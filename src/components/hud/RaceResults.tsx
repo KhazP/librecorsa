@@ -1,13 +1,16 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { RotateCcw } from "lucide-react";
 import { useFocusNav } from "@/components/menu/useFocusNav";
 import { useHudModeRef } from "./hud-mode";
-import { PromptBar } from "@/components/menu/menu-ui";
+import { Button, Well } from "@/components/ui";
+import { Badge } from "@/components/ui/Badge";
+import { PenaltyBadge, PlayerTag, PositionBadge } from "@/components/ui/badges";
+import { Icon, Trend } from "@/components/ui/icons";
+import { PromptBar } from "@/components/ui/prompts";
 import type { RaceResultEntry, RaceStatus } from "@/types/f1";
 import { STRIKES_PER_PENALTY } from "@/lib/sim/track-limits";
-import { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW, formatLapTime } from "./hud-format";
+import { formatLapTime } from "./hud-format";
 import { placesGained, type RaceRecord } from "@/lib/sim/race-history";
 import { countdownLabel, nextRaceSlot } from "@/lib/net/race-schedule";
 import { TRACKS } from "@/lib/track-registry";
@@ -17,99 +20,31 @@ const ordinal = (n: number) => (n === 2 ? "second" : n === 3 ? "third" : n === 4
 /** Race time at the flag: m:ss.mmm, or h:mm:ss.mmm past one hour */
 const formatRaceTime = (totalS: number): string => formatLapTime(Math.round(totalS * 1000));
 
-/** Time / gap column: winner's total time, "+12.345", "+1 LAP" / "+n LAPS", RUNNING or DNF */
+/** Time / gap column: winner's total time, "+12.345", "+1 lap" / "+n laps", Running or DNF */
 function timeOrGap(r: RaceResultEntry, resultsFinal: boolean): string {
   if (r.dnf) return "DNF";
-  if (r.finishTimeS === null) return resultsFinal ? "DNF" : "RUNNING";
+  if (r.finishTimeS === null) return resultsFinal ? "DNF" : "Running";
   if (r.position === 1) return formatRaceTime(r.finishTimeS);
-  if (r.lapsDown > 0) return r.lapsDown === 1 ? "+1 LAP" : `+${r.lapsDown} LAPS`;
+  if (r.lapsDown > 0) return r.lapsDown === 1 ? "+1 lap" : `+${r.lapsDown} laps`;
   if (r.gapS !== null) return `+${r.gapS.toFixed(3)}`;
   return formatRaceTime(r.finishTimeS);
 }
 
-/** Colour of the time / gap value */
-function timeColor(r: RaceResultEntry): string {
-  if (r.position === 1) return HUD_VOLT;
-  if (r.dnf) return HUD_RED;
-  if (r.finishTimeS === null) return HUD_CYAN;
-  if (r.lapsDown > 0) return "#C5CBD8";
-  return "#F5F7FA";
+/** Colour of the time / gap value: a retirement is a loss, a car still running is information, the rest is plain */
+function timeTone(r: RaceResultEntry, resultsFinal: boolean): string {
+  if (r.dnf || (r.finishTimeS === null && resultsFinal)) return "text-lc-loss";
+  if (r.finishTimeS === null) return "text-lc-info";
+  if (r.lapsDown > 0) return "text-lc-fog";
+  return "text-lc-chalk";
 }
 
-/** "+3s" pill: time penalties already added to the race time */
-const PenaltyBadge: React.FC<{ seconds: number; className?: string }> = ({ seconds, className = "mr-2" }) => (
-  <span
-    title={`${seconds.toFixed(1)} s of time penalties (track limits), included in the time`}
-    className={`inline-flex h-[18px] items-center rounded-full px-1.5 align-[1px] font-f1-mono text-[9px] font-extrabold tracking-[0.06em] ${className}`}
-    style={{ backgroundColor: HUD_RED, color: "#F5F7FA" }}
-  >
-    +{seconds % 1 === 0 ? seconds.toFixed(0) : seconds.toFixed(1)}s PEN
-  </span>
-);
+/** Whole seconds when whole, else one decimal (the kit's penalty badge prints the number as given) */
+const penaltySeconds = (s: number) => (s % 1 === 0 ? s : Math.round(s * 10) / 10);
 
-const BUTTON_BASE =
-  "inline-flex h-[46px] cursor-pointer items-center gap-2 rounded-full px-5 text-[14px] font-bold transition-colors short:h-10";
+/** The player racing the AI is named "You" already: no tag to repeat it */
+const isYou = (name: string) => name.trim().toLowerCase() === "you";
 
-const TH = "px-2.5 pb-2 font-f1-mono text-[9px] font-extrabold tracking-[0.16em] text-[#8E96AA] uppercase";
-
-/** One podium step: P1 in the middle and tallest, the player in volt */
-const PodiumStep: React.FC<{
-  r: RaceResultEntry;
-  text: string;
-  fastest: boolean;
-}> = ({ r, text, fastest }) => {
-  const p1 = r.position === 1;
-  const look = r.isPlayer
-    ? {
-        background: "linear-gradient(180deg, rgba(204,255,0,0.16), rgba(204,255,0,0.05))",
-        border: "1.5px solid #CCFF00",
-        num: HUD_VOLT,
-      }
-    : p1
-      ? {
-          background: "linear-gradient(180deg, rgba(245,247,250,0.1), rgba(245,247,250,0.03))",
-          border: "1px solid rgba(245,247,250,0.25)",
-          num: "#F5F7FA",
-        }
-      : { background: "rgba(255,255,255,0.03)", border: "1px solid #262B3D", num: "#8E96AA" };
-  const height = p1 ? "h-[186px]" : r.position === 2 ? "h-[150px]" : "h-[128px]";
-  return (
-    <div
-      className={`lc-rise relative flex min-w-0 flex-col justify-end gap-1.5 rounded-t-[24px] rounded-b-[14px] p-4 ${height} compact:h-auto compact:min-h-[112px]`}
-      // P1 rises first, then P2, then P3
-      style={{ background: look.background, border: look.border, animationDelay: `${p1 ? 0 : r.position === 2 ? 100 : 200}ms` }}
-    >
-      <span
-        className={`lc-disp absolute top-3 right-4 ${p1 ? "text-[60px]" : r.position === 2 ? "text-[44px]" : "text-[40px]"} compact:text-[36px]`}
-        style={{ color: look.num }}
-      >
-        {r.position}
-      </span>
-      <span
-        className="lc-data inline-flex items-center gap-2 text-[13px] tracking-[0.12em]"
-        style={{ color: r.isPlayer ? HUD_VOLT : "#F5F7FA" }}
-      >
-        <span
-          aria-hidden
-          className="h-4 w-1 shrink-0 rounded-full"
-          style={{ backgroundColor: r.isPlayer ? HUD_VOLT : r.teamColorHex }}
-        />
-        {r.driverCode}
-      </span>
-      <span className={`truncate font-bold ${p1 ? "text-[19px]" : "text-[17px]"}`}>
-        {r.name}
-        {r.isPlayer ? <span className="text-[12px] text-[#CCFF00]"> · you</span> : null}
-      </span>
-      <span className={`lc-data ${p1 ? "text-[18px]" : "text-[15px]"}`} style={{ color: timeColor(r) }}>
-        {text}
-      </span>
-      <span className="lc-data text-[11px] text-[#8E96AA]">
-        BEST <span style={{ color: fastest ? HUD_PURPLE : undefined }}>{formatLapTime(r.bestLapMs)}</span>
-        {r.penaltyS ? <PenaltyBadge seconds={r.penaltyS} className="ml-2" /> : null}
-      </span>
-    </div>
-  );
-};
+const TH = "lc-lbl px-2 pb-2 text-left font-semibold whitespace-nowrap";
 
 /**
  * Final classification of a race (AI or multiplayer). Renders nothing until `race.results` is set.
@@ -132,7 +67,7 @@ export const RaceResults: React.FC<{
 }> = ({ race, trackName, onClose, onRestart, onBackToLobby, backLabel = "Back to lobby", trackLimitStrikes = 0, history, nextRace }) => {
   const results = race.results;
   const rootRef = useRef<HTMLDivElement | null>(null);
-  // A controller closes the card with Ⓑ and reaches its buttons (Esc is handled below)
+  // A controller closes the card with B and reaches its buttons (Esc is handled below)
   // F1TelemetryHud mounts the card only while the HUD is live; the mode check also keeps Esc from closing it from under
   // another screen (the pause menu) if it is ever shown there
   const hudModeRef = useHudModeRef();
@@ -140,13 +75,14 @@ export const RaceResults: React.FC<{
 
   useEffect(() => {
     if (!results) return;
+    // Capture: ahead of the shell's own Esc (pause) on the same press. After it, React can commit the pause between the
+    // two listeners and unmount the card first, so Esc only paused and the card came back on resume
     const onKey = (e: KeyboardEvent) => {
-      // Not e.defaultPrevented: the shell's own Esc (pause) marks the same press, and Esc has always closed the card too
       if (e.key !== "Escape" || hudModeRef.current === "hidden") return;
       onClose();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [results, onClose, hudModeRef]);
 
   // The key that skipped the podium shot, still held or pressed twice, must not press the button the card opens on
@@ -161,6 +97,23 @@ export const RaceResults: React.FC<{
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open]);
 
+  // Tab stays inside the card while it is open
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      const root = rootRef.current;
+      if (e.key !== "Tab" || !root) return;
+      const items = Array.from(root.querySelectorAll<HTMLElement>("button:not([disabled]), a[href]"));
+      if (!items.length) return;
+      const i = items.indexOf(document.activeElement as HTMLElement);
+      const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : i === items.length - 1 ? 0 : i + 1;
+      e.preventDefault();
+      items[next].focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   if (!results) return null;
 
   const final = race.resultsFinal === true;
@@ -170,174 +123,164 @@ export const RaceResults: React.FC<{
     null,
   );
   const isFastest = (r: RaceResultEntry) => r.bestLapMs !== null && r.bestLapMs === fastestMs;
-  // Podium order on screen: P2, P1, P3
-  const podium = [ordered[1], ordered[0], ordered[2]];
   const me = ordered.find((r) => r.isPlayer);
   const showGrid = ordered.some((r) => r.gridPosition !== undefined);
+  // One main action: restart where there is one, else the way on, else closing
+  const primary = onRestart ? "restart" : nextRace ? "next" : onBackToLobby ? "back" : "close";
 
   return (
-    <div className="lc-ui-zoom pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[#08090D]/55 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))]">
+    <div className="lc-ui-zoom pointer-events-none fixed inset-0 z-(--z-lc-results) flex items-center justify-center bg-lc-void/55 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))]">
       <div
         ref={rootRef}
         role="dialog"
         aria-modal="true"
         aria-label="Race result"
-        className="pointer-events-auto flex max-h-full w-full max-w-[760px] flex-col gap-[18px] overflow-hidden rounded-[30px] border border-white/8 bg-[#0A0B10]/92 px-[26px] pt-6 pb-[22px] text-[#F5F7FA] shadow-[0_40px_100px_rgba(0,0,0,0.65)] backdrop-blur-[20px] short:gap-3 short:px-4 short:pt-4 short:pb-3"
+        className="lc-glass pointer-events-auto flex max-h-full w-full max-w-[760px] flex-col gap-4 overflow-hidden rounded-lc-sheet p-5 text-lc-chalk shadow-lc-sheet sm:px-6 short:gap-3 short:p-3.5"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span
-              aria-hidden
-              className="h-[34px] w-1.5 shrink-0 rounded-full"
-              style={{ backgroundColor: final ? HUD_VOLT : HUD_YELLOW }}
-            />
-            <h1 className="lc-disp m-0 min-w-0 truncate text-[24px] sm:text-[30px]">{trackName}</h1>
-          </div>
-          <span className="flex shrink-0 items-center gap-2">
-          {race.totalLaps ? (
-            <span
-              className="lc-data inline-flex h-7 items-center rounded-full px-3 text-[11px] tracking-[0.1em] text-[#C5CBD8]"
-              style={{ boxShadow: "inset 0 0 0 1px #262B3D" }}
-            >
-              {race.totalLaps} {race.totalLaps === 1 ? "LAP" : "LAPS"}
-            </span>
-          ) : null}
-          {trackLimitStrikes > 0 ? (
-            <span
-              className="lc-data inline-flex h-7 items-center rounded-full px-3 text-[11px] tracking-[0.1em]"
-              style={{ boxShadow: `inset 0 0 0 1px ${HUD_YELLOW}`, color: HUD_YELLOW }}
-              title={`Track-limits strikes: every ${ordinal(STRIKES_PER_PENALTY)} is a time penalty`}
-            >
-              TRACK LIMITS ×{trackLimitStrikes}
-            </span>
-          ) : null}
-          <span
-            className="lc-data inline-flex h-7 shrink-0 items-center rounded-full px-3.5 text-[11px] tracking-[0.12em]"
-            style={
-              final
-                ? { backgroundColor: HUD_VOLT, color: "#08090D" }
-                : { boxShadow: `inset 0 0 0 1px ${HUD_YELLOW}`, color: HUD_YELLOW }
-            }
-          >
-            {final ? "FINAL" : "PROVISIONAL"}
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <h2 className="lc-h2 min-w-0 truncate" title={trackName}>
+            {trackName}
+          </h2>
+          <span className="flex flex-wrap items-center gap-1.5">
+            {race.totalLaps ? (
+              <Badge variant="outline">
+                {race.totalLaps} {race.totalLaps === 1 ? "lap" : "laps"}
+              </Badge>
+            ) : null}
+            {trackLimitStrikes > 0 ? (
+              <Badge tone="warn" icon="trackLimits">
+                Track limits {trackLimitStrikes}
+              </Badge>
+            ) : null}
+            {final ? (
+              <Badge variant="outline" icon="check">
+                Final
+              </Badge>
+            ) : (
+              <Badge tone="warn" dot="live">
+                Provisional
+              </Badge>
+            )}
           </span>
         </div>
+        {/* What the badges mean, in words on the sheet (a tooltip reaches no keyboard, pad or finger) */}
+        {!final || trackLimitStrikes > 0 ? (
+          <p className="lc-hint m-0 -mt-2 short:-mt-1.5">
+            {[
+              final ? null : "Cars are still running: places can change.",
+              trackLimitStrikes > 0 ? `Every ${ordinal(STRIKES_PER_PENALTY)} track-limits strike is a time penalty.` : null,
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          </p>
+        ) : null}
 
         {me ? <PlayerSummary me={me} fieldSize={ordered.length} fastest={isFastest(me)} /> : null}
 
-        <div className="-mx-1 flex min-h-0 flex-col gap-[18px] overflow-y-auto px-1">
-          {/* Podium */}
-          <div className="grid grid-cols-[1fr_1.15fr_1fr] items-end gap-2.5 short:hidden">
-            {podium.map((r, i) =>
-              r ? (
-                <PodiumStep key={`${r.position}-${r.driverCode}`} r={r} text={timeOrGap(r, final)} fastest={isFastest(r)} />
-              ) : (
-                <span key={`empty-${i}`} aria-hidden />
-              ),
-            )}
-          </div>
-
-          <table className="w-full border-collapse text-left" aria-label="Full classification">
-            <thead className="sticky top-0 z-[1] bg-[#0A0B10]">
-              <tr>
-                <th className={`${TH} w-10`}>Pos</th>
+        <div className="-mx-1 flex min-h-0 flex-col gap-5 overflow-y-auto px-1 short:gap-3">
+          <table className="w-full border-collapse" aria-label="Full classification">
+            <thead>
+              <tr className="border-b border-lc-line">
+                <th scope="col" className={`${TH} w-14`}>
+                  Pos
+                </th>
                 {showGrid ? (
-                  <th className={`${TH} w-12`} title="Places gained or lost from the grid">
-                    +/−
+                  <th scope="col" className={`${TH} w-12`} title="Places gained or lost from the grid">
+                    <span aria-hidden>+/-</span>
+                    <span className="sr-only">Places gained</span>
                   </th>
                 ) : null}
-                <th className="w-2 p-0" />
-                <th className={TH}>Code</th>
-                <th className={TH}>Name</th>
-                <th className={`${TH} text-right`}>Laps</th>
-                <th className={`${TH} text-right`}>Time / gap</th>
-                <th className={`${TH} text-right`}>Best lap</th>
+                <th scope="col" className={`${TH} w-full`}>
+                  Driver
+                </th>
+                <th scope="col" className={`${TH} text-right max-sm:hidden`}>
+                  Laps
+                </th>
+                <th scope="col" className={`${TH} text-right`}>
+                  Time / gap
+                </th>
+                <th scope="col" className={`${TH} text-right`}>
+                  Best lap
+                </th>
               </tr>
             </thead>
             <tbody>
-              {ordered.map((r, i) => (
-                <tr
-                  key={`${r.position}-${r.driverCode}-${i}`}
-                  className={`h-10 font-f1-mono text-[13px] font-extrabold tabular-nums short:h-8 ${
-                    r.isPlayer ? "bg-[#CCFF00]/10 shadow-[inset_3px_0_0_#CCFF00]" : i % 2 ? "bg-white/[0.02]" : ""
-                  }`}
-                >
-                  <td className="px-2.5" style={{ color: r.isPlayer ? HUD_VOLT : "#8E96AA" }}>
-                    {r.position}
-                  </td>
-                  {showGrid ? (
-                    <td className="px-2.5">
-                      <PlacesBadge gained={r.dnf ? null : placesGained(r.gridPosition, r.position)} />
-                    </td>
-                  ) : null}
-                  <td className="p-0">
-                    <span
-                      className="block h-4 w-1 rounded-full"
-                      style={{ backgroundColor: r.isPlayer ? HUD_VOLT : r.teamColorHex }}
-                    />
-                  </td>
-                  <td className="px-2.5 tracking-[0.1em]" style={{ color: r.isPlayer ? HUD_VOLT : "#F5F7FA" }}>
-                    {r.driverCode}
-                  </td>
-                  <td
-                    className="px-2.5 text-[14px] font-semibold tracking-normal"
-                    style={{ fontFamily: "var(--font-geist), sans-serif" }}
+              {ordered.map((r, i) => {
+                const fastest = isFastest(r);
+                return (
+                  <tr
+                    key={`${r.position}-${r.driverCode}-${i}`}
+                    aria-current={r.isPlayer ? "true" : undefined}
+                    className={`h-11 border-b border-white/5 last:border-b-0 short:h-9 ${
+                      r.isPlayer ? "bg-lc-volt/8 shadow-[inset_2px_0_0_var(--color-lc-volt)]" : ""
+                    }`}
                   >
-                    <span className="block max-w-[180px] truncate">{r.name}</span>
-                  </td>
-                  <td className="px-2.5 text-right text-[#C5CBD8]">{r.lapsCompleted}</td>
-                  <td className="px-2.5 text-right whitespace-nowrap" style={{ color: timeColor(r) }}>
-                    {r.penaltyS ? <PenaltyBadge seconds={r.penaltyS} /> : null}
-                    {timeOrGap(r, final)}
-                  </td>
-                  <td className="px-2.5 text-right" style={{ color: isFastest(r) ? HUD_PURPLE : "#F5F7FA" }}>
-                    {formatLapTime(r.bestLapMs)}
-                  </td>
-                </tr>
-              ))}
+                    <td className="px-2">
+                      <PositionBadge position={r.position} player={r.isPlayer} size="sm" className="min-w-10" />
+                    </td>
+                    {showGrid ? (
+                      <td className="px-2">
+                        <PlacesGained gained={r.dnf ? null : placesGained(r.gridPosition, r.position)} />
+                      </td>
+                    ) : null}
+                    <td className="max-w-0 px-2">
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        {/* The team's colour: data, the one place it shows */}
+                        <span aria-hidden className="h-4 w-1 shrink-0 rounded-full" style={{ backgroundColor: r.teamColorHex }} />
+                        {r.name !== r.driverCode ? (
+                          <span className="lc-mono w-8 shrink-0 text-[12px] font-bold tracking-[0.08em] text-lc-slate">{r.driverCode}</span>
+                        ) : null}
+                        <span className="truncate text-[14px] font-semibold">{r.name}</span>
+                        {r.isPlayer && !isYou(r.name) ? <PlayerTag size="sm" /> : null}
+                      </span>
+                    </td>
+                    <td className="lc-mono px-2 text-right text-[13px] font-bold text-lc-fog max-sm:hidden">{r.lapsCompleted}</td>
+                    <td className="px-2 text-right whitespace-nowrap">
+                      <span className="inline-flex items-center justify-end gap-2">
+                        {r.penaltyS ? (
+                          <span title={`${r.penaltyS.toFixed(1)} s of time penalties, included in the time`}>
+                            <PenaltyBadge penalty={{ kind: "time", seconds: penaltySeconds(r.penaltyS) }} size="sm" />
+                          </span>
+                        ) : null}
+                        <span className={`lc-mono text-[13px] font-bold ${timeTone(r, final)}`}>{timeOrGap(r, final)}</span>
+                      </span>
+                    </td>
+                    <td className="px-2 text-right whitespace-nowrap">
+                      <BestLap ms={r.bestLapMs} fastest={fastest} />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
           {history && history.length > 0 ? <LastRaces history={history} /> : null}
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#262B3D] pt-3.5">
+        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2.5 border-t border-lc-line pt-3.5 short:pt-2.5">
           <PromptBar
-            className="mr-auto"
+            rule={false}
+            className="mr-auto max-sm:hidden"
             prompts={[
               { action: "select", label: "Select" },
               { action: "back", label: "Close" },
             ]}
           />
-          <div className="flex flex-wrap gap-2">
-            {nextRace ? <JoinNextRace {...nextRace} /> : null}
-            {onRestart ? (
-              <button
-                type="button"
-                onClick={onRestart}
-                className={`${BUTTON_BASE} border-0 bg-[#CCFF00] text-[#08090D] hover:bg-[#d9ff33]`}
-              >
-                <RotateCcw className="h-4 w-4" strokeWidth={2.6} aria-hidden />
-                Restart race
-              </button>
-            ) : null}
+          <div className="flex flex-wrap justify-end gap-2">
+            {nextRace ? <JoinNextRace {...nextRace} primary={primary === "next"} /> : null}
             {onBackToLobby ? (
-              <button
-                type="button"
-                onClick={onBackToLobby}
-                className={`${BUTTON_BASE} border border-[#00E5FF]/50 bg-[#00E5FF]/8 text-[#00E5FF] hover:bg-[#00E5FF]/15`}
-              >
+              <Button variant={primary === "back" ? "primary" : "secondary"} onClick={onBackToLobby}>
                 {backLabel}
-              </button>
+              </Button>
             ) : null}
-            <button
-              type="button"
-              onClick={onClose}
-              className={`${BUTTON_BASE} border border-[#262B3D] bg-[#1B1F2B] text-[#F5F7FA] hover:border-[#3A4157] hover:bg-[#262B3D]`}
-            >
+            {onRestart ? (
+              <Button variant="primary" icon={<Icon name="restart" />} onClick={onRestart}>
+                Restart race
+              </Button>
+            ) : null}
+            <Button variant={primary === "close" ? "primary" : "secondary"} onClick={onClose}>
               Close
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -345,18 +288,37 @@ export const RaceResults: React.FC<{
   );
 };
 
-/** Places gained (green, up) or lost (red, down) from the grid; "=" unchanged, a dash when not known */
-const PlacesBadge: React.FC<{ gained: number | null; large?: boolean }> = ({ gained, large = false }) => {
-  const size = large ? "text-[22px]" : "text-[12px]";
-  if (gained === null || gained === 0) return <span className={`lc-data ${size} text-[#8E96AA]`}>{gained === 0 ? "=" : "–"}</span>;
+/** A best lap: the race's fastest in the best colour with the lap-time mark beside it, so colour is not alone */
+const BestLap: React.FC<{ ms: number | null; fastest: boolean; large?: boolean }> = ({ ms, fastest, large = false }) => (
+  <span
+    className={`lc-mono inline-flex items-center gap-1.5 font-bold ${large ? "text-[22px]" : "text-[13px]"} ${
+      fastest ? "text-lc-best" : "text-lc-chalk"
+    }`}
+  >
+    {fastest && !large ? <Icon name="lapTimes" size="xs" label="Fastest lap" /> : null}
+    {formatLapTime(ms)}
+  </span>
+);
+
+/** Places gained (green, arrow up) or lost (crimson, arrow down) from the grid; "=" unchanged, a dash when not known */
+const PlacesGained: React.FC<{ gained: number | null; large?: boolean }> = ({ gained, large = false }) => {
+  const size = large ? "text-[22px]" : "text-[13px]";
+  if (gained === null || gained === 0)
+    return (
+      <span className={`lc-mono font-bold ${size} text-lc-slate`} aria-label={gained === 0 ? "No change" : "Not known"}>
+        {gained === 0 ? "=" : "-"}
+      </span>
+    );
+  const n = Math.abs(gained);
+  const words = `${n} ${n === 1 ? "place" : "places"} ${gained > 0 ? "gained" : "lost"}`;
   return (
     <span
-      className={`lc-data ${size} whitespace-nowrap`}
-      style={{ color: gained > 0 ? HUD_GREEN : HUD_RED }}
-      title={`${Math.abs(gained)} ${Math.abs(gained) === 1 ? "place" : "places"} ${gained > 0 ? "gained" : "lost"}`}
+      className={`lc-mono inline-flex items-center gap-1 font-bold whitespace-nowrap ${size} ${gained > 0 ? "text-lc-gain" : "text-lc-loss"}`}
+      title={words}
     >
-      {gained > 0 ? "▲" : "▼"}
-      {Math.abs(gained)}
+      <Trend direction={gained > 0 ? "up" : "down"} size="0.75em" />
+      <span aria-hidden>{n}</span>
+      <span className="sr-only">{words}</span>
     </span>
   );
 };
@@ -364,19 +326,21 @@ const PlacesBadge: React.FC<{ gained: number | null; large?: boolean }> = ({ gai
 /** The player's own race at a glance: the place, the places gained from the grid, the best lap */
 const PlayerSummary: React.FC<{ me: RaceResultEntry; fieldSize: number; fastest: boolean }> = ({ me, fieldSize, fastest }) => {
   const gained = me.dnf ? null : placesGained(me.gridPosition, me.position);
-  // Each value says what it is in the words after it, with no label above
-  const cell = "flex min-w-0 flex-col gap-0.5 rounded-[16px] border border-[#262B3D] bg-white/[0.03] px-4 py-2.5 short:py-1.5";
-  const after = "truncate text-[12px] font-semibold text-[#8E96AA]";
+  // Each value says what it is in the words under it, with no label above
+  const cell = "flex min-w-0 flex-col gap-0.5 px-4 py-2.5 short:px-3 short:py-1.5";
+  const after = "lc-hint truncate";
   return (
-    <div className="grid grid-cols-3 gap-2.5" aria-label="Your race">
-      <div className={cell}>
-        <span className="lc-data text-[22px]" style={{ color: me.dnf ? HUD_RED : HUD_VOLT }}>
+    <div className="grid grid-cols-3 gap-2.5 short:hidden" aria-label="Your race">
+      <Well className={cell}>
+        <span className={`lc-mono text-[22px] leading-tight font-bold ${me.dnf ? "text-lc-loss" : "text-lc-volt"}`}>
           {me.dnf ? "DNF" : `P${me.position}`}
         </span>
         <span className={after}>{me.dnf ? "Out of the race" : `of ${fieldSize}`}</span>
-      </div>
-      <div className={cell}>
-        <PlacesBadge gained={gained} large />
+      </Well>
+      <Well className={cell}>
+        <span className="leading-tight">
+          <PlacesGained gained={gained} large />
+        </span>
         <span className={after}>
           {me.gridPosition === undefined
             ? "Grid not known"
@@ -384,13 +348,13 @@ const PlayerSummary: React.FC<{ me: RaceResultEntry; fieldSize: number; fastest:
               ? `From P${me.gridPosition}`
               : `${Math.abs(gained) === 1 ? "place" : "places"} ${gained > 0 ? "gained" : "lost"} from P${me.gridPosition}`}
         </span>
-      </div>
-      <div className={cell}>
-        <span className="lc-data text-[22px]" style={{ color: fastest ? HUD_PURPLE : "#F5F7FA" }}>
-          {formatLapTime(me.bestLapMs)}
+      </Well>
+      <Well className={cell}>
+        <span className="leading-tight">
+          <BestLap ms={me.bestLapMs} fastest={fastest} large />
         </span>
         <span className={after}>{fastest ? "Fastest lap of the race" : "Your best lap"}</span>
-      </div>
+      </Well>
     </div>
   );
 };
@@ -400,27 +364,39 @@ const shortDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { d
 
 /** The player's last few races, kept in this browser */
 const LastRaces: React.FC<{ history: readonly RaceRecord[] }> = ({ history }) => (
-  <section className="flex flex-col gap-1.5">
-    <h2 className="m-0 px-2.5 text-[14px] font-bold text-[#F5F7FA]">Your last races</h2>
-    <ul className="m-0 flex list-none flex-col p-0">
-      {history.slice(0, 5).map((r, i) => (
-        <li
-          key={r.id}
-          className={`grid h-8 grid-cols-[3.5rem_minmax(0,1fr)_4.5rem_2.5rem_5.5rem] items-center gap-2 px-2.5 font-f1-mono text-[12px] font-extrabold tabular-nums short:h-7 ${i % 2 ? "bg-white/[0.02]" : ""}`}
-        >
-          <span className="text-[#8E96AA]">{shortDate(r.atMs)}</span>
-          <span className="truncate text-[13px] font-semibold tracking-normal" style={{ fontFamily: "var(--font-geist), sans-serif" }}>
-            {circuitName(r.trackId)}
-          </span>
-          <span style={{ color: r.finish === null ? HUD_RED : "#F5F7FA" }}>
-            {r.finish === null ? "DNF" : `P${r.finish}`}
-            <span className="text-[#8E96AA]">/{r.fieldSize}</span>
-          </span>
-          <PlacesBadge gained={placesGained(r.grid, r.finish)} />
-          <span className="text-right text-[#C5CBD8]">{formatLapTime(r.bestLapMs)}</span>
-        </li>
-      ))}
-    </ul>
+  <section className="flex flex-col gap-2" aria-labelledby="lc-last-races">
+    <h2 id="lc-last-races" className="lc-h3 px-2">
+      Your last races
+    </h2>
+    <table className="w-full border-collapse">
+      <thead className="sr-only">
+        <tr>
+          <th scope="col">Date</th>
+          <th scope="col">Circuit</th>
+          <th scope="col">Finish</th>
+          <th scope="col">Places gained</th>
+          <th scope="col">Best lap</th>
+        </tr>
+      </thead>
+      <tbody>
+        {history.slice(0, 5).map((r) => (
+          <tr key={r.id} className="h-9 border-b border-white/5 last:border-b-0 short:h-8">
+            <td className="lc-mono w-20 px-2 text-[12px] font-bold whitespace-nowrap text-lc-slate">{shortDate(r.atMs)}</td>
+            <td className="max-w-0 px-2">
+              <span className="block truncate text-[13px] font-semibold text-lc-fog">{circuitName(r.trackId)}</span>
+            </td>
+            <td className="lc-mono w-16 px-2 text-[13px] font-bold whitespace-nowrap">
+              <span className={r.finish === null ? "text-lc-loss" : "text-lc-chalk"}>{r.finish === null ? "DNF" : `P${r.finish}`}</span>
+              <span className="text-lc-slate">/{r.fieldSize}</span>
+            </td>
+            <td className="w-12 px-2">
+              <PlacesGained gained={placesGained(r.grid, r.finish)} />
+            </td>
+            <td className="lc-mono w-24 px-2 text-right text-[13px] font-bold text-lc-fog">{formatLapTime(r.bestLapMs)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   </section>
 );
 
@@ -431,7 +407,7 @@ export interface NextRaceProps {
 }
 
 /** "Join the next race", with the time until its lights counting down */
-const JoinNextRace: React.FC<NextRaceProps> = ({ slotS, onJoin }) => {
+const JoinNextRace: React.FC<NextRaceProps & { primary: boolean }> = ({ slotS, onJoin, primary }) => {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -440,13 +416,8 @@ const JoinNextRace: React.FC<NextRaceProps> = ({ slotS, onJoin }) => {
   // Worked out every tick: past the join cut-off it rolls on to the race after
   const startsMs = nextRaceSlot(now, slotS).startsMs;
   return (
-    <button
-      type="button"
-      onClick={onJoin}
-      className={`${BUTTON_BASE} border border-[#00E5FF]/50 bg-[#00E5FF]/8 text-[#00E5FF] hover:bg-[#00E5FF]/15`}
-    >
-      Join the next race
-      <span className="lc-data text-[13px] tabular-nums opacity-80">{countdownLabel(startsMs, now)}</span>
-    </button>
+    <Button variant={primary ? "primary" : "secondary"} onClick={onJoin}>
+      Join the next race <span className="lc-mono not-italic tabular-nums opacity-80">{countdownLabel(startsMs, now)}</span>
+    </Button>
   );
 };

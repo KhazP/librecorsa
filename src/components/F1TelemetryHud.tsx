@@ -14,7 +14,9 @@ import type {
 } from "@/types/f1";
 import type { MultiplayerPanelProps } from "./hud/MultiplayerPanel";
 import type { HudSettings } from "@/lib/settings/player-settings";
-import type { DisplayPanelProps } from "./hud/DisplayPanel";
+import type { DisplayPanelProps } from "./hud/PauseMenu";
+import type { ConditionsPanelProps } from "./menu/ConditionsPanel";
+import type { SettingsCategory } from "./settings/SettingsScreen";
 import type { LeaderboardPanelProps } from "./hud/LeaderboardPanel";
 import type { CarId } from "@/lib/cars/car-registry";
 import { type BuiltTrackData } from "@/lib/track-data";
@@ -28,7 +30,11 @@ import { PauseMenu } from "./hud/PauseMenu";
 import { F12026ChannelsPanel } from "./hud/F12026ChannelsPanel";
 import { MultiPageMfd } from "./hud/MultiPageMfd";
 import { useLapDeltaTracker } from "./hud/useLapDelta";
-import { HUD_CYAN, HUD_GLASS, HUD_LBL, HUD_RED, HUD_VOLT, aidsActive, raceState } from "./hud/hud-format";
+import { HUD_GLASS, HUD_INFO, HUD_LBL, aidsActive, raceState } from "./hud/hud-format";
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/Button";
+import { Icon } from "./ui/icons/Icon";
+import { KeyCap, PadGlyph } from "./ui/prompts";
 import { HudModeContext, type HudMode } from "./hud/hud-mode";
 import { aeroReadout } from "./hud/aero-label";
 import { LibreCorsaLogo } from "./ui/LibreCorsaLogo";
@@ -49,7 +55,6 @@ import { ReplayBar } from "./hud/ReplayBar";
 import { TouchControls, type TouchControlsProps } from "./hud/TouchControls";
 import { getTrackInfo } from "@/lib/track-registry";
 import { useInputMode } from "./menu/input-mode";
-import { PadGlyph } from "./menu/menu-ui";
 import { ACTIVE_TRACK_ID } from "@/lib/track-data";
 import { BroadcastHud } from "./hud/styles/BroadcastHud";
 import { WheelDashHud } from "./hud/styles/WheelDashHud";
@@ -142,8 +147,11 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   paused: boolean;
   onTogglePause: () => void;
   onOpenControls?: () => void;
+  /** Opens Settings over the pause menu on a category (the pause menu's links from Conditions and the Garage) */
+  onOpenSettings?: (category?: SettingsCategory) => void;
+  /** Weather, time of day and the track's grip, for the pause menu's Conditions tab */
+  conditionsPanel?: ConditionsPanelProps;
   onExitToTitle?: () => void;
-  controlsCheatSheet?: readonly (readonly [string, string])[];
   keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown", string>>;
   /** HUD layout preset, size and optional widgets */
   hud?: HudSettings;
@@ -175,6 +183,14 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   challengeTarget?: import("@/lib/net/challenge-target").ChallengeTarget | null;
 }
 
+/**
+ * The HUD's buttons sit over the driving view, where the mouse may be steering: hovering one must not give it the
+ * focus (the kit's buttons take it on hover, for menus), or Space, a driving key, would press it
+ */
+const keepFocusOffHover = (e: React.PointerEvent<HTMLElement>) => {
+  if (document.activeElement === e.currentTarget) e.currentTarget.blur();
+};
+
 /** The last DRS detection crossed (f12026-car), shown for 2.5 s after it happens */
 function useDrsDetectionNotice(
   detection: { zone: string; eligible: boolean; atMs: number } | null
@@ -204,7 +220,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     cameraMode,
     boostLatch,
     showLaunchHint = false,
-    launchHintText = "Hold W / ↑ to launch · Esc for menu",
+    launchHintText = "Hold W or the up arrow to launch · Esc for menu",
     mouseSteerEnabled = false,
     gamepadAssist = true,
     paused,
@@ -289,14 +305,13 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const showFfb = Boolean(props.ffbMeter) && classic;
   const scale = (hud?.scale ?? 1) * uiZoom;
   const trackInfo = getTrackInfo(ACTIVE_TRACK_ID);
+  // Touch screens have no Esc key: a Menu button opens the pause menu
   const menuButton = (
-    <button
-      type="button"
-      onClick={props.onTogglePause}
-      className={`pointer-events-auto hidden h-11 cursor-pointer rounded-full px-5 lc-title text-[15px] text-[#CCFF00] pointer-coarse:block ${HUD_GLASS}`}
-    >
-      Menu
-    </button>
+    <span className="pointer-events-auto hidden pointer-coarse:block">
+      <Button variant="secondary" size="md" icon={<Icon name="menu" />} onClick={props.onTogglePause} onPointerEnter={keepFocusOffHover}>
+        Menu
+      </Button>
+    </span>
   );
   /** Scales a corner group of the HUD about that corner */
   const corner = (origin: string): React.CSSProperties | undefined =>
@@ -336,7 +351,10 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       {telemetry.offTrack && !lightsPhase ? (
         <div
           className="lc-vign fixed inset-0"
-          style={{ background: "radial-gradient(ellipse at center, rgba(255,42,60,0) 62%, rgba(255,42,60,0.32) 100%)" }}
+          style={{
+            background:
+              "radial-gradient(ellipse at center, transparent 62%, color-mix(in srgb, var(--color-lc-loss) 32%, transparent) 100%)",
+          }}
           aria-hidden="true"
         />
       ) : null}
@@ -373,7 +391,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       {mirrorRect && !hudHidden ? (
         <div
           aria-hidden
-          className="fixed rounded-[6px] shadow-[0_0_0_3px_#08090D,0_0_0_4px_rgba(255,255,255,0.14),0_14px_40px_rgba(0,0,0,0.5)]"
+          className="fixed rounded-md shadow-[0_0_0_3px_var(--color-lc-void),0_0_0_4px_rgb(255_255_255/0.14),0_14px_40px_rgb(0_0_0/0.5)]"
           style={{ left: mirrorRect.x, top: mirrorRect.y, width: mirrorRect.w, height: mirrorRect.h }}
         />
       ) : null}
@@ -392,68 +410,59 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         ) : null}
         {!lightsPhase && race ? <RaceIncidentFeed messages={race.raceControl} yellow={race.yellow} /> : null}
         {drsNotice ? (
-          <div
-            className="inline-flex h-10 items-center gap-2.5 rounded-full border pr-5 pl-2 shadow-[0_14px_40px_rgba(0,0,0,0.5)]"
-            style={{
-              backgroundColor: drsNotice.eligible ? HUD_VOLT : "rgba(8, 9, 13, 0.86)",
-              color: drsNotice.eligible ? "#08090D" : "#F5F7FA",
-              borderColor: drsNotice.eligible ? HUD_VOLT : "#262B3D",
-            }}
-          >
-            <span
-              className="lc-data inline-flex h-7 items-center rounded-full px-2.5 text-[11px] tracking-[0.1em]"
-              style={{
-                backgroundColor: drsNotice.eligible ? "#08090D" : "#1B1F2B",
-                color: drsNotice.eligible ? HUD_VOLT : "#8E96AA",
-              }}
+          <div role="status" className={`inline-flex h-10 items-center gap-2.5 rounded-full pr-5 pl-2 text-lc-chalk ${HUD_GLASS}`}>
+            <Badge
+              tone={drsNotice.eligible ? "info" : "neutral"}
+              variant={drsNotice.eligible ? "solid" : "soft"}
+              size="lg"
+              icon={drsNotice.eligible ? "drsOpen" : "drsClosed"}
             >
               {drsNotice.zone}
-            </span>
+            </Badge>
             <span className="lc-disp text-[16px]">{drsNotice.eligible ? "DRS enabled" : "DRS not enabled"}</span>
           </div>
         ) : null}
         {showLaunchHint && !race ? (
           <div className={`inline-flex min-h-11 items-center gap-3 rounded-full py-1.5 pr-5 pl-2 ${HUD_GLASS}`}>
-            <span className="inline-flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-[#CCFF00]">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="#08090D" aria-hidden="true">
-                <path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" />
-              </svg>
+            <span className="inline-flex size-7.5 flex-none items-center justify-center rounded-full bg-lc-line text-lc-chalk">
+              <Icon name="play" size="xs" />
             </span>
-            <span className="lc-title text-[13px] text-[#F5F7FA] sm:text-[15px]">{launchHintText}</span>
+            <span className="lc-title text-[13px] text-lc-chalk sm:text-[15px]">{launchHintText}</span>
           </div>
         ) : null}
         {props.wheelUncalibrated && !race ? (
-          <button
-            type="button"
-            onClick={() => props.onOpenControls?.()}
-            className="lc-data pointer-events-auto inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-full border border-[#FFB300] bg-[#08090D]/[0.86] px-4 py-1 text-[11px] text-[#FFB300] uppercase transition-colors hover:bg-[#FFB300]/15"
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-[#FFB300]" />
-            Pedals not set up · click to calibrate throttle &amp; brake
-          </button>
+          <span className="pointer-events-auto">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Icon name="warning" className="text-lc-caution" />}
+              onClick={() => props.onOpenControls?.()}
+              onPointerEnter={keepFocusOffHover}
+            >
+              Pedals not set up: calibrate throttle and brake
+            </Button>
+          </span>
         ) : null}
         {lightsPhase ? (
           <div className={`inline-flex h-11 items-center gap-3 rounded-full pr-5 pl-2 ${HUD_GLASS}`}>
-            <span className="inline-flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-[#CCFF00]">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="#08090D" aria-hidden="true">
-                <path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" />
-              </svg>
+            <span className="inline-flex size-7.5 flex-none items-center justify-center rounded-full bg-lc-line text-lc-chalk">
+              <Icon name="play" size="xs" />
             </span>
-            <span className="lc-title lc-breathe text-[13px] text-[#F5F7FA] sm:text-[15px]">
+            <span className="lc-title lc-breathe text-[13px] text-lc-chalk sm:text-[15px]">
               Hold the throttle · go when the lights go out
             </span>
           </div>
         ) : null}
         {mouseSteerEnabled ? (
-          <div className={`flex flex-col items-center gap-1.5 rounded-[18px] px-4 py-2 ${HUD_GLASS}`}>
-            <span className={HUD_LBL} style={{ color: HUD_CYAN }}>
+          <div className={`flex flex-col items-center gap-1.5 rounded-lc-tile px-4 py-2 ${HUD_GLASS}`}>
+            <span className={HUD_LBL} style={{ color: HUD_INFO }}>
               Mouse steering · V to exit
             </span>
-            <span className="relative h-2 w-44 overflow-hidden rounded-full bg-[#1B1F2B]">
-              <span className="absolute inset-y-0 left-1/2 w-px bg-[#F5F7FA]/40" />
+            <span className="relative h-2 w-44 overflow-hidden rounded-full bg-lc-titanium">
+              <span className="absolute inset-y-0 left-1/2 w-px bg-lc-chalk/40" />
               <span
                 className="absolute inset-y-0 w-2.5 -translate-x-1/2 rounded-full"
-                style={{ left: `${50 + telemetry.steering * 48}%`, backgroundColor: HUD_CYAN }}
+                style={{ left: `${50 + telemetry.steering * 48}%`, backgroundColor: HUD_INFO }}
               />
             </span>
           </div>
@@ -483,9 +492,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           </div>
         ) : null}
         <div
-          className={`${showKeyHints ? (style ? "2xl:flex" : "sm:flex") : ""} hidden flex-wrap items-center gap-x-3 gap-y-2 rounded-full py-2 pr-3.5 pl-2 text-[12px] font-bold text-[#F5F7FA] ${HUD_GLASS}`}
+          className={`${showKeyHints ? (style ? "2xl:flex" : "sm:flex") : ""} hidden flex-wrap items-center gap-x-3 gap-y-2 rounded-full py-2 pr-3.5 pl-2 text-[12px] font-bold text-lc-chalk ${HUD_GLASS}`}
         >
-          <LibreCorsaLogo variant="mark" className="h-[22px] w-[22px]" />
+          <LibreCorsaLogo variant="mark" className="h-5.5 w-5.5" />
           {inputMode === "pad" ? (
             <span className="inline-flex items-center gap-1.5">
               <PadGlyph button="menu" family={padFamily} />
@@ -499,9 +508,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             [props.keyNames?.restart ?? "Bksp", "Restart"],
           ]).map(([k, label]) => (
             <span key={k} className="inline-flex items-center gap-1.5">
-              <span className="lc-data inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-[#CCFF00] px-1.5 text-[10px] text-[#08090D]">
-                {k}
-              </span>
+              <KeyCap>{k}</KeyCap>
               {label}
             </span>
           ))}
@@ -579,7 +586,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       {hiddenNote ? (
         <div
           role="status"
-          className={`lc-panel-in absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center rounded-full px-4 lc-title text-[13px] text-[#F5F7FA] ${HUD_GLASS}`}
+          className={`lc-panel-in absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center rounded-full px-4 lc-title text-[13px] text-lc-chalk ${HUD_GLASS}`}
         >
           HUD hidden{props.hudToggleButton ? ` · ${props.hudToggleButton} brings it back` : ""}
         </div>
@@ -621,13 +628,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       <div className="lc-safe-frame pointer-events-none fixed z-20 select-none">
         <div
           role="status"
-          className="lc-ui-zoom absolute top-[52px] left-1/2 inline-flex h-[38px] -translate-x-1/2 items-center gap-2.5 rounded-full pr-[18px] pl-3.5 text-[#F5F7FA] shadow-[0_10px_30px_rgba(255,42,60,0.35)] sm:top-[68px] short:top-8"
-          style={{ backgroundColor: HUD_RED }}
+          className={`lc-ui-zoom absolute top-13 left-1/2 inline-flex h-9.5 -translate-x-1/2 items-center gap-2.5 rounded-full pr-4.5 pl-3.5 text-lc-chalk sm:top-17 short:top-8 ${HUD_GLASS}`}
         >
-          <span className="relative inline-flex h-2 w-2">
-            <span className="lc-ping absolute inset-0 rounded-full bg-[#F5F7FA]" />
-            <span className="relative h-2 w-2 rounded-full bg-[#F5F7FA]" />
-          </span>
+          <Icon name="replay" size="sm" />
           <span className="lc-disp text-[18px]">Replay</span>
         </div>
         <div className="pointer-events-auto">

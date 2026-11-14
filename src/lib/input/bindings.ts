@@ -22,7 +22,9 @@ export type KeyAction =
   | "flyingLap"
   | "throttleHalf"
   | "replay"
-  | "mfdPage";
+  | "mfdPage"
+  | "mfd"
+  | "hud";
 
 /** Actions a controller or wheel button can trigger */
 export type PadAction =
@@ -64,6 +66,8 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "throttleHalf", label: "Half throttle (hold)" },
   { id: "replay", label: "Instant replay" },
   { id: "mfdPage", label: "Next MFD page" },
+  { id: "mfd", label: "Open / close MFD" },
+  { id: "hud", label: "Show / hide HUD" },
 ];
 
 export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
@@ -102,6 +106,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   throttleHalf: ["KeyF"],
   replay: ["KeyT"],
   mfdPage: ["Insert", "KeyI"],
+  mfd: ["KeyO"],
+  hud: ["KeyH"],
 };
 
 /** Keys that cannot be bound: Esc opens the menu, "/" starts the /boost command */

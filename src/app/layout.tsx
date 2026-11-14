@@ -11,7 +11,7 @@ import { REPO_URL, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/l
  * `/l/font?kit=…&skey=…` file URLs, so a build depended on what Google happened to return that day.
  */
 // Racing Line type (docs/DESIGN.md §3): Geist for UI text, Geist Mono for labels and data,
-// Chakra Petch (bold italic) for display, Orbitron only in the wordmark.
+// Chakra Petch (bold italic) for display. The wordmark is drawn as outlines (LibreCorsaLogo), so no Orbitron loads.
 // Variable fonts: one file serves every weight
 const geist = localFont({
   src: "./fonts/geist-variable.woff2",
@@ -35,13 +35,6 @@ const chakraPetch = localFont({
     { path: "./fonts/chakra-petch-700-italic.woff2", weight: "700", style: "italic" },
   ],
   variable: "--font-chakra",
-  display: "swap",
-});
-
-const orbitron = localFont({
-  src: "./fonts/orbitron-variable.woff2",
-  weight: "700 900",
-  variable: "--font-orbitron",
   display: "swap",
 });
 
@@ -84,16 +77,20 @@ export const metadata: Metadata = {
   // the game's script, so a deploy doesn't change the game's cached files
   ...(process.env.NEXT_PUBLIC_BUILD ? { other: { "lc-build": process.env.NEXT_PUBLIC_BUILD.slice(0, 7) } } : {}),
   // Metadata URLs don't get a base path on their own
+  // The SVG emblem draws its small version under 32 px; the PNG and ICO frames are for browsers without SVG icons
   icons: {
     icon: [
-      { url: withBasePath("/branding/librecorsa-mark.svg"), type: "image/svg+xml" },
       { url: withBasePath("/favicon.ico"), sizes: "16x16 32x32 48x48" },
+      { url: withBasePath("/branding/favicon-32.png"), sizes: "32x32", type: "image/png" },
+      { url: withBasePath("/branding/favicon-16.png"), sizes: "16x16", type: "image/png" },
+      { url: withBasePath("/branding/librecorsa-mark.svg"), type: "image/svg+xml" },
     ],
     apple: [{ url: withBasePath("/branding/apple-touch-icon.png"), sizes: "180x180" }],
   },
 };
 
 export const viewport: Viewport = {
+  // ui-allow: hex-in-style the browser chrome's colour is metadata, which cannot read a CSS token (lc-void)
   themeColor: "#08090D",
   colorScheme: "dark",
   // Draw under the notch, Dynamic Island and home indicator: the scene runs edge to edge and the UI keeps
@@ -130,9 +127,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${geist.variable} ${geistMono.variable} ${chakraPetch.variable} ${orbitron.variable}`}
+      className={`dark ${geist.variable} ${geistMono.variable} ${chakraPetch.variable}`}
     >
-      <body className="antialiased bg-[#08090D] text-[#F5F7FA] selection:bg-[#CCFF00] selection:text-[#08090D]">
+      <body className="bg-lc-void text-lc-chalk antialiased">
         {/* Old links to "/" go on to the game at /play before the home page is drawn (forward-to-game.ts) */}
         <script dangerouslySetInnerHTML={{ __html: FORWARD_TO_GAME }} />
         <script

@@ -2,21 +2,31 @@
 
 import React from "react";
 import type { TrackLimitsStatus } from "@/types/f1";
-import { HUD_GREEN, HUD_RED, HUD_SLATE, HUD_YELLOW } from "./hud-format";
+import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Icon } from "@/components/ui/icons/Icon";
+import type { IconName } from "@/components/ui/icons/registry";
+import { PenaltyBadge } from "@/components/ui/badges/PenaltyBadge";
+import { HUD_GLASS, HUD_LBL } from "./hud-format";
 
-const TONES = {
-  warning: { bg: HUD_YELLOW, fg: "#08090D", badge: "#08090D", badgeFg: HUD_YELLOW },
-  penalty: { bg: HUD_RED, fg: "#F5F7FA", badge: "#F5F7FA", badgeFg: HUD_RED },
-  lap_invalid: { bg: HUD_RED, fg: "#F5F7FA", badge: "#F5F7FA", badgeFg: HUD_RED },
-  cleared: { bg: HUD_GREEN, fg: "#08090D", badge: "#08090D", badgeFg: HUD_GREEN },
-  no_advantage: { bg: "rgba(8,9,13,0.86)", fg: "#F5F7FA", badge: "#1B1F2B", badgeFg: HUD_SLATE },
-} as const;
+type MessageKind = NonNullable<TrackLimitsStatus["message"]>["kind"];
 
-/** Strike pips: the warnings of the current cycle towards the next penalty */
-const Pips: React.FC<{ n: number; of: number; color: string; empty: string }> = ({ n, of, color, empty }) => (
-  <span className="inline-flex gap-1" aria-hidden>
+/**
+ * Each decision as the kit's badge (word and icon, in its tone) on a HUD glass pill with a hairline in the same tone.
+ * Tone comes from the badge and the hairline, never a full fill; only the bad news pulses (`lc-alert` is a crimson halo).
+ */
+const TONES: Record<MessageKind, { tone: BadgeTone; ring: string; label: string; icon?: IconName }> = {
+  warning: { tone: "warn", ring: "inset-ring-lc-caution/60", label: "Warning" },
+  penalty: { tone: "bad", ring: "inset-ring-lc-loss/70", label: "Penalty", icon: "penalty" },
+  lap_invalid: { tone: "bad", ring: "inset-ring-lc-loss/70", label: "Lap deleted", icon: "trackLimits" },
+  cleared: { tone: "good", ring: "inset-ring-lc-gain/60", label: "Cleared", icon: "success" },
+  no_advantage: { tone: "neutral", ring: "inset-ring-white/7", label: "No action", icon: "info" },
+};
+
+/** Strike pips: the warnings of the current cycle towards the next penalty, filled and outlined (never colour alone) */
+const Pips: React.FC<{ n: number; of: number }> = ({ n, of }) => (
+  <span className="inline-flex gap-1" role="img" aria-label={`${n} of ${of} warnings`}>
     {Array.from({ length: of }, (_, i) => (
-      <span key={i} className="h-2 w-2 rounded-full" style={{ backgroundColor: i < n ? color : empty }} />
+      <span key={i} className={`size-2 rounded-full ${i < n ? "bg-lc-caution" : "inset-ring-[1.5px] inset-ring-lc-keyline"}`} />
     ))}
   </span>
 );
@@ -39,26 +49,26 @@ export const RaceControlBanner: React.FC<{ status: TrackLimitsStatus | undefined
     return (
       <div
         role="alert"
-        className="lc-alert relative mt-1.5 flex min-w-[300px] flex-col gap-1.5 overflow-hidden rounded-[22px] px-4 pt-2.5 pb-3 text-[#08090D] shadow-[0_12px_34px_rgba(255,179,0,0.3)]"
-        style={{ backgroundColor: HUD_YELLOW }}
+        className={`relative mt-1.5 flex min-w-75 flex-col gap-2 overflow-hidden rounded-lc-card px-3 pt-2.5 pb-3 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
       >
-        <div className="flex items-center justify-between gap-3">
-          <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.18em] opacity-70">
-            {giveBackPos !== null ? "RACE CONTROL · ILLEGAL OVERTAKE" : "RACE CONTROL"}
+        {/* The call's badge, what to do, and the time left, on one line (the badge is the call, not a title) */}
+        <div className="flex items-center gap-3">
+          <Badge tone="warn" variant="solid" size="lg" icon={giveBackPos !== null ? "overtake" : "trackLimits"}>
+            {giveBackPos !== null ? "Illegal overtake" : "Track limits"}
+          </Badge>
+          <span className="lc-disp flex-1 text-[19px] leading-none whitespace-nowrap">
+            {giveBackPos !== null
+              ? `Hand back position · drop to P${giveBackPos}`
+              : gain !== null
+                ? `Give back ${gain.toFixed(2)} s`
+                : "Lift to give the advantage back"}
           </span>
-          <span className="lc-data text-[12px] tabular-nums">{pending.remainingS.toFixed(1)}s</span>
+          <span className="lc-data text-[12px] text-lc-caution">{pending.remainingS.toFixed(1)} s</span>
         </div>
-        <span className="lc-disp text-[19px] leading-none whitespace-nowrap">
-          {giveBackPos !== null
-            ? `Hand back position · drop to P${giveBackPos}`
-            : gain !== null
-              ? `Give back ${gain.toFixed(2)}s`
-              : "Lift to give the advantage back"}
-        </span>
-        <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-[#08090D]/20">
+        <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-lc-titanium">
           <span
-            className="absolute inset-y-0 left-0 rounded-full bg-[#08090D] transition-[width] duration-100"
-            style={{ width: `${Math.round(pending.progress * 100)}%` }}
+            className="absolute inset-0 origin-left rounded-full bg-lc-caution transition-transform duration-100"
+            style={{ transform: `scaleX(${Math.max(0, Math.min(1, pending.progress))})` }}
           />
         </span>
       </div>
@@ -67,25 +77,26 @@ export const RaceControlBanner: React.FC<{ status: TrackLimitsStatus | undefined
 
   if (msg) {
     const tone = TONES[msg.kind];
+    const bad = tone.tone === "bad";
     return (
       <div
-        role="alert"
-        className="lc-alert relative mt-1.5 inline-flex min-h-12 items-center gap-3 rounded-full py-1.5 pr-5 pl-2 shadow-[0_12px_34px_rgba(0,0,0,0.4)]"
-        style={{ backgroundColor: tone.bg, color: tone.fg }}
+        role={bad || msg.kind === "warning" ? "alert" : "status"}
+        className={`relative mt-1.5 inline-flex min-h-12 items-center gap-3 rounded-full py-1.5 pr-5 pl-2 text-lc-chalk inset-ring ${tone.ring} ${
+          bad ? "lc-alert" : ""
+        } ${HUD_GLASS}`}
       >
-        <span
-          className="inline-flex h-8 shrink-0 items-center rounded-full px-2.5 font-f1-mono text-[10px] font-extrabold tracking-[0.14em]"
-          style={{ backgroundColor: tone.badge, color: tone.badgeFg }}
-        >
-          RC
-        </span>
+        {msg.kind === "warning" ? (
+          <PenaltyBadge penalty={{ kind: "warning" }} size="lg" variant="solid" />
+        ) : (
+          <Badge tone={tone.tone} variant="solid" size="lg" icon={tone.icon}>
+            {tone.label}
+          </Badge>
+        )}
         <span className="flex min-w-0 flex-col leading-tight">
           <span className="lc-disp text-[17px] whitespace-nowrap sm:text-[19px]">{msg.text}</span>
-          {msg.detail ? <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.12em] uppercase opacity-75">{msg.detail}</span> : null}
+          {msg.detail ? <span className={`${HUD_LBL} text-lc-fog`}>{msg.detail}</span> : null}
         </span>
-        {race && status && (msg.kind === "warning" || msg.kind === "penalty") ? (
-          <Pips n={status.warnings} of={status.strikesPerPenalty} color={tone.fg} empty={msg.kind === "warning" ? "rgba(8,9,13,0.25)" : "rgba(245,247,250,0.3)"} />
-        ) : null}
+        {race && status && (msg.kind === "warning" || msg.kind === "penalty") ? <Pips n={status.warnings} of={status.strikesPerPenalty} /> : null}
       </div>
     );
   }
@@ -94,18 +105,14 @@ export const RaceControlBanner: React.FC<{ status: TrackLimitsStatus | undefined
     return (
       <div
         role="status"
-        className="relative mt-1.5 inline-flex h-11 items-center gap-2.5 rounded-full border border-[#FFB300]/60 bg-[#08090D]/[0.86] pr-5 pl-2 text-[#F5F7FA] shadow-[0_12px_34px_rgba(0,0,0,0.45)]"
+        className={`relative mt-1.5 inline-flex h-11 items-center gap-2.5 rounded-full pr-5 pl-2 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
       >
-        <span className="relative inline-flex h-[28px] w-[28px] items-center justify-center rounded-full" style={{ backgroundColor: HUD_YELLOW }}>
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#08090D" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
-            <path d="M12 8v5M12 16.5h.01" />
-          </svg>
+        <span className="inline-flex size-7 items-center justify-center rounded-full bg-lc-caution text-lc-void">
+          <Icon name="trackLimits" size="xs" />
         </span>
         <span className="lc-disp text-[16px] whitespace-nowrap sm:text-[18px]">Track limits</span>
-        <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.14em] text-[#FFB300] uppercase">
-          {offTrack ? "Off track" : "Under review"}
-        </span>
-        {race && status ? <Pips n={status.warnings} of={status.strikesPerPenalty} color={HUD_YELLOW} empty="#262B3D" /> : null}
+        <span className={`${HUD_LBL} text-lc-caution`}>{offTrack ? "Off track" : "Under review"}</span>
+        {race && status ? <Pips n={status.warnings} of={status.strikesPerPenalty} /> : null}
       </div>
     );
   }

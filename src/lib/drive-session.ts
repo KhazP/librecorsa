@@ -514,7 +514,9 @@ export class DriveSession {
         }
         if (!audio.isInitialized) {
           audio.init();
-          audio.setMuted(this.snapshot.muted);
+          // Master volume and mute are saved settings (Settings > Audio)
+          audio.setMuted(settings.audio.muted);
+          audio.setVolume(settings.audio.volume);
         } else {
           audio.resume();
         }
@@ -522,11 +524,10 @@ export class DriveSession {
         console.warn("Audio could not start; driving without sound", err);
       }
     };
+    // The Mute key flips the saved mute; applySettings passes it to the sound and the snapshot
     this.toggleMute = () => {
       this.unlockAudio();
-      const muted = !this.snapshot.muted;
-      this.publish({ muted });
-      audio?.setMuted(muted);
+      setSettings((prev) => ({ ...prev, audio: { ...prev.audio, muted: !prev.audio.muted } }));
     };
     /** The player's preferences (applySettings), and what the frame loop derives from them */
     let settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS;
@@ -998,6 +999,11 @@ export class DriveSession {
       const prev = settings;
       if (disposed || next === prev) return;
       settings = next;
+      if (next.audio !== prev.audio) {
+        if (next.audio.muted !== this.snapshot.muted) this.publish({ muted: next.audio.muted });
+        audio?.setMuted(next.audio.muted);
+        audio?.setVolume(next.audio.volume);
+      }
       if (next.keys !== prev.keys) keyLookup = buildKeyLookup(next.keys);
       if (next.padTuning !== prev.padTuning || next.keyboardTuning !== prev.keyboardTuning) {
         assistSettings = steeringAssistSettings(next.padTuning, next.keyboardTuning);
@@ -1142,7 +1148,8 @@ export class DriveSession {
 
       if (code === "Escape") {
         e.preventDefault();
-        this.togglePause();
+        // A held Esc pauses once: its repeats would resume again, or unpause after closing a screen opened from pause
+        if (!e.repeat) this.togglePause();
         return;
       }
       if (this.snapshot.paused) return;

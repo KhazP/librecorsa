@@ -2,24 +2,23 @@
 
 import React, { useState } from "react";
 import { PAD_ACTIONS, PAD_BRAKE_BUTTON, PAD_THROTTLE_BUTTON, type PadButtonBindings } from "@/lib/input/bindings";
-import { FACE_BUTTONS, PAD_BUTTON_NAMES as NAMES, type PadFamily } from "../input-mode";
+import { PadGlyph, type PadButtonName } from "@/components/ui/prompts";
+import { tokenColor } from "@/components/ui/token-color";
+import { cx } from "@/components/ui/styles";
+import { PAD_BUTTON_NAMES as NAMES, type PadFamily } from "../input-mode";
 import type { PadState } from "../useMenuNav";
 
-/** Face button colours (A B X Y / ✕ ○ □ △) */
-const FACE_COLOR = {
-  xbox: FACE_BUTTONS.xbox.map((f) => f.color),
-  playstation: FACE_BUTTONS.playstation.map((f) => f.color),
-} satisfies Record<PadFamily, string[]>;
+/** Standard-mapping buttons 0..11 as the glyphs name them */
+const GLYPH: readonly PadButtonName[] = ["a", "b", "x", "y", "lb", "rb", "lt", "rt", "view", "menu", "l3", "r3"];
 
-type Row = { key: string; buttons: number[]; chip: (f: PadFamily) => string; action: (b: PadButtonBindings) => string | null };
+type Row = { key: string; buttons: number[]; glyph: PadButtonName; action: (b: PadButtonBindings) => string | null };
 
 /** What a button does: a fixed control, or the action bound to it */
 const bound = (button: number) => (b: PadButtonBindings) => PAD_ACTIONS.find((a) => b[a.id] === button)?.label ?? null;
-const named = (button: number) => (f: PadFamily) => NAMES[f][button];
 const btn = (button: number, fixed?: string): Row => ({
   key: `b${button}`,
   buttons: [button],
-  chip: named(button),
+  glyph: GLYPH[button],
   action: fixed ? () => fixed : bound(button),
 });
 
@@ -27,18 +26,19 @@ const LEFT: Row[] = [
   btn(PAD_BRAKE_BUTTON, "Brake"),
   btn(4),
   btn(8),
-  { key: "lstick", buttons: [], chip: () => "Stick", action: () => "Steer" },
+  { key: "lstick", buttons: [], glyph: "ls", action: () => "Steer" },
   btn(10),
-  { key: "dpad-x", buttons: [14, 15], chip: () => "◀ ▶", action: () => "MFD dial" },
-  { key: "dpad-y", buttons: [12, 13], chip: () => "▲ ▼", action: () => "MFD value" },
+  { key: "dpad-x", buttons: [14, 15], glyph: "dpad-horizontal", action: () => "MFD dial" },
+  { key: "dpad-y", buttons: [12, 13], glyph: "dpad-vertical", action: () => "MFD value" },
 ];
 const RIGHT: Row[] = [btn(PAD_THROTTLE_BUTTON, "Throttle"), btn(5), btn(9), btn(3), btn(1), btn(2), btn(0), btn(11)];
 
 /** Button state on the drawing: pressed on the pad, picked in the list, or at rest */
 type Look = "pressed" | "picked" | "rest";
 
-const FILL = { pressed: "#CCFF00", picked: "#0B0C11", rest: "#0B0C11" } as const;
-const STROKE = { pressed: "#CCFF00", picked: "#CCFF00", rest: "#4A5168" } as const;
+/** The drawing's colours, read where it draws (tokens follow the page) */
+const FILL = (l: Look) => (l === "pressed" ? tokenColor("volt") : tokenColor("well"));
+const STROKE = (l: Look) => (l === "rest" ? tokenColor("keyline") : tokenColor("volt"));
 
 /** Body outlines in one 760-wide frame (both pads share it) */
 const BODY: Record<PadFamily, string> = {
@@ -46,6 +46,10 @@ const BODY: Record<PadFamily, string> = {
     "M380 118C430 118 470 110 500 112C535 114 552 130 560 152C575 200 590 260 592 300C594 330 575 345 555 340C535 335 520 310 505 290C490 270 470 262 450 262L310 262C290 262 270 270 255 290C240 310 225 335 205 340C185 345 166 330 168 300C170 260 185 200 200 152C208 130 225 114 260 112C290 110 330 118 380 118Z",
   playstation:
     "M380 122C430 122 470 106 510 108C545 110 560 128 568 150C582 196 600 262 602 300C604 334 584 352 560 346C540 341 527 318 512 296C500 280 480 272 460 272L300 272C280 272 260 280 248 296C233 318 220 341 200 346C176 352 156 334 158 300C160 262 178 196 192 150C200 128 215 110 250 108C290 106 330 122 380 122Z",
+  // Any other pad is drawn as the Xbox layout
+  get generic() {
+    return BODY.xbox;
+  },
 };
 
 /** Where each part sits on the body */
@@ -97,6 +101,10 @@ const LAYOUT: Record<
     menu: [446, 130],
     home: [380, 214],
   },
+  // Any other pad is drawn as the Xbox layout
+  get generic() {
+    return LAYOUT.xbox;
+  },
 };
 
 /** PlayStation face symbols drawn as shapes, so they look the same in every font */
@@ -112,13 +120,13 @@ const PadArt: React.FC<{ family: PadFamily; look: (button: number) => Look; axes
   const L = LAYOUT[family];
   const part = (button: number) => {
     const l = look(button);
-    return { fill: FILL[l], stroke: STROKE[l], strokeWidth: l === "rest" ? 1.5 : 2.5 };
+    return { fill: FILL(l), stroke: STROKE(l), strokeWidth: l === "rest" ? 1.5 : 2.5 };
   };
   const stick = ([cx, cy]: [number, number], button: number, ax: number, ay: number) => (
     <g>
-      <circle cx={cx} cy={cy} r={25} fill="#08090D" stroke="#2A2F40" strokeWidth={1.5} />
+      <circle cx={cx} cy={cy} r={25} fill={tokenColor("void")} stroke={tokenColor("line")} strokeWidth={1.5} />
       <circle cx={cx + ax * 7} cy={cy + ay * 7} r={16} {...part(button)} />
-      <circle cx={cx + ax * 7} cy={cy + ay * 7} r={9} fill="none" stroke={look(button) === "pressed" ? "#08090D" : "#262B3D"} strokeWidth={1.5} />
+      <circle cx={cx + ax * 7} cy={cy + ay * 7} r={9} fill="none" stroke={look(button) === "pressed" ? tokenColor("void") : tokenColor("line")} strokeWidth={1.5} />
     </g>
   );
   const [dx, dy] = L.dpad;
@@ -131,7 +139,7 @@ const PadArt: React.FC<{ family: PadFamily; look: (button: number) => Look; axes
   ];
 
   return (
-    <svg viewBox="140 62 480 300" className="block h-auto w-full" role="img" aria-label={family === "playstation" ? "DualSense controller" : "Xbox controller"}>
+    <svg viewBox="140 62 480 300" className="block h-auto w-full" role="img" aria-label="Controller">
       {/* Triggers and bumpers sit behind the body */}
       {L.triggers.map(([x, y, w, h], i) => (
         <rect key={`t${i}`} x={x} y={y} width={w} height={h} rx={8} {...part(i ? 7 : 6)} />
@@ -139,12 +147,12 @@ const PadArt: React.FC<{ family: PadFamily; look: (button: number) => Look; axes
       {L.bumpers.map(([x, y, w, h], i) => (
         <rect key={`b${i}`} x={x} y={y} width={w} height={h} rx={6} {...part(i ? 5 : 4)} />
       ))}
-      <path d={BODY[family]} fill="#1A1D27" stroke="#3A4157" strokeWidth={1.5} />
+      <path d={BODY[family]} fill={tokenColor("titanium")} stroke={tokenColor("keyline")} strokeWidth={1.5} />
 
       {family === "playstation" ? (
-        <rect x={328} y={116} width={104} height={62} rx={10} fill="#0B0C11" stroke="#2A2F40" strokeWidth={1.5} />
+        <rect x={328} y={116} width={104} height={62} rx={10} fill={tokenColor("well")} stroke={tokenColor("line")} strokeWidth={1.5} />
       ) : null}
-      <circle cx={L.home[0]} cy={L.home[1]} r={family === "xbox" ? 12 : 8} fill="#0B0C11" stroke="#3A4157" strokeWidth={1.5} />
+      <circle cx={L.home[0]} cy={L.home[1]} r={family === "xbox" ? 12 : 8} fill={tokenColor("well")} stroke={tokenColor("keyline")} strokeWidth={1.5} />
 
       {/* View / Create and Menu / Options */}
       <rect x={L.view[0] - 7} y={L.view[1] - (family === "xbox" ? 5 : 8)} width={14} height={family === "xbox" ? 10 : 16} rx={5} {...part(8)} />
@@ -154,8 +162,8 @@ const PadArt: React.FC<{ family: PadFamily; look: (button: number) => Look; axes
       {stick(L.rstick, 11, axes[2] ?? 0, axes[3] ?? 0)}
 
       {/* D-pad: one arm per button */}
-      <rect x={dx - 22} y={dy - 8} width={44} height={16} rx={3} fill="#0B0C11" />
-      <rect x={dx - 8} y={dy - 22} width={16} height={44} rx={3} fill="#0B0C11" />
+      <rect x={dx - 22} y={dy - 8} width={44} height={16} rx={3} fill={tokenColor("well")} />
+      <rect x={dx - 8} y={dy - 22} width={16} height={44} rx={3} fill={tokenColor("well")} />
       <rect x={dx - 8} y={dy - 23} width={16} height={16} rx={3} {...part(12)} />
       <rect x={dx - 8} y={dy + 7} width={16} height={16} rx={3} {...part(13)} />
       <rect x={dx - 23} y={dy - 8} width={16} height={16} rx={3} {...part(14)} />
@@ -164,10 +172,10 @@ const PadArt: React.FC<{ family: PadFamily; look: (button: number) => Look; axes
       {/* Face buttons */}
       {faces.map(([b, x, y]) => {
         const l = look(b);
-        const color = l === "pressed" ? "#08090D" : FACE_COLOR[family][b];
+        const color = l === "pressed" ? tokenColor("void") : tokenColor("chalk");
         return (
           <g key={b}>
-            <circle cx={x} cy={y} r={11.5} fill={l === "pressed" ? "#CCFF00" : "#0B0C11"} stroke={l === "rest" ? color : "#CCFF00"} strokeWidth={l === "rest" ? 1.5 : 2.5} />
+            <circle cx={x} cy={y} r={11.5} fill={FILL(l)} stroke={l === "rest" ? tokenColor("keyline") : tokenColor("volt")} strokeWidth={l === "rest" ? 1.5 : 2.5} />
             {family === "playstation" ? (
               <PsSymbol button={b} x={x} y={y} color={color} />
             ) : (
@@ -182,20 +190,12 @@ const PadArt: React.FC<{ family: PadFamily; look: (button: number) => Look; axes
   );
 };
 
-/** Name chip for a button in the lists (coloured for the face buttons) */
-const Chip: React.FC<{ row: Row; family: PadFamily; lit: boolean }> = ({ row, family, lit }) => {
-  const face = row.buttons.length === 1 && row.buttons[0] <= 3 ? FACE_COLOR[family][row.buttons[0]] : null;
-  return (
-    <span
-      className={`inline-flex h-7 min-w-[52px] shrink-0 items-center justify-center rounded-full px-2 font-f1-mono text-[11px] font-extrabold whitespace-nowrap transition-colors duration-100 ${
-        lit ? "bg-[#CCFF00] text-[#08090D]" : face ? "border-2 bg-[#08090D]" : "bg-[#1B1F2B] text-[#C5CBD8]"
-      }`}
-      style={face && !lit ? { borderColor: face, color: face } : undefined}
-    >
-      {row.chip(family)}
-    </span>
-  );
-};
+/** A button's glyph in the lists; ringed in volt while it is held down */
+const Chip: React.FC<{ row: Row; family: PadFamily; lit: boolean }> = ({ row, family, lit }) => (
+  <span className={cx("inline-flex min-w-9 shrink-0 justify-center rounded-full p-0.5", lit ? "inset-ring-2 inset-ring-lc-volt" : undefined)}>
+    <PadGlyph button={row.glyph} family={family} />
+  </span>
+);
 
 /**
  * Controller map: the connected pad drawn as an Xbox controller or a DualSense, with what every
@@ -223,12 +223,12 @@ export const PadMap: React.FC<{ family: PadFamily; bindings: PadButtonBindings; 
             key={r.key}
             onPointerEnter={() => setPicked(r.key)}
             onPointerLeave={() => setPicked((p) => (p === r.key ? null : p))}
-            className={`flex min-h-[38px] items-center gap-2.5 rounded-[12px] px-1.5 transition-colors duration-100 ${
-              lit ? "bg-[#CCFF00]/[0.08]" : picked === r.key ? "bg-white/[0.05]" : ""
+            className={`flex min-h-[38px] items-center gap-2.5 rounded-lc-nub px-1.5 transition-colors duration-100 ${
+              lit ? "bg-lc-volt/8" : picked === r.key ? "bg-white/5" : ""
             }`}
           >
             <Chip row={r} family={family} lit={lit} />
-            <span className={`min-w-0 text-[13px] leading-tight font-bold ${action ? "text-[#F5F7FA]" : "text-[#5B6275]"}`}>
+            <span className={`min-w-0 text-[13px] leading-tight font-semibold ${action ? "text-lc-chalk" : "text-lc-slate"}`}>
               {action ?? "Not used"}
             </span>
           </li>

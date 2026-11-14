@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 /** The game itself. The home page (src/app/page.tsx) links here; nothing of the simulator loads before that. */
 export default function PlayPage() {
   return (
-    <main className="h-screen w-screen overflow-hidden bg-[#07070c]">
+    <main className="h-screen w-screen overflow-hidden bg-lc-void">
       {/* Read by screen readers and search engines; the game itself draws to a canvas */}
       <h1 className="sr-only">Play LibreCorsa: free open-source racing simulator in your browser</h1>
       <p className="sr-only">{SITE_DESCRIPTION}</p>

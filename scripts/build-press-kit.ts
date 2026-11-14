@@ -15,7 +15,16 @@ import { PRESS_KIT_ZIP, PRESS_SCREENSHOTS, RISE_PRESS_KIT_ZIP, RISE_RENDERS } fr
 const PUBLIC = join(process.cwd(), "public");
 const SHOTS = join(PUBLIC, "press/screenshots");
 const THUMBS = join(SHOTS, "thumbs");
-const LOGOS = ["branding/librecorsa-logo.svg", "branding/librecorsa-mark.svg", "branding/icon-512.png", "press/banner.png"];
+// The logo files come from `npm run brand` (scripts/build-brand.ts); run it first when the logo changes
+const LOGOS = [
+  "branding/librecorsa-logo.svg",
+  "branding/librecorsa-logo-on-light.svg",
+  "branding/librecorsa-logo-mono.svg",
+  "branding/librecorsa-mark.svg",
+  "branding/librecorsa-mark-mono.svg",
+  "branding/icon-512.png",
+  "press/banner.png",
+];
 
 async function main(): Promise<void> {
   const missing = PRESS_SCREENSHOTS.filter((s) => !existsSync(join(SHOTS, s.file))).map((s) => s.file);

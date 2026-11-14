@@ -6,8 +6,9 @@
  * asked for once and kept for this browser tab only (sessionStorage); it goes out only in the X-Admin-Key header.
  */
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
+import { READ, SiteIntro, SitePage } from "@/components/home/SitePage";
+import { Button, Card as KitCard, Segmented, Skeleton, TextField } from "@/components/ui";
+import { Icon } from "@/components/ui/icons";
 import { onlineUrl } from "@/lib/net/online-config";
 import type { AdminStats as StatsBody, Count, UsageGroup } from "../../../cloudflare/api/admin";
 import type { CloudflareStats } from "../../../cloudflare/api/analytics";
@@ -15,7 +16,6 @@ import {
   BarChart,
   bytes,
   Card,
-  CARD,
   change,
   count,
   dayLabel,
@@ -127,7 +127,7 @@ export function AdminStats() {
   useEffect(() => setKey(readKey()), []);
 
   // The links to the parts land below the sticky bar, whatever its height (it wraps on a phone)
-  const scrollRef = useRef<HTMLElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const bar = barRef.current;
@@ -218,87 +218,102 @@ export function AdminStats() {
   };
 
   return (
-    // The body never scrolls (the game fills the screen), so this page scrolls itself
-    <main ref={scrollRef} id="admin-scroll" className="h-dvh overflow-y-auto scroll-smooth bg-[#08090D] text-[#F5F7FA]">
-      <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-8 px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(3rem,env(safe-area-inset-bottom))] sm:px-8">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <Link href="/" aria-label="LibreCorsa home" className="no-underline">
-            <LibreCorsaLogo variant="compact" size="sm" />
-          </Link>
-          {key ? (
-            <button type="button" onClick={forget} className="rounded-full border border-[#262B3D] px-4 py-2 text-[14px] text-[#8E96AA] transition-colors hover:border-[#3A4157] hover:text-[#F5F7FA]">
-              Forget key
-            </button>
-          ) : null}
-        </header>
+    <SitePage
+      scrollRef={scrollRef}
+      id="admin-scroll"
+      className="motion-safe:scroll-smooth"
+      action={
+        key ? (
+          <Button variant="secondary" size="sm" icon={<Icon name="locked" />} onClick={forget}>
+            Forget key
+          </Button>
+        ) : null
+      }
+    >
+      <SiteIntro title="Numbers">
+        <p className={READ}>
+          How much people drive, where, in what and with what. The driving totals carry no player id. The drivers, boards and races
+          parts count the names people race under, as the boards show them.
+        </p>
+      </SiteIntro>
 
-        <section className="flex flex-col gap-3">
-          <h1 className="lc-disp text-[clamp(36px,7vw,56px)] text-[#F5F7FA]">Numbers</h1>
-          <p className="max-w-[680px] text-[15px] leading-relaxed text-[#C5CBD8]">
-            How much people drive, where, in what and with what. The driving totals carry no player id. The drivers, boards and races
-            parts count the names people race under, as the boards show them.
-          </p>
-        </section>
-
-        {!key ? (
-          <form onSubmit={submit} className={`${CARD} flex max-w-[480px] flex-col gap-3 p-5`}>
-            <label htmlFor="admin-key" className="text-[14px] text-[#C5CBD8]">
-              Admin key
-            </label>
-            <div className="flex gap-2">
-              <input
-                id="admin-key"
+      {!key ? (
+        <KitCard className="w-full max-w-[480px]">
+          <form onSubmit={submit} className="flex flex-col gap-3">
+            <div className="flex items-start gap-2 max-sm:flex-col max-sm:items-stretch">
+              <TextField
+                label="Admin key"
+                name="admin-key"
                 type="password"
-                autoComplete="off"
+                // A password manager may keep the key (and paste it): the field never blocks one
+                autoComplete="current-password"
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                className="lc-data min-w-0 flex-1 rounded-[12px] border border-[#262B3D] bg-[#08090D] px-3 py-2.5 text-[15px] text-[#F5F7FA] outline-none focus:border-[#CCFF00]"
+                onChange={setDraft}
+                hint="Kept in this tab only."
+                error={message ?? undefined}
+                className="min-w-0 flex-1"
               />
-              <button type="submit" className="lc-title rounded-full bg-[#CCFF00] px-5 py-2.5 text-[15px] text-[#08090D] transition-colors hover:bg-[#99BF00]">
-                Open
-              </button>
+              {/* Level with the field, below its label */}
+              <Button type="submit" variant="primary" className="sm:mt-5.5">
+                Open numbers
+              </Button>
             </div>
-            <p className="text-[13px] text-[#8E96AA]">Kept in this tab only.</p>
-            {message ? <p className="text-[14px] text-[#FF6B6B]">{message}</p> : null}
+            <p role="alert" className="sr-only">
+              {message ?? ""}
+            </p>
           </form>
-        ) : (
-          <>
-            <div ref={barRef} className="sticky top-0 z-10 -mx-4 flex flex-col gap-2.5 border-b border-[#1A1E2A] bg-[#08090D]/95 px-4 py-3 backdrop-blur sm:-mx-8 sm:px-8">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div role="radiogroup" aria-label="Range" className="inline-flex rounded-full border border-[#262B3D] bg-[#11131A] p-1">
-                  {RANGES.map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      role="radio"
-                      aria-checked={days === r}
-                      onClick={() => setDays(r)}
-                      className={`rounded-full px-4 py-1.5 text-[14px] transition-colors ${days === r ? "bg-[#CCFF00] font-semibold text-[#08090D]" : "text-[#8E96AA] hover:text-[#F5F7FA]"}`}
-                    >
-                      {r} days
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[14px] text-[#8E96AA]" aria-live="polite">
-                  {state === "loading" ? "Loading…" : stats ? `${dayLabel(stats.from)} – ${dayLabel(stats.to)} (UTC)` : ""}
-                </p>
-              </div>
-              {stats ? (
-                <nav aria-label="Parts of the page" className="flex gap-x-4 gap-y-1 overflow-x-auto whitespace-nowrap text-[14px] [scrollbar-width:none] sm:flex-wrap">
-                  {SECTIONS.map((s) => (
-                    <a key={s.id} href={`#${s.id}`} className="text-[#8E96AA] no-underline transition-colors hover:text-[#F5F7FA]">
-                      {s.name}
-                    </a>
-                  ))}
-                </nav>
-              ) : null}
+        </KitCard>
+      ) : (
+        <div className="flex flex-col gap-8">
+          <div ref={barRef} className="sticky top-0 z-10 -mx-4 flex flex-col gap-3 border-b border-lc-line bg-lc-void/95 px-4 py-3 backdrop-blur sm:-mx-8 sm:px-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Segmented
+                aria-label="Range"
+                size="sm"
+                value={String(days)}
+                onChange={(id) => setDays(Number(id) as Range)}
+                options={RANGES.map((r) => ({ id: String(r), label: `${r} days` }))}
+              />
+              <p className="lc-data m-0 text-[13px] font-medium text-lc-slate" aria-live="polite">
+                {state === "loading" ? "Loading…" : stats ? `${dayLabel(stats.from)} – ${dayLabel(stats.to)} (UTC)` : ""}
+              </p>
             </div>
-            {message ? <p className="text-[14px] text-[#FF6B6B]">{message}</p> : null}
-            {stats ? <Dashboard stats={stats} nowMs={statsAtMs} names={names} cloudflare={cloudflare} /> : null}
-          </>
-        )}
-      </div>
-    </main>
+            {stats ? (
+              <nav aria-label="Parts of the page" className="-mx-2 flex overflow-x-auto whitespace-nowrap [scrollbar-width:none] sm:flex-wrap">
+                {SECTIONS.map((s) => (
+                  <a
+                    key={s.id}
+                    href={`#${s.id}`}
+                    className="inline-flex min-h-8 items-center rounded-full px-2 text-[14px] font-medium text-lc-slate no-underline transition-colors duration-200 hover:text-lc-chalk pointer-coarse:min-h-11"
+                  >
+                    {s.name}
+                  </a>
+                ))}
+              </nav>
+            ) : null}
+          </div>
+          {message ? (
+            <p role="alert" className="m-0 flex items-start gap-2 text-[14px] font-medium text-lc-loss">
+              <Icon name="error" className="mt-0.5" />
+              {message}
+            </p>
+          ) : null}
+          {stats ? (
+            <Dashboard stats={stats} nowMs={statsAtMs} names={names} cloudflare={cloudflare} />
+          ) : state === "loading" ? (
+            <div aria-busy="true" aria-label="Loading the numbers" className="flex flex-col gap-4">
+              <Skeleton className="h-8 w-48" />
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-32" />
+                ))}
+              </div>
+              <Skeleton className="h-64" />
+            </div>
+          ) : null}
+        </div>
+      )}
+    </SitePage>
   );
 }
 
@@ -349,17 +364,17 @@ function Dashboard({ stats, nowMs, names, cloudflare }: { stats: StatsBody; nowM
         title="Summary"
         intro={
           <>
-            In these {stats.days} days people drove <b className="text-[#F5F7FA]">{hours(totals.minutes)} hours</b> over{" "}
-            <b className="text-[#F5F7FA]">{count(totals.sessions)} sessions</b>.
+            In these {stats.days} days people drove <b className="text-lc-chalk">{hours(totals.minutes)} hours</b> over{" "}
+            <b className="text-lc-chalk">{count(totals.sessions)} sessions</b>.
             {top(stats.byCircuit) ? (
               <>
-                {" "}The most-driven circuit was <b className="text-[#F5F7FA]">{names.circuit(top(stats.byCircuit).id)}</b>
+                {" "}The most-driven circuit was <b className="text-lc-chalk">{names.circuit(top(stats.byCircuit).id)}</b>
               </>
             ) : null}
             {top(stats.byCar) ? (
               <>
                 {top(stats.byCircuit) ? " and the most-driven car the " : " The most-driven car was the "}
-                <b className="text-[#F5F7FA]">{names.car(top(stats.byCar).id)}</b>
+                <b className="text-lc-chalk">{names.car(top(stats.byCar).id)}</b>
               </>
             ) : null}
             {top(stats.byCircuit) || top(stats.byCar) ? "." : null} {count(board.lapsInRange)} board times were set
@@ -414,8 +429,8 @@ function Dashboard({ stats, nowMs, names, cloudflare }: { stats: StatsBody; nowM
         intro={
           extras ? (
             <>
-              What the driving was done with, as a share of the hours. Builds before this was added don&apos;t send it, so these cover{" "}
-              <b className="text-[#F5F7FA]">{percent(extrasMinutes, totals.minutes)}</b> of the hours in the range.
+              What the driving was done with, as a share of the hours. Builds before this was added don’t send it, so these cover{" "}
+              <b className="text-lc-chalk">{percent(extrasMinutes, totals.minutes)}</b> of the hours in the range.
             </>
           ) : (
             "What the driving was done with. This shows once the database has migration 0004 (the deploy applies it)."
@@ -579,17 +594,17 @@ function SiteSection({ cloudflare }: { cloudflare: CloudflareState }) {
       <Section id="site" title="Site" intro={intro}>
         {cloudflare.state === "off" ? (
           <Card>
-            <ol className="flex list-decimal flex-col gap-2 pl-5 text-[14px] leading-relaxed text-[#C5CBD8]">
+            <ol className="lc-body m-0 flex list-decimal flex-col gap-2 pl-5 leading-relaxed">
               <li>
-                In the Cloudflare dashboard, create an API token with <b className="text-[#F5F7FA]">Account Analytics: Read</b> (and{" "}
-                <b className="text-[#F5F7FA]">Zone Analytics: Read</b> for the site&apos;s visitors).
+                In the Cloudflare dashboard, create an API token with <b className="text-lc-chalk">Account Analytics: Read</b> (and{" "}
+                <b className="text-lc-chalk">Zone Analytics: Read</b> for the site’s visitors).
               </li>
               <li>
-                Run <code className="lc-data text-[#F5F7FA]">npx wrangler secret put CF_ANALYTICS_TOKEN</code> and paste it.
+                Run <code className="lc-data text-lc-chalk">npx wrangler secret put CF_ANALYTICS_TOKEN</code> and paste it.
               </li>
               <li>
-                For visitors per day, add the domain&apos;s zone id to <code className="lc-data text-[#F5F7FA]">vars</code> in wrangler.jsonc as{" "}
-                <code className="lc-data text-[#F5F7FA]">ANALYTICS_ZONE_ID</code> and deploy.
+                For visitors per day, add the domain’s zone id to <code className="lc-data text-lc-chalk">vars</code> in wrangler.jsonc as{" "}
+                <code className="lc-data text-lc-chalk">ANALYTICS_ZONE_ID</code> and deploy.
               </li>
             </ol>
           </Card>
@@ -668,13 +683,13 @@ function SiteSection({ cloudflare }: { cloudflare: CloudflareState }) {
       </div>
       {cf.problems.length ? (
         <details className={NOTE}>
-          <summary className="cursor-pointer select-none hover:text-[#C5CBD8]">
+          <summary className="inline-flex min-h-9 cursor-pointer items-center select-none hover:text-lc-chalk pointer-coarse:min-h-11">
             {cf.problems.length} {cf.problems.length === 1 ? "part" : "parts"} could not be read
           </summary>
           <ul className="mt-2 flex flex-col gap-1">
             {cf.problems.map((p) => (
               <li key={p.part}>
-                <span className="text-[#C5CBD8]">{p.part}:</span> {p.message}
+                <span className="text-lc-fog">{p.part}:</span> {p.message}
               </li>
             ))}
           </ul>

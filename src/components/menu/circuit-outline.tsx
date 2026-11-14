@@ -31,18 +31,18 @@ export const TrackOutline: React.FC<{ map: HudMap; sectors?: boolean; className?
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
-      <path d={map.path} fill="none" stroke={sectors ? "#141822" : "#1B1F2B"} strokeWidth={sectors ? 52 : thin ? 44 : 56} strokeLinejoin="round" />
+      <path d={map.path} fill="none" stroke={sectors ? "var(--color-lc-carbon)" : "var(--color-lc-titanium)"} strokeWidth={sectors ? 52 : thin ? 44 : 56} strokeLinejoin="round" />
       {sectors ? (
         map.sectorPaths.map((d, i) => (
           <path key={i} d={d} fill="none" stroke={SECTOR_COLORS[i]} strokeWidth={16} strokeLinejoin="round" strokeLinecap="round" />
         ))
       ) : (
-        <path d={map.path} fill="none" stroke={thin ? "#C5CBD8" : "#CCFF00"} strokeWidth={thin ? 16 : 22} strokeLinejoin="round" />
+        <path d={map.path} fill="none" stroke={thin ? "var(--color-lc-fog)" : "var(--color-lc-volt)"} strokeWidth={thin ? 16 : 22} strokeLinejoin="round" />
       )}
       {sectors ? (
-        <path d={map.path} fill="none" stroke="#F5F7FA" strokeOpacity={0.7} strokeWidth={4} strokeDasharray="3 37" className="lc-flow" />
+        <path d={map.path} fill="none" stroke="var(--color-lc-chalk)" strokeOpacity={0.7} strokeWidth={4} strokeDasharray="3 37" className="lc-flow" />
       ) : null}
-      <rect x={sx - 6} y={sy - 28} width={12} height={56} rx={3} fill="#F5F7FA" />
+      <rect x={sx - 6} y={sy - 28} width={12} height={56} rx={3} fill="var(--color-lc-chalk)" />
     </svg>
   );
 };

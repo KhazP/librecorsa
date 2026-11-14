@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { Camera, Pause, Play } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/icons/Icon";
+import { ArrowKeys, KeyCap } from "@/components/ui/prompts";
+import { HUD_GLASS, HUD_LBL } from "./hud-format";
+import { HUD_CHOSEN, HUD_CONTROL, HUD_IDLE } from "./styles/hud-style-parts";
 
 const SPEEDS = [0.25, 0.5, 1, 2] as const;
 /** Arrow-key seek step (s) */
@@ -91,10 +95,8 @@ export const ReplayBar: React.FC<{
   }, []);
 
   const rel = shown - endS;
-  const relText = Math.abs(rel) < 0.05 ? "0.0" : `−${Math.abs(rel).toFixed(1)}`;
+  const relText = Math.abs(rel) < 0.05 ? "0.0" : `\u2212${Math.abs(rel).toFixed(1)}`;
   const fill = endS > startS ? ((shown - startS) / (endS - startS)) * 100 : 100;
-  const ctrlClass =
-    "inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full border border-[#262B3D] bg-[#11131A] px-3.5 text-[13px] font-bold whitespace-nowrap text-[#F5F7FA] transition-colors hover:border-[#CCFF00] hover:text-[#CCFF00]";
 
   return (
     <>
@@ -104,7 +106,7 @@ export const ReplayBar: React.FC<{
 
       <section
         aria-label="Replay controls"
-        className="lc-ui-zoom pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom,0px)+3.5rem)] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto z-40 flex max-w-[820px] flex-col gap-2.5 rounded-[28px] border border-white/8 bg-[#08090D]/80 px-4 py-3.5 text-[#F5F7FA] shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-[16px] sm:bottom-[calc(env(safe-area-inset-bottom,0px)+76px)] short:bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] short:gap-2 short:py-2.5"
+        className={`lc-ui-zoom pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom,0px)+3.5rem)] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto z-40 flex max-w-205 flex-col gap-2.5 rounded-lc-sheet px-4 py-3.5 text-lc-chalk ${HUD_GLASS} sm:bottom-[calc(env(safe-area-inset-bottom,0px)+76px)] short:bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] short:gap-2 short:py-2.5`}
       >
         <div className="flex items-center gap-3.5">
           <button
@@ -112,15 +114,15 @@ export const ReplayBar: React.FC<{
             onClick={onTogglePlay}
             aria-label={playing ? "Pause replay" : "Play replay"}
             title="Play / pause (Space)"
-            className="inline-flex h-[52px] w-[52px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12)] transition-colors hover:bg-[#d9ff33] short:h-11 short:w-11"
+            className="inline-flex size-13 shrink-0 cursor-pointer items-center justify-center rounded-full bg-lc-volt text-lc-void shadow-lc-focus transition-colors hover:bg-lc-volt-hi active:bg-lc-volt-dim short:size-11"
           >
-            {playing ? <Pause size={20} fill="currentColor" strokeWidth={0} /> : <Play size={20} fill="currentColor" strokeWidth={0} />}
+            <Icon name={playing ? "pause" : "play"} size="md" />
           </button>
 
-          <label className="flex min-w-[120px] flex-1 flex-col gap-2">
-            <span className="flex justify-between font-f1-mono text-[10px] font-extrabold tracking-[0.14em] text-[#8E96AA]">
-              <span>BUFFER</span>
-              <span>LIVE</span>
+          <label className="flex min-w-30 flex-1 flex-col gap-2">
+            <span className={`flex justify-between ${HUD_LBL}`}>
+              <span>Buffer</span>
+              <span>Live</span>
             </span>
             <input
               type="range"
@@ -142,7 +144,7 @@ export const ReplayBar: React.FC<{
           <div
             role="group"
             aria-label="Playback speed"
-            className="flex rounded-full border border-[#262B3D] bg-[#08090D] p-1"
+            className="flex rounded-full border border-lc-line bg-lc-void p-1"
           >
             {SPEEDS.map((s) => (
               <button
@@ -150,11 +152,10 @@ export const ReplayBar: React.FC<{
                 type="button"
                 onClick={() => onSpeed(s)}
                 aria-pressed={speed === s}
-                className="h-8 min-w-[46px] cursor-pointer rounded-full px-2.5 font-f1-mono text-[12px] font-extrabold transition-colors"
-                style={{
-                  backgroundColor: speed === s ? "#CCFF00" : "transparent",
-                  color: speed === s ? "#08090D" : "#8E96AA",
-                }}
+                className={`lc-data h-8 min-w-11.5 rounded-full px-2.5 text-[12px] ${HUD_CONTROL} ${
+                  // Chosen is chalk on line with a hairline (UI standard §4); volt stays the cursor
+                  speed === s ? HUD_CHOSEN : HUD_IDLE
+                }`}
               >
                 {s}×
               </button>
@@ -162,27 +163,29 @@ export const ReplayBar: React.FC<{
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={onCycleCamera} title="Cycle replay camera" className={ctrlClass}>
-              <Camera size={16} aria-hidden />
+            <Button variant="secondary" size="sm" icon={<Icon name="camera" />} onClick={onCycleCamera} title="Cycle replay camera">
               {cameraLabel}
-            </button>
+            </Button>
 
-            <button type="button" onClick={onExit} className={ctrlClass}>
+            <Button variant="secondary" size="sm" prompt={<KeyCap>{exitKeyLabel}</KeyCap>} onClick={onExit}>
               Exit
-              <span className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full border border-[#3A4157] bg-[#08090D] px-1.5 font-f1-mono text-[10px] font-extrabold">
-                {exitKeyLabel}
-              </span>
-            </button>
+            </Button>
           </div>
         </div>
       </section>
 
       <div
         aria-hidden
-        className="lc-ui-zoom pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+18px)] left-1/2 z-40 hidden -translate-x-1/2 gap-[18px] font-f1-mono text-[11px] font-bold tracking-[0.1em] whitespace-nowrap text-[#8E96AA] sm:flex pointer-coarse:hidden short:hidden"
+        className="lc-ui-zoom pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+18px)] left-1/2 z-40 hidden -translate-x-1/2 items-center gap-5.5 text-[13px] font-semibold whitespace-nowrap text-lc-fog sm:flex pointer-coarse:hidden short:hidden"
       >
-        <span>SPACE PLAY / PAUSE</span>
-        <span>← → SEEK {SEEK_STEP_S} S</span>
+        <span className="inline-flex items-center gap-2">
+          <KeyCap>Space</KeyCap>
+          Play / pause
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <ArrowKeys set="horizontal" />
+          Seek {SEEK_STEP_S} s
+        </span>
       </div>
     </>
   );

@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Check, Search, Star } from "lucide-react";
+import { Button, EmptyState, IconButton, MediaTile, Select, TextField, type MediaTileProps } from "@/components/ui";
+import { Icon } from "@/components/ui/icons";
+import { KeyCap, PadGlyph, PromptBar } from "@/components/ui/prompts";
 import { connectedPads } from "@/lib/input/device-input";
 import type { ContentLibrary, LibraryKind } from "@/lib/settings/player-settings";
 import { currentInputMode, useInputMode } from "./input-mode";
-import { focusables, focusOnHover, useBackHandler, useMoveHandler, type Dir } from "./useFocusNav";
+import { focusables, useBackHandler, useMoveHandler, type Dir } from "./useFocusNav";
 import { isMenuNavSuspended, padKey } from "./useMenuNav";
-import { CURSOR_TILE, KeyCap, PadGlyph, PrimaryButton, PromptBar, Segmented } from "./menu-ui";
 
 /** Favourites and recents handed down from the saved settings (absent: the browsers work without them) */
 export interface LibraryProps {
@@ -24,10 +25,9 @@ export interface BrowserFilter<T> {
 }
 
 /**
- * A heading in the filter column and its categories (Library; then groups taken from the data). One category is
- * picked per group and the groups narrow the list together (Germany + Hill climb + one modder). A second press of
- * the picked category lets it go; the group holding the `all` filter then shows `all`, which also lets every other
- * group's pick go.
+ * A filter and its categories (Library; then groups taken from the data), drawn as one `Select`. One category is
+ * picked per group and the groups narrow the list together (Germany + Hill climb + one modder). A group without an
+ * `all` filter offers "Any"; picking the `all` filter lets every group's pick go.
  */
 export interface BrowserFilterGroup<T> {
   label: string;
@@ -59,6 +59,9 @@ export interface BrowserAction {
   run: () => void;
 }
 
+/** What a card shows: the parts of a `MediaTile` */
+export type BrowserCard = Pick<MediaTileProps, "media" | "title" | "meta" | "badges" | "overlay" | "aspect">;
+
 export interface ContentBrowserProps<T> {
   /** Accessible name ("Circuits") */
   label: string;
@@ -75,11 +78,11 @@ export interface ContentBrowserProps<T> {
   initialSelectedId?: string;
   isFavorite: (item: T) => boolean;
   onToggleFavorite?: (item: T) => void;
-  /** The card's content; its top-right corner is left for the star */
-  renderCard: (item: T, state: { selected: boolean }) => React.ReactNode;
+  /** The card's picture, title, line of facts and badges (drawn as the kit's `MediaTile`, the star in its corner) */
+  renderCard: (item: T, state: { selected: boolean }) => BrowserCard;
   /** The detail pane's content above its buttons */
   renderDetail: (item: T) => React.ReactNode;
-  /** The detail pane's main button (Load circuit, Drive this car) */
+  /** The detail pane's main button (Load circuit, Choose car) */
   primaryAction: (item: T) => BrowserAction;
   /** Ⓑ / Esc from the grid or the filters closes the browser; without it the screen's own Back runs */
   onClose?: () => void;
@@ -90,6 +93,7 @@ export interface ContentBrowserProps<T> {
 }
 
 const ALL = "all";
+const ANY = "any";
 
 /** Every word of the query appears in the item's text */
 const matches = (text: string, words: string[]) => {
@@ -107,20 +111,31 @@ const focusEl = (el: HTMLElement | null | undefined): boolean => {
 const isTyping = (el: Element | null) =>
   el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || (el instanceof HTMLInputElement && !["range", "checkbox", "radio", "button"].includes(el.type));
 
+/** A labelled field of the filter bar (the label names one control: a field label, not a heading) */
+const Field: React.FC<{ label: string; htmlFor: string; children: React.ReactNode; className?: string }> = ({ label, htmlFor, children, className }) => (
+  <div className={`flex min-w-0 flex-col gap-1.5 ${className ?? ""}`}>
+    <label htmlFor={htmlFor} className="lc-field-label">
+      {label}
+    </label>
+    {children}
+  </div>
+);
+
 /**
- * A content browser (Racing Line rule 6, "Lists grow"): search, sort, categories with live counts, a scrolling grid
- * of cards with sticky group headings, favourites, and a detail pane with the main action. Built to hold hundreds of
+ * A content browser (Racing Line rule 6, "Lists grow"): search, filters and sort in one bar, a scrolling wall of
+ * picture tiles with group headings, favourites, and a detail pane with the main action. Built to hold hundreds of
  * entries; the categories come from the caller's data.
  *
- * Input: the screen's useFocusNav moves the focus spatially, so the d-pad / arrows walk the grid in 2-D, step left
- * into the categories and right into the detail pane. Ⓐ / Enter on a card shows it in the detail pane and moves the
- * focus to its main action; Ⓑ / Esc in the detail pane returns to the card, then (with `onClose`) closes the browser.
+ * Input: the screen's useFocusNav moves the focus spatially, so the d-pad / arrows walk the wall in 2-D, step up into
+ * the filter bar and right into the detail pane. Ⓐ / Enter on a card shows it in the detail pane and moves the focus
+ * to its main action; Ⓑ / Esc in the detail pane returns to the card, then (with `onClose`) closes the browser.
  * Ⓧ / F stars the focused card, Ⓨ or / jumps to the search field.
  */
 export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
   const { items, idOf, sorts, filterGroups, onToggleFavorite, onClose, searchText } = props;
   const { mode, family } = useInputMode();
   const pad = mode === "pad";
+  const baseId = useId();
   const [query, setQuery] = useState("");
   /** The picked category of each group, by the group's label */
   const [picks, setPicks] = useState<Record<string, string>>({});
@@ -131,7 +146,6 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
   const searchRef = useRef<HTMLInputElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const detailRef = useRef<HTMLElement | null>(null);
-  const filtersRef = useRef<HTMLElement | null>(null);
 
   const words = useMemo(() => query.trim().toLowerCase().split(/\s+/).filter(Boolean), [query]);
   const searched = useMemo(() => (words.length ? items.filter((i) => matches(searchText(i), words)) : items), [items, words, searchText]);
@@ -150,6 +164,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
   const visible = useMemo(
     () => (narrowing.length ? searched.filter((i) => narrowing.every((n) => n.filter.test(i))) : searched),
     // `narrowing` is rebuilt each render: its picks are in `narrowKey`, their tests in `filterGroups`
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [searched, narrowKey, filterGroups]
   );
   const sort = sorts.find((s) => s.id === sortId) ?? sorts[0];
@@ -218,13 +233,13 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
     setQuery("");
     setPicks({});
   };
-  /** Picks a category; pressing the picked one again lets it go, and `all` lets every group's pick go */
-  const pick = (g: BrowserFilterGroup<T>, f: BrowserFilter<T>) =>
+  /** Picks a category: `all` lets every group's pick go, "Any" this group's */
+  const pick = (g: BrowserFilterGroup<T>, id: string) =>
     setPicks((p) => {
-      if (f.id === ALL) return {};
+      if (id === ALL) return {};
       const next = { ...p };
-      if (pickOf(g)?.id === f.id) delete next[g.label];
-      else next[g.label] = f.id;
+      if (id === ANY) delete next[g.label];
+      else next[g.label] = id;
       return next;
     });
 
@@ -244,29 +259,21 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
     return false;
   });
 
-  /** The filter column's entry: the open category */
-  const focusFilters = () => {
-    const nav = filtersRef.current;
-    return focusEl(nav?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? (nav ? focusables(nav)[0] : null));
-  };
   const focusGrid = () => focusEl(cardOf(selectedKey) ?? gridRef.current?.querySelector<HTMLElement>("[data-browser-item]"));
 
   /**
-   * The d-pad / arrows on a card walk the grid by rows and columns (the nearest-box search would take a category or
-   * the search field that overlaps the row); off the grid's edge: left = categories, right = detail, up = search.
+   * The d-pad / arrows on a card walk the grid by rows and columns; off the grid's edge: right = detail, up = the
+   * filter bar (the navigation's own search finds the nearest field).
    */
   useMoveHandler((dir: Dir) => {
     const grid = gridRef.current;
     const active = document.activeElement as HTMLElement | null;
     if (!grid || !active) return false;
-    // From the category column (when it is a column) right goes back into the grid
-    if (filtersRef.current?.contains(active)) {
-      if (dir !== "right" || getComputedStyle(filtersRef.current).flexDirection !== "column") return false;
-      return focusGrid() || false;
-    }
     // In the detail pane left / right stay on their row (layout switch, liveries); off its left edge back to the card
     const detail = detailRef.current;
     if (detail?.contains(active) && (dir === "left" || dir === "right")) {
+      // A segmented row moves its own choice
+      if (active.closest('[role="radiogroup"]')) return false;
       const a = active.getBoundingClientRect();
       const ay = a.top + a.height / 2;
       const ax = a.left + a.width / 2;
@@ -276,9 +283,9 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
         .filter(({ r }) => r.top <= ay && r.bottom >= ay && (dir === "right" ? r.left + r.width / 2 > ax + 2 : r.left + r.width / 2 < ax - 2))
         .sort((x, y) => Math.abs(x.r.left - a.left) - Math.abs(y.r.left - a.left))[0];
       if (next) return focusEl(next.el);
-      return dir === "left" ? focusGrid() || focusFilters() || false : true;
+      return dir === "left" ? focusGrid() || false : true;
     }
-    // Up / down walk the pane's own controls; past its top the sort, past its bottom nowhere
+    // Up / down walk the pane's own controls; past its top the filter bar, past its bottom nowhere
     if (detail?.contains(active)) {
       const a = active.getBoundingClientRect();
       const ax = a.left + a.width / 2;
@@ -295,7 +302,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
       if (dir === "down") return true;
       // Stacked under the grid (phones): up returns to the card
       if (detail.getBoundingClientRect().top >= grid.getBoundingClientRect().bottom - 1) return focusGrid() || true;
-      return focusEl(rootRef.current?.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Sort"] [aria-checked="true"]') ?? searchRef.current);
+      return false;
     }
     if (!active.hasAttribute("data-browser-item") || !grid.contains(active)) return false;
     const a = active.getBoundingClientRect();
@@ -321,12 +328,12 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
       }
     }
     if (target) return focusEl(target);
-    if (dir === "left") return focusFilters() || false;
+    if (dir === "left") return true;
     if (dir === "right") {
       focusDetail();
       return true;
     }
-    if (dir === "up") return focusEl(searchRef.current);
+    if (dir === "up") return false;
     // Below the last row: the detail pane where it is stacked under the grid (phones), else stay
     const d = detailRef.current;
     if (d && d.getBoundingClientRect().top >= grid.getBoundingClientRect().bottom - 1) focusDetail();
@@ -405,163 +412,139 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
   };
   const filtered = query.trim() !== "" || narrowing.length > 0;
   const narrowLabels = narrowing.map((n) => n.filter.label);
+  // A group with one category narrows nothing worth a control
+  const shownGroups = filterGroups.filter((g) => g.filters.length > 1 || g.filters.some((f) => f.id === ALL));
 
   return (
-    <div ref={rootRef} className="flex min-w-0 flex-col gap-3.5" role="region" aria-label={props.label}>
-      {/* Search, count and sort */}
-      <div className="flex flex-wrap items-center gap-2.5">
-        {props.toolbar}
-        <label className="flex h-11 min-w-[min(100%,220px)] flex-1 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#08090D]/80 pr-2 pl-4 transition-colors focus-within:border-[#CCFF00]">
-          <Search aria-hidden className="h-4 w-4 shrink-0 text-[#8E96AA]" strokeWidth={2.4} />
-          <input
-            ref={searchRef}
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                focusEl(gridRef.current?.querySelector<HTMLElement>("[data-browser-item]"));
-              } else if (e.key === "Escape" && query) {
-                // First Esc clears the search; the next one leaves the field
-                e.preventDefault();
-                setQuery("");
-              }
-            }}
-            aria-label={`Search ${props.label.toLowerCase()}`}
-            placeholder={props.searchPlaceholder}
-            autoComplete="off"
-            spellCheck={false}
-            className="h-10 min-w-0 flex-1 border-0 bg-transparent text-[15px] font-medium text-[#F5F7FA] outline-none placeholder:text-[#8E96AA] focus-visible:outline-none [&::-webkit-search-cancel-button]:hidden"
-          />
-          <span className="hidden sm:inline-flex">{pad ? <PadGlyph button="y" family={family} /> : <KeyCap>/</KeyCap>}</span>
-        </label>
+    <div ref={rootRef} className="flex min-w-0 flex-col gap-4" role="region" aria-label={props.label}>
+      {/* Search, filters and sort */}
+      <div className="flex flex-wrap items-end gap-x-3 gap-y-2.5" data-nav-zone="browser-filters">
+        {props.toolbar ? <div className="flex items-end self-stretch">{props.toolbar}</div> : null}
+        <div className="min-w-[min(100%,220px)] flex-1">
+        <TextField
+          {...({ ref: searchRef } as object)}
+          label="Search"
+          type="search"
+          value={query}
+          onChange={setQuery}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              focusEl(gridRef.current?.querySelector<HTMLElement>("[data-browser-item]"));
+            } else if (e.key === "Escape" && query) {
+              // First Esc clears the search; the next one leaves the field
+              e.preventDefault();
+              setQuery("");
+            }
+          }}
+          placeholder={props.searchPlaceholder}
+          autoComplete="off"
+          spellCheck={false}
+          icon={<Icon name="search" />}
+          trailing={<span className="hidden sm:inline-flex">{pad ? <PadGlyph button="y" family={family} /> : <KeyCap>/</KeyCap>}</span>}
+          className="[&_input::-webkit-search-cancel-button]:hidden"
+        />
+        </div>
+        {shownGroups.map((g, gi) => {
+          const hasAll = g.filters.some((f) => f.id === ALL);
+          const current = picks[g.label] && g.filters.some((f) => f.id === picks[g.label]) ? picks[g.label] : hasAll ? ALL : ANY;
+          const fieldId = `${baseId}-filter-${gi}`;
+          return (
+            <Field key={g.label} label={g.label} htmlFor={fieldId}>
+              <Select
+                id={fieldId}
+                aria-label={g.label}
+                value={current}
+                onChange={(id) => pick(g, id)}
+                options={[
+                  ...(hasAll ? [] : [{ id: ANY, label: `Any ${g.label.toLowerCase()}` }]),
+                  ...g.filters.map((f) => {
+                    const n = countOf(g, f);
+                    return { id: f.id, label: f.label, detail: `${n} ${props.noun}` };
+                  }),
+                ]}
+              />
+            </Field>
+          );
+        })}
         {sorts.length > 1 ? (
-          // On a phone the sort scrolls sideways in its own row rather than pushing the page wider than the screen
-          <div className="-mx-1 w-[calc(100%+0.5rem)] min-w-0 shrink-0 overflow-x-auto px-1 [scrollbar-width:none] sm:mx-0 sm:w-auto sm:px-0">
-            <Segmented
-              label="Sort"
-              className="w-max min-w-full [&>button]:px-3.5 [&>button]:whitespace-nowrap"
-              options={sorts.map((s) => ({ id: s.id, label: s.label }))}
+          <Field label="Sort" htmlFor={`${baseId}-sort`}>
+            <Select
+              id={`${baseId}-sort`}
+              aria-label="Sort"
               value={sort.id}
               onChange={setSortId}
+              options={sorts.map((s) => ({ id: s.id, label: s.label }))}
             />
-          </div>
+          </Field>
         ) : null}
       </div>
 
-      <div className="grid min-h-0 grid-cols-1 gap-3.5 md:grid-cols-[176px_minmax(0,1fr)] lg:h-[max(380px,min(760px,calc(100dvh-270px)))] lg:grid-cols-[168px_minmax(0,1fr)_minmax(272px,304px)] xl:grid-cols-[180px_minmax(0,1fr)_328px]">
-        {/* Categories: a column on wide screens, a scrolling pill row on phones */}
-        <nav
-          ref={filtersRef}
-          aria-label="Categories"
-          data-nav-zone="browser-filters"
-          data-nav-scroll
-          className="-mx-1 flex min-h-0 gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] md:mx-0 md:flex-col md:gap-0.5 md:overflow-x-visible md:overflow-y-auto md:px-0 md:pr-1 md:[scrollbar-width:thin]"
-        >
-          {filterGroups.map((g, gi) => (
-            <div key={g.label} className="contents md:flex md:flex-col md:gap-0.5">
-              <span className={`lc-lbl hidden px-3 pb-1.5 md:block ${gi ? "pt-3.5" : "pt-0.5"}`}>{g.label}</span>
-              {g.filters.map((f) => {
-                const on = f.id === pickOf(g)?.id;
-                const n = countOf(g, f);
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => pick(g, f)}
-                    onPointerEnter={focusOnHover}
-                    className={`group flex min-h-[36px] shrink-0 cursor-pointer items-center gap-2.5 rounded-full px-3.5 text-left text-[14px] font-semibold whitespace-nowrap outline-none transition-[background-color,box-shadow,color] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_5px_rgba(204,255,0,0.12)] md:w-full md:min-h-[38px] md:px-3 ${
-                      on
-                        ? "bg-[#00E5FF]/10 text-[#F5F7FA] shadow-[inset_0_0_0_1px_rgba(0,229,255,0.45)]"
-                        : `bg-transparent hover:bg-white/[0.04] ${n ? "text-[#C5CBD8]" : "text-[#8E96AA]"} max-md:shadow-[inset_0_0_0_1px_#262B3D]`
-                    }`}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{f.label}</span>
-                    <span className={`lc-data text-[11px] group-focus:text-[#08090D] ${on ? "text-[#00E5FF]" : "text-[#8E96AA]"}`}>{n}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-
-        {/* Grid */}
+      <div className="grid min-h-0 grid-cols-1 gap-4 lg:h-[max(380px,min(760px,calc(100dvh-300px)))] lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] xl:grid-cols-[minmax(0,1fr)_340px]">
+        {/* The wall */}
         <div
           ref={gridRef}
           data-nav-zone="browser-grid"
           data-nav-scroll
           aria-label={`${props.label}: ${visible.length} of ${items.length} ${props.noun}`}
           role="group"
-          className="relative min-h-0 min-w-0 pr-1 lg:overflow-y-auto lg:[scrollbar-color:#3A4157_transparent] lg:[scrollbar-width:thin]"
+          className="relative min-h-0 min-w-0 lg:-mr-1 lg:overflow-y-auto lg:pr-1 lg:[scrollbar-width:thin]"
         >
           {groups.length ? (
             groups.map((g) => (
-              <section key={g.key} aria-label={g.label || undefined} className="mb-4 last:mb-1">
+              <section key={g.key} aria-label={g.label || undefined} className="mb-5 last:mb-1">
                 {g.label ? (
-                  <div className="sticky top-0 z-[2] -mx-0.5 mb-2 flex items-center gap-2.5 bg-[#08090D]/90 px-1.5 py-2 backdrop-blur-sm">
-                    <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#CCFF00]" />
-                    <span className="lc-lbl text-[#F5F7FA]">{g.label}</span>
-                    <span className="lc-data text-[11px] text-[#8E96AA]">{g.items.length}</span>
-                    <span aria-hidden className="h-px flex-1 bg-[#262B3D]" />
-                  </div>
+                  <h3 className="m-0 mb-2.5 flex items-baseline gap-2.5">
+                    <span className="lc-h3">{g.label}</span>
+                    <span className="lc-mono text-[12px] text-lc-slate">{g.items.length}</span>
+                  </h3>
                 ) : null}
                 {g.runs.map((run, ri) => (
                   <div key={`${run.key}#${ri}`} role={run.key ? "group" : undefined} aria-label={run.key || undefined} className="mb-3 last:mb-0">
-                    {run.key ? (
-                      <div className="mb-2 flex items-center gap-2.5 px-1.5">
-                        <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{run.key}</span>
-                        <span aria-hidden className="h-px flex-1 bg-[#262B3D]" />
-                      </div>
-                    ) : null}
-                    {/* A phone lists one card per row (as a row: picture left, words right) */}
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(168px,calc(50%-5px)),1fr))] gap-2.5 phone:grid-cols-1 phone:gap-2">
+                    {run.key ? <p className="lc-mono m-0 mb-2 text-[12px] text-lc-fog">{run.key}</p> : null}
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(200px,calc(50%-6px)),1fr))] gap-3">
                       {run.items.map((it) => {
                         const id = idOf(it);
                         const isSel = id === selectedKey;
                         const fav = props.isFavorite(it);
                         const main = props.primaryAction(it);
+                        const card = props.renderCard(it, { selected: isSel });
                         return (
-                          <div key={id} className="relative min-w-0">
-                            <button
-                              type="button"
-                              data-browser-item={id}
-                              aria-pressed={isSel}
-                              // Entering the browser starts on the card it shows (the loaded circuit, the current car)
-                              data-nav-default={isSel ? "" : undefined}
-                              onPointerEnter={focusOnHover}
-                              onFocus={() => {
+                          <MediaTile
+                            key={id}
+                            {...card}
+                            // The card in the detail pane is lit white; the cursor is volt
+                            chosen={isSel}
+                            aria-pressed={isSel}
+                            // Entering the browser starts on the card it shows (the loaded circuit, the current car)
+                            navDefault={isSel}
+                            onSelect={() => choose(id)}
+                            className="scroll-mt-12 scroll-mb-2"
+                            controlProps={{
+                              "data-browser-item": id,
+                              onFocus: () => {
                                 // The d-pad and arrows show what they land on; the mouse only by clicking
                                 if (currentInputMode() !== "pointer" && id !== selectedKey) setSelectedId(id);
-                              }}
-                              onClick={() => choose(id)}
-                              onDoubleClick={() => (main.disabled ? undefined : main.run())}
-                              className={`group flex h-full w-full min-w-0 cursor-pointer scroll-mt-12 scroll-mb-2 flex-col rounded-[18px] border bg-[#11131A] text-left text-[#F5F7FA] transition-[background-color,border-color,box-shadow] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:bg-[#1B1F2B] ${CURSOR_TILE} ${
-                                // The card in the detail pane is lit white; the cursor is volt
-                                isSel ? "border-[#F5F7FA]/60 shadow-[inset_0_0_0_1px_rgba(245,247,250,0.35)]" : "border-[#262B3D] hover:border-[#3A4157]"
-                              }`}
-                            >
-                              {props.renderCard(it, { selected: isSel })}
-                            </button>
-                            {/* A pointer shortcut: the d-pad stars with Ⓧ, so the focus skips it */}
-                            {onToggleFavorite || fav ? (
-                              <button
-                                type="button"
-                                tabIndex={-1}
-                                data-nav-skip
-                                aria-label={fav ? "Remove from favourites" : "Add to favourites"}
-                                aria-pressed={fav}
-                                disabled={!onToggleFavorite}
-                                onClick={() => onToggleFavorite?.(it)}
-                                className={`absolute top-2 right-2 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[#08090D]/80 transition-colors disabled:cursor-default ${
-                                  fav ? "text-[#FFB300]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
-                                }`}
-                              >
-                                <Star aria-hidden className="h-3.5 w-3.5" strokeWidth={2.4} fill={fav ? "currentColor" : "none"} />
-                              </button>
-                            ) : null}
-                          </div>
+                              },
+                              onDoubleClick: () => (main.disabled ? undefined : main.run()),
+                            }}
+                            action={
+                              // A pointer shortcut: the d-pad stars with Ⓧ, so the focus skips it
+                              onToggleFavorite || fav ? (
+                                <IconButton
+                                  size="sm"
+                                  variant="secondary"
+                                  tabIndex={-1}
+                                  data-nav-skip=""
+                                  aria-label={fav ? "Remove from favourites" : "Add to favourites"}
+                                  aria-pressed={fav}
+                                  disabled={!onToggleFavorite}
+                                  onClick={() => onToggleFavorite?.(it)}
+                                  icon={<Icon name={fav ? "favouriteOn" : "favourite"} />}
+                                />
+                              ) : undefined
+                            }
+                          />
                         );
                       })}
                     </div>
@@ -570,25 +553,22 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
               </section>
             ))
           ) : (
-            <div className="flex flex-col items-start gap-3 px-1 py-6">
-              <p className="m-0 text-[14px] leading-relaxed text-[#C5CBD8]">
-                {words.length ? `Nothing matches “${query.trim()}”` : `No ${props.noun} here yet`}
-                {narrowLabels.length ? ` in ${narrowLabels.join(", ")}` : ""}.
-                {narrowing.length === 1 && narrowing[0].filter.id === "fav" && !words.length && onToggleFavorite
-                  ? " Star one from its card or the detail pane."
-                  : ""}
-              </p>
-              {filtered ? (
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  onPointerEnter={focusOnHover}
-                  className="inline-flex h-10 cursor-pointer items-center rounded-full border border-[#262B3D] bg-[#1B1F2B]/80 px-4 text-[13px] font-bold text-[#F5F7FA] transition-colors hover:border-[#3A4157]"
-                >
-                  Clear search and filters
-                </button>
-              ) : null}
-            </div>
+            <EmptyState
+              icon={<Icon name={filtered ? "search" : "browse"} />}
+              action={
+                filtered ? (
+                  <Button size="sm" variant="secondary" onClick={clearAll}>
+                    Clear search and filters
+                  </Button>
+                ) : undefined
+              }
+            >
+              {words.length ? `Nothing matches "${query.trim()}"` : `No ${props.noun} here yet`}
+              {narrowLabels.length ? ` in ${narrowLabels.join(", ")}` : ""}.
+              {narrowing.length === 1 && narrowing[0].filter.id === "fav" && !words.length && onToggleFavorite
+                ? " Star one from its card or the detail pane."
+                : ""}
+            </EmptyState>
           )}
           {props.footnote}
         </div>
@@ -598,69 +578,66 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
           ref={detailRef}
           aria-label="Details"
           data-nav-zone="browser-detail"
-          className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[18px] border border-[#262B3D] bg-[#11131A] md:col-span-2 lg:col-span-1"
+          className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lc-card border border-white/7 bg-lc-carbon/80"
         >
           {selected && action ? (
             <>
-              <div data-nav-scroll className="flex min-h-0 flex-1 flex-col gap-3.5 p-4 lg:overflow-y-auto lg:[scrollbar-width:thin]">
+              <div data-nav-scroll className="flex min-h-0 flex-1 flex-col gap-4 p-4.5 [&>*]:shrink-0 phone:p-3.5 lg:overflow-y-auto lg:[scrollbar-width:thin]">
                 {props.renderDetail(selected)}
               </div>
-              <div className="flex shrink-0 items-center gap-2 border-t border-[#262B3D] p-3">
-                <div data-browser-primary className="flex min-w-0 flex-1 flex-col [&>button]:w-full [&>button]:justify-center">
+              <div className="flex shrink-0 items-center gap-2 border-t border-lc-line p-3">
+                <div data-browser-primary className="flex min-w-0 flex-1 flex-col">
                   {action.current ? (
-                    <div role="status" className="inline-flex h-[52px] items-center justify-center gap-2.5 rounded-full bg-[#1B1F2B] text-[#C5CBD8] phone:h-11">
-                      <Check aria-hidden className="h-[18px] w-[18px] text-[#F5F7FA]" strokeWidth={3} />
+                    <div className="inline-flex h-13 items-center justify-center gap-2.5 rounded-full bg-lc-titanium text-lc-fog phone:h-11">
+                      <Icon name="check" className="text-lc-chalk" />
                       <span className="lc-title text-[16px]">{action.label}</span>
                     </div>
                   ) : (
-                    <PrimaryButton
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      block
                       onClick={action.run}
                       disabled={action.disabled}
-                      prompt={action.disabled ? undefined : pad ? <PadGlyph button="a" family={family} /> : "ENTER"}
+                      prompt={action.disabled ? undefined : pad ? <PadGlyph button="a" family={family} /> : <KeyCap tone="ink">Enter</KeyCap>}
                     >
                       {action.label}
-                    </PrimaryButton>
+                    </Button>
                   )}
                 </div>
                 {onToggleFavorite ? (
                   // Its key (F / Ⓧ) is in the prompts under the browser
-                  <button
-                    type="button"
+                  <IconButton
+                    variant="secondary"
                     aria-pressed={selectedFav}
-                    aria-label={selectedFav ? "Favourite" : "Add to favourites"}
+                    aria-label={selectedFav ? "Remove from favourites" : "Add to favourites"}
                     title={selectedFav ? "Favourite" : "Add to favourites"}
                     onClick={() => onToggleFavorite(selected)}
-                    onPointerEnter={focusOnHover}
-                    className="inline-flex h-[52px] w-[52px] shrink-0 cursor-pointer items-center justify-center rounded-full border border-[#262B3D] bg-[#1B1F2B]/80 text-[#F5F7FA] transition-colors hover:border-[#3A4157] hover:bg-[#262B3D] phone:h-11 phone:w-11"
-                  >
-                    <Star
-                      aria-hidden
-                      className={`h-5 w-5 ${selectedFav ? "text-[#FFB300]" : "text-[#8E96AA]"}`}
-                      strokeWidth={2.4}
-                      fill={selectedFav ? "currentColor" : "none"}
-                    />
-                  </button>
+                    icon={<Icon name={selectedFav ? "favouriteOn" : "favourite"} />}
+                  />
                 ) : null}
               </div>
             </>
           ) : (
-            <p className="m-0 p-4 text-[14px] text-[#8E96AA]">Pick a card to see it here.</p>
+            <p className="lc-body m-0 p-4.5">Pick a card to see it here.</p>
           )}
         </aside>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <span className="lc-data text-[12px] text-[#8E96AA]">
-          {visible.length} OF {items.length} {props.noun.toUpperCase()}
+        <span className="lc-hint tabular-nums" aria-live="polite">
+          {visible.length} of {items.length} {props.noun}
         </span>
+        <span className="contents phone:hidden">
         <PromptBar
-          className="gap-x-4"
+          rule={false}
           prompts={[
             { action: "select", label: "Details" },
             ...(onToggleFavorite ? [{ action: "select" as const, key: "F", pad: "x" as const, label: "Favourite" }] : []),
             { action: "select", key: "/", pad: "y", label: "Search" },
           ]}
         />
+        </span>
       </div>
     </div>
   );

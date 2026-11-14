@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Choice } from "@/components/hud/PauseMenu";
-import { carById, carClass, carClassesInUse, carsByYear, type CarClassId, type CarId } from "@/lib/cars/car-registry";
-import { carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS, setF1ModPhysics, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
-import { CarQualityBadge } from "./menu-ui";
+import { OptionTile, OptionTileGroup, Segmented, SettingRow } from "@/components/ui";
+import { carById, carClassesInUse, carsByYear, type CarClassId, type CarId } from "@/lib/cars/car-registry";
+import { carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS, setF1ModPhysics, useF1ModPhysics, type F1ModPhysics } from "@/lib/cars/f1-mod-physics";
+import { CarQualityBadge } from "./menu-content-ui";
 
 /**
- * The car picker: class tabs, then the cars of the open class under a heading per year, newest first. The open class
- * follows the car chosen elsewhere. `compact` drops the description line (the garage).
+ * The car picker of the first-run setup: the class, then the cars of that class under each year, newest first. The
+ * open class follows the car chosen elsewhere. `compact` drops the description line.
  */
 export const CarPicker: React.FC<{ carId: CarId; onChangeCar: (car: CarId) => void; compact?: boolean }> = ({
   carId,
@@ -22,99 +22,65 @@ export const CarPicker: React.FC<{ carId: CarId; onChangeCar: (car: CarId) => vo
     setShownCar(carId);
     setClassId(current.classId);
   }
-  const open = carClass(classId);
   const modPhysics = useF1ModPhysics();
   const physicsTitle = F1_MOD_PHYSICS_OPTIONS.find((o) => o.id === modPhysics)?.title ?? "";
+  const classes = carClassesInUse();
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <div role="tablist" aria-label="Car class" className="flex gap-0.5 overflow-x-auto rounded-full border border-[#262B3D] bg-[#08090D] p-1">
-        {carClassesInUse().map((k) => {
-          const selected = k.id === classId;
-          return (
-            <button
-              key={k.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              title={k.sub}
-              onClick={() => setClassId(k.id)}
-              className={`inline-flex min-h-[40px] min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full px-2.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
-                selected ? "text-[#08090D]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
-              }`}
-              style={selected ? { backgroundColor: k.color } : undefined}
-            >
-              {k.title}
-              {k.id === current.classId && !selected ? (
-                <span aria-label="Current car's class" className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: k.color }} />
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-      <div className={`grid gap-2 ${compact ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-        {carsByYear(classId).map(({ year, cars }) => (
-          <React.Fragment key={year}>
-            <div className="col-span-full flex items-center gap-2.5 px-1 pt-1">
-              <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{year}</span>
-              <span aria-hidden className="h-px flex-1 bg-[#262B3D]" />
-            </div>
+    <div className="flex flex-col gap-3">
+      {classes.length > 1 ? (
+        <Segmented<CarClassId>
+          aria-label="Car class"
+          fill
+          options={classes.map((k) => ({ id: k.id, label: k.title }))}
+          value={classId}
+          onChange={setClassId}
+        />
+      ) : null}
+      {carsByYear(classId).map(({ year, cars }) => (
+        <div key={year} className="flex flex-col gap-2">
+          <p className="lc-mono m-0 text-[12px] text-lc-fog">{year}</p>
+          <OptionTileGroup aria-label={`${year} cars`} columns={compact ? 3 : 2}>
             {cars.map((car) => (
-              <Choice key={car.id} active={car.id === carId} onClick={() => onChangeCar(car.id)}>
-                <span className="flex flex-col gap-0.5">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="lc-title text-[15px] leading-tight">{car.title}</span>
-                    <span className="font-f1-mono text-[9px] font-extrabold tracking-[0.1em]" style={{ color: open.color }}>
-                      {car.badge}
-                    </span>
+              <OptionTile
+                key={car.id}
+                checked={car.id === carId}
+                navDefault={car.id === carId}
+                onSelect={() => onChangeCar(car.id)}
+                title={car.title}
+                description={
+                  compact ? (
                     <CarQualityBadge car={car} size="xs" />
-                  </span>
-                  {compact ? null : (
-                    <span className="text-[12px] leading-[1.4] opacity-75">
-                      {carTakesPhysicsSwitch(car.id) ? `${car.sub} · ${physicsTitle} physics` : car.sub}
-                    </span>
-                  )}
-                </span>
-              </Choice>
+                  ) : carTakesPhysicsSwitch(car.id) ? (
+                    `${car.sub}, ${physicsTitle} physics`
+                  ) : (
+                    car.sub
+                  )
+                }
+              />
             ))}
-          </React.Fragment>
-        ))}
-      </div>
-      {carTakesPhysicsSwitch(carId) && current.classId === classId ? <CarPhysicsSwitch color={open.color} /> : null}
+          </OptionTileGroup>
+        </div>
+      ))}
+      {carTakesPhysicsSwitch(carId) && current.classId === classId ? <CarPhysicsSwitch /> : null}
     </div>
   );
 };
 
-/** The ported F1 cars' physics switch (F1 2026 / Rigid-body); one choice shared by every ported F1 car */
-export const CarPhysicsSwitch: React.FC<{ color: string }> = ({ color }) => {
+/** The ported open-wheelers' physics switch (Rigid-body / 2026 Prototype); one choice shared by every ported car */
+export const CarPhysicsSwitch: React.FC<{
+  /** No longer drawn: the chosen option is white, as everywhere (kept so older callers compile) */
+  color?: string;
+}> = () => {
   const modPhysics = useF1ModPhysics();
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#8E96AA]">PHYSICS</span>
-        <span className="text-[11px] text-[#8E96AA]">Applies to every ported open-wheeler</span>
-      </div>
-      <div role="radiogroup" aria-label="Open-wheeler physics" className="flex gap-0.5 rounded-full border border-[#262B3D] bg-[#08090D] p-1">
-        {F1_MOD_PHYSICS_OPTIONS.map((o) => {
-          const selected = o.id === modPhysics;
-          return (
-            <button
-              key={o.id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              title={o.sub}
-              onClick={() => setF1ModPhysics(o.id)}
-              className={`inline-flex min-h-[40px] min-w-0 flex-1 cursor-pointer items-center justify-center rounded-full px-2.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
-                selected ? "text-[#08090D]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
-              }`}
-              style={selected ? { backgroundColor: color } : undefined}
-            >
-              {o.title}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <SettingRow label="Physics" hint="Applies to every ported open-wheeler" stacked>
+      <Segmented<F1ModPhysics>
+        fill
+        options={F1_MOD_PHYSICS_OPTIONS.map((o) => ({ id: o.id, label: o.title }))}
+        value={modPhysics}
+        onChange={setF1ModPhysics}
+      />
+    </SettingRow>
   );
 };

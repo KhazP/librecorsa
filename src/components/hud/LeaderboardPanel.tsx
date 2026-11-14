@@ -1,147 +1,200 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Flag, RotateCw } from "lucide-react";
 import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
 import { lapPhysicsVersion, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { boardLabel, driverNameKey, type BoardFilter, type RemoteBoard } from "@/lib/net/leaderboard";
-import { CHOSEN_PILL, CURSOR_PILL } from "@/components/menu/menu-ui";
-import { focusOnHover } from "@/components/menu/useFocusNav";
-import { formatDelta, formatLapTime, formatSectorTime, HUD_PURPLE } from "./hud-format";
+import { Button, Card, IconButton, Disclosure, EmptyState, Segmented, Select, SettingRow, Skeleton, Toggle } from "@/components/ui";
+import { PlayerTag, PositionBadge } from "@/components/ui/badges";
+import { Icon } from "@/components/ui/icons";
+import { formatDelta, formatLapTime, formatSectorTime } from "./hud-format";
 
-/**
- * A card of the panel: a frosted card in the pause menu, the darker inset card inside the title menu's
- * panel sheet (`.lc-title-frame`)
- */
-const CARD =
-  "flex min-w-0 flex-col gap-3 rounded-[24px] border border-white/[0.07] bg-[#0D0F15]/[0.82] p-[18px] text-[#F5F7FA] [.lc-title-frame_&]:rounded-[22px] [.lc-title-frame_&]:border-[#262B3D] [.lc-title-frame_&]:bg-[#08090D]/60";
-/** Toolbar pill */
-const BUTTON = `inline-flex min-h-[40px] cursor-pointer items-center gap-2 rounded-full border border-[#262B3D] bg-[#08090D]/60 px-3.5 text-[13px] font-bold text-[#C5CBD8] transition-[background-color,border-color,box-shadow,color] duration-200 hover:border-[#3A4157] hover:text-[#F5F7FA] disabled:cursor-not-allowed disabled:opacity-40 ${CURSOR_PILL} focus:border-transparent`;
-/** Small in-row pill (race ghost, driver key) */
-const SMALL_BUTTON = `inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-[#262B3D] bg-transparent px-2.5 text-[12px] font-bold whitespace-nowrap text-[#C5CBD8] transition-[background-color,border-color,box-shadow,color] duration-200 hover:border-[#3A4157] hover:text-[#F5F7FA] ${CURSOR_PILL} focus:border-transparent`;
+/* ---------------------------------------------------------------------------------------------------------------
+ * The board table: one drawing of a timing list for the lap times, the online board and the weekly challenge
+ * ------------------------------------------------------------------------------------------------------------- */
 
-/** Position, car (and when), lap, three sectors, an action: the timing tower's columns */
-const ROW_GRID =
-  "grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-x-3 sm:grid-cols-[32px_minmax(0,1fr)_88px_62px_62px_62px_minmax(96px,auto)]";
-const SECTOR_CELL = "hidden text-right sm:block";
-
-const CardHeader: React.FC<{ label: string; color: string; children?: React.ReactNode }> = ({ label, color, children }) => (
-  <div className="flex items-center gap-2">
-    <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-    <span className="lc-lbl">{label}</span>
-    {children}
-  </div>
-);
-
-/** A row of radio pills (circuit, car): white for the one picked, volt for the cursor */
-function ChoiceRow<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: readonly { id: T; label: string; count?: number }[];
-  value: T;
-  onChange: (id: T) => void;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <span className="lc-lbl">{label}</span>
-      <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
-        {options.map((o) => {
-          const on = o.id === value;
-          return (
-            <button
-              key={o.id}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              onClick={() => onChange(o.id)}
-              onPointerEnter={focusOnHover}
-              className={`group inline-flex min-h-[36px] cursor-pointer items-center gap-2 rounded-full px-3.5 text-[13px] font-bold whitespace-nowrap transition-[background-color,box-shadow,color] duration-200 ${CURSOR_PILL} ${
-                on ? CHOSEN_PILL : "text-[#C5CBD8] shadow-[inset_0_0_0_1px_#262B3D] hover:text-[#F5F7FA]"
-              }`}
-            >
-              {o.label}
-              {o.count !== undefined ? <span className="lc-data text-[11px] text-[#8E96AA] group-focus:text-[#08090D]">{o.count}</span> : null}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+export interface BoardRow {
+  key: string;
+  rank: number;
+  /** The car (your laps) or the driver's name (a board) */
+  title: string;
+  /** The driver's three-letter code, before the name */
+  code?: string;
+  /** One line under the title: when, and how the lap was driven */
+  detail?: string;
+  /** Full date for the detail's tooltip */
+  detailTitle?: string;
+  lapMs: number;
+  /** The fastest lap of the list: best colour and an underline (colour is not alone) */
+  fastest?: boolean;
+  sectorsMs?: readonly number[];
+  /** Which of the three sectors is the fastest of its column */
+  bestSectors?: readonly boolean[];
+  /** The player's own row */
+  mine?: boolean;
+  /** An action at the end of the row (race this lap's ghost) */
+  action?: React.ReactNode;
 }
 
-/** A time that is the fastest of its column: purple with a purple bar under it (colour is never alone) */
+/** A time, the best of its column in the best colour with an underline, and said so to a screen reader */
 const Timed: React.FC<{ ms: number; best: boolean; lap?: boolean }> = ({ ms, best, lap }) => (
   <span
-    className={`lc-data inline-block ${lap ? "text-[16px] sm:text-[17px]" : "text-[13px]"} ${best ? "" : lap ? "text-[#F5F7FA]" : "text-[#C5CBD8]"}`}
-    style={best ? { color: HUD_PURPLE, boxShadow: `inset 0 -2px 0 ${HUD_PURPLE}` } : undefined}
+    className={`lc-mono font-bold whitespace-nowrap ${lap ? "text-[15px]" : "text-[13px]"} ${
+      best ? "text-lc-best underline decoration-2 underline-offset-4" : lap ? "text-lc-chalk" : "text-lc-fog"
+    }`}
     title={best ? "Fastest here" : undefined}
   >
     {lap ? formatLapTime(ms) : formatSectorTime(ms)}
+    {best ? <span className="sr-only"> (fastest)</span> : null}
   </span>
 );
 
-/** One driver of the online board: place, code and name over what the lap was driven with, lap time and the ghost */
-const OnlineRow: React.FC<{
-  rank: number;
-  entry: LeaderboardEntry;
-  fastest: boolean;
-  mine: boolean;
-  onRaceGhost?: (entry: LeaderboardEntry) => void;
-}> = ({ rank, entry, fastest, mine, onRaceGhost }) => (
-  <li
-    aria-current={mine ? "true" : undefined}
-    className={`${ROW_GRID} min-h-[52px] rounded-[12px] px-3 py-1.5 ${
-      mine ? "bg-[#CCFF00]/[0.07] shadow-[inset_0_0_0_1px_rgba(204,255,0,0.35)]" : "hover:bg-white/[0.04]"
-    }`}
-  >
-    <span className={`lc-data text-[15px] ${mine ? "text-[#CCFF00]" : "text-[#8E96AA]"}`}>{rank}</span>
-    <span className="flex min-w-0 flex-col">
-      <span className="truncate text-[14px] font-bold text-[#F5F7FA]">
-        <span className="font-f1-mono tracking-[0.1em]">{entry.code}</span> · {entry.name}
-        {mine ? <span className="font-normal text-[#8E96AA]"> (you)</span> : null}
-      </span>
-      <span className="truncate text-[12px] text-[#8E96AA]">
-        {entry.conditions ? `${boardLabel(entry.conditions)} · ` : ""}
-        {new Date(entry.recordedAt).toLocaleDateString()}
-      </span>
-    </span>
-    <span className="text-right">
-      <Timed ms={entry.lapTimeMs} best={fastest} lap />
-    </span>
-    {entry.sectorTimesMs.map((s, i) => (
-      <span key={i} className={SECTOR_CELL}>
-        <Timed ms={s} best={false} />
-      </span>
+const TH = "lc-lbl px-2 pb-2 text-left font-semibold whitespace-nowrap";
+/** Sector columns show only where the list has room for them */
+const SECTOR = "hidden text-right @2xl:table-cell";
+
+/** Laps as a timing list: place, who or what, lap time, the three sectors where there is room, and an action */
+export const BoardTable: React.FC<{ label: string; rows: readonly BoardRow[]; nameHeader?: string; footer?: React.ReactNode }> = ({
+  label,
+  rows,
+  nameHeader = "Driver",
+  footer,
+}) => {
+  const sectors = rows.some((r) => r.sectorsMs?.length);
+  const actions = rows.some((r) => r.action);
+  return (
+    <div className="@container min-w-0">
+      <table className="w-full border-collapse" aria-label={label}>
+        <thead>
+          <tr className="border-b border-lc-line">
+            <th scope="col" className={`${TH} w-14`}>
+              Pos
+            </th>
+            <th scope="col" className={`${TH} w-full`}>
+              {nameHeader}
+            </th>
+            <th scope="col" className={`${TH} text-right`}>
+              Lap
+            </th>
+            {sectors
+              ? ["S1", "S2", "S3"].map((s) => (
+                  <th key={s} scope="col" className={`${TH} ${SECTOR}`}>
+                    {s}
+                  </th>
+                ))
+              : null}
+            {actions ? (
+              <th scope="col" className="p-0">
+                <span className="sr-only">Actions</span>
+              </th>
+            ) : null}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr
+              key={r.key}
+              aria-current={r.mine ? "true" : undefined}
+              className={`h-13 border-b border-white/5 last:border-b-0 ${r.mine ? "bg-lc-volt/8 shadow-[inset_2px_0_0_var(--color-lc-volt)]" : ""}`}
+            >
+              <td className="px-2">
+                <PositionBadge position={r.rank} player={r.mine} size="sm" className="min-w-10" />
+              </td>
+              <td className="max-w-0 px-2 py-1.5">
+                <span className="flex min-w-0 items-center gap-2">
+                  {r.code ? <span className="lc-mono w-8 shrink-0 text-[12px] font-bold tracking-[0.08em] text-lc-slate">{r.code}</span> : null}
+                  <span className="truncate text-[14px] font-semibold text-lc-chalk">{r.title}</span>
+                  {r.mine ? <PlayerTag size="sm" /> : null}
+                </span>
+                {r.detail ? (
+                  <span className="lc-hint block truncate" title={r.detailTitle}>
+                    {r.detail}
+                  </span>
+                ) : null}
+              </td>
+              <td className="px-2 text-right">
+                <Timed ms={r.lapMs} best={Boolean(r.fastest)} lap />
+              </td>
+              {sectors
+                ? [0, 1, 2].map((k) => (
+                    <td key={k} className={`px-2 ${SECTOR}`}>
+                      {r.sectorsMs?.[k] ? <Timed ms={r.sectorsMs[k]} best={Boolean(r.bestSectors?.[k])} /> : null}
+                    </td>
+                  ))
+                : null}
+              {actions ? <td className="py-1.5 pl-2 text-right whitespace-nowrap">{r.action}</td> : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {footer}
+    </div>
+  );
+};
+
+/** Rows standing in for a list that is loading, at the rows' own height */
+export const BoardSkeleton: React.FC<{ rows?: number; label: string }> = ({ rows = 5, label }) => (
+  <div role="status" aria-busy="true" aria-label={label} className="flex flex-col">
+    {Array.from({ length: rows }, (_, i) => (
+      <div key={i} className="flex h-13 items-center gap-3 border-b border-white/5 px-2 last:border-b-0">
+        <Skeleton shape="line" className="h-5 w-10" />
+        <Skeleton shape="line" className="w-2/5" />
+        <Skeleton shape="line" className="ml-auto w-20" />
+      </div>
     ))}
-    <span className="col-span-full flex justify-end sm:col-span-1">
-      {onRaceGhost ? (
-        <button type="button" onClick={() => onRaceGhost(entry)} onPointerEnter={focusOnHover} className={`${SMALL_BUTTON} h-[30px]`}>
-          <Flag aria-hidden className="h-3.5 w-3.5" strokeWidth={2.4} />
-          Race ghost
-        </button>
-      ) : null}
-    </span>
-  </li>
+  </div>
 );
 
-/** A pill that narrows the online board when on ("No assists") */
-const FilterToggle: React.FC<{ label: string; on: boolean; onChange: (on: boolean) => void }> = ({ label, on, onChange }) => (
-  <button
-    type="button"
-    aria-pressed={on}
-    onClick={() => onChange(!on)}
-    onPointerEnter={focusOnHover}
-    className={`inline-flex min-h-[32px] cursor-pointer items-center rounded-full px-3 text-[12px] font-bold whitespace-nowrap transition-[background-color,box-shadow,color] duration-200 ${CURSOR_PILL} ${
-      on ? CHOSEN_PILL : "text-[#C5CBD8] shadow-[inset_0_0_0_1px_#262B3D] hover:text-[#F5F7FA]"
-    }`}
-  >
-    {label}
-  </button>
+/** A list that could not be read: what went wrong, in the loss colour on the card itself, and a way to try again */
+export const BoardError: React.FC<{ children: React.ReactNode; onRetry?: () => void }> = ({ children, onRetry }) => (
+  <div role="alert" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 py-2">
+    <p className="m-0 flex items-start gap-2 text-[14px] leading-snug font-medium text-lc-loss">
+      <Icon name="error" className="mt-0.5" />
+      {children}
+    </p>
+    {onRetry ? (
+      <Button size="sm" variant="secondary" icon={<Icon name="refresh" />} onClick={onRetry}>
+        Try again
+      </Button>
+    ) : null}
+  </div>
 );
+
+/** The player's own place on a board, in their colour */
+export const MyPlace: React.FC<{ rank: number; total: number; lapMs: number; detail: string; action?: React.ReactNode }> = ({
+  rank,
+  total,
+  lapMs,
+  detail,
+  action,
+}) => (
+  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lc-row border border-lc-volt/35 bg-lc-volt/5 px-3.5 py-2.5">
+    <span className="flex min-w-0 items-center gap-3">
+      <PositionBadge position={rank} player />
+      <span className="flex min-w-0 flex-col">
+        <span className="text-[14px] font-semibold text-lc-chalk">
+          You are P{rank} of {total}
+          <span className="lc-mono ml-2 font-bold text-lc-fog">{formatLapTime(lapMs)}</span>
+        </span>
+        {detail ? <span className="lc-hint truncate">{detail}</span> : null}
+      </span>
+    </span>
+    {action}
+  </div>
+);
+
+/** "0.214 s behind Ana" */
+const behind = (ms: number, aheadMs: number, who: string) => `${((ms - aheadMs) / 1000).toFixed(3)} s behind ${who}`;
+
+/** The button that races a lap's ghost: a round icon button in a row, a worded one on its own */
+const RaceGhost: React.FC<{ onClick: () => void; label?: string; of?: string }> = ({ onClick, label, of }) =>
+  label ? (
+    <Button size="sm" variant="secondary" icon={<Icon name="ghost" />} onClick={onClick}>
+      {label}
+    </Button>
+  ) : (
+    <IconButton size="sm" variant="secondary" icon={<Icon name="ghost" />} aria-label={`Race the ghost of ${of}`} title="Race ghost" onClick={onClick} />
+  );
 
 export interface LeaderboardPanelProps {
   trackName: string;
@@ -174,10 +227,11 @@ export interface LeaderboardPanelProps {
 }
 
 const ALL_CARS = "all";
+const CURRENT = "current";
 
 /**
- * Lap times as a timing tower: the player's best laps by circuit and car, with sector splits (the fastest of each
- * column purple), the best sectors put together, and a ghost to race; the online board under it when there is one.
+ * Lap times as a timing list: the player's best laps by circuit and car, with sector splits (the fastest of each
+ * column marked), the best sectors put together, and a ghost to race; the online board under it when there is one.
  */
 export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   trackName,
@@ -304,7 +358,13 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   const ahead = me && me.rank >= 2 ? (shown?.entries[me.rank - 2] ?? null) : null;
   const leader = shown?.entries[0] ?? null;
   const olderPhysics = (shown?.physics ?? []).filter((v) => v !== currentPhysics);
-  const filtered = noAssists || fullRealism || wetOnly;
+  const filtersOn = [noAssists, fullRealism, wetOnly].filter(Boolean).length;
+  const versions = [...new Set([...olderPhysics, ...(physics !== currentPhysics ? [physics] : [])])];
+  const clearFilters = () => {
+    setNoAssists(false);
+    setFullRealism(false);
+    setWetOnly(false);
+  };
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -318,260 +378,249 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
     if (file && onImportDriverKey) onImportDriverKey(file);
   };
 
+  const localRows: BoardRow[] = rows.map((e, i) => {
+    const board = e.conditions ? boardLabel(e.conditions) : null;
+    return {
+      key: `${e.trackId}-${e.vehicle}-${e.recordedAt}-${i}`,
+      rank: i + 1,
+      title: vehicleLabel(e.vehicle),
+      detail: `${new Date(e.recordedAt).toLocaleDateString()}${board ? ` · ${board}` : ""}`,
+      detailTitle: new Date(e.recordedAt).toLocaleString(),
+      lapMs: e.lapTimeMs,
+      fastest: i === 0 && rows.length > 1,
+      sectorsMs: e.sectorTimesMs,
+      bestSectors: e.sectorTimesMs.map((s, k) => s > 0 && s === bestSector[k] && rows.length > 1),
+      action: Boolean(onRaceGhost) && e.trackId === here ? <RaceGhost of={`your ${vehicleLabel(e.vehicle)} lap`} onClick={() => onRaceGhost?.(e)} /> : undefined,
+    };
+  });
+
+  const onlineRows: BoardRow[] = (shown?.entries ?? []).map((e, i) => ({
+    key: e.id ?? `${e.code}-${e.recordedAt}-${i}`,
+    rank: i + 1,
+    code: e.code,
+    title: e.name,
+    detail: `${e.conditions ? `${boardLabel(e.conditions)} · ` : ""}${new Date(e.recordedAt).toLocaleDateString()}`,
+    lapMs: e.lapTimeMs,
+    fastest: i === 0,
+    sectorsMs: e.sectorTimesMs,
+    mine: myKey !== "" && driverNameKey(e.name) === myKey,
+    action: onRaceGhost && circuit === here ? <RaceGhost of={`${e.name}'s lap`} onClick={() => onRaceGhost(e)} /> : undefined,
+  }));
+
   return (
-    <div className="flex flex-col gap-4 text-[#F5F7FA]">
-      {/* Toolbar (the title menu's sheet already shows the leaderboard heading) */}
-      <div className="flex flex-wrap items-end justify-between gap-3 [.lc-title-frame_&]:justify-end">
-        <div className="flex min-w-0 flex-col gap-1.5 [.lc-title-frame_&]:hidden">
-          <span className="lc-title text-[24px] leading-none">{nameOf(circuit)}</span>
-        </div>
+    <div className="flex flex-col gap-3 text-lc-chalk">
+      {/* Toolbar: the sheet around the panel already names it, and the card below names the circuit */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap gap-2">
           {onImportGhost ? (
             <>
-              <button type="button" onClick={() => fileRef.current?.click()} onPointerEnter={focusOnHover} className={BUTTON}>
-                Import ghost file…
-              </button>
+              <Button size="sm" variant="secondary" onClick={() => fileRef.current?.click()}>
+                Import ghost file
+              </Button>
               <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={handleFile} />
             </>
           ) : null}
           {onExportBest ? (
-            <button type="button" onClick={onExportBest} onPointerEnter={focusOnHover} className={BUTTON}>
-              <Download aria-hidden className="h-[15px] w-[15px]" strokeWidth={2.2} />
+            <Button size="sm" variant="secondary" icon={<Icon name="download" />} onClick={onExportBest}>
               Export my best
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
 
       {circuits.length > 1 || cars.length > 2 ? (
-        <div className="flex flex-col gap-3">
-          {circuits.length > 1 ? <ChoiceRow label="Circuit" options={circuits} value={circuit} onChange={setCircuit} /> : null}
-          {cars.length > 2 ? <ChoiceRow label="Car" options={cars} value={carShown} onChange={setCar} /> : null}
+        <div className="flex flex-col">
+          {circuits.length > 1 ? (
+            <SettingRow label="Circuit">
+              <Select
+                className="w-64 max-w-full"
+                value={circuit}
+                onChange={setCircuit}
+                options={circuits.map((c) => ({ id: c.id, label: c.label, detail: c.count === 1 ? "1 lap" : `${c.count} laps` }))}
+              />
+            </SettingRow>
+          ) : null}
+          {cars.length > 2 ? (
+            <SettingRow label="Car">
+              <Select
+                className="w-64 max-w-full"
+                value={carShown}
+                onChange={setCar}
+                options={cars.map((c) => ({ id: c.id, label: c.label, detail: c.count === 1 ? "1 lap" : `${c.count} laps` }))}
+              />
+            </SettingRow>
+          ) : null}
         </div>
       ) : null}
 
-      {/* Your laps: the timing tower */}
-      <section className={CARD} aria-label="Your best laps">
-        <CardHeader label="Your best laps" color="#CCFF00">
-          <span className="truncate text-[12px] text-[#8E96AA]">{nameOf(circuit)}</span>
-        </CardHeader>
+      {/* Your laps */}
+      <Card title="Your best laps" description={nameOf(circuit)}>
         {rows.length === 0 ? (
-          <p className="m-0 px-1 py-2 text-[14px] leading-relaxed text-[#C5CBD8]">
+          <EmptyState icon={<Icon name="lapTimes" />}>
             No laps on {nameOf(circuit)} yet. Your best lap with each car is saved here as soon as you finish one.
-          </p>
+          </EmptyState>
         ) : (
-          <div className="overflow-hidden rounded-[14px] border border-[#262B3D]" role="table" aria-label={`Best laps on ${nameOf(circuit)}`}>
-            {/* The timing tower's white cap */}
-            <div role="row" className={`${ROW_GRID} bg-[#F5F7FA] px-3 py-2 font-f1-mono text-[11px] font-extrabold tracking-[0.14em] text-[#08090D] uppercase`}>
-              <span role="columnheader">Pos</span>
-              <span role="columnheader">Car</span>
-              <span role="columnheader" className="text-right">
-                Lap
-              </span>
-              {["S1", "S2", "S3"].map((s) => (
-                <span key={s} role="columnheader" className={SECTOR_CELL}>
-                  {s}
-                </span>
-              ))}
-              <span role="columnheader" className="hidden sm:block" />
-            </div>
-            <ol className="m-0 flex list-none flex-col p-0">
-              {rows.map((e, i) => {
-                const raceable = Boolean(onRaceGhost) && e.trackId === here;
-                const board = e.conditions ? boardLabel(e.conditions) : null;
-                return (
-                  <li
-                    key={`${e.trackId}-${e.vehicle}-${e.recordedAt}-${i}`}
-                    role="row"
-                    className={`${ROW_GRID} min-h-[54px] border-t border-[#262B3D] px-3 py-1.5 first:border-t-0 hover:bg-white/[0.03]`}
-                  >
-                    <span role="cell" className={`lc-data text-[15px] ${i === 0 ? "text-[#F5F7FA]" : "text-[#8E96AA]"}`}>
-                      {i + 1}
+          <BoardTable
+            label={`Best laps on ${nameOf(circuit)}`}
+            nameHeader="Car"
+            rows={localRows}
+            footer={
+              theoretical && rows.length > 1 ? (
+                <div className="mt-1 flex items-center justify-between gap-4 rounded-lc-row bg-white/3 px-2 py-2.5">
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-[14px] font-semibold text-lc-chalk">Best sectors together</span>
+                    <span className="lc-hint">
+                      {toFind < 0 ? `${formatDelta(toFind)} s left to find` : "Your best lap already has every best sector"}
                     </span>
-                    <span role="cell" className="flex min-w-0 flex-col">
-                      <span className="truncate text-[14px] font-bold text-[#F5F7FA]">{vehicleLabel(e.vehicle)}</span>
-                      <span className="truncate text-[12px] text-[#8E96AA]" title={new Date(e.recordedAt).toLocaleString()}>
-                        {new Date(e.recordedAt).toLocaleDateString()}
-                        {board ? ` · ${board}` : ""}
-                      </span>
-                    </span>
-                    <span role="cell" className="text-right">
-                      <Timed ms={e.lapTimeMs} best={i === 0} lap />
-                    </span>
-                    {e.sectorTimesMs.map((s, k) => (
-                      <span key={k} role="cell" className={SECTOR_CELL}>
-                        <Timed ms={s} best={s > 0 && s === bestSector[k] && rows.length > 1} />
-                      </span>
-                    ))}
-                    <span role="cell" className="col-span-full flex justify-end sm:col-span-1">
-                      {raceable ? (
-                        <button type="button" onClick={() => onRaceGhost?.(e)} onPointerEnter={focusOnHover} className={`${SMALL_BUTTON} h-[30px]`}>
-                          <Flag aria-hidden className="h-3.5 w-3.5" strokeWidth={2.4} />
-                          Race ghost
-                        </button>
-                      ) : null}
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-            {theoretical && rows.length > 1 ? (
-              <div className={`${ROW_GRID} border-t border-[#262B3D] bg-[#08090D]/60 px-3 py-2.5`}>
-                <span aria-hidden />
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-[13px] font-bold text-[#F5F7FA]">Best sectors together</span>
-                  <span className="truncate text-[12px] text-[#8E96AA]">
-                    {toFind < 0 ? `${formatDelta(toFind)} s left to find` : "Your best lap already has every best sector"}
                   </span>
-                </span>
-                <span className="lc-data text-right text-[15px] text-[#C5CBD8]">{formatLapTime(theoretical)}</span>
-                {bestSector.map((s, k) => (
-                  <span key={k} className={`${SECTOR_CELL} lc-data text-[13px] text-[#8E96AA]`}>
-                    {formatSectorTime(s)}
-                  </span>
-                ))}
-                <span className="hidden sm:block" />
-              </div>
-            ) : null}
-          </div>
+                  <span className="lc-mono text-[15px] font-bold text-lc-fog">{formatLapTime(theoretical)}</span>
+                </div>
+              ) : null
+            }
+          />
         )}
-        {rows.length > 1 ? (
-          <p className="m-0 px-1 text-[12px] text-[#8E96AA]">
-            <span className="font-bold" style={{ color: HUD_PURPLE }}>
-              Underlined purple
-            </span>{" "}
-            is the fastest lap and the fastest of each sector here.
-          </p>
-        ) : null}
-      </section>
+      </Card>
 
       {/* Online times */}
       {remoteEnabled ? (
-        <section className={CARD} aria-label="Online">
-          <CardHeader label="Online" color="#00E5FF">
-            <span className="min-w-0 truncate text-[12px] text-[#8E96AA]">
-              {onlineCar ? `${vehicleLabel(onlineCar)} · ` : ""}
-              {nameOf(circuit)}
-            </span>
-            <button
-              type="button"
-              onClick={() => setReload((n) => n + 1)}
-              disabled={online.loading}
-              onPointerEnter={focusOnHover}
+        <Card
+          title="Online times"
+          description={`${onlineCar ? `${vehicleLabel(onlineCar)} · ` : ""}${nameOf(circuit)}`}
+          bodyClassName="gap-3"
+          action={
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={<Icon name="refresh" />}
+              loading={online.loading}
               aria-label="Refresh online times"
-              className={`${SMALL_BUTTON} ml-auto h-[30px]`}
+              onClick={() => setReload((n) => n + 1)}
             >
-              <RotateCw aria-hidden className={`h-3.5 w-3.5 ${online.loading ? "animate-spin" : ""}`} strokeWidth={2.2} />
-              {online.loading ? "Loading…" : "Refresh"}
-            </button>
-          </CardHeader>
-
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Show only">
-            <span className="lc-lbl mr-1">Only</span>
-            <FilterToggle label="No assists" on={noAssists} onChange={setNoAssists} />
-            <FilterToggle label="Full realism" on={fullRealism} onChange={setFullRealism} />
-            <FilterToggle label="Wet laps" on={wetOnly} onChange={setWetOnly} />
-            {olderPhysics.length > 0 || physics !== currentPhysics ? (
-              <span className="ml-auto flex flex-wrap items-center gap-1.5">
-                <FilterToggle label="Current version" on={physics === currentPhysics} onChange={() => setPhysics(currentPhysics)} />
-                {[...new Set([...olderPhysics, ...(physics !== currentPhysics ? [physics] : [])])].map((v) => (
-                  <FilterToggle key={v} label={`Older laps (v${v})`} on={physics === v} onChange={() => setPhysics(v)} />
-                ))}
-              </span>
+              Refresh
+            </Button>
+          }
+        >
+          <Disclosure moreLabel={filtersOn ? `Filters · ${filtersOn} on` : "Filters"} lessLabel="Hide filters">
+            <SettingRow label="No assists" hint="Only laps driven without driving aids">
+              <Toggle checked={noAssists} onChange={setNoAssists} />
+            </SettingRow>
+            <SettingRow label="Full realism" hint="Only laps driven on full realism">
+              <Toggle checked={fullRealism} onChange={setFullRealism} />
+            </SettingRow>
+            <SettingRow label="Wet laps" hint="Only laps driven on a wet track">
+              <Toggle checked={wetOnly} onChange={setWetOnly} />
+            </SettingRow>
+            {versions.length > 0 ? (
+              <SettingRow label="Physics version" hint="Laps from an older version of the physics are kept on their own board">
+                {versions.length + 1 <= 5 ? (
+                  <Segmented
+                    size="sm"
+                    value={physics === currentPhysics ? CURRENT : String(physics)}
+                    onChange={(id) => setPhysics(id === CURRENT ? currentPhysics : Number(id))}
+                    options={[{ id: CURRENT, label: "Current" }, ...versions.map((v) => ({ id: String(v), label: `v${v}` }))]}
+                  />
+                ) : (
+                  <Select
+                    value={physics === currentPhysics ? CURRENT : String(physics)}
+                    onChange={(id) => setPhysics(id === CURRENT ? currentPhysics : Number(id))}
+                    options={[{ id: CURRENT, label: "Current" }, ...versions.map((v) => ({ id: String(v), label: `Older laps (v${v})` }))]}
+                  />
+                )}
+              </SettingRow>
             ) : null}
-          </div>
+          </Disclosure>
 
           {/* Where the player stands */}
           {me ? (
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[14px] border border-[#CCFF00]/30 bg-[#CCFF00]/[0.05] px-3.5 py-2.5">
-              <span className="flex min-w-0 flex-col">
-                <span className="text-[14px] font-bold text-[#F5F7FA]">
-                  You are <span className="lc-data text-[#CCFF00]">P{me.rank}</span> of {shown?.total ?? me.rank}
-                  <span className="lc-data ml-2 text-[#C5CBD8]">{formatLapTime(me.entry.lapTimeMs)}</span>
-                </span>
-                <span className="truncate text-[12px] text-[#8E96AA]">
-                  {me.rank === 1
-                    ? "Fastest on this board"
-                    : ahead
-                      ? `${((me.entry.lapTimeMs - ahead.lapTimeMs) / 1000).toFixed(3)} s behind ${ahead.name}`
-                      : leader
-                        ? `${((me.entry.lapTimeMs - leader.lapTimeMs) / 1000).toFixed(3)} s off the fastest lap`
-                        : ""}
-                </span>
-              </span>
-              {ahead && onRaceGhost && circuit === here ? (
-                <button type="button" onClick={() => onRaceGhost(ahead)} onPointerEnter={focusOnHover} className={`${SMALL_BUTTON} h-9`}>
-                  <Flag aria-hidden className="h-3.5 w-3.5" strokeWidth={2.4} />
-                  Race the ghost ahead
-                </button>
-              ) : null}
-            </div>
+            <MyPlace
+              rank={me.rank}
+              total={shown?.total ?? me.rank}
+              lapMs={me.entry.lapTimeMs}
+              detail={
+                me.rank === 1
+                  ? "Fastest on this board"
+                  : ahead
+                    ? behind(me.entry.lapTimeMs, ahead.lapTimeMs, ahead.name)
+                    : leader
+                      ? `${((me.entry.lapTimeMs - leader.lapTimeMs) / 1000).toFixed(3)} s off the fastest lap`
+                      : ""
+              }
+              action={ahead && onRaceGhost && circuit === here ? <RaceGhost onClick={() => onRaceGhost(ahead)} label="Race the ghost ahead" /> : undefined}
+            />
           ) : null}
 
           {online.loading && !shown ? (
-            <p className="m-0 px-1 py-2 text-[13px] text-[#8E96AA]">Loading online times…</p>
+            <BoardSkeleton label="Loading online times" />
           ) : online.error && !shown ? (
-            <p role="alert" className="m-0 px-1 py-2 text-[13px] text-[#FF2A3C]">
-              Couldn&apos;t load the online times. Check your connection and press Refresh.
-            </p>
+            <BoardError onRetry={() => setReload((n) => n + 1)}>Couldn&apos;t load the online times. Check your connection.</BoardError>
           ) : !shown || shown.entries.length === 0 ? (
-            <p className="m-0 px-1 py-2 text-[13px] text-[#8E96AA]">
-              {filtered ? "No online laps like that here yet. Turn a filter off to see every lap." : "No online times for this circuit and car yet. Yours can be the first."}
-            </p>
+            <EmptyState
+              icon={<Icon name={filtersOn ? "filter" : "online"} />}
+              action={
+                filtersOn ? (
+                  <Button size="sm" variant="secondary" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                ) : undefined
+              }
+            >
+              {filtersOn
+                ? "No online laps like that here yet. Clear the filters to see every lap."
+                : "No online times for this circuit and car yet. Finish a lap and yours can be the first."}
+            </EmptyState>
           ) : (
             <>
               {online.error && !online.loading ? (
-                <p role="alert" className="m-0 px-1 pb-1 text-[12px] text-[#FFB300]">
+                <p role="alert" className="m-0 flex items-center gap-2 text-[13px] font-medium text-lc-caution">
+                  <Icon name="warning" />
                   Couldn&apos;t refresh. These are the last times loaded.
                 </p>
               ) : null}
-              <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
-                {shown.entries.map((e, i) => (
-                  <OnlineRow
-                    key={e.id ?? `${e.code}-${e.recordedAt}-${i}`}
-                    rank={i + 1}
-                    entry={e}
-                    fastest={i === 0}
-                    mine={myKey !== "" && driverNameKey(e.name) === myKey}
-                    onRaceGhost={circuit === here ? onRaceGhost : undefined}
-                  />
-                ))}
-              </ol>
-              {shown.total > shown.entries.length ? (
-                <p className="m-0 px-1 text-[12px] text-[#8E96AA]">
-                  The fastest {shown.entries.length} of {shown.total} drivers.
-                </p>
-              ) : null}
+              <BoardTable
+                label={`Online times on ${nameOf(circuit)}`}
+                rows={onlineRows}
+                footer={
+                  shown.total > shown.entries.length ? (
+                    <p className="lc-hint m-0 px-2 pt-2">
+                      The fastest {shown.entries.length} of {shown.total} drivers.
+                    </p>
+                  ) : null
+                }
+              />
             </>
           )}
           {onExportDriverKey || onImportDriverKey ? (
-            <div className="mt-1.5 flex flex-col gap-2.5 border-t border-[#262B3D] pt-3.5">
-              <p className="m-0 text-[12px] leading-relaxed text-[#8E96AA]">
-                <span className="font-f1-mono font-extrabold tracking-[0.1em] text-[#F5F7FA]">DRIVER KEY</span> · Your first
-                upload claims your name, and this browser keeps the key to it. Export the key to race under the same name on
-                another browser or device, and keep the file private.
+            <div className="mt-1 flex flex-col gap-2.5 border-t border-lc-line pt-3.5">
+              <h4 className="lc-row-label m-0">Driver key</h4>
+              <p className="lc-hint m-0 max-w-[62ch]">
+                Your first upload claims your name, and this browser keeps the key to it. Export the key to race under the same
+                name on another browser or device, and keep the file private.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 {onExportDriverKey ? (
-                  <button type="button" onClick={onExportDriverKey} onPointerEnter={focusOnHover} className={`${SMALL_BUTTON} h-9`}>
+                  <Button size="sm" variant="secondary" icon={<Icon name="download" />} onClick={onExportDriverKey}>
                     Export key
-                  </button>
+                  </Button>
                 ) : null}
                 {onImportDriverKey ? (
                   <>
-                    <button type="button" onClick={() => keyFileRef.current?.click()} onPointerEnter={focusOnHover} className={`${SMALL_BUTTON} h-9`}>
-                      Import key…
-                    </button>
+                    <Button size="sm" variant="secondary" onClick={() => keyFileRef.current?.click()}>
+                      Import key
+                    </Button>
                     <input ref={keyFileRef} type="file" accept="application/json,.json" className="hidden" onChange={handleKeyFile} />
                   </>
                 ) : null}
-                {driverKeyNotice ? <span className="text-[12px] text-[#F5F7FA]">{driverKeyNotice}</span> : null}
+                {driverKeyNotice ? (
+                  <span role="status" className="text-[13px] text-lc-chalk">
+                    {driverKeyNotice}
+                  </span>
+                ) : null}
               </div>
             </div>
           ) : null}
-        </section>
+        </Card>
       ) : (
-        <p className="m-0 px-1 text-[13px] text-[#8E96AA]">Online times are off in this version: these are the laps saved in this browser.</p>
+        <p className="lc-hint m-0 px-1">Online times are off in this version: these are the laps saved in this browser.</p>
       )}
     </div>
   );

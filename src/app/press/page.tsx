@@ -2,8 +2,10 @@ import { statSync } from "node:fs";
 import { join } from "node:path";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight, Download, Play } from "lucide-react";
-import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
+import { LEAD, READ, SiteIntro, SitePage, SiteSection, TEXT_LINK } from "@/components/home/SitePage";
+import { Button } from "@/components/ui";
+import { Badge } from "@/components/ui/Badge";
+import { Icon } from "@/components/ui/icons";
 import { withBasePath } from "@/lib/base-path";
 import {
   coverage,
@@ -26,19 +28,19 @@ const SHARE_IMAGE = {
 };
 
 export const metadata: Metadata = {
-  title: "Press",
+  title: "Press & media",
   description: DESCRIPTION,
   alternates: { canonical: "/press" },
   openGraph: {
     type: "website",
     url: "/press",
     siteName: SITE_NAME,
-    title: `Press | ${SITE_NAME}`,
+    title: `Press & media | ${SITE_NAME}`,
     description: DESCRIPTION,
     locale: "en_US",
     images: [SHARE_IMAGE],
   },
-  twitter: { card: "summary_large_image", title: `Press | ${SITE_NAME}`, description: DESCRIPTION, images: [SHARE_IMAGE] },
+  twitter: { card: "summary_large_image", title: `Press & media | ${SITE_NAME}`, description: DESCRIPTION, images: [SHARE_IMAGE] },
 };
 
 const TRAILER_URL = "/media/librecorsa-trailer.mp4";
@@ -47,8 +49,12 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 /** 2026-11-09 → 9 Nov 2026 (the same on every machine, unlike toLocaleDateString) */
 const day = (iso: string) => {
   const [y, m, d] = iso.split("-").map(Number);
-  return `${d} ${MONTHS[m - 1]} ${y}`;
+  return `${d} ${MONTHS[m - 1]} ${y}`;
 };
+
+const LANGUAGES = new Intl.DisplayNames(["en"], { type: "language" });
+/** "it" → "Italian" */
+const language = (code: string) => LANGUAGES.of(code) ?? code.toUpperCase();
 
 const FACTS: [string, React.ReactNode][] = [
   ["Developer", "Alp Yalay, solo"],
@@ -60,13 +66,13 @@ const FACTS: [string, React.ReactNode][] = [
   ["Price", "Free. Tips are optional and unlock nothing"],
   [
     "Website",
-    <Link key="site" href="/" className="text-[#F5F7FA] underline decoration-[#3A4157] underline-offset-4 hover:decoration-[#CCFF00]">
+    <Link key="site" href="/" translate="no" className={TEXT_LINK}>
       librecorsa.org
     </Link>,
   ],
   [
     "Source",
-    <a key="src" href={REPO_URL} className="text-[#F5F7FA] underline decoration-[#3A4157] underline-offset-4 hover:decoration-[#CCFF00]">
+    <a key="src" href={REPO_URL} translate="no" className={TEXT_LINK}>
       github.com/KhazP/librecorsa
     </a>,
   ],
@@ -80,315 +86,286 @@ const RISE_AERIAL = RISE_RENDERS.find((r) => r.file === "rise-aerial.jpg")!;
 
 const BRAND_FILES = [
   { label: "Logo", detail: "SVG", href: "/branding/librecorsa-logo.svg" },
+  { label: "Logo on light", detail: "SVG", href: "/branding/librecorsa-logo-on-light.svg" },
+  { label: "Logo in one colour", detail: "SVG", href: "/branding/librecorsa-logo-mono.svg" },
   { label: "Emblem", detail: "SVG", href: "/branding/librecorsa-mark.svg" },
-  { label: "App icon", detail: "PNG · 512 × 512", href: "/branding/icon-512.png" },
-  { label: "Banner", detail: "PNG · 2560 × 720", href: "/press/banner.png" },
+  { label: "App icon", detail: "PNG, 512 × 512", href: "/branding/icon-512.png" },
+  { label: "Banner", detail: "PNG, 2560 × 720", href: "/press/banner.png" },
 ];
 
-const SECTION = "flex flex-col gap-5 border-t border-[#262B3D] pt-8";
-const H2 = "lc-disp text-[28px] text-[#F5F7FA]";
-const CARD = "rounded-[18px] border border-[#262B3D] bg-[#11131A]";
+/** A content card on the page: carbon, a white 7 % hairline (the kit's `Card` surface) */
+const CARD = "rounded-lc-card border border-white/7 bg-lc-carbon/80";
+/** A card that is one link: the edge lights under the pointer, the volt edge and halo under the cursor */
+const CARD_LINK = `${CARD} group no-underline transition-[border-color,box-shadow] duration-200 ease-lc hover:border-lc-keyline focus-visible:border-lc-volt focus-visible:shadow-lc-focus focus-visible:outline-none`;
+/** A sub-part of the press kit */
+const H3 = "lc-h3";
+
+/** A ZIP to download: what is in it, and the button */
+function KitDownload({ title, detail, href, mb }: { title: string; detail: string; href: string; mb: string }) {
+  return (
+    <div className={`${CARD} flex flex-wrap items-center justify-between gap-x-6 gap-y-4 p-4.5 sm:p-6`}>
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="lc-row-label m-0 text-[17px]">{title}</p>
+        <p className="lc-body m-0 text-[15px]">{detail}</p>
+      </div>
+      <Button href={withBasePath(href)} download variant="secondary" icon={<Icon name="download" />}>
+        {`ZIP, ${mb} MB`}
+      </Button>
+    </div>
+  );
+}
 
 export default function PressPage() {
   const articles = coverage();
   const threads = discussions();
 
   return (
-    // The body never scrolls (the game fills the screen), so this page scrolls itself
-    <main className="h-dvh overflow-y-auto bg-[#08090D] text-[#F5F7FA]">
-      <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-10 px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(3rem,env(safe-area-inset-bottom))] sm:px-8">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <Link href="/" aria-label="LibreCorsa home" className="no-underline">
-            <LibreCorsaLogo variant="compact" size="sm" />
-          </Link>
-          <Link
-            href="/play"
-            className="lc-title inline-flex items-center gap-2 rounded-full bg-[#CCFF00] px-5 py-2.5 text-[15px] text-[#08090D] no-underline transition-colors hover:bg-[#99BF00]"
-          >
-            <Play aria-hidden className="h-4 w-4" strokeWidth={2.5} />
-            Play now
-          </Link>
-        </header>
+    <SitePage>
+      <SiteIntro title="LibreCorsa in the press">
+        <p className={LEAD}>
+          LibreCorsa is a free racing simulator that runs in your browser. I make it on my own. Here is what other people have
+          written and made about it, and everything you need to cover it yourself.
+        </p>
+      </SiteIntro>
 
-        <section className="flex flex-col gap-4">
-          <h1 className="lc-disp text-[clamp(44px,9vw,72px)] text-[#F5F7FA]">LibreCorsa in the press</h1>
-          <p className="max-w-[640px] text-[17px] leading-relaxed text-[#C5CBD8]">
-            LibreCorsa is a free racing simulator that runs in your browser. I make it on my own. Here is what other people have
-            written and made about it, and everything you need to cover it yourself.
-          </p>
-        </section>
+      <SiteSection id="coverage" title="Coverage">
+        {articles.length ? (
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+            {articles.map((a) => (
+              <li key={a.url}>
+                <a href={a.url} target="_blank" rel="noopener" className={`${CARD_LINK} flex items-start justify-between gap-4 p-4.5 sm:px-6`}>
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <h3 className="m-0 text-[17px] leading-snug font-semibold text-lc-chalk">{a.title}</h3>
+                    <p className="lc-body m-0 text-[14px] text-lc-slate">
+                      <span className="text-lc-fog">{a.outlet}</span> <span aria-hidden>·</span> {a.lang ? `${a.kind} in ${language(a.lang)}` : a.kind}
+                      {a.author ? (
+                        <>
+                          {" "}
+                          <span aria-hidden>·</span> {a.author}
+                        </>
+                      ) : null}{" "}
+                      <span aria-hidden>·</span> <span className="lc-mono">{day(a.date)}</span>
+                    </p>
+                  </div>
+                  <Icon name="externalLink" className="mt-1 text-lc-slate transition-colors duration-200 group-hover:text-lc-chalk" />
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={READ}>Nothing yet. If you write about LibreCorsa or film it, tell me and I’ll add it here.</p>
+        )}
+      </SiteSection>
 
-        <section className={SECTION} aria-labelledby="coverage">
-          <h2 id="coverage" className={H2}>
-            Coverage
-          </h2>
-          {articles.length ? (
-            <ul className="flex flex-col gap-2">
-              {articles.map((a) => (
-                <li key={a.url}>
-                  <a
-                    href={a.url}
-                    target="_blank"
-                    rel="noopener"
-                    className={`${CARD} group flex items-start justify-between gap-4 p-4 no-underline transition-colors hover:border-[#3A4157] sm:p-5`}
-                  >
-                    <div className="flex min-w-0 flex-col gap-1.5">
-                      <p className="lc-lbl">
-                        {a.outlet} · {a.kind}
-                        {a.lang ? ` · ${a.lang.toUpperCase()}` : ""}
-                      </p>
-                      <p className="text-[17px] font-semibold text-[#F5F7FA] group-hover:text-[#CCFF00]">{a.title}</p>
-                      <p className="text-[14px] text-[#8E96AA]">
-                        {a.author ? `${a.author} · ` : ""}
-                        <span className="lc-data font-semibold">{day(a.date)}</span>
-                      </p>
-                    </div>
-                    <ArrowUpRight aria-hidden className="mt-1 h-5 w-5 shrink-0 text-[#8E96AA] group-hover:text-[#CCFF00]" />
-                  </a>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-[15px] text-[#C5CBD8]">Nothing yet. If you write about LibreCorsa or film it, tell me and I&apos;ll add it here.</p>
-          )}
-        </section>
+      {threads.length ? (
+        <SiteSection id="discussion" title="Mentions">
+          <ul className={`${CARD} m-0 flex list-none flex-col divide-y divide-lc-line overflow-hidden p-0`}>
+            {threads.map((t) => (
+              <li key={t.url}>
+                <a
+                  href={t.url}
+                  target="_blank"
+                  rel="noopener"
+                  className="group flex items-center justify-between gap-4 px-4.5 py-4 no-underline transition-colors duration-200 hover:bg-white/3 focus-visible:-outline-offset-2 sm:px-6"
+                >
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <h3 className="m-0 text-[15px] leading-snug font-medium text-lc-chalk">{t.title}</h3>
+                    <p className="lc-body m-0 text-[14px] text-lc-slate">
+                      {t.where} <span aria-hidden>·</span> <span className="lc-mono">{day(t.date)}</span>
+                    </p>
+                  </div>
+                  {t.engagement ? <p className="lc-data m-0 shrink-0 text-[13px] text-lc-slate max-sm:hidden">{t.engagement}</p> : null}
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </SiteSection>
+      ) : null}
 
-        {threads.length ? (
-          <section className={SECTION} aria-labelledby="discussion">
-            <h2 id="discussion" className={H2}>
-              Mentions
-            </h2>
-            <ul className="flex flex-col divide-y divide-[#262B3D] overflow-hidden rounded-[18px] border border-[#262B3D] bg-[#11131A]">
-              {threads.map((t) => (
-                <li key={t.url}>
-                  <a href={t.url} target="_blank" rel="noopener" className="group flex items-center justify-between gap-4 px-4 py-3.5 no-underline sm:px-5">
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <p className="lc-lbl">
-                        {t.where} · {day(t.date)}
-                      </p>
-                      <p className="text-[15px] font-medium text-[#F5F7FA] group-hover:text-[#CCFF00]">{t.title}</p>
-                    </div>
-                    {t.engagement ? <p className="lc-data shrink-0 text-[13px] text-[#8E96AA] max-sm:hidden">{t.engagement}</p> : null}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+      <SiteSection id="kit" title="Press kit" gap="gap-6">
+        <KitDownload
+          title="Download the press kit"
+          detail={`${PRESS_SCREENSHOTS.length} screenshots at 2560 × 1440, the logos and the banner, in one ZIP`}
+          href={PRESS_KIT_ZIP}
+          mb={KIT_MB}
+        />
 
-        <section className={SECTION} aria-labelledby="kit">
-          <h2 id="kit" className={H2}>
-            Press kit
-          </h2>
-
-          <a
-            href={withBasePath(PRESS_KIT_ZIP)}
-            download
-            className={`${CARD} group flex flex-wrap items-center justify-between gap-4 p-5 no-underline transition-colors hover:border-[#CCFF00] sm:p-6`}
-          >
-            <span className="flex min-w-0 flex-col gap-1">
-              <span className="text-[17px] font-semibold text-[#F5F7FA]">Download the press kit</span>
-              <span className="text-[14px] text-[#8E96AA]">
-                {PRESS_SCREENSHOTS.length} screenshots at 2560 × 1440, the logos and the banner, in one ZIP
-              </span>
-            </span>
-            <span className="lc-title inline-flex shrink-0 items-center gap-2 rounded-full bg-[#CCFF00] px-5 py-2.5 text-[15px] text-[#08090D] transition-colors group-hover:bg-[#99BF00]">
-              <Download aria-hidden className="h-4 w-4" strokeWidth={2.5} />
-              ZIP · {KIT_MB} MB
-            </span>
-          </a>
-
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div className={`${CARD} flex flex-col gap-4 p-5 sm:p-6`}>
-              <p className="lc-lbl">About</p>
-              <p className="text-[15px] leading-relaxed text-[#C5CBD8]">
-                LibreCorsa is a free racing simulator that runs in a web browser, with nothing to install. You drive open-wheel race
-                cars built to the 2026 rules, GT3 cars and a small road car on more than a dozen circuits, in the dry or the rain,
-                by day or at night. Race AI drivers, set lap times against players around the world, or race friends online. It
-                plays with a keyboard, a gamepad, a touch screen or a steering wheel with force feedback. I build it alone, and
-                the code is open source.
-              </p>
-              <p className="text-[13px] leading-relaxed text-[#8E96AA]">
-                LibreCorsa is an independent fan project. It is not affiliated with Formula 1, the FIA, any team or any circuit.
-              </p>
-            </div>
-
-            <dl className={`${CARD} grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-3 p-5 sm:p-6`}>
-              {FACTS.map(([k, v]) => (
-                <div key={k} className="contents">
-                  <dt className="lc-lbl pt-[3px]">{k}</dt>
-                  <dd className="text-[15px] text-[#C5CBD8]">{v}</dd>
-                </div>
-              ))}
-            </dl>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className={`${CARD} flex flex-col gap-4 p-4.5 sm:p-6`}>
+            <p className="lc-body m-0 text-[16px] leading-[1.6]">
+              LibreCorsa is a free racing simulator that runs in a web browser, with nothing to install. You drive open-wheel race
+              cars built to the 2026 rules, GT3 cars and a small road car on more than a dozen circuits, in the dry or the rain,
+              by day or at night. Race AI drivers, set lap times against players around the world, or race friends online. It
+              plays with a keyboard, a gamepad, a touch screen or a steering wheel with force feedback. I build it alone, and
+              the code is open source.
+            </p>
+            <p className="lc-hint m-0 text-[13px]">
+              LibreCorsa is an independent fan project. It is not affiliated with Formula 1, the FIA, any team or any circuit.
+            </p>
           </div>
 
-          <a
-            href={withBasePath(TRAILER_URL)}
-            className={`${CARD} group relative block overflow-hidden no-underline`}
-            aria-label="Watch the trailer (40 seconds, MP4)"
-          >
+          <dl className={`${CARD} m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3.5 p-4.5 sm:p-6`}>
+            {FACTS.map(([k, v]) => (
+              <div key={k} className="contents">
+                <dt className="lc-lbl pt-[3px]">{k}</dt>
+                <dd className="lc-body m-0 text-[15px]">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+
+        <a href={withBasePath(TRAILER_URL)} className={`${CARD_LINK} relative block overflow-hidden`} aria-label="Watch the trailer (40 seconds, MP4)">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={withBasePath("/press/trailer-poster.jpg")}
+            alt=""
+            width={1280}
+            height={720}
+            loading="lazy"
+            decoding="async"
+            className="aspect-video w-full object-cover"
+          />
+          <span className="absolute bottom-4 left-4">
+            <Badge variant="solid" size="lg" icon="play">
+              {"Trailer, 40 s, MP4"}
+            </Badge>
+          </span>
+        </a>
+
+        <section aria-labelledby="screenshots" className="flex flex-col gap-3 pt-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h3 id="screenshots" className={H3}>
+              Screenshots
+            </h3>
+            <p className="lc-hint m-0">{"2560 × 1440, JPEG"}</p>
+          </div>
+          <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2">
+            {PRESS_SCREENSHOTS.map((s) => (
+              <li key={s.file}>
+                <a href={withBasePath(`/press/screenshots/${s.file}`)} download className={`${CARD_LINK} flex flex-col overflow-hidden`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={withBasePath(`/press/screenshots/thumbs/${s.file.replace(/\.jpg$/, ".webp")}`)}
+                    alt=""
+                    width={1024}
+                    height={576}
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-video w-full object-cover"
+                  />
+                  <span className="flex items-center justify-between gap-3 px-4.5 py-3.5 text-[14px] text-lc-fog transition-colors duration-200 group-hover:text-lc-chalk">
+                    {s.alt}
+                    <Icon name="download" className="text-lc-slate transition-colors duration-200 group-hover:text-lc-chalk" />
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section aria-labelledby="logos" className="flex flex-col gap-3 pt-4">
+          <h3 id="logos" className={H3}>
+            Logos
+          </h3>
+          <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0 sm:grid-cols-3">
+            {BRAND_FILES.map((f) => (
+              <li key={f.href}>
+                <a href={withBasePath(f.href)} download className={`${CARD_LINK} flex h-full items-start justify-between gap-3 p-4`}>
+                  <span className="flex min-w-0 flex-col gap-1">
+                    <span className="lc-row-label">{f.label}</span>
+                    <span className="lc-mono text-[12px] text-lc-slate">{f.detail}</span>
+                  </span>
+                  <Icon name="download" className="mt-0.5 text-lc-slate transition-colors duration-200 group-hover:text-lc-chalk" />
+                </a>
+              </li>
+            ))}
+          </ul>
+          <p className="lc-hint m-0 text-[13px]">Use these freely when writing about LibreCorsa. Please keep the logo’s colours as they are.</p>
+        </section>
+
+        <section className="flex flex-col gap-5 pt-4" aria-labelledby="rise">
+          <div className="flex flex-col gap-3">
+            <h3 id="rise" className={H3}>
+              RISE Motordrome
+            </h3>
+            <p className={READ}>
+              I built the circuit planned for Bugesera, Rwanda from scratch, from its published design and the real ground
+              it sits on: 5.9 km, 17 corners and a 190 m climb beside Lake Kidogo. These are Cycles renders of the same
+              model the game drives on.
+            </p>
+          </div>
+
+          <KitDownload
+            title="Download the RISE Motordrome press kit"
+            detail={`${RISE_RENDERS.length} renders of the circuit with open-wheel and GT3 cars, in one ZIP`}
+            href={RISE_PRESS_KIT_ZIP}
+            mb={RISE_KIT_MB}
+          />
+
+          <figure className={`${CARD} m-0 flex flex-col overflow-hidden`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={withBasePath("/press/trailer-poster.jpg")}
-              alt=""
-              width={1280}
-              height={720}
-              className="aspect-video w-full object-cover opacity-90 transition-opacity group-hover:opacity-100"
+              src={withBasePath(RISE_OFFICIAL_RENDER)}
+              alt="The official design render of the circuit from above the lake"
+              width={1024}
+              height={683}
+              loading="lazy"
+              decoding="async"
+              className="aspect-[3/2] w-full object-cover"
             />
-            <span className="lc-title absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-full bg-[#CCFF00] px-4 py-2 text-[14px] text-[#08090D]">
-              <Play aria-hidden className="h-4 w-4" strokeWidth={2.5} />
-              Trailer · 40 s · MP4
-            </span>
+            <figcaption className="lc-hint px-4.5 py-3 text-[14px]">The official design render, by Tilke</figcaption>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={withBasePath(`/press/rise/${RISE_AERIAL.file}`)}
+              alt={`${RISE_AERIAL.alt}, from the same angle in LibreCorsa’s model`}
+              width={3072}
+              height={2048}
+              loading="lazy"
+              decoding="async"
+              className="aspect-[3/2] w-full border-t border-lc-line object-cover"
+            />
+            <figcaption className="lc-hint px-4.5 py-3 text-[14px]">The same view of my model, rendered in Blender Cycles</figcaption>
+          </figure>
+
+          <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2">
+            {RISE_RENDERS.map((r) => (
+              <li key={r.file}>
+                <a href={withBasePath(`/press/rise/${r.file}`)} download className={`${CARD_LINK} flex flex-col overflow-hidden`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={withBasePath(`/press/rise/thumbs/${r.file.replace(/\.jpg$/, ".webp")}`)}
+                    alt=""
+                    width={1024}
+                    height={576}
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-video w-full object-cover"
+                  />
+                  <span className="flex items-center justify-between gap-3 px-4.5 py-3.5 text-[14px] text-lc-fog transition-colors duration-200 group-hover:text-lc-chalk">
+                    {r.alt}
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="lc-mono text-[12px] text-lc-slate">{r.size}</span>
+                      <Icon name="download" className="text-lc-slate transition-colors duration-200 group-hover:text-lc-chalk" />
+                    </span>
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </SiteSection>
+
+      <SiteSection id="contact" title="Contact">
+        <p className={READ}>
+          For interviews, questions or footage, email me at{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`} translate="no" className={TEXT_LINK}>
+            {CONTACT_EMAIL}
           </a>
-
-          <div className="flex flex-col gap-3">
-            <p className="lc-lbl">Screenshots · 2560 × 1440</p>
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {PRESS_SCREENSHOTS.map((s) => (
-                <li key={s.file}>
-                  <a
-                    href={withBasePath(`/press/screenshots/${s.file}`)}
-                    download
-                    className={`${CARD} group flex flex-col overflow-hidden no-underline`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={withBasePath(`/press/screenshots/thumbs/${s.file.replace(/\.jpg$/, ".webp")}`)}
-                      alt={s.alt}
-                      width={1024}
-                      height={576}
-                      loading="lazy"
-                      className="aspect-video w-full object-cover"
-                    />
-                    <span className="flex items-center justify-between gap-3 px-4 py-3 text-[14px] text-[#C5CBD8] group-hover:text-[#F5F7FA]">
-                      {s.alt}
-                      <Download aria-hidden className="h-4 w-4 shrink-0 text-[#8E96AA] group-hover:text-[#CCFF00]" />
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <p className="lc-lbl">Logos</p>
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {BRAND_FILES.map((f) => (
-                <li key={f.href}>
-                  <a
-                    href={withBasePath(f.href)}
-                    download
-                    className={`${CARD} group flex h-full flex-col gap-1 p-4 no-underline transition-colors hover:border-[#3A4157]`}
-                  >
-                    <span className="flex items-center justify-between gap-2 text-[15px] font-semibold text-[#F5F7FA] group-hover:text-[#CCFF00]">
-                      {f.label}
-                      <Download aria-hidden className="h-4 w-4 shrink-0 text-[#8E96AA] group-hover:text-[#CCFF00]" />
-                    </span>
-                    <span className="lc-data text-[12px] font-semibold text-[#8E96AA]">{f.detail}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-            <p className="text-[13px] text-[#8E96AA]">Use these freely when writing about LibreCorsa. Please keep the logo&apos;s colours as they are.</p>
-          </div>
-
-          <section className="flex flex-col gap-5 pt-4" aria-labelledby="rise">
-            <div className="flex flex-col gap-2">
-              <h3 id="rise" className="lc-disp text-[24px] text-[#F5F7FA]">
-                RISE Motordrome
-              </h3>
-              <p className="max-w-[640px] text-[15px] leading-relaxed text-[#C5CBD8]">
-                I built the circuit planned for Bugesera, Rwanda from scratch, from its published design and the real ground
-                it sits on: 5.9 km, 17 corners and a 190 m climb beside Lake Kidogo. These are Cycles renders of the same
-                model the game drives on.
-              </p>
-            </div>
-
-            <a
-              href={withBasePath(RISE_PRESS_KIT_ZIP)}
-              download
-              className={`${CARD} group flex flex-wrap items-center justify-between gap-4 p-5 no-underline transition-colors hover:border-[#CCFF00] sm:p-6`}
-            >
-              <span className="flex min-w-0 flex-col gap-1">
-                <span className="text-[17px] font-semibold text-[#F5F7FA]">Download RISE Motordrome press kit</span>
-                <span className="text-[14px] text-[#8E96AA]">{RISE_RENDERS.length} renders of the circuit with open-wheel and GT3 cars, in one ZIP</span>
-              </span>
-              <span className="lc-title inline-flex shrink-0 items-center gap-2 rounded-full bg-[#CCFF00] px-5 py-2.5 text-[15px] text-[#08090D] transition-colors group-hover:bg-[#99BF00]">
-                <Download aria-hidden className="h-4 w-4" strokeWidth={2.5} />
-                ZIP · {RISE_KIT_MB} MB
-              </span>
-            </a>
-
-            <figure className={`${CARD} flex flex-col overflow-hidden`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={withBasePath(RISE_OFFICIAL_RENDER)}
-                alt="The official design render of the circuit from above the lake"
-                width={1024}
-                height={683}
-                loading="lazy"
-                className="aspect-[3/2] w-full object-cover"
-              />
-              <figcaption className="px-4 py-3 text-[14px] text-[#8E96AA]">The official design render, by Tilke</figcaption>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={withBasePath(`/press/rise/${RISE_AERIAL.file}`)}
-                alt={`${RISE_AERIAL.alt}, from the same angle in LibreCorsa's model`}
-                width={3072}
-                height={2048}
-                loading="lazy"
-                className="aspect-[3/2] w-full border-t border-[#262B3D] object-cover"
-              />
-              <figcaption className="px-4 py-3 text-[14px] text-[#8E96AA]">
-                The same view of my model, rendered in Blender Cycles
-              </figcaption>
-            </figure>
-
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {RISE_RENDERS.map((r) => (
-                <li key={r.file}>
-                  <a
-                    href={withBasePath(`/press/rise/${r.file}`)}
-                    download
-                    className={`${CARD} group flex flex-col overflow-hidden no-underline`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={withBasePath(`/press/rise/thumbs/${r.file.replace(/\.jpg$/, ".webp")}`)}
-                      alt={r.alt}
-                      width={1024}
-                      height={576}
-                      loading="lazy"
-                      className="aspect-video w-full object-cover"
-                    />
-                    <span className="flex items-center justify-between gap-3 px-4 py-3 text-[14px] text-[#C5CBD8] group-hover:text-[#F5F7FA]">
-                      {r.alt}
-                      <span className="flex shrink-0 items-center gap-2">
-                        <span className="lc-data text-[12px] font-semibold text-[#8E96AA]">{r.size}</span>
-                        <Download aria-hidden className="h-4 w-4 shrink-0 text-[#8E96AA] group-hover:text-[#CCFF00]" />
-                      </span>
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-        </section>
-
-        <section className={SECTION} aria-labelledby="contact">
-          <h2 id="contact" className={H2}>
-            Contact
-          </h2>
-          <p className="max-w-[640px] text-[15px] leading-relaxed text-[#C5CBD8]">
-            For interviews, questions or footage, email me at{" "}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#F5F7FA] underline decoration-[#3A4157] underline-offset-4 hover:decoration-[#CCFF00]">
-              {CONTACT_EMAIL}
-            </a>
-            . Wrote something about LibreCorsa? Send me the link and I&apos;ll add it to this page.
-          </p>
-        </section>
-      </div>
-    </main>
+          . Wrote something about LibreCorsa? Send me the link and I’ll add it to this page.
+        </p>
+      </SiteSection>
+    </SitePage>
   );
 }

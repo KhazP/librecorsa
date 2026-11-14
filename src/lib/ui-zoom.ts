@@ -10,8 +10,11 @@ let zoom: number | null = null;
 const listeners = new Set<() => void>();
 
 function read(): number {
-  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--lc-ui-zoom"));
-  return Number.isFinite(v) && v > 0 ? v : 1;
+  const style = getComputedStyle(document.documentElement);
+  const v = parseFloat(style.getPropertyValue("--lc-ui-zoom"));
+  // The player's own multiplier (Settings > Display > Interface), set on <html> by settings/ui-prefs.ts
+  const user = parseFloat(style.getPropertyValue("--lc-ui-scale"));
+  return (Number.isFinite(v) && v > 0 ? v : 1) * (Number.isFinite(user) && user > 0 ? user : 1);
 }
 
 function onResize(): void {

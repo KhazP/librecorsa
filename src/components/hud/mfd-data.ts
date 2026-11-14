@@ -88,7 +88,8 @@ export function computeRelatives(
   const player: RelativeRow = {
     key: "player",
     code: me?.driverCode ?? "YOU",
-    color: me?.teamColorHex ?? "#CCFF00",
+    // The player's own colour, or the player's volt (a CSS colour: the relative page draws it in style)
+    color: me?.teamColorHex ?? "var(--color-lc-volt)",
     isPlayer: true,
     position: t.race?.position,
     dsM: 0,
