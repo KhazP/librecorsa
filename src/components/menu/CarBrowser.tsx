@@ -195,6 +195,19 @@ export const CarBrowser: React.FC<{
                 >
                   {c.credit.author}
                 </a>
+                {c.tyreCredit ? (
+                  <>
+                    , tyres by{" "}
+                    <a
+                      href={c.tyreCredit.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-lc-fog underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
+                    >
+                      {c.tyreCredit.author}
+                    </a>
+                  </>
+                ) : null}
               </span>
               <SourceChip source={carModelSource(c)} />
             </div>

@@ -1,6 +1,7 @@
 /**
  * The 2026 Pirelli sidewall on the 2018+ cars' tyres, from Cxjovich's 2026 Pirelli Tire Pack (used with permission,
- * CC BY-NC-SA 4.0, see CREDITS.md; texture ported by `scripts/cars/port_cxjovich_sidewall.py`).
+ * CC BY-NC-SA 4.0, see CREDITS.md; texture ported by `scripts/cars/port_cxjovich_sidewall.py`). The 2026 car wears
+ * whole-tyre textures instead (`tyre-wrap.ts`) and draws this sidewall only if those cannot be fetched.
  *
  * The texture is a planar disc centred on the axle: R = rubber albedo (sRGB), G = slick branding (P ZERO, chequers,
  * PIRELLI), B = wet branding (Cinturato), both masks tinted with the compound colour. It is drawn from the tyre's own
@@ -36,7 +37,8 @@ const sharedMap: THREE.IUniform<THREE.Texture | null> = { value: null };
 const sharedReady: THREE.IUniform<number> = { value: 0 };
 let loadStarted = false;
 
-function loadSidewallTexture(): void {
+/** Fetches the sidewall texture (once); every tyre with the sidewall shows it as it arrives */
+export function loadSidewallTexture(): void {
   // The artwork is hosted on librecorsa.org only (`hosted-content.ts`); a clone keeps the tyres' own sidewall
   if (loadStarted || typeof window === "undefined" || !HOSTED_CONTENT) return;
   loadStarted = true;
@@ -116,12 +118,16 @@ export interface PirelliSidewallPatch {
   setCompound(compound: TireCompound): void;
 }
 
-/** The sidewall for one tyre mesh: its own fit and compound, the shared texture */
+/**
+ * The sidewall for one tyre mesh: its own fit and compound, the shared texture. `deferLoad` leaves the texture
+ * unfetched until `loadSidewallTexture` is called (a tyre that draws the sidewall only as a fallback).
+ */
 export function createPirelliSidewall(
   geometry: THREE.BufferGeometry,
-  compound: TireCompound = "medium"
+  compound: TireCompound = "medium",
+  deferLoad = false
 ): PirelliSidewallPatch {
-  loadSidewallTexture();
+  if (!deferLoad) loadSidewallTexture();
   const { beadM, shoulderM } = sidewallBand(geometry);
   // Texture half-widths per metre: the bead-to-shoulder fit, or at least the uniform scale that keeps the lettering's
   // proportions (on a tall sidewall the fit would stretch it radially)

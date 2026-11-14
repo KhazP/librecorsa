@@ -186,6 +186,8 @@ export interface CarDefinition {
   quality: CarQuality;
   /** Its 3D body's author */
   credit: CarCredit;
+  /** Who made its tyre textures, when they are someone else's work than the body's (the car card links them) */
+  tyreCredit?: { author: string; url: string };
   /** Where its 3D body comes from, when the credit names someone else (its modder); absent: the credit */
   modelSource?: CarCredit;
   /** The vehicle model that drives it */
@@ -227,6 +229,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     badge: "PROTO 26",
     quality: "own",
     credit: QVIST_F1_2026,
+    tyreCredit: { author: "Purple Sector", url: "https://www.patreon.com/cw/PurpleSector" },
     physics: "lc26",
     year: 2026,
     sound: F1_2026_SOUND,

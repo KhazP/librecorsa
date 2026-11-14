@@ -164,6 +164,16 @@ const Credits: React.FC = () => (
           </a>
         </CreditRow>
         <CreditRow title="Tyres">
+          &ldquo;2025 Pirelli tyres&rdquo; by{" "}
+          <a href="https://www.overtake.gg/members/purple-sector.3636642/" target="_blank" rel="noreferrer" className={linkClass}>
+            Purple Sector
+          </a>{" "}
+          (
+          <a href="https://www.patreon.com/cw/PurpleSector" target="_blank" rel="noreferrer" className={linkClass}>
+            patreon.com/cw/PurpleSector
+          </a>
+          ) · the 2026 car&apos;s tyres · used with permission
+          <br />
           &ldquo;2026 Pirelli Tire Pack&rdquo; (
           <a
             href="https://www.overtake.gg/downloads/pirelli-tire-pack-for-formula-hybrid-x-2026.81209/"

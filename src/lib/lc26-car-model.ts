@@ -338,8 +338,10 @@ export function attachLc26Model(
     return installTyreDeformation(mesh, {
       unloadedRadiusM: box.max.y,
       halfWidthM: box.max.x,
-      // A 2026 car: the 2026 Pirelli sidewall over the model's own (recoloured by setTireCompound)
+      // The 2025 Pirelli textures round the whole tyre (the model's tyres are plain); the 2026 Pirelli sidewall if
+      // those cannot be fetched. Both follow setTireCompound. The wheels are not mirrored, so +X is the car's left
       pirelliSidewall: "medium",
+      tyreWrapOuterSide: c.isLeft ? 1 : -1,
     });
   });
   corners.forEach((c, i) => (c.tyre = tyreHandles[i]));

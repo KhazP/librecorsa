@@ -31,7 +31,8 @@
 import * as THREE from 'three';
 import type { TireCompound } from '@/types/f1';
 import type { TyreVisualState } from '../sim/simulator-car';
-import { createPirelliSidewall } from './pirelli-sidewall';
+import { createPirelliSidewall, loadSidewallTexture } from './pirelli-sidewall';
+import { createTyreWrap } from './tyre-wrap';
 import { subdivideTyreTread } from './tyre-subdivide';
 
 /** Default visual exaggeration of the radial deflection and the carcass shear */
@@ -88,7 +89,7 @@ export interface TyreDeformationHandle {
    * bulge takes its side from the vertex's own x, so the corner's side is not needed.
    */
   update(state: TyreVisualState, spinAngleRad: number): void;
-  /** Recolours the Pirelli sidewall branding (no-op on a tyre without it) */
+  /** Recolours the Pirelli branding, and with a tyre wrap swaps the rubber too (no-op on a tyre with neither) */
   setCompound(compound: TireCompound): void;
   /** How much closer to the road (m) the hub sits than the unloaded radius: the visual deflection */
   axleDropM: number;
@@ -104,6 +105,12 @@ export interface TyreDeformationOptions {
   gain?: number;
   /** Draw the Pirelli sidewall (pirelli-sidewall.ts) over the model's own, in this compound's colours */
   pirelliSidewall?: TireCompound;
+  /**
+   * Wrap the whole tyre in the 2025 Pirelli textures (tyre-wrap.ts), for a tyre mesh with no usable UVs: the
+   * mesh-local X the car's outside is on. With `pirelliSidewall` too, the sidewall is what shows if the wrap's
+   * textures cannot be fetched
+   */
+  tyreWrapOuterSide?: 1 | -1;
 }
 
 type UniformMap = Record<string, THREE.IUniform>;
@@ -284,15 +291,22 @@ export function installTyreDeformation(
   };
 
   // The sidewall fits itself to the model's own tyre; the subdivided tread keeps its bead and shoulder radii
-  const sidewall = opts.pirelliSidewall ? createPirelliSidewall(originalGeometry, opts.pirelliSidewall) : null;
+  const wrapped = opts.tyreWrapOuterSide !== undefined;
+  const sidewall = opts.pirelliSidewall ? createPirelliSidewall(originalGeometry, opts.pirelliSidewall, wrapped) : null;
   mesh.geometry = subdivideTyreTread(originalGeometry);
+  // The wrap reads the cross-section off the geometry the tyre is drawn with
+  const wrap = wrapped
+    ? createTyreWrap(mesh.geometry, opts.tyreWrapOuterSide!, opts.pirelliSidewall, sidewall ? loadSidewallTexture : undefined)
+    : null;
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = injectDeform(shader.vertexShader, true);
+    // The wrap first: the sidewall's colour is then written before it, so the wrap covers it once it is in
+    wrap?.patch(shader);
     sidewall?.patch(shader);
   };
-  // Tyres with and without the sidewall compile to different programs
-  const programKey = sidewall ? 'lc26-tyre-deform-sidewall' : 'lc26-tyre-deform';
+  // Tyres with and without the sidewall and the wrap compile to different programs
+  const programKey = `lc26-tyre-deform${sidewall ? '-sidewall' : ''}${wrap ? '-wrap' : ''}`;
   material.customProgramCacheKey = () => programKey;
   mesh.material = material;
 
@@ -347,6 +361,7 @@ export function installTyreDeformation(
     },
     setCompound(compound) {
       sidewall?.setCompound(compound);
+      wrap?.setCompound(compound);
     },
     dispose() {
       // The mesh keeps the (shared, cached) subdivided tread: it draws the same undeformed
