@@ -69,8 +69,9 @@ export function DriverTab() {
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [codeDraft, setCodeDraft] = useState<string | null>(null);
-  /** The name last sent to the board: Enter then leaving the field, or the screen closing, must not send it again */
+  /** The name last sent to the board, and whether it is still on its way: one request at a time */
   const sentName = useRef<string | null>(null);
+  const sending = useRef(false);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -79,18 +80,25 @@ export function DriverTab() {
     };
   }, []);
 
-  const commitName = () => {
+  /** `retry`: Enter, which may send a name again after the board said no (it may have been out of reach) */
+  const commitName = (retry = false) => {
     if (nameDraft === null) return;
     if (env.onRenameDriver) {
       // The board has the last word: the field keeps the typed name until it has taken, or says why it did not
       const typed = nameDraft;
-      // Sent once per edit (in flight, taken or turned down); typing in the field again allows another try
-      if (sentName.current === typed) return;
+      // Leaving the field or closing the screen never sends a name already sent; Enter tries it again
+      if (sending.current || (!retry && sentName.current === typed)) return;
       sentName.current = typed;
+      sending.current = true;
       void env.onRenameDriver(typed).then((error) => {
+        sending.current = false;
         if (!alive.current) return;
         setNameError(error);
         if (error === null) setNameDraft((d) => (d === typed ? null : d));
+      }, () => {
+        // Failed on the way: the next commit may send it again
+        sending.current = false;
+        sentName.current = null;
       });
       return;
     }
@@ -132,8 +140,8 @@ export function DriverTab() {
             setNameDraft(v);
             setNameError(null);
           }}
-          onKeyDown={onEnter(commitName)}
-          onBlur={commitName}
+          onKeyDown={onEnter(() => commitName(true))}
+          onBlur={() => commitName()}
           error={nameError ?? undefined}
           data-nav-default=""
         />

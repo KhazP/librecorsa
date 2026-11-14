@@ -73,9 +73,13 @@ export function ConfirmDialog({
   useEffect(() => {
     if (!open) return;
     const before = document.activeElement as HTMLElement | null;
-    // The boxes round the opener, nearest first: where the focus goes if the opener is gone when the dialog closes
+    // The boxes round the opener, nearest first, up to its screen part (a nav zone): where the focus goes if the opener
+    // is gone when the dialog closes. Never further out, where it would land on some other screen's control
     const around: HTMLElement[] = [];
-    for (let el = before?.parentElement ?? null; el && el !== document.body; el = el.parentElement) around.push(el);
+    for (let el = before?.parentElement ?? null; el && el !== document.body; el = el.parentElement) {
+      around.push(el);
+      if (el.hasAttribute("data-nav-zone")) break;
+    }
     // The safe choice takes the focus first; in an info dialog, the acknowledgement
     const raf = requestAnimationFrame(() =>
       sheetRef.current?.querySelector<HTMLElement>("[data-nav-default]")?.focus({ preventScroll: true }),
@@ -111,7 +115,8 @@ export function ConfirmDialog({
       for (const box of around) {
         if (!box.isConnected) continue;
         const next = box.querySelector<HTMLElement>(
-          "button:not([disabled]):not([data-card-reset]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])",
+          // Not a text field: focusing one would raise a touch screen's keyboard
+          'button:not([disabled]):not([data-card-reset]), input:not([disabled]):is([type="checkbox"], [type="radio"], [type="range"]), select:not([disabled])',
         );
         if (next) {
           next.focus({ preventScroll: true });

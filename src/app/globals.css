@@ -337,9 +337,14 @@ body {
     background: transparent;
   }
   /* Safari before 18.2 ignores scrollbar-width and draws the bar styled above: a box hidden with the
-     `[scrollbar-width:none]` utility (or its phone: form) hides it here too */
-  [class*="scrollbar-width:none"]::-webkit-scrollbar {
+     `[scrollbar-width:none]` utility hides it here too, and the phone: form only where that variant applies */
+  [class~="[scrollbar-width:none]"]::-webkit-scrollbar {
     display: none;
+  }
+  @media (max-width: 40rem), (max-height: 32rem) {
+    [class~="phone:[scrollbar-width:none]"]::-webkit-scrollbar {
+      display: none;
+    }
   }
 }
 
