@@ -150,7 +150,9 @@ One part per job; a screen does not draw its own button, chip, toggle, tab, slid
   glyphs of the input in use and fewer of them on phones.
 - **Meter** (8 px track; `stacked` for long names), **Skeleton**, **EmptyState** (one sentence and the action that
   fills the list), **Toast** (`ToastRegion` inside the menu root it belongs to), **ConfirmDialog** (every
-  destructive or session-restarting action asks; the safe choice has the focus).
+  destructive or session-restarting action asks; the safe choice has the focus. Its `info` tone explains instead,
+  as the Install app steps do: an info icon, the acknowledgement as the primary button with the focus, the other
+  choice ghost, and `onDismiss` for Esc, B and the backdrop when the other choice does more than close).
 - **Logo** (`LibreCorsaLogo`, `public/branding/`): built from one geometry by `npm run brand`; on a light
   background the wordmark is one colour and the emblem carries the colour.
 

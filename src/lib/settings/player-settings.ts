@@ -25,6 +25,7 @@ import {
   type WheelSettings,
 } from "@/lib/input/device-input";
 import { KB_STEER_RETURN_S, KB_STEER_RISE_S } from "@/lib/input/keyboard-steer";
+import { isTouchDevice } from "@/lib/input/touch-input";
 import { isCameraMode } from "@/lib/render/camera-modes";
 import { parseCameraNudges, type CameraNudges } from "@/lib/settings/camera-nudges";
 import { resolveCarId, type CarId } from "@/lib/cars/car-registry";
@@ -366,7 +367,17 @@ export const LIBRARY_FAVORITES_MAX = 256;
 export const LIBRARY_RECENT_MAX = 12;
 const LIBRARY_ID_MAX_LENGTH = 64;
 
+/** The graphics defaults the page is prerendered with (no device to ask on the server); see defaultGraphicsSettings */
 export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = { quality: "high", renderScale: 1, driverBody: false };
+
+/**
+ * The graphics a player starts on until they pick their own: Medium on a touch screen (phones and tablets: no bloom,
+ * half the MSAA, fewer trees), High elsewhere. It asks the device, so call it in the browser (on the server it is
+ * DEFAULT_GRAPHICS_SETTINGS); a saved choice always wins over it.
+ */
+export function defaultGraphicsSettings(): GraphicsSettings {
+  return { ...DEFAULT_GRAPHICS_SETTINGS, quality: isTouchDevice() ? "medium" : DEFAULT_GRAPHICS_SETTINGS.quality };
+}
 
 export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", tiltSteer: false, tiltRangeDeg: 30 };
 
@@ -452,6 +463,14 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   audio: DEFAULT_AUDIO_SETTINGS,
   ui: DEFAULT_INTERFACE_SETTINGS,
 };
+
+/**
+ * DEFAULT_PLAYER_SETTINGS with this device's graphics (defaultGraphicsSettings): what a first visit, a reset or a
+ * row's default means in the browser. The other groups are the shared defaults themselves, so copy before editing.
+ */
+export function defaultPlayerSettings(): PlayerSettings {
+  return { ...DEFAULT_PLAYER_SETTINGS, graphics: defaultGraphicsSettings() };
+}
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => Boolean(v) && typeof v === "object" && !Array.isArray(v);
@@ -651,8 +670,9 @@ function parseHud(v: unknown): HudSettings {
 }
 
 function parseGraphics(v: unknown): GraphicsSettings {
-  const d = DEFAULT_GRAPHICS_SETTINGS;
-  if (!isObj(v)) return structuredClone(d);
+  // A save without graphics (or without a valid preset) gets this device's default; a saved preset is kept
+  const d = defaultGraphicsSettings();
+  if (!isObj(v)) return d;
   return {
     quality: oneOf(v.quality, ["low", "medium", "high"] as const, d.quality),
     renderScale: num(v.renderScale, 0.5, 1.5, d.renderScale),
@@ -749,7 +769,7 @@ export function pushLibraryRecent(lib: ContentLibrary, kind: LibraryKind, id: st
 export function parsePlayerSettings(raw: unknown): PlayerSettings {
   const d = DEFAULT_PLAYER_SETTINGS;
   // A copy: handing out the shared defaults would let any in-place edit corrupt them for the rest of the session
-  if (!isObj(raw)) return structuredClone(d);
+  if (!isObj(raw)) return structuredClone(defaultPlayerSettings());
   return {
     device: oneOf(raw.device, ["keyboard", "controller", "wheel"] as const, d.device),
     keys: parseKeys(raw.keys),
@@ -794,7 +814,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
 }
 
 export function loadPlayerSettings(): PlayerSettings {
-  let settings = DEFAULT_PLAYER_SETTINGS;
+  let settings = defaultPlayerSettings();
   let rawProfile: unknown = undefined;
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);

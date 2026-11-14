@@ -1,4 +1,4 @@
-import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from "@/lib/settings/player-settings";
+import { defaultPlayerSettings, type PlayerSettings } from "@/lib/settings/player-settings";
 
 /**
  * Everything the game keeps in this browser, for Settings > Profile and data. Keys are listed by what they hold; the
@@ -42,7 +42,8 @@ export const STORAGE_KEYS: readonly { key: string; holds: string }[] = [
  * code, colour), favourites, the race and conditions choices and the livery stay.
  */
 export function resetAllSettings(prev: PlayerSettings): PlayerSettings {
-  const d = structuredClone(DEFAULT_PLAYER_SETTINGS);
+  // This device's defaults: Quality goes back to Medium on a touch screen
+  const d = structuredClone(defaultPlayerSettings());
   return {
     ...d,
     profile: prev.profile,

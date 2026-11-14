@@ -249,7 +249,11 @@ vec3 lc26PerturbNormal( vec3 eyePos, vec3 surfNorm, vec2 dHdxy, float faceDir ) 
 	vec3 R2 = cross( surfNorm, dPdx );
 	float det = dot( dPdx, R1 ) * faceDir;
 	vec3 grad = sign( det ) * ( dHdxy.x * R1 + dHdxy.y * R2 );
-	return normalize( abs( det ) * surfNorm - grad );
+	vec3 bumped = abs( det ) * surfNorm - grad;
+	// Where the screen derivatives give no area (det 0, as the reflection probe's small faces can on Sachsenring's
+	// trackside objects) the bump is nothing, and normalize( 0 ) would be NaN: one such texel, prefiltered, turned
+	// the cars' whole reflection map NaN and bloom spread it into black blocks over the car
+	return dot( bumped, bumped ) > 0.0 ? normalize( bumped ) : surfNorm;
 }
 `;
 
