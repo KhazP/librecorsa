@@ -16,6 +16,7 @@ import { DISTANCE_LABEL, distanceIn, SPEED_LABEL, speedIn } from "@/lib/settings
 import { SITE_DESCRIPTION } from "@/lib/site";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { FeaturedBadges } from "./FeaturedBadges";
+import { SupportButton } from "@/components/SupportButton";
 import { day, GAME_FACTS, GRADE_NOTES, type HomeData, type HomeLayout, type HomeVenue, type WhatsNewDay } from "./home-data";
 import { CarThumb, GradeBadge, GradeLegend, OutlineThumb } from "./home-ui";
 import { LapMap } from "./LapMap";
@@ -619,6 +620,31 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                       with a link to it. Every modder gets credited by name in the game.
                     </p>
                   </section>
+                  {/* Who made the circuits and cars, those who take donations first, each with their link */}
+                  {data.modders.length ? (
+                    <section aria-labelledby="the-modders" className="flex flex-col gap-4 pt-2">
+                      <h2 id="the-modders" className="lc-h2">
+                        The modders
+                      </h2>
+                      <p className="lc-body m-0 max-w-[60ch] text-[16px] leading-[1.6]">
+                        The circuits and cars are their work, used with their permission. If you enjoy one, you can thank
+                        its maker directly.
+                      </p>
+                      <ul className="m-0 flex list-none flex-col p-0">
+                        {data.modders.map((m) => (
+                          <li key={m.name} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-lc-line py-3 last:border-b">
+                            <span className="flex min-w-0 flex-col gap-0.5">
+                              <a href={m.url} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`self-start ${TEXT_LINK}`}>
+                                {m.name}
+                              </a>
+                              <span className="lc-hint text-[13px]">{m.works.join(", ")}</span>
+                            </span>
+                            <SupportButton support={m.support} maker={m.name} variant="secondary" />
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : null}
                 </div>
                 <section aria-labelledby="press-and-media" className="flex min-w-0 flex-col gap-5">
                   <h2 id="press-and-media" className="lc-h2">
