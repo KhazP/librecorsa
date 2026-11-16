@@ -353,13 +353,13 @@ def lane_widen(xz, cfg):
     return out
 
 
-def smooth_road_profile(yprof, width, ds, sigma=1.5):
+def smooth_road_profile(yprof, width, ds, sigma=1.5, crest_r=400.0, dip_r=120.0):
     """A race track is a smooth banked plane across its width: scans carry humps and overlapping layers (a 0.5 m,
     10 m long ridge on one half of the road launches a car at 120 km/h). Fit the bank plane
     through the road points, keep at most a few cm of residual, then smooth that residual along the track:
     sigma 1.5 samples (~7.5 m) takes out 10-20 m scan ripple (a washboard at speed) and keeps >80% of crests of 80 m+.
-    Then vertical curves along each line: crests no sharper than R 400 m (taken flat at 230 km/h without going
-    light), compressions no sharper than R 120 m."""
+    Then vertical curves along each line: crests no sharper than `crest_r` (R 400 m by default: taken flat at
+    230 km/h without going light), compressions no sharper than `dip_r` (R 120 m)."""
     yprof = yprof.copy()
     lat_a = np.array(LAT)
     for i in range(len(yprof)):
@@ -375,7 +375,7 @@ def smooth_road_profile(yprof, width, ds, sigma=1.5):
         col = yprof[:, k]
         for _ in range(60):
             c2 = np.roll(col, -1) - 2 * col + np.roll(col, 1)
-            over = (c2 < -ds * ds / 400.0) | (c2 > ds * ds / 120.0)
+            over = (c2 < -ds * ds / crest_r) | (c2 > ds * ds / dip_r)
             if not over.any():
                 break
             sm = (np.roll(col, -1) + 2 * col + np.roll(col, 1)) / 4
