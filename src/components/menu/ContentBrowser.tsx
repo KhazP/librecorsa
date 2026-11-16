@@ -502,7 +502,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
                 {g.runs.map((run, ri) => (
                   <div key={`${run.key}#${ri}`} role={run.key ? "group" : undefined} aria-label={run.key || undefined} className="mb-3 last:mb-0">
                     {run.key ? <p className="lc-mono m-0 mb-2 text-[12px] text-lc-fog">{run.key}</p> : null}
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(200px,calc(50%-6px)),1fr))] gap-3">
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(240px,calc(50%-6px)),1fr))] gap-3">
                       {run.items.map((it) => {
                         const id = idOf(it);
                         const isSel = id === selectedKey;
