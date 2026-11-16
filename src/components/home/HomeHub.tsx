@@ -15,6 +15,7 @@ import { useSavedInterfaceSettings, useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn, SPEED_LABEL, speedIn } from "@/lib/settings/units";
 import { SITE_DESCRIPTION } from "@/lib/site";
 import { useStoreBuild } from "@/lib/use-store-build";
+import { FeaturedBadges } from "./FeaturedBadges";
 import { day, GAME_FACTS, GRADE_NOTES, type HomeData, type HomeLayout, type HomeVenue, type WhatsNewDay } from "./home-data";
 import { CarThumb, GradeBadge, GradeLegend, OutlineThumb } from "./home-ui";
 import { LapMap } from "./LapMap";
@@ -660,6 +661,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                       </a>
                     ))}
                   </div>
+                  <FeaturedBadges className="pt-2" />
                 </section>
               </div>
             ) : null}
