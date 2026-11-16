@@ -27,7 +27,12 @@ for (const t of TRACKS) {
 }
 
 const liana = carModelSource(carById("liana"));
-check("The Liana's model source is Forza Motorsport 4's, not its modder", /Forza Motorsport 4/.test(liana.author) && carById("liana").credit.author === "alekabul");
+check(
+  "The Liana's source is its modder's physics, its model Forza Motorsport 4's",
+  liana.author === "alekabul" && /Forza Motorsport 4/.test(liana.model?.author ?? "") && carById("liana").credit.author === "alekabul"
+);
+check("A modder with a support page has it first in their source", carModelSource(carById("nissan-r33-jgtc")).support?.url === "https://www.patreon.com/gregsediting");
+check("A modder without one gets none", carModelSource(carById("amg-gt3")).support === undefined);
 check("The GT3's model source is Vecarz's", carModelSource(carById("amg-gt3")).author === "Vecarz");
 const dunsfold = TRACKS.find((t) => t.id === "dunsfold");
 check("Dunsfold's source says it is a Forza Motorsport 4 conversion", !dunsfold || /Forza Motorsport 4/.test(trackModelSource(dunsfold)?.note ?? ""));

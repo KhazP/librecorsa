@@ -108,7 +108,10 @@ export interface CarCredit {
   note?: string;
   title: string;
   author: string;
+  /** The work's page (the mod) */
   url: string;
+  /** The author's own page, which their name links to (the car card, the Source panel) */
+  authorUrl?: string;
   license: string;
   licenseUrl: string;
 }
@@ -146,7 +149,8 @@ const QVIST_F1_2026: CarCredit = {
 const gregSt = (title: string, url: string): CarCredit => ({
   title,
   author: "gregsediting",
-  url: "https://www.patreon.com/gregsediting",
+  url,
+  authorUrl: "https://www.patreon.com/gregsediting",
   license: "Used with the author's permission",
   licenseUrl: url,
 });
