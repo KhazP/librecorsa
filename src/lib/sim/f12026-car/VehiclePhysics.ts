@@ -1024,7 +1024,7 @@ export function combinedSlipForces(
 const _comb = { fx: 0, fy: 0, sx: 0, sy: 0 };
 const _brush: BrushForces = { fx: 0, fy: 0, slipNorm: 0 };
 /** Share of the tread surface's temperature in the temperature a brush tyre's grip curve is read at (the rest: its carcass) */
-const GRIP_TEMP_SURFACE_SHARE = 0.25;
+const GRIP_TEMP_SURFACE_SHARE = 0.3;
 /**
  * The pressure a compound's tyre is set to by default at its `coldRefC` (psi gauge): the one its data states, else the
  * one that reaches the optimum with the carcass at the centre of the working window
