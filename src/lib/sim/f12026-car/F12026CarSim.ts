@@ -1420,7 +1420,8 @@ export class F12026CarSim implements SimulatorCar {
       engineMap: v.engineMap,
       // The setting the player picked, not the push mode an override runs: the tuner steps from what it reads back
       ersMode: this.userErsMode,
-      hasErs: this.profile.hasErs,
+      // A prototype's hybrid runs from its kW dials: the F1 modes do nothing on it, so they are not offered
+      hasErs: this.profile.hasErs && !this.config.hybridDials,
       tcCutFraction: Number(Math.max(0, 1 - this.tcCut).toFixed(3)),
       absCutPerWheel: [
         Number(Math.max(0, 1 - cut[0]).toFixed(3)),
@@ -1456,7 +1457,7 @@ export class F12026CarSim implements SimulatorCar {
       v.regenKw = nearestStep(dials.regenStepsKw, patch.regenKw);
     }
     // The mode before the bias: the bias the driver dials is set as their offset on top of the mode's own
-    if (patch.ersMode !== undefined && this.profile.hasErs) {
+    if (patch.ersMode !== undefined && this.profile.hasErs && !this.config.hybridDials) {
       const m = patch.ersMode as PerformanceModeName;
       if (m === 'PSH' || m === 'RAC' || m === 'BAL' || m === 'LIC' || m === 'CHR') {
         this.userErsMode = m;

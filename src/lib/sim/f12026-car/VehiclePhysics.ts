@@ -267,8 +267,8 @@ const PLANK_DAMP = 20_000;
 const PLANK_FRICTION = 0.35;
 /** The plank looks for its ground at most this far above itself (m): deeper than this it is meeting a step face, not riding on a surface */
 const PLANK_PROBE_UP_M = 0.05;
-/** The traction control's cut a shaft-limited hybrid takes from the engine's spark before it touches the motor */
-const SPARK_FIRST_CUT = 0.75;
+/** The motor's largest share of the drive the spark-first cut reckons with (the rest is always the engine's) */
+const SPARK_FIRST_MAX_MOTOR_SHARE = 0.25;
 /** Share of the engine's crank power that goes into its coolant [est] */
 const COOLANT_HEAT_SHARE = 0.6;
 /** Radiator conductance per garage step of opening, against the baseline [est] */
@@ -772,7 +772,8 @@ export function bumpRubberForce(bs: BumpStopSettingsUnits, into: number, v: numb
   const etaEl = bs.reboundElasticShare ?? BUMP_RUBBER_DEFAULTS.reboundElasticShare;
   const etaC = bs.reboundDamperShare ?? BUMP_RUBBER_DEFAULTS.reboundDamperShare;
   const unload = Math.max(0, etaEl * el + etaC * c * v);
-  const band = Math.max(0.005, ((1 - etaEl) * el) / Math.max(1, dampMax - c));
+  // A smoothstep's steepest slope is 1.5 × its mean: the band is that much wider than the mean slope alone asks
+  const band = Math.max(0.005, (1.5 * ((1 - etaEl) * el + (1 - etaC) * c * 0.5)) / Math.max(1, dampMax - c));
   const u = Math.min(1, -v / band);
   return Math.max(0, load + (unload - load) * u * u * (3 - 2 * u));
 }
@@ -1096,6 +1097,8 @@ export class VehiclePhysics {
   /** Mean over the last 500 Hz step of the power into the driven shafts, engine and motor together (W) */
   public driveshaftPowerW = 0;
   private stepIcePowerSumW = 0;
+  /** The engine's crank torque the last sub-step (Nm), for the spark-first cut's split */
+  private lastIceDriveNm = 0;
   private stepShaftPowerSumW = 0;
   private stepPowerSamples = 0;
   /**
@@ -2634,14 +2637,14 @@ export class VehiclePhysics {
   /**
    * Engine coolant: the engine rejects about its own power again into the water (`COOLANT_HEAT_SHARE` of it here, the
    * rest leaves by the exhaust), the radiator sheds it by the air through it, more open by the garage's steps. Sized so
-   * a baseline radiator holds ≈ 95 °C at race pace on a 25 °C day
+   * a baseline radiator holds ≈ 105 °C flat out at 80 m/s on a 25 °C day; taped up two steps it passes the derate
    */
   private stepCoolant(dt: number): void {
     const peakW = this.peakEnginePowerW;
     const v = Math.max(0, this.velocity.dot(_ez));
     const open = Math.max(0.2, 1 + COOLANT_RADIATOR_STEP * this.coolingSteps.radiator);
-    // At race pace (55 % of peak power, 50 m/s) the baseline radiator holds 70 K over the air
-    const gRef = (COOLANT_HEAT_SHARE * 0.55 * peakW) / 70;
+    // Flat out at 80 m/s (the speed term at its 1.45) the baseline radiator holds 80 K over the air
+    const gRef = (COOLANT_HEAT_SHARE * peakW) / (80 * 1.45);
     const g = gRef * open * (0.25 + 0.75 * Math.min(1.6, v / 50));
     const heat = COOLANT_HEAT_SHARE * this.iceMechanicalPowerW + 0.04 * peakW * (this.rpm / Math.max(1, this.config.gearbox.gears.redline_rpm));
     const cap = COOLANT_CAPACITY_S * gRef;
@@ -3489,11 +3492,19 @@ export class VehiclePhysics {
     // The traction control's cut (`ignitionCut`: the torque share it allows). A hybrid under a shaft power limit cuts
     // the engine's spark first, up to three quarters of the demand, and only then the motor, whose torque is the
     // smoother and quicker to come back; any other car cuts both alike. A managed up-shift cuts everything
+    // The total it takes off is what it asked for: the engine gives up its share first (by the motor's part of the last
+    // step's drive torque), the motor only what the engine cannot
     const totalCut = shiftCut ? 1 : THREE.MathUtils.clamp(1 - (inp.ignitionCut ?? 1), 0, 1);
     const sparkFirst = ers.ERS_MAX_DEPLOY > 0 && eng.outputPowerCap !== undefined;
-    const sparkShare = sparkFirst && !shiftCut ? 1 - Math.min(1, totalCut / SPARK_FIRST_CUT) : 1 - totalCut;
-    const motorShare =
-      sparkFirst && !shiftCut ? (totalCut <= SPARK_FIRST_CUT ? 1 : 1 - (totalCut - SPARK_FIRST_CUT) / (1 - SPARK_FIRST_CUT)) : 1 - totalCut;
+    let sparkShare = 1 - totalCut;
+    let motorShare = 1 - totalCut;
+    if (sparkFirst && !shiftCut && totalCut > 0) {
+      const iceNm = Math.max(0, this.lastIceDriveNm);
+      const motorNm = Math.max(0, this.mgukTorque);
+      const f = iceNm + motorNm > 1 ? Math.min(SPARK_FIRST_MAX_MOTOR_SHARE, motorNm / (iceNm + motorNm)) : 0;
+      sparkShare = Math.max(0, 1 - totalCut / (1 - f));
+      motorShare = totalCut <= 1 - f ? 1 : Math.max(0, (1 - totalCut) / Math.max(1e-6, f));
+    }
     // Turbo lag: the curve is the torque with the boost this plate makes in steady state; while the rotor trails it the
     // torque is (1 + boost made) / (1 + boost asked for) of that, as torque ∝ 1 + boost. A rotor still spinning faster
     // than the demand gives no more than the demand (the wastegate and the throttle hold the plenum to it)
@@ -3673,6 +3684,7 @@ export class VehiclePhysics {
       }
     }
     this.mgukTorque = tK;
+    this.lastIceDriveNm = tIce;
     this.stepIcePowerSumW += Math.max(0, tIce * omegaE);
     this.stepShaftPowerSumW += Math.max(0, (tIce + tK) * omegaE * gb.efficiency * engage);
     this.stepPowerSamples++;

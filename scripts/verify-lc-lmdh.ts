@@ -271,10 +271,10 @@ console.log('\n== Straight line through the adapter (its own TC)');
   };
   const s = sprint();
   // Traction-limited to ≈ 130 km/h (1.0 g at 54 km/h), then 507 kW on 1180 kg with fuel
-  // The semi-pro TC's 10 holds the launch to 6 % of wheelspin, and the motor deploys only past 120 km/h
-  check('0-100 km/h 3.0–4.1 s', s.at[100] > 3 && s.at[100] < 4.1, `${fmt(s.at[100])} s`);
-  check('0-200 km/h 6.2–8.2 s', s.at[200] > 6.2 && s.at[200] < 8.2, `${fmt(s.at[200])} s`);
-  check('0-300 km/h 16–23 s', s.at[300] > 16 && s.at[300] < 23, `${fmt(s.at[300])} s`);
+  check('0-100 km/h 2.8–3.6 s', s.at[100] > 2.8 && s.at[100] < 3.6, `${fmt(s.at[100])} s`);
+  check('0-200 km/h 6.2–7.6 s', s.at[200] > 6.2 && s.at[200] < 7.6, `${fmt(s.at[200])} s`);
+  // The endurance trim's drag (CD·A ≈ 1.1 m² on the 5.5° wing) takes the last of it toward 20 s
+  check('0-300 km/h 15–20.5 s', s.at[300] > 15 && s.at[300] < 20.5, `${fmt(s.at[300])} s`);
   // 506 kW against CD·A 0.99 m² and the tyres' rolling loss under ≈ 17 kN of downforce: seventh runs out past Nmax,
   // where the regulated power falls away
   check('Short set, 5.5° wing: seventh runs out at 304–318 km/h', s.vmax > 304 && s.vmax < 318 && s.gear === 7 && s.rpm > LC_LMDH_POWER.nMax && s.rpm < C.gearbox.gears.redline_rpm,
@@ -335,6 +335,7 @@ console.log('\n== The regulated power at the driveshafts');
     let peakW = 0;
     let peakRpm = 0;
     let deployedJ = 0;
+    let shaftOver = 0;
     let t250 = NaN;
     let omega = (car.rpm * Math.PI) / 30;
     const e0 = car.ersEnergyJ;
@@ -356,6 +357,8 @@ console.log('\n== The regulated power at the driveshafts');
         sumLimit -= limits.shift()!;
       }
       deployedJ += Math.max(0, c.telemetry.MGUK_POWER) * TICK;
+      // The torque sensors' own reading: what the engine and motor send into the shafts this tick
+      shaftOver = Math.max(shaftOver, c.driveshaftPowerW / limit);
       if (sent.length === N) {
         worst = Math.max(worst, sumSent / sumLimit);
         if (sumSent / N > peakW) {
@@ -366,13 +369,16 @@ console.log('\n== The regulated power at the driveshafts');
       if (Number.isNaN(t250) && c.telemetry.speedKmh >= 250) t250 = t;
       return false;
     }, TICK);
-    return { worst, overJ, changes, peakW, peakRpm, deployedJ, usedJ: e0 - car.ersEnergyJ, t250 };
+    return { worst, overJ, changes, peakW, peakRpm, deployedJ, usedJ: e0 - car.ersEnergyJ, t250, shaftOver };
   };
   const qual = pull(50, 1);
   const none = pull(0, 1);
   // Measured at the wheels, past the halfshafts: their twist stores some of the drive and hands it back after a change,
   // which the 0.2 s mean may show as up to 1 % over
   check('Engine and motor never send more than the limit, deploying or not', qual.worst <= 1.01 && none.worst <= 1.01, `at most ${fmt(qual.worst * 100, 1)} % of it deploying, ${fmt(none.worst * 100, 1)} % without`);
+  // The tick's mean against the limit at its last engine speed: on the curve's falling side, up to 1 % apart
+  check('The driveshafts\' torque sensors never read over the limit, deploying or not', qual.shaftOver <= 1.01 && none.shaftOver <= 1.01,
+    `at most ${fmt(qual.shaftOver * 100, 2)} % deploying, ${fmt(none.shaftOver * 100, 2)} % without (driveshaftPowerW)`);
   check('The car reaches the limit: 507 kW to the shafts', qual.peakW > 500_000 && qual.peakW < 508_500 && none.peakW > 500_000 && none.peakW < 508_500,
     `${fmt(qual.peakW / 1000, 1)} kW at ${fmt(qual.peakRpm, 0)} rpm deploying, ${fmt(none.peakW / 1000, 1)} kW without`);
   // Not modelled: trimming the engine against the flywheel's own energy, which the shafts' sensors would also read

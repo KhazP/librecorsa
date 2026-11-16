@@ -676,9 +676,10 @@ function lmdhCompound(
       pressureRollingGain: 0.18,
       pressureGripSensitivity: 1,
       pressureGripLossPerPsi: 0.0025,
-      // No tyre blankets (Art. 12) [bop]; 70 °C where the realism level warms them anyway
+      // No tyre blankets (Art. 12) [bop]; in the window (80 °C) after a formation lap, or where the realism level warms
+      // them anyway
       coldRefC: 25,
-      blanketC: 70,
+      blanketC: 80,
     },
     camberData: {
       camberGain: 0.14,

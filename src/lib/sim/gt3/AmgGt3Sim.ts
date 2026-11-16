@@ -27,12 +27,13 @@ const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.s
  * takes ≈117–120 m on the fixed 71 % balance-bar bias (the tyres' hot pressure moves it by a few metres), μ ≈1.42–1.45
  * on the full brake force. The plan corners on μ 1.6 and brakes on 1.42 (≈121 m, never shorter than the car), so its
  * braking points are where a driver at the limit brakes, not before. Downforce ≈1.17 v², drag 0.46 v² (CdA 0.87 m²);
- * brake force and power at the wheels from the car's data.
+ * brake force and power at the wheels from the car's data. (Drag since the endurance trim: 0.567 v², CD·A ≈ 1.07.)
  */
 export const AMG_GT3_PROFILE_CAR: SpeedProfileCarModel = {
   massKg: C.chassis.totalMassKg,
   downforceCoef: 1.17,
-  dragCoef: 0.46,
+  // ½ρ·CD·A at ρ 1.06: the endurance trim's ≈ 1.07 m²
+  dragCoef: 0.567,
   rearDownforceShare: 0.55,
   rearWeightFraction: 1 - C.chassis.frontWeightFraction,
   muLat: 1.6,
