@@ -42,8 +42,8 @@ export interface SimHost {
   /** The simulation behind the transport is driving the adopted car */
   readonly remote: boolean;
   /**
-   * The way to an AI race in the simulation behind the transport, round the adopted car: null while that car is not
-   * ready there (or the simulation failed)
+   * The way to an AI race in the simulation behind the transport, round the adopted car (one still being made there
+   * included): null when the simulation failed
    */
   raceLink(): SimRaceLink | null;
   dispose(): void;
@@ -110,7 +110,9 @@ export function createSimHost(transport: SimTransport, wallNowMs: () => number =
     },
     endFrame(wantRemote) {
       if (!current) return;
-      current.setRemote(wantRemote && current.ready);
+      // (a car not ready yet stays as it is: the page's, or held for the worker by a race it placed)
+      if (!wantRemote) current.setRemote(false);
+      else if (current.ready) current.setRemote(true);
       current.endFrame();
     },
     get remote() {
@@ -119,7 +121,8 @@ export function createSimHost(transport: SimTransport, wallNowMs: () => number =
     raceLink() {
       const car = current;
       const mine = carNumber;
-      if (!car || !car.ready) return null;
+      // A car the worker is still making will do: the race's start waits behind it, and its car with it
+      if (!car || car.failed) return null;
       return {
         post: (command) => {
           if (mine === carNumber) transport.post(command);

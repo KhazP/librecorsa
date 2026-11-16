@@ -157,7 +157,8 @@ export interface RemoteCar {
   /**
    * For a placement the worker makes itself (an AI race's grid): places the twin with `place`, as near as the page
    * can tell, without sending it, and returns the placement's number for the command that has the worker place its
-   * car. The twin is read until the worker's first state from after it arrives, and is fresh on the grid again
+   * car. The twin is read until the worker's first state from after it arrives, and is fresh on the grid again; a
+   * worker not ready yet takes the car once it is, the twin held still meanwhile
    */
   placeTwin(place: (twin: SimulatorCar) => void): number;
 }
@@ -180,6 +181,11 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
   let wasStepping = false;
   /** The twin is as the last grid start left it: the worker's car, given the same calls, is its like */
   let twinFresh = false;
+  /**
+   * The worker placed the car itself (`placeTwin`) and drives it from there, but is not ready yet (a car just made):
+   * the twin is held where it was placed, fresh, until the worker can take it
+   */
+  let awaitingWorker = false;
   /** The worker drives and its state is from after the last placement: what moves is read from it */
   const live = () => remote && stateEpoch === epoch;
 
@@ -198,6 +204,7 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
 
   const step = (dtSeconds: number, inputs: Partial<ControlInputs>): unknown => {
     if (!remote) {
+      if (awaitingWorker && !failed) return twin.telemetry;
       twinFresh = false;
       return twin.step(dtSeconds, inputs);
     }
@@ -305,10 +312,14 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
     placeTwin(place) {
       place(twin);
       twinFresh = true;
+      awaitingWorker = true;
       return ++epoch;
     },
     setRemote(on) {
+      // The page keeping the car is the end of any wait for the worker
+      if (!on) awaitingWorker = false;
       if (on === remote || (on && (!ready || failed || !twinFresh))) return;
+      awaitingWorker = false;
       if (on) {
         remote = true;
       } else {
@@ -327,9 +338,15 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
     receive(event) {
       if (event.type === "ready") {
         ready = true;
+        // A car the worker placed itself while getting ready: it takes it now
+        if (awaitingWorker && !failed) {
+          awaitingWorker = false;
+          remote = true;
+        }
       } else if (event.type === "error") {
         // The page's own car carries on from where the worker's was
         failed = true;
+        awaitingWorker = false;
         if (remote) {
           syncTwinToWorker();
           remote = false;

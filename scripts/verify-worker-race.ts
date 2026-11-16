@@ -15,7 +15,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
 import { AiOpponentField, aiDriversFor } from '../src/lib/sim/ai-opponents';
 import { createSimHost, loopbackTransport } from '../src/lib/sim/runtime/sim-host';
-import { SIM_TICK_S } from '../src/lib/sim/runtime/sim-protocol';
+import { SIM_TICK_S, type SimCommand } from '../src/lib/sim/runtime/sim-protocol';
 import { WorkerAiField } from '../src/lib/sim/runtime/worker-ai-field';
 import type { SimulatorCar } from '../src/lib/sim/simulator-car';
 import { TrackEnvironment } from '../src/lib/sim/track-environment';
@@ -213,6 +213,47 @@ check('and its car drives on alone', host.remote && sim.sMeters !== sBefore && r
   const moving = race2.peers().every((p) => p.speedKmh > 50);
   check('a rolling restart races at once, the AI cars with it', race2.phase === 'racing' && !race2.playerFrozen && moving && race2.status().standings.length === OPPONENTS + 1, `the player's car ${(car.sMeters - s0).toFixed(0)} m on`);
   race2.dispose();
+}
+
+// ---- A race asked for before the worker has the car ready (a car change mid-race, a race right after loading): the
+// commands wait in the transport as they would in a busy worker's queue
+{
+  const loop3 = loopbackTransport();
+  const queued: SimCommand[] = [];
+  let busy = true;
+  const host3 = createSimHost(
+    { post: (c) => (busy ? queued.push(structuredClone(c)) : loop3.transport.post(c)), listen: loop3.transport.listen, dispose: loop3.transport.dispose },
+    loop3.wallNowMs
+  );
+  const twin3 = vehicleModelSpec(vehicle).createSim(track, root);
+  const car3 = host3.adopt(twin3, vehicle, root);
+  setUp(car3);
+  const link3 = host3.raceLink();
+  check('a race can be asked of a car the worker is still making', link3 !== null && !host3.remote);
+  if (!link3) process.exit(1);
+  const race3 = new WorkerAiField(link3, env, car3, OPPONENTS, SKILL, () => car3.groundQuery ?? null);
+  race3.startRace(true);
+  const placed = car3.sMeters;
+  for (let f = 0; f < 30; f++) {
+    car3.step(SIM_TICK_S, { throttle: 1 });
+    host3.endFrame(true);
+    race3.update();
+  }
+  check('meanwhile the car waits on the grid, the page not driving it', car3.sMeters === placed && Math.abs(twin3.vxMs) < 1e-6 && !host3.remote, `s ${placed} → ${car3.sMeters}, vx ${twin3.vxMs}, remote ${host3.remote}`);
+  busy = false;
+  for (const c of queued.splice(0)) loop3.transport.post(c);
+  for (let tick = 0; tick < 2000; tick++) {
+    car3.step(SIM_TICK_S, {});
+    loop3.advance(SIM_TICK_S);
+    host3.endFrame(true);
+    race3.update();
+  }
+  check(
+    'then the worker takes the car and runs the race',
+    host3.remote && loop3.runtime.raceField !== null && race3.phase === 'racing' && race3.peers().length === OPPONENTS,
+    `remote ${host3.remote}, field ${loop3.runtime.raceField !== null}, ${race3.phase}, ${race3.peers().length} drawn, ${race3.status().standings.length} in the standing`
+  );
+  race3.dispose();
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll worker race checks passed.');
