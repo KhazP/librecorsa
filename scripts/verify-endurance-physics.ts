@@ -91,13 +91,13 @@ console.log('\n== Bump rubbers');
 
 console.log('\n== Strip contact');
 {
-  const rt = createTyreRuntime(compoundData(GT3, GT3.compoundSlots.medium));
-  const fz = 4500;
-  const mu = tyrePeakMu(rt, fz, 'y');
-  const even = stripLoadGrip(rt, fz, 'y', mu, [1 / 3, 1 / 3, 1 / 3], 1, 1, 1, 1);
-  const shoulder = stripLoadGrip(rt, fz, 'y', mu, [0.55, 0.3, 0.15], 1, 1, 1, 1);
+  const even = stripLoadGrip([1 / 3, 1 / 3, 1 / 3], 1, 1, 1, 1);
+  const shoulder = stripLoadGrip([0.55, 0.3, 0.15], 1, 1, 1, 1);
+  const held = stripLoadGrip([0.5933, 1 / 3, 0.0733], 1, 1, 1, 1);
   check('An even patch grips as the whole tyre', Math.abs(even - 1) < 1e-12, fmt(even, 6));
-  check('Load piled on a shoulder costs grip', shoulder < 0.999 && shoulder > 0.95, fmt(shoulder, 4));
+  // Σ s·(3s)^−0.085: 1 % for [0.55, 0.30, 0.15], 1.9 % with the camber shift held at its limit
+  check('Load piled on a shoulder costs grip by Fz^−0.085', Math.abs(shoulder - 0.9903) < 2e-4 && Math.abs(held - 0.9816) < 2e-4,
+    `${fmt(shoulder, 4)} and ${fmt(held, 4)}`);
   // The strips' shares: camber × 6.5 onto the inner strip (held to ±0.26), the crown onto the middle strip (held to
   // −0.20 / +0.22), floors of 0.14 in the middle and 0.06 on the shoulders
   const sh: [number, number, number] = [0, 0, 0];

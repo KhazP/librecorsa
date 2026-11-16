@@ -717,26 +717,19 @@ export function damperForce(d: DamperSettingsUnits, v: number, knee: number, reb
   return -(d.slow_rebound * Math.min(-v, reboundKnee) + d.fast_rebound * Math.max(0, -v - reboundKnee));
 }
 
+/** Load sensitivity of a contact strip's grip: μ ∝ Fz^this, against the strip's share of an even load */
+const STRIP_LOAD_SENSITIVITY = -0.085;
+
 /**
- * Grip of a contact patch whose bands carry `sh` of the load, against the same patch loaded evenly (1 when even): each
- * band grips as the whole tyre would at 3 × its share of the load (`tyrePeakMu`), weighted by its share and its
+ * Grip of a contact patch whose strips carry `sh` of the load, against the same patch loaded evenly (1 when even): each
+ * strip carries 3 × its share of an even strip's load, and grips by μ ∝ Fz^−0.085 at it, weighted by its share and its
  * temperature grip `g0..g2` (`thermalRaw` their weighted sum)
  */
-export function stripLoadGrip(
-  t: Pick<TyreRuntime, 'data' | 'fz0' | 'dyCurve' | 'dxCurve'>,
-  fz: number,
-  axis: 'x' | 'y',
-  muEven: number,
-  sh: ArrayLike<number>,
-  g0: number,
-  g1: number,
-  g2: number,
-  thermalRaw: number
-): number {
-  if (muEven <= 0 || thermalRaw <= 0) return 1;
-  const sum =
-    sh[0] * g0 * tyrePeakMu(t, 3 * sh[0] * fz, axis) + sh[1] * g1 * tyrePeakMu(t, 3 * sh[1] * fz, axis) + sh[2] * g2 * tyrePeakMu(t, 3 * sh[2] * fz, axis);
-  return sum / (muEven * thermalRaw);
+export function stripLoadGrip(sh: ArrayLike<number>, g0: number, g1: number, g2: number, thermalRaw: number): number {
+  if (thermalRaw <= 0) return 1;
+  const e = STRIP_LOAD_SENSITIVITY;
+  const sum = sh[0] * g0 * Math.pow(3 * sh[0], e) + sh[1] * g1 * Math.pow(3 * sh[1], e) + sh[2] * g2 * Math.pow(3 * sh[2], e);
+  return sum / thermalRaw;
 }
 
 /** Shift of the contact pressure onto the inner strip per radian of camber leaning toward the car, and its limit */
@@ -2995,16 +2988,14 @@ export class VehiclePhysics {
         // longitudinal grip while the tyre is braking
         const dY = tyrePeakMu(tyre, fz, 'y');
         const dX = tyrePeakMu(tyre, fz, 'x');
-        // Each band carries its share of the load on a third of the width: as if the whole tyre carried 3 × that share,
-        // so it grips by the tyre's own load sensitivity there. Load piled on a shoulder (too much camber, the wrong
-        // pressure) costs grip; an even patch costs nothing
-        const stripY = stripLoadGrip(tyre, fz, 'y', dY, sh, g0, g1, g2, thermalRaw);
-        const stripX = stripLoadGrip(tyre, fz, 'x', dX, sh, g0, g1, g2, thermalRaw);
+        // Each strip carries its share of the load on a third of the width, and grips less per newton the more it
+        // carries: load piled on a shoulder (too much camber, the wrong pressure) costs grip; an even patch costs nothing
+        const strip = stripLoadGrip(sh, g0, g1, g2, thermalRaw);
         const brakeMod = w.slipRatio < 0 ? 1 + tyre.brakeDxMod : 1;
         // A brush tyre loses grip with its sliding speed
         const speedGrip = tyre.brush ? brushSpeedGrip(tyre.brush, Math.hypot(vsx, vy)) : 1;
-        const muY = dY * base * camberGrip * speedGrip * stripY;
-        const muX = dX * brakeMod * base * camberGripX * speedGrip * stripX;
+        const muY = dY * base * camberGrip * speedGrip * strip;
+        const muX = dX * brakeMod * base * camberGripX * speedGrip * strip;
         w.muY = muY;
         w.muX = muX;
 
