@@ -105,6 +105,7 @@ import { steeringAssistSettings } from "@/lib/sim/steering-assist";
 import { applyTimeTrial, lowestFuelSetup, timeTrialRealism, type TimeTrialRules } from "@/lib/sim/time-trial";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import { clampFov, DEFAULT_KEYBOARD_TUNING, type PlayerSettings } from "@/lib/settings/player-settings";
+import { noteDrivingFrame, noteFrameGraphics } from "@/lib/render/frame-stats";
 import type { AeroSetupPreset, CameraMode, CarTelemetry, LiveTunerPatch, RadarBlip, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
@@ -446,6 +447,11 @@ export class DriveSession {
   readonly applyGraphics: () => void;
   /** `?perf=1`: the whole-session performance report as text, to copy or save; null without `?perf=1` */
   readonly perfReport: (() => string) | null;
+  /**
+   * The next drawn frame as a PNG, at most `maxWidth` pixels wide, for a bug report (the scene only: the HUD and the
+   * menus are page elements on top of it). Null with no frame drawn within 1.5 s (a lost GPU context, a headset).
+   */
+  readonly captureFrame: (maxWidth?: number) => Promise<Blob | null>;
   /** Asks the headset for a VR session (one request at a time) */
   readonly enterVr: () => void;
   /** Opens the instant replay a moment back, paused, or closes it */
@@ -986,6 +992,38 @@ export class DriveSession {
       simWorker?.post({ type: "perf", on: true });
     }
     this.perfReport = sessionPerf ? () => sessionPerf.report(pageBuild()) : null;
+    /** A capture waiting for the next drawn frame: read in the same task as the draw (the buffer is not preserved) */
+    let captureWaiting: ((source: HTMLCanvasElement) => void) | null = null;
+    /** The capture under way: a second request meanwhile gets the same picture */
+    let capturePending: Promise<Blob | null> | null = null;
+    this.captureFrame = (maxWidth = 1280) => {
+      if (disposed) return Promise.resolve(null);
+      if (capturePending) return capturePending;
+      capturePending = new Promise<Blob | null>((resolve) => {
+        const timer = setTimeout(() => {
+          captureWaiting = null;
+          resolve(null);
+        }, 1500);
+        captureWaiting = (source) => {
+          clearTimeout(timer);
+          try {
+            const scale = Math.min(1, maxWidth / Math.max(1, source.width));
+            const out = document.createElement("canvas");
+            out.width = Math.max(1, Math.round(source.width * scale));
+            out.height = Math.max(1, Math.round(source.height * scale));
+            const ctx = out.getContext("2d");
+            if (!ctx) return resolve(null);
+            ctx.drawImage(source, 0, 0, out.width, out.height);
+            out.toBlob((blob) => resolve(blob), "image/png");
+          } catch {
+            resolve(null);
+          }
+        };
+      }).finally(() => {
+        capturePending = null;
+      });
+      return capturePending;
+    };
     reflectionProbe.setSky(env.probeSky);
     // Top-centre virtual rear-view mirror for the views without wing mirrors in shot
     const virtualMirror = new VirtualMirror(renderer, scene);
@@ -1159,6 +1197,7 @@ export class DriveSession {
       const lowered = level > 0 ? loweredSummary(g.quality, g.renderScale, level) : null;
       if (lowered !== this.snapshot.autoQualityLowered) this.publish({ autoQualityLowered: lowered });
       sessionPerf?.setRenderState({ settings: graphicsLine(g, lowered), level });
+      noteFrameGraphics(graphicsLine(g, lowered));
     };
     this.applyGraphics();
     /** The governor's decision on a frame: take the step (and say so, quietly), or note that every step is taken */
@@ -2799,6 +2838,11 @@ export class DriveSession {
           postFx.render(drawDtS);
           virtualMirror.draw();
           startupMonitor?.end("render");
+          if (captureWaiting) {
+            const take = captureWaiting;
+            captureWaiting = null;
+            take(renderer.domElement);
+          }
           if (!loggedFirstFrame) {
             loggedFirstFrame = true;
             if (process.env.NODE_ENV !== "production") {
@@ -2821,6 +2865,8 @@ export class DriveSession {
         governorFed = false;
         governor.interrupt();
       }
+      // The bug report's frame rate: the same frames, whether or not the automatic quality is on
+      if (driving && draw && !inVr) noteDrivingFrame(drawIntervalMs, nowMs);
 
       // Paused, the car is frozen but the pause menu (and the HUD under it) would still re-render at 30 Hz for nothing;
       // 4 Hz keeps what can still move there (remote players) current
