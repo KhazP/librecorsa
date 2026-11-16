@@ -17,6 +17,10 @@ import { MTR_496R_CONFIG, MTR_496R_ELECTRONICS } from '../src/lib/sim/proto/Mtr4
 import { SUZUKI_LIANA_CONFIG, SUZUKI_LIANA_ELECTRONICS } from '../src/lib/sim/road/SuzukiLianaConfig';
 import { MTR_496R_SIM_PROFILE } from '../src/lib/sim/proto/Mtr496rSim';
 import { SUZUKI_LIANA_SIM_PROFILE } from '../src/lib/sim/road/SuzukiLianaSim';
+import { VW_SCIROCCO_CONFIG, VW_SCIROCCO_ELECTRONICS } from '../src/lib/sim/road/VwSciroccoConfig';
+import { VW_SCIROCCO_SIM_PROFILE } from '../src/lib/sim/road/VwSciroccoSim';
+import { BMW_M1_PROCAR_CONFIG, BMW_M1_PROCAR_ELECTRONICS } from '../src/lib/sim/classic/BmwM1ProcarConfig';
+import { BMW_M1_PROCAR_SIM_PROFILE } from '../src/lib/sim/classic/BmwM1ProcarSim';
 import type { CarSimProfile } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { lutAt, lutGap, modDir, ModData, type Lut } from './lib/mod-data';
 
@@ -323,8 +327,10 @@ function checkSuspension(label: string, mod: ModData, config: CarPhysicsConfig, 
       eq(`${name} heave DAMP_FAST_REBOUNDTHRESHOLD`, damp.heaveFastReboundThresholdMs ?? NaN, s(heave, 'DAMP_FAST_REBOUNDTHRESHOLD'));
     }
 
+    // A strut's top mount is the upright's upper joint; its lower ball joint (where the lower arm meets the upright,
+    // WBTYRE_BOTTOM) the lower one, which the strut's own foot (STRUT_TYRE) may or may not share
     for (const i of opts.hardpoints[lower]) {
-      const key = opts.strutFront && axle === 'FRONT' && i === 4 ? 'STRUT_CAR' : opts.strutFront && axle === 'FRONT' && i === 5 ? 'STRUT_TYRE' : HARDPOINT_KEYS[i];
+      const key = opts.strutFront && axle === 'FRONT' && i === 4 ? 'STRUT_CAR' : HARDPOINT_KEYS[i];
       const theirs = mod.vec('suspensions.ini', axle, key);
       const ours = sus.hardpoints?.[i] ?? [NaN, NaN, NaN];
       for (let k = 0; k < 3; k++) eq(`${name} ${key}[${k}]`, ours[k], theirs[k]);
@@ -533,6 +539,61 @@ section('Suzuki Liana', 'suzuki_liana', (mod) => {
   }
 });
 
+section('VW Scirocco GTX 16V', 'pfa_vw_scirocco_53b', (mod) => {
+  const config = VW_SCIROCCO_CONFIG;
+  checkChassis('Scirocco', mod, config);
+  checkProfile('Scirocco', mod, config, VW_SCIROCCO_SIM_PROFILE);
+  // The front is a strut (its virtual upper arm is this model's); the rear's two arms share one pivot axis in the data,
+  // and are solved here as two parallel arms on it (the config says why): only the lower arm's pivots, the ball joints
+  // and the toe link's body end are the source's own
+  checkSuspension('Scirocco', mod, config, { hardpoints: { front: [2, 3, 4, 5, 6, 7], rear: [2, 3, 4, 5] }, strutFront: true });
+  checkDriveline('Scirocco', mod, config);
+  eq('Scirocco ALTITUDE_SENSITIVITY', config.engine.airDensitySensitivity ?? NaN, mod.num('engine.ini', 'ENGINE_DATA', 'ALTITUDE_SENSITIVITY'));
+  eq('Scirocco CHANGE_DN_TIME', config.gearbox.downshiftTimeS, mod.num('drivetrain.ini', 'GEARBOX', 'CHANGE_DN_TIME') / 1000);
+  eq('Scirocco HANDBRAKE_TORQUE', config.brakes.handbrakeTorqueNm, mod.num('brakes.ini', 'DATA', 'HANDBRAKE_TORQUE'));
+  const el = (sec: string, key: string) => mod.num('electronics.ini', sec, key);
+  eq('Scirocco ABS SLIP_RATIO_LIMIT', VW_SCIROCCO_ELECTRONICS.absDefault, el('ABS', 'SLIP_RATIO_LIMIT'));
+  eq('Scirocco ABS RATE_HZ', VW_SCIROCCO_ELECTRONICS.absRateHz, el('ABS', 'RATE_HZ'));
+  eq('Scirocco TC SLIP_RATIO_LIMIT', VW_SCIROCCO_ELECTRONICS.tcDefault, el('TRACTION_CONTROL', 'SLIP_RATIO_LIMIT'));
+  eq('Scirocco TC RATE_HZ', VW_SCIROCCO_ELECTRONICS.tcRateHz, el('TRACTION_CONTROL', 'RATE_HZ'));
+  eq('Scirocco TC MIN_SPEED_KMH', VW_SCIROCCO_ELECTRONICS.tcMinSpeedKmh, el('TRACTION_CONTROL', 'MIN_SPEED_KMH'));
+
+  // The street tyre in every slot, with the load tables and falloff of the newer tyre data
+  const compound = compoundData(config, config.compoundSlots.soft);
+  const keys = ['WIDTH', 'RADIUS', 'RIM_RADIUS', 'DAMP', 'XMU', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'ROLLING_RESISTANCE_SLIP', 'PRESSURE_RR_GAIN', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_STATIC', 'PRESSURE_D_GAIN', 'FZ0', 'LS_EXPY', 'LS_EXPX', 'BRAKE_DX_MOD', 'RADIUS_ANGULAR_K', ...V10_SHAPE.filter((k) => k !== 'COMBINED_FACTOR')];
+  for (const axle of ['front', 'rear'] as const) {
+    const AX = axle.toUpperCase();
+    checkTyre(`Scirocco ${axle}`, mod, axleTyre(compound, axle), { sectionName: AX, thermalName: `THERMAL_${AX}`, keys, loadCurvesToN: 24_000, rate: true, wear: true, thermalCurve: true, tread: true });
+  }
+});
+
+section('BMW M1 Procar', 'pddw_bmw_procar_m1', (mod) => {
+  const config = BMW_M1_PROCAR_CONFIG;
+  checkChassis('M1', mod, config);
+  checkProfile('M1', mod, config, BMW_M1_PROCAR_SIM_PROFILE);
+  checkSuspension('M1', mod, config, { hardpoints: { front: ALL, rear: ALL } });
+  checkDriveline('M1', mod, config);
+  eq('M1 ALTITUDE_SENSITIVITY', config.engine.airDensitySensitivity ?? NaN, mod.num('engine.ini', 'ENGINE_DATA', 'ALTITUDE_SENSITIVITY'));
+  eq('M1 CHANGE_DN_TIME', config.gearbox.downshiftTimeS, mod.num('drivetrain.ini', 'GEARBOX', 'CHANGE_DN_TIME') / 1000);
+  const el = (sec: string, key: string) => mod.num('electronics.ini', sec, key);
+  eq('M1 ABS SLIP_RATIO_LIMIT', BMW_M1_PROCAR_ELECTRONICS.absDefault, el('ABS', 'SLIP_RATIO_LIMIT'));
+  eq('M1 ABS RATE_HZ', BMW_M1_PROCAR_ELECTRONICS.absRateHz, el('ABS', 'RATE_HZ'));
+  eq('M1 TC SLIP_RATIO_LIMIT', BMW_M1_PROCAR_ELECTRONICS.tcDefault, el('TRACTION_CONTROL', 'SLIP_RATIO_LIMIT'));
+  eq('M1 TC RATE_HZ', BMW_M1_PROCAR_ELECTRONICS.tcRateHz, el('TRACTION_CONTROL', 'RATE_HZ'));
+  eq('M1 TC MIN_SPEED_KMH', BMW_M1_PROCAR_ELECTRONICS.tcMinSpeedKmh, el('TRACTION_CONTROL', 'MIN_SPEED_KMH'));
+
+  // The "Vintage Slicks" in every dry slot: the newer tyre data, peak μ at FZ0 falling with load by a power law
+  const compound = compoundData(config, config.compoundSlots.soft);
+  const keys = ['WIDTH', 'RADIUS', 'RIM_RADIUS', 'DAMP', 'XMU', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'ROLLING_RESISTANCE_SLIP', 'PRESSURE_RR_GAIN', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_STATIC', 'PRESSURE_D_GAIN', 'FZ0', 'LS_EXPY', 'LS_EXPX', 'BRAKE_DX_MOD', 'RADIUS_ANGULAR_K', ...V10_SHAPE.filter((k) => k !== 'COMBINED_FACTOR')];
+  for (const axle of ['front', 'rear'] as const) {
+    const AX = axle.toUpperCase();
+    const tyre = axleTyre(compound, axle);
+    checkTyre(`M1 ${axle}`, mod, tyre, { sectionName: AX, thermalName: `THERMAL_${AX}`, keys, rate: true, wear: true, thermalCurve: true, tread: true });
+    eq(`M1 ${axle} DY_REF`, tyre.model.Dy0, mod.num('tyres.ini', AX, 'DY_REF'));
+    eq(`M1 ${axle} DX_REF`, tyre.model.Dx0, mod.num('tyres.ini', AX, 'DX_REF'));
+  }
+});
+
 /** A gear change by the car's own data: the time between gears, the ignition cut, the down-shift's clutch and blip */
 function shiftData(label: string, config: CarPhysicsConfig, mod: ModData): void {
   const d = (sec: string, key: string) => mod.num('drivetrain.ini', sec, key);
@@ -545,7 +606,9 @@ function shiftData(label: string, config: CarPhysicsConfig, mod: ModData): void 
   eq(`${label} DOWNSHIFT_PROFILE POINT_2`, dn?.clutchHomeS ?? NaN, d('DOWNSHIFT_PROFILE', 'POINT_2') / 1000);
   eq(`${label} AUTOBLIP LEVEL`, dn?.blip?.level ?? NaN, d('AUTOBLIP', 'LEVEL'));
   eq(`${label} AUTOBLIP POINT_0`, dn?.blip?.riseS ?? NaN, d('AUTOBLIP', 'POINT_0') / 1000);
-  if (dn?.overRevRpm !== undefined) eq(`${label} DOWNSHIFT_PROTECTION OVERREV`, dn.overRevRpm, d('DOWNSHIFT_PROTECTION', 'OVERREV'));
+  // A car whose data has no down-shift protection takes its over-rev from elsewhere (the config says where)
+  if (dn?.overRevRpm !== undefined && Number.isFinite(d('DOWNSHIFT_PROTECTION', 'OVERREV')))
+    eq(`${label} DOWNSHIFT_PROTECTION OVERREV`, dn.overRevRpm, d('DOWNSHIFT_PROTECTION', 'OVERREV'));
 }
 
 // The GT3's base is a data set this machine doesn't hold; what it took from its second reference is checked here

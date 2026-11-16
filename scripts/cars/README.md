@@ -67,7 +67,7 @@ node --max-old-space-size=12288 scripts/cars/port_qvist_f1.mjs path/to/f1_2026_c
 
 # Assetto Corsa Car Porter (`port_ac_car.py`)
 
-`scripts/cars/port_ac_car.py` converts an Assetto Corsa car (its main `.kn5` plus one skin) into the same `CAR` / `BODY` / `STEER` / `WHEEL_xx` layout. Each car has a preset in `PRESETS`: its material table, the nodes and materials it leaves out, the skin files that override the kn5's, how its tyre meshes and spinning parts are named, and its windscreen. The Suzuki Liana 1.6 (`liana`) and the MTRacing 496R (`mtr-496r`) have hand-written material tables; gregsediting's Nissans (`nissan-r33-jgtc`, `nissan-r32-jtcc`) are `auto` presets (below). The kn5 reader, the hierarchy split and the paint bake are generic AC.
+`scripts/cars/port_ac_car.py` converts an Assetto Corsa car (its main `.kn5` plus one skin) into the same `CAR` / `BODY` / `STEER` / `WHEEL_xx` layout. Each car has a preset in `PRESETS`: its material table, the nodes and materials it leaves out, the skin files that override the kn5's, how its tyre meshes and spinning parts are named, and its windscreen. The Suzuki Liana 1.6 (`liana`) and the MTRacing 496R (`mtr-496r`) have hand-written material tables; gregsediting's Nissans (`nissan-r33-jgtc`, `nissan-r32-jtcc`) and Pfalzdriver's BMW M1 Procar (`bmw-m1-procar`) and Volkswagen Scirocco GTX 16V (`vw-scirocco-gtx`) are `auto` presets (below). The kn5 reader, the hierarchy split and the paint bake are generic AC.
 
 ```bash
 uv run --python 3.14 --no-project --with numpy --with pillow \
@@ -107,7 +107,12 @@ livery replaces (`skin_textures`); every other material comes from its AC shader
   palette texture (8 px cells, unfiltered) with each part's UVs on its colour's cell.
 - **Paint atlas**: another part drawn from the paint's own atlas (a banner, a weatherstrip) takes the paint's texture.
 
-With `--skins-out`, every skin folder becomes a livery (`export_auto_skins`): each colour map made from a `skin_textures`
+A damage shader's normal map (`ksPerPixelMultiMap_damage_dirt` with a `DAMAGE` texture in `txNormal`) is the car's dents,
+which AC fades in with damage: it is left out, so the paint is smooth.
+
+With `--skins-out`, every skin folder becomes a livery (`export_auto_skins`), its id (and folder) the skin folder's name in
+lower case with each run of other characters as one `_` (`Mars Red` → `mars_red`); a preset's `skin_ids` names a folder
+that doesn't come out right (the M1's `1980_Procar_M?ller_66`, whose umlaut its archive lost): each colour map made from a `skin_textures`
 texture is a livery file, written only for the skins whose textures differ from the default skin's (the one the GLB is
 painted in), and `skins.json` lists each skin's `files`. `src/lib/cars/classic-skins.ts` copies those lists into the
 registry (`CarSkin.files`); the rig keeps the model's own texture for any file a skin doesn't list. Skin textures match

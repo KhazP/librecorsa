@@ -4,7 +4,7 @@ import React from "react";
 import type { F12026Channels } from "@/types/f1";
 import { Badge } from "@/components/ui/Badge";
 import { ClassTag } from "@/components/ui/badges/ClassTag";
-import { CLASSIC_CAR_IDS, HUD_CAUTION, HUD_GLASS, HUD_LBL, HUD_LOSS, HUD_SLATE, PROTO_CAR_IDS, HUD_WELL } from "./hud-format";
+import { CLASSIC_CAR_IDS, HUD_CAUTION, HUD_GLASS, HUD_LBL, HUD_LOSS, HUD_SLATE, PROTO_CAR_IDS, HUD_WELL, ROAD_CAR_IDS } from "./hud-format";
 import type { AeroReadout } from "./aero-label";
 
 const WHEELS = ["LF", "RF", "LR", "RR"] as const;
@@ -50,7 +50,7 @@ export const F12026ChannelsPanel: React.FC<{
           carClass={
             c.carId === "amg-gt3"
               ? "gt3"
-              : c.carId === "liana"
+              : ROAD_CAR_IDS.has(c.carId)
                 ? "road"
                 : PROTO_CAR_IDS.has(c.carId)
                   ? "proto"

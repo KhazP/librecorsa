@@ -6,7 +6,10 @@ import { MTR_496R_SOUND } from "@/lib/sim/proto/Mtr496rSim";
 import { LC_LMDH_SOUND } from "@/lib/sim/proto/LcLmdhSim";
 import { NISSAN_R33_SOUND } from "@/lib/sim/classic/NissanR33Sim";
 import { NISSAN_R32_SOUND } from "@/lib/sim/classic/NissanR32Sim";
+import { BMW_M1_PROCAR_SOUND } from "@/lib/sim/classic/BmwM1ProcarSim";
+import { VW_SCIROCCO_SOUND } from "@/lib/sim/road/VwSciroccoSim";
 import { NISSAN_R32_SKINS, NISSAN_R33_SKINS } from "./classic-skins";
+import { BMW_M1_PROCAR_SKINS, VW_SCIROCCO_SKINS } from "./pfalzdriver-skins";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
 import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
 
@@ -25,7 +28,9 @@ export type CarId =
   | "lc-lmdh"
   | "liana"
   | "nissan-r33-jgtc"
-  | "nissan-r32-jtcc";
+  | "nissan-r32-jtcc"
+  | "bmw-m1-procar"
+  | "vw-scirocco-gtx";
 
 /**
  * The kinds of car, one menu category each; a car's year groups it within its class. Class ids live only in code
@@ -43,7 +48,7 @@ export interface CarClass {
 /**
  * Whether a car's physics belong to the car you see, the car-side counterpart of a circuit's `CircuitQuality`:
  * - "own": its vehicle model was built for this car (the F1 2026 Prototype, the Mercedes-AMG GT3 Evo,
- *   the MTRacing 496R, the LC-LMDH, the Suzuki Liana, the classic Nissans)
+ *   the MTRacing 496R, the LC-LMDH, the Suzuki Liana, the classic Nissans, the BMW M1 Procar, the VW Scirocco)
  * - "shared": a ported body on another car's model of the same class and era (the BMW)
  * - "era": a ported body from an earlier season on the 2026 model
  * The F1 physics switch doesn't change it: a ported F1 car borrows its physics under either model.
@@ -98,6 +103,8 @@ export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "lc-lmdh": "Its physics follow the LMDh regulations' published limits, with estimates where a car's data is not public.",
   "nissan-r33-jgtc": "Its physics come from the Assetto Corsa mod this car was made for.",
   "nissan-r32-jtcc": "Its physics come from the Assetto Corsa mod this car was made for.",
+  "bmw-m1-procar": "Its physics come from the Assetto Corsa mod this car was made for.",
+  "vw-scirocco-gtx": "Its physics come from the Assetto Corsa mod this car was made for.",
 };
 
 /** Who made a car's 3D body (CREDITS.md has the full notes) */
@@ -151,6 +158,15 @@ const gregSt = (title: string, url: string): CarCredit => ({
   author: "gregsediting",
   url,
   authorUrl: "https://www.gtplanet.net/forum/members/greg_st.314907/",
+  license: "Used with the author's permission",
+  licenseUrl: url,
+});
+
+/** Pfalzdriver's Assetto Corsa cars, model, physics and sound, used with his permission (CREDITS.md) */
+const pfalzdriver = (title: string, url: string): CarCredit => ({
+  title,
+  author: "Pfalzdriver",
+  url: "https://www.gtplanet.net/forum/members/pfalzdriver.315633/",
   license: "Used with the author's permission",
   licenseUrl: url,
 });
@@ -224,7 +240,7 @@ export const CAR_CLASSES: readonly CarClass[] = [
   { id: "f1", title: "Formula Open-Wheel", sub: "Single-seaters · DRS / active aero", color: "#CCFF00" },
   { id: "gt3", title: "GT3", sub: "Closed-wheel · ABS / TC", color: "#00E5FF" },
   { id: "proto", title: "Prototypes", sub: "Closed-wheel · high downforce · TC", color: "#B388FF" },
-  { id: "classic", title: "Classic GT & Touring", sub: "1990s JGTC and Group A · turbo", color: "#FFD23F" },
+  { id: "classic", title: "Classic GT & Touring", sub: "Procar, Group A and JGTC · 1979–1998", color: "#FFD23F" },
   { id: "road", title: "Road cars", sub: "Road-legal · street tyres", color: "#FF8A3D" },
 ];
 
@@ -376,6 +392,34 @@ const ALL_CARS: readonly CarDefinition[] = [
     modelUrl: "/cars/nissan-r32-jtcc/model/nissan-r32-jtcc.glb",
     skins: NISSAN_R32_SKINS,
     sound: NISSAN_R32_SOUND,
+  },
+  {
+    id: "bmw-m1-procar",
+    classId: "classic",
+    title: "BMW M1 Procar",
+    sub: "1979 Procar · 3.5 L straight six · rear-wheel drive",
+    badge: "M1 PROCAR",
+    quality: "own",
+    credit: pfalzdriver("BMW M1 Procar 1979", "https://www.gtplanet.net/forum/downloads/bmw-m1-procar-1979.7616/"),
+    physics: "bmw-m1-procar",
+    year: 1979,
+    modelUrl: "/cars/bmw-m1-procar/model/bmw-m1-procar.glb",
+    skins: BMW_M1_PROCAR_SKINS,
+    sound: BMW_M1_PROCAR_SOUND,
+  },
+  {
+    id: "vw-scirocco-gtx",
+    classId: "road",
+    title: "Volkswagen Scirocco GTX 16V",
+    sub: "1985 · 1.8 L 16-valve four · front-wheel drive",
+    badge: "SCIROCCO",
+    quality: "own",
+    credit: pfalzdriver("Volkswagen Scirocco GTX 16V", "https://www.gtplanet.net/forum/downloads/volkswagen-scirocco-gtx-16v.6763/"),
+    physics: "vw-scirocco-gtx",
+    year: 1985,
+    modelUrl: "/cars/vw-scirocco-gtx/model/vw-scirocco-gtx.glb",
+    skins: VW_SCIROCCO_SKINS,
+    sound: VW_SCIROCCO_SOUND,
   },
 ];
 

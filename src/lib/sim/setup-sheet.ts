@@ -18,6 +18,8 @@ import { MTR_496R_CONFIG } from "./proto/Mtr496rConfig";
 import { LC_LMDH_CONFIG } from "./proto/LcLmdhConfig";
 import { NISSAN_R33_CONFIG } from "./classic/NissanR33Config";
 import { NISSAN_R32_CONFIG } from "./classic/NissanR32Config";
+import { BMW_M1_PROCAR_CONFIG } from "./classic/BmwM1ProcarConfig";
+import { VW_SCIROCCO_CONFIG } from "./road/VwSciroccoConfig";
 import type { CarPhysicsConfig } from "./f12026-car/F12026CarConfig";
 
 export type SetupClassId = "f1" | "gt3";
@@ -31,9 +33,12 @@ export const SETUP_CLASS: Record<VehicleModelId, SetupClassId> = {
   // A closed-wheel car on a rear wing: the GT3 sheet
   "mtr-496r": "gt3",
   "lc-lmdh": "gt3",
-  // The classic Nissans: closed-wheel race cars, the GT3 sheet
+  // The classic cars: closed-wheel race cars, the GT3 sheet
   "nissan-r33-jgtc": "gt3",
   "nissan-r32-jtcc": "gt3",
+  "bmw-m1-procar": "gt3",
+  // A closed road car, as the Liana
+  "vw-scirocco-gtx": "gt3",
 };
 
 export interface SetupState {
@@ -154,6 +159,10 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
   // The classic Nissans' adjusters [spec setup.ini FRONT_BIAS]
   "nissan-r33-jgtc": { ...rigidBaseline(NISSAN_R33_CONFIG, "nissan-r33-jgtc"), brakeBiasRangePct: [50, 80] },
   "nissan-r32-jtcc": { ...rigidBaseline(NISSAN_R32_CONFIG, "nissan-r32-jtcc"), brakeBiasRangePct: [52, 80] },
+  // Its adjuster [spec setup.ini FRONT_BIAS]
+  "bmw-m1-procar": { ...rigidBaseline(BMW_M1_PROCAR_CONFIG, "bmw-m1-procar"), brakeBiasRangePct: [48, 80] },
+  // No bias adjuster in the cockpit [spec brakes.ini COCKPIT_ADJUSTABLE 0]
+  "vw-scirocco-gtx": rigidBaseline(VW_SCIROCCO_CONFIG, "vw-scirocco-gtx"),
 };
 
 const clampTo = (v: number, r: { min: number; max: number }) => Math.max(r.min, Math.min(r.max, v));

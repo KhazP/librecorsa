@@ -63,6 +63,8 @@ import { MTR_496R_CONFIG } from '@/lib/sim/proto/Mtr496rConfig';
 import { LC_LMDH_CONFIG } from '@/lib/sim/proto/LcLmdhConfig';
 import { NISSAN_R33_CONFIG } from '@/lib/sim/classic/NissanR33Config';
 import { NISSAN_R32_CONFIG } from '@/lib/sim/classic/NissanR32Config';
+import { BMW_M1_PROCAR_CONFIG } from '@/lib/sim/classic/BmwM1ProcarConfig';
+import { VW_SCIROCCO_CONFIG } from '@/lib/sim/road/VwSciroccoConfig';
 import {
   classificationClosed,
   classifiedTimeS,
@@ -572,6 +574,8 @@ function remoteContactMass(vehicle: VehicleModelId | undefined): [number, number
   if (vehicle === 'lc-lmdh') return [LC_LMDH_CONFIG.chassis.totalMassKg, LC_LMDH_CONFIG.chassis.inertia.yaw];
   if (vehicle === 'nissan-r33-jgtc') return [NISSAN_R33_CONFIG.chassis.totalMassKg, NISSAN_R33_CONFIG.chassis.inertia.yaw];
   if (vehicle === 'nissan-r32-jtcc') return [NISSAN_R32_CONFIG.chassis.totalMassKg, NISSAN_R32_CONFIG.chassis.inertia.yaw];
+  if (vehicle === 'bmw-m1-procar') return [BMW_M1_PROCAR_CONFIG.chassis.totalMassKg, BMW_M1_PROCAR_CONFIG.chassis.inertia.yaw];
+  if (vehicle === 'vw-scirocco-gtx') return [VW_SCIROCCO_CONFIG.chassis.totalMassKg, VW_SCIROCCO_CONFIG.chassis.inertia.yaw];
   if (vehicle === 'f12026-car') return [F12026_CAR_CONFIG.chassis.totalMassKg, F12026_CAR_CONFIG.chassis.inertia.yaw];
   return [CONTACT_MASS_KG, CONTACT_YAW_INERTIA_KGM2];
 }
