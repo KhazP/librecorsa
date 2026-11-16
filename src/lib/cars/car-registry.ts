@@ -166,7 +166,8 @@ const gregSt = (title: string, url: string): CarCredit => ({
 const pfalzdriver = (title: string, url: string): CarCredit => ({
   title,
   author: "Pfalzdriver",
-  url: "https://www.gtplanet.net/forum/members/pfalzdriver.315633/",
+  url,
+  authorUrl: "https://www.gtplanet.net/forum/members/pfalzdriver.315633/",
   license: "Used with the author's permission",
   licenseUrl: url,
 });
