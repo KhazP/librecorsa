@@ -497,16 +497,13 @@ function buildGt3LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints 
  * GT3 slick [spec]: the front's values, the rear's own Fz0, load sensitivity, 16-point DY/DX curves, peak
  * slip angle, relaxation length, pressure-spring rate, and camber thrust in `rearOverride` ([REAR]). The endurance
  * slicks are harder and longer-lasting than the sprint ones the reference laps ran on [bop]: D_REF (longitudinal)
- * 1.77 / 1.74 / 1.69, × 1.07 across, and three temperature curves.
+ * 1.77 / 1.74 / 1.69, × 1.033 across, and three temperature curves.
  */
 /**
- * Lateral grip over longitudinal [motec]: on warm tyres with fuel aboard the car held 3 % less lateral g than the
- * reference laps while it braked 3 % harder, and the second reference's slick has the same lean (its lateral load
- * curve sits 5–7 % over its longitudinal one). With the endurance trim's 64 % brake balance both axles reach their
- * grip under braking, so the lean is 7 %: the stops stay near the reference laps' g, the traction out of slow corners
- * too [bop, motec]
+ * Lateral grip over longitudinal: the endurance slick's 1.7974 lateral on 1.74 longitudinal (Medium) [bop]. The
+ * second reference's slick leans the same way (its lateral load curve sits 5–7 % over its longitudinal one) [motec]
  */
-const GT3_LATERAL_GRIP = 1.07;
+const GT3_LATERAL_GRIP = 1.033;
 
 /** The rim and inflation cavity of an 18" GT3 wheel [est] */
 const GT3_RIM_GAS = {
