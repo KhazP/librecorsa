@@ -23,7 +23,7 @@ import {
   wheelReportRows,
   type ReportFacts,
 } from "../src/lib/diagnostics/report-details";
-import { drivingFrameSummary, noteDrivingFrame, noteFrameGraphics, resetFrameStats } from "../src/lib/render/frame-stats";
+import { drivingFrameSummary, drivingInputUsed, noteDrivingFrame, noteDrivingInput, noteFrameGraphics, resetFrameStats } from "../src/lib/render/frame-stats";
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -48,6 +48,14 @@ check("A 30 s gap (a hidden tab) is not a long frame", fs?.longFrames === 0);
 check("The graphics they were drawn with go along", fs?.graphics === "High · render 100%");
 check("Two minutes later the line says so", /2 min before the report/.test(frameLine(drivingFrameSummary(t + 120_000)) ?? ""), frameLine(drivingFrameSummary(t + 120_000)) ?? "");
 check("Under two seconds of driving says nothing", frameLine({ ...fs!, seconds: 1.5 }) === null);
+
+// --- The input that drove the car
+check("No driving yet: no input", drivingInputUsed() === null);
+for (let i = 0; i < 3000; i++) noteDrivingInput("controller");
+for (let i = 0; i < 500; i++) noteDrivingInput("keyboard");
+check("Most of the last minute decides", drivingInputUsed() === "controller");
+for (let i = 0; i < 3000; i++) noteDrivingInput("keyboard");
+check("Older frames drop out of the minute", drivingInputUsed() === "keyboard");
 
 // --- Where on the lap
 const turns = [

@@ -5,10 +5,10 @@ import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { queuedBoardMisses } from "@/lib/net/leaderboard";
 import type { BoardState } from "@/lib/net/online-config";
-import { drivingFrameSummary } from "@/lib/render/frame-stats";
+import { drivingFrameSummary, drivingInputUsed } from "@/lib/render/frame-stats";
 import type { PlayerSettings } from "@/lib/settings/player-settings";
 import { hudLayout } from "@/lib/settings/hud-layouts";
-import { PHYSICS_VERSION, type LapInput } from "@/lib/sim/lap-types";
+import { isLapInput, PHYSICS_VERSION, type LapInput } from "@/lib/sim/lap-types";
 import { isStoreBuild } from "@/lib/store-mode";
 import { getActiveTimedLengthM, TURN_METADATA } from "@/lib/track-data";
 import type { CarTelemetry } from "@/types/f1";
@@ -90,8 +90,11 @@ export interface ReportFactsInput {
 /** Everything a report adds, read now */
 export function collectReportFacts(i: ReportFactsInput): ReportFacts {
   const setUp: LapInput = i.settings.device === "keyboard" && i.touchVisible ? "touch" : i.settings.device;
-  const input = i.lastLapInput
-    ? `${INPUT_NAMES[i.lastLapInput]} (last lap)${i.lastLapInput !== setUp ? `, ${INPUT_NAMES[setUp]} set up` : ""}`
+  // What drove the car: the last minute of driving, else the last lap's, else only what is set up
+  const used = drivingInputUsed();
+  const driven: [LapInput, string] | null = isLapInput(used) ? [used, "driven"] : i.lastLapInput ? [i.lastLapInput, "last lap"] : null;
+  const input = driven
+    ? `${INPUT_NAMES[driven[0]]} (${driven[1]})${driven[0] !== setUp ? `, ${INPUT_NAMES[setUp]} set up` : ""}`
     : `${INPUT_NAMES[setUp]} (set up)`;
   let drive: DriveFacts | null = null;
   if (i.drive) {

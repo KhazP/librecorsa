@@ -76,10 +76,40 @@ export function drivingFrameSummary(nowMs: number = performance.now()): FrameSum
   };
 }
 
+/** What drove the car, a sample a simulated frame while driving: about the last minute of them */
+const INPUT_SAMPLES = 3600;
+const inputCodes = new Uint8Array(INPUT_SAMPLES);
+const inputNames: string[] = [];
+let inputCount = 0;
+let inputNext = 0;
+
+/**
+ * What drove the car this frame ("keyboard", "controller", "wheel", "touch"), for the report's input line: the lap
+ * card that also says it is often gone by the time a report is written, and the setting can be wrong (#124: set to a
+ * controller, driven on the keyboard)
+ */
+export function noteDrivingInput(input: string): void {
+  let code = inputNames.indexOf(input);
+  if (code < 0) code = inputNames.push(input) - 1;
+  inputCodes[inputNext] = code;
+  inputNext = (inputNext + 1) % INPUT_SAMPLES;
+  inputCount = Math.min(inputCount + 1, INPUT_SAMPLES);
+}
+
+/** The input that drove most of the last minute of driving, or null before any */
+export function drivingInputUsed(): string | null {
+  if (inputCount === 0) return null;
+  const tally = new Array<number>(inputNames.length).fill(0);
+  for (let i = 0; i < inputCount; i++) tally[inputCodes[i]]++;
+  return inputNames[tally.indexOf(Math.max(...tally))] ?? null;
+}
+
 /** Forgets the frames (scripts/verify-report-details.ts) */
 export function resetFrameStats(): void {
   count = 0;
   next = 0;
   lastAtMs = -1;
   graphics = null;
+  inputCount = 0;
+  inputNext = 0;
 }

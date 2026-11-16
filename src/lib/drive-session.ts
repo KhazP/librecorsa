@@ -105,7 +105,7 @@ import { steeringAssistSettings } from "@/lib/sim/steering-assist";
 import { applyTimeTrial, lowestFuelSetup, timeTrialRealism, type TimeTrialRules } from "@/lib/sim/time-trial";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import { clampFov, DEFAULT_KEYBOARD_TUNING, type PlayerSettings } from "@/lib/settings/player-settings";
-import { noteDrivingFrame, noteFrameGraphics } from "@/lib/render/frame-stats";
+import { noteDrivingFrame, noteDrivingInput, noteFrameGraphics } from "@/lib/render/frame-stats";
 import type { AeroSetupPreset, CameraMode, CarTelemetry, LiveTunerPatch, RadarBlip, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
@@ -2152,6 +2152,7 @@ export class DriveSession {
         pad: { throttle: gamepadThrottle, brake: gamepadBrake, steer: gamepadStick ?? gamepadSteer ?? 0 },
         setting: settingsNow.device,
       });
+      if (driving && inputNow) noteDrivingInput(inputNow);
 
       // The AI field holds the player on the grid until the lights go out, then runs its cars
       const aiField = aiFieldOf(raceNow());
