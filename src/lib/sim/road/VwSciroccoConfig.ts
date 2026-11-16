@@ -353,7 +353,8 @@ const FLAT: LutPoints = [
  * [spec, derived]. Its angle-of-attack tables move it little over the car's ±2° of pitch.
  */
 const BODY_CLA = 0.07 * 1.67;
-const BODY_FRONT_SHARE = ((1 - FRONT_WEIGHT) * WHEELBASE - 0.17) / WHEELBASE;
+// The front axle carries the share of a load at the CG-to-rear-axle distance (FRONT_WEIGHT × wheelbase) less its 0.17 m
+const BODY_FRONT_SHARE = (FRONT_WEIGHT * WHEELBASE - 0.17) / WHEELBASE;
 
 /**
  * Body, front splitter and rear spoiler with the mod's angle-of-attack tables, their gains folded in [spec aero.ini]:

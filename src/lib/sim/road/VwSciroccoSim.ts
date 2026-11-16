@@ -25,8 +25,8 @@ const AIR = 0.5 * C.aero.airDensity;
 /**
  * The Scirocco's planning model for its lap-time line, braking zones, braking urgency and HUD target speed. The speed
  * profile's traction limit reads the driven axle, which is the front here: `rearWeightFraction` and
- * `rearDownforceShare` carry the front axle's shares (39 % of the downforce: the splitter ahead of the axle, the body's
- * behind the CG). Its aero at sea-level air: CL·A 0.19 m², CD·A 0.33 m²; brake force and power at the wheels from the
+ * `rearDownforceShare` carry the front axle's shares (55 % of the downforce: the splitter ahead of the axle, and 55 % of
+ * the body's, 0.17 m behind the CG). Its aero at sea-level air: CL·A 0.19 m², CD·A 0.33 m²; brake force and power at the wheels from the
  * car's data. Grip as `scripts/ai/measure-ggv.ts` measures it: 0.91–0.94 g held in a corner at any speed (the
  * downforce is too small to show), 1.13 g on the brakes at 54 km/h rising to 1.2 g at 160 with the drag. It brakes on
  * μ 1.02, so a 100→0 km/h stop is planned 4 % longer than the car takes (scripts/verify-vw-scirocco-gtx.ts).
@@ -35,7 +35,7 @@ export const VW_SCIROCCO_PROFILE_CAR: SpeedProfileCarModel = {
   massKg: C.chassis.totalMassKg,
   downforceCoef: AIR * 0.19,
   dragCoef: AIR * 0.33,
-  rearDownforceShare: 0.39,
+  rearDownforceShare: 0.55,
   rearWeightFraction: C.chassis.frontWeightFraction,
   muLat: 0.92,
   muLong: 1.02,
