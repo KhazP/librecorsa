@@ -150,7 +150,7 @@ const gregSt = (title: string, url: string): CarCredit => ({
   title,
   author: "gregsediting",
   url,
-  authorUrl: "https://www.patreon.com/gregsediting",
+  authorUrl: "https://www.gtplanet.net/forum/members/greg_st.314907/",
   license: "Used with the author's permission",
   licenseUrl: url,
 });
@@ -332,22 +332,15 @@ const ALL_CARS: readonly CarDefinition[] = [
     sub: "2002 · 1.6 L four · front-wheel drive",
     badge: "LIANA",
     quality: "own",
-    // The credit shown is alekabul, for the physics only: he gave permission for them and says the model isn't his.
-    // The body is Forza Motorsport 4's (Turn 10 Studios), converted for Assetto Corsa in 2015 by an author the
-    // conversion doesn't name; its owners haven't been found (CREDITS.md)
-    modelSource: {
-      title: "Suzuki Liana",
-      author: "Turn 10 Studios (Forza Motorsport 4)",
-      url: "http://assetto-db.com/car/suzuki_liana",
-      license: "Game asset, not licensed for redistribution",
-      licenseUrl: "http://assetto-db.com/car/suzuki_liana",
-      note: "Converted for Assetto Corsa in 2015 by an author the conversion doesn't name, and its owners haven't been found. The physics are alekabul's, used with his permission; the model isn't his.",
-    },
+    // The credit shown is alekabul, for the physics: he gave permission for them and says the model isn't his
+    // (CREDITS.md has where the model comes from)
     credit: {
       label: "Physics by",
       title: "Physics reworked for Top Gear Liana 1.6 GLX",
       author: "alekabul",
       url: "https://www.overtake.gg/downloads/physics-reworked-for-top-gear-liana-1-6-glx.28636/",
+      authorUrl: "https://www.overtake.gg/members/alekabul.294399/",
+      note: "The physics are alekabul's, used with his permission. The 3D model isn't his: it comes from a 2015 Assetto Corsa conversion that doesn't name its author.",
       license: "Used with the author's permission",
       licenseUrl: "https://www.overtake.gg/downloads/physics-reworked-for-top-gear-liana-1-6-glx.28636/",
     },

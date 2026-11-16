@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ModelSource } from "@/lib/model-source";
+import { supportLabel } from "@/lib/modder-support";
 import { TAKEDOWN_URL } from "@/lib/site";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icons";
@@ -160,10 +161,10 @@ export const SourceChip: React.FC<{
                   variant="primary"
                   size="sm"
                   icon={<Icon name="support" />}
-                  aria-label={`Support ${source.author} on ${source.support.via}`}
+                  aria-label={`${source.support.via === "PayPal" ? "Donate to" : "Support"} ${source.author} ${source.support.via === "PayPal" ? "via" : "on"} ${source.support.via}`}
                   className="mb-1 self-start"
                 >
-                  Support on {source.support.via}
+                  {supportLabel(source.support)}
                 </Button>
               ) : null}
               <span>

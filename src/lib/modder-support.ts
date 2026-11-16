@@ -13,9 +13,16 @@ export interface SupportLink {
 }
 
 export const MODDER_SUPPORT: Readonly<Record<string, SupportLink>> = {
-  gregsediting: { url: "https://www.patreon.com/gregsediting", via: "Patreon" },
+  "Mitja Bonca": { url: "https://www.paypal.com/paypalme/mbonca", via: "PayPal" },
+  gunnar333: { url: "https://www.paypal.me/GunnarFrei", via: "PayPal" },
+  LilSki: { url: "https://www.paypal.com/donate/?cmd=_s-xclick&hosted_button_id=4CU3LGABY58L8", via: "PayPal" },
+  "Ddiaz Design": { url: "https://paypal.me/sergiodd", via: "PayPal" },
+  gregsediting: { url: "https://www.patreon.com/cw/gregsediting", via: "Patreon" },
   "Purple Sector": { url: "https://www.patreon.com/cw/PurpleSector", via: "Patreon" },
 };
+
+/** The support button's words: a donation on PayPal, support on a membership site */
+export const supportLabel = (s: SupportLink): string => (s.via === "PayPal" ? "Donate via PayPal" : `Support on ${s.via}`);
 
 /** A modder's support page, if they have one on file */
 export const supportOf = (author: string | undefined): SupportLink | undefined => (author ? MODDER_SUPPORT[author] : undefined);

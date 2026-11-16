@@ -28,11 +28,20 @@ for (const t of TRACKS) {
 
 const liana = carModelSource(carById("liana"));
 check(
-  "The Liana's source is its modder's physics, its model Forza Motorsport 4's",
-  liana.author === "alekabul" && /Forza Motorsport 4/.test(liana.model?.author ?? "") && carById("liana").credit.author === "alekabul"
+  "The Liana's source is alekabul's physics, linked to his profile",
+  liana.author === "alekabul" && liana.authorUrl === "https://www.overtake.gg/members/alekabul.294399/" && liana.model === undefined
 );
-check("A modder with a support page has it first in their source", carModelSource(carById("nissan-r33-jgtc")).support?.url === "https://www.patreon.com/gregsediting");
-check("A modder without one gets none", carModelSource(carById("amg-gt3")).support === undefined);
+const r33 = carModelSource(carById("nissan-r33-jgtc"));
+check(
+  "gregsediting: Patreon first, his name to his profile, the title to the mod",
+  r33.support?.url === "https://www.patreon.com/cw/gregsediting" && r33.authorUrl?.includes("gtplanet.net/forum/members/") === true && r33.url.includes("gtplanet.net/forum/downloads/")
+);
+check("The BMW's modder has PayPal first", carModelSource(carById("bmw-m4-gt3")).support?.via === "PayPal");
+check("A modder without a support page gets none", carModelSource(carById("amg-gt3")).support === undefined);
+for (const [id, modder] of [["monaco", "Mitja Bonca"], ["norisring", "gunnar333"], ["watkins_glen", "LilSki"]] as const) {
+  const t = TRACKS.find((x) => x.id === id);
+  check(`${modder}'s ${id} has their support page first`, !t || trackModelSource(t)?.support?.via === "PayPal");
+}
 check("The GT3's model source is Vecarz's", carModelSource(carById("amg-gt3")).author === "Vecarz");
 const dunsfold = TRACKS.find((t) => t.id === "dunsfold");
 check("Dunsfold's source says it is a Forza Motorsport 4 conversion", !dunsfold || /Forza Motorsport 4/.test(trackModelSource(dunsfold)?.note ?? ""));
