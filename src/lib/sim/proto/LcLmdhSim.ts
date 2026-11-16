@@ -69,7 +69,9 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   // The rear wing goes 1–9° (set 5.5); the splitter is fixed, and the low-drag package trims its dive planes so the
   // balance stays where it was
   aeroPackagesDeg: { low_downforce: [-3, -4.5], balanced: [0, 0], high_downforce: [0, 3.5] },
-  padLateralMu: 1.4,
+  // Its grip on the flat per g of weight and downforce, 1.46–1.51 from 80 to 180 km/h: the steering assist's yaw guard
+  // reads this, and the 1.4 it had trimmed a stick's lock short of the grip in slow corners
+  padLateralMu: 1.5,
   // 263.5° of rim lock each way on a 13.175 : 1 rack [bop]
   steerRatio: 13.175,
   // The autopilot brakes on 85 % of this and corners on 1.1 × that: 1.45 g at low speed and 3.2 g at 306 km/h, inside
