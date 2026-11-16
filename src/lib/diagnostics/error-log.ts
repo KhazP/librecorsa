@@ -97,8 +97,9 @@ export function installErrorLog(): void {
     const original = console[method].bind(console);
     console[method] = (...args: unknown[]) => {
       try {
-        // An info line is kept only with a tag ("[sim] …"): untagged ones are not described at all
-        const tagged = (a: unknown) => typeof a === "string" && /^\[[a-z-]+\] /i.test(a);
+        // An info line is kept only with a tag ("[sim] …", or "[sim]" as its own first argument): untagged ones are not
+        // described at all
+        const tagged = (a: unknown) => typeof a === "string" && /^\[[a-z-]+\]( |$)/i.test(a);
         if (method !== "info") logLine(method, args.map(describeArg).join(" "));
         else if (tagged(args[0])) logLine("note", args.map(describeArg).join(" "));
       } catch {
