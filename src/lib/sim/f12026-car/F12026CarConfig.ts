@@ -992,13 +992,11 @@ export interface RimGasCavityThermalData {
   carcassToGasConductanceWK: number;
   /** Gas heat capacity at constant volume (J/K) */
   gasHeatCapacityJK: number;
-  /** The carcass stretches with pressure, so the gas's pressure rises less than its temperature: volume gain per psi */
-  carcassVolumeStretchPerPsi?: number;
   /**
-   * Share of the compound's `coreCooling` that leaves the carcass through its sidewalls into the outside air; the rest
-   * of what that cooling stood for now leaves through the gas and the rim. Default 0.55
+   * The carcass stretches with pressure, so the gas's pressure rises less than its temperature: volume gain per psi.
+   * Default 0.0018
    */
-  sidewallCoolingShare?: number;
+  carcassVolumeStretchPerPsi?: number;
 }
 
 /** `TyresPressureData` */

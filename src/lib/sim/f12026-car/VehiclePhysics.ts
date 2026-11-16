@@ -44,7 +44,7 @@
 
 import * as THREE from 'three';
 import { Lut, type LutPoints } from '../lut';
-import { tyreGaugePressureAtTemperature, tyreGaugePressureOfGas } from '../tyre-pressure';
+import { tyreColdPressureForGas, tyreGaugePressureOfGas } from '../tyre-pressure';
 import {
   advanceTreadDirt,
   flatSpotVibrationNm,
@@ -649,11 +649,8 @@ export interface TyreRuntime {
   wearOutKm: number;
   /** The three rubber layers (front-tyre size; × `thermalSize` per axle): `TyresThermalPatchData`'s with its defaults */
   layers: TyreLayers;
-  /**
-   * Rim and gas (`RimGasCavityThermalData`, defaults filled in), on a compound whose data gives them; null: the gas at
-   * the carcass's temperature, as the tyre was calibrated on
-   */
-  rimGas: Required<RimGasCavityThermalData> | null;
+  /** Rim and gas (`RimGasCavityThermalData`), a typical racing wheel's where the compound's data gives none */
+  rimGas: Required<RimGasCavityThermalData>;
 }
 
 interface TyreLayers {
@@ -676,8 +673,7 @@ export const RIM_GAS_DEFAULTS: Readonly<Required<RimGasCavityThermalData>> = {
   rimToGasConductanceWK: 16.5,
   carcassToGasConductanceWK: 22,
   gasHeatCapacityJK: 52,
-  carcassVolumeStretchPerPsi: 0,
-  sidewallCoolingShare: 0.55,
+  carcassVolumeStretchPerPsi: 0.0018,
 };
 
 /** The three layers of a compound's thermal data: the tread's bulk added over the carcass liner, by default */
@@ -894,7 +890,7 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
     wearCurve: data.wear ? new Lut(data.wear.curve.map(([km, pct]) => [km, pct / 100] as const)) : null,
     wearOutKm: data.wear ? data.wear.curve[data.wear.curve.length - 1][0] : 0,
     layers: tyreLayers(data.thermalData),
-    rimGas: data.thermalData.rimGas ? { ...RIM_GAS_DEFAULTS, ...data.thermalData.rimGas } : null,
+    rimGas: { ...RIM_GAS_DEFAULTS, ...data.thermalData.rimGas },
   };
 }
 
@@ -1031,8 +1027,10 @@ const GRIP_TEMP_SURFACE_SHARE = 0.3;
 export function defaultColdPressurePsi(t: TyresCompoundData): number {
   const p = t.pressureData;
   if (p.setPsi !== undefined) return p.setPsi;
-  const targetCoreC = 0.5 * (t.thermalData.optimalTempC[0] + t.thermalData.optimalTempC[1]);
-  return Math.round(tyreGaugePressureAtTemperature(p.optimalPsi, targetCoreC, p.coldRefC) * 10) / 10;
+  // The gas at the centre of the working window, the carcass stretching as it does on track
+  const targetGasC = 0.5 * (t.thermalData.optimalTempC[0] + t.thermalData.optimalTempC[1]);
+  const stretch = t.thermalData.rimGas?.carcassVolumeStretchPerPsi ?? RIM_GAS_DEFAULTS.carcassVolumeStretchPerPsi;
+  return Math.round(tyreColdPressureForGas(p.optimalPsi, p.coldRefC, targetGasC, stretch) * 10) / 10;
 }
 
 /** Spin past which a tyre's radius grows no further (rad/s): a wheel spun up off the ground does not balloon */
@@ -2182,7 +2180,7 @@ export class VehiclePhysics {
       w.blisterLevel = 0;
       w.dirtyLevel = 0;
       resetBrakeDiscState(w.brakeDisc, discC, this.brakeCompound, this.brakePadCurve);
-      w.pressurePsi = tyreGaugePressureOfGas(w.coldPressurePsi, p.coldRefC, w.gasTempC, rt.rimGas?.carcassVolumeStretchPerPsi ?? 0);
+      w.pressurePsi = tyreGaugePressureOfGas(w.coldPressurePsi, p.coldRefC, w.gasTempC, rt.rimGas.carcassVolumeStretchPerPsi);
     }
   }
 
@@ -2190,7 +2188,7 @@ export class VehiclePhysics {
   public refreshTyrePressures(): void {
     for (const w of this.wheels) {
       const rt = this.tyres[w.isFront ? 0 : 1];
-      w.pressurePsi = tyreGaugePressureOfGas(w.coldPressurePsi, rt.data.pressureData.coldRefC, w.gasTempC, rt.rimGas?.carcassVolumeStretchPerPsi ?? 0);
+      w.pressurePsi = tyreGaugePressureOfGas(w.coldPressurePsi, rt.data.pressureData.coldRefC, w.gasTempC, rt.rimGas.carcassVolumeStretchPerPsi);
     }
   }
 
@@ -4283,9 +4281,7 @@ export class VehiclePhysics {
       // the liner. The surface sheds heat to the road and the air, the liner through the sidewalls and to the gas
       const g12 = L.g12 * size;
       const g23 = L.g23 * size;
-      // Without rim and gas data the carcass keeps all of its own cooling and the gas follows it
-      const gGas = rg ? rg.carcassToGasConductanceWK * size : 0;
-      const sidewall = rg ? rg.sidewallCoolingShare : 1;
+      const gGas = rg.carcassToGasConductanceWK * size;
       const fricIn = th.slipHeatShare * slipHeat;
       for (let b = 0; b < 3; b++) {
         const share = shares[b] * 3;
@@ -4296,7 +4292,7 @@ export class VehiclePhysics {
         const q23 = g23 * (tB - tC);
         const bSurfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * size * (tS - this.ambientC);
         const bRoadCool = w.fz > 0 ? roadG * size * share * (tS - this.trackTempC) : 0;
-        const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * sidewall * size * (tC - this.ambientC);
+        const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * size * (tC - this.ambientC);
         const bGas = gGas * (tC - w.gasTempC);
         w.bandTempsC[b] = tS + (((1 - L.fricToSub) * fricIn * share - q12 - bSurfCool - bRoadCool) / surfaceCap) * dt;
         w.bandCarcassTempsC[b] = tB + ((L.fricToSub * fricIn * share + L.rollToSub * rollHeat * share + q12 - q23) / subCap) * dt;
@@ -4421,7 +4417,7 @@ export class VehiclePhysics {
         Math.min(1, this.wetness + 0.5 * sprayBoost),
         this.brakePadCurve
       );
-      if (rg) {
+      {
         const disc = w.brakeDisc;
         const tDiscK = disc.surfaceTempC + KELVIN;
         const tRimK = w.rimTempC + KELVIN;
@@ -4434,13 +4430,8 @@ export class VehiclePhysics {
         w.rimTempC += ((qDiscRim - rimAmbG * (w.rimTempC - this.ambientC) - rimGasG * (w.rimTempC - w.gasTempC)) / rg.rimHeatCapacityJK) * dt;
         const k = dt / rg.gasHeatCapacityJK;
         w.gasTempC = (w.gasTempC + k * (gGas * linerMeanC + rimGasG * w.rimTempC)) / (1 + k * (gGas + rimGasG));
-      } else {
-        // The gas at the carcass's temperature, a wet road's spray cooling the rim and it a little
-        const rimWetDeltaC = rimWetEnvironmentCoolingWK(this.wetness, v) * 0.45 * Math.max(0, w.coreTempC - this.ambientC) * 0.02;
-        w.gasTempC = Math.max(this.ambientC - 5, w.coreTempC - rimWetDeltaC);
-        w.rimTempC = w.gasTempC;
       }
-      w.pressurePsi = tyreGaugePressureOfGas(w.coldPressurePsi, td.pressureData.coldRefC, w.gasTempC, rg?.carcassVolumeStretchPerPsi ?? 0);
+      w.pressurePsi = tyreGaugePressureOfGas(w.coldPressurePsi, td.pressureData.coldRefC, w.gasTempC, rg.carcassVolumeStretchPerPsi);
     }
   }
 

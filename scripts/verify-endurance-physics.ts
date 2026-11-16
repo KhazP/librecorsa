@@ -137,11 +137,16 @@ console.log('\n== Rim and gas');
   }
   check('The brakes heat the rims, which heat the gas', car.wheels[0].rimTempC > rim0 + 5 && car.wheels[0].gasTempC > 30,
     `rim ${fmt(rim0, 0)} → ${fmt(car.wheels[0].rimTempC, 0)} °C, gas ${fmt(car.wheels[0].gasTempC, 0)} °C, disc ${fmt(car.wheels[0].brakeDisc.surfaceTempC, 0)} °C`);
-  // A compound without rim data keeps its gas at the carcass, as it was calibrated
+  // A compound without rim data rides on a typical racing wheel: its brakes heat its rims and gas the same way
   const f1 = make(F12026_CAR_CONFIG as unknown as CarPhysicsConfig);
-  f1.reset(0, 0, 0, 40);
-  run(f1, 3, corner);
-  check('Without rim data the gas follows the carcass', Math.abs(f1.wheels[0].gasTempC - f1.wheels[0].coreTempC) < 0.5, `gas ${fmt(f1.wheels[0].gasTempC, 1)} °C, carcass ${fmt(f1.wheels[0].coreTempC, 1)} °C`);
+  f1.reset(0, 0, 0, 60);
+  const f1Rim0 = f1.wheels[0].rimTempC;
+  for (let i = 0; i < 6; i++) {
+    run(f1, 2.5, () => ({ throttle: 0, brake: 0.5, steer: 0 }));
+    run(f1, 5, () => ({ throttle: 1, brake: 0, steer: 0 }));
+  }
+  check('A compound without rim data gets a typical wheel, heated by its brakes', f1.wheels[0].rimTempC > f1Rim0 + 5,
+    `rim ${fmt(f1Rim0, 0)} → ${fmt(f1.wheels[0].rimTempC, 0)} °C, gas ${fmt(f1.wheels[0].gasTempC, 0)} °C`);
 }
 
 console.log('\n== Tie-rod leverage');
