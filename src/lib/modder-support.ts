@@ -21,6 +21,7 @@ export const MODDER_SUPPORT: Readonly<Record<string, SupportLink>> = {
   // The tip page his own car descriptions ask for ("feel free to buy me a beer")
   Pfalzdriver: { url: "https://streamlabs.com/pfalzdriver", via: "Streamlabs" },
   "Purple Sector": { url: "https://www.patreon.com/cw/PurpleSector", via: "Patreon" },
+  Nukedrop: { url: "https://www.patreon.com/cw/nukedrop/", via: "Patreon" },
 };
 
 /** The support button's words: a donation on PayPal, support on a membership site */

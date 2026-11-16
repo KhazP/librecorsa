@@ -1132,6 +1132,17 @@ AC_TRACKS = {
         # Background is the satellite-photo terrain, also drawn over some ROAD physics meshes off the lap; TRACK_LIGHT
         # the light towers; sml_rock_003 a rocky access path
         'notRoadMaterials': r'^(Background|TRACK_LIGHT|sml_rock_003)$',
+        # The ROAD physics meshes off the circuit: the satellite-photo ground (1ROAD2, 17, 20, 22, 24, 25), the paddock's
+        # cracked service roads (19, 21) and a rocky path (26). As road they widened the lap before Turn 1 onto the
+        # ground beside it, and the racing lines ran there
+        'physicsNodeOverrides': [(r'^1ROAD(2|17|19|20|21|22|24|25|26)$', 'runoff')],
+        'physicsOverridesFirst': True,
+        # Turn 4's crest is R 295 m (taken at ~120 km/h, a car goes light there only past ~190 km/h): the default
+        # R 400 m limit cut the profile 0.73 m under it, and the drawn road, laid onto that within 0.32 m, came out
+        # stepped
+        'crestMinRadiusM': 250,
+        # Its skidmark layer (Skidmark01, ksPerPixelAT set to blend) draws blended, not cut out
+        'blendedCutouts': True,
         # Opened by link only (?track=willow_springs) while Nukedrop tries it on the live site; drop to list it
         'unlisted': True,
         'description': 'Willow Springs in the Mojave Desert, California: Big Willow, a fast and open 4.0 km lap of nine turns that climbs over a hill and drops back down to the long front straight.',
@@ -1863,6 +1874,17 @@ def bake_multilayer(mat, tex_pool, img_cache):
     return buf.getvalue()
 
 
+def ac_alpha_masked(mat, sh, cfg):
+    """Whether an AC material draws as a cut-out (glTF MASK). An alpha-test shader (ksPerPixelAT…) is one, unless the
+    track sets `blendedCutouts` and the material is set to blend without the alpha-test flag: Willow Springs lays its
+    faint skidmarks that way, and cut out at 0.5 they drew as black blotches from afar and vanished up close"""
+    if mat['alpha_tested'] or 'tree' in sh or 'grass' in sh:
+        return True
+    if 'perpixelat' in sh:
+        return not (cfg and cfg.get('blendedCutouts') and mat['blend'] in (1, 2))
+    return False
+
+
 def encode_webp_tex(raw_bytes, keep_alpha):
     im = Image.open(io.BytesIO(raw_bytes))
     im.load()
@@ -1889,7 +1911,7 @@ def encode_webp_tex(raw_bytes, keep_alpha):
 
 
 def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_meshes, out_path, clip=4000.0,
-                 double_sided_re=None, bake_masks=False, skip_bake=None):
+                 double_sided_re=None, bake_masks=False, skip_bake=None, cfg=None):
     """Build a glTF 2.0 binary (GLB) directly from the AC visual meshes and generated physics colliders."""
     # 1. Group static visual meshes by (mat_idx, is_decal) while keeping semaphores and dynamic grooves separate
     special_nodes = []
@@ -1903,7 +1925,7 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
         mat_idx = item['mat']
         mat = materials[mat_idx]
         sh = mat['shader'].lower()
-        is_mask = mat['alpha_tested'] or 'perpixelat' in sh or 'tree' in sh or 'grass' in sh
+        is_mask = ac_alpha_masked(mat, sh, cfg)
         is_decal = (mat['blend'] in (1, 2) or 'perpixelalpha' in sh) and not is_mask
         if is_semaphore_node(name) or name in grooves:
             special_nodes.append((name, item, mat_idx, is_decal, grooves.get(name)))
@@ -2052,7 +2074,7 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
         tint = None if m.get('baked') else multilayer_tint(m, tex_pool, img_cache)
         if tint is not None:
             pbr['baseColorFactor'] = tint
-        is_mask = m['alpha_tested'] or 'perpixelat' in sh or 'tree' in sh or 'grass' in sh
+        is_mask = ac_alpha_masked(m, sh, cfg)
         is_blend = (m['blend'] in (1, 2) or 'perpixelalpha' in sh) and not is_mask
         gmat = {'name': m['name'], 'pbrMetallicRoughness': pbr}
         if is_mask:
@@ -2525,8 +2547,9 @@ def build_ac_kerb_mesh(phys_kerb_tris, xz, tan2, rgt2, yc, width, ds, off, extra
         extra.append(kerb_entry)
 
 
-def sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai_mapped, ds, fall_max=0.27):
-    """Sample centreline elevation, 9-point lateral profile yprof, and banking on xz."""
+def sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai_mapped, ds, fall_max=0.27, crest_r=400.0):
+    """Sample centreline elevation, 9-point lateral profile yprof, and banking on xz. `crest_r`: the sharpest crest
+    the profile keeps (build_track.smooth_road_profile)"""
     n = len(xz)
     yc = np.full(n, np.nan)
     y_prev = float(y_ai_mapped[0])
@@ -2570,7 +2593,7 @@ def sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai_mapped, ds, fa
         dev = yprof[:, k] - yprof[:, 4]
         lim = np.where(np.abs(lat) <= width / 2, fall_max * abs(lat) + 0.1, 0.35 * abs(lat) + 0.5)
         yprof[:, k] = yprof[:, 4] + np.clip(dev, -lim, lim)
-    yprof = bt.smooth_road_profile(yprof, width, ds)
+    yprof = bt.smooth_road_profile(yprof, width, ds, crest_r=crest_r)
     yc = yprof[:, 4].copy()
     bank = bt.bank_from_profile(yprof, fall_max)
     return yc, yprof, bank
@@ -2852,7 +2875,7 @@ def build_ac_track(tid, cfg, args):
         'write_glb': lambda off, extra, glb_out: write_ac_glb(
             visual_items, tex_pool, materials, parse_groove_ini(data_dir), 1.0, off, extra, glb_out,
             double_sided_re=cfg.get('doubleSidedMaterials'),
-            bake_masks=bool(cfg.get('bakeMultilayerMasks')), skip_bake=road_mat_names,
+            bake_masks=bool(cfg.get('bakeMultilayerMasks')), skip_bake=road_mat_names, cfg=cfg,
         ),
     }
     return build_from_sources(tid, cfg, args, src)
@@ -2948,7 +2971,8 @@ def build_from_sources(tid, cfg, args, src):
     grass_mats = {MAT_GRASS}
 
     # 4. Elevation, lateral profile & 2-pass kerb-aligned edge refinement + recentring
-    yc, yprof, bank = sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai[ia], ds)
+    yc, yprof, bank = sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai[ia], ds,
+                                                crest_r=float(cfg.get('crestMinRadiusM', 400.0)))
     wall_cap = float(cfg.get('wallCapM', bt.WALL_CAP_M))
     refine_wall_cap = min(wall_cap, 11.5)
 
@@ -2972,7 +2996,8 @@ def build_from_sources(tid, cfg, args, src):
                 tan2 = cl.tangents(xz)
                 rgt2 = cl.rights(tan2)
                 _, ia = tree_ai.query(xz)
-            yc, yprof, bank = sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai[ia], ds)
+            yc, yprof, bank = sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai[ia], ds,
+                                                crest_r=float(cfg.get('crestMinRadiusM', 400.0)))
         log(f'  refined width: median={np.median(width):.1f} m ({width.min():.1f}..{width.max():.1f} m)')
     log(f'  elevation: {yc.min():.1f}..{yc.max():.1f} m, closure={yc[-1] - yc[0]:+.2f} m')
     if p2p:
