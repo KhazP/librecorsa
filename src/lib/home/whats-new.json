@@ -1,5 +1,20 @@
 [
   {
+    "date": "2026-11-17",
+    "title": "Pfalzdriver's M1 Procar and Scirocco, RISE Motordrome's Assetto Corsa look, and the modders up front",
+    "items": [
+      "Added the BMW M1 Procar and the Volkswagen Scirocco GTX 16V by Pfalzdriver, each with its own sounds and liveries.",
+      "RISE Motordrome now has the scenery and look of my Assetto Corsa release on OverTake, with Tecpro barriers in six places, and its lap times stay on the boards.",
+      "Every Source panel now starts with the modder's support page, the Credits open with Support the modders, About lists the modders with their donate buttons, and the loading screen, the pause menu and a note after each drive name who made the circuit and the car.",
+      "You can now report a bug from the pause menu, and the report carries the game's details, a screenshot and where the car was.",
+      "AI races now run in the simulation worker, AI cars plan their lines over several frames, and busy circuits check the ground faster, which cuts the stutter in races.",
+      "The off-track glow is now drawn inside the game's frame, which costs less than the old page layer.",
+      "Bigger circuit and car tiles on the home page and in the game, one row per car class in the car browser, and in-game panels that fit their content on wide screens."
+    ],
+    "commits": 22,
+    "lastSha": "92210623dece8a21a6eea7111a81238e1734b2c3"
+  },
+  {
     "date": "2026-11-16",
     "title": "New American circuits, third-party HUDs, and cone limits at the Red Bull Ring's inner course",
     "items": [
