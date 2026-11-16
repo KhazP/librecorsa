@@ -1,0 +1,167 @@
+/**
+ * An AI race run by the simulation worker (`sim-runtime.ts`, `worker-ai-field.ts`), checked without a worker: the
+ * worker's side in this process behind the same messages, every one cloned as `postMessage` clones it
+ * (`loopbackTransport`), driven the way drive-session.ts drives it.
+ *
+ *   npx tsx scripts/verify-worker-race.ts [trackId] [car]
+ *
+ * The race must be the race a field on the page runs, stepped the same way (the road, the player's car in two 4 ms
+ * ticks, then the field over 8 ms): the same report to the last digit, the player's car where the page's would be.
+ * Then what the page sees of it: the lights and the grid hold, the AI cars drawn where the worker has them, the road,
+ * the standing, and the race ending when the session leaves it.
+ */
+import { existsSync, readFileSync } from 'node:fs';
+import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
+import { AiOpponentField, aiDriversFor } from '../src/lib/sim/ai-opponents';
+import { createSimHost, loopbackTransport } from '../src/lib/sim/runtime/sim-host';
+import { SIM_TICK_S } from '../src/lib/sim/runtime/sim-protocol';
+import { WorkerAiField } from '../src/lib/sim/runtime/worker-ai-field';
+import type { SimulatorCar } from '../src/lib/sim/simulator-car';
+import { TrackEnvironment } from '../src/lib/sim/track-environment';
+import { getActiveTrackData, getActiveTrackMetadata, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
+import type { VehicleModelId } from '../src/types/f1';
+import { loadGlbGeometry } from './lib/glb-geometry';
+
+const failures: string[] = [];
+const check = (name: string, ok: boolean, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(72)} ${detail}`);
+  if (!ok) failures.push(name);
+};
+
+const trackId = process.argv[2] ?? 'rwanda_official_short';
+const vehicle = (process.argv[3] ?? 'amg-gt3') as VehicleModelId;
+const OPPONENTS = 3;
+const SKILL = 80;
+const SEED = 4242;
+const RACE_S = 45;
+
+const dataPath = `public/tracks/${trackId}/track_data.json`;
+if (!existsSync(dataPath)) {
+  console.log(`SKIP  ${trackId}: no track data here (a hosted circuit not downloaded)`);
+  process.exit(0);
+}
+setActiveTrack(trackId, JSON.parse(readFileSync(dataPath, 'utf8')) as RawTrackJson);
+const track = getActiveTrackData(1200);
+const root = loadGlbGeometry(`public${track.meshUrl}`);
+
+/** The game's set-up of a new car (drive-session's createCar, shortened) */
+function setUp(car: SimulatorCar): void {
+  car.aiAutopilot = false;
+  car.assistPreset = 'semi_pro';
+  car.autoGearbox = true;
+  car.aeroPreset = 'balanced';
+  car.tireCompound = 'medium';
+  car.resetToStartGrid(false);
+}
+
+/** The field's setup the race starts with (race-setup.ts startAiRace) */
+function setUpRace(field: { raceLaps: number; gridOrder: string; playerGrid: string; damageLevel: string; aggressionAdd: number }): void {
+  field.raceLaps = 3;
+  field.gridOrder = 'qualifying';
+  field.playerGrid = 'middle';
+  field.damageLevel = 'full';
+  field.aggressionAdd = 0.1;
+}
+
+// ---- The race on the page, stepped as the worker steps it
+const pagePlayer = vehicleModelSpec(vehicle).createSim(track, root);
+setUp(pagePlayer);
+const pageEnv = new TrackEnvironment(track);
+const pageField = new AiOpponentField(track, pagePlayer, aiDriversFor(OPPONENTS), pageEnv, { skill: SKILL, seed: SEED });
+setUpRace(pageField as never);
+pageField.startRace(true);
+// The player's car drives itself, as a player on autopilot would
+pagePlayer.aiAutopilot = true;
+const blocks = Math.round(RACE_S / (2 * SIM_TICK_S));
+for (let b = 0; b < blocks; b++) {
+  pageEnv.update(2 * SIM_TICK_S, pageField.sims());
+  for (let t = 0; t < 2; t++) if (!pageField.playerFrozen) pagePlayer.step(SIM_TICK_S, {});
+  pageField.update(2 * SIM_TICK_S);
+}
+
+// ---- The same race in the worker, through the messages
+const loop = loopbackTransport();
+const host = createSimHost(loop.transport, loop.wallNowMs);
+const twin = vehicleModelSpec(vehicle).createSim(track, root);
+const car = host.adopt(twin, vehicle, root);
+setUp(car);
+host.endFrame(true);
+const link = host.raceLink();
+check('the worker has the car ready for a race', link !== null);
+if (!link) process.exit(1);
+const env = new TrackEnvironment(track);
+const race = new WorkerAiField(link, env, car, OPPONENTS, SKILL, () => car.groundQuery ?? null);
+race.seed = SEED;
+setUpRace(race as never);
+race.startRace(true);
+car.aiAutopilot = true;
+const workerField = loop.runtime.raceField;
+check('the worker runs the field round its own car', workerField !== null && workerField.sims().includes(loop.runtime.simulatedCar as SimulatorCar));
+check(
+  'the circuit tells the worker its AI cars drive plans',
+  getActiveTrackMetadata().aiPlans?.[vehicle]?.ok === true && workerField!.aiSlots().every((s) => s.sim.aiPlan != null),
+  `${workerField!.aiSlots().length} cars on plans`
+);
+
+let sawLights = false;
+let frozenOnGrid = true;
+let gridPos: number | null = null;
+let lightsOutAt = -1;
+let peersBefore = 0;
+for (let tick = 0; tick < blocks * 2; tick++) {
+  // A frame of the game every tick here: the controls (none: the autopilot), the worker's clock, the end of the frame
+  car.step(SIM_TICK_S, {});
+  loop.advance(SIM_TICK_S);
+  host.endFrame(true);
+  race.update();
+  if (race.phase === 'lights') {
+    sawLights ||= race.lightsOn > 0;
+    gridPos ??= car.sMeters;
+    if (Math.abs(car.sMeters - gridPos) > 0.05) frozenOnGrid = false;
+  } else if (lightsOutAt < 0) {
+    lightsOutAt = tick * SIM_TICK_S;
+    peersBefore = race.peers().length;
+  }
+}
+check('the start lights come on and go out', sawLights && lightsOutAt > 4, `out at ${lightsOutAt.toFixed(2)} s`);
+check("the player's car is held on the grid until then", frozenOnGrid && race.phase === 'racing');
+check('the worker drives the car the whole race', host.remote);
+
+const sim = loop.runtime.simulatedCar as SimulatorCar;
+const pageReport = JSON.stringify(pageField.report());
+const workerReport = JSON.stringify(workerField!.report());
+check('the worker race reports exactly what the race on the page does', pageReport === workerReport, pageReport === workerReport ? `${RACE_S} s, ${OPPONENTS + 1} cars` : 'reports differ');
+const dPos = sim.worldPosition.distanceTo(pagePlayer.worldPosition);
+check("the player's car ends where it does on the page", dPos === 0 && sim.vxMs === pagePlayer.vxMs, `${(sim.vxMs * 3.6).toFixed(0)} km/h at ${sim.sMeters.toFixed(0)} m, off by ${dPos}`);
+
+// What the page draws: the AI cars where the worker has them (carried a few ms forward at most), the standing, the road
+const peers = race.peers();
+const slots = workerField!.aiSlots();
+let worstM = 0;
+for (const p of peers) {
+  const slot = slots.find((s) => s.peer.peerId === p.peerId);
+  if (slot) worstM = Math.max(worstM, p.position.distanceTo(slot.peer.position));
+}
+check('every AI car is drawn, where the worker has it', peers.length === OPPONENTS && peersBefore === OPPONENTS && worstM < 0.6, `${peers.length} cars, within ${worstM.toFixed(3)} m`);
+const status = race.status();
+const expected = workerField!.status();
+check('the standing reaches the page', status.standings.length === OPPONENTS + 1 && status.position === expected.position && status.phase === 'racing', `P${status.position} of ${status.fieldSize}`);
+check('the road under the car reaches the page', race.playerWetness !== null && race.rubber !== null, `wetness ${race.playerWetness}, rubber ${race.rubber?.toFixed(3)}`);
+
+// A penalty from the page's race control, the skill, and the race ending when the session leaves it
+race.playerPenaltyS = 5;
+race.update();
+race.setSkill(40);
+check('a penalty and the skill reach the worker', workerField!.playerPenaltyS === 5 && workerField!.skill === 40);
+race.dispose();
+check('the race ends in the worker when the session leaves it', loop.runtime.raceField === null);
+const sBefore = sim.sMeters;
+for (let tick = 0; tick < 250; tick++) {
+  car.step(SIM_TICK_S, {});
+  loop.advance(SIM_TICK_S);
+  host.endFrame(true);
+}
+check('and its car drives on alone', host.remote && sim.sMeters !== sBefore && race.peers().length === OPPONENTS);
+
+console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll worker race checks passed.');
+if (failures.length) process.exitCode = 1;

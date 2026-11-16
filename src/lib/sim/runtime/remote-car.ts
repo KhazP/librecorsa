@@ -4,8 +4,8 @@
  * The page keeps its own car (the twin): the garage, the menus and every setting read and write it as before, and each
  * change is sent on to the worker's car, so the two are set up alike. While the worker drives, the twin stands still
  * and everything that moves (pose, speeds, wheels, telemetry) is read from the worker's latest state instead. When the
- * worker does not drive (it is not ready, it failed, or an AI or online race is on, which still run on the page), the
- * stand-in is the twin: it steps it and reads it.
+ * worker does not drive (it is not ready, it failed, or a race the page runs is on: online, or with a wheel), the
+ * stand-in is the twin: it steps it and reads it. An AI race the worker runs places the car itself (`placeTwin`).
  *
  * A call that places the car (the grid, a teleport) is made on the twin at once, and the twin is what
  * is read until the worker's first state from after that placement arrives: the game never sees the car where it was.
@@ -152,6 +152,14 @@ export interface RemoteCar {
   endFrame(): void;
   /** The worker's events about this car */
   receive(event: SimEvent): void;
+  /** The worker failed: the page drives the car from here on */
+  readonly failed: boolean;
+  /**
+   * For a placement the worker makes itself (an AI race's grid): places the twin with `place`, as near as the page
+   * can tell, without sending it, and returns the placement's number for the command that has the worker place its
+   * car. The twin is read until the worker's first state from after it arrives, and is fresh on the grid again
+   */
+  placeTwin(place: (twin: SimulatorCar) => void): number;
 }
 
 const _forward = new THREE.Vector3();
@@ -290,6 +298,14 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
     },
     get remote() {
       return remote;
+    },
+    get failed() {
+      return failed;
+    },
+    placeTwin(place) {
+      place(twin);
+      twinFresh = true;
+      return ++epoch;
     },
     setRemote(on) {
       if (on === remote || (on && (!ready || failed || !twinFresh))) return;

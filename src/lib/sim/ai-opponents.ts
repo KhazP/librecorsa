@@ -57,6 +57,7 @@ import { drivePlanJob, driveLineOf, makeDrivePlan, type AiDrivePlan, type DriveL
 import { planCost } from '@/lib/sim/ai/speed-plan';
 import { DEFAULT_PLANNER_WEIGHTS, PLAN_DT, PLAN_STEPS, planLocal, type PlannerResult, type PredictedCar } from '@/lib/sim/ai/local-planner';
 import type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
+import type { AiRace } from '@/lib/sim/ai-race';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '@/lib/sim/gt3/AmgGt3Config';
 import { SUZUKI_LIANA_CONFIG } from '@/lib/sim/road/SuzukiLianaConfig';
@@ -665,7 +666,7 @@ export interface AiFieldReport {
   raceControl: { kind: string; text: string; detail?: string; atS: number }[];
 }
 
-export class AiOpponentField {
+export class AiOpponentField implements AiRace {
   public phase: RaceStatus['phase'] = 'racing';
   /**
    * False until startRace: the shell builds a spare field in the menus, and a field that never started is not a race
@@ -2355,6 +2356,15 @@ export class AiOpponentField {
   public playerDamage(): CarDamage | null {
     return this.cars.find((c) => c.isPlayer)?.damage ?? null;
   }
+
+  /**
+   * The AI cars in grid order: their render state, their physics, and whether the marshals have taken them away
+   * (the simulation worker sends every one, `runtime/field-frame.ts`)
+   */
+  public aiSlots(): readonly { readonly peer: InterpolatedPeerState; readonly sim: SimulatorCar; readonly removed: boolean }[] {
+    return (this.aiCarsInGridOrder ??= this.cars.filter((c) => !c.isPlayer));
+  }
+  private aiCarsInGridOrder: FieldCar[] | null = null;
 
   /** Render / HUD states of the AI cars (the player is drawn by the caller) */
   public peers(): InterpolatedPeerState[] {

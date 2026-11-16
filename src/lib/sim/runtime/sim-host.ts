@@ -12,7 +12,7 @@ import { getActiveTrackSource } from "@/lib/track-data";
 import type { SimulatorCar } from "../simulator-car";
 import { trackColliderData } from "../track-colliders";
 import { createRemoteCar, type RemoteCar } from "./remote-car";
-import type { SimCommand, SimEvent } from "./sim-protocol";
+import type { RaceCommand, SimCommand, SimEvent } from "./sim-protocol";
 import { SimRuntime } from "./sim-runtime";
 
 export interface SimTransport {
@@ -41,7 +41,25 @@ export interface SimHost {
   endFrame(wantRemote: boolean): void;
   /** The simulation behind the transport is driving the adopted car */
   readonly remote: boolean;
+  /**
+   * The way to an AI race in the simulation behind the transport, round the adopted car: null while that car is not
+   * ready there (or the simulation failed)
+   */
+  raceLink(): SimRaceLink | null;
   dispose(): void;
+}
+
+/** An AI race's line to the simulation behind the transport, for one adopted car (`worker-ai-field.ts`) */
+export interface SimRaceLink {
+  post(command: RaceCommand): void;
+  /** Calls `listener` with the simulation's events about this car (states and the race's own); returns the unsubscribe */
+  listen(listener: (event: SimEvent) => void): () => void;
+  /** `RemoteCar.placeTwin` of the adopted car, which the simulation then drives (`setRemote`) */
+  placeTwin(place: (twin: SimulatorCar) => void): number;
+  /** The simulation failed, or the car has been replaced: the race cannot go on there */
+  readonly failed: boolean;
+  /** The clock the simulation stamps its states with */
+  wallNowMs(): number;
 }
 
 const pageWallNowMs = () => performance.timeOrigin + performance.now();
@@ -52,10 +70,12 @@ export function createSimHost(transport: SimTransport, wallNowMs: () => number =
   let current: RemoteCar | null = null;
   let trackSent = false;
   const sentRoots = new WeakSet<THREE.Object3D>();
+  const raceListeners = new Set<(event: SimEvent) => void>();
   const unlisten = transport.listen((event) => {
     // An event about a car that has since been replaced is dropped
-    if ((event.type === "ready" || event.type === "state") && event.car !== carNumber) return;
-    current?.receive(event);
+    if ((event.type === "ready" || event.type === "state" || event.type === "race") && event.car !== carNumber) return;
+    if (event.type !== "race") current?.receive(event);
+    if (event.type === "state" || event.type === "race" || event.type === "error") for (const listener of raceListeners) listener(event);
   });
   return {
     adopt(twin, vehicle, trackRoot, bodyPlan) {
@@ -96,7 +116,32 @@ export function createSimHost(transport: SimTransport, wallNowMs: () => number =
     get remote() {
       return current?.remote ?? false;
     },
+    raceLink() {
+      const car = current;
+      const mine = carNumber;
+      if (!car || !car.ready) return null;
+      return {
+        post: (command) => {
+          if (mine === carNumber) transport.post(command);
+        },
+        listen: (listener) => {
+          raceListeners.add(listener);
+          return () => raceListeners.delete(listener);
+        },
+        // The worker drives the car from the start of the race: the twin is fresh on the grid, so it can take it at once
+        placeTwin: (place) => {
+          const epoch = car.placeTwin(place);
+          car.setRemote(true);
+          return epoch;
+        },
+        get failed() {
+          return car.failed || mine !== carNumber;
+        },
+        wallNowMs,
+      };
+    },
     dispose() {
+      raceListeners.clear();
       unlisten();
       transport.dispose();
       current = null;
