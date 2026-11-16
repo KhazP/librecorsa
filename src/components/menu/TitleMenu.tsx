@@ -12,7 +12,7 @@ import { timeLeftLabel } from "@/lib/net/weekly-challenge";
 import { LeaderboardPanel } from "@/components/hud/LeaderboardPanel";
 import { buildHudMap } from "@/components/hud/styles/hud-style-parts";
 import { ACTIVE_TRACK_ID, getActivePointToPoint, getTrackData } from "@/lib/track-data";
-import { getTrackInfo, DEFAULT_TRACK_ID, TRACKS, type TrackInfo } from "@/lib/track-registry";
+import { getTrackInfo, DEFAULT_TRACK_ID, LISTED_TRACKS, type TrackInfo } from "@/lib/track-registry";
 import { SCENERY_CREDITS } from "@/lib/render/scenery-credits";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
 import { isTouchDevice } from "@/lib/input/touch-input";
@@ -376,9 +376,9 @@ const Credits: React.FC = () => (
           </a>{" "}
           · used with permission
         </CreditRow>
-        {TRACKS.some((t) => t.credit) ? (
+        {LISTED_TRACKS.some((t) => t.credit) ? (
           <CreditRow title="Circuits">
-            {TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => o.credit?.url === t.credit?.url) === i).map((t) => (
+            {LISTED_TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => o.credit?.url === t.credit?.url) === i).map((t) => (
               <React.Fragment key={t.id}>
                 &ldquo;{t.credit!.title}&rdquo; (
                 <a href={t.credit!.short ?? t.credit!.url} target="_blank" rel="noreferrer" className={linkClass}>

@@ -695,5 +695,26 @@
       "licenseUrl": "https://www.overtake.gg/downloads/watkins-glen-international.20204/"
     },
     "quality": "sim"
+  },
+  {
+    "id": "willow_springs",
+    "name": "Willow Springs International Raceway",
+    "layout": "Big Willow",
+    "country": "United States",
+    "city": "Rosamond, California",
+    "lengthM": 3940.11,
+    "turns": 9,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/willow_springs/track_data.json",
+    "credit": {
+      "title": "Willow Springs - Big Willow",
+      "author": "Nukedrop",
+      "url": "https://www.overtake.gg/downloads/willow-springs-big-willow.32338/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/willow-springs-big-willow.32338/"
+    },
+    "quality": "sim",
+    "unlisted": true
   }
 ]

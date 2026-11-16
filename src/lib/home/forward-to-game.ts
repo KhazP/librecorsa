@@ -14,7 +14,7 @@ import { withBasePath } from "@/lib/base-path";
  * tag again on an in-site visit to "/" (and say so), though only a fresh load needs it. Anywhere but "/" it does
  * nothing.
  */
-const GAME_PARAMS = ["room", "car", "sim", "f1physics", "lc26engine", "vf26engine", "depth", "sky", "colliders", "perf", "profile"]; // keep-old-id: the engine switch under the car's old name
+const GAME_PARAMS = ["room", "car", "track", "sim", "f1physics", "lc26engine", "vf26engine", "depth", "sky", "colliders", "perf", "profile"]; // keep-old-id: the engine switch under the car's old name
 const HOME = withBasePath("/").replace(/\/+$/, "") || "/";
 
 /** A value as script source: JSON, with the characters that could close the script tag or end a line escaped. */

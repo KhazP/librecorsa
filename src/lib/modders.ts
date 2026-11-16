@@ -1,6 +1,6 @@
 import { CARS, carById, type CarId } from "@/lib/cars/car-registry";
 import { supportOf, type SupportLink } from "@/lib/modder-support";
-import { getTrackInfo, TRACKS } from "@/lib/track-registry";
+import { getTrackInfo, LISTED_TRACKS } from "@/lib/track-registry";
 
 /**
  * Who made what, from the car and circuit credits and the support map (modder-support.ts): one list for the Credits
@@ -33,7 +33,7 @@ export function moddersList(): ModderWork[] {
     if (!m.works.includes(work)) m.works.push(work);
     byName.set(name, m);
   };
-  for (const t of TRACKS) if (t.credit) add(t.credit.author, t.credit.authorUrl ?? t.credit.url, t.name);
+  for (const t of LISTED_TRACKS) if (t.credit) add(t.credit.author, t.credit.authorUrl ?? t.credit.url, t.name);
   for (const c of CARS) {
     add(c.credit.author, c.credit.authorUrl ?? c.credit.url, c.credit.label === "Physics by" ? `${c.title} (physics)` : c.title);
     if (c.tyreCredit) add(c.tyreCredit.author, c.tyreCredit.url, `${c.title} (tyres)`);
