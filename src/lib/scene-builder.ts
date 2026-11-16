@@ -227,7 +227,7 @@ function loadTrackGlb(
     const pair = loadVenueLayout(withBasePath(files.layoutUrl), withBasePath(files.sharedUrl), onProgress);
     return (files === split?.ktx2 ? transcoded(pair) : pair).catch((err) => {
       if (!current()) throw new SupersededLoad();
-      console.warn(`${label} not available, falling back:`, err);
+      console.warn("%s not available, falling back:", label, err);
       return fallback();
     });
   };
@@ -238,7 +238,7 @@ function loadTrackGlb(
     ktx2Url && ktx2
       ? transcoded(loadGlb(ktx2Url)).catch((err) => {
           if (!current()) throw new SupersededLoad();
-          console.warn(`KTX2 model ${ktx2Url} not available, loading ${url}:`, err);
+          console.warn("KTX2 model %s not available, loading %s:", ktx2Url, url, err);
           return loadSplitOrOwn();
         })
       : loadSplitOrOwn();
