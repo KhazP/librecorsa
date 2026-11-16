@@ -8,7 +8,7 @@
  *
  * Run: npx tsx scripts/verify-gt3-telemetry.ts
  */
-import { GT3_REF, measureGt3 } from './lib/gt3-reference';
+import { GT3_REF, measureGt3, RHO } from './lib/gt3-reference';
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ''): void {
@@ -45,14 +45,17 @@ band((at) => `braking g at ${at} km/h`, m.brakingG, -12, 12);
 
 console.log('Full-throttle g');
 // The logs are a sprint trim's: the endurance balance of performance's restrictors take 0.985 / 1.04 of its torque
-// (and cap the top at 354 kW), so the reference's full-throttle g is scaled by that first. Its drag (CD·A ≈ 1.07 m²
-// against the sprint car's ≈ 0.86, held to the low-drag trim's speed trap) takes more of the pull as the speed
-// rises: −25 % allowed past 200 km/h
+// (and cap the top at 354 kW), and its bodywork adds drag over the sprint car's CD·A of 0.865 m² (held to the low-drag
+// trim's speed trap). The reference's full-throttle g is scaled by the restrictors and loses that extra drag first
 const BOP_TORQUE = 0.985 / 1.04;
-const throttleRows = m.throttleG.map(([at, ours, ref]) => [at, ours, ref * BOP_TORQUE] as [number, number, number]);
-const restrictors = (at: number) => `full-throttle g at ${at} km/h (the reference × the restrictors' ${BOP_TORQUE.toFixed(3)})`;
-band(restrictors, throttleRows.filter(([at]) => at < 200), -15, 20);
-band(restrictors, throttleRows.filter(([at]) => at >= 200), -25, 20);
+const SPRINT_CDA = 0.865;
+const throttleRows = m.throttleG.map(([at, ours, ref], i) => {
+  const { dragG, speedMs, massKg } = m.throttleDrag[i];
+  const sprintDragG = (0.5 * RHO * SPRINT_CDA * speedMs ** 2) / (massKg * 9.81);
+  return [at, ours, ref * BOP_TORQUE - Math.max(0, dragG - sprintDragG)] as [number, number, number];
+});
+const restrictors = (at: number) => `full-throttle g at ${at} km/h (the reference × the restrictors' ${BOP_TORQUE.toFixed(3)}, less the extra drag)`;
+band(restrictors, throttleRows, -15, 20);
 
 console.log('Gearing');
 band((g) => `gear ${g} rpm per m/s`, m.rpmPerMs, -1, 1);
