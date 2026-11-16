@@ -624,10 +624,8 @@ function gt3Compound(
       thermalVerticalRefC: 90,
       // Slow graining / blistering gains and exponents [ref]; the graining wears off as the tread slides
       tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1, wearOffWithSlip: true },
-      // Pressure in the heat and the crown [est]
+      // Pressure in the heat, and the crown it gives the contact patch [est]
       pressureHeat: { slipGain: 0.45, crownGain: 0.62 },
-      // Camber moves the contact pressure to the inner shoulder at 6.5 per radian [est]
-      bandSpread: { camber: 6.5, lateral: 0.22 },
       // An 18" forged wheel; the carcass stretches a little as the pressure rises [est]
       rimGas: { ...GT3_RIM_GAS, rimHeatCapacityJK: 4600 },
     },

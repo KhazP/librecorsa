@@ -943,19 +943,13 @@ export interface TyresThermalPatchData {
    */
   tread?: { grainGain: number; grainGamma: number; blisterGain: number; blisterGamma: number; wearOffWithSlip?: boolean };
   /**
-   * Inflation pressure in the heat flow, with p = pressure / optimal − 1: the sliding heat × (1 − `slipGain` × p), the
-   * middle band's share of the heat × (1 + 2 × `crownGain` × p) and each shoulder's × (1 − `crownGain` × p) (an
-   * over-inflated tyre runs on its crown), and the rolling heat × the rolling-resistance factor of
-   * `TyresPressureData.pressureRollingGain` (a soft tyre flexes more and heats more). The bands' grip weighting is
-   * left alone. Absent: pressure does not move the heat
+   * Inflation pressure in the tyre, with p = pressure / optimal − 1: the sliding heat × (1 − `slipGain` × p), the rolling
+   * heat × the rolling-resistance factor of `TyresPressureData.pressureRollingGain` (a soft tyre flexes more and heats
+   * more), and the middle strip's share of the contact pressure + `crownGain` × p (an over-inflated tyre runs on its
+   * crown, an under-inflated one on its shoulders), which moves both the heat and the grip across the strips. Absent:
+   * pressure moves neither
    */
   pressureHeat?: { slipGain: number; crownGain: number };
-  /**
-   * How the contact pressure, and with it the heat and the grip weighting, moves across the inner / middle / outer
-   * bands: the shift toward the inner shoulder per radian of camber leaning toward the car, and toward the outer one
-   * per unit of lateral force over load. Absent: 3.8 and 0.22
-   */
-  bandSpread?: { camber: number; lateral: number };
   /**
    * The third rubber layer: each band is a tread surface over the tread's bulk (subsurface) over the carcass liner the
    * inflation gas touches. Heat capacity of the bulk layer (J/K at the front tyre's size). Absent: the carcass's

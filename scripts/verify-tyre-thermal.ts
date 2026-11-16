@@ -102,27 +102,15 @@ console.log('\n== Graining wears off as the tread slides');
   check('GT3 and F1 slicks: their GRAIN_* data wears graining off only as the tread slides', tread(AMG_GT3_CONFIG as never) && tread(F12026_CAR_CONFIG as never), '');
 }
 
-console.log('\n== Band spread');
+console.log('\n== Contact strips');
 {
-  // Camber moves the contact pressure, and the heat, across the bands by the compound's own spread where it states one
-  const shares = (spread?: { camber: number; lateral: number }) => {
-    const cfg = spread === undefined ? AMG_GT3_CONFIG : {
-      ...AMG_GT3_CONFIG,
-      tyreCompounds: Object.fromEntries(
-        Object.entries(AMG_GT3_CONFIG.tyreCompounds).map(([k, t]) => [k, t && { ...t, thermalData: { ...t.thermalData, bandSpread: spread } }])
-      ),
-    };
-    const car = new VehiclePhysics({ ground: new FlatGroundQuery(0), config: cfg as never, airDensity: 1.225 });
-    car.reset(0, 0, 0, 30);
-    for (let t = 0; t < 1; t += 1 / 120) car.step(1 / 120, { throttle: 0.2, brake: 0, steer: 0 });
-    const sh = car.wheels[0].bandLoadShares;
-    return sh[0] - sh[2];
-  };
-  const dflt = shares();
-  const same = shares({ camber: 6.5, lateral: 0.22 });
-  const none = shares({ camber: 0, lateral: 0 });
-  check('Camber loads the inner band by the spread (the GT3\'s 6.5 / 0.22; none leaves the bands even)', dflt > 0.02 && dflt === same && Math.abs(none) < 1e-9,
-    `inner − outer share ${fmt(dflt, 3)} default, ${fmt(none, 3)} with no spread`);
+  // The GT3's −3.5° front camber, rolling straight: the inner strip carries the camber's whole (held) shift
+  const car = new VehiclePhysics({ ground: new FlatGroundQuery(0), config: AMG_GT3_CONFIG as never, airDensity: 1.225 });
+  car.reset(0, 0, 0, 30);
+  for (let t = 0; t < 1; t += 1 / 120) car.step(1 / 120, { throttle: 0.2, brake: 0, steer: 0 });
+  const sh = car.wheels[0].bandLoadShares;
+  check('GT3 front at −3.5°: the inner strip carries over half the load', sh[0] > 0.5 && sh[2] < 0.1 && Math.abs(sh[0] + sh[1] + sh[2] - 1) < 1e-9,
+    `inner / middle / outer ${quad(sh, 3)}`);
 }
 
 console.log('\n== Stints round Rwanda (autopilot)');

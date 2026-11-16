@@ -744,6 +744,41 @@ export function stripLoadGrip(
   return sum / (muEven * thermalRaw);
 }
 
+/** Shift of the contact pressure onto the inner strip per radian of camber leaning toward the car, and its limit */
+const STRIP_CAMBER_SHIFT = 6.5;
+const STRIP_CAMBER_SHIFT_MAX = 0.26;
+/** Shift onto the middle strip per metre of the belt's centrifugal growth, and its limits (− unloads the middle) */
+const STRIP_CENTRIFUGAL_CROWN_PER_M = 12;
+const STRIP_CROWN_MIN = -0.2;
+const STRIP_CROWN_MAX = 0.22;
+
+/**
+ * The inner / middle / outer strips' shares of a contact patch's load (summing to 1) into `out`. Camber leaning toward
+ * the car (`camberInRad` > 0, negative camber) moves load onto the inner strip; inflation over the optimum, by the
+ * compound's `crownGain`, and the belt's centrifugal growth crown the tread onto the middle strip, under-inflation
+ * moves it onto the shoulders. Cornering moves the load only through the camber the roll and the uprights give the
+ * wheel
+ */
+export function computeBandLoadShares(
+  out: [number, number, number],
+  camberInRad: number,
+  pressurePsi: number,
+  optimalPsi: number,
+  crownGain: number,
+  growthM: number
+): void {
+  const dCam = THREE.MathUtils.clamp(camberInRad * STRIP_CAMBER_SHIFT, -STRIP_CAMBER_SHIFT_MAX, STRIP_CAMBER_SHIFT_MAX);
+  const pRel = optimalPsi > 0 ? (pressurePsi - optimalPsi) / optimalPsi : 0;
+  const dCrown = THREE.MathUtils.clamp(crownGain * pRel + STRIP_CENTRIFUGAL_CROWN_PER_M * growthM, STRIP_CROWN_MIN, STRIP_CROWN_MAX);
+  const s1 = THREE.MathUtils.clamp(1 / 3 + dCrown, 0.14, 0.62);
+  const s0 = THREE.MathUtils.clamp((1 - s1) / 2 + dCam, 0.06, 0.8);
+  const s2 = Math.max(0.06, 1 - s0 - s1);
+  const sum = s0 + s1 + s2;
+  out[0] = s0 / sum;
+  out[1] = s1 / sum;
+  out[2] = s2 / sum;
+}
+
 /** cot of a diff ramp angle (deg), the ramp held to 5° at least */
 const cot = (deg: number): number => 1 / Math.tan(Math.max(5, deg) * DEG2RAD);
 /** A three-phase diff dial (1–12) as its lock share 0–1 */
@@ -1013,9 +1048,6 @@ const _m = new THREE.Matrix4();
 const _tyreTorque = new Float64Array(4);
 const _wheelInertia = new Float64Array(4);
 const _wheelOmega = new Float64Array(4);
-/** A tyre's inner / middle / outer shares of its heat when its pressure moves them (`TyresThermalPatchData.pressureHeat`) */
-/** Crown the belt's centrifugal growth gives the contact pressure, per metre of growth (the middle band × 1 + 2·this·ΔR) */
-const CENTRIFUGAL_CROWN_PER_M = 18;
 const STEFAN_BOLTZMANN = 5.670374419e-8;
 const _carWake: AeroWakeState = { ...CLEAN_AIR_WAKE_STATE };
 const _coolAero = { cdA: 0, clAFront: 0, clARear: 0 };
@@ -2910,9 +2942,17 @@ export class VehiclePhysics {
         const td = tyre.data;
         const cam = td.camberData;
         // Temperature grip per band (inner / middle / outer), weighted by each band's share of the contact pressure. A
-        // brush tyre's grip curve is drawn against the temperature of its tread as a whole: mostly the tread's bulk, a
-        // quarter the surface, so a flash of surface heat or a cool straight moves it little
+        // brush tyre's grip curve is drawn against the temperature of its tread as a whole: mostly the tread's bulk,
+        // under a third the surface, so a flash of surface heat or a cool straight moves it little
         const sh = w.bandLoadShares;
+        computeBandLoadShares(
+          sh,
+          (w.isLeft ? -1 : 1) * w.camberLeftRad,
+          w.pressurePsi,
+          td.pressureData.optimalPsi,
+          td.thermalData.pressureHeat?.crownGain ?? 0,
+          tyreCentrifugalGrowthM(w.omega)
+        );
         const k = tyre.brush ? GRIP_TEMP_SURFACE_SHARE : 1;
         const g0 = tyre.thermal.evaluate(w.bandCarcassTempsC[0] + k * (w.bandTempsC[0] - w.bandCarcassTempsC[0]));
         const g1 = tyre.thermal.evaluate(w.bandCarcassTempsC[1] + k * (w.bandTempsC[1] - w.bandCarcassTempsC[1]));
@@ -4218,17 +4258,7 @@ export class VehiclePhysics {
 
       // One thermal model: three bands, each a tread surface over the tread's bulk over the carcass liner, each a third
       // of the tyre (a third of the heat capacity and conductances, so with an even load the bands are the whole tyre).
-      // 3-band I/M/O thermal distribution from camber & lateral force shift, in ac-tyre's convention: camber leaning
-      // toward the car (negative camber) loads the inner shoulder, the lateral force rolls the patch onto the shoulder
-      // away from the force (+ bias = toward the outer band). Inward is −left on a left wheel
-      const inward = w.isLeft ? -1 : 1;
-      const camberIn = inward * w.camberLeftRad;
-      const fyIn = (inward * w.fy) / Math.max(500, w.fz);
-      const spread = th.bandSpread;
-      const bias = THREE.MathUtils.clamp(-camberIn * (spread ? spread.camber : 3.8) + fyIn * (spread ? spread.lateral : 0.22), -0.75, 0.75);
-      const sI = Math.max(0.08, (1 - bias) * 0.33);
-      const sM = 0.34;
-      const sO = Math.max(0.08, (1 + bias) * 0.33);
+      // Each band takes the heat of its share of the contact pressure (`computeBandLoadShares`, set in the substep)
       const shares = w.bandLoadShares;
       // The compound's heat capacities and conductances are the front tyre's: this axle's scale with its size
       const rtT = this.tyres[w.isFront ? 0 : 1];
@@ -4238,29 +4268,16 @@ export class VehiclePhysics {
       const surfaceCap = L.cSurf * size;
       const subCap = L.cSub * size;
       const coreCap = L.cCore * size;
-      // Inflation pressure in the heat: an under-inflated tyre works its rubber harder and flexes more, an
-      // over-inflated one runs on its crown (`TyresThermalPatchData.pressureHeat`), and so does a tyre spun up to speed
-      // (its belt grows at the centre). The crown moves the contact pressure, and so the grip's weighting too
+      // Inflation pressure in the heat: an under-inflated tyre works its rubber harder and flexes more
+      // (`TyresThermalPatchData.pressureHeat`); where it runs on its crown or its shoulders is in the band shares
       const ph = th.pressureHeat;
       let slipHeat = slipPower;
       let rollHeat = hyst;
-      let crown = CENTRIFUGAL_CROWN_PER_M * tyreCentrifugalGrowthM(w.omega);
       if (ph) {
         const pd = td.pressureData;
         const pRel = w.pressurePsi / pd.optimalPsi - 1;
         slipHeat = slipPower * Math.max(0, 1 - ph.slipGain * pRel);
         rollHeat = hyst * Math.max(0, 1 + (pd.pressureRollingGain ?? 0) * (pd.optimalPsi / Math.max(1, w.pressurePsi) - 1));
-        crown += ph.crownGain * pRel;
-      }
-      crown = THREE.MathUtils.clamp(crown, -0.45, 0.45);
-      {
-        const hI = sI * (1 - crown);
-        const hM = sM * (1 + 2 * crown);
-        const hO = sO * (1 - crown);
-        const hSum = hI + hM + hO;
-        shares[0] = hI / hSum;
-        shares[1] = hM / hSum;
-        shares[2] = hO / hSum;
       }
       // Three layers per band: the tread surface over the tread's bulk over the carcass liner. The sliding heat taken
       // into the tyre lands mostly in the surface, some in the bulk; the rolling (hysteresis) heat is made in the bulk and

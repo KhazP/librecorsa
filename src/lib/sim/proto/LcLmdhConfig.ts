@@ -664,8 +664,6 @@ function lmdhCompound(
       // Graining below the window, blistering above it [est]
       tread: { grainGain: 0.55, grainGamma: 1, blisterGain: 0.6, blisterGamma: 1, wearOffWithSlip: true },
       pressureHeat: { slipGain: 0.48, crownGain: 0.65 },
-      // Camber moves the contact pressure to the inner shoulder at 6.5 per radian [est]
-      bandSpread: { camber: 6.5, lateral: 0.22 },
       rimGas: LMDH_RIM_GAS,
     },
     pressureData: {

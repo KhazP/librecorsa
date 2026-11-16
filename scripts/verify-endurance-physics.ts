@@ -10,7 +10,7 @@
  * mechanisms themselves.
  */
 import * as THREE from 'three';
-import { VehiclePhysics, bumpRubberForce, stripLoadGrip, tyrePeakMu, createTyreRuntime, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
+import { VehiclePhysics, bumpRubberForce, computeBandLoadShares, stripLoadGrip, tyrePeakMu, createTyreRuntime, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { FlatGroundQuery, type GroundHit, type GroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { DEFAULT_SURFACE_TABLE } from '../src/lib/sim/track-surfaces';
 import { compoundData, type CarPhysicsConfig } from '../src/lib/sim/f12026-car/F12026CarConfig';
@@ -98,6 +98,27 @@ console.log('\n== Strip contact');
   const shoulder = stripLoadGrip(rt, fz, 'y', mu, [0.55, 0.3, 0.15], 1, 1, 1, 1);
   check('An even patch grips as the whole tyre', Math.abs(even - 1) < 1e-12, fmt(even, 6));
   check('Load piled on a shoulder costs grip', shoulder < 0.999 && shoulder > 0.95, fmt(shoulder, 4));
+  // The strips' shares: camber × 6.5 onto the inner strip (held to ±0.26), the crown onto the middle strip (held to
+  // −0.20 / +0.22), floors of 0.14 in the middle and 0.06 on the shoulders
+  const sh: [number, number, number] = [0, 0, 0];
+  const at = (camDeg: number, psi = 26, crown = 0, growthM = 0) => {
+    computeBandLoadShares(sh, camDeg * (Math.PI / 180), psi, 26, crown, growthM);
+    return [...sh];
+  };
+  const near = (a: number[], b: number[]) => a.every((x, i) => Math.abs(x - b[i]) < 5e-4);
+  const shares = (a: number[]) => a.map((x) => fmt(x, 3)).join(' / ');
+  const flat = at(0);
+  check('Flat, at the optimum pressure: three even strips', near(flat, [1 / 3, 1 / 3, 1 / 3]), shares(flat));
+  const c12 = at(1.2);
+  check('−1.2° camber moves 0.136 onto the inner strip', near(c12, [0.4695, 1 / 3, 0.1972]), shares(c12));
+  const c35 = at(3.5);
+  check('−3.5° camber: the shift held at 0.26', near(c35, [0.5933, 1 / 3, 0.0733]), shares(c35));
+  const over = at(0, 28.6, 0.62);
+  check('10 % over-inflated (crown 0.62): 0.062 onto the middle strip', near(over, [0.3023, 0.3953, 0.3023]), shares(over));
+  const under = at(0, 23.4, 0.62);
+  check('10 % under-inflated: the shoulders take it', near(under, [0.3643, 0.2713, 0.3643]), shares(under));
+  const spun = at(0, 26, 0, 0.004);
+  check('4 mm of centrifugal growth crowns the middle strip by 0.048', near(spun, [0.3093, 0.3813, 0.3093]), shares(spun));
 }
 
 console.log('\n== Rim and gas');
