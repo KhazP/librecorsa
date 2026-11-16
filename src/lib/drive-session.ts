@@ -100,6 +100,8 @@ import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad } from "@/li
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { simMode } from "@/lib/sim/runtime/sim-mode";
 import { createSimHost } from "@/lib/sim/runtime/sim-host";
+import { WorkerAiField } from "@/lib/sim/runtime/worker-ai-field";
+import type { AiRace } from "@/lib/sim/ai-race";
 import { startSimWorker } from "@/lib/sim/runtime/worker-sim-host";
 import { steeringAssistSettings } from "@/lib/sim/steering-assist";
 import { applyTimeTrial, lowestFuelSetup, timeTrialRealism, type TimeTrialRules } from "@/lib/sim/time-trial";
@@ -130,9 +132,9 @@ const SEAT_PANEL_HOLD_MS = 450;
 export type AppPhase = "loading" | "title" | "wizard" | "driving";
 
 /** The race on track with the player: none (practice), the AI field, or a multiplayer race; never two at once */
-export type SessionRace = { kind: "practice" } | { kind: "ai"; field: AiOpponentField } | { kind: "mp"; race: MultiplayerRace };
+export type SessionRace = { kind: "practice" } | { kind: "ai"; field: AiRace } | { kind: "mp"; race: MultiplayerRace };
 /** The AI field on track, when the session is a race against it */
-export const aiFieldOf = (race: SessionRace): AiOpponentField | null => (race.kind === "ai" ? race.field : null);
+export const aiFieldOf = (race: SessionRace): AiRace | null => (race.kind === "ai" ? race.field : null);
 /** The multiplayer race on track, when the session is an online race */
 export const mpRaceOf = (race: SessionRace): MultiplayerRace | null => (race.kind === "mp" ? race.race : null);
 /** Why the run on track starts over (see resetRun) */
@@ -420,8 +422,11 @@ export class DriveSession {
   readonly toggleMute: () => void;
   /** Builds the next race's AI field while the browser is idle in the menus (never while driving or loading) */
   readonly prepareAiField: () => void;
-  /** The AI field for a race: the one built ahead when it was built for this car, else a new one */
-  readonly takeAiField: () => AiOpponentField;
+  /**
+   * The AI field for a race: in the simulation worker when it can run one, else on the page (the one built ahead when
+   * it was built for this car, or a new one)
+   */
+  readonly takeAiField: () => AiRace;
   /** The player's preferences: kept for the frame loop, and the ones that act on the car or the scene applied */
   readonly applySettings: (settings: PlayerSettings) => void;
   /** Puts the tyre compound on the car and its model */
@@ -659,6 +664,9 @@ export class DriveSession {
     const limitsSessionOf = (race: SessionRace) => (race.kind === "practice" ? "practice" : "race");
     this.setRace = (next) => {
       endTimeTrial();
+      const prev = this.currentRace;
+      // A race the worker runs ends there when the session leaves it
+      if (prev.kind === "ai" && (next.kind !== "ai" || next.field !== prev.field)) prev.field.dispose?.();
       this.currentRace = next;
       setRaceKind(next.kind);
       trackLimits.reset(limitsSessionOf(next));
@@ -681,9 +689,9 @@ export class DriveSession {
      * (defaults for the first car) and that car's saved tyre setup
      */
     /**
-     * The simulation worker (`sim-mode.ts`): it drives the player's car in practice, through a stand-in the rest of
-     * the session uses as the car (`sim-host.ts`). AI and online races run on the page, and so does everything where
-     * a worker cannot be started.
+     * The simulation worker (`sim-mode.ts`): it drives the player's car in practice and runs AI races, through a
+     * stand-in the rest of the session uses as the car (`sim-host.ts`, `worker-ai-field.ts`). Online races and a
+     * steering wheel's races run on the page, and so does everything where a worker cannot be started.
      */
     let simWorker: ReturnType<typeof startSimWorker> | null = null;
     if (simMode() === "worker") {
@@ -803,6 +811,13 @@ export class DriveSession {
     let gridWarm: { physics: SimulatorCar; key: string; next: number } | null = null;
     /** One build of the spare field at a time (each call while it runs would start another) */
     let aiPrepQueued = false;
+    /**
+     * The worker can run the next race: it has the car ready, and the player is not on a wheel (whose force feedback
+     * still goes from the page a frame at a time)
+     */
+    const workerRaceLink = () => (simHost && settings.device !== "wheel" ? simHost.raceLink() : null);
+    /** The car and field size the worker was last asked to build a spare field for */
+    let workerPrepared: { physics: SimulatorCar; opponents: number } | null = null;
     this.prepareAiField = () => {
       if (aiPrepQueued) return;
       aiPrepQueued = true;
@@ -811,6 +826,15 @@ export class DriveSession {
         // Never while driving: the build would be a hitch on track instead
         if (disposed || appPhaseNow === "driving" || appPhaseNow === "loading") return;
         const opponents = settings.race.opponents;
+        // A race in the worker is built there, off this thread: only the request goes from here
+        const link = workerRaceLink();
+        if (link) {
+          if (workerPrepared?.physics !== physics || workerPrepared.opponents !== opponents) {
+            workerPrepared = { physics, opponents };
+            link.post({ type: "race", op: "prepare", opponents: aiDriversFor(opponents).length, skill: settings.aiSkill });
+          }
+          return;
+        }
         if (aiFieldSpare?.physics === physics && aiFieldSpare.opponents === opponents) {
           // The field, the player in it, on the race setup's start
           const cars = aiDriversFor(opponents).length + 1;
@@ -840,6 +864,14 @@ export class DriveSession {
       scheduleIdle(run, AI_PREP_GAP_MS);
     };
     this.takeAiField = () => {
+      const link = workerRaceLink();
+      if (link) {
+        // The worker's spare field goes with this race: the menus ask for another after it
+        workerPrepared = null;
+        aiFieldSpare = null;
+        const car = physics;
+        return new WorkerAiField(link, getTrackEnv(), car, aiDriversFor(settings.race.opponents).length, settings.aiSkill, () => car.groundQuery ?? null);
+      }
       const spare = aiFieldSpare;
       aiFieldSpare = null;
       const skill = settings.aiSkill;
@@ -2155,7 +2187,17 @@ export class DriveSession {
       if (driving && inputNow) noteDrivingInput(inputNow);
 
       // The AI field holds the player on the grid until the lights go out, then runs its cars
+      if (aiFieldOf(raceNow())?.worker?.failed) {
+        // The worker stopped mid-race: the race starts over from the lights on the page, which drives the car now
+        console.warn("[sim] the worker stopped: the race restarts on the page");
+        const field = this.takeAiField();
+        if (trackRoot) field.attachTrackRoot(trackRoot);
+        this.setRace({ kind: "ai", field });
+        startAiRace(field, settings.race);
+      }
       const aiField = aiFieldOf(raceNow());
+      /** The race runs in the worker, the player's car with it: this page only sends the controls and draws it */
+      const raceInWorker = aiField?.worker !== undefined;
       if (physics.steeringAssist.settings !== assistSettings) {
         physics.steeringAssist.settings = assistSettings;
       }
@@ -2195,7 +2237,8 @@ export class DriveSession {
         }
         startupMonitor?.begin();
         const simStartMs = sessionPerf ? performance.now() : 0;
-        if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
+        // (a race in the worker holds the car on the grid there: the controls go on, which keep its clock running)
+        if (raceInWorker || (!aiField?.playerFrozen && !mpFrozen)) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
         aiField?.update(dtSeconds);
         if (sessionPerf) frameSimMs = performance.now() - simStartMs;
         startupMonitor?.end("sim");
@@ -2213,11 +2256,13 @@ export class DriveSession {
           }
         }
       }
-      // The worker drives the car in practice; an AI or online race steps it here, with the field around it
+      // The worker drives the car in practice and in an AI race it runs; another race steps it here, with the field
+      // around it
       if (simHost) {
         const was = simHost.remote;
-        // Not with a steering wheel yet: its force feedback is still sent from the page, a frame at a time
-        simHost.endFrame(raceNow().kind === "practice" && settingsNow.device !== "wheel");
+        // Not with a steering wheel yet: its force feedback is still sent from the page, a frame at a time (a race
+        // that started in the worker stays there)
+        simHost.endFrame(raceInWorker || (raceNow().kind === "practice" && settingsNow.device !== "wheel"));
         if (simHost.remote !== was) console.info(simHost.remote ? "[sim] the worker drives the car" : "[sim] the page drives the car");
       }
       if (mpRace && mpFrame && mpFrame.phase === "racing" && !frozen) {
@@ -2706,7 +2751,8 @@ export class DriveSession {
         });
 
         builtCircuit.updateEnvironment(nowMs * 0.001);
-        builtCircuit.setGrooveRubber(getTrackEnv().trackEvolution.meanRacingLineRubber());
+        // (a race in the worker lays its rubber there)
+        builtCircuit.setGrooveRubber(aiFieldOf(raceNow())?.worker?.rubber ?? getTrackEnv().trackEvolution.meanRacingLineRubber());
       }
       opponentAudio.update({
         context: audio?.context ?? null,
@@ -2762,7 +2808,9 @@ export class DriveSession {
         env.setConditions(skyConditions);
         setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity);
         // The water under the player's own wheels, not the lap's mean line water
-        visualFx.setWetness(trackEnv.weatherSampleFor(physics)?.wetness ?? wetnessFromWater(wx.lineWaterMm));
+        // (in a race the worker runs, its road under the car)
+        const workerRace = aiFieldOf(raceNow())?.worker;
+        visualFx.setWetness((workerRace ? workerRace.playerWetness : trackEnv.weatherSampleFor(physics)?.wetness) ?? wetnessFromWater(wx.lineWaterMm));
       }
       if (nowMs - lastWeatherHudMs > 500) {
         lastWeatherHudMs = nowMs;
@@ -2787,7 +2835,8 @@ export class DriveSession {
         if (drawDtS > 0) rainCamVel.subVectors(rainCamPos, rainCamPrev).divideScalar(drawDtS).clampLength(0, 110);
         rainCamPrev.copy(rainCamPos);
         // Spray thrown up by the cars ahead (the wake model's, from their speed, gap and the water)
-        const sprayWake = trackEnv.weatherSampleFor(physics)?.sprayIntensity ?? 0;
+        const workerRace = aiFieldOf(raceNow())?.worker;
+        const sprayWake = workerRace ? workerRace.playerSpray : (trackEnv.weatherSampleFor(physics)?.sprayIntensity ?? 0);
         // Droplets on the visor only from the driver's eye (the mirrors render without this layer)
         if (view.driverEye && !inVr) camera.layers.enable(RAIN_VISOR_LAYER);
         else camera.layers.disable(RAIN_VISOR_LAYER);

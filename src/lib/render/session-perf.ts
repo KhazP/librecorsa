@@ -36,7 +36,7 @@ export interface PerfRow {
   /** The page's work per drawn frame (ms) */
   work50: number;
   work95: number;
-  /** The page's own simulation (AI and online races, a wheel), ms per second */
+  /** The page's own simulation (online races, a wheel, an AI race the worker does not run), ms per second */
   simMsPerS: number;
   /** The worker's simulation: share of its time busy (%), and its longest wake (ms); null without one */
   workerPct: number | null;
