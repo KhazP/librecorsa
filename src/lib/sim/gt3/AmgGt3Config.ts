@@ -190,14 +190,15 @@ const SUSPENSIONS: SuspensionsData = {
     arb: 68_400, // [ref] front roll share 60 %
     // Inner pickup heights and pivot-axis tilts, rack height and steering-arm offset set so the solved geometry matches
     // the reference car's: RC and camber gain above, ≈ 33 % anti-dive, near-parallel steering (−10 % Ackermann),
-    // ≈ 3 °/m toe-out in bump; the uprights are as before [derived, ref]
+    // ≈ 3 °/m toe-out in bump [derived, ref]
     hardpoints: [
       [0.440, 0.0804, 0.197],
       [0.440, -0.0062, -0.145],
       [0.487, -0.1670, 0.215],
       [0.487, -0.1906, -0.155],
-      [0.128, 0.135, -0.025],
-      [0.098, -0.128, 0.017],
+      // Ball joints inside the 18" barrel: KPI 7.4°, caster 5.3°, 26 mm kingpin scrub and 31 mm trail at the ground
+      [0.088, 0.142, -0.014],
+      [0.052, -0.136, 0.012],
       [0.447, -0.1554, 0.160],
       [0.097, -0.112, 0.140],
     ],

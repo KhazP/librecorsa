@@ -9,3 +9,14 @@ const KELVIN = 273.15;
 export function tyreGaugePressureAtTemperature(pressurePsi: number, fromTempC: number, toTempC: number): number {
   return ((pressurePsi + ATMOSPHERIC_PRESSURE_PSI) * (toTempC + KELVIN)) / (fromTempC + KELVIN) - ATMOSPHERIC_PRESSURE_PSI;
 }
+
+/**
+ * The gas's pressure as it heats from the garage's `fromTempC` to `gasC`, with the carcass stretching under the rise:
+ * the ideal-gas rise ΔP shrinks by 1 / (1 + `stretchPerPsi` · ΔP) on the absolute pressure (psi gauge in and out)
+ */
+export function tyreGaugePressureOfGas(coldPsi: number, fromTempC: number, gasC: number, stretchPerPsi = 0): number {
+  const cold = coldPsi + ATMOSPHERIC_PRESSURE_PSI;
+  const raw = (cold * (gasC + KELVIN)) / (fromTempC + KELVIN);
+  const abs = stretchPerPsi > 0 ? raw / (1 + stretchPerPsi * Math.max(0, raw - cold)) : raw;
+  return abs - ATMOSPHERIC_PRESSURE_PSI;
+}

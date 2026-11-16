@@ -44,7 +44,7 @@
 
 import * as THREE from 'three';
 import { Lut, type LutPoints } from '../lut';
-import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
+import { tyreGaugePressureAtTemperature, tyreGaugePressureOfGas } from '../tyre-pressure';
 import {
   advanceTreadDirt,
   flatSpotVibrationNm,
@@ -63,6 +63,7 @@ import {
   type BrakeDiscState,
   computeDynamicBrakeMigration,
   createBrakeDiscState,
+  defaultDiscThicknessMm,
   resetBrakeDiscState,
   stepBrakeDiscThermal,
 } from '../brake-physics';
@@ -106,6 +107,7 @@ import {
   type PerformanceModeName,
   type PhysicsTyreCompound,
   type PowerSteeringData,
+  type RimGasCavityThermalData,
   type SuspensionSettingUnits,
   suspensionSupportsHeave,
   type TyresCompoundData,
@@ -461,14 +463,17 @@ export interface WheelState {
   surfaceTempC: number;
   /** Carcass (core) temperature (°C): the bands' mean core; inflation gas, carcass stiffness (derived) */
   coreTempC: number;
-  /** Inner, Middle, Outer surface band temperatures (°C): the tread surface nodes, which set the grip */
+  /** Inner, Middle, Outer surface band temperatures (°C): the tread surface nodes (flash heat, the road's touch) */
   bandTempsC: [number, number, number];
-  /** Inner, Middle, Outer tread-bulk temperatures (°C): between each band's surface and core, for display */
+  /** Inner, Middle, Outer tread-bulk temperatures (°C): the layer under the surface, where most of the grip lives */
   bandCarcassTempsC: [number, number, number];
-  /** Inner, Middle, Outer core temperatures (°C): each band's carcass node */
+  /** Inner, Middle, Outer carcass-liner temperatures (°C): the layer the inflation gas touches */
   bandCoreTempsC: [number, number, number];
   /** Inner, Middle, Outer share of the contact pressure (and of the heat), summing to 1 */
   bandLoadShares: [number, number, number];
+  /** Wheel rim and inflation gas temperatures (°C): the gas's sets the pressure */
+  rimTempC: number;
+  gasTempC: number;
   /** 16-sector circumferential surface temperature grid (°C) */
   circumferentialTempsC: Float32Array;
   /** 16-sector circumferential wear depth grid (0..1) */
@@ -627,6 +632,48 @@ export interface TyreRuntime {
   /** The compound's own wear curve (km slid → grip, 1 = new) and the distance at which it is worn out; null: generic wear */
   wearCurve: Lut | null;
   wearOutKm: number;
+  /** The three rubber layers (front-tyre size; × `thermalSize` per axle): `TyresThermalPatchData`'s with its defaults */
+  layers: TyreLayers;
+  /** Rim and gas (`RimGasCavityThermalData`, defaults filled in) */
+  rimGas: Required<RimGasCavityThermalData>;
+}
+
+interface TyreLayers {
+  cSurf: number;
+  cSub: number;
+  cCore: number;
+  g12: number;
+  g23: number;
+  fricToSub: number;
+  rollToSub: number;
+}
+
+/** A racing wheel and tyre cavity where a car's data gives none [est] */
+export const RIM_GAS_DEFAULTS: Readonly<Required<RimGasCavityThermalData>> = {
+  rimHeatCapacityJK: 4600,
+  rimBrakeOverlapAreaM2: 0.07,
+  discToRimEmissivity: 0.58,
+  discToRimConvectionWK: [2.8, 0.08],
+  rimToAmbientConvectionWK: [6.5, 0.52],
+  rimToGasConductanceWK: 16.5,
+  carcassToGasConductanceWK: 22,
+  gasHeatCapacityJK: 52,
+  carcassVolumeStretchPerPsi: 0,
+  sidewallCoolingShare: 0.55,
+};
+
+/** The layer split of a compound's thermal data, its defaults keeping the old carcass's mass and coupling */
+function tyreLayers(th: TyresThermalPatchData): TyreLayers {
+  const split = th.subsurfaceHeatCapacity === undefined;
+  return {
+    cSurf: th.surfaceHeatCapacity,
+    cSub: split ? 0.6 * th.coreHeatCapacity : th.subsurfaceHeatCapacity!,
+    cCore: split ? 0.4 * th.coreHeatCapacity : th.coreHeatCapacity,
+    g12: th.surfaceToSubsurfaceTransfer ?? th.surfaceToCore,
+    g23: th.subsurfaceToCoreTransfer ?? 4 * th.surfaceToCore,
+    fricToSub: th.frictionHeatToSubsurface ?? 0.22,
+    rollToSub: th.rollingHeatToSubsurface ?? 0.6,
+  };
 }
 
 /** Main spring in series with a helper that goes coil-bound after `helper_range` */
@@ -655,6 +702,28 @@ export function springDeflectionFor(force: number, s: SuspensionSettingUnits): n
 export function damperForce(d: DamperSettingsUnits, v: number, knee: number, reboundKnee = knee): number {
   if (v >= 0) return d.slow_bump * Math.min(v, knee) + d.fast_bump * Math.max(0, v - knee);
   return -(d.slow_rebound * Math.min(-v, reboundKnee) + d.fast_rebound * Math.max(0, -v - reboundKnee));
+}
+
+/**
+ * Grip of a contact patch whose bands carry `sh` of the load, against the same patch loaded evenly (1 when even): each
+ * band grips as the whole tyre would at 3 × its share of the load (`tyrePeakMu`), weighted by its share and its
+ * temperature grip `g0..g2` (`thermalRaw` their weighted sum)
+ */
+export function stripLoadGrip(
+  t: Pick<TyreRuntime, 'data' | 'fz0' | 'dyCurve' | 'dxCurve'>,
+  fz: number,
+  axis: 'x' | 'y',
+  muEven: number,
+  sh: ArrayLike<number>,
+  g0: number,
+  g1: number,
+  g2: number,
+  thermalRaw: number
+): number {
+  if (muEven <= 0 || thermalRaw <= 0) return 1;
+  const sum =
+    sh[0] * g0 * tyrePeakMu(t, 3 * sh[0] * fz, axis) + sh[1] * g1 * tyrePeakMu(t, 3 * sh[1] * fz, axis) + sh[2] * g2 * tyrePeakMu(t, 3 * sh[2] * fz, axis);
+  return sum / (muEven * thermalRaw);
 }
 
 /** Bump-rubber damping at contact and per metre squeezed, and its rebound shares, where the car's data gives none */
@@ -761,6 +830,8 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
     thermalSize: rear ? (compound.rear.width * compound.rear.radius) / (compound.front.width * compound.front.radius) : 1,
     wearCurve: data.wear ? new Lut(data.wear.curve.map(([km, pct]) => [km, pct / 100] as const)) : null,
     wearOutKm: data.wear ? data.wear.curve[data.wear.curve.length - 1][0] : 0,
+    layers: tyreLayers(data.thermalData),
+    rimGas: { ...RIM_GAS_DEFAULTS, ...data.thermalData.rimGas },
   };
 }
 
@@ -914,7 +985,12 @@ const _tyreTorque = new Float64Array(4);
 const _wheelInertia = new Float64Array(4);
 const _wheelOmega = new Float64Array(4);
 /** A tyre's inner / middle / outer shares of its heat when its pressure moves them (`TyresThermalPatchData.pressureHeat`) */
-const _heatShares = new Float64Array(3);
+/** Crown the belt's centrifugal growth gives the contact pressure, per metre of growth (the middle band × 1 + 2·this·ΔR) */
+const CENTRIFUGAL_CROWN_PER_M = 18;
+const STEFAN_BOLTZMANN = 5.670374419e-8;
+const KELVIN = 273.15;
+/** Wet spray's cooling of the rim against the wet-environment conductance of `rimWetEnvironmentCoolingWK` [est] */
+const RIM_WET_SPRAY_SCALE = 10;
 const _brakeImpulse = new Float64Array(4);
 const _ex = new THREE.Vector3();
 const _ey = new THREE.Vector3();
@@ -1190,6 +1266,11 @@ export class VehiclePhysics {
    * its rate (`ChassisData.chassisTorsion`); 0 on a rigid car
    */
   public chassisTwistRad = 0;
+  /**
+   * The next placement is a cold start from the garage (the full realism level): tyres raced without blankets start at
+   * the air's temperature and the brakes at `BrakesData.garageDiscTempC`. Set by the owner before `reset`
+   */
+  public coldGarageStart = false;
   private chassisTwistVelRadS = 0;
   /** Torsion stiffness (Nm/rad), damping (Nms/rad), front roll-inertia share and twist limit (rad); stiffness 0 = rigid */
   private readonly torsionK: number;
@@ -1425,6 +1506,8 @@ export class VehiclePhysics {
         bandCarcassTempsC: [70, 70, 70],
         bandCoreTempsC: [70, 70, 70],
         bandLoadShares: [1 / 3, 1 / 3, 1 / 3],
+        rimTempC: 70,
+        gasTempC: 70,
         circumferentialTempsC: circTemps,
         circumferentialWear: new Float32Array(16),
         wear: 0,
@@ -1432,7 +1515,12 @@ export class VehiclePhysics {
         grainLevel: 0,
         blisterLevel: 0,
         dirtyLevel: 0,
-        brakeDisc: createBrakeDiscState(this.brakeStartTempC, this.brakeCompound, this.brakePadCurve),
+        brakeDisc: createBrakeDiscState(
+          this.brakeStartTempC,
+          this.brakeCompound,
+          this.brakePadCurve,
+          (isFront ? cfg.brakes.discThicknessMm?.front : cfg.brakes.discThicknessMm?.rear) ?? defaultDiscThicknessMm(this.brakeCompound, isFront)
+        ),
         coldPressurePsi: 0,
         pressurePsi: 0,
         brakeTorqueNm: 0,
@@ -1854,6 +1942,9 @@ export class VehiclePhysics {
         fin(w.blisterLevel) &&
         fin(w.dirtyLevel) &&
         fin(w.pressurePsi) &&
+        fin(w.rimTempC) &&
+        fin(w.gasTempC) &&
+        fin(w.brakeDisc.discThicknessMm) &&
         fin(w.brakeDisc.surfaceTempC) &&
         fin(w.brakeDisc.coreTempC) &&
         fin(w.brakeDisc.muFactor)
@@ -1950,26 +2041,43 @@ export class VehiclePhysics {
     return t;
   }
 
-  /** Blanket temperature, cold pressure that reaches the optimum with the core at the window centre */
+  /**
+   * The temperature a compound's tyres start at: its blankets' (`TyresPressureData.coldRefC`), or for a tyre raced
+   * without blankets (`blanketC` set) the air's on a cold start from the garage, else `blanketC` (a level that warms
+   * them, or a rolling start after a formation lap)
+   */
+  private tyreStartTempC(p: TyresPressureData): number {
+    if (p.blanketC === undefined) return p.coldRefC;
+    return this.coldGarageStart ? this.ambientC : p.blanketC;
+  }
+
+  /** Blanket (or garage) temperature, cold pressure that reaches the optimum with the core at the window centre */
   private setTyreBlanketState(): void {
+    const discC =
+      this.coldGarageStart && this.config.brakes.garageDiscTempC !== undefined ? this.config.brakes.garageDiscTempC : this.brakeStartTempC;
     for (const w of this.wheels) {
-      const t = this.tyres[w.isFront ? 0 : 1].data;
+      const rt = this.tyres[w.isFront ? 0 : 1];
+      const t = rt.data;
       const p = t.pressureData;
+      const startC = this.tyreStartTempC(p);
       w.coldPressurePsi = defaultColdPressurePsi(t);
-      w.surfaceTempC = p.coldRefC;
-      w.coreTempC = p.coldRefC;
-      w.bandTempsC = [p.coldRefC, p.coldRefC, p.coldRefC];
-      w.bandCarcassTempsC = [p.coldRefC, p.coldRefC, p.coldRefC];
-      w.bandCoreTempsC = [p.coldRefC, p.coldRefC, p.coldRefC];
-      w.circumferentialTempsC.fill(p.coldRefC);
+      w.surfaceTempC = startC;
+      w.coreTempC = startC;
+      w.bandTempsC = [startC, startC, startC];
+      w.bandCarcassTempsC = [startC, startC, startC];
+      w.bandCoreTempsC = [startC, startC, startC];
+      // A blanket warms the tyre, and its rim and air with it; a cold tyre's are the air's
+      w.gasTempC = startC;
+      w.rimTempC = startC;
+      w.circumferentialTempsC.fill(startC);
       w.circumferentialWear.fill(0);
       w.wear = 0;
       w.flatSpotSeverity = 0;
       w.grainLevel = 0;
       w.blisterLevel = 0;
       w.dirtyLevel = 0;
-      resetBrakeDiscState(w.brakeDisc, this.brakeStartTempC, this.brakeCompound, this.brakePadCurve);
-      w.pressurePsi = w.coldPressurePsi;
+      resetBrakeDiscState(w.brakeDisc, discC, this.brakeCompound, this.brakePadCurve);
+      w.pressurePsi = tyreGaugePressureOfGas(w.coldPressurePsi, p.coldRefC, w.gasTempC, rt.rimGas.carcassVolumeStretchPerPsi);
     }
   }
 
@@ -2691,16 +2799,15 @@ export class VehiclePhysics {
         const td = tyre.data;
         const cam = td.camberData;
         // Temperature grip per band (inner / middle / outer), weighted by each band's share of the contact pressure. A
-        // brush tyre's grip curve is drawn against the temperature of its rubber as a whole: mostly the carcass, a
-        // quarter the tread surface, so a flash of surface heat or a cool straight moves it little
+        // brush tyre's grip curve is drawn against the temperature of its tread as a whole: mostly the tread's bulk, a
+        // quarter the surface, so a flash of surface heat or a cool straight moves it little
         const sh = w.bandLoadShares;
         const k = tyre.brush ? GRIP_TEMP_SURFACE_SHARE : 1;
-        const thermal = realismThermalGrip(
-          sh[0] * tyre.thermal.evaluate(w.bandCoreTempsC[0] + k * (w.bandTempsC[0] - w.bandCoreTempsC[0])) +
-            sh[1] * tyre.thermal.evaluate(w.bandCoreTempsC[1] + k * (w.bandTempsC[1] - w.bandCoreTempsC[1])) +
-            sh[2] * tyre.thermal.evaluate(w.bandCoreTempsC[2] + k * (w.bandTempsC[2] - w.bandCoreTempsC[2])),
-          this.realism
-        );
+        const g0 = tyre.thermal.evaluate(w.bandCarcassTempsC[0] + k * (w.bandTempsC[0] - w.bandCarcassTempsC[0]));
+        const g1 = tyre.thermal.evaluate(w.bandCarcassTempsC[1] + k * (w.bandTempsC[1] - w.bandCarcassTempsC[1]));
+        const g2 = tyre.thermal.evaluate(w.bandCarcassTempsC[2] + k * (w.bandTempsC[2] - w.bandCarcassTempsC[2]));
+        const thermalRaw = sh[0] * g0 + sh[1] * g1 + sh[2] * g2;
+        const thermal = realismThermalGrip(thermalRaw, this.realism);
         const pressureGrip = tyrePressureGrip(td.pressureData, w.pressurePsi);
         w.thermalGrip = thermal;
         // Wear, graining, blistering, dirt and flat-spots, as the LC26's tyre model (ac-tyre computeTyreForces)
@@ -2740,11 +2847,16 @@ export class VehiclePhysics {
         // longitudinal grip while the tyre is braking
         const dY = tyrePeakMu(tyre, fz, 'y');
         const dX = tyrePeakMu(tyre, fz, 'x');
+        // Each band carries its share of the load on a third of the width: as if the whole tyre carried 3 × that share,
+        // so it grips by the tyre's own load sensitivity there. Load piled on a shoulder (too much camber, the wrong
+        // pressure) costs grip; an even patch costs nothing
+        const stripY = stripLoadGrip(tyre, fz, 'y', dY, sh, g0, g1, g2, thermalRaw);
+        const stripX = stripLoadGrip(tyre, fz, 'x', dX, sh, g0, g1, g2, thermalRaw);
         const brakeMod = w.slipRatio < 0 ? 1 + tyre.brakeDxMod : 1;
         // A brush tyre loses grip with its sliding speed
         const speedGrip = tyre.brush ? brushSpeedGrip(tyre.brush, Math.hypot(vsx, vy)) : 1;
-        const muY = dY * base * camberGrip * speedGrip;
-        const muX = dX * brakeMod * base * camberGripX * speedGrip;
+        const muY = dY * base * camberGrip * speedGrip * stripY;
+        const muX = dX * brakeMod * base * camberGripX * speedGrip * stripX;
         w.muY = muY;
         w.muX = muX;
 
@@ -2870,7 +2982,11 @@ export class VehiclePhysics {
           _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, _kpGeo, fx, fy, fz, w.mz + w.mzTwist, w.mx
         );
         w.gyroSteerNm = this.wheelGyroSteerNm(w, _fw);
-        ffbMz += tyreKingpinNm + flatSpotThumpNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz, w.circumferentialWear) + w.gyroSteerNm;
+        // Each wheel's moment about its kingpin reaches the rack through its own tie rod's leverage now (lock and bump
+        // change the steering arm's angle to the rod), against the straight-ahead ratio the steering ratio is quoted at
+        ffbMz +=
+          (tyreKingpinNm + flatSpotThumpNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz, w.circumferentialWear) + w.gyroSteerNm) *
+          kin.tieRodLeverageNorm;
       }
 
       // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the
@@ -3888,8 +4004,8 @@ export class VehiclePhysics {
       const slipPower = (Math.abs(w.fx * w.slipVelX) + Math.abs(w.fy * w.vy)) * heatScale;
       const hyst = th.hysteresis * w.fz * v * heatScale;
 
-      // One thermal model: three bands, each a tread-surface node over a carcass (core) node, each a third of the
-      // tyre (a third of the heat capacity and conductances, so with an even load the bands are the 2-node tyre).
+      // One thermal model: three bands, each a tread surface over the tread's bulk over the carcass liner, each a third
+      // of the tyre (a third of the heat capacity and conductances, so with an even load the bands are the whole tyre).
       // 3-band I/M/O thermal distribution from camber & lateral force shift, in ac-tyre's convention: camber leaning
       // toward the car (negative camber) loads the inner shoulder, the lateral force rolls the patch onto the shoulder
       // away from the force (+ bias = toward the outer band). Inward is −left on a left wheel
@@ -3901,63 +4017,91 @@ export class VehiclePhysics {
       const sI = Math.max(0.08, (1 - bias) * 0.33);
       const sM = 0.34;
       const sO = Math.max(0.08, (1 + bias) * 0.33);
-      const sSum = sI + sM + sO;
       const shares = w.bandLoadShares;
-      shares[0] = sI / sSum;
-      shares[1] = sM / sSum;
-      shares[2] = sO / sSum;
       // The compound's heat capacities and conductances are the front tyre's: this axle's scale with its size
-      const size = this.tyres[w.isFront ? 0 : 1].thermalSize;
-      const surfaceCap = th.surfaceHeatCapacity * size;
-      const coreCap = th.coreHeatCapacity * size;
+      const rtT = this.tyres[w.isFront ? 0 : 1];
+      const size = rtT.thermalSize;
+      const L = rtT.layers;
+      const rg = rtT.rimGas;
+      const surfaceCap = L.cSurf * size;
+      const subCap = L.cSub * size;
+      const coreCap = L.cCore * size;
       // Inflation pressure in the heat: an under-inflated tyre works its rubber harder and flexes more, an
-      // over-inflated one runs on its crown (`TyresThermalPatchData.pressureHeat`)
+      // over-inflated one runs on its crown (`TyresThermalPatchData.pressureHeat`), and so does a tyre spun up to speed
+      // (its belt grows at the centre). The crown moves the contact pressure, and so the grip's weighting too
       const ph = th.pressureHeat;
       let slipHeat = slipPower;
       let rollHeat = hyst;
+      let crown = CENTRIFUGAL_CROWN_PER_M * tyreCentrifugalGrowthM(w.omega);
       if (ph) {
         const pd = td.pressureData;
         const pRel = w.pressurePsi / pd.optimalPsi - 1;
         slipHeat = slipPower * Math.max(0, 1 - ph.slipGain * pRel);
         rollHeat = hyst * Math.max(0, 1 + (pd.pressureRollingGain ?? 0) * (pd.optimalPsi / Math.max(1, w.pressurePsi) - 1));
-        const hI = shares[0] * Math.max(0, 1 - ph.crownGain * pRel);
-        const hM = shares[1] * Math.max(0, 1 + 2 * ph.crownGain * pRel);
-        const hO = shares[2] * Math.max(0, 1 - ph.crownGain * pRel);
-        const hSum = hI + hM + hO;
-        _heatShares[0] = hI / hSum;
-        _heatShares[1] = hM / hSum;
-        _heatShares[2] = hO / hSum;
+        crown += ph.crownGain * pRel;
       }
+      crown = THREE.MathUtils.clamp(crown, -0.45, 0.45);
+      {
+        const hI = sI * (1 - crown);
+        const hM = sM * (1 + 2 * crown);
+        const hO = sO * (1 - crown);
+        const hSum = hI + hM + hO;
+        shares[0] = hI / hSum;
+        shares[1] = hM / hSum;
+        shares[2] = hO / hSum;
+      }
+      // Three layers per band: the tread surface over the tread's bulk over the carcass liner. The sliding heat taken
+      // into the tyre lands mostly in the surface, some in the bulk; the rolling (hysteresis) heat is made in the bulk and
+      // the liner. The surface sheds heat to the road and the air, the liner through the sidewalls and to the gas
+      const g12 = L.g12 * size;
+      const g23 = L.g23 * size;
+      const gGas = rg.carcassToGasConductanceWK * size;
+      const sidewall = rg.sidewallCoolingShare;
+      const fricIn = th.slipHeatShare * slipHeat;
       for (let b = 0; b < 3; b++) {
-        const share = (ph ? _heatShares[b] : shares[b]) * 3;
-        const bToCore = th.surfaceToCore * size * (w.bandTempsC[b] - w.bandCoreTempsC[b]);
-        const bSurfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * size * (w.bandTempsC[b] - this.ambientC);
-        const bRoadCool = w.fz > 0 ? roadG * size * (shares[b] * 3) * (w.bandTempsC[b] - this.trackTempC) : 0;
-        const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * size * (w.bandCoreTempsC[b] - this.ambientC);
-        w.bandTempsC[b] += ((th.slipHeatShare * slipHeat * share - bToCore - bSurfCool - bRoadCool) / surfaceCap) * dt;
-        w.bandCoreTempsC[b] += ((rollHeat * share + bToCore - bCoreCool) / coreCap) * dt;
+        const share = shares[b] * 3;
+        const tS = w.bandTempsC[b];
+        const tB = w.bandCarcassTempsC[b];
+        const tC = w.bandCoreTempsC[b];
+        const q12 = g12 * (tS - tB);
+        const q23 = g23 * (tB - tC);
+        const bSurfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * size * (tS - this.ambientC);
+        const bRoadCool = w.fz > 0 ? roadG * size * share * (tS - this.trackTempC) : 0;
+        const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * sidewall * size * (tC - this.ambientC);
+        const bGas = gGas * (tC - w.gasTempC);
+        w.bandTempsC[b] = tS + (((1 - L.fricToSub) * fricIn * share - q12 - bSurfCool - bRoadCool) / surfaceCap) * dt;
+        w.bandCarcassTempsC[b] = tB + ((L.fricToSub * fricIn * share + L.rollToSub * rollHeat * share + q12 - q23) / subCap) * dt;
+        w.bandCoreTempsC[b] = tC + (((1 - L.rollToSub) * rollHeat * share + q23 - bCoreCool - bGas) / coreCap) * dt;
       }
       // Cross-band conduction: heat crosses between neighbouring bands through the tread and through the carcass (W/K),
       // each band a third of its layer's heat capacity. Slow next to the bands' own heating and cooling, so camber and
       // pressure keep their inner / outer temperature difference
       const kSurf = ((3 * BAND_TREAD_CONDUCTANCE) / surfaceCap) * dt;
+      const kSub = ((3 * BAND_CARCASS_CONDUCTANCE) / subCap) * dt;
       const kCore = ((3 * BAND_CARCASS_CONDUCTANCE) / coreCap) * dt;
       const d01 = kSurf * (w.bandTempsC[0] - w.bandTempsC[1]);
       const d12 = kSurf * (w.bandTempsC[1] - w.bandTempsC[2]);
       w.bandTempsC[0] -= d01;
       w.bandTempsC[1] += d01 - d12;
       w.bandTempsC[2] += d12;
+      const m01 = kSub * (w.bandCarcassTempsC[0] - w.bandCarcassTempsC[1]);
+      const m12 = kSub * (w.bandCarcassTempsC[1] - w.bandCarcassTempsC[2]);
+      w.bandCarcassTempsC[0] -= m01;
+      w.bandCarcassTempsC[1] += m01 - m12;
+      w.bandCarcassTempsC[2] += m12;
       const c01 = kCore * (w.bandCoreTempsC[0] - w.bandCoreTempsC[1]);
       const c12 = kCore * (w.bandCoreTempsC[1] - w.bandCoreTempsC[2]);
       w.bandCoreTempsC[0] -= c01;
       w.bandCoreTempsC[1] += c01 - c12;
       w.bandCoreTempsC[2] += c12;
-      for (let b = 0; b < 3; b++) w.bandCarcassTempsC[b] = 0.55 * w.bandTempsC[b] + 0.45 * w.bandCoreTempsC[b];
       // The tyre's surface temperature is the band surfaces weighted by contact pressure (the rubber on the road: flash
-      // temperature, graining); its carcass temperature the bands' mean carcass (the inner liner the inflation gas
-      // sees, and the rubber behind the carcass's vertical and cornering stiffness)
+      // temperature, graining); its carcass temperature the bulk and the liner by their heat capacity, the bands
+      // averaged (the rubber behind the carcass's vertical and cornering stiffness, and the working-window checks)
       w.surfaceTempC = shares[0] * w.bandTempsC[0] + shares[1] * w.bandTempsC[1] + shares[2] * w.bandTempsC[2];
-      w.coreTempC = (w.bandCoreTempsC[0] + w.bandCoreTempsC[1] + w.bandCoreTempsC[2]) / 3;
+      const linerMeanC = (w.bandCoreTempsC[0] + w.bandCoreTempsC[1] + w.bandCoreTempsC[2]) / 3;
+      w.coreTempC =
+        (subCap * (w.bandCarcassTempsC[0] + w.bandCarcassTempsC[1] + w.bandCarcassTempsC[2]) / 3 + coreCap * linerMeanC) /
+        (subCap + coreCap);
 
       // Wear & 16-sector flat-spotting / graining / blistering / dirt pickup
       // A compound with its own wear curve wears by the distance its tread slides over the road (more under more load,
@@ -4032,12 +4176,8 @@ export class VehiclePhysics {
 
       w.dirtyLevel = advanceTreadDirt(w.dirtyLevel, w.ground.surface, v, dt, this.trackEvolution.marbleLevel);
 
-      const p = td.pressureData;
-      const rimWetDeltaC = rimWetEnvironmentCoolingWK(this.wetness, v) * 0.45 * Math.max(0, w.coreTempC - this.ambientC) * 0.02;
-      const effectiveGasTempC = Math.max(this.ambientC - 5, w.coreTempC - rimWetDeltaC);
-      w.pressurePsi = tyreGaugePressureAtTemperature(w.coldPressurePsi, p.coldRefC, effectiveGasTempC);
-
-      // 2-node physical brake disc thermal step
+      // Brake disc (2 nodes), then the rim it heats by radiation and through the barrel's air, then the gas the rim and
+      // the carcass liner heat (implicit: its heat capacity is small next to its conductances), then the pressure
       const frictionTorqueNm = this.lastInputs.brake > 0.01 ? Math.abs(w.brakeTorqueNm) : 0;
       const sprayBoost = this.aeroWake.sprayIntensity ?? 0;
       stepBrakeDiscThermal(
@@ -4052,6 +4192,19 @@ export class VehiclePhysics {
         Math.min(1, this.wetness + 0.5 * sprayBoost),
         this.brakePadCurve
       );
+      const disc = w.brakeDisc;
+      const tDiscK = disc.surfaceTempC + KELVIN;
+      const tRimK = w.rimTempC + KELVIN;
+      const qDiscRim =
+        STEFAN_BOLTZMANN * rg.discToRimEmissivity * rg.rimBrakeOverlapAreaM2 * (tDiscK * tDiscK * tDiscK * tDiscK - tRimK * tRimK * tRimK * tRimK) +
+        (rg.discToRimConvectionWK[0] + rg.discToRimConvectionWK[1] * carSpeedMs) * (disc.coreTempC - w.rimTempC);
+      const rimAmbG =
+        rg.rimToAmbientConvectionWK[0] + rg.rimToAmbientConvectionWK[1] * carSpeedMs + RIM_WET_SPRAY_SCALE * rimWetEnvironmentCoolingWK(this.wetness, v);
+      const rimGasG = rg.rimToGasConductanceWK;
+      w.rimTempC += ((qDiscRim - rimAmbG * (w.rimTempC - this.ambientC) - rimGasG * (w.rimTempC - w.gasTempC)) / rg.rimHeatCapacityJK) * dt;
+      const k = dt / rg.gasHeatCapacityJK;
+      w.gasTempC = (w.gasTempC + k * (gGas * linerMeanC + rimGasG * w.rimTempC)) / (1 + k * (gGas + rimGasG));
+      w.pressurePsi = tyreGaugePressureOfGas(w.coldPressurePsi, td.pressureData.coldRefC, w.gasTempC, rg.carcassVolumeStretchPerPsi);
     }
   }
 

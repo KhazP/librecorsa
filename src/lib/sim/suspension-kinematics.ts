@@ -52,6 +52,8 @@ export interface DoubleWishboneHardpoints {
    * `buildDoubleWishboneHardpoints`.
    */
   rackTravelPerSteerRad: number;
+  /** 1 / the tie rod's |dψ / d rack| at static ride height, straight ahead: `tieRodLeverageNorm` is 1 there */
+  tieRodLeverageScale?: number;
   /** Actuation topology ('pull_rod' for modern F1 front, 'push_rod' for rear / GT3) */
   actuation: 'pull_rod' | 'push_rod';
   /** Rocker bellcrank progressive motion ratio slope (per m of bump) */
@@ -247,6 +249,9 @@ export function buildDoubleWishboneHardpoints(
   const nudgeM = 0.001;
   const nudged = solveCornerKinematics3D(out, 0, nudgeM, true, 0.33).wheelSteerRad;
   out.rackTravelPerSteerRad = Math.abs(nudged) > 1e-6 ? nudgeM / nudged : 0;
+  out.tieRodLeverageScale = 1;
+  const lev = solveCornerKinematics3D(out, 0, 0, true, 0.33).tieRodLeverageNorm;
+  out.tieRodLeverageScale = lev > 0 ? 1 / lev : undefined;
   return out;
 }
 
@@ -650,8 +655,9 @@ export function solveCornerKinematics3D(
   // The rack moving the tie rod's inner end by d along the car's lateral axis turns the upright by
   // tc_x · (±d) / turnDen to keep the rod's length (outboard on the left is −x)
   const dPsiDRack = Math.abs(turnDen) > 1e-9 ? (tcX * (isLeft ? -1 : 1)) / turnDen : 0;
-  const tieRodLeverageNorm =
-    dPsiDRack !== 0 && hp.rackTravelPerSteerRad > 0 ? Math.min(1.65, Math.max(0.55, Math.abs(dPsiDRack * hp.rackTravelPerSteerRad))) : 1;
+  const levScale = hp.tieRodLeverageScale ?? hp.rackTravelPerSteerRad;
+  const raw = Math.abs(dPsiDRack * levScale);
+  const tieRodLeverageNorm = dPsiDRack !== 0 && levScale > 0 ? (hp.tieRodLeverageScale === 1 ? raw : Math.min(1.65, Math.max(0.55, raw))) : 1;
   omX += turnRate * k1x;
   omY += turnRate * k1y;
   omZ += turnRate * k1z;
