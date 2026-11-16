@@ -52,7 +52,8 @@ export interface BuiltCircuitScene {
   trackRoot: Promise<THREE.Object3D>;
 }
 
-// RISE Motordrome: one glTF exported from the Blender build (public/tracks/rwanda_official/rwanda_official.glb).
+// RISE Motordrome: one glTF exported from the Blender build (public/tracks/rwanda_official/rwanda_official.glb), with
+// the scenery of its Assetto Corsa release added by scripts/rwanda-official/ac_merge.mjs (the same naming).
 // Node naming contract: Track_* (racing surfaces, barriers), Track_Collider_* (invisible physics proxies,
 // extras.collider = true), Terrain, Lake, Env_* (vegetation, canopies) and Prop_* (buildings, stands, gantry).
 // The other circuits (scripts/tracks/build_track.py) wrap a converted scan in `Track_Model` and append hidden
