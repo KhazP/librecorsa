@@ -174,6 +174,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onChangeAssistPreset: (preset: DriverAssistPreset) => void;
   /** The next view in the camera cycle */
   onCycleCamera: () => void;
+  /** Off the track: the crimson edge glow that breathes behind the HUD, which the renderer draws into the frame */
+  onOffTrackGlow?: (on: boolean) => void;
   onChangeTireCompound: (compound: TireCompound) => void;
   onChangeTyreSetup: (setup: TyreSetup) => void;
   onChangeLivery: (livery: LiveryConfig) => void;
@@ -489,6 +491,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   );
 
   const hidden = hudMode === "hidden";
+  // The off-track edge glow is drawn into the frame (the last render pass), not as a page layer over the canvas; it
+  // hides with the HUD and during the start lights
+  const offTrackGlow = telemetry.offTrack && !lightsPhase && !hidden;
+  const { onOffTrackGlow } = props;
+  useEffect(() => {
+    onOffTrackGlow?.(offTrackGlow);
+    return () => onOffTrackGlow?.(false);
+  }, [offTrackGlow, onOffTrackGlow]);
   const aeroSkinTone: SkinTone =
     aeroNoticeNow?.tone === "good"
       ? "gain"
@@ -513,17 +523,6 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         <div className="absolute top-[58%] left-1/2 -translate-x-1/2 -translate-y-1/2">
           <ProximityRadar blips={telemetry.radar} />
         </div>
-      ) : null}
-      {/* Off the track: a crimson edge glow that breathes behind the HUD (opacity-only animation) */}
-      {telemetry.offTrack && !lightsPhase ? (
-        <div
-          className="lc-vign fixed inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse at center, transparent 62%, color-mix(in srgb, var(--color-lc-loss) 32%, transparent) 100%)",
-          }}
-          aria-hidden="true"
-        />
       ) : null}
       {/* A full-screen style (Broadcast, Wheel Dash, Telemetry, a third-party layout): one layer. The run's laps, fuel
           use and clock live above it, so hiding the HUD or switching layout keeps them */}

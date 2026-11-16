@@ -704,16 +704,6 @@ body {
       opacity: 0.6;
     }
   }
-  /* Off-track edge vignette */
-  @keyframes lc-vign {
-    0%,
-    100% {
-      opacity: 0.55;
-    }
-    50% {
-      opacity: 1;
-    }
-  }
   .lc-alert {
     animation: lc-alert 1.4s ease-out infinite;
   }
@@ -728,9 +718,6 @@ body {
   }
   .lc-rev {
     animation: lc-rev 0.25s steps(2) infinite;
-  }
-  .lc-vign {
-    animation: lc-vign 1.8s ease-in-out infinite;
   }
   /* TC / ABS intervention zone on the pedal bars: a pulse like an ABS pump, held to 2.5 a second (nothing in the
      game flashes more than three times a second) */
@@ -747,8 +734,7 @@ body {
     .lc-wave,
     .lc-ripple,
     .lc-rev,
-    .lc-cut,
-    .lc-vign {
+    .lc-cut {
       animation: none;
     }
   }

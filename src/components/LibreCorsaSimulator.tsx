@@ -611,6 +611,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     getTrackEnv().setSimRealism(SIM_REALISM_FLAGS[settings.realism]);
   }, [settings.realism, getTrackEnv]);
 
+  const handleOffTrackGlow = useCallback((on: boolean) => session?.setOffTrackGlow(on), [session]);
+
   /** null returns to the car's own FOV */
   const handleCockpitFovChange = useCallback((fovDeg: number | null) => {
     setSettings((prev) => ({ ...prev, cockpitFovDeg: fovDeg === null ? null : Math.round(clampFov(fovDeg)) }));
@@ -1821,6 +1823,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             settings.device === "wheel" && (!settings.wheel.throttle || !settings.wheel.brake)
           }
           onCycleCamera={cycleCamera}
+          onOffTrackGlow={handleOffTrackGlow}
           inviteRoom={inviteRoom}
           cockpitFovDeg={settings.cockpitFovDeg}
           cockpitFovDefaultDeg={carCockpitFov}
