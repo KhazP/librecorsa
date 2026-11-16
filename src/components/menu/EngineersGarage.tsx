@@ -161,6 +161,7 @@ export const EngineersGarage: React.FC<
   const currentTuner: GarageTuner = {
     tcLevel: tuner.tcLevel,
     tc2Level: tuner.tc2Level,
+    tcSlipAngleLevel: tuner.tcSlipAngleLevel,
     absLevel: tuner.absLevel,
     brakeBiasPct: tuner.brakeBiasPct,
     brakeMigrationPct: tuner.brakeMigrationPct,
@@ -168,6 +169,9 @@ export const EngineersGarage: React.FC<
     diffMid: tuner.diffMid,
     diffExit: tuner.diffExit,
     engineMap: tuner.engineMap,
+    // The hybrid's kW dials, on a car with them (null: none)
+    ...(tuner.motorDeployKw != null ? { motorDeployKw: tuner.motorDeployKw } : {}),
+    ...(tuner.regenKw != null ? { regenKw: tuner.regenKw } : {}),
   };
   const st: SetupState = { chassis, tyre: p.tyreSetup, tuner: currentTuner };
   /** The whole setup as it stands, so an action that overwrites it can be undone */
