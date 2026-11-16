@@ -654,8 +654,9 @@ function lmdhCompound(
       surfaceHeatCapacity: 1800,
       coreHeatCapacity: 11_000,
       slipHeatShare: 0.35,
-      // Raced without blankets: a carcass that warms itself on the out-lap, under the downforce's load [bop, est]
-      hysteresis: 0.0055,
+      // Raced without blankets: a carcass, tread bulk and liner, that warms itself on the out-lap under the
+      // downforce's load [bop, est]
+      hysteresis: 0.0077,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
       // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]

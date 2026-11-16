@@ -1889,8 +1889,8 @@ function f1Compound(
         verticalDamping: 480.925,
       },
       camberData: { camberGain: 0.159, dcamber0: 1.211, dcamber1: -11.584 },
-      // Set 24.0 on the blankets: the rear discs do little of the braking (the motor's regeneration takes most of it),
-      // so the rear rims stay cool and hold the gas near its blanket temperature on a stint [est]
+      // Set 24.0 on the blankets: the rear discs average about 100 °C on a stint (the fronts about 460 °C), so the rear
+      // rims stay cool and hold the gas near its blanket temperature [est]
       pressureData: { optimalPsi: 24, setPsi: 24, pressureSpringCurve: rateCurve(274_490, 15, 12_250) },
     },
   };

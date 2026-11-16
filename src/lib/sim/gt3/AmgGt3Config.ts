@@ -611,9 +611,9 @@ function gt3Compound(
       surfaceHeatCapacity: 1800,
       coreHeatCapacity: 11000,
       slipHeatShare: 0.35,
-      // Raced without blankets, the carcass has to warm itself on the out-lap: the rolling loss nearer the tyre's
-      // rolling resistance than the blanketed sprint tyre's 0.0044 [bop, est]
-      hysteresis: 0.006,
+      // Raced without blankets, the carcass has to warm itself on the out-lap, tread bulk and liner both: the rolling
+      // loss nearer the tyre's rolling resistance than the blanketed sprint tyre's 0.0044 [bop, est]
+      hysteresis: 0.0084,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
       // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]
