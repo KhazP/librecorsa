@@ -952,13 +952,13 @@ export interface TyresThermalPatchData {
   pressureHeat?: { slipGain: number; crownGain: number };
   /**
    * The third rubber layer: each band is a tread surface over the tread's bulk (subsurface) over the carcass liner the
-   * inflation gas touches. Heat capacity of the bulk layer (J/K at the front tyre's size). Absent: the carcass's
-   * `coreHeatCapacity` split 60 / 40 between the bulk and the liner, so the tyre's thermal mass stays what it was
+   * inflation gas touches. Heat capacity of the bulk layer (J/K at the front tyre's size), on top of the liner's
+   * `coreHeatCapacity`. Absent: 0.62 × `coreHeatCapacity`
    */
   subsurfaceHeatCapacity?: number;
-  /** Surface → bulk conductance (W/K); absent: `surfaceToCore` */
+  /** Surface → bulk conductance (W/K); absent: 2.2 × `surfaceToCore` */
   surfaceToSubsurfaceTransfer?: number;
-  /** Bulk → liner conductance (W/K); absent: 4 × `surfaceToCore` (the old single carcass node, nearly) */
+  /** Bulk → liner conductance (W/K); absent: 1.4 × `surfaceToCore` */
   subsurfaceToCoreTransfer?: number;
   /** Share of the sliding heat taken into the tyre that lands in the bulk rather than the flash surface; default 0.22 */
   frictionHeatToSubsurface?: number;

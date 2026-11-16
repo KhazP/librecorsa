@@ -680,15 +680,14 @@ export const RIM_GAS_DEFAULTS: Readonly<Required<RimGasCavityThermalData>> = {
   sidewallCoolingShare: 0.55,
 };
 
-/** The layer split of a compound's thermal data, its defaults keeping the old carcass's mass and coupling */
+/** The three layers of a compound's thermal data: the tread's bulk added over the carcass liner, by default */
 function tyreLayers(th: TyresThermalPatchData): TyreLayers {
-  const split = th.subsurfaceHeatCapacity === undefined;
   return {
     cSurf: th.surfaceHeatCapacity,
-    cSub: split ? 0.6 * th.coreHeatCapacity : th.subsurfaceHeatCapacity!,
-    cCore: split ? 0.4 * th.coreHeatCapacity : th.coreHeatCapacity,
-    g12: th.surfaceToSubsurfaceTransfer ?? th.surfaceToCore,
-    g23: th.subsurfaceToCoreTransfer ?? 4 * th.surfaceToCore,
+    cSub: th.subsurfaceHeatCapacity ?? 0.62 * th.coreHeatCapacity,
+    cCore: th.coreHeatCapacity,
+    g12: th.surfaceToSubsurfaceTransfer ?? 2.2 * th.surfaceToCore,
+    g23: th.subsurfaceToCoreTransfer ?? 1.4 * th.surfaceToCore,
     fricToSub: th.frictionHeatToSubsurface ?? 0.22,
     rollToSub: th.rollingHeatToSubsurface ?? 0.6,
   };
