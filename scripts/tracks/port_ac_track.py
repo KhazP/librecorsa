@@ -1083,6 +1083,34 @@ AC_TRACKS = {
             'licenseUrl': 'https://www.overtake.gg/downloads/speedvegas-2025.86996/',
         },
     },
+    'willow_springs': {
+        'folder': 'willow_springs',
+        # big_willow_real: the everyday circuit. The other layout's model adds event dressing (camera trucks, a start
+        # gantry, banners) and floating sponsor balloons and a blimp as DYNAMIC_OBJECT_n, which get_kn5_list would
+        # bake in as static meshes
+        'layout_dir': 'big_willow_real',
+        'models_ini': None,
+        'kn5_files': ['willow_springs_real.kn5'],
+        'name': 'Willow Springs International Raceway',
+        'layout': 'Big Willow',
+        'country': 'United States',
+        'city': 'Rosamond, California',
+        # Copernicus DEM at the circuit (Open-Meteo): 735-745 m
+        'baseAltitudeM': 740,
+        'pitboxes': 40,
+        # Background is the satellite-photo terrain, also drawn over some ROAD physics meshes off the lap; TRACK_LIGHT
+        # the light towers; sml_rock_003 a rocky access path
+        'notRoadMaterials': r'^(Background|TRACK_LIGHT|sml_rock_003)$',
+        'description': 'Willow Springs in the Mojave Desert, California: Big Willow, a fast and open 4.0 km lap of nine turns that climbs over a hill and drops back down to the long front straight.',
+        'credit': {
+            'title': 'Willow Springs - Big Willow',
+            'author': 'Nukedrop',
+            'url': 'https://www.overtake.gg/downloads/willow-springs-big-willow.32338/',
+            'short': None,
+            'license': 'Used with permission',
+            'licenseUrl': 'https://www.overtake.gg/downloads/willow-springs-big-willow.32338/',
+        },
+    },
 }
 
 
@@ -2578,8 +2606,10 @@ def build_ac_track(tid, cfg, args):
     visual_items = []
     phys_tris = {k: [] for k in ('road', 'kerb', 'runoff', 'gravel', 'grass', 'wall', 'pit')}
     road_mat_names = set()
+    # `notRoadMaterials`: a mod's own materials kept off the asphalt shader, e.g. terrain drawn over ROAD physics meshes
     non_road_mat_re = re.compile(
-        r'grass|gravel|sand|wall|fence|kerb|curb|rmbl|rumble|line|stripe|skid|groove|sign|glass|water',
+        r'grass|gravel|sand|wall|fence|kerb|curb|rmbl|rumble|line|stripe|skid|groove|sign|glass|water'
+        + (f"|{cfg['notRoadMaterials']}" if cfg.get('notRoadMaterials') else ''),
         re.I,
     )
 
