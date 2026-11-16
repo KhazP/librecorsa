@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState
 import { createPortal } from "react-dom";
 import type { ModelSource } from "@/lib/model-source";
 import { TAKEDOWN_URL } from "@/lib/site";
-import { IconButton } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icons";
 import { uiZoomOf } from "@/components/ui/styles";
 
@@ -21,8 +21,10 @@ interface Place {
 }
 
 /**
- * A small round "Source" button (the kit's secondary `IconButton`) that opens where a car's or circuit's 3D model comes from: the model, its author, its
- * licence or permission, and a link to report a problem with it. It sits beside a card's own button, never inside it,
+ * A small round "Source" button (the kit's secondary `IconButton`) that opens where a car's or circuit's 3D model comes
+ * from, the modder first: their support page (Patreon, PayPal…) where they have one, then their circuit or car and its
+ * licence or permission, then the rest (the model's own origin when it is someone else's, notes) and a link to report
+ * a problem with it. It sits beside a card's own button, never inside it,
  * so pressing it doesn't pick the car or circuit. The menu cursor passes over it.
  *
  * The panel is a portal placed against the window, so no card or scrolling list clips it: above the button where it
@@ -149,6 +151,21 @@ export const SourceChip: React.FC<{
                   : { left: 0, top: 0, visibility: "hidden" }
               }
             >
+              {source.support ? (
+                <Button
+                  href={source.support.url}
+                  native
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="primary"
+                  size="sm"
+                  icon={<Icon name="support" />}
+                  aria-label={`Support ${source.author} on ${source.support.via}`}
+                  className="mb-1 self-start"
+                >
+                  Support on {source.support.via}
+                </Button>
+              ) : null}
               <span>
                 &ldquo;
                 <a href={source.url} target="_blank" rel="noreferrer" className={linkClass}>
@@ -172,6 +189,22 @@ export const SourceChip: React.FC<{
                   source.license
                 )}
               </span>
+              {source.model ? (
+                <span className="text-lc-slate">
+                  Model: &ldquo;
+                  <a href={source.model.url} target="_blank" rel="noreferrer" className={linkClass}>
+                    {source.model.title}
+                  </a>
+                  &rdquo; by {source.model.author} ·{" "}
+                  {source.model.licenseUrl ? (
+                    <a href={source.model.licenseUrl} target="_blank" rel="noreferrer" className={linkClass}>
+                      {source.model.license}
+                    </a>
+                  ) : (
+                    source.model.license
+                  )}
+                </span>
+              ) : null}
               {source.note ? <span className="text-lc-slate">{source.note}</span> : null}
               <a
                 href={TAKEDOWN_URL}
