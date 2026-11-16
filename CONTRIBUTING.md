@@ -28,7 +28,9 @@ npm run verify
 ```
 
 `npm run verify` runs every `scripts/verify-*.ts` suite (physics, both car models, GT3, input, lap tools, race
-session, realism, telemetry out, WebHID force feedback). It takes a few minutes. Physics changes must keep it
+session, realism, telemetry out, WebHID force feedback). It runs the suites side by side on your CPU cores
+(`VERIFY_JOBS=1 npm run verify` runs them one at a time), reports every failing suite at the end, and takes a few
+minutes. `node scripts/run-verify.mjs <name>` reruns one, e.g. `tyre-thermal`. Physics changes must keep it
 passing. If a change is meant to move a number, update the check and say why in the pull request.
 `npm run verify:laps` is the slow full-pace lap check; run it when you touch tyres, aero, the drivetrain or the
 racing-line optimiser.
