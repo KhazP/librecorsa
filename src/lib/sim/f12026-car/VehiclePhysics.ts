@@ -2139,6 +2139,14 @@ export class VehiclePhysics {
     }
   }
 
+  /** The tyres' pressures again from their cold pressures and their gas's temperature (after the cold pressures change) */
+  public refreshTyrePressures(): void {
+    for (const w of this.wheels) {
+      const rt = this.tyres[w.isFront ? 0 : 1];
+      w.pressurePsi = tyreGaugePressureOfGas(w.coldPressurePsi, rt.data.pressureData.coldRefC, w.gasTempC, rt.rimGas.carcassVolumeStretchPerPsi);
+    }
+  }
+
   /** Fuel on board (kg) */
   public get fuelMassKg(): number {
     return this.fuelKg;

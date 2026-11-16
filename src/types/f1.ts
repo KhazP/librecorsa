@@ -527,6 +527,12 @@ export interface LiveTunerState {
   tcLevel: number;
   /** Traction Control Stage 2: Torque cut depth / aggressiveness (1..12) */
   tc2Level: number;
+  /**
+   * Traction Control slip-angle dial (0 = off, 1 = the most sideways slide before it cuts, 12 = the least), on a car
+   * whose electronics have it (`hasTcSlipAngle`)
+   */
+  tcSlipAngleLevel: number;
+  hasTcSlipAngle: boolean;
   /** 4-Channel ABS dial (0 = OFF, 1 = min intervention, 12 = max stability) */
   absLevel: number;
   /** Front static brake balance (% front, e.g. 56.0 for F1, 61.0 for GT3) */
@@ -549,6 +555,14 @@ export interface LiveTunerState {
   ersMode: string;
   /** Whether the car has hybrid ERS */
   hasErs: boolean;
+  /** A prototype's hybrid dials (kW): the motor's deployment cap and the braking regeneration cap; null without them */
+  motorDeployKw: number | null;
+  regenKw: number | null;
+  /** The steps each dial has (kW), empty without them */
+  motorDeployStepsKw: readonly number[];
+  regenStepsKw: readonly number[];
+  /** The class bans ABS: the dial stays at 0 unless the Assisted preset keeps it */
+  absAllowed: boolean;
   /** Live TC throttle cut fraction (0 = no cut, 1 = full cut) */
   tcCutFraction: number;
   /** Live 4-wheel ABS pressure release fraction [FL, FR, RL, RR] (0 = no cut, 1 = full release) */
@@ -562,6 +576,7 @@ export type LiveTunerPatch = Partial<
     LiveTunerState,
     | "tcLevel"
     | "tc2Level"
+    | "tcSlipAngleLevel"
     | "absLevel"
     | "brakeBiasPct"
     | "brakeMigrationPct"
@@ -571,7 +586,7 @@ export type LiveTunerPatch = Partial<
     | "engineMap"
     | "ersMode"
   >
->;
+> & { motorDeployKw?: number; regenKw?: number };
 
 /**
  * Player car: the LC26 model (F1Physics2026), the 6-DOF f12026-car, or the Mercedes-AMG GT3, the Suzuki Liana, the

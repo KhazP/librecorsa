@@ -1015,7 +1015,7 @@ export class AiOpponentField {
     this.environment.reset();
     this.assignGrid();
     this.cars.forEach((car) => {
-      car.sim.resetToStartGrid(!standing, car.gridSlot, standing ? undefined : this.cars.length);
+      car.sim.resetToStartGrid(!standing, car.gridSlot, standing ? undefined : this.cars.length, true);
       if (car.ai) {
         car.ai.aiLineBiasM = 0;
         car.ai.aiSpeedCapMs = Infinity;

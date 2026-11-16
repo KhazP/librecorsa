@@ -1112,6 +1112,11 @@ export interface CarPhysicsConfig {
   compoundSlots: Record<CompoundSlot, PhysicsTyreCompound>;
   /** A prototype's own hybrid controls in place of the performance modes (`EnduranceHybridDialsData`) */
   hybridDials?: EnduranceHybridDialsData;
+  /**
+   * The homologated gear sets the garage chooses between (`ChassisSetup.gearRatioSet`), the first the one `gearbox`
+   * holds. Absent: the one set
+   */
+  gearSets?: ReadonlyArray<{ label: string; ratios: readonly number[]; reverse: number; finalDrive: number }>;
 }
 
 /**

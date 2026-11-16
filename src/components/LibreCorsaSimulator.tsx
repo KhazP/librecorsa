@@ -670,7 +670,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (mp.inScheduledRace) applyWeekRules();
       const physics = session?.car;
       if (physics) {
-        physics.resetToStartGrid(false, race.gridSlot);
+        physics.resetToStartGrid(false, race.gridSlot, undefined, true);
         race.lapClock.reset(physics.sMeters);
       }
     },
