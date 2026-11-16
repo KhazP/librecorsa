@@ -304,6 +304,8 @@ export interface CarSimProfile {
    * before the cut, apart from the slip ratio (TC1) and the cut's depth (TC2). Absent: the slide term is the car's own
    */
   tcSlipAngleDial?: boolean;
+  /** The car's own static toe (deg, + = toe-in), on which the garage's toe offsets sit. Default 0 */
+  staticToeDeg?: { front: number; rear: number };
   /**
    * The hybrid motor sits on the gearbox's input shaft, behind the clutch (a P2 layout), so it turns with the gearbox
    * and not with the engine while the clutch slips: the telemetry's `mguRpm` is then that shaft's speed (the motor's own
@@ -1335,7 +1337,8 @@ export class F12026CarSim implements SimulatorCar {
     damp(susp.dampers_controller.rear.base, base.rearDamper, false);
     const v = this.vehicle;
     const DEG = Math.PI / 180;
-    v.staticToeRad = { front: s.toeFrontDeg * DEG, rear: s.toeRearDeg * DEG };
+    const toe0 = this.profile.staticToeDeg;
+    v.staticToeRad = { front: ((toe0?.front ?? 0) + s.toeFrontDeg) * DEG, rear: ((toe0?.rear ?? 0) + s.toeRearDeg) * DEG };
     v.engineBrakingScale = pctScale(s.engineBrakingPct);
     v.brakeDuctScale = { front: Math.max(0.3, 1 + s.brakeDuctFront * BRAKE_DUCT_STEP), rear: Math.max(0.3, 1 + s.brakeDuctRear * BRAKE_DUCT_STEP) };
     v.coolingSteps = { brakeDuctFront: s.brakeDuctFront, brakeDuctRear: s.brakeDuctRear, radiator: s.radiatorTapeSteps };
@@ -1388,7 +1391,9 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   private applyAssistPresetLevels(preset: DriverAssistPreset): void {
-    Object.assign(this, assistPresetDials(this.profile, preset));
+    const d = assistPresetDials(this.profile, preset);
+    Object.assign(this, d);
+    this.tcSlipAngleLevel = d.tcSlipAngleLevel ?? d.tcLevel;
   }
 
   public getLiveTunerState(): LiveTunerState {

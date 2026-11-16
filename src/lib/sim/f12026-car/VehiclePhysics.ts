@@ -3649,6 +3649,9 @@ export class VehiclePhysics {
       const capW = powerCap.evaluate(rpm) * (this.luts.powerCapVsSpeed?.evaluate(speedKmh) ?? 1) * 1000;
       const capNm = capW / (omegaE * gb.efficiency);
       if (tIce + tK > capNm) {
+        // On a hybrid run from its own dials (a sprint, no fuel to save) the motor gives way at the limit instead:
+        // deploying where it adds no power would only empty the battery
+        if (this.motorDeployKw !== null && tK > 0) tK = Math.max(0, Math.min(tK, capNm - Math.max(0, tIce)));
         tIce = Math.max(Math.min(tIce, 0), capNm - tK);
         tK = Math.min(tK, capNm - tIce);
       }

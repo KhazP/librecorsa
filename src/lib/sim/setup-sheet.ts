@@ -144,13 +144,13 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
     steerRatio: STEER_RATIO_BASE.lc26,
   },
   "f12026-car": rigidBaseline(F12026_CAR_CONFIG, "f12026-car"),
-  "amg-gt3": rigidBaseline(AMG_GT3_CONFIG, "amg-gt3"),
+  "amg-gt3": { ...rigidBaseline(AMG_GT3_CONFIG, "amg-gt3"), brakeBiasRangePct: [56, 70] },
   liana: rigidBaseline(SUZUKI_LIANA_CONFIG, "liana"),
   // Its 58 % sits below a GT3's bias range: the mod's adjuster runs from 52 % [spec setup.ini FRONT_BIAS] to the 78 %
   // every car stops at
   "mtr-496r": { ...rigidBaseline(MTR_496R_CONFIG, "mtr-496r"), brakeBiasRangePct: [52, 78] },
   // Its 56 % sits below a GT3's bias range [est]
-  "lc-lmdh": { ...rigidBaseline(LC_LMDH_CONFIG, "lc-lmdh"), brakeBiasRangePct: [48, 68] },
+  "lc-lmdh": { ...rigidBaseline(LC_LMDH_CONFIG, "lc-lmdh"), brakeBiasRangePct: [48, 68], toeFrontDeg: -0.12, toeRearDeg: 0.12 },
   // The classic Nissans' adjusters [spec setup.ini FRONT_BIAS]
   "nissan-r33-jgtc": { ...rigidBaseline(NISSAN_R33_CONFIG, "nissan-r33-jgtc"), brakeBiasRangePct: [50, 80] },
   "nissan-r32-jtcc": { ...rigidBaseline(NISSAN_R32_CONFIG, "nissan-r32-jtcc"), brakeBiasRangePct: [52, 80] },
