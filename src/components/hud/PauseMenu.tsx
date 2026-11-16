@@ -49,6 +49,8 @@ import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { UpdateReady } from "@/components/menu/UpdateReady";
 import { feedbackContextOf, RequestPanel } from "@/components/menu/RequestPanel";
 import type { ReportFacts } from "@/lib/diagnostics/report-details";
+import { SourceChip } from "@/components/SourceChip";
+import { carModelSource, trackModelSource } from "@/lib/model-source";
 
 /**
  * What the HUD and the menus pass along as the player's settings (the old Display panel's props, whose rows now live
@@ -158,6 +160,28 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
 }
 
 type Panel = "settings" | "hud" | "conditions" | "setup" | "corners" | "multiplayer" | "leaderboard" | "report";
+
+/** "Circuit by Mitja Bonca [Source]  Model by gregsediting [Source]", at the pause menu's bottom right */
+const MadeBy: React.FC<{ trackSource: ReturnType<typeof trackModelSource>; carId: CarId }> = ({ trackSource, carId }) => {
+  const car = carById(carId);
+  const carSource = carModelSource(car);
+  const items = [
+    trackSource ? { key: "circuit", lead: "Circuit by", source: trackSource } : null,
+    { key: "car", lead: `${(car.credit.label ?? "Model by").replace(/ by$/, "")} by`, source: carSource },
+  ].filter((i): i is NonNullable<typeof i> => i !== null);
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-end gap-x-6 gap-y-2 short:mt-2">
+      {items.map((i) => (
+        <span key={i.key} className="inline-flex min-w-0 items-center gap-2 text-[13px] text-lc-slate">
+          <span className="truncate">
+            {i.lead} <span className="font-semibold text-lc-fog">{i.source.author}</span>
+          </span>
+          <SourceChip source={i.source} />
+        </span>
+      ))}
+    </div>
+  );
+};
 
 /**
  * Esc / Menu: race actions in a rail on the left, the session's panels as tabs on the right.
@@ -425,6 +449,10 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
             </section>
           </div>
         </div>
+
+        {/* Who made this circuit and this car, each with its Source button (the modder's donate link first): on
+            touch screens too, where the key prompts below are hidden */}
+        <MadeBy trackSource={trackModelSource(trackInfo)} carId={props.carId} />
 
         {/* Touch screens have no keys to show: the footer comes back with a pad */}
         <footer className={`mt-5 flex items-center gap-3 border-t border-lc-line pt-3 short:mt-3 ${mode === "pad" ? "" : "pointer-coarse:hidden"}`}>
