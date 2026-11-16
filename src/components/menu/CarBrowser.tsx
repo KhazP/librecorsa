@@ -65,7 +65,8 @@ export const CarThumb: React.FC<{ car: CarDefinition; className?: string }> = ({
 
 /**
  * Every car in the game, from the car registry: its classes become the categories (a new class shows up on its own),
- * each split by year, newest first, with favourites and recently driven. Opened from the title menu's Car entry.
+ * newest first, with favourites and recently driven. A class's cars share one wall (each tile names its year), so a
+ * wide screen fills its rows instead of stacking one car per year. Opened from the title menu's Car entry.
  */
 export const CarBrowser: React.FC<{
   carId: CarId;
@@ -112,7 +113,6 @@ export const CarBrowser: React.FC<{
       label: "Class",
       groupBy: (c) => carClass(c.classId).title,
       groupOrder: classes.map((k) => k.title),
-      subGroupBy: (c) => String(c.year),
       compare: compareCarsByClassAndYear,
     },
     {
