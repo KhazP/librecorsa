@@ -151,8 +151,8 @@ console.log('\n== Cold starts');
   const gr = start(createAmgGt3Sim, 'full', 'race');
   const gs = start(createAmgGt3Sim, 'standard', 'garage');
   check('Full realism: the GT3 leaves the garage on cold tyres and brakes', g.tyre < 32 && g.disc < 40, `${fmt(g.tyre, 0)} °C tyres, ${fmt(g.disc, 0)} °C discs, ${fmt(g.psi, 1)} psi`);
-  check('A flying start and a race grid are warm (a formation lap)', gf.tyre > 80 && gf.disc > 150 && gr.tyre > 80 && gr.disc > 150, `${fmt(gf.tyre, 0)} / ${fmt(gr.tyre, 0)} °C tyres`);
-  check('Standard realism warms them out of the garage', gs.tyre > 80 && gs.disc > 150, `${fmt(gs.tyre, 0)} °C, ${fmt(gs.disc, 0)} °C`);
+  check('A flying start and a race grid are warm (a formation lap)', gf.tyre >= 75 && gf.disc > 150 && gr.tyre >= 75 && gr.disc > 150, `${fmt(gf.tyre, 0)} / ${fmt(gr.tyre, 0)} °C tyres`);
+  check('Standard realism warms them out of the garage', gs.tyre >= 75 && gs.disc > 150, `${fmt(gs.tyre, 0)} °C, ${fmt(gs.disc, 0)} °C`);
   const l = start(createLcLmdhSim, 'full', 'garage');
   check('Full realism: the LC-LMDH out of the garage on 35 °C carbon', l.disc < 40 && l.tyre < 32, `${fmt(l.tyre, 0)} °C tyres, ${fmt(l.disc, 0)} °C discs`);
 }

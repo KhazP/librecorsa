@@ -647,10 +647,10 @@ function gt3Compound(
       pressureGripSensitivity: 1.0,
       // 0.25 % of grip per psi off the ideal [ref]
       pressureGripLossPerPsi: 0.0025,
-      // No tyre blankets [bop]: pressures set cold in the garage; in the window (85 °C) after a formation lap, or where the
-      // realism level warms them anyway
+      // No tyre blankets [bop]: pressures set cold in the garage; mid-window (80 °C of its 70–85 °C peak) after a
+      // formation lap, or where the realism level warms them anyway
       coldRefC: 25,
-      blanketC: 85,
+      blanketC: 80,
     },
     camberData: {
       camberGain: 0.134,
@@ -693,7 +693,7 @@ function gt3Compound(
         pressureGripSensitivity: 1.0,
         pressureGripLossPerPsi: 0.0025,
         coldRefC: 25,
-        blanketC: 85,
+        blanketC: 80,
       },
       camberData: {
         camberGain: 0.149,
