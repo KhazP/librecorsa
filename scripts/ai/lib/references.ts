@@ -59,6 +59,7 @@ const FAST_LANE: Record<string, string> = {
   riverside_short: 'librecorsa-src/riverside/riverside/short',
   riverside_nascar: 'librecorsa-src/riverside/riverside/nascar',
   speedvegas: 'assettocorsa/content/tracks/speedvegas',
+  willow_springs: 'librecorsa-src/willow_springs/assettocorsa/content/tracks/willow_springs/big_willow_real',
 };
 
 export function fastLanePath(trackId: string): string | null {
