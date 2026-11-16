@@ -445,6 +445,8 @@ export class DriveSession {
   readonly setCar: (car: CarId) => void;
   /** Applies the player's graphics to the running renderer, with what the automatic quality has lowered on top */
   readonly applyGraphics: () => void;
+  /** The HUD's off-track edge glow, drawn in the last render pass in the HUD's loss colour (the palette's) */
+  readonly setOffTrackGlow: (on: boolean) => void;
   /** `?perf=1`: the whole-session performance report as text, to copy or save; null without `?perf=1` */
   readonly perfReport: (() => string) | null;
   /**
@@ -1186,6 +1188,11 @@ export class DriveSession {
         `pixel ratio ${renderer.getPixelRatio().toFixed(2)}`,
         simWorker ? "sim worker" : "sim on the page",
       ].join(" · ");
+    this.setOffTrackGlow = (on) => {
+      if (disposed) return;
+      // The colour-blind palettes move loss from crimson to tangerine on the page root (palette.css)
+      postFx.setEdgeGlow(on ? getComputedStyle(document.documentElement).getPropertyValue("--lc-sem-loss") || "#ff2a3c" : null);
+    };
     this.applyGraphics = () => {
       if (disposed) return;
       const g = settings.graphics;
