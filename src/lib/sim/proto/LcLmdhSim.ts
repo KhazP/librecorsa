@@ -1,9 +1,7 @@
 /**
  * The LC-LMDH in the simulator: the f12026-car adapter (`F12026CarSim`) driving `LC_LMDH_CONFIG`.
- * A hybrid with no DRS and no ABS. The car's own traction control stays on in every preset (the regulations allow one):
- * pro runs it at a light setting with no ABS, as the car is; semi-pro and assisted tighten it and add the simulator's
- * ABS (as the F1 cars' and the other prototype's presets do, which have none either), so the AI, which brakes on the
- * semi-pro aids, doesn't lock its fronts.
+ * A hybrid with no DRS. The real car races without ABS (Art. 11.5.1); here it has the simulator's ABS on the TC + ABS
+ * and Full presets as every other car does, so its fronts don't lock under a driver used to ABS. Off is off.
  */
 import type { BuiltTrackData } from '@/lib/track-data';
 import type * as THREE from 'three';
@@ -62,8 +60,7 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   frontCamberRange: [-3.2, -0.8],
   rearCamberRange: [-2.6, -0.6],
   setupPressureRefC: 25,
-  // No ABS in the class (Art. 11.5.1): only the Assisted preset keeps one. Three traction dials
-  absAllowed: false,
+  // Three traction dials
   tcSlipAngleDial: true,
   // −0.12° (toe-out) front, +0.12° rear [bop]
   staticToeDeg: { front: -0.12, rear: 0.12 },
@@ -86,10 +83,10 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   // revs, not the torque: the fuel the hybrid's deployment saves on the real car is not counted
   fuelLPerS1000Rpm: 0.0055,
   // Levels index the electronics tables from the most intrusive (12). The class's dry baseline is 10 / 7 / 10 (slip,
-  // cut, slip angle); no ABS but on Assisted
+  // cut, slip angle); ABS on TC + ABS and Full
   assistDials: {
     pro: { tcLevel: 0, tc2Level: 7, absLevel: 0, tcSlipAngleLevel: 0 },
-    semi_pro: { tcLevel: 10, tc2Level: 7, absLevel: 0, tcSlipAngleLevel: 10 },
+    semi_pro: { tcLevel: 10, tc2Level: 7, absLevel: 6, tcSlipAngleLevel: 10 },
     assisted: { tcLevel: 12, tc2Level: 9, absLevel: 9, tcSlipAngleLevel: 12 },
   },
   keyboardSteer: { lowSpeedRate: 1.25, highSpeedRate: 0.85, returnRate: 1 },

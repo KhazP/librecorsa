@@ -107,8 +107,9 @@ console.log('\n== What the regulations fix');
   check('An up-shift cuts the engine for at least 30 ms (Art. 9.8.2)', (g.upshiftCutS ?? 0) >= 0.03, `${fmt((g.upshiftCutS ?? 0) * 1000, 0)} ms`);
   check('Hybrid on the driveline, brake-by-wire rear brakes (Art. 5.3)', C.ers.ERS_MAX_DEPLOY === 50_000 && C.ers.maxHarvestW === 200_000 && C.brakes.brakeByWire === true, '');
   const dials = LC_LMDH_SIM_PROFILE.assistDials;
-  check('No ABS on the car (Art. 11.5.1): none on pro or semi-pro, Assisted keeps one', LC_LMDH_SIM_PROFILE.absAllowed === false && dials.pro.absLevel === 0 && dials.semi_pro.absLevel === 0 && dials.assisted.absLevel > 0,
-    `semi-pro TC ${dials.semi_pro.tcLevel} / ${dials.semi_pro.tc2Level} / ${dials.semi_pro.tcSlipAngleLevel}`);
+  // The real car has none (Art. 11.5.1); the game gives it ABS on TC + ABS and Full as every car, none on Off
+  check('ABS on semi-pro and Assisted, none on pro', LC_LMDH_SIM_PROFILE.absAllowed !== false && dials.pro.absLevel === 0 && dials.semi_pro.absLevel > 0 && dials.assisted.absLevel > 0,
+    `ABS ${dials.pro.absLevel} / ${dials.semi_pro.absLevel} / ${dials.assisted.absLevel}`);
   const car = makeCar();
   check('The engine drives the rear wheels', car.drivenWheels[0] === 2 && car.drivenWheels[1] === 3, `wheels ${car.drivenWheels.join(', ')}`);
 }
