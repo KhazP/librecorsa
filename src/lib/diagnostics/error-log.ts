@@ -37,13 +37,27 @@ const sameLine = (s: string) => s.replace(/\d+(\.\d+)?/g, "#");
 /** An address without its query or fragment (a room code, a key) */
 const stripQueries = (s: string) => s.replace(/(https?:\/\/[^\s?#"')]+)[?#][^\s"')]*/g, "$1");
 
-/** One console argument as text: an Error by its name and message, an object as JSON, cut to length */
-function describe(arg: unknown): string {
+/** How many of an object's keys a line shows */
+const MAX_KEYS = 12;
+
+/**
+ * One console argument as text: an Error by its name and message, a plain object or array by its first keys with
+ * nested values named, not walked, and anything else by its class. three.js hands its own warnings whole geometries
+ * and scene objects, which a full JSON.stringify would serialise on the main thread
+ */
+export function describeArg(arg: unknown): string {
   if (arg instanceof Error) return `${arg.name}: ${arg.message}`;
   if (typeof arg === "string") return arg;
   if (arg === undefined || arg === null || typeof arg !== "object") return String(arg);
+  const proto = Object.getPrototypeOf(arg);
+  if (!Array.isArray(arg) && proto !== Object.prototype && proto !== null) return `[${arg.constructor?.name || "object"}]`;
+  const shallow = (v: unknown): unknown =>
+    v === null || typeof v !== "object" ? v : Array.isArray(v) ? `[array ${v.length}]` : `[${(v as object).constructor?.name || "object"}]`;
   try {
-    return JSON.stringify(arg);
+    if (Array.isArray(arg)) return JSON.stringify(arg.slice(0, MAX_KEYS).map(shallow));
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(arg).slice(0, MAX_KEYS)) out[k] = shallow((arg as Record<string, unknown>)[k]);
+    return JSON.stringify(out);
   } catch {
     return Object.prototype.toString.call(arg);
   }
@@ -83,9 +97,10 @@ export function installErrorLog(): void {
     const original = console[method].bind(console);
     console[method] = (...args: unknown[]) => {
       try {
-        const text = args.map(describe).join(" ");
-        if (method !== "info") logLine(method, text);
-        else if (/^\[[a-z-]+\] /i.test(text)) logLine("note", text);
+        // An info line is kept only with a tag ("[sim] …"): untagged ones are not described at all
+        const tagged = (a: unknown) => typeof a === "string" && /^\[[a-z-]+\] /i.test(a);
+        if (method !== "info") logLine(method, args.map(describeArg).join(" "));
+        else if (tagged(args[0])) logLine("note", args.map(describeArg).join(" "));
       } catch {
         // The log must never break the console
       }
@@ -94,9 +109,9 @@ export function installErrorLog(): void {
   }
   window.addEventListener("error", (e) => {
     const where = e.filename ? ` (${e.filename.split("/").pop()}:${e.lineno})` : "";
-    logLine("error", `Uncaught ${e.error instanceof Error ? describe(e.error) : e.message}${where}`);
+    logLine("error", `Uncaught ${e.error instanceof Error ? describeArg(e.error) : e.message}${where}`);
   });
-  window.addEventListener("unhandledrejection", (e) => logLine("error", `Unhandled rejection: ${describe(e.reason)}`));
+  window.addEventListener("unhandledrejection", (e) => logLine("error", `Unhandled rejection: ${describeArg(e.reason)}`));
 }
 
 /** The kept lines, oldest first */
