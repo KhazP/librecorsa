@@ -96,6 +96,7 @@ import { surfaceDragN } from '../track-surfaces';
 import {
   type AeroRideHeightMap,
   type AxleSuspensionData,
+  type BumpStopSettingsUnits,
   type CarPhysicsConfig,
   compoundData,
   DEFAULT_FRICTION_LIMIT_ANGLE_DEG,
@@ -656,6 +657,29 @@ export function damperForce(d: DamperSettingsUnits, v: number, knee: number, reb
   return -(d.slow_rebound * Math.min(-v, reboundKnee) + d.fast_rebound * Math.max(0, -v - reboundKnee));
 }
 
+/** Bump-rubber damping at contact and per metre squeezed, and its rebound shares, where the car's data gives none */
+export const BUMP_RUBBER_DEFAULTS = { damper: 2400, risingDamper: 60_000, reboundElasticShare: 0.55, reboundDamperShare: 0.15 };
+
+/**
+ * Force of a bump rubber squeezed `into` metres at wheel speed `v` (m/s, + = bump), at the wheel (N, + = up on the
+ * body). Squeezing: its elastic force plus a damping that rises with the squeeze (capped at `dampMax`). Extending: only
+ * `reboundElasticShare` of the elastic force and `reboundDamperShare` of the damping, never pulling. The two branches
+ * blend over a band of extension speed wide enough that the hysteresis never acts as a damping stiffer than `dampMax`
+ * (the hub's explicit step), so a corner standing still on its rubber carries its whole elastic force
+ */
+export function bumpRubberForce(bs: BumpStopSettingsUnits, into: number, v: number, dampMax: number): number {
+  const el = bs.rate * into + bs.progression * into * into;
+  const c = Math.min(dampMax, (bs.damper ?? BUMP_RUBBER_DEFAULTS.damper) + (bs.risingDamper ?? BUMP_RUBBER_DEFAULTS.risingDamper) * into);
+  const load = el + c * v;
+  if (v >= 0) return load;
+  const etaEl = bs.reboundElasticShare ?? BUMP_RUBBER_DEFAULTS.reboundElasticShare;
+  const etaC = bs.reboundDamperShare ?? BUMP_RUBBER_DEFAULTS.reboundDamperShare;
+  const unload = Math.max(0, etaEl * el + etaC * c * v);
+  const band = Math.max(0.005, ((1 - etaEl) * el) / Math.max(1, dampMax - c));
+  const u = Math.min(1, -v / band);
+  return Math.max(0, load + (unload - load) * u * u * (3 - 2 * u));
+}
+
 /** Fit C so the curve sin(C·atan(B·s)), B = tan(π/2C), falls to `falloff` at s = 3 */
 function fitMagicFormula(falloff: number): { B: number; C: number } {
   const at3 = (C: number) => Math.sin(C * Math.atan(3 * Math.tan(Math.PI / (2 * C))));
@@ -1161,6 +1185,20 @@ export class VehiclePhysics {
    */
   private shaftTwistMeanRad = 0;
   private shaftTwistHalfDiffRad = 0;
+  /**
+   * Chassis twist between the axle structures (rad, + = the front structure rolled about body +Z against the rear) and
+   * its rate (`ChassisData.chassisTorsion`); 0 on a rigid car
+   */
+  public chassisTwistRad = 0;
+  private chassisTwistVelRadS = 0;
+  /** Torsion stiffness (Nm/rad), damping (Nms/rad), front roll-inertia share and twist limit (rad); stiffness 0 = rigid */
+  private readonly torsionK: number;
+  private readonly torsionC: number;
+  private readonly torsionFrontShare: number;
+  private readonly torsionMaxRad: number;
+  /** Roll moments about the CG (body +Z) the front and rear corners put on the body this sub-step (Nm) */
+  private rollTorqueFront = 0;
+  private rollTorqueRear = 0;
   private mgukTorque = 0;
   private aeroFrontN = 0;
   private aeroDownN = 0;
@@ -1237,6 +1275,11 @@ export class VehiclePhysics {
     // Body axes: X = left (pitch), Y = up (yaw), Z = forward (roll)
     this.dryInertiaBody = new THREE.Vector3(ch.inertia.pitch, ch.inertia.yaw, ch.inertia.roll);
     this.inertiaBody = this.dryInertiaBody.clone();
+    const tor = ch.chassisTorsion;
+    this.torsionK = tor ? tor.torsionalStiffnessNmPerDeg * RAD2DEG : 0;
+    this.torsionC = tor ? tor.torsionalDampingNmsPerDeg * RAD2DEG : 0;
+    this.torsionFrontShare = THREE.MathUtils.clamp(tor?.frontRollInertiaShare ?? 0.46, 0.2, 0.8);
+    this.torsionMaxRad = (tor?.maxTwistDeg ?? 2.5) * DEG2RAD;
     this.floorOffsetY = cfg.aero.floorOffsetY;
     this.staticRakeDeg = Math.asin((cfg.aero.rear_target_height - cfg.aero.front_target_height) / ch.wheelbase) * RAD2DEG;
 
@@ -1304,8 +1347,14 @@ export class VehiclePhysics {
       geometry: susp.front.actuation === 'pull_rod' ? ('f1' as const) : ('gt3' as const),
       staticCasterTrailM: this.ffbMechanicalTrailM,
     };
-    this.frontSuspHardpoints = buildDoubleWishboneHardpoints(susp.front.hardpoints, true, susp.front.actuation, kinOptions);
-    this.rearSuspHardpoints = buildDoubleWishboneHardpoints(susp.rear.hardpoints, false, susp.rear.actuation, kinOptions);
+    this.frontSuspHardpoints = buildDoubleWishboneHardpoints(susp.front.hardpoints, true, susp.front.actuation, {
+      ...kinOptions,
+      rockerProgressivityPerM: susp.front.rockerProgressivityPerM,
+    });
+    this.rearSuspHardpoints = buildDoubleWishboneHardpoints(susp.rear.hardpoints, false, susp.rear.actuation, {
+      ...kinOptions,
+      rockerProgressivityPerM: susp.rear.rockerProgressivityPerM,
+    });
 
     const a = this.cgToFrontM;
     const b = this.cgToRearM;
@@ -1769,6 +1818,10 @@ export class VehiclePhysics {
     this.coupledLockTorqueNm = 0;
     this.shaftTwistMeanRad = 0;
     this.shaftTwistHalfDiffRad = 0;
+    this.chassisTwistRad = 0;
+    this.chassisTwistVelRadS = 0;
+    this.rollTorqueFront = 0;
+    this.rollTorqueRear = 0;
     this.mgukTorque = 0;
     this.aeroFrontN = 0;
     this.aeroDownN = 0;
@@ -1816,7 +1869,7 @@ export class VehiclePhysics {
     const v = this.velocity;
     const w = this.angularVelocity;
     const q = this.quaternion;
-    if (!Number.isFinite(p.x + p.y + p.z + v.x + v.y + v.z + w.x + w.y + w.z + q.x + q.y + q.z + q.w + this.engineOmega)) return false;
+    if (!Number.isFinite(p.x + p.y + p.z + v.x + v.y + v.z + w.x + w.y + w.z + q.x + q.y + q.z + q.w + this.engineOmega + this.chassisTwistRad)) return false;
     if (v.lengthSq() > BLOWN_UP_SPEED_MS * BLOWN_UP_SPEED_MS || w.lengthSq() > BLOWN_UP_SPIN_RADS * BLOWN_UP_SPIN_RADS) return false;
     for (const wh of this.wheels) {
       if (!Number.isFinite(wh.omega + wh.hubY + wh.hubVy + wh.slipRatio + wh.tanSlipAngle + wh.complianceRad + wh.twistRad)) return false;
@@ -2385,6 +2438,44 @@ export class VehiclePhysics {
     return -axle.wheelInertia * w.omega * p;
   }
 
+  /** Roll of an axle's structure against the rigid body's mean (rad, about body +Z) */
+  private axleTwistRad(front: boolean): number {
+    return (front ? 1 - this.torsionFrontShare : -this.torsionFrontShare) * this.chassisTwistRad;
+  }
+
+  /** Moment about body +Z through the CG of a world force at a world point (Nm) */
+  private rollMomentOf(f: THREE.Vector3, point: THREE.Vector3): number {
+    const rx = point.x - this.position.x;
+    const ry = point.y - this.position.y;
+    const rz = point.z - this.position.z;
+    return _ez.x * (ry * f.z - rz * f.y) + _ez.y * (rz * f.x - rx * f.z) + _ez.z * (rx * f.y - ry * f.x);
+  }
+
+  /**
+   * The chassis twist over one sub-step: the front structure's share of the roll moments against the rear's drives the
+   * twist mode (reduced inertia αf·αr·I_roll, the mean roll staying the rigid body's), held by the structure's stiffness
+   * and damping. Implicit in both, so any stiffness is stable; the corners' forces react to the twist at the next step
+   */
+  private stepChassisTwist(h: number): void {
+    const af = this.torsionFrontShare;
+    const ar = 1 - af;
+    const tau = ar * this.rollTorqueFront - af * this.rollTorqueRear;
+    this.rollTorqueFront = 0;
+    this.rollTorqueRear = 0;
+    const invI = 1 / Math.max(1e-6, af * ar * this.inertiaBody.z);
+    const k = this.torsionK;
+    const c = this.torsionC;
+    this.chassisTwistVelRadS =
+      (this.chassisTwistVelRadS + h * invI * (tau - k * this.chassisTwistRad)) / (1 + h * c * invI + h * h * k * invI);
+    const next = this.chassisTwistRad + h * this.chassisTwistVelRadS;
+    if (Math.abs(next) > this.torsionMaxRad) {
+      this.chassisTwistRad = Math.sign(next) * this.torsionMaxRad;
+      this.chassisTwistVelRadS = 0;
+    } else {
+      this.chassisTwistRad = next;
+    }
+  }
+
   private substep(h: number, inp: VehicleInputs): void {
     this.updateBasis();
     this.force.set(0, 0, 0);
@@ -2392,10 +2483,23 @@ export class VehiclePhysics {
     const upY = Math.max(0.3, _ey.y);
 
     // ---- corner kinematics & ground contact
+    const twisting = this.torsionK > 0;
     for (const w of this.wheels) {
-      w.hardpointWorld.copy(w.hardpoint).applyQuaternion(this.quaternion).add(this.position);
+      w.hardpointWorld.copy(w.hardpoint);
+      if (twisting) {
+        // The axle structure's own roll about body +Z through the CG: the hardpoint moves by φ (ez × r)
+        const phi = this.axleTwistRad(w.isFront);
+        w.hardpointWorld.x -= phi * w.hardpoint.y;
+        w.hardpointWorld.y += phi * w.hardpoint.x;
+      }
+      w.hardpointWorld.applyQuaternion(this.quaternion).add(this.position);
       _r.subVectors(w.hardpointWorld, this.position);
       w.hardpointVel.crossVectors(this.angularVelocity, _r).add(this.velocity);
+      if (twisting) {
+        const rate = (w.isFront ? 1 - this.torsionFrontShare : -this.torsionFrontShare) * this.chassisTwistVelRadS;
+        _tmp.set(-rate * w.hardpoint.y, rate * w.hardpoint.x, 0).applyQuaternion(this.quaternion);
+        w.hardpointVel.add(_tmp);
+      }
       w.grounded = this.queryContactPatch(w);
       if (w.grounded) this.climbStep(w, h);
       else w.contactY = Number.NaN;
@@ -2436,18 +2540,26 @@ export class VehiclePhysics {
       const reboundKnee = d.fastReboundThresholdMs ?? knee;
       const L = this.wheels[ai * 2];
       const R = this.wheels[ai * 2 + 1];
+      const kinAxle = ai === 0 ? frontKin : rearKin;
+      const bs = s.bumpStop;
+      const freeTravel = bs.range - (bs.packerGap ?? 0);
+      // The bump rubber's damping is held to what the hub's explicit step follows (1 − c·h / m ≥ 0.65)
+      const rubberDampMax = (0.35 * axle.unsprungMass) / h;
       for (let side = 0; side < 2; side++) {
         const w = side === 0 ? L : R;
-        let f = springForce(w.springPreload + w.compression, s.springs);
-        const intoRubber = w.compression - s.bumpStop.range;
-        if (intoRubber > 0) f += s.bumpStop.rate * intoRubber + s.bumpStop.progression * intoRubber * intoRubber;
-        const hard = s.bumpStop.hardStop;
+        // The rocker's leverage: the wheel rate × leverage² (virtual work), the damper's force × leverage at the shaft
+        // speed × leverage, so its knee is the shaft's own. 1 at static ride height
+        const mr = (side === 0 ? kinAxle.left : kinAxle.right).motionRatioNorm;
+        let f = mr * mr * springForce(w.springPreload + w.compression, s.springs);
+        const intoRubber = w.compression - freeTravel;
+        if (intoRubber > 0) f += bumpRubberForce(bs, intoRubber, w.compressionVel, rubberDampMax);
+        const hard = bs.hardStop;
         if (hard && w.compression > hard.range) f += hard.rate * (w.compression - hard.range);
         const pastDroop = -s.droopTravel - w.compression;
         if (pastDroop > 0) f -= DROOP_STOP_RATE * pastDroop + DROOP_STOP_DAMP * Math.max(0, -w.compressionVel);
-        f += damperForce(d.base, w.compressionVel, knee, reboundKnee);
+        f += mr * damperForce(d.base, mr * w.compressionVel, knee, reboundKnee);
         w.suspensionForce = f;
-        w.bumpStopTravel = s.bumpStop.range - w.compression;
+        w.bumpStopTravel = freeTravel - w.compression;
       }
       const arb = s.arb * (L.compression - R.compression);
       const roll = damperForce(d.roll, 0.5 * (L.compressionVel - R.compressionVel), knee);
@@ -2536,7 +2648,8 @@ export class VehiclePhysics {
 
       // Camber relative to the road, leaning toward +left (rad): the setup's static camber plus the solved upright's
       // camber (wishbone travel, and the caster / KPI camber of the steer angle), plus the body's lean
-      const leanBody = Math.asin(THREE.MathUtils.clamp(_ey.dot(_lw), -1, 1));
+      // (the axle structure's twist rolls its top toward −X, the right, as it lifts the left)
+      const leanBody = Math.asin(THREE.MathUtils.clamp(_ey.dot(_lw), -1, 1)) - (twisting ? this.axleTwistRad(w.isFront) : 0);
       w.camberLeftRad = (w.isLeft ? 1 : -1) * (axle.spec.staticCamber * DEG2RAD + kin.uprightCamberRad) + leanBody;
 
       // Relaxation-length carcass: slip ratio and tan(slip angle), implicit in |vx|
@@ -2783,6 +2896,11 @@ export class VehiclePhysics {
       this.addForceAt(_f, _p);
       const mzBody = w.mz + w.mzTwist;
       if (mzBody !== 0) this.torque.addScaledVector(_n, mzBody);
+      if (twisting) {
+        const tz = this.rollMomentOf(_f, _p) + mzBody * _n.dot(_ez);
+        if (w.isFront) this.rollTorqueFront += tz;
+        else this.rollTorqueRear += tz;
+      }
       // Contact force in the body frame, inboard (body +X is inboard on the right) and forward
       const inX = w.isLeft ? -1 : 1;
       const fIn = inX * (_f.dot(_ex) + fz * g.ny * _ex.y);
@@ -2806,7 +2924,13 @@ export class VehiclePhysics {
       w.hubY += w.hubVy * h;
       _f.set(0, link * _ey.y, 0);
       this.addForceAt(_f, w.hardpointWorld);
+      if (twisting) {
+        const tz = this.rollMomentOf(_f, w.hardpointWorld);
+        if (w.isFront) this.rollTorqueFront += tz;
+        else this.rollTorqueRear += tz;
+      }
     }
+    if (twisting) this.stepChassisTwist(h);
     // The rim feels the driver's share of the rack torque, the power steering's assist taking the rest
     const driverNm = driverRackTorqueNm(ffbMz, this.velocity.dot(_ez), this.powerSteering);
     this.telemetry.ffbTorqueNorm = THREE.MathUtils.clamp(driverNm / FFB_REFERENCE_NM, -1, 1);

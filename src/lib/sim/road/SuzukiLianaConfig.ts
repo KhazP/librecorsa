@@ -191,6 +191,8 @@ const SUSPENSIONS: SuspensionsData = {
   front: {
     type: 'SuspensionType_Strut',
     actuation: 'push_rod',
+    // A strut and a beam: no rocker, the spring's leverage stays put [est]
+    rockerProgressivityPerM: 0,
     // [spec STATIC_CAMBER]
     staticCamber: -0.5,
     camberGainKinematic: -21,
@@ -216,6 +218,8 @@ const SUSPENSIONS: SuspensionsData = {
   rear: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
+    // A strut and a beam: no rocker, the spring's leverage stays put [est]
+    rockerProgressivityPerM: 0,
     // Positive camber at the rear, as the mod has it [spec STATIC_CAMBER]
     staticCamber: 1.3,
     camberGainKinematic: -41,
@@ -507,6 +511,8 @@ export const SUZUKI_LIANA_CONFIG = {
     ffbMechanicalTrailM: 0.017,
     // The body's plan at barrier height, measured from liana.glb (`scripts/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.10], [0.51, 2.01], [0.75, 1.86], [0.90, 0.56], [0.76, -2.00], [0.61, -2.14], [0.00, -2.22]],
+    // Torsional stiffness between the axle structures: a steel unibody hatchback [est]
+    chassisTorsion: { torsionalStiffnessNmPerDeg: 12_000, torsionalDampingNmsPerDeg: 140, frontRollInertiaShare: 0.5 },
   },
   engine: ENGINE,
   ers: ERS,

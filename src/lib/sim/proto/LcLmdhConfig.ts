@@ -691,6 +691,8 @@ const config = (finalDrive: number, rearWingDeg: number) =>
       powerSteering: { steeringRatio: 12.5, deadbandNm: 2, rampNm: 15, maxRatio: 1.2 },
       // The body's plan at barrier height, measured from lc-lmdh.glb (`scripts/measure-car-plans.ts`)
       bodyPlan: [[0.00, 2.69], [0.55, 2.61], [0.92, 2.45], [1.00, 2.00], [1.00, 0.72], [0.96, -2.40], [0.00, -2.41]],
+      // Torsional stiffness between the axle structures: a carbon tub with the V8 as a stressed member [est]
+      chassisTorsion: { torsionalStiffnessNmPerDeg: 46_000, torsionalDampingNmsPerDeg: 340, frontRollInertiaShare: 0.45 },
     },
     engine: ENGINE,
     ers: ERS,

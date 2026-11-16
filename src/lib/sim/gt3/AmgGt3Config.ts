@@ -176,6 +176,8 @@ const SUSPENSIONS: SuspensionsData = {
   front: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
+    // Coilovers on the lower wishbones, no rocker: the leverage grows a little as the arm comes level [est]
+    rockerProgressivityPerM: 0.4,
     staticCamber: -3.5,
     camberGainKinematic: -44,
     // Front-stiff platform: ride 3.2 Hz, so the nose holds its height under braking instead of diving onto the stop [ref]
@@ -203,6 +205,8 @@ const SUSPENSIONS: SuspensionsData = {
   rear: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
+    // Coilovers on the lower wishbones, no rocker: the leverage grows a little as the arm comes level [est]
+    rockerProgressivityPerM: 0.4,
     staticCamber: -2.5,
     camberGainKinematic: -25,
     springs: { wheel_rate: 127_000, helper_rate: 0, helper_range: 0 }, // [ref]
@@ -748,6 +752,8 @@ export const AMG_GT3_CONFIG = {
     powerSteering: { steeringRatio: 12.6, deadbandNm: 2, rampNm: 15, maxRatio: 1.4, speedFadeMs: [20 / 3.6, 80 / 3.6] },
     // The body's plan at barrier height, measured from amg-gt3-evo.glb (`scripts/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.22], [0.39, 2.21], [0.99, 2.01], [1.02, -1.61], [0.97, -1.99], [0.78, -2.14], [0.46, -2.34], [0.00, -2.34]],
+    // Torsional stiffness between the axle structures: an aluminium spaceframe and a steel roll cage [est]
+    chassisTorsion: { torsionalStiffnessNmPerDeg: 31_500, torsionalDampingNmsPerDeg: 270, frontRollInertiaShare: 0.48 },
   },
   engine: ENGINE,
   ers: ERS,
