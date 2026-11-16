@@ -1,7 +1,7 @@
 /**
  * Unlisted circuits (`unlisted` in public/tracks/index.json, src/lib/track-registry.ts): a circuit opened only by its
- * link (`?track=<id>`) stays out of every list the game and the home page build, still resolves by id, and keeps
- * the flag when the converter rebuilds its index entry.
+ * link (`?track=<id>`) stays out of every list the game and the home page build (modders included), still resolves
+ * by id, and keeps the flag when the converter rebuilds its index entry.
  *
  *   npx tsx scripts/verify-unlisted-circuits.ts
  */
@@ -18,6 +18,8 @@ import {
   type TrackInfo,
 } from "../src/lib/track-registry";
 import { FORWARD_TO_GAME } from "../src/lib/home/forward-to-game";
+import { moddersList } from "../src/lib/modders";
+import { CARS } from "../src/lib/cars/car-registry";
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -52,6 +54,17 @@ for (const t of unlisted) {
   check(`${t.id}: not the default circuit`, TRACKS[0].id !== t.id);
 }
 check("every listed circuit is still listed", LISTED_TRACKS.length === TRACKS.length - unlisted.filter((t) => TRACKS.some((o) => o.id === t.id)).length);
+
+// The modders list (Credits panel, home page About) names no one for an unlisted circuit alone
+const modders = moddersList();
+for (const t of unlisted) {
+  const author = t.credit?.author;
+  if (!author) continue;
+  const otherWork = LISTED_TRACKS.some((o) => o.credit?.author === author) || CARS.some((c) => c.credit.author === author || c.tyreCredit?.author === author);
+  const named = modders.find((m) => m.name === author);
+  check(`${t.id}: the modders list leaves out its circuit`, !named?.works.includes(t.name) || otherWork, named ? named.works.join(", ") : "not listed");
+  check(`${t.id}: the modders list names ${author} only for other work`, !named || otherWork);
+}
 
 // A rebuild writes the index entry from the converter's own config: the flag must be there too, or the circuit lists
 const porter = readFileSync(path.join(ROOT, "scripts/tracks/port_ac_track.py"), "utf8");
