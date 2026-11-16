@@ -20,6 +20,8 @@ import { createMtr496rSim } from "../src/lib/sim/proto/Mtr496rSim";
 import { createLcLmdhSim } from "../src/lib/sim/proto/LcLmdhSim";
 import { createNissanR33Sim } from "../src/lib/sim/classic/NissanR33Sim";
 import { createNissanR32Sim } from "../src/lib/sim/classic/NissanR32Sim";
+import { createBmwM1ProcarSim } from "../src/lib/sim/classic/BmwM1ProcarSim";
+import { createVwSciroccoSim } from "../src/lib/sim/road/VwSciroccoSim";
 import { F1Physics2026 } from "../src/lib/f1-physics-2026";
 import { getActiveTrackData } from "../src/lib/track-data";
 import { createFlatTestTrack } from "./lib/flat-track";
@@ -45,6 +47,8 @@ const makers: Record<VehicleModelId, (t: typeof track) => SimulatorCar> = {
   "lc-lmdh": (t) => createLcLmdhSim(t),
   "nissan-r33-jgtc": (t) => createNissanR33Sim(t),
   "nissan-r32-jtcc": (t) => createNissanR32Sim(t),
+  "bmw-m1-procar": (t) => createBmwM1ProcarSim(t),
+  "vw-scirocco-gtx": (t) => createVwSciroccoSim(t),
 };
 const vehicles = Object.keys(makers) as VehicleModelId[];
 const DT = 1 / 60;
@@ -248,6 +252,8 @@ console.log("Fuel load");
     "lc-lmdh": 38,
     "nissan-r33-jgtc": 30,
     "nissan-r32-jtcc": 22,
+    "bmw-m1-procar": 22,
+    "vw-scirocco-gtx": 22,
   };
   // A setup saved before the fuel setting: no fuel field at all
   const { fuelDeltaKg: _drop, ...modern } = DEFAULT_CHASSIS_SETUP;

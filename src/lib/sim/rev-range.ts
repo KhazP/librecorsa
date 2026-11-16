@@ -26,6 +26,10 @@ export function revRangeFor(carId: string | undefined): [number, number] {
   // The classic Nissans up to their shift lights or shift points [spec digital_instruments.ini, drivetrain.ini]
   if (carId === "nissan-r33-jgtc") return [5000, 6700];
   if (carId === "nissan-r32-jtcc") return [6300, 7500];
+  // The M1's shift lamp: its LED series from 7500 rpm, full at 8400 [spec digital_instruments.ini]
+  if (carId === "bmw-m1-procar") return [7500, 8400];
+  // The Scirocco has no shift light: up to its 7000 rpm shift point [derived]
+  if (carId === "vw-scirocco-gtx") return [5800, 7000];
   return carId === "amg-gt3" ? [6200, 7500] : [...F1_REV_RANGE];
 }
 

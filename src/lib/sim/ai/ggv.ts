@@ -91,6 +91,23 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [0.79, 0.57, 0.52, 0.37, 0.24, 0.17, 0.05, -0.02],
     lockKappa: Math.tan((360 / 12.4) * (Math.PI / 180)) / 2.62,
   },
+  // Measured 2026-11-16. Its accelG at 65 m/s read 0.11: an up-shift lands in the measuring window there, so it is taken
+  // between its neighbours; at 85 m/s it is past the limiter in fifth (81 m/s)
+  'bmw-m1-procar': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [1.08, 1.09, 1.15, 1.18, 1.2, 1.21, 1.23, 1.24],
+    brakeG: [1.35, 1.47, 1.5, 1.54, 1.59, 1.65, 1.72, 1.79],
+    accelG: [0.87, 0.64, 0.46, 0.42, 0.28, 0.21, 0.14, -0.28],
+    lockKappa: Math.tan((360 / 16) * (Math.PI / 180)) / 2.53,
+  },
+  // Measured 2026-11-16. Past its 207 km/h top speed (58 m/s) the traction row is the drag it can't beat
+  'vw-scirocco-gtx': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [0.91, 0.93, 0.93, 0.93, 0.94, 0.93, 0.92, 0.92],
+    brakeG: [1.13, 1.16, 1.19, 1.2, 1.26, 1.29, 1.32, 1.36],
+    accelG: [0.41, 0.29, 0.21, 0.11, 0.05, -0.28, -0.31, -0.34],
+    lockKappa: Math.tan((450 / 14) * (Math.PI / 180)) / 2.41,
+  },
 };
 
 export const G = 9.81;

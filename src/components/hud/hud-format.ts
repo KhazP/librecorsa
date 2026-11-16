@@ -37,8 +37,8 @@ export const HUD_PROTO = "var(--color-lc-purple)";
 export const PROTO_CAR_IDS: ReadonlySet<string> = new Set(["mtr-496r", "lc-lmdh"]);
 /** The classic GT and touring class colour (`CLASS_COLORS`) */
 export const HUD_CLASSIC = "var(--color-lc-lemon)";
-/** The classic Nissans' vehicle models */
-export const CLASSIC_CAR_IDS: ReadonlySet<string> = new Set(["nissan-r33-jgtc", "nissan-r32-jtcc"]);
+/** The classic class's vehicle models */
+export const CLASSIC_CAR_IDS: ReadonlySet<string> = new Set(["nissan-r33-jgtc", "nissan-r32-jtcc", "bmw-m1-procar"]);
 export const HUD_VOID = "var(--color-lc-void)";
 export const HUD_CARBON = "var(--color-lc-carbon)";
 export const HUD_TITANIUM = "var(--color-lc-titanium)";

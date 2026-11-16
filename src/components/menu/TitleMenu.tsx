@@ -237,6 +237,13 @@ const Credits: React.FC = () => (
           · used with permission. R32 liveries also by Shin956 (UNISIA, Castrol), TOHIRA official (OTX, WISE SPORTS) and
           tomo 427 S/C (427 Motorsports, Tamiya); R32 sound by Neko Taisen
         </CreditRow>
+        <CreditRow title="BMW M1 Procar and VW Scirocco">
+          Models, liveries, sound and physics of the BMW M1 Procar and the Volkswagen Scirocco GTX 16V by{" "}
+          <a href="https://www.gtplanet.net/forum/members/pfalzdriver.315633/" target="_blank" rel="noreferrer" className={linkClass}>
+            Pfalzdriver
+          </a>{" "}
+          · used with permission. M1 Procar with DaWallace, its liveries by Johnny23, its sound by Ama FMOD
+        </CreditRow>
         <CreditRow title="Suzuki Liana">
           Physics from &ldquo;Physics reworked for Top Gear Liana 1.6 GLX&rdquo; (
           <a

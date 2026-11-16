@@ -1199,7 +1199,9 @@ export class F12026CarSim implements SimulatorCar {
       id === 'mtr-496r' ||
       id === 'lc-lmdh' ||
       id === 'nissan-r33-jgtc' ||
-      id === 'nissan-r32-jtcc'
+      id === 'nissan-r32-jtcc' ||
+      id === 'bmw-m1-procar' ||
+      id === 'vw-scirocco-gtx'
       ? id
       : 'f12026-car';
   }

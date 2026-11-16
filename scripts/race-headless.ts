@@ -3,7 +3,7 @@
  * then a results table (laps, gaps, incidents, position changes) and what each car learnt.
  *
  *   npx tsx scripts/race-headless.ts [--track rwanda_official_short] [--car lc26|f12026-car|amg-gt3|liana|mtr-496r|lc-lmdh|
- *     nissan-r33-jgtc|nissan-r32-jtcc] [--laps 5] [--cars 5]
+ *     nissan-r33-jgtc|nissan-r32-jtcc|bmw-m1-procar|vw-scirocco-gtx] [--laps 5] [--cars 5]
  *       [--skill 70] [--seed 1] [--no-learn] [--laps-table] [--sweep skill | learn | <param>=v1,v2,...]
  *       [--weather clear|overcast|light_rain|heavy_rain|drying|dynamic] [--lc26-engine rigid|classic]
  *   npm run race:headless -- --track suzuka --car amg-gt3 --sweep skill
@@ -37,6 +37,8 @@ const CAR_KINDS = [
   'lc-lmdh',
   'nissan-r33-jgtc',
   'nissan-r32-jtcc',
+  'bmw-m1-procar',
+  'vw-scirocco-gtx',
 ] as const;
 type CarKind = (typeof CAR_KINDS)[number];
 
