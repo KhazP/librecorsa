@@ -362,5 +362,118 @@
     },
     "lift": { "popMinRpm": 5500, "crackleMinRpm": 6000, "downshiftPopChance": 0.5 },
     "limiterRetriggerS": 0.85
+  },
+  "vw-scirocco-gtx": {
+    "outDir": "public/cars/vw-scirocco-gtx/audio",
+    "limiterRpm": 7500,
+    "sourceDescription": "Pfalzdriver's Volkswagen Scirocco GTX 16V Assetto Corsa mod - content/cars/pfa_vw_scirocco_53b/sfx/pfa_vw_scirocco_53b.bank",
+    "intBank": "pfa_vw_scirocco_53b/sfx/pfa_vw_scirocco_53b.bank",
+    "rawPcm16": true,
+    "engine": {
+      "int": {
+        "on": [
+          { "rpm": 900, "rootRpm": 1100, "sample": "206gti_idle_in#19" },
+          { "rpm": 2600, "rootRpm": 3850, "sample": "206gti_on_in_3900#20" },
+          { "rpm": 5050, "rootRpm": 5050, "sample": "206gti_on_in_5000#7" },
+          { "rpm": 7500, "rootRpm": 6500, "sample": "206gti_on_in_6400#28" }
+        ],
+        "off": [
+          { "rpm": 900, "rootRpm": 1100, "sample": "206gti_idle_in#19" },
+          { "rpm": 2600, "rootRpm": 3900, "sample": "206gti_off_in_3900#14" },
+          { "rpm": 7500, "rootRpm": 5450, "sample": "206gti_off_in_5400#24" }
+        ]
+      },
+      "ext": {
+        "on": [
+          { "rpm": 900, "rootRpm": 800, "sample": "206gti_idle_out#31" },
+          { "rpm": 1700, "rootRpm": 1900, "sample": "206gti_on_out_1800#5" },
+          { "rpm": 3000, "rootRpm": 3500, "sample": "206gti_on_out_3400#17" },
+          { "rpm": 4500, "rootRpm": 4900, "sample": "206gti_on_out_4900#26" },
+          { "rpm": 7500, "rootRpm": 7000, "sample": "206gti_on_out_7000#30" }
+        ],
+        "off": [
+          { "rpm": 900, "rootRpm": 800, "sample": "206gti_idle_out#31" },
+          { "rpm": 2600, "rootRpm": 2900, "sample": "206gti_off_out_2900#3" },
+          { "rpm": 4800, "rootRpm": 5300, "sample": "ext_fa01_off_5250#18" },
+          { "rpm": 7500, "rootRpm": 4900, "sample": "206gti_off_out_4900_limit#15" }
+        ]
+      }
+    },
+    "transmission": [
+      { "layer": "on", "drivetrainSpeed": 160, "sample": "transmission#8", "rms": 0.03 },
+      { "layer": "off", "drivetrainSpeed": 160, "sample": "transmission#8", "rms": 0.022 }
+    ],
+    "skid": { "int": "Skid#9", "ext": "skid_ext_mono#6" },
+    "tractionControl": "traction_control#25",
+    "oneshots": {
+      "gear_up": ["gearup#12", "gearupEXT#33"],
+      "gear_down": ["gearup#12", "geardnEXT#27"]
+    },
+    "limiterFallbackSample": "206gtirev_limit#0",
+    "throttleCurve": {
+      "ext": [[0.0, 0.0], [0.1, 0.25], [0.25, 0.55], [0.5, 0.8], [0.75, 0.94], [1.0, 1.0]],
+      "int": [[0.0, 0.0], [0.1, 0.28], [0.25, 0.58], [0.5, 0.82], [0.75, 0.95], [1.0, 1.0]]
+    },
+    "lift": { "popMinRpm": 99999, "crackleMinRpm": 99999, "downshiftPopChance": 0 },
+    "shift": { "style": "manual", "clutchS": 0.25 },
+    "limiterRetriggerS": 0.85
+  },
+  "bmw-m1-procar": {
+    "outDir": "public/cars/bmw-m1-procar/audio",
+    "limiterRpm": 9200,
+    "sourceDescription": "the BMW M1 Procar Assetto Corsa mod by Pfalzdriver and DaWallace, sound by Ama FMOD - content/cars/pddw_bmw_procar_m1/sfx/pddw_bmw_procar_m1.bank",
+    "intBank": "pddw_bmw_procar_m1/sfx/pddw_bmw_procar_m1.bank",
+    "rawPcm16": true,
+    "engine": {
+      "int": {
+        "on": [
+          { "rpm": 1300, "rootRpm": 2120, "sample": "IDLE_M1PROCAR#17" },
+          { "rpm": 3000, "rootRpm": 4000, "sample": "M1_4000_60#6" },
+          { "rpm": 4600, "rootRpm": 4600, "sample": "M1_5000_10f0#26" },
+          { "rpm": 6300, "rootRpm": 6300, "sample": "M1_5700_100_01#25" },
+          { "rpm": 9200, "rootRpm": 6400, "sample": "M1_6500_100_02#48" }
+        ],
+        "off": [
+          { "rpm": 1300, "rootRpm": 2120, "sample": "IDLE_M1PROCAR#17" },
+          { "rpm": 3800, "rootRpm": 5300, "sample": "M1_5000_OFF#9" },
+          { "rpm": 5800, "rootRpm": 6600, "sample": "M1_6000_OFFf#37" },
+          { "rpm": 7200, "rootRpm": 7300, "sample": "M1_7500_OFF#4" },
+          { "rpm": 9200, "rootRpm": 8100, "sample": "M1_8500_OFF_3#58" }
+        ]
+      },
+      "ext": {
+        "on": [
+          { "rpm": 1300, "rootRpm": 2120, "sample": "IDLE_M1PROCAR#17" },
+          { "rpm": 2400, "rootRpm": 2500, "sample": "EXM1_ONVERYLOW_RESONANCE#21" },
+          { "rpm": 3700, "rootRpm": 3900, "sample": "EXM1_ONLOW_RESONANCE#11" },
+          { "rpm": 6000, "rootRpm": 6800, "sample": "EXM1_ONHIGH_RESONANCE_4#24" },
+          { "rpm": 9200, "rootRpm": 6100, "sample": "EXM1_ONHIGH_RESONANCE_3#54" }
+        ],
+        "off": [
+          { "rpm": 1300, "rootRpm": 2120, "sample": "IDLE_M1PROCAR#17" },
+          { "rpm": 3000, "rootRpm": 3700, "sample": "EXM1_OFFVERYLOW_RESONANCE#53" },
+          { "rpm": 4700, "rootRpm": 5200, "sample": "EXM1_OFFLOAD_RESONANCE_LOW#27" },
+          { "rpm": 6300, "rootRpm": 6100, "sample": "EXM1_OFFLOAD_MID#13" },
+          { "rpm": 9200, "rootRpm": 7000, "sample": "BMWPROTO_DECEL#14" }
+        ]
+      }
+    },
+    "skid": { "int": "Skid#16", "ext": "skid_ext_mono#10" },
+    "tractionControl": "traction_control#45",
+    "oneshots": {
+      "gear_up": ["gearupEXT#57"],
+      "gear_down": ["geardnEXT#52"],
+      "backfire_int": ["1 TAG_LotESP_Burb01#44", "3 TAG_LotESP_Burb03#46", "4 TAG_LotESP_Burb04#1", "6 TAG_LotESP_Burb06#33", "9 TAG_LotESP_Burb09#12"],
+      "backfire_ext": ["1 TAG_LotESP_Burb01#44", "3 TAG_LotESP_Burb03#46", "4 TAG_LotESP_Burb04#1", "6 TAG_LotESP_Burb06#33", "9 TAG_LotESP_Burb09#12"]
+    },
+    "shiftFallbackSample": "6 TAG_LotESP_Burb06#33",
+    "limiterFallbackSample": "M1_ARTIFICIALLIMITER#49",
+    "limiterRootRpm": 8100,
+    "throttleCurve": {
+      "ext": [[0.0, 0.0], [0.2, 0.04], [0.3, 0.21], [0.4, 0.66], [0.47, 0.88], [0.6, 0.96], [0.85, 1.0], [1.0, 1.0]],
+      "int": [[0.0, 0.0], [0.2, 0.02], [0.3, 0.07], [0.4, 0.22], [0.47, 0.45], [0.5, 0.57], [0.6, 0.85], [0.7, 0.95], [0.8, 0.99], [1.0, 1.0]]
+    },
+    "lift": { "popMinRpm": 6000, "crackleMinRpm": 6800, "downshiftPopChance": 0.5 },
+    "limiterRetriggerS": 0.85
   }
 }
