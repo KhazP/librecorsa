@@ -119,9 +119,9 @@ console.log('\n== Band spread');
     return sh[0] - sh[2];
   };
   const dflt = shares();
-  const same = shares({ camber: 3.8, lateral: 0.22 });
+  const same = shares({ camber: 6.5, lateral: 0.22 });
   const none = shares({ camber: 0, lateral: 0 });
-  check('Camber loads the inner band by the spread (3.8 / 0.22 by default; none leaves the bands even)', dflt > 0.02 && dflt === same && Math.abs(none) < 1e-9,
+  check('Camber loads the inner band by the spread (the GT3\'s 6.5 / 0.22; none leaves the bands even)', dflt > 0.02 && dflt === same && Math.abs(none) < 1e-9,
     `inner − outer share ${fmt(dflt, 3)} default, ${fmt(none, 3)} with no spread`);
 }
 

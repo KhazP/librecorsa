@@ -521,16 +521,19 @@ console.log('\n== Long shallow slide along a wall of short faces (flat pad)');
       let v0 = 0;
       let drop = 0;
       let impacts = 0;
-      let lastImpact = -1;
+      // The last run's impact, if any, is not this one's
+      let lastImpact = (car.telemetry as unknown as { f12026?: { wallImpact?: { atMs: number } } }).f12026?.wallImpact?.atMs ?? -1;
       for (let k = 0; k < 600; k++) {
         const before = v.speedMs;
         const tel = car.step(DT, { throttle: 0, brake: 0, analogSteer: 0 }) as unknown as { f12026?: { wallContact?: boolean; wallImpact?: { atMs: number } } };
-        if (tel.f12026?.wallContact && touched < 0) {
+        const imp = tel.f12026?.wallImpact?.atMs ?? -1;
+        const newImpact = imp !== lastImpact && imp >= 0;
+        // A frame's contact flag is its last physics step's: a glancing touch inside the frame shows as its impact
+        if ((tel.f12026?.wallContact || newImpact) && touched < 0) {
           touched = k;
           v0 = before;
         }
-        const imp = tel.f12026?.wallImpact?.atMs ?? -1;
-        if (imp !== lastImpact && imp >= 0) {
+        if (newImpact) {
           impacts++;
           lastImpact = imp;
         }

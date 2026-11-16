@@ -1133,6 +1133,11 @@ export interface EnduranceHybridDialsData {
   defaultRegenIndex: number;
   /** No deployment below this road speed (km/h) */
   minDeploySpeedKmh: number;
+  /**
+   * The charge the controller holds the battery about (0..1): above it the motor deploys at the shaft limit (the engine
+   * giving way), below it only where the engine leaves room. Default 0.5
+   */
+  socTarget?: number;
 }
 
 /** A compound of `config`, or an error when the car does not have it */
@@ -1157,6 +1162,7 @@ export function deriveRainCompound(
   name: string,
   f1Pack = false
 ): TyresCompoundData {
+  const unblanketed = base.pressureData.blanketC !== undefined;
   const th = base.thermalData;
   const peakC = 0.5 * (th.optimalTempC[0] + th.optimalTempC[1]);
   const traits = f1Pack ? f1RainTraits(kind, peakC) : WET_TYRE_TRAITS[kind];
@@ -1200,11 +1206,25 @@ export function deriveRainCompound(
       thermalPerformanceCurve,
       optimalTempC: [th.optimalTempC[0] + traits.tempShiftC, th.optimalTempC[1] + traits.tempShiftC],
     },
-    pressureData: { ...base.pressureData, coldRefC: base.pressureData.coldRefC + 0.55 * traits.tempShiftC },
+    pressureData: rainPressure(base.pressureData, traits.tempShiftC),
     rearOverride: base.rearOverride
-      ? { ...base.rearOverride, modelData: scaleModel(base.rearOverride.modelData) }
+      ? {
+          ...base.rearOverride,
+          modelData: scaleModel(base.rearOverride.modelData),
+          pressureData: base.rearOverride.pressureData && unblanketed ? { ...base.rearOverride.pressureData, setPsi: undefined } : base.rearOverride.pressureData,
+        }
       : undefined,
   };
+}
+
+/**
+ * A rain tyre's pressures on its slick's: blanketed, the cooler blankets of its window; raced without blankets, the
+ * garage's same temperature, warmed to its cooler window where a level warms them, its cold pressure its own (the
+ * slick's set pressure is the slick's)
+ */
+function rainPressure(p: TyresPressureData, tempShiftC: number): TyresPressureData {
+  if (p.blanketC === undefined) return { ...p, coldRefC: p.coldRefC + 0.55 * tempShiftC };
+  return { ...p, setPsi: undefined, blanketC: p.blanketC + 0.55 * tempShiftC };
 }
 
 // ===========================================================================

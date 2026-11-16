@@ -275,7 +275,8 @@ console.log('\n== Simulation realism');
     return f0 - sim.telemetry.fuelKg;
   };
   const burnt = { casual: fuel('casual'), full: fuel('full') };
-  check('Casual: no fuel use', burnt.casual === 0 && burnt.full > 0, `casual ${fmt(burnt.casual, 3)} kg, full ${fmt(burnt.full, 3)} kg in 5 s`);
+  // Sprints on a fixed fuel load: no level burns any
+  check('No fuel use at any level (sprint ballast)', burnt.casual === 0 && burnt.full === 0, `casual ${fmt(burnt.casual, 3)} kg, full ${fmt(burnt.full, 3)} kg in 5 s`);
 }
 
 // ---------------------------------------------------------------------------

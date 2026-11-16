@@ -9,6 +9,7 @@
  * ranges are what the mod's data gives in Assetto Corsa terms (its wing tables, its gearing, the GT3's grip below it),
  * not tuned to these numbers.
  */
+import { SIM_REALISM_FLAGS } from '../src/lib/sim/sim-realism';
 import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
@@ -294,7 +295,9 @@ console.log('\n== Brakes, fuel and steering from the car\'s data');
   check('Fresh discs: pad friction 0.99 at 380 °C', Math.abs(car.wheels[0].brakeDisc.muFactor - 0.99) < 0.002, `${fmt(car.wheels[0].brakeDisc.muFactor, 3)}`);
 
   // Fuel flow follows the engine's speed: a constant 0.036 kg/s flat out burnt 1.12 kg here
+  // The fuel-flow model, burning (the game's sprints run on a fixed load, `SimRealismFlags.fuelUse`)
   const sim = createMtr496rSim(pad);
+  sim.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
   sim.assistPreset = 'semi_pro';
   sim.teleportToDistance(1000, 0);
   const f0 = sim.telemetry.fuelKg;
@@ -304,6 +307,7 @@ console.log('\n== Brakes, fuel and steering from the car\'s data');
 
   // The minimum 4 kg flat out: the tank runs dry and the engine stops firing, so the car coasts down
   const dry = createMtr496rSim(pad);
+  dry.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
   dry.assistPreset = 'semi_pro';
   dry.applyChassisSetup({ ...DEFAULT_CHASSIS_SETUP, fuelDeltaKg: -200 });
   dry.teleportToDistance(1000, 0);

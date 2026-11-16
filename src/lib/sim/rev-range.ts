@@ -22,11 +22,12 @@ export function revRangeFor(carId: string | undefined): [number, number] {
   if (carId === "liana") return [5200, 6500];
   if (carId === "mtr-496r") return [8000, 9400];
   // The LC-LMDH up to the engine speed its regulated power curve is set on (the lights' last stage) [claim]
-  if (carId === "lc-lmdh") return [6900, 8150];
+  if (carId === "lc-lmdh") return [6850, 8100];
   // The classic Nissans up to their shift lights or shift points [spec digital_instruments.ini, drivetrain.ini]
   if (carId === "nissan-r33-jgtc") return [5000, 6700];
   if (carId === "nissan-r32-jtcc") return [6300, 7500];
-  return carId === "amg-gt3" ? [6200, 7500] : [...F1_REV_RANGE];
+  // The GT3 up to its 7250 rpm up-shift under the endurance trim's 7450 rpm limiter
+  return carId === "amg-gt3" ? [5900, 7250] : [...F1_REV_RANGE];
 }
 
 /** A rev light's colour band: the HUD and the car's own wheel paint the same LED in the same band */

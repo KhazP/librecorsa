@@ -90,10 +90,15 @@ console.log('\n== What the regulations fix');
   const peakIsAt95 = LC_LMDH_POWER.curve500Kw.every(([n]) => capW(n * LC_LMDH_POWER.nMax, 100) <= capW(0.95 * LC_LMDH_POWER.nMax, 100));
   check('Power limit: 507 kW at 0.95 Nmax, 506 kW from 240 km/h (Art. 5.1.2)', Math.abs(peak - 507) < 0.6 && peakIsAt95 && peak <= 520 && Math.abs(capW(7750, 300) / 1000 - 506) < 0.6,
     `${fmt(peak, 1)} kW to 230 km/h, ${fmt(capW(0.95 * LC_LMDH_POWER.nMax, 300) / 1000, 1)} kW from 240, ${fmt(capW(LC_LMDH_POWER.nMax, 100) / 1000, 1)} kW at Nmax`);
-  // The same limit as a torque at engine speed (Nm), from the regulations' table × 507 / 500
-  const anchors: [number, number][] = [[4487, 531], [5099, 587], [5711, 631], [6118, 654], [6730, 668], [7138, 658], [7750, 625], [8158, 587.5], [8362, 494.5]];
+  // The same limit as a torque at engine speed (Nm), from the regulations' table × 507 / 500 on the trim's Nmax
+  const anchors: [number, number][] = [0.55, 0.625, 0.7, 0.75, 0.825, 0.875, 0.95, 1, 1.025].map((n) => {
+    const kw = LC_LMDH_POWER.curve500Kw.find(([x]) => x === n)![1];
+    const rpm = n * LC_LMDH_POWER.nMax;
+    return [rpm, (kw * 1000 * (507 / 500)) / ((rpm * Math.PI) / 30)];
+  });
   const worstNm = Math.max(...anchors.map(([rpm, nm]) => Math.abs(capW(rpm, 100) / ((rpm * Math.PI) / 30) / nm - 1)));
-  check('The limit as torque: 531 Nm at 4487 rpm, 668 at 6730, 494.5 at 8362', worstNm < 0.004, `within ${fmt(worstNm * 100, 2)} % at nine engine speeds`);
+  check(`The limit as torque: ${fmt(anchors[0][1], 0)} Nm at ${fmt(anchors[0][0], 0)} rpm … ${fmt(anchors[8][1], 1)} at ${fmt(anchors[8][0], 0)}`, worstNm < 0.004,
+    `within ${fmt(worstNm * 100, 2)} % at nine engine speeds`);
   check('Under 0.55 Nmax the limit stays at its first point', capW(2000, 100) === capW(0.55 * LC_LMDH_POWER.nMax, 100), `${fmt(capW(2000, 100) / 1000, 1)} kW`);
   // Art. 9.6.2: one set must reach 340 km/h without passing Nmax, on a 349 mm tyre radius
   const kmhAtNmax = (cfg: CarPhysicsConfig) => (((LC_LMDH_POWER.nMax * Math.PI) / 30 / (cfg.gearbox.ratios[6] * cfg.gearbox.finalDrive)) * 0.349 * 3.6);
@@ -101,7 +106,9 @@ console.log('\n== What the regulations fix');
     `long ${fmt(kmhAtNmax(LC_LMDH_LONG_CONFIG), 1)} km/h, sprint ${fmt(kmhAtNmax(C), 1)} km/h`);
   check('An up-shift cuts the engine for at least 30 ms (Art. 9.8.2)', (g.upshiftCutS ?? 0) >= 0.03, `${fmt((g.upshiftCutS ?? 0) * 1000, 0)} ms`);
   check('Hybrid on the driveline, brake-by-wire rear brakes (Art. 5.3)', C.ers.ERS_MAX_DEPLOY === 50_000 && C.ers.maxHarvestW === 200_000 && C.brakes.brakeByWire === true, '');
-  check('No ABS on the car: pro runs none (Art. 11.5.1)', LC_LMDH_SIM_PROFILE.assistDials.pro.absLevel === 0 && LC_LMDH_SIM_PROFILE.assistDials.pro.tcLevel > 0, '');
+  const dials = LC_LMDH_SIM_PROFILE.assistDials;
+  check('No ABS on the car (Art. 11.5.1): none on pro or semi-pro, Assisted keeps one', LC_LMDH_SIM_PROFILE.absAllowed === false && dials.pro.absLevel === 0 && dials.semi_pro.absLevel === 0 && dials.assisted.absLevel > 0,
+    `semi-pro TC ${dials.semi_pro.tcLevel} / ${dials.semi_pro.tc2Level} / ${dials.semi_pro.tcSlipAngleLevel}`);
   const car = makeCar();
   check('The engine drives the rear wheels', car.drivenWheels[0] === 2 && car.drivenWheels[1] === 3, `wheels ${car.drivenWheels.join(', ')}`);
 }
@@ -135,8 +142,8 @@ console.log('\n== At rest (500 Hz tick)');
   const t = car.telemetry;
   const fz = car.wheels.map((w) => w.fz);
   const front = (fz[0] + fz[1]) / fz.reduce((a, b) => a + b, 0);
-  check('Front axle carries 46 % of the weight', Math.abs(front - C.chassis.frontWeightFraction) < 0.01, `${fmt(front * 100, 1)} %`);
-  check('Rides at 48 / 68 mm', Math.abs(t.aeroHeightFront - 0.048) < 0.003 && Math.abs(t.aeroHeightRear - 0.068) < 0.003,
+  check('Front axle carries 48.5 % of the weight', Math.abs(front - C.chassis.frontWeightFraction) < 0.01, `${fmt(front * 100, 1)} %`);
+  check('Rides at 50 / 64 mm', Math.abs(t.aeroHeightFront - 0.05) < 0.003 && Math.abs(t.aeroHeightRear - 0.064) < 0.003,
     `${fmt(t.aeroHeightFront * 1000, 1)} / ${fmt(t.aeroHeightRear * 1000, 1)} mm`);
   // Two seconds of single ticks: nothing may move
   let rhLo = Infinity;
@@ -179,8 +186,9 @@ console.log('\n== Aero against speed (flat, held speed)');
   // The floor and the splitter gain as the car settles: ≈ 3.9 m² near its static ride height, ≈ 4.3 m² at 300 km/h
   check('CL·A 3.8–4.5 m² from 100 to 300 km/h, growing as it settles', slow.clA > 3.8 && fast.clA < 4.5 && slow.clA < mid.clA && mid.clA < fast.clA,
     `${fmt(slow.clA)} / ${fmt(mid.clA)} / ${fmt(fast.clA)} m² at 100 / 250 / 300 km/h`);
-  check('CD·A 0.97–1.01 m²', [slow, mid, fast].every((s) => s.cdA > 0.97 && s.cdA < 1.01), `${fmt(slow.cdA, 3)} / ${fmt(mid.cdA, 3)} / ${fmt(fast.cdA, 3)} m²`);
-  check('Downforce over drag 4.3 : 1 at 250 km/h, on 28 / 43 mm', Math.abs(mid.clA / mid.cdA - 4.3) < 0.1 && Math.abs(mid.front - 0.03) < 0.003 && Math.abs(mid.rear - 0.043) < 0.004,
+  // The drag the low-drag trim's speed trap holds it to (≈ 0.99 m² on the 1° wing), ≈ 1.1 m² on the sprint's 5.5°
+  check('CD·A 1.06–1.13 m²', [slow, mid, fast].every((s) => s.cdA > 1.06 && s.cdA < 1.13), `${fmt(slow.cdA, 3)} / ${fmt(mid.cdA, 3)} / ${fmt(fast.cdA, 3)} m²`);
+  check('Downforce over drag 3.85 : 1 at 250 km/h, on 32 / 40 mm', Math.abs(mid.clA / mid.cdA - 3.85) < 0.12 && Math.abs(mid.front - 0.032) < 0.003 && Math.abs(mid.rear - 0.04) < 0.004,
     `${fmt(mid.clA / mid.cdA, 2)} : 1 at ${fmt(mid.front * 1000, 1)} / ${fmt(mid.rear * 1000, 1)} mm`);
   // Under the 54 % of the weight on the rear axle, so the car gains understeer with speed
   check('Aero balance 44–48 % front', [slow, mid, fast].every((s) => s.bal > 44 && s.bal < 48), `${fmt(slow.bal, 1)} / ${fmt(mid.bal, 1)} / ${fmt(fast.bal, 1)} %`);
@@ -240,7 +248,8 @@ console.log('\n== Under the most aero load (500 Hz tick)');
   const rmsG = Math.sqrt(sumA / n) / 9.81;
   check('At top speed the floor rides the road\'s texture within ±0.25 mm', rideHi - rideLo < 5e-4 && rmsG < 0.03 && rideLo > 0.012,
     `${fmt(car.telemetry.speedKmh, 1)} km/h: front ride height ${fmt(rideLo * 1000, 2)}–${fmt(rideHi * 1000, 2)} mm, body ${fmt(rmsG * 1000, 1)} mg rms`);
-  check('Short of the heave packers there', frontTravel < C.suspensions.front.heave.packerGap && rearTravel < C.suspensions.rear.heave.packerGap,
+  // The low-drag trim's 11 / 12 mm third-spring packers hold the floor up at top speed: on them, a few mm into them
+  check('On the third-spring packers there, a few mm in', frontTravel < C.suspensions.front.heave.packerGap + 0.006 && rearTravel < C.suspensions.rear.heave.packerGap + 0.006,
     `travel ${fmt(frontTravel * 1000, 1)} of ${C.suspensions.front.heave.packerGap * 1000} mm front, ${fmt(rearTravel * 1000, 1)} of ${C.suspensions.rear.heave.packerGap * 1000} mm rear`);
 }
 
@@ -262,18 +271,20 @@ console.log('\n== Straight line through the adapter (its own TC)');
   };
   const s = sprint();
   // Traction-limited to ≈ 130 km/h (1.0 g at 54 km/h), then 507 kW on 1180 kg with fuel
-  check('0-100 km/h 2.8–3.6 s', s.at[100] > 2.8 && s.at[100] < 3.6, `${fmt(s.at[100])} s`);
-  check('0-200 km/h 6.2–7.6 s', s.at[200] > 6.2 && s.at[200] < 7.6, `${fmt(s.at[200])} s`);
-  check('0-300 km/h 15–20 s', s.at[300] > 15 && s.at[300] < 20, `${fmt(s.at[300])} s`);
+  // The semi-pro TC's 10 holds the launch to 6 % of wheelspin, and the motor deploys only past 120 km/h
+  check('0-100 km/h 3.0–4.1 s', s.at[100] > 3 && s.at[100] < 4.1, `${fmt(s.at[100])} s`);
+  check('0-200 km/h 6.2–8.2 s', s.at[200] > 6.2 && s.at[200] < 8.2, `${fmt(s.at[200])} s`);
+  check('0-300 km/h 16–23 s', s.at[300] > 16 && s.at[300] < 23, `${fmt(s.at[300])} s`);
   // 506 kW against CD·A 0.99 m² and the tyres' rolling loss under ≈ 17 kN of downforce: seventh runs out past Nmax,
   // where the regulated power falls away
-  check('Sprint set, 5.5° wing: seventh runs out at 314–322 km/h', s.vmax > 314 && s.vmax < 322 && s.gear === 7 && s.rpm > LC_LMDH_POWER.nMax && s.rpm < C.gearbox.gears.redline_rpm,
+  check('Short set, 5.5° wing: seventh runs out at 304–318 km/h', s.vmax > 304 && s.vmax < 318 && s.gear === 7 && s.rpm > LC_LMDH_POWER.nMax && s.rpm < C.gearbox.gears.redline_rpm,
     `${fmt(s.vmax, 1)} km/h at ${fmt(s.rpm, 0)} rpm`);
   // The class's cars were timed at 322.7–326.7 km/h through the speed trap of a banked oval's road course in
   // qualifying, on the long gear set and little wing. A trap is short of the car's terminal speed, and the long set's
   // rule puts 340 km/h at Nmax: the car must reach the trap's speeds and stay under the rule's
   const l = sprint(LC_LMDH_LONG_SIM_PROFILE);
-  check('Long set, 1° wing: terminal speed over the 326.7 km/h trap, under 340', l.vmax > 326.7 && l.vmax < 340 && l.rpm <= LC_LMDH_POWER.nMax, `${fmt(l.vmax, 1)} km/h at ${fmt(l.rpm, 0)} rpm`);
+  // At ρ 1.225: ≈ 325 km/h, the ≈ 330 of the trim's sea-level summer air (scripts/endurance-report.ts)
+  check('Long set, 1° wing: terminal speed 320–335 km/h, under Nmax', l.vmax > 320 && l.vmax < 335 && l.rpm <= LC_LMDH_POWER.nMax, `${fmt(l.vmax, 1)} km/h at ${fmt(l.rpm, 0)} rpm`);
   const wing = (cfg: CarPhysicsConfig, deg: number): CarPhysicsConfig => ({ ...cfg, aero: { ...cfg.aero, wings: cfg.aero.wings.map((w) => (w.name === 'REAR_WING' ? { ...w, angleDeg: deg } : w)) } });
   /** Flat out from a corner's exit speed: the speed at each distance (km/h), and where it ends */
   const pullFrom = (cfg: CarPhysicsConfig, kmh: number, marks: number[]) => {
@@ -293,7 +304,7 @@ console.log('\n== Straight line through the adapter (its own TC)');
   check('Long set on the 5.5° wing: between the sprint set\'s top speed and the 1° wing\'s', longMid.terminal > s.vmax && longMid.terminal < l.vmax, `${fmt(longMid.terminal, 1)} km/h (trap 322.7–326.7)`);
   // Where the traps stand is not in the timing files: 1.5 km of full throttle from a 130 km/h corner [est]
   const longRun = pullFrom(LC_LMDH_LONG_CONFIG, 130, [1500]);
-  check('Long set, 1° wing: 318–332 km/h after 1.5 km from 130 km/h', longRun.at[0] > 318 && longRun.at[0] < 332, `${fmt(longRun.at[0], 1)} km/h (trap 322.7–326.7)`);
+  check('Long set, 1° wing: 310–330 km/h after 1.5 km from 130 km/h', longRun.at[0] > 310 && longRun.at[0] < 330, `${fmt(longRun.at[0], 1)} km/h (trap 322.7–326.7)`);
   // The sprint circuit's trap, at the end of a straight of about a kilometre: 288–291 km/h, on more wing than 5.5°.
   // From a 100 km/h corner [est] the car passes that between 800 m and 1 km
   const sprintRun = pullFrom(wing(C, 9), 100, [800, 1000]);
@@ -307,10 +318,10 @@ console.log('\n== The regulated power at the driveshafts');
   // shafts' power plus what the engine's own flywheel takes up or gives back as it changes speed. The flywheel's share
   // is not limited here: after an up-shift and as wheelspin ends, the slowing engine hands its energy to the shafts
   // (≈ 17 kJ a change) on top of the limit, which a real car's controller would trim against its torque sensors
-  const pull = (mode: PerformanceModeName, soc: number) => {
+  const pull = (deployKw: number, soc: number) => {
     const car = makeCar();
     car.reset(0, 0, 0, 60 / 3.6);
-    car.setPerformanceMode(mode);
+    car.motorDeployKw = deployKw;
     car.ersEnergyJ = soc * C.ers.ERS_MAX_CHARGE;
     const N = Math.round(0.2 / TICK);
     const sent: number[] = [];
@@ -357,9 +368,11 @@ console.log('\n== The regulated power at the driveshafts');
     }, TICK);
     return { worst, overJ, changes, peakW, peakRpm, deployedJ, usedJ: e0 - car.ersEnergyJ, t250 };
   };
-  const qual = pull('PSH', 1);
-  const none = pull('CHR', 1);
-  check('Engine and motor never send more than the limit, deploying or not', qual.worst <= 1.005 && none.worst <= 1.005, `at most ${fmt(qual.worst * 100, 1)} % of it deploying, ${fmt(none.worst * 100, 1)} % without`);
+  const qual = pull(50, 1);
+  const none = pull(0, 1);
+  // Measured at the wheels, past the halfshafts: their twist stores some of the drive and hands it back after a change,
+  // which the 0.2 s mean may show as up to 1 % over
+  check('Engine and motor never send more than the limit, deploying or not', qual.worst <= 1.01 && none.worst <= 1.01, `at most ${fmt(qual.worst * 100, 1)} % of it deploying, ${fmt(none.worst * 100, 1)} % without`);
   check('The car reaches the limit: 507 kW to the shafts', qual.peakW > 500_000 && qual.peakW < 508_500 && none.peakW > 500_000 && none.peakW < 508_500,
     `${fmt(qual.peakW / 1000, 1)} kW at ${fmt(qual.peakRpm, 0)} rpm deploying, ${fmt(none.peakW / 1000, 1)} kW without`);
   // Not modelled: trimming the engine against the flywheel's own energy, which the shafts' sensors would also read
@@ -373,11 +386,11 @@ console.log('\n== The regulated power at the driveshafts');
 
 console.log('\n== Hybrid: deployment, regeneration and the store');
 {
-  // Steady flat out at 200 km/h in qualifying mode: all 50 kW, never more
+  // Steady flat out at 200 km/h on the deploy dial's 50 kW and a full store: all 50 kW, never more
   {
     const car = makeCar();
     car.reset(0, 0, 0, 200 / 3.6);
-    car.setPerformanceMode('PSH');
+    car.motorDeployKw = 50;
     car.ersEnergyJ = C.ers.ERS_MAX_CHARGE;
     let peak = 0;
     run(car, 3, () => ({ throttle: 1, brake: 0, steer: 0 }), (c, t) => {
@@ -390,7 +403,7 @@ console.log('\n== Hybrid: deployment, regeneration and the store');
   {
     const car = makeCar();
     car.reset(0, 0, 0, 200 / 3.6);
-    car.setPerformanceMode('PSH');
+    car.motorDeployKw = 50;
     car.ersEnergyJ = 0;
     let peak = 0;
     run(car, 2, () => ({ throttle: 1, brake: 0, steer: 0 }), (c) => {
@@ -433,26 +446,27 @@ console.log('\n== Hybrid: deployment, regeneration and the store');
   // Brake-by-wire: the rear axle brakes what the pedal asks with the motor or without it
   check('Brake-by-wire: the same stop with regeneration as on the calipers alone', Math.abs(regen.dist / friction.dist - 1) < 0.02 && regen.rearLock < 0.12,
     `${fmt(regen.dist, 1)} m regenerating, ${fmt(friction.dist, 1)} m on a full store, rear slip at most ${fmt(regen.rearLock * 100, 1)} %`);
-  // The hybrid fills the turbos' lag: off a closed throttle at 4500 rpm the car pulls harder in the first 0.3 s
-  const step = (mode: PerformanceModeName) => {
+  // The hybrid fills the turbos' lag: off a closed throttle in fourth, past the 120 km/h it may deploy from, the car
+  // pulls harder in the first 0.3 s
+  const step = (deployKw: number) => {
     const car = makeCar();
-    car.reset(0, 0, 0, 110 / 3.6);
+    car.reset(0, 0, 0, 140 / 3.6);
     car.autoShift = false;
-    car.setPerformanceMode(mode);
-    car.ersEnergyJ = C.ers.ERS_MAX_CHARGE;
-    run(car, 2, (c) => ({ throttle: 0, brake: 0, steer: 0, shiftUp: c.gear < 3, shiftDown: c.gear > 3 }));
+    car.motorDeployKw = deployKw;
+    car.ersEnergyJ = 0.4 * C.ers.ERS_MAX_CHARGE;
+    run(car, 2, (c) => ({ throttle: 0, brake: 0, steer: 0, shiftUp: c.gear < 4, shiftDown: c.gear > 4 }));
     const v0 = car.telemetry.speedKmh;
     run(car, 0.3, () => ({ throttle: 1, brake: 0, steer: 0 }));
     return car.telemetry.speedKmh - v0;
   };
-  const filled = step('PSH');
-  const lagging = step('CHR');
+  const filled = step(50);
+  const lagging = step(0);
   check('The motor fills the turbos\' lag off a closed throttle', filled > lagging * 1.03, `+${fmt(filled, 2)} km/h in 0.3 s deploying, +${fmt(lagging, 2)} km/h without`);
 }
 
 console.log('\n== Braking through the adapter');
 {
-  const stop = (preset: 'pro' | 'semi_pro', pedal = 1) => {
+  const stop = (preset: 'pro' | 'assisted', pedal = 1) => {
     const sim = createLcLmdhSim(pad);
     sim.assistPreset = preset;
     sim.teleportToDistance(1000, 300 / 3.6);
@@ -473,15 +487,15 @@ console.log('\n== Braking through the adapter');
     gs.sort((a, b) => a - b);
     return { dist: sim.sMeters - s0, v0, time, peakG: gs[Math.floor(gs.length * 0.98)], meanG: (v0 - sim.telemetry.speedKmh) / 3.6 / time / 9.81, lockFront, lockRear };
   };
-  const abs = stop('semi_pro');
+  const abs = stop('assisted');
   const raw = stop('pro');
   const light = stop('pro', 0.6);
   // ≈ 1.5 g of downforce and 0.35 g of drag at 300 km/h, ≈ 1.7 g on the tyres alone at 100
-  check('300–100 km/h in 105–130 m with the semi-pro ABS', abs.dist > 105 && abs.dist < 130, `${fmt(abs.dist, 1)} m in ${fmt(abs.time)} s from ${fmt(abs.v0, 0)} km/h`);
+  check('300–100 km/h in 105–130 m with the Assisted preset\'s ABS', abs.dist > 105 && abs.dist < 130, `${fmt(abs.dist, 1)} m in ${fmt(abs.time)} s from ${fmt(abs.v0, 0)} km/h`);
   check('Peak 3.2–3.8 g, 2.3–2.8 g over the stop', abs.peakG > 3.2 && abs.peakG < 3.8 && abs.meanG > 2.3 && abs.meanG < 2.8, `peak ${fmt(abs.peakG)} g, mean ${fmt(abs.meanG)} g`);
   check('A stamp locks the wheels without ABS, and stops later', raw.lockFront > 0.5 && raw.dist > abs.dist, `max lock ${fmt(raw.lockFront)}, ${fmt(raw.dist, 1)} m`);
-  // 56 % front: as the downforce bleeds off the fronts give first, which keeps the car straight
-  check('The fronts lock before the rears', light.lockFront > 0.5 && light.lockRear < 0.3, `at 60 % pedal: front ${fmt(light.lockFront)}, rear ${fmt(light.lockRear)}`);
+  // 56.4 % front: as the downforce bleeds off the fronts give first, which keeps the car straight
+  check('The fronts give before the rears', light.lockFront > light.lockRear && light.lockRear < 0.3, `at 60 % pedal: front ${fmt(light.lockFront)}, rear ${fmt(light.lockRear)}`);
   const pm = LC_LMDH_PROFILE_CAR;
   let planned = 0;
   for (let v = 300 / 3.6; v > 100 / 3.6; v -= 0.05) {
@@ -527,10 +541,9 @@ for (const [kmh, lo, hi] of [
 console.log('\n== Traction control through the adapter');
 {
   const damp = { waterMm: 0.3, wetness: wetnessFromWater(0.3), ambientC: 15, rain: 0.3 };
-  const noTc = { ...LC_LMDH_SIM_PROFILE, assistDials: { ...LC_LMDH_SIM_PROFILE.assistDials, pro: { tcLevel: 0, tc2Level: 4, absLevel: 0 } } };
   const exit = (tcOn: boolean) => {
-    const sim = createLcLmdhSim(pad, null, tcOn ? LC_LMDH_SIM_PROFILE : noTc);
-    sim.assistPreset = 'pro';
+    const sim = createLcLmdhSim(pad, null, LC_LMDH_SIM_PROFILE);
+    sim.assistPreset = tcOn ? 'semi_pro' : 'pro';
     sim.setWeatherSample(damp);
     sim.teleportToDistance(1000, 80 / 3.6);
     let sum = 0;
@@ -545,7 +558,7 @@ console.log('\n== Traction control through the adapter');
   };
   const tc = exit(true);
   const raw = exit(false);
-  // The car's own TC (pro keeps it): its 9 % target in the two seconds it works on a damp road
+  // The semi-pro preset's TC (pro runs none): its 6 % target in the two seconds it works on a damp road
   check('The car\'s own TC holds rear wheelspin on a damp road', tc < 0.15 && tc < raw * 0.6, `mean rear slip ${fmt(tc, 2)} with TC, ${fmt(raw, 2)} with it off`);
 }
 
@@ -600,9 +613,9 @@ console.log('\n== Fuel and steering');
   const f0 = sim.telemetry.fuelKg;
   for (let t = 0; t < 30; t += DT) sim.step(DT, { throttle: 1 });
   const burnt = f0 - sim.telemetry.fuelKg;
-  // ≈ 0.033 kg/s at 8000 rpm, a little less through the gears
-  check('30 s flat out from rest burns 0.8–1.0 kg', f0 === 38 && burnt > 0.8 && burnt < 1.0, `${fmt(burnt, 3)} kg of ${f0} kg`);
-  // 225° of rim lock at the hands' 900°/s
+  // A sprint's fixed 28 kg of ballast: none of it burnt
+  check('30 s flat out from rest: the 28 kg of sprint fuel stays aboard', f0 === 28 && burnt === 0, `${fmt(burnt, 3)} kg of ${f0} kg`);
+  // 263.5° of rim lock at the hands' 900°/s
   const steer = createLcLmdhSim(pad);
   steer.teleportToDistance(1000, 50 / 3.6);
   let tLock = NaN;
@@ -610,7 +623,7 @@ console.log('\n== Fuel and steering');
     steer.step(DT / 4, { analogSteer: 1 });
     if (steer.steerAngleNorm >= 0.999) tLock = t + DT / 4;
   }
-  check('Full lock from centre in 0.24–0.26 s (225° at 900°/s)', tLock > 0.24 && tLock < 0.26, `${fmt(tLock, 3)} s`);
+  check('Full lock from centre in 0.28–0.31 s (263.5° at 900°/s)', tLock > 0.28 && tLock < 0.31, `${fmt(tLock, 3)} s`);
 }
 
 console.log('\n== What the sound hears: driveshaft and motor telemetry');

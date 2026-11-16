@@ -286,7 +286,7 @@ const REAR_TARGET_HEIGHT = 0.064;
  *
  * The car's own pickup points are not public: the hardpoints are the simulator's GT push-rod wishbone layout [est],
  * `[x inboard, y up, z forward]` from the wheel centre, and the camber gain and roll-centre heights are what the
- * kinematic solver gives for it on this car's tracks and tyres [derived]: roll centres 30 mm front and 59 mm rear, a
+ * kinematic solver gives for it on this car's tracks and tyres [derived]: roll centres 63 mm front and 59 mm rear, a
  * third of the braking load carried by the front links (anti-dive), ≈ 3 °/m of toe-out in bump at the front and
  * ≈ 7 °/m of toe-in at the rear.
  */
@@ -295,13 +295,14 @@ const SUSPENSIONS: SuspensionsData = {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
     staticCamber: -2.2,
-    camberGainKinematic: -47,
+    camberGainKinematic: -46,
     springs: { wheel_rate: 60_000, helper_rate: 0, helper_range: 0 },
     // Third-spring packers 11 mm (front) and 12 mm (rear) from static [bop]
     heave: { rate: 480_000, gap: 0, packerGap: 0.011, packerRate: 900_000 },
     bumpStop: { range: 0.032, rate: 150_000, progression: 4_000_000 },
     droopTravel: 0.035,
-    rollCentreHeight: 0.0297,
+    // The prototype's own uprights put the front roll centre higher than the GT layout's 30 mm [derived]
+    rollCentreHeight: 0.0628,
     arb: 85_000,
     allowNoArb: true,
     hardpoints: [
@@ -663,6 +664,8 @@ function lmdhCompound(
       // Graining below the window, blistering above it [est]
       tread: { grainGain: 0.55, grainGamma: 1, blisterGain: 0.6, blisterGamma: 1, wearOffWithSlip: true },
       pressureHeat: { slipGain: 0.48, crownGain: 0.65 },
+      // Camber moves the contact pressure to the inner shoulder at 6.5 per radian [est]
+      bandSpread: { camber: 6.5, lateral: 0.22 },
       rimGas: LMDH_RIM_GAS,
     },
     pressureData: {

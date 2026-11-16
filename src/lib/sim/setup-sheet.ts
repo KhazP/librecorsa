@@ -9,7 +9,7 @@
  */
 
 import type { TyreSetup, VehicleModelId } from "@/types/f1";
-import { type ChassisSetup, CHASSIS_LIMITS, FUEL_KG_PER_L, FUEL_LOAD, type GarageTuner, STEER_RATIO_BASE, WING_CLICK_DEG } from "./car-setup";
+import { ARB_DETACHED_PCT, type ChassisSetup, CHASSIS_LIMITS, FUEL_KG_PER_L, FUEL_LOAD, type GarageTuner, STEER_RATIO_BASE, WING_CLICK_DEG } from "./car-setup";
 import { LC26_CHASSIS } from "./lc26-data";
 import { F12026_CAR_CONFIG } from "./f12026-car/F12026CarConfig";
 import { AMG_GT3_CONFIG } from "./gt3/AmgGt3Config";
@@ -186,8 +186,11 @@ function arbParam(key: "arbFrontPct" | "arbRearPct", label: string, detachable: 
     max: 21,
     step: 1,
     base: 11,
-    get: (st) => (st.chassis[key] <= -100 + 1e-6 ? 0 : Math.max(1, 11 + st.chassis[key] / 5)),
-    set: (st, v) => ({ ...st, chassis: { ...st.chassis, [key]: clampTo(Math.round(v) <= 0 && detachable ? -100 : (Math.max(1, Math.round(v)) - 11) * 5, lim) } }),
+    get: (st) => (st.chassis[key] <= ARB_DETACHED_PCT + 1e-6 ? 0 : Math.max(1, 11 + st.chassis[key] / 5)),
+    set: (st, v) => ({
+      ...st,
+      chassis: { ...st.chassis, [key]: Math.round(v) <= 0 && detachable ? ARB_DETACHED_PCT : clampTo((Math.max(1, Math.round(v)) - 11) * 5, lim) },
+    }),
     format: (v) => (v <= 0 ? "Detached" : int(v)),
     fx,
     writes: "chassis",
@@ -548,7 +551,8 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
           base: b.brakeBiasPct ?? 71,
           min: b.brakeBiasRangePct?.[0] ?? 60,
           max: b.brakeBiasRangePct?.[1] ?? 78,
-          step: 0.5,
+          // The adjuster's own click (0.2 % on the prototype's brake-by-wire)
+          step: cfg?.brakes.ebbStep && cfg.brakes.ebbStep < 0.005 ? Number((cfg.brakes.ebbStep * 100).toFixed(2)) : 0.5,
           format: (v) => `${v.toFixed(1)}%`,
           fx: FX.bias,
         }),

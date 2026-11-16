@@ -207,7 +207,8 @@ const SUSPENSIONS: SuspensionsData = {
     // Long, soft, progressive urethane rubber [ref] that damps and gives back only part of its force [est]
     bumpStop: { range: 0.0425, rate: 10_000, progression: 1_900_000, damper: 3200, risingDamper: 85_000, reboundElasticShare: 0.55 },
     droopTravel: 0.06,
-    rollCentreHeight: 0.024,
+    // The uprights' ball joints inside the barrel raise the front roll centre from the reference's 24 mm [derived]
+    rollCentreHeight: 0.049,
     arb: 68_400, // [ref] front roll share 60 %
     allowNoArb: true,
     // Inner pickup heights and pivot-axis tilts, rack height and steering-arm offset set so the solved geometry matches
@@ -454,8 +455,6 @@ const AERO: AeroData = {
   // A tow saves a GT3 less drag than an open-wheeler's wake model gives it: ≈ 6 km/h at the end of a long straight
   // 12 m behind another car [est]
   wakeSensitivity: { dragWakeMult: 0.18, frontLiftWakeMult: 1, diffuserDraftLiftMult: 1 },
-  // The skid block [est]
-  plankPhysics: { kLinearNm: 650_000, kExpNm: 420_000, betaPerM: 180, dampNsPerM: 16_000, frictionMu: 0.24, initialWearMarginMm: 5, wearMmPerMJ: 0.42 },
   // Each brake duct step and radiator step's drag and downforce [est]
   cooling: {
     brakeDuctFrontCdAPerStep: 0.0045,
@@ -497,15 +496,17 @@ function buildGt3LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints 
 /**
  * GT3 slick [spec]: the front's values, the rear's own Fz0, load sensitivity, 16-point DY/DX curves, peak
  * slip angle, relaxation length, pressure-spring rate, and camber thrust in `rearOverride` ([REAR]). The endurance
- * slicks are harder and longer-lasting than the sprint ones the reference laps ran on [bop]: D_REF 1.83 / 1.80 / 1.75
- * (the sprint set's 1.84 / 1.817 / 1.794), and three temperature curves.
+ * slicks are harder and longer-lasting than the sprint ones the reference laps ran on [bop]: D_REF (longitudinal)
+ * 1.77 / 1.74 / 1.69, × 1.07 across, and three temperature curves.
  */
 /**
  * Lateral grip over longitudinal [motec]: on warm tyres with fuel aboard the car held 3 % less lateral g than the
  * reference laps while it braked 3 % harder, and the second reference's slick has the same lean (its lateral load
- * curve sits 5–7 % over its longitudinal one)
+ * curve sits 5–7 % over its longitudinal one). With the endurance trim's 64 % brake balance both axles reach their
+ * grip under braking, so the lean is 7 %: the stops stay near the reference laps' g, the traction out of slow corners
+ * too [bop, motec]
  */
-const GT3_LATERAL_GRIP = 1.033;
+const GT3_LATERAL_GRIP = 1.07;
 
 /** The rim and inflation cavity of an 18" GT3 wheel [est] */
 const GT3_RIM_GAS = {
@@ -615,7 +616,7 @@ function gt3Compound(
       slipHeatShare: 0.35,
       // Raced without blankets, the carcass has to warm itself on the out-lap: the rolling loss nearer the tyre's
       // rolling resistance than the blanketed sprint tyre's 0.0044 [bop, est]
-      hysteresis: 0.0075,
+      hysteresis: 0.006,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
       coreCooling: [8, 0.2],
@@ -625,6 +626,8 @@ function gt3Compound(
       tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1, wearOffWithSlip: true },
       // Pressure in the heat and the crown [est]
       pressureHeat: { slipGain: 0.45, crownGain: 0.62 },
+      // Camber moves the contact pressure to the inner shoulder at 6.5 per radian [est]
+      bandSpread: { camber: 6.5, lateral: 0.22 },
       // An 18" forged wheel; the carcass stretches a little as the pressure rises [est]
       rimGas: { ...GT3_RIM_GAS, rimHeatCapacityJK: 4600 },
     },
@@ -705,7 +708,7 @@ const TYRES = {
     'PhysicsTyreCompound_GT3_Soft',
     'GT3 Soft',
     'S',
-    1.83,
+    1.77,
     [
       [0, 0.7],
       [20, 0.8],
@@ -727,7 +730,7 @@ const TYRES = {
     'PhysicsTyreCompound_GT3_Medium',
     'GT3 Medium',
     'M',
-    1.8,
+    1.74,
     [
       [0, 0.7],
       [20, 0.8],
@@ -750,7 +753,7 @@ const TYRES = {
     'PhysicsTyreCompound_GT3_Hard',
     'GT3 Hard',
     'H',
-    1.75,
+    1.69,
     [
       [0, 0.7],
       [20, 0.8],

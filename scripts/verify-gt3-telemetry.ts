@@ -44,10 +44,19 @@ console.log('Braking g');
 band((at) => `braking g at ${at} km/h`, m.brakingG, -12, 12);
 
 console.log('Full-throttle g');
-band((at) => `full-throttle g at ${at} km/h`, m.throttleG, -15, 20);
+// The logs are a sprint trim's: the endurance balance of performance's restrictors take 0.985 / 1.04 of its torque
+// (and cap the top at 354 kW), so the reference's full-throttle g is scaled by that first. Its drag (CD·A ≈ 1.07 m²
+// against the sprint car's ≈ 0.86, held to the low-drag trim's speed trap) takes more of the pull as the speed
+// rises: −25 % allowed past 200 km/h
+const BOP_TORQUE = 0.985 / 1.04;
+const throttleRows = m.throttleG.map(([at, ours, ref]) => [at, ours, ref * BOP_TORQUE] as [number, number, number]);
+const restrictors = (at: number) => `full-throttle g at ${at} km/h (the reference × the restrictors' ${BOP_TORQUE.toFixed(3)})`;
+band(restrictors, throttleRows.filter(([at]) => at < 200), -15, 20);
+band(restrictors, throttleRows.filter(([at]) => at >= 200), -25, 20);
 
 console.log('Gearing');
 band((g) => `gear ${g} rpm per m/s`, m.rpmPerMs, -1, 1);
-check('limiter rpm', Math.abs(m.limiterRpm - GT3_REF.limiterRpm) <= 10, `${m.limiterRpm} rpm`);
+// The logs peak at 7899 rpm on the sprint trim; the endurance balance of performance sets 7450
+check('limiter rpm: the endurance trim\'s 7450 under the logs\' sprint limiter', Math.abs(m.limiterRpm - 7450) <= 10 && m.limiterRpm < GT3_REF.limiterRpm, `${m.limiterRpm} rpm (logs ${GT3_REF.limiterRpm})`);
 
 console.log(`\nAll ${passed} GT3 telemetry checks passed.`);

@@ -1,4 +1,5 @@
 /** Gauge/absolute pressure regressions through both tyre models and their simulator adapters. */
+import { tyreGaugePressureOfGas } from '../src/lib/sim/tyre-pressure';
 import { strict as assert } from 'node:assert';
 import {
   coldPressureFor, createTyreRuntime, setTyreColdPressure, setTyreTemperature, updateTyreThermal,
@@ -90,9 +91,11 @@ for (const [name, config] of [['F12026', F12026_CAR_CONFIG], ['AMG GT3', AMG_GT3
         const td = data[w.isFront ? 0 : 1];
         const refC = td.pressureData.coldRefC;
         const targetC = (td.thermalData.optimalTempC[0] + td.thermalData.optimalTempC[1]) / 2;
-        // The default is rounded to 0.1 psi at the blanket temperature.
-        near(gasInvariant(w.coldPressurePsi, refC), gasInvariant(td.pressureData.optimalPsi, targetC), 0.0500001 / (refC + K));
-        near(w.pressurePsi, w.coldPressurePsi);
+        // The default is the data's own set pressure, else rounded to 0.1 psi at the blanket temperature.
+        if (td.pressureData.setPsi !== undefined) near(w.coldPressurePsi, td.pressureData.setPsi);
+        else near(gasInvariant(w.coldPressurePsi, refC), gasInvariant(td.pressureData.optimalPsi, targetC), 0.0500001 / (refC + K));
+        // At the gas's temperature as the tyre leaves (its blankets', or the garage's for a tyre raced without)
+        near(w.pressurePsi, tyreGaugePressureOfGas(w.coldPressurePsi, refC, w.gasTempC, td.thermalData.rimGas?.carcassVolumeStretchPerPsi ?? 0));
         w.coldPressurePsi = w.isFront ? 20 : 19;
       }
       // Exercise heating and cooling through the real thermal step, comparing the resulting gas proxy. The thermal
@@ -100,14 +103,19 @@ for (const [name, config] of [['F12026', F12026_CAR_CONFIG], ['AMG GT3', AMG_GT3
       for (const tempC of [110, 35]) {
         for (const w of car.wheels) {
           w.bandTempsC.fill(tempC);
+          w.bandCarcassTempsC.fill(tempC);
           w.bandCoreTempsC.fill(tempC);
+          w.gasTempC = w.rimTempC = tempC;
         }
         car.step(0.002, { throttle: 0, brake: 0, steer: 0 });
         for (const [i, w] of car.wheels.entries()) {
-          const refC = data[w.isFront ? 0 : 1].pressureData.coldRefC;
+          const td = data[w.isFront ? 0 : 1];
+          const refC = td.pressureData.coldRefC;
           near(w.coldPressurePsi, w.isFront ? 20 : 19);
           near(w.coreTempC, tempC, 0.5);
-          near(gasInvariant(w.pressurePsi, w.coreTempC), gasInvariant(w.coldPressurePsi, refC));
+          // The pressure follows the gas, which the carcass liner and the rim keep near them
+          near(w.gasTempC, tempC, 0.5);
+          near(w.pressurePsi, tyreGaugePressureOfGas(w.coldPressurePsi, refC, w.gasTempC, td.thermalData.rimGas?.carcassVolumeStretchPerPsi ?? 0));
           near(car.telemetry.tyrePressurePsi[i], w.pressurePsi);
         }
       }

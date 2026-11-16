@@ -136,10 +136,9 @@ export const CHASSIS_LIMITS: Record<keyof ChassisSetup, SetupRange> = {
   rideHeightRearMm: { min: -15, max: 15, step: 1 },
   springFrontPct: { min: -30, max: 30, step: 1.5 },
   springRearPct: { min: -30, max: 30, step: 1.5 },
-  // −100 %: the bar disconnected, on a car whose data allows it (`AxleSuspensionData.allowNoArb`); the sheets hold the
-  // others to −50 %
-  arbFrontPct: { min: -100, max: 50, step: 5 },
-  arbRearPct: { min: -100, max: 50, step: 5 },
+  // Below −50 % only −100 % itself: the bar disconnected, on a car whose data allows it (`AxleSuspensionData.allowNoArb`)
+  arbFrontPct: { min: -50, max: 50, step: 5 },
+  arbRearPct: { min: -50, max: 50, step: 5 },
   bumpFrontPct: { min: -40, max: 40, step: 5 },
   bumpRearPct: { min: -40, max: 40, step: 5 },
   fastBumpFrontPct: { min: -40, max: 40, step: 5 },
@@ -211,7 +210,7 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   "mtr-496r": { defaultKg: 22, minKg: 4, maxKg: 67 },
   // A sprint's fixed 28 kg (≈ 38 l) [est]: the regulations ask for a cell of at least 110 l (Art. 13.14) [spec], and hold
   // the class to an energy per stint
-  "lc-lmdh": { defaultKg: 28, minKg: 5, maxKg: 81.4 },
+  "lc-lmdh": { defaultKg: 28, minKg: 5, maxKg: 81 },
   // 40 l of a 100 l tank [spec car.ini FUEL / MAX_FUEL]
   "nissan-r33-jgtc": { defaultKg: 30, minKg: 4, maxKg: 74 },
   // 30 l of a 120 l tank [spec car.ini FUEL / MAX_FUEL]
@@ -258,11 +257,18 @@ export function clampChassisSetup(v: unknown): ChassisSetup {
   for (const k of Object.keys(CHASSIS_LIMITS) as (keyof ChassisSetup)[]) {
     const n = src[k];
     if (typeof n !== "number" || !Number.isFinite(n)) continue;
+    if ((k === "arbFrontPct" || k === "arbRearPct") && n <= ARB_DETACHED_PCT) {
+      out[k] = ARB_DETACHED_PCT;
+      continue;
+    }
     const r = CHASSIS_LIMITS[k];
     out[k] = Number(Math.max(r.min, Math.min(r.max, Math.round(n / r.step) * r.step)).toFixed(3));
   }
   return out;
 }
+
+/** The anti-roll bar setting that disconnects it (−100 %: 0 N/m) */
+export const ARB_DETACHED_PCT = -100;
 
 /** 1 + pct / 100, for scaling a baseline */
 export const pctScale = (pct: number) => 1 + pct / 100;

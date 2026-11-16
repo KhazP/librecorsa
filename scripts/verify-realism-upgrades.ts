@@ -251,11 +251,12 @@ check('f12026-car and GT3 hardpoints solve to their configs\' camber gain and ro
       assert.ok(Math.abs(s0.uprightCamberRad) < 1e-9 && Math.abs(s0.wheelSteerRad) < 1e-9, `${where}: no camber or toe of its own at static`);
       if (front) {
         assert.ok(s0.contactForwardPerBump > 0.02, `${where}: the patch moves forward in bump (anti-dive), slope ${s0.contactForwardPerBump.toFixed(3)}`);
-        // The rack turns both wheels the same way, within a few per cent of the nominal angle (the rest is Ackermann)
+        // The rack turns both wheels the same way, within a few per cent of the nominal angle (the rest is Ackermann; the
+        // GT3's ball joints inside its barrel give its steering arm ≈ 5 % of it)
         const n = 10 / D;
         const inner = at(0, n, true).wheelSteerRad;
         const outer = at(0, n, false).wheelSteerRad;
-        assert.ok(Math.abs(inner / n - 1) < 0.05 && Math.abs(outer / n - 1) < 0.05, `${where}: 10° rack gives ${(inner * D).toFixed(2)}° / ${(outer * D).toFixed(2)}°`);
+        assert.ok(Math.abs(inner / n - 1) < 0.06 && Math.abs(outer / n - 1) < 0.06, `${where}: 10° rack gives ${(inner * D).toFixed(2)}° / ${(outer * D).toFixed(2)}°`);
       }
     }
   }
