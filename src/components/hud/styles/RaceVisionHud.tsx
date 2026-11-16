@@ -24,7 +24,7 @@ import type { CarTelemetry, RaceStandingEntry } from "@/types/f1";
 import { Icon } from "@/components/ui/icons/Icon";
 import { tokenColor } from "@/components/ui/token-color";
 import { useUnits } from "@/lib/settings/ui-prefs";
-import { aidsActive, formatDelta, formatGap, formatLapTime, formatSpeed, formatTemp, HUD_BEST, HUD_CAUTION, HUD_GAIN, HUD_INFO, HUD_LOSS, HUD_SHIFT, HUD_SLATE, NO_TIME, speedUnit } from "../hud-format";
+import { aidsActive, CLASSIC_CAR_IDS, formatDelta, formatGap, formatLapTime, formatSpeed, formatTemp, HUD_BEST, HUD_CAUTION, HUD_GAIN, HUD_INFO, HUD_LOSS, HUD_SHIFT, HUD_SLATE, NO_TIME, PROTO_CAR_IDS, ROAD_CAR_IDS, speedUnit } from "../hud-format";
 import { aeroReadout } from "../aero-label";
 import { useHudModeRef } from "../hud-mode";
 import { type WeatherHudState } from "../WeatherBadge";
@@ -57,9 +57,9 @@ const lapTime = (ms: number | null | undefined) => {
 function classLabel(carId: string | undefined): string {
   if (!carId) return "Field";
   if (carId.includes("gt3")) return "GT3";
-  if (carId === "liana") return "Road";
-  if (carId === "mtr-496r" || carId === "lc-lmdh") return "Proto";
-  if (carId.startsWith("nissan")) return "Classic";
+  if (ROAD_CAR_IDS.has(carId)) return "Road";
+  if (PROTO_CAR_IDS.has(carId)) return "Proto";
+  if (CLASSIC_CAR_IDS.has(carId)) return "Classic";
   return "Formula";
 }
 

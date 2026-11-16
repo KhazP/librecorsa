@@ -31,6 +31,8 @@ export const HUD_YELLOW = "var(--color-lc-amber)";
 export const HUD_CYAN = "var(--color-lc-cyan)";
 /** The road-car class colour (`CLASS_COLORS`) */
 export const HUD_ROAD = "var(--color-lc-amber)";
+/** The road cars' vehicle models */
+export const ROAD_CAR_IDS: ReadonlySet<string> = new Set(["liana", "vw-scirocco-gtx"]);
 /** The prototype class colour (`CLASS_COLORS`) */
 export const HUD_PROTO = "var(--color-lc-purple)";
 /** The prototypes' vehicle models */
