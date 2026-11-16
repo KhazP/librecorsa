@@ -1845,7 +1845,8 @@ function f1Compound(
       hysteresis: 0.0107,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
-      coreCooling: [8, 0.2],
+      // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]
+      coreCooling: [3, 0.08],
       thermalVerticalK: -0.0012,
       thermalVerticalRefC: 100,
       // GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA [ref_tyres.ini]; the graining wears off as the tread slides
@@ -1888,7 +1889,9 @@ function f1Compound(
         verticalDamping: 480.925,
       },
       camberData: { camberGain: 0.159, dcamber0: 1.211, dcamber1: -11.584 },
-      pressureData: { optimalPsi: 24, pressureSpringCurve: rateCurve(274_490, 15, 12_250) },
+      // Set 24.0 on the blankets: the rear discs do little of the braking (the motor's regeneration takes most of it),
+      // so the rear rims stay cool and hold the gas near its blanket temperature on a stint [est]
+      pressureData: { optimalPsi: 24, setPsi: 24, pressureSpringCurve: rateCurve(274_490, 15, 12_250) },
     },
   };
 }

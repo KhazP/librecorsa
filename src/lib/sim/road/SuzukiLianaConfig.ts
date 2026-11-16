@@ -418,9 +418,21 @@ const STREET_COMPOUND: TyresCompoundData = {
     hysteresis: 0.0028,
     surfaceToCore: 40,
     surfaceCooling: [5, 0.6],
-    coreCooling: [8, 0.2],
+    // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]
+    coreCooling: [4, 0.1],
     thermalVerticalK: -0.001,
     thermalVerticalRefC: 80,
+    // A 14" steel road wheel tucked in its arch: a racing wheel's, shedding less heat into the passing air [est]
+    rimGas: {
+      rimHeatCapacityJK: 4600,
+      rimBrakeOverlapAreaM2: 0.07,
+      discToRimEmissivity: 0.58,
+      discToRimConvectionWK: [2.8, 0.08],
+      rimToAmbientConvectionWK: [3, 0.2],
+      rimToGasConductanceWK: 16.5,
+      carcassToGasConductanceWK: 22,
+      gasHeatCapacityJK: 52,
+    },
   },
   pressureData: {
     // [spec PRESSURE_IDEAL]

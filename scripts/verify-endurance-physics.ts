@@ -42,8 +42,11 @@ const make = (cfg: CarPhysicsConfig, ground: GroundQuery = flat) => new VehicleP
 const run = (car: VehiclePhysics, s: number, drive: (c: VehiclePhysics, t: number) => VehicleInputs) => {
   for (let t = 0; t < s; t += DT) car.step(DT, drive(car, t));
 };
-/** Steady cornering at about 30 m/s on a slow steer ramp */
-const corner = (c: VehiclePhysics, t: number): VehicleInputs => ({ throttle: THREE.MathUtils.clamp(0.4 + (30 - c.speedMs) * 0.4, 0, 1), brake: 0, steer: Math.min(0.45, t / 3) });
+/**
+ * Steady cornering at about 30 m/s on a slow steer ramp, held under the front tyres' limit (past it the fronts take no
+ * more of the load transfer and its split stops meaning anything)
+ */
+const corner = (c: VehiclePhysics, t: number): VehicleInputs => ({ throttle: THREE.MathUtils.clamp(0.4 + (30 - c.speedMs) * 0.4, 0, 1), brake: 0, steer: Math.min(0.3, t / 3) });
 
 console.log('\n== Chassis torsion');
 {

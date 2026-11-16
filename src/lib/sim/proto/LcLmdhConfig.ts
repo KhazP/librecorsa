@@ -658,7 +658,8 @@ function lmdhCompound(
       hysteresis: 0.0055,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
-      coreCooling: [8, 0.2],
+      // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]
+      coreCooling: [4, 0.1],
       thermalVerticalK: -0.001,
       thermalVerticalRefC: 90,
       // Graining below the window, blistering above it [est]
