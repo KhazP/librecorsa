@@ -16,6 +16,7 @@
  * with the input's.
  */
 import { readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { BinWriter, MESHOPT, accessorBytes, isFallbackBuffer, md5, meshoptOf, parseGlb, readGlb, ready, writeGlbBytes } from "./lib/glb-raw.mjs";
 
 function parseArgs(argv) {
@@ -145,9 +146,13 @@ export function stripProps(glb, textures, replace = new Map()) {
   const textures_ = compact(json.textures ?? [], keepTextures);
   for (const m of materials.out) for (const r of textureRefs(m)) r.index = textures_.map.get(r.index);
 
-  const keepImages = new Set(textures_.out.map(imageOf).filter((i) => i !== undefined));
+  // Every image a kept texture names: its plain source and each extension's (a WebP or Basis image beside a fallback)
+  const keepImages = new Set();
   for (const t of textures_.out) {
     if (t.source !== undefined) keepImages.add(t.source);
+    for (const ext of ["EXT_texture_webp", "KHR_texture_basisu"]) {
+      if (t.extensions?.[ext]?.source !== undefined) keepImages.add(t.extensions[ext].source);
+    }
   }
   const images = compact(json.images ?? [], keepImages);
   for (const t of textures_.out) {
@@ -238,7 +243,7 @@ function check(input, output, maps, replaced) {
   return n;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const opts = parseArgs(process.argv.slice(2));
   await ready;
   const input = readGlb(opts.files[0]);
