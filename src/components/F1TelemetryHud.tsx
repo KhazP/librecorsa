@@ -236,6 +236,10 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   qualityNotice?: { id: number; kind: "lowered" | "floor" } | null;
   /** `?perf=1`: the session's performance report, for the pause menu to copy or save */
   perfReport?: (() => string) | null;
+  /** The bug report's facts, read when it opens (`fromDrive`: from the pause menu, with where the car is) */
+  reportFacts?: (fromDrive: boolean) => import("@/lib/diagnostics/report-details").ReportFacts;
+  /** The scene's next frame as a picture for a bug report */
+  captureScreen?: (maxWidth?: number) => Promise<Blob | null>;
 }
 
 /**

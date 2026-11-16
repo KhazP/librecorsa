@@ -174,7 +174,9 @@ export function Tabs<T extends string>({
                 </span>
               ) : null}
               {t.label}
-              {t.badge ? <span className="inline-flex not-italic">{t.badge}</span> : null}
+              {/* `relative` keeps a badge's screen-reader text (an absolutely placed span) inside the strip's scroll
+                  clip; without it the text sits past the strip's end and widens the page on a phone */}
+              {t.badge ? <span className="relative inline-flex not-italic">{t.badge}</span> : null}
             </button>
           );
         })}

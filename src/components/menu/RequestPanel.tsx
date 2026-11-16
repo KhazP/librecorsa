@@ -1,9 +1,22 @@
 "use client";
 
-import React, { useEffect, useId, useRef, useState } from "react";
-import { Button, Card, Segmented, Select, SettingRow, TextField, Toggle } from "@/components/ui";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Button, Card, Disclosure, Segmented, Select, SettingRow, TextField, Toggle } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
-import { gpuReportLine, probeRenderer } from "@/lib/render/gpu-health";
+import { CURSOR_ROW, cx, MOTION } from "@/components/ui/styles";
+import { focusOnHover } from "@/components/menu/useFocusNav";
+import { errorLogCopy, errorLogText, type LogEntry } from "@/lib/diagnostics/error-log";
+import {
+  bugReportRows,
+  detailsText,
+  fieldText,
+  fitIssueUrl,
+  LOG_STEPS,
+  wheelReportRows,
+  type ReportFacts,
+  type ReportRow,
+} from "@/lib/diagnostics/report-details";
+import { gpuReportLine, liveSessionRenderer, probeRenderer } from "@/lib/render/gpu-health";
 
 /**
  * Feedback goes to GitHub as a pre-filled issue form (.github/ISSUE_TEMPLATE): bug-report.yml, wheel-report.yml,
@@ -36,10 +49,26 @@ export interface FeedbackContext {
   graphics: string;
 }
 
+/** The context of a report from the circuit, the car and the player's settings (the title and the pause menu) */
+export function feedbackContextOf(
+  track: { name: string; layout?: string | null },
+  carTitle: string,
+  settings: { device: "keyboard" | "controller" | "wheel"; graphics: { quality: string; renderScale: number } } | undefined
+): FeedbackContext {
+  return {
+    circuit: `${track.name}${track.layout ? `, ${track.layout}` : ""}`,
+    car: carTitle,
+    device: settings ? { keyboard: "Keyboard", controller: "Controller", wheel: "Wheel" }[settings.device] : "Unknown",
+    graphics: settings
+      ? `${settings.graphics.quality[0].toUpperCase()}${settings.graphics.quality.slice(1)} · render ${Math.round(settings.graphics.renderScale * 100)}%`
+      : "Unknown",
+  };
+}
+
 const COPY: Record<FeedbackKind, { title: string; intro: string; send: string }> = {
   Bug: {
     title: "Report a bug",
-    intro: "Something broken, glitching or behaving wrong? Say what happened; the game adds your circuit, car, device, browser and GPU.",
+    intro: "Something broken, glitching or behaving wrong? Say what happened. The game adds what it knows below, and you can leave any of it out.",
     send: "Send report",
   },
   Wheel: {
@@ -133,10 +162,11 @@ function browserName(ua: string): string {
 
 /**
  * The GPU the game started on (unmasked when allowed), and whether its WebGL context was lost: read when the session
- * started, as a fresh probe after a loss may only find "no WebGL" (issue #123)
+ * started, as a fresh probe after a loss may only find "no WebGL" (issue #123). With the session drawing, no probe.
  */
 function gpuName(): string {
-  return gpuReportLine(probeRenderer);
+  const live = liveSessionRenderer();
+  return gpuReportLine(live ? () => live : probeRenderer);
 }
 
 export interface SystemInfo {
@@ -176,8 +206,17 @@ const firstLine = (s: string, max = 70) => {
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 };
 
+/**
+ * What the game adds to a report, as the player left it: the rows still in (`ReportRow`, report-details.ts) and the
+ * error log's text. Without it a report carries the circuit, car, input, graphics and system line only.
+ */
+export interface ReportAdded {
+  rows: readonly ReportRow[];
+  log: string;
+}
+
 /** The GitHub "new issue" URL with the matching form filled in */
-export function feedbackIssueUrl(f: FeedbackForm, ctx: FeedbackContext | undefined, sys: SystemInfo | null): string {
+export function feedbackIssueUrl(f: FeedbackForm, ctx: FeedbackContext | undefined, sys: SystemInfo | null, added?: ReportAdded): string {
   const q = new URLSearchParams({ template: TEMPLATES[f.kind] });
   const set = (key: string, value: string | undefined) => {
     const v = value?.trim();
@@ -189,18 +228,30 @@ export function feedbackIssueUrl(f: FeedbackForm, ctx: FeedbackContext | undefin
       q.set("title", `[Bug] ${firstLine(f.main)}`);
       set("what", f.main);
       set("steps", f.second);
-      set("circuit", ctx?.circuit);
-      set("car", ctx?.car);
-      set("input", ctx?.device);
-      set("hardware", f.third);
-      set("browser", system);
-      set("quality", ctx?.graphics);
+      if (added) {
+        set("circuit", fieldText(added.rows, "circuit"));
+        set("car", fieldText(added.rows, "car"));
+        set("input", fieldText(added.rows, "input"));
+        // What the player wrote about their device, else what the browser sees
+        set("hardware", f.third.trim() || fieldText(added.rows, "hardware"));
+        set("browser", fieldText(added.rows, "system"));
+        set("quality", fieldText(added.rows, "quality"));
+        set("details", detailsText(added.rows));
+        set("console", added.log);
+      } else {
+        set("circuit", ctx?.circuit);
+        set("car", ctx?.car);
+        set("input", ctx?.device);
+        set("hardware", f.third);
+        set("browser", system);
+        set("quality", ctx?.graphics);
+      }
       break;
     case "Wheel":
       q.set("title", `[Wheel] ${firstLine(f.main)}`);
       set("wheel", f.main);
       set("firmware", f.second);
-      set("system", system);
+      set("system", added ? fieldText(added.rows, "system") : system);
       set("notes", f.notes);
       break;
     case "Idea":
@@ -285,11 +336,81 @@ function useSketchfabTagCheck(modelId: string | null): TagCheck | null {
   return modelId && check?.id === modelId ? check : null;
 }
 
+/** Copies a picture to the clipboard where the browser can (a click must start it); false where it can't */
+async function copyPicture(blob: Blob): Promise<boolean> {
+  try {
+    if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) return false;
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Saves a picture as a file (a phone, or a browser that won't copy pictures) */
+function savePicture(url: string): void {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `librecorsa-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 /**
- * Title-menu panel for feedback: bug and wheel reports, ideas, and car or circuit requests. It collects the
- * details, adds what the game knows (session, browser, GPU) and opens them as a pre-filled GitHub issue.
+ * One line the report adds. A click (A / Enter) leaves it out or puts it back; a line the form needs stays in.
  */
-export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context }) => {
+const AddedRow: React.FC<{ label: string; value: string; locked?: boolean; on: boolean; onToggle: () => void }> = ({
+  label,
+  value,
+  locked,
+  on,
+  onToggle,
+}) => {
+  const cells = (
+    <>
+      <span className="text-lc-slate">{label}</span>
+      <span className={cx("line-clamp-2 min-w-0 break-words", on ? "text-lc-fog" : "text-lc-dim line-through")} title={value}>
+        {value}
+      </span>
+    </>
+  );
+  const grid = "grid grid-cols-[84px_minmax(0,1fr)_16px] items-start gap-x-3 py-1 text-left text-[13px] leading-snug";
+  if (locked)
+    return (
+      <li className={cx(grid, "px-2")} title="Always sent: GitHub's form needs it">
+        {cells}
+      </li>
+    );
+  return (
+    <li>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        onClick={onToggle}
+        onPointerEnter={focusOnHover}
+        className={cx(grid, "w-full cursor-pointer rounded-lc-row px-2 hover:bg-white/4", MOTION, CURSOR_ROW)}
+      >
+        {cells}
+        <Icon name={on ? "check" : "remove"} size="sm" className={cx("mt-px", on ? "text-lc-chalk" : "text-lc-dim")} />
+      </button>
+    </li>
+  );
+};
+
+/**
+ * The feedback panel (the title menu's Feedback, the pause menu's Report a bug): bug and wheel reports, ideas, and car
+ * or circuit requests. It collects the details, adds what the game knows (the session, the build, the frame rate,
+ * recent errors, where the car was), each line shown and switchable, and opens it all as a pre-filled GitHub issue.
+ */
+export const RequestPanel: React.FC<{
+  context?: FeedbackContext;
+  /** What the game knows, read once when the panel opens (report-facts.ts) */
+  facts?: () => ReportFacts;
+  /** A picture of the scene, taken once when the panel opens (from the pause menu) */
+  screenshot?: () => Promise<Blob | null>;
+}> = ({ context, facts, screenshot }) => {
   const [kind, setKind] = useState<FeedbackKind>("Bug");
   const [main, setMain] = useState("");
   const [second, setSecond] = useState("");
@@ -309,8 +430,44 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
   /** "Write another" was pressed: the form's first control takes the focus once it is back */
   const refocusForm = useRef(false);
 
-  // Read in the browser after mount (the page is pre-rendered without these)
-  useEffect(() => setSys(readSystem()), []);
+  /** The game's facts and its error log as they were when the panel opened (the telemetry moves on under it) */
+  const [factsNow, setFactsNow] = useState<ReportFacts | null>(null);
+  const [log, setLog] = useState<LogEntry[]>([]);
+  /** Lines the player left out (ids); the driver name starts out */
+  const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(() => new Set(["driver"]));
+  const [shot, setShot] = useState<{ blob: Blob; url: string } | null>(null);
+  const [shotState, setShotState] = useState<"none" | "taking" | "ready">(screenshot ? "taking" : "none");
+  const [pictureNote, setPictureNote] = useState<"copied" | "saved" | "failed" | null>(null);
+  /** What GitHub's address had no room for, said once the report is open */
+  const [trimmed, setTrimmed] = useState<{ log: boolean; details: number } | null>(null);
+
+  // Read in the browser after mount (the page is pre-rendered without these), once: the report keeps the moment it
+  // was opened. The props' functions are new each render, so they are not dependencies.
+  useEffect(() => {
+    setSys(readSystem());
+    setFactsNow(facts?.() ?? null);
+    setLog(errorLogCopy());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!screenshot) return;
+    let live = true;
+    let url: string | null = null;
+    screenshot()
+      .then((blob) => {
+        if (!live) return;
+        if (!blob) return setShotState("none");
+        url = URL.createObjectURL(blob);
+        setShot({ blob, url });
+        setShotState("ready");
+      })
+      .catch(() => live && setShotState("none"));
+    return () => {
+      live = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const content = kind === "Car" || kind === "Track";
   const mainOk = main.trim().length >= (content ? 2 : 6);
@@ -361,13 +518,35 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
       requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
       return;
     }
-    const url = feedbackIssueUrl({ kind, main, second, third, license, permission, askedModders, modderSaidYes, notes }, context, sys);
-    window.open(url, "_blank", "noopener,noreferrer");
+    const form: FeedbackForm = { kind, main, second, third, license, permission, askedModders, modderSaidYes, notes };
+    if (!rows.length) {
+      window.open(feedbackIssueUrl(form, context, sys), "_blank", "noopener,noreferrer");
+      setSent(true);
+      return;
+    }
+    // The lines still in; the details last, as the address loses them from the end when it runs long
+    const kept = rows.filter((r) => r.locked || !leftOut.has(r.id));
+    const details = kept.filter((r) => r.field === "details");
+    const others = kept.filter((r) => r.field !== "details");
+    const withLog = logShown && !leftOut.has("errors");
+    const fit = fitIssueUrl(
+      ({ logChars, detailRows }) =>
+        feedbackIssueUrl(form, context, sys, {
+          rows: [...others, ...details.slice(0, detailRows)],
+          log: withLog && logChars > 0 ? errorLogText(logChars, log) : "",
+        }),
+      details.length
+    );
+    window.open(fit.url, "_blank", "noopener,noreferrer");
+    const logLost = withLog && errorLogText(fit.logChars, log) !== errorLogText(LOG_STEPS[0], log);
+    setTrimmed(logLost || fit.detailRows < details.length ? { log: logLost, details: details.length - fit.detailRows } : null);
     setSent(true);
   };
 
   const newReport = () => {
     clearFields();
+    setTrimmed(null);
+    setPictureNote(null);
     setLicense("");
     setPermission("");
     refocusForm.current = true;
@@ -384,24 +563,42 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
     }
   }, [sent]);
 
-  const added: [string, string][] =
-    kind === "Bug"
-      ? [
-          ["Circuit", context?.circuit ?? "Not known"],
-          ["Car", context?.car ?? "Not known"],
-          ["Input", context?.device ?? "Not known"],
-          ["Graphics", context?.graphics ?? "Not known"],
-          ["Browser", sys?.browser ?? "…"],
-          ["Screen", sys?.screen ?? "…"],
-          ["GPU", sys?.gpu ?? "…"],
-        ]
-      : kind === "Wheel"
-        ? [
-            ["Browser", sys?.browser ?? "…"],
-            ["Screen", sys?.screen ?? "…"],
-            ["GPU", sys?.gpu ?? "…"],
-          ]
-        : [];
+  // What the report adds, line by line (bug and wheel reports)
+  const rows: ReportRow[] = useMemo(() => {
+    const base = {
+      circuit: context?.circuit ?? "Not known",
+      car: context?.car ?? "Not known",
+      input: context?.device ?? "Not known",
+      graphics: context?.graphics ?? "Not known",
+      browser: sys?.browser ?? "…",
+      screen: sys?.screen ?? "…",
+      gpu: sys?.gpu ?? "…",
+    };
+    return kind === "Bug" ? bugReportRows(base, factsNow) : kind === "Wheel" ? wheelReportRows(base, factsNow) : [];
+  }, [kind, context, sys, factsNow]);
+  const logShown = kind === "Bug" && log.length > 0;
+  const toggleLine = (id: string) =>
+    setLeftOut((cur) => {
+      const next = new Set(cur);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  const picture = async (how: "copy" | "save") => {
+    if (!shot) return;
+    if (how === "copy" && (await copyPicture(shot.blob))) return setPictureNote("copied");
+    if (how === "copy") return setPictureNote("failed");
+    savePicture(shot.url);
+    setPictureNote("saved");
+  };
+  const pictureNoteText =
+    pictureNote === "copied"
+      ? "Copied. Paste it into the report on GitHub with Ctrl+V (Cmd+V on a Mac)."
+      : pictureNote === "saved"
+        ? "Saved. Drag the file into the report on GitHub."
+        : pictureNote === "failed"
+          ? "This browser won't copy pictures. Save it instead and drag the file in."
+          : null;
+  const pictureCopyable = typeof window !== "undefined" && typeof ClipboardItem !== "undefined" && Boolean(navigator.clipboard?.write);
 
   const lockedReason = rippedModel
     ? "Models ripped from other games can't be added."
@@ -425,24 +622,34 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
             other games can only be used if their original creator agrees.
           </p>
         ) : null}
-        {added.length ? (
-          <Card title="Added to your report">
-            <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-[13px]">
-              {added.map(([k, v]) => (
-                <React.Fragment key={k}>
-                  <dt className="text-lc-slate">{k}</dt>
-                  <dd className="m-0 truncate text-lc-fog" title={v}>
-                    {v}
-                  </dd>
-                </React.Fragment>
+        {rows.length ? (
+          <Card title="Added to your report" description="It goes in a public GitHub issue. Press a line to leave it out.">
+            <ul className="m-0 -mx-2 flex list-none flex-col p-0">
+              {rows.map((r) => (
+                <AddedRow key={r.id} label={r.label} value={r.value} locked={r.locked} on={r.locked || !leftOut.has(r.id)} onToggle={() => toggleLine(r.id)} />
               ))}
-            </dl>
+              {logShown ? (
+                <AddedRow
+                  label="Game log"
+                  value={`${log.length} ${log.length === 1 ? "line" : "lines"} of errors and notes, newest: ${log[log.length - 1].text}`}
+                  on={!leftOut.has("errors")}
+                  onToggle={() => toggleLine("errors")}
+                />
+              ) : null}
+            </ul>
+            {logShown ? (
+              <Disclosure moreLabel="Show the error log" lessLabel="Hide the error log">
+                <pre className="lc-mono m-0 max-h-48 overflow-auto rounded-lc-row bg-lc-well p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap text-lc-fog">
+                  {errorLogText(LOG_STEPS[0], log)}
+                </pre>
+              </Disclosure>
+            ) : null}
           </Card>
         ) : null}
         <p className="lc-hint m-0 mt-auto flex items-start gap-2">
           <Icon name="externalLink" className="mt-px text-lc-info" />
-          Opens a pre-filled issue on GitHub (free account needed); check it and press Create. Screenshots and videos can be dragged
-          in there.
+          Opens a pre-filled issue on GitHub (free account needed); check it and press Create. Paste or drag screenshots and
+          videos in there.
         </p>
       </div>
 
@@ -450,8 +657,37 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
         <div className="self-start">
           <Card title="Opened on GitHub" bodyClassName="gap-3.5">
             <p id={sentNoteId} className="lc-body m-0">
-              Check the new tab and press Create there to send it. Thanks.
+              Check the new tab and press Create there to send it.
+              {shot ? " Add the screenshot there: copy it below, then paste it into the report." : ""} Thanks.
             </p>
+            {trimmed ? (
+              <p className="lc-hint m-0">
+                {[
+                  trimmed.details ? `${trimmed.details} ${trimmed.details === 1 ? "line" : "lines"} of game details` : null,
+                  trimmed.log ? "the older errors" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" and ")}{" "}
+                didn&apos;t fit in GitHub&apos;s link and were left out.
+              </p>
+            ) : null}
+            {shot ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {pictureCopyable ? (
+                  <Button size="sm" variant="secondary" icon={<Icon name="copy" />} onClick={() => picture("copy")}>
+                    Copy picture
+                  </Button>
+                ) : null}
+                <Button size="sm" variant="ghost" icon={<Icon name="download" />} onClick={() => picture("save")}>
+                  Save picture
+                </Button>
+              </div>
+            ) : null}
+            {shot ? (
+              <p aria-live="polite" className="lc-hint m-0">
+                {pictureNoteText}
+              </p>
+            ) : null}
             {/* The focus lands here once sent: the button reads the note with it */}
             <Button ref={newReportRef} variant="secondary" className="self-start" aria-describedby={sentNoteId} onClick={newReport}>
               Write another
@@ -681,6 +917,29 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
             {copy.send}
           </Button>
         </div>
+        {kind === "Bug" && shotState !== "none" ? (
+          <Card title="Screenshot" description="The game's view when you opened this report, without the menu.">
+            {shot ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={shot.url} alt="The circuit as it was when the report opened" className="aspect-video w-full rounded-lc-row object-cover" />
+            ) : (
+              <div className="aspect-video w-full animate-pulse rounded-lc-row bg-lc-well" />
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {pictureCopyable ? (
+                <Button size="sm" variant="secondary" icon={<Icon name="copy" />} disabled={!shot} onClick={() => picture("copy")}>
+                  Copy picture
+                </Button>
+              ) : null}
+              <Button size="sm" variant="ghost" icon={<Icon name="download" />} disabled={!shot} onClick={() => picture("save")}>
+                Save picture
+              </Button>
+            </div>
+            <p aria-live="polite" className="lc-hint m-0">
+              {pictureNoteText}
+            </p>
+          </Card>
+        ) : null}
       </form>
     </div>
   );

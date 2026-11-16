@@ -108,6 +108,14 @@ export function noteRenderer(name: string | null, store: KeyValueStore | null = 
   if (tryGet(store, GPU_NAME_KEY) !== name) trySet(store, GPU_NAME_KEY, name);
 }
 
+/**
+ * The renderer of this page's running session while its context is alive, or null. The bug form then needs no probe:
+ * a fresh context while the game draws costs the GPU a second context, the very thing #123's driver could not take.
+ */
+export function liveSessionRenderer(): string | null {
+  return lostThisPage ? null : pageRenderer;
+}
+
 /** The bug form's GPU field: the renderer recorded at start (or probed now), and what became of WebGL since */
 export function gpuReportLine(probe: () => string | null, store: KeyValueStore | null = browserStore()): string {
   const known = pageRenderer ?? tryGet(store, GPU_NAME_KEY);

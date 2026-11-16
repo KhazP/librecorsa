@@ -22,7 +22,7 @@ import type { LibraryProps } from "@/components/menu/ContentBrowser";
 import { ConditionsPanel, type ConditionsPanelProps } from "@/components/menu/ConditionsPanel";
 import { RaceRules } from "@/components/menu/RaceRules";
 import type { SettingsCategory } from "@/components/settings/SettingsScreen";
-import type { CarId } from "@/lib/cars/car-registry";
+import { carById, type CarId } from "@/lib/cars/car-registry";
 import type { PlayerSettings } from "@/lib/settings/player-settings";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { SPEED_LABEL, speedIn } from "@/lib/settings/units";
@@ -47,6 +47,8 @@ import type { Prompt } from "@/components/ui/prompts/PromptBar";
 import { CURSOR_PILL, cx, HOVER_PILL, MOTION, PRESSED_PILL } from "@/components/ui/styles";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { UpdateReady } from "@/components/menu/UpdateReady";
+import { feedbackContextOf, RequestPanel } from "@/components/menu/RequestPanel";
+import type { ReportFacts } from "@/lib/diagnostics/report-details";
 
 /**
  * What the HUD and the menus pass along as the player's settings (the old Display panel's props, whose rows now live
@@ -149,9 +151,13 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   covered?: boolean;
   /** `?perf=1`: the session's performance report as text, which the Session tab copies or saves */
   perfReport?: (() => string) | null;
+  /** The bug report's facts, read when it opens (`fromDrive`: from the pause menu, with where the car is) */
+  reportFacts?: (fromDrive: boolean) => ReportFacts;
+  /** The scene's next frame as a picture for a bug report */
+  captureScreen?: (maxWidth?: number) => Promise<Blob | null>;
 }
 
-type Panel = "settings" | "hud" | "conditions" | "setup" | "corners" | "multiplayer" | "leaderboard";
+type Panel = "settings" | "hud" | "conditions" | "setup" | "corners" | "multiplayer" | "leaderboard" | "report";
 
 /**
  * Esc / Menu: race actions in a rail on the left, the session's panels as tabs on the right.
@@ -206,8 +212,10 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         ...(mpRace ? [] : [{ id: "corners" as const, label: "Corners", icon: "corners" as const }]),
         { id: "multiplayer" as const, label: "Multiplayer", icon: "multiplayer" as const },
         ...(leaderboardPanel ? [{ id: "leaderboard" as const, label: "Lap times", icon: "lapTimes" as const }] : []),
+        // A bug report from where it happened: the car's place on the circuit and a picture of the scene go with it
+        ...(props.reportFacts ? [{ id: "report" as const, label: "Report a bug", icon: "feedback" as const }] : []),
       ] satisfies { id: Panel; label: string; icon: IconName }[],
-    [leaderboardPanel, mpRace, conditionsPanel, displayPanel, phoneScreen]
+    [leaderboardPanel, mpRace, conditionsPanel, displayPanel, phoneScreen, props.reportFacts]
   );
 
   const actions = useMemo(
@@ -406,6 +414,13 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
                 ) : null}
                 {panel === "multiplayer" ? <MultiplayerPanel {...props} /> : null}
                 {panel === "leaderboard" && leaderboardPanel ? <LeaderboardPanel {...leaderboardPanel} /> : null}
+                {panel === "report" && props.reportFacts ? (
+                  <RequestPanel
+                    context={feedbackContextOf(trackInfo, carById(props.carId).title, props.settings)}
+                    facts={() => props.reportFacts!(true)}
+                    screenshot={props.captureScreen ? () => props.captureScreen!() : undefined}
+                  />
+                ) : null}
               </div>
             </section>
           </div>

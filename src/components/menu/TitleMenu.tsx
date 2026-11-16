@@ -32,7 +32,7 @@ import { PadGlyph } from "@/components/ui/prompts/PadGlyph";
 import type { Prompt } from "@/components/ui/prompts/PromptBar";
 import { CarClassTag, TrackQualityBadge } from "./menu-content-ui";
 import { HeroAction, RailRow, RESET_ROW_PROMPT, ShellPrompts, usePanelReadingOrder, useRowResettable } from "./menu-shell";
-import { RequestPanel, type FeedbackContext } from "./RequestPanel";
+import { feedbackContextOf, RequestPanel, type FeedbackContext } from "./RequestPanel";
 import { CircuitBrowser } from "./CircuitBrowser";
 import { CarBrowser } from "./CarBrowser";
 import { TrackOutline } from "./circuit-outline";
@@ -51,6 +51,22 @@ import { LiveLine } from "./LiveLine";
 import { UpdateReady } from "./UpdateReady";
 
 type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "request";
+
+/**
+ * How far a panel reaches beside the rail, in CSS px (the big-screen zoom scales them): each as wide as its content
+ * reads well, so a wide screen gains what the panel can use and no stretched rows. The circuit and car walls fit four
+ * tiles beside the details; a panel of two columns gives each about 540 px; the feedback form a form's width and its
+ * notes; a timing list a list's width; and the garage leaves the car in view on the right while its setup and livery
+ * change.
+ */
+const PANEL_WIDTH = "lg:grid-cols-[240px_minmax(0,1160px)]";
+const PANEL_COLUMNS: Partial<Record<TitlePanel, string>> = {
+  circuit: "lg:grid-cols-[240px_minmax(0,1480px)]",
+  car: "lg:grid-cols-[240px_minmax(0,1480px)]",
+  leaderboard: "lg:grid-cols-[240px_minmax(0,1200px)]",
+  request: "lg:grid-cols-[240px_minmax(0,1080px)]",
+  garage: "lg:grid-cols-[240px_minmax(0,1000px)]",
+};
 
 /**
  * Where the title menu picks up when it comes back: Controls is a screen of its own, and loading a circuit reloads the
@@ -623,15 +639,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const skin = carSkinFor(vehicle.id);
   const hudPreset = props.displayPanel?.settings.hud.preset;
   // What a bug report gets without the player typing it
-  const playerSettings = props.displayPanel?.settings;
-  const feedbackContext: FeedbackContext = {
-    circuit: `${track.name}${track.layout ? `, ${track.layout}` : ""}`,
-    car: vehicle.title,
-    device: playerSettings ? { keyboard: "Keyboard", controller: "Controller", wheel: "Wheel" }[playerSettings.device] : "Unknown",
-    graphics: playerSettings
-      ? `${playerSettings.graphics.quality[0].toUpperCase()}${playerSettings.graphics.quality.slice(1)} · render ${Math.round(playerSettings.graphics.renderScale * 100)}%`
-      : "Unknown",
-  };
+  const feedbackContext: FeedbackContext = feedbackContextOf(track, vehicle.title, props.displayPanel?.settings);
 
   // A rail entry for the title screen or the slim rail: the open panel's entry is chosen
   const row = (item: MenuItem, size: "lg" | "md" | "sm", slim = false) => (
@@ -735,7 +743,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
 
         {panel ? (
           /* Panel view: slim rail + the panel's sheet */
-          <div className="grid flex-1 grid-cols-1 items-start gap-5 lg:grid-cols-[240px_minmax(0,1000px)] lg:gap-7">
+          <div className={`grid flex-1 grid-cols-1 items-start gap-5 lg:gap-7 ${PANEL_COLUMNS[panel] ?? PANEL_WIDTH}`}>
             {/* Below lg the rail would stack 13 rows above the panel: the panel takes the screen, Close goes back */}
             <nav className="flex flex-col gap-0.5 max-lg:hidden" data-nav-zone="rail" aria-label="Main menu">
               <HeroAction id={drive.id} label={drive.label} onClick={drive.run!} size="slim" />
@@ -811,7 +819,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   {panel === "challenge" && props.challengePanel ? <ChallengePanel {...props.challengePanel} /> : null}
                   {panel === "leaderboard" && props.leaderboardPanel ? <LeaderboardPanel {...props.leaderboardPanel} /> : null}
                   {panel === "credits" ? <Credits /> : null}
-                  {panel === "request" ? <RequestPanel context={feedbackContext} /> : null}
+                  {panel === "request" ? (
+                    <RequestPanel context={feedbackContext} facts={props.reportFacts ? () => props.reportFacts!(false) : undefined} />
+                  ) : null}
                 </PanelFrame>
               </div>
             </section>

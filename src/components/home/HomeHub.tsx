@@ -15,6 +15,7 @@ import { useSavedInterfaceSettings, useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn, SPEED_LABEL, speedIn } from "@/lib/settings/units";
 import { SITE_DESCRIPTION } from "@/lib/site";
 import { useStoreBuild } from "@/lib/use-store-build";
+import { FeaturedBadges } from "./FeaturedBadges";
 import { day, GAME_FACTS, GRADE_NOTES, type HomeData, type HomeLayout, type HomeVenue, type WhatsNewDay } from "./home-data";
 import { CarThumb, GradeBadge, GradeLegend, OutlineThumb } from "./home-ui";
 import { LapMap } from "./LapMap";
@@ -84,6 +85,12 @@ const TILE = cx(
 const MORE = "inline-flex items-center gap-1 text-[13px] font-semibold text-lc-fog transition-colors duration-200 group-hover:text-lc-chalk group-focus:text-lc-chalk";
 /** The titles of the smaller Home tiles */
 const TILE_TITLE = "lc-disp text-[22px] leading-[1.05]";
+/**
+ * The Circuits and Cars walls: tiles at least 280 px or 17 % of the screen wide, so they grow with a wide screen
+ * (four across at 1280 to 1440 px, five at 1920 px and up) instead of turning into more, smaller tiles; one across on
+ * a phone
+ */
+const WALL = "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,max(280px,17vw)),1fr))]";
 /** The page's panel id, which the tabs control and the skip link lands on */
 const PANEL_ID = "home-panel";
 
@@ -425,9 +432,10 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
               />
             ) : null}
 
-            {/* Day-by-day patch notes, newest first */}
+            {/* Day-by-day patch notes, newest first. On a wide screen a day's notes run in two or three columns, so the
+                lines keep a reading length and the feed still fills the width */}
             {tab === "whats-new" ? (
-              <div className="flex max-w-[880px] flex-col">
+              <div className="flex max-w-[880px] flex-col xl:max-w-[1800px]">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 pb-4">
                   <p className="lc-body m-0 text-lc-slate">Day-by-day summary of every change to LibreCorsa.</p>
                   <a href={`${data.repoUrl}/commits/main`} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`inline-flex items-center gap-1 ${TEXT_LINK}`}>
@@ -463,9 +471,9 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                         </div>
                         <div className="flex min-w-0 flex-col gap-2">
                           <h2 className="lc-title m-0 text-[17px] leading-snug text-lc-chalk">{entry.title}</h2>
-                          <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                          <ul className="m-0 -mb-1.5 list-none p-0 xl:columns-[26rem] xl:gap-x-10">
                             {entry.items.map((item) => (
-                              <li key={item} className="relative pl-4 text-[14px] leading-relaxed text-lc-fog">
+                              <li key={item} className="relative break-inside-avoid pb-1.5 pl-4 text-[14px] leading-relaxed text-lc-fog">
                                 <span aria-hidden className="absolute top-[9px] left-0 size-1 rounded-full bg-lc-slate" />
                                 {item}
                               </li>
@@ -524,7 +532,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     No circuit matches these filters.
                   </EmptyState>
                 )}
-                <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
+                <div className={WALL}>
                   {shownVenues.map((v) => {
                     const on = v === venue;
                     const shown = on ? layout : v.layouts[0];
@@ -563,7 +571,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
             {tab === "cars" ? (
               <div className="flex flex-col gap-5">
                 <GradeLegend of="cars" shown={data.cars.map((c) => c.grade)} />
-                <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(210px,1fr))]">
+                <div className={WALL}>
                   {data.cars.map((c) => {
                     const on = c === car;
                     return (
@@ -588,7 +596,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
             {tab === "about" ? (
               <div className="grid gap-x-16 gap-y-12 pt-4 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
                 <div className="flex min-w-0 flex-col gap-8">
-                  <p className="m-0 max-w-[34ch] text-[22px] leading-[1.4] font-medium text-lc-chalk">
+                  <p className="m-0 max-w-[34ch] text-[clamp(22px,1.5vw,30px)] leading-[1.4] font-medium text-lc-chalk">
                     LibreCorsa is a free, open-source racing simulator that runs in your browser. I make it on my own.
                   </p>
                   <dl className="m-0 flex flex-col">
@@ -653,6 +661,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                       </a>
                     ))}
                   </div>
+                  <FeaturedBadges className="pt-2" />
                 </section>
               </div>
             ) : null}
