@@ -10,6 +10,9 @@ import { alignGhostToTrack } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { type ChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
 import { TrackEnvironment } from "@/lib/sim/track-environment";
+import { installErrorLog } from "@/lib/diagnostics/error-log";
+import { collectReportFacts } from "@/lib/diagnostics/report-facts";
+import type { ReportFacts } from "@/lib/diagnostics/report-details";
 import { getMultiplayerManager, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo, type ScheduledRaceStatus } from "@/lib/sim/multiplayer-sync";
 import { boardStateOf, watchOnlineConfig, type BoardState } from "@/lib/net/online-config";
 import { DEFAULT_RACE_SLOT_S } from "@/lib/net/race-schedule";
@@ -101,6 +104,9 @@ const challengeTrackName = (id: string) => {
 const BOARD_CIRCUITS = TRACKS.map((t) => ({ id: t.id, label: challengeTrackName(t.id) })).sort((a, b) => a.label.localeCompare(b.label));
 /** The snapshot store before the session exists: nothing to subscribe to */
 const noSubscribe = () => () => {};
+
+// The bug report's error log starts with the game's page, before anything on it can fail
+installErrorLog();
 // polish:B the podium shot's view before the drive exists
 const IDLE_PODIUM: PodiumUi = { stage: "idle", rows: [] };
 const idlePodium = () => IDLE_PODIUM;
@@ -1537,6 +1543,32 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     handleJoinRace();
   }, [handleBackToLobby, handleJoinRace]);
 
+  /** The bug report's facts, read when it opens; from the pause menu with where the car is (`fromDrive`) */
+  const reportFacts = (fromDrive: boolean): ReportFacts => {
+    const snap = session?.getSnapshot();
+    const onChallengeNow = timeTrial !== null && timeTrial.vehicle === challenge.vehicle && trackId === challenge.trackId;
+    const mode =
+      raceKind === "ai"
+        ? "Race against AI"
+        : raceKind === "mp"
+          ? inScheduledRace
+            ? "Open race"
+            : "Room race"
+          : onChallengeNow
+            ? "Weekly challenge"
+            : "Practice";
+    return collectReportFacts({
+      settings: settingsRef.current,
+      touchVisible,
+      lastLapInput: lapSummary?.recording.conditions?.input ?? null,
+      boardState: boardStateRef.current,
+      drive:
+        fromDrive && snap
+          ? { telemetry: snap.telemetry, mode, replay: snap.replay.active, waterMm: trackEnvRef.current?.weather.lineWaterMm ?? 0 }
+          : null,
+    });
+  };
+
   const menuProps = {
     telemetry,
     settings,
@@ -1592,6 +1624,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onTogglePause: togglePause,
     // `?perf=1`: the pause menu copies or saves the session's performance report
     perfReport: session?.perfReport ?? null,
+    // The bug report: what the game knows when it opens, and a picture of the scene from the pause menu
+    reportFacts,
+    captureScreen: session ? session.captureFrame : undefined,
     keyNames,
     // The lap board while driving, with an online board only
     onChangeBoardWidget: boardOn ? handleChangeBoardWidget : undefined,

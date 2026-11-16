@@ -47,6 +47,7 @@ import type { Prompt } from "@/components/ui/prompts/PromptBar";
 import { CURSOR_PILL, cx, HOVER_PILL, MOTION, PRESSED_PILL } from "@/components/ui/styles";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { UpdateReady } from "@/components/menu/UpdateReady";
+import type { ReportFacts } from "@/lib/diagnostics/report-details";
 
 /**
  * What the HUD and the menus pass along as the player's settings (the old Display panel's props, whose rows now live
@@ -149,6 +150,10 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   covered?: boolean;
   /** `?perf=1`: the session's performance report as text, which the Session tab copies or saves */
   perfReport?: (() => string) | null;
+  /** The bug report's facts, read when it opens (`fromDrive`: from the pause menu, with where the car is) */
+  reportFacts?: (fromDrive: boolean) => ReportFacts;
+  /** The scene's next frame as a picture for a bug report */
+  captureScreen?: (maxWidth?: number) => Promise<Blob | null>;
 }
 
 type Panel = "settings" | "hud" | "conditions" | "setup" | "corners" | "multiplayer" | "leaderboard";
