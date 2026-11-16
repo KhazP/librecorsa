@@ -1,5 +1,6 @@
 # Opened pre-filled from the in-game Feedback panel (src/components/menu/RequestPanel.tsx): GitHub only pre-fills
-# text fields from the URL, so circuit, car, input and graphics are plain inputs the game fills in for the player.
+# text fields from the URL, so circuit, car, input, graphics, game details and errors are plain text fields the game
+# fills in for the player.
 name: Bug report
 description: Something broken, crashing or behaving wrong in the sim
 title: "[Bug] "
@@ -60,13 +61,19 @@ body:
       label: Graphics
       placeholder: Low, Medium or High, plus render resolution
   - type: textarea
+    id: details
+    attributes:
+      label: Game details
+      description: Filled in when you report from the game (the build, where you were on track, frame rate, settings).
+      render: text
+  - type: textarea
     id: console
     attributes:
       label: Console errors
-      description: If you can, open the browser console (F12) and paste any red errors.
+      description: Filled in from the game's own error log when you report from the game. Otherwise, if you can, open the browser console (F12) and paste any red errors.
       render: shell
   - type: textarea
     id: media
     attributes:
       label: Screenshots or video
-      description: Drag files in here.
+      description: Paste the screenshot the game copied (Ctrl+V or Cmd+V), or drag files in here.
