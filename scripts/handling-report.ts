@@ -1,12 +1,13 @@
 /**
  * Transient handling scorecard (step steer, sine steer, lift-off, brake-in-turn, power-on exit, slow-corner grip) for
- * the LC26, the f12026-car and the GT3. See `lib/handling-tests.ts`.
+ * the LC26, the f12026-car, the GT3 and the LC-LMDH. See `lib/handling-tests.ts`.
  *
  *   npx tsx scripts/handling-report.ts [--json]
  */
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
+import { createLcLmdhSim } from '../src/lib/sim/proto/LcLmdhSim';
 import { createFlatTestTrack } from './lib/flat-track';
 import { handlingCard, type HandlingCard } from './lib/handling-tests';
 
@@ -15,6 +16,7 @@ const cards: HandlingCard[] = [
   handlingCard('LC26', () => new F1Physics2026(pad), 150 / 3.6, 70 / 3.6),
   handlingCard('f12026-car', () => new F12026CarSim(pad), 150 / 3.6, 70 / 3.6),
   handlingCard('GT3', () => createAmgGt3Sim(pad), 110 / 3.6, 60 / 3.6),
+  handlingCard('LC-LMDH', () => createLcLmdhSim(pad), 130 / 3.6, 70 / 3.6),
 ];
 
 if (process.argv.includes('--json')) {
