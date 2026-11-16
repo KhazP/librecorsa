@@ -108,6 +108,8 @@ const MODELS: [string, VehicleModelId, boolean][] = [
   ['LC-LMDH', 'lc-lmdh', false],
   ['Nissan R33 JGTC', 'nissan-r33-jgtc', false],
   ['Nissan R32 JTCC', 'nissan-r32-jtcc', false],
+  ['BMW M1 Procar', 'bmw-m1-procar', false],
+  ['VW Scirocco GTX 16V', 'vw-scirocco-gtx', false],
   ['Liana', 'liana', false],
 ];
 for (const [name, vehicle, rigid] of MODELS) {

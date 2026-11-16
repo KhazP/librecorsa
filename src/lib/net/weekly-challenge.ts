@@ -196,6 +196,9 @@ const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound;
   liana: { compound: "soft", label: "Street tyres" },
   "nissan-r33-jgtc": { compound: "soft", label: "Soft tyres" },
   "nissan-r32-jtcc": { compound: "soft", label: "Soft tyres" },
+  // Its one dry compound fills the soft, medium and hard slots
+  "bmw-m1-procar": { compound: "soft", label: "Vintage slicks" },
+  "vw-scirocco-gtx": { compound: "soft", label: "Street tyres" },
 };
 
 /** The compound every lap of a challenge in this car is driven on */

@@ -30,6 +30,9 @@ const OVER_WHEEL: Readonly<Record<CarId, OverWheelView>> = {
   liana: { fromEye: [0, 0, 0.61], pitchDeg: -6, fovDeg: 58 },
   "nissan-r33-jgtc": { fromEye: [0, 0.03, 0.53], pitchDeg: -3, fovDeg: 58 },
   "nissan-r32-jtcc": { fromEye: [0, 0.02, 0.56], pitchDeg: -3, fovDeg: 58 },
+  // Its wheel hub 0.63 m ahead of the eye: the reach of a mid-engined car
+  "bmw-m1-procar": { fromEye: [0, -0.04, 0.72], pitchDeg: -4, fovDeg: 58 },
+  "vw-scirocco-gtx": { fromEye: [0, -0.02, 0.6], pitchDeg: -5, fovDeg: 58 },
 };
 
 /** A car not in the table: a little ahead of and below the eye */

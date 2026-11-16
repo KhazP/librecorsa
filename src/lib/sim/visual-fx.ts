@@ -22,6 +22,8 @@ import { MTR_496R_CONFIG } from './proto/Mtr496rConfig';
 import { LC_LMDH_CONFIG } from './proto/LcLmdhConfig';
 import { NISSAN_R33_CONFIG } from './classic/NissanR33Config';
 import { NISSAN_R32_CONFIG } from './classic/NissanR32Config';
+import { BMW_M1_PROCAR_CONFIG } from './classic/BmwM1ProcarConfig';
+import { VW_SCIROCCO_CONFIG } from './road/VwSciroccoConfig';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 import { LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
@@ -952,6 +954,16 @@ const PORTED_ONLY = {
     config: NISSAN_R32_CONFIG,
     lockDeg: CAR_WHEEL_LOCKS_DEG['nissan-r32-jtcc'],
   },
+  'bmw-m1-procar': {
+    url: '/cars/bmw-m1-procar/model/bmw-m1-procar.glb',
+    config: BMW_M1_PROCAR_CONFIG,
+    lockDeg: CAR_WHEEL_LOCKS_DEG['bmw-m1-procar'],
+  },
+  'vw-scirocco-gtx': {
+    url: '/cars/vw-scirocco-gtx/model/vw-scirocco-gtx.glb',
+    config: VW_SCIROCCO_CONFIG,
+    lockDeg: CAR_WHEEL_LOCKS_DEG['vw-scirocco-gtx'],
+  },
 } as const;
 type PortedKind = keyof typeof PORTED_ONLY;
 /** Which opponent rig a model's AI cars get: a ported body (`PORTED_ONLY`), or the 2026 car's for the F1 models */
@@ -962,7 +974,11 @@ const rigKind = (vehicle: VehicleModelId | undefined): PortedKind | 'f1' =>
       ? 'road'
       : vehicle === 'mtr-496r'
         ? 'proto'
-        : vehicle === 'lc-lmdh' || vehicle === 'nissan-r33-jgtc' || vehicle === 'nissan-r32-jtcc'
+        : vehicle === 'lc-lmdh' ||
+            vehicle === 'nissan-r33-jgtc' ||
+            vehicle === 'nissan-r32-jtcc' ||
+            vehicle === 'bmw-m1-procar' ||
+            vehicle === 'vw-scirocco-gtx'
           ? vehicle
           : 'f1';
 const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;

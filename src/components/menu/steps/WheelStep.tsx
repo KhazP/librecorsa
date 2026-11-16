@@ -208,7 +208,10 @@ const STEER_LOCK_CLASSES = [
   // The classic class's cars turn through different locks
   { label: "JGTC GT500", models: ["nissan-r33-jgtc"] },
   { label: "Group A touring", models: ["nissan-r32-jtcc"] },
-  { label: "Road cars", models: ["liana"] },
+  { label: "Group 4 Procar", models: ["bmw-m1-procar"] },
+  // The two road cars turn through different locks
+  { label: "Suzuki Liana", models: ["liana"] },
+  { label: "VW Scirocco", models: ["vw-scirocco-gtx"] },
 ] as const;
 
 const shortPad = (padId: string) => padDisplayName(padId).slice(0, 24);

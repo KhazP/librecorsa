@@ -138,6 +138,10 @@ export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: numbe
   "nissan-r33-jgtc": { front: 1, rear: 1 },
   // No wing adjusters in its setup
   "nissan-r32-jtcc": { front: 0, rear: 0 },
+  // A fixed front spoiler; the rear wing in its 1° setup clicks [spec setup.ini WING_1 STEP 0, WING_2]
+  "bmw-m1-procar": { front: 0, rear: 1 },
+  // No wings
+  "vw-scirocco-gtx": { front: 0, rear: 0 },
 };
 
 /**
@@ -159,6 +163,10 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   "nissan-r33-jgtc": { defaultKg: 30, minKg: 4, maxKg: 74 },
   // 30 l of a 120 l tank [spec car.ini FUEL / MAX_FUEL]
   "nissan-r32-jtcc": { defaultKg: 22, minKg: 4, maxKg: 89 },
+  // 30 l of a 70 l tank [spec car.ini FUEL / MAX_FUEL]
+  "bmw-m1-procar": { defaultKg: 22, minKg: 4, maxKg: 52 },
+  // 30 l of a 55 l tank [spec car.ini FUEL / MAX_FUEL]
+  "vw-scirocco-gtx": { defaultKg: 22, minKg: 4, maxKg: 41 },
 };
 
 /** Race fuel density (kg per litre), for the litre readouts */
@@ -186,6 +194,8 @@ export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   // [spec car.ini STEER_RATIO]
   "nissan-r33-jgtc": 15,
   "nissan-r32-jtcc": 12.4,
+  "bmw-m1-procar": 16,
+  "vw-scirocco-gtx": 14,
 };
 
 export function clampChassisSetup(v: unknown): ChassisSetup {

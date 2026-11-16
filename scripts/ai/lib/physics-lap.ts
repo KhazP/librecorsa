@@ -13,6 +13,8 @@ import { createMtr496rSim } from '../../../src/lib/sim/proto/Mtr496rSim';
 import { createLcLmdhSim } from '../../../src/lib/sim/proto/LcLmdhSim';
 import { createNissanR33Sim } from '../../../src/lib/sim/classic/NissanR33Sim';
 import { createNissanR32Sim } from '../../../src/lib/sim/classic/NissanR32Sim';
+import { createBmwM1ProcarSim } from '../../../src/lib/sim/classic/BmwM1ProcarSim';
+import { createVwSciroccoSim } from '../../../src/lib/sim/road/VwSciroccoSim';
 import type { VehicleModelId } from '../../../src/types/f1';
 import { aiTrackFor } from '../../../src/lib/sim/ai/ai-track';
 import { carLimitsFor } from '../../../src/lib/sim/ai/ggv';
@@ -56,6 +58,10 @@ function simFor(vehicle: VehicleModelId, track: BuiltTrackData, root: THREE.Obje
       return createNissanR33Sim(track, root);
     case 'nissan-r32-jtcc':
       return createNissanR32Sim(track, root);
+    case 'bmw-m1-procar':
+      return createBmwM1ProcarSim(track, root);
+    case 'vw-scirocco-gtx':
+      return createVwSciroccoSim(track, root);
     default:
       return new F12026CarSim(track, root);
   }

@@ -20,6 +20,10 @@ import { NISSAN_R33_SIM_PROFILE, createNissanR33Sim } from "@/lib/sim/classic/Ni
 import { NISSAN_R33_CONFIG } from "@/lib/sim/classic/NissanR33Config";
 import { NISSAN_R32_SIM_PROFILE, createNissanR32Sim } from "@/lib/sim/classic/NissanR32Sim";
 import { NISSAN_R32_CONFIG } from "@/lib/sim/classic/NissanR32Config";
+import { BMW_M1_PROCAR_SIM_PROFILE, createBmwM1ProcarSim } from "@/lib/sim/classic/BmwM1ProcarSim";
+import { BMW_M1_PROCAR_CONFIG } from "@/lib/sim/classic/BmwM1ProcarConfig";
+import { VW_SCIROCCO_SIM_PROFILE, createVwSciroccoSim } from "@/lib/sim/road/VwSciroccoSim";
+import { VW_SCIROCCO_CONFIG } from "@/lib/sim/road/VwSciroccoConfig";
 import { LC26_ENGINE, LC26_TYRE_SETUP_RANGES } from "@/lib/sim/lc26-data";
 import type { CarClassId } from "./car-registry";
 
@@ -160,6 +164,30 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     rigConfig: NISSAN_R32_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
+  },
+  // Pfalzdriver's cars: each one's only body is its ported GLB, which brings its own cameras
+  "bmw-m1-procar": {
+    id: "bmw-m1-procar",
+    classId: "classic",
+    createSim: (track, trackRoot) => createBmwM1ProcarSim(track, trackRoot),
+    limiterRpm: BMW_M1_PROCAR_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 10_000,
+    tyreSetupRanges: BMW_M1_PROCAR_SIM_PROFILE,
+    rigConfig: BMW_M1_PROCAR_CONFIG,
+    gt3Cockpit: false,
+    floorSparks: false,
+  },
+  "vw-scirocco-gtx": {
+    id: "vw-scirocco-gtx",
+    classId: "road",
+    createSim: (track, trackRoot) => createVwSciroccoSim(track, trackRoot),
+    limiterRpm: VW_SCIROCCO_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 8000,
+    tyreSetupRanges: VW_SCIROCCO_SIM_PROFILE,
+    rigConfig: VW_SCIROCCO_CONFIG,
+    gt3Cockpit: false,
+    floorSparks: false,
+    onlyTyre: "Street tyres",
   },
 };
 

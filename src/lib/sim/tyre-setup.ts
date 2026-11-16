@@ -34,6 +34,8 @@ export const TYRE_SETUP_LIMITS: Record<VehicleModelId, TyreSetupLimits> = {
   "lc-lmdh": limitsOf(VEHICLE_MODELS["lc-lmdh"].tyreSetupRanges),
   "nissan-r33-jgtc": limitsOf(VEHICLE_MODELS["nissan-r33-jgtc"].tyreSetupRanges),
   "nissan-r32-jtcc": limitsOf(VEHICLE_MODELS["nissan-r32-jtcc"].tyreSetupRanges),
+  "bmw-m1-procar": limitsOf(VEHICLE_MODELS["bmw-m1-procar"].tyreSetupRanges),
+  "vw-scirocco-gtx": limitsOf(VEHICLE_MODELS["vw-scirocco-gtx"].tyreSetupRanges),
 };
 
 /** Tyre setups are saved per vehicle model (the LC26 keeps the original key) */
@@ -46,6 +48,8 @@ const STORAGE_KEYS: Record<VehicleModelId, string> = {
   "lc-lmdh": "bugesera.tyreSetup.lc-lmdh",
   "nissan-r33-jgtc": "bugesera.tyreSetup.nissan-r33-jgtc",
   "nissan-r32-jtcc": "bugesera.tyreSetup.nissan-r32-jtcc",
+  "bmw-m1-procar": "bugesera.tyreSetup.bmw-m1-procar",
+  "vw-scirocco-gtx": "bugesera.tyreSetup.vw-scirocco-gtx",
 };
 
 const clampTo = (x: number, range: { min: number; max: number }) => Math.min(range.max, Math.max(range.min, x));

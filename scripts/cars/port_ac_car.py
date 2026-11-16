@@ -465,10 +465,61 @@ PRESETS = {
         skin_textures=('EXT_Skin_Colour.dds', 'window_sticker.dds', 'wheel_detail_color.dds', 'rim.dds',
                        'dashboard_decals.dds', 'steer_center.dds', 'rollcage_color.dds', 'interior_metal_color.dds'),
     ),
+    # Pfalzdriver's Scirocco and M1 Procar
+    'vw-scirocco-gtx': dict(
+        title='Volkswagen Scirocco GTX 16V',
+        auto=True,
+        materials={},
+        paint=('carpaint',),
+        # The broken-glass layers AC shows only once a window is smashed
+        skip_materials={'DAMAGE_GLASS'},
+        skip_node_prefixes=(),
+        skip_nodes=('COCKPIT_LR',),
+        default_skin='Mars Red',
+        steer_nodes=(),
+        tyre_materials=('WHEEL_TYRE',),
+        tyre_prefix=None,
+        spinning=(),
+        windscreen=('Ext_Glass',),
+        # The paint colour is the body's detail map; the plates, glass tint, bumper, grille and lamp colours vary too
+        skin_textures=('metal_detail.dds', 'Plate_D.dds', 'ext_glass.dds', 'bumper_color.dds', 'grille_color.dds',
+                       '1aoplastic1.dds', 'amber_tail.dds'),
+    ),
+    'bmw-m1-procar': dict(
+        title='BMW M1 Procar',
+        auto=True,
+        materials={},
+        paint=('bmw_m1_paint_bodywork2__Bodywork_',),
+        # The broken-glass layers AC shows only once a window is smashed (the front indicators' glass among them)
+        skip_materials={'DAMAGE_GLASS', 'DAMAGE_GLASS.001'},
+        skip_node_prefixes=(),
+        # The belts drawn fastened round a driver the car doesn't carry
+        skip_nodes=('COCKPIT_LR', 'CINTURE_ON'),
+        default_skin='1979_Procar_Piquet_6',
+        steer_nodes=(),
+        tyre_materials=('bmw_m1_tyre_Tyres',),
+        tyre_prefix=None,
+        spinning=(),
+        windscreen=('EXT_GLASS',),
+        # The paint, sun strip, roll cage, steering wheel and tyre lettering
+        skin_textures=('car_paint_MAP.dds', 'metal_detail.dds', 'glass_up.dds', 'rollcage.dds', 'steer_m1.dds',
+                       'TYRE_d_2.dds'),
+        # A skin folder whose name lost its umlaut in the mod's archive
+        skin_ids={'1980_Procar_M�ller_66': '1980_procar_mueller_66'},
+    ),
 }
 # The car folders the presets were written for
 PRESET_BY_FOLDER = {'suzuki_liana': 'liana', 'mt_mtr_496r': 'mtr-496r',
-                    'nissan_skyline_bcnr33_jgtc': 'nissan-r33-jgtc', 'nissan_r32_jtcc': 'nissan-r32-jtcc'}
+                    'nissan_skyline_bcnr33_jgtc': 'nissan-r33-jgtc', 'nissan_r32_jtcc': 'nissan-r32-jtcc',
+                    'pfa_vw_scirocco_53b': 'vw-scirocco-gtx', 'pddw_bmw_procar_m1': 'bmw-m1-procar'}
+
+
+def skin_id(preset, folder):
+    """A skin folder's name as the livery's id, which is also its folder in URLs and on the asset host: lower case, each
+    run of anything but letters, digits and '-' as one '_' (a preset's `skin_ids` names the odd one out)"""
+    if folder in preset.get('skin_ids', {}):
+        return preset['skin_ids'][folder]
+    return re.sub(r'[^a-z0-9-]+', '_', folder.lower()).strip('_')
 
 
 def srgb_to_linear(c):
@@ -704,6 +755,9 @@ def auto_spec(m, stats, preset, by_name=None):
     spec['color'] = tuple(int(round(float(c))) for c in np.clip(colour if colour is not None else (255, 255, 255), 0, 255))
     spec['scale'] = round(scale, 2)
     nrm = maps.get('txNormal')
+    # A damage shader's normal map is its dents (AC fades it in with the damage): the undamaged car has none
+    if nrm and 'damage' in shader.lower() and 'damage' in nrm.lower():
+        nrm = None
     if nrm and shader != 'ksWindscreen':
         n = stats(nrm)
         if n is not None and not n['flat']:
@@ -890,13 +944,14 @@ def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir,
     written = 0
     for skin in skins:
         src = {**textures, **skin_overrides(car_dir, skin, textures, names)}
-        os.makedirs(os.path.join(out_dir, skin), exist_ok=True)
+        sid = skin_id(preset, skin)
+        os.makedirs(os.path.join(out_dir, sid), exist_ok=True)
         own = []
         for fname, key in files:
             if all(src[n] == base[n] for n in sources(key)):
                 continue
             im = image(key, src)
-            out = os.path.join(out_dir, skin, fname)
+            out = os.path.join(out_dir, sid, fname)
             if fname.endswith('.png'):
                 im.convert('RGBA').save(out, format='PNG', optimize=True)
             else:
@@ -911,7 +966,7 @@ def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir,
                 ui = json.loads(open(ui_path, 'rb').read().decode('utf-8-sig', 'replace'))
             except ValueError:
                 ui = {}
-        listing.append({'id': skin, 'name': str(ui.get('skinname', '')).strip(), 'number': str(ui.get('number', '')),
+        listing.append({'id': sid, 'name': str(ui.get('skinname', '')).strip(), 'number': str(ui.get('number', '')),
                         'swatch': paint_swatch(paint), 'files': own})
     with open(os.path.join(out_dir, 'skins.json'), 'w') as fh:
         json.dump(listing, fh, indent=1, ensure_ascii=False)
