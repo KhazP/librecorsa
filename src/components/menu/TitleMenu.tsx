@@ -882,7 +882,10 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 ) : null}
                 <dt className="lc-hint">Assists</dt>
                 <dd className="m-0 line-clamp-2 text-right text-[14px] font-semibold">
-                  {ASSIST_LABELS[props.assistPreset] ?? props.assistPreset}
+                  {/* A class without ABS runs the middle preset on TC alone */}
+                  {props.assistPreset === "semi_pro" && props.telemetry.liveTuner?.absAllowed === false
+                    ? "TC"
+                    : (ASSIST_LABELS[props.assistPreset] ?? props.assistPreset)}
                   {props.showRacingLine ? ", racing line" : ""}
                 </dd>
                 {hudPreset ? (
