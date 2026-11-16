@@ -1101,6 +1101,8 @@ AC_TRACKS = {
         # Background is the satellite-photo terrain, also drawn over some ROAD physics meshes off the lap; TRACK_LIGHT
         # the light towers; sml_rock_003 a rocky access path
         'notRoadMaterials': r'^(Background|TRACK_LIGHT|sml_rock_003)$',
+        # Opened by link only (?track=willow_springs) while Nukedrop tries it on the live site; drop to list it
+        'unlisted': True,
         'description': 'Willow Springs in the Mojave Desert, California: Big Willow, a fast and open 4.0 km lap of nine turns that climbs over a hill and drops back down to the long front straight.',
         'credit': {
             'title': 'Willow Springs - Big Willow',
@@ -2193,6 +2195,8 @@ def index_entry(tid, cfg, data):
         'credit': cfg['credit'],
         **({'type': cfg['type']} if cfg.get('type') else {}),
         'quality': 'sim',
+        # `unlisted`: left out of the game's lists, opened by its link only (src/lib/track-registry.ts)
+        **({'unlisted': True} if cfg.get('unlisted') else {}),
     }
 
 

@@ -714,6 +714,7 @@
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/willow-springs-big-willow.32338/"
     },
-    "quality": "sim"
+    "quality": "sim",
+    "unlisted": true
   }
 ]
