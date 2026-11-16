@@ -63,7 +63,7 @@ Around the site: the game draws 5.5 km, so the land climbs into a rim of hills b
 121 to 194 m above the lake; the real ground is kept where it is higher) and the lake stops at its foot. Beyond the
 lap's surroundings the ground takes field, crop, fallow and woodland colours, and a second, coarser canopy sheet is
 the far country's woodlots, where no tree is planted. Trees: 17,548 spots, 14,065 instanced after thinning the ones
-deep inside the canopy sheet, in four levels of detail. The packed circuit file is 9.7 MB and 566,000 triangles.
+deep inside the canopy sheet, in four levels of detail. The packed Blender build is 9.7 MB and 566,000 triangles; with the Assetto Corsa release's scenery on it (below) the circuit file is 17.0 MB and 922,000.
 
 Where the three extra road sections leave the built lap, the built ground gives way to them: what lies wholly under
 their asphalt, kerbs, paint and verge is taken out, what crosses their edge is cut fine and meets it a centimetre
@@ -175,6 +175,39 @@ timing gate, so each lap's gates are a small model of their own, listed in that 
 (keys as in CSP's track docs); `ac_data.py` stops if a material it expects is gone. The `.kn5` files themselves still
 come out of ksEditor.
 
+## Back from the Assetto Corsa release
+
+The circuit was then finished in Assetto Corsa and released on
+[OverTake](https://www.overtake.gg/downloads/rise-motordrome-bugesera-rwanda.88890/). The game's model takes that
+release's work back: its coordinates are the game's to the millimetre, and its road, kerbs, run-off, pit lane, gravel
+and verges lie within 2 cm of the game's, so both laps, their lengths and their racing lines stay as they are.
+
+```bash
+cp public/tracks/rwanda_official/rwanda_official.glb scripts/rwanda-official/data/rwanda_official_blender.glb   # after post.mjs
+$PY -I scripts/rwanda-official/ac_import.py <release>/content/tracks/rwanda_official   # data/ac/: layers.glb, look.json, tex/
+node scripts/rwanda-official/ac_merge.mjs            # rwanda_official.glb: the Blender build with the release on it
+npx tsx scripts/rwanda-official/ac_walls.ts          # both track data's barrier distances where the release moved them
+node scripts/ktx2-track-textures.mjs public/tracks/rwanda_official/rwanda_official.glb <out>.glb --track-data public/tracks/rwanda_official/track_data.json
+```
+
+What comes over:
+
+- the scenery the release added, as new nodes named to the contract above: the lakeside (papyrus beds and islands,
+  shore bands, stone banks, terraces), the paddock villages with their palms and parked cars, the building facades,
+  the domes, the trackside dressing (hoardings, marshal posts, brake boards, fences), the floodlight masts, the safety
+  Tecpro, the grandstand seats and the near horizon (airfield, town, wetland);
+- the main model's meshes it changed: the Turn 1 bridge, the marshal posts and the painted lines;
+- its barrier colliders, which stand up to 0.75 m nearer the road where it set Tecpro in front of the armco
+  (`ac_walls.ts` moves the track data's wall distances there, by up to 0.94 m along the sample's normal, and nothing else);
+- `extension/ext_config.ini`'s look: the barrier, pit wall, kerb, run-off, car park, causeway and forest textures, the
+  toned-down whites, the lake's colour, and the savanna colour its multilayer shaders give the grass (taken as a
+  multiplier on the grass nodes' vertex colours, gamma 2.2, as the release applies it to the colours as drawn).
+
+What stays in Assetto Corsa: the trees of CSP's tree system (the game keeps `scenery/foliage.glb`), the per-lap
+models (closures, groove, timing gates, the short lap's brake boards: both laps share one model here), the horizon
+rings beyond the game's 5.5 km far plane, the live screens, night lights, smoke, grass and rain effects, the baked
+vertex occlusion and the sounds.
+
 | File | What it holds |
 | :-- | :-- |
 | `ro_design.py` | The cross-section and band layout shared by every step |
@@ -186,4 +219,5 @@ come out of ksEditor.
 | `bl_track.py`, `bl_addon.py`, `bl_terrain.py`, `bl_scenery.py`, `bl_export.py` | The Blender build |
 | `post.mjs`, `foliage.mjs`, `export_json.py` | The game's files |
 | `ac_trees.mjs`, `bl_ac.py`, `ac_data.py` | The Assetto Corsa project |
+| `ac_import.py`, `ac_merge.mjs`, `ac_walls.ts` | The Assetto Corsa release, back into the game's files |
 | `assets/` | The tree models with their credits, the scanned surfaces (`textures/scan-*`), and the project's own barrier, fence, pit wall and gantry textures |
