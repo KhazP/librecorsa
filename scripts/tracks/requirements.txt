@@ -1,7 +1,8 @@
-# The circuit converters (port_ac_track.py, build_track.py), on Python 3.14: the versions they have been run with.
-# Other Pillow or OpenCV versions work, but encode some textures to different bytes.
+# The circuit converters (port_ac_track.py, build_track.py), on Python 3.14.
+# The hosted circuits were built with pillow 12.1.1. Pillow 13 encodes some WebP textures to different bytes, so a
+# rebuild with these pins can differ from the hosted files. Other Pillow or OpenCV versions also change some bytes.
 numpy==2.4.3
 scipy==1.18.1
 opencv-python-headless==4.13.0.92
-pillow==12.1.1
+pillow==13.0.0
 scikit-image==0.26.0
