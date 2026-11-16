@@ -225,6 +225,8 @@ let linkOpened = false;
 export function loadStoredTrackId(): string {
   if (!linkOpened && LINKED_TRACK_ID && TRACKS.some((t) => t.id === LINKED_TRACK_ID)) {
     linkOpened = true;
+    // Stored now, before it loads: a second call (development's doubled effects, an early remount) opens it too
+    storeTrackId(LINKED_TRACK_ID);
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete("track");
