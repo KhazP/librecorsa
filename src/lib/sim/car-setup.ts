@@ -302,6 +302,30 @@ export interface GaragePreset {
   tuner: GarageTuner;
 }
 
+/** A setup the car comes with: its overrides on top of the car's baseline (the electronics and compound stay as set) */
+export interface FactoryPreset {
+  id: string;
+  name: string;
+  aero: AeroSetupPreset;
+  chassis: Partial<ChassisSetup>;
+  camberDeg?: { front: number; rear: number };
+}
+
+/** The endurance cars' low-drag trims for long-straight circuits: low-downforce aero on the long gear set */
+export const FACTORY_PRESETS: Partial<Record<VehicleModelId, readonly FactoryPreset[]>> = {
+  "amg-gt3": [{ id: "low_drag_gt3", name: "Low drag", aero: "low_downforce", chassis: { gearRatioSet: 1 } }],
+  // The prototype also runs its rear bar detached and less camber for the straights
+  "lc-lmdh": [
+    {
+      id: "low_drag_proto",
+      name: "Low drag",
+      aero: "low_downforce",
+      chassis: { gearRatioSet: 1, arbRearPct: ARB_DETACHED_PCT },
+      camberDeg: { front: -1.2, rear: -1.0 },
+    },
+  ],
+};
+
 const chassisKey = (v: VehicleModelId) => `lc.garage.chassis.${v}`;
 const presetsKey = (v: VehicleModelId) => `lc.garage.presets.${v}`;
 /** A saved item under the model's id, or under the id the 2026 Prototype had before it was renamed */

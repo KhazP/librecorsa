@@ -7,7 +7,7 @@
  * mass without the burn.
  * Run: npx tsx scripts/verify-setup-sheet.ts
  */
-import { clampChassisSetup, DEFAULT_CHASSIS_SETUP, FUEL_LOAD, startingFuelKg, type ChassisSetup, type GarageTuner } from "../src/lib/sim/car-setup";
+import { clampChassisSetup, DEFAULT_CHASSIS_SETUP, FACTORY_PRESETS, FUEL_LOAD, startingFuelKg, type ChassisSetup, type GarageTuner } from "../src/lib/sim/car-setup";
 import { SIM_REALISM_FLAGS } from "../src/lib/sim/sim-realism";
 import { SETUP_CLASS, setupSheet, type SetupState } from "../src/lib/sim/setup-sheet";
 import { TYRE_SETUP_LIMITS } from "../src/lib/sim/tyre-setup";
@@ -326,6 +326,25 @@ console.log("Fuel load");
     );
   }
   check("startingFuelKg keeps to each car's range", startingFuelKg("amg-gt3", { fuelDeltaKg: 80 }) === FUEL_LOAD["amg-gt3"].maxKg && startingFuelKg("lc26", { fuelDeltaKg: -50 }) === FUEL_LOAD.lc26.minKg);
+}
+
+// ---- Factory setups ----
+console.log("Factory setups");
+for (const v of vehicles) {
+  for (const f of FACTORY_PRESETS[v] ?? []) {
+    const d = defaultTyre(v);
+    const st: SetupState = { chassis: { ...DEFAULT_CHASSIS_SETUP, ...f.chassis }, tyre: { ...d, camberDeg: f.camberDeg ?? d.camberDeg }, tuner };
+    // Every value inside its slider's range, so the garage loads it unchanged
+    const out = sheets[v].flatMap((g) => g.params).filter((q) => q.writes !== "tuner" && (q.get(st) < q.min - 1e-9 || q.get(st) > q.max + 1e-9));
+    check(`${v} ${f.id}: every setting on its slider`, out.length === 0, out.map((q) => q.id).join(", "));
+    const sim = makers[v](flat) as unknown as { applyChassisSetup(c: ChassisSetup): void; config: { suspensions: { rear: { arb: number } }; gearbox: { finalDrive?: number; ratios: number[] } } };
+    const base = makers[v](flat) as unknown as typeof sim;
+    sim.applyChassisSetup(clampChassisSetup(st.chassis));
+    base.applyChassisSetup({ ...DEFAULT_CHASSIS_SETUP });
+    const longer = sim.config.gearbox.ratios.at(-1)! * (sim.config.gearbox.finalDrive ?? 1) < base.config.gearbox.ratios.at(-1)! * (base.config.gearbox.finalDrive ?? 1);
+    const detached = f.chassis.arbRearPct === -100 ? sim.config.suspensions.rear.arb === 0 : sim.config.suspensions.rear.arb > 0;
+    check(`${v} ${f.id}: long top gear, rear bar as set`, longer && detached, `rear ARB ${sim.config.suspensions.rear.arb.toFixed(0)} N/m`);
+  }
 }
 
 console.log(`\nAll ${passed} setup sheet checks passed.`);
