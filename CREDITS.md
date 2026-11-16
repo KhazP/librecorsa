@@ -164,7 +164,7 @@ Each circuit below is created by **LilSki** ([https://www.overtake.gg/members/li
 
 #### Willow Springs (`public/tracks/willow_springs/`)
 
-* `"Willow Springs - Big Willow"` ([https://www.overtake.gg/downloads/willow-springs-big-willow.32338/](https://www.overtake.gg/downloads/willow-springs-big-willow.32338/)) by **Nukedrop** (`willow_springs`), used with permission. Converted the same way as the Mitja Bonca circuits (`scripts/tracks/port_ac_track.py`) from the mod's Big Willow Real layout, with its satellite-photo terrain and light towers drawn with their own textures rather than the game's asphalt shader
+* `"Willow Springs - Big Willow"` ([https://www.overtake.gg/downloads/willow-springs-big-willow.32338/](https://www.overtake.gg/downloads/willow-springs-big-willow.32338/)) by **Nukedrop** ([https://www.patreon.com/cw/nukedrop/](https://www.patreon.com/cw/nukedrop/)) (`willow_springs`), used with permission. Converted the same way as the Mitja Bonca circuits (`scripts/tracks/port_ac_track.py`) from the mod's Big Willow Real layout, with its satellite-photo terrain and light towers drawn with their own textures rather than the game's asphalt shader
 
 #### Istanbul Park (`public/tracks/istanbul_park/`)
 
