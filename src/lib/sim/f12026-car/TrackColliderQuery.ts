@@ -59,6 +59,14 @@ const CELL_SIZE_M = 4;
  * triangle's size outside it (microns on the largest terrain triangles), so the box test never rejects one it keeps
  */
 const TRI_BOX_MARGIN_M = 1e-3;
+/**
+ * A grid cell listing more triangles than this is split into finer cells (`splitDenseCells`): a busy stretch of a
+ * circuit (Spielberg had one 4 m cell of 458 triangles, against 9 for a typical one) cost a car a whole frame there
+ */
+const DENSE_CELL_TRIS = 64;
+/** A split cell aims for about this many triangles in each of its finer cells, in at most 8 × 8 of them */
+const SPLIT_CELL_TRIS = 16;
+const SPLIT_MAX = 8;
 /** Most points one `queryMany` answers (a contact patch takes five) */
 export const GROUND_QUERY_MANY_MAX = 8;
 /** Tagged surfaces kept per point to classify its contact */
@@ -147,6 +155,9 @@ export interface TrackColliderBuffers {
   nz: number;
   cellStart: Uint32Array;
   cellTris: Uint32Array;
+  /** Per grid cell: -1, or the first of the k × k finer cells it is split into (`cellSplitK` holds k) */
+  cellSplit: Int32Array;
+  cellSplitK: Uint8Array;
   fitted: boolean;
 }
 
@@ -203,6 +214,64 @@ function buildCsrGrid(
   const fill = cellStart.slice(0, cellCount);
   for (let i = 0; i < count; i++) forEachCell(i, (cell) => (items[fill[cell]++] = i));
   return { nx, nz, cellStart, items };
+}
+
+/**
+ * Splits each grid cell of more than `DENSE_CELL_TRIS` items into k × k finer cells, each listing the cell's items
+ * whose box (grown by `TRI_BOX_MARGIN_M`, so every triangle a point there could be inside is kept) overlaps it, in the
+ * cell's own order. A query in a split cell then scans only its finer cell's list, and finds the same triangles in the
+ * same order as it found in the whole cell's: the same answer, ties included. The finer cells follow the grid's cells
+ * in `cellStart` (a split cell's own range is left empty); `cellAt` maps a point to one with the same arithmetic.
+ */
+function splitDenseCells(
+  grid: { nx: number; nz: number; cellStart: Uint32Array; items: Uint32Array },
+  minX: number,
+  minZ: number,
+  tris: Float32Array
+): { cellStart: Uint32Array; items: Uint32Array; cellSplit: Int32Array; cellSplitK: Uint8Array } {
+  const cells = grid.nx * grid.nz;
+  const cellSplit = new Int32Array(cells).fill(-1);
+  const cellSplitK = new Uint8Array(cells);
+  let leaves = cells;
+  for (let c = 0; c < cells; c++) {
+    const count = grid.cellStart[c + 1] - grid.cellStart[c];
+    if (count <= DENSE_CELL_TRIS) continue;
+    const k = Math.min(SPLIT_MAX, Math.max(2, Math.ceil(Math.sqrt(count / SPLIT_CELL_TRIS))));
+    cellSplit[c] = leaves;
+    cellSplitK[c] = k;
+    leaves += k * k;
+  }
+  if (leaves === cells) return { cellStart: grid.cellStart, items: grid.items, cellSplit, cellSplitK };
+  /** A coordinate's finer column / row within its cell (`cellAt`'s arithmetic), clamped to the cell */
+  const sub = (v: number, min: number, cell: number, k: number) => Math.min(k - 1, Math.max(0, Math.floor(((v - min) / CELL_SIZE_M - cell) * k)));
+  const forEachLeaf = (c: number, t: number, fn: (leaf: number) => void) => {
+    const k = cellSplitK[c];
+    const cx = c % grid.nx;
+    const cz = (c - cx) / grid.nx;
+    const o = t * 9;
+    const x0 = Math.min(tris[o], tris[o + 3], tris[o + 6]) - TRI_BOX_MARGIN_M;
+    const x1 = Math.max(tris[o], tris[o + 3], tris[o + 6]) + TRI_BOX_MARGIN_M;
+    const z0 = Math.min(tris[o + 2], tris[o + 5], tris[o + 8]) - TRI_BOX_MARGIN_M;
+    const z1 = Math.max(tris[o + 2], tris[o + 5], tris[o + 8]) + TRI_BOX_MARGIN_M;
+    const sx0 = sub(x0, minX, cx, k);
+    const sx1 = sub(x1, minX, cx, k);
+    const sz0 = sub(z0, minZ, cz, k);
+    const sz1 = sub(z1, minZ, cz, k);
+    for (let sz = sz0; sz <= sz1; sz++) for (let sx = sx0; sx <= sx1; sx++) fn(cellSplit[c] + sz * k + sx);
+  };
+  const cellStart = new Uint32Array(leaves + 1);
+  for (let c = 0; c < cells; c++) {
+    if (cellSplit[c] < 0) cellStart[c + 1] = grid.cellStart[c + 1] - grid.cellStart[c];
+    else for (let i = grid.cellStart[c]; i < grid.cellStart[c + 1]; i++) forEachLeaf(c, grid.items[i], (leaf) => cellStart[leaf + 1]++);
+  }
+  for (let l = 0; l < leaves; l++) cellStart[l + 1] += cellStart[l];
+  const items = new Uint32Array(cellStart[leaves]);
+  const fill = cellStart.slice(0, leaves);
+  for (let c = 0; c < cells; c++) {
+    if (cellSplit[c] < 0) items.set(grid.items.subarray(grid.cellStart[c], grid.cellStart[c + 1]), fill[c]);
+    else for (let i = grid.cellStart[c]; i < grid.cellStart[c + 1]; i++) forEachLeaf(c, grid.items[i], (leaf) => (items[fill[leaf]++] = grid.items[i]));
+  }
+  return { cellStart, items, cellSplit, cellSplitK };
 }
 
 /** Closest point in XZ on triangle (a, b, c) to (px, pz), writing the interpolated 3D point and squared XZ distance */
@@ -746,9 +815,12 @@ export class TrackColliderQuery implements GroundQuery {
   private readonly minZ: number;
   private readonly nx: number;
   private readonly nz: number;
-  /** CSR grid: cell → [cellStart[c], cellStart[c+1]) into cellTris */
+  /** CSR grid: cell → [cellStart[c], cellStart[c+1]) into cellTris, the finer cells of split ones after the grid's */
   private readonly cellStart: Uint32Array;
   private readonly cellTris: Uint32Array;
+  /** Per grid cell: -1, or its first finer cell, and how many across (`splitDenseCells`) */
+  private readonly cellSplit: Int32Array;
+  private readonly cellSplitK: Uint8Array;
   public readonly triangleCount: number;
 
   /**
@@ -759,7 +831,7 @@ export class TrackColliderQuery implements GroundQuery {
   static fromTrackRoot(
     root: THREE.Object3D,
     table: SurfaceTable = DEFAULT_SURFACE_TABLE,
-    options: { conformSurfaces?: boolean; prepare?: (root: THREE.Object3D) => void } = {}
+    options: { conformSurfaces?: boolean; prepare?: (root: THREE.Object3D) => void; splitDenseCells?: boolean } = {}
   ): TrackColliderQuery {
     if (options.conformSurfaces) {
       conformTrackSurfaceColliders(root);
@@ -807,6 +879,8 @@ export class TrackColliderQuery implements GroundQuery {
       nz: this.nz,
       cellStart: this.cellStart,
       cellTris: this.cellTris,
+      cellSplit: this.cellSplit,
+      cellSplitK: this.cellSplitK,
       fitted: this.fitted,
     };
   }
@@ -814,7 +888,8 @@ export class TrackColliderQuery implements GroundQuery {
   constructor(
     sources: ColliderLayerSource[] | TrackColliderBuffers,
     table: SurfaceTable = DEFAULT_SURFACE_TABLE,
-    options: { conformSurfaces?: boolean } = {}
+    /** `splitDenseCells: false` keeps every grid cell whole (scripts/verify-collider-split.ts compares the two) */
+    options: { conformSurfaces?: boolean; splitDenseCells?: boolean } = {}
   ) {
     if (!Array.isArray(sources)) {
       this.fitted = sources.fitted;
@@ -832,6 +907,8 @@ export class TrackColliderQuery implements GroundQuery {
       this.nz = sources.nz;
       this.cellStart = sources.cellStart;
       this.cellTris = sources.cellTris;
+      this.cellSplit = sources.cellSplit;
+      this.cellSplitK = sources.cellSplitK;
       return;
     }
     const fitted = options.conformSurfaces === true;
@@ -1023,8 +1100,14 @@ export class TrackColliderQuery implements GroundQuery {
     this.minZ = minZ;
     this.nx = grid.nx;
     this.nz = grid.nz;
-    this.cellStart = grid.cellStart;
-    this.cellTris = grid.items;
+    const split =
+      options.splitDenseCells === false
+        ? { cellStart: grid.cellStart, items: grid.items, cellSplit: new Int32Array(grid.nx * grid.nz).fill(-1), cellSplitK: new Uint8Array(grid.nx * grid.nz) }
+        : splitDenseCells(grid, minX, minZ, this.tris);
+    this.cellStart = split.cellStart;
+    this.cellTris = split.items;
+    this.cellSplit = split.cellSplit;
+    this.cellSplitK = split.cellSplitK;
   }
 
   /**
@@ -1156,12 +1239,18 @@ export class TrackColliderQuery implements GroundQuery {
     return found;
   }
 
-  /** Grid cell of (x, z), or -1 off the grid */
+  /** Grid cell of (x, z), or its finer cell in a split one; -1 off the grid */
   private cellAt(x: number, z: number): number {
     const fx = (x - this.minX) / CELL_SIZE_M;
     const fz = (z - this.minZ) / CELL_SIZE_M;
     if (fx < 0 || fz < 0 || fx >= this.nx || fz >= this.nz) return -1;
-    return Math.floor(fz) * this.nx + Math.floor(fx);
+    const cx = Math.floor(fx);
+    const cz = Math.floor(fz);
+    const cell = cz * this.nx + cx;
+    const first = this.cellSplit[cell];
+    if (first < 0) return cell;
+    const k = this.cellSplitK[cell];
+    return first + Math.min(k - 1, Math.floor((fz - cz) * k)) * k + Math.min(k - 1, Math.floor((fx - cx) * k));
   }
 
   /** Point `p` starts a scan with no candidates */

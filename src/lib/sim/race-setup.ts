@@ -3,7 +3,7 @@
  * a race is started (changes apply from the next start).
  */
 import type { DamageLevel } from './car-damage';
-import type { AiOpponentField } from './ai-opponents';
+import type { AiRace } from './ai-race';
 
 export type PlayerGridSlot = 'back' | 'middle' | 'front' | 'random';
 export type AiGridOrder = 'pace' | 'qualifying' | 'reversed';
@@ -70,7 +70,7 @@ export function parseRaceSetup(raw: unknown): RaceSetup {
 }
 
 /** Starts an AI race with the race setup: laps, grid, damage, and the start (standing unless asked otherwise) */
-export function startAiRace(field: AiOpponentField, setup: RaceSetup, standing = setup.start === 'standing'): void {
+export function startAiRace(field: AiRace, setup: RaceSetup, standing = setup.start === 'standing'): void {
   field.raceLaps = setup.laps;
   field.gridOrder = setup.aiGrid;
   field.playerGrid = setup.grid;

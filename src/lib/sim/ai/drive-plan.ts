@@ -4,10 +4,10 @@
  * a speed plan of their own); the line and the speeds come from the line generator and `planSpeeds`, later from the
  * local planner.
  */
-import type { AiTrack } from './ai-track';
+import type { AiTrack, PathGeometry } from './ai-track';
 import { pathGeometry } from './ai-track';
 import type { CarLimits } from './ggv';
-import { planSpeeds } from './speed-plan';
+import { planSpeedsJob } from './speed-plan';
 
 export interface AiDrivePlan {
   readonly track: AiTrack;
@@ -31,13 +31,36 @@ export interface AiDrivePlan {
   readonly lapS: number;
 }
 
-export function makeDrivePlan(track: AiTrack, offsets: ArrayLike<number>, limits: CarLimits): AiDrivePlan {
+/** What a plan takes from its line alone, the same for every plan on it: the offsets, the path's geometry and dn/ds */
+export interface DriveLine {
+  readonly n: Float64Array;
+  readonly geometry: PathGeometry;
+  readonly dnds: Float64Array;
+}
+
+export function driveLineOf(track: AiTrack, offsets: ArrayLike<number>): DriveLine {
   const n = Float64Array.from(offsets);
-  const plan = planSpeeds(track, n, limits, undefined, true);
   const dnds = new Float64Array(track.n);
   for (let i = 0; i < track.n; i++) {
     const a = n[(i - 1 + track.n) % track.n], b = n[(i + 1) % track.n];
     dnds[i] = (b - a) / (2 * track.ds);
   }
-  return { track, n, v: plan.vLimit, vOpen: plan.vOpen ?? plan.vLimit, vExpected: plan.v, kappa: plan.geometry.kappa, dnds, limits, lapS: plan.lapS };
+  return { n, geometry: pathGeometry(track, n), dnds };
+}
+
+export function makeDrivePlan(track: AiTrack, offsets: ArrayLike<number> | DriveLine, limits: CarLimits): AiDrivePlan {
+  const job = drivePlanJob(track, 'geometry' in offsets ? offsets : driveLineOf(track, offsets), limits);
+  for (;;) {
+    const r = job.next();
+    if (r.done) return r.value;
+  }
+}
+
+/**
+ * `makeDrivePlan` a slice at a time (`planSpeedsJob`): pauses about every `quantum` work units, and run to the end
+ * returns the same plan. The plan shares the line's arrays, which no one writes to
+ */
+export function* drivePlanJob(track: AiTrack, line: DriveLine, limits: CarLimits, quantum = Infinity): Generator<number, AiDrivePlan, void> {
+  const plan = yield* planSpeedsJob(track, line.n, limits, line.geometry, true, quantum);
+  return { track, n: line.n, v: plan.vLimit, vOpen: plan.vOpen ?? plan.vLimit, vExpected: plan.v, kappa: plan.geometry.kappa, dnds: line.dnds, limits, lapS: plan.lapS };
 }
