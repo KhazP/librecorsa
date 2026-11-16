@@ -7,6 +7,8 @@
 import { CARS, carById } from "../src/lib/cars/car-registry";
 import { carModelSource, trackModelSource } from "../src/lib/model-source";
 import { TRACKS } from "../src/lib/track-registry";
+import { MODDER_SUPPORT } from "../src/lib/modder-support";
+import { moddersList } from "../src/lib/modders";
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -45,6 +47,13 @@ for (const [id, modder] of [["monaco", "Mitja Bonca"], ["norisring", "gunnar333"
 check("The GT3's model source is Vecarz's", carModelSource(carById("amg-gt3")).author === "Vecarz");
 const dunsfold = TRACKS.find((t) => t.id === "dunsfold");
 check("Dunsfold's source says it is a Forza Motorsport 4 conversion", !dunsfold || /Forza Motorsport 4/.test(trackModelSource(dunsfold)?.note ?? ""));
+
+// Every donation link belongs to a credited name: a spelling that differs from the credits just shows no button
+const credited = new Set([...TRACKS.flatMap((t) => (t.credit ? [t.credit.author] : [])), ...CARS.flatMap((c) => [c.credit.author, ...(c.tyreCredit ? [c.tyreCredit.author] : [])])]);
+const strays = Object.keys(MODDER_SUPPORT).filter((name) => !credited.has(name));
+check("Every donation link matches a credited modder", strays.length === 0, strays.join(", "));
+const list = moddersList();
+check("The modders list puts those with a link first", list.findIndex((m) => !m.support) === -1 || list.slice(list.findIndex((m) => !m.support)).every((m) => !m.support));
 
 console.log(failed ? `\n${failed} model source check(s) failed.` : "\nAll model source checks passed.");
 if (failed) process.exit(1);

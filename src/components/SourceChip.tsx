@@ -3,9 +3,9 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ModelSource } from "@/lib/model-source";
-import { supportLabel } from "@/lib/modder-support";
+import { SupportButton } from "@/components/SupportButton";
 import { TAKEDOWN_URL } from "@/lib/site";
-import { Button, IconButton } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icons";
 import { uiZoomOf } from "@/components/ui/styles";
 
@@ -152,21 +152,7 @@ export const SourceChip: React.FC<{
                   : { left: 0, top: 0, visibility: "hidden" }
               }
             >
-              {source.support ? (
-                <Button
-                  href={source.support.url}
-                  native
-                  target="_blank"
-                  rel="noreferrer"
-                  variant="primary"
-                  size="sm"
-                  icon={<Icon name="support" />}
-                  aria-label={`${source.support.via === "PayPal" ? "Donate to" : "Support"} ${source.author} ${source.support.via === "PayPal" ? "via" : "on"} ${source.support.via}`}
-                  className="mb-1 self-start"
-                >
-                  {supportLabel(source.support)}
-                </Button>
-              ) : null}
+              <SupportButton support={source.support} maker={source.author} className="mb-1 self-start" />
               <span>
                 &ldquo;
                 <a href={source.url} target="_blank" rel="noreferrer" className={linkClass}>
