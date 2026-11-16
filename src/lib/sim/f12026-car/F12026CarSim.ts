@@ -1620,10 +1620,12 @@ export class F12026CarSim implements SimulatorCar {
    */
   public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number, raceStart = false): void {
     // A point-to-point course is driven from a standing start: its road ends behind the start line
-    if (this.track.pointToPoint) flyingStart = false;
-    // Out of the garage at the full realism level: tyres raced without blankets and their brakes cold. A race's grid
-    // and a rolling start come after a formation lap, and the autopilot's cars plan on warm brakes
-    this.vehicle.coldGarageStart = this.realism.coldGarageStart && !flyingStart && !raceStart && !this.aiAutopilot;
+    const pointToPoint = !!this.track.pointToPoint;
+    if (pointToPoint) flyingStart = false;
+    // Out of the garage at the full realism level: tyres raced without blankets and their brakes cold, for an out-lap
+    // to warm. A race's grid and a rolling start come after a formation lap, a hill climb's start line after the
+    // driver's own warm-up (it has no out-lap), and the autopilot's cars plan on warm brakes
+    this.vehicle.coldGarageStart = this.realism.coldGarageStart && !flyingStart && !raceStart && !pointToPoint && !this.aiAutopilot;
     this.runActive = false;
     this.atRestOnLine = false;
     // Fuelled before it is seated, so it settles at the ride height of that load
