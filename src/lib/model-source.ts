@@ -1,6 +1,6 @@
 import type { CarDefinition } from "@/lib/cars/car-registry";
 import { supportOf, type SupportLink } from "@/lib/modder-support";
-import { REPO_URL } from "@/lib/site";
+import { REPO_URL, SUPPORT_URL } from "@/lib/site";
 import type { TrackInfo } from "@/lib/track-registry";
 
 /**
@@ -24,14 +24,16 @@ export interface ModelSource {
   model?: { title: string; author: string; url: string; license: string; licenseUrl?: string };
 }
 
-/** RISE Motordrome: the project's own circuit, with two trackside tree models */
+/** RISE Motordrome: the project's own circuit, also released for Assetto Corsa on OverTake, with two trackside tree models */
 const RISE_SOURCE: ModelSource = {
   title: "RISE Motordrome",
-  author: "LibreCorsa",
-  url: `${REPO_URL}/tree/main/scripts/rwanda-official`,
+  author: "Alp Yalay",
+  authorUrl: "https://www.overtake.gg/members/khazmeister.1006084/",
+  url: "https://www.overtake.gg/downloads/rise-motordrome-bugesera-rwanda.88890/",
   license: "CC BY-NC-SA 4.0",
   licenseUrl: `${REPO_URL}/blob/main/public/tracks/rwanda_official/LICENSE.md`,
-  note: "Built for LibreCorsa. Its trees are the acacia by evolveduk and the shrub by Natural_Disbuster, both CC BY 4.0.",
+  note: "Built for LibreCorsa (scripts/rwanda-official in the repository). Its trees are the acacia by evolveduk and the shrub by Natural_Disbuster, both CC BY 4.0.",
+  support: { url: SUPPORT_URL, via: "Buy Me a Coffee" },
 };
 
 /** A car's source: the credited modder's work first, and the model's own origin after it when that is someone else's */

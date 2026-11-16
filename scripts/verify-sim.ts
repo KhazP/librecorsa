@@ -719,7 +719,9 @@ async function runVerification() {
   let maxSingleFileBytes = 0;
   for (const f of allTrackFiles) {
     const sz = fs.statSync(f).size;
-    totalTrackBytes += sz;
+    // The KTX2 conversion (src/lib/ktx2-models.ts) is what a phone loads instead of the model, not as well: it counts
+    // as a file, not towards the folder
+    if (!/\.ktx2\.[0-9a-f]{8}\.glb$/.test(f)) totalTrackBytes += sz;
     if (sz > maxSingleFileBytes) maxSingleFileBytes = sz;
   }
 
