@@ -23,7 +23,7 @@ import { DISTANCE_LABEL, distanceIn } from "@/lib/settings/units";
 import { useGamepads, type PadState } from "./useMenuNav";
 import { focusInZone, focusZone, useFocusNav } from "./useFocusNav";
 import { useInputMode } from "./input-mode";
-import { Button, Sheet } from "@/components/ui";
+import { Button, IconButton, Sheet } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
 import type { IconName } from "@/components/ui/icons/registry";
@@ -45,6 +45,7 @@ import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { REPO_URL, SUPPORT_URL, TAKEDOWN_URL } from "@/lib/site";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { moddersList } from "@/lib/modders";
+import type { PromptItem } from "@/lib/support-prompt";
 import { SupportButton } from "@/components/SupportButton";
 import { cx } from "@/components/ui/styles";
 import { withBasePath } from "@/lib/base-path";
@@ -93,6 +94,11 @@ export interface TitleMenuProps extends PauseMenuProps {
   onSelectTrack?: (id: string) => void | Promise<void>;
   /** This week's challenge (only with an online board) */
   challengePanel?: ChallengePanelProps;
+  /** The note after a drive (support-prompt.ts): the circuit and car just driven whose makers take donations */
+  supportNote?: PromptItem[] | null;
+  onCloseSupportNote?: () => void;
+  /** A maker's donate button was pressed in the note */
+  onSupportThanked?: (maker: string) => void;
 }
 
 const linkClass = "text-lc-chalk underline decoration-lc-keyline underline-offset-2 hover:decoration-lc-chalk";
@@ -159,6 +165,52 @@ const ModderSupport: React.FC = () => {
         ))}
       </ul>
     </section>
+  );
+};
+
+/** "Circuit de Monaco by Mitja Bonca", "the Suzuki Liana 1.6, physics by alekabul": in the credit's own words */
+const madeBy = (i: PromptItem): React.ReactNode => {
+  const name = <span className="font-semibold text-lc-chalk">{i.maker}</span>;
+  if (i.kind === "circuit") return <>{i.title} by {name}</>;
+  return i.role === "Model" ? (
+    <>
+      the {i.title} by {name}
+    </>
+  ) : (
+    <>
+      the {i.title}, {i.role.toLowerCase()} by {name}
+    </>
+  );
+};
+
+/**
+ * The note after a drive, beside Up next on the main menu: who made the circuit and car just driven, with their
+ * donation links. It never takes the cursor (Drive keeps it) and goes with Close, a donation, or the next drive.
+ */
+const SupportNote: React.FC<{ items: PromptItem[]; onClose?: () => void; onThanked?: (maker: string) => void }> = ({
+  items,
+  onClose,
+  onThanked,
+}) => {
+  const circuit = items.find((i) => i.kind === "circuit");
+  const car = items.find((i) => i.kind === "car");
+  return (
+    <Sheet role="region" aria-label="Who made this drive" className="flex w-full flex-col gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="lc-body m-0 text-[15px] leading-snug text-lc-fog">
+          You drove {circuit ? madeBy(circuit) : null}
+          {circuit && car ? " in " : null}
+          {car ? madeBy(car) : null}.
+        </p>
+        {onClose ? <IconButton size="sm" variant="ghost" icon={<Icon name="close" />} aria-label="Close" onClick={onClose} className="-mt-1 -mr-1 shrink-0" /> : null}
+      </div>
+      <p className="lc-hint m-0">They make these for free. If you enjoyed the drive, you can thank them directly.</p>
+      <div className="flex flex-wrap gap-2">
+        {items.map((i) => (
+          <SupportButton key={i.key} support={i.support} maker={i.maker} named variant="secondary" onOpen={() => onThanked?.(i.maker)} />
+        ))}
+      </div>
+    </Sheet>
   );
 };
 
@@ -897,7 +949,11 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               </div>
             </nav>
 
-            <Sheet role="region" aria-label="Up next" className="flex w-full max-w-[340px] flex-col gap-4 short:hidden">
+            <div className="flex w-full max-w-[380px] flex-col gap-3">
+            {props.supportNote?.length ? (
+              <SupportNote items={props.supportNote} onClose={props.onCloseSupportNote} onThanked={props.onSupportThanked} />
+            ) : null}
+            <Sheet role="region" aria-label="Up next" className="flex w-full flex-col gap-4 short:hidden">
               <div className="flex items-center gap-4">
                 {map ? <TrackOutline map={map} thin className="h-[84px] w-[104px] shrink-0" /> : null}
                 <div className="flex min-w-0 flex-col gap-1">
@@ -964,6 +1020,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 ) : null}
               </dl>
             </Sheet>
+            </div>
           </div>
         )}
 

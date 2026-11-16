@@ -13,6 +13,9 @@ import { TrackEnvironment } from "@/lib/sim/track-environment";
 import { installErrorLog } from "@/lib/diagnostics/error-log";
 import { collectReportFacts } from "@/lib/diagnostics/report-facts";
 import type { ReportFacts } from "@/lib/diagnostics/report-details";
+import { carMaker, circuitMaker } from "@/lib/modders";
+import { isStoreBuild } from "@/lib/store-mode";
+import { markShown, markThanked, promptFor, readPromptState, writePromptState, type PromptItem } from "@/lib/support-prompt";
 import { getMultiplayerManager, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo, type ScheduledRaceStatus } from "@/lib/sim/multiplayer-sync";
 import { boardStateOf, watchOnlineConfig, type BoardState } from "@/lib/net/online-config";
 import { DEFAULT_RACE_SLOT_S } from "@/lib/net/race-schedule";
@@ -1543,6 +1546,57 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     handleJoinRace();
   }, [handleBackToLobby, handleJoinRace]);
 
+  // The note after a drive (support-prompt.ts): how long this circuit and car were driven, and, back on the main
+  // menu after a real drive, who made them, for the makers who take donations
+  const [supportNote, setSupportNote] = useState<PromptItem[] | null>(null);
+  const driveTime = useRef<{ pair: string; ms: number; since: number | null }>({ pair: "", ms: 0, since: null });
+  const lastPhase = useRef(phase);
+  useEffect(() => {
+    const pair = `${trackId}|${carId}`;
+    const d = driveTime.current;
+    const now = performance.now();
+    if (d.since !== null) d.ms += now - d.since;
+    d.since = phase === "driving" && !paused ? now : null;
+    if (d.pair !== pair) {
+      d.pair = pair;
+      d.ms = 0;
+    }
+  }, [phase, paused, trackId, carId]);
+  useEffect(() => {
+    const was = lastPhase.current;
+    lastPhase.current = phase;
+    if (phase === "driving") setSupportNote(null);
+    if (phase !== "title" || was !== "driving" || isStoreBuild()) return;
+    const items: PromptItem[] = [];
+    const circuit = circuitMaker(trackId);
+    const track = getTrackInfo(trackId);
+    if (circuit?.support) items.push({ key: `circuit:${track.name}`, kind: "circuit", title: track.name, maker: circuit.name, role: circuit.role, support: circuit.support });
+    const car = carMaker(carId);
+    if (car.support) items.push({ key: `car:${carId}`, kind: "car", title: carById(carId).title, maker: car.name, role: car.role, support: car.support });
+    let store: Storage | null = null;
+    try {
+      store = window.localStorage;
+    } catch {
+      store = null;
+    }
+    const state = readPromptState(store);
+    const now = Date.now();
+    const note = promptFor(items, driveTime.current.ms, state, now);
+    if (!note) return;
+    writePromptState(store, markShown(state, note, now));
+    setSupportNote(note);
+    // Read when the phase changes, with the circuit and car of that moment
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+  const closeSupportNote = useCallback(() => setSupportNote(null), []);
+  const supportThanked = useCallback((maker: string) => {
+    try {
+      writePromptState(window.localStorage, markThanked(readPromptState(window.localStorage), maker));
+    } catch {
+      // Storage blocked: the maker may be named again some week
+    }
+  }, []);
+
   /** The bug report's facts, read when it opens; from the pause menu with where the car is (`fromDrive`) */
   const reportFacts = (fromDrive: boolean): ReportFacts => {
     const snap = session?.getSnapshot();
@@ -1876,6 +1930,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       {phase === "title" ? (
         <TitleMenu
           {...menuProps}
+          // The note after a drive: on the main menu only, never over a room or a race entry
+          supportNote={roomLobby === null && !inScheduledRace ? supportNote : null}
+          onCloseSupportNote={closeSupportNote}
+          onSupportThanked={supportThanked}
           onCycleCamera={cycleCamera}
           initialRoomCode={inviteRoom ?? ""}
           // Back where the player was when a race entry or a room moved the game to another circuit (the scene reloads)
