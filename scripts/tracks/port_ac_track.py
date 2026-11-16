@@ -60,6 +60,11 @@ PHYS_COLOURS = {
     MAT_GRASS: np.array([60.0, 130.0, 50.0], np.float32),
 }
 
+# Red Bull Ring props drawn with Assetto Corsa's own textures, left out (`hideTextures`): the pit wall panels with the
+# Assetto Corsa logo, the marshals, the pit crew and pit props, and three prop atlases from Kunos's Monza, Magione and
+# Silverstone. scripts/strip-track-props.mjs takes the same props out of built GLBs.
+SPIELBERG_AC_TEXTURES = r'^(ac_crew|misc|misc1|misc_silver_2|commissario_NEW|DRIVER_Suit2|driver_face|props_pitlane)\.dds$'
+
 AC_TRACKS = {
     'chang': {
         'folder': 'chang',
@@ -91,6 +96,8 @@ AC_TRACKS = {
         'city': 'Mimasaka, Okayama',
         'baseAltitudeM': 260,
         'pitboxes': 36,
+        # The crew panels with the Assetto Corsa logo and Assetto Corsa's marshals: left out
+        'hideTextures': r'^(ac_crew|marshall)\.dds$',
         'description': 'Okayama International Circuit (formerly TI Circuit Aida) — 3.70 km Grand Prix course in Okayama Prefecture, Japan, home of the Pacific Grand Prix.',
         'credit': {
             'title': 'Okayama International Circuit',
@@ -112,6 +119,8 @@ AC_TRACKS = {
         'baseAltitudeM': 260,
         'pitboxes': 36,
         'closeBranches': True,
+        # The crew panels with the Assetto Corsa logo and Assetto Corsa's marshals: left out
+        'hideTextures': r'^(ac_crew|marshall)\.dds$',
         'description': 'Okayama International Circuit — 1.95 km Piper short layout bypassing the Moss S and back straight via the Piper link.',
         'credit': {
             'title': 'Okayama International Circuit',
@@ -133,6 +142,8 @@ AC_TRACKS = {
         'baseAltitudeM': 260,
         'pitboxes': 24,
         'closeBranches': True,
+        # Assetto Corsa's marshals: left out
+        'hideTextures': r'^(ac_crew|marshall)\.dds$',
         'description': 'Okayama International Circuit — 1.95 km Formula Drift layout combining the main straight, First Corner, and the Piper course.',
         'credit': {
             'title': 'Okayama International Circuit',
@@ -153,6 +164,7 @@ AC_TRACKS = {
         'city': 'Spielberg, Styria',
         'baseAltitudeM': 677,
         'pitboxes': 32,
+        'hideTextures': SPIELBERG_AC_TEXTURES,
         'description': 'Red Bull Ring in Spielberg, Styria, Austria — 4.32 km Grand Prix circuit with 65 m of elevation change, heavy braking zones, and fast downhill sweeps.',
         'credit': {
             'title': 'Spielberg (Red Bull Ring)',
@@ -174,6 +186,7 @@ AC_TRACKS = {
         'baseAltitudeM': 677,
         'pitboxes': 32,
         'closeBranches': True,
+        'hideTextures': SPIELBERG_AC_TEXTURES,
         'description': 'Red Bull Ring — 2.33 km South course (Südschleife) linking the Castrol Edge shortcut directly into the infield corners and Rindt / Red Bull Mobile.',
         'credit': {
             'title': 'Spielberg (Red Bull Ring)',
@@ -198,6 +211,7 @@ AC_TRACKS = {
         'wallCapM': 16.0,
         'refineEdges': False,
         'recentre': False,
+        'hideTextures': SPIELBERG_AC_TEXTURES,
         'description': 'Red Bull Ring — 0.94 km Inner skill course in the driving-centre paddock.',
         'credit': {
             'title': 'Spielberg (Red Bull Ring)',
@@ -340,6 +354,8 @@ AC_TRACKS = {
         # Turns 5 and 6 are two lefts 25 m apart that the default 35 m gap joins: the 14 corners of sections.ini
         'turnMergeGapM': 120.0,
         'turnSplitAtM': [1525.0],
+        # The crew panels with the Assetto Corsa logo and Assetto Corsa's pit props: left out
+        'hideTextures': r'^(ac_crew|props_pitlane)\.dds$',
         'description': 'Istanbul Park in Tuzla, on the Asian side of Istanbul: a 5.34 km anticlockwise Grand Prix circuit over four levels, with the long, fast multi-apex Turn 8.',
         'credit': {
             'title': 'Intercity Istanbul Park',
@@ -374,7 +390,7 @@ AC_TRACKS = {
         ],
         'physicsOverridesFirst': True,
         'roadMaterialsByTexture': True,
-        'hideTextures': r'^monz_banbrg_0[12]\.dds$',
+        'hideTextures': r'^(monz_banbrg_0[12]|commissario)\.dds$',
         # sections.ini is in Croatian, without its diacritics: the two straights ("ravnina", "pravac") are not corners
         'sectionSkip': r'ravnina|pravac',
         'sectionNames': {
@@ -417,6 +433,8 @@ AC_TRACKS = {
         ],
         'physicsOverridesFirst': True,
         'hideTextures': r'^(sign_turn_kunosSim|flag_bmw[23])\.dds$',
+        # bridge01c.dds: the Kunos Simulazioni and Assetto Corsa logos on the bridge's sides
+        'texturePatches': {'bridge01c.dds': [(0.0, 0.0, 1.0, 1.0)]},
         'description': 'Motorsport Arena Oschersleben near Magdeburg, Germany: a flat 3.70 km clockwise Grand Prix circuit, where a hard left at the end of the main straight leads into the sweeping Hotel right-hander.',
         'credit': {
             'title': 'Oschersleben',
@@ -449,6 +467,9 @@ AC_TRACKS = {
         ],
         # sections.ini numbers its corners: "T1: Cat Corner"
         'sectionStrip': r'^T\d+(&\d+)?:\s*',
+        # The crew panels with the Assetto Corsa logo, Assetto Corsa's pit props and marshals, and the toolbox with the
+        # Assetto Corsa logo: left out
+        'hideTextures': r'^(ac_crew|Props_PITLANE|MarshallT2|marshallW|toolbox)\.dds$',
         'description': 'Barbagallo Raceway at Wanneroo, north of Perth in Western Australia: a 2.41 km clockwise circuit of seven corners over sandy hills, climbing to the blind crest at Skyline before the drop into the Basin.',
         'credit': {
             'title': 'Barbagallo Raceway',
@@ -656,6 +677,8 @@ AC_TRACKS = {
             (r'^\d+_?GARAGENBODEN', 'pit'),
         ],
         'physicsOverridesFirst': True,
+        # Assetto Corsa's pit props and marshals (and their flat stand-ins): left out
+        'hideTextures': r'^(props_pitlane|Track-Marshall_HP|Marshall_LP2?)\.dds$',
         'description': 'The Sachsenring at Hohenstein-Ernstthal in Saxony: a 3.67 km anticlockwise circuit, tight through the Omega before a run of fast left-handers over the hill and the steep drop to the Sachsenkurve.',
         'credit': {
             'title': 'Sachsenring 2022',
@@ -685,6 +708,8 @@ AC_TRACKS = {
             (r'^\d+_?GARAGENBODEN', 'pit'),
         ],
         'physicsOverridesFirst': True,
+        # Assetto Corsa's pit props and marshals (and their flat stand-ins): left out
+        'hideTextures': r'^(props_pitlane|Track-Marshall_HP|Marshall_LP2?)\.dds$',
         'description': 'The Sachsenring at Hohenstein-Ernstthal in Saxony: the 1.52 km short course, which turns back to the start straight before the hill.',
         'credit': {
             'title': 'Sachsenring 2022',
@@ -756,6 +781,8 @@ AC_TRACKS = {
             'Esses d´Indianapolis': "Esses d'Indianapolis",
             'Virage d´Arnage': "Virage d'Arnage",
         },
+        # Assetto Corsa's marshals (and their flat stand-ins): left out
+        'hideTextures': r'^(Track-Marshall_LM_HP|Marshall_LP2)\.dds$',
         'description': 'The Circuit de la Sarthe as it was for the 1982 24 Hours of Le Mans: 13.6 km, most of it public road, with the Hunaudières straight unbroken for almost 6 km from Tertre Rouge to Mulsanne.',
         'credit': {
             'title': 'Le Mans 1982',
@@ -892,7 +919,9 @@ AC_TRACKS = {
         'kn5_files': ['lilski_watkins_glen.kn5', 'pb.kn5', 'phy.kn5', 'land.kn5', 'trees.kn5', 'lt.kn5', 'groove_b.kn5',
                       'cf.kn5', 'people.kn5', 'pitobjects.kn5', 'lights.kn5', 'endurance.kn5'],
         'hideNodes': r'^AC_CREW_',
-        'texturePatches': {'signs1.dds': [(0.71, 0.755, 0.99, 0.87)], 'signs3.dds': [(0.0, 0.50, 1.0, 0.60)]},
+        # pitwall.dds: the band of Assetto Corsa logos between the I Love NY and NASCAR bands
+        'texturePatches': {'signs1.dds': [(0.71, 0.755, 0.99, 0.87)], 'signs3.dds': [(0.0, 0.50, 1.0, 0.60)],
+                           'pitwall.dds': [(0.0, 0.3105, 1.0, 0.373)]},
         'name': 'Watkins Glen International',
         'layout': 'Grand Prix course',
         'country': 'United States',
@@ -928,7 +957,9 @@ AC_TRACKS = {
         'kn5_files': ['lilski_watkins_glen.kn5', 'pb.kn5', 'phy.kn5', 'land.kn5', 'trees.kn5', 'st.kn5', 'groove_s.kn5',
                       'cf.kn5', 'people.kn5', 'pitobjects.kn5', 'lights.kn5', 'endurance.kn5'],
         'hideNodes': r'^AC_CREW_',
-        'texturePatches': {'signs1.dds': [(0.71, 0.755, 0.99, 0.87)], 'signs3.dds': [(0.0, 0.50, 1.0, 0.60)]},
+        # pitwall.dds: the band of Assetto Corsa logos between the I Love NY and NASCAR bands
+        'texturePatches': {'signs1.dds': [(0.71, 0.755, 0.99, 0.87)], 'signs3.dds': [(0.0, 0.50, 1.0, 0.60)],
+                           'pitwall.dds': [(0.0, 0.3105, 1.0, 0.373)]},
         'name': 'Watkins Glen International',
         'layout': 'Short course',
         'country': 'United States',
