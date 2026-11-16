@@ -108,7 +108,11 @@ export function nearestTurn(
   let bestGap = Infinity;
   for (const t of turns) {
     let gap = Math.abs(t.sApprox - distanceM);
-    if (lengthM > 0) gap = Math.min(gap, lengthM - gap);
+    if (lengthM > 0) {
+      // Both ways round the start line, for a distance past the lap's length too (a run on past a hill climb's finish)
+      const d = (((t.sApprox - distanceM) % lengthM) + lengthM) % lengthM;
+      gap = Math.min(d, lengthM - d);
+    }
     if (gap < bestGap) {
       bestGap = gap;
       best = t;

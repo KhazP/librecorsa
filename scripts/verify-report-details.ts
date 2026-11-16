@@ -7,7 +7,7 @@
  *   npx tsx scripts/verify-report-details.ts
  */
 import { feedbackIssueUrl, type FeedbackForm } from "../src/components/menu/RequestPanel";
-import { errorLog, errorLogCopy, errorLogText, logLine } from "../src/lib/diagnostics/error-log";
+import { describeArg, errorLog, errorLogCopy, errorLogText, logLine } from "../src/lib/diagnostics/error-log";
 import {
   appChannel,
   boardLine,
@@ -67,6 +67,7 @@ check("Nearest corner, plainly", nearestTurn(turns, 950, 5000)?.number === 2);
 check("Nearest corner across the start line", nearestTurn(turns, 4990, 5000)?.number === 3 && nearestTurn(turns, 30, 5000)?.number === 1);
 check("Wrapping round: 4,950 m is nearer turn 1 at 120 m than turn 3 at 4,700", nearestTurn([turns[0], { ...turns[2], sApprox: 4700 }], 4950, 5000)?.number === 1);
 check("Far from every corner: none", nearestTurn(turns, 2500, 5000) === null);
+check("A distance past the lap's length still finds its corner (a run past a finish)", nearestTurn(turns, 5000 + 950, 5000)?.number === 2 && nearestTurn(turns, 12000, 5000) === null);
 check("A named corner reads 'Turn 1, Castle'", turnLabel(turns[0]) === "Turn 1, Castle");
 check("An unnamed one reads 'Turn 2'", turnLabel(turns[1]) === "Turn 2");
 const where = whereLine({ mode: "Race against AI", lap: 3, totalLaps: 5, distanceM: 1302.4, lengthM: 5340, turn: "Turn 4, Remus", speedKmh: 182.4, surface: "damp", replay: false });
@@ -153,6 +154,11 @@ check("Longer: the kept details are the first ones", (fp2.get("details") ?? "").
 check("Longer: the player's words are whole", fp2.get("what") === longer.main);
 
 // --- The error log
+class HeavyMesh {
+  geometry = { attributes: { position: new Array(100000).fill(0) } };
+}
+check("A class instance in a console line is named, not serialised", describeArg(new HeavyMesh()) === "[HeavyMesh]");
+check("A plain object shows its keys, nested values named", describeArg({ code: 4, detail: { deep: { deeper: 1 } }, list: [1, 2] }) === '{"code":4,"detail":"[Object]","list":"[array 2]"}');
 logLine("warn", "[load] long frame: 140 ms");
 logLine("warn", "[load] long frame: 212 ms");
 const copy = errorLogCopy();
