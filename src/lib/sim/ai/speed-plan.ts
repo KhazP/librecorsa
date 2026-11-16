@@ -44,6 +44,16 @@ const longShare = (aLatUsed: number, aLatMax: number) => {
   return Math.pow(Math.max(0, 1 - Math.pow(r, COMBINED_EXP)), 1 / COMBINED_EXP);
 };
 
+/**
+ * Rough cost of the steps of a plan, in calls of the car's limit functions: one cornering bisection is 30 of them, one
+ * step of a braking or traction pass about 3. A plan of `n` points is about 120·n (`planCost`)
+ */
+const BISECTION_WORK = 30;
+const PASS_STEP_WORK = 3;
+
+/** A plan's rough cost in `planSpeedsJob`'s work units, for a job's budget */
+export const planCost = (track: Pick<AiTrack, 'n'>) => 120 * track.n;
+
 export function planSpeeds(
   track: AiTrack,
   offsets: ArrayLike<number>,
@@ -51,6 +61,26 @@ export function planSpeeds(
   geometry = pathGeometry(track, offsets),
   withOpen = false
 ): SpeedPlan {
+  const job = planSpeedsJob(track, offsets, limits, geometry, withOpen);
+  for (;;) {
+    const r = job.next();
+    if (r.done) return r.value;
+  }
+}
+
+/**
+ * `planSpeeds` a slice at a time: the generator pauses (yields the work done since its last pause) whenever about
+ * `quantum` work units have run, so a caller can spread a plan over several frames. Run to the end it returns exactly
+ * what `planSpeeds` returns (it is the same code)
+ */
+export function* planSpeedsJob(
+  track: AiTrack,
+  offsets: ArrayLike<number>,
+  limits: CarLimits,
+  geometry = pathGeometry(track, offsets),
+  withOpen = false,
+  quantum = Infinity
+): Generator<number, SpeedPlan, void> {
   const n = track.n;
   const { kappa, seg } = geometry;
   const vTop = limits.topSpeedMs;
@@ -58,6 +88,7 @@ export function planSpeeds(
   // Lateral gravity from banking: + helps when the road is banked into the turn (+ bank raises the left edge, which
   // helps a right-hander: + curvature)
   const bankHelp = (i: number) => G * Math.sin(track.bank[i]) * Math.sign(kappa[i] || 1);
+  let work = 0;
 
   // 1. Cornering limit (bisection on v), up to `vMax`
   const cornerLimit = (i: number, vMax: number) => {
@@ -72,10 +103,16 @@ export function planSpeeds(
     return lo;
   };
   const vLat = new Float64Array(n);
-  for (let i = 0; i < n; i++) vLat[i] = cornerLimit(i, vTop);
+  for (let i = 0; i < n; i++) {
+    vLat[i] = cornerLimit(i, vTop);
+    if ((work += BISECTION_WORK) >= quantum) {
+      yield work;
+      work = 0;
+    }
+  }
 
   // 2. Backward (braking into each point) and forward (accelerating out of each) passes, twice round the lap
-  const backward = (v: Float64Array) => {
+  function* backward(v: Float64Array): Generator<number, void, void> {
     for (let step = 0; step < 2 * n; step++) {
       const i = (2 * n - 1 - step) % n;
       const j = (i + 1) % n;
@@ -84,9 +121,13 @@ export function planSpeeds(
       const aBrake = limits.braking(vj, gEffAt(j, vj)) * longShare(vj * vj * kappa[j], aLatMax) + G * Math.sin(track.slope[i]);
       const vMax = Math.sqrt(vj * vj + 2 * Math.max(0.5, aBrake) * seg[i]);
       if (vMax < v[i]) v[i] = vMax;
+      if ((work += PASS_STEP_WORK) >= quantum) {
+        yield work;
+        work = 0;
+      }
     }
-  };
-  const forward = (v: Float64Array) => {
+  }
+  function* forward(v: Float64Array): Generator<number, void, void> {
     for (let step = 0; step < 2 * n; step++) {
       const i = step % n;
       const j = (i + 1) % n;
@@ -95,25 +136,39 @@ export function planSpeeds(
       const aAcc = limits.traction(vi) * longShare(vi * vi * kappa[i], aLatMax) - G * Math.sin(track.slope[i]);
       const vMax = Math.sqrt(Math.max(0, vi * vi + 2 * aAcc * seg[i]));
       if (vMax < v[j]) v[j] = Math.max(vMax, 1);
+      if ((work += PASS_STEP_WORK) >= quantum) {
+        yield work;
+        work = 0;
+      }
     }
-  };
+  }
   // The braking-only envelope: what the car may carry, whatever its engine
   const vLimit = Float64Array.from(vLat);
-  backward(vLimit);
-  backward(vLimit);
+  yield* backward(vLimit);
+  yield* backward(vLimit);
   // ... and with the top speed open (a ceiling well above it): only the points the top speed limited change
   let vOpen: Float64Array | undefined;
   if (withOpen) {
     const vCeil = OPEN_TOP_SHARE * vTop;
     vOpen = new Float64Array(n);
-    for (let i = 0; i < n; i++) vOpen[i] = vLat[i] < vTop - 0.01 ? vLat[i] : cornerLimit(i, vCeil);
-    backward(vOpen);
-    backward(vOpen);
+    for (let i = 0; i < n; i++) {
+      if (vLat[i] < vTop - 0.01) {
+        vOpen[i] = vLat[i];
+        continue;
+      }
+      vOpen[i] = cornerLimit(i, vCeil);
+      if ((work += BISECTION_WORK) >= quantum) {
+        yield work;
+        work = 0;
+      }
+    }
+    yield* backward(vOpen);
+    yield* backward(vOpen);
   }
   const v = Float64Array.from(vLimit);
   for (let round = 0; round < 2; round++) {
-    forward(v);
-    backward(v);
+    yield* forward(v);
+    yield* backward(v);
   }
   let lapS = 0;
   for (let i = 0; i < n; i++) lapS += seg[i] / Math.max(1, 0.5 * (v[i] + v[(i + 1) % n]));

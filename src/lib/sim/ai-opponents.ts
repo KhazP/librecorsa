@@ -36,7 +36,7 @@ import { AiSectionLearner, loadLearnedCorners, saveLearnedCorners, type LearnedC
 import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
 import type { SimulatorCar } from '@/lib/sim/simulator-car';
 import { carAheadOnRoad, earnedAtDetection, type OvertakingRaceControl } from '@/lib/sim/overtaking-rules';
-import type { RaceStatus, VehicleModelId } from '@/types/f1';
+import type { RaceStatus, RacingLineId, VehicleModelId } from '@/types/f1';
 import { AiCarControl, aiControlTraits, KNOCK_LATERAL_MS, KNOCK_WALL_MS, KNOCK_YAW_RADS, type AiControlCarState } from '@/lib/sim/ai-car-control';
 import { CarDamage, worldToCarLocal, type DamageLevel, type DamageReport } from '@/lib/sim/car-damage';
 import {
@@ -53,7 +53,8 @@ import {
 import { RaceIncidents } from '@/lib/sim/race-incidents';
 import { aiTrackFor, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
 import { carLimitsFor } from '@/lib/sim/ai/ggv';
-import { makeDrivePlan, type AiDrivePlan } from '@/lib/sim/ai/drive-plan';
+import { drivePlanJob, driveLineOf, makeDrivePlan, type AiDrivePlan, type DriveLine } from '@/lib/sim/ai/drive-plan';
+import { planCost } from '@/lib/sim/ai/speed-plan';
 import { DEFAULT_PLANNER_WEIGHTS, PLAN_DT, PLAN_STEPS, planLocal, type PlannerResult, type PredictedCar } from '@/lib/sim/ai/local-planner';
 import type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
@@ -234,6 +235,8 @@ function cornerLimitedShare(plan: AiDrivePlan, s: number, vMs: number, lookM: nu
 const PLAN_GRIP = 0.97;
 /** Below a circuit's checked grip ceiling, what the fastest level plans to (see refreshPlan) */
 const RACE_GRIP_MARGIN = 0.04;
+/** Drive plans a field keeps by car, line and grip (a plan is ~60 kB on a 4 km lap) */
+const PLAN_MEMO_MAX = 48;
 
 /**
  * Lights out to the car moving (s) for an AI skill 0..100 and two seeded draws 0..1: a reaction of 0.30 s for a rookie
@@ -418,6 +421,8 @@ interface FieldCar {
   gridSlot: number;
   /** Grip its current drive plan was built on (the plan is rebuilt when it moves) */
   planGrip: number;
+  /** The next drive plan, being built a slice per field update (`runPlanJobs`), and the grip it is for */
+  planJob: { grip: number; job: Generator<number, AiDrivePlan, void> } | null;
   /** The local planner's last choice, and the race time it was made */
   local: PlannerResult | null;
   /** What the racecraft rules asked the planner for last (end offset from the line; null: race the line) */
@@ -853,7 +858,6 @@ export class AiOpponentField {
 
   /** The AI grid and the racing line per class, built on first use */
   private aiTrack: AiTrack | null = null;
-  private readonly classLines = new Map<string, Float64Array>();
 
   /** A driver's temperament in this race: its own, moved by the race setup's aggression */
   private aggressionOf(car: FieldCar): number {
@@ -896,20 +900,101 @@ export class AiOpponentField {
     const reach = this.started && car.clock.lapsDone === 0 ? 0 : this.mods.gripReach;
     const planGrip = PLAN_GRIP + (ceiling - PLAN_GRIP) * reach;
     const grip = Math.round(planGrip * car.pace * car.pace * weather * weather * damaged * 200) / 200;
-    if (sim.aiPlan && grip === car.planGrip) return;
+    if (sim.aiPlan && grip === car.planGrip) {
+      // Back on the grip it has: a plan still being built for another is dropped
+      this.dropPlanJob(car);
+      return;
+    }
+    const key = `${sim.vehicleId ?? ''}|${sim.racingLineId ?? 'f1'}|${grip}`;
+    const known = this.planMemo.get(key);
+    if (known) {
+      this.dropPlanJob(car);
+      this.installPlan(car, known, grip, key);
+      return;
+    }
+    const line = this.driveLineFor(sim.racingLineId ?? 'f1');
+    const t = this.aiTrack as AiTrack;
+    // A car's first plan is built at once: it has nothing else to drive
+    if (!sim.aiPlan) {
+      this.installPlan(car, makeDrivePlan(t, line, carLimitsFor(sim.vehicleId, grip)), grip, key);
+      return;
+    }
+    // A plan being built finishes first, even for a grip that has moved on since: restarting it on every change of
+    // the weather could keep a car on its old plan for good. Its next refresh starts the one it wants then
+    if (car.planJob) return;
+    car.planJob = { grip, job: drivePlanJob(t, line, carLimitsFor(sim.vehicleId, grip), Math.ceil(this.planSliceWork(t) / 4)) };
+    this.planQueue.push(car);
+  }
+
+  /**
+   * Drive plans built a slice at a time, a fixed share of one per field update (the same on every run of a seed): a
+   * plan is ~8 ms of work on a fast laptop and each car wants a new one most laps, which built at once was a hitch
+   * every time a car crossed the line. Until its new plan is ready a car drives its last one
+   */
+  private readonly planQueue: FieldCar[] = [];
+  private readonly planMemo = new Map<string, AiDrivePlan>();
+  private readonly driveLines = new Map<string, DriveLine>();
+
+  /** A plan's slices: about a sixteenth of a plan per field update */
+  private planSliceWork(t: AiTrack): number {
+    return Math.ceil(planCost(t) / 16);
+  }
+
+  /** The racing line of a class on the AI grid, with what every plan on it shares */
+  private driveLineFor(lineId: RacingLineId): DriveLine {
     this.aiTrack ??= aiTrackFor(this.track);
     const t = this.aiTrack;
-    const lineId = sim.racingLineId ?? 'f1';
-    let line = this.classLines.get(lineId);
+    let line = this.driveLines.get(lineId);
     if (!line) {
-      line = new Float64Array(t.n);
-      for (let i = 0; i < t.n; i++) line[i] = aiLineOffsetM(this.track.getSampleAtDistance(i * t.ds), lineId);
-      this.classLines.set(lineId, line);
+      const offsets = new Float64Array(t.n);
+      for (let i = 0; i < t.n; i++) offsets[i] = aiLineOffsetM(this.track.getSampleAtDistance(i * t.ds), lineId);
+      line = driveLineOf(t, offsets);
+      this.driveLines.set(lineId, line);
     }
-    sim.aiPlan = makeDrivePlan(t, line, carLimitsFor(sim.vehicleId, grip));
+    return line;
+  }
+
+  private installPlan(car: FieldCar, plan: AiDrivePlan, grip: number, key: string): void {
+    const sim = car.ai;
+    if (!sim) return;
+    // The plans of this field by car, line and grip, the most recent few: cars on the same grip share one
+    this.planMemo.delete(key);
+    this.planMemo.set(key, plan);
+    if (this.planMemo.size > PLAN_MEMO_MAX) this.planMemo.delete(this.planMemo.keys().next().value as string);
+    sim.aiPlan = plan;
     car.planGrip = grip;
     // The LC26's driver takes a tuning target in place of its profile's speeds: with a plan, the plan's speeds rule
     if (sim.vehicleId === 'lc26') car.hooks?.setTarget(null);
+  }
+
+  private dropPlanJob(car: FieldCar): void {
+    if (!car.planJob) return;
+    car.planJob = null;
+    const i = this.planQueue.indexOf(car);
+    if (i >= 0) this.planQueue.splice(i, 1);
+  }
+
+  /** This update's slice of the plans being built, first asked first served */
+  private runPlanJobs(): void {
+    if (!this.planQueue.length || !this.aiTrack) return;
+    let budget = this.planSliceWork(this.aiTrack);
+    while (budget > 0 && this.planQueue.length) {
+      const car = this.planQueue[0];
+      const pending = car.planJob;
+      const sim = car.ai;
+      if (!pending || !sim) {
+        this.planQueue.shift();
+        continue;
+      }
+      const r = pending.job.next();
+      if (!r.done) {
+        budget -= r.value;
+        continue;
+      }
+      this.planQueue.shift();
+      car.planJob = null;
+      this.installPlan(car, r.value, pending.grip, `${sim.vehicleId ?? ''}|${sim.racingLineId ?? 'f1'}|${pending.grip}`);
+    }
   }
 
   public attachTrackRoot(root: THREE.Object3D): void {
@@ -975,6 +1060,7 @@ export class AiOpponentField {
       craft: new RacecraftMemory(),
       gridSlot: 0,
       planGrip: 0,
+      planJob: null,
       local: null,
       localAtS: -Infinity,
       intentD: null,
@@ -1018,6 +1104,9 @@ export class AiOpponentField {
     this.raceCount++;
     this.environment.reset();
     this.assignGrid();
+    // Plans the last race was still building are for its grips
+    for (const car of this.planQueue) car.planJob = null;
+    this.planQueue.length = 0;
     this.cars.forEach((car) => {
       car.sim.resetToStartGrid(!standing, car.gridSlot, standing ? undefined : this.cars.length);
       if (car.ai) {
@@ -1117,6 +1206,7 @@ export class AiOpponentField {
   /** Advances the start procedure and steps the AI cars. Call after the player's physics step. */
   public update(dt: number): void {
     if (!(dt > 0)) return;
+    this.runPlanJobs();
     if (this.phase === 'lights') {
       this.lightsTimerS += dt;
       this.lightsOn = Math.min(5, 1 + Math.floor(this.lightsTimerS / LIGHT_INTERVAL_S));
