@@ -69,6 +69,7 @@ import {
 } from '../brake-physics';
 import {
   type AeroWakeState,
+  CLEAN_AIR_WAKE_STATE,
   DEFAULT_AERO_WAKE,
   evaluateRollAeroFactor,
 } from '../aero-wake';
@@ -103,6 +104,7 @@ import {
   DEFAULT_FRICTION_LIMIT_ANGLE_DEG,
   type DamperControllerData,
   type DamperSettingsUnits,
+  type ExponentialPlankData,
   F12026_CAR_CONFIG,
   type PerformanceModeName,
   type PhysicsTyreCompound,
@@ -265,6 +267,19 @@ const PLANK_DAMP = 20_000;
 const PLANK_FRICTION = 0.35;
 /** The plank looks for its ground at most this far above itself (m): deeper than this it is meeting a step face, not riding on a surface */
 const PLANK_PROBE_UP_M = 0.05;
+/** The traction control's cut a shaft-limited hybrid takes from the engine's spark before it touches the motor */
+const SPARK_FIRST_CUT = 0.75;
+/** Share of the engine's crank power that goes into its coolant [est] */
+const COOLANT_HEAT_SHARE = 0.6;
+/** Radiator conductance per garage step of opening, against the baseline [est] */
+const COOLANT_RADIATOR_STEP = 0.12;
+/** Coolant and block heat capacity as seconds of the baseline radiator's conductance: its warm-up time constant [est] */
+const COOLANT_CAPACITY_S = 85;
+const COOLANT_DERATE_FROM_C = 112;
+/** Half the skid block's width, for its four contact corners (m) */
+const PLANK_HALF_WIDTH_M = 0.15;
+/** The exponential part of a skid's stiffness stops growing past this penetration (m), so a crash stays bounded */
+const PLANK_EXP_CAP_M = 0.025;
 /**
  * Barrier contact: restitution, the most rebound a hit can give (m/s: the barrier and the crash structure soak up
  * the rest, so a 300 km/h hit bounces the car back onto the track side, not across it), wall friction
@@ -988,6 +1003,8 @@ const _wheelOmega = new Float64Array(4);
 /** Crown the belt's centrifugal growth gives the contact pressure, per metre of growth (the middle band × 1 + 2·this·ΔR) */
 const CENTRIFUGAL_CROWN_PER_M = 18;
 const STEFAN_BOLTZMANN = 5.670374419e-8;
+const _carWake: AeroWakeState = { ...CLEAN_AIR_WAKE_STATE };
+const _coolAero = { cdA: 0, clAFront: 0, clARear: 0 };
 const KELVIN = 273.15;
 /** Wet spray's cooling of the rim against the wet-environment conductance of `rimWetEnvironmentCoolingWK` [est] */
 const RIM_WET_SPRAY_SCALE = 10;
@@ -1056,6 +1073,34 @@ export class VehiclePhysics {
   public staticToeRad = { front: 0, rear: 0 };
   public engineBrakingScale = 1;
   public brakeDuctScale = { front: 1, rear: 1 };
+  /**
+   * The garage's cooling openings in steps from their baseline (brake ducts at step 3, the radiator's tape), for their
+   * drag and downforce (`AeroData.cooling`) and the radiator's cooling of the engine
+   */
+  public coolingSteps = { brakeDuctFront: 0, brakeDuctRear: 0, radiator: 0 };
+  /** Mean over the last 500 Hz step of the engine's own positive power at the crank (W) */
+  public iceMechanicalPowerW = 0;
+  /** Mean over the last 500 Hz step of the power into the driven shafts, engine and motor together (W) */
+  public driveshaftPowerW = 0;
+  private stepIcePowerSumW = 0;
+  private stepShaftPowerSumW = 0;
+  private stepPowerSamples = 0;
+  /**
+   * A prototype's hybrid dials (`CarPhysicsConfig.hybridDials`): the motor's deployment cap and the braking
+   * regeneration cap (kW), in place of the performance mode's. null on a car without them
+   */
+  public motorDeployKw: number | null = null;
+  public regenKw: number | null = null;
+  /**
+   * Engine coolant temperature (°C), on a car whose radiator opening is a garage setting (`AeroData.cooling`): taped up
+   * for less drag it runs hotter, and past 112 °C the engine's control takes torque away to protect it
+   */
+  public coolantTempC = 90;
+  private readonly coolantModel: boolean;
+  /** The engine curve's peak (W), for the coolant's sizing */
+  private readonly peakEnginePowerW: number;
+  /** Skid-block wear at its four corners, front-left, front-right, rear-left, rear-right (mm) (`AeroData.plankPhysics`) */
+  public readonly plankWearMm: [number, number, number, number] = [0, 0, 0, 0];
   /** Steering compliance (rad of road-wheel angle per N of lateral force) */
   private readonly steerComplianceRadPerN: number;
   private readonly ffbMechanicalTrailM: number;
@@ -1361,6 +1406,13 @@ export class VehiclePhysics {
     this.torsionC = tor ? tor.torsionalDampingNmsPerDeg * RAD2DEG : 0;
     this.torsionFrontShare = THREE.MathUtils.clamp(tor?.frontRollInertiaShare ?? 0.46, 0.2, 0.8);
     this.torsionMaxRad = (tor?.maxTwistDeg ?? 2.5) * DEG2RAD;
+    const dials = cfg.hybridDials;
+    if (dials) {
+      this.motorDeployKw = dials.deployStepsKw[dials.defaultDeployIndex] ?? null;
+      this.regenKw = dials.regenStepsKw[dials.defaultRegenIndex] ?? null;
+    }
+    this.coolantModel = cfg.aero.cooling !== undefined;
+    this.peakEnginePowerW = Math.max(1, ...cfg.engine.powerCurve.map((p) => p[1])) * 1000;
     this.floorOffsetY = cfg.aero.floorOffsetY;
     this.staticRakeDeg = Math.asin((cfg.aero.rear_target_height - cfg.aero.front_target_height) / ch.wheelbase) * RAD2DEG;
 
@@ -1908,6 +1960,10 @@ export class VehiclePhysics {
     this.shaftTwistHalfDiffRad = 0;
     this.chassisTwistRad = 0;
     this.chassisTwistVelRadS = 0;
+    this.stepIcePowerSumW = 0;
+    this.stepShaftPowerSumW = 0;
+    this.stepPowerSamples = 0;
+    if (!Number.isFinite(this.coolantTempC)) this.coolantTempC = 90;
     this.rollTorqueFront = 0;
     this.rollTorqueRear = 0;
     this.mgukTorque = 0;
@@ -2070,6 +2126,8 @@ export class VehiclePhysics {
       w.gasTempC = startC;
       w.rimTempC = startC;
       w.circumferentialTempsC.fill(startC);
+      this.plankWearMm.fill(0);
+      this.coolantTempC = 90;
       w.circumferentialWear.fill(0);
       w.wear = 0;
       w.flatSpotSeverity = 0;
@@ -2479,6 +2537,12 @@ export class VehiclePhysics {
     this.prevVelocity.copy(this.velocity);
     const h = dt / VehiclePhysics.SUBSTEPS;
     for (let k = 0; k < VehiclePhysics.SUBSTEPS; k++) this.substep(h, inp);
+    this.iceMechanicalPowerW = this.stepPowerSamples > 0 ? this.stepIcePowerSumW / this.stepPowerSamples : 0;
+    this.driveshaftPowerW = this.stepPowerSamples > 0 ? this.stepShaftPowerSumW / this.stepPowerSamples : 0;
+    this.stepIcePowerSumW = 0;
+    this.stepShaftPowerSumW = 0;
+    this.stepPowerSamples = 0;
+    if (this.coolantModel) this.stepCoolant(dt);
     this.shiftTimer = Math.max(0, this.shiftTimer - dt);
     this.manualShift.tick(dt);
     this.sinceUpshiftS += dt;
@@ -2544,6 +2608,29 @@ export class VehiclePhysics {
     const camberRate = (w.isLeft ? 1 : -1) * axle.spec.camberGainKinematic * DEG2RAD * w.compressionVel;
     const p = this.angularVelocity.dot(fw) - camberRate;
     return -axle.wheelInertia * w.omega * p;
+  }
+
+  /**
+   * Engine coolant: the engine rejects about its own power again into the water (`COOLANT_HEAT_SHARE` of it here, the
+   * rest leaves by the exhaust), the radiator sheds it by the air through it, more open by the garage's steps. Sized so
+   * a baseline radiator holds ≈ 95 °C at race pace on a 25 °C day
+   */
+  private stepCoolant(dt: number): void {
+    const peakW = this.peakEnginePowerW;
+    const v = Math.max(0, this.velocity.dot(_ez));
+    const open = Math.max(0.2, 1 + COOLANT_RADIATOR_STEP * this.coolingSteps.radiator);
+    // At race pace (55 % of peak power, 50 m/s) the baseline radiator holds 70 K over the air
+    const gRef = (COOLANT_HEAT_SHARE * 0.55 * peakW) / 70;
+    const g = gRef * open * (0.25 + 0.75 * Math.min(1.6, v / 50));
+    const heat = COOLANT_HEAT_SHARE * this.iceMechanicalPowerW + 0.04 * peakW * (this.rpm / Math.max(1, this.config.gearbox.gears.redline_rpm));
+    const cap = COOLANT_CAPACITY_S * gRef;
+    this.coolantTempC += ((heat - g * (this.coolantTempC - this.ambientC)) / cap) * dt;
+  }
+
+  /** The engine control's torque share for the coolant temperature (1 below 112 °C, down to 0.82) */
+  private coolantDerate(): number {
+    if (!this.coolantModel || this.coolantTempC <= COOLANT_DERATE_FROM_C) return 1;
+    return Math.max(0.82, 1 - 0.015 * (this.coolantTempC - COOLANT_DERATE_FROM_C));
   }
 
   /** Roll of an axle's structure against the rigid body's mean (rad, about body +Z) */
@@ -3061,7 +3148,7 @@ export class VehiclePhysics {
     // ---- aero, then the plank if the floor reaches the road
     if (this.config.aero.rhMap) this.applyMapAero(h, this.config.aero.rhMap);
     else this.applyAero();
-    this.applyPlankContact();
+    this.applyPlankContact(h);
 
     // ---- gravity and integration
     // Acceleration less gravity, for the next sub-step's unsprung inertia (the hubs ride with the body across)
@@ -3378,7 +3465,14 @@ export class VehiclePhysics {
     const shiftCut = gb.upshiftCutS !== undefined && this.sinceUpshiftS < gb.upshiftCutS;
     // A road car's cut is the driver's foot off: the throttle shuts too, and the engine slows on its overrun drag
     if (shiftCut && gb.upshiftCutLift) plate = 0;
-    const sparkShare = shiftCut ? 0 : (inp.ignitionCut ?? 1);
+    // The traction control's cut (`ignitionCut`: the torque share it allows). A hybrid under a shaft power limit cuts
+    // the engine's spark first, up to three quarters of the demand, and only then the motor, whose torque is the
+    // smoother and quicker to come back; any other car cuts both alike. A managed up-shift cuts everything
+    const totalCut = shiftCut ? 1 : THREE.MathUtils.clamp(1 - (inp.ignitionCut ?? 1), 0, 1);
+    const sparkFirst = ers.ERS_MAX_DEPLOY > 0 && eng.outputPowerCap !== undefined;
+    const sparkShare = sparkFirst && !shiftCut ? 1 - Math.min(1, totalCut / SPARK_FIRST_CUT) : 1 - totalCut;
+    const motorShare =
+      sparkFirst && !shiftCut ? (totalCut <= SPARK_FIRST_CUT ? 1 : 1 - (totalCut - SPARK_FIRST_CUT) / (1 - SPARK_FIRST_CUT)) : 1 - totalCut;
     // Turbo lag: the curve is the torque with the boost this plate makes in steady state; while the rotor trails it the
     // torque is (1 + boost made) / (1 + boost asked for) of that, as torque ∝ 1 + boost. A rotor still spinning faster
     // than the demand gives no more than the demand (the wastegate and the throttle hold the plenum to it)
@@ -3387,7 +3481,14 @@ export class VehiclePhysics {
       turbo && this.turbocharged ? Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm) * plate)) : 1;
     // Thin air (altitude, heat) costs the engine a share of what it costs the wings
     const airShare = eng.airDensitySensitivity ? 1 + eng.airDensitySensitivity * (this.airDensity / cfg.aero.airDensity - 1) : 1;
-    const tCombustion = (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * 1000) / omegaE;
+    // Ram air: the intake's dynamic pressure packs the cylinders a little fuller at speed
+    let ramShare = 1;
+    if (eng.ramAirGainPerKPa) {
+      const vAir = Math.max(0, _air.copy(this.velocity).sub(this.windWorld).dot(_ez));
+      ramShare = 1 + eng.ramAirGainPerKPa * ((0.5 * this.airDensity * vAir * vAir) / 1000);
+    }
+    const tCombustion =
+      (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
     let tIce = tCombustion * boostShare - (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
     // Crank torque the lag costs, which the MGU-K may fill below
     let turboDeficit = tCombustion * (1 - boostShare);
@@ -3461,8 +3562,16 @@ export class VehiclePhysics {
       if (everyGear && inp.throttle < ers.liftThrottle) {
         liftW = ers.topGearLiftHarvestW * mode.liftHarvestScale * (1 - inp.throttle / ers.liftThrottle);
       }
+      const dials = cfg.hybridDials;
       if (inp.brake > 0.05) {
-        pK = -ers.maxHarvestW * mode.brakeHarvestScale * Math.min(1, inp.brake * 3);
+        const harvestCapW = this.regenKw !== null ? Math.min(ers.maxHarvestW, this.regenKw * 1000) : ers.maxHarvestW * mode.brakeHarvestScale;
+        pK = -harvestCapW * Math.min(1, inp.brake * 3);
+      } else if (dials && this.motorDeployKw !== null) {
+        // The deploy dial: up to its cap on the throttle, above the class's minimum speed, while the store has charge
+        if (inp.throttle > 0.05 && speedKmh >= dials.minDeploySpeedKmh && this.ersEnergyJ > 0 && this.motorDeployKw > 0) {
+          deployAllowed = true;
+          pK = Math.min(ers.ERS_MAX_DEPLOY, this.motorDeployKw * 1000) * this.luts.deployVsGear.evaluate(this.gear) * inp.throttle;
+        }
       } else if (liftW > 0) {
         pK = -liftW;
       } else if (!everyGear && topGear && inp.throttle < ers.liftThrottle) {
@@ -3501,7 +3610,7 @@ export class VehiclePhysics {
     const bias = this.dynamicBrakeBias;
 
     let tK = 0;
-    if (pK > 0) tK = Math.min(pK / omegaE, this.luts.mgukDeploy.evaluate(rpm)) * sparkShare;
+    if (pK > 0) tK = Math.min(pK / omegaE, this.luts.mgukDeploy.evaluate(rpm)) * motorShare;
     else if (pK < 0) {
       let cap = this.luts.mgukHarvest.evaluate(rpm);
       // On the pedal the brake-by-wire never lets the drivetrain brake the rear axle past its share of the demand:
@@ -3520,8 +3629,9 @@ export class VehiclePhysics {
     // Torque fill: with no MGU-H to spin the turbo, the MGU-K makes up the torque its lag costs, within the motor's torque
     // curve and the gear's power clip, from the same store and lap allowance as the deploy
     if (deployAllowed && turboDeficit > 0) {
-      const fillCap = Math.min(this.luts.mgukDeploy.evaluate(rpm), (ers.ERS_MAX_DEPLOY * this.luts.deployVsGear.evaluate(this.gear)) / omegaE);
-      tK = Math.max(tK, Math.min(fillCap * sparkShare, tK + turboDeficit));
+      const deployCapW = this.motorDeployKw !== null ? Math.min(ers.ERS_MAX_DEPLOY, this.motorDeployKw * 1000) : ers.ERS_MAX_DEPLOY;
+      const fillCap = Math.min(this.luts.mgukDeploy.evaluate(rpm), (deployCapW * this.luts.deployVsGear.evaluate(this.gear)) / omegaE);
+      tK = Math.max(tK, Math.min(fillCap * motorShare, tK + turboDeficit));
     }
     if (this.limiterTimer > 0 && tK > 0) tK = 0;
     // A regulated limit on the power at the driven shafts (`EngineData.outputPowerCap`), which carry the crank's torque
@@ -3536,6 +3646,9 @@ export class VehiclePhysics {
       }
     }
     this.mgukTorque = tK;
+    this.stepIcePowerSumW += Math.max(0, tIce * omegaE);
+    this.stepShaftPowerSumW += Math.max(0, (tIce + tK) * omegaE * gb.efficiency * engage);
+    this.stepPowerSamples++;
 
     // ---- brakes (physical brake pad μ(T))
     const crankBrake = Math.max(0, -tK) + Math.max(0, -tIce);
@@ -3795,6 +3908,34 @@ export class VehiclePhysics {
     }
   }
 
+  /** The wake's multipliers as this car feels them (`AeroData.wakeSensitivity`), into a scratch state */
+  private carWake(): AeroWakeState {
+    const wake = this.aeroWake;
+    const ws = this.config.aero.wakeSensitivity;
+    if (!ws) return wake;
+    _carWake.dragMultiplier = 1 - ws.dragWakeMult * (1 - wake.dragMultiplier);
+    _carWake.frontDownforceMultiplier = 1 - ws.frontLiftWakeMult * (1 - wake.frontDownforceMultiplier);
+    _carWake.rearDownforceMultiplier = 1 - ws.diffuserDraftLiftMult * (1 - wake.rearDownforceMultiplier);
+    return _carWake;
+  }
+
+  /**
+   * Drag and downforce areas the cooling openings add away from their baseline (`AeroData.cooling`, m²): the brake
+   * ducts at their own axle, the radiator 65 / 35 front / rear
+   */
+  private coolingAero(out: { cdA: number; clAFront: number; clARear: number }): { cdA: number; clAFront: number; clARear: number } {
+    const c = this.config.aero.cooling;
+    if (!c) {
+      out.cdA = out.clAFront = out.clARear = 0;
+      return out;
+    }
+    const { brakeDuctFront: f, brakeDuctRear: r, radiator: rad } = this.coolingSteps;
+    out.cdA = f * c.brakeDuctFrontCdAPerStep + r * c.brakeDuctRearCdAPerStep + rad * c.radiatorCdAPerStep;
+    out.clAFront = f * c.brakeDuctFrontClAPerStep + 0.65 * rad * c.radiatorClAPerStep;
+    out.clARear = r * c.brakeDuctRearClAPerStep + 0.35 * rad * c.radiatorClAPerStep;
+    return out;
+  }
+
   /** Front wing, venturi floor and rear wing on the current ride heights, with wake and body-yaw sensitivity */
   private applyAero(): void {
     const aero = this.config.aero;
@@ -3815,7 +3956,7 @@ export class VehiclePhysics {
     const hMean = 0.5 * (this.rideFront + this.rideRear);
     const rakeDeg = Math.atan2(this.rideRear - this.rideFront, L) * RAD2DEG;
     const pitchDelta = rakeDeg - this.staticRakeDeg;
-    const wake = this.aeroWake;
+    const wake = this.carWake();
 
     const air = _air.copy(this.velocity).sub(this.windWorld);
     const vF = air.dot(_ez);
@@ -3825,7 +3966,7 @@ export class VehiclePhysics {
     this.aeroYawDeg = yawDeg;
     let down = 0;
     let front = 0;
-    let drag = aero.drag * wake.dragMultiplier;
+    let drag = (aero.drag + this.coolingAero(_coolAero).cdA) * wake.dragMultiplier;
     // With the elements' own drag heights: Σ drag area × height, the bodywork's at `dragCentreY`
     const perElement = this.dragAtElements;
     const bodyY = aero.dragCentreY ?? 0;
@@ -3859,14 +4000,13 @@ export class VehiclePhysics {
       _p.set(0, this.floorOffsetY, s.positionZ).applyQuaternion(this.quaternion).add(this.position);
       this.addForceAt(_f, _p);
     }
-    // Bodywork lift at the axles
-    for (const [cl, z] of [
-      [aero.front_lift, a],
-      [aero.rear_lift, -b],
-    ] as const) {
+    // Bodywork lift at the axles, with what the cooling openings add or spill
+    for (let axle = 0; axle < 2; axle++) {
+      const cl = axle === 0 ? aero.front_lift + _coolAero.clAFront : aero.rear_lift + _coolAero.clARear;
+      const z = axle === 0 ? a : -b;
       const fd = q * cl;
       down += fd;
-      if (z > 0) front += fd;
+      if (axle === 0) front += fd;
       _f.copy(_ey).multiplyScalar(-fd);
       _p.set(0, this.floorOffsetY, z).applyQuaternion(this.quaternion).add(this.position);
       this.addForceAt(_f, _p);
@@ -3902,7 +4042,8 @@ export class VehiclePhysics {
     this.rideRear = ry - 0.5 * (this.groundYUnder(W[2]) + this.groundYUnder(W[3]));
     const rakeDeg = Math.atan2(this.rideRear - this.rideFront, L) * RAD2DEG;
     const pitchDelta = rakeDeg - this.staticRakeDeg;
-    const wake = this.aeroWake;
+    const wake = this.carWake();
+    const cool = this.coolingAero(_coolAero);
 
     const air = _air.copy(this.velocity).sub(this.windWorld);
     const vF = air.dot(_ez);
@@ -3928,9 +4069,9 @@ export class VehiclePhysics {
     const dFlaps = Math.abs(act.dClAFront) + Math.abs(act.dClARear);
     const dCdA = rearOnly && dFlaps > 0 ? (act.dCdA * Math.abs(act.dClARear)) / dFlaps : act.dCdA;
     const clA = map.clA * clMult;
-    let front = q * (clA * balance + dClAFront * open);
-    let rear = q * (clA * (1 - balance) + act.dClARear * open);
-    let cdA = map.cdA * cdMult + dCdA * open;
+    let front = q * (clA * balance + dClAFront * open + cool.clAFront);
+    let rear = q * (clA * (1 - balance) + act.dClARear * open + cool.clARear);
+    let cdA = map.cdA * cdMult + dCdA * open + cool.cdA;
     // The wings' angle-of-attack offsets (body pitch included), split to the axles by their position
     for (const wing of this.wings) {
       const s = wing.spec;
@@ -3965,7 +4106,11 @@ export class VehiclePhysics {
   }
 
   /** Skid-block contact at the front and rear of the plank (floor reference plane) */
-  private applyPlankContact(): void {
+  private applyPlankContact(h: number): void {
+    if (this.config.aero.plankPhysics) {
+      this.applyWearingPlank(h, this.config.aero.plankPhysics);
+      return;
+    }
     const pl = this.config.aero.plank;
     const y = pl ? pl.y : this.floorOffsetY;
     for (let axle = 0; axle < 2; axle++) {
@@ -3985,6 +4130,41 @@ export class VehiclePhysics {
       _v.addScaledVector(_n, -vn);
       const vt = _v.length();
       if (vt > 1e-3) _f.addScaledVector(_v, (-PLANK_FRICTION * fn * Math.min(1, vt / 0.5)) / vt);
+      this.addForceAt(_f, _p);
+    }
+  }
+
+  /**
+   * A skid block at the four corners of the plank (`ExponentialPlankData`): stiffening exponentially as it is pressed in,
+   * its sliding work wearing it down, so a car that bottoms lap after lap rides on a thinner skid
+   */
+  private applyWearingPlank(h: number, pp: ExponentialPlankData): void {
+    const pl = this.config.aero.plank;
+    const y = pl ? pl.y : this.floorOffsetY;
+    const halfW = PLANK_HALF_WIDTH_M;
+    for (let k = 0; k < 4; k++) {
+      const front = k < 2;
+      const z = front ? (pl ? pl.frontZ : this.cgToFrontM) : pl ? pl.rearZ : -this.cgToRearM;
+      const wornM = 0.001 * this.plankWearMm[k];
+      _p.set(k % 2 === 0 ? halfW : -halfW, y + wornM, z).applyQuaternion(this.quaternion).add(this.position);
+      if (!this.ground.query(_p.x, _p.z, _p.y + PLANK_PROBE_UP_M, _plankHit)) continue;
+      const pen = _plankHit.height - _p.y;
+      if (pen <= 0) continue;
+      _n.set(_plankHit.nx, _plankHit.ny, _plankHit.nz);
+      _r.subVectors(_p, this.position);
+      _v.crossVectors(this.angularVelocity, _r).add(this.velocity);
+      const vn = _v.dot(_n);
+      // A quarter of the block's stiffness at each corner
+      const elastic = 0.25 * (pp.kLinearNm * pen + (pp.kExpNm / pp.betaPerM) * (Math.exp(pp.betaPerM * Math.min(pen, PLANK_EXP_CAP_M)) - 1));
+      const fn = Math.max(0, elastic * _n.y - 0.25 * pp.dampNsPerM * vn);
+      _f.copy(_n).multiplyScalar(fn);
+      _v.addScaledVector(_n, -vn);
+      const vt = _v.length();
+      if (vt > 1e-3) {
+        _f.addScaledVector(_v, (-pp.frictionMu * fn * Math.min(1, vt / 0.5)) / vt);
+        // Wear by the sliding work (mm per MJ), at most down to nothing left of the block
+        this.plankWearMm[k] = Math.min(pp.initialWearMarginMm, this.plankWearMm[k] + pp.wearMmPerMJ * pp.frictionMu * fn * vt * h * 1e-6);
+      }
       this.addForceAt(_f, _p);
     }
   }
