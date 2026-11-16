@@ -14,6 +14,9 @@ import { PadGlyph } from "@/components/ui/prompts";
 import { useInputMode } from "./input-mode";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn } from "@/lib/settings/units";
+import { carById, type CarId } from "@/lib/cars/car-registry";
+import { carMaker, circuitMaker, GAME_MAKER } from "@/lib/modders";
+import { useStoreBuild } from "@/lib/use-store-build";
 
 const TIPS = [
   "Esc pauses: the Garage, corner practice, AI races and multiplayer are all there.",
@@ -61,6 +64,41 @@ const ContinuePrompt: React.FC = () => {
   );
 };
 
+/**
+ * Who made what is about to load: the circuit's modder, the car's (in its credit's words: the Liana's is its
+ * physics), and the game. A maker who takes donations says so, and where: the loading screen itself takes no clicks
+ * but the one that enters the track, so the link is the circuit's and car's Source button.
+ */
+const MakersLines: React.FC<{ trackId: string; trackName: string; carId: CarId }> = ({ trackId, trackName, carId }) => {
+  const store = useStoreBuild();
+  const circuit = circuitMaker(trackId);
+  const car = carMaker(carId);
+  const lines = [
+    circuit ? { key: "circuit", lead: `${trackName} by`, maker: circuit } : null,
+    { key: "car", lead: `${carById(carId).title}: ${car.role.toLowerCase()} by`, maker: car },
+    { key: "game", lead: "LibreCorsa by", maker: GAME_MAKER },
+  ].filter((l): l is NonNullable<typeof l> => l !== null);
+  const anySupport = !store && lines.some((l) => l.maker.support);
+  return (
+    <div className="flex flex-col gap-2 border-t border-lc-line pt-3.5 short:pt-2.5">
+      <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[14px] leading-snug text-lc-slate short:text-[12px]">
+        {lines.map((l) => (
+          <li key={l.key}>
+            {l.lead} <span className="font-semibold text-lc-chalk">{l.maker.name}</span>
+            {!store && l.maker.support ? <span className="text-lc-fog"> · donations welcome</span> : null}
+          </li>
+        ))}
+      </ul>
+      {anySupport ? (
+        <p className="m-0 flex items-start gap-1.5 text-[13px] leading-snug text-lc-fog short:hidden">
+          <Icon name="support" className="mt-px shrink-0 text-lc-volt" />
+          You can donate to them any time from the Source button next to the circuit or car.
+        </p>
+      ) : null}
+    </div>
+  );
+};
+
 /** One start-light column (two lamps) inside the pill */
 const LightColumn: React.FC<{ lit: boolean; ready: boolean }> = ({ lit, ready }) => {
   // Real start lights: red lamps, out for the go (green here, once everything is in)
@@ -85,12 +123,14 @@ const LightColumn: React.FC<{ lit: boolean; ready: boolean }> = ({ lit, ready })
  */
 export const LoadingScreen: React.FC<{
   track: BuiltTrackData;
+  /** The car about to drive, for its maker's line */
+  carId: CarId;
   ready: boolean;
   /** Called synchronously inside the user gesture (audio unlock) */
   onStart: () => void;
   /** Called once the fade-out has finished */
   onDone: () => void;
-}> = ({ track, ready, onStart, onDone }) => {
+}> = ({ track, carId, ready, onStart, onDone }) => {
   const progress = useAssetProgress();
   const units = useUnits();
   const tips = useMemo(() => (BASE_ALTITUDE_M >= 1000 ? [altitudeTip(BASE_ALTITUDE_M), ...TIPS] : TIPS), []);
@@ -240,15 +280,16 @@ export const LoadingScreen: React.FC<{
           <div className="order-2 flex max-w-[560px] min-w-0 flex-col gap-[clamp(20px,3.6vh,36px)] lg:order-1 short:order-1">
             <LibreCorsaLogo variant="full" size="lg" />
 
-            {/* Percentage and the start lights as the progress indicator */}
-            <div className="flex flex-wrap items-end gap-x-7 gap-y-4 short:gap-x-5">
+            {/* Percentage and the start lights as the progress indicator: the lights under the number, so "100%" never
+                pushes them to another line as it arrives (beside it on a landscape phone, where height is short) */}
+            <div className="flex flex-col items-start gap-4 short:flex-row short:items-end short:gap-x-5">
               <span className="lc-disp text-[clamp(72px,12vw,168px)] tracking-[-0.02em] text-lc-chalk tabular-nums phone:text-[48px]">
                 {Math.round(shown * 100)}%
               </span>
               <div
                 role="img"
                 aria-label={ready ? "Start lights out: ready" : `Start lights: ${litLights} of ${LIGHTS}`}
-                className="mb-2 flex gap-2 rounded-full border border-lc-line bg-lc-carbon px-3 py-2.5 sm:mb-7.5 short:mb-2"
+                className="flex gap-2 rounded-full border border-lc-line bg-lc-carbon px-3 py-2.5 short:mb-2 phone:gap-1.5 phone:px-2 phone:py-2"
               >
                 {Array.from({ length: LIGHTS }, (_, i) => (
                   <LightColumn key={i} lit={i < litLights} ready={ready} />
@@ -276,10 +317,12 @@ export const LoadingScreen: React.FC<{
                 </p>
               )}
             </div>
+
+            <MakersLines trackId={trackInfo.id} trackName={trackInfo.name} carId={carId} />
           </div>
 
-          {/* The circuit drawing itself in Corsa Volt */}
-          <div className="order-1 mx-auto flex w-full max-w-[min(280px,32vh)] items-center justify-center lg:order-2 lg:max-w-[min(640px,100%,calc(100vh_-_12rem))] short:order-2 short:w-[min(220px,45vh)] short:max-w-none">
+          {/* The circuit drawing itself in Corsa Volt, named under it */}
+          <div className="order-1 mx-auto flex w-full max-w-[min(280px,32vh)] flex-col items-center justify-center gap-3 lg:order-2 lg:max-w-[min(640px,100%,calc(100vh_-_14rem))] short:order-2 short:w-[min(220px,45vh)] short:max-w-none short:gap-1.5">
             <svg
               viewBox="-8 -8 116 116"
               className="h-auto w-full overflow-visible"
@@ -321,14 +364,15 @@ export const LoadingScreen: React.FC<{
                   />
               ) : null}
             </svg>
+            <div className="flex flex-col items-center gap-0.5 text-center">
+              <span className="lc-h3 text-balance text-lc-chalk short:text-[14px]">{trackInfo.name}</span>
+              <span className="lc-hint short:text-[11px]">
+                {[trackInfo.layout, trackInfo.city].filter(Boolean).join(" · ")} ·{" "}
+                {distanceIn(lengthKm, units.speed).toFixed(2)} {DISTANCE_LABEL[units.speed]} · {TURN_METADATA.length} turns
+              </span>
+            </div>
           </div>
         </div>
-
-        <footer className={`lc-hint mt-6 flex flex-wrap items-center justify-between gap-2.5 border-t border-lc-line pt-3.5 short:hidden ${ready ? "compact:hidden" : ""}`}>
-          <span>
-            {trackInfo.name}, {distanceIn(lengthKm, units.speed).toFixed(2)} {DISTANCE_LABEL[units.speed]}, {TURN_METADATA.length} turns
-          </span>
-        </footer>
       </div>
 
       {/* Compact screens: the prompt stays pinned to the bottom instead of falling below the fold */}

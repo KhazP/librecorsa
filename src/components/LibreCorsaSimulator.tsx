@@ -1968,7 +1968,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
       {loadingVisible ? (
         // Under the GPU notice it takes no press: the notice's own buttons would start it too
-        <LoadingScreen track={track} ready={assetsReady && !gpuNoticeKind} onStart={handleLoadingStart} onDone={handleLoadingDone} />
+        <LoadingScreen track={track} carId={carId} ready={assetsReady && !gpuNoticeKind} onStart={handleLoadingStart} onDone={handleLoadingDone} />
       ) : null}
 
       {gpuNoticeKind ? (
