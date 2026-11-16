@@ -43,7 +43,7 @@ import { isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import type { SessionConditions } from "@/lib/sim/weather";
-import { getTrackInfo, TRACKS } from "@/lib/track-registry";
+import { getTrackInfo, LISTED_TRACKS, TRACKS } from "@/lib/track-registry";
 import { F1TelemetryHud } from "@/components/F1TelemetryHud";
 import { roomFromUrl } from "@/lib/net/invite-room";
 import { CAMERA_MODES, nextCameraMode } from "@/lib/render/camera-modes";
@@ -100,8 +100,8 @@ const challengeTrackName = (id: string) => {
   const t = getTrackInfo(id);
   return TRACKS.some((o) => o.id !== t.id && o.name === t.name) ? `${t.name} · ${t.layout}` : t.name;
 };
-/** Every circuit for the online board's picker, by name (the panel puts the loaded one first) */
-const BOARD_CIRCUITS = TRACKS.map((t) => ({ id: t.id, label: challengeTrackName(t.id) })).sort((a, b) => a.label.localeCompare(b.label));
+/** Every listed circuit for the online board's picker, by name (the panel puts the loaded one first) */
+const BOARD_CIRCUITS = LISTED_TRACKS.map((t) => ({ id: t.id, label: challengeTrackName(t.id) })).sort((a, b) => a.label.localeCompare(b.label));
 /** The snapshot store before the session exists: nothing to subscribe to */
 const noSubscribe = () => () => {};
 

@@ -85,6 +85,12 @@ export interface TrackInfo {
   type?: CircuitType;
   /** Where its model comes from (index.json) */
   quality: CircuitQuality;
+  /**
+   * Left out of every list (circuit browser, home page, lap board picker, credits) unless the page's link names it
+   * (`?track=<id>`), e.g. a new circuit its modder tries on the live site before it is listed. It still loads by id
+   * everywhere: a stored choice, a room's circuit, a board.
+   */
+  unlisted?: boolean;
 }
 
 /** "hillclimb": a road from a start line to a finish line somewhere else, driven as one timed run */
@@ -167,11 +173,30 @@ export interface CircuitVenue {
   layouts: TrackInfo[];
 }
 
-/** On librecorsa.org every circuit; in a clone of the repository only the ones it carries (`hosted-content.ts`) */
+/**
+ * On librecorsa.org every circuit; in a clone of the repository only the ones it carries (`hosted-content.ts`).
+ * Unlisted ones included: an id resolves wherever it comes from, and only the lists leave them out (`LISTED_TRACKS`).
+ */
 export const TRACKS: TrackInfo[] = (trackIndex as TrackInfo[]).filter((t) => trackListed(t.id));
 
-/** The circuits grouped by venue (same name and country), in index order */
-export const CIRCUIT_VENUES: readonly CircuitVenue[] = TRACKS.reduce<CircuitVenue[]>((venues, t) => {
+/** `?track=<id>`: the circuit a link opens. Read in the browser only, so the static pages (home) list without it */
+export const LINKED_TRACK_ID: string | null = (() => {
+  try {
+    return typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("track");
+  } catch {
+    return null;
+  }
+})();
+
+/** The circuits a list offers: every one but the unlisted, except an unlisted one this page's link names */
+export const listedTracks = (tracks: readonly TrackInfo[], linkedId: string | null): TrackInfo[] =>
+  tracks.filter((t) => !t.unlisted || t.id === linkedId);
+
+/** What the circuit browser, the home page, the lap board picker and the credits show */
+export const LISTED_TRACKS: readonly TrackInfo[] = listedTracks(TRACKS, LINKED_TRACK_ID);
+
+/** The listed circuits grouped by venue (same name and country), in index order */
+export const CIRCUIT_VENUES: readonly CircuitVenue[] = LISTED_TRACKS.reduce<CircuitVenue[]>((venues, t) => {
   const venue = venues.find((v) => v.name === t.name && v.country === t.country);
   if (venue) venue.layouts.push(t);
   else venues.push({ id: t.id, name: t.name, country: t.country, city: t.city, region: circuitRegion(t), layouts: [t] });
@@ -189,8 +214,9 @@ export function getTrackInfo(id: string): TrackInfo {
   return TRACKS[0];
 }
 
-/** The circuit picked last time (or the default) */
+/** The circuit to open: `?track=` in the URL, else the one picked last time, else the default */
 export function loadStoredTrackId(): string {
+  if (LINKED_TRACK_ID && TRACKS.some((t) => t.id === LINKED_TRACK_ID)) return LINKED_TRACK_ID;
   try {
     const id = localStorage.getItem(TRACK_STORAGE_KEY);
     if (id && TRACKS.some((t) => t.id === id)) return id;
