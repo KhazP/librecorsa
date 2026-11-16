@@ -89,6 +89,11 @@ export class SimRuntime {
     return this.race?.field ?? null;
   }
 
+  /** The field built ahead for the next race, if any (the headless checks read it) */
+  get preparedField(): AiOpponentField | null {
+    return this.spare?.field ?? null;
+  }
+
   handle(command: SimCommand): void {
     switch (command.type) {
       case "ping":
@@ -190,6 +195,9 @@ export class SimRuntime {
         const { field, env } = built;
         if (field.skill !== command.skill) field.setSkill(command.skill);
         env.setSimRealism(command.realism);
+        // The page's weather before the start (the cars plan their first laps on its grip) and again after the start's
+        // reset of the road: a change of conditions starts the road over from the page's
+        env.applyWeatherSync(command.weather);
         const setup = command.setup;
         field.raceLaps = setup.laps;
         field.gridOrder = setup.gridOrder;
@@ -197,7 +205,6 @@ export class SimRuntime {
         field.damageLevel = setup.damage;
         field.aggressionAdd = setup.aggressionAdd;
         field.startRace(setup.standing);
-        // The page's weather, after the start's reset of the road: a change of conditions starts it over from the page's
         env.applyWeatherSync(command.weather);
         const ownRaceControl = car.raceControl;
         // The player's overtaking aids follow the race rules (the page wires its own car's the same way)
@@ -309,7 +316,8 @@ export class SimRuntime {
     if (!race || !car) return;
     const field = race.field;
     const lightsChanged = field.phase !== race.sentPhase || field.lightsOn !== race.sentLights;
-    if (!force && !lightsChanged && race.steps % STATUS_EVERY !== 0) return;
+    const weatherDue = force || race.steps % WEATHER_EVERY === 0;
+    if (!force && !lightsChanged && !weatherDue && race.steps % STATUS_EVERY !== 0) return;
     race.sentPhase = field.phase;
     race.sentLights = field.lightsOn;
     const sample = race.env.weatherSampleFor(car);
@@ -326,7 +334,7 @@ export class SimRuntime {
       race.rosterSent = true;
       event.roster = field.aiSlots().map(({ peer }) => ({ peerId: peer.peerId, driverCode: peer.driverCode, teamColorHex: peer.teamColorHex, vehicle: peer.vehicle }));
     }
-    if (force || race.steps % WEATHER_EVERY === 0) event.weather = race.env.weather.snapshot();
+    if (weatherDue) event.weather = race.env.weather.snapshot();
     this.emit(event);
   }
 

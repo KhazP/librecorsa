@@ -3,12 +3,13 @@
  * worker's side in this process behind the same messages, every one cloned as `postMessage` clones it
  * (`loopbackTransport`), driven the way drive-session.ts drives it.
  *
- *   npx tsx scripts/verify-worker-race.ts [trackId] [car]
+ *   npx tsx scripts/verify-worker-race.ts [trackId] [car] [weather]
  *
  * The race must be the race a field on the page runs, stepped the same way (the road, the player's car in two 4 ms
  * ticks, then the field over 8 ms): the same report to the last digit, the player's car where the page's would be.
  * Then what the page sees of it: the lights and the grid hold, the AI cars drawn where the worker has them, the road,
- * the standing, and the race ending when the session leaves it.
+ * the standing, and the race ending when the session leaves it. Last, a race with no seed as the game starts one: the
+ * field built ahead in the menus, a standing start, and a rolling restart on the same field.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
@@ -18,6 +19,7 @@ import { SIM_TICK_S } from '../src/lib/sim/runtime/sim-protocol';
 import { WorkerAiField } from '../src/lib/sim/runtime/worker-ai-field';
 import type { SimulatorCar } from '../src/lib/sim/simulator-car';
 import { TrackEnvironment } from '../src/lib/sim/track-environment';
+import { DEFAULT_SESSION_CONDITIONS, WEATHER_PRESETS, type WeatherPresetId } from '../src/lib/sim/weather';
 import { getActiveTrackData, getActiveTrackMetadata, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import type { VehicleModelId } from '../src/types/f1';
 import { loadGlbGeometry } from './lib/glb-geometry';
@@ -30,6 +32,10 @@ const check = (name: string, ok: boolean, detail = '') => {
 
 const trackId = process.argv[2] ?? 'rwanda_official_short';
 const vehicle = (process.argv[3] ?? 'amg-gt3') as VehicleModelId;
+const weather = (process.argv[4] ?? 'clear') as WeatherPresetId;
+if (!WEATHER_PRESETS.includes(weather)) throw new Error(`unknown weather ${weather}`);
+/** Both sides' road: the page's environment, which the worker's race takes its weather from */
+const conditions = { ...DEFAULT_SESSION_CONDITIONS, weather };
 const OPPONENTS = 3;
 const SKILL = 80;
 const SEED = 4242;
@@ -66,7 +72,7 @@ function setUpRace(field: { raceLaps: number; gridOrder: string; playerGrid: str
 // ---- The race on the page, stepped as the worker steps it
 const pagePlayer = vehicleModelSpec(vehicle).createSim(track, root);
 setUp(pagePlayer);
-const pageEnv = new TrackEnvironment(track);
+const pageEnv = new TrackEnvironment(track, conditions);
 const pageField = new AiOpponentField(track, pagePlayer, aiDriversFor(OPPONENTS), pageEnv, { skill: SKILL, seed: SEED });
 setUpRace(pageField as never);
 pageField.startRace(true);
@@ -89,7 +95,7 @@ host.endFrame(true);
 const link = host.raceLink();
 check('the worker has the car ready for a race', link !== null);
 if (!link) process.exit(1);
-const env = new TrackEnvironment(track);
+const env = new TrackEnvironment(track, conditions);
 const race = new WorkerAiField(link, env, car, OPPONENTS, SKILL, () => car.groundQuery ?? null);
 race.seed = SEED;
 setUpRace(race as never);
@@ -130,7 +136,11 @@ check('the worker drives the car the whole race', host.remote);
 const sim = loop.runtime.simulatedCar as SimulatorCar;
 const pageReport = JSON.stringify(pageField.report());
 const workerReport = JSON.stringify(workerField!.report());
-check('the worker race reports exactly what the race on the page does', pageReport === workerReport, pageReport === workerReport ? `${RACE_S} s, ${OPPONENTS + 1} cars` : 'reports differ');
+check(
+  'the worker race reports exactly what the race on the page does',
+  pageReport === workerReport,
+  pageReport === workerReport ? `${RACE_S} s, ${OPPONENTS + 1} cars, ${weather}, line water ${pageEnv.weather.lineWaterMm.toFixed(2)} mm` : 'reports differ'
+);
 const dPos = sim.worldPosition.distanceTo(pagePlayer.worldPosition);
 check("the player's car ends where it does on the page", dPos === 0 && sim.vxMs === pagePlayer.vxMs, `${(sim.vxMs * 3.6).toFixed(0)} km/h at ${sim.sMeters.toFixed(0)} m, off by ${dPos}`);
 
@@ -162,6 +172,48 @@ for (let tick = 0; tick < 250; tick++) {
   host.endFrame(true);
 }
 check('and its car drives on alone', host.remote && sim.sMeters !== sBefore && race.peers().length === OPPONENTS);
+
+// ---- A race as the game starts one: no seed, the field built ahead, then a rolling restart on the same field
+{
+  const link2 = host.raceLink();
+  check('the worker can run another race', link2 !== null);
+  if (!link2) process.exit(1);
+  link2.post({ type: 'race', op: 'prepare', opponents: OPPONENTS, skill: SKILL });
+  const prepared = loop.runtime.preparedField;
+  check('the menus have the worker build the next field ahead', prepared !== null && prepared.aiSlots().length === OPPONENTS);
+  const race2 = new WorkerAiField(link2, env, car, OPPONENTS, SKILL, () => car.groundQuery ?? null);
+  race2.startRace(true);
+  check('the start takes the field built ahead', loop.runtime.raceField === prepared && loop.runtime.preparedField === null);
+  let lightsSeen = false;
+  let held = true;
+  let grid: number | null = null;
+  let out = -1;
+  for (let tick = 0; tick < 2500; tick++) {
+    car.step(SIM_TICK_S, {});
+    loop.advance(SIM_TICK_S);
+    host.endFrame(true);
+    race2.update();
+    if (race2.phase === 'lights') {
+      lightsSeen ||= race2.lightsOn > 0;
+      grid ??= car.sMeters;
+      if (Math.abs(car.sMeters - grid) > 0.05) held = false;
+    } else if (out < 0) out = tick * SIM_TICK_S;
+  }
+  check('its lights, the grid hold and the cars drawn', lightsSeen && held && out > 4 && race2.peers().length === OPPONENTS, `out at ${out.toFixed(2)} s`);
+  const field = loop.runtime.raceField;
+  race2.startRace(false);
+  check('a restart takes the field running', loop.runtime.raceField === field && field !== null);
+  const s0 = car.sMeters;
+  for (let tick = 0; tick < 500; tick++) {
+    car.step(SIM_TICK_S, {});
+    loop.advance(SIM_TICK_S);
+    host.endFrame(true);
+    race2.update();
+  }
+  const moving = race2.peers().every((p) => p.speedKmh > 50);
+  check('a rolling restart races at once, the AI cars with it', race2.phase === 'racing' && !race2.playerFrozen && moving && race2.status().standings.length === OPPONENTS + 1, `the player's car ${(car.sMeters - s0).toFixed(0)} m on`);
+  race2.dispose();
+}
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll worker race checks passed.');
 if (failures.length) process.exitCode = 1;

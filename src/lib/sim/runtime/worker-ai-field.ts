@@ -25,6 +25,8 @@ import type { SimEvent } from "./sim-protocol";
 
 /** The AI cars are carried forward no further than this when the worker's latest is older (s), as the player's car */
 const MAX_RENDER_LEAD_S = 0.05;
+/** A frame this long after the last one is the first after a stop (a pause, the menus): nothing is carried forward (ms) */
+const RESUME_GAP_MS = 100;
 
 let raceNumber = 0;
 
@@ -54,6 +56,13 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   private sentRealism: Readonly<SimRealismFlags> | null = null;
   private unlisten: (() => void) | null = null;
   private road: { wetness: number | null; spray: number; rubber: number } | null = null;
+  /**
+   * How far the AI cars are carried forward from their last poses (s), taken once a frame in `update` as the player's
+   * car is in its `step`: both are drawn at the same instant, and while the page does not drive (a pause, the replay)
+   * neither moves on
+   */
+  private leadS = 0;
+  private lastUpdateMs = -Infinity;
   private stopped = false;
 
   constructor(
@@ -167,6 +176,11 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
 
   update(): void {
     if (!this.race) return;
+    // (not on the first frame after a stop, as the player's car is not: the worker's newest poses are from before it)
+    const now = this.link.wallNowMs();
+    const resumed = now - this.lastUpdateMs > RESUME_GAP_MS;
+    this.lastUpdateMs = now;
+    this.leadS = resumed ? 0 : THREE.MathUtils.clamp((now - this.posesWallMs) / 1000 + this.posesLeadS, 0, MAX_RENDER_LEAD_S);
     if (this.playerPenaltyS !== this.sentPenaltyS) {
       this.sentPenaltyS = this.playerPenaltyS;
       this.link.post({ type: "race", op: "penalty", seconds: this.playerPenaltyS });
@@ -198,9 +212,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   }
 
   peers(): InterpolatedPeerState[] {
-    if (!this.fieldPeers) return [];
-    const leadS = THREE.MathUtils.clamp((this.link.wallNowMs() - this.posesWallMs) / 1000 + this.posesLeadS, 0, MAX_RENDER_LEAD_S);
-    return this.fieldPeers.shownAt(leadS);
+    return this.fieldPeers ? this.fieldPeers.shownAt(this.leadS) : [];
   }
 
   sims(): readonly SimulatorCar[] {
