@@ -1569,6 +1569,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     lastPhase.current = phase;
     if (phase === "driving") setSupportNote(null);
     if (phase !== "title" || was !== "driving" || isStoreBuild()) return;
+    // A room or a race entry takes the title's place: a note written as shown there would never have been seen
+    if (roomLobby !== null || inScheduledRace) return;
     const items: PromptItem[] = [];
     const circuit = circuitMaker(trackId);
     const track = getTrackInfo(trackId);
