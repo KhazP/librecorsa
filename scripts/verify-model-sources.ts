@@ -39,6 +39,7 @@ check(
   r33.support?.url === "https://www.patreon.com/cw/gregsediting" && r33.authorUrl?.includes("gtplanet.net/forum/members/") === true && r33.url.includes("gtplanet.net/forum/downloads/")
 );
 check("The BMW's modder has PayPal first", carModelSource(carById("bmw-m4-gt3")).support?.via === "PayPal");
+check("Pfalzdriver's M1 and Scirocco have his tip page first", (["bmw-m1-procar", "vw-scirocco-gtx"] as const).every((id) => carModelSource(carById(id)).support?.url === "https://streamlabs.com/pfalzdriver"));
 check("A modder without a support page gets none", carModelSource(carById("amg-gt3")).support === undefined);
 for (const [id, modder] of [["monaco", "Mitja Bonca"], ["norisring", "gunnar333"], ["watkins_glen", "LilSki"]] as const) {
   const t = TRACKS.find((x) => x.id === id);
