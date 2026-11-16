@@ -34,11 +34,11 @@ export interface VenueModel {
 
 export const VENUE_MODELS: readonly VenueModel[] = [
   { venue: "vir", build: "b79628d0", ktx2Build: "13216544", layouts: ["vir", "vir_grand_east", "vir_grand_west", "vir_north", "vir_patriot", "vir_patriot_reverse", "vir_south"] },
-  { venue: "spielberg", build: "a96cb481", ktx2Build: "d03dab41", layouts: ["spielberg", "spielberg_inner", "spielberg_south"] },
-  { venue: "sachsenring", build: "c4e8700f", ktx2Build: "6903794c", layouts: ["sachsenring", "sachsenring_short"] },
-  { venue: "okayama", build: "710efbb4", ktx2Build: "095ff98a", layouts: ["okayama", "okayama_drift", "okayama_piper"] },
+  { venue: "spielberg", build: "7813326e", ktx2Build: "e9cd6a88", layouts: ["spielberg", "spielberg_inner", "spielberg_south"] },
+  { venue: "sachsenring", build: "2f15331c", ktx2Build: "f59a16b8", layouts: ["sachsenring", "sachsenring_short"] },
+  { venue: "okayama", build: "7c5a1d41", ktx2Build: "52e7ecf3", layouts: ["okayama", "okayama_drift", "okayama_piper"] },
   { venue: "riverside", build: "e3849086", ktx2Build: "3bd90ac1", layouts: ["riverside", "riverside_short", "riverside_nascar"] },
-  { venue: "watkins_glen", build: "5d56b71c", ktx2Build: "c81a64ab", layouts: ["watkins_glen", "watkins_glen_short"] },
+  { venue: "watkins_glen", build: "3dfe75f5", ktx2Build: "4e8208d4", layouts: ["watkins_glen", "watkins_glen_short"] },
 ];
 
 /** A layout's two files (relative to the base path) */
