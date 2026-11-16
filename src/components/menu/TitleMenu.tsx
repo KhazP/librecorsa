@@ -44,6 +44,9 @@ import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { REPO_URL, SUPPORT_URL, TAKEDOWN_URL } from "@/lib/site";
 import { useStoreBuild } from "@/lib/use-store-build";
+import { moddersList } from "@/lib/modders";
+import { SupportButton } from "@/components/SupportButton";
+import { cx } from "@/components/ui/styles";
 import { withBasePath } from "@/lib/base-path";
 import { EmbeddedBadge } from "./EmbeddedBadge";
 import { InstallAppButton } from "./InstallAppButton";
@@ -120,12 +123,53 @@ const RedBullLiveryNote: React.FC = () =>
     </>
   );
 
+/** "Monaco, Red Bull Ring, Chang and 7 more" */
+const worksLine = (works: readonly string[]) => (works.length > 3 ? `${works.slice(0, 3).join(", ")} and ${works.length - 3} more` : works.join(", "));
+
+/**
+ * The modders who take donations, first in the Credits: their name, what of theirs is in the game, and their
+ * support link. Not in the Android app, which leaves payment links out.
+ */
+const ModderSupport: React.FC = () => {
+  const store = useStoreBuild();
+  const modders = useMemo(() => moddersList().filter((m) => m.support), []);
+  if (store || !modders.length) return null;
+  return (
+    <section aria-labelledby="support-modders" className="flex flex-col gap-1.5 border-t border-lc-line py-4">
+      <h3 id="support-modders" className="lc-row-label m-0">
+        Support the modders
+      </h3>
+      <p className="lc-body m-0 max-w-[70ch]">
+        The circuits and cars are their work, used with their permission. If you enjoy one, you can thank its maker
+        directly.
+      </p>
+      <ul className="m-0 mt-2 grid list-none grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] gap-x-6 p-0">
+        {modders.map((m) => (
+          <li key={m.name} className="flex min-w-0 items-center justify-between gap-3 border-t border-white/5 py-2.5">
+            <span className="flex min-w-0 flex-col">
+              <a href={m.url} target="_blank" rel="noreferrer" className={cx(linkClass, "self-start font-semibold")}>
+                {m.name}
+              </a>
+              <span className="lc-hint truncate" title={m.works.join(", ")}>
+                {worksLine(m.works)}
+              </span>
+            </span>
+            <SupportButton support={m.support} maker={m.name} variant="secondary" className="shrink-0" />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
+
 const Credits: React.FC = () => (
   <div className="flex flex-col gap-4.5">
     <p className="m-0 max-w-[760px] text-[18px] leading-snug font-semibold text-lc-chalk sm:text-[20px]">
       LibreCorsa is an open-source browser racing sim with open-wheel prototypes, GT3 cars, road cars and an open
       circuit pipeline.
     </p>
+
+    <ModderSupport />
 
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))] gap-x-8">
       <div>
