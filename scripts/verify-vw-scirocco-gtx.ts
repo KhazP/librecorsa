@@ -317,8 +317,9 @@ if (!existsSync('public/tracks/dunsfold/track_data.json')) {
   const lapStr = `${m}:${fmt(r.lapS - 60 * m, 1).padStart(4, '0')}`;
   check('Flying lap completes and stays on the track', r.done && r.beyond <= 0 && r.maxSlip < 10,
     `lap ${lapStr}, top ${fmt(r.top, 0)} km/h, CG ${fmt(Math.max(0, r.beyond), 1)} m past the edge, max body slip ${fmt(r.maxSlip, 1)}°`);
-  // Quicker than the Liana (1:41.7–1:43.0 for its AC AI): 35 bhp more on a lighter car
-  check('Lap 1:32–1:44', r.lapS > 92 && r.lapS < 104, lapStr);
+  // 1:30.6 when first measured, 11 s under the Liana (its AC AI lapped 1:41.7–1:43.0): 35 bhp more on a lighter car,
+  // and the mod's tyres hold 0.93 g to the Liana's 0.83
+  check('Lap 1:27–1:35', r.lapS > 87 && r.lapS < 95, lapStr);
 }
 
 console.log('\n== Up-shift');
