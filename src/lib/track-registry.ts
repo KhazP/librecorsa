@@ -214,9 +214,26 @@ export function getTrackInfo(id: string): TrackInfo {
   return TRACKS[0];
 }
 
-/** The circuit to open: `?track=` in the URL, else the one picked last time, else the default */
+/** Whether this page has opened its `?track=` circuit already */
+let linkOpened = false;
+
+/**
+ * The circuit to open: `?track=` in the URL the first time, else the one picked last time, else the default. The link
+ * opens its circuit once and leaves the address: the game remounting on a return from the home page, or a reload,
+ * keeps the circuit the player has picked since (activateTrack stores it).
+ */
 export function loadStoredTrackId(): string {
-  if (LINKED_TRACK_ID && TRACKS.some((t) => t.id === LINKED_TRACK_ID)) return LINKED_TRACK_ID;
+  if (!linkOpened && LINKED_TRACK_ID && TRACKS.some((t) => t.id === LINKED_TRACK_ID)) {
+    linkOpened = true;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("track");
+      window.history.replaceState(window.history.state, "", url);
+    } catch {
+      // An address that can't be rewritten: a reload opens the linked circuit again
+    }
+    return LINKED_TRACK_ID;
+  }
   try {
     const id = localStorage.getItem(TRACK_STORAGE_KEY);
     if (id && TRACKS.some((t) => t.id === id)) return id;
