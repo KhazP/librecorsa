@@ -97,6 +97,8 @@ export interface HomeData {
   contactEmail: string;
   repoUrl: string;
   supportUrl: string;
+  /** Who made the circuits and cars, those who take donations first (modders.ts) */
+  modders: import("@/lib/modders").ModderWork[];
   /** Each car's short name and class colour, for the rows of the online board of every car (the Lap times section) */
   boardCars: Partial<Record<VehicleModelId, { label: string; color: PaletteColor }>>;
   /** The cars the Lap times board can be narrowed to, one per board (cars that drive the same share one), in menu order */

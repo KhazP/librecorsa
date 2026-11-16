@@ -188,7 +188,7 @@ export const CarBrowser: React.FC<{
               <span className="lc-hint">
                 {c.credit.label ?? "Model by"}{" "}
                 <a
-                  href={c.credit.url}
+                  href={c.credit.authorUrl ?? c.credit.url}
                   target="_blank"
                   rel="noreferrer"
                   className="text-lc-fog underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"

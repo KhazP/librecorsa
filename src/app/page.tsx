@@ -11,6 +11,7 @@ import outlines from "@/lib/home/circuit-outlines.json";
 import whatsNewJson from "@/lib/home/whats-new.json";
 import type { LapOutline } from "@/lib/home/lap-outline";
 import { carModelSource, trackModelSource } from "@/lib/model-source";
+import { moddersList } from "@/lib/modders";
 import { coverage } from "@/lib/press";
 import { CONTACT_EMAIL, REPO_URL, SUPPORT_URL } from "@/lib/site";
 import { CIRCUIT_TYPE_LABELS, CIRCUIT_VENUES, DEFAULT_TRACK_ID, circuitModder, circuitType } from "@/lib/track-registry";
@@ -81,6 +82,7 @@ export default function HomePage() {
     contactEmail: CONTACT_EMAIL,
     repoUrl: REPO_URL,
     supportUrl: SUPPORT_URL,
+    modders: moddersList(),
     boardCars: Object.fromEntries(VEHICLE_MODEL_IDS.map((v) => [v, carBoardTag(v)])),
     // A board two cars share is named for the first, with the other under it
     boardCarChoices: boardCarList.map(([id, [first, ...others]]) => ({
