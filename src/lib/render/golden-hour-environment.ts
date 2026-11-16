@@ -177,6 +177,11 @@ export interface PostFx {
   setQuality(quality: "low" | "medium" | "high", msaa?: boolean): void;
   /** Puts the physical sky's clouds into the chain, right after the scene render (once; later calls are no-ops) */
   setClouds(sky: { readonly clouds: CloudsEffect; readonly cloudsActive: boolean }): void;
+  /**
+   * The off-track edge glow: a CSS hex colour turns it on (breathing, or steady under reduced motion), null turns it
+   * off. A colour it cannot read keeps the last one.
+   */
+  setEdgeGlow(color: string | null): void;
   dispose(): void;
 }
 
@@ -655,7 +660,12 @@ export function createGoldenHourEnvironment(
 // Post-processing
 // ---------------------------------------------------------------------------
 
-/** Contrast about mid-grey and saturation about luma, on the tone-mapped image; alpha forced opaque */
+/**
+ * Contrast about mid-grey and saturation about luma, on the tone-mapped image; alpha forced opaque. Then the off-track
+ * edge glow, when on: the HUD's colour fading in from 62 % of the way to the corners to 32 % at them, on an ellipse
+ * the screen's shape. Drawn here, it costs a few instructions in a pass that runs anyway, where a full-screen page
+ * layer over the canvas, animated every frame, gave the browser the whole screen to composite again each frame.
+ */
 class DisplayGradeEffect extends Effect {
   constructor(contrast: number, saturation: number) {
     super(
@@ -663,19 +673,56 @@ class DisplayGradeEffect extends Effect {
       /* glsl */ `
 uniform float uContrast;
 uniform float uSaturation;
+uniform float uEdgeGlow;
+uniform vec3 uEdgeColor;
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   // grade in a perceptual (gamma 2.2) space so the contrast pivots on mid-grey as seen, then back to linear
   vec3 c = pow(clamp(inputColor.rgb, 0.0, 1.0), vec3(1.0 / 2.2));
   c = (c - 0.5) * (1.0 + uContrast) + 0.5;
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c = mix(vec3(l), c, 1.0 + uSaturation);
+  if (uEdgeGlow > 0.0) {
+    // blended in the same display space the page's layer was composited in
+    float r = length((uv - 0.5) * 2.0) * 0.70710678;
+    c = mix(clamp(c, 0.0, 1.0), uEdgeColor, clamp((r - 0.62) / 0.38, 0.0, 1.0) * 0.32 * uEdgeGlow);
+  }
   outputColor = vec4(pow(clamp(c, 0.0, 1.0), vec3(2.2)), 1.0);
 }
 `,
-      { uniforms: new Map<string, THREE.Uniform>([["uContrast", new THREE.Uniform(contrast)], ["uSaturation", new THREE.Uniform(saturation)]]) }
+      {
+        uniforms: new Map<string, THREE.Uniform>([
+          ["uContrast", new THREE.Uniform(contrast)],
+          ["uSaturation", new THREE.Uniform(saturation)],
+          ["uEdgeGlow", new THREE.Uniform(0)],
+          ["uEdgeColor", new THREE.Uniform(new THREE.Vector3(1, 42 / 255, 60 / 255))],
+        ]),
+      }
     );
   }
+
+  /** 0 hides the edge glow; `color` is in display (sRGB) components */
+  setEdgeGlow(level: number, color?: THREE.Vector3): void {
+    (this.uniforms.get("uEdgeGlow") as THREE.Uniform<number>).value = level;
+    if (color) (this.uniforms.get("uEdgeColor") as THREE.Uniform<THREE.Vector3>).value.copy(color);
+  }
 }
+
+/** The page's breathing: 55 % to full and back over 1.8 s, eased at each end like CSS's ease-in-out */
+const EDGE_GLOW_PERIOD_MS = 1800;
+const edgeGlowLevel = (sinceMs: number): number => {
+  const p = (sinceMs % EDGE_GLOW_PERIOD_MS) / EDGE_GLOW_PERIOD_MS;
+  const u = p < 0.5 ? p * 2 : 2 - p * 2;
+  return 0.55 + 0.45 * u * u * (3 - 2 * u);
+};
+
+/** A CSS hex colour (#rgb or #rrggbb) as display components 0..1, else null */
+const hexColor = (css: string): THREE.Vector3 | null => {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(css.trim());
+  if (!m) return null;
+  const hex = m[1].length === 3 ? [...m[1]].map((d) => d + d).join("") : m[1];
+  const n = parseInt(hex, 16);
+  return new THREE.Vector3(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+};
 
 export function createPostFx(
   renderer: THREE.WebGLRenderer,
@@ -712,10 +759,16 @@ export function createPostFx(
   // white specks). The grade had a pass of its own; here it runs the same code without the round trip through a
   // half-float buffer (whose rounding was the only difference), a full-screen write and read saved per frame,
   // multisampled on High and Medium.
-  const toneMapAndGrade = () => [
-    new ToneMappingEffect({ mode: ToneMappingMode.AGX }),
-    new DisplayGradeEffect(GRADE_CONTRAST, GRADE_SATURATION),
-  ];
+  // The grade of each of the two passes below: the edge glow is set on both, as either may be the one running
+  const grades: DisplayGradeEffect[] = [];
+  const toneMapAndGrade = () => {
+    const grade = new DisplayGradeEffect(GRADE_CONTRAST, GRADE_SATURATION);
+    grades.push(grade);
+    return [new ToneMappingEffect({ mode: ToneMappingMode.AGX }), grade];
+  };
+  // When the edge glow came on (null: off), and whether it holds still for reduced motion
+  let edgeGlowSinceMs: number | null = null;
+  let edgeGlowSteady = false;
   const bloomPass = new EffectPass(camera, bloom, ...toneMapAndGrade());
   // Low and Medium have no bloom: the same pass without it. Bloom at intensity 0 left the picture as it was but still
   // ran its luminance pass and mip-chain blur every frame
@@ -736,6 +789,10 @@ export function createPostFx(
     render(dtSeconds: number): void {
       // Off until the atmosphere is ready and on presets without clouds (their composite has no off switch of its own)
       if (cloudsPass && sky) cloudsPass.enabled = sky.cloudsActive;
+      if (edgeGlowSinceMs !== null) {
+        const level = edgeGlowSteady ? 1 : edgeGlowLevel(performance.now() - edgeGlowSinceMs);
+        for (const grade of grades) grade.setEdgeGlow(level);
+      }
       composer.render(dtSeconds);
     },
 
@@ -765,6 +822,19 @@ export function createPostFx(
       cloudsPass.mainCamera = mainCamera;
       cloudsPass.enabled = next.cloudsActive;
       composer.addPass(cloudsPass, 1);
+    },
+
+    setEdgeGlow(color: string | null): void {
+      if (color === null) {
+        if (edgeGlowSinceMs === null) return;
+        edgeGlowSinceMs = null;
+        for (const grade of grades) grade.setEdgeGlow(0);
+        return;
+      }
+      const rgb = hexColor(color);
+      for (const grade of grades) grade.setEdgeGlow(1, rgb ?? undefined);
+      edgeGlowSinceMs = performance.now();
+      edgeGlowSteady = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     },
 
     dispose(): void {
