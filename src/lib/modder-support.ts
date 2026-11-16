@@ -22,6 +22,7 @@ export const MODDER_SUPPORT: Readonly<Record<string, SupportLink>> = {
   Pfalzdriver: { url: "https://streamlabs.com/pfalzdriver", via: "Streamlabs" },
   "Purple Sector": { url: "https://www.patreon.com/cw/PurpleSector", via: "Patreon" },
   Nukedrop: { url: "https://www.patreon.com/cw/nukedrop/", via: "Patreon" },
+  dazzyb2k3: { url: "https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=XT8V5ELVZTGGQ", via: "PayPal" },
 };
 
 /** The support button's words: a donation on PayPal, support on a membership site */
