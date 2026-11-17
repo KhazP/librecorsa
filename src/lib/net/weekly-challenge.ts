@@ -222,7 +222,7 @@ export function fitsChallenge(lap: { trackId: string; vehicle: string; condition
     k.realism === c.realism &&
     k.surface === "dry" &&
     k.compound === challengeCompound(c.vehicle) &&
-    k.physicsVersion === lapPhysicsVersion(c.vehicle)
+    k.physicsVersion === lapPhysicsVersion(c.vehicle, c.trackId)
   );
 }
 

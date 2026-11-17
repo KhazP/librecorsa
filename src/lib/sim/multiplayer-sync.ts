@@ -48,7 +48,7 @@ import {
   type RaceStartInfo,
 } from '@/lib/net/wire';
 import { loadDriverKey } from '@/lib/net/driver-key';
-import { lapPhysicsVersion } from '@/lib/sim/lap-types';
+import { carPhysicsVersion } from '@/lib/sim/lap-types';
 import type { FinishMessage, ResultMessage } from '@/lib/net/official-result';
 
 // What goes over the wire, and the checks on it, live in a module of their own (the race server reads them too)
@@ -1288,7 +1288,7 @@ export class MultiplayerSyncManager {
 
   /** This game's physics revision: players on another one can't race together */
   private simVersion(): number {
-    return lapPhysicsVersion('lc26');
+    return carPhysicsVersion('lc26');
   }
 
   private helloMessage(): ControlMessage {

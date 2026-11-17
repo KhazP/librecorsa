@@ -69,7 +69,7 @@ type Settled = Omit<UsageState, "lineWaterMm"> & { wet: boolean };
 /** True when practice so driven is the weekly challenge (the test its board uses) */
 export function onChallenge(s: Pick<Settled, "trackId" | "vehicle" | "assists" | "realism" | "wet">): boolean {
   // The tyre is taken as the challenge's: the counter asks which mode was driven, not whether a lap would count
-  const conditions = lapConditionsNow({ assists: s.assists, compound: challengeCompound(s.vehicle), lineWaterMm: s.wet ? WET_LAP_WATER_MM : 0, realism: s.realism, vehicle: s.vehicle });
+  const conditions = lapConditionsNow({ assists: s.assists, compound: challengeCompound(s.vehicle), lineWaterMm: s.wet ? WET_LAP_WATER_MM : 0, realism: s.realism, vehicle: s.vehicle, trackId: s.trackId });
   return fitsChallenge({ trackId: s.trackId, vehicle: s.vehicle, conditions }, challengeAt(Date.now()));
 }
 
