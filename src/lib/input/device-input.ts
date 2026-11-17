@@ -4,17 +4,24 @@
  * binding names its device by `Gamepad.id`.
  *
  * Without a wheel calibration the behaviour matches the original input code: a standard-mapping
- * controller sends its stick through the physics' steering assist, any other device steers the rack
- * from axis 0 with buttons 7 / 6 as throttle / brake.
+ * controller sends its stick through the physics' steering assist (each pedal from its own source: a
+ * trigger, or half a stick axis), any other device steers the rack from axis 0 with buttons 7 / 6 as
+ * throttle / brake.
  */
 import {
   DEFAULT_PAD_BUTTONS,
+  DEFAULT_PAD_PEDAL_SOURCES,
   PAD_ACTIONS,
   PAD_BRAKE_BUTTON,
+  PAD_PEDALS,
   PAD_THROTTLE_BUTTON,
   type PadAction,
   type PadButtonBindings,
+  type PadPedal,
+  type PadPedalSource,
+  type PadPedalSources,
 } from "./bindings";
+import { shapeStick } from "./stick-shape";
 import { logitechClassicModel, logitechHidppModel } from "./wheel-support";
 import { isDualSensePadId } from "./dualsense-protocol";
 import { dualSenseHid } from "./webhid-dualsense";
@@ -208,10 +215,22 @@ export const PAD_SENSITIVITY: Record<PadSensitivity, { steeringRate: number; dea
   sharp: { steeringRate: 0.75, deadzone: 0.04, label: "Sharp", detail: "Quick turn-in" },
 };
 
+/** A controller's pedals: each one's source (a trigger, or half a stick axis), and the dead zone of the stick ones */
+export interface PadPedalTuning {
+  pedalSources: PadPedalSources;
+  /** Stick travel ignored around centre for a pedal on a stick axis (0..0.3), so a resting stick is no throttle */
+  stickPedalDeadzone: number;
+}
+
+/** A pedal on a stick: travel past 1 − this reads as a full pedal, so a push a little off straight up still reaches 100 % */
+export const STICK_PEDAL_OUTER = 0.05;
+
 /** What the simulator needs from the device layer */
 export interface DeviceInputSettings {
   wheel: WheelSettings;
   padButtons: PadButtonBindings;
+  /** The controller's pedals; without it the triggers */
+  padTuning?: PadPedalTuning;
 }
 
 /** Minimal Gamepad shape (the real Gamepad satisfies it; tests pass plain objects) */
@@ -358,9 +377,40 @@ export function wheelRimAngleDeg(raw: number, binding: Pick<AxisBinding, "center
   return (clamp((raw - binding.center) * (binding.invert ? -1 : 1), -1, 1) * rotationDeg) / 2;
 }
 
+/** One pedal 0..1 from its source on a standard-mapping controller: a button's travel, or its half of a stick axis */
+export function padPedalValue(pad: Pick<PadLike, "axes" | "buttons">, source: PadPedalSource | null, stickDeadzone: number): number {
+  if (!source) return 0;
+  if (source.kind === "button") return pad.buttons[source.button]?.value ?? 0;
+  return Math.max(0, source.sign * shapeStick(pad.axes[source.axis] ?? 0, stickDeadzone, STICK_PEDAL_OUTER, 1));
+}
+
+/**
+ * A standard-mapping controller's pedals 0..1, before the player's curves, each from its own source (the triggers
+ * without settings). Two pedals on the two halves of one axis are never both pressed. The game, the input check and
+ * the curve preview all read this one.
+ */
+export function padPedals(pad: Pick<PadLike, "axes" | "buttons">, tuning: PadPedalTuning | undefined): Record<PadPedal, number> {
+  const sources = tuning?.pedalSources ?? DEFAULT_PAD_PEDAL_SOURCES;
+  const deadzone = tuning?.stickPedalDeadzone ?? 0;
+  const out = {} as Record<PadPedal, number>;
+  for (const p of PAD_PEDALS) out[p] = padPedalValue(pad, sources[p], deadzone);
+  return out;
+}
+
 const buttonDown = (pad: PadLike | undefined, button: number) => {
   const b = pad?.buttons[button];
   return Boolean(b && (b.pressed || b.value > 0.5));
+};
+
+/**
+ * A standard controller's button as an action. RT / LT (bound with stick pedals) count from half their travel: a
+ * browser, or the DualSense's own trigger bit, calls them pressed at a light touch, under a finger resting there.
+ * A trigger that reports no travel at all (a digital one) counts when pressed.
+ */
+const padButtonDown = (pad: PadLike, button: number) => {
+  if (button !== PAD_THROTTLE_BUTTON && button !== PAD_BRAKE_BUTTON) return buttonDown(pad, button);
+  const b = pad.buttons[button];
+  return Boolean(b && (b.value > 0.5 || (b.pressed && !(b.value > 0))));
 };
 
 /** The devices a wheel binding names (the steering's, then any separate pedals'); null without a steering binding */
@@ -435,8 +485,9 @@ export class DeviceInputReader {
         if (pad.mapping === "standard") {
           frame.source = "controller";
           frame.padSteer = rawStickX;
-          frame.throttle = pad.buttons[PAD_THROTTLE_BUTTON]?.value ?? 0;
-          frame.brake = pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0;
+          const pedals = padPedals(pad, settings.padTuning);
+          frame.throttle = pedals.throttle;
+          frame.brake = pedals.brake;
         } else {
           frame.source = "legacy";
           // 4 % dead zone, then a short ramp that rejoins the raw value at 8 %: the output no longer jumps from 0 to
@@ -457,7 +508,7 @@ export class DeviceInputReader {
         const map = pad.mapping === "standard" ? settings.padButtons : DEFAULT_PAD_BUTTONS;
         for (const { id } of PAD_ACTIONS) {
           const button = map[id];
-          if (button !== null && buttonDown(pad, button)) held.add(id);
+          if (button !== null && (pad.mapping === "standard" ? padButtonDown(pad, button) : buttonDown(pad, button))) held.add(id);
         }
         source = `${frame.source}:${pad.id}`;
       }

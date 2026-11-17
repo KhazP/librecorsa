@@ -8,11 +8,22 @@ import {
   clearKey,
   DEFAULT_KEY_BINDINGS,
   DEFAULT_PAD_BUTTONS,
+  DEFAULT_PAD_PEDAL_SOURCES,
+  freePedalButtons,
   matchPadLayout,
+  matchPedalSet,
   PAD_ACTIONS,
   PAD_LAYOUT_IDS,
   PAD_LAYOUTS,
+  PAD_PEDAL_SETS,
+  PAD_RIGHT_STICK_BUTTON,
+  pedalOnButton,
+  pedalsOnTriggers,
+  pedalStickClicks,
+  pressPedalText,
   rebindKey,
+  withPedalSet,
+  type PadPedalSources,
   rebindPadButton,
 } from '../src/lib/input/bindings';
 import {
@@ -22,6 +33,7 @@ import {
   DEFAULT_WHEEL_SETTINGS,
   DeviceInputReader,
   PAD_SENSITIVITY,
+  padPedals,
   pedalValue,
   snapshotAxes,
   strongestAxisChange,
@@ -140,33 +152,90 @@ check('a pad button moves between actions', () => {
   assert.equal(next.racingLine, 0);
   assert.equal(next.boost, null);
 });
-check('controller layouts: every action set, no shared button, triggers / D-pad / thumb-restart left alone', () => {
+check('controller layouts: every action set, no shared button, pedal buttons / D-pad / thumb-restart left alone', () => {
   assert.equal(PAD_LAYOUTS.default.buttons, DEFAULT_PAD_BUTTONS);
+  assert.equal(PAD_LAYOUTS.default.pedals, 'triggers');
   for (const id of PAD_LAYOUT_IDS) {
-    const b = PAD_LAYOUTS[id].buttons;
+    const { buttons: b, pedals } = PAD_LAYOUTS[id];
+    const sources = withPedalSet(DEFAULT_PAD_PEDAL_SOURCES, pedals);
     const used: number[] = [];
     for (const { id: action } of PAD_ACTIONS) {
       assert.notEqual(b[action], undefined, `${id}.${action} unset`);
       if (b[action] !== null) used.push(b[action] as number);
     }
     assert.equal(new Set(used).size, used.length, `${id}: a button does two things`);
-    for (const button of used) assert.ok(button <= 11 && button !== 6 && button !== 7, `${id}: button ${button} is fixed`);
+    for (const button of used) assert.ok(button <= 11, `${id}: button ${button} is the D-pad or Home`);
+    // Trigger pedals leave RT / LT alone; stick pedals leave R3 alone (the pedal thumb clicks it)
+    if (pedals === 'triggers') for (const button of used) assert.ok(button !== 6 && button !== 7, `${id}: button ${button} is a pedal`);
+    else assert.ok(!used.includes(PAD_RIGHT_STICK_BUTTON), `${id}: R3 under the pedal stick`);
+    assert.equal(freePedalButtons(b, sources), b, `${id}: binds its own pedal buttons`);
     assert.equal(b.pause, 9, `${id}: pause off Menu`);
     assert.equal(b.restart, 8, `${id}: restart off View`);
   }
   // What each layout takes from its game
   assert.deepEqual([PAD_LAYOUTS.gt.buttons.shiftUp, PAD_LAYOUTS.gt.buttons.shiftDown, PAD_LAYOUTS.gt.buttons.boost], [0, 2, 11]);
+  assert.equal(PAD_LAYOUTS.gtClassic.pedals, 'stick');
+  assert.deepEqual([PAD_LAYOUTS.gtClassic.buttons.shiftUp, PAD_LAYOUTS.gtClassic.buttons.shiftDown], [7, 6]);
+  // LB stays free in GT classic (and the left stick's up / down is no button): room for a clutch or a starter
+  assert.ok(!Object.values(PAD_LAYOUTS.gtClassic.buttons).includes(4), 'GT classic leaves LB free');
   assert.deepEqual([PAD_LAYOUTS.f1.buttons.boost, PAD_LAYOUTS.f1.buttons.aero, PAD_LAYOUTS.f1.buttons.camera], [1, 3, 5]);
   assert.deepEqual([PAD_LAYOUTS.forza.buttons.shiftUp, PAD_LAYOUTS.forza.buttons.shiftDown, PAD_LAYOUTS.forza.buttons.camera], [1, 2, 5]);
 });
-check('the picked layout is read back from the bindings, through a save, and lost on a rebind', () => {
+const STICK_SOURCES: PadPedalSources = withPedalSet(DEFAULT_PAD_PEDAL_SOURCES, 'stick');
+check('the picked layout is read back from the bindings and pedal sources, through a save, and lost on a rebind', () => {
   for (const id of PAD_LAYOUT_IDS) {
+    const pedalSources = withPedalSet(DEFAULT_PAD_PEDAL_SOURCES, PAD_LAYOUTS[id].pedals);
     const buttons = { ...PAD_LAYOUTS[id].buttons };
-    assert.equal(matchPadLayout(buttons), id);
-    const saved = parsePlayerSettings(JSON.parse(JSON.stringify({ ...DEFAULT_PLAYER_SETTINGS, padButtons: buttons })));
-    assert.equal(matchPadLayout(saved.padButtons), id, `${id} after a reload`);
-    assert.equal(matchPadLayout(rebindPadButton(buttons, 'racingLine', 4)), null, `${id} rebound`);
+    assert.equal(matchPadLayout(buttons, pedalSources), id);
+    const saved = parsePlayerSettings(
+      JSON.parse(JSON.stringify({ ...DEFAULT_PLAYER_SETTINGS, padButtons: buttons, padTuning: { ...DEFAULT_PAD_TUNING, pedalSources } })),
+    );
+    assert.deepEqual(saved.padTuning.pedalSources, pedalSources, `${id} pedal sources after a reload`);
+    assert.equal(matchPadLayout(saved.padButtons, saved.padTuning.pedalSources), id, `${id} after a reload`);
+    assert.equal(matchPadLayout(rebindPadButton(buttons, 'racingLine', 4), pedalSources), null, `${id} rebound`);
+    const other = withPedalSet(pedalSources, PAD_LAYOUTS[id].pedals === 'stick' ? 'triggers' : 'stick');
+    assert.equal(matchPadLayout(buttons, other), null, `${id} with the other pedals`);
   }
+});
+check('pedal sources: sets, the buttons they take, the stick clicks under them, triggers for trigger feedback', () => {
+  assert.equal(matchPedalSet(DEFAULT_PAD_PEDAL_SOURCES), 'triggers');
+  assert.equal(matchPedalSet(STICK_SOURCES), 'stick');
+  assert.equal(matchPedalSet({ ...STICK_SOURCES, brake: PAD_PEDAL_SETS.triggers.brake }), null, 'a mix is no set');
+  assert.equal(pedalOnButton(DEFAULT_PAD_PEDAL_SOURCES, 7), 'throttle');
+  assert.equal(pedalOnButton(STICK_SOURCES, 7), null);
+  assert.deepEqual(pedalStickClicks(DEFAULT_PAD_PEDAL_SOURCES), []);
+  assert.deepEqual(pedalStickClicks(STICK_SOURCES), [PAD_RIGHT_STICK_BUTTON]);
+  assert.ok(pedalsOnTriggers(DEFAULT_PAD_PEDAL_SOURCES));
+  assert.ok(!pedalsOnTriggers(STICK_SOURCES));
+  assert.ok(!pedalsOnTriggers({ throttle: { kind: 'button', button: 6 }, brake: { kind: 'button', button: 7 } }), 'swapped is not the usual');
+  assert.equal(pressPedalText(DEFAULT_PAD_PEDAL_SOURCES.throttle), 'Hold RT');
+  assert.equal(pressPedalText(STICK_SOURCES.throttle), 'Push the right stick up');
+});
+check('trigger pedals free RT / LT; stick pedals leave the bindings as they are', () => {
+  const classic = PAD_LAYOUTS.gtClassic.buttons;
+  const freed = freePedalButtons(classic, DEFAULT_PAD_PEDAL_SOURCES);
+  assert.equal(freed.shiftUp, null);
+  assert.equal(freed.shiftDown, null);
+  assert.equal(freed.boost, classic.boost);
+  assert.equal(freePedalButtons(DEFAULT_PAD_BUTTONS, DEFAULT_PAD_PEDAL_SOURCES), DEFAULT_PAD_BUTTONS, 'nothing on the triggers: the same object');
+  assert.equal(freePedalButtons(classic, STICK_SOURCES), classic);
+  // A pedal on another button (a clutch on LB, say) frees that button's action too
+  const lbPedal = { ...STICK_SOURCES, brake: { kind: 'button' as const, button: 4 } };
+  assert.equal(freePedalButtons(PAD_LAYOUTS.gt.buttons, lbPedal).hud, null);
+});
+check('pedal settings: old saves keep the triggers, bad sources fall back, the dead zone is clamped', () => {
+  const old = parsePlayerSettings({ padTuning: { throttleGamma: 1.5 } });
+  assert.deepEqual(old.padTuning.pedalSources, DEFAULT_PAD_PEDAL_SOURCES);
+  assert.equal(old.padTuning.stickPedalDeadzone, DEFAULT_PAD_TUNING.stickPedalDeadzone);
+  assert.equal(old.padTuning.throttleGamma, 1.5);
+  assert.deepEqual(parsePlayerSettings({ padSensitivity: 'sharp' }).padTuning.pedalSources, DEFAULT_PAD_PEDAL_SOURCES, 'a save from before padTuning');
+  const broken = parsePlayerSettings({
+    padTuning: { pedalSources: { throttle: { kind: 'axis', axis: 3, sign: 2 }, brake: null }, stickPedalDeadzone: 5 },
+  }).padTuning;
+  assert.deepEqual(broken.pedalSources, DEFAULT_PAD_PEDAL_SOURCES, 'a bad sign, and a throttle / brake saved off the pad');
+  assert.equal(broken.stickPedalDeadzone, 0.3);
+  const mixed = parsePlayerSettings({ padTuning: { pedalSources: { throttle: STICK_SOURCES.throttle } } }).padTuning.pedalSources;
+  assert.deepEqual(mixed, { throttle: STICK_SOURCES.throttle, brake: DEFAULT_PAD_PEDAL_SOURCES.brake }, 'each pedal on its own');
 });
 
 console.log('Wheel and pedals');
@@ -205,6 +274,61 @@ check('standard controller: stick to the assist, triggers, A boost, edges', () =
   assert.ok(f1.pressed.has('shiftUp'));
   const f2 = reader.read([pad('Xbox', 'standard', [0, 0], [0, 5])], settings, 1 / 60);
   assert.ok(!f2.pressed.has('shiftUp'), 'a held button fires once');
+});
+check('stick pedals: right stick up throttle, down brake, dead zone at rest, full a little before the stop', () => {
+  const stick = { pedalSources: STICK_SOURCES, stickPedalDeadzone: 0.1 };
+  const at = (y: number) => padPedals(pad('Xbox', 'standard', [0, 0, 0, y], [], { 7: 0.9, 6: 0.9 }), stick);
+  assert.deepEqual(at(0.08), { throttle: 0, brake: 0 }, 'resting drift');
+  assert.deepEqual(at(-0.08), { throttle: 0, brake: 0 });
+  near(at(-1).throttle, 1);
+  near(at(-0.96).throttle, 1, 1e-9);
+  near(at(-0.525).throttle, 0.5);
+  assert.equal(at(-0.6).brake, 0, 'never both');
+  near(at(1).brake, 1);
+  assert.equal(at(1).throttle, 0);
+  assert.equal(padPedals(pad('Xbox', 'standard', [0, 0], [], { 7: 0.9 }), stick).throttle, 0, 'a pad without axis 3');
+  // Without stick pedals the triggers, whatever the stick does
+  const triggers = padPedals(pad('Xbox', 'standard', [0, 0, 0, -1], [], { 7: 0.4, 6: 0.2 }), undefined);
+  near(triggers.throttle, 0.4);
+  near(triggers.brake, 0.2);
+  // Each pedal reads its own source: the brake on the left stick's down half, the throttle still on RT
+  const mixed = { pedalSources: { ...DEFAULT_PAD_PEDAL_SOURCES, brake: { kind: 'axis' as const, axis: 1, sign: 1 as const } }, stickPedalDeadzone: 0.1 };
+  const m = padPedals(pad('Xbox', 'standard', [0, 1, 0, 0], [], { 7: 0.4, 6: 0.9 }), mixed);
+  near(m.throttle, 0.4);
+  near(m.brake, 1);
+});
+check('GT classic: right stick drives, RT / LT shift, R3 does nothing', () => {
+  const reader = new DeviceInputReader();
+  const settings = {
+    wheel: DEFAULT_WHEEL_SETTINGS,
+    padButtons: PAD_LAYOUTS.gtClassic.buttons,
+    padTuning: { pedalSources: STICK_SOURCES, stickPedalDeadzone: 0.1 },
+  };
+  const f1 = reader.read([pad('Xbox', 'standard', [0.2, 0, 0, -1], [7], { 7: 1 })], settings, 1 / 60);
+  assert.equal(f1.source, 'controller');
+  near(f1.throttle, 1);
+  assert.equal(f1.brake, 0);
+  assert.ok(f1.pressed.has('shiftUp'));
+  const f2 = reader.read([pad('Xbox', 'standard', [0, 0, 0, 0.5], [6, 11], { 6: 0.7 })], settings, 1 / 60);
+  assert.equal(f2.throttle, 0);
+  near(f2.brake, 0.4 / 0.85);
+  assert.ok(f2.pressed.has('shiftDown'));
+  assert.deepEqual([...f2.pressed], ['shiftDown'], 'R3 is unbound');
+  // A light touch on a shift trigger (a browser already calls it pressed) shifts nothing; half its travel does
+  const r = new DeviceInputReader();
+  const touch = (v: number, pressed: boolean) => r.read([pad('Xbox', 'standard', [0, 0, 0, 0], pressed ? [7] : [], { 7: v })], settings, 1 / 60);
+  assert.equal(touch(0.2, true).pressed.size, 0, 'resting finger');
+  assert.ok(touch(0.6, true).pressed.has('shiftUp'), 'past half');
+  touch(0, false);
+  assert.ok(touch(0, true).pressed.has('shiftUp'), 'a digital trigger, pressed with no travel');
+  // The same pad on trigger pedals and the default buttons: RT is the throttle and shifts nothing
+  const f3 = new DeviceInputReader().read(
+    [pad('Xbox', 'standard', [0, 0, 0, -1], [7], { 7: 1 })],
+    { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS, padTuning: { pedalSources: DEFAULT_PAD_PEDAL_SOURCES, stickPedalDeadzone: 0.1 } },
+    1 / 60,
+  );
+  near(f3.throttle, 1);
+  assert.equal(f3.pressed.size, 0);
 });
 check('uncalibrated non-standard device keeps the original raw path', () => {
   const reader = new DeviceInputReader();

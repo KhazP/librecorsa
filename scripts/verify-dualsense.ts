@@ -177,6 +177,10 @@ check('USB 0x01: sticks, triggers, buttons in standard order, battery', () => {
   const p = parseInputReport(0x01, usbReport());
   assert.ok(p);
   assert.ok(Math.abs(p.axes[0]) < 0.01 && p.axes[1] === -1 && p.axes[2] === 1);
+  // Right stick up reads negative, as the Gamepad API's: the stick pedals' throttle
+  const up = new Uint8Array(usbReport().buffer);
+  up[3] = 0;
+  assert.equal(parseInputReport(0x01, new DataView(up.buffer))?.axes[3], -1);
   assert.equal(p.l2, 0);
   assert.equal(p.r2, 1);
   assert.equal(p.buttons[0], true, 'Cross');
