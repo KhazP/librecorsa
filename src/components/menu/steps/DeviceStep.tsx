@@ -107,7 +107,7 @@ export function ConnectedDevicesCard() {
                     <Badge tone="good" dot size="sm">
                       {isLikelyWheel(p) ? "Wheel" : "Controller"}
                     </Badge>
-                    <span className="lc-row-label truncate">{padDisplayName(p.id)}</span>
+                    <span className="lc-row-label truncate" title={padDisplayName(p.id)}>{padDisplayName(p.id)}</span>
                   </span>
                   <span className="flex shrink-0 items-center gap-3">
                     <span className="lc-mono text-[12px] text-lc-slate">

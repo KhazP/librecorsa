@@ -214,7 +214,6 @@ const STEER_LOCK_CLASSES = [
   { label: "VW Scirocco", models: ["vw-scirocco-gtx"] },
 ] as const;
 
-const shortPad = (padId: string) => padDisplayName(padId).slice(0, 24);
 
 function liveSteer(pads: PadState[], w: WheelSettings) {
   if (!w.steer) return null;
@@ -558,7 +557,7 @@ export function WheelSetup({ first }: { first?: boolean }) {
     <div className="flex flex-col gap-2">
       <SettingRow
         label={label}
-        hint={bound ? `${shortPad(bound.padId)}, axis ${bound.axis}` : "Not calibrated yet"}
+        hint={bound ? `${padDisplayName(bound.padId)}, axis ${bound.axis}` : "Not calibrated yet"}
         disabled={noWheel !== null}
         disabledReason={noWheel ?? undefined}
       >

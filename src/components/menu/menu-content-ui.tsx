@@ -115,7 +115,7 @@ export const LiveryPicker: React.FC<{
           );
         })}
       </div>
-      <span className="min-w-0 truncate text-[13px] font-semibold text-lc-fog">{shown.name}</span>
+      <span className="min-w-0 truncate text-[13px] font-semibold text-lc-fog" title={shown.name}>{shown.name}</span>
     </div>
   );
 };
@@ -156,7 +156,7 @@ export const CarSkinPicker: React.FC<{ carId: CarId; surface?: string }> = ({ ca
           );
         })}
       </div>
-      <span className="min-w-0 truncate text-[13px] font-semibold text-lc-fog">{shown?.name}</span>
+      <span className="min-w-0 truncate text-[13px] font-semibold text-lc-fog" title={shown?.name}>{shown?.name}</span>
     </div>
   );
 };

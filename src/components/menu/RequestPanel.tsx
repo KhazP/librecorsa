@@ -707,7 +707,7 @@ export const RequestPanel: React.FC<{
               multiline
               rows={3}
               maxLength={1500}
-              hint="And what you expected instead."
+              hint={main.length > 1200 ? `${main.length.toLocaleString("en-US")} of 1,500 characters` : "And what you expected instead."}
               placeholder="The car's wheels sink into the road in the last corner…"
               value={main}
               onChange={setMain}

@@ -7,6 +7,7 @@ import { BoardError, BoardSkeleton, BoardTable, MyPlace } from "@/components/hud
 import { Button, Card, EmptyState } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons";
+import { formatCount } from "@/lib/net/board-client";
 
 export interface ChallengePanelProps {
   challenge: WeeklyChallenge;
@@ -106,7 +107,7 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
 
       <Card
         title="This week's times"
-        action={board ? <Badge variant="outline">{board.total === 1 ? "1 driver" : `${board.total} drivers`}</Badge> : null}
+        action={board ? <Badge variant="outline">{board.total === 1 ? "1 driver" : `${formatCount(board.total)} drivers`}</Badge> : null}
         bodyClassName="gap-3"
       >
         {me ? (

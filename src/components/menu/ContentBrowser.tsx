@@ -95,9 +95,12 @@ export interface ContentBrowserProps<T> {
 const ALL = "all";
 const ANY = "any";
 
+/** Lower case without accents, so "osnabruck" finds "Osnabrück" */
+const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
 /** Every word of the query appears in the item's text */
 const matches = (text: string, words: string[]) => {
-  const hay = text.toLowerCase();
+  const hay = fold(text);
   return words.every((w) => hay.includes(w));
 };
 
@@ -147,7 +150,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
   const gridRef = useRef<HTMLDivElement | null>(null);
   const detailRef = useRef<HTMLElement | null>(null);
 
-  const words = useMemo(() => query.trim().toLowerCase().split(/\s+/).filter(Boolean), [query]);
+  const words = useMemo(() => fold(query.trim()).split(/\s+/).filter(Boolean), [query]);
   const searched = useMemo(() => (words.length ? items.filter((i) => matches(searchText(i), words)) : items), [items, words, searchText]);
   /**
    * Each group's picked category: a pick whose category is gone (they come from the data) counts as none, and the
@@ -460,7 +463,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
                   ...(hasAll ? [] : [{ id: ANY, label: `Any ${g.label.toLowerCase()}` }]),
                   ...g.filters.map((f) => {
                     const n = countOf(g, f);
-                    return { id: f.id, label: f.label, detail: `${n} ${props.noun}` };
+                    return { id: f.id, label: f.label, detail: `${n} ${n === 1 ? props.noun.replace(/s$/, "") : props.noun}` };
                   }),
                 ]}
               />
@@ -619,7 +622,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
               </div>
             </>
           ) : (
-            <p className="lc-body m-0 p-4.5">Pick a card to see it here.</p>
+            <p className="lc-body m-0 p-4.5">{visible.length ? "Pick a card to see it here." : "No card to show. Clear the search or filters."}</p>
           )}
         </aside>
       </div>

@@ -158,7 +158,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
 
         {readout ? (
           <Card title="On track now">
-            <dl className="m-0 grid grid-cols-4 gap-x-4 py-1">
+            <dl className="m-0 grid grid-cols-[repeat(3,4rem)_minmax(0,1fr)] gap-x-4 py-1">
               {[
                 ["Clock", clock(readout.clockH)],
                 ["Air", temp(readout.airC)],
@@ -167,7 +167,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
               ].map(([k, v]) => (
                 <div key={k} className="flex min-w-0 flex-col gap-0.5">
                   <dt className="lc-hint">{k}</dt>
-                  <dd className="lc-data m-0 truncate text-[15px] text-lc-chalk">{v}</dd>
+                  <dd title={v} className="lc-data m-0 truncate text-[15px] text-lc-chalk">{v}</dd>
                 </div>
               ))}
             </dl>
