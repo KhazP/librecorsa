@@ -407,7 +407,7 @@ console.log('\n== Zone corrections (drs-zone-fixes.ts)');
 {
   const zones = [{ id: 'ZONE_2', detection: 0.0708, start: 0.1079, end: 0.1996 }];
   const fixed = correctedDrsZones('spielberg', DRS_ZONE_FIXES.spielberg.lengthM, zones);
-  check('A correction moves only its edge, the id and detection point kept', fixed[0].start === 0.1079 && fixed[0].detection === 0.0708 && fixed[0].end > 0.25 && zones[0].end === 0.1996);
+  check('A correction moves only its edges, the id and detection point kept', Math.abs(fixed[0].start - 410 / DRS_ZONE_FIXES.spielberg.lengthM) < 1e-4 && fixed[0].detection === 0.0708 && fixed[0].end > 0.25 && zones[0].start === 0.1079 && zones[0].end === 0.1996);
   const warn = console.warn;
   console.warn = () => {};
   const other = correctedDrsZones('spielberg', 4400, zones);

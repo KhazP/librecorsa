@@ -29,7 +29,9 @@ export const DRS_ZONE_FIXES: Readonly<Record<string, DrsZoneFix>> = {
     zones: {
       // Ended at 861 m, ahead of the Turn 2 kink, 230 m short of the braking point for Remus (Turn 3, 1095 m on an
       // autopilot lap). The 2026 FIA zone runs from Turn 1 to Turn 3, the kink included
-      ZONE_2: { endM: 1120, why: "Turn 1 to Turn 3 runs through the Turn 2 kink to the braking point for Remus" },
+      // Started at 466 m. A racing line straight enough out of Turn 1 opened the flaps from 410 m anyway; the line kept
+      // off the modelled kerbs bends a little longer, so the start is set here, not left to the line
+      ZONE_2: { startM: 410, endM: 1120, why: "Turn 1 to Turn 3 runs from Turn 1's exit through the Turn 2 kink to the braking point for Remus" },
     },
   },
   norisring: {
