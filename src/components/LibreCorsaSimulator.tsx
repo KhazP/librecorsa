@@ -21,7 +21,7 @@ import { boardStateOf, watchOnlineConfig, type BoardState } from "@/lib/net/onli
 import { DEFAULT_RACE_SLOT_S } from "@/lib/net/race-schedule";
 import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer } from "@/lib/sim/lap-recorder";
-import { lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { currentBoardBase, lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, listBestLaps, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
 import {
   boardKeyOf,
@@ -725,8 +725,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         lineWaterMm: getTrackEnv().weather.lineWaterMm,
         realism: settingsRef.current.realism,
         vehicle: vehicleModelRef.current,
+        trackId,
       }),
-    [session, getTrackEnv]
+    [session, getTrackEnv, trackId]
   );
   const refreshLeaderboard = useCallback(async () => {
     // Several refreshes can overlap (car change, a saved lap): only the latest may land
@@ -1307,8 +1308,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const challengeAvailable = TRACKS.some((t) => t.id === challenge.trackId) && CARS.some((c) => c.physics === challenge.vehicle);
   // The week's races can be on another circuit and car than its time trial
   const racesAvailable = TRACKS.some((t) => t.id === challenge.race.trackId) && CARS.some((c) => c.physics === challenge.race.vehicle);
+  /**
+   * The week's board: the one laps go on now (the time trial's target), or an older one the panel picked, by its base
+   * revision
+   */
   const loadChallengeBoard = useCallback(
-    () => fetchRemoteBoard(challenge.trackId, challenge.vehicle, { event: challenge.id, name: settingsRef.current.profile.name, limit: 20 }).catch(() => null),
+    (version: number = currentBoardBase(challenge.trackId)) =>
+      fetchRemoteBoard(challenge.trackId, challenge.vehicle, { event: challenge.id, name: settingsRef.current.profile.name, limit: 20, version }).catch(() => null),
     [challenge]
   );
   // polish:A — the time trial's target on the HUD: the week's board, read again after each upload. Not without a board

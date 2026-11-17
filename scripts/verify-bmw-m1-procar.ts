@@ -19,6 +19,7 @@ import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { buildDoubleWishboneHardpoints, solveCornerKinematics3D } from '../src/lib/sim/suspension-kinematics';
 import { wetnessFromWater } from '../src/lib/sim/wet-tyres';
+import { SIM_REALISM_FLAGS } from '../src/lib/sim/sim-realism';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
 import { measureDownshift, measureUpshift } from './lib/upshift-test';
@@ -329,7 +330,9 @@ console.log("\n== Brakes, fuel and steering from the car's data");
   check('Pad friction 0.85 / 1.00 / 1.00 / 0.90 at 0 / 300 / 600 / 900 °C', [0.85, 1, 1, 0.9].every((v, i) => Math.abs(pads[i] - v) < 1e-9), pads.map((v) => fmt(v)).join(' / '));
 
   // Fuel flow follows the engine's speed: 0.005 l/s per 1000 rpm at full throttle, 0.74 kg/l
+  // The fuel-flow model, burning (the game's sprints run on a fixed load, `SimRealismFlags.fuelUse`)
   const sim = createBmwM1ProcarSim(pad);
+  sim.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
   sim.assistPreset = 'semi_pro';
   sim.teleportToDistance(1000, 0);
   const f0 = sim.telemetry.fuelKg;
@@ -355,8 +358,9 @@ console.log("\n== Brakes, fuel and steering from the car's data");
 console.log('\n== Up-shift');
 {
   // 260 ms between gears with the pedal up as long
-  const u = measureUpshift((t) => createBmwM1ProcarSim(t), 90);
-  check("An up-shift on a light pedal: the drive goes, then the driven wheels take the engine's excess, under 15 % of slip", u.to === u.from + 1 && u.gMin < u.gBefore - 0.05 && u.slipPeak < 0.15,
+  // At 70 km/h, under the limiter: in first at 90 km/h the engine sits on it, with no drive to lose in the shift
+  const u = measureUpshift((t) => createBmwM1ProcarSim(t), 70);
+  check("An up-shift on a light pedal: the drive goes, then the driven wheels take the engine's excess, under 16 % of slip", u.to === u.from + 1 && u.gMin < u.gBefore - 0.05 && u.slipPeak < 0.16,
     `gear ${u.from} → ${u.to}, slip ${(u.slipBefore * 100).toFixed(1)} % → ${(u.slipPeak * 100).toFixed(1)} %, ${u.gBefore.toFixed(2)} g → ${u.gMin.toFixed(2)} … ${u.gPeak.toFixed(2)} g`);
 }
 

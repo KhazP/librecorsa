@@ -22,20 +22,20 @@ export interface Ktx2Model {
 }
 
 export const KTX2_MODELS: readonly Ktx2Model[] = [
-  { model: "/tracks/barbagallo/barbagallo.glb", build: "c5604d45" },
-  { model: "/tracks/borgloh/borgloh.glb", build: "a259d6b5" },
-  { model: "/tracks/bridgehampton/bridgehampton.glb", build: "84b74b84" },
+  { model: "/tracks/barbagallo/barbagallo.glb", build: "44de8787" },
+  { model: "/tracks/borgloh/borgloh.glb", build: "7f4a63bd" },
+  { model: "/tracks/bridgehampton/bridgehampton.glb", build: "d8cfe1d0" },
   { model: "/tracks/chang/chang.glb", build: "450cab73" },
-  { model: "/tracks/dunsfold/dunsfold.glb", build: "4fa2d903" },
-  { model: "/tracks/goodwood/goodwood.glb", build: "cdcb728e" },
+  { model: "/tracks/dunsfold/dunsfold.glb", build: "801d33ca" },
+  { model: "/tracks/goodwood/goodwood.glb", build: "11024313" },
   { model: "/tracks/grobnik/grobnik.glb", build: "86923d13" },
-  { model: "/tracks/istanbul_park/istanbul_park.glb", build: "cc85f5be" },
-  { model: "/tracks/le_mans_82/le_mans_82.glb", build: "3df8abe9" },
-  { model: "/tracks/monaco/monaco.glb", build: "bf3d1c5a" },
-  { model: "/tracks/norisring/norisring.glb", build: "d7346dff" },
-  { model: "/tracks/oschersleben/oschersleben.glb", build: "ee6edaf8" },
+  { model: "/tracks/istanbul_park/istanbul_park.glb", build: "dcbe1f52" },
+  { model: "/tracks/le_mans_82/le_mans_82.glb", build: "6b85979b" },
+  { model: "/tracks/monaco/monaco.glb", build: "60cb8a7b" },
+  { model: "/tracks/norisring/norisring.glb", build: "243ef1c7" },
+  { model: "/tracks/oschersleben/oschersleben.glb", build: "eadf95c6" },
   { model: "/tracks/rwanda_official/rwanda_official.glb", build: "2e64c928" },
-  { model: "/tracks/speedvegas/speedvegas.glb", build: "a053b15e" },
+  { model: "/tracks/speedvegas/speedvegas.glb", build: "8c9ab5b8" },
   { model: "/tracks/willow_springs/willow_springs.glb", build: "6416e695" },
 ];
 

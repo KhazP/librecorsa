@@ -2,10 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { boardLabel, driverNameKey, type RemoteBoard } from "@/lib/net/leaderboard";
+import { boardChoiceOf, boardChoices, PHYSICS_VERSION } from "@/lib/sim/lap-types";
 import { challengeConditionsLabel, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
 import { BoardError, BoardSkeleton, BoardTable, MyPlace } from "@/components/hud/LeaderboardPanel";
-import { Button, Card, EmptyState } from "@/components/ui";
+import { Button, Card, EmptyState, Select } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
+import { Segmented } from "@/components/ui/Segmented";
 import { Icon } from "@/components/ui/icons";
 import { formatCount } from "@/lib/net/board-client";
 
@@ -15,8 +17,11 @@ export interface ChallengePanelProps {
   carTitle: string;
   /** This copy of the game has the week's circuit and car */
   available: boolean;
-  /** Reads the week's board with the player's place on it; null when it can't be read */
-  loadBoard: () => Promise<RemoteBoard | null>;
+  /**
+   * Reads the week's board of base revision `version` (lap-types.ts `BoardChoice`) with the player's place on it; null
+   * when it can't be read
+   */
+  loadBoard: (version: number) => Promise<RemoteBoard | null>;
   /** Changes when the board may have changed (a lap went up) */
   boardVersion: number;
   driverName: string;
@@ -26,7 +31,10 @@ export interface ChallengePanelProps {
   hasRaces?: boolean;
 }
 
-/** This week's challenge: its circuit, car and rules, the button that sets them up, and its board */
+/**
+ * This week's challenge: its circuit, car and rules, the button that sets them up, and its board, under the physics
+ * driven now or an older version's laps kept as they were
+ */
 export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   challenge,
   trackName,
@@ -45,19 +53,28 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   }, []);
 
   const [reload, setReload] = useState(0);
-  const [state, setState] = useState<{ board: RemoteBoard | null; loading: boolean; error: boolean }>({ board: null, loading: true, error: false });
+  // The board picked (lap-types.ts `BoardChoice`): the one laps go on now, or one kept from before an update
+  const choices = boardChoices(challenge.trackId);
+  const [boardPick, setBoardPick] = useState<string | null>(null);
+  const choice = boardChoiceOf(challenge.trackId, boardPick);
+  const older = !choice.current;
+  const version = choice.base;
+  const versionName = choice.label;
+  // The board read, and under which physics version: another version's is never shown under this one's picker
+  const [state, setState] = useState<{ of: number; board: RemoteBoard | null; loading: boolean; error: boolean }>({ of: version, board: null, loading: true, error: false });
   useEffect(() => {
     let live = true;
     setState((s) => ({ ...s, loading: true }));
-    void loadBoard().then((board) => {
-      if (live) setState((s) => ({ board: board ?? s.board, loading: false, error: board === null }));
+    void loadBoard(version).then((board) => {
+      if (live) setState((s) => ({ of: version, board: board ?? (s.of === version ? s.board : null), loading: false, error: board === null }));
     });
     return () => {
       live = false;
     };
-  }, [loadBoard, boardVersion, challenge.id, reload]);
+  }, [loadBoard, boardVersion, challenge.id, reload, version]);
 
-  const { board } = state;
+  const board = state.of === version ? state.board : null;
+  const loading = state.loading || state.of !== version;
   const myKey = driverNameKey(driverName);
   const me = board?.me ?? null;
   const ahead = me && me.rank >= 2 ? (board?.entries[me.rank - 2] ?? null) : null;
@@ -110,6 +127,16 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
         action={board ? <Badge variant="outline">{board.total === 1 ? "1 driver" : `${formatCount(board.total)} drivers`}</Badge> : null}
         bodyClassName="gap-3"
       >
+        {choices.length <= 2 ? (
+          <Segmented aria-label="Physics version" size="sm" value={choice.id} onChange={setBoardPick} options={choices} className="self-start" />
+        ) : (
+          <Select aria-label="Physics version" className="w-64 max-w-full self-start" value={choice.id} onChange={setBoardPick} options={choices} />
+        )}
+        {older ? (
+          <p className="lc-hint m-0">
+            {choice.physics !== PHYSICS_VERSION ? "I kept these laps from before the physics update." : "I kept these laps from before I changed this circuit."}
+          </p>
+        ) : null}
         {me ? (
           <MyPlace
             rank={me.rank}
@@ -124,15 +151,17 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
             }
           />
         ) : null}
-        {state.loading && !board ? (
+        {loading && !board ? (
           <BoardSkeleton label="Loading this week's times" />
         ) : state.error && !board ? (
           <BoardError onRetry={() => setReload((n) => n + 1)}>Couldn&apos;t load this week&apos;s times. Check your connection.</BoardError>
         ) : !board || board.entries.length === 0 ? (
-          <EmptyState icon={<Icon name="challenge" />}>No times yet this week. Drive the challenge and yours can be the first.</EmptyState>
+          <EmptyState icon={<Icon name="challenge" />}>
+            {older ? `No times this week on ${versionName}.` : "No times yet this week. Drive the challenge and yours can be the first."}
+          </EmptyState>
         ) : (
           <BoardTable
-            label="This week's times"
+            label={older ? `This week's times, ${versionName}` : "This week's times"}
             rows={board.entries.map((e, i) => ({
               key: e.id ?? `${e.code}-${i}`,
               rank: i + 1,

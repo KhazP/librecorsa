@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as THREE from 'three';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson, type BuiltTrackData } from '../src/lib/track-data';
-import { TrackWallQuery, type WallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { TrackWallQuery, createGroundHit, type GroundHit, type WallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import type { VehiclePhysics } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
@@ -221,6 +221,29 @@ const endFrame = (log: PushLog) => {
 
 const wallOf = (car: F12026CarSim) => (car.vehicle as unknown as { walls?: WallQuery }).walls;
 
+const crosses = (a: Pt, b: Pt, c: Pt, d: Pt): boolean => {
+  const o = (p: Pt, q: Pt, r: Pt) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
+};
+const wallIds = new Int32Array(1024);
+const groundHit = createGroundHit();
+/** A barrier segment runs through the car's outline as it stands */
+function placedInBarrier(car: F12026CarSim): boolean {
+  const walls = wallOf(car);
+  if (!walls) return false;
+  const v = car.vehicle;
+  const h = outlineWorld(v);
+  const k = walls.near(v.position.x, v.position.z, 6, wallIds);
+  for (let i = 0; i < k; i++) {
+    const o = wallIds[i] * 6;
+    const a: Pt = [walls.segments[o], walls.segments[o + 1]];
+    const b: Pt = [walls.segments[o + 2], walls.segments[o + 3]];
+    if (depthIn(a, h) > 0 || depthIn(b, h) > 0) return true;
+    for (let e = 0; e < h.length; e++) if (crosses(a, b, h[e], h[(e + 1) % h.length])) return true;
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Scenarios
 // ---------------------------------------------------------------------------------------------------------------
@@ -228,6 +251,10 @@ const wallOf = (car: F12026CarSim) => (car.vehicle as unknown as { walls?: WallQ
 interface HeadOnResult {
   runs: number;
   through: number;
+  /** Runs the car left the scene in: a non-finite position, or 2 m higher or lower over the ground than where it was placed */
+  lost: number;
+  /** Starts left out: a barrier through the car where it was placed (a prop set just behind one), not a head-on run */
+  skipped: number;
   bySpeed: Map<number, number>;
   /** Deepest the post's footprint got inside the car's outline (m), over the runs that did not go through */
   deepest: number;
@@ -250,7 +277,7 @@ function headOnGrid(
   const v = car.vehicle;
   const lat: Pt = [-t[1], t[0]];
   const yaw = Math.atan2(t[0], t[1]);
-  const res: HeadOnResult = { runs: 0, through: 0, bySpeed: new Map(), deepest: -Infinity, detail: [] };
+  const res: HeadOnResult = { runs: 0, through: 0, lost: 0, skipped: 0, bySpeed: new Map(), deepest: -Infinity, detail: [] };
   for (const d of [0, 0.25, 0.5, 0.68, 0.8, 0.9, 0.95, 1.0]) {
     for (const speed of [15, 42, 60]) {
       for (const ph of [0, 0.25, 0.5, 0.75]) {
@@ -258,19 +285,40 @@ function headOnGrid(
         const x0 = centre[0] + lat[0] * side * d - t[0] * back;
         const z0 = centre[1] + lat[1] * side * d - t[1] * back;
         car.restorePose({ x: x0, z: z0, yawRad: yaw, speedMs: speed, s: sOf(x0, z0) });
+        if (placedInBarrier(car)) {
+          res.skipped++;
+          continue;
+        }
+        // Height over the ground under the car (a hill climb's grade moves it metres up or down on a run)
+        const ground = (v as unknown as { ground: { query(x: number, z: number, y: number, out: GroundHit): boolean } }).ground;
+        const overGround = (): number =>
+          ground.query(v.position.x, v.position.z, v.position.y + 50, groundHit) ? v.position.y - groundHit.height : Number.NaN;
+        const placedOver = overGround();
+        let lost = !Number.isFinite(v.position.x + v.position.y + v.position.z);
         let deepest = -Infinity;
         let touched = false;
         for (let k = 0; k < 240; k++) {
           const sp = v.speedMs;
           const tel = car.step(DT, { throttle: !touched && sp < speed ? 1 : 0, brake: 0, analogSteer: 0 }) as unknown as { f12026?: { wallContact?: boolean } };
           if (tel.f12026?.wallContact) touched = true;
+          // Blown up, or launched: 2 m higher or lower over the ground than where it was placed (no ground under the car,
+          // past the edge of the circuit's model, is neither)
+          const over = overGround();
+          if (!Number.isFinite(v.position.x + v.position.y + v.position.z) || (Number.isFinite(over) && Math.abs(over - placedOver) > 2)) {
+            lost = true;
+            break;
+          }
           const h = outlineWorld(v);
           for (const q of foot) deepest = Math.max(deepest, depthIn(q, h));
           const along = (v.position.x - centre[0]) * t[0] + (v.position.z - centre[1]) * t[1];
           if (along > 6 || (k > 30 && v.speedMs < 0.3)) break;
         }
         res.runs++;
-        if (deepest > 0.2) {
+        if (lost) {
+          // Flown off or blown up: neither a pass nor a hit, a fault of its own
+          res.lost++;
+          res.detail.push(`d ${d} ${speed} m/s ph ${ph}: lost`);
+        } else if (deepest > 0.2) {
           res.through++;
           res.bySpeed.set(speed, (res.bySpeed.get(speed) ?? 0) + 1);
           res.detail.push(`d ${d} ${speed} m/s ph ${ph}: ${deepest.toFixed(2)} m in`);
@@ -421,19 +469,21 @@ for (const kind of CARS) {
       [centre[0] - size / 2, centre[1] + size / 2],
     ];
     let through = 0;
+    let lost = 0;
     let runs = 0;
     let deepest = -Infinity;
     const bySpeed = new Map<number, number>();
     for (const side of [1, -1]) {
       const r = headOnGrid(car, centre, foot, [0, 1], side, flatS);
       through += r.through;
+      lost += r.lost;
       runs += r.runs;
       deepest = Math.max(deepest, r.deepest);
       for (const [s, n] of r.bySpeed) bySpeed.set(s, (bySpeed.get(s) ?? 0) + n);
       if (!STRICT) for (const l of r.detail.slice(0, 6)) console.log(`      ${l}`);
     }
     const sp = [15, 42, 60].map((s) => `${s} m/s ${bySpeed.get(s) ?? 0}`).join(', ');
-    check(`${kind}: ${size * 100} cm post head-on, none through`, through === 0, `${through}/${runs} through [${sp}], deepest of the rest ${deepest.toFixed(3)} m in`);
+    check(`${kind}: ${size * 100} cm post head-on, none through`, through === 0 && lost === 0, `${through}/${runs} through [${sp}], ${lost} lost, deepest of the rest ${deepest.toFixed(3)} m in`);
   }
 }
 
@@ -604,6 +654,8 @@ console.log('\n== Borgloh: thin props head-on');
     for (const kind of CARS) {
       const car = makeCar(kind, c.track, c.root);
       let through = 0;
+      let lost = 0;
+      let skipped = 0;
       let runs = 0;
       const per: string[] = [];
       for (const p of PROPS) {
@@ -618,11 +670,16 @@ console.log('\n== Borgloh: thin props head-on');
         const f = roadFrame(c.track, centre[0], centre[1], () => true);
         const r = headOnGrid(car, centre, foot, f.t, f.roadSide, sOf);
         through += r.through;
+        lost += r.lost;
+        skipped += r.skipped;
         runs += r.runs;
-        per.push(`${p.name} ${r.through}`);
+        per.push(`${p.name} ${r.through}${r.lost ? ` (${r.lost} lost)` : ''}${r.skipped ? ` (${r.skipped} starts in a barrier left out)` : ''}`);
         if (!STRICT) for (const l of r.detail.slice(0, 4)) console.log(`      ${kind} ${p.name} ${l}`);
       }
       check(`${kind}: Borgloh thin props head-on, none through`, through === 0, `${through}/${runs} through (${per.join(', ')})`);
+      check(`${kind}: …and the car stays in the scene on every run`, lost === 0, `${lost}/${runs} flown off or non-finite`);
+      // A prop that stands behind a barrier leaves some starts out; the rest of its starts must still be run
+      check(`${kind}: …with most starts run`, runs >= 0.6 * (runs + skipped), `${runs} run, ${skipped} placed in a barrier left out`);
       // Yawed 10° toward each prop from the road, nose first: the first contact at a face, not in the air
       const walls = wallOf(car);
       if (walls) {

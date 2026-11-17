@@ -271,7 +271,7 @@ async function main(): Promise<void> {
       telemetry: t,
       position: car.worldPosition,
       quaternion: car.worldQuaternion,
-      conditions: { assists: 'pro', compound: 'medium', surface: 'dry', realism: 'full', physicsVersion: lapPhysicsVersion('lc26'), autopilot: false },
+      conditions: { assists: 'pro', compound: 'medium', surface: 'dry', realism: 'full', physicsVersion: lapPhysicsVersion('lc26', 'rwanda_official_short'), autopilot: false },
     });
     if (done && ++laps === 2) lap = done.recording;
   }
@@ -380,6 +380,44 @@ async function main(): Promise<void> {
     check(`a lap that never gets through: sent ${bq.FLUSH_MAX_TRIES} more times, then left with Retry`, attempts === bq.FLUSH_MAX_TRIES && lb.queuedBoardMisses().length === 0 && stuck !== null && !stuck.posted && stuck.error === lb.BOARD_UNREACHABLE_GAVE_UP, `${attempts} upload(s)`);
     globalThis.fetch = counted;
     net.postDown = false;
+  }
+  {
+    // A lap left waiting from before a physics update (an older version's board is read only now): the game doesn't
+    // send it again, it stops waiting with the reason, and the board would turn it down too
+    const { PHYSICS_VERSION, PHYSICS_VERSIONS, boardPhysicsVersion } = await import('../src/lib/sim/lap-types');
+    const before = onAnother('pro', 'standard', 'wet');
+    const stale: Lap = { ...before, conditions: { ...before.conditions!, physicsVersion: boardPhysicsVersion(PHYSICS_VERSIONS[0].physics, 'lc26') } };
+    lb.saveBoardMiss(stale, lb.BOARD_UNREACHABLE, 'auto');
+    check('older physics: the lap from before the update is waiting', lb.queuedBoardMisses().length === 1);
+    skew += 4_000;
+    await readOnlineConfig({ fresh: true });
+    const posts = hits.post;
+    await bq.flushQueuedLaps(flushOpts(() => stale));
+    check('older physics: not sent, and it stops waiting', hits.post === posts && lb.queuedBoardMisses().length === 0, `${hits.post - posts} upload(s)`);
+    const direct = await lb.submitLap({ ...stale, driverName: driver.name, driverCode: driver.code });
+    check('older physics: the game says why', !direct.ok && direct.error === lb.OLDER_PHYSICS_LAP && hits.post === posts, String(direct.error));
+    check('older physics: Your best laps offers no Post for it', lb.boardStatusOf(lb.lapToEntry(stale, 'local')) === null);
+
+    // The same for a lap left waiting from before its circuit's boards started again (src/lib/circuit-board-resets.ts)
+    const { CIRCUIT_BOARD_RESETS } = await import('../src/lib/circuit-board-resets');
+    const resets = CIRCUIT_BOARD_RESETS as Record<string, { physics: number; oldBoard: string; why: string }[]>;
+    const waiting = onAnother('semi_pro', 'casual', 'wet');
+    lb.saveBoardMiss(waiting, lb.BOARD_UNREACHABLE, 'auto');
+    resets[waiting.trackId] = [{ physics: PHYSICS_VERSION, oldBoard: 'Old kerbs', why: 'a check' }];
+    try {
+      skew += 4_000;
+      await readOnlineConfig({ fresh: true });
+      const before = hits.post;
+      await bq.flushQueuedLaps(flushOpts(() => waiting));
+      const why = await lb.submitLap({ ...waiting, driverName: driver.name, driverCode: driver.code });
+      check(
+        'circuit restart: a lap from before it is not sent, stops waiting, and says why',
+        hits.post === before && lb.queuedBoardMisses().length === 0 && !why.ok && why.error === lb.OLDER_PHYSICS_LAP && lb.boardStatusOf(lb.lapToEntry(waiting, 'local')) === null,
+        `${hits.post - before} upload(s), ${why.error}`
+      );
+    } finally {
+      delete resets[waiting.trackId];
+    }
   }
   {
     // The server turns the board off: off, not out of reach; nothing is uploaded or queued

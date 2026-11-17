@@ -8,7 +8,7 @@
  *   fetchSiteStats     tabs in view now and drivers to date (the title screen's line)
  */
 import { isVehicleModelId, type AssistPreset, type VehicleModelId } from "@/types/f1";
-import { lapPhysicsVersion, parseLapConditions, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { currentBoardBase, lapPhysicsVersion, MAX_LAP_REVISION, parseLapConditions, revisionOnBoard, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import type { SimRealism } from "@/lib/sim/sim-realism";
 import { getOnlineConfig, onlineUrl } from "./online-config";
 
@@ -124,22 +124,27 @@ export function parseBoardEntry(
   return entry;
 }
 
+/** A lap revision as a board may say it */
+const isRevision = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= MAX_LAP_REVISION;
+
 /**
  * Which rows belong on a board: one car's on the revision asked for; every car's on the revision the server says it
- * ranks that car under now (`current`), which a browser on the LC26's older engine would not work out the same.
- * Without that list (an older server), this build's own.
+ * ranks that car under on the board asked for (`current`), which a browser on the LC26's older engine would not work
+ * out the same. Without that list (an older server), this build's own for that board.
  */
-function boardFits(car: BoardCar, physics: number, current: unknown): (vehicle: VehicleModelId, physics: number) => boolean {
+function boardFits(car: BoardCar, physics: number, current: unknown, version: number): (vehicle: VehicleModelId, physics: number) => boolean {
   if (car !== ALL_CARS) return (vehicle, p) => vehicle === car && p === physics;
   const said = isRecord(current) ? current : {};
   return (vehicle, p) => {
     const v = said[vehicle];
-    const revision = typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 1000 ? v : lapPhysicsVersion(vehicle);
-    return p === revision;
+    return p === (isRevision(v) ? v : revisionOnBoard(version, vehicle));
   };
 }
 
-/** An answer of GET /api/laps, validated; null when it is not one */
+/**
+ * An answer of GET /api/laps, validated; null when it is not one. `version`: the board every car's rows were read from
+ * (its base revision, lap-types.ts `BoardChoice`), the one laps on the circuit go on now by default
+ */
 export function parseBoardPage(
   body: unknown,
   trackId: string,
@@ -147,9 +152,10 @@ export function parseBoardPage(
   physics: number,
   filter: BoardFilter,
   limit: number = BOARD_PAGE_SIZE,
+  version: number = currentBoardBase(trackId),
 ): BoardPage | null {
   if (!isRecord(body) || !Array.isArray(body.laps)) return null;
-  const fits = boardFits(car, physics, body.current);
+  const fits = boardFits(car, physics, body.current, version);
   const entries: LeaderboardEntry[] = [];
   for (const row of body.laps.slice(0, clampLimit(limit))) {
     const entry = parseBoardEntry(row, trackId, fits, filter);
@@ -177,7 +183,7 @@ export function parseBoardPage(
     if (from !== null && from >= 1 && around.every((e) => e !== null)) near = { pos: from, entries: around as LeaderboardEntry[] };
   }
   const revisions = Array.isArray(body.physics)
-    ? body.physics.filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 1000).slice(0, 20)
+    ? body.physics.filter(isRevision).slice(0, 20)
     : [];
   const atLeast = offset + entries.length;
   return { entries, offset, total: total !== null && total >= atLeast ? total : atLeast, me, near, physics: revisions };
@@ -202,23 +208,27 @@ export async function requestJson(url: string, init: RequestInit, shared = false
 }
 
 /**
- * One page of a circuit's online board: one car's (on `physics`, else the revision this browser drives it under) or
- * every car's, optionally only laps driven a certain way; with `name`, where that driver stands (and with `near`,
- * the places either side). Null when there is no online board, or it could not be read.
+ * One page of a circuit's online board: one car's (on `physics`, else its revision on the board of base revision
+ * `version`, else the revision this browser drives it under there) or every car's (on their revisions on `version`'s
+ * board, else the one laps go on now), optionally only laps driven a certain way; with `name`, where that driver stands
+ * (and with `near`, the places either side). Null when there is no online board, or it could not be read.
  */
 export async function fetchBoardPage(
   trackId: string,
   car: BoardCar,
-  opts: { filter?: BoardFilter; physics?: number; name?: string; event?: string; offset?: number; limit?: number; near?: number } = {},
+  opts: { filter?: BoardFilter; physics?: number; version?: number; name?: string; event?: string; offset?: number; limit?: number; near?: number } = {},
 ): Promise<BoardPage | null> {
   const base = onlineUrl("/laps");
   if (!base || !(await getOnlineConfig()).board) return null;
   const filter = opts.filter ?? {};
-  const physics = car === ALL_CARS ? 0 : (opts.physics ?? lapPhysicsVersion(car));
+  const version = opts.version ?? currentBoardBase(trackId);
+  const physics = car === ALL_CARS ? 0 : (opts.physics ?? (opts.version !== undefined ? revisionOnBoard(version, car) : lapPhysicsVersion(car, trackId)));
   const limit = clampLimit(opts.limit ?? BOARD_PAGE_SIZE);
-  // The parameters in one fixed order: the edge keeps one copy per address, and the order is part of it
+  // The parameters in one fixed order: the edge keeps one copy per address, and the order is part of it. Every car's
+  // board laps go on now keeps the address it always had
   const query = new URLSearchParams({ track: trackId, vehicle: car });
   if (car !== ALL_CARS) query.set("physics", String(physics));
+  else if (version !== currentBoardBase(trackId)) query.set("version", String(version));
   query.set("limit", String(limit));
   const offset = Math.max(0, Math.floor(opts.offset ?? 0));
   if (offset > 0) query.set("offset", String(offset));
@@ -231,7 +241,7 @@ export async function fetchBoardPage(
   if (name && opts.near) query.set("near", String(Math.min(5, Math.max(1, Math.floor(opts.near)))));
   const res = await requestJson(`${base}?${query.toString()}`, { method: "GET" }, !name);
   if (!res || res.status < 200 || res.status >= 300) return null;
-  return parseBoardPage(res.body, trackId, car, physics, filter, limit);
+  return parseBoardPage(res.body, trackId, car, physics, filter, limit, version);
 }
 
 /** A circuit's laps and drivers */
@@ -242,12 +252,16 @@ export interface CircuitTotals {
   drivers: number;
 }
 
-/** A circuit's totals, for one car (on `physics`) or every car; null without an online board or when unreadable */
-export async function fetchCircuitTotals(trackId: string, car: BoardCar, physics?: number): Promise<CircuitTotals | null> {
+/**
+ * A circuit's totals, for one car (on `physics`) or every car (on the board of base revision `version`, the one laps go
+ * on now by default); null without an online board or when unreadable
+ */
+export async function fetchCircuitTotals(trackId: string, car: BoardCar, physics?: number, version: number = currentBoardBase(trackId)): Promise<CircuitTotals | null> {
   const base = onlineUrl("/stats/circuit");
   if (!base || !(await getOnlineConfig()).board) return null;
   const query = new URLSearchParams({ track: trackId, vehicle: car });
   if (car !== ALL_CARS && physics !== undefined) query.set("physics", String(physics));
+  else if (car === ALL_CARS && version !== currentBoardBase(trackId)) query.set("version", String(version));
   const res = await requestJson(`${base}?${query.toString()}`, { method: "GET" }, true);
   if (!res || res.status !== 200 || !isRecord(res.body) || res.body.ok !== true) return null;
   const laps = count(res.body.laps);

@@ -416,8 +416,79 @@ let cachedBuiltTrack: BuiltTrackData | null = null;
 export const LAT_PROFILE_OFFSETS = [-12, -8, -5, -2.5, 0, 2.5, 5, 8, 12] as const;
 
 /**
+ * A profile column counts as road once the road's edge is past it, and comes in over this far (m) as the edge moves out
+ * past it; the column after it is eased in past the edge over the same distance (scripts/tracks/build_track.py
+ * EDGE_COLUMN_RAMP_M)
+ */
+const EDGE_COLUMN_RAMP_M = 0.5;
+
+const LAT_CENTRE = (LAT_PROFILE_OFFSETS.length - 1) >> 1;
+
+/** The profile's height at `lat` (|lat| <= 12) by plain interpolation between its columns */
+function profileBetweenColumns(yp: readonly number[], lat: number): number {
+  for (let k = 0; k < LAT_PROFILE_OFFSETS.length - 1; k++) {
+    const l0 = LAT_PROFILE_OFFSETS[k];
+    const l1 = LAT_PROFILE_OFFSETS[k + 1];
+    if (lat >= l0 && lat <= l1) return yp[k] + ((yp[k + 1] - yp[k]) * (lat - l0)) / (l1 - l0);
+  }
+  return yp[LAT_CENTRE];
+}
+
+/** |lateral offset| of the profile column `m` columns out from the centre on `side` (−1 left, +1 right) */
+function columnLat(side: number, m: number): number {
+  return Math.abs(LAT_PROFILE_OFFSETS[LAT_CENTRE + side * m]);
+}
+
+/** The line through columns `m0` and `m1` on `side`, at |offset| `x` */
+function columnLine(yp: readonly number[], side: number, m0: number, m1: number, x: number): number {
+  const y0 = yp[LAT_CENTRE + side * m0];
+  const l0 = columnLat(side, m0);
+  return y0 + ((yp[LAT_CENTRE + side * m1] - y0) * (x - l0)) / (columnLat(side, m1) - l0);
+}
+
+/** The road at |offset| `x` <= half width, `j` the outermost column the edge is past */
+function roadSurface(yp: readonly number[], side: number, j: number, halfWidth: number, x: number): number {
+  if (j <= 1) return columnLine(yp, side, 0, 1, x);
+  if (x <= columnLat(side, j - 1)) return profileBetweenColumns(yp, side * x);
+  const w = Math.min(1, (halfWidth - columnLat(side, j)) / EDGE_COLUMN_RAMP_M);
+  return (1 - w) * columnLine(yp, side, j - 2, j - 1, x) + w * columnLine(yp, side, j - 1, j, x);
+}
+
+/** Past the edge: from the edge's height to column `m`, then on through the columns past it */
+function easeToColumn(yp: readonly number[], side: number, m: number, yEdge: number, halfWidth: number, lat: number): number {
+  const a = Math.abs(lat);
+  if (m > LAT_CENTRE || a >= columnLat(side, m)) return profileBetweenColumns(yp, lat);
+  return yEdge + ((yp[LAT_CENTRE + side * m] - yEdge) * (a - halfWidth)) / (columnLat(side, m) - halfWidth);
+}
+
+/**
+ * Height at `lat` (|lat| <= 12, + right) of a road of half width `halfWidth` from its profile `yp`. The road keeps its own
+ * crossfall out to its edge: the columns past the edge hold the ground beside the road (a bank, a ditch, the ground
+ * under a bridge), so from the last road column on the height follows the line through the last two road columns, and
+ * only past the edge does it ease to the next column out. A column counts as road once the edge is past it and comes in
+ * over EDGE_COLUMN_RAMP_M as the edge moves on; past the edge the column after the next one out comes in the same way
+ * while the next one is within that distance, so nothing steps as the road widens past a column. The converter builds
+ * the road colliders by the same rule (scripts/tracks/build_track.py `road_profile_height`).
+ */
+function roadProfileHeight(yp: readonly number[], halfWidth: number, lat: number): number {
+  const side = lat > 0 ? 1 : -1;
+  const a = Math.abs(lat);
+  // j: the outermost column the edge is past
+  let j = 0;
+  while (j < LAT_CENTRE && columnLat(side, j + 1) < halfWidth) j++;
+  if (a <= halfWidth) return roadSurface(yp, side, j, halfWidth, a);
+  if (j >= LAT_CENTRE) return profileBetweenColumns(yp, lat);
+  const yEdge = roadSurface(yp, side, j, halfWidth, halfWidth);
+  const u = Math.min(1, (columnLat(side, j + 1) - halfWidth) / EDGE_COLUMN_RAMP_M);
+  const next = easeToColumn(yp, side, j + 1, yEdge, halfWidth, lat);
+  if (u >= 1 || j + 2 > LAT_CENTRE) return next;
+  return u * next + (1 - u) * easeToColumn(yp, side, j + 2, yEdge, halfWidth, lat);
+}
+
+/**
  * Evaluates the exact 3D track surface height `y` at a signed lateral offset `lateralOffsetM`
- * (`-left .. +right` along horizontal track binormal) for a `TrackSamplePoint`.
+ * (`-left .. +right` along horizontal track binormal) for a `TrackSamplePoint`: on the road and up to 12 m out, the
+ * profile read by `roadProfileHeight` for the sample's width; further out, the outermost columns' slope carried on.
  */
 export function evaluateSampleLateralHeightM(
   sample: TrackSamplePoint,
@@ -439,15 +510,7 @@ export function evaluateSampleLateralHeightM(
       (LAT_PROFILE_OFFSETS[n - 1] - LAT_PROFILE_OFFSETS[n - 2]);
     return yp[n - 1] + slopeRight * (lateralOffsetM - LAT_PROFILE_OFFSETS[n - 1]);
   }
-  for (let k = 0; k < n - 1; k++) {
-    const l0 = LAT_PROFILE_OFFSETS[k];
-    const l1 = LAT_PROFILE_OFFSETS[k + 1];
-    if (lateralOffsetM >= l0 && lateralOffsetM <= l1) {
-      const alpha = (lateralOffsetM - l0) / (l1 - l0);
-      return yp[k] + (yp[k + 1] - yp[k]) * alpha;
-    }
-  }
-  return sample.position.y;
+  return roadProfileHeight(yp, sample.width / 2, lateralOffsetM);
 }
 
 /**

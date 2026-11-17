@@ -78,7 +78,7 @@ const letGo = (e: React.SyntheticEvent<HTMLElement>) => e.currentTarget.blur();
 const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehicle, driverName, mode, onChangeMode, keyName }) => {
   const skin = useHudSkin();
   const name = driverName.trim();
-  const physics = lapPhysicsVersion(vehicle);
+  const physics = lapPhysicsVersion(vehicle, trackId);
   const boardKey = `${trackId}|${vehicle}|${physics}|${driverNameKey(name)}`;
   /** The board shown now: a read that answers after the car, circuit or name changed is cached, never shown */
   const shownKey = useRef(boardKey);

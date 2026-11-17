@@ -2638,6 +2638,7 @@ export class DriveSession {
               compound: physics.tireCompound,
               lineWaterMm: trackEnv.weather.lineWaterMm,
               realism: settingsNow.realism,
+              trackId,
             }),
             autopilot: physics.aiAutopilot,
           },
