@@ -64,7 +64,7 @@ export const BroadcastTower: React.FC<{
             </>
           ) : (
             <>
-              Practice <span className="opacity-45">· {activeLapWord()} {Math.max(1, t.lapCount)}</span>
+              {t.qualifying ? "Qualifying" : "Practice"} <span className="opacity-45">· {activeLapWord()} {Math.max(1, t.lapCount)}</span>
             </>
           )}
         </div>
