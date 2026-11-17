@@ -256,6 +256,12 @@ export interface CarSimProfile {
   /** The racing line this car drives, plans on and draws (default: the F1 line) */
   racingLine?: RacingLineId;
   /**
+   * The tallest kerb (its rise over the ground it stands on, m) the AI lets this car's outer tyres run onto (default
+   * `AI_KERB_RISE_DEFAULT_M`). Where a circuit's kerbs are modelled at their real height, the line, the plans and the
+   * tracker keep the tyres off anything taller (`lateralRangeAt`)
+   */
+  aiMaxKerbRiseM?: number;
+  /**
    * The car's understeer gradient (front road-wheel angle beyond the kinematic one, rad per m/s² of lateral
    * acceleration) the autopilot steers in ahead of its yaw loop. Default 0: the loop's integrator finds it.
    */
@@ -420,6 +426,79 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
     out.posOut[i] = pos > 0 ? 0 : posOut;
   }
   perTrack.set(track, out);
+  return out;
+}
+
+/** The tallest kerb an AI car's tyres run onto, unless its profile says otherwise (m) */
+const AI_KERB_RISE_DEFAULT_M = 0.08;
+/** Room the tyres keep from where a kerb gets too tall (m) */
+const AI_KERB_TYRE_ROOM_M = 0.1;
+/** Spacing along the lap of the kerb-height probe (m): a kerb's height changes over a few metres */
+const AI_KERB_STEP_M = 2;
+
+/** Per side, how far from the centreline a kerb first rises past a limit (m, every `AI_KERB_STEP_M`; Infinity: none) */
+interface KerbLimits {
+  neg: Float32Array;
+  pos: Float32Array;
+}
+const kerbLimitCache = new WeakMap<GroundQuery, WeakMap<BuiltTrackData, Map<number, KerbLimits | null>>>();
+
+/**
+ * Where the kerbs get taller than `maxRiseM` over the ground they stand on (`GroundQuery.queryBase`), probed out from
+ * the centreline past the track's width every `AI_KERB_STEP_M`, each limit held for ±5 m (a car comes at a kerb at an
+ * angle). Null where the ground can't say (no `queryBase`) or no kerb on the circuit can be that tall. It runs where the
+ * circuit's surface table caps a kerb's rise (`maxRiseM`) above the car's limit: the converter's modelled kerbs (0.2 m).
+ * Where kerbs are flattened to a few cm, or the circuit has no cap of its own (its kerbs as built, RISE's 5 cm edges),
+ * nothing is probed and nothing changes
+ */
+function kerbLimits(track: BuiltTrackData, ground: GroundQuery, maxRiseM: number): KerbLimits | null {
+  const cap = getActiveSurfaceTable().kerb.maxRiseM;
+  if (!ground.queryBase || !Number.isFinite(cap) || cap <= maxRiseM) return null;
+  let perTrack = kerbLimitCache.get(ground);
+  if (!perTrack) kerbLimitCache.set(ground, (perTrack = new WeakMap()));
+  let perRise = perTrack.get(track);
+  if (!perRise) perTrack.set(track, (perRise = new Map()));
+  if (perRise.has(maxRiseM)) return perRise.get(maxRiseM) ?? null;
+  const L = track.totalLengthM;
+  const n = Math.ceil(L / AI_KERB_STEP_M);
+  const raw = { neg: new Float32Array(n).fill(Infinity), pos: new Float32Array(n).fill(Infinity) };
+  const hit = createGroundHit();
+  const base = createGroundHit();
+  let any = false;
+  for (let i = 0; i < n; i++) {
+    const smp = track.getSampleAtDistance((i * L) / n);
+    const b = smp.binormal;
+    const reach = smp.width / 2 + AP_KERB_PROBE_M;
+    for (const side of [-1, 1] as const) {
+      for (let lat = 0; lat <= reach + 1e-6; lat += AP_EDGE_PROBE_M) {
+        const x = smp.position.x + b.x * side * lat;
+        const z = smp.position.z + b.z * side * lat;
+        const y = smp.position.y + b.y * side * lat + 1.5;
+        if (!ground.query(x, z, y, hit) || hit.surface !== 'kerb') continue;
+        if (!ground.queryBase(x, z, y, base) || hit.height - base.height <= maxRiseM) continue;
+        (side < 0 ? raw.neg : raw.pos)[i] = lat;
+        any = true;
+        break;
+      }
+    }
+  }
+  let out: KerbLimits | null = null;
+  if (any) {
+    const hold = Math.max(1, Math.round(5 / (L / n)));
+    out = { neg: new Float32Array(n), pos: new Float32Array(n) };
+    for (let i = 0; i < n; i++) {
+      let neg = Infinity;
+      let pos = Infinity;
+      for (let k = -hold; k <= hold; k++) {
+        const j = (i + k + n) % n;
+        neg = Math.min(neg, raw.neg[j]);
+        pos = Math.min(pos, raw.pos[j]);
+      }
+      out.neg[i] = neg;
+      out.pos[i] = pos;
+    }
+  }
+  perRise.set(maxRiseM, out);
   return out;
 }
 
@@ -2097,6 +2176,15 @@ export class F12026CarSim implements SimulatorCar {
     const halfTrack = 0.5 * Math.max(this.profile.config.chassis.trackWidthFront, this.profile.config.chassis.trackWidthRear);
     if (!lipNeg && outNeg > 0) lo = Math.min(lo, -(half + outNeg - halfTrack - TRACK_KERB_EDGE_ROOM_M));
     if (!lipPos && outPos > 0) hi = Math.max(hi, half + outPos - halfTrack - TRACK_KERB_EDGE_ROOM_M);
+    // A kerb modelled taller than this car takes: the outer tyres stay off it (the kerb allowance above included)
+    const kerbs = this.collider ? kerbLimits(this.track, this.collider, this.profile.aiMaxKerbRiseM ?? AI_KERB_RISE_DEFAULT_M) : null;
+    if (kerbs) {
+      const n = kerbs.neg.length;
+      const i = Math.round((wrap(s, this.track.totalLengthM) / this.track.totalLengthM) * n) % n;
+      if (Number.isFinite(kerbs.neg[i])) lo = Math.max(lo, -(kerbs.neg[i] - halfTrack - AI_KERB_TYRE_ROOM_M));
+      if (Number.isFinite(kerbs.pos[i])) hi = Math.min(hi, kerbs.pos[i] - halfTrack - AI_KERB_TYRE_ROOM_M);
+      if (lo > hi) lo = hi = 0.5 * (lo + hi);
+    }
     // A course laid out in cones: the lane between them, as a road edge (cone-lanes.ts)
     const cones = coneLaneRangeAt(this.track.id, s, this.track.totalLengthM);
     if (cones) {
