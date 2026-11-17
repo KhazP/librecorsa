@@ -15,13 +15,25 @@ import {
   type PlayerGridSlot,
   type RaceAggression,
   type RaceSetup,
-  type RaceStartKind,
 } from "@/lib/sim/race-setup";
+import {
+  RULE_PRESET_LABELS,
+  TRACK_LIMITS_CHOICE_LABELS,
+  type RaceStartChoice,
+  type RulePresetId,
+  type TrackLimitsChoice,
+} from "@/lib/sim/race-rules";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn } from "@/lib/settings/units";
 
 /** Above this many AI cars, slower machines lose frame rate: every car runs the full vehicle model */
 const HEAVY_FIELD = 7;
+
+const RULES_HINT: Record<RulePresetId, string> = {
+  auto: "Open-wheel rules for F1 cars, endurance rules for the rest",
+  open_wheel: "Track limits by strikes: 4 is +5 s, 8 is +10 s, 12 is a disqualification",
+  endurance_sprint: "Track limits by weighted points: 5 is +5 s, 10 is +10 s, 15 is a disqualification",
+};
 
 const AGGRESSION_HINT: Record<RaceAggression, string> = {
   clean: "More room, fewer lunges",
@@ -80,7 +92,7 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
   const pause = context === "pause";
   // Only a change of field size restarts a running AI race (the shell rebuilds the field and starts from the lights)
   const restartsNow = pause && aiOpponents === true;
-  const start = RACE_START_LABELS[setup.start].toLowerCase();
+  const startNote = setup.startMode === "auto" ? "" : ` from a ${RACE_START_LABELS[setup.startMode].toLowerCase()} start`;
   const heavy = setup.opponents > HEAVY_FIELD ? "A big field costs frame rate on slower machines" : null;
 
   return (
@@ -90,7 +102,7 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
         {onToggleAiOpponents ? (
           <SettingRow
             label="AI opponents"
-            hint={`Race ${setup.opponents} AI ${setup.opponents === 1 ? "car" : "cars"} from a ${start} start. Turning this on or off restarts the run.`}
+            hint={`Race ${setup.opponents} AI ${setup.opponents === 1 ? "car" : "cars"}${startNote}. Turning this on or off restarts the run.`}
           >
             <Toggle checked={aiOpponents === true} onChange={() => onToggleAiOpponents()} />
           </SettingRow>
@@ -140,11 +152,25 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
         <SettingRow label="Laps" hint={distance ?? undefined}>
           <Stepper value={setup.laps} min={1} max={50} onChange={(laps) => onChange({ laps })} />
         </SettingRow>
-        <SettingRow label="Start">
-          <Segmented<RaceStartKind>
-            options={(["standing", "rolling"] as const).map((id) => ({ id, label: RACE_START_LABELS[id] }))}
-            value={setup.start}
-            onChange={(s) => onChange({ start: s })}
+        <SettingRow label="Rules" hint={RULES_HINT[setup.rulePreset]}>
+          <Segmented<RulePresetId>
+            options={(["auto", "open_wheel", "endurance_sprint"] as const).map((id) => ({ id, label: RULE_PRESET_LABELS[id] }))}
+            value={setup.rulePreset}
+            onChange={(rulePreset) => onChange({ rulePreset })}
+          />
+        </SettingRow>
+        <SettingRow label="Track limits" hint={setup.trackLimits === "off" ? "Only course cuts are penalised" : undefined}>
+          <Segmented<TrackLimitsChoice>
+            options={(["auto", "off"] as const).map((id) => ({ id, label: TRACK_LIMITS_CHOICE_LABELS[id] }))}
+            value={setup.trackLimits}
+            onChange={(trackLimits) => onChange({ trackLimits })}
+          />
+        </SettingRow>
+        <SettingRow label="Start" hint={setup.startMode === "auto" ? "Set by the rules" : undefined}>
+          <Segmented<RaceStartChoice>
+            options={(["auto", "standing", "rolling"] as const).map((id) => ({ id, label: RACE_START_LABELS[id] }))}
+            value={setup.startMode}
+            onChange={(startMode) => onChange({ startMode })}
           />
         </SettingRow>
         <SettingRow label="Grid slot">

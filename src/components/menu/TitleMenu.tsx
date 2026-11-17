@@ -38,7 +38,7 @@ import { CarBrowser } from "./CarBrowser";
 import { TrackOutline } from "./circuit-outline";
 import { ConditionsPanel } from "./ConditionsPanel";
 import { RaceSetupPanel } from "./RaceSetupPanel";
-import { DEFAULT_RACE_SETUP, RACE_START_LABELS } from "@/lib/sim/race-setup";
+import { DEFAULT_RACE_SETUP, raceStartSuffix } from "@/lib/sim/race-setup";
 import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
@@ -602,7 +602,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     ...(hillClimb ? [] : [{
       id: "race",
       label: "Race AI",
-      detail: `${raceSetup.opponents} AI ${raceSetup.opponents === 1 ? "car" : "cars"} · ${raceSetup.laps} ${raceSetup.laps === 1 ? "lap" : "laps"} · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)} · ${RACE_START_LABELS[raceSetup.start].toLowerCase()} start`,
+      detail: `${raceSetup.opponents} AI ${raceSetup.opponents === 1 ? "car" : "cars"} · ${raceSetup.laps} ${raceSetup.laps === 1 ? "lap" : "laps"} · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)}${raceStartSuffix(raceSetup.startMode, " · ")}`,
       icon: "race" as const,
       // The race is set up first; its panel has the start (without a setter there is nothing to set: straight to the lights)
       ...(props.onChangeRaceSetup ? { panel: "race" as const, run: () => openPanel("race") } : { run: onRaceAi }),
