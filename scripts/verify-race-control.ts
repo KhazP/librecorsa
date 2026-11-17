@@ -1047,6 +1047,17 @@ console.log("Classification · disqualified");
   check("the AI race takes the player out, disqualified", st.phase === "finished" && me?.dq === true && me.position === 2, JSON.stringify(me));
   field.startRace(true);
   check("the next start clears it", !field.playerDisqualified && field.status().phase === "lights");
+  // A jump start called by the page goes into race control's ledger and onto the feed, with the track-limits time kept apart
+  field.playerPenaltyS = 3;
+  field.penalisePlayer(10, "jump_start", "Jump start");
+  const meNow = field.status().standings.find((e) => e.isPlayer);
+  type Feed = { raceControl: { ledger: { entriesOf(code: string): readonly { reason: string; seconds: number }[] }; messages: { kind: string; detail?: string }[] } };
+  const rc = (field as unknown as Feed).raceControl;
+  check(
+    "a jump start is in the ledger and on the feed, added to the track-limits time",
+    meNow?.penaltyS === 13 && rc.ledger.entriesOf("YOU").some((e) => e.reason === "jump_start" && e.seconds === 10) && rc.messages.some((m) => m.kind === "penalty" && m.detail === "Jump start"),
+    JSON.stringify(meNow)
+  );
 }
 
 console.log("Yellow flags · passing under yellow");

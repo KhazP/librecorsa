@@ -208,6 +208,7 @@ export class SimRuntime {
         field.playerDriver = setup.driver;
         field.manualStart = setup.standing && setup.manualStart === true;
         field.lockAidsInYellow = setup.lockAidsInYellow ?? true;
+        field.qualifying = setup.qualifying;
         field.startRace(setup.standing);
         env.applyWeatherSync(command.weather);
         const ownRaceControl = car.raceControl;
@@ -241,6 +242,9 @@ export class SimRuntime {
         return;
       case "rules":
         if (this.race) this.race.field.lockAidsInYellow = command.lockAidsInYellow;
+        return;
+      case "penalise":
+        this.race?.field.penalisePlayer(command.seconds, command.reason, command.detail);
         return;
       case "conditions":
         this.race?.env.setConditions(command.conditions);
@@ -310,7 +314,7 @@ export class SimRuntime {
       if (race && race.tick === 0) race.env.update(fieldDtS, race.field.sims());
       // A manual start holds the car on the grid through the lights with its engine live; an assisted one stops it
       const frozen = race?.field.playerFrozen === true;
-      const onGrid = frozen && race!.field.manualStart;
+      const onGrid = frozen && race!.field.manualStart && !race!.field.gridStanding;
       if (race) car.gridHold = onGrid;
       if (!frozen || onGrid) {
         car.step(SIM_TICK_S, inputs);

@@ -8,10 +8,12 @@
  * car on the grid itself). The page's track environment goes on stepping the weather for drawing it; the worker's
  * weather is eased into it about once a second, and the road under the player (water, spray, rubber) is the worker's.
  */
+import type { QualifyingGridInput } from "../qualifying";
 import * as THREE from "three";
 import type { RaceStatus } from "@/types/f1";
 import type { AiRace, RaceDriverLabel, WorkerRaceView } from "../ai-race";
 import type { DamageLevel } from "../car-damage";
+import type { PenaltyReason } from "../penalty-ledger";
 import type { GroundQuery } from "../f12026-car/TrackColliderQuery";
 import type { InterpolatedPeerState } from "../multiplayer-sync";
 import type { AiGridOrder, PlayerGridSlot } from "../race-setup";
@@ -41,7 +43,12 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   manualStart = false;
   playerDisqualified = false;
   lockAidsInYellow = true;
+
+  penalisePlayer(seconds: number, reason: PenaltyReason, detail: string): void {
+    if (this.race) this.link.post({ type: "race", op: "penalise", seconds, reason, detail });
+  }
   private sentLockAids = true;
+  qualifying: QualifyingGridInput | undefined = undefined;
   readonly worker: WorkerRaceView = this;
   /** The field's seed for the next start (a headless check replays one); unset, the worker draws one */
   seed: number | undefined = undefined;
@@ -132,6 +139,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
         manualStart: standing && this.manualStart,
         driver: this.playerDriver,
         lockAidsInYellow: this.lockAidsInYellow,
+        qualifying: this.qualifying ? { ...this.qualifying } : undefined,
       },
       epoch,
       weather: this.env.weather.snapshot(),
@@ -166,6 +174,10 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
 
   get lightsOn(): number {
     return this.latest?.lightsOn ?? 0;
+  }
+
+  get gridStanding(): boolean {
+    return this.phase === "lights" && (this.latest?.countdownS ?? 0) > 0;
   }
 
   get playerFrozen(): boolean {

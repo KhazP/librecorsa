@@ -637,8 +637,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // A hill climb has no races: one car at a time, start to finish
       if (getActivePointToPoint()) race = false;
       const field = race && session ? (aiFieldOf(session.race) ?? session.takeAiField()) : null;
-      startSession(field ? { kind: "ai", field } : { kind: "practice" });
-      if (field) startAiRace(field, settingsRef.current.race, settingsRef.current.profile);
+      // Qualifying first when the race setup asks for it: the player alone on a flying lap, the field waiting
+      const qualifyingMin = settingsRef.current.race.qualifying;
+      startSession(field && !qualifyingMin ? { kind: "ai", field } : { kind: "practice" });
+      if (field && qualifyingMin) session?.startQualifying(field, qualifyingMin);
+      else if (field) startAiRace(field, settingsRef.current.race, settingsRef.current.profile);
       else session?.car.resetToStartGrid(false);
       setLaunchHint(true);
     },

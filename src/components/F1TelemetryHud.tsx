@@ -27,6 +27,7 @@ import { ChallengeTargetPanel, LapPanel, TimingTower } from "./hud/TimingPanels"
 import { SpeedCluster } from "./hud/SpeedCluster";
 import { TyrePanel } from "./hud/TyrePanel";
 import { StartLights } from "./hud/StartLights";
+import { QualifyingClock, QualifyingGrid } from "./hud/QualifyingHud";
 import { LaunchCue } from "./hud/LaunchCue";
 import { PauseMenu } from "./hud/PauseMenu";
 import { F12026ChannelsPanel } from "./hud/F12026ChannelsPanel";
@@ -603,6 +604,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         {/* The touch controls carry their own pause button */}
         {style && !touch ? menuButton : null}
         <StartLights race={race} />
+        {telemetry.qualifying ? <QualifyingClock q={telemetry.qualifying} /> : null}
+        {/* The grid qualifying set, while it stands before the first red light */}
+        {lightsPhase && race?.qualifying && race.countdownS ? <QualifyingGrid rows={race.qualifying} /> : null}
         {/* The ±1 s ribbon sits under every preset except the Phone HUD, whose speed pod owns this spot, and the
             layouts that show the delta up here themselves */}
         {hud?.deltaBar && !phone && !style?.ownDeltaBar && !lightsPhase ? <DeltaBar deltaS={deltaS} runId={telemetry.runId ?? 0} /> : null}

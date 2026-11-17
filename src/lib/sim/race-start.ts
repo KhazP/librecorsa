@@ -12,11 +12,14 @@ export const RACE_START_MODE_LABELS: Record<RaceStartMode, string> = { assisted:
 /** What each launch asks of the player, for the rows that set it */
 export const RACE_START_MODE_HINTS: Record<RaceStartMode, string> = {
   assisted: 'The car waits on the grid and pulls away on the throttle at lights out',
-  manual: 'Hold the clutch and the revs through the lights, let it go at lights out. Moving early is a jump start: +5 s',
+  manual: 'Hold the clutch and the revs through the lights, let it go at lights out. Moving early is a jump start: +5 s, +10 s for a big one',
 };
 
 /** Time added at the flag for a jump start (s) */
 export const JUMP_START_PENALTY_S = 5;
+/** … and for a big one: more than `BIG_JUMP_M` off the spot, or past a car ahead, before the lights go out (s) */
+export const BIG_JUMP_START_PENALTY_S = 10;
+export const BIG_JUMP_M = 2.5;
 
 /**
  * Engine speed to hold through the lights (rpm, from–to): letting the clutch out over about 0.3 s from inside it gets
@@ -72,30 +75,76 @@ export function keptOnGrid(speedMs: number, inGear: boolean, clutch: number, thr
 
 /**
  * Watches the car through the lights: moving off its spot while it should be held there is a jump start, kept until
- * the next race. Revving it with the clutch out is not one while the car has not moved.
+ * the next race. Revving it with the clutch out is not one while the car has not moved, nor is a car shaking on its
+ * springs: what counts is how far it is up the road from where the hold began (the lap distance, when the frames give
+ * it; else its speed added up, back and forth cancelling). A jump start is +5 s, or +10 s when the car is more than
+ * `BIG_JUMP_M` up the road, or ahead of a car it started behind, by the time the lights go out; race control's call
+ * comes then (`update` returns "verdict" once).
  */
 export class JumpStartWatch {
-  private rolledM = 0;
+  private movedM = 0;
+  private spotM: number | null = null;
   private jumpedNow = false;
+  private bigJump = false;
+  private startPosition: number | null = null;
+  private judged = false;
 
   get jumped(): boolean {
     return this.jumpedNow;
   }
 
-  reset(): void {
-    this.rolledM = 0;
-    this.jumpedNow = false;
+  /** The time the jump start costs, as it stands (s); 0 without one */
+  get penaltyS(): number {
+    return !this.jumpedNow ? 0 : this.bigJump ? BIG_JUMP_START_PENALTY_S : JUMP_START_PENALTY_S;
   }
 
-  /** One frame, with the car's speed (m/s). Returns true on the frame the start becomes a jump start */
-  update(dtS: number, held: boolean, speedMs: number): boolean {
-    if (this.jumpedNow || !held) {
-      this.rolledM = 0;
-      return false;
+  /** A big jump start: past `BIG_JUMP_M`, or past a car ahead */
+  get big(): boolean {
+    return this.bigJump;
+  }
+
+  reset(): void {
+    this.movedM = 0;
+    this.spotM = null;
+    this.jumpedNow = false;
+    this.bigJump = false;
+    this.startPosition = null;
+    this.judged = false;
+  }
+
+  /**
+   * One frame, with the car's speed (m/s, forwards +) and, in a race, its place (1 = leading) and lap distance (m) on
+   * a lap `lapLengthM` long. Returns "jump" on the frame the start becomes a jump start, "verdict" on the first frame
+   * after the lights with one to call, null otherwise
+   */
+  update(dtS: number, held: boolean, speedMs: number, position?: number, distM?: number, lapLengthM?: number): "jump" | "verdict" | null {
+    if (!held) {
+      this.movedM = 0;
+      this.spotM = null;
+      this.startPosition = null;
+      if (this.jumpedNow && !this.judged) {
+        this.judged = true;
+        return "verdict";
+      }
+      return null;
     }
-    if (Number.isFinite(speedMs)) this.rolledM += Math.abs(speedMs) * Math.max(0, dtS);
-    if (this.rolledM < JUMP_DISTANCE_M) return false;
+    if (this.startPosition === null && position !== undefined) this.startPosition = position;
+    if (distM !== undefined && Number.isFinite(distM)) {
+      this.spotM ??= distM;
+      const L = lapLengthM && lapLengthM > 0 ? lapLengthM : Infinity;
+      const d = distM - this.spotM;
+      this.movedM = Number.isFinite(L) ? ((((d + L / 2) % L) + L) % L) - L / 2 : d;
+    } else if (Number.isFinite(speedMs)) {
+      this.movedM += speedMs * Math.max(0, dtS);
+    }
+    const ahead = Math.max(0, this.movedM);
+    if (this.jumpedNow) {
+      if (ahead >= BIG_JUMP_M || (position !== undefined && this.startPosition !== null && position < this.startPosition)) this.bigJump = true;
+      return null;
+    }
+    if (ahead < JUMP_DISTANCE_M) return null;
     this.jumpedNow = true;
-    return true;
+    if (ahead >= BIG_JUMP_M) this.bigJump = true;
+    return "jump";
   }
 }

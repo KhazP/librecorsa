@@ -269,7 +269,7 @@ const SessionBlocks: React.FC<{ t: CarTelemetry }> = ({ t }) => {
         {pad2(race ? race.lap : Math.max(1, t.lapCount))}
         {race?.totalLaps ? <span className="text-[18px]">/{pad2(race.totalLaps)}</span> : null}
       </SessionBlock>
-      <SessionBlock label={race ? "Race" : "Practice"} className="hidden min-w-[164px] xl:flex">
+      <SessionBlock label={race ? "Race" : t.qualifying ? "Qualifying" : "Practice"} className="hidden min-w-[164px] xl:flex">
         {hms(clock)}
       </SessionBlock>
     </div>
