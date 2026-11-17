@@ -4,14 +4,33 @@ on:
   push:
     tags:
       - "desktop-v*"
+  # A manual run builds and signs but never publishes a release, which is how SignPath test signing is checked.
+  workflow_dispatch:
+    inputs:
+      signing_policy:
+        description: SignPath signing policy for the Windows installer
+        type: choice
+        options:
+          - test-signing
+          - release-signing
+          - none
+        default: test-signing
 
 permissions:
   contents: read
+
+env:
+  SIGNPATH_ORGANIZATION_ID: 915def1d-d8da-483d-9c78-1533563d92de
+  SIGNPATH_PROJECT_SLUG: librecorsa
 
 jobs:
   build:
     name: Build (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      # SignPath reads this run's job details and downloads the unsigned installer artifact.
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -46,6 +65,7 @@ jobs:
         run: npm run check
 
       - name: Sync version from tag
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
         working-directory: desktop
         shell: bash
         run: |
@@ -77,6 +97,85 @@ jobs:
           fi
           npx electron-builder ${{ matrix.target_flag }} --publish never
 
+      # Tag builds are signed with release-signing once the repository variable SIGNPATH_SIGN_RELEASES is "true",
+      # which waits for SignPath's production certificate. Until then a tag build ships unsigned, as before.
+      - name: Pick SignPath signing policy
+        id: signing
+        if: matrix.platform == 'win'
+        shell: bash
+        env:
+          DISPATCH_POLICY: ${{ inputs.signing_policy }}
+          SIGN_RELEASES: ${{ vars.SIGNPATH_SIGN_RELEASES }}
+        run: |
+          policy=""
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$DISPATCH_POLICY" != "none" ]; then policy="$DISPATCH_POLICY"; fi
+          elif [ "$SIGN_RELEASES" = "true" ]; then
+            policy="release-signing"
+          fi
+          echo "policy=$policy" >> "$GITHUB_OUTPUT"
+          echo "SignPath policy: ${policy:-none, the installer stays unsigned}"
+
+      - name: Upload unsigned installer for SignPath
+        id: unsigned
+        if: steps.signing.outputs.policy != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: signpath-unsigned-win
+          path: desktop/dist/*-Setup.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      # release-signing waits for an approver in SignPath, so the wait is an hour instead of the default 10 minutes.
+      - name: Sign installer with SignPath
+        if: steps.signing.outputs.policy != ''
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ steps.signing.outputs.policy }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: desktop/dist-signed
+
+      # Signing changes the installer's bytes, so the block map and latest.yml electron-builder wrote are rebuilt
+      # from the signed file. Without this, installed copies reject the update as a checksum mismatch.
+      - name: Use signed installer and rebuild update files
+        if: steps.signing.outputs.policy != ''
+        working-directory: desktop
+        shell: bash
+        run: |
+          shopt -s nullglob
+          signed=(dist-signed/*-Setup.exe)
+          if [ "${#signed[@]}" -ne 1 ]; then
+            echo "::error::SignPath returned ${#signed[@]} installers, expected 1"
+            exit 1
+          fi
+          name="$(basename "${signed[0]}")"
+          if [ ! -f "dist/$name" ]; then
+            echo "::error::dist/$name is missing"
+            exit 1
+          fi
+          cp "${signed[0]}" "dist/$name"
+          node scripts/refresh-update-info.js "dist/$name" dist/latest.yml
+
+      - name: Check installer signature
+        if: steps.signing.outputs.policy != ''
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          foreach ($file in Get-ChildItem dist/*-Setup.exe) {
+            $signature = Get-AuthenticodeSignature $file.FullName
+            if (-not $signature.SignerCertificate) {
+              Write-Error "$($file.Name) has no Authenticode signature"
+              exit 1
+            }
+            # A test-signed installer reports an untrusted root here; the subject shows which certificate signed it.
+            "$($file.Name): signed by $($signature.SignerCertificate.Subject) ($($signature.Status))"
+          }
+
       - name: Upload release files (${{ matrix.platform }})
         uses: actions/upload-artifact@v7
         with:
@@ -93,6 +192,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -103,14 +203,17 @@ jobs:
           sparse-checkout: desktop/release-notes.md
           sparse-checkout-cone-mode: false
 
+      # Only the desktop-* artifacts: signpath-unsigned-win is the installer before signing and is never published.
       - name: Download release files
         uses: actions/download-artifact@v8
         with:
           path: artifacts
+          pattern: desktop-*
           merge-multiple: true
 
-      # The gh CLI on the runner, not a third-party action: the repository allows GitHub's own actions only, and
-      # a third-party one stops the whole run before it starts. The notes file comes first, then GitHub's notes.
+      # The gh CLI on the runner, not a third-party action: the repository allows GitHub's own actions plus the
+      # SignPath one only, and any other action stops the whole run before it starts. The notes file comes first,
+      # then GitHub's notes.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
