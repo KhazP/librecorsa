@@ -4,6 +4,7 @@
  */
 import type { DamageLevel } from './car-damage';
 import type { AiRace, RaceDriverLabel } from './ai-race';
+import { RACE_START_MODES, type RaceStartMode } from './race-start';
 
 export type PlayerGridSlot = 'back' | 'middle' | 'front' | 'random';
 export type AiGridOrder = 'pace' | 'qualifying' | 'reversed';
@@ -21,6 +22,8 @@ export interface RaceSetup {
   aiGrid: AiGridOrder;
   damage: DamageLevel;
   start: RaceStartKind;
+  /** A standing start's launch: the car pulls away by itself, or the player holds the clutch and the revs */
+  launch: RaceStartMode;
   aggression: RaceAggression;
 }
 
@@ -31,6 +34,7 @@ export const DEFAULT_RACE_SETUP: RaceSetup = {
   aiGrid: 'qualifying',
   damage: 'reduced',
   start: 'standing',
+  launch: 'assisted',
   aggression: 'normal',
 };
 
@@ -65,22 +69,22 @@ export function parseRaceSetup(raw: unknown): RaceSetup {
     aiGrid: pick(r.aiGrid, ['pace', 'qualifying', 'reversed'] as const, d.aiGrid),
     damage: pick(r.damage, ['off', 'reduced', 'full'] as const, d.damage),
     start: pick(r.start, ['standing', 'rolling'] as const, d.start),
+    launch: pick(r.launch, RACE_START_MODES, d.launch),
     aggression: pick(r.aggression, ['clean', 'normal', 'hard'] as const, d.aggression),
   };
 }
 
 /**
- * Starts an AI race with the race setup: laps, grid, damage, and the start (standing unless asked otherwise), with the
- * player under their own driver code and colour
+ * Starts an AI race with the race setup: laps, grid, damage, and the start (standing unless asked otherwise) with its
+ * launch, the player under their own driver code and colour
  */
 export function startAiRace(
   field: AiRace,
   setup: RaceSetup,
   driver: RaceDriverLabel | null,
   standing = setup.start === 'standing',
-  manualStart = false,
 ): void {
-  field.manualStart = standing && manualStart;
+  field.manualStart = standing && setup.launch === 'manual';
   field.playerDriver = driver ? { code: driver.code, color: driver.color } : null;
   field.raceLaps = setup.laps;
   field.gridOrder = setup.aiGrid;

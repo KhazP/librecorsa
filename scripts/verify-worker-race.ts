@@ -14,6 +14,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
 import { AiOpponentField, aiDriversFor } from '../src/lib/sim/ai-opponents';
+import { DEFAULT_RACE_SETUP, startAiRace } from '../src/lib/sim/race-setup';
 import { createSimHost, loopbackTransport } from '../src/lib/sim/runtime/sim-host';
 import { SIM_TICK_S, type SimCommand } from '../src/lib/sim/runtime/sim-protocol';
 import { WorkerAiField } from '../src/lib/sim/runtime/worker-ai-field';
@@ -262,8 +263,9 @@ check('and its car drives on alone', host.remote && sim.sMeters !== sBefore && r
   check('the worker can run a race with a manual start', link4 !== null);
   if (!link4) process.exit(1);
   const race4 = new WorkerAiField(link4, env, car, OPPONENTS, SKILL, () => car.groundQuery ?? null);
-  race4.manualStart = true;
-  race4.startRace(true);
+  // Through the call the menu's Start race makes, with the launch the race setup carries
+  startAiRace(race4, { ...DEFAULT_RACE_SETUP, launch: 'manual' }, null);
+  check('a manual launch in the race setup reaches the worker field', race4.manualStart);
   car.aiAutopilot = false;
   let grid: number | null = null;
   let held = true;

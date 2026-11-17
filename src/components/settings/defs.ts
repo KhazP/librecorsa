@@ -11,6 +11,7 @@ import {
   UI_SCALE_MIN,
   type PlayerSettings,
 } from "@/lib/settings/player-settings";
+import { RACE_START_MODE_HINTS, RACE_START_MODE_LABELS, RACE_START_MODES, type RaceStartMode } from "@/lib/sim/race-start";
 import { SIM_REALISM_LABELS, SIM_REALISM_LEVELS } from "@/lib/sim/sim-realism";
 import { ASSIST_SLIDERS, type AssistSliderSpec } from "@/lib/sim/steering-assist";
 import type { AssistPreset } from "@/types/f1";
@@ -136,18 +137,15 @@ export const realism = choice("segmented", {
   ...top("realism"),
 });
 
-export const raceStarts = choice("segmented", {
-  id: "raceStarts",
-  label: "Race starts",
-  hint: (env) =>
-    env.settings.raceStarts === "manual"
-      ? "Hold the clutch and the revs through the lights, let it go at lights out. Early is a jump start: +5 s"
-      : "The car waits on the grid and pulls away on the throttle at lights out",
-  options: [
-    { id: "assisted", label: "Assisted" },
-    { id: "manual", label: "Manual" },
-  ],
-  ...top("raceStarts"),
+/** A standing start's launch, kept with the race setup: the pre-race rules show the same choice */
+export const launch = choice("segmented", {
+  id: "launch",
+  label: "Launch",
+  hint: (env) => RACE_START_MODE_HINTS[env.settings.race.launch],
+  options: RACE_START_MODES.map((id) => ({ id, label: RACE_START_MODE_LABELS[id] })),
+  read: (env) => env.settings.race.launch,
+  initial: () => DEFAULT_PLAYER_SETTINGS.race.launch,
+  write: (env, id) => env.update((s) => ({ ...s, race: { ...s.race, launch: id as RaceStartMode } })),
 });
 
 export const ghost = toggle({

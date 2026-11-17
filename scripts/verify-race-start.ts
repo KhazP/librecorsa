@@ -10,6 +10,8 @@
 import { createFlatTestTrack } from './lib/flat-track';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
 import { JumpStartWatch, LAUNCH_RPM, launchWindow } from '../src/lib/sim/race-start';
+import type { AiRace } from '../src/lib/sim/ai-race';
+import { DEFAULT_RACE_SETUP, parseRaceSetup, startAiRace } from '../src/lib/sim/race-setup';
 import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from '../src/lib/sim/rev-range';
 import { isVehicleModelId, type ControlInputs, type VehicleModelId } from '../src/types/f1';
 
@@ -87,6 +89,23 @@ console.log('\n== Jump starts');
   check('a jump start is kept until the next race', w.jumped);
   w.reset();
   check('and cleared for it', !w.jumped);
+}
+
+// ---- The launch rides with the race setup, so every race start (the menu, a restart, a new car) reads the same one
+{
+  console.log('\n== the race setup');
+  const startWith = (patch: Partial<typeof DEFAULT_RACE_SETUP>, standing?: boolean) => {
+    const field = { manualStart: false, startRace: () => {} } as unknown as AiRace;
+    startAiRace(field, { ...DEFAULT_RACE_SETUP, ...patch }, null, standing);
+    return field.manualStart;
+  };
+  check('a new player starts assisted', DEFAULT_RACE_SETUP.launch === 'assisted');
+  check('a manual launch makes a manual start', startWith({ launch: 'manual' }));
+  check('an assisted launch does not', !startWith({ launch: 'assisted' }));
+  check('a rolling start is never a manual one', !startWith({ launch: 'manual', start: 'rolling' }));
+  check('a flying start (standing forced off) is never a manual one', !startWith({ launch: 'manual' }, false));
+  check('the launch is saved with the race setup', parseRaceSetup(JSON.parse(JSON.stringify({ ...DEFAULT_RACE_SETUP, launch: 'manual' }))).launch === 'manual');
+  check('an unknown launch reads as assisted', parseRaceSetup({ launch: 'auto' }).launch === 'assisted');
 }
 
 console.log(failures.length ? `\n${failures.length} failed: ${failures.join(', ')}` : '\nAll race start checks passed.');

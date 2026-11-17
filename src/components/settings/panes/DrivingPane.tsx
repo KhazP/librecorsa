@@ -12,7 +12,7 @@ import {
   ghost,
   pedalHelpStrength,
   racingLine,
-  raceStarts,
+  launch,
   realism,
   tcAbs,
   throttleHelp,
@@ -29,7 +29,7 @@ export function AssistsTab() {
       <SettingsCard
         title="Driving aids"
         first
-        rows={[assistLevel, tcAbs, racingLine, autoGearbox, raceStarts, { ...controllerSteerAssist, advanced: !onPad }]}
+        rows={[assistLevel, tcAbs, racingLine, autoGearbox, launch, { ...controllerSteerAssist, advanced: !onPad }]}
       />
       <SettingsCard title="Pedal help" description="For the keyboard, where a key is all or nothing" rows={[throttleHelp, brakeHelp]} />
       <SettingsCard title="On track" rows={[realism, ghost]} />

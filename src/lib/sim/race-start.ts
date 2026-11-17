@@ -8,6 +8,12 @@ import type { VehicleModelId } from '@/types/f1';
 
 export type RaceStartMode = 'assisted' | 'manual';
 export const RACE_START_MODES: readonly RaceStartMode[] = ['assisted', 'manual'];
+export const RACE_START_MODE_LABELS: Record<RaceStartMode, string> = { assisted: 'Assisted', manual: 'Manual' };
+/** What each launch asks of the player, for the rows that set it */
+export const RACE_START_MODE_HINTS: Record<RaceStartMode, string> = {
+  assisted: 'The car waits on the grid and pulls away on the throttle at lights out',
+  manual: 'Hold the clutch and the revs through the lights, let it go at lights out. Early is a jump start: +5 s',
+};
 
 /** Time added at the flag for a jump start (s) */
 export const JUMP_START_PENALTY_S = 5;

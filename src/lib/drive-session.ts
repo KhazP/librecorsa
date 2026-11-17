@@ -934,7 +934,7 @@ export class DriveSession {
         const field = this.takeAiField();
         if (trackRoot) field.attachTrackRoot(trackRoot);
         this.setRace({ kind: "ai", field });
-        startAiRace(field, settings.race, settings.profile, undefined, settings.raceStarts === "manual");
+        startAiRace(field, settings.race, settings.profile);
       }
       setTelemetry({ ...physics.telemetry });
       // In the menus, the next race's field is built for the new car
@@ -1337,7 +1337,7 @@ export class DriveSession {
           const field = this.takeAiField();
           if (trackRoot) field.attachTrackRoot(trackRoot);
           this.setRace({ kind: "ai", field });
-          startAiRace(field, next.race, next.profile, undefined, next.raceStarts === "manual");
+          startAiRace(field, next.race, next.profile);
         }
       }
     };
@@ -1607,7 +1607,7 @@ export class DriveSession {
       if (race.kind === "practice") return this.restartFlyingLap();
       // Out of a replay first (the reset does that), then the car moves
       this.resetRun("restart");
-      startAiRace(race.field, settings.race, settings.profile, undefined, settings.raceStarts === "manual");
+      startAiRace(race.field, settings.race, settings.profile);
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -2283,7 +2283,7 @@ export class DriveSession {
         const field = this.takeAiField();
         if (trackRoot) field.attachTrackRoot(trackRoot);
         this.setRace({ kind: "ai", field });
-        startAiRace(field, settings.race, settings.profile, undefined, settings.raceStarts === "manual");
+        startAiRace(field, settings.race, settings.profile);
       }
       const aiField = aiFieldOf(raceNow());
       /** The race runs in the worker, the player's car with it: this page only sends the controls and draws it */
@@ -2331,7 +2331,7 @@ export class DriveSession {
         // its car there: the controls go on, which keep its clock running); an assisted one stops it
         const gridHeld = raceInWorker
           ? aiField.playerFrozen && aiField.manualStart
-          : (aiField?.playerFrozen === true && aiField.manualStart) || (mpFrozen && settingsNow.raceStarts === "manual");
+          : (aiField?.playerFrozen === true && aiField.manualStart) || (mpFrozen && settingsNow.race.launch === "manual");
         if (!raceInWorker) physics.gridHold = gridHeld;
         if (jumpWatch.update(dtSeconds, gridHeld, inputs.clutch ?? 0, inputs.throttle, physics.telemetry.gear !== 0)) {
           console.info(`[race] jump start: +${JUMP_START_PENALTY_S} s at the flag`);
