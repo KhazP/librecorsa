@@ -407,21 +407,22 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
       }
       if (e.key === "," || e.key === "<") {
         e.preventDefault();
-        cycleDial(-1);
+        actionsRef.current.cycleDial(-1);
       } else if (e.key === "." || e.key === ">") {
         e.preventDefault();
-        cycleDial(1);
+        actionsRef.current.cycleDial(1);
       } else if (e.key === "-" || e.key === "_") {
         e.preventDefault();
-        adjustActiveDial(-1);
+        actionsRef.current.adjustActiveDial(-1);
       } else if (e.key === "=" || e.key === "+") {
         e.preventDefault();
-        adjustActiveDial(1);
+        actionsRef.current.adjustActiveDial(1);
       }
     };
+    // Added once: the actions come from the ref, so a new tuner state each physics step doesn't re-add it
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cycleDial, adjustActiveDial, hudModeRef]);
+  }, [hudModeRef]);
 
   // The active dial's value, a short tag beside its name, and its segment bar
   const hero = useMemo((): { text: string; tag: string; segments: number; filled: number; off: boolean } => {

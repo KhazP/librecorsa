@@ -135,7 +135,10 @@ export const BrakeBar: React.FC<{ c: CornerData; className?: string }> = ({ c, c
         style={{ transform: `scaleY(${frac})`, backgroundColor: color }}
       />
       {coreFrac !== null ? (
-        <span className="absolute inset-x-0 h-0.5 bg-lc-chalk/70" style={{ bottom: `${coreFrac * 100}%` }} />
+        // Core tick moved by transform (no layout every tick)
+        <span className="absolute inset-0" style={{ transform: `translateY(${(1 - coreFrac) * 100}%)` }}>
+          <span className="absolute inset-x-0 top-0 h-0.5 -translate-y-full bg-lc-chalk/70" />
+        </span>
       ) : null}
     </span>
   );

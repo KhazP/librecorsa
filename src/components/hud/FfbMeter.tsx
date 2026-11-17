@@ -51,8 +51,13 @@ export const FfbMeter: React.FC<FfbMeterProps> = ({ force, clipping, peak, sugge
         />
         {peakPct > 0 ? (
           <>
-            <span className="absolute inset-y-0 w-px bg-white/80" style={{ left: `${50 - peakPct}%` }} />
-            <span className="absolute inset-y-0 w-px bg-white/80" style={{ left: `${50 + peakPct}%` }} />
+            {/* Peak ticks moved by transform (no layout every tick) */}
+            <span className="absolute inset-0" style={{ transform: `translateX(${-peakPct}%)` }}>
+              <span className="absolute inset-y-0 left-1/2 w-px bg-white/80" />
+            </span>
+            <span className="absolute inset-0" style={{ transform: `translateX(${peakPct}%)` }}>
+              <span className="absolute inset-y-0 left-1/2 w-px bg-white/80" />
+            </span>
           </>
         ) : null}
         <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-lc-chalk/50" />

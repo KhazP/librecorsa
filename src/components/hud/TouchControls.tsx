@@ -112,9 +112,9 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
     onChange(0);
   };
 
-  const frac = ((value + 1) / 2).toFixed(4);
-  const knobLeft = `calc(${KNOB / 2}px + (100% - ${KNOB}px) * ${frac})`;
-  const fillWidth = `calc((100% - ${KNOB}px) * ${(Math.abs(value) / 2).toFixed(4)})`;
+  // Fill and knob move by transform only, so steering redraws without a layout every frame
+  const frac = (value + 1) / 2;
+  const travel = { left: KNOB / 2, right: KNOB / 2 };
   const held = value !== 0;
 
   return (
@@ -135,30 +135,37 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
       <div className="pointer-events-none relative h-full">
         {/* Track */}
         <span className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/24" />
-        {/* Fill from the centre to the knob */}
-        <span
-          className="absolute top-1/2 h-1 -translate-y-1/2"
-          style={{
-            width: fillWidth,
-            backgroundColor: HUD_VOLT,
-            ...(value < 0
-              ? { right: "50%", borderRadius: "999px 0 0 999px" }
-              : { left: "50%", borderRadius: "0 999px 999px 0" }),
-          }}
-        />
+        {/* Fill from the centre to the knob: a half each way, slid in from the centre */}
+        <span className="absolute inset-y-0" style={travel}>
+          <span className="absolute top-1/2 left-1/2 h-1 w-1/2 -translate-y-1/2 overflow-hidden">
+            <span
+              className="block h-full rounded-r-full"
+              style={{ backgroundColor: HUD_VOLT, transform: `translateX(${(Math.max(0, value) - 1) * 100}%)` }}
+            />
+          </span>
+          <span className="absolute top-1/2 right-1/2 h-1 w-1/2 -translate-y-1/2 overflow-hidden">
+            <span
+              className="block h-full rounded-l-full"
+              style={{ backgroundColor: HUD_VOLT, transform: `translateX(${(1 - Math.max(0, -value)) * 100}%)` }}
+            />
+          </span>
+        </span>
         {/* Centre reference */}
         <span className="absolute top-1/2 left-1/2 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/40" />
         {/* Knob */}
-        <span
-          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] phone:scale-[0.82]"
-          style={{
-            left: knobLeft,
-            width: KNOB,
-            height: KNOB,
-            borderColor: held ? HUD_VOLT : "rgb(255 255 255 / 0.7)",
-            backgroundColor: tint(HUD_VOID, held ? 70 : 45),
-          }}
-        />
+        <span className="absolute inset-y-0" style={travel}>
+          <span className="absolute inset-0" style={{ transform: `translateX(${frac * 100}%)` }}>
+            <span
+              className="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] phone:scale-[0.82]"
+              style={{
+                width: KNOB,
+                height: KNOB,
+                borderColor: held ? HUD_VOLT : "rgb(255 255 255 / 0.7)",
+                backgroundColor: tint(HUD_VOID, held ? 70 : 45),
+              }}
+            />
+          </span>
+        </span>
       </div>
     </div>
   );
@@ -166,13 +173,21 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
 
 /** Tilt steering's only readout while driving: a slim bar along the bottom edge, its tick where the steering is */
 const TiltMeter: React.FC<{ value: number }> = ({ value }) => {
-  const half = Math.abs(value) * 50;
+  // A half each way slid in from the centre (transform only, no layout every frame)
   return (
     <div aria-hidden className="relative h-1 w-[min(36vw,168px)] rounded-full bg-white/24 shadow-[0_0_0_1px_rgb(0_0_0/0.16)]">
-      <span
-        className="absolute inset-y-0 rounded-full"
-        style={{ left: `${value < 0 ? 50 - half : 50}%`, width: `${half}%`, backgroundColor: HUD_VOLT }}
-      />
+      <span className="absolute inset-y-0 left-1/2 w-1/2 overflow-hidden">
+        <span
+          className="block h-full rounded-r-full"
+          style={{ backgroundColor: HUD_VOLT, transform: `translateX(${(Math.max(0, value) - 1) * 100}%)` }}
+        />
+      </span>
+      <span className="absolute inset-y-0 right-1/2 w-1/2 overflow-hidden">
+        <span
+          className="block h-full rounded-l-full"
+          style={{ backgroundColor: HUD_VOLT, transform: `translateX(${(1 - Math.max(0, -value)) * 100}%)` }}
+        />
+      </span>
       <span className="absolute -inset-y-1 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-white/70" />
     </div>
   );
@@ -190,7 +205,7 @@ const TiltNote: React.FC<{ children: React.ReactNode; onRetry?: () => void; maxW
   );
   // A retry asks for permission as the finger lifts: iOS takes a pointerup as a user gesture, not a pointerdown
   return onRetry ? (
-    <button type="button" className={`${cls} pointer-events-auto touch-none active:scale-95`} style={{ touchAction: "none" }} onPointerUp={onRetry}>
+    <button type="button" className={`${cls} pointer-events-auto relative touch-none before:absolute before:inset-x-0 before:-inset-y-1.5 active:scale-95`} style={{ touchAction: "none" }} onPointerUp={onRetry}>
       {body}
     </button>
   ) : (
@@ -213,6 +228,8 @@ interface PedalProps {
 /** Vertical pedal: the finger's height on the pedal (bottom 0 → top 1) is the input */
 const Pedal: React.FC<PedalProps> = ({ label, color, icon, value, onChange, suspended }) => {
   const pid = useRef<number | null>(null);
+  // The pedal never moves while held: read its box once per press, not on every pointer move
+  const box = useRef<DOMRect | null>(null);
 
   useEffect(() => {
     if (!suspended) return;
@@ -228,13 +245,14 @@ const Pedal: React.FC<PedalProps> = ({ label, color, icon, value, onChange, susp
   );
 
   const measure = (e: React.PointerEvent<HTMLDivElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
+    const r = box.current ?? e.currentTarget.getBoundingClientRect();
     return clamp((r.bottom - e.clientY) / Math.max(1, r.height), 0, 1);
   };
   const down = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     if (pid.current !== null) return;
     pid.current = e.pointerId;
+    box.current = e.currentTarget.getBoundingClientRect();
     e.currentTarget.setPointerCapture(e.pointerId);
     onChange(measure(e));
   };

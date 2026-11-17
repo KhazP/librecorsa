@@ -701,10 +701,10 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               </span>
               <span className="relative h-2 w-44 overflow-hidden rounded-full bg-lc-titanium">
                 <span className="absolute inset-y-0 left-1/2 w-px bg-lc-chalk/40" />
-                <span
-                  className="absolute inset-y-0 w-2.5 -translate-x-1/2 rounded-full"
-                  style={{ left: `${50 + telemetry.steering * 48}%`, backgroundColor: HUD_INFO }}
-                />
+                {/* Moved by transform, so the steering dot doesn't lay out every tick */}
+                <span className="absolute inset-0" style={{ transform: `translateX(${telemetry.steering * 48}%)` }}>
+                  <span className="absolute inset-y-0 left-1/2 w-2.5 -translate-x-1/2 rounded-full" style={{ backgroundColor: HUD_INFO }} />
+                </span>
               </span>
             </div>
           )

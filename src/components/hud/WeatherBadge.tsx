@@ -40,7 +40,7 @@ const clock = (h: number) => {
 };
 
 /** Small pill: air / track temperature, the track's state and rain */
-export const WeatherBadge: React.FC<{ weather: WeatherHudState; variant?: "pill" | "panel" }> = ({ weather, variant = "pill" }) => {
+const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | "panel" }> = ({ weather, variant = "pill" }) => {
   const s = surface(weather.waterMm);
   const units = useUnits();
   const shape =
@@ -76,3 +76,6 @@ export const WeatherBadge: React.FC<{ weather: WeatherHudState; variant?: "pill"
     </div>
   );
 };
+
+/** Memoised: the HUD re-renders 30 times a second, the weather object only changes a few times a second */
+export const WeatherBadge = React.memo(WeatherBadgeView);
