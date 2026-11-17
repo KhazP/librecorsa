@@ -21,16 +21,16 @@ const RING_C = 2 * Math.PI * RING_R;
 
 /** One step's ring: fills with its progress in white, full, green and ticked once the step is done */
 const StepRing: React.FC<{ progress: number; color: string; done: boolean }> = ({ progress, color, done }) => (
-  <span className="relative inline-flex size-6 shrink-0 items-center justify-center">
-    <svg viewBox="0 0 24 24" className="absolute inset-0 size-6 -rotate-90" aria-hidden>
-      <circle cx="12" cy="12" r={RING_R} fill="none" stroke={HUD_SLATE} strokeOpacity={0.55} strokeWidth="2.5" />
+  <span className="relative inline-flex size-7.5 shrink-0 items-center justify-center">
+    <svg viewBox="0 0 24 24" className="absolute inset-0 size-7.5 -rotate-90" aria-hidden>
+      <circle cx="12" cy="12" r={RING_R} fill="none" stroke={HUD_SLATE} strokeOpacity={0.55} strokeWidth="2.75" />
       <circle
         cx="12"
         cy="12"
         r={RING_R}
         fill="none"
         stroke={color}
-        strokeWidth="2.5"
+        strokeWidth="2.75"
         strokeLinecap="round"
         strokeDasharray={RING_C}
         strokeDashoffset={RING_C * (1 - Math.min(1, Math.max(0, progress)))}
@@ -39,17 +39,18 @@ const StepRing: React.FC<{ progress: number; color: string; done: boolean }> = (
     </svg>
     {done ? (
       <span className="relative inline-flex" style={{ color }}>
-        <Icon name="check" size="xs" className="size-3!" />
+        <Icon name="check" size="xs" className="size-3.5!" />
       </span>
     ) : null}
   </span>
 );
 
 const Step: React.FC<{ ring: React.ReactNode; prompt?: React.ReactNode; label: string; color?: string }> = ({ ring, prompt, label, color }) => (
-  <div className="flex items-center gap-2.5">
+  <div className="flex items-center gap-3">
     {ring}
-    {prompt}
-    <span className="lc-title hud-text-shadow text-[13px] whitespace-nowrap uppercase sm:text-[14px]" style={{ color: color ?? HUD_WHITE }}>
+    {/* The glyph caps are drawn at 22 px: grown with the text */}
+    {prompt ? <span className="mx-0.5 inline-flex scale-125">{prompt}</span> : null}
+    <span className="lc-title hud-text-shadow text-[16px] whitespace-nowrap uppercase sm:text-[18px]" style={{ color: color ?? HUD_WHITE }}>
       {label}
     </span>
   </div>
@@ -91,9 +92,9 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry }> = ({ telemetry }) 
 
   if (jumped) {
     return (
-      <div role="status" className={`flex items-center gap-2.5 rounded-lc-row py-2 pr-4 pl-2.5 ${HUD_GLASS}`}>
+      <div role="status" className={`flex items-center gap-3 rounded-lc-row py-2.5 pr-5 pl-3 ${HUD_GLASS}`}>
         <StepRing progress={1} color={HUD_RED} done={false} />
-        <span className="lc-title hud-text-shadow text-[13px] whitespace-nowrap uppercase sm:text-[14px]" style={{ color: HUD_RED }}>
+        <span className="lc-title hud-text-shadow text-[16px] whitespace-nowrap uppercase sm:text-[18px]" style={{ color: HUD_RED }}>
           Jump start: +{JUMP_START_PENALTY_S} s at the flag
         </span>
       </div>
@@ -113,7 +114,7 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry }> = ({ telemetry }) 
     <div
       role="status"
       aria-label={`Manual start: ${clutchIn ? "clutch held" : "hold the clutch"}, ${revsIn ? "revs in the launch window" : revsOver ? "too many revs" : "bring the revs up"}`}
-      className={`flex flex-col gap-2 rounded-lc-row py-2.5 pr-4 pl-2.5 ${HUD_GLASS}`}
+      className={`flex flex-col gap-2.5 rounded-lc-row py-3 pr-5 pl-3 ${HUD_GLASS}`}
     >
       <Step
         ring={<StepRing progress={start.clutchIn} color={clutchIn ? HUD_GAIN : HUD_WHITE} done={clutchIn} />}
