@@ -10,7 +10,7 @@
  */
 import * as THREE from "three";
 import type { RaceStatus } from "@/types/f1";
-import type { AiRace, WorkerRaceView } from "../ai-race";
+import type { AiRace, RaceDriverLabel, WorkerRaceView } from "../ai-race";
 import type { DamageLevel } from "../car-damage";
 import type { GroundQuery } from "../f12026-car/TrackColliderQuery";
 import type { InterpolatedPeerState } from "../multiplayer-sync";
@@ -36,6 +36,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   playerGrid: PlayerGridSlot = "back";
   damageLevel: DamageLevel = "reduced";
   aggressionAdd = 0;
+  playerDriver: RaceDriverLabel | null = null;
   playerPenaltyS = 0;
   readonly worker: WorkerRaceView = this;
   /** The field's seed for the next start (a headless check replays one); unset, the worker draws one */
@@ -121,6 +122,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
         damage: this.damageLevel,
         aggressionAdd: this.aggressionAdd,
         standing,
+        driver: this.playerDriver,
       },
       epoch,
       weather: this.env.weather.snapshot(),

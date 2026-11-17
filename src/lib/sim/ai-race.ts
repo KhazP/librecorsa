@@ -10,6 +10,12 @@ import type { InterpolatedPeerState } from './multiplayer-sync';
 import type { AiGridOrder, PlayerGridSlot } from './race-setup';
 import type { SimulatorCar } from './simulator-car';
 
+/** The player in a race against the AI: their three-letter code and colour (Settings > Display > Driver) */
+export interface RaceDriverLabel {
+  code: string;
+  color: string;
+}
+
 export interface AiRace {
   /** Race setup, read at the next `startRace` (race-setup.ts `startAiRace` writes them) */
   raceLaps: number;
@@ -17,6 +23,8 @@ export interface AiRace {
   playerGrid: PlayerGridSlot;
   damageLevel: DamageLevel;
   aggressionAdd: number;
+  /** The player's code and colour on the timing, the results and race control's messages; null: 'YOU' in red */
+  playerDriver: RaceDriverLabel | null;
   /** Lines the field up and starts it: a standing start behind the lights, or a rolling one */
   startRace(standing: boolean): void;
   readonly skill: number;

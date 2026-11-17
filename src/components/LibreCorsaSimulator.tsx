@@ -501,7 +501,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const physics = session.car;
       session.resetRun("restart");
       // A restart from the menu uses the race's own start; the flying-lap key always gives a rolling one
-      if (race.kind === "ai") startAiRace(race.field, settingsRef.current.race, flyingStart ? false : undefined);
+      if (race.kind === "ai") startAiRace(race.field, settingsRef.current.race, settingsRef.current.profile, flyingStart ? false : undefined);
       else physics.resetToStartGrid(flyingStart);
     },
     [session]
@@ -518,7 +518,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
     const field = session.takeAiField();
     session.setRace({ kind: "ai", field });
-    startAiRace(field, settingsRef.current.race);
+    startAiRace(field, settingsRef.current.race, settingsRef.current.profile);
   }, [session]);
 
   const handleSelectTurn = useCallback(
@@ -635,7 +635,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (getActivePointToPoint()) race = false;
       const field = race && session ? (aiFieldOf(session.race) ?? session.takeAiField()) : null;
       startSession(field ? { kind: "ai", field } : { kind: "practice" });
-      if (field) startAiRace(field, settingsRef.current.race);
+      if (field) startAiRace(field, settingsRef.current.race, settingsRef.current.profile);
       else session?.car.resetToStartGrid(false);
       setLaunchHint(true);
     },
@@ -1336,7 +1336,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         const field = session.takeAiField();
         session.setRace({ kind: "ai", field });
         // No damage, as in an open race with other drivers (their cars take none)
-        startAiRace(field, { ...settingsRef.current.race, laps: week.race.laps, start: "standing", damage: "off" });
+        startAiRace(field, { ...settingsRef.current.race, laps: week.race.laps, start: "standing", damage: "off" }, settingsRef.current.profile);
       } else {
         // polish:A — the time trial: its fixed tyre, fuel and road, from a flying start
         session?.setTimeTrial(timeTrialRules(week.vehicle));
