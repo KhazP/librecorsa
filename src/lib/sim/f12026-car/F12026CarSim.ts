@@ -1637,6 +1637,8 @@ export class F12026CarSim implements SimulatorCar {
       toggleXMode: raw.toggleXMode ?? false,
       shiftUp: raw.shiftUp ?? false,
       shiftDown: raw.shiftDown ?? false,
+      // The driver's clutch pedal while it is pressed at all; let go, the car works its own clutch
+      clutch: Number.isFinite(raw.clutch) && (raw.clutch ?? 0) > 0 ? THREE.MathUtils.clamp(raw.clutch ?? 0, 0, 1) : undefined,
     };
     if (inputs.toggleXMode && this.profile.hasDrs) this.drsPressPending = true;
     // Whole control ticks of this frame; what is left over waits for the next (the pose is drawn carried forward by it)
@@ -1703,6 +1705,8 @@ export class F12026CarSim implements SimulatorCar {
         drs: drsPress || cmd.drs,
         shiftUp,
         shiftDown,
+        // The autopilot drives on the car's own clutch
+        clutch: this.aiAutopilot ? undefined : inputs.clutch,
       };
       // A car whose state has blown up hands back a non-finite command: the rack must not keep it past the rescue
       this.steerCmd = Number.isFinite(cmd.steer) ? cmd.steer : 0;

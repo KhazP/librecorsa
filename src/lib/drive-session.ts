@@ -122,6 +122,9 @@ const KB_THROTTLE_RISE_S = DEFAULT_KEYBOARD_TUNING.throttleRiseS;
 const KB_THROTTLE_FALL_S = 0.1;
 const KB_BRAKE_RISE_S = DEFAULT_KEYBOARD_TUNING.brakeRiseS;
 const KB_BRAKE_FALL_S = 0.08;
+/** A clutch key presses the pedal at once and lets it out over this long: a launch on it slips, it doesn't dump */
+const KB_CLUTCH_IN_S = 0.08;
+const KB_CLUTCH_OUT_S = 0.4;
 /** Holding the camera key or button this long opens the seat panel; a shorter press changes the view */
 const SEAT_PANEL_HOLD_MS = 450;
 
@@ -149,6 +152,7 @@ const HELD_KEYS = {
   steerLeft: "left",
   steerRight: "right",
   throttleHalf: "half",
+  clutch: "clutch",
   boostHold: "boostHold",
 } as const satisfies Partial<Record<KeyAction, string>>;
 type HeldKeyAction = keyof typeof HELD_KEYS;
@@ -315,6 +319,7 @@ export interface DriveKeys {
   shiftDown: boolean;
   toggleX: boolean;
   half: boolean;
+  clutch: boolean;
 }
 
 /** The instant replay: the recording, and where it is shown from while open */
@@ -544,9 +549,10 @@ export class DriveSession {
       shiftDown: false,
       toggleX: false,
       half: false,
+      clutch: false,
     };
     /** Ramped keyboard pedals 0..1 (the steering keys are shaped by the car's steering assist) */
-    const kbInput = { throttle: 0, brake: 0 };
+    const kbInput = { throttle: 0, brake: 0, clutch: 0 };
     /** Slip help on the keyboard's pedals while the car's ABS / traction control is off */
     const kbPedalAssist = new KeyboardPedalAssist();
     /** The mouse's steering, -1..1, while mouse steering is on */
@@ -558,6 +564,7 @@ export class DriveSession {
       for (const flag of Object.values(HELD_KEYS)) heldKeys[flag] = false;
       kbInput.throttle = 0;
       kbInput.brake = 0;
+      kbInput.clutch = 0;
       kbPedalAssist.reset();
     };
     this.togglePause = () => {
@@ -1719,6 +1726,7 @@ export class DriveSession {
       physics.aiAutopilot = false;
       kbInput.throttle = 0;
       kbInput.brake = 0;
+      kbInput.clutch = 0;
       kbPedalAssist.reset();
     };
     this.replayTogglePlay = () => {
@@ -2112,6 +2120,9 @@ export class DriveSession {
         keys.down ? 1 : 0,
         dtSeconds / (keys.down ? kbTuning.brakeRiseS || KB_BRAKE_RISE_S : KB_BRAKE_FALL_S)
       );
+      kb.clutch = approach(kb.clutch, keys.clutch ? 1 : 0, dtSeconds / (keys.clutch ? KB_CLUTCH_IN_S : KB_CLUTCH_OUT_S));
+      // The clutch pedal from the key, a controller or the wheel's pedal set; none bound leaves the car's own clutch
+      const clutchPedal = driving ? Math.max(kb.clutch, device.clutch) : 0;
       const carAids = physics.telemetry.liveTuner;
       const tyreSlip = axleSlipFromTelemetry(physics.telemetry, kbAxleSlip);
       const kbBrakeScale = kbPedalAssist.brakeScale(
@@ -2170,6 +2181,7 @@ export class DriveSession {
         toggleXMode: heldKeys.toggleX,
         shiftUp: heldKeys.shiftUp,
         shiftDown: heldKeys.shiftDown,
+        ...(clutchPedal > 0 ? { clutch: clutchPedal } : {}),
       };
       heldKeys.toggleX = false;
       heldKeys.shiftUp = false;
