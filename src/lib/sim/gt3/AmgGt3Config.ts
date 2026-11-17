@@ -495,15 +495,21 @@ function buildGt3LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints 
 
 /**
  * GT3 slick [spec]: the front's values, the rear's own Fz0, load sensitivity, 16-point DY/DX curves, peak
- * slip angle, relaxation length, pressure-spring rate, and camber thrust in `rearOverride` ([REAR]). The endurance
- * slicks are harder and longer-lasting than the sprint ones the reference laps ran on [bop]: D_REF (longitudinal)
- * 1.77 / 1.74 / 1.69, × 1.033 across, and three temperature curves.
+ * slip angle, relaxation length, pressure-spring rate, and camber thrust in `rearOverride` ([REAR]). D_REF
+ * (longitudinal) 1.77 / 1.74 / 1.69, each with its own lateral grip, and three temperature curves. The medium and the
+ * hard are the endurance slicks, harder and longer-lasting than the sprint ones the reference laps ran on [bop]. The
+ * soft is the tyre the sprints and the weekly challenge run on, so it corners as those laps did [motec]
  */
+/** Lateral grip over longitudinal on the endurance medium and hard: 1.7974 lateral on 1.74 longitudinal (medium) [bop] */
+const GT3_ENDURANCE_LATERAL_GRIP = 1.033;
 /**
- * Lateral grip over longitudinal: the endurance slick's 1.7974 lateral on 1.74 longitudinal (Medium) [bop]. The
- * second reference's slick leans the same way (its lateral load curve sits 5–7 % over its longitudinal one) [motec]
+ * Lateral grip over longitudinal on the soft [motec]: warm, with fuel aboard, the car holds the reference laps'
+ * sustained lateral g within 2 % from 81 to 171 km/h (1.72 / 1.77 / 1.82 / 1.98 g against 1.70 / 1.79 / 1.79 /
+ * 2.01 g). The 153 km/h bin is one fast corner that sits over the 171 km/h one; the car holds 1.92 g there against
+ * 2.13. The second reference's slick leans about as far: its lateral load curve sits 6–10 % over its longitudinal one
+ * from 1 to 5 kN [ref]
  */
-const GT3_LATERAL_GRIP = 1.033;
+const GT3_SPRINT_LATERAL_GRIP = 1.08;
 
 /** The rim and inflation cavity of an 18" GT3 wheel [est] */
 const GT3_RIM_GAS = {
@@ -538,8 +544,10 @@ function gt3Compound(
   tyre_compound: PhysicsTyreCompound,
   name: string,
   shortName: 'S' | 'M' | 'H',
-  /** D_REF (lateral = longitudinal) of the compound */
+  /** D_REF (longitudinal) of the compound */
   gripScale: number,
+  /** Its lateral grip over its longitudinal */
+  lateralGrip: number,
   thermalCurve: LutPoints,
   window: [number, number],
   /**
@@ -561,12 +569,12 @@ function gt3Compound(
     rear: GT3_REAR,
     modelData: {
       // D_REF of the load-sensitivity law μ = D_REF·(Fz/FZ0)^(LS_EXP−1), plus 16-point tabulated DY_CURVE / DX_CURVE
-      Dy0: Number((gripScale * GT3_LATERAL_GRIP).toFixed(4)),
+      Dy0: Number((gripScale * lateralGrip).toFixed(4)),
       Dx0: gripScale,
       lsExpY: 0.7917,
       lsExpX: 0.8017,
       Fz0: 3787,
-      dyCurve: buildGt3LoadCurve(gripScale * GT3_LATERAL_GRIP, 3787, 0.7917),
+      dyCurve: buildGt3LoadCurve(gripScale * lateralGrip, 3787, 0.7917),
       dxCurve: buildGt3LoadCurve(gripScale, 3787, 0.8017),
       // A brush tyre: the brush curve to the peak slip angle [motec, with the steering compliance: understeer gradient
       // 1.43 °/g against the logs' 1.44], and the second reference set's shape data, the peak angle growing 4.3 % per
@@ -661,12 +669,12 @@ function gt3Compound(
     // The 325/705-18 rear [spec REAR / REAR_1 / REAR_2, flatter load-sensitivity curve + 16-pt DY/DX tables + rear spring gain]
     rearOverride: {
       modelData: {
-        Dy0: Number((rearGripScale * GT3_LATERAL_GRIP).toFixed(4)),
+        Dy0: Number((rearGripScale * lateralGrip).toFixed(4)),
         Dx0: rearGripScale,
         Fz0: 3910,
         lsExpY: 0.8044,
         lsExpX: 0.8144,
-        dyCurve: buildGt3LoadCurve(rearGripScale * GT3_LATERAL_GRIP, 3910, 0.8044),
+        dyCurve: buildGt3LoadCurve(rearGripScale * lateralGrip, 3910, 0.8044),
         dxCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8144),
         friction_limit_angle: 6.06,
         peakSlipLoadGain: 0.035,
@@ -706,6 +714,7 @@ const TYRES = {
     'GT3 Soft',
     'S',
     1.77,
+    GT3_SPRINT_LATERAL_GRIP,
     [
       [0, 0.7],
       [20, 0.8],
@@ -728,6 +737,7 @@ const TYRES = {
     'GT3 Medium',
     'M',
     1.74,
+    GT3_ENDURANCE_LATERAL_GRIP,
     [
       [0, 0.7],
       [20, 0.8],
@@ -751,6 +761,7 @@ const TYRES = {
     'GT3 Hard',
     'H',
     1.69,
+    GT3_ENDURANCE_LATERAL_GRIP,
     [
       [0, 0.7],
       [20, 0.8],
