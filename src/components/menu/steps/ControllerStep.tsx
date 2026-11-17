@@ -156,12 +156,22 @@ export function ControllerButtonsCard() {
   useButtonCapture(capturing, (b) => onButton(b.button), onCancel, { standardOnly: true });
 
   const name = (button: number | null) => padButtonName(button, shownFamily);
+  // Gears with no button (the pedals moved back onto the triggers they shifted on, say): the manual box can't shift
+  const noGears = PAD_ACTIONS.filter(({ id }) => (id === "shiftUp" || id === "shiftDown") && settings.padButtons[id] === null).map(
+    ({ label }, i) => (i === 0 ? label : label.toLowerCase()),
+  );
+  const gearHint = noGears.length
+    ? `${noGears.join(" and ")} ${noGears.length > 1 ? "have" : "has"} no button, so the manual gearbox can't shift. Press a layout, or set ${
+        noGears.length > 1 ? "them" : "it"
+      } below`
+    : undefined;
   const layout: RowDef = choice("tiles", {
     id: "padLayout",
     label: "Button layout",
     columns: 3,
     hint: () =>
-      matchPadLayout(settings.padButtons, sources) === null ? "My own layout: press a layout to start from it" : undefined,
+      gearHint ??
+      (matchPadLayout(settings.padButtons, sources) === null ? "My own layout: press a layout to start from it" : undefined),
     options: PAD_LAYOUT_IDS.map((id) => {
       const { buttons: b, pedals: p } = PAD_LAYOUTS[id];
       const gears = `${name(b.shiftUp)} / ${name(b.shiftDown)} gears`;
