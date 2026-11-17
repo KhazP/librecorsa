@@ -11,7 +11,7 @@ import { listBestLaps } from "@/lib/sim/ghost-store";
 import { lapPlausibilityProblem } from "@/lib/sim/lap-plausibility";
 import { isPointToPointTrack } from "@/lib/track-kinds";
 import { validateLapRecording } from "@/lib/sim/lap-recorder";
-import { lapBoardClass, lapPhysicsVersion, type LapConditions, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { isCurrentLapPhysics, lapBoardClass, lapPhysicsVersion, type LapConditions, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { getOrCreateDriverKey } from "./driver-key";
 import { getOnlineConfig, markOnlineAnswered, markOnlineUnreachable, onlineUrl, readOnlineConfig } from "./online-config";
 import { cappedString, clampLimit, fetchBoardPage, finiteNumber, parseBoardPage, requestJson, type BoardFilter } from "./board-client";
@@ -59,6 +59,8 @@ export interface SubmitResult {
 export const BOARD_UNREACHABLE = "Couldn't reach the online board, I'll keep trying";
 /** The same once the game has stopped trying by itself (Your best laps still has Retry) */
 export const BOARD_UNREACHABLE_GAVE_UP = "Couldn't reach the online board";
+/** A lap driven on an older physics version, or before its circuit's boards started again: that board is read only */
+export const OLDER_PHYSICS_LAP = "This lap is from an older version of the physics or the circuit, and that board is read only";
 
 export interface RenameResult {
   ok: boolean;
@@ -242,7 +244,7 @@ export function clearBoardMiss(key: string, lapTimeMs: number): void {
 export function boardStatusOf(
   lap: Pick<LeaderboardEntry, "trackId" | "vehicle" | "conditions" | "lapTimeMs" | "recordedAt">,
 ): { posted: true } | { posted: false; error: string | null } | null {
-  if (!lap.conditions || lap.conditions.physicsVersion !== lapPhysicsVersion(lap.vehicle)) return null;
+  if (!lap.conditions || lap.conditions.physicsVersion !== lapPhysicsVersion(lap.vehicle, lap.trackId)) return null;
   const key = boardKeyOf(lap);
   if (!key) return null;
   const best = loadBoardBest(key);
@@ -302,13 +304,13 @@ export function parseRemoteBoard(
 }
 
 /**
- * One online board: the fastest drivers of a circuit and car (optionally only laps driven a certain way), and where
- * `name` stands on it. Null when there is no online board, or it could not be read.
+ * One online board: the fastest drivers of a circuit and car (optionally only laps driven a certain way, or under an
+ * older physics `version`), and where `name` stands on it. Null when there is no online board, or it could not be read.
  */
 export async function fetchRemoteBoard(
   trackId: string,
   vehicle: VehicleModelId,
-  opts: { filter?: BoardFilter; physics?: number; name?: string; event?: string; limit?: number } = {},
+  opts: { filter?: BoardFilter; physics?: number; version?: number; name?: string; event?: string; limit?: number } = {},
 ): Promise<RemoteBoard | null> {
   const page = await fetchBoardPage(trackId, vehicle, { ...opts, limit: clampLimit(opts.limit ?? DEFAULT_LIMIT, DEFAULT_LIMIT) });
   return page ? { entries: page.entries, total: page.total, me: page.me, physics: page.physics } : null;
@@ -345,6 +347,8 @@ export async function submitLap(rec: LapRecording, opts: { event?: string } = {}
   if (!valid) return { ok: false, error: "The lap recording is invalid" };
   // Without its assists, realism, surface and physics revision a lap can't be shown fairly
   if (!valid.conditions) return { ok: false, error: "This lap was recorded by an older version of the game" };
+  // Only the physics and the circuit as they are now take laps (a lap queued from before an update stays off)
+  if (!isCurrentLapPhysics(valid.vehicle, valid.conditions.physicsVersion, valid.trackId)) return { ok: false, error: OLDER_PHYSICS_LAP };
   // The board refuses a lap whose samples don't agree with each other; say so before uploading
   const problem = lapPlausibilityProblem(valid.data, { open: isPointToPointTrack(valid.trackId) });
   if (problem) return { ok: false, error: problem };
