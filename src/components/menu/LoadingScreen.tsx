@@ -102,7 +102,7 @@ const MakersLines: React.FC<{ trackId: string; trackName: string; carId: CarId }
 /** One start-light column (two lamps) inside the pill */
 const LightColumn: React.FC<{ lit: boolean; ready: boolean }> = ({ lit, ready }) => {
   // Real start lights: red lamps, out for the go (green here, once everything is in)
-  const lamp = `size-4.5 rounded-full transition-[background-color,box-shadow] duration-300 sm:size-5.5 phone:size-4.5 ${
+  const lamp = `size-4.5 rounded-full sm:size-5.5 phone:size-4.5 ${
     ready
       ? "bg-lc-gain shadow-[0_0_14px_var(--color-lc-gain)]"
       : lit

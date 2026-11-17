@@ -782,8 +782,10 @@ body {
     transform: none;
   }
 }
+/* Backwards, not both: an opacity animation still held after it ends keeps the panel a backdrop root, and the
+   frosted glass inside it never blurs */
 .lc-panel-in {
-  animation: lc-panel-in 180ms ease-out both;
+  animation: lc-panel-in 180ms ease-out backwards;
 }
 @media (prefers-reduced-motion: reduce) {
   .lc-panel-in {
@@ -839,9 +841,20 @@ body {
   transform-origin: bottom;
   animation: lc-rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
+/* Text that rises into place whole (podium places and names), hidden until its delay is up */
+@keyframes lc-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+.lc-rise-in {
+  animation: lc-rise-in 400ms var(--lc-ease) backwards;
+}
 @media (prefers-reduced-motion: reduce) {
   .lc-grow,
-  .lc-rise {
+  .lc-rise,
+  .lc-rise-in {
     animation: none;
   }
 }

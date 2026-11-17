@@ -426,7 +426,7 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
                   data-nav-zone={PANE}
                   className="flex min-w-0 flex-col gap-3"
                 >
-                  <div key={`${category}/${tab.id}`} className="lc-panel-in flex min-w-0 flex-col gap-3">
+                  <div key={`${category}/${tab.id}`} className="flex min-w-0 flex-col gap-3">
                     {advancedOnly ? <AdvancedOnly what={tab.advancedOnly!} onShowAdvanced={() => setDetail("advanced")} /> : tab.render()}
                     {detail === "simple" && !advancedOnly && advancedHere > 0 ? (
                       <AdvancedOnly more what="More settings on this page" onShowAdvanced={() => setDetail("advanced")} />

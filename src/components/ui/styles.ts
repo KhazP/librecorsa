@@ -23,6 +23,8 @@ export const CURSOR_PILL = cx(
   "outline-none focus-visible:outline-none",
   "focus:bg-lc-volt focus:text-lc-void focus:inset-ring-transparent focus:shadow-lc-focus",
   "data-cursor:bg-lc-volt data-cursor:text-lc-void data-cursor:inset-ring-transparent data-cursor:shadow-lc-focus",
+  // Lands at once on a pad or keyboard move; under the mouse it keeps the fade
+  "in-data-[input=keyboard]:focus:transition-none in-data-[input=pad]:focus:transition-none in-data-[input=keyboard]:data-cursor:transition-none in-data-[input=pad]:data-cursor:transition-none",
 );
 
 /** Pressed: one step darker, chosen and cursor alike */
@@ -39,6 +41,8 @@ export const CURSOR_TILE = cx(
   "outline-none focus-visible:outline-none",
   "focus:border-lc-volt focus:inset-ring focus:inset-ring-lc-volt focus:shadow-lc-focus",
   "data-cursor:border-lc-volt data-cursor:inset-ring data-cursor:inset-ring-lc-volt data-cursor:shadow-lc-focus",
+  // Lands at once on a pad or keyboard move; under the mouse it keeps the fade
+  "in-data-[input=keyboard]:focus:transition-none in-data-[input=pad]:focus:transition-none in-data-[input=keyboard]:data-cursor:transition-none in-data-[input=pad]:data-cursor:transition-none",
 );
 
 /** The cursor on a full-width row-like button (Disclosure): the row ring, 2 px volt outline and a 6 % volt tint */

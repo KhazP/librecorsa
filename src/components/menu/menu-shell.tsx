@@ -162,6 +162,7 @@ export const HeroAction: React.FC<{
         "group flex w-full min-w-0 cursor-pointer items-center border-0 text-left text-lc-chalk",
         MOTION,
         "outline-none focus-visible:outline-none focus:bg-lc-volt focus:text-lc-void focus:shadow-lc-focus focus:inset-ring-transparent active:bg-lc-volt-dim",
+        "in-data-[input=keyboard]:focus:transition-none in-data-[input=pad]:focus:transition-none",
         s.box,
       )}
     >
@@ -171,6 +172,7 @@ export const HeroAction: React.FC<{
           "inline-flex shrink-0 items-center justify-center rounded-full bg-lc-volt text-lc-void",
           MOTION,
           "group-focus:bg-lc-void group-focus:text-lc-volt",
+          "in-data-[input=keyboard]:group-focus:transition-none in-data-[input=pad]:group-focus:transition-none",
           s.disc,
         )}
       >

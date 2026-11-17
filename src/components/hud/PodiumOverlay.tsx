@@ -28,7 +28,7 @@ export const PodiumOverlay: React.FC<{ rows: readonly PodiumRow[]; trackName: st
             r ? (
               <div
                 key={`${r.position}-${r.driverCode}`}
-                className="lc-rise flex min-w-0 flex-col items-center gap-1.5 text-center"
+                className="lc-rise-in flex min-w-0 flex-col items-center gap-1.5 text-center"
                 style={{ animationDelay: `${r.position === 1 ? 150 : r.position === 2 ? 400 : 650}ms` }}
               >
                 <span

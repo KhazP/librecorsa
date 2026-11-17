@@ -141,7 +141,7 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={bodyId}
-        className="lc-glass lc-ui-zoom lc-toast-in flex w-full max-w-[26rem] flex-col gap-4 rounded-lc-sheet p-6 text-lc-chalk shadow-lc-sheet phone:p-5"
+        className="lc-glass lc-ui-zoom lc-toast-in flex w-full max-w-[26rem] [backdrop-filter:none] flex-col gap-4 rounded-lc-sheet p-6 text-lc-chalk shadow-lc-sheet phone:p-5"
       >
         <div className="flex items-start gap-3">
           {icon ? (

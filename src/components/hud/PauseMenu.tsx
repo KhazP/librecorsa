@@ -421,7 +421,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
               data-nav-zone="panel"
               aria-label={tabs.find((t) => t.id === panel)?.label}
             >
-              <div key={panel} className="lc-panel-in">
+              <div key={panel}>
                 {panel === "settings" ? <SessionPanel {...props} /> : null}
                 {panel === "hud" && displayPanel ? <HudPanel display={displayPanel} onOpenSettings={props.onOpenSettings} /> : null}
                 {panel === "conditions" && conditionsPanel ? (
