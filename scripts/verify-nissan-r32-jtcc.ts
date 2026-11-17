@@ -9,6 +9,7 @@
  * the axles), the shifts, the driver aids through the simulator adapter, then autopilot laps of Rwanda against the GT3's.
  * The ranges are what the mod's data gives in Assetto Corsa terms, not tuned to these numbers.
  */
+import { SIM_REALISM_FLAGS } from '../src/lib/sim/sim-realism';
 import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
@@ -400,7 +401,9 @@ console.log("\n== Brakes, fuel and steering from the car's data");
   check('Pad friction 0.986 / 1.000 / 0.989 at 0 / 500 / 1200 °C', [0.986, 1, 0.989].every((v, i) => Math.abs(pads[i] - v) < 1e-9), pads.map((v) => fmt(v, 3)).join(' / '));
 
   // 0.004 l/s per 1000 rpm flat out at 0.74 kg/l
+  // The fuel-flow model, burning (the game's sprints run on a fixed load, `SimRealismFlags.fuelUse`)
   const sim = createNissanR32Sim(pad);
+  sim.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
   sim.assistPreset = 'pro';
   sim.teleportToDistance(1000, 0);
   const f0 = sim.telemetry.fuelKg;

@@ -50,6 +50,28 @@ export interface ChassisSetup {
   brakeDuctRear: number;
   /** Starting fuel load from the car's default (kg, see FUEL_LOAD) */
   fuelDeltaKg: number;
+  /** Third (heave) springs, % stiffer or softer than the baseline, on a car that has them */
+  heaveSpringFrontPct: number;
+  heaveSpringRearPct: number;
+  /** Third-spring packers: free heave travel before they touch, from the baseline (mm, + = more travel) */
+  heavePackerFrontMm: number;
+  heavePackerRearMm: number;
+  /** Corner packers on the damper shafts (mm), taking free travel off the bump rubbers */
+  cornerPackerFrontMm: number;
+  cornerPackerRearMm: number;
+  /** Third dampers, % stiffer or softer than the baseline: slow and fast, bump and rebound */
+  heaveBumpFrontPct: number;
+  heaveBumpRearPct: number;
+  heaveFastBumpFrontPct: number;
+  heaveFastBumpRearPct: number;
+  heaveReboundFrontPct: number;
+  heaveReboundRearPct: number;
+  heaveFastReboundFrontPct: number;
+  heaveFastReboundRearPct: number;
+  /** Radiator opening in steps from the baseline (− = taped up: less drag, a hotter engine) */
+  radiatorTapeSteps: number;
+  /** Which of the car's homologated gear sets (`CarPhysicsConfig.gearSets`): 0 its first, the sprint set */
+  gearRatioSet: number;
 }
 
 export const DEFAULT_CHASSIS_SETUP: ChassisSetup = {
@@ -82,6 +104,22 @@ export const DEFAULT_CHASSIS_SETUP: ChassisSetup = {
   brakeDuctFront: 0,
   brakeDuctRear: 0,
   fuelDeltaKg: 0,
+  heaveSpringFrontPct: 0,
+  heaveSpringRearPct: 0,
+  heavePackerFrontMm: 0,
+  heavePackerRearMm: 0,
+  cornerPackerFrontMm: 0,
+  cornerPackerRearMm: 0,
+  heaveBumpFrontPct: 0,
+  heaveBumpRearPct: 0,
+  heaveFastBumpFrontPct: 0,
+  heaveFastBumpRearPct: 0,
+  heaveReboundFrontPct: 0,
+  heaveReboundRearPct: 0,
+  heaveFastReboundFrontPct: 0,
+  heaveFastReboundRearPct: 0,
+  radiatorTapeSteps: 0,
+  gearRatioSet: 0,
 };
 
 export interface SetupRange {
@@ -98,6 +136,7 @@ export const CHASSIS_LIMITS: Record<keyof ChassisSetup, SetupRange> = {
   rideHeightRearMm: { min: -15, max: 15, step: 1 },
   springFrontPct: { min: -30, max: 30, step: 1.5 },
   springRearPct: { min: -30, max: 30, step: 1.5 },
+  // Below −50 % only −100 % itself: the bar disconnected, on a car whose data allows it (`AxleSuspensionData.allowNoArb`)
   arbFrontPct: { min: -50, max: 50, step: 5 },
   arbRearPct: { min: -50, max: 50, step: 5 },
   bumpFrontPct: { min: -40, max: 40, step: 5 },
@@ -121,6 +160,22 @@ export const CHASSIS_LIMITS: Record<keyof ChassisSetup, SetupRange> = {
   brakeDuctFront: { min: -3, max: 3, step: 1 },
   brakeDuctRear: { min: -3, max: 3, step: 1 },
   fuelDeltaKg: { min: -50, max: 80, step: 1 },
+  heaveSpringFrontPct: { min: -40, max: 60, step: 2 },
+  heaveSpringRearPct: { min: -40, max: 60, step: 2 },
+  heavePackerFrontMm: { min: -15, max: 25, step: 1 },
+  heavePackerRearMm: { min: -15, max: 25, step: 1 },
+  cornerPackerFrontMm: { min: 0, max: 25, step: 1 },
+  cornerPackerRearMm: { min: 0, max: 25, step: 1 },
+  heaveBumpFrontPct: { min: -40, max: 40, step: 5 },
+  heaveBumpRearPct: { min: -40, max: 40, step: 5 },
+  heaveFastBumpFrontPct: { min: -40, max: 40, step: 5 },
+  heaveFastBumpRearPct: { min: -40, max: 40, step: 5 },
+  heaveReboundFrontPct: { min: -40, max: 40, step: 5 },
+  heaveReboundRearPct: { min: -40, max: 40, step: 5 },
+  heaveFastReboundFrontPct: { min: -40, max: 40, step: 5 },
+  heaveFastReboundRearPct: { min: -40, max: 40, step: 5 },
+  radiatorTapeSteps: { min: -2, max: 4, step: 1 },
+  gearRatioSet: { min: 0, max: 1, step: 1 },
 };
 
 /** Element angle one wing step adds (deg): F1 cars on a 0–50 scale, the GT3 rear wing in its own clicks */
@@ -151,14 +206,15 @@ export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: numbe
 export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: number; maxKg: number }> = {
   lc26: { defaultKg: LC26_CHASSIS.fuelKg, minKg: 5, maxKg: LC26_CHASSIS.fuelTankKg },
   "f12026-car": { defaultKg: 35, minKg: 5, maxKg: 110 },
-  "amg-gt3": { defaultKg: 50, minKg: 5, maxKg: 89 },
+  // A sprint's fixed 30 kg (≈ 40 l) [est]
+  "amg-gt3": { defaultKg: 30, minKg: 5, maxKg: 74 },
   // 30 l of a 50 l tank of petrol [spec car.ini FUEL / MAX_FUEL]
   liana: { defaultKg: 22, minKg: 4, maxKg: 37 },
   // 30 l of a 90 l tank [spec car.ini FUEL / MAX_FUEL]
   "mtr-496r": { defaultKg: 22, minKg: 4, maxKg: 67 },
-  // Half of a 76 kg (≈ 101 l) fill [est]: the regulations ask for a cell of at least 110 l (Art. 13.14) [spec], and hold
+  // A sprint's fixed 28 kg (≈ 38 l) [est]: the regulations ask for a cell of at least 110 l (Art. 13.14) [spec], and hold
   // the class to an energy per stint
-  "lc-lmdh": { defaultKg: 38, minKg: 5, maxKg: 76 },
+  "lc-lmdh": { defaultKg: 28, minKg: 5, maxKg: 81 },
   // 40 l of a 100 l tank [spec car.ini FUEL / MAX_FUEL]
   "nissan-r33-jgtc": { defaultKg: 30, minKg: 4, maxKg: 74 },
   // 30 l of a 120 l tank [spec car.ini FUEL / MAX_FUEL]
@@ -189,8 +245,8 @@ export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   "amg-gt3": 12.6,
   liana: 15,
   "mtr-496r": 14,
-  // [est]
-  "lc-lmdh": 12.5,
+  // 527° of rim lock for 20° at the road wheels [est]
+  "lc-lmdh": 13.175,
   // [spec car.ini STEER_RATIO]
   "nissan-r33-jgtc": 15,
   "nissan-r32-jtcc": 12.4,
@@ -211,11 +267,18 @@ export function clampChassisSetup(v: unknown): ChassisSetup {
   for (const k of Object.keys(CHASSIS_LIMITS) as (keyof ChassisSetup)[]) {
     const n = src[k];
     if (typeof n !== "number" || !Number.isFinite(n)) continue;
+    if ((k === "arbFrontPct" || k === "arbRearPct") && n <= ARB_DETACHED_PCT) {
+      out[k] = ARB_DETACHED_PCT;
+      continue;
+    }
     const r = CHASSIS_LIMITS[k];
     out[k] = Number(Math.max(r.min, Math.min(r.max, Math.round(n / r.step) * r.step)).toFixed(3));
   }
   return out;
 }
+
+/** The anti-roll bar setting that disconnects it (−100 %: 0 N/m) */
+export const ARB_DETACHED_PCT = -100;
 
 /** 1 + pct / 100, for scaling a baseline */
 export const pctScale = (pct: number) => 1 + pct / 100;
@@ -223,7 +286,18 @@ export const pctScale = (pct: number) => 1 + pct / 100;
 /** The electronics a preset sets as the car leaves the garage */
 export type GarageTuner = Pick<
   LiveTunerPatch,
-  "tcLevel" | "tc2Level" | "absLevel" | "brakeBiasPct" | "brakeMigrationPct" | "diffEntry" | "diffMid" | "diffExit" | "engineMap"
+  | "tcLevel"
+  | "tc2Level"
+  | "tcSlipAngleLevel"
+  | "absLevel"
+  | "brakeBiasPct"
+  | "brakeMigrationPct"
+  | "diffEntry"
+  | "diffMid"
+  | "diffExit"
+  | "engineMap"
+  | "motorDeployKw"
+  | "regenKw"
 >;
 
 export interface GaragePreset {
@@ -237,6 +311,30 @@ export interface GaragePreset {
   aero: AeroSetupPreset;
   tuner: GarageTuner;
 }
+
+/** A setup the car comes with: its overrides on top of the car's baseline (the electronics and compound stay as set) */
+export interface FactoryPreset {
+  id: string;
+  name: string;
+  aero: AeroSetupPreset;
+  chassis: Partial<ChassisSetup>;
+  camberDeg?: { front: number; rear: number };
+}
+
+/** The endurance cars' low-drag trims for long-straight circuits: low-downforce aero on the long gear set */
+export const FACTORY_PRESETS: Partial<Record<VehicleModelId, readonly FactoryPreset[]>> = {
+  "amg-gt3": [{ id: "low_drag_gt3", name: "Low drag", aero: "low_downforce", chassis: { gearRatioSet: 1 } }],
+  // The prototype also runs its rear bar detached and less camber for the straights
+  "lc-lmdh": [
+    {
+      id: "low_drag_proto",
+      name: "Low drag",
+      aero: "low_downforce",
+      chassis: { gearRatioSet: 1, arbRearPct: ARB_DETACHED_PCT },
+      camberDeg: { front: -1.2, rear: -1.0 },
+    },
+  ],
+};
 
 const chassisKey = (v: VehicleModelId) => `lc.garage.chassis.${v}`;
 const presetsKey = (v: VehicleModelId) => `lc.garage.presets.${v}`;

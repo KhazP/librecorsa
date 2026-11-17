@@ -3,7 +3,15 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import type { AeroSetupPreset, LiveTunerPatch, LiveTunerState, TireCompound } from "@/types/f1";
-import { DEFAULT_CHASSIS_SETUP, loadGaragePresets, saveGaragePresets, type GaragePreset, type GarageTuner } from "@/lib/sim/car-setup";
+import {
+  DEFAULT_CHASSIS_SETUP,
+  FACTORY_PRESETS,
+  loadGaragePresets,
+  saveGaragePresets,
+  type FactoryPreset,
+  type GaragePreset,
+  type GarageTuner,
+} from "@/lib/sim/car-setup";
 import { setupSheet, type SetupGroup, type SetupParam, type SetupState } from "@/lib/sim/setup-sheet";
 import type { PauseMenuProps } from "@/components/hud/PauseMenu";
 import { Button, Card, IconButton, Segmented, SettingRow, Slider, Tabs, TextField, Toast } from "@/components/ui";
@@ -161,6 +169,7 @@ export const EngineersGarage: React.FC<
   const currentTuner: GarageTuner = {
     tcLevel: tuner.tcLevel,
     tc2Level: tuner.tc2Level,
+    tcSlipAngleLevel: tuner.tcSlipAngleLevel,
     absLevel: tuner.absLevel,
     brakeBiasPct: tuner.brakeBiasPct,
     brakeMigrationPct: tuner.brakeMigrationPct,
@@ -168,6 +177,9 @@ export const EngineersGarage: React.FC<
     diffMid: tuner.diffMid,
     diffExit: tuner.diffExit,
     engineMap: tuner.engineMap,
+    // The hybrid's kW dials, on a car with them (null: none)
+    ...(tuner.motorDeployKw != null ? { motorDeployKw: tuner.motorDeployKw } : {}),
+    ...(tuner.regenKw != null ? { regenKw: tuner.regenKw } : {}),
   };
   const st: SetupState = { chassis, tyre: p.tyreSetup, tuner: currentTuner };
   /** The whole setup as it stands, so an action that overwrites it can be undone */
@@ -246,6 +258,20 @@ export const EngineersGarage: React.FC<
     p.onChangeLiveTuner?.(loaded.tuner);
     setNote(`Loaded “${x.name}”`, () => restore(before));
   };
+  /** A factory setup: the car's baseline with the preset's changes, loaded as a saved one is */
+  const loadFactoryPreset = (f: FactoryPreset) =>
+    loadPreset({
+      id: f.id,
+      name: f.name,
+      savedAt: 0,
+      vehicle: p.vehicleModel,
+      chassis: { ...DEFAULT_CHASSIS_SETUP, ...f.chassis },
+      tyre: { ...p.defaultTyreSetup, camberDeg: f.camberDeg ?? p.defaultTyreSetup.camberDeg },
+      compound: p.tireCompound,
+      aero: f.aero,
+      tuner: {},
+    });
+  const factoryPresets = FACTORY_PRESETS[p.vehicleModel] ?? [];
   const deletePreset = (x: GaragePreset) => {
     const before = presets;
     const next = presets.filter((y) => y.id !== x.id);
@@ -349,7 +375,16 @@ export const EngineersGarage: React.FC<
     if (x === "assists")
       // The TC & ABS preset lives in Settings > Driving now: the Garage shows it and links there
       return (
-        <SettingRow key={x} label="Traction control & ABS" hint={`${ASSIST_WORDS[p.assistPreset] ?? p.assistPreset}, set in Settings`}>
+        <SettingRow
+          key={x}
+          label="Traction control & ABS"
+          hint={
+            // A class without ABS runs the middle preset on TC alone, and ABS only on Full
+            tuner.absAllowed === false
+              ? `${p.assistPreset === "semi_pro" ? "TC" : (ASSIST_WORDS[p.assistPreset] ?? p.assistPreset)}, set in Settings. This class races without ABS: only Full adds it`
+              : `${ASSIST_WORDS[p.assistPreset] ?? p.assistPreset}, set in Settings`
+          }
+        >
           {p.onOpenSettings ? (
             <Button size="sm" variant="secondary" icon={<Icon name="settings" />} onClick={() => p.onOpenSettings?.("driving")}>
               Settings
@@ -456,8 +491,19 @@ export const EngineersGarage: React.FC<
               Save
             </Button>
           </div>
-          {presets.length > 0 ? (
+          {presets.length > 0 || factoryPresets.length > 0 ? (
             <ul className="m-0 flex list-none flex-col gap-1 p-0 pt-2">
+              {/* The car's own setups first, which cannot be deleted */}
+              {factoryPresets.map((f) => (
+                <li key={f.id} className="flex items-center gap-1">
+                  <span className="min-w-0 flex-1">
+                    <Button size="sm" variant="ghost" block onClick={() => loadFactoryPreset(f)} aria-label={`Load ${f.name}, the factory setup`}>
+                      <span className="truncate">{f.name}</span>
+                      <span className="lc-hint ml-2 shrink-0">Factory</span>
+                    </Button>
+                  </span>
+                </li>
+              ))}
               {presets.map((x) => (
                 <li key={x.id} className="flex items-center gap-1">
                   <span className="min-w-0 flex-1">

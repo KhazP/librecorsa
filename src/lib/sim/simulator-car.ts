@@ -150,8 +150,11 @@ export interface SimulatorCar {
 
   /** Advance by a render frame */
   step(dtSeconds: number, inputs: Partial<ControlInputs>): unknown;
-  /** `fieldSize`: a race's rolling start, every car of the field at one speed (`rollingStartSpeedMs`) */
-  resetToStartGrid(flyingStart?: boolean, gridSlot?: number, fieldSize?: number): void;
+  /**
+   * `fieldSize`: a race's rolling start, every car of the field at one speed (`rollingStartSpeedMs`). `raceStart`: a
+   * race's grid, after its formation lap (warm tyres and brakes), not a car out of the garage
+   */
+  resetToStartGrid(flyingStart?: boolean, gridSlot?: number, fieldSize?: number, raceStart?: boolean): void;
   teleportToDistance(sMeters: number, speedMs?: number, lateral?: number): void;
   teleportToTurn(turnNumber: number): void;
   /**

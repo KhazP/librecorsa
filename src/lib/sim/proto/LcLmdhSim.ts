@@ -1,9 +1,7 @@
 /**
  * The LC-LMDH in the simulator: the f12026-car adapter (`F12026CarSim`) driving `LC_LMDH_CONFIG`.
- * A hybrid with no DRS and no ABS. The car's own traction control stays on in every preset (the regulations allow one):
- * pro runs it at a light setting with no ABS, as the car is; semi-pro and assisted tighten it and add the simulator's
- * ABS (as the F1 cars' and the other prototype's presets do, which have none either), so the AI, which brakes on the
- * semi-pro aids, doesn't lock its fronts.
+ * A hybrid with no DRS. The real car races without ABS (Art. 11.5.1); here it has the simulator's ABS on the TC + ABS
+ * and Full presets as every other car does, so its fronts don't lock under a driver used to ABS. Off is off.
  */
 import type { BuiltTrackData } from '@/lib/track-data';
 import type * as THREE from 'three';
@@ -28,14 +26,15 @@ const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.s
 /**
  * The car's planning model for its lap-time line, braking zones, braking urgency and HUD target speed, at ρ 1.07
  * (Rwanda's air, as the other closed-wheel cars' plans are): downforce 2.2 v² (CL·A ≈ 4.1 m² over the speeds a lap
- * uses), drag 0.53 v² (CD·A 0.99 m²), 55.5 % of the downforce on the rear axle. It corners on μ 1.365 and brakes on
+ * uses), drag 0.588 v² (CD·A 1.10 m²), 55.5 % of the downforce on the rear axle. It corners on μ 1.365 and brakes on
  * μ 1.3, under what `scripts/ai/measure-ggv.ts` measures (1.59 g at 54 km/h and 3.43 g at 306 in corners, 1.69 and
  * 3.42 g on the brakes), so it never brakes later than the car can stop.
  */
 export const LC_LMDH_PROFILE_CAR: SpeedProfileCarModel = {
   massKg: C.chassis.totalMassKg,
   downforceCoef: 2.2,
-  dragCoef: 0.53,
+  // ½ρ·CD·A at ρ 1.07: the endurance trim's ≈ 1.10 m² on the 5.5° wing
+  dragCoef: 0.588,
   rearDownforceShare: 0.555,
   rearWeightFraction: 1 - C.chassis.frontWeightFraction,
   muLat: 1.365,
@@ -56,17 +55,25 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   hasErs: true,
   hasDrs: false,
   turbo: true,
-  // [est]
-  coldPsiRange: [18, 34],
-  frontCamberRange: [-4, 0],
-  rearCamberRange: [-3, 0],
+  // Cold pressures at the garage's 25 °C (no blankets): 131–172 kPa [bop]
+  coldPsiRange: [19, 25],
+  frontCamberRange: [-3.2, -0.8],
+  rearCamberRange: [-2.6, -0.6],
+  setupPressureRefC: 25,
+  // Three traction dials
+  tcSlipAngleDial: true,
+  // −0.12° (toe-out) front, +0.12° rear [bop]
+  staticToeDeg: { front: -0.12, rear: 0.12 },
   tcMinSpeedMs: E.tcMinSpeedKmh / 3.6,
   electronics: E,
-  // The rear wing goes 1–9° (set 5.5); the splitter is fixed
-  aeroPackagesDeg: { low_downforce: [0, -4.5], balanced: [0, 0], high_downforce: [0, 3.5] },
-  padLateralMu: 1.4,
-  // 225° of rim lock each way on a 12.5 : 1 rack [est]
-  steerRatio: 12.5,
+  // The rear wing goes 1–9° (set 5.5); the splitter is fixed, and the low-drag package trims its dive planes so the
+  // balance stays where it was
+  aeroPackagesDeg: { low_downforce: [-3, -4.5], balanced: [0, 0], high_downforce: [0, 3.5] },
+  // Its grip on the flat per g of weight and downforce, 1.46–1.51 from 80 to 180 km/h: the steering assist's yaw guard
+  // reads this, and the 1.4 it had trimmed a stick's lock short of the grip in slow corners
+  padLateralMu: 1.5,
+  // 263.5° of rim lock each way on a 13.175 : 1 rack [bop]
+  steerRatio: 13.175,
   // The autopilot brakes on 85 % of this and corners on 1.1 × that: 1.45 g at low speed and 3.2 g at 306 km/h, inside
   // the measured 1.52 and 3.32 g
   braking: { lowG: 1.55, aeroG: 1.9, refMs: 85 },
@@ -77,11 +84,12 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   // ≈ 0.033 kg/s at 8000 rpm flat out [est]: 540 kW at the crank at 38 % efficiency. The flow follows the pedal and the
   // revs, not the torque: the fuel the hybrid's deployment saves on the real car is not counted
   fuelLPerS1000Rpm: 0.0055,
-  // Levels index the electronics tables from the most intrusive (12): 4 is 9 % of wheelspin, 6 the default 8 %
+  // Levels index the electronics tables from the most intrusive (12). The class's dry baseline is 10 / 7 / 10 (slip,
+  // cut, slip angle); ABS on TC + ABS and Full
   assistDials: {
-    pro: { tcLevel: 4, tc2Level: 4, absLevel: 0 },
-    semi_pro: { tcLevel: 6, tc2Level: 6, absLevel: 6 },
-    assisted: { tcLevel: 9, tc2Level: 9, absLevel: 9 },
+    pro: { tcLevel: 0, tc2Level: 7, absLevel: 0, tcSlipAngleLevel: 0 },
+    semi_pro: { tcLevel: 10, tc2Level: 7, absLevel: 6, tcSlipAngleLevel: 10 },
+    assisted: { tcLevel: 12, tc2Level: 9, absLevel: 9, tcSlipAngleLevel: 12 },
   },
   keyboardSteer: { lowSpeedRate: 1.25, highSpeedRate: 0.85, returnRate: 1 },
   // The spec hybrid's motor is on the gearbox's clutch shaft (Art. 5.3.2) [spec]

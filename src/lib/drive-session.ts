@@ -983,7 +983,7 @@ export class DriveSession {
           const key = `${cars}:${rolling}`;
           if (gridWarm?.physics !== physics || gridWarm.key !== key) gridWarm = { physics, key, next: 0 };
           if (!physics.createAiPeerCar || gridWarm.next >= cars) return;
-          physics.createAiPeerCar().resetToStartGrid(rolling, gridWarm.next, rolling ? cars : undefined);
+          physics.createAiPeerCar().resetToStartGrid(rolling, gridWarm.next, rolling ? cars : undefined, true);
           gridWarm.next++;
           aiPrepQueued = true;
           scheduleIdle(run, AI_PREP_GAP_MS);

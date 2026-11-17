@@ -102,38 +102,29 @@ console.log('\n== Graining wears off as the tread slides');
   check('GT3 and F1 slicks: their GRAIN_* data wears graining off only as the tread slides', tread(AMG_GT3_CONFIG as never) && tread(F12026_CAR_CONFIG as never), '');
 }
 
-console.log('\n== Band spread');
+console.log('\n== Contact strips');
 {
-  // Camber moves the contact pressure, and the heat, across the bands by the compound's own spread where it states one
-  const shares = (spread?: { camber: number; lateral: number }) => {
-    const cfg = spread === undefined ? AMG_GT3_CONFIG : {
-      ...AMG_GT3_CONFIG,
-      tyreCompounds: Object.fromEntries(
-        Object.entries(AMG_GT3_CONFIG.tyreCompounds).map(([k, t]) => [k, t && { ...t, thermalData: { ...t.thermalData, bandSpread: spread } }])
-      ),
-    };
-    const car = new VehiclePhysics({ ground: new FlatGroundQuery(0), config: cfg as never, airDensity: 1.225 });
-    car.reset(0, 0, 0, 30);
-    for (let t = 0; t < 1; t += 1 / 120) car.step(1 / 120, { throttle: 0.2, brake: 0, steer: 0 });
-    const sh = car.wheels[0].bandLoadShares;
-    return sh[0] - sh[2];
-  };
-  const dflt = shares();
-  const same = shares({ camber: 3.8, lateral: 0.22 });
-  const none = shares({ camber: 0, lateral: 0 });
-  check('Camber loads the inner band by the spread (3.8 / 0.22 by default; none leaves the bands even)', dflt > 0.02 && dflt === same && Math.abs(none) < 1e-9,
-    `inner − outer share ${fmt(dflt, 3)} default, ${fmt(none, 3)} with no spread`);
+  // The GT3's −3.5° front camber, rolling straight: the inner strip carries the camber's whole (held) shift
+  const car = new VehiclePhysics({ ground: new FlatGroundQuery(0), config: AMG_GT3_CONFIG as never, airDensity: 1.225 });
+  car.reset(0, 0, 0, 30);
+  for (let t = 0; t < 1; t += 1 / 120) car.step(1 / 120, { throttle: 0.2, brake: 0, steer: 0 });
+  const sh = car.wheels[0].bandLoadShares;
+  check('GT3 front at −3.5°: the inner strip carries over half the load', sh[0] > 0.5 && sh[2] < 0.1 && Math.abs(sh[0] + sh[1] + sh[2] - 1) < 1e-9,
+    `inner / middle / outer ${quad(sh, 3)}`);
 }
 
 console.log('\n== Stints round Rwanda (autopilot)');
 {
   const track = getActiveTrackData();
   const gt3 = stint(createAmgGt3Sim(track), 5);
-  check('GT3: no graining or blistering over 5 laps', Math.max(...gt3.grainByLap.flat()) < 0.1 && gt3.blister === 0,
-    `grain ${quad(gt3.grainByLap[gt3.grainByLap.length - 1])}, core ${quad(gt3.coreC, 0)} °C`);
-  // −3.5° of front camber: the inner band carries the most load and runs hottest, the outer coolest
+  // Unblanketed, its rears settle a degree or two over the soft's 85 °C peak at the autopilot's pace in Rwanda's heat:
+  // a trace of blistering (≈ 0.1 % of grip) is allowed, as a trace of graining is
+  check('GT3: no graining, blistering under 1 % over 5 laps', Math.max(...gt3.grainByLap.flat()) < 0.1 && gt3.blister < 0.01,
+    `grain ${quad(gt3.grainByLap[gt3.grainByLap.length - 1])}, blister ${gt3.blister.toFixed(4)}, core ${quad(gt3.coreC, 0)} °C`);
+  // −3.2° of front camber holds the camber shift at its limit: the inner strip carries 0.59 of the load and runs
+  // hottest, the outer (0.07) coolest
   const spread = (wheel: number[]) => wheel[0] - wheel[2];
-  check('GT3: front tyres run 5–15 °C hotter inside than outside', [0, 1].every((i) => spread(gt3.bandsC[i]) > 5 && spread(gt3.bandsC[i]) < 15 && gt3.bandsC[i][0] > gt3.bandsC[i][1] && gt3.bandsC[i][1] > gt3.bandsC[i][2]),
+  check('GT3: front tyres run 5–20 °C hotter inside than outside', [0, 1].every((i) => spread(gt3.bandsC[i]) > 5 && spread(gt3.bandsC[i]) < 20 && gt3.bandsC[i][0] > gt3.bandsC[i][1] && gt3.bandsC[i][1] > gt3.bandsC[i][2]),
     `inner / middle / outer ${quad(gt3.bandsC[0], 0)} and ${quad(gt3.bandsC[1], 0)} °C`);
   // The GT3's fronts run at the low edge of its 70–85 °C window on this circuit at the autopilot's pace
   check('GT3: carcasses within 5 °C of the window, pressures within 1.5 psi of 26', within(gt3.lapCoreC, [70, 85], [70, 85], 5) && within(gt3.lapPsi, [26, 26], [26, 26], 1.5),

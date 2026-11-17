@@ -27,12 +27,13 @@ const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.s
  * takes ≈117–120 m on the fixed 71 % balance-bar bias (the tyres' hot pressure moves it by a few metres), μ ≈1.42–1.45
  * on the full brake force. The plan corners on μ 1.6 and brakes on 1.42 (≈121 m, never shorter than the car), so its
  * braking points are where a driver at the limit brakes, not before. Downforce ≈1.17 v², drag 0.46 v² (CdA 0.87 m²);
- * brake force and power at the wheels from the car's data.
+ * brake force and power at the wheels from the car's data. (Drag since the endurance trim: 0.567 v², CD·A ≈ 1.07.)
  */
 export const AMG_GT3_PROFILE_CAR: SpeedProfileCarModel = {
   massKg: C.chassis.totalMassKg,
   downforceCoef: 1.17,
-  dragCoef: 0.46,
+  // ½ρ·CD·A at ρ 1.06: the endurance trim's ≈ 1.07 m²
+  dragCoef: 0.567,
   rearDownforceShare: 0.55,
   rearWeightFraction: 1 - C.chassis.frontWeightFraction,
   muLat: 1.6,
@@ -41,8 +42,8 @@ export const AMG_GT3_PROFILE_CAR: SpeedProfileCarModel = {
     2 *
     C.brakes.maxTorqueNm *
     (C.brakes.front_bias / tyreRadius('front') + (1 - C.brakes.front_bias) / tyreRadius('rear')),
-  // Peak crank power (the curve is kW) through the driveline: ≈359 kW at the wheels
-  maxDrivePowerW: Math.max(...C.engine.powerCurve.map(([, kw]) => kw)) * 1000 * C.gearbox.efficiency,
+  // The regulated power at the driveshafts: 354 kW
+  maxDrivePowerW: 354_000,
   // Above the ≈88 m/s drag-limited top speed, so power and drag set the straight-line speed, not this cap
   vMaxMs: 90,
 };
@@ -53,10 +54,16 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   hasErs: false,
   hasDrs: false,
   turbo: false,
-  // GT3 setup ranges (cold psi, camber)
-  coldPsiRange: [15, 30],
-  frontCamberRange: [-4.0, 0],
-  rearCamberRange: [-3.0, 0.5],
+  // GT3 setup ranges: cold psi at the garage's 25 °C (no blankets), camber
+  coldPsiRange: [18, 26],
+  frontCamberRange: [-4.0, -1.5],
+  rearCamberRange: [-3.2, -1.0],
+  setupPressureRefC: 25,
+  // 540° lock to lock on the 12.6 : 1 rack
+  steerRatio: 12.6,
+  // An endurance GT3's electronics: twelve ABS maps, three traction dials
+  enduranceAbsMaps: true,
+  tcSlipAngleDial: true,
   tcMinSpeedMs: E.tcMinSpeedKmh / 3.6,
   electronics: E,
   // Splitter goes 0–2° (default 2), rear wing 0–14° (default 6)
@@ -76,9 +83,9 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   fuelFlowKgS: 0.036,
   // Default switch positions in semi-pro, the most intrusive TC and a tighter ABS in assisted, TC and ABS off in pro
   assistDials: {
-    pro: { tcLevel: 0, tc2Level: 5, absLevel: 0 },
-    semi_pro: { tcLevel: 10, tc2Level: 6, absLevel: 9 },
-    assisted: { tcLevel: 12, tc2Level: 9, absLevel: 11 },
+    pro: { tcLevel: 0, tc2Level: 5, absLevel: 0, tcSlipAngleLevel: 0 },
+    semi_pro: { tcLevel: 10, tc2Level: 6, absLevel: 9, tcSlipAngleLevel: 10 },
+    assisted: { tcLevel: 12, tc2Level: 9, absLevel: 11, tcSlipAngleLevel: 12 },
   },
   // A heavy car on a slow rack: quicker keys in slow and medium corners (half the grip limit ≈210 ms after the key at
   // 70–120 km/h instead of ≈300, the yaw ≈130 ms sooner at 70) and at speed as the base, where the car is calm; a

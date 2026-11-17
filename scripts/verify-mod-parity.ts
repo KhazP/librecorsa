@@ -617,21 +617,26 @@ section('AMG GT3 (second reference)', 'gt3_ref', (mod) => {
   const s = (sec: string, key: string) => mod.num('suspensions.ini', sec, key);
   eq('GT3 ARB front', config.suspensions.front.arb, s('ARB', 'FRONT'));
   eq('GT3 ARB rear', config.suspensions.rear.arb, s('ARB', 'REAR'));
-  eq('GT3 front SPRING_RATE', config.suspensions.front.springs.wheel_rate, s('FRONT', 'SPRING_RATE'));
-  eq('GT3 rear SPRING_RATE', config.suspensions.rear.springs.wheel_rate, s('REAR', 'SPRING_RATE'));
+  // The endurance balance of performance's trim moves the springs (168 / 132 N/mm), the coast lock (0.58) and the
+  // preload (60 Nm) off the reference's: those are held to the trim, the rest to the reference
+  eq('GT3 front SPRING_RATE (the endurance trim)', config.suspensions.front.springs.wheel_rate, 168_000);
+  eq('GT3 rear SPRING_RATE (the endurance trim)', config.suspensions.rear.springs.wheel_rate, 132_000);
   const diff = config.differential.settings;
   eq('GT3 diff POWER', diff.power, mod.num('drivetrain.ini', 'DIFFERENTIAL', 'POWER'));
-  eq('GT3 diff COAST', diff.coast, mod.num('drivetrain.ini', 'DIFFERENTIAL', 'COAST'));
-  eq('GT3 diff PRELOAD', diff.preload, mod.num('drivetrain.ini', 'DIFFERENTIAL', 'PRELOAD'));
+  eq('GT3 diff COAST (the endurance trim)', diff.coast, 0.58);
+  eq('GT3 diff PRELOAD (the endurance trim)', diff.preload, 60);
   // The gear change is this reference's; the limiter stays the base data set's
   shiftData('GT3', config, mod);
   const compound = compoundData(config, config.compoundSlots.soft);
   const keys = ['FLEX_GAIN', 'PRESSURE_FLEX_GAIN', 'COMBINED_FACTOR', 'CX_MULT', 'SPEED_SENSITIVITY', 'FALLOFF_LEVEL', 'FALLOFF_SPEED', 'PRESSURE_D_GAIN', 'BRAKE_DX_MOD', 'DCAMBER_0', 'DCAMBER_1', 'DAMP'];
   for (const axle of ['front', 'rear'] as const) {
     const AX = axle.toUpperCase();
-    // One wear curve per compound: the front's
-    checkTyre(`GT3 ${axle}`, mod, axleTyre(compound, axle), { sectionName: AX, thermalName: `THERMAL_${AX}`, keys, tread: true, wear: axle === 'front' });
+    checkTyre(`GT3 ${axle}`, mod, axleTyre(compound, axle), { sectionName: AX, thermalName: `THERMAL_${AX}`, keys, tread: true, wear: false });
   }
+  // One wear curve per compound, the front's: the reference's grip against distance, the distances × the endurance
+  // soft's tread life (0.47)
+  const softLife = 0.47;
+  sameCurve('GT3 front WEAR_CURVE (distances × the endurance soft\'s 0.47)', (compound.wear?.curve ?? []).map(([km, pct]) => [km / softLife, pct] as [number, number]), mod.lutOf('tyres.ini', 'FRONT', 'WEAR_CURVE'), 0.05);
   eq('GT3 VIRTUALKM USE_LOAD', compound.wear?.loadScaled ? 1 : 0, mod.num('tyres.ini', 'VIRTUALKM', 'USE_LOAD'));
 }, false);
 

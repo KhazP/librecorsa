@@ -890,6 +890,13 @@ export class F1Physics2026 {
     return {
       tcLevel: this.tcLevel,
       tc2Level: this.tc2Level,
+      tcSlipAngleLevel: 0,
+      hasTcSlipAngle: false,
+      motorDeployKw: null,
+      regenKw: null,
+      motorDeployStepsKw: [],
+      regenStepsKw: [],
+      absAllowed: true,
       absLevel: this.absLevel,
       brakeBiasPct: Number((this.liveBrakeBias * 100).toFixed(1)),
       brakeMigrationPct: Number((this.liveBrakeMigration * 100).toFixed(1)),

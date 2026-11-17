@@ -261,6 +261,8 @@ const SUSPENSIONS: SuspensionsData = {
   front: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
+    // Coilovers on the wishbones, no rocker: the leverage grows a little as the arm comes level [est]
+    rockerProgressivityPerM: 0.3,
     // [spec STATIC_CAMBER]
     staticCamber: -3,
     camberGainKinematic: -28.0,
@@ -288,6 +290,8 @@ const SUSPENSIONS: SuspensionsData = {
   rear: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
+    // Coilovers on the wishbones, no rocker: the leverage grows a little as the arm comes level [est]
+    rockerProgressivityPerM: 0.3,
     // [spec STATIC_CAMBER]
     staticCamber: -2,
     camberGainKinematic: -51.7,
@@ -642,7 +646,8 @@ function slick(
       hysteresis: 0.0072,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
-      coreCooling: [8, 0.2],
+      // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]
+      coreCooling: [4, 0.1],
       thermalVerticalK: -0.001,
       thermalVerticalRefC: 85,
     },
@@ -806,6 +811,8 @@ export const NISSAN_R32_CONFIG = {
     ffbMechanicalTrailM: 0.033,
     // The body's plan at barrier height, measured from nissan-r32-jtcc.glb (`scripts/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.29], [0.39, 2.26], [0.73, 2.07], [0.80, 1.94], [0.88, -0.94], [0.79, -2.17], [0.00, -2.26]],
+    // Torsional stiffness between the axle structures: a steel unibody stiffened by a welded cage [est]
+    chassisTorsion: { torsionalStiffnessNmPerDeg: 20_000, torsionalDampingNmsPerDeg: 200, frontRollInertiaShare: 0.5 },
   },
   engine: ENGINE,
   ers: ERS,

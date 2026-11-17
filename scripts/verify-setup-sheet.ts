@@ -7,7 +7,7 @@
  * mass without the burn.
  * Run: npx tsx scripts/verify-setup-sheet.ts
  */
-import { clampChassisSetup, DEFAULT_CHASSIS_SETUP, FUEL_LOAD, startingFuelKg, type ChassisSetup, type GarageTuner } from "../src/lib/sim/car-setup";
+import { clampChassisSetup, DEFAULT_CHASSIS_SETUP, FACTORY_PRESETS, FUEL_LOAD, startingFuelKg, type ChassisSetup, type GarageTuner } from "../src/lib/sim/car-setup";
 import { SIM_REALISM_FLAGS } from "../src/lib/sim/sim-realism";
 import { SETUP_CLASS, setupSheet, type SetupState } from "../src/lib/sim/setup-sheet";
 import { TYRE_SETUP_LIMITS } from "../src/lib/sim/tyre-setup";
@@ -242,14 +242,15 @@ console.log("Dampers");
 
 console.log("Fuel load");
 {
-  // What every car started on before the garage had a fuel setting
+  // What every car started on before the garage had a fuel setting; the GT3 and the LC-LMDH since on their endurance
+  // trims' fixed sprint loads
   const LEGACY_FUEL_KG: Record<VehicleModelId, number> = {
     lc26: 40,
     "f12026-car": 35,
-    "amg-gt3": 50,
+    "amg-gt3": 30,
     liana: 22,
     "mtr-496r": 22,
-    "lc-lmdh": 38,
+    "lc-lmdh": 28,
     "nissan-r33-jgtc": 30,
     "nissan-r32-jtcc": 22,
     "bmw-m1-procar": 22,
@@ -278,28 +279,31 @@ console.log("Fuel load");
     check(`${v}: the fuel load sets the starting fuel and the mass`, Math.abs(light.telemetry.fuelKg - f.minKg) < 1e-6 && Math.abs(heavy.telemetry.fuelKg - f.maxKg) < 1e-6 && Math.abs(dm - (f.maxKg - f.minKg)) < 1e-6, `${f.minKg}–${f.maxKg} kg, +${dm.toFixed(1)} kg`);
     check(`${v}: the load holds through a restart`, (heavy.resetToStartGrid(true), Math.abs(heavy.telemetry.fuelKg - f.maxKg) < 1e-6));
     const sameFuel = withSetup(v, { fuelDeltaKg: 10 });
+    // Burning switched on (the game's sprints run a fixed load, `SimRealismFlags.fuelUse`)
+    (sameFuel as Massy).setSimRealism?.({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
     // 4 s: a car whose fuel flow follows its rpm burns under the readout's 0.01 kg in the first 2 s of a launch
     for (let i = 0; i < 240; i++) sameFuel.step(DT, { throttle: 1 });
     const burnt = sameFuel.telemetry.fuelKg;
     sameFuel.applyChassisSetup?.({ ...DEFAULT_CHASSIS_SETUP, fuelDeltaKg: 10, springFrontPct: 6 });
     check(`${v}: changing another setting keeps the fuel burnt so far`, burnt < f.defaultKg + 10 && sameFuel.telemetry.fuelKg === burnt);
 
-    // Full realism burns it and the car lightens; Casual keeps the load (and its mass) all run. 20 kg over the default,
-    // or a full tank where that's less (the Liana's 37 kg tank starts on 22)
+    // With burning on the car lightens; Full as shipped (sprints on a fixed load) and Casual keep the load and its mass
+    // all run. 20 kg over the default, or a full tank where that's less (the Liana's 37 kg tank starts on 22)
     const extra = Math.min(20, f.maxKg - f.defaultKg);
-    const burn = (level: "full" | "casual") => {
+    const burn = (level: "burning" | "full" | "casual") => {
       const car = withSetup(v, { fuelDeltaKg: extra });
-      (car as Massy).setSimRealism?.(SIM_REALISM_FLAGS[level]);
+      (car as Massy).setSimRealism?.(level === "burning" ? { ...SIM_REALISM_FLAGS.full, fuelUse: true } : SIM_REALISM_FLAGS[level]);
       car.resetToStartGrid(true);
       const m0 = massOf(car);
       for (let i = 0; i < 600; i++) car.step(DT, { throttle: 1 });
       return { fuel: car.telemetry.fuelKg, dm: massOf(car) - m0 };
     };
+    const burning = burn("burning");
     const full = burn("full");
     const casual = burn("casual");
     const start = f.defaultKg + extra;
-    check(`${v}: Full burns the fuel and the car lightens`, full.fuel < start - 0.05 && Math.abs(full.dm + (start - full.fuel)) < 0.006 /* the readout is to 0.01 kg */, `${(start - full.fuel).toFixed(2)} kg in 10 s`);
-    check(`${v}: Casual keeps the load and its mass`, casual.fuel === start && casual.dm === 0);
+    check(`${v}: burning, the fuel goes and the car lightens`, burning.fuel < start - 0.05 && Math.abs(burning.dm + (start - burning.fuel)) < 0.006 /* the readout is to 0.01 kg */, `${(start - burning.fuel).toFixed(2)} kg in 10 s`);
+    check(`${v}: Full and Casual keep the load and its mass (sprint ballast)`, full.fuel === start && full.dm === 0 && casual.fuel === start && casual.dm === 0);
   }
 
   // A flying lap of Kigali on the autopilot, light and full: the extra mass costs time
@@ -328,6 +332,25 @@ console.log("Fuel load");
     );
   }
   check("startingFuelKg keeps to each car's range", startingFuelKg("amg-gt3", { fuelDeltaKg: 80 }) === FUEL_LOAD["amg-gt3"].maxKg && startingFuelKg("lc26", { fuelDeltaKg: -50 }) === FUEL_LOAD.lc26.minKg);
+}
+
+// ---- Factory setups ----
+console.log("Factory setups");
+for (const v of vehicles) {
+  for (const f of FACTORY_PRESETS[v] ?? []) {
+    const d = defaultTyre(v);
+    const st: SetupState = { chassis: { ...DEFAULT_CHASSIS_SETUP, ...f.chassis }, tyre: { ...d, camberDeg: f.camberDeg ?? d.camberDeg }, tuner };
+    // Every value inside its slider's range, so the garage loads it unchanged
+    const out = sheets[v].flatMap((g) => g.params).filter((q) => q.writes !== "tuner" && (q.get(st) < q.min - 1e-9 || q.get(st) > q.max + 1e-9));
+    check(`${v} ${f.id}: every setting on its slider`, out.length === 0, out.map((q) => q.id).join(", "));
+    const sim = makers[v](flat) as unknown as { applyChassisSetup(c: ChassisSetup): void; config: { suspensions: { rear: { arb: number } }; gearbox: { finalDrive?: number; ratios: number[] } } };
+    const base = makers[v](flat) as unknown as typeof sim;
+    sim.applyChassisSetup(clampChassisSetup(st.chassis));
+    base.applyChassisSetup({ ...DEFAULT_CHASSIS_SETUP });
+    const longer = sim.config.gearbox.ratios.at(-1)! * (sim.config.gearbox.finalDrive ?? 1) < base.config.gearbox.ratios.at(-1)! * (base.config.gearbox.finalDrive ?? 1);
+    const detached = f.chassis.arbRearPct === -100 ? sim.config.suspensions.rear.arb === 0 : sim.config.suspensions.rear.arb > 0;
+    check(`${v} ${f.id}: long top gear, rear bar as set`, longer && detached, `rear ARB ${sim.config.suspensions.rear.arb.toFixed(0)} N/m`);
+  }
 }
 
 console.log(`\nAll ${passed} setup sheet checks passed.`);

@@ -9,7 +9,7 @@
  */
 
 import type { TyreSetup, VehicleModelId } from "@/types/f1";
-import { type ChassisSetup, CHASSIS_LIMITS, FUEL_KG_PER_L, FUEL_LOAD, type GarageTuner, STEER_RATIO_BASE, WING_CLICK_DEG } from "./car-setup";
+import { ARB_DETACHED_PCT, type ChassisSetup, CHASSIS_LIMITS, FUEL_KG_PER_L, FUEL_LOAD, type GarageTuner, STEER_RATIO_BASE, WING_CLICK_DEG } from "./car-setup";
 import { LC26_CHASSIS } from "./lc26-data";
 import { F12026_CAR_CONFIG } from "./f12026-car/F12026CarConfig";
 import { AMG_GT3_CONFIG } from "./gt3/AmgGt3Config";
@@ -149,13 +149,13 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
     steerRatio: STEER_RATIO_BASE.lc26,
   },
   "f12026-car": rigidBaseline(F12026_CAR_CONFIG, "f12026-car"),
-  "amg-gt3": rigidBaseline(AMG_GT3_CONFIG, "amg-gt3"),
+  "amg-gt3": { ...rigidBaseline(AMG_GT3_CONFIG, "amg-gt3"), brakeBiasRangePct: [56, 70] },
   liana: rigidBaseline(SUZUKI_LIANA_CONFIG, "liana"),
   // Its 58 % sits below a GT3's bias range: the mod's adjuster runs from 52 % [spec setup.ini FRONT_BIAS] to the 78 %
   // every car stops at
   "mtr-496r": { ...rigidBaseline(MTR_496R_CONFIG, "mtr-496r"), brakeBiasRangePct: [52, 78] },
   // Its 56 % sits below a GT3's bias range [est]
-  "lc-lmdh": { ...rigidBaseline(LC_LMDH_CONFIG, "lc-lmdh"), brakeBiasRangePct: [48, 68] },
+  "lc-lmdh": { ...rigidBaseline(LC_LMDH_CONFIG, "lc-lmdh"), brakeBiasRangePct: [48, 68], toeFrontDeg: -0.12, toeRearDeg: 0.12 },
   // The classic Nissans' adjusters [spec setup.ini FRONT_BIAS]
   "nissan-r33-jgtc": { ...rigidBaseline(NISSAN_R33_CONFIG, "nissan-r33-jgtc"), brakeBiasRangePct: [50, 80] },
   "nissan-r32-jtcc": { ...rigidBaseline(NISSAN_R32_CONFIG, "nissan-r32-jtcc"), brakeBiasRangePct: [52, 80] },
@@ -166,6 +166,47 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
 };
 
 const clampTo = (v: number, r: { min: number; max: number }) => Math.max(r.min, Math.min(r.max, v));
+
+/** Each car's physics data, for the parts of a sheet that depend on what the car has */
+const CONFIGS: Record<VehicleModelId, CarPhysicsConfig | null> = {
+  lc26: null,
+  "f12026-car": F12026_CAR_CONFIG as unknown as CarPhysicsConfig,
+  "amg-gt3": AMG_GT3_CONFIG as unknown as CarPhysicsConfig,
+  liana: SUZUKI_LIANA_CONFIG as unknown as CarPhysicsConfig,
+  "mtr-496r": MTR_496R_CONFIG as unknown as CarPhysicsConfig,
+  "lc-lmdh": LC_LMDH_CONFIG as unknown as CarPhysicsConfig,
+  "nissan-r33-jgtc": NISSAN_R33_CONFIG as unknown as CarPhysicsConfig,
+  "nissan-r32-jtcc": NISSAN_R32_CONFIG as unknown as CarPhysicsConfig,
+  "bmw-m1-procar": BMW_M1_PROCAR_CONFIG as unknown as CarPhysicsConfig,
+  "vw-scirocco-gtx": VW_SCIROCCO_CONFIG as unknown as CarPhysicsConfig,
+};
+
+/** Cars whose electronics have the third traction dial, for the driven axle's slide */
+const TC_SLIP_ANGLE_CARS: ReadonlySet<VehicleModelId> = new Set(["amg-gt3", "lc-lmdh"]);
+
+/**
+ * An anti-roll bar on the games' 1–21 scale (11 the baseline, 5 % a step), with 0 "Detached" (the bar off, −100 %) on
+ * a car whose data allows it
+ */
+function arbParam(key: "arbFrontPct" | "arbRearPct", label: string, detachable: boolean, fx: SetupEffect): SetupParam {
+  const lim = CHASSIS_LIMITS[key];
+  return {
+    id: key,
+    label,
+    min: detachable ? 0 : 1,
+    max: 21,
+    step: 1,
+    base: 11,
+    get: (st) => (st.chassis[key] <= ARB_DETACHED_PCT + 1e-6 ? 0 : Math.max(1, 11 + st.chassis[key] / 5)),
+    set: (st, v) => ({
+      ...st,
+      chassis: { ...st.chassis, [key]: Math.round(v) <= 0 && detachable ? ARB_DETACHED_PCT : clampTo((Math.max(1, Math.round(v)) - 11) * 5, lim) },
+    }),
+    format: (v) => (v <= 0 ? "Detached" : int(v)),
+    fx,
+    writes: "chassis",
+  };
+}
 
 /**
  * A chassis offset shown on a game-style scale: display = base + offset × perUnit. The slider runs over the
@@ -286,6 +327,14 @@ const FX = {
   fastRebound: { more: "Wheel stays down slower after kerbs", less: "Wheel drops back quickly" },
   ductFront: { more: "Cooler front brakes, more drag", less: "Hotter front brakes, less drag" },
   ductRear: { more: "Cooler rear brakes, more drag", less: "Hotter rear brakes, less drag" },
+  radiator: { more: "Cooler engine, more drag", less: "Less drag, the engine runs hot" },
+  gearSet: { more: "Long gears: top speed on long straights", less: "Short gears: quicker out of slow corners" },
+  heaveSpring: { more: "Flatter platform at speed, harsher on bumps", less: "Rides bumps, the floor moves more" },
+  heavePacker: { more: "More travel before the packer", less: "The packer holds the floor up sooner" },
+  cornerPacker: { more: "The stops come sooner, flatter in the corners", less: "More free travel, more roll" },
+  tcSlipAngle: { more: "Cuts sooner as the rear slides", less: "Lets the rear slide further on power" },
+  motorDeploy: { more: "More electric push, drains the battery", less: "Saves charge, less push" },
+  regen: { more: "More charge back, more rear braking", less: "Calmer rear on the brakes, less charge" },
   fuel: { more: "Longer stint, heavier and slower", less: "Lighter and quicker, shorter stint" },
 } satisfies Record<string, SetupEffect>;
 
@@ -310,13 +359,46 @@ const dampers = (): SetupParam[] => {
   ];
 };
 
-/** The parameters every car shares on its electronics page */
-const electronics = (): SetupParam[] => [
-  tunerParam("tcLevel", { label: "TC 1", base: 5, min: 0, max: 12, step: 1, format: (v) => (v === 0 ? "OFF" : int(v)), fx: FX.tc }),
-  tunerParam("tc2Level", { label: "TC 2", base: 6, min: 1, max: 12, step: 1, format: int, fx: FX.tc2 }),
-  tunerParam("absLevel", { label: "ABS", base: 5, min: 0, max: 12, step: 1, format: (v) => (v === 0 ? "OFF" : int(v)), fx: FX.abs }),
-  tunerParam("engineMap", { label: "Engine map", base: 2, min: 1, max: 5, step: 1, format: (v) => ENGINE_MAP_LABELS[v] ?? int(v), fx: FX.map }),
-];
+/**
+ * The parameters every car shares on its electronics page, with a car's own: the slip-angle traction dial, a
+ * prototype's hybrid dials
+ */
+const electronics = (vehicle?: VehicleModelId): SetupParam[] => {
+  const cfg = vehicle ? CONFIGS[vehicle] : null;
+  const dials = cfg?.hybridDials;
+  const off = (v: number) => (v === 0 ? "OFF" : int(v));
+  return [
+    tunerParam("tcLevel", { label: vehicle && TC_SLIP_ANGLE_CARS.has(vehicle) ? "TC slip" : "TC 1", base: 5, min: 0, max: 12, step: 1, format: off, fx: FX.tc }),
+    tunerParam("tc2Level", { label: vehicle && TC_SLIP_ANGLE_CARS.has(vehicle) ? "TC cut" : "TC 2", base: 6, min: 1, max: 12, step: 1, format: int, fx: FX.tc2 }),
+    ...(vehicle && TC_SLIP_ANGLE_CARS.has(vehicle)
+      ? [tunerParam("tcSlipAngleLevel", { label: "TC slip angle", base: 5, min: 0, max: 12, step: 1, format: off, fx: FX.tcSlipAngle })]
+      : []),
+    tunerParam("absLevel", { label: "ABS", base: 5, min: 0, max: 12, step: 1, format: off, fx: FX.abs }),
+    tunerParam("engineMap", { label: "Engine map", base: 2, min: 1, max: 5, step: 1, format: (v) => ENGINE_MAP_LABELS[v] ?? int(v), fx: FX.map }),
+    ...(dials
+      ? [
+          tunerParam("motorDeployKw", {
+            label: "Motor deployment",
+            base: dials.deployStepsKw[dials.defaultDeployIndex],
+            min: Math.min(...dials.deployStepsKw),
+            max: Math.max(...dials.deployStepsKw),
+            step: 10,
+            format: (v) => `${Math.round(v)} kW`,
+            fx: FX.motorDeploy,
+          }),
+          tunerParam("regenKw", {
+            label: "Regeneration",
+            base: dials.regenStepsKw[dials.defaultRegenIndex],
+            min: Math.min(...dials.regenStepsKw),
+            max: Math.max(...dials.regenStepsKw),
+            step: 10,
+            format: (v) => `${Math.round(v)} kW`,
+            fx: FX.regen,
+          }),
+        ]
+      : []),
+  ];
+};
 
 /** One cold pressure per tyre (a real car's pressures are set wheel by wheel) */
 const tyrePressures = (r: TyreRanges, d: TyreSetup): SetupParam[] =>
@@ -424,7 +506,7 @@ function f1Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyre
       label: "Electronics",
       short: "Electr.",
       extras: ["assists"],
-      params: electronics(),
+      params: electronics(vehicle),
     },
     fuelGroup(vehicle),
   ];
@@ -437,6 +519,13 @@ function f1Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyre
  */
 function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
   const hasWing = WING_CLICK_DEG[vehicle].rear > 0;
+  const cfg = CONFIGS[vehicle];
+  const susp = cfg?.suspensions;
+  const hasThird = (susp?.front.heave.rate ?? 0) > 0 || (susp?.rear.heave.rate ?? 0) > 0;
+  const pctOf = (key: keyof ChassisSetup, label: string, fx: SetupEffect) =>
+    chassisParam(key, { label, base: 0, min: -100, max: 100, step: CHASSIS_LIMITS[key].step, format: (v) => `${v > 0 ? "+" : ""}${Math.round(v)}%`, fx });
+  const packerMm = (key: keyof ChassisSetup, label: string, baseMm: number, fx: SetupEffect) =>
+    chassisParam(key, { label, base: Math.round(baseMm), min: 0, max: 60, step: 1, format: mm, fx });
   const rate = (key: keyof ChassisSetup, label: string, baseNmm: number, fx: SetupEffect) =>
     // The slider runs in % of the baseline; the readout is the rate itself
     chassisParam(key, { label, base: 0, min: -100, max: 100, step: CHASSIS_LIMITS[key].step, format: (v) => `${Math.round(baseNmm * (1 + v / 100))} N/mm`, fx });
@@ -458,25 +547,29 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
       label: "Electronics",
       short: "Electr.",
       extras: ["assists"],
-      params: electronics(),
+      params: electronics(vehicle),
     },
     {
       id: "mechanical",
       label: "Mechanical grip",
       short: "Mech.",
       params: [
-        chassisParam("arbFrontPct", { label: "Front anti-roll bar", base: 11, perUnit: 1 / 5, min: 1, max: 21, step: 1, format: int, fx: FX.arbFront }),
-        chassisParam("arbRearPct", { label: "Rear anti-roll bar", base: 11, perUnit: 1 / 5, min: 1, max: 21, step: 1, format: int, fx: FX.arbRear }),
+        arbParam("arbFrontPct", "Front anti-roll bar", susp?.front.allowNoArb === true, FX.arbFront),
+        arbParam("arbRearPct", "Rear anti-roll bar", susp?.rear.allowNoArb === true, FX.arbRear),
         chassisParam("brakePowerPct", { label: "Brake power", base: 100, min: 80, max: 100, step: 1, format: pct, fx: FX.brakePressure }),
         tunerParam("brakeBiasPct", {
           label: "Brake bias",
           base: b.brakeBiasPct ?? 71,
           min: b.brakeBiasRangePct?.[0] ?? 60,
           max: b.brakeBiasRangePct?.[1] ?? 78,
-          step: 0.5,
+          // The adjuster's own click (0.2 % on the prototype's brake-by-wire)
+          step: cfg?.brakes.ebbStep && cfg.brakes.ebbStep < 0.005 ? Number((cfg.brakes.ebbStep * 100).toFixed(2)) : 0.5,
           format: (v) => `${v.toFixed(1)}%`,
           fx: FX.bias,
         }),
+        ...(cfg?.brakes.brakeByWire !== false && cfg?.brakes.migration
+          ? [tunerParam("brakeMigrationPct", { label: "Brake migration", base: cfg.brakes.migration.amount * 100, min: 0, max: 3, step: 0.1, format: (v) => `${v.toFixed(1)}%`, fx: FX.migration })]
+          : []),
         chassisParam("steerRatioDelta", { label: "Steering ratio", base: b.steerRatio, min: 10, max: 16, step: 0.2, format: (v) => v.toFixed(1), fx: FX.steerRatio }),
         rate("springFrontPct", "Front wheel rate", b.wheelRateFrontNmm, FX.wheelRateFront),
         rate("springRearPct", "Rear wheel rate", b.wheelRateRearNmm, FX.wheelRateRear),
@@ -485,8 +578,46 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
         chassisParam("bumpStopRangeFrontMm", { label: "Front bump stop range", base: Math.round(b.bumpStopRangeFrontMm), min: 5, max: Math.max(70, Math.round(b.bumpStopRangeFrontMm) + 10), step: 1, format: mm, fx: FX.bumpStopRange }),
         chassisParam("bumpStopRangeRearMm", { label: "Rear bump stop range", base: Math.round(b.bumpStopRangeRearMm), min: 5, max: Math.max(70, Math.round(b.bumpStopRangeRearMm) + 10), step: 1, format: mm, fx: FX.bumpStopRange }),
         chassisParam("diffPreloadNm", { label: "Diff preload", base: b.diffPreloadNm, min: Math.min(20, b.diffPreloadNm), max: 300, step: 10, format: (v) => `${Math.round(v)} Nm`, fx: FX.preload }),
+        packerMm("cornerPackerFrontMm", "Front corner packers", 1000 * (susp?.front.bumpStop.packerGap ?? 0), FX.cornerPacker),
+        packerMm("cornerPackerRearMm", "Rear corner packers", 1000 * (susp?.rear.bumpStop.packerGap ?? 0), FX.cornerPacker),
+        ...(cfg?.gearSets && cfg.gearSets.length > 1
+          ? [
+              chassisParam("gearRatioSet", {
+                label: "Gear set",
+                base: 0,
+                min: 0,
+                max: cfg.gearSets.length - 1,
+                step: 1,
+                format: (v) => cfg.gearSets?.[Math.round(v)]?.label ?? int(v),
+                fx: FX.gearSet,
+              }),
+            ]
+          : []),
       ],
     },
+    ...(hasThird
+      ? [
+          {
+            id: "third",
+            label: "Third elements",
+            short: "3rd",
+            params: [
+              pctOf("heaveSpringFrontPct", "Front third spring", FX.heaveSpring),
+              pctOf("heaveSpringRearPct", "Rear third spring", FX.heaveSpring),
+              chassisParam("heavePackerFrontMm", { label: "Front third packer", base: Math.round(1000 * (susp?.front.heave.packerGap ?? 0)), min: 0, max: 80, step: 1, format: mm, fx: FX.heavePacker }),
+              chassisParam("heavePackerRearMm", { label: "Rear third packer", base: Math.round(1000 * (susp?.rear.heave.packerGap ?? 0)), min: 0, max: 80, step: 1, format: mm, fx: FX.heavePacker }),
+              pctOf("heaveBumpFrontPct", "Front third bump", FX.bump),
+              pctOf("heaveBumpRearPct", "Rear third bump", FX.bump),
+              pctOf("heaveFastBumpFrontPct", "Front third fast bump", FX.fastBump),
+              pctOf("heaveFastBumpRearPct", "Rear third fast bump", FX.fastBump),
+              pctOf("heaveReboundFrontPct", "Front third rebound", FX.rebound),
+              pctOf("heaveReboundRearPct", "Rear third rebound", FX.rebound),
+              pctOf("heaveFastReboundFrontPct", "Front third fast rebound", FX.fastRebound),
+              pctOf("heaveFastReboundRearPct", "Rear third fast rebound", FX.fastRebound),
+            ],
+          } satisfies SetupGroup,
+        ]
+      : []),
     {
       id: "dampers",
       label: "Dampers",
@@ -504,6 +635,9 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
         ...(hasWing ? [chassisParam("rearWingClicks", { label: "Rear wing", base: 5, min: 0, max: 10, step: 1, format: int, fx: FX.rearWing })] : []),
         chassisParam("brakeDuctFront", { label: "Front brake ducts", base: 3, min: 0, max: 6, step: 1, format: int, fx: FX.ductFront }),
         chassisParam("brakeDuctRear", { label: "Rear brake ducts", base: 3, min: 0, max: 6, step: 1, format: int, fx: FX.ductRear }),
+        ...(cfg?.aero.cooling
+          ? [chassisParam("radiatorTapeSteps", { label: "Radiator opening", base: 3, min: 1, max: 7, step: 1, format: int, fx: FX.radiator })]
+          : []),
       ],
     },
     fuelGroup(vehicle),

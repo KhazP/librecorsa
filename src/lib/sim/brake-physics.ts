@@ -7,14 +7,34 @@
  * - Double-sigmoid pad/disc friction efficiency curve `evaluateBrakePadMuFactor(tempC, compound)`
  *   capturing cold bite loss ("green" / cold carbon discs) and high-temperature thermal fade:
  *   - `'carbon-ceramic'` (F1 carbon-carbon discs: soft cold bite below ~130 °C, full from ~180 °C, fade > 950 °C)
+ *   - `'endurance-carbon'` (prototype carbon-carbon: ≈0.44 of its bite at 25 °C, 0.70 at 155 °C, full from ≈330 °C)
  *   - `'endurance-steel'` (GT3 cast-iron discs: cold bite below 75 °C, optimal 95–680 °C, fade > 720 °C)
  *   - or a car's own curve from its data (`BrakePadMuCurve`), in place of the material's
  * - Cumulative pad glazing degradation (`padGlazingFactor`) under sustained extreme overheating.
+ * - Disc wear: thickness lost with the braking energy, faster when hot, and the heat capacity lost with it.
  * - WEC / F1 Dynamic Brake Migration (`computeDynamicBrakeMigration`) that shifts effective brake
  *   bias forward at high hydraulic pressure and rearward during trail-braking release.
  */
 
-export type BrakeCompoundKind = 'carbon-ceramic' | 'endurance-steel';
+export type BrakeCompoundKind = 'carbon-ceramic' | 'endurance-carbon' | 'endurance-steel';
+
+/** Carbon-carbon discs (F1's and a prototype's): the lighter, radiating thermal model */
+export const isCarbonBrake = (compound: BrakeCompoundKind): boolean => compound !== 'endurance-steel';
+
+/** New disc thickness by material (mm) [est] */
+export function defaultDiscThicknessMm(compound: BrakeCompoundKind, front: boolean): number {
+  return compound === 'endurance-steel' ? (front ? 38 : 32) : 32;
+}
+
+/**
+ * Disc wear per MJ of braking energy at a moderate temperature (mm/MJ) [est]: an F1 disc loses a millimetre or two in
+ * a race, a prototype's carbon about two over a 24-hour race, an iron disc a little more than that
+ */
+const DISC_WEAR_MM_PER_MJ: Record<BrakeCompoundKind, number> = {
+  'carbon-ceramic': 0.008,
+  'endurance-carbon': 0.0011,
+  'endurance-steel': 0.0016,
+};
 
 /** A car's own pad friction against disc temperature: (°C, share of full torque) points, temperature ascending */
 export type BrakePadMuCurve = ReadonlyArray<readonly [number, number]>;
@@ -40,6 +60,9 @@ export interface BrakeDiscState {
   padGlazingFactor: number;
   /** Current effective pad friction multiplier (0.55..1.0) */
   muFactor: number;
+  /** Disc thickness now and new (mm): a thinner disc holds less heat and runs hotter */
+  discThicknessMm: number;
+  initialThicknessMm: number;
 }
 
 const STEFAN_BOLTZMANN = 5.670374419e-8;
@@ -48,13 +71,16 @@ const KELVIN = 273.15;
 export function createBrakeDiscState(
   initialTempC = 350,
   compound: BrakeCompoundKind = 'carbon-ceramic',
-  padCurve?: BrakePadMuCurve
+  padCurve?: BrakePadMuCurve,
+  thicknessMm = defaultDiscThicknessMm(compound, true)
 ): BrakeDiscState {
   const s: BrakeDiscState = {
     surfaceTempC: initialTempC,
     coreTempC: initialTempC,
     padGlazingFactor: 0,
     muFactor: 1,
+    discThicknessMm: thicknessMm,
+    initialThicknessMm: thicknessMm,
   };
   s.muFactor = evaluateBrakePadMuFactor(initialTempC, compound, 0, padCurve);
   return s;
@@ -64,11 +90,14 @@ export function resetBrakeDiscState(
   state: BrakeDiscState,
   tempC: number,
   compound: BrakeCompoundKind = 'carbon-ceramic',
-  padCurve?: BrakePadMuCurve
+  padCurve?: BrakePadMuCurve,
+  thicknessMm = state.initialThicknessMm
 ): void {
   state.surfaceTempC = tempC;
   state.coreTempC = tempC;
   state.padGlazingFactor = 0;
+  state.discThicknessMm = thicknessMm;
+  state.initialThicknessMm = thicknessMm;
   state.muFactor = evaluateBrakePadMuFactor(tempC, compound, 0, padCurve);
 }
 
@@ -102,6 +131,13 @@ export function evaluateBrakePadMuFactor(
     // Normalize plateau in [250..880 °C] to 1.00
     const raw = Math.min(1, coldRamp * hotFade * 1.004);
     return Math.max(0.55, raw * glazePenalty);
+  } else if (compound === 'endurance-carbon') {
+    // A prototype's carbon-carbon bites weakly cold: ≈0.44 at 25 °C, 0.70 at 155 °C, 0.93 at 260 °C, full across
+    // ≈330–880 °C, fading past ≈920 °C. An out-lap from the garage has to weave and drag the brakes up to temperature
+    const coldRamp = 0.4 + 0.6 * sigmoid((surfaceTempC - 155) / 52);
+    const hotFade = 1 - 0.45 * sigmoid((surfaceTempC - 980) / 38);
+    const raw = Math.min(1, coldRamp * hotFade * 1.006);
+    return Math.max(0.4, raw * glazePenalty);
   } else {
     // GT3 endurance steel: 0.80 at 20 °C -> ~1.00 by 95 °C, fades above 720 °C
     const coldRamp = 0.78 + 0.22 * sigmoid((surfaceTempC - 48) / 14);
@@ -120,7 +156,7 @@ export function evaluateBrakePadMuFactor(
  * @param carSpeedMs Longitudinal airspeed for cooling duct convection (m/s)
  * @param ambientC Ambient air temperature (°C)
  * @param dt Integration step (s)
- * @param compound Brake disc/pad material ('carbon-ceramic' | 'endurance-steel')
+ * @param compound Brake disc/pad material
  * @param coolingScale Brake duct opening: forced-air convection relative to the baseline duct (1)
  * @param padCurve The car's own pad friction against temperature, in place of the material's
  */
@@ -136,10 +172,12 @@ export function stepBrakeDiscThermal(
   wetness = 0,
   padCurve?: BrakePadMuCurve
 ): void {
-  const isCarbon = compound === 'carbon-ceramic';
-  // Heat capacities (J/K): carbon friction ring + pad face (~1150 J/K) and core vanes/bell (~1450 J/K)
-  const cSurface = isCarbon ? 1150 : 2100;
-  const cCore = isCarbon ? 1450 : 3600;
+  const isCarbon = isCarbonBrake(compound);
+  // Heat capacities (J/K): carbon friction ring + pad face (~1150 J/K) and core vanes/bell (~1450 J/K), less what the
+  // disc has worn away (down to two thirds: a disc is changed before then)
+  const massShare = Math.max(0.65, state.discThicknessMm / Math.max(1e-6, state.initialThicknessMm));
+  const cSurface = (isCarbon ? 1150 : 2100) * massShare;
+  const cCore = (isCarbon ? 1450 : 3600) * massShare;
   const gSurfCore = isCarbon ? 160 : 220; // W/K conduction between friction face and core vanes
 
   const brakePowerW = Math.max(0, frictionTorqueNm) * Math.abs(wheelOmegaRadS);
@@ -174,6 +212,12 @@ export function stepBrakeDiscThermal(
   state.surfaceTempC = Math.max(ambientC, Math.min(maxTemp, state.surfaceTempC + dSurf));
   state.coreTempC = Math.max(ambientC, Math.min(maxTemp, state.coreTempC + dCore));
 
+  // Wear: the braking energy, at up to 2.8× the rate on a disc above ≈720 °C (carbon oxidises, iron softens)
+  if (brakePowerW > 0) {
+    const wearPerMJ = DISC_WEAR_MM_PER_MJ[compound] * (1 + 1.8 * sigmoid((state.surfaceTempC - 720) / 90));
+    state.discThicknessMm = Math.max(0, state.discThicknessMm - wearPerMJ * brakePowerW * dt * 1e-6);
+  }
+
   // Pad glazing accumulation when braking hard above the compound's glazing temperature threshold
   const glazeThresholdC = isCarbon ? 980 : 750;
   if (state.surfaceTempC > glazeThresholdC && brakePowerW > 15_000) {
@@ -190,15 +234,18 @@ export function stepBrakeDiscThermal(
  * linearly forward to `base + migrationRange` at full pedal, so the bias comes back rearward as the driver releases
  * into the corner. The data do not label the sign; forward-at-high-pressure is the F1 convention. Continuous in the
  * pedal (no step as it leaves zero) and never rearward of the set bias. With `rampStart` the shift only begins past
- * that share of the travel (`BMIG_RAMP`): base + (pedal - ramp) / (1 - ramp) x range above it.
+ * that share of the travel (`BMIG_RAMP`): base + ((pedal - ramp) / (1 - ramp))^exponent x range above it; an exponent
+ * above 1 sheds most of the shift early in the release, so the nose takes the apex without a late snap.
  */
 export function computeDynamicBrakeMigration(
   baseFrontBias: number,
   brakePedal: number,
   migrationRange = 0.06,
-  rampStart = 0
+  rampStart = 0,
+  exponent = 1
 ): number {
   const pedal = Math.max(0, Math.min(1, brakePedal));
-  const p = rampStart > 0 ? Math.max(0, (pedal - rampStart) / Math.max(1e-6, 1 - rampStart)) : pedal;
+  const lin = rampStart > 0 ? Math.max(0, (pedal - rampStart) / Math.max(1e-6, 1 - rampStart)) : pedal;
+  const p = exponent === 1 ? lin : Math.pow(lin, exponent);
   return Math.max(0.35, Math.min(0.75, baseFrontBias + migrationRange * p));
 }

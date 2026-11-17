@@ -509,8 +509,9 @@ console.log("Time trial · fixed conditions");
       for (let i = 0; i < 60 * 10; i++) car.step(1 / 60, { throttle: 1, brake: 0, steerLeft: 0, steerRight: 0, manualOverride: false, toggleXMode: false, shiftUp: false, shiftDown: false });
       return before - car.telemetry.fuelKg;
     };
-    const used = burn(SIM_REALISM_FLAGS.full);
-    const held = burn(timeTrialRealism(SIM_REALISM_FLAGS.full));
+    // Burning switched on (the game's sprints run a fixed load): the time trial still burns none
+    const used = burn({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
+    const held = burn(timeTrialRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true }));
     check(`${name}: the time trial burns none of its low fuel`, used > 0.05 && held === 0, `${used.toFixed(3)} kg in 10 s flat out at Full, ${held} in the time trial`);
   }
 }
@@ -693,8 +694,9 @@ console.log("Garage on the sims");
     const lift = settle(8) - settle(0);
     check(`${name}: +8 mm ride height settles about 8 mm higher`, lift > 5 && lift < 11, `${lift.toFixed(2)} mm`);
 
-    // Live fuel consumption on f12026-car and amg-gt3
+    // Live fuel consumption on f12026-car and amg-gt3, burning switched on (the game's sprints run a fixed load)
     const fuelCar = make();
+    (fuelCar as { setSimRealism?: (f: SimRealismFlags) => void }).setSimRealism?.({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
     fuelCar.resetToStartGrid(true);
     const startFuel = fuelCar.telemetry.fuelKg;
     for (let i = 0; i < 60; i++) fuelCar.step(1 / 60, { throttle: 1 });

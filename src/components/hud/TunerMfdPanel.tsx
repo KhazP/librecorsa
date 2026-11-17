@@ -74,6 +74,13 @@ const PHASE_LABEL: Record<DiffPhase, string> = { ENTRY: "Entry", MID: "Mid", EXI
 const FALLBACK_TUNER: LiveTunerState = {
   tcLevel: 5,
   tc2Level: 6,
+  tcSlipAngleLevel: 0,
+  hasTcSlipAngle: false,
+  motorDeployKw: null,
+  regenKw: null,
+  motorDeployStepsKw: [],
+  regenStepsKw: [],
+  absAllowed: true,
   absLevel: 5,
   brakeBiasPct: 56.0,
   brakeMigrationPct: 2.5,

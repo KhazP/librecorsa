@@ -77,6 +77,7 @@ import { evaluateDynamicBrakingUrgency } from '../track-occupancy';
 import {
   type CarPhysicsConfig,
   compoundData,
+  type DamperSettingsUnits,
   DEFAULT_FRICTION_LIMIT_ANGLE_DEG,
   F12026_CAR_CONFIG,
   type PerformanceModeName,
@@ -101,6 +102,9 @@ const DEG2RAD = Math.PI / 180;
  * front, the lightly loaded inside one, slips the most and reaches its peak first
  */
 const leastBent = (left: number, right: number) => (Math.abs(left) < Math.abs(right) ? left : right);
+/** The step of a dial nearest a value */
+const nearestStep = (steps: readonly number[], v: number): number =>
+  steps.reduce((best, x) => (Math.abs(x - v) < Math.abs(best - v) ? x : best), steps[0] ?? v);
 const RAD2DEG = 180 / Math.PI;
 /** Rwanda (≈1400 m ASL) air density: what the braking envelopes below are planned at */
 const AIR_DENSITY = 1.06;
@@ -216,6 +220,8 @@ export interface AidDials {
   tcLevel: number;
   tc2Level: number;
   absLevel: number;
+  /** The slip-angle traction dial, on a car with it (`CarSimProfile.tcSlipAngleDial`); absent: the car's own slide term */
+  tcSlipAngleLevel?: number;
 }
 
 /** The F1 cars' driver-assist presets on `F12026_ELECTRONICS` */
@@ -291,6 +297,23 @@ export interface CarSimProfile {
   setupPressureRefC?: number;
   /** The car's own keyboard steering curve (`keyboard-steer.ts`); absent = the keyboard's base ramp at every speed */
   keyboardSteer?: KeyboardSteerProfile;
+  /**
+   * The class allows ABS. false (a prototype's regulations): the dial is held at 0 on every preset but Assisted, which
+   * keeps its ABS so a keyboard or pad driver can still stop the car. Default true
+   */
+  absAllowed?: boolean;
+  /**
+   * The ABS dial picks one of twelve maps, each a front and rear slip target as a share of the tyre's peak slip and a
+   * reapply rate (`ENDURANCE_ABS_MAPS`): qualifying, race, worn or bumpy, wet. Absent: one slip target per level
+   */
+  enduranceAbsMaps?: boolean;
+  /**
+   * A third traction dial for the driven axle's slide (`AidDials.tcSlipAngleLevel`): how far sideways the rears may go
+   * before the cut, apart from the slip ratio (TC1) and the cut's depth (TC2). Absent: the slide term is the car's own
+   */
+  tcSlipAngleDial?: boolean;
+  /** The car's own static toe (deg, + = toe-in), on which the garage's toe offsets sit. Default 0 */
+  staticToeDeg?: { front: number; rear: number };
   /**
    * The hybrid motor sits on the gearbox's input shaft, behind the clutch (a P2 layout), so it turns with the gearbox
    * and not with the engine while the clutch slips: the telemetry's `mguRpm` is then that shaft's speed (the motor's own
@@ -631,10 +654,32 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: 
   return v;
 }
 
-/** The dial positions of a driver-assist preset */
+/** The dial positions of a driver-assist preset (a class without ABS keeps it only on Assisted) */
 function assistPresetDials(profile: CarSimProfile, preset: DriverAssistPreset): AidDials {
-  return profile.assistDials[preset];
+  const d = profile.assistDials[preset];
+  return profile.absAllowed === false && preset !== 'assisted' ? { ...d, absLevel: 0 } : d;
 }
+
+/**
+ * Twelve ABS maps [est]: front and rear slip targets as shares of the tyre's peak slip, and the pressure's reapply rate
+ * against the base. 1–3 qualifying (new tyres, the shortest stop, a rear free to rotate the car), 4–6 race (a margin on
+ * the rear as the tyres wear), 7–9 worn tyres, bumps or a cold track (slower reapply, no false releases off kerbs),
+ * 10–12 wet (a wider window for the wet tread)
+ */
+const ENDURANCE_ABS_MAPS: readonly (readonly [number, number, number])[] = [
+  [1.02, 0.92, 1.22],
+  [1.0, 0.9, 1.22],
+  [0.98, 0.88, 1.2],
+  [0.96, 0.84, 1.1],
+  [0.95, 0.83, 1.05],
+  [0.94, 0.81, 1.0],
+  [0.92, 0.8, 0.92],
+  [0.9, 0.78, 0.88],
+  [0.88, 0.76, 0.84],
+  [1.1, 0.88, 0.95],
+  [1.08, 0.86, 0.92],
+  [1.05, 0.84, 0.9],
+];
 
 /**
  * The car's controllers (steering assist, traction control, ABS, the autopilot) run on a clock of their own: every
@@ -886,6 +931,8 @@ export class F12026CarSim implements SimulatorCar {
   public tc2Level = 6;
   /** Live MFD 4-channel ABS dial (0 = OFF, 1 = min intervention, 12 = max stability) */
   public absLevel = 5;
+  /** Live MFD slip-angle TC dial (0 = off), on a car with it (`CarSimProfile.tcSlipAngleDial`) */
+  public tcSlipAngleLevel = 5;
   /** User-selected ERS deployment mode in MFD (overridden to 'PSH' while manual override / boost is held) */
   private userErsMode: PerformanceModeName = 'RAC';
   /** Push mode is running (the override held or latched, the 8 s boost, or the AI's Overtake Mode), not just picked */
@@ -930,6 +977,10 @@ export class F12026CarSim implements SimulatorCar {
     rearDamper: { slow_bump: number; fast_bump: number; slow_rebound: number; fast_rebound: number };
     frontHeight: number;
     rearHeight: number;
+    /** Third springs (rate, packer gap) and dampers, and the corner packers, as the car's data has them */
+    heave: { front: { rate: number; packerGap: number }; rear: { rate: number; packerGap: number } };
+    heaveDamper: { front: DamperSettingsUnits; rear: DamperSettingsUnits };
+    cornerPacker: { front: number; rear: number };
   };
   private wingTrimDeg = { front: 0, rear: 0 };
   private chassis: ChassisSetup = { ...DEFAULT_CHASSIS_SETUP };
@@ -1068,6 +1119,12 @@ export class F12026CarSim implements SimulatorCar {
       rearDamper: { ...sp.dampers_controller.rear.base },
       frontHeight: this.config.aero.front_target_height,
       rearHeight: this.config.aero.rear_target_height,
+      heave: {
+        front: { rate: sp.front.heave.rate, packerGap: sp.front.heave.packerGap },
+        rear: { rate: sp.rear.heave.rate, packerGap: sp.rear.heave.packerGap },
+      },
+      heaveDamper: { front: { ...sp.dampers_controller.front.heave }, rear: { ...sp.dampers_controller.rear.heave } },
+      cornerPacker: { front: sp.front.bumpStop.packerGap ?? 0, rear: sp.rear.bumpStop.packerGap ?? 0 },
     };
     const L = track.totalLengthM;
     this.vehicle = new VehiclePhysics({
@@ -1325,12 +1382,42 @@ export class F12026CarSim implements SimulatorCar {
     const susp = this.config.suspensions;
     const axle = (spec: typeof susp.front, b: typeof base.front, springPct: number, arbPct: number, stopRatePct: number, stopRangeMm: number) => {
       spec.springs.wheel_rate = b.springRate * pctScale(springPct);
-      spec.arb = b.arb * pctScale(arbPct);
+      // A bar is only taken off altogether (−100 %) on a car whose data allows it
+      spec.arb = b.arb * pctScale(Math.max(spec.allowNoArb ? -100 : -50, arbPct));
       spec.bumpStop.rate = b.bumpStopRate * pctScale(stopRatePct);
       spec.bumpStop.range = Math.max(0.002, b.bumpStopRange + stopRangeMm / 1000);
     };
     axle(susp.front, base.front, s.springFrontPct, s.arbFrontPct, s.bumpStopRateFrontPct, s.bumpStopRangeFrontMm);
     axle(susp.rear, base.rear, s.springRearPct, s.arbRearPct, s.bumpStopRateRearPct, s.bumpStopRangeRearMm);
+    // Corner packers, and on a car with third elements their springs, packers and dampers
+    susp.front.bumpStop.packerGap = base.cornerPacker.front + s.cornerPackerFrontMm / 1000;
+    susp.rear.bumpStop.packerGap = base.cornerPacker.rear + s.cornerPackerRearMm / 1000;
+    const third = (
+      spec: typeof susp.front,
+      d: typeof susp.dampers_controller.front,
+      b: { rate: number; packerGap: number },
+      bd: DamperSettingsUnits,
+      front: boolean
+    ) => {
+      if (b.rate <= 0) return;
+      spec.heave.rate = b.rate * pctScale(front ? s.heaveSpringFrontPct : s.heaveSpringRearPct);
+      spec.heave.packerGap = Math.max(0.001, b.packerGap + (front ? s.heavePackerFrontMm : s.heavePackerRearMm) / 1000);
+      d.heave.slow_bump = bd.slow_bump * pctScale(front ? s.heaveBumpFrontPct : s.heaveBumpRearPct);
+      d.heave.fast_bump = bd.fast_bump * pctScale(front ? s.heaveFastBumpFrontPct : s.heaveFastBumpRearPct);
+      d.heave.slow_rebound = bd.slow_rebound * pctScale(front ? s.heaveReboundFrontPct : s.heaveReboundRearPct);
+      d.heave.fast_rebound = bd.fast_rebound * pctScale(front ? s.heaveFastReboundFrontPct : s.heaveFastReboundRearPct);
+    };
+    third(susp.front, susp.dampers_controller.front, base.heave.front, base.heaveDamper.front, true);
+    third(susp.rear, susp.dampers_controller.rear, base.heave.rear, base.heaveDamper.rear, false);
+    // A homologated gear set, on a car with more than one
+    const sets = this.config.gearSets;
+    if (sets && sets.length > 0) {
+      const set = sets[THREE.MathUtils.clamp(Math.round(s.gearRatioSet), 0, sets.length - 1)];
+      const gb = this.config.gearbox;
+      gb.ratios = [...set.ratios];
+      gb.reverse = set.reverse;
+      gb.finalDrive = set.finalDrive;
+    }
     const damp = (d: typeof susp.dampers_controller.front.base, b: typeof base.frontDamper, front: boolean) => {
       d.slow_bump = b.slow_bump * pctScale(front ? s.bumpFrontPct : s.bumpRearPct);
       d.fast_bump = b.fast_bump * pctScale(front ? s.fastBumpFrontPct : s.fastBumpRearPct);
@@ -1341,9 +1428,11 @@ export class F12026CarSim implements SimulatorCar {
     damp(susp.dampers_controller.rear.base, base.rearDamper, false);
     const v = this.vehicle;
     const DEG = Math.PI / 180;
-    v.staticToeRad = { front: s.toeFrontDeg * DEG, rear: s.toeRearDeg * DEG };
+    const toe0 = this.profile.staticToeDeg;
+    v.staticToeRad = { front: ((toe0?.front ?? 0) + s.toeFrontDeg) * DEG, rear: ((toe0?.rear ?? 0) + s.toeRearDeg) * DEG };
     v.engineBrakingScale = pctScale(s.engineBrakingPct);
     v.brakeDuctScale = { front: Math.max(0.3, 1 + s.brakeDuctFront * BRAKE_DUCT_STEP), rear: Math.max(0.3, 1 + s.brakeDuctRear * BRAKE_DUCT_STEP) };
+    v.coolingSteps = { brakeDuctFront: s.brakeDuctFront, brakeDuctRear: s.brakeDuctRear, radiator: s.radiatorTapeSteps };
     this.config.brakes.maxTorqueNm = base.brakeTorqueNm * pctScale(s.brakePowerPct);
     this.config.differential.settings.preload = Math.max(0, base.diffPreloadNm + s.diffPreloadNm);
     const ratio = STEER_RATIO_BASE[car];
@@ -1393,7 +1482,9 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   private applyAssistPresetLevels(preset: DriverAssistPreset): void {
-    Object.assign(this, assistPresetDials(this.profile, preset));
+    const d = assistPresetDials(this.profile, preset);
+    Object.assign(this, d);
+    this.tcSlipAngleLevel = d.tcSlipAngleLevel ?? d.tcLevel;
   }
 
   public getLiveTunerState(): LiveTunerState {
@@ -1402,7 +1493,14 @@ export class F12026CarSim implements SimulatorCar {
     return {
       tcLevel: this.tcLevel,
       tc2Level: this.tc2Level,
+      tcSlipAngleLevel: this.tcSlipAngleLevel,
+      hasTcSlipAngle: this.profile.tcSlipAngleDial === true,
       absLevel: this.absLevel,
+      absAllowed: this.profile.absAllowed !== false,
+      motorDeployKw: v.motorDeployKw,
+      regenKw: v.regenKw,
+      motorDeployStepsKw: this.config.hybridDials?.deployStepsKw ?? [],
+      regenStepsKw: this.config.hybridDials?.regenStepsKw ?? [],
       brakeBiasPct: Number((v.brakeBias * 100).toFixed(1)),
       brakeMigrationPct: Number((v.liveBrakeMigrationAmount * 100).toFixed(1)),
       diffEntry: v.diffEntryLevel,
@@ -1413,7 +1511,8 @@ export class F12026CarSim implements SimulatorCar {
       engineMap: v.engineMap,
       // The setting the player picked, not the push mode an override runs: the tuner steps from what it reads back
       ersMode: this.userErsMode,
-      hasErs: this.profile.hasErs,
+      // A prototype's hybrid runs from its kW dials: the F1 modes do nothing on it, so they are not offered
+      hasErs: this.profile.hasErs && !this.config.hybridDials,
       tcCutFraction: Number(Math.max(0, 1 - this.tcCut).toFixed(3)),
       absCutPerWheel: [
         Number(Math.max(0, 1 - cut[0]).toFixed(3)),
@@ -1434,10 +1533,22 @@ export class F12026CarSim implements SimulatorCar {
       this.tc2Level = THREE.MathUtils.clamp(Math.round(patch.tc2Level), 1, 12);
     }
     if (patch.absLevel !== undefined) {
-      this.absLevel = THREE.MathUtils.clamp(Math.round(patch.absLevel), 0, 12);
+      // A class without ABS: only the Assisted preset may run it
+      const banned = this.profile.absAllowed === false && this._assistPreset !== 'assisted';
+      this.absLevel = banned ? 0 : THREE.MathUtils.clamp(Math.round(patch.absLevel), 0, 12);
+    }
+    if (patch.tcSlipAngleLevel !== undefined) {
+      this.tcSlipAngleLevel = THREE.MathUtils.clamp(Math.round(patch.tcSlipAngleLevel), 0, 12);
+    }
+    const dials = this.config.hybridDials;
+    if (dials && patch.motorDeployKw !== undefined && Number.isFinite(patch.motorDeployKw)) {
+      v.motorDeployKw = nearestStep(dials.deployStepsKw, patch.motorDeployKw);
+    }
+    if (dials && patch.regenKw !== undefined && Number.isFinite(patch.regenKw)) {
+      v.regenKw = nearestStep(dials.regenStepsKw, patch.regenKw);
     }
     // The mode before the bias: the bias the driver dials is set as their offset on top of the mode's own
-    if (patch.ersMode !== undefined && this.profile.hasErs) {
+    if (patch.ersMode !== undefined && this.profile.hasErs && !this.config.hybridDials) {
       const m = patch.ersMode as PerformanceModeName;
       if (m === 'PSH' || m === 'RAC' || m === 'BAL' || m === 'LIC' || m === 'CHR') {
         this.userErsMode = m;
@@ -1598,9 +1709,14 @@ export class F12026CarSim implements SimulatorCar {
    * Standing start from grid slot `gridSlot` (0 = pole), or a flying lap from the run-up of the main
    * straight (further slots queue 28 m apart, alternating sides), as the LC26 does.
    */
-  public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number): void {
+  public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number, raceStart = false): void {
     // A point-to-point course is driven from a standing start: its road ends behind the start line
-    if (this.track.pointToPoint) flyingStart = false;
+    const pointToPoint = !!this.track.pointToPoint;
+    if (pointToPoint) flyingStart = false;
+    // Out of the garage at the full realism level: tyres raced without blankets and their brakes cold, for an out-lap
+    // to warm. A race's grid and a rolling start come after a formation lap, a hill climb's start line after the
+    // driver's own warm-up (it has no out-lap), and the autopilot's cars plan on warm brakes
+    this.vehicle.coldGarageStart = this.realism.coldGarageStart && !flyingStart && !raceStart && !pointToPoint && !this.aiAutopilot;
     this.runActive = false;
     this.atRestOnLine = false;
     // Fuelled before it is seated, so it settles at the ride height of that load
@@ -1655,6 +1771,7 @@ export class F12026CarSim implements SimulatorCar {
       }
     }
     this.afterPlacement();
+    this.vehicle.coldGarageStart = false;
     this.vehicle.ersEnergyJ = this.config.ers.ERS_MAX_CHARGE;
     this.vehicle.resetLapEnergy();
     this.simTimeMs = 0;
@@ -1912,6 +2029,15 @@ export class F12026CarSim implements SimulatorCar {
   };
 
   /**
+   * The autopilot's dials: the semi-pro preset's, with the Assisted preset's ABS where the class bans it (the AI's
+   * threshold braking, which the autopilot's pedal alone does not do)
+   */
+  private autopilotDials(): AidDials {
+    const d = this.profile.assistDials.semi_pro;
+    return d.absLevel > 0 || this.profile.absAllowed !== false ? d : { ...d, absLevel: this.profile.assistDials.assisted.absLevel };
+  }
+
+  /**
    * 130 Hz TC1/TC2 + 240 Hz 4-Ch ABS on the pedals, at the given dial positions (the driver's, or the autopilot's). The
    * TC cuts spark and fuel (`ignitionCut`), which takes torque off at once; the pedal itself passes through
    */
@@ -1942,7 +2068,18 @@ export class F12026CarSim implements SimulatorCar {
       const saDriven = Math.max(Math.abs(W[dl].slipAngleRad), Math.abs(W[dr].slipAngleRad)) / saLimitRad;
       const ctl = this.aidControl;
       const slide = v.waterMm > 0 ? ctl.tcWetSlide : elec.tcDryRearSlide;
-      const slideTerm = slide ? slide.gain * Math.max(0, saDriven - slide.from) : 0;
+      let slideGain = slide ? slide.gain : 0;
+      let slideFrom = slide ? slide.from : 0;
+      if (this.profile.tcSlipAngleDial) {
+        // The slip-angle dial: off at 0; from 1 (the most slide before the cut) to 12 (the least), about the car's own
+        // calibration at 6–7
+        const lvl = THREE.MathUtils.clamp(Math.round(dials.tcSlipAngleLevel ?? dials.tcLevel), 0, 12);
+        const own = slide ?? ctl.tcWetSlide;
+        const n = (lvl - 1) / 11;
+        slideGain = lvl > 0 ? own.gain * (0.45 + 1.1 * n) : 0;
+        slideFrom = own.from * (1.45 - 0.9 * n);
+      }
+      const slideTerm = slideGain > 0 ? slideGain * Math.max(0, saDriven - slideFrom) : 0;
       const latFactor = Math.max(tight.floor, 1 - tight.gain * Math.pow(gLat, tight.exponent) - slideTerm);
       const tcEffTarget = tcBaseTarget * latFactor;
       // Weighted driven axle slip (default 0.65 * max(k_L, k_R) + 0.35 * mean(k_L, k_R)); on a four-wheel-drive car the
@@ -1973,7 +2110,15 @@ export class F12026CarSim implements SimulatorCar {
 
     // 240 Hz 4-Channel Independent ABS (per-wheel slip + angular decel anticipation + rear yaw stability)
     const absLv = THREE.MathUtils.clamp(Math.round(dials.absLevel), 0, 12);
-    const absBaseTarget = absLv > 0 ? elec.absLevels[THREE.MathUtils.clamp(12 - absLv, 0, elec.absLevels.length - 1)] : 0;
+    // A map per dial position (front and rear targets as shares of the tyre's peak slip, a reapply rate), or a slip
+    // target per level
+    const absMap = this.profile.enduranceAbsMaps && absLv > 0 ? ENDURANCE_ABS_MAPS[absLv - 1] : null;
+    const kappaPeak = Math.max(0.05, this.compoundData.modelData.slip_ratio_limit);
+    const absBaseTarget = absMap
+      ? kappaPeak * absMap[0]
+      : absLv > 0
+        ? elec.absLevels[THREE.MathUtils.clamp(12 - absLv, 0, elec.absLevels.length - 1)]
+        : 0;
     const cut = this.absWheelCut;
     if (this.absCut === 1) cut.fill(1);
     if (absBaseTarget > 0 && speed > 3 && brake > 0.01) {
@@ -1988,9 +2133,11 @@ export class F12026CarSim implements SimulatorCar {
         const lock = -w.slipRatio + decelAnticipation;
         // Rear channels tighten target under trail-braking slip angle to prevent rear axle step-out
         const rearLatGuard = i >= 2 ? Math.max(guard.floor, 1 - guard.gain * Math.max(0, Math.abs(w.slipAngleRad) - guard.deadbandRad)) : 1;
-        const effAbsTarget = absBaseTarget * rearLatGuard;
+        const axleTarget = absMap && i >= 2 ? kappaPeak * absMap[1] : absBaseTarget;
+        const effAbsTarget = axleTarget * rearLatGuard;
         const want = lock > effAbsTarget ? Math.max(ctl.absFloor, 1 - (lock - effAbsTarget) * ctl.absGain) : 1;
-        cut[i] += (want - cut[i]) * Math.min(1, (want < cut[i] ? absRate * ctl.absApplyShare : absRate * ctl.absReleaseShare) * h);
+        const reapply = absRate * ctl.absReleaseShare * (absMap ? absMap[2] : 1);
+        cut[i] += (want - cut[i]) * Math.min(1, (want < cut[i] ? absRate * ctl.absApplyShare : reapply) * h);
         minCut = Math.min(minCut, cut[i]);
       }
       this.absCut = minCut;
@@ -2151,7 +2298,7 @@ export class F12026CarSim implements SimulatorCar {
       // understeering on the brakes: ease off so the fronts have grip left to turn with
       Math.max(0, -pedal) * (frontsSaturated ? 0.5 : 1) * rearCut,
       h,
-      assistPresetDials(this.profile, 'semi_pro')
+      this.autopilotDials()
     );
     return {
       ...aids,
@@ -2446,10 +2593,9 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   private applyColdPressures(): void {
-    for (const w of this.vehicle.wheels) {
-      w.coldPressurePsi = pressureAt(this.coldPsi, w.isFront, w.isLeft);
-      w.pressurePsi = w.coldPressurePsi;
-    }
+    for (const w of this.vehicle.wheels) w.coldPressurePsi = pressureAt(this.coldPsi, w.isFront, w.isLeft);
+    // At the temperature the gas is at now (blankets, the garage's air, or as the tyres were)
+    this.vehicle.refreshTyrePressures();
   }
 
   /** Sync adapter brake temps from VehiclePhysics 2-node physical brake disc state */

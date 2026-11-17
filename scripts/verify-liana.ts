@@ -8,6 +8,7 @@
  * adapter, then autopilot laps of Dunsfold Aerodrome (the Top Gear test track). The ranges are the road car's (Suzuki's figures, Top Gear's
  * lap board) and the Assetto Corsa car's (its 100 % AI lapped 1:41.7–1:43.0 there), not tuned to these numbers.
  */
+import { SIM_REALISM_FLAGS } from '../src/lib/sim/sim-realism';
 import { readFileSync, existsSync } from 'node:fs';
 import * as THREE from 'three';
 import { setActiveTrack, getActiveTrackData, type RawTrackJson } from '../src/lib/track-data';
@@ -352,7 +353,9 @@ console.log('\n== Brakes, fuel and steering from the car\'s data');
 
   const wide = createFlatTestTrack(30_000, 3000);
   // Fuel flow follows the engine's speed: a constant 0.006 kg/s flat out burnt 0.187 kg here
+  // The fuel-flow model, burning (the game's sprints run on a fixed load, `SimRealismFlags.fuelUse`)
   const sim = createSuzukiLianaSim(wide);
+  sim.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
   sim.teleportToDistance(1000, 0);
   const f0 = sim.telemetry.fuelKg;
   for (let t = 0; t < 30; t += DT) sim.step(DT, { throttle: 1 });

@@ -9,6 +9,7 @@
  * against the GT3's. The ranges are what the mod's data gives in Assetto Corsa terms (its tables, gearing, brake torque
  * and tyre data), not tuned to these numbers.
  */
+import { SIM_REALISM_FLAGS } from '../src/lib/sim/sim-realism';
 import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
@@ -368,7 +369,9 @@ console.log('\n== Brakes, fuel and steering from the car\'s data');
   check('Pad friction 0.97 / 1.00 / 0.96 / 0.90 at 0 / 400 / 1000 / 1200 °C', [0.97, 1, 0.96, 0.9].every((v, i) => Math.abs(pads[i] - v) < 1e-9), pads.map((v) => fmt(v)).join(' / '));
 
   // Fuel flow follows the engine's speed: 0.00574 l/s per 1000 rpm at full throttle, 0.74 kg/l
+  // The fuel-flow model, burning (the game's sprints run on a fixed load, `SimRealismFlags.fuelUse`)
   const sim = createNissanR33Sim(pad);
+  sim.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
   sim.assistPreset = 'semi_pro';
   sim.teleportToDistance(1000, 0);
   const f0 = sim.telemetry.fuelKg;

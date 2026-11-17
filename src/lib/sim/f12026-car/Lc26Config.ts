@@ -485,7 +485,8 @@ function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: '
       hysteresis: 0.0107,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
-      coreCooling: [8, 0.2],
+      // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]
+      coreCooling: [4, 0.1],
       thermalVerticalK: -0.0012,
       thermalVerticalRefC: 100,
       ...(heat ? { pressureHeat: heat.pressureHeat } : {}),
@@ -567,6 +568,8 @@ export function buildLc26Config(overrides: Lc26Overrides = {}) {
       powerSteering: { steeringRatio: LC26_CHASSIS.steering.ratio, deadbandNm: 26, rampNm: 6, maxRatio: 0.45 },
       // The body's plan at barrier height, measured from f12026.glb (`scripts/measure-car-plans.ts`)
       bodyPlan: [[0.00, 2.93], [0.90, 2.59], [0.88, 0.87], [0.57, -2.46], [0.00, -2.46]],
+      // Torsional stiffness between the axle structures: a carbon tub, engine and gearbox as stressed members [est]
+      chassisTorsion: { torsionalStiffnessNmPerDeg: 50_000, torsionalDampingNmsPerDeg: 300, frontRollInertiaShare: 0.42 },
     },
     engine: {
       ...ENGINE,

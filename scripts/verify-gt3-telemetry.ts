@@ -8,7 +8,7 @@
  *
  * Run: npx tsx scripts/verify-gt3-telemetry.ts
  */
-import { GT3_REF, measureGt3 } from './lib/gt3-reference';
+import { GT3_REF, measureGt3, RHO } from './lib/gt3-reference';
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ''): void {
@@ -44,10 +44,22 @@ console.log('Braking g');
 band((at) => `braking g at ${at} km/h`, m.brakingG, -12, 12);
 
 console.log('Full-throttle g');
-band((at) => `full-throttle g at ${at} km/h`, m.throttleG, -15, 20);
+// The logs are a sprint trim's: the endurance balance of performance's restrictors take 0.985 / 1.04 of its torque
+// (and cap the top at 354 kW), and its bodywork adds drag over the sprint car's CD·A of 0.865 m² (held to the low-drag
+// trim's speed trap). The reference's full-throttle g is scaled by the restrictors and loses that extra drag first
+const BOP_TORQUE = 0.985 / 1.04;
+const SPRINT_CDA = 0.865;
+const throttleRows = m.throttleG.map(([at, ours, ref], i) => {
+  const { dragG, speedMs, massKg } = m.throttleDrag[i];
+  const sprintDragG = (0.5 * RHO * SPRINT_CDA * speedMs ** 2) / (massKg * 9.81);
+  return [at, ours, ref * BOP_TORQUE - Math.max(0, dragG - sprintDragG)] as [number, number, number];
+});
+const restrictors = (at: number) => `full-throttle g at ${at} km/h (the reference × the restrictors' ${BOP_TORQUE.toFixed(3)}, less the extra drag)`;
+band(restrictors, throttleRows, -15, 20);
 
 console.log('Gearing');
 band((g) => `gear ${g} rpm per m/s`, m.rpmPerMs, -1, 1);
-check('limiter rpm', Math.abs(m.limiterRpm - GT3_REF.limiterRpm) <= 10, `${m.limiterRpm} rpm`);
+// The logs peak at 7899 rpm on the sprint trim; the endurance balance of performance sets 7450
+check('limiter rpm: the endurance trim\'s 7450 under the logs\' sprint limiter', Math.abs(m.limiterRpm - 7450) <= 10 && m.limiterRpm < GT3_REF.limiterRpm, `${m.limiterRpm} rpm (logs ${GT3_REF.limiterRpm})`);
 
 console.log(`\nAll ${passed} GT3 telemetry checks passed.`);

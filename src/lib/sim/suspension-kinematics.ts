@@ -52,6 +52,8 @@ export interface DoubleWishboneHardpoints {
    * `buildDoubleWishboneHardpoints`.
    */
   rackTravelPerSteerRad: number;
+  /** 1 / the tie rod's |dψ / d rack| at static ride height, straight ahead: `tieRodLeverageNorm` is 1 there */
+  tieRodLeverageScale?: number;
   /** Actuation topology ('pull_rod' for modern F1 front, 'push_rod' for rear / GT3) */
   actuation: 'pull_rod' | 'push_rod';
   /** Rocker bellcrank progressive motion ratio slope (per m of bump) */
@@ -99,6 +101,12 @@ export interface CornerKinematicsState {
   kingpinTrailM: number;
   /** Instantaneous pushrod/pullrod rocker motion ratio (normalized to 1.0 at static ride height) */
   motionRatioNorm: number;
+  /**
+   * The tie rod's leverage on this wheel's steering now against straight ahead at static ride height:
+   * (dψ / d rack) × `rackTravelPerSteerRad`. A moment about the kingpin reaches the rack, and so the steering wheel, by
+   * this share of what a constant steering ratio gives (the arm's angle to the tie rod changes with lock and bump)
+   */
+  tieRodLeverageNorm: number;
   /**
    * Contact patch motion per metre of wheel-centre bump, inboard and forward (m/m). These are the front- and side-view
    * swing-arm slopes for a force at the ground (virtual work: a force F there loads the wheel's travel by F · dr/dz):
@@ -181,6 +189,8 @@ export interface DoubleWishboneOptions {
    * Default 0.012 (F1) / 0.025 (GT3).
    */
   staticCasterTrailM?: number;
+  /** Rocker leverage growth per m of bump (`motionRatioNorm`); default by actuation, 1.35 pullrod / 1.15 pushrod */
+  rockerProgressivityPerM?: number;
 }
 
 /**
@@ -232,13 +242,16 @@ export function buildDoubleWishboneHardpoints(
     tieRodLengthM: Math.hypot(tyreSteer[0] - carSteer[0], tyreSteer[1] - carSteer[1], tyreSteer[2] - carSteer[2]),
     rackTravelPerSteerRad: 1,
     actuation,
-    rockerProgressivityPerM: actuation === 'pull_rod' ? 1.35 : 1.15,
+    rockerProgressivityPerM: options.rockerProgressivityPerM ?? (actuation === 'pull_rod' ? 1.35 : 1.15),
     staticCasterTrailM: options.staticCasterTrailM ?? (gt3 ? 0.025 : 0.012),
   };
   // Rack ratio: with 1 m per "radian", a 1 mm nudge of the rack reads straight off the left wheel's solved angle
   const nudgeM = 0.001;
   const nudged = solveCornerKinematics3D(out, 0, nudgeM, true, 0.33).wheelSteerRad;
   out.rackTravelPerSteerRad = Math.abs(nudged) > 1e-6 ? nudgeM / nudged : 0;
+  out.tieRodLeverageScale = 1;
+  const lev = solveCornerKinematics3D(out, 0, 0, true, 0.33).tieRodLeverageNorm;
+  out.tieRodLeverageScale = lev > 0 ? 1 / lev : undefined;
   return out;
 }
 
@@ -336,6 +349,7 @@ export function createCornerKinematicsState(): CornerKinematicsState {
     kingpinScrubM: 0,
     kingpinTrailM: 0,
     motionRatioNorm: 1,
+    tieRodLeverageNorm: 1,
     contactInboardPerBump: 0,
     contactForwardPerBump: 0,
     hubInboardPerBump: 0,
@@ -638,6 +652,12 @@ export function solveCornerKinematics3D(
   const vsZ = vBz + omX * rsY - omY * rsX;
   const turnDen = tcX * (k1y * rsZ - k1z * rsY) + tcY * (k1z * rsX - k1x * rsZ) + tcZ * (k1x * rsY - k1y * rsX);
   const turnRate = Math.abs(turnDen) > 1e-9 ? -(tcX * vsX + tcY * vsY + tcZ * vsZ) / turnDen : 0;
+  // The rack moving the tie rod's inner end by d along the car's lateral axis turns the upright by
+  // tc_x · (±d) / turnDen to keep the rod's length (outboard on the left is −x)
+  const dPsiDRack = Math.abs(turnDen) > 1e-9 ? (tcX * (isLeft ? -1 : 1)) / turnDen : 0;
+  const levScale = hp.tieRodLeverageScale ?? hp.rackTravelPerSteerRad;
+  const raw = Math.abs(dPsiDRack * levScale);
+  const tieRodLeverageNorm = dPsiDRack !== 0 && levScale > 0 ? (hp.tieRodLeverageScale === 1 ? raw : Math.min(1.65, Math.max(0.55, raw))) : 1;
   omX += turnRate * k1x;
   omY += turnRate * k1y;
   omZ += turnRate * k1z;
@@ -673,6 +693,7 @@ export function solveCornerKinematics3D(
   out.kingpinScrubM = kingpinScrubM;
   out.kingpinTrailM = kingpinTrailM;
   out.motionRatioNorm = motionRatioNorm;
+  out.tieRodLeverageNorm = tieRodLeverageNorm;
   out.contactInboardPerBump = vCx * perHub;
   out.contactForwardPerBump = vCz * perHub;
   out.hubInboardPerBump = vWx * perHub;

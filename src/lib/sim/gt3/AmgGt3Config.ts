@@ -12,6 +12,9 @@
  *
  * No hybrid, DRS or heave spring: the ERS is zeroed, every performance mode is the same map, the heave element
  * has no rate, and the brakes are conventional hydraulics (no brake-by-wire).
+ *
+ * Trimmed to an endurance GT3 balance of performance [bop]: 1365 kg with the driver, 354 kW at the driveshafts under
+ * a torque-sensor cap, a 7450 rpm limiter, a low-drag aero window and harder slicks raced without tyre blankets.
  */
 import type { LutPoints } from '../lut';
 import type {
@@ -55,17 +58,33 @@ const WHEEL_TORQUE: [number, number][] = [
 ];
 
 /**
- * The curve against the reference laps [motec]: on warm tyres with fuel aboard the car pulled 4–5 % less
- * full-throttle g than they do from 100 to 250 km/h, where the engine sets it, so the engine makes 4 % more than the
- * curve: 406 kW (545 hp) at the crank, a GT3's balance-of-performance figure
+ * The endurance balance of performance's restrictors [bop]: the curve × 0.985, ≈ 385 kW (516 hp) at the crank at
+ * 7000 rpm, which the driveshaft cap below then holds to 354 kW
  */
-const TORQUE_SCALE = 1.04;
+const TORQUE_SCALE = 0.985;
+
+/**
+ * The regulated power at the driveshafts (rpm → kW after the gearbox's losses) [bop]: 354 kW (475 hp) across
+ * 5500–7000 rpm, falling with the curve toward the limiter
+ */
+const SHAFT_POWER_CAP: LutPoints = [
+  [0, 354.5],
+  [5500, 354.5],
+  [6500, 354],
+  [7000, 354],
+  [7250, 347.8],
+  [7450, 336.7],
+  [7600, 312.8],
+];
 
 /** Crank power (kW) at the curve's points [derived] */
 const POWER_CURVE: LutPoints = WHEEL_TORQUE.map(([rpm, nm]) => [rpm, ((nm * TORQUE_SCALE) / DRIVELINE_EFFICIENCY) * rpm * Math.PI / 30 / 1000]);
 
 const ENGINE = {
   powerCurve: POWER_CURVE,
+  outputPowerCap: { curve: SHAFT_POWER_CAP },
+  // The front grille's airbox: its dynamic pressure fills the cylinders a little more at speed, under the cap [est]
+  ramAirGainPerKPa: 0.0042,
   // Linear overrun torque, 100 Nm at 8000 rpm [spec COAST_REF]
   coastCurve: [
     [0, 0],
@@ -127,13 +146,15 @@ const mode = (performance_mode_name: PerformanceModeName): PerformanceModeData =
 /**
  * 6-speed sequential on a 3.4285 final drive. 2nd–5th are calibrated from engine rpm
  * per m/s of rear wheel speed in each gear in reference GT3 MoTeC logs (181.2 / 141.3 / 115.3 / 100.8 on the 0.3525 m
- * rear) [motec]; 1st is [spec]; 6th keeps 5th's step [est]. ~320 km/h
- * at the 7900 rpm limiter, past the drag-limited top speed
+ * rear) [motec]; 1st is [spec]; 6th keeps 5th's step [est]. The low-drag set's longer 5th and 6th on a 3.25 final
+ * drive reach ≈ 311 km/h at the 7450 rpm limiter, headroom for a tow down a long straight [bop]
  */
+const SPRINT_GEARS = { label: 'Sprint', ratios: [2.5, 1.951, 1.521, 1.2414, 1.0847, 0.96], reverse: 3.818, finalDrive: 3.4285 };
+const LOW_DRAG_GEARS = { label: 'Low drag', ratios: [2.5, 1.951, 1.521, 1.2414, 1.065, 0.93], reverse: 3.818, finalDrive: 3.25 };
 const GEARBOX = {
-  ratios: [2.5, 1.951, 1.521, 1.2414, 1.0847, 0.96],
-  reverse: 3.818,
-  finalDrive: 3.4285,
+  ratios: [...SPRINT_GEARS.ratios],
+  reverse: SPRINT_GEARS.reverse,
+  finalDrive: SPRINT_GEARS.finalDrive,
   // Dog box: 50 ms between gears, the ignition cut for 70 ms [ref CHANGE_UP_TIME, AUTO_CUTOFF_TIME]. The first data set's
   // 100 ms leaves the full-throttle g further from the logs across the changes [motec]
   shiftTimeS: 0.07,
@@ -147,10 +168,9 @@ const GEARBOX = {
   downshift: { neutralS: 0.1, clutchReleaseS: 0.122, clutchHomeS: 0.168, blip: { level: 0.73, riseS: 0.01 }, overRevRpm: 500 },
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
-    // Reference telemetry limiter: logs peak at 7899 rpm [motec]
-    redline_rpm: 7900,
-    // Up-shifts land at a median 7487 rpm [motec]
-    upshift_rpm: 7500,
+    // The endurance balance of performance's limiter [bop] (the reference logs, on a sprint trim, peak at 7899 rpm)
+    redline_rpm: 7450,
+    upshift_rpm: 7250,
     downshift_rpm: 3800,
     // Into a braking zone the auto box clicks down while the lower gear lands under 6300 rpm (the shift lights'
     // second stage), so the engine stays in its power band on the brakes instead of lugging down to 3800 [est]
@@ -176,26 +196,32 @@ const SUSPENSIONS: SuspensionsData = {
   front: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
-    staticCamber: -3.5,
-    camberGainKinematic: -44,
-    // Front-stiff platform: ride 3.2 Hz, so the nose holds its height under braking instead of diving onto the stop [ref]
-    springs: { wheel_rate: 171_000, helper_rate: 0, helper_range: 0 },
+    // Coilovers on the lower wishbones, no rocker: the leverage grows a little as the arm comes level [est]
+    rockerProgressivityPerM: 0.4,
+    staticCamber: -3.2,
+    camberGainKinematic: -45,
+    // Front-stiff platform: ride ≈ 3.2 Hz, so the nose holds its height under braking instead of diving onto the stop
+    // [ref], a little softer with the coilover's rising leverage [bop]
+    springs: { wheel_rate: 168_000, helper_rate: 0, helper_range: 0 },
     heave: { rate: 0, gap: 1, packerGap: 1, packerRate: 0 },
-    // Long, soft, progressive rubber: the outside front no longer lands on a stiff stop mid-corner [ref]
-    bumpStop: { range: 0.0425, rate: 10_000, progression: 1_900_000 },
+    // Long, soft, progressive urethane rubber [ref] that damps and gives back only part of its force [est]
+    bumpStop: { range: 0.0425, rate: 10_000, progression: 1_900_000, damper: 3200, risingDamper: 85_000, reboundElasticShare: 0.55 },
     droopTravel: 0.06,
-    rollCentreHeight: 0.024,
+    // The uprights' ball joints inside the barrel raise the front roll centre from the reference's 24 mm [derived]
+    rollCentreHeight: 0.049,
     arb: 68_400, // [ref] front roll share 60 %
+    allowNoArb: true,
     // Inner pickup heights and pivot-axis tilts, rack height and steering-arm offset set so the solved geometry matches
     // the reference car's: RC and camber gain above, ≈ 33 % anti-dive, near-parallel steering (−10 % Ackermann),
-    // ≈ 3 °/m toe-out in bump; the uprights are as before [derived, ref]
+    // ≈ 3 °/m toe-out in bump [derived, ref]
     hardpoints: [
       [0.440, 0.0804, 0.197],
       [0.440, -0.0062, -0.145],
       [0.487, -0.1670, 0.215],
       [0.487, -0.1906, -0.155],
-      [0.128, 0.135, -0.025],
-      [0.098, -0.128, 0.017],
+      // Ball joints inside the 18" barrel: KPI 7.4°, caster 5.3°, 26 mm kingpin scrub and 31 mm trail at the ground
+      [0.088, 0.142, -0.014],
+      [0.052, -0.136, 0.012],
       [0.447, -0.1554, 0.160],
       [0.097, -0.112, 0.140],
     ],
@@ -203,14 +229,17 @@ const SUSPENSIONS: SuspensionsData = {
   rear: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
-    staticCamber: -2.5,
+    // Coilovers on the lower wishbones, no rocker: the leverage grows a little as the arm comes level [est]
+    rockerProgressivityPerM: 0.4,
+    staticCamber: -2.3,
     camberGainKinematic: -25,
-    springs: { wheel_rate: 127_000, helper_rate: 0, helper_range: 0 }, // [ref]
+    springs: { wheel_rate: 132_000, helper_rate: 0, helper_range: 0 }, // [ref, bop]
     heave: { rate: 0, gap: 1, packerGap: 1, packerRate: 0 },
-    bumpStop: { range: 0.056, rate: 9_000, progression: 1_700_000 }, // [ref]
+    bumpStop: { range: 0.056, rate: 9_000, progression: 1_700_000, damper: 3200, risingDamper: 85_000, reboundElasticShare: 0.55 }, // [ref, est]
     droopTravel: 0.055,
     rollCentreHeight: 0.06,
     arb: 40_200, // [ref]
+    allowNoArb: true,
     // As the front: RC and camber gain above, no anti-squat, ≈ 32 % anti-lift, ≈ 7 °/m toe-in in bump [derived, ref]
     hardpoints: [
       [0.440, 0.0838, 0.251],
@@ -247,6 +276,8 @@ const SUSPENSIONS: SuspensionsData = {
 
 /** Reference wing area: chord 1 × span 2.1221 m [spec] */
 const WING_AREA = 2.1221;
+/** CG height at static ride height (m) [bop]: the dry-sump front-mid V8 low in the chassis, the ballast on the floor */
+const CG_HEIGHT = 0.368;
 const FRONT_TARGET_HEIGHT = 0.055;
 const REAR_TARGET_HEIGHT = 0.07;
 const WHEELBASE = 2.65;
@@ -273,7 +304,9 @@ const YAW_CL_REAR_WING: LutPoints = [[0, 1], [2, 0.995], [5, 0.975], [10, 0.91],
 const AERO: AeroData = {
   front_lift: 0,
   rear_lift: 0,
-  drag: 0.35 * WING_AREA,
+  // A closed GT3's body drags as a sports car does (C_D ≈ 0.45 on ≈ 2.1 m²): with the wings, CD·A ≈ 1.07 m² in the
+  // sprint trim and ≈ 0.99 in the low-drag one, so the regulated 354 kW reaches ≈ 293 km/h at sea level [bop, derived]
+  drag: 0.455 * WING_AREA,
   // A closed car's drag acts near the centroid of its frontal area (≈ 0.55 m up a 1.2 m tall body), raised a little by
   // the rear wing at ≈ 1.15 m: ≈ 0.6 m off the ground, 0.2 m above the 0.40 m CG [est]
   dragCentreY: 0.2,
@@ -419,11 +452,23 @@ const AERO: AeroData = {
       lutYaw_CL_mult: YAW_CL_REAR_WING,
     },
   ],
+  // A tow saves a GT3 less drag than an open-wheeler's wake model gives it: ≈ 6 km/h at the end of a long straight
+  // 12 m behind another car [est]
+  wakeSensitivity: { dragWakeMult: 0.18, frontLiftWakeMult: 1, diffuserDraftLiftMult: 1 },
+  // Each brake duct step and radiator step's drag and downforce [est]
+  cooling: {
+    brakeDuctFrontCdAPerStep: 0.0045,
+    brakeDuctFrontClAPerStep: -0.008,
+    brakeDuctRearCdAPerStep: 0.003,
+    brakeDuctRearClAPerStep: -0.005,
+    radiatorCdAPerStep: 0.0065,
+    radiatorClAPerStep: -0.011,
+  },
   // Ground-height maps peak at 45–66 mm; 55 mm is minimum ride height [spec], rake [est]
   front_target_height: FRONT_TARGET_HEIGHT,
   rear_target_height: REAR_TARGET_HEIGHT,
-  // Floor plane at the mean target height below the 0.40 m CG [derived]
-  floorOffsetY: -(0.4 - 0.5 * (FRONT_TARGET_HEIGHT + REAR_TARGET_HEIGHT)),
+  // Floor plane at the mean target height below the 0.368 m CG [derived]
+  floorOffsetY: -(CG_HEIGHT - 0.5 * (FRONT_TARGET_HEIGHT + REAR_TARGET_HEIGHT)),
   drsTransitionS: 0.25,
   drsCloseThrottle: 0.5,
   airDensity: 1.225,
@@ -450,16 +495,28 @@ function buildGt3LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints 
 
 /**
  * GT3 slick [spec]: the front's values, the rear's own Fz0, load sensitivity, 16-point DY/DX curves, peak
- * slip angle, relaxation length, pressure-spring rate, and camber thrust in `rearOverride` ([REAR]). Soft / medium / hard
- * keep the grip steps (DY_REF = DX_REF 1.58 / 1.56 / 1.54) scaled ×1.165 to reference GT3 grip [motec], and three
- * temperature curves.
+ * slip angle, relaxation length, pressure-spring rate, and camber thrust in `rearOverride` ([REAR]). The endurance
+ * slicks are harder and longer-lasting than the sprint ones the reference laps ran on [bop]: D_REF (longitudinal)
+ * 1.77 / 1.74 / 1.69, × 1.033 across, and three temperature curves.
  */
 /**
- * Lateral grip over longitudinal [motec]: on warm tyres with fuel aboard the car held 3 % less lateral g than the
- * reference laps while it braked 3 % harder, and the second reference's slick has the same lean (its lateral load
- * curve sits 5–7 % over its longitudinal one)
+ * Lateral grip over longitudinal: the endurance slick's 1.7974 lateral on 1.74 longitudinal (Medium) [bop]. The
+ * second reference's slick leans the same way (its lateral load curve sits 5–7 % over its longitudinal one) [motec]
  */
 const GT3_LATERAL_GRIP = 1.033;
+
+/** The rim and inflation cavity of an 18" GT3 wheel [est] */
+const GT3_RIM_GAS = {
+  rimHeatCapacityJK: 4600,
+  rimBrakeOverlapAreaM2: 0.072,
+  discToRimEmissivity: 0.58,
+  discToRimConvectionWK: [2.8, 0.08] as const,
+  rimToAmbientConvectionWK: [6.5, 0.52] as const,
+  rimToGasConductanceWK: 16.5,
+  carcassToGasConductanceWK: 22,
+  gasHeatCapacityJK: 52,
+  carcassVolumeStretchPerPsi: 0.0018,
+};
 
 /** The reference slick's wear: grip (% of new) against km slid [ref] */
 const GT3_WEAR_CURVE: [number, number][] = [
@@ -485,7 +542,10 @@ function gt3Compound(
   gripScale: number,
   thermalCurve: LutPoints,
   window: [number, number],
-  /** Tread life against the soft's (× the distance of its wear curve) */
+  /**
+   * Tread life (× the distance of its wear curve) [est]: the endurance soft / medium / hard at ≈ 0.47 / 0.75 / 1.12,
+   * so a medium loses ≈ 2–3 % a lap of Le Mans and lasts a double stint
+   */
   wearLife: number
 ): TyresCompoundData {
   // Wider 325/705-18 rear slick has ~1.2 % higher peak reference μ at Fz0 = 3910 N and flatter load sensitivity
@@ -551,17 +611,26 @@ function gt3Compound(
       surfaceHeatCapacity: 1800,
       coreHeatCapacity: 11000,
       slipHeatShare: 0.35,
-      hysteresis: 0.0044,
+      // Raced without blankets, the carcass has to warm itself on the out-lap, tread bulk and liner both: the rolling
+      // loss nearer the tyre's rolling resistance than the blanketed sprint tyre's 0.0044 [bop, est]
+      hysteresis: 0.0084,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
-      coreCooling: [8, 0.2],
+      // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]
+      coreCooling: [4, 0.1],
       thermalVerticalK: -0.001,
       thermalVerticalRefC: 90,
       // Slow graining / blistering gains and exponents [ref]; the graining wears off as the tread slides
       tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1, wearOffWithSlip: true },
+      // Pressure in the heat, and the crown it gives the contact patch [est]
+      pressureHeat: { slipGain: 0.45, crownGain: 0.62 },
+      // An 18" forged wheel; the carcass stretches a little as the pressure rises [est]
+      rimGas: { ...GT3_RIM_GAS, rimHeatCapacityJK: 4600 },
     },
     pressureData: {
-      optimalPsi: 26,
+      optimalPsi: 26.3,
+      // 140 kPa in the garage at 25 °C, ≈ 26 psi hot [bop]
+      setPsi: 20.3,
       // RATE 280 470 N/m at 16 psi + 13 154 N/m per psi [spec]
       pressureSpringCurve: [
         [16, 280_470],
@@ -574,7 +643,10 @@ function gt3Compound(
       pressureGripSensitivity: 1.0,
       // 0.25 % of grip per psi off the ideal [ref]
       pressureGripLossPerPsi: 0.0025,
-      coldRefC: 60,
+      // No tyre blankets [bop]: pressures set cold in the garage; mid-window (80 °C of its 70–85 °C peak) after a
+      // formation lap, or where the realism level warms them anyway
+      coldRefC: 25,
+      blanketC: 80,
     },
     camberData: {
       camberGain: 0.134,
@@ -604,7 +676,8 @@ function gt3Compound(
         relaxationLengthY: 0.10173,
       },
       pressureData: {
-        optimalPsi: 26,
+        optimalPsi: 26.3,
+        setPsi: 20.3,
         // Rear RATE 282 710 N/m at 16 psi + 11 304 N/m per psi [spec REAR PRESSURE_SPRING_GAIN]
         pressureSpringCurve: [
           [16, 282_710],
@@ -615,7 +688,8 @@ function gt3Compound(
         ],
         pressureGripSensitivity: 1.0,
         pressureGripLossPerPsi: 0.0025,
-        coldRefC: 60,
+        coldRefC: 25,
+        blanketC: 80,
       },
       camberData: {
         camberGain: 0.149,
@@ -631,7 +705,7 @@ const TYRES = {
     'PhysicsTyreCompound_GT3_Soft',
     'GT3 Soft',
     'S',
-    1.84,
+    1.77,
     [
       [0, 0.7],
       [20, 0.8],
@@ -647,13 +721,13 @@ const TYRES = {
       [300, 0.6],
     ],
     [70, 85],
-    1
+    0.47
   ),
   PhysicsTyreCompound_GT3_Medium: gt3Compound(
     'PhysicsTyreCompound_GT3_Medium',
     'GT3 Medium',
     'M',
-    1.817,
+    1.74,
     [
       [0, 0.7],
       [20, 0.8],
@@ -670,13 +744,13 @@ const TYRES = {
       [300, 0.6],
     ],
     [80, 95],
-    1.6
+    0.75
   ),
   PhysicsTyreCompound_GT3_Hard: gt3Compound(
     'PhysicsTyreCompound_GT3_Hard',
     'GT3 Hard',
     'H',
-    1.794,
+    1.69,
     [
       [0, 0.7],
       [20, 0.8],
@@ -693,7 +767,7 @@ const TYRES = {
       [300, 0.6],
     ],
     [80, 105],
-    2.4
+    1.12
   ),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
@@ -709,22 +783,22 @@ const TYRES_WITH_RAIN = {
   PhysicsTyreCompound_GT3_Wet: deriveRainCompound(TYRES.PhysicsTyreCompound_GT3_Medium, 'wet', 'PhysicsTyreCompound_GT3_Wet', 'GT3 Wet'),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
-/** Equivalent-box inertia from 1.78 × 0.99 × 3.85 m: yaw ≈ 2040 kg·m² [ref INERTIA, derived] */
-const MASS = 1360;
-const box = (a: number, b: number) => (MASS / 12) * (a * a + b * b);
+/** With the driver, no fuel: the endurance balance-of-performance weight [bop] */
+const MASS = 1365;
 
 export const AMG_GT3_CONFIG = {
   screenName: 'Mercedes-AMG GT3',
   chassis: {
     // With driver, no fuel [spec TOTALMASS]
     totalMassKg: MASS,
-    frontWeightFraction: 0.48,
+    // The ballast box moved the balance a little forward [bop]
+    frontWeightFraction: 0.482,
     wheelbase: WHEELBASE,
     trackWidthFront: 1.75,
     trackWidthRear: 1.72,
-    // Hub heights 55 / 60 mm below the CG on the 0.340 / 0.3525 m tyres [spec BASEY, derived]
-    cgHeight: 0.4,
-    inertia: { pitch: box(0.99, 3.85), roll: box(1.78, 0.99), yaw: box(1.78, 3.85) },
+    cgHeight: CG_HEIGHT,
+    // The equivalent box (1.78 × 0.99 × 3.85 m) at 1365 kg, with the cage's and the transaxle's polar mass [bop, derived]
+    inertia: { pitch: 1845, roll: 495, yaw: 2110 },
     // An 18 in wheel and tyre (25 kg), the brake, the upright and half the links [ref]
     unsprungMassFront: 45,
     unsprungMassRear: 49,
@@ -733,9 +807,9 @@ export const AMG_GT3_CONFIG = {
     // Wheel, tyre and disc about the axle (kg·m²) [ref]
     wheelInertiaFront: 1.6,
     wheelInertiaRear: 1.8,
-    // 320° lock [spec] on ~12.6 ratio: steering-wheel angle per path
-    // curvature is 1900 deg·m over the 2.65 m wheelbase [motec]
-    maxRoadWheelDeg: 320 / 12.6,
+    // 540° lock to lock on the 12.6 : 1 rack [bop]: steering-wheel angle per path curvature is 1900 deg·m over the
+    // 2.65 m wheelbase [motec]
+    maxRoadWheelDeg: 270 / 12.6,
     // Reference telemetry needs ~1.4° of road-wheel angle per g beyond the geometric (Ackermann) angle, ours ~0.3° rigid: this
     // much rack / bush flex makes up the difference without moving the grip limit [motec]
     steerComplianceDegPerKN: 0.28,
@@ -748,27 +822,40 @@ export const AMG_GT3_CONFIG = {
     powerSteering: { steeringRatio: 12.6, deadbandNm: 2, rampNm: 15, maxRatio: 1.4, speedFadeMs: [20 / 3.6, 80 / 3.6] },
     // The body's plan at barrier height, measured from amg-gt3-evo.glb (`scripts/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.22], [0.39, 2.21], [0.99, 2.01], [1.02, -1.61], [0.97, -1.99], [0.78, -2.14], [0.46, -2.34], [0.00, -2.34]],
+    // Torsional stiffness between the axle structures: an aluminium spaceframe and a steel roll cage [est]
+    chassisTorsion: { torsionalStiffnessNmPerDeg: 31_500, torsionalDampingNmsPerDeg: 270, frontRollInertiaShare: 0.48 },
   },
   engine: ENGINE,
   ers: ERS,
   performanceModes: { PSH: mode('PSH'), RAC: mode('RAC'), BAL: mode('BAL'), LIC: mode('LIC'), CHR: mode('CHR') },
   gearbox: GEARBOX,
+  gearSets: [SPRINT_GEARS, LOW_DRAG_GEARS],
   // Auto-clutch 2300–3200 rpm [spec]
   clutch: { maxTorqueNm: 820, biteRpm: 2300, lockRpm: 3200 },
-  // Locking torque = preload + POWER / COAST × input torque [spec]: 0.30 power and 0.67 coast lock with the dials where
-  // the car has them. The coast lock and the light preload keep the rear calm on lift-off and trail braking (lift-off
-  // yaw kick 24 % → 4 %) [ref]
+  // Locking torque = preload + POWER / COAST × input torque [spec]: 0.30 power and 0.58 coast lock with the dials where
+  // the car has them, 60 Nm of preload. A freer coast than the sprint car's 0.67 helps unblanketed tyres turn in; the
+  // preload keeps the rear calm on lift-off and trail braking [ref, bop]
   differential: {
     type: 'LSD_Ramp',
-    settings: { power: 0.3, coast: 0.67, preload: 50, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
-    // Solid steel Ø 32 mm × 0.55 m from the rear transaxle (G 80 GPa): GJ/L ≈ 15 kNm/rad, ≈ 11 kNm/rad with the CV joints;
-    // shuffle 7.2 Hz in 1st, 19 Hz in 6th. Damping 10 % of critical for a wheel on its own shaft [est]
-    halfshaft: { stiffnessNmPerRad: 11_000, dampingNmsPerRad: 29 },
+    settings: { power: 0.3, coast: 0.58, preload: 60, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
+    // Solid steel Ø 32 mm × 0.55 m from the rear transaxle (G 80 GPa): GJ/L ≈ 15 kNm/rad, ≈ 11.5 kNm/rad with the CV
+    // joints; shuffle 7.2 Hz in 1st, 19 Hz in 6th. Damping 10 % of critical for a wheel on its own shaft [est]
+    halfshaft: { stiffnessNmPerRad: 11_500, dampingNmsPerRad: 31 },
   },
-  // Iron discs: steel pad μ(T) curve and heat capacities
-  // MAX_TORQUE 4750 / FRONT_SHARE 0.71, ADJUST_STEP 0.5 %
-  // No brake-by-wire: the bias is the balance bar's, so it does not migrate with pedal travel [spec]
-  brakes: { maxTorqueNm: 4750, front_bias: 0.71, ebbStep: 0.005, brakeByWire: false, discMaterial: 'endurance-steel', migration: { amount: 0, rampStart: 0 } },
+  // Iron discs: steel pad μ(T) curve and heat capacities. 4850 Nm at full pedal, 64 % of the torque to the front: on
+  // the smaller front tyres (0.340 m against 0.3525 m) that is 64.8 % of the braking force at the road, so the wide rears
+  // do their share [bop]. No brake-by-wire: the bias is the balance bar's, so it does not migrate with pedal travel
+  // [spec]. 35 °C out of the garage, 195 °C after a formation lap [est]
+  brakes: {
+    maxTorqueNm: 4850,
+    front_bias: 0.64,
+    ebbStep: 0.005,
+    brakeByWire: false,
+    discMaterial: 'endurance-steel',
+    migration: { amount: 0, rampStart: 0 },
+    discStartTempC: 195,
+    garageDiscTempC: 35,
+  },
   suspensions: SUSPENSIONS,
   aero: AERO,
   tyreCompounds: TYRES_WITH_RAIN,

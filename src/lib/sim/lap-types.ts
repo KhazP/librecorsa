@@ -44,7 +44,7 @@ export function drivingInputOf(f: {
  * Revision of the vehicle physics. Bump it whenever a physics change makes earlier lap times incomparable: laps
  * recorded under another revision then go on another leaderboard.
  */
-export const PHYSICS_VERSION = 7;
+export const PHYSICS_VERSION = 8;
 
 /**
  * The revision a lap in this car is driven under: the one its current board, ghosts and weekly challenges go by. The

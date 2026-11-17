@@ -649,7 +649,8 @@ function protoCompound(
       hysteresis: 0.0072,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
-      coreCooling: [8, 0.2],
+      // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]
+      coreCooling: [4, 0.1],
       thermalVerticalK: -0.001,
       thermalVerticalRefC: 85,
     },
@@ -806,6 +807,8 @@ export const MTR_496R_CONFIG = {
     ffbMechanicalTrailM: 0.045,
     // The body's plan at barrier height, measured from mtr-496r.glb (`scripts/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.40], [0.74, 2.35], [0.93, 2.18], [0.95, 0.16], [0.95, -2.05], [0.00, -2.20]],
+    // Torsional stiffness between the axle structures: a carbon tub with the engine as a stressed member [est]
+    chassisTorsion: { torsionalStiffnessNmPerDeg: 40_000, torsionalDampingNmsPerDeg: 320, frontRollInertiaShare: 0.45 },
   },
   engine: ENGINE,
   ers: ERS,
