@@ -1,4 +1,4 @@
-import { keyLabel } from "@/lib/input/bindings";
+import { keyLabel, PAD_PEDALS, pedalsOnTriggers } from "@/lib/input/bindings";
 import { PAD_SENSITIVITY } from "@/lib/input/device-input";
 import { isTouchDevice, requestTiltPermission } from "@/lib/input/touch-input";
 import { ALL_CAMERA_MODES, CAMERA_MODES } from "@/lib/render/camera-modes";
@@ -222,6 +222,11 @@ export const vibration = toggle({
 /** Steering speed and the inner dead zone start from the chosen steering feel */
 const feel = (env: SettingsEnv) => PAD_SENSITIVITY[env.settings.padSensitivity];
 
+/** With the pedals off the triggers (stick pedals), the triggers shift gears: nothing pulses in them */
+export const needsTriggerPedals = (env: SettingsEnv) =>
+  pedalsOnTriggers(env.settings.padTuning.pedalSources) ? null : "Needs the pedals on the triggers";
+const onStick = (env: SettingsEnv) => PAD_PEDALS.some((p) => env.settings.padTuning.pedalSources[p]?.kind === "axis");
+
 export const controllerFineTuning: RowDef[] = [
   slider({
     id: "steeringRate",
@@ -261,6 +266,18 @@ export const controllerFineTuning: RowDef[] = [
   }),
   slider({ id: "throttleGamma", label: "Throttle curve", hint: "Above 1 keeps light presses gentler", advanced: true, min: 0.5, max: 3, step: 0.05, format: (v) => curve(v), ...pad("throttleGamma") }),
   slider({ id: "brakeGamma", label: "Brake curve", hint: "Above 1 gives finer brake control at light pressure", advanced: true, min: 0.5, max: 3, step: 0.05, format: (v) => curve(v), ...pad("brakeGamma") }),
+  slider({
+    id: "stickPedalDeadzone",
+    label: "Pedal stick dead zone",
+    hint: "Stick travel ignored before a pedal on the stick starts",
+    advanced: true,
+    min: 0,
+    max: 0.3,
+    step: 0.01,
+    format: pct,
+    off: (env) => (onStick(env) ? null : "Needs a pedal on a stick"),
+    ...pad("stickPedalDeadzone"),
+  }),
 ];
 
 export const triggerRumble = toggle({
@@ -268,6 +285,7 @@ export const triggerRumble = toggle({
   label: "Trigger rumble",
   hint: "Slip and ABS pulses in the brake trigger, wheelspin in the throttle trigger, on controllers that have them",
   advanced: true,
+  off: needsTriggerPedals,
   ...pad("triggerRumble"),
 });
 
@@ -276,7 +294,7 @@ export const triggerSlip = toggle({
   label: "Trigger slip with ABS and TC on",
   hint: "Tyre-slip vibration in the triggers even while ABS and traction control are on",
   advanced: true,
-  off: (env) => (env.settings.padTuning.triggerRumble ? null : "Needs Trigger rumble on"),
+  off: (env) => needsTriggerPedals(env) ?? (env.settings.padTuning.triggerRumble ? null : "Needs Trigger rumble on"),
   ...pad("triggerSlipAlwaysOn"),
 });
 

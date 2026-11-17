@@ -8,10 +8,14 @@ import {
   DEFAULT_KEY_BINDINGS,
   DEFAULT_PAD_BUTTONS,
   KEY_ACTIONS,
+  DEFAULT_PAD_PEDAL_SOURCES,
   PAD_ACTIONS,
+  PAD_PEDALS,
   RESERVED_CODES,
   type KeyBindings,
   type PadButtonBindings,
+  type PadPedalSource,
+  type PadPedalSources,
 } from "@/lib/input/bindings";
 import {
   DEFAULT_WHEEL_SETTINGS,
@@ -20,6 +24,7 @@ import {
   type AxisBinding,
   type ButtonBinding,
   type InputDevice,
+  type PadPedalTuning,
   type PadSensitivity,
   type PedalBinding,
   type WheelSettings,
@@ -134,7 +139,7 @@ export interface ContentLibrary {
   recent: Record<LibraryKind, string[]>;
 }
 
-export interface PadTuning extends DeviceAssistTuning {
+export interface PadTuning extends DeviceAssistTuning, PadPedalTuning {
   /** Stick smoothing rate multiplier of the steering assist (higher = quicker) */
   steeringRate: number;
   /** Inner stick dead zone (0..0.3) */
@@ -143,7 +148,7 @@ export interface PadTuning extends DeviceAssistTuning {
   outerDeadzone: number;
   /** Stick response curve: 1 linear, > 1 finer near centre (0.5..3) */
   linearity: number;
-  /** Trigger response curves: 1 linear, > 1 finer at light pressure (0.5..3) */
+  /** Throttle / brake response curves, whatever they are read from: 1 linear, > 1 finer at light pressure (0.5..3) */
   throttleGamma: number;
   brakeGamma: number;
   /** Impulse-trigger rumble (Xbox): ABS in LT, wheelspin in RT */
@@ -304,6 +309,9 @@ export const DEFAULT_PAD_TUNING: PadTuning = {
   linearity: 1,
   throttleGamma: 1,
   brakeGamma: 1,
+  // The triggers until the player picks the right stick (Buttons card, or the GT classic layout)
+  pedalSources: DEFAULT_PAD_PEDAL_SOURCES,
+  stickPedalDeadzone: 0.1,
   triggerRumble: true,
   triggerSlipAlwaysOn: false,
   ...DEFAULT_DEVICE_ASSIST_TUNING,
@@ -329,6 +337,7 @@ export const PAD_FINE_TUNING_FIELDS = [
   "linearity",
   "throttleGamma",
   "brakeGamma",
+  "stickPedalDeadzone",
   "triggerRumble",
   "triggerSlipAlwaysOn",
 ] as const satisfies readonly (keyof PadTuning)[];
@@ -634,6 +643,29 @@ function parsePerCarFfb(v: unknown): WheelSettings["ffbPerCar"] {
   return out;
 }
 
+/** A saved pedal source, or undefined when it is not one */
+function parsePedalSource(v: unknown): PadPedalSource | null | undefined {
+  if (v === null) return null;
+  if (!isObj(v)) return undefined;
+  if (v.kind === "button" && index(v.button)) return { kind: "button", button: v.button as number };
+  if (v.kind === "axis" && index(v.axis) && (v.sign === -1 || v.sign === 1)) return { kind: "axis", axis: v.axis as number, sign: v.sign };
+  return undefined;
+}
+
+/**
+ * Each pedal's saved source; a missing or broken one takes its default. A pedal with a source by default (the throttle,
+ * the brake) cannot be saved off the controller: null there takes the default too
+ */
+function parsePedalSources(v: unknown): PadPedalSources {
+  const out = { ...DEFAULT_PAD_PEDAL_SOURCES };
+  if (!isObj(v)) return out;
+  for (const p of PAD_PEDALS) {
+    const source = parsePedalSource(v[p]);
+    if (source !== undefined && (source !== null || DEFAULT_PAD_PEDAL_SOURCES[p] === null)) out[p] = source;
+  }
+  return out;
+}
+
 function parsePadTuning(v: unknown): PadTuning {
   const d = DEFAULT_PAD_TUNING;
   if (!isObj(v)) return structuredClone(d);
@@ -644,6 +676,9 @@ function parsePadTuning(v: unknown): PadTuning {
     linearity: num(v.linearity, 0.5, 3, d.linearity),
     throttleGamma: num(v.throttleGamma, 0.5, 3, d.throttleGamma),
     brakeGamma: num(v.brakeGamma, 0.5, 3, d.brakeGamma),
+    // Saves from before pedal sources have none: the triggers, as they drove
+    pedalSources: parsePedalSources(v.pedalSources),
+    stickPedalDeadzone: num(v.stickPedalDeadzone, 0, 0.3, d.stickPedalDeadzone),
     triggerRumble: bool(v.triggerRumble, d.triggerRumble),
     triggerSlipAlwaysOn: bool(v.triggerSlipAlwaysOn, d.triggerSlipAlwaysOn),
     ...sanitizeAssistTuning(v),

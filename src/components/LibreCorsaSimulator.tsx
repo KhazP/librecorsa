@@ -59,7 +59,7 @@ import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components
 import { SettingsScreen, type SettingsCategory } from "@/components/settings/SettingsScreen";
 import type { SettingsEnv } from "@/components/settings/env";
 import { applyInterfaceSettings } from "@/lib/settings/ui-prefs";
-import { keyLabel, padButtonLabel } from "@/lib/input/bindings";
+import { keyLabel, padButtonLabel, pressPedalText } from "@/lib/input/bindings";
 import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
@@ -1501,7 +1501,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     settings.device === "wheel"
       ? `Press the throttle to launch · ${seatHintOn ? "hold the camera button for your seat · " : ""}pause button or Esc for menu`
       : settings.device === "controller"
-        ? `Hold RT to launch · ${seatHintOn ? `hold ${padButtonLabel(settings.padButtons.camera)} for your seat · ` : ""}${padButtonLabel(settings.padButtons.pause)} for menu`
+        ? `${pressPedalText(settings.padTuning.pedalSources.throttle)} to launch · ${seatHintOn ? `hold ${padButtonLabel(settings.padButtons.camera)} for your seat · ` : ""}${padButtonLabel(settings.padButtons.pause)} for menu`
         : touchVisible && vrState !== "on"
           ? "Hold Throttle to launch"
           : `Hold ${keyLabel(settings.keys.throttle[0])} to launch · ${seatHintOn ? `hold ${keyLabel(settings.keys.camera[0])} for your seat · ` : ""}Esc for menu`;

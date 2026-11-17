@@ -2,17 +2,25 @@
 
 import React, { useState } from "react";
 import {
+  freePedalButtons,
   matchPadLayout,
+  matchPedalSet,
   PAD_ACTIONS,
   PAD_BRAKE_BUTTON,
   PAD_LAYOUT_IDS,
   PAD_LAYOUTS,
+  PAD_PEDAL_LABELS,
   PAD_THROTTLE_BUTTON,
   padButtonLabel,
+  pedalOnButton,
+  pedalStickClicks,
   rebindPadButton,
+  withPedalSet,
   type PadAction,
+  type PadLayout,
+  type PadPedalSet,
 } from "@/lib/input/bindings";
-import { connectedPads, PAD_SENSITIVITY, padDisplayName, type PadSensitivity } from "@/lib/input/device-input";
+import { connectedPads, PAD_SENSITIVITY, padDisplayName, padPedals, type PadSensitivity } from "@/lib/input/device-input";
 import { Button, SettingRow } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import type { PadButtonName } from "@/components/ui/prompts";
@@ -24,7 +32,7 @@ import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { useGamepads } from "../useMenuNav";
 import { CAPTURE_TIMEOUT_S, useButtonCapture } from "./button-capture";
 import { padButtonName, padFamilyOf, useInputMode } from "../input-mode";
-import { StickCurve, TriggerBars } from "./TuningSlider";
+import { PedalCurveBars, StickCurve } from "./TuningSlider";
 import { PadMap } from "./PadMap";
 import { Hint, StatusPill, TrackMeter } from "./setup-ui";
 import { DualSenseCard, testDualSenseRumble } from "./DualSenseCard";
@@ -51,10 +59,12 @@ function testRumble(dualSense: DualSenseSettings) {
   }
 }
 
-/** The controller in use, live: the stick and the triggers as the game reads them */
+/** The controller in use, live: the stick and the pedals (triggers or right stick) as the game reads them */
 export function InputCheckCard() {
+  const { settings } = useSettingsEnv();
   const pads = useGamepads();
   const pad = pads.find((p) => p.mapping === "standard") ?? null;
+  const pedals = pad ? padPedals(pad, settings.padTuning) : null;
   return (
     <SettingsCard
       title="Input check"
@@ -69,8 +79,8 @@ export function InputCheckCard() {
             <span className="lc-body truncate">{padDisplayName(pad.id)}</span>
           </span>
           <TrackMeter label="Steer" value={pad.axes[0] ?? 0} color="var(--color-lc-info)" centered />
-          <TrackMeter label="Throttle" value={pad.buttons[PAD_THROTTLE_BUTTON]?.value ?? 0} color="var(--lc-sem-throttle)" />
-          <TrackMeter label="Brake" value={pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0} color="var(--lc-sem-brake)" />
+          <TrackMeter label="Throttle" value={pedals?.throttle ?? 0} color="var(--lc-sem-throttle)" />
+          <TrackMeter label="Brake" value={pedals?.brake ?? 0} color="var(--lc-sem-brake)" />
         </div>
       ) : null}
     </SettingsCard>
@@ -119,39 +129,102 @@ export function ControllerButtonsCard() {
   const pad = pads.find((p) => p.mapping === "standard") ?? null;
   const shownFamily = pad ? padFamilyOf(pad.id) : family;
   const [capturing, setCapturing] = useState<PadAction | null>(null);
+  /** A pedal's button pressed while capturing: it stays that pedal, and the capture keeps listening */
+  const [refused, setRefused] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
+  const sources = settings.padTuning.pedalSources;
+  const pedalSet = matchPedalSet(sources);
 
+  const capture = React.useCallback((action: PadAction | null) => {
+    setRefused(null);
+    setCapturing(action);
+  }, []);
   const onButton = React.useCallback(
     (button: number) => {
       if (!capturing) return;
+      if (pedalOnButton(sources, button) !== null) {
+        setRefused(button);
+        return;
+      }
       update((s) => ({ ...s, padButtons: rebindPadButton(s.padButtons, capturing, button) }));
-      setCapturing(null);
+      capture(null);
     },
-    [capturing, update],
+    [capturing, sources, update, capture],
   );
-  const onCancel = React.useCallback(() => setCapturing(null), []);
+  const refusedPedal = refused === null ? null : pedalOnButton(sources, refused);
+  const onCancel = React.useCallback(() => capture(null), [capture]);
   useButtonCapture(capturing, (b) => onButton(b.button), onCancel, { standardOnly: true });
 
   const name = (button: number | null) => padButtonName(button, shownFamily);
+  // Gears with no button (the pedals moved back onto the triggers they shifted on, say): the manual box can't shift
+  const noGears = PAD_ACTIONS.filter(({ id }) => (id === "shiftUp" || id === "shiftDown") && settings.padButtons[id] === null).map(
+    ({ label }, i) => (i === 0 ? label : label.toLowerCase()),
+  );
+  const gearHint = noGears.length
+    ? `${noGears.join(" and ")} ${noGears.length > 1 ? "have" : "has"} no button, so the manual gearbox can't shift. Press a layout, or set ${
+        noGears.length > 1 ? "them" : "it"
+      } below`
+    : undefined;
   const layout: RowDef = choice("tiles", {
     id: "padLayout",
     label: "Button layout",
-    columns: 4,
-    hint: () => (matchPadLayout(settings.padButtons) === null ? "My own layout: press a layout to start from it" : undefined),
+    columns: 3,
+    hint: () =>
+      gearHint ??
+      (matchPadLayout(settings.padButtons, sources) === null ? "My own layout: press a layout to start from it" : undefined),
     options: PAD_LAYOUT_IDS.map((id) => {
-      const b = PAD_LAYOUTS[id].buttons;
-      return { id, label: PAD_LAYOUTS[id].label, detail: `${name(b.shiftUp)} / ${name(b.shiftDown)} gears, ${name(b.boost)} boost` };
+      const { buttons: b, pedals: p } = PAD_LAYOUTS[id];
+      const gears = `${name(b.shiftUp)} / ${name(b.shiftDown)} gears`;
+      return { id, label: PAD_LAYOUTS[id].label, detail: p === "stick" ? `Right stick pedals, ${gears}` : `${gears}, ${name(b.boost)} boost` };
     }),
-    read: (env) => matchPadLayout(env.settings.padButtons) ?? "custom",
-    write: (env, id) => env.update((s) => ({ ...s, padButtons: { ...PAD_LAYOUTS[id as keyof typeof PAD_LAYOUTS].buttons } })),
+    read: (env) => matchPadLayout(env.settings.padButtons, env.settings.padTuning.pedalSources) ?? "custom",
+    write: (env, id) => {
+      const picked = PAD_LAYOUTS[id as PadLayout];
+      env.update((s) => {
+        const pedalSources = withPedalSet(s.padTuning.pedalSources, picked.pedals);
+        // Another pedal on a button the layout uses (a clutch) keeps it: the action there lets go
+        return { ...s, padButtons: freePedalButtons({ ...picked.buttons }, pedalSources), padTuning: { ...s.padTuning, pedalSources } };
+      });
+    },
     initial: () => "default",
+  });
+  // A pedal stick's click is under the pedal thumb: say what it still does there
+  const clickHint = pedalStickClicks(sources)
+    .map((click) => {
+      const action = PAD_ACTIONS.find((a) => settings.padButtons[a.id] === click)?.label;
+      return action ? `${name(click)} still does ${action}: a firm push on the stick can press it` : null;
+    })
+    .find((h) => h !== null);
+  const pedalRow: RowDef = choice("tiles", {
+    id: "padPedals",
+    label: "Pedals",
+    columns: 2,
+    hint: () => clickHint ?? undefined,
+    options: [
+      { id: "triggers", label: "Triggers", detail: `${name(PAD_THROTTLE_BUTTON)} throttle, ${name(PAD_BRAKE_BUTTON)} brake` },
+      { id: "stick", label: "Right stick", detail: `Up throttle, down brake; ${name(PAD_THROTTLE_BUTTON)} and ${name(PAD_BRAKE_BUTTON)} free to bind` },
+    ],
+    read: (env) => matchPedalSet(env.settings.padTuning.pedalSources) ?? "custom",
+    // Back on the triggers, whatever was bound to them lets go: RT would shift up every time it was pressed
+    write: (env, id) =>
+      env.update((s) => {
+        const pedalSources = withPedalSet(s.padTuning.pedalSources, id as PadPedalSet);
+        return { ...s, padButtons: freePedalButtons(s.padButtons, pedalSources), padTuning: { ...s.padTuning, pedalSources } };
+      }),
+    initial: () => matchPedalSet(DEFAULT_PLAYER_SETTINGS.padTuning.pedalSources) ?? "triggers",
   });
 
   return (
     <SettingsCard
       title="Buttons"
-      description="Right trigger throttle, left trigger brake, left stick steers"
-      rows={[layout]}
+      description={
+        pedalSet === "stick"
+          ? "Right stick up throttle, down brake, left stick steers"
+          : pedalSet === "triggers"
+            ? "Right trigger throttle, left trigger brake, left stick steers"
+            : "Left stick steers"
+      }
+      rows={[layout, pedalRow]}
     >
       <div className="grid gap-x-8 gap-y-1 xl:grid-cols-2">
       {PAD_ACTIONS.map(({ id, label }) => {
@@ -165,7 +238,7 @@ export function ControllerButtonsCard() {
               variant={listening ? "primary" : "secondary"}
               className="min-w-28"
               aria-label={listening ? `Press a button for ${label}` : `${label}: ${bound ? name(button) : "not set"}. Change`}
-              onClick={() => setCapturing(listening ? null : id)}
+              onClick={() => capture(listening ? null : id)}
             >
               {listening ? "Press a button" : bound ? (button < GLYPH.length ? name(button) : padButtonLabel(button)) : "Add"}
             </Button>
@@ -174,7 +247,12 @@ export function ControllerButtonsCard() {
       })}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-        {capturing ? (
+        {capturing && refused !== null && refusedPedal ? (
+          <StatusPill tone="live">
+            {name(refused)} is the {PAD_PEDAL_LABELS[refusedPedal].toLowerCase()}. Press another button
+            {pedalSet === "triggers" ? ", or move the pedals to the right stick" : null}
+          </StatusPill>
+        ) : capturing ? (
           <StatusPill tone="live">Press a controller button. Esc cancels; it stops after {CAPTURE_TIMEOUT_S} s</StatusPill>
         ) : (
           <Hint>Press a slot, then the button you want.</Hint>
@@ -185,7 +263,7 @@ export function ControllerButtonsCard() {
       </div>
       {showMap ? (
         <div className="rounded-lc-row border border-lc-line bg-lc-well p-3">
-          <PadMap family={shownFamily} bindings={settings.padButtons} pad={pad} />
+          <PadMap family={shownFamily} bindings={settings.padButtons} pedalSources={sources} pad={pad} />
         </div>
       ) : null}
     </SettingsCard>
@@ -200,7 +278,7 @@ export function ControllerFineTuningCard() {
     <SettingsCard title="Fine tuning" rows={[...controllerFineTuning, triggerRumble, triggerSlip]}>
       <div className="grid gap-3 pt-2 sm:grid-cols-2">
         <StickCurve deadzone={t.deadzone} outerDeadzone={t.outerDeadzone} linearity={t.linearity} />
-        <TriggerBars throttleGamma={t.throttleGamma} brakeGamma={t.brakeGamma} />
+        <PedalCurveBars tuning={t} throttleGamma={t.throttleGamma} brakeGamma={t.brakeGamma} />
       </div>
     </SettingsCard>
   );

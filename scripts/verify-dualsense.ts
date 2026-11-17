@@ -177,6 +177,10 @@ check('USB 0x01: sticks, triggers, buttons in standard order, battery', () => {
   const p = parseInputReport(0x01, usbReport());
   assert.ok(p);
   assert.ok(Math.abs(p.axes[0]) < 0.01 && p.axes[1] === -1 && p.axes[2] === 1);
+  // Right stick up reads negative, as the Gamepad API's: the stick pedals' throttle
+  const up = new Uint8Array(usbReport().buffer);
+  up[3] = 0;
+  assert.equal(parseInputReport(0x01, new DataView(up.buffer))?.axes[3], -1);
   assert.equal(p.l2, 0);
   assert.equal(p.r2, 1);
   assert.equal(p.buttons[0], true, 'Cross');
@@ -277,6 +281,14 @@ check('adaptive triggers off: both free while driving', () => {
   const f = frame(cruise({ brake: 0.9 }), { settings: { ...settings, adaptiveTriggers: false } });
   assert.deepEqual(f.output.leftTrigger, { mode: 'off' });
   assert.deepEqual(f.output.rightTrigger, { mode: 'off' });
+});
+check('stick pedals: L2 / R2 shift gears, so they stay free through ABS and wheelspin', () => {
+  const absTelemetry = cruise({ brake: 0.9, throttle: 0, wheelSlipRatios: [-0.2, -0.2, -0.1, -0.1], f12026: { absActive: true } });
+  assert.equal(frame(absTelemetry).output.leftTrigger?.mode, 'vibration', 'the same ABS stop buzzes L2 on trigger pedals');
+  assert.deepEqual(frame(absTelemetry, { triggerPedals: false }).output.leftTrigger, { mode: 'off' });
+  const spin = frame(cruise({ throttle: 1, wheelSlipRatios: [0, 0, 0.4, 0.4] }), { triggerPedals: false });
+  assert.deepEqual(spin.output.rightTrigger, { mode: 'off' });
+  assert.notDeepEqual(frame(cruise({ brake: 0.9 }), { triggerPedals: true }).output.leftTrigger, { mode: 'off' }, 'trigger pedals keep them');
 });
 check('rumble follows the motors and its strength; off with the rumble switch', () => {
   const t = cruise({ wheelSlipRatios: [-0.45, -0.45, 0, 0] });
