@@ -9,13 +9,36 @@ import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { LapRecorder, validateLapRecording, type CompletedLap } from '../src/lib/sim/lap-recorder';
 import { lapPlausibilityProblem } from '../src/lib/sim/lap-plausibility';
-import { LAP_SAMPLE_STRIDE, PHYSICS_VERSION, drivingInputOf, lapBoardClass, lapPhysicsVersion, parseLapConditions, type LapRecording } from '../src/lib/sim/lap-types';
+import {
+  LAP_SAMPLE_STRIDE,
+  PHYSICS_VERSION,
+  PHYSICS_VERSIONS,
+  CIRCUIT_REVISION_STEP,
+  boardChoiceOf,
+  boardChoiceOfLap,
+  boardChoices,
+  boardPhysicsVersion,
+  carPhysicsVersion,
+  circuitRevision,
+  currentBoardBase,
+  drivingInputOf,
+  isCurrentLapPhysics,
+  lapBoardClass,
+  lapConditionsNow,
+  lapPhysicsVersion,
+  parseLapConditions,
+  physicsVersionLabel,
+  revisionOnBoard,
+  type LapRecording,
+} from '../src/lib/sim/lap-types';
+import { CIRCUIT_BOARD_RESETS, type CircuitBoardReset } from '../src/lib/circuit-board-resets';
+import { VEHICLE_MODEL_IDS } from '../src/types/f1';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleApi } from '../cloudflare/api/index';
 import { boardKeyOf, loadBoardBest, parseRemoteBoard, saveBoardBest } from '../src/lib/net/leaderboard';
 import { challengePlaceLabel, challengeTarget } from '../src/lib/net/challenge-target';
-import { boardDeps, driverNameKey, listLaps, renameDriver, submitLap, type BoardDeps } from '../cloudflare/api/board';
+import { boardDeps, driverNameKey, listLaps, OLDER_PHYSICS, renameDriver, submitLap, type BoardDeps } from '../cloudflare/api/board';
 import { nameProblem } from '../src/lib/net/name-filter';
 import { randomDriverProfile } from '../src/lib/settings/player-settings';
 import type { Env } from '../cloudflare/api/types';
@@ -24,8 +47,12 @@ import { planImport, type SupabaseDriver, type SupabaseLap } from './migrate-sup
 import { carById, type CarId } from '../src/lib/cars/car-registry';
 import { CHALLENGE_ROTATION, challengeAt, challengeCompound, challengeConditionsLabel, challengeProblem, challengesSoFar, fitsChallenge, isoWeekId, timeLeftLabel } from '../src/lib/net/weekly-challenge';
 
+/** The circuit of the real lap */
+const TRACK = 'rwanda_official_short';
 /** The revision the laps here are driven under: the board of the car they are driven in (the LC26's own) */
-const CURRENT = lapPhysicsVersion('lc26');
+const CURRENT = lapPhysicsVersion('lc26', TRACK);
+/** Circuits' own board restarts, open for the checks that put one in (and take it out again) */
+const RESETS = CIRCUIT_BOARD_RESETS as Record<string, CircuitBoardReset[]>;
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -94,12 +121,21 @@ check('board class', real.conditions !== undefined && lapBoardClass(real.conditi
     if (stored) kept.set('librecorsa.lc26Engine', stored);
     g.window = { location: { search } };
     g.localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) };
-    const out = { lc26: lapPhysicsVersion('lc26'), others: lapPhysicsVersion('f12026-car'), kept: kept.get('librecorsa.lc26Engine') };
+    const out = { lc26: lapPhysicsVersion('lc26', TRACK), others: lapPhysicsVersion('f12026-car', TRACK), kept: kept.get('librecorsa.lc26Engine'), restarted: inRestart() };
     delete g.window;
     delete g.localStorage;
     return out;
   };
-  const shipped = lapPhysicsVersion('lc26');
+  /** The LC26's revision on a circuit whose boards started again once (this browser's engine) */
+  const inRestart = () => {
+    RESETS.restarted_circuit = [{ physics: PHYSICS_VERSION, oldBoard: 'Old kerbs', why: 'a check' }];
+    try {
+      return lapPhysicsVersion('lc26', 'restarted_circuit');
+    } finally {
+      delete RESETS.restarted_circuit;
+    }
+  };
+  const shipped = lapPhysicsVersion('lc26', TRACK);
   const fresh = inBrowser('');
   const older = inBrowser('', 'classic');
   const asked = inBrowser('?lc26engine=classic');
@@ -114,7 +150,107 @@ check('board class', real.conditions !== undefined && lapBoardClass(real.conditi
     older.lc26 === PHYSICS_VERSION && asked.lc26 === PHYSICS_VERSION && asked.kept === 'classic' && back.lc26 === shipped && back.kept === 'rigid',
     `p${older.lc26} / p${back.lc26}`
   );
-  check('the other cars keep one board whichever engine the LC26 is on', fresh.others === PHYSICS_VERSION && older.others === PHYSICS_VERSION && lapPhysicsVersion() === PHYSICS_VERSION);
+  check('the other cars keep one board whichever engine the LC26 is on', fresh.others === PHYSICS_VERSION && older.others === PHYSICS_VERSION && carPhysicsVersion() === PHYSICS_VERSION);
+
+  // The physics versions the boards are named by: the newest is the one driven now, each older one keeps its numbers
+  const newest = PHYSICS_VERSIONS[PHYSICS_VERSIONS.length - 1];
+  check(
+    'versions: the newest named version is the one driven now, the LC26\'s offset with it',
+    newest.physics === PHYSICS_VERSION && PHYSICS_VERSION + newest.lc26Offset === shipped,
+    `${newest.name} p${newest.physics}+${newest.lc26Offset}`
+  );
+  check(
+    'versions: named in order, each a number of its own',
+    PHYSICS_VERSIONS.every((v, i) => v.name === `V${i + 1}` && (i === 0 || v.physics > PHYSICS_VERSIONS[i - 1].physics))
+  );
+  check(
+    'versions: the board of the version driven now is the one laps go on, for every car',
+    VEHICLE_MODEL_IDS.every((v) => boardPhysicsVersion(PHYSICS_VERSION, v) === lapPhysicsVersion(v, TRACK) && revisionOnBoard(currentBoardBase(TRACK), v) === lapPhysicsVersion(v, TRACK))
+  );
+  const v1 = PHYSICS_VERSIONS[0];
+  check(
+    'versions: Physics V1 is revision 7, the LC26\'s 527',
+    v1.physics === 7 && boardPhysicsVersion(v1.physics, 'lc26') === 527 && boardPhysicsVersion(v1.physics, 'amg-gt3') === 7 && PHYSICS_VERSION === 8 && shipped === 528,
+    `p${boardPhysicsVersion(v1.physics, 'lc26')}`
+  );
+  const classicV1 = (() => {
+    g.window = { location: { search: '' } };
+    g.localStorage = { getItem: (k: string) => (k === 'librecorsa.lc26Engine' ? 'classic' : null), setItem: () => {} };
+    const out = boardPhysicsVersion(v1.physics, 'lc26');
+    delete g.window;
+    delete g.localStorage;
+    return out;
+  })();
+  check('versions: the LC26 on its older engine reads its V1 laps on revision 7', classicV1 === 7, `p${classicV1}`);
+  check('versions: named "Physics V2 (New)" and "Physics V1"', physicsVersionLabel(PHYSICS_VERSION) === 'Physics V2 (New)' && physicsVersionLabel(7) === 'Physics V1' && physicsVersionLabel(PHYSICS_VERSION, { short: true }) === 'Physics V2');
+  check(
+    'versions: a lap\'s revision finds its board, on either LC26 engine',
+    boardChoiceOfLap(TRACK, 'lc26', 527) === '7' && boardChoiceOfLap(TRACK, 'lc26', 7) === '7' && boardChoiceOfLap(TRACK, 'lc26', 528) === '8' && boardChoiceOfLap(TRACK, 'amg-gt3', 8) === '8' &&
+      boardChoiceOfLap(TRACK, 'amg-gt3', 527) === null && boardChoiceOfLap(TRACK, 'amg-gt3', 6) === null
+  );
+  check(
+    'versions: only the version driven now takes laps, the LC26\'s on either engine',
+    isCurrentLapPhysics('lc26', 528, TRACK) && isCurrentLapPhysics('lc26', 8, TRACK) && isCurrentLapPhysics('liana', 8, TRACK) &&
+      !isCurrentLapPhysics('lc26', 527, TRACK) && !isCurrentLapPhysics('liana', 7, TRACK) && !isCurrentLapPhysics('liana', 528, TRACK)
+  );
+  check(
+    'versions: a version and the LC26\'s offset stay under a circuit\'s step',
+    PHYSICS_VERSIONS.every((v) => v.physics + v.lc26Offset < CIRCUIT_REVISION_STEP)
+  );
+  const plain = boardChoices(TRACK);
+  check(
+    'versions: a circuit that never started again has one board per version, the two the picker shows',
+    plain.map((c) => `${c.id}:${c.base}:${c.label}`).join() === '8:8:Physics V2 (New),7:7:Physics V1' && plain[0].current && !plain[1].current
+  );
+
+  // A circuit's own restart (src/lib/circuit-board-resets.ts): every circuit is at 0 for the Physics V2 reset, so one is
+  // put in for these checks and taken out again
+  check(
+    'circuits: none started again before Physics V2, each restart well formed',
+    Object.values(CIRCUIT_BOARD_RESETS).every((list) => list.every((r) => r.physics >= 8 && PHYSICS_VERSIONS.some((v) => v.physics === r.physics) && r.oldBoard.trim().length > 0 && r.oldBoard.length <= 24))
+  );
+  RESETS[TRACK] = [{ physics: PHYSICS_VERSION, oldBoard: 'Old kerbs', why: 'a check' }];
+  try {
+    check(
+      'circuits: a restart folds into every car\'s revision there, the LC26\'s offset kept',
+      circuitRevision(TRACK) === 1 && lapPhysicsVersion('amg-gt3', TRACK) === 1008 && lapPhysicsVersion('lc26', TRACK) === 1528 && currentBoardBase(TRACK) === 1008,
+      `p${lapPhysicsVersion('amg-gt3', TRACK)} / p${lapPhysicsVersion('lc26', TRACK)}`
+    );
+    check('circuits: on the LC26\'s older engine too', older.restarted === 1008 && fresh.restarted === 1528, `p${older.restarted} / p${fresh.restarted}`);
+    check('circuits: the other circuits keep their boards', lapPhysicsVersion('amg-gt3', 'spielberg') === 8 && lapPhysicsVersion('lc26', 'spielberg') === 528 && circuitRevision('spielberg') === 0);
+    const choices = boardChoices(TRACK);
+    check(
+      'circuits: the board from before the restart stays in the picker, under its version',
+      choices.map((c) => `${c.id}:${c.base}:${c.label}`).join() === '8:1008:Physics V2 (New),8-0:8:Physics V2 · Old kerbs,7:7:Physics V1',
+      choices.map((c) => c.id).join()
+    );
+    check(
+      'circuits: a pick is found again on each circuit, or falls back to its version',
+      boardChoiceOf(TRACK, '8-0').base === 8 && boardChoiceOf('spielberg', '8-0').id === '8' && boardChoiceOf(TRACK, null).current && boardChoiceOf(TRACK, 'junk').id === '8'
+    );
+    check(
+      'circuits: a lap finds its board, before and after the restart',
+      revisionOnBoard(8, 'lc26') === 528 && revisionOnBoard(1008, 'lc26') === 1528 && boardChoiceOfLap(TRACK, 'lc26', 528) === '8-0' && boardChoiceOfLap(TRACK, 'lc26', 1528) === '8' &&
+        boardChoiceOfLap(TRACK, 'amg-gt3', 1008) === '8' && boardChoiceOfLap(TRACK, 'amg-gt3', 7) === '7' && boardChoiceOfLap(TRACK, 'amg-gt3', 1007) === null
+    );
+    check(
+      'circuits: only the restarted board takes laps there',
+      isCurrentLapPhysics('lc26', 1528, TRACK) && isCurrentLapPhysics('lc26', 1008, TRACK) && !isCurrentLapPhysics('lc26', 528, TRACK) && !isCurrentLapPhysics('amg-gt3', 8, TRACK) &&
+        isCurrentLapPhysics('amg-gt3', 8, 'spielberg') && parseLapConditions({ ...real.conditions, physicsVersion: 1528 }) !== null
+    );
+    const recorder = new LapRecorder({ trackLengthM: 1000, turns: [], trackId: TRACK, vehicle: 'amg-gt3', driverName: 'Rec', driverCode: 'REC' });
+    const recorded = () => (recorder as unknown as { physicsVersion: number }).physicsVersion;
+    const gt3 = recorded();
+    recorder.setContext({ vehicle: 'lc26' });
+    check('circuits: the lap recorder ranks laps on the restarted board, for a car set later too', gt3 === 1008 && recorded() === 1528, `p${gt3} / p${recorded()}`);
+    const now = lapConditionsNow({ assists: 'pro', compound: 'soft', lineWaterMm: 0, realism: 'full', vehicle: 'lc26', trackId: TRACK });
+    check(
+      'circuits: the personal best and the online board are kept per restart',
+      lapBoardClass(now) === 'p1528-pro-full-dry' && boardKeyOf({ trackId: TRACK, vehicle: 'lc26', conditions: now }) === `${TRACK}|lc26|p1528-pro-full-dry`
+    );
+  } finally {
+    delete RESETS[TRACK];
+  }
 }
 {
   // A lap posts itself when it beats this browser's lap on its online board, not its local personal best: a best set
@@ -396,12 +532,76 @@ async function main(): Promise<void> {
     check('challenge: nothing to store and a bad event: refused with the reason', junk.status === 409 && junk.body.error === 'Unknown event', junk.body.error);
   }
   {
-    // A lap from an older physics revision goes on that revision's board
-    const res = await post(variant(0.98, 'Old Timer', { physicsVersion: 1 }), 'c'.repeat(43));
-    check('board: an older-physics lap is ranked on its own board', res.body.ok === true && res.body.rank === 1 && res.body.total === 1);
+    // A lap of an older physics version (a tab left open from before the update) is refused: those boards are read only
+    const V1 = boardPhysicsVersion(PHYSICS_VERSIONS[0].physics, 'lc26');
+    const stale = variant(0.98, 'Old Timer', { physicsVersion: V1 });
+    const res = await post(stale, 'c'.repeat(43));
+    check('board: a lap of an older physics version is refused, its board read only', res.status === 409 && res.body.error === OLDER_PHYSICS, res.body.error);
+    const claimed = await deps.db.prepare('SELECT COUNT(*) AS n FROM drivers WHERE name_key = ?').bind('old timer').first<{ n: number }>();
+    check('board: and nothing of it is kept, not even a claim on the name', claimed?.n === 0 && (await list('', V1)).body.total === 0);
+
+    // A V1 lap stored before the update stays on its board, read as it was
+    const id = '00000000-0000-4000-8000-000000000001';
+    await ghosts.put(`laps/${id}.json`, JSON.stringify(stale));
+    await deps.db
+      .prepare(
+        'INSERT INTO laps (id, track_id, vehicle, physics, event, assists, realism, surface, compound, input, name_key, driver_name, driver_code, lap_time_ms, s1_ms, s2_ms, s3_ms, recorded_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      )
+      .bind(id, stale.trackId, stale.vehicle, V1, '', 'pro', 'full', 'dry', 'medium', null, 'old timer', 'Old Timer', 'OLD', stale.lapTimeMs, ...stale.sectorTimesMs, stale.recordedAt, nowMs)
+      .run();
     const now = (await list()).body;
-    check('board: and not on the current one, which lists both revisions', now.total === 3 && now.physics.join() === `${CURRENT},1`, now.physics.join());
-    check('board: the older board has it', (await list('', 1)).body.laps[0]?.name === 'Old Timer');
+    check('board: the current one leaves it off, and lists both revisions', now.total === 3 && now.physics.join() === `${CURRENT},${V1}`, now.physics.join());
+    check('board: the older board has it', (await list('', V1)).body.laps[0]?.name === 'Old Timer');
+  }
+  {
+    // A circuit's boards start again on their own (src/lib/circuit-board-resets.ts): on a board of its own, so the counts
+    // above stay as they are. Put in for these checks and taken out again
+    const own: BoardDeps = { db: fakeD1(schema), ghosts: fakeR2(), eventRule: challengeProblem, now: () => nowMs };
+    const send = async (rec: LapRecording, key: string, extra: Record<string, unknown> = {}) => {
+      const res = await submitLap(
+        own,
+        new Request('https://librecorsa.test/api/laps', { method: 'POST', body: JSON.stringify({ rec, driverKey: key, ...extra }), headers: { 'CF-Connecting-IP': `10.7.0.${ipCounter++ % 250}` } })
+      );
+      return { status: res.status, body: res.body as PostAnswer };
+    };
+    const read = async (query: string) => {
+      const res = await listLaps(own, new URL(`https://librecorsa.test/api/laps?track=${TRACK}${query}`));
+      return { status: res.status, body: res.body as ListAnswer & { current?: Record<string, number> } };
+    };
+    // Before the restart: a lap on the board as it was
+    const before = await send(variant(0.99, 'Before Fix', { physicsVersion: CURRENT }), 'e'.repeat(43));
+    RESETS[TRACK] = [{ physics: PHYSICS_VERSION, oldBoard: 'Old kerbs', why: 'a check' }];
+    try {
+      const NEW = lapPhysicsVersion('lc26', TRACK);
+      const stale = await send(variant(0.98, 'Before Fix', { physicsVersion: CURRENT }), 'e'.repeat(43));
+      check('circuit restart: a lap from before it is refused, its board read only', before.body.ok === true && stale.status === 409 && stale.body.error === OLDER_PHYSICS, stale.body.error);
+      const rules = { assists: week.assists, realism: week.realism, compound: challengeCompound(week.vehicle), surface: 'dry' as const };
+      const after = await send(variant(1.0, 'After Fix', { ...rules, physicsVersion: NEW }), 'f'.repeat(43), { event: week.id });
+      check('circuit restart: a lap on the restarted board goes up, to the week\'s board too', after.body.ok === true && after.body.rank === 1 && after.body.total === 1 && after.body.eventRank === 1, after.body.error ?? after.body.eventError);
+      check(
+        'circuit restart: the week\'s rules go by the restarted board',
+        challengeProblem(variant(1.0, 'x', { ...rules, physicsVersion: NEW }), week.id, nowMs) === null && challengeProblem(variant(1.0, 'x', { ...rules, physicsVersion: CURRENT }), week.id, nowMs) !== null
+      );
+      const newBoard = (await read(`&vehicle=lc26&physics=${NEW}`)).body;
+      const oldBoard = (await read(`&vehicle=lc26&physics=${CURRENT}`)).body;
+      check(
+        'circuit restart: one car\'s boards, before and after, each with its own laps',
+        newBoard.laps.map((r) => r.name).join() === 'After Fix' && oldBoard.laps.map((r) => r.name).join() === 'Before Fix' && newBoard.physics.join() === `${NEW},${CURRENT}`,
+        newBoard.physics.join()
+      );
+      const all = (await read('&vehicle=all')).body;
+      const allOld = (await read('&vehicle=all&version=8')).body;
+      check(
+        'circuit restart: every car\'s board is the restarted one, and version=8 the one before it',
+        all.laps.map((r) => r.name).join() === 'After Fix' && all.current?.lc26 === NEW && allOld.laps.map((r) => r.name).join() === 'Before Fix' && allOld.current?.lc26 === CURRENT
+      );
+      const asked = await Promise.all(['1008', '7', '1007', '2008'].map(async (v) => (await read(`&vehicle=all&version=${v}`)).status));
+      check('circuit restart: a board the circuit never had is refused', asked.join() === '200,200,400,400', asked.join());
+      const elsewhere = (await listLaps(own, new URL('https://librecorsa.test/api/laps?track=spielberg&vehicle=all&version=1008'))).status;
+      check('circuit restart: and another circuit has no restarted board', elsewhere === 400);
+    } finally {
+      delete RESETS[TRACK];
+    }
   }
   {
     let last = { status: 0, body: {} as PostAnswer };

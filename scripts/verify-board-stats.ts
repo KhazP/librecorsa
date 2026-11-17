@@ -19,7 +19,8 @@ import { ALL_CARS, currentPhysicsByCar, driverNameKey, listLaps, renameDriver, s
 import { circuitTotals, driversToDate } from '../cloudflare/api/stats';
 import { recordUsage } from '../cloudflare/api/usage';
 import { usageLapsOf, MAX_LAPS_PER_MINUTE } from '../src/lib/net/usage-modes';
-import { lapPhysicsVersion, PHYSICS_VERSION } from '../src/lib/sim/lap-types';
+import { boardPhysicsVersion, currentBoardBase, lapPhysicsVersion, PHYSICS_VERSION, PHYSICS_VERSIONS } from '../src/lib/sim/lap-types';
+import { CIRCUIT_BOARD_RESETS, type CircuitBoardReset } from '../src/lib/circuit-board-resets';
 import { VEHICLE_MODEL_IDS, type VehicleModelId } from '../src/types/f1';
 import type { D1Database, DurableObjectNamespace, Env, RateLimit } from '../cloudflare/api/types';
 import { fakeD1, fakeR2, fakeState } from './lib/fake-cloudflare';
@@ -36,7 +37,7 @@ const FULL = sql('0001_lap_boards.sql', '0002_race_results.sql', '0003_usage.sql
 
 const TRACK = 'sachsenring';
 const NOW = Date.UTC(2026, 10, 14, 12);
-const LC26 = lapPhysicsVersion('lc26');
+const LC26 = lapPhysicsVersion('lc26', TRACK);
 
 type Row = { id: string; name: string; vehicle: string; lapTimeMs: number; conditions: { assists: string; physicsVersion: number } };
 type ListAnswer = {
@@ -58,7 +59,7 @@ async function lap(db: D1Database, o: { name: string; vehicle: VehicleModelId; m
     .prepare(
       'INSERT INTO laps (id, track_id, vehicle, physics, event, assists, realism, surface, compound, name_key, driver_name, driver_code, lap_time_ms, s1_ms, s2_ms, s3_ms, recorded_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
-    .bind(id, o.track ?? TRACK, o.vehicle, o.physics ?? lapPhysicsVersion(o.vehicle), o.event ?? '', o.assists ?? 'pro', 'full', 'dry', 'soft', driverNameKey(o.name), o.name, o.name.slice(0, 3).toUpperCase(), o.ms, o.ms / 3, o.ms / 3, o.ms / 3, NOW, o.created ?? NOW + seq)
+    .bind(id, o.track ?? TRACK, o.vehicle, o.physics ?? lapPhysicsVersion(o.vehicle, o.track ?? TRACK), o.event ?? '', o.assists ?? 'pro', 'full', 'dry', 'soft', driverNameKey(o.name), o.name, o.name.slice(0, 3).toUpperCase(), o.ms, o.ms / 3, o.ms / 3, o.ms / 3, NOW, o.created ?? NOW + seq)
     .run();
   return id;
 }
@@ -80,7 +81,7 @@ async function main(): Promise<void> {
   await lap(db, { name: 'Driver 05', vehicle: 'lc26', ms: 89_000, assists: 'assisted' });
   for (const [i, name] of drivers.slice(10, 33).entries()) await lap(db, { name, vehicle: 'amg-gt3', ms: 92_000 + i * 900 - (i % 3 === 0 ? 5_000 : 0) });
   await lap(db, { name: 'Old Timer', vehicle: 'lc26', ms: 80_000, physics: PHYSICS_VERSION === LC26 ? LC26 - 1 : PHYSICS_VERSION });
-  await lap(db, { name: 'Old Gt3', vehicle: 'amg-gt3', ms: 70_000, physics: lapPhysicsVersion('amg-gt3') - 1 });
+  await lap(db, { name: 'Old Gt3', vehicle: 'amg-gt3', ms: 70_000, physics: lapPhysicsVersion('amg-gt3', TRACK) - 1 });
   await lap(db, { name: 'Tied Later', vehicle: 'lc26', ms: 90_000 + 20 * 250, created: NOW + 100_000 });
   await lap(db, { name: 'Elsewhere', vehicle: 'liana', ms: 60_000, track: 'dunsfold' });
   await lap(db, { name: 'Challenger', vehicle: 'lc26', ms: 95_000, event: '2026-W46' });
@@ -131,8 +132,8 @@ async function main(): Promise<void> {
 
   // 3. The all-cars board -----------------------------------------------------------------------------------------------
   {
-    const current = currentPhysicsByCar();
-    check('all cars: every car at the revision this build ships', VEHICLE_MODEL_IDS.every((v) => current[v] === lapPhysicsVersion(v)) && current.lc26 === LC26);
+    const current = currentPhysicsByCar(currentBoardBase(TRACK));
+    check('all cars: every car at the revision this build ships', VEHICLE_MODEL_IDS.every((v) => current[v] === lapPhysicsVersion(v, TRACK)) && current.lc26 === LC26);
     const all = await list(`&vehicle=${ALL_CARS}&limit=100&name=Driver%2011`);
     const names = all.laps.map((r) => r.name);
     check('all cars: every driver once, in any car', all.total === 58 && all.laps.length === 58 && new Set(names).size === 58, `${all.total}`);
@@ -261,7 +262,7 @@ async function main(): Promise<void> {
     const plan = (s: string, ...b: (string | number)[]) => (raw.prepare(`EXPLAIN QUERY PLAN ${s}`).all(...b) as { detail: string }[]).map((r) => r.detail).join(' | ');
     const one = plan('SELECT * FROM laps WHERE track_id = ? AND vehicle = ? AND physics = ? AND event = ? ORDER BY lap_time_ms', TRACK, 'lc26', LC26, '');
     check('index: one car\'s board reads its own rows', /USING INDEX laps_board|USING COVERING INDEX laps_driver_class/.test(one), one);
-    const lc = currentPhysicsByCar();
+    const lc = currentPhysicsByCar(currentBoardBase(TRACK));
     const ids = Object.keys(lc);
     const every = plan(`SELECT COUNT(DISTINCT name_key) FROM laps WHERE track_id = ? AND event = '' AND vehicle IN (${ids.map(() => '?').join(', ')}) AND physics = CASE vehicle ${ids.map(() => 'WHEN ? THEN ?').join(' ')} END`, TRACK, ...ids, ...Object.entries(lc).flat());
     check('index: the all-cars board reads the circuit\'s rows only', /\(track_id=\?/.test(every) && !/SCAN laps\b/.test(every), every);
@@ -327,13 +328,13 @@ async function main(): Promise<void> {
     g.window = { location: { search: '' } };
     g.localStorage = { getItem: (k: string) => (k === 'librecorsa.lc26Engine' ? 'classic' : null), setItem: () => {} };
     const classic = parseBoardPage(raw, TRACK, ALL_CARS, 0, {}, 20);
-    const ownRevision = lapPhysicsVersion('lc26');
+    const ownRevision = lapPhysicsVersion('lc26', TRACK);
     delete g.window;
     delete g.localStorage;
     check('client: a browser on the LC26\'s older engine still reads the all-cars board', ownRevision !== LC26 && classic?.entries.length === 20, `own p${ownRevision}, ${classic?.entries.length} rows`);
     const forged = parseBoardPage({ ...(raw as object), current: { ...(raw as { current: object }).current, lc26: 1 } }, TRACK, ALL_CARS, 0, {}, 20);
     check('client: rows on a revision the answer does not name are dropped', (forged?.entries.length ?? 0) < 20);
-    const one = parseBoardPage((await listLaps(deps, new URL(`https://librecorsa.org/api/laps?track=${TRACK}&vehicle=lc26&physics=${LC26}`))).body, TRACK, 'amg-gt3', lapPhysicsVersion('amg-gt3'), {}, 20);
+    const one = parseBoardPage((await listLaps(deps, new URL(`https://librecorsa.org/api/laps?track=${TRACK}&vehicle=lc26&physics=${LC26}`))).body, TRACK, 'amg-gt3', lapPhysicsVersion('amg-gt3', TRACK), {}, 20);
     check('client: one car\'s rows never show on another car\'s board', one !== null && one.entries.length === 0);
     check('client: junk is no page', parseBoardPage({ laps: 'x' }, TRACK, ALL_CARS, 0, {}) === null && parseBoardPage(null, TRACK, 'lc26', LC26, {}) === null);
     check(
@@ -353,6 +354,95 @@ async function main(): Promise<void> {
     check('tower: short of room, the player and the places next to them first', (await tower('Driver 30', 3)) === '30 31* 32' && (await tower('Driver 30', 5)) === '1 ... 30 31* 32', `${await tower('Driver 30', 3)} | ${await tower('Driver 30', 5)}`);
     check('tower: no room at all still shows the player', (await tower('Driver 30', 0)) === '31*');
     check('tower: no lap yet, the top five', (await tower('Nobody')) === '1 2 3 4 5');
+  }
+
+  // 9. Older physics versions: their boards read as they were ---------------------------------------------------------
+  {
+    // Another circuit, so the counts above stay as they are: Physics V1 laps (the LC26 on its rigid-body revision and
+    // on its older engine's, and a GT3), and a lap of the version driven now
+    const ON = 'grobnik';
+    const V1 = PHYSICS_VERSIONS[0].physics;
+    await lap(db, { name: 'Vee One', vehicle: 'lc26', ms: 80_000, physics: boardPhysicsVersion(V1, 'lc26'), track: ON });
+    await lap(db, { name: 'Vee One Gt3', vehicle: 'amg-gt3', ms: 85_000, physics: V1, track: ON });
+    await lap(db, { name: 'Vee One Classic', vehicle: 'lc26', ms: 79_000, physics: V1, track: ON });
+    await lap(db, { name: 'Vee Two', vehicle: 'lc26', ms: 82_000, track: ON });
+    const read = async (query: string) => listLaps(deps, new URL(`https://librecorsa.org/api/laps?track=${ON}&vehicle=all${query}`));
+    const now = (await read('')).body as ListAnswer;
+    check('versions: every car\'s board is the version driven now by default', now.total === 1 && now.laps[0]?.name === 'Vee Two' && now.current?.lc26 === LC26, `${now.total}`);
+    const older = (await read(`&version=${V1}`)).body as ListAnswer;
+    const olderNames = older.laps.map((r) => r.name);
+    check(
+      'versions: version=7 reads every car on its Physics V1 revision',
+      older.total === 2 && olderNames.join() === 'Vee One,Vee One Gt3' && older.current?.lc26 === 527 && older.current?.['amg-gt3'] === 7,
+      `${olderNames.join()} ${JSON.stringify(older.current && { lc26: older.current.lc26, gt3: older.current['amg-gt3'] })}`
+    );
+    check('versions: asking for the version driven now is the default board', ((await read(`&version=${PHYSICS_VERSION}`)).body as ListAnswer).total === 1);
+    const refused = await Promise.all(['junk', '5', '527', '7.5'].map(async (v) => (await read(`&version=${v}`)).status));
+    check('versions: a version the boards don\'t name is refused', refused.every((st) => st === 400), refused.join());
+    const named = (await read(`&version=${V1}&name=Vee%20One%20Gt3`)).body as ListAnswer;
+    check('versions: a driver finds their place on the older board', named.me?.pos === 2 && named.me.lap.name === 'Vee One Gt3');
+    const one = (await listLaps(deps, new URL(`https://librecorsa.org/api/laps?track=${ON}&vehicle=lc26&physics=${boardPhysicsVersion(V1, 'lc26')}`))).body as ListAnswer;
+    check('versions: one car\'s older board as it always was', one.total === 1 && one.laps[0]?.name === 'Vee One' && one.physics.join() === `${LC26},${boardPhysicsVersion(V1, 'lc26')},${V1}`, one.physics.join());
+
+    const page = parseBoardPage(older, ON, ALL_CARS, 0, {}, 20, V1);
+    check('client: an older version\'s all-cars page reads its rows', page !== null && page.entries.map((e) => e.name).join() === 'Vee One,Vee One Gt3');
+    const unsaid = parseBoardPage({ ...older, current: undefined }, ON, ALL_CARS, 0, {}, 20, V1);
+    check('client: without the server\'s list, the rows are checked against that version', unsaid?.entries.length === 2);
+    const mixed = parseBoardPage(older, ON, ALL_CARS, 0, {}, 20);
+    check('client: read as the version driven now, the older rows are still checked by what the server said', mixed?.entries.length === 2);
+    const crossed = parseBoardPage({ ...older, current: undefined }, ON, ALL_CARS, 0, {}, 20);
+    check('client: older rows never pass as the version driven now', crossed?.entries.length === 0);
+
+    const totals = await circuitTotals(db, ON, ALL_CARS, V1);
+    check('versions: totals count the older board\'s drivers', totals.drivers === 2 && (await circuitTotals(db, ON, ALL_CARS)).drivers === 1, `${totals.drivers}`);
+    const viaApi = (await (await api(`/api/stats/circuit?track=${ON}&vehicle=all&version=${V1}`)).json()) as { ok: boolean; drivers: number };
+    check('versions: and through the API, by version', viaApi.ok && viaApi.drivers === 2, JSON.stringify(viaApi));
+    check('versions: a totals version the boards don\'t name is refused', (await api(`/api/stats/circuit?track=${ON}&vehicle=all&version=99`)).status === 400);
+  }
+
+  // 10. A circuit whose boards started again on their own (src/lib/circuit-board-resets.ts): put in for these checks
+  {
+    const ON = 'oschersleben';
+    const RESETS = CIRCUIT_BOARD_RESETS as Record<string, CircuitBoardReset[]>;
+    await lap(db, { name: 'Pre Fix', vehicle: 'lc26', ms: 70_000, track: ON });
+    await lap(db, { name: 'Pre Fix Two', vehicle: 'lc26', ms: 70_500, track: ON });
+    await lap(db, { name: 'Pre Fix Gt3', vehicle: 'amg-gt3', ms: 75_000, track: ON });
+    RESETS[ON] = [{ physics: PHYSICS_VERSION, oldBoard: 'Old kerbs', why: 'a check' }];
+    try {
+      // Laps after the restart, on the revision the game now gives them there
+      await lap(db, { name: 'Post Fix', vehicle: 'lc26', ms: 71_000, track: ON });
+      await lap(db, { name: 'Post Fix Gt3', vehicle: 'amg-gt3', ms: 76_000, track: ON });
+      const read = async (query: string) => (await listLaps(deps, new URL(`https://librecorsa.org/api/laps?track=${ON}&vehicle=all${query}`))).body as ListAnswer;
+      const now = await read('');
+      const before = await read(`&version=${PHYSICS_VERSION}`);
+      check(
+        'restart: every car\'s board is the restarted one, the board before it kept',
+        now.laps.map((r) => r.name).join() === 'Post Fix,Post Fix Gt3' && now.current?.lc26 === 1528 && now.current?.['amg-gt3'] === 1008 &&
+          before.laps.map((r) => r.name).join() === 'Pre Fix,Pre Fix Two,Pre Fix Gt3' && before.current?.lc26 === LC26,
+        `${now.laps.map((r) => r.name).join()} | ${before.laps.map((r) => r.name).join()}`
+      );
+      const unsaid = (b: ListAnswer) => ({ ...b, current: undefined });
+      check(
+        'restart: the client reads both, with or without the server\'s list',
+        parseBoardPage(now, ON, ALL_CARS, 0, {}, 20)?.entries.length === 2 && parseBoardPage(unsaid(now), ON, ALL_CARS, 0, {}, 20)?.entries.length === 2 &&
+          parseBoardPage(unsaid(before), ON, ALL_CARS, 0, {}, 20, PHYSICS_VERSION)?.entries.length === 3 && parseBoardPage(unsaid(before), ON, ALL_CARS, 0, {}, 20)?.entries.length === 0
+      );
+      const totals = [await circuitTotals(db, ON, ALL_CARS), await circuitTotals(db, ON, ALL_CARS, PHYSICS_VERSION), await circuitTotals(db, ON, 'lc26'), await circuitTotals(db, ON, 'lc26', LC26)];
+      check('restart: totals count each board\'s drivers', totals.map((t) => t.drivers).join() === '2,3,1,2', totals.map((t) => t.drivers).join());
+      const viaApi = (await (await api(`/api/stats/circuit?track=${ON}&vehicle=all&version=${PHYSICS_VERSION}`)).json()) as { drivers: number };
+      check('restart: and through the API', viaApi.drivers === 3 && (await api(`/api/stats/circuit?track=${ON}&vehicle=all&version=1007`)).status === 400);
+      // A circuit id from a request is looked up as the map's own entry: a word every object has is no circuit with restarts
+      const words = await Promise.all(
+        ['constructor', 'toString', 'hasOwnProperty'].flatMap((w) => [
+          listLaps(deps, new URL(`https://librecorsa.org/api/laps?track=${w}&vehicle=lc26&physics=${LC26}`)),
+          listLaps(deps, new URL(`https://librecorsa.org/api/laps?track=${w}&vehicle=all`)),
+        ])
+      ).then((rs) => rs.map((r) => r.status));
+      const wordTotals = await api('/api/stats/circuit?track=constructor&vehicle=all');
+      check('restart: a circuit named like an object\'s own key reads as an empty board', words.every((st) => st === 200) && wordTotals.status === 200, `${words.join()} ${wordTotals.status}`);
+    } finally {
+      delete RESETS[ON];
+    }
   }
 
   if (failures.length > 0) {
