@@ -641,7 +641,7 @@ export class SimVisualFxManager {
 
   /** The car the peer reports (AI and older clients: the AMR, which is what F1Physics2026 models) */
   private createOpponentRig(peer: InterpolatedPeerState): SimCarRig {
-    const livery = this.mapDriverToLivery(peer.driverCode);
+    const livery = this.mapDriverToLivery(liveryCodeOf(peer));
     const ghost = Boolean(peer.ghost || peer.passThrough || peer.stale);
     const pooled = this.pool.get(poolKey(peer.vehicle, ghost))?.pop();
     const rig = pooled ?? buildOpponentRig(peer.vehicle, livery);
@@ -650,7 +650,7 @@ export class SimVisualFxManager {
       if (!ghost) pooled.setLivery(livery);
     }
     // A ported car with liveries of its own races each driver in one of them (the ghost in the car's first)
-    rig.setSkin?.(ghost ? null : opponentSkin(peer.vehicle, peer.driverCode));
+    rig.setSkin?.(ghost ? null : opponentSkin(peer.vehicle, liveryCodeOf(peer)));
     return rig;
   }
 
@@ -999,6 +999,14 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
   }
   addContactShadow(rig.root, vehicle);
   return rig;
+}
+
+/**
+ * The code a car's livery goes by: an AI driver's own (its id, `ai_<code>`), as a race may show it under another when
+ * the player's code is theirs (`aiRaceCodes`); anyone else's driver code
+ */
+function liveryCodeOf(peer: InterpolatedPeerState): string {
+  return peer.isAiPeer && peer.peerId.startsWith('ai_') ? peer.peerId.slice(3) : peer.driverCode;
 }
 
 /**
