@@ -118,6 +118,30 @@ painted in), and `skins.json` lists each skin's `files`. `src/lib/cars/classic-s
 registry (`CarSkin.files`); the rig keeps the model's own texture for any file a skin doesn't list. Skin textures match
 the kn5's regardless of case, as AC does.
 
+## Livery parts and animation poses
+
+Some mods change parts as well as paint per skin (a skin's `ext_config.ini` `[MODEL_REPLACEMENT_*]` hides kn5 nodes and
+inserts `extension/*.kn5` files), or keep parts that the setup's wing animations scale out of sight. A preset can say:
+
+- `parts`: kn5 node → part name; the node's subtree becomes a node of its own, `PART_<name>` under `BODY` (one mesh per
+  material), instead of joining the body's per-material meshes;
+- `extra_kn5`: `(file in extension/, part name)` pairs; those kn5s are read in the car's frame and become parts too (a
+  material with the car's own name and maps is the car's; one that differs is added as `<name>~<file stem>`);
+- `part_variants`: part → the variants whose liveries show it; `skin_variants`: skin folder → its variant (else
+  `base`). The CAR node's `partVariants` extras map each `PART_` node to its variants, `skins.json` gives each skin's
+  `variant`, and the rig (`ported-car-model.ts`) shows a part only for a livery of one of its variants
+  (`CarSkin.variant`). The first livery must wear the base parts;
+- `part_poses`: kn5 node → `(file in animations/, frame)`: the node (and its subtree) placed where that frame of the
+  `.ksanim` has it, for a part the animation scales into view (the Chaparral 2D 1967's Sebring spoiler and canards).
+
+```bash
+# the Chaparral 2Ds: the public mod's folder with NPanic's unencrypted kn5 in it (the folder name keys data.acd)
+uv run ... port_ac_car.py <...>/wsc_legends_chaparral_2d_66 public/cars/chaparral-2d/model/chaparral-2d.glb \
+  --kn5 chaparral_2d.kn5 --skins-out public/cars/chaparral-2d/skins
+uv run ... port_ac_car.py <...>/wsc_legends_chaparral_2d_67 public/cars/chaparral-2d-67/model/chaparral-2d-67.glb \
+  --kn5 chaparral_2d_67.kn5 --skins-out public/cars/chaparral-2d-67/skins
+```
+
 ```bash
 uv run --python 3.14 --no-project --with numpy --with pillow python -P scripts/cars/port_ac_car.py \
   <...>/content/cars/nissan_r32_jtcc public/cars/nissan-r32-jtcc/model/nissan-r32-jtcc.glb \

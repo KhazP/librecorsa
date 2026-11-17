@@ -978,8 +978,11 @@ def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir,
                 ui = json.loads(open(ui_path, 'rb').read().decode('utf-8-sig', 'replace'))
             except ValueError:
                 ui = {}
-        listing.append({'id': sid, 'name': str(ui.get('skinname', '')).strip(), 'number': str(ui.get('number', '')),
-                        'swatch': paint_swatch(paint), 'files': own})
+        entry = {'id': sid, 'name': str(ui.get('skinname', '')).strip(), 'number': str(ui.get('number', '')),
+                 'swatch': paint_swatch(paint), 'files': own}
+        if skin in preset.get('skin_variants', {}):
+            entry['variant'] = preset['skin_variants'][skin]
+        listing.append(entry)
     with open(os.path.join(out_dir, 'skins.json'), 'w') as fh:
         json.dump(listing, fh, indent=1, ensure_ascii=False)
     print(f'  {len(listing)} skins, {written} livery files -> {out_dir}')
@@ -1037,10 +1040,112 @@ def classify(nodes, i, preset, mat):
     return 'body', None
 
 
+def read_ksanim(path):
+    """{node name: [4x4 local matrix per frame]} of an AC .ksanim (version 1: matrices; 2: rotation quaternion x, y, z,
+    w, translation and scale per frame)"""
+    b = open(path, 'rb').read()
+    o = 0
+
+    def i32():
+        nonlocal o
+        o += 4
+        return struct.unpack_from('<i', b, o - 4)[0]
+
+    version, out = i32(), {}
+    for _ in range(i32()):
+        n = i32()
+        name = b[o:o + n].decode('latin1')
+        o += n
+        count = i32()
+        if version == 1:
+            fr = np.frombuffer(b, '<f4', count * 16, o).astype(np.float64).reshape(count, 4, 4)
+            o += count * 64
+            out[name] = [m.T for m in fr]
+            continue
+        fr = np.frombuffer(b, '<f4', count * 10, o).astype(np.float64).reshape(count, 10)
+        o += count * 40
+        mats = []
+        for x, y, z, w, tx, ty, tz, sx, sy, sz in fr:
+            r = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                          [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                          [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+            m = np.eye(4)
+            m[:3, :3] = r * np.array([sx, sy, sz])
+            m[:3, 3] = (tx, ty, tz)
+            mats.append(m)
+        out[name] = mats
+    return out
+
+
+def ancestor_ids(nodes, i):
+    out = []
+    p = nodes[i]['parent']
+    while p is not None:
+        out.append(p)
+        p = nodes[p]['parent']
+    return out
+
+
+def pose_nodes(car_dir, preset, nodes):
+    """Put the preset's `part_poses` nodes ({node: (ksanim file, frame)}) where that frame of the mod's animation has
+    them (a part the setup scales out of sight at rest, such as an aero kit), their subtrees with them"""
+    for name, (fname, frame) in preset.get('part_poses', {}).items():
+        local = read_ksanim(os.path.join(car_dir, 'animations', fname))[name][frame]
+        i = next(k for k, n in enumerate(nodes) if n['name'] == name and n['kind'] == 1)
+        parent = nodes[i]['parent']
+        world = (nodes[parent]['world'] if parent is not None else np.eye(4)) @ local
+        delta = world @ np.linalg.inv(nodes[i]['world'])
+        for k in range(len(nodes)):
+            if k == i or i in ancestor_ids(nodes, k):
+                nodes[k]['world'] = delta @ nodes[k]['world']
+
+
+def add_extension_parts(car_dir, preset, textures, materials, nodes):
+    """Append the preset's `extra_kn5` (the mod's `extension/` kn5s, in the car's frame) to `nodes`, and return
+    {node index: part} for every mesh in a part (`parts` names kn5 nodes whose subtrees are one). An extension material
+    with the car's own name and maps is the car's; one that differs is added as `<name>~<file stem>`, and its textures
+    only where the car has none of that name"""
+    part_of = {}
+    by_name = {m['name']: i for i, m in enumerate(materials)}
+    for fname, part in preset.get('extra_kn5', ()):
+        tex, mats, ext_nodes = read_kn5(os.path.join(car_dir, 'extension', fname))
+        for k, v in tex.items():
+            textures.setdefault(k, v)
+        remap = {}
+        for i, m in enumerate(mats):
+            own = by_name.get(m['name'])
+            if own is not None and materials[own]['maps'] == m['maps']:
+                remap[i] = own
+            else:
+                materials.append({**m, 'name': f"{m['name']}~{fname.rsplit('.', 1)[0]}"})
+                remap[i] = len(materials) - 1
+        base = len(nodes)
+        for n in ext_nodes:
+            n = dict(n)
+            if n['parent'] is not None:
+                n['parent'] += base
+            if n['mesh'] is not None:
+                n['mesh'] = {**n['mesh'], 'mat': remap[n['mesh']['mat']]}
+                part_of[len(nodes)] = part
+            nodes.append(n)
+    parts = preset.get('parts', {})
+    for i, n in enumerate(nodes):
+        if n['mesh'] is None or i in part_of:
+            continue
+        for name in [n['name'], *ancestors(nodes, i)]:
+            if name in parts:
+                part_of[i] = parts[name]
+                break
+    return part_of
+
+
 def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg_quality):
     MATERIALS = preset['materials']
     kn5_path = os.path.join(car_dir, kn5_name or f'{os.path.basename(os.path.normpath(car_dir))}.kn5')
     textures, materials, nodes = read_kn5(kn5_path)
+    pose_nodes(car_dir, preset, nodes)
+    part_of = add_extension_parts(car_dir, preset, textures, materials, nodes)
+    part_variants = preset.get('part_variants', {})
     by_name = {m['name']: m for m in materials}
     auto = bool(preset.get('auto'))
     skin_tex = {}
@@ -1096,7 +1201,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         if kind == 'skip':
             dropped[mat] = dropped.get(mat, 0) + 1
             continue
-        parts.append([kind, corner, mat, *world_mesh(n), n['name']])
+        part = part_of.get(i) if kind == 'body' else None
+        parts.append([kind, corner, mat, *world_mesh(n), n['name'], part])
 
     # Shift: lowest tyre point to y = 0, X centred on the four tyres
     tyres = [p for p in parts if p[0] == 'tyre']
@@ -1332,8 +1438,17 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     order = {m['name']: i for i, m in enumerate(materials)}
     body_parts.sort(key=lambda p: order[p[2]])
     body_kids = [writer.add_mesh_node(f'BODY_{node_label(mi)}', [pi])
-                 for mi, pi in prims(body_parts, order=lambda k: order[k])]
+                 for mi, pi in prims([p for p in body_parts if p[8] is None], order=lambda k: order[k])]
+    # A livery's parts (`parts`, `extra_kn5`): PART_<name>, one mesh per material, shown for its variants' liveries
+    variant_nodes = {}
+    for part in sorted({p[8] for p in body_parts if p[8] is not None}):
+        out = prims([p for p in body_parts if p[8] == part], order=lambda k: order[k])
+        kids = [writer.add_mesh_node(f'PART_{part}_{node_label(mi)}', [pi]) for mi, pi in out]
+        body_kids.append(writer.add_node(f'PART_{part}', children=kids))
+        variant_nodes[f'PART_{part}'] = list(part_variants.get(part, ('base',)))
     body_node = writer.add_node('BODY', children=body_kids)
+    # The cameras read the body as the first livery wears it
+    body_parts = [p for p in body_parts if p[8] is None or 'base' in part_variants.get(p[8], ('base',))]
 
     # The palettes: PALETTE_CELL px per colour, PALETTE_COLS to a row, sampled without filtering
     if palettes:
@@ -1408,6 +1523,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         **({'skinMaps': {MATERIALS[m]['name']: f for m, (f, _) in preset['skin_maps'].items()}}
            if preset.get('skin_maps') else {}),
         **({'skinMaps': {name: f for name, (f, _) in sorted(skin_files.items())}} if skin_files else {}),
+        # PART_<name> -> the variants whose liveries show it (CarSkin.variant, 'base' when a livery names none)
+        **({'partVariants': variant_nodes} if variant_nodes else {}),
         'source': {
             'title': preset['title'],
             'kn5': os.path.basename(kn5_path),
