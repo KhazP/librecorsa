@@ -21,6 +21,8 @@ import { VW_SCIROCCO_CONFIG, VW_SCIROCCO_ELECTRONICS } from '../src/lib/sim/road
 import { VW_SCIROCCO_SIM_PROFILE } from '../src/lib/sim/road/VwSciroccoSim';
 import { BMW_M1_PROCAR_CONFIG, BMW_M1_PROCAR_ELECTRONICS } from '../src/lib/sim/classic/BmwM1ProcarConfig';
 import { BMW_M1_PROCAR_SIM_PROFILE } from '../src/lib/sim/classic/BmwM1ProcarSim';
+import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG, CHAPARRAL_2D_ELECTRONICS } from '../src/lib/sim/classic/Chaparral2dConfig';
+import { CHAPARRAL_2D_67_SIM_PROFILE, CHAPARRAL_2D_SIM_PROFILE } from '../src/lib/sim/classic/Chaparral2dSim';
 import type { CarSimProfile } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { lutAt, lutGap, modDir, ModData, type Lut } from './lib/mod-data';
 
@@ -593,6 +595,40 @@ section('BMW M1 Procar', 'pddw_bmw_procar_m1', (mod) => {
     eq(`M1 ${axle} DX_REF`, tyre.model.Dx0, mod.num('tyres.ini', AX, 'DX_REF'));
   }
 });
+
+// The Chaparral 2Ds, 1966 and 1967: one data set each, the same electronics, tyres and brakes
+for (const [title, folder, label, config, profile] of [
+  ['Chaparral 2D (1966)', 'wsc_legends_chaparral_2d_66', '2D 66', CHAPARRAL_2D_CONFIG, CHAPARRAL_2D_SIM_PROFILE],
+  ['Chaparral 2D (1967)', 'wsc_legends_chaparral_2d_67', '2D 67', CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_67_SIM_PROFILE],
+] as const) {
+  section(title, folder, (mod) => {
+    const c = config as unknown as CarPhysicsConfig;
+    checkChassis(label, mod, c);
+    checkProfile(label, mod, c, profile);
+    checkSuspension(label, mod, c, { hardpoints: { front: ALL, rear: ALL } });
+    checkDriveline(label, mod, c);
+    eq(`${label} ALTITUDE_SENSITIVITY`, c.engine.airDensitySensitivity ?? NaN, mod.num('engine.ini', 'ENGINE_DATA', 'ALTITUDE_SENSITIVITY'));
+    eq(`${label} CHANGE_DN_TIME`, c.gearbox.downshiftTimeS ?? NaN, mod.num('drivetrain.ini', 'GEARBOX', 'CHANGE_DN_TIME') / 1000);
+    // No down-shift protection in the data: the box takes one up to the engine's damage threshold
+    eq(`${label} DAMAGE RPM_THRESHOLD`, c.gearbox.gears.redline_rpm + (c.gearbox.downshift?.overRevRpm ?? NaN), mod.num('engine.ini', 'DAMAGE', 'RPM_THRESHOLD'));
+    const el = (sec: string, key: string) => mod.num('electronics.ini', sec, key);
+    eq(`${label} ABS SLIP_RATIO_LIMIT`, CHAPARRAL_2D_ELECTRONICS.absDefault, el('ABS', 'SLIP_RATIO_LIMIT'));
+    eq(`${label} ABS RATE_HZ`, CHAPARRAL_2D_ELECTRONICS.absRateHz, el('ABS', 'RATE_HZ'));
+    eq(`${label} TC SLIP_RATIO_LIMIT`, CHAPARRAL_2D_ELECTRONICS.tcDefault, el('TRACTION_CONTROL', 'SLIP_RATIO_LIMIT'));
+    eq(`${label} TC RATE_HZ`, CHAPARRAL_2D_ELECTRONICS.tcRateHz, el('TRACTION_CONTROL', 'RATE_HZ'));
+    eq(`${label} TC MIN_SPEED_KMH`, CHAPARRAL_2D_ELECTRONICS.tcMinSpeedKmh, el('TRACTION_CONTROL', 'MIN_SPEED_KMH'));
+    // "LM60" in every dry slot: the newer tyre data, peak μ at FZ0 falling with load by a power law
+    const compound = compoundData(c, c.compoundSlots.soft);
+    const keys = ['WIDTH', 'RADIUS', 'RIM_RADIUS', 'DAMP', 'XMU', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'ROLLING_RESISTANCE_SLIP', 'PRESSURE_RR_GAIN', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_STATIC', 'PRESSURE_D_GAIN', 'FZ0', 'LS_EXPY', 'LS_EXPX', 'BRAKE_DX_MOD', 'RADIUS_ANGULAR_K', ...V10_SHAPE.filter((k) => k !== 'COMBINED_FACTOR')];
+    for (const axle of ['front', 'rear'] as const) {
+      const AX = axle.toUpperCase();
+      const tyre = axleTyre(compound, axle);
+      checkTyre(`${label} ${axle}`, mod, tyre, { sectionName: AX, thermalName: `THERMAL_${AX}`, keys, rate: true, wear: true, thermalCurve: true, tread: true });
+      eq(`${label} ${axle} DY_REF`, tyre.model.Dy0, mod.num('tyres.ini', AX, 'DY_REF'));
+      eq(`${label} ${axle} DX_REF`, tyre.model.Dx0, mod.num('tyres.ini', AX, 'DX_REF'));
+    }
+  });
+}
 
 /** A gear change by the car's own data: the time between gears, the ignition cut, the down-shift's clutch and blip */
 function shiftData(label: string, config: CarPhysicsConfig, mod: ModData): void {
