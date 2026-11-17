@@ -7,6 +7,7 @@ import type { AiRace, RaceDriverLabel } from './ai-race';
 import { RACE_START_MODES, type RaceStartMode } from './race-start';
 import type { CarClassId } from '@/lib/cars/car-registry';
 import { resolveRaceRules, type RaceStartChoice, type ResolvedRaceRules, type RulePresetId, type TrackLimitsChoice } from './race-rules';
+import { QUALIFYING_MINUTES, type QualifyingMinutes } from './qualifying';
 
 export type PlayerGridSlot = 'back' | 'middle' | 'front' | 'random';
 export type AiGridOrder = 'pace' | 'qualifying' | 'reversed';
@@ -32,6 +33,8 @@ export interface RaceSetup {
   rulePreset: RulePresetId;
   /** Track limits judged by the preset's ladder, or off (course cuts are still penalised) */
   trackLimits: TrackLimitsChoice;
+  /** Qualifying before the race (min, driven alone; it sets the grid): 0 = none, the grid slot and AI grid apply */
+  qualifying: QualifyingMinutes;
 }
 
 export const DEFAULT_RACE_SETUP: RaceSetup = {
@@ -45,6 +48,7 @@ export const DEFAULT_RACE_SETUP: RaceSetup = {
   aggression: 'normal',
   rulePreset: 'auto',
   trackLimits: 'auto',
+  qualifying: 0,
 };
 
 export const RACE_LAP_OPTIONS = [3, 5, 10, 20] as const;
@@ -86,6 +90,7 @@ export function parseRaceSetup(raw: unknown): RaceSetup {
     aggression: pick(r.aggression, ['clean', 'normal', 'hard'] as const, d.aggression),
     rulePreset: pick(r.rulePreset, ['auto', 'open_wheel', 'endurance_sprint'] as const, d.rulePreset),
     trackLimits: pick(r.trackLimits, ['auto', 'off'] as const, d.trackLimits),
+    qualifying: (QUALIFYING_MINUTES as readonly unknown[]).includes(r.qualifying) ? (r.qualifying as QualifyingMinutes) : d.qualifying,
   };
 }
 
@@ -111,5 +116,7 @@ export function startAiRace(
   field.playerGrid = setup.grid;
   field.damageLevel = setup.damage;
   field.aggressionAdd = RACE_AGGRESSION_OFFSET[setup.aggression];
+  // A qualifying grid stands for the restarts of the race it was driven for; without qualifying the setup's grid applies
+  if (!setup.qualifying) field.qualifying = undefined;
   field.startRace(standing);
 }

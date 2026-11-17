@@ -208,6 +208,7 @@ export class SimRuntime {
         field.playerDriver = setup.driver;
         field.manualStart = setup.standing && setup.manualStart === true;
         field.lockAidsInYellow = setup.lockAidsInYellow ?? true;
+        field.qualifying = setup.qualifying;
         field.startRace(setup.standing);
         env.applyWeatherSync(command.weather);
         const ownRaceControl = car.raceControl;

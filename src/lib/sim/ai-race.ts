@@ -5,6 +5,7 @@
  */
 import type * as THREE from 'three';
 import type { RaceStatus } from '@/types/f1';
+import type { QualifyingGridInput } from './qualifying';
 import type { DamageLevel } from './car-damage';
 import type { InterpolatedPeerState } from './multiplayer-sync';
 import type { AiGridOrder, PlayerGridSlot } from './race-setup';
@@ -30,6 +31,11 @@ export interface AiRace {
   startRace(standing: boolean): void;
   /** The player makes the standing start on the clutch: held on the grid through the lights with the engine live */
   manualStart: boolean;
+  /**
+   * The grid comes from qualifying (qualifying.ts): the player's best clean lap against the AI cars' own times.
+   * Undefined: no qualifying, the grid slot and the AI grid order apply. Read at `startRace`
+   */
+  qualifying: QualifyingGridInput | undefined;
   readonly skill: number;
   setSkill(skill: number): void;
   attachTrackRoot(root: THREE.Object3D): void;

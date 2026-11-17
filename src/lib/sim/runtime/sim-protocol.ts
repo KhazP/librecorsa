@@ -2,6 +2,7 @@
  * Messages between the page and the simulation worker (`sim-worker.ts`, `sim-runtime.ts`). Plain data only:
  * everything here crosses `postMessage`, so no class instances, functions or three.js objects.
  */
+import type { QualifyingGridInput } from "../qualifying";
 import type { CarTelemetry, ControlInputs, RaceStatus, VehicleModelId } from "@/types/f1";
 import type { RawTrackJson } from "@/lib/track-data";
 import type { RaceDriverLabel } from "../ai-race";
@@ -77,6 +78,8 @@ export interface RaceStartSetup {
   driver: RaceDriverLabel | null;
   /** The rules close the overtaking aids inside a yellow zone */
   lockAidsInYellow?: boolean;
+  /** The grid from qualifying (`AiRace.qualifying`); absent: none */
+  qualifying?: QualifyingGridInput;
 }
 
 /**

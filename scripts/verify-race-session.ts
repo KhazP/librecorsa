@@ -7,6 +7,10 @@ import * as THREE from "three";
 import { GapTimer, LapClock, MultiplayerRace, classificationClosed, classify, raceOrder, type RacerProgress } from "../src/lib/sim/race-session";
 import type { InterpolatedPeerState, RaceStartInfo } from "../src/lib/sim/multiplayer-sync";
 import { sanitizePacket, type ControlMessage, type NetworkVehiclePacket } from "../src/lib/net/wire";
+import { QualifyingSession, aiQualifyingMs, qualifyingOrder, type QualifyingFrame } from "../src/lib/sim/qualifying";
+import { AiOpponentField, AI_DRIVERS } from "../src/lib/sim/ai-opponents";
+import { F1Physics2026 } from "../src/lib/f1-physics-2026";
+import { getActiveTrackData } from "../src/lib/track-data";
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ""): void {
@@ -465,5 +469,82 @@ const gaps = new GapTimer();
 gaps.record(10, [100]);
 gaps.record(12, [150, 100]);
 check("gap is the time since the leader passed", Math.abs(gaps.gapS(12, 100, 50) - 2) < 1e-9);
+
+console.log("Qualifying");
+{
+  const frame = (o: Partial<QualifyingFrame> = {}): QualifyingFrame => ({
+    lapCount: 1,
+    lastLapTimeMs: null,
+    lastLapValid: true,
+    currentLapTimeMs: 1000,
+    lapInvalid: false,
+    autopilot: false,
+    ...o,
+  });
+  // A 60 s session; laps of 25 s
+  const q = new QualifyingSession(60);
+  q.update(1, frame({ lapCount: 1, currentLapTimeMs: 1000 }));
+  q.update(24, frame({ lapCount: 1, currentLapTimeMs: 25000 }));
+  q.update(0.1, frame({ lapCount: 2, lastLapTimeMs: 25100, currentLapTimeMs: 100 }));
+  check("a clean lap is the best so far", q.bestMs === 25100 && q.laps.length === 1 && q.laps[0].valid);
+  q.update(10, frame({ lapCount: 2, currentLapTimeMs: 10100, lapInvalid: true }));
+  q.update(14, frame({ lapCount: 2, currentLapTimeMs: 24100, lapInvalid: true }));
+  q.update(0.1, frame({ lapCount: 3, lastLapTimeMs: 24200, lastLapValid: false, currentLapTimeMs: 100 }));
+  check("a deleted lap is never the best, however quick", q.bestMs === 25100 && q.laps[1].valid === false);
+  // The clock runs out 10 s into lap 3, clean: it may be finished
+  const atFlag = q.update(11, frame({ lapCount: 3, currentLapTimeMs: 11100 }));
+  check("at the flag a clean lap under way may be finished", atFlag === "last_lap" && q.remainingS === 0);
+  const finished = q.update(13, frame({ lapCount: 4, lastLapTimeMs: 24900, currentLapTimeMs: 100 }));
+  check("crossing the line ends the session, the lap counted", finished === "done" && q.bestMs === 24900);
+
+  const dirty = new QualifyingSession(30);
+  dirty.update(1, frame({ currentLapTimeMs: 1000 }));
+  dirty.update(10, frame({ currentLapTimeMs: 11000, lapInvalid: true }));
+  check("at the flag a deleted lap ends the session at once", dirty.update(20, frame({ currentLapTimeMs: 31000, lapInvalid: true })) === "done");
+  const auto = new QualifyingSession(30);
+  auto.update(1, frame({ currentLapTimeMs: 1000, autopilot: true }));
+  auto.update(1, frame({ currentLapTimeMs: 2000 }));
+  check("a lap the autopilot drove any of never counts", auto.update(28, frame({ currentLapTimeMs: 30000 })) === "done");
+  const restart = new QualifyingSession(30);
+  restart.update(1, frame({ currentLapTimeMs: 1000 }));
+  restart.update(29.5, frame({ currentLapTimeMs: 30500 }));
+  check("a restart after the flag is no lap under way", restart.state === "last_lap" && restart.update(0.1, frame({ currentLapTimeMs: 100 })) === "done");
+
+  const order = qualifyingOrder([
+    { id: "a", lapMs: 25300 },
+    { id: "me", lapMs: null },
+    { id: "b", lapMs: 25100 },
+    { id: "c", lapMs: 25300 },
+  ]);
+  check("grid: clean laps quickest first, ties in the order given, no time last", order.map((e) => e.id).join(",") === "b,a,c,me", order.map((e) => e.id).join(","));
+  check("AI laps: the reference at full pace, slower down the field", aiQualifyingMs(90000, 1, 1) === 90000 && aiQualifyingMs(90000, 1, 0.95) === Math.round(90000 * 1.0325));
+}
+
+console.log("Qualifying · the AI field's grid");
+{
+  const track = getActiveTrackData(1200);
+  const player = new F1Physics2026(track);
+  const drivers = AI_DRIVERS.slice(0, 4);
+  const field = new AiOpponentField(track, player, drivers, undefined, { seed: 3, learning: false });
+  field.qualifying = { playerMs: 1, refLapMs: 90000, refBase: 1 };
+  field.startRace(true);
+  const st = field.status();
+  const rows = st.qualifying ?? [];
+  check("pole for a lap no one could beat", rows[0]?.isPlayer === true && st.standings.find((s) => s.isPlayer) !== undefined, JSON.stringify(rows));
+  check("every AI car has a time, slower than the reference", rows.filter((r) => !r.isPlayer).every((r) => r.lapMs !== null && r.lapMs > 90000));
+  check("the grid stands before the first light", st.phase === "lights" && (st.countdownS ?? 0) > 0 && field.lightsOn === 0);
+  for (let t = 0; t < 9; t += 0.05) field.update(0.05);
+  check("then the lights", field.lightsOn > 0 || field.phase === "racing");
+  const slow = new AiOpponentField(track, new F1Physics2026(track), drivers, undefined, { seed: 3, learning: false });
+  slow.qualifying = { playerMs: null, refLapMs: 90000, refBase: 1 };
+  slow.startRace(true);
+  const srows = slow.status().qualifying ?? [];
+  check("no clean lap: from the back", srows[srows.length - 1]?.isPlayer === true && srows[srows.length - 1]?.lapMs === null);
+  const none = new AiOpponentField(track, new F1Physics2026(track), drivers, undefined, { seed: 3, learning: false });
+  none.qualifying = { playerMs: 80000, refLapMs: null, refBase: 1 };
+  none.playerGrid = "back";
+  none.startRace(true);
+  check("no reference lap: the setup's grid, no classification", none.status().qualifying === undefined && !none.status().countdownS);
+}
 
 console.log(`\n${passed} checks passed`);

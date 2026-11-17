@@ -1,6 +1,7 @@
 import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
-import { LIVERIES, TURN_METADATA, inDeadZone, type BuiltTrackData } from "@/lib/track-data";
+import { LIVERIES, TURN_METADATA, getActiveTrackMetadata, inDeadZone, type BuiltTrackData } from "@/lib/track-data";
+import { AUTOPILOT_REF_BASE, LINE_CHECK_REF_BASE, QualifyingSession } from "@/lib/sim/qualifying";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
 import { trackColliders } from "@/lib/sim/track-colliders";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
@@ -459,6 +460,12 @@ export class DriveSession {
    * it was built for this car, or a new one)
    */
   readonly takeAiField: () => AiRace;
+  /**
+   * Qualifying for an AI race (qualifying.ts): the player drives alone, on a flying lap, for `minutes`; then the field
+   * lines up from it and the race starts. Anything else that sets the session (another race, practice, a car change)
+   * ends it
+   */
+  readonly startQualifying: (field: AiRace, minutes: number) => void;
   /** The player's preferences: kept for the frame loop, and the ones that act on the car or the scene applied */
   readonly applySettings: (settings: PlayerSettings) => void;
   /** Puts the tyre compound on the car and its model */
@@ -707,6 +714,77 @@ export class DriveSession {
       fuelHeld = { car: physics, flags };
     };
     /** Race control's session for a race on track (or practice) */
+    /**
+     * Qualifying before an AI race: the field waiting for its grid, the session's clock and laps, and the reference lap
+     * the AI cars' times are taken from (a circuit's AI line check where it has one for this car, else a lone autopilot
+     * lap of a copy of the car, driven a slice per frame while the player qualifies)
+     */
+    let quali: {
+      field: AiRace;
+      session: QualifyingSession;
+      ref: { lapMs: number | null; base: number; car: SimulatorCar | null; lap0: number; simS: number };
+    } | null = null;
+    /** Page time per frame for the reference lap (ms), and the step it is driven at (s) */
+    const QUALI_REF_BUDGET_MS = 1.5;
+    const QUALI_REF_DT_S = 1 / 120;
+    /** A reference lap that takes longer than this is given up (s of simulated time) */
+    const QUALI_REF_GIVE_UP_S = 600;
+    const endQualifying = () => {
+      quali = null;
+    };
+    /** Drives the reference lap on for up to `budgetMs` of page time (Infinity: to its end) */
+    const stepQualifyingRef = (budgetMs: number) => {
+      const ref = quali?.ref;
+      const car = ref?.car;
+      if (!ref || !car) return;
+      const until = performance.now() + budgetMs;
+      while (performance.now() < until) {
+        car.step(QUALI_REF_DT_S, {});
+        ref.simS += QUALI_REF_DT_S;
+        if (car.telemetry.lapCount > ref.lap0) {
+          ref.lapMs = car.telemetry.lastLapTimeMs ?? null;
+        } else if (ref.simS < QUALI_REF_GIVE_UP_S) {
+          continue;
+        }
+        ref.car = null;
+        return;
+      }
+    };
+    const finishQualifying = () => {
+      const q = quali;
+      if (!q) return;
+      // A reference lap not yet done is finished now (the moment between qualifying and the grid)
+      stepQualifyingRef(Infinity);
+      quali = null;
+      // In the rain the AI cars lap slower, as they race (the reference laps are dry)
+      const weather = Math.max(0.5, getTrackEnv().weatherPaceScale(physics));
+      q.field.qualifying = {
+        playerMs: q.session.bestMs,
+        refLapMs: q.ref.lapMs !== null ? Math.round(q.ref.lapMs / weather) : null,
+        refBase: q.ref.base,
+      };
+      this.resetRun("race");
+      this.setRace({ kind: "ai", field: q.field });
+      startAiRace(q.field, settings.race, settings.profile);
+    };
+    this.startQualifying = (field, minutes) => {
+      if (disposed) return;
+      this.setRace({ kind: "practice" });
+      const check = getActiveTrackMetadata().aiPlans?.[vehicleNow];
+      let ref: NonNullable<typeof quali>["ref"];
+      if (check?.ok && check.physicsLapS > 0) {
+        ref = { lapMs: Math.round(check.physicsLapS * 1000), base: LINE_CHECK_REF_BASE, car: null, lap0: 0, simS: 0 };
+      } else {
+        // A copy of the car on the page, on its autopilot at full pace, alone on a flying lap
+        const car = vehicleModelSpec(vehicleNow).createSim(track, trackRoot, carById(carIdNow).bodyPlan);
+        car.resetToStartGrid(true);
+        car.aiAutopilot = true;
+        if (car.aiPaceScale !== undefined) car.aiPaceScale = 1;
+        ref = { lapMs: null, base: AUTOPILOT_REF_BASE, car, lap0: car.telemetry.lapCount, simS: 0 };
+      }
+      quali = { field, session: new QualifyingSession(minutes * 60), ref };
+      physics.resetToStartGrid(true);
+    };
     const limitsSessionOf = (race: SessionRace) => (race.kind === "practice" ? "practice" : "race");
     /** The AI race's rules close the overtaking aids inside a yellow zone (set with the track-limits ladder) */
     let aidsLockInYellow = true;
@@ -721,6 +799,7 @@ export class DriveSession {
       return { scoring: rules.trackLimits, pointsAllowed: rules.pointsAllowed };
     };
     this.setRace = (next) => {
+      endQualifying();
       endTimeTrial();
       const prev = this.currentRace;
       // A race the worker runs ends there when the session leaves it
@@ -946,6 +1025,8 @@ export class DriveSession {
 
     this.setCar = (car) => {
       if (disposed) return;
+      // The field waiting on qualifying was built round the old car
+      endQualifying();
       const newCar = car !== carRigCar;
       endTimeTrial();
       // The run starts over before the old car goes: leaving the replay writes its saved pose into `physics`, which
@@ -2437,6 +2518,28 @@ export class DriveSession {
         vehicleNow
       );
       physics.telemetry.race = mpRace && mpFrame ? mpRace.status(mpFrame, physics.vxMs) : aiField?.status();
+      // Qualifying: the clock, the reference lap behind it, and the race once the session is over
+      if (quali && driving) {
+        const t = physics.telemetry;
+        stepQualifyingRef(QUALI_REF_BUDGET_MS);
+        const state = quali.session.update(dtSeconds, {
+          lapCount: t.lapCount,
+          lastLapTimeMs: t.lastLapTimeMs ?? null,
+          lastLapValid: t.lastLapValid !== false,
+          currentLapTimeMs: t.currentLapTimeMs,
+          lapInvalid: t.lapInvalid === true,
+          autopilot: physics.aiAutopilot,
+        });
+        if (state === "done") finishQualifying();
+      }
+      physics.telemetry.qualifying = quali
+        ? {
+            remainingS: quali.session.remainingS,
+            lastLap: quali.session.state === "last_lap",
+            lapCounts: quali.session.lapCounts,
+            bestMs: quali.session.bestMs,
+          }
+        : undefined;
       physics.telemetry.runId = runId;
       // The manual start's cue: what to hold as the clutch, and a jump start once there is one
       physics.telemetry.start =
@@ -2514,7 +2617,7 @@ export class DriveSession {
       );
 
       // Laps: summary card, personal best (saved, and raced as the ghost) — practice only
-      if (driving && !aiField && !mpRace) {
+      if (driving && !aiField && !mpRace && !quali) {
         const done = lapRecorder.update({
           telemetry: physics.telemetry,
           position: physics.worldPosition,

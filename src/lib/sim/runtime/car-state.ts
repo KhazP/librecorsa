@@ -142,7 +142,7 @@ export function captureCarState(car: SimulatorCar, out: CarState): CarState {
 }
 
 /** Telemetry fields the page fills in itself each frame (the race, its radar, race control): never taken from the worker */
-export const PAGE_OWNED_TELEMETRY: readonly (keyof CarTelemetry)[] = ["race", "runId", "radar", "peers", "trackLimits", "ffbSubframeSamples"];
+export const PAGE_OWNED_TELEMETRY: readonly (keyof CarTelemetry)[] = ["race", "runId", "radar", "peers", "trackLimits", "ffbSubframeSamples", "qualifying"];
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _turn = new THREE.Quaternion();

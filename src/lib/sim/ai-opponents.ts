@@ -53,6 +53,7 @@ import {
 import { RaceIncidents } from '@/lib/sim/race-incidents';
 import { YellowPassJudge, type PassCar, type YellowLevel } from '@/lib/sim/yellow-passes';
 import type { PenaltyReason } from '@/lib/sim/penalty-ledger';
+import { aiQualifyingMs, qualifyingOrder, type QualifyingGridInput, type QualifyingResult } from '@/lib/sim/qualifying';
 import { aiTrackFor, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
 import { carLimitsFor } from '@/lib/sim/ai/ggv';
 import { drivePlanJob, driveLineOf, makeDrivePlan, type AiDrivePlan, type DriveLine } from '@/lib/sim/ai/drive-plan';
@@ -496,6 +497,9 @@ const fieldContactYawCap = (impactMs: number) => THREE.MathUtils.clamp(0.25 + 0.
 const fieldContactDvCap = (impactMs: number) => Math.max(CONTACT_MAX_DV_MS, 2 + 1.3 * impactMs);
 /** Two boxes can only overlap with their centres within a full diagonal (m, squared) */
 const CONTACT_BROAD_M2 = CAR_LEN_M * CAR_LEN_M + CAR_WID_M * CAR_WID_M;
+/** After qualifying, the grid stands this long before the first red light, for its order to be read (s) */
+export const QUALIFYING_GRID_SHOW_S = 8;
+
 /** AI pace through a yellow zone and a double-yellow one (share of the car's own) */
 export const YELLOW_PACE = 0.93;
 export const DOUBLE_YELLOW_PACE = 0.72;
@@ -1244,6 +1248,8 @@ export class AiOpponentField implements AiRace {
     this.phase = standing ? 'lights' : 'racing';
     this.lightsOn = 0;
     this.lightsTimerS = 0;
+    // After qualifying the grid stands a few seconds before the lights, for its order to be read
+    this.preStartS = standing && this.qualiResults ? QUALIFYING_GRID_SHOW_S : 0;
     this.holdS = 0.2 + this.rng() * 2.8;
   }
 
@@ -1255,10 +1261,23 @@ export class AiOpponentField implements AiRace {
     const ai = this.cars.filter((c) => c.ai);
     const rng = seededRng(this.seed ^ 0x9e3779b9);
     const quali = new Map<FieldCar, number>();
-    for (const c of ai) quali.set(c, this.gridOrder === 'qualifying' ? c.basePace * (1 + gaussian(rng) * 0.012) : c.basePace);
+    const q = this.qualifying;
+    // After qualifying every AI car has its session's pace: its own, with a lap's worth of luck
+    for (const c of ai) quali.set(c, this.gridOrder === 'qualifying' || q ? c.basePace * (1 + gaussian(rng) * 0.012) : c.basePace);
     ai.sort((a, b) => (quali.get(b) as number) - (quali.get(a) as number));
-    if (this.gridOrder === 'reversed') ai.reverse();
+    if (this.gridOrder === 'reversed' && !q) ai.reverse();
     const player = this.cars.find((c) => c.isPlayer);
+    this.qualiResults = null;
+    if (q && q.refLapMs !== null) {
+      // The AI cars' laps from the reference at their session's pace, the player's own best clean lap among them
+      const refLapMs = q.refLapMs;
+      const entries = ai.map((c) => ({ id: c.id, car: c, lapMs: aiQualifyingMs(refLapMs, q.refBase, quali.get(c) as number) }));
+      const all: { id: string; car: FieldCar; lapMs: number | null }[] = player ? [...entries, { id: player.id, car: player, lapMs: q.playerMs }] : entries;
+      const order = qualifyingOrder(all);
+      order.forEach((e, i) => (e.car.gridSlot = i));
+      this.qualiResults = order.map((e) => ({ code: e.car.code, isPlayer: e.car.isPlayer, lapMs: e.lapMs }));
+      return;
+    }
     const n = ai.length + (player ? 1 : 0);
     let playerSlot = n - 1;
     if (this.playerGrid === 'front') playerSlot = 0;
@@ -1276,6 +1295,11 @@ export class AiOpponentField implements AiRace {
   public update(dt: number): void {
     if (!(dt > 0)) return;
     this.runPlanJobs();
+    if (this.phase === 'lights' && this.preStartS > 0) {
+      this.preStartS = Math.max(0, this.preStartS - dt);
+      for (const car of this.cars) this.syncPeer(car);
+      return;
+    }
     if (this.phase === 'lights') {
       this.lightsTimerS += dt;
       this.lightsOn = Math.min(5, 1 + Math.floor(this.lightsTimerS / LIGHT_INTERVAL_S));
@@ -2545,6 +2569,12 @@ export class AiOpponentField implements AiRace {
   /** Time penalties the player serves at the flag (track limits), in seconds */
   public playerPenaltyS = 0;
   public manualStart = false;
+  /** The grid from qualifying (qualifying.ts); undefined: none. Read at `startRace` */
+  public qualifying: QualifyingGridInput | undefined = undefined;
+  /** The qualifying classification the race lined up in; null without qualifying */
+  private qualiResults: QualifyingResult[] | null = null;
+  /** The grid's pause before the first red light after qualifying (s left) */
+  private preStartS = 0;
 
   private playerDq = false;
 
@@ -2590,6 +2620,8 @@ export class AiOpponentField implements AiRace {
     return {
       phase: this.phase,
       lightsOn: this.lightsOn,
+      countdownS: this.phase === 'lights' && this.preStartS > 0 ? this.preStartS : undefined,
+      qualifying: this.qualiResults ?? undefined,
       position: playerIdx + 1,
       fieldSize: order.length,
       lap: Math.max(1, Math.min(this.raceLaps, Math.floor(player.distM / L) + 1)),
