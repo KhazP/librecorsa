@@ -15,7 +15,12 @@
  * as a quick player does): places won on lap 1 and passes count against, spins, contacts (twice over: a move across a
  * car's nose is the risk) offs and retirements against. The quickest car's lap-1 gain is logged alongside.
  *
+ * `--stand-in line|slow|early|weave` races each candidate with a stand-in for the player in the field (a car that keeps no
+ * racecraft: `lib/stand-in-race.ts`), and scores the contacts race control puts on an AI car against it twice more, as
+ * GT Sophy's reward weighs unsporting collisions on top of any contact. The path-check knobs are searched too.
+ *
  * Worker mode (one race, JSON out): --eval '<params json>' --track <id> --seed <n> --planner on|off --car <id> [--mode]
+ *   [--stand-in <profile>]
  */
 import { spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -28,6 +33,7 @@ import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
 import { AI_DRIVERS, AI_RESERVE_DRIVERS, AiOpponentField, DEFAULT_RACECRAFT, type RacecraftParams } from '../../src/lib/sim/ai-opponents';
 import { loadGlbGeometry } from '../lib/glb-geometry';
 import { REALISM_REF } from './lib/references';
+import { runStandInRace, STAND_IN_PROFILES, type StandInProfile } from './lib/stand-in-race';
 
 const argv = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -43,6 +49,8 @@ interface RaceScore {
   dnf: number;
   meanLapS: number;
   score: number;
+  /** Contacts race control put on an AI car against the stand-in (`--stand-in`) */
+  aiFaultVsStandIn?: number;
   /** Places won on lap 1 across the field, and by the quickest car (defence mode) */
   lap1Gains?: number;
   fastestGain1?: number;
@@ -57,6 +65,32 @@ if (argv.includes('--eval')) {
   const seed = Number(opt('seed', '1'));
   const laps = Number(opt('laps', '3'));
   const cars = Number(opt('cars', '8'));
+  const standIn = opt('stand-in', 'none') as StandInProfile;
+  if (standIn !== 'none') {
+    const r = runStandInRace({
+      trackId,
+      car: opt('car', 'f12026-car'),
+      seed,
+      laps,
+      aiCars: cars,
+      standIn,
+      racecraft: params,
+      localPlanner: opt('planner', 'off') === 'on',
+    });
+    const s: RaceScore = {
+      passes: r.aiPasses,
+      spins: r.aiSpins,
+      contacts: r.aiVsAi.events + r.vsStandIn.events,
+      offs: r.aiOffs,
+      dnf: r.aiDnf,
+      meanLapS: Number.isFinite(r.aiMeanLapS) ? r.aiMeanLapS : 999,
+      score: 0,
+      aiFaultVsStandIn: r.vsStandIn.aiAtFault,
+    };
+    s.score = s.passes * 1 - s.spins * 4 - s.contacts * 1 - 2 * r.vsStandIn.aiAtFault - s.offs * 0.5 - s.dnf * 10 - 0.3 * s.meanLapS;
+    console.log(JSON.stringify(s));
+    process.exit(0);
+  }
   setActiveTrack(trackId, JSON.parse(readFileSync(`public/tracks/${trackId}/track_data.json`, 'utf8')) as RawTrackJson);
   const track = getActiveTrackData(1200);
   const carId = opt('car', 'f12026-car');
@@ -127,6 +161,15 @@ const RANGES: Partial<Record<keyof RacecraftParams, [number, number]>> = mode ==
   followFadeM: [12, 40],
   dirtyAirMargin: [0.04, 0.2],
 };
+const standInArg = opt('stand-in', 'none');
+if (!(STAND_IN_PROFILES as readonly string[]).includes(standInArg)) throw new Error(`unknown --stand-in ${standInArg}`);
+if (standInArg !== 'none' && mode !== 'defence') {
+  Object.assign(RANGES, {
+    alongsideReachM: [0.5, 4],
+    predictS: [0.6, 2.2],
+    playerMarginM: [0, 2],
+  } satisfies Partial<Record<keyof RacecraftParams, [number, number]>>);
+}
 const planner = opt('planner', 'off');
 if (planner === 'on') {
   Object.assign(RANGES, {
@@ -147,9 +190,9 @@ const carId = opt('car', 'f12026-car');
 const seeds = Number(opt('seeds', '1'));
 const outDir = join(REALISM_REF, 'reports/race-ai/tuning');
 mkdirSync(outDir, { recursive: true });
-const tag = mode === 'defence' ? 'defence' : planner;
+const tag = (mode === 'defence' ? 'defence' : planner) + (standInArg !== 'none' ? `-${standInArg}` : '');
 const logPath = join(outDir, `racecraft-${tag}.log`);
-writeFileSync(logPath, `tuning ${keys.join(', ')} on ${tracks.join(', ')} · ${carId} · ${seeds} seed(s) · planner ${planner}\n`);
+writeFileSync(logPath, `tuning ${keys.join(', ')} on ${tracks.join(', ')} · ${carId} · ${seeds} seed(s) · planner ${planner} · stand-in ${standInArg}\n`);
 const log = (m: string) => {
   console.log(m);
   appendFileSync(logPath, m + '\n');
@@ -178,7 +221,7 @@ function runRace(params: Partial<RacecraftParams>, track: string, seed: number):
   return new Promise((resolve) => {
     const child = spawn(
       process.execPath,
-      ['--disable-warning=THREE_CJS_DEPRECATED', '--import', 'tsx', __filename, '--eval', JSON.stringify(params), '--track', track, '--seed', String(seed), '--planner', planner, '--laps', laps, '--cars', cars, '--car', carId, '--mode', mode],
+      ['--disable-warning=THREE_CJS_DEPRECATED', '--import', 'tsx', __filename, '--eval', JSON.stringify(params), '--track', track, '--seed', String(seed), '--planner', planner, '--laps', laps, '--cars', cars, '--car', carId, '--mode', mode, '--stand-in', standInArg],
       { stdio: ['ignore', 'pipe', 'ignore'] }
     );
     let out = '';
@@ -230,7 +273,7 @@ async function main(): Promise<void> {
       const detail =
         mode === 'defence'
           ? `lap1 ${avg(ok.map((r) => r.lap1Gains ?? 0))} fastest ${avg(ok.map((r) => r.fastestGain1 ?? 0))} p ${avg(ok.map((r) => r.passes))} s ${avg(ok.map((r) => r.spins))} c ${avg(ok.map((r) => r.contacts))} o ${avg(ok.map((r) => r.offs))} d ${avg(ok.map((r) => r.dnf))}`
-          : ok.map((r) => `p${r.passes} s${r.spins} c${r.contacts.toFixed(0)} o${r.offs} d${r.dnf} ${r.meanLapS.toFixed(1)}s`).join(' | ');
+          : ok.map((r) => `p${r.passes} s${r.spins} c${r.contacts.toFixed(0)}${r.aiFaultVsStandIn !== undefined ? ` f${r.aiFaultVsStandIn}` : ''} o${r.offs} d${r.dnf} ${r.meanLapS.toFixed(1)}s`).join(' | ');
       return { c, score, detail };
     });
     scored.sort((a, b) => b.score - a.score);

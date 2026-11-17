@@ -53,6 +53,8 @@ export const LC26_SIM_PROFILE: CarSimProfile = {
   braking: { lowG: 1.6, aeroG: 2.8, refMs: 70 },
   speedProfile: lc26TunedProfileCar(),
   keyboardSteer: OPEN_WHEEL_KEYBOARD_STEER,
+  // Low and stiff: a 5-10 cm kerb at Barbagallo lifts three wheels at 145 km/h, where the f12026-car and GT3 ride it
+  aiMaxKerbRiseM: 0.05,
 };
 
 /** The same car on the data as it stands, untuned: what `F1Physics2026` drives */

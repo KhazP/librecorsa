@@ -96,6 +96,8 @@ export interface GroundHit {
 /** Anything that can answer "what is under this XZ point, at or below probeY" */
 export interface GroundQuery {
   query(x: number, z: number, probeY: number, out: GroundHit): boolean;
+  /** The ground with the kerbs left out (the circuit's colliders only): what a kerb stands on */
+  queryBase?(x: number, z: number, probeY: number, out: GroundHit): boolean;
   /**
    * The ground is a smooth analytic surface (flat, or interpolated from the track samples) with no texture or seams for
    * a tyre's contact patch to envelope: the tyres probe it at their centre alone
@@ -1143,6 +1145,12 @@ export class TrackColliderQuery implements GroundQuery {
     return this.resolve(0, out);
   }
 
+  /** `query`'s ground with the kerbs and sausages left out: the road, run-off or other ground they stand on. False where there is none but a kerb (or nothing). */
+  queryBase(x: number, z: number, probeY: number, out: GroundHit): boolean {
+    if (!this.query(x, z, probeY, out)) return false;
+    return this.resolve(0, out, true, false);
+  }
+
   /**
    * `query` for up to `GROUND_QUERY_MANY_MAX` nearby points at once (a tyre's contact patch), each answered exactly as
    * `query` would: points in the same grid cell share one pass over its triangles, the bulk of a query's cost.
@@ -1309,7 +1317,7 @@ export class TrackColliderQuery implements GroundQuery {
    * Point `p`'s ground from its scanned candidates (see the class notes), into `out`; false when it has none. Unless
    * `full`, only its height is written (no normal or surface tags).
    */
-  private resolve(p: number, out: GroundHit, full = true): boolean {
+  private resolve(p: number, out: GroundHit, full = true, raised = true): boolean {
     const c = p * 4;
     const roadH = this.candH[c + CAND_ROAD];
     const roadT = this.candT[c + CAND_ROAD];
@@ -1357,7 +1365,7 @@ export class TrackColliderQuery implements GroundQuery {
     let normalU: number;
     let normalV: number;
     if (baseT >= 0) {
-      if (raisedT >= 0 && raisedH >= baseH - (this.fitted ? SURFACE_MATCH_M : 0) && raisedH <= baseH + 0.6) {
+      if (raised && raisedT >= 0 && raisedH >= baseH - (this.fitted ? SURFACE_MATCH_M : 0) && raisedH <= baseH + 0.6) {
         const maxRise = this.layers[this.triLayer[raisedT]].props.maxRiseM;
         contactT = raisedT;
         contactH = Math.min(Math.max(baseH, raisedH), baseH + maxRise);
@@ -1381,6 +1389,8 @@ export class TrackColliderQuery implements GroundQuery {
         normalU = baseU;
         normalV = baseV;
       }
+    } else if (!raised) {
+      return false;
     } else if (raisedT >= 0) {
       contactT = raisedT;
       contactH = raisedH;

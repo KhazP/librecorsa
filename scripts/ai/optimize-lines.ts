@@ -26,6 +26,7 @@ import { carLimitsFor } from '../../src/lib/sim/ai/ggv';
 import { loadGlbGeometry } from '../lib/glb-geometry';
 import { lineBoundsFromCar, lineCost, LineParam, minCurvatureLine, optimiseLapTime, wallPenalty, type WallClearance } from './lib/line-opt';
 import { TrackWallQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
+import { vehicleModelSpec } from '../../src/lib/cars/vehicle-models';
 import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
 import { physicsLap, type PhysicsLap, type PhysicsLapCar } from './lib/physics-lap';
@@ -75,9 +76,18 @@ const track = getActiveTrackData(1200);
 const t = aiTrackFor(track);
 const limits = carLimitsFor(line === 'gt3' ? 'amg-gt3' : 'f12026-car', grip);
 const root = loadGlbGeometry(`public${track.meshUrl}`);
-// The line stays where this car's tracker can follow it: its usable road, lips and kerbs included
+// The line stays where this car's tracker can follow it: its usable road, lips and kerbs included. The F1 line is the
+// LC26's too: inside both cars' roads, so neither is asked onto a kerb too tall for it (the LC26 takes lower kerbs)
 const boundsCar = line === 'gt3' ? createAmgGt3Sim(track, root) : new F12026CarSim(track, root);
-const bounds = lineBoundsFromCar(t, (s) => boundsCar.lateralRangeAt(s));
+const lc26Bounds = line === 'gt3' ? null : (vehicleModelSpec('lc26').createSim(track, root) as unknown as { lateralRangeAt?: (s: number) => [number, number] });
+const bounds = lineBoundsFromCar(t, (s) => {
+  const [lo, hi] = boundsCar.lateralRangeAt(s);
+  const other = lc26Bounds?.lateralRangeAt?.(s);
+  if (!other) return [lo, hi];
+  const a = Math.max(lo, other[0]);
+  const b = Math.min(hi, other[1]);
+  return a <= b ? [a, b] : [0.5 * (a + b), 0.5 * (a + b)];
+});
 const param = new LineParam(t, 6);
 // The barriers each side, found by stepping out from the centreline, and the car's own barrier probes
 const wallQ = root ? TrackWallQuery.fromTrackRoot(root, getActiveTrackMetadata().mesh?.barrierMeshes, roadFacing) : null;
