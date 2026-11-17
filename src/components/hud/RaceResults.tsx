@@ -225,9 +225,9 @@ export const RaceResults: React.FC<{
                         {/* The team's colour: data, the one place it shows */}
                         <span aria-hidden className="h-4 w-1 shrink-0 rounded-full" style={{ backgroundColor: r.teamColorHex }} />
                         {r.name !== r.driverCode ? (
-                          <span className="lc-mono w-8 shrink-0 text-[12px] font-bold tracking-[0.08em] text-lc-slate">{r.driverCode}</span>
+                          <span className="lc-mono w-8 shrink-0 text-[12px] font-bold tracking-[0.08em] text-lc-slate">{r.driverCode.slice(0, 3)}</span>
                         ) : null}
-                        <span className="truncate text-[14px] font-semibold">{r.name}</span>
+                        <span dir="auto" className="truncate text-[14px] font-semibold" title={r.name}>{r.name}</span>
                         {r.isPlayer ? <PlayerTag size="sm" /> : null}
                       </span>
                     </td>
@@ -380,7 +380,7 @@ const LastRaces: React.FC<{ history: readonly RaceRecord[] }> = ({ history }) =>
           <tr key={r.id} className="h-9 border-b border-white/5 last:border-b-0 short:h-8">
             <td className="lc-mono w-20 px-2 text-[12px] font-bold whitespace-nowrap text-lc-slate">{shortDate(r.atMs)}</td>
             <td className="max-w-0 px-2">
-              <span className="block truncate text-[13px] font-semibold text-lc-fog">{circuitName(r.trackId)}</span>
+              <span className="block truncate text-[13px] font-semibold text-lc-fog" title={circuitName(r.trackId)}>{circuitName(r.trackId)}</span>
             </td>
             <td className="lc-mono w-16 px-2 text-[13px] font-bold whitespace-nowrap">
               <span className={r.finish === null ? "text-lc-loss" : "text-lc-chalk"}>{r.finish === null ? "DNF" : `P${r.finish}`}</span>

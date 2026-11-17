@@ -458,12 +458,12 @@ export const codeFromName = (name: string) => sanitizeDriverCode(name);
 
 /** Three upper-case letters from any input ("" → the default code) */
 export const sanitizeDriverCode = (v: string) => {
-  const letters = v.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
+  const letters = v.normalize("NFD").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
   return letters.length === 3 ? letters : (letters + DEFAULT_DRIVER_PROFILE.code).slice(0, 3);
 };
 /** Printable name of at most 16 characters */
 export const sanitizeDriverName = (v: string) =>
-  v.replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 16) || DEFAULT_DRIVER_PROFILE.name;
+  Array.from(v.replace(/[\u0000-\u001f\u007f<>]/g, "").trim()).slice(0, 16).join("") || DEFAULT_DRIVER_PROFILE.name;
 export const sanitizeColor = (v: string) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v.toUpperCase() : DEFAULT_DRIVER_PROFILE.color);
 
 export const SETTINGS_STORAGE_KEY = "bugesera.settings.v1";
