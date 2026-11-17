@@ -757,7 +757,7 @@ export class DriveSession {
       stepQualifyingRef(Infinity);
       quali = null;
       // In the rain the AI cars lap slower, as they race (the reference laps are dry)
-      const weather = Math.max(0.5, trackEnv.weatherPaceScale(physics));
+      const weather = Math.max(0.5, getTrackEnv().weatherPaceScale(physics));
       q.field.qualifying = {
         playerMs: q.session.bestMs,
         refLapMs: q.ref.lapMs !== null ? Math.round(q.ref.lapMs / weather) : null,
