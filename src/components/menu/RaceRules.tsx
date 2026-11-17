@@ -17,6 +17,7 @@ import {
   type RaceSetup,
   type RaceStartKind,
 } from "@/lib/sim/race-setup";
+import { RACE_START_MODE_HINTS, RACE_START_MODE_LABELS, RACE_START_MODES, type RaceStartMode } from "@/lib/sim/race-start";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn } from "@/lib/settings/units";
 
@@ -145,6 +146,17 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
             options={(["standing", "rolling"] as const).map((id) => ({ id, label: RACE_START_LABELS[id] }))}
             value={setup.start}
             onChange={(s) => onChange({ start: s })}
+          />
+        </SettingRow>
+        {/* The same choice as Settings > Driving > Launch */}
+        <SettingRow
+          label="Launch"
+          hint={setup.start === "standing" ? RACE_START_MODE_HINTS[setup.launch] : "A rolling start has no launch: this applies to standing starts"}
+        >
+          <Segmented<RaceStartMode>
+            options={RACE_START_MODES.map((id) => ({ id, label: RACE_START_MODE_LABELS[id] }))}
+            value={setup.launch}
+            onChange={(launch) => onChange({ launch })}
           />
         </SettingRow>
         <SettingRow label="Grid slot">
