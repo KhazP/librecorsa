@@ -178,7 +178,7 @@ export function Select<T extends string>({
         </span>
         <Icon
           name="expand"
-          className={cx("transition-transform duration-200 ease-lc", open ? "rotate-180" : undefined)}
+          className={cx("transition-transform duration-200 ease-lc motion-reduce:transition-none", open ? "rotate-180" : undefined)}
         />
       </button>
       {open && place && typeof document !== "undefined"

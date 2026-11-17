@@ -54,7 +54,7 @@ export const GradeLegend: React.FC<{ of: keyof typeof GRADE_NOTES; shown: readon
     {(["sim", "model"] as const).filter((grade) => shown.includes(grade)).map((grade) => (
       <div key={grade} className="flex min-w-0 items-start gap-2.5">
         {/* Stacked on a phone: the same width for both, so the two notes start in line */}
-        <dt className="shrink-0 max-sm:min-w-[96px]">
+        <dt className="shrink-0 max-sm:min-w-[104px]">
           <GradeBadge grade={grade} />
         </dt>
         <dd className="lc-body m-0 pt-0.5">{GRADE_NOTES[of][grade]}</dd>

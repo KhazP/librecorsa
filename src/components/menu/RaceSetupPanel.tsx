@@ -9,7 +9,7 @@ import type { CarDefinition } from "@/lib/cars/car-registry";
 import type { TrackInfo } from "@/lib/track-registry";
 import { aiDriversFor, aiRaceCodes } from "@/lib/sim/ai-opponents";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
-import { RACE_START_LABELS, type RaceSetup } from "@/lib/sim/race-setup";
+import { raceStartSuffix, type RaceSetup } from "@/lib/sim/race-setup";
 import { RaceRules, useRaceDistance } from "./RaceRules";
 
 export interface RaceSetupPanelProps {
@@ -153,7 +153,8 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
               {distance ? `, ${distance}` : ""}, {setup.opponents} AI {setup.opponents === 1 ? "car" : "cars"}
             </span>
             <span className="lc-hint truncate phone:hidden">
-              {aiSkillLabel(aiSkill)} AI, {RACE_START_LABELS[setup.start].toLowerCase()} start
+              {aiSkillLabel(aiSkill)} AI{raceStartSuffix(setup.startMode, ", ")}
+              {setup.startMode !== "rolling" && setup.launch === "manual" ? ", manual launch" : ""}
             </span>
           </span>
           <Button ref={startRef} variant="primary" size="lg" onClick={onStart} prompt={mode === "pad" ? <PadGlyph button="menu" family={family} /> : undefined}>

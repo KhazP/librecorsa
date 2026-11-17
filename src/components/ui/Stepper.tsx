@@ -87,7 +87,7 @@ export function Stepper({ value, onChange, min, max, step = 1, format, forceCurs
         className={cx(
           "relative z-10 inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-lc-fog",
           "hover:bg-white/6 hover:text-lc-chalk active:bg-lc-titanium disabled:cursor-not-allowed disabled:opacity-30",
-          "pointer-coarse:size-11",
+          "pointer-coarse:size-11 pointer-fine:after:absolute pointer-fine:after:-inset-1",
           MOTION,
         )}
       >

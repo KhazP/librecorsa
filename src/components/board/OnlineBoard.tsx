@@ -92,7 +92,7 @@ const driversLine = (n: number) => `${formatCount(n)} ${n === 1 ? "driver" : "dr
 const totalsLine = (t: CircuitTotals) => `${formatCount(t.laps)} ${t.laps === 1 ? "lap" : "laps"} · ${driversLine(t.drivers)}`;
 
 /** "0.214 s behind Ana" */
-const behind = (ms: number, aheadMs: number, who: string) => `${((ms - aheadMs) / 1000).toFixed(3)} s behind ${who}`;
+const behind = (ms: number, aheadMs: number, who: string) => `${((ms - aheadMs) / 1000).toFixed(3)} s behind \u2068${who}\u2069`;
 
 const CURRENT = "current";
 
@@ -391,10 +391,10 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
       {/* Where the player stands */}
       {me ? (
         <MyPlace
-          rank={me.rank}
+          rank={me.pos}
           total={total}
           lapMs={me.entry.lapTimeMs}
-          detail={me.rank === 1 ? "Fastest on this board" : ahead ? behind(me.entry.lapTimeMs, ahead.lapTimeMs, ahead.name) : ""}
+          detail={me.pos === 1 ? "Fastest on this board" : ahead ? behind(me.entry.lapTimeMs, ahead.lapTimeMs, ahead.name) : ""}
           action={ahead && ghostsHere ? <RaceGhost onClick={() => onRaceGhost?.(ahead)} label="Race the ghost ahead" /> : undefined}
         />
       ) : null}

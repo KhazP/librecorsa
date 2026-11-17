@@ -197,12 +197,12 @@ const FlagRow: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapInv
     race?.phase === "finished"
       ? { text: "Race finished", cls: "bg-(--blk-flag-black) text-(--blk-ink)" }
       : race?.yellow
-        ? { text: "Yellow flag", cls: "bg-(--blk-flag-yellow) text-(--blk-ink-on)" }
+        ? { text: race.doubleYellow ? "Double yellow" : "Yellow flag", cls: "bg-(--blk-flag-yellow) text-(--blk-ink-on)" }
         : t.offTrack || tl?.message?.kind === "lap_invalid" || (lapInvalid && t.currentLapTimeMs < 6000)
           ? {
               text: t.offTrack
                 ? race && tl && tl.strikesPerPenalty > 0
-                  ? `Off track · ${tl.warnings}/${tl.strikesPerPenalty}`
+                  ? `Off track · ${tl.ladder?.scoring === "weighted_pts" ? tl.warnings.toFixed(2) : tl.warnings}/${tl.strikesPerPenalty}`
                   : "Off track"
                 : "Lap deleted",
               cls: "bg-(--blk-player) text-(--blk-ink)",
@@ -269,7 +269,7 @@ const SessionBlocks: React.FC<{ t: CarTelemetry }> = ({ t }) => {
         {pad2(race ? race.lap : Math.max(1, t.lapCount))}
         {race?.totalLaps ? <span className="text-[18px]">/{pad2(race.totalLaps)}</span> : null}
       </SessionBlock>
-      <SessionBlock label={race ? "Race" : "Practice"} className="hidden min-w-[164px] xl:flex">
+      <SessionBlock label={race ? "Race" : t.qualifying ? "Qualifying" : "Practice"} className="hidden min-w-[164px] xl:flex">
         {hms(clock)}
       </SessionBlock>
     </div>

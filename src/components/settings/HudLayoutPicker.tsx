@@ -86,7 +86,7 @@ function LayoutTile({
             "relative z-10 -mt-1 mr-auto ml-1 inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm text-[12px] leading-tight text-lc-slate",
             "underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk hover:decoration-lc-chalk",
             "focus-visible:text-lc-chalk focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lc-volt",
-            "pointer-coarse:min-h-8",
+            "pointer-coarse:min-h-11",
           )}
         >
           <span className="truncate">by {credit.author}</span>

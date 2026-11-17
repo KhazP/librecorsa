@@ -108,7 +108,17 @@ const DT = 1 / 120;
 const ZONE = { id: 'Z', detection: 0.09, start: 0.12, end: 0.24 };
 const sOf = (car: VehiclePhysics) => car.trackProgress * LAP;
 type Phase = (s: number) => Partial<VehicleInputs>;
-function flatRun(opts: { gated?: boolean; eligible?: boolean; startMs?: number; wetness?: number; script: Phase; untilS?: number; maxT?: number }) {
+function flatRun(opts: {
+  gated?: boolean;
+  eligible?: boolean;
+  startMs?: number;
+  wetness?: number;
+  script: Phase;
+  untilS?: number;
+  maxT?: number;
+  /** Race control shuts the flaps from this lap distance on (a yellow flag) */
+  barredFromS?: number;
+}) {
   const events: VehicleEvent[] = [];
   const car = new VehiclePhysics({
     ground: new FlatGroundQuery(0),
@@ -117,6 +127,7 @@ function flatRun(opts: { gated?: boolean; eligible?: boolean; startMs?: number; 
     locateProgress: (_x, z) => 0.04 + z / LAP,
     lapLengthM: LAP,
     drsEligibleAtDetection: () => opts.eligible ?? true,
+    flapsBarred: () => opts.barredFromS !== undefined && Number.isFinite(car.trackProgress) && sOf(car) >= opts.barredFromS,
     onEvent: (e) => events.push(e),
   });
   car.drsGatedByDetection = opts.gated ?? false;
@@ -233,6 +244,12 @@ const pressAt = (at: number) => {
     `queued to ${kn.log.findLast((r) => r.queued)?.s.toFixed(0)} m, detection at ${detectionM} m`,
   );
   check('DRS: and opens the zone as it starts when it is earned', ke.openAt !== null && ke.openAt < zoneStart + 6, `open at ${ke.openAt?.toFixed(1)} m`);
+  // A yellow flag under the open-wheel rules: an open flap closes as the car enters the zone, and stays shut
+  const yellow = flatRun({ script: (s) => ({ drs: s >= 650 && s < 652 }), barredFromS: 800 });
+  const openBefore = yellow.log.some((r) => r.open && r.s < 800);
+  const openAfter = yellow.log.some((r) => r.open && r.s > 802);
+  check('A yellow zone shuts an open flap, and it stays shut', openBefore && !openAfter, `open before ${openBefore}, after ${openAfter}`);
+
   // Too wet for the flaps: a press is not kept either (2026 and DRS alike)
   const p15 = pressAt(zoneStart - 100);
   const wet = flatRun({ wetness: 1, script: (s) => ({ drs: p15(s) }) });

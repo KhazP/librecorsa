@@ -11,6 +11,7 @@ import {
   UI_SCALE_MIN,
   type PlayerSettings,
 } from "@/lib/settings/player-settings";
+import { RACE_START_MODE_HINTS, RACE_START_MODE_LABELS, RACE_START_MODES, type RaceStartMode } from "@/lib/sim/race-start";
 import { SIM_REALISM_LABELS, SIM_REALISM_LEVELS } from "@/lib/sim/sim-realism";
 import { ASSIST_SLIDERS, type AssistSliderSpec } from "@/lib/sim/steering-assist";
 import type { AssistPreset } from "@/types/f1";
@@ -134,6 +135,17 @@ export const realism = choice("segmented", {
   hint: (env) => SIM_REALISM_LABELS[env.settings.realism].detail,
   options: SIM_REALISM_LEVELS.map((id) => ({ id, label: SIM_REALISM_LABELS[id].label })),
   ...top("realism"),
+});
+
+/** A standing start's launch, kept with the race setup: the pre-race rules show the same choice */
+export const launch = choice("segmented", {
+  id: "launch",
+  label: "Launch",
+  hint: (env) => RACE_START_MODE_HINTS[env.settings.race.launch],
+  options: RACE_START_MODES.map((id) => ({ id, label: RACE_START_MODE_LABELS[id] })),
+  read: (env) => env.settings.race.launch,
+  initial: () => DEFAULT_PLAYER_SETTINGS.race.launch,
+  write: (env, id) => env.update((s) => ({ ...s, race: { ...s.race, launch: id as RaceStartMode } })),
 });
 
 export const ghost = toggle({
@@ -540,7 +552,7 @@ export const lapSummary = toggle({ id: "lapSummary", label: "Lap summary", hint:
 export const mirror = choice("segmented", {
   id: "virtualMirror",
   label: "Mirror",
-  hint: "Auto: onboard views without wing mirrors in sight",
+  hint: "Auto: in races and with other players on track, in onboard views without wing mirrors in sight",
   options: [
     { id: "auto", label: "Auto" },
     { id: "always", label: "Always" },

@@ -2,10 +2,12 @@
  * Messages between the page and the simulation worker (`sim-worker.ts`, `sim-runtime.ts`). Plain data only:
  * everything here crosses `postMessage`, so no class instances, functions or three.js objects.
  */
+import type { QualifyingGridInput } from "../qualifying";
 import type { CarTelemetry, ControlInputs, RaceStatus, VehicleModelId } from "@/types/f1";
 import type { RawTrackJson } from "@/lib/track-data";
 import type { RaceDriverLabel } from "../ai-race";
 import type { DamageLevel } from "../car-damage";
+import type { PenaltyReason } from "../penalty-ledger";
 import type { AiGridOrder, PlayerGridSlot } from "../race-setup";
 import type { SimRealismFlags } from "../sim-realism";
 import type { SessionConditions, WeatherSyncState } from "../weather";
@@ -33,6 +35,7 @@ export const CAR_SETTABLE = [
   "tireCompound",
   "trackLimitsMode",
   "trackLimitsHold",
+  "gridHold",
   "aiSelfRecovery",
   "vxMs",
   "sMeters",
@@ -69,8 +72,14 @@ export interface RaceStartSetup {
   damage: DamageLevel;
   aggressionAdd: number;
   standing: boolean;
+  /** A standing start the player makes on the clutch: the car held on the grid with its engine live */
+  manualStart?: boolean;
   /** The player's code and colour (`AiRace.playerDriver`) */
   driver: RaceDriverLabel | null;
+  /** The rules close the overtaking aids inside a yellow zone */
+  lockAidsInYellow?: boolean;
+  /** The grid from qualifying (`AiRace.qualifying`); absent: none */
+  qualifying?: QualifyingGridInput;
 }
 
 /**
@@ -95,7 +104,9 @@ export type RaceCommand =
       seed?: number;
     }
   | { type: "race"; op: "skill"; skill: number }
-  | { type: "race"; op: "penalty"; seconds: number }
+  | { type: "race"; op: "penalty"; seconds: number; dq?: boolean }
+  | { type: "race"; op: "rules"; lockAidsInYellow: boolean }
+  | { type: "race"; op: "penalise"; seconds: number; reason: PenaltyReason; detail: string }
   | { type: "race"; op: "conditions"; conditions: SessionConditions }
   | { type: "race"; op: "realism"; flags: SimRealismFlags }
   | { type: "race"; op: "end" };

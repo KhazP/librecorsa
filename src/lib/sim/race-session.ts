@@ -239,7 +239,8 @@ export function classify(
       lapsDown,
       lapsCompleted,
       bestLapMs: r.bestLapMs,
-      dnf: !!r.dnf || (final && !finished),
+      dnf: !!r.dnf || !!r.dq || (final && !finished),
+      dq: r.dq || undefined,
       penaltyS: r.penaltyS ? r.penaltyS : undefined,
     };
   });

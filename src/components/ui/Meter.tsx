@@ -35,8 +35,9 @@ export function Meter({ label, value, tone = "good", detail, labelClassName = "w
   const track = (
     <span aria-hidden className={cx("relative block h-2 min-w-0 overflow-hidden rounded-full bg-lc-titanium", stacked ? "w-full" : "flex-1")}>
       <span
-        className={cx("absolute inset-y-0 left-0 rounded-full transition-[width] duration-200 ease-lc", TONE_FILL[tone])}
-        style={{ width: `${pct}%` }}
+        // Slid in by transform (no layout while shaders compile on the main thread); the track clips it, the right end stays round
+        className={cx("absolute inset-0 rounded-full transition-transform duration-200 ease-lc motion-reduce:transition-none", TONE_FILL[tone])}
+        style={{ transform: `translateX(${pct - 100}%)` }}
       />
     </span>
   );

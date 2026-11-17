@@ -37,6 +37,7 @@ export interface ControlInputs {
   toggleXMode: boolean;
   shiftUp: boolean;
   shiftDown: boolean;
+  neutral?: boolean; // One-frame press: out of gear (both shift buttons at once, or the Neutral key / button)
 }
 
 export type CameraMode =
@@ -211,6 +212,8 @@ export interface RaceStandingEntry {
   penaltyS?: number;
   /** Out of the race (terminal damage) */
   retired?: boolean;
+  /** Disqualified by race control */
+  dq?: boolean;
   /** Damage 0..1 (absent: none) */
   damage?: number;
 }
@@ -232,6 +235,8 @@ export interface RaceResultEntry {
   bestLapMs: number | null;
   /** Still running when the classification closed */
   dnf: boolean;
+  /** Disqualified (shown in place of the DNF) */
+  dq?: boolean;
   /** Time penalties added to the race time (s), already included in `finishTimeS` and `gapS` */
   penaltyS?: number;
   /** Track-limits warnings received (the player's own) */
@@ -246,8 +251,10 @@ export interface RaceStatus {
   phase: 'lights' | 'racing' | 'finished';
   /** Red start lights lit (0–5); 0 during the race */
   lightsOn: number;
-  /** Seconds until the light sequence starts (multiplayer countdown); absent otherwise */
+  /** Seconds until the light sequence starts (multiplayer countdown, an AI race's grid after qualifying); absent otherwise */
   countdownS?: number;
+  /** The qualifying classification the race lined up in (AI race with qualifying): code, player, best clean lap (ms) */
+  qualifying?: { code: string; isPlayer: boolean; lapMs: number | null }[];
   /** Race length (laps) */
   totalLaps?: number;
   /** Final classification once the player has finished */
@@ -269,6 +276,12 @@ export interface RaceStatus {
   raceControl?: RaceControlFeedMessage[];
   /** The player is coming up on a yellow flag */
   yellow?: boolean;
+  /** … and it is a double yellow (a car stopped on the road, or more than one incident) */
+  doubleYellow?: boolean;
+  /** Blue flag: the car lapping the player is close behind (its code) */
+  blueFlag?: string;
+  /** A place the player owes back after passing under yellow: to whom, and the time left to give it back */
+  giveBack?: { code: string; double: boolean; remainingS: number; progress: number };
   /** The player's car damage (absent: none, or damage off) */
   damage?: PlayerDamageStatus;
 }
@@ -330,6 +343,9 @@ export interface TyreSetup {
   coldPressurePsi: WheelPressures;
   camberDeg: { front: number; rear: number };
 }
+
+/** The control a manual start's cue names as the clutch */
+export type StartClutchControl = { pad: number } | { key: string } | { name: string };
 
 export interface CarTelemetry {
   /** The last car-to-car contact this car took in a race: its closing speed (m/s), counted up per contact */
@@ -474,6 +490,24 @@ export interface CarTelemetry {
   /** Present while racing the AI opponents */
   race?: RaceStatus;
   /**
+   * A manual standing start, set by the app shell: the car held on the grid through the lights, a jump start, the
+   * control the player holds as the clutch (a standard-mapping pad button, a key's name, or a named control such as
+   * "clutch pedal"), and how far they hold it in (0..1, 1 = pressed)
+   */
+  start?: {
+    held: boolean;
+    jumped: boolean;
+    /** What the jump start costs as it stands (s): +5, or +10 for a big one */
+    penaltyS?: number;
+    clutch: StartClutchControl;
+    clutchIn: number;
+  };
+  /**
+   * Qualifying before an AI race (qualifying.ts), set by the session: the clock left (s), whether the lap under way is
+   * the last one (the clock has run out) and still counts, and the best clean lap so far (ms)
+   */
+  qualifying?: { remainingS: number; lastLap: boolean; lapCounts: boolean; bestMs: number | null };
+  /**
    * Run counter, set by the app shell: it goes up whenever the run restarts (a new session, a restart, a
    * teleport, a car change). Anything that keeps lap- or run-scoped state resets when it changes,
    * instead of guessing a restart from the lap count or distance.
@@ -507,6 +541,18 @@ export interface TrackLimitsStatus {
   totalStrikes: number;
   /** Time penalties awarded (s) */
   penaltyS: number;
+  /**
+   * A race on a points ladder (race-rules.ts): its points so far against the allowance; `warnings` / `strikesPerPenalty`
+   * then hold the meter towards the next step. Absent: the strike ladder of before, or not a race
+   */
+  ladder?: {
+    scoring: 'four_strike' | 'weighted_pts';
+    points: number;
+    pointsAllowed: number;
+    /** Within a point of the next step: the black-and-white flag is out */
+    blackWhite: boolean;
+    disqualified: boolean;
+  };
   /** An excursion in progress or being judged: what the driver must still give back */
   pending: {
     /** "off": still off the track; "judging": back on, settling; "give_back": must give the time / lift / position back */
@@ -521,7 +567,7 @@ export interface TrackLimitsStatus {
   } | null;
   /** The last race-control message, for the banner; `atMs` is the wall-clock time it was issued */
   message: {
-    kind: "warning" | "penalty" | "cleared" | "lap_invalid" | "no_advantage";
+    kind: "warning" | "final_warning" | "penalty" | "disqualified" | "cleared" | "lap_invalid" | "no_advantage";
     text: string;
     detail?: string;
     atMs: number;

@@ -84,10 +84,11 @@ export const F12026ChannelsPanel: React.FC<{
                 </span>
               </div>
               <span className="relative h-1.5 overflow-hidden rounded-full bg-lc-titanium">
+                {/* Slid in from the left by transform (no layout every tick); the right end stays round */}
                 <span
-                  className="absolute inset-y-0 left-0 rounded-full"
+                  className="absolute inset-0 rounded-full"
                   style={{
-                    width: `${Math.min(100, frac * 100)}%`,
+                    transform: `translateX(${(Math.max(0, Math.min(1, frac)) - 1) * 100}%)`,
                     backgroundColor: circleColor(frac),
                   }}
                 />

@@ -125,7 +125,7 @@ export function CoverageList({ items }: { items: CoverageItem[] }) {
               setGroup("all");
               setLang("all");
             }}
-            className="cursor-pointer font-medium text-lc-chalk underline decoration-lc-keyline underline-offset-4 hover:decoration-lc-chalk"
+            className="inline-flex cursor-pointer items-center font-medium text-lc-chalk underline decoration-lc-keyline underline-offset-4 hover:decoration-lc-chalk pointer-coarse:min-h-11"
           >
             Show everything
           </button>

@@ -4,7 +4,21 @@
  * garage setup clamping.
  * Run: npx tsx scripts/verify-race-control.ts
  */
-import { COURSE_CUT_MARGIN_S, COURSE_CUT_MIN_PENALTY_S, TrackLimitsMonitor, type TrackLimitsEvent, type TrackLimitsFrame } from "../src/lib/sim/track-limits";
+import {
+  COURSE_CUT_MARGIN_S,
+  COURSE_CUT_MIN_PENALTY_S,
+  TrackLimitsMonitor,
+  weightedCutPoints,
+  type CutInput,
+  type TrackLimitsEvent,
+  type TrackLimitsFrame,
+} from "../src/lib/sim/track-limits";
+import { resolveRaceRules } from "../src/lib/sim/race-rules";
+import { YellowPassJudge, type YellowPassEvent } from "../src/lib/sim/yellow-passes";
+import { PenaltyLedger } from "../src/lib/sim/penalty-ledger";
+import { parseRaceSetup, rulesForSetup } from "../src/lib/sim/race-setup";
+import { VEHICLE_MODELS } from "../src/lib/cars/vehicle-models";
+import { classify, raceOrder } from "../src/lib/sim/race-session";
 import { stretchTimeS } from "../src/lib/sim/course-limits";
 import { classifiedTimeS, type RacerProgress } from "../src/lib/sim/race-session";
 import { computeRelatives, fuelStrategy, type LapRecord } from "../src/components/hud/mfd-data";
@@ -772,6 +786,324 @@ console.log("AI race · overtaking-aid rules per car");
     rows.length === 2 && rows.every((r) => r.gridPosition === grid.find(([code]) => code === r.driverCode)?.[1]),
     JSON.stringify(rows.map((r) => [r.driverCode, r.gridPosition]))
   );
+}
+
+console.log("Track limits · weighted points");
+{
+  const cut = (c: Partial<CutInput>): number =>
+    weightedCutPoints({
+      gainS: null,
+      shortcutM: 0,
+      offThrottleAvg: 1,
+      brakingZone: false,
+      speedGainMs: 0,
+      curvatureRad: 0,
+      wallRiding: false,
+      wallContactS: 0,
+      ...c,
+    });
+  const ladder: [number, number][] = [
+    [0.05, 0],
+    [0.15, 0.25],
+    [0.5, 1],
+    [1.5, 3.25],
+    [5, 20.5],
+  ];
+  for (const [g, pts] of ladder) check(`a ${g} s gain flat out scores ${pts} pts`, cut({ gainS: g }) === pts, String(cut({ gainS: g })));
+  check("every score is in quarter points", [0.17, 0.33, 0.71, 1.23, 2.9].every((g) => (cut({ gainS: g }) * 4) % 1 === 0));
+  check("lifting halves the score", cut({ gainS: 1, offThrottleAvg: 0 }) === Math.round((1.85 + 0.55 * 0.25) * 0.5 * 4) / 4);
+  check(
+    "a wide exit given back by lifting (lost time, a little shortcut) scores nothing",
+    cut({ gainS: -0.4, shortcutM: 5, offThrottleAvg: 0.3 }) === 0,
+    String(cut({ gainS: -0.4, shortcutM: 5, offThrottleAvg: 0.3 }))
+  );
+  check(
+    "a chicane cut flat out with no time gained still scores its shortcut",
+    cut({ gainS: -0.05, shortcutM: 12, offThrottleAvg: 0.9, curvatureRad: 0.6 }) === 1.5,
+    String(cut({ gainS: -0.05, shortcutM: 12, offThrottleAvg: 0.9, curvatureRad: 0.6 }))
+  );
+  check("riding the wall is at least a point", cut({ wallRiding: true, wallContactS: 0.4 }) === 1);
+  check("without a reference only the shortcut scores", cut({ gainS: null, shortcutM: 10 }) === 1.25);
+}
+
+/** A strike on a straight: off with a gain, not given back (the 6 s window runs out) */
+const strikeWith = (m: TrackLimitsMonitor, gainS: number) => [...wide(m, 0.6, 0, -gainS), ...drive(m, 6.5, { deltaS: -gainS })];
+
+console.log("Track limits · four strikes (open wheel)");
+{
+  const m = new TrackLimitsMonitor();
+  m.reset("race", { scoring: "four_strike", pointsAllowed: 4 });
+  const calls: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    const ev = strikeWith(m, 0.3).filter((e) => e.kind !== "cleared" && e.kind !== "no_advantage");
+    calls.push(ev.map((e) => (e.kind === "penalty" ? `+${e.penaltyS}` : e.kind)).join(","));
+    if (i === 2) {
+      const snap = m.snapshot(clock * 1000);
+      check(
+        "three strikes: the black-and-white flag, next is +5 s",
+        snap.message?.kind === "final_warning" && snap.message.detail === "Time gained · next is +5 s" && snap.ladder?.blackWhite === true,
+        JSON.stringify(snap.message)
+      );
+    }
+  }
+  check(
+    "1-3 warnings, 4 +5 s, 8 +10 s, 12 disqualified",
+    calls.join("|") === "warning|warning|warning|+5|warning|warning|warning|+10|warning|warning|warning|disqualified",
+    calls.join("|")
+  );
+  check("the time penalties add up to 15 s", m.penaltyTotalS === 15, String(m.penaltyTotalS));
+  check("disqualified", m.disqualified && m.snapshot(clock * 1000).ladder?.disqualified === true);
+  check("nothing is judged after the disqualification", strikeWith(m, 0.3).length === 0 && !m.judging);
+  const snap = new TrackLimitsMonitor();
+  snap.reset("race", { scoring: "four_strike", pointsAllowed: 4 });
+  strikeWith(snap, 0.3);
+  strikeWith(snap, 0.3);
+  const s2 = snap.snapshot(clock * 1000);
+  check("the meter shows strikes of four", s2.warnings === 2 && s2.strikesPerPenalty === 4 && s2.ladder?.scoring === "four_strike", JSON.stringify(s2));
+}
+
+console.log("Track limits · weighted points (endurance)");
+{
+  const m = new TrackLimitsMonitor();
+  m.reset("race", { scoring: "weighted_pts", pointsAllowed: 5 });
+  const calls: string[] = [];
+  // A 1 s gain flat out is 2 points a time
+  for (let i = 0; i < 8; i++) {
+    const ev = strikeWith(m, 1).filter((e) => e.kind !== "cleared" && e.kind !== "no_advantage");
+    calls.push(ev.map((e) => (e.kind === "penalty" ? `+${e.penaltyS}` : e.kind)).join(","));
+  }
+  check("2, 4 (flag), 6 +5 s, 8, 10 +10 s, 12, 14, 16 disqualified", calls.join("|") === "warning|warning|+5|warning|+10|warning|warning|disqualified", calls.join("|"));
+  check("points total", m.pointsTotal === 16, String(m.pointsTotal));
+  const w = new TrackLimitsMonitor();
+  w.reset("race", { scoring: "weighted_pts", pointsAllowed: 5 });
+  strikeWith(w, 0.3);
+  const s = w.snapshot(clock * 1000);
+  check("a 0.3 s gain is half a point on the meter", s.warnings === 0.5 && s.ladder?.points === 0.5 && s.message?.detail === "Time gained · 0.50 pts", JSON.stringify(s));
+}
+
+console.log("Track limits · cuts measured from the car's path");
+{
+  /**
+   * One excursion along a way the test draws: `at(u)` (u 0..1 through the excursion) gives the lap distance, the
+   * world position, the curvature and the lateral offset; the car is on the track just before and just after
+   */
+  const along = (
+    m: TrackLimitsMonitor,
+    at: (u: number) => { distM: number; x: number; z: number; curvature?: number; lateralM?: number },
+    offS = 1.5,
+    deltaAfter = 0
+  ) => {
+    const events: TrackLimitsEvent[] = [];
+    const frame = (u: number, offTrack: boolean, seconds: number, deltaS: number) => {
+      const p = at(u);
+      events.push(
+        ...drive(m, seconds, {
+          offTrack,
+          distM: p.distM,
+          posX: p.x,
+          posZ: p.z,
+          curvature: p.curvature ?? 0,
+          lateralM: p.lateralM ?? 0,
+          halfWidthM: 6,
+          deltaS,
+          speedMs: 30,
+        })
+      );
+    };
+    frame(0, false, 0.2, 0);
+    const n = Math.round(offS / DT);
+    for (let i = 0; i <= n; i++) frame(i / n, true, DT, 0);
+    frame(1, false, 2, deltaAfter);
+    return events;
+  };
+  /** A straight 40 m of road the car crosses in `40 − cutM` of its own path (a cut, as far as the measure goes) */
+  const straightCut = (m: TrackLimitsMonitor, cutM: number) =>
+    along(m, (u) => ({ distM: 1000 + 40 * u, x: 0, z: (40 - cutM) * u, lateralM: -6 }));
+  /** A right-hand hairpin, 30 m radius round (0, 0): the car on a circle of radius `r`, or straight across from the inside edge */
+  const R = 30;
+  const hairpin = (m: TrackLimitsMonitor, path: "outside" | "inside_edge" | "across") =>
+    along(m, (u) => {
+      const th = Math.PI * u;
+      const r = path === "outside" ? R + 8 : R - 6;
+      const pos = path === "across" ? { x: (R - 6) * (1 - 2 * u), z: 0 } : { x: r * Math.cos(th), z: r * Math.sin(th) };
+      return { distM: 1000 + R * th, ...pos, curvature: 1 / R, lateralM: path === "outside" ? -8 : 6 };
+    });
+
+  const big = new TrackLimitsMonitor();
+  big.reset("race", { scoring: "four_strike", pointsAllowed: 4 });
+  const bev = straightCut(big, 25);
+  check("cutting 25 m is +5 s at once", bev.length === 1 && bev[0].kind === "penalty" && bev[0].penaltyS === 5 && !big.judging, JSON.stringify(bev));
+  const gain = new TrackLimitsMonitor();
+  gain.reset("race", { scoring: "weighted_pts", pointsAllowed: 5 });
+  const gev = [...wide(gain, 0.6, 0, -2.5)];
+  check("gaining 2.5 s is +5 s at once (no give-back)", gev.some((e) => e.kind === "penalty" && e.penaltyS === 5) && !gain.judging, JSON.stringify(gev));
+  const mid = new TrackLimitsMonitor();
+  mid.reset("race", { scoring: "weighted_pts", pointsAllowed: 5 });
+  const mev = straightCut(mid, 10);
+  check(
+    "a 10 m cut with no time gained scores its points on the weighted ladder",
+    mev.length === 1 && mev[0].kind === "warning" && mev[0].reason === "corner_cut" && mid.pointsTotal === 1.25,
+    JSON.stringify(mev) + " " + mid.pointsTotal
+  );
+  const four = new TrackLimitsMonitor();
+  four.reset("race", { scoring: "four_strike", pointsAllowed: 4 });
+  const fev = straightCut(four, 10);
+  check("the same cut with no gain is no strike on the open-wheel ladder", fev.length === 1 && fev[0].kind === "no_advantage", JSON.stringify(fev));
+
+  const wideHairpin = new TrackLimitsMonitor();
+  wideHairpin.reset("race", { scoring: "weighted_pts", pointsAllowed: 5 });
+  const wev = hairpin(wideHairpin, "outside");
+  check(
+    "running wide round a hairpin cuts nothing (no penalty, no points)",
+    wev.length === 1 && wev[0].kind === "no_advantage" && wideHairpin.pointsTotal === 0 && wideHairpin.penaltyTotalS === 0,
+    JSON.stringify(wev)
+  );
+  const edge = new TrackLimitsMonitor();
+  edge.reset("race", { scoring: "weighted_pts", pointsAllowed: 5 });
+  const eev = hairpin(edge, "inside_edge");
+  check("the inside edge's own line is no cut", eev.every((e) => e.kind !== "penalty") && edge.pointsTotal === 0, JSON.stringify(eev));
+  const across = new TrackLimitsMonitor();
+  across.reset("race", { scoring: "weighted_pts", pointsAllowed: 5 });
+  const aev = hairpin(across, "across");
+  check("straight across the hairpin's inside (27 m short) is +5 s at once", aev.length === 1 && aev[0].kind === "penalty" && aev[0].penaltyS === 5, JSON.stringify(aev));
+
+  const legacy = new TrackLimitsMonitor();
+  legacy.reset("race");
+  check("online's strike ladder takes no notice of the shortcut", straightCut(legacy, 25).every((e) => e.kind === "no_advantage"));
+  const off = new TrackLimitsMonitor();
+  off.reset("race", { scoring: "disabled", pointsAllowed: 5 });
+  check("track limits off: an excursion is not judged", strikeWith(off, 1).length === 0 && straightCut(off, 25).length === 0 && !off.judging);
+}
+
+console.log("Track limits · positions gained off the track (points ladders)");
+{
+  const pass = (m: TrackLimitsMonitor, from: number, to: number) => {
+    drive(m, 0.2, { racePosition: from, deltaS: 0 });
+    drive(m, 0.5, { offTrack: true, racePosition: to, deltaS: 0.1, throttle: 0.3, lateralM: 6 });
+  };
+  const m = new TrackLimitsMonitor();
+  m.reset("race", { scoring: "weighted_pts", pointsAllowed: 5 });
+  pass(m, 4, 3);
+  const watched = drive(m, 12.2, { racePosition: 3, deltaS: 0.1 });
+  const card = m.snapshot(clock * 1000).pending;
+  check("still time to hand it back after 12 s (3 s watched + 15 s)", watched.length === 0 && card?.giveBackPosition === 4, JSON.stringify(card));
+  const kept = drive(m, 7.5, { racePosition: 3, deltaS: 0.1 });
+  check("one place kept: +5 s", kept.length === 1 && kept[0].kind === "penalty" && kept[0].penaltyS === 5, JSON.stringify(kept));
+  pass(m, 5, 3);
+  const two = drive(m, 20, { racePosition: 3, deltaS: 0.1 });
+  check("two places kept: +10 s", two.length === 1 && two[0].penaltyS === 10, JSON.stringify(two));
+  pass(m, 4, 3);
+  drive(m, 1.5, { racePosition: 3, deltaS: 0.1 });
+  const full = m.snapshot(clock * 1000).pending;
+  check("while watched the bar is full", (full?.progress ?? 0) > 0.99 && full?.remainingS === 15, JSON.stringify(full));
+  const back = drive(m, 1, { racePosition: 4, deltaS: 0.1 });
+  check("handed back: cleared", back.length === 1 && back[0].kind === "cleared");
+}
+
+console.log("Race rules · presets by car class");
+{
+  for (const model of Object.values(VEHICLE_MODELS)) {
+    const r = resolveRaceRules(model.classId);
+    const f1 = model.classId === "f1";
+    check(
+      `${model.id}: ${f1 ? "open wheel, four strikes" : "endurance, weighted points"}, standing start`,
+      r.preset === (f1 ? "open_wheel" : "endurance_sprint") &&
+        r.trackLimits === (f1 ? "four_strike" : "weighted_pts") &&
+        r.pointsAllowed === (f1 ? 4 : 5) &&
+        r.startKind === "standing" &&
+        r.lockAidsInYellow === f1,
+      JSON.stringify(r)
+    );
+  }
+  check("a preset picked outright wins over the class", resolveRaceRules("gt3", { rulePreset: "open_wheel" }).trackLimits === "four_strike");
+  check("track limits off", resolveRaceRules("f1", { trackLimits: "off" }).trackLimits === "disabled");
+  check("a start picked outright", resolveRaceRules("f1", { start: "rolling" }).startKind === "rolling");
+  check("old saved setups: a rolling start stays rolling", parseRaceSetup({ start: "rolling" }).startMode === "rolling");
+  check("old saved setups: the old standing default becomes auto", parseRaceSetup({ start: "standing" }).startMode === "auto");
+  check("the setup's choices reach the rules", rulesForSetup("f1", parseRaceSetup({ rulePreset: "endurance_sprint", trackLimits: "off" })).trackLimits === "disabled");
+}
+
+console.log("Classification · disqualified");
+{
+  const base: RacerProgress = { id: "a", code: "AAA", name: "A", color: "#fff", isPlayer: false, distM: 5000, speedMs: 0, finishTimeS: 300, bestLapMs: null };
+  const order = raceOrder(
+    [
+      { ...base, id: "dq", code: "DQQ", isPlayer: true, finishTimeS: null, distM: 2000, dnf: true, dq: true },
+      { ...base, id: "dnf", code: "DNF", finishTimeS: null, distM: 1000, dnf: true },
+      { ...base, id: "win", code: "WIN" },
+    ],
+    1000
+  );
+  check("a disqualified car is classified behind the retirements", order.map((r) => r.code).join(",") === "WIN,DNF,DQQ", order.map((r) => r.code).join(","));
+  const rows = classify(order, 1000, 5, true);
+  check("its result says so", rows[2].dq === true && rows[2].dnf === true && !rows[1].dq);
+  const track = getActiveTrackData(1200);
+  const player = new F1Physics2026(track);
+  const field = new AiOpponentField(track, player, [AI_DRIVERS[0]], undefined, { seed: 1, learning: false });
+  field.startRace(true);
+  field.playerDisqualified = true;
+  const st = field.status();
+  const me = st.results?.find((r) => r.isPlayer);
+  check("the AI race takes the player out, disqualified", st.phase === "finished" && me?.dq === true && me.position === 2, JSON.stringify(me));
+  field.startRace(true);
+  check("the next start clears it", !field.playerDisqualified && field.status().phase === "lights");
+  // A jump start called by the page goes into race control's ledger and onto the feed, with the track-limits time kept apart
+  field.playerPenaltyS = 3;
+  field.penalisePlayer(10, "jump_start", "Jump start");
+  const meNow = field.status().standings.find((e) => e.isPlayer);
+  type Feed = { raceControl: { ledger: { entriesOf(code: string): readonly { reason: string; seconds: number }[] }; messages: { kind: string; detail?: string }[] } };
+  const rc = (field as unknown as Feed).raceControl;
+  check(
+    "a jump start is in the ledger and on the feed, added to the track-limits time",
+    meNow?.penaltyS === 13 && rc.ledger.entriesOf("YOU").some((e) => e.reason === "jump_start" && e.seconds === 10) && rc.messages.some((m) => m.kind === "penalty" && m.detail === "Jump start"),
+    JSON.stringify(meNow)
+  );
+}
+
+console.log("Yellow flags · passing under yellow");
+{
+  const pass = (j: YellowPassJudge, level: 0 | 1 | 2, exempt = false) => {
+    // The other car 5 m ahead, then the player 5 m ahead of it
+    j.update(DT, 1000, [{ code: "AAA", distM: 1005, exempt, gone: false }], level, true);
+    return j.update(DT, 1010, [{ code: "AAA", distM: 1005, exempt, gone: false }], level, true);
+  };
+  const hold = (j: YellowPassJudge, seconds: number, meM: number, otherM: number, level: 0 | 1 | 2 = 0) => {
+    const ev: YellowPassEvent[] = [];
+    for (let t = 0; t < seconds; t += DT) ev.push(...j.update(DT, meM, [{ code: "AAA", distM: otherM, exempt: false, gone: false }], level, true));
+    return ev;
+  };
+  const j = new YellowPassJudge();
+  check("passing on a green track is no offence", pass(j, 0).length === 0 && j.owed === null);
+  const j2 = new YellowPassJudge();
+  const order = pass(j2, 1);
+  check("passing under yellow: the place is owed back", order.length === 1 && order[0].kind === "order" && j2.owed?.code === "AAA");
+  check("watched first: the hand-back clock shows the full 15 s", j2.owed?.remainingS === 15);
+  const back = hold(j2, 1, 1000, 1005);
+  check("letting the car back by clears it", back.some((e) => e.kind === "returned") && j2.owed === null, JSON.stringify(back));
+  const j3 = new YellowPassJudge();
+  pass(j3, 1);
+  const kept = hold(j3, 18.5, 1010, 1005);
+  check("kept past 3 + 15 s: +5 s", kept.length === 1 && kept[0].kind === "penalty" && kept[0].seconds === 5, JSON.stringify(kept));
+  const j4 = new YellowPassJudge();
+  pass(j4, 2);
+  const keptDouble = hold(j4, 18.5, 1010, 1005);
+  check("under a double yellow: +10 s", keptDouble.length === 1 && keptDouble[0].seconds === 10, JSON.stringify(keptDouble));
+  const j5 = new YellowPassJudge();
+  check("passing the car the flag is out for (or a crawling one) is no offence", pass(j5, 2, true).length === 0);
+  const j6 = new YellowPassJudge();
+  pass(j6, 1);
+  const gone = j6.update(DT, 1010, [{ code: "AAA", distM: 1005, exempt: true, gone: true }], 0, true);
+  check("the passed car retires: nothing left to hand back", gone.length === 1 && gone[0].kind === "dropped" && j6.owed === null);
+  const j7 = new YellowPassJudge();
+  pass(j7, 1);
+  for (let t = 0; t < 30; t += DT) j7.update(DT, 1010, [{ code: "AAA", distM: 1005, exempt: false, gone: false }], 0, false);
+  check("the clock stops while the player isn't racing (autopilot)", j7.owed?.remainingS === 15);
+
+  const ledger = new PenaltyLedger();
+  ledger.add("YOU", { kind: "time_penalty", reason: "yellow_overtake", seconds: 5, atS: 10, label: "" });
+  ledger.add("YOU", { kind: "warning", reason: "collision", seconds: 0, atS: 20, label: "" });
+  ledger.add("YOU", { kind: "time_penalty", reason: "collision", seconds: 10, atS: 30, label: "" });
+  check("the ledger sums the time penalties only", ledger.secondsOf("YOU") === 15 && ledger.entriesOf("YOU").length === 3 && !ledger.disqualified("YOU"));
 }
 
 console.log(`\n${passed} checks passed`);

@@ -3,6 +3,8 @@
  * The defaults reproduce the original hard-coded layout exactly.
  */
 
+import { printedKey } from "./key-layout";
+
 export type KeyAction =
   | "throttle"
   | "brake"
@@ -13,6 +15,7 @@ export type KeyAction =
   | "aero"
   | "shiftUp"
   | "shiftDown"
+  | "neutral"
   | "camera"
   | "racingLine"
   | "mute"
@@ -21,6 +24,7 @@ export type KeyAction =
   | "restart"
   | "flyingLap"
   | "throttleHalf"
+  | "clutch"
   | "replay"
   | "mfdPage"
   | "mfd"
@@ -33,6 +37,7 @@ export type PadAction =
   | "aero"
   | "shiftUp"
   | "shiftDown"
+  | "neutral"
   | "camera"
   | "racingLine"
   | "restart"
@@ -58,6 +63,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "aero", label: "Active aero X / Z" },
   { id: "shiftUp", label: "Gear up" },
   { id: "shiftDown", label: "Gear down" },
+  { id: "neutral", label: "Neutral" },
   { id: "camera", label: "Camera (hold: seat & camera)" },
   { id: "racingLine", label: "Racing line" },
   { id: "mute", label: "Mute" },
@@ -66,6 +72,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "restart", label: "Restart" },
   { id: "flyingLap", label: "Restart lap (flying start)" },
   { id: "throttleHalf", label: "Half throttle (hold)" },
+  { id: "clutch", label: "Clutch (hold)" },
   { id: "replay", label: "Instant replay" },
   { id: "mfdPage", label: "Next MFD page" },
   { id: "mfd", label: "Open / close MFD" },
@@ -76,6 +83,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
 export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   { id: "shiftUp", label: "Gear up" },
   { id: "shiftDown", label: "Gear down" },
+  { id: "neutral", label: "Neutral" },
   { id: "boost", label: "Boost" },
   { id: "aero", label: "Active aero X / Z" },
   { id: "camera", label: "Camera (hold: seat & camera)" },
@@ -99,6 +107,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   aero: ["KeyX"],
   shiftUp: ["KeyE"],
   shiftDown: ["KeyQ"],
+  neutral: ["KeyN"],
   camera: ["KeyC"],
   racingLine: ["KeyR"],
   mute: ["KeyM"],
@@ -108,6 +117,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   // Outside a race: the lap starts over at speed (in a race it does nothing)
   flyingLap: ["KeyL"],
   throttleHalf: ["KeyF"],
+  // No key: the clutch is the car's own until a player wants it
+  clutch: [],
   replay: ["KeyT"],
   mfdPage: ["Insert", "KeyI"],
   mfd: ["KeyO"],
@@ -122,12 +133,18 @@ export const RESERVED_CODES: ReadonlySet<string> = new Set(["Escape", "Slash"]);
 /** Standard-mapping controller buttons (Xbox layout names) */
 export type PadButtonBindings = Record<PadAction, number | null>;
 
-export const DEFAULT_PAD_BUTTONS: PadButtonBindings = {
+/**
+ * Gears on the bumpers, the layout every controller had before GT style became the default (17 Nov 2026). A saved
+ * button map dates from then at the latest, so an action missing from one falls back to this, not to the new default.
+ */
+export const BUMPER_SHIFT_BUTTONS: PadButtonBindings = {
   boost: 0, // A
   aero: 2, // X
   camera: 3, // Y
   shiftDown: 4, // LB
   shiftUp: 5, // RB
+  // Gear up and gear down pressed together are neutral too, on every layout
+  neutral: null,
   racingLine: null,
   restart: 8, // View
   flyingLap: null,
@@ -139,6 +156,28 @@ export const DEFAULT_PAD_BUTTONS: PadButtonBindings = {
   board: null,
 };
 
+/** Gran Turismo 7: ✕ up, □ down, R1 change view, R3 nitro / overtake, Options pause. The right thumb is free in a drive */
+export const GT_STYLE_BUTTONS: PadButtonBindings = {
+  shiftUp: 0, // A (✕)
+  shiftDown: 2, // X (□)
+  // Gear up and gear down pressed together are neutral too, on every layout
+  neutral: null,
+  boost: 11, // RS (R3)
+  camera: 5, // RB (R1)
+  pause: 9, // Menu (Options)
+  restart: 8, // View (Create)
+  flyingLap: null,
+  aero: 3, // Y (△)
+  mfd: 10, // LS (L3)
+  mfdPage: 1, // B (○)
+  hud: 4, // LB (L1)
+  racingLine: null,
+  board: null,
+};
+
+/** A new player's buttons: GT style, gears under the right thumb, which also holds Gear up as the clutch at a manual start */
+export const DEFAULT_PAD_BUTTONS: PadButtonBindings = GT_STYLE_BUTTONS;
+
 /** Fixed standard-mapping buttons: the triggers, the stick clicks */
 export const PAD_THROTTLE_BUTTON = 7; // RT
 export const PAD_BRAKE_BUTTON = 6; // LT
@@ -146,12 +185,13 @@ export const PAD_LEFT_STICK_BUTTON = 10; // LS (L3)
 export const PAD_RIGHT_STICK_BUTTON = 11; // RS (R3)
 
 /**
- * The pedals a controller drives. Each one reads from its own source ({@link PadPedalSources}), so another pedal (a
- * clutch, 0..1 with 1 pressed) joins by adding its id here, a source in the saved map and a label.
+ * The pedals a controller drives. Each one reads from its own source ({@link PadPedalSources}), so another pedal
+ * joins by adding its id here, a source in the saved map and a label. The clutch is 0..1 with 1 pressed (open), and
+ * has no source until the player gives it one.
  */
-export type PadPedal = "throttle" | "brake";
-export const PAD_PEDALS = ["throttle", "brake"] as const satisfies readonly PadPedal[];
-export const PAD_PEDAL_LABELS: Record<PadPedal, string> = { throttle: "Throttle", brake: "Brake" };
+export type PadPedal = "throttle" | "brake" | "clutch";
+export const PAD_PEDALS = ["throttle", "brake", "clutch"] as const satisfies readonly PadPedal[];
+export const PAD_PEDAL_LABELS: Record<PadPedal, string> = { throttle: "Throttle", brake: "Brake", clutch: "Clutch" };
 
 /**
  * Where one pedal is read on a standard-mapping controller: an analogue button's travel (a trigger), or one half of a
@@ -170,7 +210,7 @@ export const PAD_PEDAL_SETS: Record<PadPedalSet, Pick<PadPedalSources, "throttle
   stick: { throttle: { kind: "axis", axis: 3, sign: -1 }, brake: { kind: "axis", axis: 3, sign: 1 } },
 };
 export const PAD_PEDAL_SET_IDS = Object.keys(PAD_PEDAL_SETS) as PadPedalSet[];
-export const DEFAULT_PAD_PEDAL_SOURCES: PadPedalSources = { ...PAD_PEDAL_SETS.triggers };
+export const DEFAULT_PAD_PEDAL_SOURCES: PadPedalSources = { ...PAD_PEDAL_SETS.triggers, clutch: null };
 
 export const samePedalSource = (a: PadPedalSource | null, b: PadPedalSource | null): boolean =>
   a === null || b === null
@@ -183,7 +223,9 @@ export const samePedalSource = (a: PadPedalSource | null, b: PadPedalSource | nu
 export function matchPedalSet(sources: PadPedalSources): PadPedalSet | null {
   return (
     PAD_PEDAL_SET_IDS.find((id) =>
-      (Object.keys(PAD_PEDAL_SETS[id]) as (keyof PadPedalSources)[]).every((p) => samePedalSource(sources[p], PAD_PEDAL_SETS[id][p])),
+      (Object.keys(PAD_PEDAL_SETS[id]) as (keyof (typeof PAD_PEDAL_SETS)[PadPedalSet])[]).every((p) =>
+        samePedalSource(sources[p], PAD_PEDAL_SETS[id][p]),
+      ),
     ) ?? null
   );
 }
@@ -237,37 +279,18 @@ export function freePedalButtons(bindings: PadButtonBindings, sources: PadPedalS
 }
 
 /** Ready-made controller layouts, after the defaults of the racing games players come from */
-export type PadLayout = "default" | "gt" | "gtClassic" | "f1" | "forza";
+export type PadLayout = "gt" | "gtClassic" | "f1" | "forza" | "bumper";
 
 /**
  * Each layout puts what its game has on the same buttons (standard mapping; Xbox names, PlayStation in brackets). An
- * action the game lacks keeps its LibreCorsa default button when that one is free, else takes a free one. All of them
+ * action the game lacks keeps its Bumper shift button when that one is free, else takes a free one. All of them
  * leave the D-pad (the MFD's dials) alone, keep Menu on pause and restart on View: restart is not a rewind, and it must
  * not sit under a thumb. A layout also names its throttle / brake set: the trigger layouts leave RT / LT to them, the
  * stick layout shifts on them and leaves R3 free, since the thumb on the pedal stick can click it.
  */
 export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet; buttons: PadButtonBindings }> = {
-  default: { label: "Default", pedals: "triggers", buttons: DEFAULT_PAD_BUTTONS },
-  // Gran Turismo 7: ✕ up, □ down, R1 change view, R3 nitro / overtake, Options pause
-  gt: {
-    label: "GT style",
-    pedals: "triggers",
-    buttons: {
-      shiftUp: 0, // A (✕)
-      shiftDown: 2, // X (□)
-      boost: 11, // RS (R3)
-      camera: 5, // RB (R1)
-      pause: 9, // Menu (Options)
-      restart: 8, // View (Create)
-      flyingLap: null,
-      aero: 3, // Y (△)
-      mfd: 10, // LS (L3)
-      mfdPage: 1, // B (○)
-      hud: 4, // LB (L1)
-      racingLine: null,
-      board: null,
-    },
-  },
+  // The default
+  gt: { label: "GT style", pedals: "triggers", buttons: GT_STYLE_BUTTONS },
   // Classic Gran Turismo on a pad: right stick up throttle, down brake, R2 up, L2 down; the rest as GT style, with
   // the boost off R3 (now under the pedal thumb) onto ✕ and the HUD onto □, so L1 and the left stick's up / down
   // stay free (a clutch or a starter can go there)
@@ -277,6 +300,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
     buttons: {
       shiftUp: 7, // RT (R2)
       shiftDown: 6, // LT (L2)
+      neutral: null,
       boost: 0, // A (✕)
       camera: 5, // RB (R1)
       pause: 9, // Menu (Options)
@@ -297,6 +321,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
     buttons: {
       shiftUp: 0, // A (✕)
       shiftDown: 2, // X (□)
+      neutral: null,
       boost: 1, // B (○)
       aero: 3, // Y (△)
       camera: 5, // RB (R1)
@@ -317,6 +342,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
     buttons: {
       shiftUp: 1, // B (○)
       shiftDown: 2, // X (□)
+      neutral: null,
       boost: 0, // A (✕)
       camera: 5, // RB (R1)
       aero: 10, // LS (L3)
@@ -330,6 +356,8 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       board: null,
     },
   },
+  // Gears on the bumpers: the default until 17 Nov 2026, so the layout most saved settings still have
+  bumper: { label: "Bumper shift", pedals: "triggers", buttons: BUMPER_SHIFT_BUTTONS },
 };
 
 export const PAD_LAYOUT_IDS = Object.keys(PAD_LAYOUTS) as PadLayout[];
@@ -372,9 +400,28 @@ export const STANDARD_BUTTON_NAMES: Record<number, string> = {
 export const padButtonLabel = (button: number | null | undefined) =>
   button === null || button === undefined ? "—" : (STANDARD_BUTTON_NAMES[button] ?? `Button ${button}`);
 
-/** Readable label for a KeyboardEvent.code */
+/** Dead keys' combining accents, as the spacing characters printed on the key */
+const DEAD_KEY_CAPS: Record<string, string> = {
+  "̀": "`",
+  "́": "´",
+  "̂": "^",
+  "̃": "~",
+  "̈": "¨",
+  "̊": "°",
+  "̧": "¸",
+};
+
+/**
+ * Readable label for a KeyboardEvent.code: the key as printed on the player's keyboard where the browser says (on
+ * AZERTY, KeyW is "Z"), else its US name. The number row keeps its digits, which every layout prints on those keys.
+ */
 export function keyLabel(code: string | undefined): string {
   if (!code) return "—";
+  const printed = code.startsWith("Digit") ? undefined : printedKey(code);
+  // A dead key reports its combining accent: the cap shows the accent on its own (AZERTY's ^ key)
+  if (printed && /^\p{M}$/u.test(printed) && DEAD_KEY_CAPS[printed]) return DEAD_KEY_CAPS[printed];
+  // A space or an unknown combining mark prints nothing readable on a key cap
+  if (printed && printed.trim() && !/^\p{M}+$/u.test(printed)) return printed.toUpperCase();
   if (code.startsWith("Key")) return code.slice(3);
   if (code.startsWith("Digit")) return code.slice(5);
   if (code.startsWith("Numpad")) return `Num ${code.slice(6)}`;
@@ -398,6 +445,7 @@ export function keyLabel(code: string | undefined): string {
     Comma: ",",
     Period: ".",
     Semicolon: ";",
+    Slash: "/",
     Quote: "'",
     BracketLeft: "[",
     BracketRight: "]",
@@ -406,6 +454,10 @@ export function keyLabel(code: string | undefined): string {
     Equal: "=",
     Backquote: "`",
     Insert: "Ins",
+    // Keys a US keyboard lacks (ISO, Japanese), named when the browser can't say what they print
+    IntlBackslash: "ISO \\",
+    IntlRo: "Ro",
+    IntlYen: "Yen",
   };
   return named[code] ?? code;
 }

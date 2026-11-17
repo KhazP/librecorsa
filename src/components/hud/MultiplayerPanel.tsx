@@ -71,7 +71,12 @@ const CLASS_OPTIONS: { value: CarClassRule; label: string }[] = [
   { value: "gt3", label: "GT3 only" },
 ];
 
-const trackName = (id: string) => TRACKS.find((t) => t.id === id)?.name ?? id;
+/** A circuit's name, with the layout when the venue has more than one, so a guest knows which (an unknown id stays itself) */
+const trackName = (id: string) => {
+  const t = TRACKS.find((x) => x.id === id);
+  if (!t) return id;
+  return TRACKS.some((o) => o.id !== t.id && o.name === t.name) ? `${t.name} · ${t.layout}` : t.name;
+};
 const optionLabel = <T extends string>(options: { value: T; label: string }[], value: T) =>
   options.find((o) => o.value === value)?.label ?? value;
 
@@ -376,7 +381,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             )}
           </SettingRow>
           <SettingRow label="Circuit">
-            <span className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+            <span className="flex max-w-56 min-w-0 flex-wrap items-center justify-end gap-1.5 text-right">
               <ReadValue>{trackName(settings.trackId)}</ReadValue>
               <TrackQualityBadge track={getTrackInfo(settings.trackId)} size="xs" />
             </span>

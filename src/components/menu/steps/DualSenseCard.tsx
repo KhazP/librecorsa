@@ -230,7 +230,7 @@ export function DualSenseCard() {
           <Badge tone="good" dot>
             Connected
           </Badge>
-          <span className="lc-body truncate">
+          <span className="lc-body truncate" title={`${status.name ?? "DualSense"}, ${usb ? "USB" : "Bluetooth"}${battery}`}>
             {status.name ?? "DualSense"}, {usb ? "USB" : "Bluetooth"}
             {battery}
           </span>

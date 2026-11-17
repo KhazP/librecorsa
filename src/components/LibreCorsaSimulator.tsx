@@ -60,6 +60,7 @@ import { SettingsScreen, type SettingsCategory } from "@/components/settings/Set
 import type { SettingsEnv } from "@/components/settings/env";
 import { applyInterfaceSettings } from "@/lib/settings/ui-prefs";
 import { keyLabel, padButtonLabel, pressPedalText } from "@/lib/input/bindings";
+import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
@@ -209,6 +210,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The loading screen stays mounted while it fades out over the title menu */
   const [loadingVisible, setLoadingVisible] = useState(true);
   const [settings, setSettings] = useState<PlayerSettings>(DEFAULT_PLAYER_SETTINGS);
+  // Key names in hints follow the keyboard layout (AZERTY's KeyW is "Z"): re-render once it is read
+  useKeyLayout();
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   // The preferences the game applies to the car and the camera: `settings` is their only copy
@@ -634,8 +637,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // A hill climb has no races: one car at a time, start to finish
       if (getActivePointToPoint()) race = false;
       const field = race && session ? (aiFieldOf(session.race) ?? session.takeAiField()) : null;
-      startSession(field ? { kind: "ai", field } : { kind: "practice" });
-      if (field) startAiRace(field, settingsRef.current.race, settingsRef.current.profile);
+      // Qualifying first when the race setup asks for it: the player alone on a flying lap, the field waiting
+      const qualifyingMin = settingsRef.current.race.qualifying;
+      startSession(field && !qualifyingMin ? { kind: "ai", field } : { kind: "practice" });
+      if (field && qualifyingMin) session?.startQualifying(field, qualifyingMin);
+      else if (field) startAiRace(field, settingsRef.current.race, settingsRef.current.profile);
       else session?.car.resetToStartGrid(false);
       setLaunchHint(true);
     },
@@ -1334,9 +1340,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (race && session) {
         // The field for the car now on track, over the week's race distance
         const field = session.takeAiField();
-        session.setRace({ kind: "ai", field });
+        // The same rules for everyone: the car class's, with track limits on
+        session.setRace({ kind: "ai", field, rules: { rulePreset: "auto", trackLimits: "auto" } });
         // No damage, as in an open race with other drivers (their cars take none)
-        startAiRace(field, { ...settingsRef.current.race, laps: week.race.laps, start: "standing", damage: "off" }, settingsRef.current.profile);
+        startAiRace(field, { ...settingsRef.current.race, laps: week.race.laps, startMode: "standing", damage: "off" }, settingsRef.current.profile);
       } else {
         // polish:A — the time trial: its fixed tyre, fuel and road, from a flying start
         session?.setTimeTrial(timeTrialRules(week.vehicle));
@@ -2031,7 +2038,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
       {loadingVisible ? (
         // Under the GPU notice it takes no press: the notice's own buttons would start it too
-        <LoadingScreen track={track} carId={carId} ready={assetsReady && !gpuNoticeKind} onStart={handleLoadingStart} onDone={handleLoadingDone} />
+        <LoadingScreen
+          track={track}
+          carId={carId}
+          ready={assetsReady && !gpuNoticeKind}
+          cameraKey={settings.keys.camera[0]}
+          lineKey={settings.keys.racingLine[0]}
+          onStart={handleLoadingStart}
+          onDone={handleLoadingDone}
+        />
       ) : null}
 
       {gpuNoticeKind ? (

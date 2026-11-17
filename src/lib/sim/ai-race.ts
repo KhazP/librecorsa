@@ -5,9 +5,11 @@
  */
 import type * as THREE from 'three';
 import type { RaceStatus } from '@/types/f1';
+import type { QualifyingGridInput } from './qualifying';
 import type { DamageLevel } from './car-damage';
 import type { InterpolatedPeerState } from './multiplayer-sync';
 import type { AiGridOrder, PlayerGridSlot } from './race-setup';
+import type { PenaltyReason } from './penalty-ledger';
 import type { SimulatorCar } from './simulator-car';
 
 /** The player in a race against the AI: their three-letter code and colour (Settings > Display > Driver) */
@@ -27,6 +29,13 @@ export interface AiRace {
   playerDriver: RaceDriverLabel | null;
   /** Lines the field up and starts it: a standing start behind the lights, or a rolling one */
   startRace(standing: boolean): void;
+  /** The player makes the standing start on the clutch: held on the grid through the lights with the engine live */
+  manualStart: boolean;
+  /**
+   * The grid comes from qualifying (qualifying.ts): the player's best clean lap against the AI cars' own times.
+   * Undefined: no qualifying, the grid slot and the AI grid order apply. Read at `startRace`
+   */
+  qualifying: QualifyingGridInput | undefined;
   readonly skill: number;
   setSkill(skill: number): void;
   attachTrackRoot(root: THREE.Object3D): void;
@@ -34,8 +43,21 @@ export interface AiRace {
   readonly lightsOn: number;
   /** The player is held on the grid until the lights go out */
   readonly playerFrozen: boolean;
+  /**
+   * The grid stands before its first red light (after qualifying, for its order to be read): the player's car stays
+   * still, and a manual start's hold (and its jump-start watch) begins only with the lights
+   */
+  readonly gridStanding?: boolean;
   /** Time penalties the player serves at the flag (track limits), in seconds */
   playerPenaltyS: number;
+  /** Disqualified by race control (track limits): out of the race, classified last; cleared by the next start */
+  playerDisqualified: boolean;
+  /** Race control's time penalty on the player for a call the page makes (a jump start): in the ledger and on the feed */
+  penalisePlayer(seconds: number, reason: PenaltyReason, detail: string): void;
+  /** The race's rules close the overtaking aids inside a yellow zone (race-rules.ts) */
+  lockAidsInYellow: boolean;
+  /** A car on this page has its overtaking aids closed by a yellow flag (a field in the worker answers there) */
+  aidsLockedFor?(sim: SimulatorCar): boolean;
   /** The race rules for the player's overtaking aids apply */
   readonly raceRulesActive: boolean;
   detectionEarnedFor(sim: SimulatorCar): boolean;

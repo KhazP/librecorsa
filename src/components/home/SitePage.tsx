@@ -64,7 +64,7 @@ export function SitePage({
         )}
       >
         <header className="flex min-h-13 flex-wrap items-center justify-between gap-4">
-          <Link href="/" aria-label="LibreCorsa home" className="inline-flex rounded-lc-nub no-underline">
+          <Link href="/" aria-label="LibreCorsa home" className="inline-flex items-center rounded-lc-nub no-underline pointer-coarse:min-h-11">
             <LibreCorsaLogo variant="compact" size="sm" />
           </Link>
           {action}

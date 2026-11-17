@@ -116,6 +116,14 @@ console.log('\n== Overtake Mode grant');
   earn = false;
   g.observe(0.895, 0.905, zones, race);
   check('Judged afresh next lap: lost when over 1 s', !g.available(race) && g.extraDeployJ(race) === 0);
+  let lockedEarn = true;
+  const locked: OvertakingRaceControl = { racing: true, aidsLocked: true, earnedAtDetection: () => lockedEarn };
+  const lg = new OvertakeGrant();
+  lg.observe(0.88, 0.91, zones, locked);
+  check('Yellow zone (aids locked): no Overtake Mode and no extra energy even when earned', !lg.available(locked) && lg.extraDeployJ(locked) === 0);
+  const unlocked: OvertakingRaceControl = { racing: true, aidsLocked: false, earnedAtDetection: () => lockedEarn };
+  check('Out of the yellow: the earned override is back', lg.available(unlocked) && lg.extraDeployJ(unlocked) === OVERTAKE_EXTRA_DEPLOY_J);
+  lockedEarn = false;
   g.observe(0.895, 0.905, zones, { racing: false, earnedAtDetection: () => true });
   check('After the flag: free again', g.available({ racing: false, earnedAtDetection: () => false }));
 }

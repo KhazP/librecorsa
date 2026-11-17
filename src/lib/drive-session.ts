@@ -1,6 +1,7 @@
 import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
-import { LIVERIES, TURN_METADATA, inDeadZone, type BuiltTrackData } from "@/lib/track-data";
+import { LIVERIES, TURN_METADATA, getActiveTrackMetadata, inDeadZone, type BuiltTrackData } from "@/lib/track-data";
+import { AUTOPILOT_REF_BASE, LINE_CHECK_REF_BASE, QualifyingSession } from "@/lib/sim/qualifying";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
 import { trackColliders } from "@/lib/sim/track-colliders";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
@@ -37,11 +38,12 @@ import { VirtualMirror } from "@/lib/render/virtual-mirror";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/lib/sim/car-setup";
 import { CameraRig } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
-import { TrackLimitsMonitor } from "@/lib/sim/track-limits";
+import { LEGACY_TRACK_LIMITS, TrackLimitsMonitor, type TrackLimitsRules } from "@/lib/sim/track-limits";
 import { stretchTimeS } from "@/lib/sim/course-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
-import { startAiRace } from "@/lib/sim/race-setup";
+import { rulesForSetup, startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
+import { JumpStartWatch } from "@/lib/sim/race-start";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
@@ -95,7 +97,16 @@ import {
 } from "@/lib/render/adaptive-quality";
 import { pageBuild } from "@/lib/build-id";
 import { addContactShadow, seatContactShadow } from "@/lib/render/contact-shadow";
-import { buildKeyLookup, HUD_TOGGLE_EVENT, pedalsOnTriggers, type KeyAction } from "@/lib/input/bindings";
+import {
+  buildKeyLookup,
+  HUD_TOGGLE_EVENT,
+  keyLabel,
+  PAD_BRAKE_BUTTON,
+  PAD_THROTTLE_BUTTON,
+  pedalsOnTriggers,
+  pedalSourceText,
+  type KeyAction,
+} from "@/lib/input/bindings";
 import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { simMode } from "@/lib/sim/runtime/sim-mode";
@@ -108,7 +119,17 @@ import { applyTimeTrial, lowestFuelSetup, timeTrialRealism, type TimeTrialRules 
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import { clampFov, DEFAULT_KEYBOARD_TUNING, type PlayerSettings } from "@/lib/settings/player-settings";
 import { noteDrivingFrame, noteDrivingInput, noteFrameGraphics } from "@/lib/render/frame-stats";
-import type { AeroSetupPreset, CameraMode, CarTelemetry, LiveTunerPatch, RadarBlip, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
+import type {
+  AeroSetupPreset,
+  CameraMode,
+  CarTelemetry,
+  LiveTunerPatch,
+  RadarBlip,
+  StartClutchControl,
+  TireCompound,
+  TyreSetup,
+  VehicleModelId,
+} from "@/types/f1";
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
 export const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
@@ -122,6 +143,9 @@ const KB_THROTTLE_RISE_S = DEFAULT_KEYBOARD_TUNING.throttleRiseS;
 const KB_THROTTLE_FALL_S = 0.1;
 const KB_BRAKE_RISE_S = DEFAULT_KEYBOARD_TUNING.brakeRiseS;
 const KB_BRAKE_FALL_S = 0.08;
+/** A clutch key presses the pedal at once and lets it out over this long: a launch on it slips, it doesn't dump */
+const KB_CLUTCH_IN_S = 0.08;
+const KB_CLUTCH_OUT_S = 0.4;
 /** Holding the camera key or button this long opens the seat panel; a shorter press changes the view */
 const SEAT_PANEL_HOLD_MS = 450;
 
@@ -132,7 +156,11 @@ const SEAT_PANEL_HOLD_MS = 450;
 export type AppPhase = "loading" | "title" | "wizard" | "driving";
 
 /** The race on track with the player: none (practice), the AI field, or a multiplayer race; never two at once */
-export type SessionRace = { kind: "practice" } | { kind: "ai"; field: AiRace } | { kind: "mp"; race: MultiplayerRace };
+export type SessionRace =
+  | { kind: "practice" }
+  /** `rules`: sporting rules fixed for this race (the weekly challenge's), over the player's race setup */
+  | { kind: "ai"; field: AiRace; rules?: Pick<RaceSetup, "rulePreset" | "trackLimits"> }
+  | { kind: "mp"; race: MultiplayerRace };
 /** The AI field on track, when the session is a race against it */
 export const aiFieldOf = (race: SessionRace): AiRace | null => (race.kind === "ai" ? race.field : null);
 /** The multiplayer race on track, when the session is an online race */
@@ -149,6 +177,7 @@ const HELD_KEYS = {
   steerLeft: "left",
   steerRight: "right",
   throttleHalf: "half",
+  clutch: "clutch",
   boostHold: "boostHold",
 } as const satisfies Partial<Record<KeyAction, string>>;
 type HeldKeyAction = keyof typeof HELD_KEYS;
@@ -315,6 +344,10 @@ export interface DriveKeys {
   shiftDown: boolean;
   toggleX: boolean;
   half: boolean;
+  clutch: boolean;
+  neutral: boolean;
+  /** The Gear up key is down (it is one-shot, but a manual start holds it as the clutch) */
+  gearUpHeld: boolean;
 }
 
 /** The instant replay: the recording, and where it is shown from while open */
@@ -427,6 +460,12 @@ export class DriveSession {
    * it was built for this car, or a new one)
    */
   readonly takeAiField: () => AiRace;
+  /**
+   * Qualifying for an AI race (qualifying.ts): the player drives alone, on a flying lap, for `minutes`; then the field
+   * lines up from it and the race starts. Anything else that sets the session (another race, practice, a car change)
+   * ends it
+   */
+  readonly startQualifying: (field: AiRace, minutes: number) => void;
   /** The player's preferences: kept for the frame loop, and the ones that act on the car or the scene applied */
   readonly applySettings: (settings: PlayerSettings) => void;
   /** Puts the tyre compound on the car and its model */
@@ -544,9 +583,18 @@ export class DriveSession {
       shiftDown: false,
       toggleX: false,
       half: false,
+      clutch: false,
+      neutral: false,
+      gearUpHeld: false,
     };
     /** Ramped keyboard pedals 0..1 (the steering keys are shaped by the car's steering assist) */
-    const kbInput = { throttle: 0, brake: 0 };
+    const kbInput = { throttle: 0, brake: 0, clutch: 0, padClutch: 0 };
+    /** A manual start: the clutch watched through the lights, and Gear up held as the clutch when none is bound */
+    const jumpWatch = new JumpStartWatch();
+    const startClutch = { active: false };
+    let gridHeldLastFrame = false;
+    /** How far the player held the clutch in on the last step (0..1), for the start cue */
+    let startClutchIn = 0;
     /** Slip help on the keyboard's pedals while the car's ABS / traction control is off */
     const kbPedalAssist = new KeyboardPedalAssist();
     /** The mouse's steering, -1..1, while mouse steering is on */
@@ -556,8 +604,11 @@ export class DriveSession {
     /** Lets go of every held driving key: on pause, and when the window loses focus (its keyups never arrive) */
     const releaseHeldKeys = () => {
       for (const flag of Object.values(HELD_KEYS)) heldKeys[flag] = false;
+      heldKeys.gearUpHeld = false;
       kbInput.throttle = 0;
       kbInput.brake = 0;
+      kbInput.clutch = 0;
+      kbInput.padClutch = 0;
       kbPedalAssist.reset();
     };
     this.togglePause = () => {
@@ -663,15 +714,99 @@ export class DriveSession {
       fuelHeld = { car: physics, flags };
     };
     /** Race control's session for a race on track (or practice) */
+    /**
+     * Qualifying before an AI race: the field waiting for its grid, the session's clock and laps, and the reference lap
+     * the AI cars' times are taken from (a circuit's AI line check where it has one for this car, else a lone autopilot
+     * lap of a copy of the car, driven a slice per frame while the player qualifies)
+     */
+    let quali: {
+      field: AiRace;
+      session: QualifyingSession;
+      ref: { lapMs: number | null; base: number; car: SimulatorCar | null; lap0: number; simS: number };
+    } | null = null;
+    /** Page time per frame for the reference lap (ms), and the step it is driven at (s) */
+    const QUALI_REF_BUDGET_MS = 1.5;
+    const QUALI_REF_DT_S = 1 / 120;
+    /** A reference lap that takes longer than this is given up (s of simulated time) */
+    const QUALI_REF_GIVE_UP_S = 600;
+    const endQualifying = () => {
+      quali = null;
+    };
+    /** Drives the reference lap on for up to `budgetMs` of page time (Infinity: to its end) */
+    const stepQualifyingRef = (budgetMs: number) => {
+      const ref = quali?.ref;
+      const car = ref?.car;
+      if (!ref || !car) return;
+      const until = performance.now() + budgetMs;
+      while (performance.now() < until) {
+        car.step(QUALI_REF_DT_S, {});
+        ref.simS += QUALI_REF_DT_S;
+        if (car.telemetry.lapCount > ref.lap0) {
+          ref.lapMs = car.telemetry.lastLapTimeMs ?? null;
+        } else if (ref.simS < QUALI_REF_GIVE_UP_S) {
+          continue;
+        }
+        ref.car = null;
+        return;
+      }
+    };
+    const finishQualifying = () => {
+      const q = quali;
+      if (!q) return;
+      // A reference lap not yet done is finished now (the moment between qualifying and the grid)
+      stepQualifyingRef(Infinity);
+      quali = null;
+      // In the rain the AI cars lap slower, as they race (the reference laps are dry)
+      const weather = Math.max(0.5, getTrackEnv().weatherPaceScale(physics));
+      q.field.qualifying = {
+        playerMs: q.session.bestMs,
+        refLapMs: q.ref.lapMs !== null ? Math.round(q.ref.lapMs / weather) : null,
+        refBase: q.ref.base,
+      };
+      this.resetRun("race");
+      this.setRace({ kind: "ai", field: q.field });
+      startAiRace(q.field, settings.race, settings.profile);
+    };
+    this.startQualifying = (field, minutes) => {
+      if (disposed) return;
+      this.setRace({ kind: "practice" });
+      const check = getActiveTrackMetadata().aiPlans?.[vehicleNow];
+      let ref: NonNullable<typeof quali>["ref"];
+      if (check?.ok && check.physicsLapS > 0) {
+        ref = { lapMs: Math.round(check.physicsLapS * 1000), base: LINE_CHECK_REF_BASE, car: null, lap0: 0, simS: 0 };
+      } else {
+        // A copy of the car on the page, on its autopilot at full pace, alone on a flying lap
+        const car = vehicleModelSpec(vehicleNow).createSim(track, trackRoot, carById(carIdNow).bodyPlan);
+        car.resetToStartGrid(true);
+        car.aiAutopilot = true;
+        if (car.aiPaceScale !== undefined) car.aiPaceScale = 1;
+        ref = { lapMs: null, base: AUTOPILOT_REF_BASE, car, lap0: car.telemetry.lapCount, simS: 0 };
+      }
+      quali = { field, session: new QualifyingSession(minutes * 60), ref };
+      physics.resetToStartGrid(true);
+    };
     const limitsSessionOf = (race: SessionRace) => (race.kind === "practice" ? "practice" : "race");
+    /** The AI race's rules close the overtaking aids inside a yellow zone (set with the track-limits ladder) */
+    let aidsLockInYellow = true;
+    /**
+     * Race control's track-limits ladder: an AI race's from its rules (the player's car class and the race setup);
+     * online races keep the strike ladder every build judges by, until the rules go over the wire
+     */
+    const limitsRulesOf = (race: SessionRace): TrackLimitsRules => {
+      if (race.kind !== "ai") return LEGACY_TRACK_LIMITS;
+      const rules = rulesForSetup(vehicleModelSpec(vehicleNow).classId, { ...settings.race, ...race.rules });
+      aidsLockInYellow = rules.lockAidsInYellow;
+      return { scoring: rules.trackLimits, pointsAllowed: rules.pointsAllowed };
+    };
     this.setRace = (next) => {
+      endQualifying();
       endTimeTrial();
       const prev = this.currentRace;
       // A race the worker runs ends there when the session leaves it
       if (prev.kind === "ai" && (next.kind !== "ai" || next.field !== prev.field)) prev.field.dispose?.();
       this.currentRace = next;
       setRaceKind(next.kind);
-      trackLimits.reset(limitsSessionOf(next));
+      trackLimits.reset(limitsSessionOf(next), limitsRulesOf(next));
       wallDeletedLaps.clear();
     };
     this.toggleAutopilot = () => {
@@ -727,6 +862,10 @@ export class DriveSession {
           earnedAtDetection: () => {
             const race = raceNow();
             return race.kind === "mp" ? race.race.detectionEarnedFor(self) : race.kind === "ai" ? race.field.detectionEarnedFor(self) : true;
+          },
+          get aidsLocked() {
+            const race = raceNow();
+            return race.kind === "ai" ? (race.field.aidsLockedFor?.(self) ?? false) : false;
           },
         };
       }
@@ -840,7 +979,7 @@ export class DriveSession {
         if (aiFieldSpare?.physics === physics && aiFieldSpare.opponents === opponents) {
           // The field, the player in it, on the race setup's start
           const cars = aiDriversFor(opponents).length + 1;
-          const rolling = settings.race.start === "rolling";
+          const rolling = settings.race.startMode === "rolling";
           const key = `${cars}:${rolling}`;
           if (gridWarm?.physics !== physics || gridWarm.key !== key) gridWarm = { physics, key, next: 0 };
           if (!physics.createAiPeerCar || gridWarm.next >= cars) return;
@@ -886,6 +1025,8 @@ export class DriveSession {
 
     this.setCar = (car) => {
       if (disposed) return;
+      // The field waiting on qualifying was built round the old car
+      endQualifying();
       const newCar = car !== carRigCar;
       endTimeTrial();
       // The run starts over before the old car goes: leaving the replay writes its saved pose into `physics`, which
@@ -1510,6 +1651,7 @@ export class DriveSession {
         if (DRIVER_KEYS.has(action) && physics.aiAutopilot && !coolDown.active) physics.aiAutopilot = false;
         return;
       }
+      if (action === "shiftUp") heldKeys.gearUpHeld = true;
       // Held controls ignore auto-repeat anyway; one-shot actions must not flicker while a key is held
       if (e.repeat) return;
       runAction(action);
@@ -1526,6 +1668,9 @@ export class DriveSession {
           break;
         case "shiftDown":
           heldKeys.shiftDown = true;
+          break;
+        case "neutral":
+          heldKeys.neutral = true;
           break;
         case "aero":
           heldKeys.toggleX = true;
@@ -1592,6 +1737,7 @@ export class DriveSession {
         cameraKeyHold = null;
         if (!this.snapshot.paused && !this.snapshot.seatPanel) cycleCamera();
       }
+      if (action === "shiftUp") heldKeys.gearUpHeld = false;
       if (action && isHeldKeyAction(action)) heldKeys[HELD_KEYS[action]] = false;
     };
 
@@ -1711,14 +1857,20 @@ export class DriveSession {
       exitReplay();
       replay.buffer.clear();
       onRunReset(reason);
+      jumpWatch.reset();
+      startClutch.active = false;
+      gridHeldLastFrame = false;
+      startClutchIn = 0;
+      kbInput.padClutch = 0;
       // Race control and the cameras start over with the run (the car is about to be put somewhere else)
-      trackLimits.reset(limitsSessionOf(raceNow()));
+      trackLimits.reset(limitsSessionOf(raceNow()), limitsRulesOf(raceNow()));
       wallDeletedLaps.clear();
       cameraRig.reset();
       lapRecorder.reset();
       physics.aiAutopilot = false;
       kbInput.throttle = 0;
       kbInput.brake = 0;
+      kbInput.clutch = 0;
       kbPedalAssist.reset();
     };
     this.replayTogglePlay = () => {
@@ -1796,6 +1948,8 @@ export class DriveSession {
     const rainCamVel = new THREE.Vector3();
     const soloCars: SimulatorCar[] = [];
     const remoteWake: WakeEmitterCar[] = [];
+    /** Other players on this circuit last frame (a room's lobby included): the mirror's auto mode shows for them */
+    let peersOnTrack = 0;
     const ghostPos = new THREE.Vector3();
     const guardSelf: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
     const guardOther: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
@@ -2112,6 +2266,50 @@ export class DriveSession {
         keys.down ? 1 : 0,
         dtSeconds / (keys.down ? kbTuning.brakeRiseS || KB_BRAKE_RISE_S : KB_BRAKE_FALL_S)
       );
+      kb.clutch = approach(kb.clutch, keys.clutch ? 1 : 0, dtSeconds / (keys.clutch ? KB_CLUTCH_IN_S : KB_CLUTCH_OUT_S));
+      // A manual start with no clutch bound: Gear up is the clutch from the lights until it is let go after them, as in
+      // the F1 games, and its presses are not shifts meanwhile
+      const padClutchSource = settingsNow.padTuning.pedalSources.clutch;
+      const clutchBound =
+        settingsNow.keys.clutch.length > 0 ||
+        (device.source === "controller" && padClutchSource !== null) ||
+        (device.source === "wheel" && settingsNow.wheel.clutch !== null);
+      if (gridHeldLastFrame && !clutchBound) startClutch.active = true;
+      // What the start cue tells the player to hold
+      const kbClutchKey = settingsNow.keys.clutch[0];
+      const padGearUp = settingsNow.padButtons.shiftUp;
+      const startClutchControl: StartClutchControl =
+        device.source === "controller" && padClutchSource !== null
+          ? padClutchSource.kind === "button"
+            ? { pad: padClutchSource.button }
+            : { name: pedalSourceText(padClutchSource) }
+          : device.source === "wheel" && settingsNow.wheel.clutch !== null
+            ? { name: "clutch pedal" }
+            : kbClutchKey
+              ? { key: keyLabel(kbClutchKey) }
+              : device.source === "controller"
+                ? padGearUp !== null
+                  ? { pad: padGearUp }
+                  : { name: "Gear up" }
+                : device.source === "wheel"
+                  ? { name: "upshift paddle" }
+                  : { key: keyLabel(settingsNow.keys.shiftUp[0]) };
+      const gearUpHeld = heldKeys.gearUpHeld || device.held?.has("shiftUp") === true;
+      // A button as the clutch (a controller button other than a trigger, Gear up at a start) presses at once and lets
+      // out over the key clutch's time: letting go slips the clutch, it does not dump it
+      const digitalPadClutch =
+        device.source === "controller" &&
+        padClutchSource?.kind === "button" &&
+        padClutchSource.button !== PAD_THROTTLE_BUTTON &&
+        padClutchSource.button !== PAD_BRAKE_BUTTON;
+      const buttonClutchTarget = startClutch.active ? (gearUpHeld ? 1 : 0) : digitalPadClutch ? device.clutch : null;
+      kb.padClutch =
+        buttonClutchTarget === null
+          ? 0
+          : approach(kb.padClutch, buttonClutchTarget, dtSeconds / (buttonClutchTarget > kb.padClutch ? KB_CLUTCH_IN_S : KB_CLUTCH_OUT_S));
+      if (startClutch.active && !gridHeldLastFrame && !gearUpHeld && kb.padClutch === 0) startClutch.active = false;
+      // The clutch pedal from the key, a controller or the wheel's pedal set; none bound leaves the car's own clutch
+      const clutchPedal = driving ? Math.max(kb.clutch, buttonClutchTarget === null ? device.clutch : kb.padClutch) : 0;
       const carAids = physics.telemetry.liveTuner;
       const tyreSlip = axleSlipFromTelemetry(physics.telemetry, kbAxleSlip);
       const kbBrakeScale = kbPedalAssist.brakeScale(
@@ -2168,12 +2366,15 @@ export class DriveSession {
         manualOverride:
           heldKeys.boostHold || this.snapshot.boostLatch || gamepadBoost,
         toggleXMode: heldKeys.toggleX,
-        shiftUp: heldKeys.shiftUp,
+        shiftUp: heldKeys.shiftUp && !startClutch.active,
         shiftDown: heldKeys.shiftDown,
+        neutral: heldKeys.neutral,
+        ...(clutchPedal > 0 ? { clutch: clutchPedal } : {}),
       };
       heldKeys.toggleX = false;
       heldKeys.shiftUp = false;
       heldKeys.shiftDown = false;
+      heldKeys.neutral = false;
       // The driver takes the car back from the autopilot with any device (the keys do it on key down): a pedal, the
       // stick, the touch steering pad. Not the wheel's rim, which its force feedback turns on its own.
       if (driving && physics.aiAutopilot && !coolDown.active) {
@@ -2244,8 +2445,31 @@ export class DriveSession {
         }
         startupMonitor?.begin();
         const simStartMs = sessionPerf ? performance.now() : 0;
-        // (a race in the worker holds the car on the grid there: the controls go on, which keep its clock running)
-        if (raceInWorker || (!aiField?.playerFrozen && !mpFrozen)) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
+        // A manual start holds the car on the grid through the lights with its engine live (a race in the worker holds
+        // its car there: the controls go on, which keep its clock running); an assisted one stops it
+        // (not while an AI race's grid stands before its lights, after qualifying: the car waits still)
+        const gridHeld = raceInWorker
+          ? aiField.playerFrozen && aiField.manualStart && !aiField.gridStanding
+          : (aiField?.playerFrozen === true && aiField.manualStart && !aiField.gridStanding) || (mpFrozen && settingsNow.race.launch === "manual");
+        if (!raceInWorker) physics.gridHold = gridHeld;
+        // A jump start: race control's call once the lights are out (+5 s, +10 s for a big one), into an AI race's
+        // ledger and feed; an online race serves it with the player's own penalties below
+        const startCall = jumpWatch.update(
+          dtSeconds,
+          gridHeld,
+          physics.telemetry.speedMs,
+          physics.telemetry.race?.position,
+          physics.sMeters,
+          track.totalLengthM
+        );
+        if (startCall === "jump") console.info(`[race] jump start`);
+        if (startCall === "verdict") {
+          console.info(`[race] jump start: +${jumpWatch.penaltyS} s at the flag`);
+          aiField?.penalisePlayer(jumpWatch.penaltyS, "jump_start", jumpWatch.big ? "Jump start · well off the grid spot" : "Jump start");
+        }
+        gridHeldLastFrame = gridHeld;
+        startClutchIn = inputs.clutch ?? 0;
+        if (raceInWorker || (!aiField?.playerFrozen && !mpFrozen) || gridHeld) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
         aiField?.update(dtSeconds);
         if (sessionPerf) frameSimMs = performance.now() - simStartMs;
         startupMonitor?.end("sim");
@@ -2302,7 +2526,34 @@ export class DriveSession {
         vehicleNow
       );
       physics.telemetry.race = mpRace && mpFrame ? mpRace.status(mpFrame, physics.vxMs) : aiField?.status();
+      // Qualifying: the clock, the reference lap behind it, and the race once the session is over
+      if (quali && driving) {
+        const t = physics.telemetry;
+        stepQualifyingRef(QUALI_REF_BUDGET_MS);
+        const state = quali.session.update(dtSeconds, {
+          lapCount: t.lapCount,
+          lastLapTimeMs: t.lastLapTimeMs ?? null,
+          lastLapValid: t.lastLapValid !== false,
+          currentLapTimeMs: t.currentLapTimeMs,
+          lapInvalid: t.lapInvalid === true,
+          autopilot: physics.aiAutopilot,
+        });
+        if (state === "done") finishQualifying();
+      }
+      physics.telemetry.qualifying = quali
+        ? {
+            remainingS: quali.session.remainingS,
+            lastLap: quali.session.state === "last_lap",
+            lapCounts: quali.session.lapCounts,
+            bestMs: quali.session.bestMs,
+          }
+        : undefined;
       physics.telemetry.runId = runId;
+      // The manual start's cue: what to hold as the clutch, and a jump start once there is one
+      physics.telemetry.start =
+        gridHeldLastFrame || jumpWatch.jumped || startClutch.active
+          ? { held: gridHeldLastFrame, jumped: jumpWatch.jumped, penaltyS: jumpWatch.penaltyS, clutch: startClutchControl, clutchIn: startClutchIn }
+          : undefined;
 
       // Track limits: in a race, race control judges each excursion once the car is back on the asphalt (warnings,
       // and every third one is a time penalty served at the flag). Any other driving is strict: off is a deleted lap.
@@ -2311,6 +2562,7 @@ export class DriveSession {
         const raceNow = t.race;
         physics.trackLimitsMode = trackLimits.mode === "race" ? "judged" : "strict";
         if (driving) {
+          const here = track.getSampleAtDistance(physics.sMeters);
           const tlEvent = trackLimits.update({
             nowMs,
             dtS: dtSeconds,
@@ -2324,9 +2576,13 @@ export class DriveSession {
             throttle: t.throttle,
             brake: t.brake,
             lateralM: physics.lateralOffsetM,
-            curvature: track.getSampleAtDistance(physics.sMeters).curvature,
+            curvature: here.curvature,
+            halfWidthM: here.width / 2,
             deltaS: lapDelta.delta(t),
             racePosition: raceNow?.position,
+            speedMs: physics.vxMs,
+            posX: physics.worldPosition.x,
+            posZ: physics.worldPosition.z,
             active: !physics.aiAutopilot && !mpFrozen && raceNow?.phase !== "lights" && raceNow?.phase !== "finished",
             // Barriers: a hill climb's run is done on any touch (judged up to its finish line), a circuit's lap only by
             // riding the wall
@@ -2344,9 +2600,16 @@ export class DriveSession {
           }
         }
         physics.trackLimitsHold = trackLimits.judging;
-        if (aiField) aiField.playerPenaltyS = trackLimits.penaltyTotalS;
+        // The player's own calls, served at the flag: track limits, and online a jump start too (in an AI race race
+        // control's calls, a jump start and a pass under yellow among them, are in the field's ledger)
+        const startPenaltyS = jumpWatch.penaltyS;
+        if (aiField) {
+          aiField.lockAidsInYellow = aidsLockInYellow;
+          aiField.playerPenaltyS = trackLimits.penaltyTotalS;
+          if (trackLimits.disqualified) aiField.playerDisqualified = true;
+        }
         if (mpRace) {
-          mpRace.penaltyS = trackLimits.penaltyTotalS;
+          mpRace.penaltyS = trackLimits.penaltyTotalS + startPenaltyS;
           mpRace.compound = physics.tireCompound;
         }
         t.trackLimits = trackLimits.snapshot(nowMs);
@@ -2362,7 +2625,7 @@ export class DriveSession {
       );
 
       // Laps: summary card, personal best (saved, and raced as the ghost) — practice only
-      if (driving && !aiField && !mpRace) {
+      if (driving && !aiField && !mpRace && !quali) {
         const done = lapRecorder.update({
           telemetry: physics.telemetry,
           position: physics.worldPosition,
@@ -2463,6 +2726,7 @@ export class DriveSession {
 
       // A peer on another circuit has coordinates that mean nothing here
       const samePeers = interpolatedPeers.filter((p) => !p.trackId || p.trackId === trackId);
+      peersOnTrack = samePeers.length;
       // On the lap where they are drawn, not where their newest packet put them (the tower, the relative, the gaps)
       placePeersWhereDrawn(samePeers, track.projectWorldToTrack, track.totalLengthM);
       peerWakeEmitters(track, samePeers, remoteWake);
@@ -2868,13 +3132,16 @@ export class DriveSession {
         reflectionProbe.update(podium.focus ?? physics.worldPosition, carRig.root, scene.environmentIntensity);
         startupMonitor?.end("probe");
         // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
-        // chase view too when the player asked for it always
+        // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an
+        // online race, or other players in the room (practice, the hotlap and qualifying are driven alone)
         const vmSetting = settingsNow.hud.virtualMirror;
         const vmView =
           view.virtualMirror === "always" ||
           (view.virtualMirror === "noSideMirrors" && !(wingMirrors?.found && wingMirrors.coversSides)) ||
           (view.virtualMirror === "onRequest" && vmSetting === "always");
-        const vmOn = driving && !inVr && !podium.playing && container.clientWidth >= 640 && vmSetting !== "off" && vmView;
+        const othersAbout = raceNow().kind !== "practice" || peersOnTrack > 0;
+        const vmOn =
+          driving && !inVr && !podium.playing && container.clientWidth >= 640 && vmView && (vmSetting === "always" || (vmSetting === "auto" && othersAbout));
         // The mirrors refresh every other frame, 30 times a second at 60 fps; under the 30 fps cap every drawn frame
         // does, which keeps them at 30
         const mirrorFrame = pacer.cap > 0 ? 0 : frameIndex;

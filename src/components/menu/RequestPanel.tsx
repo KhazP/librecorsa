@@ -707,7 +707,7 @@ export const RequestPanel: React.FC<{
               multiline
               rows={3}
               maxLength={1500}
-              hint="And what you expected instead."
+              hint={main.length > 1200 ? `${main.length.toLocaleString("en-US")} of 1,500 characters` : "And what you expected instead."}
               placeholder="The car's wheels sink into the road in the last corner…"
               value={main}
               onChange={setMain}
@@ -923,7 +923,7 @@ export const RequestPanel: React.FC<{
               // eslint-disable-next-line @next/next/no-img-element
               <img src={shot.url} alt="The circuit as it was when the report opened" className="aspect-video w-full rounded-lc-row object-cover" />
             ) : (
-              <div className="aspect-video w-full animate-pulse rounded-lc-row bg-lc-well" />
+              <div className="lc-skeleton aspect-video w-full rounded-lc-row bg-lc-well" />
             )}
             <div className="flex flex-wrap items-center gap-2">
               {pictureCopyable ? (

@@ -220,10 +220,13 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
   // Nothing read (the board is off or out of reach): no widget rather than an empty one
   if (!page) return null;
   const me = page.me;
-  const rank = justSet?.rank ?? me?.rank ?? null;
+  const rank = justSet?.rank ?? me?.pos ?? null;
   const total = justSet?.total ?? page.total;
   const place = rank !== null ? `P${rank}/${formatCount(total)}` : null;
   const lines = towerLines(page, driverNameKey(name), rowsRoom);
+  // Wide enough for the longest place shown ("1284"), the same on every row so the codes line up
+  const maxPos = lines.reduce((m, l) => ("pos" in l ? Math.max(m, l.pos) : m), 0);
+  const posCol = { "--lc-pos-w": `max(26px, ${String(maxPos).length}ch)` } as React.CSSProperties;
   const laps = read?.totals?.laps ?? null;
 
   const toggle = () => {
@@ -307,7 +310,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
                   <span className={`lc-data text-[11px] ${skinCss.inkDim}`}>/{formatCount(total)}</span>
                 </span>
               ) : (
-                <span className={`lc-data shrink-0 text-[11px] ${skinCss.inkDim}`}>{formatCount(total)} drivers</span>
+                <span className={`lc-data shrink-0 text-[11px] ${skinCss.inkDim}`}>{formatCount(total)} {total === 1 ? "driver" : "drivers"}</span>
               )}
             </button>
             {lines.length === 0 ? (
@@ -323,14 +326,15 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
                     <li
                       key={`${l.pos}-${l.entry.code}`}
                       title={l.entry.name}
+                      style={posCol}
                       aria-current={l.mine ? "true" : undefined}
-                      className={`lc-data grid h-7 grid-cols-[26px_34px_minmax(0,1fr)_auto] items-center gap-1.5 pr-2.5 pl-2 text-[13px] ${skinCss.row} ${
+                      className={`lc-data grid h-7 grid-cols-[var(--lc-pos-w,26px)_34px_minmax(0,1fr)_auto] items-center gap-1.5 pr-2.5 pl-2 text-[13px] ${skinCss.row} ${
                         l.mine ? `font-bold ${skinCss.playerRow}` : skinCss.ink
                       }`}
                     >
                       <span className={`text-center ${skinCss.pos} ${l.mine ? "" : skinCss.inkDim}`}>{l.pos}</span>
                       <span className="tracking-[0.1em]">{l.entry.code.slice(0, 3)}</span>
-                      <span className={`truncate font-sans text-[12px] ${l.mine ? "" : skinCss.inkSoft}`}>{l.entry.name}</span>
+                      <span dir="auto" className={`truncate text-left font-sans text-[12px] ${l.mine ? "" : skinCss.inkSoft}`}>{l.entry.name}</span>
                       <span className="text-right text-[12px]">{formatLapTime(l.entry.lapTimeMs)}</span>
                     </li>
                   ),
@@ -382,7 +386,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
           letGo(e);
           setMenu((m) => !m);
         }}
-        className={`inline-flex size-7 items-center justify-center rounded-full text-lc-slate transition-colors duration-200 ease-lc hover:bg-white/8 hover:text-lc-chalk aria-expanded:bg-white/8 aria-expanded:text-lc-chalk ${FOCUS}`}
+        className={`relative inline-flex size-7 items-center justify-center rounded-full text-lc-slate pointer-fine:after:absolute pointer-fine:after:-inset-1 transition-colors duration-200 ease-lc hover:bg-white/8 hover:text-lc-chalk aria-expanded:bg-white/8 aria-expanded:text-lc-chalk ${FOCUS}`}
       >
         <Icon name="settings" size="xs" className="size-3.5" />
       </button>
@@ -435,7 +439,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
                 <span className="lc-data text-[11px] text-lc-void/60">/{formatCount(total)}</span>
               </span>
             ) : (
-              <span className="lc-data shrink-0 text-[11px] text-lc-void/60">{formatCount(total)} drivers</span>
+              <span className="lc-data shrink-0 text-[11px] text-lc-void/60">{formatCount(total)} {total === 1 ? "driver" : "drivers"}</span>
             )}
           </button>
           {lines.length === 0 ? (
@@ -451,15 +455,16 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
                   <li
                     key={`${l.pos}-${l.entry.code}`}
                     title={l.entry.name}
+                    style={posCol}
                     aria-current={l.mine ? "true" : undefined}
-                    className={`lc-data grid h-7 grid-cols-[26px_34px_minmax(0,1fr)_auto] items-center gap-1.5 text-[13px] ${
+                    className={`lc-data grid h-7 grid-cols-[var(--lc-pos-w,26px)_34px_minmax(0,1fr)_auto] items-center gap-1.5 text-[13px] ${
                       l.mine ? "mx-1.5 my-0.5 rounded-full bg-lc-volt pr-2.5 pl-0.5 text-lc-void" : "pr-2.5 pl-2 text-lc-chalk"
                     }`}
                   >
                     <span className={`text-center ${l.mine ? "" : "text-lc-slate"}`}>{l.pos}</span>
                     <span className="tracking-[0.1em]">{l.entry.code.slice(0, 3)}</span>
                     <span className="flex min-w-0 items-center gap-1">
-                      <span className={`truncate font-sans text-[12px] ${l.mine ? "" : "text-lc-fog"}`}>{l.entry.name}</span>
+                      <span dir="auto" className={`truncate font-sans text-[12px] ${l.mine ? "" : "text-lc-fog"}`}>{l.entry.name}</span>
                       <InputIcon input={l.entry.conditions?.input} className={l.mine ? "" : "text-lc-slate"} />
                     </span>
                     <span className="text-right text-[12px]">{formatLapTime(l.entry.lapTimeMs)}</span>

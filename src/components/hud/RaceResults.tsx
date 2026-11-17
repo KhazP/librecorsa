@@ -22,6 +22,7 @@ const formatRaceTime = (totalS: number): string => formatLapTime(Math.round(tota
 
 /** Time / gap column: winner's total time, "+12.345", "+1 lap" / "+n laps", Running or DNF */
 function timeOrGap(r: RaceResultEntry, resultsFinal: boolean): string {
+  if (r.dq) return "DSQ";
   if (r.dnf) return "DNF";
   if (r.finishTimeS === null) return resultsFinal ? "DNF" : "Running";
   if (r.position === 1) return formatRaceTime(r.finishTimeS);
@@ -177,12 +178,13 @@ export const RaceResults: React.FC<{
         <div className="-mx-1 flex min-h-0 flex-col gap-5 overflow-y-auto px-1 short:gap-3">
           <table className="w-full border-collapse" aria-label="Full classification">
             <thead>
+              {/* Under 640 px only Pos, Driver and Time fit: +/- and the best lap are in the player's own summary above */}
               <tr className="border-b border-lc-line">
                 <th scope="col" className={`${TH} w-14`}>
                   Pos
                 </th>
                 {showGrid ? (
-                  <th scope="col" className={`${TH} w-12`} title="Places gained or lost from the grid">
+                  <th scope="col" className={`${TH} w-12 max-sm:hidden`} title="Places gained or lost from the grid">
                     <span aria-hidden>+/-</span>
                     <span className="sr-only">Places gained</span>
                   </th>
@@ -196,7 +198,7 @@ export const RaceResults: React.FC<{
                 <th scope="col" className={`${TH} text-right`}>
                   Time / gap
                 </th>
-                <th scope="col" className={`${TH} text-right`}>
+                <th scope="col" className={`${TH} text-right max-sm:hidden`}>
                   Best lap
                 </th>
               </tr>
@@ -216,7 +218,7 @@ export const RaceResults: React.FC<{
                       <PositionBadge position={r.position} player={r.isPlayer} size="sm" className="min-w-10" />
                     </td>
                     {showGrid ? (
-                      <td className="px-2">
+                      <td className="px-2 max-sm:hidden">
                         <PlacesGained gained={r.dnf ? null : placesGained(r.gridPosition, r.position)} />
                       </td>
                     ) : null}
@@ -225,16 +227,17 @@ export const RaceResults: React.FC<{
                         {/* The team's colour: data, the one place it shows */}
                         <span aria-hidden className="h-4 w-1 shrink-0 rounded-full" style={{ backgroundColor: r.teamColorHex }} />
                         {r.name !== r.driverCode ? (
-                          <span className="lc-mono w-8 shrink-0 text-[12px] font-bold tracking-[0.08em] text-lc-slate">{r.driverCode}</span>
+                          <span className="lc-mono w-8 shrink-0 text-[12px] font-bold tracking-[0.08em] text-lc-slate">{r.driverCode.slice(0, 3)}</span>
                         ) : null}
-                        <span className="truncate text-[14px] font-semibold">{r.name}</span>
+                        <span dir="auto" className="truncate text-[14px] font-semibold" title={r.name}>{r.name}</span>
                         {r.isPlayer ? <PlayerTag size="sm" /> : null}
                       </span>
                     </td>
                     <td className="lc-mono px-2 text-right text-[13px] font-bold text-lc-fog max-sm:hidden">{r.lapsCompleted}</td>
                     <td className="px-2 text-right whitespace-nowrap">
                       <span className="inline-flex items-center justify-end gap-2">
-                        {r.penaltyS ? (
+                        {r.dq ? <PenaltyBadge penalty={{ kind: "disqualified" }} size="sm" /> : null}
+                        {r.penaltyS && !r.dq ? (
                           <span title={`${r.penaltyS.toFixed(1)} s of time penalties, included in the time`}>
                             <PenaltyBadge penalty={{ kind: "time", seconds: penaltySeconds(r.penaltyS) }} size="sm" />
                           </span>
@@ -242,7 +245,7 @@ export const RaceResults: React.FC<{
                         <span className={`lc-mono text-[13px] font-bold ${timeTone(r, final)}`}>{timeOrGap(r, final)}</span>
                       </span>
                     </td>
-                    <td className="px-2 text-right whitespace-nowrap">
+                    <td className="px-2 text-right whitespace-nowrap max-sm:hidden">
                       <BestLap ms={r.bestLapMs} fastest={fastest} />
                     </td>
                   </tr>
@@ -330,9 +333,9 @@ const PlayerSummary: React.FC<{ me: RaceResultEntry; fieldSize: number; fastest:
     <div className="grid grid-cols-3 gap-2.5 short:hidden" aria-label="Your race">
       <Well className={cell}>
         <span className={`lc-mono text-[22px] leading-tight font-bold ${me.dnf ? "text-lc-loss" : "text-lc-volt"}`}>
-          {me.dnf ? "DNF" : `P${me.position}`}
+          {me.dq ? "DSQ" : me.dnf ? "DNF" : `P${me.position}`}
         </span>
-        <span className={after}>{me.dnf ? "Out of the race" : `of ${fieldSize}`}</span>
+        <span className={after}>{me.dq ? "Disqualified" : me.dnf ? "Out of the race" : `of ${fieldSize}`}</span>
       </Well>
       <Well className={cell}>
         <span className="leading-tight">
@@ -380,7 +383,7 @@ const LastRaces: React.FC<{ history: readonly RaceRecord[] }> = ({ history }) =>
           <tr key={r.id} className="h-9 border-b border-white/5 last:border-b-0 short:h-8">
             <td className="lc-mono w-20 px-2 text-[12px] font-bold whitespace-nowrap text-lc-slate">{shortDate(r.atMs)}</td>
             <td className="max-w-0 px-2">
-              <span className="block truncate text-[13px] font-semibold text-lc-fog">{circuitName(r.trackId)}</span>
+              <span className="block truncate text-[13px] font-semibold text-lc-fog" title={circuitName(r.trackId)}>{circuitName(r.trackId)}</span>
             </td>
             <td className="lc-mono w-16 px-2 text-[13px] font-bold whitespace-nowrap">
               <span className={r.finish === null ? "text-lc-loss" : "text-lc-chalk"}>{r.finish === null ? "DNF" : `P${r.finish}`}</span>

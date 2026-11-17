@@ -205,15 +205,28 @@ const DT = 1 / 120;
   const L = track.totalLengthM;
   // (carInfo is a snapshot: read the state again each time)
   const stpNow = () => field.carInfo('STP')!;
+  let doubleSeen = false;
+  let paceUnderDouble = Infinity;
+  let aidsLocked = false;
   for (let t = 0; t < 30 && !passed; t += DT) {
     field.update(DT);
     for (const i of field.incidents) if (i.kind === 'contact') hit = true;
     if (field.underYellow(run.sim.sMeters)) yellowSeen = true;
+    if (field.yellowLevelAt(run.sim.sMeters) === 2) {
+      doubleSeen = true;
+      paceUnderDouble = Math.min(paceUnderDouble, run.sim.aiPaceScale ?? Infinity);
+      aidsLocked ||= field.aidsLockedFor(run.sim);
+    }
     const ds = ((stp.sim.sMeters - run.sim.sMeters + L * 1.5) % L) - L / 2;
     if (Math.abs(ds) < 5) minClear = Math.min(minClear, Math.abs(stp.sim.lateralOffsetM - run.sim.lateralOffsetM));
     if (ds < -30) passed = true;
   }
   check('Stopped car: the car behind is shown the yellow', yellowSeen);
+  check('Stopped car on the road: a double yellow', doubleSeen);
+  check('Double yellow: the car behind lifts to 72 % pace or less', paceUnderDouble <= 0.72 * 1.03 + 1e-9, `${f(paceUnderDouble, 3)}`);
+  check('Yellow zone: the overtaking aids are closed (open-wheel rules)', aidsLocked);
+  field.lockAidsInYellow = false;
+  check('… and open under rules that leave them be', !field.aidsLockedFor(run.sim));
   check('Stopped car: it goes round, not into it', passed && !hit, `${passed ? 'passed' : 'not past'}, lateral clearance ${f(minClear)} m${hit ? ', HIT' : ''}`);
   check('Stopped car: retired and classified DNF', stpNow().retired && !!field.status().standings.find((e) => e.driverCode === 'STP')?.retired);
 }

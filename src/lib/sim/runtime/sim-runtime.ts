@@ -65,7 +65,7 @@ export class SimRuntime {
   private car: SimulatorCar | null = null;
   private inputs: Partial<ControlInputs> = {};
   /** One-frame presses (paddles, the X-mode button) waiting for the next tick */
-  private pressed = { shiftUp: false, shiftDown: false, toggleXMode: false };
+  private pressed = { shiftUp: false, shiftDown: false, neutral: false, toggleXMode: false };
   private driving = false;
   private accumulatorS = 0;
   private epoch = 0;
@@ -149,6 +149,7 @@ export class SimRuntime {
         this.inputs = i;
         this.pressed.shiftUp ||= i.shiftUp === true;
         this.pressed.shiftDown ||= i.shiftDown === true;
+        this.pressed.neutral ||= i.neutral === true;
         this.pressed.toggleXMode ||= i.toggleXMode === true;
         this.driving = true;
         return;
@@ -205,6 +206,9 @@ export class SimRuntime {
         field.damageLevel = setup.damage;
         field.aggressionAdd = setup.aggressionAdd;
         field.playerDriver = setup.driver;
+        field.manualStart = setup.standing && setup.manualStart === true;
+        field.lockAidsInYellow = setup.lockAidsInYellow ?? true;
+        field.qualifying = setup.qualifying;
         field.startRace(setup.standing);
         env.applyWeatherSync(command.weather);
         const ownRaceControl = car.raceControl;
@@ -213,6 +217,9 @@ export class SimRuntime {
           car.raceControl = {
             get racing() {
               return field.raceRulesActive;
+            },
+            get aidsLocked() {
+              return field.aidsLockedFor(car);
             },
             earnedAtDetection: () => field.detectionEarnedFor(car),
           };
@@ -228,7 +235,16 @@ export class SimRuntime {
         this.race?.field.setSkill(command.skill);
         return;
       case "penalty":
-        if (this.race) this.race.field.playerPenaltyS = command.seconds;
+        if (this.race) {
+          this.race.field.playerPenaltyS = command.seconds;
+          if (command.dq) this.race.field.playerDisqualified = true;
+        }
+        return;
+      case "rules":
+        if (this.race) this.race.field.lockAidsInYellow = command.lockAidsInYellow;
+        return;
+      case "penalise":
+        this.race?.field.penalisePlayer(command.seconds, command.reason, command.detail);
         return;
       case "conditions":
         this.race?.env.setConditions(command.conditions);
@@ -255,7 +271,10 @@ export class SimRuntime {
     const race = this.race;
     if (!race) return;
     this.race = null;
-    if (this.car) this.car.raceControl = race.ownRaceControl;
+    if (this.car) {
+      this.car.raceControl = race.ownRaceControl;
+      this.car.gridHold = false;
+    }
   }
 
   /** Whether the clock is running (the page is driving the car) */
@@ -284,15 +303,20 @@ export class SimRuntime {
       const p = this.pressed;
       const held = this.inputs;
       // A press is one tick long: the car sees one edge however many ticks the frame that sent it spans
-      const inputs = p.shiftUp || p.shiftDown || p.toggleXMode || held.shiftUp || held.shiftDown || held.toggleXMode
-        ? { ...held, shiftUp: p.shiftUp, shiftDown: p.shiftDown, toggleXMode: p.toggleXMode }
-        : held;
-      p.shiftUp = p.shiftDown = p.toggleXMode = false;
+      const inputs =
+        p.shiftUp || p.shiftDown || p.neutral || p.toggleXMode || held.shiftUp || held.shiftDown || held.neutral || held.toggleXMode
+          ? { ...held, shiftUp: p.shiftUp, shiftDown: p.shiftDown, neutral: p.neutral, toggleXMode: p.toggleXMode }
+          : held;
+      p.shiftUp = p.shiftDown = p.neutral = p.toggleXMode = false;
       // A race steps as the page steps one: the road under every car, then the player's car (held on the grid
       // until the lights go out), then the field; the field and the road every FIELD_TICKS ticks
       const fieldDtS = FIELD_TICKS * SIM_TICK_S;
       if (race && race.tick === 0) race.env.update(fieldDtS, race.field.sims());
-      if (!race?.field.playerFrozen) {
+      // A manual start holds the car on the grid through the lights with its engine live; an assisted one stops it
+      const frozen = race?.field.playerFrozen === true;
+      const onGrid = frozen && race!.field.manualStart && !race!.field.gridStanding;
+      if (race) car.gridHold = onGrid;
+      if (!frozen || onGrid) {
         car.step(SIM_TICK_S, inputs);
         const samples = car.telemetry.ffbSubframeSamples;
         if (samples) for (const s of samples) this.ffb.push(s);

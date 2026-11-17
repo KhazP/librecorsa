@@ -7,6 +7,7 @@ import {
   buildKeyLookup,
   clearKey,
   DEFAULT_KEY_BINDINGS,
+  BUMPER_SHIFT_BUTTONS,
   DEFAULT_PAD_BUTTONS,
   DEFAULT_PAD_PEDAL_SOURCES,
   freePedalButtons,
@@ -148,13 +149,27 @@ check('clearing a slot removes the key', () => {
   assert.deepEqual(clearKey(DEFAULT_KEY_BINDINGS, 'throttle', 1).throttle, ['KeyW']);
 });
 check('a pad button moves between actions', () => {
-  const next = rebindPadButton(DEFAULT_PAD_BUTTONS, 'racingLine', 0); // A was boost
+  const next = rebindPadButton(DEFAULT_PAD_BUTTONS, 'racingLine', 0); // A was gear up
   assert.equal(next.racingLine, 0);
-  assert.equal(next.boost, null);
+  assert.equal(next.shiftUp, null);
+});
+check('a new player gets GT style; a saved map keeps its buttons, and an action it lacks takes Bumper shift\'s', () => {
+  assert.equal(DEFAULT_PAD_BUTTONS, PAD_LAYOUTS.gt.buttons);
+  assert.equal(DEFAULT_PLAYER_SETTINGS.padButtons, DEFAULT_PAD_BUTTONS);
+  assert.deepEqual(parsePlayerSettings({}).padButtons, PAD_LAYOUTS.gt.buttons);
+  // A save from before the switch: the whole Bumper shift map
+  const old = { ...PAD_LAYOUTS.bumper.buttons };
+  const reloaded = parsePlayerSettings(JSON.parse(JSON.stringify({ ...DEFAULT_PLAYER_SETTINGS, padButtons: old }))).padButtons;
+  assert.deepEqual(reloaded, old);
+  assert.equal(matchPadLayout(reloaded), 'bumper');
+  // An older save without the HUD action: Bumper shift's R3, not GT style's LB (gear down there)
+  const { hud: _hud, ...noHud } = old;
+  assert.equal(parsePlayerSettings({ padButtons: noHud }).padButtons.hud, PAD_LAYOUTS.bumper.buttons.hud);
 });
 check('controller layouts: every action set, no shared button, pedal buttons / D-pad / thumb-restart left alone', () => {
-  assert.equal(PAD_LAYOUTS.default.buttons, DEFAULT_PAD_BUTTONS);
-  assert.equal(PAD_LAYOUTS.default.pedals, 'triggers');
+  assert.equal(PAD_LAYOUTS.gt.buttons, DEFAULT_PAD_BUTTONS);
+  assert.equal(PAD_LAYOUTS.gt.pedals, 'triggers');
+  assert.deepEqual([PAD_LAYOUTS.bumper.buttons.shiftUp, PAD_LAYOUTS.bumper.buttons.shiftDown, PAD_LAYOUTS.bumper.buttons.boost], [5, 4, 0]);
   for (const id of PAD_LAYOUT_IDS) {
     const { buttons: b, pedals } = PAD_LAYOUTS[id];
     const sources = withPedalSet(DEFAULT_PAD_PEDAL_SOURCES, pedals);
@@ -207,7 +222,7 @@ check('pedal sources: sets, the buttons they take, the stick clicks under them, 
   assert.deepEqual(pedalStickClicks(STICK_SOURCES), [PAD_RIGHT_STICK_BUTTON]);
   assert.ok(pedalsOnTriggers(DEFAULT_PAD_PEDAL_SOURCES));
   assert.ok(!pedalsOnTriggers(STICK_SOURCES));
-  assert.ok(!pedalsOnTriggers({ throttle: { kind: 'button', button: 6 }, brake: { kind: 'button', button: 7 } }), 'swapped is not the usual');
+  assert.ok(!pedalsOnTriggers({ throttle: { kind: 'button', button: 6 }, brake: { kind: 'button', button: 7 }, clutch: null }), 'swapped is not the usual');
   assert.equal(pressPedalText(DEFAULT_PAD_PEDAL_SOURCES.throttle), 'Hold RT');
   assert.equal(pressPedalText(STICK_SOURCES.throttle), 'Push the right stick up');
 });
@@ -217,7 +232,7 @@ check('trigger pedals free RT / LT; stick pedals leave the bindings as they are'
   assert.equal(freed.shiftUp, null);
   assert.equal(freed.shiftDown, null);
   assert.equal(freed.boost, classic.boost);
-  assert.equal(freePedalButtons(DEFAULT_PAD_BUTTONS, DEFAULT_PAD_PEDAL_SOURCES), DEFAULT_PAD_BUTTONS, 'nothing on the triggers: the same object');
+  assert.equal(freePedalButtons(BUMPER_SHIFT_BUTTONS, DEFAULT_PAD_PEDAL_SOURCES), BUMPER_SHIFT_BUTTONS, 'nothing on the triggers: the same object');
   assert.equal(freePedalButtons(classic, STICK_SOURCES), classic);
   // A pedal on another button (a clutch on LB, say) frees that button's action too
   const lbPedal = { ...STICK_SOURCES, brake: { kind: 'button' as const, button: 4 } };
@@ -235,7 +250,7 @@ check('pedal settings: old saves keep the triggers, bad sources fall back, the d
   assert.deepEqual(broken.pedalSources, DEFAULT_PAD_PEDAL_SOURCES, 'a bad sign, and a throttle / brake saved off the pad');
   assert.equal(broken.stickPedalDeadzone, 0.3);
   const mixed = parsePlayerSettings({ padTuning: { pedalSources: { throttle: STICK_SOURCES.throttle } } }).padTuning.pedalSources;
-  assert.deepEqual(mixed, { throttle: STICK_SOURCES.throttle, brake: DEFAULT_PAD_PEDAL_SOURCES.brake }, 'each pedal on its own');
+  assert.deepEqual(mixed, { throttle: STICK_SOURCES.throttle, brake: DEFAULT_PAD_PEDAL_SOURCES.brake, clutch: null }, 'each pedal on its own');
 });
 
 console.log('Wheel and pedals');
@@ -265,7 +280,7 @@ check('pedals: normal, inverted and combined-axis', () => {
 console.log('Device reader');
 check('standard controller: stick to the assist, triggers, A boost, edges', () => {
   const reader = new DeviceInputReader();
-  const settings = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS };
+  const settings = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: BUMPER_SHIFT_BUTTONS };
   const f1 = reader.read([pad('Xbox', 'standard', [0.4, 0], [0, 5], { 7: 0.8, 6: 0.1 })], settings, 1 / 60);
   assert.equal(f1.source, 'controller');
   near(f1.padSteer!, 0.4);
@@ -275,11 +290,19 @@ check('standard controller: stick to the assist, triggers, A boost, edges', () =
   const f2 = reader.read([pad('Xbox', 'standard', [0, 0], [0, 5])], settings, 1 / 60);
   assert.ok(!f2.pressed.has('shiftUp'), 'a held button fires once');
 });
+check('a wheel not set up yet shifts on its paddles under the GT style default; a pad on A', () => {
+  const settings = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PLAYER_SETTINGS.padButtons };
+  const wheel = new DeviceInputReader().read([pad('G920 Driving Force Racing Wheel', 'standard', [0], [5])], settings, 1 / 60);
+  assert.ok(wheel.pressed.has('shiftUp'), 'right paddle');
+  assert.ok(!wheel.pressed.has('camera'));
+  const pad1 = new DeviceInputReader().read([pad('Xbox', 'standard', [0, 0], [0])], settings, 1 / 60);
+  assert.ok(pad1.pressed.has('shiftUp'), 'A');
+});
 check('stick pedals: right stick up throttle, down brake, dead zone at rest, full a little before the stop', () => {
   const stick = { pedalSources: STICK_SOURCES, stickPedalDeadzone: 0.1 };
   const at = (y: number) => padPedals(pad('Xbox', 'standard', [0, 0, 0, y], [], { 7: 0.9, 6: 0.9 }), stick);
-  assert.deepEqual(at(0.08), { throttle: 0, brake: 0 }, 'resting drift');
-  assert.deepEqual(at(-0.08), { throttle: 0, brake: 0 });
+  assert.deepEqual(at(0.08), { throttle: 0, brake: 0, clutch: 0 }, 'resting drift');
+  assert.deepEqual(at(-0.08), { throttle: 0, brake: 0, clutch: 0 });
   near(at(-1).throttle, 1);
   near(at(-0.96).throttle, 1, 1e-9);
   near(at(-0.525).throttle, 0.5);
@@ -296,6 +319,89 @@ check('stick pedals: right stick up throttle, down brake, dead zone at rest, ful
   const m = padPedals(pad('Xbox', 'standard', [0, 1, 0, 0], [], { 7: 0.4, 6: 0.9 }), mixed);
   near(m.throttle, 0.4);
   near(m.brake, 1);
+});
+const LB_CLUTCH: PadPedalSources = { ...DEFAULT_PAD_PEDAL_SOURCES, clutch: { kind: 'button', button: 4 } };
+check('clutch on a controller: none by default, its own button when given one, kept by a layout, never on a pedal', () => {
+  assert.equal(DEFAULT_PAD_PEDAL_SOURCES.clutch, null);
+  assert.equal(padPedals(pad('Xbox', 'standard', [0, 0, 0, 0], [4], { 7: 0.5 }), undefined).clutch, 0, 'no source reads 0');
+  near(padPedals(pad('Xbox', 'standard', [0, 0, 0, 0], [4]), { pedalSources: LB_CLUTCH, stickPedalDeadzone: 0.1 }).clutch, 1);
+  assert.equal(pedalOnButton(LB_CLUTCH, 4), 'clutch');
+  const picked = withPedalSet(LB_CLUTCH, 'stick');
+  assert.deepEqual(picked.clutch, LB_CLUTCH.clutch, 'a pedal set leaves the clutch where it is');
+  assert.equal(matchPedalSet(picked), 'stick', 'the clutch is not part of a set');
+  assert.equal(freePedalButtons(BUMPER_SHIFT_BUTTONS, LB_CLUTCH).shiftDown, null, 'LB lets go of gear down');
+  // Saves: an old one has no clutch, one on the throttle's own trigger is dropped, one on a button of its own stays
+  assert.equal(parsePlayerSettings({ padTuning: {} }).padTuning.pedalSources.clutch, null);
+  const onRt = parsePlayerSettings({ padTuning: { pedalSources: { clutch: { kind: 'button', button: 7 } } } });
+  assert.equal(onRt.padTuning.pedalSources.clutch, null, 'on RT, the throttle');
+  const onLb = parsePlayerSettings({ padTuning: { pedalSources: { clutch: { kind: 'button', button: 4 } } } });
+  assert.deepEqual(onLb.padTuning.pedalSources.clutch, { kind: 'button', button: 4 });
+  // The keyboard's clutch has no key until the player gives it one
+  assert.deepEqual(DEFAULT_KEY_BINDINGS.clutch, []);
+  assert.equal(buildKeyLookup(rebindKey(DEFAULT_KEY_BINDINGS, 'clutch', 0, 'KeyZ')).get('KeyZ'), 'clutch');
+});
+check('neutral: N on the keyboard, no button of its own on a pad, gear up + gear down together on a pad and a wheel', () => {
+  assert.deepEqual(DEFAULT_KEY_BINDINGS.neutral, ['KeyN']);
+  assert.equal(buildKeyLookup(DEFAULT_KEY_BINDINGS).get('KeyN'), 'neutral');
+  assert.equal(BUMPER_SHIFT_BUTTONS.neutral, null);
+  for (const id of PAD_LAYOUT_IDS) assert.equal(PAD_LAYOUTS[id].buttons.neutral, null, `${id} leaves neutral to the paddles`);
+  // A save from before neutral still reads as its layout
+  const { neutral: _n, ...oldDefault } = BUMPER_SHIFT_BUTTONS;
+  const old = parsePlayerSettings({ padButtons: oldDefault });
+  assert.equal(old.padButtons.neutral, null);
+  assert.equal(matchPadLayout(old.padButtons, old.padTuning.pedalSources), 'bumper');
+  // LB then RB on a pad: gear down, then neutral as RB joins it, once
+  const settings = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: BUMPER_SHIFT_BUTTONS };
+  const r = new DeviceInputReader();
+  const f1 = r.read([pad('Xbox', 'standard', [0, 0], [4])], settings, 1 / 60);
+  assert.ok(f1.pressed.has('shiftDown') && !f1.pressed.has('neutral'));
+  const f2 = r.read([pad('Xbox', 'standard', [0, 0], [4, 5])], settings, 1 / 60);
+  assert.ok(f2.pressed.has('neutral'), 'the second paddle down');
+  const f3 = r.read([pad('Xbox', 'standard', [0, 0], [4, 5])], settings, 1 / 60);
+  assert.ok(!f3.pressed.has('neutral'), 'held, it fires once');
+  // Both in one frame: both shifts and neutral (the car lets neutral win)
+  const f4 = new DeviceInputReader().read([pad('Xbox', 'standard', [0, 0], [4, 5])], settings, 1 / 60);
+  assert.ok(f4.pressed.has('neutral') && f4.pressed.has('shiftUp') && f4.pressed.has('shiftDown'));
+  // A wheel's paddles, with its own neutral button too
+  const wheel = {
+    ...DEFAULT_WHEEL_SETTINGS,
+    steer: { padId: 'G29', axis: 0, center: 0, invert: false },
+    buttons: { ...DEFAULT_WHEEL_SETTINGS.buttons, shiftUp: { padId: 'G29', button: 4 }, shiftDown: { padId: 'G29', button: 5 }, neutral: { padId: 'G29', button: 9 } },
+  };
+  const w = new DeviceInputReader();
+  w.read([pad('G29', '', [0])], { wheel, padButtons: BUMPER_SHIFT_BUTTONS }, 1 / 60);
+  assert.ok(w.read([pad('G29', '', [0], [4, 5])], { wheel, padButtons: BUMPER_SHIFT_BUTTONS }, 1 / 60).pressed.has('neutral'), 'both paddles');
+  w.read([pad('G29', '', [0])], { wheel, padButtons: BUMPER_SHIFT_BUTTONS }, 1 / 60);
+  assert.ok(w.read([pad('G29', '', [0], [9])], { wheel, padButtons: BUMPER_SHIFT_BUTTONS }, 1 / 60).pressed.has('neutral'), 'its N button');
+});
+check('clutch in the device frame: the controller button, the calibrated clutch of a wheel pedal set, 0 with none', () => {
+  const padSettings = {
+    wheel: DEFAULT_WHEEL_SETTINGS,
+    padButtons: freePedalButtons(BUMPER_SHIFT_BUTTONS, LB_CLUTCH),
+    padTuning: { pedalSources: LB_CLUTCH, stickPedalDeadzone: 0.1 },
+  };
+  const f = new DeviceInputReader().read([pad('Xbox', 'standard', [0, 0], [4])], padSettings, 1 / 60);
+  near(f.clutch, 1);
+  assert.ok(!f.pressed.has('shiftDown'), 'the clutch button shifts nothing');
+  const plain = new DeviceInputReader().read([pad('Xbox', 'standard', [0, 0], [4])], { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: BUMPER_SHIFT_BUTTONS }, 1 / 60);
+  assert.equal(plain.clutch, 0);
+  // A clutch pedal on axis 3 of a separate pedal set, idle at 1 and fully pressed at −1, half way down
+  const wheel = {
+    ...DEFAULT_WHEEL_SETTINGS,
+    steer: { padId: 'G29', axis: 0, center: 0, invert: false },
+    clutch: { padId: 'Pedals', axis: 3, idle: 1, full: -1 },
+  };
+  const reader = new DeviceInputReader();
+  const w = reader.read([pad('G29', '', [0]), pad('Pedals', '', [0, 0, 0, 0])], { wheel, padButtons: BUMPER_SHIFT_BUTTONS }, 1 / 60);
+  assert.equal(w.source, 'wheel');
+  near(w.clutch, (0.5 - 0.02) / 0.98);
+  // The pedal set unplugged mid-drive: the wheel is lost, as with the throttle's or the brake's device
+  const gone = reader.read([pad('G29', '', [0])], { wheel, padButtons: BUMPER_SHIFT_BUTTONS }, 1 / 60);
+  assert.ok(gone.wheelLost);
+  assert.equal(gone.clutch, 0);
+  assert.equal(DEFAULT_WHEEL_SETTINGS.clutch, null);
+  assert.deepEqual(parsePlayerSettings({ wheel: { clutch: wheel.clutch } }).wheel.clutch, wheel.clutch, 'a saved clutch pedal');
+  assert.equal(parsePlayerSettings({ wheel: { clutch: { padId: 'Pedals' } } }).wheel.clutch, null, 'a broken one is none');
 });
 check('GT classic: right stick drives, RT / LT shift, R3 does nothing', () => {
   const reader = new DeviceInputReader();
@@ -324,7 +430,7 @@ check('GT classic: right stick drives, RT / LT shift, R3 does nothing', () => {
   // The same pad on trigger pedals and the default buttons: RT is the throttle and shifts nothing
   const f3 = new DeviceInputReader().read(
     [pad('Xbox', 'standard', [0, 0, 0, -1], [7], { 7: 1 })],
-    { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS, padTuning: { pedalSources: DEFAULT_PAD_PEDAL_SOURCES, stickPedalDeadzone: 0.1 } },
+    { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: BUMPER_SHIFT_BUTTONS, padTuning: { pedalSources: DEFAULT_PAD_PEDAL_SOURCES, stickPedalDeadzone: 0.1 } },
     1 / 60,
   );
   near(f3.throttle, 1);
@@ -332,7 +438,7 @@ check('GT classic: right stick drives, RT / LT shift, R3 does nothing', () => {
 });
 check('uncalibrated non-standard device keeps the original raw path', () => {
   const reader = new DeviceInputReader();
-  const f = reader.read([pad('Generic wheel', '', [0.3, 0], [], { 7: 0.5 })], { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  const f = reader.read([pad('Generic wheel', '', [0.3, 0], [], { 7: 0.5 })], { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: BUMPER_SHIFT_BUTTONS }, 1 / 60);
   assert.equal(f.source, 'legacy');
   near(f.analogSteer!, 0.3);
   near(f.throttle, 0.5);
@@ -348,7 +454,7 @@ check('calibrated wheel with pedals and paddles on separate devices', () => {
     buttons: { ...DEFAULT_WHEEL_SETTINGS.buttons, shiftUp: { padId: 'DD base', button: 4 } },
   };
   const pads = [pad('DD base', '', [60 / 540], [4]), pad('Pedals', '', [0, 1, -1])];
-  const f = reader.read(pads, { wheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  const f = reader.read(pads, { wheel, padButtons: BUMPER_SHIFT_BUTTONS }, 1 / 60);
   assert.equal(f.source, 'wheel');
   near(f.analogSteer!, 60 / 180); // 60° of a 180° half-lock
   near(f.throttle, 1);
@@ -359,7 +465,7 @@ check('an unplugged wheel is reported once (the game pauses), not silently hande
   const reader = new DeviceInputReader();
   const wheel = { ...DEFAULT_WHEEL_SETTINGS, steer: { padId: 'DD base', axis: 0, center: 0, invert: false } };
   const xbox = pad('Xbox', 'standard', [0.5, 0], [0, 5], { 7: 0.9 });
-  const settings = { wheel, padButtons: DEFAULT_PAD_BUTTONS };
+  const settings = { wheel, padButtons: BUMPER_SHIFT_BUTTONS };
   assert.equal(reader.read([pad('DD base', '', [0.1]), xbox], settings, 1 / 60).wheelLost, undefined);
   const lost = reader.read([xbox], settings, 1 / 60);
   assert.equal(lost.wheelLost, true);
@@ -372,7 +478,7 @@ check('an unplugged wheel is reported once (the game pauses), not silently hande
       throttle: { padId: 'Pedals', axis: 1, idle: -1, full: 1 },
       brake: { padId: 'Pedals', axis: 2, idle: 1, full: -1 },
     },
-    padButtons: DEFAULT_PAD_BUTTONS,
+    padButtons: BUMPER_SHIFT_BUTTONS,
   };
   const r2 = new DeviceInputReader();
   assert.equal(r2.read([pad('DD base', '', [0.1]), pad('Pedals', '', [0, 1, 1])], pedalled, 1 / 60).wheelLost, undefined);
@@ -799,7 +905,7 @@ check('clearing or rebinding the steering with the wheel plugged in is not an un
   const reader = new DeviceInputReader();
   const steer = { padId: 'DD base', axis: 0, center: 0, invert: false };
   const pads = [pad('DD base', '', [0.1, 0])];
-  const bound = { wheel: { ...DEFAULT_WHEEL_SETTINGS, steer }, padButtons: DEFAULT_PAD_BUTTONS };
+  const bound = { wheel: { ...DEFAULT_WHEEL_SETTINGS, steer }, padButtons: BUMPER_SHIFT_BUTTONS };
   const withSteer = (s: typeof steer | null) => ({ ...bound, wheel: { ...bound.wheel, steer: s } });
   assert.equal(reader.read(pads, bound, 1 / 60).wheelLost, undefined);
   assert.equal(reader.read(pads, withSteer({ ...steer, axis: 1 }), 1 / 60).wheelLost, undefined, 'rebound to another axis');
@@ -810,7 +916,7 @@ check('clearing or rebinding the steering with the wheel plugged in is not an un
 });
 check('a button already held on the device the input switches to is not a press; pressing it again is', () => {
   const reader = new DeviceInputReader();
-  const settings = { wheel: { ...DEFAULT_WHEEL_SETTINGS, steer: { padId: 'DD base', axis: 0, center: 0, invert: false } }, padButtons: DEFAULT_PAD_BUTTONS };
+  const settings = { wheel: { ...DEFAULT_WHEEL_SETTINGS, steer: { padId: 'DD base', axis: 0, center: 0, invert: false } }, padButtons: BUMPER_SHIFT_BUTTONS };
   const xboxHeld = pad('Xbox', 'standard', [0, 0], [5]);
   assert.equal(reader.read([pad('DD base', '', [0]), xboxHeld], settings, 1 / 60).source, 'wheel');
   const switched = reader.read([xboxHeld], settings, 1 / 60);
@@ -820,7 +926,7 @@ check('a button already held on the device the input switches to is not a press;
   assert.ok(reader.read([xboxHeld], settings, 1 / 60).pressed.has('shiftUp'), 'pressed again: a press');
   // A pad that only appears with a press (the browser hides it until then) still counts from no device at all
   const fresh = new DeviceInputReader();
-  const pads = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS };
+  const pads = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: BUMPER_SHIFT_BUTTONS };
   assert.equal(fresh.read([], pads, 1 / 60).source, null);
   assert.ok(fresh.read([xboxHeld], pads, 1 / 60).pressed.has('shiftUp'), 'first press of a pad that just appeared');
 });

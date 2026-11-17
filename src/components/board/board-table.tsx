@@ -13,6 +13,7 @@ import { Icon } from "@/components/ui/icons/Icon";
 import { formatLapTime, formatSectorTime } from "@/components/hud/hud-format";
 import type { LapInput } from "@/lib/sim/lap-types";
 import { InputIcon } from "./InputIcon";
+import { formatCount } from "@/lib/net/board-client";
 
 export interface BoardRow {
   key: string;
@@ -116,8 +117,8 @@ export const BoardTable: React.FC<{
                 <td className="max-w-0 px-2 py-1.5">
                   <span className="flex min-w-0 items-center gap-2">
                     {/* The code gives way to the name in a narrow list (a phone) */}
-                    {r.code ? <span className="lc-mono hidden w-8 shrink-0 text-[12px] font-bold tracking-[0.08em] text-lc-slate @sm:inline">{r.code}</span> : null}
-                    <span className="truncate text-[14px] font-semibold text-lc-chalk" title={r.title}>
+                    {r.code ? <span className="lc-mono hidden w-8 shrink-0 text-[12px] font-bold tracking-[0.08em] text-lc-slate @sm:inline">{r.code.slice(0, 3)}</span> : null}
+                    <span dir="auto" className="truncate text-[14px] font-semibold text-lc-chalk" title={r.title}>
                       {r.title}
                     </span>
                     <InputIcon input={r.input} className="text-lc-fog" />
@@ -205,7 +206,7 @@ export const MyPlace: React.FC<{ rank: number; total: number; lapMs: number; det
       <PositionBadge position={rank} player />
       <span className="flex min-w-0 flex-col">
         <span className="text-[14px] font-semibold text-lc-chalk">
-          You are P{rank} of {total}
+          You are P{formatCount(rank)} of {formatCount(total)}
           <span className="lc-mono ml-2 font-bold text-lc-fog">{formatLapTime(lapMs)}</span>
         </span>
         {detail ? <span className="lc-hint truncate">{detail}</span> : null}

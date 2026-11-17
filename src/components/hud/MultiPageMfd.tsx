@@ -625,8 +625,8 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
 
   const racing = Boolean(t.race);
   const rows = useMemo(
-    () => (page === "rel" || folded ? computeRelatives(t, tracker, trackLengthM, compound, playerCode) : []),
-    [page, folded, t, tracker, trackLengthM, compound, playerCode],
+    () => (page === "rel" ? computeRelatives(t, tracker, trackLengthM, compound, playerCode) : []),
+    [page, t, tracker, trackLengthM, compound, playerCode],
   );
   const meta = PAGES.find((p) => p.id === page) ?? PAGES[0];
 

@@ -176,6 +176,8 @@ export interface SimulatorCar {
   trackLimitsMode?: 'strict' | 'judged';
   /** Judged mode: an excursion is being judged; a lap completed meanwhile does not count */
   trackLimitsHold?: boolean;
+  /** A manual start's lights: the car held on the grid, its engine live (`race-start.ts`) */
+  gridHold?: boolean;
   /** Race control deleted the running lap */
   invalidateLap?(): void;
   /** Garage chassis setup (wing trim, ride height, springs, bars, dampers) as offsets from the car's baseline */

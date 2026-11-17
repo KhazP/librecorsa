@@ -34,6 +34,8 @@ export interface RacerProgress {
   grid?: number;
   /** Retired (a multiplayer car whose peer dropped before the flag): classified DNF, behind every runner */
   dnf?: boolean;
+  /** Disqualified: classified last, behind the retired cars */
+  dq?: boolean;
 }
 
 /** Race time at the flag with the time penalties added (s); null while running */
@@ -50,6 +52,7 @@ const gridOf = (r: RacerProgress) => r.grid ?? Number.MAX_SAFE_INTEGER;
  */
 export function raceOrder<T extends RacerProgress>(racers: readonly T[], lapLengthM?: number): T[] {
   return [...racers].sort((a, b) => {
+    if (!!a.dq !== !!b.dq) return a.dq ? 1 : -1;
     if (!!a.dnf !== !!b.dnf) return a.dnf ? 1 : -1;
     const aFin = a.finishTimeS !== null && !a.dnf;
     const bFin = b.finishTimeS !== null && !b.dnf;

@@ -1,4 +1,6 @@
 import React from "react";
+import { keyLabel } from "@/lib/input/bindings";
+import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { Icon } from "../icons/Icon";
 import type { IconName } from "../icons/registry";
 
@@ -65,7 +67,11 @@ const ARROW_CHAR: Record<string, ArrowKey> = { "\u2191": "up", "\u2193": "down",
  * Turns a key string as older call sites write it ("Esc", "Q / E", "← →", "W S · ↑ ↓") into caps, one per
  * key, with the arrow characters drawn
  */
+/** A letter (or "/") in a prompt names a physical key (KeyboardEvent.code): the cap shows what it prints on this keyboard */
+const capText = (token: string) => (/^[A-Z]$/.test(token) ? keyLabel(`Key${token}`) : token === "/" ? keyLabel("Slash") : token);
+
 export const KeysFromString: React.FC<{ keys: string; tone?: keyof typeof TONE }> = ({ keys, tone }) => {
+  useKeyLayout();
   const caps: React.ReactNode[] = [];
   // A separator on its own is the key itself ("/" opens the search)
   const tokens = /^\s*[/\u00b7+]\s*$/.test(keys) ? [keys.trim()] : keys.split(/[\s/\u00b7+]+/).filter(Boolean);
@@ -75,7 +81,7 @@ export const KeysFromString: React.FC<{ keys: string; tone?: keyof typeof TONE }
     } else {
       caps.push(
         <KeyCap key={caps.length} tone={tone}>
-          {token}
+          {capText(token)}
         </KeyCap>,
       );
     }

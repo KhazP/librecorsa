@@ -6,11 +6,13 @@ import { DEFAULT_RACE_SETUP, parseRaceSetup, type RaceSetup } from "@/lib/sim/ra
 import type { AssistPreset, CameraMode } from "@/types/f1";
 import {
   DEFAULT_KEY_BINDINGS,
+  BUMPER_SHIFT_BUTTONS,
   DEFAULT_PAD_BUTTONS,
   KEY_ACTIONS,
   DEFAULT_PAD_PEDAL_SOURCES,
   PAD_ACTIONS,
   PAD_PEDALS,
+  samePedalSource,
   RESERVED_CODES,
   type KeyBindings,
   type PadButtonBindings,
@@ -226,7 +228,7 @@ export interface HudSettings {
   deltaBar: boolean;
   /** Card with sectors, corner speeds and the theoretical best after every lap */
   lapSummary: boolean;
-  /** HUD rear-view mirror: auto = onboard views without wing mirrors on screen */
+  /** HUD rear-view mirror: auto = with other cars about (a race, other players), in onboard views without wing mirrors on screen */
   virtualMirror: VirtualMirrorMode;
   /** Timing tower gaps: to the car ahead (interval) or to the leader */
   towerGaps: "interval" | "leader";
@@ -458,12 +460,12 @@ export const codeFromName = (name: string) => sanitizeDriverCode(name);
 
 /** Three upper-case letters from any input ("" → the default code) */
 export const sanitizeDriverCode = (v: string) => {
-  const letters = v.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
+  const letters = v.normalize("NFD").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
   return letters.length === 3 ? letters : (letters + DEFAULT_DRIVER_PROFILE.code).slice(0, 3);
 };
 /** Printable name of at most 16 characters */
 export const sanitizeDriverName = (v: string) =>
-  v.replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 16) || DEFAULT_DRIVER_PROFILE.name;
+  Array.from(v.replace(/[\u0000-\u001f\u007f<>]/g, "").trim()).slice(0, 16).join("") || DEFAULT_DRIVER_PROFILE.name;
 export const sanitizeColor = (v: string) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v.toUpperCase() : DEFAULT_DRIVER_PROFILE.color);
 
 export const SETTINGS_STORAGE_KEY = "bugesera.settings.v1";
@@ -547,8 +549,11 @@ function parseKeys(v: unknown): KeyBindings {
 }
 
 function parsePadButtons(v: unknown): PadButtonBindings {
+  // No saved map: a new player, on today's default
   if (!isObj(v)) return { ...DEFAULT_PAD_BUTTONS };
-  const out = { ...DEFAULT_PAD_BUTTONS };
+  // A saved map was made on Bumper shift or from it: an action it lacks takes that layout's button, not GT style's
+  const base = BUMPER_SHIFT_BUTTONS;
+  const out = { ...base };
   const claimed = new Set<number>();
   const saved = new Set<string>();
   for (const { id } of PAD_ACTIONS) {
@@ -560,7 +565,7 @@ function parsePadButtons(v: unknown): PadButtonBindings {
   }
   // Same for the controller: a default button the player has given to another action stays unbound here
   for (const { id } of PAD_ACTIONS) {
-    const d = DEFAULT_PAD_BUTTONS[id];
+    const d = base[id];
     if (!saved.has(id) && d !== null && claimed.has(d)) out[id] = null;
   }
   return out;
@@ -594,6 +599,7 @@ function parseWheel(v: unknown): WheelSettings {
     steer: parseAxis(v.steer),
     throttle: parsePedal(v.throttle),
     brake: parsePedal(v.brake),
+    clutch: parsePedal(v.clutch),
     brakeGamma: num(v.brakeGamma, 0.5, 3, d.brakeGamma),
     steerDeadzone: num(v.steerDeadzone, 0, 0.2, d.steerDeadzone),
     steerSmoothingS: num(v.steerSmoothingS, 0, 0.2, d.steerSmoothingS),
@@ -663,6 +669,8 @@ function parsePedalSources(v: unknown): PadPedalSources {
     const source = parsePedalSource(v[p]);
     if (source !== undefined && (source !== null || DEFAULT_PAD_PEDAL_SOURCES[p] === null)) out[p] = source;
   }
+  // A clutch on the throttle's or the brake's own source would open the clutch with every press of that pedal
+  if (out.clutch && (samePedalSource(out.clutch, out.throttle) || samePedalSource(out.clutch, out.brake))) out.clutch = null;
   return out;
 }
 

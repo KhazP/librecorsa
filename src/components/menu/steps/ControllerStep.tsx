@@ -13,6 +13,7 @@ import {
   PAD_THROTTLE_BUTTON,
   padButtonLabel,
   pedalOnButton,
+  pedalSourceText,
   pedalStickClicks,
   rebindPadButton,
   withPedalSet,
@@ -76,11 +77,14 @@ export function InputCheckCard() {
             <Badge tone="good" dot>
               Connected
             </Badge>
-            <span className="lc-body truncate">{padDisplayName(pad.id)}</span>
+            <span className="lc-body truncate" title={padDisplayName(pad.id)}>{padDisplayName(pad.id)}</span>
           </span>
           <TrackMeter label="Steer" value={pad.axes[0] ?? 0} color="var(--color-lc-info)" centered />
           <TrackMeter label="Throttle" value={pedals?.throttle ?? 0} color="var(--lc-sem-throttle)" />
           <TrackMeter label="Brake" value={pedals?.brake ?? 0} color="var(--lc-sem-brake)" />
+          {settings.padTuning.pedalSources.clutch ? (
+            <TrackMeter label="Clutch" value={pedals?.clutch ?? 0} color="var(--color-lc-azure)" />
+          ) : null}
         </div>
       ) : null}
     </SettingsCard>
@@ -128,21 +132,36 @@ export function ControllerButtonsCard() {
   const { family } = useInputMode();
   const pad = pads.find((p) => p.mapping === "standard") ?? null;
   const shownFamily = pad ? padFamilyOf(pad.id) : family;
-  const [capturing, setCapturing] = useState<PadAction | null>(null);
+  /** The action, or the clutch pedal, waiting for a button */
+  const [capturing, setCapturing] = useState<PadAction | "clutch" | null>(null);
   /** A pedal's button pressed while capturing: it stays that pedal, and the capture keeps listening */
   const [refused, setRefused] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
   const sources = settings.padTuning.pedalSources;
   const pedalSet = matchPedalSet(sources);
 
-  const capture = React.useCallback((action: PadAction | null) => {
+  const capture = React.useCallback((action: PadAction | "clutch" | null) => {
     setRefused(null);
     setCapturing(action);
   }, []);
   const onButton = React.useCallback(
     (button: number) => {
       if (!capturing) return;
-      if (pedalOnButton(sources, button) !== null) {
+      const pedal = pedalOnButton(sources, button);
+      if (capturing === "clutch") {
+        // The clutch takes any button but the throttle's and the brake's; an action on it lets go of it
+        if (pedal === "throttle" || pedal === "brake") {
+          setRefused(button);
+          return;
+        }
+        update((s) => {
+          const pedalSources = { ...s.padTuning.pedalSources, clutch: { kind: "button" as const, button } };
+          return { ...s, padButtons: freePedalButtons(s.padButtons, pedalSources), padTuning: { ...s.padTuning, pedalSources } };
+        });
+        capture(null);
+        return;
+      }
+      if (pedal !== null) {
         setRefused(button);
         return;
       }
@@ -186,7 +205,7 @@ export function ControllerButtonsCard() {
         return { ...s, padButtons: freePedalButtons({ ...picked.buttons }, pedalSources), padTuning: { ...s.padTuning, pedalSources } };
       });
     },
-    initial: () => "default",
+    initial: () => "gt",
   });
   // A pedal stick's click is under the pedal thumb: say what it still does there
   const clickHint = pedalStickClicks(sources)
@@ -246,6 +265,36 @@ export function ControllerButtonsCard() {
         );
       })}
       </div>
+      <SettingRow
+        label="Clutch"
+        hint={sources.clutch ? "Held, it opens the clutch: rev on the spot, slip it off the line" : "Optional. The car works its own clutch until you press it"}
+        className={capturing === "clutch" ? "bg-lc-volt/6" : undefined}
+      >
+        <Button
+          size="sm"
+          variant={capturing === "clutch" ? "primary" : "secondary"}
+          className="min-w-28"
+          aria-label={capturing === "clutch" ? "Press a button for the clutch" : `Clutch: ${sources.clutch ? pedalSourceText(sources.clutch) : "not set"}. Change`}
+          onClick={() => capture(capturing === "clutch" ? null : "clutch")}
+        >
+          {capturing === "clutch"
+            ? "Press a button"
+            : sources.clutch
+              ? sources.clutch.kind === "button"
+                ? name(sources.clutch.button)
+                : pedalSourceText(sources.clutch)
+              : "Add"}
+        </Button>
+        {sources.clutch && capturing !== "clutch" ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => update((s) => ({ ...s, padTuning: { ...s.padTuning, pedalSources: { ...s.padTuning.pedalSources, clutch: null } } }))}
+          >
+            Remove
+          </Button>
+        ) : null}
+      </SettingRow>
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
         {capturing && refused !== null && refusedPedal ? (
           <StatusPill tone="live">
@@ -255,7 +304,7 @@ export function ControllerButtonsCard() {
         ) : capturing ? (
           <StatusPill tone="live">Press a controller button. Esc cancels; it stops after {CAPTURE_TIMEOUT_S} s</StatusPill>
         ) : (
-          <Hint>Press a slot, then the button you want.</Hint>
+          <Hint>Press a slot, then the button you want. Gear up and gear down together select neutral.</Hint>
         )}
         <Button size="sm" variant="ghost" onClick={() => setShowMap((v) => !v)} aria-expanded={showMap}>
           {showMap ? "Hide map" : "Button map"}

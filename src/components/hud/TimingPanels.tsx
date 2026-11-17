@@ -79,7 +79,11 @@ export const TowerRows: React.FC<{
                   FL
                 </Badge>
               ) : null}
-              {e.penaltyS ? <PenaltyBadge penalty={{ kind: "time", seconds: Math.round(e.penaltyS) }} size="hud" variant="solid" /> : null}
+              {e.dq ? (
+                <PenaltyBadge penalty={{ kind: "disqualified" }} size="hud" variant="solid" />
+              ) : e.penaltyS ? (
+                <PenaltyBadge penalty={{ kind: "time", seconds: Math.round(e.penaltyS) }} size="hud" variant="solid" />
+              ) : null}
               {e.finished ? <FlagIcon flag="chequered" size={14} label="Finished" /> : null}
               {!e.retired && e.damage !== undefined && e.damage >= 0.15 ? (
                 <span
@@ -219,7 +223,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
         {/* Each half scales from the centre (transform only, so the gauge never re-lays out) */}
         {deltaS !== null ? (
           <span
-            className={`absolute inset-y-0 w-1/2 transition-transform duration-75 ${
+            className={`absolute inset-y-0 w-1/2 transition-transform duration-100 ease-linear ${
               deltaNorm <= 0 ? "right-1/2 origin-right bg-lc-gain" : "left-1/2 origin-left bg-lc-loss"
             }`}
             style={{ transform: `scaleX(${Math.abs(deltaNorm)})` }}
