@@ -905,7 +905,7 @@ export class DriveSession {
         const field = this.takeAiField();
         if (trackRoot) field.attachTrackRoot(trackRoot);
         this.setRace({ kind: "ai", field });
-        startAiRace(field, settings.race);
+        startAiRace(field, settings.race, settings.profile);
       }
       setTelemetry({ ...physics.telemetry });
       // In the menus, the next race's field is built for the new car
@@ -1308,7 +1308,7 @@ export class DriveSession {
           const field = this.takeAiField();
           if (trackRoot) field.attachTrackRoot(trackRoot);
           this.setRace({ kind: "ai", field });
-          startAiRace(field, next.race);
+          startAiRace(field, next.race, next.profile);
         }
       }
     };
@@ -1574,7 +1574,7 @@ export class DriveSession {
       if (race.kind === "practice") return this.restartFlyingLap();
       // Out of a replay first (the reset does that), then the car moves
       this.resetRun("restart");
-      startAiRace(race.field, settings.race);
+      startAiRace(race.field, settings.race, settings.profile);
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -2200,7 +2200,7 @@ export class DriveSession {
         const field = this.takeAiField();
         if (trackRoot) field.attachTrackRoot(trackRoot);
         this.setRace({ kind: "ai", field });
-        startAiRace(field, settings.race);
+        startAiRace(field, settings.race, settings.profile);
       }
       const aiField = aiFieldOf(raceNow());
       /** The race runs in the worker, the player's car with it: this page only sends the controls and draws it */

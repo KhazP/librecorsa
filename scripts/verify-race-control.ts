@@ -595,13 +595,15 @@ console.log("MFD relative");
       standings: [st("LAP", 4950, 9950), st("YOU", 100, 5100, true), st("AHD", 160, 5160), st("BHD", 40, 5040), st("DWN", 300, 300)],
     },
   } as unknown as CarTelemetry;
-  const rows = computeRelatives(t, null, L, "soft");
+  const rows = computeRelatives(t, null, L, "soft", "TST");
   const codes = rows.map((r) => r.code).join(",");
   check("ordered by road position around the player", codes === "DWN,AHD,YOU,BHD,LAP", codes);
   const byCode = Object.fromEntries(rows.map((r) => [r.code, r]));
   check("a car across the line shows behind on the road", byCode.LAP.dsM === -150);
   check("lap up / lap down", byCode.LAP.lapDiff === 1 && byCode.DWN.lapDiff === -1 && byCode.AHD.lapDiff === 0);
   check("road gap from speed without a reference", Math.abs(byCode.AHD.gapS - 60 / 50) < 1e-9 && byCode.BHD.gapS < 0);
+  const practice = computeRelatives({ ...t, race: undefined, peers: [] } as unknown as CarTelemetry, null, L, "soft", "TST");
+  check("outside a race the player goes by their own code", practice.find((r) => r.isPlayer)?.code === "TST");
 }
 
 console.log("Fuel strategy");

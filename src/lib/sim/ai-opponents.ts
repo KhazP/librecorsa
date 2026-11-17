@@ -57,7 +57,7 @@ import { drivePlanJob, driveLineOf, makeDrivePlan, type AiDrivePlan, type DriveL
 import { planCost } from '@/lib/sim/ai/speed-plan';
 import { DEFAULT_PLANNER_WEIGHTS, PLAN_DT, PLAN_STEPS, planLocal, type PlannerResult, type PredictedCar } from '@/lib/sim/ai/local-planner';
 import type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
-import type { AiRace } from '@/lib/sim/ai-race';
+import type { AiRace, RaceDriverLabel } from '@/lib/sim/ai-race';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '@/lib/sim/gt3/AmgGt3Config';
 import { SUZUKI_LIANA_CONFIG } from '@/lib/sim/road/SuzukiLianaConfig';
@@ -116,7 +116,25 @@ export function aiDriversFor(n: number): AiDriverDef[] {
   return [...AI_DRIVERS, ...AI_RESERVE_DRIVERS].slice(0, Math.max(1, Math.min(n, AI_DRIVERS.length + AI_RESERVE_DRIVERS.length)));
 }
 
+/**
+ * Codes a driver races under when the player's own code is theirs: made up, as the field's are (no real driver's), and
+ * none of the eleven above
+ */
+const AI_SPARE_CODES = ['ZOL', 'VEK', 'ORA', 'TIB', 'MAV', 'QEN'];
+
+/**
+ * The codes the AI drivers race under beside the player's: their own, except a driver whose code is the player's, who
+ * takes the first spare code nobody in the race has
+ */
+export function aiRaceCodes(aiCodes: readonly string[], playerCode: string): string[] {
+  const taken = new Set([...aiCodes, playerCode]);
+  const free = AI_SPARE_CODES.filter((c) => !taken.has(c));
+  return aiCodes.map((code) => (code === playerCode ? (free.shift() ?? code) : code));
+}
+
+/** The player's car in the field: its code (the field's key for it) and, without a driver of their own, what it shows */
 const PLAYER_CODE = 'YOU';
+const PLAYER_COLOR = '#E10600';
 /** Car footprint used for contact (m): length, width */
 const CAR_LEN_M = 5.0;
 const CAR_WID_M = 1.95;
@@ -377,7 +395,11 @@ export type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
 
 interface FieldCar {
   id: string;
+  /** The driver's code as built: the key of the car's dice, learning, penalties and `carInfo` ('YOU' for the player) */
   code: string;
+  /** The code the race shows: the player's own, and a driver's own unless it is the player's (`aiRaceCodes`) */
+  label: string;
+  /** The colour the race shows (the player's own) */
   teamColorHex: string;
   isPlayer: boolean;
   sim: SimulatorCar;
@@ -725,8 +747,10 @@ export class AiOpponentField implements AiRace {
   public playerGrid: PlayerGridSlot;
   /** Added to every driver's temperament (`RACE_AGGRESSION_OFFSET`): the race setup's clean / normal / hard */
   public aggressionAdd = 0;
-  /** Race control: contacts judged, penalties, yellow flags, the messages for the HUD */
-  public readonly raceControl = new RaceIncidents(PLAYER_CODE);
+  /** The player's code and colour, from the next start (`AiRace.playerDriver`); null: 'YOU' in red */
+  public playerDriver: RaceDriverLabel | null = null;
+  /** Race control: contacts judged, penalties, yellow flags, the messages for the HUD (with the codes the race shows) */
+  public readonly raceControl = new RaceIncidents(PLAYER_CODE, (code) => this.labelOf(code));
 
   constructor(
     private readonly track: BuiltTrackData,
@@ -775,7 +799,7 @@ export class AiOpponentField implements AiRace {
       const s = (i * track.totalLengthM) / this.tuning.n;
       this.cornerAt[i] = this.corners.findIndex((c) => inSection(s, c.fromM, c.toM, track.totalLengthM));
     }
-    if (!this.spectate) this.cars.push(this.makeCar('player', PLAYER_CODE, '#E10600', player, null, 1));
+    if (!this.spectate) this.cars.push(this.makeCar('player', PLAYER_CODE, PLAYER_COLOR, player, null, 1));
     for (const car of this.cars) this.allSims.push(car.sim);
     // The AI cars' overtaking aids follow the race rules too (the player's are wired by the simulator)
     for (const car of this.cars) if (car.ai) car.ai.raceControl = this.raceControlFor(car.ai);
@@ -1032,6 +1056,7 @@ export class AiOpponentField implements AiRace {
       },
       id,
       code,
+      label: code,
       teamColorHex,
       isPlayer: ai === null,
       sim,
@@ -1090,6 +1115,26 @@ export class AiOpponentField implements AiRace {
     };
   }
 
+  /**
+   * The codes and colours this race shows: the player's driver (or 'YOU' in red), and each AI driver's own code unless
+   * it is the player's. Set at every start: a field built ahead or raced again may have another player's driver
+   */
+  private applyLabels(): void {
+    const player = this.cars.find((c) => c.isPlayer);
+    if (player) {
+      player.label = player.peer.driverCode = this.playerDriver?.code || PLAYER_CODE;
+      player.teamColorHex = player.peer.teamColorHex = this.playerDriver?.color || PLAYER_COLOR;
+    }
+    const ai = this.cars.filter((c) => !c.isPlayer);
+    const codes = aiRaceCodes(ai.map((c) => c.code), player?.label ?? '');
+    ai.forEach((c, i) => (c.label = c.peer.driverCode = codes[i]));
+  }
+
+  /** The code the race shows for a car's code */
+  private labelOf(code: string): string {
+    return this.cars.find((c) => c.code === code)?.label ?? code;
+  }
+
   /** The player is held on the grid until the lights go out */
   get playerFrozen(): boolean {
     return this.phase === 'lights';
@@ -1103,6 +1148,7 @@ export class AiOpponentField implements AiRace {
   public startRace(standing: boolean): void {
     const L = this.track.totalLengthM;
     this.raceCount++;
+    this.applyLabels();
     this.environment.reset();
     this.assignGrid();
     // Plans the last race was still building are for its grips
@@ -2161,8 +2207,8 @@ export class AiOpponentField implements AiRace {
   private progressOf(c: FieldCar): RacerProgress {
     return {
       id: c.id,
-      code: c.code,
-      name: c.code,
+      code: c.label,
+      name: c.label,
       color: c.teamColorHex,
       isPlayer: c.isPlayer,
       distM: c.distM,
@@ -2317,7 +2363,10 @@ export class AiOpponentField implements AiRace {
     };
   }
 
-  /** One car's state by its code ('YOU' for the player): the driver's mode, damage, retirement, incidents */
+  /**
+   * One car's state by its code as built ('YOU' for the player, whatever the race shows): the driver's mode, damage,
+   * retirement, incidents
+   */
   public carInfo(code: string): {
     mode: AiCarControl['mode'];
     damage: CarDamage;
@@ -2411,7 +2460,7 @@ export class AiOpponentField implements AiRace {
         const intervalS = i > 0 ? gapFloor - prevGap : undefined;
         prevGap = gapFloor;
         return {
-          driverCode: c.code,
+          driverCode: c.label,
           teamColorHex: c.teamColorHex,
           isPlayer: c.isPlayer,
           lap: Math.max(1, Math.min(this.raceLaps, Math.floor(c.distM / L) + 1)),

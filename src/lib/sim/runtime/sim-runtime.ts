@@ -204,6 +204,7 @@ export class SimRuntime {
         field.playerGrid = setup.playerGrid;
         field.damageLevel = setup.damage;
         field.aggressionAdd = setup.aggressionAdd;
+        field.playerDriver = setup.driver;
         field.startRace(setup.standing);
         env.applyWeatherSync(command.weather);
         const ownRaceControl = car.raceControl;

@@ -490,6 +490,8 @@ export interface MultiPageMfdProps {
   tracker: LapDeltaTracker | null;
   trackLengthM: number;
   compound: TireCompound;
+  /** The player's driver code, for the relative page outside a race (a race's standing carries its own) */
+  playerCode?: string;
   /** Start folded to the one-line pill */
   defaultFolded?: boolean;
   /** Fold back to the pill 3.5 s after the last D-pad press when the D-pad opened it */
@@ -507,6 +509,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
   tracker,
   trackLengthM,
   compound,
+  playerCode = "YOU",
   defaultFolded = false,
   autoFold = true,
 }) => {
@@ -622,8 +625,8 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
 
   const racing = Boolean(t.race);
   const rows = useMemo(
-    () => (page === "rel" || folded ? computeRelatives(t, tracker, trackLengthM, compound) : []),
-    [page, folded, t, tracker, trackLengthM, compound],
+    () => (page === "rel" || folded ? computeRelatives(t, tracker, trackLengthM, compound, playerCode) : []),
+    [page, folded, t, tracker, trackLengthM, compound, playerCode],
   );
   const meta = PAGES.find((p) => p.id === page) ?? PAGES[0];
 

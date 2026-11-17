@@ -7,7 +7,7 @@ import { useInputMode } from "./input-mode";
 import { focusables, useMoveHandler } from "./useFocusNav";
 import type { CarDefinition } from "@/lib/cars/car-registry";
 import type { TrackInfo } from "@/lib/track-registry";
-import { aiDriversFor } from "@/lib/sim/ai-opponents";
+import { aiDriversFor, aiRaceCodes } from "@/lib/sim/ai-opponents";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { RACE_START_LABELS, type RaceSetup } from "@/lib/sim/race-setup";
 import { RaceRules, useRaceDistance } from "./RaceRules";
@@ -21,8 +21,9 @@ export interface RaceSetupPanelProps {
   /** Weather and time of day, as a line */
   conditionsLabel?: string;
   car: Pick<CarDefinition, "id" | "quality" | "title" | "badge"> & { color: string };
-  /** The player's driver code on the grid */
+  /** The player's driver code and colour on the grid (Settings > Display > Driver) */
   playerCode?: string;
+  playerColor?: string;
   onOpenCircuit: () => void;
   onOpenConditions?: () => void;
   /** Opens the car browser (named for the Event row it once sat behind) */
@@ -32,22 +33,27 @@ export interface RaceSetupPanelProps {
 
 interface GridSlot {
   code: string;
-  /** The team's own colour (data), absent for the player */
+  /** The team's own colour, the player's own (data); absent: the player's volt */
   color?: string;
   player?: boolean;
 }
 
-/** The grid as it will line up: AI by pace (qualifying shuffles it a little), the player in the chosen slot */
-function gridPreview(setup: RaceSetup, playerCode: string): GridSlot[] {
-  const ai: GridSlot[] = aiDriversFor(setup.opponents)
-    .slice()
+/**
+ * The grid as it will line up: AI by pace (qualifying shuffles it a little), under the codes they race with beside the
+ * player's (`aiRaceCodes`), and the player in the chosen slot
+ */
+function gridPreview(setup: RaceSetup, playerCode: string, playerColor: string | undefined): GridSlot[] {
+  const drivers = aiDriversFor(setup.opponents);
+  const codes = aiRaceCodes(drivers.map((d) => d.code), playerCode);
+  const ai: GridSlot[] = drivers
+    .map((d, i) => ({ code: codes[i], color: d.teamColorHex, pace: d.pace }))
     .sort((a, b) => b.pace - a.pace)
-    .map((d) => ({ code: d.code, color: d.teamColorHex }));
+    .map(({ code, color }) => ({ code, color }));
   if (setup.aiGrid === "reversed") ai.reverse();
   const n = ai.length + 1;
   const slot = setup.grid === "front" ? 0 : setup.grid === "middle" ? Math.floor((n - 1) / 2) : setup.grid === "random" ? -1 : n - 1;
   const out = [...ai];
-  if (slot >= 0) out.splice(slot, 0, { code: playerCode, player: true });
+  if (slot >= 0) out.splice(slot, 0, { code: playerCode, color: playerColor, player: true });
   return out;
 }
 
@@ -75,8 +81,8 @@ const GridList: React.FC<{ grid: GridSlot[]; drawn: boolean }> = ({ grid, drawn 
           <span className="lc-data w-[2.5ch] text-right text-[12px] text-lc-slate">{i + 1}</span>
           <span
             aria-hidden
-            className={`h-3 w-1 shrink-0 rounded-full ${g.player ? "bg-lc-volt" : ""}`}
-            // ui-allow: hex-in-style a team's own colour is data
+            className={`h-3 w-1 shrink-0 rounded-full ${g.player && !g.color ? "bg-lc-volt" : ""}`}
+            // ui-allow: hex-in-style a team's own colour is data, as is the player's
             style={g.color ? { background: g.color } : undefined}
           />
           <span className={`lc-data text-[13px] ${g.player ? "text-lc-volt" : "text-lc-chalk"}`}>{g.code}</span>
@@ -97,13 +103,14 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
   conditionsLabel,
   car,
   playerCode = "YOU",
+  playerColor,
   onOpenCircuit,
   onOpenConditions,
   onOpenGarage,
   onStart,
 }) => {
   const { mode, family } = useInputMode();
-  const grid = gridPreview(setup, playerCode);
+  const grid = gridPreview(setup, playerCode, playerColor);
   const distance = useRaceDistance(setup.laps, track.lengthM);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const startRef = useRef<HTMLButtonElement | null>(null);

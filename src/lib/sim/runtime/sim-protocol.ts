@@ -4,6 +4,7 @@
  */
 import type { CarTelemetry, ControlInputs, RaceStatus, VehicleModelId } from "@/types/f1";
 import type { RawTrackJson } from "@/lib/track-data";
+import type { RaceDriverLabel } from "../ai-race";
 import type { DamageLevel } from "../car-damage";
 import type { AiGridOrder, PlayerGridSlot } from "../race-setup";
 import type { SimRealismFlags } from "../sim-realism";
@@ -68,6 +69,8 @@ export interface RaceStartSetup {
   damage: DamageLevel;
   aggressionAdd: number;
   standing: boolean;
+  /** The player's code and colour (`AiRace.playerDriver`) */
+  driver: RaceDriverLabel | null;
 }
 
 /**

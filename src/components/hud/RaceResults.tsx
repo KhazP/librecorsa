@@ -41,9 +41,6 @@ function timeTone(r: RaceResultEntry, resultsFinal: boolean): string {
 /** Whole seconds when whole, else one decimal (the kit's penalty badge prints the number as given) */
 const penaltySeconds = (s: number) => (s % 1 === 0 ? s : Math.round(s * 10) / 10);
 
-/** The player racing the AI is named "You" already: no tag to repeat it */
-const isYou = (name: string) => name.trim().toLowerCase() === "you";
-
 const TH = "lc-lbl px-2 pb-2 text-left font-semibold whitespace-nowrap";
 
 /**
@@ -231,7 +228,7 @@ export const RaceResults: React.FC<{
                           <span className="lc-mono w-8 shrink-0 text-[12px] font-bold tracking-[0.08em] text-lc-slate">{r.driverCode}</span>
                         ) : null}
                         <span className="truncate text-[14px] font-semibold">{r.name}</span>
-                        {r.isPlayer && !isYou(r.name) ? <PlayerTag size="sm" /> : null}
+                        {r.isPlayer ? <PlayerTag size="sm" /> : null}
                       </span>
                     </td>
                     <td className="lc-mono px-2 text-right text-[13px] font-bold text-lc-fog max-sm:hidden">{r.lapsCompleted}</td>

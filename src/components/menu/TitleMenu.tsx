@@ -882,6 +882,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       }
                       car={{ id: vehicle.id, quality: vehicle.quality, title: vehicle.title, badge: vehicle.badge, color: vehicleColor }}
                       playerCode={props.profile?.code}
+                      playerColor={props.profile?.color}
                       onOpenCircuit={() => openPanel("circuit", { fromRace: true })}
                       onOpenConditions={props.conditionsPanel ? () => openPanel("conditions", { fromRace: true }) : undefined}
                       onOpenGarage={() => openPanel("car", { fromRace: true })}

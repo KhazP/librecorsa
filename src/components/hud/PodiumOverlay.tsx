@@ -45,9 +45,9 @@ export const PodiumOverlay: React.FC<{ rows: readonly PodiumRow[]; trackName: st
                     {r.name}
                   </span>
                 </span>
-                {r.isPlayer && r.name.trim().toLowerCase() !== "you" ? (
+                {r.isPlayer ? (
                   <PlayerTag size="sm" />
-                ) : !r.isPlayer && r.name !== r.driverCode ? (
+                ) : r.name !== r.driverCode ? (
                   // The code under the name, unless the name is the code (the AI drivers)
                   <span className="lc-mono text-[12px] font-bold tracking-[0.12em] text-lc-slate">{r.driverCode}</span>
                 ) : null}

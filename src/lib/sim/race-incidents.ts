@@ -90,7 +90,11 @@ export class RaceIncidents {
   private nextId = 1;
   private yellowShown = false;
 
-  constructor(private readonly playerCode = 'YOU') {}
+  constructor(
+    private readonly playerCode = 'YOU',
+    /** The code a message shows for a car's code (the race's own codes: the player's driver, a renamed AI driver) */
+    private readonly labelOf: (code: string) => string = (code) => code
+  ) {}
 
   public reset(): void {
     this.messages.length = 0;
@@ -137,7 +141,7 @@ export class RaceIncidents {
           break;
         case 'retired':
           for (const o of this.open) if (o.victim === inc.code) o.victimRetired = true;
-          this.post(raceTimeS, 'retired', inc.isPlayer ? 'You are out of the race' : `${inc.code} is out of the race`, inc.isPlayer ? 'Damage' : undefined, inc.isPlayer);
+          this.post(raceTimeS, 'retired', inc.isPlayer ? 'You are out of the race' : `${this.labelOf(inc.code)} is out of the race`, inc.isPlayer ? 'Damage' : undefined, inc.isPlayer);
           break;
       }
     }
@@ -184,7 +188,7 @@ export class RaceIncidents {
     });
     if (playerInvolved && c.impactMs > 3) {
       const other = c.aIsPlayer ? c.b : c.a;
-      this.post(raceTimeS, 'investigation', `Contact with ${other}`, 'Under investigation', true);
+      this.post(raceTimeS, 'investigation', `Contact with ${this.labelOf(other)}`, 'Under investigation', true);
     }
   }
 
@@ -202,8 +206,8 @@ export class RaceIncidents {
       this.post(
         raceTimeS,
         'penalty',
-        o.atIsPlayer ? `${penalty} s time penalty` : `${o.at} · ${penalty} s penalty`,
-        `Causing a collision${o.victim ? ` with ${o.victim}` : ''}`,
+        o.atIsPlayer ? `${penalty} s time penalty` : `${this.labelOf(o.at)} · ${penalty} s penalty`,
+        `Causing a collision${o.victim ? ` with ${this.labelOf(o.victim)}` : ''}`,
         o.atIsPlayer || o.victimIsPlayer
       );
       return;
@@ -212,9 +216,9 @@ export class RaceIncidents {
       if (!o.atIsPlayer) this.cautionUntilS.set(o.at, raceTimeS + AT_FAULT_COOLDOWN_S / 2);
       if (o.atIsPlayer && o.impactMs > 3) {
         this.playerContactWarnings++;
-        this.post(raceTimeS, 'warning', 'Warning', `Contact with ${o.victim} · ${o.reason.toLowerCase()}`, true);
+        this.post(raceTimeS, 'warning', 'Warning', `Contact with ${this.labelOf(o.victim ?? '')} · ${o.reason.toLowerCase()}`, true);
       } else if (o.playerInvolved && o.impactMs > 3) {
-        this.post(raceTimeS, 'nfa', 'No further action', `${o.at} · ${o.reason.toLowerCase()}`, true);
+        this.post(raceTimeS, 'nfa', 'No further action', `${this.labelOf(o.at)} · ${o.reason.toLowerCase()}`, true);
       }
       return;
     }
