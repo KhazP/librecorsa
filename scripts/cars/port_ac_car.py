@@ -507,11 +507,68 @@ PRESETS = {
         # A skin folder whose name lost its umlaut in the mod's archive
         skin_ids={'1980_Procar_M�ller_66': '1980_procar_mueller_66'},
     ),
+    # NPanic's Chaparral 2D, 1966 (327) and 1967 (427). Their liveries change parts as well as paint: a part (`parts`:
+    # kn5 node -> part, or an `extension/` kn5 the mod inserts, `extra_kn5`) is a node of its own, shown only for the
+    # liveries of its variants (`part_variants`; a livery's variant is `skin_variants`, else 'base')
+    'chaparral-2d': dict(
+        title='Chaparral 2D (1966)',
+        auto=True,
+        materials={},
+        paint=('EXT_Main_Body',),
+        # The windscreen's inner face (a second, near-clear layer over the outer glass)
+        skip_materials={'INT_Window'},
+        skip_node_prefixes=(),
+        # The gurney extension and the centre lamps' covers as the mod's default setup has them: off (the kn5 has the
+        # extension fitted, and the covers tucked away)
+        skip_nodes=('COCKPIT_LR', 'EXT_Gurney_Animation', 'EXT_Mainlights_Cover_Animation'),
+        default_skin='7_nurb_1000_1966',
+        steer_nodes=(),
+        tyre_materials=('EXT_Tire',),
+        tyre_prefix=None,
+        spinning=('DISC_',),
+        windscreen=('EXT_Window',),
+        # The paint, the number plate and (one Sebring car's) gauge labels
+        skin_textures=('EXT_Body.dds', 'EXT_Licence_Plate.dds', 'INT_Labels_Gauges.dds'),
+        # The Sebring and Daytona cars (the skins' ext_config.ini MODEL_REPLACEMENT) wear the Sebring scoop and fixed
+        # light covers, and no roof mirror or number plate
+        parts={'EXT_Scoop': 'scoop', 'EXT_Mirror_Roof': 'roof_mirror', 'EXT_License_Plate': 'plate'},
+        extra_kn5=(('EXT_Scoop_Sebring.kn5', 'scoop_sebring'), ('EXT_Mirror_Roof_Off.kn5', 'roof_mirror_off'),
+                   ('EXT_Fixed_Lightcover.kn5', 'light_covers_fixed')),
+        part_variants={'scoop': ('base',), 'roof_mirror': ('base',), 'plate': ('base',),
+                       'scoop_sebring': ('sebring',), 'roof_mirror_off': ('sebring',),
+                       'light_covers_fixed': ('sebring',)},
+        skin_variants={'11_sebring_1966': 'sebring', '12_sebring_1966': 'sebring', '65_daytona_1966': 'sebring'},
+    ),
+    'chaparral-2d-67': dict(
+        title='Chaparral 2D (1967)',
+        auto=True,
+        materials={},
+        paint=('EXT_Main_Body',),
+        skip_materials={'INT_Window'},
+        skip_node_prefixes=(),
+        # The centre lamps' covers, tucked away in the kn5 (the default setup's covers off)
+        skip_nodes=('COCKPIT_LR', 'EXT_Mainlights_Cover_Animation'),
+        default_skin='14_daytona_1967',
+        steer_nodes=(),
+        tyre_materials=('EXT_Tire',),
+        tyre_prefix=None,
+        spinning=('DISC_',),
+        windscreen=('EXT_Window',),
+        skin_textures=('EXT_Body.dds', 'EXT_Licence_Plate.dds', 'INT_Labels_Gauges.dds'),
+        # Daytona's raised gurney spoiler; Sebring's big spoiler and front canards (the mod's two setup aero kits)
+        parts={'EXT_Daytona_Wing': 'daytona_wing', 'EXT_Sebring_Wing': 'sebring_wing', 'EXT_Canards': 'canards'},
+        extra_kn5=(),
+        part_variants={'daytona_wing': ('base',), 'sebring_wing': ('sebring',), 'canards': ('sebring',)},
+        # The Sebring kit sits scaled down inside the body at rest; the setup's aero 50 (the last frame) fits it
+        part_poses={'EXT_Sebring_Wing': ('rear_aero.ksanim', 100), 'EXT_Canards': ('canards.ksanim', 100)},
+        skin_variants={'5_sebring_1967': 'sebring'},
+    ),
 }
 # The car folders the presets were written for
 PRESET_BY_FOLDER = {'suzuki_liana': 'liana', 'mt_mtr_496r': 'mtr-496r',
                     'nissan_skyline_bcnr33_jgtc': 'nissan-r33-jgtc', 'nissan_r32_jtcc': 'nissan-r32-jtcc',
-                    'pfa_vw_scirocco_53b': 'vw-scirocco-gtx', 'pddw_bmw_procar_m1': 'bmw-m1-procar'}
+                    'pfa_vw_scirocco_53b': 'vw-scirocco-gtx', 'pddw_bmw_procar_m1': 'bmw-m1-procar',
+                    'wsc_legends_chaparral_2d_66': 'chaparral-2d', 'wsc_legends_chaparral_2d_67': 'chaparral-2d-67'}
 
 
 def skin_id(preset, folder):
