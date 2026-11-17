@@ -497,13 +497,23 @@ function buildGt3LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints 
  * GT3 slick [spec]: the front's values, the rear's own Fz0, load sensitivity, 16-point DY/DX curves, peak
  * slip angle, relaxation length, pressure-spring rate, and camber thrust in `rearOverride` ([REAR]). The endurance
  * slicks are harder and longer-lasting than the sprint ones the reference laps ran on [bop]: D_REF (longitudinal)
- * 1.77 / 1.74 / 1.69, × 1.033 across, and three temperature curves.
+ * 1.690 / 1.662 / 1.614 (the soft 1.7 % over the medium, the medium 3 % over the hard), × 1.131 across, and three
+ * temperature curves.
+ *
+ * Longitudinal [motec]: on the soft, warm, with fuel aboard, stops with the front slip held at the logs' ABS level
+ * pull the logs' braking g within 2 % where the tyres set it, 99 to 189 km/h (1.65 / 1.71 / 1.86 / 2.06 g against
+ * 1.68 / 1.72 / 1.83 / 2.03 g, the mean of five stops at each speed). From 225 km/h the pedal is down and the brakes'
+ * 4850 Nm and the endurance bodywork's drag set it, 6–7 % over the logs' sprint car.
  */
 /**
- * Lateral grip over longitudinal: the endurance slick's 1.7974 lateral on 1.74 longitudinal (Medium) [bop]. The
- * second reference's slick leans the same way (its lateral load curve sits 5–7 % over its longitudinal one) [motec]
+ * Lateral grip over longitudinal [motec]: warm, with fuel aboard, the car on the soft holds the reference laps'
+ * sustained lateral g within 2 % from 81 to 171 km/h (1.72 / 1.77 / 1.82 / 1.98 g against 1.70 / 1.79 / 1.79 /
+ * 2.01 g). The 153 km/h bin is one fast corner that sits over the 171 km/h one; the car holds 1.92 g there against
+ * 2.13. The same lean on the medium and the hard puts the medium at 1.63 g on an 80 km/h skidpad, inside the
+ * endurance slick's 1.62–1.74 g [bop]. Each grip is fitted to its own logs, so the lean is further than the second
+ * reference's slick, whose lateral load curve sits 6–10 % over its longitudinal one from 1 to 5 kN [ref]
  */
-const GT3_LATERAL_GRIP = 1.033;
+const GT3_LATERAL_GRIP = 1.131;
 
 /** The rim and inflation cavity of an 18" GT3 wheel [est] */
 const GT3_RIM_GAS = {
@@ -538,7 +548,7 @@ function gt3Compound(
   tyre_compound: PhysicsTyreCompound,
   name: string,
   shortName: 'S' | 'M' | 'H',
-  /** D_REF (lateral = longitudinal) of the compound */
+  /** D_REF (longitudinal) of the compound */
   gripScale: number,
   thermalCurve: LutPoints,
   window: [number, number],
@@ -705,7 +715,7 @@ const TYRES = {
     'PhysicsTyreCompound_GT3_Soft',
     'GT3 Soft',
     'S',
-    1.77,
+    1.69,
     [
       [0, 0.7],
       [20, 0.8],
@@ -727,7 +737,7 @@ const TYRES = {
     'PhysicsTyreCompound_GT3_Medium',
     'GT3 Medium',
     'M',
-    1.74,
+    1.662,
     [
       [0, 0.7],
       [20, 0.8],
@@ -750,7 +760,7 @@ const TYRES = {
     'PhysicsTyreCompound_GT3_Hard',
     'GT3 Hard',
     'H',
-    1.69,
+    1.614,
     [
       [0, 0.7],
       [20, 0.8],

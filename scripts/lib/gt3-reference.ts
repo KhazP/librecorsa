@@ -6,7 +6,8 @@
  * by speed, braking g by speed (95th percentile above 60 % pedal), full-throttle g by speed, engine rpm per m/s of rear
  * wheel speed by gear, the slip the ABS and TC allow, and the steering needed per curvature and per g.
  * Sea-level air (ρ 1.2) like Valencia, flat ground, no driver aids (the slip targets stand in for them), and the car
- * in the state those runs were driven in: tyres in their working window, part of a tank of fuel aboard.
+ * in the state those runs were driven in: tyres in their working window, part of a tank of fuel aboard. The car runs
+ * the soft (the car's first slot), the tyre the sprints run on.
  *
  * Shared by `compare-gt3-telemetry.ts` (prints the table) and `verify-gt3-telemetry.ts` (asserts it).
  */

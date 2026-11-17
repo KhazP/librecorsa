@@ -32,11 +32,13 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [1.252, 1.327, 1.228, 1.009, 0.761, 0.506, 0.305, 0.015],
     lockKappa: Math.tan((250 / 12.6) * (Math.PI / 180)) / 3.382,
   },
+  // Measured 2026-11-18 on the endurance trim and its slicks fitted to the reference laps (the BMW M4 GT3 drives on
+  // these physics and reads this table too). It tops out near 294 km/h, so it slows at 85 m/s
   'amg-gt3': {
     speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
-    latG: [1.579, 1.661, 1.747, 1.886, 2.046, 2.219, 2.404, 2.574],
-    brakeG: [1.548, 1.837, 1.92, 2.015, 2.103, 2.176, 2.231, 2.295],
-    accelG: [0.894, 0.82, 0.614, 0.462, 0.335, 0.227, 0.128, 0.02],
+    latG: [1.63, 1.711, 1.803, 1.937, 2.083, 2.247, 2.408, 2.487],
+    brakeG: [1.68, 1.757, 1.86, 1.985, 2.129, 2.266, 2.337, 2.411],
+    accelG: [0.805, 0.718, 0.551, 0.403, 0.272, 0.157, 0.046, -0.397],
     lockKappa: Math.tan((320 / 12.6) * (Math.PI / 180)) / 2.65,
   },
   // Measured 2026-11-12 on the rigid-body engine the LC26 ships on (`lc26-engine.ts`)
