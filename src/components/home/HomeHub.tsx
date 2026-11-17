@@ -254,7 +254,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
         <h1 className="sr-only">LibreCorsa: free open-source racing simulator in your browser</h1>
         <p className="sr-only">{SITE_DESCRIPTION}</p>
 
-        <header className={`flex shrink-0 flex-wrap items-center gap-x-4 gap-y-3 pt-[max(1rem,env(safe-area-inset-top))] pb-4 sm:gap-x-6 ${GUTTER}`}>
+        <header className={`flex shrink-0 flex-wrap items-center gap-x-3 gap-y-3 pt-[max(1rem,env(safe-area-inset-top))] pb-4 sm:gap-x-6 ${GUTTER}`}>
           <LibreCorsaLogo variant="compact" size="sm" />
           {/* A pointer click picks a tab without leaving the cursor's volt on it (Drive keeps the one volt fill); keys
               and a pad keep the cursor where they put it. `contents` keeps the strip a child of the header's row. */}
@@ -273,7 +273,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
               size="sm"
               prevPrompt={pad ? <PadGlyph button="lb" family={family} /> : <KeyCap>Q</KeyCap>}
               nextPrompt={pad ? <PadGlyph button="rb" family={family} /> : <KeyCap>E</KeyCap>}
-              className="max-md:order-last max-md:w-full"
+              className="max-lg:order-last max-lg:w-full max-md:[mask-image:linear-gradient(to_right,#000_calc(100%-2rem),transparent)]"
             />
           </div>
           {/* Beside the logo on a phone too: the tabs take the row under them */}
@@ -303,7 +303,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
             className={`min-h-0 flex-1 overflow-y-auto overscroll-contain pt-2 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none max-lg:pb-24 ${GUTTER}`}
           >
             {tab === "home" ? (
-              <div className="grid gap-3 lg:h-full lg:min-h-[520px] lg:grid-cols-12 lg:grid-rows-2">
+              <div className="grid gap-3 lg:h-full lg:min-h-[620px] lg:grid-cols-12 lg:grid-rows-2">
                 <a
                   href={PLAY_HREF}
                   onClick={() => rememberPicks(picks)}
@@ -349,7 +349,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     </span>
                     {layout.outline?.kmh.length ? (
                       <span className="mt-1 flex items-baseline gap-1.5">
-                        <span ref={speedRef} className="lc-data text-[34px] leading-none">
+                        <span ref={speedRef} className="lc-data inline-block min-w-[3ch] text-right text-[34px] leading-none">
                           {Math.round(speedIn(layout.outline.kmh[0], units.speed))}
                         </span>
                         <span className="text-[12px] font-semibold text-lc-slate">{SPEED_LABEL[units.speed]}</span>
@@ -404,7 +404,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     <span className={TILE_TITLE}>Press & media</span>
                     <span className="lc-hint text-[13px]">{data.coverageCount} articles and videos so far</span>
                   </span>
-                  <span aria-hidden className="flex flex-col">
+                  <span aria-hidden className="flex min-h-0 flex-1 flex-col overflow-hidden [mask-image:linear-gradient(to_bottom,#000_calc(100%-1rem),transparent)]">
                     {data.coverage.slice(0, 3).map((a) => (
                       <span key={a.url} className="flex min-w-0 flex-col gap-0.5 border-t border-lc-line py-2.5">
                         <span className="truncate text-[13px] font-semibold text-lc-chalk">{a.outlet}</span>
@@ -412,7 +412,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                       </span>
                     ))}
                   </span>
-                  <span aria-hidden className={`${MORE} mt-auto`}>
+                  <span aria-hidden className={`${MORE} mt-auto shrink-0`}>
                     Coverage and press kit
                     <Icon name="next" />
                   </span>
@@ -462,7 +462,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                             rel="noopener"
                             onPointerEnter={focusOnHover}
                             data-nav-default={index === 0 ? "" : undefined}
-                            className="inline-flex items-center gap-1 rounded-full text-[12px] text-lc-slate no-underline transition-colors duration-200 hover:text-lc-chalk focus-visible:text-lc-chalk"
+                            className="inline-flex items-center gap-1 rounded-full text-[12px] text-lc-slate no-underline transition-colors duration-200 hover:text-lc-chalk focus-visible:text-lc-chalk pointer-coarse:min-h-11"
                           >
                             <span className="lc-data">
                               {entry.commits} {entry.commits === 1 ? "commit" : "commits"}
@@ -634,7 +634,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                         {data.modders.map((m) => (
                           <li key={m.name} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-lc-line py-3 last:border-b">
                             <span className="flex min-w-0 flex-col gap-0.5">
-                              <a href={m.url} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`self-start ${TEXT_LINK}`}>
+                              <a href={m.url} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`self-start inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
                                 {m.name}
                               </a>
                               <span className="lc-hint text-[13px]">{m.works.join(", ")}</span>
@@ -682,7 +682,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                       // Not in the Android app (store-mode.ts)
                       ...(storeBuild ? [] : [["Buy me a coffee", data.supportUrl]]),
                     ].map(([label, href]) => (
-                      <a key={label} href={href} onPointerEnter={focusOnHover} className={TEXT_LINK}>
+                      <a key={label} href={href} onPointerEnter={focusOnHover} className={`inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
                         {label}
                       </a>
                     ))}
@@ -699,7 +699,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
           className={`flex shrink-0 items-center justify-between gap-4 border-t border-lc-line pt-3 pb-[max(0.875rem,env(safe-area-inset-bottom))] ${pad ? "" : "max-lg:hidden pointer-coarse:hidden"} ${GUTTER}`}
         >
           <PromptBar prompts={prompts} rule={false} />
-          <span className="max-w-[34%] truncate text-[13px] font-semibold text-lc-slate max-md:hidden">
+          <span title={`${venue.name}, ${car.title}`} className="max-w-[34%] truncate text-[13px] font-semibold text-lc-slate max-md:hidden">
             {venue.name}, {car.title}
           </span>
         </footer>
