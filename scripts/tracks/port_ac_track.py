@@ -469,6 +469,8 @@ AC_TRACKS = {
         'layout_dir': '',
         'models_ini': None,
         'kn5_files': ['barbagallo.kn5'],
+        # Its 5-10 cm right-hander kerb at ~2150 m threw the LC26 at 145 km/h: the AI keeps off it (aiMaxKerbRiseM)
+        'modelledKerbs': True,
         'name': 'Barbagallo Raceway',
         'layout': 'Long circuit',
         'country': 'Australia',
