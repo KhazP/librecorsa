@@ -71,6 +71,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   tireCompound: "config",
   trackLimitsMode: "config",
   trackLimitsHold: "config",
+  gridHold: "config",
   aiSelfRecovery: "config",
 
   groundQuery: "local",

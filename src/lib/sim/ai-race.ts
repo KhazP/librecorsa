@@ -27,6 +27,8 @@ export interface AiRace {
   playerDriver: RaceDriverLabel | null;
   /** Lines the field up and starts it: a standing start behind the lights, or a rolling one */
   startRace(standing: boolean): void;
+  /** The player makes the standing start on the clutch: held on the grid through the lights with the engine live */
+  manualStart: boolean;
   readonly skill: number;
   setSkill(skill: number): void;
   attachTrackRoot(root: THREE.Object3D): void;

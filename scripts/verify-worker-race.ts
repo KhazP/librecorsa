@@ -256,5 +256,49 @@ check('and its car drives on alone', host.remote && sim.sMeters !== sBefore && r
   race3.dispose();
 }
 
+// ---- A manual start in the worker: held on the grid with the engine live, the clutch the driver's to let out
+{
+  const link4 = host.raceLink();
+  check('the worker can run a race with a manual start', link4 !== null);
+  if (!link4) process.exit(1);
+  const race4 = new WorkerAiField(link4, env, car, OPPONENTS, SKILL, () => car.groundQuery ?? null);
+  race4.manualStart = true;
+  race4.startRace(true);
+  car.aiAutopilot = false;
+  let grid: number | null = null;
+  let held = true;
+  let peakRpm = 0;
+  let tick = 0;
+  for (; tick < 2500 && (race4.phase === 'lights' || grid === null); tick++) {
+    car.step(SIM_TICK_S, { throttle: 0.6, clutch: 1 });
+    loop.advance(SIM_TICK_S);
+    host.endFrame(true);
+    race4.update();
+    if (race4.phase === 'lights') {
+      grid ??= car.sMeters;
+      if (Math.abs(car.sMeters - grid) > 0.05) held = false;
+      peakRpm = Math.max(peakRpm, car.telemetry.rpm);
+    }
+  }
+  check('through the lights the car stays on its grid spot, its engine revving', held && peakRpm > 3000, `${Math.round(peakRpm)} rpm`);
+  // Clutch still held after the lights: the car waits; let out, it goes
+  for (let f = 0; f < 60; f++) {
+    car.step(SIM_TICK_S, { throttle: 0.6, clutch: 1 });
+    loop.advance(SIM_TICK_S);
+    host.endFrame(true);
+    race4.update();
+  }
+  const waited = Math.abs(car.sMeters - (grid ?? car.sMeters)) < 0.1;
+  for (let f = 0; f < 400; f++) {
+    const clutch = Math.max(0, 1 - f / 75);
+    car.step(SIM_TICK_S, clutch > 0 ? { throttle: 0.8, clutch } : { throttle: 0.8 });
+    loop.advance(SIM_TICK_S);
+    host.endFrame(true);
+    race4.update();
+  }
+  check('after the lights the car waits on the clutch, and goes as it comes out', waited && car.sMeters - (grid ?? 0) > 5, `${(car.sMeters - (grid ?? 0)).toFixed(1)} m on`);
+  race4.dispose();
+}
+
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll worker race checks passed.');
 if (failures.length) process.exitCode = 1;

@@ -815,6 +815,11 @@ export class F12026CarSim implements SimulatorCar {
   public gamepadAssistEnabled = true;
   /** Automatic gear changes; off = the driver shifts. The autopilot always shifts for itself (VehiclePhysics.autoShift) */
   public autoGearbox = true;
+  /**
+   * Held on the grid through the lights of a manual start: the brakes on and the clutch open whatever the pedals say,
+   * the gear left where it is, the throttle revving a free engine
+   */
+  public gridHold = false;
   /** Keyboard and controller steering assist */
   public readonly steeringAssist = new SteeringAssist();
   /** DRS is driver-operated on the f12026-car (and absent on a GT3): there is no automatic mode, so writes are ignored */
@@ -1694,6 +1699,7 @@ export class F12026CarSim implements SimulatorCar {
     // the rack turns at the rim's own speed rather than in one jump per frame
     const rim = inputs.steerRim && inputs.analogSteer !== undefined ? inputs.analogSteer : null;
     const rimFrom = rim !== null && this.lastRimSteer !== null ? this.lastRimSteer : rim;
+    const held = this.gridHold && !this.aiAutopilot;
     for (let k = 0; k < ticks; k++) {
       if (rim !== null && rimFrom !== null) inputs.analogSteer = rimFrom + ((rim - rimFrom) * (k + 1)) / ticks;
       const cmd: { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
@@ -1703,15 +1709,15 @@ export class F12026CarSim implements SimulatorCar {
         // An empty tank (fuel is only burnt with fuel use on): the engine no longer fires. A race field's own car is
         // spared: it starts on a load nobody chose and has no pit stop to take
         ignitionCut: this.fuelKg > 0 || !this.realism.fuelUse || (this.aiAutopilot && !this.aiSelfRecovery) ? cmd.ignitionCut : 0,
-        brake: cmd.brake,
-        brakeWheelScale: cmd.brakeWheelScale,
+        brake: held ? 1 : cmd.brake,
+        brakeWheelScale: held ? undefined : cmd.brakeWheelScale,
         steer: cmd.steer,
-        drs: drsPress || cmd.drs,
-        shiftUp,
-        shiftDown,
+        drs: !held && (drsPress || cmd.drs),
+        shiftUp: !held && shiftUp,
+        shiftDown: !held && shiftDown,
         // The autopilot keeps its gear and drives on the car's own clutch
-        neutral: neutral && !this.aiAutopilot,
-        clutch: this.aiAutopilot ? undefined : inputs.clutch,
+        neutral: !held && neutral && !this.aiAutopilot,
+        clutch: held ? 1 : this.aiAutopilot ? undefined : inputs.clutch,
       };
       // A car whose state has blown up hands back a non-finite command: the rack must not keep it past the rescue
       this.steerCmd = Number.isFinite(cmd.steer) ? cmd.steer : 0;

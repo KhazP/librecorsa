@@ -38,6 +38,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   aggressionAdd = 0;
   playerDriver: RaceDriverLabel | null = null;
   playerPenaltyS = 0;
+  manualStart = false;
   readonly worker: WorkerRaceView = this;
   /** The field's seed for the next start (a headless check replays one); unset, the worker draws one */
   seed: number | undefined = undefined;
@@ -122,6 +123,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
         damage: this.damageLevel,
         aggressionAdd: this.aggressionAdd,
         standing,
+        manualStart: standing && this.manualStart,
         driver: this.playerDriver,
       },
       epoch,

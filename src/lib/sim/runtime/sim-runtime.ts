@@ -206,6 +206,7 @@ export class SimRuntime {
         field.damageLevel = setup.damage;
         field.aggressionAdd = setup.aggressionAdd;
         field.playerDriver = setup.driver;
+        field.manualStart = setup.standing && setup.manualStart === true;
         field.startRace(setup.standing);
         env.applyWeatherSync(command.weather);
         const ownRaceControl = car.raceControl;
@@ -256,7 +257,10 @@ export class SimRuntime {
     const race = this.race;
     if (!race) return;
     this.race = null;
-    if (this.car) this.car.raceControl = race.ownRaceControl;
+    if (this.car) {
+      this.car.raceControl = race.ownRaceControl;
+      this.car.gridHold = false;
+    }
   }
 
   /** Whether the clock is running (the page is driving the car) */
@@ -294,7 +298,11 @@ export class SimRuntime {
       // until the lights go out), then the field; the field and the road every FIELD_TICKS ticks
       const fieldDtS = FIELD_TICKS * SIM_TICK_S;
       if (race && race.tick === 0) race.env.update(fieldDtS, race.field.sims());
-      if (!race?.field.playerFrozen) {
+      // A manual start holds the car on the grid through the lights with its engine live; an assisted one stops it
+      const frozen = race?.field.playerFrozen === true;
+      const onGrid = frozen && race!.field.manualStart;
+      if (race) car.gridHold = onGrid;
+      if (!frozen || onGrid) {
         car.step(SIM_TICK_S, inputs);
         const samples = car.telemetry.ffbSubframeSamples;
         if (samples) for (const s of samples) this.ffb.push(s);

@@ -73,7 +73,14 @@ export function parseRaceSetup(raw: unknown): RaceSetup {
  * Starts an AI race with the race setup: laps, grid, damage, and the start (standing unless asked otherwise), with the
  * player under their own driver code and colour
  */
-export function startAiRace(field: AiRace, setup: RaceSetup, driver: RaceDriverLabel | null, standing = setup.start === 'standing'): void {
+export function startAiRace(
+  field: AiRace,
+  setup: RaceSetup,
+  driver: RaceDriverLabel | null,
+  standing = setup.start === 'standing',
+  manualStart = false,
+): void {
+  field.manualStart = standing && manualStart;
   field.playerDriver = driver ? { code: driver.code, color: driver.color } : null;
   field.raceLaps = setup.laps;
   field.gridOrder = setup.aiGrid;
