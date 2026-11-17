@@ -68,8 +68,8 @@ const ClutchPrompt: React.FC<{ control: StartClutchControl }> = ({ control }) =>
 };
 
 /**
- * A manual start's checklist under the lights, as the F1 games show it: hold the clutch, get the revs into the car's
- * launch window. Each step has a ring that fills as the player gets there. A jump start turns it into the penalty.
+ * A manual start's checklist under the lights, as the F1 games show it: hold the clutch, get the revs up to the car's
+ * launch revs. Each step has a ring that fills as the player gets there. A jump start turns it into the penalty.
  */
 export const LaunchCue: React.FC<{ telemetry: CarTelemetry }> = ({ telemetry }) => {
   const start = telemetry.start;
@@ -103,17 +103,17 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry }> = ({ telemetry }) 
 
   const carId = telemetry.f12026?.carId;
   const limiter = revRangeFor(carId)[1] + SHIFT_BEEP_BELOW_LIMITER_RPM;
-  const [lo, hi] = launchWindow(carId, limiter);
+  // Revs from the window's floor up to the limiter launch as well as each other (race-start.ts): any of them is green
+  const [lo] = launchWindow(carId, limiter);
   const rpm = Math.max(0, telemetry.rpm || 0);
-  const revsIn = rpm >= lo && rpm <= hi;
-  const revsOver = rpm > hi;
+  const revsUp = rpm >= lo;
   const clutchIn = start.clutchIn >= CLUTCH_IN;
   const named = "name" in start.clutch ? start.clutch.name : null;
 
   return (
     <div
       role="status"
-      aria-label={`Manual start: ${clutchIn ? "clutch held" : "hold the clutch"}, ${revsIn ? "revs in the launch window" : revsOver ? "too many revs" : "bring the revs up"}`}
+      aria-label={`Manual start: ${clutchIn ? "clutch held" : "hold the clutch"}, ${revsUp ? "revs up" : "bring the revs up"}`}
       className={`flex flex-col gap-2.5 rounded-lc-row py-3 pr-5 pl-3 ${HUD_GLASS}`}
     >
       <Step
@@ -122,9 +122,8 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry }> = ({ telemetry }) 
         label={named ? `Hold the ${named}` : "Hold clutch"}
       />
       <Step
-        ring={<StepRing progress={revsOver ? 1 : rpm / lo} color={revsOver ? HUD_RED : revsIn ? HUD_GAIN : HUD_WHITE} done={revsIn} />}
-        label={revsOver ? "Too many revs" : "Revs in the green"}
-        color={revsOver ? HUD_RED : undefined}
+        ring={<StepRing progress={rpm / lo} color={revsUp ? HUD_GAIN : HUD_WHITE} done={revsUp} />}
+        label="Revs up"
       />
     </div>
   );
