@@ -434,7 +434,7 @@ const steerLockRows: RowDef[] = STEER_LOCK_CLASSES.map((c) => {
   const real = CAR_WHEEL_LOCKS_DEG[c.models[0]];
   return slider({
     id: `lock-${c.models[0]}`,
-    label: `Steering lock: ${c.label.toLowerCase()}`,
+    label: `Steering lock: ${c.label}`,
     hint: "How far round the rim full lock is. The real car's lock is the most realistic",
     advanced: true,
     min: STEER_LOCK_MIN_DEG,
@@ -465,6 +465,8 @@ export function WheelSetup({ first }: { first?: boolean }) {
   const pads = useGamepads();
   const w = settings.wheel;
   const [mode, setModeState] = useState<WheelMode>(IDLE);
+  // "Btn 3 moved from Pause menu": a button taken from another action says so, as the keyboard screen does
+  const [buttonNotice, setButtonNotice] = useState<string | null>(null);
   // Read by the calibrator and capture callbacks, which a late frame can still call after the mode has moved on
   const modeRef = useRef(mode);
   const setMode = useCallback((next: WheelMode) => {
@@ -521,6 +523,10 @@ export function WheelSetup({ first }: { first?: boolean }) {
     (b: ButtonBinding) => {
       const m = modeRef.current;
       if (m.kind !== "capturing") return;
+      const taken = PAD_ACTIONS.find(
+        ({ id }) => id !== m.action && w.buttons[id]?.button === b.button && w.buttons[id]?.padId === b.padId,
+      );
+      setButtonNotice(taken ? `Btn ${b.button} moved from ${taken.label}` : null);
       update((s) => {
         const buttons = { ...s.wheel.buttons };
         for (const k of Object.keys(buttons) as PadAction[]) {
@@ -532,7 +538,7 @@ export function WheelSetup({ first }: { first?: boolean }) {
       });
       setMode(IDLE);
     },
-    [update, setMode],
+    [update, setMode, w.buttons],
   );
   const onCancelCapture = useCallback(() => {
     if (modeRef.current.kind === "capturing") setMode(IDLE);
@@ -689,6 +695,10 @@ export function WheelSetup({ first }: { first?: boolean }) {
           <div className="pt-2">
             <StatusPill tone="live">Press a button on any device. Esc cancels; it stops after {CAPTURE_TIMEOUT_S} s</StatusPill>
           </div>
+        ) : buttonNotice ? (
+          <div className="pt-2">
+            <StatusPill>{buttonNotice}</StatusPill>
+          </div>
         ) : null}
       </SettingsCard>
     </>
@@ -844,7 +854,6 @@ export const WheelStep: React.FC = () => {
   return (
     <div className="grid items-start gap-3 lg:grid-cols-2">
       <div className="flex min-w-0 flex-col gap-3">
-        {wheels.length === 0 && pads.length === 0 ? <Hint>{NO_WHEEL}.</Hint> : null}
         <WheelSetup first />
       </div>
       <div className="flex min-w-0 flex-col gap-3">

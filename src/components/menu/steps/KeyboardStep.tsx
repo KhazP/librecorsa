@@ -83,10 +83,11 @@ export function KeyBindingsCard({ first }: { first?: boolean }) {
       <div className="grid gap-x-8 gap-y-1 xl:grid-cols-2">
       {KEY_ACTIONS.map(({ id, label }, row) => {
         const codes = settings.keys[id];
-        const slots = Math.max(KEY_SLOTS, codes.length);
+        // One empty slot at most: an action with no key shows a single Add, not two
+        const slots = Math.min(Math.max(KEY_SLOTS, codes.length), codes.length + 1);
         return (
           <SettingRow key={id} label={label} className={capture?.action === id ? "bg-lc-volt/6" : undefined}>
-            <span className="flex flex-wrap items-center justify-end gap-1.5">
+            <span className="flex max-w-64 flex-wrap items-center justify-end gap-1.5">
               {Array.from({ length: slots }, (_, slot) => {
                 const listening = capture?.action === id && capture.slot === slot;
                 // An empty slot binds the next free one, so the slot pressed and the one listening can differ
