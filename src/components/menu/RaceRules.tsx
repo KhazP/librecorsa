@@ -24,7 +24,12 @@ import {
   type RulePresetId,
   type TrackLimitsChoice,
 } from "@/lib/sim/race-rules";
+import { QUALIFYING_MINUTES, type QualifyingMinutes } from "@/lib/sim/qualifying";
 import { useUnits } from "@/lib/settings/ui-prefs";
+
+/** The segmented control's ids are strings: "0" (off), "5", "10", "15" */
+type QualifyingOption = `${QualifyingMinutes}`;
+const qualifyingOption = (m: QualifyingMinutes): QualifyingOption => `${m}`;
 import { DISTANCE_LABEL, distanceIn } from "@/lib/settings/units";
 
 /** Above this many AI cars, slower machines lose frame rate: every car runs the full vehicle model */
@@ -185,23 +190,38 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
             onChange={(launch) => onChange({ launch })}
           />
         </SettingRow>
-        <SettingRow label="Grid slot">
-          <Segmented<PlayerGridSlot>
-            options={(["front", "middle", "back", "random"] as const).map((id) => ({ id, label: PLAYER_GRID_LABELS[id] }))}
-            value={setup.grid}
-            onChange={(grid) => onChange({ grid })}
-          />
-        </SettingRow>
         <SettingRow
-          label="AI grid"
-          hint={setup.aiGrid === "qualifying" ? "Pace order, shuffled a little by a qualifying lap" : undefined}
+          label="Qualifying"
+          hint={setup.qualifying ? "You drive alone first: your best clean lap sets your place among the AI cars' times" : undefined}
         >
-          <Segmented<AiGridOrder>
-            options={(["qualifying", "pace", "reversed"] as const).map((id) => ({ id, label: AI_GRID_LABELS[id] }))}
-            value={setup.aiGrid}
-            onChange={(aiGrid) => onChange({ aiGrid })}
+          <Segmented<QualifyingOption>
+            options={QUALIFYING_MINUTES.map((m) => ({ id: qualifyingOption(m), label: m ? `${m} min` : "Off" }))}
+            value={qualifyingOption(setup.qualifying)}
+            onChange={(m) => onChange({ qualifying: Number(m) as QualifyingMinutes })}
           />
         </SettingRow>
+        {/* Qualifying sets the grid: the slot and the AI order are the setup's only without it */}
+        {setup.qualifying ? null : (
+          <>
+            <SettingRow label="Grid slot">
+              <Segmented<PlayerGridSlot>
+                options={(["front", "middle", "back", "random"] as const).map((id) => ({ id, label: PLAYER_GRID_LABELS[id] }))}
+                value={setup.grid}
+                onChange={(grid) => onChange({ grid })}
+              />
+            </SettingRow>
+            <SettingRow
+              label="AI grid"
+              hint={setup.aiGrid === "qualifying" ? "Pace order, shuffled a little by a qualifying lap" : undefined}
+            >
+              <Segmented<AiGridOrder>
+                options={(["qualifying", "pace", "reversed"] as const).map((id) => ({ id, label: AI_GRID_LABELS[id] }))}
+                value={setup.aiGrid}
+                onChange={(aiGrid) => onChange({ aiGrid })}
+              />
+            </SettingRow>
+          </>
+        )}
         <SettingRow label="Damage">
           <Segmented<DamageLevel>
             options={DAMAGE_LEVELS.map((id) => ({ id, label: DAMAGE_LEVEL_LABELS[id] }))}
