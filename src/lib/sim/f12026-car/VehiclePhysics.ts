@@ -93,6 +93,7 @@ import {
 } from '../wet-tyres';
 import { FULL_REALISM, realismThermalGrip, type SimRealismFlags } from '../sim-realism';
 import { surfaceDragN } from '../track-surfaces';
+import { createKerbHitState, kerbHitLevel, stepKerbHit, type KerbHitState } from '../kerb-hits';
 import {
   type AeroRideHeightMap,
   type AxleSuspensionData,
@@ -236,6 +237,12 @@ export function flatSpotThumpNm(severity: number, rotationRad: number, omega: nu
  * column sees it divided by the steering ratio (≈ 48 Nm on 12.6:1)
  */
 const FFB_REFERENCE_NM = 600;
+/**
+ * Backward push at the contact patch per newton of a kerb's load hit (`kerb-hits.ts`): a tyre meeting an edge is pushed
+ * back as well as up. Felt in the rack through the front tyres' scrub radius (`kingpinMomentNm`), as a kerb kicks a real
+ * steering wheel
+ */
+const KERB_STRIKE_FX_PER_N = 0.35;
 /**
  * Diff map blending: the pedal travel over which the brake hands the diff to its entry map and the throttle to its exit
  * map (a touch of brake is corner entry; power is committed from ≈ 40 % pedal), the road-wheel angle over which the lock
@@ -413,6 +420,8 @@ export interface WheelState {
   /** Tyre radial stiffness (N/m) */
   verticalRate: number;
   fz: number;
+  /** What the road's shape does to the tyre (`kerb-hits.ts`) */
+  kerbHit: KerbHitState;
   fx: number;
   fy: number;
   /** Self-aligning moment about the contact normal (Nm) */
@@ -1350,6 +1359,7 @@ export class VehiclePhysics {
         patchHalfLengthM: 0,
         verticalRate: 0,
         fz: 0,
+        kerbHit: createKerbHitState(),
         fx: 0,
         fy: 0,
         mz: 0,
@@ -1502,6 +1512,21 @@ export class VehiclePhysics {
    * Drain the outer-step FFB samples collected since the last call (the newest FFB_SUBFRAME_MAX), in the telemetry
    * convention (torque on the rim, + = right) like `-takeFfbAverage()`. Falls back to the latest value.
    */
+  /**
+   * Each tyre's kerb hit level now (FL, FR, RL, RR; `kerbHitLevel`) into `hits`; and how often the left and right
+   * tyres are being hit (Hz, the busier of each side's two) into `hz`.
+   * For the pad's rumble and the DualSense, which are told what the road does to each side.
+   */
+  public readKerbHits(hits: number[], hz: number[]): void {
+    hz[0] = hz[1] = 0;
+    for (let i = 0; i < 4; i++) {
+      const w = this.wheels[i];
+      hits[i] = kerbHitLevel(w.kerbHit, this.staticCornerLoad(w.isFront));
+      const side = w.isLeft ? 0 : 1;
+      hz[side] = Math.max(hz[side], w.kerbHit.hitRateHz);
+    }
+  }
+
   public takeFfbSubframeSamples(): number[] {
     if (this.ffbSubframeSamples.length === 0) return [-this.telemetry.ffbTorqueNorm];
     const out = this.ffbSubframeSamples.slice();
@@ -2538,6 +2563,7 @@ export class VehiclePhysics {
         if (delta > 0) fz = Math.max(0, w.verticalRate * delta - model.verticalDamping * vRelN);
       }
       w.fz = fz;
+      stepKerbHit(w.kerbHit, fz, w.grounded, this.staticCornerLoad(w.isFront), h);
       w.deflection = Math.max(0, delta);
       w.loadedRadius = R0 - w.deflection + dR * 0.25;
       w.rollingRadius = Math.max(0.2, R0 - w.deflection / 3);
@@ -2789,7 +2815,18 @@ export class VehiclePhysics {
           _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, _kpGeo, fx, fy, fz, w.mz + w.mzTwist, w.mx
         );
         w.gyroSteerNm = this.wheelGyroSteerNm(w, _fw);
-        ffbMz += tyreKingpinNm + flatSpotThumpNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz, w.circumferentialWear) + w.gyroSteerNm;
+        // A kerb's hit pushes the patch back at the scrub radius (KERB_STRIKE_FX_PER_N)
+        const kerbStrikeNm =
+          w.kerbHit.hitN !== 0
+            ? kingpinMomentNm(
+                _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, _kpGeo, -KERB_STRIKE_FX_PER_N * w.kerbHit.hitN, 0, 0, 0, 0
+              )
+            : 0;
+        ffbMz +=
+          tyreKingpinNm +
+          flatSpotThumpNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz, w.circumferentialWear) +
+          w.gyroSteerNm +
+          kerbStrikeNm;
       }
 
       // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the

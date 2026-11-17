@@ -157,6 +157,10 @@ AC_TRACKS = {
     'spielberg': {
         'folder': 'spielberg_ver2',
         'layout_dir': 'circuit_full',
+        'modelledKerbs': True,
+        # Issue #113: the road and run-off outside Remus (s 1254-1324) laid on the mod's drawn ground, where this
+        # build's lie up to 0.8 m under it (made on the 7 Nov 2026 build, which this source rebuilds vertex for vertex)
+        'physicsPatches': ('scripts/tracks/patches/spielberg-remus-v2.json',),
         'models_ini': 'models_circuit_full.ini',
         'name': 'Red Bull Ring',
         'layout': 'Grand Prix layout',
@@ -178,6 +182,7 @@ AC_TRACKS = {
     'spielberg_south': {
         'folder': 'spielberg_ver2',
         'layout_dir': 'circuit_south',
+        'modelledKerbs': True,
         'models_ini': 'models_circuit_south.ini',
         'name': 'Red Bull Ring',
         'layout': 'South course',
@@ -200,6 +205,7 @@ AC_TRACKS = {
     'spielberg_inner': {
         'folder': 'spielberg_ver2',
         'layout_dir': 'circuit_inner',
+        'modelledKerbs': True,
         'models_ini': 'models_circuit_inner.ini',
         'name': 'Red Bull Ring',
         'layout': 'Inner skill course',
@@ -227,6 +233,12 @@ AC_TRACKS = {
         'layout_dir': '',
         'models_ini': None,
         'kn5_files': ['monaco.kn5'],
+        'modelledKerbs': True,
+        # The start straight crests sharply out of Anthony Noghès (mod R ~134 m over ~15 m at s ~2980): the default R 400 m
+        # limit and 1.5-sample smoothing left the road 22 cm under the mod's at the centre and 43 cm at the left edge, past
+        # the 0.32 m the drawn road is laid within, so the drawn road stood over the wheels there
+        'crestMinRadiusM': 150,
+        'profileSmoothSamples': 0.75,
         'name': 'Circuit de Monaco',
         'layout': 'Grand Prix layout',
         'country': 'Monaco',
@@ -321,6 +333,8 @@ AC_TRACKS = {
     },
     'istanbul_park': {
         'folder': 'istanbul_park',
+        # It drives on hidden kerb meshes and draws its kerbs apart (relief p90 4.0 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': '1',
         'models_ini': None,
         # models_1.ini also places the helicopters and the blimp (animated by CSP): the circuit, plus the brake boards
@@ -369,6 +383,9 @@ AC_TRACKS = {
     },
     'grobnik': {
         'folder': 'grobnik',
+        # Its kerb meshes are drawn and driven on (relief p90 7.1 cm): kept as modelled, not the generic hump. Their
+        # 60 deg sides make 4.6-4.7 cm edges at 335 and 1140 m, as the mod's do
+        'modelledKerbs': True,
         'layout_dir': '',
         'models_ini': None,
         'kn5_files': ['grobnik.kn5'],
@@ -416,6 +433,8 @@ AC_TRACKS = {
         'layout_dir': '',
         'models_ini': None,
         'kn5_files': ['oschersleben.kn5'],
+        # Its chicane kerb at 468 m stands 9-10 cm inside the road's width: the AI keeps off it (aiMaxKerbRiseM)
+        'modelledKerbs': True,
         'name': 'Motorsport Arena Oschersleben',
         'layout': 'Grand Prix layout',
         'country': 'Germany',
@@ -450,6 +469,8 @@ AC_TRACKS = {
         'layout_dir': '',
         'models_ini': None,
         'kn5_files': ['barbagallo.kn5'],
+        # Its 5-10 cm right-hander kerb at ~2150 m threw the LC26 at 145 km/h: the AI keeps off it (aiMaxKerbRiseM)
+        'modelledKerbs': True,
         'name': 'Barbagallo Raceway',
         'layout': 'Long circuit',
         'country': 'Australia',
@@ -482,6 +503,8 @@ AC_TRACKS = {
     },
     'vir': {
         'folder': 'vir',
+        # Its kerb meshes are drawn and driven on (relief p90 11.0 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': 'full course',
         'models_ini': None,
         # models_full course.ini also lists the pit crews, the crowd, 3D grass, the DRS cones and two balloons
@@ -509,6 +532,8 @@ AC_TRACKS = {
     },
     'vir_north': {
         'folder': 'vir',
+        # Its kerb meshes are drawn and driven on (relief p90 11.0 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': 'north course',
         'models_ini': None,
         'kn5_files': ['vir.kn5', 'vir_north.kn5', 'trackday_signage.kn5', 'patriot_objects.kn5'],
@@ -533,6 +558,8 @@ AC_TRACKS = {
     },
     'vir_south': {
         'folder': 'vir',
+        # Its kerb meshes are drawn and driven on (relief p90 11.0 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': 'south course',
         'models_ini': None,
         'kn5_files': ['vir.kn5', 'vir_south.kn5', 'trackday_signage.kn5', 'south_objects.kn5'],
@@ -557,7 +584,12 @@ AC_TRACKS = {
     },
     'vir_grand_east': {
         'folder': 'vir',
+        # Its kerb meshes are drawn and driven on (relief p90 11.0 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': 'grand east course',
+        # The Patriot course's crest (mod R ~130 m) was cut up to 0.41 m under the mod's road by the default R 400 m limit,
+        # past the 0.32 m the drawn road is laid within, so the drawn road stood over the wheels there
+        'crestMinRadiusM': 200,
         'models_ini': None,
         'kn5_files': ['vir.kn5', 'vir_grand_east.kn5', 'trackday_signage.kn5', 'patriot_objects.kn5'],
         'name': 'Virginia International Raceway',
@@ -581,6 +613,8 @@ AC_TRACKS = {
     },
     'vir_grand_west': {
         'folder': 'vir',
+        # Its kerb meshes are drawn and driven on (relief p90 11.0 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': 'grand west course',
         'models_ini': None,
         'kn5_files': ['vir.kn5', 'vir_grand_west.kn5', 'trackday_signage.kn5', 'patriot_objects.kn5'],
@@ -605,7 +639,12 @@ AC_TRACKS = {
     },
     'vir_patriot': {
         'folder': 'vir',
+        # Its kerb meshes are drawn and driven on (relief p90 11.0 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': 'patriot course',
+        # The Patriot course's crest (mod R ~130 m) was cut up to 0.41 m under the mod's road by the default R 400 m limit,
+        # past the 0.32 m the drawn road is laid within, so the drawn road stood over the wheels there
+        'crestMinRadiusM': 200,
         'models_ini': None,
         'kn5_files': ['vir.kn5', 'vir_patriot.kn5', 'trackday_signage.kn5', 'patriot_objects.kn5'],
         'name': 'Virginia International Raceway',
@@ -629,7 +668,12 @@ AC_TRACKS = {
     },
     'vir_patriot_reverse': {
         'folder': 'vir',
+        # Its kerb meshes are drawn and driven on (relief p90 11.0 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': 'patriot reverse course',
+        # The Patriot course's crest (mod R ~130 m) was cut up to 0.41 m under the mod's road by the default R 400 m limit,
+        # past the 0.32 m the drawn road is laid within, so the drawn road stood over the wheels there
+        'crestMinRadiusM': 200,
         'models_ini': None,
         'kn5_files': ['vir.kn5', 'vir_patriot_reverse.kn5', 'trackday_signage.kn5', 'patriot_objects.kn5'],
         'name': 'Virginia International Raceway',
@@ -653,6 +697,8 @@ AC_TRACKS = {
     },
     'sachsenring': {
         'folder': 'g333_sachsenring_2022',
+        # Its kerb meshes are drawn and driven on (relief p90 3.0 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': 'event',
         'models_ini': None,
         # models_event.ini also places helicopters, marshals, flag men and camera crews (animated by CSP). AC.kn5 holds
@@ -691,6 +737,8 @@ AC_TRACKS = {
     },
     'sachsenring_short': {
         'folder': 'g333_sachsenring_2022',
+        # Its kerb meshes are drawn and driven on (relief p90 3.0 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': 'trackday_short',
         'models_ini': None,
         'kn5_files': ['g333_sachsenring_2022.kn5', 'trackday_short.kn5', 'walls.kn5', 'roadmesh.kn5', 'trees.kn5',
@@ -722,6 +770,8 @@ AC_TRACKS = {
     },
     'norisring': {
         'folder': 'norisring',
+        # Its kerb meshes are drawn and driven on (relief p90 3.0 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': '',
         'models_ini': None,
         # AC.kn5 holds only the grid, pit and timing markers; norisring_RDMesh.kn5 is the physical road
@@ -753,6 +803,8 @@ AC_TRACKS = {
     },
     'le_mans_82': {
         'folder': 'le_mans_82',
+        # Its kerb meshes are drawn and driven on (relief p90 5.4 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': 'regular',
         'models_ini': None,
         # models_regular.ini also places the airship, a helicopter and camera crews (animated by CSP). physical.kn5 is
@@ -872,6 +924,8 @@ AC_TRACKS = {
     },
     'bridgehampton': {
         'folder': 'bridgehampton',
+        # It drives on hidden kerb meshes and draws its kerbs apart (relief p90 1.7 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': '',
         'models_ini': None,
         # models.ini also lists 3D grass (grass.kn5) and the crowd (people.kn5, 314k triangles). phy.kn5 is the
@@ -911,6 +965,9 @@ AC_TRACKS = {
     },
     'watkins_glen': {
         'folder': 'lilski_watkins_glen',
+        # It drives on hidden kerb meshes and draws its kerbs apart (relief p90 4.3 cm): kept as modelled, not the
+        # generic hump.
+        'modelledKerbs': True,
         'layout_dir': 'boot',
         'models_ini': None,
         # models_boot.ini also lists 3D grass, the parked tents and RVs (veh.kn5, 531k triangles) and the blimp and
@@ -952,6 +1009,10 @@ AC_TRACKS = {
     },
     'watkins_glen_short': {
         'folder': 'lilski_watkins_glen',
+        # It drives on hidden kerb meshes and draws its kerbs apart (relief p90 4.3 cm): kept as modelled, not the
+        # generic hump. The GT3's line was
+        # re-optimised on them (the old one, tuned on the hump, spun it at 3.4 km)
+        'modelledKerbs': True,
         'layout_dir': 'short',
         'models_ini': None,
         'kn5_files': ['lilski_watkins_glen.kn5', 'pb.kn5', 'phy.kn5', 'land.kn5', 'trees.kn5', 'st.kn5', 'groove_s.kn5',
@@ -986,6 +1047,11 @@ AC_TRACKS = {
     },
     'riverside': {
         'folder': 'riverside',
+        # It drives on hidden kerb meshes and draws its kerbs apart (relief p90 6.6 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
+        # The run into Turn 7A crests at R ~280 m (s ~2010): the default R 400 m limit cut the road 0.34 m under the mod's,
+        # past the 0.32 m the drawn road is laid within, so the drawn road stood 0.34 m over the wheels there
+        'crestMinRadiusM': 250,
         'layout_dir': 'long',
         'models_ini': None,
         # models_long.ini also lists 3D grass, the parked cars and RVs (veh.kn5, 749k triangles) and the blimp.
@@ -1023,6 +1089,11 @@ AC_TRACKS = {
     },
     'riverside_short': {
         'folder': 'riverside',
+        # It drives on hidden kerb meshes and draws its kerbs apart (relief p90 6.6 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
+        # The run into Turn 7A crests at R ~280 m (s ~2010): the default R 400 m limit cut the road 0.34 m under the mod's,
+        # past the 0.32 m the drawn road is laid within, so the drawn road stood 0.34 m over the wheels there
+        'crestMinRadiusM': 250,
         'layout_dir': 'short',
         'models_ini': None,
         'kn5_files': ['riverside.kn5', 'phy.kn5', 'land.kn5', 'short.kn5', 'trees.kn5', 'crowd.kn5', 'misc.kn5'],
@@ -1054,6 +1125,8 @@ AC_TRACKS = {
     },
     'riverside_nascar': {
         'folder': 'riverside',
+        # It drives on hidden kerb meshes and draws its kerbs apart (relief p90 6.6 cm): kept as modelled, not the generic hump
+        'modelledKerbs': True,
         'layout_dir': 'nascar',
         'models_ini': None,
         'kn5_files': ['riverside.kn5', 'phy.kn5', 'land.kn5', 'nascar.kn5', 'trees.kn5', 'crowd.kn5', 'misc.kn5'],
@@ -1089,6 +1162,7 @@ AC_TRACKS = {
         'models_ini': None,
         'kn5_files': ['speedvegas.kn5', 'walls.kn5', 'models.kn5', 'models2.kn5', 'models3.kn5', 'models4.kn5',
                       'models5.kn5', 'objects.kn5'],
+        'modelledKerbs': True,
         # walls.kn5 draws the tyre walls and fences as well as holding the barriers' physics meshes
         'physicsFiles': (),
         'name': 'SpeedVegas',
@@ -1143,6 +1217,9 @@ AC_TRACKS = {
         'crestMinRadiusM': 250,
         # Its skidmark layer (Skidmark01, ksPerPixelAT set to blend) draws blended, not cut out
         'blendedCutouts': True,
+        # Its kerbs (1_KERB0-5, drawn and driven on) are 0.45 m strips 1.9 cm proud with a slot every metre: kept as
+        # modelled, not flattened into the generic hump
+        'modelledKerbs': True,
         # Opened by link only (?track=willow_springs) while Nukedrop tries it on the live site; drop to list it
         'unlisted': True,
         'description': 'Willow Springs in the Mojave Desert, California: Big Willow, a fast and open 4.0 km lap of nine turns that climbs over a hill and drops back down to the long front straight.',
@@ -1930,12 +2007,12 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
         if is_semaphore_node(name) or name in grooves:
             special_nodes.append((name, item, mat_idx, is_decal, grooves.get(name)))
         else:
-            key = (mat_idx, is_decal)
+            key = (mat_idx, is_decal, bool(item.get('keepShape')))
             grouped.setdefault(key, []).append(item)
 
     # Chunk grouped meshes into <= 65534 vertices per primitive
     merged_nodes = []
-    for (mat_idx, is_decal), items in grouped.items():
+    for (mat_idx, is_decal, keep_shape), items in grouped.items():
         cur_p, cur_n, cur_uv, cur_idx = [], [], [], []
         v_count = 0
         chunk_id = 0
@@ -1944,7 +2021,7 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
             nonlocal cur_p, cur_n, cur_uv, cur_idx, v_count, chunk_id
             if not cur_idx:
                 return
-            mname = f"{materials[mat_idx]['name']}_chunk{chunk_id}"
+            mname = f"{materials[mat_idx]['name']}{'_shaped' if keep_shape else ''}_chunk{chunk_id}"
             chunk_id += 1
             merged_nodes.append((
                 mname,
@@ -1953,6 +2030,7 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
                     'nrm': np.concatenate(cur_n, 0),
                     'uv': np.concatenate(cur_uv, 0),
                     'idx': np.concatenate(cur_idx, 0),
+                    'keepShape': keep_shape,
                 },
                 mat_idx,
                 is_decal,
@@ -2127,6 +2205,9 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
         if groove_cfg is not None:
             extras['decal'] = True
             extras['groove'] = groove_cfg
+        # Laid on the colliders here (`modelledKerbs`): the load-time fit leaves it as built (render/fit-visual-road.ts)
+        if item.get('keepShape'):
+            extras['keepShape'] = True
         if extras:
             nd['extras'] = extras
         node_i = len(gltf_nodes)
@@ -2547,9 +2628,268 @@ def build_ac_kerb_mesh(phys_kerb_tris, xz, tan2, rgt2, yc, width, ds, off, extra
         extra.append(kerb_entry)
 
 
-def sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai_mapped, ds, fall_max=0.27, crest_r=400.0):
+# How far around a point the kerb's shift is averaged (m): enough to smooth the road-to-road difference, far less than
+# a kerb's length, and the same for every vertex at one spot, so a modelled slot or ridge keeps its depth
+KERB_SHIFT_SMOOTH_M = 1.0
+# Most a modelled kerb may lift a wheel over the ground beside it (m): Oschersleben's stand 12-18 cm over the gravel
+# beside them, Grobnik's 11-14 cm, and Assetto Corsa drives them at that height
+MODELLED_KERB_MAX_RISE_M = 0.20
+# Steepest face of a modelled kerb the wheels ride (deg). Steeper ones (the walls of Willow's slots and its edges,
+# 30-90 deg) stay drawn but out of the physics mesh, where they are steps: their slope, smoothed into the flat tops
+# beside them at load, tilted the ground under a wheel by up to 68 deg and threw the drawn tyres up off the kerb
+MODELLED_KERB_MAX_FACE_DEG = 25.0
+# A drawn mesh with this share of its area on the physics kerb (within 5 cm of it) is drawn kerb, moved with it:
+# mods that drive on hidden 1KERB meshes draw their kerbs separately (Istanbul Park's rumble strips: all of them on it;
+# Watkins Glen's CURB 0.83). Named as kerb, curb or rumble, from the lower share (Watkins Glen's curb grooves: 0.61)
+DRAWN_KERB_SHARE = 0.75
+# A kerb point the converted road or off-road bands cover (from just under it to this far over it, m) is lifted onto
+# them, plus MODELLED_KERB_CLEAR_M: the converted road can run wider than the mod's and the bands, swept out from it,
+# higher than the mod's ground, and a kerb under them drives as them (Norisring's at 1.5 km under the road, Grobnik's
+# at 400 m 5-13 cm under the grass, both open kerb in the mod). Points above them keep their place
+MODELLED_KERB_COVER_M = 0.3
+MODELLED_KERB_CLEAR_M = 0.003
+DRAWN_KERB_SHARE_NAMED = 0.55
+DRAWN_KERB_NAME_RE = re.compile(r'kerb|curb|rumble|ripple', re.I)
+
+
+# Physics nodes whose patch-table vertices may sit up to PATCH_NEAR_M off the table's height in a rebuild (the grass
+# edge is re-seated on the walls' and run-off's edges, which can move it a little)
+PATCH_NEAR_NODES = ('Track_Surface_Grass',)
+PATCH_NEAR_M = 0.02
+
+
+def apply_physics_patch(extra, path, skip=()):
+    """A table of physics vertex heights made by a fix to a built GLB (scripts/tracks/patches/*.json: per physics node,
+    each vertex's exact float32 position, its new height and how many copies it has), laid into this build's physics
+    meshes. Refuses a build that does not hold each vertex exactly as often as the table says: the table was made for
+    one build of one mod, and on any other ground it would move the wrong vertices."""
+    with open(path, encoding='utf-8') as f:
+        patch = json.load(f)
+    moved = []
+    for name, entries in patch['nodes'].items():
+        if name in skip or not entries:
+            continue
+        at = [i for i, e in enumerate(extra) if e[0] == name]
+        if len(at) != 1:
+            raise RuntimeError(f'{os.path.basename(path)}: {len(at)} {name} meshes in this build, expected one')
+        i = at[0]
+        P = np.asarray(extra[i][1], np.float32).copy()
+        index, by_xz = {}, {}
+        for k, q in enumerate(map(tuple, P)):
+            index.setdefault(q, []).append(k)
+            by_xz.setdefault((q[0], q[2]), []).append(k)
+        claimed, near = set(), 0
+        todo = []
+        for e in entries:
+            hits = index.get(tuple(np.float32([e['x'], e['y'], e['z']])), [])
+            if len(hits) == e['count']:
+                todo.append((e, hits))
+                claimed.update(hits)
+            elif hits or name not in PATCH_NEAR_NODES:
+                raise RuntimeError(f'{os.path.basename(path)}: {name} vertex ({e["x"]}, {e["y"]}, {e["z"]}) found '
+                                   f'{len(hits)} times, expected {e["count"]}: not the build this patch was made for')
+            else:
+                todo.append((e, None))
+        for n_e, (e, hits) in enumerate(todo):
+            if hits is None:
+                # A grass edge vertex this build seats a little differently: the same place, its height within
+                # PATCH_NEAR_M of the table's
+                cand = [k for k in by_xz.get((np.float32(e['x']), np.float32(e['z'])), [])
+                        if k not in claimed and abs(float(P[k, 1]) - e['y']) <= PATCH_NEAR_M]
+                if len(cand) != e['count']:
+                    raise RuntimeError(f'{os.path.basename(path)}: {name} vertex ({e["x"]}, {e["y"]}, {e["z"]}) found '
+                                       f'{len(cand)} times within {PATCH_NEAR_M} m, expected {e["count"]}')
+                claimed.update(cand)
+                hits = cand
+                near += 1
+                todo[n_e] = (e, hits)
+        for e, hits in todo:
+            P[hits, 1] = np.float32(e['newY'])
+        extra[i] = (extra[i][0], P, *extra[i][2:])
+        moved.append(f'{name} {len(entries)}' + (f' ({near} matched within {PATCH_NEAR_M * 100:.0f} cm)' if near else ''))
+    log(f'  physics patch {os.path.basename(path)}: ' + ', '.join(moved) + (f' (left out: {", ".join(skip)})' if skip else ''))
+
+
+def build_modelled_kerb_mesh(phys_kerb_tris, phys_road_tris, xz, tan2, rgt2, width, ds, off, extra, visual_items):
+    """`modelledKerbs`: the mod's own kerbs, as modelled, moved with the road under them.
+
+    The converted road is rebuilt from the mod's (smoothed, crests limited), so it lies a few centimetres above or
+    below the mod's road. Each kerb vertex is moved up or down by that difference at its spot, averaged over
+    KERB_SHIFT_SMOOTH_M: the kerb sits on the converted road as it sat on the mod's, keeping its height, ridges and slots.
+    The kerb physics mesh (`Track_Surface_Kerb`) and the kerb meshes the mod also draws (1KERB nodes that are visible)
+    get the same shift, so what is drawn is what the wheels touch, as in Assetto Corsa, and those drawn meshes are
+    tagged `keepShape` for the load-time fit to leave alone.
+    """
+    if not phys_kerb_tris or not phys_road_tris:
+        return
+    T_k = np.concatenate(phys_kerb_tris, 0).astype(np.float64)
+    c = T_k.mean(1)
+    fn = np.cross(T_k[:, 1] - T_k[:, 0], T_k[:, 2] - T_k[:, 0])
+    fn_len = np.linalg.norm(fn, axis=1)
+    ny = np.abs(fn[:, 1]) / np.maximum(fn_len, 1e-12)
+    tree_xz = cKDTree(xz)
+    _, ic = tree_xz.query(c[:, [0, 2]])
+    ec = np.abs(np.einsum('ij,ij->i', c[:, [0, 2]] - xz[ic], rgt2[ic])) - width[ic] / 2
+    # Every face for now: which ones the wheels ride (MODELLED_KERB_MAX_FACE_DEG) is decided once they are moved, as the
+    # drawn kerb's are, since lifting a wall's foot (lift_uncovered) can make it a ramp
+    keep = (fn_len > 1e-6) & (ny > 0.05) & (ec < 5.0)
+    if not np.any(keep):
+        return
+    Tk = T_k[keep].copy()
+
+    # The converted road (not moved at load) and the mod's, both in the mod's coordinates
+    ours = [np.asarray(m_pos, np.float64)[np.asarray(m_idx, np.int64).reshape(-1, 3)] + off
+            for m_name, m_pos, m_idx, _ in extra if m_name == 'Track_Surface_Road' and len(m_idx)]
+    if not ours:
+        log('  modelled kerbs: no Track_Surface_Road, kerbs left out')
+        return
+    T_o = np.concatenate(ours, 0)
+    soup_o = srf.TriSoup(T_o, np.zeros(len(T_o), np.int32), np.zeros((len(T_o), 3), np.uint8))
+    T_m = np.concatenate(phys_road_tris, 0).astype(np.float64)
+    soup_m = srf.TriSoup(T_m, np.zeros(len(T_m), np.int32), np.zeros((len(T_m), 3), np.uint8))
+
+    def road_gap(x, z, y):
+        """Converted road minus the mod's road at (x, z), the surfaces nearest height y; None where either is missing"""
+        ho = [h for h, _, _ in soup_o.hits(x, z) if abs(h - y) < 1.5]
+        hm = [h for h, _, _ in soup_m.hits(x, z) if abs(h - y) < 1.5]
+        if not ho or not hm:
+            return None
+        return min(ho, key=lambda h: abs(h - y)) - min(hm, key=lambda h: abs(h - y))
+
+    # The gap at each kerb vertex, or where the kerb lies off the road, at the road's edge beside it (0.3 m in)
+    P = Tk.reshape(-1, 3)
+    q_xz = np.round(P[:, [0, 2]] * 1000.0).astype(np.int64)
+    _, uniq = np.unique(q_xz, axis=0, return_index=True)
+    U = P[uniq]
+    _, iu = tree_xz.query(U[:, [0, 2]])
+    lat = np.einsum('ij,ij->i', U[:, [0, 2]] - xz[iu], rgt2[iu])
+    gap = np.full(len(U), np.nan)
+    for k, (x, y, z) in enumerate(U):
+        g = road_gap(x, z, y)
+        if g is None:
+            half = max(width[iu[k]] / 2 - 0.3, 0.0)
+            ex, ez = xz[iu[k]] + rgt2[iu[k]] * np.clip(lat[k], -half, half)
+            g = road_gap(ex, ez, y)
+        if g is not None:
+            gap[k] = g
+    ok = np.isfinite(gap)
+    if not ok.any():
+        log('  modelled kerbs: no road under or beside them, kerbs left out')
+        return
+    if not ok.all():
+        # Fill from the nearest vertex that has it
+        _, j = cKDTree(U[ok][:, [0, 2]]).query(U[~ok][:, [0, 2]])
+        gap[~ok] = gap[ok][j]
+    pts = U[:, [0, 2]]
+    pts_tree = cKDTree(pts)
+
+    def shift_at(q):
+        """The averaged gap at points q (n x 2)"""
+        out = np.empty(len(q))
+        for k, nb in enumerate(pts_tree.query_ball_point(q, KERB_SHIFT_SMOOTH_M)):
+            if not nb:
+                _, j = pts_tree.query(q[k])
+                out[k] = gap[j]
+                continue
+            d = np.linalg.norm(pts[nb] - q[k], axis=1)
+            w = (1.0 - d / KERB_SHIFT_SMOOTH_M) ** 2 + 1e-9
+            out[k] = float(np.dot(w, gap[nb]) / w.sum())
+        return out
+
+    # The converted surfaces a kerb point may lie under (MODELLED_KERB_COVER_M), in the mod's coordinates
+    cover = [np.asarray(m_pos, np.float64)[np.asarray(m_idx, np.int64).reshape(-1, 3)] + off
+             for m_name, m_pos, m_idx, _ in extra
+             if m_name in ('Track_Surface_Road', 'Track_Surface_Runoff', 'Track_Surface_Gravel', 'Track_Surface_Grass')
+             and len(m_idx)]
+    T_c = np.concatenate(cover, 0)
+    soup_c = srf.TriSoup(T_c, np.zeros(len(T_c), np.int32), np.zeros((len(T_c), 3), np.uint8))
+    n_lifted = [0]
+
+    def lift_uncovered(P):
+        """P (n x 3, the mod's coordinates, already shifted): each point under a converted surface lifted onto it"""
+        for k in range(len(P)):
+            x, y, z = P[k]
+            hs = [h for h, _, _ in soup_c.hits(x, z) if y - 0.05 < h <= y + MODELLED_KERB_COVER_M]
+            if hs and max(hs) + MODELLED_KERB_CLEAR_M > y:
+                P[k, 1] = max(hs) + MODELLED_KERB_CLEAR_M
+                n_lifted[0] += 1
+        return P
+
+    # Physics: the kept triangles as the mod has them, not split: the drawn kerb is moved vertex by vertex, and a physics
+    # triangle split where the drawn one is not would bend between the same corners differently once a point is lifted
+    V = Tk.reshape(-1, 3).copy()
+    V[:, 1] += shift_at(V[:, [0, 2]])
+    V = lift_uncovered(V)
+    n_lifted_phys = n_lifted[0]
+    T_moved = V.reshape(-1, 3, 3)
+    n_moved = np.cross(T_moved[:, 1] - T_moved[:, 0], T_moved[:, 2] - T_moved[:, 0])
+    ny_moved = np.abs(n_moved[:, 1]) / np.maximum(np.linalg.norm(n_moved, axis=1), 1e-12)
+    V = T_moved[ny_moved > math.cos(math.radians(MODELLED_KERB_MAX_FACE_DEG))].reshape(-1, 3)
+    V -= off
+    F = np.arange(len(V), dtype=np.uint32).reshape(-1, 3)
+    fn_sub = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    F[fn_sub[:, 1] < 0] = F[fn_sub[:, 1] < 0][:, ::-1]
+    F = F.reshape(-1)
+
+    # u: metres along the lap (the surface ripple's phase, none by default on these kerbs); v = 0.5
+    s_xz = V[:, [0, 2]] + off[[0, 2]]
+    _, iv = tree_xz.query(s_xz)
+    L_m = ds * len(xz)
+    s_u = (iv * ds + np.einsum('ij,ij->i', s_xz - xz[iv], tan2[iv])) % L_m
+    u_tri = s_u.reshape(-1, 3)
+    wrap = u_tri.max(1) - u_tri.min(1) > L_m / 2
+    u_tri[wrap] = np.where(u_tri[wrap] < L_m / 2, u_tri[wrap] + L_m, u_tri[wrap])
+    UV = np.column_stack([u_tri.reshape(-1) / bt.KERB_UV_M, np.full(len(V), 0.5)]).astype(np.float32)
+
+    kerb_entry = ('Track_Surface_Kerb', V.astype(np.float32), F, {'surface': 'kerb', 'uvScaleM': bt.KERB_UV_M, '_uv': UV})
+    extra[:] = [e for e in extra if e[0] != 'Track_Surface_Kerb'] + [kerb_entry]
+
+    # Drawing: the mod's visible kerb meshes, and the drawn meshes lying on its kerbs (DRAWN_KERB_SHARE), moved the same
+    # way
+    soup_k = srf.TriSoup(T_k, np.zeros(len(T_k), np.int32), np.zeros((len(T_k), 3), np.uint8))
+    k_lo = T_k.reshape(-1, 3).min(0) - 1.0
+    k_hi = T_k.reshape(-1, 3).max(0) + 1.0
+
+    def on_kerb_share(P, idx):
+        """The share of the mesh's area lying on the physics kerb (its faces' centres within 5 cm of it)"""
+        inside = (P[:, 0] > k_lo[0]) & (P[:, 0] < k_hi[0]) & (P[:, 2] > k_lo[2]) & (P[:, 2] < k_hi[2])
+        if inside.sum() < max(3, 0.2 * len(P)):
+            return 0.0
+        T = P[np.asarray(idx, np.int64).reshape(-1, 3)]
+        area = 0.5 * np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1)
+        pick = np.arange(0, len(T), max(1, len(T) // 600))
+        C = T[pick].mean(1)
+        on = np.array([any(abs(h - y) < 0.05 for h, _, _ in soup_k.hits(x, z)) for x, y, z in C])
+        a = area[pick]
+        return float(a[on].sum() / a.sum()) if a.sum() > 0 else 0.0
+
+    n_vis = 0
+    n_drawn = 0
+    for it in visual_items:
+        if it.get('physics') == 'kerb':
+            pass
+        elif it.get('physics') is None:
+            named = bool(DRAWN_KERB_NAME_RE.search(f"{it.get('name', '')} {it.get('matName', '')}"))
+            share = on_kerb_share(it['pos'].astype(np.float64), it['idx'])
+            if share < (DRAWN_KERB_SHARE_NAMED if named else DRAWN_KERB_SHARE):
+                continue
+            n_drawn += 1
+        else:
+            continue
+        p = it['pos'].astype(np.float64)
+        p[:, 1] += shift_at(p[:, [0, 2]])
+        it['pos'] = lift_uncovered(p).astype(np.float32)
+        it['keepShape'] = True
+        n_vis += 1
+    log(f'  modelled kerbs: {len(F) // 3} physics triangles, {n_vis} drawn meshes ({n_drawn} drawn apart from the physics '
+        f'kerbs); {n_lifted_phys} physics points lifted out from under the converted surfaces; road gap under them '
+        f'p10 {np.percentile(gap, 10) * 100:.1f} median {np.median(gap) * 100:.1f} p90 {np.percentile(gap, 90) * 100:.1f} cm '
+        f'({int((~ok).sum())} of {len(ok)} vertices filled from neighbours)')
+
+
+def sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai_mapped, ds, fall_max=0.27, crest_r=400.0, sigma=1.5):
     """Sample centreline elevation, 9-point lateral profile yprof, and banking on xz. `crest_r`: the sharpest crest
-    the profile keeps (build_track.smooth_road_profile)"""
+    the profile keeps, `sigma` its smoothing along the lap in samples (build_track.smooth_road_profile)"""
     n = len(xz)
     yc = np.full(n, np.nan)
     y_prev = float(y_ai_mapped[0])
@@ -2593,7 +2933,7 @@ def sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai_mapped, ds, fa
         dev = yprof[:, k] - yprof[:, 4]
         lim = np.where(np.abs(lat) <= width / 2, fall_max * abs(lat) + 0.1, 0.35 * abs(lat) + 0.5)
         yprof[:, k] = yprof[:, 4] + np.clip(dev, -lim, lim)
-    yprof = bt.smooth_road_profile(yprof, width, ds, crest_r=crest_r)
+    yprof = bt.smooth_road_profile(yprof, width, ds, sigma=sigma, crest_r=crest_r)
     yc = yprof[:, 4].copy()
     bank = bt.bank_from_profile(yprof, fall_max)
     return yc, yprof, bank
@@ -2697,6 +3037,16 @@ def build_ac_track(tid, cfg, args):
             if area > 0 and flat_area / area > 0.8 and area / max(ntri, 1) > 2.0:
                 mats[mi].update(shader='ksPerPixel', alpha_tested=False, blend=0)
                 log(f'  ksGrass ground drawn opaque: {mats[mi]["name"]} ({area:.0f} m2, {ntri} tris)')
+        # An unblended ksGrass material on kerb meshes is a kerb, not grass blades: VIR draws its FIA kerbs (KERB2 and
+        # FIA Kurb Blank on 01KERB..) with it, in small triangles, and they went undrawn while still driving as kerbs. A
+        # blended one is an overlay (Norisring's dirt on 20CURB_curbe) and stays left out
+        kerb_grass = {nd['mesh']['mat'] for nd in nodes
+                      if nd['mesh'] is not None and classify_physics_node(nd['name']) == 'kerb'
+                      and mats[nd['mesh']['mat']]['shader'].lower() == 'ksgrass'
+                      and mats[nd['mesh']['mat']]['blend'] == 0}
+        for mi in sorted(kerb_grass):
+            mats[mi].update(shader='ksPerPixel', alpha_tested=False, blend=0)
+            log(f'  ksGrass kerb drawn opaque: {mats[mi]["name"]}')
         for m_obj in mats:
             orig_name = m_obj['name']
             sig = (orig_name, m_obj['shader'], m_obj['blend'], m_obj['alpha_tested'], m_obj['maps'].get('txDiffuse'))
@@ -2795,6 +3145,8 @@ def build_ac_track(tid, cfg, args):
                     'idx': m['idx'],
                     'mat': m['mat'] + mat_offset,
                     'transparent': m['transparent'],
+                    'physics': pcat,
+                    'matName': mat_name,
                 })
 
     # `skinDir`: the mod's active track skin replaces KN5 textures by file name (case-insensitive, as AC reads it)
@@ -2870,6 +3222,7 @@ def build_ac_track(tid, cfg, args):
         'start_pt': start_pt,
         'ahead_pt': ahead_pt,
         'base': base,
+        'visual_items': visual_items,
         'layout_path': layout_path,
         'data_dir': data_dir,
         'write_glb': lambda off, extra, glb_out: write_ac_glb(
@@ -2972,7 +3325,8 @@ def build_from_sources(tid, cfg, args, src):
 
     # 4. Elevation, lateral profile & 2-pass kerb-aligned edge refinement + recentring
     yc, yprof, bank = sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai[ia], ds,
-                                                crest_r=float(cfg.get('crestMinRadiusM', 400.0)))
+                                                crest_r=float(cfg.get('crestMinRadiusM', 400.0)),
+                                                sigma=float(cfg.get('profileSmoothSamples', 1.5)))
     wall_cap = float(cfg.get('wallCapM', bt.WALL_CAP_M))
     refine_wall_cap = min(wall_cap, 11.5)
 
@@ -2997,7 +3351,8 @@ def build_from_sources(tid, cfg, args, src):
                 rgt2 = cl.rights(tan2)
                 _, ia = tree_ai.query(xz)
             yc, yprof, bank = sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai[ia], ds,
-                                                crest_r=float(cfg.get('crestMinRadiusM', 400.0)))
+                                                crest_r=float(cfg.get('crestMinRadiusM', 400.0)),
+                                                sigma=float(cfg.get('profileSmoothSamples', 1.5)))
         log(f'  refined width: median={np.median(width):.1f} m ({width.min():.1f}..{width.max():.1f} m)')
     log(f'  elevation: {yc.min():.1f}..{yc.max():.1f} m, closure={yc[-1] - yc[0]:+.2f} m')
     if p2p:
@@ -3196,6 +3551,12 @@ def build_from_sources(tid, cfg, args, src):
         p2p_track_data(data, cfg, n, ds, L, finS, endS, stS, splitS, dead, pos3)
     surf_table = parse_surface_overrides(data_dir) or {}
     surf_table.setdefault('kerb', {})['maxRiseM'] = 0.026
+    if cfg.get('modelledKerbs'):
+        # The kerbs keep the mod's modelled ridges and slots: no made-up ripple on top of them. They are driven as drawn,
+        # so the rise cap (meant for block-modelled kerbs) only has to stop a wheel climbing something else: Willow's
+        # stand 2.8-5.5 cm over the run-off and gravel at their outer edge, where the 2.6 cm cap sank the wheel into them
+        surf_table['kerb']['bumpHeightM'] = 0.0
+        surf_table['kerb']['maxRiseM'] = MODELLED_KERB_MAX_RISE_M
     data['metadata']['surfaceTable'] = surf_table
 
     # Ensure grid slots stay safely within narrow street/skill-course widths
@@ -3276,7 +3637,15 @@ def build_from_sources(tid, cfg, args, src):
         )
         if cfg.get('offroadOverRoad'):
             extra = offroad_over_road(extra, soup, road_set, off, xz, rgt2, width, ds)
-        if use_scan_kerbs:
+        for rel in cfg.get('physicsPatches', ()):
+            # Before the kerbs: modelled kerbs are seated on the patched road and run-off. Their own table entries
+            # are left out, as the kerb is built afresh
+            apply_physics_patch(extra, os.path.join(ROOT, rel),
+                                skip=('Track_Surface_Kerb',) if use_scan_kerbs and cfg.get('modelledKerbs') else ())
+        if use_scan_kerbs and cfg.get('modelledKerbs'):
+            build_modelled_kerb_mesh(phys_tris['kerb'], phys_tris['road'], xz, tan2, rgt2, width, ds, off, extra,
+                                     src.get('visual_items', ()))
+        elif use_scan_kerbs:
             build_ac_kerb_mesh(phys_tris['kerb'], xz, tan2, rgt2, yc, width, ds, off, extra)
         glb_out = os.path.join(out_dir, f'{tid}.glb')
         src['write_glb'](off, extra, glb_out)

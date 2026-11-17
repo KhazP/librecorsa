@@ -25,20 +25,20 @@
 export interface VenueModel {
   /** The venue's folder under public/tracks (its first layout's id); the shared file lives there */
   venue: string;
-  /** The split build (scripts/split-venue-model.mjs prints it): the first 8 hex digits of the shared file's sha256 */
+  /** The split build (scripts/split-venue-model.mjs prints it): the first 8 hex digits of the sha256 of the shared file and its layouts' inputs */
   build: string;
-  /** The KTX2 build of the same pair, for phones: the first 8 hex digits of its shared file's sha256 */
+  /** The KTX2 build of the same pair, for phones: the first 8 hex digits of the sha256 of its shared file and its layout inputs */
   ktx2Build?: string;
   layouts: readonly string[];
 }
 
 export const VENUE_MODELS: readonly VenueModel[] = [
-  { venue: "vir", build: "b79628d0", ktx2Build: "13216544", layouts: ["vir", "vir_grand_east", "vir_grand_west", "vir_north", "vir_patriot", "vir_patriot_reverse", "vir_south"] },
-  { venue: "spielberg", build: "7813326e", ktx2Build: "e9cd6a88", layouts: ["spielberg", "spielberg_inner", "spielberg_south"] },
-  { venue: "sachsenring", build: "2f15331c", ktx2Build: "f59a16b8", layouts: ["sachsenring", "sachsenring_short"] },
+  { venue: "vir", build: "476350c0", ktx2Build: "98df3e6d", layouts: ["vir", "vir_grand_east", "vir_grand_west", "vir_north", "vir_patriot", "vir_patriot_reverse", "vir_south"] },
+  { venue: "spielberg", build: "9fbd960f", ktx2Build: "eb1a6a72", layouts: ["spielberg", "spielberg_inner", "spielberg_south"] },
+  { venue: "sachsenring", build: "eb67f168", ktx2Build: "fd072eed", layouts: ["sachsenring", "sachsenring_short"] },
   { venue: "okayama", build: "7c5a1d41", ktx2Build: "52e7ecf3", layouts: ["okayama", "okayama_drift", "okayama_piper"] },
-  { venue: "riverside", build: "e3849086", ktx2Build: "3bd90ac1", layouts: ["riverside", "riverside_short", "riverside_nascar"] },
-  { venue: "watkins_glen", build: "3dfe75f5", ktx2Build: "4e8208d4", layouts: ["watkins_glen", "watkins_glen_short"] },
+  { venue: "riverside", build: "1f8752cd", ktx2Build: "90147345", layouts: ["riverside", "riverside_short", "riverside_nascar"] },
+  { venue: "watkins_glen", build: "8bfec9ed", ktx2Build: "9e90c846", layouts: ["watkins_glen", "watkins_glen_short"] },
 ];
 
 /** A layout's two files (relative to the base path) */

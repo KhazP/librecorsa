@@ -1145,7 +1145,10 @@ export class TrackColliderQuery implements GroundQuery {
     return this.resolve(0, out);
   }
 
-  /** `query`'s ground with the kerbs and sausages left out: the road, run-off or other ground they stand on. False where there is none but a kerb (or nothing). */
+  /**
+   * `query`'s ground with the kerbs and sausages left out: the road, run-off or other ground they stand on. False
+   * where there is none but a kerb (or nothing).
+   */
   queryBase(x: number, z: number, probeY: number, out: GroundHit): boolean {
     if (!this.query(x, z, probeY, out)) return false;
     return this.resolve(0, out, true, false);
@@ -1315,7 +1318,7 @@ export class TrackColliderQuery implements GroundQuery {
 
   /**
    * Point `p`'s ground from its scanned candidates (see the class notes), into `out`; false when it has none. Unless
-   * `full`, only its height is written (no normal or surface tags).
+   * `full`, only its height is written (no normal or surface tags). Without `raised`, kerbs and sausages are left out.
    */
   private resolve(p: number, out: GroundHit, full = true, raised = true): boolean {
     const c = p * 4;

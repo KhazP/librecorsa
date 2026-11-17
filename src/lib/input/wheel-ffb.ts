@@ -156,6 +156,9 @@ const PHYSICS_SAMPLE_MS = 2;
  */
 const HID_KERB_HZ = 40;
 const HID_KERB_AMPLITUDE = 0.12;
+/** The kerb buzz follows the front tyres' hit rate (`kerbHitHz`) within these (Hz); HID_KERB_HZ without it */
+const HID_KERB_MIN_HZ = 12;
+const HID_KERB_MAX_HZ = 70;
 const HID_ABS_HZ = 25;
 const HID_ABS_AMPLITUDE = 0.1;
 const HID_SLIDE_HZ = 27;
@@ -222,6 +225,10 @@ export class WheelFfbClient {
   private hidHold = 0;
   private hidActiveDriving = false;
   private hidKerb = 0;
+  /** The kerb buzz's rate (Hz), its running phase (rad) and when it last advanced (ms) */
+  private hidKerbHz = HID_KERB_HZ;
+  private hidKerbPhase = 0;
+  private hidKerbLastMs = 0;
   private hidAbs = 0;
   private hidSlide = 0;
   private hidRough = 0;
@@ -273,6 +280,7 @@ export class WheelFfbClient {
     const hwLeds = useHid && activeHid !== null && activeHid.hasRevLeds();
     let force = 0;
     let kerb = 0;
+    let kerbHz = HID_KERB_HZ;
     let abs = 0;
     let rough = 0;
     let slide = 0;
@@ -366,7 +374,16 @@ export class WheelFfbClient {
       if (wheel.ffbInvert) force = -force;
 
       const fronts = telemetry.wheelSurfaces;
-      if (speedKmh > 15 && fronts && (fronts[0] === "kerb" || fronts[1] === "kerb")) kerb = wheel.ffbKerb;
+      const frontHits = telemetry.wheelKerbHit;
+      if (frontHits) {
+        // From the physics: as hard as the kerb hits the front tyres (none over a flat one), at the rate it does
+        // (`kerb-hits.ts`); the rack's own kick at the scrub radius comes with the physics torque
+        if (speedKmh > 15) kerb = wheel.ffbKerb * Math.max(frontHits[0], frontHits[1]);
+        const hitHz = telemetry.kerbHitHz ? Math.max(telemetry.kerbHitHz[0], telemetry.kerbHitHz[1]) : 0;
+        if (hitHz > 0) kerbHz = Math.min(HID_KERB_MAX_HZ, Math.max(HID_KERB_MIN_HZ, hitHz));
+      } else if (speedKmh > 15 && fronts && (fronts[0] === "kerb" || fronts[1] === "kerb")) {
+        kerb = wheel.ffbKerb;
+      }
       if (speedKmh > 5 && telemetry.f12026?.absActive) abs = wheel.ffbAbs;
       // Off the track the grass shakes the rim, as the surface effects level sets for the kerbs
       if (speedKmh > 10 && fronts && (fronts[0] === "grass" || fronts[1] === "grass")) {
@@ -409,7 +426,7 @@ export class WheelFfbClient {
     };
     if (useHid) {
       if (this.hidTest) return;
-      this.hidPlay(subframes, force, driving && wheel.ffbEnabled, kerb, abs, rough, slide, shift);
+      this.hidPlay(subframes, force, driving && wheel.ffbEnabled, kerb, kerbHz, abs, rough, slide, shift);
       return;
     }
     this.hidStopPlayer();
@@ -432,6 +449,7 @@ export class WheelFfbClient {
     force: number,
     activeDriving: boolean,
     kerb: number,
+    kerbHz: number,
     abs: number,
     rough: number,
     slide: number,
@@ -442,6 +460,7 @@ export class WheelFfbClient {
     this.hidHold = this.hidQueue.length > 0 ? this.hidQueue[this.hidQueue.length - 1] : force;
     this.hidActiveDriving = activeDriving;
     this.hidKerb = kerb;
+    this.hidKerbHz = kerbHz;
     this.hidAbs = abs;
     this.hidRough = rough;
     this.hidSlide = slide;
@@ -485,13 +504,17 @@ export class WheelFfbClient {
       this.hidQueue.splice(0, take);
     }
     const t = nowMs / 1000;
+    // The kerb buzz runs on its own phase, so a change of rate does not jump it
+    const kerbDt = this.hidKerbLastMs > 0 ? Math.min(0.05, Math.max(0, (nowMs - this.hidKerbLastMs) / 1000)) : 0;
+    this.hidKerbLastMs = nowMs;
+    this.hidKerbPhase = (this.hidKerbPhase + 2 * Math.PI * this.hidKerbHz * kerbDt) % (2 * Math.PI);
     if (this.hidRough > 0) {
       this.hidNoise += (Math.random() * 2 - 1 - this.hidNoise) * 0.18;
     } else {
       this.hidNoise = 0;
     }
     const buzz =
-      HID_KERB_AMPLITUDE * this.hidKerb * Math.sin(2 * Math.PI * HID_KERB_HZ * t) +
+      HID_KERB_AMPLITUDE * this.hidKerb * Math.sin(this.hidKerbPhase) +
       HID_ABS_AMPLITUDE * this.hidAbs * Math.sign(Math.sin(2 * Math.PI * HID_ABS_HZ * t)) +
       HID_SLIDE_AMPLITUDE * this.hidSlide * Math.sin(2 * Math.PI * HID_SLIDE_HZ * t) +
       HID_ROUGH_AMPLITUDE * this.hidRough * (0.65 * Math.sin(2 * Math.PI * HID_ROUGH_HZ * t) + 0.35 * this.hidNoise) +

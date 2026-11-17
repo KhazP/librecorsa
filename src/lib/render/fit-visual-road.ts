@@ -21,6 +21,10 @@ const OVERLAY_LIFT_M = 0.002;
 /**
  * Lays a converted circuit's visual road (`Track_Model`) onto its fitted ground, so the drawn road follows the
  * colliders across crests and compressions and the wheels sit on what the player sees. Grass is left as modelled.
+ *
+ * Meshes the converter already laid on the colliders (`keepShape`: a mod's modelled kerbs, moved with the road and
+ * driven on as drawn) are left as built. On such a circuit the rest is laid on the ground under a kerb, not on its
+ * top, so the road beneath stays beneath it; decals and grooves still go on top.
  */
 export function fitVisualRoad(root: THREE.Object3D, ground: GroundQuery): void {
   // Every `Track_Model` there is (a venue's split model puts its shared scenery under the layout's own)
@@ -31,23 +35,31 @@ export function fitVisualRoad(root: THREE.Object3D, ground: GroundQuery): void {
   if (!models.length) return;
   root.updateMatrixWorld(true);
   const hit = createGroundHit();
+  let shaped = false;
+  for (const tm of models) tm.traverse((o) => {
+    if (o.userData?.keepShape) shaped = true;
+  });
+  const base = shaped && ground instanceof TrackColliderQuery ? ground : null;
   // Leaves out, before the ground query, the vertices the fit cannot move (most of a scan)
   const reach = roadReach(ground);
   const inv = new THREE.Matrix4();
   const v = new THREE.Vector3();
   const seen = new Set<THREE.BufferGeometry>();
   for (const tm of models) tm.traverse((o) => {
-    if (!(o instanceof THREE.Mesh) || !o.geometry || seen.has(o.geometry)) return;
+    if (!(o instanceof THREE.Mesh) || !o.geometry || seen.has(o.geometry) || inheritedTag(o, "keepShape", root)) return;
     seen.add(o.geometry);
     const pos = o.geometry.getAttribute("position");
     if (!pos) return;
-    const lift = inheritedTag(o, "decal", root) || inheritedTag(o, "groove", root) ? OVERLAY_LIFT_M : 0;
+    const overlay = !!(inheritedTag(o, "decal", root) || inheritedTag(o, "groove", root));
+    const lift = overlay ? OVERLAY_LIFT_M : 0;
+    const under = overlay ? null : base;
     inv.copy(o.matrixWorld).invert();
     let dirty = false;
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
       if (reach && !reach(v.x, v.y, v.z)) continue;
-      if (!ground.query(v.x, v.z, v.y + FIT_WINDOW_M, hit) || hit.surface === "grass" || !(Math.abs(v.y - hit.height) < FIT_WINDOW_M)) continue;
+      const found = under ? under.queryBase(v.x, v.z, v.y + FIT_WINDOW_M, hit) : ground.query(v.x, v.z, v.y + FIT_WINDOW_M, hit);
+      if (!found || hit.surface === "grass" || !(Math.abs(v.y - hit.height) < FIT_WINDOW_M)) continue;
       v.y = hit.height + lift;
       v.applyMatrix4(inv);
       pos.setXYZ(i, v.x, v.y, v.z);

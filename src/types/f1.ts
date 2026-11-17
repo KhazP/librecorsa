@@ -412,6 +412,12 @@ export interface CarTelemetry {
   wheelSlipRatios: [number, number, number, number]; // FL, FR, RL, RR signed longitudinal slip ratio
   wheelSlipAnglesDeg: [number, number, number, number]; // FL, FR, RL, RR lateral slip angle (deg)
   wheelLoadsN: [number, number, number, number]; // FL, FR, RL, RR vertical contact load Fz (N)
+  /**
+   * FL, FR, RL, RR: what the road's shape did to each tyre this frame, from its load hits (0 smooth road, 1 a hard
+   * kerb), and left / right: how often those hits came (Hz). From the physics, for the pad and the DualSense
+   */
+  wheelKerbHit?: [number, number, number, number];
+  kerbHitHz?: [number, number];
   wheelRideHeightsMm: [number, number, number, number]; // FL, FR, RL, RR dynamic ride height (mm)
   suspensionTravelMm: [number, number, number, number]; // FL, FR, RL, RR suspension compression (mm)
   suspensionVelocityMs: [number, number, number, number]; // FL, FR, RL, RR shock velocity (m/s, + = compressing), from the last physics step

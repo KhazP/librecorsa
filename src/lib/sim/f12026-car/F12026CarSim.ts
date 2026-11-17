@@ -2716,6 +2716,9 @@ export class F12026CarSim implements SimulatorCar {
     t.wheelSlipRatios = quad((w) => w.slipRatio);
     t.wheelSlipAnglesDeg = quad((w) => w.slipAngleRad * RAD2DEG);
     t.wheelLoadsN = quad((w) => Math.round(w.fz));
+    const hits = (t.wheelKerbHit ??= [0, 0, 0, 0]);
+    const hitHz = (t.kerbHitHz ??= [0, 0]);
+    v.readKerbHits(hits, hitHz);
     t.wheelRideHeightsMm = quad((w) => Math.round((w.isFront ? vt.aeroHeightFront : vt.aeroHeightRear) * 1000));
     t.suspensionTravelMm = quad((w) => Number((w.compression * 1000).toFixed(2)));
     t.suspensionVelocityMs = quad((w) => w.compressionVel);

@@ -22,21 +22,21 @@ export interface Ktx2Model {
 }
 
 export const KTX2_MODELS: readonly Ktx2Model[] = [
-  { model: "/tracks/barbagallo/barbagallo.glb", build: "5fb38bdd" },
+  { model: "/tracks/barbagallo/barbagallo.glb", build: "c5604d45" },
   { model: "/tracks/borgloh/borgloh.glb", build: "a259d6b5" },
-  { model: "/tracks/bridgehampton/bridgehampton.glb", build: "91d48b50" },
+  { model: "/tracks/bridgehampton/bridgehampton.glb", build: "84b74b84" },
   { model: "/tracks/chang/chang.glb", build: "450cab73" },
   { model: "/tracks/dunsfold/dunsfold.glb", build: "4fa2d903" },
   { model: "/tracks/goodwood/goodwood.glb", build: "cdcb728e" },
-  { model: "/tracks/grobnik/grobnik.glb", build: "8d410648" },
-  { model: "/tracks/istanbul_park/istanbul_park.glb", build: "5c2fcef9" },
-  { model: "/tracks/le_mans_82/le_mans_82.glb", build: "961b7304" },
-  { model: "/tracks/monaco/monaco.glb", build: "55c3dc14" },
-  { model: "/tracks/norisring/norisring.glb", build: "89235a23" },
-  { model: "/tracks/oschersleben/oschersleben.glb", build: "ba37ea08" },
+  { model: "/tracks/grobnik/grobnik.glb", build: "86923d13" },
+  { model: "/tracks/istanbul_park/istanbul_park.glb", build: "cc85f5be" },
+  { model: "/tracks/le_mans_82/le_mans_82.glb", build: "3df8abe9" },
+  { model: "/tracks/monaco/monaco.glb", build: "bf3d1c5a" },
+  { model: "/tracks/norisring/norisring.glb", build: "d7346dff" },
+  { model: "/tracks/oschersleben/oschersleben.glb", build: "ee6edaf8" },
   { model: "/tracks/rwanda_official/rwanda_official.glb", build: "2e64c928" },
-  { model: "/tracks/speedvegas/speedvegas.glb", build: "1ddc8739" },
-  { model: "/tracks/willow_springs/willow_springs.glb", build: "4b133d00" },
+  { model: "/tracks/speedvegas/speedvegas.glb", build: "a053b15e" },
+  { model: "/tracks/willow_springs/willow_springs.glb", build: "6416e695" },
 ];
 
 /** The KTX2 model that stands in for a circuit model, if it has one (relative to the base path) */
