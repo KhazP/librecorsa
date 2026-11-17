@@ -533,6 +533,16 @@ def decode(raw):
     return im.convert('RGBA')
 
 
+def resize_straight(im, size, resample=Image.LANCZOS):
+    """`im` resized with its colour and alpha filtered apart. Pillow filters RGBA premultiplied, which blacks out the
+    colour wherever the alpha is 0, and a multimap's alpha is a mask (a paint atlas can be 0 all over), not coverage"""
+    if im.mode != 'RGBA':
+        return im.resize(size, resample)
+    rgb = im.convert('RGB').resize(size, resample)
+    rgb.putalpha(im.getchannel('A').resize(size, resample))
+    return rgb
+
+
 def bake_multimap(diffuse, detail, uv_mult, flat=False):
     """AC's ksPerPixelMultiMap colour: diffuse * (detail * (1 - diffuse.a) + diffuse.a), in gamma space, as an opaque
     RGB image at the larger of the two sizes (the detail tiled `uv_mult` times; a flat detail, or any with `flat`, is
@@ -547,9 +557,9 @@ def bake_multimap(diffuse, detail, uv_mult, flat=False):
         reps = max(1, int(round(uv_mult)))
         size = (max(diffuse.size[0], detail.size[0] * reps), max(diffuse.size[1], detail.size[1] * reps))
         tiled = Image.fromarray((np.tile(t, (reps, reps, 1)) * 255).astype(np.uint8), 'RGBA')
-        det = np.asarray(tiled.resize(size, Image.BICUBIC), np.float32)[..., :3] / 255.0
+        det = np.asarray(resize_straight(tiled, size, Image.BICUBIC), np.float32)[..., :3] / 255.0
         if diffuse.size != size:
-            d = np.asarray(diffuse.resize(size, Image.BICUBIC), np.float32) / 255.0
+            d = np.asarray(resize_straight(diffuse, size, Image.BICUBIC), np.float32) / 255.0
     a = d[..., 3:4]
     rgb = d[..., :3] * (det * (1.0 - a) + a)
     return Image.fromarray(np.clip(rgb * 255.0 + 0.5, 0, 255).astype(np.uint8), 'RGB')
@@ -565,7 +575,7 @@ def baked_image(key, src, mats, limit):
     mean = key.startswith('bakemean:')
     if mean and max(diffuse.size) > limit:
         k = limit / max(diffuse.size)
-        diffuse = diffuse.resize((round(diffuse.width * k), round(diffuse.height * k)), Image.LANCZOS)
+        diffuse = resize_straight(diffuse, (round(diffuse.width * k), round(diffuse.height * k)))
     return bake_multimap(diffuse, detail, m['props'].get('detailUVMultiplier', 1.0), flat=mean)
 
 
@@ -605,7 +615,9 @@ class TexturePool:
     def _add(self, key, im, cap, alpha, normal=False):
         if max(im.size) > cap:
             k = cap / max(im.size)
-            im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
+            # An opaque map's alpha goes unused (and may be a mask of 0s, which a premultiplied filter would black out)
+            im = (im if alpha else im.convert('RGB')).resize((max(1, round(im.width * k)), max(1, round(im.height * k))),
+                                                            Image.LANCZOS)
         buf = io.BytesIO()
         if alpha:
             im.convert('RGBA').save(buf, format='PNG', optimize=True)
@@ -887,7 +899,7 @@ def export_skins(car_dir, preset, textures, materials, out_dir, max_tex, small_t
             if how == 'bakemean':
                 if max(diffuse.size) > max_tex:
                     k = max_tex / max(diffuse.size)
-                    diffuse = diffuse.resize((round(diffuse.width * k), round(diffuse.height * k)), Image.LANCZOS)
+                    diffuse = resize_straight(diffuse, (round(diffuse.width * k), round(diffuse.height * k)))
                 im = bake_multimap(diffuse, decode(src[m['maps']['txDetail']]), 1.0, flat=True)
             else:
                 im = diffuse
