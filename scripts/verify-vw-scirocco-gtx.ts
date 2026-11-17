@@ -21,6 +21,7 @@ import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
 import { downshiftThenThrottle, measureDownshift, measureUpshift } from './lib/upshift-test';
 import { wetnessFromWater } from '../src/lib/sim/wet-tyres';
+import { SIM_REALISM_FLAGS } from '../src/lib/sim/sim-realism';
 import { noteSkip } from './lib/hosted-files';
 import { evaluateBrakePadMuFactor } from '../src/lib/sim/brake-physics';
 import { buildDoubleWishboneHardpoints, solveCornerKinematics3D } from '../src/lib/sim/suspension-kinematics';
@@ -271,7 +272,9 @@ console.log('\n== Brakes, fuel and steering from the car\'s data');
 
   const wide = createFlatTestTrack(30_000, 3000);
   // 0.003 l/s per 1000 rpm flat out
+  // The fuel-flow model, burning (the game's sprints run on a fixed load, `SimRealismFlags.fuelUse`)
   const sim = createVwSciroccoSim(wide);
+  sim.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
   sim.teleportToDistance(1000, 0);
   const f0 = sim.telemetry.fuelKg;
   for (let t = 0; t < 30; t += DT) sim.step(DT, { throttle: 1 });
