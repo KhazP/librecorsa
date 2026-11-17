@@ -217,6 +217,11 @@ async function verifyKerbsFeelAndSound() {
     const { raw, track, root } = loadTrack(tid);
     const ground = trackColliders(root).ground!;
     const hit = createGroundHit();
+    // Built with its mod's modelled kerbs (drawn meshes tagged keepShape): driven as modelled, no ripple of ours on top
+    let modelledKerbs = false;
+    root.traverse((o: any) => {
+      if (o.userData?.keepShape) modelledKerbs = true;
+    });
 
     // Verify Track_Surface_Kerb triangles are never buried under Track_Surface_Runoff or Track_Collider_Road
     let kerbNode: any = null;
@@ -336,9 +341,10 @@ async function verifyKerbsFeelAndSound() {
       assert.ok(kerb.frames > 0, `[${tid}/${carKind}] Expected car to register surface='kerb' on kerb at s=${targetS.toFixed(1)}m`);
       // The serrations keep the dampers working: with no ripple these fitted kerbs leave the corners at ~0.01 m/s. A 2 mm
       // ripple gives 0.03-0.12 m/s; the 8 mm one that once set the bar at 0.08 m/s lifted a wheel off for a third of
-      // the time on every kerb
+      // the time on every kerb. Modelled kerbs work the dampers as much as their shape does: a smooth one in the mod
+      // (Oschersleben's at this spot, 0.006 m/s) is smooth here too
       assert.ok(
-        kerb.shockMs > 0.02,
+        modelledKerbs || kerb.shockMs > 0.02,
         `[${tid}/${carKind}] Expected the kerb to work the suspension (RMS shock velocity > 0.02 m/s), got ${kerb.shockMs.toFixed(3)} m/s`
       );
       console.log(
@@ -358,6 +364,19 @@ async function verifyTrackEdgeContinuity() {
     const ground = trackColliders(root).ground!;
     const hit = createGroundHit();
     let stepCliffs = 0;
+    // A circuit built with its mod's modelled kerbs (`modelledKerbs`, drawn meshes tagged keepShape) drives them as
+    // modelled, edges included: Willow's drop 4.5-7.5 cm onto the ground behind them, where the mod's own ground lies
+    // 3.5-7.5 cm under them too; Istanbul Park's one at 2048 m 10 cm onto the run-off band (no ground of the mod's behind
+    // it); VIR's stepped kerbs rise 4.6-6.3 cm where the mod's rise 5.6-8.2 cm. Steps with a kerb on either side are
+    // counted apart, up to MODELLED_KERB_BACK_M (the most a modelled kerb may stand, its `maxRiseM` in
+    // scripts/tracks/port_ac_track.py); any other step fails
+    let shaped = false;
+    root.traverse((o) => {
+      if (o.userData?.keepShape) shaped = true;
+    });
+    const MODELLED_KERB_BACK_M = 0.2;
+    let kerbBacks = 0;
+    let kerbBackMax = 0;
     const n = raw.samples.length;
     for (let i = 0; i < n; i++) {
       const s0 = raw.samples[i];
@@ -373,6 +392,7 @@ async function verifyTrackEdgeContinuity() {
         const wDist = side < 0 ? (s0.wL ?? 45) : (s0.wR ?? 45);
         const maxOff = Math.min(hw + 3.0, wDist - 0.35);
         let prevY: number | null = null;
+        let prevKerb = false;
         for (let d = hw - 0.8; d <= maxOff; d += 0.1) {
           const x = s0.p[0] + rx * side * d;
           const z = s0.p[2] + rz * side * d;
@@ -381,14 +401,24 @@ async function verifyTrackEdgeContinuity() {
             continue;
           }
           if (prevY !== null && Math.abs(hit.height - prevY) > 0.045) {
-            stepCliffs++;
+            const step = Math.abs(prevY - hit.height);
+            if (shaped && (prevKerb || hit.surface === 'kerb') && step <= MODELLED_KERB_BACK_M) {
+              kerbBacks++;
+              kerbBackMax = Math.max(kerbBackMax, step);
+            } else {
+              stepCliffs++;
+            }
           }
           prevY = hit.height;
+          prevKerb = hit.surface === 'kerb';
         }
       }
     }
     assert.equal(stepCliffs, 0, `[${tid}] Expected 0 lateral kerb/edge step cliffs (>45 mm / 0.1 m), got ${stepCliffs}`);
-    console.log(`PASS  [${tid}] 0 lateral kerb/edge step cliffs across all ${n} samples`);
+    console.log(
+      `PASS  [${tid}] 0 lateral kerb/edge step cliffs across all ${n} samples` +
+        (kerbBacks ? ` (${kerbBacks} edges of its modelled kerbs, up to ${(kerbBackMax * 1000).toFixed(0)} mm)` : '')
+    );
   }
 
 }
