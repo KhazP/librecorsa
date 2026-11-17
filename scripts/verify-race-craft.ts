@@ -11,9 +11,12 @@
  *  4. A quicker car gets past a slower one on Istanbul Park, cleanly
  *  5. A car stopped on the racing line: the car behind sees the yellow, goes round it, and doesn't hit it
  *  6. A rolling start: the whole field at one speed, and no AI car spins off it
+ *  7. A player who keeps no racecraft (holds the inside, or drives a slow line, and never gives room): an AI car coming
+ *     up on it into three corners from three gaps, beside it or in line, doesn't run into it
  */
 import { readFileSync } from 'node:fs';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
+import { aiLineOffsetM } from '../src/lib/sim/speed-profile';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { AiOpponentField, launchReactionS, type FieldIncident } from '../src/lib/sim/ai-opponents';
@@ -274,6 +277,77 @@ const DT = 1 / 120;
     for (const i of field.incidents) if (i.kind === 'spin') spins.push(`${i.code} at ${f(t)} s`);
   }
   check('Rolling start: no AI car spins off it (GT3, five cars)', spins.length === 0, spins.join(', ') || 'no spins in 10 s');
+}
+
+// ---- 7. A player who keeps no racecraft
+// The AI cars' rules assume the other car keeps them too: room given beside it, the corner yielded when it isn't its own.
+// A player holding the inside, or on a slow line of their own, was turned in on and run into (issue 135). The player
+// here is the autopilot on its own line or holding the inside of the road, blind to the AI car. The AI car comes up on it
+// 22, 12 or 6 m back (in line: 22 or 12), 5 m/s quicker, a car's width outside it or in line behind it, into three
+// corners. On the rules before the room and path checks it ran into the player in 11 of 21 runs, at up to 31 m/s
+{
+  const L = track.totalLengthM;
+  const lineOf = (sim: F12026CarSim, s: number) => aiLineOffsetM(track.getSampleAtDistance(s), sim.racingLineId);
+  let runs = 0;
+  let aiFault = 0;
+  let worstAiFaultMs = 0;
+  const faults: string[] = [];
+  for (const cornerS of [1180, 2482, 4086]) {
+    const inside = Math.sign(track.getSampleAtDistance(cornerS).curvature);
+    for (const lead of [-22, -12, -6]) {
+      for (const holdsInside of [true, false]) {
+        for (const inLine of [false, true]) {
+          const player = new F12026CarSim(track, root);
+          const field = new AiOpponentField(track, player, [{ code: 'AIX', teamColorHex: '#fff', pace: 0.97 }], undefined, { seed: 3, learning: false });
+          field.raceLaps = 3;
+          field.startRace(false);
+          const s0 = (cornerS - 420 + L) % L;
+          const half = track.getSampleAtDistance(s0).width / 2 - 1.3;
+          const v0 = Math.min(70, track.getSampleAtDistance(s0).optimalSpeedKmh / 3.6) * 0.92;
+          const pN = holdsInside ? inside * Math.min(half, 3.2) : lineOf(player, s0);
+          const aN = inLine ? pN : Math.max(-half, Math.min(half, pN - inside * 3.4));
+          if (!inLine && Math.abs(aN - pN) < 3) continue;
+          // (in line 6 m back is a metre off its gearbox at 5 m/s quicker: no car stops in that)
+          if (inLine && lead > -10) continue;
+          player.teleportToDistance(s0, v0, pN);
+          const ai = field.carInfo('AIX')!.sim as F12026CarSim;
+          ai.teleportToDistance((s0 + lead + L) % L, v0 + 5, aN);
+          // The field's own state for the car where it was put: its offset from its line, off the grid lane
+          for (const c of (field as unknown as { cars: { ai: F12026CarSim | null; biasM: number; startLaneM: number | null }[] }).cars) {
+            if (!c.ai) continue;
+            c.biasM = aN - lineOf(c.ai, c.ai.sMeters);
+            c.ai.aiLineBiasM = c.biasM;
+            c.startLaneM = null;
+          }
+          let fault = 0;
+          let worst = 0;
+          for (let t = 0; t < 12; t += DT) {
+            player.aiAutopilot = true;
+            player.aiPaceScale = holdsInside ? 0.9 : 0.86;
+            if (holdsInside) player.aiLineBiasM = pN - lineOf(player, player.sMeters);
+            player.step(DT, {});
+            field.update(DT);
+            for (const i of field.incidents) {
+              if (i.kind !== 'contact') continue;
+              const j = judgeContact(i);
+              if (j.atFault && (j.atFault === 'a') !== i.aIsPlayer) {
+                fault++;
+                worst = Math.max(worst, i.impactMs);
+              }
+            }
+          }
+          runs++;
+          if (fault) {
+            aiFault++;
+            faults.push(`T@${cornerS} ${lead} m ${holdsInside ? 'inside' : 'line'} ${inLine ? 'in line' : 'beside'} ${f(worst)} m/s`);
+          }
+          worstAiFaultMs = Math.max(worstAiFaultMs, worst);
+        }
+      }
+    }
+  }
+  check('No racecraft: the AI car runs into the player in 1 run in 12 at most', aiFault <= runs / 12, `${aiFault} of ${runs}${faults.length ? `: ${faults.join(', ')}` : ''}`);
+  check('No racecraft: ... and never at more than 6 m/s', worstAiFaultMs <= 6, `worst ${f(worstAiFaultMs)} m/s`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll racecraft checks passed.');

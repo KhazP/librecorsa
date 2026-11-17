@@ -224,10 +224,10 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   defendReachM: 2.2,
   defendRoomS: 0.8,
   startLaneMaxM: 900,
-  alongsideReachM: 0,
-  squeezeYield: 0,
-  predictS: 0,
-  playerMarginM: 0,
+  alongsideReachM: 2.5,
+  squeezeYield: 1,
+  predictS: 1.5,
+  playerMarginM: 0.4,
 };
 /** The path check's step (s) */
 const PATH_STEP_S = 0.1;
