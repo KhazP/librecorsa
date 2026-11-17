@@ -92,7 +92,7 @@ import { lockShareOf } from '../tyre-slide-fx';
 import { filterChassisG } from '../chassis-g';
 import { beyondLayoutEdge, CourseCutWatch, inLapStretch, isCourseHop } from '../course-limits';
 import { coneLaneRangeAt } from '../cone-lanes';
-import { pullsAway } from '../race-start';
+import { keptOnGrid } from '../race-start';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -1704,7 +1704,7 @@ export class F12026CarSim implements SimulatorCar {
     const rimFrom = rim !== null && this.lastRimSteer !== null ? this.lastRimSteer : rim;
     const held = this.gridHold && !this.aiAutopilot;
     // Held, the car stays on its spot until the driver lets the clutch out in gear with the throttle up
-    const pinned = held && !pullsAway(v.gear !== 0, inputs.clutch ?? 0, inputs.throttle ?? 0);
+    const pinned = held && keptOnGrid(v.velocity.length(), v.gear !== 0, inputs.clutch ?? 0, inputs.throttle ?? 0);
     for (let k = 0; k < ticks; k++) {
       if (rim !== null && rimFrom !== null) inputs.analogSteer = rimFrom + ((rim - rimFrom) * (k + 1)) / ticks;
       const cmd: { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =

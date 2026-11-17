@@ -62,6 +62,11 @@ for (const id of CARS) {
     for (let t = 0; t < 1.5; t += DT) early.step(DT, { throttle: 0.6, clutch: 0 });
     const went = early.worldPosition.distanceTo(e0);
     check('held: the clutch let out early on the throttle, the car goes', went > 1, `${went.toFixed(1)} m in 1.5 s`);
+    // Gone early, the car is the driver's: a lift lets it coast, the hold does not brake it to a stop
+    const before = early.telemetry.speedKmh;
+    for (let t = 0; t < 0.3; t += DT) early.step(DT, { throttle: 0, clutch: 0 });
+    const after = early.telemetry.speedKmh;
+    check('held: a car that went early coasts on a lift, not braked', after > 0.7 * before, `${before.toFixed(0)} → ${after.toFixed(0)} km/h over 0.3 s`);
   }
   // The lights go out with the clutch held: the car waits; let out, it goes
   sim.gridHold = false;

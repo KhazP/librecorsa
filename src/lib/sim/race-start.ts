@@ -54,9 +54,20 @@ const DRIVE_AWAY_THROTTLE = 0.2;
 /** Distance the car may roll on the grid before it counts as a jump start (m): a flick of the clutch does not */
 const JUMP_DISTANCE_M = 0.5;
 
+/** Speed (m/s) above which a car that has left its grid spot is driven on: the hold never brakes a moving car */
+const HOLD_BELOW_MS = 1;
+
 /** A car held on the grid goes when its clutch is let out past the bite in gear with the throttle up */
 export function pullsAway(inGear: boolean, clutch: number, throttle: number): boolean {
   return inGear && clutch < BITE && throttle > DRIVE_AWAY_THROTTLE;
+}
+
+/**
+ * Whether a car held on the grid is kept on its spot this step: standing, and not being driven away. A car that has
+ * gone early is the driver's from then on: a lift does not stop it dead
+ */
+export function keptOnGrid(speedMs: number, inGear: boolean, clutch: number, throttle: number): boolean {
+  return Math.abs(speedMs) < HOLD_BELOW_MS && !pullsAway(inGear, clutch, throttle);
 }
 
 /**
