@@ -177,12 +177,13 @@ export const RaceResults: React.FC<{
         <div className="-mx-1 flex min-h-0 flex-col gap-5 overflow-y-auto px-1 short:gap-3">
           <table className="w-full border-collapse" aria-label="Full classification">
             <thead>
+              {/* Under 640 px only Pos, Driver and Time fit: +/- and the best lap are in the player's own summary above */}
               <tr className="border-b border-lc-line">
                 <th scope="col" className={`${TH} w-14`}>
                   Pos
                 </th>
                 {showGrid ? (
-                  <th scope="col" className={`${TH} w-12`} title="Places gained or lost from the grid">
+                  <th scope="col" className={`${TH} w-12 max-sm:hidden`} title="Places gained or lost from the grid">
                     <span aria-hidden>+/-</span>
                     <span className="sr-only">Places gained</span>
                   </th>
@@ -196,7 +197,7 @@ export const RaceResults: React.FC<{
                 <th scope="col" className={`${TH} text-right`}>
                   Time / gap
                 </th>
-                <th scope="col" className={`${TH} text-right`}>
+                <th scope="col" className={`${TH} text-right max-sm:hidden`}>
                   Best lap
                 </th>
               </tr>
@@ -216,7 +217,7 @@ export const RaceResults: React.FC<{
                       <PositionBadge position={r.position} player={r.isPlayer} size="sm" className="min-w-10" />
                     </td>
                     {showGrid ? (
-                      <td className="px-2">
+                      <td className="px-2 max-sm:hidden">
                         <PlacesGained gained={r.dnf ? null : placesGained(r.gridPosition, r.position)} />
                       </td>
                     ) : null}
@@ -242,7 +243,7 @@ export const RaceResults: React.FC<{
                         <span className={`lc-mono text-[13px] font-bold ${timeTone(r, final)}`}>{timeOrGap(r, final)}</span>
                       </span>
                     </td>
-                    <td className="px-2 text-right whitespace-nowrap">
+                    <td className="px-2 text-right whitespace-nowrap max-sm:hidden">
                       <BestLap ms={r.bestLapMs} fastest={fastest} />
                     </td>
                   </tr>
