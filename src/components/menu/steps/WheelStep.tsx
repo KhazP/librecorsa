@@ -48,7 +48,8 @@ import { padPressTracker, suspendMenuNav, useGamepads, type PadState } from "../
 import { CAPTURE_TIMEOUT_S, useButtonCapture } from "./button-capture";
 import { Hint, StatusPill, TrackMeter } from "./setup-ui";
 
-type CalTarget = "steer" | "throttle" | "brake";
+type CalTarget = "steer" | "throttle" | "brake" | "clutch";
+type PedalTarget = Exclude<CalTarget, "steer">;
 
 const STEER_DETECT = 0.12;
 const PEDAL_DETECT = 0.2;
@@ -57,6 +58,7 @@ const PROMPTS: Record<CalTarget, { rest: string; act: string }> = {
   steer: { rest: "Hold the wheel straight ahead, then press Continue.", act: "Now turn the wheel about 90° to the left and hold it." },
   throttle: { rest: "Take your foot off the throttle, then press Continue.", act: "Press the throttle all the way down, then let it go." },
   brake: { rest: "Take your foot off the brake, then press Continue.", act: "Press the brake all the way down, then let it go." },
+  clutch: { rest: "Take your foot off the clutch, then press Continue.", act: "Press the clutch all the way down, then let it go." },
 };
 
 /**
@@ -68,7 +70,7 @@ const AxisCalibrator: React.FC<{
   target: CalTarget;
   exclude: { padId: string; axis: number }[];
   onSteer: (b: AxisBinding) => void;
-  onPedal: (target: "throttle" | "brake", b: PedalBinding) => void;
+  onPedal: (target: PedalTarget, b: PedalBinding) => void;
   onCancel: () => void;
 }> = ({ target, exclude, onSteer, onPedal, onCancel }) => {
   // rest: waiting for Continue · act: watching for the axis that moves · locked: a pedal's axis found, followed to its
@@ -499,7 +501,7 @@ export function WheelSetup({ first }: { first?: boolean }) {
     [setWheel, setMode],
   );
   const onPedal = useCallback(
-    (target: "throttle" | "brake", b: PedalBinding) => {
+    (target: PedalTarget, b: PedalBinding) => {
       // The result belongs to the calibrator that measured it: a late frame from the throttle step must never land on
       // the brake once the setup has moved on (that bound both pedals to the throttle's axis)
       const m = modeRef.current;
@@ -509,7 +511,8 @@ export function WheelSetup({ first }: { first?: boolean }) {
         setMode(m.all ? { kind: "calibrating", target: "brake", all: true } : IDLE);
         return;
       }
-      setWheel({ brake: b });
+      // The clutch is not part of Calibrate all: a pedal set may have none
+      setWheel(target === "clutch" ? { clutch: b } : { brake: b });
       setMode(IDLE);
     },
     [setWheel, setMode],
@@ -543,22 +546,35 @@ export function WheelSetup({ first }: { first?: boolean }) {
   // Axes already taken, so the next calibration ignores them
   const excludeFor = useCallback(
     (target: CalTarget) =>
-      [target !== "steer" ? w.steer : null, target !== "throttle" ? w.throttle : null, target !== "brake" ? w.brake : null]
+      [
+        target !== "steer" ? w.steer : null,
+        target !== "throttle" ? w.throttle : null,
+        target !== "brake" ? w.brake : null,
+        target !== "clutch" ? w.clutch : null,
+      ]
         .filter((b): b is AxisBinding | PedalBinding => Boolean(b))
         .map((b) => ({ padId: b.padId, axis: b.axis })),
-    [w.steer, w.throttle, w.brake],
+    [w.steer, w.throttle, w.brake, w.clutch],
   );
   const exclude = React.useMemo(() => (calibrating ? excludeFor(calibrating) : []), [calibrating, excludeFor]);
 
   const steer = liveSteer(pads, w);
   const throttle = livePedal(pads, w.throttle);
   const brake = livePedal(pads, w.brake, w.brakeGamma);
+  const clutch = livePedal(pads, w.clutch);
 
-  const calRow = (target: CalTarget, label: string, bound: AxisBinding | PedalBinding | null, live: React.ReactNode, nav?: boolean) => (
+  const calRow = (
+    target: CalTarget,
+    label: string,
+    bound: AxisBinding | PedalBinding | null,
+    live: React.ReactNode,
+    nav?: boolean,
+    opts: { unboundHint?: string; extra?: React.ReactNode } = {},
+  ) => (
     <div className="flex flex-col gap-2">
       <SettingRow
         label={label}
-        hint={bound ? `${shortPad(bound.padId)}, axis ${bound.axis}` : "Not calibrated yet"}
+        hint={bound ? `${shortPad(bound.padId)}, axis ${bound.axis}` : (opts.unboundHint ?? "Not calibrated yet")}
         disabled={noWheel !== null}
         disabledReason={noWheel ?? undefined}
       >
@@ -571,6 +587,7 @@ export function WheelSetup({ first }: { first?: boolean }) {
         >
           {calibrating === target ? "Calibrating" : bound ? "Recalibrate" : "Calibrate"}
         </Button>
+        {opts.extra}
       </SettingRow>
       {calibrating === target ? (
         <AxisCalibrator key={target} target={target} exclude={exclude} onSteer={onSteer} onPedal={onPedal} onCancel={onCancelCal} />
@@ -649,6 +666,21 @@ export function WheelSetup({ first }: { first?: boolean }) {
       <SettingsCard title="Pedals">
         {calRow("throttle", "Throttle", w.throttle, throttle !== null ? <TrackMeter compact label="Throttle" value={throttle} color="var(--lc-sem-throttle)" /> : null)}
         {calRow("brake", "Brake", w.brake, brake !== null ? <TrackMeter compact label="Brake" value={brake} color="var(--lc-sem-brake)" /> : null)}
+        {calRow(
+          "clutch",
+          "Clutch",
+          w.clutch,
+          clutch !== null ? <TrackMeter compact label="Clutch" value={clutch} color="var(--color-lc-azure)" /> : null,
+          false,
+          {
+            unboundHint: "Optional, for a pedal set with a clutch. The car works its own clutch until you press it",
+            extra: w.clutch ? (
+              <Button size="sm" variant="ghost" disabled={calibrating !== null || capturing !== null} onClick={() => setWheel({ clutch: null })}>
+                Remove
+              </Button>
+            ) : null,
+          },
+        )}
         <SettingField def={wheelBrakeCurve} />
       </SettingsCard>
 
