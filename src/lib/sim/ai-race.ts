@@ -8,6 +8,7 @@ import type { RaceStatus } from '@/types/f1';
 import type { DamageLevel } from './car-damage';
 import type { InterpolatedPeerState } from './multiplayer-sync';
 import type { AiGridOrder, PlayerGridSlot } from './race-setup';
+import type { PenaltyReason } from './penalty-ledger';
 import type { SimulatorCar } from './simulator-car';
 
 /** The player in a race against the AI: their three-letter code and colour (Settings > Display > Driver) */
@@ -40,6 +41,8 @@ export interface AiRace {
   playerPenaltyS: number;
   /** Disqualified by race control (track limits): out of the race, classified last; cleared by the next start */
   playerDisqualified: boolean;
+  /** Race control's time penalty on the player for a call the page makes (a jump start): in the ledger and on the feed */
+  penalisePlayer(seconds: number, reason: PenaltyReason, detail: string): void;
   /** The race's rules close the overtaking aids inside a yellow zone (race-rules.ts) */
   lockAidsInYellow: boolean;
   /** A car on this page has its overtaking aids closed by a yellow flag (a field in the worker answers there) */

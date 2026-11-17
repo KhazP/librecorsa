@@ -486,7 +486,14 @@ export interface CarTelemetry {
    * control the player holds as the clutch (a standard-mapping pad button, a key's name, or a named control such as
    * "clutch pedal"), and how far they hold it in (0..1, 1 = pressed)
    */
-  start?: { held: boolean; jumped: boolean; clutch: StartClutchControl; clutchIn: number };
+  start?: {
+    held: boolean;
+    jumped: boolean;
+    /** What the jump start costs as it stands (s): +5, or +10 for a big one */
+    penaltyS?: number;
+    clutch: StartClutchControl;
+    clutchIn: number;
+  };
   /**
    * Run counter, set by the app shell: it goes up whenever the run restarts (a new session, a restart, a
    * teleport, a car change). Anything that keeps lap- or run-scoped state resets when it changes,

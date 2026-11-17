@@ -14,6 +14,7 @@ export type PenaltyReason =
   | "illegal_overtake"
   | "yellow_overtake"
   | "formation_corridor"
+  | "jump_start"
   | "collision"
   | "unsafe_rejoin"
   | "unsportsmanlike";

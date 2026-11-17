@@ -242,6 +242,9 @@ export class SimRuntime {
       case "rules":
         if (this.race) this.race.field.lockAidsInYellow = command.lockAidsInYellow;
         return;
+      case "penalise":
+        this.race?.field.penalisePlayer(command.seconds, command.reason, command.detail);
+        return;
       case "conditions":
         this.race?.env.setConditions(command.conditions);
         return;

@@ -42,7 +42,7 @@ import { stretchTimeS } from "@/lib/sim/course-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
 import { rulesForSetup, startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
-import { JumpStartWatch, JUMP_START_PENALTY_S } from "@/lib/sim/race-start";
+import { JumpStartWatch } from "@/lib/sim/race-start";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
@@ -2370,8 +2370,13 @@ export class DriveSession {
           ? aiField.playerFrozen && aiField.manualStart
           : (aiField?.playerFrozen === true && aiField.manualStart) || (mpFrozen && settingsNow.race.launch === "manual");
         if (!raceInWorker) physics.gridHold = gridHeld;
-        if (jumpWatch.update(dtSeconds, gridHeld, physics.telemetry.speedMs)) {
-          console.info(`[race] jump start: +${JUMP_START_PENALTY_S} s at the flag`);
+        // A jump start: race control's call once the lights are out (+5 s, +10 s for a big one), into an AI race's
+        // ledger and feed; an online race serves it with the player's own penalties below
+        const startCall = jumpWatch.update(dtSeconds, gridHeld, physics.telemetry.speedMs, physics.telemetry.race?.position);
+        if (startCall === "jump") console.info(`[race] jump start`);
+        if (startCall === "verdict") {
+          console.info(`[race] jump start: +${jumpWatch.penaltyS} s at the flag`);
+          aiField?.penalisePlayer(jumpWatch.penaltyS, "jump_start", jumpWatch.big ? "Jump start · well off the grid spot" : "Jump start");
         }
         gridHeldLastFrame = gridHeld;
         startClutchIn = inputs.clutch ?? 0;
@@ -2436,7 +2441,7 @@ export class DriveSession {
       // The manual start's cue: what to hold as the clutch, and a jump start once there is one
       physics.telemetry.start =
         gridHeldLastFrame || jumpWatch.jumped || startClutch.active
-          ? { held: gridHeldLastFrame, jumped: jumpWatch.jumped, clutch: startClutchControl, clutchIn: startClutchIn }
+          ? { held: gridHeldLastFrame, jumped: jumpWatch.jumped, penaltyS: jumpWatch.penaltyS, clutch: startClutchControl, clutchIn: startClutchIn }
           : undefined;
 
       // Track limits: in a race, race control judges each excursion once the car is back on the asphalt (warnings,
@@ -2484,12 +2489,12 @@ export class DriveSession {
           }
         }
         physics.trackLimitsHold = trackLimits.judging;
-        // The player's own calls, served at the flag: track limits and a jump start (race control's calls on the field,
-        // a pass under yellow among them, are in its ledger)
-        const startPenaltyS = jumpWatch.jumped ? JUMP_START_PENALTY_S : 0;
+        // The player's own calls, served at the flag: track limits, and online a jump start too (in an AI race race
+        // control's calls, a jump start and a pass under yellow among them, are in the field's ledger)
+        const startPenaltyS = jumpWatch.penaltyS;
         if (aiField) {
           aiField.lockAidsInYellow = aidsLockInYellow;
-          aiField.playerPenaltyS = trackLimits.penaltyTotalS + startPenaltyS;
+          aiField.playerPenaltyS = trackLimits.penaltyTotalS;
           if (trackLimits.disqualified) aiField.playerDisqualified = true;
         }
         if (mpRace) {

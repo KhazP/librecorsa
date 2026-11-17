@@ -92,12 +92,13 @@ console.log('\n== Launch windows');
 
 console.log('\n== Jump starts');
 {
-  const run = (frames: [number, boolean, number][]) => {
+  type StartFrame = [number, boolean, number, number?];
+  const run = (frames: StartFrame[]) => {
     const w = new JumpStartWatch();
     for (const [dt, held, speedMs] of frames) w.update(dt, held, speedMs);
     return w.jumped;
   };
-  const many = (n: number, f: [number, boolean, number]) => Array.from({ length: n }, () => f);
+  const many = (n: number, f: StartFrame): StartFrame[] => Array.from({ length: n }, () => f);
   check('standing still through the lights: no jump start', !run(many(600, [1 / 60, true, 0])));
   check('rolling a metre off the spot: jump start', run(many(60, [1 / 60, true, 1])));
   check('a few centimetres of roll: not one', !run([...many(6, [1 / 60, true, 0.5]), ...many(120, [1 / 60, true, 0])]));
@@ -108,6 +109,24 @@ console.log('\n== Jump starts');
   check('a jump start is kept until the next race', w.jumped);
   w.reset();
   check('and cleared for it', !w.jumped);
+
+  const calls = (frames: StartFrame[]) => {
+    const j = new JumpStartWatch();
+    const out: string[] = [];
+    for (const [dt, held, speedMs, pos] of frames) {
+      const c = j.update(dt, held, speedMs, pos);
+      if (c) out.push(c);
+    }
+    return { j, out };
+  };
+  const creep = calls([...many(30, [1 / 60, true, 1.5]), ...many(60, [1 / 60, true, 0]), [1 / 60, false, 0]]);
+  check('a short creep (0.75 m): +5 s, called once at lights out', creep.j.penaltyS === 5 && !creep.j.big && creep.out.join(',') === 'jump,verdict', creep.out.join(','));
+  const gone = calls([...many(120, [1 / 60, true, 3]), [1 / 60, false, 10], ...many(30, [1 / 60, false, 20])]);
+  check('a big jump (6 m before the lights went out): +10 s', gone.j.penaltyS === 10 && gone.j.big && gone.out.join(',') === 'jump,verdict', `${gone.j.penaltyS} s, ${gone.out.join(',')}`);
+  const past = calls([[1 / 60, true, 0, 6], ...many(40, [1 / 60, true, 1.5, 6]), [1 / 60, true, 1.5, 5], [1 / 60, false, 5, 5]]);
+  check('past the car ahead before the lights went out: +10 s', past.j.penaltyS === 10 && past.j.big, `${past.j.penaltyS} s`);
+  const clean = calls([...many(300, [1 / 60, true, 0]), ...many(60, [1 / 60, false, 30])]);
+  check('a clean start: no call, no time', clean.out.length === 0 && clean.j.penaltyS === 0);
   check('the clutch out in gear on the throttle pulls away', pullsAway(true, 0, 0.6));
   check('the clutch in, neutral or off the throttle does not', !pullsAway(true, 1, 1) && !pullsAway(false, 0, 1) && !pullsAway(true, 0, 0.1));
 }

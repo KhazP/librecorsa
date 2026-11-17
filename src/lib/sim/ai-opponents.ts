@@ -52,6 +52,7 @@ import {
 } from '@/lib/sim/ai-racecraft';
 import { RaceIncidents } from '@/lib/sim/race-incidents';
 import { YellowPassJudge, type PassCar, type YellowLevel } from '@/lib/sim/yellow-passes';
+import type { PenaltyReason } from '@/lib/sim/penalty-ledger';
 import { aiTrackFor, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
 import { carLimitsFor } from '@/lib/sim/ai/ggv';
 import { drivePlanJob, driveLineOf, makeDrivePlan, type AiDrivePlan, type DriveLine } from '@/lib/sim/ai/drive-plan';
@@ -2546,6 +2547,11 @@ export class AiOpponentField implements AiRace {
   public manualStart = false;
 
   private playerDq = false;
+
+  public penalisePlayer(seconds: number, reason: PenaltyReason, detail: string): void {
+    const me = this.cars.find((c) => c.isPlayer);
+    if (me) this.raceControl.penalise(this.raceTimeS, me.code, seconds, reason, detail, true);
+  }
 
   public get playerDisqualified(): boolean {
     return this.playerDq;
