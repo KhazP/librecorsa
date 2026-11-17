@@ -13,6 +13,8 @@
  */
 import type { DamageReport } from './car-damage';
 import type { FieldIncident } from './ai-opponents';
+import { PenaltyLedger, type PenaltyReason } from './penalty-ledger';
+import type { YellowLevel } from './yellow-passes';
 
 export type RaceControlMessageKind = 'yellow' | 'green' | 'investigation' | 'penalty' | 'warning' | 'nfa' | 'retired' | 'info';
 
@@ -78,8 +80,8 @@ const MESSAGE_LIFE_S = 6;
 
 export class RaceIncidents {
   public readonly messages: RaceControlMessage[] = [];
-  /** Time penalties per car code (s), served at the flag */
-  public readonly penaltiesS = new Map<string, number>();
+  /** Every penalty handed out, per car code; the time penalties are served at the flag */
+  public readonly ledger = new PenaltyLedger();
   /** Race time until which each AI driver races with extra caution after an at-fault contact */
   public readonly cautionUntilS = new Map<string, number>();
   /** Collisions the player caused (penalised) and warnings for contact */
@@ -88,24 +90,30 @@ export class RaceIncidents {
   private readonly open: Investigation[] = [];
   private readonly pairAt = new Map<string, number>();
   private nextId = 1;
-  private yellowShown = false;
+  private yellowShown: YellowLevel = 0;
 
   constructor(private readonly playerCode = 'YOU') {}
 
   public reset(): void {
     this.messages.length = 0;
-    this.penaltiesS.clear();
+    this.ledger.clear();
     this.cautionUntilS.clear();
     this.playerCollisions = 0;
     this.playerContactWarnings = 0;
     this.open.length = 0;
     this.pairAt.clear();
-    this.yellowShown = false;
+    this.yellowShown = 0;
   }
 
   /** Time penalties of a car (s) */
   public penaltyOf(code: string): number {
-    return this.penaltiesS.get(code) ?? 0;
+    return this.ledger.secondsOf(code);
+  }
+
+  /** A time penalty from a call made outside the contact judging (a pass under yellow), with its message */
+  public penalise(atS: number, code: string, seconds: number, reason: PenaltyReason, detail: string, player: boolean): void {
+    this.ledger.add(code, { kind: 'time_penalty', reason, seconds, atS, label: detail });
+    this.post(atS, 'penalty', player ? `${seconds} s time penalty` : `${code} · ${seconds} s penalty`, detail, player);
   }
 
   /** Extra overtaking caution (0..1) of an AI driver now */
@@ -123,7 +131,8 @@ export class RaceIncidents {
    * One frame: the field's incidents, and whether the player is approaching a yellow flag (a car stopped or
    * spinning on the road ahead, within the yellow zone)
    */
-  public update(raceTimeS: number, incidents: readonly FieldIncident[], playerUnderYellow: boolean): void {
+  public update(raceTimeS: number, incidents: readonly FieldIncident[], playerYellow: YellowLevel | boolean): void {
+    const level: YellowLevel = playerYellow === true ? 1 : playerYellow === false ? 0 : playerYellow;
     for (const inc of incidents) {
       switch (inc.kind) {
         case 'contact':
@@ -148,9 +157,12 @@ export class RaceIncidents {
       this.open.splice(i, 1);
       this.decide(o, raceTimeS);
     }
-    if (playerUnderYellow && !this.yellowShown) this.post(raceTimeS, 'yellow', 'Yellow flag', 'Incident ahead · no overtaking', true);
-    if (!playerUnderYellow && this.yellowShown) this.post(raceTimeS, 'green', 'Track clear', undefined, true);
-    this.yellowShown = playerUnderYellow;
+    if (level > this.yellowShown) {
+      if (level === 2) this.post(raceTimeS, 'yellow', 'Double yellow', 'Car stopped ahead · slow down, no overtaking', true);
+      else this.post(raceTimeS, 'yellow', 'Yellow flag', 'Incident ahead · no overtaking', true);
+    }
+    if (level === 0 && this.yellowShown > 0) this.post(raceTimeS, 'green', 'Track clear', undefined, true);
+    this.yellowShown = level;
   }
 
   private onContact(c: ContactIncident, raceTimeS: number): void {
@@ -196,7 +208,7 @@ export class RaceIncidents {
     const consequence = o.victimSpun || o.victimRetired || o.victimDamage >= 0.15;
     if (o.at && consequence) {
       const penalty = o.victimRetired ? COLLISION_RETIRED_PENALTY_S : COLLISION_PENALTY_S;
-      this.penaltiesS.set(o.at, this.penaltyOf(o.at) + penalty);
+      this.ledger.add(o.at, { kind: 'time_penalty', reason: 'collision', seconds: penalty, atS: raceTimeS, label: 'Causing a collision' });
       if (o.atIsPlayer) this.playerCollisions++;
       else this.cautionUntilS.set(o.at, raceTimeS + AT_FAULT_COOLDOWN_S);
       this.post(
@@ -219,6 +231,11 @@ export class RaceIncidents {
       return;
     }
     if (o.playerInvolved && (consequence || o.impactMs > 3)) this.post(raceTimeS, 'nfa', 'Racing incident', 'No further action', true);
+  }
+
+  /** A call race control makes outside its own judging (the player's track-limits disqualification) */
+  public announce(atS: number, kind: RaceControlMessageKind, text: string, detail?: string, player = true): void {
+    this.post(atS, kind, text, detail, player);
   }
 
   private post(atS: number, kind: RaceControlMessageKind, text: string, detail: string | undefined, player: boolean): void {

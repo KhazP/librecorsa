@@ -361,6 +361,8 @@ export interface VehiclePhysicsOptions {
   lapLengthM?: number;
   /** Asked at each detection point whether DRS is earned (e.g. within 1 s of the car ahead); default yes */
   drsEligibleAtDetection?: (zone: ZoneData_DRSZone) => boolean;
+  /** Race control shuts the flaps here whatever the zone says (a yellow flag under the open-wheel rules) */
+  flapsBarred?: () => boolean;
   /** Barrier walls (`Track_Collider_Wall_*`); none = no barriers */
   walls?: WallQuery;
   /**
@@ -1103,6 +1105,7 @@ export class VehiclePhysics {
   private readonly locateProgress?: (x: number, z: number) => number;
   private readonly lapLengthM: number;
   private readonly drsEligibleAtDetection?: (zone: ZoneData_DRSZone) => boolean;
+  private readonly flapsBarred?: () => boolean;
   /**
    * Where the flaps may open as one list (`flapStretches`), for the rules it was made for, with the lap fraction at
    * which a 2026 car is told of each (`STRAIGHT_MODE_AHEAD`)
@@ -1197,6 +1200,7 @@ export class VehiclePhysics {
     this.locateProgress = options.locateProgress;
     this.lapLengthM = options.lapLengthM ?? 0;
     this.drsEligibleAtDetection = options.drsEligibleAtDetection;
+    this.flapsBarred = options.flapsBarred;
     this.walls = options.walls;
     this.onEvent = options.onEvent;
 
@@ -2249,7 +2253,8 @@ export class VehiclePhysics {
       armed = straight || (zone !== undefined && (!this.drsGatedByDetection || this.drsArmedZone === zone.id));
     }
     if (!this.drsFitted) inZone = armed = false;
-    const dryEnoughForDrs = isRearFlapAllowedInWet(this.wetness);
+    // Too wet, or race control's yellow flag: the flaps stay shut (and an open one closes)
+    const dryEnoughForDrs = isRearFlapAllowedInWet(this.wetness) && !this.flapsBarred?.();
     this.telemetry.drsZone = inZone;
     this.telemetry.drsAvailable = inZone && armed && dryEnoughForDrs;
     // Closes on the brake, a lift, or when track wetness exceeds the rear flap threshold

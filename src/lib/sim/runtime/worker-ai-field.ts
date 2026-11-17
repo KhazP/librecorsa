@@ -37,6 +37,9 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   damageLevel: DamageLevel = "reduced";
   aggressionAdd = 0;
   playerPenaltyS = 0;
+  playerDisqualified = false;
+  lockAidsInYellow = true;
+  private sentLockAids = true;
   readonly worker: WorkerRaceView = this;
   /** The field's seed for the next start (a headless check replays one); unset, the worker draws one */
   seed: number | undefined = undefined;
@@ -52,6 +55,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   private posesWallMs = 0;
   private posesLeadS = 0;
   private sentPenaltyS = 0;
+  private sentDq = false;
   private sentConditions: SessionConditions | null = null;
   private sentRealism: Readonly<SimRealismFlags> | null = null;
   private unlisten: (() => void) | null = null;
@@ -97,6 +101,8 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
     this.rulesActive = true;
     this.placeholderPhase = standing ? "lights" : "racing";
     this.playerPenaltyS = this.sentPenaltyS = 0;
+    this.playerDisqualified = this.sentDq = false;
+    this.sentLockAids = this.lockAidsInYellow;
     this.unlisten ??= this.link.listen((event) => this.receive(event));
     // The road starts over with the race, as it does for a field on the page
     this.env.reset();
@@ -121,6 +127,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
         damage: this.damageLevel,
         aggressionAdd: this.aggressionAdd,
         standing,
+        lockAidsInYellow: this.lockAidsInYellow,
       },
       epoch,
       weather: this.env.weather.snapshot(),
@@ -181,9 +188,14 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
     const resumed = now - this.lastUpdateMs > RESUME_GAP_MS;
     this.lastUpdateMs = now;
     this.leadS = resumed ? 0 : THREE.MathUtils.clamp((now - this.posesWallMs) / 1000 + this.posesLeadS, 0, MAX_RENDER_LEAD_S);
-    if (this.playerPenaltyS !== this.sentPenaltyS) {
+    if (this.lockAidsInYellow !== this.sentLockAids) {
+      this.sentLockAids = this.lockAidsInYellow;
+      this.link.post({ type: "race", op: "rules", lockAidsInYellow: this.lockAidsInYellow });
+    }
+    if (this.playerPenaltyS !== this.sentPenaltyS || this.playerDisqualified !== this.sentDq) {
       this.sentPenaltyS = this.playerPenaltyS;
-      this.link.post({ type: "race", op: "penalty", seconds: this.playerPenaltyS });
+      this.sentDq = this.playerDisqualified;
+      this.link.post({ type: "race", op: "penalty", seconds: this.playerPenaltyS, dq: this.playerDisqualified || undefined });
     }
     const conditions = this.env.weather.conditions;
     if (this.sentConditions && !sameConditions(conditions, this.sentConditions)) {
