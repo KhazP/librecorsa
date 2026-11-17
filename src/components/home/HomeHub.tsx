@@ -71,6 +71,9 @@ const UNREAD_DOT = (
   </>
 );
 
+/** Letters in a name's longest word: a heading can't wrap inside one */
+const longestWord = (name: string) => Math.max(0, ...name.split(/\s+/).map((w) => w.length));
+
 const GUTTER =
   "pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))]";
 /**
@@ -340,7 +343,8 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                   className={`${TILE} flex min-h-[230px] cursor-pointer p-6 lg:col-span-5`}
                 >
                   <span className="relative z-10 flex max-w-[52%] flex-col items-start gap-2">
-                    <span className="lc-h2">{venue.name}</span>
+                    {/* A long word ("MOTORDROME", "INTERNATIONAL") steps down with the window on the grid layout, so it stays clear of the map */}
+                    <span className={cx("lc-h2", longestWord(venue.name) >= 10 && "lg:text-[clamp(24px,2.4vw,34px)]")}>{venue.name}</span>
                     <span className="lc-body">{layout.layout}</span>
                     {/* The badge shares the distance's line, so a two-line name still leaves room on a short screen */}
                     <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
