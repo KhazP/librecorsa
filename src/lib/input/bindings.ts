@@ -3,6 +3,8 @@
  * The defaults reproduce the original hard-coded layout exactly.
  */
 
+import { printedKey } from "./key-layout";
+
 export type KeyAction =
   | "throttle"
   | "brake"
@@ -372,9 +374,28 @@ export const STANDARD_BUTTON_NAMES: Record<number, string> = {
 export const padButtonLabel = (button: number | null | undefined) =>
   button === null || button === undefined ? "—" : (STANDARD_BUTTON_NAMES[button] ?? `Button ${button}`);
 
-/** Readable label for a KeyboardEvent.code */
+/** Dead keys' combining accents, as the spacing characters printed on the key */
+const DEAD_KEY_CAPS: Record<string, string> = {
+  "̀": "`",
+  "́": "´",
+  "̂": "^",
+  "̃": "~",
+  "̈": "¨",
+  "̊": "°",
+  "̧": "¸",
+};
+
+/**
+ * Readable label for a KeyboardEvent.code: the key as printed on the player's keyboard where the browser says (on
+ * AZERTY, KeyW is "Z"), else its US name. The number row keeps its digits, which every layout prints on those keys.
+ */
 export function keyLabel(code: string | undefined): string {
   if (!code) return "—";
+  const printed = code.startsWith("Digit") ? undefined : printedKey(code);
+  // A dead key reports its combining accent: the cap shows the accent on its own (AZERTY's ^ key)
+  if (printed && /^\p{M}$/u.test(printed) && DEAD_KEY_CAPS[printed]) return DEAD_KEY_CAPS[printed];
+  // A space or an unknown combining mark prints nothing readable on a key cap
+  if (printed && printed.trim() && !/^\p{M}+$/u.test(printed)) return printed.toUpperCase();
   if (code.startsWith("Key")) return code.slice(3);
   if (code.startsWith("Digit")) return code.slice(5);
   if (code.startsWith("Numpad")) return `Num ${code.slice(6)}`;
@@ -398,6 +419,7 @@ export function keyLabel(code: string | undefined): string {
     Comma: ",",
     Period: ".",
     Semicolon: ";",
+    Slash: "/",
     Quote: "'",
     BracketLeft: "[",
     BracketRight: "]",
@@ -406,6 +428,10 @@ export function keyLabel(code: string | undefined): string {
     Equal: "=",
     Backquote: "`",
     Insert: "Ins",
+    // Keys a US keyboard lacks (ISO, Japanese), named when the browser can't say what they print
+    IntlBackslash: "ISO \\",
+    IntlRo: "Ro",
+    IntlYen: "Yen",
   };
   return named[code] ?? code;
 }

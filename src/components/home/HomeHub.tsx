@@ -9,6 +9,8 @@ import { Button, EmptyState, MediaTile, Select, Tabs } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { KeyCap, PadGlyph, PromptBar, type Prompt } from "@/components/ui/prompts";
+import { keyLabel } from "@/lib/input/bindings";
+import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { CURSOR_TILE, cx, MOTION } from "@/components/ui/styles";
 import { withBasePath } from "@/lib/base-path";
 import { useSavedInterfaceSettings, useUnits } from "@/lib/settings/ui-prefs";
@@ -108,6 +110,8 @@ const VENUE_FILTERS: readonly { key: VenueFilterKey; all: string; label: string;
 const NO_VENUE_FILTERS: Record<VenueFilterKey, string> = { type: "", country: "", modder: "" };
 
 export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
+  // The Q / E caps name physical keys as printed on this keyboard
+  useKeyLayout();
   const [tab, setTab] = useState<Tab>("home");
   const [layoutId, setLayoutId] = useState(data.defaultTrackId);
   const [carId, setCarId] = useState(data.defaultCarId);
@@ -274,8 +278,8 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
               aria-label="Sections"
               panelId={PANEL_ID}
               size="sm"
-              prevPrompt={pad ? <PadGlyph button="lb" family={family} /> : <KeyCap>Q</KeyCap>}
-              nextPrompt={pad ? <PadGlyph button="rb" family={family} /> : <KeyCap>E</KeyCap>}
+              prevPrompt={pad ? <PadGlyph button="lb" family={family} /> : <KeyCap>{keyLabel("KeyQ")}</KeyCap>}
+              nextPrompt={pad ? <PadGlyph button="rb" family={family} /> : <KeyCap>{keyLabel("KeyE")}</KeyCap>}
               className="max-lg:order-last max-lg:w-full max-md:[mask-image:linear-gradient(to_right,#000_calc(100%-2rem),transparent)]"
             />
           </div>

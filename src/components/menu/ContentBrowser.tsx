@@ -5,6 +5,8 @@ import { flushSync } from "react-dom";
 import { Button, EmptyState, IconButton, MediaTile, Select, TextField, type MediaTileProps } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { KeyCap, PadGlyph, PromptBar } from "@/components/ui/prompts";
+import { keyLabel } from "@/lib/input/bindings";
+import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { connectedPads } from "@/lib/input/device-input";
 import type { ContentLibrary, LibraryKind } from "@/lib/settings/player-settings";
 import { currentInputMode, useInputMode } from "./input-mode";
@@ -135,6 +137,8 @@ const Field: React.FC<{ label: string; htmlFor: string; children: React.ReactNod
  * Ⓧ / F stars the focused card, Ⓨ or / jumps to the search field.
  */
 export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
+  // The search key cap names a physical key as printed on this keyboard
+  useKeyLayout();
   const { items, idOf, sorts, filterGroups, onToggleFavorite, onClose, searchText } = props;
   const { mode, family } = useInputMode();
   const pad = mode === "pad";
@@ -444,7 +448,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
           autoComplete="off"
           spellCheck={false}
           icon={<Icon name="search" />}
-          trailing={<span className="hidden sm:inline-flex">{pad ? <PadGlyph button="y" family={family} /> : <KeyCap>/</KeyCap>}</span>}
+          trailing={<span className="hidden sm:inline-flex">{pad ? <PadGlyph button="y" family={family} /> : <KeyCap>{keyLabel("Slash")}</KeyCap>}</span>}
           className="[&_input::-webkit-search-cancel-button]:hidden"
         />
         </div>

@@ -5,6 +5,8 @@ import { BASE_ALTITUDE_M, type BuiltTrackData, DEFAULT_TRACK_ID, TURN_METADATA }
 import { getTrackInfo } from "@/lib/track-registry";
 import { formatMegabytes, useAssetProgress, type AssetTask } from "@/lib/loading/asset-progress";
 import { connectedPads } from "@/lib/input/device-input";
+import { keyLabel } from "@/lib/input/bindings";
+import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { enterFullscreenOnTouch } from "@/lib/install-app";
 import { padPressTracker } from "./useMenuNav";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
@@ -18,11 +20,12 @@ import { carById, type CarId } from "@/lib/cars/car-registry";
 import { carMaker, circuitMaker, GAME_MAKER } from "@/lib/modders";
 import { useStoreBuild } from "@/lib/use-store-build";
 
-const TIPS = [
+/** The tips, naming the player's own camera and racing-line keys as printed on their keyboard */
+const tipsFor = (camera: string, line: string) => [
   "Esc pauses: the Garage, corner practice, AI races and multiplayer are all there.",
   "Brake in a straight line, then trail off the pedal as you turn into the apex.",
-  "Press C to cycle cameras: cockpit, T-cam, chase and trackside TV.",
-  "The racing line turns red where you need to brake. Press R to hide it once you know the circuit.",
+  `Press ${camera} to cycle cameras: cockpit, T-cam, chase and trackside TV.`,
+  `The racing line turns red where you need to brake. Press ${line} to hide it once you know the circuit.`,
   "On a controller, the steering assist keeps the front tyres at their grip limit.",
   "Use the boost on the straights; the battery recharges under braking.",
   "Switch between open-wheelers, GT3s and road cars from the Car menu.",
@@ -126,14 +129,22 @@ export const LoadingScreen: React.FC<{
   /** The car about to drive, for its maker's line */
   carId: CarId;
   ready: boolean;
+  /** The camera and racing-line keys (KeyboardEvent.code) the tips name, as printed on this keyboard */
+  cameraKey?: string;
+  lineKey?: string;
   /** Called synchronously inside the user gesture (audio unlock) */
   onStart: () => void;
   /** Called once the fade-out has finished */
   onDone: () => void;
-}> = ({ track, carId, ready, onStart, onDone }) => {
+}> = ({ track, carId, ready, cameraKey, lineKey, onStart, onDone }) => {
   const progress = useAssetProgress();
   const units = useUnits();
-  const tips = useMemo(() => (BASE_ALTITUDE_M >= 1000 ? [altitudeTip(BASE_ALTITUDE_M), ...TIPS] : TIPS), []);
+  const layout = useKeyLayout();
+  const tips = useMemo(() => {
+    const base = tipsFor(keyLabel(cameraKey ?? "KeyC"), keyLabel(lineKey ?? "KeyR"));
+    return BASE_ALTITUDE_M >= 1000 ? [altitudeTip(BASE_ALTITUDE_M), ...base] : base;
+    // Re-run when the layout is read (its identity changes): the key names follow it
+  }, [layout, cameraKey, lineKey]);
   const [tip, setTip] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const leavingRef = useRef(false);

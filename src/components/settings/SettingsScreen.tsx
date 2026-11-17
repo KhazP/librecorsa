@@ -15,6 +15,8 @@ import {
 } from "@/components/ui";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { KeyCap, PadGlyph, PromptBar, type Prompt } from "@/components/ui/prompts";
+import { keyLabel } from "@/lib/input/bindings";
+import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { focusables, scrollPast, tabStops, useFocusNav, useMoveHandler } from "@/components/menu/useFocusNav";
 import { isMenuNavSuspended } from "@/components/menu/useMenuNav";
 import { useInputMode } from "@/components/menu/input-mode";
@@ -113,6 +115,8 @@ export interface SettingsScreenProps {
  * list, close); it takes Esc before anything else hears it, since in a session Esc is also the pause key.
  */
 export function SettingsScreen({ env, initialCategory = "driving", initialTab, onClose }: SettingsScreenProps) {
+  // The Q / E and Y caps name physical keys as printed on this keyboard
+  useKeyLayout();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const paneId = useId();
   const [category, setCategory] = useState<SettingsCategory>(initialCategory);
@@ -363,7 +367,7 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
               <div className="flex flex-wrap items-center gap-3">
                 <span className="flex items-center gap-2.5">
                   <span aria-hidden className="inline-flex pointer-coarse:hidden">
-                    {pad ? <PadGlyph button="y" family={family} /> : <KeyCap>Y</KeyCap>}
+                    {pad ? <PadGlyph button="y" family={family} /> : <KeyCap>{keyLabel("KeyY")}</KeyCap>}
                   </span>
                   <Segmented
                     size="sm"
@@ -415,8 +419,8 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
                     tabs={cat.tabs.map((t) => ({ id: t.id, label: t.label }))}
                     value={tab.id}
                     onChange={(id) => setTabFor((m) => ({ ...m, [category]: id }))}
-                    prevPrompt={pad ? <PadGlyph button="lb" family={family} /> : <KeyCap>Q</KeyCap>}
-                    nextPrompt={pad ? <PadGlyph button="rb" family={family} /> : <KeyCap>E</KeyCap>}
+                    prevPrompt={pad ? <PadGlyph button="lb" family={family} /> : <KeyCap>{keyLabel("KeyQ")}</KeyCap>}
+                    nextPrompt={pad ? <PadGlyph button="rb" family={family} /> : <KeyCap>{keyLabel("KeyE")}</KeyCap>}
                   />
                 ) : null}
                 <section

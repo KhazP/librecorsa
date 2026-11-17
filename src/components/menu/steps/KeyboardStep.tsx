@@ -11,6 +11,7 @@ import {
   RESERVED_CODES,
   type KeyAction,
 } from "@/lib/input/bindings";
+import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { Button, IconButton, SettingRow } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { KeyCap } from "@/components/ui/prompts";
@@ -31,6 +32,8 @@ export const keyWord = (code: string | undefined) => (code && ARROW_WORDS[code])
  * is never where the cursor lands.
  */
 export function KeyBindingsCard({ first }: { first?: boolean }) {
+  // Key names as printed on this keyboard (AZERTY's KeyW is "Z"), re-read when the layout is known or changes
+  useKeyLayout();
   const { settings, update } = useSettingsEnv();
   const [capture, setCapture] = useState<{ action: KeyAction; slot: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -135,20 +138,24 @@ export function KeyBindingsCard({ first }: { first?: boolean }) {
   );
 }
 
-/** Keys the game keeps for itself, listed so they can be found (S137) */
-const FIXED_KEYS: { label: string; keys: string[] }[] = [
+/**
+ * Keys the game keeps for itself, listed so they can be found (S137). The view and tab keys are physical positions
+ * (KeyboardEvent.code), named as printed on this keyboard; the MFD and chat keys are the characters typed (event.key)
+ */
+const fixedKeys = (): { label: string; keys: string[] }[] => [
   { label: "Pause menu", keys: ["Esc"] },
   { label: "Move the view (cockpit, dash)", keys: ["Alt", "Arrows"] },
-  { label: "View height and field of view", keys: ["-", "=", "[", "]"] },
+  { label: "View height and field of view", keys: ["Minus", "Equal", "BracketLeft", "BracketRight"].map(keyLabel) },
   { label: "MFD dials", keys: [",", ".", "-", "="] },
   { label: "Chat command for boost", keys: ["/"] },
-  { label: "Switch tabs in menus", keys: ["Q", "E"] },
+  { label: "Switch tabs in menus", keys: ["KeyQ", "KeyE"].map(keyLabel) },
 ];
 
 export function FixedKeysCard() {
+  useKeyLayout();
   return (
     <SettingsCard title="Fixed keys" description="These keys cannot be changed" advanced>
-      {FIXED_KEYS.map((f) => (
+      {fixedKeys().map((f) => (
         <div key={f.label} className="flex min-h-11 items-center justify-between gap-3">
           <span className="lc-body">{f.label}</span>
           <span className="flex shrink-0 items-center gap-1">
