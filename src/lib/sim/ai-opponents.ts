@@ -181,6 +181,21 @@ export interface RacecraftParams {
   defendRoomS: number;
   /** Off the start an AI keeps its grid lane until a corner comes into view, or this far into the race at most (m) */
   startLaneMaxM: number;
+  /**
+   * Side by side into a corner, the room for the other car may take the car this much further off its line than the
+   * corner otherwise lets it go (m; 0: the corner's reach is the limit, so a car that stays put is turned in on)
+   */
+  alongsideReachM: number;
+  /**
+   * Side by side with less than a car's width of room left on our side (the corner's reach or the road's edge used up)
+   * and not clearly ahead: lift and drop in behind (1), or only when the road's edge is the limit (0)
+   */
+  squeezeYield: number;
+  /**
+   * Extra margin against the player's car (m): a player keeps no racecraft rules (no tucking in, no room given, early or
+   * late braking), so the AI follows a little further back and keeps a little more room beside it
+   */
+  playerMarginM: number;
 }
 
 export const DEFAULT_RACECRAFT: RacecraftParams = {
@@ -202,6 +217,9 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   defendReachM: 2.2,
   defendRoomS: 0.8,
   startLaneMaxM: 900,
+  alongsideReachM: 0,
+  squeezeYield: 0,
+  playerMarginM: 0,
 };
 /** Rate at which an AI moves off / back onto its line (m/s) */
 const BIAS_RATE_MS = 2.2;
@@ -1502,6 +1520,9 @@ export class AiOpponentField implements AiRace {
       let hazard: FieldCar | null = null;
       let hazardGap = Infinity;
       let lapper: FieldCar | null = null;
+      // The car beside us the room below is made for, and where that room puts us
+      let roomFor: FieldCar | null = null;
+      let roomLat = 0;
       const hazardLook = 40 + me.vxMs * 3;
       for (const other of this.cars) {
         if (other === car || other.removed) continue;
@@ -1518,15 +1539,19 @@ export class AiOpponentField implements AiRace {
           continue;
         }
         // Alongside: keep a car's width of room
-        if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(dLat) < this.rc.alongsideSpacingM) {
+        // (the player keeps no racecraft rules: a little more room beside it)
+        const extraLat = other.isPlayer ? 0.5 * this.rc.playerMarginM : 0;
+        if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(dLat) < this.rc.alongsideSpacingM + extraLat) {
           const away = me.lateralOffsetM >= other.sim.lateralOffsetM ? 1 : -1;
-          targetLat = other.sim.lateralOffsetM + away * this.rc.alongsideSpacingM;
+          targetLat = other.sim.lateralOffsetM + away * (this.rc.alongsideSpacingM + extraLat);
           // Squeezed against the edge with no room left on that side and not clearly ahead: back out of it
           if (Math.abs(targetLat) > half && ds > -0.5 * CAR_LEN_M) squeezedBy = other;
+          roomFor = other;
+          roomLat = targetLat;
         }
         // Side by side with its nose behind the other car's: the one that yields if a corner comes and it doesn't own it
         if (ds > 0.5 && along && Math.abs(dLat) < this.rc.alongsideSpacingM + 0.6) alongsideAhead = other;
-        if (ds > 0 && ds < 90 && Math.abs(dLat) < CAR_WID_M + 0.4 && ds < aheadGap) {
+        if (ds > 0 && ds < 90 && Math.abs(dLat) < CAR_WID_M + 0.4 + extraLat && ds < aheadGap) {
           ahead = other;
           aheadGap = ds;
         }
@@ -1544,8 +1569,8 @@ export class AiOpponentField implements AiRace {
         if (ds < 0 && ds > -90 && other.distM > car.distM + 0.5 * L && other.finishTimeS === null) lapper = other;
         // A car in our path: never closer than we could still stop behind it if it braked now (the pack into a
         // braking zone, each car on its own braking point, otherwise ran into each other's gearboxes)
-        if (ds > 0 && ds < 80 && Math.abs(dLat) < CAR_WID_M + 0.35) {
-          speedCap = Math.min(speedCap, followCapMs(other.sim, ds - CAR_LEN_M, this.rc));
+        if (ds > 0 && ds < 80 && Math.abs(dLat) < CAR_WID_M + 0.35 + extraLat) {
+          speedCap = Math.min(speedCap, followCapMs(other.sim, ds - CAR_LEN_M - (other.isPlayer ? this.rc.playerMarginM : 0), this.rc));
         }
       }
 
@@ -1770,7 +1795,25 @@ export class AiOpponentField implements AiRace {
       }
       // (backing off beside a car, the corner's room is no limit: held to it, the car was taken back across into the other)
       if (holdingOut) maxBias = Math.max(maxBias, sample.width / 2);
-      const biasTarget = pos === null ? 0 : THREE.MathUtils.clamp(pos - line, -maxBias, maxBias);
+      // How far off its line the corner lets this car go before the room for a car alongside (the off-line speed below)
+      const cornerReach = maxBias;
+      // Side by side: the room for the other car may take us past the corner's reach (and costs speed there, below).
+      // Held to the reach, a car alongside that stays where it is was turned in on: another AI car moves over too, so
+      // between them they made the room, but a player doesn't
+      if (roomFor && targetLat === roomLat && this.rc.alongsideReachM > 0) {
+        maxBias = Math.max(maxBias, Math.min(Math.abs((pos ?? line) - line), maxBias + this.rc.alongsideReachM));
+      }
+      let biasTarget = pos === null ? 0 : THREE.MathUtils.clamp(pos - line, -maxBias, maxBias);
+      // ... and with less than a car's width of room left on our side, not clearly ahead: lift and drop in behind
+      if (roomFor && this.rc.squeezeYield > 0) {
+        const dsR = wrapHalf(roomFor.sim.sMeters - me.sMeters, L);
+        const sep = Math.abs(line + biasTarget - roomFor.sim.lateralOffsetM);
+        // (another AI car makes room on its side too: only the one behind lifts, or both did and stayed side by side)
+        if (sep < CAR_WID_M + 0.4 && dsR > (roomFor.isPlayer ? -0.5 * CAR_LEN_M : 0)) {
+          const overlapM = Math.max(0, CAR_LEN_M + 0.5 - dsR);
+          speedCap = Math.min(speedCap, roomFor.sim.vxMs - THREE.MathUtils.clamp(1.5 * overlapM, 1.5, 5));
+        }
+      }
       // A pass the corner ahead has no room for: held to its line there, the passing car is back in the other car's path,
       // so it follows it in. With a run from the tow and a later braking point, it went on and ran into its rear corner
       let passBlocked = false;
@@ -1815,7 +1858,9 @@ export class AiOpponentField implements AiRace {
       this.refreshPlan(car);
       const planned = me.aiPlan ? 1 : car.pace * weatherPace;
       // (a planned car's speed off the line is the planner's, from its path: no blanket slow-down per metre)
-      const offLine = me.aiPlan ? 1 : 1 - 0.012 * Math.abs(car.biasM);
+      // Past the corner's reach for a car alongside: that line is tighter than the plan's, so a little slower
+      const pastReach = this.rc.alongsideReachM > 0 ? Math.max(0, Math.abs(car.biasM) - cornerReach) : 0;
+      const offLine = (me.aiPlan ? 1 : 1 - 0.012 * Math.abs(car.biasM)) * (1 - 0.015 * pastReach);
       me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 0.999, planned * attackPush) * offLine * dirtyAirPenalty * yellowLift * blueLift;
       me.aiSpeedCapMs = speedCap;
       me.aiTopSpeedOpen = yellowLift === 1 && blueLift === 1;
