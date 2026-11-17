@@ -522,7 +522,7 @@ export const lapSummary = toggle({ id: "lapSummary", label: "Lap summary", hint:
 export const mirror = choice("segmented", {
   id: "virtualMirror",
   label: "Mirror",
-  hint: "Auto: onboard views without wing mirrors in sight",
+  hint: "Auto: in races and with other players on track, in onboard views without wing mirrors in sight",
   options: [
     { id: "auto", label: "Auto" },
     { id: "always", label: "Always" },

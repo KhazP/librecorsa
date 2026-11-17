@@ -1816,6 +1816,8 @@ export class DriveSession {
     const rainCamVel = new THREE.Vector3();
     const soloCars: SimulatorCar[] = [];
     const remoteWake: WakeEmitterCar[] = [];
+    /** Other players on this circuit last frame (a room's lobby included): the mirror's auto mode shows for them */
+    let peersOnTrack = 0;
     const ghostPos = new THREE.Vector3();
     const guardSelf: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
     const guardOther: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
@@ -2488,6 +2490,7 @@ export class DriveSession {
 
       // A peer on another circuit has coordinates that mean nothing here
       const samePeers = interpolatedPeers.filter((p) => !p.trackId || p.trackId === trackId);
+      peersOnTrack = samePeers.length;
       // On the lap where they are drawn, not where their newest packet put them (the tower, the relative, the gaps)
       placePeersWhereDrawn(samePeers, track.projectWorldToTrack, track.totalLengthM);
       peerWakeEmitters(track, samePeers, remoteWake);
@@ -2893,13 +2896,16 @@ export class DriveSession {
         reflectionProbe.update(podium.focus ?? physics.worldPosition, carRig.root, scene.environmentIntensity);
         startupMonitor?.end("probe");
         // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
-        // chase view too when the player asked for it always
+        // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an
+        // online race, or other players in the room (practice, the hotlap and qualifying are driven alone)
         const vmSetting = settingsNow.hud.virtualMirror;
         const vmView =
           view.virtualMirror === "always" ||
           (view.virtualMirror === "noSideMirrors" && !(wingMirrors?.found && wingMirrors.coversSides)) ||
           (view.virtualMirror === "onRequest" && vmSetting === "always");
-        const vmOn = driving && !inVr && !podium.playing && container.clientWidth >= 640 && vmSetting !== "off" && vmView;
+        const othersAbout = raceNow().kind !== "practice" || peersOnTrack > 0;
+        const vmOn =
+          driving && !inVr && !podium.playing && container.clientWidth >= 640 && vmView && (vmSetting === "always" || (vmSetting === "auto" && othersAbout));
         // The mirrors refresh every other frame, 30 times a second at 60 fps; under the 30 fps cap every drawn frame
         // does, which keeps them at 30
         const mirrorFrame = pacer.cap > 0 ? 0 : frameIndex;
