@@ -278,12 +278,15 @@ for (const [name, config] of CARS) {
       if (t > 0.5) {
         const [L, R] = c.wheels;
         rim.push(s[s.length - 1] as number);
-        loads.push([L.fx, R.fx, L.fy, R.fy, L.fz, R.fz, L.mz + L.mzTwist, R.mz + R.mzTwist, L.mx, R.mx, L.gyroSteerNm, R.gyroSteerNm]);
+        loads.push([
+          L.fx, R.fx, L.fy, R.fy, L.fz, R.fz, L.mz + L.mzTwist, R.mz + R.mzTwist, L.mx, R.mx, L.gyroSteerNm, R.gyroSteerNm,
+          L.kerbHit.hitN, R.kerbHit.hitN,
+        ]);
         dLoad.push(L.fz - R.fz);
       }
     }
-    // Everything the rim does is the front tyres' loads at their levers plus the wheels' gyroscopic torque: a linear fit
-    // on them leaves nothing over
+    // Everything the rim does is the front tyres' loads at their levers, the wheels' gyroscopic torque and the kerb
+    // strikes of their load hits (`kerb-hits.ts`; here the road's texture): a linear fit on them leaves nothing over
     const r2 = linearFitR2(rim, loads);
     assert.ok(sd(still) < 1e-4, `parked ${sd(still)}`);
     assert.ok(sd(rim) > 1e-3 && sd(dLoad) > 50, `rim ${sd(rim)}, load ${sd(dLoad)}`);

@@ -174,6 +174,7 @@ import {
   lc26FullBrakeForceN,
   withPlanningGrip,
 } from './sim/speed-profile';
+import { createKerbHitState, kerbHitLevel, stepKerbHit, type KerbHitState } from './sim/kerb-hits';
 
 export type { VehicleWheelState, WheelCornerIndex };
 
@@ -461,6 +462,8 @@ export class F1Physics2026 {
   public frontWheelAngleRad = 0; // + = right
   public ffbTorqueNorm = 0;
   public readonly ffbSubframeSamples: number[] = [];
+  /** What the road's shape does to each tyre (`kerb-hits.ts`), in `wheels` order */
+  private readonly kerbHits: KerbHitState[] = [createKerbHitState(), createKerbHitState(), createKerbHitState(), createKerbHitState()];
   public frontSlipRatioNorm = 0;
   public rearSlipRatioNorm = 0;
 
@@ -1952,6 +1955,10 @@ export class F1Physics2026 {
       const acc = this.subStep(h, throttle, roadFrac);
       sumAx += acc.ax;
       sumAy += acc.ay;
+      for (let i = 0; i < 4; i++) {
+        const w = this.wheels[i];
+        stepKerbHit(this.kerbHits[i], w.fzN, w.fzN > 0, this.staticCornerLoadN(w.isFront), h);
+      }
     }
     this.lastAxMs2 += (sumAx / SUBSTEPS - this.lastAxMs2) * Math.min(1, 25 * dt);
     this.lastAyMs2 += (sumAy / SUBSTEPS - this.lastAyMs2) * Math.min(1, 25 * dt);
@@ -2483,6 +2490,11 @@ export class F1Physics2026 {
   // ---------------------------------------------------------------------------
   // 2 kHz sub-step
   // ---------------------------------------------------------------------------
+
+  /** A corner's share of the car's weight at rest (N) */
+  private staticCornerLoadN(front: boolean): number {
+    return 0.5 * this.massKg * G * (front ? LC26_CHASSIS.frontWeightFraction : 1 - LC26_CHASSIS.frontWeightFraction);
+  }
 
   private subStep(h: number, throttle: number, roadFrac: number): { ax: number; ay: number } {
     const M = this.totalMassKg;
@@ -3411,6 +3423,15 @@ export class F1Physics2026 {
     t.wheelSlipRatios = quad((w) => w.slipRatio);
     t.wheelSlipAnglesDeg = quad((w) => THREE.MathUtils.radToDeg(w.slipAngleRad));
     t.wheelLoadsN = quad((w) => Math.round(w.fzN));
+    const hits = (t.wheelKerbHit ??= [0, 0, 0, 0]);
+    const hitHz = (t.kerbHitHz ??= [0, 0]);
+    hitHz[0] = hitHz[1] = 0;
+    W.forEach((w, k) => {
+      const state = this.kerbHits[this.wheels.indexOf(w)];
+      hits[k] = kerbHitLevel(state, this.staticCornerLoadN(w.isFront));
+      const side = w.isLeft ? 0 : 1;
+      hitHz[side] = Math.max(hitHz[side], state.hitRateHz);
+    });
     t.wheelRideHeightsMm = quad((w) => Math.round(w.rideHeight * 1000));
     t.suspensionTravelMm = quad((w) => {
       const ax = w.isFront ? this.axles[0] : this.axles[1];

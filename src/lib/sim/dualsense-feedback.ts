@@ -6,7 +6,9 @@ import {
   createRumbleCues,
   createRumbleMixState,
   hapticMagnitudes,
+  kerbHitRateHz,
   kerbPulseOn,
+  kerbSides,
   layerRumble,
   resetRumbleMixState,
   triggerCues,
@@ -144,6 +146,9 @@ export function throttleTriggerEffect(
 
 const leftKerb = (t: CarTelemetry) => t.onKerbLeft || t.wheelSurfaces?.[0] === "kerb" || t.wheelSurfaces?.[2] === "kerb";
 const rightKerb = (t: CarTelemetry) => t.onKerbRight || t.wheelSurfaces?.[1] === "kerb" || t.wheelSurfaces?.[3] === "kerb";
+/** How hard a kerb hits each side, as a share of the kerb cue: the physics' hits, or the surface flags without them */
+const kerbShare = (t: CarTelemetry): [number, number] =>
+  t.wheelKerbHit ? kerbSides(t) : [leftKerb(t) ? 1 : 0, rightKerb(t) ? 1 : 0];
 
 export class DualSenseFeedback {
   private timeS = 0;
@@ -200,7 +205,7 @@ export class DualSenseFeedback {
     const tc = triggerCues(t, { triggerSlipAlwaysOn: input.triggerSlipAlwaysOn });
 
     const rumbleGain = input.rumbleOn ? settings.rumbleStrength : 0;
-    const kerbHit = this.cues.kerb > 0 && kerbPulseOn(this.timeS) ? this.cues.kerb : 0;
+    const kerbHit = this.cues.kerb > 0 && kerbPulseOn(this.timeS, kerbHitRateHz(t)) ? this.cues.kerb : 0;
     const low = layerRumble(strong, KERB_LOW_MOTOR * kerbHit);
     const rumble = input.hdHaptics ? null : { low: clamp01(low * rumbleGain), high: clamp01(weak * rumbleGain) };
 
@@ -226,11 +231,15 @@ export class DualSenseFeedback {
       const rough = c.roughWheels;
       const speedMs = Math.max(0, t.speedKmh / 3.6);
       const engineOn = t.rpm > 500 ? 1 : 0;
+      // Each side's kerb strikes as hard as the kerb hits that side's tyres, one knock per hit at the rate they come
+      const [shareL, shareR] = kerbShare(t);
+      const shareTop = Math.max(shareL, shareR);
+      const hitHz = kerbHitRateHz(t);
       haptics = {
         gain: settings.hapticStrength,
-        kerbL: leftKerb(t) ? c.kerb : 0,
-        kerbR: rightKerb(t) ? c.kerb : 0,
-        kerbHz: Math.min(40, Math.max(5, speedMs / 1.4)),
+        kerbL: shareTop > 0 ? (c.kerb * shareL) / shareTop : 0,
+        kerbR: shareTop > 0 ? (c.kerb * shareR) / shareTop : 0,
+        kerbHz: Math.min(40, Math.max(5, hitHz > 0 ? hitHz : speedMs / 1.4)),
         roughL: clamp01(((rough[0] + rough[2]) / 2) * 1.5 + c.texture * 0.6),
         roughR: clamp01(((rough[1] + rough[3]) / 2) * 1.5 + c.texture * 0.6),
         lockL: lockAt(0),

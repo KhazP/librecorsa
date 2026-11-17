@@ -72,8 +72,27 @@ const EFFECT_DURATION_MS = 90;
 /** Magnitude change that counts as a new effect while the previous one is still running */
 const MAGNITUDE_EPS = 0.03;
 const KERB_PULSE_HZ = 12;
-/** Whether the kerb pulse is in its on half at `timeS` */
-export const kerbPulseOn = (timeS: number) => (timeS * KERB_PULSE_HZ) % 1 < 0.5;
+/** A pad's motors follow pulses up to about this rate (Hz): faster kerb hits pulse at it */
+const KERB_PULSE_MAX_HZ = 15;
+/**
+ * Whether the kerb pulse is in its on half at `timeS`: at `hitHz`, the rate the tyres are being hit (`kerbHitHz`), up to
+ * KERB_PULSE_MAX_HZ, or KERB_PULSE_HZ without it
+ */
+export const kerbPulseOn = (timeS: number, hitHz = 0) =>
+  (timeS * (hitHz > 0 ? Math.min(KERB_PULSE_MAX_HZ, hitHz) : KERB_PULSE_HZ)) % 1 < 0.5;
+
+/**
+ * How hard a kerb hits the car's left and right tyres, 0..1: from the physics (`wheelKerbHit`, each tyre's load hits),
+ * or, from telemetry without it, 1 on a kerb by the surface flags
+ */
+export function kerbSides(t: CarTelemetry): [number, number] {
+  const h = t.wheelKerbHit;
+  if (h) return [Math.max(h[0], h[2]), Math.max(h[1], h[3])];
+  return [t.onKerbLeft ? 1 : 0, t.onKerbRight ? 1 : 0];
+}
+
+/** The rate the tyres are being hit (Hz, the busier side), 0 without it */
+export const kerbHitRateHz = (t: CarTelemetry): number => (t.kerbHitHz ? Math.max(t.kerbHitHz[0], t.kerbHitHz[1]) : 0);
 const ABS_PULSE_HZ = 20;
 const TC_PULSE_HZ = 25;
 
@@ -319,10 +338,12 @@ export function hapticMagnitudes(
 
   const speedFactor = clamp01(t.speedKmh / 300);
 
-  // Weak motor: kerb strikes pulse on and off, front-tyre scrub near the limit, faint road texture
-  const onKerb = t.onKerbLeft || t.onKerbRight;
-  const kerbLevel = onKerb ? 0.55 + 0.35 * speedFactor : 0;
-  const kerb = kerbPulseOn(timeS) ? kerbLevel : 0;
+  // Weak motor: kerb strikes, as hard as the kerb hits the tyres and pulsing at the rate it does; front-tyre scrub near
+  // the limit, faint road texture
+  const [kerbL, kerbR] = kerbSides(t);
+  const kerbHit = Math.max(kerbL, kerbR);
+  const kerbLevel = kerbHit > 0 ? (0.55 + 0.35 * speedFactor) * kerbHit : 0;
+  const kerb = kerbPulseOn(timeS, kerbHitRateHz(t)) ? kerbLevel : 0;
   const scrub = 0.4 * pastPeak(Math.max(t.tireSlipRatio[0], t.tireSlipRatio[1]));
   const texture = 0.04 * speedFactor;
   let weak = layerRumble(0, kerb);
