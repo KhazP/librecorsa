@@ -131,7 +131,11 @@ export const RESERVED_CODES: ReadonlySet<string> = new Set(["Escape", "Slash"]);
 /** Standard-mapping controller buttons (Xbox layout names) */
 export type PadButtonBindings = Record<PadAction, number | null>;
 
-export const DEFAULT_PAD_BUTTONS: PadButtonBindings = {
+/**
+ * Gears on the bumpers, the layout every controller had before GT style became the default (17 Nov 2026). A saved
+ * button map dates from then at the latest, so an action missing from one falls back to this, not to the new default.
+ */
+export const BUMPER_SHIFT_BUTTONS: PadButtonBindings = {
   boost: 0, // A
   aero: 2, // X
   camera: 3, // Y
@@ -149,6 +153,28 @@ export const DEFAULT_PAD_BUTTONS: PadButtonBindings = {
   // Every button has a job already: a player can give it one
   board: null,
 };
+
+/** Gran Turismo 7: ✕ up, □ down, R1 change view, R3 nitro / overtake, Options pause. The right thumb is free in a drive */
+export const GT_STYLE_BUTTONS: PadButtonBindings = {
+  shiftUp: 0, // A (✕)
+  shiftDown: 2, // X (□)
+  // Gear up and gear down pressed together are neutral too, on every layout
+  neutral: null,
+  boost: 11, // RS (R3)
+  camera: 5, // RB (R1)
+  pause: 9, // Menu (Options)
+  restart: 8, // View (Create)
+  flyingLap: null,
+  aero: 3, // Y (△)
+  mfd: 10, // LS (L3)
+  mfdPage: 1, // B (○)
+  hud: 4, // LB (L1)
+  racingLine: null,
+  board: null,
+};
+
+/** A new player's buttons: GT style, gears under the right thumb, which also holds Gear up as the clutch at a manual start */
+export const DEFAULT_PAD_BUTTONS: PadButtonBindings = GT_STYLE_BUTTONS;
 
 /** Fixed standard-mapping buttons: the triggers, the stick clicks */
 export const PAD_THROTTLE_BUTTON = 7; // RT
@@ -251,38 +277,18 @@ export function freePedalButtons(bindings: PadButtonBindings, sources: PadPedalS
 }
 
 /** Ready-made controller layouts, after the defaults of the racing games players come from */
-export type PadLayout = "default" | "gt" | "gtClassic" | "f1" | "forza";
+export type PadLayout = "gt" | "gtClassic" | "f1" | "forza" | "bumper";
 
 /**
  * Each layout puts what its game has on the same buttons (standard mapping; Xbox names, PlayStation in brackets). An
- * action the game lacks keeps its LibreCorsa default button when that one is free, else takes a free one. All of them
+ * action the game lacks keeps its Bumper shift button when that one is free, else takes a free one. All of them
  * leave the D-pad (the MFD's dials) alone, keep Menu on pause and restart on View: restart is not a rewind, and it must
  * not sit under a thumb. A layout also names its throttle / brake set: the trigger layouts leave RT / LT to them, the
  * stick layout shifts on them and leaves R3 free, since the thumb on the pedal stick can click it.
  */
 export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet; buttons: PadButtonBindings }> = {
-  default: { label: "Default", pedals: "triggers", buttons: DEFAULT_PAD_BUTTONS },
-  // Gran Turismo 7: ✕ up, □ down, R1 change view, R3 nitro / overtake, Options pause
-  gt: {
-    label: "GT style",
-    pedals: "triggers",
-    buttons: {
-      shiftUp: 0, // A (✕)
-      shiftDown: 2, // X (□)
-      neutral: null,
-      boost: 11, // RS (R3)
-      camera: 5, // RB (R1)
-      pause: 9, // Menu (Options)
-      restart: 8, // View (Create)
-      flyingLap: null,
-      aero: 3, // Y (△)
-      mfd: 10, // LS (L3)
-      mfdPage: 1, // B (○)
-      hud: 4, // LB (L1)
-      racingLine: null,
-      board: null,
-    },
-  },
+  // The default
+  gt: { label: "GT style", pedals: "triggers", buttons: GT_STYLE_BUTTONS },
   // Classic Gran Turismo on a pad: right stick up throttle, down brake, R2 up, L2 down; the rest as GT style, with
   // the boost off R3 (now under the pedal thumb) onto ✕ and the HUD onto □, so L1 and the left stick's up / down
   // stay free (a clutch or a starter can go there)
@@ -348,6 +354,8 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       board: null,
     },
   },
+  // Gears on the bumpers: the default until 17 Nov 2026, so the layout most saved settings still have
+  bumper: { label: "Bumper shift", pedals: "triggers", buttons: BUMPER_SHIFT_BUTTONS },
 };
 
 export const PAD_LAYOUT_IDS = Object.keys(PAD_LAYOUTS) as PadLayout[];

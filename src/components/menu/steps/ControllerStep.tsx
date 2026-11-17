@@ -205,7 +205,7 @@ export function ControllerButtonsCard() {
         return { ...s, padButtons: freePedalButtons({ ...picked.buttons }, pedalSources), padTuning: { ...s.padTuning, pedalSources } };
       });
     },
-    initial: () => "default",
+    initial: () => "gt",
   });
   // A pedal stick's click is under the pedal thumb: say what it still does there
   const clickHint = pedalStickClicks(sources)

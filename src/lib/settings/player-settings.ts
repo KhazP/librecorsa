@@ -6,6 +6,7 @@ import { DEFAULT_RACE_SETUP, parseRaceSetup, type RaceSetup } from "@/lib/sim/ra
 import type { AssistPreset, CameraMode } from "@/types/f1";
 import {
   DEFAULT_KEY_BINDINGS,
+  BUMPER_SHIFT_BUTTONS,
   DEFAULT_PAD_BUTTONS,
   KEY_ACTIONS,
   DEFAULT_PAD_PEDAL_SOURCES,
@@ -548,8 +549,11 @@ function parseKeys(v: unknown): KeyBindings {
 }
 
 function parsePadButtons(v: unknown): PadButtonBindings {
+  // No saved map: a new player, on today's default
   if (!isObj(v)) return { ...DEFAULT_PAD_BUTTONS };
-  const out = { ...DEFAULT_PAD_BUTTONS };
+  // A saved map was made on Bumper shift or from it: an action it lacks takes that layout's button, not GT style's
+  const base = BUMPER_SHIFT_BUTTONS;
+  const out = { ...base };
   const claimed = new Set<number>();
   const saved = new Set<string>();
   for (const { id } of PAD_ACTIONS) {
@@ -561,7 +565,7 @@ function parsePadButtons(v: unknown): PadButtonBindings {
   }
   // Same for the controller: a default button the player has given to another action stays unbound here
   for (const { id } of PAD_ACTIONS) {
-    const d = DEFAULT_PAD_BUTTONS[id];
+    const d = base[id];
     if (!saved.has(id) && d !== null && claimed.has(d)) out[id] = null;
   }
   return out;

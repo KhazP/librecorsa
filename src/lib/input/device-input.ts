@@ -9,7 +9,7 @@
  * throttle / brake.
  */
 import {
-  DEFAULT_PAD_BUTTONS,
+  BUMPER_SHIFT_BUTTONS,
   DEFAULT_PAD_PEDAL_SOURCES,
   PAD_ACTIONS,
   PAD_BRAKE_BUTTON,
@@ -523,7 +523,8 @@ export class DeviceInputReader {
               : (pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0);
           frame.clutch = wheelClutch(pads, wheel.clutch);
         }
-        const map = pad.mapping === "standard" ? settings.padButtons : DEFAULT_PAD_BUTTONS;
+        // A wheel not set up yet has its paddles where a pad has its bumpers: it shifts there whatever the pad layout
+        const map = isLikelyWheel(pad) ? BUMPER_SHIFT_BUTTONS : settings.padButtons;
         for (const { id } of PAD_ACTIONS) {
           const button = map[id];
           if (button !== null && (pad.mapping === "standard" ? padButtonDown(pad, button) : buttonDown(pad, button))) held.add(id);
