@@ -8,7 +8,8 @@
  */
 
 import { BMW_M4_GT3_SOUND, CarAudioEngine } from "../src/lib/sim/CarAudio";
-import type { CarTelemetry } from "../src/types/f1";
+import type { CarTelemetry, SurfaceType } from "../src/types/f1";
+import { getActiveSurfaceTable } from "../src/lib/track-data";
 
 let passed = 0;
 let failed = 0;
@@ -35,7 +36,10 @@ class MockParam {
   writes = 0;
   /** setValueAtTime calls with a value above zero (the debris clicks) */
   pulses = 0;
-  constructor(v: number) {
+  /** The highest value set or targeted */
+  peak = 0;
+  /** The node the param belongs to: a signal connected into the param feeds that node */
+  constructor(v: number, readonly owner?: MockNode) {
     this.v = v;
     this.last = v;
   }
@@ -51,11 +55,13 @@ class MockParam {
     this.last = x;
     this.writes++;
     if (x > 0) this.pulses++;
+    this.peak = Math.max(this.peak, x);
     return this;
   }
   setTargetAtTime(x: number, t: number, tau: number) {
     assertFinite(x, t, tau);
     this.last = x;
+    this.peak = Math.max(this.peak, x);
     this.writes++;
     return this;
   }
@@ -81,8 +87,9 @@ class MockNode {
   constructor(readonly ctx: MockContext) {
     ctx.nodes.push(this);
   }
-  connect<T extends MockNode>(dest: T): T {
-    this.outs.push(dest);
+  connect<T extends MockNode | MockParam>(dest: T): T {
+    const node: MockNode | undefined = dest instanceof MockParam ? dest.owner : (dest as MockNode);
+    if (node) this.outs.push(node);
     return dest;
   }
   disconnect() {
@@ -94,7 +101,7 @@ class MockNode {
 }
 
 class MockGain extends MockNode {
-  readonly gain = new MockParam(1);
+  readonly gain = new MockParam(1, this);
 }
 class MockFilter extends MockNode {
   type = "lowpass";
@@ -112,6 +119,10 @@ class MockSource extends MockNode {
   readonly frequency = new MockParam(440);
   readonly playbackRate = new MockParam(1);
   onended: (() => void) | null = null;
+  wave: unknown = null;
+  setPeriodicWave(wave: unknown) {
+    this.wave = wave;
+  }
   start(_when = 0, offset = 0) {
     this.started = true;
     this.startOffset = offset;
@@ -119,6 +130,9 @@ class MockSource extends MockNode {
   stop() {
     this.stopped = true;
   }
+}
+class MockPanner extends MockNode {
+  readonly pan = new MockParam(0);
 }
 class MockCompressor extends MockNode {
   readonly threshold = new MockParam(-24);
@@ -153,6 +167,13 @@ class MockContext {
   }
   createDynamicsCompressor() {
     return new MockCompressor(this);
+  }
+  createStereoPanner() {
+    return new MockPanner(this);
+  }
+  createPeriodicWave(real: Float32Array, imag: Float32Array) {
+    for (const x of [...real, ...imag]) assertFinite(x);
+    return { real, imag };
   }
   createWaveShaper() {
     return Object.assign(new MockNode(this), { curve: null as Float32Array | null });
@@ -266,6 +287,20 @@ function voicesRaisedBy(a: Fixture, b: Fixture): number[] {
 const clicksIn = (run: Run) =>
   run.ctx.nodes.reduce((n, node) => n + (node instanceof MockGain ? node.gain.pulses : 0), 0);
 
+/** A kerb roar level's pan */
+const panOf = (g: MockGain) => (g.outs.find((o) => o instanceof MockPanner) as MockPanner | undefined)?.pan.value ?? NaN;
+
+/** The kerb roar's levels, left then right: the gains that feed a stereo panner */
+function roarLevels(run: Run): MockGain[] {
+  return run.ctx.nodes
+    .filter((n): n is MockGain => n instanceof MockGain && n.outs.some((o) => o instanceof MockPanner))
+    .sort((a, b) => panOf(a) - panOf(b));
+}
+
+/** The ridge-rate oscillator that swells a kerb roar level */
+const ridgeOscOf = (run: Run, level: MockGain) =>
+  run.ctx.sources.find((s) => s.wave !== null && feeds(s, level));
+
 // ---------------------------------------------------------------------------------------------------------------
 
 console.log("1. Tyre squeal, kerb and off-track: CarAudio's voices only, the rig adds none");
@@ -274,12 +309,65 @@ console.log("1. Tyre squeal, kerb and off-track: CarAudio's voices only, the rig
   check("A slide brings in exactly two voices: CarAudio's squeal tone and scrub", slide.length === 2, `gains ${slide}`);
 
   const kerb = voicesRaisedBy(steady(), steady({ surface: "kerb", wheelSurfaces: quad("kerb") }));
-  check("A kerb brings in exactly one rumble voice", kerb.length === 1, `gain ${kerb}`);
+  check("A kerb brings in three voices: the rumble and both sides' roar", kerb.length === 3, `gains ${kerb}`);
 
   for (const surface of ["grass", "runoff"] as const) {
     const off = voicesRaisedBy(steady(), steady({ surface, wheelSurfaces: quad(surface) }));
     check(`${surface}: exactly one off-track voice comes in`, off.length === 1, `gain ${off}`);
   }
+}
+
+console.log("\n1b. Kerb roar: swelling at the ridge rate, on the side the kerb is under");
+{
+  const LEFT: Quad<SurfaceType> = ["kerb", "asphalt", "kerb", "asphalt"];
+  const roar = (fixture: Fixture, hz = 60, seconds = 1) => {
+    const run = start();
+    drive(run, seconds, hz, fixture);
+    const [l, r] = roarLevels(run);
+    const oscHz = (g: MockGain | undefined) => (g ? ridgeOscOf(run, g)?.frequency.last ?? NaN : NaN);
+    return { l: l?.gain.last ?? NaN, r: r?.gain.last ?? NaN, lPeak: l?.gain.peak ?? NaN, rPeak: r?.gain.peak ?? NaN, lHz: oscHz(l), rHz: oscHz(r) };
+  };
+  const run0 = start();
+  const levels = roarLevels(run0);
+  check(
+    "Two roar voices, panned left and right, each swelled by a ridge-rate wave",
+    levels.length === 2 && panOf(levels[0]) < 0 && panOf(levels[1]) > 0 && levels.every((g) => ridgeOscOf(run0, g)),
+    `pans ${levels.map(panOf)}`
+  );
+
+  const left = roar(steady({ surface: "kerb", onKerbLeft: true, wheelSurfaces: LEFT }));
+  check("Left wheels on a kerb: the left roars, the right does not", left.l > 0 && left.r === 0 && left.rPeak === 0, `${left.l.toFixed(3)} / ${left.r}`);
+  const both = roar(steady({ surface: "kerb", wheelSurfaces: quad("kerb") }));
+  check("Both sides on kerbs: both roar", both.l > 0 && both.r > 0, `${both.l.toFixed(3)} / ${both.r.toFixed(3)}`);
+  const front = roar(steady({ surface: "kerb", wheelSurfaces: ["kerb", "asphalt", "asphalt", "asphalt"] }));
+  check("Both of a side's wheels roar louder than one", left.l > front.l && front.l > 0, `${left.l.toFixed(3)} vs ${front.l.toFixed(3)}`);
+  // 40 m/s over the active circuit's kerb ridges
+  const slow = roar(steady({ speedKmh: 72, speedMs: 20, surface: "kerb", wheelSurfaces: LEFT }));
+  check(
+    "The swell is the ridge rate, half at half the speed",
+    Math.abs(left.lHz - 40 / getActiveSurfaceTable().kerb.bumpLengthM) < 0.5 && Math.abs(slow.lHz / left.lHz - 0.5) < 0.01,
+    `${left.lHz.toFixed(1)} Hz at 40 m/s, ${slow.lHz.toFixed(1)} Hz at 20 m/s`
+  );
+
+  for (const surface of ["asphalt", "grass", "runoff"] as const) {
+    const off = roar(steady({ surface, wheelSurfaces: quad(surface) }));
+    check(`${surface}: no roar`, off.lPeak === 0 && off.rPeak === 0, `${off.lPeak} / ${off.rPeak}`);
+  }
+  const airborne = roar(steady({ surface: "kerb", wheelSurfaces: quad("kerb"), wheelLoadsN: quad(0) }));
+  check("Wheels in the air over a kerb: no roar", airborne.lPeak + airborne.rPeak === 0);
+  const crawl = roar(steady({ speedKmh: 10, speedMs: 2.8, surface: "kerb", wheelSurfaces: quad("kerb") }));
+  check("No roar at a crawl", crawl.lPeak + crawl.rPeak === 0);
+
+  const touch = roar((t) => telemetry(t < 1.5 / 60 ? { surface: "kerb", wheelSurfaces: LEFT } : {}), 60, 0.25);
+  check(
+    "A one-frame touch strikes the edge, then dies away",
+    touch.lPeak > 1.5 * left.l && touch.l === 0 && touch.rPeak === 0,
+    `peak ${touch.lPeak.toFixed(3)} vs ${left.l.toFixed(3)} held`
+  );
+  const at60 = roar(steady({ surface: "kerb", wheelSurfaces: LEFT }), 60, 2);
+  const at144 = roar(steady({ surface: "kerb", wheelSurfaces: LEFT }), 144, 2);
+  check("The same level at 60 and 144 frames a second", Math.abs(at60.l - at144.l) < 1e-9, `${at60.l} / ${at144.l}`);
+  check("The roar level peaks at 1 or less, the edge strike included", both.lPeak > 0 && both.lPeak <= 1, `peak ${both.lPeak.toFixed(3)}`);
 }
 
 console.log("\n2. Each of the rig's four sounds follows its own input");
@@ -497,6 +585,13 @@ console.log("\n7. Noise loops and teardown");
     "The rig's roar, rattle and debris loops each start at their own point of the shared noise",
     rigLoops.length === 3 && alignedWithAnother.length === 0,
     `${rigLoops.length} rig loops, offsets ${rigLoops.map((s) => s.startOffset.toFixed(3))}`
+  );
+
+  const gritLoop = loops.filter((s) => roarLevels(run).some((level) => feeds(s, level)));
+  check(
+    "The kerb roar's noise loop starts at its own point of the shared noise",
+    gritLoop.length === 1 && !loops.some((o) => o !== gritLoop[0] && o.buffer === gritLoop[0].buffer && o.startOffset === gritLoop[0].startOffset),
+    `${gritLoop.length} roar loops`
   );
 
   run.engine.dispose();
