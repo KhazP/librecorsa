@@ -11,6 +11,7 @@ import {
   DEFAULT_PAD_PEDAL_SOURCES,
   PAD_ACTIONS,
   PAD_PEDALS,
+  samePedalSource,
   RESERVED_CODES,
   type KeyBindings,
   type PadButtonBindings,
@@ -594,6 +595,7 @@ function parseWheel(v: unknown): WheelSettings {
     steer: parseAxis(v.steer),
     throttle: parsePedal(v.throttle),
     brake: parsePedal(v.brake),
+    clutch: parsePedal(v.clutch),
     brakeGamma: num(v.brakeGamma, 0.5, 3, d.brakeGamma),
     steerDeadzone: num(v.steerDeadzone, 0, 0.2, d.steerDeadzone),
     steerSmoothingS: num(v.steerSmoothingS, 0, 0.2, d.steerSmoothingS),
@@ -663,6 +665,8 @@ function parsePedalSources(v: unknown): PadPedalSources {
     const source = parsePedalSource(v[p]);
     if (source !== undefined && (source !== null || DEFAULT_PAD_PEDAL_SOURCES[p] === null)) out[p] = source;
   }
+  // A clutch on the throttle's or the brake's own source would open the clutch with every press of that pedal
+  if (out.clutch && (samePedalSource(out.clutch, out.throttle) || samePedalSource(out.clutch, out.brake))) out.clutch = null;
   return out;
 }
 

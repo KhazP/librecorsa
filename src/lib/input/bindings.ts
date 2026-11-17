@@ -21,6 +21,7 @@ export type KeyAction =
   | "restart"
   | "flyingLap"
   | "throttleHalf"
+  | "clutch"
   | "replay"
   | "mfdPage"
   | "mfd"
@@ -66,6 +67,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "restart", label: "Restart" },
   { id: "flyingLap", label: "Restart lap (flying start)" },
   { id: "throttleHalf", label: "Half throttle (hold)" },
+  { id: "clutch", label: "Clutch (hold)" },
   { id: "replay", label: "Instant replay" },
   { id: "mfdPage", label: "Next MFD page" },
   { id: "mfd", label: "Open / close MFD" },
@@ -108,6 +110,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   // Outside a race: the lap starts over at speed (in a race it does nothing)
   flyingLap: ["KeyL"],
   throttleHalf: ["KeyF"],
+  // No key: the clutch is the car's own until a player wants it
+  clutch: [],
   replay: ["KeyT"],
   mfdPage: ["Insert", "KeyI"],
   mfd: ["KeyO"],
@@ -146,12 +150,13 @@ export const PAD_LEFT_STICK_BUTTON = 10; // LS (L3)
 export const PAD_RIGHT_STICK_BUTTON = 11; // RS (R3)
 
 /**
- * The pedals a controller drives. Each one reads from its own source ({@link PadPedalSources}), so another pedal (a
- * clutch, 0..1 with 1 pressed) joins by adding its id here, a source in the saved map and a label.
+ * The pedals a controller drives. Each one reads from its own source ({@link PadPedalSources}), so another pedal
+ * joins by adding its id here, a source in the saved map and a label. The clutch is 0..1 with 1 pressed (open), and
+ * has no source until the player gives it one.
  */
-export type PadPedal = "throttle" | "brake";
-export const PAD_PEDALS = ["throttle", "brake"] as const satisfies readonly PadPedal[];
-export const PAD_PEDAL_LABELS: Record<PadPedal, string> = { throttle: "Throttle", brake: "Brake" };
+export type PadPedal = "throttle" | "brake" | "clutch";
+export const PAD_PEDALS = ["throttle", "brake", "clutch"] as const satisfies readonly PadPedal[];
+export const PAD_PEDAL_LABELS: Record<PadPedal, string> = { throttle: "Throttle", brake: "Brake", clutch: "Clutch" };
 
 /**
  * Where one pedal is read on a standard-mapping controller: an analogue button's travel (a trigger), or one half of a
@@ -170,7 +175,7 @@ export const PAD_PEDAL_SETS: Record<PadPedalSet, Pick<PadPedalSources, "throttle
   stick: { throttle: { kind: "axis", axis: 3, sign: -1 }, brake: { kind: "axis", axis: 3, sign: 1 } },
 };
 export const PAD_PEDAL_SET_IDS = Object.keys(PAD_PEDAL_SETS) as PadPedalSet[];
-export const DEFAULT_PAD_PEDAL_SOURCES: PadPedalSources = { ...PAD_PEDAL_SETS.triggers };
+export const DEFAULT_PAD_PEDAL_SOURCES: PadPedalSources = { ...PAD_PEDAL_SETS.triggers, clutch: null };
 
 export const samePedalSource = (a: PadPedalSource | null, b: PadPedalSource | null): boolean =>
   a === null || b === null
@@ -183,7 +188,9 @@ export const samePedalSource = (a: PadPedalSource | null, b: PadPedalSource | nu
 export function matchPedalSet(sources: PadPedalSources): PadPedalSet | null {
   return (
     PAD_PEDAL_SET_IDS.find((id) =>
-      (Object.keys(PAD_PEDAL_SETS[id]) as (keyof PadPedalSources)[]).every((p) => samePedalSource(sources[p], PAD_PEDAL_SETS[id][p])),
+      (Object.keys(PAD_PEDAL_SETS[id]) as (keyof (typeof PAD_PEDAL_SETS)[PadPedalSet])[]).every((p) =>
+        samePedalSource(sources[p], PAD_PEDAL_SETS[id][p]),
+      ),
     ) ?? null
   );
 }

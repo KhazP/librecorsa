@@ -58,6 +58,8 @@ export interface WheelSettings {
   steer: AxisBinding | null;
   throttle: PedalBinding | null;
   brake: PedalBinding | null;
+  /** A clutch pedal, when the wheel's pedal set has one and the player calibrated it (1 = pressed, the clutch open) */
+  clutch: PedalBinding | null;
   /** Brake response curve: 1 linear, > 1 finer control at light pressure */
   brakeGamma: number;
   /** Steering dead zone around centre (fraction of half the rotation) */
@@ -182,6 +184,7 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   steer: null,
   throttle: null,
   brake: null,
+  clutch: null,
   brakeGamma: 1,
   ffbEnabled: false,
   ffbGain: 1,
@@ -246,6 +249,8 @@ export interface PadLike {
 export interface DeviceFrame {
   throttle: number;
   brake: number;
+  /** Clutch pedal 0..1 (1 = pressed, the clutch open); 0 when the device has none */
+  clutch: number;
   /** Steering straight to the rack (wheel), −1..1, + = right */
   analogSteer?: number;
   /** Raw controller stick for the physics' steering assist */
@@ -413,9 +418,18 @@ const padButtonDown = (pad: PadLike, button: number) => {
   return Boolean(b && (b.value > 0.5 || (b.pressed && !(b.value > 0))));
 };
 
+/** A calibrated clutch pedal 0..1 (1 = pressed), 0 without one or with its device gone */
+function wheelClutch(pads: readonly PadLike[], b: PedalBinding | null): number {
+  if (!b) return 0;
+  const p = findPad(pads, b.padId);
+  return p ? pedalValue(p.axes[b.axis] ?? b.idle, b, 1) : 0;
+}
+
 /** The devices a wheel binding names (the steering's, then any separate pedals'); null without a steering binding */
 function boundWheelDevices(wheel: WheelSettings): string | null {
-  return wheel.steer ? [wheel.steer.padId, wheel.throttle?.padId ?? "", wheel.brake?.padId ?? ""].join("\n") : null;
+  return wheel.steer
+    ? [wheel.steer.padId, wheel.throttle?.padId ?? "", wheel.brake?.padId ?? "", wheel.clutch?.padId ?? ""].join("\n")
+    : null;
 }
 
 /** Per-frame reader: holds the button edge state and the steering filter */
@@ -430,14 +444,15 @@ export class DeviceInputReader {
 
   read(pads: readonly PadLike[], settings: DeviceInputSettings, dtSeconds: number, vehicle?: string): DeviceFrame {
     const held = new Set<PadAction>();
-    const frame: DeviceFrame = { throttle: 0, brake: 0, boostHeld: false, pressed: new Set(), source: null };
+    const frame: DeviceFrame = { throttle: 0, brake: 0, clutch: 0, boostHeld: false, pressed: new Set(), source: null };
     const wheel = settings.wheel;
     const wheelPad = wheel.steer ? findPad(pads, wheel.steer.padId) : undefined;
     // Pedals on their own USB device count too: losing the brake pedal silently is worse than losing the wheel
     const present =
       wheelPad !== undefined &&
       (!wheel.throttle || findPad(pads, wheel.throttle.padId) !== undefined) &&
-      (!wheel.brake || findPad(pads, wheel.brake.padId) !== undefined);
+      (!wheel.brake || findPad(pads, wheel.brake.padId) !== undefined) &&
+      (!wheel.clutch || findPad(pads, wheel.clutch.padId) !== undefined);
     // Lost means the same bound devices were all connected last frame and one is gone now: clearing or rebinding the
     // steering (or the pedals) with everything plugged in is a settings change, not an unplug
     const devices = boundWheelDevices(wheel);
@@ -472,6 +487,7 @@ export class DeviceInputReader {
       };
       frame.throttle = pedal(wheel.throttle, 1, PAD_THROTTLE_BUTTON);
       frame.brake = pedal(wheel.brake, wheel.brakeGamma, PAD_BRAKE_BUTTON);
+      frame.clutch = wheelClutch(pads, wheel.clutch);
 
       for (const { id } of PAD_ACTIONS) {
         const b = wheel.buttons[id];
@@ -488,6 +504,7 @@ export class DeviceInputReader {
           const pedals = padPedals(pad, settings.padTuning);
           frame.throttle = pedals.throttle;
           frame.brake = pedals.brake;
+          frame.clutch = pedals.clutch;
         } else {
           frame.source = "legacy";
           // 4 % dead zone, then a short ramp that rejoins the raw value at 8 %: the output no longer jumps from 0 to
@@ -504,6 +521,7 @@ export class DeviceInputReader {
             wheel.brake && bPad
               ? pedalValue(bPad.axes[wheel.brake.axis] ?? wheel.brake.idle, wheel.brake, wheel.brakeGamma)
               : (pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0);
+          frame.clutch = wheelClutch(pads, wheel.clutch);
         }
         const map = pad.mapping === "standard" ? settings.padButtons : DEFAULT_PAD_BUTTONS;
         for (const { id } of PAD_ACTIONS) {

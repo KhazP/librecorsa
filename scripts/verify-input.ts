@@ -207,7 +207,7 @@ check('pedal sources: sets, the buttons they take, the stick clicks under them, 
   assert.deepEqual(pedalStickClicks(STICK_SOURCES), [PAD_RIGHT_STICK_BUTTON]);
   assert.ok(pedalsOnTriggers(DEFAULT_PAD_PEDAL_SOURCES));
   assert.ok(!pedalsOnTriggers(STICK_SOURCES));
-  assert.ok(!pedalsOnTriggers({ throttle: { kind: 'button', button: 6 }, brake: { kind: 'button', button: 7 } }), 'swapped is not the usual');
+  assert.ok(!pedalsOnTriggers({ throttle: { kind: 'button', button: 6 }, brake: { kind: 'button', button: 7 }, clutch: null }), 'swapped is not the usual');
   assert.equal(pressPedalText(DEFAULT_PAD_PEDAL_SOURCES.throttle), 'Hold RT');
   assert.equal(pressPedalText(STICK_SOURCES.throttle), 'Push the right stick up');
 });
@@ -235,7 +235,7 @@ check('pedal settings: old saves keep the triggers, bad sources fall back, the d
   assert.deepEqual(broken.pedalSources, DEFAULT_PAD_PEDAL_SOURCES, 'a bad sign, and a throttle / brake saved off the pad');
   assert.equal(broken.stickPedalDeadzone, 0.3);
   const mixed = parsePlayerSettings({ padTuning: { pedalSources: { throttle: STICK_SOURCES.throttle } } }).padTuning.pedalSources;
-  assert.deepEqual(mixed, { throttle: STICK_SOURCES.throttle, brake: DEFAULT_PAD_PEDAL_SOURCES.brake }, 'each pedal on its own');
+  assert.deepEqual(mixed, { throttle: STICK_SOURCES.throttle, brake: DEFAULT_PAD_PEDAL_SOURCES.brake, clutch: null }, 'each pedal on its own');
 });
 
 console.log('Wheel and pedals');
@@ -278,8 +278,8 @@ check('standard controller: stick to the assist, triggers, A boost, edges', () =
 check('stick pedals: right stick up throttle, down brake, dead zone at rest, full a little before the stop', () => {
   const stick = { pedalSources: STICK_SOURCES, stickPedalDeadzone: 0.1 };
   const at = (y: number) => padPedals(pad('Xbox', 'standard', [0, 0, 0, y], [], { 7: 0.9, 6: 0.9 }), stick);
-  assert.deepEqual(at(0.08), { throttle: 0, brake: 0 }, 'resting drift');
-  assert.deepEqual(at(-0.08), { throttle: 0, brake: 0 });
+  assert.deepEqual(at(0.08), { throttle: 0, brake: 0, clutch: 0 }, 'resting drift');
+  assert.deepEqual(at(-0.08), { throttle: 0, brake: 0, clutch: 0 });
   near(at(-1).throttle, 1);
   near(at(-0.96).throttle, 1, 1e-9);
   near(at(-0.525).throttle, 0.5);
@@ -296,6 +296,55 @@ check('stick pedals: right stick up throttle, down brake, dead zone at rest, ful
   const m = padPedals(pad('Xbox', 'standard', [0, 1, 0, 0], [], { 7: 0.4, 6: 0.9 }), mixed);
   near(m.throttle, 0.4);
   near(m.brake, 1);
+});
+const LB_CLUTCH: PadPedalSources = { ...DEFAULT_PAD_PEDAL_SOURCES, clutch: { kind: 'button', button: 4 } };
+check('clutch on a controller: none by default, its own button when given one, kept by a layout, never on a pedal', () => {
+  assert.equal(DEFAULT_PAD_PEDAL_SOURCES.clutch, null);
+  assert.equal(padPedals(pad('Xbox', 'standard', [0, 0, 0, 0], [4], { 7: 0.5 }), undefined).clutch, 0, 'no source reads 0');
+  near(padPedals(pad('Xbox', 'standard', [0, 0, 0, 0], [4]), { pedalSources: LB_CLUTCH, stickPedalDeadzone: 0.1 }).clutch, 1);
+  assert.equal(pedalOnButton(LB_CLUTCH, 4), 'clutch');
+  const picked = withPedalSet(LB_CLUTCH, 'stick');
+  assert.deepEqual(picked.clutch, LB_CLUTCH.clutch, 'a pedal set leaves the clutch where it is');
+  assert.equal(matchPedalSet(picked), 'stick', 'the clutch is not part of a set');
+  assert.equal(freePedalButtons(DEFAULT_PAD_BUTTONS, LB_CLUTCH).shiftDown, null, 'LB lets go of gear down');
+  // Saves: an old one has no clutch, one on the throttle's own trigger is dropped, one on a button of its own stays
+  assert.equal(parsePlayerSettings({ padTuning: {} }).padTuning.pedalSources.clutch, null);
+  const onRt = parsePlayerSettings({ padTuning: { pedalSources: { clutch: { kind: 'button', button: 7 } } } });
+  assert.equal(onRt.padTuning.pedalSources.clutch, null, 'on RT, the throttle');
+  const onLb = parsePlayerSettings({ padTuning: { pedalSources: { clutch: { kind: 'button', button: 4 } } } });
+  assert.deepEqual(onLb.padTuning.pedalSources.clutch, { kind: 'button', button: 4 });
+  // The keyboard's clutch has no key until the player gives it one
+  assert.deepEqual(DEFAULT_KEY_BINDINGS.clutch, []);
+  assert.equal(buildKeyLookup(rebindKey(DEFAULT_KEY_BINDINGS, 'clutch', 0, 'KeyZ')).get('KeyZ'), 'clutch');
+});
+check('clutch in the device frame: the controller button, the calibrated clutch of a wheel pedal set, 0 with none', () => {
+  const padSettings = {
+    wheel: DEFAULT_WHEEL_SETTINGS,
+    padButtons: freePedalButtons(DEFAULT_PAD_BUTTONS, LB_CLUTCH),
+    padTuning: { pedalSources: LB_CLUTCH, stickPedalDeadzone: 0.1 },
+  };
+  const f = new DeviceInputReader().read([pad('Xbox', 'standard', [0, 0], [4])], padSettings, 1 / 60);
+  near(f.clutch, 1);
+  assert.ok(!f.pressed.has('shiftDown'), 'the clutch button shifts nothing');
+  const plain = new DeviceInputReader().read([pad('Xbox', 'standard', [0, 0], [4])], { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  assert.equal(plain.clutch, 0);
+  // A clutch pedal on axis 3 of a separate pedal set, idle at 1 and fully pressed at −1, half way down
+  const wheel = {
+    ...DEFAULT_WHEEL_SETTINGS,
+    steer: { padId: 'G29', axis: 0, center: 0, invert: false },
+    clutch: { padId: 'Pedals', axis: 3, idle: 1, full: -1 },
+  };
+  const reader = new DeviceInputReader();
+  const w = reader.read([pad('G29', '', [0]), pad('Pedals', '', [0, 0, 0, 0])], { wheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  assert.equal(w.source, 'wheel');
+  near(w.clutch, (0.5 - 0.02) / 0.98);
+  // The pedal set unplugged mid-drive: the wheel is lost, as with the throttle's or the brake's device
+  const gone = reader.read([pad('G29', '', [0])], { wheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  assert.ok(gone.wheelLost);
+  assert.equal(gone.clutch, 0);
+  assert.equal(DEFAULT_WHEEL_SETTINGS.clutch, null);
+  assert.deepEqual(parsePlayerSettings({ wheel: { clutch: wheel.clutch } }).wheel.clutch, wheel.clutch, 'a saved clutch pedal');
+  assert.equal(parsePlayerSettings({ wheel: { clutch: { padId: 'Pedals' } } }).wheel.clutch, null, 'a broken one is none');
 });
 check('GT classic: right stick drives, RT / LT shift, R3 does nothing', () => {
   const reader = new DeviceInputReader();
