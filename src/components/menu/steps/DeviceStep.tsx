@@ -120,7 +120,7 @@ export function ConnectedDevicesCard() {
                     ) : null}
                   </span>
                 </div>
-                {open ? <PadMap family={padFamilyOf(p.id)} bindings={settings.padButtons} pad={p} /> : null}
+                {open ? <PadMap family={padFamilyOf(p.id)} bindings={settings.padButtons} pedalSources={settings.padTuning.pedalSources} pad={p} /> : null}
               </li>
             );
           })}

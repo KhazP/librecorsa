@@ -1,4 +1,4 @@
-import { keyLabel } from "@/lib/input/bindings";
+import { keyLabel, PAD_PEDALS } from "@/lib/input/bindings";
 import { PAD_SENSITIVITY } from "@/lib/input/device-input";
 import { isTouchDevice, requestTiltPermission } from "@/lib/input/touch-input";
 import { ALL_CAMERA_MODES, CAMERA_MODES } from "@/lib/render/camera-modes";
@@ -222,6 +222,8 @@ export const vibration = toggle({
 /** Steering speed and the inner dead zone start from the chosen steering feel */
 const feel = (env: SettingsEnv) => PAD_SENSITIVITY[env.settings.padSensitivity];
 
+const onStick = (env: SettingsEnv) => PAD_PEDALS.some((p) => env.settings.padTuning.pedalSources[p]?.kind === "axis");
+
 export const controllerFineTuning: RowDef[] = [
   slider({
     id: "steeringRate",
@@ -261,6 +263,18 @@ export const controllerFineTuning: RowDef[] = [
   }),
   slider({ id: "throttleGamma", label: "Throttle curve", hint: "Above 1 keeps light presses gentler", advanced: true, min: 0.5, max: 3, step: 0.05, format: (v) => curve(v), ...pad("throttleGamma") }),
   slider({ id: "brakeGamma", label: "Brake curve", hint: "Above 1 gives finer brake control at light pressure", advanced: true, min: 0.5, max: 3, step: 0.05, format: (v) => curve(v), ...pad("brakeGamma") }),
+  slider({
+    id: "stickPedalDeadzone",
+    label: "Pedal stick dead zone",
+    hint: "Stick travel ignored before a pedal on the stick starts",
+    advanced: true,
+    min: 0,
+    max: 0.3,
+    step: 0.01,
+    format: pct,
+    off: (env) => (onStick(env) ? null : "Needs a pedal on a stick"),
+    ...pad("stickPedalDeadzone"),
+  }),
 ];
 
 export const triggerRumble = toggle({

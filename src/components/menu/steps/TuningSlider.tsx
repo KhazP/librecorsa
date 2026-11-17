@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { PAD_BRAKE_BUTTON, PAD_THROTTLE_BUTTON } from "@/lib/input/bindings";
 import { shapeStick } from "@/lib/input/stick-shape";
-import { connectedPads } from "@/lib/input/device-input";
+import { connectedPads, padPedals, type PadPedalTuning } from "@/lib/input/device-input";
+import { PAD_PEDAL_LABELS, pedalSourceText, type PadPedal } from "@/lib/input/bindings";
 
 // Plot geometry (viewBox 0 0 160 100): input x maps to 10..150, output y to 90..10
 const toX = (x: number) => 80 + x * 70;
@@ -62,15 +62,22 @@ export const StickCurve: React.FC<{ deadzone: number; outerDeadzone: number; lin
   );
 };
 
-/** One trigger: raw travel bar and the shaped (raw^gamma) bar, live from the standard mapping */
-const TriggerRow: React.FC<{ label: string; button: number; gamma: number; color: string }> = ({
-  label,
-  button,
+/**
+ * One pedal: raw travel bar and the shaped (raw^gamma) bar, live from the standard mapping as the game reads it, named
+ * with where it is read ("Throttle trigger", "Brake, right stick down")
+ */
+export const PedalRow: React.FC<{ pedal: PadPedal; tuning: PadPedalTuning; gamma: number; color: string }> = ({
+  pedal,
+  tuning,
   gamma,
   color,
 }) => {
+  const where = pedalSourceText(tuning.pedalSources[pedal]);
+  const label = where === "trigger" ? `${PAD_PEDAL_LABELS[pedal]} trigger` : `${PAD_PEDAL_LABELS[pedal]}, ${where}`;
   const gammaRef = useRef(gamma);
   gammaRef.current = gamma;
+  const tuningRef = useRef(tuning);
+  tuningRef.current = tuning;
   const rawBar = useRef<HTMLSpanElement>(null);
   const shapedBar = useRef<HTMLSpanElement>(null);
   const readout = useRef<HTMLSpanElement>(null);
@@ -80,7 +87,7 @@ const TriggerRow: React.FC<{ label: string; button: number; gamma: number; color
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const pad = connectedPads().find((p) => p.mapping === "standard");
-      const raw = Math.min(1, Math.max(0, pad?.buttons[button]?.value ?? 0));
+      const raw = Math.min(1, Math.max(0, pad ? padPedals(pad, tuningRef.current)[pedal] : 0));
       const shaped = raw <= 0 ? 0 : Math.pow(raw, gammaRef.current);
       if (rawBar.current) rawBar.current.style.width = `${(raw * 100).toFixed(1)}%`;
       if (shapedBar.current) shapedBar.current.style.width = `${(shaped * 100).toFixed(1)}%`;
@@ -88,7 +95,7 @@ const TriggerRow: React.FC<{ label: string; button: number; gamma: number; color
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [button]);
+  }, [pedal]);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -108,10 +115,17 @@ const TriggerRow: React.FC<{ label: string; button: number; gamma: number; color
   );
 };
 
-/** Live RT / LT readout with the throttle and brake curves applied (grey = raw travel, colour = shaped) */
-export const TriggerBars: React.FC<{ throttleGamma: number; brakeGamma: number }> = ({ throttleGamma, brakeGamma }) => (
+/**
+ * Live throttle / brake readout with their curves applied (grey = raw travel, colour = shaped), from wherever each
+ * pedal is read
+ */
+export const PedalCurveBars: React.FC<{ tuning: PadPedalTuning; throttleGamma: number; brakeGamma: number }> = ({
+  tuning,
+  throttleGamma,
+  brakeGamma,
+}) => (
   <div className="flex flex-col gap-3 rounded-lc-tile border border-lc-line bg-lc-void p-3.5">
-    <TriggerRow label="Throttle trigger" button={PAD_THROTTLE_BUTTON} gamma={throttleGamma} color="var(--lc-sem-throttle)" />
-    <TriggerRow label="Brake trigger" button={PAD_BRAKE_BUTTON} gamma={brakeGamma} color="var(--lc-sem-brake)" />
+    <PedalRow pedal="throttle" tuning={tuning} gamma={throttleGamma} color="var(--lc-sem-throttle)" />
+    <PedalRow pedal="brake" tuning={tuning} gamma={brakeGamma} color="var(--lc-sem-brake)" />
   </div>
 );

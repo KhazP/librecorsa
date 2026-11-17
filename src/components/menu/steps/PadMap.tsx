@@ -1,7 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
-import { PAD_ACTIONS, PAD_BRAKE_BUTTON, PAD_THROTTLE_BUTTON, type PadButtonBindings } from "@/lib/input/bindings";
+import {
+  PAD_ACTIONS,
+  PAD_BRAKE_BUTTON,
+  PAD_PEDAL_LABELS,
+  PAD_PEDALS,
+  PAD_THROTTLE_BUTTON,
+  pedalOnButton,
+  type PadButtonBindings,
+  type PadPedalSources,
+} from "@/lib/input/bindings";
 import { PadGlyph, type PadButtonName } from "@/components/ui/prompts";
 import { tokenColor } from "@/components/ui/token-color";
 import { cx } from "@/components/ui/styles";
@@ -11,7 +20,14 @@ import type { PadState } from "../useMenuNav";
 /** Standard-mapping buttons 0..11 as the glyphs name them */
 const GLYPH: readonly PadButtonName[] = ["a", "b", "x", "y", "lb", "rb", "lt", "rt", "view", "menu", "l3", "r3"];
 
-type Row = { key: string; buttons: number[]; glyph: PadButtonName; action: (b: PadButtonBindings) => string | null };
+type Row = {
+  key: string;
+  buttons: number[];
+  glyph: PadButtonName;
+  action: (b: PadButtonBindings) => string | null;
+  /** A stick axis the row is about: lit while it moves */
+  axis?: number;
+};
 
 /** What a button does: a fixed control, or the action bound to it */
 const bound = (button: number) => (b: PadButtonBindings) => PAD_ACTIONS.find((a) => b[a.id] === button)?.label ?? null;
@@ -22,16 +38,55 @@ const btn = (button: number, fixed?: string): Row => ({
   action: fixed ? () => fixed : bound(button),
 });
 
-const LEFT: Row[] = [
-  btn(PAD_BRAKE_BUTTON, "Brake"),
-  btn(4),
-  btn(8),
-  { key: "lstick", buttons: [], glyph: "ls", action: () => "Steer" },
-  btn(10),
-  { key: "dpad-x", buttons: [14, 15], glyph: "dpad-horizontal", action: () => "MFD dial" },
-  { key: "dpad-y", buttons: [12, 13], glyph: "dpad-vertical", action: () => "MFD value" },
-];
-const RIGHT: Row[] = [btn(PAD_THROTTLE_BUTTON, "Throttle"), btn(5), btn(9), btn(3), btn(1), btn(2), btn(0), btn(11)];
+/** Each side's rows, top to bottom: a button that is a pedal says so, a stick axis with pedals on it gets its own row */
+const rows = (sources: PadPedalSources): { left: Row[]; right: Row[] } => {
+  const button = (b: number) => {
+    const pedal = pedalOnButton(sources, b);
+    return pedal ? btn(b, PAD_PEDAL_LABELS[pedal]) : btn(b);
+  };
+  // "Throttle up, brake down": the pedals on one axis, the up / left half first
+  const axisRow = (axis: number): Row[] => {
+    const on = PAD_PEDALS.flatMap((p) => {
+      const s = sources[p];
+      return s?.kind === "axis" && s.axis === axis ? [{ p, sign: s.sign }] : [];
+    }).sort((a, b) => a.sign - b.sign);
+    if (!on.length) return [];
+    const vertical = axis % 2 === 1;
+    const text = on
+      .map(({ p, sign }, i) => {
+        const label = i === 0 ? PAD_PEDAL_LABELS[p] : PAD_PEDAL_LABELS[p].toLowerCase();
+        return `${label} ${vertical ? (sign < 0 ? "up" : "down") : sign < 0 ? "left" : "right"}`;
+      })
+      .join(", ");
+    const glyph: PadButtonName = `${axis < 2 ? "ls" : "rs"}-${vertical ? "vertical" : "horizontal"}`;
+    return [{ key: `axis${axis}`, buttons: [], glyph, action: () => text, axis }];
+  };
+  return {
+    left: [
+      button(PAD_BRAKE_BUTTON),
+      btn(4),
+      btn(8),
+      { key: "lstick", buttons: [], glyph: "ls", action: () => "Steer" },
+      ...axisRow(0),
+      ...axisRow(1),
+      btn(10),
+      { key: "dpad-x", buttons: [14, 15], glyph: "dpad-horizontal", action: () => "MFD dial" },
+      { key: "dpad-y", buttons: [12, 13], glyph: "dpad-vertical", action: () => "MFD value" },
+    ],
+    right: [
+      button(PAD_THROTTLE_BUTTON),
+      btn(5),
+      btn(9),
+      btn(3),
+      btn(1),
+      btn(2),
+      btn(0),
+      ...axisRow(2),
+      ...axisRow(3),
+      btn(11),
+    ],
+  };
+};
 
 /** Button state on the drawing: pressed on the pad, picked in the list, or at rest */
 type Look = "pressed" | "picked" | "rest";
@@ -202,22 +257,25 @@ const Chip: React.FC<{ row: Row; family: PadFamily; lit: boolean }> = ({ row, fa
  * button does either side. Buttons light up as they are pressed; pointing at a row picks its
  * button out on the drawing.
  */
-export const PadMap: React.FC<{ family: PadFamily; bindings: PadButtonBindings; pad?: PadState | null }> = ({
-  family,
-  bindings,
-  pad,
-}) => {
+export const PadMap: React.FC<{
+  family: PadFamily;
+  bindings: PadButtonBindings;
+  pedalSources: PadPedalSources;
+  pad?: PadState | null;
+}> = ({ family, bindings, pedalSources, pad }) => {
   const [picked, setPicked] = useState<string | null>(null);
+  const { left, right } = rows(pedalSources);
   const pressed = (b: number) => Boolean(pad?.buttons[b]?.pressed);
-  const pickedButtons = new Set([...LEFT, ...RIGHT].find((r) => r.key === picked)?.buttons ?? []);
+  const pickedButtons = new Set([...left, ...right].find((r) => r.key === picked)?.buttons ?? []);
   const look = (b: number): Look => (pressed(b) ? "pressed" : pickedButtons.has(b) ? "picked" : "rest");
-  const stickMoved = Math.hypot(pad?.axes[0] ?? 0, pad?.axes[1] ?? 0) > 0.2;
+  const steerMoved = Math.hypot(pad?.axes[0] ?? 0, pad?.axes[1] ?? 0) > 0.2;
 
   const list = (rows: Row[], className: string) => (
     <ul className={`flex flex-col gap-1 ${className}`}>
       {rows.map((r) => {
         const action = r.action(bindings);
-        const lit = r.key === "lstick" ? stickMoved : r.buttons.some(pressed);
+        const lit =
+          r.key === "lstick" ? steerMoved : r.axis !== undefined ? Math.abs(pad?.axes[r.axis] ?? 0) > 0.2 : r.buttons.some(pressed);
         return (
           <li
             key={r.key}
@@ -242,8 +300,8 @@ export const PadMap: React.FC<{ family: PadFamily; bindings: PadButtonBindings; 
       <div className="mx-auto w-full max-w-[320px] sm:col-span-2 lg:order-2 lg:col-span-1">
         <PadArt family={family} look={look} axes={pad?.axes ?? []} />
       </div>
-      {list(LEFT, "lg:order-1")}
-      {list(RIGHT, "lg:order-3")}
+      {list(left, "lg:order-1")}
+      {list(right, "lg:order-3")}
     </div>
   );
 };
