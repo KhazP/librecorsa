@@ -93,7 +93,7 @@ async function main(): Promise<void> {
       const first = await board(
         track,
         vehicle,
-        lapPhysicsVersion(vehicle === "lc26" ? undefined : vehicle),
+        lapPhysicsVersion(vehicle === "lc26" ? undefined : vehicle, track),
       );
       // The revisions with laps here (the LC26's rigid-body revision is not this process's default: ask the server)
       const revisions = new Set<number>(first?.physics ?? []);

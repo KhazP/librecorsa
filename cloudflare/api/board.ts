@@ -9,16 +9,21 @@
  *                            rank: 1 + the drivers faster, so a tie shares it; pos: the place in the board's order,
  *                            which the pages follow. aboveMs: the best lap of the place above the driver's, null at the
  *                            top. near=1..5: the places either side of the driver's, as `near`)
- *                            vehicle=all: every driver once, with their fastest lap in any car, each car on the revision
- *                            this build ships it on (`current`, worked out here; `physics` is not needed and is ignored)
+ *                            vehicle=all: every driver once, with their fastest lap in any car, each car on its revision
+ *                            on one of the circuit's boards (`current`, worked out here; `physics` is not needed and
+ *                            is ignored). version=: that board's base revision, its PHYSICS_VERSION plus 1000 for each
+ *                            restart of the circuit's boards (lap-types.ts `boardChoices`: 7 for Physics V1 on a
+ *                            circuit never restarted; any other is refused); absent, the board laps go on now
  *   GET  /api/laps/<id>   -> the lap's LapRecording (its ghost), or 404
  *   POST /api/drivers/rename  { from, to, code?, driverKey }
  *                         -> { ok: true, moved } | { ok: false, error, taken? }
  *
- * One board per circuit, car and physics revision: every driver appears once, with their fastest lap and what it
+ * One board per circuit, car and revision (lap-types.ts `lapPhysicsVersion`: the physics version, the circuit's own
+ * restarts, the LC26's engine): every driver appears once, with their fastest lap and what it
  * was driven with (assists, realism, dry or wet). A driver keeps one stored lap per such class, so the board can be
  * narrowed ("no assists only") and still show everyone's best of that kind. A weekly challenge (`event`) has its own
- * board with the same rules.
+ * board with the same rules. Laps go up on the board of the physics and the circuit as they are now only: older boards
+ * are read, never written.
  *
  * Driver names are claimed with a driver key: a random secret the game keeps in the browser. The first upload under
  * a name stores the key's SHA-256; later uploads under that name (ignoring case and extra spaces) must bring the same
@@ -26,7 +31,7 @@
  * name takes their laps and race results with them (`renameDriver`), so a board never shows them twice. Names that
  * fail the name filter (src/lib/net/name-filter.ts) are refused on upload and on rename.
  */
-import { ASSIST_PRESETS, lapPhysicsVersion, type LapConditions } from "../../src/lib/sim/lap-types";
+import { ASSIST_PRESETS, boardChoices, currentBoardBase, isCurrentLapPhysics, MAX_LAP_REVISION, revisionOnBoard, type LapConditions } from "../../src/lib/sim/lap-types";
 import { SIM_REALISM_LEVELS } from "../../src/lib/sim/sim-realism";
 import { isVehicleModelId, VEHICLE_MODEL_IDS, type VehicleModelId } from "../../src/types/f1";
 import { nameProblem } from "../../src/lib/net/name-filter";
@@ -200,6 +205,11 @@ async function claimName(deps: BoardDeps, nameKey: string, keyHash: string, nowM
 }
 
 const NAME_TAKEN = "This name is taken. Import your driver key under Lap Times, or race under another name";
+/**
+ * A lap driven on an older physics version, or before its circuit's boards started again (a tab left open from before
+ * the update): its board is read only now
+ */
+export const OLDER_PHYSICS = "This lap is from an older version of the physics or the circuit. Reload the game to drive on the new one";
 
 /**
  * What a refused upload said about itself, as sent (unchecked, capped): enough to match a player's report to it by
@@ -251,6 +261,7 @@ async function takeLap(deps: BoardDeps, request: Request, seen: LapSeen): Promis
   const rec = checked.rec;
   const badName = nameProblem(rec.driverName);
   if (badName) return fail(badName);
+  if (!isCurrentLapPhysics(rec.vehicle, rec.conditions.physicsVersion, rec.trackId)) return fail(OLDER_PHYSICS, 409);
   // A lap sent for a challenge it doesn't fit (the week turned, a clock is off) still counts on the open board
   let event = "";
   let eventError: string | null = null;
@@ -289,17 +300,21 @@ async function takeLap(deps: BoardDeps, request: Request, seen: LapSeen): Promis
 }
 
 /**
- * The physics revision each car's laps are ranked under now, as this build ships it: the revision `lapPhysicsVersion`
- * gives a car without a browser's own choice of engine (the LC26's older engine is kept in the browser, so the Worker
- * always reads the engine it ships on). The all-cars board takes every car at its own current revision.
+ * The revision each car's laps are ranked under on the board of base revision `base` (lap-types.ts `BoardChoice`; the
+ * board laps go on now is `currentBoardBase(track)`), as this build ships it: the revision `revisionOnBoard` gives a
+ * car without a browser's own choice of engine (the LC26's older engine is kept in the browser, so the Worker always
+ * reads the engine it ships on). The all-cars board takes every car at its own revision.
  */
-export function currentPhysicsByCar(): Record<VehicleModelId, number> {
-  return Object.fromEntries(VEHICLE_MODEL_IDS.map((v) => [v, lapPhysicsVersion(v)])) as Record<VehicleModelId, number>;
+export function currentPhysicsByCar(base: number): Record<VehicleModelId, number> {
+  return Object.fromEntries(VEHICLE_MODEL_IDS.map((v) => [v, revisionOnBoard(base, v)])) as Record<VehicleModelId, number>;
 }
 
-/** The rows of every car at its current revision on a circuit: a WHERE clause and its binds (after the circuit and event) */
-export function currentPhysicsWhere(): { sql: string; binds: unknown[] } {
-  const current = Object.entries(currentPhysicsByCar());
+/**
+ * The rows of every car at its revision on the board of base revision `base` on a circuit: a WHERE clause and its
+ * binds (after the circuit and event)
+ */
+export function currentPhysicsWhere(base: number): { sql: string; binds: unknown[] } {
+  const current = Object.entries(currentPhysicsByCar(base));
   return {
     sql: `vehicle IN (${current.map(() => "?").join(", ")}) AND physics = CASE vehicle ${current.map(() => "WHEN ? THEN ?").join(" ")} END`,
     binds: [...current.map(([v]) => v), ...current.flat()],
@@ -313,6 +328,17 @@ const MAX_OFFSET = 1_000_000;
 /** Places listed either side of the driver's own (`near`) */
 const MAX_NEAR = 5;
 
+/**
+ * The board of a circuit an all-cars read asks for (`version`, by its base revision): the one laps go on now when
+ * absent, null for one the circuit never had
+ */
+export function askedBoardBase(q: URLSearchParams, track: string): number | null {
+  const raw = q.get("version");
+  if (raw === null || raw === "") return currentBoardBase(track);
+  const base = Number(raw);
+  return Number.isInteger(base) && boardChoices(track).some((c) => c.base === base) ? base : null;
+}
+
 export async function listLaps(deps: BoardDeps, url: URL): Promise<Answer> {
   const q = url.searchParams;
   const track = q.get("track") ?? "";
@@ -320,10 +346,12 @@ export async function listLaps(deps: BoardDeps, url: URL): Promise<Answer> {
   const allCars = vehicle === ALL_CARS;
   const physics = Number(q.get("physics"));
   const event = q.get("event") ?? "";
-  if (!TRACK_ID_RE.test(track) || (!allCars && (!isVehicleModelId(vehicle) || !Number.isInteger(physics) || physics < 1 || physics > 1000))) {
+  if (!TRACK_ID_RE.test(track) || (!allCars && (!isVehicleModelId(vehicle) || !Number.isInteger(physics) || physics < 1 || physics > MAX_LAP_REVISION))) {
     return fail("track, vehicle and physics are required");
   }
   if (event !== "" && !EVENT_ID_RE.test(event)) return fail("Unknown event");
+  const version = allCars ? askedBoardBase(q, track) : currentBoardBase(track);
+  if (version === null) return fail("Unknown physics version");
   const limitRaw = Number(q.get("limit"));
   const limit = Number.isFinite(limitRaw) && limitRaw >= 1 ? Math.min(MAX_LIMIT, Math.floor(limitRaw)) : DEFAULT_LIMIT;
   const offsetRaw = Number(q.get("offset"));
@@ -331,11 +359,12 @@ export async function listLaps(deps: BoardDeps, url: URL): Promise<Answer> {
   const nearRaw = Number(q.get("near"));
   const near = Number.isFinite(nearRaw) && nearRaw > 0 ? Math.min(MAX_NEAR, Math.floor(nearRaw)) : 0;
 
-  // One car on one revision, or every car on its current one; narrowing to a class takes only known values
+  // One car on one revision, or every car on its revision under one physics version; narrowing to a class takes only
+  // known values
   let where: string;
   const binds: unknown[] = [];
   if (allCars) {
-    const current = currentPhysicsWhere();
+    const current = currentPhysicsWhere(version);
     where = `track_id = ? AND event = ? AND ${current.sql}`;
     binds.push(track, event, ...current.binds);
   } else {
@@ -395,8 +424,9 @@ export async function listLaps(deps: BoardDeps, url: URL): Promise<Answer> {
     physics: (results[2].results as { physics: number }[]).map((r) => r.physics),
     me: mine ? { rank: 1 + (ahead?.ahead ?? 0), pos: myPos ?? 1 + (ahead?.ahead ?? 0), lap: entryOf(mine), aboveMs: ahead?.above ?? null } : null,
   };
-  // Every car's current revision, so a client checks the rows against what this board took, not its own engine choice
-  if (allCars) body.current = currentPhysicsByCar();
+  // Every car's revision on this board, so a client checks the rows against what this board took, not its own engine
+  // choice
+  if (allCars) body.current = currentPhysicsByCar(version);
   if (near > 0 && mine && around.length > 0) body.near = { pos: around[0].pos, laps: around.map(entryOf) };
   return { status: 200, body };
 }

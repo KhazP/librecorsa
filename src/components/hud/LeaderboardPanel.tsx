@@ -2,9 +2,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
-import type { LeaderboardEntry } from "@/lib/sim/lap-types";
+import { boardChoiceOf, boardChoiceOfLap, boardChoices, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { boardLabel } from "@/lib/net/leaderboard";
-import { Button, Card, IconButton, EmptyState, Select, SettingRow } from "@/components/ui";
+import { Button, Card, IconButton, EmptyState, Segmented, Select, SettingRow } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { OnlineBoard, type BoardCarTag } from "@/components/board/OnlineBoard";
 import { BoardTable, type BoardRow } from "@/components/board/board-table";
@@ -63,9 +63,19 @@ const ALL_CARS = "all";
 const NEUTRAL_TAG = (vehicle: VehicleModelId): BoardCarTag => ({ label: vehicle, color: "slate" });
 
 /**
+ * The board of its circuit a saved best is listed under (lap-types.ts `BoardChoice.id`): a best from before every board
+ * the picker names (or without its conditions) goes with the oldest
+ */
+const boardOfLap = (e: LeaderboardEntry): string => {
+  const choices = boardChoices(e.trackId);
+  return (e.conditions ? boardChoiceOfLap(e.trackId, e.vehicle, e.conditions.physicsVersion) : null) ?? choices[choices.length - 1].id;
+};
+
+/**
  * Lap times: the circuit's online board a page at a time (src/components/board/OnlineBoard.tsx), whose circuit picker
- * the rest follows, then the player's best laps by car on that circuit, with sector splits (the fastest of each column
- * marked), the best sectors put together, and a ghost to race.
+ * and board (physics version) the rest follows, then the player's best laps by car on that circuit and board, with
+ * sector splits (the fastest of each column marked), the best sectors put together, and a ghost to race. Without an
+ * online board, the best laps have their own picker once there are laps of an older board.
  */
 export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   trackName,
@@ -136,17 +146,25 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   const here = trackId ?? local[0]?.trackId ?? "";
   const [circuit, setCircuit] = useState(here);
   const [car, setCar] = useState<string>(ALL_CARS);
-  const pool = allLocal ?? local;
+  /**
+   * The board the online board and the best laps show (lap-types.ts `BoardChoice`): a physics version, or a circuit's
+   * board from before it started again. Picked by id, and found again on each circuit
+   */
+  const [boardPick, setBoardPick] = useState<string | null>(null);
+  const choices = useMemo(() => boardChoices(circuit), [circuit]);
+  const choice = boardChoiceOf(circuit, boardPick);
+  const older = !choice.current;
+  const allPool = allLocal ?? local;
   const nameOf = (id: string) => (id === here ? trackName : (trackNameOf?.(id) ?? id));
 
-  /** Circuits with laps saved here (the picker without an online board) */
+  /** Circuits with laps saved here, of any physics version (the picker without an online board) */
   const localCircuits = useMemo(() => {
-    const ids = [...new Set(pool.map((e) => e.trackId))];
+    const ids = [...new Set(allPool.map((e) => e.trackId))];
     if (here && !ids.includes(here)) ids.push(here);
     return ids
-      .map((id) => ({ id, label: id === here ? trackName : (trackNameOf?.(id) ?? id), count: pool.filter((e) => e.trackId === id).length }))
+      .map((id) => ({ id, label: id === here ? trackName : (trackNameOf?.(id) ?? id), count: allPool.filter((e) => e.trackId === id).length }))
       .sort((a, b) => (a.id === here ? -1 : b.id === here ? 1 : a.label.localeCompare(b.label)));
-  }, [pool, here, trackName, trackNameOf]);
+  }, [allPool, here, trackName, trackNameOf]);
   /** Every circuit, the loaded one first (the online board's picker), and any with laps here this build no longer lists */
   const boardCircuits = useMemo(() => {
     const listed = circuitList ?? [];
@@ -156,7 +174,10 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
     return loaded ? [loaded, ...all.filter((c) => c.id !== here)] : all;
   }, [circuitList, localCircuits, here]);
 
-  const onCircuit = useMemo(() => pool.filter((e) => e.trackId === circuit), [pool, circuit]);
+  /** Without an online board, the best laps' own picker shows once a best of an older board is saved on this circuit */
+  const localPicker = !remoteEnabled && (older || allPool.some((e) => e.trackId === circuit && boardOfLap(e) !== choices[0].id));
+  /** The saved bests on this circuit and board: a lap time is only compared with laps on the same physics and circuit */
+  const onCircuit = useMemo(() => allPool.filter((e) => e.trackId === circuit && boardOfLap(e) === choice.id), [allPool, circuit, choice.id]);
   const cars = useMemo(() => {
     const ids: string[] = [...new Set(onCircuit.map((e) => e.vehicle))];
     return [
@@ -316,6 +337,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
           onRaceGhost={onRaceGhost}
           ghostCircuit={here}
           footer={driverKey}
+          boardChoice={choice.id}
+          onBoardChoiceChange={setBoardPick}
         />
       ) : localCircuits.length > 1 ? (
         <SettingRow label="Circuit">
@@ -331,22 +354,35 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       {/* Your laps */}
       <Card
         title="Your best laps"
-        description={nameOf(circuit)}
+        description={older ? `${nameOf(circuit)} · ${choice.label}` : nameOf(circuit)}
         action={
-          cars.length > 2 ? (
-            <Select
-              aria-label="Car"
-              className="w-56 max-w-full"
-              value={carShown}
-              onChange={setCar}
-              options={cars.map((c) => ({ id: c.id, label: c.label, detail: c.count === 1 ? "1 lap" : `${c.count} laps` }))}
-            />
+          cars.length > 2 || localPicker ? (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {localPicker ? (
+                choices.length <= 2 ? (
+                  <Segmented aria-label="Physics version" size="sm" value={choice.id} onChange={setBoardPick} options={choices} />
+                ) : (
+                  <Select aria-label="Physics version" className="w-56 max-w-full" value={choice.id} onChange={setBoardPick} options={choices} />
+                )
+              ) : null}
+              {cars.length > 2 ? (
+                <Select
+                  aria-label="Car"
+                  className="w-56 max-w-full"
+                  value={carShown}
+                  onChange={setCar}
+                  options={cars.map((c) => ({ id: c.id, label: c.label, detail: c.count === 1 ? "1 lap" : `${c.count} laps` }))}
+                />
+              ) : null}
+            </div>
           ) : undefined
         }
       >
         {rows.length === 0 ? (
           <EmptyState icon={<Icon name="lapTimes" />}>
-            No laps on {nameOf(circuit)} yet. Your best lap with each car is saved here as soon as you finish one.
+            {older
+              ? `No laps on ${nameOf(circuit)} on ${choice.label}.`
+              : `No laps on ${nameOf(circuit)} yet. Your best lap with each car is saved here as soon as you finish one.`}
           </EmptyState>
         ) : (
           <BoardTable

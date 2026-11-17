@@ -9,10 +9,10 @@
 import { MultiplayerSyncManager, sanitizePacket, type LobbyState, type NetworkVehiclePacket } from '../src/lib/sim/multiplayer-sync';
 import { decodeState, encodeState, MAX_STATE_PACKETS_PER_S, PROTOCOL_VERSION, StateInfoMemory, stateInfoJson } from '../src/lib/net/wire';
 import type { StatePacketFields } from '../src/lib/net/state-codec';
-import { lapPhysicsVersion } from '../src/lib/sim/lap-types';
+import { carPhysicsVersion } from '../src/lib/sim/lap-types';
 
 /** What this build says in its hello and lobby: its protocol version and physics revision */
-const VERSIONS = { proto: PROTOCOL_VERSION, sim: lapPhysicsVersion('lc26') };
+const VERSIONS = { proto: PROTOCOL_VERSION, sim: carPhysicsVersion('lc26') };
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {

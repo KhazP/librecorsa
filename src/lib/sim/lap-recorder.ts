@@ -147,7 +147,7 @@ export class LapRecorder {
   /** Turns in track order, with the half-width of each corner window */
   private readonly corners: CornerWindow[];
   private vehicle: VehicleModelId;
-  /** Physics revision this car's laps are driven under, read once when the car is set */
+  /** The revision this car's laps on this circuit are ranked under, read once when the car is set */
   private physicsVersion: number;
   private driverName: string;
   private driverCode: string;
@@ -179,7 +179,7 @@ export class LapRecorder {
     this.sampleHz = opts.sampleHz ?? DEFAULT_SAMPLE_HZ;
     this.period = 1 / this.sampleHz;
     this.vehicle = opts.vehicle;
-    this.physicsVersion = lapPhysicsVersion(opts.vehicle);
+    this.physicsVersion = lapPhysicsVersion(opts.vehicle, opts.trackId);
     this.driverName = cleanDriverName(opts.driverName);
     this.driverCode = opts.driverCode;
     this.pb = opts.personalBestMs ?? null;
@@ -203,7 +203,7 @@ export class LapRecorder {
   setContext(ctx: Partial<Pick<LapRecorderOptions, "vehicle" | "driverName" | "driverCode" | "personalBestMs">>): void {
     if (ctx.vehicle !== undefined && ctx.vehicle !== this.vehicle) {
       this.vehicle = ctx.vehicle;
-      this.physicsVersion = lapPhysicsVersion(ctx.vehicle);
+      this.physicsVersion = lapPhysicsVersion(ctx.vehicle, this.trackId);
       this.sessionSectorBest = [null, null, null];
       this.sessionCornerBest = this.corners.map(() => null);
     }
