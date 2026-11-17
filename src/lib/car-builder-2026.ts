@@ -15,6 +15,8 @@ import { PIRELLI_COMPOUND_COLORS } from "@/lib/render/pirelli-sidewall";
 export interface PortedSkin {
   baseUrl: string;
   files?: readonly string[];
+  /** The parts it wears (`CarSkin.variant`); absent: the model's base parts */
+  variant?: string;
 }
 
 export interface SimCarRig {

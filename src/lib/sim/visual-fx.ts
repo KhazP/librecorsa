@@ -1021,7 +1021,7 @@ function opponentSkin(vehicle: VehicleModelId | undefined, driverCode: string): 
   let h = 0;
   for (const ch of driverCode) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   const skin = skins[h % skins.length];
-  return skin === skins[0] ? null : { baseUrl: carSkinBaseUrl(car.id, skin.id), files: skin.files };
+  return skin === skins[0] ? null : { baseUrl: carSkinBaseUrl(car.id, skin.id), files: skin.files, variant: skin.variant };
 }
 
 /** The translucent materials `ghostify` gave a car */

@@ -138,6 +138,11 @@ export interface CarSkin {
    * as the model was made. Absent: every file the model's `skinMaps` name
    */
   files?: readonly string[];
+  /**
+   * The parts it wears when they differ from the first livery's (the Chaparral 2D's Sebring scoop or aero kit): the
+   * model's PART_ nodes the GLB's `partVariants` extras list for this name are shown, the others hidden. Absent: "base"
+   */
+  variant?: string;
 }
 
 const CC_BY = { license: "CC BY 4.0", licenseUrl: "https://creativecommons.org/licenses/by/4.0/" } as const;
