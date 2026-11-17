@@ -2348,7 +2348,7 @@ export class DriveSession {
           ? aiField.playerFrozen && aiField.manualStart
           : (aiField?.playerFrozen === true && aiField.manualStart) || (mpFrozen && settingsNow.race.launch === "manual");
         if (!raceInWorker) physics.gridHold = gridHeld;
-        if (jumpWatch.update(dtSeconds, gridHeld, inputs.clutch ?? 0, inputs.throttle, physics.telemetry.gear !== 0)) {
+        if (jumpWatch.update(dtSeconds, gridHeld, physics.telemetry.speedMs)) {
           console.info(`[race] jump start: +${JUMP_START_PENALTY_S} s at the flag`);
         }
         gridHeldLastFrame = gridHeld;

@@ -1,8 +1,8 @@
 /**
  * Manual race starts, as the F1 games run them: through the lights the player's car is held on the grid with its
- * engine live, the driver holds the clutch and the revs, and lets the clutch out when the lights go out. Letting it out
- * in gear with the revs up before then is a jump start, served as time at the flag. Assisted starts keep the car frozen
- * until the lights go out, as before.
+ * engine live, the driver holds the clutch and the revs, and lets the clutch out when the lights go out. Let out
+ * earlier, the car goes, and moving off its spot before the lights go out is a jump start, served as time at the flag.
+ * Assisted starts keep the car frozen until the lights go out, as before.
  */
 import type { VehicleModelId } from '@/types/f1';
 
@@ -12,7 +12,7 @@ export const RACE_START_MODE_LABELS: Record<RaceStartMode, string> = { assisted:
 /** What each launch asks of the player, for the rows that set it */
 export const RACE_START_MODE_HINTS: Record<RaceStartMode, string> = {
   assisted: 'The car waits on the grid and pulls away on the throttle at lights out',
-  manual: 'Hold the clutch and the revs through the lights, let it go at lights out. Early is a jump start: +5 s',
+  manual: 'Hold the clutch and the revs through the lights, let it go at lights out. Moving early is a jump start: +5 s',
 };
 
 /** Time added at the flag for a jump start (s) */
@@ -47,17 +47,22 @@ export function launchWindow(vehicle: VehicleModelId | string | undefined, limit
 
 /** Clutch travel (0..1, 1 = pressed) below which a clutch held in gear has started to take the car away */
 const BITE = 0.5;
-/** Throttle that counts as the revs being up */
-const REVS_UP = 0.2;
-/** How long the clutch may be out in gear with the revs up before it counts: a flick of the pedal does not */
-const JUMP_AFTER_S = 0.2;
+/** Throttle that takes the car away on a clutch let out: below it the car's anti-stall keeps it standing */
+const DRIVE_AWAY_THROTTLE = 0.2;
+/** Distance the car may roll on the grid before it counts as a jump start (m): a flick of the clutch does not */
+const JUMP_DISTANCE_M = 0.5;
+
+/** A car held on the grid goes when its clutch is let out past the bite in gear with the throttle up */
+export function pullsAway(inGear: boolean, clutch: number, throttle: number): boolean {
+  return inGear && clutch < BITE && throttle > DRIVE_AWAY_THROTTLE;
+}
 
 /**
- * Watches the clutch through the lights. In gear, with the clutch out past its bite and the throttle up for a moment
- * while the car is held, the car would have gone: a jump start, kept until the next race.
+ * Watches the car through the lights: moving off its spot while it should be held there is a jump start, kept until
+ * the next race. Revving it with the clutch out is not one while the car has not moved.
  */
 export class JumpStartWatch {
-  private outS = 0;
+  private rolledM = 0;
   private jumpedNow = false;
 
   get jumped(): boolean {
@@ -65,19 +70,18 @@ export class JumpStartWatch {
   }
 
   reset(): void {
-    this.outS = 0;
+    this.rolledM = 0;
     this.jumpedNow = false;
   }
 
-  /** One frame. Returns true on the frame the start becomes a jump start */
-  update(dtS: number, held: boolean, clutch: number, throttle: number, inGear: boolean): boolean {
+  /** One frame, with the car's speed (m/s). Returns true on the frame the start becomes a jump start */
+  update(dtS: number, held: boolean, speedMs: number): boolean {
     if (this.jumpedNow || !held) {
-      this.outS = 0;
+      this.rolledM = 0;
       return false;
     }
-    const going = inGear && clutch < BITE && throttle > REVS_UP;
-    this.outS = going ? this.outS + Math.max(0, dtS) : 0;
-    if (this.outS < JUMP_AFTER_S) return false;
+    if (Number.isFinite(speedMs)) this.rolledM += Math.abs(speedMs) * Math.max(0, dtS);
+    if (this.rolledM < JUMP_DISTANCE_M) return false;
     this.jumpedNow = true;
     return true;
   }

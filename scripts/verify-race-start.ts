@@ -2,14 +2,15 @@
  * Manual race starts (`race-start.ts`), on flat ground:
  *   npx tsx scripts/verify-race-start.ts
  *
- * Held on the grid, the car never moves and keeps its gear whatever the pedals and paddles do, while its engine revs
- * free on the throttle. Let go after the lights, it waits on a held clutch and goes as the clutch comes out. Every car
- * has a launch window inside its rev range, and the jump start watch calls a clutch let out in gear with the revs up
- * through the lights, not a flick of the pedal, neutral or a start the car is not held for.
+ * Held on the grid with the clutch in, the car never moves and keeps its gear whatever the pedals and paddles do, while
+ * its engine revs free on the throttle; off the throttle, the clutch out leaves it standing too. The clutch let out in
+ * gear on the throttle, it goes. Let go after the lights, it waits on a held clutch and goes as the clutch comes out.
+ * Every car has a launch window inside its rev range, and the jump start watch calls the car moving off its spot
+ * through the lights, not a few centimetres of roll, revs on a car that stays put or a start the car is not held for.
  */
 import { createFlatTestTrack } from './lib/flat-track';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
-import { JumpStartWatch, LAUNCH_RPM, launchWindow } from '../src/lib/sim/race-start';
+import { JumpStartWatch, LAUNCH_RPM, launchWindow, pullsAway } from '../src/lib/sim/race-start';
 import type { AiRace } from '../src/lib/sim/ai-race';
 import { DEFAULT_RACE_SETUP, parseRaceSetup, startAiRace } from '../src/lib/sim/race-setup';
 import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from '../src/lib/sim/rev-range';
@@ -39,14 +40,29 @@ for (const id of CARS) {
   };
   hold(1.5, { throttle: 0.6, clutch: 1 });
   const revs = sim.telemetry.rpm;
-  hold(0.5, { throttle: 1 });
-  hold(0.2, { throttle: 0.5, shiftUp: true });
-  hold(0.2, { throttle: 0.5, shiftDown: true, neutral: true });
-  hold(0.5, { brake: 0, throttle: 0.3, analogSteer: 0.5 });
+  hold(0.5, { throttle: 1, clutch: 1 });
+  hold(0.2, { throttle: 0.5, clutch: 1, shiftUp: true });
+  hold(0.2, { throttle: 0.5, clutch: 1, shiftDown: true, neutral: true });
+  hold(0.5, { brake: 0, throttle: 0.3, clutch: 1, analogSteer: 0.5 });
+  hold(0.5, { throttle: 0.1, clutch: 0 });
   const moved = sim.worldPosition.distanceTo(p0);
-  check('held: the car stays on its spot whatever the pedals do', moved < 0.02 && sim.telemetry.speedKmh < 0.1, `${(moved * 100).toFixed(1)} cm, ${sim.telemetry.speedKmh.toFixed(2)} km/h`);
+  check('held: the car stays on its spot with the clutch in, or off the throttle', moved < 0.02 && sim.telemetry.speedKmh < 0.1, `${(moved * 100).toFixed(1)} cm, ${sim.telemetry.speedKmh.toFixed(2)} km/h`);
   check('held: the engine revs free on the throttle', revs > 2500, `${Math.round(revs)} rpm`);
   check('held: the paddles and neutral leave the gear alone', sim.telemetry.gear === gear0, `gear ${gear0} → ${sim.telemetry.gear}`);
+  // The clutch let out early on the throttle: the car goes, on a copy so the rest starts from the spot
+  {
+    const early = vehicleModelSpec(id).createSim(track, null);
+    early.assistPreset = 'semi_pro';
+    early.autoGearbox = true;
+    early.teleportToDistance(1000, 0);
+    early.step(DT, {});
+    const e0 = early.worldPosition.clone();
+    early.gridHold = true;
+    for (let t = 0; t < 1; t += DT) early.step(DT, { throttle: 0.6, clutch: 1 });
+    for (let t = 0; t < 1.5; t += DT) early.step(DT, { throttle: 0.6, clutch: 0 });
+    const went = early.worldPosition.distanceTo(e0);
+    check('held: the clutch let out early on the throttle, the car goes', went > 1, `${went.toFixed(1)} m in 1.5 s`);
+  }
   // The lights go out with the clutch held: the car waits; let out, it goes
   sim.gridHold = false;
   for (let t = 0; t < 0.5; t += DT) sim.step(DT, { throttle: 0.6, clutch: 1 });
@@ -71,24 +87,24 @@ console.log('\n== Launch windows');
 
 console.log('\n== Jump starts');
 {
-  const run = (frames: [number, boolean, number, number, boolean][]) => {
+  const run = (frames: [number, boolean, number][]) => {
     const w = new JumpStartWatch();
-    for (const [dt, held, clutch, throttle, inGear] of frames) w.update(dt, held, clutch, throttle, inGear);
+    for (const [dt, held, speedMs] of frames) w.update(dt, held, speedMs);
     return w.jumped;
   };
-  const many = (n: number, f: [number, boolean, number, number, boolean]) => Array.from({ length: n }, () => f);
-  check('clutch held, revs up: no jump start', !run(many(120, [1 / 60, true, 1, 1, true])));
-  check('clutch out in gear with the revs up for a quarter second: jump start', run(many(15, [1 / 60, true, 0, 0.8, true])));
-  check('a tenth of a second off the clutch: not one', !run([...many(6, [1 / 60, true, 0, 0.8, true]), ...many(30, [1 / 60, true, 1, 0.8, true])]));
-  check('off the clutch in neutral: not one', !run(many(60, [1 / 60, true, 0, 1, false])));
-  check('off the clutch, off the throttle: not one', !run(many(60, [1 / 60, true, 0, 0, true])));
-  check('after the lights (not held): never one', !run(many(60, [1 / 60, false, 0, 1, true])));
+  const many = (n: number, f: [number, boolean, number]) => Array.from({ length: n }, () => f);
+  check('standing still through the lights: no jump start', !run(many(600, [1 / 60, true, 0])));
+  check('rolling a metre off the spot: jump start', run(many(60, [1 / 60, true, 1])));
+  check('a few centimetres of roll: not one', !run([...many(6, [1 / 60, true, 0.5]), ...many(120, [1 / 60, true, 0])]));
+  check('after the lights (not held): never one', !run(many(120, [1 / 60, false, 20])));
   const w = new JumpStartWatch();
-  for (let i = 0; i < 20; i++) w.update(1 / 60, true, 0, 1, true);
-  w.update(1 / 60, true, 1, 1, true);
+  for (let i = 0; i < 60; i++) w.update(1 / 60, true, 2);
+  w.update(1 / 60, true, 0);
   check('a jump start is kept until the next race', w.jumped);
   w.reset();
   check('and cleared for it', !w.jumped);
+  check('the clutch out in gear on the throttle pulls away', pullsAway(true, 0, 0.6));
+  check('the clutch in, neutral or off the throttle does not', !pullsAway(true, 1, 1) && !pullsAway(false, 0, 1) && !pullsAway(true, 0, 0.1));
 }
 
 // ---- The launch rides with the race setup, so every race start (the menu, a restart, a new car) reads the same one
