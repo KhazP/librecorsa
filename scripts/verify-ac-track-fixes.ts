@@ -6,9 +6,11 @@
  *    vir, sachsenring, norisring, le_mans_82 and the LilSki, SpeedVegas and Willow Springs circuits for all 3 car
  *    physics models (the hill climbs have no kerbs)
  * 4. Kerb / edge step continuity of the fitted surfaces
+ * 5. The road's edges as the game reads them from the track data, against the road collider the converter built
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import * as THREE from 'three';
 import path from 'node:path';
 
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
@@ -16,13 +18,17 @@ import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createGroundHit, TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { trackColliders } from '../src/lib/sim/track-colliders';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
-import { getActiveTrackData, type RawTrackJson, setActiveTrack } from '../src/lib/track-data';
+import { evaluateSampleLateralHeightM, getActiveTrackData, type RawTrackJson, setActiveTrack } from '../src/lib/track-data';
+import type { TrackSamplePoint } from '../src/types/f1';
 import { loadGlbGeometry, readTrackGltfJson, trackModelFiles } from './lib/glb-geometry';
 import { skipSuiteWithout } from './lib/hosted-files';
 
 skipSuiteWithout('public/tracks/okayama/track_data.json', 'public/tracks/monaco/track_data.json', 'public/tracks/dunsfold/track_data.json', 'public/tracks/istanbul_park/track_data.json', 'public/tracks/grobnik/track_data.json', 'public/tracks/oschersleben/track_data.json', 'public/tracks/barbagallo/track_data.json', 'public/tracks/vir/track_data.json', 'public/tracks/sachsenring/track_data.json', 'public/tracks/sachsenring_short/track_data.json', 'public/tracks/norisring/track_data.json', 'public/tracks/le_mans_82/track_data.json', 'public/tracks/goodwood/track_data.json', 'public/tracks/borgloh/track_data.json', 'public/tracks/bridgehampton/track_data.json', 'public/tracks/watkins_glen/track_data.json', 'public/tracks/watkins_glen_short/track_data.json', 'public/tracks/riverside/track_data.json', 'public/tracks/riverside_short/track_data.json', 'public/tracks/riverside_nascar/track_data.json', 'public/tracks/speedvegas/track_data.json', 'public/tracks/willow_springs/track_data.json');
 
 const ROOT = path.resolve(__dirname, '..');
+
+/** The circuits whose road colliders carry the road's crossfall out to its edges (section 5) */
+const ROAD_EDGE_RULE_TRACKS = ['spielberg', 'spielberg_south', 'spielberg_inner', 'monaco', 'dunsfold', 'istanbul_park', 'oschersleben', 'barbagallo', 'vir', 'vir_north', 'vir_south', 'vir_grand_east', 'vir_grand_west', 'vir_patriot', 'vir_patriot_reverse', 'sachsenring', 'sachsenring_short', 'norisring', 'le_mans_82', 'borgloh', 'goodwood', 'bridgehampton', 'riverside', 'riverside_short', 'riverside_nascar', 'speedvegas'];
 
 function loadTrack(id: string) {
   const dir = path.join(ROOT, 'public', 'tracks', id);
@@ -426,11 +432,100 @@ async function verifyTrackEdgeContinuity() {
 
 }
 
+/**
+ * The road collider stands on the track data's lateral profile, and the game reads that profile for the road's height
+ * (evaluateSampleLateralHeightM) where it has no collider: before the circuit's model loads and in the AI's wheel
+ * contact. The road keeps its own crossfall out to its edge in both (scripts/tracks/build_track.py
+ * road_profile_height), so at both edges of every sample they agree to the millimetre. Chang and the Okayama layouts
+ * were built by the earlier rule, which ran the edge towards the ground beside the road (their mods' sources were not on
+ * hand to rebuild them), and so were Grobnik, Watkins Glen and Willow Springs, whose builds by this rule failed the
+ * kerb checks (sections 3 and 4 here, and verify-kerb-feel's Willow Turn 6). The Red Bull Ring's Remus patch
+ * (scripts/tracks/patches) moves the road collider at s 1254-1324 on purpose, so that stretch is left out there.
+ */
+async function verifyRoadEdgeProfile() {
+  console.log("\n=== 5. Verifying the game's road profile against the road collider at both edges ===");
+  const skip: Record<string, [number, number]> = { spielberg: [1249, 1329] };
+  for (const tid of ROAD_EDGE_RULE_TRACKS) {
+    const { raw, root } = loadTrack(tid);
+    root.updateMatrixWorld(true);
+    // The road collider's triangles on a 2 m grid
+    const cell = 2;
+    const cells = new Map<string, number[][]>();
+    const v = new THREE.Vector3();
+    root.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      let n: THREE.Object3D | null = o;
+      while (n && n.name !== 'Track_Collider_Road') n = n.parent;
+      if (!n) return;
+      const pos = o.geometry.getAttribute('position');
+      const idx = o.geometry.getIndex();
+      const count = idx ? idx.count : pos.count;
+      for (let i = 0; i + 2 < count; i += 3) {
+        const t: number[] = [];
+        for (let k = 0; k < 3; k++) {
+          v.fromBufferAttribute(pos, idx ? idx.getX(i + k) : i + k).applyMatrix4(o.matrixWorld);
+          t.push(v.x, v.y, v.z);
+        }
+        const x0 = Math.floor(Math.min(t[0], t[3], t[6]) / cell), x1 = Math.floor(Math.max(t[0], t[3], t[6]) / cell);
+        const z0 = Math.floor(Math.min(t[2], t[5], t[8]) / cell), z1 = Math.floor(Math.max(t[2], t[5], t[8]) / cell);
+        for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
+          const key = `${x},${z}`;
+          (cells.get(key) ?? cells.set(key, []).get(key)!).push(t);
+        }
+      }
+    });
+    const colliderAt = (x: number, z: number, near: number) => {
+      let best: number | null = null;
+      for (const t of cells.get(`${Math.floor(x / cell)},${Math.floor(z / cell)}`) ?? []) {
+        const v0x = t[3] - t[0], v0z = t[5] - t[2], v1x = t[6] - t[0], v1z = t[8] - t[2], px = x - t[0], pz = z - t[2];
+        const den = v0x * v1z - v1x * v0z;
+        if (Math.abs(den) < 1e-12) continue;
+        const a = (px * v1z - v1x * pz) / den, b = (v0x * pz - px * v0z) / den;
+        if (a < -1e-5 || b < -1e-5 || a + b > 1 + 1e-5) continue;
+        const h = t[1] + a * (t[4] - t[1]) + b * (t[7] - t[1]);
+        if (best === null || Math.abs(h - near) < Math.abs(best - near)) best = h;
+      }
+      return best;
+    };
+    let worst = 0;
+    let worstAt = '';
+    let probes = 0;
+    let missed = 0;
+    const [k0, k1] = skip[tid] ?? [Infinity, -Infinity];
+    // A hill climb's dead stretch, from the road's end back round to its start, has no road
+    const p2p = (raw.metadata as { pointToPoint?: { endS: number; startS: number } } | undefined)?.pointToPoint;
+    for (const smp of raw.samples as unknown as { s: number; p: number[]; t: number[]; w: number; b: number; yProf?: number[] }[]) {
+      if (!smp.yProf || (smp.s >= k0 && smp.s <= k1) || (p2p && smp.s > p2p.endS && smp.s < p2p.startS)) continue;
+      // The converter's right-hand vector: the horizontal tangent turned a quarter (centreline.py `rights`)
+      const l = Math.hypot(smp.t[0], smp.t[2]);
+      const rx = -smp.t[2] / l, rz = smp.t[0] / l;
+      const sample = { yProf: smp.yProf, width: smp.w, position: { y: smp.p[1] }, bankingRad: smp.b } as unknown as TrackSamplePoint;
+      for (const lat of [-smp.w / 2, smp.w / 2]) {
+        const y = evaluateSampleLateralHeightM(sample, lat);
+        const h = colliderAt(smp.p[0] + rx * lat, smp.p[2] + rz * lat, y);
+        probes++;
+        if (h === null) {
+          missed++;
+          continue;
+        }
+        if (Math.abs(y - h) > worst) {
+          worst = Math.abs(y - h);
+          worstAt = `s ${smp.s.toFixed(0)} ${lat < 0 ? 'left' : 'right'}`;
+        }
+      }
+    }
+    assert.ok(missed <= probes * 0.01, `[${tid}] ${missed} of ${probes} road edges have no road collider under them`);
+    assert.ok(worst < 0.01, `[${tid}] the track data's road edge is ${(worst * 100).toFixed(1)} cm off the road collider at ${worstAt}`);
+    console.log(`PASS  [${tid}] the game's road edge on the road collider at ${probes - missed} edges, worst ${(worst * 1000).toFixed(1)} mm`);
+  }
+}
+
 async function main() {
   await verifyOkayamaMaterialsAndDecalIsolation();
   await verifyMonacoBarrierHitboxes();
   await verifyKerbsFeelAndSound();
   await verifyTrackEdgeContinuity();
+  await verifyRoadEdgeProfile();
   console.log('\nALL AC TRACK FIX VERIFICATIONS PASSED.');
 }
 

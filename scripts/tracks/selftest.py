@@ -260,8 +260,36 @@ def test_carry_previous_lines():
     assert all(s['ro'] == 1.5 and s['roGt3'] == 0.5 for s in same['samples']) and same['metadata']['lapTime'] == 61.2
 
 
+def test_road_profile_height():
+    """The road keeps its crossfall out to its edge however low the ground beside it lies; past the edge it eases down
+    to that ground; a column comes in smoothly as the road widens past it; inside the road the profile is plain
+    interpolation between its columns"""
+    import build_track as bt
+    lat = np.array(bt.LAT)
+    plane = list(-0.02 * lat)
+    ditch = plane[:]
+    ditch[7] = plane[7] - 1.0  # 8 m right: a ditch
+    # inside the road's outermost column, plain interpolation
+    for x in (-4.0, -1.0, 0.0, 2.0, 4.9):
+        assert abs(bt.road_profile_height(ditch, 6.5, x) - float(np.interp(x, lat, ditch))) < 1e-12, x
+    # the edge and the metres before it stay on the road's plane
+    for x in (5.5, 6.0, 6.5):
+        assert abs(bt.road_profile_height(ditch, 6.5, x) - (-0.02 * x)) < 1e-9, x
+    # past the edge, down to the ditch at its column
+    past = [bt.road_profile_height(ditch, 6.5, x) for x in (6.5, 7.0, 7.5, 8.0)]
+    assert all(b < a for a, b in zip(past, past[1:])) and abs(past[-1] - ditch[7]) < 1e-9, past
+    # widening past the ditch's column: no step at the edge, and once the column is 0.5 m inside it is road
+    hws = np.arange(7.0, 9.0, 0.001)
+    edge = np.array([bt.road_profile_height(ditch, h, h) for h in hws])
+    assert np.abs(np.diff(edge)).max() < 0.005, np.abs(np.diff(edge)).max()
+    h = 8.6
+    assert abs(bt.road_profile_height(ditch, h, h) - (ditch[7] + (ditch[7] - ditch[6]) / 3.0 * (h - 8.0))) < 1e-9
+    # a narrow road (a 4 m country lane) leans on its centre and 2.5 m columns only
+    assert abs(bt.road_profile_height(ditch, 2.0, 2.0) - float(np.interp(2.0, lat, ditch))) < 1e-12
+
+
 TESTS = [test_route_start_cut, test_wall_lane_oval, test_glb_sparse_accessors, test_turn_names_over_the_start_line,
-         test_carry_previous_lines]
+         test_carry_previous_lines, test_road_profile_height]
 
 if __name__ == '__main__':
     failed = 0

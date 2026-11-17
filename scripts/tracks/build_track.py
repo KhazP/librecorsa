@@ -47,6 +47,9 @@ KERB_EDGE_OUT_M = 2.6
 KERB_UV_M = 6.0
 # Road surface: largest departure from the fitted bank plane kept from the scan (m)
 ROAD_RESIDUAL_M = 0.04
+# A profile column counts as road once the road's edge is past it, and comes in over this far as the edge moves out past
+# it; the column after it is eased in past the edge over the same distance (road_profile_height)
+EDGE_COLUMN_RAMP_M = 0.5
 DS = 5.0
 WALL_CAP_M = 45.0
 # `closeBranches`: tarmac this far past the edge marks another road leaving; its barrier stands this far off the
@@ -351,6 +354,66 @@ def lane_widen(xz, cfg):
         ramp = np.clip(np.minimum(s - a, b - s) / 60.0 + 1.0, 0.0, 1.0)
         out = np.maximum(out, m * ramp * ramp * (3 - 2 * ramp))
     return out
+
+
+def road_profile_height(yp, hw, lat):
+    """Height at lateral offset `lat` (m, + right, |lat| <= 12) of a road of half width `hw` from its profile `yp` (the
+    heights at LAT). The road keeps its own crossfall out to its edge: the profile columns past the edge hold the ground
+    beside the road (a bank, a ditch, the ground under a bridge), so the height from the last road column on is the line
+    through the last two road columns, and only past the edge does it ease to the next column out. Interpolated straight
+    towards that column, the last metres of road leaned up to 0.4 m off the mod's road, and the drawn road laid onto them
+    tilted across the lane.
+
+    A column counts as road once the edge is past it and comes in over EDGE_COLUMN_RAMP_M as the edge moves on past it;
+    past the edge the column after the next one out comes in the same way while the next one is within that distance.
+    So the road and the ground beside it change smoothly as the road widens past a column (a column counted as road
+    the moment the edge reaches it steps the edge line by up to 0.2 m where it lies off the road's plane).
+    src/lib/track-data.ts (evaluateSampleLateralHeightM) reads the profile by the same rule."""
+    side = 1 if lat > 0 else -1
+    a = abs(lat)
+    c0 = len(LAT) // 2
+
+    def col(m):
+        return c0 + side * m
+
+    def lat_of(m):
+        return abs(LAT[col(m)])
+
+    def line(m0, m1, x):
+        return yp[col(m0)] + (yp[col(m1)] - yp[col(m0)]) * (x - lat_of(m0)) / (lat_of(m1) - lat_of(m0))
+
+    def beyond(x):
+        return float(np.interp(side * x, LAT, yp))
+
+    # j: the outermost column the edge is past
+    j = 0
+    while j < c0 and lat_of(j + 1) < hw:
+        j += 1
+
+    def road(x):
+        if j <= 1:
+            return line(0, 1, x)
+        if x <= lat_of(j - 1):
+            return beyond(x)
+        w = min(1.0, (hw - lat_of(j)) / EDGE_COLUMN_RAMP_M)
+        return (1.0 - w) * line(j - 2, j - 1, x) + w * line(j - 1, j, x)
+
+    if a <= hw:
+        return float(road(a))
+    if j >= c0:
+        return beyond(a)
+    ye = road(hw)
+
+    def ease(m):
+        # from the edge to column m, then on through the columns past it
+        if m > c0 or a >= lat_of(m):
+            return beyond(a)
+        return ye + (yp[col(m)] - ye) * (a - hw) / (lat_of(m) - hw)
+
+    u = min(1.0, (lat_of(j + 1) - hw) / EDGE_COLUMN_RAMP_M)
+    if u >= 1.0 or j + 2 > c0:
+        return float(ease(j + 1))
+    return float(u * ease(j + 1) + (1.0 - u) * ease(j + 2))
 
 
 def smooth_road_profile(yprof, width, ds, sigma=1.5, crest_r=400.0, dip_r=120.0):
@@ -1104,11 +1167,10 @@ def collider_meshes(soup, road_set, kerb_mats, xz, rgt, yprof, width, bank, kerb
     kerb is the scan's own kerb paint (scan_kerb_mesh) and no generated kerb is drawn over it. `skip`: samples with
     no surfaces (a point-to-point course's dead stretch; pass `wall_open` there too)"""
     n = len(xz)
-    lat_ref = np.array(LAT)
 
     def prof_y(i, lat):
         if -12.0 <= lat <= 12.0:
-            return float(np.interp(lat, lat_ref, yprof[i]))
+            return road_profile_height(yprof[i], hw[i], lat)
         edge = yprof[i, 0] if lat < 0 else yprof[i, -1]
         return float(edge - math.sin(bank[i]) * (lat - (-12.0 if lat < 0 else 12.0)))
 
