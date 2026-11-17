@@ -1332,6 +1332,12 @@ export class VehiclePhysics {
   private drsArmedZone: string | null = null;
   private lastDrsZoneId: string | null = null;
   private wallContactNow = false;
+  /**
+   * True while `reset` holds the car on its spot to settle: no wall contact then. A car placed overlapping a barrier
+   * was pushed and spun by it on every held substep, its position put back each time, until it rolled over, flew up
+   * or blew up; let go, the barrier pushes it out as ever (capped per step)
+   */
+  private pinnedForSettle = false;
   private wallContactStep = false;
   private wallImpactStep = 0;
   /** Hardest hit of the contact going on now (m/s); 0 once off the barrier */
@@ -1903,6 +1909,7 @@ export class VehiclePhysics {
         onEvent?.(e);
       };
       try {
+        this.pinnedForSettle = true;
         for (let k = 0; k < 300 * VehiclePhysics.SUBSTEPS; k++) {
           this.updateBasis();
           this.velocity.x = speedMs * _ez.x;
@@ -1916,8 +1923,10 @@ export class VehiclePhysics {
           this.position.z = z;
           this.angularVelocity.y = 0;
         }
+        this.pinnedForSettle = false;
         if (!rolling) for (let k = 0; k < 600 * VehiclePhysics.SUBSTEPS; k++) this.substep(h, hold);
       } finally {
+        this.pinnedForSettle = false;
         this.onEvent = onEvent;
       }
       memo?.store(events > 0);
@@ -3321,7 +3330,7 @@ export class VehiclePhysics {
 
     for (const w of this.wheels) w.rotationRad = (w.rotationRad + w.omega * h) % (2 * Math.PI);
 
-    this.applyWallContacts();
+    if (!this.pinnedForSettle) this.applyWallContacts();
   }
 
   /** I^-1 v in world axes (body-frame diagonal inertia) */
