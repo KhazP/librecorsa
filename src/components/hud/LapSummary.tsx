@@ -300,7 +300,7 @@ const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose:
     );
   }
   return (
-    <div className="ml-auto flex w-fit max-w-full items-center gap-2 rounded-full border border-white/7 bg-lc-void/75 py-1.5 pr-1.5 pl-4.5 text-lc-chalk shadow-lc-pop backdrop-blur-[14px] pointer-coarse:mx-auto">
+    <div className="ml-auto flex w-fit max-w-full items-center gap-2 rounded-full border border-white/7 bg-lc-void/75 py-1.5 pr-1.5 pl-4.5 text-lc-chalk shadow-lc-pop backdrop-blur-[14px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto">
       <button
         type="button"
         onClick={onOpen}
@@ -358,7 +358,7 @@ const ToastNote: React.FC<{ text: string }> = ({ text }) => {
   return (
     <p
       role="status"
-      className="mt-1.5 ml-auto flex w-fit max-w-full items-center gap-1.5 rounded-full border border-white/7 bg-lc-void/75 px-3 py-1 text-[12px] leading-snug font-medium text-lc-amber shadow-lc-pop backdrop-blur-[14px] pointer-coarse:mx-auto"
+      className="mt-1.5 ml-auto flex w-fit max-w-full items-center gap-1.5 rounded-full border border-white/7 bg-lc-void/75 px-3 py-1 text-[12px] leading-snug font-medium text-lc-amber shadow-lc-pop backdrop-blur-[14px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto"
     >
       <Icon name="offline" size="xs" className="shrink-0" />
       {text}

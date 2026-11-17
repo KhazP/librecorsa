@@ -328,6 +328,13 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   // The Phone HUD on a phone-sized screen, and for the game's own presets wherever the touch pads are up; a third-party
   // layout keeps its look on a tablet and steps out of the pads' way itself (`touch`)
   const phone = showsPhoneHud(preset, { phone: usePhoneLayout(), touchControls: touch });
+  // While the phone HUD is up the notices lose their blur too (HUD_GLASS), some of which render outside this tree
+  useEffect(() => {
+    if (!phone) return;
+    const root = document.documentElement;
+    root.setAttribute("data-phone-hud", "");
+    return () => root.removeAttribute("data-phone-hud");
+  }, [phone]);
   // The lap board is for large screens only: not mounted below 1280 × 720
   const largeScreen = useLargeScreen();
   const lapInvalid = useLapInvalid(telemetry);
