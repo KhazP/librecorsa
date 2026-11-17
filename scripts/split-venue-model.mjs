@@ -17,8 +17,9 @@
  *   GPU once; the file's `extras.lcVenueLayout.order` restores the original order of `Track_Model`'s children.
  * - `split-report.json`: input and output md5s and sizes.
  *
- * `<build>` is the first 8 hex digits of the shared file's sha256: a rebuild from other inputs gets new names, so
- * files already on R2 for deployed code are never replaced. src/lib/venue-models.ts names the build the game loads;
+ * `<build>` is the first 8 hex digits of the sha256 of the shared file and the layouts' input md5s: a rebuild from other
+ * inputs gets new names (a physics-only change to one layout too), so files already on R2 for deployed code are never
+ * replaced. src/lib/venue-models.ts names the build the game loads;
  * the loader is src/lib/render/venue-model.ts.
  *
  * Buffer views go across byte for byte where they can (every vertex stream here). A meshopt view whose accessors end
@@ -757,7 +758,9 @@ async function main() {
   if (!sharedJsonBase.samplers.length) delete sharedJsonBase.samplers;
   const sExt = extensionLists({ ...sharedJsonBase, bufferViews: S.json.bufferViews }, layouts);
   const sharedBytes = S.finish({ ...sharedJsonBase, extensionsUsed: sExt.used, ...(sExt.required.length ? { extensionsRequired: sExt.required } : {}) });
-  const build = sha256(sharedBytes).slice(0, 8);
+  // The layouts' inputs too: a change to one layout's own part (its physics) leaves the shared file as it was, and a
+  // build named by the shared file alone would rewrite that layout's file under a name already on R2
+  const build = sha256(Buffer.concat([sharedBytes, ...layouts.map((l) => Buffer.from(l.md5))])).slice(0, 8);
   const sharedName = `${opts.venue}.shared.${build}.glb`;
 
   const outputs = [];

@@ -360,7 +360,8 @@ const writeFile = (file, extraJson) => {
 if (venueId) {
   mkdirSync(outDir, { recursive: true });
   const shared = writeFile(0);
-  const build = sha256(shared).slice(0, 8);
+  // Named by the layouts' inputs as well as the shared file, so a change to one layout alone gets new names
+  const build = sha256(Buffer.concat([shared, ...inputs.slice(1).map((i) => Buffer.from(sha256(i.bytes)))])).slice(0, 8);
   const sharedPath = path.join(outDir, `${venueId}.shared.${build}.glb`);
   writeFileSync(sharedPath, shared);
   outputs.push({ input: inputs[0].path, output: sharedPath, bytes: shared.length, inputBytes: inputs[0].bytes.length });
