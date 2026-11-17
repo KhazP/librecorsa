@@ -251,8 +251,10 @@ export interface RaceStatus {
   phase: 'lights' | 'racing' | 'finished';
   /** Red start lights lit (0–5); 0 during the race */
   lightsOn: number;
-  /** Seconds until the light sequence starts (multiplayer countdown); absent otherwise */
+  /** Seconds until the light sequence starts (multiplayer countdown, an AI race's grid after qualifying); absent otherwise */
   countdownS?: number;
+  /** The qualifying classification the race lined up in (AI race with qualifying): code, player, best clean lap (ms) */
+  qualifying?: { code: string; isPlayer: boolean; lapMs: number | null }[];
   /** Race length (laps) */
   totalLaps?: number;
   /** Final classification once the player has finished */
@@ -487,6 +489,11 @@ export interface CarTelemetry {
    * "clutch pedal"), and how far they hold it in (0..1, 1 = pressed)
    */
   start?: { held: boolean; jumped: boolean; clutch: StartClutchControl; clutchIn: number };
+  /**
+   * Qualifying before an AI race (qualifying.ts), set by the session: the clock left (s), whether the lap under way is
+   * the last one (the clock has run out) and still counts, and the best clean lap so far (ms)
+   */
+  qualifying?: { remainingS: number; lastLap: boolean; lapCounts: boolean; bestMs: number | null };
   /**
    * Run counter, set by the app shell: it goes up whenever the run restarts (a new session, a restart, a
    * teleport, a car change). Anything that keeps lap- or run-scoped state resets when it changes,

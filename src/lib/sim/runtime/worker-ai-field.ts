@@ -8,6 +8,7 @@
  * car on the grid itself). The page's track environment goes on stepping the weather for drawing it; the worker's
  * weather is eased into it about once a second, and the road under the player (water, spray, rubber) is the worker's.
  */
+import type { QualifyingGridInput } from "../qualifying";
 import * as THREE from "three";
 import type { RaceStatus } from "@/types/f1";
 import type { AiRace, RaceDriverLabel, WorkerRaceView } from "../ai-race";
@@ -42,6 +43,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   playerDisqualified = false;
   lockAidsInYellow = true;
   private sentLockAids = true;
+  qualifying: QualifyingGridInput | undefined = undefined;
   readonly worker: WorkerRaceView = this;
   /** The field's seed for the next start (a headless check replays one); unset, the worker draws one */
   seed: number | undefined = undefined;
@@ -132,6 +134,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
         manualStart: standing && this.manualStart,
         driver: this.playerDriver,
         lockAidsInYellow: this.lockAidsInYellow,
+        qualifying: this.qualifying ? { ...this.qualifying } : undefined,
       },
       epoch,
       weather: this.env.weather.snapshot(),
