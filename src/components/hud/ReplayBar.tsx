@@ -132,7 +132,7 @@ export const ReplayBar: React.FC<{
               step={0.01}
               value={shown}
               onChange={(e) => onSeek(Number(e.target.value))}
-              className="lc-range !h-2"
+              className="lc-range -my-2 h-6 [--lc-track:8px]"
               style={{ "--lc-fill": `${fill.toFixed(2)}%` } as React.CSSProperties}
             />
           </label>

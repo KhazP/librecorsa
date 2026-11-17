@@ -35,7 +35,7 @@ export function Meter({ label, value, tone = "good", detail, labelClassName = "w
   const track = (
     <span aria-hidden className={cx("relative block h-2 min-w-0 overflow-hidden rounded-full bg-lc-titanium", stacked ? "w-full" : "flex-1")}>
       <span
-        className={cx("absolute inset-y-0 left-0 rounded-full transition-[width] duration-200 ease-lc", TONE_FILL[tone])}
+        className={cx("absolute inset-y-0 left-0 rounded-full transition-[width] duration-200 ease-lc motion-reduce:transition-none", TONE_FILL[tone])}
         style={{ width: `${pct}%` }}
       />
     </span>

@@ -382,7 +382,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
           letGo(e);
           setMenu((m) => !m);
         }}
-        className={`inline-flex size-7 items-center justify-center rounded-full text-lc-slate transition-colors duration-200 ease-lc hover:bg-white/8 hover:text-lc-chalk aria-expanded:bg-white/8 aria-expanded:text-lc-chalk ${FOCUS}`}
+        className={`relative inline-flex size-7 items-center justify-center rounded-full text-lc-slate pointer-fine:after:absolute pointer-fine:after:-inset-1 transition-colors duration-200 ease-lc hover:bg-white/8 hover:text-lc-chalk aria-expanded:bg-white/8 aria-expanded:text-lc-chalk ${FOCUS}`}
       >
         <Icon name="settings" size="xs" className="size-3.5" />
       </button>

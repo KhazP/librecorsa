@@ -64,7 +64,7 @@ export function Disclosure({ children, moreLabel = "More", lessLabel = "Less", c
       >
         <Icon
           name="expand"
-          className={cx("transition-transform duration-200 ease-lc", open ? "rotate-180" : undefined)}
+          className={cx("transition-transform duration-200 ease-lc motion-reduce:transition-none", open ? "rotate-180" : undefined)}
         />
         <span className="text-[14px] font-semibold">
           {open ? lessLabel : moreLabel}
