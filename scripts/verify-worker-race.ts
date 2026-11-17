@@ -163,6 +163,21 @@ race.playerPenaltyS = 5;
 race.update();
 race.setSkill(40);
 check('a penalty and the skill reach the worker', workerField!.playerPenaltyS === 5 && workerField!.skill === 40);
+// Race control's disqualification (track limits): the worker's field takes the player out, and the page sees it
+race.playerDisqualified = true;
+race.update();
+for (let tick = 0; tick < 30; tick++) {
+  car.step(SIM_TICK_S, {});
+  loop.advance(SIM_TICK_S);
+  host.endFrame(true);
+  race.update();
+}
+const dqMe = race.status().results?.find((r) => r.isPlayer);
+check(
+  'a disqualification reaches the worker and comes back in the result',
+  workerField!.playerDisqualified && race.status().phase === 'finished' && dqMe?.dq === true,
+  JSON.stringify(dqMe)
+);
 race.dispose();
 check('the race ends in the worker when the session leaves it', loop.runtime.raceField === null);
 const sBefore = sim.sMeters;
