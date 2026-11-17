@@ -107,6 +107,16 @@ export function hazardLine(
   return { latM: Math.max(-halfRoadM, Math.min(halfRoadM, lat)), roomM: room };
 }
 
+/**
+ * Distance covered in `tS` from `vMs` at a steady acceleration `aMs2` (m), stopping at rest rather than reversing: the
+ * path check's guess of where a car will be, from what it is doing now
+ */
+export function travelM(vMs: number, aMs2: number, tS: number): number {
+  const v = Math.max(0, vMs);
+  if (aMs2 < 0 && v + aMs2 * tS < 0) return (v * v) / (2 * -aMs2);
+  return v * tS + 0.5 * aMs2 * tS * tS;
+}
+
 /** Yellow flag zone around an incident: from this far before it to this far past it (m) */
 export const YELLOW_BEFORE_M = 350;
 export const YELLOW_AFTER_M = 40;

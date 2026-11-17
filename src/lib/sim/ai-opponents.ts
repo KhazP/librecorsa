@@ -49,6 +49,7 @@ import {
   ownsCorner,
   passFeasible,
   RacecraftMemory,
+  travelM,
 } from '@/lib/sim/ai-racecraft';
 import { RaceIncidents } from '@/lib/sim/race-incidents';
 import { aiTrackFor, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
@@ -192,6 +193,12 @@ export interface RacecraftParams {
    */
   squeezeYield: number;
   /**
+   * How far ahead (s) each car checks its own path against the predicted paths of the cars around it: a car its line
+   * will run into is followed, one alongside is given room, and no move is made across the nose of a car behind
+   * (0: off)
+   */
+  predictS: number;
+  /**
    * Extra margin against the player's car (m): a player keeps no racecraft rules (no tucking in, no room given, early or
    * late braking), so the AI follows a little further back and keeps a little more room beside it
    */
@@ -219,8 +226,19 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   startLaneMaxM: 900,
   alongsideReachM: 0,
   squeezeYield: 0,
+  predictS: 0,
   playerMarginM: 0,
 };
+/** The path check's step (s) */
+const PATH_STEP_S = 0.1;
+/** How quickly a car moves across to give room the path check found it needs (m/s): a line sweeping to the apex crosses
+ * the road at ~4 m/s, and at the usual rate the room came a second late */
+const AVOID_RATE_MS = 4;
+/** How much less sure the path check is of where a car will be along the road, and across it, per second ahead (m/s) */
+const PATH_SPREAD_MS = 1;
+const PATH_SPREAD_LAT_MS = 0.25;
+/** How long a car's tracker takes to bring it onto the path it aims for (s) */
+const PATH_TRACK_LAG_S = 0.35;
 /** Rate at which an AI moves off / back onto its line (m/s) */
 const BIAS_RATE_MS = 2.2;
 /** ... and out of the tow to pass (m/s): a quick move, made with the speed the tow gave */
@@ -1814,6 +1832,13 @@ export class AiOpponentField implements AiRace {
           speedCap = Math.min(speedCap, roomFor.sim.vxMs - THREE.MathUtils.clamp(1.5 * overlapM, 1.5, 5));
         }
       }
+      // A car whose path ours will run into, or one beside it that ours will squeeze: checked ahead of time
+      if (this.rc.predictS > 0) {
+        const check = this.pathCheck(car, biasTarget, biasRate, half, line);
+        speedCap = Math.min(speedCap, check.capMs);
+        if (check.biasM !== null) biasTarget = check.biasM;
+        if (check.rateMs !== null) biasRate = Math.max(biasRate, check.rateMs);
+      }
       // A pass the corner ahead has no room for: held to its line there, the passing car is back in the other car's path,
       // so it follows it in. With a run from the tow and a later braking point, it went on and ran into its rear corner
       let passBlocked = false;
@@ -1918,6 +1943,143 @@ export class AiOpponentField implements AiRace {
    * car keeps to the racecraft rules (a car's width of room, yielding a corner it doesn't own), which hold the space
    * the other driver is owed; the planner chooses how to approach and pass the cars ahead
    */
+  private readonly pathLine = new Float64Array(64);
+  private readonly pathS = new Float64Array(64);
+
+  /**
+   * The path check (`RacecraftParams.predictS`): where this car will be over the next moments (its line, the bias it is
+   * heading for, its speed and acceleration now) against where each car near it will be. Another AI car runs down its
+   * own line from where it is; the player's car holds its offset and carries on its sideways move for half a second (a
+   * human keeps no line of ours). The first moment two footprints would overlap decides:
+   *  - a car ahead whose path ours runs into (our line closing onto it, or it braking early): followed, as a car in our
+   *    path is (it was only followed once already in line, too late through a turn-in)
+   *  - a car beside us that our path squeezes: given room, or, with no road left for it and not clearly ahead, a lift to
+   *    drop in behind
+   *  - a car behind whose path our move across would cut: the move waits
+   * Returns a speed cap (Infinity: none) and a bias to aim for instead (null: keep the one chosen)
+   */
+  private pathCheck(
+    car: FieldCar,
+    biasTarget: number,
+    biasRate: number,
+    half: number,
+    line: number
+  ): { capMs: number; biasM: number | null; rateMs: number | null } {
+    const me = car.ai as SimulatorCar;
+    const L = this.track.totalLengthM;
+    const steps = Math.min(this.pathLine.length, Math.max(1, Math.round(this.rc.predictS / PATH_STEP_S)));
+    const meS = me.sMeters;
+    const meN = me.lateralOffsetM;
+    const meV = Math.max(0, me.vxMs);
+    const meA = (me.telemetry.longitudinalG ?? 0) * 9.81;
+    let capMs = Infinity;
+    let biasM: number | null = null;
+    let rateMs: number | null = null;
+    let near = false;
+    for (const o of this.cars) {
+      if (o === car || o.removed) continue;
+      const ds = wrapHalf(o.sim.sMeters - meS, L);
+      if (ds > -30 && ds < 60 + meV * this.rc.predictS) near = true;
+    }
+    if (!near) return { capMs, biasM, rateMs };
+    // Our own path: distance covered and the line's offset there, at each step
+    for (let k = 1; k <= steps; k++) {
+      const t = k * PATH_STEP_S;
+      const s = travelM(meV, meA, t);
+      this.pathS[k - 1] = s;
+      this.pathLine[k - 1] = aiLineOffsetM(this.track.getSampleAtDistance((meS + s) % L), me.racingLineId) - line;
+    }
+    // Where we will be across the road: on our way to the line and bias, from where the car is heading now (the tracker
+    // takes a moment to bring it back: on a corner exit a car moving across at 4 m/s was a metre past its line, into the
+    // car beside it, before its own path said so)
+    const meLat = this.lateralSpeedMs(me);
+    const myN = (k: number, b0: number, b1: number) => {
+      const t = k * PATH_STEP_S;
+      const planned = meN + this.pathLine[k - 1] + THREE.MathUtils.clamp(b1 - b0, -biasRate * t, biasRate * t);
+      return planned + (meN + meLat * t - planned) * Math.exp(-t / PATH_TRACK_LAG_S);
+    };
+    for (const o of this.cars) {
+      if (o === car || o.removed || this.isHazard(o)) continue;
+      const os = o.sim;
+      const dsNow = wrapHalf(os.sMeters - meS, L);
+      if (dsNow < -30 || dsNow > 60 + meV * this.rc.predictS) continue;
+      const human = o.isPlayer;
+      const lenGap = CAR_LEN_M + 0.6 + (human ? this.rc.playerMarginM : 0);
+      const widGap = CAR_WID_M + 0.2 + (human ? 0.5 * this.rc.playerMarginM : 0);
+      // Another AI car already beside us keeps the racecraft rules too (room on its side, the corner yielded): those
+      // rules deal with it. The player's car is checked all the way: it keeps none of them
+      if (!human && Math.abs(dsNow) < lenGap && Math.abs(os.lateralOffsetM - meN) < widGap) continue;
+      const oV = Math.max(0, os.vxMs);
+      const oA = (os.telemetry.longitudinalG ?? 0) * 9.81;
+      const oLat = human ? this.lateralSpeedMs(os) : 0;
+      const oLine0 = human ? 0 : aiLineOffsetM(this.track.getSampleAtDistance(os.sMeters), os.racingLineId);
+      // (the guess grows less sure further ahead for the player's car only: another AI car runs down its own line, and
+      // with the margin grown for it too, a car pulling out to pass at the passing spacing saw a conflict and gave up)
+      const spreadS = human ? PATH_SPREAD_MS : 0;
+      const spreadN = human ? PATH_SPREAD_LAT_MS : 0;
+      // The first step the footprints overlap (null: none), and, side by side, how far short of a car's width of room on
+      // our side of it the path comes at its worst (m)
+      const away = Math.sign(meN - os.lateralOffsetM) || 1;
+      const conflictAt = (b1: number): { k: number; need: number } | null => {
+        let first = 0;
+        let need = 0;
+        for (let k = 1; k <= steps; k++) {
+          const t = k * PATH_STEP_S;
+          const dsT = dsNow + travelM(oV, oA, t) - this.pathS[k - 1];
+          // (where the player's car will be is less sure further ahead: a metre along the road per second. Held to the
+          // footprints alone, a player a few metres behind flickered in and out of the check and the room closed again)
+          if (Math.abs(dsT) >= lenGap + spreadS * t) continue;
+          const oN = human
+            ? os.lateralOffsetM + oLat * Math.min(t, 0.5)
+            : os.lateralOffsetM + aiLineOffsetM(this.track.getSampleAtDistance((os.sMeters + travelM(oV, oA, t)) % L), os.racingLineId) - oLine0;
+          // (crossing to its other side is running through it: measured on our side of it)
+          const short = widGap + spreadN * t - away * (myN(k, car.biasM, b1) - oN);
+          if (short > 0) {
+            if (!first) first = k;
+            need = Math.max(need, short);
+          }
+        }
+        return first ? { k: first, need } : null;
+      };
+      const hit = conflictAt(biasM ?? biasTarget);
+      if (!hit) continue;
+      if (dsNow >= lenGap) {
+        // Ahead: slot in behind it
+        capMs = Math.min(capMs, followCapMs(os, dsNow - CAR_LEN_M - (human ? this.rc.playerMarginM : 0), this.rc));
+      } else if (dsNow > -lenGap) {
+        // Beside: room on our side of it, made quickly, if the road has it; and, not clearly ahead, a lift to drop in
+        // behind when it doesn't or the move can't be made in time
+        let want: number = (biasM ?? biasTarget) + away * (hit.need + 0.1);
+        // ... and, close beside the player's car, no move toward it at all: where we are now is the least we keep (the
+        // tracker runs a little past where it aims, and a car moving across onto its exit line touched the player's)
+        const hold = meN - line;
+        if (human && away * (meN - os.lateralOffsetM) < widGap + 1.5 && away * (hold - want) > 0) want = hold;
+        const inTime = Math.abs(want - car.biasM) <= AVOID_RATE_MS * hit.k * PATH_STEP_S + 0.3;
+        const onRoad = Math.abs(line + want) <= half;
+        if (onRoad) {
+          biasM = want;
+          rateMs = AVOID_RATE_MS;
+        }
+        if ((!onRoad || !inTime) && dsNow > (human ? -0.5 * CAR_LEN_M : 0)) {
+          capMs = Math.min(capMs, oV - THREE.MathUtils.clamp(1.5 * Math.max(0, CAR_LEN_M + 0.5 - dsNow), 1.5, 5));
+        }
+      } else if (!conflictAt(car.biasM)) {
+        // Behind: our move across would cut its nose; hold where we are until it is clear
+        biasM = car.biasM;
+      }
+    }
+    return { capMs, biasM, rateMs };
+  }
+
+  /** A car's speed across the road (m/s, + right) */
+  private lateralSpeedMs(sim: SimulatorCar): number {
+    const v = sim.worldVelocity;
+    if (!v) return 0;
+    const b = this.track.getSampleAtDistance(sim.sMeters).binormal;
+    const bl = Math.hypot(b.x, b.z) || 1;
+    return (v.x * b.x + v.z * b.z) / bl;
+  }
+
   private trafficNear(car: FieldCar): boolean {
     const L = this.track.totalLengthM;
     const me = car.sim;
@@ -2148,14 +2310,7 @@ export class AiOpponentField implements AiRace {
   private reportContact(carA: FieldCar, carB: FieldCar, dsAB: number, impactMs: number): void {
     // `a` is the car further back
     const [back, front, ds] = dsAB >= 0 ? [carA, carB, dsAB] : [carB, carA, -dsAB];
-    const latSpeed = (sim: SimulatorCar) => {
-      const sample = this.track.getSampleAtDistance(sim.sMeters);
-      const v = sim.worldVelocity;
-      const b = sample.binormal;
-      const bl = Math.hypot(b.x, b.z) || 1;
-      if (v) return (v.x * b.x + v.z * b.z) / bl;
-      return 0;
-    };
+    const latSpeed = (sim: SimulatorCar) => this.lateralSpeedMs(sim);
     this.incidents.push({
       kind: 'contact',
       a: back.code,
