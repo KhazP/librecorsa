@@ -42,7 +42,12 @@ check('understeer gradient near the reference 1.44 deg/g', k > 1.1 && k < 1.8, `
 check('steer-per-g fit recovers the wheelbase', Math.abs(m.geometricTermM - 2.65) < 0.5, `${m.geometricTermM.toFixed(2)} m`);
 
 console.log('Braking g');
-band((at) => `braking g at ${at} km/h`, m.brakingG, -12, 12);
+// Where the tyres set the stop, 99 to 189 km/h, the slicks' longitudinal grip is fitted to the logs: held to −5…+5 %
+// (one stop, read over 3 m/s, moves a few percent with where the ABS's pedal happens to be). From 225 km/h the pedal
+// is down, so the brakes' torque and the endurance bodywork's drag set it, over the logs' sprint car
+const tyreLimited = ([at]: [number, number, number]) => at < 200;
+band((at) => `braking g at ${at} km/h`, m.brakingG.filter(tyreLimited), -5, 5);
+band((at) => `braking g at ${at} km/h (the brakes' torque)`, m.brakingG.filter((r) => !tyreLimited(r)), -12, 12);
 
 console.log('Full-throttle g');
 // The logs are a sprint trim's: the endurance balance of performance's restrictors take 0.985 / 1.04 of its torque
