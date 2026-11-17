@@ -688,7 +688,7 @@ export function WheelSetup({ first }: { first?: boolean }) {
 
       <SettingsCard
         title="Buttons"
-        description="Gear paddles and a pause button are the essentials"
+        description="Gear paddles and a pause button are the essentials. Both paddles together select neutral"
         extraReset={{ changed: anyButton, reset: () => setWheel({ buttons: emptyWheelButtons() }) }}
         resetWhat="every wheel button (they are cleared)"
       >

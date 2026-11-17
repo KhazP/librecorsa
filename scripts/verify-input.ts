@@ -317,6 +317,40 @@ check('clutch on a controller: none by default, its own button when given one, k
   assert.deepEqual(DEFAULT_KEY_BINDINGS.clutch, []);
   assert.equal(buildKeyLookup(rebindKey(DEFAULT_KEY_BINDINGS, 'clutch', 0, 'KeyZ')).get('KeyZ'), 'clutch');
 });
+check('neutral: N on the keyboard, no button of its own on a pad, gear up + gear down together on a pad and a wheel', () => {
+  assert.deepEqual(DEFAULT_KEY_BINDINGS.neutral, ['KeyN']);
+  assert.equal(buildKeyLookup(DEFAULT_KEY_BINDINGS).get('KeyN'), 'neutral');
+  assert.equal(DEFAULT_PAD_BUTTONS.neutral, null);
+  for (const id of PAD_LAYOUT_IDS) assert.equal(PAD_LAYOUTS[id].buttons.neutral, null, `${id} leaves neutral to the paddles`);
+  // A save from before neutral still reads as its layout
+  const { neutral: _n, ...oldDefault } = DEFAULT_PAD_BUTTONS;
+  const old = parsePlayerSettings({ padButtons: oldDefault });
+  assert.equal(old.padButtons.neutral, null);
+  assert.equal(matchPadLayout(old.padButtons, old.padTuning.pedalSources), 'default');
+  // LB then RB on a pad: gear down, then neutral as RB joins it, once
+  const settings = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS };
+  const r = new DeviceInputReader();
+  const f1 = r.read([pad('Xbox', 'standard', [0, 0], [4])], settings, 1 / 60);
+  assert.ok(f1.pressed.has('shiftDown') && !f1.pressed.has('neutral'));
+  const f2 = r.read([pad('Xbox', 'standard', [0, 0], [4, 5])], settings, 1 / 60);
+  assert.ok(f2.pressed.has('neutral'), 'the second paddle down');
+  const f3 = r.read([pad('Xbox', 'standard', [0, 0], [4, 5])], settings, 1 / 60);
+  assert.ok(!f3.pressed.has('neutral'), 'held, it fires once');
+  // Both in one frame: both shifts and neutral (the car lets neutral win)
+  const f4 = new DeviceInputReader().read([pad('Xbox', 'standard', [0, 0], [4, 5])], settings, 1 / 60);
+  assert.ok(f4.pressed.has('neutral') && f4.pressed.has('shiftUp') && f4.pressed.has('shiftDown'));
+  // A wheel's paddles, with its own neutral button too
+  const wheel = {
+    ...DEFAULT_WHEEL_SETTINGS,
+    steer: { padId: 'G29', axis: 0, center: 0, invert: false },
+    buttons: { ...DEFAULT_WHEEL_SETTINGS.buttons, shiftUp: { padId: 'G29', button: 4 }, shiftDown: { padId: 'G29', button: 5 }, neutral: { padId: 'G29', button: 9 } },
+  };
+  const w = new DeviceInputReader();
+  w.read([pad('G29', '', [0])], { wheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  assert.ok(w.read([pad('G29', '', [0], [4, 5])], { wheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60).pressed.has('neutral'), 'both paddles');
+  w.read([pad('G29', '', [0])], { wheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60);
+  assert.ok(w.read([pad('G29', '', [0], [9])], { wheel, padButtons: DEFAULT_PAD_BUTTONS }, 1 / 60).pressed.has('neutral'), 'its N button');
+});
 check('clutch in the device frame: the controller button, the calibrated clutch of a wheel pedal set, 0 with none', () => {
   const padSettings = {
     wheel: DEFAULT_WHEEL_SETTINGS,

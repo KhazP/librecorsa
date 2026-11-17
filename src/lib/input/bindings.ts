@@ -13,6 +13,7 @@ export type KeyAction =
   | "aero"
   | "shiftUp"
   | "shiftDown"
+  | "neutral"
   | "camera"
   | "racingLine"
   | "mute"
@@ -34,6 +35,7 @@ export type PadAction =
   | "aero"
   | "shiftUp"
   | "shiftDown"
+  | "neutral"
   | "camera"
   | "racingLine"
   | "restart"
@@ -59,6 +61,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "aero", label: "Active aero X / Z" },
   { id: "shiftUp", label: "Gear up" },
   { id: "shiftDown", label: "Gear down" },
+  { id: "neutral", label: "Neutral" },
   { id: "camera", label: "Camera (hold: seat & camera)" },
   { id: "racingLine", label: "Racing line" },
   { id: "mute", label: "Mute" },
@@ -78,6 +81,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
 export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   { id: "shiftUp", label: "Gear up" },
   { id: "shiftDown", label: "Gear down" },
+  { id: "neutral", label: "Neutral" },
   { id: "boost", label: "Boost" },
   { id: "aero", label: "Active aero X / Z" },
   { id: "camera", label: "Camera (hold: seat & camera)" },
@@ -101,6 +105,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   aero: ["KeyX"],
   shiftUp: ["KeyE"],
   shiftDown: ["KeyQ"],
+  neutral: ["KeyN"],
   camera: ["KeyC"],
   racingLine: ["KeyR"],
   mute: ["KeyM"],
@@ -132,6 +137,8 @@ export const DEFAULT_PAD_BUTTONS: PadButtonBindings = {
   camera: 3, // Y
   shiftDown: 4, // LB
   shiftUp: 5, // RB
+  // Gear up and gear down pressed together are neutral too, on every layout
+  neutral: null,
   racingLine: null,
   restart: 8, // View
   flyingLap: null,
@@ -262,6 +269,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
     buttons: {
       shiftUp: 0, // A (✕)
       shiftDown: 2, // X (□)
+      neutral: null,
       boost: 11, // RS (R3)
       camera: 5, // RB (R1)
       pause: 9, // Menu (Options)
@@ -284,6 +292,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
     buttons: {
       shiftUp: 7, // RT (R2)
       shiftDown: 6, // LT (L2)
+      neutral: null,
       boost: 0, // A (✕)
       camera: 5, // RB (R1)
       pause: 9, // Menu (Options)
@@ -304,6 +313,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
     buttons: {
       shiftUp: 0, // A (✕)
       shiftDown: 2, // X (□)
+      neutral: null,
       boost: 1, // B (○)
       aero: 3, // Y (△)
       camera: 5, // RB (R1)
@@ -324,6 +334,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
     buttons: {
       shiftUp: 1, // B (○)
       shiftDown: 2, // X (□)
+      neutral: null,
       boost: 0, // A (✕)
       camera: 5, // RB (R1)
       aero: 10, // LS (L3)

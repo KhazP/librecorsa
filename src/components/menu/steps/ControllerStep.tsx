@@ -304,7 +304,7 @@ export function ControllerButtonsCard() {
         ) : capturing ? (
           <StatusPill tone="live">Press a controller button. Esc cancels; it stops after {CAPTURE_TIMEOUT_S} s</StatusPill>
         ) : (
-          <Hint>Press a slot, then the button you want.</Hint>
+          <Hint>Press a slot, then the button you want. Gear up and gear down together select neutral.</Hint>
         )}
         <Button size="sm" variant="ghost" onClick={() => setShowMap((v) => !v)} aria-expanded={showMap}>
           {showMap ? "Hide map" : "Button map"}

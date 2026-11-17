@@ -320,6 +320,7 @@ export interface DriveKeys {
   toggleX: boolean;
   half: boolean;
   clutch: boolean;
+  neutral: boolean;
 }
 
 /** The instant replay: the recording, and where it is shown from while open */
@@ -550,6 +551,7 @@ export class DriveSession {
       toggleX: false,
       half: false,
       clutch: false,
+      neutral: false,
     };
     /** Ramped keyboard pedals 0..1 (the steering keys are shaped by the car's steering assist) */
     const kbInput = { throttle: 0, brake: 0, clutch: 0 };
@@ -1534,6 +1536,9 @@ export class DriveSession {
         case "shiftDown":
           heldKeys.shiftDown = true;
           break;
+        case "neutral":
+          heldKeys.neutral = true;
+          break;
         case "aero":
           heldKeys.toggleX = true;
           break;
@@ -2181,11 +2186,13 @@ export class DriveSession {
         toggleXMode: heldKeys.toggleX,
         shiftUp: heldKeys.shiftUp,
         shiftDown: heldKeys.shiftDown,
+        neutral: heldKeys.neutral,
         ...(clutchPedal > 0 ? { clutch: clutchPedal } : {}),
       };
       heldKeys.toggleX = false;
       heldKeys.shiftUp = false;
       heldKeys.shiftDown = false;
+      heldKeys.neutral = false;
       // The driver takes the car back from the autopilot with any device (the keys do it on key down): a pedal, the
       // stick, the touch steering pad. Not the wheel's rim, which its force feedback turns on its own.
       if (driving && physics.aiAutopilot && !coolDown.active) {

@@ -532,6 +532,9 @@ export class DeviceInputReader {
       }
     }
 
+    // Gear up and gear down held together are neutral, on a pad and on a wheel's paddles alike: it fires once, when the
+    // second one goes down (the first may have shifted already; neutral wins in the car)
+    if (held.has("shiftUp") && held.has("shiftDown")) held.add("neutral");
     // The input moved to another device (wheel unplugged, a second pad took over): what is already held there is the
     // new baseline, not a press. From no device at all it counts: a browser shows a pad only once a button is pressed
     const switched = this.prevSource !== null && source !== null && source !== this.prevSource;
