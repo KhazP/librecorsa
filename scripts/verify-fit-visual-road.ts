@@ -12,7 +12,7 @@ import * as path from 'node:path';
 import * as THREE from 'three';
 import { fitVisualRoad, inheritedTag } from '../src/lib/render/fit-visual-road';
 import { trackColliders } from '../src/lib/sim/track-colliders';
-import { createGroundHit, type GroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { createGroundHit, TrackColliderQuery, type GroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
@@ -38,17 +38,26 @@ function fitEveryVertex(root: THREE.Object3D, ground: GroundQuery): void {
   const inv = new THREE.Matrix4();
   const v = new THREE.Vector3();
   const seen = new Set<THREE.BufferGeometry>();
+  // Kept-shape meshes (a mod's modelled kerbs) stay as built; on such a circuit the rest goes under the kerbs
+  let shaped = false;
   for (const tm of trackModels(root)) tm.traverse((o) => {
-    if (!(o instanceof THREE.Mesh) || !o.geometry || seen.has(o.geometry)) return;
+    if (o.userData?.keepShape) shaped = true;
+  });
+  const base = shaped && ground instanceof TrackColliderQuery ? ground : null;
+  for (const tm of trackModels(root)) tm.traverse((o) => {
+    if (!(o instanceof THREE.Mesh) || !o.geometry || seen.has(o.geometry) || inheritedTag(o, 'keepShape', root)) return;
     seen.add(o.geometry);
     const pos = o.geometry.getAttribute('position');
     if (!pos) return;
-    const lift = inheritedTag(o, 'decal', root) || inheritedTag(o, 'groove', root) ? 0.002 : 0;
+    const overlay = !!(inheritedTag(o, 'decal', root) || inheritedTag(o, 'groove', root));
+    const lift = overlay ? 0.002 : 0;
+    const under = overlay ? null : base;
     inv.copy(o.matrixWorld).invert();
     let dirty = false;
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
-      if (!ground.query(v.x, v.z, v.y + 0.32, hit) || hit.surface === 'grass' || !(Math.abs(v.y - hit.height) < 0.32)) continue;
+      const found = under ? under.queryBase(v.x, v.z, v.y + 0.32, hit) : ground.query(v.x, v.z, v.y + 0.32, hit);
+      if (!found || hit.surface === 'grass' || !(Math.abs(v.y - hit.height) < 0.32)) continue;
       v.y = hit.height + lift;
       v.applyMatrix4(inv);
       pos.setXYZ(i, v.x, v.y, v.z);

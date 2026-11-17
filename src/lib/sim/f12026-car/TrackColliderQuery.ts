@@ -1144,6 +1144,15 @@ export class TrackColliderQuery implements GroundQuery {
   }
 
   /**
+   * `query`'s ground with the kerbs and sausages left out: the road, run-off or other ground they stand on. False
+   * where there is none but a kerb (or nothing).
+   */
+  queryBase(x: number, z: number, probeY: number, out: GroundHit): boolean {
+    if (!this.query(x, z, probeY, out)) return false;
+    return this.resolve(0, out, true, false);
+  }
+
+  /**
    * `query` for up to `GROUND_QUERY_MANY_MAX` nearby points at once (a tyre's contact patch), each answered exactly as
    * `query` would: points in the same grid cell share one pass over its triangles, the bulk of a query's cost.
    * Returns a bit mask, bit i set when point i has ground (written to `outs[i]`); points from `fullCount` on get only
@@ -1307,9 +1316,9 @@ export class TrackColliderQuery implements GroundQuery {
 
   /**
    * Point `p`'s ground from its scanned candidates (see the class notes), into `out`; false when it has none. Unless
-   * `full`, only its height is written (no normal or surface tags).
+   * `full`, only its height is written (no normal or surface tags). Without `raised`, kerbs and sausages are left out.
    */
-  private resolve(p: number, out: GroundHit, full = true): boolean {
+  private resolve(p: number, out: GroundHit, full = true, raised = true): boolean {
     const c = p * 4;
     const roadH = this.candH[c + CAND_ROAD];
     const roadT = this.candT[c + CAND_ROAD];
@@ -1357,7 +1366,7 @@ export class TrackColliderQuery implements GroundQuery {
     let normalU: number;
     let normalV: number;
     if (baseT >= 0) {
-      if (raisedT >= 0 && raisedH >= baseH - (this.fitted ? SURFACE_MATCH_M : 0) && raisedH <= baseH + 0.6) {
+      if (raised && raisedT >= 0 && raisedH >= baseH - (this.fitted ? SURFACE_MATCH_M : 0) && raisedH <= baseH + 0.6) {
         const maxRise = this.layers[this.triLayer[raisedT]].props.maxRiseM;
         contactT = raisedT;
         contactH = Math.min(Math.max(baseH, raisedH), baseH + maxRise);
@@ -1381,6 +1390,8 @@ export class TrackColliderQuery implements GroundQuery {
         normalU = baseU;
         normalV = baseV;
       }
+    } else if (!raised) {
+      return false;
     } else if (raisedT >= 0) {
       contactT = raisedT;
       contactH = raisedH;
