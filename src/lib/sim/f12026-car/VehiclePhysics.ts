@@ -309,6 +309,11 @@ export interface VehicleInputs {
   /** Edge-triggered */
   shiftUp?: boolean;
   shiftDown?: boolean;
+  /**
+   * Edge-triggered: out of gear, the engine free of the wheels. It wins over a shift in the same step; the next shift
+   * (or the auto box on the throttle) puts a gear back in
+   */
+  neutral?: boolean;
   /** DRS button (edge-triggered toggle) */
   drs?: boolean;
 }
@@ -1138,7 +1143,7 @@ export class VehiclePhysics {
   private wallContactPeakMs = 0;
 
   private timeAccumulator = 0;
-  private prevInputs = { shiftUp: false, shiftDown: false, drs: false };
+  private prevInputs = { shiftUp: false, shiftDown: false, neutral: false, drs: false };
   private drsRequested = false;
   private shiftTimer = 0;
   /** A paddle press that came while a shift was still under way: it is made once that shift is done */
@@ -2062,6 +2067,7 @@ export class VehiclePhysics {
       handbrake: i.handbrake === undefined ? undefined : c(fin(i.handbrake), 0, 1),
       shiftUp: !!i.shiftUp,
       shiftDown: !!i.shiftDown,
+      neutral: !!i.neutral,
       drs: !!i.drs,
     };
   }
@@ -2069,6 +2075,8 @@ export class VehiclePhysics {
   private handleEdges(inp: VehicleInputs): void {
     if (inp.shiftUp && !this.prevInputs.shiftUp) this.paddleShift(1);
     if (inp.shiftDown && !this.prevInputs.shiftDown) this.paddleShift(-1);
+    // After the paddles: both pressed at once (the usual way to ask for neutral) end in neutral, whatever they did first
+    if (inp.neutral && !this.prevInputs.neutral) this.selectNeutral();
     // The flap button: opens the flaps (or keeps the press for the zone ahead, `updateDrs`), shuts them when open, and
     // a second press takes back a kept one
     if (inp.drs && !this.prevInputs.drs) {
@@ -2081,6 +2089,7 @@ export class VehiclePhysics {
     }
     this.prevInputs.shiftUp = !!inp.shiftUp;
     this.prevInputs.shiftDown = !!inp.shiftDown;
+    this.prevInputs.neutral = !!inp.neutral;
     this.prevInputs.drs = !!inp.drs;
   }
 
@@ -2093,8 +2102,25 @@ export class VehiclePhysics {
     if (this.requestShift(this.gear + dir)) this.manualShift.shifted(dir, this.gear);
   }
 
+  /** Takes the gear out at any speed: a shift waiting behind the one under way is dropped */
+  private selectNeutral(): void {
+    this.pendingShift = 0;
+    this.manualShift.clear();
+    if (this.gear === 0) return;
+    this.gear = 0;
+    this.shiftTimer = this.config.gearbox.shiftTimeS;
+    this.onEvent?.({ type: 'GEAR', gear: 0 });
+  }
+
   private requestShift(target: number): boolean {
     const gb = this.config.gearbox;
+    // Out of neutral on the move, either paddle (or the auto box) puts in the gear that fits the road speed, the ECU
+    // matching the revs to it: first gear at speed would throw the engine far past its limit. At a standstill, up is
+    // first and down is reverse
+    if (this.gear === 0) this.updateBasis();
+    const forwardMs = this.gear === 0 ? this.velocity.dot(_ez) : 0;
+    const fromNeutralMoving = forwardMs > 2;
+    if (fromNeutralMoving) target = this.gearForSpeed(forwardMs);
     let g = THREE.MathUtils.clamp(target, -1, gb.ratios.length);
     // A sequential box has no neutral between first and reverse: down from first is reverse (only near standstill,
     // below), up from reverse is first
@@ -2118,6 +2144,7 @@ export class VehiclePhysics {
     }
     this.gear = g;
     this.shiftTimer = down ? (gb.downshiftTimeS ?? gb.shiftTimeS) : gb.shiftTimeS;
+    if (fromNeutralMoving) this.engineOmega = Math.max(this.engineOmega, Math.min(this.roadRpm(g), gb.gears.redline_rpm) * RPM2RADS);
     // The ECU blips the engine up to the new gear's road speed on a downshift, so the closed clutch does not
     // jerk the rear axle down by the engine's inertia (that impulse locked the rears under trail braking).
     // Road speed, not wheel speed: matching spinning wheels would feed the wheelspin.

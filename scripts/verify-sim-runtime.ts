@@ -384,6 +384,14 @@ console.log("\n== The driver's clutch pedal through the messages");
   check("clutch held: the simulation's car revs on the spot", heldKmh < 1 && heldRpm > 2500, `${heldKmh.toFixed(2)} km/h, ${Math.round(heldRpm)} rpm`);
   for (let f = 0; f < 150; f++) frame(r, { throttle: 0.6 });
   check('clutch let go: it drives off', r.car.telemetry.speedKmh > 10, `${r.car.telemetry.speedKmh.toFixed(1)} km/h`);
+  // A neutral press is one press through the messages, and the gear for the speed goes back in on a paddle
+  r.car.autoGearbox = false;
+  frame(r, { throttle: 0, neutral: true });
+  for (let f = 0; f < 30; f++) frame(r, { throttle: 0 });
+  check('neutral press: out of gear in the simulation', r.car.telemetry.gear === 0, `gear ${r.car.telemetry.gear}`);
+  frame(r, { throttle: 0, shiftUp: true });
+  for (let f = 0; f < 10; f++) frame(r, { throttle: 0 });
+  check('a paddle out of neutral on the move: a gear for the speed', r.car.telemetry.gear >= 1, `gear ${r.car.telemetry.gear}, ${r.car.telemetry.speedKmh.toFixed(0)} km/h`);
 }
 
 if (failures.length) {

@@ -37,6 +37,7 @@ export interface ControlInputs {
   toggleXMode: boolean;
   shiftUp: boolean;
   shiftDown: boolean;
+  neutral?: boolean; // One-frame press: out of gear (both shift buttons at once, or the Neutral key / button)
 }
 
 export type CameraMode =

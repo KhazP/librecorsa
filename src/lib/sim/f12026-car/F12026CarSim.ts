@@ -903,6 +903,7 @@ export class F12026CarSim implements SimulatorCar {
   /** A paddle pressed in a frame that ran no tick waits for the next one */
   private shiftUpPending = false;
   private shiftDownPending = false;
+  private neutralPending = false;
   /** The steering rim's position at the last frame (`ControlInputs.steerRim`), its move is spread over this frame's ticks */
   private lastRimSteer: number | null = null;
   private lapStartMs = 0;
@@ -1637,6 +1638,7 @@ export class F12026CarSim implements SimulatorCar {
       toggleXMode: raw.toggleXMode ?? false,
       shiftUp: raw.shiftUp ?? false,
       shiftDown: raw.shiftDown ?? false,
+      neutral: raw.neutral ?? false,
       // The driver's clutch pedal while it is pressed at all; let go, the car works its own clutch
       clutch: Number.isFinite(raw.clutch) && (raw.clutch ?? 0) > 0 ? THREE.MathUtils.clamp(raw.clutch ?? 0, 0, 1) : undefined,
     };
@@ -1681,10 +1683,12 @@ export class F12026CarSim implements SimulatorCar {
     // A press in a frame too short for a tick is kept for the next.
     this.shiftUpPending ||= inputs.shiftUp;
     this.shiftDownPending ||= inputs.shiftDown;
+    this.neutralPending ||= inputs.neutral;
     const drsPress = this.drsPressPending;
     const shiftUp = this.shiftUpPending;
     const shiftDown = this.shiftDownPending;
-    if (ticks > 0) this.drsPressPending = this.shiftUpPending = this.shiftDownPending = false;
+    const neutral = this.neutralPending;
+    if (ticks > 0) this.drsPressPending = this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
     // A steering wheel's rim is read once a frame: its move since the last frame is spread over this frame's ticks, so
     // the rack turns at the rim's own speed rather than in one jump per frame
@@ -1705,7 +1709,8 @@ export class F12026CarSim implements SimulatorCar {
         drs: drsPress || cmd.drs,
         shiftUp,
         shiftDown,
-        // The autopilot drives on the car's own clutch
+        // The autopilot keeps its gear and drives on the car's own clutch
+        neutral: neutral && !this.aiAutopilot,
         clutch: this.aiAutopilot ? undefined : inputs.clutch,
       };
       // A car whose state has blown up hands back a non-finite command: the rack must not keep it past the rescue
@@ -2308,7 +2313,7 @@ export class F12026CarSim implements SimulatorCar {
     this.steeringAssist.reset();
     this.steerCmd = 0;
     this.lastRimSteer = null;
-    this.shiftUpPending = this.shiftDownPending = false;
+    this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
     this.tcCut = this.absCut = 1;
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;

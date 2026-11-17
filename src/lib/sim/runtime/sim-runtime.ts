@@ -65,7 +65,7 @@ export class SimRuntime {
   private car: SimulatorCar | null = null;
   private inputs: Partial<ControlInputs> = {};
   /** One-frame presses (paddles, the X-mode button) waiting for the next tick */
-  private pressed = { shiftUp: false, shiftDown: false, toggleXMode: false };
+  private pressed = { shiftUp: false, shiftDown: false, neutral: false, toggleXMode: false };
   private driving = false;
   private accumulatorS = 0;
   private epoch = 0;
@@ -149,6 +149,7 @@ export class SimRuntime {
         this.inputs = i;
         this.pressed.shiftUp ||= i.shiftUp === true;
         this.pressed.shiftDown ||= i.shiftDown === true;
+        this.pressed.neutral ||= i.neutral === true;
         this.pressed.toggleXMode ||= i.toggleXMode === true;
         this.driving = true;
         return;
@@ -284,10 +285,11 @@ export class SimRuntime {
       const p = this.pressed;
       const held = this.inputs;
       // A press is one tick long: the car sees one edge however many ticks the frame that sent it spans
-      const inputs = p.shiftUp || p.shiftDown || p.toggleXMode || held.shiftUp || held.shiftDown || held.toggleXMode
-        ? { ...held, shiftUp: p.shiftUp, shiftDown: p.shiftDown, toggleXMode: p.toggleXMode }
-        : held;
-      p.shiftUp = p.shiftDown = p.toggleXMode = false;
+      const inputs =
+        p.shiftUp || p.shiftDown || p.neutral || p.toggleXMode || held.shiftUp || held.shiftDown || held.neutral || held.toggleXMode
+          ? { ...held, shiftUp: p.shiftUp, shiftDown: p.shiftDown, neutral: p.neutral, toggleXMode: p.toggleXMode }
+          : held;
+      p.shiftUp = p.shiftDown = p.neutral = p.toggleXMode = false;
       // A race steps as the page steps one: the road under every car, then the player's car (held on the grid
       // until the lights go out), then the field; the field and the road every FIELD_TICKS ticks
       const fieldDtS = FIELD_TICKS * SIM_TICK_S;
