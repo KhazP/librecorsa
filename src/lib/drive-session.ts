@@ -2447,13 +2447,21 @@ export class DriveSession {
         const simStartMs = sessionPerf ? performance.now() : 0;
         // A manual start holds the car on the grid through the lights with its engine live (a race in the worker holds
         // its car there: the controls go on, which keep its clock running); an assisted one stops it
+        // (not while an AI race's grid stands before its lights, after qualifying: the car waits still)
         const gridHeld = raceInWorker
-          ? aiField.playerFrozen && aiField.manualStart
-          : (aiField?.playerFrozen === true && aiField.manualStart) || (mpFrozen && settingsNow.race.launch === "manual");
+          ? aiField.playerFrozen && aiField.manualStart && !aiField.gridStanding
+          : (aiField?.playerFrozen === true && aiField.manualStart && !aiField.gridStanding) || (mpFrozen && settingsNow.race.launch === "manual");
         if (!raceInWorker) physics.gridHold = gridHeld;
         // A jump start: race control's call once the lights are out (+5 s, +10 s for a big one), into an AI race's
         // ledger and feed; an online race serves it with the player's own penalties below
-        const startCall = jumpWatch.update(dtSeconds, gridHeld, physics.telemetry.speedMs, physics.telemetry.race?.position);
+        const startCall = jumpWatch.update(
+          dtSeconds,
+          gridHeld,
+          physics.telemetry.speedMs,
+          physics.telemetry.race?.position,
+          physics.sMeters,
+          track.totalLengthM
+        );
         if (startCall === "jump") console.info(`[race] jump start`);
         if (startCall === "verdict") {
           console.info(`[race] jump start: +${jumpWatch.penaltyS} s at the flag`);

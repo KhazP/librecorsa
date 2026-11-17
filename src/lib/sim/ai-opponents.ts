@@ -1161,6 +1161,10 @@ export class AiOpponentField implements AiRace {
     return this.phase === 'lights';
   }
 
+  get gridStanding(): boolean {
+    return this.phase === 'lights' && this.preStartS > 0;
+  }
+
   /**
    * Lines the field up: AI cars in grid order, the player behind them. A standing start runs the
    * light sequence (five reds one second apart, then a random 0.2–3 s hold); a rolling start

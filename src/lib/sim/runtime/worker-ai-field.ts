@@ -176,6 +176,10 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
     return this.latest?.lightsOn ?? 0;
   }
 
+  get gridStanding(): boolean {
+    return this.phase === "lights" && (this.latest?.countdownS ?? 0) > 0;
+  }
+
   get playerFrozen(): boolean {
     return this.frozen;
   }

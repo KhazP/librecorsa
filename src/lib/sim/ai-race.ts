@@ -43,6 +43,11 @@ export interface AiRace {
   readonly lightsOn: number;
   /** The player is held on the grid until the lights go out */
   readonly playerFrozen: boolean;
+  /**
+   * The grid stands before its first red light (after qualifying, for its order to be read): the player's car stays
+   * still, and a manual start's hold (and its jump-start watch) begins only with the lights
+   */
+  readonly gridStanding?: boolean;
   /** Time penalties the player serves at the flag (track limits), in seconds */
   playerPenaltyS: number;
   /** Disqualified by race control (track limits): out of the race, classified last; cleared by the next start */

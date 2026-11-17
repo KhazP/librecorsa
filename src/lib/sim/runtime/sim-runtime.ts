@@ -314,7 +314,7 @@ export class SimRuntime {
       if (race && race.tick === 0) race.env.update(fieldDtS, race.field.sims());
       // A manual start holds the car on the grid through the lights with its engine live; an assisted one stops it
       const frozen = race?.field.playerFrozen === true;
-      const onGrid = frozen && race!.field.manualStart;
+      const onGrid = frozen && race!.field.manualStart && !race!.field.gridStanding;
       if (race) car.gridHold = onGrid;
       if (!frozen || onGrid) {
         car.step(SIM_TICK_S, inputs);
