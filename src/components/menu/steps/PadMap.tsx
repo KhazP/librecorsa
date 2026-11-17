@@ -281,7 +281,7 @@ export const PadMap: React.FC<{
             key={r.key}
             onPointerEnter={() => setPicked(r.key)}
             onPointerLeave={() => setPicked((p) => (p === r.key ? null : p))}
-            className={`flex min-h-[38px] items-center gap-2.5 rounded-lc-nub px-1.5 transition-colors duration-100 ${
+            className={`flex min-h-[38px] items-center gap-2.5 rounded-lc-nub px-1.5 ${
               lit ? "bg-lc-volt/8" : picked === r.key ? "bg-white/5" : ""
             }`}
           >

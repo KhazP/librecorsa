@@ -62,7 +62,7 @@ export function TextField({
       <div
         data-cursor={forceCursor ? "" : undefined}
         className={cx(
-          "flex min-w-0 gap-2.5 rounded-lc-row border bg-lc-well px-3.5 transition-[border-color,box-shadow] duration-200 ease-lc",
+          "flex min-w-0 gap-2.5 rounded-lc-row border bg-lc-well px-3.5 transition-[border-color,box-shadow] duration-200 ease-lc in-data-[input=keyboard]:transition-none in-data-[input=pad]:transition-none",
           multiline ? "items-start py-2.5" : "h-11 items-center",
           "focus-within:border-lc-volt focus-within:shadow-lc-focus data-cursor:border-lc-volt data-cursor:shadow-lc-focus",
           error ? "border-lc-loss" : "border-lc-line hover:border-lc-keyline",

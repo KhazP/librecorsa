@@ -904,8 +904,8 @@ const CornerChart: React.FC<{ corners: CornerStat[]; units: UnitSettings }> = ({
                   onFocus={() => setPicked(i)}
                 >
                   <span
-                    className={`lc-grow block w-full ${skin !== null ? skinCss.radiusSm : "rounded-full"} ${i === sel ? "ring-2 ring-lc-chalk" : ""}`}
-                    style={{ height: `${pct}%`, background: d.bar, animationDelay: `${i * 25}ms` }}
+                    className={`block w-full ${skin !== null ? skinCss.radiusSm : "rounded-full"} ${i === sel ? "ring-2 ring-lc-chalk" : ""}`}
+                    style={{ height: `${pct}%`, background: d.bar }}
                   />
                 </button>
               );

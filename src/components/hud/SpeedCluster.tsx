@@ -116,7 +116,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
       return (
         <span
           key={i}
-          className={`flex-1 rounded-full bg-white/7 transition-colors duration-75 ${cls}`}
+          className={`flex-1 rounded-full bg-white/7 ${cls}`}
           style={active ? { backgroundColor: flash ? HUD_SHIFT : ledColor(i) } : undefined}
         />
       );
@@ -223,7 +223,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
             </span>
           </div>
           <span
-            className="flex size-19 items-center justify-center rounded-full text-lc-void transition-colors"
+            className="flex size-19 items-center justify-center rounded-full text-lc-void"
             style={{ backgroundColor: gearRing }}
             aria-label={`Gear ${gear}`}
           >
@@ -271,7 +271,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
         </div>
 
         <div
-          className="flex h-20 w-17.5 flex-none flex-col items-center justify-center rounded-lc-card border-2 bg-lc-well transition-colors"
+          className="flex h-20 w-17.5 flex-none flex-col items-center justify-center rounded-lc-card border-2 bg-lc-well"
           style={{ borderColor: gearRing }}
         >
           <span className={HUD_LBL}>Gear</span>
@@ -285,7 +285,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
           >
             {/* Scales from the bottom (transform only, so the bar never re-lays out) */}
             <span
-              className="absolute inset-0 origin-bottom bg-lc-info transition-transform"
+              className="absolute inset-0 origin-bottom bg-lc-info transition-transform duration-100 ease-linear"
               style={{ transform: `scaleY(${ers / 100})` }}
             />
           </span>

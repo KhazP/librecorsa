@@ -9,8 +9,12 @@
 /** Joins class names, dropping the empty ones */
 export const cx = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(" ");
 
-/** One timing for every state change: 200 ms on the house curve */
-export const MOTION = "transition-[background-color,border-color,box-shadow,color,opacity] duration-200 ease-lc";
+/** One timing for every state change: 200 ms on the house curve. A pad or keyboard move lands at once, and the item it
+ * left lets go at once; under the mouse the fade stays */
+export const MOTION = cx(
+  "transition-[background-color,border-color,box-shadow,color,opacity] duration-200 ease-lc",
+  "in-data-[input=keyboard]:transition-none in-data-[input=pad]:transition-none",
+);
 
 /** A pill, segment or tab the setting is on: raised, white text, a lit hairline */
 export const CHOSEN_PILL = "bg-lc-line text-lc-chalk inset-ring inset-ring-white/28";

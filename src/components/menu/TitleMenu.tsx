@@ -862,7 +862,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             </nav>
 
             <section ref={panelRef} className="min-h-0 min-w-0 scroll-mt-4" data-nav-zone="panel" aria-label={panelTitle}>
-              <div key={panel} className="lc-panel-in">
+              <div key={panel}>
                 <PanelFrame
                   subtitle={panelSubtitle[panel]}
                   title={panel === "request" ? undefined : panelTitle}

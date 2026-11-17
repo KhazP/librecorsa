@@ -131,7 +131,7 @@ export const BrakeBar: React.FC<{ c: CornerData; className?: string }> = ({ c, c
       }`}
     >
       <span
-        className="absolute inset-0 origin-bottom rounded-full transition-transform duration-150"
+        className="absolute inset-0 origin-bottom rounded-full transition-transform duration-100 ease-linear"
         style={{ transform: `scaleY(${frac})`, backgroundColor: color }}
       />
       {coreFrac !== null ? (

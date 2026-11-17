@@ -840,14 +840,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           <SkinBanner
             role="status"
             cut="sm"
-            className="lc-panel-in absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center px-4 text-[13px] font-semibold"
+            className="absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center px-4 text-[13px] font-semibold"
           >
             HUD hidden{props.hudToggleButton ? ` · ${props.hudToggleButton} brings it back` : ""}
           </SkinBanner>
         ) : (
           <div
             role="status"
-            className={`lc-panel-in absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center rounded-full px-4 lc-title text-[13px] text-lc-chalk ${HUD_GLASS}`}
+            className={`absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center rounded-full px-4 lc-title text-[13px] text-lc-chalk ${HUD_GLASS}`}
           >
             HUD hidden{props.hudToggleButton ? ` · ${props.hudToggleButton} brings it back` : ""}
           </div>
