@@ -159,8 +159,9 @@ AC_TRACKS = {
         'layout_dir': 'circuit_full',
         'modelledKerbs': True,
         # Issue #113: the road and run-off outside Remus (s 1254-1324) laid on the mod's drawn ground, where this
-        # build's lie up to 0.8 m under it (made on the 7 Nov 2026 build, which this source rebuilds vertex for vertex)
-        'physicsPatches': ('scripts/tracks/patches/spielberg-remus-v2.json',),
+        # build's lie up to 0.8 m under it (made on this build without the patch, which this source rebuilds vertex
+        # for vertex)
+        'physicsPatches': ('scripts/tracks/patches/spielberg-remus-v3.json',),
         'models_ini': 'models_circuit_full.ini',
         'name': 'Red Bull Ring',
         'layout': 'Grand Prix layout',
