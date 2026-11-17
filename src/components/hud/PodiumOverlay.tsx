@@ -41,7 +41,7 @@ export const PodiumOverlay: React.FC<{ rows: readonly PodiumRow[]; trackName: st
                 <span className="inline-flex max-w-full items-center gap-2">
                   {/* The team's colour: data */}
                   <span aria-hidden className="h-4 w-1 shrink-0 rounded-full" style={{ backgroundColor: r.teamColorHex }} />
-                  <span className={`truncate font-bold ${r.position === 1 ? "text-[17px] sm:text-[22px]" : "text-[15px] sm:text-[18px]"}`}>
+                  <span className={`line-clamp-2 font-bold break-words ${r.position === 1 ? "text-[17px] sm:text-[22px]" : "text-[15px] sm:text-[18px]"}`}>
                     {r.name}
                   </span>
                 </span>

@@ -13,7 +13,7 @@ import type {
   TyreSetup,
   VehicleModelId,
 } from "@/types/f1";
-import { ACTIVE_TRACK_ID, TURN_METADATA, activeLapWord, getActiveTimedLengthM, getTrackData } from "@/lib/track-data";
+import { ACTIVE_TRACK_ID, TURN_METADATA, activeLapWord, getActiveTimedLengthM, getTrackData, inDeadZone } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 import type { ChassisSetup } from "@/lib/sim/car-setup";
 import type { RaceSetup } from "@/lib/sim/race-setup";
@@ -173,7 +173,7 @@ const MadeBy: React.FC<{ trackSource: ReturnType<typeof trackModelSource>; carId
     <div className="mt-4 flex flex-wrap items-center justify-end gap-x-6 gap-y-2 short:mt-2">
       {items.map((i) => (
         <span key={i.key} className="inline-flex min-w-0 items-center gap-2 text-[13px] text-lc-slate">
-          <span className="truncate">
+          <span className="truncate" title={`${i.lead} ${i.source.author}`}>
             {i.lead} <span className="font-semibold text-lc-fog">{i.source.author}</span>
           </span>
           <SourceChip source={i.source} />
@@ -532,7 +532,9 @@ const cornerName = (name: string) => name.replace(/^Turn \d+\s*[—-]\s*/, "");
 /** The active circuit's outline, start line and corner positions, fitted to an SVG viewBox */
 function buildCornerMap() {
   const track = getTrackData();
-  const samples = track.samples;
+  // A hill climb's road is open: no closing stretch (its dead zone has no road), as the minimap draws it
+  const p2p = track.pointToPoint;
+  const samples = p2p ? track.samples.filter((s) => !inDeadZone(p2p, s.s)) : track.samples;
   let minX = Infinity;
   let maxX = -Infinity;
   let minZ = Infinity;
@@ -552,9 +554,11 @@ function buildCornerMap() {
   let d = "";
   for (let i = 0; i < samples.length; i += 2) {
     const p = pt(samples[i].position.x, samples[i].position.z);
-    d += `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+    // A gap in the road (the dead zone's edges) starts a new stroke rather than a line across it
+    const jump = i > 0 && !!p2p && Math.abs(samples[i].s - samples[i - 2].s) > 30;
+    d += `${i === 0 || jump ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
   }
-  d += "Z";
+  if (!p2p) d += "Z";
 
   // Start / finish: a short bar across the track, perpendicular to the direction of travel
   const sf = track.getSampleAtDistance(0);
