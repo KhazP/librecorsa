@@ -102,7 +102,6 @@ import {
   keyLabel,
   PAD_BRAKE_BUTTON,
   PAD_THROTTLE_BUTTON,
-  padButtonLabel,
   pedalsOnTriggers,
   pedalSourceText,
   type KeyAction,
@@ -119,7 +118,17 @@ import { applyTimeTrial, lowestFuelSetup, timeTrialRealism, type TimeTrialRules 
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import { clampFov, DEFAULT_KEYBOARD_TUNING, type PlayerSettings } from "@/lib/settings/player-settings";
 import { noteDrivingFrame, noteDrivingInput, noteFrameGraphics } from "@/lib/render/frame-stats";
-import type { AeroSetupPreset, CameraMode, CarTelemetry, LiveTunerPatch, RadarBlip, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
+import type {
+  AeroSetupPreset,
+  CameraMode,
+  CarTelemetry,
+  LiveTunerPatch,
+  RadarBlip,
+  StartClutchControl,
+  TireCompound,
+  TyreSetup,
+  VehicleModelId,
+} from "@/types/f1";
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
 export const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
@@ -573,6 +582,8 @@ export class DriveSession {
     const jumpWatch = new JumpStartWatch();
     const startClutch = { active: false };
     let gridHeldLastFrame = false;
+    /** How far the player held the clutch in on the last step (0..1), for the start cue */
+    let startClutchIn = 0;
     /** Slip help on the keyboard's pedals while the car's ABS / traction control is off */
     const kbPedalAssist = new KeyboardPedalAssist();
     /** The mouse's steering, -1..1, while mouse steering is on */
@@ -1748,6 +1759,7 @@ export class DriveSession {
       jumpWatch.reset();
       startClutch.active = false;
       gridHeldLastFrame = false;
+      startClutchIn = 0;
       kbInput.padClutch = 0;
       // Race control and the cameras start over with the run (the car is about to be put somewhere else)
       trackLimits.reset(limitsSessionOf(raceNow()));
@@ -2162,20 +2174,23 @@ export class DriveSession {
       if (gridHeldLastFrame && !clutchBound) startClutch.active = true;
       // What the start cue tells the player to hold
       const kbClutchKey = settingsNow.keys.clutch[0];
-      const startClutchName =
+      const padGearUp = settingsNow.padButtons.shiftUp;
+      const startClutchControl: StartClutchControl =
         device.source === "controller" && padClutchSource !== null
           ? padClutchSource.kind === "button"
-            ? padButtonLabel(padClutchSource.button)
-            : pedalSourceText(padClutchSource)
+            ? { pad: padClutchSource.button }
+            : { name: pedalSourceText(padClutchSource) }
           : device.source === "wheel" && settingsNow.wheel.clutch !== null
-            ? "the clutch pedal"
+            ? { name: "clutch pedal" }
             : kbClutchKey
-              ? keyLabel(kbClutchKey)
+              ? { key: keyLabel(kbClutchKey) }
               : device.source === "controller"
-                ? padButtonLabel(settingsNow.padButtons.shiftUp)
+                ? padGearUp !== null
+                  ? { pad: padGearUp }
+                  : { name: "Gear up" }
                 : device.source === "wheel"
-                  ? "the upshift paddle"
-                  : keyLabel(settingsNow.keys.shiftUp[0]);
+                  ? { name: "upshift paddle" }
+                  : { key: keyLabel(settingsNow.keys.shiftUp[0]) };
       const gearUpHeld = heldKeys.gearUpHeld || device.held?.has("shiftUp") === true;
       // A button as the clutch (a controller button other than a trigger, Gear up at a start) presses at once and lets
       // out over the key clutch's time: letting go slips the clutch, it does not dump it
@@ -2337,6 +2352,7 @@ export class DriveSession {
           console.info(`[race] jump start: +${JUMP_START_PENALTY_S} s at the flag`);
         }
         gridHeldLastFrame = gridHeld;
+        startClutchIn = inputs.clutch ?? 0;
         if (raceInWorker || (!aiField?.playerFrozen && !mpFrozen) || gridHeld) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
         aiField?.update(dtSeconds);
         if (sessionPerf) frameSimMs = performance.now() - simStartMs;
@@ -2398,7 +2414,7 @@ export class DriveSession {
       // The manual start's cue: what to hold as the clutch, and a jump start once there is one
       physics.telemetry.start =
         gridHeldLastFrame || jumpWatch.jumped || startClutch.active
-          ? { held: gridHeldLastFrame, jumped: jumpWatch.jumped, clutch: startClutchName }
+          ? { held: gridHeldLastFrame, jumped: jumpWatch.jumped, clutch: startClutchControl, clutchIn: startClutchIn }
           : undefined;
 
       // Track limits: in a race, race control judges each excursion once the car is back on the asphalt (warnings,

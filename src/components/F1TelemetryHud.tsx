@@ -589,7 +589,6 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         {/* The touch controls carry their own pause button */}
         {style && !touch ? menuButton : null}
         <StartLights race={race} />
-        <LaunchCue telemetry={telemetry} />
         {/* The ±1 s ribbon sits under every preset except the Phone HUD, whose speed pod owns this spot, and the
             layouts that show the delta up here themselves */}
         {hud?.deltaBar && !phone && !style?.ownDeltaBar && !lightsPhase ? <DeltaBar deltaS={deltaS} runId={telemetry.runId ?? 0} /> : null}
@@ -712,6 +711,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           )
         ) : null}
       </div>
+      </div>
+
+      {/* A manual start's checklist on the right edge, between the right-hand corners, as the F1 games place it: the
+          centre stays the lights' own */}
+      <div className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 sm:right-4">
+        <div style={corner("center right")}>
+          <LaunchCue telemetry={telemetry} />
+        </div>
       </div>
 
       {hudHidden ? null : (
