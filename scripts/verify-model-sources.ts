@@ -51,7 +51,7 @@ check(
     })
 );
 check(
-  "NPanic's Chaparrals: his PayPal first, his name to his profile, the title to the mod, every creator named",
+  "NPanic's Chaparrals: NPanic's PayPal first, the name to the OverTake profile, the title to the mod, every creator named",
   !hosted("chaparral-2d", "chaparral-2d-67") ||
     (["chaparral-2d", "chaparral-2d-67"] as const).every((id) => {
       const s = carModelSource(carById(id));

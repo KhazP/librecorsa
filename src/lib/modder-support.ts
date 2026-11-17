@@ -23,7 +23,7 @@ export const MODDER_SUPPORT: Readonly<Record<string, SupportLink>> = {
   "Purple Sector": { url: "https://www.patreon.com/cw/PurpleSector", via: "Patreon" },
   Nukedrop: { url: "https://www.patreon.com/cw/nukedrop/", via: "Patreon" },
   dazzyb2k3: { url: "https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=XT8V5ELVZTGGQ", via: "PayPal" },
-  // The donation link he gave with the Chaparral 2D
+  // The donation link NPanic gave with the Chaparral 2D
   NPanic: { url: "https://paypal.me/NPanic97", via: "PayPal" },
 };
 

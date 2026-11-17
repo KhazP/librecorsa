@@ -185,7 +185,7 @@ const pfalzdriver = (title: string, url: string): CarCredit => ({
 });
 
 /**
- * NPanic's Chaparral 2Ds, model, liveries, sound and physics, used with his permission (CREDITS.md). The mod's page
+ * NPanic's Chaparral 2Ds, model, liveries, sound and physics, used with NPanic's permission (CREDITS.md). The mod's page
  * names everyone whose work is in it; the car card shows them with the source
  */
 const NPANIC_CHAPARRAL_URL = "https://www.overtake.gg/downloads/1966-1967-chaparral-2d.79525/";
