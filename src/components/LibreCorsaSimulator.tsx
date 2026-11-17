@@ -1334,9 +1334,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (race && session) {
         // The field for the car now on track, over the week's race distance
         const field = session.takeAiField();
-        session.setRace({ kind: "ai", field });
+        // The same rules for everyone: the car class's, with track limits on
+        session.setRace({ kind: "ai", field, rules: { rulePreset: "auto", trackLimits: "auto" } });
         // No damage, as in an open race with other drivers (their cars take none)
-        startAiRace(field, { ...settingsRef.current.race, laps: week.race.laps, start: "standing", damage: "off" });
+        startAiRace(field, { ...settingsRef.current.race, laps: week.race.laps, startMode: "standing", damage: "off" });
       } else {
         // polish:A — the time trial: its fixed tyre, fuel and road, from a flying start
         session?.setTimeTrial(timeTrialRules(week.vehicle));
