@@ -95,7 +95,7 @@ import {
 } from "@/lib/render/adaptive-quality";
 import { pageBuild } from "@/lib/build-id";
 import { addContactShadow, seatContactShadow } from "@/lib/render/contact-shadow";
-import { buildKeyLookup, HUD_TOGGLE_EVENT, type KeyAction } from "@/lib/input/bindings";
+import { buildKeyLookup, HUD_TOGGLE_EVENT, pedalsOnTriggers, type KeyAction } from "@/lib/input/bindings";
 import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { simMode } from "@/lib/sim/runtime/sim-mode";
@@ -2275,8 +2275,11 @@ export class DriveSession {
       if (mpRace && mpFrame && mpFrame.phase === "racing" && !frozen) {
         mpRace.lapClock.update(physics.sMeters, mpFrame.raceTimeS, mpRace.start.laps, mpRace.flagOut);
       }
+      // With the pedals off the triggers (stick pedals) they shift gears: no ABS or wheelspin in them, no brake-pedal
+      // resistance in L2
+      const triggerPedals = pedalsOnTriggers(padTuning.pedalSources);
       haptics.update(physics.telemetry, dtSeconds, rumbleEnabled && driving, {
-        triggerRumble: padTuning.triggerRumble,
+        triggerRumble: padTuning.triggerRumble && triggerPedals,
         triggerSlipAlwaysOn: padTuning.triggerSlipAlwaysOn,
         skipPad: ownedByDualSense,
       });
@@ -2285,6 +2288,7 @@ export class DriveSession {
         rumbleOn: rumbleEnabled,
         settings: settingsNow.dualSense,
         triggerSlipAlwaysOn: padTuning.triggerSlipAlwaysOn,
+        triggerPedals,
         driverColor: settingsNow.profile.color,
         vehicle: vehicleNow,
       });

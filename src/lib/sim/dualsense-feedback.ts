@@ -60,6 +60,8 @@ export interface DualSenseFrameInput {
   settings: DualSenseSettings;
   /** Trigger limit buzz even with ABS / traction control on */
   triggerSlipAlwaysOn: boolean;
+  /** False when the pedals are on the right stick: L2 / R2 shift gears then, so they get no resistance or buzz */
+  triggerPedals?: boolean;
   /** The driver colour (#RRGGBB) */
   driverColor: string;
   /** The HD haptics synth is playing: the rumble emulation stays off so it does not take the actuators over */
@@ -202,7 +204,7 @@ export class DualSenseFeedback {
     const low = layerRumble(strong, KERB_LOW_MOTOR * kerbHit);
     const rumble = input.hdHaptics ? null : { low: clamp01(low * rumbleGain), high: clamp01(weak * rumbleGain) };
 
-    const triggers = settings.adaptiveTriggers;
+    const triggers = settings.adaptiveTriggers && input.triggerPedals !== false;
     const leftTrigger = triggers ? this.hold("left", brakeTriggerEffect(t, settings.triggerStrength, tc)) : TRIGGER_OFF;
     const rightTrigger = triggers ? this.hold("right", throttleTriggerEffect(t, settings.triggerStrength, tc)) : TRIGGER_OFF;
 

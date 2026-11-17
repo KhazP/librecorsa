@@ -1,4 +1,4 @@
-import { keyLabel, PAD_PEDALS } from "@/lib/input/bindings";
+import { keyLabel, PAD_PEDALS, pedalsOnTriggers } from "@/lib/input/bindings";
 import { PAD_SENSITIVITY } from "@/lib/input/device-input";
 import { isTouchDevice, requestTiltPermission } from "@/lib/input/touch-input";
 import { ALL_CAMERA_MODES, CAMERA_MODES } from "@/lib/render/camera-modes";
@@ -222,6 +222,9 @@ export const vibration = toggle({
 /** Steering speed and the inner dead zone start from the chosen steering feel */
 const feel = (env: SettingsEnv) => PAD_SENSITIVITY[env.settings.padSensitivity];
 
+/** With the pedals off the triggers (stick pedals), the triggers shift gears: nothing pulses in them */
+export const needsTriggerPedals = (env: SettingsEnv) =>
+  pedalsOnTriggers(env.settings.padTuning.pedalSources) ? null : "Needs the pedals on the triggers";
 const onStick = (env: SettingsEnv) => PAD_PEDALS.some((p) => env.settings.padTuning.pedalSources[p]?.kind === "axis");
 
 export const controllerFineTuning: RowDef[] = [
@@ -282,6 +285,7 @@ export const triggerRumble = toggle({
   label: "Trigger rumble",
   hint: "Slip and ABS pulses in the brake trigger, wheelspin in the throttle trigger, on controllers that have them",
   advanced: true,
+  off: needsTriggerPedals,
   ...pad("triggerRumble"),
 });
 
@@ -290,7 +294,7 @@ export const triggerSlip = toggle({
   label: "Trigger slip with ABS and TC on",
   hint: "Tyre-slip vibration in the triggers even while ABS and traction control are on",
   advanced: true,
-  off: (env) => (env.settings.padTuning.triggerRumble ? null : "Needs Trigger rumble on"),
+  off: (env) => needsTriggerPedals(env) ?? (env.settings.padTuning.triggerRumble ? null : "Needs Trigger rumble on"),
   ...pad("triggerSlipAlwaysOn"),
 });
 

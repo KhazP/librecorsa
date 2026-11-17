@@ -12,6 +12,8 @@ export interface DualSenseDriveOptions {
   rumbleOn: boolean;
   settings: DualSenseSettings;
   triggerSlipAlwaysOn: boolean;
+  /** False with stick pedals: the triggers shift gears and stay free */
+  triggerPedals?: boolean;
   driverColor: string;
   vehicle?: string;
 }

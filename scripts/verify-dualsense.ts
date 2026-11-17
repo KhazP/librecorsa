@@ -282,6 +282,14 @@ check('adaptive triggers off: both free while driving', () => {
   assert.deepEqual(f.output.leftTrigger, { mode: 'off' });
   assert.deepEqual(f.output.rightTrigger, { mode: 'off' });
 });
+check('stick pedals: L2 / R2 shift gears, so they stay free through ABS and wheelspin', () => {
+  const absTelemetry = cruise({ brake: 0.9, throttle: 0, wheelSlipRatios: [-0.2, -0.2, -0.1, -0.1], f12026: { absActive: true } });
+  assert.equal(frame(absTelemetry).output.leftTrigger?.mode, 'vibration', 'the same ABS stop buzzes L2 on trigger pedals');
+  assert.deepEqual(frame(absTelemetry, { triggerPedals: false }).output.leftTrigger, { mode: 'off' });
+  const spin = frame(cruise({ throttle: 1, wheelSlipRatios: [0, 0, 0.4, 0.4] }), { triggerPedals: false });
+  assert.deepEqual(spin.output.rightTrigger, { mode: 'off' });
+  assert.notDeepEqual(frame(cruise({ brake: 0.9 }), { triggerPedals: true }).output.leftTrigger, { mode: 'off' }, 'trigger pedals keep them');
+});
 check('rumble follows the motors and its strength; off with the rumble switch', () => {
   const t = cruise({ wheelSlipRatios: [-0.45, -0.45, 0, 0] });
   const on = frame(t);

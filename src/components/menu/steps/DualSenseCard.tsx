@@ -5,6 +5,8 @@ import { Button, SettingRow } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { useSettingsEnv } from "@/components/settings/env";
 import { choice, lens, pct, pctOrOff, SettingsCard, slider, toggle, type RowDef } from "@/components/settings/fields";
+import { needsTriggerPedals } from "@/components/settings/defs";
+import { pedalsOnTriggers } from "@/lib/input/bindings";
 import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { dualSenseAudioHaptics } from "@/lib/input/dualsense-audio-haptics";
 import { isDualSensePadId, slopeZones, TRIGGER_OFF } from "@/lib/input/dualsense-protocol";
@@ -32,6 +34,8 @@ const adaptiveTriggers = toggle({
   id: "dualSenseTriggers",
   label: "Adaptive triggers",
   hint: "L2 firms up like a brake pedal; ABS, lock-ups and wheelspin buzz in L2 and R2",
+  // With stick pedals L2 / R2 shift gears: they stay free
+  off: needsTriggerPedals,
   ...ds("adaptiveTriggers"),
 });
 
@@ -144,6 +148,8 @@ export function testDualSenseRumble(settings: DualSenseSettings) {
 export function DualSenseCard() {
   const { settings } = useSettingsEnv();
   const d = settings.dualSense;
+  /** The triggers firm up and buzz: switched on, and the pedals are on them */
+  const triggerFeedback = d.adaptiveTriggers && pedalsOnTriggers(settings.padTuning.pedalSources);
   const status = useSyncExternalStore(dualSenseHid.subscribe, dualSenseHid.getStatus, dualSenseHid.getStatus);
   const audio = useSyncExternalStore(dualSenseAudioHaptics.subscribe, dualSenseAudioHaptics.getStatus, dualSenseAudioHaptics.getStatus);
   const pads = useGamepads();
@@ -208,7 +214,7 @@ export function DualSenseCard() {
 
   const rows: RowDef[] = [
     adaptiveTriggers,
-    ...(d.adaptiveTriggers ? [triggerFeel] : []),
+    ...(triggerFeedback ? [triggerFeel] : []),
     hdHaptics,
     ...(hd ? [hapticStrength, engineHaptics] : [rumbleStrength]),
     lightbar,
@@ -232,7 +238,7 @@ export function DualSenseCard() {
       }
     >
       {audio.state === "error" && audio.message ? <StatusPill tone="info">{audio.message}</StatusPill> : null}
-      {d.adaptiveTriggers ? (
+      {triggerFeedback ? (
         <SettingRow label="Test triggers" hint="L2 and R2 stiffen, then buzz">
           <Button size="sm" variant="secondary" onClick={() => testTriggers(d.triggerStrength)}>
             Test
