@@ -111,9 +111,12 @@ export function fuelLapsLeft(fuelKg: number, perLapKg: number | null): number | 
   return fuelKg / perLapKg;
 }
 
-/** A driver as a short label: the multiplayer name, else the three-letter code; the player is "You" */
+/**
+ * A driver as a short label: the multiplayer name, else the three-letter code. The player is "You" online, where the
+ * others go by name, and goes by their own code against the AI, as the field does
+ */
 export function driverLabel(e: Pick<RaceStandingEntry, "isPlayer" | "name" | "driverCode">, you = "You"): string {
-  if (e.isPlayer) return you;
+  if (e.isPlayer) return e.name === undefined ? e.driverCode : you;
   return e.name?.trim() || e.driverCode;
 }
 

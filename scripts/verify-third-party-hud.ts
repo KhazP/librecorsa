@@ -116,7 +116,8 @@ check('a completed lap: an untimed sector stays empty', completedLap(1, 95_000, 
 
 check('fuel: laps the tank lasts', fuelLapsLeft(30, 2.5) === 12);
 check('fuel: unknown before a lap is measured', fuelLapsLeft(30, null) === null && fuelLapsLeft(30, 0) === null);
-check('names: the player is You', driverLabel({ isPlayer: true, driverCode: 'TST' }) === 'You');
+check('names: the player is You online', driverLabel({ isPlayer: true, driverCode: 'TST', name: 'Tester' }) === 'You');
+check('names: the player goes by their code against the AI', driverLabel({ isPlayer: true, driverCode: 'TST' }) === 'TST');
 check('names: an online name before the code', driverLabel({ isPlayer: false, driverCode: 'ABC', name: ' Sam ' }) === 'Sam');
 check('names: the code otherwise', driverLabel({ isPlayer: false, driverCode: 'ABC' }) === 'ABC');
 check('clock: minutes and seconds', formatClock(754.9) === '12:34');
