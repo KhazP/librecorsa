@@ -469,6 +469,11 @@ export interface CarTelemetry {
   /** Present while racing the AI opponents */
   race?: RaceStatus;
   /**
+   * A manual standing start, set by the app shell: the car held on the grid through the lights, a jump start, and
+   * the control the player holds as the clutch ("RB", "E", "the clutch pedal")
+   */
+  start?: { held: boolean; jumped: boolean; clutch: string };
+  /**
    * Run counter, set by the app shell: it goes up whenever the run restarts (a new session, a restart, a
    * teleport, a car change). Anything that keeps lap- or run-scoped state resets when it changes,
    * instead of guessing a restart from the lap count or distance.

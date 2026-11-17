@@ -39,6 +39,7 @@ import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
 import { DEFAULT_DEVICE_ASSIST_TUNING, sanitizeAssistTuning, type DeviceAssistTuning } from "@/lib/sim/steering-assist";
 import { DEFAULT_HUD_PRESET, parseHudPreset, type HudPreset } from "@/lib/settings/hud-layouts";
 import { SIM_REALISM_LEVELS, type SimRealism } from "@/lib/sim/sim-realism";
+import { RACE_START_MODES, type RaceStartMode } from "@/lib/sim/race-start";
 import { DEFAULT_SESSION_CONDITIONS, sanitizeConditions, type SessionConditions } from "@/lib/sim/weather";
 
 export interface PlayerSettings {
@@ -80,6 +81,8 @@ export interface PlayerSettings {
   race: RaceSetup;
   /** Simulation realism: tyre wear, temperature grip, fuel use and how hard rain bites (Full = the whole model) */
   realism: SimRealism;
+  /** Standing starts: assisted (the car waits on the grid) or manual (held with the engine live, the clutch the player's) */
+  raceStarts: RaceStartMode;
   /** Weather, time of day and time multiplier for offline sessions (the host's apply online) */
   conditions: SessionConditions;
   /** Starred and recently chosen cars and circuits (the car and circuit browsers) */
@@ -503,6 +506,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   aiSkill: AI_SKILL_DEFAULT,
   race: DEFAULT_RACE_SETUP,
   realism: "full",
+  raceStarts: "assisted",
   conditions: DEFAULT_SESSION_CONDITIONS,
   library: DEFAULT_CONTENT_LIBRARY,
   audio: DEFAULT_AUDIO_SETTINGS,
@@ -885,6 +889,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     aiSkill: Math.round(num(raw.aiSkill, 0, 100, d.aiSkill)),
     race: parseRaceSetup(raw.race),
     realism: oneOf(raw.realism, SIM_REALISM_LEVELS, d.realism),
+    raceStarts: oneOf(raw.raceStarts, RACE_START_MODES, d.raceStarts),
     conditions: sanitizeConditions(raw.conditions),
     library: parseLibrary(raw.library),
     audio: parseAudio(raw.audio),

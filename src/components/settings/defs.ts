@@ -136,6 +136,20 @@ export const realism = choice("segmented", {
   ...top("realism"),
 });
 
+export const raceStarts = choice("segmented", {
+  id: "raceStarts",
+  label: "Race starts",
+  hint: (env) =>
+    env.settings.raceStarts === "manual"
+      ? "Hold the clutch and the revs through the lights, let it go at lights out. Early is a jump start: +5 s"
+      : "The car waits on the grid and pulls away on the throttle at lights out",
+  options: [
+    { id: "assisted", label: "Assisted" },
+    { id: "manual", label: "Manual" },
+  ],
+  ...top("raceStarts"),
+});
+
 export const ghost = toggle({
   id: "ghost",
   label: "Race my best-lap ghost",
