@@ -211,6 +211,8 @@ export interface RaceStandingEntry {
   penaltyS?: number;
   /** Out of the race (terminal damage) */
   retired?: boolean;
+  /** Disqualified by race control */
+  dq?: boolean;
   /** Damage 0..1 (absent: none) */
   damage?: number;
 }
@@ -232,6 +234,8 @@ export interface RaceResultEntry {
   bestLapMs: number | null;
   /** Still running when the classification closed */
   dnf: boolean;
+  /** Disqualified (shown in place of the DNF) */
+  dq?: boolean;
   /** Time penalties added to the race time (s), already included in `finishTimeS` and `gapS` */
   penaltyS?: number;
   /** Track-limits warnings received (the player's own) */
@@ -269,6 +273,12 @@ export interface RaceStatus {
   raceControl?: RaceControlFeedMessage[];
   /** The player is coming up on a yellow flag */
   yellow?: boolean;
+  /** … and it is a double yellow (a car stopped on the road, or more than one incident) */
+  doubleYellow?: boolean;
+  /** Blue flag: the car lapping the player is close behind (its code) */
+  blueFlag?: string;
+  /** A place the player owes back after passing under yellow: to whom, and the time left to give it back */
+  giveBack?: { code: string; double: boolean; remainingS: number; progress: number };
   /** The player's car damage (absent: none, or damage off) */
   damage?: PlayerDamageStatus;
 }
@@ -501,6 +511,18 @@ export interface TrackLimitsStatus {
   totalStrikes: number;
   /** Time penalties awarded (s) */
   penaltyS: number;
+  /**
+   * A race on a points ladder (race-rules.ts): its points so far against the allowance; `warnings` / `strikesPerPenalty`
+   * then hold the meter towards the next step. Absent: the strike ladder of before, or not a race
+   */
+  ladder?: {
+    scoring: 'four_strike' | 'weighted_pts';
+    points: number;
+    pointsAllowed: number;
+    /** Within a point of the next step: the black-and-white flag is out */
+    blackWhite: boolean;
+    disqualified: boolean;
+  };
   /** An excursion in progress or being judged: what the driver must still give back */
   pending: {
     /** "off": still off the track; "judging": back on, settling; "give_back": must give the time / lift / position back */
@@ -515,7 +537,7 @@ export interface TrackLimitsStatus {
   } | null;
   /** The last race-control message, for the banner; `atMs` is the wall-clock time it was issued */
   message: {
-    kind: "warning" | "penalty" | "cleared" | "lap_invalid" | "no_advantage";
+    kind: "warning" | "final_warning" | "penalty" | "disqualified" | "cleared" | "lap_invalid" | "no_advantage";
     text: string;
     detail?: string;
     atMs: number;
