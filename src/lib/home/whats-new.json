@@ -1,7 +1,7 @@
 [
   {
     "date": "2026-11-17",
-    "title": "Pfalzdriver's M1 Procar and Scirocco, RISE Motordrome's Assetto Corsa look, and the modders up front",
+    "title": "Pfalzdriver's M1 Procar and Scirocco, race rules, manual starts and qualifying, and RISE Motordrome's Assetto Corsa look",
     "items": [
       "Added the BMW M1 Procar and the Volkswagen Scirocco GTX 16V by Pfalzdriver, each with its own sounds and liveries.",
       "RISE Motordrome now has the scenery and look of my Assetto Corsa release on OverTake, with Tecpro barriers in six places, and its lap times stay on the boards.",
@@ -9,10 +9,15 @@
       "You can now report a bug from the pause menu, and the report carries the game's details, a screenshot and where the car was.",
       "AI races now run in the simulation worker, AI cars plan their lines over several frames, and busy circuits check the ground faster, which cuts the stutter in races.",
       "The off-track glow is now drawn inside the game's frame, which costs less than the old page layer.",
-      "Bigger circuit and car tiles on the home page and in the game, one row per car class in the car browser, and in-game panels that fit their content on wide screens."
+      "Bigger circuit and car tiles on the home page and in the game, one row per car class in the car browser, and in-game panels that fit their content on wide screens.",
+      "AI races now follow rules by car class, open-wheel for the F1 cars and endurance for the rest, picked in the race setup along with the start and whether track limits are judged.",
+      "Track limits in AI races now build up to time penalties: the F1 cars get a strike per cut (black-and-white flag at 3, +5 s at 4, +10 s at 8, disqualified at 12), the other cars get points for how much a cut gained (+5 s at 5, +10 s at 10, disqualified at 15), and a big cut is a penalty straight away.",
+      "Yellow flags in AI races: a stopped car brings out a double yellow, the AI slows down and doesn't pass, a place taken under yellow has to be given back within 15 s or it's +5 s (+10 s under a double yellow), the F1 cars' Straight Mode and Overtake Mode stay closed in a yellow zone, and a blue flag shows when a car is about to lap you.",
+      "Manual race starts (Settings > Driving and the race rules): hold the clutch and the revs through the lights and let go at lights out, with a clutch you can bind to a pad button, a wheel pedal or a key, and neutral on gear up plus gear down. Moving early is +5 s, or +10 s past 2.5 m or past a car. New players get the GT style pad layout; the old one stays as Bumper shift.",
+      "Qualifying before AI races (5, 10 or 15 minutes, in the race setup) sets the grid from your best lap against the AI's times, the HUD mirror on Auto now only shows with other cars on track, and race control's messages take less space."
     ],
-    "commits": 22,
-    "lastSha": "92210623dece8a21a6eea7111a81238e1734b2c3"
+    "commits": 100,
+    "lastSha": "0e7061cf04cf2d98cdee99b1d766ec6e7d3c6134"
   },
   {
     "date": "2026-11-16",
