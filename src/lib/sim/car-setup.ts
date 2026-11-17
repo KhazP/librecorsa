@@ -170,9 +170,9 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   "bmw-m1-procar": { defaultKg: 22, minKg: 4, maxKg: 52 },
   // 30 l of a 55 l tank [spec car.ini FUEL / MAX_FUEL]
   "vw-scirocco-gtx": { defaultKg: 22, minKg: 4, maxKg: 41 },
-  // 30 l of a 160 l tank [spec car.ini FUEL / MAX_FUEL]
-  "chaparral-2d": { defaultKg: 22, minKg: 4, maxKg: 118 },
-  "chaparral-2d-67": { defaultKg: 22, minKg: 4, maxKg: 118 },
+  // 30 l of a 160 l tank [spec car.ini FUEL / MAX_FUEL], filled as far as the garage's +80 kg goes (138 l)
+  "chaparral-2d": { defaultKg: 22, minKg: 4, maxKg: 102 },
+  "chaparral-2d-67": { defaultKg: 22, minKg: 4, maxKg: 102 },
 };
 
 /** Race fuel density (kg per litre), for the litre readouts */

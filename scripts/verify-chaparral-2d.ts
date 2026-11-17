@@ -123,9 +123,10 @@ const CARS: CarCase[] = [
     lat100: [1.0, 1.4],
     lat200: [0.95, 1.35],
     lap: [128, 155],
-    // It runs out to ≈ 0.75 m on the power out of two first-gear corners (s ≈ 970 and 4370 m): the autopilot's exit
-    // plan takes a mid-gear traction figure, and the 427 in first has more than that to give
-    edgeM: 0.8,
+    // It runs out ≈ 0.85 m on the power out of two first-gear corners (s ≈ 970 and 4370 m), on the old tyre model and
+    // the three-layer one alike: the autopilot's exit plan takes a mid-gear traction figure, and the 427 in first has
+    // more than that to give. The bound leaves room for a power slide's spread from run to run
+    edgeM: 1.0,
     skins: CHAPARRAL_2D_67_SKINS,
   },
 ];
