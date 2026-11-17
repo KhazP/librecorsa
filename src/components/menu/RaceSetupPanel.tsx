@@ -154,6 +154,7 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
             </span>
             <span className="lc-hint truncate phone:hidden">
               {aiSkillLabel(aiSkill)} AI, {RACE_START_LABELS[setup.start].toLowerCase()} start
+              {setup.start === "standing" && setup.launch === "manual" ? ", manual launch" : ""}
             </span>
           </span>
           <Button ref={startRef} variant="primary" size="lg" onClick={onStart} prompt={mode === "pad" ? <PadGlyph button="menu" family={family} /> : undefined}>

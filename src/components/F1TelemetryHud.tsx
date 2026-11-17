@@ -27,6 +27,7 @@ import { ChallengeTargetPanel, LapPanel, TimingTower } from "./hud/TimingPanels"
 import { SpeedCluster } from "./hud/SpeedCluster";
 import { TyrePanel } from "./hud/TyrePanel";
 import { StartLights } from "./hud/StartLights";
+import { LaunchCue } from "./hud/LaunchCue";
 import { PauseMenu } from "./hud/PauseMenu";
 import { F12026ChannelsPanel } from "./hud/F12026ChannelsPanel";
 import { MultiPageMfd } from "./hud/MultiPageMfd";
@@ -721,6 +722,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           )
         ) : null}
       </div>
+      </div>
+
+      {/* A manual start's checklist on the right edge, between the right-hand corners, as the F1 games place it: the
+          centre stays the lights' own */}
+      <div className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 sm:right-4">
+        <div style={corner("center right")}>
+          <LaunchCue telemetry={telemetry} />
+        </div>
       </div>
 
       {hudHidden ? null : (

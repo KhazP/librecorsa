@@ -2422,6 +2422,7 @@ export class AiOpponentField implements AiRace {
 
   /** Time penalties the player serves at the flag (track limits), in seconds */
   public playerPenaltyS = 0;
+  public manualStart = false;
 
   public status(): RaceStatus {
     const L = this.track.totalLengthM;

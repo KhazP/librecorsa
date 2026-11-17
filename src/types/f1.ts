@@ -37,6 +37,7 @@ export interface ControlInputs {
   toggleXMode: boolean;
   shiftUp: boolean;
   shiftDown: boolean;
+  neutral?: boolean; // One-frame press: out of gear (both shift buttons at once, or the Neutral key / button)
 }
 
 export type CameraMode =
@@ -331,6 +332,9 @@ export interface TyreSetup {
   camberDeg: { front: number; rear: number };
 }
 
+/** The control a manual start's cue names as the clutch */
+export type StartClutchControl = { pad: number } | { key: string } | { name: string };
+
 export interface CarTelemetry {
   /** The last car-to-car contact this car took in a race: its closing speed (m/s), counted up per contact */
   carContact?: { speedMs: number; seq: number };
@@ -467,6 +471,12 @@ export interface CarTelemetry {
   radar?: RadarBlip[];
   /** Present while racing the AI opponents */
   race?: RaceStatus;
+  /**
+   * A manual standing start, set by the app shell: the car held on the grid through the lights, a jump start, the
+   * control the player holds as the clutch (a standard-mapping pad button, a key's name, or a named control such as
+   * "clutch pedal"), and how far they hold it in (0..1, 1 = pressed)
+   */
+  start?: { held: boolean; jumped: boolean; clutch: StartClutchControl; clutchIn: number };
   /**
    * Run counter, set by the app shell: it goes up whenever the run restarts (a new session, a restart, a
    * teleport, a car change). Anything that keeps lap- or run-scoped state resets when it changes,

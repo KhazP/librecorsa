@@ -33,6 +33,7 @@ export const CAR_SETTABLE = [
   "tireCompound",
   "trackLimitsMode",
   "trackLimitsHold",
+  "gridHold",
   "aiSelfRecovery",
   "vxMs",
   "sMeters",
@@ -69,6 +70,8 @@ export interface RaceStartSetup {
   damage: DamageLevel;
   aggressionAdd: number;
   standing: boolean;
+  /** A standing start the player makes on the clutch: the car held on the grid with its engine live */
+  manualStart?: boolean;
   /** The player's code and colour (`AiRace.playerDriver`) */
   driver: RaceDriverLabel | null;
 }

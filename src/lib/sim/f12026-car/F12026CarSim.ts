@@ -92,6 +92,7 @@ import { lockShareOf } from '../tyre-slide-fx';
 import { filterChassisG } from '../chassis-g';
 import { beyondLayoutEdge, CourseCutWatch, inLapStretch, isCourseHop } from '../course-limits';
 import { coneLaneRangeAt } from '../cone-lanes';
+import { pullsAway } from '../race-start';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -815,6 +816,12 @@ export class F12026CarSim implements SimulatorCar {
   public gamepadAssistEnabled = true;
   /** Automatic gear changes; off = the driver shifts. The autopilot always shifts for itself (VehiclePhysics.autoShift) */
   public autoGearbox = true;
+  /**
+   * Held on the grid through the lights of a manual start: the gear left where it is, and while the driver holds the
+   * clutch (or keeps off the throttle) the brakes on and the clutch open, the throttle revving a free engine. Let out in
+   * gear with the throttle up, the car goes: moving before the lights go out is the jump start
+   */
+  public gridHold = false;
   /** Keyboard and controller steering assist */
   public readonly steeringAssist = new SteeringAssist();
   /** DRS is driver-operated on the f12026-car (and absent on a GT3): there is no automatic mode, so writes are ignored */
@@ -903,6 +910,7 @@ export class F12026CarSim implements SimulatorCar {
   /** A paddle pressed in a frame that ran no tick waits for the next one */
   private shiftUpPending = false;
   private shiftDownPending = false;
+  private neutralPending = false;
   /** The steering rim's position at the last frame (`ControlInputs.steerRim`), its move is spread over this frame's ticks */
   private lastRimSteer: number | null = null;
   private lapStartMs = 0;
@@ -1637,6 +1645,9 @@ export class F12026CarSim implements SimulatorCar {
       toggleXMode: raw.toggleXMode ?? false,
       shiftUp: raw.shiftUp ?? false,
       shiftDown: raw.shiftDown ?? false,
+      neutral: raw.neutral ?? false,
+      // The driver's clutch pedal while it is pressed at all; let go, the car works its own clutch
+      clutch: Number.isFinite(raw.clutch) && (raw.clutch ?? 0) > 0 ? THREE.MathUtils.clamp(raw.clutch ?? 0, 0, 1) : undefined,
     };
     if (inputs.toggleXMode && this.profile.hasDrs) this.drsPressPending = true;
     // Whole control ticks of this frame; what is left over waits for the next (the pose is drawn carried forward by it)
@@ -1679,15 +1690,20 @@ export class F12026CarSim implements SimulatorCar {
     // A press in a frame too short for a tick is kept for the next.
     this.shiftUpPending ||= inputs.shiftUp;
     this.shiftDownPending ||= inputs.shiftDown;
+    this.neutralPending ||= inputs.neutral;
     const drsPress = this.drsPressPending;
     const shiftUp = this.shiftUpPending;
     const shiftDown = this.shiftDownPending;
-    if (ticks > 0) this.drsPressPending = this.shiftUpPending = this.shiftDownPending = false;
+    const neutral = this.neutralPending;
+    if (ticks > 0) this.drsPressPending = this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
     // A steering wheel's rim is read once a frame: its move since the last frame is spread over this frame's ticks, so
     // the rack turns at the rim's own speed rather than in one jump per frame
     const rim = inputs.steerRim && inputs.analogSteer !== undefined ? inputs.analogSteer : null;
     const rimFrom = rim !== null && this.lastRimSteer !== null ? this.lastRimSteer : rim;
+    const held = this.gridHold && !this.aiAutopilot;
+    // Held, the car stays on its spot until the driver lets the clutch out in gear with the throttle up
+    const pinned = held && !pullsAway(v.gear !== 0, inputs.clutch ?? 0, inputs.throttle ?? 0);
     for (let k = 0; k < ticks; k++) {
       if (rim !== null && rimFrom !== null) inputs.analogSteer = rimFrom + ((rim - rimFrom) * (k + 1)) / ticks;
       const cmd: { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
@@ -1697,12 +1713,15 @@ export class F12026CarSim implements SimulatorCar {
         // An empty tank (fuel is only burnt with fuel use on): the engine no longer fires. A race field's own car is
         // spared: it starts on a load nobody chose and has no pit stop to take
         ignitionCut: this.fuelKg > 0 || !this.realism.fuelUse || (this.aiAutopilot && !this.aiSelfRecovery) ? cmd.ignitionCut : 0,
-        brake: cmd.brake,
-        brakeWheelScale: cmd.brakeWheelScale,
+        brake: pinned ? 1 : cmd.brake,
+        brakeWheelScale: pinned ? undefined : cmd.brakeWheelScale,
         steer: cmd.steer,
-        drs: drsPress || cmd.drs,
-        shiftUp,
-        shiftDown,
+        drs: !held && (drsPress || cmd.drs),
+        shiftUp: !held && shiftUp,
+        shiftDown: !held && shiftDown,
+        // The autopilot keeps its gear and drives on the car's own clutch
+        neutral: !held && neutral && !this.aiAutopilot,
+        clutch: pinned ? 1 : this.aiAutopilot ? undefined : inputs.clutch,
       };
       // A car whose state has blown up hands back a non-finite command: the rack must not keep it past the rescue
       this.steerCmd = Number.isFinite(cmd.steer) ? cmd.steer : 0;
@@ -2304,7 +2323,7 @@ export class F12026CarSim implements SimulatorCar {
     this.steeringAssist.reset();
     this.steerCmd = 0;
     this.lastRimSteer = null;
-    this.shiftUpPending = this.shiftDownPending = false;
+    this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
     this.tcCut = this.absCut = 1;
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;
