@@ -12,7 +12,7 @@ const LightColumn = () => (
 /** Route fallback before the simulator mounts: the first frame of the simulator's own loading screen */
 export default function Loading() {
   return (
-    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-lc-void text-lc-chalk">
+    <div className="relative flex h-dvh w-screen flex-col overflow-hidden bg-lc-void text-lc-chalk">
       <div className="relative mx-auto flex w-full max-w-[1440px] flex-1 flex-col pt-[max(clamp(28px,4.4vh,48px),env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] lg:pr-[max(4rem,env(safe-area-inset-right))] lg:pl-[max(4rem,env(safe-area-inset-left))]">
         <div className="flex flex-1 items-center">
           <div className="flex w-full max-w-[560px] min-w-0 flex-col gap-[clamp(20px,3.6vh,36px)]">

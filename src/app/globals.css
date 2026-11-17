@@ -178,6 +178,12 @@
   --f1-green: #00e676;
 }
 
+/* No pull-to-refresh or rubber-band: a pull at the top of a menu would reload the game */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -269,6 +275,18 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .hud-fade-out {
     animation-name: hud-fade-out-still;
+  }
+}
+
+/* ---- Touch: two quick taps on a control are two taps, not a double-tap zoom; a long press doesn't select its label ----
+   Zero specificity, so the touch controls' own touch-action: none still wins. Pinch zoom stays on */
+@layer base {
+  :where(button, a, summary, label, [role="button"], [role="tab"], [role="option"]) {
+    touch-action: manipulation;
+  }
+  :where(button, [role="button"], [role="tab"], [role="option"]) {
+    -webkit-user-select: none;
+    user-select: none;
   }
 }
 

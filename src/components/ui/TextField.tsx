@@ -80,7 +80,7 @@ export function TextField({
             aria-invalid={error ? true : undefined}
             aria-describedby={cx(errorId, hintId, input["aria-describedby"]) || undefined}
             onChange={(e) => onChange(e.target.value)}
-            className="min-h-6 min-w-0 flex-1 resize-y bg-transparent text-[15px] leading-normal font-medium text-lc-chalk outline-none placeholder:text-lc-slate focus-visible:outline-none disabled:cursor-not-allowed in-data-[input=pad]:focus:shadow-none in-data-[input=pad]:focus:outline-none"
+            className="min-h-6 min-w-0 flex-1 resize-y bg-transparent text-[15px] pointer-coarse:text-[16px] leading-normal font-medium text-lc-chalk outline-none placeholder:text-lc-slate focus-visible:outline-none disabled:cursor-not-allowed in-data-[input=pad]:focus:shadow-none in-data-[input=pad]:focus:outline-none"
           />
         ) : (
           <>
@@ -97,7 +97,7 @@ export function TextField({
               aria-invalid={error ? true : undefined}
               aria-describedby={cx(errorId, hintId, input["aria-describedby"]) || undefined}
               onChange={(e) => onChange(e.target.value)}
-              className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-medium text-lc-chalk outline-none placeholder:text-lc-slate focus-visible:outline-none disabled:cursor-not-allowed in-data-[input=pad]:focus:shadow-none in-data-[input=pad]:focus:outline-none"
+              className="h-full min-w-0 flex-1 bg-transparent text-[15px] pointer-coarse:text-[16px] font-medium text-lc-chalk outline-none placeholder:text-lc-slate focus-visible:outline-none disabled:cursor-not-allowed in-data-[input=pad]:focus:shadow-none in-data-[input=pad]:focus:outline-none"
             />
             {trailing}
           </>

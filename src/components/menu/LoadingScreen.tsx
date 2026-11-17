@@ -322,7 +322,7 @@ export const LoadingScreen: React.FC<{
           </div>
 
           {/* The circuit drawing itself in Corsa Volt, named under it */}
-          <div className="order-1 mx-auto flex w-full max-w-[min(280px,32vh)] flex-col items-center justify-center gap-3 lg:order-2 lg:max-w-[min(640px,100%,calc(100vh_-_14rem))] short:order-2 short:w-[min(220px,45vh)] short:max-w-none short:gap-1.5">
+          <div className="order-1 mx-auto flex w-full max-w-[min(280px,32vh)] flex-col items-center justify-center gap-3 lg:order-2 lg:max-w-[min(640px,100%,calc(100dvh_-_14rem))] short:order-2 short:w-[min(220px,45vh)] short:max-w-none short:gap-1.5">
             <svg
               viewBox="-8 -8 116 116"
               className="h-auto w-full overflow-visible"
