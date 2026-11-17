@@ -113,6 +113,12 @@ const CARS: CarCase[] = [
     make: () => createAmgGt3Sim(pad),
     peakDeg: rigidBodyPeak(AMG_GT3_CONFIG),
     minSettledSlip: 0.9,
+    // Its slicks have less braking grip since they were fitted to the reference laps' stops, so trail-braking from
+    // 180 km/h on a held key the brake uses more of the fronts' grip and they reach 1.13× their peak slip angle (1.11×
+    // with the assist's old 1.5 grip figure): the assist's slip target leaves no room for the braking share. Taking
+    // that share off the target for every car cut the other cars' trail-braked steering by up to three quarters, so the
+    // GT3's turn-in bound is 1.13×
+    bounds: { ...STRICT, turnInSlip: 1.13 },
   },
   {
     name: 'F1 2026 Rigid-Body',
