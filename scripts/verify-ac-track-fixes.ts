@@ -236,7 +236,9 @@ async function verifyKerbsFeelAndSound() {
     const idx = kerbNode.geometry.getIndex();
     const triCount = (idx ? idx.count : pos.count) / 3;
     if (tid === 'monaco') {
-      assert.ok(triCount >= 7000, `[monaco] Expected >= 7000 kerb triangles (including chicane kerbs), got ${triCount}`);
+      // The generated band ran to 7000+ triangles; the mod's own kerbs, chicane kerbs and sausages included, are ~3600
+      const least = modelledKerbs ? 3000 : 7000;
+      assert.ok(triCount >= least, `[monaco] Expected >= ${least} kerb triangles (including chicane kerbs), got ${triCount}`);
     }
 
     let hitKerb = 0;
@@ -402,7 +404,7 @@ async function verifyTrackEdgeContinuity() {
           }
           if (prevY !== null && Math.abs(hit.height - prevY) > 0.045) {
             const step = Math.abs(prevY - hit.height);
-            if (shaped && (prevKerb || hit.surface === 'kerb') && step <= MODELLED_KERB_BACK_M) {
+            if (shaped && (prevKerb || hit.surface === 'kerb' || hit.surface === 'sausage') && step <= MODELLED_KERB_BACK_M) {
               kerbBacks++;
               kerbBackMax = Math.max(kerbBackMax, step);
             } else {
@@ -410,7 +412,8 @@ async function verifyTrackEdgeContinuity() {
             }
           }
           prevY = hit.height;
-          prevKerb = hit.surface === 'kerb';
+          // A sausage (drawn-surfaces.ts names the Red Bull Ring's yellow kerbs and cubes so) is a modelled kerb too
+          prevKerb = hit.surface === 'kerb' || hit.surface === 'sausage';
         }
       }
     }
