@@ -2,10 +2,11 @@
  * A/B of the AI field's racecraft in headless races with a stand-in for the player (`lib/stand-in-race.ts`): the same
  * tracks, seeds and stand-in profiles for each arm, raced in parallel, then raw totals per arm and per profile.
  *
- *   npx tsx scripts/ai/race-ab.ts [--tracks spielberg,istanbul_park] [--car lc26] [--seeds 4] [--laps 3] [--ai 7]
+ *   npx tsx scripts/ai/race-ab.ts [--tracks spielberg,istanbul_park] [--car lc26] [--seeds 4] [--seed0 0] [--laps 3] [--ai 7]
  *       [--profiles line,slow,early,weave,none] [--jobs 4] [--a '<racecraft json>'] [--b '<racecraft json>']
  *       [--planner on|off] [--json out.json]
  *
+ * `--seed0 N` starts at the N-th seed: a held-out set for a final check after knobs were picked on the first ones.
  * Each arm is a set of racecraft knobs (`RacecraftParams`) over the defaults; with no `--b` only the defaults race.
  * Headless races are chaotic (one first-lap pile-up moves a total by 5-10), so read totals over 24+ races, then the
  * per-race rows for where the difference sits.
@@ -31,6 +32,7 @@ if (argv.includes('--one')) {
 const tracks = opt('tracks', 'spielberg,istanbul_park').split(',');
 const car = opt('car', 'lc26');
 const seeds = Number(opt('seeds', '4'));
+const seed0 = Number(opt('seed0', '0'));
 const laps = Number(opt('laps', '3'));
 const aiCars = Number(opt('ai', '7'));
 const jobsN = Number(opt('jobs', '4'));
@@ -152,7 +154,7 @@ async function main(): Promise<void> {
     for (const trackId of tracks)
       for (const standIn of profiles)
         for (let k = 0; k < seeds; k++)
-          races.push({ arm: arm.name, o: { trackId, car, seed: 101 + k * 31, laps, aiCars, standIn, racecraft: arm.racecraft, localPlanner } });
+          races.push({ arm: arm.name, o: { trackId, car, seed: 101 + (seed0 + k) * 31, laps, aiCars, standIn, racecraft: arm.racecraft, localPlanner } });
   console.error(`${races.length} races (${arms.length} arm(s) × ${tracks.length} tracks × ${profiles.length} profiles × ${seeds} seeds), ${jobsN} at once`);
   const started = Date.now();
   const results = await pool(races.map((r) => () => runOne(r.o)), jobsN);

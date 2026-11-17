@@ -203,6 +203,17 @@ export interface RacecraftParams {
    * late braking), so the AI follows a little further back and keeps a little more room beside it
    */
   playerMarginM: number;
+  /**
+   * The room past the corner's reach and the squeeze lift only for the player's car (1), or for every car (0). Between
+   * two AI cars both make room, and taken past the reach by both they ran wide into the corners (GT3 offs at
+   * Oschersleben up a third)
+   */
+  roomPlayerOnly: number;
+  /**
+   * The path check's room and lift beside a car only for the player's car (1), or for every car (0). Another AI car
+   * beside us keeps the same rules; ahead and behind are checked for every car either way
+   */
+  pathSidePlayerOnly: number;
 }
 
 export const DEFAULT_RACECRAFT: RacecraftParams = {
@@ -228,6 +239,8 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   squeezeYield: 1,
   predictS: 1.5,
   playerMarginM: 0.4,
+  roomPlayerOnly: 1,
+  pathSidePlayerOnly: 1,
 };
 /** The path check's step (s) */
 const PATH_STEP_S = 0.1;
@@ -1818,12 +1831,13 @@ export class AiOpponentField implements AiRace {
       // Side by side: the room for the other car may take us past the corner's reach (and costs speed there, below).
       // Held to the reach, a car alongside that stays where it is was turned in on: another AI car moves over too, so
       // between them they made the room, but a player doesn't
-      if (roomFor && targetLat === roomLat && this.rc.alongsideReachM > 0) {
+      const roomRules = roomFor !== null && (roomFor.isPlayer || !this.rc.roomPlayerOnly);
+      if (roomFor && roomRules && targetLat === roomLat && this.rc.alongsideReachM > 0) {
         maxBias = Math.max(maxBias, Math.min(Math.abs((pos ?? line) - line), maxBias + this.rc.alongsideReachM));
       }
       let biasTarget = pos === null ? 0 : THREE.MathUtils.clamp(pos - line, -maxBias, maxBias);
       // ... and with less than a car's width of room left on our side, not clearly ahead: lift and drop in behind
-      if (roomFor && this.rc.squeezeYield > 0) {
+      if (roomFor && roomRules && this.rc.squeezeYield > 0) {
         const dsR = wrapHalf(roomFor.sim.sMeters - me.sMeters, L);
         const sep = Math.abs(line + biasTarget - roomFor.sim.lateralOffsetM);
         // (another AI car makes room on its side too: only the one behind lifts, or both did and stayed side by side)
@@ -1833,7 +1847,8 @@ export class AiOpponentField implements AiRace {
         }
       }
       // A car whose path ours will run into, or one beside it that ours will squeeze: checked ahead of time
-      if (this.rc.predictS > 0) {
+      // (a car spun or rejoining keeps to its rejoin: steered round the others as well, it was run across the grass)
+      if (this.rc.predictS > 0 && car.control?.racing !== false) {
         const check = this.pathCheck(car, biasTarget, biasRate, half, line);
         speedCap = Math.min(speedCap, check.capMs);
         if (check.biasM !== null) biasTarget = check.biasM;
@@ -2047,6 +2062,7 @@ export class AiOpponentField implements AiRace {
         // Ahead: slot in behind it
         capMs = Math.min(capMs, followCapMs(os, dsNow - CAR_LEN_M - (human ? this.rc.playerMarginM : 0), this.rc));
       } else if (dsNow > -lenGap) {
+        if (!human && this.rc.pathSidePlayerOnly) continue;
         // Beside: room on our side of it, made quickly, if the road has it; and, not clearly ahead, a lift to drop in
         // behind when it doesn't or the move can't be made in time
         let want: number = (biasM ?? biasTarget) + away * (hit.need + 0.1);
