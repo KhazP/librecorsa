@@ -20,8 +20,9 @@ export const JUMP_START_PENALTY_S = 5;
 
 /**
  * Engine speed to hold through the lights (rpm, from–to): letting the clutch out over about 0.3 s from inside it gets
- * the car to 100 m within 0.05 s of its best getaway. Measured with headless launches on flat ground, traction control
- * on and off (17 Nov 2026), narrowed where the car spins its wheels without it.
+ * the car to 100 m within 0.05 s of its best getaway. Measured with headless launches on flat ground with traction
+ * control on (Semi-pro, 17 Nov 2026). With it off, a full-throttle release spins the 2026 Prototype and the MTR 496R
+ * from any revs: the throttle has to come in with the clutch.
  */
 export const LAUNCH_RPM: Readonly<Partial<Record<VehicleModelId, readonly [number, number]>>> = {
   'f12026-car': [9500, 11500],
