@@ -19,6 +19,8 @@ import {
 } from "@/lib/track-registry";
 import { Disclosure, SettingRow, Skeleton } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
+import { Icon } from "@/components/ui/icons/Icon";
+import { cx } from "@/components/ui/styles";
 import { StateBadge } from "@/components/ui/badges/StateBadge";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn } from "@/lib/settings/units";
@@ -48,8 +50,8 @@ const CardOutline: React.FC<{ track: TrackInfo }> = ({ track }) => {
       {map ? (
         <TrackOutline map={map} thin className="h-full max-w-full" label={`${track.name} outline`} />
       ) : map === undefined ? (
-        <Skeleton className="h-3/5 w-3/5" />
-      ) : null}
+        <Skeleton className={cx("h-3/5 w-3/5", !near && "[animation:none]")} />
+      ) : <Icon name="trackCircuit" size="lg" className="text-lc-slate" />}
     </span>
   );
 };

@@ -219,7 +219,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
         {/* Each half scales from the centre (transform only, so the gauge never re-lays out) */}
         {deltaS !== null ? (
           <span
-            className={`absolute inset-y-0 w-1/2 transition-transform duration-75 ${
+            className={`absolute inset-y-0 w-1/2 transition-transform duration-100 ease-linear ${
               deltaNorm <= 0 ? "right-1/2 origin-right bg-lc-gain" : "left-1/2 origin-left bg-lc-loss"
             }`}
             style={{ transform: `scaleX(${Math.abs(deltaNorm)})` }}

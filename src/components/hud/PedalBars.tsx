@@ -62,7 +62,7 @@ const Bar: React.FC<{
         aria-valuemax={100}
         aria-valuenow={Math.round(output * 100)}
       >
-        <span className="absolute inset-x-0 bottom-0" style={{ height: `${output * 100}%`, backgroundColor: color }} />
+        <span className="absolute inset-0 origin-bottom" style={{ transform: `scaleY(${output})`, backgroundColor: color }} />
         {cut > 0.005 && cutColor ? (
           <span
             className={`absolute inset-x-0 ${active ? "lc-cut" : ""}`}

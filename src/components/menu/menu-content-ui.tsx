@@ -69,7 +69,7 @@ export const CarQualityBadge: React.FC<{
 
 /* A swatch: the chosen one has a white ring, the cursor a volt one with its halo; the ring's gap is the surface behind */
 const SWATCH = [
-  "h-9 w-12 cursor-pointer rounded-full outline-none transition-[box-shadow] duration-200 ease-lc pointer-coarse:h-11 pointer-coarse:w-14 focus-visible:outline-none",
+  "h-9 w-12 cursor-pointer rounded-full outline-none transition-[box-shadow] duration-200 ease-lc pointer-coarse:h-11 pointer-coarse:w-14 focus-visible:outline-none in-data-[input=keyboard]:focus:transition-none in-data-[input=pad]:focus:transition-none",
   "focus:shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_var(--color-lc-volt),0_0_0_9px_color-mix(in_srgb,var(--color-lc-volt)_14%,transparent)]",
 ].join(" ");
 const SWATCH_CHOSEN = "shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_var(--color-lc-chalk)]";
@@ -115,7 +115,7 @@ export const LiveryPicker: React.FC<{
           );
         })}
       </div>
-      <span className="min-w-0 truncate text-[13px] font-semibold text-lc-fog">{shown.name}</span>
+      <span className="min-w-0 truncate text-[13px] font-semibold text-lc-fog" title={shown.name}>{shown.name}</span>
     </div>
   );
 };
@@ -156,7 +156,7 @@ export const CarSkinPicker: React.FC<{ carId: CarId; surface?: string }> = ({ ca
           );
         })}
       </div>
-      <span className="min-w-0 truncate text-[13px] font-semibold text-lc-fog">{shown?.name}</span>
+      <span className="min-w-0 truncate text-[13px] font-semibold text-lc-fog" title={shown?.name}>{shown?.name}</span>
     </div>
   );
 };

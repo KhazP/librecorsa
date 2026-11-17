@@ -56,7 +56,7 @@ export function Toggle({
         className={cx(
           "group relative h-7.5 w-14 shrink-0 cursor-pointer rounded-full",
           // A 44 px target on touch screens without growing the drawing
-          "before:absolute before:-inset-x-1 pointer-coarse:before:-inset-y-1.75",
+          "before:absolute before:-inset-x-1 before:inset-y-0 pointer-coarse:before:-inset-y-1.75",
           "focus-visible:outline-offset-3 data-cursor:outline-2 data-cursor:outline-offset-3 data-cursor:outline-lc-volt",
           MOTION,
           DISABLED,
@@ -68,7 +68,7 @@ export function Toggle({
         <span
           aria-hidden
           className={cx(
-            "absolute top-1.25 left-1.25 size-5 rounded-full transition-[translate,background-color] duration-200 ease-lc",
+            "absolute top-1.25 left-1.25 size-5 rounded-full transition-[translate,background-color] duration-200 ease-lc motion-reduce:transition-none",
             checked ? "translate-x-6.5 bg-lc-void" : "translate-x-0 bg-lc-slate",
           )}
         />

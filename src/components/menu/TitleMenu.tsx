@@ -622,7 +622,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             id: "challenge",
             label: "Weekly challenge",
             short: "Challenge",
-            detail: `${props.challengePanel.trackName} · ${props.challengePanel.carTitle} · ${timeLeftLabel(props.challengePanel.challenge.endsMs, Date.now())} left`,
+            detail: `${timeLeftLabel(props.challengePanel.challenge.endsMs, Date.now())} left · ${props.challengePanel.trackName} · ${props.challengePanel.carTitle}`,
             icon: "challenge" as const,
             panel: "challenge" as const,
             run: () => openPanel("challenge"),
@@ -832,7 +832,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   />
                 }
               >
-                <span className="max-w-[10rem] truncate">{props.profile.name}</span>
+                <span className="max-w-[10rem] truncate" title={props.profile.name}>{props.profile.name}</span>
               </Button>
             ) : (
               <span className="inline-flex items-center gap-2 text-[14px] font-semibold text-lc-chalk">
@@ -862,7 +862,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             </nav>
 
             <section ref={panelRef} className="min-h-0 min-w-0 scroll-mt-4" data-nav-zone="panel" aria-label={panelTitle}>
-              <div key={panel} className="lc-panel-in">
+              <div key={panel}>
                 <PanelFrame
                   subtitle={panelSubtitle[panel]}
                   title={panel === "request" ? undefined : panelTitle}
@@ -965,7 +965,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               <div className="flex items-center gap-4">
                 {map ? <TrackOutline map={map} thin className="h-[84px] w-[104px] shrink-0" /> : null}
                 <div className="flex min-w-0 flex-col gap-1">
-                  <h2 className="lc-h3 line-clamp-2 text-balance">{track.name}</h2>
+                  <h2 className="lc-h3 line-clamp-3 text-balance" title={track.name}>{track.name}</h2>
                   <p className="lc-hint m-0 line-clamp-2">{[track.layout, track.city].filter(Boolean).join(" · ")}</p>
                   <p className="lc-hint m-0">
                     <span className="lc-mono text-lc-fog">{lengthOf(track, units.speed)}</span>

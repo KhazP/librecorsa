@@ -13,7 +13,7 @@ export default function ErrorBoundary({
   reset: () => void;
 }) {
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-lc-void text-lc-chalk">
+    <div className="relative h-dvh w-screen overflow-hidden bg-lc-void text-lc-chalk">
       <main className="relative flex h-full max-w-[760px] flex-col justify-center gap-7 overflow-y-auto pt-[max(3rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(3rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(6vw,env(safe-area-inset-right))] sm:pl-[max(6vw,env(safe-area-inset-left))] lg:pl-[max(6rem,env(safe-area-inset-left))] short:gap-4 short:pt-[max(1.5rem,env(safe-area-inset-top))] short:pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <LibreCorsaLogo variant="compact" size="md" />
 

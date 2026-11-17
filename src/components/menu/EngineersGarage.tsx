@@ -218,7 +218,7 @@ export const EngineersGarage: React.FC<
       aero: p.aeroPreset,
       tuner: currentTuner,
     };
-    const next = [preset, ...presets.filter((x) => x.id !== preset.id)];
+    const next = [preset, ...presets.filter((x) => x.id !== preset.id)].slice(0, 24);
     setPresets(next);
     setName("");
     setNote(saveGaragePresets(p.vehicleModel, next) ? `Saved “${preset.name}”` : "Could not save: storage is blocked");
@@ -462,7 +462,7 @@ export const EngineersGarage: React.FC<
                 <li key={x.id} className="flex items-center gap-1">
                   <span className="min-w-0 flex-1">
                     <Button size="sm" variant="ghost" block onClick={() => loadPreset(x)} aria-label={`Load ${x.name}`}>
-                      <span className="truncate">{x.name}</span>
+                      <span className="truncate" title={x.name}>{x.name}</span>
                     </Button>
                   </span>
                   <IconButton size="sm" variant="ghost" aria-label={`Delete ${x.name}`} icon={<Icon name="delete" />} onClick={() => deletePreset(x)} />

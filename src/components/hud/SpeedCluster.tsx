@@ -61,7 +61,7 @@ const InputBar: React.FC<{ label: string; pct: number; color: string; labelColor
 }) => (
   <span className="flex flex-col items-center gap-[3px]" title={title}>
     <span className={`relative w-1.75 overflow-hidden rounded-full bg-lc-titanium ${h}`}>
-      <span className="absolute inset-x-0 bottom-0" style={{ height: `${pct}%`, backgroundColor: color }} />
+      <span className="absolute inset-0 origin-bottom" style={{ transform: `scaleY(${pct / 100})`, backgroundColor: color }} />
     </span>
     <span className={HUD_LBL} style={labelColor ? { color: labelColor } : undefined}>
       {label}
@@ -116,7 +116,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
       return (
         <span
           key={i}
-          className={`flex-1 rounded-full bg-white/7 transition-colors duration-75 ${cls}`}
+          className={`flex-1 rounded-full bg-white/7 ${cls}`}
           style={active ? { backgroundColor: flash ? HUD_SHIFT : ledColor(i) } : undefined}
         />
       );
@@ -223,7 +223,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
             </span>
           </div>
           <span
-            className="flex size-19 items-center justify-center rounded-full text-lc-void transition-colors"
+            className="flex size-19 items-center justify-center rounded-full text-lc-void"
             style={{ backgroundColor: gearRing }}
             aria-label={`Gear ${gear}`}
           >
@@ -271,7 +271,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
         </div>
 
         <div
-          className="flex h-20 w-17.5 flex-none flex-col items-center justify-center rounded-lc-card border-2 bg-lc-well transition-colors"
+          className="flex h-20 w-17.5 flex-none flex-col items-center justify-center rounded-lc-card border-2 bg-lc-well"
           style={{ borderColor: gearRing }}
         >
           <span className={HUD_LBL}>Gear</span>
@@ -285,16 +285,16 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
           >
             {/* Scales from the bottom (transform only, so the bar never re-lays out) */}
             <span
-              className="absolute inset-0 origin-bottom bg-lc-info transition-transform"
+              className="absolute inset-0 origin-bottom bg-lc-info transition-transform duration-100 ease-linear"
               style={{ transform: `scaleY(${ers / 100})` }}
             />
           </span>
         ) : (
           <span className="relative h-20 w-2.5 flex-none overflow-hidden rounded-full bg-lc-titanium" title="Engine RPM Band">
             <span
-              className="absolute inset-x-0 bottom-0"
+              className="absolute inset-0 origin-bottom"
               style={{
-                height: `${Math.min(100, (telemetry.rpm / revFull) * 100)}%`,
+                transform: `scaleY(${Math.min(1, telemetry.rpm / revFull)})`,
                 backgroundColor: flash ? HUD_SHIFT : HUD_INFO,
               }}
             />

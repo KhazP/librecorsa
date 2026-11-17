@@ -89,7 +89,7 @@ export const RaceControlBanner: React.FC<{ status: TrackLimitsStatus | undefined
           </div>
           <span className={`relative h-1.5 w-full overflow-hidden ${skinCss.bgDeep} ${skinCss.radiusSm}`}>
             <span
-              className={`absolute inset-0 origin-left transition-transform duration-100 ${skinCss.fillCaution}`}
+              className={`absolute inset-0 origin-left transition-transform duration-100 ease-linear ${skinCss.fillCaution}`}
               style={{ transform: `scaleX(${Math.max(0, Math.min(1, pending.progress))})` }}
             />
           </span>
@@ -111,7 +111,7 @@ export const RaceControlBanner: React.FC<{ status: TrackLimitsStatus | undefined
         </div>
         <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-lc-titanium">
           <span
-            className="absolute inset-0 origin-left rounded-full bg-lc-caution transition-transform duration-100"
+            className="absolute inset-0 origin-left rounded-full bg-lc-caution transition-transform duration-100 ease-linear"
             style={{ transform: `scaleX(${Math.max(0, Math.min(1, pending.progress))})` }}
           />
         </span>

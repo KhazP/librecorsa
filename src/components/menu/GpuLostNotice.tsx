@@ -86,7 +86,7 @@ export function GpuLostNotice({ kind, canLower, onLower, onRetry, onReloadPage }
           aria-modal="true"
           aria-labelledby={titleId}
           aria-describedby={bodyId}
-          className="lc-toast-in flex flex-col gap-5 p-6"
+          className="lc-toast-in flex flex-col gap-5 p-6 [backdrop-filter:none]"
         >
           <div className="flex items-start gap-3">
             <span aria-hidden className="mt-px inline-flex shrink-0 text-lc-crimson [&_svg]:size-6">

@@ -71,7 +71,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
                   {[0, 1].map((row) => (
                     <span
                       key={row}
-                      className="block size-8 rounded-full transition-colors duration-150 sm:size-10 short:size-7"
+                      className="block size-8 rounded-full sm:size-10 short:size-7"
                       style={{
                         backgroundColor: on ? HUD_RED : "color-mix(in srgb, var(--color-lc-crimson) 10%, var(--color-lc-void))",
                         boxShadow: on ? `0 0 22px ${HUD_RED}, 0 0 4px ${HUD_RED}` : "inset 0 2px 6px rgb(0 0 0 / 0.9)",
@@ -107,7 +107,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
                 {[0, 1].map((row) => (
                   <span
                     key={row}
-                    className="block size-8 rounded-full transition-colors duration-150 sm:size-10 short:size-7"
+                    className="block size-8 rounded-full sm:size-10 short:size-7"
                     style={{
                       backgroundColor: on ? HUD_RED : "color-mix(in srgb, var(--color-lc-crimson) 10%, var(--color-lc-void))",
                       boxShadow: on ? `0 0 22px ${HUD_RED}, 0 0 4px ${HUD_RED}` : "inset 0 2px 6px rgb(0 0 0 / 0.9)",

@@ -76,7 +76,7 @@ export function InputCheckCard() {
             <Badge tone="good" dot>
               Connected
             </Badge>
-            <span className="lc-body truncate">{padDisplayName(pad.id)}</span>
+            <span className="lc-body truncate" title={padDisplayName(pad.id)}>{padDisplayName(pad.id)}</span>
           </span>
           <TrackMeter label="Steer" value={pad.axes[0] ?? 0} color="var(--color-lc-info)" centered />
           <TrackMeter label="Throttle" value={pedals?.throttle ?? 0} color="var(--lc-sem-throttle)" />

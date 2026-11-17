@@ -277,7 +277,7 @@ export default function PressPage() {
             {FACTS.map(([k, v]) => (
               <div key={k} className="contents">
                 <dt className="lc-lbl pt-[3px]">{k}</dt>
-                <dd className="lc-body m-0 text-[15px]">{v}</dd>
+                <dd className="lc-body m-0 text-[15px] [overflow-wrap:anywhere]">{v}</dd>
               </div>
             ))}
           </dl>

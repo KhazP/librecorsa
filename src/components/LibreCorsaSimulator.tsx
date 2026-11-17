@@ -60,6 +60,7 @@ import { SettingsScreen, type SettingsCategory } from "@/components/settings/Set
 import type { SettingsEnv } from "@/components/settings/env";
 import { applyInterfaceSettings } from "@/lib/settings/ui-prefs";
 import { keyLabel, padButtonLabel, pressPedalText } from "@/lib/input/bindings";
+import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
@@ -209,6 +210,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The loading screen stays mounted while it fades out over the title menu */
   const [loadingVisible, setLoadingVisible] = useState(true);
   const [settings, setSettings] = useState<PlayerSettings>(DEFAULT_PLAYER_SETTINGS);
+  // Key names in hints follow the keyboard layout (AZERTY's KeyW is "Z"): re-render once it is read
+  useKeyLayout();
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   // The preferences the game applies to the car and the camera: `settings` is their only copy
@@ -2031,7 +2034,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
       {loadingVisible ? (
         // Under the GPU notice it takes no press: the notice's own buttons would start it too
-        <LoadingScreen track={track} carId={carId} ready={assetsReady && !gpuNoticeKind} onStart={handleLoadingStart} onDone={handleLoadingDone} />
+        <LoadingScreen
+          track={track}
+          carId={carId}
+          ready={assetsReady && !gpuNoticeKind}
+          cameraKey={settings.keys.camera[0]}
+          lineKey={settings.keys.racingLine[0]}
+          onStart={handleLoadingStart}
+          onDone={handleLoadingDone}
+        />
       ) : null}
 
       {gpuNoticeKind ? (

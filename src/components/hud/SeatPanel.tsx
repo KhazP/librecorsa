@@ -259,7 +259,7 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
                         aria-checked={p.view === v}
                         onClick={() => p.onSetView(v)}
                         className={cx(
-                          "h-8 flex-1 cursor-pointer rounded-full text-[13px] font-semibold [text-shadow:none] pointer-coarse:h-9",
+                          "h-8 flex-1 cursor-pointer rounded-full text-[13px] font-semibold [text-shadow:none] pointer-coarse:h-11",
                           MOTION,
                           p.view === v ? CHOSEN_PILL : cx("text-lc-slate", HOVER_PILL),
                         )}

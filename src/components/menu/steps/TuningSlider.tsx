@@ -89,8 +89,8 @@ export const PedalRow: React.FC<{ pedal: PadPedal; tuning: PadPedalTuning; gamma
       const pad = connectedPads().find((p) => p.mapping === "standard");
       const raw = Math.min(1, Math.max(0, pad ? padPedals(pad, tuningRef.current)[pedal] : 0));
       const shaped = raw <= 0 ? 0 : Math.pow(raw, gammaRef.current);
-      if (rawBar.current) rawBar.current.style.width = `${(raw * 100).toFixed(1)}%`;
-      if (shapedBar.current) shapedBar.current.style.width = `${(shaped * 100).toFixed(1)}%`;
+      if (rawBar.current) rawBar.current.style.transform = `translateX(${((raw - 1) * 100).toFixed(1)}%)`;
+      if (shapedBar.current) shapedBar.current.style.transform = `translateX(${((shaped - 1) * 100).toFixed(1)}%)`;
       if (readout.current) readout.current.textContent = `${Math.round(raw * 100)}% in, ${Math.round(shaped * 100)}% out`;
     };
     raf = requestAnimationFrame(tick);
@@ -106,10 +106,10 @@ export const PedalRow: React.FC<{ pedal: PadPedal; tuning: PadPedalTuning; gamma
         </span>
       </span>
       <span className="block h-1 overflow-hidden rounded-full bg-lc-titanium">
-        <span ref={rawBar} className="block h-full rounded-full bg-lc-dim" style={{ width: "0%" }} />
+        <span ref={rawBar} className="block h-full w-full rounded-full bg-lc-dim" style={{ transform: "translateX(-100%)" }} />
       </span>
       <span className="block h-1 overflow-hidden rounded-full bg-lc-titanium">
-        <span ref={shapedBar} className="block h-full rounded-full" style={{ width: "0%", background: color }} />
+        <span ref={shapedBar} className="block h-full w-full rounded-full" style={{ transform: "translateX(-100%)", background: color }} />
       </span>
     </div>
   );

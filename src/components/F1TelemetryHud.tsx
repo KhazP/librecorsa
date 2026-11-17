@@ -20,7 +20,8 @@ import type { SettingsCategory } from "./settings/SettingsScreen";
 import type { LeaderboardPanelProps } from "./hud/LeaderboardPanel";
 import type { CarId } from "@/lib/cars/car-registry";
 import { type BuiltTrackData } from "@/lib/track-data";
-import { HUD_TOGGLE_EVENT } from "@/lib/input/bindings";
+import { HUD_TOGGLE_EVENT, keyLabel } from "@/lib/input/bindings";
+import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { TrackMinimap } from "./TrackMinimap";
 import { ChallengeTargetPanel, LapPanel, TimingTower } from "./hud/TimingPanels";
 import { SpeedCluster } from "./hud/SpeedCluster";
@@ -328,9 +329,19 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   // The Phone HUD on a phone-sized screen, and for the game's own presets wherever the touch pads are up; a third-party
   // layout keeps its look on a tablet and steps out of the pads' way itself (`touch`)
   const phone = showsPhoneHud(preset, { phone: usePhoneLayout(), touchControls: touch });
+  // While the phone HUD is up the notices lose their blur too (HUD_GLASS), some of which render outside this tree
+  useEffect(() => {
+    if (!phone) return;
+    const root = document.documentElement;
+    root.setAttribute("data-phone-hud", "");
+    return () => root.removeAttribute("data-phone-hud");
+  }, [phone]);
   // The lap board is for large screens only: not mounted below 1280 × 720
   const largeScreen = useLargeScreen();
   const lapInvalid = useLapInvalid(telemetry);
+  // The mouse-steer key as bound, named as printed on this keyboard
+  useKeyLayout();
+  const mouseSteerKey = keyLabel(props.displayPanel?.settings.keys.mouseSteer[0] ?? "KeyV");
   // Under the virtual mirror's strip (its rect is shared with the renderer), with a little air
   // The renderer draws the mirror into this rect; the HUD frames it and starts the top-centre column under it
   const mirrorRect = props.virtualMirror && !phone && typeof window !== "undefined" ? virtualMirrorRect(window.innerWidth, window.innerHeight) : null;
@@ -685,7 +696,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         {mouseSteerEnabled ? (
           isThirdParty ? (
             <SkinPanel cut="sm" innerClassName="flex flex-col items-center gap-1.5 px-4 py-2">
-              <span className={`text-[10px] font-bold uppercase ${skinCss.inkInfo}`}>Mouse steering · V to exit</span>
+              <span className={`text-[10px] font-bold uppercase ${skinCss.inkInfo}`}>Mouse steering · {mouseSteerKey} to exit</span>
               <span className={`relative h-2 w-44 overflow-hidden ${skinCss.bgDeep} ${skinCss.radiusSm}`}>
                 <span className={`absolute inset-y-0 left-1/2 w-px ${skinCss.fillDim}`} />
                 <span
@@ -697,14 +708,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           ) : (
             <div className={`flex flex-col items-center gap-1.5 rounded-lc-tile px-4 py-2 ${HUD_GLASS}`}>
               <span className={HUD_LBL} style={{ color: HUD_INFO }}>
-                Mouse steering · V to exit
+                Mouse steering · {mouseSteerKey} to exit
               </span>
               <span className="relative h-2 w-44 overflow-hidden rounded-full bg-lc-titanium">
                 <span className="absolute inset-y-0 left-1/2 w-px bg-lc-chalk/40" />
-                <span
-                  className="absolute inset-y-0 w-2.5 -translate-x-1/2 rounded-full"
-                  style={{ left: `${50 + telemetry.steering * 48}%`, backgroundColor: HUD_INFO }}
-                />
+                {/* Moved by transform, so the steering dot doesn't lay out every tick */}
+                <span className="absolute inset-0" style={{ transform: `translateX(${telemetry.steering * 48}%)` }}>
+                  <span className="absolute inset-y-0 left-1/2 w-2.5 -translate-x-1/2 rounded-full" style={{ backgroundColor: HUD_INFO }} />
+                </span>
               </span>
             </div>
           )
@@ -833,14 +844,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           <SkinBanner
             role="status"
             cut="sm"
-            className="lc-panel-in absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center px-4 text-[13px] font-semibold"
+            className="absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center px-4 text-[13px] font-semibold"
           >
             HUD hidden{props.hudToggleButton ? ` · ${props.hudToggleButton} brings it back` : ""}
           </SkinBanner>
         ) : (
           <div
             role="status"
-            className={`lc-panel-in absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center rounded-full px-4 lc-title text-[13px] text-lc-chalk ${HUD_GLASS}`}
+            className={`absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center rounded-full px-4 lc-title text-[13px] text-lc-chalk ${HUD_GLASS}`}
           >
             HUD hidden{props.hudToggleButton ? ` · ${props.hudToggleButton} brings it back` : ""}
           </div>

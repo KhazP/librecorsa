@@ -178,6 +178,12 @@
   --f1-green: #00e676;
 }
 
+/* No pull-to-refresh or rubber-band: a pull at the top of a menu would reload the game */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -269,6 +275,18 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .hud-fade-out {
     animation-name: hud-fade-out-still;
+  }
+}
+
+/* ---- Touch: two quick taps on a control are two taps, not a double-tap zoom; a long press doesn't select its label ----
+   Zero specificity, so the touch controls' own touch-action: none still wins. Pinch zoom stays on */
+@layer base {
+  :where(button, a, summary, label, [role="button"], [role="tab"], [role="option"]) {
+    touch-action: manipulation;
+  }
+  :where(button, [role="button"], [role="tab"], [role="option"]) {
+    -webkit-user-select: none;
+    user-select: none;
   }
 }
 
@@ -399,6 +417,7 @@ body {
     font-style: italic;
     text-transform: uppercase;
     margin: 0;
+    text-wrap: balance;
   }
   .lc-h1 {
     font-size: 44px;
@@ -434,6 +453,7 @@ body {
     font-size: 14px;
     line-height: 1.45;
     color: var(--color-lc-fog);
+    text-wrap: pretty;
   }
   .lc-hint {
     font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
@@ -441,6 +461,7 @@ body {
     font-size: 12px;
     line-height: 1.4;
     color: var(--color-lc-slate);
+    text-wrap: pretty;
   }
   .lc-chip-text {
     font-family: var(--font-geist-mono), ui-monospace, monospace;
@@ -526,8 +547,9 @@ body {
       transform: none;
     }
   }
+  /* Backwards, not both: a held opacity animation keeps a blurred child from blurring (as lc-panel-in) */
   .lc-toast-in {
-    animation: lc-toast-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: lc-toast-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
   }
   @media (prefers-reduced-motion: reduce) {
     .lc-dot,
@@ -571,22 +593,33 @@ body {
     background: rgba(255, 255, 255, 0.04);
   }
 
-  /* Range sliders: volt fill drawn by the component (--lc-fill), round pitboard thumb with a volt ring */
+  /* Range sliders: volt fill drawn by the component (--lc-fill), round pitboard thumb with a volt ring.
+     The input is a 44 px touch target; the visible track (--lc-track, 6 px) is drawn by the track pseudo-elements */
   .lc-range {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
-    height: 6px;
+    height: 44px;
     margin: 0;
-    border-radius: 999px;
     outline: none;
     cursor: pointer;
+    background: transparent;
+  }
+  .lc-range::-webkit-slider-runnable-track {
+    height: var(--lc-track, 6px);
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ccff00 0 var(--lc-fill, 50%), #1b1f2b var(--lc-fill, 50%) 100%);
+  }
+  .lc-range::-moz-range-track {
+    height: var(--lc-track, 6px);
+    border-radius: 999px;
     background: linear-gradient(90deg, #ccff00 0 var(--lc-fill, 50%), #1b1f2b var(--lc-fill, 50%) 100%);
   }
   .lc-range::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 20px;
     height: 20px;
+    margin-top: calc((var(--lc-track, 6px) - 20px) / 2);
     border-radius: 50%;
     background: #f5f7fa;
     border: 4px solid #ccff00;
@@ -649,18 +682,17 @@ body {
   .lc-drift {
     animation: lc-drift 7s ease-in-out infinite;
   }
-  /* Track-limits / warning pill: a crimson halo pulses out from the edge */
+  /* Track-limits / warning pill: a crimson ring pulses at its edge, twice a cycle. The ring is its own layer and only
+     fades (opacity), so the blurred pill is painted once instead of every frame */
   @keyframes lc-alert {
     0%,
+    50%,
     100% {
-      box-shadow:
-        0 0 0 0 rgba(255, 42, 60, 0.55),
-        0 12px 34px rgba(255, 42, 60, 0.35);
+      opacity: 0;
     }
-    50% {
-      box-shadow:
-        0 0 0 10px rgba(255, 42, 60, 0),
-        0 12px 34px rgba(255, 42, 60, 0.35);
+    18%,
+    68% {
+      opacity: 1;
     }
   }
   /* Waiting for an input (binding capture, calibration): a volt halo */
@@ -704,8 +736,20 @@ body {
       opacity: 0.6;
     }
   }
+  /* A crimson glow under the pill (its shadow-lc-pop in crimson; skin banners carry no shadow utility, so the plain
+     box-shadow serves them) and the ring above, the only part that animates */
   .lc-alert {
-    animation: lc-alert 1.4s ease-out infinite;
+    --tw-shadow-color: rgba(255, 42, 60, 0.35);
+    box-shadow: 0 12px 34px rgba(255, 42, 60, 0.35);
+  }
+  .lc-alert::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 0 0 5px rgba(255, 42, 60, 0.28);
+    pointer-events: none;
+    animation: lc-alert 1.4s ease-in-out infinite;
   }
   .lc-listen {
     animation: lc-listen 1.4s ease-out infinite;
@@ -729,7 +773,7 @@ body {
     .lc-flow,
     .lc-ping,
     .lc-drift,
-    .lc-alert,
+    .lc-alert::after,
     .lc-listen,
     .lc-wave,
     .lc-ripple,
@@ -750,8 +794,10 @@ body {
     transform: none;
   }
 }
+/* Backwards, not both: an opacity animation still held after it ends keeps the panel a backdrop root, and the
+   frosted glass inside it never blurs */
 .lc-panel-in {
-  animation: lc-panel-in 180ms ease-out both;
+  animation: lc-panel-in 180ms ease-out backwards;
 }
 @media (prefers-reduced-motion: reduce) {
   .lc-panel-in {
@@ -807,9 +853,20 @@ body {
   transform-origin: bottom;
   animation: lc-rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
+/* Text that rises into place whole (podium places and names), hidden until its delay is up */
+@keyframes lc-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+.lc-rise-in {
+  animation: lc-rise-in 400ms var(--lc-ease) backwards;
+}
 @media (prefers-reduced-motion: reduce) {
   .lc-grow,
-  .lc-rise {
+  .lc-rise,
+  .lc-rise-in {
     animation: none;
   }
 }

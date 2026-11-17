@@ -154,14 +154,15 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 /** This week's top five by wins then podiums, and the player's record in one line */
 const RaceResultsLines: React.FC<{ standings: WeekStanding[]; record: DriverRecord | null }> = ({ standings, record }) => (
   <div className="flex flex-col gap-2 border-t border-lc-line pt-4">
-    <h4 className="lc-row-label m-0">This week&apos;s top drivers</h4>
     {standings.length === 0 ? null : (
+      <>
+      <h4 className="lc-row-label m-0">This week&apos;s top drivers</h4>
       <ol className="m-0 flex list-none flex-col p-0">
         {standings.slice(0, 5).map((s, i) => (
           <li key={`${s.name}-${i}`} className="flex h-9 items-center justify-between gap-3 border-b border-white/5 last:border-b-0">
             <span className="flex min-w-0 items-center gap-2.5">
               <PositionBadge position={i + 1} size="sm" className="min-w-10" />
-              <span className="truncate text-[14px] font-semibold">{s.name}</span>
+              <span className="truncate text-[14px] font-semibold" title={s.name}>{s.name}</span>
             </span>
             <span className="lc-mono shrink-0 text-[12px] font-bold text-lc-fog">
               {plural(s.wins, "win", "wins")} · {plural(s.podiums, "podium", "podiums")}
@@ -169,6 +170,7 @@ const RaceResultsLines: React.FC<{ standings: WeekStanding[]; record: DriverReco
           </li>
         ))}
       </ol>
+      </>
     )}
     {record && record.starts > 0 ? (
       <p className="lc-hint m-0">

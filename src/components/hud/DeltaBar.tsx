@@ -106,11 +106,11 @@ export const DeltaBar: React.FC<{ deltaS: number | null; width?: number; /** The
       <div className="absolute inset-x-0 top-2 h-2.5 overflow-hidden rounded-full bg-lc-void/70 inset-ring inset-ring-white/8">
         {/* Each half scales from the centre line (transform only, so the bar never re-lays out) */}
         <span
-          className="absolute inset-y-0 right-1/2 w-1/2 origin-right bg-lc-gain transition-transform duration-[120ms] ease-out"
+          className="absolute inset-y-0 right-1/2 w-1/2 origin-right bg-lc-gain transition-transform duration-100 ease-linear"
           style={{ transform: `scaleX(${aheadK})` }}
         />
         <span
-          className="absolute inset-y-0 left-1/2 w-1/2 origin-left bg-lc-loss transition-transform duration-[120ms] ease-out"
+          className="absolute inset-y-0 left-1/2 w-1/2 origin-left bg-lc-loss transition-transform duration-100 ease-linear"
           style={{ transform: `scaleX(${behindK})` }}
         />
         {/* ±0.5 s ticks */}

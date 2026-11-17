@@ -2,6 +2,8 @@
 
 import React from "react";
 import { useInputMode } from "@/components/menu/input-mode";
+import { keyLabel } from "@/lib/input/bindings";
+import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { ArrowKeys, KeyCap, KeysFromString } from "./KeyCap";
 import { PadGlyph, type PadButtonName, type PadGlyphFamily } from "./PadGlyph";
 
@@ -31,7 +33,9 @@ const PAD_FOR: Record<PromptAction, PadButtonName[]> = {
   pages: ["lt", "rt"],
 };
 
+// The tab and page keys are physical positions (useFocusNav matches KeyQ / KeyE / KeyZ / KeyC): named as printed here
 const KeysFor: React.FC<{ action: PromptAction }> = ({ action }) => {
+  useKeyLayout();
   switch (action) {
     case "move":
       return <ArrowKeys set="all" />;
@@ -40,15 +44,15 @@ const KeysFor: React.FC<{ action: PromptAction }> = ({ action }) => {
     case "tabs":
       return (
         <span className="inline-flex items-center gap-1">
-          <KeyCap>Q</KeyCap>
-          <KeyCap>E</KeyCap>
+          <KeyCap>{keyLabel("KeyQ")}</KeyCap>
+          <KeyCap>{keyLabel("KeyE")}</KeyCap>
         </span>
       );
     case "pages":
       return (
         <span className="inline-flex items-center gap-1">
-          <KeyCap>Z</KeyCap>
-          <KeyCap>C</KeyCap>
+          <KeyCap>{keyLabel("KeyZ")}</KeyCap>
+          <KeyCap>{keyLabel("KeyC")}</KeyCap>
         </span>
       );
     case "back":

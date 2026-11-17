@@ -190,8 +190,9 @@ export interface ControlEnvelope {
 /** The default circuit (DEFAULT_TRACK_ID in track-data.ts, which loads three.js and so can't be imported here) */
 export const FALLBACK_TRACK_ID = 'rwanda_official_short';
 
+// Cut by code point, not UTF-16 unit, so a name never ends in half an emoji (a lone surrogate draws as a broken glyph)
 const clampStr = (v: unknown, max: number, fallback: string) =>
-  typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f<>]/g, '').slice(0, max) : fallback;
+  typeof v === 'string' ? Array.from(v.replace(/[\u0000-\u001f\u007f<>]/g, '')).slice(0, max).join('') : fallback;
 const asCode = (v: unknown) => {
   const s = typeof v === 'string' ? v.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) : '';
   return s.length === 3 ? s : 'DRV';
