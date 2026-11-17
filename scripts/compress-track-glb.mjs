@@ -5,8 +5,10 @@
  *   node scripts/compress-track-glb.mjs --all          # every circuit in public/tracks/index.json
  *
  * The visual scan is quantized (16-bit positions, 8-bit normals, 14-bit UVs). The hidden physics meshes
- * (Track_Collider_* / Track_Surface_*, or nodes with a `collider` / `hidden` extra) keep their float positions
- * and node transforms, and the script re-reads its output and fails unless every physics vertex is unchanged.
+ * (Track_Collider_* / Track_Surface_*, or nodes with a `collider` / `hidden` extra) and the drawn meshes laid on them
+ * (`keepShape`: a mod's modelled kerbs, which must match their physics mesh to the millimetre; 16 bits over a kerb mesh
+ * spanning the circuit are 2 cm steps) keep their float positions and node transforms, and the script re-reads its
+ * output and fails unless every one of their vertices is unchanged.
  * Already compressed files are skipped. The browser decodes with three's MeshoptDecoder (src/lib/gltf-loader.ts),
  * the Node scripts with scripts/lib/glb-geometry.ts. scripts/tracks/port_ac_track.py runs it on every GLB it writes;
  * run it yourself on one built with --no-compress or by scripts/tracks/build_track.py.
@@ -39,7 +41,7 @@ function isMeshoptCompressed(file) {
 
 const isPhysicsNode = (node) => {
   const extras = node.getExtras() ?? {};
-  return /^Track_(Collider|Surface)_/.test(node.getName()) || Boolean(extras.collider || extras.hidden);
+  return /^Track_(Collider|Surface)_/.test(node.getName()) || Boolean(extras.collider || extras.hidden || extras.keepShape);
 };
 
 /** Meshes under a physics node (the node itself or any descendant) */
@@ -180,6 +182,6 @@ for (const file of files) {
   const size1 = statSync(file).size;
   before += size0;
   after += size1;
-  console.log(`${path.basename(file)}: ${(size0 / 1e6).toFixed(1)} MB -> ${(size1 / 1e6).toFixed(1)} MB (${reference.size} physics meshes bit-exact)`);
+  console.log(`${path.basename(file)}: ${(size0 / 1e6).toFixed(1)} MB -> ${(size1 / 1e6).toFixed(1)} MB (${reference.size} physics and kept-shape meshes bit-exact)`);
 }
 if (before > 0) console.log(`total: ${(before / 1e6).toFixed(1)} MB -> ${(after / 1e6).toFixed(1)} MB`);
