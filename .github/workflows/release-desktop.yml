@@ -99,6 +99,8 @@ jobs:
 
       # Tag builds are signed with release-signing once the repository variable SIGNPATH_SIGN_RELEASES is "true",
       # which waits for SignPath's production certificate. Until then a tag build ships unsigned, as before.
+      # The version goes to SignPath, whose artifact configuration only signs an installer whose product version
+      # matches it (SignPath Foundation requires product name and version restrictions).
       - name: Pick SignPath signing policy
         id: signing
         if: matrix.platform == 'win'
@@ -113,8 +115,10 @@ jobs:
           elif [ "$SIGN_RELEASES" = "true" ]; then
             policy="release-signing"
           fi
+          version="$(node -p "require('./desktop/package.json').version")"
           echo "policy=$policy" >> "$GITHUB_OUTPUT"
-          echo "SignPath policy: ${policy:-none, the installer stays unsigned}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "SignPath policy: ${policy:-none, the installer stays unsigned} (version $version)"
 
       - name: Upload unsigned installer for SignPath
         id: unsigned
@@ -139,6 +143,8 @@ jobs:
           wait-for-completion: true
           wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: desktop/dist-signed
+          parameters: |
+            version: ${{ toJSON(steps.signing.outputs.version) }}
 
       # Signing changes the installer's bytes, so the block map and latest.yml electron-builder wrote are rebuilt
       # from the signed file. Without this, installed copies reject the update as a checksum mismatch.
