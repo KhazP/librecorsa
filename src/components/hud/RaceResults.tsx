@@ -22,6 +22,7 @@ const formatRaceTime = (totalS: number): string => formatLapTime(Math.round(tota
 
 /** Time / gap column: winner's total time, "+12.345", "+1 lap" / "+n laps", Running or DNF */
 function timeOrGap(r: RaceResultEntry, resultsFinal: boolean): string {
+  if (r.dq) return "DSQ";
   if (r.dnf) return "DNF";
   if (r.finishTimeS === null) return resultsFinal ? "DNF" : "Running";
   if (r.position === 1) return formatRaceTime(r.finishTimeS);
@@ -237,7 +238,8 @@ export const RaceResults: React.FC<{
                     <td className="lc-mono px-2 text-right text-[13px] font-bold text-lc-fog max-sm:hidden">{r.lapsCompleted}</td>
                     <td className="px-2 text-right whitespace-nowrap">
                       <span className="inline-flex items-center justify-end gap-2">
-                        {r.penaltyS ? (
+                        {r.dq ? <PenaltyBadge penalty={{ kind: "disqualified" }} size="sm" /> : null}
+                        {r.penaltyS && !r.dq ? (
                           <span title={`${r.penaltyS.toFixed(1)} s of time penalties, included in the time`}>
                             <PenaltyBadge penalty={{ kind: "time", seconds: penaltySeconds(r.penaltyS) }} size="sm" />
                           </span>
@@ -333,9 +335,9 @@ const PlayerSummary: React.FC<{ me: RaceResultEntry; fieldSize: number; fastest:
     <div className="grid grid-cols-3 gap-2.5 short:hidden" aria-label="Your race">
       <Well className={cell}>
         <span className={`lc-mono text-[22px] leading-tight font-bold ${me.dnf ? "text-lc-loss" : "text-lc-volt"}`}>
-          {me.dnf ? "DNF" : `P${me.position}`}
+          {me.dq ? "DSQ" : me.dnf ? "DNF" : `P${me.position}`}
         </span>
-        <span className={after}>{me.dnf ? "Out of the race" : `of ${fieldSize}`}</span>
+        <span className={after}>{me.dq ? "Disqualified" : me.dnf ? "Out of the race" : `of ${fieldSize}`}</span>
       </Well>
       <Well className={cell}>
         <span className="leading-tight">

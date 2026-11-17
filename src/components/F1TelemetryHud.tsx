@@ -591,9 +591,17 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             layouts that show the delta up here themselves */}
         {hud?.deltaBar && !phone && !style?.ownDeltaBar && !lightsPhase ? <DeltaBar deltaS={deltaS} runId={telemetry.runId ?? 0} /> : null}
         {!lightsPhase ? (
-          <RaceControlBanner status={telemetry.trackLimits} offTrack={telemetry.offTrack} race={Boolean(race)} yellow={Boolean(race?.yellow)} />
+          <RaceControlBanner
+            status={telemetry.trackLimits}
+            offTrack={telemetry.offTrack}
+            race={Boolean(race)}
+            yellow={Boolean(race?.yellow)}
+            yellowGiveBack={race?.giveBack}
+          />
         ) : null}
-        {!lightsPhase && race ? <RaceIncidentFeed messages={race.raceControl} yellow={race.yellow} /> : null}
+        {!lightsPhase && race ? (
+          <RaceIncidentFeed messages={race.raceControl} yellow={race.yellow} doubleYellow={race.doubleYellow} blueFlag={race.blueFlag} />
+        ) : null}
         {aeroNoticeNow ? (
           isThirdParty ? (
             <SkinBanner
