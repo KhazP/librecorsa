@@ -33,13 +33,15 @@ function wrapDs(a: number, b: number, L: number): number {
 
 /**
  * On-track relative table: the cars nearest the player by road distance, `n` ahead and `n` behind, with the
- * time it takes to close the gap on the road and how many laps up or down each car is.
+ * time it takes to close the gap on the road and how many laps up or down each car is. The player goes by their
+ * race standing's code, or `playerCode` (their own, Settings > Display > Driver) outside a race.
  */
 export function computeRelatives(
   t: CarTelemetry,
   tracker: LapDeltaTracker | null,
   L: number,
   playerCompound: TireCompound,
+  playerCode: string,
   n = 3,
 ): RelativeRow[] {
   const playerS = t.trackDistanceM;
@@ -87,7 +89,7 @@ export function computeRelatives(
   const behind = placed.filter((r) => r.dsM < 0).sort((a, b) => b.dsM - a.dsM).slice(0, n);
   const player: RelativeRow = {
     key: "player",
-    code: me?.driverCode ?? "YOU",
+    code: me?.driverCode ?? playerCode,
     // The player's own colour, or the player's volt (a CSS colour: the relative page draws it in style)
     color: me?.teamColorHex ?? "var(--color-lc-volt)",
     isPlayer: true,
