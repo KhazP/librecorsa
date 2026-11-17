@@ -376,6 +376,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
 
   const lightsPhase = race?.phase === "lights";
+  // An assisted start's cue: a manual start has its own checklist (LaunchCue), and the throttle with the clutch out
+  // there takes the car away early
+  const throttleCue = lightsPhase && !telemetry.start;
   const style = phone ? PHONE_STYLE : HUD_STYLES[preset];
   const thirdPartySkin = thirdPartySkinOf(preset, phone);
   const isThirdParty = thirdPartySkin !== null;
@@ -683,7 +686,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             )}
           </span>
         ) : null}
-        {lightsPhase ? (
+        {throttleCue ? (
           isThirdParty ? (
             <SkinBanner cut="sm" className="inline-flex h-10 items-center gap-2.5 pr-4 pl-3">
               <Icon name="play" size="xs" />
