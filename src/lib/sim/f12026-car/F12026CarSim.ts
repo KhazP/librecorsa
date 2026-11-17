@@ -1007,6 +1007,7 @@ export class F12026CarSim implements SimulatorCar {
       },
       lapLengthM: L,
       drsEligibleAtDetection: (zone) => (this.raceControl?.racing ? this.raceControl.earnedAtDetection(zone.id) : true),
+      flapsBarred: () => !!this.raceControl?.racing && !!this.raceControl.aidsLocked,
       bodyPlan: profile.bodyPlan,
       onEvent: (e) => this.onVehicleEvent(e),
     });

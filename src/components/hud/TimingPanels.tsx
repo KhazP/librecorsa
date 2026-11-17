@@ -79,7 +79,11 @@ export const TowerRows: React.FC<{
                   FL
                 </Badge>
               ) : null}
-              {e.penaltyS ? <PenaltyBadge penalty={{ kind: "time", seconds: Math.round(e.penaltyS) }} size="hud" variant="solid" /> : null}
+              {e.dq ? (
+                <PenaltyBadge penalty={{ kind: "disqualified" }} size="hud" variant="solid" />
+              ) : e.penaltyS ? (
+                <PenaltyBadge penalty={{ kind: "time", seconds: Math.round(e.penaltyS) }} size="hud" variant="solid" />
+              ) : null}
               {e.finished ? <FlagIcon flag="chequered" size={14} label="Finished" /> : null}
               {!e.retired && e.damage !== undefined && e.damage >= 0.15 ? (
                 <span

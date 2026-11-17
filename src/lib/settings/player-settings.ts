@@ -228,7 +228,7 @@ export interface HudSettings {
   deltaBar: boolean;
   /** Card with sectors, corner speeds and the theoretical best after every lap */
   lapSummary: boolean;
-  /** HUD rear-view mirror: auto = onboard views without wing mirrors on screen */
+  /** HUD rear-view mirror: auto = with other cars about (a race, other players), in onboard views without wing mirrors on screen */
   virtualMirror: VirtualMirrorMode;
   /** Timing tower gaps: to the car ahead (interval) or to the leader */
   towerGaps: "interval" | "leader";

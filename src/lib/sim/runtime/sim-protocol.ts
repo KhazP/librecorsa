@@ -74,6 +74,8 @@ export interface RaceStartSetup {
   manualStart?: boolean;
   /** The player's code and colour (`AiRace.playerDriver`) */
   driver: RaceDriverLabel | null;
+  /** The rules close the overtaking aids inside a yellow zone */
+  lockAidsInYellow?: boolean;
 }
 
 /**
@@ -98,7 +100,8 @@ export type RaceCommand =
       seed?: number;
     }
   | { type: "race"; op: "skill"; skill: number }
-  | { type: "race"; op: "penalty"; seconds: number }
+  | { type: "race"; op: "penalty"; seconds: number; dq?: boolean }
+  | { type: "race"; op: "rules"; lockAidsInYellow: boolean }
   | { type: "race"; op: "conditions"; conditions: SessionConditions }
   | { type: "race"; op: "realism"; flags: SimRealismFlags }
   | { type: "race"; op: "end" };

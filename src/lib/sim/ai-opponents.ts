@@ -51,6 +51,7 @@ import {
   RacecraftMemory,
 } from '@/lib/sim/ai-racecraft';
 import { RaceIncidents } from '@/lib/sim/race-incidents';
+import { YellowPassJudge, type PassCar, type YellowLevel } from '@/lib/sim/yellow-passes';
 import { aiTrackFor, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
 import { carLimitsFor } from '@/lib/sim/ai/ggv';
 import { drivePlanJob, driveLineOf, makeDrivePlan, type AiDrivePlan, type DriveLine } from '@/lib/sim/ai/drive-plan';
@@ -494,6 +495,21 @@ const fieldContactYawCap = (impactMs: number) => THREE.MathUtils.clamp(0.25 + 0.
 const fieldContactDvCap = (impactMs: number) => Math.max(CONTACT_MAX_DV_MS, 2 + 1.3 * impactMs);
 /** Two boxes can only overlap with their centres within a full diagonal (m, squared) */
 const CONTACT_BROAD_M2 = CAR_LEN_M * CAR_LEN_M + CAR_WID_M * CAR_WID_M;
+/** AI pace through a yellow zone and a double-yellow one (share of the car's own) */
+export const YELLOW_PACE = 0.93;
+export const DOUBLE_YELLOW_PACE = 0.72;
+/**
+ * Double yellow: a hazard stopped on the road (under this speed, m/s), going the wrong way, or two hazards within this
+ * distance of each other (m); up once its cause has lasted `DOUBLE_ON_S`, down once it has been gone `DOUBLE_OFF_S`
+ */
+const DOUBLE_STOPPED_MS = 2;
+const DOUBLE_CLUSTER_M = 250;
+const DOUBLE_ON_S = 0.5;
+const DOUBLE_OFF_S = 2;
+/** Blue flag: a car a lap up within this time behind the player on the road (s), and this close (m) */
+const BLUE_FLAG_S = 1.2;
+const BLUE_FLAG_M = 90;
+
 /** A retired car stopped this long is taken away by the marshals (s): long enough to be a yellow-flag hazard */
 const RETIRED_REMOVE_S = 20;
 
@@ -1208,6 +1224,7 @@ export class AiOpponentField implements AiRace {
     });
     this.player.aiAutopilot = false;
     this.playerPenaltyS = 0;
+    this.playerDq = false;
     this.raceTimeS = 0;
     this.gapTimer.reset();
     this.splitTimer.reset();
@@ -1217,6 +1234,10 @@ export class AiOpponentField implements AiRace {
     this.incidents.length = 0;
     this.raceControl.reset();
     this.yellowS.length = 0;
+    this.yellowDouble.length = 0;
+    this.yellowCar.length = 0;
+    this.doubleState.clear();
+    this.yellowPasses.reset();
     this.passOrder = [];
     this.passTimerS = 0;
     this.phase = standing ? 'lights' : 'racing';
@@ -1268,7 +1289,7 @@ export class AiOpponentField implements AiRace {
     this.raceTimeS += dt;
     this.incidents.length = 0;
     if (this.ownsEnvironment) this.environment.update(dt, this.allSims);
-    this.updateYellows();
+    this.updateYellows(dt);
     this.planTraffic(dt);
     for (const car of this.cars) {
       car.contact = false;
@@ -1309,7 +1330,8 @@ export class AiOpponentField implements AiRace {
       this.trackDistance(car);
       this.syncPeer(car);
     }
-    this.raceControl.update(this.raceTimeS, this.incidents, this.playerUnderYellow());
+    this.raceControl.update(this.raceTimeS, this.incidents, this.playerYellowLevel());
+    this.judgeYellowPasses(dt);
     this.countPasses();
   }
 
@@ -1333,15 +1355,14 @@ export class AiOpponentField implements AiRace {
 
   /** The player is coming up on a yellow flag (someone else's incident ahead) */
   public playerUnderYellow(): boolean {
+    return this.playerYellowLevel() > 0;
+  }
+
+  /** The flag where the player is (someone else's incident ahead): green, yellow or double yellow */
+  public playerYellowLevel(): YellowLevel {
     const me = this.cars.find((c) => c.isPlayer);
-    if (!me || this.phase !== 'racing') return false;
-    const L = this.track.totalLengthM;
-    for (const c of this.cars) {
-      if (c === me || !this.isHazard(c)) continue;
-      const sample = this.track.getSampleAtDistance(c.sim.sMeters);
-      if (Math.abs(c.sim.lateralOffsetM) < sample.width / 2 + 4 && inYellowZone(me.sim.sMeters, c.sim.sMeters, L)) return true;
-    }
-    return false;
+    if (!me || this.phase !== 'racing') return 0;
+    return this.yellowLevelAt(me.sim.sMeters, me);
   }
 
   /** What the driver feels of the car, for its hands (`AiCarControl`) */
@@ -1481,7 +1502,8 @@ export class AiOpponentField implements AiRace {
       // Racecraft here: the tuning (with its section overrides), the skill level and the driver's temperament.
       // At the shipped caution the passing rules are exactly the ones this field always raced with.
       const T = this.tuning;
-      const yellow = this.underYellow(me.sMeters);
+      const yellowFlag = this.yellowLevelAt(me.sMeters);
+      const yellow = yellowFlag > 0;
       const caution = THREE.MathUtils.clamp(
         T.at('overtakeCaution', me.sMeters) + this.mods.cautionAdd - 0.25 * this.aggressionOf(car) + this.raceControl.cautionOf(car.code, this.raceTimeS),
         0,
@@ -1807,7 +1829,7 @@ export class AiOpponentField implements AiRace {
       // Rain: the pace the tyres' grip on this much water allows (weather.ts / track-environment.ts)
       const weatherPace = this.environment.weatherPaceScale(me);
       // Yellow flag: lift through the zone
-      const yellowLift = yellow ? 0.93 : 1;
+      const yellowLift = yellowFlag === 2 ? DOUBLE_YELLOW_PACE : yellow ? YELLOW_PACE : 1;
       // Making a pass stick: a little more into the corner (a later brake, more speed) once alongside
       const passing = craft.passTargetId !== null && ahead !== null && aheadGap < CAR_LEN_M * 1.2 && !passBlocked;
       const attackPush = passing ? 1 + this.rc.attackPush * (1 + Math.max(0, this.aggressionOf(car))) : 1;
@@ -1991,24 +2013,119 @@ export class AiOpponentField implements AiRace {
     return Math.atan2(Math.sin(err), Math.cos(err));
   }
 
-  /** Lap distances of the hazards on the road (yellow flags), refreshed each frame */
+  /** The hazards on the road (yellow flags), refreshed each frame: lap distance, double yellow or not, and the car */
   private readonly yellowS: number[] = [];
+  private readonly yellowDouble: boolean[] = [];
+  private readonly yellowCar: FieldCar[] = [];
+  /** Each hazard's double-yellow cause: how long it has lasted or been gone, and whether its double yellow is up */
+  private readonly doubleState = new Map<FieldCar, { onS: number; offS: number; up: boolean }>();
 
-  private updateYellows(): void {
+  private updateYellows(dt: number): void {
     this.yellowS.length = 0;
+    this.yellowDouble.length = 0;
+    this.yellowCar.length = 0;
+    const L = this.track.totalLengthM;
     for (const c of this.cars) {
       if (!this.isHazard(c)) continue;
       const sample = this.track.getSampleAtDistance(c.sim.sMeters);
       // On or by the road: a car far out in a run-off area needs no yellow
-      if (Math.abs(c.sim.lateralOffsetM) < sample.width / 2 + 4) this.yellowS.push(c.sim.sMeters);
+      if (Math.abs(c.sim.lateralOffsetM) < sample.width / 2 + 4) {
+        this.yellowS.push(c.sim.sMeters);
+        this.yellowCar.push(c);
+      }
     }
+    for (const [car] of this.doubleState) if (!this.yellowCar.includes(car)) this.doubleState.delete(car);
+    for (let i = 0; i < this.yellowCar.length; i++) {
+      const c = this.yellowCar[i];
+      const sample = this.track.getSampleAtDistance(c.sim.sMeters);
+      const stoppedOnRoad = Math.abs(c.sim.vxMs) < DOUBLE_STOPPED_MS && Math.abs(c.sim.lateralOffsetM) < sample.width / 2;
+      const wrongWay = Math.abs(this.headingErr(c.sim)) > Math.PI / 2;
+      const cluster = this.yellowS.some((s, j) => j !== i && Math.abs(wrapHalf(s - this.yellowS[i], L)) < DOUBLE_CLUSTER_M);
+      const st = this.doubleState.get(c) ?? { onS: 0, offS: 0, up: false };
+      if (stoppedOnRoad || wrongWay || cluster) {
+        st.onS += dt;
+        st.offS = 0;
+        if (st.onS >= DOUBLE_ON_S) st.up = true;
+      } else {
+        st.offS += dt;
+        st.onS = 0;
+        if (st.offS >= DOUBLE_OFF_S) st.up = false;
+      }
+      this.doubleState.set(c, st);
+      this.yellowDouble.push(st.up);
+    }
+  }
+
+  /** The flag at lap distance `s`: green, yellow or double yellow; `except` leaves a car's own incident out */
+  public yellowLevelAt(s: number, except?: FieldCar): YellowLevel {
+    const L = this.track.totalLengthM;
+    let level: YellowLevel = 0;
+    for (let i = 0; i < this.yellowS.length; i++) {
+      if (this.yellowCar[i] === except || !inYellowZone(s, this.yellowS[i], L)) continue;
+      if (this.yellowDouble[i]) return 2;
+      level = 1;
+    }
+    return level;
   }
 
   /** Inside a yellow flag zone at lap distance `s` */
   public underYellow(s: number): boolean {
+    return this.yellowLevelAt(s) > 0;
+  }
+
+  /** Passes the player makes under yellow, and the places owed back */
+  private readonly yellowPasses = new YellowPassJudge();
+
+  private judgeYellowPasses(dt: number): void {
+    const me = this.cars.find((c) => c.isPlayer);
+    if (!me) return;
+    const active = this.phase === 'racing' && !me.retired && me.finishTimeS === null && !this.player.aiAutopilot;
+    const cars: PassCar[] = [];
+    for (const c of this.cars) {
+      if (c === me) continue;
+      const sample = this.track.getSampleAtDistance(c.sim.sMeters);
+      const gone = c.removed || c.retired || c.finishTimeS !== null;
+      const off = Math.abs(c.sim.lateralOffsetM) > sample.width / 2 + 1;
+      const wrongWay = Math.abs(this.headingErr(c.sim)) > Math.PI / 2;
+      cars.push({ code: c.code, distM: c.distM, exempt: gone || off || wrongWay || this.isHazard(c), gone });
+    }
+    const t = this.raceTimeS;
+    for (const e of this.yellowPasses.update(dt, me.distM, cars, this.playerYellowLevel(), active)) {
+      const flag = e.double ? 'double yellow' : 'yellow';
+      if (e.kind === 'order') {
+        this.raceControl.announce(t, 'investigation', `Overtake under ${flag}`, `Give the place back to ${e.code}`);
+      } else if (e.kind === 'returned') {
+        this.raceControl.announce(t, 'nfa', 'Position handed back', 'No further action');
+      } else if (e.kind === 'penalty') {
+        this.raceControl.penalise(t, me.code, e.seconds ?? 5, 'yellow_overtake', `Overtaking under ${flag} · ${e.code}`, true);
+      }
+    }
+  }
+
+  /** The car lapping the player, close behind it on the road (the blue flag); null when there is none */
+  private playerBlueFlag(): string | null {
+    const me = this.cars.find((c) => c.isPlayer);
+    if (!me || this.phase !== 'racing' || me.retired || me.finishTimeS !== null) return null;
     const L = this.track.totalLengthM;
-    for (const ys of this.yellowS) if (inYellowZone(s, ys, L)) return true;
-    return false;
+    for (const c of this.cars) {
+      if (c === me || c.removed || c.retired || c.finishTimeS !== null || c.distM - me.distM < 0.5 * L) continue;
+      const behindM = (((me.sim.sMeters - c.sim.sMeters) % L) + L) % L;
+      if (behindM > 0 && behindM <= BLUE_FLAG_M && behindM / Math.max(5, c.sim.vxMs) <= BLUE_FLAG_S) return c.code;
+    }
+    return null;
+  }
+
+  /**
+   * The race's rules close the overtaking aids inside a yellow zone (race-rules.ts `lockAidsInYellow`); set before the
+   * start, read every frame
+   */
+  public lockAidsInYellow = true;
+
+  /** A car's overtaking aids are closed: the rules say so and it is inside someone else's yellow zone */
+  public aidsLockedFor(sim: SimulatorCar): boolean {
+    if (!this.lockAidsInYellow || this.phase !== 'racing' || this.yellowS.length === 0) return false;
+    const car = this.cars.find((c) => c.sim === sim);
+    return this.yellowLevelAt(sim.sMeters, car) > 0;
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -2221,6 +2338,7 @@ export class AiOpponentField implements AiRace {
       penaltyS: (c.isPlayer ? this.playerPenaltyS : 0) + this.raceControl.penaltyOf(c.code),
       compound: c.sim.tireCompound,
       dnf: c.retired || undefined,
+      dq: (c.isPlayer && this.playerDq) || undefined,
     };
   }
 
@@ -2359,6 +2477,9 @@ export class AiOpponentField implements AiRace {
       get racing() {
         return field.raceRulesActiveFor(sim);
       },
+      get aidsLocked() {
+        return field.aidsLockedFor(sim);
+      },
       earnedAtDetection: () => field.detectionEarnedFor(sim),
     };
   }
@@ -2424,6 +2545,24 @@ export class AiOpponentField implements AiRace {
   public playerPenaltyS = 0;
   public manualStart = false;
 
+  private playerDq = false;
+
+  public get playerDisqualified(): boolean {
+    return this.playerDq;
+  }
+
+  /** Race control's black flag: the player is out, classified last (the cool-down takes the car, as on a retirement) */
+  public set playerDisqualified(dq: boolean) {
+    if (!dq || this.playerDq) return;
+    this.playerDq = true;
+    const car = this.cars.find((c) => c.isPlayer);
+    if (!car || car.retired || car.finishTimeS !== null) return;
+    car.retired = true;
+    car.retiredAtS = this.raceTimeS;
+    this.phase = 'finished';
+    this.raceControl.announce(this.raceTimeS, 'penalty', `${car.code} disqualified`, 'Track limits');
+  }
+
   public status(): RaceStatus {
     const L = this.track.totalLengthM;
     const progress = new Map<FieldCar, RacerProgress>();
@@ -2469,6 +2608,7 @@ export class AiOpponentField implements AiRace {
           intervalS,
           finished: c.finishTimeS !== null,
           retired: c.retired || undefined,
+          dq: (c.isPlayer && this.playerDq) || undefined,
           damage: c.damage.pristine ? undefined : Math.round(c.damage.overall * 100) / 100,
           bestLapMs: c.bestLapMs,
           lastLapMs: c.lastLapMs,
@@ -2486,6 +2626,9 @@ export class AiOpponentField implements AiRace {
       splits: this.phase === 'racing' ? this.playerSplits.compute(this.splitTimer, this.raceTimeS, orderedProgress) : undefined,
       raceControl: this.raceControlFeed(),
       yellow: this.playerUnderYellow() || undefined,
+      doubleYellow: this.playerYellowLevel() === 2 || undefined,
+      blueFlag: this.playerBlueFlag() ?? undefined,
+      giveBack: this.yellowPasses.owed ?? undefined,
       damage: this.playerDamageStatus(),
     };
   }

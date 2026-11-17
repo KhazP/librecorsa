@@ -37,11 +37,11 @@ import { VirtualMirror } from "@/lib/render/virtual-mirror";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/lib/sim/car-setup";
 import { CameraRig } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
-import { TrackLimitsMonitor } from "@/lib/sim/track-limits";
+import { LEGACY_TRACK_LIMITS, TrackLimitsMonitor, type TrackLimitsRules } from "@/lib/sim/track-limits";
 import { stretchTimeS } from "@/lib/sim/course-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
-import { startAiRace } from "@/lib/sim/race-setup";
+import { rulesForSetup, startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 import { JumpStartWatch, JUMP_START_PENALTY_S } from "@/lib/sim/race-start";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
@@ -155,7 +155,11 @@ const SEAT_PANEL_HOLD_MS = 450;
 export type AppPhase = "loading" | "title" | "wizard" | "driving";
 
 /** The race on track with the player: none (practice), the AI field, or a multiplayer race; never two at once */
-export type SessionRace = { kind: "practice" } | { kind: "ai"; field: AiRace } | { kind: "mp"; race: MultiplayerRace };
+export type SessionRace =
+  | { kind: "practice" }
+  /** `rules`: sporting rules fixed for this race (the weekly challenge's), over the player's race setup */
+  | { kind: "ai"; field: AiRace; rules?: Pick<RaceSetup, "rulePreset" | "trackLimits"> }
+  | { kind: "mp"; race: MultiplayerRace };
 /** The AI field on track, when the session is a race against it */
 export const aiFieldOf = (race: SessionRace): AiRace | null => (race.kind === "ai" ? race.field : null);
 /** The multiplayer race on track, when the session is an online race */
@@ -704,6 +708,18 @@ export class DriveSession {
     };
     /** Race control's session for a race on track (or practice) */
     const limitsSessionOf = (race: SessionRace) => (race.kind === "practice" ? "practice" : "race");
+    /** The AI race's rules close the overtaking aids inside a yellow zone (set with the track-limits ladder) */
+    let aidsLockInYellow = true;
+    /**
+     * Race control's track-limits ladder: an AI race's from its rules (the player's car class and the race setup);
+     * online races keep the strike ladder every build judges by, until the rules go over the wire
+     */
+    const limitsRulesOf = (race: SessionRace): TrackLimitsRules => {
+      if (race.kind !== "ai") return LEGACY_TRACK_LIMITS;
+      const rules = rulesForSetup(vehicleModelSpec(vehicleNow).classId, { ...settings.race, ...race.rules });
+      aidsLockInYellow = rules.lockAidsInYellow;
+      return { scoring: rules.trackLimits, pointsAllowed: rules.pointsAllowed };
+    };
     this.setRace = (next) => {
       endTimeTrial();
       const prev = this.currentRace;
@@ -711,7 +727,7 @@ export class DriveSession {
       if (prev.kind === "ai" && (next.kind !== "ai" || next.field !== prev.field)) prev.field.dispose?.();
       this.currentRace = next;
       setRaceKind(next.kind);
-      trackLimits.reset(limitsSessionOf(next));
+      trackLimits.reset(limitsSessionOf(next), limitsRulesOf(next));
       wallDeletedLaps.clear();
     };
     this.toggleAutopilot = () => {
@@ -767,6 +783,10 @@ export class DriveSession {
           earnedAtDetection: () => {
             const race = raceNow();
             return race.kind === "mp" ? race.race.detectionEarnedFor(self) : race.kind === "ai" ? race.field.detectionEarnedFor(self) : true;
+          },
+          get aidsLocked() {
+            const race = raceNow();
+            return race.kind === "ai" ? (race.field.aidsLockedFor?.(self) ?? false) : false;
           },
         };
       }
@@ -880,7 +900,7 @@ export class DriveSession {
         if (aiFieldSpare?.physics === physics && aiFieldSpare.opponents === opponents) {
           // The field, the player in it, on the race setup's start
           const cars = aiDriversFor(opponents).length + 1;
-          const rolling = settings.race.start === "rolling";
+          const rolling = settings.race.startMode === "rolling";
           const key = `${cars}:${rolling}`;
           if (gridWarm?.physics !== physics || gridWarm.key !== key) gridWarm = { physics, key, next: 0 };
           if (!physics.createAiPeerCar || gridWarm.next >= cars) return;
@@ -1762,7 +1782,7 @@ export class DriveSession {
       startClutchIn = 0;
       kbInput.padClutch = 0;
       // Race control and the cameras start over with the run (the car is about to be put somewhere else)
-      trackLimits.reset(limitsSessionOf(raceNow()));
+      trackLimits.reset(limitsSessionOf(raceNow()), limitsRulesOf(raceNow()));
       wallDeletedLaps.clear();
       cameraRig.reset();
       lapRecorder.reset();
@@ -1847,6 +1867,8 @@ export class DriveSession {
     const rainCamVel = new THREE.Vector3();
     const soloCars: SimulatorCar[] = [];
     const remoteWake: WakeEmitterCar[] = [];
+    /** Other players on this circuit last frame (a room's lobby included): the mirror's auto mode shows for them */
+    let peersOnTrack = 0;
     const ghostPos = new THREE.Vector3();
     const guardSelf: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
     const guardOther: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
@@ -2424,6 +2446,7 @@ export class DriveSession {
         const raceNow = t.race;
         physics.trackLimitsMode = trackLimits.mode === "race" ? "judged" : "strict";
         if (driving) {
+          const here = track.getSampleAtDistance(physics.sMeters);
           const tlEvent = trackLimits.update({
             nowMs,
             dtS: dtSeconds,
@@ -2437,9 +2460,13 @@ export class DriveSession {
             throttle: t.throttle,
             brake: t.brake,
             lateralM: physics.lateralOffsetM,
-            curvature: track.getSampleAtDistance(physics.sMeters).curvature,
+            curvature: here.curvature,
+            halfWidthM: here.width / 2,
             deltaS: lapDelta.delta(t),
             racePosition: raceNow?.position,
+            speedMs: physics.vxMs,
+            posX: physics.worldPosition.x,
+            posZ: physics.worldPosition.z,
             active: !physics.aiAutopilot && !mpFrozen && raceNow?.phase !== "lights" && raceNow?.phase !== "finished",
             // Barriers: a hill climb's run is done on any touch (judged up to its finish line), a circuit's lap only by
             // riding the wall
@@ -2457,8 +2484,14 @@ export class DriveSession {
           }
         }
         physics.trackLimitsHold = trackLimits.judging;
+        // The player's own calls, served at the flag: track limits and a jump start (race control's calls on the field,
+        // a pass under yellow among them, are in its ledger)
         const startPenaltyS = jumpWatch.jumped ? JUMP_START_PENALTY_S : 0;
-        if (aiField) aiField.playerPenaltyS = trackLimits.penaltyTotalS + startPenaltyS;
+        if (aiField) {
+          aiField.lockAidsInYellow = aidsLockInYellow;
+          aiField.playerPenaltyS = trackLimits.penaltyTotalS + startPenaltyS;
+          if (trackLimits.disqualified) aiField.playerDisqualified = true;
+        }
         if (mpRace) {
           mpRace.penaltyS = trackLimits.penaltyTotalS + startPenaltyS;
           mpRace.compound = physics.tireCompound;
@@ -2577,6 +2610,7 @@ export class DriveSession {
 
       // A peer on another circuit has coordinates that mean nothing here
       const samePeers = interpolatedPeers.filter((p) => !p.trackId || p.trackId === trackId);
+      peersOnTrack = samePeers.length;
       // On the lap where they are drawn, not where their newest packet put them (the tower, the relative, the gaps)
       placePeersWhereDrawn(samePeers, track.projectWorldToTrack, track.totalLengthM);
       peerWakeEmitters(track, samePeers, remoteWake);
@@ -2982,13 +3016,16 @@ export class DriveSession {
         reflectionProbe.update(podium.focus ?? physics.worldPosition, carRig.root, scene.environmentIntensity);
         startupMonitor?.end("probe");
         // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
-        // chase view too when the player asked for it always
+        // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an
+        // online race, or other players in the room (practice, the hotlap and qualifying are driven alone)
         const vmSetting = settingsNow.hud.virtualMirror;
         const vmView =
           view.virtualMirror === "always" ||
           (view.virtualMirror === "noSideMirrors" && !(wingMirrors?.found && wingMirrors.coversSides)) ||
           (view.virtualMirror === "onRequest" && vmSetting === "always");
-        const vmOn = driving && !inVr && !podium.playing && container.clientWidth >= 640 && vmSetting !== "off" && vmView;
+        const othersAbout = raceNow().kind !== "practice" || peersOnTrack > 0;
+        const vmOn =
+          driving && !inVr && !podium.playing && container.clientWidth >= 640 && vmView && (vmSetting === "always" || (vmSetting === "auto" && othersAbout));
         // The mirrors refresh every other frame, 30 times a second at 60 fps; under the 30 fps cap every drawn frame
         // does, which keeps them at 30
         const mirrorFrame = pacer.cap > 0 ? 0 : frameIndex;

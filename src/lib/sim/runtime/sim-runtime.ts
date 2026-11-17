@@ -207,6 +207,7 @@ export class SimRuntime {
         field.aggressionAdd = setup.aggressionAdd;
         field.playerDriver = setup.driver;
         field.manualStart = setup.standing && setup.manualStart === true;
+        field.lockAidsInYellow = setup.lockAidsInYellow ?? true;
         field.startRace(setup.standing);
         env.applyWeatherSync(command.weather);
         const ownRaceControl = car.raceControl;
@@ -215,6 +216,9 @@ export class SimRuntime {
           car.raceControl = {
             get racing() {
               return field.raceRulesActive;
+            },
+            get aidsLocked() {
+              return field.aidsLockedFor(car);
             },
             earnedAtDetection: () => field.detectionEarnedFor(car),
           };
@@ -230,7 +234,13 @@ export class SimRuntime {
         this.race?.field.setSkill(command.skill);
         return;
       case "penalty":
-        if (this.race) this.race.field.playerPenaltyS = command.seconds;
+        if (this.race) {
+          this.race.field.playerPenaltyS = command.seconds;
+          if (command.dq) this.race.field.playerDisqualified = true;
+        }
+        return;
+      case "rules":
+        if (this.race) this.race.field.lockAidsInYellow = command.lockAidsInYellow;
         return;
       case "conditions":
         this.race?.env.setConditions(command.conditions);
