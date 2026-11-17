@@ -475,5 +475,117 @@
     },
     "lift": { "popMinRpm": 6000, "crackleMinRpm": 6800, "downshiftPopChance": 0.5 },
     "limiterRetriggerS": 0.85
+  },
+  "chaparral-2d": {
+    "outDir": "public/cars/chaparral-2d/audio",
+    "limiterRpm": 6800,
+    "sourceDescription": "the Chaparral 2D (1966) mod by NPanic, sound by Felix789 - content/cars/wsc_legends_chaparral_2d_66/sfx/wsc_legends_chaparral_2d_66.bank",
+    "intBank": "librecorsa-src/wsc_legends_chaparral_2d_66/sfx/wsc_legends_chaparral_2d_66.bank",
+    "rawPcm16": true,
+    "engine": {
+      "int": {
+        "on": [
+          { "rpm": 1100, "rootRpm": 1250, "sample": "t70chevy_int_idle#13" },
+          { "rpm": 2000, "rootRpm": 2000, "sample": "t70chevy_int_lowwhine_on#7" },
+          { "rpm": 3500, "rootRpm": 3900, "sample": "t70chevy_int_low33_on#11" },
+          { "rpm": 4800, "rootRpm": 4700, "sample": "t70chevy_int_mid33Q_on#0" },
+          { "rpm": 5700, "rootRpm": 5980, "sample": "t70chevy_int_lowmidkick33_on#43" },
+          { "rpm": 6800, "rootRpm": 6950, "sample": "t70chevy_int_high33_on#61" }
+        ],
+        "off": [
+          { "rpm": 1100, "rootRpm": 1250, "sample": "t70chevy_int_idle#13" },
+          { "rpm": 2100, "rootRpm": 3400, "sample": "t70chevy_int_lowmid_off#2" },
+          { "rpm": 3500, "rootRpm": 3700, "sample": "t70chevy_int_lowmidkick5_off#53" },
+          { "rpm": 6800, "rootRpm": 6200, "sample": "t70chevy_int_midkick5raspy_off#21" }
+        ]
+      },
+      "ext": {
+        "on": [
+          { "rpm": 1100, "rootRpm": 1250, "sample": "t70chevy_ext_idle#36" },
+          { "rpm": 2100, "rootRpm": 3200, "sample": "lolat70mk3_ext_rear_lowdrive_on#28" },
+          { "rpm": 4600, "rootRpm": 4600, "sample": "lolat70mk3_ext_rear_midkick_on#10" },
+          { "rpm": 6800, "rootRpm": 5800, "sample": "lolat70mk3_ext_rear_highcutbuzz_on#19" }
+        ],
+        "off": [
+          { "rpm": 1100, "rootRpm": 1250, "sample": "t70chevy_ext_idle#36" },
+          { "rpm": 2300, "rootRpm": 3700, "sample": "lolat70mk3_ext_rear_midlow_off#37" },
+          { "rpm": 6800, "rootRpm": 5700, "sample": "lolat70mk3_ext_rear_highbuzz_off#3" }
+        ]
+      }
+    },
+    "transmission": [
+      { "layer": "on", "drivetrainSpeed": 70, "sample": "transmission#15", "rms": 0.03 },
+      { "layer": "off", "drivetrainSpeed": 70, "sample": "transmission#15", "rms": 0.022 }
+    ],
+    "skid": { "int": "Skid#18", "ext": "skid_ext_mono#12" },
+    "tractionControl": "traction_control#51",
+    "oneshots": {
+      "gear_up": ["veh_gear_shift_classic_up 0 3 0 short#9", "gearupEXT#63"],
+      "gear_down": ["veh_gear_shift_classic_up 0 0 0 short#40", "geardnEXT#55"],
+      "backfire_int": ["500_backfire3#17", "500_backfire4#57", "500_backfire5#30", "500_backfire6#47", "500_backfire7#22"],
+      "backfire_ext": ["backfireEXT_1#35", "backfireEXT_2#60", "backfireEXT_3#42", "backfireEXT_4#54", "backfireEXT_5#41", "backfireEXT_6#52", "backfireEXT_7#38", "backfireEXT_9#27"]
+    },
+    "shiftFallbackSample": "500_backfire4#57",
+    "limiterFallbackSample": "limiter2_int#64",
+    "throttleCurve": {
+      "ext": [[0.0, 0.0], [0.2, 0.04], [0.3, 0.21], [0.4, 0.66], [0.47, 0.88], [0.6, 0.96], [0.85, 1.0], [1.0, 1.0]],
+      "int": [[0.0, 0.0], [0.2, 0.02], [0.3, 0.06], [0.4, 0.19], [0.47, 0.4], [0.5, 0.52], [0.6, 0.82], [0.7, 0.95], [0.8, 0.98], [1.0, 1.0]]
+    },
+    "lift": { "popMinRpm": 4400, "crackleMinRpm": 5000, "downshiftPopChance": 0.5 },
+    "limiterRetriggerS": 0.85
+  },
+  "chaparral-2d-67": {
+    "outDir": "public/cars/chaparral-2d-67/audio",
+    "limiterRpm": 6800,
+    "sourceDescription": "the Chaparral 2D (1967) mod by NPanic, sound by Felix789 - content/cars/wsc_legends_chaparral_2d_67/sfx/wsc_legends_chaparral_2d_67.bank",
+    "intBank": "librecorsa-src/wsc_legends_chaparral_2d_67/sfx/wsc_legends_chaparral_2d_67.bank",
+    "rawPcm16": true,
+    "engine": {
+      "int": {
+        "on": [
+          { "rpm": 1100, "rootRpm": 1100, "sample": "Corvette_C7R_IDLE_IN#3" },
+          { "rpm": 1800, "rootRpm": 2900, "sample": "Corvette_C7R_VERYLOW_IN_ON#14" },
+          { "rpm": 4400, "rootRpm": 4300, "sample": "Corvette_C7R_MED_IN_ON#36" },
+          { "rpm": 6800, "rootRpm": 5780, "sample": "Corvette_C7R_6100_on_in#30" }
+        ],
+        "off": [
+          { "rpm": 1100, "rootRpm": 1300, "sample": "ORECA_FLM09_IDLE_IN#20" },
+          { "rpm": 2200, "rootRpm": 3300, "sample": "AM_EGT_in_off_low#12" },
+          { "rpm": 6800, "rootRpm": 6400, "sample": "AM_EGT_in_off_mid#41" }
+        ]
+      },
+      "ext": {
+        "on": [
+          { "rpm": 1100, "rootRpm": 1800, "sample": "Corvette_C7R_idle_ext#37" },
+          { "rpm": 2200, "rootRpm": 3300, "sample": "AM_EGT_ex_on_low_b#26" },
+          { "rpm": 6800, "rootRpm": 6500, "sample": "AM_EGT_ex_on_veryhigh_a#21" }
+        ],
+        "off": [
+          { "rpm": 1100, "rootRpm": 1800, "sample": "Corvette_C7R_idle_ext#37" },
+          { "rpm": 2200, "rootRpm": 3300, "sample": "AM_EGT_ex_off_low_a#8" },
+          { "rpm": 6800, "rootRpm": 6500, "sample": "AM_EGT_ex_off_mid_a#13" }
+        ]
+      }
+    },
+    "transmission": [
+      { "layer": "on", "drivetrainSpeed": 120, "sample": "transmission#6", "rms": 0.042 },
+      { "layer": "off", "drivetrainSpeed": 120, "sample": "transmission#6", "rms": 0.028 }
+    ],
+    "skid": { "int": "Skid#15", "ext": "skid_ext_mono#9" },
+    "tractionControl": "traction_control#31",
+    "oneshots": {
+      "gear_up": ["gear_up#19", "gearupEXT#40"],
+      "gear_down": ["gear_dn#17", "geardnEXT#34"],
+      "backfire_int": ["ASTON GTE backfire 1 1#32", "ASTON GTE backfire 2 1#2", "ASTON GTE backfire 3 1#23", "ASTON GTE backfire 4 1#11", "ASTON GTE backfire 5 1#33"],
+      "backfire_ext": ["aston backfire 1 1#10", "aston backfire 2 1#1", "aston backfire 3 1#25"]
+    },
+    "shiftFallbackSample": "ASTON GTE backfire 3 1#23",
+    "limiterFallbackSample": "corvette_limiter_exhaust_loop#35",
+    "throttleCurve": {
+      "ext": [[0.0, 0.0], [0.2, 0.04], [0.3, 0.21], [0.4, 0.66], [0.47, 0.88], [0.6, 0.96], [0.85, 1.0], [1.0, 1.0]],
+      "int": [[0.0, 0.0], [0.2, 0.02], [0.3, 0.06], [0.4, 0.19], [0.47, 0.4], [0.5, 0.52], [0.6, 0.82], [0.7, 0.95], [0.8, 0.98], [1.0, 1.0]]
+    },
+    "lift": { "popMinRpm": 4400, "crackleMinRpm": 5000, "downshiftPopChance": 0.5 },
+    "limiterRetriggerS": 0.85
   }
 }
