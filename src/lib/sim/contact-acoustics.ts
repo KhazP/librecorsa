@@ -20,6 +20,8 @@ const GT_MODELS: ReadonlySet<string> = new Set<VehicleModelId>([
   'nissan-r32-jtcc',
   'bmw-m1-procar',
   'vw-scirocco-gtx',
+  'chaparral-2d',
+  'chaparral-2d-67',
 ]);
 
 /** Squeal pitch factor per wheel (FL, FR, RL, RR): the larger front discs ring a little lower */

@@ -144,6 +144,8 @@ export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
   "nissan-r32-jtcc": 720,
   "bmw-m1-procar": 720,
   "vw-scirocco-gtx": 900,
+  "chaparral-2d": 720,
+  "chaparral-2d-67": 720,
 };
 
 /** Range of a player-set steering lock (deg, lock to lock): never slower than the real car's */

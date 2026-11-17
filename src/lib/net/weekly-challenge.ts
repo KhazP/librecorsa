@@ -199,6 +199,9 @@ const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound;
   // Its one dry compound fills the soft, medium and hard slots
   "bmw-m1-procar": { compound: "soft", label: "Vintage slicks" },
   "vw-scirocco-gtx": { compound: "soft", label: "Street tyres" },
+  // Their one dry compound fills the soft, medium and hard slots
+  "chaparral-2d": { compound: "soft", label: "Slicks" },
+  "chaparral-2d-67": { compound: "soft", label: "Slicks" },
 };
 
 /** The compound every lap of a challenge in this car is driven on */

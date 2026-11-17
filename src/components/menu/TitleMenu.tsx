@@ -360,6 +360,18 @@ const Credits: React.FC = () => (
           </a>{" "}
           · used with permission. M1 Procar with DaWallace, its liveries by Johnny23, its sound by Ama FMOD
         </CreditRow>
+        <CreditRow title="Chaparral 2D">
+          Models, liveries, sound and physics of the 1966 and 1967 Chaparral 2D by{" "}
+          <a href="https://www.overtake.gg/members/npanic.761347/" target="_blank" rel="noreferrer" className={linkClass}>
+            NPanic
+          </a>{" "}
+          (
+          <a href="https://paypal.me/NPanic97" target="_blank" rel="noreferrer" className={linkClass}>
+            PayPal
+          </a>
+          ) · used with permission. 3D model by Nugget &amp; NPanic, LoDs by Dodge33, skins by Pasta, physics by Bazza, CSP
+          config by Valentin K, sound by Felix789
+        </CreditRow>
         <CreditRow title="Suzuki Liana">
           Physics from &ldquo;Physics reworked for Top Gear Liana 1.6 GLX&rdquo; (
           <a

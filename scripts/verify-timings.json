@@ -17,6 +17,7 @@
   "verify-fixed-tick.ts": 49.5,
   "verify-sim.ts": 42.9,
   "verify-bmw-m1-procar.ts": 40.0,
+  "verify-chaparral-2d.ts": 60.0,
   "verify-cool-down.ts": 28,
   "verify-liana.ts": 22.3,
   "verify-weather.ts": 20.2,

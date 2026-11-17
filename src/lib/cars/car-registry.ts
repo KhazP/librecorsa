@@ -8,8 +8,10 @@ import { NISSAN_R33_SOUND } from "@/lib/sim/classic/NissanR33Sim";
 import { NISSAN_R32_SOUND } from "@/lib/sim/classic/NissanR32Sim";
 import { BMW_M1_PROCAR_SOUND } from "@/lib/sim/classic/BmwM1ProcarSim";
 import { VW_SCIROCCO_SOUND } from "@/lib/sim/road/VwSciroccoSim";
+import { CHAPARRAL_2D_67_SOUND, CHAPARRAL_2D_SOUND } from "@/lib/sim/classic/Chaparral2dSim";
 import { NISSAN_R32_SKINS, NISSAN_R33_SKINS } from "./classic-skins";
 import { BMW_M1_PROCAR_SKINS, VW_SCIROCCO_SKINS } from "./pfalzdriver-skins";
+import { CHAPARRAL_2D_67_SKINS, CHAPARRAL_2D_SKINS } from "./chaparral-skins";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
 import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
 
@@ -30,7 +32,9 @@ export type CarId =
   | "nissan-r33-jgtc"
   | "nissan-r32-jtcc"
   | "bmw-m1-procar"
-  | "vw-scirocco-gtx";
+  | "vw-scirocco-gtx"
+  | "chaparral-2d"
+  | "chaparral-2d-67";
 
 /**
  * The kinds of car, one menu category each; a car's year groups it within its class. Class ids live only in code
@@ -48,7 +52,8 @@ export interface CarClass {
 /**
  * Whether a car's physics belong to the car you see, the car-side counterpart of a circuit's `CircuitQuality`:
  * - "own": its vehicle model was built for this car (the F1 2026 Prototype, the Mercedes-AMG GT3 Evo,
- *   the MTRacing 496R, the LC-LMDH, the Suzuki Liana, the classic Nissans, the BMW M1 Procar, the VW Scirocco)
+ *   the MTRacing 496R, the LC-LMDH, the Suzuki Liana, the classic Nissans, the BMW M1 Procar, the VW Scirocco, the
+ *   Chaparral 2Ds)
  * - "shared": a ported body on another car's model of the same class and era (the BMW)
  * - "era": a ported body from an earlier season on the 2026 model
  * The F1 physics switch doesn't change it: a ported F1 car borrows its physics under either model.
@@ -105,6 +110,8 @@ export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "nissan-r32-jtcc": "Its physics come from the Assetto Corsa mod this car was made for.",
   "bmw-m1-procar": "Its physics come from the Assetto Corsa mod this car was made for.",
   "vw-scirocco-gtx": "Its physics come from the Assetto Corsa mod this car was made for.",
+  "chaparral-2d": "Its physics come from the Assetto Corsa mod this car was made for.",
+  "chaparral-2d-67": "Its physics come from the Assetto Corsa mod this car was made for.",
 };
 
 /** Who made a car's 3D body (CREDITS.md has the full notes) */
@@ -177,6 +184,21 @@ const pfalzdriver = (title: string, url: string): CarCredit => ({
   licenseUrl: url,
 });
 
+/**
+ * NPanic's Chaparral 2Ds, model, liveries, sound and physics, used with his permission (CREDITS.md). The mod's page
+ * names everyone whose work is in it; the car card shows them with the source
+ */
+const NPANIC_CHAPARRAL_URL = "https://www.overtake.gg/downloads/1966-1967-chaparral-2d.79525/";
+const npanic = (title: string): CarCredit => ({
+  title,
+  author: "NPanic",
+  url: NPANIC_CHAPARRAL_URL,
+  authorUrl: "https://www.overtake.gg/members/npanic.761347/",
+  note: "3D model by Nugget & NPanic, LoDs by Dodge33, skins by Pasta, physics by Bazza, CSP config by Valentin K, sound by Felix789.",
+  license: "Used with the author's permission",
+  licenseUrl: NPANIC_CHAPARRAL_URL,
+});
+
 /** The 496R's 20 skins, the GLB's own MTR Green first [scripts/cars/port_ac_car.py --skins-out skins.json] */
 const MTR_496R_SKINS: readonly CarSkin[] = [
   { id: "04_mtrgreen_metallic", name: "#4 MTR Green", swatch: ["#085848", "#081818"] },
@@ -246,7 +268,7 @@ export const CAR_CLASSES: readonly CarClass[] = [
   { id: "f1", title: "Formula Open-Wheel", sub: "Single-seaters · DRS / active aero", color: "#CCFF00" },
   { id: "gt3", title: "GT3", sub: "Closed-wheel · ABS / TC", color: "#00E5FF" },
   { id: "proto", title: "Prototypes", sub: "Closed-wheel · high downforce · TC", color: "#B388FF" },
-  { id: "classic", title: "Classic GT & Touring", sub: "Procar, Group A and JGTC · 1979–1998", color: "#FFD23F" },
+  { id: "classic", title: "Classic GT & Touring", sub: "Sports prototypes, Procar, Group A and JGTC · 1966–1998", color: "#FFD23F" },
   { id: "road", title: "Road cars", sub: "Road-legal · street tyres", color: "#FF8A3D" },
 ];
 
@@ -426,6 +448,34 @@ const ALL_CARS: readonly CarDefinition[] = [
     modelUrl: "/cars/vw-scirocco-gtx/model/vw-scirocco-gtx.glb",
     skins: VW_SCIROCCO_SKINS,
     sound: VW_SCIROCCO_SOUND,
+  },
+  {
+    id: "chaparral-2d",
+    classId: "classic",
+    title: "Chaparral 2D",
+    sub: "1966 · 5.4 L V8 · two speeds on a torque converter",
+    badge: "2D 1966",
+    quality: "own",
+    credit: npanic("1966-1967 Chaparral 2D"),
+    physics: "chaparral-2d",
+    year: 1966,
+    modelUrl: "/cars/chaparral-2d/model/chaparral-2d.glb",
+    skins: CHAPARRAL_2D_SKINS,
+    sound: CHAPARRAL_2D_SOUND,
+  },
+  {
+    id: "chaparral-2d-67",
+    classId: "classic",
+    title: "Chaparral 2D 427",
+    sub: "1967 · 7.0 L V8 · three speeds on a torque converter",
+    badge: "2D 1967",
+    quality: "own",
+    credit: npanic("1966-1967 Chaparral 2D"),
+    physics: "chaparral-2d-67",
+    year: 1967,
+    modelUrl: "/cars/chaparral-2d-67/model/chaparral-2d-67.glb",
+    skins: CHAPARRAL_2D_67_SKINS,
+    sound: CHAPARRAL_2D_67_SOUND,
   },
 ];
 

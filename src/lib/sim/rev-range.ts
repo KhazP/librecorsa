@@ -30,6 +30,8 @@ export function revRangeFor(carId: string | undefined): [number, number] {
   if (carId === "bmw-m1-procar") return [7500, 8400];
   // The Scirocco has no shift light: up to its 7000 rpm shift point [derived]
   if (carId === "vw-scirocco-gtx") return [5800, 7000];
+  // The Chaparrals have no shift light: up to their 6700 rpm shift point [spec drivetrain.ini AUTO_SHIFTER UP]
+  if (carId === "chaparral-2d" || carId === "chaparral-2d-67") return [5600, 6700];
   return carId === "amg-gt3" ? [6200, 7500] : [...F1_REV_RANGE];
 }
 

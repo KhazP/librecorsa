@@ -75,7 +75,11 @@ export function addContactShadow(root: THREE.Object3D, vehicle: VehicleModelId |
           ? "proto"
           : vehicle === "lc-lmdh"
             ? "lmdh"
-            : vehicle === "nissan-r33-jgtc" || vehicle === "nissan-r32-jtcc" || vehicle === "bmw-m1-procar"
+            : vehicle === "nissan-r33-jgtc" ||
+                vehicle === "nissan-r32-jtcc" ||
+                vehicle === "bmw-m1-procar" ||
+                vehicle === "chaparral-2d" ||
+                vehicle === "chaparral-2d-67"
             ? "classic"
             : "f1";
   // One quad per car model and one material for all of them, rather than a fresh pair per rig
