@@ -563,15 +563,24 @@ const pad = (id: string, axes: number[]): PadLike => ({
   axes,
   buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })),
 });
-check('the gyro reaches the frame only while a DualSense or DualShock 4 steers', () => {
+check('the gyro reaches the frame only from the DualSense or DualShock 4 that steers', () => {
   const settings = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PLAYER_SETTINGS.padButtons };
-  const ds = new DeviceInputReader().read([pad('DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)', [0.2, 0])], settings, 1 / 60, undefined, 0.4);
+  const any = (v: number) => () => v;
+  const ds = new DeviceInputReader().read([pad('DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)', [0.2, 0])], settings, 1 / 60, undefined, any(0.4));
   assert.equal(ds.gyroSteer, 0.4);
   near(ds.padSteer!, 0.2, 1e-12);
-  const xbox = new DeviceInputReader().read([pad('Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)', [0.2, 0])], settings, 1 / 60, undefined, 0.4);
+  const xbox = new DeviceInputReader().read([pad('Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)', [0.2, 0])], settings, 1 / 60, undefined, any(0.4));
   assert.equal(xbox.gyroSteer, undefined, 'a paired DualSense on the desk never steers for the Xbox pad');
-  const ds4 = new DeviceInputReader().read([pad('Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)', [0, 0])], settings, 1 / 60, undefined, -0.3);
+  const ds4Id = 'Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)';
+  const ds4 = new DeviceInputReader().read([pad(ds4Id, [0, 0])], settings, 1 / 60, undefined, any(-0.3));
   assert.equal(ds4.gyroSteer, -0.3, 'a DualShock 4 steers with its gyro too');
+  // A DualSense streams its lean, the DualShock 4 (not on WebHID) steers: the DualSense's lean is not its own
+  const onlyDualSense = (id: string) => (isDualShock4PadId(id) ? undefined : 0.4);
+  const mixed = new DeviceInputReader().read([pad(ds4Id, [0, 0])], settings, 1 / 60, undefined, onlyDualSense);
+  assert.equal(mixed.gyroSteer, undefined, 'a DualSense on the desk never steers for the DualShock 4');
+  const asked: string[] = [];
+  new DeviceInputReader().read([pad(ds4Id, [0, 0])], settings, 1 / 60, undefined, (id) => (asked.push(id), 0.1));
+  assert.deepEqual(asked, [ds4Id], 'asked for the pad that steers');
   const off = new DeviceInputReader().read([pad('DualSense Wireless Controller', [0, 0])], settings, 1 / 60);
   assert.equal(off.gyroSteer, undefined);
 });

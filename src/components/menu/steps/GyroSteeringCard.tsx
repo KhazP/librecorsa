@@ -63,9 +63,10 @@ function gyroRows(blocked: string | null): { on: RowDef; lock: RowDef; sensitivi
 
 /**
  * The paired DualSense's gyro steering, live, while `active`: its lean from the centre (deg) and the steering it
- * gives. Keeps the motion tracked while shown, also outside a drive. Null while there is nothing to show.
+ * gives. Keeps the motion tracked while shown, also outside a drive. Null while there is nothing to show. With `padId`,
+ * that pad's own lean only, as the car gets it.
  */
-export function useGyroLive(active: boolean, lockDeg: number, sensitivity: number): { deg: number; steer: number } | null {
+export function useGyroLive(active: boolean, lockDeg: number, sensitivity: number, padId?: string): { deg: number; steer: number } | null {
   const [deg, setDeg] = useState<number | null>(null);
   useEffect(() => {
     if (!active) {
@@ -77,7 +78,7 @@ export function useGyroLive(active: boolean, lockDeg: number, sensitivity: numbe
     let shown: number | null = null;
     const tick = () => {
       raf = requestAnimationFrame(tick);
-      const now = gyroSource.steerDeg();
+      const now = gyroSource.steerDeg(padId);
       // Tenths of a degree: the meter stays still with the pad at rest instead of re-rendering every frame
       const rounded = now === null ? null : Math.round(now * 10) / 10;
       if (rounded !== shown) {
@@ -90,7 +91,7 @@ export function useGyroLive(active: boolean, lockDeg: number, sensitivity: numbe
       cancelAnimationFrame(raf);
       release();
     };
-  }, [active]);
+  }, [active, padId]);
   return deg === null ? null : { deg, steer: gyroSteerValue(deg, lockDeg, sensitivity) };
 }
 

@@ -455,11 +455,17 @@ export class DeviceInputReader {
   private wheelPresent = false;
 
   /**
-   * `gyroSteer` is the gyro steering of the DualSense or DualShock 4 connected over WebHID this frame (−1..1), when it
-   * is on: it reaches the frame only while a pad of that kind steers, so a pad lying on the desk never steers for an
-   * Xbox pad
+   * `gyroSteer` gives the gyro steering (−1..1) of the DualSense or DualShock 4 with that Gamepad API id, streaming
+   * over WebHID, when it is on: it is asked only for the pad that steers, so a pad lying on the desk never steers for
+   * an Xbox pad or for the other kind of Sony pad
    */
-  read(pads: readonly PadLike[], settings: DeviceInputSettings, dtSeconds: number, vehicle?: string, gyroSteer?: number): DeviceFrame {
+  read(
+    pads: readonly PadLike[],
+    settings: DeviceInputSettings,
+    dtSeconds: number,
+    vehicle?: string,
+    gyroSteer?: (padId: string) => number | undefined
+  ): DeviceFrame {
     const held = new Set<PadAction>();
     const frame: DeviceFrame = { throttle: 0, brake: 0, clutch: 0, boostHeld: false, pressed: new Set(), source: null };
     const wheel = settings.wheel;
@@ -518,7 +524,8 @@ export class DeviceInputReader {
         if (pad.mapping === "standard") {
           frame.source = "controller";
           frame.padSteer = rawStickX;
-          if (gyroSteer !== undefined && isGyroPadId(pad.id)) frame.gyroSteer = gyroSteer;
+          const gyro = gyroSteer && isGyroPadId(pad.id) ? gyroSteer(pad.id) : undefined;
+          if (gyro !== undefined) frame.gyroSteer = gyro;
           const pedals = padPedals(pad, settings.padTuning);
           frame.throttle = pedals.throttle;
           frame.brake = pedals.brake;
