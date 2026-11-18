@@ -236,7 +236,10 @@ export class AudioBGMController {
         .then(() => {
           if (!deck.track) deck.el.pause();
         })
-        .catch(() => {});
+        .catch((err: unknown) => {
+          // Refused (the call did not come from a press): the next press primes it
+          if (err instanceof DOMException && err.name === "NotAllowedError") deck.primed = false;
+        });
     }
   }
 
