@@ -4,8 +4,9 @@
  *
  * Over Bluetooth, reading the calibration switches the pad to its full report, which a browser reading the short one
  * may no longer see: {@link DualShock4Hid.bluetoothPad} hands device-input a standard pad parsed from the HID
- * reports instead, as the DualSense driver does. So the pad is opened only when the player connects it in the gyro
- * card, and reopened on later visits only while gyro steering is on.
+ * reports instead, as the DualSense driver does. The pad is first opened when the player connects it in the gyro
+ * card; a pad granted then is reopened on every visit and replug, like the DualSense, so a pad left in its full
+ * report always has its stand-in.
  */
 import type { HidApiLike, HidDeviceLike, HidInputReportEventLike } from "./webhid-ffb";
 import type { PadLike } from "./device-input";
@@ -38,6 +39,12 @@ const MOTION_FRESH_MS = 300;
 /** Bluetooth input older than this no longer stands in for the Gamepad API pad (ms) */
 const BT_INPUT_FRESH_MS = 300;
 const UNSUPPORTED = "Gyro steering needs Chrome or Edge (WebHID) on https or localhost";
+
+/** The page's WebHID, on https or localhost */
+function browserHid(): HidApiLike | null {
+  if (typeof navigator === "undefined" || typeof window === "undefined" || !window.isSecureContext) return null;
+  return (navigator as { hid?: HidApiLike }).hid ?? null;
+}
 
 const nowMs = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -73,8 +80,10 @@ export class DualShock4Hid {
   private controlsMs = -Infinity;
   private padCache: { controls: Ds4Controls; pad: PadLike } | null = null;
   private listening = false;
-  private restoreTried = false;
   private opening: Promise<void> | null = null;
+
+  /** `hidApi` is the browser's WebHID by default; the verify suite hands it a fake */
+  constructor(private readonly hidApi: () => HidApiLike | null = browserHid) {}
 
   readonly subscribe = (fn: () => void): (() => void) => {
     this.listeners.add(fn);
@@ -88,8 +97,7 @@ export class DualShock4Hid {
   }
 
   private hid(): HidApiLike | null {
-    if (typeof navigator === "undefined" || typeof window === "undefined" || !window.isSecureContext) return null;
-    return (navigator as { hid?: HidApiLike }).hid ?? null;
+    return this.hidApi();
   }
 
   supported(): boolean {
@@ -125,8 +133,8 @@ export class DualShock4Hid {
     );
   }
 
-  /** Reopens a pad this site was already given (no prompt) */
-  private async restore(): Promise<void> {
+  /** Reopens a pad this site was already given (no prompt), and keeps watching for it being plugged in */
+  async restore(): Promise<void> {
     const hid = this.hid();
     if (!hid) return;
     this.listen(hid);
@@ -144,7 +152,7 @@ export class DualShock4Hid {
     if (this.listening) return;
     this.listening = true;
     hid.addEventListener("connect", ({ device }) => {
-      if (!this.device && this.motionWanted() && isDualShock4Ids(device.vendorId, device.productId)) void this.open(device);
+      if (!this.device && isDualShock4Ids(device.vendorId, device.productId)) void this.open(device);
     });
     hid.addEventListener("disconnect", ({ device }) => {
       if (device !== this.device) return;
@@ -252,17 +260,13 @@ export class DualShock4Hid {
     return this.motionFromSettings || this.motionHolders > 0;
   }
 
-  /** Gyro steering on or off, from the settings (every frame); on, a pad granted on an earlier visit is reopened */
+  /** Gyro steering on or off, from the settings (the frame loop sets it every frame) */
   setMotionWanted(on: boolean): void {
     if (on && !this.motionWanted()) {
       this.tilt.reset();
       this.clock.reset();
     }
     this.motionFromSettings = on;
-    if (on && !this.restoreTried) {
-      this.restoreTried = true;
-      void this.restore();
-    }
   }
 
   /** Keeps the motion tracked while a settings screen shows it; call the returned function to let go */
