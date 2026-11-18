@@ -148,6 +148,22 @@ check('Escape and Slash are reserved', () => {
 check('clearing a slot removes the key', () => {
   assert.deepEqual(clearKey(DEFAULT_KEY_BINDINGS, 'throttle', 1).throttle, ['KeyW']);
 });
+check('Half brake sits on G beside Half throttle; a save that already uses G keeps it and leaves Half brake unbound', () => {
+  const lookup = buildKeyLookup(DEFAULT_KEY_BINDINGS);
+  assert.equal(lookup.get('KeyF'), 'throttleHalf');
+  assert.equal(lookup.get('KeyG'), 'brakeHalf');
+  const { brakeHalf: _unsaved, ...older } = { ...DEFAULT_KEY_BINDINGS, camera: ['KeyC', 'KeyG'] };
+  const keys = parsePlayerSettings({ keys: older }).keys;
+  assert.deepEqual(keys.camera, ['KeyC', 'KeyG']);
+  assert.deepEqual(keys.brakeHalf, []);
+});
+check('the Half brake amount defaults to 50 % and stays within 20-90 %', () => {
+  assert.equal(parsePlayerSettings({}).keyboardTuning.halfBrake, 0.5);
+  assert.equal(parsePlayerSettings({ keyboardTuning: { halfBrake: 0.35 } }).keyboardTuning.halfBrake, 0.35);
+  assert.equal(parsePlayerSettings({ keyboardTuning: { halfBrake: 2 } }).keyboardTuning.halfBrake, 0.9);
+  assert.equal(parsePlayerSettings({ keyboardTuning: { halfBrake: 0 } }).keyboardTuning.halfBrake, 0.2);
+  assert.ok((KEYBOARD_FEEL_FIELDS as readonly string[]).includes('halfBrake'), 'the keyboard feel card resets it');
+});
 check('a pad button moves between actions', () => {
   const next = rebindPadButton(DEFAULT_PAD_BUTTONS, 'racingLine', 0); // A was gear up
   assert.equal(next.racingLine, 0);
