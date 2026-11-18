@@ -252,7 +252,7 @@ function loadTrackGlb(
       const size = new THREE.Vector3();
       root.updateMatrixWorld(true);
       const colliders = trackColliders(root);
-      if (colliders.conformSurfaces && colliders.ground) fitVisualRoad(root, colliders.ground);
+      if (colliders.conformSurfaces && colliders.ground) fitVisualRoad(root, colliders.ground, roadMaterials);
       root.traverse((obj) => {
         // Exported node extras land on the node; the mesh child inherits nothing, so walk up.
         let node: THREE.Object3D | null = obj;

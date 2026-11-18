@@ -1,8 +1,11 @@
 /**
  * fitVisualRoad leaves out the vertices it cannot move before it asks the ground (render/fit-visual-road.ts,
  * `roadReach`). The road it lays must stay exactly as before: each circuit is loaded twice, one copy fitted the
- * way it was before that test (every vertex queried, copied below) and one with fitVisualRoad, and every position
+ * way it was before that test (every vertex queried: `everyVertex`) and one with fitVisualRoad as the game runs it, and every position
  * of `Track_Model` must come out bit for bit the same. Also prints how much load time the test saves.
+ *
+ * Both are given the circuit's road materials, as the game gives them, so the asphalt is laid on the ground and the
+ * layers around it move with it.
  *
  *   npx tsx scripts/verify-fit-visual-road.ts            (every circuit with fitted surfaces this copy has)
  *   npx tsx scripts/verify-fit-visual-road.ts chang vir  (just these)
@@ -10,9 +13,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import * as THREE from 'three';
-import { fitVisualRoad, inheritedTag } from '../src/lib/render/fit-visual-road';
+import { fitVisualRoad } from '../src/lib/render/fit-visual-road';
 import { trackColliders } from '../src/lib/sim/track-colliders';
-import { createGroundHit, TrackColliderQuery, type GroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
@@ -31,42 +33,6 @@ function trackModels(root: THREE.Object3D): THREE.Object3D[] {
   return out;
 }
 
-/** fitVisualRoad as it was before it left vertices out: every vertex of the scan is queried */
-function fitEveryVertex(root: THREE.Object3D, ground: GroundQuery): void {
-  root.updateMatrixWorld(true);
-  const hit = createGroundHit();
-  const inv = new THREE.Matrix4();
-  const v = new THREE.Vector3();
-  const seen = new Set<THREE.BufferGeometry>();
-  // Kept-shape meshes (a mod's modelled kerbs) stay as built; on such a circuit the rest goes under the kerbs
-  let shaped = false;
-  for (const tm of trackModels(root)) tm.traverse((o) => {
-    if (o.userData?.keepShape) shaped = true;
-  });
-  const base = shaped && ground instanceof TrackColliderQuery ? ground : null;
-  for (const tm of trackModels(root)) tm.traverse((o) => {
-    if (!(o instanceof THREE.Mesh) || !o.geometry || seen.has(o.geometry) || inheritedTag(o, 'keepShape', root)) return;
-    seen.add(o.geometry);
-    const pos = o.geometry.getAttribute('position');
-    if (!pos) return;
-    const overlay = !!(inheritedTag(o, 'decal', root) || inheritedTag(o, 'groove', root));
-    const lift = overlay ? 0.002 : 0;
-    const under = overlay ? null : base;
-    inv.copy(o.matrixWorld).invert();
-    let dirty = false;
-    for (let i = 0; i < pos.count; i++) {
-      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
-      const found = under ? under.queryBase(v.x, v.z, v.y + 0.32, hit) : ground.query(v.x, v.z, v.y + 0.32, hit);
-      if (!found || hit.surface === 'grass' || !(Math.abs(v.y - hit.height) < 0.32)) continue;
-      v.y = hit.height + lift;
-      v.applyMatrix4(inv);
-      pos.setXYZ(i, v.x, v.y, v.z);
-      dirty = true;
-    }
-    if (dirty) pos.needsUpdate = true;
-  });
-}
-
 /** Every position attribute under Track_Model, in traversal order */
 function positions(root: THREE.Object3D): THREE.BufferAttribute[] {
   const out: THREE.BufferAttribute[] = [];
@@ -77,7 +43,7 @@ function positions(root: THREE.Object3D): THREE.BufferAttribute[] {
 }
 
 const tracksDir = path.join('public', 'tracks');
-type TrackJson = RawTrackJson & { metadata?: { mesh?: { url?: string; conformSurfaces?: boolean } } };
+type TrackJson = RawTrackJson & { metadata?: { mesh?: { url?: string; conformSurfaces?: boolean; roadMaterials?: string[] } } };
 const wanted = process.argv.slice(2);
 const ids = (wanted.length ? wanted : readdirSync(tracksDir)).filter((id) => existsSync(path.join(tracksDir, id, 'track_data.json'))).sort();
 const done = new Set<string>();
@@ -95,9 +61,10 @@ for (const id of ids) {
   if (!groundBefore || !groundAfter) continue;
   const original = positions(before).map((p) => (p.array as Float32Array).slice());
   const t0 = performance.now();
-  fitEveryVertex(before, groundBefore);
+  const roadMaterials = raw.metadata?.mesh?.roadMaterials ?? [];
+  fitVisualRoad(before, groundBefore, roadMaterials, { everyVertex: true });
   const t1 = performance.now();
-  fitVisualRoad(after, groundAfter);
+  fitVisualRoad(after, groundAfter, roadMaterials);
   const t2 = performance.now();
   const a = positions(before);
   const b = positions(after);
