@@ -202,6 +202,8 @@ export interface KeyboardTuning extends DeviceAssistTuning {
   steerReturnS: number;
   /** Throttle while the half-throttle key is held with throttle (0.2..0.9) */
   halfThrottle: number;
+  /** Brake while the half-brake key is held (0.2..0.9) */
+  halfBrake: number;
   /** With traction control off, eases the throttle key back while the rear tyres pass their grip */
   exitAssist: boolean;
   /** With ABS off, eases the brake key back while the tyres pass their grip */
@@ -325,6 +327,7 @@ export const DEFAULT_KEYBOARD_TUNING: KeyboardTuning = {
   steerRiseS: KB_STEER_RISE_S,
   steerReturnS: KB_STEER_RETURN_S,
   halfThrottle: 0.5,
+  halfBrake: 0.5,
   exitAssist: true,
   brakeAssist: true,
   pedalAssistStrength: 0.5,
@@ -349,6 +352,7 @@ export const KEYBOARD_FEEL_FIELDS = [
   "steerRiseS",
   "steerReturnS",
   "halfThrottle",
+  "halfBrake",
 ] as const satisfies readonly (keyof KeyboardTuning)[];
 export const KEYBOARD_PEDAL_HELP_FIELDS = ["pedalAssistStrength", "exitAssist", "brakeAssist"] as const satisfies readonly (keyof KeyboardTuning)[];
 /** The pause menu's rows under its steering assist card */
@@ -717,6 +721,7 @@ function parseKeyboardTuning(v: unknown): KeyboardTuning {
     steerRiseS: num(v.steerRiseS, 0.05, 1, d.steerRiseS),
     steerReturnS: num(v.steerReturnS, 0.05, 1, d.steerReturnS),
     halfThrottle: num(v.halfThrottle, 0.2, 0.9, d.halfThrottle),
+    halfBrake: num(v.halfBrake, 0.2, 0.9, d.halfBrake),
     exitAssist: bool(v.exitAssist, d.exitAssist),
     brakeAssist: bool(v.brakeAssist, d.brakeAssist),
     pedalAssistStrength: num(v.pedalAssistStrength, 0, 1, d.pedalAssistStrength),

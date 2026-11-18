@@ -24,6 +24,7 @@ export type KeyAction =
   | "restart"
   | "flyingLap"
   | "throttleHalf"
+  | "brakeHalf"
   | "clutch"
   | "replay"
   | "mfdPage"
@@ -72,6 +73,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "restart", label: "Restart" },
   { id: "flyingLap", label: "Restart lap (flying start)" },
   { id: "throttleHalf", label: "Half throttle (hold)" },
+  { id: "brakeHalf", label: "Half brake (hold)" },
   { id: "clutch", label: "Clutch (hold)" },
   { id: "replay", label: "Instant replay" },
   { id: "mfdPage", label: "Next MFD page" },
@@ -117,6 +119,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   // Outside a race: the lap starts over at speed (in a race it does nothing)
   flyingLap: ["KeyL"],
   throttleHalf: ["KeyF"],
+  // Beside Half throttle
+  brakeHalf: ["KeyG"],
   // No key: the clutch is the car's own until a player wants it
   clutch: [],
   replay: ["KeyT"],

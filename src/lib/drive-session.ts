@@ -177,13 +177,14 @@ const HELD_KEYS = {
   steerLeft: "left",
   steerRight: "right",
   throttleHalf: "half",
+  brakeHalf: "halfBrake",
   clutch: "clutch",
   boostHold: "boostHold",
 } as const satisfies Partial<Record<KeyAction, string>>;
 type HeldKeyAction = keyof typeof HELD_KEYS;
 const isHeldKeyAction = (action: KeyAction): action is HeldKeyAction => Object.hasOwn(HELD_KEYS, action);
 /** Held keys that take the car back from the autopilot (holding boost does not) */
-const DRIVER_KEYS: ReadonlySet<HeldKeyAction> = new Set(["throttle", "brake", "steerLeft", "steerRight", "throttleHalf"]);
+const DRIVER_KEYS: ReadonlySet<HeldKeyAction> = new Set(["throttle", "brake", "steerLeft", "steerRight", "throttleHalf", "brakeHalf"]);
 
 /** One-shot driving actions: the same whether they come from a key, a pad button or a touch pad */
 export type DriveAction = Exclude<KeyAction, HeldKeyAction> | "mfd" | "hud";
@@ -344,6 +345,8 @@ export interface DriveKeys {
   shiftDown: boolean;
   toggleX: boolean;
   half: boolean;
+  /** The Half brake key */
+  halfBrake: boolean;
   clutch: boolean;
   neutral: boolean;
   /** The Gear up key is down (it is one-shot, but a manual start holds it as the clutch) */
@@ -583,6 +586,7 @@ export class DriveSession {
       shiftDown: false,
       toggleX: false,
       half: false,
+      halfBrake: false,
       clutch: false,
       neutral: false,
       gearUpHeld: false,
@@ -2261,10 +2265,13 @@ export class DriveSession {
         kbThrottleTarget,
         dtSeconds / (throttleRising ? kbTuning.throttleRiseS || KB_THROTTLE_RISE_S : KB_THROTTLE_FALL_S)
       );
+      // Half-brake key: a fixed part brake, for trail braking or a light lift
+      const kbBrakeTarget = keys.down ? 1 : keys.halfBrake ? kbTuning.halfBrake : 0;
+      const brakeRising = kbBrakeTarget > kb.brake;
       kb.brake = approach(
         kb.brake,
-        keys.down ? 1 : 0,
-        dtSeconds / (keys.down ? kbTuning.brakeRiseS || KB_BRAKE_RISE_S : KB_BRAKE_FALL_S)
+        kbBrakeTarget,
+        dtSeconds / (brakeRising ? kbTuning.brakeRiseS || KB_BRAKE_RISE_S : KB_BRAKE_FALL_S)
       );
       kb.clutch = approach(kb.clutch, keys.clutch ? 1 : 0, dtSeconds / (keys.clutch ? KB_CLUTCH_IN_S : KB_CLUTCH_OUT_S));
       // A manual start with no clutch bound: Gear up is the clutch from the lights until it is let go after them, as in
@@ -2313,7 +2320,7 @@ export class DriveSession {
       const carAids = physics.telemetry.liveTuner;
       const tyreSlip = axleSlipFromTelemetry(physics.telemetry, kbAxleSlip);
       const kbBrakeScale = kbPedalAssist.brakeScale(
-        keys.down,
+        kbBrakeTarget > 0,
         kb.brake,
         tyreSlip.totalNdSlip,
         dtSeconds,
@@ -2388,7 +2395,7 @@ export class DriveSession {
         touch,
         source: device.source,
         mouseSteer: settings.mouseSteer,
-        keys: kbSteerDir !== 0 || kbThrottleTarget > 0 || keys.down,
+        keys: kbSteerDir !== 0 || kbThrottleTarget > 0 || kbBrakeTarget > 0,
         pad: { throttle: gamepadThrottle, brake: gamepadBrake, steer: gamepadStick ?? gamepadSteer ?? 0 },
         setting: settingsNow.device,
       });
