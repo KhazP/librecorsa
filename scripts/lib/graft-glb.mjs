@@ -44,6 +44,13 @@ function graftParsed(base, addon, label) {
   for (const doc of [j, a]) {
     for (const acc of doc.accessors ?? []) if (acc.sparse) throw new Error(`${label}: sparse accessors are not handled`);
   }
+  // Neither is carried over with its indices moved: an add-on animation's nodes and accessors, nor a node extension's
+  // own references (EXT_mesh_gpu_instancing's accessors, KHR_lights_punctual's light)
+  if ((a.animations ?? []).length) throw new Error(`${label}: add-on animations are not handled`);
+  for (const n of a.nodes) {
+    const ext = Object.keys(n.extensions ?? {});
+    if (ext.length) throw new Error(`${label}: add-on node "${n.name ?? ""}" has extensions (${ext.join(", ")}), which are not handled`);
+  }
   const tmBase = j.nodes.findIndex((n) => n.name === "Track_Model");
   const tmAddon = a.nodes.findIndex((n) => n.name === "Track_Model");
   if (tmBase < 0 || tmAddon < 0) throw new Error(`${label}: both files need a Track_Model node`);
