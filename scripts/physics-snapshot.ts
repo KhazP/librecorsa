@@ -214,7 +214,8 @@ if (cmp) {
     const d = (k: string, x: number, y: number) => `${k} ${y}→${x} (${(((x - y) / Math.max(1e-9, Math.abs(y))) * 100).toFixed(1)} %)`;
     console.log(
       id.padEnd(16),
-      r.hash === b.hash ? 'same trajectory' : 'trajectory CHANGED',
+      // A run with --no-hash leaves the hash empty: nothing to say about the trajectory
+      !r.hash || !b.hash ? 'not hashed' : r.hash === b.hash ? 'same trajectory' : 'trajectory CHANGED',
       '|',
       [d('vmax', r.vmaxKmh, b.vmaxKmh), d('brake', r.brake200.distM, b.brake200.distM), d('g80', r.latG80, b.latG80), d('g160', r.latG160, b.latG160), d('g240', r.latG240, b.latG240), d('step', r.stepMs, b.stepMs)].join(', ')
     );
