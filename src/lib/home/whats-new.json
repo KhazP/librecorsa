@@ -8,13 +8,13 @@
       "The GT3 and the LC-LMDH now run with power caps and balance of performance trims, the LC-LMDH has deploy and regen dials, and the steering kicks under braking and over kerbs on both are about a third of what they were. The GT3 corners and brakes like its reference laps on all three slicks. The LC-LMDH's high downforce and low drag packages now trim the front with the wing, so the car turns the same on all three instead of pushing on high downforce.",
       "Kerbs on 27 layouts are now each mod's own kerbs instead of a generic bump, drawn and driven the same with the sausages included, and you feel each tyre's hits through the wheel, the controller's rumble and the DualSense.",
       "Kerbs have a sound now: a rough roar on the side you're on that swells with each ridge, and a hit as you get on.",
-      "The road keeps its own crossfall out to its edges on 26 layouts, and the crests at Riverside, VIR and Monaco no longer cut under the car.",
+      "The road keeps its own crossfall out to its edges on 26 layouts, and the crests at Riverside, VIR and Monaco no longer cut under the car, and the Red Bull Ring's Turn 1 to Turn 3 Straight Mode zone now starts at 410 m.",
       "AI drivers leave room beside a car, lift when they're squeezed, check their path against the cars around them, keep off kerbs too tall for them and aim at smooth road edges in traffic, so they don't push you sideways or spin off a rolling start.",
-      "Added NPanic's 1966 and 1967 Chaparral 2D, with each livery's own scoop, spoiler and lamps, their own sound and physics, and an Engine braking slider in their garage.",
+      "Added Pfalzdriver's Porsche 934 Turbo RSR with its turbo, both tyre sets, 34 liveries and its own sound, and NPanic's 1966 and 1967 Chaparral 2D, with each livery's own scoop, spoiler and lamps, their own sound and physics, and an Engine braking slider in their garage.",
       "AI races show your own driver code and colour instead of YOU, and the new GT classic controller layout puts throttle and brake on the right stick with shifts on the triggers.",
-      "There's a Half brake key now, on G beside Half throttle, with both amounts set in the keyboard settings, and every car's garage has a Tyre blankets switch in its Tyres tab, so you can start on warm tyres in any car.",
+      "There's a Half brake key now, on G beside Half throttle, with both amounts set in the keyboard settings, and every car's garage has a Tyre blankets switch in its Tyres tab, so you can start on warm tyres in any car, while the classic cars' tyres now reach their working range within a couple of laps without them.",
       "Small design fixes across the site, menus and HUD: boards that hold up with long names, bigger touch targets on phones, an instant controller cursor, frosted glass that really blurs, lighter HUD animations, and key names that follow your keyboard layout.",
-      "The Red Bull Ring's Turn 1 to Turn 3 Straight Mode zone now starts at 410 m."
+      "There's music now: menus, races and results each get their own tracks from 28 public-domain recordings, crossfading as you go, ducked in the pause menu, and K skips a track. Leave the title screen for 30 s and the camera takes off on an aerial tour of the circuit."
     ],
     "commits": 43,
     "lastSha": "d95304f32aef6c3e4a32519d099811cd52f5715c"
