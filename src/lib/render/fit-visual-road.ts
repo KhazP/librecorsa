@@ -31,10 +31,13 @@ const CARRY_FADE_M = 4;
 const CARRY_SLOPE = 0.5;
 
 /**
- * A mesh with at least this share of its vertices laid on the ground lies on it (its asphalt, lines and markings):
- * tagged `userData.onGround`, it casts no shadow (scene-builder.ts), as a mod draws it
+ * A mesh with at least this share of its vertices laid on the ground, none of them more than `ON_GROUND_HEIGHT_M` over
+ * it, lies on it (its asphalt, lines and markings): tagged `userData.onGround`, it casts no shadow (scene-builder.ts),
+ * as a mod draws it. Anything standing up keeps its shadow, however low: a curb, a wall, a sign, a cone, a fence, and a
+ * bridge deck in a road material (its vertices are not laid at all)
  */
 const ON_GROUND_SHARE = 0.9;
+const ON_GROUND_HEIGHT_M = 0.08;
 
 /** A mesh's material name: three's material, or `userData.materialName` from the Node scripts' GLB reader */
 export function materialNameOf(mesh: THREE.Mesh): string {
@@ -101,18 +104,20 @@ export function fitVisualRoad(
     const under = layer.overlay ? null : base;
     inv.copy(o.matrixWorld).invert();
     let fitted = 0;
+    let highest = -Infinity;
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
       if (reach && !reach(v.x, v.y, v.z)) continue;
       const found = under ? under.queryBase(v.x, v.z, v.y + FIT_WINDOW_M, hit) : ground.query(v.x, v.z, v.y + FIT_WINDOW_M, hit);
       if (!found || hit.surface === "grass" || !(Math.abs(v.y - hit.height) < FIT_WINDOW_M)) continue;
       v.y = place(v.x, v.y, v.z, hit.height);
+      highest = Math.max(highest, v.y - hit.height);
       v.applyMatrix4(inv);
       pos.setXYZ(i, v.x, v.y, v.z);
       fitted++;
     }
     if (fitted) pos.needsUpdate = true;
-    if (fitted >= ON_GROUND_SHARE * pos.count) o.userData.onGround = true;
+    if (fitted >= ON_GROUND_SHARE * pos.count && highest <= ON_GROUND_HEIGHT_M) o.userData.onGround = true;
   };
 
   // The asphalt first, on the ground; each move is kept by where it was made (x, its height before, z)
