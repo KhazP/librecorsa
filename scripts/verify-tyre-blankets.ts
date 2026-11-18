@@ -46,6 +46,18 @@ console.log('== Each car its own way (no choice made)');
   const gt3 = startC('amg-gt3', 'garage', 0);
   const gt3Fly = startC('amg-gt3', 'flying', 0);
   check('GT3: raced without blankets, cold out of the garage, warm on a flying start', gt3 < 35 && gt3Fly >= 75, `${gt3.toFixed(0)} / ${gt3Fly.toFixed(0)} °C`);
+  // Rain tyres on a carcass set in the garage's air start at that air too, set to reach their pressure in their own window
+  const rain = (['porsche-934-rsr', 'chaparral-2d', 'bmw-m1-procar'] as const).flatMap((v) =>
+    (['intermediate', 'wet'] as const).map((c) => {
+      const sim = VEHICLE_MODELS[v].createSim(pad, null) as F12026CarSim;
+      sim.setSimRealism(SIM_REALISM_FLAGS.full);
+      sim.applyChassisSetup({ ...DEFAULT_CHASSIS_SETUP });
+      sim.tireCompound = c;
+      sim.resetToStartGrid(false);
+      return { name: `${v} ${c}`, c: (sim as unknown as { vehicle: VehiclePhysics }).vehicle.wheels[0].coreTempC };
+    })
+  );
+  check('934, Chaparral 2D, M1: rain tyres leave the garage at its 20 °C', rain.every((r) => Math.abs(r.c - 20) < 0.5), rain.map((r) => `${r.name} ${r.c.toFixed(1)}`).join(', '));
 }
 
 console.log('\n== Blankets on');
