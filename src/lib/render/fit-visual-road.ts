@@ -31,13 +31,18 @@ const CARRY_FADE_M = 4;
 const CARRY_SLOPE = 0.5;
 
 /**
- * A mesh with at least this share of its vertices laid on the ground, none of them more than `ON_GROUND_HEIGHT_M` over
- * it, lies on it (its asphalt, lines and markings): tagged `userData.onGround`, it casts no shadow (scene-builder.ts),
- * as a mod draws it. Anything standing up keeps its shadow, however low: a curb, a wall, a sign, a cone, a fence, and a
- * bridge deck in a road material (its vertices are not laid at all)
+ * A mesh in a road material, or with at least this share of its vertices laid on the ground, lies on it (its asphalt,
+ * lines and markings) when none of its laid vertices ends up more than `ON_GROUND_HEIGHT_M` over the ground and no
+ * steep face of it stands more than that over the ground either: tagged `userData.onGround`, it casts no shadow
+ * (scene-builder.ts), as a mod draws it. Anything standing up keeps its shadow: a curb, a wall, a sign post or a
+ * stand, also when it is merged with flat road or built in a road material. A flat surface the fit cannot reach (over
+ * a dip, off the colliders) still lies on the ground: with no face standing up, its shadow would only fall on itself
+ * and the layers beside it, in jagged teeth
  */
 const ON_GROUND_SHARE = 0.9;
 const ON_GROUND_HEIGHT_M = 0.08;
+/** A triangle whose normal points up less than this (steeper than 60°) stands up: a wall, a post, a curb's face */
+const STANDING_NORMAL_Y = 0.5;
 
 /** A mesh's material name: three's material, or `userData.materialName` from the Node scripts' GLB reader */
 export function materialNameOf(mesh: THREE.Mesh): string {
@@ -117,7 +122,36 @@ export function fitVisualRoad(
       fitted++;
     }
     if (fitted) pos.needsUpdate = true;
-    if (fitted >= ON_GROUND_SHARE * pos.count && highest <= ON_GROUND_HEIGHT_M) o.userData.onGround = true;
+    const laid = layer.road || fitted >= ON_GROUND_SHARE * pos.count;
+    if (laid && !(highest > ON_GROUND_HEIGHT_M) && !standsUp(o, under)) o.userData.onGround = true;
+  };
+
+  /** Whether a steep face of the mesh, as fitted, stands more than `ON_GROUND_HEIGHT_M` over the ground below it */
+  const corners = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const e1 = new THREE.Vector3();
+  const e2 = new THREE.Vector3();
+  const standsUp = (o: THREE.Mesh, under: TrackColliderQuery | null): boolean => {
+    const pos = o.geometry.getAttribute("position");
+    const index = o.geometry.index;
+    const count = index ? index.count : pos.count;
+    const checked = new Uint8Array(pos.count);
+    for (let t = 0; t + 2 < count; t += 3) {
+      for (let k = 0; k < 3; k++) corners[k].fromBufferAttribute(pos, index ? index.getX(t + k) : t + k).applyMatrix4(o.matrixWorld);
+      e1.subVectors(corners[1], corners[0]);
+      e2.subVectors(corners[2], corners[0]);
+      e1.cross(e2);
+      const len = e1.length();
+      if (!(len > 0) || Math.abs(e1.y) >= STANDING_NORMAL_Y * len) continue;
+      for (let k = 0; k < 3; k++) {
+        const i = index ? index.getX(t + k) : t + k;
+        if (checked[i]) continue;
+        checked[i] = 1;
+        const p = corners[k];
+        const found = under ? under.queryBase(p.x, p.z, p.y + FIT_WINDOW_M, hit) : ground.query(p.x, p.z, p.y + FIT_WINDOW_M, hit);
+        if (found && p.y - hit.height > ON_GROUND_HEIGHT_M) return true;
+      }
+    }
+    return false;
   };
 
   // The asphalt first, on the ground; each move is kept by where it was made (x, its height before, z)
