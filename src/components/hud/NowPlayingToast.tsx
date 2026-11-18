@@ -22,13 +22,20 @@ export function NowPlayingToast({ nowPlaying }: { nowPlaying: NowPlaying | null 
     lastSeq.current = nowPlaying.seq;
     setShown(nowPlaying);
     setLeaving(false);
+  }, [nowPlaying]);
+
+  // The card's timers run per announcement: the music going quiet, or a track picked up again, within the four seconds
+  // leaves them running (only a newer track restarts them)
+  const shownSeq = shown?.seq;
+  useEffect(() => {
+    if (shownSeq === undefined) return;
     const leave = window.setTimeout(() => setLeaving(true), SHOW_MS - LEAVE_MS);
     const gone = window.setTimeout(() => setShown(null), SHOW_MS);
     return () => {
       window.clearTimeout(leave);
       window.clearTimeout(gone);
     };
-  }, [nowPlaying]);
+  }, [shownSeq]);
 
   return (
     <div
