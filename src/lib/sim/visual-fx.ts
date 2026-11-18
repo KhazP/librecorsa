@@ -24,6 +24,7 @@ import { NISSAN_R33_CONFIG } from './classic/NissanR33Config';
 import { NISSAN_R32_CONFIG } from './classic/NissanR32Config';
 import { BMW_M1_PROCAR_CONFIG } from './classic/BmwM1ProcarConfig';
 import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from './classic/Chaparral2dConfig';
+import { PORSCHE_934_RSR_CONFIG } from './classic/Porsche934RsrConfig';
 import { VW_SCIROCCO_CONFIG } from './road/VwSciroccoConfig';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 import { LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
@@ -975,6 +976,11 @@ const PORTED_ONLY = {
     config: CHAPARRAL_2D_67_CONFIG,
     lockDeg: CAR_WHEEL_LOCKS_DEG['chaparral-2d-67'],
   },
+  'porsche-934-rsr': {
+    url: '/cars/porsche-934-rsr/model/porsche-934-rsr.glb',
+    config: PORSCHE_934_RSR_CONFIG,
+    lockDeg: CAR_WHEEL_LOCKS_DEG['porsche-934-rsr'],
+  },
 } as const;
 type PortedKind = keyof typeof PORTED_ONLY;
 /** Which opponent rig a model's AI cars get: a ported body (`PORTED_ONLY`), or the 2026 car's for the F1 models */
@@ -991,7 +997,8 @@ const rigKind = (vehicle: VehicleModelId | undefined): PortedKind | 'f1' =>
             vehicle === 'bmw-m1-procar' ||
             vehicle === 'vw-scirocco-gtx' ||
             vehicle === 'chaparral-2d' ||
-            vehicle === 'chaparral-2d-67'
+            vehicle === 'chaparral-2d-67' ||
+            vehicle === 'porsche-934-rsr'
           ? vehicle
           : 'f1';
 const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;

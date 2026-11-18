@@ -67,7 +67,7 @@ node --max-old-space-size=12288 scripts/cars/port_qvist_f1.mjs path/to/f1_2026_c
 
 # Assetto Corsa Car Porter (`port_ac_car.py`)
 
-`scripts/cars/port_ac_car.py` converts an Assetto Corsa car (its main `.kn5` plus one skin) into the same `CAR` / `BODY` / `STEER` / `WHEEL_xx` layout. Each car has a preset in `PRESETS`: its material table, the nodes and materials it leaves out, the skin files that override the kn5's, how its tyre meshes and spinning parts are named, and its windscreen. The Suzuki Liana 1.6 (`liana`) and the MTRacing 496R (`mtr-496r`) have hand-written material tables; gregsediting's Nissans (`nissan-r33-jgtc`, `nissan-r32-jtcc`) and Pfalzdriver's BMW M1 Procar (`bmw-m1-procar`) and Volkswagen Scirocco GTX 16V (`vw-scirocco-gtx`) are `auto` presets (below). The kn5 reader, the hierarchy split and the paint bake are generic AC.
+`scripts/cars/port_ac_car.py` converts an Assetto Corsa car (its main `.kn5` plus one skin) into the same `CAR` / `BODY` / `STEER` / `WHEEL_xx` layout. Each car has a preset in `PRESETS`: its material table, the nodes and materials it leaves out, the skin files that override the kn5's, how its tyre meshes and spinning parts are named, and its windscreen. The Suzuki Liana 1.6 (`liana`) and the MTRacing 496R (`mtr-496r`) have hand-written material tables; gregsediting's Nissans (`nissan-r33-jgtc`, `nissan-r32-jtcc`) and Pfalzdriver's BMW M1 Procar (`bmw-m1-procar`), Volkswagen Scirocco GTX 16V (`vw-scirocco-gtx`) and Porsche 934 Turbo RSR (`porsche-934-rsr`) are `auto` presets (below). The kn5 reader, the hierarchy split and the paint bake are generic AC.
 
 ```bash
 uv run --python 3.14 --no-project --with numpy --with pillow \
@@ -140,6 +140,13 @@ uv run ... port_ac_car.py <...>/wsc_legends_chaparral_2d_66 public/cars/chaparra
   --kn5 chaparral_2d.kn5 --skins-out public/cars/chaparral-2d/skins
 uv run ... port_ac_car.py <...>/wsc_legends_chaparral_2d_67 public/cars/chaparral-2d-67/model/chaparral-2d-67.glb \
   --kn5 chaparral_2d_67.kn5 --skins-out public/cars/chaparral-2d-67/skins
+```
+
+```bash
+# the 934's kn5 isn't named after its folder
+uv run --python 3.14 --no-project --with numpy --with pillow python -P scripts/cars/port_ac_car.py \
+  <...>/pfa_porsche_934t_rsr_rr public/cars/porsche-934-rsr/model/porsche-934-rsr.glb \
+  --kn5 porsche_934_turbo_rsr.kn5 --skins-out public/cars/porsche-934-rsr/skins
 ```
 
 ```bash

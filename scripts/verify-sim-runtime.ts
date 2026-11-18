@@ -112,6 +112,7 @@ const MODELS: [string, VehicleModelId, boolean][] = [
   ['VW Scirocco GTX 16V', 'vw-scirocco-gtx', false],
   ['Chaparral 2D', 'chaparral-2d', false],
   ['Chaparral 2D 1967', 'chaparral-2d-67', false],
+  ['Porsche 934 Turbo RSR', 'porsche-934-rsr', false],
   ['Liana', 'liana', false],
 ];
 for (const [name, vehicle, rigid] of MODELS) {

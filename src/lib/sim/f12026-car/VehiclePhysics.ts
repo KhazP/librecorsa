@@ -116,6 +116,7 @@ import {
   suspensionSupportsHeave,
   type TyresCompoundData,
   type TyresPressureData,
+  turboBoostAsked,
   turboSteadyBoost,
   type TyresThermalPatchData,
   type WingData,
@@ -630,6 +631,8 @@ interface WingRuntime {
 export interface TyreRuntime {
   data: TyresCompoundData;
   thermal: Lut;
+  /** Lateral grip against camber (degrees, negative leaning into the force) when the compound gives it as a table */
+  camberLut: Lut | null;
   pressureSpring: Lut;
   /** tan(peak slip angle) at Fz0; at other loads see `tyrePeakSlipTan` */
   tanPeakAngle: number;
@@ -879,6 +882,7 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
   return {
     data,
     thermal: new Lut(data.thermalData.thermalPerformanceCurve),
+    camberLut: data.camberData.dcamberLut ? new Lut(data.camberData.dcamberLut) : null,
     pressureSpring: new Lut(data.pressureData.pressureSpringCurve),
     tanPeakAngle: Math.tan(fla * DEG2RAD),
     pKy2: model.pKy2,
@@ -1216,6 +1220,8 @@ export class VehiclePhysics {
   private readonly brakeStartTempC: number;
   /** The rear discs' cooling air against the front's (`BrakesData.rearDuctShare`) */
   private readonly brakeRearDuctShare: number;
+  /** Both axles' cooling air against the material's own ducts (`BrakesData.ductShare`) */
+  private readonly brakeDuctShare: number;
   /** Dynamic brake bias after pressure-sensitive brake migration */
   public dynamicBrakeBias = 0.56;
   /** Live-tunable dynamic brake migration ramp amount (0..0.06) */
@@ -1464,6 +1470,7 @@ export class VehiclePhysics {
     this.brakePadCurve = cfg.brakes.padMuCurve;
     this.brakeStartTempC = cfg.brakes.discStartTempC ?? 380;
     this.brakeRearDuctShare = cfg.brakes.rearDuctShare ?? 1;
+    this.brakeDuctShare = cfg.brakes.ductShare ?? 1;
     this.drivenWheels = cfg.drivenAxle === 'front' ? [0, 1] : [2, 3];
     this.coupledWheels = cfg.awd ? (cfg.drivenAxle === 'front' ? [2, 3] : [0, 1]) : null;
     this.drivenPairs = this.coupledWheels ? [this.drivenWheels, this.coupledWheels] : [this.drivenWheels];
@@ -2676,7 +2683,7 @@ export class VehiclePhysics {
     // Turbo: spools toward the boost the cylinders' air asks for, faster the more exhaust there is; runs down slowly
     const turbo = this.config.engine.turbo;
     if (turbo && this.turbocharged) {
-      const target = turboSteadyBoost(turbo, this.rpm) * this.icePlate;
+      const target = turboBoostAsked(turbo, this.rpm, this.icePlate);
       const tau = target > this.turboBoost ? (turbo.spoolUpS * turbo.spoolRefRpm) / Math.max(this.rpm, this.config.engine.idleRpm) : turbo.spoolDownS;
       this.turboBoost += (target - this.turboBoost) * Math.min(1, dt / tau);
       this.turboBoostBar = 1 + (turbo.displayMaxBoostBar * this.turboBoost) / turbo.maxBoost;
@@ -3061,7 +3068,9 @@ export class VehiclePhysics {
         // Camber grip: leaning into the force direction (force opposes the slip)
         const forceSign = w.tanSlipAngle > 0 ? -1 : 1;
         const gInto = w.camberLeftRad * forceSign;
-        const camberGrip = THREE.MathUtils.clamp(1 + cam.dcamber0 * gInto + cam.dcamber1 * gInto * gInto, 0.7, 1.1);
+        const camberGrip = tyre.camberLut
+          ? THREE.MathUtils.clamp(tyre.camberLut.evaluate(-gInto * RAD2DEG), 0.6, 1.1)
+          : THREE.MathUtils.clamp(1 + cam.dcamber0 * gInto + cam.dcamber1 * gInto * gInto, 0.7, 1.1);
         const gAbs = Math.abs(w.camberLeftRad);
         const camberGripX = THREE.MathUtils.clamp(1 + cam.dcamber0_x * gAbs + cam.dcamber1_x * gAbs * gAbs, 0.7, 1.1);
         // Peak μ at this load: the compound's load tables, else the power law about Fz0. BRAKE_DX_MOD adds
@@ -3625,10 +3634,24 @@ export class VehiclePhysics {
     }
     // Turbo lag: the curve is the torque with the boost this plate makes in steady state; while the rotor trails it the
     // torque is (1 + boost made) / (1 + boost asked for) of that, as torque ∝ 1 + boost. A rotor still spinning faster
-    // than the demand gives no more than the demand (the wastegate and the throttle hold the plenum to it)
+    // than the demand gives no more than the demand (the wastegate and the throttle hold the plenum to it). With the
+    // throttle inside the boost law the curve is the full-load torque, so the share is (1 + boost made, up to the boost
+    // asked for) / (1 + the full-load boost)
     const turbo = eng.turbo;
-    const boostShare =
-      turbo && this.turbocharged ? Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm) * plate)) : 1;
+    let boostShare = 1;
+    // Share of the curve's torque the lag costs
+    let lagShare = 0;
+    if (turbo && this.turbocharged) {
+      if (turbo.throttleInBoostLaw) {
+        const full = 1 + turboSteadyBoost(turbo, rpm);
+        const asked = turboBoostAsked(turbo, rpm, plate);
+        boostShare = (1 + Math.min(this.turboBoost, asked)) / full;
+        lagShare = Math.max(0, asked - this.turboBoost) / full;
+      } else {
+        boostShare = Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm) * plate));
+        lagShare = 1 - boostShare;
+      }
+    }
     // Thin air (altitude, heat) costs the engine a share of what it costs the wings
     const airShare = eng.airDensitySensitivity ? 1 + eng.airDensitySensitivity * (this.airDensity / cfg.aero.airDensity - 1) : 1;
     // Ram air: the intake's dynamic pressure packs the cylinders a little fuller at speed
@@ -3641,7 +3664,7 @@ export class VehiclePhysics {
       (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
     let tIce = tCombustion * boostShare - (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
     // Crank torque the lag costs, which the MGU-K may fill below
-    let turboDeficit = tCombustion * (1 - boostShare);
+    let turboDeficit = tCombustion * lagShare;
     if (this.shiftTimer > 0 && tIce > 0 && !downshifting) {
       tIce *= gb.shiftTorqueFraction;
       turboDeficit *= gb.shiftTorqueFraction;
@@ -4494,7 +4517,7 @@ export class VehiclePhysics {
         this.ambientC,
         dt,
         this.brakeCompound,
-        w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear * this.brakeRearDuctShare,
+        this.brakeDuctShare * (w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear * this.brakeRearDuctShare),
         Math.min(1, this.wetness + 0.5 * sprayBoost),
         this.brakePadCurve
       );

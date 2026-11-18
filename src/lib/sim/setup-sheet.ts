@@ -20,6 +20,7 @@ import { NISSAN_R33_CONFIG } from "./classic/NissanR33Config";
 import { NISSAN_R32_CONFIG } from "./classic/NissanR32Config";
 import { BMW_M1_PROCAR_CONFIG } from "./classic/BmwM1ProcarConfig";
 import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG, CHAPARRAL_ENGINE_BRAKING } from "./classic/Chaparral2dConfig";
+import { PORSCHE_934_RSR_CONFIG } from "./classic/Porsche934RsrConfig";
 import { VW_SCIROCCO_CONFIG } from "./road/VwSciroccoConfig";
 import { type CarPhysicsConfig, racesOnBlankets } from "./f12026-car/F12026CarConfig";
 
@@ -42,6 +43,7 @@ export const SETUP_CLASS: Record<VehicleModelId, SetupClassId> = {
   "vw-scirocco-gtx": "gt3",
   "chaparral-2d": "gt3",
   "chaparral-2d-67": "gt3",
+  "porsche-934-rsr": "gt3",
 };
 
 export interface SetupState {
@@ -173,6 +175,8 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
   // Their adjuster [spec setup.ini FRONT_BIAS]
   "chaparral-2d": { ...rigidBaseline(CHAPARRAL_2D_CONFIG, "chaparral-2d"), brakeBiasRangePct: [48, 80], engineBrakingPct: 100 * CHAPARRAL_ENGINE_BRAKING },
   "chaparral-2d-67": { ...rigidBaseline(CHAPARRAL_2D_67_CONFIG, "chaparral-2d-67"), brakeBiasRangePct: [48, 80], engineBrakingPct: 100 * CHAPARRAL_ENGINE_BRAKING },
+  // Its adjuster [spec setup.ini FRONT_BIAS]
+  "porsche-934-rsr": { ...rigidBaseline(PORSCHE_934_RSR_CONFIG, "porsche-934-rsr"), brakeBiasRangePct: [52, 80] },
 };
 
 const clampTo = (v: number, r: { min: number; max: number }) => Math.max(r.min, Math.min(r.max, v));
@@ -191,6 +195,7 @@ const CONFIGS: Record<VehicleModelId, CarPhysicsConfig | null> = {
   "vw-scirocco-gtx": VW_SCIROCCO_CONFIG as unknown as CarPhysicsConfig,
   "chaparral-2d": CHAPARRAL_2D_CONFIG as unknown as CarPhysicsConfig,
   "chaparral-2d-67": CHAPARRAL_2D_67_CONFIG as unknown as CarPhysicsConfig,
+  "porsche-934-rsr": PORSCHE_934_RSR_CONFIG as unknown as CarPhysicsConfig,
 };
 
 /** Cars whose electronics have the third traction dial, for the driven axle's slide */
@@ -612,7 +617,8 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
         ...(b.engineBrakingPct !== undefined
           ? [chassisParam("engineBrakingPct", { label: "Engine braking", base: b.engineBrakingPct, perUnit: b.engineBrakingPct / 100, min: 25, max: 100, step: 5, format: pct, fx: FX.engineBraking })]
           : []),
-        chassisParam("steerRatioDelta", { label: "Steering ratio", base: b.steerRatio, min: 10, max: 16, step: 0.2, format: (v) => v.toFixed(1), fx: FX.steerRatio }),
+        // A rack slower than 16:1 (the 934's 16.9) keeps its own ratio as the slowest
+        chassisParam("steerRatioDelta", { label: "Steering ratio", base: b.steerRatio, min: 10, max: Math.max(16, b.steerRatio), step: 0.2, format: (v) => v.toFixed(1), fx: FX.steerRatio }),
         rate("springFrontPct", "Front wheel rate", b.wheelRateFrontNmm, FX.wheelRateFront),
         rate("springRearPct", "Rear wheel rate", b.wheelRateRearNmm, FX.wheelRateRear),
         rate("bumpStopRateFrontPct", "Front bump stop rate", b.bumpStopRateFrontNmm, FX.bumpStopRate),

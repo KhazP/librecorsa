@@ -46,6 +46,7 @@ export const CLASSIC_CAR_IDS: ReadonlySet<string> = new Set([
   "bmw-m1-procar",
   "chaparral-2d",
   "chaparral-2d-67",
+  "porsche-934-rsr",
 ]);
 export const HUD_VOID = "var(--color-lc-void)";
 export const HUD_CARBON = "var(--color-lc-carbon)";
