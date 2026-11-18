@@ -215,7 +215,17 @@ export class AudioBGMController {
     for (const deck of this.decks) {
       if (deck.blocked) {
         deck.blocked = false;
-        this.startDeck(deck, deck.gen);
+        if (deck === this.decks[this.active] && !deck.leaving && deck.pool === this.playing) this.startDeck(deck, deck.gen);
+        else {
+          // A track the music has moved on from: the deck plays only to take the press (iOS), silent at gain 0
+          const gen = deck.gen;
+          void deck.el
+            .play()
+            .then(() => {
+              if (gen === deck.gen) deck.el.pause();
+            })
+            .catch(() => {});
+        }
         continue;
       }
       if (deck.primed || deck.track) continue;
