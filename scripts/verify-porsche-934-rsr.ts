@@ -439,8 +439,7 @@ console.log('\n== Autopilot round Rwanda against the GT3');
     // Out of the pit lane's 20 °C the slicks and the discs reach the windows the data's grip curves are made for: the
     // slicks full from 80 °C (83 % below 58), the pads from 450 °C (79 % at 250)
     const t3 = m.tyres[2] ?? [0, 0, 0, 0];
-    // They come up short of their window in this model (the garage's blankets start them in it): this holds the gain
-    check('third lap: slicks at 48 °C or more front, 56 °C rear (data window 75–90 °C)', Math.min(t3[0], t3[1]) >= 48 && Math.min(t3[2], t3[3]) >= 56,
+    check('third lap: slicks at 56 °C or more front, 64 °C rear (on the step to 94 %, full at 80 °C)', Math.min(t3[0], t3[1]) >= 56 && Math.min(t3[2], t3[3]) >= 64,
       `tyres by lap ${m.tyres.map((q) => q.join('/')).join(' → ')} °C`);
     check('third lap: discs reach 450 °C front and 350 °C rear under braking', Math.min(m.discs[0], m.discs[1]) >= 450 && Math.min(m.discs[2], m.discs[3]) >= 350, `peak ${m.discs.join(' / ')} °C`);
     const gt3 = lap(createAmgGt3Sim(track, root));

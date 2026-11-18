@@ -557,24 +557,23 @@ const BIAS_CAMBER: LutPoints = [
 ];
 
 /**
- * What the two sets share: this model's heat capacities, as the M1's, with half its cooling [est]. On the M1's cooling
- * the slicks sat at 45–56 °C after three laps, where this tyre has 80–83 % of its grip (its data's curve wants 80 °C);
- * on half of it they run ≈ 6 °C warmer. They still come up short of the window in this model: the garage's tyre
- * blankets start them there
+ * What the two sets share: the M1's heat capacities, hysteresis and cooling [est]. From the pit lane's 20 °C the slicks
+ * reach 60–70 °C by the third lap (88–97 % of their grip, the data's curve full at 80 °C) and their pressures come up to
+ * the ideal; on the GT3's capacities and the M1's old 0.0044 they sat at 53–63 °C (82–94 %) and lapped 0.7 s slower
  */
 const THERMAL_COMMON = {
   // Pressure moves the heat: the sliding heat and the crown against the shoulders [ref], the rolling heat by
   // PRESSURE_RR_GAIN [spec]
   pressureHeat: { slipGain: 0.5, crownGain: 0.05 },
   // The data's own thermal constants are for AC's tyre model, not this one
-  surfaceHeatCapacity: 1800,
-  coreHeatCapacity: 11000,
+  surfaceHeatCapacity: 900,
+  coreHeatCapacity: 5500,
   slipHeatShare: 0.35,
-  hysteresis: 0.0044,
+  hysteresis: 0.0084,
   surfaceToCore: 40,
-  surfaceCooling: [3, 0.3] as [number, number],
+  surfaceCooling: [5, 0.6] as [number, number],
   // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]
-  coreCooling: [2.5, 0.06] as [number, number],
+  coreCooling: [4, 0.1] as [number, number],
   thermalVerticalK: -0.001,
   thermalVerticalRefC: 80,
 };
