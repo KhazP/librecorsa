@@ -34,6 +34,7 @@ import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
 import { measureDownshift, measureUpshift } from './lib/upshift-test';
 import { evaluateBrakePadMuFactor } from '../src/lib/sim/brake-physics';
+import { SIM_REALISM_FLAGS } from '../src/lib/sim/sim-realism';
 import { hasFile, noteSkip } from './lib/hosted-files';
 import { CHAPARRAL_2D_67_SKINS, CHAPARRAL_2D_SKINS } from '../src/lib/cars/chaparral-skins';
 
@@ -375,7 +376,9 @@ for (const K of CARS) {
     const E = K.profile.electronics!;
     check(`${label}: pro: no ABS, no TC; semi-pro: the ABS at 13 %; assisted adds a TC`, dials.pro.absLevel === 0 && dials.pro.tcLevel === 0 && dials.semi_pro.tcLevel === 0 &&
       E.absLevels[12 - dials.semi_pro.absLevel] === 0.13 && dials.assisted.tcLevel > 0, '');
+    // The fuel-flow model, burning (the game's sprints run on a fixed load, `SimRealismFlags.fuelUse`)
     const sim = K.make(pad);
+    sim.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
     sim.assistPreset = 'semi_pro';
     sim.teleportToDistance(1000, 0);
     const f0 = sim.telemetry.fuelKg;
@@ -385,7 +388,7 @@ for (const K of CARS) {
       expected += (sim.telemetry.rpm / 1000) * K.profile.fuelLPerS1000Rpm! * 0.74 * DT;
     }
     const burnt = f0 - sim.telemetry.fuelKg;
-    check(`${label}: 30 s flat out burns what CONSUMPTION gives at the engine's speed`, burnt === 0 || Math.abs(burnt / expected - 1) < 0.05, `${fmt(burnt, 3)} kg vs ${fmt(expected, 3)} kg`);
+    check(`${label}: 30 s flat out burns what CONSUMPTION gives at the engine's speed`, Math.abs(burnt / expected - 1) < 0.05, `${fmt(burnt, 3)} kg vs ${fmt(expected, 3)} kg`);
   }
 
   console.log('\n== Gear changes');
