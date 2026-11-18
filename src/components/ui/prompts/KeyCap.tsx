@@ -70,7 +70,12 @@ const ARROW_CHAR: Record<string, ArrowKey> = { "\u2191": "up", "\u2193": "down",
 /** A letter (or "/") in a prompt names a physical key (KeyboardEvent.code): the cap shows what it prints on this keyboard */
 const capText = (token: string) => (/^[A-Z]$/.test(token) ? keyLabel(`Key${token}`) : token === "/" ? keyLabel("Slash") : token);
 
-export const KeysFromString: React.FC<{ keys: string; tone?: keyof typeof TONE }> = ({ keys, tone }) => {
+export const KeysFromString: React.FC<{
+  keys: string;
+  tone?: keyof typeof TONE;
+  /** The keys are already named as printed on this keyboard (keyLabel): shown as written, not read as physical keys */
+  printed?: boolean;
+}> = ({ keys, tone, printed = false }) => {
   useKeyLayout();
   const caps: React.ReactNode[] = [];
   // A separator on its own is the key itself ("/" opens the search)
@@ -81,7 +86,7 @@ export const KeysFromString: React.FC<{ keys: string; tone?: keyof typeof TONE }
     } else {
       caps.push(
         <KeyCap key={caps.length} tone={tone}>
-          {capText(token)}
+          {printed ? token : capText(token)}
         </KeyCap>,
       );
     }
