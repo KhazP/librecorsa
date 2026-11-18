@@ -37,6 +37,9 @@ import {
   parseDs4Motion,
 } from '../src/lib/input/dualshock4-protocol';
 import { isGyroPadId } from '../src/lib/input/gyro-source';
+import { DualSenseHid } from '../src/lib/input/webhid-dualsense';
+import { DualShock4Hid } from '../src/lib/input/webhid-dualshock4';
+import type { HidApiLike, HidDeviceLike, HidInputReportEventLike } from '../src/lib/input/webhid-ffb';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
 
 let passed = 0;
@@ -516,6 +519,12 @@ check('16-bit clock: steps across its wrap; a silence longer than the wrap is a 
   // 0.4 s later by the wall clock: the counter went round more than once, and only looks like a short step
   assert.equal(clock.step(0x0100, 404), -1);
   near(clock.step(0x0100 + 750, 408), 0.004, 1e-9, 'tracking again');
+  // The page stalled 0.3 s (under one wrap) with the reports queued behind it: the counter's 4 ms step is the true one
+  near(clock.step(0x0100 + 1500, 708), 0.004, 1e-9, 'a stall is no gap');
+  // The DualSense's 32-bit clock wraps every 24 minutes: no stall of the page is taken for a gap
+  const ds = new SensorClock(SENSOR_TICKS_PER_S, 32);
+  ds.step(0, 0);
+  near(ds.step(12000, 2000), 0.004, 1e-12, 'a 2 s stall');
 });
 check('a lap of corners on the DualShock 4\'s clock (wrapping every 0.35 s) follows the hands', () => {
   const tilt = new PadTilt();
@@ -579,6 +588,123 @@ check('settings: off by default, 35° lock, linear; old saves get the defaults; 
   assert.ok(wild.gyroLockDeg <= GYRO_LOCK_MAX_DEG && wild.gyroSensitivity >= 0.5);
 });
 
-const _types: ImuCalibration | null = calibration;
-void _types;
-console.log(`\n${passed} gyro steering checks passed`);
+console.log('Drivers (a fake WebHID device)');
+interface FakeDevice extends HidDeviceLike {
+  featureReads: number[];
+  send(reportId: number, data: Uint8Array): void;
+}
+function fakeDevice(productId: number, outputReportId: number, outputBytes: number, features: Record<number, Uint8Array>): FakeDevice {
+  let listener: ((e: HidInputReportEventLike) => void) | null = null;
+  const d: FakeDevice = {
+    opened: false,
+    vendorId: 0x054c,
+    productId,
+    productName: 'fake',
+    collections: [{ outputReports: [{ reportId: outputReportId, items: [{ reportSize: 8, reportCount: outputBytes }] }] }] as unknown as HidDeviceLike['collections'],
+    featureReads: [],
+    open: async () => {
+      d.opened = true;
+    },
+    close: async () => {},
+    sendReport: async () => {},
+    sendFeatureReport: async () => {},
+    receiveFeatureReport: async (id: number) => {
+      d.featureReads.push(id);
+      const f = features[id];
+      if (!f) throw new Error(`no feature report ${id}`);
+      return view(f);
+    },
+    addEventListener: (_type, fn) => {
+      listener = fn;
+    },
+    removeEventListener: () => {
+      listener = null;
+    },
+    send: (reportId, data) => listener?.({ reportId, data: view(data) }),
+  };
+  return d;
+}
+function fakeApi(device: FakeDevice): { api: HidApiLike; unplug(): void } {
+  const off: ((e: { device: HidDeviceLike }) => void)[] = [];
+  return {
+    api: {
+      requestDevice: async () => [device],
+      getDevices: async () => [device],
+      addEventListener: (type, fn) => {
+        if (type === 'disconnect') off.push(fn);
+      },
+      removeEventListener: () => {},
+    },
+    unplug: () => off.forEach((fn) => fn({ device })),
+  };
+}
+
+async function driverChecks() {
+  {
+    // The DualSense on Bluetooth: the captured run through the driver, the frame loop asking for the motion every frame,
+    // reads exactly as the tracker fed the same reports directly
+    const device = fakeDevice(0x0ce6, 0x31, 77, { 0x05: hex(CALIBRATION_0x05) });
+    const { api, unplug } = fakeApi(device);
+    const driver = new DualSenseHid(() => api);
+    await driver.connect();
+    assert.equal(driver.connected(), true);
+    assert.ok(device.featureReads.includes(0x05), 'calibration read');
+    assert.equal(driver.imuCalibrated(), true);
+    const tilt = new PadTilt();
+    const clock = new SensorClock(SENSOR_TICKS_PER_S, 32);
+    let worst = 0;
+    for (const h of MOTION_IMU) {
+      driver.setMotionWanted(true);
+      const data = new Uint8Array(77);
+      data.set(hex(h), 1 + 15);
+      device.send(0x31, data);
+      tilt.update(asSample(parseMotionReport(0x31, view(data), calibration!)!, clock));
+      worst = Math.max(worst, Math.abs(driver.gyroSteerDeg()! - tilt.steerDeg()!));
+    }
+    assert.ok(worst < 1e-9, `driver against the tracker: ${worst}`);
+    assert.ok(Math.abs(driver.gyroSteerDeg()!) > 5, 'the run turned the pad');
+    unplug();
+    assert.equal(driver.gyroSteerDeg(), null, 'unplugged');
+    passed++;
+    console.log('  ok  DualSense driver: every report reaches the tracker, read as the tracker reads it alone');
+  }
+  {
+    // The DualShock 4 on Bluetooth: the Bluetooth calibration read first, the lean follows a turn, the stand-in pad
+    const btCal = ds4CalibrationReport(true);
+    const device = fakeDevice(0x09cc, 0x11, 77, { 0x05: btCal });
+    const { api, unplug } = fakeApi(device);
+    const driver = new DualShock4Hid(() => api);
+    await driver.connect();
+    assert.equal(driver.connected(), true);
+    assert.equal(driver.getStatus().transport, 'bluetooth');
+    assert.equal(device.featureReads[0], 0x05, 'Bluetooth calibration first');
+    // One second at 250 Hz turning from level to 20° right (clockwise as the player sees it: −z), flat on its back
+    for (let i = 0; i <= 250; i++) {
+      driver.setMotionWanted(true);
+      const t = i / 250;
+      const roll = 20 * Math.min(1, t / 0.6) * DEG;
+      const rate = t < 0.6 ? 20 / 0.6 : 0;
+      device.send(0x11, ds4Bt(ds4Common({ gyro: [0, 0, -rate], accelG: [-Math.sin(roll), Math.cos(roll), 0], ticks: Math.round(t * DS4_SENSOR_TICKS_PER_S) & 0xffff })));
+    }
+    near(driver.gyroSteerDeg()!, 20, 0.5, 'lean');
+    const pad = driver.bluetoothPad();
+    assert.ok(pad && pad.id.includes('09cc') && pad.buttons[0]?.pressed, 'stand-in pad with Cross held');
+    unplug();
+    assert.equal(driver.connected(), false);
+    assert.equal(driver.bluetoothPad(), null);
+    passed++;
+    console.log('  ok  DualShock 4 driver: Bluetooth calibration, the lean through a turn, the stand-in pad, unplugged');
+  }
+}
+
+driverChecks().then(
+  () => {
+    const _types: ImuCalibration | null = calibration;
+    void _types;
+    console.log(`\n${passed} gyro steering checks passed`);
+  },
+  (e) => {
+    console.error(e);
+    process.exit(1);
+  }
+);

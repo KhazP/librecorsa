@@ -91,7 +91,16 @@ const sameBytes = (a: Uint8Array | null, b: Uint8Array) => a !== null && a.lengt
 
 const DEFAULT_PAD_ID = "DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)";
 
+/** The page's WebHID, on https or localhost */
+function browserHid(): HidApiLike | null {
+  if (typeof navigator === "undefined" || typeof window === "undefined" || !window.isSecureContext) return null;
+  return (navigator as { hid?: HidApiLike }).hid ?? null;
+}
+
 export class DualSenseHid {
+  /** `hidApi` is the browser's WebHID by default; the verify suite hands it a fake */
+  constructor(private readonly hidApi: () => HidApiLike | null = browserHid) {}
+
   private status: DualSenseStatus = { state: "idle", transport: null, name: null, battery: null, message: null };
   private readonly listeners = new Set<() => void>();
   private device: HidDeviceLike | null = null;
@@ -139,8 +148,7 @@ export class DualSenseHid {
   }
 
   private hid(): HidApiLike | null {
-    if (typeof navigator === "undefined" || typeof window === "undefined" || !window.isSecureContext) return null;
-    return (navigator as { hid?: HidApiLike }).hid ?? null;
+    return this.hidApi();
   }
 
   supported(): boolean {
