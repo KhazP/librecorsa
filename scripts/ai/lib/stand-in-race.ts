@@ -89,6 +89,10 @@ export interface StandInRaceResult {
   aiPasses: number;
   aiMeanLapS: number;
   aiPenaltiesS: number;
+  /** Where and when (lap m, race s) each AI v AI contact, AI spin and AI off-track happened */
+  aiVsAiAt: [number, number][];
+  spinsAt: [number, number][];
+  offsAt: [number, number][];
 }
 
 const emptyTally = (): ContactTally => ({ events: 0, aiAtFault: 0, standInAtFault: 0, racingIncident: 0, rearEnd: 0, sideswipe: 0, impactSum: 0 });
@@ -189,6 +193,7 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
   });
   field.raceLaps = o.laps;
   field.startRace(true);
+  const aiCodes = field.report().cars.filter((c) => !c.isPlayer).map((c) => c.code);
   const driver = spectate ? null : new StandInDriver(o.standIn, player, track, o.seed);
 
   const DT = 1 / 120;
@@ -207,6 +212,11 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
   let prevS = player.sMeters;
   let standInDist = 0;
 
+  const aiVsAiAt: [number, number][] = [];
+  const spinsAt: [number, number][] = [];
+  const offsAt: [number, number][] = [];
+  const offSeen = new Map<string, number>();
+  let offTimerS = 0;
   const tally = (c: Extract<FieldIncident, { kind: 'contact' }>) => {
     const key = c.a < c.b ? `${c.a}|${c.b}` : `${c.b}|${c.a}`;
     const last = lastPairS.get(key);
@@ -214,6 +224,10 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
     if (last !== undefined && t - last < 1) return;
     const withStandIn = c.aIsPlayer || c.bIsPlayer;
     const k = withStandIn ? vsStandIn : aiVsAi;
+    if (!withStandIn) {
+      const sim = field.carInfo(c.a)?.sim;
+      if (sim) aiVsAiAt.push([Math.round(sim.sMeters), Math.round(t * 10) / 10]);
+    }
     const j = judgeContact(c);
     k.events++;
     k.impactSum += c.impactMs;
@@ -235,7 +249,22 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
     }
     field.update(DT);
     t += DT;
-    for (const inc of field.incidents) if (inc.kind === 'contact') tally(inc);
+    for (const inc of field.incidents) {
+      if (inc.kind === 'contact') tally(inc);
+      else if (inc.kind === 'spin') spinsAt.push([Math.round(inc.s), Math.round(t * 10) / 10]);
+    }
+    // Off-track moments, from each AI car's own count a few times a second
+    offTimerS += DT;
+    if (offTimerS >= 0.25) {
+      offTimerS = 0;
+      for (const code of aiCodes) {
+        const info = field.carInfo(code);
+        if (!info) continue;
+        const was = offSeen.get(code) ?? 0;
+        if (info.stats.offTracks > was) offsAt.push([Math.round(info.sim.sMeters), Math.round(t * 10) / 10]);
+        offSeen.set(code, info.stats.offTracks);
+      }
+    }
     if (!driver) continue;
     // The stand-in's own laps (the field keeps no lap clock for the player's car here)
     const ds = player.sMeters - prevS;
@@ -290,5 +319,8 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
     aiPasses: sum('passes'),
     aiMeanLapS: flying.length ? flying.reduce((a, b) => a + b, 0) / flying.length / 1000 : NaN,
     aiPenaltiesS: ai.reduce((a, c) => a + c.penaltyS, 0),
+    aiVsAiAt,
+    spinsAt,
+    offsAt,
   };
 }
