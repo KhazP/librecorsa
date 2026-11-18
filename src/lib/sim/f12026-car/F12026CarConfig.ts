@@ -215,11 +215,24 @@ export interface TurboData {
   spoolDownS: number;
   /** Gauge pressure shown at full boost (bar), for the HUD and the sound */
   displayMaxBoostBar: number;
+  /**
+   * The throttle works inside the power law: the boost asked for is maxBoost·(plate·rpm / referenceRpm)^gamma, so a
+   * part-open throttle makes far less boost than its share of the full-load boost, and the torque at part throttle is
+   * plate × the unboosted curve × (1 + that boost). Unset: the boost asked for is the plate's share of the full-load
+   * boost, and the torque the plate's share of the boosted curve
+   */
+  throttleInBoostLaw?: boolean;
 }
 
 /** Full-load steady-state boost of `turbo` at `rpm` */
 export function turboSteadyBoost(turbo: TurboData, rpm: number): number {
   return Math.min(turbo.maxBoost, turbo.maxBoost * Math.max(0, rpm / turbo.referenceRpm) ** turbo.gamma);
+}
+
+/** The steady-state boost `turbo` asks for at `rpm` with the throttle plate at `plate` (0..1) */
+export function turboBoostAsked(turbo: TurboData, rpm: number, plate: number): number {
+  if (!turbo.throttleInBoostLaw) return turboSteadyBoost(turbo, rpm) * plate;
+  return turbo.maxBoost * Math.min(1, Math.max(0, (plate * rpm) / turbo.referenceRpm)) ** turbo.gamma;
 }
 
 export interface ERSData {

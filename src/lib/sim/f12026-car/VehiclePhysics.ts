@@ -115,6 +115,7 @@ import {
   suspensionSupportsHeave,
   type TyresCompoundData,
   type TyresPressureData,
+  turboBoostAsked,
   turboSteadyBoost,
   type TyresThermalPatchData,
   type WingData,
@@ -2663,7 +2664,7 @@ export class VehiclePhysics {
     // Turbo: spools toward the boost the cylinders' air asks for, faster the more exhaust there is; runs down slowly
     const turbo = this.config.engine.turbo;
     if (turbo && this.turbocharged) {
-      const target = turboSteadyBoost(turbo, this.rpm) * this.icePlate;
+      const target = turboBoostAsked(turbo, this.rpm, this.icePlate);
       const tau = target > this.turboBoost ? (turbo.spoolUpS * turbo.spoolRefRpm) / Math.max(this.rpm, this.config.engine.idleRpm) : turbo.spoolDownS;
       this.turboBoost += (target - this.turboBoost) * Math.min(1, dt / tau);
       this.turboBoostBar = 1 + (turbo.displayMaxBoostBar * this.turboBoost) / turbo.maxBoost;
@@ -3612,10 +3613,24 @@ export class VehiclePhysics {
     }
     // Turbo lag: the curve is the torque with the boost this plate makes in steady state; while the rotor trails it the
     // torque is (1 + boost made) / (1 + boost asked for) of that, as torque ∝ 1 + boost. A rotor still spinning faster
-    // than the demand gives no more than the demand (the wastegate and the throttle hold the plenum to it)
+    // than the demand gives no more than the demand (the wastegate and the throttle hold the plenum to it). With the
+    // throttle inside the boost law the curve is the full-load torque, so the share is (1 + boost made, up to the boost
+    // asked for) / (1 + the full-load boost)
     const turbo = eng.turbo;
-    const boostShare =
-      turbo && this.turbocharged ? Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm) * plate)) : 1;
+    let boostShare = 1;
+    // Share of the curve's torque the lag costs
+    let lagShare = 0;
+    if (turbo && this.turbocharged) {
+      if (turbo.throttleInBoostLaw) {
+        const full = 1 + turboSteadyBoost(turbo, rpm);
+        const asked = turboBoostAsked(turbo, rpm, plate);
+        boostShare = (1 + Math.min(this.turboBoost, asked)) / full;
+        lagShare = Math.max(0, asked - this.turboBoost) / full;
+      } else {
+        boostShare = Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm) * plate));
+        lagShare = 1 - boostShare;
+      }
+    }
     // Thin air (altitude, heat) costs the engine a share of what it costs the wings
     const airShare = eng.airDensitySensitivity ? 1 + eng.airDensitySensitivity * (this.airDensity / cfg.aero.airDensity - 1) : 1;
     // Ram air: the intake's dynamic pressure packs the cylinders a little fuller at speed
@@ -3628,7 +3643,7 @@ export class VehiclePhysics {
       (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
     let tIce = tCombustion * boostShare - (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
     // Crank torque the lag costs, which the MGU-K may fill below
-    let turboDeficit = tCombustion * (1 - boostShare);
+    let turboDeficit = tCombustion * lagShare;
     if (this.shiftTimer > 0 && tIce > 0 && !downshifting) {
       tIce *= gb.shiftTorqueFraction;
       turboDeficit *= gb.shiftTorqueFraction;
