@@ -24,6 +24,9 @@ import {
 import { shapeStick } from "./stick-shape";
 import { logitechClassicModel, logitechHidppModel } from "./wheel-support";
 import { isDualSensePadId } from "./dualsense-protocol";
+import { isDualShock4PadId } from "./dualshock4-protocol";
+import { isGyroPadId } from "./gyro-source";
+import { dualShock4Hid } from "./webhid-dualshock4";
 import { dualSenseHid } from "./webhid-dualsense";
 
 export type InputDevice = "keyboard" | "controller" | "wheel";
@@ -282,11 +285,15 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 export function connectedPads(): PadLike[] {
   if (typeof navigator === "undefined" || typeof navigator.getGamepads !== "function") return [];
   const pads: PadLike[] = navigator.getGamepads().filter((p): p is Gamepad => Boolean(p && p.connected !== false));
-  // A DualSense on Bluetooth that the WebHID driver writes to sends its extended report, which the Gamepad API may
-  // no longer read: the pad parsed from the HID reports takes its place, under the browser's id for it
-  const hidPad = dualSenseHid.bluetoothPad();
-  if (hidPad) {
-    const i = pads.findIndex((p) => isDualSensePadId(p.id));
+  // A DualSense or DualShock 4 on Bluetooth that a WebHID driver opened sends its full report, which the Gamepad API
+  // may no longer read: the pad parsed from the HID reports takes its place, under the browser's id for it
+  const standIns: [PadLike | null, (id: string) => boolean][] = [
+    [dualSenseHid.bluetoothPad(), isDualSensePadId],
+    [dualShock4Hid.bluetoothPad(), isDualShock4PadId],
+  ];
+  for (const [hidPad, isIt] of standIns) {
+    if (!hidPad) continue;
+    const i = pads.findIndex((p) => isIt(p.id));
     const native = i >= 0 ? pads[i] : undefined;
     const stand = native ? { ...hidPad, id: native.id, index: native.index } : { ...hidPad, index: pads.length };
     if (i >= 0) pads[i] = stand;
@@ -447,8 +454,9 @@ export class DeviceInputReader {
   private wheelPresent = false;
 
   /**
-   * `gyroSteer` is the paired DualSense's gyro steering this frame (−1..1), when it is on: it reaches the frame only
-   * while that DualSense is the controller that steers, so a pad lying on the desk never steers for another one
+   * `gyroSteer` is the gyro steering of the DualSense or DualShock 4 connected over WebHID this frame (−1..1), when it
+   * is on: it reaches the frame only while a pad of that kind steers, so a pad lying on the desk never steers for an
+   * Xbox pad
    */
   read(pads: readonly PadLike[], settings: DeviceInputSettings, dtSeconds: number, vehicle?: string, gyroSteer?: number): DeviceFrame {
     const held = new Set<PadAction>();
@@ -509,7 +517,7 @@ export class DeviceInputReader {
         if (pad.mapping === "standard") {
           frame.source = "controller";
           frame.padSteer = rawStickX;
-          if (gyroSteer !== undefined && isDualSensePadId(pad.id)) frame.gyroSteer = gyroSteer;
+          if (gyroSteer !== undefined && isGyroPadId(pad.id)) frame.gyroSteer = gyroSteer;
           const pedals = padPedals(pad, settings.padTuning);
           frame.throttle = pedals.throttle;
           frame.brake = pedals.brake;

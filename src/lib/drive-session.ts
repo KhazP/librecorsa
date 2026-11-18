@@ -65,6 +65,7 @@ import { DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { shapeStick } from "@/lib/input/stick-shape";
 import { combineStickAndGyro, gyroSteerValue } from "@/lib/input/gyro-steer";
+import { gyroSource } from "@/lib/input/gyro-source";
 import { advanceAsphaltRain, setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import {
   isRainCompound,
@@ -2173,10 +2174,10 @@ export class DriveSession {
       // rack directly.
       // Read every frame (also in menus / paused) so button edges never fire on a stale press
       const pads = connectedPads();
-      // Gyro steering: the paired DualSense's lean, tracked at the pad's own report rate (webhid-dualsense.ts)
+      // Gyro steering: the DualSense's or DualShock 4's lean, tracked at the pad's own report rate (gyro-source.ts)
       const gyroSettings = settings.dualSense;
-      dualSenseHid.setMotionWanted(gyroSettings.gyroSteer);
-      const gyroDeg = gyroSettings.gyroSteer ? dualSenseHid.gyroSteerDeg() : null;
+      gyroSource.setMotionWanted(gyroSettings.gyroSteer);
+      const gyroDeg = gyroSettings.gyroSteer ? gyroSource.steerDeg() : null;
       const gyroSteer =
         gyroDeg === null ? undefined : gyroSteerValue(gyroDeg, gyroSettings.gyroLockDeg, gyroSettings.gyroSensitivity);
       const device = deviceInput.read(pads, settings, dtSeconds, vehicleNow, gyroSteer);
@@ -2221,7 +2222,7 @@ export class DriveSession {
           : shapeStick(device.padSteer, padTuning.deadzone, padTuning.outerDeadzone, padTuning.linearity);
       // The gyro steers only while driving, added to the stick so either one (or both) steers through the same assist.
       // The pad's lean as the car is handed back (the start, unpausing, the seat panel closed) is straight ahead
-      if (driving && !gyroWasDriving) dualSenseHid.recentreGyro();
+      if (driving && !gyroWasDriving) gyroSource.recentre();
       const gyroStick = driving && gyroWasDriving ? device.gyroSteer : undefined;
       gyroWasDriving = driving;
       const gamepadStick = padStick === undefined ? undefined : combineStickAndGyro(padStick, gyroStick);

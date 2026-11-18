@@ -179,7 +179,7 @@ export interface DualSenseSettings {
   lightbar: DualSenseLightbar;
   /** The five player LEDs as rev lights */
   revLeds: boolean;
-  /** Gyro steering: tilt the pad like a steering wheel, alongside the stick (WebHID only) */
+  /** Gyro steering: tilt the pad like a steering wheel, alongside the stick (WebHID only; the DualShock 4's too) */
   gyroSteer: boolean;
   /** Tilt for full lock, degrees each way (10..90) */
   gyroLockDeg: number;
