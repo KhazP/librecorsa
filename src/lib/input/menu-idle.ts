@@ -39,7 +39,9 @@ export class MenuIdleWatch {
       const was = this.pads.get(key);
       const buttons = p.buttons.map((b) => b.pressed);
       if (!was) {
-        // A pad that just connected (or was first seen) sets where its axes rest
+        // A pad that just connected (or was first seen) sets where its axes rest. A browser shows a pad only once one
+        // of its buttons is pressed, so a button already down on it is that press
+        if (buttons.some(Boolean)) this.inputSeen = true;
         this.pads.set(key, { buttons, axes: [...p.axes] });
         continue;
       }
