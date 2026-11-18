@@ -461,8 +461,11 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
 
 /** The tallest kerb an AI car's tyres run onto, unless its profile says otherwise (m) */
 const AI_KERB_RISE_DEFAULT_M = 0.08;
-/** Room the tyres keep from where a kerb gets too tall (m) */
-const AI_KERB_TYRE_ROOM_M = 0.1;
+/**
+ * Room the outer tyres' outer edges keep from where a kerb gets too tall, measured from the wheel's centre (m): half a
+ * tyre's width and 0.1 m to spare, as on a kerb past the track's width (`TRACK_KERB_EDGE_ROOM_M`)
+ */
+const AI_KERB_TYRE_ROOM_M = 0.3;
 /** Spacing along the lap of the kerb-height probe (m): a kerb's height changes over a few metres */
 const AI_KERB_STEP_M = 2;
 

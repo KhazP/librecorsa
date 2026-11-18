@@ -279,6 +279,23 @@ const PLANK_FRICTION = 0.35;
 const PLANK_PROBE_UP_M = 0.05;
 /** The motor's largest share of the drive the spark-first cut reckons with (the rest is always the engine's) */
 const SPARK_FIRST_MAX_MOTOR_SHARE = 0.25;
+
+const _shaft: [number, number] = [0, 0];
+/**
+ * Engine and motor crank torque (Nm) under a regulated limit on the shaft power (`EngineData.outputPowerCap`, `capNm`
+ * at the crank): the engine gives way to the motor's deployment, then the motor to the limit. `motorGivesWay`: the
+ * motor gives way to the engine first instead. Written into a shared pair
+ */
+function underShaftLimit(ice: number, motor: number, capNm: number, motorGivesWay: boolean): [number, number] {
+  if (ice + motor > capNm) {
+    if (motorGivesWay && motor > 0) motor = Math.max(0, Math.min(motor, capNm - Math.max(0, ice)));
+    ice = Math.max(Math.min(ice, 0), capNm - motor);
+    motor = Math.min(motor, capNm - ice);
+  }
+  _shaft[0] = ice;
+  _shaft[1] = motor;
+  return _shaft;
+}
 /** Share of the engine's crank power that goes into its coolant [est] */
 const COOLANT_HEAT_SHARE = 0.6;
 /** Radiator conductance per garage step of opening, against the baseline [est] */
@@ -1141,8 +1158,9 @@ export class VehiclePhysics {
   /** Mean over the last 500 Hz step of the power into the driven shafts, engine and motor together (W) */
   public driveshaftPowerW = 0;
   private stepIcePowerSumW = 0;
-  /** The engine's crank torque the last sub-step (Nm), for the spark-first cut's split */
+  /** The engine's and the motor's crank torque the last sub-step without the traction cut (Nm), for the spark-first split */
   private lastIceDriveNm = 0;
+  private lastMotorDriveNm = 0;
   private stepShaftPowerSumW = 0;
   private stepPowerSamples = 0;
   /**
@@ -2063,6 +2081,8 @@ export class VehiclePhysics {
     this.rollTorqueFront = 0;
     this.rollTorqueRear = 0;
     this.mgukTorque = 0;
+    this.lastIceDriveNm = 0;
+    this.lastMotorDriveNm = 0;
     this.aeroFrontN = 0;
     this.aeroDownN = 0;
     this.aeroDragN = 0;
@@ -3620,14 +3640,14 @@ export class VehiclePhysics {
     // the engine's spark first, up to three quarters of the demand, and only then the motor, whose torque is the
     // smoother and quicker to come back; any other car cuts both alike. A managed up-shift cuts everything
     // The total it takes off is what it asked for: the engine gives up its share first (by the motor's part of the last
-    // step's drive torque), the motor only what the engine cannot
+    // step's drive torque before the cut), the motor only what the engine cannot
     const totalCut = shiftCut ? 1 : THREE.MathUtils.clamp(1 - (inp.ignitionCut ?? 1), 0, 1);
     const sparkFirst = ers.ERS_MAX_DEPLOY > 0 && eng.outputPowerCap !== undefined;
     let sparkShare = 1 - totalCut;
     let motorShare = 1 - totalCut;
     if (sparkFirst && !shiftCut && totalCut > 0) {
       const iceNm = Math.max(0, this.lastIceDriveNm);
-      const motorNm = Math.max(0, this.mgukTorque);
+      const motorNm = Math.max(0, this.lastMotorDriveNm);
       const f = iceNm + motorNm > 1 ? Math.min(SPARK_FIRST_MAX_MOTOR_SHARE, motorNm / (iceNm + motorNm)) : 0;
       sparkShare = Math.max(0, 1 - totalCut / (1 - f));
       motorShare = totalCut <= 1 - f ? 1 : Math.max(0, (1 - totalCut) / Math.max(1e-6, f));
@@ -3660,16 +3680,24 @@ export class VehiclePhysics {
       const vAir = Math.max(0, _air.copy(this.velocity).sub(this.windWorld).dot(_ez));
       ramShare = 1 + eng.ramAirGainPerKPa * ((0.5 * this.airDensity * vAir * vAir) / 1000);
     }
-    const tCombustion =
-      (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
-    let tIce = tCombustion * boostShare - (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
+    // Combustion torque at the full spark, and what the traction cut leaves of it
+    const tCombustionFull =
+      (plate * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
+    const tCombustion = tCombustionFull * sparkShare;
+    const tCoast = (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
+    let tIce = tCombustion * boostShare - tCoast;
+    // The same at the full spark, for the next step's spark-first split: one read back after the cut would count the cut
+    // as the motor's larger share, and a held cut would take more each step
+    let tIceUncut = tCombustionFull * boostShare - tCoast;
     // Crank torque the lag costs, which the MGU-K may fill below
     let turboDeficit = tCombustion * lagShare;
     if (this.shiftTimer > 0 && tIce > 0 && !downshifting) {
       tIce *= gb.shiftTorqueFraction;
       turboDeficit *= gb.shiftTorqueFraction;
     }
+    if (this.shiftTimer > 0 && tIceUncut > 0 && !downshifting) tIceUncut *= gb.shiftTorqueFraction;
     if (tIce > 0) tIce *= this.damagePowerMult;
+    if (tIceUncut > 0) tIceUncut *= this.damagePowerMult;
 
     // ---- clutch engagement
     const axleOmega = this.drivenOmega();
@@ -3810,22 +3838,27 @@ export class VehiclePhysics {
     // A regulated limit on the power at the driven shafts (`EngineData.outputPowerCap`), which carry the crank's torque
     // less the gearbox's losses: the engine gives way to the motor's deployment, then the motor to the limit
     const powerCap = this.luts.powerCap;
-    if (powerCap && tIce + tK > 0) {
+    // The motor's torque before its share of the cut (a cut that leaves it nothing keeps the last step's)
+    let tKUncut = motorShare > 0.05 ? Math.max(0, tK) / motorShare : this.lastMotorDriveNm;
+    if (powerCap) {
       const capW = powerCap.evaluate(rpm) * (this.luts.powerCapVsSpeed?.evaluate(speedKmh) ?? 1) * 1000;
       const capNm = capW / (omegaE * gb.efficiency);
-      if (tIce + tK > capNm) {
-        // On a hybrid run from its own dials the controller holds the battery about its target charge: above it the
-        // engine gives way to the motor at the limit, as the class's energy rules have it; below it the motor gives way
-        // there instead (deploying adds no power at the limit, so it would only empty the battery), and keeps filling
-        // what the engine leaves under it (the turbos' lag, a corner exit)
-        const dialTarget = cfg.hybridDials?.socTarget ?? 0.5;
-        if (this.motorDeployKw !== null && tK > 0 && soc < dialTarget) tK = Math.max(0, Math.min(tK, capNm - Math.max(0, tIce)));
-        tIce = Math.max(Math.min(tIce, 0), capNm - tK);
-        tK = Math.min(tK, capNm - tIce);
-      }
+      // On a hybrid run from its own dials the controller holds the battery about its target charge: above it the
+      // engine gives way to the motor at the limit, as the class's energy rules have it; below it the motor gives way
+      // there instead (deploying adds no power at the limit, so it would only empty the battery), and keeps filling
+      // what the engine leaves under it (the turbos' lag, a corner exit)
+      const motorGivesWay = this.motorDeployKw !== null && soc < (cfg.hybridDials?.socTarget ?? 0.5);
+      let limited = underShaftLimit(tIce, tK, capNm, motorGivesWay);
+      tIce = limited[0];
+      tK = limited[1];
+      // The split's torques without the cut, under the same limit
+      limited = underShaftLimit(tIceUncut, tKUncut, capNm, motorGivesWay);
+      tIceUncut = limited[0];
+      tKUncut = limited[1];
     }
     this.mgukTorque = tK;
-    this.lastIceDriveNm = tIce;
+    this.lastIceDriveNm = tIceUncut;
+    this.lastMotorDriveNm = tKUncut;
     this.stepIcePowerSumW += Math.max(0, tIce * omegaE);
     this.stepShaftPowerSumW += Math.max(0, (tIce + tK) * omegaE * gb.efficiency * engage);
     this.stepPowerSamples++;
@@ -4073,6 +4106,7 @@ export class VehiclePhysics {
         const scale = Math.max(0, room) / want;
         pMech *= scale;
         this.mgukTorque *= scale;
+        this.lastMotorDriveNm *= scale;
       }
       const e = (pMech / ers.deployEfficiency) * h;
       this.ersEnergyJ = Math.max(0, this.ersEnergyJ - e);

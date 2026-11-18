@@ -1201,7 +1201,7 @@ export function deriveRainCompound(
   name: string,
   f1Pack = false
 ): TyresCompoundData {
-  const unblanketed = base.pressureData.blanketC !== undefined;
+  const unblanketed = !racesOnBlankets(base.pressureData);
   const th = base.thermalData;
   const peakC = 0.5 * (th.optimalTempC[0] + th.optimalTempC[1]);
   const traits = f1Pack ? f1RainTraits(kind, peakC) : WET_TYRE_TRAITS[kind];
@@ -1259,10 +1259,12 @@ export function deriveRainCompound(
 /**
  * A rain tyre's pressures on its slick's: blanketed, the cooler blankets of its window; raced without blankets, the
  * garage's same temperature, warmed to its cooler window where a level warms them, its cold pressure its own (the
- * slick's set pressure is the slick's)
+ * slick's set pressure is the slick's). A tyre set in the garage's air with no blankets at all (`coldRefC` under a
+ * blanket's warmth, no `blanketC`) keeps that air's temperature too
  */
 function rainPressure(p: TyresPressureData, tempShiftC: number): TyresPressureData {
-  if (p.blanketC === undefined) return { ...p, coldRefC: p.coldRefC + 0.55 * tempShiftC };
+  if (racesOnBlankets(p)) return { ...p, coldRefC: p.coldRefC + 0.55 * tempShiftC };
+  if (p.blanketC === undefined) return { ...p, setPsi: undefined };
   return { ...p, setPsi: undefined, blanketC: p.blanketC + 0.55 * tempShiftC };
 }
 

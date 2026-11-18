@@ -1060,6 +1060,25 @@ console.log("Classification · disqualified");
     meNow?.penaltyS === 13 && rc.ledger.entriesOf("YOU").some((e) => e.reason === "jump_start" && e.seconds === 10) && rc.messages.some((m) => m.kind === "penalty" && m.detail === "Jump start"),
     JSON.stringify(meNow)
   );
+  // A player racing under an AI driver's code: that driver races renamed, and race control's calls show the race's codes
+  const named = new AiOpponentField(track, new F1Physics2026(track), [AI_DRIVERS[0], AI_DRIVERS[1]], undefined, { seed: 1, learning: false });
+  named.playerDriver = { code: AI_DRIVERS[0].code, color: "#00ff00" };
+  named.qualifying = { playerMs: 1, refLapMs: 90000, refBase: 1 };
+  named.startRace(true);
+  const shown = named.status().standings.map((e) => e.driverCode);
+  const quali = (named.status().qualifying ?? []).map((r) => r.code);
+  check(
+    "qualifying shows the codes the standings show",
+    quali.length === 3 && quali.every((c) => shown.includes(c)) && quali.filter((c) => c === AI_DRIVERS[0].code).length === 1,
+    `${quali.join(",")} / ${shown.join(",")}`
+  );
+  named.playerDisqualified = true;
+  const namedFeed = (named as unknown as { raceControl: { messages: { kind: string; text: string }[] } }).raceControl.messages;
+  check(
+    "the disqualification names the player's own code",
+    namedFeed.some((m) => m.kind === "penalty" && m.text === `${AI_DRIVERS[0].code} disqualified`),
+    JSON.stringify(namedFeed)
+  );
 }
 
 console.log("Yellow flags · passing under yellow");
