@@ -125,7 +125,18 @@ const SetupRow: React.FC<{
         onReset={changed ? () => change(q.base) : undefined}
         resetLabel={`Reset ${(DIAL_NAMES[q.id] ?? q.label).toLowerCase()} to the baseline, ${format(q.base)}`}
       >
-        <Slider value={value} min={q.min} max={q.max} step={q.step} defaultValue={base} format={format} onChange={change} />
+        {q.toggle ? (
+          <Segmented<"off" | "on">
+            value={value >= 1 ? "on" : "off"}
+            onChange={(id) => change(id === "on" ? 1 : 0)}
+            options={[
+              { id: "off", label: "Off" },
+              { id: "on", label: "On" },
+            ]}
+          />
+        ) : (
+          <Slider value={value} min={q.min} max={q.max} step={q.step} defaultValue={base} format={format} onChange={change} />
+        )}
       </SettingRow>
     </div>
   );

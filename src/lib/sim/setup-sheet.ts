@@ -21,7 +21,7 @@ import { NISSAN_R32_CONFIG } from "./classic/NissanR32Config";
 import { BMW_M1_PROCAR_CONFIG } from "./classic/BmwM1ProcarConfig";
 import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from "./classic/Chaparral2dConfig";
 import { VW_SCIROCCO_CONFIG } from "./road/VwSciroccoConfig";
-import type { CarPhysicsConfig } from "./f12026-car/F12026CarConfig";
+import { type CarPhysicsConfig, racesOnBlankets } from "./f12026-car/F12026CarConfig";
 
 export type SetupClassId = "f1" | "gt3";
 
@@ -84,6 +84,8 @@ export interface SetupParam {
   invert?: boolean;
   /** Which of the car's setup channels it writes (the garage can only change the ones it is given) */
   writes: "chassis" | "tyre" | "tuner";
+  /** An off / on choice (0 / 1), drawn as a switch rather than a slider */
+  toggle?: boolean;
 }
 
 export type SetupExtra = "compound" | "aeroPackage" | "assists" | "liveTyres";
@@ -319,6 +321,7 @@ const FX = {
   bias: { more: "Stable braking, fronts lock first", less: "Rotates on entry, rears lock first" },
   migration: { more: "Rotates on trail braking", less: "Balance stays put through release" },
   coldPsi: { more: "Warms up faster, less peak grip", less: "More grip, slower to warm up" },
+  blankets: { more: "Warm tyres from the first corner", less: "Cold out of the garage, warm them on the out-lap" },
   tc: { more: "Less wheelspin, slower exits", less: "Faster exits, rear can step out" },
   tc2: { more: "Hard cut: catches slides firmly", less: "Soft cut: keeps more drive" },
   abs: { more: "No lock-ups, longer stops", less: "Shorter stops if you are precise" },
@@ -426,6 +429,30 @@ const cambers = (r: TyreRanges, d: TyreSetup): SetupParam[] => [
   tyreParam("camberRear", "Rear camber", r.camberRearDeg, d.camberDeg.rear, (t) => t.camberDeg.rear, (t, v) => ({ ...t, camberDeg: { ...t.camberDeg, rear: v } }), camber, FX.camberRear, true),
 ];
 
+/**
+ * Tyre blankets, on or off: the car's own way unless the player picks (a car raced on blankets has them on; the LC26,
+ * with no config here, is one). On, the tyres leave the garage at the blankets' warmth at every start; off, a car
+ * raced on blankets leaves on cold tyres too when its start is a cold one
+ */
+const blanketParam = (vehicle: VehicleModelId): SetupParam => {
+  const cfg = CONFIGS[vehicle];
+  const base = !cfg || racesOnBlankets(cfg.tyreCompounds[cfg.compoundSlots.soft]!.pressureData) ? 1 : 0;
+  return {
+    id: "tyreBlankets",
+    label: "Tyre blankets",
+    min: 0,
+    max: 1,
+    step: 1,
+    base,
+    get: (st) => (st.chassis.tyreBlankets === 0 ? base : st.chassis.tyreBlankets > 0 ? 1 : 0),
+    set: (st, v) => ({ ...st, chassis: { ...st.chassis, tyreBlankets: Math.round(v) === base ? 0 : Math.round(v) >= 1 ? 1 : -1 } }),
+    format: (v) => (v >= 1 ? "On" : "Off"),
+    fx: FX.blankets,
+    writes: "chassis",
+    toggle: true,
+  };
+};
+
 /** Starting fuel (kg on the F1 cars, litres beside it on the GT3s, which are fuelled by the litre) */
 const fuelGroup = (vehicle: VehicleModelId): SetupGroup => {
   const f = FUEL_LOAD[vehicle];
@@ -507,7 +534,7 @@ function f1Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyre
       label: "Tyres",
       short: "Tyres",
       extras: ["compound", "liveTyres"],
-      params: tyrePressures(r, d),
+      params: [blanketParam(vehicle), ...tyrePressures(r, d)],
     },
     {
       id: "electronics",
@@ -544,6 +571,7 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
       short: "Tyres",
       extras: ["compound", "liveTyres"],
       params: [
+        blanketParam(vehicle),
         ...tyrePressures(r, d),
         chassisParam("toeFrontDeg", { label: "Front toe", base: b.toeFrontDeg, min: -0.4, max: 0.4, step: 0.01, format: toe, fx: FX.toeFront }),
         chassisParam("toeRearDeg", { label: "Rear toe", base: b.toeRearDeg, min: -0.4, max: 0.4, step: 0.01, format: toe, fx: FX.toeRear }),
