@@ -6,6 +6,7 @@ import { AZIMUTH_OFFSET_DEG, LATITUDE_DEG } from "@/lib/sim/weather";
 import { withBasePath } from "@/lib/base-path";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { patchShader, type ShaderPatch } from "./shader-patch";
+import { cloudSkyFor, describeClouds, pickCloudRecipe, type CloudRecipe, type CloudSkySetup } from "./cloud-recipes";
 
 /*
  * Physically based sky and volumetric clouds (@takram/three-atmosphere and @takram/three-clouds, MIT): the sky on
@@ -25,6 +26,8 @@ import { patchShader, type ShaderPatch } from "./shader-patch";
  *   - Volumetric clouds run wherever this sky shows: High uses the library's "medium" preset, Medium its "low", and
  *     phones and tablets "low" at half resolution. The environment bake and the reflection probe have no clouds, so
  *     an overcast veil greys their sky with the weather's cloud cover.
+ *   - Which clouds show comes from a seed per session (cloud-recipes.ts): the cloud types, their heights and where
+ *     the pattern starts. The caller picks the seed; they drift with the session's wind, faster aloft.
  *   - The clouds' noise volumes are generated on the GPU and their ray-march jitter is our own blue noise
  *     (scripts/generate-blue-noise.ts): nothing is fetched from outside the game.
  */
@@ -42,8 +45,12 @@ const BLUE_NOISE_URL = "/sky/blue-noise-128.bin";
 const BLUE_NOISE_SIZE = 128;
 /** Slices of the spatiotemporal noise volume the clouds cycle through, one per frame */
 const BLUE_NOISE_DEPTH = 64;
-/** Cloud drift (local-weather texture repeats per second) */
-const CLOUD_WIND = new THREE.Vector2(0.0004, 0.00015);
+/** Wind at cloud height against the session's near-ground wind */
+const WIND_ALOFT_FACTOR = 2;
+/** The clouds never stand quite still: the least drift (m/s), along the recipe's own heading in a calm */
+const MIN_DRIFT_MS = 2.5;
+/** Height (m) the drift speed is matched at: the cumulus and the deck */
+const DRIFT_ALTITUDE_M = 1500;
 
 export type SkyQuality = "low" | "medium" | "high";
 
@@ -54,6 +61,9 @@ export interface PhysicalSkyConditions {
   cloud: number;
   /** Rain intensity 0..1 */
   rain: number;
+  /** Near-ground wind (m/s) along scene X and Z: the clouds drift with it, as the rain streaks do */
+  windVxMs?: number;
+  windVzMs?: number;
 }
 
 /**
@@ -71,6 +81,67 @@ export function sceneToECEFMatrix(result = new THREE.Matrix4()): THREE.Matrix4 {
   // Rows east, north, up take a scene vector to (east, north, up) components
   const sceneToENU = new THREE.Matrix4().makeBasis(east, north, up).transpose();
   return result.multiplyMatrices(enuToECEF, sceneToENU);
+}
+
+/**
+ * The clouds' weather-texture coordinate for a point on the globe (ECEF), as the clouds shader's getCubeSphereUv
+ * computes it: the drift speed in m/s is turned into texture repeats per second through it
+ */
+export function cubeSphereUv(position: THREE.Vector3, out = new THREE.Vector2()): THREE.Vector2 {
+  const len = position.length();
+  const nx = position.x / len;
+  const ny = position.y / len;
+  const nz = position.z / len;
+  const fx = Math.abs(nx);
+  const fy = Math.abs(ny);
+  const fz = Math.abs(nz);
+  let mx: number;
+  let my: number;
+  if (fy > fx && fy > fz) {
+    mx = ny > 0 ? -nx : nx;
+    my = nz;
+  } else if (fx > fy && fx > fz) {
+    mx = nx > 0 ? ny : -ny;
+    my = nz;
+  } else {
+    mx = nx;
+    my = nz > 0 ? ny : -ny;
+  }
+  const m2x = mx * mx;
+  const m2y = my * my;
+  const q = -2 * m2x + 2 * m2y - 3;
+  const ux = Math.sqrt(Math.max(0, 1.5 + m2x - m2y - 0.5 * Math.sqrt(Math.max(0, -24 * m2x + q * q)))) * (mx > 0 ? 1 : -1);
+  const uy = Math.sqrt(6 / (3 - ux * ux)) * my;
+  return out.set(ux * 0.5 + 0.5, uy * 0.5 + 0.5);
+}
+
+const _driftBase = new THREE.Vector3();
+const _driftDir = new THREE.Vector3();
+const _driftUp = new THREE.Vector3();
+const _uv0 = new THREE.Vector2();
+const _uv1 = new THREE.Vector2();
+/**
+ * The clouds' localWeatherVelocity (texture repeats per second) that moves them `speedMs` along the scene direction
+ * (dirX, dirZ). The shader samples the texture at uv x repeat + offset, so the offset runs against the motion.
+ */
+export function cloudDriftVelocity(
+  dirX: number,
+  dirZ: number,
+  speedMs: number,
+  worldToECEF: THREE.Matrix4,
+  repeat: number,
+  out = new THREE.Vector2()
+): THREE.Vector2 {
+  const len = Math.hypot(dirX, dirZ);
+  if (!(len > 0) || !(speedMs > 0)) return out.set(0, 0);
+  _driftUp.set(0, 1, 0).transformDirection(worldToECEF);
+  _driftBase.setFromMatrixPosition(worldToECEF).addScaledVector(_driftUp, DRIFT_ALTITUDE_M);
+  _driftDir.set(dirX / len, 0, dirZ / len).transformDirection(worldToECEF);
+  // Central difference over 2 km: the texture coordinate's rate along the wind
+  const step = 1000;
+  cubeSphereUv(_driftBase.addScaledVector(_driftDir, -step), _uv0);
+  cubeSphereUv(_driftBase.addScaledVector(_driftDir, 2 * step), _uv1);
+  return out.subVectors(_uv1, _uv0).multiplyScalar((-repeat * speedMs) / (2 * step));
 }
 
 /** The sky material's uniforms this module adds on top of the library's */
@@ -116,16 +187,22 @@ export const CLOUDS_REVERSED_DEPTH_PATCHES: readonly ShaderPatch[] = [
 ];
 
 /**
- * The clouds composite, scaled to the scene like the sky. Its SKIP_RENDERING switch never worked here: postprocessing
+ * The clouds composite, scaled to the scene like the sky, and greyed and dimmed in rain: the library's light inside a
+ * thick deck leaves a rain sky pale and tinted by the low sun. Its SKIP_RENDERING switch never worked here: postprocessing
  * renames the effect's define (to e0SKIP_RENDERING) but not this `#ifdef`, so the composite always ran. It is made
  * unconditional, and the clouds are switched off by disabling their pass instead (PhysicalSky.cloudsActive).
  */
 export const CLOUDS_COMPOSITE_PATCHES: readonly ShaderPatch[] = [
   ["#ifdef SKIP_RENDERING", "#if 0 // SKIP_RENDERING (the pass is disabled instead)"],
-  ["uniform sampler2D cloudsBuffer;", "uniform sampler2D cloudsBuffer;\nuniform float cloudsRadianceScale;"],
+  [
+    "uniform sampler2D cloudsBuffer;",
+    "uniform sampler2D cloudsBuffer;\nuniform float cloudsRadianceScale;\nuniform float cloudsGrey;\nuniform vec3 cloudsGreyTint;",
+  ],
   [
     "outputColor.rgb = inputColor.rgb * (1.0 - clouds.a) + clouds.rgb;",
-    "outputColor.rgb = inputColor.rgb * (1.0 - clouds.a) + clouds.rgb * cloudsRadianceScale;",
+    /* glsl */ `vec3 cloudsColor = clouds.rgb * cloudsRadianceScale;
+  cloudsColor = mix(cloudsColor, vec3(dot(cloudsColor, vec3(0.2126, 0.7152, 0.0722))) * cloudsGreyTint, cloudsGrey);
+  outputColor.rgb = inputColor.rgb * (1.0 - clouds.a) + cloudsColor;`,
   ],
 ];
 
@@ -161,12 +238,23 @@ function patchCloudsForReversedDepth(clouds: CloudsEffect): void {
   material.needsUpdate = true;
 }
 
-/** Scales the clouds by SKY_RADIANCE_SCALE where the effect composites them over the frame */
-function patchCloudsComposite(clouds: CloudsEffect): void {
+/** The composite's own uniforms: radiance scale, and how far toward a neutral grey (0..1) */
+interface CloudsCompositeUniforms {
+  cloudsRadianceScale: THREE.Uniform<number>;
+  cloudsGrey: THREE.Uniform<number>;
+}
+
+/** Scales the clouds by SKY_RADIANCE_SCALE where the effect composites them over the frame, greyed by the weather */
+function patchCloudsComposite(clouds: CloudsEffect): CloudsCompositeUniforms {
   // postprocessing's Effect keeps its shader behind a protected setter
   const effect = clouds as unknown as { getFragmentShader(): string; setFragmentShader(source: string): void };
   effect.setFragmentShader(patchShader(effect.getFragmentShader(), CLOUDS_COMPOSITE_PATCHES, "clouds composite"));
-  clouds.uniforms.set("cloudsRadianceScale" as never, new THREE.Uniform(SKY_RADIANCE_SCALE) as never);
+  const u: CloudsCompositeUniforms = { cloudsRadianceScale: new THREE.Uniform(SKY_RADIANCE_SCALE), cloudsGrey: new THREE.Uniform(0) };
+  const map = clouds.uniforms as unknown as Map<string, THREE.Uniform>;
+  map.set("cloudsRadianceScale", u.cloudsRadianceScale);
+  map.set("cloudsGrey", u.cloudsGrey);
+  map.set("cloudsGreyTint", new THREE.Uniform(OVERCAST_TINT.clone()));
+  return u;
 }
 
 /**
@@ -216,9 +304,19 @@ export class PhysicalSky {
   private readonly sunECEF = new THREE.Vector3(0, 0, 1);
   private readonly procedural: Array<{ dispose(): void }> = [];
   private stbn: THREE.Data3DTexture | null = null;
+  private readonly composite: CloudsCompositeUniforms;
   private quality: SkyQuality = "high";
   private cloud = 0;
   private rain = 0;
+  private windX = 0;
+  private windZ = 0;
+  /** The session's cloud seed and the recipe picked from it (null: pick on the next look, with the weather then) */
+  private seed = 1;
+  private recipe: CloudRecipe | null = null;
+  private readonly setup: CloudSkySetup = cloudSkyFor(pickCloudRecipe(1, 0, 0), 0, 0);
+  private readonly logRecipes = typeof location !== "undefined" && new URLSearchParams(location.search).has("cloudseed");
+  /** The recipe has a layer on now (a cloudless sky skips the clouds' pass: the library has no heights to march then) */
+  private anyClouds = true;
   private disposed = false;
 
   constructor(renderer: THREE.WebGLRenderer, onReady: () => void) {
@@ -242,11 +340,10 @@ export class PhysicalSky {
     this.clouds.shapeTexture = shape;
     this.clouds.shapeDetailTexture = shapeDetail;
     this.clouds.turbulenceTexture = turbulence;
-    this.clouds.localWeatherVelocity.copy(CLOUD_WIND);
     // Light shafts need the atmosphere's aerial-perspective pass, which this renderer does not run
     this.clouds.lightShafts = false;
     if (reversedDepth) patchCloudsForReversedDepth(this.clouds);
-    patchCloudsComposite(this.clouds);
+    this.composite = patchCloudsComposite(this.clouds);
     this.clouds.skipRendering = false;
 
     this.generator = new PrecomputedTexturesGenerator(renderer);
@@ -287,7 +384,23 @@ export class PhysicalSky {
     this.clouds.sunDirection.copy(this.sunECEF);
     this.cloud = THREE.MathUtils.clamp(c.cloud, 0, 1);
     this.rain = THREE.MathUtils.clamp(c.rain, 0, 1);
+    this.windX = Number.isFinite(c.windVxMs) ? c.windVxMs! : 0;
+    this.windZ = Number.isFinite(c.windVzMs) ? c.windVzMs! : 0;
     this.applyLook();
+  }
+
+  /**
+   * A new session's sky: the cloud types, heights and pattern are picked from `seed` with the next conditions (cheap:
+   * uniforms only, no shader change)
+   */
+  setSeed(seed: number): void {
+    this.seed = seed;
+    this.recipe = null;
+  }
+
+  /** The cloud types on show now, lowest first (empty until the first conditions) */
+  get cloudTypes(): string[] {
+    return this.recipe ? describeClouds(this.recipe, this.cloud, this.rain) : [];
   }
 
   /** The graphics preset: this sky and its clouds on Medium and High, hidden on Low (the classic sky shows there) */
@@ -305,22 +418,56 @@ export class PhysicalSky {
     return this.ready && this.quality !== "low";
   }
 
-  /** Whether the clouds' pass should run this frame (they come and go with the sky) */
+  /** Whether the clouds' pass should run this frame (they come and go with the sky, and sit out a cloudless one) */
   get cloudsActive(): boolean {
-    return this.showing;
+    return this.showing && this.anyClouds;
+  }
+
+  /** Picks the session's recipe (once per seed) and puts its pattern where the seed says */
+  private ensureRecipe(): CloudRecipe {
+    if (this.recipe) return this.recipe;
+    const r = pickCloudRecipe(this.seed, this.cloud, this.rain);
+    this.recipe = r;
+    const c = this.clouds;
+    c.localWeatherRepeat.setScalar(r.repeat);
+    c.localWeatherOffset.set(r.offset[0], r.offset[1]);
+    c.shapeOffset.set(r.shapeOffset[0], r.shapeOffset[1], r.shapeOffset[2]);
+    c.shapeDetailOffset.set(r.shapeOffset[1], r.shapeOffset[2], r.shapeOffset[0]);
+    if (this.logRecipes) console.info(`[physical-sky] cloud seed ${r.seed}: ${describeClouds(r, this.cloud, this.rain).join(", ") || "clear"}`);
+    return r;
   }
 
   private applyLook(): void {
     const { cloud, rain } = this;
-    const volumetric = this.cloudsActive;
     this.mesh.visible = this.showing;
     this.bakeMesh.visible = this.showing;
-    // A clear day keeps a few fair-weather clouds; full cover closes the sky
-    this.clouds.coverage = 0.25 + 0.6 * cloud + 0.1 * rain;
-    // The bake has no volumetric clouds, so its sky always takes the veil; the visible sky only past what they show
+    const recipe = this.ensureRecipe();
+    cloudSkyFor(recipe, cloud, rain, this.setup);
+    this.anyClouds = this.setup.layers.some((l) => l.height > 0);
+    const volumetric = this.cloudsActive;
+    this.clouds.coverage = this.setup.coverage;
+    for (let i = 0; i < 4; i++) this.clouds.cloudLayers[i].set(this.setup.layers[i]);
+    // Drift with the wind aloft, along the recipe's own heading in a calm
+    const calm = Math.hypot(this.windX, this.windZ) < 0.1;
+    cloudDriftVelocity(
+      calm ? Math.sin(recipe.calmDriftRad) : this.windX,
+      calm ? Math.cos(recipe.calmDriftRad) : this.windZ,
+      Math.max(MIN_DRIFT_MS, WIND_ALOFT_FACTOR * Math.hypot(this.windX, this.windZ)),
+      this.worldToECEF,
+      recipe.repeat,
+      this.clouds.localWeatherVelocity
+    );
+    // Rain clouds dark and grey (the visible sky with them, so the horizon below the deck matches); a dry overcast
+    // keeps some of the low sun's colour
+    const gloom = rain * (0.75 + 0.25 * cloud);
+    this.composite.cloudsRadianceScale.value = SKY_RADIANCE_SCALE * (1 - 0.45 * gloom);
+    this.composite.cloudsGrey.value = Math.min(1, 0.7 * gloom + 0.3 * THREE.MathUtils.smoothstep(cloud, 0.8, 1));
+    this.mesh.material.uniforms.skyRadianceScale.value = SKY_RADIANCE_SCALE * (1 - 0.35 * gloom);
+    // The bake has no volumetric clouds, so its sky always takes the veil; the visible sky only a little under a full
+    // deck and in rain (the deck itself greys it, and broken cloud shows blue sky between)
     const veil = cloud * (0.75 + 0.25 * rain);
     this.bakeMesh.material.uniforms.overcast.value = veil;
-    this.mesh.material.uniforms.overcast.value = volumetric ? 0.6 * THREE.MathUtils.smoothstep(cloud, 0.7, 1) + 0.25 * rain : veil;
+    this.mesh.material.uniforms.overcast.value = volumetric ? 0.3 * THREE.MathUtils.smoothstep(cloud, 0.85, 1) + 0.4 * rain : veil;
     // A thick overcast hides the sun disc (the probe zeroes this while it films and puts the value back)
     this.mesh.material.uniforms.showSunDisc.value = 1 - THREE.MathUtils.smoothstep(cloud, 0.55, 0.9);
   }

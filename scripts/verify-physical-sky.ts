@@ -1,7 +1,9 @@
 /**
  * The physical sky (src/lib/render/physical-sky.ts, Medium and High graphics): the scene sits on the globe with up, north and
  * east where the weather model puts them, so the sky's sun stands where the scene's sun light comes from; the shader
- * edits still land on the libraries' current sources; and the clouds' blue noise is our own and well formed.
+ * edits still land on the libraries' current sources; the clouds' blue noise is our own and well formed; and each
+ * session's cloud recipe (cloud-recipes.ts) is repeatable from its seed, varied across seeds, inside the limits its
+ * coverage maths needs and smooth as the weather changes, with the clouds drifting the way the wind blows.
  *
  *   npx tsx scripts/verify-physical-sky.ts
  */
@@ -12,14 +14,26 @@ import { SkyMaterial } from '@takram/three-atmosphere';
 import { CloudsEffect } from '@takram/three-clouds';
 import { Ellipsoid, Geodetic } from '@takram/three-geospatial';
 import {
+  cloudDriftVelocity,
   CLOUDS_COMPOSITE_PATCHES,
   CLOUDS_REVERSED_DEPTH_PATCHES,
   createSpatiotemporalNoise,
+  cubeSphereUv,
   sceneToECEFMatrix,
   SKY_FRAGMENT_PATCHES,
   SKY_VERTEX_REVERSED_DEPTH_PATCHES,
 } from '../src/lib/render/physical-sky';
 import { AZIMUTH_OFFSET_DEG, LATITUDE_DEG, sunPosition, TIME_OF_DAY_HOURS } from '../src/lib/sim/weather';
+import {
+  cloudSkyFor,
+  describeClouds,
+  MAX_COVERAGE,
+  MIN_COVERAGE,
+  pickCloudRecipe,
+  TEXTURED_MAX_FILTER,
+  type CloudLayerSetup,
+  type CloudSkySetup,
+} from '../src/lib/render/cloud-recipes';
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ''): void {
@@ -123,5 +137,97 @@ for (const i of [0, 777, 9001, 16383]) {
 }
 check('each texel steps evenly through time', worstGap <= 12, `largest gap ${worstGap}/255`);
 volume.dispose();
+
+// --- Cloud recipes ---------------------------------------------------------------------------------------------------
+const SEEDS = Array.from({ length: 120 }, (_, i) => 1 + i * 7919);
+check('a seed picks the same recipe every time', JSON.stringify(pickCloudRecipe(4242, 0.3, 0)) === JSON.stringify(pickCloudRecipe(4242, 0.3, 0)));
+const clearSkies = SEEDS.map((seed) => describeClouds(pickCloudRecipe(seed, 0, 0), 0, 0).join(', '));
+const distinctClear = new Set(clearSkies).size;
+check('clear days differ between seeds', distinctClear >= 8, `${distinctClear} different skies over ${SEEDS.length} seeds`);
+check('some clear days have no clouds at all', clearSkies.some((s) => s === ''));
+check('some clear days have mid or high cloud', clearSkies.some((s) => /alto|cirr/.test(s)));
+const offsets = SEEDS.map((seed) => pickCloudRecipe(seed, 0, 0).offset);
+check('pattern positions spread over the texture', Math.min(...offsets.map((o) => o[0])) < 0.1 && Math.max(...offsets.map((o) => o[0])) > 0.9);
+
+const textured = (i: number) => i < 3;
+/** How much a layer shows: its density scale times the share of its texture that passes (the deck: its density) */
+function strength(s: CloudSkySetup, i: number): number {
+  const l = s.layers[i];
+  if (l.height <= 0) return 0;
+  if (!textured(i)) return l.densityScale * Math.min(1, s.coverage / l.coverageFilterWidth);
+  const threshold = 1 - s.coverage / (1 - l.coverageFilterWidth);
+  return l.densityScale * (1 - Math.pow(threshold, 1 / l.weatherExponent));
+}
+let limitsOk = true;
+let limitsDetail = '';
+let worstStep = 0;
+let worstStepDetail = '';
+let orderOk = true;
+const keys: (keyof CloudLayerSetup)[] = ['altitude', 'height', 'shapeAmount', 'shapeAlteringBias'];
+const sweep = (seed: number, path: Array<[number, number]>) => {
+  const r = pickCloudRecipe(seed, path[0][0], path[0][1]);
+  let prev: CloudSkySetup | null = null;
+  for (const [cloud, rain] of path) {
+    const s = cloudSkyFor(r, cloud, rain);
+    if (!(s.coverage >= MIN_COVERAGE && s.coverage <= MAX_COVERAGE)) [limitsOk, limitsDetail] = [false, `coverage ${s.coverage}`];
+    s.layers.forEach((l, i) => {
+      const finite = Object.values(l).every((v) => typeof v === 'boolean' || Number.isFinite(v));
+      if (!finite || l.densityScale < 0 || (l.densityScale === 0) !== (l.height === 0)) [limitsOk, limitsDetail] = [false, `seed ${seed} layer ${i}`];
+      if (textured(i) && l.height > 0 && (l.coverageFilterWidth > TEXTURED_MAX_FILTER || s.coverage >= 1 - l.coverageFilterWidth)) {
+        [limitsOk, limitsDetail] = [false, `seed ${seed} layer ${i} filter ${l.coverageFilterWidth}`];
+      }
+    });
+    const [cu, mid, high] = s.layers;
+    if ((mid.height > 0 && cu.height > 0 && mid.altitude < cu.altitude + 500) || (high.height > 0 && mid.height > 0 && high.altitude < mid.altitude + mid.height)) orderOk = false;
+    if (prev) {
+      for (let i = 0; i < 4; i++) {
+        const a = strength(prev, i);
+        const b = strength(s, i);
+        if (Math.abs(a - b) > worstStep) [worstStep, worstStepDetail] = [Math.abs(a - b), `seed ${seed} layer ${i} at cloud ${cloud.toFixed(3)} rain ${rain.toFixed(3)}`];
+        // Heights and shapes may jump only where the layer is invisible on one side of the step
+        if (Math.min(a, b) > 0.002) {
+          for (const k of keys) {
+            const d = Math.abs((prev.layers[i][k] as number) - (s.layers[i][k] as number));
+            const lim = k === 'altitude' || k === 'height' ? 100 : 0.02;
+            if (d > lim) [worstStep, worstStepDetail] = [Infinity, `seed ${seed} layer ${i} ${k} jumps ${d.toFixed(3)} at cloud ${cloud.toFixed(3)} rain ${rain.toFixed(3)}`];
+          }
+        }
+      }
+    }
+    prev = s;
+  }
+};
+for (const seed of SEEDS) {
+  // Clear to overcast, then into the heaviest rain: the paths the dynamic weather and the forecasts take
+  sweep(seed, Array.from({ length: 201 }, (_, i) => [i / 200, 0] as [number, number]));
+  sweep(seed, Array.from({ length: 201 }, (_, i) => [0.85 + 0.15 * (i / 200), i / 200] as [number, number]));
+}
+check('every layer stays inside the limits its coverage maths needs', limitsOk, limitsDetail);
+check('cumulus below the mid layer, the mid layer below the high one', orderOk);
+check('the clouds change smoothly with the weather (largest step in how much a layer shows)', worstStep < 0.012, `${worstStep.toFixed(4)} ${worstStepDetail}`);
+const allRain = SEEDS.map((seed) => cloudSkyFor(pickCloudRecipe(seed, 1, 0.85), 1, 0.85));
+check('heavy rain closes the sky with a low, thick, dense deck', allRain.every(({ coverage, layers: [, , , d] }) =>
+  d.height > 2000 && d.altitude < 650 && coverage / d.coverageFilterWidth >= 0.9));
+check('a clear sky has no deck', SEEDS.every((seed) => cloudSkyFor(pickCloudRecipe(seed, 0, 0), 0, 0).layers[3].height === 0));
+
+// --- Cloud drift ---------------------------------------------------------------------------------------------------
+const faces = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+check('weather-texture coordinate is 0.5, 0.5 at every cube face centre',
+  faces.every((f) => cubeSphereUv(new THREE.Vector3(...f).multiplyScalar(6.4e6)).distanceTo(new THREE.Vector2(0.5, 0.5)) < 1e-12));
+const vx = cloudDriftVelocity(1, 0, 10, m, 100);
+const vBack = cloudDriftVelocity(-1, 0, 10, m, 100);
+check('drift runs back against a reversed wind', vx.clone().add(vBack).length() < 1e-9 * vx.length() && vx.length() > 0);
+// A cloud moves with the wind: a second later the texture coordinate it sits on (uv x repeat + offset, fixed for it) is
+// found 10 m downwind. The cube-sphere coordinate is skewed here, so this is checked in metres, along several headings
+const upEcef = new THREE.Vector3(0, 1, 0).transformDirection(m);
+const atClouds = new THREE.Vector3().setFromMatrixPosition(m).addScaledVector(upEcef, 1500);
+let worstDrift = 0;
+for (const [dx, dz] of [[1, 0], [0, 1], [0.6, -0.8], [-0.7, -0.7]]) {
+  const v = cloudDriftVelocity(dx, dz, 10, m, 100);
+  const dir = new THREE.Vector3(dx, 0, dz).normalize().transformDirection(m);
+  const moved = cubeSphereUv(atClouds.clone().addScaledVector(dir, 10)).sub(cubeSphereUv(atClouds)).multiplyScalar(100).add(v);
+  worstDrift = Math.max(worstDrift, moved.length() / v.length());
+}
+check('a cloud moves downwind at the wind speed, whichever way it blows', worstDrift < 1e-3, `${worstDrift.toExponential(2)} of a second's drift off`);
 
 console.log(`\nverify-physical-sky: ${passed} checks passed`);

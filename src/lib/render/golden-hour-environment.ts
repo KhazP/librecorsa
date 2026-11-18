@@ -129,6 +129,9 @@ export interface SkyConditions {
   cloud: number;
   /** Rain intensity 0..1 */
   rain: number;
+  /** Near-ground wind (m/s) along scene X and Z: the volumetric clouds drift with it */
+  windVxMs?: number;
+  windVzMs?: number;
 }
 
 /** The original look: clear sky, sun at 14 deg / 127 deg */
@@ -164,6 +167,13 @@ export interface GoldenHourEnvironment {
   update(carWorldPos: THREE.Vector3, camera: THREE.Camera): void;
   /** Time of day and weather: moves the sun and sets sky, fill, fog and exposure (cheap; re-bakes the environment only on a visible change) */
   setConditions(conditions: SkyConditions): void;
+  /**
+   * A new session's clouds: the seed picks the cloud types, their heights and where the pattern sits (cloud-recipes.ts),
+   * with the conditions of the next setConditions. Call it before that setConditions. Cheap: no shader change
+   */
+  setCloudSeed(seed: number): void;
+  /** The cloud types the physical sky shows now, lowest first (empty with the classic sky) */
+  readonly cloudTypes: string[];
   dispose(): void;
 }
 
@@ -527,6 +537,9 @@ export function createGoldenHourEnvironment(
   let disposed = false;
   let current: SkyConditions = { ...GOLDEN_HOUR_SKY };
   const tint = new THREE.Color();
+  let cloudSeed = 1;
+  /** Where the classic sky's drifting clouds start (s on its cloud clock), from the cloud seed */
+  let classicCloudClockS = 0;
 
   const rebake = () => {
     baker.bake(skySunDir, skyLook, sunLight, fillLight);
@@ -550,7 +563,14 @@ export function createGoldenHourEnvironment(
       physicalSky = new PhysicalSky(renderer, applySkyChoice);
       scene.add(physicalSky.mesh);
       baker.setPhysicalSky(physicalSky.bakeMesh);
-      physicalSky.setConditions({ sunDirection: skySunDir, cloud: current.cloud, rain: current.rain });
+      physicalSky.setSeed(cloudSeed);
+      physicalSky.setConditions({
+        sunDirection: skySunDir,
+        cloud: current.cloud,
+        rain: current.rain,
+        windVxMs: current.windVxMs,
+        windVzMs: current.windVzMs,
+      });
     }
     if (!physicalSky) return;
     const wasShowing = physicalSky.showing;
@@ -573,7 +593,7 @@ export function createGoldenHourEnvironment(
     const e = c.elevationDeg;
     const cloud = THREE.MathUtils.clamp(c.cloud, 0, 1);
     const rain = THREE.MathUtils.clamp(c.rain, 0, 1);
-    current = { elevationDeg: e, azimuthDeg: c.azimuthDeg, cloud, rain };
+    current = { elevationDeg: e, azimuthDeg: c.azimuthDeg, cloud, rain, windVxMs: c.windVxMs, windVzMs: c.windVzMs };
 
     // Sun: the light never comes from below the horizon (shadows stay sane at dawn / dusk); the sky's sun does
     sunDirection.copy(sunDirectionUnit(Math.max(1, e), c.azimuthDeg));
@@ -600,7 +620,7 @@ export function createGoldenHourEnvironment(
 
     skyLookFor(current, skyLook);
     applySkyLook(sky, skySunDir, skyLook);
-    physicalSky?.setConditions({ sunDirection: skySunDir, cloud, rain });
+    physicalSky?.setConditions({ sunDirection: skySunDir, cloud, rain, windVxMs: c.windVxMs, windVzMs: c.windVzMs });
     const dElev = Math.abs(e - baked.elevationDeg);
     const dCloud = Math.abs(cloud - baked.cloud);
     const dRain = Math.abs(rain - baked.rain);
@@ -625,12 +645,21 @@ export function createGoldenHourEnvironment(
 
       camera.getWorldPosition(scratch);
       sky.position.copy(scratch);
-      // Drifting clouds (the Sky shader skips them at zero coverage)
-      if (sky.material.uniforms.cloudCoverage.value > 0) sky.material.uniforms.time.value = performance.now() / 1000;
+      // Drifting clouds (the Sky shader skips them at zero coverage), from where this session's seed starts them
+      if (sky.material.uniforms.cloudCoverage.value > 0) sky.material.uniforms.time.value = classicCloudClockS + performance.now() / 1000;
       if (pendingBake && performance.now() - lastBakeMs > REBAKE_MIN_S * 1000) rebake();
     },
 
     setConditions,
+    setCloudSeed(seed: number): void {
+      if (disposed) return;
+      cloudSeed = seed;
+      classicCloudClockS = (Math.abs(Math.floor(seed)) % 10007) * 0.9;
+      physicalSky?.setSeed(seed);
+    },
+    get cloudTypes(): string[] {
+      return physicalSky?.showing ? physicalSky.cloudTypes : [];
+    },
     setQuality,
     startPhysicalSky(): void {
       if (!physicalSkyHeld) return;

@@ -30,6 +30,7 @@ import {
   createGoldenHourEnvironment,
   createPostFx,
 } from "@/lib/render/golden-hour-environment";
+import { sameConditions, type SessionConditions } from "@/lib/sim/weather";
 import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
 import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from "@/lib/sim/rev-range";
@@ -2000,7 +2001,19 @@ export class DriveSession {
     let lastSkyMs = -Infinity;
     let lastWeatherHudMs = -Infinity;
     let weatherHudKey = "";
-    const skyConditions = { elevationDeg: 14, azimuthDeg: 127, cloud: 0, rain: 0 };
+    const skyConditions = { elevationDeg: 14, azimuthDeg: 127, cloud: 0, rain: 0, windVxMs: 0, windVzMs: 0 };
+    // Each session's clouds come from a seed of their own, new whenever the weather's conditions change. Only the look
+    // depends on it, so it stays on this client. `?cloudseed=N` fixes it (and logs the cloud types each one picks)
+    const cloudSeedParam = new URLSearchParams(window.location.search).get("cloudseed");
+    const fixedCloudSeed = cloudSeedParam !== null && Number.isFinite(Number(cloudSeedParam)) ? Math.floor(Number(cloudSeedParam)) : null;
+    let cloudConditions: SessionConditions | null = null;
+    if (cloudSeedParam !== null) {
+      (window as unknown as { __lcCloudSeed?: (seed: number) => string[] }).__lcCloudSeed = (seed) => {
+        env.setCloudSeed(seed);
+        env.setConditions(skyConditions);
+        return env.cloudTypes;
+      };
+    }
     const rainCamPos = new THREE.Vector3();
     const rainCamPrev = new THREE.Vector3();
     const rainCamVel = new THREE.Vector3();
@@ -3189,6 +3202,12 @@ export class DriveSession {
         skyConditions.azimuthDeg = sun.azimuthDeg;
         skyConditions.cloud = wx.cloudCover;
         skyConditions.rain = wx.rainIntensity;
+        skyConditions.windVxMs = wx.windVxMs;
+        skyConditions.windVzMs = wx.windVzMs;
+        if (!cloudConditions || !sameConditions(cloudConditions, wx.conditions)) {
+          cloudConditions = { ...wx.conditions };
+          env.setCloudSeed(fixedCloudSeed ?? Math.floor(Math.random() * 2 ** 31));
+        }
         env.setConditions(skyConditions);
         setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity);
         // The water under the player's own wheels, not the lap's mean line water
