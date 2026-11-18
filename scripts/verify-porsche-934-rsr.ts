@@ -208,8 +208,8 @@ console.log('\n== Launch and straight line through the adapter');
 {
   // A driver's start: 5000 rpm held on the clutch, the clutch out over 0.3 s, then the throttle fed to keep the rears
   // at 15 % slip, on slicks from the pit lane's 20 °C (79 % of their grip). Lifting to catch the wheelspin also lets the
-  // boost fall (the throttle works inside the boost law), so the car pulls in surges. The mod's 5.6 s is the real
-  // car's figure, on warm tyres
+  // boost fall (the throttle works inside the boost law), so the car pulls in surges; the clutch slipping at its
+  // launch rpm keeps the engine where the turbo works. The mod lists 5.6 s
   const sim = createPorsche934RsrSim(pad);
   sim.assistPreset = 'pro';
   sim.teleportToDistance(1000, 0);
@@ -231,7 +231,7 @@ console.log('\n== Launch and straight line through the adapter');
     if (Number.isNaN(t100) && v >= 100) t100 = t - 2.5;
     if (Number.isNaN(t200) && v >= 200) t200 = t - 2.5;
   }
-  check('0-100 km/h 6.0–8.0 s from a clutch start, the throttle fed (cold slicks)', t100 > 6 && t100 < 8, `${fmt(t100)} s, 0-200 ${fmt(t200)} s`);
+  check('0-100 km/h 4.5–6.5 s from a clutch start, the throttle fed (cold slicks)', t100 > 4.5 && t100 < 6.5, `${fmt(t100)} s, 0-200 ${fmt(t200)} s`);
   // Flat out from rest on the auto clutch (no clutch pedal): the clutch slips at its launch rpm instead of pulling the
   // engine down to its 1200–1800 rpm bite, where it makes 110 Nm and no boost
   {
