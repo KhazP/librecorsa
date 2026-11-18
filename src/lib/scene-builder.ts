@@ -22,6 +22,7 @@ import { createGroundHit, type GroundQuery } from "@/lib/sim/f12026-car/TrackCol
 import { OVERLAY_LAYER } from "@/lib/render/layers";
 import { cutSceneryBoxes, isCutMaterialMesh, type SceneryCutBox } from "@/lib/scenery-cuts";
 import { freezeStaticTransforms, singlePassTransparency } from "@/lib/render/static-scene";
+import { attachDriftingObjects, type DriftingObjects } from "@/lib/render/drifting-objects";
 import { loadVenueLayout } from "@/lib/render/venue-model";
 import { venueModelFiles, type VenueModelFiles, type VenuePair } from "@/lib/venue-models";
 
@@ -1113,8 +1114,12 @@ export function buildCircuitScene(
     else if (ownLamps) startLightGroup.visible = false;
   };
 
+  /** A converted circuit's balloons and blimp (drifting-objects.ts), once the circuit has loaded */
+  let drifting: DriftingObjects | null = null;
+
   const updateEnvironment = (elapsedSeconds: number) => {
     setSceneryTime(elapsedSeconds);
+    drifting?.update(elapsedSeconds);
   };
 
   const setGrooveRubber = (rubber: number) => {
@@ -1155,6 +1160,7 @@ export function buildCircuitScene(
     (root) => {
       attachStartLightsToGantry(root);
       collectGrooves(root);
+      drifting = attachDriftingObjects(root);
       resolveTrackRoot(root);
     },
     sheenMask,

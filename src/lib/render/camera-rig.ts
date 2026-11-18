@@ -369,7 +369,8 @@ export class TracksideBroadcastDirector {
   *occlusionSteps(trackRoot: THREE.Object3D): Generator<number, void, void> {
     const occluders: THREE.Object3D[] = [];
     trackRoot.traverseVisible((obj) => {
-      if ((obj as THREE.Mesh).isMesh) occluders.push(obj);
+      // Not the objects drifting high over the circuit (drifting-objects.ts): they move, and block no sight line
+      if ((obj as THREE.Mesh).isMesh && !(obj as THREE.Mesh).geometry.getAttribute("_drift")) occluders.push(obj);
     });
     // Indexed once, in slices (a scan is up to 1.4 M triangles); each sight line then tests only what it crosses
     const occluder = new SegmentOccluder();

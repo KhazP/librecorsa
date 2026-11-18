@@ -36,7 +36,7 @@ export const KTX2_MODELS: readonly Ktx2Model[] = [
   { model: "/tracks/oschersleben/oschersleben.glb", build: "eadf95c6" },
   { model: "/tracks/rwanda_official/rwanda_official.glb", build: "2e64c928" },
   { model: "/tracks/speedvegas/speedvegas.glb", build: "8c9ab5b8" },
-  { model: "/tracks/willow_springs/willow_springs.glb", build: "6416e695" },
+  { model: "/tracks/willow_springs/willow_springs.glb", build: "905545a8" },
 ];
 
 /** The KTX2 model that stands in for a circuit model, if it has one (relative to the base path) */
