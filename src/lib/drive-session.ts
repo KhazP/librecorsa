@@ -694,6 +694,7 @@ export class DriveSession {
           // Master volume and mute are saved settings (Settings > Audio)
           audio.setMuted(settings.audio.muted);
           audio.setVolume(settings.audio.volume);
+          audio.setKerbVolume(settings.audio.kerbs);
         } else {
           audio.resume();
         }
@@ -1455,6 +1456,7 @@ export class DriveSession {
         if (next.audio.muted !== this.snapshot.muted) this.publish({ muted: next.audio.muted });
         audio?.setMuted(next.audio.muted);
         audio?.setVolume(next.audio.volume);
+        audio?.setKerbVolume(next.audio.kerbs);
         applyMusicSettings(next);
       }
       if (next.keys !== prev.keys) keyLookup = buildKeyLookup(next.keys);
