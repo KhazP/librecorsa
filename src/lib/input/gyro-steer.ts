@@ -81,20 +81,24 @@ export interface MotionSample {
 }
 
 /**
- * A pad's sensor clock: the seconds between two readings across the counter's wrap. A silence longer than
- * {@link GYRO_GAP_RESEED_S} by the wall clock is a gap, whatever the counter says: a 16-bit clock wraps in a third
- * of a second, so a longer silence would read as a short step.
+ * A pad's sensor clock: the seconds between two readings across the counter's wrap. Only when the wall clock says
+ * at least a whole wrap went by is the step taken for a gap, whatever the counter says: a 16-bit clock wraps in a
+ * third of a second, so a longer silence would read as a short step. A shorter wall-clock gap is the page stalling
+ * (a shader compile, a collection) with the reports queued behind it, and the counter's step is the true one.
  */
 export class SensorClock {
   private lastTicks: number | null = null;
   private lastWallMs: number | null = null;
   private readonly span: number;
+  /** One turn of the counter (ms) */
+  private readonly wrapMs: number;
 
   constructor(
     private readonly ticksPerS: number,
     bits: 16 | 32,
   ) {
     this.span = 2 ** bits;
+    this.wrapMs = (this.span / ticksPerS) * 1000;
   }
 
   reset(): void {
@@ -105,7 +109,7 @@ export class SensorClock {
   /** Seconds since the previous reading, or −1 for the first one and after a gap */
   step(ticks: number, wallMs?: number): number {
     const prev = this.lastTicks;
-    const gap = wallMs !== undefined && this.lastWallMs !== null && wallMs - this.lastWallMs > GYRO_GAP_RESEED_S * 1000;
+    const gap = wallMs !== undefined && this.lastWallMs !== null && wallMs - this.lastWallMs >= this.wrapMs;
     this.lastTicks = ticks;
     this.lastWallMs = wallMs ?? null;
     if (prev === null || gap) return -1;
