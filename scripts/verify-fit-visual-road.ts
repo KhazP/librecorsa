@@ -75,8 +75,9 @@ function positions(root: THREE.Object3D): THREE.BufferAttribute[] {
   check('crossover: the upper road\'s line moves with its own asphalt', upper.every((y) => Math.abs(y - 4.93) < 1e-5), upper.map((y) => y.toFixed(4)).join(' '));
 }
 
-// What lies on the ground casts no shadow (`onGround`); what stands up keeps it, also merged into flat road. Ground at
-// 0 m for x < 4 and none further out; a dip to -0.5 m for 0.5 < x < 4 where a test asks for one
+// What lies on the ground casts no shadow (`onGround`); what stands up (a wall, a post, a deck) keeps it, also merged
+// into flat road or in a road material. Ground at 0 m for x < 4 and none further out; a dip to -0.5 m for 0.5 < x < 4
+// where a test asks for one
 {
   const mesh = (name: string, points: number[], tris: number[]) => {
     const g = new THREE.BufferGeometry();
@@ -113,6 +114,8 @@ function positions(root: THREE.Object3D): THREE.BufferAttribute[] {
   const wallTris = [0, 2, 1, 0, 3, 2, 1, 2, 5, 1, 5, 4];
   check('ground: asphalt with a wall merged in stands up', !onGround(mesh('Asphalt', wall, wallTris)));
   const many = [...flat(-1, 1), ...Array.from({ length: 16 }, (_, i) => [-1 + i / 8, 0, 0]).flat(), 1, 1, -1, 1, 1, 1];
+  // A deck 5 m up in the road material (a bridge over the ground): it has room under it
+  check('ground: an asphalt deck 5 m up keeps its shadow', !onGround(mesh('Asphalt', flat(-1, 1, 5), [0, 2, 1, 0, 3, 2])));
   check('ground: a laid line with a post merged in stands up', !onGround(mesh('Line', many, wallTris.map((i) => (i >= 4 ? i + 16 : i))), false, []));
 }
 
