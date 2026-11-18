@@ -3,6 +3,7 @@ Assetto Corsa circuit mod (KN5 + AI + INI data) → LibreCorsa track
 (public/tracks/<id>/track_data.json + public/tracks/<id>/<id>.glb).
 
     python -P scripts/tracks/port_ac_track.py <id|id,id|all> [--src DIR] [--no-glb] [--no-line-opt] [--no-compress]
+                                              [--extras-only]
 
 Reads the KN5 models listed in the layout's models_*.ini, the binary AI lanes (fast_lane.ai and pit_lane.ai),
 and the INI metadata (sections.ini, surfaces.ini, drs_zones.ini, cameras*.ini, groove.ini, crew.ini, lighting.ini),
@@ -1386,6 +1387,244 @@ def get_kn5_list(cfg):
     return out
 
 
+# Slots in the drifting objects' table (src/lib/render/drifting-objects.ts, DRIFT_SLOTS): a vertex's `_DRIFT` value is
+# (slot + 0.5) / DRIFT_SLOTS, which the GLB's 12-bit quantization keeps apart
+DRIFT_SLOTS = 32
+# Drifting objects that share one mesh are drawn over an atlas of their textures in tiles of DRIFT_TILE px, each image
+# wrapped round into a DRIFT_GUTTER px border (AC wraps their UVs a little past 0..1, and the border keeps the mipmaps
+# of the neighbouring tiles out)
+DRIFT_TILE = 256
+DRIFT_GUTTER = 8
+
+
+def merge_kn5_assets(t_dict, mats, kf, tex_pool, materials, seen_mat_names):
+    """Adds another KN5's textures and materials to the pools: a texture name already holding other bytes, and a
+    material name already given to a different material, get the file's name added. Returns the offset of its
+    materials in `materials`"""
+    stem = os.path.splitext(os.path.basename(kf))[0].replace(' ', '_')
+    renamed = {}
+    for tname, raw in t_dict.items():
+        if tname in tex_pool and tex_pool[tname] != raw:
+            root_, ext = os.path.splitext(tname)
+            renamed[tname] = f'{root_}@{stem}{ext}'
+            tex_pool[renamed[tname]] = raw
+        else:
+            tex_pool[tname] = raw
+    for m in mats:
+        m['maps'] = {slot: renamed.get(t, t) for slot, t in m['maps'].items()}
+        sig = (m['name'], m['shader'], m['blend'], m['alpha_tested'], m['maps'].get('txDiffuse'))
+        if m['name'] in seen_mat_names and seen_mat_names[m['name']] != sig:
+            m['name'] = f"{m['name']}_{stem}"
+        seen_mat_names[m['name']] = sig
+    offset = len(materials)
+    materials.extend(mats)
+    return offset
+
+
+def world_mesh(nd):
+    """A KN5 mesh node's positions and normals in the model's space"""
+    m, w = nd['mesh'], nd['world']
+    pos = (m['pos'] @ w[:3, :3].T) + w[:3, 3]
+    nrm = m['nrm'] @ w[:3, :3].T
+    nlen = np.linalg.norm(nrm, axis=1, keepdims=True)
+    nrm = np.where(nlen > 1e-9, nrm / np.maximum(nlen, 1e-9), np.array([0.0, 1.0, 0.0], np.float32))
+    return pos.astype(np.float32), nrm.astype(np.float32)
+
+
+def extra_model_items(cfg, tex_pool, materials, seen_mat_names):
+    """`extraModels`: [{`kn5`, `nodes` (regex of node names), optional `hideTextures`}], meshes drawn from another of the
+    mod's models (the props of a layout dressed for an event), never physics. Each mesh is tagged with its file
+    (`fromModel`), which keeps it in nodes of its own"""
+    items = []
+    for spec in cfg.get('extraModels', ()):
+        kf = spec['kn5']
+        t_dict, mats, nodes = read_kn5_full(os.path.join(cfg['base_dir'], kf))
+        moff = merge_kn5_assets(t_dict, mats, kf, tex_pool, materials, seen_mat_names)
+        n_items = n_tris = 0
+        for nd in nodes:
+            m = nd['mesh']
+            if m is None or not re.search(spec['nodes'], nd['name']):
+                continue
+            mat = mats[m['mat']]
+            if not (nd['active'] and m['visible'] and m['renderable']) or mat['shader'].lower() == 'ksgrass':
+                continue
+            if spec.get('hideTextures') and re.search(spec['hideTextures'], mat['maps'].get('txDiffuse', ''), re.I):
+                continue
+            pos, nrm = world_mesh(nd)
+            items.append({
+                'name': nd['name'],
+                'pos': pos,
+                'nrm': nrm,
+                'uv': m['uv'].astype(np.float32),
+                'idx': m['idx'],
+                'mat': m['mat'] + moff,
+                'transparent': m['transparent'],
+                'physics': None,
+                'matName': mat['name'],
+                'fromModel': kf,
+            })
+            n_items += 1
+            n_tris += len(m['idx']) // 3
+        log(f'  {kf}: {n_items} meshes ({n_tris} triangles) of its props drawn')
+    return items
+
+
+def drift_atlas(images):
+    """One image of DRIFT_TILE px tiles, 8 to a row; returns it and each tile's (x, y) in px"""
+    cols = min(8, len(images))
+    rows = math.ceil(len(images) / cols)
+    inner = DRIFT_TILE - 2 * DRIFT_GUTTER
+    atlas = Image.new('RGB', (cols * DRIFT_TILE, rows * DRIFT_TILE))
+    corners = []
+    for k, im in enumerate(images):
+        a = np.asarray(im.convert('RGB').resize((inner, inner), Image.LANCZOS))
+        a = np.pad(a, ((DRIFT_GUTTER, DRIFT_GUTTER), (DRIFT_GUTTER, DRIFT_GUTTER), (0, 0)), mode='wrap')
+        corners.append(((k % cols) * DRIFT_TILE, (k // cols) * DRIFT_TILE))
+        atlas.paste(Image.fromarray(a), corners[-1])
+    return atlas, corners
+
+
+def drifting_object_items(cfg, tex_pool, materials, seen_mat_names):
+    """`driftingObjects`: a models ini whose DYNAMIC_OBJECT_n sections float objects over the circuit. Assetto Corsa
+    starts each at RND_POS_CENTER plus a random offset within +-RND_POS_RANGE, and moves it in a straight line for the
+    whole session at RND_VEL_BASE plus a random +-RND_VEL_RANGE (m, m/s, x y z). Each is drawn at its centre with its
+    vertices tagged with a slot (`_DRIFT`); the node's `drift` extras give every slot's ranges, and
+    src/lib/render/drifting-objects.ts draws the random values and moves them. Objects with the same mesh (a fleet of
+    balloons in their own liveries) become one mesh over an atlas of their diffuse textures, one draw call. Their ksFlags
+    meshes (a balloon's burner flame, a few cm across) are left out, and they cast no shadow"""
+    base = cfg['base_dir']
+    cp = parse_ac_ini(os.path.join(base, cfg['driftingObjects']))
+    secs = sorted((s for s in cp.sections() if re.match(r'^DYNAMIC_OBJECT_\d+$', s)), key=lambda s: int(s.rsplit('_', 1)[1]))
+    kn5_cache = {}
+    objects = []
+    for sec in secs:
+        c = cp[sec]
+        f = c.get('FILE', '').strip()
+        if not f or float(c.get('PROBABILITY', '100')) <= 0 or not os.path.exists(os.path.join(base, f)):
+            continue
+
+        def vec(key):
+            return [float(x) for x in c.get(key, '0,0,0').split(',')]
+
+        # Only the RANDOM modes are known (forum notes); any other mode is drawn still at its centre
+        pos_random = c.get('POS_MODE', 'RANDOM').strip().upper() == 'RANDOM'
+        vel_random = c.get('VEL_MODE', 'RANDOM').strip().upper() == 'RANDOM'
+        if not (pos_random and vel_random):
+            log(f'  {sec}: POS_MODE/VEL_MODE other than RANDOM, drawn still at RND_POS_CENTER')
+        if f not in kn5_cache:
+            t_dict, mats, nodes = read_kn5_full(os.path.join(base, f))
+            meshes = []
+            for nd in nodes:
+                m = nd['mesh']
+                if m is None or not (nd['active'] and m['visible'] and m['renderable']):
+                    continue
+                if mats[m['mat']]['shader'].lower() == 'ksflags':
+                    continue
+                pos, nrm = world_mesh(nd)
+                meshes.append({'pos': pos, 'nrm': nrm, 'uv': m['uv'].astype(np.float32), 'idx': m['idx'],
+                               'mat': mats[m['mat']], 'tex': t_dict})
+            kn5_cache[f] = meshes
+        objects.append({
+            'file': f,
+            'center': np.array(vec('RND_POS_CENTER'), np.float32),
+            'drift': {
+                'range': vec('RND_POS_RANGE') if pos_random else [0.0, 0.0, 0.0],
+                'velBase': vec('RND_VEL_BASE') if vel_random else [0.0, 0.0, 0.0],
+                'velRange': vec('RND_VEL_RANGE') if vel_random else [0.0, 0.0, 0.0],
+            },
+            'meshes': kn5_cache[f],
+        })
+    if len(objects) > DRIFT_SLOTS:
+        raise SystemExit(f'driftingObjects: {len(objects)} objects, the game has {DRIFT_SLOTS} slots')
+
+    # A fleet: one-mesh objects whose mesh is the same, each with its own diffuse texture
+    def shape_key(o):
+        if len(o['meshes']) != 1:
+            return None
+        ms = o['meshes'][0]
+        return (len(ms['pos']), ms['pos'].tobytes(), ms['uv'].tobytes(), ms['idx'].tobytes())
+
+    groups = {}
+    for slot, o in enumerate(objects):
+        key = shape_key(o)
+        groups.setdefault(key if key is not None else ('one', slot), []).append(slot)
+
+    items = []
+    for key, slots in groups.items():
+        fleet = key[0] != 'one' and len(slots) > 1
+        if fleet:
+            ms0 = objects[slots[0]]['meshes'][0]
+            images = [decode_rgba(objects[s]['meshes'][0]['tex'][objects[s]['meshes'][0]['mat']['maps']['txDiffuse']])
+                      for s in slots]
+            atlas, corners = drift_atlas(images)
+            stem = os.path.splitext(objects[slots[0]]['file'])[0]
+            tname = f'drift_atlas_{stem}.png'
+            buf = io.BytesIO()
+            atlas.save(buf, 'PNG')
+            tex_pool[tname] = buf.getvalue()
+            materials.append({'name': f'Drift_{stem}_atlas', 'shader': 'ksPerPixel', 'blend': 0, 'alpha_tested': False,
+                              'props': {}, 'maps': {'txDiffuse': tname}, 'maxTex': max(atlas.size)})
+            mat_i = len(materials) - 1
+            # Shift the UVs by whole tiles of the image (the same texels when wrapped) to sit around 0..1; the border
+            # covers what is left past it
+            uv = ms0['uv'].astype(np.float64)
+            uv = uv - np.floor((uv.min(0) + uv.max(0)) / 2)
+            inner = DRIFT_TILE - 2 * DRIFT_GUTTER
+            over = max(float(-uv.min()), float(uv.max() - 1), 0.0) * inner
+            if over > DRIFT_GUTTER:
+                log(f'  driftingObjects: {stem} UVs run {over:.0f} px past their tile, clamped')
+                uv = np.clip(uv, -DRIFT_GUTTER / inner, 1 + DRIFT_GUTTER / inner)
+            W, H = atlas.size
+            parts = []
+            for k, s in enumerate(slots):
+                x0, y0 = corners[k]
+                uv_a = np.stack([(x0 + DRIFT_GUTTER + uv[:, 0] * inner) / W, (y0 + DRIFT_GUTTER + uv[:, 1] * inner) / H], 1)
+                parts.append((s, ms0['pos'] + objects[s]['center'], ms0['nrm'], uv_a, ms0['idx']))
+            pieces = [(f'Drift_{stem}_fleet', mat_i, parts)]
+        else:
+            pieces = []
+            for s in slots:
+                o = objects[s]
+                stem = os.path.splitext(o['file'])[0]
+                for j, ms in enumerate(o['meshes']):
+                    mat = dict(ms['mat'], maps=dict(ms['mat']['maps']))
+                    moff = merge_kn5_assets({t: ms['tex'][t] for t in mat['maps'].values() if t in ms['tex']}, [mat],
+                                            o['file'], tex_pool, materials, seen_mat_names)
+                    pieces.append((f'Drift_{stem}_{j}', moff, [(s, ms['pos'] + o['center'], ms['nrm'], ms['uv'], ms['idx'])]))
+        for name, mat_i, parts in pieces:
+            pos, nrm, uvs, idx, drift = [], [], [], [], []
+            nv = 0
+            for s, p, n, u, ix in parts:
+                pos.append(p)
+                nrm.append(n)
+                uvs.append(u)
+                idx.append(ix.astype(np.uint32) + nv)
+                drift.append(np.full(len(p), (s + 0.5) / DRIFT_SLOTS, np.float32))
+                nv += len(p)
+            slot_list = sorted({s for s, *_ in parts})
+            items.append({
+                'name': name,
+                'pos': np.concatenate(pos).astype(np.float32),
+                'nrm': np.concatenate(nrm).astype(np.float32),
+                'uv': np.concatenate(uvs).astype(np.float32),
+                'idx': np.concatenate(idx),
+                'mat': mat_i,
+                'transparent': False,
+                'physics': None,
+                'matName': materials[mat_i]['name'],
+                'drift': np.concatenate(drift),
+                'ownNode': True,
+                'nodeExtras': {
+                    'castShadow': False,
+                    'drift': [{'slot': s, 'file': objects[s]['file'], **objects[s]['drift']} for s in slot_list],
+                },
+            })
+    n_fleet = sum(len(it['nodeExtras']['drift']) for it in items if it['name'].endswith('_fleet'))
+    log(f"  {cfg['driftingObjects']}: {len(objects)} drifting objects ({n_fleet} drawn over one atlas), "
+        f'{sum(len(it["idx"]) for it in items) // 3} triangles in {len(items)} meshes')
+    return items
+
+
 def parse_groove_ini(data_dir):
     cp = parse_ac_ini(os.path.join(data_dir, 'groove.ini'))
     grooves = {}
@@ -1963,7 +2202,7 @@ def ac_alpha_masked(mat, sh, cfg):
     return False
 
 
-def encode_webp_tex(raw_bytes, keep_alpha):
+def encode_webp_tex(raw_bytes, keep_alpha, max_tex=MAX_TEX):
     im = Image.open(io.BytesIO(raw_bytes))
     im.load()
     if keep_alpha:
@@ -1971,7 +2210,7 @@ def encode_webp_tex(raw_bytes, keep_alpha):
     else:
         im = im.convert('RGB')
     w, h = im.size
-    k = max(w, h) / MAX_TEX
+    k = max(w, h) / max_tex
     if k > 1:
         size = (max(1, round(w / k)), max(1, round(h / k)))
         if keep_alpha:
@@ -2005,15 +2244,17 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
         sh = mat['shader'].lower()
         is_mask = ac_alpha_masked(mat, sh, cfg)
         is_decal = (mat['blend'] in (1, 2) or 'perpixelalpha' in sh) and not is_mask
-        if is_semaphore_node(name) or name in grooves:
+        # `ownNode`: drawn as its own node, unmerged (the drifting objects, which carry a vertex attribute of their own)
+        if is_semaphore_node(name) or name in grooves or item.get('ownNode'):
             special_nodes.append((name, item, mat_idx, is_decal, grooves.get(name)))
         else:
-            key = (mat_idx, is_decal, bool(item.get('keepShape')))
+            # A mesh from another of the mod's models (`extraModels`) is merged only with others from it
+            key = (mat_idx, is_decal, bool(item.get('keepShape')), item.get('fromModel'))
             grouped.setdefault(key, []).append(item)
 
     # Chunk grouped meshes into <= 65534 vertices per primitive
     merged_nodes = []
-    for (mat_idx, is_decal, keep_shape), items in grouped.items():
+    for (mat_idx, is_decal, keep_shape, from_model), items in grouped.items():
         cur_p, cur_n, cur_uv, cur_idx = [], [], [], []
         v_count = 0
         chunk_id = 0
@@ -2022,7 +2263,8 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
             nonlocal cur_p, cur_n, cur_uv, cur_idx, v_count, chunk_id
             if not cur_idx:
                 return
-            mname = f"{materials[mat_idx]['name']}{'_shaped' if keep_shape else ''}_chunk{chunk_id}"
+            mname = (f"{materials[mat_idx]['name']}{'_shaped' if keep_shape else ''}"
+                     f"{'_' + os.path.splitext(from_model)[0] if from_model else ''}_chunk{chunk_id}")
             chunk_id += 1
             merged_nodes.append((
                 mname,
@@ -2032,6 +2274,7 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
                     'uv': np.concatenate(cur_uv, 0),
                     'idx': np.concatenate(cur_idx, 0),
                     'keepShape': keep_shape,
+                    'fromModel': from_model,
                 },
                 mat_idx,
                 is_decal,
@@ -2080,6 +2323,8 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
 
     # Determine which textures are used and whether any user material requires alpha
     tex_alpha_need = {}
+    # A material's `maxTex` lets its texture keep more than MAX_TEX px (the drifting objects' atlas)
+    tex_max = {}
     for old_mi in used_mats:
         m = materials[old_mi]
         sh = m['shader'].lower()
@@ -2094,6 +2339,7 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
         tname = m['maps'].get('txDiffuse')
         if tname and tname in tex_pool:
             tex_alpha_need[tname] = tex_alpha_need.get(tname, False) or needs_alpha
+            tex_max[tname] = max(tex_max.get(tname, MAX_TEX), m.get('maxTex', MAX_TEX))
 
     chunks = []
     accessors = []
@@ -2128,7 +2374,7 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
         raw = tex_pool[tname]
         raw_bytes_total += len(raw)
         try:
-            webp = encode_webp_tex(raw, needs_alpha)
+            webp = encode_webp_tex(raw, needs_alpha, tex_max[tname])
             mime = 'image/webp'
         except Exception as e:
             log(f'  tex {tname} fallback ({e})')
@@ -2192,8 +2438,12 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
             ia = put_acc(idx.astype(np.uint16), 5123, 'SCALAR', 34963)
         else:
             ia = put_acc(idx.astype(np.uint32), 5125, 'SCALAR', 34963)
+        attrs = {'POSITION': pa, 'NORMAL': na, 'TEXCOORD_0': ua}
+        # A drifting object's slot (drifting_object_items)
+        if item.get('drift') is not None:
+            attrs['_DRIFT'] = put_acc(np.asarray(item['drift'], np.float32), 5126, 'SCALAR', 34962)
         prim = {
-            'attributes': {'POSITION': pa, 'NORMAL': na, 'TEXCOORD_0': ua},
+            'attributes': attrs,
             'indices': ia,
             'material': mat_remap[old_mi],
         }
@@ -2209,6 +2459,9 @@ def write_ac_glb(visual_items, tex_pool, materials, grooves, scale, off, extra_m
         # Laid on the colliders here (`modelledKerbs`): the load-time fit leaves it as built (render/fit-visual-road.ts)
         if item.get('keepShape'):
             extras['keepShape'] = True
+        if item.get('fromModel'):
+            extras['fromModel'] = item['fromModel']
+        extras.update(item.get('nodeExtras', {}))
         if extras:
             nd['extras'] = extras
         node_i = len(gltf_nodes)
@@ -2867,6 +3120,8 @@ def build_modelled_kerb_mesh(phys_kerb_tris, phys_road_tris, xz, tan2, rgt2, wid
     n_vis = 0
     n_drawn = 0
     for it in visual_items:
+        if it.get('fromModel') or it.get('drift') is not None:
+            continue
         if it.get('physics') == 'kerb':
             pass
         elif it.get('physics') is None:
@@ -3149,6 +3404,11 @@ def build_ac_track(tid, cfg, args):
                     'physics': pcat,
                     'matName': mat_name,
                 })
+
+    # Drawn only, never physics: props from another of the mod's models and the objects drifting over the circuit
+    visual_items += extra_model_items(cfg, tex_pool, materials, seen_mat_names)
+    if cfg.get('driftingObjects'):
+        visual_items += drifting_object_items(cfg, tex_pool, materials, seen_mat_names)
 
     # `skinDir`: the mod's active track skin replaces KN5 textures by file name (case-insensitive, as AC reads it)
     if cfg.get('skinDir'):
@@ -3763,6 +4023,41 @@ def apply_street_hairpin_margin(tid, cfg):
         json.dump(d, f, separators=(',', ':'), ensure_ascii=False)
 
 
+def graft_extras(tid, cfg):
+    """--extras-only: builds just the circuit's `extraModels` and `driftingObjects` meshes and grafts them into its
+    existing GLB with scripts/graft-track-extras.mjs, which keeps every other byte of it. For a circuit whose full
+    rebuild would also change what it ships (converter changes since it was built). The track data and index.json are
+    left alone"""
+    out_dir = os.path.join(ROOT, 'public', 'tracks', tid)
+    glb = os.path.join(out_dir, f'{tid}.glb')
+    if not os.path.exists(glb):
+        raise SystemExit(f'{tid}: no {glb} to graft onto')
+    if not (cfg.get('extraModels') or cfg.get('driftingObjects')):
+        raise SystemExit(f'{tid}: no extraModels or driftingObjects to graft')
+    log(f'\n=== Grafting the extras of {tid} ===')
+    # The add-on's Track_Model takes the circuit model's own offset and scale
+    raw = open(glb, 'rb').read()
+    head = json.loads(raw[20:20 + struct.unpack('<I', raw[12:16])[0]])
+    tm = next(n for n in head['nodes'] if n.get('name') == 'Track_Model')
+    off = -np.array(tm.get('translation', [0.0, 0.0, 0.0]), np.float64)
+    scale = float(tm.get('scale', [1.0])[0])
+    tex_pool, materials, seen_mat_names = {}, [], {}
+    items = extra_model_items(cfg, tex_pool, materials, seen_mat_names)
+    if cfg.get('driftingObjects'):
+        items += drifting_object_items(cfg, tex_pool, materials, seen_mat_names)
+    addon = os.path.join(out_dir, f'{tid}.extras.glb')
+    write_ac_glb(items, tex_pool, materials, {}, scale, off, [], addon, cfg=cfg)
+    try:
+        for cmd in (['node', 'scripts/compress-track-glb.mjs', addon], ['node', 'scripts/graft-track-extras.mjs', glb, addon]):
+            r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            log(f'  {os.path.basename(cmd[1])}:', r.stdout.strip() or r.stderr.strip())
+            if r.returncode != 0:
+                raise RuntimeError(f'{cmd[1]} failed: {r.stderr}')
+    finally:
+        if os.path.exists(addon):
+            os.remove(addon)
+
+
 def resolve_sources(ids, src_arg):
     """Each circuit's `base_dir`: the mod's track folder on this machine (see the module docstring)"""
     local = json.load(open(LOCAL_SOURCES, encoding='utf-8')) if os.path.exists(LOCAL_SOURCES) else {}
@@ -3793,6 +4088,8 @@ def main():
     ap.add_argument('--no-glb', action='store_true')
     ap.add_argument('--no-line-opt', action='store_true')
     ap.add_argument('--no-compress', action='store_true')
+    ap.add_argument('--extras-only', action='store_true',
+                    help="graft just the circuit's extraModels and driftingObjects into its existing GLB")
     args = ap.parse_args()
 
     ids = list(AC_TRACKS.keys()) if args.id == 'all' else [x.strip() for x in args.id.split(',')]
@@ -3800,6 +4097,10 @@ def main():
         if tid not in AC_TRACKS:
             raise SystemExit(f'Unknown AC track id: {tid}')
     resolve_sources(ids, args.src)
+    if args.extras_only:
+        for tid in ids:
+            graft_extras(tid, AC_TRACKS[tid])
+        return
     built = {}
     for tid in ids:
         cfg = AC_TRACKS[tid]

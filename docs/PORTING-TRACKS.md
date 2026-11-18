@@ -33,7 +33,7 @@ The fields every entry needs:
 - `credit`: `title`, `author`, `url`, `short`, `license`, `licenseUrl`, shown in the game's credits
 - `type` (`'street'` or `'hillclimb'`) and `pointToPoint: True` where they apply
 
-The other keys fix things a particular mod needs: `physicsNodeOverrides` when the mod's surface names don't say what a surface is, `hideTextures`, `hideNodes` and `hideMaterials` to leave meshes out, `sectionSkip` and `sectionNames` for corner names, `closeBranches` and `openWalls` where several layouts share the asphalt, `bakeMultilayerMasks` for terrain drawn from a blend mask over a blank base texture (LilSki's circuits), and `texturePatches` to paint over one panel of a sign atlas. The comments next to each one in the existing entries say what it was for.
+The other keys fix things a particular mod needs: `physicsNodeOverrides` when the mod's surface names don't say what a surface is, `hideTextures`, `hideNodes` and `hideMaterials` to leave meshes out, `sectionSkip` and `sectionNames` for corner names, `closeBranches` and `openWalls` where several layouts share the asphalt, `bakeMultilayerMasks` for terrain drawn from a blend mask over a blank base texture (LilSki's circuits), `texturePatches` to paint over one panel of a sign atlas, `extraModels` to draw props from another of the mod's models (never as physics), and `driftingObjects` for a models ini whose `DYNAMIC_OBJECT_n` balloons or blimps float over the circuit (drawn moving as Assetto Corsa moves them, `src/lib/render/drifting-objects.ts`). The comments next to each one in the existing entries say what it was for.
 
 ### 2. Point it at the folder
 
@@ -55,6 +55,7 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
 - `--no-line-opt` skips the optimiser. The circuit keeps the racing lines of its last build when the new centreline has as many samples; otherwise it gets the minimum-curvature line.
 - `--no-glb` writes only the track data. The optimiser needs the GLB, so it is skipped too and the lines are kept the same way.
 - `--no-compress` keeps the raw GLB.
+- `--extras-only` grafts just the circuit's `extraModels` and `driftingObjects` into its existing GLB (`scripts/graft-track-extras.mjs`), leaving every other byte of it and the track data as they are. For a circuit whose full rebuild would also change what it ships.
 
 From the mod it reads:
 
