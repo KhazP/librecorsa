@@ -357,7 +357,8 @@ function checkSuspension(label: string, mod: ModData, config: CarPhysicsConfig, 
 }
 
 /** Engine, gearbox, clutch, differential, brakes */
-function checkDriveline(label: string, mod: ModData, config: CarPhysicsConfig): void {
+/** `dataFrontShare`: a car whose default tune moves the brake bias off the data's checks the data's own share instead */
+function checkDriveline(label: string, mod: ModData, config: CarPhysicsConfig, opts: { dataFrontShare?: number } = {}): void {
   const e = (sec: string, key: string) => mod.num('engine.ini', sec, key);
   const d = (sec: string, key: string) => mod.num('drivetrain.ini', sec, key);
   // power.lut is torque at the wheels' side of the driveline: the config's crank power × its efficiency, as torque
@@ -393,7 +394,7 @@ function checkDriveline(label: string, mod: ModData, config: CarPhysicsConfig): 
   eq(`${label} autoclutch MAX_RPM`, config.clutch.lockRpm, d('AUTOCLUTCH', 'MAX_RPM'));
   shiftData(label, config, mod);
   eq(`${label} brake MAX_TORQUE`, config.brakes.maxTorqueNm, mod.num('brakes.ini', 'DATA', 'MAX_TORQUE'));
-  eq(`${label} brake FRONT_SHARE`, config.brakes.front_bias, mod.num('brakes.ini', 'DATA', 'FRONT_SHARE'));
+  eq(`${label} brake FRONT_SHARE`, opts.dataFrontShare ?? config.brakes.front_bias, mod.num('brakes.ini', 'DATA', 'FRONT_SHARE'));
 }
 
 /**
@@ -606,7 +607,8 @@ for (const [title, folder, label, config, profile] of [
     checkChassis(label, mod, c);
     checkProfile(label, mod, c, profile);
     checkSuspension(label, mod, c, { hardpoints: { front: ALL, rear: ALL } });
-    checkDriveline(label, mod, c);
+    // The default tune moves the bias forward from the data's 56 % (Chaparral2dConfig BRAKES)
+    checkDriveline(label, mod, c, { dataFrontShare: 0.56 });
     eq(`${label} ALTITUDE_SENSITIVITY`, c.engine.airDensitySensitivity ?? NaN, mod.num('engine.ini', 'ENGINE_DATA', 'ALTITUDE_SENSITIVITY'));
     eq(`${label} CHANGE_DN_TIME`, c.gearbox.downshiftTimeS ?? NaN, mod.num('drivetrain.ini', 'GEARBOX', 'CHANGE_DN_TIME') / 1000);
     // No down-shift protection in the data: the box takes one up to the engine's damage threshold

@@ -366,8 +366,8 @@ const Credits: React.FC = () => (
             NPanic
           </a>{" "}
           (
-          <a href="https://paypal.me/NPanic97" target="_blank" rel="noreferrer" className={linkClass}>
-            PayPal
+          <a href="https://www.paypal.com/paypalme/williampasta" target="_blank" rel="noreferrer" className={linkClass}>
+            the team&rsquo;s PayPal
           </a>
           ) · used with permission. 3D model by Nugget &amp; NPanic, LoDs by Dodge33, skins by Pasta, physics by Bazza, CSP
           config by Valentin K, sound by Felix789

@@ -1540,7 +1540,8 @@ export class F12026CarSim implements SimulatorCar {
     const DEG = Math.PI / 180;
     const toe0 = this.profile.staticToeDeg;
     v.staticToeRad = { front: ((toe0?.front ?? 0) + s.toeFrontDeg) * DEG, rear: ((toe0?.rear ?? 0) + s.toeRearDeg) * DEG };
-    v.engineBrakingScale = pctScale(s.engineBrakingPct);
+    // Never past the engine's whole overrun: only a car whose default tune passes part of it can turn it up
+    v.engineBrakingScale = Math.min(pctScale(s.engineBrakingPct), 1 / Math.min(1, this.config.performanceModes.RAC.coastTorqueScale));
     v.brakeDuctScale = { front: Math.max(0.3, 1 + s.brakeDuctFront * BRAKE_DUCT_STEP), rear: Math.max(0.3, 1 + s.brakeDuctRear * BRAKE_DUCT_STEP) };
     v.coolingSteps = { brakeDuctFront: s.brakeDuctFront, brakeDuctRear: s.brakeDuctRear, radiator: s.radiatorTapeSteps };
     this.config.brakes.maxTorqueNm = base.brakeTorqueNm * pctScale(s.brakePowerPct);

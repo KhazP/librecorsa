@@ -19,7 +19,7 @@ import { LC_LMDH_CONFIG } from "./proto/LcLmdhConfig";
 import { NISSAN_R33_CONFIG } from "./classic/NissanR33Config";
 import { NISSAN_R32_CONFIG } from "./classic/NissanR32Config";
 import { BMW_M1_PROCAR_CONFIG } from "./classic/BmwM1ProcarConfig";
-import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from "./classic/Chaparral2dConfig";
+import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG, CHAPARRAL_ENGINE_BRAKING } from "./classic/Chaparral2dConfig";
 import { VW_SCIROCCO_CONFIG } from "./road/VwSciroccoConfig";
 import { type CarPhysicsConfig, racesOnBlankets } from "./f12026-car/F12026CarConfig";
 
@@ -117,6 +117,8 @@ interface CarBaseline {
   brakeBiasPct?: number;
   /** The brake-bias adjuster's range (%); absent: the GT3 sheet's 60–78 */
   brakeBiasRangePct?: readonly [number, number];
+  /** The default tune's engine braking (% of the engine's overrun); present: the GT3 sheet shows the slider */
+  engineBrakingPct?: number;
 }
 
 const rigidBaseline = (
@@ -169,8 +171,8 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
   // No bias adjuster in the cockpit [spec brakes.ini COCKPIT_ADJUSTABLE 0]
   "vw-scirocco-gtx": rigidBaseline(VW_SCIROCCO_CONFIG, "vw-scirocco-gtx"),
   // Their adjuster [spec setup.ini FRONT_BIAS]
-  "chaparral-2d": { ...rigidBaseline(CHAPARRAL_2D_CONFIG, "chaparral-2d"), brakeBiasRangePct: [48, 80] },
-  "chaparral-2d-67": { ...rigidBaseline(CHAPARRAL_2D_67_CONFIG, "chaparral-2d-67"), brakeBiasRangePct: [48, 80] },
+  "chaparral-2d": { ...rigidBaseline(CHAPARRAL_2D_CONFIG, "chaparral-2d"), brakeBiasRangePct: [48, 80], engineBrakingPct: 100 * CHAPARRAL_ENGINE_BRAKING },
+  "chaparral-2d-67": { ...rigidBaseline(CHAPARRAL_2D_67_CONFIG, "chaparral-2d-67"), brakeBiasRangePct: [48, 80], engineBrakingPct: 100 * CHAPARRAL_ENGINE_BRAKING },
 };
 
 const clampTo = (v: number, r: { min: number; max: number }) => Math.max(r.min, Math.min(r.max, v));
@@ -605,6 +607,10 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
         }),
         ...(cfg?.brakes.brakeByWire !== false && cfg?.brakes.migration
           ? [tunerParam("brakeMigrationPct", { label: "Brake migration", base: cfg.brakes.migration.amount * 100, min: 0, max: 3, step: 0.1, format: (v) => `${v.toFixed(1)}%`, fx: FX.migration })]
+          : []),
+        // The readout in % of the engine's overrun; the setup keeps the change from the default tune, in % of it
+        ...(b.engineBrakingPct !== undefined
+          ? [chassisParam("engineBrakingPct", { label: "Engine braking", base: b.engineBrakingPct, perUnit: b.engineBrakingPct / 100, min: 25, max: 100, step: 5, format: pct, fx: FX.engineBraking })]
           : []),
         chassisParam("steerRatioDelta", { label: "Steering ratio", base: b.steerRatio, min: 10, max: 16, step: 0.2, format: (v) => v.toFixed(1), fx: FX.steerRatio }),
         rate("springFrontPct", "Front wheel rate", b.wheelRateFrontNmm, FX.wheelRateFront),

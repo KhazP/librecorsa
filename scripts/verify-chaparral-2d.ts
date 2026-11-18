@@ -313,6 +313,40 @@ for (const K of CARS) {
     check(`${label}: the braking line never plans shorter than the car stops`, planned >= abs.dist * 0.97, `${fmt(planned, 1)} m planned vs ${fmt(abs.dist, 1)} m stopped`);
   }
 
+  console.log('\n== Trail braking in a fast corner');
+  {
+    // Settled at 0.7 g and 180 km/h on the default tune, then the brake with the wheel held where it was. At the data's
+    // 56 % bias and full engine braking both cars spun from half the pedal. The 1967 still lets go at a quarter of the
+    // pedal held like this: its rears, carrying 60 % of the weight, give up first as the car turns in towards 1 g
+    const trail = (brake: number) => {
+      const sim = K.make(pad);
+      sim.assistPreset = 'pro';
+      sim.teleportToDistance(1000, 180 / 3.6);
+      let integ = 0;
+      let steer = 0;
+      let pedal = 0.3;
+      for (let t = 0; t < 12; t += DT) {
+        const err = 180 - sim.telemetry.speedKmh;
+        integ = Math.max(-20, Math.min(20, integ + err * DT));
+        pedal = Math.min(1, Math.max(0, 0.25 + 0.04 * err + 0.03 * integ));
+        steer = Math.min(0.6, Math.max(0, steer + 0.08 * DT * (0.7 - Math.abs(sim.telemetry.lateralG)) * Math.min(1, t / 2 + 0.2)));
+        sim.step(DT, { throttle: pedal, analogSteer: steer });
+      }
+      const lat = Math.abs(sim.telemetry.lateralG);
+      let slip = 0;
+      for (let t = 0; t < 2.5 && sim.telemetry.speedKmh > 40; t += DT) {
+        sim.step(DT, { brake, analogSteer: steer });
+        slip = Math.max(slip, (Math.abs(Math.atan2(sim.vyMs, Math.max(1, sim.vxMs))) * 180) / Math.PI);
+      }
+      return { lat, slip };
+    };
+    for (const brake of label.includes('1966') ? [0.25, 0.5] : [0.5]) {
+      const r = trail(brake);
+      check(`${label}: ${brake * 100} % pedal at 0.7 g and 180 km/h, the wheel held: the car slides under 8°`, Math.abs(r.lat - 0.7) < 0.08 && r.slip < 8,
+        `${fmt(r.lat)} g before the brake, ${fmt(r.slip, 1)}° at most`);
+    }
+  }
+
   console.log('\n== Cornering (flat, steer ramp at constant speed)');
   for (const [kmh, [lo, hi]] of [
     [100, K.lat100],

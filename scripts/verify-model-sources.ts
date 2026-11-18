@@ -51,11 +51,11 @@ check(
     })
 );
 check(
-  "NPanic's Chaparrals: NPanic's PayPal first, the name to the OverTake profile, the title to the mod, every creator named",
+  "NPanic's Chaparrals: the team's PayPal (Pasta's) first, the name to the OverTake profile, the title to the mod, every creator named",
   !hosted("chaparral-2d", "chaparral-2d-67") ||
     (["chaparral-2d", "chaparral-2d-67"] as const).every((id) => {
       const s = carModelSource(carById(id));
-      return s.support?.url === "https://paypal.me/NPanic97" && s.authorUrl?.includes("overtake.gg/members/npanic") === true && s.url.includes("overtake.gg/downloads/") &&
+      return s.support?.url === "https://www.paypal.com/paypalme/williampasta" && s.authorUrl?.includes("overtake.gg/members/npanic") === true && s.url.includes("overtake.gg/downloads/") &&
         ["Nugget", "Dodge33", "Pasta", "Bazza", "Valentin K", "Felix789"].every((n) => carById(id).credit.note?.includes(n) === true);
     })
 );
