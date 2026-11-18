@@ -243,6 +243,27 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   "porsche-934-rsr": { defaultKg: 22, minKg: 4, maxKg: 89 },
 };
 
+/**
+ * The default loads a garage save made before 18 Nov 2026 has its fuel offset from, where today's differ (kg): the GT3
+ * started on 50 kg and the LMDh on 38 until the sprints' fixed loads
+ */
+const FUEL_DEFAULT_BEFORE_NOV_18_KG: Partial<Record<VehicleModelId, number>> = { "amg-gt3": 50, "lc-lmdh": 38 };
+
+/**
+ * A saved setup's fuel offset carried over to today's default. Every save since 18 Nov 2026 holds a `tyreBlankets`
+ * entry; one without it was made against the defaults before then, and a load the driver chose (any offset but 0) keeps
+ * its kilograms, as far as today's tank goes. An offset of 0 was the default then and stays the default now
+ */
+function rebaseSavedFuel(vehicle: VehicleModelId, saved: unknown): unknown {
+  const before = FUEL_DEFAULT_BEFORE_NOV_18_KG[vehicle];
+  if (before === undefined || !saved || typeof saved !== "object" || "tyreBlankets" in saved) return saved;
+  const delta = (saved as { fuelDeltaKg?: unknown }).fuelDeltaKg;
+  if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) return saved;
+  const f = FUEL_LOAD[vehicle];
+  const kg = Math.max(f.minKg, Math.min(f.maxKg, before + delta));
+  return { ...saved, fuelDeltaKg: kg - f.defaultKg };
+}
+
 /** Race fuel density (kg per litre), for the litre readouts */
 export const FUEL_KG_PER_L = 0.74;
 
@@ -366,7 +387,7 @@ const readSaved = (key: (v: VehicleModelId) => string, v: VehicleModelId): strin
 export function loadChassisSetup(vehicle: VehicleModelId): ChassisSetup {
   try {
     const raw = readSaved(chassisKey, vehicle);
-    return raw ? clampChassisSetup(JSON.parse(raw)) : { ...DEFAULT_CHASSIS_SETUP };
+    return raw ? clampChassisSetup(rebaseSavedFuel(vehicle, JSON.parse(raw))) : { ...DEFAULT_CHASSIS_SETUP };
   } catch {
     return { ...DEFAULT_CHASSIS_SETUP };
   }
@@ -408,7 +429,7 @@ export function loadGaragePresets(vehicle: VehicleModelId): GaragePreset[] {
     if (!Array.isArray(list)) return [];
     return list
       .filter((p): p is GaragePreset => Boolean(p) && typeof p === "object" && typeof (p as GaragePreset).name === "string")
-      .map((p) => ({ ...p, vehicle, chassis: clampChassisSetup(p.chassis), tyre: perWheelTyreSetup(p.tyre) }));
+      .map((p) => ({ ...p, vehicle, chassis: clampChassisSetup(rebaseSavedFuel(vehicle, p.chassis)), tyre: perWheelTyreSetup(p.tyre) }));
   } catch {
     return [];
   }

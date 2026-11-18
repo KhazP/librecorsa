@@ -7,7 +7,18 @@
  * mass without the burn.
  * Run: npx tsx scripts/verify-setup-sheet.ts
  */
-import { clampChassisSetup, DEFAULT_CHASSIS_SETUP, FACTORY_PRESETS, FUEL_LOAD, startingFuelKg, type ChassisSetup, type GarageTuner } from "../src/lib/sim/car-setup";
+import {
+  clampChassisSetup,
+  DEFAULT_CHASSIS_SETUP,
+  FACTORY_PRESETS,
+  FUEL_LOAD,
+  loadChassisSetup,
+  loadGaragePresets,
+  saveChassisSetup,
+  startingFuelKg,
+  type ChassisSetup,
+  type GarageTuner,
+} from "../src/lib/sim/car-setup";
 import { SIM_REALISM_FLAGS } from "../src/lib/sim/sim-realism";
 import { SETUP_CLASS, setupSheet, type SetupState } from "../src/lib/sim/setup-sheet";
 import { TYRE_SETUP_LIMITS } from "../src/lib/sim/tyre-setup";
@@ -270,6 +281,31 @@ console.log("Fuel load");
   const legacy = clampChassisSetup({ ...modern, springFrontPct: 6 });
   check("an old save without a fuel field loads on the default fuel", legacy.fuelDeltaKg === 0 && legacy.springFrontPct === 6);
   check("a junk fuel field falls back to the default", clampChassisSetup({ fuelDeltaKg: "lots" }).fuelDeltaKg === 0 && clampChassisSetup({ fuelDeltaKg: Number.NaN }).fuelDeltaKg === 0);
+
+  // Saves from before 18 Nov 2026 (no tyreBlankets entry) were offset from the GT3's 50 kg and the LMDh's 38 kg
+  // defaults of then: a load the driver chose keeps its kilograms (as far as the tank goes), the default stays the default
+  {
+    const store = new Map<string, string>();
+    const g = globalThis as { window?: unknown };
+    const had = g.window;
+    g.window = { localStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) } };
+    const { tyreBlankets: _tb, ...before } = DEFAULT_CHASSIS_SETUP;
+    void _tb;
+    store.set("lc.garage.chassis.amg-gt3", JSON.stringify({ ...before, fuelDeltaKg: 10 }));
+    store.set("lc.garage.chassis.lc-lmdh", JSON.stringify({ ...before, fuelDeltaKg: 0 }));
+    store.set("lc.garage.chassis.mtr-496r", JSON.stringify({ ...before, fuelDeltaKg: 10 }));
+    store.set("lc.garage.presets.lc-lmdh", JSON.stringify([{ name: "Long", chassis: { ...before, fuelDeltaKg: 60 } }]));
+    const gt3 = loadChassisSetup("amg-gt3");
+    const kg = (v: VehicleModelId, s: ChassisSetup) => startingFuelKg(v, s);
+    check("a GT3 save from before 18 Nov keeps its 60 kg", kg("amg-gt3", gt3) === 60, `${kg("amg-gt3", gt3)} kg`);
+    saveChassisSetup("amg-gt3", gt3);
+    check("and keeps them once saved again", kg("amg-gt3", loadChassisSetup("amg-gt3")) === 60, `${kg("amg-gt3", loadChassisSetup("amg-gt3"))} kg`);
+    check("an LMDh save on the default load starts on today's default", kg("lc-lmdh", loadChassisSetup("lc-lmdh")) === FUEL_LOAD["lc-lmdh"].defaultKg);
+    const preset = loadGaragePresets("lc-lmdh")[0]?.chassis;
+    check("an LMDh preset's 98 kg load fills today's tank", preset !== undefined && kg("lc-lmdh", preset) === FUEL_LOAD["lc-lmdh"].maxKg, `${preset && kg("lc-lmdh", preset)} kg`);
+    check("a car whose default did not change keeps its offset", kg("mtr-496r", loadChassisSetup("mtr-496r")) === FUEL_LOAD["mtr-496r"].defaultKg + 10);
+    g.window = had;
+  }
 
   type Massy = SimulatorCar & { contactMassKg?: number; totalMassKg?: number; setSimRealism?: (f: (typeof SIM_REALISM_FLAGS)["full"]) => void };
   const massOf = (c: SimulatorCar) => (c as Massy).contactMassKg ?? (c as Massy).totalMassKg ?? Number.NaN;
