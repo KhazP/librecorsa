@@ -177,6 +177,13 @@ const ERS = {
   topGearLiftHarvestW: 0,
 };
 
+/**
+ * The default tune's engine braking: half the engine's overrun torque reaches the rears off the throttle [est], where the
+ * data's held-on clutch passes all of it. At full strength the overrun braked the rears like a light pedal, and trail
+ * braking in a fast corner spun the car. The garage's Engine braking slider runs from a quarter of it to all of it
+ */
+export const CHAPARRAL_ENGINE_BRAKING = 0.5;
+
 const mode = (performance_mode_name: PerformanceModeName): PerformanceModeData => ({
   performance_mode_name,
   deployFraction: 0,
@@ -189,7 +196,7 @@ const mode = (performance_mode_name: PerformanceModeName): PerformanceModeData =
   liftHarvestScale: 0,
   topGearClipHarvestW: 0,
   partThrottleHarvestW: 0,
-  coastTorqueScale: 1,
+  coastTorqueScale: CHAPARRAL_ENGINE_BRAKING,
   ebbOffset: 0,
 });
 
@@ -696,12 +703,15 @@ const inertia = (mass: number) => {
 export const CHAPARRAL_AERO_KIT_DEG = 50;
 
 /**
- * 2000 Nm at full pedal, 56 % front, the bias adjustable in 0.5 % steps, no handbrake; the pads' grip is 70 % cold,
+ * 2000 Nm at full pedal, the bias adjustable in 0.5 % steps, no handbrake; the pads' grip is 70 % cold,
  * full from 400 to 600 °C, 70 % at 800 and 20 % at 1200 (the same curve front and rear) [spec brakes.ini]
  */
 const BRAKES = {
   maxTorqueNm: 2000,
-  front_bias: 0.56,
+  // The default tune's 63 % front [est]: at the data's 56 % [spec FRONT_SHARE] the rears, which carry 54–60 % of the
+  // weight and lose much of it to the transfer under braking, spun the car braking in fast corners. The garage's
+  // adjuster still runs 48–80 %
+  front_bias: 0.63,
   handbrakeTorqueNm: 0,
   ebbStep: 0.005,
   brakeByWire: false,
