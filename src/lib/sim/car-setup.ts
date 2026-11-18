@@ -359,6 +359,8 @@ export const FACTORY_PRESETS: Partial<Record<VehicleModelId, readonly FactoryPre
 
 const chassisKey = (v: VehicleModelId) => `lc.garage.chassis.${v}`;
 const presetsKey = (v: VehicleModelId) => `lc.garage.presets.${v}`;
+/** Saved setups kept per car */
+export const GARAGE_PRESETS_MAX = 24;
 /** A saved item under the model's id, or under the id the 2026 Prototype had before it was renamed */
 const readSaved = (key: (v: VehicleModelId) => string, v: VehicleModelId): string | null =>
   window.localStorage.getItem(key(v)) ?? (v === "lc26" ? window.localStorage.getItem(key("vf26" as VehicleModelId)) : null); // keep-old-id
@@ -416,7 +418,7 @@ export function loadGaragePresets(vehicle: VehicleModelId): GaragePreset[] {
 
 export function saveGaragePresets(vehicle: VehicleModelId, presets: GaragePreset[]): boolean {
   try {
-    window.localStorage.setItem(presetsKey(vehicle), JSON.stringify(presets.slice(0, 24)));
+    window.localStorage.setItem(presetsKey(vehicle), JSON.stringify(presets.slice(0, GARAGE_PRESETS_MAX)));
     return true;
   } catch {
     return false;
