@@ -20,6 +20,10 @@ import { MTR_496R_CONFIG } from '../src/lib/sim/proto/Mtr496rConfig';
 import { SUZUKI_LIANA_CONFIG } from '../src/lib/sim/road/SuzukiLianaConfig';
 import { NISSAN_R33_CONFIG } from '../src/lib/sim/classic/NissanR33Config';
 import { NISSAN_R32_CONFIG } from '../src/lib/sim/classic/NissanR32Config';
+import { BMW_M1_PROCAR_CONFIG } from '../src/lib/sim/classic/BmwM1ProcarConfig';
+import { VW_SCIROCCO_CONFIG } from '../src/lib/sim/road/VwSciroccoConfig';
+import { CHAPARRAL_2D_CONFIG, CHAPARRAL_2D_67_CONFIG } from '../src/lib/sim/classic/Chaparral2dConfig';
+import { PORSCHE_934_RSR_CONFIG } from '../src/lib/sim/classic/Porsche934RsrConfig';
 
 const CARS: Record<string, CarPhysicsConfig> = {
   'f12026-car': F12026_CAR_CONFIG as unknown as CarPhysicsConfig,
@@ -30,6 +34,11 @@ const CARS: Record<string, CarPhysicsConfig> = {
   liana: SUZUKI_LIANA_CONFIG as unknown as CarPhysicsConfig,
   'nissan-r33-jgtc': NISSAN_R33_CONFIG as unknown as CarPhysicsConfig,
   'nissan-r32-jtcc': NISSAN_R32_CONFIG as unknown as CarPhysicsConfig,
+  'bmw-m1-procar': BMW_M1_PROCAR_CONFIG as unknown as CarPhysicsConfig,
+  'vw-scirocco-gtx': VW_SCIROCCO_CONFIG as unknown as CarPhysicsConfig,
+  'chaparral-2d': CHAPARRAL_2D_CONFIG as unknown as CarPhysicsConfig,
+  'chaparral-2d-67': CHAPARRAL_2D_67_CONFIG as unknown as CarPhysicsConfig,
+  'porsche-934-rsr': PORSCHE_934_RSR_CONFIG as unknown as CarPhysicsConfig,
 };
 
 /** Flat road with a strip of 25 mm sine kerbs across the run (x 2..6 m, every 0.9 m along z) and a 40 mm ramp */
