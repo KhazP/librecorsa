@@ -31,16 +31,19 @@ const CARRY_FADE_M = 4;
 const CARRY_SLOPE = 0.5;
 
 /**
- * A mesh in a road material, or with at least this share of its vertices laid on the ground, lies on it (its asphalt,
- * lines and markings) when none of its laid vertices ends up more than `ON_GROUND_HEIGHT_M` over the ground and
- * nothing on it stands up: tagged `userData.onGround`, it casts no shadow (scene-builder.ts), as a mod draws it.
- * Anything standing up keeps its shadow: a curb, a wall, a sign post or a stand (a steep face more than
- * `ON_GROUND_HEIGHT_M` tall and over the ground), and a deck with room under it (a face held more than
- * `DECK_HEIGHT_M` over the ground at each corner), also when it is merged with flat road or built in a road material.
- * A flat surface the fit cannot reach (over a dip, off the colliders) still lies on the ground: with nothing standing
- * up, its shadow would only fall on itself and the layers beside it, in jagged teeth
+ * A mesh with at least this share of its vertices laid on the ground, or in a road material with ground under at least
+ * `ROAD_GROUND_SHARE` of them, lies on it (its asphalt, lines and markings) when none of its laid vertices ends up more
+ * than `ON_GROUND_HEIGHT_M` over the ground and nothing on it stands up: tagged `userData.onGround`, it casts no
+ * shadow (scene-builder.ts), as a mod draws it. Anything standing up keeps its shadow: a curb, a wall, a sign post or
+ * a stand (a steep face more than `ON_GROUND_HEIGHT_M` tall, over the ground by as much or with no ground under it),
+ * and a deck with room under it (a face held more than `DECK_HEIGHT_M` over the ground at each corner), also when it
+ * is merged with flat road or built in a road material. A flat road the fit cannot reach in places (over a dip, over
+ * grass) still lies on the ground: with nothing standing up, its shadow would only fall on itself and the layers
+ * beside it, in jagged teeth. Where the colliders don't reach (a layout's colliders cover its own roads only), there is
+ * nothing to tell a road from a deck by, and a mesh mostly out there keeps its shadow
  */
 const ON_GROUND_SHARE = 0.9;
+const ROAD_GROUND_SHARE = 0.5;
 const ON_GROUND_HEIGHT_M = 0.08;
 /** A triangle whose normal points up less than this (steeper than 60°) stands up: a wall, a post, a curb's face */
 const STANDING_NORMAL_Y = 0.5;
@@ -128,8 +131,10 @@ export function fitVisualRoad(
       fitted++;
     }
     if (fitted) pos.needsUpdate = true;
-    const laid = layer.road || fitted >= ON_GROUND_SHARE * pos.count;
-    if (laid && !(highest > ON_GROUND_HEIGHT_M) && !standsUp(o, under)) o.userData.onGround = true;
+    if (highest > ON_GROUND_HEIGHT_M) return;
+    const laid = fitted >= ON_GROUND_SHARE * pos.count;
+    if (!(laid || layer.road) || standsUp(o, under)) return;
+    if (laid || groundUnderMost(o, under)) o.userData.onGround = true;
   };
 
   /**
@@ -148,6 +153,21 @@ export function fitVisualRoad(
     }
     return heights[i];
   };
+  /** Whether at least `ROAD_GROUND_SHARE` of the mesh's vertices have ground under them */
+  const groundUnderMost = (o: THREE.Mesh, under: TrackColliderQuery | null): boolean => {
+    const pos = o.geometry.getAttribute("position");
+    const need = ROAD_GROUND_SHARE * pos.count;
+    let found = 0;
+    let missing = 0;
+    for (let i = 0; i < pos.count; i++) {
+      if (heightOf(i, corners[0].fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld), under) !== Infinity) {
+        if (++found >= need) return true;
+      } else if (++missing > pos.count - need) {
+        return false;
+      }
+    }
+    return found >= need;
+  };
   /** Whether anything on the mesh, as fitted, stands up: a steep face or a deck (see `ON_GROUND_SHARE`) */
   const standsUp = (o: THREE.Mesh, under: TrackColliderQuery | null): boolean => {
     const pos = o.geometry.getAttribute("position");
@@ -164,12 +184,11 @@ export function fitVisualRoad(
       const len = e1.length();
       if (!(len > 0)) continue;
       if (Math.abs(e1.y) < STANDING_NORMAL_Y * len) {
-        // A steep face standing up by its own height, with a corner that far over the ground
+        // A steep face standing up by its own height, with a corner that far over the ground or no ground under it
         const tall = Math.max(corners[0].y, corners[1].y, corners[2].y) - Math.min(corners[0].y, corners[1].y, corners[2].y);
         if (!(tall > ON_GROUND_HEIGHT_M)) continue;
         for (let k = 0; k < 3; k++) {
-          const h = heightOf(cornerAt[k], corners[k], under);
-          if (h > ON_GROUND_HEIGHT_M && h !== Infinity) return true;
+          if (heightOf(cornerAt[k], corners[k], under) > ON_GROUND_HEIGHT_M) return true;
         }
       } else {
         // A deck: every corner held high over the ground
