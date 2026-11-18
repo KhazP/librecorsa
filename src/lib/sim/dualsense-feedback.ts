@@ -7,7 +7,6 @@ import {
   createRumbleMixState,
   hapticMagnitudes,
   kerbHitRateHz,
-  kerbPulseOn,
   kerbSides,
   layerRumble,
   resetRumbleMixState,
@@ -205,7 +204,8 @@ export class DualSenseFeedback {
     const tc = triggerCues(t, { triggerSlipAlwaysOn: input.triggerSlipAlwaysOn });
 
     const rumbleGain = input.rumbleOn ? settings.rumbleStrength : 0;
-    const kerbHit = this.cues.kerb > 0 && kerbPulseOn(this.timeS, kerbHitRateHz(t)) ? this.cues.kerb : 0;
+    // The weak motor's kerb pulse, in step with it (hapticMagnitudes moved its phase on this frame)
+    const kerbHit = this.cues.kerb > 0 && this.mix.kerbPhase < 0.5 ? this.cues.kerb : 0;
     const low = layerRumble(strong, KERB_LOW_MOTOR * kerbHit);
     const rumble = input.hdHaptics ? null : { low: clamp01(low * rumbleGain), high: clamp01(weak * rumbleGain) };
 

@@ -89,6 +89,35 @@ check('weak motor: a kerb strike under tyre scrub stays below full', () => {
   assert.ok(stacked < 1 && stacked > kerbAlone, `kerb ${kerbAlone.toFixed(3)} → stacked ${stacked.toFixed(3)}`);
   assert.ok(hapticMagnitudes(kerb, 1 / 24 + 0.001).weak < 0.05, 'kerb pulse still off on its off half');
 });
+/** One second on the left kerbs at 60 fps from `startS`, the hit rate ramping 10 → 12 Hz: the kerb pulse's on frames */
+function kerbRamp(startS: number, mix: RumbleMixState): boolean[] {
+  const on: boolean[] = [];
+  for (let i = 0; i < 60; i++) {
+    const hz = 10 + (2 * i) / 60;
+    const t = cruise({ onKerbLeft: true, wheelKerbHit: [1, 0, 1, 0], kerbHitHz: [hz, 0] });
+    on.push(hapticMagnitudes(t, startS + i * DT, mix).weak > 0.3);
+  }
+  return on;
+}
+check('the kerb pulse keeps its rhythm while its rate follows the car, however long the session', () => {
+  for (const startS of [0, 1000.123]) {
+    const on = kerbRamp(startS, createRumbleMixState());
+    let flips = 0;
+    let run = 1;
+    let shortest = Infinity;
+    for (let i = 1; i < on.length; i++) {
+      if (on[i] === on[i - 1]) run++;
+      else {
+        if (flips > 0) shortest = Math.min(shortest, run);
+        flips++;
+        run = 1;
+      }
+    }
+    // About 11 cycles in the second: 22 edges, each half 2.5-3 frames long
+    assert.ok(flips >= 19 && flips <= 24, `${flips} edges from ${startS} s`);
+    assert.ok(shortest >= 2, `a half of ${shortest} frame from ${startS} s`);
+  }
+});
 
 console.log('Surface roughness');
 check('smooth asphalt with braking-dive shock velocity is silent', () => {
@@ -292,6 +321,32 @@ check('a hit goes out at once past the send gate, with the trigger cues beside i
     assert.equal(calls[calls.length - 1].type, 'reset');
     h.update(cruise(), DT, true, { triggerRumble: true });
     assert.ok(calls[calls.length - 1].p.strongMagnitude < 0.01, 'stop() cleared the envelope');
+  });
+});
+
+check('each kerb pulse edge goes out in the frame the motor switches, at the rate the kerb is hit', () => {
+  const calls: Call[] = [];
+  withPads([{ id: 'pad', vibrationActuator: fakeActuator(['dual-rumble'], calls) }], () => {
+    const h = new GamepadHaptics();
+    // The same frames through a mix of its own: where the weak motor switches on and off
+    const mix = createRumbleMixState();
+    let timeS = 0;
+    let was: boolean | null = null;
+    let edges = 0;
+    for (let i = 0; i < 120; i++) {
+      const t = cruise({ onKerbLeft: true, wheelKerbHit: [1, 0, 1, 0], kerbHitHz: [14 + i / 60, 0] });
+      timeS += DT;
+      const on = hapticMagnitudes(t, timeS, mix).weak > 0.3;
+      const before = calls.length;
+      h.update(t, DT, true);
+      if (was !== null && on !== was) {
+        edges++;
+        assert.equal(calls.length, before + 1, `frame ${i}: the switch went out`);
+        assert.equal(calls[calls.length - 1].p.weakMagnitude > 0.3, on, `frame ${i}: as the motor is`);
+      }
+      was = on;
+    }
+    assert.ok(edges >= 50, `${edges} edges in 2 s at 14-15 Hz`);
   });
 });
 

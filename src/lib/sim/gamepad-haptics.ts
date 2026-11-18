@@ -74,12 +74,14 @@ const MAGNITUDE_EPS = 0.03;
 const KERB_PULSE_HZ = 12;
 /** A pad's motors follow pulses up to about this rate (Hz): faster kerb hits pulse at it */
 const KERB_PULSE_MAX_HZ = 15;
+/** The kerb pulse's rate: `hitHz`, the rate the tyres are being hit (`kerbHitHz`), up to KERB_PULSE_MAX_HZ, or KERB_PULSE_HZ without it */
+const kerbPulseHz = (hitHz: number) => (hitHz > 0 ? Math.min(KERB_PULSE_MAX_HZ, hitHz) : KERB_PULSE_HZ);
 /**
- * Whether the kerb pulse is in its on half at `timeS`: at `hitHz`, the rate the tyres are being hit (`kerbHitHz`), up to
- * KERB_PULSE_MAX_HZ, or KERB_PULSE_HZ without it
+ * Whether the kerb pulse is in its on half at `timeS`, for a call with no state carried between frames. A frame loop
+ * reads `RumbleMixState.kerbPhase` instead: the rate follows the car's speed, and `timeS · hz` would jump at every
+ * change of it
  */
-export const kerbPulseOn = (timeS: number, hitHz = 0) =>
-  (timeS * (hitHz > 0 ? Math.min(KERB_PULSE_MAX_HZ, hitHz) : KERB_PULSE_HZ)) % 1 < 0.5;
+export const kerbPulseOn = (timeS: number, hitHz = 0) => (timeS * kerbPulseHz(hitHz)) % 1 < 0.5;
 
 /**
  * How hard a kerb hits the car's left and right tyres, 0..1: from the physics (`wheelKerbHit`, each tyre's load hits),
@@ -155,10 +157,12 @@ export interface RumbleMixState {
   weightN: number;
   /** The last car-to-car contact felt (`CarTelemetry.carContact.seq`) */
   contactSeq: number;
+  /** Where the kerb pulse is in its cycle, 0..1 (on in the first half), moved on each frame at the pulse's rate */
+  kerbPhase: number;
 }
 
 export function createRumbleMixState(): RumbleMixState {
-  return { lastTimeS: NaN, roughHold: [0, 0, 0, 0], impactEnvelope: 0, weightN: 0, contactSeq: 0 };
+  return { lastTimeS: NaN, roughHold: [0, 0, 0, 0], impactEnvelope: 0, weightN: 0, contactSeq: 0, kerbPhase: 0 };
 }
 
 /** Back to a fresh state (pause, toggle off, unmount) */
@@ -167,6 +171,7 @@ export function resetRumbleMixState(state: RumbleMixState): void {
   state.roughHold.fill(0);
   state.impactEnvelope = 0;
   state.weightN = 0;
+  state.kerbPhase = 0;
 }
 
 const finiteOr = (v: number | undefined, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
@@ -266,18 +271,19 @@ export function layerRumble(acc: number, effect: number): number {
 
 /**
  * Which pulses are running and in which half of their cycle (a bitmask that changes on every pulse edge), and the
- * shortest running half-period (s; 0 with no pulse)
+ * shortest running half-period (s; 0 with no pulse). The kerb pulse is where `kerbPhase` has it, at the rate the motors
+ * play it
  */
-function pulseState(t: CarTelemetry, timeS: number, triggers: boolean): { key: number; halfS: number } {
+function pulseState(t: CarTelemetry, timeS: number, triggers: boolean, kerbPhase: number): { key: number; halfS: number } {
   let key = 0;
   let halfS = 0;
-  const add = (bit: number, hz: number) => {
+  const add = (bit: number, hz: number, phase = (timeS * hz) % 1) => {
     key |= 1 << (2 * bit);
-    if ((timeS * hz) % 1 < 0.5) key |= 1 << (2 * bit + 1);
+    if (phase < 0.5) key |= 1 << (2 * bit + 1);
     const h = 0.5 / hz;
     halfS = halfS === 0 ? h : Math.min(halfS, h);
   };
-  if (t.onKerbLeft || t.onKerbRight) add(0, KERB_PULSE_HZ);
+  if (t.onKerbLeft || t.onKerbRight) add(0, kerbPulseHz(kerbHitRateHz(t)), kerbPhase);
   if (triggers) {
     const minSlip = Math.min(...t.wheelSlipRatios);
     if (t.brake > 0.05 && (t.f12026?.absActive === true || (t.speedKmh > 30 && minSlip < -0.12))) add(1, ABS_PULSE_HZ);
@@ -343,7 +349,15 @@ export function hapticMagnitudes(
   const [kerbL, kerbR] = kerbSides(t);
   const kerbHit = Math.max(kerbL, kerbR);
   const kerbLevel = kerbHit > 0 ? (0.55 + 0.35 * speedFactor) * kerbHit : 0;
-  const kerb = kerbPulseOn(timeS, kerbHitRateHz(t)) ? kerbLevel : 0;
+  // The pulse's phase moves on at its rate, so a change of rate (the car speeding up over the kerb) does not jump it
+  let kerbOn: boolean;
+  if (mix) {
+    mix.kerbPhase = (mix.kerbPhase + kerbPulseHz(kerbHitRateHz(t)) * decayDt) % 1;
+    kerbOn = mix.kerbPhase < 0.5;
+  } else {
+    kerbOn = kerbPulseOn(timeS, kerbHitRateHz(t));
+  }
+  const kerb = kerbOn ? kerbLevel : 0;
   const scrub = 0.4 * pastPeak(Math.max(t.tireSlipRatio[0], t.tireSlipRatio[1]));
   const texture = 0.04 * speedFactor;
   let weak = layerRumble(0, kerb);
@@ -586,7 +600,7 @@ export class GamepadHaptics {
       this.outputs.set(key, out);
 
       const useTriggers = wantTriggers && supportsTriggerRumble(actuator);
-      const pulse = pulseState(t, this.timeS, useTriggers);
+      const pulse = pulseState(t, this.timeS, useTriggers, this.mix.kerbPhase);
       // A pulse edge or a hit goes out when it happens: the gate below would otherwise alias 12-25 Hz pulses and
       // hold a hit back by up to a send interval
       const impact = this.mix.impactEnvelope;
