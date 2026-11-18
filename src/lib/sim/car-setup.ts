@@ -197,6 +197,9 @@ export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: numbe
   "bmw-m1-procar": { front: 0, rear: 1 },
   // No wings
   "vw-scirocco-gtx": { front: 0, rear: 0 },
+  // Their aero kits are switches, not clicks (the aero package picks them) [spec setup.ini WING_3, WING_4: 0 or 50]
+  "chaparral-2d": { front: 0, rear: 0 },
+  "chaparral-2d-67": { front: 0, rear: 0 },
 };
 
 /**
@@ -223,6 +226,9 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   "bmw-m1-procar": { defaultKg: 22, minKg: 4, maxKg: 52 },
   // 30 l of a 55 l tank [spec car.ini FUEL / MAX_FUEL]
   "vw-scirocco-gtx": { defaultKg: 22, minKg: 4, maxKg: 41 },
+  // 30 l of a 160 l tank [spec car.ini FUEL / MAX_FUEL], filled as far as the garage's +80 kg goes (138 l)
+  "chaparral-2d": { defaultKg: 22, minKg: 4, maxKg: 102 },
+  "chaparral-2d-67": { defaultKg: 22, minKg: 4, maxKg: 102 },
 };
 
 /** Race fuel density (kg per litre), for the litre readouts */
@@ -252,6 +258,8 @@ export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   "nissan-r32-jtcc": 12.4,
   "bmw-m1-procar": 16,
   "vw-scirocco-gtx": 14,
+  "chaparral-2d": 14.1,
+  "chaparral-2d-67": 14.1,
 };
 
 export function clampChassisSetup(v: unknown): ChassisSetup {

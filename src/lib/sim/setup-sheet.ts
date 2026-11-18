@@ -19,6 +19,7 @@ import { LC_LMDH_CONFIG } from "./proto/LcLmdhConfig";
 import { NISSAN_R33_CONFIG } from "./classic/NissanR33Config";
 import { NISSAN_R32_CONFIG } from "./classic/NissanR32Config";
 import { BMW_M1_PROCAR_CONFIG } from "./classic/BmwM1ProcarConfig";
+import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from "./classic/Chaparral2dConfig";
 import { VW_SCIROCCO_CONFIG } from "./road/VwSciroccoConfig";
 import type { CarPhysicsConfig } from "./f12026-car/F12026CarConfig";
 
@@ -39,6 +40,8 @@ export const SETUP_CLASS: Record<VehicleModelId, SetupClassId> = {
   "bmw-m1-procar": "gt3",
   // A closed road car, as the Liana
   "vw-scirocco-gtx": "gt3",
+  "chaparral-2d": "gt3",
+  "chaparral-2d-67": "gt3",
 };
 
 export interface SetupState {
@@ -163,6 +166,9 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
   "bmw-m1-procar": { ...rigidBaseline(BMW_M1_PROCAR_CONFIG, "bmw-m1-procar"), brakeBiasRangePct: [48, 80] },
   // No bias adjuster in the cockpit [spec brakes.ini COCKPIT_ADJUSTABLE 0]
   "vw-scirocco-gtx": rigidBaseline(VW_SCIROCCO_CONFIG, "vw-scirocco-gtx"),
+  // Their adjuster [spec setup.ini FRONT_BIAS]
+  "chaparral-2d": { ...rigidBaseline(CHAPARRAL_2D_CONFIG, "chaparral-2d"), brakeBiasRangePct: [48, 80] },
+  "chaparral-2d-67": { ...rigidBaseline(CHAPARRAL_2D_67_CONFIG, "chaparral-2d-67"), brakeBiasRangePct: [48, 80] },
 };
 
 const clampTo = (v: number, r: { min: number; max: number }) => Math.max(r.min, Math.min(r.max, v));
@@ -179,6 +185,8 @@ const CONFIGS: Record<VehicleModelId, CarPhysicsConfig | null> = {
   "nissan-r32-jtcc": NISSAN_R32_CONFIG as unknown as CarPhysicsConfig,
   "bmw-m1-procar": BMW_M1_PROCAR_CONFIG as unknown as CarPhysicsConfig,
   "vw-scirocco-gtx": VW_SCIROCCO_CONFIG as unknown as CarPhysicsConfig,
+  "chaparral-2d": CHAPARRAL_2D_CONFIG as unknown as CarPhysicsConfig,
+  "chaparral-2d-67": CHAPARRAL_2D_67_CONFIG as unknown as CarPhysicsConfig,
 };
 
 /** Cars whose electronics have the third traction dial, for the driven axle's slide */

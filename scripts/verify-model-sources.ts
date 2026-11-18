@@ -50,6 +50,15 @@ check(
       return s.support?.url === "https://streamlabs.com/pfalzdriver" && s.authorUrl?.includes("gtplanet.net/forum/members/") === true && s.url.includes("gtplanet.net/forum/downloads/");
     })
 );
+check(
+  "NPanic's Chaparrals: NPanic's PayPal first, the name to the OverTake profile, the title to the mod, every creator named",
+  !hosted("chaparral-2d", "chaparral-2d-67") ||
+    (["chaparral-2d", "chaparral-2d-67"] as const).every((id) => {
+      const s = carModelSource(carById(id));
+      return s.support?.url === "https://paypal.me/NPanic97" && s.authorUrl?.includes("overtake.gg/members/npanic") === true && s.url.includes("overtake.gg/downloads/") &&
+        ["Nugget", "Dodge33", "Pasta", "Bazza", "Valentin K", "Felix789"].every((n) => carById(id).credit.note?.includes(n) === true);
+    })
+);
 check("A modder without a support page gets none", !hosted("amg-gt3") || carModelSource(carById("amg-gt3")).support === undefined);
 for (const [id, modder] of [["monaco", "Mitja Bonca"], ["norisring", "gunnar333"], ["watkins_glen", "LilSki"], ["vir", "dazzyb2k3"]] as const) {
   const t = TRACKS.find((x) => x.id === id);

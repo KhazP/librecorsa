@@ -211,6 +211,7 @@ const STEER_LOCK_CLASSES = [
   { label: "JGTC GT500", models: ["nissan-r33-jgtc"] },
   { label: "Group A touring", models: ["nissan-r32-jtcc"] },
   { label: "Group 4 Procar", models: ["bmw-m1-procar"] },
+  { label: "Chaparral 2D", models: ["chaparral-2d", "chaparral-2d-67"] },
   // The two road cars turn through different locks
   { label: "Suzuki Liana", models: ["liana"] },
   { label: "VW Scirocco", models: ["vw-scirocco-gtx"] },

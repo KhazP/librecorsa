@@ -22,6 +22,8 @@ import { NISSAN_R32_SIM_PROFILE, createNissanR32Sim } from "@/lib/sim/classic/Ni
 import { NISSAN_R32_CONFIG } from "@/lib/sim/classic/NissanR32Config";
 import { BMW_M1_PROCAR_SIM_PROFILE, createBmwM1ProcarSim } from "@/lib/sim/classic/BmwM1ProcarSim";
 import { BMW_M1_PROCAR_CONFIG } from "@/lib/sim/classic/BmwM1ProcarConfig";
+import { CHAPARRAL_2D_67_SIM_PROFILE, CHAPARRAL_2D_SIM_PROFILE, createChaparral2d67Sim, createChaparral2dSim } from "@/lib/sim/classic/Chaparral2dSim";
+import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from "@/lib/sim/classic/Chaparral2dConfig";
 import { VW_SCIROCCO_SIM_PROFILE, createVwSciroccoSim } from "@/lib/sim/road/VwSciroccoSim";
 import { VW_SCIROCCO_CONFIG } from "@/lib/sim/road/VwSciroccoConfig";
 import { LC26_ENGINE, LC26_TYRE_SETUP_RANGES } from "@/lib/sim/lc26-data";
@@ -188,6 +190,29 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     gt3Cockpit: false,
     floorSparks: false,
     onlyTyre: "Street tyres",
+  },
+  // NPanic's Chaparrals: each one's only body is its ported GLB, which brings its own cameras
+  "chaparral-2d": {
+    id: "chaparral-2d",
+    classId: "classic",
+    createSim: (track, trackRoot) => createChaparral2dSim(track, trackRoot),
+    limiterRpm: CHAPARRAL_2D_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 8000,
+    tyreSetupRanges: CHAPARRAL_2D_SIM_PROFILE,
+    rigConfig: CHAPARRAL_2D_CONFIG,
+    gt3Cockpit: false,
+    floorSparks: false,
+  },
+  "chaparral-2d-67": {
+    id: "chaparral-2d-67",
+    classId: "classic",
+    createSim: (track, trackRoot) => createChaparral2d67Sim(track, trackRoot),
+    limiterRpm: CHAPARRAL_2D_67_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 8000,
+    tyreSetupRanges: CHAPARRAL_2D_67_SIM_PROFILE,
+    rigConfig: CHAPARRAL_2D_67_CONFIG,
+    gt3Cockpit: false,
+    floorSparks: false,
   },
 };
 

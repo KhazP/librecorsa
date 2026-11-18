@@ -507,11 +507,68 @@ PRESETS = {
         # A skin folder whose name lost its umlaut in the mod's archive
         skin_ids={'1980_Procar_M�ller_66': '1980_procar_mueller_66'},
     ),
+    # NPanic's Chaparral 2D, 1966 (327) and 1967 (427). Their liveries change parts as well as paint: a part (`parts`:
+    # kn5 node -> part, or an `extension/` kn5 the mod inserts, `extra_kn5`) is a node of its own, shown only for the
+    # liveries of its variants (`part_variants`; a livery's variant is `skin_variants`, else 'base')
+    'chaparral-2d': dict(
+        title='Chaparral 2D (1966)',
+        auto=True,
+        materials={},
+        paint=('EXT_Main_Body',),
+        # The windscreen's inner face (a second, near-clear layer over the outer glass)
+        skip_materials={'INT_Window'},
+        skip_node_prefixes=(),
+        # The gurney extension and the centre lamps' covers as the mod's default setup has them: off (the kn5 has the
+        # extension fitted, and the covers tucked away)
+        skip_nodes=('COCKPIT_LR', 'EXT_Gurney_Animation', 'EXT_Mainlights_Cover_Animation'),
+        default_skin='7_nurb_1000_1966',
+        steer_nodes=(),
+        tyre_materials=('EXT_Tire',),
+        tyre_prefix=None,
+        spinning=('DISC_',),
+        windscreen=('EXT_Window',),
+        # The paint, the number plate and (one Sebring car's) gauge labels
+        skin_textures=('EXT_Body.dds', 'EXT_Licence_Plate.dds', 'INT_Labels_Gauges.dds'),
+        # The Sebring and Daytona cars (the skins' ext_config.ini MODEL_REPLACEMENT) wear the Sebring scoop and fixed
+        # light covers, and no roof mirror or number plate
+        parts={'EXT_Scoop': 'scoop', 'EXT_Mirror_Roof': 'roof_mirror', 'EXT_License_Plate': 'plate'},
+        extra_kn5=(('EXT_Scoop_Sebring.kn5', 'scoop_sebring'), ('EXT_Mirror_Roof_Off.kn5', 'roof_mirror_off'),
+                   ('EXT_Fixed_Lightcover.kn5', 'light_covers_fixed')),
+        part_variants={'scoop': ('base',), 'roof_mirror': ('base',), 'plate': ('base',),
+                       'scoop_sebring': ('sebring',), 'roof_mirror_off': ('sebring',),
+                       'light_covers_fixed': ('sebring',)},
+        skin_variants={'11_sebring_1966': 'sebring', '12_sebring_1966': 'sebring', '65_daytona_1966': 'sebring'},
+    ),
+    'chaparral-2d-67': dict(
+        title='Chaparral 2D (1967)',
+        auto=True,
+        materials={},
+        paint=('EXT_Main_Body',),
+        skip_materials={'INT_Window'},
+        skip_node_prefixes=(),
+        # The centre lamps' covers, tucked away in the kn5 (the default setup's covers off)
+        skip_nodes=('COCKPIT_LR', 'EXT_Mainlights_Cover_Animation'),
+        default_skin='14_daytona_1967',
+        steer_nodes=(),
+        tyre_materials=('EXT_Tire',),
+        tyre_prefix=None,
+        spinning=('DISC_',),
+        windscreen=('EXT_Window',),
+        skin_textures=('EXT_Body.dds', 'EXT_Licence_Plate.dds', 'INT_Labels_Gauges.dds'),
+        # Daytona's raised gurney spoiler; Sebring's big spoiler and front canards (the mod's two setup aero kits)
+        parts={'EXT_Daytona_Wing': 'daytona_wing', 'EXT_Sebring_Wing': 'sebring_wing', 'EXT_Canards': 'canards'},
+        extra_kn5=(),
+        part_variants={'daytona_wing': ('base',), 'sebring_wing': ('sebring',), 'canards': ('sebring',)},
+        # The Sebring kit sits scaled down inside the body at rest; the setup's aero 50 (the last frame) fits it
+        part_poses={'EXT_Sebring_Wing': ('rear_aero.ksanim', 100), 'EXT_Canards': ('canards.ksanim', 100)},
+        skin_variants={'5_sebring_1967': 'sebring'},
+    ),
 }
 # The car folders the presets were written for
 PRESET_BY_FOLDER = {'suzuki_liana': 'liana', 'mt_mtr_496r': 'mtr-496r',
                     'nissan_skyline_bcnr33_jgtc': 'nissan-r33-jgtc', 'nissan_r32_jtcc': 'nissan-r32-jtcc',
-                    'pfa_vw_scirocco_53b': 'vw-scirocco-gtx', 'pddw_bmw_procar_m1': 'bmw-m1-procar'}
+                    'pfa_vw_scirocco_53b': 'vw-scirocco-gtx', 'pddw_bmw_procar_m1': 'bmw-m1-procar',
+                    'wsc_legends_chaparral_2d_66': 'chaparral-2d', 'wsc_legends_chaparral_2d_67': 'chaparral-2d-67'}
 
 
 def skin_id(preset, folder):
@@ -533,6 +590,16 @@ def decode(raw):
     return im.convert('RGBA')
 
 
+def resize_straight(im, size, resample=Image.LANCZOS):
+    """`im` resized with its colour and alpha filtered apart. Pillow filters RGBA premultiplied, which blacks out the
+    colour wherever the alpha is 0, and a multimap's alpha is a mask (a paint atlas can be 0 all over), not coverage"""
+    if im.mode != 'RGBA':
+        return im.resize(size, resample)
+    rgb = im.convert('RGB').resize(size, resample)
+    rgb.putalpha(im.getchannel('A').resize(size, resample))
+    return rgb
+
+
 def bake_multimap(diffuse, detail, uv_mult, flat=False):
     """AC's ksPerPixelMultiMap colour: diffuse * (detail * (1 - diffuse.a) + diffuse.a), in gamma space, as an opaque
     RGB image at the larger of the two sizes (the detail tiled `uv_mult` times; a flat detail, or any with `flat`, is
@@ -547,9 +614,9 @@ def bake_multimap(diffuse, detail, uv_mult, flat=False):
         reps = max(1, int(round(uv_mult)))
         size = (max(diffuse.size[0], detail.size[0] * reps), max(diffuse.size[1], detail.size[1] * reps))
         tiled = Image.fromarray((np.tile(t, (reps, reps, 1)) * 255).astype(np.uint8), 'RGBA')
-        det = np.asarray(tiled.resize(size, Image.BICUBIC), np.float32)[..., :3] / 255.0
+        det = np.asarray(resize_straight(tiled, size, Image.BICUBIC), np.float32)[..., :3] / 255.0
         if diffuse.size != size:
-            d = np.asarray(diffuse.resize(size, Image.BICUBIC), np.float32) / 255.0
+            d = np.asarray(resize_straight(diffuse, size, Image.BICUBIC), np.float32) / 255.0
     a = d[..., 3:4]
     rgb = d[..., :3] * (det * (1.0 - a) + a)
     return Image.fromarray(np.clip(rgb * 255.0 + 0.5, 0, 255).astype(np.uint8), 'RGB')
@@ -565,7 +632,7 @@ def baked_image(key, src, mats, limit):
     mean = key.startswith('bakemean:')
     if mean and max(diffuse.size) > limit:
         k = limit / max(diffuse.size)
-        diffuse = diffuse.resize((round(diffuse.width * k), round(diffuse.height * k)), Image.LANCZOS)
+        diffuse = resize_straight(diffuse, (round(diffuse.width * k), round(diffuse.height * k)))
     return bake_multimap(diffuse, detail, m['props'].get('detailUVMultiplier', 1.0), flat=mean)
 
 
@@ -605,7 +672,9 @@ class TexturePool:
     def _add(self, key, im, cap, alpha, normal=False):
         if max(im.size) > cap:
             k = cap / max(im.size)
-            im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
+            # An opaque map's alpha goes unused (and may be a mask of 0s, which a premultiplied filter would black out)
+            im = (im if alpha else im.convert('RGB')).resize((max(1, round(im.width * k)), max(1, round(im.height * k))),
+                                                            Image.LANCZOS)
         buf = io.BytesIO()
         if alpha:
             im.convert('RGBA').save(buf, format='PNG', optimize=True)
@@ -887,7 +956,7 @@ def export_skins(car_dir, preset, textures, materials, out_dir, max_tex, small_t
             if how == 'bakemean':
                 if max(diffuse.size) > max_tex:
                     k = max_tex / max(diffuse.size)
-                    diffuse = diffuse.resize((round(diffuse.width * k), round(diffuse.height * k)), Image.LANCZOS)
+                    diffuse = resize_straight(diffuse, (round(diffuse.width * k), round(diffuse.height * k)))
                 im = bake_multimap(diffuse, decode(src[m['maps']['txDetail']]), 1.0, flat=True)
             else:
                 im = diffuse
@@ -966,8 +1035,11 @@ def export_auto_skins(car_dir, preset, textures, materials, skin_files, out_dir,
                 ui = json.loads(open(ui_path, 'rb').read().decode('utf-8-sig', 'replace'))
             except ValueError:
                 ui = {}
-        listing.append({'id': sid, 'name': str(ui.get('skinname', '')).strip(), 'number': str(ui.get('number', '')),
-                        'swatch': paint_swatch(paint), 'files': own})
+        entry = {'id': sid, 'name': str(ui.get('skinname', '')).strip(), 'number': str(ui.get('number', '')),
+                 'swatch': paint_swatch(paint), 'files': own}
+        if skin in preset.get('skin_variants', {}):
+            entry['variant'] = preset['skin_variants'][skin]
+        listing.append(entry)
     with open(os.path.join(out_dir, 'skins.json'), 'w') as fh:
         json.dump(listing, fh, indent=1, ensure_ascii=False)
     print(f'  {len(listing)} skins, {written} livery files -> {out_dir}')
@@ -1025,10 +1097,112 @@ def classify(nodes, i, preset, mat):
     return 'body', None
 
 
+def read_ksanim(path):
+    """{node name: [4x4 local matrix per frame]} of an AC .ksanim (version 1: matrices; 2: rotation quaternion x, y, z,
+    w, translation and scale per frame)"""
+    b = open(path, 'rb').read()
+    o = 0
+
+    def i32():
+        nonlocal o
+        o += 4
+        return struct.unpack_from('<i', b, o - 4)[0]
+
+    version, out = i32(), {}
+    for _ in range(i32()):
+        n = i32()
+        name = b[o:o + n].decode('latin1')
+        o += n
+        count = i32()
+        if version == 1:
+            fr = np.frombuffer(b, '<f4', count * 16, o).astype(np.float64).reshape(count, 4, 4)
+            o += count * 64
+            out[name] = [m.T for m in fr]
+            continue
+        fr = np.frombuffer(b, '<f4', count * 10, o).astype(np.float64).reshape(count, 10)
+        o += count * 40
+        mats = []
+        for x, y, z, w, tx, ty, tz, sx, sy, sz in fr:
+            r = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                          [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                          [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+            m = np.eye(4)
+            m[:3, :3] = r * np.array([sx, sy, sz])
+            m[:3, 3] = (tx, ty, tz)
+            mats.append(m)
+        out[name] = mats
+    return out
+
+
+def ancestor_ids(nodes, i):
+    out = []
+    p = nodes[i]['parent']
+    while p is not None:
+        out.append(p)
+        p = nodes[p]['parent']
+    return out
+
+
+def pose_nodes(car_dir, preset, nodes):
+    """Put the preset's `part_poses` nodes ({node: (ksanim file, frame)}) where that frame of the mod's animation has
+    them (a part the setup scales out of sight at rest, such as an aero kit), their subtrees with them"""
+    for name, (fname, frame) in preset.get('part_poses', {}).items():
+        local = read_ksanim(os.path.join(car_dir, 'animations', fname))[name][frame]
+        i = next(k for k, n in enumerate(nodes) if n['name'] == name and n['kind'] == 1)
+        parent = nodes[i]['parent']
+        world = (nodes[parent]['world'] if parent is not None else np.eye(4)) @ local
+        delta = world @ np.linalg.inv(nodes[i]['world'])
+        for k in range(len(nodes)):
+            if k == i or i in ancestor_ids(nodes, k):
+                nodes[k]['world'] = delta @ nodes[k]['world']
+
+
+def add_extension_parts(car_dir, preset, textures, materials, nodes):
+    """Append the preset's `extra_kn5` (the mod's `extension/` kn5s, in the car's frame) to `nodes`, and return
+    {node index: part} for every mesh in a part (`parts` names kn5 nodes whose subtrees are one). An extension material
+    with the car's own name and maps is the car's; one that differs is added as `<name>~<file stem>`, and its textures
+    only where the car has none of that name"""
+    part_of = {}
+    by_name = {m['name']: i for i, m in enumerate(materials)}
+    for fname, part in preset.get('extra_kn5', ()):
+        tex, mats, ext_nodes = read_kn5(os.path.join(car_dir, 'extension', fname))
+        for k, v in tex.items():
+            textures.setdefault(k, v)
+        remap = {}
+        for i, m in enumerate(mats):
+            own = by_name.get(m['name'])
+            if own is not None and materials[own]['maps'] == m['maps']:
+                remap[i] = own
+            else:
+                materials.append({**m, 'name': f"{m['name']}~{fname.rsplit('.', 1)[0]}"})
+                remap[i] = len(materials) - 1
+        base = len(nodes)
+        for n in ext_nodes:
+            n = dict(n)
+            if n['parent'] is not None:
+                n['parent'] += base
+            if n['mesh'] is not None:
+                n['mesh'] = {**n['mesh'], 'mat': remap[n['mesh']['mat']]}
+                part_of[len(nodes)] = part
+            nodes.append(n)
+    parts = preset.get('parts', {})
+    for i, n in enumerate(nodes):
+        if n['mesh'] is None or i in part_of:
+            continue
+        for name in [n['name'], *ancestors(nodes, i)]:
+            if name in parts:
+                part_of[i] = parts[name]
+                break
+    return part_of
+
+
 def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg_quality):
     MATERIALS = preset['materials']
     kn5_path = os.path.join(car_dir, kn5_name or f'{os.path.basename(os.path.normpath(car_dir))}.kn5')
     textures, materials, nodes = read_kn5(kn5_path)
+    pose_nodes(car_dir, preset, nodes)
+    part_of = add_extension_parts(car_dir, preset, textures, materials, nodes)
+    part_variants = preset.get('part_variants', {})
     by_name = {m['name']: m for m in materials}
     auto = bool(preset.get('auto'))
     skin_tex = {}
@@ -1084,7 +1258,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         if kind == 'skip':
             dropped[mat] = dropped.get(mat, 0) + 1
             continue
-        parts.append([kind, corner, mat, *world_mesh(n), n['name']])
+        part = part_of.get(i) if kind == 'body' else None
+        parts.append([kind, corner, mat, *world_mesh(n), n['name'], part])
 
     # Shift: lowest tyre point to y = 0, X centred on the four tyres
     tyres = [p for p in parts if p[0] == 'tyre']
@@ -1320,8 +1495,17 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
     order = {m['name']: i for i, m in enumerate(materials)}
     body_parts.sort(key=lambda p: order[p[2]])
     body_kids = [writer.add_mesh_node(f'BODY_{node_label(mi)}', [pi])
-                 for mi, pi in prims(body_parts, order=lambda k: order[k])]
+                 for mi, pi in prims([p for p in body_parts if p[8] is None], order=lambda k: order[k])]
+    # A livery's parts (`parts`, `extra_kn5`): PART_<name>, one mesh per material, shown for its variants' liveries
+    variant_nodes = {}
+    for part in sorted({p[8] for p in body_parts if p[8] is not None}):
+        out = prims([p for p in body_parts if p[8] == part], order=lambda k: order[k])
+        kids = [writer.add_mesh_node(f'PART_{part}_{node_label(mi)}', [pi]) for mi, pi in out]
+        body_kids.append(writer.add_node(f'PART_{part}', children=kids))
+        variant_nodes[f'PART_{part}'] = list(part_variants.get(part, ('base',)))
     body_node = writer.add_node('BODY', children=body_kids)
+    # The cameras read the body as the first livery wears it
+    body_parts = [p for p in body_parts if p[8] is None or 'base' in part_variants.get(p[8], ('base',))]
 
     # The palettes: PALETTE_CELL px per colour, PALETTE_COLS to a row, sampled without filtering
     if palettes:
@@ -1396,6 +1580,8 @@ def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_t
         **({'skinMaps': {MATERIALS[m]['name']: f for m, (f, _) in preset['skin_maps'].items()}}
            if preset.get('skin_maps') else {}),
         **({'skinMaps': {name: f for name, (f, _) in sorted(skin_files.items())}} if skin_files else {}),
+        # PART_<name> -> the variants whose liveries show it (CarSkin.variant, 'base' when a livery names none)
+        **({'partVariants': variant_nodes} if variant_nodes else {}),
         'source': {
             'title': preset['title'],
             'kn5': os.path.basename(kn5_path),

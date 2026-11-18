@@ -1452,7 +1452,9 @@ export class F12026CarSim implements SimulatorCar {
       id === 'nissan-r33-jgtc' ||
       id === 'nissan-r32-jtcc' ||
       id === 'bmw-m1-procar' ||
-      id === 'vw-scirocco-gtx'
+      id === 'vw-scirocco-gtx' ||
+      id === 'chaparral-2d' ||
+      id === 'chaparral-2d-67'
       ? id
       : 'f12026-car';
   }

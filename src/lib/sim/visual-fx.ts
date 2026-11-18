@@ -23,6 +23,7 @@ import { LC_LMDH_CONFIG } from './proto/LcLmdhConfig';
 import { NISSAN_R33_CONFIG } from './classic/NissanR33Config';
 import { NISSAN_R32_CONFIG } from './classic/NissanR32Config';
 import { BMW_M1_PROCAR_CONFIG } from './classic/BmwM1ProcarConfig';
+import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from './classic/Chaparral2dConfig';
 import { VW_SCIROCCO_CONFIG } from './road/VwSciroccoConfig';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 import { LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
@@ -964,6 +965,16 @@ const PORTED_ONLY = {
     config: VW_SCIROCCO_CONFIG,
     lockDeg: CAR_WHEEL_LOCKS_DEG['vw-scirocco-gtx'],
   },
+  'chaparral-2d': {
+    url: '/cars/chaparral-2d/model/chaparral-2d.glb',
+    config: CHAPARRAL_2D_CONFIG,
+    lockDeg: CAR_WHEEL_LOCKS_DEG['chaparral-2d'],
+  },
+  'chaparral-2d-67': {
+    url: '/cars/chaparral-2d-67/model/chaparral-2d-67.glb',
+    config: CHAPARRAL_2D_67_CONFIG,
+    lockDeg: CAR_WHEEL_LOCKS_DEG['chaparral-2d-67'],
+  },
 } as const;
 type PortedKind = keyof typeof PORTED_ONLY;
 /** Which opponent rig a model's AI cars get: a ported body (`PORTED_ONLY`), or the 2026 car's for the F1 models */
@@ -978,7 +989,9 @@ const rigKind = (vehicle: VehicleModelId | undefined): PortedKind | 'f1' =>
             vehicle === 'nissan-r33-jgtc' ||
             vehicle === 'nissan-r32-jtcc' ||
             vehicle === 'bmw-m1-procar' ||
-            vehicle === 'vw-scirocco-gtx'
+            vehicle === 'vw-scirocco-gtx' ||
+            vehicle === 'chaparral-2d' ||
+            vehicle === 'chaparral-2d-67'
           ? vehicle
           : 'f1';
 const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;
@@ -1021,7 +1034,7 @@ function opponentSkin(vehicle: VehicleModelId | undefined, driverCode: string): 
   let h = 0;
   for (const ch of driverCode) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   const skin = skins[h % skins.length];
-  return skin === skins[0] ? null : { baseUrl: carSkinBaseUrl(car.id, skin.id), files: skin.files };
+  return skin === skins[0] ? null : { baseUrl: carSkinBaseUrl(car.id, skin.id), files: skin.files, variant: skin.variant };
 }
 
 /** The translucent materials `ghostify` gave a car */

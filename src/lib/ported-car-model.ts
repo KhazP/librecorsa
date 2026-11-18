@@ -69,6 +69,8 @@ interface PortedExtras {
   revLeds?: unknown;
   /** GLB material name -> the file of a livery that replaces its colour texture */
   skinMaps?: Record<string, string>;
+  /** PART_ node -> the livery variants that show it (`CarSkin.variant`, "base" for a livery that names none) */
+  partVariants?: Record<string, string[]>;
 }
 
 /** Livery textures, loaded once each and shared by every car wearing them */
@@ -286,8 +288,12 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   // The livery: this rig's copies of the materials it repaints (with their own textures), and the skin it wears
   const skinSlots: { mat: THREE.MeshStandardMaterial; file: string; own: THREE.Texture | null }[] = [];
   let skin = options.skin ?? null;
+  // A livery's own parts (the GLB's `partVariants`): each shown only for the liveries of its variants
+  const parts: { node: THREE.Object3D; variants: readonly string[] }[] = [];
   const applySkin = () => {
     const wearing = skin;
+    const variant = wearing?.variant ?? "base";
+    for (const part of parts) part.node.visible = part.variants.includes(variant);
     for (const slot of skinSlots) {
       // No livery, or one that leaves this file as the model has it
       if (!wearing || (wearing.files && !wearing.files.includes(slot.file))) {
@@ -377,6 +383,10 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       steerRest.copy(steerNode.quaternion);
       if (extras.revLeds) steerNode.userData.revLeds = extras.revLeds;
     }
+    for (const [name, variants] of Object.entries(extras.partVariants ?? {})) {
+      const node = find(name);
+      if (node) parts.push({ node, variants });
+    }
     // The materials a livery repaints, copied for this car (the template's are every car's): the body's and the
     // wheels' (a livery can recolour the rims)
     const skinMaps = extras.skinMaps;
@@ -398,8 +408,8 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       };
       bodyGroup.traverse(visit);
       for (const corner of corners) corner.spin.traverse(visit);
-      applySkin();
     }
+    applySkin();
     placeholder.removeFromParent();
     placeholder.geometry.dispose();
     (placeholder.material as THREE.Material).dispose();
@@ -450,7 +460,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     // compound
     setLivery: () => {},
     setSkin: (next) => {
-      if (next?.baseUrl === skin?.baseUrl) return;
+      if (next?.baseUrl === skin?.baseUrl && next?.variant === skin?.variant) return;
       skin = next;
       applySkin();
     },

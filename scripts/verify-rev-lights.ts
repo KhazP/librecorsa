@@ -21,7 +21,7 @@ function check(name: string, fn: () => void) {
 }
 
 const COUNT = 15;
-const CARS = [undefined, "lc26", "f12026-car", "amg-gt3", "liana", "mtr-496r", "lc-lmdh", "nissan-r33-jgtc", "nissan-r32-jtcc", "bmw-m1-procar", "vw-scirocco-gtx"];
+const CARS = [undefined, "lc26", "f12026-car", "amg-gt3", "liana", "mtr-496r", "lc-lmdh", "nissan-r33-jgtc", "nissan-r32-jtcc", "bmw-m1-procar", "vw-scirocco-gtx", "chaparral-2d", "chaparral-2d-67"];
 const bandsAt = (rpm: number, range: readonly [number, number]) => {
   const { lit, atShift } = revLeds(rpm, range, COUNT);
   return atShift ? "flash" : Array.from({ length: lit }, (_, i) => revLedBand(i, COUNT)).join(" ");

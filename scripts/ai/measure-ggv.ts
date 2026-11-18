@@ -3,7 +3,7 @@
  * (a g-g-v table), on the flat test pad with the aids the AI drives with.
  *
  *   npx tsx scripts/ai/measure-ggv.ts [--car f12026-car|amg-gt3|lc26|liana|mtr-496r|lc-lmdh|nissan-r33-jgtc|
- *     nissan-r32-jtcc|bmw-m1-procar|vw-scirocco-gtx|all] [--out public/ai/ggv.json]
+ *     nissan-r32-jtcc|bmw-m1-procar|vw-scirocco-gtx|chaparral-2d|chaparral-2d-67|all] [--out public/ai/ggv.json]
  *
  * Cornering: an ISO 4138-style slow steer ramp at each held speed, the best 1 s mean lateral g (scripts/lib/handling-
  * tests.ts). Braking: full pedal with the AI's ABS from each speed, the mean deceleration from 0.15 s to 0.5 s.
@@ -19,6 +19,7 @@ import { createLcLmdhSim } from '../../src/lib/sim/proto/LcLmdhSim';
 import { createNissanR33Sim } from '../../src/lib/sim/classic/NissanR33Sim';
 import { createNissanR32Sim } from '../../src/lib/sim/classic/NissanR32Sim';
 import { createBmwM1ProcarSim } from '../../src/lib/sim/classic/BmwM1ProcarSim';
+import { createChaparral2d67Sim, createChaparral2dSim } from '../../src/lib/sim/classic/Chaparral2dSim';
 import { createVwSciroccoSim } from '../../src/lib/sim/road/VwSciroccoSim';
 import { createLc26Sim } from '../../src/lib/sim/f12026-car/Lc26Sim';
 import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
@@ -35,7 +36,9 @@ type CarId =
   | 'nissan-r33-jgtc'
   | 'nissan-r32-jtcc'
   | 'bmw-m1-procar'
-  | 'vw-scirocco-gtx';
+  | 'vw-scirocco-gtx'
+  | 'chaparral-2d'
+  | 'chaparral-2d-67';
 const argv = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
   const i = argv.indexOf(`--${name}`);
@@ -58,6 +61,8 @@ const makers: Record<CarId, () => SimulatorCar> = {
   'nissan-r32-jtcc': () => createNissanR32Sim(pad),
   'bmw-m1-procar': () => createBmwM1ProcarSim(pad),
   'vw-scirocco-gtx': () => createVwSciroccoSim(pad),
+  'chaparral-2d': () => createChaparral2dSim(pad),
+  'chaparral-2d-67': () => createChaparral2d67Sim(pad),
 };
 
 function straightLine(make: () => SimulatorCar, vMs: number, mode: 'brake' | 'throttle', windowS: number): number {

@@ -1253,7 +1253,7 @@ export class DriveSession {
     const skinFor = (car: CarId): PortedSkin | null => {
       const skins = carById(car).skins;
       const skin = carSkinFor(car);
-      return skin && skins && skin.id !== skins[0].id ? { baseUrl: carSkinBaseUrl(car, skin.id), files: skin.files } : null;
+      return skin && skins && skin.id !== skins[0].id ? { baseUrl: carSkinBaseUrl(car, skin.id), files: skin.files, variant: skin.variant } : null;
     };
     const createCarRig = (car: CarId): SimCarRig => {
       const def = carById(car);

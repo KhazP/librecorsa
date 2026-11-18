@@ -110,6 +110,23 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [0.41, 0.29, 0.21, 0.11, 0.05, -0.28, -0.31, -0.34],
     lockKappa: Math.tan((450 / 14) * (Math.PI / 180)) / 2.41,
   },
+  // Measured 2026-11-18. The body lifts, so its grip falls with speed; first gear runs to ≈ 170 km/h, so the traction row
+  // drops at 45 m/s where second takes over; past its ≈ 300 km/h top speed (83 m/s) it is the drag it can't beat
+  'chaparral-2d': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [0.9, 0.93, 0.94, 0.92, 0.9, 0.86, 0.82, 0.79],
+    brakeG: [1.17, 1.17, 1.18, 1.2, 1.22, 1.25, 1.29, 1.33],
+    accelG: [0.59, 0.6, 0.57, 0.24, 0.25, 0.2, 0.12, -0.14],
+    lockKappa: Math.tan((360 / 14.1) * (Math.PI / 180)) / 2.311,
+  },
+  // Measured 2026-11-18. The 427's three gears change at ≈ 165 and 245 km/h
+  'chaparral-2d-67': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [0.94, 0.98, 0.99, 0.94, 0.94, 0.93, 0.89, 0.87],
+    brakeG: [1.16, 1.16, 1.18, 1.2, 1.22, 1.25, 1.29, 1.33],
+    accelG: [0.65, 0.68, 0.62, 0.36, 0.35, 0.16, 0.15, 0.07],
+    lockKappa: Math.tan((360 / 14.1) * (Math.PI / 180)) / 2.311,
+  },
 };
 
 export const G = 9.81;
