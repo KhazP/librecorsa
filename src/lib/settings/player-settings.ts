@@ -96,6 +96,8 @@ export interface PlayerSettings {
 export interface AudioSettings {
   /** Master volume, 0 to 1 */
   volume: number;
+  /** The tyres' roar and rumble on the kerbs, 0 to 1.5 of their own level */
+  kerbs: number;
   /** Silences everything without losing the volume (the Mute key toggles it) */
   muted: boolean;
   /** The music's level in the menus, in a race (from the lights out to the flag) and over the results and replays, 0 to 1 */
@@ -453,6 +455,7 @@ export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", tiltSteer: 
 /** The race music 12 dB under the menus' (a quarter of the level), under the engine and the tyres */
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   volume: 1,
+  kerbs: 1,
   muted: false,
   menuMusic: 0.8,
   raceMusic: 0.2,
@@ -814,6 +817,7 @@ function parseAudio(v: unknown): AudioSettings {
   if (!isObj(v)) return { ...d, musicOff: [] };
   return {
     volume: num(v.volume, 0, 1, d.volume),
+    kerbs: num(v.kerbs, 0, 1.5, d.kerbs),
     muted: bool(v.muted, d.muted),
     menuMusic: num(v.menuMusic, 0, 1, d.menuMusic),
     raceMusic: num(v.raceMusic, 0, 1, d.raceMusic),

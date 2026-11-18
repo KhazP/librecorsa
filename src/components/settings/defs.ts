@@ -687,6 +687,7 @@ export const palette = choice("select", {
 // ---- Audio
 
 export const masterVolume = slider({ id: "volume", label: "Master volume", hint: "Every sound in the game", min: 0, max: 1, step: 0.05, format: pct, ...audio("volume") });
+export const kerbVolume = slider({ id: "kerbs", label: "Kerbs", hint: "The roar and rumble of the tyres on the kerbs", min: 0, max: 1.5, step: 0.05, format: pct, ...audio("kerbs") });
 export const mute = toggle({
   id: "muted",
   label: "Mute",
