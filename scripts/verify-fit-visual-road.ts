@@ -75,6 +75,47 @@ function positions(root: THREE.Object3D): THREE.BufferAttribute[] {
   check('crossover: the upper road\'s line moves with its own asphalt', upper.every((y) => Math.abs(y - 4.93) < 1e-5), upper.map((y) => y.toFixed(4)).join(' '));
 }
 
+// What lies on the ground casts no shadow (`onGround`); what stands up keeps it, also merged into flat road. Ground at
+// 0 m for x < 4 and none further out; a dip to -0.5 m for 0.5 < x < 4 where a test asks for one
+{
+  const mesh = (name: string, points: number[], tris: number[]) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+    g.setIndex(tris);
+    return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name }));
+  };
+  const flat = (x0: number, x1: number, y = 0) => [x0, y, -1, x1, y, -1, x1, y, 1, x0, y, 1];
+  const ground = (dip: boolean) =>
+    ({
+      query(x: number, _z: number, _probeY: number, out: { height: number; surface: string }) {
+        if (x >= 4) return false;
+        out.height = dip && x > 0.5 ? -0.5 : 0;
+        out.surface = 'road';
+        return true;
+      },
+    }) as unknown as GroundQuery;
+  const onGround = (m: THREE.Mesh, dip = false, road: string[] = ['Asphalt']) => {
+    const root = new THREE.Group();
+    const tm = new THREE.Group();
+    tm.name = 'Track_Model';
+    root.add(tm);
+    tm.add(m);
+    fitVisualRoad(root, ground(dip), road);
+    return m.userData.onGround === true;
+  };
+  // Asphalt running off the colliders: half its vertices have no ground, but it is road
+  check('ground: asphalt partly off the colliders lies on the ground', onGround(mesh('Asphalt', [...flat(-1, 1), ...flat(10, 12)], [0, 2, 1, 0, 3, 2, 4, 6, 5, 4, 7, 6])));
+  check('ground: the same mesh in another material does not', !onGround(mesh('Grandstand', [...flat(-1, 1), ...flat(10, 12)], [0, 2, 1, 0, 3, 2, 4, 6, 5, 4, 7, 6])));
+  // Flat asphalt over a dip the fit cannot reach (0.5 m under its far edge): nothing on it stands up
+  check('ground: flat asphalt over a dip lies on the ground', onGround(mesh('Asphalt', flat(-1, 1), [0, 2, 1, 0, 3, 2]), true));
+  // A 1 m wall merged into the asphalt at its far edge, in the road material and in another one fitted to 90 %
+  const wall = [...flat(-1, 1), 1, 1, -1, 1, 1, 1];
+  const wallTris = [0, 2, 1, 0, 3, 2, 1, 2, 5, 1, 5, 4];
+  check('ground: asphalt with a wall merged in stands up', !onGround(mesh('Asphalt', wall, wallTris)));
+  const many = [...flat(-1, 1), ...Array.from({ length: 16 }, (_, i) => [-1 + i / 8, 0, 0]).flat(), 1, 1, -1, 1, 1, 1];
+  check('ground: a laid line with a post merged in stands up', !onGround(mesh('Line', many, wallTris.map((i) => (i >= 4 ? i + 16 : i))), false, []));
+}
+
 const tracksDir = path.join('public', 'tracks');
 type TrackJson = RawTrackJson & { metadata?: { mesh?: { url?: string; conformSurfaces?: boolean; roadMaterials?: string[] } } };
 const wanted = process.argv.slice(2);
