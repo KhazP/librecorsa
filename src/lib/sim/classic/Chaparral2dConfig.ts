@@ -624,11 +624,14 @@ function lm60(frontPsi: number, rearPsi: number): TyresCompoundData {
       // Pressure moves the heat: the sliding heat and the crown against the shoulders [ref], the rolling heat by
       // PRESSURE_RR_GAIN [spec]
       pressureHeat: { slipGain: 0.5, crownGain: 0.05 },
-      // The M1's heat capacities and cooling [est]: the data's own thermal constants are for AC's tyre model, not this one
-      surfaceHeatCapacity: 1800,
-      coreHeatCapacity: 11000,
+      // The M1's heat capacities, hysteresis and cooling [est]: the data's own thermal constants are for AC's tyre model,
+      // not this one. From the pit lane's 20 °C the tyres reach 54–60 °C by the third lap, 50 °C past where their grip is
+      // full, their pressures at the data's 37 psi ideal (on the GT3's capacities and the M1's old 0.0044 they sat 3–5 psi
+      // short)
+      surfaceHeatCapacity: 900,
+      coreHeatCapacity: 5500,
       slipHeatShare: 0.35,
-      hysteresis: 0.0044,
+      hysteresis: 0.0084,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
       // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]

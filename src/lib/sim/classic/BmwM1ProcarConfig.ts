@@ -566,12 +566,15 @@ const SLICK: TyresCompoundData = {
     // Pressure moves the heat: the sliding heat and the crown against the shoulders [ref], the rolling heat by
     // PRESSURE_RR_GAIN [spec]
     pressureHeat: { slipGain: 0.5, crownGain: 0.05 },
-    // The GT3 slick's heat capacities and cooling, as the Nissans' [est]: the data's own thermal constants are for AC's
-    // tyre model, not this one
-    surfaceHeatCapacity: 1800,
-    coreHeatCapacity: 11000,
+    // The GT3 slick's cooling, as the Nissans' [est]: the data's own thermal constants are for AC's
+    // tyre model, not this one. Half the GT3 slick's heat capacities and its rolling hysteresis [est]: on the GT3's
+    // capacities and the M1's old 0.0044 a tyre from the pit lane's 20 °C gained 4–5 °C a lap and sat at 48–54 °C after
+    // four (its data's pressures stopping 3–5 psi short of PRESSURE_IDEAL); on these it reaches 56–64 °C by the third
+    // lap, the pressures at the ideal as the data has them
+    surfaceHeatCapacity: 900,
+    coreHeatCapacity: 5500,
     slipHeatShare: 0.35,
-    hysteresis: 0.0044,
+    hysteresis: 0.0084,
     surfaceToCore: 40,
     surfaceCooling: [5, 0.6],
     // Through the sidewalls; the rest of the carcass's heat leaves through the gas and the rim [est]
