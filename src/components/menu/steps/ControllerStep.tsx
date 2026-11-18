@@ -37,6 +37,9 @@ import { PedalCurveBars, StickCurve } from "./TuningSlider";
 import { PadMap } from "./PadMap";
 import { Hint, StatusPill, TrackMeter } from "./setup-ui";
 import { DualSenseCard, testDualSenseRumble } from "./DualSenseCard";
+import { GyroSteeringCard, useGyroLive } from "./GyroSteeringCard";
+import { combineStickAndGyro } from "@/lib/input/gyro-steer";
+import { isDualSensePadId } from "@/lib/input/dualsense-protocol";
 
 /** Standard-mapping buttons 0..11 as the glyphs name them */
 const GLYPH: readonly PadButtonName[] = ["a", "b", "x", "y", "lb", "rb", "lt", "rt", "view", "menu", "l3", "r3"];
@@ -66,6 +69,10 @@ export function InputCheckCard() {
   const pads = useGamepads();
   const pad = pads.find((p) => p.mapping === "standard") ?? null;
   const pedals = pad ? padPedals(pad, settings.padTuning) : null;
+  // With gyro steering on, the steer bar is the stick and the tilt together, as the car gets them
+  const d = settings.dualSense;
+  const gyro = useGyroLive(Boolean(pad && isDualSensePadId(pad.id)) && d.gyroSteer && dualSenseHid.connected(), d.gyroLockDeg, d.gyroSensitivity);
+  const steer = combineStickAndGyro(pad?.axes[0] ?? 0, gyro?.steer);
   return (
     <SettingsCard
       title="Input check"
@@ -79,7 +86,7 @@ export function InputCheckCard() {
             </Badge>
             <span className="lc-body truncate" title={padDisplayName(pad.id)}>{padDisplayName(pad.id)}</span>
           </span>
-          <TrackMeter label="Steer" value={pad.axes[0] ?? 0} color="var(--color-lc-info)" centered />
+          <TrackMeter label="Steer" value={steer} color="var(--color-lc-info)" centered />
           <TrackMeter label="Throttle" value={pedals?.throttle ?? 0} color="var(--lc-sem-throttle)" />
           <TrackMeter label="Brake" value={pedals?.brake ?? 0} color="var(--lc-sem-brake)" />
           {settings.padTuning.pedalSources.clutch ? (
@@ -340,6 +347,7 @@ export function ControllerSetup() {
       <SteeringFeelCard first />
       <InputCheckCard />
       <DualSenseCard />
+      <GyroSteeringCard />
       <ControllerButtonsCard />
       <ControllerFineTuningCard />
     </>
