@@ -27,9 +27,14 @@ export const gyroSource = {
       b();
     };
   },
-  /** The connected pad's lean from its centre (deg, + = right), or null with none streaming its motion */
-  steerDeg(): number | null {
-    return dualSenseHid.gyroSteerDeg() ?? dualShock4Hid.gyroSteerDeg();
+  /**
+   * The lean from its centre (deg, + = right) of the pad with the Gamepad API id `padId`, from the driver of its kind;
+   * without an id, of whichever pad streams. Null with none streaming its motion
+   */
+  steerDeg(padId?: string): number | null {
+    if (padId === undefined) return dualSenseHid.gyroSteerDeg() ?? dualShock4Hid.gyroSteerDeg();
+    if (isDualSensePadId(padId)) return dualSenseHid.gyroSteerDeg();
+    return isDualShock4PadId(padId) ? dualShock4Hid.gyroSteerDeg() : null;
   },
   /** The lean as it is now becomes straight ahead */
   recentre(): void {

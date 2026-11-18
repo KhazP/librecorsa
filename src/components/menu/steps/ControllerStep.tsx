@@ -71,7 +71,7 @@ export function InputCheckCard() {
   const pedals = pad ? padPedals(pad, settings.padTuning) : null;
   // With gyro steering on, the steer bar is the stick and the tilt together, as the car gets them
   const d = settings.dualSense;
-  const gyro = useGyroLive(Boolean(pad && isGyroPadId(pad.id)) && d.gyroSteer && gyroSource.connected(), d.gyroLockDeg, d.gyroSensitivity);
+  const gyro = useGyroLive(Boolean(pad && isGyroPadId(pad.id)) && d.gyroSteer && gyroSource.connected(), d.gyroLockDeg, d.gyroSensitivity, pad?.id);
   const steer = combineStickAndGyro(pad?.axes[0] ?? 0, gyro?.steer);
   return (
     <SettingsCard

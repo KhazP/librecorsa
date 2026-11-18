@@ -2223,12 +2223,16 @@ export class DriveSession {
       // rack directly.
       // Read every frame (also in menus / paused) so button edges never fire on a stale press
       const pads = connectedPads();
-      // Gyro steering: the DualSense's or DualShock 4's lean, tracked at the pad's own report rate (gyro-source.ts)
+      // Gyro steering: the DualSense's or DualShock 4's lean, tracked at the pad's own report rate (gyro-source.ts). The
+      // reader asks for the pad that steers, which gets its own lean, never another Sony pad's
       const gyroSettings = settings.dualSense;
       gyroSource.setMotionWanted(gyroSettings.gyroSteer);
-      const gyroDeg = gyroSettings.gyroSteer ? gyroSource.steerDeg() : null;
-      const gyroSteer =
-        gyroDeg === null ? undefined : gyroSteerValue(gyroDeg, gyroSettings.gyroLockDeg, gyroSettings.gyroSensitivity);
+      const gyroSteer = gyroSettings.gyroSteer
+        ? (padId: string) => {
+            const deg = gyroSource.steerDeg(padId);
+            return deg === null ? undefined : gyroSteerValue(deg, gyroSettings.gyroLockDeg, gyroSettings.gyroSensitivity);
+          }
+        : undefined;
       const device = deviceInput.read(pads, settings, dtSeconds, vehicleNow, gyroSteer);
       const appPhase = appPhaseNow;
       const inMenu = appPhase !== "driving";
