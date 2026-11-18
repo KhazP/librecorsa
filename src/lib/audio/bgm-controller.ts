@@ -404,9 +404,11 @@ export class AudioBGMController {
     deck.pool = pool;
     this.ramp(deck.gain.gain, 0, 0);
     const url = musicUrl(track);
-    if (deck.el.getAttribute("src") !== url) deck.el.src = url;
+    const reload = deck.el.getAttribute("src") !== url;
+    if (reload) deck.el.src = url;
     const seek = () => {
-      if (gen !== deck.gen || atS <= 0) return;
+      // A new file starts at the top; the deck's own file sits where it last paused, so it is moved even to 0
+      if (gen !== deck.gen || (reload && atS <= 0)) return;
       try {
         deck.el.currentTime = atS;
       } catch {
