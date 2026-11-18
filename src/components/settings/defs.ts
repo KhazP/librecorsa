@@ -216,6 +216,7 @@ export const keyboardFeel: RowDef[] = [
   }),
   slider({ id: "steerReturnS", label: "Steering return", hint: "How quickly the steering comes back to centre when the key is let go", advanced: true, min: 0.05, max: 1, step: 0.01, format: ms, ...kb("steerReturnS") }),
   slider({ id: "halfThrottle", label: "Half throttle", hint: "Throttle while the Half throttle key is held with throttle", advanced: true, min: 0.2, max: 0.9, step: 0.01, format: pct, ...kb("halfThrottle") }),
+  slider({ id: "halfBrake", label: "Half brake", hint: "Brake while the Half brake key is held", advanced: true, min: 0.2, max: 0.9, step: 0.01, format: pct, ...kb("halfBrake") }),
 ];
 
 // ---- Controls > Controller
