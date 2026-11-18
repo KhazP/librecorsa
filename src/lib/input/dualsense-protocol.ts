@@ -333,7 +333,8 @@ export interface DualSenseInput {
   full: boolean;
 }
 
-const stick = (v: number) => Math.max(-1, Math.min(1, (v - 127.5) / 127.5));
+/** A stick byte to −1..1 (+ = right / down) */
+export const stick = (v: number) => Math.max(-1, Math.min(1, (v - 127.5) / 127.5));
 
 /** D-pad hat (0 = up, clockwise, 8 = none) to up / down / left / right */
 function hatToDpad(hat: number): [boolean, boolean, boolean, boolean] {
@@ -341,7 +342,8 @@ function hatToDpad(hat: number): [boolean, boolean, boolean, boolean] {
   return [hat === 7 || hat <= 1, hat >= 3 && hat <= 5, hat >= 5 && hat <= 7, hat >= 1 && hat <= 3];
 }
 
-function buttonsFrom(b0: number, b1: number, b2: number, l2: number, r2: number): boolean[] {
+/** The three button bytes Sony pads share (DualSense and DualShock 4) in standard-mapping order, 18 buttons */
+export function buttonsFrom(b0: number, b1: number, b2: number, l2: number, r2: number): boolean[] {
   const [up, down, left, right] = hatToDpad(b0 & 0x0f);
   return [
     (b0 & 0x20) !== 0, // 0 Cross
@@ -455,20 +457,44 @@ export function parseImuCalibration(view: DataView): ImuCalibration | null {
   const o = view.byteLength >= 41 && view.getUint8(0) === DS_CALIBRATION_FEATURE_REPORT_ID ? 1 : 0;
   if (view.byteLength < o + 34) return null;
   const s16 = (i: number) => view.getInt16(o + i, true);
-  const gyroBias = [s16(0), s16(2), s16(4)];
-  const plus = [s16(6), s16(10), s16(14)];
-  const minus = [s16(8), s16(12), s16(16)];
-  const speed2x = s16(18) + s16(20);
+  return sonyImuCalibration({
+    gyroBias: [s16(0), s16(2), s16(4)],
+    gyroPlus: [s16(6), s16(10), s16(14)],
+    gyroMinus: [s16(8), s16(12), s16(16)],
+    speed2x: s16(18) + s16(20),
+    accelPlus: [s16(22), s16(26), s16(30)],
+    accelMinus: [s16(24), s16(28), s16(32)],
+  });
+}
+
+/** The numbers of a Sony calibration report (DualSense and DualShock 4), per axis x, y, z */
+export interface SonyCalibrationFields {
+  gyroBias: readonly number[];
+  /** Gyro counts at the calibration rate either way */
+  gyroPlus: readonly number[];
+  gyroMinus: readonly number[];
+  /** The calibration rate both ways together, deg/s */
+  speed2x: number;
+  /** Accelerometer counts at +1 g and −1 g */
+  accelPlus: readonly number[];
+  accelMinus: readonly number[];
+}
+
+/**
+ * Scales from a Sony calibration report's numbers, as hid-playstation turns them; null when they cannot be a
+ * calibration (a blank report, a clone that fills it with junk)
+ */
+export function sonyImuCalibration(f: SonyCalibrationFields): ImuCalibration | null {
   const gyroDpsPerCount = [0, 1, 2].map((k) => {
-    const span = Math.abs((plus[k] as number) - (gyroBias[k] as number)) + Math.abs((minus[k] as number) - (gyroBias[k] as number));
-    return span > 0 && speed2x > 0 ? speed2x / span : NaN;
+    const bias = f.gyroBias[k] ?? 0;
+    const span = Math.abs((f.gyroPlus[k] ?? 0) - bias) + Math.abs((f.gyroMinus[k] ?? 0) - bias);
+    return span > 0 && f.speed2x > 0 ? f.speed2x / span : NaN;
   }) as Vec3;
   const accelBias: Vec3 = [0, 0, 0];
   const accelGPerCount: Vec3 = [0, 0, 0];
   for (let k = 0; k < 3; k++) {
-    const p = s16(22 + 4 * k);
-    const m = s16(24 + 4 * k);
-    const range2g = p - m;
+    const p = f.accelPlus[k] ?? 0;
+    const range2g = p - (f.accelMinus[k] ?? 0);
     accelBias[k] = p - range2g / 2;
     accelGPerCount[k] = range2g > 0 ? 2 / range2g : NaN;
   }
