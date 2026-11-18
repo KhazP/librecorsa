@@ -10,16 +10,20 @@
  *  3. Grid: reversed, the player's slot
  *  4. A quicker car gets past a slower one on Istanbul Park, cleanly
  *  5. A car stopped on the racing line: the car behind sees the yellow, goes round it, and doesn't hit it
- *  6. A rolling start: the whole field at one speed, and no AI car spins off it
+ *  6. A rolling start: the whole field at one speed, and no AI car spins off it; a car held on the road's edge by a bias
+ *     keeps a smooth aim where the edge steps (a kerb's allowance)
  *  7. A player who keeps no racecraft (holds the inside, or drives a slow line, and never gives room): an AI car coming
  *     up on it into three corners from three gaps, beside it or in line, doesn't run into it
  */
 import { readFileSync } from 'node:fs';
+import type { TrackSamplePoint } from '../src/types/f1';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { aiLineOffsetM } from '../src/lib/sim/speed-profile';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { AiOpponentField, launchReactionS, type FieldIncident } from '../src/lib/sim/ai-opponents';
+import { sampleGrid } from '../src/lib/sim/ai/ai-track';
+import type { AiDrivePlan } from '../src/lib/sim/ai/drive-plan';
 import { hazardLine, inYellowZone, overlapNow, ownsCorner, passFeasible } from '../src/lib/sim/ai-racecraft';
 import { COLLISION_PENALTY_S, judgeContact, RaceIncidents } from '../src/lib/sim/race-incidents';
 import { loadGlbGeometry } from './lib/glb-geometry';
@@ -284,12 +288,76 @@ const DT = 1 / 120;
   const speeds = field.sims().map((sim) => sim.vxMs);
   const spread = Math.max(...speeds) - Math.min(...speeds);
   check('Rolling start: the whole field at one speed', spread < 0.5 && Math.min(...speeds) > 10, speeds.map((v) => `${f(v * 3.6, 0)}`).join(' ') + ' km/h');
+  // Out of the last corner each car's lane holds it 3-6 m right of a line swinging right for Turn 1, on the road's edge,
+  // where a kerb starts at s 266: two or three cars once spun there at 10-13 s, every seed (see below). Held to 20 s, and
+  // with room: no slide near what race control calls a spin (0.42 rad, 1.6 rad/s)
+  const cars = (field as unknown as { cars: { ai: F12026CarSim | null; control: { mode: string } | null }[] }).cars.filter((c) => c.ai);
   const spins: string[] = [];
-  for (let t = 0; t < 10; t += DT) {
+  let worstSlip = 0;
+  let worstYawErr = 0;
+  for (let t = 0; t < 20; t += DT) {
     field.update(DT);
     for (const i of field.incidents) if (i.kind === 'spin') spins.push(`${i.code} at ${f(t)} s`);
+    for (const c of cars) {
+      const sim = c.ai as F12026CarSim;
+      if (c.control?.mode !== 'racing' || sim.vxMs < 12) continue;
+      worstSlip = Math.max(worstSlip, Math.abs(Math.atan2(sim.vyMs, sim.vxMs)));
+      worstYawErr = Math.max(worstYawErr, Math.abs(sim.yawRateRadS - sim.vxMs * track.getSampleAtDistance(sim.sMeters).curvature));
+    }
   }
-  check('Rolling start: no AI car spins off it (GT3, five cars)', spins.length === 0, spins.join(', ') || 'no spins in 10 s');
+  check('Rolling start: no AI car spins off it (GT3, five cars)', spins.length === 0, spins.join(', ') || 'no spins in 20 s');
+  check(
+    'Rolling start: ... and each car holds its line',
+    worstSlip < 0.15 && worstYawErr < 1,
+    `worst slip ${f(worstSlip, 2)} rad (< 0.15), yaw error ${f(worstYawErr, 2)} rad/s (< 1)`
+  );
+}
+// A car held off its line by a bias (its grid lane, room for a car alongside) is aimed no further out than the road's
+// edge. That edge steps: a kerb's allowance comes in over a metre, and where the kerb runs on past the width its tyres
+// may follow it out, at s 266-273 on the way to Turn 1 1.1 m within 7 m. The aim once stepped with it, and the tracker's
+// 14 m look-ahead at 220 km/h asked 2.5-4 g of steering for it: the GT3s above spun. Checked on the aim itself, which
+// no grip can hide. Away from where the range cuts the plan's own line (a few slivers of a metre and less)
+{
+  const field = new AiOpponentField(track, createAmgGt3Sim(track, root), [{ code: 'AAA', teamColorHex: '#fff', pace: 1 }], undefined, {
+    spectate: true,
+    learning: false,
+    seed: 1,
+  });
+  field.startRace(false);
+  const sim = field.aiSims()[0] as unknown as {
+    aiLineBiasM: number;
+    aiPlan: AiDrivePlan;
+    planTargetAt(plan: AiDrivePlan, s: number, sample: TrackSamplePoint, latNow: number): number;
+  };
+  const plan = sim.aiPlan;
+  const L = track.totalLengthM;
+  const aim = (s: number, bias: number) => {
+    sim.aiLineBiasM = bias;
+    // (a car on its line, pushed out by the bias)
+    return sim.planTargetAt(plan, s, track.getSampleAtDistance(((s % L) + L) % L), lineAt(s));
+  };
+  const lineAt = (s: number) => sampleGrid(plan.n, s, plan.track.ds);
+  let kerbJump = 0;
+  for (const bias of [3, 4, 5]) for (let s = 240; s < 300; s += 0.5) kerbJump = Math.max(kerbJump, Math.abs(aim(s + 0.5, bias) - aim(s, bias)));
+  check('Edge aim: on the edge where a kerb starts, < 0.1 m per 0.5 m', kerbJump < 0.1, `${f(kerbJump, 2)} m (once 0.6 m)`);
+  let lapJump = 0;
+  let lapJumpAt = '';
+  const ds = 0.25;
+  for (const bias of [-6, -4, -2, 2, 4, 6]) {
+    let prev = NaN;
+    let prevCut = true;
+    for (let s = 0; s <= L; s += ds) {
+      const own = aim(s, bias) - lineAt(s);
+      const cut = Math.abs(aim(s, 0) - lineAt(s)) > 0.01;
+      if (!cut && !prevCut && Math.abs(own - prev) > lapJump) {
+        lapJump = Math.abs(own - prev);
+        lapJumpAt = `bias ${bias} m at s ${f(s, 0)}`;
+      }
+      prev = own;
+      prevCut = cut;
+    }
+  }
+  check('Edge aim: ... round the lap, the bias moves it < 0.25 m per 0.25 m', lapJump < 0.25, `${f(lapJump, 2)} m, ${lapJumpAt} (once 1.4 m)`);
 }
 
 // ---- 7. A player who keeps no racecraft

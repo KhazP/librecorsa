@@ -76,9 +76,12 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   // 1.1 × that (≈1.6 g slow, ≈2.1 g fast, the car's own grip): it laps the circuits' GT3 speed profiles to within
   // ≈1–5 % at the AI's 0.975 pace (scripts/race-headless.ts --car amg-gt3)
   braking: { lowG: 1.7, aeroG: 0.55, refMs: 70 },
-  // ≈0.2° more front road-wheel angle per m/s² than the kinematic angle: the car's understeer, which the autopilot's
-  // yaw loop otherwise only caught up with by mid-corner at speed
-  understeerRadPerMs2: 0.0035,
+  // The car's understeer, which the autopilot's yaw loop otherwise only caught up with by mid-corner at speed: the front
+  // road-wheel angle past the kinematic one (and past the loop's 0.8 × body slip) per m/s², on a flat-pad steer ramp at
+  // constant speed on the calibrated grip: 0.0014-0.0016 rad at 160-260 km/h (0.0006 at 100). The 0.0035 measured on the
+  // older physics steered in twice the understeer the car has, and the feed-forward grows with v²: the yaw loop swung
+  // and diverged at 200-270 km/h (VIR's and Watkins Glen's lines spun off on check-lines)
+  understeerRadPerMs2: 0.0015,
   speedProfile: AMG_GT3_PROFILE_CAR,
   // its own lap-time line: lower grip and downforce than an F1 car move the apexes and braking points
   racingLine: 'gt3',

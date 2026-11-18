@@ -526,6 +526,99 @@ function kerbLimits(track: BuiltTrackData, ground: GroundQuery, maxRiseM: number
   return out;
 }
 
+/** The edges a traffic bias may push a tracked plan's target out to, - and + sides (m, every `ds` along the lap) */
+interface BiasEdges {
+  lo: Float32Array;
+  hi: Float32Array;
+  /**
+   * The range itself with each narrowing ahead brought in no steeper than the edges (and no widening): how far out a
+   * car already past the edges is let stay (`planTargetAt`)
+   */
+  loAhead: Float32Array;
+  hiAhead: Float32Array;
+  ds: number;
+}
+/** Per collider (or none yet), track and car profile */
+const NO_COLLIDER = {};
+const biasEdgeCache = new WeakMap<object, WeakMap<BuiltTrackData, WeakMap<CarSimProfile, BiasEdges>>>();
+
+/**
+ * The lateral range (`rangeAt`, a car's `lateralRangeAt`) as the edges a traffic bias may push a tracked plan's target
+ * out to: nowhere steeper along the lap than `TRACK_BIAS_EDGE_SLOPE`, its corners rounded over ±`TRACK_BIAS_EDGE_ROUND_M`,
+ * and nowhere wider than the range itself (a widening starts later, a narrowing earlier).
+ *
+ * The range steps: a kerb's allowance comes in over a metre (`TRACK_KERB_ALLOW_M`, and up to a metre more where a kerb
+ * runs on past the width), a lip's narrowing is held to ±10 m. A bias that took the target past the range left it on
+ * the edge, and the edge's step came through as a step in the target: on Istanbul's rolling start the GT3s' grid lanes
+ * held them 3-4 m right of a line swinging right for Turn 1, on the edge, and the kerb starting at s 266 moved their
+ * target 1.1 m out within 7 m. The pursuit's 14 m look-ahead at 220 km/h asked 2.5-4 g of steering for it (it asks
+ * about 41 m/s² per metre of sudden error), the steering swung at the hands' speed to ±0.4 of its lock and back, and
+ * the swing grew until the car spun.
+ */
+function biasEdgesOf(L: number, rangeAt: (s: number) => [number, number]): BiasEdges {
+  const n = Math.max(16, Math.ceil(L / TRACK_BIAS_EDGE_STEP_M));
+  const ds = L / n;
+  const lo0 = new Float32Array(n);
+  const hi0 = new Float32Array(n);
+  for (let i = 0; i < n; i++) [lo0[i], hi0[i]] = rangeAt(i * ds);
+  // Each narrowing ahead brought in at the slope, before the widenings are: twice round the lap backwards
+  const rise = TRACK_BIAS_EDGE_SLOPE * ds;
+  const loAhead = Float32Array.from(lo0);
+  const hiAhead = Float32Array.from(hi0);
+  for (let k = 2 * n - 1; k >= 0; k--) {
+    const i = k % n;
+    const j = (i + 1) % n;
+    hiAhead[i] = Math.min(hiAhead[i], hiAhead[j] + rise);
+    loAhead[i] = Math.max(loAhead[i], loAhead[j] - rise);
+  }
+  // No steeper than the slope: each edge pulled in to within slope × distance of every point where it is narrower (twice
+  // round the lap each way, so the pull carries across the line)
+  for (let k = 0; k < 2 * n; k++) {
+    const i = k % n;
+    const j = (i - 1 + n) % n;
+    hi0[i] = Math.min(hi0[i], hi0[j] + rise);
+    lo0[i] = Math.max(lo0[i], lo0[j] - rise);
+  }
+  for (let k = 2 * n - 1; k >= 0; k--) {
+    const i = k % n;
+    const j = (i + 1) % n;
+    hi0[i] = Math.min(hi0[i], hi0[j] + rise);
+    lo0[i] = Math.max(lo0[i], lo0[j] - rise);
+  }
+  // The corners rounded, still inside: the narrowest within ±w, then the mean of that over ±w (every point the mean
+  // reads is no wider than here)
+  const w = Math.max(1, Math.round(TRACK_BIAS_EDGE_ROUND_M / ds));
+  const loN = new Float32Array(n);
+  const hiN = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let a = -Infinity;
+    let b = Infinity;
+    for (let k = -w; k <= w; k++) {
+      const j = (i + k + n) % n;
+      a = Math.max(a, lo0[j]);
+      b = Math.min(b, hi0[j]);
+    }
+    loN[i] = a;
+    hiN[i] = b;
+  }
+  const lo = new Float32Array(n);
+  const hi = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let a = 0;
+    let b = 0;
+    for (let k = -w; k <= w; k++) {
+      const j = (i + k + n) % n;
+      a += loN[j];
+      b += hiN[j];
+    }
+    lo[i] = a / (2 * w + 1);
+    hi[i] = b / (2 * w + 1);
+    // Narrower than nothing: both edges at its middle
+    if (lo[i] > hi[i]) lo[i] = hi[i] = 0.5 * (lo[i] + hi[i]);
+  }
+  return { lo, hi, loAhead, hiAhead, ds };
+}
+
 /** The lateral range (m) the autopilot keeps its CG in at distance `s`: the usable road less its edge margin */
 function autopilotLateralRange(
   track: BuiltTrackData,
@@ -719,6 +812,13 @@ const TRACK_I_MAX_MS2 = 2.5;
 const TRACK_KERB_ALLOW_M = 0.6;
 /** On a kerb past the track's width, the outer tyres' outer edges stay this far inside where it ends (m): half a tyre's width and 0.1 m to spare */
 const TRACK_KERB_EDGE_ROOM_M = 0.3;
+/**
+ * The edges a traffic bias may push a plan's target out to (`biasEdgesOf`): the lateral range drawn no steeper along
+ * the lap than this (m per m), its corners rounded over ± this (m), sampled this often (m)
+ */
+const TRACK_BIAS_EDGE_SLOPE = 0.025;
+const TRACK_BIAS_EDGE_ROUND_M = 10;
+const TRACK_BIAS_EDGE_STEP_M = 0.5;
 /** Autopilot pedals ease off past this share of the rears' peak slip angle, by this much per share beyond it */
 const AP_REAR_GUARD = 0.9;
 const AP_REAR_GUARD_GAIN = 4;
@@ -2363,10 +2463,44 @@ export class F12026CarSim implements SimulatorCar {
     return [lo, hi];
   }
 
+  /** The edges a traffic bias may push this car's plan target out to (`biasEdgesOf`), built on first use */
+  private biasEdges(): BiasEdges {
+    const key = this.collider ?? NO_COLLIDER;
+    let perTrack = biasEdgeCache.get(key);
+    if (!perTrack) biasEdgeCache.set(key, (perTrack = new WeakMap()));
+    let perProfile = perTrack.get(this.track);
+    if (!perProfile) perTrack.set(this.track, (perProfile = new WeakMap()));
+    let edges = perProfile.get(this.profile);
+    if (!edges) perProfile.set(this.profile, (edges = biasEdgesOf(this.track.totalLengthM, (s) => this.lateralRangeAt(s))));
+    return edges;
+  }
+
+  /**
+   * Where a supplied plan puts a car now `latNow` across the road at lap distance `s` (m, + right): the plan's offset
+   * with the traffic bias, kept inside the usable road (`lateralRangeAt`). The bias takes it no further out than the
+   * range's smoothed edges (`biasEdgesOf`), or than the plan's own offset or the car itself where either is further out:
+   * a target held on the range's own edge stepped with it, and one held inside the car on the smoothed edge pulled it in
+   * toward a car beside it (a pack into a corner, each car out on the kerb). Where the car is past the smoothed edge, a
+   * narrowing ahead brings the target in no steeper than the edges are drawn. With no bias it is the plan's offset in
+   * the range, as before
+   */
+  private planTargetAt(plan: AiDrivePlan, s: number, sample: TrackSamplePoint, latNow: number): number {
+    const [lo, hi] = this.lateralRangeAt(s, sample);
+    const n = sampleGrid(plan.n, s, plan.track.ds);
+    let want = n + this.aiLineBiasM;
+    if (this.aiLineBiasM !== 0) {
+      const e = this.biasEdges();
+      const loE = Math.min(sampleGrid(e.lo, s, e.ds), Math.max(sampleGrid(e.loAhead, s, e.ds), latNow));
+      const hiE = Math.max(sampleGrid(e.hi, s, e.ds), Math.min(sampleGrid(e.hiAhead, s, e.ds), latNow));
+      want = THREE.MathUtils.clamp(want, Math.min(n, loE), Math.max(n, hiE));
+    }
+    return THREE.MathUtils.clamp(want, lo, hi);
+  }
+
   /**
    * The curvature (+ left, as the pursuit's) to steer for on a supplied plan: the path's own, a little ahead for the
    * steering's lag, plus a pull onto the path on the lateral error and its rate. The target is the plan's offset with
-   * the traffic bias, kept inside the autopilot's usable road (edges and lips as ever).
+   * the traffic bias, kept inside the autopilot's usable road (edges and lips as ever, `planTargetAt`).
    */
   private planCurvature(plan: AiDrivePlan, p: { s: number; lateralOffset: number; sample: TrackSamplePoint }, speed: number): number {
     const v = this.vehicle;
@@ -2378,8 +2512,7 @@ export class F12026CarSim implements SimulatorCar {
     // TRACK_REJOIN_MS2: pursuit asks ≈ 2v²e/L², and 4 m off at 190 km/h a short look-ahead asked for several g and spun
     // the car. Within a metre it stays short: tracking errors there are the pursuit's own, and stretching for them
     // only cut the corners further
-    const [lo0, hi0] = this.lateralRangeAt(p.s, p.sample);
-    const nNow = THREE.MathUtils.clamp(sampleGrid(plan.n, p.s, t.ds) + this.aiLineBiasM, lo0, hi0);
+    const nNow = this.planTargetAt(plan, p.s, p.sample, p.lateralOffset);
     const eFar = Math.max(0, Math.abs(nNow - p.lateralOffset) - 1);
     const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S, Math.sqrt((2 * speed * speed * eFar) / TRACK_REJOIN_MS2)) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
@@ -2388,8 +2521,7 @@ export class F12026CarSim implements SimulatorCar {
     const nMid = sampleGrid(plan.n, p.s + 0.5 * ld, t.ds);
     const sLook = p.s + ld / Math.max(0.4, 1 - kc * nMid);
     const look = this.track.getSampleAtDistance(wrap(sLook, this.track.totalLengthM));
-    const [lo, hi] = this.lateralRangeAt(sLook, look);
-    const nT = THREE.MathUtils.clamp(sampleGrid(plan.n, sLook, t.ds) + this.aiLineBiasM, lo, hi);
+    const nT = this.planTargetAt(plan, sLook, look, p.lateralOffset);
     const dx = look.position.x + look.binormal.x * nT - v.position.x;
     const dz = look.position.z + look.binormal.z * nT - v.position.z;
     const dl = Math.hypot(dx, dz);
