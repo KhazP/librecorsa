@@ -20,6 +20,10 @@ import { MTR_496R_CONFIG } from '../src/lib/sim/proto/Mtr496rConfig';
 import { SUZUKI_LIANA_CONFIG } from '../src/lib/sim/road/SuzukiLianaConfig';
 import { NISSAN_R33_CONFIG } from '../src/lib/sim/classic/NissanR33Config';
 import { NISSAN_R32_CONFIG } from '../src/lib/sim/classic/NissanR32Config';
+import { BMW_M1_PROCAR_CONFIG } from '../src/lib/sim/classic/BmwM1ProcarConfig';
+import { VW_SCIROCCO_CONFIG } from '../src/lib/sim/road/VwSciroccoConfig';
+import { CHAPARRAL_2D_CONFIG, CHAPARRAL_2D_67_CONFIG } from '../src/lib/sim/classic/Chaparral2dConfig';
+import { PORSCHE_934_RSR_CONFIG } from '../src/lib/sim/classic/Porsche934RsrConfig';
 
 const CARS: Record<string, CarPhysicsConfig> = {
   'f12026-car': F12026_CAR_CONFIG as unknown as CarPhysicsConfig,
@@ -30,6 +34,11 @@ const CARS: Record<string, CarPhysicsConfig> = {
   liana: SUZUKI_LIANA_CONFIG as unknown as CarPhysicsConfig,
   'nissan-r33-jgtc': NISSAN_R33_CONFIG as unknown as CarPhysicsConfig,
   'nissan-r32-jtcc': NISSAN_R32_CONFIG as unknown as CarPhysicsConfig,
+  'bmw-m1-procar': BMW_M1_PROCAR_CONFIG as unknown as CarPhysicsConfig,
+  'vw-scirocco-gtx': VW_SCIROCCO_CONFIG as unknown as CarPhysicsConfig,
+  'chaparral-2d': CHAPARRAL_2D_CONFIG as unknown as CarPhysicsConfig,
+  'chaparral-2d-67': CHAPARRAL_2D_67_CONFIG as unknown as CarPhysicsConfig,
+  'porsche-934-rsr': PORSCHE_934_RSR_CONFIG as unknown as CarPhysicsConfig,
 };
 
 /** Flat road with a strip of 25 mm sine kerbs across the run (x 2..6 m, every 0.9 m along z) and a 40 mm ramp */
@@ -205,7 +214,8 @@ if (cmp) {
     const d = (k: string, x: number, y: number) => `${k} ${y}→${x} (${(((x - y) / Math.max(1e-9, Math.abs(y))) * 100).toFixed(1)} %)`;
     console.log(
       id.padEnd(16),
-      r.hash === b.hash ? 'same trajectory' : 'trajectory CHANGED',
+      // A run with --no-hash leaves the hash empty: nothing to say about the trajectory
+      !r.hash || !b.hash ? 'not hashed' : r.hash === b.hash ? 'same trajectory' : 'trajectory CHANGED',
       '|',
       [d('vmax', r.vmaxKmh, b.vmaxKmh), d('brake', r.brake200.distM, b.brake200.distM), d('g80', r.latG80, b.latG80), d('g160', r.latG160, b.latG160), d('g240', r.latG240, b.latG240), d('step', r.stepMs, b.stepMs)].join(', ')
     );

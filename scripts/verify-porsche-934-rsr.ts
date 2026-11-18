@@ -27,6 +27,7 @@ import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
 import { measureDownshift, measureUpshift } from './lib/upshift-test';
 import { evaluateBrakePadMuFactor } from '../src/lib/sim/brake-physics';
+import { SIM_REALISM_FLAGS } from '../src/lib/sim/sim-realism';
 import { hasFile, noteSkip } from './lib/hosted-files';
 import { PORSCHE_934_RSR_SKINS } from '../src/lib/cars/pfalzdriver-skins';
 
@@ -348,7 +349,9 @@ console.log("\n== Brakes, fuel and aids from the car's data");
   const E = PORSCHE_934_RSR_SIM_PROFILE.electronics!;
   check('pro: no ABS, no TC; semi-pro: the ABS at 20 %; assisted adds a TC', dials.pro.absLevel === 0 && dials.pro.tcLevel === 0 && dials.semi_pro.tcLevel === 0 &&
     E.absLevels[12 - dials.semi_pro.absLevel] === 0.2 && dials.assisted.tcLevel > 0, '');
+  // The fuel-flow model, burning (the game's sprints run on a fixed load, `SimRealismFlags.fuelUse`)
   const sim = createPorsche934RsrSim(pad);
+  sim.setSimRealism({ ...SIM_REALISM_FLAGS.full, fuelUse: true });
   sim.assistPreset = 'semi_pro';
   sim.teleportToDistance(1000, 0);
   const f0 = sim.telemetry.fuelKg;
@@ -358,7 +361,7 @@ console.log("\n== Brakes, fuel and aids from the car's data");
     expected += (sim.telemetry.rpm / 1000) * PORSCHE_934_RSR_SIM_PROFILE.fuelLPerS1000Rpm! * 0.74 * DT;
   }
   const burnt = f0 - sim.telemetry.fuelKg;
-  check("30 s flat out burns what CONSUMPTION gives at the engine's speed", burnt === 0 || Math.abs(burnt / expected - 1) < 0.05, `${fmt(burnt, 3)} kg vs ${fmt(expected, 3)} kg`);
+  check("30 s flat out burns what CONSUMPTION gives at the engine's speed", Math.abs(burnt / expected - 1) < 0.05, `${fmt(burnt, 3)} kg vs ${fmt(expected, 3)} kg`);
 }
 
 console.log('\n== Gear changes');

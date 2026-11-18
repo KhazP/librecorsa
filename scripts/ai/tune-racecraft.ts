@@ -40,6 +40,11 @@ const opt = (name: string, fallback: string) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : fallback;
 };
+// The stand-in race (lib/stand-in-race.ts) starts on the qualifying grid and is scored on the pass objective: a defence
+// search with it would tune the defence knobs against the wrong score
+if (opt('mode', 'pass') === 'defence' && opt('stand-in', 'none') !== 'none') {
+  throw new Error('--mode defence does not take --stand-in: the stand-in race is scored on the pass objective, not on defence');
+}
 
 interface RaceScore {
   passes: number;

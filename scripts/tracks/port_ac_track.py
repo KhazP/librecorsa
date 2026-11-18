@@ -2983,10 +2983,10 @@ def build_modelled_kerb_mesh(phys_kerb_tris, phys_road_tris, xz, tan2, rgt2, wid
     KERB_SHIFT_SMOOTH_M: the kerb sits on the converted road as it sat on the mod's, keeping its height, ridges and slots.
     The kerb physics mesh (`Track_Surface_Kerb`) and the kerb meshes the mod also draws (1KERB nodes that are visible)
     get the same shift, so what is drawn is what the wheels touch, as in Assetto Corsa, and those drawn meshes are
-    tagged `keepShape` for the load-time fit to leave alone.
+    tagged `keepShape` for the load-time fit to leave alone. Returns whether it built them.
     """
     if not phys_kerb_tris or not phys_road_tris:
-        return
+        return False
     T_k = np.concatenate(phys_kerb_tris, 0).astype(np.float64)
     c = T_k.mean(1)
     fn = np.cross(T_k[:, 1] - T_k[:, 0], T_k[:, 2] - T_k[:, 0])
@@ -2999,7 +2999,7 @@ def build_modelled_kerb_mesh(phys_kerb_tris, phys_road_tris, xz, tan2, rgt2, wid
     # drawn kerb's are, since lifting a wall's foot (lift_uncovered) can make it a ramp
     keep = (fn_len > 1e-6) & (ny > 0.05) & (ec < 5.0)
     if not np.any(keep):
-        return
+        return False
     Tk = T_k[keep].copy()
 
     # The converted road (not moved at load) and the mod's, both in the mod's coordinates
@@ -3007,7 +3007,7 @@ def build_modelled_kerb_mesh(phys_kerb_tris, phys_road_tris, xz, tan2, rgt2, wid
             for m_name, m_pos, m_idx, _ in extra if m_name == 'Track_Surface_Road' and len(m_idx)]
     if not ours:
         log('  modelled kerbs: no Track_Surface_Road, kerbs left out')
-        return
+        return False
     T_o = np.concatenate(ours, 0)
     soup_o = srf.TriSoup(T_o, np.zeros(len(T_o), np.int32), np.zeros((len(T_o), 3), np.uint8))
     T_m = np.concatenate(phys_road_tris, 0).astype(np.float64)
@@ -3040,7 +3040,7 @@ def build_modelled_kerb_mesh(phys_kerb_tris, phys_road_tris, xz, tan2, rgt2, wid
     ok = np.isfinite(gap)
     if not ok.any():
         log('  modelled kerbs: no road under or beside them, kerbs left out')
-        return
+        return False
     if not ok.all():
         # Fill from the nearest vertex that has it
         _, j = cKDTree(U[ok][:, [0, 2]]).query(U[~ok][:, [0, 2]])
@@ -3152,6 +3152,7 @@ def build_modelled_kerb_mesh(phys_kerb_tris, phys_road_tris, xz, tan2, rgt2, wid
         f'kerbs); {n_lifted_phys} physics points lifted out from under the converted surfaces; road gap under them '
         f'p10 {np.percentile(gap, 10) * 100:.1f} median {np.median(gap) * 100:.1f} p90 {np.percentile(gap, 90) * 100:.1f} cm '
         f'({int((~ok).sum())} of {len(ok)} vertices filled from neighbours)')
+    return True
 
 
 def sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai_mapped, ds, fall_max=0.27, crest_r=400.0, sigma=1.5):
@@ -3823,7 +3824,11 @@ def build_from_sources(tid, cfg, args, src):
         p2p_track_data(data, cfg, n, ds, L, finS, endS, stS, splitS, dead, pos3)
     surf_table = parse_surface_overrides(data_dir) or {}
     surf_table.setdefault('kerb', {})['maxRiseM'] = 0.026
-    if cfg.get('modelledKerbs'):
+    # The modelled kerbs' entry goes with the physics kerb build_modelled_kerb_mesh makes from the mod's kerb meshes: not
+    # with the generated kerbs of a mod that has none (no use_scan_kerbs), nor once that build makes none (below)
+    modelled_kerbs = use_scan_kerbs and bool(cfg.get('modelledKerbs'))
+    kerb_surface = dict(surf_table['kerb'])
+    if modelled_kerbs:
         # The kerbs keep the mod's modelled ridges and slots: no made-up ripple on top of them. They are driven as drawn,
         # so the rise cap (meant for block-modelled kerbs) only has to stop a wheel climbing something else: Willow's
         # stand 2.8-5.5 cm over the run-off and gravel at their outer edge, where the 2.6 cm cap sank the wheel into them
@@ -3913,10 +3918,19 @@ def build_from_sources(tid, cfg, args, src):
             # Before the kerbs: modelled kerbs are seated on the patched road and run-off. Their own table entries
             # are left out, as the kerb is built afresh
             apply_physics_patch(extra, os.path.join(ROOT, rel),
-                                skip=('Track_Surface_Kerb',) if use_scan_kerbs and cfg.get('modelledKerbs') else ())
-        if use_scan_kerbs and cfg.get('modelledKerbs'):
-            build_modelled_kerb_mesh(phys_tris['kerb'], phys_tris['road'], xz, tan2, rgt2, width, ds, off, extra,
-                                     src.get('visual_items', ()))
+                                skip=('Track_Surface_Kerb',) if modelled_kerbs else ())
+        if modelled_kerbs:
+            if not build_modelled_kerb_mesh(phys_tris['kerb'], phys_tris['road'], xz, tan2, rgt2, width, ds, off, extra,
+                                            src.get('visual_items', ())):
+                # No modelled kerb mesh after all: the kerb entry goes back to the one without the modelled kerbs'
+                # settings, in the written file as it is now (apply_street_hairpin_margin may have rewritten it)
+                data['metadata']['surfaceTable']['kerb'] = kerb_surface
+                with open(json_out, encoding='utf-8') as f:
+                    written = json.load(f)
+                written['metadata']['surfaceTable']['kerb'] = kerb_surface
+                with open(json_out, 'w', encoding='utf-8') as f:
+                    json.dump(written, f, separators=(',', ':'), ensure_ascii=False)
+                log('  modelled kerbs: none built, the kerb surface keeps its rise cap and ripple')
         elif use_scan_kerbs:
             build_ac_kerb_mesh(phys_tris['kerb'], xz, tan2, rgt2, yc, width, ds, off, extra)
         glb_out = os.path.join(out_dir, f'{tid}.glb')
