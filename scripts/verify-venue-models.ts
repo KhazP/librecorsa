@@ -33,7 +33,7 @@ import { fitVisualRoad } from '../src/lib/render/fit-visual-road';
 import { createVenueLoaders, mergeVenueLayout } from '../src/lib/render/venue-model';
 import { createGroundHit } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { trackColliders } from '../src/lib/sim/track-colliders';
-import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
+import { getActiveTrackData, getActiveTrackMetadata, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { VENUE_MODELS, venueModelFiles, type VenuePair } from '../src/lib/venue-models';
 import { TracksideBroadcastDirector } from '../src/lib/render/camera-rig';
 import { loadGlbGeometry, readTrackGltfJson } from './lib/glb-geometry';
@@ -294,8 +294,10 @@ async function verifyLayout(id: string, files: VenuePair, ktx2: boolean): Promis
   }
   check('colliders: 1500 wall queries identical', wallSame === 1500, `${wallSame} / 1500`);
   if (A.conformSurfaces && A.ground && B.ground) {
-    fitVisualRoad(rootA, A.ground);
-    fitVisualRoad(rootB, B.ground);
+    // As the game fits it: the layers keep their order by the layout's road materials
+    const roadMaterials = getActiveTrackMetadata().mesh?.roadMaterials;
+    fitVisualRoad(rootA, A.ground, roadMaterials);
+    fitVisualRoad(rootB, B.ground, roadMaterials);
   }
   const fdiff = firstDifference(describeGeometry(rootA), describeGeometry(rootB));
   check('fitVisualRoad: same fitted vertices', !fdiff, fdiff);
