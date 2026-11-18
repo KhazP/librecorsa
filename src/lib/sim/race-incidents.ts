@@ -117,7 +117,7 @@ export class RaceIncidents {
   /** A time penalty from a call made outside the contact judging (a pass under yellow), with its message */
   public penalise(atS: number, code: string, seconds: number, reason: PenaltyReason, detail: string, player: boolean): void {
     this.ledger.add(code, { kind: 'time_penalty', reason, seconds, atS, label: detail });
-    this.post(atS, 'penalty', player ? `${seconds} s time penalty` : `${code} · ${seconds} s penalty`, detail, player);
+    this.post(atS, 'penalty', player ? `${seconds} s time penalty` : `${this.labelOf(code)} · ${seconds} s penalty`, detail, player);
   }
 
   /** Extra overtaking caution (0..1) of an AI driver now */

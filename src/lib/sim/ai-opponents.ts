@@ -1333,7 +1333,7 @@ export class AiOpponentField implements AiRace {
       const all: { id: string; car: FieldCar; lapMs: number | null }[] = player ? [...entries, { id: player.id, car: player, lapMs: q.playerMs }] : entries;
       const order = qualifyingOrder(all);
       order.forEach((e, i) => (e.car.gridSlot = i));
-      this.qualiResults = order.map((e) => ({ code: e.car.code, isPlayer: e.car.isPlayer, lapMs: e.lapMs }));
+      this.qualiResults = order.map((e) => ({ code: e.car.label, isPlayer: e.car.isPlayer, lapMs: e.lapMs }));
       return;
     }
     const n = ai.length + (player ? 1 : 0);
@@ -2350,16 +2350,25 @@ export class AiOpponentField implements AiRace {
     for (const e of this.yellowPasses.update(dt, me.distM, cars, this.playerYellowLevel(), active)) {
       const flag = e.double ? 'double yellow' : 'yellow';
       if (e.kind === 'order') {
-        this.raceControl.announce(t, 'investigation', `Overtake under ${flag}`, `Give the place back to ${e.code}`);
+        this.raceControl.announce(t, 'investigation', `Overtake under ${flag}`, `Give the place back to ${this.labelOf(e.code)}`);
       } else if (e.kind === 'returned') {
         this.raceControl.announce(t, 'nfa', 'Position handed back', 'No further action');
       } else if (e.kind === 'penalty') {
-        this.raceControl.penalise(t, me.code, e.seconds ?? 5, 'yellow_overtake', `Overtaking under ${flag} · ${e.code}`, true);
+        this.raceControl.penalise(t, me.code, e.seconds ?? 5, 'yellow_overtake', `Overtaking under ${flag} · ${this.labelOf(e.code)}`, true);
       }
     }
   }
 
-  /** The car lapping the player, close behind it on the road (the blue flag); null when there is none */
+  /** The place the player owes back after passing under yellow, under the code the race shows for that car */
+  private giveBackStatus(): RaceStatus['giveBack'] {
+    const owed = this.yellowPasses.owed;
+    return owed ? { ...owed, code: this.labelOf(owed.code) } : undefined;
+  }
+
+  /**
+   * The car lapping the player, close behind it on the road (the blue flag), under the code the race shows; null when
+   * there is none
+   */
   private playerBlueFlag(): string | null {
     const me = this.cars.find((c) => c.isPlayer);
     if (!me || this.phase !== 'racing' || me.retired || me.finishTimeS !== null) return null;
@@ -2367,7 +2376,7 @@ export class AiOpponentField implements AiRace {
     for (const c of this.cars) {
       if (c === me || c.removed || c.retired || c.finishTimeS !== null || c.distM - me.distM < 0.5 * L) continue;
       const behindM = (((me.sim.sMeters - c.sim.sMeters) % L) + L) % L;
-      if (behindM > 0 && behindM <= BLUE_FLAG_M && behindM / Math.max(5, c.sim.vxMs) <= BLUE_FLAG_S) return c.code;
+      if (behindM > 0 && behindM <= BLUE_FLAG_M && behindM / Math.max(5, c.sim.vxMs) <= BLUE_FLAG_S) return c.label;
     }
     return null;
   }
@@ -2821,7 +2830,7 @@ export class AiOpponentField implements AiRace {
     car.retired = true;
     car.retiredAtS = this.raceTimeS;
     this.phase = 'finished';
-    this.raceControl.announce(this.raceTimeS, 'penalty', `${car.code} disqualified`, 'Track limits');
+    this.raceControl.announce(this.raceTimeS, 'penalty', `${car.label} disqualified`, 'Track limits');
   }
 
   public status(): RaceStatus {
@@ -2891,7 +2900,7 @@ export class AiOpponentField implements AiRace {
       yellow: this.playerUnderYellow() || undefined,
       doubleYellow: this.playerYellowLevel() === 2 || undefined,
       blueFlag: this.playerBlueFlag() ?? undefined,
-      giveBack: this.yellowPasses.owed ?? undefined,
+      giveBack: this.giveBackStatus(),
       damage: this.playerDamageStatus(),
     };
   }
