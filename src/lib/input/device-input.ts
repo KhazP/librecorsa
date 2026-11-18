@@ -257,6 +257,8 @@ export interface DeviceFrame {
   analogSteer?: number;
   /** Raw controller stick for the physics' steering assist */
   padSteer?: number;
+  /** Gyro steering of the DualSense that steers (−1..1, + = right), added to the shaped stick; unset without it */
+  gyroSteer?: number;
   boostHeld: boolean;
   /** Button actions pressed this frame (rising edges) */
   pressed: Set<PadAction>;
@@ -444,7 +446,11 @@ export class DeviceInputReader {
   private wheelDevices: string | null = null;
   private wheelPresent = false;
 
-  read(pads: readonly PadLike[], settings: DeviceInputSettings, dtSeconds: number, vehicle?: string): DeviceFrame {
+  /**
+   * `gyroSteer` is the paired DualSense's gyro steering this frame (−1..1), when it is on: it reaches the frame only
+   * while that DualSense is the controller that steers, so a pad lying on the desk never steers for another one
+   */
+  read(pads: readonly PadLike[], settings: DeviceInputSettings, dtSeconds: number, vehicle?: string, gyroSteer?: number): DeviceFrame {
     const held = new Set<PadAction>();
     const frame: DeviceFrame = { throttle: 0, brake: 0, clutch: 0, boostHeld: false, pressed: new Set(), source: null };
     const wheel = settings.wheel;
@@ -503,6 +509,7 @@ export class DeviceInputReader {
         if (pad.mapping === "standard") {
           frame.source = "controller";
           frame.padSteer = rawStickX;
+          if (gyroSteer !== undefined && isDualSensePadId(pad.id)) frame.gyroSteer = gyroSteer;
           const pedals = padPedals(pad, settings.padTuning);
           frame.throttle = pedals.throttle;
           frame.brake = pedals.brake;
