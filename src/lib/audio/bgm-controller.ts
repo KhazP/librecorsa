@@ -279,7 +279,10 @@ export class AudioBGMController {
       if (ids.has(this.held[pool]!.id)) delete this.held[pool];
     }
     const deck = this.decks[this.active];
-    if (deck?.track && !deck.leaving && ids.has(deck.track.id) && this.playing) this.playNext(this.playing, true);
+    const pool = this.playing;
+    if (deck?.track && !deck.leaving && ids.has(deck.track.id) && pool) this.playNext(pool, true);
+    // The pool had nothing to play (every track of it off): one switched back on starts the music again
+    else if (pool && !this.current && MUSIC_TRACKS.some((t) => t.pool === pool && this.playable(t.id))) this.playNext(pool, true);
   }
 
   /** Skip: the next track of the pool playing, at once (nothing while the music is held) */
