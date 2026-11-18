@@ -1140,6 +1140,29 @@ export function compoundData(config: CarPhysicsConfig, compound: PhysicsTyreComp
 }
 
 /**
+ * Whether a tyre's data has it raced on blankets: its cold pressure is set at a blanket's warmth (`coldRefC` 40 °C or
+ * more) rather than in the garage's air, and it is not one raced without them (`blanketC`)
+ */
+export function racesOnBlankets(p: TyresPressureData): boolean {
+  return p.blanketC === undefined && p.coldRefC >= 40;
+}
+
+/** The hottest a tyre blanket heats a tyre (°C) */
+export const TYRE_BLANKET_MAX_C = 80;
+
+/**
+ * The temperature a compound's tyres leave their blankets at: the data's own (`blanketC`, or `coldRefC` for a tyre
+ * raced on blankets); for a tyre whose data has none, the middle of its grip window, at most `TYRE_BLANKET_MAX_C`
+ */
+export function blanketTempC(t: TyresCompoundData): number {
+  const p = t.pressureData;
+  if (p.blanketC !== undefined) return p.blanketC;
+  if (racesOnBlankets(p)) return p.coldRefC;
+  const [lo, hi] = t.thermalData.optimalTempC;
+  return Math.min(TYRE_BLANKET_MAX_C, 0.5 * (lo + hi));
+}
+
+/**
  * A treaded rain tyre on a slick's carcass [est]: the grip (D, the load tables) scaled by the compound's dry grip, the
  * temperature curve moved down to its cooler window and falling off twice as fast again above it (a rain tyre on a dry
  * track overheats), cooler blankets, and a longer, softer tread (relaxation length, peak slip angle). The water
