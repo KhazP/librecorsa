@@ -530,6 +530,12 @@ function kerbLimits(track: BuiltTrackData, ground: GroundQuery, maxRiseM: number
 interface BiasEdges {
   lo: Float32Array;
   hi: Float32Array;
+  /**
+   * The range itself with each narrowing ahead brought in no steeper than the edges (and no widening): how far out a
+   * car already past the edges is let stay (`planTargetAt`)
+   */
+  loAhead: Float32Array;
+  hiAhead: Float32Array;
   ds: number;
 }
 /** Per collider (or none yet), track and car profile */
@@ -555,9 +561,18 @@ function biasEdgesOf(L: number, rangeAt: (s: number) => [number, number]): BiasE
   const lo0 = new Float32Array(n);
   const hi0 = new Float32Array(n);
   for (let i = 0; i < n; i++) [lo0[i], hi0[i]] = rangeAt(i * ds);
+  // Each narrowing ahead brought in at the slope, before the widenings are: twice round the lap backwards
+  const rise = TRACK_BIAS_EDGE_SLOPE * ds;
+  const loAhead = Float32Array.from(lo0);
+  const hiAhead = Float32Array.from(hi0);
+  for (let k = 2 * n - 1; k >= 0; k--) {
+    const i = k % n;
+    const j = (i + 1) % n;
+    hiAhead[i] = Math.min(hiAhead[i], hiAhead[j] + rise);
+    loAhead[i] = Math.max(loAhead[i], loAhead[j] - rise);
+  }
   // No steeper than the slope: each edge pulled in to within slope × distance of every point where it is narrower (twice
   // round the lap each way, so the pull carries across the line)
-  const rise = TRACK_BIAS_EDGE_SLOPE * ds;
   for (let k = 0; k < 2 * n; k++) {
     const i = k % n;
     const j = (i - 1 + n) % n;
@@ -601,7 +616,7 @@ function biasEdgesOf(L: number, rangeAt: (s: number) => [number, number]): BiasE
     // Narrower than nothing: both edges at its middle
     if (lo[i] > hi[i]) lo[i] = hi[i] = 0.5 * (lo[i] + hi[i]);
   }
-  return { lo, hi, ds };
+  return { lo, hi, loAhead, hiAhead, ds };
 }
 
 /** The lateral range (m) the autopilot keeps its CG in at distance `s`: the usable road less its edge margin */
@@ -804,8 +819,6 @@ const TRACK_KERB_EDGE_ROOM_M = 0.3;
 const TRACK_BIAS_EDGE_SLOPE = 0.025;
 const TRACK_BIAS_EDGE_ROUND_M = 10;
 const TRACK_BIAS_EDGE_STEP_M = 0.5;
-/** A car taken back outside those edges keeps the room it has there, given up at this rate (m/s) */
-const TRACK_BIAS_HOLD_MS = 1;
 /** Autopilot pedals ease off past this share of the rears' peak slip angle, by this much per share beyond it */
 const AP_REAR_GUARD = 0.9;
 const AP_REAR_GUARD_GAIN = 4;
@@ -1011,10 +1024,6 @@ export class F12026CarSim implements SimulatorCar {
   public aiPlan: AiDrivePlan | null = null;
   /** Integral of the lateral error while tracking a plan (m/s²) */
   private trackI = 0;
-  /** Room held past the bias edges after a hand-back, - and + sides (m, `easeBiasHold`), and whether to seed it next */
-  private biasHoldLo = 0;
-  private biasHoldHi = 0;
-  private biasHoldSeed = true;
   private _assistPreset: DriverAssistPreset = 'semi_pro';
   /** Live MFD Stage-1 TC slip dial (0 = OFF, 1 = min intervention / max slip, 12 = max intervention / min slip) */
   public tcLevel = 5;
@@ -1950,8 +1959,6 @@ export class F12026CarSim implements SimulatorCar {
       // The autopilot takes the car after a stint off: its pedal and steer integrators start from zero, not from its
       // last drive. A brief hand-back (an AI driver's reaction to a knock) carries on from where it was.
       if (this.autopilotIdleS > AUTOPILOT_STALE_S) this.apPedal = this.apYawI = this.apThrottle = 0;
-      // Taken back from wherever the car is: the room past the bias edges is measured there again
-      if (this.autopilotIdleS > 0) this.biasHoldSeed = true;
       this.autopilotIdleS = 0;
     } else {
       this.autopilotIdleS += steppedS;
@@ -2469,46 +2476,25 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /**
-   * Where a supplied plan puts the car at lap distance `s` (m, + right): the plan's offset with the traffic bias, kept
-   * inside the usable road (`lateralRangeAt`). The bias takes it no further out than the range's smoothed edges
-   * (`biasEdgesOf`) and the room held past them after a hand-back (`easeBiasHold`), or than the plan's own offset where
-   * that is further out: a target held on the range's own edge stepped with it. With no bias it is the plan's offset in
+   * Where a supplied plan puts a car now `latNow` across the road at lap distance `s` (m, + right): the plan's offset
+   * with the traffic bias, kept inside the usable road (`lateralRangeAt`). The bias takes it no further out than the
+   * range's smoothed edges (`biasEdgesOf`), or than the plan's own offset or the car itself where either is further out:
+   * a target held on the range's own edge stepped with it, and one held inside the car on the smoothed edge pulled it in
+   * toward a car beside it (a pack into a corner, each car out on the kerb). Where the car is past the smoothed edge, a
+   * narrowing ahead brings the target in no steeper than the edges are drawn. With no bias it is the plan's offset in
    * the range, as before
    */
-  private planTargetAt(plan: AiDrivePlan, s: number, sample: TrackSamplePoint): number {
+  private planTargetAt(plan: AiDrivePlan, s: number, sample: TrackSamplePoint, latNow: number): number {
     const [lo, hi] = this.lateralRangeAt(s, sample);
     const n = sampleGrid(plan.n, s, plan.track.ds);
     let want = n + this.aiLineBiasM;
     if (this.aiLineBiasM !== 0) {
       const e = this.biasEdges();
-      const loE = sampleGrid(e.lo, s, e.ds) - this.biasHoldLo;
-      const hiE = sampleGrid(e.hi, s, e.ds) + this.biasHoldHi;
+      const loE = Math.min(sampleGrid(e.lo, s, e.ds), Math.max(sampleGrid(e.loAhead, s, e.ds), latNow));
+      const hiE = Math.max(sampleGrid(e.hi, s, e.ds), Math.min(sampleGrid(e.hiAhead, s, e.ds), latNow));
       want = THREE.MathUtils.clamp(want, Math.min(n, loE), Math.max(n, hiE));
     }
     return THREE.MathUtils.clamp(want, lo, hi);
-  }
-
-  /**
-   * The room past the bias edges held for a car the autopilot takes back outside them (`biasHoldSeed`), eased away at
-   * `TRACK_BIAS_HOLD_MS`. The field hands a car back with its bias set to where it is, so that its target starts there
-   * (a knock, a rejoin): out on a kerb past the smoothed edge, the edge alone would pull the target in by up to a metre
-   * at once, the step the edges are there to take out
-   */
-  private easeBiasHold(s: number, latNow: number): void {
-    if (this.biasHoldSeed) {
-      this.biasHoldSeed = false;
-      if (this.aiLineBiasM === 0) {
-        this.biasHoldLo = this.biasHoldHi = 0;
-        return;
-      }
-      const e = this.biasEdges();
-      this.biasHoldLo = Math.max(0, sampleGrid(e.lo, s, e.ds) - latNow);
-      this.biasHoldHi = Math.max(0, latNow - sampleGrid(e.hi, s, e.ds));
-      return;
-    }
-    const d = TRACK_BIAS_HOLD_MS * CONTROL_DT_S;
-    this.biasHoldLo = Math.max(0, this.biasHoldLo - d);
-    this.biasHoldHi = Math.max(0, this.biasHoldHi - d);
   }
 
   /**
@@ -2526,8 +2512,7 @@ export class F12026CarSim implements SimulatorCar {
     // TRACK_REJOIN_MS2: pursuit asks ≈ 2v²e/L², and 4 m off at 190 km/h a short look-ahead asked for several g and spun
     // the car. Within a metre it stays short: tracking errors there are the pursuit's own, and stretching for them
     // only cut the corners further
-    this.easeBiasHold(p.s, p.lateralOffset);
-    const nNow = this.planTargetAt(plan, p.s, p.sample);
+    const nNow = this.planTargetAt(plan, p.s, p.sample, p.lateralOffset);
     const eFar = Math.max(0, Math.abs(nNow - p.lateralOffset) - 1);
     const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S, Math.sqrt((2 * speed * speed * eFar) / TRACK_REJOIN_MS2)) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
@@ -2536,7 +2521,7 @@ export class F12026CarSim implements SimulatorCar {
     const nMid = sampleGrid(plan.n, p.s + 0.5 * ld, t.ds);
     const sLook = p.s + ld / Math.max(0.4, 1 - kc * nMid);
     const look = this.track.getSampleAtDistance(wrap(sLook, this.track.totalLengthM));
-    const nT = this.planTargetAt(plan, sLook, look);
+    const nT = this.planTargetAt(plan, sLook, look, p.lateralOffset);
     const dx = look.position.x + look.binormal.x * nT - v.position.x;
     const dz = look.position.z + look.binormal.z * nT - v.position.z;
     const dl = Math.hypot(dx, dz);
@@ -2711,7 +2696,6 @@ export class F12026CarSim implements SimulatorCar {
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;
     this.apPedal = this.apYawI = this.apThrottle = this.trackI = 0;
-    this.biasHoldSeed = true;
     this.apLaunch = false;
     this.drsPressPending = false;
     this.boostRemainingS = 0;

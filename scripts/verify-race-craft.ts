@@ -327,13 +327,14 @@ const DT = 1 / 120;
   const sim = field.aiSims()[0] as unknown as {
     aiLineBiasM: number;
     aiPlan: AiDrivePlan;
-    planTargetAt(plan: AiDrivePlan, s: number, sample: TrackSamplePoint): number;
+    planTargetAt(plan: AiDrivePlan, s: number, sample: TrackSamplePoint, latNow: number): number;
   };
   const plan = sim.aiPlan;
   const L = track.totalLengthM;
   const aim = (s: number, bias: number) => {
     sim.aiLineBiasM = bias;
-    return sim.planTargetAt(plan, s, track.getSampleAtDistance(((s % L) + L) % L));
+    // (a car on its line, pushed out by the bias)
+    return sim.planTargetAt(plan, s, track.getSampleAtDistance(((s % L) + L) % L), lineAt(s));
   };
   const lineAt = (s: number) => sampleGrid(plan.n, s, plan.track.ds);
   let kerbJump = 0;
