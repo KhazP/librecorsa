@@ -419,7 +419,8 @@ export class AudioBGMController {
     void deck.el
       .play()
       .then(() => {
-        if (gen !== deck.gen || !deck.pool) return;
+        // A deck the music has left since (a stop, or a skip within the second) stays on its fade-out
+        if (gen !== deck.gen || !deck.pool || deck.leaving || deck !== this.decks[this.active]) return;
         this.ramp(deck.gain.gain, this.levelOf(deck.pool), CROSSFADE_S);
       })
       .catch((err: unknown) => {
