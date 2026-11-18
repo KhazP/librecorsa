@@ -58,6 +58,8 @@ console.log('== The hit tracker');
 }
 
 // ---- 2. Willow Springs' slotted kerb
+// The tracker's failures end the suite here: skipping section 2 for want of the hosted files would pass it
+if (failures.length) finish();
 skipSuiteWithout('public/tracks/willow_springs/track_data.json', 'public/tracks/willow_springs/willow_springs.glb');
 console.log("\n== Willow Springs' Turn 6 kerb at 100 km/h");
 setActiveTrack('willow_springs', JSON.parse(readFileSync('public/tracks/willow_springs/track_data.json', 'utf8')) as RawTrackJson);
