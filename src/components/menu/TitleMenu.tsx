@@ -53,6 +53,7 @@ import { EmbeddedBadge } from "./EmbeddedBadge";
 import { InstallAppButton } from "./InstallAppButton";
 import { LiveLine } from "./LiveLine";
 import { UpdateReady } from "./UpdateReady";
+import { TitleMusic } from "./TitleMusic";
 
 type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "request";
 
@@ -544,6 +545,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const { mode } = useInputMode();
+  // The music's footer control: once a track has played, or while the music is switched off
+  const musicShown = Boolean(props.onToggleMusicMute) && (Boolean(props.nowPlaying) || props.musicMuted === true);
   const units = useUnits();
   const storeBuild = useStoreBuild();
   // The circuit panel opened from the race setup's Event card: loading a circuit then returns to the race setup
@@ -1047,9 +1050,21 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           </div>
         )}
 
-        {/* Touch screens have no keys to show: the footer comes back with a pad */}
-        <footer className={`flex items-center justify-between gap-3 border-t border-lc-line pt-3 ${mode === "pad" ? "" : "pointer-coarse:hidden"}`}>
-          <ShellPrompts prompts={prompts} phonePrompts={phonePrompts} />
+        {/* Touch screens have no keys to show: the prompts come back with a pad. The music's control stays */}
+        <footer
+          className={`flex items-center justify-between gap-3 border-t border-lc-line pt-3 ${mode === "pad" || musicShown ? "" : "pointer-coarse:hidden"}`}
+        >
+          <div className={`min-w-0 ${mode === "pad" ? "" : "pointer-coarse:hidden"}`}>
+            <ShellPrompts prompts={prompts} phonePrompts={phonePrompts} />
+          </div>
+          {musicShown ? (
+            <TitleMusic
+              nowPlaying={props.nowPlaying ?? null}
+              musicMuted={props.musicMuted === true}
+              onSkip={props.onSkipTrack}
+              onToggleMute={props.onToggleMusicMute!}
+            />
+          ) : null}
         </footer>
       </div>
     </div>

@@ -40,6 +40,7 @@ import { usePhoneLayout } from "./styles/PhoneHud";
 import { Badge } from "@/components/ui/Badge";
 import { SessionBadge } from "@/components/ui/badges/SessionBadge";
 import { Icon } from "@/components/ui/icons/Icon";
+import type { NowPlaying } from "@/lib/audio/bgm-controller";
 import type { IconName } from "@/components/ui/icons/registry";
 import { KeyCap } from "@/components/ui/prompts/KeyCap";
 import { PadGlyph } from "@/components/ui/prompts/PadGlyph";
@@ -137,6 +138,12 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   conditionsPanel?: ConditionsPanelProps;
   /** Leaves the session for the title menu */
   onExitToTitle?: () => void;
+  /** The music playing (none while it is held, before the lights) and the skip to the next track */
+  nowPlaying?: NowPlaying | null;
+  onSkipTrack?: () => void;
+  /** The music alone switched off (the title screen's music button), and its switch */
+  musicMuted?: boolean;
+  onToggleMusicMute?: () => void;
   /** Key names for the hints on the toggles (defaults: the original layout) */
   keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown", string>>;
   /** HUD layout, graphics, touch controls and VR */
@@ -190,6 +197,7 @@ const MadeBy: React.FC<{ trackSource: ReturnType<typeof trackModelSource>; carId
  */
 export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   const { telemetry, onTogglePause, onResetCar, aiOpponents, onOpenControls, onExitToTitle, leaderboardPanel, conditionsPanel, displayPanel } = props;
+  const { nowPlaying, onSkipTrack } = props;
   const phoneScreen = usePhoneLayout();
   // Online: the host restarts the race for everyone and nobody has a flying lap; a guest in a lobby restarts nothing
   // (racing or not). The shell guards the same handlers.
@@ -270,12 +278,15 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
             },
           ]
         : []),
+      ...(nowPlaying && onSkipTrack
+        ? [{ id: "music", label: "Skip track", detail: `${nowPlaying.title}, ${nowPlaying.composer}`, icon: "skip" as const, run: onSkipTrack }]
+        : []),
       ...(onOpenControls
         ? [{ id: "settings", label: "Settings", detail: "Controls, assists, display, sound", icon: "settings" as const, run: onOpenControls }]
         : []),
       ...(onExitToTitle ? [{ id: "title", label: "Main menu", detail: "Leave the session", icon: "leave" as const, run: onExitToTitle }] : []),
     ],
-    [aiOpponents, mpRace, canRestart, canFly, restartAndResume, onOpenControls, onExitToTitle]
+    [aiOpponents, mpRace, canRestart, canFly, restartAndResume, nowPlaying, onSkipTrack, onOpenControls, onExitToTitle]
   );
 
   // A tab that went away while open (Corners when an online race starts) shows the session tab instead

@@ -3,6 +3,7 @@
  * Everything is validated on load: a corrupt or partial save falls back field by field to the defaults.
  */
 import { DEFAULT_RACE_SETUP, parseRaceSetup, type RaceSetup } from "@/lib/sim/race-setup";
+import { MUSIC_TRACK_IDS } from "@/lib/audio/music-catalog";
 import type { AssistPreset, CameraMode } from "@/types/f1";
 import {
   DEFAULT_KEY_BINDINGS,
@@ -97,6 +98,14 @@ export interface AudioSettings {
   volume: number;
   /** Silences everything without losing the volume (the Mute key toggles it) */
   muted: boolean;
+  /** The music's level in the menus, in a race (from the lights out to the flag) and over the results and replays, 0 to 1 */
+  menuMusic: number;
+  raceMusic: number;
+  replayMusic: number;
+  /** Soundtrack tracks switched off (ids from music-catalog.ts) */
+  musicOff: string[];
+  /** The music alone is off (the title screen's music button), every other sound playing on */
+  musicMuted: boolean;
 }
 
 export type SpeedUnit = "kmh" | "mph";
@@ -441,7 +450,16 @@ export function defaultGraphicsSettings(): GraphicsSettings {
 
 export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", tiltSteer: false, tiltRangeDeg: 30 };
 
-export const DEFAULT_AUDIO_SETTINGS: AudioSettings = { volume: 1, muted: false };
+/** The race music 12 dB under the menus' (a quarter of the level), under the engine and the tyres */
+export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
+  volume: 1,
+  muted: false,
+  menuMusic: 0.8,
+  raceMusic: 0.2,
+  replayMusic: 0.8,
+  musicOff: [],
+  musicMuted: false,
+};
 
 export const DEFAULT_INTERFACE_SETTINGS: InterfaceSettings = {
   units: { speed: "kmh", temperature: "c", pressure: "bar" },
@@ -793,8 +811,16 @@ function parseTouch(v: unknown): TouchSettings {
 
 function parseAudio(v: unknown): AudioSettings {
   const d = DEFAULT_AUDIO_SETTINGS;
-  if (!isObj(v)) return { ...d };
-  return { volume: num(v.volume, 0, 1, d.volume), muted: bool(v.muted, d.muted) };
+  if (!isObj(v)) return { ...d, musicOff: [] };
+  return {
+    volume: num(v.volume, 0, 1, d.volume),
+    muted: bool(v.muted, d.muted),
+    menuMusic: num(v.menuMusic, 0, 1, d.menuMusic),
+    raceMusic: num(v.raceMusic, 0, 1, d.raceMusic),
+    replayMusic: num(v.replayMusic, 0, 1, d.replayMusic),
+    musicOff: Array.isArray(v.musicOff) ? [...new Set(v.musicOff.filter((id) => isStr(id) && MUSIC_TRACK_IDS.has(id)))] : [],
+    musicMuted: bool(v.musicMuted, d.musicMuted),
+  };
 }
 
 export function parseInterface(v: unknown): InterfaceSettings {

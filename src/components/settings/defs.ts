@@ -15,6 +15,7 @@ import { RACE_START_MODE_HINTS, RACE_START_MODE_LABELS, RACE_START_MODES, type R
 import { SIM_REALISM_LABELS, SIM_REALISM_LEVELS } from "@/lib/sim/sim-realism";
 import { ASSIST_SLIDERS, type AssistSliderSpec } from "@/lib/sim/steering-assist";
 import type { AssistPreset } from "@/types/f1";
+import { MUSIC_TRACKS, type MusicPool } from "@/lib/audio/music-catalog";
 import type { SettingsEnv } from "./env";
 import {
   audio,
@@ -694,6 +695,46 @@ export const mute = toggle({
 });
 export const drsBeeps = toggle({ id: "drsBeep", label: "DRS beeps", hint: "Two tones when DRS is available, a chime when the flap opens", ...hud("drsBeep") });
 export const shiftBeep = toggle({ id: "shiftBeep", label: "Shift beep", hint: "A short beep 150 rpm before the rev limiter", ...hud("shiftBeep") });
+
+export const musicOn = toggle({
+  id: "musicOn",
+  label: "Music",
+  hint: "Every track, in every part of the game. The other sounds play on",
+  ...lens<boolean>(
+    (st) => !st.audio.musicMuted,
+    (st, on) => ({ ...st, audio: { ...st.audio, musicMuted: !on } }),
+  ),
+});
+export const menuMusic = slider({ id: "menuMusic", label: "Menu music", hint: "One track plays on across every menu screen", min: 0, max: 1, step: 0.05, format: pctOrOff, ...audio("menuMusic") });
+export const raceMusic = slider({
+  id: "raceMusic",
+  label: "Race music",
+  hint: (env) => `Starts at the lights out, or once the car moves in practice. Key ${key(env, "nextTrack")} skips a track`,
+  min: 0,
+  max: 1,
+  step: 0.05,
+  format: pctOrOff,
+  ...audio("raceMusic"),
+});
+export const replayMusic = slider({ id: "replayMusic", label: "Results and replay music", hint: "From the chequered flag, and in replays", min: 0, max: 1, step: 0.05, format: pctOrOff, ...audio("replayMusic") });
+
+/** One switch per soundtrack track, by pool (Advanced): a track switched off never plays */
+export const musicTrackRows = (pool: MusicPool) =>
+  MUSIC_TRACKS.filter((t) => t.pool === pool).map((t) =>
+    toggle({
+      id: `music-${t.id}`,
+      label: t.title,
+      hint: `${t.composer}, ${t.performer}`,
+      advanced: true,
+      ...lens<boolean>(
+        (st) => !st.audio.musicOff.includes(t.id),
+        (st, on) => ({
+          ...st,
+          audio: { ...st.audio, musicOff: on ? st.audio.musicOff.filter((id) => id !== t.id) : [...st.audio.musicOff, t.id] },
+        }),
+      ),
+    }),
+  );
 
 // ---- Profile and data
 

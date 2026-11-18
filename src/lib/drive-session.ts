@@ -120,6 +120,8 @@ import { steeringAssistSettings } from "@/lib/sim/steering-assist";
 import { applyTimeTrial, lowestFuelSetup, timeTrialRealism, type TimeTrialRules } from "@/lib/sim/time-trial";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import { clampFov, DEFAULT_KEYBOARD_TUNING, type PlayerSettings } from "@/lib/settings/player-settings";
+import { sharedMusic, type NowPlaying } from "@/lib/audio/bgm-controller";
+import { MusicDirector } from "@/lib/audio/music-director";
 import { noteDrivingFrame, noteDrivingInput, noteFrameGraphics } from "@/lib/render/frame-stats";
 import type {
   AeroSetupPreset,
@@ -282,6 +284,8 @@ export interface DriveSnapshot {
    * drive is frozen and draws nothing until the component remounts it. `hidden`: it went while the page was hidden
    */
   gpuLost: GpuLoss | null;
+  /** The music track playing, as last announced (the toast shows each new one, the pause menu names it) */
+  nowPlaying: NowPlaying | null;
 }
 
 /** A lost WebGL context: whether the page was hidden at the time, and where the player was */
@@ -322,6 +326,7 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
     autoQualityLowered: null,
     qualityNotice: null,
     gpuLost: null,
+    nowPlaying: null,
   };
 }
 
@@ -458,6 +463,8 @@ export class DriveSession {
   /** Creates and starts the car audio on a user gesture (the browser keeps audio locked until one) */
   readonly unlockAudio: () => void;
   readonly toggleMute: () => void;
+  /** The next track of the music playing (the music key, the pause menu's Skip track) */
+  readonly nextTrack: () => void;
   /** Builds the next race's AI field while the browser is idle in the menus (never while driving or loading) */
   readonly prepareAiField: () => void;
   /**
@@ -642,8 +649,35 @@ export class DriveSession {
 
     /** The car sounds: created by the first unlockAudio, then paused and resumed by the frame loop alone */
     let audio: F1AudioEngine2026 | null = null;
+    /**
+     * The music: one player for the page (it plays on across circuits, which each get a new session), told each frame
+     * what to play (music-director.ts); this session shows what it announces
+     */
+    const music = sharedMusic();
+    const musicDirector = new MusicDirector();
+    const applyMusicSettings = (s: PlayerSettings) => {
+      const a = s.audio;
+      music.setLevels({
+        volume: a.volume,
+        muted: a.muted,
+        musicMuted: a.musicMuted,
+        menu: a.menuMusic,
+        race: a.raceMusic,
+        results: a.replayMusic,
+      });
+      music.setDisabled(new Set(a.musicOff));
+    };
+    const stopNowPlaying = music.subscribe((nowPlaying) => this.publish({ nowPlaying }));
+    this.nextTrack = () => music.playNextInPool();
     this.unlockAudio = () => {
       if (disposed) return;
+      // The music unlocks on the same press, apart from the car audio (which a browser can refuse on its own)
+      try {
+        music.unlock();
+        applyMusicSettings(settings);
+      } catch (err) {
+        console.warn("Music could not start", err);
+      }
       // Called inside the press that leaves the loading screen or starts a race: a browser that refuses Web Audio
       // leaves the game silent, never stuck on that press
       try {
@@ -924,6 +958,7 @@ export class DriveSession {
       autoQualityLowered: null,
       qualityNotice: null,
       gpuLost: null,
+      nowPlaying: sharedMusic().current,
     };
 
     /**
@@ -1415,6 +1450,7 @@ export class DriveSession {
         if (next.audio.muted !== this.snapshot.muted) this.publish({ muted: next.audio.muted });
         audio?.setMuted(next.audio.muted);
         audio?.setVolume(next.audio.volume);
+        applyMusicSettings(next);
       }
       if (next.keys !== prev.keys) keyLookup = buildKeyLookup(next.keys);
       if (next.padTuning !== prev.padTuning || next.keyboardTuning !== prev.keyboardTuning) {
@@ -1704,6 +1740,9 @@ export class DriveSession {
           break;
         case "mute":
           this.toggleMute();
+          break;
+        case "nextTrack":
+          this.nextTrack();
           break;
         case "autopilot":
           this.toggleAutopilot();
@@ -3066,6 +3105,18 @@ export class DriveSession {
       });
       audio?.setCameraMode(mode);
       audio?.setPaused(!driving);
+      // The music follows where the player is: the menus, the grid, the race, the flag, a replay, the pause menu
+      if (music.unlocked) {
+        music.setCue(
+          musicDirector.cue({
+            phase: appPhase,
+            racePhase: physics.telemetry.race?.phase,
+            replaying,
+            frozen: frozen || Boolean(device.wheelLost),
+            speedMs: physics.vxMs,
+          }),
+        );
+      }
       if (driving) {
         audio?.update(physics.telemetry, dtSeconds);
         // Cues: DRS enabled (two-tone), flap open (chime; LC26: X-mode), shift point (150 rpm short of the limiter)
@@ -3325,6 +3376,8 @@ export class DriveSession {
       setKtx2Renderer(null);
       renderer.dispose();
       audio?.dispose();
+      // The music plays on into the next circuit's session (or the menus)
+      stopNowPlaying();
     };
   }
 
