@@ -30,6 +30,12 @@ const CARRY_FADE_M = 4;
  */
 const CARRY_SLOPE = 0.5;
 
+/**
+ * A mesh with at least this share of its vertices laid on the ground lies on it (its asphalt, lines and markings):
+ * tagged `userData.onGround`, it casts no shadow (scene-builder.ts), as a mod draws it
+ */
+const ON_GROUND_SHARE = 0.9;
+
 /** A mesh's material name: three's material, or `userData.materialName` from the Node scripts' GLB reader */
 export function materialNameOf(mesh: THREE.Mesh): string {
   const m = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
@@ -94,7 +100,7 @@ export function fitVisualRoad(
     const pos = o.geometry.getAttribute("position");
     const under = layer.overlay ? null : base;
     inv.copy(o.matrixWorld).invert();
-    let dirty = false;
+    let fitted = 0;
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
       if (reach && !reach(v.x, v.y, v.z)) continue;
@@ -103,9 +109,10 @@ export function fitVisualRoad(
       v.y = place(v.x, v.y, v.z, hit.height);
       v.applyMatrix4(inv);
       pos.setXYZ(i, v.x, v.y, v.z);
-      dirty = true;
+      fitted++;
     }
-    if (dirty) pos.needsUpdate = true;
+    if (fitted) pos.needsUpdate = true;
+    if (fitted >= ON_GROUND_SHARE * pos.count) o.userData.onGround = true;
   };
 
   // The asphalt first, on the ground; each move is kept by where it was made (x, its height before, z)
