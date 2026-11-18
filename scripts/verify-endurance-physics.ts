@@ -248,6 +248,31 @@ console.log('\n== Hybrid dials and the traction cut');
   const full = pull(1);
   const half = pull(0.5);
   check('The spark-first cut takes off what the traction control asks for', Math.abs(half / full - 0.5) < 0.08, `${fmt(half / 1000, 0)} of ${fmt(full / 1000, 0)} kW at half allowance`);
+  // Held, a deep cut keeps to what it asks for: the split goes by the drive before the cut. Read back after it, each step
+  // counted the cut as the motor's larger share and took more, down to half the 30 % allowed. Shaft power against the
+  // uncut car's at the same road speed, 1.5 s into the cut
+  const held = (cut: number) => {
+    const c = make(LMDH);
+    c.reset(0, 0, 0, 140 / 3.6);
+    c.autoShift = false;
+    c.ersEnergyJ = store;
+    const into4 = (cc: VehiclePhysics, allow: number): VehicleInputs => ({ throttle: 1, brake: 0, steer: 0, shiftUp: cc.gear < 4, shiftDown: cc.gear > 4, ignitionCut: allow });
+    run(c, 0.6, (cc) => into4(cc, 1));
+    const out: { v: number; p: number }[] = [];
+    run(c, 1.5, (cc) => {
+      out.push({ v: cc.speedMs, p: cc.driveshaftPowerW });
+      return into4(cc, cut);
+    });
+    return out;
+  };
+  const ref = held(1);
+  const deep = held(0.3);
+  const last = deep[deep.length - 1];
+  const k = ref.findIndex((x) => x.v >= last.v);
+  const r0 = ref[Math.max(0, k - 1)];
+  const r1 = ref[Math.max(0, k)];
+  const refP = r0.p + ((r1.p - r0.p) * (last.v - r0.v)) / Math.max(1e-9, r1.v - r0.v);
+  check('A cut held for 1.5 s at 30 % allowance leaves 24–36 % of the drive', Math.abs(last.p / refP - 0.3) < 0.06, `${fmt(last.p / 1000, 0)} of ${fmt(refP / 1000, 0)} kW at ${fmt(last.v * 3.6, 0)} km/h`);
 }
 
 console.log('\n== Coolant');
