@@ -150,7 +150,8 @@ export const CHASSIS_LIMITS: Record<keyof ChassisSetup, SetupRange> = {
   toeFrontDeg: { min: -0.6, max: 0.6, step: 0.01 },
   toeRearDeg: { min: -0.6, max: 0.6, step: 0.01 },
   brakePowerPct: { min: -20, max: 0, step: 1 },
-  engineBrakingPct: { min: -50, max: 0, step: 5 },
+  // Up to +100: a car whose default tune halves the overrun (the Chaparral 2Ds) can put all of it back
+  engineBrakingPct: { min: -50, max: 100, step: 5 },
   steerRatioDelta: { min: -2.6, max: 3.4, step: 0.1 },
   bumpStopRateFrontPct: { min: -60, max: 100, step: 10 },
   bumpStopRateRearPct: { min: -60, max: 100, step: 10 },
