@@ -629,6 +629,8 @@ interface WingRuntime {
 export interface TyreRuntime {
   data: TyresCompoundData;
   thermal: Lut;
+  /** Lateral grip against camber (degrees, negative leaning into the force) when the compound gives it as a table */
+  camberLut: Lut | null;
   pressureSpring: Lut;
   /** tan(peak slip angle) at Fz0; at other loads see `tyrePeakSlipTan` */
   tanPeakAngle: number;
@@ -878,6 +880,7 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
   return {
     data,
     thermal: new Lut(data.thermalData.thermalPerformanceCurve),
+    camberLut: data.camberData.dcamberLut ? new Lut(data.camberData.dcamberLut) : null,
     pressureSpring: new Lut(data.pressureData.pressureSpringCurve),
     tanPeakAngle: Math.tan(fla * DEG2RAD),
     pKy2: model.pKy2,
@@ -3049,7 +3052,9 @@ export class VehiclePhysics {
         // Camber grip: leaning into the force direction (force opposes the slip)
         const forceSign = w.tanSlipAngle > 0 ? -1 : 1;
         const gInto = w.camberLeftRad * forceSign;
-        const camberGrip = THREE.MathUtils.clamp(1 + cam.dcamber0 * gInto + cam.dcamber1 * gInto * gInto, 0.7, 1.1);
+        const camberGrip = tyre.camberLut
+          ? THREE.MathUtils.clamp(tyre.camberLut.evaluate(-gInto * RAD2DEG), 0.6, 1.1)
+          : THREE.MathUtils.clamp(1 + cam.dcamber0 * gInto + cam.dcamber1 * gInto * gInto, 0.7, 1.1);
         const gAbs = Math.abs(w.camberLeftRad);
         const camberGripX = THREE.MathUtils.clamp(1 + cam.dcamber0_x * gAbs + cam.dcamber1_x * gAbs * gAbs, 0.7, 1.1);
         // Peak μ at this load: the compound's load tables, else the power law about Fz0. BRAKE_DX_MOD adds

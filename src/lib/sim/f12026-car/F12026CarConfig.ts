@@ -1052,6 +1052,11 @@ export interface TyresCamberData {
   /** Lateral grip vs camber leaning into the force: 1 + dcamber0·γ + dcamber1·γ² (rad) */
   dcamber0: number;
   dcamber1: number;
+  /**
+   * Lateral grip against camber as a table, in place of the dcamber0 / dcamber1 parabola: degrees of camber (negative:
+   * the tyre's top leaning into the force) → grip multiplier. Absent: the parabola
+   */
+  dcamberLut?: LutPoints;
   /** Longitudinal grip vs camber magnitude: 1 + dcamber0_x·|γ| + dcamber1_x·γ² (rad) */
   dcamber0_x: number;
   dcamber1_x: number;
