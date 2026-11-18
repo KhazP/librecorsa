@@ -24,6 +24,8 @@
   --blk-flag-yellow: #ffff00;
   --blk-flag-white: #ffffff;
   --blk-flag-black: #000000;
+  /* The blue flag in the game's own blue, as its flag icon draws it */
+  --blk-flag-blue: var(--color-lc-cyan);
 
   color: var(--blk-ink);
   font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
