@@ -22,6 +22,7 @@ import { NISSAN_R33_SOUND } from "../src/lib/sim/classic/NissanR33Sim";
 import { NISSAN_R32_SOUND } from "../src/lib/sim/classic/NissanR32Sim";
 import { BMW_M1_PROCAR_SOUND } from "../src/lib/sim/classic/BmwM1ProcarSim";
 import { CHAPARRAL_2D_67_SOUND, CHAPARRAL_2D_SOUND } from "../src/lib/sim/classic/Chaparral2dSim";
+import { PORSCHE_934_RSR_SOUND } from "../src/lib/sim/classic/Porsche934RsrSim";
 import { VW_SCIROCCO_SOUND } from "../src/lib/sim/road/VwSciroccoSim";
 import type { Lc26AudioManifest } from "../src/lib/sim/lc26-audio";
 import { noteSkip, REPO_CAR_IDS } from "./lib/hosted-files";
@@ -50,6 +51,7 @@ const EXPECTED_SOUNDS: Record<CarId, { sound: CarSoundSource; maxIdleRpm: number
   "vw-scirocco-gtx": { sound: VW_SCIROCCO_SOUND, maxIdleRpm: 1000 },
   "chaparral-2d": { sound: CHAPARRAL_2D_SOUND, maxIdleRpm: 1400 },
   "chaparral-2d-67": { sound: CHAPARRAL_2D_67_SOUND, maxIdleRpm: 1400 },
+  "porsche-934-rsr": { sound: PORSCHE_934_RSR_SOUND, maxIdleRpm: 1400 },
 };
 
 const MAX_BANK_BYTES = Math.round(3.4 * 1024 * 1024);

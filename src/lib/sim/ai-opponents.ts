@@ -71,6 +71,7 @@ import { NISSAN_R33_CONFIG } from '@/lib/sim/classic/NissanR33Config';
 import { NISSAN_R32_CONFIG } from '@/lib/sim/classic/NissanR32Config';
 import { BMW_M1_PROCAR_CONFIG } from '@/lib/sim/classic/BmwM1ProcarConfig';
 import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from '@/lib/sim/classic/Chaparral2dConfig';
+import { PORSCHE_934_RSR_CONFIG } from '@/lib/sim/classic/Porsche934RsrConfig';
 import { VW_SCIROCCO_CONFIG } from '@/lib/sim/road/VwSciroccoConfig';
 import {
   classificationClosed,
@@ -677,6 +678,7 @@ function remoteContactMass(vehicle: VehicleModelId | undefined): [number, number
   if (vehicle === 'vw-scirocco-gtx') return [VW_SCIROCCO_CONFIG.chassis.totalMassKg, VW_SCIROCCO_CONFIG.chassis.inertia.yaw];
   if (vehicle === 'chaparral-2d') return [CHAPARRAL_2D_CONFIG.chassis.totalMassKg, CHAPARRAL_2D_CONFIG.chassis.inertia.yaw];
   if (vehicle === 'chaparral-2d-67') return [CHAPARRAL_2D_67_CONFIG.chassis.totalMassKg, CHAPARRAL_2D_67_CONFIG.chassis.inertia.yaw];
+  if (vehicle === 'porsche-934-rsr') return [PORSCHE_934_RSR_CONFIG.chassis.totalMassKg, PORSCHE_934_RSR_CONFIG.chassis.inertia.yaw];
   if (vehicle === 'f12026-car') return [F12026_CAR_CONFIG.chassis.totalMassKg, F12026_CAR_CONFIG.chassis.inertia.yaw];
   return [CONTACT_MASS_KG, CONTACT_YAW_INERTIA_KGM2];
 }

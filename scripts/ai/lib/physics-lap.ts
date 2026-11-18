@@ -15,6 +15,7 @@ import { createNissanR33Sim } from '../../../src/lib/sim/classic/NissanR33Sim';
 import { createNissanR32Sim } from '../../../src/lib/sim/classic/NissanR32Sim';
 import { createBmwM1ProcarSim } from '../../../src/lib/sim/classic/BmwM1ProcarSim';
 import { createChaparral2d67Sim, createChaparral2dSim } from '../../../src/lib/sim/classic/Chaparral2dSim';
+import { createPorsche934RsrSim } from '../../../src/lib/sim/classic/Porsche934RsrSim';
 import { createVwSciroccoSim } from '../../../src/lib/sim/road/VwSciroccoSim';
 import type { VehicleModelId } from '../../../src/types/f1';
 import { aiTrackFor } from '../../../src/lib/sim/ai/ai-track';
@@ -67,6 +68,8 @@ function simFor(vehicle: VehicleModelId, track: BuiltTrackData, root: THREE.Obje
       return createChaparral2dSim(track, root);
     case 'chaparral-2d-67':
       return createChaparral2d67Sim(track, root);
+    case 'porsche-934-rsr':
+      return createPorsche934RsrSim(track, root);
     default:
       return new F12026CarSim(track, root);
   }

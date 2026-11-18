@@ -24,6 +24,8 @@ import { BMW_M1_PROCAR_SIM_PROFILE, createBmwM1ProcarSim } from "@/lib/sim/class
 import { BMW_M1_PROCAR_CONFIG } from "@/lib/sim/classic/BmwM1ProcarConfig";
 import { CHAPARRAL_2D_67_SIM_PROFILE, CHAPARRAL_2D_SIM_PROFILE, createChaparral2d67Sim, createChaparral2dSim } from "@/lib/sim/classic/Chaparral2dSim";
 import { CHAPARRAL_2D_67_CONFIG, CHAPARRAL_2D_CONFIG } from "@/lib/sim/classic/Chaparral2dConfig";
+import { PORSCHE_934_RSR_SIM_PROFILE, createPorsche934RsrSim } from "@/lib/sim/classic/Porsche934RsrSim";
+import { PORSCHE_934_RSR_CONFIG } from "@/lib/sim/classic/Porsche934RsrConfig";
 import { VW_SCIROCCO_SIM_PROFILE, createVwSciroccoSim } from "@/lib/sim/road/VwSciroccoSim";
 import { VW_SCIROCCO_CONFIG } from "@/lib/sim/road/VwSciroccoConfig";
 import { LC26_ENGINE, LC26_TYRE_SETUP_RANGES } from "@/lib/sim/lc26-data";
@@ -211,6 +213,18 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     telemetryMaxRpm: 8000,
     tyreSetupRanges: CHAPARRAL_2D_67_SIM_PROFILE,
     rigConfig: CHAPARRAL_2D_67_CONFIG,
+    gt3Cockpit: false,
+    floorSparks: false,
+  },
+  // Pfalzdriver's 934: its only body is its ported GLB, which brings its own cameras
+  "porsche-934-rsr": {
+    id: "porsche-934-rsr",
+    classId: "classic",
+    createSim: (track, trackRoot) => createPorsche934RsrSim(track, trackRoot),
+    limiterRpm: PORSCHE_934_RSR_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 9000,
+    tyreSetupRanges: PORSCHE_934_RSR_SIM_PROFILE,
+    rigConfig: PORSCHE_934_RSR_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
   },

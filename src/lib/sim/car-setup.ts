@@ -200,6 +200,8 @@ export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: numbe
   // Their aero kits are switches, not clicks (the aero package picks them) [spec setup.ini WING_3, WING_4: 0 or 50]
   "chaparral-2d": { front: 0, rear: 0 },
   "chaparral-2d-67": { front: 0, rear: 0 },
+  // A fixed spoiler and wing (setup.ini has no wing entry)
+  "porsche-934-rsr": { front: 0, rear: 0 },
 };
 
 /**
@@ -229,6 +231,8 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   // 30 l of a 160 l tank [spec car.ini FUEL / MAX_FUEL], filled as far as the garage's +80 kg goes (138 l)
   "chaparral-2d": { defaultKg: 22, minKg: 4, maxKg: 102 },
   "chaparral-2d-67": { defaultKg: 22, minKg: 4, maxKg: 102 },
+  // 30 l of a 120 l tank [spec car.ini FUEL / MAX_FUEL], filled as far as the garage's +80 kg goes (138 l)
+  "porsche-934-rsr": { defaultKg: 22, minKg: 4, maxKg: 89 },
 };
 
 /** Race fuel density (kg per litre), for the litre readouts */
@@ -260,6 +264,7 @@ export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   "vw-scirocco-gtx": 14,
   "chaparral-2d": 14.1,
   "chaparral-2d-67": 14.1,
+  "porsche-934-rsr": 16.9,
 };
 
 export function clampChassisSetup(v: unknown): ChassisSetup {

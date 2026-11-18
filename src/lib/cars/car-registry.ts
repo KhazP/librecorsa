@@ -7,10 +7,11 @@ import { LC_LMDH_SOUND } from "@/lib/sim/proto/LcLmdhSim";
 import { NISSAN_R33_SOUND } from "@/lib/sim/classic/NissanR33Sim";
 import { NISSAN_R32_SOUND } from "@/lib/sim/classic/NissanR32Sim";
 import { BMW_M1_PROCAR_SOUND } from "@/lib/sim/classic/BmwM1ProcarSim";
+import { PORSCHE_934_RSR_SOUND } from "@/lib/sim/classic/Porsche934RsrSim";
 import { VW_SCIROCCO_SOUND } from "@/lib/sim/road/VwSciroccoSim";
 import { CHAPARRAL_2D_67_SOUND, CHAPARRAL_2D_SOUND } from "@/lib/sim/classic/Chaparral2dSim";
 import { NISSAN_R32_SKINS, NISSAN_R33_SKINS } from "./classic-skins";
-import { BMW_M1_PROCAR_SKINS, VW_SCIROCCO_SKINS } from "./pfalzdriver-skins";
+import { BMW_M1_PROCAR_SKINS, PORSCHE_934_RSR_SKINS, VW_SCIROCCO_SKINS } from "./pfalzdriver-skins";
 import { CHAPARRAL_2D_67_SKINS, CHAPARRAL_2D_SKINS } from "./chaparral-skins";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
 import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
@@ -34,7 +35,8 @@ export type CarId =
   | "bmw-m1-procar"
   | "vw-scirocco-gtx"
   | "chaparral-2d"
-  | "chaparral-2d-67";
+  | "chaparral-2d-67"
+  | "porsche-934-rsr";
 
 /**
  * The kinds of car, one menu category each; a car's year groups it within its class. Class ids live only in code
@@ -112,6 +114,7 @@ export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "vw-scirocco-gtx": "Its physics come from the Assetto Corsa mod this car was made for.",
   "chaparral-2d": "Its physics come from the Assetto Corsa mod this car was made for.",
   "chaparral-2d-67": "Its physics come from the Assetto Corsa mod this car was made for.",
+  "porsche-934-rsr": "Its physics come from the Assetto Corsa mod this car was made for.",
 };
 
 /** Who made a car's 3D body (CREDITS.md has the full notes) */
@@ -268,7 +271,7 @@ export const CAR_CLASSES: readonly CarClass[] = [
   { id: "f1", title: "Formula Open-Wheel", sub: "Single-seaters · DRS / active aero", color: "#CCFF00" },
   { id: "gt3", title: "GT3", sub: "Closed-wheel · ABS / TC", color: "#00E5FF" },
   { id: "proto", title: "Prototypes", sub: "Closed-wheel · high downforce · TC", color: "#B388FF" },
-  { id: "classic", title: "Classic GT & Touring", sub: "Sports prototypes, Procar, Group A and JGTC · 1966–1998", color: "#FFD23F" },
+  { id: "classic", title: "Classic GT & Touring", sub: "Sports prototypes, Group 4, Group A and JGTC · 1966–1998", color: "#FFD23F" },
   { id: "road", title: "Road cars", sub: "Road-legal · street tyres", color: "#FF8A3D" },
 ];
 
@@ -476,6 +479,21 @@ const ALL_CARS: readonly CarDefinition[] = [
     modelUrl: "/cars/chaparral-2d-67/model/chaparral-2d-67.glb",
     skins: CHAPARRAL_2D_67_SKINS,
     sound: CHAPARRAL_2D_67_SOUND,
+  },
+  {
+    id: "porsche-934-rsr",
+    classId: "classic",
+    title: "Porsche 934 Turbo RSR",
+    sub: "1976 Group 4 · 3.0 L turbo flat six · rear-wheel drive",
+    badge: "934 RSR",
+    quality: "own",
+    // The car's GTPlanet page is gone; the mod links its author's channel
+    credit: pfalzdriver("Porsche 934 Turbo RSR", "https://www.youtube.com/@Pfalzdriver"),
+    physics: "porsche-934-rsr",
+    year: 1976,
+    modelUrl: "/cars/porsche-934-rsr/model/porsche-934-rsr.glb",
+    skins: PORSCHE_934_RSR_SKINS,
+    sound: PORSCHE_934_RSR_SOUND,
   },
 ];
 

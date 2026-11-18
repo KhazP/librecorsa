@@ -1454,7 +1454,8 @@ export class F12026CarSim implements SimulatorCar {
       id === 'bmw-m1-procar' ||
       id === 'vw-scirocco-gtx' ||
       id === 'chaparral-2d' ||
-      id === 'chaparral-2d-67'
+      id === 'chaparral-2d-67' ||
+      id === 'porsche-934-rsr'
       ? id
       : 'f12026-car';
   }

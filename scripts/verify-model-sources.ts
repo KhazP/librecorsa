@@ -51,6 +51,13 @@ check(
     })
 );
 check(
+  "Pfalzdriver's 934: his tip page first, his name to his profile, the title to the channel the mod links",
+  !hosted("porsche-934-rsr") ||
+    ((s) => s.support?.url === "https://streamlabs.com/pfalzdriver" && s.authorUrl?.includes("gtplanet.net/forum/members/") === true && s.url === "https://www.youtube.com/@Pfalzdriver")(
+      carModelSource(carById("porsche-934-rsr"))
+    )
+);
+check(
   "NPanic's Chaparrals: NPanic's PayPal first, the name to the OverTake profile, the title to the mod, every creator named",
   !hosted("chaparral-2d", "chaparral-2d-67") ||
     (["chaparral-2d", "chaparral-2d-67"] as const).every((id) => {
