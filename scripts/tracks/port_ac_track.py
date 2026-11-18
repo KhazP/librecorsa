@@ -1192,9 +1192,9 @@ AC_TRACKS = {
     },
     'willow_springs': {
         'folder': 'willow_springs',
-        # big_willow_real: the everyday circuit. The other layout's model adds event dressing (camera trucks, a start
-        # gantry, banners) and floating sponsor balloons and a blimp as DYNAMIC_OBJECT_n, which get_kn5_list would
-        # bake in as static meshes
+        # big_willow_real: the everyday circuit, the model the physics comes from. The other layout's event dressing and
+        # its balloons and blimp (DYNAMIC_OBJECT_n, which get_kn5_list would bake in as static meshes) are added below
+        # (`extraModels`, `driftingObjects`)
         'layout_dir': 'big_willow_real',
         'models_ini': None,
         'kn5_files': ['willow_springs_real.kn5'],
@@ -1222,6 +1222,17 @@ AC_TRACKS = {
         # Its kerbs (1_KERB0-5, drawn and driven on) are 0.45 m strips 1.9 cm proud with a slot every metre: kept as
         # modelled, not flattened into the generic hump
         'modelledKerbs': True,
+        # The mod's other layout (big_willow) is this lap dressed for an event day. From its model: the camera truck
+        # (OBJ133), the team transporters (OBJ45), a Ferris wheel (OBJ53), a canvas pavilion (OBJ15), tents (OBJ54), a
+        # row of parked cars beside them (OBJ213), a light pole with Nukedrop's donation sign (OBJ42) and two banner
+        # stands (OBJ9, OBJ154). Its other differences are this model's car parks and buses laid out again and two of
+        # its banner rows in other panels, left out as they would stand in the same places
+        'extraModels': [{
+            'kn5': 'willow_springs.kn5',
+            'nodes': r'^OBJ(9|15|42|45|53|54|133|154|213)(_SUB\d+)?$',
+        }],
+        # That layout's models ini also floats 31 hot-air balloons and a blimp over the circuit
+        'driftingObjects': 'models_big_willow.ini',
         # Opened by link only (?track=willow_springs) while Nukedrop tries it on the live site; drop to list it
         'unlisted': True,
         'description': 'Willow Springs in the Mojave Desert, California: Big Willow, a fast and open 4.0 km lap of nine turns that climbs over a hill and drops back down to the long front straight.',
