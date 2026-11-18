@@ -59,23 +59,33 @@ for (let s = 0; s < L; s += step) {
     if (best > 0) rows.push({ s, side, rise: best, from, to, rangeEdge: side < 0 ? -range[0] : range[1] });
   }
 }
-// Stretches: consecutive rows on one side
-let i = 0;
-console.log(`${trackId} · ${carId} · kerbs taller than ${(minRise * 100).toFixed(0)} cm (lateral m from the centreline; range = the car's usable centre reach)`);
-while (i < rows.length) {
-  const r0 = rows[i];
-  let j = i;
-  let rise = r0.rise, from = r0.from, to = r0.to, over = false;
-  while (j + 1 < rows.length && rows[j + 1].side === r0.side && rows[j + 1].s - rows[j].s <= step + 1e-6) j++;
-  for (let k = i; k <= j; k++) {
-    rise = Math.max(rise, rows[k].rise);
-    from = Math.min(from, rows[k].from);
-    to = Math.max(to, rows[k].to);
-    // The car's centre may reach the kerb's inner edge less half its track: its tyres on it
-    if (rows[k].rangeEdge + 0.8 > rows[k].from) over = true;
+// Stretches: consecutive rows on one side, each side on its own (a station with a kerb on both sides has a row for
+// each, so the rows in lap order alternate sides there), printed in lap order
+interface Stretch { s0: number; s1: number; side: number; rise: number; from: number; to: number; over: boolean }
+const stretches: Stretch[] = [];
+for (const side of [-1, 1]) {
+  const sideRows = rows.filter((r) => r.side === side);
+  let i = 0;
+  while (i < sideRows.length) {
+    const r0 = sideRows[i];
+    let j = i;
+    let rise = r0.rise, from = r0.from, to = r0.to, over = false;
+    while (j + 1 < sideRows.length && sideRows[j + 1].s - sideRows[j].s <= step + 1e-6) j++;
+    for (let k = i; k <= j; k++) {
+      rise = Math.max(rise, sideRows[k].rise);
+      from = Math.min(from, sideRows[k].from);
+      to = Math.max(to, sideRows[k].to);
+      // The car's centre may reach the kerb's inner edge less half its track: its tyres on it
+      if (sideRows[k].rangeEdge + 0.8 > sideRows[k].from) over = true;
+    }
+    stretches.push({ s0: r0.s, s1: sideRows[j].s, side, rise, from, to, over });
+    i = j + 1;
   }
+}
+stretches.sort((a, b) => a.s0 - b.s0 || a.side - b.side);
+console.log(`${trackId} · ${carId} · kerbs taller than ${(minRise * 100).toFixed(0)} cm (lateral m from the centreline; range = the car's usable centre reach)`);
+for (const { s0, s1, side, rise, from, to, over } of stretches) {
   console.log(
-    `  ${r0.s.toFixed(0).padStart(5)}-${rows[j].s.toFixed(0).padEnd(5)} ${r0.side < 0 ? 'left ' : 'right'} rise ${(rise * 100).toFixed(1).padStart(4)} cm  across ${from.toFixed(1)}-${to.toFixed(1)} m  ${over ? 'IN the usable road' : 'clear'}`
+    `  ${s0.toFixed(0).padStart(5)}-${s1.toFixed(0).padEnd(5)} ${side < 0 ? 'left ' : 'right'} rise ${(rise * 100).toFixed(1).padStart(4)} cm  across ${from.toFixed(1)}-${to.toFixed(1)} m  ${over ? 'IN the usable road' : 'clear'}`
   );
-  i = j + 1;
 }
