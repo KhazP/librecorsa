@@ -23,6 +23,12 @@ const OVERLAY_LIFT_M = 0.002;
  */
 const CARRY_RADIUS_M = 2;
 const CARRY_FADE_M = 4;
+/**
+ * An asphalt vertex carries its move only to a vertex within the fit window of its own height, plus this much per metre
+ * across the ground for the road's slope: where a road passes over another (a bridge, a crossover, a pit lane under the
+ * track), each level's layers move with their own asphalt, not a mix of both
+ */
+const CARRY_SLOPE = 0.5;
 
 /** A mesh's material name: three's material, or `userData.materialName` from the Node scripts' GLB reader */
 export function materialNameOf(mesh: THREE.Mesh): string {
@@ -102,7 +108,7 @@ export function fitVisualRoad(
     if (dirty) pos.needsUpdate = true;
   };
 
-  // The asphalt first, on the ground; each move is kept by where it was made
+  // The asphalt first, on the ground; each move is kept by where it was made (x, its height before, z)
   const moves = new Map<string, number[]>();
   const cellKey = (cx: number, cz: number) => `${cx},${cz}`;
   for (const layer of layers) {
@@ -111,13 +117,16 @@ export function fitVisualRoad(
       const key = cellKey(Math.floor(x / CARRY_FADE_M), Math.floor(z / CARRY_FADE_M));
       let cell = moves.get(key);
       if (!cell) moves.set(key, (cell = []));
-      cell.push(x, z, groundY - y);
+      cell.push(x, y, z, groundY - y);
       return groundY;
     });
   }
-  /** The asphalt's move around (x, z), weighted by distance, and how far its nearest fitted vertex is (Infinity: none) */
+  /**
+   * The move of the asphalt around (x, y, z) on the same level, weighted by distance, and how far its nearest fitted
+   * vertex is (Infinity: none)
+   */
   const carried = { dy: 0, near: Infinity };
-  const carry = (x: number, z: number) => {
+  const carry = (x: number, y: number, z: number) => {
     const cx = Math.floor(x / CARRY_FADE_M);
     const cz = Math.floor(z / CARRY_FADE_M);
     let sw = 0;
@@ -127,12 +136,13 @@ export function fitVisualRoad(
       for (let dx = -1; dx <= 1; dx++) {
         const cell = moves.get(cellKey(cx + dx, cz + dz));
         if (!cell) continue;
-        for (let k = 0; k < cell.length; k += 3) {
-          const d2 = (cell[k] - x) ** 2 + (cell[k + 1] - z) ** 2;
+        for (let k = 0; k < cell.length; k += 4) {
+          const d2 = (cell[k] - x) ** 2 + (cell[k + 2] - z) ** 2;
           if (d2 >= CARRY_FADE_M * CARRY_FADE_M) continue;
+          if (Math.abs(cell[k + 1] - y) > FIT_WINDOW_M + CARRY_SLOPE * Math.sqrt(d2)) continue;
           const w = 1 / (d2 + 0.01);
           sw += w;
-          sdy += w * cell[k + 2];
+          sdy += w * cell[k + 3];
           near = Math.min(near, d2);
         }
       }
@@ -146,7 +156,7 @@ export function fitVisualRoad(
     if (layer.road) continue;
     const lift = layer.overlay ? OVERLAY_LIFT_M : 0;
     fit(layer, (x, y, z, groundY) => {
-      const { dy, near } = carry(x, z);
+      const { dy, near } = carry(x, y, z);
       const laid = groundY + lift;
       if (near >= CARRY_FADE_M) return laid;
       if (near <= CARRY_RADIUS_M) return y + dy;

@@ -5,7 +5,8 @@
  * of `Track_Model` must come out bit for bit the same. Also prints how much load time the test saves.
  *
  * Both are given the circuit's road materials, as the game gives them, so the asphalt is laid on the ground and the
- * layers around it move with it.
+ * layers around it move with it. A synthetic crossover checks first that each level's layers move with their own
+ * asphalt.
  *
  *   npx tsx scripts/verify-fit-visual-road.ts            (every circuit with fitted surfaces this copy has)
  *   npx tsx scripts/verify-fit-visual-road.ts chang vir  (just these)
@@ -16,6 +17,7 @@ import * as THREE from 'three';
 import { fitVisualRoad } from '../src/lib/render/fit-visual-road';
 import { trackColliders } from '../src/lib/sim/track-colliders';
 import { setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
+import type { GroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
 const failures: string[] = [];
@@ -40,6 +42,37 @@ function positions(root: THREE.Object3D): THREE.BufferAttribute[] {
     if (o instanceof THREE.Mesh && o.geometry?.getAttribute('position')) out.push(o.geometry.getAttribute('position') as THREE.BufferAttribute);
   });
   return out;
+}
+
+// A crossover: a road at 0 m and one over it at 5 m, each with a line 1 cm over its asphalt. The ground lifts the lower
+// road 5 cm and lowers the upper one 8 cm; each line must move with its own road's asphalt, not a mix of both levels
+{
+  const quad = (y: number, half: number, name: string) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([-half, y, -half, half, y, -half, half, y, half, -half, y, half], 3));
+    g.setIndex([0, 2, 1, 0, 3, 2]);
+    return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ name }));
+  };
+  const root = new THREE.Group();
+  const tm = new THREE.Group();
+  tm.name = 'Track_Model';
+  root.add(tm);
+  const lowerLine = quad(0.01, 0.5, 'Line');
+  const upperLine = quad(5.01, 0.5, 'Line');
+  tm.add(quad(0, 1, 'Asphalt'), quad(5, 1, 'Asphalt'), lowerLine, upperLine);
+  const ground = {
+    query(_x: number, _z: number, probeY: number, out: { height: number; surface: string }) {
+      out.height = probeY > 4 ? 4.92 : 0.05;
+      out.surface = 'road';
+      return true;
+    },
+  } as unknown as GroundQuery;
+  fitVisualRoad(root, ground, ['Asphalt']);
+  const ys = (m: THREE.Mesh) => Array.from({ length: 4 }, (_, i) => m.geometry.getAttribute('position').getY(i));
+  const lower = ys(lowerLine);
+  const upper = ys(upperLine);
+  check('crossover: the lower road\'s line moves with its own asphalt', lower.every((y) => Math.abs(y - 0.06) < 1e-5), lower.map((y) => y.toFixed(4)).join(' '));
+  check('crossover: the upper road\'s line moves with its own asphalt', upper.every((y) => Math.abs(y - 4.93) < 1e-5), upper.map((y) => y.toFixed(4)).join(' '));
 }
 
 const tracksDir = path.join('public', 'tracks');
