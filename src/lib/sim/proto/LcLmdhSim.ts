@@ -66,9 +66,11 @@ export const LC_LMDH_SIM_PROFILE: CarSimProfile = {
   staticToeDeg: { front: -0.12, rear: 0.12 },
   tcMinSpeedMs: E.tcMinSpeedKmh / 3.6,
   electronics: E,
-  // The rear wing goes 1–9° (set 5.5); the splitter is fixed, and the low-drag package trims its dive planes so the
-  // balance stays where it was
-  aeroPackagesDeg: { low_downforce: [-3, -4.5], balanced: [0, 0], high_downforce: [0, 3.5] },
+  // The rear wing goes 1–9° (set 5.5). Each package trims the front with it so the balance stays where it was, ≈ 47 %
+  // front at 150 and 250 km/h: high downforce adds the dive planes (+3°) with 1.5° more wing, as much downforce as
+  // 3.5° of wing alone gave without moving the balance 3.8 % rearward (the push in fast corners); low drag takes them
+  // off (−5°) with the wing at its 1° minimum, where the front alone had kept 49.5 % on the nose
+  aeroPackagesDeg: { low_downforce: [-5, -4.5], balanced: [0, 0], high_downforce: [3, 1.5] },
   // Its grip on the flat per g of weight and downforce, 1.46–1.51 from 80 to 180 km/h: the steering assist's yaw guard
   // reads this, and the 1.4 it had trimmed a stick's lock short of the grip in slow corners
   padLateralMu: 1.5,

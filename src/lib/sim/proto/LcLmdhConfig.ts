@@ -400,8 +400,11 @@ const AERO: AeroData = {
       positionZ: 2.0,
       angleDeg: 0,
       heightRef: 'front',
-      // Against the body's pitch from its static rake (deg, + nose down)
+      // Against the body's pitch from its static rake (deg, + nose down). Below -3° it is the dive planes and flick coming
+      // off for the low-drag package, shedding front downforce at the rate the splitter does near -2°
       lutAOA_CL: perArea([
+        [-9, 0.61],
+        [-6, 0.79],
         [-3, 0.99],
         [-1, 1.125],
         [0, 1.185],
@@ -410,6 +413,7 @@ const AERO: AeroData = {
         [4, 1.315],
       ]),
       lutAOA_CD: perArea([
+        [-9, 0.04],
         [-3, 0.045],
         [0, 0.05],
         [4, 0.06],
@@ -740,7 +744,7 @@ const TYRES_WITH_RAIN = {
   PhysicsTyreCompound_Proto_Wet: deriveRainCompound(TYRES.PhysicsTyreCompound_Proto_Medium, 'wet', 'PhysicsTyreCompound_Proto_Wet', 'Wet'),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
-const config = (set: GearSet, rearWingDeg: number) =>
+const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
   ({
     screenName: 'LC-LMDH',
     chassis: {
@@ -813,7 +817,12 @@ const config = (set: GearSet, rearWingDeg: number) =>
       migration: { amount: 0.005, rampStart: 0, exponent: 1.35 },
     },
     suspensions: SUSPENSIONS,
-    aero: { ...AERO, wings: AERO.wings.map((w) => (w.name === 'REAR_WING' ? { ...w, angleDeg: rearWingDeg } : w)) },
+    aero: {
+      ...AERO,
+      wings: AERO.wings.map((w) =>
+        w.name === 'REAR_WING' ? { ...w, angleDeg: rearWingDeg } : w.name === 'FRONT_WING' ? { ...w, angleDeg: frontWingDeg } : w
+      ),
+    },
     tyreCompounds: TYRES_WITH_RAIN,
     compoundSlots: {
       soft: 'PhysicsTyreCompound_Proto_Soft',
@@ -828,10 +837,10 @@ const config = (set: GearSet, rearWingDeg: number) =>
 export const LC_LMDH_CONFIG = config(LMDH_GEAR_SETS.short, 5.5);
 
 /**
- * The same car in its low-drag trim: the long gear set and the rear wing at its 1° minimum, as the garage's gear set
- * and low-drag package make it: `scripts/verify-lc-lmdh.ts` checks its top speed
+ * The same car in its low-drag trim: the long gear set, the rear wing at its 1° minimum and the front trimmed 5° off,
+ * as the garage's gear set and low-drag package make it: `scripts/verify-lc-lmdh.ts` checks its top speed
  */
-export const LC_LMDH_LONG_CONFIG = config(LMDH_GEAR_SETS.long, 1);
+export const LC_LMDH_LONG_CONFIG = config(LMDH_GEAR_SETS.long, 1, -5);
 
 /** What the regulations and the bulletin fix, for the checks: Nmax, the 500 kW line and the car's scale on it */
 export const LC_LMDH_POWER = { nMax: N_MAX, curve500Kw: POWER_CURVE_500, scaleVsKmh: POWER_SCALE_VS_KMH };
