@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "public");
 const BUCKET = "librecorsa-assets";
-const TYPES = { ".glb": "model/gltf-binary", ".json": "application/json", ".ogg": "audio/ogg", ".wav": "audio/wav", ".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg", ".ktx2": "image/ktx2", ".mp4": "video/mp4" };
+const TYPES = { ".glb": "model/gltf-binary", ".json": "application/json", ".ogg": "audio/ogg", ".wav": "audio/wav", ".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg", ".ktx2": "image/ktx2", ".mp4": "video/mp4", ".mp3": "audio/mpeg" };
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
