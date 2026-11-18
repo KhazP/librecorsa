@@ -66,10 +66,10 @@ const KERB_REENTRY_S = 0.12;
 /** How long (s) after a side's edge strike its roar eases back to its own level */
 const KERB_EDGE_S = 0.05;
 /**
- * The kerb roar's level, one side's wheels both on the kerb, at speed: in the browser about 16 dB under the whole mix
+ * The kerb roar's level, one side's wheels both on the kerb, at speed: in the browser about 14 dB under the whole mix
  * between 400 and 2500 Hz, the compressor barely moving
  */
-const KERB_ROAR_LEVEL = 0.45;
+const KERB_ROAR_LEVEL = 0.57;
 /** The part of the kerb roar that rises and falls with each ridge; the rest rolls on between them */
 const KERB_RIDGE_DEPTH = 0.4;
 
@@ -665,6 +665,12 @@ export class CarAudioEngine {
 
   /** Master volume, 0 to 1 (Settings > Audio): every sound reaches the speakers through the master gain */
   private volume = 1;
+  /** The kerb roar and rumble's level, 0 to 1.5 (Settings > Audio > Kerbs) */
+  private kerbVolume = 1;
+
+  public setKerbVolume(volume: number): void {
+    this.kerbVolume = Math.min(1.5, Math.max(0, volume));
+  }
 
   /** The master gain's level: silent while muted or paused, else the mix level times the master volume */
   private outputLevel(): number {
@@ -938,7 +944,7 @@ export class CarAudioEngine {
     if (this.kerbOsc && this.kerbFilter && this.kerbGain) {
       const isKerb = kerbSides[0] > 0 || kerbSides[1] > 0;
       const kerbFreq = THREE.MathUtils.clamp(ridgeHz, 30, 145);
-      const kerbAmp = isKerb ? THREE.MathUtils.clamp(speedMs * 0.0018, 0.02, 0.085) : 0;
+      const kerbAmp = isKerb ? THREE.MathUtils.clamp(speedMs * 0.00227, 0.025, 0.107) * this.kerbVolume : 0;
       this.kerbOsc.frequency.setTargetAtTime(kerbFreq, now, 0.015);
       this.kerbFilter.frequency.setTargetAtTime(kerbFreq * 2.2, now, 0.015);
       this.kerbGain.gain.setTargetAtTime(kerbAmp, now, 0.015);
@@ -987,7 +993,7 @@ export class CarAudioEngine {
     const ridgeHz = Math.min(KERB_MAX_RIDGE_HZ, speedMs / (ridgeM > 0.2 ? ridgeM : KERB_RIDGE_FALLBACK_M));
     // Softer at a crawl, and a little quieter from outside the car
     const strength =
-      KERB_ROAR_LEVEL * (0.7 + 0.3 * THREE.MathUtils.clamp((speedMs - 4) / 36, 0, 1)) * (interior ? 1 : 0.8);
+      KERB_ROAR_LEVEL * this.kerbVolume * (0.7 + 0.3 * THREE.MathUtils.clamp((speedMs - 4) / 36, 0, 1)) * (interior ? 1 : 0.8);
     for (let side = 0; side < 2; side++) {
       const osc = this.kerbRidgeOsc[side];
       const gain = this.kerbRoarLevel[side]?.gain;
