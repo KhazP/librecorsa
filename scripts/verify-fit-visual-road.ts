@@ -107,6 +107,10 @@ function positions(root: THREE.Object3D): THREE.BufferAttribute[] {
   // Asphalt running off the colliders: half its vertices have no ground, but it is road
   check('ground: asphalt partly off the colliders lies on the ground', onGround(mesh('Asphalt', [...flat(-1, 1), ...flat(10, 12)], [0, 2, 1, 0, 3, 2, 4, 6, 5, 4, 7, 6])));
   check('ground: the same mesh in another material does not', !onGround(mesh('Grandstand', [...flat(-1, 1), ...flat(10, 12)], [0, 2, 1, 0, 3, 2, 4, 6, 5, 4, 7, 6])));
+  // Mostly where the colliders don't reach (another layout's road): nothing tells it from a deck
+  check('ground: asphalt mostly off the colliders keeps its shadow', !onGround(mesh('Asphalt', [...flat(-1, 1), ...flat(10, 12), ...flat(14, 16)], [0, 2, 1, 0, 3, 2, 4, 6, 5, 4, 7, 6, 8, 10, 9, 8, 11, 10])));
+  // A 1 m wall off the colliders, merged into asphalt that lies on them
+  check('ground: asphalt with a wall off the colliders stands up', !onGround(mesh('Asphalt', [...flat(-1, 1), 10, 0, -1, 10, 0, 1, 10, 1, 1, 10, 1, -1], [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7])));
   // Flat asphalt over a dip the fit cannot reach (0.5 m under its far edge): nothing on it stands up
   check('ground: flat asphalt over a dip lies on the ground', onGround(mesh('Asphalt', flat(-1, 1), [0, 2, 1, 0, 3, 2]), true));
   // A 1 m wall merged into the asphalt at its far edge, in the road material and in another one fitted to 90 %
