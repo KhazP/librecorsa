@@ -771,6 +771,8 @@ export class DriveSession {
     const QUALI_REF_DT_S = 1 / 120;
     /** A reference lap that takes longer than this is given up (s of simulated time) */
     const QUALI_REF_GIVE_UP_S = 600;
+    /** Page time the reference lap gets at the end of qualifying (ms): one not done by then is given up */
+    const QUALI_REF_FINISH_MS = 200;
     const endQualifying = () => {
       quali = null;
     };
@@ -795,8 +797,9 @@ export class DriveSession {
     const finishQualifying = () => {
       const q = quali;
       if (!q) return;
-      // A reference lap not yet done is finished now (the moment between qualifying and the grid)
-      stepQualifyingRef(Infinity);
+      // A reference lap not yet done is driven on now (the moment between qualifying and the grid), for a moment only:
+      // one still not over the line gives no reference, and the race lines up as its setup says (the AI cars by pace)
+      stepQualifyingRef(QUALI_REF_FINISH_MS);
       quali = null;
       // In the rain the AI cars lap slower, as they race (the reference laps are dry)
       const weather = Math.max(0.5, getTrackEnv().weatherPaceScale(physics));

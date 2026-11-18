@@ -215,7 +215,17 @@ export class AudioBGMController {
     for (const deck of this.decks) {
       if (deck.blocked) {
         deck.blocked = false;
-        this.startDeck(deck, deck.gen);
+        if (deck === this.decks[this.active] && !deck.leaving && deck.pool === this.playing) this.startDeck(deck, deck.gen);
+        else {
+          // A track the music has moved on from: the deck plays only to take the press (iOS), silent at gain 0
+          const gen = deck.gen;
+          void deck.el
+            .play()
+            .then(() => {
+              if (gen === deck.gen) deck.el.pause();
+            })
+            .catch(() => {});
+        }
         continue;
       }
       if (deck.primed || deck.track) continue;
@@ -226,7 +236,10 @@ export class AudioBGMController {
         .then(() => {
           if (!deck.track) deck.el.pause();
         })
-        .catch(() => {});
+        .catch((err: unknown) => {
+          // Refused (the call did not come from a press): the next press primes it
+          if (err instanceof DOMException && err.name === "NotAllowedError") deck.primed = false;
+        });
     }
   }
 
@@ -248,10 +261,14 @@ export class AudioBGMController {
   }
 
   setLevels(levels: MusicLevels): void {
+    const deck = this.decks[this.active];
+    const was = deck?.pool ? this.levelOf(deck.pool) : null;
     this.levels = levels;
     if (this.master) this.ramp(this.master.gain, this.masterLevel(), 0.05);
-    const deck = this.decks[this.active];
-    if (deck && !deck.leaving && deck.pool && deck.pool === this.playing) this.ramp(deck.gain.gain, this.levelOf(deck.pool), 0.1);
+    // Only a new level moves the deck: every press sets the same levels again, and a fade-in under way carries on
+    if (deck && !deck.leaving && deck.pool && deck.pool === this.playing && this.levelOf(deck.pool) !== was) {
+      this.ramp(deck.gain.gain, this.levelOf(deck.pool), 0.1);
+    }
     this.reconcile();
   }
 
@@ -262,7 +279,10 @@ export class AudioBGMController {
       if (ids.has(this.held[pool]!.id)) delete this.held[pool];
     }
     const deck = this.decks[this.active];
-    if (deck?.track && !deck.leaving && ids.has(deck.track.id) && this.playing) this.playNext(this.playing, true);
+    const pool = this.playing;
+    if (deck?.track && !deck.leaving && ids.has(deck.track.id) && pool) this.playNext(pool, true);
+    // The pool had nothing to play (every track of it off): one switched back on starts the music again
+    else if (pool && !this.current && MUSIC_TRACKS.some((t) => t.pool === pool && this.playable(t.id))) this.playNext(pool, true);
   }
 
   /** Skip: the next track of the pool playing, at once (nothing while the music is held) */
@@ -387,9 +407,11 @@ export class AudioBGMController {
     deck.pool = pool;
     this.ramp(deck.gain.gain, 0, 0);
     const url = musicUrl(track);
-    if (deck.el.getAttribute("src") !== url) deck.el.src = url;
+    const reload = deck.el.getAttribute("src") !== url;
+    if (reload) deck.el.src = url;
     const seek = () => {
-      if (gen !== deck.gen || atS <= 0) return;
+      // A new file starts at the top; the deck's own file sits where it last paused, so it is moved even to 0
+      if (gen !== deck.gen || (reload && atS <= 0)) return;
       try {
         deck.el.currentTime = atS;
       } catch {
@@ -419,7 +441,8 @@ export class AudioBGMController {
     void deck.el
       .play()
       .then(() => {
-        if (gen !== deck.gen || !deck.pool) return;
+        // A deck the music has left since (a stop, or a skip within the second) stays on its fade-out
+        if (gen !== deck.gen || !deck.pool || deck.leaving || deck !== this.decks[this.active]) return;
         this.ramp(deck.gain.gain, this.levelOf(deck.pool), CROSSFADE_S);
       })
       .catch((err: unknown) => {
