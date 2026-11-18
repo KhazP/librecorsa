@@ -340,6 +340,12 @@ export const F12026_SIM_PROFILE: CarSimProfile = {
   padLateralMu: 1.75,
   // Flat-ground probes: 2.3 / 3.6 / 4.0 g lateral at 100 / 200 / 280 km/h, 4.3 g on the brakes from 300
   braking: { lowG: 1.6, aeroG: 2.8, refMs: 70 },
+  // The car's understeer, which the autopilot steers in ahead of its yaw loop: the front road-wheel angle past the
+  // kinematic one (and past the loop's 0.8 × body slip) per m/s², on a flat-pad steer ramp at constant speed: 0.0005 at
+  // 130 km/h, 0.0008 at 160-250. 0.001 holds SpeedVegas' tight line, which 0.0007 ran 3.4 m off. Without it the
+  // autopilot worked it out from the fronts' cornering stiffness each step, 0.0012-0.0015 at 100-160 km/h, and went to
+  // the fronts' whole peak slip angle whenever a front wheel left the ground over a kerb
+  understeerRadPerMs2: 0.001,
   assistDials: F1_ASSIST_DIALS,
   keyboardSteer: OPEN_WHEEL_KEYBOARD_STEER,
 };

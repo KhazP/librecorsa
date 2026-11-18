@@ -51,6 +51,13 @@ export const LC26_SIM_PROFILE: CarSimProfile = {
   // The ratio the config's lock is given on (270° of rim lock on 14:1)
   steerRatio: LC26_CHASSIS.steering.ratio,
   braking: { lowG: 1.6, aeroG: 2.8, refMs: 70 },
+  // The car's understeer, which the autopilot steers in ahead of its yaw loop: the front road-wheel angle past the
+  // kinematic one (and past the loop's 0.8 × body slip) per m/s², on a flat-pad steer ramp at constant speed: 0.0006 at
+  // 130 km/h, 0.0014 at 160-190. Without it the autopilot worked it out from the fronts' cornering stiffness each step,
+  // 0.0015 at 130 km/h, and with a front wheel off the ground over the Red Bull Ring's Turn 1 exit kerbs a third of the
+  // time it went to the fronts' whole peak slip angle there: the steering swung to 0.8 of its lock and the car spun
+  // every lap
+  understeerRadPerMs2: 0.001,
   speedProfile: lc26TunedProfileCar(),
   keyboardSteer: OPEN_WHEEL_KEYBOARD_STEER,
   // Low and stiff: a 5-10 cm kerb at Barbagallo lifts three wheels at 145 km/h, where the f12026-car and GT3 ride it
