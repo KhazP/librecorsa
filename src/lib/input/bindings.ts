@@ -19,6 +19,7 @@ export type KeyAction =
   | "camera"
   | "racingLine"
   | "mute"
+  | "nextTrack"
   | "autopilot"
   | "mouseSteer"
   | "restart"
@@ -68,6 +69,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "camera", label: "Camera (hold: seat & camera)" },
   { id: "racingLine", label: "Racing line" },
   { id: "mute", label: "Mute" },
+  { id: "nextTrack", label: "Next music track" },
   { id: "autopilot", label: "Autopilot" },
   { id: "mouseSteer", label: "Mouse steering" },
   { id: "restart", label: "Restart" },
@@ -113,6 +115,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   camera: ["KeyC"],
   racingLine: ["KeyR"],
   mute: ["KeyM"],
+  // N is Neutral: K, free in the car and in the menus
+  nextTrack: ["KeyK"],
   autopilot: ["KeyP"],
   mouseSteer: ["KeyV"],
   restart: ["Backspace"],

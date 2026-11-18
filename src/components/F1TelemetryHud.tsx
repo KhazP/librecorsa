@@ -1,5 +1,6 @@
 "use client";
 
+import type { NowPlaying } from "@/lib/audio/bgm-controller";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AeroSetupPreset,
@@ -206,6 +207,9 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** Weather, time of day and the track's grip, for the pause menu's Conditions tab */
   conditionsPanel?: ConditionsPanelProps;
   onExitToTitle?: () => void;
+  /** The music playing, and the pause menu's skip */
+  nowPlaying?: NowPlaying | null;
+  onSkipTrack?: () => void;
   keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board", string>>;
   /** The lap board's gear: when it opens (the HUD setting), changed from the board itself; without it, no lap board */
   onChangeBoardWidget?: (mode: BoardWidgetMode) => void;

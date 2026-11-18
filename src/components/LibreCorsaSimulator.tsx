@@ -71,6 +71,7 @@ import { signalBoardLap } from "@/components/hud/BoardWidget";
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, WebGLUnavailableError, type AppPhase, type SessionRace } from "@/lib/drive-session";
 import { GpuLostNotice } from "@/components/menu/GpuLostNotice";
+import { NowPlayingToast } from "@/components/hud/NowPlayingToast";
 import { browserStore, lostRecently, probeRenderer, settleLoss } from "@/lib/render/gpu-health";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 import type { PodiumUi } from "@/lib/render/podium-shot";
@@ -185,6 +186,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     autoQualityLowered,
     qualityNotice,
     gpuLost,
+    nowPlaying,
   } = useSyncExternalStore(session?.subscribe ?? noSubscribe, session?.getSnapshot ?? (() => idleSnapshot), () => idleSnapshot);
 
   const [aeroPreset, setAeroPreset] =
@@ -463,6 +465,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, []);
 
   const handleToggleMute = useCallback(() => session?.toggleMute(), [session]);
+  // The music alone: a press also unlocks the audio, so the first press on a silent menu starts the music
+  const handleToggleMusicMute = useCallback(() => {
+    session?.unlockAudio();
+    setSettings((prev) => ({ ...prev, audio: { ...prev.audio, musicMuted: !prev.audio.musicMuted } }));
+  }, [session]);
 
   const handleToggleAiAutopilot = useCallback(() => {
     session?.unlockAudio();
@@ -1685,6 +1692,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onChangeLivery: handleLiveryChange,
     onToggleRacingLine: handleToggleRacingLine,
     onToggleMute: handleToggleMute,
+    nowPlaying,
+    onSkipTrack: session ? session.nextTrack : undefined,
+    musicMuted: settings.audio.musicMuted,
+    onToggleMusicMute: handleToggleMusicMute,
     onToggleAiAutopilot: handleToggleAiAutopilot,
     onToggleMouseSteer: handleToggleMouseSteer,
     onResetCar: handleResetCar,
@@ -2057,6 +2068,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onDone={handleLoadingDone}
         />
       ) : null}
+
+      <NowPlayingToast nowPlaying={nowPlaying} />
 
       {gpuNoticeKind ? (
         <GpuLostNotice
