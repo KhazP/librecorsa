@@ -11,6 +11,7 @@ import {
   type NudgeView,
 } from "@/lib/settings/camera-nudges";
 import { keyLabel } from "@/lib/input/bindings";
+import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { connectedPads } from "@/lib/input/device-input";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { SMALL_LENGTH_LABEL, smallLengthIn } from "@/lib/settings/units";
@@ -120,6 +121,8 @@ function formatValue(row: Row, nudge: CameraNudge, fovDeg: number, units: UnitSe
 export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
   const [row, setRow] = useState(0);
   const units = useUnits();
+  // The camera key's name in the prompts is as printed here: named again when the layout is read
+  useKeyLayout();
   // The latest props for the key and pad handlers, which are attached once
   const latest = useRef(p);
   latest.current = p;
@@ -298,7 +301,7 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
             { action: "adjust", label: "Change" },
             { action: "select", label: "Reset row" },
             { action: "start", label: "Reset view", key: "R", pad: "x" },
-            { action: "back", label: "Done", key: `Esc / ${cameraKey}` },
+            { action: "back", label: "Done", key: `Esc / ${cameraKey}`, keyPrinted: true },
           ]}
         />
         <p className="lc-hint m-0 px-1 text-lc-fog short:hidden">Kept for this car. The car waits while this is open.</p>

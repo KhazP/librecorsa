@@ -15,6 +15,8 @@ export interface Prompt {
   label: string;
   /** Keys shown for the keyboard, as text ("Space", "Q / E", "← →"); arrows are drawn */
   key?: string;
+  /** `key` already names the keys as printed here (built with keyLabel): its letters are not translated again */
+  keyPrinted?: boolean;
   /** Controller button shown instead of the action's own */
   pad?: PadButtonName;
 }
@@ -90,7 +92,7 @@ export const PromptBar: React.FC<{
               ))}
             </span>
           ) : p.key ? (
-            <KeysFromString keys={p.key} />
+            <KeysFromString keys={p.key} printed={p.keyPrinted} />
           ) : (
             <KeysFor action={p.action} />
           )}

@@ -6,6 +6,7 @@ import type { AeroSetupPreset, LiveTunerPatch, LiveTunerState, TireCompound } fr
 import {
   DEFAULT_CHASSIS_SETUP,
   FACTORY_PRESETS,
+  GARAGE_PRESETS_MAX,
   loadGaragePresets,
   saveGaragePresets,
   type FactoryPreset,
@@ -230,6 +231,11 @@ export const EngineersGarage: React.FC<
       label = `Setup ${n}`;
     }
     const existing = presets.find((x) => x.name.toLowerCase() === label.toLowerCase());
+    // A full list takes no new setup (it would push the oldest out unseen); a save over an existing name still works
+    if (!existing && presets.length >= GARAGE_PRESETS_MAX) {
+      setNote(`${GARAGE_PRESETS_MAX} setups saved: delete one first`);
+      return;
+    }
     const preset: GaragePreset = {
       id: existing?.id ?? `${Date.now().toString(36)}`,
       name: label.slice(0, 32),
@@ -241,7 +247,7 @@ export const EngineersGarage: React.FC<
       aero: p.aeroPreset,
       tuner: currentTuner,
     };
-    const next = [preset, ...presets.filter((x) => x.id !== preset.id)].slice(0, 24);
+    const next = [preset, ...presets.filter((x) => x.id !== preset.id)].slice(0, GARAGE_PRESETS_MAX);
     setPresets(next);
     setName("");
     setNote(saveGaragePresets(p.vehicleModel, next) ? `Saved “${preset.name}”` : "Could not save: storage is blocked");

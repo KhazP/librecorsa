@@ -111,6 +111,7 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
 }) => {
   const { mode, family } = useInputMode();
   const grid = gridPreview(setup, playerCode, playerColor);
+  const fieldSize = grid.length + (setup.grid === "random" ? 1 : 0);
   const distance = useRaceDistance(setup.laps, track.lengthM);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const startRef = useRef<HTMLButtonElement | null>(null);
@@ -135,10 +136,15 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
         <LinkRow navDefault label="Circuit" value={track.layout ? `${track.name} · ${track.layout}` : track.name} onClick={onOpenCircuit} />
         <LinkRow label="Conditions" value={conditionsLabel ?? "As set"} onClick={onOpenConditions} />
         <LinkRow label="Car" value={`${car.title}, for the whole field`} onClick={onOpenGarage} />
-        {/* A random slot leaves the player out of the preview, not out of the field */}
-        <Disclosure moreLabel={`Show the grid (${grid.length + (setup.grid === "random" ? 1 : 0)} cars)`} lessLabel="Hide the grid">
-          <GridList grid={grid} drawn={setup.grid === "random"} />
-        </Disclosure>
+        {/* Qualifying sets the grid, so there is no order to preview. A random slot leaves the player out of the
+            preview, not out of the field */}
+        {setup.qualifying ? (
+          <LinkRow label="Grid" value={`Set by qualifying, ${fieldSize} cars`} />
+        ) : (
+          <Disclosure moreLabel={`Show the grid (${fieldSize} cars)`} lessLabel="Hide the grid">
+            <GridList grid={grid} drawn={setup.grid === "random"} />
+          </Disclosure>
+        )}
       </Card>
 
       <RaceRules context="title" setup={setup} onChange={onChange} aiSkill={aiSkill} onChangeAiSkill={onChangeAiSkill} trackLengthM={track.lengthM} />

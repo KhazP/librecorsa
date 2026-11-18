@@ -428,8 +428,12 @@ export function keyLabel(code: string | undefined): string {
   const printed = code.startsWith("Digit") ? undefined : printedKey(code);
   // A dead key reports its combining accent: the cap shows the accent on its own (AZERTY's ^ key)
   if (printed && /^\p{M}$/u.test(printed) && DEAD_KEY_CAPS[printed]) return DEAD_KEY_CAPS[printed];
-  // A space or an unknown combining mark prints nothing readable on a key cap
-  if (printed && printed.trim() && !/^\p{M}+$/u.test(printed)) return printed.toUpperCase();
+  // A space or an unknown combining mark prints nothing readable on a key cap. Upper case only where it keeps the
+  // length: the German ß key would read "SS"
+  if (printed && printed.trim() && !/^\p{M}+$/u.test(printed)) {
+    const upper = printed.toUpperCase();
+    return upper.length === printed.length ? upper : printed;
+  }
   if (code.startsWith("Key")) return code.slice(3);
   if (code.startsWith("Digit")) return code.slice(5);
   if (code.startsWith("Numpad")) return `Num ${code.slice(6)}`;

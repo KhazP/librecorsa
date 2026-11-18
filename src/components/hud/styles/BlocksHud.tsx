@@ -188,7 +188,10 @@ const SectorBar: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, laps }
   );
 };
 
-/** The flag row under the sectors: a yellow flag, the last lap, the race finished (empty otherwise) */
+/**
+ * The flag row under the sectors: a yellow flag, the track limits, a blue flag, the last lap, the race finished (empty
+ * otherwise). Race control's standing flag pill stays off under this layout, so the blue flag shows here
+ */
 const FlagRow: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapInvalid }) => {
   const race = t.race;
   const tl = t.trackLimits;
@@ -207,9 +210,11 @@ const FlagRow: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapInv
                 : "Lap deleted",
               cls: "bg-(--blk-player) text-(--blk-ink)",
             }
-          : race?.totalLaps && race.lap === race.totalLaps && race.phase === "racing"
-            ? { text: "Last lap", cls: "bg-(--blk-flag-white) text-(--blk-ink-on)" }
-            : null;
+          : race?.blueFlag
+            ? { text: `Blue flag · Let ${race.blueFlag} through`, cls: "bg-(--blk-flag-blue) text-(--blk-ink-on)" }
+            : race?.totalLaps && race.lap === race.totalLaps && race.phase === "racing"
+              ? { text: "Last lap", cls: "bg-(--blk-flag-white) text-(--blk-ink-on)" }
+              : null;
   if (!row) return null;
   return (
     <div role="status" className={`flex h-5 items-center justify-center text-[13px] leading-none font-black uppercase ${row.cls}`}>
