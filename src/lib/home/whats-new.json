@@ -12,6 +12,7 @@
       "AI drivers leave room beside a car, lift when they're squeezed, check their path against the cars around them, keep off kerbs too tall for them and aim at smooth road edges in traffic, so they don't push you sideways or spin off a rolling start.",
       "Added NPanic's 1966 and 1967 Chaparral 2D, with each livery's own scoop, spoiler and lamps, and their own sound and physics.",
       "AI races show your own driver code and colour instead of YOU, and the new GT classic controller layout puts throttle and brake on the right stick with shifts on the triggers.",
+      "There's a Half brake key now, on G beside Half throttle, and both amounts can be set in the keyboard settings.",
       "Small design fixes across the site, menus and HUD: boards that hold up with long names, bigger touch targets on phones, an instant controller cursor, frosted glass that really blurs, lighter HUD animations, and key names that follow your keyboard layout.",
       "The Red Bull Ring's Turn 1 to Turn 3 Straight Mode zone now starts at 410 m."
     ],
