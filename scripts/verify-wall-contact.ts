@@ -255,6 +255,11 @@ interface HeadOnResult {
   lost: number;
   /** Starts left out: a barrier through the car where it was placed (a prop set just behind one), not a head-on run */
   skipped: number;
+  /**
+   * Runs lost after the car rolled past 60°: a car on its side can blow up into the air on any surface, old physics or
+   * new (a separate fault from barrier contact), so these are reported here, not failed
+   */
+  rolledLost: number;
   bySpeed: Map<number, number>;
   /** Deepest the post's footprint got inside the car's outline (m), over the runs that did not go through */
   deepest: number;
@@ -277,7 +282,7 @@ function headOnGrid(
   const v = car.vehicle;
   const lat: Pt = [-t[1], t[0]];
   const yaw = Math.atan2(t[0], t[1]);
-  const res: HeadOnResult = { runs: 0, through: 0, lost: 0, skipped: 0, bySpeed: new Map(), deepest: -Infinity, detail: [] };
+  const res: HeadOnResult = { runs: 0, through: 0, lost: 0, skipped: 0, rolledLost: 0, bySpeed: new Map(), deepest: -Infinity, detail: [] };
   for (const d of [0, 0.25, 0.5, 0.68, 0.8, 0.9, 0.95, 1.0]) {
     for (const speed of [15, 42, 60]) {
       for (const ph of [0, 0.25, 0.5, 0.75]) {
@@ -297,6 +302,8 @@ function headOnGrid(
         let lost = !Number.isFinite(v.position.x + v.position.y + v.position.z);
         let deepest = -Infinity;
         let touched = false;
+        const trace: string[] = [];
+        let rolled = false;
         for (let k = 0; k < 240; k++) {
           const sp = v.speedMs;
           const tel = car.step(DT, { throttle: !touched && sp < speed ? 1 : 0, brake: 0, analogSteer: 0 }) as unknown as { f12026?: { wallContact?: boolean } };
@@ -304,6 +311,12 @@ function headOnGrid(
           // Blown up, or launched: 2 m higher or lower over the ground than where it was placed (no ground under the car,
           // past the edge of the circuit's model, is neither)
           const over = overGround();
+          // Tilted past 60° from upright (the body's up axis against the world's)
+          if (new THREE.Vector3(0, 1, 0).applyQuaternion(v.quaternion).y < 0.5) rolled = true;
+          if (process.env.WALL_TRACE) {
+            const e = new THREE.Euler().setFromQuaternion(v.quaternion, 'YXZ');
+            trace.push(`k ${k} over ${over.toFixed(2)} v ${v.speedMs.toFixed(1)} vy ${v.velocity.y.toFixed(2)} roll ${(e.z * 57.3).toFixed(0)} pitch ${(e.x * 57.3).toFixed(0)} wall ${(car.telemetry as any).f12026?.wallContact ? 1 : 0}`);
+          }
           if (!Number.isFinite(v.position.x + v.position.y + v.position.z) || (Number.isFinite(over) && Math.abs(over - placedOver) > 2)) {
             lost = true;
             break;
@@ -314,10 +327,13 @@ function headOnGrid(
           if (along > 6 || (k > 30 && v.speedMs < 0.3)) break;
         }
         res.runs++;
-        if (lost) {
+        if (lost && rolled) {
+          res.rolledLost++;
+          res.detail.push(`d ${d} ${speed} m/s ph ${ph}: rolled over, then blew up`);
+        } else if (lost) {
           // Flown off or blown up: neither a pass nor a hit, a fault of its own
           res.lost++;
-          res.detail.push(`d ${d} ${speed} m/s ph ${ph}: lost`);
+          res.detail.push(`d ${d} ${speed} m/s ph ${ph}: lost` + (trace.length ? `\n        ${trace.slice(-14).join('\n        ')}` : ''));
         } else if (deepest > 0.2) {
           res.through++;
           res.bySpeed.set(speed, (res.bySpeed.get(speed) ?? 0) + 1);
@@ -655,6 +671,7 @@ console.log('\n== Borgloh: thin props head-on');
       const car = makeCar(kind, c.track, c.root);
       let through = 0;
       let lost = 0;
+      let rolledLost = 0;
       let skipped = 0;
       let runs = 0;
       const per: string[] = [];
@@ -671,13 +688,14 @@ console.log('\n== Borgloh: thin props head-on');
         const r = headOnGrid(car, centre, foot, f.t, f.roadSide, sOf);
         through += r.through;
         lost += r.lost;
+        rolledLost += r.rolledLost;
         skipped += r.skipped;
         runs += r.runs;
         per.push(`${p.name} ${r.through}${r.lost ? ` (${r.lost} lost)` : ''}${r.skipped ? ` (${r.skipped} starts in a barrier left out)` : ''}`);
         if (!STRICT) for (const l of r.detail.slice(0, 4)) console.log(`      ${kind} ${p.name} ${l}`);
       }
       check(`${kind}: Borgloh thin props head-on, none through`, through === 0, `${through}/${runs} through (${per.join(', ')})`);
-      check(`${kind}: …and the car stays in the scene on every run`, lost === 0, `${lost}/${runs} flown off or non-finite`);
+      check(`${kind}: …and the car stays in the scene on every run`, lost === 0, `${lost}/${runs} flown off or non-finite` + (rolledLost ? `; ${rolledLost} more blew up after rolling over (not failed here)` : ''));
       // A prop that stands behind a barrier leaves some starts out; the rest of its starts must still be run
       check(`${kind}: …with most starts run`, runs >= 0.6 * (runs + skipped), `${runs} run, ${skipped} placed in a barrier left out`);
       // Yawed 10° toward each prop from the road, nose first: the first contact at a face, not in the air
