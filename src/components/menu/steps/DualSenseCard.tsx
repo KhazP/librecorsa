@@ -174,7 +174,7 @@ export function DualSenseCard() {
     return (
       <SettingsCard
         title="DualSense"
-        description="Pair it for adaptive triggers, rumble sent straight to the pad, HD haptics over USB and rev lights. The browser keeps it paired until you unplug it or quit the browser."
+        description="Pair it for adaptive triggers, rumble sent straight to the pad, HD haptics over USB, rev lights and gyro steering. The browser keeps it paired until you unplug it or quit the browser."
       >
         <SettingRow label="Pair the controller" hint={status.message ?? "The browser lists it; pick it and press Connect"}>
           <Button size="sm" variant="primary" onClick={() => void dualSenseHid.connect()}>

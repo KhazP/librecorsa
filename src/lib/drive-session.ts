@@ -64,6 +64,8 @@ import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { shapeStick } from "@/lib/input/stick-shape";
+import { combineStickAndGyro, gyroSteerValue } from "@/lib/input/gyro-steer";
+import { gyroSource } from "@/lib/input/gyro-source";
 import { advanceAsphaltRain, setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import {
   isRainCompound,
@@ -1924,6 +1926,8 @@ export class DriveSession {
     const wallDeletedLaps = new Set<number>();
     /** The wheel went while it could not pause the game (menus, loading): it pauses once the car is driven again */
     let wheelLostPending = false;
+    /** The player drove last frame: gyro steering takes its centre again when the car is handed back */
+    let gyroWasDriving = false;
     const displayExtra: { deltaMs: number | null } = { deltaMs: null };
     // The view camera: every view's placement, the menus' orbit and the driver's neck; told to start over when the
     // run does and when the replay moves the drawn car
@@ -2174,7 +2178,13 @@ export class DriveSession {
       // rack directly.
       // Read every frame (also in menus / paused) so button edges never fire on a stale press
       const pads = connectedPads();
-      const device = deviceInput.read(pads, settings, dtSeconds, vehicleNow);
+      // Gyro steering: the DualSense's or DualShock 4's lean, tracked at the pad's own report rate (gyro-source.ts)
+      const gyroSettings = settings.dualSense;
+      gyroSource.setMotionWanted(gyroSettings.gyroSteer);
+      const gyroDeg = gyroSettings.gyroSteer ? gyroSource.steerDeg() : null;
+      const gyroSteer =
+        gyroDeg === null ? undefined : gyroSteerValue(gyroDeg, gyroSettings.gyroLockDeg, gyroSettings.gyroSensitivity);
+      const device = deviceInput.read(pads, settings, dtSeconds, vehicleNow, gyroSteer);
       const appPhase = appPhaseNow;
       const inMenu = appPhase !== "driving";
       const rp = replay;
@@ -2210,10 +2220,16 @@ export class DriveSession {
       const gamepadSteer = device.analogSteer;
       // The whole curve the setup screen previews (inner and outer dead zone, then linearity), here once: the assist
       // used to apply the inner dead zone after the curve, and without the assist it was never applied
-      const gamepadStick =
+      const padStick =
         device.padSteer === undefined
           ? undefined
           : shapeStick(device.padSteer, padTuning.deadzone, padTuning.outerDeadzone, padTuning.linearity);
+      // The gyro steers only while driving, added to the stick so either one (or both) steers through the same assist.
+      // The pad's lean as the car is handed back (the start, unpausing, the seat panel closed) is straight ahead
+      if (driving && !gyroWasDriving) gyroSource.recentre();
+      const gyroStick = driving && gyroWasDriving ? device.gyroSteer : undefined;
+      gyroWasDriving = driving;
+      const gamepadStick = padStick === undefined ? undefined : combineStickAndGyro(padStick, gyroStick);
       const gamepadBoost = driving && device.boostHeld;
       // With the GPU lost the notice over the game has the buttons: the pad's Menu must not open the pause menu under it
       if (!inMenu && !gpuLost) {
@@ -2386,7 +2402,8 @@ export class DriveSession {
       // stick, the touch steering pad. Not the wheel's rim, which its force feedback turns on its own.
       if (driving && physics.aiAutopilot && !coolDown.active) {
         const pedal = Math.max(gamepadThrottle, gamepadBrake, touch?.throttle ?? 0, touch?.brake ?? 0);
-        const stick = Math.abs(gamepadStick ?? 0);
+        // The stick alone: a pad held at a slant would otherwise hand the car back as soon as the autopilot took it
+        const stick = Math.abs(padStick ?? 0);
         const touchSteer = touchSteering && !settingsNow.touch.tiltSteer ? Math.abs(touch.steer) : 0;
         if (pedal > 0.15 || stick > 0.3 || touchSteer > 0.2) physics.aiAutopilot = false;
       }

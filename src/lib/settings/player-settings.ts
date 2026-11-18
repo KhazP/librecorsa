@@ -32,6 +32,7 @@ import {
   type WheelSettings,
 } from "@/lib/input/device-input";
 import { KB_STEER_RETURN_S, KB_STEER_RISE_S } from "@/lib/input/keyboard-steer";
+import { GYRO_LOCK_MAX_DEG, GYRO_LOCK_MIN_DEG, GYRO_SENSITIVITY_MAX, GYRO_SENSITIVITY_MIN } from "@/lib/input/gyro-steer";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { isCameraMode } from "@/lib/render/camera-modes";
 import { parseCameraNudges, type CameraNudges } from "@/lib/settings/camera-nudges";
@@ -178,6 +179,12 @@ export interface DualSenseSettings {
   lightbar: DualSenseLightbar;
   /** The five player LEDs as rev lights */
   revLeds: boolean;
+  /** Gyro steering: tilt the pad like a steering wheel, alongside the stick (WebHID only; the DualShock 4's too) */
+  gyroSteer: boolean;
+  /** Tilt for full lock, degrees each way (10..90) */
+  gyroLockDeg: number;
+  /** Response around the centre (0.5..1.5): 1 linear, below 1 calmer, above 1 sharper */
+  gyroSensitivity: number;
 }
 
 export const DUALSENSE_LIGHTBAR_MODES = ["revs", "driver", "off"] as const satisfies readonly DualSenseLightbar[];
@@ -191,6 +198,9 @@ export const DEFAULT_DUALSENSE_SETTINGS: DualSenseSettings = {
   engineHaptics: 0.3,
   lightbar: "revs",
   revLeds: true,
+  gyroSteer: false,
+  gyroLockDeg: 35,
+  gyroSensitivity: 1,
 };
 
 export interface KeyboardTuning extends DeviceAssistTuning {
@@ -709,6 +719,9 @@ function parseDualSense(v: unknown): DualSenseSettings {
     engineHaptics: num(v.engineHaptics, 0, 1, d.engineHaptics),
     lightbar: oneOf(v.lightbar, DUALSENSE_LIGHTBAR_MODES, d.lightbar),
     revLeds: bool(v.revLeds, d.revLeds),
+    gyroSteer: bool(v.gyroSteer, d.gyroSteer),
+    gyroLockDeg: num(v.gyroLockDeg, GYRO_LOCK_MIN_DEG, GYRO_LOCK_MAX_DEG, d.gyroLockDeg),
+    gyroSensitivity: num(v.gyroSensitivity, GYRO_SENSITIVITY_MIN, GYRO_SENSITIVITY_MAX, d.gyroSensitivity),
   };
 }
 

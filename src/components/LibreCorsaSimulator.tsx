@@ -63,6 +63,7 @@ import { keyLabel, padButtonLabel, pressPedalText } from "@/lib/input/bindings";
 import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { dualSenseHid } from "@/lib/input/webhid-dualsense";
+import { dualShock4Hid } from "@/lib/input/webhid-dualshock4";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { nameProblem } from "@/lib/net/name-filter";
 import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type BoardWidgetMode, type PlayerSettings } from "@/lib/settings/player-settings";
@@ -1460,9 +1461,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
     void webHidFfb.reconnect();
   }, [hidFfbWanted]);
-  // A DualSense paired on an earlier visit opens again without a prompt (adaptive triggers, rumble, lights)
+  // A DualSense paired on an earlier visit opens again without a prompt (adaptive triggers, rumble, lights), and so
+  // does a DualShock 4 connected for gyro steering
   useEffect(() => {
     void dualSenseHid.restore();
+    void dualShock4Hid.restore();
   }, []);
   // A recognised wheel with no steering bound (the wizard's wheel step skipped, or plugged in later) is set up as a
   // wheel straight away; otherwise it drives as a gamepad, through the stick steering assist

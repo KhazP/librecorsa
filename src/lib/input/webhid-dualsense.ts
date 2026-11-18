@@ -13,6 +13,7 @@ import {
   buildCommonBlock,
   buildOutputReport,
   DS_BT_OUTPUT_REPORT_ID,
+  DS_CALIBRATION_FEATURE_REPORT_ID,
   DS_FIRMWARE_FEATURE_REPORT_ID,
   DS_USB_OUTPUT_REPORT_ID,
   DUALSENSE_EDGE_PRODUCT_ID,
@@ -20,16 +21,22 @@ import {
   EMPTY_OUTPUT,
   isDualSenseIds,
   isDualSensePadId,
+  NOMINAL_IMU_CALIBRATION,
   outputReportLength,
   parseFeatureVersion,
+  parseImuCalibration,
   parseInputReport,
+  parseMotionReport,
+  SENSOR_TICKS_PER_S,
   SONY_VENDOR_ID,
   TRIGGER_OFF,
   usesVibrationV2,
   type DualSenseInput,
   type DualSenseOutput,
   type DualSenseTransport,
+  type ImuCalibration,
 } from "./dualsense-protocol";
+import { PadTilt, SensorClock } from "./gyro-steer";
 
 export interface DualSenseStatus {
   state: "unsupported" | "idle" | "connecting" | "connected" | "error";
@@ -54,6 +61,8 @@ const WATCHDOG_MS = 300;
 const BT_INPUT_FRESH_MS = 300;
 const BATTERY_EMIT_MS = 5000;
 const FEATURE_READ_TIMEOUT_MS = 600;
+/** Motion older than this no longer steers (ms): the pad went quiet, or fell back to its short Bluetooth report */
+const MOTION_FRESH_MS = 300;
 const UNSUPPORTED = "Adaptive triggers and haptics need Chrome or Edge (WebHID) on https or localhost";
 
 const nowMs = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -82,7 +91,16 @@ const sameBytes = (a: Uint8Array | null, b: Uint8Array) => a !== null && a.lengt
 
 const DEFAULT_PAD_ID = "DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)";
 
+/** The page's WebHID, on https or localhost */
+function browserHid(): HidApiLike | null {
+  if (typeof navigator === "undefined" || typeof window === "undefined" || !window.isSecureContext) return null;
+  return (navigator as { hid?: HidApiLike }).hid ?? null;
+}
+
 export class DualSenseHid {
+  /** `hidApi` is the browser's WebHID by default; the verify suite hands it a fake */
+  constructor(private readonly hidApi: () => HidApiLike | null = browserHid) {}
+
   private status: DualSenseStatus = { state: "idle", transport: null, name: null, battery: null, message: null };
   private readonly listeners = new Set<() => void>();
   private device: HidDeviceLike | null = null;
@@ -107,6 +125,13 @@ export class DualSenseHid {
   private batteryEmitMs = -Infinity;
   private listening = false;
   private opening: Promise<void> | null = null;
+  private imuCalibration: ImuCalibration = NOMINAL_IMU_CALIBRATION;
+  /** The pad's lean, tracked from every input report while something wants the motion (gyro steering) */
+  private readonly tilt = new PadTilt();
+  private readonly clock = new SensorClock(SENSOR_TICKS_PER_S, 32);
+  private motionFromSettings = false;
+  private motionHolders = 0;
+  private motionMs = -Infinity;
   /** A settings-screen test: shown in place of the game's output until it runs out */
   private test: { output: Partial<DualSenseOutput>; untilMs: number } | null = null;
   private testTimer: ReturnType<typeof setTimeout> | null = null;
@@ -123,8 +148,7 @@ export class DualSenseHid {
   }
 
   private hid(): HidApiLike | null {
-    if (typeof navigator === "undefined" || typeof window === "undefined" || !window.isSecureContext) return null;
-    return (navigator as { hid?: HidApiLike }).hid ?? null;
+    return this.hidApi();
   }
 
   supported(): boolean {
@@ -235,6 +259,17 @@ export class DualSenseHid {
       // Unknown firmware: the revised rumble, which every pad updated since 2021 has
     }
     this.vibrationV2 = usesVibrationV2(device.productId, featureVersion);
+    // The gyro and accelerometer scales; over Bluetooth, reading this report also turns on the full input report
+    let calibration: ImuCalibration | null = null;
+    try {
+      calibration = parseImuCalibration(await withTimeout(device.receiveFeatureReport(DS_CALIBRATION_FEATURE_REPORT_ID), FEATURE_READ_TIMEOUT_MS));
+    } catch {
+      // Nominal scales: within a few percent of a real pad's
+    }
+    this.imuCalibration = calibration ?? NOMINAL_IMU_CALIBRATION;
+    this.tilt.reset();
+    this.clock.reset();
+    this.motionMs = -Infinity;
     this.device = device;
     this.seq = 0;
     this.sentBlock = null;
@@ -254,6 +289,9 @@ export class DualSenseHid {
     this.transport = null;
     this.input = null;
     this.padCache = null;
+    this.tilt.reset();
+    this.clock.reset();
+    this.motionMs = -Infinity;
     if (this.keepaliveTimer !== null) clearInterval(this.keepaliveTimer);
     this.keepaliveTimer = null;
     if (this.flushTimer !== null) clearTimeout(this.flushTimer);
@@ -262,6 +300,15 @@ export class DualSenseHid {
 
   private readonly onInput = (e: HidInputReportEventLike) => {
     const t = nowMs();
+    // Every report while the gyro steers: the tilt is integrated at the pad's own report rate, not the frame rate
+    if (this.motionWanted()) {
+      const motion = parseMotionReport(e.reportId, e.data, this.imuCalibration);
+      if (motion) {
+        const dtS = this.clock.step(motion.ticks, t);
+        this.tilt.update({ gyroDps: motion.gyroDps, accelG: motion.accelG, dtS, recentreHeld: motion.touchpad });
+        this.motionMs = t;
+      }
+    }
     // Over USB the Gamepad API reads the sticks; only the battery is wanted from the HID reports, now and then
     if (this.transport === "usb" && t - this.batteryEmitMs < BATTERY_EMIT_MS) return;
     const input = parseInputReport(e.reportId, e.data);
@@ -298,6 +345,49 @@ export class DualSenseHid {
     };
     this.padCache = { input, pad };
     return pad;
+  }
+
+  private motionWanted(): boolean {
+    return this.motionFromSettings || this.motionHolders > 0;
+  }
+
+  /** Gyro steering on or off, from the settings (the frame loop sets it every frame) */
+  setMotionWanted(on: boolean): void {
+    if (on && !this.motionWanted()) {
+      this.tilt.reset();
+      this.clock.reset();
+    }
+    this.motionFromSettings = on;
+  }
+
+  /** Keeps the motion tracked while a settings screen shows it; call the returned function to let go */
+  holdMotion(): () => void {
+    if (!this.motionWanted()) {
+      this.tilt.reset();
+      this.clock.reset();
+    }
+    this.motionHolders++;
+    let held = true;
+    return () => {
+      if (held) this.motionHolders--;
+      held = false;
+    };
+  }
+
+  /** The pad's lean from its centre (deg, + = right), or null with no DualSense streaming its motion */
+  gyroSteerDeg(): number | null {
+    if (!this.connected() || nowMs() - this.motionMs > MOTION_FRESH_MS) return null;
+    return this.tilt.steerDeg();
+  }
+
+  /** The pad's lean as it is now becomes straight ahead */
+  recentreGyro(): void {
+    this.tilt.recentre();
+  }
+
+  /** Whether the gyro scales came from the pad's own calibration */
+  imuCalibrated(): boolean {
+    return this.imuCalibration.fromPad;
   }
 
   /** Sets part of the pad's output; it goes out with the next report (at most one every 8 ms) */
