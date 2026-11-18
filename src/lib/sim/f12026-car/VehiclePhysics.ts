@@ -1218,6 +1218,8 @@ export class VehiclePhysics {
   private readonly brakeStartTempC: number;
   /** The rear discs' cooling air against the front's (`BrakesData.rearDuctShare`) */
   private readonly brakeRearDuctShare: number;
+  /** Both axles' cooling air against the material's own ducts (`BrakesData.ductShare`) */
+  private readonly brakeDuctShare: number;
   /** Dynamic brake bias after pressure-sensitive brake migration */
   public dynamicBrakeBias = 0.56;
   /** Live-tunable dynamic brake migration ramp amount (0..0.06) */
@@ -1460,6 +1462,7 @@ export class VehiclePhysics {
     this.brakePadCurve = cfg.brakes.padMuCurve;
     this.brakeStartTempC = cfg.brakes.discStartTempC ?? 380;
     this.brakeRearDuctShare = cfg.brakes.rearDuctShare ?? 1;
+    this.brakeDuctShare = cfg.brakes.ductShare ?? 1;
     this.drivenWheels = cfg.drivenAxle === 'front' ? [0, 1] : [2, 3];
     this.coupledWheels = cfg.awd ? (cfg.drivenAxle === 'front' ? [2, 3] : [0, 1]) : null;
     this.drivenPairs = this.coupledWheels ? [this.drivenWheels, this.coupledWheels] : [this.drivenWheels];
@@ -4501,7 +4504,7 @@ export class VehiclePhysics {
         this.ambientC,
         dt,
         this.brakeCompound,
-        w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear * this.brakeRearDuctShare,
+        this.brakeDuctShare * (w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear * this.brakeRearDuctShare),
         Math.min(1, this.wetness + 0.5 * sprayBoost),
         this.brakePadCurve
       );

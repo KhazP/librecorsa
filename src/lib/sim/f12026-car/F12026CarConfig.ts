@@ -475,6 +475,12 @@ export interface BrakesData {
    */
   rearDuctShare?: number;
   /**
+   * The cooling air both axles' discs get against the material's own ducts (0..1, on top of the garage's duct setting
+   * and `rearDuctShare`): a car with smaller ducts than the ones the material's model is set for, so its discs run in
+   * the temperature range its pads are made for. Absent: 1
+   */
+  ductShare?: number;
+  /**
    * Brake-by-wire migration: the bias moves forward by `amount` at full pedal, starting at `rampStart` of the pedal
    * travel (BRAKE_MIGRATION + BMIG_RAMP), along the pedal's share past the ramp raised to `exponent` (default 1, a
    * straight line; above 1 the shift comes off early as the driver releases into the corner). Default 0.015 from the
