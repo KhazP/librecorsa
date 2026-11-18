@@ -31,13 +31,24 @@ const CARRY_FADE_M = 4;
 const CARRY_SLOPE = 0.5;
 
 /**
- * A mesh with at least this share of its vertices laid on the ground, none of them more than `ON_GROUND_HEIGHT_M` over
- * it, lies on it (its asphalt, lines and markings): tagged `userData.onGround`, it casts no shadow (scene-builder.ts),
- * as a mod draws it. Anything standing up keeps its shadow, however low: a curb, a wall, a sign, a cone, a fence, and a
- * bridge deck in a road material (its vertices are not laid at all)
+ * A mesh with at least this share of its vertices laid on the ground, or in a road material with ground under at least
+ * `ROAD_GROUND_SHARE` of them, lies on it (its asphalt, lines and markings) when none of its laid vertices ends up more
+ * than `ON_GROUND_HEIGHT_M` over the ground and nothing on it stands up: tagged `userData.onGround`, it casts no
+ * shadow (scene-builder.ts), as a mod draws it. Anything standing up keeps its shadow: a curb, a wall, a sign post or
+ * a stand (a steep face more than `ON_GROUND_HEIGHT_M` tall, over the ground by as much or with no ground under it),
+ * and a deck with room under it (a face held more than `DECK_HEIGHT_M` over the ground at each corner), also when it
+ * is merged with flat road or built in a road material. A flat road the fit cannot reach in places (over a dip, over
+ * grass) still lies on the ground: with nothing standing up, its shadow would only fall on itself and the layers
+ * beside it, in jagged teeth. Where the colliders don't reach (a layout's colliders cover its own roads only), there is
+ * nothing to tell a road from a deck by, and a mesh mostly out there keeps its shadow
  */
 const ON_GROUND_SHARE = 0.9;
+const ROAD_GROUND_SHARE = 0.5;
 const ON_GROUND_HEIGHT_M = 0.08;
+/** A triangle whose normal points up less than this (steeper than 60°) stands up: a wall, a post, a curb's face */
+const STANDING_NORMAL_Y = 0.5;
+/** A face this far over the ground at each of its corners is a deck (a bridge, a walkway): there is room under it */
+const DECK_HEIGHT_M = 2;
 
 /** A mesh's material name: three's material, or `userData.materialName` from the Node scripts' GLB reader */
 export function materialNameOf(mesh: THREE.Mesh): string {
@@ -103,6 +114,8 @@ export function fitVisualRoad(
     const pos = o.geometry.getAttribute("position");
     const under = layer.overlay ? null : base;
     inv.copy(o.matrixWorld).invert();
+    if (heights.length < pos.count) heights = new Float32Array(pos.count);
+    heights.fill(NaN, 0, pos.count);
     let fitted = 0;
     let highest = -Infinity;
     for (let i = 0; i < pos.count; i++) {
@@ -111,13 +124,84 @@ export function fitVisualRoad(
       const found = under ? under.queryBase(v.x, v.z, v.y + FIT_WINDOW_M, hit) : ground.query(v.x, v.z, v.y + FIT_WINDOW_M, hit);
       if (!found || hit.surface === "grass" || !(Math.abs(v.y - hit.height) < FIT_WINDOW_M)) continue;
       v.y = place(v.x, v.y, v.z, hit.height);
-      highest = Math.max(highest, v.y - hit.height);
+      heights[i] = v.y - hit.height;
+      highest = Math.max(highest, heights[i]);
       v.applyMatrix4(inv);
       pos.setXYZ(i, v.x, v.y, v.z);
       fitted++;
     }
     if (fitted) pos.needsUpdate = true;
-    if (fitted >= ON_GROUND_SHARE * pos.count && highest <= ON_GROUND_HEIGHT_M) o.userData.onGround = true;
+    if (highest > ON_GROUND_HEIGHT_M) return;
+    const laid = fitted >= ON_GROUND_SHARE * pos.count;
+    if (!(laid || layer.road) || standsUp(o, under)) return;
+    if (laid || groundUnderMost(o, under)) o.userData.onGround = true;
+  };
+
+  /**
+   * Each vertex's height over the ground below it, as fitted, of the layer `fit` last moved (NaN: not asked yet;
+   * Infinity: no ground under it)
+   */
+  let heights = new Float32Array(0);
+  const corners = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const cornerAt = [0, 0, 0];
+  const e1 = new THREE.Vector3();
+  const e2 = new THREE.Vector3();
+  const heightOf = (i: number, p: THREE.Vector3, under: TrackColliderQuery | null): number => {
+    if (Number.isNaN(heights[i])) {
+      const found = under ? under.queryBase(p.x, p.z, p.y + FIT_WINDOW_M, hit) : ground.query(p.x, p.z, p.y + FIT_WINDOW_M, hit);
+      heights[i] = found ? p.y - hit.height : Infinity;
+    }
+    return heights[i];
+  };
+  /** Whether at least `ROAD_GROUND_SHARE` of the mesh's vertices have ground under them */
+  const groundUnderMost = (o: THREE.Mesh, under: TrackColliderQuery | null): boolean => {
+    const pos = o.geometry.getAttribute("position");
+    const need = ROAD_GROUND_SHARE * pos.count;
+    let found = 0;
+    let missing = 0;
+    for (let i = 0; i < pos.count; i++) {
+      if (heightOf(i, corners[0].fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld), under) !== Infinity) {
+        if (++found >= need) return true;
+      } else if (++missing > pos.count - need) {
+        return false;
+      }
+    }
+    return found >= need;
+  };
+  /** Whether anything on the mesh, as fitted, stands up: a steep face or a deck (see `ON_GROUND_SHARE`) */
+  const standsUp = (o: THREE.Mesh, under: TrackColliderQuery | null): boolean => {
+    const pos = o.geometry.getAttribute("position");
+    const index = o.geometry.index;
+    const count = index ? index.count : pos.count;
+    for (let t = 0; t + 2 < count; t += 3) {
+      for (let k = 0; k < 3; k++) {
+        cornerAt[k] = index ? index.getX(t + k) : t + k;
+        corners[k].fromBufferAttribute(pos, cornerAt[k]).applyMatrix4(o.matrixWorld);
+      }
+      e1.subVectors(corners[1], corners[0]);
+      e2.subVectors(corners[2], corners[0]);
+      e1.cross(e2);
+      const len = e1.length();
+      if (!(len > 0)) continue;
+      if (Math.abs(e1.y) < STANDING_NORMAL_Y * len) {
+        // A steep face standing up by its own height, with a corner that far over the ground or no ground under it
+        const tall = Math.max(corners[0].y, corners[1].y, corners[2].y) - Math.min(corners[0].y, corners[1].y, corners[2].y);
+        if (!(tall > ON_GROUND_HEIGHT_M)) continue;
+        for (let k = 0; k < 3; k++) {
+          if (heightOf(cornerAt[k], corners[k], under) > ON_GROUND_HEIGHT_M) return true;
+        }
+      } else {
+        // A deck: every corner held high over the ground
+        let k = 0;
+        while (k < 3) {
+          const h = heightOf(cornerAt[k], corners[k], under);
+          if (!(h > DECK_HEIGHT_M && h !== Infinity)) break;
+          k++;
+        }
+        if (k === 3) return true;
+      }
+    }
+    return false;
   };
 
   // The asphalt first, on the ground; each move is kept by where it was made (x, its height before, z)
