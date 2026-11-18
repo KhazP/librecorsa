@@ -291,6 +291,8 @@ const SUSPENSIONS: SuspensionsData = {
   front: {
     type: 'SuspensionType_Strut',
     actuation: 'push_rod',
+    // A strut: no rocker, the spring's leverage stays put [est]
+    rockerProgressivityPerM: 0,
     // [spec STATIC_CAMBER]
     staticCamber: -1.9,
     camberGainKinematic: -23,
@@ -318,6 +320,8 @@ const SUSPENSIONS: SuspensionsData = {
   rear: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
+    // Coilovers on the wishbones, no rocker: the leverage grows a little as the arm comes level [est]
+    rockerProgressivityPerM: 0.3,
     // [spec STATIC_CAMBER]
     staticCamber: -2,
     camberGainKinematic: -19.6,
