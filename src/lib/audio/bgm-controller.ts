@@ -261,10 +261,14 @@ export class AudioBGMController {
   }
 
   setLevels(levels: MusicLevels): void {
+    const deck = this.decks[this.active];
+    const was = deck?.pool ? this.levelOf(deck.pool) : null;
     this.levels = levels;
     if (this.master) this.ramp(this.master.gain, this.masterLevel(), 0.05);
-    const deck = this.decks[this.active];
-    if (deck && !deck.leaving && deck.pool && deck.pool === this.playing) this.ramp(deck.gain.gain, this.levelOf(deck.pool), 0.1);
+    // Only a new level moves the deck: every press sets the same levels again, and a fade-in under way carries on
+    if (deck && !deck.leaving && deck.pool && deck.pool === this.playing && this.levelOf(deck.pool) !== was) {
+      this.ramp(deck.gain.gain, this.levelOf(deck.pool), 0.1);
+    }
     this.reconcile();
   }
 
