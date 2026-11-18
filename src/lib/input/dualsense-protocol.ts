@@ -409,6 +409,120 @@ export function parseInputReport(reportId: number, data: DataView): DualSenseInp
 }
 
 /* ------------------------------------------------------------------------------------------------------------ */
+/* Motion sensors                                                                                                */
+/* ------------------------------------------------------------------------------------------------------------ */
+
+/**
+ * Axes, as the pad reports them: x to the right, y up out of the face (with the pad lying flat), z toward the player.
+ * Right-handed: a positive rate turns anticlockwise seen from the axis' positive end. At rest the accelerometer reads
+ * +1 g away from the ground.
+ */
+export type Vec3 = [number, number, number];
+
+/** IMU block of the full input report (report data offsets, USB; one more over Bluetooth) */
+const IMU_GYRO = 15;
+const IMU_ACCEL = 21;
+const IMU_TIMESTAMP = 27;
+/** The sensor timestamp counts in thirds of a microsecond and wraps at 2^32 (about every 24 minutes) */
+export const SENSOR_TICKS_PER_S = 3_000_000;
+
+export const DS_CALIBRATION_FEATURE_REPORT_ID = 0x05;
+
+/** Scales from raw sensor counts to deg/s and g, per axis */
+export interface ImuCalibration {
+  gyroDpsPerCount: Vec3;
+  accelBias: Vec3;
+  accelGPerCount: Vec3;
+  /** Read from the pad's own calibration; false for the nominal scales */
+  fromPad: boolean;
+}
+
+/** Nominal scales for a pad whose calibration cannot be read: 16 counts per deg/s, 8192 per g */
+export const NOMINAL_IMU_CALIBRATION: ImuCalibration = {
+  gyroDpsPerCount: [1 / 16, 1 / 16, 1 / 16],
+  accelBias: [0, 0, 0],
+  accelGPerCount: [1 / 8192, 1 / 8192, 1 / 8192],
+  fromPad: false,
+};
+
+/**
+ * The pad's IMU calibration from feature report 0x05, as hid-playstation reads it: per gyro axis the counts at a
+ * known rate either way, per accelerometer axis the counts at +1 g and −1 g. The gyro bias is left at zero, as the
+ * Linux driver does: the firmware takes it out already. Chrome hands the report over with its id first; without it
+ * everything sits one byte earlier. Null when the report is short or its numbers cannot be a calibration.
+ */
+export function parseImuCalibration(view: DataView): ImuCalibration | null {
+  const o = view.byteLength >= 41 && view.getUint8(0) === DS_CALIBRATION_FEATURE_REPORT_ID ? 1 : 0;
+  if (view.byteLength < o + 34) return null;
+  const s16 = (i: number) => view.getInt16(o + i, true);
+  const gyroBias = [s16(0), s16(2), s16(4)];
+  const plus = [s16(6), s16(10), s16(14)];
+  const minus = [s16(8), s16(12), s16(16)];
+  const speed2x = s16(18) + s16(20);
+  const gyroDpsPerCount = [0, 1, 2].map((k) => {
+    const span = Math.abs((plus[k] as number) - (gyroBias[k] as number)) + Math.abs((minus[k] as number) - (gyroBias[k] as number));
+    return span > 0 && speed2x > 0 ? speed2x / span : NaN;
+  }) as Vec3;
+  const accelBias: Vec3 = [0, 0, 0];
+  const accelGPerCount: Vec3 = [0, 0, 0];
+  for (let k = 0; k < 3; k++) {
+    const p = s16(22 + 4 * k);
+    const m = s16(24 + 4 * k);
+    const range2g = p - m;
+    accelBias[k] = p - range2g / 2;
+    accelGPerCount[k] = range2g > 0 ? 2 / range2g : NaN;
+  }
+  // A real pad sits near 16 counts per deg/s and 8192 per g; anything far off is a blank or broken report
+  const sane = (v: number, nominal: number) => Number.isFinite(v) && v > nominal / 3 && v < nominal * 3;
+  if (!gyroDpsPerCount.every((v) => sane(v, 1 / 16)) || !accelGPerCount.every((v) => sane(v, 1 / 8192))) return null;
+  return { gyroDpsPerCount, accelBias, accelGPerCount, fromPad: true };
+}
+
+/** One motion sample of the full input report */
+export interface DualSenseMotion {
+  /** Rotation rate, deg/s */
+  gyroDps: Vec3;
+  /** Acceleration, g (gravity included) */
+  accelG: Vec3;
+  /** Sensor clock, in {@link SENSOR_TICKS_PER_S} ticks, wrapping at 2^32 */
+  ticks: number;
+  /** Touchpad clicked down */
+  touchpad: boolean;
+}
+
+/**
+ * The motion sensors of a full input report (USB 0x01, Bluetooth 0x31), calibrated. Null for the short Bluetooth
+ * report, which has none, and for anything else.
+ */
+export function parseMotionReport(reportId: number, data: DataView, calibration: ImuCalibration = NOMINAL_IMU_CALIBRATION): DualSenseMotion | null {
+  let base: number;
+  if (reportId === DS_USB_INPUT_REPORT_ID && data.byteLength >= 55) base = 0;
+  else if (reportId === DS_BT_INPUT_REPORT_ID && data.byteLength >= 56) base = 1;
+  else return null;
+  const c = calibration;
+  const s16 = (o: number) => data.getInt16(base + o, true);
+  return {
+    gyroDps: [
+      s16(IMU_GYRO) * c.gyroDpsPerCount[0],
+      s16(IMU_GYRO + 2) * c.gyroDpsPerCount[1],
+      s16(IMU_GYRO + 4) * c.gyroDpsPerCount[2],
+    ],
+    accelG: [
+      (s16(IMU_ACCEL) - c.accelBias[0]) * c.accelGPerCount[0],
+      (s16(IMU_ACCEL + 2) - c.accelBias[1]) * c.accelGPerCount[1],
+      (s16(IMU_ACCEL + 4) - c.accelBias[2]) * c.accelGPerCount[2],
+    ],
+    ticks: data.getUint32(base + IMU_TIMESTAMP, true),
+    touchpad: (data.getUint8(base + 9) & 0x02) !== 0,
+  };
+}
+
+/** Seconds between two sensor timestamps, across the counter's wrap */
+export function sensorDtS(fromTicks: number, toTicks: number): number {
+  return ((toTicks - fromTicks) >>> 0) / SENSOR_TICKS_PER_S;
+}
+
+/* ------------------------------------------------------------------------------------------------------------ */
 /* Firmware                                                                                                      */
 /* ------------------------------------------------------------------------------------------------------------ */
 
