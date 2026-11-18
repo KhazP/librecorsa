@@ -39,7 +39,7 @@ import { Hint, StatusPill, TrackMeter } from "./setup-ui";
 import { DualSenseCard, testDualSenseRumble } from "./DualSenseCard";
 import { GyroSteeringCard, useGyroLive } from "./GyroSteeringCard";
 import { combineStickAndGyro } from "@/lib/input/gyro-steer";
-import { isDualSensePadId } from "@/lib/input/dualsense-protocol";
+import { gyroSource, isGyroPadId } from "@/lib/input/gyro-source";
 
 /** Standard-mapping buttons 0..11 as the glyphs name them */
 const GLYPH: readonly PadButtonName[] = ["a", "b", "x", "y", "lb", "rb", "lt", "rt", "view", "menu", "l3", "r3"];
@@ -71,7 +71,7 @@ export function InputCheckCard() {
   const pedals = pad ? padPedals(pad, settings.padTuning) : null;
   // With gyro steering on, the steer bar is the stick and the tilt together, as the car gets them
   const d = settings.dualSense;
-  const gyro = useGyroLive(Boolean(pad && isDualSensePadId(pad.id)) && d.gyroSteer && dualSenseHid.connected(), d.gyroLockDeg, d.gyroSensitivity);
+  const gyro = useGyroLive(Boolean(pad && isGyroPadId(pad.id)) && d.gyroSteer && gyroSource.connected(), d.gyroLockDeg, d.gyroSensitivity);
   const steer = combineStickAndGyro(pad?.axes[0] ?? 0, gyro?.steer);
   return (
     <SettingsCard

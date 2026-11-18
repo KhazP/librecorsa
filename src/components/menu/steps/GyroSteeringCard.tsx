@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useSyncExternalStore } from "react";
 import { Button, SettingRow } from "@/components/ui";
+import { Badge } from "@/components/ui/Badge";
 import { lens, SettingsCard, slider, toggle, type RowDef } from "@/components/settings/fields";
 import type { SettingsEnv } from "@/components/settings/env";
 import { useSettingsEnv } from "@/components/settings/env";
@@ -12,7 +13,9 @@ import {
   GYRO_SENSITIVITY_MIN,
   gyroSteerValue,
 } from "@/lib/input/gyro-steer";
+import { gyroSource } from "@/lib/input/gyro-source";
 import { dualSenseHid } from "@/lib/input/webhid-dualsense";
+import { dualShock4Hid } from "@/lib/input/webhid-dualshock4";
 import type { DualSenseSettings } from "@/lib/settings/player-settings";
 import { TrackMeter } from "./setup-ui";
 
@@ -22,7 +25,7 @@ const ds = <K extends keyof DualSenseSettings>(key: K) =>
     (s, value) => ({ ...s, dualSense: { ...s.dualSense, [key]: value } }),
   );
 
-/** The rows, for why gyro steering cannot be used right now (null when a DualSense is connected over WebHID) */
+/** The rows, for why gyro steering cannot be used right now (null when a pad with a gyro is connected over WebHID) */
 function gyroRows(blocked: string | null): { on: RowDef; lock: RowDef; sensitivity: RowDef } {
   const needsGyro = (env: SettingsEnv) => blocked ?? (env.settings.dualSense.gyroSteer ? null : "Needs Gyro steering on");
   return {
@@ -69,12 +72,12 @@ export function useGyroLive(active: boolean, lockDeg: number, sensitivity: numbe
       setDeg(null);
       return;
     }
-    const release = dualSenseHid.holdMotion();
+    const release = gyroSource.holdMotion();
     let raf = 0;
     let shown: number | null = null;
     const tick = () => {
       raf = requestAnimationFrame(tick);
-      const now = dualSenseHid.gyroSteerDeg();
+      const now = gyroSource.steerDeg();
       // Tenths of a degree: the meter stays still with the pad at rest instead of re-rendering every frame
       const rounded = now === null ? null : Math.round(now * 10) / 10;
       if (rounded !== shown) {
@@ -92,32 +95,57 @@ export function useGyroLive(active: boolean, lockDeg: number, sensitivity: numbe
 }
 
 /**
- * Gyro steering, for every controller player: a DualSense paired over WebHID steers by turning it, alongside the
- * stick. The card says plainly what it needs, so a player with another pad learns why it stays off.
+ * Gyro steering, for every controller player: a DualSense or DualShock 4 connected over WebHID steers by turning it,
+ * alongside the stick. The DualSense connects in its own card (it has more there); the DualShock 4 connects here. The
+ * card says plainly what it needs, so a player with another pad learns why it stays off.
  */
 export function GyroSteeringCard() {
   const { settings } = useSettingsEnv();
   const d = settings.dualSense;
-  const status = useSyncExternalStore(dualSenseHid.subscribe, dualSenseHid.getStatus, dualSenseHid.getStatus);
+  const sense = useSyncExternalStore(dualSenseHid.subscribe, dualSenseHid.getStatus, dualSenseHid.getStatus);
+  const shock = useSyncExternalStore(dualShock4Hid.subscribe, dualShock4Hid.getStatus, dualShock4Hid.getStatus);
   // WebHID is read on the client only, so the first render matches the server's
   const [supported, setSupported] = useState(false);
   useEffect(() => setSupported(dualSenseHid.supported()), []);
-  const connected = supported && status.state === "connected";
+  const senseOn = supported && sense.state === "connected";
+  const shockOn = supported && shock.state === "connected";
+  const connected = senseOn || shockOn;
   const live = useGyroLive(connected && d.gyroSteer, d.gyroLockDeg, d.gyroSensitivity);
 
   const blocked = !supported
-    ? "Needs Chrome or Edge, with the DualSense connected in the DualSense card"
+    ? "Needs Chrome or Edge, with the controller connected here over WebHID"
     : connected
       ? null
-      : "Connect the DualSense in the DualSense card first";
+      : "Connect a DualSense or DualShock 4 first";
   const r = gyroRows(blocked);
   const rows: RowDef[] = [r.on, ...(d.gyroSteer ? [r.lock, r.sensitivity] : [])];
+  const padName = senseOn ? (sense.name ?? "DualSense") : "DualShock 4";
+  const transport = (senseOn ? sense.transport : shock.transport) === "usb" ? "USB" : "Bluetooth";
   return (
     <SettingsCard
       title="Gyro steering"
-      description="Needs a DualSense connected through the DualSense card (Chrome or Edge, over WebHID). Xbox controllers have no gyro."
+      description="Works with a DualSense, connected in the DualSense card, or a DualShock 4, connected here. Chrome or Edge only (WebHID). Xbox controllers have no gyro."
       rows={rows}
+      before={
+        connected ? (
+          <span className="flex items-center gap-2 pb-1">
+            <Badge tone="good" dot>
+              Connected
+            </Badge>
+            <span className="lc-body truncate">
+              {padName}, {transport}
+            </span>
+          </span>
+        ) : undefined
+      }
     >
+      {supported && !connected ? (
+        <SettingRow label="DualShock 4" hint={shock.message ?? "The browser lists it; pick it and press Connect"}>
+          <Button size="sm" variant="secondary" onClick={() => void dualShock4Hid.connect()}>
+            Connect DualShock 4
+          </Button>
+        </SettingRow>
+      ) : null}
       {connected && d.gyroSteer ? (
         <>
           <div className="py-1">
@@ -130,7 +158,7 @@ export function GyroSteeringCard() {
             />
           </div>
           <SettingRow label="Re-centre" hint="Or press the touchpad while driving. Hold it to move the controller without steering">
-            <Button size="sm" variant="secondary" onClick={() => dualSenseHid.recentreGyro()}>
+            <Button size="sm" variant="secondary" onClick={() => gyroSource.recentre()}>
               Re-centre
             </Button>
           </SettingRow>
