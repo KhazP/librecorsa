@@ -27,6 +27,7 @@ import {
   parseImuCalibration,
   parseInputReport,
   parseMotionReport,
+  SENSOR_TICKS_PER_S,
   SONY_VENDOR_ID,
   TRIGGER_OFF,
   usesVibrationV2,
@@ -35,7 +36,7 @@ import {
   type DualSenseTransport,
   type ImuCalibration,
 } from "./dualsense-protocol";
-import { PadTilt } from "./gyro-steer";
+import { PadTilt, SensorClock } from "./gyro-steer";
 
 export interface DualSenseStatus {
   state: "unsupported" | "idle" | "connecting" | "connected" | "error";
@@ -118,6 +119,7 @@ export class DualSenseHid {
   private imuCalibration: ImuCalibration = NOMINAL_IMU_CALIBRATION;
   /** The pad's lean, tracked from every input report while something wants the motion (gyro steering) */
   private readonly tilt = new PadTilt();
+  private readonly clock = new SensorClock(SENSOR_TICKS_PER_S, 32);
   private motionFromSettings = false;
   private motionHolders = 0;
   private motionMs = -Infinity;
@@ -258,6 +260,7 @@ export class DualSenseHid {
     }
     this.imuCalibration = calibration ?? NOMINAL_IMU_CALIBRATION;
     this.tilt.reset();
+    this.clock.reset();
     this.motionMs = -Infinity;
     this.device = device;
     this.seq = 0;
@@ -279,6 +282,7 @@ export class DualSenseHid {
     this.input = null;
     this.padCache = null;
     this.tilt.reset();
+    this.clock.reset();
     this.motionMs = -Infinity;
     if (this.keepaliveTimer !== null) clearInterval(this.keepaliveTimer);
     this.keepaliveTimer = null;
@@ -292,7 +296,8 @@ export class DualSenseHid {
     if (this.motionWanted()) {
       const motion = parseMotionReport(e.reportId, e.data, this.imuCalibration);
       if (motion) {
-        this.tilt.update(motion);
+        const dtS = this.clock.step(motion.ticks, t);
+        this.tilt.update({ gyroDps: motion.gyroDps, accelG: motion.accelG, dtS, recentreHeld: motion.touchpad });
         this.motionMs = t;
       }
     }
@@ -340,13 +345,19 @@ export class DualSenseHid {
 
   /** Gyro steering on or off, from the settings (the frame loop sets it every frame) */
   setMotionWanted(on: boolean): void {
-    if (on && !this.motionWanted()) this.tilt.reset();
+    if (on && !this.motionWanted()) {
+      this.tilt.reset();
+      this.clock.reset();
+    }
     this.motionFromSettings = on;
   }
 
   /** Keeps the motion tracked while a settings screen shows it; call the returned function to let go */
   holdMotion(): () => void {
-    if (!this.motionWanted()) this.tilt.reset();
+    if (!this.motionWanted()) {
+      this.tilt.reset();
+      this.clock.reset();
+    }
     this.motionHolders++;
     let held = true;
     return () => {

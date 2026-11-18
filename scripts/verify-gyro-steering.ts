@@ -23,6 +23,8 @@ import {
   GYRO_LOCK_MAX_DEG,
   gyroSteerValue,
   PadTilt,
+  SensorClock,
+  type MotionSample,
 } from '../src/lib/input/gyro-steer';
 import { DeviceInputReader, DEFAULT_WHEEL_SETTINGS, type PadLike } from '../src/lib/input/device-input';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
@@ -157,7 +159,14 @@ check('sensor clock: seconds across the 32-bit wrap', () => {
 
 /** The captured motion run, parsed as the driver parses it */
 const motion = MOTION_IMU.map((h) => parseMotionReport(0x01, view(usbAround(hex(h))), calibration!) as DualSenseMotion);
-const accelRoll = (m: DualSenseMotion) => Math.atan2(-m.accelG[0], Math.hypot(m.accelG[1], m.accelG[2])) / DEG;
+/** A DualSense reading as the driver hands it to the tracker, through the pad's 32-bit clock */
+const asSample = (m: DualSenseMotion, clock: SensorClock): MotionSample => ({
+  gyroDps: m.gyroDps,
+  accelG: m.accelG,
+  dtS: clock.step(m.ticks),
+  recentreHeld: m.touchpad,
+});
+const accelRoll = (m: Pick<DualSenseMotion, 'accelG'>) => Math.atan2(-m.accelG[0], Math.hypot(m.accelG[1], m.accelG[2])) / DEG;
 
 check('captured motion: the gyro turns gravity the way the accelerometer then measures it (axes agree, no flip)', () => {
   // Gyro alone (no accelerometer pull), from the first reading's gravity: RMS of its lean against the accelerometer's
@@ -203,11 +212,12 @@ check('captured motion: where the accelerometer reads gravity alone, the tracked
   // Calm reports: within 0.05 g of 1 g and turning under 30 deg/s. Elsewhere the accelerometer also reads the
   // hands' movement (about 0.15 g on this run), so it is no reference there
   const tilt = new PadTilt();
+  const clock = new SensorClock(SENSOR_TICKS_PER_S, 32);
   let e2 = 0;
   let n = 0;
   let worst = 0;
   for (const m of motion) {
-    tilt.update(m);
+    tilt.update(asSample(m, clock));
     if (Math.abs(Math.hypot(...m.accelG) - 1) >= 0.05 || Math.hypot(...m.gyroDps) >= 30) continue;
     const e = tilt.rollDeg()! - accelRoll(m);
     e2 += e * e;
@@ -259,6 +269,7 @@ function simulate(tilt: PadTilt, o: RunOptions, each?: (t: number, trueRoll: num
   const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) * 2 - 1;
   const dt = 1 / o.hz;
   const n = Math.round(o.seconds * o.hz);
+  const clock = new SensorClock(SENSOR_TICKS_PER_S, 32);
   let prev = orientation(o.pose(0));
   for (let i = 1; i <= n; i++) {
     const t = i * dt;
@@ -277,7 +288,7 @@ function simulate(tilt: PadTilt, o: RunOptions, each?: (t: number, trueRoll: num
       ticks: ((o.startTicks ?? 0) + Math.round(t * SENSOR_TICKS_PER_S)) >>> 0,
       touchpad: o.touchpad?.(t) ?? false,
     };
-    tilt.update(m);
+    tilt.update(asSample(m, clock));
     each?.(t, pose.roll);
   }
 }
@@ -347,16 +358,19 @@ check('the sensor clock wrapping mid-turn is a normal step, not a restart', () =
 });
 check('a lost stretch of reports: a short gap is integrated, a long one starts over from gravity', () => {
   const tilt = new PadTilt();
+  const clock = new SensorClock(SENSOR_TICKS_PER_S, 32);
+  const feed = (gyroDps: Vec3, accelG: Vec3, ticks: number) =>
+    tilt.update({ gyroDps, accelG, dtS: clock.step(ticks), recentreHeld: false });
   // A second at rest, flat: the quick settling after the start is over
-  for (let i = 0; i <= 250; i++) tilt.update({ gyroDps: [0, 0, 0], accelG: [0, 1, 0], ticks: i * 12000, touchpad: false });
+  for (let i = 0; i <= 250; i++) feed([0, 0, 0], [0, 1, 0], i * 12000);
   // 45 ms gap (two reports lost at 66 Hz) turning at 30 deg/s clockwise (−z), the accelerometer still reading flat:
   // the gyro's 1.35°, less the accelerometer's pull over 45 ms. A restart would read 0°
   const ticks = 250 * 12000 + 0.045 * SENSOR_TICKS_PER_S;
-  tilt.update({ gyroDps: [0, 0, -30], accelG: [0, 1, 0], ticks, touchpad: false });
+  feed([0, 0, -30], [0, 1, 0], ticks);
   near(tilt.rollDeg()!, 1.35 * Math.exp(-0.045 / 0.4), 0.02, 'integrated');
   // A second without reports: the next one starts from its own gravity (leaning 30° right)
   const s = Math.sin(30 * DEG);
-  tilt.update({ gyroDps: [0, 0, 0], accelG: [-s, Math.cos(30 * DEG), 0], ticks: ticks + SENSOR_TICKS_PER_S, touchpad: false });
+  feed([0, 0, 0], [-s, Math.cos(30 * DEG), 0], ticks + SENSOR_TICKS_PER_S);
   near(tilt.rollDeg()!, 30, 1e-6, 're-seeded');
 });
 

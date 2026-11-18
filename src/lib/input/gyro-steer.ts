@@ -6,9 +6,10 @@
  * the same with the pad held flat, tipped toward the player or upright, and turning it flat on the table (yaw) or
  * tipping it (pitch) steers nothing.
  *
- * Pure maths, no browser APIs: webhid-dualsense.ts feeds it every input report, the verify suite feeds it bytes.
+ * Pure maths, no browser APIs: the WebHID drivers feed it every input report (each pad's own clock read by a
+ * {@link SensorClock}), the verify suite feeds it bytes.
  */
-import { sensorDtS, type DualSenseMotion, type Vec3 } from "./dualsense-protocol";
+import type { Vec3 } from "./dualsense-protocol";
 
 const DEG = Math.PI / 180;
 
@@ -67,11 +68,55 @@ function accelTrust(deviationG: number): number {
   return clamp((ACCEL_TRUST_NONE_G - deviationG) / (ACCEL_TRUST_NONE_G - ACCEL_TRUST_FULL_G), ACCEL_TRUST_FLOOR, 1);
 }
 
+/** One motion reading, as the tracker takes it */
+export interface MotionSample {
+  /** Rotation rate, deg/s, in the pad's frame (x right, y up out of the face, z toward the player) */
+  gyroDps: Vec3;
+  /** Acceleration, g, gravity included, same axes */
+  accelG: Vec3;
+  /** Seconds since the pad's previous reading; 0 or less (the first reading, after a gap) starts the tracking over */
+  dtS: number;
+  /** The re-centre control (the touchpad click) is held */
+  recentreHeld: boolean;
+}
+
+/**
+ * A pad's sensor clock: the seconds between two readings across the counter's wrap. A silence longer than
+ * {@link GYRO_GAP_RESEED_S} by the wall clock is a gap, whatever the counter says: a 16-bit clock wraps in a third
+ * of a second, so a longer silence would read as a short step.
+ */
+export class SensorClock {
+  private lastTicks: number | null = null;
+  private lastWallMs: number | null = null;
+  private readonly span: number;
+
+  constructor(
+    private readonly ticksPerS: number,
+    bits: 16 | 32,
+  ) {
+    this.span = 2 ** bits;
+  }
+
+  reset(): void {
+    this.lastTicks = null;
+    this.lastWallMs = null;
+  }
+
+  /** Seconds since the previous reading, or −1 for the first one and after a gap */
+  step(ticks: number, wallMs?: number): number {
+    const prev = this.lastTicks;
+    const gap = wallMs !== undefined && this.lastWallMs !== null && wallMs - this.lastWallMs > GYRO_GAP_RESEED_S * 1000;
+    this.lastTicks = ticks;
+    this.lastWallMs = wallMs ?? null;
+    if (prev === null || gap) return -1;
+    return ((((ticks - prev) % this.span) + this.span) % this.span) / this.ticksPerS;
+  }
+}
+
 /** Tracks the pad's lean from its motion reports and holds the centre the steering is measured from */
 export class PadTilt {
   /** Up, as a unit vector in the pad's frame; null until a usable reading */
   private up: Vec3 | null = null;
-  private lastTicks: number | null = null;
   /** The accelerometer's distance off 1 g, smoothed (g) */
   private deviationG = 0;
   /**
@@ -86,7 +131,6 @@ export class PadTilt {
   /** Forget the tracking; the next reading starts it again and becomes the centre */
   reset(): void {
     this.up = null;
-    this.lastTicks = null;
     this.deviationG = 0;
     this.settleReadings = 0;
     this.centreDeg = 0;
@@ -101,12 +145,11 @@ export class PadTilt {
     } else this.centrePending = true;
   }
 
-  /** One motion report. A held touchpad click keeps re-centring, so the centre is where it is let go */
-  update(m: DualSenseMotion): void {
+  /** One motion reading. A held re-centre control keeps re-centring, so the centre is where it is let go */
+  update(m: MotionSample): void {
     const a = m.accelG;
     const aMag = Math.hypot(a[0], a[1], a[2]);
-    const dt = this.lastTicks === null ? -1 : sensorDtS(this.lastTicks, m.ticks);
-    this.lastTicks = m.ticks;
+    const dt = m.dtS;
     if (this.up === null || dt <= 0 || dt > GYRO_GAP_RESEED_S) {
       // Start (or start over after a gap) from gravity alone, once the reading looks like it
       this.up = Math.abs(aMag - 1) < ACCEL_SEED_MAX_G ? normalized(a) : null;
@@ -134,7 +177,7 @@ export class PadTilt {
       up = [up[0] + k * pull[0], up[1] + k * pull[1], up[2] + k * pull[2]];
       this.up = normalized(up) ?? this.up;
     }
-    if (this.up && (this.centrePending || m.touchpad)) {
+    if (this.up && (this.centrePending || m.recentreHeld)) {
       this.centreDeg = this.rollDeg() ?? 0;
       this.centrePending = false;
     }
