@@ -1483,6 +1483,8 @@ export class F12026CarSim implements SimulatorCar {
       this.vehicle.setFuelMass(this.fuelKg);
       this.telemetry.fuelKg = Number(this.fuelKg.toFixed(2));
     }
+    // Blankets on or off take effect where the tyres are next put back to their start temperature (the next start)
+    this.vehicle.tyreBlankets = s.tyreBlankets === 0 ? null : s.tyreBlankets > 0;
     const click = WING_CLICK_DEG[car];
     this.wingTrimDeg = { front: s.frontWingClicks * click.front, rear: s.rearWingClicks * click.rear };
     this.aeroPreset = this.aero;

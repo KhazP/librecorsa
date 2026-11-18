@@ -101,5 +101,6 @@
   "verify-mp-flags.ts": 0.2,
   "verify-whats-new.ts": 0.2,
   "verify-race-history.ts": 0.1,
-  "verify-track-surfaces.ts": 0.1
+  "verify-track-surfaces.ts": 0.1,
+  "verify-tyre-blankets.ts": 8.0
 }

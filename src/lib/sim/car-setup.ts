@@ -72,6 +72,11 @@ export interface ChassisSetup {
   radiatorTapeSteps: number;
   /** Which of the car's homologated gear sets (`CarPhysicsConfig.gearSets`): 0 its first, the sprint set */
   gearRatioSet: number;
+  /**
+   * Tyre blankets: 1 on (the tyres leave the garage warm at every start), −1 off, 0 the car's own way (on for a car
+   * raced on blankets, `racesOnBlankets`)
+   */
+  tyreBlankets: number;
 }
 
 export const DEFAULT_CHASSIS_SETUP: ChassisSetup = {
@@ -120,6 +125,7 @@ export const DEFAULT_CHASSIS_SETUP: ChassisSetup = {
   heaveFastReboundRearPct: 0,
   radiatorTapeSteps: 0,
   gearRatioSet: 0,
+  tyreBlankets: 0,
 };
 
 export interface SetupRange {
@@ -176,6 +182,7 @@ export const CHASSIS_LIMITS: Record<keyof ChassisSetup, SetupRange> = {
   heaveFastReboundRearPct: { min: -40, max: 40, step: 5 },
   radiatorTapeSteps: { min: -2, max: 4, step: 1 },
   gearRatioSet: { min: 0, max: 1, step: 1 },
+  tyreBlankets: { min: -1, max: 1, step: 1 },
 };
 
 /** Element angle one wing step adds (deg): F1 cars on a 0–50 scale, the GT3 rear wing in its own clicks */

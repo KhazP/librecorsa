@@ -101,6 +101,7 @@ import {
   type AxleSuspensionData,
   type BumpStopSettingsUnits,
   type CarPhysicsConfig,
+  blanketTempC,
   compoundData,
   DEFAULT_FRICTION_LIMIT_ANGLE_DEG,
   type DamperControllerData,
@@ -119,6 +120,7 @@ import {
   type TyresThermalPatchData,
   type WingData,
   type ZoneData_DRSZone,
+  racesOnBlankets,
 } from './F12026CarConfig';
 import {
   convexHullIndices,
@@ -1377,6 +1379,12 @@ export class VehiclePhysics {
    * the air's temperature and the brakes at `BrakesData.garageDiscTempC`. Set by the owner before `reset`
    */
   public coldGarageStart = false;
+  /**
+   * The player's tyre blankets (`ChassisSetup.tyreBlankets`): true, the tyres leave their blankets warm at every start
+   * (`blanketTempC`); false, a car raced on blankets leaves the garage on cold tyres too when its start is a cold one
+   * (`coldGarageStart`); null, the car's own way (`racesOnBlankets`). Set by the owner before `reset`
+   */
+  public tyreBlankets: boolean | null = null;
   private chassisTwistVelRadS = 0;
   /** Torsion stiffness (Nm/rad), damping (Nms/rad), front roll-inertia share and twist limit (rad); stiffness 0 = rigid */
   private readonly torsionK: number;
@@ -2179,13 +2187,18 @@ export class VehiclePhysics {
   }
 
   /**
-   * The temperature a compound's tyres start at: its blankets' (`TyresPressureData.coldRefC`), or for a tyre raced
-   * without blankets (`blanketC` set) the air's on a cold start from the garage, else `blanketC` (a level that warms
-   * them, or a rolling start after a formation lap)
+   * The temperature a compound's tyres start at. On blankets (the player's choice, else the car's own way): the
+   * blankets' (`blanketTempC`). Without: a tyre raced without blankets (`blanketC` set) at the air's on a cold start from
+   * the garage, else at `blanketC` (a level that warms them, or a rolling start after a formation lap); a tyre whose
+   * blankets the player took off at the air's on a cold start, else its `coldRefC` as before; a tyre set in the garage's
+   * air at its `coldRefC`
    */
-  private tyreStartTempC(p: TyresPressureData): number {
-    if (p.blanketC === undefined) return p.coldRefC;
-    return this.coldGarageStart ? this.ambientC : p.blanketC;
+  private tyreStartTempC(t: TyresCompoundData): number {
+    const p = t.pressureData;
+    const own = racesOnBlankets(p);
+    if (this.tyreBlankets ?? own) return blanketTempC(t);
+    if (p.blanketC !== undefined || own) return this.coldGarageStart ? this.ambientC : (p.blanketC ?? p.coldRefC);
+    return p.coldRefC;
   }
 
   /** Blanket (or garage) temperature, cold pressure that reaches the optimum with the core at the window centre */
@@ -2196,7 +2209,7 @@ export class VehiclePhysics {
       const rt = this.tyres[w.isFront ? 0 : 1];
       const t = rt.data;
       const p = t.pressureData;
-      const startC = this.tyreStartTempC(p);
+      const startC = this.tyreStartTempC(t);
       w.coldPressurePsi = defaultColdPressurePsi(t);
       w.surfaceTempC = startC;
       w.coreTempC = startC;
