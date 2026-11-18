@@ -578,7 +578,8 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
         ...(cfg?.brakes.brakeByWire !== false && cfg?.brakes.migration
           ? [tunerParam("brakeMigrationPct", { label: "Brake migration", base: cfg.brakes.migration.amount * 100, min: 0, max: 3, step: 0.1, format: (v) => `${v.toFixed(1)}%`, fx: FX.migration })]
           : []),
-        chassisParam("steerRatioDelta", { label: "Steering ratio", base: b.steerRatio, min: 10, max: 16, step: 0.2, format: (v) => v.toFixed(1), fx: FX.steerRatio }),
+        // A rack slower than 16:1 (the 934's 16.9) keeps its own ratio as the slowest
+        chassisParam("steerRatioDelta", { label: "Steering ratio", base: b.steerRatio, min: 10, max: Math.max(16, b.steerRatio), step: 0.2, format: (v) => v.toFixed(1), fx: FX.steerRatio }),
         rate("springFrontPct", "Front wheel rate", b.wheelRateFrontNmm, FX.wheelRateFront),
         rate("springRearPct", "Rear wheel rate", b.wheelRateRearNmm, FX.wheelRateRear),
         rate("bumpStopRateFrontPct", "Front bump stop rate", b.bumpStopRateFrontNmm, FX.bumpStopRate),
