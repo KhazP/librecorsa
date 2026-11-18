@@ -224,7 +224,10 @@ export class AudioBGMController {
             .then(() => {
               if (gen === deck.gen) deck.el.pause();
             })
-            .catch(() => {});
+            .catch((err: unknown) => {
+              // Refused again (the call did not come from a press): the next press tries this deck again
+              if (gen === deck.gen && err instanceof DOMException && err.name === "NotAllowedError") deck.blocked = true;
+            });
         }
         continue;
       }
