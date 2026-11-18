@@ -110,6 +110,8 @@ import {
   type KeyAction,
 } from "@/lib/input/bindings";
 import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad } from "@/lib/input/device-input";
+import { MenuIdleWatch } from "@/lib/input/menu-idle";
+import { AERIAL_IDLE_MS } from "@/lib/render/menu-aerial";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { simMode } from "@/lib/sim/runtime/sim-mode";
 import { createSimHost } from "@/lib/sim/runtime/sim-host";
@@ -1932,6 +1934,10 @@ export class DriveSession {
     // The view camera: every view's placement, the menus' orbit and the driver's neck; told to start over when the
     // run does and when the replay moves the drawn car
     const cameraRig = new CameraRig(camera, track);
+    // The title screen left alone this long tours the circuit from the air (menu-aerial.ts); reduced motion holds one frame
+    const menuIdle = new MenuIdleWatch(window);
+    const reducedMotion = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    let aerialOverlayOff = false;
     // polish:B the podium shot takes the camera for a few seconds after a race; the drive's cameras start over after it
     const podium = new PodiumDirector(track, () => {
       cameraRig.reset();
@@ -2187,6 +2193,11 @@ export class DriveSession {
       const device = deviceInput.read(pads, settings, dtSeconds, vehicleNow, gyroSteer);
       const appPhase = appPhaseNow;
       const inMenu = appPhase !== "driving";
+      // Only the title screen counts its idle time: back on it from anywhere else, the clock starts over
+      const menuIdleMs = menuIdle.idleMs(nowMs, pads);
+      if (appPhase !== "title") menuIdle.reset(nowMs);
+      // Never in a headset: a climb of a hundred metres is no backdrop there
+      const menuAerial = appPhase === "title" && menuIdleMs >= AERIAL_IDLE_MS && !renderer.xr.isPresenting;
       const rp = replay;
       if (rp.active && inMenu) exitReplay();
       const replaying = rp.active;
@@ -3046,9 +3057,22 @@ export class DriveSession {
           driving,
           inVr,
           menu: inMenu
-            ? { close: appPhase === "wizard" && wizardStep === "car", width: container.clientWidth, height: container.clientHeight }
+            ? {
+                close: appPhase === "wizard" && wizardStep === "car",
+                width: container.clientWidth,
+                height: container.clientHeight,
+                aerial: menuAerial,
+                still: reducedMotion?.matches ?? false,
+                fogDensity: scene.fog instanceof THREE.FogExp2 ? scene.fog.density : undefined,
+              }
             : null,
         });
+        // The driving aids' overlay (the racing line) is not drawn from the air: the tour is a broadcast shot
+        if (cameraRig.aerialUp !== aerialOverlayOff) {
+          aerialOverlayOff = cameraRig.aerialUp;
+          if (aerialOverlayOff) camera.layers.disable(OVERLAY_LAYER);
+          else camera.layers.enable(OVERLAY_LAYER);
+        }
 
         builtCircuit.updateEnvironment(nowMs * 0.001);
         // (a race in the worker lays its rubber there)
@@ -3154,7 +3178,8 @@ export class DriveSession {
         );
         env.update(physics.worldPosition, camera);
         startupMonitor?.begin();
-        reflectionProbe.update(podium.focus ?? physics.worldPosition, carRig.root, scene.environmentIntensity);
+        // Not in the aerial tour: the car is a speck there, and its reflections can wait for the camera to come back
+        if (!cameraRig.aerialUp) reflectionProbe.update(podium.focus ?? physics.worldPosition, carRig.root, scene.environmentIntensity);
         startupMonitor?.end("probe");
         // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
         // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an
@@ -3297,6 +3322,7 @@ export class DriveSession {
       haptics.stop();
       dualSense.stop();
       opponentAudio.dispose();
+      menuIdle.dispose();
       wheelFfb.dispose();
       simHost?.dispose();
       document.removeEventListener("visibilitychange", onVisibilityChange);

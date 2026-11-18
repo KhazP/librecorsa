@@ -7,6 +7,7 @@ import type { CameraMode, CarTelemetry, TrackSamplePoint } from "@/types/f1";
 import type { BuiltTrackData } from "@/lib/track-data";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import type { Lc26CameraAnchor } from "@/lib/lc26-car-model";
+import { type AerialPose, MenuAerial } from "./menu-aerial";
 
 const TWO_PI = Math.PI * 2;
 const RAD2DEG = 180 / Math.PI;
@@ -593,8 +594,30 @@ export interface CameraRigFrame {
   /** In a VR headset, which is the driver's head */
   inVr: boolean;
   /** In the menus: the attract orbit (closer on the car-select step), framed for a viewport of width × height */
-  menu: { close: boolean; width: number; height: number } | null;
+  menu: CameraRigMenu | null;
 }
+
+export interface CameraRigMenu {
+  /** The car-select step: closer on the car */
+  close: boolean;
+  width: number;
+  height: number;
+  /** The title screen left alone: the aerial tour of the circuit (menu-aerial.ts) takes over from the orbit */
+  aerial?: boolean;
+  /** Reduced motion: the aerial holds one frame and cuts to it, with no flight up from the car */
+  still?: boolean;
+  /** The scene's fog density, which pulls the aerial cameras in when the air thickens */
+  fogDensity?: number;
+}
+
+/** How long the camera takes to rise from the car's orbit into the aerial tour (s) */
+const AERIAL_RISE_S = 8;
+/** The fastest the camera tilts or pans while it climbs (rad/s) */
+const AERIAL_TILT_RATE = 0.3;
+const smootherstep = (x: number) => {
+  const t = THREE.MathUtils.clamp(x, 0, 1);
+  return t * t * t * (t * (t * 6 - 15) + 10);
+};
 
 /**
  * Places the view camera every frame: on the car model's onboard anchor when it has one for the view, else from the
@@ -630,6 +653,15 @@ export class CameraRig {
   private heliSnap = true;
   private menuOrbitRad = 0.6;
   private menuViewOffset = false;
+  /** The title screen's aerial tour, planned on first use; how long it has been up (s, -1 when it is not) */
+  private menuAerial: MenuAerial | null = null;
+  private aerialS = -1;
+  private readonly aerialPose: AerialPose = { position: new THREE.Vector3(), lookAt: new THREE.Vector3(), fovDeg: 40 };
+  private readonly orbitLook = new THREE.Vector3();
+  /** Where the camera looks while it climbs into the aerial tour, and scratch for turning it */
+  private readonly riseDir = new THREE.Vector3();
+  private readonly riseWant = new THREE.Vector3();
+  private readonly riseAxis = new THREE.Vector3();
   // Neck FX: velocity-aligned slide look, steering look, 25 m track-spline apex lookahead, and horizon roll stabilization
   private neckYaw = 0;
   private neckPitch = 0;
@@ -667,6 +699,11 @@ export class CameraRig {
     this.chaseCamera.reset();
     this.tvDirector.reset();
     this.heliSnap = true;
+  }
+
+  /** The title screen's aerial tour is up (the car is a speck, or out of shot) */
+  get aerialUp(): boolean {
+    return this.aerialS >= 0;
   }
 
   update(f: CameraRigFrame): void {
@@ -858,8 +895,51 @@ export class CameraRig {
         p.z + Math.cos(this.menuOrbitRad) * radius
       );
       camera.up.set(0, 1, 0);
-      camera.lookAt(p.x, p.y + 0.55, p.z);
+      const look = this.orbitLook.set(p.x, p.y + 0.55, p.z);
       camera.fov = close ? 36 : 32;
+      if (f.menu.aerial && !close) {
+        // Left alone, the title screen tours the circuit from the air: the camera rises from the car into the first
+        // shot (height first, so it clears the pit wall and the stands), then the shots cut on their own. Under
+        // reduced motion it cuts straight to one held frame. Any input cuts back to the car (aerial goes false).
+        const still = Boolean(f.menu.still);
+        if (this.aerialS < 0) {
+          this.aerialS = 0;
+          this.menuAerial ??= new MenuAerial(this.track);
+          this.menuAerial.restart(physics.sMeters);
+        } else {
+          this.aerialS += dtSeconds;
+        }
+        const aspect = f.menu.width / Math.max(1, f.menu.height);
+        const pose = this.menuAerial!.pose(this.aerialS, aspect, f.menu.fogDensity ?? 0.00035, still, this.aerialPose);
+        const rise = still ? 1 : this.aerialS / AERIAL_RISE_S;
+        const w = smootherstep(rise);
+        const wy = smootherstep(rise * 1.35);
+        camera.position.set(
+          THREE.MathUtils.lerp(camera.position.x, pose.position.x, w),
+          THREE.MathUtils.lerp(camera.position.y, pose.position.y, wy),
+          THREE.MathUtils.lerp(camera.position.z, pose.position.z, w)
+        );
+        look.lerp(pose.lookAt, smootherstep(rise * 1.2));
+        camera.fov = THREE.MathUtils.lerp(camera.fov, pose.fovDeg, w);
+        if (rise < 1) {
+          // A camera climbing straight up beside the car would tilt down onto it in a second: the operator's tilt
+          // lags behind instead, eased in and turning no faster than AERIAL_TILT_RATE, handing over by the top
+          const want = this.riseWant.subVectors(look, camera.position).normalize();
+          if (this.aerialS === 0) this.riseDir.copy(want);
+          const angle = this.riseDir.angleTo(want);
+          if (angle > 1e-6) {
+            const step = Math.min(angle * (1 - Math.exp(-3 * dtSeconds)), AERIAL_TILT_RATE * dtSeconds);
+            this.riseAxis.crossVectors(this.riseDir, want);
+            if (this.riseAxis.lengthSq() > 1e-12) this.riseDir.applyAxisAngle(this.riseAxis.normalize(), step).normalize();
+          }
+          const handOver = smootherstep((rise - 0.7) / 0.3);
+          const dir = this.riseAxis.copy(this.riseDir).lerp(want, handOver).normalize();
+          look.copy(camera.position).addScaledVector(dir, 100);
+        }
+      } else {
+        this.aerialS = -1;
+      }
+      camera.lookAt(look);
       // Push the car right of centre so the menu panel on the left does not cover it
       const w = f.menu.width;
       const h = f.menu.height;
@@ -872,6 +952,7 @@ export class CameraRig {
       camera.updateProjectionMatrix();
       this.menuViewOffset = false;
     }
+    if (!f.menu) this.aerialS = -1;
 
     // Driver's head (not in VR, where the headset is the head). A neck holds the eyes steady against the
     // chassis' suspension pitch and roll and turns them a little toward where the car is going; the road's own
