@@ -215,11 +215,24 @@ export interface TurboData {
   spoolDownS: number;
   /** Gauge pressure shown at full boost (bar), for the HUD and the sound */
   displayMaxBoostBar: number;
+  /**
+   * The throttle works inside the power law: the boost asked for is maxBoost·(plate·rpm / referenceRpm)^gamma, so a
+   * part-open throttle makes far less boost than its share of the full-load boost, and the torque at part throttle is
+   * plate × the unboosted curve × (1 + that boost). Unset: the boost asked for is the plate's share of the full-load
+   * boost, and the torque the plate's share of the boosted curve
+   */
+  throttleInBoostLaw?: boolean;
 }
 
 /** Full-load steady-state boost of `turbo` at `rpm` */
 export function turboSteadyBoost(turbo: TurboData, rpm: number): number {
   return Math.min(turbo.maxBoost, turbo.maxBoost * Math.max(0, rpm / turbo.referenceRpm) ** turbo.gamma);
+}
+
+/** The steady-state boost `turbo` asks for at `rpm` with the throttle plate at `plate` (0..1) */
+export function turboBoostAsked(turbo: TurboData, rpm: number, plate: number): number {
+  if (!turbo.throttleInBoostLaw) return turboSteadyBoost(turbo, rpm) * plate;
+  return turbo.maxBoost * Math.min(1, Math.max(0, (plate * rpm) / turbo.referenceRpm)) ** turbo.gamma;
 }
 
 export interface ERSData {
@@ -461,6 +474,12 @@ export interface BrakesData {
    * little work left to them. Absent: 1, the front's airflow
    */
   rearDuctShare?: number;
+  /**
+   * The cooling air both axles' discs get against the material's own ducts (0..1, on top of the garage's duct setting
+   * and `rearDuctShare`): a car with smaller ducts than the ones the material's model is set for, so its discs run in
+   * the temperature range its pads are made for. Absent: 1
+   */
+  ductShare?: number;
   /**
    * Brake-by-wire migration: the bias moves forward by `amount` at full pedal, starting at `rampStart` of the pedal
    * travel (BRAKE_MIGRATION + BMIG_RAMP), along the pedal's share past the ramp raised to `exponent` (default 1, a
@@ -1039,6 +1058,11 @@ export interface TyresCamberData {
   /** Lateral grip vs camber leaning into the force: 1 + dcamber0·γ + dcamber1·γ² (rad) */
   dcamber0: number;
   dcamber1: number;
+  /**
+   * Lateral grip against camber as a table, in place of the dcamber0 / dcamber1 parabola: degrees of camber (negative:
+   * the tyre's top leaning into the force) → grip multiplier. Absent: the parabola
+   */
+  dcamberLut?: LutPoints;
   /** Longitudinal grip vs camber magnitude: 1 + dcamber0_x·|γ| + dcamber1_x·γ² (rad) */
   dcamber0_x: number;
   dcamber1_x: number;

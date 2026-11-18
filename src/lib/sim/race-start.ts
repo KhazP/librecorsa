@@ -39,6 +39,8 @@ export const LAUNCH_RPM: Readonly<Partial<Record<VehicleModelId, readonly [numbe
   'nissan-r32-jtcc': [6300, 7500],
   'bmw-m1-procar': [3800, 4500],
   'vw-scirocco-gtx': [3000, 5000],
+  // The turbo needs revs to make boost, and from 5500 the cold slicks spin (TC off, as on semi-pro) [est]
+  'porsche-934-rsr': [3500, 4500],
   liana: [4500, 6500],
 };
 

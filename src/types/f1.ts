@@ -659,7 +659,8 @@ export type VehicleModelId =
   | "bmw-m1-procar"
   | "vw-scirocco-gtx"
   | "chaparral-2d"
-  | "chaparral-2d-67";
+  | "chaparral-2d-67"
+  | "porsche-934-rsr";
 
 /** Typed as a Record over VehicleModelId so adding a car fails to compile until it is listed here */
 const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
@@ -675,6 +676,7 @@ const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
   "vw-scirocco-gtx": true,
   "chaparral-2d": true,
   "chaparral-2d-67": true,
+  "porsche-934-rsr": true,
 };
 
 /** Every vehicle model id, for validating ids from storage and the network */

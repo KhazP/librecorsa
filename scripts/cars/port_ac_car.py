@@ -507,6 +507,25 @@ PRESETS = {
         # A skin folder whose name lost its umlaut in the mod's archive
         skin_ids={'1980_Procar_M�ller_66': '1980_procar_mueller_66'},
     ),
+    'porsche-934-rsr': dict(
+        title='Porsche 934 Turbo RSR',
+        auto=True,
+        materials={},
+        paint=('EXT_CARPAINT',),
+        # The broken-glass layers AC shows only once a window is smashed
+        skip_materials={'DAMAGE_GLASS'},
+        skip_node_prefixes=(),
+        # The belts drawn fastened round a driver the car doesn't carry
+        skip_nodes=('COCKPIT_LR', 'CINTURE_ON'),
+        default_skin='DRM 200 Miles Nuernberg 6',
+        steer_nodes=(),
+        tyre_materials=('TIRES',),
+        tyre_prefix=None,
+        spinning=(),
+        windscreen=('EXT_GLASS_FRONT',),
+        # The paint, the window banners, and (a few skins') roll cage and belts
+        skin_textures=('ext_skin.dds', 'ext_glass.dds', 'int_glass.dds', 'rollcage.dds', 'cinture.dds'),
+    ),
     # NPanic's Chaparral 2D, 1966 (327) and 1967 (427). Their liveries change parts as well as paint: a part (`parts`:
     # kn5 node -> part, or an `extension/` kn5 the mod inserts, `extra_kn5`) is a node of its own, shown only for the
     # liveries of its variants (`part_variants`; a livery's variant is `skin_variants`, else 'base')
@@ -568,6 +587,7 @@ PRESETS = {
 PRESET_BY_FOLDER = {'suzuki_liana': 'liana', 'mt_mtr_496r': 'mtr-496r',
                     'nissan_skyline_bcnr33_jgtc': 'nissan-r33-jgtc', 'nissan_r32_jtcc': 'nissan-r32-jtcc',
                     'pfa_vw_scirocco_53b': 'vw-scirocco-gtx', 'pddw_bmw_procar_m1': 'bmw-m1-procar',
+                    'pfa_porsche_934t_rsr_rr': 'porsche-934-rsr',
                     'wsc_legends_chaparral_2d_66': 'chaparral-2d', 'wsc_legends_chaparral_2d_67': 'chaparral-2d-67'}
 
 

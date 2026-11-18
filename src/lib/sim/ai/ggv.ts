@@ -127,6 +127,16 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [0.65, 0.68, 0.62, 0.36, 0.35, 0.16, 0.15, 0.07],
     lockKappa: Math.tan((360 / 14.1) * (Math.PI / 180)) / 2.311,
   },
+  // Measured 2026-11-18 on the slicks. Its accelG at 45 m/s read 0.16: the 2-3 up-shift (7200 rpm in second is 46 m/s)
+  // lands in the measuring window there and the turbo has to spool again after it, so it is taken between its
+  // neighbours; past its ≈ 305 km/h top speed (85 m/s) it is the drag it can't beat
+  'porsche-934-rsr': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [0.99, 1.0, 1.01, 1.01, 1.0, 0.99, 0.99, 1.0],
+    brakeG: [1.1, 1.09, 1.11, 1.13, 1.16, 1.21, 1.26, 1.32],
+    accelG: [0.47, 0.45, 0.44, 0.36, 0.28, 0.17, 0.13, -0.02],
+    lockKappa: Math.tan((540 / 16.9) * (Math.PI / 180)) / 2.296,
+  },
 };
 
 export const G = 9.81;

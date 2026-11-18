@@ -587,5 +587,72 @@
     },
     "lift": { "popMinRpm": 4400, "crackleMinRpm": 5000, "downshiftPopChance": 0.5 },
     "limiterRetriggerS": 0.85
+  },
+  "porsche-934-rsr": {
+    "outDir": "public/cars/porsche-934-rsr/audio",
+    "limiterRpm": 8400,
+    "sourceDescription": "Pfalzdriver's Porsche 934 Turbo RSR Assetto Corsa mod - content/cars/pfa_porsche_934t_rsr_rr/sfx/pfa_porsche_934t_rsr_rr.bank",
+    "intBank": "pfa_porsche_934t_rsr_rr/sfx/pfa_porsche_934t_rsr_rr.bank",
+    "rawPcm16": true,
+    "resampleRange": [0.4, 1.65],
+    "engine": {
+      "int": {
+        "on": [
+          { "rpm": 900, "rootRpm": 2000, "sample": "idle pk#41" },
+          { "rpm": 2400, "rootRpm": 3800, "sample": "midp2 p2 (3)#48" },
+          { "rpm": 4200, "rootRpm": 4200, "sample": "midp p2k#44" },
+          { "rpm": 5800, "rootRpm": 6900, "sample": "highp2 p3 wobble#10" },
+          { "rpm": 7600, "rootRpm": 7900, "sample": "maxp p2#6" },
+          { "rpm": 8400, "rootRpm": 6700, "sample": "maxp p3 (4)#27" }
+        ],
+        "off": [
+          { "rpm": 900, "rootRpm": 2000, "sample": "idle pk#41" },
+          { "rpm": 2600, "rootRpm": 4100, "sample": "midc p#9" },
+          { "rpm": 4200, "rootRpm": 7900, "sample": "maxp p2#6" }
+        ]
+      },
+      "ext": {
+        "on": [
+          { "rpm": 900, "rootRpm": 2200, "sample": "idle p#31" },
+          { "rpm": 3200, "rootRpm": 4500, "sample": "midp p2k#44" },
+          { "rpm": 5200, "rootRpm": 4800, "sample": "highp p2 (2)#21" },
+          { "rpm": 6800, "rootRpm": 8500, "sample": "maxp int#25" },
+          { "rpm": 8400, "rootRpm": 7300, "sample": "maxp p3 (4)#27" }
+        ],
+        "off": [
+          { "rpm": 900, "rootRpm": 2200, "sample": "idle p#31" },
+          { "rpm": 2800, "rootRpm": 4500, "sample": "midc2 p2#2" },
+          { "rpm": 4700, "rootRpm": 5300, "sample": "highc p2#33" },
+          { "rpm": 8400, "rootRpm": 7300, "sample": "maxp p3 (2)#46" }
+        ]
+      }
+    },
+    "turbo": [
+      { "layer": "on", "boost": 0.5, "sample": "turbo#43", "rms": 0.068 },
+      { "layer": "on", "boost": 1.4, "sample": "turbo front#37", "rms": 0.068 },
+      { "layer": "off", "boost": 0.5, "sample": "turbo#43", "rms": 0.052 },
+      { "layer": "off", "boost": 1.4, "sample": "turbo front#37", "rms": 0.052 }
+    ],
+    "transmission": [
+      { "layer": "on", "drivetrainSpeed": 160, "sample": "maxp p2+#28", "rms": 0.012 },
+      { "layer": "off", "drivetrainSpeed": 160, "sample": "maxp p2+#28", "rms": 0.011 }
+    ],
+    "skid": { "int": "Skid#12", "ext": "skid_ext_mono#8" },
+    "oneshots": {
+      "gear_up": ["gear ext#38"],
+      "gear_down": ["gear ext#38"],
+      "shift_cut": ["ex_boxer_upshift#3"],
+      "backfire_int": ["bf1#29", "bf2#40"],
+      "backfire_ext": ["bf1#29", "bf2#40"],
+      "blowoff": ["80s f1 bov p#11"]
+    },
+    "limiterFallbackSample": "maxp p3 (4)#27",
+    "limiterRootRpm": 6700,
+    "throttleCurve": {
+      "ext": [[0.0, 0.0], [0.2, 0.06], [0.3, 0.26], [0.4, 0.69], [0.47, 0.89], [0.6, 0.96], [0.85, 1.0], [1.0, 1.0]],
+      "int": [[0.0, 0.0], [0.2, 0.05], [0.3, 0.11], [0.4, 0.27], [0.47, 0.46], [0.5, 0.54], [0.6, 0.79], [0.7, 0.91], [0.8, 0.97], [0.9, 0.98], [1.0, 1.0]]
+    },
+    "lift": { "popMinRpm": 4000, "crackleMinRpm": 4500, "downshiftPopChance": 0.5 },
+    "limiterRetriggerS": 0.85
   }
 }

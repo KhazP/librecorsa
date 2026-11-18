@@ -194,10 +194,24 @@ console.log('\n== Aero against speed (flat, held speed)');
   // Under the 54 % of the weight on the rear axle, so the car gains understeer with speed
   check('Aero balance 44–48 % front', [slow, mid, fast].every((s) => s.bal > 44 && s.bal < 48), `${fmt(slow.bal, 1)} / ${fmt(mid.bal, 1)} / ${fmt(fast.bal, 1)} %`);
   check('Floor clear of the ground at 300 km/h', Math.min(fast.front, fast.rear) > 0.015, `${fmt(fast.front * 1000, 1)} / ${fmt(fast.rear * 1000, 1)} mm, ${fmt(fast.downN / 1000, 1)} kN of downforce`);
-  // The long-circuit trim's 1° wing: 4.5° less, 0.065 m² of CL·A and 0.022 m² of CD·A a degree
+  // The long-circuit trim: the 1° wing (4.5° less, 0.065 m² of CL·A and 0.022 m² of CD·A a degree) and the front's dive
+  // planes off, which shed the front's share of it so the balance stays put
   const low = at(250, LC_LMDH_LONG_CONFIG);
-  check('The 1° wing sheds ≈ 0.10 m² of CD·A and ≈ 0.3 m² of CL·A', Math.abs(mid.cdA - low.cdA - 0.099) < 0.015 && mid.clA - low.clA > 0.2 && mid.clA - low.clA < 0.45,
+  check('The low-drag trim sheds ≈ 0.10 m² of CD·A and ≈ 0.65 m² of CL·A', Math.abs(mid.cdA - low.cdA - 0.1) < 0.015 && mid.clA - low.clA > 0.5 && mid.clA - low.clA < 0.8,
     `CD·A ${fmt(low.cdA, 3)} m², CL·A ${fmt(low.clA)} m², balance ${fmt(low.bal, 1)} % front`);
+  // Each garage package trims the front with the wing: the balance stays within a point of the balanced package's
+  const pkgBal = (Object.entries(LC_LMDH_SIM_PROFILE.aeroPackagesDeg) as [string, [number, number]][]).map(([name, [f, r]]) => {
+    const cfg = structuredClone(C);
+    for (const w of cfg.aero.wings) w.angleDeg += w.name === 'FRONT_WING' ? f : w.name === 'REAR_WING' ? r : 0;
+    return { name, b150: at(150, cfg).bal, b250: at(250, cfg).bal, clA: at(250, cfg).clA };
+  });
+  const ref = pkgBal.find((p) => p.name === 'balanced')!;
+  check('Every aero package keeps the balance within 1 % of balanced', pkgBal.every((p) => Math.abs(p.b150 - ref.b150) < 1 && Math.abs(p.b250 - ref.b250) < 1),
+    pkgBal.map((p) => `${p.name} ${fmt(p.b150, 1)} / ${fmt(p.b250, 1)} %`).join(', '));
+  const hi = pkgBal.find((p) => p.name === 'high_downforce')!;
+  const lo = pkgBal.find((p) => p.name === 'low_downforce')!;
+  check('High downforce adds CL·A and low drag sheds it', hi.clA > ref.clA + 0.1 && lo.clA < ref.clA - 0.4,
+    `${fmt(lo.clA)} / ${fmt(ref.clA)} / ${fmt(hi.clA)} m² at 250 km/h`);
 }
 
 const pad = createFlatTestTrack(40_000, 3000);
