@@ -296,14 +296,11 @@ function loadTrackGlb(
           obj.castShadow = castExtra;
         } else if (topName === "Track_Model") {
           // Converted scans have no naming contract: only tall things (stands, buildings, trees, barriers) cast. What
-          // lies on the ground never does, as a mod draws it: its road materials, what the fit laid on the ground
-          // (`onGround`, fit-visual-road.ts: lines and markings) and modelled kerbs. Merged across a circuit's climbs,
-          // they passed for tall, and their edges, a centimetre or two over the ground beside them, drew jagged
+          // lies on the ground never does, as a mod draws it: what the fit laid flat on the ground (`onGround`,
+          // fit-visual-road.ts: the asphalt, its lines and markings) and modelled kerbs. Merged across a circuit's
+          // climbs, they passed for tall, and their edges, a centimetre or two over the ground beside them, drew jagged
           // shadow-map teeth along the lines at a low sun
-          const onGround =
-            obj.userData?.onGround === true ||
-            !!inheritedTag(obj, "keepShape", root) ||
-            (Array.isArray(obj.material) ? obj.material : [obj.material]).some((m) => roadMaterialNames.has(m.name));
+          const onGround = obj.userData?.onGround === true || !!inheritedTag(obj, "keepShape", root);
           obj.geometry.computeBoundingBox();
           box.copy(obj.geometry.boundingBox!).applyMatrix4(obj.matrixWorld).getSize(size);
           obj.castShadow = !isDecal && !onGround && size.y > 1.2;
