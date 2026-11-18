@@ -2,7 +2,9 @@
  * Checks DualSense gyro steering without a pad: the IMU offsets and calibration against report bytes captured from a
  * real DualSense over Bluetooth (CRC-checked), the tilt tracking on that capture's motion, and on simulated runs at
  * 66 Hz (the capture's Bluetooth rate on macOS) and 250 Hz: no drift over a lap with a gyro bias, steady under the
- * rumble's shake, the timestamp wrap, dropped reports, re-centring, the steering curve and the stick summed with it:
+ * rumble's shake, the timestamp wrap, dropped reports, re-centring, the steering curve and the stick summed with it.
+ * The DualShock 4's reports are built from the Linux driver's layout (hid-playstation): no DualShock 4 was at hand.
+ *
  *   npx tsx scripts/verify-gyro-steering.ts
  */
 import assert from 'node:assert/strict';
@@ -27,6 +29,14 @@ import {
   type MotionSample,
 } from '../src/lib/input/gyro-steer';
 import { DeviceInputReader, DEFAULT_WHEEL_SETTINGS, type PadLike } from '../src/lib/input/device-input';
+import {
+  DS4_SENSOR_TICKS_PER_S,
+  isDualShock4PadId,
+  parseDs4Calibration,
+  parseDs4Controls,
+  parseDs4Motion,
+} from '../src/lib/input/dualshock4-protocol';
+import { isGyroPadId } from '../src/lib/input/gyro-source';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
 
 let passed = 0;
@@ -262,6 +272,8 @@ interface RunOptions {
   dropEvery?: number;
   startTicks?: number;
   touchpad?: (t: number) => boolean;
+  /** The DualShock 4's 16-bit clock (16/3 µs steps, wrapping every 0.35 s) instead of the DualSense's */
+  ds4Clock?: boolean;
 }
 /** Feeds `tilt` a simulated run; calls `each` after every report with the time and the true roll */
 function simulate(tilt: PadTilt, o: RunOptions, each?: (t: number, trueRoll: number) => void) {
@@ -269,7 +281,7 @@ function simulate(tilt: PadTilt, o: RunOptions, each?: (t: number, trueRoll: num
   const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) * 2 - 1;
   const dt = 1 / o.hz;
   const n = Math.round(o.seconds * o.hz);
-  const clock = new SensorClock(SENSOR_TICKS_PER_S, 32);
+  const clock = o.ds4Clock ? new SensorClock(DS4_SENSOR_TICKS_PER_S, 16) : new SensorClock(SENSOR_TICKS_PER_S, 32);
   let prev = orientation(o.pose(0));
   for (let i = 1; i <= n; i++) {
     const t = i * dt;
@@ -285,7 +297,9 @@ function simulate(tilt: PadTilt, o: RunOptions, each?: (t: number, trueRoll: num
     const m: DualSenseMotion = {
       gyroDps: w.map((v) => v / DEG + (o.gyroBiasDps ?? 0) + rand() * (o.gyroNoiseDps ?? 0)) as Vec3,
       accelG: up.map((v) => v + shake + rand() * (o.accelNoiseG ?? 0)) as Vec3,
-      ticks: ((o.startTicks ?? 0) + Math.round(t * SENSOR_TICKS_PER_S)) >>> 0,
+      ticks: o.ds4Clock
+        ? Math.round(t * DS4_SENSOR_TICKS_PER_S) & 0xffff
+        : ((o.startTicks ?? 0) + Math.round(t * SENSOR_TICKS_PER_S)) >>> 0,
       touchpad: o.touchpad?.(t) ?? false,
     };
     tilt.update(asSample(m, clock));
@@ -418,6 +432,120 @@ check('the stick and the gyro add up, held to full lock', () => {
   assert.equal(combineStickAndGyro(0.3, undefined), 0.3);
 });
 
+console.log('DualShock 4 (reports built from hid-playstation\'s layout)');
+/** A calibration report: pitch ±8900/8890, yaw ±8600/8610, roll ±8300/8310 counts at ±540 deg/s, accel ±1 g */
+function ds4CalibrationReport(bluetooth: boolean): Uint8Array {
+  const r = new Uint8Array(bluetooth ? 41 : 37);
+  const v = new DataView(r.buffer);
+  r[0] = bluetooth ? 0x05 : 0x02;
+  const gyro = bluetooth ? [8900, 8600, 8300, -8890, -8610, -8310] : [8900, -8890, 8600, -8610, 8300, -8310];
+  const fields = [0, 0, 0, ...gyro, 540, 540, 8200, -8180, 8190, -8200, 8210, -8170];
+  fields.forEach((f, i) => v.setInt16(1 + 2 * i, f, true));
+  return r;
+}
+const ds4Cal = parseDs4Calibration(0x02, view(ds4CalibrationReport(false)))!;
+check('calibration: USB 0x02 and Bluetooth 0x05 orders give the same scales; the wrong order does not', () => {
+  assert.ok(ds4Cal.fromPad);
+  near(ds4Cal.gyroDpsPerCount[0], 1080 / 17790, 1e-12, 'pitch');
+  near(ds4Cal.gyroDpsPerCount[1], 1080 / 17210, 1e-12, 'yaw');
+  near(ds4Cal.gyroDpsPerCount[2], 1080 / 16610, 1e-12, 'roll');
+  near(ds4Cal.accelGPerCount[0], 2 / 16380, 1e-12, 'accel x');
+  assert.deepEqual(parseDs4Calibration(0x05, view(ds4CalibrationReport(true))), ds4Cal);
+  assert.deepEqual(parseDs4Calibration(0x02, view(ds4CalibrationReport(false).subarray(1))), ds4Cal, 'without the id byte');
+  const misread = parseDs4Calibration(0x02, view(Uint8Array.from([0x02, ...ds4CalibrationReport(true).subarray(1, 37)])));
+  assert.notDeepEqual(misread, ds4Cal, 'Bluetooth bytes read in the USB order');
+  assert.equal(parseDs4Calibration(0x02, view(new Uint8Array(37))), null, 'blank');
+  assert.equal(parseDs4Calibration(0x01, view(ds4CalibrationReport(false))), null, 'not a calibration report');
+});
+/** The 32-byte block both transports share: sticks, buttons, triggers, the clock, gyro and accel counts */
+function ds4Common(o: { gyro: Vec3; accelG: Vec3; ticks: number; touchpad?: boolean }): Uint8Array {
+  const c = new Uint8Array(32);
+  const v = new DataView(c.buffer);
+  c.set([255, 0, 128, 128], 0); // left stick right and up
+  c[4] = 0x20 | 0x06; // Cross, hat left
+  c[5] = 0x01 | 0x04; // L1, L2 button
+  c[6] = 0x01 | (o.touchpad ? 0x02 : 0); // PS, touchpad
+  c[7] = 255; // L2 full
+  c[8] = 0;
+  v.setUint16(9, o.ticks, true);
+  o.gyro.forEach((g, k) => v.setInt16(12 + 2 * k, Math.round(g / ds4Cal.gyroDpsPerCount[k]!), true));
+  o.accelG.forEach((a, k) => v.setInt16(18 + 2 * k, Math.round(a / ds4Cal.accelGPerCount[k]! + ds4Cal.accelBias[k]!), true));
+  return c;
+}
+const ds4Usb = (c: Uint8Array) => {
+  const d = new Uint8Array(63);
+  d.set(c, 0);
+  return d;
+};
+const ds4Bt = (c: Uint8Array) => {
+  const d = new Uint8Array(77);
+  d[0] = 0xc0; // the two lead bytes
+  d.set(c, 2);
+  return d;
+};
+check('motion: USB 0x01 at the start, Bluetooth 0x11 two bytes in; the short Bluetooth 0x01 has none', () => {
+  const c = ds4Common({ gyro: [12, -30, 45], accelG: [-0.5, 0.866, 0], ticks: 0xfff0, touchpad: true });
+  for (const [id, data] of [[0x01, ds4Usb(c)], [0x11, ds4Bt(c)]] as const) {
+    const m = parseDs4Motion(id, view(data), ds4Cal);
+    assert.ok(m, `report ${id}`);
+    m.gyroDps.forEach((g, k) => near(g, [12, -30, 45][k]!, 0.07, `gyro ${k}`));
+    m.accelG.forEach((a, k) => near(a, [-0.5, 0.866, 0][k]!, 0.001, `accel ${k}`));
+    assert.equal(m.ticks, 0xfff0);
+    assert.equal(m.touchpad, true);
+  }
+  assert.equal(parseDs4Motion(0x01, view(new Uint8Array(9)), ds4Cal), null, 'short Bluetooth report');
+  assert.equal(parseDs4Motion(0x31, view(new Uint8Array(77)), ds4Cal), null, 'a DualSense report id');
+});
+check('Bluetooth controls: sticks, buttons and triggers in the standard order, as the stand-in pad', () => {
+  const p = parseDs4Controls(0x11, view(ds4Bt(ds4Common({ gyro: [0, 0, 0], accelG: [0, 1, 0], ticks: 0 }))))!;
+  assert.equal(p.axes[0], 1);
+  assert.equal(p.axes[1], -1);
+  assert.equal(p.buttons[0], true, 'Cross');
+  assert.equal(p.buttons[4], true, 'L1');
+  assert.equal(p.buttons[6], true, 'L2');
+  assert.deepEqual(p.buttons.slice(12, 16), [false, false, true, false], 'd-pad left');
+  assert.equal(p.buttons[16], true, 'PS');
+  assert.equal(p.l2, 1);
+  assert.equal(p.r2, 0);
+  assert.equal(parseDs4Controls(0x01, view(new Uint8Array(9))), null);
+});
+check('16-bit clock: steps across its wrap; a silence longer than the wrap is a gap by the wall clock', () => {
+  const clock = new SensorClock(DS4_SENSOR_TICKS_PER_S, 16);
+  assert.equal(clock.step(0xfff0, 0), -1, 'first reading');
+  near(clock.step(0x0010, 4), 0x20 / DS4_SENSOR_TICKS_PER_S, 1e-12, 'across the wrap');
+  // 0.4 s later by the wall clock: the counter went round more than once, and only looks like a short step
+  assert.equal(clock.step(0x0100, 404), -1);
+  near(clock.step(0x0100 + 750, 408), 0.004, 1e-9, 'tracking again');
+});
+check('a lap of corners on the DualShock 4\'s clock (wrapping every 0.35 s) follows the hands', () => {
+  const tilt = new PadTilt();
+  let e2 = 0;
+  let n = 0;
+  const pose = (t: number): PadPose => ({ roll: 25 * Math.sin((2 * Math.PI * t) / 6), pitch: 35 });
+  simulate(tilt, { hz: 250, seconds: 60, pose, ds4Clock: true, gyroBiasDps: 1, gyroNoiseDps: 0.3, accelNoiseG: 0.01 }, (t, truth) => {
+    if (t < 1) return;
+    e2 += (tilt.rollDeg()! - truth) ** 2;
+    n++;
+  });
+  const rms = Math.sqrt(e2 / n);
+  assert.ok(rms < 0.8, `RMS ${rms.toFixed(2)}°`);
+});
+check('DualShock 4 ids: Chrome, Firefox and name-only ids; not the DualSense, not an Xbox pad', () => {
+  for (const id of [
+    'Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)',
+    'Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 05c4)',
+    'DUALSHOCK 4 USB Wireless Adaptor (Vendor: 054c Product: 0ba0)',
+    '054c-09cc-Wireless Controller',
+    'DUALSHOCK 4 Wireless Controller',
+    'Wireless Controller',
+  ])
+    assert.ok(isDualShock4PadId(id) && isGyroPadId(id), id);
+  for (const id of ['DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)', 'Xbox Wireless Controller', 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)'])
+    assert.ok(!isDualShock4PadId(id), id);
+  assert.ok(isGyroPadId('DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'));
+  assert.ok(!isGyroPadId('Xbox Wireless Controller'));
+});
+
 console.log('Device reader and settings');
 const pad = (id: string, axes: number[]): PadLike => ({
   id,
@@ -426,13 +554,15 @@ const pad = (id: string, axes: number[]): PadLike => ({
   axes,
   buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })),
 });
-check('the gyro reaches the frame only while a DualSense steers', () => {
+check('the gyro reaches the frame only while a DualSense or DualShock 4 steers', () => {
   const settings = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PLAYER_SETTINGS.padButtons };
   const ds = new DeviceInputReader().read([pad('DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)', [0.2, 0])], settings, 1 / 60, undefined, 0.4);
   assert.equal(ds.gyroSteer, 0.4);
   near(ds.padSteer!, 0.2, 1e-12);
   const xbox = new DeviceInputReader().read([pad('Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)', [0.2, 0])], settings, 1 / 60, undefined, 0.4);
   assert.equal(xbox.gyroSteer, undefined, 'a paired DualSense on the desk never steers for the Xbox pad');
+  const ds4 = new DeviceInputReader().read([pad('Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)', [0, 0])], settings, 1 / 60, undefined, -0.3);
+  assert.equal(ds4.gyroSteer, -0.3, 'a DualShock 4 steers with its gyro too');
   const off = new DeviceInputReader().read([pad('DualSense Wireless Controller', [0, 0])], settings, 1 / 60);
   assert.equal(off.gyroSteer, undefined);
 });
