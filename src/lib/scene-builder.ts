@@ -18,6 +18,7 @@ import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } f
 import { cleanScanMaterial } from "@/lib/render/scan-materials";
 import { trackColliders } from "@/lib/sim/track-colliders";
 import { fitVisualRoad, inheritedTag } from "@/lib/render/fit-visual-road";
+import { fillRoadSeams, type SeamFillOptions } from "@/lib/render/seam-fill";
 import { createGroundHit, type GroundQuery } from "@/lib/sim/f12026-car/TrackColliderQuery";
 import { OVERLAY_LAYER } from "@/lib/render/layers";
 import { cutSceneryBoxes, isCutMaterialMesh, type SceneryCutBox } from "@/lib/scenery-cuts";
@@ -188,7 +189,9 @@ function loadTrackGlb(
   /** Scan materials whose meshes are left out (track data `mesh.cutMaterials`) */
   cutMaterials: readonly string[] = [],
   /** The layout's split model (venue-models.ts): loaded in place of `url`, which stays the fallback */
-  split?: VenueModelFiles
+  split?: VenueModelFiles,
+  /** The lap's edges are the ones whose seams get filled (seam-fill.ts) */
+  lap?: SeamFillOptions["lap"]
 ): void {
   const cutMaterialNames = new Set(cutMaterials);
   const roadMaterialNames = new Set(roadMaterials);
@@ -252,7 +255,12 @@ function loadTrackGlb(
       const size = new THREE.Vector3();
       root.updateMatrixWorld(true);
       const colliders = trackColliders(root);
-      if (colliders.conformSurfaces && colliders.ground) fitVisualRoad(root, colliders.ground, roadMaterials);
+      if (colliders.conformSurfaces && colliders.ground) {
+        fitVisualRoad(root, colliders.ground, roadMaterials);
+        // The mod's gaps between the asphalt and the terrain beside it, fitted with their heights kept, open onto the
+        // sky's ground: filled with the terrain's own surface (seam-fill.ts)
+        fillRoadSeams(root, roadMaterials, { lap });
+      }
       root.traverse((obj) => {
         // Exported node extras land on the node; the mesh child inherits nothing, so walk up.
         let node: THREE.Object3D | null = obj;
@@ -1173,7 +1181,9 @@ export function buildCircuitScene(
     track.roadMaterials ?? [],
     track.sceneryCuts ?? [],
     track.sceneryCutMaterials ?? [],
-    venueModelFiles(track.id)
+    venueModelFiles(track.id),
+    // The road edges a driver sees: across the track and 15 m beyond its sides (the run-off's own asphalt, the pit exit)
+    samples.map((p) => ({ x: p.position.x, z: p.position.z, reach: p.width / 2 + 15 }))
   );
 
   // The procedural stand-in is placed once

@@ -29,6 +29,8 @@ interface GltfJson {
 
 /** The glTF extension a venue layout file uses to point at the shared file's materials and textures */
 const VENUE_EXTENSION = 'LC_venue_shared';
+/** A venue layout file's meshes whose material is the shared file's: that material's number there */
+const sharedMaterialOf = new WeakMap<THREE.Object3D, number>();
 
 const parseJson = (buf: Buffer): GltfJson => JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as GltfJson;
 
@@ -80,6 +82,10 @@ export function loadGlbGeometry(path: string, sharedPath?: string): THREE.Group 
       tm.add(child);
     }
     if (tm.children.length !== own.length + common.length) throw new Error(`${path}: its order leaves children out`);
+    layout.root.traverse((o) => {
+      const ref = sharedMaterialOf.get(o);
+      if (ref !== undefined) o.userData.alphaMode = shared.json.materials?.[ref]?.alphaMode ?? 'OPAQUE';
+    });
     layout.root.updateMatrixWorld(true);
   }
   return layout.root;
@@ -176,8 +182,15 @@ function buildGlbGeometry(path: string): { root: THREE.Group; json: GltfJson } {
         if (p.attributes.TEXCOORD_0 !== undefined) g.setAttribute('uv', new THREE.BufferAttribute(readAccessor(p.attributes.TEXCOORD_0, true), 2));
         if (p.indices !== undefined) g.setIndex(new THREE.BufferAttribute(readAccessor(p.indices, false), 1));
         const mesh = new THREE.Mesh(g);
-        // The material's name only (no material is built), for tests that pick primitives by it
-        if (p.material !== undefined) mesh.userData.materialName = gltf.materials?.[p.material]?.name ?? '';
+        // The material's name and alpha mode only (no material is built), for tests that pick primitives by it. A venue
+        // layout file's material points at the shared file's for its alpha mode (`loadGlbGeometry` reads it there)
+        if (p.material !== undefined) {
+          const mat = gltf.materials?.[p.material];
+          mesh.userData.materialName = mat?.name ?? '';
+          mesh.userData.alphaMode = mat?.alphaMode ?? 'OPAQUE';
+          const shared = mat?.extensions?.[VENUE_EXTENSION]?.material;
+          if (shared !== undefined) sharedMaterialOf.set(mesh, shared);
+        }
         return mesh;
       });
       if (prims.length === 1) obj = prims[0];
