@@ -92,14 +92,28 @@ interface SteerPadProps {
   suspended: boolean;
 }
 
+/** Releases pointer capture safely if the element still holds it (no-op if the browser already released it) */
+function releaseCapture(el: Element | null, id: number): void {
+  if (!el?.hasPointerCapture?.(id)) return;
+  try {
+    el.releasePointerCapture(id);
+  } catch {
+    // ignore if the browser already released capture
+  }
+}
+
 /** Horizontal steering slider: the finger's travel from its touch-down point maps to −1..1 */
 const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
   const pid = useRef<number | null>(null);
+  const padRef = useRef<HTMLDivElement | null>(null);
   const origin = useRef(0);
 
   useEffect(() => {
     if (!suspended) return;
-    pid.current = null;
+    if (pid.current !== null) {
+      releaseCapture(padRef.current, pid.current);
+      pid.current = null;
+    }
     onChange(0);
   }, [suspended, onChange]);
   useEffect(
@@ -135,6 +149,7 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
 
   return (
     <div
+      ref={padRef}
       role="slider"
       aria-label="Steering"
       aria-valuemin={-100}
@@ -244,12 +259,16 @@ interface PedalProps {
 /** Vertical pedal: the finger's height on the pedal (bottom 0 → top 1) is the input */
 const Pedal: React.FC<PedalProps> = ({ label, color, icon, value, onChange, suspended }) => {
   const pid = useRef<number | null>(null);
+  const pedalRef = useRef<HTMLDivElement | null>(null);
   // The pedal never moves while held: read its box once per press, not on every pointer move
   const box = useRef<DOMRect | null>(null);
 
   useEffect(() => {
     if (!suspended) return;
-    pid.current = null;
+    if (pid.current !== null) {
+      releaseCapture(pedalRef.current, pid.current);
+      pid.current = null;
+    }
     onChange(0);
   }, [suspended, onChange]);
 
@@ -287,6 +306,7 @@ const Pedal: React.FC<PedalProps> = ({ label, color, icon, value, onChange, susp
   // The visible pedal is the whole hit area: the travel is measured over its height
   return (
     <div
+      ref={pedalRef}
       role="slider"
       aria-label={label}
       aria-valuemin={0}
@@ -346,14 +366,7 @@ const HoldButton: React.FC<HoldButtonProps> = ({
   useEffect(() => {
     if (!suspended) return;
     if (pid.current !== null) {
-      const el = btnRef.current;
-      if (el?.hasPointerCapture?.(pid.current)) {
-        try {
-          el.releasePointerCapture(pid.current);
-        } catch {
-          // ignore if the browser already released capture
-        }
-      }
+      releaseCapture(btnRef.current, pid.current);
       pid.current = null;
     }
     onChange(false);
@@ -443,18 +456,7 @@ const HoldButtonPair: React.FC<{
   useEffect(() => {
     if (!suspended) return;
     if (pointers.current.size > 0) {
-      const el = pairRef.current;
-      if (el) {
-        for (const id of pointers.current.keys()) {
-          if (el.hasPointerCapture?.(id)) {
-            try {
-              el.releasePointerCapture(id);
-            } catch {
-              // ignore if the browser already released capture
-            }
-          }
-        }
-      }
+      for (const id of pointers.current.keys()) releaseCapture(pairRef.current, id);
       pointers.current.clear();
       sync();
     }
