@@ -1032,12 +1032,12 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
             ) : null}
             {steerControl}
           </div>
-          {/* Bottom-right: driving buttons above the pedals (right-to-left so headlights never shift existing buttons) */}
+          {/* Bottom-right: driving buttons above the pedals (right-to-left: shift paddles stay adjacent on the bottom row in portrait wrap, headlights last so toggling never shifts existing buttons) */}
           <div
             className="absolute flex flex-col items-end gap-3 phone:gap-2"
             style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
           >
-            {buttonRow([aero, boost, shiftUp, shiftDown, gearButton, headlights], "end")}
+            {buttonRow([shiftUp, shiftDown, aero, boost, gearButton, headlights], "end")}
             {pedalPair}
           </div>
         </>
