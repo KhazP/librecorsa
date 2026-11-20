@@ -113,7 +113,10 @@ const CustomColorSlot: React.FC<{
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-semibold text-lc-slate">{label}</span>
-        <label className="flex cursor-pointer items-center gap-1.5 rounded-lc-nub border border-lc-line bg-lc-carbon px-1.5 py-0.5">
+        <label
+          data-nav-skip=""
+          className="flex cursor-pointer items-center gap-1.5 rounded-lc-nub border border-lc-line bg-lc-carbon px-1.5 py-0.5 focus-within:border-lc-volt"
+        >
           <input
             ref={inputRef}
             type="color"
@@ -121,7 +124,7 @@ const CustomColorSlot: React.FC<{
             value={value}
             onChange={(e) => onDraft(e.target.value)}
             onBlur={(e) => onCommit(e.target.value)}
-            className="size-4 shrink-0 cursor-pointer border-0 bg-transparent p-0"
+            className="size-4 shrink-0 cursor-pointer border-0 bg-transparent p-0 outline-none"
           />
           <span className="lc-mono text-[11px] text-lc-fog uppercase">{value}</span>
         </label>
@@ -179,10 +182,13 @@ export const LiveryPicker: React.FC<{
   draftRef.current = draft;
 
   const updateDraft = (slot: keyof CustomLiveryColors, hex: string) => {
-    setDraft((prev) => ({ ...prev, [slot]: hex }));
+    const next: CustomLiveryColors = { ...draftRef.current, [slot]: hex };
+    draftRef.current = next;
+    setDraft(next);
   };
   const commitSlot = (slot: keyof CustomLiveryColors, hex: string) => {
     const next: CustomLiveryColors = { ...draftRef.current, [slot]: hex };
+    draftRef.current = next;
     setDraft(next);
     if (
       value.id === "custom" &&
