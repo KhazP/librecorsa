@@ -130,6 +130,19 @@ const RedBullLiveryNote: React.FC = () =>
     </>
   );
 
+/** sagatron918's PayPal donation link: left out in the Android store build (Google Play payment rules) */
+const SagatronDonateLink: React.FC = () =>
+  useStoreBuild() ? null : (
+    <>
+      {" "}
+      (
+      <a href="https://www.paypal.me/SagarNaikB" target="_blank" rel="noreferrer" className={linkClass}>
+        paypal.me/SagarNaikB
+      </a>
+      )
+    </>
+  );
+
 /** "Monaco, Red Bull Ring, Chang and 7 more" */
 const worksLine = (works: readonly string[]) => (works.length > 3 ? `${works.slice(0, 3).join(", ")} and ${works.length - 3} more` : works.join(", "));
 
@@ -334,6 +347,10 @@ const Credits: React.FC = () => (
             CC BY-NC-SA 4.0
           </a>{" "}
           · used with permission
+          <br />
+          &ldquo;RSS GT-M Tyre Extension Packs&rdquo; (Pirelli, Michelin, Goodyear, Bridgestone, Yokohama, Falken) by
+          sagatron918
+          <SagatronDonateLink /> · GT, prototype and classic racing tyres · used with permission
         </CreditRow>
         <CreditRow title="MTRacing 496R">
           Model, sound and physics from &ldquo;MTRacing 496R&rdquo; by{" "}
