@@ -960,12 +960,24 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
   ) : (
     <SteerPad value={vis.steer} onChange={setSteer} suspended={suspended} />
   );
-  /** A row of driving buttons over a pedal; nothing at all when the car and gearbox use none */
+  /**
+   * Driving buttons over a pedal; nothing at all when the car and gearbox use none.
+   * Right-aligned clusters (`align === "end"`) expect buttons in right-to-left priority order so `flex-row-reverse`
+   * keeps the primary buttons anchored to the right edge and `flex-wrap-reverse` wraps overflow upward on narrow
+   * portrait phones (`< 640 px`, max 3 per row = 160 px) — keeping clear of `TiltNote` and never shifting existing
+   * buttons when `Headlights` appears or disappears.
+   */
   const buttonRow = (buttons: React.ReactNode[], align: "start" | "end") => {
     const shown = buttons.filter(Boolean);
-    return shown.length ? (
-      <div className={`flex gap-2 ${align === "end" ? "justify-end" : "justify-start"}`}>{shown}</div>
-    ) : null;
+    if (!shown.length) return null;
+    if (align === "end") {
+      return (
+        <div className="flex flex-row-reverse flex-wrap-reverse justify-start gap-2 max-sm:portrait:max-w-42">
+          {shown}
+        </div>
+      );
+    }
+    return <div className="flex justify-start gap-2">{shown}</div>;
   };
 
   return (
@@ -995,12 +1007,12 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
               <TiltNote maxWidth="max-w-[calc(100vw-232px)]">{tiltStatus === "asking" ? "Allow motion access" : "Tap to turn on tilt"}</TiltNote>
             )}
           </div>
-          {/* Bottom-right: throttle under the right thumb, the other buttons over it (right-aligned so headlights never shift existing buttons) */}
+          {/* Bottom-right: throttle under the right thumb, the other buttons over it (right-to-left so headlights never shift existing buttons) */}
           <div
             className="absolute flex flex-col items-end gap-3 phone:gap-2"
             style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
           >
-            {buttonRow([headlights, shiftUp, boost, aero], "end")}
+            {buttonRow([aero, boost, shiftUp, headlights], "end")}
             {throttlePedal}
           </div>
         </>
@@ -1020,12 +1032,12 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
             ) : null}
             {steerControl}
           </div>
-          {/* Bottom-right: driving buttons above the pedals (right-aligned so headlights never shift existing buttons) */}
+          {/* Bottom-right: driving buttons above the pedals (right-to-left so headlights never shift existing buttons) */}
           <div
             className="absolute flex flex-col items-end gap-3 phone:gap-2"
             style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
           >
-            {buttonRow([headlights, gearButton, shiftDown, shiftUp, boost, aero], "end")}
+            {buttonRow([aero, boost, shiftUp, shiftDown, gearButton, headlights], "end")}
             {pedalPair}
           </div>
         </>
