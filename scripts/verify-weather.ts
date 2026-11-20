@@ -11,6 +11,8 @@
  *  5. Realism levels: casual has no wear / fuel use, full is the default
  *  6. AI: weather pace and tyre call
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
@@ -48,6 +50,8 @@ import {
   WeatherState,
 } from '../src/lib/sim/weather';
 import {
+  AUTO_HEADLIGHT_RAIN,
+  AUTO_HEADLIGHT_SUN_DEG,
   CarHeadlights,
   headlightProfileFor,
   headlightSpotCountFor,
@@ -281,14 +285,22 @@ console.log('\n== Weather & time of day');
   const nightManualOff = resolveHeadlightStates('off', nightSun.elevationDeg, 0);
   const rainManualOff = resolveHeadlightStates('off', 40, 0.6);
   const dayManualOn = resolveHeadlightStates('on', 40, 0);
+  const nightManualOn = resolveHeadlightStates('on', nightSun.elevationDeg, 0);
   const duskAuto = resolveHeadlightStates('auto', 2, 0);
+  const rainAuto = resolveHeadlightStates('auto', 40, 0.6);
   const dayAuto = resolveHeadlightStates('auto', 40, 0);
+  const atThresholdAuto = resolveHeadlightStates('auto', AUTO_HEADLIGHT_SUN_DEG, AUTO_HEADLIGHT_RAIN);
   hlMed.setEnabled(nightManualOff.player, false);
   hlOpp.setEnabled(nightManualOff.opponents, false);
   const nightAppliedOk = !hlMed.isOn && hlOpp.isOn;
   hlMed.setEnabled(dayManualOn.player, false);
   hlOpp.setEnabled(dayManualOn.opponents, false);
   const dayAppliedOk = hlMed.isOn && !hlOpp.isOn;
+  const driveSessionSrc = readFileSync(resolve(process.cwd(), 'src/lib/drive-session.ts'), 'utf8');
+  const driveSessionWiredOk =
+    /resolveHeadlightStates\(headlightMode,\s*skyConditions\.elevationDeg,\s*wx\.rainIntensity\)/.test(driveSessionSrc) &&
+    /carHeadlights\.setEnabled\(headlights\.player,/.test(driveSessionSrc) &&
+    /visualFx\.setHeadlights\(headlights\.opponents,/.test(driveSessionSrc);
   const oppIndependentOfPlayerToggle =
     !nightManualOff.player &&
     nightManualOff.opponents &&
@@ -296,12 +308,19 @@ console.log('\n== Weather & time of day');
     rainManualOff.opponents &&
     dayManualOn.player &&
     !dayManualOn.opponents &&
+    nightManualOn.player &&
+    nightManualOn.opponents &&
     duskAuto.player &&
     duskAuto.opponents &&
+    rainAuto.player &&
+    rainAuto.opponents &&
     !dayAuto.player &&
     !dayAuto.opponents &&
+    !atThresholdAuto.player &&
+    !atThresholdAuto.opponents &&
     nightAppliedOk &&
-    dayAppliedOk;
+    dayAppliedOk &&
+    driveSessionWiredOk;
   hlMed.dispose();
   hlOpp.dispose();
   check(
@@ -310,9 +329,9 @@ console.log('\n== Weather & time of day');
     `med=${medSpots.length} spot, opp=${oppSpots.length} spots / ${oppSprites.length} flares`,
   );
   check(
-    'resolveHeadlightStates keeps opponents on auto regardless of player manual on/off toggle',
+    'resolveHeadlightStates & drive-session wiring keep opponents on auto regardless of player toggle',
     oppIndependentOfPlayerToggle,
-    `nightOff={p:${nightManualOff.player},o:${nightManualOff.opponents}}, rainOff={p:${rainManualOff.player},o:${rainManualOff.opponents}}, dayOn={p:${dayManualOn.player},o:${dayManualOn.opponents}}`,
+    `nightOff={p:${nightManualOff.player},o:${nightManualOff.opponents}}, rainOff={p:${rainManualOff.player},o:${rainManualOff.opponents}}, dayOn={p:${dayManualOn.player},o:${dayManualOn.opponents}}, wired=${driveSessionWiredOk}`,
   );
   const sampleCarIds = ['lc26', 'amg-gt3', 'mtr-496r', 'bmw-m1-procar', 'liana'] as const;
   check(
