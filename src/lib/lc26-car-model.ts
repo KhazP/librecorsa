@@ -17,6 +17,10 @@ import { installVertexOcclusion } from "@/lib/render/vertex-occlusion";
 import { createDriverFigure } from "@/lib/render/driver-figure";
 import { createDriverHelmet } from "@/lib/render/driver-helmet";
 import { installLiveryDecals } from "@/lib/render/livery-decals";
+import {
+  installF1LiveryPaint,
+  type F1LiverySurface,
+} from "@/lib/render/livery-repaint";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
 import {
   relativeMatrix,
@@ -358,33 +362,65 @@ export function attachLc26Model(
   for (const c of corners) upgradeLc26Materials(c.steer, { liveryMask });
   applyRearRainLight(bodyGroup);
 
-  // Each car its own paint zone materials (the upgraded ones are shared by every clone of the template); the body's
-  // carry the livery decals, the flaps' (in their own node space) do not
+  // Each car gets its own paint zone materials (the upgraded ones are shared by every clone of the template):
+  // - BODY paint zones carry both the procedural tri-orthographic livery shader and external decals (oracle_red_bull).
+  // - Active-aero flaps get their own material clone with their closed-pose matrix (`aeroClosed`) as `uLiveryFrame`
+  //   so wing sponsor banners and stripes stay locked to the flaps even when X-Mode opens them.
   const zoneMats = new Map<string, THREE.MeshStandardMaterial[]>();
   const ownZone = new Map<string, THREE.MeshStandardMaterial>();
   const decalMats: THREE.Material[] = [];
-  const onFlap = (obj: THREE.Object3D) => {
-    for (let o: THREE.Object3D | null = obj; o && o !== bodyGroup; o = o.parent) if (o.userData.aeroClosed) return true;
-    return false;
+  const liverySurfaces: F1LiverySurface[] = [];
+  const flapNodeFor = (obj: THREE.Object3D): THREE.Object3D | null => {
+    for (let o: THREE.Object3D | null = obj; o && o !== bodyGroup; o = o.parent) {
+      if (o.userData.aeroClosed) return o;
+    }
+    return null;
   };
   bodyGroup.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh) return;
-    const flap = onFlap(mesh);
+    const flapNode = flapNodeFor(mesh);
     const own = (m: THREE.Material): THREE.Material => {
       if (!PAINT_ZONE_MATERIALS.includes(m.name)) return m;
-      const key = `${m.uuid}:${flap}`;
+      const key = `${m.uuid}:${flapNode ? flapNode.uuid : "body"}`;
       let c = ownZone.get(key);
       if (!c) {
         c = (m as THREE.MeshStandardMaterial).clone();
         ownZone.set(key, c);
         zoneMats.set(m.name, [...(zoneMats.get(m.name) ?? []), c]);
-        if (!flap) decalMats.push(c);
+        if (!flapNode) decalMats.push(c);
+        if ((c as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial) {
+          const frameMatrix = flapNode?.userData.aeroClosed
+            ? new THREE.Matrix4().fromArray(flapNode.userData.aeroClosed as number[])
+            : undefined;
+          liverySurfaces.push({ material: c as THREE.MeshPhysicalMaterial, frameMatrix });
+        }
       }
       return c;
     };
     mesh.material = Array.isArray(mesh.material) ? mesh.material.map(own) : own(mesh.material);
   });
+
+  // Per-car rim material clone so liveries with iconic rim finishes (e.g. 1978 Black & Gold) can tint wheels cleanly
+  let ownRimMat: THREE.MeshStandardMaterial | null = null;
+  let defaultRimColor: THREE.Color | null = null;
+  for (const c of corners) {
+    c.spin.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const swapRim = (m: THREE.Material): THREE.Material => {
+        if (m.name !== "EXT_RIM" || !(m as THREE.MeshStandardMaterial).isMeshStandardMaterial) return m;
+        if (!ownRimMat) {
+          ownRimMat = (m as THREE.MeshStandardMaterial).clone();
+          defaultRimColor = ownRimMat.color.clone();
+        }
+        return ownRimMat;
+      };
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(swapRim) : swapRim(mesh.material);
+    });
+  }
+
+  const proceduralPaint = !liveryMask && liverySurfaces.length ? installF1LiveryPaint(liverySurfaces) : null;
   const decals = decalMats.length ? installLiveryDecals(decalMats) : null;
 
   // A body without a driver of its own gets one: a helmet in the cockpit and, with a steering wheel to hold, the
@@ -463,8 +499,17 @@ export function attachLc26Model(
       EXT_PAINT_SECONDARY: livery.secondary,
       EXT_PAINT_ACCENT: livery.accent,
     };
-    for (const [name, mats] of zoneMats) for (const m of mats) m.color.set(colours[name]);
-    decals?.set(livery.decals);
+    const useProcedural = !liveryMask && !livery.decals && proceduralPaint !== null;
+    const appliedProcedural = useProcedural ? proceduralPaint.set(livery) : false;
+    if (!appliedProcedural) {
+      proceduralPaint?.set(null);
+      for (const [name, mats] of zoneMats) for (const m of mats) m.color.set(colours[name]);
+    }
+    decals?.set(appliedProcedural ? null : livery.decals);
+    if (ownRimMat && defaultRimColor) {
+      if (livery.visual?.rimColor) ownRimMat.color.set(livery.visual.rimColor);
+      else ownRimMat.color.copy(defaultRimColor);
+    }
     driverHelmet?.setColours(livery.primary, livery.secondary, livery.accent);
     driverFigure?.setColours(livery.primary, livery.secondary, livery.accent);
   };
@@ -474,6 +519,7 @@ export function attachLc26Model(
     driverHelmet?.dispose();
     driverFigure?.dispose();
     for (const m of ownZone.values()) m.dispose();
+    ownRimMat?.dispose();
     for (const h of liveTyreHandles) h.dispose();
     bodyGroup.removeFromParent();
     for (const c of corners) c.steer.removeFromParent();

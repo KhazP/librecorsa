@@ -4,6 +4,7 @@
  *   npx tsx scripts/verify-liveries.ts
  */
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 import {
   buildCustomLivery,
   CUSTOM_LIVERY_PALETTE,
@@ -13,6 +14,14 @@ import {
   resolveLivery,
   sanitizeCustomLivery,
 } from '../src/lib/track-data';
+import {
+  F1_ATLAS_SIZE,
+  LIVERY_FINISH_PROFILES,
+  installF1LiveryPaint,
+  liverySwatchBackground,
+  renderF1LiveryToContext,
+  resolveLiveryVisual,
+} from '../src/lib/render/livery-repaint';
 import { AI_DRIVERS, AI_RESERVE_DRIVERS } from '../src/lib/sim/ai-opponents';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
 import { resetAllSettings } from '../src/components/settings/storage';
@@ -26,8 +35,65 @@ function check(name: string, fn: () => void) {
 
 const HEX_RE = /^#[0-9a-f]{6}$/i;
 const TRADEMARK_RE =
-  /\b(ferrari|mercedes|mclaren|red\s*bull|aston\s*martin|alpine|williams|haas|sauber|audi|cadillac|racing\s*bulls|marlboro|john\s*player|camel|gulf|mild\s*seven|benetton|jordan|lotus|renault|f1|formula\s*1|silver\s*arrows|scuderia|woking|maranello|brackley|milton(?:\s*keynes)?|silverstone|enstone|grove|faenza|kannapolis|ingolstadt|hinwil|detroit)\b/i;
+  /\b(ferrari|mercedes|mclaren|red\s*bull|aston\s*martin|alpine|williams|haas|sauber|audi|cadillac|racing\s*bulls|brawn|marlboro|john\s*player|camel|gulf|mild\s*seven|benetton|jordan|lotus|renault|honda|canon|telefonica|benson|hedges|petronas|aramco|shell|pirelli|oracle|crowdstrike|santander|vodafone|bwt|eni|msc|fia|hp|visit\s*rwanda|rwandair|f1|formula\s*1|silver\s*arrows|scuderia|woking|maranello|brackley|milton(?:\s*keynes)?|silverstone|enstone|grove|faenza|kannapolis|ingolstadt|hinwil|detroit)\b/i;
 const CURRENT_F1_NUMBERS = new Set(['1', '3', '4', '5', '6', '10', '11', '12', '14', '16', '18', '23', '27', '30', '31', '33', '41', '43', '44', '55', '63', '77', '81', '87']);
+
+function createMockCanvas2D(): {
+  ctx: CanvasRenderingContext2D;
+  drawOps: number;
+  texts: string[];
+} {
+  const state = { drawOps: 0, texts: [] as string[] };
+  const noop = () => {};
+  const grad = { addColorStop: noop };
+  const mock = {
+    fillStyle: '#000',
+    strokeStyle: '#000',
+    lineWidth: 1,
+    lineJoin: 'miter',
+    lineCap: 'butt',
+    font: '10px sans-serif',
+    textAlign: 'left',
+    textBaseline: 'alphabetic',
+    globalAlpha: 1,
+    save: noop,
+    restore: noop,
+    translate: noop,
+    rotate: noop,
+    scale: noop,
+    beginPath: noop,
+    closePath: noop,
+    moveTo: noop,
+    lineTo: noop,
+    quadraticCurveTo: noop,
+    arc: noop,
+    createLinearGradient: () => grad,
+    createPattern: () => ({}),
+    measureText: (t: string) => ({ width: t.length * 14 }),
+    fillRect: () => {
+      state.drawOps++;
+    },
+    strokeRect: () => {
+      state.drawOps++;
+    },
+    clearRect: noop,
+    fill: () => {
+      state.drawOps++;
+    },
+    stroke: () => {
+      state.drawOps++;
+    },
+    fillText: (t: string) => {
+      state.drawOps++;
+      state.texts.push(String(t));
+    },
+    strokeText: (t: string) => {
+      state.drawOps++;
+      state.texts.push(String(t));
+    },
+  };
+  return { ctx: mock as unknown as CanvasRenderingContext2D, get drawOps() { return state.drawOps; }, texts: state.texts };
+}
 
 function hexToRgb(hex: string): [number, number, number] {
   const n = Number.parseInt(hex.slice(1), 16);
@@ -225,6 +291,80 @@ check('custom colour picker builds, resolves, sanitizes and persists cleanly', (
   const afterReset = resetAllSettings({ ...DEFAULT_PLAYER_SETTINGS, liveryId: 'custom', customLivery: saved.customLivery });
   assert.equal(afterReset.liveryId, 'custom');
   assert.deepEqual(afterReset.customLivery, saved.customLivery);
+
+  // Legacy retro IDs alias cleanly to their upgraded iconic historical counterparts
+  assert.equal(resolveLivery('retro_tri_92', custom).id, 'retro_tri_93');
+  assert.equal(resolveLivery('retro_emerald_91', custom).id, 'retro_fluoro_09');
+  assert.equal(resolveLivery('retro_powder_69', custom).id, 'retro_hornet_99');
+});
+
+check('all 11 grid2026, 6 retro, 3 house and custom liveries have complete trademark-free visual specs & sponsors', () => {
+  const targets = [
+    ...LIVERIES.filter((l) => !l.notInStoreBuild),
+    buildCustomLivery(DEFAULT_CUSTOM_LIVERY),
+  ];
+  const expectedRetroIds = new Set([
+    'retro_red_white',
+    'retro_black_gold',
+    'retro_tri_93',
+    'retro_sky_05',
+    'retro_fluoro_09',
+    'retro_hornet_99',
+  ]);
+  const actualRetroIds = new Set(LIVERIES.filter((l) => l.category === 'retro').map((l) => l.id));
+  assert.deepEqual(actualRetroIds, expectedRetroIds, 'retro collection must include all 6 iconic historical liveries');
+
+  for (const liv of targets) {
+    assert.ok(liv.visual, `${liv.id} must define a visual spec`);
+    const v = liv.visual!;
+    assert.ok(v.finish in LIVERY_FINISH_PROFILES, `${liv.id} finish must be valid: ${v.finish}`);
+    assert.match(v.bodyBase, HEX_RE, `${liv.id} bodyBase`);
+    assert.match(v.bodySecondary, HEX_RE, `${liv.id} bodySecondary`);
+    assert.match(v.stripePrimary, HEX_RE, `${liv.id} stripePrimary`);
+    if (v.stripeSecondary) assert.match(v.stripeSecondary, HEX_RE, `${liv.id} stripeSecondary`);
+    assert.ok(v.carbonExposure >= 0 && v.carbonExposure <= 1, `${liv.id} carbonExposure out of range`);
+
+    const sponsorValues = [v.sponsors.title, v.sponsors.wing, v.sponsors.nose, v.sponsors.halo, v.sponsors.tech];
+    for (const s of sponsorValues) {
+      assert.ok(s.trim().length >= 2, `${liv.id} sponsor must be non-empty`);
+      assert.ok(!TRADEMARK_RE.test(s), `${liv.id} sponsor must not contain real trademarks: "${s}"`);
+    }
+    const swatch = liverySwatchBackground(liv);
+    assert.ok(swatch.includes('linear-gradient'), `${liv.id} swatch should produce a rich multi-colour gradient`);
+  }
+});
+
+check('procedural 2048px livery canvas painter and tri-orthographic material installer run cleanly across all liveries', () => {
+  const targets = [
+    ...LIVERIES.filter((l) => !l.notInStoreBuild),
+    buildCustomLivery({ primary: '#12ab34', secondary: '#0a0b0c', accent: '#ff8800' }),
+  ];
+
+  // Install shader controller onto sample LC26 zone + flap materials and verify switching never throws
+  const bodyMat = new THREE.MeshPhysicalMaterial({ color: '#ffffff' });
+  const flapMat = new THREE.MeshPhysicalMaterial({ color: '#ffffff' });
+  const flapFrame = new THREE.Matrix4().makeTranslation(0, 0.811, -2.305);
+  const controller = installF1LiveryPaint([
+    { material: bodyMat },
+    { material: flapMat, frameMatrix: flapFrame },
+  ]);
+  assert.ok(bodyMat.customProgramCacheKey().includes('f1-procedural-livery'));
+  assert.ok(flapMat.customProgramCacheKey().includes('f1-procedural-livery'));
+
+  for (const liv of targets) {
+    const mock = createMockCanvas2D();
+    renderF1LiveryToContext(mock.ctx, liv, F1_ATLAS_SIZE);
+    assert.ok(mock.drawOps >= 40, `${liv.id} rendered too few draw operations (${mock.drawOps})`);
+    const spec = resolveLiveryVisual(liv);
+    assert.ok(mock.texts.includes(spec.sponsors.title), `${liv.id} did not draw title sponsor ${spec.sponsors.title}`);
+    assert.ok(mock.texts.includes(spec.sponsors.wing), `${liv.id} did not draw wing sponsor ${spec.sponsors.wing}`);
+    assert.ok(mock.texts.includes(liv.number), `${liv.id} did not draw racing number #${liv.number}`);
+    // Calling controller.set in headless Node returns false gracefully without throwing
+    assert.equal(controller.set(liv), false);
+  }
+  assert.equal(controller.set(null), false);
+  bodyMat.dispose();
+  flapMat.dispose();
 });
 
 console.log(`\n${passed} checks passed`);

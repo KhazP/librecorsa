@@ -11,6 +11,7 @@ import { setCarSkin, useCarSkinId } from "@/lib/cars/car-skins";
 import { carPhysics, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import type { CustomLiveryColors, LiveryCategory, LiveryConfig } from "@/types/f1";
 import { buildCustomLivery, CUSTOM_LIVERY_PALETTE, LIVERY_CATEGORY_LABELS } from "@/lib/track-data";
+import { liverySwatchBackground } from "@/lib/render/livery-repaint";
 /** The older size names the callers pass (xs is the small badge) */
 export type ChipSize = "md" | "sm" | "xs";
 import { focusOnHover } from "./useFocusNav";
@@ -70,7 +71,7 @@ export const CarQualityBadge: React.FC<{
 
 /* A swatch: the chosen one has a white ring, the cursor a volt one with its halo; the ring's gap is the surface behind */
 const SWATCH = [
-  "h-9 w-12 cursor-pointer rounded-full outline-none transition-[box-shadow] duration-200 ease-lc pointer-coarse:h-11 pointer-coarse:w-14 focus-visible:outline-none in-data-[input=keyboard]:focus:transition-none in-data-[input=pad]:focus:transition-none",
+  "relative h-9 w-14 cursor-pointer overflow-hidden rounded-full outline-none transition-[box-shadow] duration-200 ease-lc pointer-coarse:h-11 pointer-coarse:w-16 focus-visible:outline-none in-data-[input=keyboard]:focus:transition-none in-data-[input=pad]:focus:transition-none",
   "focus:shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_var(--color-lc-volt),0_0_0_9px_color-mix(in_srgb,var(--color-lc-volt)_14%,transparent)]",
 ].join(" ");
 const SWATCH_CHOSEN = "shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_var(--color-lc-chalk)]";
@@ -230,13 +231,14 @@ export const LiveryPicker: React.FC<{
           >
             {g.items.map((liv) => {
               const on = value.id === liv.id;
+              const sponsor = liv.visual?.sponsors.title;
               return (
                 <button
                   key={liv.id}
                   type="button"
                   role="radio"
                   aria-checked={on}
-                  aria-label={`${liv.name} · ${g.label} · ${liv.team}`}
+                  aria-label={sponsor ? `${liv.name} · ${sponsor} · ${g.label}` : `${liv.name} · ${g.label} · ${liv.team}`}
                   onClick={() => onChange(liv)}
                   onPointerEnter={focusOnHover}
                   onFocus={() => setHover(liv)}
@@ -245,10 +247,15 @@ export const LiveryPicker: React.FC<{
                   style={
                     {
                       "--lc-swatch-gap": surface,
-                      background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65% 100%)`,
+                      background: liverySwatchBackground(liv),
                     } as React.CSSProperties
                   }
-                />
+                >
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent"
+                  />
+                </button>
               );
             })}
             {gi === 0 ? (

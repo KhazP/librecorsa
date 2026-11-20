@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
 import { SATIN_PAINT } from "@/lib/render/paint-finish";
+import {
+  applyLiveryFinishToMaterial,
+  installF1LiveryPaint,
+  resolveLiveryVisual,
+} from "@/lib/render/livery-repaint";
 import { LC26_MODEL_URL, attachLc26Model, loadLc26Template, type Lc26ModelInstance } from "@/lib/lc26-car-model";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
@@ -86,86 +91,107 @@ function createCarbonWeaveTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-function createWingSponsorTexture(
-  text: string,
-  bgColor: string,
-  textColor: string,
-  accentColor: string
-): THREE.CanvasTexture {
+function createWingSponsorTexture(livery: LiveryConfig): {
+  texture: THREE.CanvasTexture;
+  redraw: (liv: LiveryConfig) => void;
+} {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 128;
   const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.fillStyle = bgColor;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+
+  const redraw = (liv: LiveryConfig) => {
+    if (!ctx) return;
+    const spec = resolveLiveryVisual(liv);
+    const bg = spec.wingMain ?? spec.bodySecondary;
+    const bgHex = bg.replace("#", "");
+    const n = Number.parseInt(bgHex, 16);
+    const luma = (((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) / 255;
+    const fg = spec.pattern === "retro78_pinstripe" ? "#ebca68" : luma > 0.56 ? "#101218" : "#f8fafc";
+
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, 512, 128);
-    ctx.fillStyle = accentColor;
+    ctx.fillStyle = spec.stripePrimary;
     ctx.fillRect(0, 0, 512, 10);
     ctx.fillRect(0, 118, 512, 10);
 
-    // Draw twin HP-style blue roundels + central VISIT RWANDA text matching Reference Image 3
-    for (const cx of [96, 416]) {
-      ctx.fillStyle = "#0096d6";
+    // Flanking geometric accent badges
+    for (const cx of [64, 448]) {
+      ctx.fillStyle = spec.stripePrimary;
       ctx.beginPath();
-      ctx.arc(cx, 64, 34, 0, Math.PI * 2);
+      ctx.arc(cx, 64, 24, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "italic 900 32px Arial, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("hp", cx, 65);
+      ctx.strokeStyle = fg;
+      ctx.lineWidth = 3;
+      ctx.stroke();
     }
 
-    ctx.fillStyle = textColor;
-    ctx.font = "italic 900 34px Arial, sans-serif";
+    ctx.fillStyle = fg;
+    ctx.font = "italic 900 40px Arial, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(text, 256, 66);
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  return tex;
+    ctx.fillText(spec.sponsors.title, 256, 66, 300);
+    tex.needsUpdate = true;
+  };
+
+  redraw(livery);
+  return { texture: tex, redraw };
 }
 
-function createFrontWingFlapTexture(): THREE.CanvasTexture {
+function createFrontWingFlapTexture(livery: LiveryConfig): {
+  texture: THREE.CanvasTexture;
+  redraw: (liv: LiveryConfig) => void;
+} {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 128;
   const ctx = canvas.getContext("2d");
-  if (ctx) {
-    // Crisp white upper flap with geometric carbon chevrons & blue HP roundel (Reference Image 3)
-    ctx.fillStyle = "#f8fafc";
-    ctx.fillRect(0, 0, 512, 128);
-    ctx.fillStyle = "#14161d";
-    ctx.fillRect(0, 96, 512, 32);
-    for (let x = 24; x < 480; x += 76) {
-      ctx.beginPath();
-      ctx.moveTo(x, 96);
-      ctx.lineTo(x + 22, 42);
-      ctx.lineTo(x + 36, 96);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.fillStyle = "#0096d6";
-    ctx.beginPath();
-    ctx.arc(256, 50, 28, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "italic 900 26px Arial, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("hp", 256, 51);
-  }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
-  return tex;
+
+  const redraw = (liv: LiveryConfig) => {
+    if (!ctx) return;
+    const spec = resolveLiveryVisual(liv);
+    const bg = spec.bodyBase;
+    const bgHex = bg.replace("#", "");
+    const n = Number.parseInt(bgHex, 16);
+    const luma = (((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) / 255;
+    const fg = spec.pattern === "retro78_pinstripe" ? "#ebca68" : luma > 0.56 ? "#101218" : "#f8fafc";
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, 512, 128);
+    ctx.fillStyle = spec.bodySecondary;
+    ctx.fillRect(0, 96, 512, 32);
+    ctx.fillStyle = spec.stripePrimary;
+    ctx.fillRect(0, 0, 512, 12);
+    for (let x = 24; x < 480; x += 84) {
+      ctx.fillStyle = spec.bodySecondary;
+      ctx.beginPath();
+      ctx.moveTo(x, 96);
+      ctx.lineTo(x + 20, 48);
+      ctx.lineTo(x + 34, 96);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = fg;
+    ctx.font = "italic 900 32px Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(spec.sponsors.wing, 256, 54, 340);
+    tex.needsUpdate = true;
+  };
+
+  redraw(livery);
+  return { texture: tex, redraw };
 }
 
-function createNoseDeckDecalTexture(driverNumber: string): {
+function createNoseDeckDecalTexture(livery: LiveryConfig): {
   texture: THREE.CanvasTexture;
-  redraw: (num: string) => void;
+  redraw: (liv: LiveryConfig) => void;
 } {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
@@ -175,56 +201,63 @@ function createNoseDeckDecalTexture(driverNumber: string): {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
 
-  const redraw = (num: string) => {
+  const redraw = (liv: LiveryConfig) => {
     if (!ctx) return;
+    const spec = resolveLiveryVisual(liv);
     ctx.clearRect(0, 0, 256, 512);
-    // Modena Yellow & White longitudinal racing stripes
-    ctx.fillStyle = "#ffe600";
-    ctx.fillRect(110, 0, 36, 512);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(98, 0, 8, 512);
-    ctx.fillRect(150, 0, 8, 512);
 
-    // Yellow Shield / Shell Crest near nose tip (top of canvas -> z ~ 2.15)
-    ctx.fillStyle = "#ffe600";
-    ctx.fillRect(96, 68, 64, 48);
-    ctx.strokeStyle = "#d40000";
-    ctx.lineWidth = 5;
-    ctx.strokeRect(96, 68, 64, 48);
+    // Livery-coordinated twin racing stripes along nose spine
+    ctx.fillStyle = spec.stripePrimary;
+    ctx.fillRect(114, 0, 28, 512);
+    ctx.fillStyle = spec.stripeSecondary ?? "#f8fafc";
+    ctx.fillRect(102, 0, 7, 512);
+    ctx.fillRect(147, 0, 7, 512);
 
-    // HP Blue Roundel at mid-nose (middle of canvas -> z ~ 1.65)
-    ctx.fillStyle = "#0096d6";
+    // Geometric team nose crest near tip
+    ctx.fillStyle = spec.bodySecondary;
     ctx.beginPath();
-    ctx.arc(128, 195, 42, 0, Math.PI * 2);
+    ctx.moveTo(92, 54);
+    ctx.lineTo(164, 54);
+    ctx.lineTo(154, 106);
+    ctx.lineTo(128, 124);
+    ctx.lineTo(102, 106);
+    ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = spec.stripePrimary;
+    ctx.lineWidth = 5;
     ctx.stroke();
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "italic 900 38px Arial, sans-serif";
+
+    // Fictional nose sponsor badge
+    ctx.fillStyle = spec.bodySecondary;
+    ctx.fillRect(36, 168, 184, 54);
+    ctx.strokeStyle = spec.stripePrimary;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(36, 168, 184, 54);
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = "italic 900 26px Arial, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("hp", 128, 197);
+    ctx.fillText(spec.sponsors.nose, 128, 196, 164);
 
-    // Driver Number Box on wide upper nose deck right in front of T-Cam (bottom-mid of canvas -> z ~ 1.15)
-    ctx.fillStyle = "#0f172a";
+    // Bold Driver Number plate on upper nose deck
+    ctx.fillStyle = spec.numberBg ?? spec.bodySecondary;
     ctx.beginPath();
     ctx.arc(128, 345, 64, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "#ffe600";
+    ctx.strokeStyle = spec.stripePrimary;
     ctx.lineWidth = 6;
     ctx.stroke();
 
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = spec.numberColor ?? "#ffffff";
     ctx.font = "italic 900 72px Arial, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(num, 128, 349);
+    ctx.fillText(liv.number, 128, 349);
 
     tex.needsUpdate = true;
   };
 
-  redraw(driverNumber);
+  redraw(livery);
   return { texture: tex, redraw };
 }
 
@@ -559,18 +592,19 @@ function createHelmetCrownTexture(livery: LiveryConfig): {
     ctx.fillText(liv.number, 0, 0);
     ctx.restore();
 
-    // Sponsor logo ("hp" + "RWA") below the number on the helmet crown (matching "eni" in Reference Image 1)
+    // Fictional team partner badge below the number on the helmet crown
+    const spec = resolveLiveryVisual(liv);
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(148, 305, 216, 74);
-    ctx.strokeStyle = "#0096d6";
+    ctx.strokeStyle = spec.stripePrimary;
     ctx.lineWidth = 5;
     ctx.strokeRect(148, 305, 216, 74);
 
     ctx.fillStyle = "#0f172a";
-    ctx.font = "italic 900 44px Arial, sans-serif";
+    ctx.font = "italic 900 36px Arial, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("hp • RWA", 256, 344);
+    ctx.fillText(spec.sponsors.nose, 256, 344, 196);
 
     tex.needsUpdate = true;
   };
@@ -616,15 +650,17 @@ function createHelmetSideTexture(livery: LiveryConfig): {
       ctx.fill();
     }
 
-    // Dark carbon visor brow strip with bold white sponsor text ("SCUDERIA HP" / "CROWDSTRIKE" in Reference Image 2)
+    // Dark carbon visor brow strip with fictional team partner text
+    const spec = resolveLiveryVisual(liv);
     ctx.fillStyle = "#0f172a";
     ctx.fillRect(0, 120, 1024, 46);
     ctx.fillStyle = "#ffffff";
     ctx.font = "900 28px Arial, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    const browLabel = `${spec.sponsors.title} • ${spec.sponsors.tech}`;
     for (const cx of [180, 512, 844]) {
-      ctx.fillText("SCUDERIA • HP • RWANDA", cx, 144);
+      ctx.fillText(browLabel, cx, 144, 290);
     }
 
     tex.needsUpdate = true;
@@ -648,23 +684,24 @@ function createHaloSponsorTexture(livery: LiveryConfig): {
 
   const redraw = (liv: LiveryConfig) => {
     if (!ctx) return;
-    // Upper band (y = 0..108, v = 0.58..1.0): Painted upper Halo fairing strip (like pink BWT/eni/MSC arch in Ref Image 1)
-    ctx.fillStyle = liv.primary;
+    const spec = resolveLiveryVisual(liv);
+    // Upper band (y = 0..108, v = 0.58..1.0): Painted upper Halo fairing strip
+    ctx.fillStyle = spec.halo ?? liv.primary;
     ctx.fillRect(0, 0, 1024, 108);
-    ctx.fillStyle = liv.accent;
-    ctx.fillRect(0, 0, 1024, 10);
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = spec.stripePrimary;
+    ctx.fillRect(0, 0, 1024, 12);
+    ctx.fillStyle = spec.stripeSecondary ?? "#ffffff";
     ctx.fillRect(0, 98, 1024, 10);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "italic 900 40px Arial, sans-serif";
+    ctx.font = "italic 900 38px Arial, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("SCUDERIA", 260, 54);
-    ctx.fillText("hp • RWANDA", 512, 54);
-    ctx.fillText("MSC • FIA", 764, 54);
+    ctx.fillText(spec.sponsors.title, 240, 54, 260);
+    ctx.fillText(spec.sponsors.halo, 512, 54, 240);
+    ctx.fillText(spec.sponsors.tech, 784, 54, 260);
 
-    // Lower band (y = 108..256, v = 0.0..0.58): Dark carbon/titanium inner Halo hoop with white sponsor decals (Ref Images 1 & 2)
+    // Lower band (y = 108..256, v = 0.0..0.58): Dark carbon/titanium inner Halo hoop with fictional partner decals
     ctx.fillStyle = "#141821";
     ctx.fillRect(0, 108, 1024, 148);
     ctx.strokeStyle = "#334155";
@@ -672,14 +709,12 @@ function createHaloSponsorTexture(livery: LiveryConfig): {
     ctx.strokeRect(2, 110, 1020, 144);
 
     ctx.fillStyle = "#f8fafc";
-    ctx.font = "italic 900 32px Arial, sans-serif";
-    ctx.fillText("PIRELLI", 150, 184);
-    ctx.fillText("RS TURBO 26", 345, 184);
-    ctx.fillStyle = "#38bdf8";
-    ctx.fillText("VISIT RWANDA", 512, 184);
+    ctx.font = "italic 900 30px Arial, sans-serif";
+    ctx.fillText(spec.sponsors.wing, 175, 184, 220);
+    ctx.fillStyle = spec.stripePrimary;
+    ctx.fillText(spec.sponsors.title, 512, 184, 280);
     ctx.fillStyle = "#f8fafc";
-    ctx.fillText("RWANDAIR", 685, 184);
-    ctx.fillText("SHELL", 874, 184);
+    ctx.fillText(spec.sponsors.nose, 845, 184, 220);
 
     tex.needsUpdate = true;
   };
@@ -710,27 +745,36 @@ function createMirrorGlassTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-function createWheelBrowDecalTexture(): THREE.CanvasTexture {
+function createWheelBrowDecalTexture(livery: LiveryConfig): {
+  texture: THREE.CanvasTexture;
+  redraw: (liv: LiveryConfig) => void;
+} {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 128;
   const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.fillStyle = "#12151e";
-    ctx.fillRect(0, 0, 256, 128);
-    ctx.fillStyle = "#e10600";
-    ctx.fillRect(0, 0, 256, 14);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 14, 256, 6);
-    ctx.font = "italic 900 34px Arial, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("hp • RWA", 128, 72);
-  }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
-  return tex;
+
+  const redraw = (liv: LiveryConfig) => {
+    if (!ctx) return;
+    const spec = resolveLiveryVisual(liv);
+    ctx.fillStyle = "#12151e";
+    ctx.fillRect(0, 0, 256, 128);
+    ctx.fillStyle = spec.stripePrimary;
+    ctx.fillRect(0, 0, 256, 14);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 14, 256, 6);
+    ctx.font = "italic 900 32px Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(spec.sponsors.tech, 128, 72, 224);
+    tex.needsUpdate = true;
+  };
+
+  redraw(livery);
+  return { texture: tex, redraw };
 }
 
 interface CrossSectionSlice {
@@ -873,10 +917,26 @@ export function createF1Car2026(
 
   const carbonTex = createCarbonWeaveTexture();
 
-  // Satin race livery (paint-finish.ts), as on the loaded model
+  // Satin race livery (paint-finish.ts), upgraded dynamically with procedural finish & 2048px tri-orthographic shader
   const primaryPaintMat = new THREE.MeshPhysicalMaterial({ color: initialLivery.primary, ...SATIN_PAINT });
   const secondaryPaintMat = new THREE.MeshPhysicalMaterial({ color: initialLivery.secondary, ...SATIN_PAINT });
   const accentPaintMat = new THREE.MeshPhysicalMaterial({ color: initialLivery.accent, ...SATIN_PAINT });
+  const bodyLiveryMat = new THREE.MeshPhysicalMaterial({ color: initialLivery.primary, ...SATIN_PAINT });
+  const proceduralBodyPaint = installF1LiveryPaint([{ material: bodyLiveryMat }]);
+  const applyProceduralFinish = (liv: LiveryConfig) => {
+    const applied = !liv.decals ? proceduralBodyPaint.set(liv) : false;
+    if (!applied) {
+      proceduralBodyPaint.set(null);
+      bodyLiveryMat.color.set(liv.primary);
+    }
+    primaryPaintMat.color.set(liv.primary);
+    secondaryPaintMat.color.set(liv.secondary);
+    accentPaintMat.color.set(liv.accent);
+    applyLiveryFinishToMaterial(primaryPaintMat, liv);
+    applyLiveryFinishToMaterial(secondaryPaintMat, liv);
+    applyLiveryFinishToMaterial(accentPaintMat, liv);
+  };
+  applyProceduralFinish(initialLivery);
 
   const carbonMat = new THREE.MeshPhysicalMaterial({
     color: 0x181b22,
@@ -1058,13 +1118,13 @@ export function createF1Car2026(
     },
   ]);
 
-  const mainBodyMesh = new THREE.Mesh(mainBodyGeom, primaryPaintMat);
+  const mainBodyMesh = new THREE.Mesh(mainBodyGeom, bodyLiveryMat);
   mainBodyMesh.castShadow = true;
   mainBodyMesh.receiveShadow = true;
   chassisGroup.add(mainBodyMesh);
 
   // Conformal 3D Crowned Nose Top-Deck Decal & Racing Stripe (matches nose center ridge & shoulder slope with zero clipping)
-  const noseDecal = createNoseDeckDecalTexture(initialLivery.number);
+  const noseDecal = createNoseDeckDecalTexture(initialLivery);
   const noseDeckStations = [
     { z: 0.68, halfW: 0.19, yCenter: 0.568, yEdge: 0.561 },
     { z: 1.05, halfW: 0.165, yCenter: 0.538, yEdge: 0.531 },
@@ -1238,7 +1298,7 @@ export function createF1Car2026(
     sidepodGeom.setIndex(spIdx);
     sidepodGeom.computeVertexNormals();
 
-    const sidepodMesh = new THREE.Mesh(sidepodGeom, primaryPaintMat);
+    const sidepodMesh = new THREE.Mesh(sidepodGeom, bodyLiveryMat);
     sidepodMesh.castShadow = true;
     sidepodMesh.receiveShadow = true;
     chassisGroup.add(sidepodMesh);
@@ -1268,7 +1328,7 @@ export function createF1Car2026(
   // Sculpted Roll-Hoop Airbox Fairing set cleanly behind T-Cam lens (z <= -0.12)
   const airboxHood = new THREE.Mesh(
     new THREE.CylinderGeometry(0.095, 0.135, 0.34, 16),
-    primaryPaintMat
+    bodyLiveryMat
   );
   airboxHood.rotation.x = Math.PI * 0.46;
   airboxHood.position.set(0, 0.77, -0.29);
@@ -1318,7 +1378,7 @@ export function createF1Car2026(
   });
   sharkFinGeom.rotateY(-Math.PI * 0.5);
   sharkFinGeom.translate(0.011, 0, 0);
-  const sharkFinMesh = new THREE.Mesh(sharkFinGeom, primaryPaintMat);
+  const sharkFinMesh = new THREE.Mesh(sharkFinGeom, bodyLiveryMat);
   chassisGroup.add(sharkFinMesh);
 
   const sharkFinTrim = new THREE.Mesh(
@@ -2130,8 +2190,9 @@ export function createF1Car2026(
   fwSecondElement.rotation.x = 0.12;
   fwGroup.add(fwSecondElement);
 
+  const fwFlapTex = createFrontWingFlapTexture(initialLivery);
   const fwFlapMat = new THREE.MeshStandardMaterial({
-    map: createFrontWingFlapTexture(),
+    map: fwFlapTex.texture,
     roughness: 0.22,
     metalness: 0.15,
   });
@@ -2223,21 +2284,16 @@ export function createF1Car2026(
   // Rear Wing Spoon Mainplane
   const rwMainPlane = new THREE.Mesh(
     new THREE.BoxGeometry(1.04, 0.034, 0.26),
-    primaryPaintMat
+    bodyLiveryMat
   );
   rwMainPlane.position.set(0, 0.73, -1.86);
   rwMainPlane.rotation.x = 0.1;
   chassisGroup.add(rwMainPlane);
 
-  // Pivoting 2026 X-Mode / Z-Mode Upper Rear Wing Flap with White + HP + VISIT RWANDA Banner
-  const rwSponsorTex = createWingSponsorTexture(
-    "VISIT RWANDA",
-    "#f8fafc",
-    "#0f172a",
-    "#d40000"
-  );
+  // Pivoting 2026 X-Mode / Z-Mode Upper Rear Wing Flap with livery-driven fictional sponsor banner
+  const rwSponsorTex = createWingSponsorTexture(initialLivery);
   const rwFlapFaceMat = new THREE.MeshStandardMaterial({
-    map: rwSponsorTex,
+    map: rwSponsorTex.texture,
     roughness: 0.22,
     metalness: 0.15,
   });
@@ -2266,7 +2322,7 @@ export function createF1Car2026(
   for (const side of [-1, 1]) {
     const rwEndplate = new THREE.Mesh(
       new THREE.BoxGeometry(0.028, 0.56, 0.42),
-      primaryPaintMat
+      bodyLiveryMat
     );
     rwEndplate.position.set(side * 0.52, 0.61, -1.87);
     chassisGroup.add(rwEndplate);
@@ -2380,8 +2436,9 @@ export function createF1Car2026(
     roughness: 0.25,
   });
 
+  const wheelBrowTex = createWheelBrowDecalTexture(initialLivery);
   const wheelBrowMat = new THREE.MeshStandardMaterial({
-    map: createWheelBrowDecalTexture(),
+    map: wheelBrowTex.texture,
     roughness: 0.24,
     metalness: 0.22,
     side: THREE.DoubleSide,
@@ -2615,6 +2672,7 @@ export function createF1Car2026(
   addSuspensionWishbones(-0.12, -0.64, -1.48, 0.38, 0.22);
 
   let currentLivery = initialLivery;
+  if (initialLivery.visual?.rimColor) rimMat.color.set(initialLivery.visual.rimColor);
   const setLivery = (livery: LiveryConfig) => {
     currentLivery = livery;
     // Once the model is on, the procedural car has been freed: its canvases are not drawn again
@@ -2622,10 +2680,13 @@ export function createF1Car2026(
       lc26.setLivery(livery);
       return;
     }
-    primaryPaintMat.color.set(livery.primary);
-    secondaryPaintMat.color.set(livery.secondary);
-    accentPaintMat.color.set(livery.accent);
-    noseDecal.redraw(livery.number);
+    applyProceduralFinish(livery);
+    if (livery.visual?.rimColor) rimMat.color.set(livery.visual.rimColor);
+    else rimMat.color.setHex(0x1e2430);
+    noseDecal.redraw(livery);
+    fwFlapTex.redraw(livery);
+    rwSponsorTex.redraw(livery);
+    wheelBrowTex.redraw(livery);
     helmetCrownTex.redraw(livery);
     helmetSideTex.redraw(livery);
     haloSponsorTex.redraw(livery);

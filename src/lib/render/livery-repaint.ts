@@ -204,7 +204,7 @@ export function repaintTexture(texture: THREE.Texture, keys: PaintKeys, livery: 
  * colours in a picker would otherwise keep every one on the GPU for the session. An evicted one still on a car is
  * uploaded again from its canvas on the next draw.
  */
-const MAX_CACHED_LIVERIES = 14;
+const MAX_CACHED_LIVERIES = 22;
 
 function evictOldest<V>(cache: Map<string, V>, dispose: (v: V) => void): void {
   while (cache.size > MAX_CACHED_LIVERIES) {
@@ -290,3 +290,17 @@ export function applyLivery(slots: readonly PaintSlot[], keys: PaintKeys, livery
     else (slot.mesh.material as THREE.Material[])[slot.index] = m;
   }
 }
+
+export {
+  F1_ATLAS_SIZE,
+  LIVERY_FINISH_PROFILES,
+  applyLiveryFinishToMaterial,
+  getF1LiveryAtlasTexture,
+  installF1LiveryPaint,
+  liverySwatchBackground,
+  renderF1LiveryToContext,
+  resolveLiveryVisual,
+  type F1LiveryPaintController,
+  type F1LiverySurface,
+  type LiveryFinishParams,
+} from "@/lib/render/f1-livery-painter";

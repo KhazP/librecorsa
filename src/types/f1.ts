@@ -57,6 +57,67 @@ export type TireCompound = "soft" | "medium" | "hard" | "intermediate" | "wet";
 
 export type LiveryCategory = "house" | "grid2026" | "retro" | "custom";
 
+export type LiveryFinish = "gloss" | "satin" | "matte" | "metallic" | "chrome";
+
+export type LiveryPatternId =
+  | "librecorsa"
+  | "aurora"
+  | "verdant"
+  | "papaya26"
+  | "rosso26"
+  | "silver26"
+  | "cobalt26"
+  | "emerald26"
+  | "bleu26"
+  | "royal26"
+  | "bianco26"
+  | "carbon26"
+  | "titanium26"
+  | "crest26"
+  | "retro88_chevron"
+  | "retro78_pinstripe"
+  | "retro93_tri"
+  | "retro05_sky"
+  | "retro09_fluoro"
+  | "retro99_hornet"
+  | "custom";
+
+export interface LiverySponsorSet {
+  /** Large sidepod wordmark and chase-cam rear wing banner */
+  title: string;
+  /** Rear wing top plane and front wing flap partner */
+  wing: string;
+  /** Nose deck and engine cover secondary partner */
+  nose: string;
+  /** Halo arch and cockpit collar partner */
+  halo: string;
+  /** Wing endplate and lower flank technical partner */
+  tech: string;
+}
+
+export interface LiveryVisualSpec {
+  pattern: LiveryPatternId;
+  finish: LiveryFinish;
+  /** Rich paint colours used by the procedural 2048px canvas livery painter */
+  bodyBase: string;
+  bodySecondary: string;
+  stripePrimary: string;
+  stripeSecondary?: string;
+  noseTip?: string;
+  airbox?: string;
+  halo?: string;
+  wingMain?: string;
+  endplate?: string;
+  rimColor?: string;
+  numberBg?: string;
+  numberColor?: string;
+  /** Exposed woven carbon-fibre intensity (0 = fully painted retro, 1 = heavy 2026 carbon flanks/floor) */
+  carbonExposure: number;
+  sponsors: LiverySponsorSet;
+  /** Multi-colour CSS gradient preview used by the livery picker swatch */
+  swatchCss?: string;
+}
+
 export type LiveryId =
   | "librecorsa"
   | "aurora"
@@ -73,12 +134,12 @@ export type LiveryId =
   | "grid26_carbon"
   | "grid26_titanium"
   | "grid26_crest"
-  | "retro_black_gold"
   | "retro_red_white"
-  | "retro_tri_92"
-  | "retro_emerald_91"
-  | "retro_powder_69"
+  | "retro_black_gold"
+  | "retro_tri_93"
   | "retro_sky_05"
+  | "retro_fluoro_09"
+  | "retro_hornet_99"
   | "custom";
 
 export interface CustomLiveryColors {
@@ -97,7 +158,9 @@ export interface LiveryConfig {
   number: string;
   /** Grouping in the livery picker (house originals, 2026 grid mockups, retro classics, custom) */
   category?: LiveryCategory;
-  /** Pictures on the paint (render/livery-decals.ts); a livery without is its three colours only */
+  /** High-craft procedural livery pattern, finish, multi-zone palette, and fictional sponsors */
+  visual?: LiveryVisualSpec;
+  /** Pictures on the paint (render/livery-decals.ts); overrides procedural projection when set */
   decals?: LiveryDecalSet;
   /** Left out of the Android app (lib/store-mode.ts): its logos aren't licensed */
   notInStoreBuild?: true;
