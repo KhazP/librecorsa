@@ -13,6 +13,12 @@ import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { CLUTCH_BITE_LOCK, CLUTCH_BITE_START, clutchPedalEngagement } from '../src/lib/sim/f12026-car/VehiclePhysics';
+import {
+  ENGINE_RESTART_CRANK_S,
+  ENGINE_STALL_DELAY_S,
+  StallController,
+  stallSpeedRadS,
+} from '../src/lib/sim/stall-controller';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
 import { resolveActiveClutchBinding } from '../src/lib/input/bindings';
 import { autoClutch } from '../src/components/settings/defs';
@@ -305,6 +311,50 @@ check(
     Boolean(wheelOffUnbound?.toLowerCase().includes('wheel')),
   `touch="${touchOffEvenWithKey}", kb="${kbOffNoKey}", pad="${padOffUnbound}", wheel="${wheelOffUnbound}"`,
 );
+
+// Direct unit tests for shared StallController state machine
+{
+  const idleRpm = 1000;
+  const idleOmega = (idleRpm * Math.PI) / 30;
+  const stallOmega = stallSpeedRadS(idleRpm);
+  const ctrl = new StallController();
+  // Stalls after ENGINE_STALL_DELAY_S below stallOmega with clutch engaged in gear
+  let omega = stallOmega * 0.5;
+  for (let t = 0; t < ENGINE_STALL_DELAY_S * 0.5; t += 0.01) {
+    omega = ctrl.step(0.01, true, 1, 0, 0, omega, 0, idleOmega, stallOmega);
+  }
+  const notYetStalled = !ctrl.stalled;
+  for (let t = 0; t < ENGINE_STALL_DELAY_S; t += 0.01) {
+    omega = ctrl.step(0.01, true, 1, 0, 0, omega, 0, idleOmega, stallOmega);
+  }
+  const stalledAfterDelay = ctrl.stalled;
+  // Starter crank with clutch in + throttle restarts in ~half ENGINE_RESTART_CRANK_S
+  omega = 0;
+  let crankTime = 0;
+  while (ctrl.stalled && crankTime < 1.0) {
+    omega = ctrl.step(0.01, true, 0, 1, 0.3, omega, 0, idleOmega, stallOmega);
+    crankTime += 0.01;
+  }
+  const crankRestartOk = !ctrl.stalled && omega >= idleOmega && crankTime < ENGINE_RESTART_CRANK_S * 0.7;
+  // Re-stall, then bump-start recovery while rolling in gear with clutch engaged
+  for (let t = 0; t < ENGINE_STALL_DELAY_S + 0.02; t += 0.01) {
+    ctrl.step(0.01, true, 1, 0, 0, 0, 0, idleOmega, stallOmega);
+  }
+  const stalledForBump = ctrl.stalled;
+  ctrl.step(0.01, true, 0.8, 0, 0, stallOmega * 1.2, idleOmega * 0.8, idleOmega, stallOmega);
+  const bumpStartOk = stalledForBump && !ctrl.stalled;
+  // Re-stall, then recoverIfAuto immediately recovers to idleOmega
+  for (let t = 0; t < ENGINE_STALL_DELAY_S + 0.02; t += 0.01) {
+    ctrl.step(0.01, true, 1, 0, 0, 0, 0, idleOmega, stallOmega);
+  }
+  const autoRecoveredOmega = ctrl.recoverIfAuto(0, idleOmega);
+  const autoRecoverOk = !ctrl.stalled && autoRecoveredOmega >= idleOmega;
+  check(
+    'shared StallController handles stall delay, throttled crank, bump-start and auto recovery',
+    notYetStalled && stalledAfterDelay && crankRestartOk && bumpStartOk && autoRecoverOk,
+    `crank=${crankTime.toFixed(2)}s, bump=${bumpStartOk}, auto=${autoRecoverOk}`,
+  );
+}
 
 console.log(failures.length ? `\n${failures.length} failed: ${failures.join(', ')}` : '\nAll clutch pedal checks passed.');
 process.exit(failures.length ? 1 : 0);

@@ -44,6 +44,14 @@
 
 import * as THREE from 'three';
 import { Lut, type LutPoints } from '../lut';
+import {
+  CLUTCH_BITE_LOCK,
+  CLUTCH_BITE_START,
+  clutchPedalEngagement,
+  StallController,
+  stallSpeedRpm,
+} from '../stall-controller';
+export { CLUTCH_BITE_LOCK, CLUTCH_BITE_START, clutchPedalEngagement };
 import { tyreColdPressureForGas, tyreGaugePressureOfGas } from '../tyre-pressure';
 import {
   advanceTreadDirt,
@@ -177,26 +185,6 @@ const RAD2DEG = 180 / Math.PI;
 const RPM2RADS = Math.PI / 30;
 const RADS2RPM = 30 / Math.PI;
 const SOLVER_ITERATIONS = 8;
-/** Clutch pedal travel above which the clutch is fully open (free play near the floor) */
-export const CLUTCH_BITE_START = 0.85;
-/** Clutch pedal travel below which the clutch is fully locked (free play near the top) */
-export const CLUTCH_BITE_LOCK = 0.18;
-/** Seconds below stall speed before a manual-clutch engine stalls (s) */
-const ENGINE_STALL_DELAY_S = 0.12;
-/** Seconds of starter crank (clutch held or in neutral) to restart a stalled engine (s) */
-const ENGINE_RESTART_CRANK_S = 0.45;
-
-/**
- * Maps clutch pedal travel `pedal` (0 = released/engaged, 1 = floor/open) to normalized torque capacity (0..1)
- * with free play at both ends and a progressive friction bite zone between `CLUTCH_BITE_START` and `CLUTCH_BITE_LOCK`.
- */
-export function clutchPedalEngagement(pedal: number): number {
-  if (pedal >= CLUTCH_BITE_START) return 0;
-  if (pedal <= CLUTCH_BITE_LOCK) return 1;
-  const u = (CLUTCH_BITE_START - pedal) / (CLUTCH_BITE_START - CLUTCH_BITE_LOCK);
-  // Progressive clamping curve: gentle, featherable torque in the lower bite zone, clamping firmly near lock
-  return Math.pow(u, 2.2);
-}
 
 /** Auto box: hold a new gear this long after an upshift before an off-brake downshift (s) */
 const AUTO_DOWNSHIFT_HOLD_S = 1.0;
@@ -1412,9 +1400,7 @@ export class VehiclePhysics {
   private limiterTimer = 0;
   private clutchEngagement = 1;
   private clutchSlipNorm = 0;
-  private stalled = false;
-  private lowRpmTimerS = 0;
-  private restartTimerS = 0;
+  private readonly stall = new StallController();
   /** Throttle plate the cylinders see, after the air path's lag (`EngineData.torqueResponseS`) */
   private icePlate = 0;
   private lsdLockTorque = 0;
@@ -2098,9 +2084,7 @@ export class VehiclePhysics {
     }
     this.clutchEngagement = 1;
     this.clutchSlipNorm = 0;
-    this.stalled = false;
-    this.lowRpmTimerS = 0;
-    this.restartTimerS = 0;
+    this.stall.reset();
     this.icePlate = 0;
     this.lsdLockTorque = 0;
     this.centreCouplingTorqueNm = 0;
@@ -3633,17 +3617,16 @@ export class VehiclePhysics {
     const rpm = this.rpm;
     const omegaE = Math.max(50, this.engineOmega);
     const manualClutch = !this.autoClutch && !this.autoShift;
-    const stallRpm = Math.max(350, eng.idleRpm * 0.42);
+    const stallRpm = stallSpeedRpm(eng.idleRpm);
+    const idleOmega = eng.idleRpm * RPM2RADS;
+    const stallOmega = stallRpm * RPM2RADS;
     const axleOmega = this.drivenOmega();
     const wheelSideRpm = Math.abs(axleOmega * ratio) * RADS2RPM;
     const wheelSideForwardRpm = axleOmega * ratio * RADS2RPM;
 
     // Switching Auto clutch (or Auto gearbox) back on recovers a stalled engine immediately
-    if (!manualClutch && this.stalled) {
-      this.stalled = false;
-      this.lowRpmTimerS = 0;
-      this.restartTimerS = 0;
-      this.engineOmega = Math.max(this.engineOmega, eng.idleRpm * RPM2RADS);
+    if (!manualClutch) {
+      this.engineOmega = this.stall.recoverIfAuto(this.engineOmega, idleOmega);
     }
 
     // ---- clutch engagement
@@ -3685,41 +3668,17 @@ export class VehiclePhysics {
 
     // ---- manual-clutch stall & starter / bump-start recovery
     if (manualClutch) {
-      if (this.stalled) {
-        const disengaged = this.gear === 0 || (inp.clutch ?? 0) >= CLUTCH_BITE_START;
-        const bumpStart =
-          this.gear !== 0 && engage > 0.4 && wheelSideForwardRpm >= eng.idleRpm * 0.7 && rpm >= stallRpm * 1.1;
-        if (bumpStart) {
-          this.stalled = false;
-          this.lowRpmTimerS = 0;
-          this.restartTimerS = 0;
-        } else if (disengaged) {
-          const crankRate = inp.throttle > 0.05 ? 2.0 : 1.0;
-          this.restartTimerS += h * crankRate;
-          const crankTarget = eng.idleRpm * 0.5 * RPM2RADS;
-          if (this.engineOmega < crankTarget) {
-            this.engineOmega = Math.min(crankTarget, this.engineOmega + (crankTarget / ENGINE_RESTART_CRANK_S) * h * 1.5);
-          }
-          if (this.restartTimerS >= ENGINE_RESTART_CRANK_S) {
-            this.stalled = false;
-            this.lowRpmTimerS = 0;
-            this.restartTimerS = 0;
-            this.engineOmega = Math.max(this.engineOmega, eng.idleRpm * RPM2RADS);
-          }
-        } else {
-          this.restartTimerS = Math.max(0, this.restartTimerS - h * 2);
-        }
-      } else {
-        if (this.gear !== 0 && engage > 0.1 && rpm < stallRpm) {
-          this.lowRpmTimerS += h;
-          if (this.lowRpmTimerS >= ENGINE_STALL_DELAY_S) {
-            this.stalled = true;
-            this.restartTimerS = 0;
-          }
-        } else {
-          this.lowRpmTimerS = Math.max(0, this.lowRpmTimerS - h * 2);
-        }
-      }
+      this.engineOmega = this.stall.step(
+        h,
+        this.gear !== 0,
+        engage,
+        inp.clutch ?? 0,
+        inp.throttle,
+        this.engineOmega,
+        axleOmega * ratio,
+        idleOmega,
+        stallOmega,
+      );
     }
 
     // ---- ICE (with live Engine Torque Map 1..5)
@@ -3736,7 +3695,7 @@ export class VehiclePhysics {
     // The blip of a down-shift opens the throttle on the free engine, through the same air path
     const dn = gb.downshift;
     const downshifting = dn !== undefined && this.sinceDownshiftS < dn.clutchHomeS && this.sinceDownshiftS < this.sinceUpshiftS;
-    if (downshifting && dn.blip && this.sinceDownshiftS < Math.max(dn.neutralS, dn.clutchReleaseS) && !this.stalled) {
+    if (downshifting && dn.blip && this.sinceDownshiftS < Math.max(dn.neutralS, dn.clutchReleaseS) && !this.stall.stalled) {
       // Held until the engine turns as fast as the driven wheels ask of it in this gear, less what it still gains while
       // the air path empties
       const wanted = Math.min(Math.abs(axleOmega * ratio) * RADS2RPM, gb.gears.redline_rpm);
@@ -3754,7 +3713,7 @@ export class VehiclePhysics {
     } else {
       this.icePlate = plate;
     }
-    if (this.stalled) {
+    if (this.stall.stalled) {
       this.icePlate = 0;
       plate = 0;
     } else {
@@ -3813,11 +3772,11 @@ export class VehiclePhysics {
     }
     // Combustion torque at the full spark, and what the traction cut leaves of it.
     // Under manual clutch, an engine dragged below stall speed chokes and loses torque; once stalled it produces none.
-    const lugScale = this.stalled ? 0 : manualClutch && rpm < stallRpm ? THREE.MathUtils.clamp(rpm / stallRpm, 0, 1) : 1;
+    const lugScale = this.stall.stalled ? 0 : manualClutch && rpm < stallRpm ? THREE.MathUtils.clamp(rpm / stallRpm, 0, 1) : 1;
     const tCombustionFull =
       (plate * lugScale * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
     const tCombustion = tCombustionFull * sparkShare;
-    const coastSpinScale = this.stalled ? THREE.MathUtils.clamp(this.engineOmega / 30, 0, 1) : 1;
+    const coastSpinScale = this.stall.stalled ? THREE.MathUtils.clamp(this.engineOmega / 30, 0, 1) : 1;
     const tCoast = (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale * coastSpinScale;
     let tIce = tCombustion * boostShare - tCoast;
     // The same at the full spark, for the next step's spark-first split: one read back after the cut would count the cut
@@ -3864,7 +3823,7 @@ export class VehiclePhysics {
      */
     let liftW = 0;
     const everyGear = ers.liftHarvestEveryGear;
-    const coupled = engage > 0.9 && this.gear > 0 && !this.stalled;
+    const coupled = engage > 0.9 && this.gear > 0 && !this.stall.stalled;
     if (coupled) {
       if (everyGear && inp.throttle < ers.liftThrottle) {
         liftW = ers.topGearLiftHarvestW * mode.liftHarvestScale * (1 - inp.throttle / ers.liftThrottle);
@@ -4697,7 +4656,7 @@ export class VehiclePhysics {
     t.steer = inp.steer;
     t.clutchEngagement = this.clutchEngagement;
     t.clutchSlip = this.clutchSlipNorm;
-    t.engineStalled = this.stalled;
+    t.engineStalled = this.stall.stalled;
     if (dt > 0) {
       _v.subVectors(this.velocity, this.prevVelocity).divideScalar(dt);
       t.lonG = _v.dot(_ez) / G;

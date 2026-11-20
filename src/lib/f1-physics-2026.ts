@@ -42,7 +42,7 @@ import type {
   WheelPressures,
 } from '@/types/f1';
 import { axlePressures, pressureAt } from '@/types/f1';
-import { CLUTCH_BITE_START, clutchPedalEngagement } from './sim/f12026-car/VehiclePhysics';
+import { clutchPedalEngagement, StallController, stallSpeedRadS } from './sim/stall-controller';
 export type { ControlInputs };
 import {
   BASE_ALTITUDE_M,
@@ -440,9 +440,7 @@ export class F1Physics2026 {
   public autoClutch = true;
   private manualClutchPedal = 0;
   private manualClutchBound = true;
-  private engineStalled = false;
-  private stallLowRpmS = 0;
-  private stallRestartS = 0;
+  private readonly stall = new StallController();
   private clutchSlipNorm = 0;
   /** The controller's stick goes through the steering assist (off = raw stick to the rack); the keyboard always does */
   public gamepadAssistEnabled = true;
@@ -1612,9 +1610,7 @@ export class F1Physics2026 {
 
   private syncDrivetrainToRoadSpeed(): void {
     const dt = this.drivetrain;
-    this.engineStalled = false;
-    this.stallLowRpmS = 0;
-    this.stallRestartS = 0;
+    this.stall.reset();
     this.clutchSlipNorm = 0;
     const rearOmega = 0.5 * (this.wheels[2].spinVel + this.wheels[3].spinVel);
     const engineFromRoad = rearOmega * this.overallRatio(dt.gear);
@@ -2688,55 +2684,33 @@ export class F1Physics2026 {
     const brakeL = wl.brakeTorqueNm;
     const brakeR = wr.brakeTorqueNm;
     const manualClutch = !this.autoClutch && !this.autoGearbox && !this.aiAutopilot && this.manualClutchBound;
-    const stallOmega = Math.max(350, LC26_ENGINE.idleRpm * 0.42) * RPM2RADS;
+    const stallOmega = stallSpeedRadS(LC26_ENGINE.idleRpm);
     let tIn: number;
-    if (!manualClutch && this.engineStalled) {
-      this.engineStalled = false;
-      this.stallLowRpmS = 0;
-      this.stallRestartS = 0;
-      drv.engineOmega = Math.max(drv.engineOmega, idle);
+    if (!manualClutch) {
+      drv.engineOmega = this.stall.recoverIfAuto(drv.engineOmega, idle);
     }
 
     if (manualClutch) {
       const engage = ratio !== 0 ? clutchPedalEngagement(this.manualClutchPedal) : 0;
       drv.clutchEngagement = engage;
-      if (ratio === 0 || engage < 0.99 || this.engineStalled) drv.clutchLocked = false;
-      if (this.engineStalled) {
-        const disengaged = ratio === 0 || this.manualClutchPedal >= CLUTCH_BITE_START;
-        const bumpStart = ratio !== 0 && engage > 0.4 && omegaAxle * ratio >= idle * 0.7 && drv.engineOmega >= stallOmega * 1.1;
-        if (bumpStart) {
-          this.engineStalled = false;
-          this.stallLowRpmS = 0;
-          this.stallRestartS = 0;
-        } else if (disengaged) {
-          this.stallRestartS += h * (throttle > 0.05 ? 2 : 1);
-          const crank = idle * 0.5;
-          if (drv.engineOmega < crank) drv.engineOmega = Math.min(crank, drv.engineOmega + (crank / 0.45) * h * 1.5);
-          if (this.stallRestartS >= 0.45) {
-            this.engineStalled = false;
-            this.stallLowRpmS = 0;
-            this.stallRestartS = 0;
-            drv.engineOmega = Math.max(drv.engineOmega, idle);
-          }
-        } else {
-          this.stallRestartS = Math.max(0, this.stallRestartS - h * 2);
-        }
-      } else if (ratio !== 0 && engage > 0.1 && drv.engineOmega < stallOmega) {
-        this.stallLowRpmS += h;
-        if (this.stallLowRpmS >= 0.12) {
-          this.engineStalled = true;
-          this.stallRestartS = 0;
-          drv.clutchLocked = false;
-        }
-      } else {
-        this.stallLowRpmS = Math.max(0, this.stallLowRpmS - h * 2);
-      }
+      drv.engineOmega = this.stall.step(
+        h,
+        ratio !== 0,
+        engage,
+        this.manualClutchPedal,
+        throttle,
+        drv.engineOmega,
+        omegaAxle * ratio,
+        idle,
+        stallOmega,
+      );
+      if (ratio === 0 || engage < 0.99 || this.stall.stalled) drv.clutchLocked = false;
 
-      const tEngineManual = this.engineStalled
+      const tEngineManual = this.stall.stalled
         ? -Math.min(20, drv.engineOmega * 0.6)
         : this.engineTorque(Math.max(50, drv.engineOmega), throttle) *
           (drv.engineOmega < stallOmega ? THREE.MathUtils.clamp(drv.engineOmega / stallOmega, 0, 1) : 1);
-      if (drv.clutchLocked && ratio !== 0 && !this.engineStalled) {
+      if (drv.clutchLocked && ratio !== 0 && !this.stall.stalled) {
         tIn = ratio * tEngineManual * (tEngineManual >= 0 ? eta : 1 / eta) - drv.harvestAxleTorqueNm;
         const J = 2 * Iw + (Ie + Igb) * ratio * ratio;
         const free = omegaAxle + ((tIn - roadTqLeft - roadTqRight) / J) * h;
@@ -2748,13 +2722,13 @@ export class F1Physics2026 {
         const capacity = engage * LC26_DRIVETRAIN.clutchMaxTorqueNm;
         const tClutch = ratio !== 0 ? THREE.MathUtils.clamp(slip * 40, -capacity, capacity) : 0;
         drv.engineOmega = THREE.MathUtils.clamp(drv.engineOmega + ((tEngineManual - tClutch) / (Ie + 0.002)) * h, 0, maxOmega);
-        if (!this.engineStalled && (ratio === 0 || engage <= 0.1) && drv.engineOmega < idle) drv.engineOmega = idle;
-        const harvestAxle = engage > 0.5 && !this.engineStalled && drv.gear > 0 ? drv.harvestAxleTorqueNm : 0;
+        if (!this.stall.stalled && (ratio === 0 || engage <= 0.1) && drv.engineOmega < idle) drv.engineOmega = idle;
+        const harvestAxle = engage > 0.5 && !this.stall.stalled && drv.gear > 0 ? drv.harvestAxleTorqueNm : 0;
         tIn = ratio * tClutch * (tClutch >= 0 ? eta : 1 / eta) - harvestAxle;
         const J = 2 * Iw + Igb * ratio * ratio;
         const free = omegaAxle + ((tIn - roadTqLeft - roadTqRight) / J) * h;
         omegaAxle = this.applyBrakeFriction(free, ((brakeL + brakeR) / J) * h);
-        if (ratio !== 0 && engage >= 0.99 && !this.engineStalled && Math.abs(drv.engineOmega - omegaAxle * ratio) < 15) {
+        if (ratio !== 0 && engage >= 0.99 && !this.stall.stalled && Math.abs(drv.engineOmega - omegaAxle * ratio) < 15) {
           drv.clutchLocked = true;
           drv.engineOmega = THREE.MathUtils.clamp(omegaAxle * ratio, 0, maxOmega);
         }
@@ -3489,7 +3463,7 @@ export class F1Physics2026 {
       : inputs.brake;
     t.clutch = drv.clutchLocked ? 1 : drv.clutchEngagement;
     t.clutchSlip = this.clutchSlipNorm;
-    t.engineStalled = this.engineStalled;
+    t.engineStalled = this.stall.stalled;
     t.steering = this.steerAngleNorm;
     t.longitudinalG = this.lastAxMs2 / G;
     t.lateralG = -this.lastAyMs2 / G;
