@@ -65,6 +65,7 @@ import { flagMultiplayerRace } from "@/lib/sim/mp-flags"; // polish:D
 import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
 import { CoolDown } from "@/lib/sim/cool-down";
 import { PodiumDirector } from "@/lib/render/podium-shot";
+import { OverheadNameplateProjector, type OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { canFlashback, isInOnlineRoom, poseFromReplayCar, ReplayBuffer } from "@/lib/sim/replay-buffer";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
@@ -417,6 +418,8 @@ export interface DriveSessionHost {
    * preset: started on the defaults (High on a desktop) the physical sky's GPU precompute ran even on Low (issue #123)
    */
   settings: PlayerSettings;
+  /** Optional ref to the DOM-pooled overhead nameplate overlay, updated directly in the render loop */
+  nameplatesRef?: { readonly current: OverheadNameplatesSink | null };
 }
 
 /**
@@ -1155,6 +1158,7 @@ export class DriveSession {
     );
     // The view camera also draws the driving aids (the racing line), which the probe and mirrors leave out
     camera.layers.enable(OVERLAY_LAYER);
+    const nameplateProjector = new OverheadNameplateProjector();
 
     let renderer: THREE.WebGLRenderer;
     try {
@@ -3561,6 +3565,20 @@ export class DriveSession {
             }
           }
         }
+        const nameplates = host.nameplatesRef?.current;
+        if (nameplates) {
+          if (!inMenu && !inVr && !podium.playing && settingsNow.hud.showPlayerNames && drawnPeers.length > 0) {
+            const localBestLapMs = physics.telemetry.qualifying ? physics.telemetry.qualifying.bestMs : physics.telemetry.bestLapTimeMs;
+            nameplates.update(
+              nameplateProjector.project(drawnPeers, camera, container.clientWidth, container.clientHeight, {
+                race: physics.telemetry.race,
+                localBestLapMs,
+              })
+            );
+          } else {
+            nameplates.hideAll();
+          }
+        }
       }
 
       // Automatic quality: judged on the frames drawn while driving (not paused, in a menu or a replay)
@@ -3684,6 +3702,7 @@ export class DriveSession {
       floorSparks.dispose();
       setKtx2Renderer(null);
       renderer.dispose();
+      host.nameplatesRef?.current?.hideAll();
       audio?.dispose();
       // The music plays on into the next circuit's session (or the menus)
       stopNowPlaying();

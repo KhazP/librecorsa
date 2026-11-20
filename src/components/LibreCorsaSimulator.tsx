@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExtern
 import { DEFAULT_TRACK_ID, getActivePointToPoint, getActiveTrackData, resolveLivery } from "@/lib/track-data";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { DualSensePairPrompt } from "@/components/hud/DualSensePairPrompt";
+import { OverheadNameplates } from "@/components/hud/OverheadNameplates";
+import type { OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import { CARS, carById, carForVehicle, type CarId } from "@/lib/cars/car-registry";
 import { alignGhostToTrack } from "@/lib/sim/ghost-align";
@@ -141,6 +143,7 @@ export interface LibreCorsaSimulatorProps {
 
 export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackId = DEFAULT_TRACK_ID, onSelectTrack, onRestart }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const nameplatesRef = useRef<OverheadNameplatesSink | null>(null);
   /** The drive on the mounted circuit: the scene, the car and the frame loop (created once the container exists) */
   const [session, setSession] = useState<DriveSession | null>(null);
   /** The browser gave this page no WebGL context: only a page reload (or a browser restart) can bring it back */
@@ -1253,6 +1256,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         trackId,
         // The save itself, read here as well as below: the state still holds the prerendered defaults at this point
         settings: loadPlayerSettings(),
+        nameplatesRef,
       });
     } catch (err) {
       // No WebGL for this page (switched off, or refused after a GPU reset): say so rather than the error screen
@@ -1890,6 +1894,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }}
     >
       <div ref={containerRef} className="h-full w-full" />
+      <OverheadNameplates overlayRef={nameplatesRef} />
 
       {phase === "driving" && seatPanel ? (
         <SeatPanel

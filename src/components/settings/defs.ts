@@ -593,6 +593,12 @@ export const mirror = choice("segmented", {
   ...hud("virtualMirror"),
 });
 export const radar = toggle({ id: "radar", label: "Radar", hint: "Fades in when a car is alongside or close behind", ...hud("radar") });
+export const playerNames = toggle({
+  id: "showPlayerNames",
+  label: "Player names",
+  hint: "Names over the other cars, the top three in gold, silver and bronze",
+  ...hud("showPlayerNames"),
+});
 export const boardWidget = choice("segmented", {
   id: "boardWidget",
   label: "Lap board",

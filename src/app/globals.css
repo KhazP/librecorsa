@@ -23,6 +23,11 @@
   --color-lc-crimson-hi: #fc5d6c;
   --color-lc-purple-hi: #c772fe;
 
+  /* Podium tiers (overhead nameplates, rankings) */
+  --color-lc-podium-gold: #ffd43b;
+  --color-lc-podium-silver: #cfd6e3;
+  --color-lc-podium-bronze: #e09152;
+
   /* Colour-blind palettes only (palette.css): the pairs that stay apart without red against green */
   --color-lc-azure: #4da6ff;
   --color-lc-tangerine: #ff8a1f;
@@ -88,6 +93,9 @@
   --z-lc-results: 60; /* race results, podium */
   --z-lc-loading: 70;
   --z-lc-notice: 80; /* errors that must sit over everything */
+  --podium-gold: var(--color-lc-podium-gold);
+  --podium-silver: var(--color-lc-podium-silver);
+  --podium-bronze: var(--color-lc-podium-bronze);
 }
 
 /* Phones, tablets and short laptop windows, where the full-size menu layouts run off the bottom */
@@ -888,4 +896,99 @@ body {
   .lc-rise-in {
     animation: none;
   }
+}
+
+/* Overhead player nameplates: DOM-pooled in OverheadNameplates.tsx, driven directly from the render loop */
+.lc-nameplate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--color-lc-chalk) 16%, transparent);
+  background: color-mix(in srgb, var(--color-lc-void) 76%, transparent);
+  color: var(--color-lc-chalk);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-lc-void) 65%, transparent);
+  white-space: nowrap;
+  will-change: transform, opacity;
+  contain: layout style;
+}
+.lc-nameplate[data-podium="1"] {
+  border-color: var(--podium-gold);
+  color: var(--podium-gold);
+}
+.lc-nameplate[data-podium="2"] {
+  border-color: var(--podium-silver);
+  color: var(--podium-silver);
+}
+.lc-nameplate[data-podium="3"] {
+  border-color: var(--podium-bronze);
+  color: var(--podium-bronze);
+}
+.lc-nameplate-rank {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  color: var(--color-lc-slate);
+}
+.lc-nameplate[data-podium="1"] .lc-nameplate-rank,
+.lc-nameplate[data-podium="2"] .lc-nameplate-rank,
+.lc-nameplate[data-podium="3"] .lc-nameplate-rank {
+  padding: 2px 5px;
+  border-radius: 9999px;
+  color: var(--color-lc-void);
+}
+.lc-nameplate[data-podium="1"] .lc-nameplate-rank {
+  background: var(--podium-gold);
+}
+.lc-nameplate[data-podium="2"] .lc-nameplate-rank {
+  background: var(--podium-silver);
+}
+.lc-nameplate[data-podium="3"] .lc-nameplate-rank {
+  background: var(--podium-bronze);
+}
+.lc-nameplate-name {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lc-nameplate-fl {
+  padding: 2px 5px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--color-lc-best) 55%, transparent);
+  background: color-mix(in srgb, var(--color-lc-best) 22%, transparent);
+  color: var(--color-lc-best-ink);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+.lc-nameplate-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.lc-nameplate-badge {
+  padding: 1px 4px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--color-lc-chalk) 20%, transparent);
+  background: color-mix(in srgb, var(--color-lc-titanium) 80%, transparent);
+  color: var(--color-lc-fog);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
 }

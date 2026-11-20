@@ -20,6 +20,7 @@ import {
   lapSummary,
   mirror,
   palette,
+  playerNames,
   pressureUnit,
   quality,
   radar,
@@ -77,7 +78,7 @@ export function HudTab() {
   return (
     <>
       <HudLayoutCard />
-      <SettingsCard title="What the HUD shows" rows={[hudSize, deltaBar, lapSummary, mirror, radar, boardWidget, ...hudAdvanced]} />
+      <SettingsCard title="What the HUD shows" rows={[hudSize, deltaBar, lapSummary, mirror, radar, playerNames, boardWidget, ...hudAdvanced]} />
     </>
   );
 }

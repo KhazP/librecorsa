@@ -281,6 +281,8 @@ export interface HudSettings {
    * each lap ("lapEnd"), always open, or always folded
    */
   boardWidget: BoardWidgetMode;
+  /** Names over the other players' and AI cars, the top three in podium colours */
+  showPlayerNames: boolean;
 }
 
 export type BoardWidgetMode = "lapEnd" | "open" | "closed";
@@ -421,6 +423,7 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   shiftBeep: false,
   headMovement: "natural",
   boardWidget: "lapEnd",
+  showPlayerNames: true,
 };
 
 export const DEFAULT_CONTENT_LIBRARY: ContentLibrary = {
@@ -795,6 +798,7 @@ function parseHud(v: unknown): HudSettings {
     // Older saves: Neck FX switched off asked for a still camera
     headMovement: oneOf(v.headMovement, ["natural", "static"] as const, v.neckFx === false ? "static" : d.headMovement),
     boardWidget: oneOf(v.boardWidget, BOARD_WIDGET_MODES, d.boardWidget),
+    showPlayerNames: bool(v.showPlayerNames, d.showPlayerNames),
   };
 }
 
