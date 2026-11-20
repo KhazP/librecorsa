@@ -9,6 +9,7 @@ import type { InterpolatedPeerState, RaceStartInfo } from "../src/lib/sim/multip
 import { buildRaceGrid, sanitizePacket, sortQualifyingTimes, type ControlMessage, type NetworkVehiclePacket } from "../src/lib/net/wire";
 import { QualifyingSession, aiQualifyingMs, qualifyingOrder, type QualifyingFrame } from "../src/lib/sim/qualifying";
 import { AiOpponentField, AI_DRIVERS } from "../src/lib/sim/ai-opponents";
+import { ROLLING_START_PACE_MS } from "../src/lib/sim/simulator-car";
 import { F1Physics2026 } from "../src/lib/f1-physics-2026";
 import { getActiveTrackData } from "../src/lib/track-data";
 
@@ -583,6 +584,149 @@ console.log("Multiplayer SP features · rolling start, rules, qualifying grid");
     "buildRaceGrid random shuffles deterministically with custom rng",
     buildRaceGrid(["a", "b", "c"], { gridOrder: "random", rng: () => 0 }).join(",") === "b,c,a",
   );
+}
+
+console.log("AI rolling start · formation pace until Start/Finish");
+{
+  const track = getActiveTrackData(1200);
+  const dt = 1 / 60;
+
+  // 1. Player at the back: AI pack holds formation pace until P1 crosses S/F, then accelerates to racing speed
+  {
+    const player = new F1Physics2026(track);
+    const field = new AiOpponentField(track, player, AI_DRIVERS.slice(0, 4), undefined, { seed: 7, learning: false });
+    field.playerGrid = "back";
+    field.raceLaps = 2;
+    field.startRace(false);
+    const initStatus = field.status();
+    const paceMs = initStatus.rollingFormation?.paceMs ?? 0;
+    check(
+      "rolling start begins in formation with pace <= ROLLING_START_PACE_MS",
+      field.phase === "racing" && field.isRollingFormation && paceMs > 10 && paceMs <= ROLLING_START_PACE_MS + 1e-6,
+      `pace=${(paceMs * 3.6).toFixed(1)} km/h`,
+    );
+    check("overtaking aids locked during rolling formation", field.aidsLockedFor(player));
+
+    let maxAiSpeedBeforeGreen = 0;
+    let greenAtS = -1;
+    let leaderDistAtGreen = -Infinity;
+    player.aiAutopilot = true;
+    for (let i = 0; i < 60 * 18; i++) {
+      player.step(dt, {});
+      field.update(dt);
+      const st = field.status();
+      if (field.isRollingFormation) {
+        for (const sim of field.aiSims()) maxAiSpeedBeforeGreen = Math.max(maxAiSpeedBeforeGreen, sim.vxMs);
+      } else if (greenAtS < 0) {
+        greenAtS = field.timeS;
+        leaderDistAtGreen = st.standings[0]?.raceDistM ?? -Infinity;
+        break;
+      }
+    }
+    check(
+      "AI cars hold formation pace (never blast off before Start/Finish)",
+      greenAtS > 1 && maxAiSpeedBeforeGreen <= paceMs + 2.5,
+      `max=${(maxAiSpeedBeforeGreen * 3.6).toFixed(1)} vs pace=${(paceMs * 3.6).toFixed(1)} km/h, green at ${greenAtS.toFixed(2)} s`,
+    );
+    check(
+      "green flag drops as P1 crosses Start/Finish",
+      !field.isRollingFormation && field.status().rollingFormation === undefined && leaderDistAtGreen >= -1 && leaderDistAtGreen < 20,
+      `leaderDist=${leaderDistAtGreen.toFixed(1)} m`,
+    );
+    for (let i = 0; i < 60 * 3; i++) {
+      player.step(dt, {});
+      field.update(dt);
+    }
+    const minAfterGreen = Math.min(...field.aiSims().map((s) => s.vxMs));
+    check(
+      "AI cars accelerate to full racing speed after green flag",
+      minAfterGreen > paceMs + 15,
+      `minAfter=${(minAfterGreen * 3.6).toFixed(1)} vs pace=${(paceMs * 3.6).toFixed(1)} km/h`,
+    );
+  }
+
+  // 2. Player on pole (P1): AI cars behind never jump the player before S/F, and release on S/F crossing
+  {
+    const player = new F1Physics2026(track);
+    const field = new AiOpponentField(track, player, AI_DRIVERS.slice(0, 3), undefined, { seed: 11, learning: false });
+    field.playerGrid = "front";
+    field.raceLaps = 2;
+    field.startRace(false);
+    const paceMs = field.status().rollingFormation?.paceMs ?? 0;
+    check("player on pole starts in rolling formation", field.isRollingFormation && field.status().position === 1);
+
+    let jumpedBeforeGreen = false;
+    let maxAiBeforeGreen = 0;
+    let greenAtS = -1;
+    for (let i = 0; i < 60 * 18; i++) {
+      // Player gently maintains near formation pace (no hard acceleration) until crossing S/F
+      const throttle = player.vxMs < paceMs - 0.5 ? 0.28 : 0.05;
+      player.step(dt, { throttle, brake: 0 });
+      field.update(dt);
+      const st = field.status();
+      if (field.isRollingFormation) {
+        if (st.position !== 1) jumpedBeforeGreen = true;
+        for (const sim of field.aiSims()) maxAiBeforeGreen = Math.max(maxAiBeforeGreen, sim.vxMs);
+      } else if (greenAtS < 0) {
+        greenAtS = field.timeS;
+        break;
+      }
+    }
+    check(
+      "player on pole is not jumped by AI cars before Start/Finish",
+      !jumpedBeforeGreen && greenAtS > 1 && maxAiBeforeGreen <= paceMs + 2.5,
+      `jumped=${jumpedBeforeGreen}, maxAi=${(maxAiBeforeGreen * 3.6).toFixed(1)} km/h, greenAt=${greenAtS.toFixed(2)} s`,
+    );
+    for (let i = 0; i < 60 * 3; i++) {
+      player.step(dt, { throttle: 1, brake: 0 });
+      field.update(dt);
+    }
+    const minAfterGreen = Math.min(...field.aiSims().map((s) => s.vxMs));
+    check(
+      "AI pack launches cleanly once pole player crosses Start/Finish",
+      minAfterGreen > paceMs + 15,
+      `minAfter=${(minAfterGreen * 3.6).toFixed(1)} km/h`,
+    );
+  }
+
+  // 3. Player on pole accelerates in the final acceleration zone (< 55 m before S/F) -> green drops early
+  {
+    const player = new F1Physics2026(track);
+    const field = new AiOpponentField(track, player, AI_DRIVERS.slice(0, 2), undefined, { seed: 13, learning: false });
+    field.playerGrid = "front";
+    field.startRace(false);
+    const paceMs = field.status().rollingFormation?.paceMs ?? 0;
+    let earlyGreenDist = Infinity;
+    for (let i = 0; i < 60 * 15; i++) {
+      const pDist = field.status().standings.find((s) => s.isPlayer)?.raceDistM ?? -200;
+      const throttle = pDist >= -50 ? 1 : player.vxMs < paceMs - 0.5 ? 0.25 : 0.05;
+      player.step(dt, { throttle, brake: 0 });
+      field.update(dt);
+      if (!field.isRollingFormation) {
+        earlyGreenDist = field.status().standings.find((s) => s.isPlayer)?.raceDistM ?? 0;
+        break;
+      }
+    }
+    check(
+      "pole player accelerating in the final 55 m zone triggers early green flag",
+      !field.isRollingFormation && earlyGreenDist >= -55 && earlyGreenDist < 0,
+      `earlyGreenDist=${earlyGreenDist.toFixed(1)} m`,
+    );
+  }
+
+  // 4. Safety fallback: if pole car stalls/stops, formation releases so the race never deadlocks
+  {
+    const player = new F1Physics2026(track);
+    const field = new AiOpponentField(track, player, AI_DRIVERS.slice(0, 2), undefined, { seed: 17, learning: false });
+    field.playerGrid = "front";
+    field.startRace(false);
+    for (let i = 0; i < 60 * 10; i++) {
+      player.step(dt, { throttle: 0, brake: 1 });
+      field.update(dt);
+      if (!field.isRollingFormation) break;
+    }
+    check("stalled P1 triggers safety fallback green flag (no deadlock)", !field.isRollingFormation, `released at ${field.timeS.toFixed(2)} s`);
+  }
 }
 
 console.log(`\n${passed} checks passed`);

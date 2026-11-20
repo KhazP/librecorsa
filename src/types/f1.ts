@@ -320,6 +320,8 @@ export interface RaceStatus {
   lightsOn: number;
   /** Seconds until the light sequence starts (multiplayer countdown, an AI race's grid after qualifying); absent otherwise */
   countdownS?: number;
+  /** Rolling-start formation approach: the field holds this pace (m/s) until the leader crosses Start/Finish */
+  rollingFormation?: { paceMs: number };
   /** The qualifying classification the race lined up in (AI race with qualifying): code, player, best clean lap (ms) */
   qualifying?: { code: string; isPlayer: boolean; lapMs: number | null }[];
   /** Race length (laps) */

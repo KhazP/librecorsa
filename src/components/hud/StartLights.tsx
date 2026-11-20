@@ -2,8 +2,11 @@
 
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { RaceStatus } from "@/types/f1";
+import { Badge } from "@/components/ui/Badge";
+import { currentUnits } from "@/lib/settings/ui-prefs";
+import { SPEED_LABEL, speedIn } from "@/lib/settings/units";
 import { HUD_GLASS, HUD_RED, raceState } from "./hud-format";
-import { skinCss, SkinPanel, useHudSkin } from "./styles/third-party-skin";
+import { SkinBanner, skinCss, SkinPanel, SkinTag, useHudSkin } from "./styles/third-party-skin";
 
 const LIGHT_COLUMNS = [0, 1, 2, 3, 4];
 /** Waving chequer strip outline (520 × 60 viewBox) */
@@ -25,10 +28,10 @@ const ChequerStrip: React.FC<{ patternId: string; defs?: boolean }> = ({ pattern
   </svg>
 );
 
-/** Five-light start gantry overlay (the lights are red: identity, not state); "Lights out" when the race starts, "Chequered flag" when the player finishes */
+/** Five-light start gantry overlay (the lights are red: identity, not state); "Lights out" / "Green flag" when the race starts, "Chequered flag" when the player finishes */
 export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }) => {
   const skin = useHudSkin();
-  const [starts, setStarts] = useState(0);
+  const [startBanner, setStartBanner] = useState<{ kind: "go" | "green"; id: number } | null>(null);
   const [flags, setFlags] = useState(0);
   // Which banner has finished fading: it is then removed, so it stops holding space above the delta bar
   const [faded, setFaded] = useState<string | null>(null);
@@ -36,15 +39,22 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
     if (e.target === e.currentTarget) setFaded(id);
   };
   const prevPhase = useRef(race?.phase);
+  const prevRolling = useRef(Boolean(race?.rollingFormation));
   const patternId = `lc-chk-${useId().replace(/:/g, "")}`;
 
   // The banner follows the player's own flag (raceState().finished), not the classification
   const flagged = raceState(race).finished;
+  const rolling = Boolean(race?.rollingFormation);
   useEffect(() => {
-    if (prevPhase.current === "lights" && race?.phase === "racing") setStarts((n) => n + 1);
+    if (prevPhase.current === "lights" && race?.phase === "racing") {
+      setStartBanner((b) => ({ kind: "go", id: (b?.id ?? 0) + 1 }));
+    } else if (prevRolling.current && !rolling && race?.phase === "racing") {
+      setStartBanner((b) => ({ kind: "green", id: (b?.id ?? 0) + 1 }));
+    }
     if (flagged && prevPhase.current !== "finished") setFlags((n) => n + 1);
     prevPhase.current = race?.phase;
-  }, [race?.phase, flagged]);
+    prevRolling.current = rolling;
+  }, [race?.phase, rolling, flagged]);
 
   if (race?.phase === "lights") {
     const countdown =
@@ -121,11 +131,59 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
       </div>
     );
   }
-  if (starts > 0 && race?.phase === "racing") {
-    if (faded === `go${starts}`) return null;
+  if (race?.phase === "racing" && race.rollingFormation) {
+    const units = currentUnits();
+    const pace = Math.round(speedIn(race.rollingFormation.paceMs * 3.6, units.speed));
+    const unit = SPEED_LABEL[units.speed];
     if (skin !== null) {
       return (
-        <div key={starts} onAnimationEnd={fadeEnd(`go${starts}`)} className="hud-fade-out relative flex items-center justify-center">
+        <SkinBanner role="status" tone="caution" cut="sm" className="inline-flex min-h-10 items-center gap-2.5 py-1.5 pr-4 pl-2.5">
+          <SkinTag tone="caution" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
+            Rolling start
+          </SkinTag>
+          <span className="text-[14px] font-bold whitespace-nowrap uppercase">
+            Hold pace · <span className="lc-data">{pace}</span> {unit} to start/finish
+          </span>
+        </SkinBanner>
+      );
+    }
+    return (
+      <div
+        role="status"
+        className={`inline-flex min-h-10 items-center gap-2.5 rounded-full py-1.5 pr-4.5 pl-2.5 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
+      >
+        <Badge tone="warn" variant="solid" size="sm">
+          Rolling start
+        </Badge>
+        <span className="lc-disp text-[14px] whitespace-nowrap">
+          Hold pace · <span className="lc-data">{pace}</span> {unit} to start/finish
+        </span>
+      </div>
+    );
+  }
+  if (startBanner?.kind === "green" && race?.phase === "racing" && faded !== `green${startBanner.id}`) {
+    if (skin !== null) {
+      return (
+        <div key={`green${startBanner.id}`} onAnimationEnd={fadeEnd(`green${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
+          <SkinPanel cut="lg" tone="gain" innerClassName="flex flex-col items-center gap-2 px-8 py-4 sm:px-14 sm:py-6">
+            <span className="text-[40px] leading-none font-bold whitespace-nowrap uppercase sm:text-[68px]">Green flag</span>
+          </SkinPanel>
+        </div>
+      );
+    }
+    return (
+      <div key={`green${startBanner.id}`} onAnimationEnd={fadeEnd(`green${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
+        <span className="lc-ripple absolute inset-0 rounded-full border-2 border-lc-gain/55" aria-hidden="true" />
+        <div className="relative flex flex-col items-center gap-2 rounded-full border-2 border-lc-gain/55 bg-lc-void/84 px-8 py-4 shadow-lc-pop sm:px-14 sm:py-6">
+          <span className="lc-disp text-[44px] whitespace-nowrap text-lc-gain sm:text-[76px]">Green flag</span>
+        </div>
+      </div>
+    );
+  }
+  if (startBanner?.kind === "go" && race?.phase === "racing" && faded !== `go${startBanner.id}`) {
+    if (skin !== null) {
+      return (
+        <div key={startBanner.id} onAnimationEnd={fadeEnd(`go${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
           <SkinPanel cut="lg" tone="accent" innerClassName="flex flex-col items-center gap-3 px-8 py-4 sm:gap-4 sm:px-14 sm:py-6">
             <div className="flex gap-2" aria-hidden="true">
               {LIGHT_COLUMNS.map((i) => (
@@ -138,7 +196,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
       );
     }
     return (
-      <div key={starts} onAnimationEnd={fadeEnd(`go${starts}`)} className="hud-fade-out relative flex items-center justify-center">
+      <div key={startBanner.id} onAnimationEnd={fadeEnd(`go${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
         {/* Ripples leaving the banner */}
         <span className="lc-ripple absolute inset-0 rounded-full border-2 border-lc-chalk/45" aria-hidden="true" />
         <div className="relative flex flex-col items-center gap-3 rounded-full border-2 border-lc-chalk/45 bg-lc-void/84 px-8 py-4 shadow-lc-pop sm:gap-4 sm:px-14 sm:py-6">

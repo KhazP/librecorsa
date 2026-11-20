@@ -382,7 +382,7 @@ export function startPose(
 export const FLYING_SLOT_SPACING_M = 28;
 
 /** A race's rolling start never runs faster than this (m/s): a formation pace, not racing speed */
-export const ROLLING_START_PACE_MS = 160 / 3.6;
+export const ROLLING_START_PACE_MS = 120 / 3.6;
 /** No rolling-start slot where the road within 10 m curves tighter than this (1/m: a 33 m radius, a hairpin) */
 const ROLLING_SLOT_MAX_CURVATURE = 0.03;
 /** The most cornering a car placed with no yaw rate is asked for at the field's speed (g) */

@@ -220,14 +220,24 @@ check('and its car drives on alone', host.remote && sim.sMeters !== sBefore && r
   race2.startRace(false);
   check('a restart takes the field running', loop.runtime.raceField === field && field !== null);
   const s0 = car.sMeters;
+  let sawFormation = false;
+  let maxPeerBeforeGreenKmh = 0;
+  let formationPaceKmh = 0;
   for (let tick = 0; tick < 500; tick++) {
     car.step(SIM_TICK_S, {});
     loop.advance(SIM_TICK_S);
     host.endFrame(true);
     race2.update();
+    const st = race2.status();
+    if (st.rollingFormation) {
+      sawFormation = true;
+      formationPaceKmh = st.rollingFormation.paceMs * 3.6;
+      for (const p of race2.peers()) maxPeerBeforeGreenKmh = Math.max(maxPeerBeforeGreenKmh, p.speedKmh);
+    }
   }
   const moving = race2.peers().every((p) => p.speedKmh > 50);
   check('a rolling restart races at once, the AI cars with it', race2.phase === 'racing' && !race2.playerFrozen && moving && race2.status().standings.length === OPPONENTS + 1, `the player's car ${(car.sMeters - s0).toFixed(0)} m on`);
+  check('worker rolling start surfaces formation status and holds formation pace', sawFormation && maxPeerBeforeGreenKmh <= formationPaceKmh + 10, `max ${maxPeerBeforeGreenKmh.toFixed(1)} vs pace ${formationPaceKmh.toFixed(1)} km/h`);
   race2.dispose();
 }
 

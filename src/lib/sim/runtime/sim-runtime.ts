@@ -49,6 +49,7 @@ interface WorkerRace {
   poses: Float64Array | null;
   sentPhase: string;
   sentLights: number;
+  sentRolling: boolean;
   rosterSent: boolean;
   /** The car's race control before the race wired its own */
   ownRaceControl: OvertakingRaceControl | null | undefined;
@@ -224,7 +225,7 @@ export class SimRuntime {
             earnedAtDetection: () => field.detectionEarnedFor(car),
           };
         }
-        this.race = { id: command.race, opponents: command.opponents, field, env, tick: 0, steps: 0, fresh: true, poses: null, sentPhase: "", sentLights: -1, rosterSent: false, ownRaceControl };
+        this.race = { id: command.race, opponents: command.opponents, field, env, tick: 0, steps: 0, fresh: true, poses: null, sentPhase: "", sentLights: -1, sentRolling: false, rosterSent: false, ownRaceControl };
         this.epoch = command.epoch;
         this.accumulatorS = 0;
         this.reportRace(true);
@@ -348,11 +349,15 @@ export class SimRuntime {
     const car = this.car;
     if (!race || !car) return;
     const field = race.field;
-    const lightsChanged = field.phase !== race.sentPhase || field.lightsOn !== race.sentLights;
+    const lightsChanged =
+      field.phase !== race.sentPhase ||
+      field.lightsOn !== race.sentLights ||
+      field.isRollingFormation !== race.sentRolling;
     const weatherDue = force || race.steps % WEATHER_EVERY === 0;
     if (!force && !lightsChanged && !weatherDue && race.steps % STATUS_EVERY !== 0) return;
     race.sentPhase = field.phase;
     race.sentLights = field.lightsOn;
+    race.sentRolling = field.isRollingFormation;
     const sample = race.env.weatherSampleFor(car);
     const event: Extract<SimEvent, { type: "race" }> = {
       type: "race",

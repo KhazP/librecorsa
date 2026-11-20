@@ -34,7 +34,7 @@ import {
 import { AI_TUNING_LIBRARY } from '@/lib/sim/ai-tuning-data';
 import { AiSectionLearner, loadLearnedCorners, saveLearnedCorners, type LearnedCorner } from '@/lib/sim/ai-learning';
 import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
-import type { SimulatorCar } from '@/lib/sim/simulator-car';
+import { ROLLING_START_PACE_MS, type SimulatorCar } from '@/lib/sim/simulator-car';
 import { carAheadOnRoad, earnedAtDetection, type OvertakingRaceControl } from '@/lib/sim/overtaking-rules';
 import type { RaceStatus, RacingLineId, VehicleModelId } from '@/types/f1';
 import { AiCarControl, aiControlTraits, KNOCK_LATERAL_MS, KNOCK_WALL_MS, KNOCK_YAW_RADS, type AiControlCarState } from '@/lib/sim/ai-car-control';
@@ -511,6 +511,8 @@ interface FieldCar {
   startLaneM: number | null;
   /** Time from lights out until it gets going (s): its reaction, now and then a bogged launch on top */
   launchReactS: number;
+  /** Race time (s) when this AI car reacts to a rolling start's green flag (holds formation pace until then) */
+  rollingGreenAtS: number;
   /** Laps, distance and flag of this car (the same clock a multiplayer race keeps) */
   readonly clock: LapClock;
   /** Race distance covered (m); negative on the grid behind the line */
@@ -783,6 +785,16 @@ export class AiOpponentField implements AiRace {
   private lightsTimerS = 0;
   private holdS = 0;
   private raceTimeS = 0;
+  /** True during a rolling start's formation approach before the green flag drops */
+  private rollingFormation = false;
+  /** Formation speed (m/s) held by the AI field during a rolling start */
+  private rollingPaceMs = 0;
+  /** Race time (s) when the green flag dropped on a rolling start */
+  private rollingGreenAtS = 0;
+  /** Seconds the P1 leader has been stalled during a rolling formation */
+  private rollingLeaderStallS = 0;
+  /** Maximum race time (s) for a rolling formation before safety green-flag release */
+  private rollingMaxWaitS = 0;
   /** Race time at which the first car reached each distance bucket (gap timing) */
   /** Time gaps to the leader at the same point of the track (finer buckets than a multiplayer race's) */
   private readonly gapTimer = new GapTimer(GAP_BUCKET_M);
@@ -1168,6 +1180,7 @@ export class AiOpponentField implements AiRace {
       defending: false,
       startLaneM: null,
       launchReactS: 0,
+      rollingGreenAtS: 0,
       prevS: 0,
       biasM: 0,
       stuckS: 0,
@@ -1219,10 +1232,16 @@ export class AiOpponentField implements AiRace {
     return this.phase === 'lights' && this.preStartS > 0;
   }
 
+  /** True while a rolling start is holding formation pace before the green flag */
+  get isRollingFormation(): boolean {
+    return this.rollingFormation;
+  }
+
   /**
    * Lines the field up: AI cars in grid order, the player behind them. A standing start runs the
    * light sequence (five reds one second apart, then a random 0.2–3 s hold); a rolling start
-   * queues the cars on the main straight, all at one formation speed, and races at once.
+   * queues the cars on the approach at one formation speed and holds formation pace until the
+   * leader crosses Start/Finish (or accelerates in the final acceleration zone).
    */
   public startRace(standing: boolean): void {
     const L = this.track.totalLengthM;
@@ -1271,9 +1290,10 @@ export class AiOpponentField implements AiRace {
         car.control.catchSlipRad = traits.catchSlipRad;
         car.control.reset();
       }
-      // A standing start only: a rolling one is already under way at the green
+      // A standing start only: a rolling one holds formation pace until green flag, then reacts smoothly
       const launchDraw = car.ai ? launchReactionS(this.skillLevel, car.rng(), car.rng()) : 0;
       car.launchReactS = standing ? launchDraw : 0;
+      car.rollingGreenAtS = 0;
       // Start from the grid slot's lane, not the racing line, so the field does not file onto the line off the grid
       car.startLaneM = car.ai ? car.sim.lateralOffsetM : null;
       car.biasM = car.ai ? THREE.MathUtils.clamp(car.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(car.sim.sMeters), car.ai.racingLineId), -6, 6) : 0;
@@ -1309,6 +1329,26 @@ export class AiOpponentField implements AiRace {
     // After qualifying the grid stands a few seconds before the lights, for its order to be read
     this.preStartS = standing && this.qualiResults ? QUALIFYING_GRID_SHOW_S : 0;
     this.holdS = 0.2 + this.rng() * 2.8;
+    // Rolling start: hold the whole field at its spawn formation speed until the leader crosses Start/Finish
+    const leader = this.cars.find((c) => c.gridSlot === 0) ?? this.cars[0];
+    const spawnSpeeds = this.cars.map((c) => c.sim.vxMs).filter((v) => v > 5);
+    const paceMs = spawnSpeeds.length > 0 ? Math.min(ROLLING_START_PACE_MS, Math.min(...spawnSpeeds)) : 0;
+    this.rollingFormation =
+      !standing && !this.track.pointToPoint && paceMs > 5 && leader !== undefined && leader.clock.distM < -5;
+    this.rollingPaceMs = this.rollingFormation ? paceMs : 0;
+    this.rollingGreenAtS = 0;
+    this.rollingLeaderStallS = 0;
+    this.rollingMaxWaitS = this.rollingFormation
+      ? Math.max(12, Math.max(0, -(leader?.clock.distM ?? 0)) / Math.max(5, paceMs) + 8)
+      : 0;
+    if (this.rollingFormation) {
+      for (const car of this.cars) {
+        if (car.ai) {
+          car.ai.aiSpeedCapMs = this.rollingPaceMs;
+          car.ai.aiTopSpeedOpen = false;
+        }
+      }
+    }
   }
 
   /**
@@ -1371,6 +1411,7 @@ export class AiOpponentField implements AiRace {
 
     this.raceTimeS += dt;
     this.incidents.length = 0;
+    this.updateRollingFormation(dt);
     if (this.ownsEnvironment) this.environment.update(dt, this.allSims);
     this.updateYellows(dt);
     this.planTraffic(dt);
@@ -1399,6 +1440,10 @@ export class AiOpponentField implements AiRace {
         if (out.speedCapMs < (sim.aiSpeedCapMs ?? Infinity)) sim.aiSpeedCapMs = out.speedCapMs;
         // Lights out: on the brakes until the driver reacts
         if (this.raceTimeS < car.launchReactS) sim.aiSpeedCapMs = 0;
+        // Rolling start green flag: keep holding formation pace until this driver reacts (no braking!)
+        if (this.rollingPaceMs > 0 && this.raceTimeS < car.rollingGreenAtS) {
+          sim.aiSpeedCapMs = Math.min(sim.aiSpeedCapMs ?? Infinity, this.rollingPaceMs);
+        }
         sim.step(dt, {});
       } else {
         sim.aiAutopilot = false;
@@ -1413,15 +1458,88 @@ export class AiOpponentField implements AiRace {
       this.trackDistance(car);
       this.syncPeer(car);
     }
+    // Check again right after trackDistance so an AI leader crossing S/F drops green on the exact same frame
+    if (this.rollingFormation) this.updateRollingFormation(0);
     this.raceControl.update(this.raceTimeS, this.incidents, this.playerYellowLevel());
     this.judgeYellowPasses(dt);
     this.countPasses();
+  }
+
+  /**
+   * Monitors a rolling-start formation approach and drops the green flag when:
+   *  1. The P1 leader (AI or player) crosses Start/Finish (`distM >= 0`),
+   *  2. A human player on pole deliberately accelerates well above formation pace in the final ~55 m acceleration zone,
+   *  3. Safety fallback: P1 stalls for > 6 s or the overall formation exceeds `rollingMaxWaitS`.
+   * Also silently releases if a car was teleported mid-lap (headless test setups).
+   */
+  private updateRollingFormation(dt: number): void {
+    if (!this.rollingFormation) return;
+    const L = this.track.totalLengthM;
+    for (const car of this.cars) {
+      if (!car.removed && Math.abs(wrapHalf(car.sim.sMeters - car.prevS, L)) > 40) {
+        this.releaseRollingStart(true);
+        return;
+      }
+    }
+    const leader = this.cars.find((c) => c.gridSlot === 0) ?? this.cars[0];
+    if (!leader || leader.removed || leader.retired) {
+      this.releaseRollingStart();
+      return;
+    }
+    const leaderDistNow = leader.distM + wrapHalf(leader.sim.sMeters - leader.prevS, L);
+    if (leaderDistNow >= 0) {
+      this.releaseRollingStart();
+      return;
+    }
+    if (
+      leader.isPlayer &&
+      !leader.sim.aiAutopilot &&
+      leaderDistNow >= -55 &&
+      leader.sim.vxMs > this.rollingPaceMs + 5 &&
+      leader.sim.telemetry.throttle > 0.65
+    ) {
+      this.releaseRollingStart();
+      return;
+    }
+    if (dt > 0) {
+      if (leader.sim.vxMs < Math.max(4, 0.35 * this.rollingPaceMs)) {
+        this.rollingLeaderStallS += dt;
+      } else {
+        this.rollingLeaderStallS = 0;
+      }
+    }
+    if (this.rollingLeaderStallS >= 6 || this.raceTimeS >= this.rollingMaxWaitS) {
+      this.releaseRollingStart();
+    }
+  }
+
+  private releaseRollingStart(silent = false): void {
+    if (!this.rollingFormation) return;
+    this.rollingFormation = false;
+    this.rollingGreenAtS = this.raceTimeS;
+    this.rollingLeaderStallS = 0;
+    for (const car of this.cars) {
+      if (!car.ai) continue;
+      car.startLaneM = silent ? null : car.sim.lateralOffsetM;
+      if (silent) {
+        car.rollingGreenAtS = 0;
+        car.ai.aiSpeedCapMs = Infinity;
+        car.ai.aiTopSpeedOpen = true;
+      } else {
+        // Slight staggered green-flag reaction down the field (P1 nearly instant, pack reacts smoothly behind)
+        const skillFactor = 1 - this.skillLevel / 100;
+        const rowDelay = 0.045 * Math.min(car.gridSlot, 8);
+        const react = rowDelay + (0.04 + 0.14 * skillFactor) * car.rng();
+        car.rollingGreenAtS = this.raceTimeS + react;
+      }
+    }
   }
 
   /** Running order on the road a few times a second, for the passes made (retired cars are left out) */
   private passOrder: FieldCar[] = [];
   private passTimerS = 0;
   private countPasses(): void {
+    if (this.rollingFormation) return;
     if (this.raceTimeS - this.passTimerS < 0.25) return;
     this.passTimerS = this.raceTimeS;
     const running = this.cars.filter((c) => !c.retired && c.finishTimeS === null);
@@ -1579,6 +1697,50 @@ export class AiOpponentField implements AiRace {
       const sample = this.track.getSampleAtDistance(me.sMeters);
       const line = aiLineOffsetM(sample, me.racingLineId);
       const half = sample.width / 2 - 1.2;
+      if (this.rollingFormation) {
+        // Hold tight staggered formation pace up to Start/Finish: no racing, passing or defending before green.
+        const stagger = car.gridSlot === 0 ? 0 : car.gridSlot % 2 === 1 ? -2.6 : 2.6;
+        let formationCap = this.rollingPaceMs;
+        let targetLat = THREE.MathUtils.clamp(line + stagger, -half, half);
+        for (const other of this.cars) {
+          if (other === car || other.removed) continue;
+          const ds = wrapHalf(other.sim.sMeters - me.sMeters, L);
+          const dLat = other.sim.lateralOffsetM - me.lateralOffsetM;
+          const extraLat = other.isPlayer ? 0.5 * this.rc.playerMarginM : 0;
+          if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(dLat) < this.rc.alongsideSpacingM + extraLat) {
+            const away = me.lateralOffsetM >= other.sim.lateralOffsetM ? 1 : -1;
+            targetLat = THREE.MathUtils.clamp(other.sim.lateralOffsetM + away * (this.rc.alongsideSpacingM + extraLat), -half, half);
+          }
+          if (ds > 0 && ds < 80 && Math.abs(dLat) < CAR_WID_M + 0.35 + extraLat) {
+            formationCap = Math.min(formationCap, followCapMs(other.sim, ds - CAR_LEN_M - (other.isPlayer ? this.rc.playerMarginM : 0), this.rc));
+          }
+          // Never jump a rolling car that started ahead in grid order before the green flag drops
+          if (other.gridSlot < car.gridSlot && !other.retired && other.sim.vxMs > 5 && ds > -15 && ds < 35) {
+            const minGapM = other.gridSlot === car.gridSlot - 1 ? 10 : 12;
+            if (ds < minGapM + 8) {
+              const matchCap = Math.max(0, other.sim.vxMs + Math.min(0, (ds - minGapM) * 0.5));
+              formationCap = Math.min(formationCap, matchCap);
+            }
+          }
+        }
+        car.defending = false;
+        car.local = null;
+        car.craft.passTargetId = null;
+        car.craft.backOffId = null;
+        car.craft.commitSide = 0;
+        const biasTarget = THREE.MathUtils.clamp(targetLat - line, -6, 6);
+        car.biasM += THREE.MathUtils.clamp(biasTarget - car.biasM, -BIAS_RATE_MS * dt, BIAS_RATE_MS * dt);
+        me.aiLineBiasM = car.biasM;
+        this.refreshPlan(car);
+        const weatherPace = this.environment.weatherPaceScale(me);
+        const planned = me.aiPlan ? 1 : car.pace * weatherPace;
+        me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 0.999, planned);
+        me.aiSpeedCapMs = formationCap;
+        me.aiTopSpeedOpen = false;
+        car.hooks?.setSteerGain(this.tuning.at('steerGain', me.sMeters));
+        if (car.hooks?.refresh?.()) this.rebuildTarget(car);
+        continue;
+      }
       let targetLat: number | null = null;
       let speedCap = Infinity;
       let biasRate = BIAS_RATE_MS;
@@ -1978,7 +2140,7 @@ export class AiOpponentField implements AiRace {
       if (sim.aiSpeedCapMs !== undefined && sim.aiSpeedCapMs !== Infinity) sim.aiSpeedCapMs = Infinity;
       return;
     }
-    let cap = Infinity;
+    let cap = this.rollingFormation ? this.rollingPaceMs : Infinity;
     for (const other of this.cars) {
       if (other === me || other.removed) continue;
       const ds = wrapHalf(other.sim.sMeters - sim.sMeters, L);
@@ -2254,6 +2416,7 @@ export class AiOpponentField implements AiRace {
   /** A car the others treat as an obstacle: spinning, stopped or crawling, or retired and not yet taken away */
   private isHazard(car: FieldCar): boolean {
     if (car.removed) return false;
+    if (this.rollingFormation) return car.retired;
     if (car.retired || car.control?.incident) return true;
     // Off the start everyone is slow; and a finished car on its in-lap is no obstacle anyone races
     if (this.raceTimeS < 10 || car.distM < 150) return false;
@@ -2281,6 +2444,10 @@ export class AiOpponentField implements AiRace {
     this.yellowS.length = 0;
     this.yellowDouble.length = 0;
     this.yellowCar.length = 0;
+    if (this.rollingFormation) {
+      this.doubleState.clear();
+      return;
+    }
     const L = this.track.totalLengthM;
     for (const c of this.cars) {
       if (!this.isHazard(c)) continue;
@@ -2334,6 +2501,7 @@ export class AiOpponentField implements AiRace {
   private readonly yellowPasses = new YellowPassJudge();
 
   private judgeYellowPasses(dt: number): void {
+    if (this.rollingFormation) return;
     const me = this.cars.find((c) => c.isPlayer);
     if (!me) return;
     const active = this.phase === 'racing' && !me.retired && me.finishTimeS === null && !this.player.aiAutopilot;
@@ -2387,8 +2555,9 @@ export class AiOpponentField implements AiRace {
    */
   public lockAidsInYellow = true;
 
-  /** A car's overtaking aids are closed: the rules say so and it is inside someone else's yellow zone */
+  /** A car's overtaking aids are closed: the rules say so and it is inside someone else's yellow zone, or before a rolling start's green flag */
   public aidsLockedFor(sim: SimulatorCar): boolean {
+    if (this.rollingFormation) return true;
     if (!this.lockAidsInYellow || this.phase !== 'racing' || this.yellowS.length === 0) return false;
     const car = this.cars.find((c) => c.sim === sim);
     return this.yellowLevelAt(sim.sMeters, car) > 0;
@@ -2697,7 +2866,14 @@ export class AiOpponentField implements AiRace {
       if (car.isPlayer) car.clock.invalidateCurrentLap();
       car.clock.rewindTo(car.sim.sMeters, this.raceTimeS, p?.distM);
       car.prevS = car.sim.sMeters;
+      if (car.ai) car.rollingGreenAtS = 0;
       this.syncPeer(car);
+    }
+    if (this.rollingPaceMs > 0) {
+      const leader = this.cars.find((c) => c.gridSlot === 0) ?? this.cars[0];
+      const rewoundBeforeGreen = this.rollingFormation || (this.rollingGreenAtS > 0 && this.raceTimeS < this.rollingGreenAtS);
+      this.rollingFormation = Boolean(rewoundBeforeGreen && leader && leader.distM < -5);
+      this.rollingLeaderStallS = 0;
     }
   }
 
@@ -2892,6 +3068,7 @@ export class AiOpponentField implements AiRace {
       phase: this.phase,
       lightsOn: this.lightsOn,
       countdownS: this.phase === 'lights' && this.preStartS > 0 ? this.preStartS : undefined,
+      rollingFormation: this.rollingFormation ? { paceMs: this.rollingPaceMs } : undefined,
       qualifying: this.qualiResults ?? undefined,
       position: playerIdx + 1,
       fieldSize: order.length,
