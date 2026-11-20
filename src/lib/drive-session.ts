@@ -1965,7 +1965,7 @@ export class DriveSession {
         raceKind: race.kind,
         weeklyChallengeRace: race.kind === "ai" && race.rules !== undefined,
         timeTrialActive: timeTrial !== null,
-        qualifyingActive: quali !== null,
+        qualifyingActive: quali !== null || multiplayerSync.activeQualifying !== null,
         inOnlineRoom: isInOnlineRoom(multiplayerSync.status, peersOnTrack),
         aiRacePhase: race.kind === "ai" ? race.field.phase : undefined,
       });
