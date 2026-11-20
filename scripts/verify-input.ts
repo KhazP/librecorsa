@@ -96,7 +96,9 @@ import {
   steeringAssistSettings,
 } from '../src/lib/sim/steering-assist';
 import { resetAllSettings } from '../src/components/settings/storage';
-import { tiltSteer } from '../src/components/settings/defs';
+import { tiltSteer, touchLayout } from '../src/components/settings/defs';
+import { resetTouchInput, touchInput } from '../src/lib/input/touch-input';
+import { drivingInputOf } from '../src/lib/sim/lap-types';
 import type { SettingsEnv } from '../src/components/settings/env';
 import {
   enterFullscreenOnTouch,
@@ -1168,6 +1170,47 @@ check('Settings > Touch: turning Tilt to steer on asks iOS for motion access in 
     delete g.window;
     delete g.DeviceOrientationEvent;
   }
+});
+check('Settings > Touch: touch style toggles between sliders and buttons, persists, and falls back on bad saves', () => {
+  let settings = DEFAULT_PLAYER_SETTINGS;
+  assert.equal(settings.touch.layout, 'sliders', 'default layout is sliders');
+  const env = {
+    get settings() { return settings; },
+    update: (fn: (s: typeof settings) => typeof settings) => void (settings = fn(settings)),
+  } as unknown as SettingsEnv;
+  touchLayout.write(env, 'buttons');
+  assert.equal(settings.touch.layout, 'buttons');
+  const roundTripped = parsePlayerSettings(JSON.parse(JSON.stringify(settings)));
+  assert.equal(roundTripped.touch.layout, 'buttons');
+  const bad = parsePlayerSettings({ touch: { mode: 'on', layout: 'joystick' } });
+  assert.equal(bad.touch.layout, 'sliders', 'unknown touch layout falls back to sliders');
+  const legacy = parsePlayerSettings({ touch: { mode: 'on', tiltSteer: false, tiltRangeDeg: 30 } });
+  assert.equal(legacy.touch.layout, 'sliders', 'older save without layout keeps sliders');
+  settings = { ...settings, touch: { ...settings.touch, mode: 'off' } };
+  assert.ok(touchLayout.off?.(env), 'touch style is disabled when touch controls are off');
+});
+check('Touch buttons: digital flags reset cleanly and tag laps as touch input', () => {
+  touchInput.active = true;
+  touchInput.steerLeft = true;
+  touchInput.throttleBtn = true;
+  assert.equal(
+    drivingInputOf({
+      touch: touchInput,
+      source: null,
+      mouseSteer: false,
+      keys: false,
+      pad: { throttle: 0, brake: 0, steer: 0 },
+      setting: 'keyboard',
+    }),
+    'touch',
+    'holding a digital touch button records touch input',
+  );
+  resetTouchInput();
+  assert.equal(touchInput.active, false);
+  assert.equal(touchInput.steerLeft, false);
+  assert.equal(touchInput.steerRight, false);
+  assert.equal(touchInput.throttleBtn, false);
+  assert.equal(touchInput.brakeBtn, false);
 });
 
 /** Manual clock and timers for the WebHID driver and its writer */

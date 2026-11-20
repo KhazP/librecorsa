@@ -2342,11 +2342,13 @@ export class DriveSession {
       // Keyboard-only input shaping: keys become ramped pedals, eased back while the tyres pass their grip when the
       // car's ABS / traction control is off. The steering keys' direction goes to the car's steering assist, which
       // ramps it to the front tyres' grip limit, self-aligns the car when they are let go and caps a countersteer.
+      // Digital touch buttons (Touch style = Buttons) share this ramped/assisted path so tapping buttons feels smooth.
       // Wheel and mouse inputs are passed through untouched.
       const keys = heldKeys;
       const kb = kbInput;
+      const touch = touchInput.active && driving ? touchInput : null;
       // Half-throttle key: a fixed part throttle for wet-like traction or slow corners
-      const kbThrottleTarget = keys.up ? 1 : keys.half ? kbTuning.halfThrottle : 0;
+      const kbThrottleTarget = keys.up || touch?.throttleBtn ? 1 : keys.half ? kbTuning.halfThrottle : 0;
       const throttleRising = kbThrottleTarget > kb.throttle;
       kb.throttle = approach(
         kb.throttle,
@@ -2354,7 +2356,7 @@ export class DriveSession {
         dtSeconds / (throttleRising ? kbTuning.throttleRiseS || KB_THROTTLE_RISE_S : KB_THROTTLE_FALL_S)
       );
       // Half-brake key: a fixed part brake, for trail braking or a light lift
-      const kbBrakeTarget = keys.down ? 1 : keys.halfBrake ? kbTuning.halfBrake : 0;
+      const kbBrakeTarget = keys.down || touch?.brakeBtn ? 1 : keys.halfBrake ? kbTuning.halfBrake : 0;
       const brakeRising = kbBrakeTarget > kb.brake;
       kb.brake = approach(
         kb.brake,
@@ -2424,12 +2426,18 @@ export class DriveSession {
         driving && kbTuning.exitAssist && carAids?.tcLevel === 0,
         kbTuning.pedalAssistStrength
       );
-      const kbSteerDir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-      // On-screen controls: pedals and a steering pad (or the tilt of the device). With no wheel or controller the touch
-      // steering is always the steering, centred too; with one, that device steers while the touch steering is centred
-      const touch = touchInput.active && driving ? touchInput : null;
+      const kbSteerDir = (keys.right || touch?.steerRight ? 1 : 0) - (keys.left || touch?.steerLeft ? 1 : 0);
+      // On-screen controls: sliders, four hold buttons, or device tilt. Digital touch buttons steer via `kbSteer`
+      // (speed-sensitive steering assist) instead of `analogSteer`, so `touchSteering` stays false when buttons steer.
+      const touchButtonsSteer =
+        touch !== null &&
+        (touch.steerLeft ||
+          touch.steerRight ||
+          (settingsNow.touch.layout === "buttons" && !settingsNow.touch.tiltSteer && Math.abs(touch.steer) <= 0.01));
       const touchSteering =
-        touch !== null && ((gamepadStick === undefined && gamepadSteer === undefined) || Math.abs(touch.steer) > 0.01);
+        touch !== null &&
+        !touchButtonsSteer &&
+        ((gamepadStick === undefined && gamepadSteer === undefined) || Math.abs(touch.steer) > 0.01);
       if (touchInput.active) {
         if (driving) {
           if (touchInput.shiftUp) runAction("shiftUp");
@@ -2471,20 +2479,21 @@ export class DriveSession {
       heldKeys.shiftDown = false;
       heldKeys.neutral = false;
       // The driver takes the car back from the autopilot with any device (the keys do it on key down): a pedal, the
-      // stick, the touch steering pad. Not the wheel's rim, which its force feedback turns on its own.
+      // stick, the touch steering pad or touch buttons. Not the wheel's rim, which its force feedback turns on its own.
       if (driving && physics.aiAutopilot && !coolDown.active) {
         const pedal = Math.max(gamepadThrottle, gamepadBrake, touch?.throttle ?? 0, touch?.brake ?? 0);
         // The stick alone: a pad held at a slant would otherwise hand the car back as soon as the autopilot took it
         const stick = Math.abs(padStick ?? 0);
         const touchSteer = touchSteering && !settingsNow.touch.tiltSteer ? Math.abs(touch.steer) : 0;
-        if (pedal > 0.15 || stick > 0.3 || touchSteer > 0.2) physics.aiAutopilot = false;
+        const touchBtn = Boolean(touch?.throttleBtn || touch?.brakeBtn || touch?.steerLeft || touch?.steerRight);
+        if (pedal > 0.15 || stick > 0.3 || touchSteer > 0.2 || touchBtn) physics.aiAutopilot = false;
       }
       // What drives the car this frame, for the icon beside the driver's name on the boards (the lap keeps the one used most)
       const inputNow = drivingInputOf({
         touch,
         source: device.source,
         mouseSteer: settings.mouseSteer,
-        keys: kbSteerDir !== 0 || kbThrottleTarget > 0 || kbBrakeTarget > 0,
+        keys: keys.left || keys.right || keys.up || keys.down || keys.half || keys.halfBrake,
         pad: { throttle: gamepadThrottle, brake: gamepadBrake, steer: gamepadStick ?? gamepadSteer ?? 0 },
         setting: settingsNow.device,
       });

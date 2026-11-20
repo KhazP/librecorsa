@@ -8,7 +8,7 @@ import { ControllerSetup } from "@/components/menu/steps/ControllerStep";
 import { WheelSetup } from "@/components/menu/steps/WheelStep";
 import { useGamepads } from "@/components/menu/useMenuNav";
 import type { InputDevice } from "@/lib/input/device-input";
-import { tiltRange, tiltSteer, touchMode } from "../defs";
+import { tiltRange, tiltSteer, touchLayout, touchMode } from "../defs";
 import { useSettingsEnv } from "../env";
 import { SettingsCard } from "../fields";
 
@@ -49,5 +49,5 @@ export const ControllerTab = ControllerSetup;
 export const WheelTab = () => <WheelSetup first />;
 
 export function TouchTab() {
-  return <SettingsCard title="Touch" rows={[touchMode, tiltSteer, tiltRange]} first />;
+  return <SettingsCard title="Touch" rows={[touchMode, touchLayout, tiltSteer, tiltRange]} first />;
 }

@@ -367,6 +367,18 @@ export const touchMode = choice("segmented", {
   ...touch("mode"),
 });
 
+export const touchLayout = choice("segmented", {
+  id: "touchLayout",
+  label: "Touch style",
+  hint: "Drag sliders for partial input, or hold four buttons (left, right, brake, throttle)",
+  off: (env) => (env.settings.touch.mode === "off" ? "Touch controls are off" : null),
+  options: [
+    { id: "sliders", label: "Sliders" },
+    { id: "buttons", label: "Buttons" },
+  ],
+  ...touch("layout"),
+});
+
 const tiltSteerLens = touch("tiltSteer");
 
 export const tiltSteer = toggle({

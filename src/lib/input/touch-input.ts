@@ -6,12 +6,17 @@
 export interface TouchInputState {
   /** True while the TouchControls overlay is mounted */
   active: boolean;
-  /** 0..1 */
+  /** 0..1 (slider pedal) */
   throttle: number;
-  /** 0..1 */
+  /** 0..1 (slider pedal) */
   brake: number;
-  /** -1 (full left) .. 1 (full right) */
+  /** -1 (full left) .. 1 (full right) (slider or tilt) */
   steer: number;
+  /** Digital touch buttons (Buttons layout; routed through the same smooth ramps / steering assist as keys) */
+  steerLeft: boolean;
+  steerRight: boolean;
+  throttleBtn: boolean;
+  brakeBtn: boolean;
   /** set true for one frame by a button tap; the consumer clears them */
   shiftUp: boolean;
   /** set true for one frame by a button tap; the consumer clears them */
@@ -28,6 +33,10 @@ export const touchInput: TouchInputState = {
   throttle: 0,
   brake: 0,
   steer: 0,
+  steerLeft: false,
+  steerRight: false,
+  throttleBtn: false,
+  brakeBtn: false,
   shiftUp: false,
   shiftDown: false,
   boost: false,
@@ -40,6 +49,10 @@ export function resetTouchInput(): void {
   touchInput.throttle = 0;
   touchInput.brake = 0;
   touchInput.steer = 0;
+  touchInput.steerLeft = false;
+  touchInput.steerRight = false;
+  touchInput.throttleBtn = false;
+  touchInput.brakeBtn = false;
   touchInput.shiftUp = false;
   touchInput.shiftDown = false;
   touchInput.boost = false;

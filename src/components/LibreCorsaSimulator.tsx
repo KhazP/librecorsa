@@ -1948,6 +1948,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           touchControls={
             touchVisible && vrState !== "on"
               ? {
+                  layout: settings.touch.layout,
                   tiltSteer: settings.touch.tiltSteer,
                   tiltRangeDeg: settings.touch.tiltRangeDeg,
                   autoGearbox,

@@ -21,7 +21,15 @@ export const isLapInput = (value: unknown): value is LapInput => (LAP_INPUTS as 
  */
 export function drivingInputOf(f: {
   /** The on-screen controls' pedals and steering, when they are shown */
-  touch: { throttle: number; brake: number; steer: number } | null;
+  touch: {
+    throttle: number;
+    brake: number;
+    steer: number;
+    steerLeft?: boolean;
+    steerRight?: boolean;
+    throttleBtn?: boolean;
+    brakeBtn?: boolean;
+  } | null;
   /** The device the pad reader took this frame (`DeviceFrame.source`) */
   source: "wheel" | "controller" | "legacy" | null;
   mouseSteer: boolean;
@@ -32,7 +40,18 @@ export function drivingInputOf(f: {
   /** The input chosen in the settings: a pad without the standard layout is a wheel there */
   setting: "keyboard" | "controller" | "wheel";
 }): LapInput | null {
-  if (f.touch && (f.touch.throttle > 0.02 || f.touch.brake > 0.02 || Math.abs(f.touch.steer) > 0.01)) return "touch";
+  if (
+    f.touch &&
+    (f.touch.throttle > 0.02 ||
+      f.touch.brake > 0.02 ||
+      Math.abs(f.touch.steer) > 0.01 ||
+      f.touch.steerLeft ||
+      f.touch.steerRight ||
+      f.touch.throttleBtn ||
+      f.touch.brakeBtn)
+  ) {
+    return "touch";
+  }
   if (f.source === "wheel" && !f.mouseSteer) return "wheel";
   if (f.keys || f.mouseSteer) return "keyboard";
   const padUsed = f.pad.throttle > 0.02 || f.pad.brake > 0.02 || Math.abs(f.pad.steer) > 0.05;

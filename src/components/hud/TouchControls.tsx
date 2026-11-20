@@ -7,6 +7,7 @@ import {
   tiltToSteer,
   touchInput,
 } from "@/lib/input/touch-input";
+import type { TouchLayout } from "@/lib/settings/player-settings";
 import { Icon } from "@/components/ui/icons/Icon";
 import { HUD_BRAKE, HUD_INFO, HUD_THROTTLE, HUD_VOID, HUD_VOLT, HUD_WHITE } from "./hud-format";
 import { useHudMode } from "./hud-mode";
@@ -21,12 +22,27 @@ const REVERSE_OFFER_KMH = 5;
 const DRIVEN_OFF_KMH = 15;
 
 type Analog = "steer" | "throttle" | "brake";
+type Digital = "steerLeft" | "steerRight" | "throttleBtn" | "brakeBtn";
 type TiltStatus = "off" | "asking" | "ready" | "denied" | "unsupported";
 interface Visual {
   steer: number;
   throttle: number;
   brake: number;
+  steerLeft: boolean;
+  steerRight: boolean;
+  throttleBtn: boolean;
+  brakeBtn: boolean;
 }
+
+const ZERO_VISUAL: Visual = {
+  steer: 0,
+  throttle: 0,
+  brake: 0,
+  steerLeft: false,
+  steerRight: false,
+  throttleBtn: false,
+  brakeBtn: false,
+};
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -300,6 +316,82 @@ const Pedal: React.FC<PedalProps> = ({ label, color, icon, value, onChange, susp
   );
 };
 
+interface HoldButtonProps {
+  label: string;
+  color: string;
+  icon: "keyLeft" | "keyRight" | "brake" | "keyUp";
+  pressed: boolean;
+  onChange: (down: boolean) => void;
+  /** Hidden under the pause menu or a replay: a finger still down is let go */
+  suspended: boolean;
+  className: string;
+}
+
+/**
+ * Multi-touch hold button for the four-button mobile layout (left, right, brake, throttle).
+ * Tracks its own pointerId so steering and pedals can be held together without interference.
+ */
+const HoldButton: React.FC<HoldButtonProps> = ({
+  label,
+  color,
+  icon,
+  pressed,
+  onChange,
+  suspended,
+  className,
+}) => {
+  const pid = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!suspended) return;
+    pid.current = null;
+    onChange(false);
+  }, [suspended, onChange]);
+
+  useEffect(
+    () => () => {
+      if (pid.current !== null) onChange(false);
+    },
+    [onChange],
+  );
+
+  const down = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    if (pid.current !== null) return;
+    pid.current = e.pointerId;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    onChange(true);
+  };
+  const release = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.pointerId !== pid.current) return;
+    pid.current = null;
+    onChange(false);
+  };
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={pressed}
+      className={`pointer-events-auto touch-none relative flex items-center justify-center rounded-lc-sheet phone:rounded-lc-card transition-transform duration-75 ${pressed ? "scale-95" : ""} ${className}`}
+      style={{
+        touchAction: "none",
+        backgroundColor: pressed ? tint(color, 55) : GHOST_BG,
+        boxShadow: pressed
+          ? `inset 0 0 0 2px ${color}, 0 0 0 1px rgb(0 0 0 / 0.16)`
+          : `inset 0 0 0 1.5px ${tint(color, 55)}, 0 0 0 1px rgb(0 0 0 / 0.16)`,
+        color: pressed ? HUD_WHITE : color,
+      }}
+      onPointerDown={down}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onLostPointerCapture={release}
+    >
+      <Icon name={icon} size="lg" />
+    </button>
+  );
+};
+
 interface GhostButtonProps {
   /** Accessible name */
   label: string;
@@ -374,7 +466,9 @@ export interface TouchCarState {
 }
 
 export interface TouchControlsProps {
-  /** Steer from device tilt instead of the on-screen slider */
+  /** Sliders for analogue steering/pedals, or four hold buttons (left, right, brake, throttle) */
+  layout?: TouchLayout;
+  /** Steer from device tilt instead of the on-screen slider or steering buttons */
   tiltSteer: boolean;
   /** Tilt angle that gives full steering lock, in degrees */
   tiltRangeDeg: number;
@@ -385,11 +479,12 @@ export interface TouchControlsProps {
 }
 
 /**
- * Phone touch overlay: steering (slider or tilt), brake and throttle pedals, the driving buttons the car and gearbox
- * use, plus pause and camera. With tilt steering the pedals split, brake under the left thumb and throttle under the
- * right. Writes into the `touchInput` singleton.
+ * Phone touch overlay: steering (slider, left/right buttons, or tilt), brake and throttle pedals (sliders or buttons),
+ * the driving buttons the car and gearbox use, plus pause and camera. With tilt steering the pedals split, brake under
+ * the left thumb and throttle under the right. Writes into the `touchInput` singleton.
  */
 export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }> = ({
+  layout = "sliders",
   tiltSteer,
   tiltRangeDeg,
   autoGearbox,
@@ -397,7 +492,7 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
   onCycleCamera,
   car,
 }) => {
-  const [vis, setVis] = useState<Visual>({ steer: 0, throttle: 0, brake: 0 });
+  const [vis, setVis] = useState<Visual>(ZERO_VISUAL);
   // The one source for tilt: the note shows it and the orientation listener only steers while it is "ready".
   // `statusRef` mirrors it for the same-event guard (a first tap on a retry reaches both tap handlers before a render)
   const [tiltStatus, setTiltStatusState] = useState<TiltStatus>("off");
@@ -409,7 +504,7 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
   // Paused or in a replay the overlay stays mounted (tilt keeps its permission) but drives nothing
   const suspended = useHudMode() === "hidden";
 
-  const live = useRef<Visual>({ steer: 0, throttle: 0, brake: 0 });
+  const live = useRef<Visual>({ ...ZERO_VISUAL });
   const frame = useRef<number | null>(null);
   const tiltOffset = useRef({ beta: 0, gamma: 0 });
   const tiltNeedsZero = useRef(true);
@@ -421,7 +516,15 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
       frame.current = null;
       const l = live.current;
       setVis((p) =>
-        p.steer === l.steer && p.throttle === l.throttle && p.brake === l.brake ? p : { ...l },
+        p.steer === l.steer &&
+        p.throttle === l.throttle &&
+        p.brake === l.brake &&
+        p.steerLeft === l.steerLeft &&
+        p.steerRight === l.steerRight &&
+        p.throttleBtn === l.throttleBtn &&
+        p.brakeBtn === l.brakeBtn
+          ? p
+          : { ...l },
       );
     });
   }, []);
@@ -435,14 +538,27 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
     [schedule],
   );
 
+  const writeDigital = useCallback(
+    (key: Digital, down: boolean) => {
+      live.current[key] = down;
+      touchInput[key] = down;
+      schedule();
+    },
+    [schedule],
+  );
+
   const setSteer = useCallback((v: number) => write("steer", v), [write]);
   const setThrottle = useCallback((v: number) => write("throttle", v), [write]);
   const setBrake = useCallback((v: number) => write("brake", v), [write]);
+  const setSteerLeft = useCallback((d: boolean) => writeDigital("steerLeft", d), [writeDigital]);
+  const setSteerRight = useCallback((d: boolean) => writeDigital("steerRight", d), [writeDigital]);
+  const setThrottleBtn = useCallback((d: boolean) => writeDigital("throttleBtn", d), [writeDigital]);
+  const setBrakeBtn = useCallback((d: boolean) => writeDigital("brakeBtn", d), [writeDigital]);
 
   /** Mark the overlay active for the game loop while it is shown; clear everything when hidden or unmounted */
   useEffect(() => {
     if (suspended) {
-      live.current = { steer: 0, throttle: 0, brake: 0 };
+      live.current = { ...ZERO_VISUAL };
       resetTouchInput();
       schedule();
     } else {
@@ -454,6 +570,19 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
       resetTouchInput();
     };
   }, [suspended, schedule]);
+
+  /** Switching between Sliders and Buttons clears any live input from the previous layout */
+  useEffect(() => {
+    live.current = { ...ZERO_VISUAL };
+    touchInput.steer = 0;
+    touchInput.throttle = 0;
+    touchInput.brake = 0;
+    touchInput.steerLeft = false;
+    touchInput.steerRight = false;
+    touchInput.throttleBtn = false;
+    touchInput.brakeBtn = false;
+    schedule();
+  }, [layout, schedule]);
 
   /** Ask for tilt permission (iOS needs a user gesture); a request already under way, or granted, is not repeated */
   const enableTilt = useCallback(async () => {
@@ -596,11 +725,61 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
     </GhostButton>
   ) : null;
 
-  const brakePedal = (
+  const buttonsMode = layout === "buttons";
+  const pedalBtnCls =
+    "h-32 w-24 max-sm:portrait:h-26 max-sm:portrait:w-18 short:w-22 phone:h-24 phone:w-21";
+  const steerBtnCls =
+    "h-22 w-24 max-sm:portrait:h-18 max-sm:portrait:w-18 phone:h-18 phone:w-21";
+
+  const brakePedal = buttonsMode ? (
+    <HoldButton
+      label="Brake"
+      color={HUD_BRAKE}
+      icon="brake"
+      pressed={vis.brakeBtn}
+      onChange={setBrakeBtn}
+      suspended={suspended}
+      className={pedalBtnCls}
+    />
+  ) : (
     <Pedal label="Brake" color={HUD_BRAKE} icon="brake" value={vis.brake} onChange={setBrake} suspended={suspended} />
   );
-  const throttlePedal = (
+  const throttlePedal = buttonsMode ? (
+    <HoldButton
+      label="Throttle"
+      color={HUD_THROTTLE}
+      icon="keyUp"
+      pressed={vis.throttleBtn}
+      onChange={setThrottleBtn}
+      suspended={suspended}
+      className={pedalBtnCls}
+    />
+  ) : (
     <Pedal label="Throttle" color={HUD_THROTTLE} icon="keyUp" value={vis.throttle} onChange={setThrottle} suspended={suspended} />
+  );
+  const steerControl = buttonsMode ? (
+    <div className="flex gap-3 max-sm:portrait:gap-2 phone:gap-2">
+      <HoldButton
+        label="Steer left"
+        color={HUD_VOLT}
+        icon="keyLeft"
+        pressed={vis.steerLeft}
+        onChange={setSteerLeft}
+        suspended={suspended}
+        className={steerBtnCls}
+      />
+      <HoldButton
+        label="Steer right"
+        color={HUD_VOLT}
+        icon="keyRight"
+        pressed={vis.steerRight}
+        onChange={setSteerRight}
+        suspended={suspended}
+        className={steerBtnCls}
+      />
+    </div>
+  ) : (
+    <SteerPad value={vis.steer} onChange={setSteer} suspended={suspended} />
   );
   /** A row of driving buttons over a pedal; nothing at all when the car and gearbox use none */
   const buttonRow = (buttons: React.ReactNode[], align: "start" | "end") => {
@@ -660,7 +839,7 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
                 <TiltNote maxWidth="max-w-[calc(100vw-216px)]">No tilt sensor</TiltNote>
               )
             ) : null}
-            <SteerPad value={vis.steer} onChange={setSteer} suspended={suspended} />
+            {steerControl}
           </div>
           {/* Bottom-right: driving buttons above the pedals */}
           <div

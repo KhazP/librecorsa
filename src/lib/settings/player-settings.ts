@@ -305,11 +305,15 @@ export type FpsCap = 0 | 30;
 export const FPS_CAPS: readonly FpsCap[] = [0, 30];
 
 export type TouchMode = "auto" | "on" | "off";
+export type TouchLayout = "sliders" | "buttons";
+export const TOUCH_LAYOUTS: readonly TouchLayout[] = ["sliders", "buttons"];
 
 export interface TouchSettings {
   /** On-screen pedals and steering: auto shows them on touch screens */
   mode: TouchMode;
-  /** Steer by tilting the device instead of the on-screen slider */
+  /** Sliders for analogue steering and pedals, or four hold buttons (left, right, brake, throttle) */
+  layout: TouchLayout;
+  /** Steer by tilting the device instead of the on-screen steering pad or buttons */
   tiltSteer: boolean;
   /** Tilt angle for full lock (degrees, 10..60) */
   tiltRangeDeg: number;
@@ -450,7 +454,7 @@ export function defaultGraphicsSettings(): GraphicsSettings {
   return { ...DEFAULT_GRAPHICS_SETTINGS, quality: touch ? "medium" : DEFAULT_GRAPHICS_SETTINGS.quality, autoQuality: touch };
 }
 
-export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", tiltSteer: false, tiltRangeDeg: 30 };
+export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", layout: "sliders", tiltSteer: false, tiltRangeDeg: 30 };
 
 /** The race music 12 dB under the menus' (a quarter of the level), under the engine and the tyres */
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
@@ -807,6 +811,7 @@ function parseTouch(v: unknown): TouchSettings {
   if (!isObj(v)) return structuredClone(d);
   return {
     mode: oneOf(v.mode, ["auto", "on", "off"] as const, d.mode),
+    layout: oneOf(v.layout, TOUCH_LAYOUTS, d.layout),
     tiltSteer: bool(v.tiltSteer, d.tiltSteer),
     tiltRangeDeg: num(v.tiltRangeDeg, 10, 60, d.tiltRangeDeg),
   };
