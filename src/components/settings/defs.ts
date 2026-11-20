@@ -388,7 +388,7 @@ export const touchMode = choice("segmented", {
 export const touchLayout = choice("segmented", {
   id: "touchLayout",
   label: "Touch style",
-  hint: "Drag sliders for partial input, or hold four buttons (left, right, brake, throttle)",
+  hint: "Drag sliders for partial input, or tap/hold four digital buttons (uses the same steering curve and assist as keyboard steering)",
   off: (env) => (env.settings.touch.mode === "off" ? "Touch controls are off" : null),
   options: [
     { id: "sliders", label: "Sliders" },
