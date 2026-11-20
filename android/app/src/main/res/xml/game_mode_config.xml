@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12+ Game Mode (https://developer.android.com/games/optimize/adpf/gamemode).
+    Declares that LibreCorsa supports both Performance and Battery saver modes, so the player can
+    pick one from the Game Dashboard / game settings and the system applies its own tuning.
+-->
+<game-mode-config xmlns:android="http://schemas.android.com/apk/res/android"
+    android:supportsPerformanceGameMode="true"
+    android:supportsBatteryGameMode="true" />

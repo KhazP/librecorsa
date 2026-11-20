@@ -37,9 +37,16 @@ def twaManifest = [
     // Every shortcut must include the following fields:
     // - name: String that will show up in the shortcut.
     // - short_name: Shorter string used if |name| is too long.
-    // - url: Absolute path of the URL to launch the app with (e.g '/create').
-    // - icon: Name of the resource in the drawable folder to use as an icon.
-    shortcuts: [],
+    // - url: Absolute URL to launch the app with (e.g 'https://librecorsa.org/create'). The
+    //   launcher hands it to LauncherActivity as the intent data, which opens it in the TWA.
+    // - icon: Name of the resource in the drawable folder to use as an icon, or a full resource
+    //   reference such as '@mipmap/ic_launcher'.
+    // Only pages that exist: the game reads no `mode` parameter, so there is no deep link into a
+    // weekly challenge or online lobby; the home page holds the lap time boards and the challenge.
+    shortcuts: [
+        [name: 'Drive', short_name: 'Drive', url: 'https://librecorsa.org/play', icon: '@mipmap/ic_launcher'],
+        [name: 'Weekly & Boards', short_name: 'Boards', url: 'https://librecorsa.org/', icon: '@mipmap/ic_launcher'],
+    ],
     // The duration of fade out animation in milliseconds to be played when removing splash screen.
     splashScreenFadeOutDuration: 300,
     generatorApp: 'bubblewrap-cli', // Application that generated the Android Project
@@ -57,8 +64,8 @@ android {
         applicationId "org.librecorsa.app"
         minSdkVersion 24
         targetSdkVersion 36
-        versionCode 1
-        versionName "1"
+        versionCode 2
+        versionName "0.2.0"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
@@ -150,9 +157,35 @@ android {
 
         
     }
+    // Optional release signing, read from the environment so no secret lives in the repository.
+    // With all four variables set, assembleRelease / bundleRelease produce a signed APK / AAB; with
+    // any of them unset the release build is left unsigned (as before) and still succeeds.
+    def releaseKeystore = System.getenv('LIBRECORSA_ANDROID_KEYSTORE')
+    def releaseKeystorePassword = System.getenv('LIBRECORSA_ANDROID_KEYSTORE_PASSWORD')
+    def releaseKeyAlias = System.getenv('LIBRECORSA_ANDROID_KEY_ALIAS')
+    def releaseKeyPassword = System.getenv('LIBRECORSA_ANDROID_KEY_PASSWORD')
+    def releaseSigningAvailable = [releaseKeystore, releaseKeystorePassword, releaseKeyAlias, releaseKeyPassword]
+        .every { it != null && !it.trim().isEmpty() }
+    if (releaseSigningAvailable && !file(releaseKeystore).isFile()) {
+        throw new GradleException("LIBRECORSA_ANDROID_KEYSTORE does not point to a keystore file")
+    }
+
+    signingConfigs {
+        if (releaseSigningAvailable) {
+            release {
+                storeFile file(releaseKeystore)
+                storePassword releaseKeystorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled true
+            if (releaseSigningAvailable) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     compileOptions {
@@ -184,7 +217,7 @@ task generateShorcutsFile {
                 'shortcut'(
                         'android:shortcutId': 'shortcut' + i,
                         'android:enabled': 'true',
-                        'android:icon': '@drawable/' + s.icon,
+                        'android:icon': s.icon.startsWith('@') ? s.icon : '@drawable/' + s.icon,
                         'android:shortcutShortLabel': '@string/shortcut_short_name_' + i,
                         'android:shortcutLongLabel': '@string/shortcut_name_' + i) {
                     'intent'(
