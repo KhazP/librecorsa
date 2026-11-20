@@ -12,6 +12,8 @@ export interface TouchInputState {
   brake: number;
   /** -1 (full left) .. 1 (full right) (slider or tilt) */
   steer: number;
+  /** True while an analogue steering control (slider or ready device tilt) is driving `steer` */
+  analogSteerActive: boolean;
   /** Digital touch buttons (Buttons layout; routed through the same smooth ramps / steering assist as keys) */
   steerLeft: boolean;
   steerRight: boolean;
@@ -33,6 +35,7 @@ export const touchInput: TouchInputState = {
   throttle: 0,
   brake: 0,
   steer: 0,
+  analogSteerActive: false,
   steerLeft: false,
   steerRight: false,
   throttleBtn: false,
@@ -49,6 +52,7 @@ export function resetTouchInput(): void {
   touchInput.throttle = 0;
   touchInput.brake = 0;
   touchInput.steer = 0;
+  touchInput.analogSteerActive = false;
   touchInput.steerLeft = false;
   touchInput.steerRight = false;
   touchInput.throttleBtn = false;

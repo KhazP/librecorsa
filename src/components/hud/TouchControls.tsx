@@ -392,6 +392,125 @@ const HoldButton: React.FC<HoldButtonProps> = ({
   );
 };
 
+interface PairButtonSpec {
+  label: string;
+  color: string;
+  icon: "keyLeft" | "keyRight" | "brake" | "keyUp";
+  pressed: boolean;
+  onChange: (down: boolean) => void;
+}
+
+/**
+ * Paired multi-touch hold buttons (Left/Right steering, or Brake/Throttle pedals).
+ * Supports independent multi-touch fingers AND smooth thumb-rolling across the midline between the two buttons
+ * without lifting, while tolerating slight thumb drift off the outer edges until pointer release.
+ */
+const HoldButtonPair: React.FC<{
+  left: PairButtonSpec;
+  right: PairButtonSpec;
+  suspended: boolean;
+  buttonClassName: string;
+  gapClassName: string;
+}> = ({ left, right, suspended, buttonClassName, gapClassName }) => {
+  const pointers = useRef(new Map<number, "left" | "right">());
+  const pairRef = useRef<HTMLDivElement | null>(null);
+  const leftOnChange = left.onChange;
+  const rightOnChange = right.onChange;
+
+  const sync = useCallback(() => {
+    let l = false;
+    let r = false;
+    for (const side of pointers.current.values()) {
+      if (side === "left") l = true;
+      else r = true;
+    }
+    leftOnChange(l);
+    rightOnChange(r);
+  }, [leftOnChange, rightOnChange]);
+
+  useEffect(() => {
+    if (!suspended) return;
+    if (pointers.current.size > 0) {
+      pointers.current.clear();
+      sync();
+    }
+  }, [suspended, sync]);
+
+  useEffect(
+    () => () => {
+      if (pointers.current.size > 0) {
+        pointers.current.clear();
+        leftOnChange(false);
+        rightOnChange(false);
+      }
+    },
+    [leftOnChange, rightOnChange],
+  );
+
+  const sideForX = (clientX: number): "left" | "right" => {
+    const rect = pairRef.current?.getBoundingClientRect();
+    if (!rect) return "left";
+    return clientX < rect.left + rect.width * 0.5 ? "left" : "right";
+  };
+
+  const onDown = (side: "left" | "right") => (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    pointers.current.set(e.pointerId, side);
+    pairRef.current?.setPointerCapture(e.pointerId);
+    sync();
+  };
+
+  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const prev = pointers.current.get(e.pointerId);
+    if (!prev) return;
+    const next = sideForX(e.clientX);
+    if (next !== prev) {
+      pointers.current.set(e.pointerId, next);
+      sync();
+    }
+  };
+
+  const onRelease = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointers.current.delete(e.pointerId)) return;
+    sync();
+  };
+
+  const renderBtn = (spec: PairButtonSpec, side: "left" | "right") => (
+    <button
+      type="button"
+      aria-label={spec.label}
+      aria-pressed={spec.pressed}
+      className={`pointer-events-auto touch-none relative flex items-center justify-center rounded-lc-sheet phone:rounded-lc-card transition-transform duration-75 ${spec.pressed ? "scale-95" : ""} ${buttonClassName}`}
+      style={{
+        touchAction: "none",
+        backgroundColor: spec.pressed ? tint(spec.color, 55) : GHOST_BG,
+        boxShadow: spec.pressed
+          ? `inset 0 0 0 2px ${spec.color}, 0 0 0 1px rgb(0 0 0 / 0.16)`
+          : `inset 0 0 0 1.5px ${tint(spec.color, 55)}, 0 0 0 1px rgb(0 0 0 / 0.16)`,
+        color: spec.pressed ? HUD_WHITE : spec.color,
+      }}
+      onPointerDown={onDown(side)}
+    >
+      <Icon name={spec.icon} size="lg" />
+    </button>
+  );
+
+  return (
+    <div
+      ref={pairRef}
+      className={`pointer-events-auto touch-none flex ${gapClassName}`}
+      style={{ touchAction: "none" }}
+      onPointerMove={onMove}
+      onPointerUp={onRelease}
+      onPointerCancel={onRelease}
+      onLostPointerCapture={onRelease}
+    >
+      {renderBtn(left, "left")}
+      {renderBtn(right, "right")}
+    </div>
+  );
+};
+
 interface GhostButtonProps {
   /** Accessible name */
   label: string;
@@ -726,10 +845,18 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
   ) : null;
 
   const buttonsMode = layout === "buttons";
+
+  /** Tell the game loop whether an analogue steering source (slider or active tilt) currently owns `touchInput.steer` */
+  useEffect(() => {
+    touchInput.analogSteerActive = !suspended && (!buttonsMode || (tilt && tiltStatus === "ready"));
+  }, [suspended, buttonsMode, tilt, tiltStatus]);
+
+  // Size classes use mutually exclusive `short:` (landscape phones) and `max-sm:portrait:` (portrait phones)
+  // so the `phone:` variant never overrides the narrower portrait widths and causes button overlap on 360–375 px screens.
   const pedalBtnCls =
-    "h-32 w-24 max-sm:portrait:h-26 max-sm:portrait:w-18 short:w-22 phone:h-24 phone:w-21";
+    "h-32 w-24 short:h-24 short:w-21 max-sm:portrait:h-24 max-sm:portrait:w-16";
   const steerBtnCls =
-    "h-22 w-24 max-sm:portrait:h-18 max-sm:portrait:w-18 phone:h-18 phone:w-21";
+    "h-22 w-24 short:h-18 short:w-21 max-sm:portrait:h-18 max-sm:portrait:w-16";
 
   const brakePedal = buttonsMode ? (
     <HoldButton
@@ -757,27 +884,28 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
   ) : (
     <Pedal label="Throttle" color={HUD_THROTTLE} icon="keyUp" value={vis.throttle} onChange={setThrottle} suspended={suspended} />
   );
-  const steerControl = buttonsMode ? (
-    <div className="flex gap-3 max-sm:portrait:gap-2 phone:gap-2">
-      <HoldButton
-        label="Steer left"
-        color={HUD_VOLT}
-        icon="keyLeft"
-        pressed={vis.steerLeft}
-        onChange={setSteerLeft}
-        suspended={suspended}
-        className={steerBtnCls}
-      />
-      <HoldButton
-        label="Steer right"
-        color={HUD_VOLT}
-        icon="keyRight"
-        pressed={vis.steerRight}
-        onChange={setSteerRight}
-        suspended={suspended}
-        className={steerBtnCls}
-      />
+  const pedalPair = buttonsMode ? (
+    <HoldButtonPair
+      left={{ label: "Brake", color: HUD_BRAKE, icon: "brake", pressed: vis.brakeBtn, onChange: setBrakeBtn }}
+      right={{ label: "Throttle", color: HUD_THROTTLE, icon: "keyUp", pressed: vis.throttleBtn, onChange: setThrottleBtn }}
+      suspended={suspended}
+      buttonClassName={pedalBtnCls}
+      gapClassName="gap-3 short:gap-2 max-sm:portrait:gap-2"
+    />
+  ) : (
+    <div className="flex gap-3 phone:gap-2">
+      {brakePedal}
+      {throttlePedal}
     </div>
+  );
+  const steerControl = buttonsMode ? (
+    <HoldButtonPair
+      left={{ label: "Steer left", color: HUD_VOLT, icon: "keyLeft", pressed: vis.steerLeft, onChange: setSteerLeft }}
+      right={{ label: "Steer right", color: HUD_VOLT, icon: "keyRight", pressed: vis.steerRight, onChange: setSteerRight }}
+      suspended={suspended}
+      buttonClassName={steerBtnCls}
+      gapClassName="gap-3 short:gap-2 max-sm:portrait:gap-2"
+    />
   ) : (
     <SteerPad value={vis.steer} onChange={setSteer} suspended={suspended} />
   );
@@ -847,10 +975,7 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
             style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
           >
             {buttonRow([gearButton, shiftDown, shiftUp, boost, aero], "end")}
-            <div className="flex gap-3 phone:gap-2">
-              {brakePedal}
-              {throttlePedal}
-            </div>
+            {pedalPair}
           </div>
         </>
       )}

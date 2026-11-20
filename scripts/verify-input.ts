@@ -1189,8 +1189,9 @@ check('Settings > Touch: touch style toggles between sliders and buttons, persis
   settings = { ...settings, touch: { ...settings.touch, mode: 'off' } };
   assert.ok(touchLayout.off?.(env), 'touch style is disabled when touch controls are off');
 });
-check('Touch buttons: digital flags reset cleanly and tag laps as touch input', () => {
+check('Touch buttons: digital flags and analogSteerActive reset cleanly and tag laps as touch input', () => {
   touchInput.active = true;
+  touchInput.analogSteerActive = true;
   touchInput.steerLeft = true;
   touchInput.throttleBtn = true;
   assert.equal(
@@ -1207,6 +1208,7 @@ check('Touch buttons: digital flags reset cleanly and tag laps as touch input', 
   );
   resetTouchInput();
   assert.equal(touchInput.active, false);
+  assert.equal(touchInput.analogSteerActive, false);
   assert.equal(touchInput.steerLeft, false);
   assert.equal(touchInput.steerRight, false);
   assert.equal(touchInput.throttleBtn, false);

@@ -2445,15 +2445,13 @@ export class DriveSession {
       );
       const kbSteerDir = (keys.right || touch?.steerRight ? 1 : 0) - (keys.left || touch?.steerLeft ? 1 : 0);
       // On-screen controls: sliders, four hold buttons, or device tilt. Digital touch buttons steer via `kbSteer`
-      // (speed-sensitive steering assist) instead of `analogSteer`, so `touchSteering` stays false when buttons steer.
-      const touchButtonsSteer =
-        touch !== null &&
-        (touch.steerLeft ||
-          touch.steerRight ||
-          (settingsNow.touch.layout === "buttons" && !settingsNow.touch.tiltSteer && Math.abs(touch.steer) <= 0.01));
+      // (speed-sensitive steering assist) instead of `analogSteer`, so `touchSteering` is only active when an analogue
+      // steering control (slider or ready device tilt) owns `touch.steer` — including when tilt falls back to buttons.
       const touchSteering =
         touch !== null &&
-        !touchButtonsSteer &&
+        touch.analogSteerActive &&
+        !touch.steerLeft &&
+        !touch.steerRight &&
         ((gamepadStick === undefined && gamepadSteer === undefined) || Math.abs(touch.steer) > 0.01);
       if (touchInput.active) {
         if (driving) {
