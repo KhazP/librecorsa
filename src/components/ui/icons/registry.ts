@@ -116,6 +116,7 @@ import {
   DrsOpen,
   Ers,
   Gearbox,
+  Headlights,
   Helmet,
   Puncture,
   TractionControl,
@@ -282,6 +283,7 @@ export const ICONS = {
   ers: Ers,
   overtake: Zap,
   helmet: Helmet,
+  headlights: Headlights,
 
   // Track and race
   racingLine: RacingLine,
@@ -341,6 +343,7 @@ export const CUSTOM_ICONS: readonly IconName[] = [
   "drsClosed",
   "ers",
   "helmet",
+  "headlights",
   "racingLine",
   "trackCircuit",
   "trackHillClimb",

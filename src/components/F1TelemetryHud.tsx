@@ -210,7 +210,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** The music playing, and the pause menu's skip */
   nowPlaying?: NowPlaying | null;
   onSkipTrack?: () => void;
-  keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board", string>>;
+  keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board" | "headlights", string>>;
   /** The lap board's gear: when it opens (the HUD setting), changed from the board itself; without it, no lap board */
   onChangeBoardWidget?: (mode: BoardWidgetMode) => void;
   /** HUD layout preset, size and optional widgets */
@@ -790,6 +790,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             [props.keyNames?.restart ?? "Bksp", "Restart"],
             // The lap board's key, while there is one on screen
             ...(boardNode && boardKeyName && boardKeyName !== "—" ? [[boardKeyName, "Board"]] : []),
+            // Headlights toggle key while dark, lit, or manually overridden
+            ...(props.keyNames?.headlights &&
+            props.keyNames.headlights !== "—" &&
+            (props.weather?.headlightsAutoOn ||
+              props.weather?.headlightsOn ||
+              (props.weather?.headlightMode && props.weather.headlightMode !== "auto"))
+              ? [[props.keyNames.headlights, "Lights"]]
+              : []),
           ]).map(([k, label]) => (
             <span key={k} className="inline-flex items-center gap-1.5">
               <KeyCap>{k}</KeyCap>

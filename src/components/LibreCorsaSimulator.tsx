@@ -1529,6 +1529,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       shiftUp: first(k.shiftUp),
       shiftDown: first(k.shiftDown),
       board: first(k.board),
+      headlights: first(k.headlights),
     };
   }, [settings.keys]);
   /** The lap board's gear sets when it opens: the same HUD setting as in Settings */
@@ -1972,6 +1973,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   autoGearbox,
                   onPause: togglePause,
                   onCycleCamera: cycleCamera,
+                  showHeadlights: Boolean(
+                    weatherHud?.headlightsAutoOn ||
+                      weatherHud?.headlightsOn ||
+                      (weatherHud?.headlightMode && weatherHud.headlightMode !== "auto"),
+                  ),
+                  headlightsOn: Boolean(weatherHud?.headlightsOn),
+                  onToggleHeadlights: () => session?.runAction("headlights"),
                 }
               : null
           }

@@ -183,6 +183,11 @@ check('a new player gets GT style; a saved map keeps its buttons, and an action 
   // An older save without the HUD action: Bumper shift's R3, not GT style's LB (gear down there)
   const { hud: _hud, ...noHud } = old;
   assert.equal(parsePlayerSettings({ padButtons: noHud }).padButtons.hud, PAD_LAYOUTS.bumper.buttons.hud);
+  // Headlights is bindable on controller (unbound by default) and survives save/load
+  assert.equal(DEFAULT_PAD_BUTTONS.headlights, null);
+  const withHeadlights = rebindPadButton(DEFAULT_PAD_BUTTONS, 'headlights', 3);
+  assert.equal(withHeadlights.headlights, 3);
+  assert.equal(parsePlayerSettings({ padButtons: withHeadlights }).padButtons.headlights, 3);
 });
 check('controller layouts: every action set, no shared button, pedal buttons / D-pad / thumb-restart left alone', () => {
   assert.equal(PAD_LAYOUTS.gt.buttons, DEFAULT_PAD_BUTTONS);

@@ -3,6 +3,7 @@
 import React from "react";
 import { Icon } from "@/components/ui/icons/Icon";
 import { SurfaceBadge, type TrackSurface } from "@/components/ui/badges/SurfaceBadge";
+import type { HeadlightMode } from "@/lib/render/car-headlights";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { formatSpeed, formatTemp, HUD_GLASS, HUD_LBL, speedUnit } from "./hud-format";
 
@@ -24,6 +25,12 @@ export interface WeatherHudState {
   windSpeedMs?: number;
   /** Wind cardinal/octant direction */
   windDirection?: string;
+  /** Player headlights are currently illuminated */
+  headlightsOn?: boolean;
+  /** Current headlight mode ('auto' | 'on' | 'off') */
+  headlightMode?: HeadlightMode;
+  /** Automatic headlights would be active (night, dusk, or heavy rain) */
+  headlightsAutoOn?: boolean;
 }
 
 /** Track surface from the water on the racing line (the kit's `SurfaceBadge` draws it) */
@@ -71,6 +78,29 @@ const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | 
           <span className="lc-data text-[11px] text-lc-fog">
             {formatSpeed(weather.windSpeedMs * 3.6, units)} {speedUnit(units)}
           </span>
+        </span>
+      ) : null}
+      {weather.headlightsOn === true || (weather.headlightMode !== undefined && weather.headlightMode !== "auto") ? (
+        <span
+          className={`inline-flex items-center gap-1 ${weather.headlightsOn ? "text-lc-good" : "text-lc-ash"}`}
+          aria-label={
+            weather.headlightMode === "on"
+              ? "Headlights forced on"
+              : weather.headlightMode === "off"
+                ? "Headlights forced off"
+                : "Headlights on"
+          }
+          title={
+            weather.headlightMode === "on"
+              ? "Headlights on (manual)"
+              : weather.headlightMode === "off"
+                ? "Headlights off (manual)"
+                : "Headlights on (auto)"
+          }
+        >
+          <Icon name="headlights" size="xs" className={`size-3.5 ${weather.headlightsOn ? "" : "opacity-60"}`} />
+          {weather.headlightMode === "on" ? <span className="lc-chip-text text-[9px] text-lc-good">ON</span> : null}
+          {weather.headlightMode === "off" ? <span className="lc-chip-text text-[9px] text-lc-ash">OFF</span> : null}
         </span>
       ) : null}
     </div>

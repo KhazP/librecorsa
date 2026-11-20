@@ -50,7 +50,8 @@ export type PadAction =
   | "mfd"
   | "mfdPage"
   | "hud"
-  | "board";
+  | "board"
+  | "headlights";
 
 export type KeyBindings = Record<KeyAction, string[]>;
 
@@ -102,6 +103,7 @@ export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   { id: "mfdPage", label: "Next MFD page" },
   { id: "hud", label: "Show / hide HUD" },
   { id: "board", label: "Open / close lap board" },
+  { id: "headlights", label: "Headlights" },
 ];
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
@@ -166,6 +168,7 @@ export const BUMPER_SHIFT_BUTTONS: PadButtonBindings = {
   hud: 11, // RS click (R3)
   // Every button has a job already: a player can give it one
   board: null,
+  headlights: null,
 };
 
 /** Gran Turismo 7: ✕ up, □ down, R1 change view, R3 nitro / overtake, Options pause. The right thumb is free in a drive */
@@ -185,6 +188,7 @@ export const GT_STYLE_BUTTONS: PadButtonBindings = {
   hud: 4, // LB (L1)
   racingLine: null,
   board: null,
+  headlights: null,
 };
 
 /** A new player's buttons: GT style, gears under the right thumb, which also holds Gear up as the clutch at a manual start */
@@ -324,6 +328,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       hud: 2, // X (□)
       racingLine: null,
       board: null,
+      headlights: null,
     },
   },
   // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause
@@ -345,6 +350,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       hud: 11, // RS (R3)
       racingLine: null,
       board: null,
+      headlights: null,
     },
   },
   // Forza: B up, X down (manual layout), RB switch camera, LS toggle convertible, Menu pause
@@ -366,6 +372,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       hud: 11, // RS (R3)
       racingLine: null,
       board: null,
+      headlights: null,
     },
   },
   // Gears on the bumpers: the default until 17 Nov 2026, so the layout most saved settings still have

@@ -1784,6 +1784,7 @@ export class DriveSession {
         case "headlights": {
           const onNow = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, trackEnv.weather.rainIntensity);
           headlightMode = onNow ? "off" : "on";
+          lastWeatherHudMs = 0;
           break;
         }
         // The HUD owns these panels
@@ -3240,7 +3241,10 @@ export class DriveSession {
         skyConditions.windVxMs = wx.windVxMs;
         skyConditions.windVzMs = wx.windVzMs;
         if (!cloudConditions || !sameConditions(cloudConditions, wx.conditions)) {
-          if (cloudConditions && cloudConditions.timeOfDay !== wx.conditions.timeOfDay) headlightMode = "auto";
+          if (cloudConditions && cloudConditions.timeOfDay !== wx.conditions.timeOfDay) {
+            headlightMode = "auto";
+            lastWeatherHudMs = 0;
+          }
           cloudConditions = { ...wx.conditions };
           syncHeadlightSpots();
           env.setCloudSeed(fixedCloudSeed ?? Math.floor(Math.random() * 2 ** 31));
@@ -3254,6 +3258,8 @@ export class DriveSession {
       }
       if (nowMs - lastWeatherHudMs > 500) {
         lastWeatherHudMs = nowMs;
+        const headlightsAutoOn = shouldHeadlightsBeOn("auto", skyConditions.elevationDeg, wx.rainIntensity);
+        const headlightsOnHud = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
         const next: WeatherHudState = {
           airC: Math.round(wx.ambientC),
           trackC: Math.round(wx.trackTempC),
@@ -3261,6 +3267,9 @@ export class DriveSession {
           rain: Math.round(wx.rainIntensity * 20) / 20,
           clockH: Math.round(wx.clockH * 60) / 60,
           timeMoving: wx.conditions.timeScale > 0, humidityPct: Math.round(wx.humidityPct), windSpeedMs: Math.round((wx.windSpeedKmh / 3.6) * 10) / 10, windDirection: ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round((((wx.windDirectionDeg % 360) + 360) % 360) / 45) % 8],
+          headlightsOn: headlightsOnHud,
+          headlightMode,
+          headlightsAutoOn,
         };
         const key = JSON.stringify(next);
         if (key !== weatherHudKey) {

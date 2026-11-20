@@ -100,3 +100,11 @@ export const Damage = defineSymbol("damage", [
   ["path", { d: "M20 15v3" }],
   ["path", { d: "m7 13 3.5-3 2 3.5L17 10" }],
 ]);
+
+/** Low-beam headlamp: D-shaped lamp housing and three angled forward rays */
+export const Headlights = defineSymbol("headlights", [
+  ["path", { d: "M12 6h2a6 6 0 0 1 0 12h-2a10 10 0 0 1 0-12Z" }],
+  ["path", { d: "M8 8.5 3.5 10" }],
+  ["path", { d: "M7.5 12 3 13.5" }],
+  ["path", { d: "M8 15.5 3.5 17" }],
+]);

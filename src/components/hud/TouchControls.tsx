@@ -575,12 +575,22 @@ const GhostButton: React.FC<GhostButtonProps> = ({ label, children, onTap, on, a
   </button>
 );
 
-/** Small round icon button for the top corner (pause, camera, recentre): 44 px to the touch */
-const ChromeButton: React.FC<{ label: string; icon: "pause" | "camera" | "tilt"; onTap: () => void }> = ({ label, icon, onTap }) => (
+/** Small round icon button for the top corner (pause, camera, headlights, recentre): 44 px to the touch */
+const ChromeButton: React.FC<{
+  label: string;
+  icon: "pause" | "camera" | "tilt" | "headlights";
+  onTap: () => void;
+  active?: boolean;
+}> = ({ label, icon, onTap, active }) => (
   <button
     type="button"
     aria-label={label}
-    className="pointer-events-auto touch-none flex size-11 items-center justify-center rounded-full bg-lc-void/45 text-lc-chalk shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)] active:scale-95"
+    aria-pressed={active === undefined ? undefined : active}
+    className={`pointer-events-auto touch-none flex size-11 items-center justify-center rounded-full active:scale-95 ${
+      active
+        ? "bg-lc-good/22 text-lc-good shadow-[inset_0_0_0_1.5px_var(--color-lc-good)]"
+        : "bg-lc-void/45 text-lc-chalk shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
+    }`}
     style={{ touchAction: "none" }}
     onPointerDown={(e) => {
       e.preventDefault();
@@ -621,6 +631,11 @@ export interface TouchControlsProps {
   autoGearbox: boolean;
   onPause: () => void;
   onCycleCamera: () => void;
+  /** Show the top-corner headlamp toggle (dark / night / heavy rain or manually toggled) */
+  showHeadlights?: boolean;
+  /** Player headlights are currently lit */
+  headlightsOn?: boolean;
+  onToggleHeadlights?: () => void;
 }
 
 /**
@@ -635,6 +650,9 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
   autoGearbox,
   onPause,
   onCycleCamera,
+  showHeadlights,
+  headlightsOn,
+  onToggleHeadlights,
   car,
 }) => {
   const [vis, setVis] = useState<Visual>(ZERO_VISUAL);
@@ -945,10 +963,18 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
 
   return (
     <div className="pointer-events-none fixed inset-0 z-30 touch-none select-none">
-      {/* Top-left: pause, camera and (tilt steering) recentre */}
+      {/* Top-left: pause, camera, headlights (when dark or toggled) and (tilt steering) recentre */}
       <div className="absolute flex gap-2" style={{ top: edge("top", 12), left: edge("left", 16) }}>
         <ChromeButton label="Pause" icon="pause" onTap={onPause} />
         <ChromeButton label="Camera" icon="camera" onTap={onCycleCamera} />
+        {onToggleHeadlights && (showHeadlights || headlightsOn) ? (
+          <ChromeButton
+            label={headlightsOn ? "Turn headlights off" : "Turn headlights on"}
+            icon="headlights"
+            active={Boolean(headlightsOn)}
+            onTap={onToggleHeadlights}
+          />
+        ) : null}
         {tilt && tiltStatus === "ready" ? <ChromeButton label="Recentre tilt" icon="tilt" onTap={onRecentre} /> : null}
       </div>
 
