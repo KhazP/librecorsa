@@ -27,7 +27,7 @@ import { challengeProblem } from "../../src/lib/net/weekly-challenge";
 import { boardDeps, ghostOf, listLaps, renameDriver, submitLap } from "./board";
 import { driverRecord, listRaceResults } from "./results";
 import { ROOM_CODE_RE } from "./room";
-import { adminGrantAward, adminKeyMatches, adminListAwards, adminRevokeAward, adminStats } from "./admin";
+import { adminClearDriverLaps, adminDeleteLap, adminGrantAward, adminKeyMatches, adminListAwards, adminRevokeAward, adminStats } from "./admin";
 import { hallOfFame, listBadges } from "./awards";
 import { analyticsConfigured, cloudflareStats } from "./analytics";
 import { turnConfigured } from "./turn";
@@ -213,6 +213,9 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
   }
   if (path === "/api/badges" && request.method === "GET") {
     if (!config.board || !env.BOARD_DB) return json({ ok: false, error: "The lap boards are off" }, 404, origin);
+    if (await overLimit(env.BADGES_LIMIT ?? env.BOARD_LIMIT, request)) {
+      return json({ ok: false, error: "Too many badge requests, try again shortly" }, 429, origin);
+    }
     try {
       const answer = await listBadges(env.BOARD_DB, url, Date.now());
       return json(answer.body, answer.status, origin, SHARED_ANSWER_S.badges);
@@ -382,6 +385,32 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
         return json(answer.body, answer.status, origin);
       } catch (err) {
         console.error("admin awards revoke failed:", err instanceof Error ? err.message : "error");
+        return notFound(origin);
+      }
+    }
+    const lapDelete = /^\/api\/admin\/laps\/([0-9a-f-]{36})$/i.exec(path);
+    if (lapDelete && request.method === "DELETE" && env.BOARD_DB) {
+      try {
+        const answer = await adminDeleteLap(env.BOARD_DB, env.GHOSTS, lapDelete[1]);
+        return json(answer.body, answer.status, origin);
+      } catch (err) {
+        console.error("admin lap delete failed:", err instanceof Error ? err.message : "error");
+        return notFound(origin);
+      }
+    }
+    const driverLapsDelete = /^\/api\/admin\/drivers\/([^/]+)\/laps$/.exec(path);
+    if (driverLapsDelete && request.method === "DELETE" && env.BOARD_DB) {
+      try {
+        let name: string;
+        try {
+          name = decodeURIComponent(driverLapsDelete[1]);
+        } catch {
+          return json({ ok: false, error: "Invalid driver name" }, 400, origin);
+        }
+        const answer = await adminClearDriverLaps(env.BOARD_DB, env.GHOSTS, name);
+        return json(answer.body, answer.status, origin);
+      } catch (err) {
+        console.error("admin driver laps clear failed:", err instanceof Error ? err.message : "error");
         return notFound(origin);
       }
     }

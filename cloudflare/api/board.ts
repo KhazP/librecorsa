@@ -36,7 +36,7 @@ import { SIM_REALISM_LEVELS } from "../../src/lib/sim/sim-realism";
 import { isVehicleModelId, VEHICLE_MODEL_IDS, type VehicleModelId } from "../../src/types/f1";
 import { nameProblem } from "../../src/lib/net/name-filter";
 import { checkLap, TRACK_ID_RE, type CheckedLap } from "./lap-check";
-import { moveDriverAwards } from "./awards";
+import { invalidateAutoWeeklyAwards, invalidateAutoWeeklyAwardsForDriver, moveDriverAwards } from "./awards";
 import type { D1Database, D1PreparedStatement, Env, R2Bucket } from "./types";
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024 + 4096;
@@ -120,13 +120,42 @@ export async function sha256Hex(text: string): Promise<string> {
 
 const ghostKey = (id: string) => `laps/${id}.json`;
 
-/** Removes rows and their ghosts */
-async function deleteLaps(deps: BoardDeps, ids: string[]): Promise<void> {
+/** Removes rows and their ghosts; when `refreshAutoAwards` is set (admin deletion), invalidates affected archived weekly podiums */
+export async function deleteLaps(
+  deps: { db: D1Database; ghosts?: R2Bucket },
+  ids: string[],
+  opts: { refreshAutoAwards?: boolean } = {},
+): Promise<number> {
+  let deleted = 0;
+  const affected: { event: string; physics: number }[] = [];
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
-    await deps.db.prepare(`DELETE FROM laps WHERE id IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).run();
-    await deps.ghosts.delete(chunk.map(ghostKey));
+    const marks = chunk.map(() => "?").join(",");
+    if (opts.refreshAutoAwards) {
+      const rows = await deps.db
+        .prepare(`SELECT DISTINCT event, physics FROM laps WHERE event != '' AND id IN (${marks})`)
+        .bind(...chunk)
+        .all<{ event: string; physics: number }>();
+      affected.push(...rows.results);
+    }
+    const done = await deps.db.prepare(`DELETE FROM laps WHERE id IN (${marks})`).bind(...chunk).run();
+    deleted += done.meta?.changes ?? 0;
+    if (deps.ghosts) await deps.ghosts.delete(chunk.map(ghostKey));
   }
+  if (opts.refreshAutoAwards && affected.length > 0) {
+    await invalidateAutoWeeklyAwards(deps.db, affected);
+  }
+  return deleted;
+}
+
+/** Removes every lap (and ghost) belonging to a driver and refreshes any affected archived weekly podiums */
+export async function deleteDriverLaps(deps: { db: D1Database; ghosts?: R2Bucket }, rawName: string): Promise<number> {
+  const nameKey = driverNameKey(rawName);
+  if (!nameKey) return 0;
+  const rows = await deps.db.prepare("SELECT id FROM laps WHERE name_key = ?").bind(nameKey).all<{ id: string }>();
+  const deleted = await deleteLaps(deps, rows.results.map((r) => r.id), { refreshAutoAwards: true });
+  await invalidateAutoWeeklyAwardsForDriver(deps.db, nameKey);
+  return deleted;
 }
 
 /** This driver's place on a board (their fastest lap of any class against everyone else's) and the board's size */

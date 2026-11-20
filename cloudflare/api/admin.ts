@@ -8,8 +8,9 @@
  */
 import trackIndex from "../../public/tracks/index.json";
 import { checkAwardInput, grantAward, listAwards, revokeAward, type AdminAward } from "./awards";
+import { deleteDriverLaps, deleteLaps, driverNameKey } from "./board";
 import { utcDay } from "./usage";
-import type { D1Database } from "./types";
+import type { D1Database, R2Bucket } from "./types";
 
 type Answer = { status: number; body: unknown };
 
@@ -445,4 +446,28 @@ export async function adminRevokeAward(db: D1Database, id: number): Promise<Answ
   const removed = await revokeAward(db, id);
   if (removed === 0) return { status: 404, body: { ok: false, error: "Award not found" } };
   return { status: 200, body: { ok: true, id } };
+}
+
+const LAP_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * DELETE /api/admin/laps/:id: delete a lap (and its ghost) and invalidate any archived `auto` weekly podium rows
+ * for its (event, physics) so the next Hall of Fame / badges read re-archives cleanly from valid laps.
+ */
+export async function adminDeleteLap(db: D1Database, ghosts: R2Bucket | undefined, id: string): Promise<Answer> {
+  if (!LAP_ID_RE.test(id)) return { status: 400, body: { ok: false, error: "Invalid lap id" } };
+  const removed = await deleteLaps({ db, ghosts }, [id], { refreshAutoAwards: true });
+  if (removed === 0) return { status: 404, body: { ok: false, error: "Lap not found" } };
+  return { status: 200, body: { ok: true, id } };
+}
+
+/**
+ * DELETE /api/admin/drivers/:name/laps: clear all laps for a driver (and their ghosts) and invalidate any archived
+ * `auto` weekly podium rows they held so affected weeks re-archive cleanly on the next read.
+ */
+export async function adminClearDriverLaps(db: D1Database, ghosts: R2Bucket | undefined, rawName: string): Promise<Answer> {
+  const nameKey = driverNameKey(rawName);
+  if (!nameKey || nameKey.length > 64) return { status: 400, body: { ok: false, error: "Invalid driver name" } };
+  const deleted = await deleteDriverLaps({ db, ghosts }, nameKey);
+  return { status: 200, body: { ok: true, nameKey, deleted } };
 }

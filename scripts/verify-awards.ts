@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { handleApi, SHARED_ANSWER_S } from "../cloudflare/api/index";
 import { driverNameKey, renameDriver, type BoardDeps } from "../cloudflare/api/board";
-import { checkAwardInput, physicsIdOf, rankPodiums, tallyMostDecorated, type AdminAward } from "../cloudflare/api/awards";
+import { checkAwardInput, parseBadgeNames, physicsIdOf, rankPodiums, tallyMostDecorated, type AdminAward } from "../cloudflare/api/awards";
 import type { AdminAwardsBody } from "../cloudflare/api/admin";
 import {
   badgeDetail,
@@ -370,6 +370,89 @@ async function main(): Promise<void> {
     forgetBadges();
     const offline = await fetchBadges(["Alice"], { nowMs: 1000, fetchJson: async () => null });
     check("client: fetchBadges returns empty map gracefully when offline", Object.keys(offline).length === 0);
+  }
+
+  // 7. Admin lap deletion / driver clear refreshes archived auto weekly awards, plus /api/badges canonicalization & rate limit
+  {
+    const db = fakeD1(FULL);
+    const ghosts = fakeR2();
+    const badgeLim = limiter(2);
+    const env = {
+      ONLINE_BOARD: "on",
+      BOARD_DB: db,
+      GHOSTS: ghosts,
+      ADMIN_KEY: KEY,
+      BADGES_LIMIT: badgeLim,
+    } as unknown as Env;
+
+    const v1Liana = boardPhysicsVersion(7, "liana");
+    const v2Liana = lapPhysicsVersion("liana", "dunsfold");
+    const cheatLapId = await addLap(db, { name: "Cheater", track: "dunsfold", vehicle: "liana", physics: v1Liana, ms: 50_000, event: "2026-W46" });
+    await ghosts.put(`laps/${cheatLapId}.json`, "{}");
+    await addLap(db, { name: "Alice", track: "dunsfold", vehicle: "liana", physics: v1Liana, ms: 80_000, event: "2026-W46" });
+    await addLap(db, { name: "Bob", track: "dunsfold", vehicle: "liana", physics: v1Liana, ms: 81_000, event: "2026-W46" });
+    await addLap(db, { name: "Carol", track: "dunsfold", vehicle: "liana", physics: v1Liana, ms: 82_000, event: "2026-W46" });
+    await addLap(db, { name: "Dave", track: "dunsfold", vehicle: "liana", physics: v2Liana, ms: 79_000, event: "2026-W46" });
+
+    // Archive 2026-W46 (V1 has Cheater P1, Alice P2, Bob P3; V2 has Dave P1) and give Alice a manual bulb award
+    await apiCall(env, "/api/hall-of-fame");
+    await apiCall(env, "/api/admin/awards", { method: "POST", key: KEY, body: { name: "Alice", note: "Keep manual award" } });
+
+    // Unauthorized DELETE returns 404 parity
+    const unauthLapDel = await apiCall(env, `/api/admin/laps/${cheatLapId}`, { method: "DELETE", key: "wrong" });
+    const unauthDriverDel = await apiCall(env, "/api/admin/drivers/Cheater/laps", { method: "DELETE" });
+    check("admin lap/driver delete: unauthorized requests return 404", unauthLapDel.status === 404 && unauthDriverDel.status === 404);
+
+    // Admin deletes the fraudulent P1 lap -> auto rows for 2026-W46:v1 invalidated, ghost removed, V2 & manual bulb untouched
+    const delLapRes = await apiCall(env, `/api/admin/laps/${cheatLapId}`, { method: "DELETE", key: KEY });
+    const hofAfterCheat = (await (await apiCall(env, "/api/hall-of-fame")).json()) as HallOfFameAnswer;
+    const v1After = hofAfterCheat.events.find((e) => e.event === "2026-W46" && e.physics === "v1");
+    const v2After = hofAfterCheat.events.find((e) => e.event === "2026-W46" && e.physics === "v2");
+    check(
+      "admin lap delete: refreshes archived weekly auto awards and promotes clean podium",
+      delLapRes.status === 200 &&
+        !ghosts.objects.has(`laps/${cheatLapId}.json`) &&
+        v1After?.podium.map((p) => `${p.place}:${p.nameKey}`).join(",") === "1:alice,2:bob,3:carol" &&
+        v2After?.podium[0]?.nameKey === "dave",
+      v1After?.podium.map((p) => `${p.place}:${p.nameKey}`).join(","),
+    );
+
+    // Admin clears Alice's laps -> V1 podium refreshes again (Bob P1, Carol P2) while Alice's manual bulb award stays
+    const clearAliceRes = await apiCall(env, "/api/admin/drivers/Alice/laps", { method: "DELETE", key: KEY });
+    const hofAfterClear = (await (await apiCall(env, "/api/hall-of-fame")).json()) as HallOfFameAnswer;
+    const v1Cleared = hofAfterClear.events.find((e) => e.event === "2026-W46" && e.physics === "v1");
+    check(
+      "admin driver clear: deletes driver laps and refreshes affected archived weekly podiums",
+      clearAliceRes.status === 200 && v1Cleared?.podium.map((p) => `${p.place}:${p.nameKey}`).join(",") === "1:bob,2:carol",
+      v1Cleared?.podium.map((p) => `${p.place}:${p.nameKey}`).join(","),
+    );
+
+    // Canonicalization & deduplication of names= on /api/badges + rate limiting
+    check(
+      "parseBadgeNames: canonicalizes, deduplicates and sorts name keys",
+      parseBadgeNames("Carol, bob, BOB , Alice")?.join(",") === "alice,bob,carol",
+    );
+    const b1 = await apiCall(env, "/api/badges?names=Bob,alice,ALICE,Bob", { ip: "9.9.9.1" });
+    const b2 = await apiCall(env, "/api/badges?names=alice,bob", { ip: "9.9.9.1" });
+    const b3 = await apiCall(env, "/api/badges?names=alice,bob", { ip: "9.9.9.1" });
+    const b1Text = await b1.text();
+    const b2Text = await b2.text();
+    check(
+      "badges: unordered/duplicate names produce identical canonical JSON and enforce BADGES_LIMIT (429 no-store)",
+      b1.status === 200 &&
+        b2.status === 200 &&
+        b1Text === b2Text &&
+        b1Text.includes('"bulb"') &&
+        b3.status === 429 &&
+        b3.headers.get("Cache-Control") === "no-store",
+      `statuses=${b1.status},${b2.status},${b3.status}`,
+    );
+
+    // Falls back to BOARD_LIMIT when BADGES_LIMIT is unset
+    const fallbackEnv = { ONLINE_BOARD: "on", BOARD_DB: db, GHOSTS: ghosts, BOARD_LIMIT: limiter(1) } as unknown as Env;
+    const fb1 = await apiCall(fallbackEnv, "/api/badges?names=bob", { ip: "9.9.9.2" });
+    const fb2 = await apiCall(fallbackEnv, "/api/badges?names=bob", { ip: "9.9.9.2" });
+    check("badges: falls back to BOARD_LIMIT when BADGES_LIMIT is not bound", fb1.status === 200 && fb2.status === 429);
   }
 
   if (failures.length > 0) {

@@ -253,18 +253,19 @@ export async function hallOfFame(db: D1Database, nowMs: number): Promise<Answer>
   return { status: 200, body };
 }
 
-/** The name keys of a `names=` list: each once, in order; null when there are too many or one is too long */
+/** The name keys of a `names=` list: each once, sorted canonically; null when there are too many or one is too long */
 export function parseBadgeNames(raw: string | null): string[] | null {
   if (raw === null) return [];
   const parts = raw.split(",");
   if (parts.length > MAX_BADGE_NAMES * 2) return null;
-  const keys: string[] = [];
+  const seen = new Set<string>();
   for (const part of parts) {
     if (part.length > MAX_NAME_LENGTH) return null;
     const key = driverNameKey(part);
-    if (key && !keys.includes(key)) keys.push(key);
+    if (key) seen.add(key);
   }
-  return keys.length > MAX_BADGE_NAMES ? null : keys;
+  if (seen.size > MAX_BADGE_NAMES) return null;
+  return [...seen].sort();
 }
 
 /**
@@ -328,8 +329,11 @@ export async function badgesOf(db: D1Database, keys: readonly string[], nowMs: n
     if (r.note && b.note === undefined) b.note = r.note;
   }
   const order = (t: BadgeType) => BADGE_TYPES.indexOf(t);
-  for (const list of Object.values(out)) list.sort((a, b) => order(a.type) - order(b.type));
-  return out;
+  const canonical: Record<string, DriverBadge[]> = {};
+  for (const k of [...Object.keys(out)].sort()) {
+    canonical[k] = out[k].sort((a, b) => order(a.type) - order(b.type));
+  }
+  return canonical;
 }
 
 export async function listBadges(db: D1Database, url: URL, nowMs: number): Promise<Answer> {
@@ -418,6 +422,61 @@ export async function grantAward(db: D1Database, award: AwardInput, nowMs: numbe
 export async function revokeAward(db: D1Database, id: number): Promise<number> {
   const done = await db.prepare("DELETE FROM driver_awards WHERE id = ?").bind(id).run();
   return done.meta.changes ?? 0;
+}
+
+/**
+ * Deletes archived `auto` weekly podium rows for the given (event, physics) boards so the next Hall of Fame / badges
+ * read recomputes and re-archives cleanly from valid laps. Leaves manual (`awarded_by != 'auto'`) awards untouched.
+ */
+export async function invalidateAutoWeeklyAwards(
+  db: D1Database,
+  targets: readonly { event: string; physics: number | string }[],
+): Promise<number> {
+  const seen = new Set<string>();
+  const pairs: { event: string; physics: string }[] = [];
+  for (const t of targets) {
+    if (!EVENT_ID_RE.test(t.event)) continue;
+    const physics = typeof t.physics === "number" ? physicsIdOf(t.physics) : t.physics.trim().toLowerCase();
+    if (!physics) continue;
+    const k = `${t.event}|${physics}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    pairs.push({ event: t.event, physics });
+  }
+  if (pairs.length === 0) return 0;
+  const removed = await orNull(async () => {
+    const res = await db.batch(
+      pairs.map((p) =>
+        db
+          .prepare("DELETE FROM driver_awards WHERE awarded_by = 'auto' AND event_id = ? AND physics = ?")
+          .bind(p.event, p.physics),
+      ),
+    );
+    return res.reduce((sum, r) => sum + (r.meta?.changes ?? 0), 0);
+  });
+  return removed ?? 0;
+}
+
+/**
+ * Invalidates archived `auto` weekly podiums for every finished week where `nameKey` holds an auto medal, so clearing
+ * or banning that driver re-archives the promoted podium on the next read.
+ */
+export async function invalidateAutoWeeklyAwardsForDriver(db: D1Database, nameKey: string): Promise<number> {
+  const key = driverNameKey(nameKey);
+  if (!key) return 0;
+  const rows = await orNull(async () =>
+    (
+      await db
+        .prepare("SELECT DISTINCT event_id, physics FROM driver_awards WHERE awarded_by = 'auto' AND name_key = ?")
+        .bind(key)
+        .all<{ event_id: string; physics: string }>()
+    ).results,
+  );
+  if (!rows || rows.length === 0) return 0;
+  return invalidateAutoWeeklyAwards(
+    db,
+    rows.map((r) => ({ event: r.event_id, physics: r.physics })),
+  );
 }
 
 /**
