@@ -9,7 +9,7 @@ import {
 } from "@/lib/input/touch-input";
 import type { TouchLayout } from "@/lib/settings/player-settings";
 import { Icon } from "@/components/ui/icons/Icon";
-import { HUD_BRAKE, HUD_INFO, HUD_THROTTLE, HUD_VOID, HUD_VOLT, HUD_WHITE } from "./hud-format";
+import { HUD_BRAKE, HUD_GAIN, HUD_INFO, HUD_THROTTLE, HUD_VOID, HUD_VOLT, HUD_WHITE } from "./hud-format";
 import { useHudMode } from "./hud-mode";
 
 /** Finger travel from the touch-down point that gives full steering lock, as a fraction of window width */
@@ -575,22 +575,16 @@ const GhostButton: React.FC<GhostButtonProps> = ({ label, children, onTap, on, a
   </button>
 );
 
-/** Small round icon button for the top corner (pause, camera, headlights, recentre): 44 px to the touch */
+/** Small round icon button for the top corner (pause, camera, recentre): 44 px to the touch */
 const ChromeButton: React.FC<{
   label: string;
-  icon: "pause" | "camera" | "tilt" | "headlights";
+  icon: "pause" | "camera" | "tilt";
   onTap: () => void;
-  active?: boolean;
-}> = ({ label, icon, onTap, active }) => (
+}> = ({ label, icon, onTap }) => (
   <button
     type="button"
     aria-label={label}
-    aria-pressed={active === undefined ? undefined : active}
-    className={`pointer-events-auto touch-none flex size-11 items-center justify-center rounded-full active:scale-95 ${
-      active
-        ? "bg-lc-good/22 text-lc-good shadow-[inset_0_0_0_1.5px_var(--color-lc-good)]"
-        : "bg-lc-void/45 text-lc-chalk shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
-    }`}
+    className="pointer-events-auto touch-none flex size-11 items-center justify-center rounded-full bg-lc-void/45 text-lc-chalk shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)] active:scale-95"
     style={{ touchAction: "none" }}
     onPointerDown={(e) => {
       e.preventDefault();
@@ -631,7 +625,7 @@ export interface TouchControlsProps {
   autoGearbox: boolean;
   onPause: () => void;
   onCycleCamera: () => void;
-  /** Show the top-corner headlamp toggle (dark / night / heavy rain or manually toggled) */
+  /** Show the headlamp toggle in the driving button cluster (dark / night / heavy rain or manually toggled) */
   showHeadlights?: boolean;
   /** Player headlights are currently lit */
   headlightsOn?: boolean;
@@ -888,6 +882,19 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
     </GhostButton>
   ) : null;
 
+  const headlights =
+    onToggleHeadlights && (showHeadlights || headlightsOn) ? (
+      <GhostButton
+        key="headlights"
+        label="Headlights"
+        on={Boolean(headlightsOn)}
+        tone={HUD_GAIN}
+        onTap={onToggleHeadlights}
+      >
+        <Icon name="headlights" size="md" />
+      </GhostButton>
+    ) : null;
+
   const buttonsMode = layout === "buttons";
 
   /** Tell the game loop whether an analogue steering source (slider or active tilt) currently owns `touchInput.steer` */
@@ -963,18 +970,10 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
 
   return (
     <div className="pointer-events-none fixed inset-0 z-30 touch-none select-none">
-      {/* Top-left: pause, camera, headlights (when dark or toggled) and (tilt steering) recentre */}
+      {/* Top-left: pause, camera and (tilt steering) recentre — max 3 buttons (164 px) so it stays clear of PhoneHud */}
       <div className="absolute flex gap-2" style={{ top: edge("top", 12), left: edge("left", 16) }}>
         <ChromeButton label="Pause" icon="pause" onTap={onPause} />
         <ChromeButton label="Camera" icon="camera" onTap={onCycleCamera} />
-        {onToggleHeadlights && (showHeadlights || headlightsOn) ? (
-          <ChromeButton
-            label="Headlights"
-            icon="headlights"
-            active={Boolean(headlightsOn)}
-            onTap={onToggleHeadlights}
-          />
-        ) : null}
         {tilt && tiltStatus === "ready" ? <ChromeButton label="Recentre tilt" icon="tilt" onTap={onRecentre} /> : null}
       </div>
 
@@ -996,12 +995,12 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
               <TiltNote maxWidth="max-w-[calc(100vw-232px)]">{tiltStatus === "asking" ? "Allow motion access" : "Tap to turn on tilt"}</TiltNote>
             )}
           </div>
-          {/* Bottom-right: throttle under the right thumb, the other buttons over it */}
+          {/* Bottom-right: throttle under the right thumb, the other buttons over it (right-aligned so headlights never shift existing buttons) */}
           <div
             className="absolute flex flex-col items-end gap-3 phone:gap-2"
             style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
           >
-            {buttonRow([shiftUp, boost, aero], "end")}
+            {buttonRow([headlights, shiftUp, boost, aero], "end")}
             {throttlePedal}
           </div>
         </>
@@ -1021,12 +1020,12 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
             ) : null}
             {steerControl}
           </div>
-          {/* Bottom-right: driving buttons above the pedals */}
+          {/* Bottom-right: driving buttons above the pedals (right-aligned so headlights never shift existing buttons) */}
           <div
             className="absolute flex flex-col items-end gap-3 phone:gap-2"
             style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
           >
-            {buttonRow([gearButton, shiftDown, shiftUp, boost, aero], "end")}
+            {buttonRow([headlights, gearButton, shiftDown, shiftUp, boost, aero], "end")}
             {pedalPair}
           </div>
         </>

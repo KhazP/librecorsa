@@ -88,7 +88,7 @@ const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | 
       ) : null}
       {weather.headlightsOn === true || (weather.headlightMode !== undefined && weather.headlightMode !== "auto") ? (
         <span
-          className={`inline-flex items-center gap-1 ${weather.headlightsOn ? "text-lc-good" : "text-lc-ash"}`}
+          className={`inline-flex items-center gap-1 ${weather.headlightsOn ? "text-lc-gain" : "text-lc-slate"}`}
           title={
             weather.headlightMode === "on"
               ? "Headlights on (manual)"
@@ -99,12 +99,12 @@ const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | 
         >
           <Icon name="headlights" size="xs" label={headlightLabel} className={`size-3.5 ${weather.headlightsOn ? "" : "opacity-60"}`} />
           {weather.headlightMode === "on" ? (
-            <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-good">
+            <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-gain">
               ON
             </span>
           ) : null}
           {weather.headlightMode === "off" ? (
-            <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-ash">
+            <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-slate">
               OFF
             </span>
           ) : null}
