@@ -143,6 +143,30 @@ export function shouldHeadlightsBeOn(mode: HeadlightMode, sunElevationDeg: numbe
   return sunElevationDeg < AUTO_HEADLIGHT_SUN_DEG || rainIntensity > AUTO_HEADLIGHT_RAIN;
 }
 
+export interface HeadlightStates {
+  /** Whether the player's car headlights are illuminated (honours manual on/off override) */
+  player: boolean;
+  /** Whether AI / online opponent headlights are illuminated (always automatic so the player's toggle never darkens them) */
+  opponents: boolean;
+}
+
+/**
+ * Resolves both player and opponent headlight states for a rendered frame.
+ * Opponents always follow automatic sky/rain lighting so a manual player toggle never darkens AI / online cars at
+ * night or switches them on in clear daylight.
+ */
+export function resolveHeadlightStates(
+  mode: HeadlightMode,
+  sunElevationDeg: number,
+  rainIntensity: number,
+): HeadlightStates {
+  const opponents = shouldHeadlightsBeOn("auto", sunElevationDeg, rainIntensity);
+  return {
+    player: mode === "auto" ? opponents : mode === "on",
+    opponents,
+  };
+}
+
 /** Whether a session's conditions can ever become dark or rainy enough to need real road-beam SpotLights */
 export function canSessionGetDark(conditions: SessionConditions): boolean {
   if (conditions.timeScale > 0) return true;

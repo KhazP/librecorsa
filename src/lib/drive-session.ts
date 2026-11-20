@@ -15,7 +15,14 @@ import { Gt3DashDisplay, gt3MirrorPatches } from "@/lib/render/gt3-dash-display"
 import { createPortedCarRig } from "@/lib/ported-car-model";
 import { staticFloorOf } from "@/lib/render/body-floor";
 import { FloorSparks } from "@/lib/render/floor-sparks";
-import { CarHeadlights, canSessionGetDark, headlightSpotCountFor, shouldHeadlightsBeOn, type HeadlightMode } from "@/lib/render/car-headlights";
+import {
+  CarHeadlights,
+  canSessionGetDark,
+  headlightSpotCountFor,
+  resolveHeadlightStates,
+  shouldHeadlightsBeOn,
+  type HeadlightMode,
+} from "@/lib/render/car-headlights";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
@@ -3258,8 +3265,7 @@ export class DriveSession {
       }
       if (nowMs - lastWeatherHudMs > 500) {
         lastWeatherHudMs = nowMs;
-        const headlightsAutoOn = shouldHeadlightsBeOn("auto", skyConditions.elevationDeg, wx.rainIntensity);
-        const headlightsOnHud = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
+        const hudLights = resolveHeadlightStates(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
         const next: WeatherHudState = {
           airC: Math.round(wx.ambientC),
           trackC: Math.round(wx.trackTempC),
@@ -3267,9 +3273,9 @@ export class DriveSession {
           rain: Math.round(wx.rainIntensity * 20) / 20,
           clockH: Math.round(wx.clockH * 60) / 60,
           timeMoving: wx.conditions.timeScale > 0, humidityPct: Math.round(wx.humidityPct), windSpeedMs: Math.round((wx.windSpeedKmh / 3.6) * 10) / 10, windDirection: ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round((((wx.windDirectionDeg % 360) + 360) % 360) / 45) % 8],
-          headlightsOn: headlightsOnHud,
+          headlightsOn: hudLights.player,
           headlightMode,
-          headlightsAutoOn,
+          headlightsAutoOn: hudLights.opponents,
         };
         const key = JSON.stringify(next);
         if (key !== weatherHudKey) {
@@ -3290,12 +3296,10 @@ export class DriveSession {
         if (view.driverEye && !inVr) camera.layers.enable(RAIN_VISOR_LAYER);
         else camera.layers.disable(RAIN_VISOR_LAYER);
         const skyLight = THREE.MathUtils.clamp((skyConditions.elevationDeg + 3) / 17, 0, 1) * (1 - 0.4 * wx.cloudCover);
-        const headlightsOn = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
-        // Opponents always run on automatic lighting so the player's manual toggle never darkens AI / online cars
-        const opponentHeadlightsOn = shouldHeadlightsBeOn("auto", skyConditions.elevationDeg, wx.rainIntensity);
+        const headlights = resolveHeadlightStates(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
         // Onboard views (cockpit, dash, nose, shoulder, T-cam) sit on/behind the nose; hide the player's own front flares
-        carHeadlights.setEnabled(headlightsOn, physics.telemetry.brake > 0.05, camera, view.anchor !== null);
-        visualFx.setHeadlights(opponentHeadlightsOn, camera);
+        carHeadlights.setEnabled(headlights.player, physics.telemetry.brake > 0.05, camera, view.anchor !== null);
+        visualFx.setHeadlights(headlights.opponents, camera);
         visualFx.setLightLevel(skyLight);
         rainFx.update(
           drawDtS,

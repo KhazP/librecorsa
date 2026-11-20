@@ -47,7 +47,13 @@ import {
   topographicalPuddleFactor,
   WeatherState,
 } from '../src/lib/sim/weather';
-import { CarHeadlights, headlightProfileFor, headlightSpotCountFor, shouldHeadlightsBeOn } from '../src/lib/render/car-headlights';
+import {
+  CarHeadlights,
+  headlightProfileFor,
+  headlightSpotCountFor,
+  resolveHeadlightStates,
+  shouldHeadlightsBeOn,
+} from '../src/lib/render/car-headlights';
 import { evaluateAeroWakeDeficit } from '../src/lib/sim/aero-wake';
 import { stepWindscreenWipers } from '../src/lib/render/rain-fx';
 import { TrackEvolutionState } from '../src/lib/sim/track-evolution';
@@ -271,14 +277,31 @@ console.log('\n== Weather & time of day');
   const medSpots = hlMed.group.children.filter((c): c is THREE.SpotLight => c instanceof THREE.SpotLight);
   const oppSpots = hlOpp.group.children.filter((c): c is THREE.SpotLight => c instanceof THREE.SpotLight);
   const oppSprites = hlOpp.group.children.filter((c): c is THREE.Sprite => c instanceof THREE.Sprite);
-  // Player manually forcing headlights off at night must not darken auto-lit opponents
-  const playerForcedOffAtNight = shouldHeadlightsBeOn('off', nightSun.elevationDeg, 0);
-  const opponentAutoAtNight = shouldHeadlightsBeOn('auto', nightSun.elevationDeg, 0);
-  const opponentAutoInRain = shouldHeadlightsBeOn('auto', 40, 0.6);
-  const opponentAutoInDay = shouldHeadlightsBeOn('auto', 40, 0);
-  hlMed.setEnabled(playerForcedOffAtNight, false);
-  hlOpp.setEnabled(opponentAutoAtNight, false);
-  const oppIndependentOfPlayerToggle = !hlMed.isOn && hlOpp.isOn && opponentAutoInRain && !opponentAutoInDay;
+  // resolveHeadlightStates (used directly by drive-session) keeps opponents on auto even when player toggles on/off
+  const nightManualOff = resolveHeadlightStates('off', nightSun.elevationDeg, 0);
+  const rainManualOff = resolveHeadlightStates('off', 40, 0.6);
+  const dayManualOn = resolveHeadlightStates('on', 40, 0);
+  const duskAuto = resolveHeadlightStates('auto', 2, 0);
+  const dayAuto = resolveHeadlightStates('auto', 40, 0);
+  hlMed.setEnabled(nightManualOff.player, false);
+  hlOpp.setEnabled(nightManualOff.opponents, false);
+  const nightAppliedOk = !hlMed.isOn && hlOpp.isOn;
+  hlMed.setEnabled(dayManualOn.player, false);
+  hlOpp.setEnabled(dayManualOn.opponents, false);
+  const dayAppliedOk = hlMed.isOn && !hlOpp.isOn;
+  const oppIndependentOfPlayerToggle =
+    !nightManualOff.player &&
+    nightManualOff.opponents &&
+    !rainManualOff.player &&
+    rainManualOff.opponents &&
+    dayManualOn.player &&
+    !dayManualOn.opponents &&
+    duskAuto.player &&
+    duskAuto.opponents &&
+    !dayAuto.player &&
+    !dayAuto.opponents &&
+    nightAppliedOk &&
+    dayAppliedOk;
   hlMed.dispose();
   hlOpp.dispose();
   check(
@@ -287,9 +310,9 @@ console.log('\n== Weather & time of day');
     `med=${medSpots.length} spot, opp=${oppSpots.length} spots / ${oppSprites.length} flares`,
   );
   check(
-    'Opponent auto headlights stay lit at night/rain even when player manually toggles lights off',
+    'resolveHeadlightStates keeps opponents on auto regardless of player manual on/off toggle',
     oppIndependentOfPlayerToggle,
-    `playerOff=${!playerForcedOffAtNight}, oppNight=${opponentAutoAtNight}, oppRain=${opponentAutoInRain}, oppDay=${opponentAutoInDay}`,
+    `nightOff={p:${nightManualOff.player},o:${nightManualOff.opponents}}, rainOff={p:${rainManualOff.player},o:${rainManualOff.opponents}}, dayOn={p:${dayManualOn.player},o:${dayManualOn.opponents}}`,
   );
   const sampleCarIds = ['lc26', 'amg-gt3', 'mtr-496r', 'bmw-m1-procar', 'liana'] as const;
   check(
