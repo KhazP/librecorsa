@@ -101,9 +101,9 @@ export interface AiDriverDef {
 /** Field in grid order (pole first); the player lines up behind them */
 export const AI_DRIVERS: AiDriverDef[] = [
   { code: 'KIG', teamColorHex: '#ff8000', pace: 0.975, aggression: 0.2, consistencyBias: 0.05 },
-  { code: 'MUS', teamColorHex: '#e8002d', pace: 0.968, aggression: 0.5, consistencyBias: -0.05 },
+  { code: 'MUS', teamColorHex: '#ee1a10', pace: 0.968, aggression: 0.5, consistencyBias: -0.05 },
   { code: 'NYA', teamColorHex: '#27f4d2', pace: 0.961, aggression: -0.3, consistencyBias: 0.08 },
-  { code: 'RUB', teamColorHex: '#2f5ec6', pace: 0.954, aggression: 0.3, consistencyBias: -0.03 },
+  { code: 'RUB', teamColorHex: '#636af4', pace: 0.954, aggression: 0.3, consistencyBias: -0.03 },
   { code: 'HUY', teamColorHex: '#b6babd', pace: 0.947, aggression: -0.5, consistencyBias: 0 },
 ];
 
@@ -111,10 +111,10 @@ export const AI_DRIVERS: AiDriverDef[] = [
 export const AI_RESERVE_DRIVERS: AiDriverDef[] = [
   { code: 'GIS', teamColorHex: '#109e75', pace: 0.951, aggression: 0.6, consistencyBias: -0.06 },
   { code: 'KAR', teamColorHex: '#ff87bc', pace: 0.944, aggression: 0.1, consistencyBias: 0.04 },
-  { code: 'NYU', teamColorHex: '#5c8cff', pace: 0.958, aggression: -0.1, consistencyBias: 0.02 },
-  { code: 'BUT', teamColorHex: '#ffd700', pace: 0.94, aggression: 0.4, consistencyBias: -0.02 },
+  { code: 'NYU', teamColorHex: '#38a6ff', pace: 0.958, aggression: -0.1, consistencyBias: 0.02 },
+  { code: 'BUT', teamColorHex: '#e2bc42', pace: 0.94, aggression: 0.4, consistencyBias: -0.02 },
   { code: 'RUH', teamColorHex: '#eef2f6', pace: 0.936, aggression: -0.4, consistencyBias: 0.06 },
-  { code: 'KIB', teamColorHex: '#9b0000', pace: 0.947, aggression: 0.8, consistencyBias: -0.08 },
+  { code: 'KIB', teamColorHex: '#dc4468', pace: 0.947, aggression: 0.8, consistencyBias: -0.08 },
 ];
 
 /** A field of `n` AI drivers: the five regulars, then the reserves */

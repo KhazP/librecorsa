@@ -40,6 +40,32 @@ function rgbDist(a: string, b: string): number {
   return Math.hypot(ar - br, ag - bg, ab - bb);
 }
 
+function relLuminance([r, g, b]: readonly [number, number, number]): number {
+  const linear = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+}
+
+function contrastRatio(a: readonly [number, number, number], b: readonly [number, number, number]): number {
+  const la = relLuminance(a);
+  const lb = relLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+function compositeOver(
+  fg: readonly [number, number, number],
+  alpha: number,
+  bg: readonly [number, number, number],
+): [number, number, number] {
+  return [
+    Math.round(fg[0] * alpha + bg[0] * (1 - alpha)),
+    Math.round(fg[1] * alpha + bg[1] * (1 - alpha)),
+    Math.round(fg[2] * alpha + bg[2] * (1 - alpha)),
+  ];
+}
+
 console.log('F1 liveries & custom colour picker');
 
 check('11 original 2026 grid mockup liveries with unique ids, neutral numbers and valid hex colours', () => {
@@ -79,20 +105,67 @@ check('all 11 AI drivers map to 11 distinct colour-aligned 2026 grid liveries wi
   assert.equal(ids.size, roster.length, `expected ${roster.length} distinct AI liveries, got ${ids.size}: ${assigned.map((l) => l.id).join(', ')}`);
   assert.ok(assigned.every((l) => l.category === 'grid2026'), 'all AI liveries should come from grid2026');
   // Every AI driver's HUD timing colour should align tightly with its assigned livery's primary or accent colour
+  // AND be strictly closer to its own livery than to any other AI car's livery
   for (let i = 0; i < roster.length; i++) {
     const d = roster[i];
     const liv = assigned[i];
-    const bestDist = Math.min(rgbDist(d.teamColorHex, liv.primary), rgbDist(d.teamColorHex, liv.accent));
+    const ownPrimDist = rgbDist(d.teamColorHex, liv.primary);
+    const ownAccDist = rgbDist(d.teamColorHex, liv.accent);
+    const ownDist = Math.min(ownPrimDist, ownAccDist);
     assert.ok(
-      bestDist < 100,
-      `${d.code} (${d.teamColorHex}) does not match ${liv.id} (primary=${liv.primary}, accent=${liv.accent}, dist=${bestDist.toFixed(1)})`,
+      ownDist < 100,
+      `${d.code} (${d.teamColorHex}) does not match ${liv.id} (primary=${liv.primary}, accent=${liv.accent}, dist=${ownDist.toFixed(1)})`,
     );
+    for (let j = 0; j < roster.length; j++) {
+      if (i === j) continue;
+      const other = assigned[j];
+      const otherDist = Math.min(rgbDist(d.teamColorHex, other.primary), rgbDist(d.teamColorHex, other.accent));
+      assert.ok(
+        ownDist < otherDist,
+        `${d.code} (${d.teamColorHex}) is closer to ${roster[j].code}'s ${other.id} (dist=${otherDist.toFixed(1)}) than to its own ${liv.id} (dist=${ownDist.toFixed(1)})`,
+      );
+      if (ownPrimDist <= ownAccDist) {
+        const otherPrimDist = rgbDist(d.teamColorHex, other.primary);
+        assert.ok(
+          ownPrimDist < otherPrimDist,
+          `${d.code} (${d.teamColorHex}) body colour is closer to ${roster[j].code}'s ${other.id} primary=${other.primary} (dist=${otherPrimDist.toFixed(1)}) than to its own ${liv.id} primary=${liv.primary} (dist=${ownPrimDist.toFixed(1)})`,
+        );
+      }
+    }
   }
   // Unknown human peer code still resolves deterministically to a grid2026 livery
   const peerA = liveryForDriverCode('XYZ');
   const peerB = liveryForDriverCode('XYZ');
   assert.equal(peerA.id, peerB.id);
   assert.equal(peerA.category, 'grid2026');
+});
+
+check('all 11 AI drivers timing colours pass WCAG >= 3:1 on lc-void and HUD glass and stay visually distinct', () => {
+  const roster = [...AI_DRIVERS, ...AI_RESERVE_DRIVERS];
+  const voidBg = hexToRgb('#08090d'); // --color-lc-void
+  const midTrack: [number, number, number] = [128, 128, 128];
+  // HUD_GLASS / PHONE_GLASS use bg-lc-void/74; also verify against 72% alpha over mid-grey asphalt
+  const hudGlassBg = compositeOver(voidBg, 0.74, midTrack);
+  const hudGlass72Bg = compositeOver(voidBg, 0.72, midTrack);
+  for (const d of roster) {
+    assert.match(d.teamColorHex, HEX_RE, `${d.code} teamColorHex`);
+    const rgb = hexToRgb(d.teamColorHex);
+    const cVoid = contrastRatio(rgb, voidBg);
+    const cGlass = contrastRatio(rgb, hudGlassBg);
+    const cGlass72 = contrastRatio(rgb, hudGlass72Bg);
+    assert.ok(cVoid >= 3.0, `${d.code} (${d.teamColorHex}) contrast on #08090d is ${cVoid.toFixed(2)}:1 (< 3.0:1)`);
+    assert.ok(cGlass >= 3.0, `${d.code} (${d.teamColorHex}) contrast on HUD_GLASS (bg-lc-void/74 over mid-grey) is ${cGlass.toFixed(2)}:1 (< 3.0:1)`);
+    assert.ok(cGlass72 >= 3.0, `${d.code} (${d.teamColorHex}) contrast on rgba(8,9,13,0.72) over mid-grey is ${cGlass72.toFixed(2)}:1 (< 3.0:1)`);
+  }
+  for (let i = 0; i < roster.length; i++) {
+    for (let j = i + 1; j < roster.length; j++) {
+      const dist = rgbDist(roster[i].teamColorHex, roster[j].teamColorHex);
+      assert.ok(
+        dist >= 60,
+        `${roster[i].code} (${roster[i].teamColorHex}) and ${roster[j].code} (${roster[j].teamColorHex}) are too similar (RGB dist=${dist.toFixed(1)} < 60)`,
+      );
+    }
+  }
 });
 
 check('custom colour palette swatches are unique valid hex colours', () => {
