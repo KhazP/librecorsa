@@ -10,7 +10,7 @@ import type { CarClassCode } from "@/components/ui/badges/class-colors";
 import { setCarSkin, useCarSkinId } from "@/lib/cars/car-skins";
 import { carPhysics, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import type { CustomLiveryColors, LiveryCategory, LiveryConfig } from "@/types/f1";
-import { buildCustomLivery, LIVERY_CATEGORY_LABELS } from "@/lib/track-data";
+import { buildCustomLivery, CUSTOM_LIVERY_PALETTE, LIVERY_CATEGORY_LABELS } from "@/lib/track-data";
 /** The older size names the callers pass (xs is the small badge) */
 export type ChipSize = "md" | "sm" | "xs";
 import { focusOnHover } from "./useFocusNav";
@@ -75,6 +75,10 @@ const SWATCH = [
 ].join(" ");
 const SWATCH_CHOSEN = "shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_var(--color-lc-chalk)]";
 const SWATCH_IDLE = "inset-ring inset-ring-white/15 hover:shadow-[0_0_0_1px_var(--color-lc-slate)]";
+const MINI_SWATCH = [
+  "size-5 shrink-0 cursor-pointer rounded-full outline-none transition-[box-shadow] duration-200 ease-lc pointer-coarse:size-7 focus-visible:outline-none in-data-[input=keyboard]:focus:transition-none in-data-[input=pad]:focus:transition-none",
+  "focus:shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_var(--color-lc-volt),0_0_0_8px_color-mix(in_srgb,var(--color-lc-volt)_14%,transparent)]",
+].join(" ");
 
 const LIVERY_GROUPS: readonly Exclude<LiveryCategory, "custom">[] = ["house", "grid2026", "retro"];
 const CUSTOM_WHEEL_GRADIENT =
@@ -83,6 +87,7 @@ const CUSTOM_WHEEL_GRADIENT =
 /**
  * Native `<input type="color">` fires React's `onChange` (native `input`) on every drag pixel. Keeping draft state
  * locally and committing only on native `change` / `blur` prevents repainting full 2K livery textures mid-drag.
+ * A focusable preset swatch row sits alongside it so controller and keyboard users can pick colours without a mouse.
  */
 const CustomColorSlot: React.FC<{
   label: string;
@@ -102,22 +107,48 @@ const CustomColorSlot: React.FC<{
     return () => el.removeEventListener("change", handleNativeChange);
   }, []);
 
+  const lower = value.toLowerCase();
+
   return (
-    <label className="flex min-w-0 cursor-pointer flex-col gap-1">
-      <span className="text-[11px] font-semibold text-lc-slate">{label}</span>
-      <span className="flex items-center gap-1.5 rounded-lc-nub border border-lc-line bg-lc-carbon px-1.5 py-1">
-        <input
-          ref={inputRef}
-          type="color"
-          aria-label={`Custom livery ${label.toLowerCase()} colour`}
-          value={value}
-          onChange={(e) => onDraft(e.target.value)}
-          onBlur={(e) => onCommit(e.target.value)}
-          className="size-5 shrink-0 cursor-pointer border-0 bg-transparent p-0"
-        />
-        <span className="lc-mono min-w-0 truncate text-[11px] text-lc-fog uppercase">{value}</span>
-      </span>
-    </label>
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold text-lc-slate">{label}</span>
+        <label className="flex cursor-pointer items-center gap-1.5 rounded-lc-nub border border-lc-line bg-lc-carbon px-1.5 py-0.5">
+          <input
+            ref={inputRef}
+            type="color"
+            aria-label={`Custom livery ${label.toLowerCase()} colour`}
+            value={value}
+            onChange={(e) => onDraft(e.target.value)}
+            onBlur={(e) => onCommit(e.target.value)}
+            className="size-4 shrink-0 cursor-pointer border-0 bg-transparent p-0"
+          />
+          <span className="lc-mono text-[11px] text-lc-fog uppercase">{value}</span>
+        </label>
+      </div>
+      <div role="group" aria-label={`${label} colour presets`} className="flex flex-wrap items-center gap-1.5">
+        {CUSTOM_LIVERY_PALETTE.map((preset) => {
+          const active = lower === preset.hex.toLowerCase();
+          return (
+            <button
+              key={preset.hex}
+              type="button"
+              aria-label={`${label} ${preset.name}`}
+              aria-pressed={active}
+              onClick={() => onCommit(preset.hex)}
+              onPointerEnter={focusOnHover}
+              className={`${MINI_SWATCH} ${active ? SWATCH_CHOSEN : SWATCH_IDLE}`}
+              style={
+                {
+                  "--lc-swatch-gap": "var(--color-lc-well)",
+                  backgroundColor: preset.hex,
+                } as React.CSSProperties
+              }
+            />
+          );
+        })}
+      </div>
+    </div>
   );
 };
 
@@ -187,6 +218,7 @@ export const LiveryPicker: React.FC<{
         {groups.map((g, gi) => (
           <div
             key={g.cat}
+            role="group"
             aria-label={g.label}
             className={`flex flex-wrap items-center gap-2 ${gi > 0 ? "border-t border-lc-line/60 pt-2" : ""}`}
           >
@@ -237,7 +269,7 @@ export const LiveryPicker: React.FC<{
       </div>
 
       {isCustom ? (
-        <div className="grid grid-cols-3 gap-2 rounded-lc-row border border-lc-line bg-lc-well p-2">
+        <div className="flex flex-col gap-2.5 rounded-lc-row border border-lc-line bg-lc-well p-2.5">
           {(
             [
               ["primary", "Primary"],
