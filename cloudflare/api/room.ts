@@ -52,8 +52,8 @@ export const MAX_GUESTS = 15;
 const MAX_MESSAGE_CHARS = 32 * 1024;
 /** Messages one socket may send per ten seconds (an offer or answer plus its candidates is a few dozen) */
 const MAX_MESSAGES_PER_10S = 200;
-/** Valid qualifying lap bounds (ms): at least 1 s, under ~2.7 h */
-const MIN_LAP_MS = 1_000;
+/** Valid qualifying lap bounds (ms): at least 10 s, under ~2.7 h */
+const MIN_LAP_MS = 10_000;
 const MAX_LAP_MS = 10_000_000;
 
 type Attachment =
@@ -198,31 +198,43 @@ export class RoomServer {
   }
 
   private activeParticipants(roomState: RoomSessionState, explicitPeers: string[] | null = null): string[] {
-    if (explicitPeers && explicitPeers.length > 0) {
-      roomState.participants = [...explicitPeers];
-      return roomState.participants;
-    }
     const fromSockets: string[] = [];
+    const connected = new Set<string>();
     for (const ws of this.state.getWebSockets(HOST_TAG)) {
       const a = attachmentOf(ws);
-      if (a && a.role === "host") fromSockets.push(senderPeerId(a));
+      if (a && a.role === "host") {
+        const pid = senderPeerId(a);
+        if (!connected.has(pid)) {
+          connected.add(pid);
+          fromSockets.push(pid);
+        }
+      }
     }
     for (const ws of this.state.getWebSockets()) {
       const a = attachmentOf(ws);
-      if (a && a.role === "guest") fromSockets.push(senderPeerId(a));
+      if (a && a.role === "guest") {
+        const pid = senderPeerId(a);
+        if (!connected.has(pid)) {
+          connected.add(pid);
+          fromSockets.push(pid);
+        }
+      }
     }
+    const preferred = explicitPeers && explicitPeers.length > 0 ? explicitPeers : roomState.participants;
     const merged: string[] = [];
     const seen = new Set<string>();
-    for (const p of roomState.participants) {
-      if (fromSockets.includes(p) && !seen.has(p)) {
+    for (const p of preferred) {
+      if (connected.has(p) && !seen.has(p)) {
         seen.add(p);
         merged.push(p);
       }
     }
-    for (const p of fromSockets) {
-      if (!seen.has(p)) {
-        seen.add(p);
-        merged.push(p);
+    if (!explicitPeers || merged.length === 0) {
+      for (const p of fromSockets) {
+        if (!seen.has(p)) {
+          seen.add(p);
+          merged.push(p);
+        }
       }
     }
     roomState.participants = merged;
@@ -395,17 +407,46 @@ export class RoomServer {
 
       case "join": {
         if (typeof msg.peerId !== "string" || !PEER_ID_RE.test(msg.peerId)) return;
-        const oldPeerId = senderPeerId(who);
         const nextPeerId = msg.peerId;
+        // Once a socket binds a peerId, prevent switching it mid-connection (idempotent re-send is a no-op)
+        if (who.peerId !== undefined) {
+          if (who.peerId !== nextPeerId) {
+            send(ws, { t: "error", code: "peer_id_locked", message: "Peer ID is already bound for this connection" });
+          }
+          return;
+        }
+        // Prevent hijacking any currently connected socket's peerId/id or claiming the host default id as a guest
+        const taken =
+          (who.role === "guest" && nextPeerId === "host") ||
+          this.state.getWebSockets().some((other) => {
+            if (other === ws) return false;
+            const oa = attachmentOf(other);
+            if (!oa || oa.role === "refused") return false;
+            return senderPeerId(oa) === nextPeerId || (oa.role === "guest" && oa.id === nextPeerId);
+          });
+        if (taken) {
+          send(ws, { t: "error", code: "peer_id_taken", message: "Peer ID is already owned by another connection" });
+          return;
+        }
+        const oldPeerId = senderPeerId(who);
         const updated: Attachment =
           who.role === "host" ? { role: "host", peerId: nextPeerId } : { role: "guest", id: who.id, peerId: nextPeerId };
         ws.serializeAttachment(updated);
         const roomState = await this.loadRoomState();
         const idx = roomState.participants.indexOf(oldPeerId);
-        if (idx >= 0) roomState.participants[idx] = nextPeerId;
-        else if (!roomState.participants.includes(nextPeerId)) roomState.participants.push(nextPeerId);
+        if (idx >= 0) {
+          if (roomState.participants.includes(nextPeerId) && oldPeerId !== nextPeerId) {
+            roomState.participants.splice(idx, 1);
+          } else {
+            roomState.participants[idx] = nextPeerId;
+          }
+        } else if (!roomState.participants.includes(nextPeerId)) {
+          roomState.participants.push(nextPeerId);
+        }
         if (oldPeerId !== nextPeerId && roomState.qualifyingLaps[oldPeerId] !== undefined) {
-          roomState.qualifyingLaps[nextPeerId] = roomState.qualifyingLaps[oldPeerId];
+          const prev = roomState.qualifyingLaps[nextPeerId];
+          roomState.qualifyingLaps[nextPeerId] =
+            prev === undefined ? roomState.qualifyingLaps[oldPeerId] : Math.min(prev, roomState.qualifyingLaps[oldPeerId]);
           delete roomState.qualifyingLaps[oldPeerId];
         }
         await this.saveRoomState(roomState);
@@ -509,15 +550,24 @@ export class RoomServer {
 
   async webSocketClose(ws: ServerSocket, code: number): Promise<void> {
     const who = attachmentOf(ws);
-    if (who?.role === "guest") {
+    if (who && who.role !== "refused") {
       const peerId = senderPeerId(who);
-      const roomState = await this.loadRoomState();
-      const idx = roomState.participants.indexOf(peerId);
-      if (idx >= 0) {
-        roomState.participants.splice(idx, 1);
-        await this.saveRoomState(roomState);
+      const stillOwnedElsewhere = this.state.getWebSockets().some((other) => {
+        if (other === ws) return false;
+        const oa = attachmentOf(other);
+        return oa !== null && oa.role !== "refused" && senderPeerId(oa) === peerId;
+      });
+      if (!stillOwnedElsewhere) {
+        const roomState = await this.loadRoomState();
+        const idx = roomState.participants.indexOf(peerId);
+        if (idx >= 0) {
+          roomState.participants.splice(idx, 1);
+          await this.saveRoomState(roomState);
+        }
       }
-      for (const host of this.state.getWebSockets(HOST_TAG)) send(host, { t: "left", id: who.id });
+      if (who.role === "guest") {
+        for (const host of this.state.getWebSockets(HOST_TAG)) send(host, { t: "left", id: who.id });
+      }
     }
     close(ws, code === 1005 || code === 1006 ? 1000 : code, "closed");
   }

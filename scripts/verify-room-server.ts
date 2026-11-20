@@ -395,6 +395,90 @@ async function main() {
     );
   }
 
+  // Security hardening: peerId ownership, 10s lap floor, connected-only activeParticipants, and host disconnect cleanup
+  {
+    let clockMs = 3_000_000;
+    const sState = fakeState();
+    const sRoom = new RoomServer(sState, env, async () => ICE, () => clockMs);
+    const h = new FakeSocket();
+    const victim = new FakeSocket();
+    const impostor = new FakeSocket();
+    await sRoom.connect('host', TOKEN_A, h, 'private');
+    await sRoom.connect('guest', '', victim);
+    await sRoom.connect('guest', '', impostor);
+    const impostorConnId = impostor.last()?.id as string;
+
+    await sRoom.webSocketMessage(h, JSON.stringify({ t: 'join', peerId: 'peer_h' }));
+    await sRoom.webSocketMessage(victim, JSON.stringify({ t: 'join', peerId: 'peer_victim' }));
+
+    // Guest cannot hijack an open socket's peerId or claim default "host"
+    await sRoom.webSocketMessage(impostor, JSON.stringify({ t: 'join', peerId: 'peer_victim' }));
+    const takenVictim = impostor.last();
+    await sRoom.webSocketMessage(impostor, JSON.stringify({ t: 'join', peerId: 'peer_h' }));
+    const takenHost = impostor.last();
+    await sRoom.webSocketMessage(impostor, JSON.stringify({ t: 'join', peerId: 'host' }));
+    const takenDefaultHost = impostor.last();
+    check(
+      'guest join cannot hijack an existing open socket peerId or default host id',
+      takenVictim?.t === 'error' &&
+        takenVictim?.code === 'peer_id_taken' &&
+        takenHost?.code === 'peer_id_taken' &&
+        takenDefaultHost?.code === 'peer_id_taken',
+    );
+
+    // Once bound, a socket cannot change its peerId mid-connection (idempotent re-send is ok)
+    await sRoom.webSocketMessage(victim, JSON.stringify({ t: 'join', peerId: 'peer_victim' }));
+    const sentAfterIdem = victim.sent.length;
+    await sRoom.webSocketMessage(victim, JSON.stringify({ t: 'join', peerId: 'peer_renamed' }));
+    check(
+      'bound socket cannot switch peerId mid-connection',
+      victim.sent.length === sentAfterIdem + 1 && victim.last()?.t === 'error' && victim.last()?.code === 'peer_id_locked',
+    );
+
+    // Start qualifying with host-supplied peers containing a bogus disconnected peer -> filtered to connected sockets only
+    await sRoom.webSocketMessage(h, JSON.stringify({ t: 'settings', settings: { qualifyingMinutes: 3 } }));
+    await sRoom.webSocketMessage(
+      h,
+      JSON.stringify({ t: 'start_session', peers: ['peer_victim', 'ghost_offline_peer', 'peer_h'] }),
+    );
+    const qState = await sRoom.getRoomState();
+    check(
+      'activeParticipants filters host-supplied peers to connected sockets only',
+      qState.participants.join(',') === 'peer_victim,peer_h' && !qState.participants.includes('ghost_offline_peer'),
+      qState.participants.join(','),
+    );
+
+    // Impostor submits lap (still under its own connection id, NOT victim) and sub-10s laps are rejected
+    const sid = qState.sessionId!;
+    await sRoom.webSocketMessage(victim, JSON.stringify({ t: 'lap', sessionId: sid, bestLapMs: 85_000 }));
+    await sRoom.webSocketMessage(impostor, JSON.stringify({ t: 'lap', sessionId: sid, bestLapMs: 60_000 }));
+    await sRoom.webSocketMessage(victim, JSON.stringify({ t: 'lap', sessionId: sid, bestLapMs: 9_999 }));
+    await sRoom.webSocketMessage(
+      victim,
+      JSON.stringify({ t: 'progress', race: { id: sid, dist: 2000, fin: null, best: 1_000 } }),
+    );
+    const afterLaps = await sRoom.getRoomState();
+    check(
+      'qualifying enforces >= 10s lap floor and isolates impostor laps from victim',
+      afterLaps.qualifyingLaps['peer_victim'] === 85_000 && afterLaps.qualifyingLaps[impostorConnId] === 60_000,
+      JSON.stringify(afterLaps.qualifyingLaps),
+    );
+
+    // Closing impostor does NOT evict victim; closing host removes host from participants
+    await sRoom.webSocketClose(impostor, 1001);
+    const afterImpostorClose = await sRoom.getRoomState();
+    await sRoom.webSocketClose(h, 1001);
+    const afterHostClose = await sRoom.getRoomState();
+    check(
+      'impostor disconnect leaves victim in participants, and host disconnect removes host',
+      afterImpostorClose.participants.includes('peer_victim') &&
+        !afterImpostorClose.participants.includes(impostorConnId) &&
+        !afterHostClose.participants.includes('peer_h') &&
+        afterHostClose.participants.includes('peer_victim'),
+      `afterImpostor=${afterImpostorClose.participants.join(',')} afterHost=${afterHostClose.participants.join(',')}`,
+    );
+  }
+
   if (failures.length > 0) {
     console.error(`\n${failures.length} check(s) failed`);
     process.exit(1);
