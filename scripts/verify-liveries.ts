@@ -143,7 +143,6 @@ check('11 original 2026 grid mockup liveries with unique ids, neutral numbers an
     assert.match(liv.primary, HEX_RE, `${liv.id} primary`);
     assert.match(liv.secondary, HEX_RE, `${liv.id} secondary`);
     assert.match(liv.accent, HEX_RE, `${liv.id} accent`);
-    assert.ok(!liv.notInStoreBuild, `${liv.id} should be available in store builds too`);
     assert.ok(!CURRENT_F1_NUMBERS.has(liv.number), `${liv.id} should use a neutral non-current F1 driver number, got #${liv.number}`);
     assert.ok(!TRADEMARK_RE.test(`${liv.id.replace(/_/g, ' ')} ${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names or HQ towns: ${liv.name} / ${liv.team}`);
   }
@@ -158,7 +157,6 @@ check('6 original retro liveries with unique ids, neutral numbers, valid hex col
     assert.match(liv.primary, HEX_RE, `${liv.id} primary`);
     assert.match(liv.secondary, HEX_RE, `${liv.id} secondary`);
     assert.match(liv.accent, HEX_RE, `${liv.id} accent`);
-    assert.ok(!liv.notInStoreBuild, `${liv.id} should be available in store builds too`);
     assert.ok(!CURRENT_F1_NUMBERS.has(liv.number), `${liv.id} should use a neutral number, got #${liv.number}`);
     assert.ok(!TRADEMARK_RE.test(`${liv.id.replace(/_/g, ' ')} ${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names or HQ towns: ${liv.name} / ${liv.team}`);
   }
@@ -245,23 +243,23 @@ check('custom colour palette swatches are unique valid hex colours', () => {
   assert.equal(hexes.size, CUSTOM_LIVERY_PALETTE.length, 'palette swatches must be unique');
 });
 
-check('every livery id across the whole list is unique and store-eligible house/grid/retro liveries stay neutral', () => {
+check('every livery id across the whole list is unique, original and trademark-free', () => {
   const ids = new Set(LIVERIES.map((l) => l.id));
   assert.equal(ids.size, LIVERIES.length, 'duplicate livery id');
+  assert.equal(LIVERIES.length, 20, `expected 20 original liveries (3 house + 11 grid2026 + 6 retro), got ${LIVERIES.length}`);
   assert.equal(LIVERIES[0].id, 'librecorsa');
   assert.equal(LIVERIES[1].id, 'aurora');
   assert.equal(LIVERIES[2].id, 'verdant');
-  // Every non-store-excluded livery (house originals, 2026 grid, retro) must have unique neutral numbers & clean names
-  const storeEligible = LIVERIES.filter((l) => !l.notInStoreBuild);
-  for (const liv of storeEligible) {
+  assert.ok(!LIVERIES.some((l) => (l.id as string) === 'oracle_red_bull'), 'oracle_red_bull must be removed');
+  for (const liv of LIVERIES) {
     assert.match(liv.primary, HEX_RE, `${liv.id} primary`);
     assert.match(liv.secondary, HEX_RE, `${liv.id} secondary`);
     assert.match(liv.accent, HEX_RE, `${liv.id} accent`);
     assert.ok(!CURRENT_F1_NUMBERS.has(liv.number), `${liv.id} should use a neutral non-current F1 driver number, got #${liv.number}`);
     assert.ok(!TRADEMARK_RE.test(`${liv.id.replace(/_/g, ' ')} ${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names or HQ towns: ${liv.name} / ${liv.team}`);
   }
-  const nums = new Set(storeEligible.map((l) => l.number));
-  assert.equal(nums.size, storeEligible.length, 'duplicate racing number across store-eligible liveries');
+  const nums = new Set(LIVERIES.map((l) => l.number));
+  assert.equal(nums.size, LIVERIES.length, 'duplicate racing number across liveries');
 });
 
 check('custom colour picker builds, resolves, sanitizes and persists cleanly', () => {
@@ -292,7 +290,8 @@ check('custom colour picker builds, resolves, sanitizes and persists cleanly', (
   assert.equal(afterReset.liveryId, 'custom');
   assert.deepEqual(afterReset.customLivery, saved.customLivery);
 
-  // Legacy retro IDs alias cleanly to their upgraded iconic historical counterparts
+  // Legacy IDs alias cleanly so previously saved player settings keep working
+  assert.equal(resolveLivery('oracle_red_bull', custom).id, 'grid26_cobalt');
   assert.equal(resolveLivery('retro_tri_92', custom).id, 'retro_tri_93');
   assert.equal(resolveLivery('retro_emerald_91', custom).id, 'retro_fluoro_09');
   assert.equal(resolveLivery('retro_powder_69', custom).id, 'retro_hornet_99');
@@ -300,7 +299,7 @@ check('custom colour picker builds, resolves, sanitizes and persists cleanly', (
 
 check('all 11 grid2026, 6 retro, 3 house and custom liveries have complete trademark-free visual specs & sponsors', () => {
   const targets = [
-    ...LIVERIES.filter((l) => !l.notInStoreBuild),
+    ...LIVERIES,
     buildCustomLivery(DEFAULT_CUSTOM_LIVERY),
   ];
   const expectedRetroIds = new Set([
@@ -336,7 +335,7 @@ check('all 11 grid2026, 6 retro, 3 house and custom liveries have complete trade
 
 check('procedural 2048px livery canvas painter and tri-orthographic material installer run cleanly across all liveries', () => {
   const targets = [
-    ...LIVERIES.filter((l) => !l.notInStoreBuild),
+    ...LIVERIES,
     buildCustomLivery({ primary: '#12ab34', secondary: '#0a0b0c', accent: '#ff8800' }),
   ];
 

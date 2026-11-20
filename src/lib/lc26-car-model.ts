@@ -16,7 +16,6 @@ import { PAINT_ZONE_MATERIALS, setLc26LiveryColours, upgradeLc26Materials } from
 import { installVertexOcclusion } from "@/lib/render/vertex-occlusion";
 import { createDriverFigure } from "@/lib/render/driver-figure";
 import { createDriverHelmet } from "@/lib/render/driver-helmet";
-import { installLiveryDecals } from "@/lib/render/livery-decals";
 import {
   installF1LiveryPaint,
   type F1LiverySurface,
@@ -363,12 +362,11 @@ export function attachLc26Model(
   applyRearRainLight(bodyGroup);
 
   // Each car gets its own paint zone materials (the upgraded ones are shared by every clone of the template):
-  // - BODY paint zones carry both the procedural tri-orthographic livery shader and external decals (oracle_red_bull).
+  // - BODY paint zones carry the procedural tri-orthographic livery shader.
   // - Active-aero flaps get their own material clone with their closed-pose matrix (`aeroClosed`) as `uLiveryFrame`
   //   so wing sponsor banners and stripes stay locked to the flaps even when X-Mode opens them.
   const zoneMats = new Map<string, THREE.MeshStandardMaterial[]>();
   const ownZone = new Map<string, THREE.MeshStandardMaterial>();
-  const decalMats: THREE.Material[] = [];
   const liverySurfaces: F1LiverySurface[] = [];
   const flapNodeFor = (obj: THREE.Object3D): THREE.Object3D | null => {
     for (let o: THREE.Object3D | null = obj; o && o !== bodyGroup; o = o.parent) {
@@ -388,7 +386,6 @@ export function attachLc26Model(
         c = (m as THREE.MeshStandardMaterial).clone();
         ownZone.set(key, c);
         zoneMats.set(m.name, [...(zoneMats.get(m.name) ?? []), c]);
-        if (!flapNode) decalMats.push(c);
         if ((c as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial) {
           const frameMatrix = flapNode?.userData.aeroClosed
             ? new THREE.Matrix4().fromArray(flapNode.userData.aeroClosed as number[])
@@ -421,7 +418,6 @@ export function attachLc26Model(
   }
 
   const proceduralPaint = !liveryMask && liverySurfaces.length ? installF1LiveryPaint(liverySurfaces) : null;
-  const decals = decalMats.length ? installLiveryDecals(decalMats) : null;
 
   // A body without a driver of its own gets one: a helmet in the cockpit and, with a steering wheel to hold, the
   // figure under it
@@ -499,13 +495,12 @@ export function attachLc26Model(
       EXT_PAINT_SECONDARY: livery.secondary,
       EXT_PAINT_ACCENT: livery.accent,
     };
-    const useProcedural = !liveryMask && !livery.decals && proceduralPaint !== null;
+    const useProcedural = !liveryMask && proceduralPaint !== null;
     const appliedProcedural = useProcedural ? proceduralPaint.set(livery) : false;
     if (!appliedProcedural) {
       proceduralPaint?.set(null);
       for (const [name, mats] of zoneMats) for (const m of mats) m.color.set(colours[name]);
     }
-    decals?.set(appliedProcedural ? null : livery.decals);
     if (ownRimMat && defaultRimColor) {
       if (livery.visual?.rimColor) ownRimMat.color.set(livery.visual.rimColor);
       else ownRimMat.color.copy(defaultRimColor);

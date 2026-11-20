@@ -3332,13 +3332,13 @@ export interface F1LiverySurface {
 }
 
 export interface F1LiveryPaintController {
-  /** Applies a procedural livery (or disables procedural override when `null` so external decal liveries take over) */
+  /** Applies a procedural livery (or disables procedural override when `null`) */
   set: (livery: LiveryConfig | null) => boolean;
 }
 
 /**
  * Installs the zero-recompile tri-orthographic procedural F1 livery shader onto a car's own paint materials.
- * Safe to chain alongside `installLiveryDecals`: when `set(null)` is called, the shader becomes a no-op.
+ * When `set(null)` is called, the shader becomes a no-op and falls back to the base paint zone colours.
  */
 export function installF1LiveryPaint(surfaces: readonly F1LiverySurface[]): F1LiveryPaintController {
   const sharedUniforms = {

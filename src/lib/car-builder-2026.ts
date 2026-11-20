@@ -924,7 +924,7 @@ export function createF1Car2026(
   const bodyLiveryMat = new THREE.MeshPhysicalMaterial({ color: initialLivery.primary, ...SATIN_PAINT });
   const proceduralBodyPaint = installF1LiveryPaint([{ material: bodyLiveryMat }]);
   const applyProceduralFinish = (liv: LiveryConfig) => {
-    const applied = !liv.decals ? proceduralBodyPaint.set(liv) : false;
+    const applied = proceduralBodyPaint.set(liv);
     if (!applied) {
       proceduralBodyPaint.set(null);
       bodyLiveryMat.color.set(liv.primary);

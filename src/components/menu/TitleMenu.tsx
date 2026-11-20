@@ -121,15 +121,6 @@ const CreditRow: React.FC<{ title: string; children: React.ReactNode }> = ({ tit
   </div>
 );
 
-/** The 2026 Prototype's Red Bull livery: the Android app leaves the livery out (store-mode.ts), and this note with it */
-const RedBullLiveryNote: React.FC = () =>
-  useStoreBuild() ? null : (
-    <>
-      . Its Oracle Red Bull Racing livery uses pictures from an Assetto Corsa skin made for VRC&apos;s Formula Alpha 2026;
-      the logos are their owners&apos; trademarks
-    </>
-  );
-
 /** sagatron918's PayPal donation link: left out in the Android store build (Google Play payment rules) */
 const SagatronDonateLink: React.FC = () =>
   useStoreBuild() ? null : (
@@ -284,7 +275,6 @@ const Credits: React.FC = () => (
           <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
             CC BY 4.0
           </a>
-          <RedBullLiveryNote />
           <br />
           Mercedes-AMG GT3 Evo: &ldquo;Mercedes-AMG GT3&rdquo; (
           <a

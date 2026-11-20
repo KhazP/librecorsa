@@ -1,12 +1,12 @@
 /*
  * The store build: the Android app (a Trusted Web Activity, `android/`) is what goes on Google Play, and inside it the
- * site leaves out what the store's rules make risky: the Buy me a coffee link (Play's payment rules) and the Oracle Red
- * Bull Racing livery (its logos aren't licensed). Chrome opens the app's first page with `document.referrer` set to
+ * site leaves out what the store's rules make risky: external payment/donation links (Play's payment rules) and
+ * third-party GT tyre brand logos. Chrome opens the app's first page with `document.referrer` set to
  * `android-app://<package id>`; later pages in the same tab read the mark left in sessionStorage. The desktop app and
  * the site in a browser are unaffected. `?store=play` turns it on in a browser tab, to check it without a phone.
  *
- * No React here: track-data.ts imports this, and the sim worker imports track-data. Components use useStoreBuild
- * (use-store-build.ts).
+ * No React here so non-UI modules (`gt-tyre-sidewall.ts`, `report-facts.ts`) can import it cleanly. Components use
+ * useStoreBuild (`use-store-build.ts`).
  */
 
 const ANDROID_APP_REFERRER = "android-app://org.librecorsa.app";

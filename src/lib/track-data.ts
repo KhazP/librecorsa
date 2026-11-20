@@ -3,7 +3,6 @@ import {
   CustomLiveryColors,
   LiveryCategory,
   LiveryConfig,
-  LiveryDecalSet,
   LiveryId,
   RunoffStyle,
   TrackSamplePoint,
@@ -15,7 +14,6 @@ import { resolveSurfaceTable, type SurfaceTable, type SurfaceTableOverrides } fr
 import type { SceneryCutBox } from "./scenery-cuts";
 import type { LapStretches } from "./sim/course-limits";
 import { correctedDrsZones } from "./drs-zone-fixes";
-import { isStoreBuild } from "./store-mode";
 
 /** Raw `track_data.json` layout shared by every circuit (the bundled circuit's file is the reference schema) */
 export type RawTrackJson = typeof rawTrackJson;
@@ -150,36 +148,12 @@ export interface GridSlotDef {
 export const RWANDA_SPAWN_GRID: GridSlotDef[] = [...(rawTrackJson.spawnGrid as GridSlotDef[])];
 
 /**
- * The Oracle Red Bull Racing livery's pictures: cut from an Assetto Corsa skin of the RB22 by
- * `scripts/cars/build_rb_livery.mjs` (atlas rectangles from its `decals.json`), placed on the 2026 Prototype's body
- */
-const ORACLE_RED_BULL_DECALS: LiveryDecalSet = {
-  atlas: "/cars/f12026/liveries/oracle_red_bull/decals.png",
-  decals: [
-    // ORACLE along each sidepod
-    { rect: [0, 0, 0.53516, 0.61523], face: "left", centre: [0.62, 0.5, -0.08], size: [0.62, 0.178], depth: 0.15 },
-    { rect: [0, 0, 0.53516, 0.61523], face: "right", centre: [-0.62, 0.5, -0.08], size: [0.62, 0.178], depth: 0.15 },
-    // A bull charging forward on each side of the engine cover, the Red Bull wordmark behind it
-    { rect: [0.66699, 0, 0.19092, 0.4375], face: "left", centre: [0.34, 0.61, -0.52], size: [0.38, 0.218], depth: 0.12 },
-    { rect: [0.66699, 0, 0.19092, 0.4375], face: "right", centre: [-0.34, 0.61, -0.52], size: [0.38, 0.218], depth: 0.12, flipX: true },
-    { rect: [0, 0.63086, 0.25342, 0.33008], face: "left", centre: [0.31, 0.62, -0.98], size: [0.5, 0.163], depth: 0.12 },
-    { rect: [0, 0.63086, 0.25342, 0.33008], face: "right", centre: [-0.31, 0.62, -0.98], size: [0.5, 0.163], depth: 0.12 },
-    // The nose: a bull on each side, the number on top
-    { rect: [0.66699, 0, 0.19092, 0.4375], face: "left", centre: [0.12, 0.44, 2.05], size: [0.3, 0.172], depth: 0.1 },
-    { rect: [0.66699, 0, 0.19092, 0.4375], face: "right", centre: [-0.12, 0.44, 2.05], size: [0.3, 0.172], depth: 0.1, flipX: true },
-    { rect: [0.53906, 0, 0.12402, 0.50195], face: "top", centre: [0, 0.56, 1.72], size: [0.17, 0.172], rotDeg: -90, depth: 0.1 },
-    // ORACLE across the rear wing's main plane
-    { rect: [0, 0, 0.53516, 0.61523], face: "top", centre: [0, 0.8, -2.18], size: [0.7, 0.201], depth: 0.07 },
-  ],
-};
-
-/**
  * The F1 liveries:
- * - House originals (LibreCorsa, Aurora, Verdant, plus Oracle Red Bull in non-store builds)
+ * - House originals (LibreCorsa, Aurora, Verdant)
  * - 2026 Grid: 11 broadcast-grade liveries inspired by the 11-team 2026 grid (100% original teams & fictional sponsors)
  * - Retro: 6 iconic classic-era inspired liveries (1988, 1978, 1993, 2005, 2009, 1999) with fictional retro sponsors
  */
-const ALL_LIVERIES: LiveryConfig[] = [
+export const LIVERIES: LiveryConfig[] = [
   // ---- House originals
   {
     id: "librecorsa",
@@ -285,18 +259,6 @@ const ALL_LIVERIES: LiveryConfig[] = [
       swatchCss:
         "linear-gradient(135deg, #0d5c46 0 54%, #e8c35a 54% 63%, #0a0f0d 63% 100%)",
     },
-  },
-  {
-    id: "oracle_red_bull",
-    name: "Max Verstappen #3",
-    team: "Oracle Red Bull Racing",
-    primary: "#15214a",
-    secondary: "#0e0f12",
-    accent: "#f2b705",
-    number: "3",
-    category: "house",
-    decals: ORACLE_RED_BULL_DECALS,
-    notInStoreBuild: true,
   },
 
   // ---- 2026 Grid (11 real-life-inspired 2026 liveries, original teams, fake sponsors, neutral numbers)
@@ -1000,14 +962,9 @@ export function buildCustomLivery(colors: CustomLiveryColors): LiveryConfig {
   };
 }
 
-/**
- * The liveries this copy of the game offers and paints: in the Android app, all but the Red Bull one. A saved choice
- * of a missing livery falls back to the first, and so does an AI car that wore it; the saved choice stays as it was.
- */
-export const LIVERIES: LiveryConfig[] = isStoreBuild() ? ALL_LIVERIES.filter((l) => !l.notInStoreBuild) : ALL_LIVERIES;
-
-/** Legacy retro livery IDs aliased smoothly so previously saved user settings resolve cleanly */
+/** Legacy livery IDs aliased smoothly so previously saved user settings resolve cleanly */
 const LEGACY_LIVERY_ALIASES: Readonly<Record<string, LiveryId>> = {
+  oracle_red_bull: "grid26_cobalt",
   retro_tri_92: "retro_tri_93",
   retro_emerald_91: "retro_fluoro_09",
   retro_powder_69: "retro_hornet_99",

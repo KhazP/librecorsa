@@ -34,7 +34,7 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python
       - `WHEEL_xx_RIM` (rotating wheel rim, spokes, hub, and brake disc)
       - `WHEEL_xx_TYRE` (single-primitive tyre mesh for `installTyreDeformation`)
 
-# 2026 Prototype body (`port_qvist_f1.mjs`, `build_rb_livery.mjs`)
+# 2026 Prototype body (`port_qvist_f1.mjs`)
 
 `port_qvist_f1.mjs` builds the 2026 Prototype's body, `public/cars/f12026/model/f12026.glb`, from Qvist Designs'
 "F1 2026 concept (polygon model)" (CC BY 4.0, [qvistdesigns.framer.website](https://qvistdesigns.framer.website/); its GLB is not in the
@@ -59,11 +59,6 @@ node --max-old-space-size=12288 scripts/cars/port_qvist_f1.mjs path/to/f1_2026_c
 - **From the AM26** (`scripts/cars/sources/am26-steering-wheel.glb`, `--steer-from`): `STEER_BASE` (steering wheel,
   shift lights, display) and the root's `cameras`. That file is DeX's AM26 (CC BY 4.0, the car's previous body) cut
   down to its `LC26` root (with its `cameras` and `steerBase` extras) and `STEER_BASE` subtree, 1 MB instead of 16. The root's `helmet.pos` places the game's own helmet.
-
-`build_rb_livery.mjs <skin folder>` cuts the Oracle Red Bull Racing livery's pictures out of an Assetto Corsa skin's
-`car-body.dds` (VRC Formula Alpha 2026, RB22), keys off its navy and packs them into
-`public/cars/f12026/liveries/oracle_red_bull/decals.png`; `decals.json` gives the rectangles the livery's placements in
-`src/lib/track-data.ts` use (`render/livery-decals.ts` projects them).
 
 # Assetto Corsa Car Porter (`port_ac_car.py`)
 
