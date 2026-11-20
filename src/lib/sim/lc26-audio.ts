@@ -180,6 +180,8 @@ export interface Lc26AudioInputs {
   skidRate?: number;
   /** Traction control is cutting the engine */
   tcActive?: boolean;
+  /** Engine is stalled (manual clutch): mute combustion & turbo loops while coasting/skid sounds continue */
+  stalled?: boolean;
   /** Mean speed of the driven shafts (rad/s) and the torque they carry (Nm, negative on the overrun and under
    * regeneration): banks with a `driveline` section pitch and level their transmission loops from these */
   driveshaftRadS?: number;
@@ -713,13 +715,14 @@ export class Lc26SoundBank {
     this.engineFilter.frequency.setTargetAtTime(cutoffHz, now, 0.018);
     this.engineShelf.gain.setTargetAtTime(shelfDb, now, 0.018);
 
+    const engineAlive = inp.stalled ? 0 : 1;
     const engineTau = this.upshiftTimer > 0 || this.downshiftTimer > 0 ? 0.012 : tau;
     for (const view of ['ext', 'int'] as Lc26View[]) {
       const onness = lerpTable(m.throttleCurve[view], effThrottle);
-      const wOn = Math.sin(onness * Math.PI * 0.5) * shiftOnScale;
-      const wOff = Math.cos(onness * Math.PI * 0.5) * shiftOffScale;
+      const wOn = Math.sin(onness * Math.PI * 0.5) * shiftOnScale * engineAlive;
+      const wOff = Math.cos(onness * Math.PI * 0.5) * shiftOffScale * engineAlive;
       const viewLevel = view === 'int' ? this.viewMix : 1 - this.viewMix;
-      const active = viewLevel > 0.002;
+      const active = viewLevel > 0.002 && engineAlive > 0;
       this.engine[view].on.update(rpm, active ? wOn : 0, true, now, dt, engineTau, pitchTau);
       this.engine[view].off.update(rpm, active ? wOff : 0, true, now, dt, engineTau, pitchTau);
     }
@@ -727,7 +730,7 @@ export class Lc26SoundBank {
     // Turbo (`boost` = gauge bar; pitched subtly with boost so spool rises naturally)
     const onnessExt = lerpTable(m.throttleCurve.ext, effThrottle);
     const boost = Math.max(0, inp.boostBarGauge);
-    const boostFade = Math.min(1, boost / 0.25) * (0.35 + 0.65 * Math.min(1, boost / 2.2));
+    const boostFade = engineAlive * Math.min(1, boost / 0.25) * (0.35 + 0.65 * Math.min(1, boost / 2.2));
     this.turboOn?.update(boost, boostFade * Math.sin(onnessExt * Math.PI * 0.5), false, now, dt, tau);
     this.turboOff?.update(boost, boostFade * Math.cos(onnessExt * Math.PI * 0.5), false, now, dt, tau);
 

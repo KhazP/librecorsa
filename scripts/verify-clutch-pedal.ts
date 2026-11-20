@@ -10,6 +10,7 @@ import { createFlatTestTrack } from './lib/flat-track';
 import { createBmwM1ProcarSim } from '../src/lib/sim/classic/BmwM1ProcarSim';
 import { createSuzukiLianaSim } from '../src/lib/sim/road/SuzukiLianaSim';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
+import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { CLUTCH_BITE_LOCK, CLUTCH_BITE_START, clutchPedalEngagement } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
@@ -141,6 +142,44 @@ const stalledAgain = liana.telemetry.engineStalled === true;
 liana.autoClutch = true;
 drive(liana, 0.1, { throttle: 0, brake: 1, clutch: 0 });
 check('manual clutch: turning auto-clutch back on recovers stall', stalledAgain && liana.telemetry.engineStalled === false && liana.telemetry.rpm >= 600, `${liana.telemetry.rpm} rpm`);
+
+// Legacy LC26 engine (`F1Physics2026`): stall, reset/teleport clears stall, clutch-hold restart and slip launch
+const legacy = new F1Physics2026(track);
+legacy.assistPreset = 'pro';
+legacy.teleportToDistance(1000, 0);
+legacy.autoGearbox = false;
+legacy.autoClutch = false;
+const driveLegacy = (seconds: number, inputs: Partial<ControlInputs>) => {
+  for (let t = 0; t < seconds; t += 1 / 60) legacy.step(1 / 60, { ...inputs });
+};
+driveLegacy(1.0, { throttle: 0, brake: 1, clutch: 0 });
+check('legacy LC26 manual clutch: dumping clutch stalls the engine', legacy.telemetry.engineStalled === true && legacy.telemetry.rpm < 200, `stalled=${legacy.telemetry.engineStalled}, ${Math.round(legacy.telemetry.rpm)} rpm`);
+legacy.teleportToDistance(1000, 0);
+check('legacy LC26 manual clutch: reset/teleport clears stalled state', legacy.telemetry.engineStalled === false && legacy.telemetry.rpm >= 3500, `stalled=${legacy.telemetry.engineStalled}, ${Math.round(legacy.telemetry.rpm)} rpm`);
+driveLegacy(1.0, { throttle: 0, brake: 1, clutch: 0 });
+driveLegacy(0.8, { throttle: 0, brake: 1, clutch: 1 });
+check('legacy LC26 manual clutch: holding clutch restarts stalled engine', legacy.telemetry.engineStalled === false && legacy.telemetry.rpm >= 3500, `stalled=${legacy.telemetry.engineStalled}, ${Math.round(legacy.telemetry.rpm)} rpm`);
+driveLegacy(0.35, { throttle: 0.75, brake: 0, clutch: 1 });
+let legacySlip = 0;
+for (let t = 0; t < 0.8; t += 1 / 60) {
+  const pedal = Math.max(0, 0.78 - (t / 0.8) * 0.78);
+  legacy.step(1 / 60, { throttle: 0.75, brake: 0, clutch: pedal });
+  legacySlip = Math.max(legacySlip, legacy.telemetry.clutchSlip ?? 0);
+}
+driveLegacy(1.0, { throttle: 0.9, brake: 0, clutch: 0 });
+legacy.step(1 / 60, { throttle: 0.9, brake: 0, clutch: 0, shiftUp: true });
+driveLegacy(1.0, { throttle: 0.95, brake: 0, clutch: 0 });
+legacy.step(1 / 60, { throttle: 0.95, brake: 0, clutch: 0, shiftUp: true });
+driveLegacy(1.0, { throttle: 0.95, brake: 0, clutch: 0 });
+check(
+  'legacy LC26 manual clutch: bite-point launch locks clutch & deploys ERS',
+  legacy.telemetry.engineStalled === false &&
+    legacySlip > 0.05 &&
+    legacy.telemetry.speedKmh > 120 &&
+    legacy.telemetry.clutch === 1 &&
+    legacy.telemetry.mgukPowerKw > 10,
+  `slip=${legacySlip.toFixed(2)}, ${legacy.telemetry.speedKmh.toFixed(1)} km/h, clutch=${legacy.telemetry.clutch}, mguk=${legacy.telemetry.mgukPowerKw.toFixed(0)} kW`,
+);
 
 console.log(failures.length ? `\n${failures.length} failed: ${failures.join(', ')}` : '\nAll clutch pedal checks passed.');
 process.exit(failures.length ? 1 : 0);

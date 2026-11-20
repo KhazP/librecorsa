@@ -1609,6 +1609,10 @@ export class F1Physics2026 {
 
   private syncDrivetrainToRoadSpeed(): void {
     const dt = this.drivetrain;
+    this.engineStalled = false;
+    this.stallLowRpmS = 0;
+    this.stallRestartS = 0;
+    this.clutchSlipNorm = 0;
     const rearOmega = 0.5 * (this.wheels[2].spinVel + this.wheels[3].spinVel);
     const engineFromRoad = rearOmega * this.overallRatio(dt.gear);
     const idle = LC26_ENGINE.idleRpm * RPM2RADS;
@@ -2693,7 +2697,7 @@ export class F1Physics2026 {
     if (manualClutch) {
       const engage = ratio !== 0 ? clutchPedalEngagement(this.manualClutchPedal) : 0;
       drv.clutchEngagement = engage;
-      drv.clutchLocked = false;
+      if (ratio === 0 || engage < 0.99 || this.engineStalled) drv.clutchLocked = false;
       if (this.engineStalled) {
         const disengaged = ratio === 0 || this.manualClutchPedal >= CLUTCH_BITE_START;
         const bumpStart = ratio !== 0 && engage > 0.4 && omegaAxle * ratio >= idle * 0.7 && drv.engineOmega >= stallOmega * 1.1;
@@ -2719,6 +2723,7 @@ export class F1Physics2026 {
         if (this.stallLowRpmS >= 0.12) {
           this.engineStalled = true;
           this.stallRestartS = 0;
+          drv.clutchLocked = false;
         }
       } else {
         this.stallLowRpmS = Math.max(0, this.stallLowRpmS - h * 2);
@@ -2728,17 +2733,31 @@ export class F1Physics2026 {
         ? -Math.min(20, drv.engineOmega * 0.6)
         : this.engineTorque(Math.max(50, drv.engineOmega), throttle) *
           (drv.engineOmega < stallOmega ? THREE.MathUtils.clamp(drv.engineOmega / stallOmega, 0, 1) : 1);
-      const slip = drv.engineOmega - omegaAxle * ratio;
-      const capacity = engage * LC26_DRIVETRAIN.clutchMaxTorqueNm;
-      const tClutch = ratio !== 0 ? THREE.MathUtils.clamp(slip * 40, -capacity, capacity) : 0;
-      drv.engineOmega = THREE.MathUtils.clamp(drv.engineOmega + ((tEngineManual - tClutch) / (Ie + 0.002)) * h, 0, maxOmega);
-      if (!this.engineStalled && (ratio === 0 || engage <= 0.1) && drv.engineOmega < idle) drv.engineOmega = idle;
-      tIn = ratio * tClutch * (tClutch >= 0 ? eta : 1 / eta);
-      const J = 2 * Iw + Igb * ratio * ratio;
-      const free = omegaAxle + ((tIn - roadTqLeft - roadTqRight) / J) * h;
-      omegaAxle = this.applyBrakeFriction(free, ((brakeL + brakeR) / J) * h);
-      this.clutchSlipNorm =
-        ratio !== 0 && engage > 0.02 && engage < 0.99 ? THREE.MathUtils.clamp(Math.abs(slip) / Math.max(50, idle), 0, 1) : 0;
+      if (drv.clutchLocked && ratio !== 0 && !this.engineStalled) {
+        tIn = ratio * tEngineManual * (tEngineManual >= 0 ? eta : 1 / eta) - drv.harvestAxleTorqueNm;
+        const J = 2 * Iw + (Ie + Igb) * ratio * ratio;
+        const free = omegaAxle + ((tIn - roadTqLeft - roadTqRight) / J) * h;
+        omegaAxle = this.applyBrakeFriction(free, ((brakeL + brakeR) / J) * h);
+        drv.engineOmega = THREE.MathUtils.clamp(omegaAxle * ratio, 0, maxOmega);
+        this.clutchSlipNorm = 0;
+      } else {
+        const slip = drv.engineOmega - omegaAxle * ratio;
+        const capacity = engage * LC26_DRIVETRAIN.clutchMaxTorqueNm;
+        const tClutch = ratio !== 0 ? THREE.MathUtils.clamp(slip * 40, -capacity, capacity) : 0;
+        drv.engineOmega = THREE.MathUtils.clamp(drv.engineOmega + ((tEngineManual - tClutch) / (Ie + 0.002)) * h, 0, maxOmega);
+        if (!this.engineStalled && (ratio === 0 || engage <= 0.1) && drv.engineOmega < idle) drv.engineOmega = idle;
+        const harvestAxle = engage > 0.5 && !this.engineStalled && drv.gear > 0 ? drv.harvestAxleTorqueNm : 0;
+        tIn = ratio * tClutch * (tClutch >= 0 ? eta : 1 / eta) - harvestAxle;
+        const J = 2 * Iw + Igb * ratio * ratio;
+        const free = omegaAxle + ((tIn - roadTqLeft - roadTqRight) / J) * h;
+        omegaAxle = this.applyBrakeFriction(free, ((brakeL + brakeR) / J) * h);
+        if (ratio !== 0 && engage >= 0.99 && !this.engineStalled && Math.abs(drv.engineOmega - omegaAxle * ratio) < 15) {
+          drv.clutchLocked = true;
+          drv.engineOmega = THREE.MathUtils.clamp(omegaAxle * ratio, 0, maxOmega);
+        }
+        this.clutchSlipNorm =
+          ratio !== 0 && engage > 0.02 && !drv.clutchLocked ? THREE.MathUtils.clamp(Math.abs(slip) / Math.max(50, idle), 0, 1) : 0;
+      }
     } else {
     this.clutchSlipNorm = 0;
     const tEngine = this.engineTorque(drv.engineOmega, throttle);

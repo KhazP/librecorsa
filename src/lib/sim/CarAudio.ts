@@ -803,6 +803,7 @@ export class CarAudioEngine {
           skid: bankSkid ? 0.55 * Math.sqrt(squeal.amp) : 0,
           skidRate: 0.85 + 0.25 * squeal.pitch,
           tcActive: telemetry.f12026?.tcActive ?? false,
+          stalled: telemetry.engineStalled === true,
           // Heard only by banks that carry a driveline section or an electric machine loop
           driveshaftRadS: telemetry.driveshaftRadS,
           driveshaftTorqueNm: telemetry.driveshaftTorqueNm,
@@ -851,11 +852,13 @@ export class CarAudioEngine {
       this.engineExhaustFilter.frequency.setTargetAtTime(cutoffHz, now, tau);
     }
 
+    const engineAlive = telemetry.engineStalled ? 0 : 1;
+
     // Crossfade across the 5 real F1 WAV sample loops
     if (this.engineVoice === 'samples') {
-      const onThrottleWeight = 0.35 + 0.65 * this.smoothAccel;
+      const onThrottleWeight = (0.35 + 0.65 * this.smoothAccel) * engineAlive;
       const overrunWeight =
-        (1.0 - this.smoothAccel) * THREE.MathUtils.clamp((rpm - 5000) / 7000, 0.15, 1.0);
+        (1.0 - this.smoothAccel) * THREE.MathUtils.clamp((rpm - 5000) / 7000, 0.15, 1.0) * engineAlive;
 
       for (const layer of this.sampleNodes) {
         const rate = THREE.MathUtils.clamp(rpm / layer.def.baseRpm, 0.30, 2.50);
@@ -884,7 +887,7 @@ export class CarAudioEngine {
     if (synthVoices && this.subHarmonicOsc && this.subHarmonicGain && this.subHarmonicFilter) {
       this.subHarmonicOsc.frequency.setTargetAtTime(f0 * 0.5, now, tau);
       this.subHarmonicFilter.frequency.setTargetAtTime(Math.min(260, f0 * 0.85), now, tau);
-      const subLevel = (this.engineVoice === 'samples' ? 0.055 : 0.16) * (0.4 + 0.6 * this.smoothAccel) * shiftDip;
+      const subLevel = (this.engineVoice === 'samples' ? 0.055 : 0.16) * (0.4 + 0.6 * this.smoothAccel) * shiftDip * engineAlive;
       this.subHarmonicGain.gain.setTargetAtTime(subLevel, now, tau);
     }
 
@@ -893,7 +896,7 @@ export class CarAudioEngine {
     const turboIlag = Math.exp(-3.0 * this.turboLag);
     if (synthVoices && this.turboOsc && this.turboGain) {
       const turboFreq = 1650 + (1.0 - turboIlag) * 2400 + mp * 850;
-      const turboAmp = THREE.MathUtils.clamp((1.0 - turboIlag) * 0.022 * mp, 0, 0.025);
+      const turboAmp = THREE.MathUtils.clamp((1.0 - turboIlag) * 0.022 * mp, 0, 0.025) * engineAlive;
       this.turboOsc.frequency.setTargetAtTime(turboFreq, now, tau);
       this.turboGain.gain.setTargetAtTime(turboAmp, now, tau);
     }
