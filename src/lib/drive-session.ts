@@ -13,6 +13,7 @@ import { disposeTree } from "@/lib/render/dispose-tree";
 import { setKtx2Renderer } from "@/lib/render/ktx2";
 import { Gt3DashDisplay, gt3MirrorPatches } from "@/lib/render/gt3-dash-display";
 import { createPortedCarRig } from "@/lib/ported-car-model";
+import { defaultGtTyreBrand, resolveGtTyreBrand } from "@/lib/render/gt-tyre-sidewall";
 import { staticFloorOf } from "@/lib/render/body-floor";
 import { FloorSparks } from "@/lib/render/floor-sparks";
 import {
@@ -1329,6 +1330,12 @@ export class DriveSession {
             cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : undefined,
             // F1 cars from 2018 on wear the 2026 Pirelli sidewall (the SF71H on its 13" tyres too; the models' own are poor)
             pirelliSidewall: def.classId === "f1" && def.year >= 2018,
+            // Non-F1 racing cars wear sagatron918's GT sidewall packs (optional `?tyres=<brand>` override for testing)
+            gtSidewall:
+              def.classId === "f1" || def.classId === "road"
+                ? null
+                : (resolveGtTyreBrand(typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tyres") : null) ??
+                  defaultGtTyreBrand(def.id, def.classId)),
             skin: skinFor(car),
           })
         : model.gt3Cockpit

@@ -15,6 +15,7 @@ import { createF1Car2026, type PortedSkin, type SimCarRig } from '@/lib/car-buil
 import { carForVehicle, carSkinBaseUrl } from '@/lib/cars/car-registry';
 import type { WheelSeating } from '@/lib/render/corner-rig';
 import { createPortedCarRig, loadTemplate as loadPortedTemplate } from '@/lib/ported-car-model';
+import { defaultGtTyreBrand } from '@/lib/render/gt-tyre-sidewall';
 import { staticFloorOf } from '@/lib/render/body-floor';
 import { CAR_WHEEL_LOCKS_DEG } from '@/lib/input/device-input';
 import { SUZUKI_LIANA_CONFIG } from './road/SuzukiLianaConfig';
@@ -1052,6 +1053,7 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
       chassis: own.config.chassis,
       steerLockDeg: own.lockDeg / 2,
       floor: staticFloorOf(own.config),
+      gtSidewall: defaultGtTyreBrand(kind),
     });
   } else {
     rig = createF1Car2026(livery, 'medium', undefined, { opponent: true });

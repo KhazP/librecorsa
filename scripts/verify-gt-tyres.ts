@@ -1,0 +1,167 @@
+/**
+ * GT tyre sidewall packs (`src/lib/render/gt-tyre-sidewall.ts`) and sagatron918 credits:
+ * verifies all 6 brands are registered and mapped to real non-F1 cars, shader injection & uniform setup
+ * work cleanly without colliding with `pirelli-sidewall.ts`, generated WebPs (when present) are valid lossless
+ * RIFF/VP8L images, and credits gate the PayPal donation link behind `useStoreBuild()`.
+ *
+ *   npx tsx scripts/verify-gt-tyres.ts
+ */
+import { existsSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
+import * as THREE from "three";
+import {
+  canLoadGtTyreSidewall,
+  createGtTyreSidewall,
+  DEFAULT_CAR_GT_TYRE_BRAND,
+  defaultGtTyreBrand,
+  GT_SIDEWALL_TEX_RIM,
+  GT_SIDEWALL_TEX_SHOULDER,
+  GT_TYRE_BRANDS,
+  GT_TYRE_PACKS,
+  resolveGtTyreBrand,
+  type GtTyreBrand,
+} from "../src/lib/render/gt-tyre-sidewall";
+
+let failed = 0;
+function check(name: string, ok: boolean, detail = ""): void {
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name.padEnd(64)} ${detail}`);
+  if (!ok) failed++;
+}
+
+const EXPECTED_BRANDS: readonly GtTyreBrand[] = [
+  "pirelli",
+  "michelin",
+  "goodyear",
+  "bridgestone",
+  "yokohama",
+  "falken",
+];
+
+check(
+  "All 6 GT tyre brands registered",
+  GT_TYRE_BRANDS.length === 6 && EXPECTED_BRANDS.every((b) => GT_TYRE_BRANDS.includes(b) && GT_TYRE_PACKS[b].brand === b),
+  GT_TYRE_BRANDS.join(", ")
+);
+
+// Every brand must be mapped to at least one real car so all 6 packs are genuinely used
+const usedBrands = new Set(Object.values(DEFAULT_CAR_GT_TYRE_BRAND));
+check(
+  "All 6 brands mapped onto default non-F1 cars",
+  EXPECTED_BRANDS.every((b) => usedBrands.has(b)),
+  Object.entries(DEFAULT_CAR_GT_TYRE_BRAND)
+    .map(([c, b]) => `${c}=${b}`)
+    .join(", ")
+);
+
+check("F1 car gets null GT tyre brand", defaultGtTyreBrand("lc26", "f1") === null);
+check("Road cars get null GT tyre brand", defaultGtTyreBrand("liana", "road") === null && defaultGtTyreBrand("vw-scirocco-gtx", "road") === null);
+check("Fallback by class maps gt3/proto/classic", defaultGtTyreBrand("future-gt3", "gt3") === "pirelli" && defaultGtTyreBrand("future-proto", "proto") === "michelin" && defaultGtTyreBrand("future-classic", "classic") === "goodyear");
+check(
+  "resolveGtTyreBrand parses valid brands and rejects junk",
+  resolveGtTyreBrand("  Yokohama ") === "yokohama" && resolveGtTyreBrand("FALKEN") === "falken" && resolveGtTyreBrand("unknown") === null && resolveGtTyreBrand(null) === null
+);
+check("canLoadGtTyreSidewall is false in Node/SSR", canLoadGtTyreSidewall() === false);
+
+// Synthetic tyre geometry: cylinder-like ring with axle along X, bead=0.24m, shoulder=0.33m
+const geo = new THREE.BufferGeometry();
+const verts: number[] = [];
+const norms: number[] = [];
+for (let i = 0; i < 32; i++) {
+  const a = (i / 32) * Math.PI * 2;
+  const cy = Math.cos(a);
+  const cz = Math.sin(a);
+  for (const side of [-1, 1]) {
+    verts.push(side * 0.16, 0.24 * cy, 0.24 * cz, side * 0.16, 0.33 * cy, 0.33 * cz);
+    norms.push(side, 0, 0, side, 0, 0);
+  }
+}
+geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+geo.setAttribute("normal", new THREE.Float32BufferAttribute(norms, 3));
+
+const patch = createGtTyreSidewall(geo, "goodyear", "medium");
+const fit = patch.uniforms.uGtSwFit.value as THREE.Vector3;
+const expectedTexPerM = Math.max(
+  (GT_SIDEWALL_TEX_SHOULDER - GT_SIDEWALL_TEX_RIM) / (0.33 - 0.24),
+  GT_SIDEWALL_TEX_SHOULDER / 0.33
+);
+check(
+  "Sidewall fit matches mesh bead/shoulder radii",
+  Math.abs(fit.x - 0.33) < 1e-4 && Math.abs(fit.y - GT_SIDEWALL_TEX_SHOULDER) < 1e-4 && Math.abs(fit.z - expectedTexPerM) < 1e-4,
+  `shoulder=${fit.x.toFixed(3)}, texShoulder=${fit.y.toFixed(2)}, dt/dr=${fit.z.toFixed(3)}`
+);
+
+const mockShader = {
+  uniforms: {} as Record<string, THREE.IUniform>,
+  vertexShader: "#include <common>\nvoid main() {\n#include <begin_vertex>\n}",
+  fragmentShader: "#include <common>\nvoid main() {\n#include <color_fragment>\n}",
+} as unknown as THREE.WebGLProgramParametersWithUniforms;
+patch.patch(mockShader);
+check(
+  "Shader patch injects GT sidewall vertex + fragment GLSL",
+  mockShader.vertexShader.includes("vGtSwRest = position;") &&
+    mockShader.fragmentShader.includes("texture2D(uGtSwMap, gtSwUv)") &&
+    "uGtSwMap" in mockShader.uniforms &&
+    "uGtSwReady" in mockShader.uniforms
+);
+
+// Compound & brand transitions + dispose should never throw
+let transitionsOk = true;
+try {
+  patch.setCompound("wet");
+  patch.setCompound("intermediate");
+  patch.setCompound("soft");
+  patch.setBrand("falken");
+  patch.setCompound("wet");
+  patch.dispose();
+} catch {
+  transitionsOk = false;
+}
+check("Compound/brand switches and dispose run cleanly", transitionsOk);
+geo.dispose();
+
+// Verify local ported lossless WebPs if generated in public/cars/shared/tyres/gt/
+const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const gtDir = path.join(root, "public/cars/shared/tyres/gt");
+if (existsSync(gtDir)) {
+  const urls = GT_TYRE_BRANDS.flatMap((b) => {
+    const p = GT_TYRE_PACKS[b];
+    return p.wetUrl ? [p.url, p.wetUrl] : [p.url];
+  });
+  for (const url of urls) {
+    const filePath = path.join(root, "public", url);
+    const exists = existsSync(filePath);
+    let lossless = false;
+    let kb = 0;
+    if (exists) {
+      const buf = readFileSync(filePath);
+      kb = statSync(filePath).size / 1024;
+      lossless =
+        buf.subarray(0, 4).toString("ascii") === "RIFF" &&
+        buf.subarray(8, 12).toString("ascii") === "WEBP" &&
+        buf.subarray(12, 16).toString("ascii") === "VP8L";
+    }
+    check(`Ported WebP valid lossless: ${path.basename(filePath)}`, exists && lossless && kb > 10, `${kb.toFixed(1)} KiB`);
+  }
+} else {
+  console.log("SKIP  public/cars/shared/tyres/gt not present in this checkout (R2-hosted)");
+}
+
+// Verify credits & store-build PayPal gating
+const creditsMd = readFileSync(path.join(root, "CREDITS.md"), "utf8");
+const titleMenu = readFileSync(path.join(root, "src/components/menu/TitleMenu.tsx"), "utf8");
+const allBrandNames = ["Pirelli", "Michelin", "Goodyear", "Bridgestone", "Yokohama", "Falken"];
+check(
+  "CREDITS.md credits sagatron918, all 6 brands, and PayPal link",
+  creditsMd.includes("sagatron918") &&
+    creditsMd.includes("https://www.paypal.me/SagarNaikB") &&
+    allBrandNames.every((n) => creditsMd.includes(n))
+);
+check(
+  "TitleMenu.tsx credits sagatron918 and gates PayPal via useStoreBuild()",
+  titleMenu.includes("sagatron918") &&
+    titleMenu.includes("https://www.paypal.me/SagarNaikB") &&
+    /SagatronDonateLink[\s\S]{0,120}useStoreBuild\(\)\s*\?\s*null/.test(titleMenu)
+);
+
+console.log(failed ? `\n${failed} GT tyre check(s) failed.` : "\nAll GT tyre checks passed.");
+if (failed) process.exit(1);

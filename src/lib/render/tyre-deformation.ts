@@ -32,6 +32,7 @@ import * as THREE from 'three';
 import type { TireCompound } from '@/types/f1';
 import type { TyreVisualState } from '../sim/simulator-car';
 import { createPirelliSidewall, loadSidewallTexture } from './pirelli-sidewall';
+import { createGtTyreSidewall, type GtTyreBrand } from './gt-tyre-sidewall';
 import { createTyreWrap } from './tyre-wrap';
 import { subdivideTyreTread } from './tyre-subdivide';
 
@@ -105,6 +106,8 @@ export interface TyreDeformationOptions {
   gain?: number;
   /** Draw the Pirelli sidewall (pirelli-sidewall.ts) over the model's own, in this compound's colours */
   pirelliSidewall?: TireCompound;
+  /** Draw a GT / prototype / classic racing tyre sidewall (gt-tyre-sidewall.ts) over the model's own */
+  gtSidewall?: { brand: GtTyreBrand; compound?: TireCompound };
   /**
    * Wrap the whole tyre in the 2025 Pirelli textures (tyre-wrap.ts), for a tyre mesh with no usable UVs: the
    * mesh-local X the car's outside is on. With `pirelliSidewall` too, the sidewall is what shows if the wrap's
@@ -293,6 +296,10 @@ export function installTyreDeformation(
   // The sidewall fits itself to the model's own tyre; the subdivided tread keeps its bead and shoulder radii
   const wrapped = opts.tyreWrapOuterSide !== undefined;
   const sidewall = opts.pirelliSidewall ? createPirelliSidewall(originalGeometry, opts.pirelliSidewall, wrapped) : null;
+  const gtSidewall =
+    !sidewall && opts.gtSidewall
+      ? createGtTyreSidewall(originalGeometry, opts.gtSidewall.brand, opts.gtSidewall.compound ?? 'medium')
+      : null;
   mesh.geometry = subdivideTyreTread(originalGeometry);
   // The wrap reads the cross-section off the geometry the tyre is drawn with
   const wrap = wrapped
@@ -304,9 +311,10 @@ export function installTyreDeformation(
     // The wrap first: the sidewall's colour is then written before it, so the wrap covers it once it is in
     wrap?.patch(shader);
     sidewall?.patch(shader);
+    gtSidewall?.patch(shader);
   };
   // Tyres with and without the sidewall and the wrap compile to different programs
-  const programKey = `lc26-tyre-deform${sidewall ? '-sidewall' : ''}${wrap ? '-wrap' : ''}`;
+  const programKey = `lc26-tyre-deform${sidewall ? '-sidewall' : ''}${gtSidewall ? '-gt-sidewall' : ''}${wrap ? '-wrap' : ''}`;
   material.customProgramCacheKey = () => programKey;
   mesh.material = material;
 
@@ -361,10 +369,12 @@ export function installTyreDeformation(
     },
     setCompound(compound) {
       sidewall?.setCompound(compound);
+      gtSidewall?.setCompound(compound);
       wrap?.setCompound(compound);
     },
     dispose() {
       // The mesh keeps the (shared, cached) subdivided tread: it draws the same undeformed
+      gtSidewall?.dispose();
       mesh.material = original;
       mesh.customDepthMaterial = undefined;
       mesh.customDistanceMaterial = undefined;

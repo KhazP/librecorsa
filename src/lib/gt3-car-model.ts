@@ -4,7 +4,7 @@ import { cleanGt3Material, sharpenCarMaps } from "@/lib/render/ported-car-materi
 import { assetProgress, type AssetTaskId } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
-import type { CarTelemetry, LiveryConfig } from "@/types/f1";
+import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
 import type { SimCarRig } from "@/lib/car-builder-2026";
 import type { Lc26CameraAnchor, Lc26ModelInstance } from "@/lib/lc26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
@@ -304,6 +304,7 @@ export function createGt3CarRig(): SimCarRig {
   let cameraAnchors: Lc26ModelInstance["cameraAnchors"] | null = null;
 
   const corners: RigCorner[] = [];
+  let compound: TireCompound = "medium";
   let disposed = false;
 
   // Cockpit parts driven from the telemetry (set once the cockpit model is attached)
@@ -366,6 +367,7 @@ export function createGt3CarRig(): SimCarRig {
         ? installTyreDeformation(tyreMesh, {
             unloadedRadiusM: extras.tyreRadius?.[SIDE[i]] ?? 0.34,
             halfWidthM: extras.tyreHalfWidth?.[SIDE[i]] ?? 0.163,
+            gtSidewall: { brand: "pirelli", compound },
           })
         : null;
       corners.push({ steer, spin, isFront: i < 2, isLeft, restY: steer.position.y, tyre });
@@ -465,8 +467,10 @@ export function createGt3CarRig(): SimCarRig {
       currentLivery = livery;
       applyLivery(paintSlots, GT3_PAINT_KEYS, livery);
     },
-    // The model keeps its own tyres
-    setTireCompound: () => {},
+    setTireCompound: (c) => {
+      compound = c;
+      for (const corner of corners) corner.tyre?.setCompound(c);
+    },
     getCameraAnchors: () => cameraAnchors,
     getLc26Body: () => null,
     updateFromTelemetry,

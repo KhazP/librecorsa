@@ -6,6 +6,7 @@ import type { CarTelemetry, TireCompound } from "@/types/f1";
 import type { PortedSkin, SimCarRig } from "@/lib/car-builder-2026";
 import type { Lc26ModelInstance } from "@/lib/lc26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
+import type { GtTyreBrand } from "@/lib/render/gt-tyre-sidewall";
 import { cleanPortedCarMaterial, sharpenCarMaps } from "@/lib/render/ported-car-materials";
 import {
   relativeMatrix,
@@ -45,6 +46,8 @@ export interface PortedCarOptions {
   cameraAnchors?: (fit: PortedCameraFit) => Lc26ModelInstance["cameraAnchors"];
   /** A 2018+ car: its tyres get the 2026 Pirelli sidewall, recoloured by the compound (the model's own otherwise) */
   pirelliSidewall?: boolean;
+  /** Non-F1 racing car GT tyre sidewall brand (sagatron918 packs, `gt-tyre-sidewall.ts`) */
+  gtSidewall?: GtTyreBrand | null;
   /**
    * A livery of the car's own to wear instead of the paint its GLB was made in: its files (`carSkinBaseUrl`) replace
    * the textures of the materials the GLB's `skinMaps` extras name
@@ -369,6 +372,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
             unloadedRadiusM: extras.tyreRadius?.[SIDE[i]] ?? 0.34,
             halfWidthM: extras.tyreHalfWidth?.[SIDE[i]] ?? 0.16,
             pirelliSidewall: options.pirelliSidewall ? compound : undefined,
+            gtSidewall: !options.pirelliSidewall && options.gtSidewall ? { brand: options.gtSidewall, compound } : undefined,
           })
         : null;
       corners.push({ steer, spin, isFront: i < 2, isLeft: i % 2 === 1, restY: steer.position.y, tyre });
