@@ -8,9 +8,11 @@ import {
   buildCustomLivery,
   DEFAULT_CUSTOM_LIVERY,
   LIVERIES,
+  liveryForDriverCode,
   resolveLivery,
   sanitizeCustomLivery,
 } from '../src/lib/track-data';
+import { AI_DRIVERS, AI_RESERVE_DRIVERS } from '../src/lib/sim/ai-opponents';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
 import { resetAllSettings } from '../src/components/settings/storage';
 
@@ -23,11 +25,12 @@ function check(name: string, fn: () => void) {
 
 const HEX_RE = /^#[0-9a-f]{6}$/i;
 const TRADEMARK_RE =
-  /\b(ferrari|mercedes|mclaren|red\s*bull|aston\s*martin|alpine|williams|haas|sauber|audi|cadillac|racing\s*bulls|marlboro|john\s*player|camel|gulf|mild\s*seven|benetton|jordan|lotus|renault|f1|formula\s*1)\b/i;
+  /\b(ferrari|mercedes|mclaren|red\s*bull|aston\s*martin|alpine|williams|haas|sauber|audi|cadillac|racing\s*bulls|marlboro|john\s*player|camel|gulf|mild\s*seven|benetton|jordan|lotus|renault|f1|formula\s*1|silver\s*arrows|scuderia|woking|maranello|brackley|milton(?:\s*keynes)?|silverstone|enstone|grove|faenza|kannapolis|ingolstadt|hinwil|detroit)\b/i;
+const CURRENT_F1_NUMBERS = new Set(['1', '3', '4', '5', '6', '7', '10', '11', '12', '14', '16', '18', '22', '23', '27', '30', '31', '43', '44', '55', '63', '77', '81', '87']);
 
 console.log('F1 liveries & custom colour picker');
 
-check('11 original 2026 grid mockup liveries with unique ids and valid hex colours', () => {
+check('11 original 2026 grid mockup liveries with unique ids, neutral numbers and valid hex colours', () => {
   const grid = LIVERIES.filter((l) => l.category === 'grid2026');
   assert.equal(grid.length, 11, `expected 11 grid2026 liveries, got ${grid.length}`);
   const ids = new Set(grid.map((l) => l.id));
@@ -37,11 +40,12 @@ check('11 original 2026 grid mockup liveries with unique ids and valid hex colou
     assert.match(liv.secondary, HEX_RE, `${liv.id} secondary`);
     assert.match(liv.accent, HEX_RE, `${liv.id} accent`);
     assert.ok(!liv.notInStoreBuild, `${liv.id} should be available in store builds too`);
-    assert.ok(!TRADEMARK_RE.test(`${liv.id.replace(/_/g, ' ')} ${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names: ${liv.name} / ${liv.team}`);
+    assert.ok(!CURRENT_F1_NUMBERS.has(liv.number), `${liv.id} should use a neutral non-current F1 driver number, got #${liv.number}`);
+    assert.ok(!TRADEMARK_RE.test(`${liv.id.replace(/_/g, ' ')} ${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names or HQ towns: ${liv.name} / ${liv.team}`);
   }
 });
 
-check('6 original retro liveries with unique ids, valid hex colours and no trademarked names', () => {
+check('6 original retro liveries with unique ids, neutral numbers, valid hex colours and no trademarked names', () => {
   const retro = LIVERIES.filter((l) => l.category === 'retro');
   assert.equal(retro.length, 6, `expected 6 retro liveries, got ${retro.length}`);
   const ids = new Set(retro.map((l) => l.id));
@@ -51,8 +55,22 @@ check('6 original retro liveries with unique ids, valid hex colours and no trade
     assert.match(liv.secondary, HEX_RE, `${liv.id} secondary`);
     assert.match(liv.accent, HEX_RE, `${liv.id} accent`);
     assert.ok(!liv.notInStoreBuild, `${liv.id} should be available in store builds too`);
-    assert.ok(!TRADEMARK_RE.test(`${liv.id.replace(/_/g, ' ')} ${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names: ${liv.name} / ${liv.team}`);
+    assert.ok(!CURRENT_F1_NUMBERS.has(liv.number), `${liv.id} should use a neutral number, got #${liv.number}`);
+    assert.ok(!TRADEMARK_RE.test(`${liv.id.replace(/_/g, ' ')} ${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names or HQ towns: ${liv.name} / ${liv.team}`);
   }
+});
+
+check('all 11 AI drivers map to 11 distinct 2026 grid liveries with zero collisions', () => {
+  const roster = [...AI_DRIVERS, ...AI_RESERVE_DRIVERS];
+  const assigned = roster.map((d) => liveryForDriverCode(d.code));
+  const ids = new Set(assigned.map((l) => l.id));
+  assert.equal(ids.size, roster.length, `expected ${roster.length} distinct AI liveries, got ${ids.size}: ${assigned.map((l) => l.id).join(', ')}`);
+  assert.ok(assigned.every((l) => l.category === 'grid2026'), 'all AI liveries should come from grid2026');
+  // Unknown human peer code still resolves deterministically to a grid2026 livery
+  const peerA = liveryForDriverCode('XYZ');
+  const peerB = liveryForDriverCode('XYZ');
+  assert.equal(peerA.id, peerB.id);
+  assert.equal(peerA.category, 'grid2026');
 });
 
 check('every livery id across the whole list is unique and house liveries stay first', () => {

@@ -32,7 +32,7 @@ import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
 import { CarHeadlights } from '@/lib/render/car-headlights';
 import { disposeTree } from '@/lib/render/dispose-tree';
-import { LIVERIES } from '@/lib/track-data';
+import { LIVERIES, liveryForDriverCode } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
 import type { SimulatorWheel as SimWheelState } from './simulator-car';
 import { GHOST_OPACITY, ghostFade } from './ghost-align';
@@ -653,11 +653,7 @@ export class SimVisualFxManager {
   }
 
   private mapDriverToLivery(code: string): LiveryConfig {
-    const grid = LIVERIES.filter((l) => l.category === 'grid2026');
-    const pool = grid.length > 0 ? grid : LIVERIES;
-    let hash = 0;
-    for (let i = 0; i < code.length; i++) hash = (hash * 31 + code.charCodeAt(i)) >>> 0;
-    return pool[hash % pool.length] ?? LIVERIES[0];
+    return liveryForDriverCode(code);
   }
 
   /** The car the peer reports (AI and older clients: the AMR, which is what F1Physics2026 models) */

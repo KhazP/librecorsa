@@ -43,6 +43,9 @@ interface PaintAnalysis {
 const analyses = new WeakMap<THREE.Texture, Map<PaintKeys, PaintAnalysis | null>>();
 const repainted = new WeakMap<THREE.Texture, Map<string, THREE.Texture>>();
 const materials = new WeakMap<THREE.Material, Map<string, THREE.Material>>();
+/** Single replaceable slot for the player's active custom paint so custom picks never bloat/evict preset caches */
+const customRepainted = new WeakMap<THREE.Texture, { key: string; value: THREE.Texture }>();
+const customMaterials = new WeakMap<THREE.Material, { key: string; value: THREE.Material }>();
 
 function hexBytes(css: string): [number, number, number] {
   // getHex() is sRGB (the Color itself holds linear components)
@@ -135,9 +138,14 @@ function liveryKey(livery: LiveryConfig): string {
 /** The paint texture repainted in the livery's colours, or null when the texture cannot be read (no DOM, CORS) */
 export function repaintTexture(texture: THREE.Texture, keys: PaintKeys, livery: LiveryConfig): THREE.Texture | null {
   const key = liveryKey(livery);
-  let cache = repainted.get(texture);
-  const cached = cache?.get(key);
-  if (cached) return cached;
+  const isCustom = livery.id === "custom";
+  if (isCustom) {
+    const prev = customRepainted.get(texture);
+    if (prev && prev.key === key) return prev.value;
+  } else {
+    const cached = repainted.get(texture)?.get(key);
+    if (cached) return cached;
+  }
   const a = analyse(texture, keys);
   if (!a) return null;
 
@@ -175,12 +183,19 @@ export function repaintTexture(texture: THREE.Texture, keys: PaintKeys, livery: 
   out.center.copy(texture.center);
   out.matrixAutoUpdate = texture.matrixAutoUpdate;
   out.matrix.copy(texture.matrix);
-  if (!cache) {
-    cache = new Map();
-    repainted.set(texture, cache);
+  if (isCustom) {
+    const prev = customRepainted.get(texture);
+    if (prev) prev.value.dispose();
+    customRepainted.set(texture, { key, value: out });
+  } else {
+    let cache = repainted.get(texture);
+    if (!cache) {
+      cache = new Map();
+      repainted.set(texture, cache);
+    }
+    cache.set(key, out);
+    evictOldest(cache, (t) => t.dispose());
   }
-  cache.set(key, out);
-  evictOldest(cache, (t) => t.dispose());
   return out;
 }
 
@@ -189,7 +204,7 @@ export function repaintTexture(texture: THREE.Texture, keys: PaintKeys, livery: 
  * colours in a picker would otherwise keep every one on the GPU for the session. An evicted one still on a car is
  * uploaded again from its canvas on the next draw.
  */
-const MAX_CACHED_LIVERIES = 24;
+const MAX_CACHED_LIVERIES = 14;
 
 function evictOldest<V>(cache: Map<string, V>, dispose: (v: V) => void): void {
   while (cache.size > MAX_CACHED_LIVERIES) {
@@ -213,21 +228,33 @@ export function liveryMaterial<M extends THREE.Material & { map: THREE.Texture |
 ): M {
   if (!base.map) return base;
   const key = liveryKey(livery);
-  let cache = materials.get(base);
-  const cached = cache?.get(key);
-  if (cached) return cached as M;
+  const isCustom = livery.id === "custom";
+  if (isCustom) {
+    const prev = customMaterials.get(base);
+    if (prev && prev.key === key) return prev.value as M;
+  } else {
+    const cached = materials.get(base)?.get(key);
+    if (cached) return cached as M;
+  }
   const map = repaintTexture(base.map, keys, livery);
   if (!map) return base;
   const out = base.clone() as M;
   out.onBeforeCompile = base.onBeforeCompile;
   out.customProgramCacheKey = base.customProgramCacheKey;
   out.map = map;
-  if (!cache) {
-    cache = new Map();
-    materials.set(base, cache);
+  if (isCustom) {
+    const prev = customMaterials.get(base);
+    if (prev) prev.value.dispose();
+    customMaterials.set(base, { key, value: out });
+  } else {
+    let cache = materials.get(base);
+    if (!cache) {
+      cache = new Map();
+      materials.set(base, cache);
+    }
+    cache.set(key, out);
+    evictOldest(cache, (m) => m.dispose());
   }
-  cache.set(key, out);
-  evictOldest(cache, (m) => m.dispose());
   return out;
 }
 
