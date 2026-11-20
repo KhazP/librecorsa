@@ -134,6 +134,25 @@ console.log('\n== Weather & time of day');
   // Advance 3 hours of sim time across midnight (21.5 -> 0.5)
   for (let i = 0; i < 180; i++) nightW.step(1);
   check('Night clock wraps cleanly across midnight with timeScale > 0', nightW.clockH > 0 && nightW.clockH < 1.5, `${fmt(nightW.clockH, 2)} h`);
+  // Online sync across the 0/24 h midnight wrap must blend through midnight (~0 h), never jump through noon (~12 h)
+  const nightCond = { ...DEFAULT_SESSION_CONDITIONS, timeOfDay: 'night' as const, timeScale: 60 };
+  const guestPre = new WeatherState(5300, nightCond);
+  guestPre.clockH = 23.95;
+  const hostPost = new WeatherState(5300, nightCond);
+  hostPost.clockH = 0.05;
+  guestPre.applySync(hostPost.snapshot());
+  const distToMidnightFwd = Math.min(guestPre.clockH, 24 - guestPre.clockH);
+  const guestPost = new WeatherState(5300, nightCond);
+  guestPost.clockH = 0.05;
+  const hostPre = new WeatherState(5300, nightCond);
+  hostPre.clockH = 23.95;
+  guestPost.applySync(hostPre.snapshot());
+  const distToMidnightRev = Math.min(guestPost.clockH, 24 - guestPost.clockH);
+  check(
+    'Online sync blends across 0/24 h midnight without jumping to noon',
+    distToMidnightFwd < 0.05 && distToMidnightRev < 0.05,
+    `23.95→0.05 => ${fmt(guestPre.clockH, 3)} h, 0.05→23.95 => ${fmt(guestPost.clockH, 3)} h`,
+  );
   check(
     'Auto headlights turn on at night / dusk / heavy rain and stay off in clear daylight',
     shouldHeadlightsBeOn('auto', nightSun.elevationDeg, 0) &&

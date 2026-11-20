@@ -191,10 +191,6 @@ export const TIME_OF_DAY_HOURS: Record<TimeOfDayId, number> = {
   night: 21.5,
 };
 
-/** Legacy daylight bounds (kept exported; the clock now wraps a full 24 h cycle with car headlights at night) */
-export const CLOCK_MIN_H = 0;
-export const CLOCK_MAX_H = 24;
-
 /** The sun at `clockH`: elevation (deg) and azimuth in the three.js Sky convention (deg; 0 = +Z, 90 = +X) */
 export function sunPosition(clockH: number): { elevationDeg: number; azimuthDeg: number } {
   const a = solarAngles(clockH);
@@ -859,7 +855,10 @@ export class WeatherState {
     const same = sameConditions(c, this.conditions);
     if (!same) this.reset(c);
     const k = same ? 0.5 : 1;
-    this.clockH += (s.clockH - this.clockH) * k;
+    // Wrap the 24 h clock delta onto [-12, 12] so guests never lerp through noon across midnight
+    let dh = s.clockH - this.clockH;
+    dh -= 24 * Math.round(dh / 24);
+    this.clockH = (((this.clockH + dh * k) % 24) + 24) % 24;
     this.weatherS += (s.weatherS - this.weatherS) * k;
     this.cloudCover += (s.cloud - this.cloudCover) * k;
     this.rainIntensity += (s.rain - this.rainIntensity) * k;

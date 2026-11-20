@@ -601,12 +601,19 @@ export function createGoldenHourEnvironment(
     current = { elevationDeg: e, azimuthDeg: c.azimuthDeg, cloud, rain, windVxMs: c.windVxMs, windVzMs: c.windVzMs };
 
     const nightShare = THREE.MathUtils.clamp((-e - 3) / 10, 0, 1);
-    // Sun: the light never comes from below the horizon (shadows stay sane at dawn / dusk); at night it shifts to a
-    // high cool moon so barriers and kerbs stay softly silhouetted while car headlights carry the road lighting
-    if (e < -4) {
+    // Sun: the light never comes from below the horizon (shadows stay sane at dawn / dusk); between -2° and -6° it
+    // smoothly arcs over to a high cool moon so shadows never abruptly flip while headlights carry the road lighting
+    const moonBlend = THREE.MathUtils.smoothstep(-e, 2, 6);
+    if (moonBlend <= 0) {
+      sunDirection.copy(sunDirectionUnit(Math.max(1, e), c.azimuthDeg));
+    } else if (moonBlend >= 1) {
       sunDirection.copy(sunDirectionUnit(35, (c.azimuthDeg + 180) % 360));
     } else {
-      sunDirection.copy(sunDirectionUnit(Math.max(1, e), c.azimuthDeg));
+      const dayDir = sunDirectionUnit(Math.max(1, e), c.azimuthDeg);
+      const moonDir = sunDirectionUnit(35, (c.azimuthDeg + 180) % 360);
+      sunDirection.copy(dayDir).lerp(moonDir, moonBlend);
+      if (sunDirection.lengthSq() < 1e-4) sunDirection.set(0, 1, 0);
+      else sunDirection.normalize();
     }
     skySunDir.copy(sunDirectionUnit(e, c.azimuthDeg));
     sunLight.position.copy(sunDirection).multiplyScalar(SUN_DISTANCE_M);
