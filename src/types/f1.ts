@@ -33,6 +33,8 @@ export interface ControlInputs {
   padSteer?: number; // Optional raw gamepad thumbstick [-1..1] (+ = right), run through the steering assist
   kbSteer?: number; // Optional keyboard steering direction (-1 left, 0, +1 right), always run through the steering assist
   clutch?: number; // Optional manual clutch [0..1]
+  /** False when the active input device has no clutch bound; forces auto-clutch fallback so manual clutch cannot soft-lock */
+  clutchBound?: boolean;
   manualOverride: boolean;
   toggleXMode: boolean;
   shiftUp: boolean;
@@ -393,6 +395,8 @@ export interface CarTelemetry {
   clutchSlip?: number;
   /** True when the engine has stalled under manual clutch (autoClutch off); hold clutch or shift to N to restart */
   engineStalled?: boolean;
+  /** The player's currently bound clutch control, if any (shown on the stall recovery cue) */
+  clutchControl?: StartClutchControl;
   steering: number; // -1..1 (positive = right)
   /**
    * The player's own steering this frame, −1..1 (+ = right): the keys' direction, the shaped stick, or the wheel, mouse

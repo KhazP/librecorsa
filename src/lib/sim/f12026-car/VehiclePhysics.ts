@@ -3675,7 +3675,9 @@ export class VehiclePhysics {
           const turning = THREE.MathUtils.smoothstep(wheelSideForwardRpm, 0.7 * eng.idleRpm, eng.idleRpm);
           engage *= Math.max(pedal, turning);
         }
-        if (inp.clutch !== undefined) engage = Math.min(engage, clutchPedalEngagement(inp.clutch));
+        // Auto-clutch mode keeps linear 1 - clutch so manual race starts stay unchanged; the progressive bite-point
+        // curve (`clutchPedalEngagement`) applies only when full manual clutch (`manualClutch`) is active.
+        if (inp.clutch !== undefined) engage = Math.min(engage, THREE.MathUtils.clamp(1 - inp.clutch, 0, 1));
       }
       // A dog box between gears: the engine is free of the wheels
       if (gb.upshiftNeutralS !== undefined && this.sinceUpshiftS < gb.upshiftNeutralS) engage = 0;

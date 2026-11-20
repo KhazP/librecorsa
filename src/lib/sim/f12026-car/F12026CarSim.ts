@@ -1962,6 +1962,7 @@ export class F12026CarSim implements SimulatorCar {
       neutral: raw.neutral ?? false,
       // The driver's clutch pedal while it is pressed at all; let go, the car works its own clutch
       clutch: Number.isFinite(raw.clutch) && (raw.clutch ?? 0) > 0 ? THREE.MathUtils.clamp(raw.clutch ?? 0, 0, 1) : undefined,
+      clutchBound: raw.clutchBound,
     };
     if (inputs.toggleXMode && this.profile.hasDrs) this.drsPressPending = true;
     // Whole control ticks of this frame; what is left over waits for the next (the pose is drawn carried forward by it)
@@ -2011,7 +2012,8 @@ export class F12026CarSim implements SimulatorCar {
     const neutral = this.neutralPending;
     if (ticks > 0) this.drsPressPending = this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
-    this.vehicle.autoClutch = this.autoClutch || this.autoGearbox || this.aiAutopilot;
+    // Never soft-lock a car when manual clutch is requested but no clutch control is bound on the active device
+    this.vehicle.autoClutch = this.autoClutch || this.autoGearbox || this.aiAutopilot || inputs.clutchBound === false;
     // A steering wheel's rim is read once a frame: its move since the last frame is spread over this frame's ticks, so
     // the rack turns at the rim's own speed rather than in one jump per frame
     const rim = inputs.steerRim && inputs.analogSteer !== undefined ? inputs.analogSteer : null;

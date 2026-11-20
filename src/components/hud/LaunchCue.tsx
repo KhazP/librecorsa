@@ -71,7 +71,7 @@ const ClutchPrompt: React.FC<{ control: StartClutchControl }> = ({ control }) =>
  * A manual start's checklist under the lights, as the F1 games show it: hold the clutch, get the revs up to the car's
  * launch revs. Each step has a ring that fills as the player gets there. A jump start turns it into the penalty.
  */
-export const LaunchCue: React.FC<{ telemetry: CarTelemetry }> = ({ telemetry }) => {
+export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean }> = ({ telemetry, hudHidden = false }) => {
   const start = telemetry.start;
   const held = start?.held === true;
   const jumped = start?.jumped === true;
@@ -88,16 +88,28 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry }> = ({ telemetry }) 
     return () => window.clearTimeout(timer);
   }, [jumped, held]);
 
-  if (telemetry.engineStalled && !held) {
+  if (telemetry.engineStalled && !held && !hudHidden) {
+    const control = telemetry.clutchControl;
+    const named = control && "name" in control ? control.name : null;
+    const hasGlyph = control !== undefined && !named;
+    const ariaControl = named ?? (control && "key" in control ? control.key : "clutch");
     return (
       <div
         role="status"
-        aria-label="Engine stalled: hold clutch or shift to neutral to restart"
+        aria-label={`Engine stalled: hold ${ariaControl} or shift to neutral to restart`}
         className={`flex items-center gap-3 rounded-lc-row py-2.5 pr-5 pl-3 ${HUD_GLASS}`}
       >
         <StepRing progress={1} color={HUD_RED} done={false} />
-        <span className="lc-title hud-text-shadow text-[16px] whitespace-nowrap uppercase sm:text-[18px]" style={{ color: HUD_RED }}>
-          Engine stalled · Hold clutch or shift to N
+        <span className="lc-title hud-text-shadow flex items-center gap-2 text-[16px] whitespace-nowrap uppercase sm:text-[18px]" style={{ color: HUD_RED }}>
+          <span>Engine stalled · Hold</span>
+          {hasGlyph && control ? (
+            <span className="mx-0.5 inline-flex scale-125">
+              <ClutchPrompt control={control} />
+            </span>
+          ) : (
+            <span>{named ?? "clutch"}</span>
+          )}
+          <span>or shift to N</span>
         </span>
       </div>
     );

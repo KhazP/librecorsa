@@ -2389,10 +2389,10 @@ export class DriveSession {
         (device.source === "controller" && padClutchSource !== null) ||
         (device.source === "wheel" && settingsNow.wheel.clutch !== null);
       if (gridHeldLastFrame && !clutchBound) startClutch.active = true;
-      // What the start cue tells the player to hold
+      // What the start cue (and stall recovery banner) tells the player to hold
       const kbClutchKey = settingsNow.keys.clutch[0];
       const padGearUp = settingsNow.padButtons.shiftUp;
-      const startClutchControl: StartClutchControl =
+      const boundClutchControl: StartClutchControl | undefined =
         device.source === "controller" && padClutchSource !== null
           ? padClutchSource.kind === "button"
             ? { pad: padClutchSource.button }
@@ -2401,13 +2401,16 @@ export class DriveSession {
             ? { name: "clutch pedal" }
             : kbClutchKey
               ? { key: keyLabel(kbClutchKey) }
-              : device.source === "controller"
-                ? padGearUp !== null
-                  ? { pad: padGearUp }
-                  : { name: "Gear up" }
-                : device.source === "wheel"
-                  ? { name: "upshift paddle" }
-                  : { key: keyLabel(settingsNow.keys.shiftUp[0]) };
+              : undefined;
+      const startClutchControl: StartClutchControl =
+        boundClutchControl ??
+        (device.source === "controller"
+          ? padGearUp !== null
+            ? { pad: padGearUp }
+            : { name: "Gear up" }
+          : device.source === "wheel"
+            ? { name: "upshift paddle" }
+            : { key: keyLabel(settingsNow.keys.shiftUp[0]) });
       const gearUpHeld = heldKeys.gearUpHeld || device.held?.has("shiftUp") === true;
       // A button as the clutch (a controller button other than a trigger, Gear up at a start) presses at once and lets
       // out over the key clutch's time: letting go slips the clutch, it does not dump it
@@ -2487,6 +2490,7 @@ export class DriveSession {
         shiftUp: heldKeys.shiftUp && !startClutch.active,
         shiftDown: heldKeys.shiftDown,
         neutral: heldKeys.neutral,
+        clutchBound,
         ...(clutchPedal > 0 ? { clutch: clutchPedal } : {}),
       };
       heldKeys.toggleX = false;
@@ -2669,6 +2673,7 @@ export class DriveSession {
           }
         : undefined;
       physics.telemetry.runId = runId;
+      physics.telemetry.clutchControl = boundClutchControl;
       // The manual start's cue: what to hold as the clutch, and a jump start once there is one
       physics.telemetry.start =
         gridHeldLastFrame || jumpWatch.jumped || startClutch.active

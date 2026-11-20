@@ -439,6 +439,7 @@ export class F1Physics2026 {
   /** Automatic clutch and anti-stall (default true); false with manual gears enables bite point, slip and stalls */
   public autoClutch = true;
   private manualClutchPedal = 0;
+  private manualClutchBound = true;
   private engineStalled = false;
   private stallLowRpmS = 0;
   private stallRestartS = 0;
@@ -1284,11 +1285,13 @@ export class F1Physics2026 {
       padSteer: rawInputs.padSteer !== undefined ? THREE.MathUtils.clamp(rawInputs.padSteer, -1, 1) : undefined,
       kbSteer: rawInputs.kbSteer !== undefined ? Math.sign(rawInputs.kbSteer) : undefined,
       clutch: rawInputs.clutch,
+      clutchBound: rawInputs.clutchBound,
       manualOverride: Boolean(rawInputs.manualOverride),
       toggleXMode: Boolean(rawInputs.toggleXMode),
       shiftUp: Boolean(rawInputs.shiftUp),
       shiftDown: Boolean(rawInputs.shiftDown),
     };
+    this.manualClutchBound = rawInputs.clutchBound !== false;
     this.manualClutchPedal = Number.isFinite(rawInputs.clutch) ? THREE.MathUtils.clamp(rawInputs.clutch ?? 0, 0, 1) : 0;
 
     if (this.aiAutopilot !== this.prevAiAutopilot) {
@@ -2684,7 +2687,7 @@ export class F1Physics2026 {
     let deltaOmega = wl.spinVel - wr.spinVel;
     const brakeL = wl.brakeTorqueNm;
     const brakeR = wr.brakeTorqueNm;
-    const manualClutch = !this.autoClutch && !this.autoGearbox && !this.aiAutopilot;
+    const manualClutch = !this.autoClutch && !this.autoGearbox && !this.aiAutopilot && this.manualClutchBound;
     const stallOmega = Math.max(350, LC26_ENGINE.idleRpm * 0.42) * RPM2RADS;
     let tIn: number;
     if (!manualClutch && this.engineStalled) {

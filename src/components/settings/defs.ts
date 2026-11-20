@@ -115,7 +115,15 @@ export const autoClutch = toggle({
   id: "autoClutch",
   label: "Auto clutch",
   hint: "Works the clutch and prevents stalling. Turn off with manual gears for bite point, clutch slip and stalls",
-  off: (env) => (env.settings.autoGearbox ? "Turn off Automatic gearbox to use manual clutch" : null),
+  off: (env) => {
+    const s = env.settings;
+    if (s.autoGearbox) return "Turn off Automatic gearbox to use manual clutch";
+    if (s.device === "wheel") return s.wheel.clutch !== null ? null : "Bind a clutch pedal under Controls > Wheel";
+    if (s.device === "controller") return s.padTuning.pedalSources.clutch !== null ? null : "Bind a clutch control under Controls > Controller";
+    if (s.keys.clutch.length > 0) return null;
+    const touchActive = s.touch.mode === "on" || (s.touch.mode === "auto" && isTouchDevice());
+    return touchActive ? "Touch controls have no clutch pedal" : "Bind a Clutch key under Controls > Keyboard";
+  },
   ...top("autoClutch"),
 });
 

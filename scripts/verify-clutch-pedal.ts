@@ -143,6 +143,38 @@ liana.autoClutch = true;
 drive(liana, 0.1, { throttle: 0, brake: 1, clutch: 0 });
 check('manual clutch: turning auto-clutch back on recovers stall', stalledAgain && liana.telemetry.engineStalled === false && liana.telemetry.rpm >= 600, `${liana.telemetry.rpm} rpm`);
 
+// Auto-clutch keeps linear (1 - clutch) curve for manual starts; progressive bite-point curve applies only to manualClutch
+const autoLinear = standing(() => createSuzukiLianaSim(track));
+autoLinear.autoGearbox = false;
+autoLinear.autoClutch = true;
+drive(autoLinear, 0.3, { throttle: 0.9, clutch: 1 });
+autoLinear.step(DT, { throttle: 0.9, clutch: 0.5 });
+const autoEngAtHalf = autoLinear.telemetry.clutch;
+const manualCurve = standing(() => createSuzukiLianaSim(track));
+manualCurve.autoGearbox = false;
+manualCurve.autoClutch = false;
+drive(manualCurve, 0.3, { throttle: 0.9, clutch: 1 });
+manualCurve.step(DT, { throttle: 0.9, clutch: 0.5 });
+const manualEngAtHalf = manualCurve.telemetry.clutch;
+check(
+  'auto-clutch keeps linear 1-clutch curve (0.50) while manual uses bite curve (~0.24)',
+  Math.abs(autoEngAtHalf - 0.5) < 0.02 && Math.abs(manualEngAtHalf - clutchPedalEngagement(0.5)) < 0.02 && autoEngAtHalf > manualEngAtHalf + 0.2,
+  `auto=${autoEngAtHalf.toFixed(2)}, manual=${manualEngAtHalf.toFixed(2)}`,
+);
+
+// No clutch bound (`clutchBound: false`): autoClutch=false must fall back to auto-clutch and never soft-lock heavy/GT3 cars
+const gt3Unbound = standing(() => createAmgGt3Sim(track, null));
+gt3Unbound.autoGearbox = false;
+gt3Unbound.autoClutch = false;
+drive(gt3Unbound, 1.0, { throttle: 0, brake: 1, clutchBound: false });
+const gt3NoStall = gt3Unbound.telemetry.engineStalled === false && gt3Unbound.telemetry.rpm > 400;
+drive(gt3Unbound, 2.0, { throttle: 1, brake: 0, clutchBound: false });
+check(
+  'no clutch bound (GT3): autoClutch off falls back to auto-clutch without stalling',
+  gt3NoStall && gt3Unbound.telemetry.engineStalled === false && gt3Unbound.telemetry.speedKmh > 40,
+  `stalled=${gt3Unbound.telemetry.engineStalled}, ${gt3Unbound.telemetry.speedKmh.toFixed(1)} km/h`,
+);
+
 // Legacy LC26 engine (`F1Physics2026`): stall, reset/teleport clears stall, clutch-hold restart and slip launch
 const legacy = new F1Physics2026(track);
 legacy.assistPreset = 'pro';
@@ -152,6 +184,15 @@ legacy.autoClutch = false;
 const driveLegacy = (seconds: number, inputs: Partial<ControlInputs>) => {
   for (let t = 0; t < seconds; t += 1 / 60) legacy.step(1 / 60, { ...inputs });
 };
+driveLegacy(1.0, { throttle: 0, brake: 1, clutchBound: false });
+const legacyUnboundNoStall = legacy.telemetry.engineStalled === false && legacy.telemetry.rpm >= 3500;
+driveLegacy(2.0, { throttle: 1, brake: 0, clutchBound: false });
+check(
+  'no clutch bound (legacy LC26): autoClutch off falls back to auto-clutch without stalling',
+  legacyUnboundNoStall && legacy.telemetry.engineStalled === false && legacy.telemetry.speedKmh > 40,
+  `stalled=${legacy.telemetry.engineStalled}, ${legacy.telemetry.speedKmh.toFixed(1)} km/h`,
+);
+legacy.teleportToDistance(1000, 0);
 driveLegacy(1.0, { throttle: 0, brake: 1, clutch: 0 });
 check('legacy LC26 manual clutch: dumping clutch stalls the engine', legacy.telemetry.engineStalled === true && legacy.telemetry.rpm < 200, `stalled=${legacy.telemetry.engineStalled}, ${Math.round(legacy.telemetry.rpm)} rpm`);
 legacy.teleportToDistance(1000, 0);

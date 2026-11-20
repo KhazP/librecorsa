@@ -747,7 +747,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           centre stays the lights' own */}
       <div className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 sm:right-4">
         <div style={corner("center right")}>
-          <LaunchCue telemetry={telemetry} />
+          <LaunchCue telemetry={telemetry} hudHidden={hudHidden} />
         </div>
       </div>
 
