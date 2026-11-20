@@ -78,13 +78,13 @@ check('all 11 AI drivers map to 11 distinct colour-aligned 2026 grid liveries wi
   const ids = new Set(assigned.map((l) => l.id));
   assert.equal(ids.size, roster.length, `expected ${roster.length} distinct AI liveries, got ${ids.size}: ${assigned.map((l) => l.id).join(', ')}`);
   assert.ok(assigned.every((l) => l.category === 'grid2026'), 'all AI liveries should come from grid2026');
-  // Every AI driver's HUD timing colour should align with its assigned livery's primary or accent colour
+  // Every AI driver's HUD timing colour should align tightly with its assigned livery's primary or accent colour
   for (let i = 0; i < roster.length; i++) {
     const d = roster[i];
     const liv = assigned[i];
     const bestDist = Math.min(rgbDist(d.teamColorHex, liv.primary), rgbDist(d.teamColorHex, liv.accent));
     assert.ok(
-      bestDist < 175,
+      bestDist < 100,
       `${d.code} (${d.teamColorHex}) does not match ${liv.id} (primary=${liv.primary}, accent=${liv.accent}, dist=${bestDist.toFixed(1)})`,
     );
   }
@@ -106,15 +106,23 @@ check('custom colour palette swatches are unique valid hex colours', () => {
   assert.equal(hexes.size, CUSTOM_LIVERY_PALETTE.length, 'palette swatches must be unique');
 });
 
-check('every livery id across the whole list is unique and house liveries stay first', () => {
+check('every livery id across the whole list is unique and store-eligible house/grid/retro liveries stay neutral', () => {
   const ids = new Set(LIVERIES.map((l) => l.id));
   assert.equal(ids.size, LIVERIES.length, 'duplicate livery id');
   assert.equal(LIVERIES[0].id, 'librecorsa');
   assert.equal(LIVERIES[1].id, 'aurora');
   assert.equal(LIVERIES[2].id, 'verdant');
-  const gridAndRetro = LIVERIES.filter((l) => l.category === 'grid2026' || l.category === 'retro');
-  const nums = new Set(gridAndRetro.map((l) => l.number));
-  assert.equal(nums.size, gridAndRetro.length, 'duplicate racing number across 2026 grid / retro liveries');
+  // Every non-store-excluded livery (house originals, 2026 grid, retro) must have unique neutral numbers & clean names
+  const storeEligible = LIVERIES.filter((l) => !l.notInStoreBuild);
+  for (const liv of storeEligible) {
+    assert.match(liv.primary, HEX_RE, `${liv.id} primary`);
+    assert.match(liv.secondary, HEX_RE, `${liv.id} secondary`);
+    assert.match(liv.accent, HEX_RE, `${liv.id} accent`);
+    assert.ok(!CURRENT_F1_NUMBERS.has(liv.number), `${liv.id} should use a neutral non-current F1 driver number, got #${liv.number}`);
+    assert.ok(!TRADEMARK_RE.test(`${liv.id.replace(/_/g, ' ')} ${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names or HQ towns: ${liv.name} / ${liv.team}`);
+  }
+  const nums = new Set(storeEligible.map((l) => l.number));
+  assert.equal(nums.size, storeEligible.length, 'duplicate racing number across store-eligible liveries');
 });
 
 check('custom colour picker builds, resolves, sanitizes and persists cleanly', () => {
