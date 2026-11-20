@@ -33,9 +33,12 @@ import { RULE_PRESET_LABELS, TRACK_LIMITS_CHOICE_LABELS, type TrackLimitsChoice 
 import { getTrackInfo, TRACKS } from "@/lib/track-registry";
 import { Button, Card, ConfirmDialog, Disclosure, Segmented, Select, SettingRow, Stepper, TextField, Toggle, Well } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
+import { DriverBadges } from "@/components/ui/DriverBadges";
 import { PlayerTag, SessionBadge } from "@/components/ui/badges";
 import { Icon } from "@/components/ui/icons";
 import { TrackQualityBadge } from "@/components/menu/menu-content-ui";
+import { fetchBadges, type DriverBadge } from "@/lib/net/awards";
+import { driverNameKey } from "@/lib/net/board-client";
 import { formatLapTime } from "./hud-format";
 import { RacesCard, type RacesCardProps } from "./RacesCard";
 
@@ -267,6 +270,24 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   const serverReady = lobby?.players.find((p) => p.peerId === localPeerId)?.ready ?? false;
   const [pendingReady, setPendingReady] = useState<boolean | null>(null);
   const ready = pendingReady ?? serverReady;
+
+  // Driver badges for peers in the room: batch-fetched once per distinct set of player names
+  const [driverBadges, setDriverBadges] = useState<Record<string, DriverBadge[]>>({});
+  const lobbyPlayerNamesKey = lobby
+    ? Array.from(new Set(lobby.players.map((p) => driverNameKey(p.name)).filter(Boolean)))
+        .sort()
+        .join("\n")
+    : "";
+  useEffect(() => {
+    if (!lobbyPlayerNamesKey) return;
+    let live = true;
+    void fetchBadges(lobbyPlayerNamesKey.split("\n")).then((map) => {
+      if (live) setDriverBadges(map);
+    });
+    return () => {
+      live = false;
+    };
+  }, [lobbyPlayerNamesKey]);
 
   // Browser-only values are read after mount so server and client markup match
   useEffect(() => {
@@ -632,6 +653,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                       <span className="truncate text-[14px] font-semibold text-lc-chalk" title={p.name}>
                         {p.name}
                       </span>
+                      <DriverBadges badges={driverBadges[driverNameKey(p.name)] ?? []} compact />
                       {isMe ? <PlayerTag size="sm" /> : null}
                     </span>
                     <span className="lc-hint truncate" title={carName}>

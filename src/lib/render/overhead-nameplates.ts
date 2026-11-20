@@ -1,5 +1,105 @@
 import * as THREE from "three";
+import { fetchBadges, sortBadges, type BadgeType, type DriverBadge } from "@/lib/net/awards";
+import { driverNameKey } from "@/lib/net/board-client";
 import type { RaceStandingEntry, RaceStatus } from "@/types/f1";
+
+const NAMEPLATE_BADGE_SHORT: Record<BadgeType, string> = {
+  weekly_gold: "G",
+  weekly_silver: "S",
+  weekly_bronze: "B",
+  track_record: "TR",
+  og: "OG",
+  bulb: "IDEA",
+};
+
+/** Concise uppercase chip codes for overhead nameplates ("G", "G×2", "S", "B", "TR", "OG", "IDEA") */
+export function formatNameplateBadges(badges: readonly DriverBadge[]): string[] {
+  if (badges.length === 0) return [];
+  return sortBadges(badges).map((b) => {
+    const short = NAMEPLATE_BADGE_SHORT[b.type];
+    return b.count > 1 ? `${short}×${b.count}` : short;
+  });
+}
+
+export type NameplateBadgeFetcher = (names: readonly string[]) => Promise<Record<string, DriverBadge[]>>;
+
+/**
+ * In-memory cache of formatted overhead nameplate badge codes keyed by `driverNameKey`.
+ * Batch-fetches unseen remote player names once per name change (never called inside the render loop)
+ * and skips AI peers, ghosts, and offline/empty responses.
+ */
+export class NameplateBadgeCache {
+  private readonly byNameKey = new Map<string, readonly string[]>();
+  private readonly requestedKeys = new Set<string>();
+  private disposed = false;
+
+  constructor(private readonly fetcher: NameplateBadgeFetcher = fetchBadges) {}
+
+  /** Read-only view of resolved badge codes by normalized driver name key */
+  get map(): ReadonlyMap<string, readonly string[]> {
+    return this.byNameKey;
+  }
+
+  /** Synchronously returns cached badge codes for a driver name, or undefined if none/unloaded */
+  get(name: string | undefined): readonly string[] | undefined {
+    if (!name || this.byNameKey.size === 0) return undefined;
+    return this.byNameKey.get(driverNameKey(name));
+  }
+
+  /**
+   * Batch-fetches badges for any unseen non-AI, non-ghost peer names.
+   * Returns a promise resolving once the triggered batch completes, or null when nothing needed fetching.
+   */
+  syncPeers(peers: readonly Pick<NameplatePeerInput, "name" | "isAiPeer" | "ghost">[]): Promise<void> | null {
+    if (this.disposed || peers.length === 0) return null;
+    const missing: string[] = [];
+    for (let i = 0; i < peers.length; i++) {
+      const p = peers[i];
+      if (p.isAiPeer || p.ghost || !p.name) continue;
+      const key = driverNameKey(p.name);
+      if (!key || this.requestedKeys.has(key)) continue;
+      this.requestedKeys.add(key);
+      missing.push(p.name);
+    }
+    return this.fetchMissing(missing);
+  }
+
+  /** Batch-fetches badges for unseen human driver names (e.g. online lobby members) */
+  syncNames(names: readonly (string | undefined)[]): Promise<void> | null {
+    if (this.disposed || names.length === 0) return null;
+    const missing: string[] = [];
+    for (let i = 0; i < names.length; i++) {
+      const name = names[i];
+      if (!name) continue;
+      const key = driverNameKey(name);
+      if (!key || this.requestedKeys.has(key)) continue;
+      this.requestedKeys.add(key);
+      missing.push(name);
+    }
+    return this.fetchMissing(missing);
+  }
+
+  private fetchMissing(missing: string[]): Promise<void> | null {
+    if (missing.length === 0) return null;
+    return this.fetcher(missing)
+      .then((res) => {
+        if (this.disposed || !res) return;
+        for (const [key, list] of Object.entries(res)) {
+          const codes = formatNameplateBadges(list);
+          if (codes.length > 0) this.byNameKey.set(key, codes);
+        }
+      })
+      .catch(() => {
+        // Offline or network error: badges are an optional garnish
+      });
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.byNameKey.clear();
+    this.requestedKeys.clear();
+  }
+}
 
 /** Height above the car origin where the overhead nameplate anchors (metres) */
 export const NAMEPLATE_ROOF_OFFSET_M = 1.55;
@@ -31,6 +131,8 @@ export interface NameplateRankingContext {
   readonly race?: Pick<RaceStatus, "standings"> | null;
   /** Local player's fastest valid lap of the current practice/qualifying session (ms), or null before one */
   readonly localBestLapMs?: number | null;
+  /** Optional cached badge codes keyed by `driverNameKey` (skipped for AI peers) */
+  readonly badgesByNameKey?: ReadonlyMap<string, readonly string[]> | null;
 }
 
 export interface NameplatePeerRanking {
@@ -328,8 +430,14 @@ export class OverheadNameplateProjector {
         fastestLap: ranking?.fastestLap ?? false,
         rank: ranking?.rank ?? null,
       };
-      if (peer.badges && peer.badges.length > 0) {
-        entry.badges = [...peer.badges];
+      const peerBadges =
+        peer.badges && peer.badges.length > 0
+          ? peer.badges
+          : !peer.isAiPeer && peer.name && context.badgesByNameKey && context.badgesByNameKey.size > 0
+            ? context.badgesByNameKey.get(driverNameKey(peer.name))
+            : undefined;
+      if (peerBadges && peerBadges.length > 0) {
+        entry.badges = [...peerBadges];
       }
       this.entries.push(entry);
     }

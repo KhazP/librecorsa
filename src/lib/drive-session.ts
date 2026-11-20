@@ -65,7 +65,7 @@ import { flagMultiplayerRace } from "@/lib/sim/mp-flags"; // polish:D
 import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
 import { CoolDown } from "@/lib/sim/cool-down";
 import { PodiumDirector } from "@/lib/render/podium-shot";
-import { OverheadNameplateProjector, type OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
+import { NameplateBadgeCache, OverheadNameplateProjector, type OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { canFlashback, isInOnlineRoom, poseFromReplayCar, ReplayBuffer } from "@/lib/sim/replay-buffer";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
@@ -1159,6 +1159,8 @@ export class DriveSession {
     // The view camera also draws the driving aids (the racing line), which the probe and mirrors leave out
     camera.layers.enable(OVERLAY_LAYER);
     const nameplateProjector = new OverheadNameplateProjector();
+    const nameplateBadges = new NameplateBadgeCache();
+    let latestRemotePeers: readonly InterpolatedPeerState[] = [];
 
     let renderer: THREE.WebGLRenderer;
     try {
@@ -1425,10 +1427,22 @@ export class DriveSession {
     void visualFx.prewarm(carPhysics(carIdNow));
     // One connection for the page: it survives a circuit switch (which remounts this component)
     const multiplayerSync = getMultiplayerManager();
+    const syncNameplateBadges = () => {
+      if (disposed) return;
+      if (latestRemotePeers.length > 0) void nameplateBadges.syncPeers(latestRemotePeers);
+      const lobbyPlayers = multiplayerSync.lobby?.players;
+      if (lobbyPlayers && lobbyPlayers.length > 0) {
+        const localId = multiplayerSync.localPeerId;
+        void nameplateBadges.syncNames(lobbyPlayers.filter((p) => p.peerId !== localId).map((p) => p.name));
+      }
+    };
+    const nameplateBadgeTimer = window.setInterval(syncNameplateBadges, 1000);
     multiplayerSync.onStatusChange = (st) => {
       setP2pStatus(st);
+      syncNameplateBadges();
     };
     setP2pStatus(multiplayerSync.status);
+    syncNameplateBadges();
 
     // Lap recording for the summary card, the personal-best ghost and the leaderboards
     const lapRecorder = new LapRecorder({
@@ -3043,6 +3057,7 @@ export class DriveSession {
 
       // A peer on another circuit has coordinates that mean nothing here
       const samePeers = interpolatedPeers.filter((p) => !p.trackId || p.trackId === trackId);
+      latestRemotePeers = samePeers;
       peersOnTrack = samePeers.length;
       // On the lap where they are drawn, not where their newest packet put them (the tower, the relative, the gaps)
       placePeersWhereDrawn(samePeers, track.projectWorldToTrack, track.totalLengthM);
@@ -3573,6 +3588,7 @@ export class DriveSession {
               nameplateProjector.project(drawnPeers, camera, container.clientWidth, container.clientHeight, {
                 race: physics.telemetry.race,
                 localBestLapMs,
+                badgesByNameKey: nameplateBadges.map,
               })
             );
           } else {
@@ -3702,6 +3718,8 @@ export class DriveSession {
       floorSparks.dispose();
       setKtx2Renderer(null);
       renderer.dispose();
+      window.clearInterval(nameplateBadgeTimer);
+      nameplateBadges.dispose();
       host.nameplatesRef?.current?.hideAll();
       audio?.dispose();
       // The music plays on into the next circuit's session (or the menus)

@@ -8,13 +8,16 @@ import {
   NAMEPLATE_FADE_START_M,
   NAMEPLATE_MAX_DISTANCE_M,
   NAMEPLATE_ROOF_OFFSET_M,
+  NameplateBadgeCache,
   OverheadNameplateProjector,
+  formatNameplateBadges,
   nameplateLabel,
   nameplateOpacity,
   projectNameplates,
   rankNameplatePeers,
   type NameplatePeerInput,
 } from "../src/lib/render/overhead-nameplates";
+import type { DriverBadge } from "../src/lib/net/awards";
 import { DEFAULT_HUD_SETTINGS, parsePlayerSettings } from "../src/lib/settings/player-settings";
 import type { RaceStandingEntry } from "../src/types/f1";
 
@@ -279,4 +282,105 @@ check("showPlayerNames HUD setting defaults to true and parses safely from saves
   assert.equal(parsePlayerSettings({ hud: { showPlayerNames: "invalid" } }).hud.showPlayerNames, true);
 });
 
-console.log(`verify-nameplates: ${passed} checks passed`);
+check("formatNameplateBadges orders badges canonically with concise codes and counts", () => {
+  assert.deepEqual(formatNameplateBadges([]), []);
+  const badges: DriverBadge[] = [
+    { type: "bulb", count: 1, note: "Wet tyres" },
+    { type: "og", count: 1 },
+    { type: "track_record", count: 3 },
+    { type: "weekly_bronze", count: 1 },
+    { type: "weekly_gold", count: 2 },
+    { type: "weekly_silver", count: 1 },
+  ];
+  assert.deepEqual(formatNameplateBadges(badges), ["G×2", "S", "B", "TR×3", "OG", "IDEA"]);
+});
+
+async function runAsyncChecks() {
+  // NameplateBadgeCache batch-fetches unseen human peers once, skips AI/ghost, and serves cached codes to projector
+  const calls: string[][] = [];
+  const cache = new NameplateBadgeCache(async (names) => {
+    calls.push([...names]);
+    return {
+      alice: [{ type: "weekly_gold", count: 2 }, { type: "og", count: 1 }],
+      "alice v2": [{ type: "track_record", count: 1 }],
+    };
+  });
+
+  const batch1 = cache.syncPeers([
+    peer({ peerId: "h1", name: "Alice", isAiPeer: false }),
+    peer({ peerId: "h2", name: "  alice  ", isAiPeer: false }),
+    peer({ peerId: "ai1", name: "AI Driver", isAiPeer: true }),
+    peer({ peerId: "g1", name: "Ghost Driver", isAiPeer: false, ghost: true }),
+  ]);
+  assert.ok(batch1 !== null);
+  await batch1;
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], ["Alice"]);
+  assert.deepEqual(cache.get("Alice"), ["G×2", "OG"]);
+  assert.deepEqual(cache.get("ALICE"), ["G×2", "OG"]);
+  assert.equal(cache.get("AI Driver"), undefined);
+
+  // Calling syncPeers again with unchanged names does zero fetches
+  const batchRepeat = cache.syncPeers([peer({ peerId: "h1", name: "Alice", isAiPeer: false })]);
+  assert.equal(batchRepeat, null);
+  assert.equal(calls.length, 1);
+
+  // When a peer changes name, only the newly seen name is fetched
+  const batchRenamed = cache.syncPeers([
+    peer({ peerId: "h1", name: "Alice V2", isAiPeer: false }),
+    peer({ peerId: "h2", name: "Alice", isAiPeer: false }),
+  ]);
+  assert.ok(batchRenamed !== null);
+  await batchRenamed;
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1], ["Alice V2"]);
+  assert.deepEqual(cache.get("Alice V2"), ["TR"]);
+
+  // Projector attaches cached badges to remote human peers and skips AI peers even with matching names
+  const cam = makeCamera();
+  const projector = new OverheadNameplateProjector();
+  const projected = projector.project(
+    [
+      peer({ peerId: "human", name: "Alice", isAiPeer: false }),
+      peer({ peerId: "ai-same-name", name: "Alice", isAiPeer: true }),
+      peer({ peerId: "explicit", name: "Alice", isAiPeer: false, badges: ["CUSTOM"] }),
+    ],
+    cam,
+    VIEW_W,
+    VIEW_H,
+    { badgesByNameKey: cache.map },
+  );
+  const byId = new Map(projected.map((e) => [e.peerId, e]));
+  assert.deepEqual(byId.get("human")?.badges, ["G×2", "OG"]);
+  assert.equal(byId.get("ai-same-name")?.badges, undefined);
+  assert.deepEqual(byId.get("explicit")?.badges, ["CUSTOM"]);
+  passed++;
+  console.log("  ok  NameplateBadgeCache batch-fetches once per name change, skips AI/ghost, and feeds projector");
+
+  // Offline / rejected fetch is a graceful no-op and does not hammer on repeat syncs
+  let offlineCalls = 0;
+  const offlineCache = new NameplateBadgeCache(async () => {
+    offlineCalls++;
+    throw new Error("offline");
+  });
+  const off1 = offlineCache.syncPeers([peer({ peerId: "h1", name: "Bob", isAiPeer: false })]);
+  assert.ok(off1 !== null);
+  await off1;
+  assert.equal(offlineCalls, 1);
+  assert.equal(offlineCache.get("Bob"), undefined);
+  assert.equal(offlineCache.syncPeers([peer({ peerId: "h1", name: "Bob", isAiPeer: false })]), null);
+  assert.equal(offlineCalls, 1);
+  cache.dispose();
+  offlineCache.dispose();
+  passed++;
+  console.log("  ok  NameplateBadgeCache handles offline/failed fetches gracefully without retrying in loop");
+}
+
+runAsyncChecks()
+  .then(() => {
+    console.log(`verify-nameplates: ${passed} checks passed`);
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
