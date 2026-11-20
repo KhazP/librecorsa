@@ -14,6 +14,9 @@ import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { CLUTCH_BITE_LOCK, CLUTCH_BITE_START, clutchPedalEngagement } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
+import { resolveActiveClutchBinding } from '../src/lib/input/bindings';
+import { autoClutch } from '../src/components/settings/defs';
+import type { SettingsEnv } from '../src/components/settings/env';
 import type { ControlInputs } from '../src/types/f1';
 
 const failures: string[] = [];
@@ -220,6 +223,87 @@ check(
     legacy.telemetry.clutch === 1 &&
     legacy.telemetry.mgukPowerKw > 10,
   `slip=${legacySlip.toFixed(2)}, ${legacy.telemetry.speedKmh.toFixed(1)} km/h, clutch=${legacy.telemetry.clutch}, mguk=${legacy.telemetry.mgukPowerKw.toFixed(0)} kW`,
+);
+
+// Device-scoped clutch binding resolution & Settings > Driving > Auto clutch `off()` guard
+const kbBound = resolveActiveClutchBinding({
+  deviceSource: null,
+  touchActive: false,
+  keyClutchCodes: ['KeyC'],
+  padClutchSource: null,
+  wheelClutchBound: false,
+});
+const padUnboundWithKbKey = resolveActiveClutchBinding({
+  deviceSource: 'controller',
+  touchActive: false,
+  keyClutchCodes: ['KeyC'],
+  padClutchSource: null,
+  wheelClutchBound: false,
+});
+const wheelUnboundWithKbKey = resolveActiveClutchBinding({
+  deviceSource: 'wheel',
+  touchActive: false,
+  keyClutchCodes: ['KeyC'],
+  padClutchSource: null,
+  wheelClutchBound: false,
+});
+const touchWithKbKey = resolveActiveClutchBinding({
+  deviceSource: null,
+  touchActive: true,
+  keyClutchCodes: ['KeyC'],
+  padClutchSource: null,
+  wheelClutchBound: false,
+});
+const padBoundBtn = resolveActiveClutchBinding({
+  deviceSource: 'controller',
+  touchActive: false,
+  keyClutchCodes: [],
+  padClutchSource: { kind: 'button', button: 4 },
+  wheelClutchBound: false,
+});
+check(
+  'clutch binding is scoped strictly to the active input device',
+  kbBound.bound &&
+    kbBound.control !== undefined &&
+    'key' in kbBound.control &&
+    !padUnboundWithKbKey.bound &&
+    padUnboundWithKbKey.control === undefined &&
+    !wheelUnboundWithKbKey.bound &&
+    wheelUnboundWithKbKey.control === undefined &&
+    !touchWithKbKey.bound &&
+    touchWithKbKey.control === undefined &&
+    padBoundBtn.bound &&
+    padBoundBtn.control !== undefined &&
+    'pad' in padBoundBtn.control &&
+    padBoundBtn.control.pad === 4,
+  `kb=${kbBound.bound}, padUnbound=${padUnboundWithKbKey.bound}, wheelUnbound=${wheelUnboundWithKbKey.bound}, touch=${touchWithKbKey.bound}`,
+);
+
+const envFor = (settings: typeof DEFAULT_PLAYER_SETTINGS): SettingsEnv =>
+  ({ settings, update: () => {}, ffb: null, liveTuner: null, reset: () => {} }) as unknown as SettingsEnv;
+const offReason = (patch: Partial<typeof DEFAULT_PLAYER_SETTINGS>) =>
+  autoClutch.off?.(envFor({ ...DEFAULT_PLAYER_SETTINGS, autoGearbox: false, ...patch })) ?? null;
+const touchOffEvenWithKey = offReason({
+  device: 'keyboard',
+  touch: { ...DEFAULT_PLAYER_SETTINGS.touch, mode: 'on' },
+  keys: { ...DEFAULT_PLAYER_SETTINGS.keys, clutch: ['KeyC'] },
+});
+const kbOffNoKey = offReason({ device: 'keyboard', touch: { ...DEFAULT_PLAYER_SETTINGS.touch, mode: 'off' } });
+const kbOnWithKey = offReason({
+  device: 'keyboard',
+  touch: { ...DEFAULT_PLAYER_SETTINGS.touch, mode: 'off' },
+  keys: { ...DEFAULT_PLAYER_SETTINGS.keys, clutch: ['KeyC'] },
+});
+const padOffUnbound = offReason({ device: 'controller' });
+const wheelOffUnbound = offReason({ device: 'wheel' });
+check(
+  'autoClutch.off blocks unbound keyboard/controller/wheel and touch (even if a key is bound)',
+  Boolean(touchOffEvenWithKey?.toLowerCase().includes('touch')) &&
+    Boolean(kbOffNoKey?.toLowerCase().includes('keyboard')) &&
+    kbOnWithKey === null &&
+    Boolean(padOffUnbound?.toLowerCase().includes('controller')) &&
+    Boolean(wheelOffUnbound?.toLowerCase().includes('wheel')),
+  `touch="${touchOffEvenWithKey}", kb="${kbOffNoKey}", pad="${padOffUnbound}", wheel="${wheelOffUnbound}"`,
 );
 
 console.log(failures.length ? `\n${failures.length} failed: ${failures.join(', ')}` : '\nAll clutch pedal checks passed.');

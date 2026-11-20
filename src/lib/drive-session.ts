@@ -108,7 +108,7 @@ import {
   PAD_BRAKE_BUTTON,
   PAD_THROTTLE_BUTTON,
   pedalsOnTriggers,
-  pedalSourceText,
+  resolveActiveClutchBinding,
   type KeyAction,
 } from "@/lib/input/bindings";
 import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad } from "@/lib/input/device-input";
@@ -2393,24 +2393,16 @@ export class DriveSession {
       // A manual start with no clutch bound: Gear up is the clutch from the lights until it is let go after them, as in
       // the F1 games, and its presses are not shifts meanwhile
       const padClutchSource = settingsNow.padTuning.pedalSources.clutch;
-      const clutchBound =
-        settingsNow.keys.clutch.length > 0 ||
-        (device.source === "controller" && padClutchSource !== null) ||
-        (device.source === "wheel" && settingsNow.wheel.clutch !== null);
+      const { bound: clutchBound, control: boundClutchControl } = resolveActiveClutchBinding({
+        deviceSource: device.source,
+        touchActive: touchInput.active,
+        keyClutchCodes: settingsNow.keys.clutch,
+        padClutchSource,
+        wheelClutchBound: settingsNow.wheel.clutch !== null,
+      });
       if (gridHeldLastFrame && !clutchBound) startClutch.active = true;
       // What the start cue (and stall recovery banner) tells the player to hold
-      const kbClutchKey = settingsNow.keys.clutch[0];
       const padGearUp = settingsNow.padButtons.shiftUp;
-      const boundClutchControl: StartClutchControl | undefined =
-        device.source === "controller" && padClutchSource !== null
-          ? padClutchSource.kind === "button"
-            ? { pad: padClutchSource.button }
-            : { name: pedalSourceText(padClutchSource) }
-          : device.source === "wheel" && settingsNow.wheel.clutch !== null
-            ? { name: "clutch pedal" }
-            : kbClutchKey
-              ? { key: keyLabel(kbClutchKey) }
-              : undefined;
       const startClutchControl: StartClutchControl =
         boundClutchControl ??
         (device.source === "controller"

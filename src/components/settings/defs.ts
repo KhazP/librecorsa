@@ -120,9 +120,9 @@ export const autoClutch = toggle({
     if (s.autoGearbox) return "Turn off Automatic gearbox to use manual clutch";
     if (s.device === "wheel") return s.wheel.clutch !== null ? null : "Bind a clutch pedal under Controls > Wheel";
     if (s.device === "controller") return s.padTuning.pedalSources.clutch !== null ? null : "Bind a clutch control under Controls > Controller";
-    if (s.keys.clutch.length > 0) return null;
     const touchActive = s.touch.mode === "on" || (s.touch.mode === "auto" && isTouchDevice());
-    return touchActive ? "Touch controls have no clutch pedal" : "Bind a Clutch key under Controls > Keyboard";
+    if (touchActive) return "Touch controls have no clutch pedal";
+    return s.keys.clutch.length > 0 ? null : "Bind a Clutch key under Controls > Keyboard";
   },
   ...top("autoClutch"),
 });

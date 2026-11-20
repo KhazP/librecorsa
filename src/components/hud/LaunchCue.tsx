@@ -92,7 +92,13 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean 
     const control = telemetry.clutchControl;
     const named = control && "name" in control ? control.name : null;
     const hasGlyph = control !== undefined && !named;
-    const ariaControl = named ?? (control && "key" in control ? control.key : "clutch");
+    const ariaControl =
+      named ??
+      (control && "key" in control
+        ? control.key
+        : control && "pad" in control
+          ? (PAD_GLYPHS[control.pad]?.toUpperCase() ?? `B${control.pad}`)
+          : "clutch");
     return (
       <div
         role="status"

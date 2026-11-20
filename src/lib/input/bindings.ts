@@ -3,6 +3,7 @@
  * The defaults reproduce the original hard-coded layout exactly.
  */
 
+import type { StartClutchControl } from "@/types/f1";
 import { printedKey } from "./key-layout";
 
 export type KeyAction =
@@ -525,4 +526,36 @@ export function rebindPadButton(bindings: PadButtonBindings, action: PadAction, 
   }
   next[action] = button;
   return next;
+}
+
+/**
+ * Whether the active input device has a clutch bound, plus the control prompt to display in the start / stall cue.
+ * Scoped strictly to the active device so a leftover keyboard clutch binding never soft-locks a controller, wheel or
+ * touch player whose own device has no clutch bound.
+ */
+export function resolveActiveClutchBinding(params: {
+  deviceSource: "wheel" | "controller" | "legacy" | null;
+  touchActive: boolean;
+  keyClutchCodes: readonly string[];
+  padClutchSource: PadPedalSource | null;
+  wheelClutchBound: boolean;
+}): { bound: boolean; control: StartClutchControl | undefined } {
+  if (params.deviceSource === "controller") {
+    if (params.padClutchSource === null) return { bound: false, control: undefined };
+    const control: StartClutchControl =
+      params.padClutchSource.kind === "button"
+        ? { pad: params.padClutchSource.button }
+        : { name: pedalSourceText(params.padClutchSource) };
+    return { bound: true, control };
+  }
+  if (params.deviceSource === "wheel") {
+    return params.wheelClutchBound
+      ? { bound: true, control: { name: "clutch pedal" } }
+      : { bound: false, control: undefined };
+  }
+  if (params.deviceSource === "legacy" || params.touchActive) {
+    return { bound: false, control: undefined };
+  }
+  const firstKey = params.keyClutchCodes[0];
+  return firstKey ? { bound: true, control: { key: keyLabel(firstKey) } } : { bound: false, control: undefined };
 }
