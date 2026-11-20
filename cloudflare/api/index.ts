@@ -9,6 +9,8 @@
  *   POST /api/usage               one stretch of driving for the anonymous daily totals (usage.ts)
  *   GET /api/admin/stats          the owner's numbers, with the admin key as `Authorization: Bearer <key>` (admin.ts)
  *   GET /api/admin/cloudflare     Cloudflare's numbers for the site, the same way, once an analytics token is set (analytics.ts)
+ *   GET/POST /api/admin/awards, DELETE /api/admin/awards/<id>  driver badges given by hand (awards.ts, admin.ts)
+ *   GET /api/hall-of-fame, GET /api/badges                     weekly challenge podiums (V1 & V2) and driver badges (awards.ts)
  *   GET /api/races/results, GET /api/drivers/record     the open races' results (results.ts)
  *   GET /api/stats, GET /api/stats/circuit              tabs in view and drivers to date; a circuit's laps and drivers (stats.ts)
  *   POST /api/live                a heartbeat from a tab with the game in view, for the live count (presence.ts)
@@ -25,7 +27,8 @@ import { challengeProblem } from "../../src/lib/net/weekly-challenge";
 import { boardDeps, ghostOf, listLaps, renameDriver, submitLap } from "./board";
 import { driverRecord, listRaceResults } from "./results";
 import { ROOM_CODE_RE } from "./room";
-import { adminKeyMatches, adminStats } from "./admin";
+import { adminGrantAward, adminKeyMatches, adminListAwards, adminRevokeAward, adminStats } from "./admin";
+import { hallOfFame, listBadges } from "./awards";
 import { analyticsConfigured, cloudflareStats } from "./analytics";
 import { turnConfigured } from "./turn";
 import { recordUsage } from "./usage";
@@ -84,13 +87,13 @@ function allowedOrigin(request: Request, url: URL, env: Env): string | null {
  * How long the answers anyone may share are kept, in the browser and in Workers caching at the edge (seconds): the
  * home page and the title screen read them on every view, and none of them is about the one asking
  */
-export const SHARED_ANSWER_S = { board: 30, circuit: 60, stats: 30 } as const;
+export const SHARED_ANSWER_S = { board: 30, circuit: 60, stats: 30, hallOfFame: 60, badges: 60 } as const;
 
 function headersFor(origin: string | null, sharedForS = 0): Record<string, string> {
   const headers: Record<string, string> = { "Cache-Control": sharedForS > 0 ? `public, max-age=${sharedForS}` : "no-store", Vary: "Origin" };
   if (origin) {
     headers["Access-Control-Allow-Origin"] = origin;
-    headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
+    headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS";
     headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization";
     headers["Access-Control-Max-Age"] = "86400";
   }
@@ -194,6 +197,28 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
     } catch (err) {
       console.error("race results", err);
       return json({ ok: false, error: "The race results had a problem. Try again in a moment" }, 500, origin);
+    }
+  }
+
+  // The weekly challenge's Hall of Fame and driver badges (awards.ts), on the lap boards' database
+  if (path === "/api/hall-of-fame" && request.method === "GET") {
+    if (!config.board || !env.BOARD_DB) return json({ ok: false, error: "The lap boards are off" }, 404, origin);
+    try {
+      const answer = await hallOfFame(env.BOARD_DB, Date.now());
+      return json(answer.body, answer.status, origin, SHARED_ANSWER_S.hallOfFame);
+    } catch (err) {
+      console.error("hall of fame", err);
+      return json({ ok: false, error: "The Hall of Fame could not be read" }, 500, origin);
+    }
+  }
+  if (path === "/api/badges" && request.method === "GET") {
+    if (!config.board || !env.BOARD_DB) return json({ ok: false, error: "The lap boards are off" }, 404, origin);
+    try {
+      const answer = await listBadges(env.BOARD_DB, url, Date.now());
+      return json(answer.body, answer.status, origin, SHARED_ANSWER_S.badges);
+    } catch (err) {
+      console.error("badges", err);
+      return json({ ok: false, error: "The badges could not be read" }, 500, origin);
     }
   }
 
@@ -307,8 +332,8 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
   // off, and a fault while reading
   if (path === "/api/admin" || path.startsWith("/api/admin/")) {
     if (await overLimit(env.ADMIN_LIMIT, request)) return tooMany(origin);
-    if (request.method !== "GET" || !(await adminKeyMatches(bearerKey(request), env.ADMIN_KEY))) return notFound(origin);
-    if (path === "/api/admin/stats" && env.BOARD_DB) {
+    if (!(await adminKeyMatches(bearerKey(request), env.ADMIN_KEY))) return notFound(origin);
+    if (path === "/api/admin/stats" && request.method === "GET" && env.BOARD_DB) {
       const races = config.races ? env.RACES : undefined;
       try {
         const nextRace = races ? async () => (({ startsMs, waiting }) => ({ startsMs, waiting }))(await raceWaiting(races, config.raceSlotS, url)) : undefined;
@@ -321,13 +346,42 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
       }
     }
     // Cloudflare's own numbers for the site (analytics.ts), once an analytics token is set
-    if (path === "/api/admin/cloudflare" && analyticsConfigured(env)) {
+    if (path === "/api/admin/cloudflare" && request.method === "GET" && analyticsConfigured(env)) {
       try {
         // Called as a plain function: the runtime's fetch refuses to run as another object's method
         const answer = await cloudflareStats(env, Date.now(), (input, init) => fetch(input, init));
         return json(answer, 200, origin);
       } catch (err) {
         console.error("cloudflare stats failed:", err instanceof Error ? err.message : "error");
+        return notFound(origin);
+      }
+    }
+    // Driver badges given by hand (awards.ts): list, grant, revoke
+    if (path === "/api/admin/awards" && request.method === "GET" && env.BOARD_DB) {
+      try {
+        const answer = await adminListAwards(env.BOARD_DB, url);
+        return json(answer.body, answer.status, origin);
+      } catch (err) {
+        console.error("admin awards list failed:", err instanceof Error ? err.message : "error");
+        return notFound(origin);
+      }
+    }
+    if (path === "/api/admin/awards" && request.method === "POST" && env.BOARD_DB) {
+      try {
+        const answer = await adminGrantAward(env.BOARD_DB, request, Date.now());
+        return json(answer.body, answer.status, origin);
+      } catch (err) {
+        console.error("admin awards grant failed:", err instanceof Error ? err.message : "error");
+        return notFound(origin);
+      }
+    }
+    const awardDelete = /^\/api\/admin\/awards\/(\d{1,12})$/.exec(path);
+    if (awardDelete && request.method === "DELETE" && env.BOARD_DB) {
+      try {
+        const answer = await adminRevokeAward(env.BOARD_DB, Number(awardDelete[1]));
+        return json(answer.body, answer.status, origin);
+      } catch (err) {
+        console.error("admin awards revoke failed:", err instanceof Error ? err.message : "error");
         return notFound(origin);
       }
     }

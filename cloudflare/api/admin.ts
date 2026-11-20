@@ -7,6 +7,7 @@
  * run side by side after one that asks whether the usage rows count laps yet.
  */
 import trackIndex from "../../public/tracks/index.json";
+import { checkAwardInput, grantAward, listAwards, revokeAward, type AdminAward } from "./awards";
 import { utcDay } from "./usage";
 import type { D1Database } from "./types";
 
@@ -395,4 +396,53 @@ export async function adminStats(deps: AdminDeps, url: URL): Promise<Answer> {
     live: liveNow,
   };
   return { status: 200, body };
+}
+
+export interface AdminAwardsBody {
+  ok: true;
+  awards: AdminAward[];
+  drivers: { nameKey: string; name: string }[];
+  /** False before migration 0008 is applied */
+  ready: boolean;
+}
+
+const MAX_AWARD_BODY_BYTES = 2048;
+
+/** GET /api/admin/awards?q=&all=1: manual badges (or every row with all=1) and optional driver search */
+export async function adminListAwards(db: D1Database, url: URL): Promise<Answer> {
+  const q = url.searchParams.get("q") ?? undefined;
+  const all = url.searchParams.get("all") === "1";
+  const result = await orNull(() => listAwards(db, { all, q }));
+  if (result === null) {
+    const body: AdminAwardsBody = { ok: true, awards: [], drivers: [], ready: false };
+    return { status: 200, body };
+  }
+  const body: AdminAwardsBody = { ok: true, awards: result.awards, drivers: result.drivers, ready: true };
+  return { status: 200, body };
+}
+
+/** POST /api/admin/awards: grant a manual badge (defaults to bulb) */
+export async function adminGrantAward(db: D1Database, request: Request, nowMs: number): Promise<Answer> {
+  if (Number(request.headers.get("Content-Length") ?? 0) > MAX_AWARD_BODY_BYTES) return { status: 413, body: { ok: false, error: "Body is too large" } };
+  const text = await request.text();
+  if (text.length > MAX_AWARD_BODY_BYTES) return { status: 413, body: { ok: false, error: "Body is too large" } };
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return { status: 400, body: { ok: false, error: "Body is not valid JSON" } };
+  }
+  const checked = checkAwardInput(raw);
+  if (!checked.ok) return { status: 400, body: { ok: false, error: checked.error } };
+  const award = await grantAward(db, checked.award, nowMs);
+  if (!award) return { status: 500, body: { ok: false, error: "The badge could not be saved" } };
+  return { status: 200, body: { ok: true, award } };
+}
+
+/** DELETE /api/admin/awards/:id: revoke an award by its row id */
+export async function adminRevokeAward(db: D1Database, id: number): Promise<Answer> {
+  if (!Number.isInteger(id) || id < 1) return { status: 400, body: { ok: false, error: "Invalid award id" } };
+  const removed = await revokeAward(db, id);
+  if (removed === 0) return { status: 404, body: { ok: false, error: "Award not found" } };
+  return { status: 200, body: { ok: true, id } };
 }

@@ -36,6 +36,7 @@ import { SIM_REALISM_LEVELS } from "../../src/lib/sim/sim-realism";
 import { isVehicleModelId, VEHICLE_MODEL_IDS, type VehicleModelId } from "../../src/types/f1";
 import { nameProblem } from "../../src/lib/net/name-filter";
 import { checkLap, TRACK_ID_RE, type CheckedLap } from "./lap-check";
+import { moveDriverAwards } from "./awards";
 import type { D1Database, D1PreparedStatement, Env, R2Bucket } from "./types";
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024 + 4096;
@@ -503,12 +504,14 @@ export async function renameDriver(deps: BoardDeps, request: Request): Promise<A
       deps.db.prepare("UPDATE race_cars SET name_key = ?, name = ?, code = COALESCE(?, code) WHERE name_key = ?").bind(toKey, to, code, fromKey),
       deps.db.prepare("DELETE FROM drivers WHERE name_key = ?").bind(fromKey),
     ]);
+    await moveDriverAwards(deps.db, fromKey, toKey, to);
   } else if (ownsOld || fromKey === toKey) {
     // The same name in other letters or spacing: the boards show it as now written
     await deps.db.batch([
       deps.db.prepare("UPDATE laps SET driver_name = ?, driver_code = COALESCE(?, driver_code) WHERE name_key = ?").bind(to, code, toKey),
       deps.db.prepare("UPDATE race_cars SET name = ?, code = COALESCE(?, code) WHERE name_key = ?").bind(to, code, toKey),
     ]);
+    await moveDriverAwards(deps.db, toKey, toKey, to);
   }
   return { status: 200, body: { ok: true, moved } };
 }
