@@ -7,6 +7,7 @@ import type { RaceResultEntry, RaceSplits, RaceStandingEntry, RaceStatus, TireCo
 import type { InterpolatedPeerState, PeerRaceProgress, RaceStartInfo } from "@/lib/sim/multiplayer-sync";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { carAheadOnRoad, earnedAtDetection } from "@/lib/sim/overtaking-rules";
+import { CarDamage } from "@/lib/sim/car-damage";
 import { ContactGuard } from "@/lib/sim/contact-guard";
 import { classifiedTimeS, raceOrder, type RacerProgress } from "@/lib/sim/race-order";
 import {
@@ -418,6 +419,11 @@ export class MultiplayerRace {
   private book: ResultBook | null = null;
   private sendResult: ((result: ResultMessage) => void) | null = null;
 
+  /** The player's damage model for this multiplayer race (null when damage is 'off') */
+  readonly damage: CarDamage | null;
+  /** The qualifying classification the race started from, formatted for the HUD */
+  private readonly qualifyingRows?: { code: string; isPlayer: boolean; lapMs: number | null }[];
+
   constructor(
     readonly start: RaceStartInfo,
     private readonly lapLengthM: number,
@@ -426,9 +432,23 @@ export class MultiplayerRace {
     roster: readonly { peerId: string; name: string; code: string; color: string }[]
   ) {
     this.lapClock = new LapClock(lapLengthM);
-    this.lightsOutHostMs = start.lightsStartHostMs + 5 * LIGHT_INTERVAL_MS + start.holdMs;
+    this.lightsOutHostMs =
+      start.startType === "rolling"
+        ? start.lightsStartHostMs
+        : start.lightsStartHostMs + 5 * LIGHT_INTERVAL_MS + start.holdMs;
     this.guard = start.collisions === "protected" ? new ContactGuard() : null;
+    const damageLevel = start.rules?.damage ?? "off";
+    this.damage = damageLevel !== "off" ? new CarDamage(damageLevel, 2.75, 1.0) : null;
     this.present = new Set(roster.map((p) => p.peerId));
+    const codeById = new Map<string, string>([[localPeerId, identity.code]]);
+    for (const p of roster) codeById.set(p.peerId, p.code);
+    if (start.qualifying && start.qualifying.length > 0) {
+      this.qualifyingRows = start.qualifying.map((q) => ({
+        code: codeById.get(q.peer) ?? q.peer.slice(0, 3).toUpperCase(),
+        isPlayer: q.peer === localPeerId,
+        lapMs: q.ms,
+      }));
+    }
     for (const p of roster) {
       if (p.peerId === localPeerId || !start.grid.includes(p.peerId)) continue;
       this.remote.set(p.peerId, {
@@ -782,10 +802,25 @@ export class MultiplayerRace {
     const official = this.official;
     const officialResults = official && (playerFinished || official.final) ? this.officialResults(field, official) : null;
     const officialPlace = officialResults?.findIndex((r) => r.isPlayer) ?? -1;
+    const d = this.damage;
+    const damageStatus: RaceStatus["damage"] =
+      d && !d.pristine && (d.overall >= 0.03 || d.terminal || d.punctured.some(Boolean))
+        ? {
+            front: d.front,
+            rear: d.rear,
+            left: d.left,
+            right: d.right,
+            suspension: [...d.suspension],
+            punctured: [...d.punctured],
+            overall: d.overall,
+            terminal: d.terminal,
+          }
+        : undefined;
     return {
       phase: frame.phase === "racing" ? (playerFinished ? "finished" : "racing") : "lights",
       lightsOn: frame.lightsOn,
       countdownS: frame.phase === "countdown" ? frame.countdownS : undefined,
+      qualifying: this.qualifyingRows,
       position: officialPlace >= 0 && playerFinished ? officialPlace + 1 : ordered.indexOf(me) + 1,
       fieldSize: ordered.length,
       lap: Math.max(1, Math.min(this.start.laps, Math.floor(me.distM / L) + 1)),
@@ -796,6 +831,7 @@ export class MultiplayerRace {
       resultsFinal: officialResults ? official?.final === true : this.finalResults !== null,
       resultsOfficial: officialResults !== null,
       multiplayer: true,
+      damage: damageStatus,
       splits: frame.phase === "racing" ? this.playerSplits.compute(this.splitTimer, frame.raceTimeS, ordered) : undefined,
     };
   }

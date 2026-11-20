@@ -52,6 +52,7 @@ import { LEGACY_TRACK_LIMITS, TrackLimitsMonitor, type TrackLimitsRules } from "
 import { stretchTimeS } from "@/lib/sim/course-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
+import { resolveRaceRules } from "@/lib/sim/race-rules";
 import { rulesForSetup, startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 import { JumpStartWatch } from "@/lib/sim/race-start";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
@@ -848,15 +849,31 @@ export class DriveSession {
     /** The AI race's rules close the overtaking aids inside a yellow zone (set with the track-limits ladder) */
     let aidsLockInYellow = true;
     /**
-     * Race control's track-limits ladder: an AI race's from its rules (the player's car class and the race setup);
-     * online races keep the strike ladder every build judges by, until the rules go over the wire
+     * Race control's track-limits ladder: an AI race's from its rules (the player's car class and the race setup),
+     * and a multiplayer race's from the room's wire rules (defaulting to the classic strike ladder for older hosts)
      */
     const limitsRulesOf = (race: SessionRace): TrackLimitsRules => {
+      if (race.kind === "mp") {
+        const r = race.race.start.rules;
+        if (!r) return LEGACY_TRACK_LIMITS;
+        if (r.penalties === false || r.trackLimits === "off") return { scoring: "disabled", pointsAllowed: 0 };
+        if (r.preset === "classic") return LEGACY_TRACK_LIMITS;
+        const resolved = resolveRaceRules(vehicleModelSpec(vehicleNow).classId, { rulePreset: r.preset, trackLimits: r.trackLimits });
+        aidsLockInYellow = resolved.lockAidsInYellow;
+        return { scoring: resolved.trackLimits, pointsAllowed: resolved.pointsAllowed };
+      }
       if (race.kind !== "ai") return LEGACY_TRACK_LIMITS;
       const rules = rulesForSetup(vehicleModelSpec(vehicleNow).classId, { ...settings.race, ...race.rules });
       aidsLockInYellow = rules.lockAidsInYellow;
       return { scoring: rules.trackLimits, pointsAllowed: rules.pointsAllowed };
     };
+    /** MP qualifying & practice valid-lap tracking (broadcast in PeerRaceProgress.best and reported to room qualifying) */
+    let mpQualiId: string | null = null;
+    let mpQualiBestMs: number | null = null;
+    let mpQualiSeenLap: number | null = null;
+    let mpPracticeBestMs: number | null = null;
+    let mpPracticeSeenLap: number | null = null;
+    let mpLastWallImpactMs = 0;
     this.setRace = (next) => {
       endQualifying();
       endTimeTrial();
@@ -2039,6 +2056,12 @@ export class DriveSession {
       startClutchIn = 0;
       kbInput.padClutch = 0;
       // Race control and the cameras start over with the run (the car is about to be put somewhere else)
+      if (reason === "session") {
+        mpPracticeBestMs = null;
+        mpPracticeSeenLap = null;
+      }
+      mpLastWallImpactMs = physics.telemetry.f12026?.wallImpact?.atMs ?? 0;
+      physics.setDamageEffects?.(null);
       trackLimits.reset(limitsSessionOf(raceNow()), limitsRulesOf(raceNow()));
       wallDeletedLaps.clear();
       cameraRig.reset();
@@ -2670,9 +2693,12 @@ export class DriveSession {
         // A manual start holds the car on the grid through the lights with its engine live (a race in the worker holds
         // its car there: the controls go on, which keep its clock running); an assisted one stops it
         // (not while an AI race's grid stands before its lights, after qualifying: the car waits still)
+        const mpManualStart = mpRace
+          ? mpRace.start.startType !== "rolling" && (mpRace.start.manualStart ?? settingsNow.race.launch === "manual")
+          : false;
         const gridHeld = raceInWorker
           ? aiField.playerFrozen && aiField.manualStart && !aiField.gridStanding
-          : (aiField?.playerFrozen === true && aiField.manualStart && !aiField.gridStanding) || (mpFrozen && settingsNow.race.launch === "manual");
+          : (aiField?.playerFrozen === true && aiField.manualStart && !aiField.gridStanding) || (mpFrozen && mpManualStart);
         if (!raceInWorker) physics.gridHold = gridHeld;
         // A jump start: race control's call once the lights are out (+5 s, +10 s for a big one), into an AI race's
         // ledger and feed; an online race serves it with the player's own penalties below
@@ -2762,6 +2788,52 @@ export class DriveSession {
         });
         if (state === "done") finishQualifying();
       }
+      const mpQuali = !mpRace && !aiField && !quali ? multiplayerSync.activeQualifying : null;
+      if (mpQuali) {
+        const t = physics.telemetry;
+        if (mpQualiId !== mpQuali.id) {
+          mpQualiId = mpQuali.id;
+          mpQualiBestMs = null;
+          mpQualiSeenLap = t.lapCount;
+        }
+        if (
+          driving &&
+          mpQualiSeenLap !== null &&
+          t.lapCount > mpQualiSeenLap &&
+          t.lastLapTimeMs !== null &&
+          t.lastLapTimeMs !== undefined &&
+          t.lastLapTimeMs >= 1000 &&
+          t.lastLapValid !== false &&
+          !physics.aiAutopilot
+        ) {
+          const lapMs = Math.round(t.lastLapTimeMs);
+          if (mpQualiBestMs === null || lapMs < mpQualiBestMs) {
+            mpQualiBestMs = lapMs;
+            multiplayerSync.reportQualifyingLap(mpQualiBestMs);
+          }
+        }
+        mpQualiSeenLap = t.lapCount;
+      } else {
+        mpQualiId = null;
+        mpQualiBestMs = null;
+        mpQualiSeenLap = null;
+        if (driving && !mpRace && !aiField && !quali) {
+          const t = physics.telemetry;
+          if (
+            mpPracticeSeenLap !== null &&
+            t.lapCount > mpPracticeSeenLap &&
+            t.lastLapTimeMs !== null &&
+            t.lastLapTimeMs !== undefined &&
+            t.lastLapTimeMs >= 1000 &&
+            t.lastLapValid !== false &&
+            !physics.aiAutopilot
+          ) {
+            const lapMs = Math.round(t.lastLapTimeMs);
+            if (mpPracticeBestMs === null || lapMs < mpPracticeBestMs) mpPracticeBestMs = lapMs;
+          }
+          mpPracticeSeenLap = t.lapCount;
+        }
+      }
       physics.telemetry.qualifying = quali
         ? {
             remainingS: quali.session.remainingS,
@@ -2769,7 +2841,17 @@ export class DriveSession {
             lapCounts: quali.session.lapCounts,
             bestMs: quali.session.bestMs,
           }
-        : undefined;
+        : mpQuali
+          ? {
+              remainingS:
+                mpQuali.endsAtHostMs !== undefined
+                  ? Math.max(0, (mpQuali.endsAtHostMs - multiplayerSync.hostNowMs(nowMs)) / 1000)
+                  : 0,
+              lastLap: false,
+              lapCounts: physics.telemetry.lapInvalid !== true && !physics.aiAutopilot,
+              bestMs: mpQualiBestMs,
+            }
+          : undefined;
       physics.telemetry.runId = runId;
       physics.telemetry.clutchControl = boundClutchControl;
       // The manual start's cue: what to hold as the clutch, and a jump start once there is one
@@ -2832,7 +2914,8 @@ export class DriveSession {
           if (trackLimits.disqualified) aiField.playerDisqualified = true;
         }
         if (mpRace) {
-          mpRace.penaltyS = trackLimits.penaltyTotalS + startPenaltyS;
+          const penaltiesOn = mpRace.start.rules?.penalties !== false;
+          mpRace.penaltyS = penaltiesOn ? trackLimits.penaltyTotalS + startPenaltyS : 0;
           mpRace.compound = physics.tireCompound;
         }
         t.trackLimits = trackLimits.snapshot(nowMs);
@@ -2917,7 +3000,13 @@ export class DriveSession {
           driverCode: settingsNow.profile.code,
           teamColorHex: settingsNow.profile.color,
           name: settingsNow.profile.name,
-          race: mpRace?.progress(),
+          race: mpRace
+            ? mpRace.progress()
+            : mpQuali
+              ? { id: mpQuali.id, dist: Math.round(physics.sMeters * 10) / 10, fin: null, best: mpQualiBestMs, cmp: physics.tireCompound }
+              : multiplayerSync.lobby
+                ? { id: "practice", dist: Math.round(physics.sMeters * 10) / 10, fin: null, best: mpPracticeBestMs, cmp: physics.tireCompound }
+                : undefined,
           hz: guard?.self.flag || undefined,
           vehicle: vehicleNow,
           trackId,
@@ -2975,7 +3064,22 @@ export class DriveSession {
           // polish:B a car that has taken the flag passes through (collisionsActiveWith), drawn as a ghost
           if (mpFrame.phase === "racing" && p.race?.id === mpRace.start.id && (mpRace.lapClock.finishTimeS !== null || p.race.fin !== null)) through = true;
           p.passThrough = through;
-          if (driving && solid) resolvePlayerVsRemoteCar(physics, p, dtSeconds);
+          if (driving && solid) {
+            const hit = resolvePlayerVsRemoteCar(physics, p, dtSeconds);
+            if (hit && mpRace.damage && mpFrame.phase === "racing") {
+              const closingMs = Math.hypot(carVelocityWorld.x - p.linearVelocity.x, carVelocityWorld.z - p.linearVelocity.z);
+              if (closingMs > 2) mpRace.damage.registerImpact({ localX: 0, localZ: 2.0, speedMs: closingMs, source: "car" });
+            }
+          }
+        }
+        // Multiplayer car damage from walls and car contact when enabled by the room rules
+        if (mpRace.damage && driving && mpFrame.phase === "racing") {
+          const wall = physics.telemetry.f12026?.wallImpact;
+          if (wall && wall.atMs > mpLastWallImpactMs) {
+            mpLastWallImpactMs = wall.atMs;
+            mpRace.damage.registerImpact({ localX: wall.localX ?? 0, localZ: wall.localZ ?? 2.75, speedMs: wall.speedMs, source: "wall" });
+          }
+          if (!mpRace.damage.pristine) physics.setDamageEffects?.(mpRace.damage.effects());
         }
         // polish:D yellow flags: a car stopped, off or going the wrong way on the road ahead (mp-flags.ts)
         if (physics.telemetry.race && mpFrame.phase === "racing") {

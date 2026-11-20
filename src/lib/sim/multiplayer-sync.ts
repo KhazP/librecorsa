@@ -25,17 +25,22 @@ import type { TyreVisualState } from './simulator-car';
 import type { GroundQuery } from './f12026-car/TrackColliderQuery';
 import { getOnlineConfig, onlineApiBase, onlineSocketUrl, readOnlineConfig } from '@/lib/net/online-config';
 import {
+  buildRaceGrid,
   MAX_STATE_BYTES,
   MAX_STATE_PACKETS_PER_S,
+  MP_QUALIFYING_MINUTES,
   PEER_ID_RE,
   PROTOCOL_VERSION,
+  sanitizeControl,
+  sanitizeLobbySettings,
+  sanitizePacket,
+  sortQualifyingTimes,
   STATE_SEND_HZ,
   StateInfoMemory,
   decodeState,
   encodeState,
-  sanitizeControl,
-  sanitizePacket,
   stateInfoJson,
+  withLobbyDefaults,
   type CarClassRule,
   type CollisionMode,
   type ControlEnvelope,
@@ -43,17 +48,42 @@ import {
   type LobbyPlayer,
   type LobbySettings,
   type LobbyState,
+  type MpGridOrder,
+  type MpQualifyingMinutes,
+  type MpRaceRules,
+  type MpStartType,
   type NetworkVehiclePacket,
   type PeerRaceProgress,
+  type QualifyingTime,
   type RaceStartInfo,
+  type RoomKind,
+  type RoomPhase,
+  type RoomSessionInfo,
 } from '@/lib/net/wire';
 import { loadDriverKey } from '@/lib/net/driver-key';
 import { carPhysicsVersion } from '@/lib/sim/lap-types';
 import type { FinishMessage, ResultMessage } from '@/lib/net/official-result';
 
 // What goes over the wire, and the checks on it, live in a module of their own (the race server reads them too)
-export { sanitizePacket };
-export type { CarClassRule, CollisionMode, LobbyPlayer, LobbySettings, LobbyState, NetworkVehiclePacket, PeerRaceProgress, RaceStartInfo };
+export { MP_QUALIFYING_MINUTES, sanitizePacket, withLobbyDefaults };
+export type {
+  CarClassRule,
+  CollisionMode,
+  LobbyPlayer,
+  LobbySettings,
+  LobbyState,
+  MpGridOrder,
+  MpQualifyingMinutes,
+  MpRaceRules,
+  MpStartType,
+  NetworkVehiclePacket,
+  PeerRaceProgress,
+  QualifyingTime,
+  RaceStartInfo,
+  RoomKind,
+  RoomPhase,
+  RoomSessionInfo,
+};
 
 export interface InterpolatedPeerState {
   peerId: string;
@@ -430,6 +460,10 @@ export class MultiplayerSyncManager {
   public weatherProvider?: () => WeatherSyncState | null;
   public onRaceStart?: (start: RaceStartInfo) => void;
   public onRaceAbort?: (id: string) => void;
+  /** Private room qualifying started (or updated on this client) */
+  public onQualifyingStart?: (session: RoomSessionInfo) => void;
+  /** Private room qualifying ended or was aborted */
+  public onQualifyingEnd?: (id: string) => void;
   /** A room's host: a car's finish report (official-result.ts keeps them) */
   public onRaceFinish?: (peerId: string, finish: FinishMessage) => void;
   /** The official result, from the race server or the room's host */
@@ -444,8 +478,14 @@ export class MultiplayerSyncManager {
   private memberSeenMs = new Map<string, number>();
   /** Host: members dropped for silence, kept so their next packet puts them back (a guest only says hello once) */
   private lapsedMembers = new Map<string, LobbyPlayer>();
-  private lobbySettings: LobbySettings = { trackId: DEFAULT_TRACK_ID, laps: 5, collisions: 'ghost_lap1', carClass: 'any' };
+  private lobbySettings: LobbySettings = withLobbyDefaults({ trackId: DEFAULT_TRACK_ID, laps: 5, collisions: 'ghost_lap1', carClass: 'any' });
   private activeRace: RaceStartInfo | null = null;
+  /** Active private-room qualifying session (on host and guests) */
+  public activeQualifying: RoomSessionInfo | null = null;
+  /** Host: best valid qualifying lap (ms) per peer during `activeQualifying` */
+  private qualifyingLaps = new Map<string, number>();
+  /** Last qualifying best lap reported by this client (to avoid redundant messages) */
+  private lastSentQualiLap: { id: string; ms: number } | null = null;
   /**
    * Guest: the race this client is done with (left with leaveRace, or ended by the host); neither a repeated start
    * nor a lobby still showing it puts this player back in it
@@ -690,6 +730,9 @@ export class MultiplayerSyncManager {
           opened = true;
           attempt = 0;
           this.roomIce = sanitizeIceServers(msg.iceServers);
+          // Bind our game peerId and current lobby settings on the room server
+          this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
+          this.sendRoomServer({ t: 'settings', settings: this.lobbySettings });
           if (this.openPeerCount() === 0) {
             this.emitStatus({ state: 'signaling', statusText: `Room ${roomCode} is open • waiting for players` });
           }
@@ -709,6 +752,20 @@ export class MultiplayerSyncManager {
             const entry = this.rtcPeers.get(remoteId);
             if (entry) await entry.pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate));
           }
+        } else if (msg.t === 'qualifying_update' && this.activeQualifying && msg.sessionId === this.activeQualifying.id && Array.isArray(msg.times)) {
+          for (const row of msg.times as QualifyingTime[]) {
+            if (typeof row?.peer === 'string' && typeof row.ms === 'number' && Number.isFinite(row.ms) && row.ms >= 1000) {
+              const prev = this.qualifyingLaps.get(row.peer);
+              if (prev === undefined || row.ms < prev) this.qualifyingLaps.set(row.peer, Math.round(row.ms));
+            }
+          }
+          this.refreshQualifyingTimes();
+          this.broadcastLobby();
+        } else if (msg.t === 'phase' && msg.phase === 'racing' && this.activeQualifying && Array.isArray(msg.grid)) {
+          // Room server timer expired (DO alarm): launch the race with the server-sorted qualifying grid
+          const serverGrid = (msg.grid as unknown[]).filter((g): g is string => typeof g === 'string');
+          const serverQuali = Array.isArray(msg.qualifying) ? (msg.qualifying as QualifyingTime[]) : undefined;
+          this.launchRaceInternal(4000, serverGrid.length > 0 ? serverGrid : undefined, serverQuali, false);
         }
       } catch {
         // Ignore a malformed message
@@ -865,6 +922,7 @@ export class MultiplayerSyncManager {
         const msg = JSON.parse(ev.data);
         if (msg.t === 'welcome') {
           this.roomIce = sanitizeIceServers(msg.iceServers);
+          this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
           const sdp = await this.offerToHost(ROOM_HOST_ID, ROOM_HOST_ID);
           if (this.signalingWs !== ws) return;
           ws.send(JSON.stringify({ t: 'signal', data: { sdp } }));
@@ -1326,8 +1384,12 @@ export class MultiplayerSyncManager {
     // A guest turning host drops the race it followed: that race ran on the old host's clock and is not its to run
     // (or to advertise and abort). A host hosting again (another manual offer) keeps its race
     const dropped = this.isHost ? null : this.activeRace;
+    const droppedQuali = this.isHost ? null : this.activeQualifying;
     if (!this.isHost) {
       this.activeRace = null;
+      this.activeQualifying = null;
+      this.qualifyingLaps.clear();
+      this.lastSentQualiLap = null;
       this.doneRaceId = null;
     }
     this.isHost = true;
@@ -1336,6 +1398,7 @@ export class MultiplayerSyncManager {
     this.bestClockRttMs = 0;
     if (this.localTrackId) this.lobbySettings = { ...this.lobbySettings, trackId: this.localTrackId };
     this.broadcastLobby();
+    if (droppedQuali) this.onQualifyingEnd?.(droppedQuali.id);
     if (dropped) this.onRaceAbort?.(dropped.id);
   }
 
@@ -1344,7 +1407,11 @@ export class MultiplayerSyncManager {
     this.closePeers();
     // Whatever race ran here (our own as host, or an old host's) is not the new host's
     const dropped = this.activeRace;
+    const droppedQuali = this.activeQualifying;
     this.activeRace = null;
+    this.activeQualifying = null;
+    this.qualifyingLaps.clear();
+    this.lastSentQualiLap = null;
     this.doneRaceId = null;
     this.isHost = false;
     this.hostId = null;
@@ -1355,7 +1422,18 @@ export class MultiplayerSyncManager {
     this.clockOffsetMs = 0;
     this.bestClockRttMs = Infinity;
     this.setLobby(null);
+    if (droppedQuali) this.onQualifyingEnd?.(droppedQuali.id);
     if (dropped) this.onRaceAbort?.(dropped.id);
+  }
+
+  /** Sends a JSON message to this site's room server when connected through it */
+  private sendRoomServer(msg: unknown): void {
+    if (this.signalVia !== 'server' || this.signalingWs?.readyState !== WebSocket.OPEN) return;
+    try {
+      this.signalingWs.send(JSON.stringify(msg));
+    } catch {
+      // Socket closed meanwhile
+    }
   }
 
   /** Hosts a race for the other tabs of this browser (no network needed) */
@@ -1369,7 +1447,9 @@ export class MultiplayerSyncManager {
   /** Host: change the race settings */
   public setLobbySettings(patch: Partial<LobbySettings>): void {
     if (!this.isHost) return;
-    this.lobbySettings = { ...this.lobbySettings, ...patch };
+    const kind: RoomKind = this.inScheduledRace ? 'public' : 'private';
+    this.lobbySettings = sanitizeLobbySettings({ ...this.lobbySettings, ...patch }, kind);
+    this.sendRoomServer({ t: 'settings', settings: this.lobbySettings });
     this.broadcastLobby();
   }
 
@@ -1379,33 +1459,155 @@ export class MultiplayerSyncManager {
     else this.sendControl({ type: 'ready', ready });
   }
 
+  /** Host: refreshes sorted qualifying standings for the current lobby players */
+  private refreshQualifyingTimes(): void {
+    if (!this.activeQualifying) return;
+    const ids = this.lobbyPlayers().map((p) => p.peerId);
+    this.activeQualifying = {
+      ...this.activeQualifying,
+      times: sortQualifyingTimes(ids, this.qualifyingLaps),
+    };
+  }
+
+  /**
+   * Host: starts the session configured in the lobby — qualifying first in a private room when
+   * `qualifyingMinutes > 0`, otherwise straight to the race.
+   */
+  public startSession(countdownMs = 4000): RaceStartInfo | RoomSessionInfo | null {
+    if (!this.isHost) return null;
+    if (!this.inScheduledRace && !this.activeQualifying && (this.lobbySettings.qualifyingMinutes ?? 0) > 0) {
+      return this.startQualifying();
+    }
+    return this.startRace(countdownMs);
+  }
+
+  /** Host: starts private-room qualifying for `lobbySettings.qualifyingMinutes` minutes */
+  public startQualifying(): RoomSessionInfo | null {
+    if (!this.isHost || this.inScheduledRace) return null;
+    const minutes = this.lobbySettings.qualifyingMinutes ?? 0;
+    if (minutes <= 0) return null;
+    const id = Math.random().toString(36).slice(2, 10);
+    const players = this.lobbyPlayers().map((p) => p.peerId);
+    this.activeRace = null;
+    this.qualifyingLaps.clear();
+    this.lastSentQualiLap = null;
+    const session: RoomSessionInfo = {
+      phase: 'qualifying',
+      id,
+      minutes,
+      endsAtHostMs: this.hostNowMs() + minutes * 60_000,
+      times: sortQualifyingTimes(players, this.qualifyingLaps),
+    };
+    this.activeQualifying = session;
+    this.sendRoomServer({ t: 'start_session', sessionId: id, peers: players });
+    this.broadcastLobby();
+    this.onQualifyingStart?.(session);
+    return session;
+  }
+
+  /** Host: aborts an active qualifying session back to the lobby */
+  public abortQualifying(): void {
+    if (!this.isHost || !this.activeQualifying) return;
+    const id = this.activeQualifying.id;
+    this.activeQualifying = null;
+    this.qualifyingLaps.clear();
+    this.lastSentQualiLap = null;
+    this.sendRoomServer({ t: 'abort' });
+    this.broadcastLobby();
+    this.onQualifyingEnd?.(id);
+  }
+
+  /** Reports this player's fastest valid lap during an active private-room qualifying session */
+  public reportQualifyingLap(bestLapMs: number | null): void {
+    const q = this.activeQualifying;
+    if (!q || bestLapMs === null || !Number.isFinite(bestLapMs) || bestLapMs < 1000) return;
+    const rounded = Math.round(bestLapMs);
+    if (this.lastSentQualiLap && this.lastSentQualiLap.id === q.id && rounded >= this.lastSentQualiLap.ms) return;
+    this.lastSentQualiLap = { id: q.id, ms: rounded };
+    // Notify RoomServer DO (if connected through it) using PeerRaceProgress shape
+    this.sendRoomServer({ t: 'progress', race: { id: q.id, dist: 0, fin: null, best: rounded } });
+    if (this.isHost) {
+      const prev = this.qualifyingLaps.get(this.localPeerId);
+      if (prev === undefined || rounded < prev) {
+        this.qualifyingLaps.set(this.localPeerId, rounded);
+        this.refreshQualifyingTimes();
+        this.broadcastLobby();
+      }
+    } else if (this.hostId) {
+      this.sendControl({ type: 'quali_lap', id: q.id, bestLapMs: rounded }, this.hostId);
+    }
+  }
+
   /** Host: lines everyone up and starts the lights `countdownMs` from now. Returns the start, or null when not hosting */
   public startRace(countdownMs = 4000): RaceStartInfo | null {
+    return this.launchRaceInternal(countdownMs, undefined, undefined, true);
+  }
+
+  private launchRaceInternal(
+    countdownMs: number,
+    forcedGrid?: string[],
+    forcedQualifying?: QualifyingTime[],
+    notifyServer = true,
+  ): RaceStartInfo | null {
     if (!this.isHost) return null;
-    const players = this.lobbyPlayers();
+    const players = this.lobbyPlayers().map((p) => p.peerId);
+    const endedQuali = this.activeQualifying;
+    const fromQualifying = endedQuali !== null;
+    const qualifying = fromQualifying
+      ? (forcedQualifying ?? sortQualifyingTimes(players, this.qualifyingLaps))
+      : undefined;
+    const grid =
+      forcedGrid ??
+      buildRaceGrid(players, {
+        gridOrder: this.lobbySettings.gridOrder ?? 'qualifying',
+        qualifyingTimes: qualifying,
+        fromQualifying,
+      });
+    this.activeQualifying = null;
+    this.qualifyingLaps.clear();
+    this.lastSentQualiLap = null;
+    if (notifyServer) {
+      this.sendRoomServer({ t: 'start_race', peers: players });
+    }
+    const rolling = this.lobbySettings.startType === 'rolling';
     const start: RaceStartInfo = {
       id: Math.random().toString(36).slice(2, 10),
       lightsStartHostMs: this.hostNowMs() + countdownMs,
-      holdMs: 200 + Math.random() * 2800,
+      holdMs: rolling ? 0 : 200 + Math.random() * 2800,
       laps: this.lobbySettings.laps,
       collisions: this.lobbySettings.collisions,
       carClass: this.lobbySettings.carClass,
       trackId: this.lobbySettings.trackId,
-      // Host on pole, then the others in the order they joined
-      grid: players.map((p) => p.peerId),
+      grid,
+      vehicle: this.lobbySettings.vehicle,
+      weather: this.lobbySettings.weather,
+      timeOfDay: this.lobbySettings.timeOfDay,
+      timeScale: this.lobbySettings.timeScale,
+      startType: this.lobbySettings.startType,
+      manualStart: rolling ? false : this.lobbySettings.manualStart,
+      gridOrder: this.lobbySettings.gridOrder,
+      rules: this.lobbySettings.rules,
+      qualifying,
     };
     this.activeRace = start;
     this.sendControl({ type: 'start', start });
     this.broadcastLobby();
+    if (endedQuali) this.onQualifyingEnd?.(endedQuali.id);
     this.onRaceStart?.(start);
     return start;
   }
 
-  /** Host: ends the race for everyone (back to the lobby) */
+  /** Host: ends the race (or qualifying) for everyone (back to the lobby) */
   public abortRace(): void {
-    if (!this.isHost || !this.activeRace) return;
+    if (!this.isHost) return;
+    if (this.activeQualifying) {
+      this.abortQualifying();
+      return;
+    }
+    if (!this.activeRace) return;
     const id = this.activeRace.id;
     this.activeRace = null;
+    this.sendRoomServer({ t: 'abort' });
     this.sendControl({ type: 'abort', id });
     this.broadcastLobby();
     this.onRaceAbort?.(id);
@@ -1495,6 +1697,8 @@ export class MultiplayerSyncManager {
       weather: this.weatherProvider?.() ?? undefined,
       proto: PROTOCOL_VERSION,
       sim: this.simVersion(),
+      roomKind: this.inScheduledRace ? 'public' : 'private',
+      session: this.activeQualifying ? { ...this.activeQualifying } : undefined,
     };
     this.setLobby(lobby);
     this.sendControl({ type: 'lobby', lobby });
@@ -1714,6 +1918,16 @@ export class MultiplayerSyncManager {
         if (this.isHost || from !== this.hostId || (!via && this.rtcPeers.size > 0)) break;
         this.onRaceResult?.(msg);
         break;
+      case 'quali_lap':
+        if (this.isHost && this.activeQualifying && msg.id === this.activeQualifying.id) {
+          const prev = this.qualifyingLaps.get(from);
+          if (prev === undefined || msg.bestLapMs < prev) {
+            this.qualifyingLaps.set(from, msg.bestLapMs);
+            this.refreshQualifyingTimes();
+            this.broadcastLobby();
+          }
+        }
+        break;
     }
   }
 
@@ -1726,6 +1940,23 @@ export class MultiplayerSyncManager {
    */
   private reconcileRace(lobbyArrived: boolean): void {
     if (this.isHost) return;
+    // Follow private-room qualifying session state from the host's lobby
+    const session = this.lobby?.session;
+    const quali = session?.phase === 'qualifying' ? session : null;
+    if (quali) {
+      const isNew = this.activeQualifying?.id !== quali.id;
+      this.activeQualifying = quali;
+      if (isNew) {
+        this.lastSentQualiLap = null;
+        this.onQualifyingStart?.(quali);
+      }
+    } else if (this.activeQualifying && lobbyArrived) {
+      const endedId = this.activeQualifying.id;
+      this.activeQualifying = null;
+      this.lastSentQualiLap = null;
+      this.onQualifyingEnd?.(endedId);
+    }
+
     const race = this.lobby?.race ?? null;
     const active = this.activeRace;
     if (active) {
@@ -1752,6 +1983,13 @@ export class MultiplayerSyncManager {
       // memberSeenMs is kept current by every message and packet (memberHeard), so it alone says who is still here
       for (const [id, seen] of this.memberSeenMs) {
         if (nowMs - seen > 8000) this.lapseMember(id);
+      }
+      // Private-room qualifying timer expiration: transition automatically to the sorted race grid
+      if (
+        this.activeQualifying?.endsAtHostMs !== undefined &&
+        this.hostNowMs(nowMs) >= this.activeQualifying.endsAtHostMs
+      ) {
+        this.startRace();
       }
       if (nowMs - this.lastLobbyMs > 3000) this.broadcastLobby();
     }
@@ -2109,7 +2347,25 @@ export class MultiplayerSyncManager {
    */
   public ingestPacket(pkt: NetworkVehiclePacket, isAiPeer = false, receiveClockMs?: number): void {
     const now = receiveClockMs !== undefined && Number.isFinite(receiveClockMs) ? receiveClockMs : this.clock();
-    if (!isAiPeer) this.memberHeard(pkt.peerId, now);
+    if (!isAiPeer) {
+      this.memberHeard(pkt.peerId, now);
+      if (
+        this.isHost &&
+        this.activeQualifying &&
+        pkt.race?.id === this.activeQualifying.id &&
+        typeof pkt.race.best === 'number' &&
+        Number.isFinite(pkt.race.best) &&
+        pkt.race.best >= 1000
+      ) {
+        const rounded = Math.round(pkt.race.best);
+        const prev = this.qualifyingLaps.get(pkt.peerId);
+        if (prev === undefined || rounded < prev) {
+          this.qualifyingLaps.set(pkt.peerId, rounded);
+          this.refreshQualifyingTimes();
+          this.broadcastLobby();
+        }
+      }
+    }
     let buffer = this.peers.get(pkt.peerId);
     if (!buffer) {
       buffer = {

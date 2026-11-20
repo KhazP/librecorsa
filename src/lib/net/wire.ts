@@ -6,7 +6,17 @@
  * No three.js and no DOM: the Worker imports this file.
  */
 import { foldVehicleModelId, isVehicleModelId, type TireCompound, type VehicleModelId } from '../../types/f1';
-import { sanitizeWeatherSync, type WeatherSyncState } from '../sim/weather';
+import {
+  sanitizeWeatherSync,
+  TIME_OF_DAY_PRESETS,
+  TIME_SCALES,
+  WEATHER_PRESETS,
+  type TimeOfDayId,
+  type WeatherPresetId,
+  type WeatherSyncState,
+} from '../sim/weather';
+import type { RulePresetId, TrackLimitsChoice } from '../sim/race-rules';
+import type { DamageLevel } from '../sim/car-damage';
 
 // The car state packet travels in binary (state-codec.ts); everything else is JSON
 export { decodeState, encodeState, MAX_STATE_BYTES, PROTOCOL_VERSION, stateInfoJson, StateInfoMemory } from './state-codec';
@@ -98,6 +108,36 @@ export interface PeerRaceProgress {
 export type CollisionMode = 'on' | 'ghost_lap1' | 'off' | 'protected';
 export type CarClassRule = 'any' | 'f1' | 'gt3';
 
+/** How the cars leave the grid: from a standstill behind the lights, or queued at formation speed */
+export type MpStartType = 'standing' | 'rolling';
+/**
+ * How the grid lines up: by qualifying (the quickest clean lap on pole; without a session, the order players joined,
+ * host on pole), reversed (the same order back to front: the quickest last, cars without a lap still at the back), or
+ * drawn at random
+ */
+export type MpGridOrder = 'random' | 'reverse' | 'qualifying';
+/** Qualifying session lengths a private room offers (min); 0 = none. Public rooms never qualify */
+export const MP_QUALIFYING_MINUTES = [0, 3, 5, 10] as const;
+export type MpQualifyingMinutes = (typeof MP_QUALIFYING_MINUTES)[number];
+/** The sporting rules (race-rules.ts) as a room picks them; `classic` is the strike ladder every older build judges by */
+export interface MpRaceRules {
+  preset: RulePresetId | 'classic';
+  trackLimits: TrackLimitsChoice;
+  /** Time penalties (track limits & jump starts); default true */
+  penalties?: boolean;
+  /** Mechanical & aero damage level; default 'off' */
+  damage?: DamageLevel;
+}
+/** A private room (a code friends share) or a public one (a scheduled or quick race anyone may enter) */
+export type RoomKind = 'private' | 'public';
+
+export const MP_START_TYPES: readonly MpStartType[] = ['standing', 'rolling'];
+export const MP_GRID_ORDERS: readonly MpGridOrder[] = ['qualifying', 'reverse', 'random'];
+export const MP_RULE_PRESETS: readonly MpRaceRules['preset'][] = ['classic', 'auto', 'open_wheel', 'endurance_sprint'];
+export const MP_DAMAGE_LEVELS: readonly DamageLevel[] = ['off', 'reduced', 'full'];
+const MP_TRACK_LIMITS: readonly TrackLimitsChoice[] = ['auto', 'off'];
+const ROOM_PHASES: readonly RoomPhase[] = ['lobby', 'qualifying', 'racing'];
+
 export interface LobbySettings {
   trackId: string;
   laps: number;
@@ -105,6 +145,66 @@ export interface LobbySettings {
   carClass: CarClassRule;
   /** Everyone drives this car (a scheduled race's); absent: any car the class allows */
   vehicle?: VehicleModelId;
+  // Everything below is absent from older hosts: `withLobbyDefaults` fills it in as those races always ran
+  /** The session's weather, time of day and clock speed (weather.ts presets); absent: whatever the host drives in */
+  weather?: WeatherPresetId;
+  timeOfDay?: TimeOfDayId;
+  timeScale?: number;
+  startType?: MpStartType;
+  /** A standing start's launch is the driver's: clutch and revs held through the lights. Absent: each player's own setting */
+  manualStart?: boolean;
+  gridOrder?: MpGridOrder;
+  rules?: MpRaceRules;
+  /** Qualifying before the race (min): private rooms only, always 0 in a public one */
+  qualifyingMinutes?: MpQualifyingMinutes;
+}
+
+/** The settings an older host's lobby (or race) leaves out, as those races always ran */
+export const LOBBY_DEFAULTS = {
+  startType: 'standing',
+  manualStart: false,
+  gridOrder: 'qualifying',
+  rules: { preset: 'classic', trackLimits: 'auto', penalties: true, damage: 'off' },
+  qualifyingMinutes: 0,
+} as const satisfies Partial<LobbySettings>;
+
+/** The settings with every optional rule in place (weather, time and launch stay as given: absent is meaningful) */
+export function withLobbyDefaults<T extends Partial<LobbySettings>>(
+  s: T,
+): T & Required<Pick<LobbySettings, 'startType' | 'manualStart' | 'gridOrder' | 'rules' | 'qualifyingMinutes'>> {
+  return {
+    ...s,
+    startType: s.startType ?? LOBBY_DEFAULTS.startType,
+    manualStart: s.manualStart ?? LOBBY_DEFAULTS.manualStart,
+    gridOrder: s.gridOrder ?? LOBBY_DEFAULTS.gridOrder,
+    rules: {
+      preset: s.rules?.preset ?? LOBBY_DEFAULTS.rules.preset,
+      trackLimits: s.rules?.trackLimits ?? LOBBY_DEFAULTS.rules.trackLimits,
+      penalties: s.rules?.penalties ?? LOBBY_DEFAULTS.rules.penalties,
+      damage: s.rules?.damage ?? LOBBY_DEFAULTS.rules.damage,
+    },
+    qualifyingMinutes: s.qualifyingMinutes ?? LOBBY_DEFAULTS.qualifyingMinutes,
+  };
+}
+
+/** One driver's qualifying: best clean lap (ms), null without one */
+export interface QualifyingTime {
+  peer: string;
+  ms: number | null;
+}
+
+/** Where a room is between races: open, qualifying (until `endsAtHostMs` on the host's clock), or racing */
+export type RoomPhase = 'lobby' | 'qualifying' | 'racing';
+
+export interface RoomSessionInfo {
+  phase: RoomPhase;
+  /** The qualifying session's id: laps count for it while each car's progress carries this id */
+  id: string;
+  minutes?: number;
+  /** Host clock (ms) at which qualifying ends */
+  endsAtHostMs?: number;
+  /** The classification so far, quickest first */
+  times?: QualifyingTime[];
 }
 
 export interface LobbyPlayer {
@@ -129,6 +229,10 @@ export interface LobbyState {
   /** The host's protocol version (PROTOCOL_VERSION) and physics revision; a guest on another one can't race it */
   proto?: number;
   sim?: number;
+  /** Whether this is a private room or a public/scheduled one (absent from older hosts) */
+  roomKind?: RoomKind;
+  /** Qualifying, while a private room runs it (absent from older hosts: the room is open or racing) */
+  session?: RoomSessionInfo;
 }
 
 /** Everything every client needs to run the same start: the lights are timed on the host's clock */
@@ -146,6 +250,16 @@ export interface RaceStartInfo {
   grid: string[];
   /** Everyone drives this car (a scheduled race's); absent: any car the class allows */
   vehicle?: VehicleModelId;
+  // Absent from older hosts: a standing start, the classic rules, each player's own launch
+  weather?: WeatherPresetId;
+  timeOfDay?: TimeOfDayId;
+  timeScale?: number;
+  startType?: MpStartType;
+  manualStart?: boolean;
+  gridOrder?: MpGridOrder;
+  rules?: MpRaceRules;
+  /** The qualifying classification the grid was drawn from, quickest first */
+  qualifying?: QualifyingTime[];
 }
 
 /** One car in the official result (src/lib/net/official-result.ts) */
@@ -178,7 +292,9 @@ export type ControlMessage =
   /** The official result, only ever from the race server or the room's host; final once it no longer changes */
   | { type: 'result'; id: string; final: boolean; rows: OfficialResultRow[] }
   /** The driver key, once after hello on a race server's socket (never in a URL): proves the name for the results */
-  | { type: 'identify'; driverKey: string };
+  | { type: 'identify'; driverKey: string }
+  /** A driver's valid best lap during a private room's qualifying session (sent to host) */
+  | { type: 'quali_lap'; id: string; bestLapMs: number };
 
 export interface ControlEnvelope {
   ctl: ControlMessage;
@@ -204,7 +320,7 @@ const COLLISION_MODES: readonly CollisionMode[] = ['on', 'ghost_lap1', 'off', 'p
 const version = (v: unknown): number | undefined => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 1e6 ? v : undefined);
 const CAR_CLASSES: readonly CarClassRule[] = ['any', 'f1', 'gt3'];
 
-function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
+export function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
   if (!v || typeof v !== 'object') return undefined;
   const r = v as Record<string, unknown>;
   const dist = finite(r.dist, -10_000, 10_000_000);
@@ -221,6 +337,174 @@ function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
   };
 }
 
+const asWeather = (v: unknown): WeatherPresetId | undefined =>
+  WEATHER_PRESETS.includes(v as WeatherPresetId) ? (v as WeatherPresetId) : undefined;
+const asTimeOfDay = (v: unknown): TimeOfDayId | undefined =>
+  TIME_OF_DAY_PRESETS.includes(v as TimeOfDayId) ? (v as TimeOfDayId) : undefined;
+const asTimeScale = (v: unknown): number | undefined => {
+  const n = finite(v, 0, 120);
+  if (n === null) return undefined;
+  return TIME_SCALES.includes(n) ? n : Math.round(n);
+};
+const asStartType = (v: unknown): MpStartType | undefined =>
+  MP_START_TYPES.includes(v as MpStartType) ? (v as MpStartType) : undefined;
+const asGridOrder = (v: unknown): MpGridOrder | undefined =>
+  MP_GRID_ORDERS.includes(v as MpGridOrder) ? (v as MpGridOrder) : undefined;
+const asQualifyingMinutes = (v: unknown): MpQualifyingMinutes | undefined =>
+  typeof v === 'number' && (MP_QUALIFYING_MINUTES as readonly number[]).includes(v) ? (v as MpQualifyingMinutes) : undefined;
+const asRoomKind = (v: unknown): RoomKind | undefined => (v === 'private' || v === 'public' ? v : undefined);
+
+export function sanitizeRaceRules(v: unknown): MpRaceRules | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const r = v as Record<string, unknown>;
+  const preset = MP_RULE_PRESETS.includes(r.preset as MpRaceRules['preset']) ? (r.preset as MpRaceRules['preset']) : 'classic';
+  const trackLimits = MP_TRACK_LIMITS.includes(r.trackLimits as TrackLimitsChoice) ? (r.trackLimits as TrackLimitsChoice) : 'auto';
+  const penalties = typeof r.penalties === 'boolean' ? r.penalties : true;
+  const damage = MP_DAMAGE_LEVELS.includes(r.damage as DamageLevel) ? (r.damage as DamageLevel) : 'off';
+  return { preset, trackLimits, penalties, damage };
+}
+
+/** Validates lobby settings from the network or client; public rooms always force `qualifyingMinutes = 0` */
+export function sanitizeLobbySettings(v: unknown, roomKind?: RoomKind): LobbySettings {
+  const st = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const weather = asWeather(st.weather);
+  const timeOfDay = asTimeOfDay(st.timeOfDay);
+  const timeScale = asTimeScale(st.timeScale);
+  const startType = asStartType(st.startType);
+  const manualStart = typeof st.manualStart === 'boolean' ? st.manualStart : undefined;
+  const gridOrder = asGridOrder(st.gridOrder);
+  const rules = sanitizeRaceRules(st.rules);
+  const rawQuali = asQualifyingMinutes(st.qualifyingMinutes);
+  const qualifyingMinutes: MpQualifyingMinutes | undefined = roomKind === 'public' ? 0 : rawQuali;
+  const out: LobbySettings = {
+    trackId: clampStr(st.trackId, 64, FALLBACK_TRACK_ID),
+    laps: Math.round(finite(st.laps, 1, 99) ?? 5),
+    collisions: COLLISION_MODES.includes(st.collisions as CollisionMode) ? (st.collisions as CollisionMode) : 'on',
+    carClass: CAR_CLASSES.includes(st.carClass as CarClassRule) ? (st.carClass as CarClassRule) : 'any',
+    vehicle: asPeerVehicle(st.vehicle),
+  };
+  if (weather !== undefined) out.weather = weather;
+  if (timeOfDay !== undefined) out.timeOfDay = timeOfDay;
+  if (timeScale !== undefined) out.timeScale = timeScale;
+  if (startType !== undefined) out.startType = startType;
+  if (manualStart !== undefined) out.manualStart = manualStart;
+  if (gridOrder !== undefined) out.gridOrder = gridOrder;
+  if (rules !== undefined) out.rules = rules;
+  if (qualifyingMinutes !== undefined) out.qualifyingMinutes = qualifyingMinutes;
+  return out;
+}
+
+function sanitizeQualifyingTimes(v: unknown): QualifyingTime[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out: QualifyingTime[] = [];
+  for (const item of v.slice(0, 32)) {
+    if (!item || typeof item !== 'object') continue;
+    const q = item as Record<string, unknown>;
+    if (typeof q.peer !== 'string' || !q.peer) continue;
+    out.push({ peer: q.peer.slice(0, 64), ms: finite(q.ms, 1000, 1e7) });
+  }
+  return out;
+}
+
+function sanitizeRoomSession(v: unknown): RoomSessionInfo | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const s = v as Record<string, unknown>;
+  if (!ROOM_PHASES.includes(s.phase as RoomPhase) || typeof s.id !== 'string') return undefined;
+  const out: RoomSessionInfo = {
+    phase: s.phase as RoomPhase,
+    id: s.id.slice(0, 32),
+  };
+  const minutes = asQualifyingMinutes(s.minutes);
+  if (minutes !== undefined) out.minutes = minutes;
+  const endsAtHostMs = finite(s.endsAtHostMs, -1e15, 1e15);
+  if (endsAtHostMs !== null) out.endsAtHostMs = endsAtHostMs;
+  const times = sanitizeQualifyingTimes(s.times);
+  if (times !== undefined) out.times = times;
+  return out;
+}
+
+/**
+ * Sorts qualifying participants by valid `bestLapMs` ascending; drivers without a valid lap are ordered behind them
+ * in their original `peers` order.
+ */
+export function sortQualifyingTimes(
+  peers: readonly string[],
+  times: ReadonlyMap<string, number | null> | Record<string, number | null | undefined>,
+): QualifyingTime[] {
+  const getTime = (peer: string): number | null => {
+    const raw = times instanceof Map ? times.get(peer) : (times as Record<string, number | null | undefined>)[peer];
+    return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? Math.round(raw) : null;
+  };
+  const indexed = peers.map((peer, idx) => ({ peer, ms: getTime(peer), idx }));
+  indexed.sort((a, b) => {
+    if (a.ms !== null && b.ms !== null) return a.ms - b.ms || a.idx - b.idx;
+    if (a.ms !== null) return -1;
+    if (b.ms !== null) return 1;
+    return a.idx - b.idx;
+  });
+  return indexed.map(({ peer, ms }) => ({ peer, ms }));
+}
+
+/**
+ * Builds the race starting grid from `peers`.
+ * - After a qualifying session (`fromQualifying: true`): always sorted by valid `bestLapMs` ascending, with drivers
+ *   without a valid lap ordered behind them.
+ * - Without qualifying: applies `gridOrder` (`qualifying` uses any recorded times or join order; `reverse` reverses
+ *   the order; `random` shuffles using `rng`).
+ */
+export function buildRaceGrid(
+  peers: readonly string[],
+  options: {
+    gridOrder?: MpGridOrder;
+    qualifyingTimes?: ReadonlyMap<string, number | null> | Record<string, number | null | undefined> | readonly QualifyingTime[];
+    fromQualifying?: boolean;
+    rng?: () => number;
+  } = {},
+): string[] {
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const p of peers) {
+    if (!seen.has(p)) {
+      seen.add(p);
+      unique.push(p);
+    }
+  }
+  const toMap = (src: typeof options.qualifyingTimes): Map<string, number | null> => {
+    const m = new Map<string, number | null>();
+    if (!src) return m;
+    if (Array.isArray(src)) {
+      for (const row of src) m.set(row.peer, row.ms);
+    } else if (src instanceof Map) {
+      for (const [k, v] of src) m.set(k, v);
+    } else {
+      for (const [k, v] of Object.entries(src)) m.set(k, v ?? null);
+    }
+    return m;
+  };
+  if (options.fromQualifying) {
+    return sortQualifyingTimes(unique, toMap(options.qualifyingTimes)).map((q) => q.peer);
+  }
+  const order = options.gridOrder ?? 'qualifying';
+  if (order === 'random') {
+    const out = [...unique];
+    const rng = options.rng ?? Math.random;
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.max(0, Math.min(0.999999999999, rng())) * (i + 1));
+      const tmp = out[i];
+      out[i] = out[j];
+      out[j] = tmp;
+    }
+    return out;
+  }
+  if (order === 'reverse') {
+    return [...unique].reverse();
+  }
+  if (options.qualifyingTimes) {
+    return sortQualifyingTimes(unique, toMap(options.qualifyingTimes)).map((q) => q.peer);
+  }
+  return unique;
+}
+
 export function sanitizeStart(v: unknown): RaceStartInfo | null {
   if (!v || typeof v !== 'object') return null;
   const s = v as Record<string, unknown>;
@@ -229,7 +513,7 @@ export function sanitizeStart(v: unknown): RaceStartInfo | null {
   const laps = finite(s.laps, 1, 99);
   if (typeof s.id !== 'string' || lightsStartHostMs === null || holdMs === null || laps === null) return null;
   if (!Array.isArray(s.grid)) return null;
-  return {
+  const out: RaceStartInfo = {
     id: s.id.slice(0, 32),
     lightsStartHostMs,
     holdMs,
@@ -240,25 +524,36 @@ export function sanitizeStart(v: unknown): RaceStartInfo | null {
     grid: s.grid.filter((g): g is string => typeof g === 'string').slice(0, 32).map((g) => g.slice(0, 64)),
     vehicle: asPeerVehicle(s.vehicle),
   };
+  const weather = asWeather(s.weather);
+  const timeOfDay = asTimeOfDay(s.timeOfDay);
+  const timeScale = asTimeScale(s.timeScale);
+  const startType = asStartType(s.startType);
+  const gridOrder = asGridOrder(s.gridOrder);
+  const rules = sanitizeRaceRules(s.rules);
+  const qualifying = sanitizeQualifyingTimes(s.qualifying);
+  if (weather !== undefined) out.weather = weather;
+  if (timeOfDay !== undefined) out.timeOfDay = timeOfDay;
+  if (timeScale !== undefined) out.timeScale = timeScale;
+  if (startType !== undefined) out.startType = startType;
+  if (typeof s.manualStart === 'boolean') out.manualStart = s.manualStart;
+  if (gridOrder !== undefined) out.gridOrder = gridOrder;
+  if (rules !== undefined) out.rules = rules;
+  if (qualifying !== undefined) out.qualifying = qualifying;
+  return out;
 }
 
 export function sanitizeLobby(v: unknown): LobbyState | null {
   if (!v || typeof v !== 'object') return null;
   const l = v as Record<string, unknown>;
-  const st = (l.settings ?? {}) as Record<string, unknown>;
   if (typeof l.hostId !== 'string' || !Array.isArray(l.players)) return null;
-  return {
+  const roomKind = asRoomKind(l.roomKind);
+  const session = sanitizeRoomSession(l.session);
+  const out: LobbyState = {
     hostId: l.hostId.slice(0, 64),
     weather: sanitizeWeatherSync(l.weather) ?? undefined,
     proto: version(l.proto),
     sim: version(l.sim),
-    settings: {
-      trackId: clampStr(st.trackId, 64, FALLBACK_TRACK_ID),
-      laps: Math.round(finite(st.laps, 1, 99) ?? 5),
-      collisions: COLLISION_MODES.includes(st.collisions as CollisionMode) ? (st.collisions as CollisionMode) : 'on',
-      carClass: CAR_CLASSES.includes(st.carClass as CarClassRule) ? (st.carClass as CarClassRule) : 'any',
-      vehicle: asPeerVehicle(st.vehicle),
-    },
+    settings: sanitizeLobbySettings(l.settings, roomKind),
     players: l.players.slice(0, 32).flatMap((p): LobbyPlayer[] => {
       if (!p || typeof p !== 'object') return [];
       const q = p as Record<string, unknown>;
@@ -278,6 +573,9 @@ export function sanitizeLobby(v: unknown): LobbyState | null {
     }),
     race: l.race ? sanitizeStart(l.race) : null,
   };
+  if (roomKind !== undefined) out.roomKind = roomKind;
+  if (session !== undefined) out.session = session;
+  return out;
 }
 
 /** Peer ids are generated as `peer_xxxxxxx`; anything else from the network is refused */
@@ -424,6 +722,11 @@ export function sanitizeControl(v: unknown): ControlMessage | null {
     }
     case 'identify':
       return typeof m.driverKey === 'string' && DRIVER_KEY_RE.test(m.driverKey) ? { type: 'identify', driverKey: m.driverKey } : null;
+    case 'quali_lap': {
+      const bestLapMs = finite(m.bestLapMs, 1000, 1e7);
+      if (typeof m.id !== 'string' || bestLapMs === null) return null;
+      return { type: 'quali_lap', id: m.id.slice(0, 32), bestLapMs: Math.round(bestLapMs) };
+    }
     default:
       return null;
   }

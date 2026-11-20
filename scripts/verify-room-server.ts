@@ -14,6 +14,7 @@ import type { Env } from '../cloudflare/api/types';
 import { FakeSocket, fakeState } from './lib/fake-cloudflare';
 import { parseApiBase, parseOnlineConfig } from '../src/lib/net/online-config';
 import { sanitizeIceServers } from '../src/lib/sim/multiplayer-sync';
+import { sanitizeLobby, sanitizeLobbySettings, sanitizeStart, withLobbyDefaults } from '../src/lib/net/wire';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -163,6 +164,236 @@ async function main() {
   check('online side: "/api" and full URLs, trailing slash dropped', parseApiBase('/api/') === '/api' && parseApiBase('https://x.example/api') === 'https://x.example/api');
   const parsed = parseOnlineConfig({ rooms: true, relay: 'yes', board: 1 });
   check('config from the network: only real booleans count', parsed.rooms && !parsed.relay && !parsed.board && !parseOnlineConfig(null).rooms);
+
+  // Backwards-compatible LobbySettings & RaceStartInfo sanitization
+  {
+    const legacyLobby = sanitizeLobby({
+      hostId: 'peer_h',
+      settings: { trackId: 'monza', laps: 4, collisions: 'on', carClass: 'gt3' },
+      players: [{ peerId: 'peer_h', name: 'Host', code: 'HST', color: '#ffffff', ready: true, isHost: true }],
+      race: null,
+    });
+    const defaulted = legacyLobby ? withLobbyDefaults(legacyLobby.settings) : null;
+    check(
+      'legacy lobby without new SP fields sanitizes with safe defaults',
+      defaulted !== null &&
+        defaulted.startType === 'standing' &&
+        defaulted.manualStart === false &&
+        defaulted.gridOrder === 'qualifying' &&
+        defaulted.qualifyingMinutes === 0 &&
+        defaulted.rules.preset === 'classic' &&
+        defaulted.rules.damage === 'off',
+    );
+    const fullSettings = sanitizeLobbySettings(
+      {
+        trackId: 'spa',
+        laps: 8,
+        collisions: 'ghost_lap1',
+        carClass: 'f1',
+        weather: 'dynamic',
+        timeOfDay: 'night',
+        timeScale: 15,
+        startType: 'rolling',
+        manualStart: true,
+        gridOrder: 'reverse',
+        rules: { preset: 'open_wheel', trackLimits: 'auto', penalties: false, damage: 'full' },
+        qualifyingMinutes: 5,
+      },
+      'private',
+    );
+    check(
+      'private room LobbySettings keeps weather, night, rolling, rules, and qualifying',
+      fullSettings.weather === 'dynamic' &&
+        fullSettings.timeOfDay === 'night' &&
+        fullSettings.timeScale === 15 &&
+        fullSettings.startType === 'rolling' &&
+        fullSettings.manualStart === true &&
+        fullSettings.gridOrder === 'reverse' &&
+        fullSettings.rules?.preset === 'open_wheel' &&
+        fullSettings.rules?.penalties === false &&
+        fullSettings.rules?.damage === 'full' &&
+        fullSettings.qualifyingMinutes === 5,
+    );
+    const pubSettings = sanitizeLobbySettings({ ...fullSettings, qualifyingMinutes: 10 }, 'public');
+    check('sanitizeLobbySettings forces qualifyingMinutes = 0 on public rooms', pubSettings.qualifyingMinutes === 0);
+    const sanitizedStart = sanitizeStart({
+      id: 'r99',
+      lightsStartHostMs: 1000,
+      holdMs: 0,
+      laps: 5,
+      collisions: 'on',
+      carClass: 'any',
+      trackId: 'spa',
+      grid: ['p1', 'p2'],
+      weather: 'light_rain',
+      timeOfDay: 'night',
+      timeScale: 5,
+      startType: 'rolling',
+      manualStart: false,
+      gridOrder: 'qualifying',
+      rules: { preset: 'endurance_sprint', trackLimits: 'off', penalties: true, damage: 'reduced' },
+      qualifying: [
+        { peer: 'p1', ms: 88_400 },
+        { peer: 'p2', ms: null },
+      ],
+    });
+    check(
+      'sanitizeStart preserves new SP settings and qualifying rows',
+      sanitizedStart !== null &&
+        sanitizedStart.timeOfDay === 'night' &&
+        sanitizedStart.startType === 'rolling' &&
+        sanitizedStart.rules?.damage === 'reduced' &&
+        sanitizedStart.qualifying?.length === 2 &&
+        sanitizedStart.qualifying[0].ms === 88_400 &&
+        sanitizedStart.qualifying[1].ms === null,
+    );
+  }
+
+  // Public room: server-side qualifying rejection
+  {
+    let clockMs = 1_000_000;
+    const pubState = fakeState();
+    const pubRoom = new RoomServer(pubState, env, async () => ICE, () => clockMs);
+    const pubHost = new FakeSocket();
+    const pubGuest = new FakeSocket();
+    await pubRoom.connect('host', TOKEN_A, pubHost, 'public');
+    await pubRoom.connect('guest', '', pubGuest);
+    await pubRoom.webSocketMessage(pubHost, JSON.stringify({ t: 'join', peerId: 'peer_pub_h' }));
+    await pubRoom.webSocketMessage(pubGuest, JSON.stringify({ t: 'join', peerId: 'peer_pub_g' }));
+    await pubRoom.webSocketMessage(pubHost, JSON.stringify({ t: 'settings', settings: { qualifyingMinutes: 5, timeOfDay: 'night' } }));
+    const errMsg = pubHost.sent.find((m) => m.t === 'error');
+    const stAfter = await pubRoom.getRoomState();
+    check(
+      'public room rejects qualifyingMinutes > 0 and enforces qualifyingMinutes = 0',
+      errMsg?.code === 'qualifying_private_only' && stAfter.settings.qualifyingMinutes === 0 && stAfter.settings.timeOfDay === 'night',
+    );
+    await pubRoom.webSocketMessage(pubHost, JSON.stringify({ t: 'start_qualifying' }));
+    const stQualiTry = await pubRoom.getRoomState();
+    check(
+      'public room refuses start_qualifying and stays in lobby',
+      pubHost.last()?.t === 'error' && pubHost.last()?.code === 'qualifying_private_only' && stQualiTry.phase === 'lobby',
+    );
+    await pubRoom.webSocketMessage(pubHost, JSON.stringify({ t: 'start_session' }));
+    const stStart = await pubRoom.getRoomState();
+    check('public room start_session skips qualifying and goes straight to racing', stStart.phase === 'racing' && pubState.alarmMs === null);
+  }
+
+  // Private room Qualifying: timer expiration via DO alarm + grid sorting (valid ascending, no-lap behind)
+  {
+    let clockMs = 2_000_000;
+    const qState = fakeState();
+    const qRoom = new RoomServer(qState, env, async () => ICE, () => clockMs);
+    const h = new FakeSocket();
+    const p1 = new FakeSocket();
+    const p2 = new FakeSocket();
+    const p3 = new FakeSocket();
+    await qRoom.connect('host', TOKEN_A, h, 'private');
+    await qRoom.connect('guest', '', p1);
+    await qRoom.connect('guest', '', p2);
+    await qRoom.connect('guest', '', p3);
+    await qRoom.webSocketMessage(h, JSON.stringify({ t: 'join', peerId: 'peer_host' }));
+    await qRoom.webSocketMessage(p1, JSON.stringify({ t: 'join', peerId: 'peer_g1' }));
+    await qRoom.webSocketMessage(p2, JSON.stringify({ t: 'join', peerId: 'peer_g2' }));
+    await qRoom.webSocketMessage(p3, JSON.stringify({ t: 'join', peerId: 'peer_g3' }));
+
+    // Guest cannot change settings or start qualifying
+    await qRoom.webSocketMessage(p1, JSON.stringify({ t: 'settings', settings: { qualifyingMinutes: 10, laps: 99 } }));
+    await qRoom.webSocketMessage(p1, JSON.stringify({ t: 'start_session' }));
+    check('guest cannot modify room settings or start session', (await qRoom.getRoomState()).phase === 'lobby' && (await qRoom.getRoomState()).settings.laps === 5);
+
+    // Host configures private room with 3 min qualifying + SP features and starts session
+    await qRoom.webSocketMessage(
+      h,
+      JSON.stringify({
+        t: 'settings',
+        settings: {
+          laps: 6,
+          weather: 'light_rain',
+          timeOfDay: 'night',
+          timeScale: 5,
+          startType: 'standing',
+          manualStart: true,
+          gridOrder: 'qualifying',
+          rules: { preset: 'open_wheel', trackLimits: 'auto', penalties: true, damage: 'reduced' },
+          qualifyingMinutes: 3,
+        },
+      }),
+    );
+    await qRoom.webSocketMessage(h, JSON.stringify({ t: 'start_session' }));
+    const qRunning = await qRoom.getRoomState();
+    const expectedEnd = clockMs + 3 * 60_000;
+    check(
+      'private room transitions to qualifying with qualifyingEndsAt and DO alarm',
+      qRunning.phase === 'qualifying' &&
+        qRunning.qualifyingEndsAt === expectedEnd &&
+        qState.alarmMs === expectedEnd &&
+        h.last()?.t === 'phase' &&
+        h.last()?.phase === 'qualifying' &&
+        p1.last()?.phase === 'qualifying',
+    );
+
+    const sessionId = qRunning.sessionId!;
+    // Peers report valid bestLapMs via PeerRaceProgress and lap messages
+    await qRoom.webSocketMessage(p2, JSON.stringify({ t: 'progress', race: { id: sessionId, dist: 4200, fin: null, best: 91_500 } }));
+    await qRoom.webSocketMessage(p2, JSON.stringify({ t: 'progress', race: { id: sessionId, dist: 8400, fin: null, best: 89_200 } }));
+    await qRoom.webSocketMessage(p2, JSON.stringify({ t: 'progress', race: { id: sessionId, dist: 12600, fin: null, best: 92_000 } })); // slower, ignored
+    await qRoom.webSocketMessage(h, JSON.stringify({ t: 'progress', race: { id: sessionId, dist: 4200, fin: null, best: 90_100 } }));
+    await qRoom.webSocketMessage(p3, JSON.stringify({ t: 'lap', sessionId, bestLapMs: 88_400 }));
+    await qRoom.webSocketMessage(p1, JSON.stringify({ t: 'progress', race: { id: sessionId, dist: 4200, fin: null, best: null } })); // no valid lap
+    await qRoom.webSocketMessage(p1, JSON.stringify({ t: 'lap', sessionId, bestLapMs: 500 })); // implausibly short, ignored
+    await qRoom.webSocketMessage(p1, JSON.stringify({ t: 'progress', race: { id: 'wrong_id', dist: 4200, fin: null, best: 70_000 } })); // wrong session, ignored
+
+    // Timer expires -> DO alarm fires
+    clockMs = expectedEnd;
+    await qRoom.alarm();
+    const raced = await qRoom.getRoomState();
+    const phaseMsg = p3.last();
+    check(
+      'qualifying timer expiry sorts race grid by valid bestLapMs ascending, no-lap behind',
+      raced.phase === 'racing' &&
+        qState.alarmMs === null &&
+        raced.grid.join(',') === 'peer_g3,peer_g2,peer_host,peer_g1' &&
+        phaseMsg?.t === 'phase' &&
+        phaseMsg?.phase === 'racing' &&
+        (phaseMsg?.grid as string[]).join(',') === 'peer_g3,peer_g2,peer_host,peer_g1',
+      raced.grid.join(','),
+    );
+    check(
+      'qualifying keeps fastest valid lap per driver and null for no-lap driver',
+      raced.qualifying.map((x) => `${x.peer}:${x.ms}`).join(',') === 'peer_g3:88400,peer_g2:89200,peer_host:90100,peer_g1:null',
+      raced.qualifying.map((x) => `${x.peer}:${x.ms}`).join(','),
+    );
+
+    // Host early-start during qualifying
+    await qRoom.webSocketMessage(h, JSON.stringify({ t: 'abort' }));
+    await qRoom.webSocketMessage(h, JSON.stringify({ t: 'settings', settings: { qualifyingMinutes: 5 } }));
+    await qRoom.webSocketMessage(h, JSON.stringify({ t: 'start_session' }));
+    const q2 = await qRoom.getRoomState();
+    await qRoom.webSocketMessage(p1, JSON.stringify({ t: 'lap', sessionId: q2.sessionId, bestLapMs: 87_000 }));
+    await qRoom.webSocketMessage(h, JSON.stringify({ t: 'lap', sessionId: q2.sessionId, bestLapMs: 89_500 }));
+    // Host clicks "Start Race" early (before timer expires)
+    clockMs += 30_000;
+    await qRoom.webSocketMessage(h, JSON.stringify({ t: 'start_race' }));
+    const earlyRace = await qRoom.getRoomState();
+    check(
+      'host early Start Race during qualifying sorts grid by laps set so far and clears alarm',
+      earlyRace.phase === 'racing' &&
+        qState.alarmMs === null &&
+        earlyRace.grid.join(',') === 'peer_g1,peer_host,peer_g2,peer_g3',
+      earlyRace.grid.join(','),
+    );
+
+    // Direct race gridOrder = reverse (no qualifying)
+    await qRoom.webSocketMessage(h, JSON.stringify({ t: 'abort' }));
+    await qRoom.webSocketMessage(h, JSON.stringify({ t: 'settings', settings: { qualifyingMinutes: 0, gridOrder: 'reverse' } }));
+    await qRoom.webSocketMessage(h, JSON.stringify({ t: 'start_session' }));
+    const revRace = await qRoom.getRoomState();
+    check(
+      'direct race with gridOrder reverse reverses participant order',
+      revRace.phase === 'racing' && revRace.grid.join(',') === 'peer_g3,peer_g2,peer_g1,peer_host',
+      revRace.grid.join(','),
+    );
+  }
 
   if (failures.length > 0) {
     console.error(`\n${failures.length} check(s) failed`);

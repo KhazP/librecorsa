@@ -563,7 +563,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   );
 
   // The page's one multiplayer manager (it outlives this component across circuit switches)
-  const handleHostP2PRoom = useCallback(() => getMultiplayerManager().hostRoom(), []);
+  const syncHostConditionsToLobby = useCallback(() => {
+    const c = settingsRef.current.conditions;
+    getMultiplayerManager().setLobbySettings({ weather: c.weather, timeOfDay: c.timeOfDay, timeScale: c.timeScale });
+  }, []);
+  const handleHostP2PRoom = useCallback(() => {
+    const code = getMultiplayerManager().hostRoom();
+    syncHostConditionsToLobby();
+    return code;
+  }, [syncHostConditionsToLobby]);
   const handleJoinP2PRoom = useCallback((roomCode: string) => getMultiplayerManager().joinRoom(roomCode), []);
   const handleCreateManualOffer = useCallback(() => getMultiplayerManager().createManualOffer(), []);
   const handleAcceptManualOffer = useCallback(
@@ -575,13 +583,30 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     return true;
   }, []);
 
-  const handleHostLocal = useCallback(() => getMultiplayerManager().hostLocal(), []);
-  const handleSetLobbySettings = useCallback((patch: Partial<LobbySettings>) => getMultiplayerManager().setLobbySettings(patch), []);
+  const handleHostLocal = useCallback(() => {
+    getMultiplayerManager().hostLocal();
+    syncHostConditionsToLobby();
+  }, [syncHostConditionsToLobby]);
+  const handleSetLobbySettings = useCallback((patch: Partial<LobbySettings>) => {
+    getMultiplayerManager().setLobbySettings(patch);
+    if (patch.weather !== undefined || patch.timeOfDay !== undefined || patch.timeScale !== undefined) {
+      setSettings((prev) => ({
+        ...prev,
+        conditions: {
+          ...prev.conditions,
+          weather: patch.weather ?? prev.conditions.weather,
+          weatherNodes: patch.weather !== undefined ? undefined : prev.conditions.weatherNodes,
+          timeOfDay: patch.timeOfDay ?? prev.conditions.timeOfDay,
+          timeScale: patch.timeScale ?? prev.conditions.timeScale,
+        },
+      }));
+    }
+  }, []);
   const handleSetReady = useCallback((ready: boolean) => getMultiplayerManager().setReady(ready), []);
   const handleStartMpRace = useCallback(() => {
     // A hill climb has no races: one car at a time, start to finish
     if (getActivePointToPoint()) return;
-    getMultiplayerManager().startRace();
+    getMultiplayerManager().startSession();
   }, []);
   const handleAbortMpRace = useCallback(() => getMultiplayerManager().abortRace(), []);
 
@@ -711,13 +736,28 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (!allowed.includes(vehicleModelRef.current)) changeCar(raceCarFor(allowed[0], mp.inScheduledRace).id);
       // A scheduled race is driven to the week's rules: its assists and realism, a dry track
       if (mp.inScheduledRace) applyWeekRules();
+      else if (start.weather || start.timeOfDay || start.timeScale !== undefined) {
+        const env = getTrackEnv();
+        const cur = env.weather.conditions;
+        const nextCond = {
+          ...cur,
+          weather: start.weather ?? cur.weather,
+          weatherNodes: start.weather !== undefined ? undefined : cur.weatherNodes,
+          timeOfDay: start.timeOfDay ?? cur.timeOfDay,
+          timeScale: start.timeScale ?? cur.timeScale,
+        };
+        if (nextCond.weather !== cur.weather || nextCond.timeOfDay !== cur.timeOfDay || nextCond.timeScale !== cur.timeScale) {
+          env.setConditions(nextCond);
+        }
+      }
       const physics = session?.car;
       if (physics) {
-        physics.resetToStartGrid(false, race.gridSlot, undefined, true);
+        const rolling = start.startType === "rolling";
+        physics.resetToStartGrid(rolling, race.gridSlot, rolling ? start.grid.length : undefined, true);
         race.lapClock.reset(physics.sMeters);
       }
     },
-    [session, track, changeCar, startSession, applyWeekRules]
+    [session, track, changeCar, startSession, applyWeekRules, getTrackEnv]
   );
   const startMpRaceRef = useRef(startMpRace);
   startMpRaceRef.current = startMpRace;
@@ -1288,6 +1328,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setRaceEntry(mp.raceStatus);
     mp.onRaceStatusChange = setRaceEntry;
     mp.weatherProvider = () => trackEnvRef.current?.weather.snapshot() ?? null;
+    mp.onQualifyingStart = () => {
+      if (!session || phaseRef.current === "loading") return;
+      const lobbyNow = mp.lobby;
+      if (lobbyNow) {
+        const allowed = lobbyNow.settings.vehicle ? [lobbyNow.settings.vehicle] : vehicleModelsFor(lobbyNow.settings.carClass);
+        if (allowed.length > 0 && !allowed.includes(vehicleModelRef.current)) {
+          changeCar(raceCarFor(allowed[0], mp.inScheduledRace).id);
+        }
+      }
+      startSession({ kind: "practice" });
+      session.car.resetToStartGrid(true);
+    };
     mp.onRaceStart = (start) => {
       // A scheduled race nobody else entered: out of it, and the same race against the AI instead
       if (mp.inScheduledRace && start.grid.length <= 1) {
@@ -1319,13 +1371,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       mp.onLobbyChange = undefined;
       mp.onRaceStatusChange = undefined;
       mp.weatherProvider = undefined;
+      mp.onQualifyingStart = undefined;
       mp.onRaceStart = undefined;
       mp.onRaceAbort = undefined;
       mp.onRaceFinish = undefined;
       mp.onRaceResult = undefined;
       window.clearInterval(timer);
     };
-  }, [session, trackId, onSelectTrack, takeRaceStart, endMpRace, changeCar]);
+  }, [session, trackId, onSelectTrack, takeRaceStart, endMpRace, changeCar, startSession]);
 
   // ---- Weekly challenge
   // The week is read when the menus open (it only turns on Monday)

@@ -6,7 +6,7 @@
 import * as THREE from "three";
 import { GapTimer, LapClock, MultiplayerRace, classificationClosed, classify, raceOrder, type RacerProgress } from "../src/lib/sim/race-session";
 import type { InterpolatedPeerState, RaceStartInfo } from "../src/lib/sim/multiplayer-sync";
-import { sanitizePacket, type ControlMessage, type NetworkVehiclePacket } from "../src/lib/net/wire";
+import { buildRaceGrid, sanitizePacket, sortQualifyingTimes, type ControlMessage, type NetworkVehiclePacket } from "../src/lib/net/wire";
 import { QualifyingSession, aiQualifyingMs, qualifyingOrder, type QualifyingFrame } from "../src/lib/sim/qualifying";
 import { AiOpponentField, AI_DRIVERS } from "../src/lib/sim/ai-opponents";
 import { F1Physics2026 } from "../src/lib/f1-physics-2026";
@@ -547,6 +547,42 @@ console.log("Qualifying · the AI field's grid");
   none.playerGrid = "back";
   none.startRace(true);
   check("no reference lap: the setup's grid, no classification", none.status().qualifying === undefined && !none.status().countdownS);
+}
+
+console.log("Multiplayer SP features · rolling start, rules, qualifying grid");
+{
+  const rollingStart: RaceStartInfo = {
+    ...start,
+    id: "race-rolling",
+    lightsStartHostMs: 20_000,
+    holdMs: 0,
+    startType: "rolling",
+    manualStart: false,
+    rules: { preset: "open_wheel", trackLimits: "auto", penalties: true, damage: "full" },
+    qualifying: [
+      { peer: "other", ms: 81_200 },
+      { peer: "me", ms: 82_400 },
+      { peer: "host", ms: null },
+    ],
+    grid: ["other", "me", "host"],
+  };
+  const mpRolling = new MultiplayerRace(rollingStart, L, "me", { name: "Me", code: "MEE", color: "#00ff00" }, roster);
+  check("rolling start counts down before lightsStartHostMs", mpRolling.frame(18_000).phase === "countdown" && mpRolling.frame(18_000).lightsOn === 0);
+  check("rolling start skips 5-red-light sequence and races at lightsStartHostMs", mpRolling.frame(20_500).phase === "racing" && Math.abs(mpRolling.frame(20_500).raceTimeS - 0.5) < 1e-9);
+  check("damage model enabled when rules.damage is full", mpRolling.damage !== null && mpRolling.damage.level === "full");
+  check("default race without rules.damage keeps damage off", race.damage === null);
+  const stRoll = mpRolling.status(mpRolling.frame(18_000), 0);
+  check(
+    "qualifying grid rows surfaced on multiplayer RaceStatus",
+    stRoll.qualifying?.length === 3 && stRoll.qualifying[0].code === "OTH" && stRoll.qualifying[1].isPlayer === true && stRoll.qualifying[2].lapMs === null,
+  );
+  const sorted = sortQualifyingTimes(["a", "b", "c", "d"], { a: 90_000, b: 88_000, c: null, d: 88_000 });
+  check("sortQualifyingTimes sorts ascending, breaks ties by join order, puts null last", sorted.map((r) => r.peer).join(",") === "b,d,a,c");
+  check("buildRaceGrid reverse flips peer order", buildRaceGrid(["a", "b", "c"], { gridOrder: "reverse" }).join(",") === "c,b,a");
+  check(
+    "buildRaceGrid random shuffles deterministically with custom rng",
+    buildRaceGrid(["a", "b", "c"], { gridOrder: "random", rng: () => 0 }).join(",") === "b,c,a",
+  );
 }
 
 console.log(`\n${passed} checks passed`);

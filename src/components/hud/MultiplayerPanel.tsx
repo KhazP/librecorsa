@@ -4,21 +4,39 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   hasTurnServer,
   loadUserTurnServer,
+  MP_QUALIFYING_MINUTES,
   saveUserTurnServer,
+  withLobbyDefaults,
   type CarClassRule,
   type CollisionMode,
   type LobbyPlayer,
   type LobbySettings,
   type LobbyState,
+  type MpGridOrder,
+  type MpQualifyingMinutes,
+  type MpRaceRules,
+  type MpStartType,
   type P2PConnectionStatus,
   type PeerNetStats,
 } from "@/lib/sim/multiplayer-sync";
+import {
+  TIME_OF_DAY_LABELS,
+  TIME_OF_DAY_PRESETS,
+  TIME_SCALES,
+  WEATHER_LABELS,
+  WEATHER_PRESETS,
+  type TimeOfDayId,
+  type WeatherPresetId,
+} from "@/lib/sim/weather";
+import { DAMAGE_LEVEL_LABELS, DAMAGE_LEVELS, type DamageLevel } from "@/lib/sim/car-damage";
+import { RULE_PRESET_LABELS, TRACK_LIMITS_CHOICE_LABELS, type TrackLimitsChoice } from "@/lib/sim/race-rules";
 import { getTrackInfo, TRACKS } from "@/lib/track-registry";
-import { Button, Card, ConfirmDialog, Disclosure, Select, SettingRow, Stepper, TextField, Well } from "@/components/ui";
+import { Button, Card, ConfirmDialog, Disclosure, Segmented, Select, SettingRow, Stepper, TextField, Toggle, Well } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { PlayerTag, SessionBadge } from "@/components/ui/badges";
 import { Icon } from "@/components/ui/icons";
 import { TrackQualityBadge } from "@/components/menu/menu-content-ui";
+import { formatLapTime } from "./hud-format";
 import { RacesCard, type RacesCardProps } from "./RacesCard";
 
 export interface MultiplayerPanelProps {
@@ -70,6 +88,34 @@ const CLASS_OPTIONS: { value: CarClassRule; label: string }[] = [
   { value: "f1", label: "Open-wheelers only" },
   { value: "gt3", label: "GT3 only" },
 ];
+
+const START_TYPE_OPTIONS: { value: MpStartType; label: string }[] = [
+  { value: "standing", label: "Standing" },
+  { value: "rolling", label: "Rolling" },
+];
+
+const GRID_ORDER_OPTIONS: { value: MpGridOrder; label: string }[] = [
+  { value: "qualifying", label: "Qualifying" },
+  { value: "reverse", label: "Reverse" },
+  { value: "random", label: "Random" },
+];
+
+const MP_RULE_PRESET_OPTIONS: { value: MpRaceRules["preset"]; label: string }[] = [
+  { value: "classic", label: "Classic" },
+  { value: "auto", label: RULE_PRESET_LABELS.auto },
+  { value: "open_wheel", label: RULE_PRESET_LABELS.open_wheel },
+  { value: "endurance_sprint", label: RULE_PRESET_LABELS.endurance_sprint },
+];
+
+const TIME_SCALE_OPTIONS = TIME_SCALES.map((s) => ({
+  id: String(s),
+  label: s === 0 ? "Fixed" : `${s}x`,
+}));
+
+const QUALIFYING_OPTIONS = MP_QUALIFYING_MINUTES.map((m) => ({
+  id: String(m),
+  label: m === 0 ? "Off" : `${m} min`,
+}));
 
 /** A circuit's name, with the layout when the venue has more than one, so a guest knows which (an unknown id stays itself) */
 const trackName = (id: string) => {
@@ -355,7 +401,16 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   const joinError = joinHint ?? (joinFailed ? p2pStatus?.statusText || "Couldn't join that room. Check the code." : undefined);
 
   const renderLobby = (state: LobbyState) => {
-    const settings = state.settings;
+    const settings = withLobbyDefaults(state.settings);
+    const rules = settings.rules;
+    const weather = settings.weather ?? state.weather?.conditions.weather ?? "clear";
+    const timeOfDay = settings.timeOfDay ?? state.weather?.conditions.timeOfDay ?? "golden_hour";
+    const timeScale = settings.timeScale ?? state.weather?.conditions.timeScale ?? 0;
+    const isPrivate = state.roomKind !== "public";
+    const qualifyingActive = state.session?.phase === "qualifying";
+    const qualifyingTimes = new Map((state.session?.times ?? []).map((t) => [t.peer, t.ms]));
+    const locked = raceRunning || qualifyingActive;
+
     // Who hosts comes from one place, the lobby's host id: the host badge, "You are host" and the host's controls agree
     const isHostPlayer = (p: LobbyPlayer) => p.peerId === state.hostId;
     const hostPlayer = state.players.find(isHostPlayer);
@@ -366,15 +421,38 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     const allowedVehicles = vehiclesForClass ? vehiclesForClass(settings.carClass) : null;
     const vehicleBlocked = !!allowedVehicles && !!currentVehicle && !allowedVehicles.includes(currentVehicle);
 
+    const updateRules = (patch: Partial<MpRaceRules>) => {
+      onSetLobbySettings?.({ rules: { ...rules, ...patch } });
+    };
+
+    const orderedPlayers = qualifyingActive
+      ? [...state.players].sort((a, b) => {
+          const am = qualifyingTimes.get(a.peerId) ?? null;
+          const bm = qualifyingTimes.get(b.peerId) ?? null;
+          if (am !== null && bm !== null) return am - bm;
+          if (am !== null) return -1;
+          if (bm !== null) return 1;
+          return 0;
+        })
+      : state.players;
+
     return (
       <div className="flex min-w-0 flex-col gap-3">
         <Card
           title="Lobby"
           description={`Hosted by ${hostPlayer?.name ?? "nobody yet"}`}
-          action={isHost ? <SessionBadge session="host">You are host</SessionBadge> : null}
+          action={
+            qualifyingActive ? (
+              <Badge tone="info" dot="live">
+                Qualifying
+              </Badge>
+            ) : isHost ? (
+              <SessionBadge session="host">You are host</SessionBadge>
+            ) : null
+          }
         >
-          <SettingRow label="Laps">
-            {isHost ? (
+          <SettingRow label="Laps" disabled={locked}>
+            {isHost && !locked ? (
               <Stepper value={settings.laps} min={MIN_LAPS} max={MAX_LAPS} onChange={setLaps} />
             ) : (
               <span className="lc-mono text-[18px] font-bold text-lc-chalk">{settings.laps}</span>
@@ -386,8 +464,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               <TrackQualityBadge track={getTrackInfo(settings.trackId)} size="xs" />
             </span>
           </SettingRow>
-          <SettingRow label="Collisions">
-            {isHost ? (
+          <SettingRow label="Collisions" disabled={locked}>
+            {isHost && !locked ? (
               <Select
                 value={settings.collisions}
                 options={COLLISION_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
@@ -397,8 +475,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               <ReadValue>{optionLabel(COLLISION_OPTIONS, settings.collisions)}</ReadValue>
             )}
           </SettingRow>
-          <SettingRow label="Car class">
-            {isHost ? (
+          <SettingRow label="Car class" disabled={locked}>
+            {isHost && !locked ? (
               <Select
                 value={settings.carClass}
                 options={CLASS_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
@@ -408,13 +486,142 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               <ReadValue>{optionLabel(CLASS_OPTIONS, settings.carClass)}</ReadValue>
             )}
           </SettingRow>
+          {isPrivate ? (
+            <SettingRow
+              label="Qualifying"
+              hint={settings.qualifyingMinutes > 0 ? "Fastest valid lap starts on pole; drivers without a lap start behind" : undefined}
+              disabled={locked}
+            >
+              {isHost && !locked ? (
+                <Segmented<string>
+                  value={String(settings.qualifyingMinutes)}
+                  options={QUALIFYING_OPTIONS}
+                  onChange={(v) => onSetLobbySettings?.({ qualifyingMinutes: Number(v) as MpQualifyingMinutes })}
+                />
+              ) : (
+                <ReadValue>{settings.qualifyingMinutes > 0 ? `${settings.qualifyingMinutes} min` : "Off"}</ReadValue>
+              )}
+            </SettingRow>
+          ) : null}
+          <SettingRow label="Start" disabled={locked}>
+            {isHost && !locked ? (
+              <Segmented<MpStartType>
+                value={settings.startType}
+                options={START_TYPE_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
+                onChange={(startType) =>
+                  onSetLobbySettings?.({ startType, manualStart: startType === "rolling" ? false : settings.manualStart })
+                }
+              />
+            ) : (
+              <ReadValue>{optionLabel(START_TYPE_OPTIONS, settings.startType)}</ReadValue>
+            )}
+          </SettingRow>
+          {settings.startType === "standing" ? (
+            <SettingRow label="Manual launch" hint="Hold clutch and revs through the lights" disabled={locked}>
+              {isHost && !locked ? (
+                <Toggle checked={settings.manualStart} onChange={(manualStart) => onSetLobbySettings?.({ manualStart })} />
+              ) : (
+                <ReadValue>{settings.manualStart ? "On" : "Off"}</ReadValue>
+              )}
+            </SettingRow>
+          ) : null}
+          <SettingRow label="Grid order" hint={settings.qualifyingMinutes > 0 ? "Set by qualifying" : undefined} disabled={locked}>
+            {settings.qualifyingMinutes > 0 ? (
+              <ReadValue>Qualifying</ReadValue>
+            ) : isHost && !locked ? (
+              <Segmented<MpGridOrder>
+                value={settings.gridOrder}
+                options={GRID_ORDER_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
+                onChange={(gridOrder) => onSetLobbySettings?.({ gridOrder })}
+              />
+            ) : (
+              <ReadValue>{optionLabel(GRID_ORDER_OPTIONS, settings.gridOrder)}</ReadValue>
+            )}
+          </SettingRow>
+        </Card>
+
+        <Card title="Conditions and rules">
+          <SettingRow label="Weather" disabled={locked}>
+            {isHost && !locked ? (
+              <Select<WeatherPresetId>
+                value={weather}
+                options={WEATHER_PRESETS.map((id) => ({ id, label: WEATHER_LABELS[id].label }))}
+                onChange={(w) => onSetLobbySettings?.({ weather: w })}
+              />
+            ) : (
+              <ReadValue>{WEATHER_LABELS[weather].label}</ReadValue>
+            )}
+          </SettingRow>
+          <SettingRow label="Time of day" disabled={locked}>
+            {isHost && !locked ? (
+              <Select<TimeOfDayId>
+                value={timeOfDay}
+                options={TIME_OF_DAY_PRESETS.map((id) => ({ id, label: TIME_OF_DAY_LABELS[id] }))}
+                onChange={(tod) => onSetLobbySettings?.({ timeOfDay: tod })}
+              />
+            ) : (
+              <ReadValue>{TIME_OF_DAY_LABELS[timeOfDay]}</ReadValue>
+            )}
+          </SettingRow>
+          <SettingRow label="Time speed" disabled={locked}>
+            {isHost && !locked ? (
+              <Select<string>
+                value={String(timeScale)}
+                options={TIME_SCALE_OPTIONS}
+                onChange={(v) => onSetLobbySettings?.({ timeScale: Number(v) })}
+              />
+            ) : (
+              <ReadValue>{timeScale === 0 ? "Fixed" : `${timeScale}x`}</ReadValue>
+            )}
+          </SettingRow>
+          <SettingRow label="Rules preset" disabled={locked}>
+            {isHost && !locked ? (
+              <Select<MpRaceRules["preset"]>
+                value={rules.preset}
+                options={MP_RULE_PRESET_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
+                onChange={(preset) => updateRules({ preset })}
+              />
+            ) : (
+              <ReadValue>{optionLabel(MP_RULE_PRESET_OPTIONS, rules.preset)}</ReadValue>
+            )}
+          </SettingRow>
+          <SettingRow label="Track limits" disabled={locked}>
+            {isHost && !locked ? (
+              <Segmented<TrackLimitsChoice>
+                value={rules.trackLimits}
+                options={(["auto", "off"] as const).map((id) => ({ id, label: TRACK_LIMITS_CHOICE_LABELS[id] }))}
+                onChange={(trackLimits) => updateRules({ trackLimits })}
+              />
+            ) : (
+              <ReadValue>{TRACK_LIMITS_CHOICE_LABELS[rules.trackLimits]}</ReadValue>
+            )}
+          </SettingRow>
+          <SettingRow label="Penalties" disabled={locked}>
+            {isHost && !locked ? (
+              <Toggle checked={rules.penalties !== false} onChange={(penalties) => updateRules({ penalties })} />
+            ) : (
+              <ReadValue>{rules.penalties !== false ? "On" : "Off"}</ReadValue>
+            )}
+          </SettingRow>
+          <SettingRow label="Damage" disabled={locked}>
+            {isHost && !locked ? (
+              <Segmented<DamageLevel>
+                value={rules.damage ?? "off"}
+                options={DAMAGE_LEVELS.map((id) => ({ id, label: DAMAGE_LEVEL_LABELS[id] }))}
+                onChange={(damage) => updateRules({ damage })}
+              />
+            ) : (
+              <ReadValue>{DAMAGE_LEVEL_LABELS[rules.damage ?? "off"]}</ReadValue>
+            )}
+          </SettingRow>
         </Card>
 
         <Card title="Drivers" action={<Badge variant="outline">{state.players.length}</Badge>} bodyClassName="gap-3">
           <ul className="m-0 flex list-none flex-col p-0">
-            {state.players.map((p) => {
+            {orderedPlayers.map((p) => {
               const isMe = p.peerId === localPeerId;
               const carName = p.vehicle ? (vehicleLabel?.(p.vehicle) ?? p.vehicle) : "No car yet";
+              const qLapMs = qualifyingActive ? (qualifyingTimes.get(p.peerId) ?? null) : null;
               return (
                 <li key={p.peerId} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-white/5 py-2.5 last:border-b-0">
                   {/* The driver's own colour: data */}
@@ -432,17 +639,24 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
+                    {qualifyingActive ? (
+                      <Badge size="sm" tone={qLapMs !== null ? "info" : undefined} variant={qLapMs !== null ? undefined : "outline"} className="lc-mono">
+                        {qLapMs !== null ? formatLapTime(qLapMs) : "No time"}
+                      </Badge>
+                    ) : null}
                     {isHostPlayer(p) ? <SessionBadge session="host" size="sm" /> : null}
                     {!isMe ? <NetBadge stats={peerStats?.find((s) => s.peerId === p.peerId)} /> : null}
-                    {p.ready ? (
-                      <Badge size="sm" tone="good" icon="success">
-                        Ready
-                      </Badge>
-                    ) : (
-                      <Badge size="sm" variant="outline">
-                        Not ready
-                      </Badge>
-                    )}
+                    {!qualifyingActive ? (
+                      p.ready ? (
+                        <Badge size="sm" tone="good" icon="success">
+                          Ready
+                        </Badge>
+                      ) : (
+                        <Badge size="sm" variant="outline">
+                          Not ready
+                        </Badge>
+                      )
+                    ) : null}
                   </div>
                 </li>
               );
@@ -489,14 +703,20 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 disabledReason={!raceRunning ? startBlocked : undefined}
                 onClick={() => onStartRace?.()}
               >
-                {raceRunning ? "Race in progress" : "Start race"}
+                {raceRunning
+                  ? "Race in progress"
+                  : qualifyingActive
+                    ? "Start race now"
+                    : settings.qualifyingMinutes > 0 && isPrivate
+                      ? `Start ${settings.qualifyingMinutes} min qualifying`
+                      : "Start race"}
               </Button>
-              {raceRunning && onAbortRace ? (
+              {(raceRunning || qualifyingActive) && onAbortRace ? (
                 <Button variant="danger" block onClick={() => setConfirmEnd(true)}>
-                  End race for everyone
+                  {qualifyingActive ? "End qualifying" : "End race for everyone"}
                 </Button>
               ) : null}
-              {!raceRunning ? (
+              {!raceRunning && !qualifyingActive ? (
                 <p className={`m-0 text-center text-[12px] ${startBlocked ? "font-medium text-lc-caution" : "text-lc-slate"}`}>
                   {startBlocked ?? "Everyone not ready will still start."}
                 </p>
@@ -516,16 +736,22 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 {ready ? "Ready" : "Ready up"}
               </Button>
               <p className="lc-hint m-0 text-center">
-                {raceRunning ? "Race in progress." : ready ? "Press again if you are not ready. The host starts the race." : "The host starts the race."}
+                {raceRunning
+                  ? "Race in progress."
+                  : qualifyingActive
+                    ? "Qualifying in progress. Set a clean lap for grid position."
+                    : ready
+                      ? "Press again if you are not ready. The host starts the race."
+                      : "The host starts the race."}
               </p>
             </div>
           )}
         </Card>
         <ConfirmDialog
           open={confirmEnd}
-          title="End the race for everyone?"
-          confirmLabel="End race"
-          cancelLabel="Keep racing"
+          title={qualifyingActive ? "End qualifying for everyone?" : "End the race for everyone?"}
+          confirmLabel={qualifyingActive ? "End qualifying" : "End race"}
+          cancelLabel={qualifyingActive ? "Keep qualifying" : "Keep racing"}
           icon={<Icon name="warning" />}
           onCancel={() => setConfirmEnd(false)}
           onConfirm={() => {
