@@ -88,6 +88,21 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry }> = ({ telemetry }) 
     return () => window.clearTimeout(timer);
   }, [jumped, held]);
 
+  if (telemetry.engineStalled && !held) {
+    return (
+      <div
+        role="status"
+        aria-label="Engine stalled: hold clutch or shift to neutral to restart"
+        className={`flex items-center gap-3 rounded-lc-row py-2.5 pr-5 pl-3 ${HUD_GLASS}`}
+      >
+        <StepRing progress={1} color={HUD_RED} done={false} />
+        <span className="lc-title hud-text-shadow text-[16px] whitespace-nowrap uppercase sm:text-[18px]" style={{ color: HUD_RED }}>
+          Engine stalled · Hold clutch or shift to N
+        </span>
+      </div>
+    );
+  }
+
   if (!start || (!held && !jumpShown)) return null;
 
   if (jumped) {

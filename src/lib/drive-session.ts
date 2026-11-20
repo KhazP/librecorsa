@@ -922,6 +922,7 @@ export class DriveSession {
       car.assistPreset = prefs.assistPreset;
       car.gamepadAssistEnabled = prefs.gamepadAssist;
       car.autoGearbox = prefs.autoGearbox;
+      car.autoClutch = prefs.autoClutch;
       car.aeroPreset = prev?.aeroPreset ?? DEFAULT_AERO_PRESET;
       if (prev) {
         car.tireCompound = prev.tireCompound;
@@ -1468,6 +1469,7 @@ export class DriveSession {
       if (next.assistPreset !== prev.assistPreset) physics.assistPreset = next.assistPreset;
       if (next.gamepadAssist !== prev.gamepadAssist) physics.gamepadAssistEnabled = next.gamepadAssist;
       if (next.autoGearbox !== prev.autoGearbox) physics.autoGearbox = next.autoGearbox;
+      if (next.autoClutch !== prev.autoClutch) physics.autoClutch = next.autoClutch;
       builtCircuit.racingLineMesh.visible = next.racingLine;
       if (prev.mouseSteer && !next.mouseSteer) mouseSteerValue = 0;
       if (next.liveryId !== prev.liveryId) {

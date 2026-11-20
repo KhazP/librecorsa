@@ -67,6 +67,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   assistPreset: "config",
   gamepadAssistEnabled: "config",
   autoGearbox: "config",
+  autoClutch: "config",
   autoXMode: "config",
   tireCompound: "config",
   trackLimitsMode: "config",

@@ -77,6 +77,8 @@ export const assistLevel = choice("tiles", {
       ...s,
       assistPreset: level.preset,
       racingLine: level.racingLine,
+      // Beginner and Intermediate keep auto-clutch on so players don't stall unexpectedly; Sim leaves it as set
+      autoClutch: level.id === "sim" ? s.autoClutch : true,
       // Beginners on a controller get its steering assist too
       gamepadAssist: level.id === "beginner" && s.device === "controller" ? true : s.gamepadAssist,
     }));
@@ -107,6 +109,14 @@ export const autoGearbox = toggle({
   label: "Automatic gearbox",
   hint: (env) => `Off: shift yourself with ${key(env, "shiftUp")} and ${key(env, "shiftDown")}`,
   ...top("autoGearbox"),
+});
+
+export const autoClutch = toggle({
+  id: "autoClutch",
+  label: "Auto clutch",
+  hint: "Works the clutch and prevents stalling. Turn off with manual gears for bite point, clutch slip and stalls",
+  off: (env) => (env.settings.autoGearbox ? "Turn off Automatic gearbox to use manual clutch" : null),
+  ...top("autoClutch"),
 });
 
 export const controllerSteerAssist = toggle({

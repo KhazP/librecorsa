@@ -1051,6 +1051,8 @@ export class F12026CarSim implements SimulatorCar {
   public gamepadAssistEnabled = true;
   /** Automatic gear changes; off = the driver shifts. The autopilot always shifts for itself (VehiclePhysics.autoShift) */
   public autoGearbox = true;
+  /** Automatic clutch and anti-stall (default true); false with manual gears enables bite point, slip and stalls */
+  public autoClutch = true;
   /**
    * Held on the grid through the lights of a manual start: the gear left where it is, and while the driver holds the
    * clutch (or keeps off the throttle) the brakes on and the clutch open, the throttle revving a free engine. Let out in
@@ -2009,6 +2011,7 @@ export class F12026CarSim implements SimulatorCar {
     const neutral = this.neutralPending;
     if (ticks > 0) this.drsPressPending = this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
+    this.vehicle.autoClutch = this.autoClutch || this.autoGearbox || this.aiAutopilot;
     // A steering wheel's rim is read once a frame: its move since the last frame is spread over this frame's ticks, so
     // the rack turns at the rim's own speed rather than in one jump per frame
     const rim = inputs.steerRim && inputs.analogSteer !== undefined ? inputs.analogSteer : null;
@@ -2033,7 +2036,7 @@ export class F12026CarSim implements SimulatorCar {
         shiftDown: !held && shiftDown,
         // The autopilot keeps its gear and drives on the car's own clutch
         neutral: !held && neutral && !this.aiAutopilot,
-        clutch: pinned ? 1 : this.aiAutopilot ? undefined : inputs.clutch,
+        clutch: pinned ? 1 : this.aiAutopilot ? undefined : this.vehicle.autoClutch ? inputs.clutch : (inputs.clutch ?? 0),
       };
       // A car whose state has blown up hands back a non-finite command: the rack must not keep it past the rescue
       this.steerCmd = Number.isFinite(cmd.steer) ? cmd.steer : 0;
@@ -2965,6 +2968,8 @@ export class F12026CarSim implements SimulatorCar {
     t.throttle = vt.throttle;
     t.brake = vt.brake;
     t.clutch = vt.clutchEngagement;
+    t.clutchSlip = vt.clutchSlip;
+    t.engineStalled = vt.engineStalled;
     t.steering = this.steerCmd;
     t.longitudinalG = this.lastAxMs2 / G;
     t.lateralG = -this.lastAyMs2 / G;

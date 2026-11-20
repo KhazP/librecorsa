@@ -55,6 +55,8 @@ export interface PlayerSettings {
   gamepadAssist: boolean;
   /** Automatic gearbox; off = shift with Gear up / Gear down */
   autoGearbox: boolean;
+  /** Automatic clutch and anti-stall; off with manual gears = bite point, clutch slip and stalls */
+  autoClutch: boolean;
   mouseSteer: boolean;
   liveryId: string | null;
   camera: CameraMode | null;
@@ -527,6 +529,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   racingLine: true,
   gamepadAssist: true,
   autoGearbox: true,
+  autoClutch: true,
   mouseSteer: false,
   liveryId: null,
   camera: null,
@@ -916,6 +919,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     racingLine: bool(raw.racingLine, d.racingLine),
     gamepadAssist: bool(raw.gamepadAssist, d.gamepadAssist),
     autoGearbox: bool(raw.autoGearbox, d.autoGearbox),
+    autoClutch: bool(raw.autoClutch, d.autoClutch),
     mouseSteer: bool(raw.mouseSteer, d.mouseSteer),
     liveryId: isStr(raw.liveryId) ? raw.liveryId : null,
     camera: isCameraMode(raw.camera) ? raw.camera : null,

@@ -177,6 +177,27 @@ const RAD2DEG = 180 / Math.PI;
 const RPM2RADS = Math.PI / 30;
 const RADS2RPM = 30 / Math.PI;
 const SOLVER_ITERATIONS = 8;
+/** Clutch pedal travel above which the clutch is fully open (free play near the floor) */
+export const CLUTCH_BITE_START = 0.85;
+/** Clutch pedal travel below which the clutch is fully locked (free play near the top) */
+export const CLUTCH_BITE_LOCK = 0.18;
+/** Seconds below stall speed before a manual-clutch engine stalls (s) */
+const ENGINE_STALL_DELAY_S = 0.12;
+/** Seconds of starter crank (clutch held or in neutral) to restart a stalled engine (s) */
+const ENGINE_RESTART_CRANK_S = 0.45;
+
+/**
+ * Maps clutch pedal travel `pedal` (0 = released/engaged, 1 = floor/open) to normalized torque capacity (0..1)
+ * with free play at both ends and a progressive friction bite zone between `CLUTCH_BITE_START` and `CLUTCH_BITE_LOCK`.
+ */
+export function clutchPedalEngagement(pedal: number): number {
+  if (pedal >= CLUTCH_BITE_START) return 0;
+  if (pedal <= CLUTCH_BITE_LOCK) return 1;
+  const u = (CLUTCH_BITE_START - pedal) / (CLUTCH_BITE_START - CLUTCH_BITE_LOCK);
+  // Progressive clamping curve: gentle, featherable torque in the lower bite zone, clamping firmly near lock
+  return Math.pow(u, 2.2);
+}
+
 /** Auto box: hold a new gear this long after an upshift before an off-brake downshift (s) */
 const AUTO_DOWNSHIFT_HOLD_S = 1.0;
 /** Auto box: under this share of the downshift point the engine lugs, and the box shifts down whatever the pedals */
@@ -557,6 +578,10 @@ export interface VehicleTelemetry {
   brake: number;
   steer: number;
   clutchEngagement: number;
+  /** Normalized clutch slip intensity (0..1) while partially engaged with engine/wheel speed difference */
+  clutchSlip: number;
+  /** True when the engine has stalled under manual clutch */
+  engineStalled: boolean;
   /** Body-frame accelerations (g): + forward, + left */
   lonG: number;
   latG: number;
@@ -1214,6 +1239,8 @@ export class VehiclePhysics {
   public gear = 1;
   public engineOmega: number;
   public autoShift = true;
+  /** Automatic clutch and anti-stall (default true); false with manual gears enables bite point, slip and stalls */
+  public autoClutch = true;
   public ersEnergyJ: number;
   public lapDeployJ = 0;
   public lapHarvestJ = 0;
@@ -1384,6 +1411,10 @@ export class VehiclePhysics {
   private sinceDownshiftS = Infinity;
   private limiterTimer = 0;
   private clutchEngagement = 1;
+  private clutchSlipNorm = 0;
+  private stalled = false;
+  private lowRpmTimerS = 0;
+  private restartTimerS = 0;
   /** Throttle plate the cylinders see, after the air path's lag (`EngineData.torqueResponseS`) */
   private icePlate = 0;
   private lsdLockTorque = 0;
@@ -2066,6 +2097,10 @@ export class VehiclePhysics {
       if (!w.bandLoadShares.every(Number.isFinite)) w.bandLoadShares = [1 / 3, 1 / 3, 1 / 3];
     }
     this.clutchEngagement = 1;
+    this.clutchSlipNorm = 0;
+    this.stalled = false;
+    this.lowRpmTimerS = 0;
+    this.restartTimerS = 0;
     this.icePlate = 0;
     this.lsdLockTorque = 0;
     this.centreCouplingTorqueNm = 0;
@@ -3597,6 +3632,93 @@ export class VehiclePhysics {
     const ratio = this.totalRatio();
     const rpm = this.rpm;
     const omegaE = Math.max(50, this.engineOmega);
+    const manualClutch = !this.autoClutch && !this.autoShift;
+    const stallRpm = Math.max(350, eng.idleRpm * 0.42);
+    const axleOmega = this.drivenOmega();
+    const wheelSideRpm = Math.abs(axleOmega * ratio) * RADS2RPM;
+    const wheelSideForwardRpm = axleOmega * ratio * RADS2RPM;
+
+    // Switching Auto clutch (or Auto gearbox) back on recovers a stalled engine immediately
+    if (!manualClutch && this.stalled) {
+      this.stalled = false;
+      this.lowRpmTimerS = 0;
+      this.restartTimerS = 0;
+      this.engineOmega = Math.max(this.engineOmega, eng.idleRpm * RPM2RADS);
+    }
+
+    // ---- clutch engagement
+    const cl = cfg.clutch;
+    let engage = 0;
+    if (this.gear !== 0) {
+      if (manualClutch) {
+        // Full manual clutch: pedal maps through free play and a progressive bite zone directly to torque capacity
+        engage = clutchPedalEngagement(inp.clutch ?? 0);
+      } else {
+        // Launch: in first gear the pedal moves the bite window up to end at the car's launch rpm, so the engine revs to
+        // where it has torque and the clutch slips there until the wheels have met it, instead of closing on an engine
+        // near its idle. Off the pedal the window is the anti-stall one again
+        let biteRpm = cl.biteRpm;
+        if (cl.launchRpm !== undefined && Math.abs(this.gear) === 1) {
+          const launch = THREE.MathUtils.clamp((inp.throttle - 0.2) / 0.6, 0, 1);
+          biteRpm += launch * Math.max(0, cl.launchRpm - cl.lockRpm);
+        }
+        const lockRpm = biteRpm + (cl.lockRpm - cl.biteRpm);
+        const t = THREE.MathUtils.clamp((rpm - biteRpm) / (lockRpm - biteRpm), 0, 1);
+        engage = wheelSideRpm >= lockRpm ? 1 : t * t * (3 - 2 * t);
+        // Anti-stall: off the pedal, with the wheels turning slower than the engine idles, the auto-clutch lets go. The
+        // idle controller holds the engine at or above some cars' bite speed, and its torque through the slipping clutch
+        // walked a car standing on the grid away. A pedal past 5 % has the whole clutch again, for the launch. Wheels
+        // turning against the gear (a car spinning backwards off a barrier, in first) count as slower than idle: through
+        // the clutch they would turn the engine backwards, and a stopped engine never starts again
+        if (wheelSideForwardRpm < eng.idleRpm) {
+          const pedal = THREE.MathUtils.clamp(inp.throttle / 0.05, 0, 1);
+          const turning = THREE.MathUtils.smoothstep(wheelSideForwardRpm, 0.7 * eng.idleRpm, eng.idleRpm);
+          engage *= Math.max(pedal, turning);
+        }
+        if (inp.clutch !== undefined) engage = Math.min(engage, clutchPedalEngagement(inp.clutch));
+      }
+      // A dog box between gears: the engine is free of the wheels
+      if (gb.upshiftNeutralS !== undefined && this.sinceUpshiftS < gb.upshiftNeutralS) engage = 0;
+    }
+
+    // ---- manual-clutch stall & starter / bump-start recovery
+    if (manualClutch) {
+      if (this.stalled) {
+        const disengaged = this.gear === 0 || (inp.clutch ?? 0) >= CLUTCH_BITE_START;
+        const bumpStart =
+          this.gear !== 0 && engage > 0.4 && wheelSideForwardRpm >= eng.idleRpm * 0.7 && rpm >= stallRpm * 1.1;
+        if (bumpStart) {
+          this.stalled = false;
+          this.lowRpmTimerS = 0;
+          this.restartTimerS = 0;
+        } else if (disengaged) {
+          const crankRate = inp.throttle > 0.05 ? 2.0 : 1.0;
+          this.restartTimerS += h * crankRate;
+          const crankTarget = eng.idleRpm * 0.5 * RPM2RADS;
+          if (this.engineOmega < crankTarget) {
+            this.engineOmega = Math.min(crankTarget, this.engineOmega + (crankTarget / ENGINE_RESTART_CRANK_S) * h * 1.5);
+          }
+          if (this.restartTimerS >= ENGINE_RESTART_CRANK_S) {
+            this.stalled = false;
+            this.lowRpmTimerS = 0;
+            this.restartTimerS = 0;
+            this.engineOmega = Math.max(this.engineOmega, eng.idleRpm * RPM2RADS);
+          }
+        } else {
+          this.restartTimerS = Math.max(0, this.restartTimerS - h * 2);
+        }
+      } else {
+        if (this.gear !== 0 && engage > 0.1 && rpm < stallRpm) {
+          this.lowRpmTimerS += h;
+          if (this.lowRpmTimerS >= ENGINE_STALL_DELAY_S) {
+            this.stalled = true;
+            this.restartTimerS = 0;
+          }
+        } else {
+          this.lowRpmTimerS = Math.max(0, this.lowRpmTimerS - h * 2);
+        }
+      }
+    }
 
     // ---- ICE (with live Engine Torque Map 1..5)
     if (rpm >= gb.gears.redline_rpm) this.limiterTimer = eng.limiterCutS;
@@ -3612,10 +3734,10 @@ export class VehiclePhysics {
     // The blip of a down-shift opens the throttle on the free engine, through the same air path
     const dn = gb.downshift;
     const downshifting = dn !== undefined && this.sinceDownshiftS < dn.clutchHomeS && this.sinceDownshiftS < this.sinceUpshiftS;
-    if (downshifting && dn.blip && this.sinceDownshiftS < Math.max(dn.neutralS, dn.clutchReleaseS)) {
+    if (downshifting && dn.blip && this.sinceDownshiftS < Math.max(dn.neutralS, dn.clutchReleaseS) && !this.stalled) {
       // Held until the engine turns as fast as the driven wheels ask of it in this gear, less what it still gains while
       // the air path empties
-      const wanted = Math.min(Math.abs(this.drivenOmega() * ratio) * RADS2RPM, gb.gears.redline_rpm);
+      const wanted = Math.min(Math.abs(axleOmega * ratio) * RADS2RPM, gb.gears.redline_rpm);
       const emptiesS = (eng.torqueResponseS?.fall ?? 0) + 60 / Math.max(rpm, eng.idleRpm);
       const stillGains = ((this.icePlate * this.luts.power.evaluate(rpm) * 1000) / omegaE / eng.inertia) * emptiesS * RADS2RPM;
       if (rpm + stillGains < wanted) plate = Math.max(plate, dn.blip.level * Math.min(1, this.sinceDownshiftS / Math.max(1e-6, dn.blip.riseS)));
@@ -3630,7 +3752,14 @@ export class VehiclePhysics {
     } else {
       this.icePlate = plate;
     }
-    plate = Math.max(this.icePlate, THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15));
+    if (this.stalled) {
+      this.icePlate = 0;
+      plate = 0;
+    } else {
+      const idleScale = manualClutch ? THREE.MathUtils.smoothstep(rpm, stallRpm, eng.idleRpm * 0.75) : 1;
+      const idleFloor = THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15) * idleScale;
+      plate = Math.max(this.icePlate, idleFloor);
+    }
     if (this.limiterTimer > 0) plate = 0;
     // A managed up-shift takes the drive away while it lasts: the spark, and with it the MGU-K's deployment below
     const shiftCut = gb.upshiftCutS !== undefined && this.sinceUpshiftS < gb.upshiftCutS;
@@ -3680,11 +3809,14 @@ export class VehiclePhysics {
       const vAir = Math.max(0, _air.copy(this.velocity).sub(this.windWorld).dot(_ez));
       ramShare = 1 + eng.ramAirGainPerKPa * ((0.5 * this.airDensity * vAir * vAir) / 1000);
     }
-    // Combustion torque at the full spark, and what the traction cut leaves of it
+    // Combustion torque at the full spark, and what the traction cut leaves of it.
+    // Under manual clutch, an engine dragged below stall speed chokes and loses torque; once stalled it produces none.
+    const lugScale = this.stalled ? 0 : manualClutch && rpm < stallRpm ? THREE.MathUtils.clamp(rpm / stallRpm, 0, 1) : 1;
     const tCombustionFull =
-      (plate * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
+      (plate * lugScale * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
     const tCombustion = tCombustionFull * sparkShare;
-    const tCoast = (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
+    const coastSpinScale = this.stalled ? THREE.MathUtils.clamp(this.engineOmega / 30, 0, 1) : 1;
+    const tCoast = (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale * coastSpinScale;
     let tIce = tCombustion * boostShare - tCoast;
     // The same at the full spark, for the next step's spark-first split: one read back after the cut would count the cut
     // as the motor's larger share, and a held cut would take more each step
@@ -3699,50 +3831,22 @@ export class VehiclePhysics {
     if (tIce > 0) tIce *= this.damagePowerMult;
     if (tIceUncut > 0) tIceUncut *= this.damagePowerMult;
 
-    // ---- clutch engagement
-    const axleOmega = this.drivenOmega();
-    const wheelSideRpm = Math.abs(axleOmega * ratio) * RADS2RPM;
-    const cl = cfg.clutch;
-    let engage = 0;
-    if (this.gear !== 0) {
-      // Launch: in first gear the pedal moves the bite window up to end at the car's launch rpm, so the engine revs to
-      // where it has torque and the clutch slips there until the wheels have met it, instead of closing on an engine
-      // near its idle. Off the pedal the window is the anti-stall one again
-      let biteRpm = cl.biteRpm;
-      if (cl.launchRpm !== undefined && Math.abs(this.gear) === 1) {
-        const launch = THREE.MathUtils.clamp((inp.throttle - 0.2) / 0.6, 0, 1);
-        biteRpm += launch * Math.max(0, cl.launchRpm - cl.lockRpm);
-      }
-      const lockRpm = biteRpm + (cl.lockRpm - cl.biteRpm);
-      const t = THREE.MathUtils.clamp((rpm - biteRpm) / (lockRpm - biteRpm), 0, 1);
-      engage = wheelSideRpm >= lockRpm ? 1 : t * t * (3 - 2 * t);
-      // Anti-stall: off the pedal, with the wheels turning slower than the engine idles, the auto-clutch lets go. The
-      // idle controller holds the engine at or above some cars' bite speed, and its torque through the slipping clutch
-      // walked a car standing on the grid away. A pedal past 5 % has the whole clutch again, for the launch. Wheels
-      // turning against the gear (a car spinning backwards off a barrier, in first) count as slower than idle: through
-      // the clutch they would turn the engine backwards, and a stopped engine never starts again
-      const wheelSideForwardRpm = axleOmega * ratio * RADS2RPM;
-      if (wheelSideForwardRpm < eng.idleRpm) {
-        const pedal = THREE.MathUtils.clamp(inp.throttle / 0.05, 0, 1);
-        const turning = THREE.MathUtils.smoothstep(wheelSideForwardRpm, 0.7 * eng.idleRpm, eng.idleRpm);
-        engage *= Math.max(pedal, turning);
-      }
-      if (inp.clutch !== undefined) engage = Math.min(engage, 1 - inp.clutch);
-      // A dog box between gears: the engine is free of the wheels
-      if (gb.upshiftNeutralS !== undefined && this.sinceUpshiftS < gb.upshiftNeutralS) engage = 0;
-      // A down-shift: free between gears, then the clutch comes home over its ramp, or at once when the engine has met
-      // the wheels' speed (nothing is left to slip away, and the throttle finds the whole clutch)
-      if (downshifting) {
-        const from = Math.max(dn.neutralS, dn.clutchReleaseS);
-        if (this.sinceDownshiftS >= from && Math.abs(rpm - wheelSideRpm) < 0.02 * Math.max(rpm, wheelSideRpm)) {
-          this.sinceDownshiftS = dn.clutchHomeS;
-        } else {
-          const home = this.sinceDownshiftS < from ? 0 : (this.sinceDownshiftS - from) / Math.max(1e-6, dn.clutchHomeS - from);
-          engage = Math.min(engage, home);
-        }
+    // A down-shift: free between gears, then the clutch comes home over its ramp, or at once when the engine has met
+    // the wheels' speed (nothing is left to slip away, and the throttle finds the whole clutch)
+    if (this.gear !== 0 && downshifting) {
+      const from = Math.max(dn.neutralS, dn.clutchReleaseS);
+      if (this.sinceDownshiftS >= from && Math.abs(rpm - wheelSideRpm) < 0.02 * Math.max(rpm, wheelSideRpm)) {
+        this.sinceDownshiftS = dn.clutchHomeS;
+      } else {
+        const home = this.sinceDownshiftS < from ? 0 : (this.sinceDownshiftS - from) / Math.max(1e-6, dn.clutchHomeS - from);
+        engage = Math.min(engage, home);
       }
     }
     this.clutchEngagement = engage;
+    this.clutchSlipNorm =
+      this.gear !== 0 && engage > 0.02 && engage < 0.99
+        ? THREE.MathUtils.clamp(Math.abs(this.engineOmega - axleOmega * ratio) / Math.max(50, eng.idleRpm * RPM2RADS), 0, 1)
+        : 0;
     const clutchCap = cl.maxTorqueNm * engage;
 
     // ---- MGU-K (crank torque, + deploy / − harvest)
@@ -3758,7 +3862,7 @@ export class VehiclePhysics {
      */
     let liftW = 0;
     const everyGear = ers.liftHarvestEveryGear;
-    const coupled = engage > 0.9 && this.gear > 0;
+    const coupled = engage > 0.9 && this.gear > 0 && !this.stalled;
     if (coupled) {
       if (everyGear && inp.throttle < ers.liftThrottle) {
         liftW = ers.topGearLiftHarvestW * mode.liftHarvestScale * (1 - inp.throttle / ers.liftThrottle);
@@ -4590,6 +4694,8 @@ export class VehiclePhysics {
     t.brake = inp.brake;
     t.steer = inp.steer;
     t.clutchEngagement = this.clutchEngagement;
+    t.clutchSlip = this.clutchSlipNorm;
+    t.engineStalled = this.stalled;
     if (dt > 0) {
       _v.subVectors(this.velocity, this.prevVelocity).divideScalar(dt);
       t.lonG = _v.dot(_ez) / G;
@@ -4658,6 +4764,8 @@ export class VehiclePhysics {
       brake: 0,
       steer: 0,
       clutchEngagement: 0,
+      clutchSlip: 0,
+      engineStalled: false,
       lonG: 0,
       latG: 0,
       WHEEL_SPEED_LF: 0,

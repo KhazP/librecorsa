@@ -6,6 +6,7 @@ import { AssistCurve } from "@/components/menu/steps/setup-ui";
 import {
   assistLevel,
   assistSliders,
+  autoClutch,
   autoGearbox,
   brakeHelp,
   controllerSteerAssist,
@@ -29,7 +30,7 @@ export function AssistsTab() {
       <SettingsCard
         title="Driving aids"
         first
-        rows={[assistLevel, tcAbs, racingLine, autoGearbox, launch, { ...controllerSteerAssist, advanced: !onPad }]}
+        rows={[assistLevel, tcAbs, racingLine, autoGearbox, autoClutch, launch, { ...controllerSteerAssist, advanced: !onPad }]}
       />
       <SettingsCard title="Pedal help" description="For the keyboard, where a key is all or nothing" rows={[throttleHelp, brakeHelp]} />
       <SettingsCard title="On track" rows={[realism, ghost]} />

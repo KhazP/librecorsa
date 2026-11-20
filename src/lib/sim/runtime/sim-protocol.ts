@@ -30,6 +30,7 @@ export const CAR_SETTABLE = [
   "assistPreset",
   "gamepadAssistEnabled",
   "autoGearbox",
+  "autoClutch",
   "autoXMode",
   "activeAeroMode",
   "tireCompound",

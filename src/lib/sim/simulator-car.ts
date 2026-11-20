@@ -142,6 +142,8 @@ export interface SimulatorCar {
   gamepadAssistEnabled: boolean;
   /** Automatic gear changes; off = the driver shifts with Gear up / Gear down (AI cars keep it on) */
   autoGearbox: boolean;
+  /** Automatic clutch & anti-stall (default true); false with manual gears enables bite point, clutch slip and stalls */
+  autoClutch: boolean;
   /** Keyboard and controller steering assist (its settings follow the player's tuning) and what steered last */
   readonly steeringAssist: { settings: SteeringAssistSettings; readonly source: SteeringSource | null };
   autoXMode: boolean;

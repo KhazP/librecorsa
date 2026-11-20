@@ -357,6 +357,10 @@ export interface CarTelemetry {
   throttle: number; // 0..1
   brake: number; // 0..1
   clutch: number; // 0..1 (1 = engaged, 0 = disengaged)
+  /** Normalized clutch slip intensity (0..1) while the clutch is partially engaged and engine/wheel speeds differ */
+  clutchSlip?: number;
+  /** True when the engine has stalled under manual clutch (autoClutch off); hold clutch or shift to N to restart */
+  engineStalled?: boolean;
   steering: number; // -1..1 (positive = right)
   /**
    * The player's own steering this frame, −1..1 (+ = right): the keys' direction, the shaped stick, or the wheel, mouse
