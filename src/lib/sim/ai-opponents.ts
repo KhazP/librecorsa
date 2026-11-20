@@ -113,7 +113,7 @@ export const AI_RESERVE_DRIVERS: AiDriverDef[] = [
   { code: 'KAR', teamColorHex: '#ff87bc', pace: 0.944, aggression: 0.1, consistencyBias: 0.04 },
   { code: 'NYU', teamColorHex: '#6692ff', pace: 0.958, aggression: -0.1, consistencyBias: 0.02 },
   { code: 'BUT', teamColorHex: '#ffd700', pace: 0.94, aggression: 0.4, consistencyBias: -0.02 },
-  { code: 'RUH', teamColorHex: '#00a19c', pace: 0.936, aggression: -0.4, consistencyBias: 0.06 },
+  { code: 'RUH', teamColorHex: '#eef2f6', pace: 0.936, aggression: -0.4, consistencyBias: 0.06 },
   { code: 'KIB', teamColorHex: '#9b0000', pace: 0.947, aggression: 0.8, consistencyBias: -0.08 },
 ];
 

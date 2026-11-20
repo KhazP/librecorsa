@@ -247,12 +247,12 @@ const ALL_LIVERIES: LiveryConfig[] = [
   },
   {
     id: "grid26_silver",
-    name: "Aether Alloy #41",
+    name: "Aether Alloy #42",
     team: "Aether Works",
     primary: "#c8d0d8",
     secondary: "#0d1115",
     accent: "#00d2be",
-    number: "41",
+    number: "42",
     category: "grid2026",
   },
   {
@@ -410,6 +410,22 @@ export const DEFAULT_CUSTOM_LIVERY: Readonly<CustomLiveryColors> = {
   secondary: "#12151e",
   accent: "#ff3355",
 };
+
+/** Curated motorsport swatches for controller / keyboard custom livery picking alongside the native colour input */
+export const CUSTOM_LIVERY_PALETTE: readonly { hex: string; name: string }[] = [
+  { hex: "#eef2f6", name: "Chalk" },
+  { hex: "#141820", name: "Carbon" },
+  { hex: "#b4b9c0", name: "Alloy" },
+  { hex: "#dc0000", name: "Vermilion" },
+  { hex: "#ff7a00", name: "Papaya" },
+  { hex: "#f0b429", name: "Gold" },
+  { hex: "#cedc00", name: "Volt" },
+  { hex: "#0d6e4f", name: "Emerald" },
+  { hex: "#00c8ff", name: "Cyan" },
+  { hex: "#1d4ed8", name: "Cobalt" },
+  { hex: "#1c2e6b", name: "Indigo" },
+  { hex: "#ff4d94", name: "Magenta" },
+];
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
