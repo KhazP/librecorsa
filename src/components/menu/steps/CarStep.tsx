@@ -4,10 +4,11 @@ import React from "react";
 import { LIVERIES } from "@/lib/track-data";
 import { FACTORY_LIVERY_NOTE, carTakesLivery } from "@/lib/cars/car-registry";
 import { CAMERA_MODES, STARTING_CAMERAS } from "@/lib/render/camera-modes";
-import { Card, OptionTile, OptionTileGroup } from "@/components/ui";
+import { Card } from "@/components/ui";
 import { SettingsCard, SettingField } from "@/components/settings/fields";
 import { defaultView } from "@/components/settings/defs";
 import { CarPicker } from "../CarPicker";
+import { LiveryPicker } from "../menu-content-ui";
 import { Hint } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
@@ -29,25 +30,7 @@ export const CarStep: React.FC<SetupStepProps> = (p) => (
       {!carTakesLivery(p.carId) ? (
         <Hint>{FACTORY_LIVERY_NOTE}</Hint>
       ) : (
-        <OptionTileGroup aria-label="Livery" columns={3}>
-          {LIVERIES.map((liv) => (
-            <OptionTile
-              key={liv.id}
-              checked={p.selectedLivery.id === liv.id}
-              onSelect={() => p.onChangeLivery(liv)}
-              title={liv.name}
-              description={liv.team}
-              media={
-                <span
-                  aria-hidden
-                  className="block h-8 w-full"
-                  // ui-allow: hex-in-style the livery's own colours are data
-                  style={{ background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65%)` }}
-                />
-              }
-            />
-          ))}
-        </OptionTileGroup>
+        <LiveryPicker liveries={LIVERIES} value={p.selectedLivery} onChange={p.onChangeLivery} surface="var(--color-lc-carbon)" />
       )}
     </Card>
 

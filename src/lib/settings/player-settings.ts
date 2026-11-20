@@ -4,7 +4,7 @@
  */
 import { DEFAULT_RACE_SETUP, parseRaceSetup, type RaceSetup } from "@/lib/sim/race-setup";
 import { MUSIC_TRACK_IDS } from "@/lib/audio/music-catalog";
-import type { AssistPreset, CameraMode } from "@/types/f1";
+import type { AssistPreset, CameraMode, CustomLiveryColors } from "@/types/f1";
 import {
   DEFAULT_KEY_BINDINGS,
   BUMPER_SHIFT_BUTTONS,
@@ -59,6 +59,8 @@ export interface PlayerSettings {
   autoClutch: boolean;
   mouseSteer: boolean;
   liveryId: string | null;
+  /** User-picked primary, secondary and accent colours when `liveryId === "custom"` */
+  customLivery: CustomLiveryColors;
   camera: CameraMode | null;
   /**
    * Driver's-eye vertical FOV (degrees); null = the car's own. The other onboard cameras move by the same amount.
@@ -532,6 +534,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   autoClutch: true,
   mouseSteer: false,
   liveryId: null,
+  customLivery: { primary: "#00c8ff", secondary: "#12151e", accent: "#ff3355" },
   camera: null,
   cockpitFovDeg: null,
   cameraNudges: {},
@@ -809,6 +812,19 @@ function parseGraphics(v: unknown): GraphicsSettings {
   };
 }
 
+const LIVERY_HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+function parseCustomLivery(v: unknown): CustomLiveryColors {
+  const d = DEFAULT_PLAYER_SETTINGS.customLivery;
+  if (!isObj(v)) return { ...d };
+  const hex = (raw: unknown, fb: string) => (isStr(raw) && LIVERY_HEX_RE.test(raw) ? raw.toLowerCase() : fb);
+  return {
+    primary: hex(v.primary, d.primary),
+    secondary: hex(v.secondary, d.secondary),
+    accent: hex(v.accent, d.accent),
+  };
+}
+
 function parseTouch(v: unknown): TouchSettings {
   const d = DEFAULT_TOUCH_SETTINGS;
   if (!isObj(v)) return structuredClone(d);
@@ -922,6 +938,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     autoClutch: bool(raw.autoClutch, d.autoClutch),
     mouseSteer: bool(raw.mouseSteer, d.mouseSteer),
     liveryId: isStr(raw.liveryId) ? raw.liveryId : null,
+    customLivery: parseCustomLivery(raw.customLivery),
     camera: isCameraMode(raw.camera) ? raw.camera : null,
     cockpitFovDeg:
       typeof raw.cockpitFovDeg === "number" && Number.isFinite(raw.cockpitFovDeg)

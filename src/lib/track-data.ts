@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import {
+  CustomLiveryColors,
+  LiveryCategory,
   LiveryConfig,
   LiveryDecalSet,
   RunoffStyle,
@@ -171,10 +173,13 @@ const ORACLE_RED_BULL_DECALS: LiveryDecalSet = {
 };
 
 /**
- * The F1 liveries: the first in LibreCorsa's own colours, two more of the game's own, and the Oracle Red Bull Racing
- * one with its pictures (the 2026 Prototype's body paints them; other bodies take the colours only)
+ * The F1 liveries:
+ * - House originals (LibreCorsa, Aurora, Verdant, plus Oracle Red Bull in non-store builds)
+ * - 2026 Grid: 11 original/fantasy color-scheme mockups inspired by the 11-team 2026 grid (no trademarked F1 branding)
+ * - Retro: 6 iconic classic-era inspired fantasy liveries (1969, 1978, 1988, 1991, 1992, 2005)
  */
 const ALL_LIVERIES: LiveryConfig[] = [
+  // ---- House originals
   {
     id: "librecorsa",
     name: "LibreCorsa #26",
@@ -183,6 +188,7 @@ const ALL_LIVERIES: LiveryConfig[] = [
     secondary: "#11131a",
     accent: "#ff2a3c",
     number: "26",
+    category: "house",
   },
   {
     id: "aurora",
@@ -192,6 +198,7 @@ const ALL_LIVERIES: LiveryConfig[] = [
     secondary: "#0b3d4a",
     accent: "#ff6a1a",
     number: "7",
+    category: "house",
   },
   {
     id: "verdant",
@@ -201,6 +208,7 @@ const ALL_LIVERIES: LiveryConfig[] = [
     secondary: "#0a0f0d",
     accent: "#e8c35a",
     number: "11",
+    category: "house",
   },
   {
     id: "oracle_red_bull",
@@ -210,16 +218,239 @@ const ALL_LIVERIES: LiveryConfig[] = [
     secondary: "#0e0f12",
     accent: "#f2b705",
     number: "3",
+    category: "house",
     decals: ORACLE_RED_BULL_DECALS,
     notInStoreBuild: true,
   },
+
+  // ---- 2026 Grid (11 fantasy team mockups, zero trademarked branding)
+  {
+    id: "grid26_papaya",
+    name: "Papaya Works #4",
+    team: "Woking Papaya",
+    primary: "#ff7a00",
+    secondary: "#14161c",
+    accent: "#00b7ff",
+    number: "4",
+    category: "grid2026",
+  },
+  {
+    id: "grid26_rosso",
+    name: "Scuderia Rosso #16",
+    team: "Maranello Rosso",
+    primary: "#dc0000",
+    secondary: "#15151a",
+    accent: "#ffd200",
+    number: "16",
+    category: "grid2026",
+  },
+  {
+    id: "grid26_silver",
+    name: "Silver Arrows #63",
+    team: "Brackley Silver",
+    primary: "#c8d0d8",
+    secondary: "#0d1115",
+    accent: "#00d2be",
+    number: "63",
+    category: "grid2026",
+  },
+  {
+    id: "grid26_cobalt",
+    name: "Cobalt Charge #1",
+    team: "Milton Cobalt",
+    primary: "#16204a",
+    secondary: "#0d1018",
+    accent: "#e62436",
+    number: "1",
+    category: "grid2026",
+  },
+  {
+    id: "grid26_emerald",
+    name: "British Emerald #14",
+    team: "Silverstone Emerald",
+    primary: "#00594f",
+    secondary: "#0c1412",
+    accent: "#cedc00",
+    number: "14",
+    category: "grid2026",
+  },
+  {
+    id: "grid26_bleu",
+    name: "Bleu Rose #10",
+    team: "Enstone Bleu",
+    primary: "#0074c8",
+    secondary: "#131620",
+    accent: "#ff5fa2",
+    number: "10",
+    category: "grid2026",
+  },
+  {
+    id: "grid26_royal",
+    name: "Grove Royal #23",
+    team: "Grove Royal",
+    primary: "#003594",
+    secondary: "#0a1122",
+    accent: "#ff7a00",
+    number: "23",
+    category: "grid2026",
+  },
+  {
+    id: "grid26_bianco",
+    name: "Faenza Bianco #30",
+    team: "Faenza Bianco",
+    primary: "#eef2f6",
+    secondary: "#182954",
+    accent: "#e32227",
+    number: "30",
+    category: "grid2026",
+  },
+  {
+    id: "grid26_carbon",
+    name: "Kannapolis Carbon #87",
+    team: "Kannapolis Carbon",
+    primary: "#1b1d23",
+    secondary: "#eceff3",
+    accent: "#e1062c",
+    number: "87",
+    category: "grid2026",
+  },
+  {
+    id: "grid26_titanium",
+    name: "Ingolstadt Titanium #27",
+    team: "Ingolstadt Works",
+    primary: "#b4b9c0",
+    secondary: "#131418",
+    accent: "#ff2a1f",
+    number: "27",
+    category: "grid2026",
+  },
+  {
+    id: "grid26_crest",
+    name: "Detroit Crest #11",
+    team: "Detroit Crest",
+    primary: "#141820",
+    secondary: "#d6dbe2",
+    accent: "#d4af37",
+    number: "11",
+    category: "grid2026",
+  },
+
+  // ---- Retro Classics (6 era-inspired fantasy liveries)
+  {
+    id: "retro_black_gold",
+    name: "70s Black & Gold #5",
+    team: "Classic '78",
+    primary: "#121215",
+    secondary: "#1f1b14",
+    accent: "#d4a843",
+    number: "5",
+    category: "retro",
+  },
+  {
+    id: "retro_red_white",
+    name: "80s Red & White #12",
+    team: "Classic '88",
+    primary: "#f4f5f7",
+    secondary: "#e62020",
+    accent: "#181a20",
+    number: "12",
+    category: "retro",
+  },
+  {
+    id: "retro_tri_92",
+    name: "90s Royal & Gold #5",
+    team: "Classic '92",
+    primary: "#0e3a9c",
+    secondary: "#f4f6f8",
+    accent: "#ffd000",
+    number: "5",
+    category: "retro",
+  },
+  {
+    id: "retro_emerald_91",
+    name: "90s Emerald Debut #32",
+    team: "Classic '91",
+    primary: "#008c45",
+    secondary: "#0047ab",
+    accent: "#f4f6f8",
+    number: "32",
+    category: "retro",
+  },
+  {
+    id: "retro_gulf_69",
+    name: "60s Powder & Tangerine #9",
+    team: "Classic '69",
+    primary: "#6bb6e8",
+    secondary: "#1a2430",
+    accent: "#ff6b1a",
+    number: "9",
+    category: "retro",
+  },
+  {
+    id: "retro_sky_05",
+    name: "2000s Sky & Sunburst #5",
+    team: "Classic '05",
+    primary: "#4eb8e5",
+    secondary: "#142238",
+    accent: "#ffcc00",
+    number: "5",
+    category: "retro",
+  },
 ];
+
+export const LIVERY_CATEGORY_LABELS: Readonly<Record<Exclude<LiveryCategory, "custom">, string>> = {
+  house: "LibreCorsa",
+  grid2026: "2026 Grid",
+  retro: "Retro",
+};
+
+export const DEFAULT_CUSTOM_LIVERY: Readonly<CustomLiveryColors> = {
+  primary: "#00c8ff",
+  secondary: "#12151e",
+  accent: "#ff3355",
+};
+
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+/** Validates a custom livery's three hex colours, falling back field by field to DEFAULT_CUSTOM_LIVERY */
+export function sanitizeCustomLivery(v: unknown): CustomLiveryColors {
+  const d = DEFAULT_CUSTOM_LIVERY;
+  if (!v || typeof v !== "object") return { ...d };
+  const o = v as Record<string, unknown>;
+  const pick = (raw: unknown, fb: string) => (typeof raw === "string" && HEX_COLOR_RE.test(raw) ? raw.toLowerCase() : fb);
+  return {
+    primary: pick(o.primary, d.primary),
+    secondary: pick(o.secondary, d.secondary),
+    accent: pick(o.accent, d.accent),
+  };
+}
+
+/** Builds a LiveryConfig from custom user-picked colours */
+export function buildCustomLivery(colors: CustomLiveryColors): LiveryConfig {
+  const clean = sanitizeCustomLivery(colors);
+  return {
+    id: "custom",
+    name: "Custom Paint",
+    team: "Custom",
+    primary: clean.primary,
+    secondary: clean.secondary,
+    accent: clean.accent,
+    number: "26",
+    category: "custom",
+  };
+}
 
 /**
  * The liveries this copy of the game offers and paints: in the Android app, all but the Red Bull one. A saved choice
  * of a missing livery falls back to the first, and so does an AI car that wore it; the saved choice stays as it was.
  */
 export const LIVERIES: LiveryConfig[] = isStoreBuild() ? ALL_LIVERIES.filter((l) => !l.notInStoreBuild) : ALL_LIVERIES;
+
+/** Resolves a saved livery id (including "custom") into a paintable LiveryConfig */
+export function resolveLivery(id: string | null | undefined, custom?: CustomLiveryColors | null): LiveryConfig {
+  if (id === "custom") return buildCustomLivery(custom ?? DEFAULT_CUSTOM_LIVERY);
+  return LIVERIES.find((l) => l.id === id) ?? LIVERIES[0];
+}
 
 function turnsOf(raw: RawTrackJson): TurnMetadata[] {
   return (raw.turns as TurnMetadata[]).map((t) => ({ ...t, sector: t.sector as 1 | 2 | 3 }));

@@ -1,6 +1,6 @@
 import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
-import { LIVERIES, TURN_METADATA, getActiveTrackMetadata, inDeadZone, type BuiltTrackData } from "@/lib/track-data";
+import { TURN_METADATA, getActiveTrackMetadata, inDeadZone, resolveLivery, type BuiltTrackData } from "@/lib/track-data";
 import { AUTOPILOT_REF_BASE, LINE_CHECK_REF_BASE, QualifyingSession } from "@/lib/sim/qualifying";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
 import { trackColliders } from "@/lib/sim/track-colliders";
@@ -713,8 +713,7 @@ export class DriveSession {
     let settings: PlayerSettings = initialSettings;
     let keyLookup = buildKeyLookup(settings.keys);
     let assistSettings = steeringAssistSettings(settings.padTuning, settings.keyboardTuning);
-    const liveryFor = (id: string | null) => LIVERIES.find((l) => l.id === id) ?? LIVERIES[0];
-    let livery = liveryFor(settings.liveryId);
+    let livery = resolveLivery(settings.liveryId, settings.customLivery);
     const raceNow = (): SessionRace => this.currentRace;
     /**
      * Bumped whenever the run on track starts over (see resetRun) and written into the telemetry every frame, so
@@ -1479,8 +1478,12 @@ export class DriveSession {
       if (next.autoClutch !== prev.autoClutch) physics.autoClutch = next.autoClutch;
       builtCircuit.racingLineMesh.visible = next.racingLine;
       if (prev.mouseSteer && !next.mouseSteer) mouseSteerValue = 0;
-      if (next.liveryId !== prev.liveryId) {
-        livery = liveryFor(next.liveryId);
+      const customChanged =
+        next.customLivery.primary !== prev.customLivery.primary ||
+        next.customLivery.secondary !== prev.customLivery.secondary ||
+        next.customLivery.accent !== prev.customLivery.accent;
+      if (next.liveryId !== prev.liveryId || (next.liveryId === "custom" && customChanged)) {
+        livery = resolveLivery(next.liveryId, next.customLivery);
         carRig.setLivery(livery);
       }
       const g = next.graphics;

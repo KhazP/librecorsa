@@ -9,7 +9,8 @@ import { ClassTag } from "@/components/ui/badges/ClassTag";
 import type { CarClassCode } from "@/components/ui/badges/class-colors";
 import { setCarSkin, useCarSkinId } from "@/lib/cars/car-skins";
 import { carPhysics, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
-import type { LiveryConfig } from "@/types/f1";
+import type { CustomLiveryColors, LiveryCategory, LiveryConfig } from "@/types/f1";
+import { buildCustomLivery, LIVERY_CATEGORY_LABELS } from "@/lib/track-data";
 /** The older size names the callers pass (xs is the small badge) */
 export type ChipSize = "md" | "sm" | "xs";
 import { focusOnHover } from "./useFocusNav";
@@ -75,9 +76,13 @@ const SWATCH = [
 const SWATCH_CHOSEN = "shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_var(--color-lc-chalk)]";
 const SWATCH_IDLE = "inset-ring inset-ring-white/15 hover:shadow-[0_0_0_1px_var(--color-lc-slate)]";
 
+const LIVERY_GROUPS: readonly Exclude<LiveryCategory, "custom">[] = ["house", "grid2026", "retro"];
+const CUSTOM_WHEEL_GRADIENT =
+  "conic-gradient(from 0deg, hsl(0 90% 56%), hsl(55 95% 54%), hsl(125 80% 48%), hsl(195 90% 52%), hsl(255 85% 60%), hsl(315 88% 58%), hsl(360 90% 56%))";
+
 /**
- * Livery swatches with the name beside them: the chosen one has a white ring, the cursor a volt one, and the name
- * follows the cursor (so a controller or keyboard reads each livery's name, not only the chosen one's)
+ * Livery swatches grouped by collection (LibreCorsa, 2026 Grid, Retro) plus a Custom colour picker (primary,
+ * secondary, accent). The chosen swatch has a white ring, the cursor a volt one, and the name follows the cursor.
  */
 export const LiveryPicker: React.FC<{
   liveries: readonly LiveryConfig[];
@@ -88,34 +93,106 @@ export const LiveryPicker: React.FC<{
 }> = ({ liveries, value, onChange, surface = "var(--color-lc-void)" }) => {
   const [hover, setHover] = React.useState<LiveryConfig | null>(null);
   const shown = hover ?? value;
+  const isCustom = value.id === "custom";
+  const customColors: CustomLiveryColors = {
+    primary: value.primary,
+    secondary: value.secondary,
+    accent: value.accent,
+  };
+  const pickCustom = (patch: Partial<CustomLiveryColors>) => onChange(buildCustomLivery({ ...customColors, ...patch }));
+
+  const groups = LIVERY_GROUPS.map((cat) => ({
+    cat,
+    label: LIVERY_CATEGORY_LABELS[cat],
+    items: liveries.filter((l) => (l.category ?? "house") === cat),
+  })).filter((g) => g.items.length > 0);
+
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-      <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Livery">
-        {liveries.map((liv) => {
-          const on = value.id === liv.id;
-          return (
-            <button
-              key={liv.id}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              aria-label={`${liv.name} · ${liv.team}`}
-              onClick={() => onChange(liv)}
-              onPointerEnter={focusOnHover}
-              onFocus={() => setHover(liv)}
-              onBlur={() => setHover(null)}
-              className={`${SWATCH} ${on ? SWATCH_CHOSEN : SWATCH_IDLE}`}
-              style={
-                {
-                  "--lc-swatch-gap": surface,
-                  background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65% 100%)`,
-                } as React.CSSProperties
-              }
-            />
-          );
-        })}
+    <div className="flex min-w-0 flex-col gap-2.5">
+      <div className="flex min-w-0 items-baseline justify-between gap-2">
+        <span className="min-w-0 truncate text-[13px] font-semibold text-lc-chalk" title={shown.name}>
+          {shown.name}
+        </span>
+        <span className="shrink-0 truncate text-[12px] text-lc-slate">{shown.team}</span>
       </div>
-      <span className="min-w-0 truncate text-[13px] font-semibold text-lc-fog" title={shown.name}>{shown.name}</span>
+
+      <div className="flex flex-col gap-2" role="radiogroup" aria-label="Livery">
+        {groups.map((g, gi) => (
+          <div key={g.cat} className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-semibold tracking-[0.06em] text-lc-slate uppercase">{g.label}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {g.items.map((liv) => {
+                const on = value.id === liv.id;
+                return (
+                  <button
+                    key={liv.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    aria-label={`${liv.name} · ${liv.team}`}
+                    onClick={() => onChange(liv)}
+                    onPointerEnter={focusOnHover}
+                    onFocus={() => setHover(liv)}
+                    onBlur={() => setHover(null)}
+                    className={`${SWATCH} ${on ? SWATCH_CHOSEN : SWATCH_IDLE}`}
+                    style={
+                      {
+                        "--lc-swatch-gap": surface,
+                        background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65% 100%)`,
+                      } as React.CSSProperties
+                    }
+                  />
+                );
+              })}
+              {gi === 0 ? (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={isCustom}
+                  aria-label="Custom Paint · Custom colour picker"
+                  onClick={() => onChange(buildCustomLivery(customColors))}
+                  onPointerEnter={focusOnHover}
+                  onFocus={() => setHover(buildCustomLivery(customColors))}
+                  onBlur={() => setHover(null)}
+                  className={`${SWATCH} ${isCustom ? SWATCH_CHOSEN : SWATCH_IDLE}`}
+                  style={
+                    {
+                      "--lc-swatch-gap": surface,
+                      background: CUSTOM_WHEEL_GRADIENT,
+                    } as React.CSSProperties
+                  }
+                />
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {isCustom ? (
+        <div className="grid grid-cols-3 gap-2 rounded-lc-row border border-lc-line bg-lc-well p-2">
+          {(
+            [
+              ["primary", "Primary"],
+              ["secondary", "Secondary"],
+              ["accent", "Accent"],
+            ] as const
+          ).map(([slot, label]) => (
+            <label key={slot} className="flex min-w-0 cursor-pointer flex-col gap-1">
+              <span className="text-[11px] font-semibold text-lc-slate">{label}</span>
+              <span className="flex items-center gap-1.5 rounded-lc-nub border border-lc-line bg-lc-carbon px-1.5 py-1">
+                <input
+                  type="color"
+                  aria-label={`Custom livery ${label.toLowerCase()} colour`}
+                  value={customColors[slot]}
+                  onChange={(e) => pickCustom({ [slot]: e.target.value })}
+                  className="size-5 shrink-0 cursor-pointer border-0 bg-transparent p-0"
+                />
+                <span className="lc-mono min-w-0 truncate text-[11px] text-lc-fog uppercase">{customColors[slot]}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 };

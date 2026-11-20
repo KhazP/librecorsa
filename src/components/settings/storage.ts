@@ -56,6 +56,7 @@ export function resetAllSettings(prev: PlayerSettings): PlayerSettings {
     aiSkill: prev.aiSkill,
     conditions: prev.conditions,
     liveryId: prev.liveryId,
+    customLivery: prev.customLivery,
     // The detail level the player is looking at stays, so the screen does not change under them
     ui: { ...d.ui, detail: prev.ui.detail },
   };

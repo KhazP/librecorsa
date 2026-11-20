@@ -633,12 +633,11 @@ export class SimVisualFxManager {
   }
 
   private mapDriverToLivery(code: string): LiveryConfig {
-    if (code === 'KIG') return LIVERIES[2] ?? LIVERIES[0];
-    if (code === 'MUS') return LIVERIES[1] ?? LIVERIES[0];
-    if (code === 'NYA') return LIVERIES[3] ?? LIVERIES[0];
-    if (code === 'RUB') return LIVERIES[4] ?? LIVERIES[0];
-    if (code === 'HUY') return LIVERIES[1] ?? LIVERIES[0];
-    return LIVERIES[0];
+    const grid = LIVERIES.filter((l) => l.category === 'grid2026');
+    const pool = grid.length > 0 ? grid : LIVERIES;
+    let hash = 0;
+    for (let i = 0; i < code.length; i++) hash = (hash * 31 + code.charCodeAt(i)) >>> 0;
+    return pool[hash % pool.length] ?? LIVERIES[0];
   }
 
   /** The car the peer reports (AI and older clients: the AMR, which is what F1Physics2026 models) */

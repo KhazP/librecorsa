@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { DEFAULT_TRACK_ID, getActivePointToPoint, getActiveTrackData, LIVERIES } from "@/lib/track-data";
+import { DEFAULT_TRACK_ID, getActivePointToPoint, getActiveTrackData, resolveLivery } from "@/lib/track-data";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { DualSensePairPrompt } from "@/components/hud/DualSensePairPrompt";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
@@ -223,7 +223,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const gamepadAssist = settings.gamepadAssist;
   const autoGearbox = settings.autoGearbox;
   const mouseSteerEnabled = settings.mouseSteer;
-  const selectedLivery = useMemo(() => LIVERIES.find((l) => l.id === settings.liveryId) ?? LIVERIES[0], [settings.liveryId]);
+  const selectedLivery = useMemo(
+    () => resolveLivery(settings.liveryId, settings.customLivery),
+    [settings.liveryId, settings.customLivery]
+  );
   const cameraMode: CameraMode = settings.camera ?? "chase";
   const setPreference = useCallback(<K extends keyof PlayerSettings>(key: K, value: PlayerSettings[K]) => {
     setSettings((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
@@ -458,7 +461,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     [session]
   );
 
-  const handleLiveryChange = useCallback((livery: LiveryConfig) => setPreference("liveryId", livery.id), [setPreference]);
+  const handleLiveryChange = useCallback((livery: LiveryConfig) => {
+    if (livery.id === "custom") {
+      setSettings((prev) => ({
+        ...prev,
+        liveryId: "custom",
+        customLivery: { primary: livery.primary, secondary: livery.secondary, accent: livery.accent },
+      }));
+      return;
+    }
+    setPreference("liveryId", livery.id);
+  }, [setPreference]);
 
   const handleToggleRacingLine = useCallback(() => {
     setSettings((prev) => ({ ...prev, racingLine: !prev.racingLine }));

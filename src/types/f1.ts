@@ -53,7 +53,37 @@ export type CameraMode =
 /** Dry slicks, then the treaded rain tyres: intermediate (damp / light rain) and full wet (standing water) */
 export type TireCompound = "soft" | "medium" | "hard" | "intermediate" | "wet";
 
-export type LiveryId = "librecorsa" | "aurora" | "verdant" | "oracle_red_bull";
+export type LiveryCategory = "house" | "grid2026" | "retro" | "custom";
+
+export type LiveryId =
+  | "librecorsa"
+  | "aurora"
+  | "verdant"
+  | "oracle_red_bull"
+  | "grid26_papaya"
+  | "grid26_rosso"
+  | "grid26_silver"
+  | "grid26_cobalt"
+  | "grid26_emerald"
+  | "grid26_bleu"
+  | "grid26_royal"
+  | "grid26_bianco"
+  | "grid26_carbon"
+  | "grid26_titanium"
+  | "grid26_crest"
+  | "retro_black_gold"
+  | "retro_red_white"
+  | "retro_tri_92"
+  | "retro_emerald_91"
+  | "retro_gulf_69"
+  | "retro_sky_05"
+  | "custom";
+
+export interface CustomLiveryColors {
+  primary: string;
+  secondary: string;
+  accent: string;
+}
 
 export interface LiveryConfig {
   id: LiveryId;
@@ -63,6 +93,8 @@ export interface LiveryConfig {
   secondary: string;
   accent: string;
   number: string;
+  /** Grouping in the livery picker (house originals, 2026 grid mockups, retro classics, custom) */
+  category?: LiveryCategory;
   /** Pictures on the paint (render/livery-decals.ts); a livery without is its three colours only */
   decals?: LiveryDecalSet;
   /** Left out of the Android app (lib/store-mode.ts): its logos aren't licensed */
