@@ -466,7 +466,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setSettings((prev) => ({
         ...prev,
         liveryId: "custom",
-        customLivery: { primary: livery.primary, secondary: livery.secondary, accent: livery.accent },
+        // Keep the user's saved custom colours when switching back to Custom from a preset;
+        // overwrite them only while editing the colour pickers on Custom.
+        customLivery:
+          prev.liveryId === "custom"
+            ? { primary: livery.primary, secondary: livery.secondary, accent: livery.accent }
+            : prev.customLivery,
       }));
       return;
     }

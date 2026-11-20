@@ -75,7 +75,7 @@ export type LiveryId =
   | "retro_red_white"
   | "retro_tri_92"
   | "retro_emerald_91"
-  | "retro_gulf_69"
+  | "retro_powder_69"
   | "retro_sky_05"
   | "custom";
 

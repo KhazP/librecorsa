@@ -37,7 +37,7 @@ check('11 original 2026 grid mockup liveries with unique ids and valid hex colou
     assert.match(liv.secondary, HEX_RE, `${liv.id} secondary`);
     assert.match(liv.accent, HEX_RE, `${liv.id} accent`);
     assert.ok(!liv.notInStoreBuild, `${liv.id} should be available in store builds too`);
-    assert.ok(!TRADEMARK_RE.test(`${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names: ${liv.name} / ${liv.team}`);
+    assert.ok(!TRADEMARK_RE.test(`${liv.id.replace(/_/g, ' ')} ${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names: ${liv.name} / ${liv.team}`);
   }
 });
 
@@ -51,7 +51,7 @@ check('6 original retro liveries with unique ids, valid hex colours and no trade
     assert.match(liv.secondary, HEX_RE, `${liv.id} secondary`);
     assert.match(liv.accent, HEX_RE, `${liv.id} accent`);
     assert.ok(!liv.notInStoreBuild, `${liv.id} should be available in store builds too`);
-    assert.ok(!TRADEMARK_RE.test(`${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names: ${liv.name} / ${liv.team}`);
+    assert.ok(!TRADEMARK_RE.test(`${liv.id.replace(/_/g, ' ')} ${liv.name} ${liv.team}`), `${liv.id} must not use trademarked names: ${liv.name} / ${liv.team}`);
   }
 });
 

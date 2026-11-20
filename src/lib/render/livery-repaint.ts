@@ -189,7 +189,7 @@ export function repaintTexture(texture: THREE.Texture, keys: PaintKeys, livery: 
  * colours in a picker would otherwise keep every one on the GPU for the session. An evicted one still on a car is
  * uploaded again from its canvas on the next draw.
  */
-const MAX_CACHED_LIVERIES = 8;
+const MAX_CACHED_LIVERIES = 24;
 
 function evictOldest<V>(cache: Map<string, V>, dispose: (v: V) => void): void {
   while (cache.size > MAX_CACHED_LIVERIES) {

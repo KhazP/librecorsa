@@ -377,7 +377,7 @@ const ALL_LIVERIES: LiveryConfig[] = [
     category: "retro",
   },
   {
-    id: "retro_gulf_69",
+    id: "retro_powder_69",
     name: "60s Powder & Tangerine #9",
     team: "Classic '69",
     primary: "#6bb6e8",
