@@ -225,6 +225,22 @@ console.log('\n== Weather & time of day');
   const onboardHideOk = frontSprites.every((s) => !s.visible);
   hl.setEnabled(false);
   const restored = spots.every((s) => s.intensity === 0) && frontClonedMat.emissiveIntensity === 0;
+  // Daytime brake lights: rear sprites light up under braking behind the car even when headlights are off,
+  // while front flares, spots and boosted lenses stay off, and releasing brake turns rear sprites back off
+  cam.position.set(0, 1.2, -6);
+  hl.setEnabled(false, true, cam);
+  const daytimeBrakeBehind =
+    spots.every((s) => s.intensity === 0) &&
+    frontClonedMat.emissiveIntensity === 0 &&
+    frontSprites.every((s) => !s.visible) &&
+    rearSprites.every((s) => s.visible) &&
+    (rearSprites[0].material as THREE.SpriteMaterial).opacity > 0.7;
+  cam.position.set(0, 1.2, 10);
+  hl.setEnabled(false, true, cam);
+  const daytimeBrakeFrontHidden = rearSprites.every((s) => !s.visible) && frontSprites.every((s) => !s.visible);
+  cam.position.set(0, 1.2, -6);
+  hl.setEnabled(false, false, cam);
+  const daytimeCoastOff = rearSprites.every((s) => !s.visible) && frontSprites.every((s) => !s.visible);
   hl.dispose();
   const originalRestored = frontMesh.material === sharedLight004 && frontMesh2.material === gt3LightMat;
   check(
@@ -232,18 +248,36 @@ console.log('\n== Weather & time of day');
     allForward && clonedAndIsolated && flaresOutsideBody && chaseOk && noseCamOk && frontViewOk && onboardHideOk && restored && originalRestored,
     `${spots.length} spots, frontZ=${frontSprites[0]?.position.z.toFixed(2)}`,
   );
+  check(
+    'CarHeadlights illuminates brake lights in daylight while keeping running lights and front beams off',
+    daytimeBrakeBehind && daytimeBrakeFrontHidden && daytimeCoastOff,
+    `brakeBehind=${daytimeBrakeBehind}, frontHidden=${daytimeBrakeFrontHidden}, coastOff=${daytimeCoastOff}`,
+  );
   // Medium 1-spot and lightsOnly (opponent) 0-spot modes
   const hlMed = new CarHeadlights('amg-gt3', { spotCount: 1 });
   const hlOpp = new CarHeadlights('amg-gt3', { lightsOnly: true });
   const medSpots = hlMed.group.children.filter((c): c is THREE.SpotLight => c instanceof THREE.SpotLight);
   const oppSpots = hlOpp.group.children.filter((c): c is THREE.SpotLight => c instanceof THREE.SpotLight);
   const oppSprites = hlOpp.group.children.filter((c): c is THREE.Sprite => c instanceof THREE.Sprite);
+  // Player manually forcing headlights off at night must not darken auto-lit opponents
+  const playerForcedOffAtNight = shouldHeadlightsBeOn('off', nightSun.elevationDeg, 0);
+  const opponentAutoAtNight = shouldHeadlightsBeOn('auto', nightSun.elevationDeg, 0);
+  const opponentAutoInRain = shouldHeadlightsBeOn('auto', 40, 0.6);
+  const opponentAutoInDay = shouldHeadlightsBeOn('auto', 40, 0);
+  hlMed.setEnabled(playerForcedOffAtNight, false);
+  hlOpp.setEnabled(opponentAutoAtNight, false);
+  const oppIndependentOfPlayerToggle = !hlMed.isOn && hlOpp.isOn && opponentAutoInRain && !opponentAutoInDay;
   hlMed.dispose();
   hlOpp.dispose();
   check(
     'CarHeadlights supports 1-spot Medium and lightsOnly (0-spot) opponent modes',
     medSpots.length === 1 && medSpots[0].position.x === 0 && oppSpots.length === 0 && oppSprites.length >= 3,
     `med=${medSpots.length} spot, opp=${oppSpots.length} spots / ${oppSprites.length} flares`,
+  );
+  check(
+    'Opponent auto headlights stay lit at night/rain even when player manually toggles lights off',
+    oppIndependentOfPlayerToggle,
+    `playerOff=${!playerForcedOffAtNight}, oppNight=${opponentAutoAtNight}, oppRain=${opponentAutoInRain}, oppDay=${opponentAutoInDay}`,
   );
   const sampleCarIds = ['lc26', 'amg-gt3', 'mtr-496r', 'bmw-m1-procar', 'liana'] as const;
   check(

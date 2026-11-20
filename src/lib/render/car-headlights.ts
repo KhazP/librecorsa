@@ -434,8 +434,9 @@ export class CarHeadlights {
   }
 
   /**
-   * Toggle headlights on/off, update rear brake-light brightening, and gate each front/rear flare sprite against the
-   * camera position so front headlight flares never leak into onboard (cockpit / dash / nose) or behind-car views.
+   * Toggle headlights on/off, update rear brake-light brightening (including daytime braking when headlights are off),
+   * and gate each front/rear flare sprite against the camera position so front headlight flares never leak into
+   * onboard (cockpit / dash / nose) or behind-car views.
    */
   setEnabled(on: boolean, braking = false, camera?: THREE.Camera, hideFrontFlares = false): void {
     this.scanMaterials();
@@ -444,41 +445,51 @@ export class CarHeadlights {
       const intensity = on ? this.spotIntensity : 0;
       for (const s of this.spots) s.intensity = intensity;
       for (const f of this.frontFlares) f.visible = on && !hideFrontFlares;
-      for (const r of this.rearFlares) r.visible = on;
       this.applyMaterialBoost(on);
     }
+    const rearActive = on || braking;
     const baseRearOpacity = braking ? 0.95 : 0.55;
-    if (on && braking !== this.braking) {
+    if (braking !== this.braking) {
       this.braking = braking;
-      this.rearMat.opacity = baseRearOpacity;
       const s = this.profile.rearHalfWidthM > 0.01 ? (braking ? 0.36 : 0.28) : (braking ? 0.28 : 0.22);
       for (const r of this.rearFlares) r.scale.setScalar(s);
     }
-    if (on && camera) {
+    if (!on) {
+      this.frontMat.opacity = 0;
+      for (const f of this.frontFlares) f.visible = false;
+    }
+    if (!rearActive) {
+      this.rearMat.opacity = 0;
+      for (const r of this.rearFlares) r.visible = false;
+      return;
+    }
+    if (camera) {
       this.group.updateWorldMatrix(true, true);
       // Local +Z is forward in every car rig's chassisGroup
       _carFwd.set(0, 0, 1).transformDirection(this.group.matrixWorld);
       camera.getWorldPosition(_camPos);
 
-      let maxFrontVis = 0;
-      for (const f of this.frontFlares) {
-        if (hideFrontFlares) {
-          f.visible = false;
-          continue;
+      if (on) {
+        let maxFrontVis = 0;
+        for (const f of this.frontFlares) {
+          if (hideFrontFlares) {
+            f.visible = false;
+            continue;
+          }
+          _flarePos.setFromMatrixPosition(f.matrixWorld);
+          _toCam.subVectors(_camPos, _flarePos);
+          const lenSq = _toCam.lengthSq();
+          if (lenSq <= 1e-6) {
+            f.visible = false;
+            continue;
+          }
+          const alongFwd = _toCam.dot(_carFwd);
+          const vis = alongFwd > 0.1 ? THREE.MathUtils.smoothstep(alongFwd / Math.sqrt(lenSq), 0.12, 0.55) : 0;
+          f.visible = vis > 0.01;
+          if (vis > maxFrontVis) maxFrontVis = vis;
         }
-        _flarePos.setFromMatrixPosition(f.matrixWorld);
-        _toCam.subVectors(_camPos, _flarePos);
-        const lenSq = _toCam.lengthSq();
-        if (lenSq <= 1e-6) {
-          f.visible = false;
-          continue;
-        }
-        const alongFwd = _toCam.dot(_carFwd);
-        const vis = alongFwd > 0.1 ? THREE.MathUtils.smoothstep(alongFwd / Math.sqrt(lenSq), 0.12, 0.55) : 0;
-        f.visible = vis > 0.01;
-        if (vis > maxFrontVis) maxFrontVis = vis;
+        this.frontMat.opacity = 0.9 * maxFrontVis;
       }
-      this.frontMat.opacity = 0.9 * maxFrontVis;
 
       let maxRearVis = 0;
       for (const r of this.rearFlares) {
@@ -495,16 +506,22 @@ export class CarHeadlights {
         if (vis > maxRearVis) maxRearVis = vis;
       }
       this.rearMat.opacity = baseRearOpacity * maxRearVis;
-    } else if (on) {
-      this.frontMat.opacity = hideFrontFlares ? 0 : 0.9;
+    } else {
+      if (on) {
+        this.frontMat.opacity = hideFrontFlares ? 0 : 0.9;
+        for (const f of this.frontFlares) f.visible = !hideFrontFlares;
+      }
       this.rearMat.opacity = baseRearOpacity;
-      for (const f of this.frontFlares) f.visible = !hideFrontFlares;
       for (const r of this.rearFlares) r.visible = true;
     }
   }
 
   get isOn(): boolean {
     return this.enabled;
+  }
+
+  get isBraking(): boolean {
+    return this.braking;
   }
 
   dispose(): void {

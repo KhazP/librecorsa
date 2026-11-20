@@ -284,10 +284,10 @@ export class SimVisualFxManager {
   public setHeadlights(on: boolean, camera?: THREE.Camera): void {
     for (const entry of this.opponentCars.values()) {
       const hl = this.rigHeadlights.get(entry.rig);
-      if (hl) hl.setEnabled(!entry.ghost && on, entry.braking === true, camera, false);
+      if (hl) hl.setEnabled(!entry.ghost && on, !entry.ghost && entry.braking === true, camera, false);
       if (entry.spare) {
         const spareHl = this.rigHeadlights.get(entry.spare);
-        if (spareHl?.isOn) spareHl.setEnabled(false);
+        if (spareHl && (spareHl.isOn || spareHl.isBraking)) spareHl.setEnabled(false, false);
       }
     }
   }

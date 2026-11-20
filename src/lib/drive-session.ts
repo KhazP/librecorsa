@@ -3282,9 +3282,11 @@ export class DriveSession {
         else camera.layers.disable(RAIN_VISOR_LAYER);
         const skyLight = THREE.MathUtils.clamp((skyConditions.elevationDeg + 3) / 17, 0, 1) * (1 - 0.4 * wx.cloudCover);
         const headlightsOn = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
+        // Opponents always run on automatic lighting so the player's manual toggle never darkens AI / online cars
+        const opponentHeadlightsOn = shouldHeadlightsBeOn("auto", skyConditions.elevationDeg, wx.rainIntensity);
         // Onboard views (cockpit, dash, nose, shoulder, T-cam) sit on/behind the nose; hide the player's own front flares
         carHeadlights.setEnabled(headlightsOn, physics.telemetry.brake > 0.05, camera, view.anchor !== null);
-        visualFx.setHeadlights(headlightsOn, camera);
+        visualFx.setHeadlights(opponentHeadlightsOn, camera);
         visualFx.setLightLevel(skyLight);
         rainFx.update(
           drawDtS,
