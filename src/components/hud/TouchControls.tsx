@@ -341,10 +341,21 @@ const HoldButton: React.FC<HoldButtonProps> = ({
   className,
 }) => {
   const pid = useRef<number | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!suspended) return;
-    pid.current = null;
+    if (pid.current !== null) {
+      const el = btnRef.current;
+      if (el?.hasPointerCapture?.(pid.current)) {
+        try {
+          el.releasePointerCapture(pid.current);
+        } catch {
+          // ignore if the browser already released capture
+        }
+      }
+      pid.current = null;
+    }
     onChange(false);
   }, [suspended, onChange]);
 
@@ -370,6 +381,7 @@ const HoldButton: React.FC<HoldButtonProps> = ({
 
   return (
     <button
+      ref={btnRef}
       type="button"
       aria-label={label}
       aria-pressed={pressed}
@@ -431,6 +443,18 @@ const HoldButtonPair: React.FC<{
   useEffect(() => {
     if (!suspended) return;
     if (pointers.current.size > 0) {
+      const el = pairRef.current;
+      if (el) {
+        for (const id of pointers.current.keys()) {
+          if (el.hasPointerCapture?.(id)) {
+            try {
+              el.releasePointerCapture(id);
+            } catch {
+              // ignore if the browser already released capture
+            }
+          }
+        }
+      }
       pointers.current.clear();
       sync();
     }
