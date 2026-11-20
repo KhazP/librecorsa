@@ -145,18 +145,46 @@ console.log('\n== Weather & time of day');
     'auto/on/off',
   );
   const hlRoot = new THREE.Group();
-  const hlMat = new THREE.MeshStandardMaterial({ name: 'headlight_glass', emissive: new THREE.Color(0x000000), emissiveIntensity: 0 });
-  hlRoot.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), hlMat));
+  const placeholder = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshStandardMaterial({ name: 'placeholder' }));
+  hlRoot.add(placeholder);
   const hl = new CarHeadlights('amg-gt3');
   hl.attach(hlRoot);
   hl.setEnabled(true, true);
+  // Simulate async GLB load replacing placeholder with bodyGroup (same direct child count: 2 === 2)
+  placeholder.removeFromParent();
+  const bodyGroup = new THREE.Group();
+  const gt3LightMat = new THREE.MeshStandardMaterial({ name: 'MI_Mercedes_AMG_GT3_Evo_Lights', emissive: new THREE.Color(0x000000), emissiveIntensity: 0 });
+  const frontMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), gt3LightMat);
+  frontMesh.position.set(0.6, 0.5, 2.4);
+  const rearLightMat = new THREE.MeshStandardMaterial({ name: 'light_020', emissive: new THREE.Color(0x000000), emissiveIntensity: 0 });
+  const rearMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), rearLightMat);
+  rearMesh.position.set(0.6, 0.6, -2.3);
+  bodyGroup.add(frontMesh, rearMesh);
+  hlRoot.add(bodyGroup);
+  hl.setEnabled(true, true);
   const spots = hl.group.children.filter((c): c is THREE.SpotLight => c instanceof THREE.SpotLight);
+  const sprites = hl.group.children.filter((c): c is THREE.Sprite => c instanceof THREE.Sprite);
+  const frontSprites = sprites.filter((s) => s.position.z > 0);
+  const rearSprites = sprites.filter((s) => s.position.z < 0);
   const allForward = spots.length === 2 && spots.every((s) => s.intensity > 0 && s.target.position.z > s.position.z + 20);
-  const boosted = hlMat.emissiveIntensity > 1;
+  const boosted = gt3LightMat.emissiveIntensity > 1 && rearLightMat.emissiveIntensity === 0;
+  const flaresOutsideBody = frontSprites.every((s) => s.position.z > 2.4) && rearSprites.every((s) => s.position.z < -2.3);
+  // Directional flare visibility: behind car hides front flares; in front hides rear flares
+  const cam = new THREE.PerspectiveCamera();
+  cam.position.set(0, 1.2, -6);
+  hl.setEnabled(true, false, cam);
+  const chaseOk = frontSprites.every((s) => !s.visible) && rearSprites.every((s) => s.visible);
+  cam.position.set(0, 1.2, 10);
+  hl.setEnabled(true, false, cam);
+  const frontViewOk = frontSprites.every((s) => s.visible) && rearSprites.every((s) => !s.visible);
   hl.setEnabled(false);
-  const restored = spots.every((s) => s.intensity === 0) && hlMat.emissiveIntensity === 0;
+  const restored = spots.every((s) => s.intensity === 0) && gt3LightMat.emissiveIntensity === 0;
   hl.dispose();
-  check('CarHeadlights mounts twin forward SpotLights and boosts/restores headlight materials', allForward && boosted && restored, `${spots.length} spots`);
+  check(
+    'CarHeadlights detects async GLB swap, boosts front lights, keeps flares outside body and gates by camera side',
+    allForward && boosted && flaresOutsideBody && chaseOk && frontViewOk && restored,
+    `${spots.length} spots, frontZ=${frontSprites[0]?.position.z.toFixed(2)}`,
+  );
   const sampleCarIds = ['lc26', 'amg-gt3', 'mtr-496r', 'bmw-m1-procar', 'liana'] as const;
   check(
     'Every car class resolves its own valid headlight profile',

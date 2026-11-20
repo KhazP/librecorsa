@@ -46,8 +46,8 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
     rearHalfWidthM: 0,
     rearHeightM: 0.46,
     color: 0xf4f8ff,
-    intensity: 260,
-    distanceM: 165,
+    intensity: 175,
+    distanceM: 175,
     angleRad: 0.54,
     penumbra: 0.62,
     aimSpreadM: 2.8,
@@ -61,8 +61,8 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
     rearHalfWidthM: 0.70,
     rearHeightM: 0.68,
     color: 0xf8fbff,
-    intensity: 340,
-    distanceM: 185,
+    intensity: 215,
+    distanceM: 200,
     angleRad: 0.56,
     penumbra: 0.58,
     aimSpreadM: 3.2,
@@ -76,8 +76,8 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
     rearHalfWidthM: 0.68,
     rearHeightM: 0.62,
     color: 0xf4f9ff,
-    intensity: 380,
-    distanceM: 195,
+    intensity: 240,
+    distanceM: 210,
     angleRad: 0.58,
     penumbra: 0.56,
     aimSpreadM: 3.4,
@@ -91,8 +91,8 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
     rearHalfWidthM: 0.62,
     rearHeightM: 0.64,
     color: 0xffe4b0,
-    intensity: 270,
-    distanceM: 155,
+    intensity: 180,
+    distanceM: 165,
     angleRad: 0.56,
     penumbra: 0.62,
     aimSpreadM: 2.8,
@@ -106,8 +106,8 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
     rearHalfWidthM: 0.60,
     rearHeightM: 0.72,
     color: 0xfff0d4,
-    intensity: 240,
-    distanceM: 145,
+    intensity: 160,
+    distanceM: 155,
     angleRad: 0.58,
     penumbra: 0.64,
     aimSpreadM: 2.6,
@@ -155,6 +155,17 @@ function getFlareTexture(): THREE.CanvasTexture | null {
 }
 
 const HEADLIGHT_MAT_RE = /(?:head_?light|front_?light|lamp_?front|hl_glass|light_?front|farol|scheinwerfer)/i;
+/** Generic light materials on ported/GT3 GLBs (e.g. `light_004`, `BMWMAT_Lights1`, `MI_..._Lights`) — gated by front Z */
+const GENERIC_LIGHT_MAT_RE = /(?:^|_)lights?\d*$|interactive_lights/i;
+const EXCLUDED_LIGHT_RE = /(?:tail|brake|reverse|indicator|dash|wheel|interior|clearled|glass)/i;
+
+const _carPos = new THREE.Vector3();
+const _carFwd = new THREE.Vector3();
+const _camPos = new THREE.Vector3();
+const _toCam = new THREE.Vector3();
+const _box = new THREE.Box3();
+const _center = new THREE.Vector3();
+const _invRoot = new THREE.Matrix4();
 
 interface BoostedMaterial {
   mat: THREE.MeshStandardMaterial;
@@ -163,8 +174,9 @@ interface BoostedMaterial {
 }
 
 /**
- * Twin forward-facing car headlights (SpotLights + lens flares + rear tail-light glow) mounted directly to a car's
- * chassisGroup so the beams follow body pitch, roll and bumps. No shadow maps are allocated, keeping frame cost low.
+ * Twin forward-facing car headlights (SpotLights + directional lens flares + rear tail-light glow) mounted directly to
+ * a car's chassisGroup so the beams follow body pitch, roll and bumps. No shadow maps are allocated, keeping frame
+ * cost low.
  */
 export class CarHeadlights {
   readonly group = new THREE.Group();
@@ -176,7 +188,7 @@ export class CarHeadlights {
   private readonly profile: HeadlightProfile;
   private readonly boosted: BoostedMaterial[] = [];
   private scannedRoot: THREE.Object3D | null = null;
-  private scannedChildCount = -1;
+  private scannedChildren: THREE.Object3D[] = [];
   private enabled = false;
   private braking = false;
 
@@ -186,11 +198,13 @@ export class CarHeadlights {
     const p = this.profile;
 
     const makeSpot = (side: 1 | -1): THREE.SpotLight => {
-      const spot = new THREE.SpotLight(p.color, 0, p.distanceM, p.angleRad, p.penumbra, 1.4);
+      // Decay 1.0 + slightly raised virtual beam origin avoids grazing-angle Lambertian collapse on flat asphalt
+      // past 30 m while keeping near-nose intensity balanced under AgX tone mapping.
+      const spot = new THREE.SpotLight(p.color, 0, p.distanceM, p.angleRad, p.penumbra, 1.0);
       spot.castShadow = false;
-      spot.position.set(side * p.halfWidthM, p.heightM, p.frontZM);
-      // Aimed ~48 m down the road, slightly down onto the asphalt and gently outward for corner apexes
-      spot.target.position.set(side * (p.halfWidthM + p.aimSpreadM), 0, p.frontZM + 48);
+      spot.position.set(side * p.halfWidthM, p.heightM + 0.3, p.frontZM);
+      // Aimed ~52 m down the road, slightly down onto the asphalt and gently outward for corner apexes
+      spot.target.position.set(side * (p.halfWidthM + p.aimSpreadM), 0, p.frontZM + 52);
       this.group.add(spot, spot.target);
       return spot;
     };
@@ -240,30 +254,78 @@ export class CarHeadlights {
   attach(chassisGroup: THREE.Group): void {
     chassisGroup.add(this.group);
     this.scannedRoot = chassisGroup;
-    this.scannedChildCount = -1;
+    this.scannedChildren = [];
   }
 
-  /** Lazily discovers any ported GLB headlight materials once the async model finishes attaching */
+  /**
+   * Lazily discovers GLB headlight materials and body bounds whenever the chassisGroup's child list changes
+   * (including when an async loader replaces its placeholder with the real `bodyGroup` keeping child count equal).
+   */
   private scanMaterials(): void {
     const root = this.scannedRoot;
     if (!root) return;
-    if (root.children.length === this.scannedChildCount) return;
-    this.scannedChildCount = root.children.length;
+    const kids = root.children;
+    if (kids.length === this.scannedChildren.length && kids.every((c, i) => c === this.scannedChildren[i])) return;
+    this.scannedChildren = kids.slice();
+
+    root.updateMatrixWorld(true);
+    _invRoot.copy(root.matrixWorld).invert();
+
     const seen = new Set(this.boosted.map((b) => b.mat));
-    root.traverse((obj) => {
-      if (!(obj instanceof THREE.Mesh)) return;
-      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-      for (const m of mats) {
-        if (!(m instanceof THREE.MeshStandardMaterial) || seen.has(m)) continue;
-        if (!HEADLIGHT_MAT_RE.test(m.name) && !HEADLIGHT_MAT_RE.test(obj.name)) continue;
-        seen.add(m);
-        this.boosted.push({
-          mat: m,
-          baseEmissive: m.emissive.clone(),
-          baseIntensity: m.emissiveIntensity,
-        });
-      }
-    });
+    let bodyMaxZ = -Infinity;
+    let bodyMinZ = Infinity;
+
+    for (const child of kids) {
+      if (child === this.group) continue;
+      child.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh)) return;
+        const geo = obj.geometry;
+        if (geo) {
+          if (!geo.boundingBox) geo.computeBoundingBox();
+          if (geo.boundingBox) {
+            _box.copy(geo.boundingBox).applyMatrix4(obj.matrixWorld).applyMatrix4(_invRoot);
+            if (Number.isFinite(_box.max.z) && _box.max.z - _box.min.z < 8) {
+              if (_box.max.z > bodyMaxZ) bodyMaxZ = _box.max.z;
+              if (_box.min.z < bodyMinZ) bodyMinZ = _box.min.z;
+            }
+            _box.getCenter(_center);
+          } else {
+            _center.set(0, 0, 0);
+          }
+        } else {
+          _center.set(0, 0, 0);
+        }
+
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const m of mats) {
+          if (!(m instanceof THREE.MeshStandardMaterial) || seen.has(m)) continue;
+          const explicit = HEADLIGHT_MAT_RE.test(m.name) || HEADLIGHT_MAT_RE.test(obj.name);
+          const genericFront =
+            !explicit &&
+            _center.z > 0.75 &&
+            !EXCLUDED_LIGHT_RE.test(m.name) &&
+            !EXCLUDED_LIGHT_RE.test(obj.name) &&
+            (GENERIC_LIGHT_MAT_RE.test(m.name) || GENERIC_LIGHT_MAT_RE.test(obj.name));
+          if (!explicit && !genericFront) continue;
+          seen.add(m);
+          this.boosted.push({
+            mat: m,
+            baseEmissive: m.emissive.clone(),
+            baseIntensity: m.emissiveIntensity,
+          });
+        }
+      });
+    }
+
+    // Keep front/rear lens flare sprites just outside real GLB noses/tails when the car is longer than the class default
+    if (bodyMaxZ > 1.2 && bodyMaxZ < 4.0) {
+      const frontZ = Math.max(this.profile.frontZM, bodyMaxZ - 0.08);
+      for (const f of this.frontFlares) f.position.z = frontZ + 0.06;
+    }
+    if (bodyMinZ < -1.2 && bodyMinZ > -4.0) {
+      const rearZ = Math.min(this.profile.rearZM, bodyMinZ + 0.08);
+      for (const r of this.rearFlares) r.position.z = rearZ - 0.06;
+    }
     if (this.enabled) this.applyMaterialBoost(true);
   }
 
@@ -279,8 +341,11 @@ export class CarHeadlights {
     }
   }
 
-  /** Toggle headlights on/off and update rear tail-light brightness on braking */
-  setEnabled(on: boolean, braking = false): void {
+  /**
+   * Toggle headlights on/off, update rear brake-light brightening, and gate front/rear flare sprites by camera side
+   * so front headlight flares never float around the nose when viewed from behind (chase / cockpit / hood).
+   */
+  setEnabled(on: boolean, braking = false, camera?: THREE.Camera): void {
     this.scanMaterials();
     if (on !== this.enabled) {
       this.enabled = on;
@@ -291,11 +356,36 @@ export class CarHeadlights {
       for (const r of this.rearFlares) r.visible = on;
       this.applyMaterialBoost(on);
     }
+    const baseRearOpacity = braking ? 0.95 : 0.55;
     if (on && braking !== this.braking) {
       this.braking = braking;
-      this.rearMat.opacity = braking ? 0.95 : 0.55;
+      this.rearMat.opacity = baseRearOpacity;
       const s = this.profile.rearHalfWidthM > 0.01 ? (braking ? 0.36 : 0.28) : (braking ? 0.28 : 0.22);
       for (const r of this.rearFlares) r.scale.setScalar(s);
+    }
+    if (on && camera) {
+      this.group.updateWorldMatrix(true, false);
+      _carPos.setFromMatrixPosition(this.group.matrixWorld);
+      // Local +Z is forward in every car rig's chassisGroup
+      _carFwd.set(0, 0, 1).transformDirection(this.group.matrixWorld);
+      camera.getWorldPosition(_camPos);
+      _toCam.subVectors(_camPos, _carPos);
+      const lenSq = _toCam.lengthSq();
+      if (lenSq > 1e-6) {
+        _toCam.multiplyScalar(1 / Math.sqrt(lenSq));
+        const dot = _toCam.dot(_carFwd);
+        const frontVis = THREE.MathUtils.smoothstep(dot, 0.12, 0.55);
+        const rearVis = THREE.MathUtils.smoothstep(-dot, 0.05, 0.45);
+        this.frontMat.opacity = 0.9 * frontVis;
+        for (const f of this.frontFlares) f.visible = frontVis > 0.01;
+        this.rearMat.opacity = baseRearOpacity * rearVis;
+        for (const r of this.rearFlares) r.visible = rearVis > 0.01;
+      }
+    } else if (on) {
+      this.frontMat.opacity = 0.9;
+      this.rearMat.opacity = baseRearOpacity;
+      for (const f of this.frontFlares) f.visible = true;
+      for (const r of this.rearFlares) r.visible = true;
     }
   }
 

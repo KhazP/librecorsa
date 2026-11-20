@@ -3271,7 +3271,8 @@ export class DriveSession {
         const skyLight = THREE.MathUtils.clamp((skyConditions.elevationDeg + 3) / 17, 0, 1) * (1 - 0.4 * wx.cloudCover);
         carHeadlights.setEnabled(
           shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, wx.rainIntensity),
-          physics.telemetry.brake > 0.05
+          physics.telemetry.brake > 0.05,
+          camera
         );
         visualFx.setLightLevel(skyLight);
         rainFx.update(
