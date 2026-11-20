@@ -52,7 +52,7 @@ export const CarThumb: React.FC<{
   className?: string;
 }> = ({ car, liveryId, skinId, className = "" }) => {
   const storedSkinId = useCarSkinId(car.id);
-  const effectiveSkinId = skinId !== undefined ? skinId : storedSkinId;
+  const effectiveSkinId = skinId ?? storedSkinId;
   const fallbackSrc = withBasePath(carThumbUrl(car.id));
   const variantUrl =
     liveryId && liveryId !== "custom" && carTakesLivery(car.id)
@@ -137,6 +137,8 @@ export const CarBrowser: React.FC<{
 }> = ({ carId, onChangeCar, selectedLivery, onChangeLivery, library, onClose, toolbar, lockedReason }) => {
   const classes = carClassesInUse();
   const modPhysics = useF1ModPhysics();
+  const [hoveredLivery, setHoveredLivery] = useState<{ carId: CarId; id: string } | null>(null);
+  const [hoveredSkin, setHoveredSkin] = useState<{ carId: CarId; id: string } | null>(null);
   const qualities = QUALITIES.filter((q) => CARS.some((c) => c.quality === q));
   const favs = library?.library.favorites.cars ?? [];
   const recent = library?.library.recent.cars ?? [];
@@ -214,10 +216,16 @@ export const CarBrowser: React.FC<{
       renderDetail={(c) => {
         const own = physicsLabel(c);
         const q = carQualityMeta(c);
+        const previewLiveryId = carTakesLivery(c.id)
+          ? hoveredLivery?.carId === c.id
+            ? hoveredLivery.id
+            : selectedLivery.id
+          : undefined;
+        const previewSkinId = c.skins?.length && hoveredSkin?.carId === c.id ? hoveredSkin.id : undefined;
         return (
           <>
             <span className="relative -mx-1 -mt-1 block aspect-video overflow-hidden rounded-lc-tile bg-lc-well [&>img]:size-full">
-              <CarThumb car={c} liveryId={carTakesLivery(c.id) ? selectedLivery.id : undefined} className="p-2" />
+              <CarThumb car={c} liveryId={previewLiveryId} skinId={previewSkinId} className="p-2" />
             </span>
             <div className="flex flex-col gap-1.5">
               <h3 className="lc-h3 m-0 [overflow-wrap:anywhere]">{c.title}</h3>
@@ -232,9 +240,27 @@ export const CarBrowser: React.FC<{
             </div>
             {carTakesPhysicsSwitch(c.id) ? <CarPhysicsSwitch /> : null}
             {carTakesLivery(c.id) ? (
-              <LiveryPicker liveries={LIVERIES} value={selectedLivery} onChange={onChangeLivery} surface="var(--color-lc-carbon)" />
+              <LiveryPicker
+                liveries={LIVERIES}
+                value={selectedLivery}
+                onChange={onChangeLivery}
+                onHover={(livery) =>
+                  setHoveredLivery((prev) =>
+                    livery ? { carId: c.id, id: livery.id } : prev?.carId === c.id ? null : prev,
+                  )
+                }
+                surface="var(--color-lc-carbon)"
+              />
             ) : c.skins?.length ? (
-              <CarSkinPicker carId={c.id} surface="var(--color-lc-carbon)" />
+              <CarSkinPicker
+                carId={c.id}
+                onHover={(skinId) =>
+                  setHoveredSkin((prev) =>
+                    skinId ? { carId: c.id, id: skinId } : prev?.carId === c.id ? null : prev,
+                  )
+                }
+                surface="var(--color-lc-carbon)"
+              />
             ) : (
               <p className="lc-hint m-0">{FACTORY_LIVERY_NOTE}</p>
             )}

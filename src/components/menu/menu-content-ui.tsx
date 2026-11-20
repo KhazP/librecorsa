@@ -164,10 +164,42 @@ export const LiveryPicker: React.FC<{
   liveries: readonly LiveryConfig[];
   value: LiveryConfig;
   onChange: (livery: LiveryConfig) => void;
+  /** Fires when a swatch is hovered or focused, and clears (`null`) on blur or mouse leave */
+  onHover?: (livery: LiveryConfig | null) => void;
   /** The ring's gap matches the surface behind it (a CSS colour) */
   surface?: string;
-}> = ({ liveries, value, onChange, surface = "var(--color-lc-void)" }) => {
+}> = ({ liveries, value, onChange, onHover, surface = "var(--color-lc-void)" }) => {
   const [hover, setHover] = React.useState<LiveryConfig | null>(null);
+  const hoverRef = React.useRef<LiveryConfig | null>(null);
+  const onHoverRef = React.useRef(onHover);
+  onHoverRef.current = onHover;
+  const updateHover = React.useCallback((next: LiveryConfig | null) => {
+    const prev = hoverRef.current;
+    if (
+      prev === next ||
+      (prev &&
+        next &&
+        prev.id === next.id &&
+        prev.primary === next.primary &&
+        prev.secondary === next.secondary &&
+        prev.accent === next.accent)
+    ) {
+      return;
+    }
+    hoverRef.current = next;
+    setHover(next);
+    onHoverRef.current?.(next);
+  }, []);
+  React.useEffect(
+    () => () => {
+      if (hoverRef.current !== null) {
+        hoverRef.current = null;
+        onHoverRef.current?.(null);
+      }
+    },
+    [],
+  );
+
   const shown = hover ?? value;
   const isCustom = value.id === "custom";
   const [draft, setDraft] = React.useState<CustomLiveryColors>({
@@ -221,7 +253,15 @@ export const LiveryPicker: React.FC<{
         <span className="shrink-0 truncate text-[12px] text-lc-slate">{captionRight}</span>
       </div>
 
-      <div className="flex flex-col gap-2" role="radiogroup" aria-label="Livery">
+      <div
+        className="flex flex-col gap-2"
+        role="radiogroup"
+        aria-label="Livery"
+        onMouseLeave={() => updateHover(null)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) updateHover(null);
+        }}
+      >
         {groups.map((g, gi) => (
           <div
             key={g.cat}
@@ -240,9 +280,11 @@ export const LiveryPicker: React.FC<{
                   aria-checked={on}
                   aria-label={sponsor ? `${liv.name} · ${sponsor} · ${g.label}` : `${liv.name} · ${g.label} · ${liv.team}`}
                   onClick={() => onChange(liv)}
-                  onPointerEnter={focusOnHover}
-                  onFocus={() => setHover(liv)}
-                  onBlur={() => setHover(null)}
+                  onPointerEnter={(e) => {
+                    focusOnHover(e);
+                    if (e.pointerType === "mouse") updateHover(liv);
+                  }}
+                  onFocus={() => updateHover(liv)}
                   className={`${SWATCH} ${on ? SWATCH_CHOSEN : SWATCH_IDLE}`}
                   style={
                     {
@@ -265,9 +307,11 @@ export const LiveryPicker: React.FC<{
                 aria-checked={isCustom}
                 aria-label="Custom Paint · Custom colour picker"
                 onClick={() => onChange(buildCustomLivery(draft))}
-                onPointerEnter={focusOnHover}
-                onFocus={() => setHover(buildCustomLivery(draft))}
-                onBlur={() => setHover(null)}
+                onPointerEnter={(e) => {
+                  focusOnHover(e);
+                  if (e.pointerType === "mouse") updateHover(buildCustomLivery(draft));
+                }}
+                onFocus={() => updateHover(buildCustomLivery(draft))}
                 className={`${SWATCH} ${isCustom ? SWATCH_CHOSEN : SWATCH_IDLE}`}
                 style={
                   {
@@ -308,14 +352,49 @@ export const LiveryPicker: React.FC<{
  * The liveries of a car that has its own (its mod's skins, `CarDefinition.skins`): one swatch each in its two main
  * colours, the picked one ringed, its name beside them. The pick is kept per car and goes onto the car at once.
  */
-export const CarSkinPicker: React.FC<{ carId: CarId; surface?: string }> = ({ carId, surface = "var(--color-lc-void)" }) => {
+export const CarSkinPicker: React.FC<{
+  carId: CarId;
+  /** Fires when a skin swatch is hovered or focused, and clears (`null`) on blur or mouse leave */
+  onHover?: (skinId: string | null) => void;
+  surface?: string;
+}> = ({ carId, onHover, surface = "var(--color-lc-void)" }) => {
   const skins = carById(carId).skins ?? [];
   const value = useCarSkinId(carId) ?? skins[0]?.id;
   const [hover, setHover] = React.useState<string | null>(null);
+  const hoverRef = React.useRef<string | null>(null);
+  const onHoverRef = React.useRef(onHover);
+  onHoverRef.current = onHover;
+  const updateHover = React.useCallback((next: string | null) => {
+    if (hoverRef.current === next) return;
+    hoverRef.current = next;
+    setHover(next);
+    onHoverRef.current?.(next);
+  }, []);
+  React.useEffect(() => {
+    updateHover(null);
+  }, [carId, updateHover]);
+  React.useEffect(
+    () => () => {
+      if (hoverRef.current !== null) {
+        hoverRef.current = null;
+        onHoverRef.current?.(null);
+      }
+    },
+    [],
+  );
+
   const shown = skins.find((s) => s.id === (hover ?? value));
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Livery">
+      <div
+        className="flex flex-wrap items-center gap-2"
+        role="radiogroup"
+        aria-label="Livery"
+        onMouseLeave={() => updateHover(null)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) updateHover(null);
+        }}
+      >
         {skins.map((skin) => {
           const on = value === skin.id;
           return (
@@ -326,9 +405,11 @@ export const CarSkinPicker: React.FC<{ carId: CarId; surface?: string }> = ({ ca
               aria-checked={on}
               aria-label={skin.name}
               onClick={() => setCarSkin(carId, skin.id)}
-              onPointerEnter={focusOnHover}
-              onFocus={() => setHover(skin.id)}
-              onBlur={() => setHover(null)}
+              onPointerEnter={(e) => {
+                focusOnHover(e);
+                if (e.pointerType === "mouse") updateHover(skin.id);
+              }}
+              onFocus={() => updateHover(skin.id)}
               className={`${SWATCH} ${on ? SWATCH_CHOSEN : SWATCH_IDLE}`}
               style={
                 {

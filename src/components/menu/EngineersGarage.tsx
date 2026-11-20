@@ -25,14 +25,14 @@ import { TYRE_SETUP_LIMITS } from "@/lib/sim/tyre-setup";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { PRESSURE_LABEL, pressureDecimals, pressureIn } from "@/lib/settings/units";
 import { CarPhysicsSwitch } from "./CarPicker";
-import { CarBrowser } from "./CarBrowser";
+import { CarBrowser, CarThumb } from "./CarBrowser";
 import { CarClassTag, CarQualityBadge, CarSkinPicker, LiveryPicker } from "./menu-content-ui";
 import { currentInputMode, useInputMode } from "./input-mode";
 import { focusables, useMoveHandler } from "./useFocusNav";
 import { carTakesPhysicsSwitch } from "@/lib/cars/f1-mod-physics";
 import { TyreBrakeGrid } from "@/components/hud/TyreBrakeWidget";
 import { LIVERIES } from "@/lib/track-data";
-import { FACTORY_LIVERY_NOTE, carById, carClass, carTakesLivery } from "@/lib/cars/car-registry";
+import { FACTORY_LIVERY_NOTE, carById, carClass, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 
 /** Short tab names for the pages whose full name would push the strip onto a second row */
@@ -327,6 +327,14 @@ export const EngineersGarage: React.FC<
     if (currentInputMode() !== "pointer") browseRef.current?.focus({ preventScroll: true });
   };
   const car = carById(p.carId);
+  const [hoveredLivery, setHoveredLivery] = useState<{ carId: CarId; id: string } | null>(null);
+  const [hoveredSkin, setHoveredSkin] = useState<{ carId: CarId; id: string } | null>(null);
+  const previewLiveryId = carTakesLivery(p.carId)
+    ? hoveredLivery?.carId === p.carId
+      ? hoveredLivery.id
+      : p.selectedLivery.id
+    : undefined;
+  const previewSkinId = car.skins?.length && hoveredSkin?.carId === p.carId ? hoveredSkin.id : undefined;
 
   const changedIn = (g: SetupGroup) => g.params.filter((q) => isChanged(q, st)).length;
   const groupChanged = changedIn(group);
@@ -472,11 +480,32 @@ export const EngineersGarage: React.FC<
             <CarQualityBadge car={car} size="sm" />
           </span>
           {carTakesPhysicsSwitch(p.carId) ? <CarPhysicsSwitch /> : null}
+          <span className="relative my-1 block aspect-video max-h-44 w-full overflow-hidden rounded-lc-tile bg-lc-well [&>img]:size-full">
+            <CarThumb car={car} liveryId={previewLiveryId} skinId={previewSkinId} className="p-2" />
+          </span>
           <SettingRow label="Livery" hint={!carTakesLivery(p.carId) && !car.skins?.length ? FACTORY_LIVERY_NOTE : undefined} stacked={Boolean(car.skins?.length || carTakesLivery(p.carId))}>
             {car.skins?.length ? (
-              <CarSkinPicker carId={p.carId} surface="var(--color-lc-carbon)" />
+              <CarSkinPicker
+                carId={p.carId}
+                onHover={(skinId) =>
+                  setHoveredSkin((prev) =>
+                    skinId ? { carId: p.carId, id: skinId } : prev?.carId === p.carId ? null : prev,
+                  )
+                }
+                surface="var(--color-lc-carbon)"
+              />
             ) : carTakesLivery(p.carId) ? (
-              <LiveryPicker liveries={LIVERIES} value={p.selectedLivery} onChange={p.onChangeLivery} surface="var(--color-lc-carbon)" />
+              <LiveryPicker
+                liveries={LIVERIES}
+                value={p.selectedLivery}
+                onChange={p.onChangeLivery}
+                onHover={(livery) =>
+                  setHoveredLivery((prev) =>
+                    livery ? { carId: p.carId, id: livery.id } : prev?.carId === p.carId ? null : prev,
+                  )
+                }
+                surface="var(--color-lc-carbon)"
+              />
             ) : null}
           </SettingRow>
         </Card>

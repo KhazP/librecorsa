@@ -1,14 +1,15 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { LIVERIES } from "@/lib/track-data";
-import { FACTORY_LIVERY_NOTE, carTakesLivery } from "@/lib/cars/car-registry";
+import { FACTORY_LIVERY_NOTE, carById, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
 import { CAMERA_MODES, STARTING_CAMERAS } from "@/lib/render/camera-modes";
 import { Card } from "@/components/ui";
 import { SettingsCard, SettingField } from "@/components/settings/fields";
 import { defaultView } from "@/components/settings/defs";
+import { CarThumb } from "../CarBrowser";
 import { CarPicker } from "../CarPicker";
-import { LiveryPicker } from "../menu-content-ui";
+import { CarSkinPicker, LiveryPicker } from "../menu-content-ui";
 import { Hint } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
@@ -20,22 +21,57 @@ const startingView = {
 };
 
 /** First-run setup's last step: car, livery and the starting view, with the car on the turntable beside the panel */
-export const CarStep: React.FC<SetupStepProps> = (p) => (
-  <div className="flex flex-col gap-3">
-    <Card title="Car">
-      <CarPicker carId={p.carId} onChangeCar={p.onChangeCar} />
-    </Card>
+export const CarStep: React.FC<SetupStepProps> = (p) => {
+  const car = carById(p.carId);
+  const [hoveredLivery, setHoveredLivery] = useState<{ carId: CarId; id: string } | null>(null);
+  const [hoveredSkin, setHoveredSkin] = useState<{ carId: CarId; id: string } | null>(null);
+  const previewLiveryId = carTakesLivery(p.carId)
+    ? hoveredLivery?.carId === p.carId
+      ? hoveredLivery.id
+      : p.selectedLivery.id
+    : undefined;
+  const previewSkinId = car.skins?.length && hoveredSkin?.carId === p.carId ? hoveredSkin.id : undefined;
 
-    <Card title="Livery">
-      {!carTakesLivery(p.carId) ? (
-        <Hint>{FACTORY_LIVERY_NOTE}</Hint>
-      ) : (
-        <LiveryPicker liveries={LIVERIES} value={p.selectedLivery} onChange={p.onChangeLivery} surface="var(--color-lc-carbon)" />
-      )}
-    </Card>
+  return (
+    <div className="flex flex-col gap-3">
+      <Card title="Car">
+        <CarPicker carId={p.carId} onChangeCar={p.onChangeCar} />
+      </Card>
 
-    <SettingsCard title="Camera">
-      <SettingField def={startingView} />
-    </SettingsCard>
-  </div>
-);
+      <Card title="Livery" bodyClassName="gap-3">
+        <span className="relative block aspect-video max-h-44 w-full overflow-hidden rounded-lc-tile bg-lc-well [&>img]:size-full">
+          <CarThumb car={car} liveryId={previewLiveryId} skinId={previewSkinId} className="p-2" />
+        </span>
+        {carTakesLivery(p.carId) ? (
+          <LiveryPicker
+            liveries={LIVERIES}
+            value={p.selectedLivery}
+            onChange={p.onChangeLivery}
+            onHover={(livery) =>
+              setHoveredLivery((prev) =>
+                livery ? { carId: p.carId, id: livery.id } : prev?.carId === p.carId ? null : prev,
+              )
+            }
+            surface="var(--color-lc-carbon)"
+          />
+        ) : car.skins?.length ? (
+          <CarSkinPicker
+            carId={p.carId}
+            onHover={(skinId) =>
+              setHoveredSkin((prev) =>
+                skinId ? { carId: p.carId, id: skinId } : prev?.carId === p.carId ? null : prev,
+              )
+            }
+            surface="var(--color-lc-carbon)"
+          />
+        ) : (
+          <Hint>{FACTORY_LIVERY_NOTE}</Hint>
+        )}
+      </Card>
+
+      <SettingsCard title="Camera">
+        <SettingField def={startingView} />
+      </SettingsCard>
+    </div>
+  );
+};
