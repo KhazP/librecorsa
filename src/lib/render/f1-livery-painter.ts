@@ -178,14 +178,57 @@ export function applyLiveryFinishToMaterial(mat: THREE.MeshPhysicalMaterial, liv
   mat.specularIntensity = finish.specularIntensity;
 }
 
+/** Canvas2D methods required to paint the full multi-panel procedural livery atlas */
+const REQUIRED_CANVAS2D_METHODS = [
+  "save",
+  "restore",
+  "translate",
+  "rotate",
+  "scale",
+  "beginPath",
+  "closePath",
+  "moveTo",
+  "lineTo",
+  "quadraticCurveTo",
+  "arc",
+  "fill",
+  "stroke",
+  "fillRect",
+  "strokeRect",
+  "fillText",
+  "strokeText",
+  "measureText",
+  "createLinearGradient",
+] as const;
+
+/**
+ * Returns true when `ctx` implements the full Canvas2D surface used by the procedural livery painter.
+ * Guards minimal headless Node/SSR canvas stubs so they degrade cleanly instead of throwing `TypeError`.
+ */
+function isCapableCanvas2DContext(ctx: unknown): ctx is CanvasRenderingContext2D {
+  if (!ctx || typeof ctx !== "object") return false;
+  const record = ctx as Record<string, unknown>;
+  for (const method of REQUIRED_CANVAS2D_METHODS) {
+    if (typeof record[method] !== "function") return false;
+  }
+  return true;
+}
+
 /** Crisp 2x2 diagonal twill carbon-fibre weave CanvasPattern */
 function createCarbonFill(ctx: CanvasRenderingContext2D): CanvasPattern | string {
-  if (typeof document === "undefined") return "#15171e";
+  if (
+    typeof document === "undefined" ||
+    typeof document.createElement !== "function" ||
+    typeof ctx.createPattern !== "function"
+  ) {
+    return "#15171e";
+  }
   const tile = document.createElement("canvas");
+  if (!tile || typeof tile.getContext !== "function") return "#15171e";
   tile.width = 16;
   tile.height = 16;
   const t = tile.getContext("2d");
-  if (!t) return "#15171e";
+  if (!t || typeof t.fillRect !== "function") return "#15171e";
   t.fillStyle = "#111319";
   t.fillRect(0, 0, 16, 16);
   for (let y = 0; y < 16; y += 4) {
@@ -199,7 +242,11 @@ function createCarbonFill(ctx: CanvasRenderingContext2D): CanvasPattern | string
       }
     }
   }
-  return ctx.createPattern(tile, "repeat") ?? "#15171e";
+  try {
+    return ctx.createPattern(tile, "repeat") ?? "#15171e";
+  } catch {
+    return "#15171e";
+  }
 }
 
 function fillPoly(ctx: CanvasRenderingContext2D, pts: readonly [number, number][], fill: string | CanvasPattern | CanvasGradient): void {
@@ -631,7 +678,7 @@ function drawWordmark(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const measured = Math.max(1, ctx.measureText(text).width);
+  const measured = Math.max(1, ctx.measureText(text)?.width ?? text.length * fontSize * 0.6);
   const scaleX = measured > maxWidth ? maxWidth / measured : 1;
 
   if (options.bgPill) {
@@ -3089,6 +3136,14 @@ export function renderF1LiveryToContext(
   pixelSize = F1_ATLAS_SIZE
 ): void {
   const spec = resolveLiveryVisual(livery);
+  if (!isCapableCanvas2DContext(ctx)) {
+    const partial = ctx as Partial<CanvasRenderingContext2D> | null | undefined;
+    if (partial && typeof partial.fillRect === "function") {
+      partial.fillStyle = spec.bodyBase;
+      partial.fillRect(0, 0, pixelSize, pixelSize);
+    }
+    return;
+  }
   const scale = pixelSize / F1_ATLAS_SIZE;
   ctx.save();
   if (scale !== 1) ctx.scale(scale, scale);
@@ -3117,12 +3172,14 @@ function atlasCacheKey(livery: LiveryConfig): string {
 function chooseAtlasResolution(): number {
   if (typeof window === "undefined") return F1_ATLAS_SIZE;
   // Crisp 2048px on desktop / tablets; 1024px on compact mobile viewports to stay GPU-memory friendly
-  return window.innerWidth < 768 ? 1024 : F1_ATLAS_SIZE;
+  return typeof window.innerWidth === "number" && window.innerWidth > 0 && window.innerWidth < 768
+    ? 1024
+    : F1_ATLAS_SIZE;
 }
 
 /** Generates (or retrieves from cache) the high-DPI CanvasTexture livery atlas for an F1 livery */
 export function getF1LiveryAtlasTexture(livery: LiveryConfig): THREE.CanvasTexture | null {
-  if (typeof document === "undefined") return null;
+  if (typeof document === "undefined" || typeof document.createElement !== "function") return null;
   const key = atlasCacheKey(livery);
   const isCustom = livery.id === "custom";
   if (isCustom) {
@@ -3134,10 +3191,11 @@ export function getF1LiveryAtlasTexture(livery: LiveryConfig): THREE.CanvasTextu
 
   const size = chooseAtlasResolution();
   const canvas = document.createElement("canvas");
+  if (!canvas || typeof canvas.getContext !== "function") return null;
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
+  if (!isCapableCanvas2DContext(ctx)) return null;
 
   renderF1LiveryToContext(ctx, livery, size);
 
