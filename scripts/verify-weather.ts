@@ -240,7 +240,19 @@ console.log('\n== Weather & time of day');
   const daytimeBrakeFrontHidden = rearSprites.every((s) => !s.visible) && frontSprites.every((s) => !s.visible);
   cam.position.set(0, 1.2, -6);
   hl.setEnabled(false, false, cam);
-  const daytimeCoastOff = rearSprites.every((s) => !s.visible) && frontSprites.every((s) => !s.visible);
+  const daytimeCoastOff = !hl.isBraking && rearSprites.every((s) => !s.visible) && frontSprites.every((s) => !s.visible);
+  // Toggling headlights off while braking keeps rear brake lights lit while shutting down beams, front flares and lenses
+  hl.setEnabled(true, true, cam);
+  hl.setEnabled(false, true, cam);
+  const toggleOffWhileBrakingOk =
+    !hl.isOn &&
+    hl.isBraking &&
+    spots.every((s) => s.intensity === 0) &&
+    frontClonedMat.emissiveIntensity === 0 &&
+    frontSprites.every((s) => !s.visible) &&
+    rearSprites.every((s) => s.visible) &&
+    (rearSprites[0].material as THREE.SpriteMaterial).opacity > 0.7;
+  hl.setEnabled(false, false, cam);
   hl.dispose();
   const originalRestored = frontMesh.material === sharedLight004 && frontMesh2.material === gt3LightMat;
   check(
@@ -250,8 +262,8 @@ console.log('\n== Weather & time of day');
   );
   check(
     'CarHeadlights illuminates brake lights in daylight while keeping running lights and front beams off',
-    daytimeBrakeBehind && daytimeBrakeFrontHidden && daytimeCoastOff,
-    `brakeBehind=${daytimeBrakeBehind}, frontHidden=${daytimeBrakeFrontHidden}, coastOff=${daytimeCoastOff}`,
+    daytimeBrakeBehind && daytimeBrakeFrontHidden && daytimeCoastOff && toggleOffWhileBrakingOk,
+    `brakeBehind=${daytimeBrakeBehind}, frontHidden=${daytimeBrakeFrontHidden}, coastOff=${daytimeCoastOff}, toggleOffBraking=${toggleOffWhileBrakingOk}`,
   );
   // Medium 1-spot and lightsOnly (opponent) 0-spot modes
   const hlMed = new CarHeadlights('amg-gt3', { spotCount: 1 });

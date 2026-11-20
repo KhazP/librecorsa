@@ -313,6 +313,18 @@ check('standard controller: stick to the assist, triggers, A boost, edges', () =
   const f2 = reader.read([pad('Xbox', 'standard', [0, 0], [0, 5])], settings, 1 / 60);
   assert.ok(!f2.pressed.has('shiftUp'), 'a held button fires once');
 });
+check('controller button bound to headlights emits headlights on rising edge only', () => {
+  const reader = new DeviceInputReader();
+  const padButtons = rebindPadButton(DEFAULT_PAD_BUTTONS, 'headlights', 3);
+  const settings = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons };
+  const press1 = reader.read([pad('Xbox', 'standard', [0, 0], [3])], settings, 1 / 60);
+  assert.ok(press1.pressed.has('headlights'), 'first press triggers headlights');
+  const held = reader.read([pad('Xbox', 'standard', [0, 0], [3])], settings, 1 / 60);
+  assert.ok(!held.pressed.has('headlights'), 'holding headlights button does not re-trigger');
+  reader.read([pad('Xbox', 'standard', [0, 0], [])], settings, 1 / 60);
+  const press2 = reader.read([pad('Xbox', 'standard', [0, 0], [3])], settings, 1 / 60);
+  assert.ok(press2.pressed.has('headlights'), 'second press triggers headlights again');
+});
 check('a wheel not set up yet shifts on its paddles under the GT style default; a pad on A', () => {
   const settings = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PLAYER_SETTINGS.padButtons };
   const wheel = new DeviceInputReader().read([pad('G920 Driving Force Racing Wheel', 'standard', [0], [5])], settings, 1 / 60);
