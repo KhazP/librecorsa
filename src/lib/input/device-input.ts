@@ -419,16 +419,22 @@ const buttonDown = (pad: PadLike | undefined, button: number) => {
   return Boolean(b && (b.pressed || b.value > 0.5));
 };
 
+/** Travel at which RT / LT, bound as buttons (stick pedals), go down as an action: a DualSense L2 / R2 shift */
+export const PAD_TRIGGER_PRESS = 0.22;
+/** Travel under which a trigger that is down lets go again (hysteresis: a finger hovering by the press point fires once) */
+export const PAD_TRIGGER_RELEASE = 0.12;
+
 /**
- * A standard controller's button as an action. RT / LT (bound with stick pedals) count from half their travel: a
- * browser, or the DualSense's own trigger bit, calls them pressed at a light touch, under a finger resting there.
- * A trigger that reports no travel at all (a digital one) counts when pressed.
+ * RT / LT bound as a button: down from {@link PAD_TRIGGER_PRESS} of travel, and once down held until under
+ * {@link PAD_TRIGGER_RELEASE}. A browser, or the DualSense's own trigger bit, calls a trigger pressed at a light touch
+ * under a finger resting there, so the bit alone counts only for a trigger that reports no travel at all (a digital one).
  */
-const padButtonDown = (pad: PadLike, button: number) => {
-  if (button !== PAD_THROTTLE_BUTTON && button !== PAD_BRAKE_BUTTON) return buttonDown(pad, button);
-  const b = pad.buttons[button];
-  return Boolean(b && (b.value > 0.5 || (b.pressed && !(b.value > 0))));
-};
+export function padTriggerDown(b: { pressed: boolean; value: number } | undefined, wasDown: boolean): boolean {
+  if (!b) return false;
+  if (!(b.value > 0)) return b.pressed;
+  // A hair of slack on the press point: a DualSense reports 0.22 as 0.21999… after its 8-bit to float conversion
+  return wasDown ? b.value > PAD_TRIGGER_RELEASE : b.value >= PAD_TRIGGER_PRESS - 1e-6;
+}
 
 /** A calibrated clutch pedal 0..1 (1 = pressed), 0 without one or with its device gone */
 function wheelClutch(pads: readonly PadLike[], b: PedalBinding | null): number {
@@ -453,6 +459,8 @@ export class DeviceInputReader {
   /** The bound wheel devices last frame ({@link boundWheelDevices}) and whether they were all connected */
   private wheelDevices: string | null = null;
   private wheelPresent = false;
+  /** RT / LT read as buttons that were down last frame (by button index), for their press / release hysteresis */
+  private triggersDown = new Set<number>();
 
   /**
    * `gyroSteer` gives the gyro steering (−1..1) of the DualSense or DualShock 4 with that Gamepad API id, streaming
@@ -467,6 +475,14 @@ export class DeviceInputReader {
     gyroSteer?: (padId: string) => number | undefined
   ): DeviceFrame {
     const held = new Set<PadAction>();
+    const triggersDown = new Set<number>();
+    // A standard controller's button as an action; RT / LT (bound with stick pedals) through padTriggerDown
+    const padButtonDown = (pad: PadLike, button: number) => {
+      if (button !== PAD_THROTTLE_BUTTON && button !== PAD_BRAKE_BUTTON) return buttonDown(pad, button);
+      const down = padTriggerDown(pad.buttons[button], this.triggersDown.has(button));
+      if (down) triggersDown.add(button);
+      return down;
+    };
     const frame: DeviceFrame = { throttle: 0, brake: 0, clutch: 0, boostHeld: false, pressed: new Set(), source: null };
     const wheel = settings.wheel;
     const wheelPad = wheel.steer ? findPad(pads, wheel.steer.padId) : undefined;
@@ -567,6 +583,7 @@ export class DeviceInputReader {
     if (!switched) for (const a of held) if (!this.prevHeld.has(a)) frame.pressed.add(a);
     this.prevHeld = held;
     this.prevSource = source;
+    this.triggersDown = triggersDown;
     frame.held = held;
     frame.boostHeld = held.has("boost");
     return frame;

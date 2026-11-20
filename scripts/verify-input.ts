@@ -33,6 +33,9 @@ import {
   carWheelLockDeg,
   DEFAULT_WHEEL_SETTINGS,
   DeviceInputReader,
+  PAD_TRIGGER_PRESS,
+  PAD_TRIGGER_RELEASE,
+  padTriggerDown,
   PAD_SENSITIVITY,
   padPedals,
   pedalValue,
@@ -459,7 +462,7 @@ check('GT classic: right stick drives, RT / LT shift, R3 does nothing', () => {
   const r = new DeviceInputReader();
   const touch = (v: number, pressed: boolean) => r.read([pad('Xbox', 'standard', [0, 0, 0, 0], pressed ? [7] : [], { 7: v })], settings, 1 / 60);
   assert.equal(touch(0.2, true).pressed.size, 0, 'resting finger');
-  assert.ok(touch(0.6, true).pressed.has('shiftUp'), 'past half');
+  assert.ok(touch(0.6, true).pressed.has('shiftUp'), 'well past the press point');
   touch(0, false);
   assert.ok(touch(0, true).pressed.has('shiftUp'), 'a digital trigger, pressed with no travel');
   // The same pad on trigger pedals and the default buttons: RT is the throttle and shifts nothing
@@ -470,6 +473,43 @@ check('GT classic: right stick drives, RT / LT shift, R3 does nothing', () => {
   );
   near(f3.throttle, 1);
   assert.equal(f3.pressed.size, 0);
+});
+check('DualSense L2 / R2 shifts: down at 0.22, held to 0.12, one shift per pull', () => {
+  assert.equal(PAD_TRIGGER_PRESS, 0.22);
+  assert.equal(PAD_TRIGGER_RELEASE, 0.12);
+  // The pure rule
+  assert.equal(padTriggerDown({ pressed: true, value: 0.15 }, false), false, '0.15 is a resting finger');
+  assert.equal(padTriggerDown({ pressed: true, value: 0.22 }, false), true, '0.22 presses');
+  assert.equal(padTriggerDown({ pressed: true, value: 0.2199999 }, false), true, '8-bit rounding of 0.22 presses');
+  assert.equal(padTriggerDown({ pressed: true, value: 0.18 }, true), true, '0.18 stays down once down');
+  assert.equal(padTriggerDown({ pressed: true, value: 0.18 }, false), false, '0.18 does not press from up');
+  assert.equal(padTriggerDown({ pressed: false, value: 0.12 }, true), false, 'at 0.12 it lets go');
+  assert.equal(padTriggerDown({ pressed: true, value: 0 }, false), true, 'a digital trigger');
+  assert.equal(padTriggerDown(undefined, true), false);
+  // Through the reader, on a DualSense with the GT classic layout (R2 up, L2 down)
+  const settings = {
+    wheel: DEFAULT_WHEEL_SETTINGS,
+    padButtons: PAD_LAYOUTS.gtClassic.buttons,
+    padTuning: { pedalSources: STICK_SOURCES, stickPedalDeadzone: 0.1 },
+  };
+  const ds = 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)';
+  const r = new DeviceInputReader();
+  const at = (r2: number, l2 = 0) =>
+    r.read([pad(ds, 'standard', [0, 0, 0, 0], [...(r2 > 0 ? [7] : []), ...(l2 > 0 ? [6] : [])], { 7: r2, 6: l2 })], settings, 1 / 60);
+  assert.equal(at(0.15).pressed.size, 0, 'no shift at 0.15');
+  assert.ok(at(0.22).pressed.has('shiftUp'), 'R2 at 0.22 shifts up promptly');
+  assert.equal(at(0.18).pressed.size, 0, 'held at 0.18: no second shift');
+  assert.ok(at(0.18).held!.has('shiftUp'), 'held at 0.18 stays held');
+  assert.equal(at(0.25).pressed.size, 0, 'back over 0.22 while held: still one shift');
+  assert.equal(at(0.13).pressed.size, 0, 'just over the release point');
+  assert.ok(!at(0.11).held!.has('shiftUp'), 'under 0.12 lets go');
+  assert.ok(at(0.22).pressed.has('shiftUp'), 'released, so the next pull shifts again');
+  at(0);
+  // Each trigger keeps its own state: R2 held at 0.18 does not hold L2 down at 0.18
+  assert.ok(at(0.3).pressed.has('shiftUp'));
+  const both = at(0.18, 0.18);
+  assert.ok(both.held!.has('shiftUp') && !both.held!.has('shiftDown'), 'L2 at 0.18 from up stays up');
+  assert.ok(at(0.18, 0.22).pressed.has('shiftDown'), 'L2 at 0.22 shifts down');
 });
 check('uncalibrated non-standard device keeps the original raw path', () => {
   const reader = new DeviceInputReader();
