@@ -15,7 +15,7 @@ import { Gt3DashDisplay, gt3MirrorPatches } from "@/lib/render/gt3-dash-display"
 import { createPortedCarRig } from "@/lib/ported-car-model";
 import { staticFloorOf } from "@/lib/render/body-floor";
 import { FloorSparks } from "@/lib/render/floor-sparks";
-import { CarHeadlights, headlightSpotCountFor, shouldHeadlightsBeOn, type HeadlightMode } from "@/lib/render/car-headlights";
+import { CarHeadlights, canSessionGetDark, headlightSpotCountFor, shouldHeadlightsBeOn, type HeadlightMode } from "@/lib/render/car-headlights";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
@@ -1332,8 +1332,13 @@ export class DriveSession {
     };
     let carRig = createCarRig(carIdNow);
     let carRigCar: CarId = carIdNow;
+    const initialHeadlightConditions = canSessionGetDark(getTrackEnv().weather.conditions)
+      ? getTrackEnv().weather.conditions
+      : settings.conditions;
     const desiredHeadlightSpots = () => headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality);
-    let carHeadlights = new CarHeadlights(carIdNow, { spotCount: desiredHeadlightSpots() });
+    let carHeadlights = new CarHeadlights(carIdNow, {
+      spotCount: headlightSpotCountFor(initialHeadlightConditions, settings.graphics.quality),
+    });
     carHeadlights.attach(carRig.chassisGroup);
     let headlightMode: HeadlightMode = "auto";
     const syncHeadlightSpots = () => {
@@ -3457,6 +3462,7 @@ export class DriveSession {
       gt3Dash?.dispose();
       portedDash?.dispose();
       carHeadlights.dispose();
+      visualFx.disposeHeadlights();
       unsubscribeCarSkins();
       postFx.dispose();
       reflectionProbe.dispose();

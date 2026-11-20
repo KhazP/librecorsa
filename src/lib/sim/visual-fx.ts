@@ -292,6 +292,12 @@ export class SimVisualFxManager {
     }
   }
 
+  /** Disposes every active and pooled opponent's headlights (restoring original template materials) on teardown */
+  public disposeHeadlights(): void {
+    for (const hl of this.rigHeadlights.values()) hl.dispose();
+    this.rigHeadlights.clear();
+  }
+
   /**
    * Updates tire skidmarks, smoke/gravel particles, and opponent 3D cars each frame.
    * `emit` is false while the player's car is not being simulated (paused, menus, replay): its wheel state is then
