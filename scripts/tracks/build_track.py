@@ -1398,7 +1398,8 @@ def collider_meshes(soup, road_set, kerb_mats, xz, rgt, yprof, width, bank, kerb
     # starts behind the wall
     flushL, flushR = wall[:, 0] - hw < 1.6, wall[:, 1] - hw < 1.6
     rL, rR = np.where(flushL, r0L, rL), np.where(flushR, r0R, rR)
-    out.append(('Track_Surface_Runoff', *merge([strip(-rL, -r0L, 3, None, 1.5, False, blend=True), strip(r0R, rR, 3, None, 1.5, False, blend=True)]),
+    # 7 columns (like Grass below) so wide banked runoff (25+ m) steps every ~4 m instead of >13 m and stays inside the height window
+    out.append(('Track_Surface_Runoff', *merge([strip(-rL, -r0L, 7, None, 2.0, False, blend=True), strip(r0R, rR, 7, None, 2.0, False, blend=True)]),
                 {'surface': 'runoff'}))
     gL, gR = np.where(flushL, rL, rL + grav[:, 0]), np.where(flushR, rR, rR + grav[:, 1])
     out.append(('Track_Surface_Gravel', *merge([strip(-gL, -rL, 3, None, 1.5, False, blend=True), strip(rR, gR, 3, None, 1.5, False, blend=True)]),
