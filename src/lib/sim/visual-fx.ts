@@ -30,6 +30,7 @@ import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 import { LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
+import { CarHeadlights } from '@/lib/render/car-headlights';
 import { disposeTree } from '@/lib/render/dispose-tree';
 import { LIVERIES } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
@@ -163,8 +164,12 @@ export class SimVisualFxManager {
       ghostCheckS?: number;
       /** A ghost's translucent materials, faded as it nears the player's car */
       ghostMats?: THREE.Material[];
+      /** Last frame's braking state for opponent tail-light brightening */
+      braking?: boolean;
     }
   >();
+  /** Lights-only CarHeadlights (front/rear flares + cloned emissive lenses, zero SpotLights) attached to solid opponent rigs */
+  private readonly rigHeadlights = new Map<SimCarRig, CarHeadlights>();
   /** The player's car (mean of its wheels) while it is driven; null in replays and menus (the ghost is not faded) */
   private readonly playerPos = new THREE.Vector3();
   private playerPosValid = false;
@@ -270,6 +275,21 @@ export class SimVisualFxManager {
   /** Wetness of the road under the player's car (weather.ts): spray behind the rear wheels, no smoke */
   public setWetness(wetness: number): void {
     this.wetness = THREE.MathUtils.clamp(wetness, 0, 1);
+  }
+
+  /**
+   * Drives every active non-ghost opponent's lights-only headlights (front/rear flares + cloned emissive lenses)
+   * from the session's headlight state and active camera, so AI and online cars are visible ahead and in mirrors at night.
+   */
+  public setHeadlights(on: boolean, camera?: THREE.Camera): void {
+    for (const entry of this.opponentCars.values()) {
+      const hl = this.rigHeadlights.get(entry.rig);
+      if (hl) hl.setEnabled(!entry.ghost && on, entry.braking === true, camera, false);
+      if (entry.spare) {
+        const spareHl = this.rigHeadlights.get(entry.spare);
+        if (spareHl?.isOn) spareHl.setEnabled(false);
+      }
+    }
   }
 
   /**
@@ -646,6 +666,12 @@ export class SimVisualFxManager {
     const ghost = Boolean(peer.ghost || peer.passThrough || peer.stale);
     const pooled = this.pool.get(poolKey(peer.vehicle, ghost))?.pop();
     const rig = pooled ?? buildOpponentRig(peer.vehicle, livery);
+    if (!ghost && !this.rigHeadlights.has(rig)) {
+      const carId = peer.vehicle ? carForVehicle(peer.vehicle).id : 'lc26';
+      const hl = new CarHeadlights(carId, { lightsOnly: true });
+      hl.attach(rig.chassisGroup);
+      this.rigHeadlights.set(rig, hl);
+    }
     if (pooled) {
       pooled.root.visible = true;
       if (!ghost) pooled.setLivery(livery);
@@ -687,6 +713,12 @@ export class SimVisualFxManager {
         ];
         for (const { ghost, livery } of builds) {
           const rig = buildOpponentRig(vehicle, livery);
+          if (!ghost) {
+            const carId = vehicle ? carForVehicle(vehicle).id : 'lc26';
+            const hl = new CarHeadlights(carId, { lightsOnly: true });
+            hl.attach(rig.chassisGroup);
+            this.rigHeadlights.set(rig, hl);
+          }
           rig.root.position.set(0, -500, 0);
           this.group.add(rig.root);
           const key = poolKey(vehicle, ghost);
@@ -784,6 +816,7 @@ export class SimVisualFxManager {
       syntheticTelemetry.mgukPowerKw = peer.throttle > 0.5 ? 250 : -80;
       syntheticTelemetry.totalPowerKw = 650 * peer.throttle;
       const braking = peer.brake > 0.2;
+      entry.braking = braking;
       const bt = syntheticTelemetry.brakeTempsC;
       bt[0] = bt[1] = braking ? 780 : 340;
       bt[2] = bt[3] = braking ? 720 : 320;
@@ -839,6 +872,11 @@ export class SimVisualFxManager {
   private dropOpponentRigs(entry: { rig: SimCarRig; spare?: SimCarRig }): void {
     for (const rig of [entry.rig, entry.spare]) {
       if (!rig) continue;
+      const hl = this.rigHeadlights.get(rig);
+      if (hl) {
+        hl.dispose();
+        this.rigHeadlights.delete(rig);
+      }
       this.group.remove(rig.root);
       // The rig's own dispose() only stops its updates: its canvases, geometry and materials (and the contact
       // shadow) would otherwise stay on the GPU for every car that ever left

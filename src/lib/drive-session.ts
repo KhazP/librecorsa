@@ -15,7 +15,7 @@ import { Gt3DashDisplay, gt3MirrorPatches } from "@/lib/render/gt3-dash-display"
 import { createPortedCarRig } from "@/lib/ported-car-model";
 import { staticFloorOf } from "@/lib/render/body-floor";
 import { FloorSparks } from "@/lib/render/floor-sparks";
-import { CarHeadlights, shouldHeadlightsBeOn, type HeadlightMode } from "@/lib/render/car-headlights";
+import { CarHeadlights, headlightSpotCountFor, shouldHeadlightsBeOn, type HeadlightMode } from "@/lib/render/car-headlights";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
@@ -1332,9 +1332,17 @@ export class DriveSession {
     };
     let carRig = createCarRig(carIdNow);
     let carRigCar: CarId = carIdNow;
-    let carHeadlights = new CarHeadlights(carIdNow);
+    const desiredHeadlightSpots = () => headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality);
+    let carHeadlights = new CarHeadlights(carIdNow, { spotCount: desiredHeadlightSpots() });
     carHeadlights.attach(carRig.chassisGroup);
     let headlightMode: HeadlightMode = "auto";
+    const syncHeadlightSpots = () => {
+      const wanted = desiredHeadlightSpots();
+      if (wanted === carHeadlights.spotCount) return;
+      carHeadlights.dispose();
+      carHeadlights = new CarHeadlights(carRigCar, { spotCount: wanted });
+      carHeadlights.attach(carRig.chassisGroup);
+    };
     // A livery picked in the menus goes onto the car at once
     const unsubscribeCarSkins = subscribeCarSkins(() => carRig.setSkin?.(skinFor(carRigCar)));
     const swapCarRig = (car: CarId) => {
@@ -1356,7 +1364,7 @@ export class DriveSession {
       disposeTree(carRig.root);
       carRig = createCarRig(car);
       carRigCar = car;
-      carHeadlights = new CarHeadlights(car);
+      carHeadlights = new CarHeadlights(car, { spotCount: desiredHeadlightSpots() });
       carHeadlights.attach(carRig.chassisGroup);
       // A different model for the opponents and the ghost: build and compile them now, not at the next race start
       void visualFx.prewarm(carPhysics(car)).then(() => {
@@ -1493,6 +1501,7 @@ export class DriveSession {
         governor.reset(ladderLength(g), 0);
         rememberLevel(g.quality, g.renderScale, 0, performance.now());
         this.applyGraphics();
+        if (g.quality !== pg.quality) syncHeadlightSpots();
         sessionPerf?.note(performance.now(), `graphics set to ${g.quality}, render ${Math.round(g.renderScale * 100)}%, auto quality ${g.autoQuality ? "on" : "off"}`);
       }
       if (g.fpsCap !== pg.fpsCap) {
@@ -3236,6 +3245,7 @@ export class DriveSession {
         if (!cloudConditions || !sameConditions(cloudConditions, wx.conditions)) {
           if (cloudConditions && cloudConditions.timeOfDay !== wx.conditions.timeOfDay) headlightMode = "auto";
           cloudConditions = { ...wx.conditions };
+          syncHeadlightSpots();
           env.setCloudSeed(fixedCloudSeed ?? Math.floor(Math.random() * 2 ** 31));
         }
         env.setConditions(skyConditions);
@@ -3274,11 +3284,10 @@ export class DriveSession {
         if (view.driverEye && !inVr) camera.layers.enable(RAIN_VISOR_LAYER);
         else camera.layers.disable(RAIN_VISOR_LAYER);
         const skyLight = THREE.MathUtils.clamp((skyConditions.elevationDeg + 3) / 17, 0, 1) * (1 - 0.4 * wx.cloudCover);
-        carHeadlights.setEnabled(
-          shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, wx.rainIntensity),
-          physics.telemetry.brake > 0.05,
-          camera
-        );
+        const headlightsOn = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
+        // Onboard views (cockpit, dash, nose, shoulder, T-cam) sit on/behind the nose; hide the player's own front flares
+        carHeadlights.setEnabled(headlightsOn, physics.telemetry.brake > 0.05, camera, view.anchor !== null);
+        visualFx.setHeadlights(headlightsOn, camera);
         visualFx.setLightLevel(skyLight);
         rainFx.update(
           drawDtS,
