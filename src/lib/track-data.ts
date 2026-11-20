@@ -259,7 +259,7 @@ const ALL_LIVERIES: LiveryConfig[] = [
     id: "grid26_cobalt",
     name: "Apex Cobalt #52",
     team: "Apex Racing",
-    primary: "#1a2b66",
+    primary: "#1e347a",
     secondary: "#0d1018",
     accent: "#e62436",
     number: "52",
