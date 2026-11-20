@@ -969,7 +969,7 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
         <ChromeButton label="Camera" icon="camera" onTap={onCycleCamera} />
         {onToggleHeadlights && (showHeadlights || headlightsOn) ? (
           <ChromeButton
-            label={headlightsOn ? "Turn headlights off" : "Turn headlights on"}
+            label="Headlights"
             icon="headlights"
             active={Boolean(headlightsOn)}
             onTap={onToggleHeadlights}

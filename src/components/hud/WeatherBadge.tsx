@@ -54,8 +54,14 @@ const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | 
     variant === "panel"
       ? "flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lc-tile px-3.5 py-2.5" // under the circuit map
       : "inline-flex h-8 items-center gap-3 rounded-full py-1 pr-3.5 pl-3.5";
+  const headlightLabel =
+    weather.headlightMode === "on"
+      ? "Headlights forced on"
+      : weather.headlightMode === "off"
+        ? "Headlights forced off"
+        : "Headlights on";
   return (
-    <div className={`${shape} ${HUD_GLASS}`} aria-label="Weather">
+    <div role="group" className={`${shape} ${HUD_GLASS}`} aria-label="Weather">
       {weather.timeMoving ? <span className="lc-data text-[11px] text-lc-chalk">{clock(weather.clockH)}</span> : null}
       <span className="flex items-center gap-1.5">
         <span className={HUD_LBL}>Air</span>
@@ -83,13 +89,6 @@ const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | 
       {weather.headlightsOn === true || (weather.headlightMode !== undefined && weather.headlightMode !== "auto") ? (
         <span
           className={`inline-flex items-center gap-1 ${weather.headlightsOn ? "text-lc-good" : "text-lc-ash"}`}
-          aria-label={
-            weather.headlightMode === "on"
-              ? "Headlights forced on"
-              : weather.headlightMode === "off"
-                ? "Headlights forced off"
-                : "Headlights on"
-          }
           title={
             weather.headlightMode === "on"
               ? "Headlights on (manual)"
@@ -98,9 +97,17 @@ const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | 
                 : "Headlights on (auto)"
           }
         >
-          <Icon name="headlights" size="xs" className={`size-3.5 ${weather.headlightsOn ? "" : "opacity-60"}`} />
-          {weather.headlightMode === "on" ? <span className="lc-chip-text text-[9px] text-lc-good">ON</span> : null}
-          {weather.headlightMode === "off" ? <span className="lc-chip-text text-[9px] text-lc-ash">OFF</span> : null}
+          <Icon name="headlights" size="xs" label={headlightLabel} className={`size-3.5 ${weather.headlightsOn ? "" : "opacity-60"}`} />
+          {weather.headlightMode === "on" ? (
+            <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-good">
+              ON
+            </span>
+          ) : null}
+          {weather.headlightMode === "off" ? (
+            <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-ash">
+              OFF
+            </span>
+          ) : null}
         </span>
       ) : null}
     </div>

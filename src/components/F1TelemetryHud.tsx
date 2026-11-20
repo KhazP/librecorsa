@@ -799,7 +799,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               ? [[props.keyNames.headlights, "Lights"]]
               : []),
           ]).map(([k, label]) => (
-            <span key={k} className="inline-flex items-center gap-1.5">
+            <span key={label} className="inline-flex items-center gap-1.5">
               <KeyCap>{k}</KeyCap>
               {label}
             </span>

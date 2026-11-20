@@ -1782,9 +1782,9 @@ export class DriveSession {
           this.toggleAutopilot();
           break;
         case "headlights": {
-          const onNow = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, trackEnv.weather.rainIntensity);
+          const onNow = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, getTrackEnv().weather.rainIntensity);
           headlightMode = onNow ? "off" : "on";
-          lastWeatherHudMs = 0;
+          lastWeatherHudMs = -Infinity;
           break;
         }
         // The HUD owns these panels
@@ -3243,7 +3243,7 @@ export class DriveSession {
         if (!cloudConditions || !sameConditions(cloudConditions, wx.conditions)) {
           if (cloudConditions && cloudConditions.timeOfDay !== wx.conditions.timeOfDay) {
             headlightMode = "auto";
-            lastWeatherHudMs = 0;
+            lastWeatherHudMs = -Infinity;
           }
           cloudConditions = { ...wx.conditions };
           syncHeadlightSpots();
