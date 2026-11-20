@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { LiveryConfig } from "@/types/f1";
 import { LIVERIES } from "@/lib/track-data";
 import {
@@ -8,7 +8,9 @@ import {
   CARS,
   carClass,
   carClassesInUse,
+  carLiveryThumbUrl,
   carQualityMeta,
+  carSkinThumbUrl,
   carThumbUrl,
   compareCarsByClassAndYear,
   carTakesLivery,
@@ -18,6 +20,7 @@ import {
   type CarId,
   type CarQuality,
 } from "@/lib/cars/car-registry";
+import { useCarSkinId } from "@/lib/cars/car-skins";
 import { carPhysics, carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { Disclosure, Skeleton } from "@/components/ui";
 import { StateBadge } from "@/components/ui/badges/StateBadge";
@@ -36,27 +39,78 @@ const physicsLabel = (car: CarDefinition) =>
   car.classId === "f1" ? F1_MOD_PHYSICS_OPTIONS.find((o) => o.id === car.physics)?.title : undefined;
 
 /**
- * The car's picture (`npm run car-thumbs`), a titanium block while it loads; a copy without the file (a clone, for a
- * hosted car) keeps the block. A car that takes liveries is pictured in the default one.
+ * The car's picture (`npm run car-thumbs`), showing the active livery or mod skin when available and falling back
+ * smoothly to the car's default thumb (`carThumbUrl`) for custom paint or missing hosted variant files. Keeps the
+ * previously loaded image visible for the same car while a newly picked livery/skin image loads so there is no flicker.
  */
-export const CarThumb: React.FC<{ car: CarDefinition; className?: string }> = ({ car, className = "" }) => {
-  const [state, setState] = useState<"loading" | "done" | "failed">("loading");
+export const CarThumb: React.FC<{
+  car: CarDefinition;
+  /** Active procedural livery id for cars that take liveries (`lc26`) */
+  liveryId?: string | null;
+  /** Explicit skin id override; defaults to the car's active skin from `useCarSkinId` */
+  skinId?: string | null;
+  className?: string;
+}> = ({ car, liveryId, skinId, className = "" }) => {
+  const storedSkinId = useCarSkinId(car.id);
+  const effectiveSkinId = skinId !== undefined ? skinId : storedSkinId;
+  const fallbackSrc = withBasePath(carThumbUrl(car.id));
+  const variantUrl =
+    liveryId && liveryId !== "custom" && carTakesLivery(car.id)
+      ? carLiveryThumbUrl(car.id, liveryId)
+      : effectiveSkinId && car.skins?.length
+        ? carSkinThumbUrl(car.id, effectiveSkinId)
+        : null;
+  const desiredSrc = variantUrl ? withBasePath(variantUrl) : fallbackSrc;
+
+  const [loaded, setLoaded] = useState<{ carId: CarId; src: string } | null>(null);
+  const [fallbackFor, setFallbackFor] = useState<string | null>(null);
+  const [failedFor, setFailedFor] = useState<string | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  const shownSrc = loaded?.carId === car.id ? loaded.src : null;
+  const targetSrc = fallbackFor === desiredSrc ? fallbackSrc : desiredSrc;
+  const targetFailed = failedFor === targetSrc;
+  const ready = shownSrc === targetSrc;
+
+  useEffect(() => {
+    const el = imgRef.current;
+    if (el && el.complete && el.naturalWidth > 0 && shownSrc !== targetSrc) {
+      setLoaded({ carId: car.id, src: targetSrc });
+    }
+  }, [car.id, shownSrc, targetSrc]);
+
   return (
     <>
-      {state !== "done" ? <Skeleton className={`absolute inset-3 ${state === "failed" ? "[animation:none]" : ""}`} /> : null}
-      {state === "failed" ? null : (
-        // A plain img: a static file the export serves as is (next/image would need a loader for it)
+      {!shownSrc ? <Skeleton className={`absolute inset-3 ${targetFailed ? "[animation:none]" : ""}`} /> : null}
+      {shownSrc && !ready ? (
         <img
-          src={withBasePath(carThumbUrl(car.id))}
+          src={shownSrc}
           alt={car.title}
           width={640}
           height={360}
-          loading="lazy"
           decoding="async"
           draggable={false}
-          onLoad={() => setState("done")}
-          onError={() => setState("failed")}
-          className={`pointer-events-none relative object-contain select-none ${state === "done" ? "" : "opacity-0"} ${className}`}
+          className={`pointer-events-none relative object-contain select-none ${className}`}
+        />
+      ) : null}
+      {targetFailed ? null : (
+        // A plain img: a static file the export serves as is (next/image would need a loader for it)
+        <img
+          ref={imgRef}
+          key={targetSrc}
+          src={targetSrc}
+          alt={car.title}
+          width={640}
+          height={360}
+          loading={shownSrc ? "eager" : "lazy"}
+          decoding="async"
+          draggable={false}
+          onLoad={() => setLoaded({ carId: car.id, src: targetSrc })}
+          onError={() => {
+            if (targetSrc !== fallbackSrc) setFallbackFor(desiredSrc);
+            else setFailedFor(targetSrc);
+          }}
+          className={`pointer-events-none object-contain select-none ${ready ? "relative" : "absolute inset-0 opacity-0"} ${className}`}
         />
       )}
     </>
@@ -146,7 +200,7 @@ export const CarBrowser: React.FC<{
       onClose={onClose}
       toolbar={toolbar}
       renderCard={(c) => ({
-        media: <CarThumb car={c} className="p-2.5 pt-9" />,
+        media: <CarThumb car={c} liveryId={carTakesLivery(c.id) ? selectedLivery.id : undefined} className="p-2.5 pt-9" />,
         title: c.title,
         meta: `${carClass(c.classId).title}, ${c.year}`,
         badges: (
@@ -163,7 +217,7 @@ export const CarBrowser: React.FC<{
         return (
           <>
             <span className="relative -mx-1 -mt-1 block aspect-video overflow-hidden rounded-lc-tile bg-lc-well [&>img]:size-full">
-              <CarThumb car={c} className="p-2" />
+              <CarThumb car={c} liveryId={carTakesLivery(c.id) ? selectedLivery.id : undefined} className="p-2" />
             </span>
             <div className="flex flex-col gap-1.5">
               <h3 className="lc-h3 m-0 [overflow-wrap:anywhere]">{c.title}</h3>

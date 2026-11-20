@@ -561,17 +561,25 @@ export const compareCarsByClassAndYear = (a: CarDefinition, b: CarDefinition): n
  */
 export const carTakesLivery = (id: CarId): boolean => !carById(id).modelUrl;
 
+const carThumbDir = (id: CarId): string => {
+  if (REPO_CAR_IDS.has(id)) return "/lc26";
+  // Beside the car's model, so a car that took over another's body shows that body's picture
+  const modelDir = carById(id).modelUrl?.match(/^(\/cars\/[^/]+)\/model\//)?.[1];
+  return modelDir ?? `/cars/${id}`;
+};
+
 /**
  * The car browser's picture of a car (`npm run car-thumbs` renders them): beside a hosted car's files, so it goes up to
  * R2 with them (`npm run upload-hosted`), in the folder of the car's model; the repository car drives the 2026
- * prototype's body, whose one picture is in the repository. A copy without the file shows the card without a picture.
+ * prototype's body, whose pictures are in the repository. A copy without the file shows the card without a picture.
  */
-export const carThumbUrl = (id: CarId): string => {
-  if (REPO_CAR_IDS.has(id)) return "/lc26/thumb.webp";
-  // Beside the car's model, so a car that took over another's body shows that body's picture
-  const modelDir = carById(id).modelUrl?.match(/^(\/cars\/[^/]+)\/model\//)?.[1];
-  return `${modelDir ?? `/cars/${id}`}/thumb.webp`;
-};
+export const carThumbUrl = (id: CarId): string => `${carThumbDir(id)}/thumb.webp`;
+
+/** Picture of a car wearing a specific procedural livery (`npm run car-thumbs`), beside its default thumb */
+export const carLiveryThumbUrl = (id: CarId, liveryId: string): string => `${carThumbDir(id)}/thumbs/${liveryId}.webp`;
+
+/** Picture of a ported car wearing a specific mod skin (`npm run car-thumbs`), beside its default thumb */
+export const carSkinThumbUrl = (id: CarId, skinId: string): string => `${carThumbDir(id)}/thumbs/${skinId}.webp`;
 
 /** A car's skin by id, its first (the GLB's own paint) when the id is unknown or absent; null for a car without skins */
 export const carSkin = (id: CarId, skinId: string | null | undefined): CarSkin | null => {

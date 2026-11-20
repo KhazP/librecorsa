@@ -1,23 +1,33 @@
 /**
  * Browser half of `npm run car-thumbs` (scripts/render-car-thumbs.ts bundles and serves it). Builds one car exactly as
  * the drive session does (drive-session.ts `createCarRig`: a ported car's GLB, the GT3 rig, or the 2026 prototype),
- * lights it in a neutral studio, frames a front three-quarter view and leaves the picture in `window.__thumb`.
+ * lights it in a neutral studio, frames a front three-quarter view and exposes `window.__thumbApi` so the runner can
+ * load each car GLB once and snap its default picture plus every livery or mod skin in place.
  *
  *   /__thumbs/?car=<CarId>
  */
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { carById, type CarId } from "@/lib/cars/car-registry";
+import { carById, carSkinBaseUrl, type CarId } from "@/lib/cars/car-registry";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
 import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
-import { createPortedCarRig } from "@/lib/ported-car-model";
+import { clearSkinTextureCache, createPortedCarRig } from "@/lib/ported-car-model";
 import { staticFloorOf } from "@/lib/render/body-floor";
 import { LIVERIES } from "@/lib/track-data";
+
+export interface ThumbRenderApi {
+  snap: () => Promise<string>;
+  snapLivery: (liveryId: string) => Promise<string>;
+  snapSkin: (skinId: string | null) => Promise<string>;
+  dispose: () => Promise<void>;
+}
 
 declare global {
   interface Window {
     __thumb?: string;
+    __thumbReady?: boolean;
+    __thumbApi?: ThumbRenderApi;
     __thumbError?: string;
   }
 }
@@ -54,6 +64,7 @@ const loaded = (rig: SimCarRig) => Boolean(rig.getLc26Body() || rig.getCameraAnc
 async function main(): Promise<void> {
   const id = new URLSearchParams(location.search).get("car") as CarId | null;
   if (!id) throw new Error("no ?car=");
+  const def = carById(id);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
@@ -80,12 +91,7 @@ async function main(): Promise<void> {
   const started = performance.now();
   while (!loaded(rig)) {
     if (performance.now() - started > LOAD_TIMEOUT_MS) throw new Error(`${id}: model did not load`);
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  // Textures decode after the model lands: give them a moment, rendering so uploads happen
-  for (let i = 0; i < 90; i++) {
-    renderer.render(scene, new THREE.PerspectiveCamera());
-    await new Promise((r) => requestAnimationFrame(r));
+    await new Promise((r) => setTimeout(r, 100));
   }
 
   // Frame the car from its front three-quarter: the nose points toward +Z on every rig (the sharp trim crops the margin)
@@ -96,11 +102,66 @@ async function main(): Promise<void> {
   const radius = Math.max(size.x, size.z) * 0.5;
   const camera = new THREE.PerspectiveCamera(28, WIDTH / HEIGHT, 0.05, 200);
   const view = new THREE.Vector3(-0.66, 0.32, 0.68).normalize();
-  const fit = radius / Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)) * 0.8;
+  const fit = (radius / Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))) * 0.8;
   camera.position.copy(centre).addScaledVector(view, fit);
   camera.lookAt(centre.x, centre.y - size.y * 0.08, centre.z);
-  renderer.render(scene, camera);
+
+  const renderFrames = async (count: number) => {
+    for (let i = 0; i < count; i++) {
+      renderer.render(scene, camera);
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    renderer.render(scene, camera);
+    renderer.getContext().finish();
+  };
+
+  // Initial textures (GLB maps, tyres) decode asynchronously after the model lands: warm up before snapping
+  await renderFrames(60);
+
+  const snap = async (): Promise<string> => {
+    await renderFrames(2);
+    return renderer.domElement.toDataURL("image/png");
+  };
+
+  const snapLivery = async (liveryId: string): Promise<string> => {
+    const livery = LIVERIES.find((l) => l.id === liveryId);
+    if (!livery) throw new Error(`${id}: unknown livery ${liveryId}`);
+    rig.setLivery(livery);
+    await renderFrames(3);
+    return renderer.domElement.toDataURL("image/png");
+  };
+
+  const snapSkin = async (skinId: string | null): Promise<string> => {
+    const skins = def.skins;
+    if (!skins?.length) return snap();
+    const skin = skinId ? skins.find((s) => s.id === skinId) : null;
+    if (skinId && !skin) throw new Error(`${id}: unknown skin ${skinId}`);
+    const ported =
+      skin && skin.id !== skins[0].id
+        ? { baseUrl: carSkinBaseUrl(def.id, skin.id), files: skin.files, variant: skin.variant }
+        : null;
+    // Reset to the GLB's own maps first and dispose prior skin textures so multi-skin batches keep VRAM flat
+    await rig.setSkin?.(null);
+    await clearSkinTextureCache();
+    if (ported) await rig.setSkin?.(ported);
+    await renderFrames(4);
+    return renderer.domElement.toDataURL("image/png");
+  };
+
+  const dispose = async (): Promise<void> => {
+    await rig.setSkin?.(null);
+    await clearSkinTextureCache();
+    rig.dispose();
+    scene.environment?.dispose();
+    pmrem.dispose();
+    renderer.renderLists.dispose();
+    renderer.dispose();
+    renderer.forceContextLoss();
+  };
+
+  window.__thumbApi = { snap, snapLivery, snapSkin, dispose };
   window.__thumb = renderer.domElement.toDataURL("image/png");
+  window.__thumbReady = true;
 }
 
 main().catch((err: unknown) => {

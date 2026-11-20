@@ -84,7 +84,9 @@ function loadSkinTexture(url: string, like: THREE.Texture | null): Promise<THREE
   if (!tex) {
     tex = new THREE.TextureLoader()
       .loadAsync(withBasePath(url))
-      .then((t) => {
+      .then(async (t) => {
+        const img = t.image as HTMLImageElement | undefined;
+        if (img && typeof img.decode === "function") await img.decode().catch(() => {});
         // As the GLB's own: glTF UVs (no flip), sRGB colour, repeating
         t.flipY = false;
         t.colorSpace = THREE.SRGBColorSpace;
@@ -100,6 +102,16 @@ function loadSkinTexture(url: string, like: THREE.Texture | null): Promise<THREE
     skinTextures.set(url, tex);
   }
   return tex;
+}
+
+/** Disposes and clears cached skin textures (used by offline batch thumbnail rendering to cap VRAM across dozens of skins) */
+export async function clearSkinTextureCache(): Promise<void> {
+  const entries = [...skinTextures.values()];
+  skinTextures.clear();
+  for (const p of entries) {
+    const tex = await p;
+    tex?.dispose();
+  }
 }
 
 const WHEELS = WHEEL_NODES;
@@ -293,10 +305,11 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   let skin = options.skin ?? null;
   // A livery's own parts (the GLB's `partVariants`): each shown only for the liveries of its variants
   const parts: { node: THREE.Object3D; variants: readonly string[] }[] = [];
-  const applySkin = () => {
+  const applySkin = (): Promise<void> => {
     const wearing = skin;
     const variant = wearing?.variant ?? "base";
     for (const part of parts) part.node.visible = part.variants.includes(variant);
+    const pending: Promise<void>[] = [];
     for (const slot of skinSlots) {
       // No livery, or one that leaves this file as the model has it
       if (!wearing || (wearing.files && !wearing.files.includes(slot.file))) {
@@ -304,12 +317,15 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         slot.mat.needsUpdate = true;
         continue;
       }
-      void loadSkinTexture(`${wearing.baseUrl}/${slot.file}`, slot.own).then((tex) => {
-        if (disposed || skin !== wearing || !tex) return;
-        slot.mat.map = tex;
-        slot.mat.needsUpdate = true;
-      });
+      pending.push(
+        loadSkinTexture(`${wearing.baseUrl}/${slot.file}`, slot.own).then((tex) => {
+          if (disposed || skin !== wearing || !tex) return;
+          slot.mat.map = tex;
+          slot.mat.needsUpdate = true;
+        })
+      );
     }
+    return Promise.all(pending).then(() => undefined);
   };
 
   void loadTemplate(options.url).then((template) => {
@@ -388,7 +404,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       if (extras.revLeds) steerNode.userData.revLeds = extras.revLeds;
     }
     for (const [name, variants] of Object.entries(extras.partVariants ?? {})) {
-      const node = find(name);
+      const node = bodyGroup.getObjectByName(name) ?? find(name);
       if (node) parts.push({ node, variants });
     }
     // The materials a livery repaints, copied for this car (the template's are every car's): the body's and the
@@ -464,9 +480,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     // compound
     setLivery: () => {},
     setSkin: (next) => {
-      if (next?.baseUrl === skin?.baseUrl && next?.variant === skin?.variant) return;
+      if (next?.baseUrl === skin?.baseUrl && next?.variant === skin?.variant) return Promise.resolve();
       skin = next;
-      applySkin();
+      return applySkin();
     },
     setTireCompound: (c) => {
       compound = c;

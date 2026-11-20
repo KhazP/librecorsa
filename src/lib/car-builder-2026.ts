@@ -30,7 +30,7 @@ export interface SimCarRig {
   helmetGroup: THREE.Group;
   setLivery: (livery: LiveryConfig) => void;
   /** A ported car's own livery (`PortedSkin`), or null for the paint its model was made in */
-  setSkin?: (skin: PortedSkin | null) => void;
+  setSkin?: (skin: PortedSkin | null) => void | Promise<void>;
   setTireCompound: (compound: TireCompound) => void;
   /** Onboard camera anchors once the 3D model has loaded (null until then, or for the procedural car) */
   getCameraAnchors: () => Lc26ModelInstance["cameraAnchors"] | null;
