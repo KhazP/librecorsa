@@ -4,16 +4,18 @@
  * The board table: one drawing of a timing list for the lap times, the online board and the weekly challenge. Free of
  * the simulator, so the home page's board can use it too.
  */
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { DriverBadges } from "@/components/ui/DriverBadges";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { PlayerTag } from "@/components/ui/badges/PlayerTag";
 import { PositionBadge } from "@/components/ui/badges/PositionBadge";
 import { Icon } from "@/components/ui/icons/Icon";
 import { formatLapTime, formatSectorTime } from "@/components/hud/hud-format";
+import { fetchBadges, type DriverBadge } from "@/lib/net/awards";
 import type { LapInput } from "@/lib/sim/lap-types";
 import { InputIcon } from "./InputIcon";
-import { formatCount } from "@/lib/net/board-client";
+import { driverNameKey, formatCount } from "@/lib/net/board-client";
 
 export interface BoardRow {
   key: string;
@@ -40,6 +42,8 @@ export interface BoardRow {
   bestSectors?: readonly boolean[];
   /** The player's own row */
   mine?: boolean;
+  /** Pre-fetched badges for this driver (when omitted on a driver board, fetched in a batch automatically) */
+  badges?: readonly DriverBadge[];
   /** An action at the end of the row (race this lap's ghost) */
   action?: React.ReactNode;
 }
@@ -69,9 +73,23 @@ export const BoardTable: React.FC<{
   footer?: React.ReactNode;
   /** A newer page is on its way: the rows shown stay, dimmed, and say so */
   stale?: boolean;
-}> = ({ label, rows, nameHeader = "Driver", footer, stale = false }) => {
+  /** Whether to batch-fetch and render driver badges beside driver names (defaults to true for Driver boards) */
+  showBadges?: boolean;
+}> = ({ label, rows, nameHeader = "Driver", footer, stale = false, showBadges = nameHeader === "Driver" }) => {
   const sectors = rows.some((r) => r.sectorsMs?.length);
   const actions = rows.some((r) => r.action);
+  const [fetchedBadges, setFetchedBadges] = useState<Record<string, DriverBadge[]>>({});
+  const namesKey = showBadges ? rows.filter((r) => r.badges === undefined).map((r) => driverNameKey(r.title)).join("\n") : "";
+  useEffect(() => {
+    if (!namesKey) return;
+    let live = true;
+    void fetchBadges(namesKey.split("\n")).then((map) => {
+      if (live) setFetchedBadges(map);
+    });
+    return () => {
+      live = false;
+    };
+  }, [namesKey]);
   return (
     <div className="@container min-w-0">
       <table
@@ -122,6 +140,7 @@ export const BoardTable: React.FC<{
                       {r.title}
                     </span>
                     <InputIcon input={r.input} className="text-lc-fog" />
+                    {showBadges ? <DriverBadges badges={r.badges ?? fetchedBadges[driverNameKey(r.title)] ?? []} compact /> : null}
                     {r.mine ? <PlayerTag size="sm" /> : null}
                   </span>
                   {r.tag || r.detail ? (

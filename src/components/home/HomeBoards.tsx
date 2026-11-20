@@ -10,6 +10,7 @@ import React, { useEffect, useState } from "react";
 import type { VehicleModelId } from "@/types/f1";
 import { ALL_CARS, boardLabel, type BoardCar } from "@/lib/net/board-client";
 import { challengeAt, challengeConditionsLabel, challengesSoFar, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
+import { HallOfFame } from "@/components/board/HallOfFame";
 import { OnlineBoard, type BoardCarTag } from "@/components/board/OnlineBoard";
 import { Badge } from "@/components/ui/Badge";
 import { Segmented } from "@/components/ui/Segmented";
@@ -27,7 +28,7 @@ export interface HomeBoardsProps {
   carTitles: Readonly<Record<string, string>>;
 }
 
-type View = "laps" | "challenge";
+type View = "laps" | "challenge" | "hof";
 
 /** "9 Nov" */
 const dayOf = (ms: number) => new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -75,6 +76,7 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
       options={[
         { id: "laps", label: "All laps" },
         { id: "challenge", label: "Weekly challenge" },
+        { id: "hof", label: "Hall of Fame" },
       ]}
       className="self-start phone:self-stretch"
       fill
@@ -93,6 +95,18 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
           onCircuitChange={onCircuitChange}
           carPicker={{ cars: carChoices, value: car, onChange: setCar }}
           carTag={carTag}
+        />
+      </div>
+    );
+  }
+
+  if (view === "hof") {
+    return (
+      <div className="flex flex-col gap-3">
+        {switcher}
+        <HallOfFame
+          circuitName={circuitName}
+          carName={(v) => carTitles[v] ?? carChoices.find((c) => c.id === v)?.label ?? v}
         />
       </div>
     );

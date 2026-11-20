@@ -50,11 +50,13 @@ import {
   Keyboard,
   LayoutDashboard,
   LayoutGrid,
+  Lightbulb,
   ListFilter,
   LoaderCircle,
   Lock,
   LogOut,
   Menu,
+  Medal,
   MessageSquarePlus,
   Minus,
   MonitorCog,
@@ -298,6 +300,10 @@ export const ICONS = {
   grid: StartGrid,
   podium: Podium,
   chequered: Chequered,
+
+  // Driver badges (DriverBadges.tsx): a weekly challenge medal, and an idea that went into the game
+  medal: Medal,
+  idea: Lightbulb,
 
   // Weather and time of day
   weatherClear: Sun,

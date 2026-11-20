@@ -14,6 +14,7 @@ import { onlineUrl } from "@/lib/net/online-config";
 import type { AdminStats as StatsBody, Count, UsageGroup } from "../../../cloudflare/api/admin";
 import type { CloudflareStats } from "../../../cloudflare/api/analytics";
 import { readAdmin } from "./admin-fetch";
+import { AwardsSection } from "./AwardsSection";
 import { type BuildDay, buildDays } from "./build-days";
 import {
   AverageList,
@@ -143,6 +144,7 @@ const SECTIONS = [
   { id: "drivers", name: "Drivers" },
   { id: "boards", name: "Boards" },
   { id: "races", name: "Races" },
+  { id: "awards", name: "Badges" },
   { id: "site", name: "Site" },
 ] as const;
 
@@ -253,7 +255,7 @@ export function Dashboard({ adminKey, initial, initialDays, onForget }: { adminK
         ) : null}
         {/* A range on its way keeps the numbers in hand, dimmed, instead of a blank page */}
         <div className={pending ? "opacity-60 transition-opacity duration-200" : "transition-opacity duration-200"} aria-busy={pending !== null}>
-          <Numbers stats={stats} nowMs={statsAtMs} names={names} cloudflare={cloudflare} live={live} pageBuild={pageBuild} />
+          <Numbers stats={stats} nowMs={statsAtMs} names={names} cloudflare={cloudflare} live={live} pageBuild={pageBuild} adminKey={adminKey} />
         </div>
       </div>
     </SitePage>
@@ -309,6 +311,7 @@ function Numbers({
   cloudflare,
   live,
   pageBuild,
+  adminKey,
 }: {
   stats: StatsBody;
   nowMs: number;
@@ -316,6 +319,7 @@ function Numbers({
   cloudflare: CloudflareState;
   live: number | null | undefined;
   pageBuild: string | null;
+  adminKey: string;
 }) {
   const { totals, previous, board, races, extras } = stats;
   const raceCount = races ? races.open + races.room : 0;
@@ -752,6 +756,8 @@ function Numbers({
           </>
         ) : null}
       </Section>
+
+      <AwardsSection adminKey={adminKey} />
 
       <SiteSection cloudflare={cloudflare} />
     </div>

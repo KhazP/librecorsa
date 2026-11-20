@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { CARS } from "@/lib/cars/car-registry";
+import { TRACKS, venueOf } from "@/lib/track-registry";
 import { boardLabel, driverNameKey, type RemoteBoard } from "@/lib/net/leaderboard";
 import { boardChoiceOf, boardChoices, PHYSICS_VERSION } from "@/lib/sim/lap-types";
 import { challengeConditionsLabel, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
+import { HallOfFame } from "@/components/board/HallOfFame";
 import { BoardError, BoardSkeleton, BoardTable, MyPlace } from "@/components/hud/LeaderboardPanel";
 import { Button, Card, EmptyState, Select } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
@@ -31,9 +34,20 @@ export interface ChallengePanelProps {
   hasRaces?: boolean;
 }
 
+const formatCircuitName = (id: string): string => {
+  const t = TRACKS.find((x) => x.id === id);
+  if (!t) return id.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const layouts = venueOf(id)?.layouts.length ?? 1;
+  return layouts > 1 && t.layout ? `${t.name} · ${t.layout}` : t.name;
+};
+
+const formatCarName = (vehicle: string): string => CARS.find((c) => c.physics === vehicle)?.title ?? vehicle;
+
+type ChallengeTab = "week" | "hof";
+
 /**
  * This week's challenge: its circuit, car and rules, the button that sets them up, and its board, under the physics
- * driven now or an older version's laps kept as they were
+ * driven now or an older version's laps kept as they were, plus the Hall of Fame of completed weeks.
  */
 export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   challenge,
@@ -46,6 +60,7 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   onDrive,
   hasRaces = false,
 }) => {
+  const [tab, setTab] = useState<ChallengeTab>("week");
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -87,94 +102,111 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   ];
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))] items-start gap-3">
-      <Card
-        title={trackName}
-        description={carTitle}
-        action={
-          <Badge icon="time" variant="outline">
-            {timeLeftLabel(challenge.endsMs, now)} left
-          </Badge>
-        }
-        bodyClassName="gap-3.5"
-      >
-        <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label="Rules">
-          {rules.map((r) => (
-            <li key={r}>
-              <Badge>{r === "Full" || r === "Standard" || r === "Casual" ? `${r} realism` : r}</Badge>
-            </li>
-          ))}
-        </ul>
-        <p className="lc-body m-0">
-          Same circuit, car and settings for everyone, until Monday. Flying laps: leave the track and the lap is deleted,
-          and the next one too if it was before the line. Your best lap goes on the week&apos;s board by itself.
-          {hasRaces && available ? " To race others this week, open Multiplayer." : ""}
-        </p>
-        {available ? (
-          <Button variant="primary" size="lg" block icon={<Icon name="drive" />} onClick={onDrive}>
-            Drive the challenge
-          </Button>
-        ) : (
-          <p className="m-0 flex items-start gap-2 text-[14px] leading-snug font-medium text-lc-caution">
-            <Icon name="warning" className="mt-0.5" />
-            This copy of the game doesn&apos;t have this week&apos;s circuit or car. Play it on librecorsa.org.
-          </p>
-        )}
-      </Card>
-
-      <Card
-        title="This week's times"
-        action={board ? <Badge variant="outline">{board.total === 1 ? "1 driver" : `${formatCount(board.total)} drivers`}</Badge> : null}
-        bodyClassName="gap-3"
-      >
-        {choices.length <= 2 ? (
-          <Segmented aria-label="Physics version" size="sm" value={choice.id} onChange={setBoardPick} options={choices} className="self-start" />
-        ) : (
-          <Select aria-label="Physics version" className="w-64 max-w-full self-start" value={choice.id} onChange={setBoardPick} options={choices} />
-        )}
-        {older ? (
-          <p className="lc-hint m-0">
-            {choice.physics !== PHYSICS_VERSION ? "I kept these laps from before the physics update." : "I kept these laps from before I changed this circuit."}
-          </p>
-        ) : null}
-        {me ? (
-          <MyPlace
-            rank={me.rank}
-            total={board?.total ?? me.rank}
-            lapMs={me.entry.lapTimeMs}
-            detail={
-              me.rank === 1
-                ? "Fastest this week"
-                : aboveMs !== null
-                  ? `${((me.entry.lapTimeMs - aboveMs) / 1000).toFixed(3)} s behind ${ahead && ahead.lapTimeMs === aboveMs ? ahead.name : `P${me.rank - 1}`}`
-                  : ""
+    <div className="flex flex-col gap-3">
+      <Segmented
+        aria-label="Challenge view"
+        size="sm"
+        value={tab}
+        onChange={setTab}
+        options={[
+          { id: "week", label: "This week" },
+          { id: "hof", label: "Hall of Fame" },
+        ]}
+        className="self-start"
+      />
+      {tab === "hof" ? (
+        <HallOfFame circuitName={formatCircuitName} carName={formatCarName} driverName={driverName} refreshKey={boardVersion} />
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))] items-start gap-3">
+          <Card
+            title={trackName}
+            description={carTitle}
+            action={
+              <Badge icon="time" variant="outline">
+                {timeLeftLabel(challenge.endsMs, now)} left
+              </Badge>
             }
-          />
-        ) : null}
-        {loading && !board ? (
-          <BoardSkeleton label="Loading this week's times" />
-        ) : state.error && !board ? (
-          <BoardError onRetry={() => setReload((n) => n + 1)}>Couldn&apos;t load this week&apos;s times. Check your connection.</BoardError>
-        ) : !board || board.entries.length === 0 ? (
-          <EmptyState icon={<Icon name="challenge" />}>
-            {older ? `No times this week on ${versionName}.` : "No times yet this week. Drive the challenge and yours can be the first."}
-          </EmptyState>
-        ) : (
-          <BoardTable
-            label={older ? `This week's times, ${versionName}` : "This week's times"}
-            rows={board.entries.map((e, i) => ({
-              key: e.id ?? `${e.code}-${i}`,
-              rank: i + 1,
-              code: e.code,
-              title: e.name,
-              input: e.conditions?.input,
-              lapMs: e.lapTimeMs,
-              fastest: i === 0,
-              mine: myKey !== "" && driverNameKey(e.name) === myKey,
-            }))}
-          />
-        )}
-      </Card>
+            bodyClassName="gap-3.5"
+          >
+            <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label="Rules">
+              {rules.map((r) => (
+                <li key={r}>
+                  <Badge>{r === "Full" || r === "Standard" || r === "Casual" ? `${r} realism` : r}</Badge>
+                </li>
+              ))}
+            </ul>
+            <p className="lc-body m-0">
+              Same circuit, car and settings for everyone, until Monday. Flying laps: leave the track and the lap is deleted,
+              and the next one too if it was before the line. Your best lap goes on the week&apos;s board by itself.
+              {hasRaces && available ? " To race others this week, open Multiplayer." : ""}
+            </p>
+            {available ? (
+              <Button variant="primary" size="lg" block icon={<Icon name="drive" />} onClick={onDrive}>
+                Drive the challenge
+              </Button>
+            ) : (
+              <p className="m-0 flex items-start gap-2 text-[14px] leading-snug font-medium text-lc-caution">
+                <Icon name="warning" className="mt-0.5" />
+                This copy of the game doesn&apos;t have this week&apos;s circuit or car. Play it on librecorsa.org.
+              </p>
+            )}
+          </Card>
+
+          <Card
+            title="This week's times"
+            action={board ? <Badge variant="outline">{board.total === 1 ? "1 driver" : `${formatCount(board.total)} drivers`}</Badge> : null}
+            bodyClassName="gap-3"
+          >
+            {choices.length <= 2 ? (
+              <Segmented aria-label="Physics version" size="sm" value={choice.id} onChange={setBoardPick} options={choices} className="self-start" />
+            ) : (
+              <Select aria-label="Physics version" className="w-64 max-w-full self-start" value={choice.id} onChange={setBoardPick} options={choices} />
+            )}
+            {older ? (
+              <p className="lc-hint m-0">
+                {choice.physics !== PHYSICS_VERSION ? "I kept these laps from before the physics update." : "I kept these laps from before I changed this circuit."}
+              </p>
+            ) : null}
+            {me ? (
+              <MyPlace
+                rank={me.rank}
+                total={board?.total ?? me.rank}
+                lapMs={me.entry.lapTimeMs}
+                detail={
+                  me.rank === 1
+                    ? "Fastest this week"
+                    : aboveMs !== null
+                      ? `${((me.entry.lapTimeMs - aboveMs) / 1000).toFixed(3)} s behind ${ahead && ahead.lapTimeMs === aboveMs ? ahead.name : `P${me.rank - 1}`}`
+                      : ""
+                }
+              />
+            ) : null}
+            {loading && !board ? (
+              <BoardSkeleton label="Loading this week's times" />
+            ) : state.error && !board ? (
+              <BoardError onRetry={() => setReload((n) => n + 1)}>Couldn&apos;t load this week&apos;s times. Check your connection.</BoardError>
+            ) : !board || board.entries.length === 0 ? (
+              <EmptyState icon={<Icon name="challenge" />}>
+                {older ? `No times this week on ${versionName}.` : "No times yet this week. Drive the challenge and yours can be the first."}
+              </EmptyState>
+            ) : (
+              <BoardTable
+                label={older ? `This week's times, ${versionName}` : "This week's times"}
+                rows={board.entries.map((e, i) => ({
+                  key: e.id ?? `${e.code}-${i}`,
+                  rank: i + 1,
+                  code: e.code,
+                  title: e.name,
+                  input: e.conditions?.input,
+                  lapMs: e.lapTimeMs,
+                  fastest: i === 0,
+                  mine: myKey !== "" && driverNameKey(e.name) === myKey,
+                }))}
+              />
+            )}
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
