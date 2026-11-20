@@ -31,7 +31,8 @@ export type KeyAction =
   | "mfdPage"
   | "mfd"
   | "hud"
-  | "board";
+  | "board"
+  | "headlights";
 
 /** Actions a controller or wheel button can trigger */
 export type PadAction =
@@ -82,6 +83,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "mfd", label: "Open / close MFD" },
   { id: "hud", label: "Show / hide HUD" },
   { id: "board", label: "Open / close lap board" },
+  { id: "headlights", label: "Headlights" },
 ];
 
 export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
@@ -133,6 +135,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   hud: ["KeyH"],
   // Beside the HUD's own key, away from L (which restarts the lap)
   board: ["KeyJ"],
+  headlights: ["KeyU"],
 };
 
 /** Keys that cannot be bound: Esc opens the menu, "/" starts the /boost command */

@@ -15,6 +15,7 @@ import { Gt3DashDisplay, gt3MirrorPatches } from "@/lib/render/gt3-dash-display"
 import { createPortedCarRig } from "@/lib/ported-car-model";
 import { staticFloorOf } from "@/lib/render/body-floor";
 import { FloorSparks } from "@/lib/render/floor-sparks";
+import { CarHeadlights, shouldHeadlightsBeOn, type HeadlightMode } from "@/lib/render/car-headlights";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
@@ -1332,6 +1333,9 @@ export class DriveSession {
     };
     let carRig = createCarRig(carIdNow);
     let carRigCar: CarId = carIdNow;
+    let carHeadlights = new CarHeadlights(carIdNow);
+    carHeadlights.attach(carRig.chassisGroup);
+    let headlightMode: HeadlightMode = "auto";
     // A livery picked in the menus goes onto the car at once
     const unsubscribeCarSkins = subscribeCarSkins(() => carRig.setSkin?.(skinFor(carRigCar)));
     const swapCarRig = (car: CarId) => {
@@ -1346,12 +1350,15 @@ export class DriveSession {
       gt3Dash = null;
       portedDash?.dispose();
       portedDash = null;
+      carHeadlights.dispose();
       reflectionProbe.untrack(carRig.root);
       carRig.dispose();
       // Free the old car's GPU memory: switching cars otherwise stacks every model's textures on the GPU
       disposeTree(carRig.root);
       carRig = createCarRig(car);
       carRigCar = car;
+      carHeadlights = new CarHeadlights(car);
+      carHeadlights.attach(carRig.chassisGroup);
       // A different model for the opponents and the ghost: build and compile them now, not at the next race start
       void visualFx.prewarm(carPhysics(car)).then(() => {
         if (disposed) return;
@@ -1757,6 +1764,11 @@ export class DriveSession {
         case "autopilot":
           this.toggleAutopilot();
           break;
+        case "headlights": {
+          const onNow = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, trackEnv.weather.rainIntensity);
+          headlightMode = onNow ? "off" : "on";
+          break;
+        }
         // The HUD owns these panels
         case "mfd":
         case "mfdPage":
@@ -3216,6 +3228,7 @@ export class DriveSession {
         skyConditions.windVxMs = wx.windVxMs;
         skyConditions.windVzMs = wx.windVzMs;
         if (!cloudConditions || !sameConditions(cloudConditions, wx.conditions)) {
+          if (cloudConditions && cloudConditions.timeOfDay !== wx.conditions.timeOfDay) headlightMode = "auto";
           cloudConditions = { ...wx.conditions };
           env.setCloudSeed(fixedCloudSeed ?? Math.floor(Math.random() * 2 ** 31));
         }
@@ -3255,6 +3268,10 @@ export class DriveSession {
         if (view.driverEye && !inVr) camera.layers.enable(RAIN_VISOR_LAYER);
         else camera.layers.disable(RAIN_VISOR_LAYER);
         const skyLight = THREE.MathUtils.clamp((skyConditions.elevationDeg + 3) / 17, 0, 1) * (1 - 0.4 * wx.cloudCover);
+        carHeadlights.setEnabled(
+          shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, wx.rainIntensity),
+          physics.telemetry.brake > 0.05
+        );
         visualFx.setLightLevel(skyLight);
         rainFx.update(
           drawDtS,
@@ -3431,6 +3448,7 @@ export class DriveSession {
       wingMirrors?.dispose();
       gt3Dash?.dispose();
       portedDash?.dispose();
+      carHeadlights.dispose();
       unsubscribeCarSkins();
       postFx.dispose();
       reflectionProbe.dispose();

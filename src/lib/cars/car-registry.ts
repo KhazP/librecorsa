@@ -520,6 +520,9 @@ export const resolveCarId = (value: unknown): CarId | null => {
   return isCarId(id) ? id : null;
 };
 
+/** Looks up a car across the full registry even when hosted cars are hidden in a local build */
+export const anyCarById = (id: CarId): CarDefinition | undefined => ALL_CARS.find((c) => c.id === id);
+
 export const carById = (id: CarId): CarDefinition => {
   const car = BY_ID.get(id);
   if (car) return car;

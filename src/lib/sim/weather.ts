@@ -18,7 +18,7 @@ import {
 } from './track-evolution';
 
 export type WeatherPresetId = 'clear' | 'overcast' | 'light_rain' | 'heavy_rain' | 'drying' | 'dynamic';
-export type TimeOfDayId = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'golden_hour' | 'dusk';
+export type TimeOfDayId = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'golden_hour' | 'dusk' | 'night';
 
 /** 11-level sky cover classification (indices 0..10) */
 export type SkyCoverId =
@@ -94,7 +94,7 @@ export interface WeatherNode {
 }
 
 export const WEATHER_PRESETS: readonly WeatherPresetId[] = ['clear', 'overcast', 'light_rain', 'heavy_rain', 'drying', 'dynamic'];
-export const TIME_OF_DAY_PRESETS: readonly TimeOfDayId[] = ['dawn', 'morning', 'noon', 'afternoon', 'golden_hour', 'dusk'];
+export const TIME_OF_DAY_PRESETS: readonly TimeOfDayId[] = ['dawn', 'morning', 'noon', 'afternoon', 'golden_hour', 'dusk', 'night'];
 /** Time progression multipliers offered in the menu (0 = the clock stands still) */
 export const TIME_SCALES: readonly number[] = [0, 1, 5, 15, 60];
 
@@ -138,6 +138,7 @@ export const TIME_OF_DAY_LABELS: Record<TimeOfDayId, string> = {
   afternoon: 'Afternoon',
   golden_hour: 'Golden hour',
   dusk: 'Dusk',
+  night: 'Night',
 };
 
 // ---------------------------------------------------------------------------
@@ -187,11 +188,12 @@ export const TIME_OF_DAY_HOURS: Record<TimeOfDayId, number> = {
   afternoon: 15,
   golden_hour: GOLDEN_HOUR_CLOCK_H,
   dusk: 17.95,
+  night: 21.5,
 };
 
-/** The progressing clock stops in the late twilight, so a long session never goes fully dark (h) */
-export const CLOCK_MIN_H = 5.9;
-export const CLOCK_MAX_H = 18.35;
+/** Legacy daylight bounds (kept exported; the clock now wraps a full 24 h cycle with car headlights at night) */
+export const CLOCK_MIN_H = 0;
+export const CLOCK_MAX_H = 24;
 
 /** The sun at `clockH`: elevation (deg) and azimuth in the three.js Sky convention (deg; 0 = +Z, 90 = +X) */
 export function sunPosition(clockH: number): { elevationDeg: number; azimuthDeg: number } {
@@ -727,7 +729,7 @@ export class WeatherState {
     const scale = Math.max(1, c.timeScale);
     const dtW = dt * scale;
     this.weatherS += dtW;
-    if (c.timeScale > 0) this.clockH = Math.min(CLOCK_MAX_H, Math.max(CLOCK_MIN_H, this.clockH + (dt * c.timeScale) / 3600));
+    if (c.timeScale > 0) this.clockH = (((this.clockH + (dt * c.timeScale) / 3600) % 24) + 24) % 24;
 
     const schedule = this.regime === 'schedule';
     // The forecast's air temperature (the other regimes take it from the clock, cloud and rain below)

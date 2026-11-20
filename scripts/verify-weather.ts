@@ -39,11 +39,15 @@ import {
   GOLDEN_HOUR_CLOCK_H,
   interpolateWeatherNodes,
   nearestSkyCover,
+  sanitizeConditions,
   sanitizeWeatherSync,
   sunPosition,
+  TIME_OF_DAY_HOURS,
+  TIME_OF_DAY_PRESETS,
   topographicalPuddleFactor,
   WeatherState,
 } from '../src/lib/sim/weather';
+import { CarHeadlights, headlightProfileFor, shouldHeadlightsBeOn } from '../src/lib/render/car-headlights';
 import { evaluateAeroWakeDeficit } from '../src/lib/sim/aero-wake';
 import { stepWindscreenWipers } from '../src/lib/render/rain-fx';
 import { TrackEvolutionState } from '../src/lib/sim/track-evolution';
@@ -121,6 +125,45 @@ console.log('\n== Weather & time of day');
   if (snap) guest.applySync(snap);
   check('Host weather sync round-trips', !!snap && guest.conditions.weather === 'light_rain' && Math.abs(guest.waterMm - host.waterMm) < 1e-9 && Math.abs(guest.clockH - host.clockH) < 1e-9, `${guest.conditions.weather}, ${fmt(guest.waterMm, 3)} mm, ${fmt(guest.clockH, 3)} h`);
   check('Garbage sync is refused', sanitizeWeatherSync({ clockH: 'x' }) === null, 'null');
+
+  // Night preset & car headlights (#142)
+  const nightSun = sunPosition(TIME_OF_DAY_HOURS.night);
+  const nightW = new WeatherState(5300, { ...DEFAULT_SESSION_CONDITIONS, timeOfDay: 'night', timeScale: 60 });
+  check('Night preset is listed and puts the sun well below the horizon', TIME_OF_DAY_PRESETS.includes('night') && nightSun.elevationDeg < -15, `clock ${TIME_OF_DAY_HOURS.night} h, elev ${fmt(nightSun.elevationDeg, 1)}°`);
+  check('Night survives sanitizeConditions', sanitizeConditions({ timeOfDay: 'night' }).timeOfDay === 'night', 'night');
+  // Advance 3 hours of sim time across midnight (21.5 -> 0.5)
+  for (let i = 0; i < 180; i++) nightW.step(1);
+  check('Night clock wraps cleanly across midnight with timeScale > 0', nightW.clockH > 0 && nightW.clockH < 1.5, `${fmt(nightW.clockH, 2)} h`);
+  check(
+    'Auto headlights turn on at night / dusk / heavy rain and stay off in clear daylight',
+    shouldHeadlightsBeOn('auto', nightSun.elevationDeg, 0) &&
+      shouldHeadlightsBeOn('auto', 2, 0) &&
+      shouldHeadlightsBeOn('auto', 40, 0.6) &&
+      !shouldHeadlightsBeOn('auto', 14, 0) &&
+      shouldHeadlightsBeOn('on', 60, 0) &&
+      !shouldHeadlightsBeOn('off', nightSun.elevationDeg, 1),
+    'auto/on/off',
+  );
+  const hlRoot = new THREE.Group();
+  const hlMat = new THREE.MeshStandardMaterial({ name: 'headlight_glass', emissive: new THREE.Color(0x000000), emissiveIntensity: 0 });
+  hlRoot.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), hlMat));
+  const hl = new CarHeadlights('amg-gt3');
+  hl.attach(hlRoot);
+  hl.setEnabled(true, true);
+  const spots = hl.group.children.filter((c): c is THREE.SpotLight => c instanceof THREE.SpotLight);
+  const allForward = spots.length === 2 && spots.every((s) => s.intensity > 0 && s.target.position.z > s.position.z + 20);
+  const boosted = hlMat.emissiveIntensity > 1;
+  hl.setEnabled(false);
+  const restored = spots.every((s) => s.intensity === 0) && hlMat.emissiveIntensity === 0;
+  hl.dispose();
+  check('CarHeadlights mounts twin forward SpotLights and boosts/restores headlight materials', allForward && boosted && restored, `${spots.length} spots`);
+  const sampleCarIds = ['lc26', 'amg-gt3', 'mtr-496r', 'bmw-m1-procar', 'liana'] as const;
+  check(
+    'Every car class resolves its own valid headlight profile',
+    sampleCarIds.every((id) => headlightProfileFor(id).intensity > 0 && headlightProfileFor(id).distanceM >= 100) &&
+      headlightProfileFor('amg-gt3').halfWidthM > headlightProfileFor('lc26').halfWidthM,
+    `${sampleCarIds.length} classes`,
+  );
 }
 
 // ---------------------------------------------------------------------------

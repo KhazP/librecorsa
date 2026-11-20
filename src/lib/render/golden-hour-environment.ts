@@ -319,15 +319,18 @@ function colorCurve(keys: readonly Key[], x: number, out: THREE.Color): THREE.Co
   return out.setHex(keys[keys.length - 1][1]);
 }
 
-// Keys by sun elevation (deg). Each passes through the golden-hour constant at 14 deg.
-const SUN_COLOR_KEYS: readonly Key[] = [[-2, 0xff6a2a], [4, 0xffa262], [14, SUN_COLOR], [35, 0xfff4e8], [70, 0xfff8f2]];
-const SUN_INTENSITY_KEYS: readonly Key[] = [[-3, 0], [1, 0.8], [6, 3.0], [14, SUN_INTENSITY], [35, 5.8], [70, 6.2]];
+// Keys by sun elevation (deg). Each passes through the golden-hour constant at 14 deg, and extends smoothly into
+// moonlit night below -3 deg while keeping dawn..noon curves identical.
+const SUN_COLOR_KEYS: readonly Key[] = [[-18, 0x7692c8], [-6, 0x8088b2], [-2, 0xff6a2a], [4, 0xffa262], [14, SUN_COLOR], [35, 0xfff4e8], [70, 0xfff8f2]];
+const SUN_INTENSITY_KEYS: readonly Key[] = [[-18, 0.14], [-6, 0.08], [-3, 0], [1, 0.8], [6, 3.0], [14, SUN_INTENSITY], [35, 5.8], [70, 6.2]];
 // The sky's prefiltered environment already lights everything from the sky dome; this flat fill on top of it only
 // washes out shading and reflections (cars read as matte plastic), so it is kept to a trace
-const FILL_INTENSITY_KEYS: readonly Key[] = [[-3, 0.05], [4, 0.1], [14, FILL_INTENSITY], [40, 0.17], [70, 0.19]];
-const FOG_COLOR_KEYS: readonly Key[] = [[-3, 0x5e5468], [4, 0xd49c7c], [14, FOG_COLOR], [35, 0xd8dade], [70, 0xc8d4e2]];
-const ENV_INTENSITY_KEYS: readonly Key[] = [[-3, 0.3], [4, 0.7], [14, 1], [70, 1.1]];
-const EXPOSURE_KEYS: readonly Key[] = [[-3, 1.5], [4, 1.32], [14, EXPOSURE], [35, 1.08], [70, 1.05]];
+const FILL_INTENSITY_KEYS: readonly Key[] = [[-18, 0.018], [-8, 0.025], [-3, 0.05], [4, 0.1], [14, FILL_INTENSITY], [40, 0.17], [70, 0.19]];
+const FOG_COLOR_KEYS: readonly Key[] = [[-18, 0x060a14], [-8, 0x161a2c], [-3, 0x5e5468], [4, 0xd49c7c], [14, FOG_COLOR], [35, 0xd8dade], [70, 0xc8d4e2]];
+const ENV_INTENSITY_KEYS: readonly Key[] = [[-18, 0.055], [-8, 0.12], [-3, 0.3], [4, 0.7], [14, 1], [70, 1.1]];
+const EXPOSURE_KEYS: readonly Key[] = [[-18, 1.65], [-8, 1.58], [-3, 1.5], [4, 1.32], [14, EXPOSURE], [35, 1.08], [70, 1.05]];
+const NIGHT_FILL_SKY = 0x182542;
+const NIGHT_FILL_GROUND = 0x070a10;
 const OVERCAST_SUN = 0xe6e8ea;
 const OVERCAST_FOG = 0xb2b6ba;
 const RAIN_FOG = 0x8c9297;
@@ -345,12 +348,13 @@ interface SkyLook {
 function skyLookFor(c: SkyConditions, out: SkyLook): SkyLook {
   const cloud = THREE.MathUtils.clamp(c.cloud, 0, 1);
   const rain = THREE.MathUtils.clamp(c.rain, 0, 1);
+  const nightShare = THREE.MathUtils.clamp((-c.elevationDeg - 3) / 10, 0, 1);
   out.turbidity = SKY_TURBIDITY + 6 * cloud;
   out.rayleigh = SKY_RAYLEIGH * (1 - 0.5 * cloud);
   // 0 keeps the Sky shader's cloud pass off entirely on a clear day
   out.cloudCoverage = cloud < 0.02 ? 0 : cloud;
   out.cloudDensity = 0.4 + 0.45 * cloud + 0.15 * rain;
-  out.radianceScale = SKY_RADIANCE_SCALE * (1 - 0.35 * rain);
+  out.radianceScale = SKY_RADIANCE_SCALE * (1 - 0.35 * rain) * (1 - 0.94 * nightShare);
   return out;
 }
 
@@ -417,7 +421,8 @@ class SkyBaker {
     this.groundSun.position.copy(sunDir).multiplyScalar(100);
     this.groundFill.color.copy(fill.color);
     this.groundFill.groundColor.copy(fill.groundColor);
-    this.groundFill.intensity = Math.max(fill.intensity, GROUND_SKY_LIGHT);
+    const dayFloor = THREE.MathUtils.clamp((sunDir.y + 0.08) / 0.22, 0.05, 1);
+    this.groundFill.intensity = Math.max(fill.intensity, GROUND_SKY_LIGHT * dayFloor);
     // Filmed here, then prefiltered into the same target every time: fromScene allocated a new one per bake, which
     // handed every lit material a new environment map to look its program up for and churned GPU memory. Every face
     // is cleared whatever the app's clear settings (the composer turns autoClear off), with the clear colour behind
@@ -595,22 +600,28 @@ export function createGoldenHourEnvironment(
     const rain = THREE.MathUtils.clamp(c.rain, 0, 1);
     current = { elevationDeg: e, azimuthDeg: c.azimuthDeg, cloud, rain, windVxMs: c.windVxMs, windVzMs: c.windVzMs };
 
-    // Sun: the light never comes from below the horizon (shadows stay sane at dawn / dusk); the sky's sun does
-    sunDirection.copy(sunDirectionUnit(Math.max(1, e), c.azimuthDeg));
+    const nightShare = THREE.MathUtils.clamp((-e - 3) / 10, 0, 1);
+    // Sun: the light never comes from below the horizon (shadows stay sane at dawn / dusk); at night it shifts to a
+    // high cool moon so barriers and kerbs stay softly silhouetted while car headlights carry the road lighting
+    if (e < -4) {
+      sunDirection.copy(sunDirectionUnit(35, (c.azimuthDeg + 180) % 360));
+    } else {
+      sunDirection.copy(sunDirectionUnit(Math.max(1, e), c.azimuthDeg));
+    }
     skySunDir.copy(sunDirectionUnit(e, c.azimuthDeg));
     sunLight.position.copy(sunDirection).multiplyScalar(SUN_DISTANCE_M);
-    colorCurve(SUN_COLOR_KEYS, e, sunLight.color).lerp(tint.setHex(OVERCAST_SUN), 0.6 * cloud);
+    colorCurve(SUN_COLOR_KEYS, e, sunLight.color).lerp(tint.setHex(OVERCAST_SUN), 0.6 * cloud * (1 - nightShare));
     // Cloud blocks most direct sun; an overcast sky still leaves faint, soft shadows
     sunLight.intensity = curve(SUN_INTENSITY_KEYS, e) * (1 - 0.88 * Math.pow(cloud, 1.5));
 
-    // Fill: an overcast sky lights everything from above
-    fillLight.color.setHex(FILL_SKY).lerp(tint.setHex(OVERCAST_FILL_SKY), cloud);
-    fillLight.groundColor.setHex(FILL_GROUND).lerp(tint.setHex(WET_FILL_GROUND), rain);
+    // Fill: an overcast sky lights everything from above; at night it deepens to cool indigo
+    fillLight.color.setHex(FILL_SKY).lerp(tint.setHex(OVERCAST_FILL_SKY), cloud).lerp(tint.setHex(NIGHT_FILL_SKY), nightShare);
+    fillLight.groundColor.setHex(FILL_GROUND).lerp(tint.setHex(WET_FILL_GROUND), rain).lerp(tint.setHex(NIGHT_FILL_GROUND), nightShare);
     fillLight.intensity = curve(FILL_INTENSITY_KEYS, e) * (1 + 1.1 * cloud);
 
     colorCurve(FOG_COLOR_KEYS, e, fog.color)
-      .lerp(tint.setHex(OVERCAST_FOG), 0.8 * cloud)
-      .lerp(tint.setHex(RAIN_FOG), rain);
+      .lerp(tint.setHex(OVERCAST_FOG), 0.8 * cloud * (1 - 0.9 * nightShare))
+      .lerp(tint.setHex(RAIN_FOG), rain * (1 - 0.9 * nightShare));
     // A low sun dims the overcast / rain haze too
     if (cloud > 0 && e < 14) fog.color.multiplyScalar(1 - cloud * (1 - curve(ENV_INTENSITY_KEYS, e)));
     fog.density = FOG_DENSITY * (1 + 1.2 * cloud) + 0.0022 * Math.pow(rain, 1.2);
