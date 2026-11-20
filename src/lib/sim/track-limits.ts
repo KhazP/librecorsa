@@ -354,6 +354,31 @@ export class TrackLimitsMonitor {
     this.wallLastS = -Infinity;
   }
 
+  /**
+   * Cancels any in-flight excursion / course-cut watch after a Flashback (the car jumped back to a recorded pose)
+   * without erasing prior race penalties or strikes, and posts the same `lap_invalid` race-control banner as a cut.
+   */
+  noteFlashback(nowMs: number): void {
+    this.exc = null;
+    this.wasOff = false;
+    this.seenDistM = null;
+    this.cutWatch.reset();
+    this.onRoad = null;
+    this.cutFrom = null;
+    this.afterCut = false;
+    this.seenWallS = null;
+    this.wallLog.length = 0;
+    this.wallSumS = 0;
+    this.wallBreach = false;
+    this.wallNow = false;
+    this.message = {
+      kind: "lap_invalid",
+      text: "Flashback · lap deleted",
+      detail: "Current lap invalidated",
+      atMs: nowMs,
+    };
+  }
+
   get mode(): TrackLimitsSession {
     return this.session;
   }

@@ -418,6 +418,12 @@ export interface ReplayCarState {
   brake: number;
   gear: number;
   rpm: number;
+  /** Distance along the lap (m), the track projection's hint when a flashback puts the car back here */
+  s?: number;
+  /** The player's lap count here */
+  lap?: number;
+  /** Cumulative race distance (m) during an AI race, so flashback rewinds lap clocks cleanly */
+  distM?: number;
 }
 
 export interface ReplayFrame {

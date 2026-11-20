@@ -18,6 +18,22 @@ export interface RaceDriverLabel {
   color: string;
 }
 
+/** Recorded pose of one car in an AI race, for Flashback rewind */
+export interface FieldCarRestorePose {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  qx: number;
+  qy: number;
+  qz: number;
+  qw: number;
+  yawRad: number;
+  speedMs: number;
+  s?: number;
+  distM?: number;
+}
+
 export interface AiRace {
   /** Race setup, read at the next `startRace` (race-setup.ts `startAiRace` writes them) */
   raceLaps: number;
@@ -73,6 +89,8 @@ export interface AiRace {
    * lights too, as the worker holds it there itself, and draws the road from what the worker's cars do to it
    */
   readonly worker?: WorkerRaceView;
+  /** Rewinds AI cars and race clocks to a recorded Flashback frame, and invalidates the player's current race lap */
+  restoreField?(poses: readonly FieldCarRestorePose[], rewindS: number): void;
   /** The session has left the race (another race, practice) */
   dispose?(): void;
 }

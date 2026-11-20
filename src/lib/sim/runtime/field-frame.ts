@@ -4,6 +4,7 @@
  * states the game draws AI cars from (`FieldPeers`), carried forward to the frame as the player's own car is.
  */
 import * as THREE from "three";
+import type { FieldCarRestorePose } from "../ai-race";
 import type { GroundQuery } from "../f12026-car/TrackColliderQuery";
 import type { InterpolatedPeerState } from "../multiplayer-sync";
 import type { SimulatorCar, TyreVisualState } from "../simulator-car";
@@ -172,6 +173,24 @@ export class FieldPeers {
         } else t.contactInCar = { x: a[q + 6], y: a[q + 7], z: a[q + 8] };
         t.onRoad = a[q + 9] === 1;
       }
+    }
+  }
+
+  /** Immediately places the page's AI peers at their rewound Flashback poses so there is no single-frame snap */
+  restorePoses(poses: readonly FieldCarRestorePose[]): void {
+    const byId = new Map<string, FieldCarRestorePose>();
+    for (const p of poses) byId.set(p.id, p);
+    for (const s of this.slots) {
+      const p = byId.get(s.peer.peerId);
+      if (!p) continue;
+      s.position.set(p.x, p.y, p.z);
+      s.quaternion.set(p.qx, p.qy, p.qz, p.qw);
+      s.yawRate = 0;
+      s.peer.position.copy(s.position);
+      s.peer.quaternion.copy(s.quaternion);
+      s.peer.linearVelocity.set(0, 0, 0);
+      s.peer.speedKmh = p.speedMs * 3.6;
+      if (p.s !== undefined) s.peer.trackS = p.s;
     }
   }
 

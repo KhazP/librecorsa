@@ -219,6 +219,11 @@ export class LapRecorder {
     this.abandon();
   }
 
+  /** Marks the lap in progress invalid (just like an off-track cut): it still finishes, never counts as PB or ranks */
+  invalidateCurrentLap(): void {
+    this.valid = false;
+  }
+
   /** Call every frame while driving; returns the lap once one is completed, else null */
   update(input: LapRecorderInput): CompletedLap | null {
     const t = input.telemetry;

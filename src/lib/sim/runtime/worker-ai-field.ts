@@ -11,7 +11,7 @@
 import type { QualifyingGridInput } from "../qualifying";
 import * as THREE from "three";
 import type { RaceStatus } from "@/types/f1";
-import type { AiRace, RaceDriverLabel, WorkerRaceView } from "../ai-race";
+import type { AiRace, FieldCarRestorePose, RaceDriverLabel, WorkerRaceView } from "../ai-race";
 import type { DamageLevel } from "../car-damage";
 import type { PenaltyReason } from "../penalty-ledger";
 import type { GroundQuery } from "../f12026-car/TrackColliderQuery";
@@ -261,6 +261,14 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
 
   get failed(): boolean {
     return this.link.failed;
+  }
+
+  /** Rewinds AI cars in the worker to their Flashback poses and updates the page's peer buffer immediately */
+  restoreField(poses: readonly FieldCarRestorePose[], rewindS: number): void {
+    if (!this.race || this.phase !== "racing") return;
+    this.leadS = 0;
+    this.fieldPeers?.restorePoses(poses);
+    this.link.post({ type: "race", op: "restore", poses: poses.map((p) => ({ ...p })), rewindS });
   }
 
   /** The session has left the race: the worker drops it, and its car drives on alone */

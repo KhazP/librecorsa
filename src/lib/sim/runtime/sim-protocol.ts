@@ -5,7 +5,7 @@
 import type { QualifyingGridInput } from "../qualifying";
 import type { CarTelemetry, ControlInputs, RaceStatus, VehicleModelId } from "@/types/f1";
 import type { RawTrackJson } from "@/lib/track-data";
-import type { RaceDriverLabel } from "../ai-race";
+import type { FieldCarRestorePose, RaceDriverLabel } from "../ai-race";
 import type { DamageLevel } from "../car-damage";
 import type { PenaltyReason } from "../penalty-ledger";
 import type { AiGridOrder, PlayerGridSlot } from "../race-setup";
@@ -110,6 +110,7 @@ export type RaceCommand =
   | { type: "race"; op: "penalise"; seconds: number; reason: PenaltyReason; detail: string }
   | { type: "race"; op: "conditions"; conditions: SessionConditions }
   | { type: "race"; op: "realism"; flags: SimRealismFlags }
+  | { type: "race"; op: "restore"; poses: FieldCarRestorePose[]; rewindS: number }
   | { type: "race"; op: "end" };
 
 /** An AI car of the race, as the page draws it */

@@ -269,6 +269,7 @@ export class LapClock {
   lastCrossingLapMs: number | null = null;
   private prevS = 0;
   private lapStartS = 0;
+  private currentLapInvalid = false;
 
   constructor(private readonly lapLengthM: number) {}
 
@@ -285,6 +286,29 @@ export class LapClock {
     this.lastCrossingLapMs = null;
     this.lapsDone = 0;
     this.lapStartS = 0;
+    this.currentLapInvalid = false;
+  }
+
+  /** Marks the lap under way invalid (e.g. Flashback) so it never counts as this race's best lap */
+  invalidateCurrentLap(): void {
+    this.currentLapInvalid = true;
+  }
+
+  /** Rewinds the clock cleanly to a restored track distance `sMeters` (and optional recorded cumulative `distM`) */
+  rewindTo(sMeters: number, raceTimeS: number, distM?: number): void {
+    const L = this.lapLengthM;
+    if (distM !== undefined && Number.isFinite(distM)) {
+      this.distM = Math.round((distM - sMeters) / L) * L + sMeters;
+    } else {
+      this.distM += wrapHalf(sMeters - this.prevS, L);
+    }
+    this.prevS = sMeters;
+    this.lapsDone = Math.max(0, Math.floor(this.distM / L));
+    if (this.finishTimeS !== null && raceTimeS < this.finishTimeS) {
+      this.finishTimeS = null;
+      this.finishLaps = null;
+    }
+    if (this.lapStartS > raceTimeS) this.lapStartS = raceTimeS;
   }
 
   /**
@@ -299,8 +323,10 @@ export class LapClock {
     if (laps > this.lapsDone && this.finishTimeS === null) {
       const lapMs = (raceTimeS - this.lapStartS) * 1000;
       this.lastCrossingLapMs = lapMs;
+      const valid = !this.currentLapInvalid;
+      this.currentLapInvalid = false;
       // The first lap starts from the grid: still a lap, as on a timing screen
-      if (lapMs > 1000 && (this.bestLapMs === null || lapMs < this.bestLapMs)) this.bestLapMs = Math.round(lapMs);
+      if (valid && lapMs > 1000 && (this.bestLapMs === null || lapMs < this.bestLapMs)) this.bestLapMs = Math.round(lapMs);
       if (lapMs > 1000) this.lastLapMs = Math.round(lapMs);
       this.lapsDone = laps;
       this.lapStartS = raceTimeS;

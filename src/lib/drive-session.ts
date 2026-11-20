@@ -64,7 +64,7 @@ import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from
 import { CoolDown } from "@/lib/sim/cool-down";
 import { PodiumDirector } from "@/lib/render/podium-shot";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
-import { ReplayBuffer } from "@/lib/sim/replay-buffer";
+import { canFlashback, isInOnlineRoom, poseFromReplayCar, ReplayBuffer } from "@/lib/sim/replay-buffer";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
 import { drivingInputOf, lapConditionsNow, type LapRecording, type LapSummaryData, type ReplayCarState } from "@/lib/sim/lap-types";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
@@ -125,7 +125,7 @@ import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { simMode } from "@/lib/sim/runtime/sim-mode";
 import { createSimHost } from "@/lib/sim/runtime/sim-host";
 import { WorkerAiField } from "@/lib/sim/runtime/worker-ai-field";
-import type { AiRace } from "@/lib/sim/ai-race";
+import type { AiRace, FieldCarRestorePose } from "@/lib/sim/ai-race";
 import { startSimWorker } from "@/lib/sim/runtime/worker-sim-host";
 import { steeringAssistSettings } from "@/lib/sim/steering-assist";
 import { applyTimeTrial, lowestFuelSetup, timeTrialRealism, type TimeTrialRules } from "@/lib/sim/time-trial";
@@ -310,7 +310,7 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
   const car = new F1Physics2026(track);
   return {
     telemetry: { ...car.telemetry },
-    replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1 },
+    replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1, canFlashback: false },
     steerLockDeg: undefined,
     carCockpitFovDeg: FALLBACK_COCKPIT_FOV_DEG,
     virtualMirror: false,
@@ -388,6 +388,8 @@ export interface ReplayUi {
   endS: number;
   playing: boolean;
   speed: number;
+  /** True only in solo Practice and active regular AI races (never online rooms, Weekly Challenge, or Qualifying) */
+  canFlashback: boolean;
 }
 
 /**
@@ -527,6 +529,8 @@ export class DriveSession {
   readonly toggleReplay: () => void;
   /** Leaves the replay: the drawn car goes back to the live pose */
   readonly exitReplay: () => void;
+  /** Resumes driving from the scrubbed replay timestamp (Practice & regular AI races only; invalidates current lap) */
+  readonly flashbackReplay: () => boolean;
   /** polish:B the podium shot after a race, and the overlay's view of it */
   readonly podium: PodiumDirector;
 
@@ -955,7 +959,7 @@ export class DriveSession {
     this.carNow = () => physics;
     this.snapshot = {
       telemetry: { ...physics.telemetry },
-      replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1 },
+      replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1, canFlashback: false },
       steerLockDeg: undefined,
       carCockpitFovDeg: FALLBACK_COCKPIT_FOV_DEG,
       virtualMirror: false,
@@ -1913,6 +1917,17 @@ export class DriveSession {
     });
     /** Look of every car seen in the replay window (the frames only hold poses) */
     const replayNames = new Map<string, { code: string; color: string; vehicle?: VehicleModelId }>();
+    const canFlashbackNow = (): boolean => {
+      const race = raceNow();
+      return canFlashback({
+        raceKind: race.kind,
+        weeklyChallengeRace: race.kind === "ai" && race.rules !== undefined,
+        timeTrialActive: timeTrial !== null,
+        qualifyingActive: quali !== null,
+        inOnlineRoom: isInOnlineRoom(multiplayerSync.status, peersOnTrack),
+        aiRacePhase: race.kind === "ai" ? race.field.phase : undefined,
+      });
+    };
     const exitReplay = () => {
       const rp = replay;
       if (!rp.active) return;
@@ -1921,11 +1936,65 @@ export class DriveSession {
       physics.worldPosition.copy(replaySaved.pos);
       physics.worldQuaternion.copy(replaySaved.quat);
       cameraRig.reset();
-      setReplayUi((u) => ({ ...u, active: false }));
+      setReplayUi((u) => ({ ...u, active: false, canFlashback: false }));
+    };
+    const flashbackReplay = (): boolean => {
+      const rp = replay;
+      if (!rp.active || !canFlashbackNow()) return false;
+      const frame = rp.buffer.frameAt(rp.timeS);
+      const car = frame?.cars.find((c) => c.id === "player");
+      if (!car) return false;
+      const rewindS = Math.max(0, replayClockS - rp.timeS);
+      // Invalidate before and after restoring pose so both the worker's immediate placement report and local twin see it
+      physics.invalidateLap?.();
+      const playerPose = poseFromReplayCar(car);
+      if (physics.restorePose) physics.restorePose(playerPose);
+      else physics.teleportToDistance(car.s ?? physics.sMeters, playerPose.speedMs);
+      physics.invalidateLap?.();
+      // Invalidate the current lap in LapRecorder & TrackLimitsMonitor just like going off-track
+      lapRecorder.invalidateCurrentLap();
+      trackLimits.noteFlashback(performance.now());
+      // In an AI race, rewind every AI car and race clock together so there are no teleport glitches
+      const field = aiFieldOf(raceNow());
+      if (field?.restoreField && frame) {
+        const poses: FieldCarRestorePose[] = [];
+        for (const c of frame.cars) {
+          const p = poseFromReplayCar(c);
+          poses.push({
+            id: c.id,
+            x: c.x,
+            y: c.y,
+            z: c.z,
+            qx: c.qx,
+            qy: c.qy,
+            qz: c.qz,
+            qw: c.qw,
+            yawRad: p.yawRad,
+            speedMs: p.speedMs,
+            ...(c.s !== undefined ? { s: c.s } : {}),
+            ...(c.distM !== undefined ? { distM: c.distM } : {}),
+          });
+        }
+        field.restoreField(poses, rewindS);
+      }
+      // Truncate the replay buffer from the flashback point forward so future replays stay coherent
+      rp.buffer.truncateAfter(rp.timeS);
+      replayClockS = rp.timeS;
+      lastReplayPushS = rp.timeS;
+      rp.active = false;
+      cameraRig.reset();
+      physics.aiAutopilot = false;
+      kbInput.throttle = 0;
+      kbInput.brake = 0;
+      kbInput.clutch = 0;
+      kbPedalAssist.reset();
+      setReplayUi((u) => ({ ...u, active: false, canFlashback: false }));
+      return true;
     };
     this.exitReplay = () => {
       if (!disposed) exitReplay();
     };
+    this.flashbackReplay = () => (disposed ? false : flashbackReplay());
     this.toggleReplay = () => {
       if (disposed) return;
       const rp = replay;
@@ -1940,7 +2009,15 @@ export class DriveSession {
       rp.speed = 1;
       rp.timeS = Math.max(rp.buffer.startS, rp.buffer.endS - REPLAY_OPEN_BACK_S);
       cameraRig.reset();
-      setReplayUi({ active: true, timeS: rp.timeS, startS: rp.buffer.startS, endS: rp.buffer.endS, playing: false, speed: 1 });
+      setReplayUi({
+        active: true,
+        timeS: rp.timeS,
+        startS: rp.buffer.startS,
+        endS: rp.buffer.endS,
+        playing: false,
+        speed: 1,
+        canFlashback: canFlashbackNow(),
+      });
     };
 
     this.resetRun = (reason) => {
@@ -2959,6 +3036,8 @@ export class DriveSession {
         replayClockS += dtSeconds;
         if (replayClockS - lastReplayPushS >= 1 / 30) {
           lastReplayPushS = replayClockS;
+          const standings = aiField ? physics.telemetry.race?.standings : undefined;
+          const playerDistM = standings?.find((st) => st.isPlayer)?.raceDistM;
           const cars: ReplayCarState[] = [
             {
               id: "player",
@@ -2975,11 +3054,15 @@ export class DriveSession {
               brake: physics.telemetry.brake,
               gear: physics.telemetry.gear,
               rpm: physics.telemetry.rpm,
+              s: physics.sMeters,
+              lap: physics.telemetry.lapCount,
+              ...(playerDistM !== undefined ? { distM: playerDistM } : {}),
             },
           ];
           for (const p of renderPeers) {
             if (p.ghost) continue;
             replayNames.set(p.peerId, { code: p.driverCode, color: p.teamColorHex, vehicle: p.vehicle });
+            const peerDistM = standings?.find((st) => !st.isPlayer && st.driverCode === p.driverCode)?.raceDistM;
             cars.push({
               id: p.peerId,
               x: p.position.x,
@@ -2995,6 +3078,8 @@ export class DriveSession {
               brake: p.brake,
               gear: 0,
               rpm: 0,
+              s: p.trackS,
+              ...(peerDistM !== undefined ? { distM: peerDistM } : {}),
             });
           }
           rp.buffer.push(replayClockS, cars);
@@ -3418,6 +3503,7 @@ export class DriveSession {
             endS: rp.buffer.endS,
             playing: rp.playing,
             speed: rp.speed,
+            canFlashback: canFlashbackNow(),
           });
         }
       }

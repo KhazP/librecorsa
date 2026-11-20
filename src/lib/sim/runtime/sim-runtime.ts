@@ -252,6 +252,14 @@ export class SimRuntime {
       case "realism":
         this.race?.env.setSimRealism(command.flags);
         return;
+      case "restore":
+        if (this.race) {
+          this.race.field.restoreField(command.poses, command.rewindS);
+          this.accumulatorS = 0;
+          this.reportRace(true);
+          this.report(true);
+        }
+        return;
       case "end":
         this.endRace();
         return;

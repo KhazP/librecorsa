@@ -12,8 +12,8 @@ const SPEEDS = [0.25, 0.5, 1, 2] as const;
 const SEEK_STEP_S = 5;
 
 /**
- * Bottom-centre transport bar for replays. Keys: Space play / pause, ArrowLeft / ArrowRight seek, and the replay key
- * (handled by the simulator) exits.
+ * Bottom-centre transport bar for replays. Keys: Space play / pause, ArrowLeft / ArrowRight seek, F flashback (when
+ * allowed: solo Practice & regular AI races), and the replay key (handled by the simulator) exits.
  * Keys are ignored while an input (e.g. the slider) has focus.
  */
 export const ReplayBar: React.FC<{
@@ -28,6 +28,8 @@ export const ReplayBar: React.FC<{
   onSpeed: (speed: number) => void;
   onCycleCamera: () => void;
   onExit: () => void;
+  /** Resumes live driving from the scrubbed replay timestamp (Practice & AI races only; invalidates current lap) */
+  onFlashback?: () => void;
   /** Label of the key that leaves the replay */
   exitKeyLabel?: string;
 }> = ({
@@ -42,19 +44,20 @@ export const ReplayBar: React.FC<{
   onSpeed,
   onCycleCamera,
   onExit,
+  onFlashback,
   exitKeyLabel = "T",
 }) => {
   const shown = Math.min(endS, Math.max(startS, timeS));
 
   // The key listeners read the latest clock and callbacks from here, so they are added once: re-adding them every frame
   // (the clock moves while playing) dropped the Space latch between keydown and keyup
-  const latest = useRef({ timeS, startS, endS, onTogglePlay, onSeek });
-  latest.current = { timeS, startS, endS, onTogglePlay, onSeek };
+  const latest = useRef({ timeS, startS, endS, onTogglePlay, onSeek, onFlashback });
+  latest.current = { timeS, startS, endS, onTogglePlay, onSeek, onFlashback };
 
   useEffect(() => {
     const clamp = (t: number) => Math.min(latest.current.endS, Math.max(latest.current.startS, t));
     const onKey = (e: KeyboardEvent) => {
-      const { timeS, onTogglePlay, onSeek } = latest.current;
+      const { timeS, onTogglePlay, onSeek, onFlashback } = latest.current;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -76,6 +79,9 @@ export const ReplayBar: React.FC<{
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         onSeek(clamp(timeS + SEEK_STEP_S));
+      } else if (onFlashback && (e.code === "KeyF" || e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        onFlashback();
       }
     };
     // A focused button clicks itself on Space's keyup: the key already toggled play, so that click must not toggle
@@ -167,6 +173,19 @@ export const ReplayBar: React.FC<{
               {cameraLabel}
             </Button>
 
+            {onFlashback ? (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Icon name="restart" />}
+                prompt={<KeyCap tone="ink">F</KeyCap>}
+                onClick={onFlashback}
+                title="Flashback — resume driving from this moment (F, invalidates current lap)"
+              >
+                Flashback
+              </Button>
+            ) : null}
+
             <Button variant="secondary" size="sm" prompt={<KeyCap>{exitKeyLabel}</KeyCap>} onClick={onExit}>
               Exit
             </Button>
@@ -186,6 +205,12 @@ export const ReplayBar: React.FC<{
           <ArrowKeys set="horizontal" />
           Seek {SEEK_STEP_S} s
         </span>
+        {onFlashback ? (
+          <span className="inline-flex items-center gap-2">
+            <KeyCap>F</KeyCap>
+            Flashback
+          </span>
+        ) : null}
       </div>
     </>
   );

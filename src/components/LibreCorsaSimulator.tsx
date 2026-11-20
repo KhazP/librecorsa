@@ -1960,6 +1960,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   onSpeed: (speed: number) => session?.replaySpeed(speed),
                   onCycleCamera: cycleCamera,
                   onExit: () => session?.exitReplay(),
+                  onFlashback: replayUi.canFlashback ? () => { session?.flashbackReplay(); } : undefined,
                   exitKeyLabel: settings.keys.replay[0] ? keyLabel(settings.keys.replay[0]) : "T",
                 }
               : null

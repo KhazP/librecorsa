@@ -61,7 +61,7 @@ import { drivePlanJob, driveLineOf, makeDrivePlan, type AiDrivePlan, type DriveL
 import { planCost } from '@/lib/sim/ai/speed-plan';
 import { DEFAULT_PLANNER_WEIGHTS, PLAN_DT, PLAN_STEPS, planLocal, type PlannerResult, type PredictedCar } from '@/lib/sim/ai/local-planner';
 import type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
-import type { AiRace, RaceDriverLabel } from '@/lib/sim/ai-race';
+import type { AiRace, FieldCarRestorePose, RaceDriverLabel } from '@/lib/sim/ai-race';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '@/lib/sim/gt3/AmgGt3Config';
 import { SUZUKI_LIANA_CONFIG } from '@/lib/sim/road/SuzukiLianaConfig';
@@ -2662,6 +2662,43 @@ export class AiOpponentField implements AiRace {
   /** Physics of the AI cars, in grid order */
   public aiSims(): SimulatorCar[] {
     return this.cars.flatMap((c) => (c.ai ? [c.ai] : []));
+  }
+
+  /**
+   * Flashback rewind: puts every AI car back at its recorded replay pose, rewinds the race clock and every car's
+   * `LapClock` cleanly (without teleport glitches), and invalidates the player's current race lap.
+   */
+  public restoreField(poses: readonly FieldCarRestorePose[], rewindS: number): void {
+    if (this.phase !== 'racing') return;
+    const byId = new Map<string, FieldCarRestorePose>();
+    for (const p of poses) byId.set(p.id, p);
+    this.raceTimeS = Math.max(0, this.raceTimeS - Math.max(0, rewindS));
+    this.passTimerS = this.raceTimeS;
+    this.gapTimer.reset();
+    this.splitTimer.reset();
+    this.yellowPasses.reset();
+    for (const car of this.cars) {
+      const p = byId.get(car.isPlayer ? 'player' : car.id);
+      if (car.ai && !car.removed && p) {
+        const target = { x: p.x, z: p.z, yawRad: p.yawRad, speedMs: Math.max(0, p.speedMs), s: p.s };
+        if (car.ai.restorePose) car.ai.restorePose(target);
+        else car.ai.teleportToDistance(p.s ?? car.ai.sMeters, target.speedMs);
+        car.control?.reset();
+        car.craft.reset();
+        car.stuckS = 0;
+        car.contact = false;
+        car.wasOff = false;
+        car.inWallHit = false;
+        car.prevVx = car.ai.vxMs;
+        car.local = null;
+        car.localAtS = -Infinity;
+        car.intentD = null;
+      }
+      if (car.isPlayer) car.clock.invalidateCurrentLap();
+      car.clock.rewindTo(car.sim.sMeters, this.raceTimeS, p?.distM);
+      car.prevS = car.sim.sMeters;
+      this.syncPeer(car);
+    }
   }
 
   /**
