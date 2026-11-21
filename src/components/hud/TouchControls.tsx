@@ -637,7 +637,7 @@ export interface TouchControlsProps {
  * the driving buttons the car and gearbox use, plus pause and camera. With tilt steering the pedals split, brake under
  * the left thumb and throttle under the right. Writes into the `touchInput` singleton.
  */
-export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }> = ({
+const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> = ({
   layout = "sliders",
   tiltSteer,
   tiltRangeDeg,
@@ -1045,3 +1045,5 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
     </div>
   );
 };
+
+export const TouchControls = React.memo(TouchControlsView);

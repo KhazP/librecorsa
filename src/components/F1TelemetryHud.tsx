@@ -292,6 +292,10 @@ function touchCarState(t: CarTelemetry, lights: boolean): TouchCarState {
   const channels = t.f12026;
   const aero = aeroReadout(t);
   const overtakeLocked = t.overtakingRules === "straight-mode-2026" && t.overtakeAvailable === false;
+  // TouchControls only branches on |speed| < 5 (offer reverse) and |speed| > 15 (driven off) and gear < 0: bucket them
+  // so TouchControls memoization holds across every frame of normal driving instead of re-rendering at 20 Hz.
+  const absSpeed = Math.abs(t.speedKmh);
+  const speedBand = absSpeed < 5 ? 0 : absSpeed <= 15 ? 10 : 20;
   return {
     hasErs: channels?.hasErs ?? true,
     hasAero: (!channels || channels.hasDrs) && t.overtakingRules !== "none",
@@ -300,8 +304,8 @@ function touchCarState(t: CarTelemetry, lights: boolean): TouchCarState {
     aeroArmed: aero.armed || !channels,
     boostOn: !overtakeLocked && t.manualOverrideActive,
     boostLocked: overtakeLocked,
-    gear: t.gear,
-    speedKmh: t.speedKmh,
+    gear: t.gear < 0 ? -1 : 1,
+    speedKmh: speedBand,
     runId: t.runId ?? 0,
     lights,
   };
@@ -398,6 +402,24 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
 
   const lightsPhase = race?.phase === "lights";
+  const rawTouchCar = props.touchControls ? touchCarState(telemetry, lightsPhase) : null;
+  const touchCar = useMemo<TouchCarState | null>(
+    () => rawTouchCar,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      rawTouchCar?.hasErs,
+      rawTouchCar?.hasAero,
+      rawTouchCar?.aeroOpen,
+      rawTouchCar?.aeroArmed,
+      rawTouchCar?.boostOn,
+      rawTouchCar?.boostLocked,
+      rawTouchCar?.gear,
+      rawTouchCar?.speedKmh,
+      rawTouchCar?.runId,
+      rawTouchCar?.lights,
+    ]
+  );
+  const handleCloseResults = useCallback(() => props.onCloseResults?.(), [props.onCloseResults]);
   // An assisted start's cue: a manual start has its own checklist (LaunchCue), and the throttle with the clutch out
   // there takes the car away early
   const throttleCue = lightsPhase && !telemetry.start;
@@ -919,9 +941,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       {/* Portalled to the page: places itself bottom right over the MFD and dash, top centre on touch */}
       {props.lapSummary ? <LapSummary {...props.lapSummary} /> : null}
 
-      {props.touchControls ? (
+      {props.touchControls && touchCar ? (
         <div className="pointer-events-auto">
-          <TouchControls {...props.touchControls} car={touchCarState(telemetry, lightsPhase)} />
+          <TouchControls {...props.touchControls} car={touchCar} />
         </div>
       ) : null}
 
@@ -931,7 +953,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           <RaceResults
             race={race}
             trackName={trackInfo.name}
-            onClose={() => props.onCloseResults?.()}
+            onClose={handleCloseResults}
             onRestart={props.onRestartRace}
             onBackToLobby={props.onBackToLobby}
             backLabel={props.backToLobbyLabel}

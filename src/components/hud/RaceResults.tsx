@@ -45,7 +45,7 @@ const TH = "lc-lbl px-2 pb-2 text-left font-semibold whitespace-nowrap";
  * Final classification of a race (AI or multiplayer). Renders nothing until `race.results` is set.
  * The backdrop only dims the screen; clicks outside the card still reach the sim.
  */
-export const RaceResults: React.FC<{
+interface RaceResultsProps {
   race: RaceStatus;
   trackName: string;
   onClose: () => void;
@@ -59,7 +59,51 @@ export const RaceResults: React.FC<{
   history?: readonly RaceRecord[];
   /** An open race: the next one to join */
   nextRace?: NextRaceProps;
-}> = ({ race, trackName, onClose, onRestart, onBackToLobby, backLabel = "Back to lobby", trackLimitStrikes = 0, history, nextRace }) => {
+}
+
+function sameRaceResults(a: RaceResultsProps, b: RaceResultsProps): boolean {
+  if (
+    a.trackName !== b.trackName ||
+    a.backLabel !== b.backLabel ||
+    a.trackLimitStrikes !== b.trackLimitStrikes ||
+    a.history !== b.history ||
+    a.nextRace !== b.nextRace ||
+    a.onClose !== b.onClose ||
+    a.onRestart !== b.onRestart ||
+    a.onBackToLobby !== b.onBackToLobby ||
+    a.race.resultsFinal !== b.race.resultsFinal ||
+    a.race.totalLaps !== b.race.totalLaps ||
+    a.race.multiplayer !== b.race.multiplayer
+  ) {
+    return false;
+  }
+  const ra = a.race.results;
+  const rb = b.race.results;
+  if (ra === rb) return true;
+  if (!ra || !rb || ra.length !== rb.length) return false;
+  for (let i = 0; i < ra.length; i++) {
+    const x = ra[i];
+    const y = rb[i];
+    if (
+      x.position !== y.position ||
+      x.driverCode !== y.driverCode ||
+      x.finishTimeS !== y.finishTimeS ||
+      x.gapS !== y.gapS ||
+      x.lapsDown !== y.lapsDown ||
+      x.lapsCompleted !== y.lapsCompleted ||
+      x.dnf !== y.dnf ||
+      x.dq !== y.dq ||
+      x.bestLapMs !== y.bestLapMs ||
+      x.penaltyS !== y.penaltyS ||
+      x.gridPosition !== y.gridPosition
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose, onRestart, onBackToLobby, backLabel = "Back to lobby", trackLimitStrikes = 0, history, nextRace }) => {
   const results = race.results;
   const rootRef = useRef<HTMLDivElement | null>(null);
   // A controller closes the card with B and reaches its buttons (Esc is handled below)
@@ -273,6 +317,8 @@ export const RaceResults: React.FC<{
     </div>
   );
 };
+
+export const RaceResults = React.memo(RaceResultsView, sameRaceResults);
 
 /** A best lap: the race's fastest in the best colour with the lap-time mark beside it, so colour is not alone */
 const BestLap: React.FC<{ ms: number | null; fastest: boolean; large?: boolean }> = ({ ms, fastest, large = false }) => (
