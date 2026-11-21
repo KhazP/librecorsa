@@ -25,9 +25,13 @@ import { StateBadge } from "@/components/ui/badges/StateBadge";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn } from "@/lib/settings/units";
 import type { UnitSettings } from "@/lib/settings/player-settings";
+import type { VehicleModelId } from "@/types/f1";
+import { bestLapForCircuit, bestLapsByVehicleForCircuit } from "@/lib/sim/ghost-store";
+import { useBestLapSummaries } from "@/lib/sim/use-best-laps";
+import { formatLapTime } from "@/components/hud/hud-format";
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { TrackOutline, useCircuitOutline, useNearView } from "./circuit-outline";
-import { TrackQualityBadge } from "./menu-content-ui";
+import { carBoardTag, TrackQualityBadge } from "./menu-content-ui";
 import { LayoutChoice } from "@/components/LayoutChoice";
 import { SourceChip } from "@/components/SourceChip";
 import { trackModelSource } from "@/lib/model-source";
@@ -78,13 +82,16 @@ const DetailOutline: React.FC<{ track: TrackInfo }> = ({ track }) => {
 export const CircuitBrowser: React.FC<{
   /** The loaded circuit */
   trackId: string;
+  /** Currently chosen car physics model (its personal best is preferred on every circuit card) */
+  vehicleModel?: VehicleModelId;
   /** Switches circuit (reloads the scene); settles when the load fails (on success the menu is replaced) */
   onSelect?: (id: string) => void | Promise<void>;
   library?: LibraryProps;
   /** The venues to list (default every venue in the registry) */
   venues?: readonly CircuitVenue[];
-}> = ({ trackId, onSelect, library, venues = CIRCUIT_VENUES }) => {
+}> = ({ trackId, vehicleModel, onSelect, library, venues = CIRCUIT_VENUES }) => {
   const units = useUnits();
+  const bestLaps = useBestLapSummaries();
   // The layout being loaded: its button says so until the scene reloads (or the load fails and it is offered again)
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const load = (id: string) => {
@@ -217,12 +224,26 @@ export const CircuitBrowser: React.FC<{
       }
       renderCard={(v) => {
         const t = shownLayout(v);
+        const pb = bestLapForCircuit(bestLaps, t.id, vehicleModel);
         return {
           media: <CardOutline track={t} />,
           title: v.name,
           meta: (
             <>
-              {v.country}, {lengthOf(t, units)}
+              <span className="block truncate">
+                {v.country}, {lengthOf(t, units)}
+              </span>
+              {pb ? (
+                <span className="mt-0.5 flex items-center gap-1.5 text-[12px]">
+                  <Icon name="lapTimes" size="xs" className={pb.forCurrentCar ? "text-lc-best" : "text-lc-slate"} />
+                  <span className={cx("lc-mono font-semibold", pb.forCurrentCar ? "text-lc-chalk" : "text-lc-fog")}>
+                    {formatLapTime(pb.lapTimeMs)}
+                  </span>
+                  {!pb.forCurrentCar ? (
+                    <span className="truncate text-[11px] text-lc-slate">{carBoardTag(pb.vehicle).label}</span>
+                  ) : null}
+                </span>
+              ) : null}
             </>
           ),
           badges: (
@@ -245,6 +266,7 @@ export const CircuitBrowser: React.FC<{
         const source = trackModelSource(t);
         const hill = circuitType(t) === "hillclimb";
         const layoutOptions = v.layouts.map((l) => ({ id: l.id, label: l.layout }));
+        const circuitPbs = bestLapsByVehicleForCircuit(bestLaps, t.id);
         return (
           <>
             <DetailOutline track={t} />
@@ -270,6 +292,26 @@ export const CircuitBrowser: React.FC<{
                 ))}
               </span>
             </div>
+            {circuitPbs.length > 0 ? (
+              <SettingRow label="Personal best" stacked>
+                <div className="flex flex-col gap-1">
+                  {circuitPbs.slice(0, 4).map((entry) => {
+                    const isCur = vehicleModel != null && entry.vehicle === vehicleModel;
+                    return (
+                      <div key={entry.vehicle} className="flex items-center justify-between gap-2 text-[13px]">
+                        <span className={cx("truncate", isCur ? "font-semibold text-lc-chalk" : "text-lc-fog")}>
+                          {carBoardTag(entry.vehicle).label}
+                        </span>
+                        <span className={cx("lc-mono inline-flex items-center gap-1.5 font-semibold", isCur ? "text-lc-best" : "text-lc-chalk")}>
+                          {isCur ? <Icon name="lapTimes" size="xs" /> : null}
+                          {formatLapTime(entry.lapTimeMs)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </SettingRow>
+            ) : null}
             {v.layouts.length > 1 ? (
               <SettingRow label="Layout" stacked>
                 <LayoutChoice options={layoutOptions} value={t.id} onChange={(id) => setLayoutOf((m) => ({ ...m, [v.id]: id }))} />

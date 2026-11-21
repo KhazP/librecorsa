@@ -907,6 +907,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   {panel === "circuit" ? (
                     <CircuitBrowser
                       trackId={trackId}
+                      vehicleModel={props.vehicleModel}
                       onSelect={
                         onSelectTrack
                           ? (id) => {

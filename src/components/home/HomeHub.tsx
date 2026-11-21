@@ -24,6 +24,9 @@ import { CarThumb, GradeBadge, OutlineThumb } from "./home-ui";
 import { LapMap } from "./LapMap";
 import { HomeDownloads } from "./HomeDownloads";
 import { HomeLapTimes } from "./HomeLapTimes";
+import { bestLapForCircuit } from "@/lib/sim/ghost-store";
+import { useBestLapSummaries } from "@/lib/sim/use-best-laps";
+import { formatLapTime } from "@/components/hud/hud-format";
 import { PLAY_HREF, rememberPicks, storedPicks } from "./play";
 import { TEXT_LINK } from "./SitePage";
 
@@ -118,6 +121,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   const pad = mode === "pad";
   useSavedInterfaceSettings();
   const units = useUnits();
+  const bestLaps = useBestLapSummaries();
   const storeBuild = useStoreBuild();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const driveRef = useRef<HTMLAnchorElement | null>(null);
@@ -543,6 +547,8 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                   {shownVenues.map((v) => {
                     const on = v === venue;
                     const shown = on ? layout : v.layouts[0];
+                    const pb = bestLapForCircuit(bestLaps, shown.id, car.vehicle);
+                    const pbCarLabel = pb ? (data.boardCars[pb.vehicle]?.label ?? pb.vehicle) : "";
                     return (
                       <div key={v.name} className="flex min-w-0 flex-col gap-2">
                         <MediaTile
@@ -555,7 +561,20 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                           title={v.name}
                           meta={
                             <>
-                              {v.country} <span aria-hidden>·</span> <span className="lc-mono">{lengthOf(shown)}</span>
+                              <span className="block truncate">
+                                {v.country} <span aria-hidden>·</span> <span className="lc-mono">{lengthOf(shown)}</span>
+                              </span>
+                              {pb ? (
+                                <span className="mt-0.5 flex items-center gap-1.5 text-[12px]">
+                                  <Icon name="lapTimes" size="xs" className={pb.forCurrentCar ? "text-lc-best" : "text-lc-slate"} />
+                                  <span className={cx("lc-mono font-semibold", pb.forCurrentCar ? "text-lc-chalk" : "text-lc-fog")}>
+                                    {formatLapTime(pb.lapTimeMs)}
+                                  </span>
+                                  {!pb.forCurrentCar ? (
+                                    <span className="truncate text-[11px] text-lc-slate">{pbCarLabel}</span>
+                                  ) : null}
+                                </span>
+                              ) : null}
                             </>
                           }
                           action={v.source ? <SourceChip source={v.source} /> : undefined}

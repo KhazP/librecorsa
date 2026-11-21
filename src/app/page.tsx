@@ -70,6 +70,7 @@ export default function HomePage() {
     })),
     cars: CARS.map((c) => ({
       id: c.id,
+      vehicle: c.physics,
       title: c.title,
       classTitle: CAR_CLASSES.find((k) => k.id === c.classId)?.title ?? "",
       year: c.year,

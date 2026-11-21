@@ -53,6 +53,8 @@ export interface HomeVenue {
 
 export interface HomeCar {
   id: string;
+  /** Shared physics / leaderboard model id */
+  vehicle: VehicleModelId;
   title: string;
   classTitle: string;
   year: number;

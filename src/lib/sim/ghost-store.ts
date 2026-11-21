@@ -3,16 +3,87 @@
  * exported to and imported from the user's disk. Every call degrades to null / false / []
  * when storage is unavailable (SSR, private windows, blocked site data).
  */
-import type { VehicleModelId } from "@/types/f1";
+import { foldVehicleModelId, isVehicleModelId, type VehicleModelId } from "@/types/f1";
 import { validateLapRecording } from "@/lib/sim/lap-recorder";
-import { lapBoardClass, type LapRecording } from "@/lib/sim/lap-types";
+import { lapBoardClass, lapPhysicsVersion, type LapRecording } from "@/lib/sim/lap-types";
 
 const DB_NAME = "bugesera-laps";
 const DB_VERSION = 1;
 const STORE_NAME = "bestLaps";
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+const BROADCAST_CHANNEL = "librecorsa-best-laps";
+const STORAGE_PING_KEY = "librecorsa.bestLapsUpdatedAt";
+
+export interface BestLapSummary {
+  trackId: string;
+  vehicle: VehicleModelId;
+  lapTimeMs: number;
+  physicsVersion?: number;
+  recordedAt: number;
+}
+
+export interface CircuitBestLap {
+  lapTimeMs: number;
+  vehicle: VehicleModelId;
+  /** True when the lap was driven in the player's currently selected car model */
+  forCurrentCar: boolean;
+  /** True when only laps from an older physics/circuit board revision exist */
+  legacyPhysics: boolean;
+}
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
+let summariesCache: BestLapSummary[] | null = null;
+const lapListeners = new Set<() => void>();
+let crossTabChannel: BroadcastChannel | null = null;
+let crossTabSubscribed = false;
+
+function notifyBestLapsChanged(broadcast = true): void {
+  summariesCache = null;
+  for (const cb of lapListeners) {
+    try {
+      cb();
+    } catch {
+      // Ignore subscriber errors
+    }
+  }
+  if (!broadcast || typeof window === "undefined") return;
+  try {
+    crossTabChannel ??= typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(BROADCAST_CHANNEL) : null;
+    crossTabChannel?.postMessage(Date.now());
+  } catch {
+    // BroadcastChannel unavailable
+  }
+  try {
+    localStorage.setItem(STORAGE_PING_KEY, String(Date.now()));
+  } catch {
+    // Storage unavailable
+  }
+}
+
+function ensureCrossTabSubscription(): void {
+  if (crossTabSubscribed || typeof window === "undefined") return;
+  crossTabSubscribed = true;
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      crossTabChannel ??= new BroadcastChannel(BROADCAST_CHANNEL);
+      crossTabChannel.addEventListener("message", () => notifyBestLapsChanged(false));
+    }
+  } catch {
+    // Ignore
+  }
+  window.addEventListener("storage", (e) => {
+    if (e.key === STORAGE_PING_KEY) notifyBestLapsChanged(false);
+  });
+}
+
+/** Subscribes to local PB saves/deletes (including across open tabs, e.g. /play -> /) */
+export function subscribeBestLaps(listener: () => void): () => void {
+  ensureCrossTabSubscription();
+  lapListeners.add(listener);
+  return () => {
+    lapListeners.delete(listener);
+  };
+}
 
 /**
  * Store key of a personal best: one per circuit, car and board class (assists, realism, surface, physics revision),
@@ -139,12 +210,107 @@ export async function saveBestLapIfFaster(rec: LapRecording): Promise<boolean> {
           put();
         };
       };
-      tx.oncomplete = () => resolve(stored);
+      tx.oncomplete = () => {
+        if (stored) notifyBestLapsChanged();
+        resolve(stored);
+      };
       tx.onabort = () => resolve(false);
     } catch {
       resolve(false);
     }
   });
+}
+
+/** Lightweight extraction of summary metadata from a raw stored record without scanning ghost sample floats */
+export function extractBestLapSummary(raw: unknown): BestLapSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.trackId !== "string" || !r.trackId) return null;
+  const vehicle = foldVehicleModelId(r.vehicle);
+  if (!isVehicleModelId(vehicle)) return null;
+  if (typeof r.lapTimeMs !== "number" || !Number.isFinite(r.lapTimeMs) || r.lapTimeMs <= 0) return null;
+  const cond = r.conditions && typeof r.conditions === "object" ? (r.conditions as Record<string, unknown>) : null;
+  const pv = cond && typeof cond.physicsVersion === "number" && Number.isFinite(cond.physicsVersion) ? cond.physicsVersion : undefined;
+  const recordedAt = typeof r.recordedAt === "number" && Number.isFinite(r.recordedAt) ? r.recordedAt : 0;
+  return {
+    trackId: r.trackId,
+    vehicle,
+    lapTimeMs: r.lapTimeMs,
+    ...(pv !== undefined ? { physicsVersion: pv } : {}),
+    recordedAt,
+  };
+}
+
+/** Fast cached summary list of every stored personal best, fastest first (skips deep ghost sample validation) */
+export async function listBestLapSummaries(): Promise<readonly BestLapSummary[]> {
+  if (summariesCache) return summariesCache;
+  const all = await runRequest<unknown[]>("readonly", (store) => store.getAll());
+  if (!all) return [];
+  const out: BestLapSummary[] = [];
+  for (const raw of all) {
+    const s = extractBestLapSummary(raw);
+    if (s) out.push(s);
+  }
+  out.sort((a, b) => a.lapTimeMs - b.lapTimeMs);
+  summariesCache = out;
+  return out;
+}
+
+/**
+ * Picks the headline personal best for a circuit:
+ *   1. Current physics revision + currently selected car (fastest across assist/weather boards)
+ *   2. Current physics revision + any car (fallback, flagged `forCurrentCar: false` so UI shows its car tag)
+ *   3. Older physics revision + currently selected car
+ *   4. Older physics revision + any car
+ */
+export function bestLapForCircuit(
+  summaries: readonly BestLapSummary[],
+  trackId: string,
+  preferredVehicle?: VehicleModelId | null,
+): CircuitBestLap | null {
+  let curSame: BestLapSummary | null = null;
+  let curAny: BestLapSummary | null = null;
+  let oldSame: BestLapSummary | null = null;
+  let oldAny: BestLapSummary | null = null;
+
+  for (let i = 0; i < summaries.length; i++) {
+    const s = summaries[i];
+    if (s.trackId !== trackId) continue;
+    const isCurrentPhysics = s.physicsVersion !== undefined && s.physicsVersion === lapPhysicsVersion(s.vehicle, trackId);
+    const sameCar = preferredVehicle != null && s.vehicle === preferredVehicle;
+    if (isCurrentPhysics) {
+      if (sameCar && (!curSame || s.lapTimeMs < curSame.lapTimeMs)) curSame = s;
+      if (!curAny || s.lapTimeMs < curAny.lapTimeMs) curAny = s;
+    } else {
+      if (sameCar && (!oldSame || s.lapTimeMs < oldSame.lapTimeMs)) oldSame = s;
+      if (!oldAny || s.lapTimeMs < oldAny.lapTimeMs) oldAny = s;
+    }
+  }
+
+  if (curSame) return { lapTimeMs: curSame.lapTimeMs, vehicle: curSame.vehicle, forCurrentCar: true, legacyPhysics: false };
+  if (curAny) return { lapTimeMs: curAny.lapTimeMs, vehicle: curAny.vehicle, forCurrentCar: false, legacyPhysics: false };
+  if (oldSame) return { lapTimeMs: oldSame.lapTimeMs, vehicle: oldSame.vehicle, forCurrentCar: true, legacyPhysics: true };
+  if (oldAny) return { lapTimeMs: oldAny.lapTimeMs, vehicle: oldAny.vehicle, forCurrentCar: false, legacyPhysics: true };
+  return null;
+}
+
+/** Fastest personal best per vehicle for a circuit (current physics preferred per car), fastest first */
+export function bestLapsByVehicleForCircuit(
+  summaries: readonly BestLapSummary[],
+  trackId: string,
+): { vehicle: VehicleModelId; lapTimeMs: number; legacyPhysics: boolean }[] {
+  const byVehicle = new Map<VehicleModelId, { lapTimeMs: number; legacyPhysics: boolean }>();
+  for (const s of summaries) {
+    if (s.trackId !== trackId) continue;
+    const legacy = s.physicsVersion === undefined || s.physicsVersion !== lapPhysicsVersion(s.vehicle, trackId);
+    const prev = byVehicle.get(s.vehicle);
+    if (!prev || (prev.legacyPhysics && !legacy) || (prev.legacyPhysics === legacy && s.lapTimeMs < prev.lapTimeMs)) {
+      byVehicle.set(s.vehicle, { lapTimeMs: s.lapTimeMs, legacyPhysics: legacy });
+    }
+  }
+  return [...byVehicle.entries()]
+    .map(([vehicle, v]) => ({ vehicle, ...v }))
+    .sort((a, b) => Number(a.legacyPhysics) - Number(b.legacyPhysics) || a.lapTimeMs - b.lapTimeMs);
 }
 
 /** Every stored personal best (for the local leaderboard), fastest first */
@@ -162,6 +328,7 @@ export async function listBestLaps(): Promise<LapRecording[]> {
 /** Removes the stored personal best for a circuit and car (on one board class; without one, the unsplit best) */
 export async function deleteBestLap(trackId: string, vehicle: VehicleModelId, board: string | null = null): Promise<void> {
   await runRequest("readwrite", (store) => store.delete(lapKey(trackId, vehicle, board)));
+  notifyBestLapsChanged();
 }
 
 /** m.ss.mmm, e.g. 1.23.456 for 83456 ms */
