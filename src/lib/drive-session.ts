@@ -72,7 +72,7 @@ import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf
 import { drivingInputOf, lapConditionsNow, type LapInput, type LapRecording, type LapSummaryData, type ReplayCarState } from "@/lib/sim/lap-types";
 import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
-import { touchInput } from "@/lib/input/touch-input";
+import { isTouchDevice, touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
@@ -250,6 +250,18 @@ const scheduleIdle = (fn: (deadline?: IdleDeadline) => void, fallbackDelayMs = 1
 };
 /** Safari's wait between the spare AI field's build steps (a few frames for the menus between two AI cars) */
 const AI_PREP_GAP_MS = 150;
+
+/** Rare structural telemetry fields read outside the live HUD (root simulator, TitleMenu, race history) */
+function telemetryStructKeyOf(t: CarTelemetry): string {
+  const r = t.race;
+  const results = r?.results;
+  const me = results?.find((row) => row.isPlayer);
+  const resKey =
+    me && results
+      ? `${r?.resultsFinal ? 1 : 0}:${results.length}:${me.position}:${me.finishTimeS ?? ""}:${me.dnf ? 1 : 0}:${me.gridPosition ?? ""}:${me.bestLapMs ?? ""}:${me.penaltyS ?? ""}`
+      : "";
+  return `${t.runId ?? ""}|${r?.phase ?? ""}|${r?.multiplayer ? 1 : 0}|${t.liveTuner?.absAllowed === false ? 0 : 1}|${resKey}`;
+}
 
 /** What the drive shows the UI: one snapshot, replaced whenever any part changes (see DriveSession.subscribe) */
 export interface DriveSnapshot {
@@ -439,6 +451,15 @@ export class DriveSession {
   };
   /** What the drive shows the UI now: the same object until something in it changes */
   readonly getSnapshot = (): DriveSnapshot => this.snapshot;
+  /** High-frequency driving telemetry channel so the HUD updates without re-rendering the root simulator component */
+  private telemetrySnapshot: CarTelemetry;
+  private telemetryStructKey = "";
+  private readonly telemetryListeners = new Set<() => void>();
+  readonly subscribeTelemetry = (listener: () => void): (() => void) => {
+    this.telemetryListeners.add(listener);
+    return () => this.telemetryListeners.delete(listener);
+  };
+  readonly getTelemetry = (): CarTelemetry => this.telemetrySnapshot;
   /** The race on track with the player: practice, the AI field or an online race (setRace is its only writer) */
   private currentRace: SessionRace = { kind: "practice" };
   /**
@@ -556,8 +577,8 @@ export class DriveSession {
     } = host;
 
     let disposed = false;
-    // What the UI shows goes out through the snapshot (see subscribe)
-    const setTelemetry = (telemetry: CarTelemetry) => this.publish({ telemetry });
+    // High-frequency telemetry goes to HUD subscribers only; the top-level snapshot updates only on structural changes
+    const setTelemetry = (telemetry: CarTelemetry) => this.publishTelemetry(telemetry);
     const setReplayUi = (next: ReplayUi | ((prev: ReplayUi) => ReplayUi)) =>
       this.publish({ replay: typeof next === "function" ? next(this.snapshot.replay) : next });
     const setSteerLockDeg = (steerLockDeg: number) => this.publish({ steerLockDeg });
@@ -985,8 +1006,11 @@ export class DriveSession {
 
     let physics = createCar(vehicleNow, null);
     this.carNow = () => physics;
+    const initialTelemetry: CarTelemetry = { ...physics.telemetry };
+    this.telemetrySnapshot = initialTelemetry;
+    this.telemetryStructKey = telemetryStructKeyOf(initialTelemetry);
     this.snapshot = {
-      telemetry: { ...physics.telemetry },
+      telemetry: initialTelemetry,
       replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1, canFlashback: false },
       steerLockDeg: undefined,
       carCockpitFovDeg: FALLBACK_COCKPIT_FOV_DEG,
@@ -3660,9 +3684,10 @@ export class DriveSession {
       // The bug report's frame rate: the same frames, whether or not the automatic quality is on
       if (driving && draw && !inVr) noteDrivingFrame(drawIntervalMs, nowMs);
 
-      // Paused, the car is frozen but the pause menu (and the HUD under it) would still re-render at 30 Hz for nothing;
-      // 4 Hz keeps what can still move there (remote players) current
-      if (nowMs - lastHudSyncMs > (frozen ? 250 : 33)) {
+      // Paused or in menus: 4 Hz keeps remote players current without burning 30 Hz HUD commits.
+      // Driving: 30 Hz on desktop, 20 Hz on touch devices to reduce mobile main-thread React overhead.
+      const hudIntervalMs = frozen || inMenu ? 250 : isTouchDevice() ? 50 : 33;
+      if (nowMs - lastHudSyncMs > hudIntervalMs) {
         lastHudSyncMs = nowMs;
         // What the player steered with against what the wheels did, for the input trace
         const steerSource = physics.steeringAssist.source;
@@ -3780,6 +3805,16 @@ export class DriveSession {
   private publish(patch: Partial<DriveSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...patch };
     for (const listener of this.listeners) listener();
+  }
+
+  private publishTelemetry(telemetry: CarTelemetry): void {
+    this.telemetrySnapshot = telemetry;
+    for (const listener of this.telemetryListeners) listener();
+    const key = telemetryStructKeyOf(telemetry);
+    if (key !== this.telemetryStructKey) {
+      this.telemetryStructKey = key;
+      this.publish({ telemetry });
+    }
   }
 
   /** The race on track with the player */

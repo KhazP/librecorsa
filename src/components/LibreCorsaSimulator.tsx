@@ -1239,8 +1239,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     return () => window.clearTimeout(id);
   }, [launchHint]);
   useEffect(() => {
-    if (launchHint && telemetry.speedKmh > 15) setLaunchHint(false);
-  }, [launchHint, telemetry.speedKmh]);
+    if (!launchHint || !session) return;
+    if (session.getTelemetry().speedKmh > 15) {
+      setLaunchHint(false);
+      return;
+    }
+    return session.subscribeTelemetry(() => {
+      if (session.getTelemetry().speedKmh > 15) setLaunchHint(false);
+    });
+  }, [launchHint, session]);
   // A car's first drive also names the seat panel in the launch hint; once it has shown (or the panel opened), not again
   const [seatHintOn, setSeatHintOn] = useState(false);
   useEffect(() => {
@@ -1814,10 +1821,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       boardState: boardStateRef.current,
       drive:
         fromDrive && snap
-          ? { telemetry: snap.telemetry, mode, replay: snap.replay.active, waterMm: trackEnvRef.current?.weather.lineWaterMm ?? 0 }
+          ? { telemetry: session?.getTelemetry() ?? snap.telemetry, mode, replay: snap.replay.active, waterMm: trackEnvRef.current?.weather.lineWaterMm ?? 0 }
           : null,
     });
   };
+
+  const telemetrySource = useMemo(
+    () => (session ? { subscribe: session.subscribeTelemetry, getSnapshot: session.getTelemetry } : undefined),
+    [session]
+  );
 
   const menuProps = {
     telemetry,
@@ -2010,6 +2022,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       {phase === "driving" ? (
         <F1TelemetryHud
           {...menuProps}
+          telemetrySource={telemetrySource}
           seatPanel={seatPanel}
           track={track}
           weather={weatherHud}

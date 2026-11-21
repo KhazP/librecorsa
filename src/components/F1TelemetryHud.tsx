@@ -1,7 +1,7 @@
 "use client";
 
 import type { NowPlaying } from "@/lib/audio/bgm-controller";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type {
   AeroSetupPreset,
   CameraMode,
@@ -128,9 +128,18 @@ const HUD_STYLES: Partial<Record<HudPreset, HudStyleDef>> = {
 /** Every preset gives way to the Phone HUD on a phone-sized screen, and the game's own wherever the touch controls are up (`showsPhoneHud`) */
 const PHONE_STYLE: HudStyleDef = { component: PhoneHud, bottomClearance: 16 };
 
+const noTelemetrySubscribe = () => () => {};
+
+export interface TelemetrySource {
+  subscribe: (listener: () => void) => () => void;
+  getSnapshot: () => CarTelemetry;
+}
+
 interface F1TelemetryHudProps extends MultiplayerPanelProps {
   track: BuiltTrackData;
   telemetry: CarTelemetry;
+  /** Live high-frequency telemetry store; when provided, the HUD subscribes directly without re-rendering its parent */
+  telemetrySource?: TelemetrySource;
   aeroPreset: AeroSetupPreset;
   assistPreset: DriverAssistPreset;
   cameraMode: CameraMode;
@@ -305,7 +314,7 @@ function touchCarState(t: CarTelemetry, lights: boolean): TouchCarState {
 export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const {
     track,
-    telemetry,
+    telemetrySource,
     tireCompound,
     cameraMode,
     boostLatch,
@@ -316,6 +325,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     paused,
     onCycleCamera,
   } = props;
+
+  const fallbackTelemetry = useCallback(() => props.telemetry, [props.telemetry]);
+  const liveTelemetry = useSyncExternalStore(
+    telemetrySource?.subscribe ?? noTelemetrySubscribe,
+    telemetrySource?.getSnapshot ?? fallbackTelemetry,
+    fallbackTelemetry
+  );
+  const telemetry = telemetrySource ? liveTelemetry : props.telemetry;
 
   const inviteRoom = props.inviteRoom ?? null;
   // An invite link opens the multiplayer panel on the first pause only
@@ -776,38 +793,40 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             <TyrePanel telemetry={telemetry} compound={tireCompound} />
           </div>
         ) : null}
-        <div
-          className={`${showKeyHints ? (style ? "2xl:flex" : "sm:flex") : ""} hidden flex-wrap items-center gap-x-3 gap-y-2 rounded-lc-row py-1.5 pr-3 pl-2 text-[12px] font-bold text-lc-chalk ${HUD_GLASS}`}
-        >
-          <LibreCorsaLogo variant="mark" className="h-5.5 w-5.5" />
-          {inputMode === "pad" ? (
-            <span className="inline-flex items-center gap-1.5">
-              <PadGlyph button="menu" family={padFamily} />
-              Menu
-            </span>
-          ) : null}
-          {(inputMode === "pad" ? [] : [
-            ["ESC", "Menu"],
-            [props.keyNames?.camera ?? "C", "Camera"],
-            [props.keyNames?.racingLine ?? "R", "Line"],
-            [props.keyNames?.restart ?? "Bksp", "Restart"],
-            // The lap board's key, while there is one on screen
-            ...(boardNode && boardKeyName && boardKeyName !== "—" ? [[boardKeyName, "Board"]] : []),
-            // Headlights toggle key while dark, lit, or manually overridden
-            ...(props.keyNames?.headlights &&
-            props.keyNames.headlights !== "—" &&
-            (props.weather?.headlightsAutoOn ||
-              props.weather?.headlightsOn ||
-              (props.weather?.headlightMode && props.weather.headlightMode !== "auto"))
-              ? [[props.keyNames.headlights, "Lights"]]
-              : []),
-          ]).map(([k, label]) => (
-            <span key={label} className="inline-flex items-center gap-1.5">
-              <KeyCap>{k}</KeyCap>
-              {label}
-            </span>
-          ))}
-        </div>
+        {showKeyHints ? (
+          <div
+            className={`${style ? "2xl:flex" : "sm:flex"} hidden flex-wrap items-center gap-x-3 gap-y-2 rounded-lc-row py-1.5 pr-3 pl-2 text-[12px] font-bold text-lc-chalk ${HUD_GLASS}`}
+          >
+            <LibreCorsaLogo variant="mark" className="h-5.5 w-5.5" />
+            {inputMode === "pad" ? (
+              <span className="inline-flex items-center gap-1.5">
+                <PadGlyph button="menu" family={padFamily} />
+                Menu
+              </span>
+            ) : null}
+            {(inputMode === "pad" ? [] : [
+              ["ESC", "Menu"],
+              [props.keyNames?.camera ?? "C", "Camera"],
+              [props.keyNames?.racingLine ?? "R", "Line"],
+              [props.keyNames?.restart ?? "Bksp", "Restart"],
+              // The lap board's key, while there is one on screen
+              ...(boardNode && boardKeyName && boardKeyName !== "—" ? [[boardKeyName, "Board"]] : []),
+              // Headlights toggle key while dark, lit, or manually overridden
+              ...(props.keyNames?.headlights &&
+              props.keyNames.headlights !== "—" &&
+              (props.weather?.headlightsAutoOn ||
+                props.weather?.headlightsOn ||
+                (props.weather?.headlightMode && props.weather.headlightMode !== "auto"))
+                ? [[props.keyNames.headlights, "Lights"]]
+                : []),
+            ]).map(([k, label]) => (
+              <span key={label} className="inline-flex items-center gap-1.5">
+                <KeyCap>{k}</KeyCap>
+                {label}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* Classic / Minimal bottom-right: Live Tuner MFD, engineering channels (when active); Minimal's speed pills sit here too */}
