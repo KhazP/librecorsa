@@ -301,7 +301,7 @@ export function SettingsCard({
           setAsking(false);
         }}
       >
-        {`This puts ${resetWhat ?? "the settings in this card"} back to their defaults.`}
+        {`Resets ${resetWhat ?? "these settings"} to defaults.`}
       </ConfirmDialog>
     </Card>
   );
@@ -313,13 +313,11 @@ export function SettingsCard({
  */
 export function AdvancedOnly({ onShowAdvanced, what, more }: { onShowAdvanced: () => void; what: string; more?: boolean }) {
   return (
-    <Card>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="lc-body m-0">{what} are in Advanced.</p>
-        <Button variant="secondary" size="sm" onClick={onShowAdvanced} data-nav-default={more ? undefined : ""}>
-          Show advanced
-        </Button>
-      </div>
-    </Card>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lc-row border border-lc-line bg-lc-carbon/60 px-4 py-2.5">
+      <span className="lc-hint">{what}</span>
+      <Button variant="secondary" size="sm" onClick={onShowAdvanced} data-nav-default={more ? undefined : ""}>
+        Show advanced
+      </Button>
+    </div>
   );
 }

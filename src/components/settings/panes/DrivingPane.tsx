@@ -32,7 +32,7 @@ export function AssistsTab() {
         first
         rows={[assistLevel, tcAbs, racingLine, autoGearbox, autoClutch, launch, { ...controllerSteerAssist, advanced: !onPad }]}
       />
-      <SettingsCard title="Pedal help" description="For the keyboard, where a key is all or nothing" rows={[throttleHelp, brakeHelp]} />
+      <SettingsCard title="Pedal help" rows={[throttleHelp, brakeHelp]} />
       <SettingsCard title="On track" rows={[realism, ghost]} />
     </>
   );
@@ -47,12 +47,12 @@ function presetRow(device: "keyboard" | "controller"): RowDef {
     label: "Preset",
     hint: (env) => {
       const p = matchingAssistPreset(tuningOf(env));
-      return p ? assistPresetDetail(p.tuning, env.steerLockDeg) : "My own tuning";
+      return p ? assistPresetDetail(p.tuning, env.steerLockDeg) : "Custom";
     },
     advanced: true,
     options: (env) => [
       ...ASSIST_PRESETS.map((p) => ({ id: p.id, label: p.label, detail: assistPresetDetail(p.tuning, env.steerLockDeg) })),
-      { id: "custom", label: "Custom", detail: "My own tuning", disabled: true },
+      { id: "custom", label: "Custom", disabled: true },
     ],
     read: (env) => matchingAssistPreset(tuningOf(env))?.id ?? "custom",
     write: (env, id) => {
@@ -77,17 +77,12 @@ export function SteeringHelpTab() {
   const lock = env.steerLockDeg ?? 30;
   return (
     <>
-      <SettingsCard
-        title="Keyboard steering"
-        description="How the assist steers for a key that can only be on or off"
-        rows={KEYBOARD_ROWS}
-        first
-      >
+      <SettingsCard title="Keyboard steering" rows={KEYBOARD_ROWS} first>
         <div className="max-w-[280px] pt-2">
           <AssistCurve tuning={env.settings.keyboardTuning} device="keyboard" lockDeg={lock} />
         </div>
       </SettingsCard>
-      <SettingsCard title="Controller steering" description="How the assist steers for the stick" rows={CONTROLLER_ROWS}>
+      <SettingsCard title="Controller steering" rows={CONTROLLER_ROWS}>
         <div className="max-w-[280px] pt-2">
           <AssistCurve tuning={env.settings.padTuning} device="controller" lockDeg={lock} />
         </div>

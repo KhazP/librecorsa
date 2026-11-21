@@ -52,14 +52,11 @@ function HudLayoutCard() {
 
 export function GraphicsTab() {
   const env = useSettingsEnv();
-  const vrOff = env.vrSupported
-    ? null
-    : "No headset found. VR needs a browser with WebXR and a headset connected";
+  const vrOff = env.vrSupported ? null : "Requires WebXR headset";
   return (
     <SettingsCard title="Graphics" rows={[quality, renderScale, frameRate, autoQuality, driverBody]} first>
       <SettingRow
         label="VR"
-        hint="Drive in a headset. Still experimental: expect rough edges"
         disabled={vrOff !== null}
         disabledReason={vrOff ?? undefined}
       >
@@ -93,19 +90,18 @@ export function CameraTab() {
     <SettingsCard title="Camera" rows={[defaultView, fieldOfView, headMovement]} first>
       <SettingRow
         label="Adjust seat"
-        hint={`Moves the cockpit and dash views of this car. While driving, hold ${cameraKey} or ${cameraButton}`}
+        hint={`Hold ${cameraKey} or ${cameraButton} on track`}
         disabled={!env.onOpenSeatPanel}
-        disabledReason={`Only while driving: hold ${cameraKey} or ${cameraButton} in the car`}
+        disabledReason={`Available while driving (hold ${cameraKey} or ${cameraButton})`}
       >
         <Button size="sm" variant="secondary" disabled={!env.onOpenSeatPanel} onClick={() => env.onOpenSeatPanel?.()}>
-          Adjust now
+          Adjust
         </Button>
       </SettingRow>
       <SettingRow
         label="Reset seat positions"
-        hint="Puts every car's cockpit and dash views back where the car has them"
         disabled={!nudged}
-        disabledReason="Every car is at its own seat position"
+        disabledReason="Already at default"
       >
         <Button size="sm" variant="danger" disabled={!nudged} onClick={() => setAsking(true)}>
           Reset
@@ -114,14 +110,14 @@ export function CameraTab() {
       <ConfirmDialog
         open={asking}
         title="Reset seat positions?"
-        confirmLabel="Reset every car"
+        confirmLabel="Reset all"
         onCancel={() => setAsking(false)}
         onConfirm={() => {
           env.update((s) => ({ ...s, cameraNudges: {} }));
           setAsking(false);
         }}
       >
-        Every car&apos;s cockpit and dash views go back to where the car has them, with their field of view.
+        Resets cockpit and dash seat offsets for all cars.
       </ConfirmDialog>
     </SettingsCard>
   );

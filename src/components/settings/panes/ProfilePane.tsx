@@ -23,7 +23,7 @@ function ColourRow() {
   const current = env.settings.profile.color;
   const set = (c: string) => env.update((s) => ({ ...s, profile: { ...s.profile, color: sanitizeColor(c) } }));
   return (
-    <SettingRow label="Colour" hint="Shown to other players in multiplayer and on the lap boards" stacked>
+    <SettingRow label="Colour" stacked>
       <div role="radiogroup" aria-label="Colour" className="flex flex-wrap items-center gap-2">
         {DRIVER_COLORS.map((c, i) => {
           const chosen = current.toUpperCase() === c;
@@ -195,9 +195,9 @@ function PortRow() {
     <SettingRow
       label="UDP port"
       advanced
-      hint={claimed ? `Port ${w.telemetryPort} is ${claimed}: tools there will misread it. The default is ${DEFAULT_TELEMETRY_PORT}` : "Where the bridge sends it, on this computer"}
+      hint={claimed ? `Port ${w.telemetryPort} conflicts with ${claimed} (default ${DEFAULT_TELEMETRY_PORT})` : undefined}
       disabled={!w.telemetryOut}
-      disabledReason="Needs Telemetry out on"
+      disabledReason="Requires UDP telemetry"
       changed={w.telemetryPort !== DEFAULT_TELEMETRY_PORT}
       onReset={() => env.update((s) => ({ ...s, wheel: { ...s.wheel, telemetryPort: DEFAULT_TELEMETRY_PORT } }))}
     >
@@ -217,7 +217,7 @@ function PortRow() {
           if (Number.isInteger(n) && n >= 1024 && n <= 65535) env.update((s) => ({ ...s, wheel: { ...s.wheel, telemetryPort: n } }));
         }}
         onBlur={() => setText(String(w.telemetryPort))}
-        className="lc-mono h-10 w-28 rounded-full border border-lc-line bg-lc-well px-4 text-right text-[14px] pointer-coarse:text-[16px] text-lc-chalk outline-none focus:border-lc-volt focus:shadow-lc-focus disabled:cursor-not-allowed disabled:opacity-40"
+        className="lc-mono h-10 w-28 rounded-lc-row border border-lc-line bg-lc-well px-3.5 text-right text-[14px] pointer-coarse:text-[16px] text-lc-chalk outline-none focus:border-lc-volt focus:shadow-lc-focus disabled:cursor-not-allowed disabled:opacity-40"
       />
     </SettingRow>
   );
@@ -234,8 +234,8 @@ export function DataTab() {
       {env.driverKey ? (
         <SettingsCard title="Driver key">
           <SettingRow
-            label="Driver key"
-            hint={env.driverKey.notice ?? "Signs your laps on the online boards. Keep a copy to post from another browser"}
+            label="Identity key"
+            hint={env.driverKey.notice ?? "Signs online laps. Back up to use on another browser"}
             navDefault
           >
             <Button size="sm" variant="secondary" icon={<Icon name="download" />} onClick={env.driverKey.onExport} data-nav-default="">
@@ -258,16 +258,16 @@ export function DataTab() {
           </SettingRow>
         </SettingsCard>
       ) : null}
-      <SettingsCard title="Telemetry out" rows={[telemetryOut]} first={!env.driverKey}>
+      <SettingsCard title="Telemetry" rows={[telemetryOut]} first={!env.driverKey}>
         <PortRow />
       </SettingsCard>
-      <SettingsCard title="Start over">
-        <SettingRow label="Reset all settings" hint="Controls, key bindings, assists, force feedback, display and sound go back to their defaults">
+      <SettingsCard title="Reset">
+        <SettingRow label="Reset all settings" hint="Restores default controls, assists, display and audio">
           <Button size="sm" variant="danger" onClick={() => setAsking("reset")}>
             Reset
           </Button>
         </SettingRow>
-        <SettingRow label="Clear saved data" hint="Removes everything the game saved in this browser and starts it as a first visit">
+        <SettingRow label="Clear saved data" hint="Deletes local settings, driver key, laps, ghosts and setups">
           <Button size="sm" variant="danger" icon={<Icon name="delete" />} onClick={() => setAsking("clear")}>
             Clear
           </Button>
@@ -284,8 +284,7 @@ export function DataTab() {
           setAsking(null);
         }}
       >
-        Every setting on this screen goes back to its default, key bindings and calibration too. Your name, colour,
-        favourites, car setups, race choices and lap times stay.
+        Resets all settings, bindings and calibration to defaults. Profile, setups and lap times stay.
       </ConfirmDialog>
       <ConfirmDialog
         open={asking === "clear"}
@@ -298,9 +297,7 @@ export function DataTab() {
           void clearSavedData();
         }}
       >
-        This removes every setting, your driver name and key, lap history and ghosts, car setups, favourites, race history
-        and multiplayer server details from this browser, and reloads the game. Without the driver key your online lap
-        times can no longer be claimed from here. It cannot be undone.
+        Permanently removes all settings, driver key, laps, ghosts and setups from this browser, then reloads.
       </ConfirmDialog>
     </>
   );

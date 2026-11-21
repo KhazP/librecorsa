@@ -54,7 +54,7 @@ const CATEGORIES: readonly CategoryDef[] = [
     icon: "assists",
     tabs: [
       { id: "assists", label: "Assists", render: () => <AssistsTab /> },
-      { id: "steering", label: "Steering help", advancedOnly: "The steering help settings", render: () => <SteeringHelpTab /> },
+      { id: "steering", label: "Steering help", advancedOnly: "Steering help is in Advanced", render: () => <SteeringHelpTab /> },
     ],
   },
   {
@@ -433,7 +433,7 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
                   <div key={`${category}/${tab.id}`} className="flex min-w-0 flex-col gap-3">
                     {advancedOnly ? <AdvancedOnly what={tab.advancedOnly!} onShowAdvanced={() => setDetail("advanced")} /> : tab.render()}
                     {detail === "simple" && !advancedOnly && advancedHere > 0 ? (
-                      <AdvancedOnly more what="More settings on this page" onShowAdvanced={() => setDetail("advanced")} />
+                      <AdvancedOnly more what="More settings in Advanced" onShowAdvanced={() => setDetail("advanced")} />
                     ) : null}
                   </div>
                 </section>

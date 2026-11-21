@@ -21,7 +21,7 @@ export function DeviceTab() {
   const pads = useGamepads();
   return (
     <>
-      <SettingsCard title="Active device" description="What the game drives with. The other tabs only set each device up">
+      <SettingsCard title="Active device">
         <DeviceTiles
           choices={DEVICES}
           value={env.settings.device}
@@ -32,8 +32,8 @@ export function DeviceTab() {
       </SettingsCard>
       <ConnectedDevicesCard />
       {env.onRunSetup ? (
-        <SettingsCard title="First-time setup">
-          <SettingRow label="Run setup again" hint="The device, assist level and car steps of the first visit">
+        <SettingsCard title="Quick setup">
+          <SettingRow label="Run setup wizard">
             <Button size="sm" variant="secondary" onClick={env.onRunSetup}>
               Run setup
             </Button>
