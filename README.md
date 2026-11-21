@@ -5,6 +5,8 @@
 <p>
   <a href="https://librecorsa.org/"><b>▶&nbsp; Play in your browser</b></a>
   &nbsp;·&nbsp;
+  <a href="https://librecorsa.org/download">Download</a>
+  &nbsp;·&nbsp;
   <a href="#features">Features</a>
   &nbsp;·&nbsp;
   <a href="#controls">Controls</a>
@@ -49,6 +51,19 @@
 </table>
 
 > LibreCorsa is an independent fan project. It is not affiliated with Formula 1, the FIA, any team or any circuit.
+
+---
+
+## Download apps
+
+You can play straight in any modern browser at **[librecorsa.org](https://librecorsa.org/)**, or install the optional native wrapper from **[librecorsa.org/download](https://librecorsa.org/download)** / **[GitHub Releases](https://github.com/KhazP/librecorsa/releases/latest)**. Every wrapper opens the live site, so game updates arrive without reinstalling.
+
+| Platform | Package | Notes |
+| :-- | :-- | :-- |
+| **Windows (x64)** | `LibreCorsa-*-win-x64-Setup.exe` | Discrete GPU preference, silent WebHID for wheels & DualSense. Unsigned while SignPath setup finishes (*More info → Run anyway*) |
+| **macOS** | `LibreCorsa-*-mac-arm64.dmg` / `mac-x64.dmg` | Apple Silicon and Intel builds. Unsigned (*Privacy & Security* or `xattr -cr /Applications/LibreCorsa.app`) |
+| **Linux (x64)** | `LibreCorsa-*-linux-x86_64.AppImage` | `chmod +x` and run (needs FUSE2 / `libfuse2`) |
+| **Android (7+)** | `LibreCorsa-*-android.apk` | Signed fullscreen TWA (no browser bar, sticky-immersive, Game Mode, launcher shortcuts; Chrome required) |
 
 ---
 
