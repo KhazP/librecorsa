@@ -56,8 +56,8 @@
             android:name="twa_generator"
             android:value="@string/generatorApp" />
 
-        <!-- Android 12+ Game Mode: the player (or Game Dashboard) may pick Performance or
-             Battery saver for LibreCorsa; the system applies its own interventions. -->
+        <!-- Android 12+ Game Mode: declares no app-side GameManager handling so platform/OEM
+             Game Mode interventions remain enabled. -->
         <meta-data
             android:name="android.game_mode_config"
             android:resource="@xml/game_mode_config" />

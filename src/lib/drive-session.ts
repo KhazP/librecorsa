@@ -72,6 +72,7 @@ import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf
 import { drivingInputOf, lapConditionsNow, type LapInput, type LapRecording, type LapSummaryData, type ReplayCarState } from "@/lib/sim/lap-types";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { touchInput } from "@/lib/input/touch-input";
+import { ScreenWakeLock } from "@/lib/screen-wake-lock";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
@@ -629,6 +630,8 @@ export class DriveSession {
     /** Last device that actually sent driving/clutch input; lets an idle plugged-in pad coexist with keyboard clutch. */
     let lastDrivingInput: LapInput | null = null;
     let prevSettingsDevice = initialSettings.device;
+    /** Keeps the screen awake via `navigator.wakeLock` while actively driving (for tilt steering & Android TWA). */
+    const wakeLock = new ScreenWakeLock();
     /** How far the player held the clutch in on the last step (0..1), for the start cue */
     let startClutchIn = 0;
     /** Slip help on the keyboard's pedals while the car's ABS / traction control is off */
@@ -2451,6 +2454,7 @@ export class DriveSession {
       // The pause menu, the seat panel or a lost GPU context: the car waits
       const frozen = this.snapshot.paused || this.snapshot.seatPanel || gpuLost;
       const driving = !inMenu && !frozen && !replaying && !device.wheelLost;
+      wakeLock.setDesired(driving);
       const padTuning = settingsNow.padTuning;
       const kbTuning = settingsNow.keyboardTuning;
       const isPad = device.source === "controller";
@@ -3713,6 +3717,7 @@ export class DriveSession {
       window.clearInterval(assetWatchdog);
       renderer.setAnimationLoop(null);
       void renderer.xr.getSession()?.end();
+      wakeLock.dispose();
       haptics.stop();
       dualSense.stop();
       opponentAudio.dispose();

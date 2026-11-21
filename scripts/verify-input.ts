@@ -3,6 +3,7 @@
  *   npx tsx scripts/verify-input.ts
  */
 import assert from 'node:assert/strict';
+import { ScreenWakeLock, shouldHoldWakeLock, type WakeLockSentinelLike } from '../src/lib/screen-wake-lock';
 import {
   buildKeyLookup,
   clearKey,
@@ -1644,6 +1645,79 @@ async function asyncChecks() {
     await ffb.dispose();
     passed++;
     console.log('  ok  WebHID connect(): a failing picker keeps a wheel that is already running');
+  }
+
+  // ScreenWakeLock: acquires while driving & visible, releases in menus/pause/hidden, re-acquires on visibility, and cancels in-flight on dispose
+  {
+    assert.equal(shouldHoldWakeLock({ driving: true, visible: true }), true);
+    assert.equal(shouldHoldWakeLock({ driving: false, visible: true }), false);
+    assert.equal(shouldHoldWakeLock({ driving: true, visible: false }), false);
+    let requests = 0;
+    let releases = 0;
+    let visState = 'visible';
+    const docState: { visCb: (() => void) | null } = { visCb: null };
+    const makeSentinel = (): WakeLockSentinelLike => {
+      let released = false;
+      let onRel: (() => void) | null = null;
+      return {
+        get released() {
+          return released;
+        },
+        async release() {
+          if (!released) {
+            released = true;
+            releases++;
+            onRel?.();
+          }
+        },
+        addEventListener(_t, fn) {
+          onRel = fn;
+        },
+        removeEventListener(_t, fn) {
+          if (onRel === fn) onRel = null;
+        },
+      };
+    };
+    const api = {
+      async request() {
+        requests++;
+        return makeSentinel();
+      },
+    };
+    const doc = {
+      get visibilityState() {
+        return visState;
+      },
+      addEventListener(_t: 'visibilitychange', fn: () => void) {
+        docState.visCb = fn;
+      },
+      removeEventListener(_t: 'visibilitychange', fn: () => void) {
+        if (docState.visCb === fn) docState.visCb = null;
+      },
+    };
+    const lock = new ScreenWakeLock(api, doc);
+    lock.setDesired(true);
+    await Promise.resolve();
+    assert.equal(requests, 1);
+    assert.equal(lock.active, true);
+    // Tab hidden releases lock; returning visible re-acquires it
+    visState = 'hidden';
+    docState.visCb?.();
+    assert.equal(releases, 1);
+    assert.equal(lock.active, false);
+    visState = 'visible';
+    docState.visCb?.();
+    await Promise.resolve();
+    assert.equal(requests, 2);
+    assert.equal(lock.active, true);
+    // Pause / menu releases lock; dispose detaches visibility listener
+    lock.setDesired(false);
+    assert.equal(releases, 2);
+    assert.equal(lock.active, false);
+    lock.dispose();
+    assert.equal(docState.visCb, null);
+    passed++;
+    console.log('  ok  ScreenWakeLock: holds screen awake while driving, releases in menus/hidden and re-acquires on resume');
   }
   console.log(`\n${passed} checks passed`);
 }

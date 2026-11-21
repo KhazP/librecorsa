@@ -32,13 +32,10 @@ public class LauncherActivity
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Window window = getWindow();
-        // Tilt steering gives the touchscreen no input for whole laps: keep the screen from
-        // dimming or locking while LibreCorsa is in front.
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        // Draw into the camera cutout on the short edges, so landscape fullscreen is truly edge
-        // to edge instead of leaving a black bar beside the notch.
+        // Draw the splash trampoline into the camera cutout on short edges; gameplay itself runs
+        // inside Chrome's TWA window with viewport-fit=cover and navigator.wakeLock while driving.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            Window window = getWindow();
             WindowManager.LayoutParams attributes = window.getAttributes();
             attributes.layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
