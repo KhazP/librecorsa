@@ -569,7 +569,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   // The page's one multiplayer manager (it outlives this component across circuit switches)
   /** Host-only temporary weather/time override edited in the MP lobby (never mutates saved SP settings) */
-  const [roomConditions, setRoomConditions] = useState<RoomConditionsOverride | null>(null);
+  const [roomConditions, setRoomConditions] = useState<RoomConditionsOverride | null>(() => {
+    const mp = getMultiplayerManager();
+    if (!mp.isHost || mp.inScheduledRace || !mp.lobby) return null;
+    const { weather, timeOfDay, timeScale } = mp.lobby.settings;
+    return weather !== undefined || timeOfDay !== undefined || timeScale !== undefined
+      ? { weather, timeOfDay, timeScale }
+      : null;
+  });
   /** True when a guest's TrackEnvironment was synced to a host's weather/time, so leaving restores SP conditions */
   const guestWeatherSyncedRef = useRef(false);
   const restoreOwnConditionsNow = useCallback(() => {
@@ -686,6 +693,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   activeConditionsRef.current = activeConditions;
   const conditionsKey = JSON.stringify(activeConditions);
   useEffect(() => {
+    if (guestWeatherSyncedRef.current) return;
     const env = getTrackEnv();
     const next = activeConditionsRef.current;
     if (JSON.stringify(env.weather.conditions) !== JSON.stringify(next)) {
