@@ -111,7 +111,7 @@ function withRoughDiffuse(mat: THREE.Material): THREE.Material {
   return out;
 }
 
-const SHADOW_RECEIVE_ONLY = new Set([
+export const SHADOW_RECEIVE_ONLY = new Set([
   "Terrain",
   "Lake",
   "Track_Asphalt_Road",
@@ -135,6 +135,77 @@ export function castShadowExtra(obj: THREE.Object3D, root: THREE.Object3D): bool
     if (typeof v === "boolean") return v;
   }
   return undefined;
+}
+
+function meshMaterialNames(obj: THREE.Mesh): string[] {
+  const mats = Array.isArray(obj.material) ? obj.material : obj.material ? [obj.material] : [];
+  const names: string[] = [];
+  for (const m of mats) {
+    if (m?.name) names.push(m.name);
+  }
+  if (!names.length && typeof obj.userData?.materialName === "string" && obj.userData.materialName) {
+    names.push(obj.userData.materialName);
+  }
+  return names;
+}
+
+/**
+ * Whether a circuit mesh is excluded from casting shadows by per-track `noShadowMeshes` or `noShadowMaterials`.
+ * Checks both `obj.name` and the original glTF node name (`userData.name` before duplicate renaming).
+ */
+export function isShadowExcluded(
+  obj: THREE.Mesh,
+  root: THREE.Object3D,
+  noShadowMeshes?: ReadonlySet<string>,
+  noShadowMaterials?: ReadonlySet<string>
+): boolean {
+  if (noShadowMeshes?.size) {
+    if (noShadowMeshes.has(obj.name)) return true;
+    const origName = inheritedTag<string>(obj, "name", root);
+    if (origName && noShadowMeshes.has(origName)) return true;
+  }
+  if (noShadowMaterials?.size) {
+    const names = meshMaterialNames(obj);
+    if (names.length > 0 && names.every((n) => noShadowMaterials.has(n))) return true;
+  }
+  return false;
+}
+
+export interface MeshShadowCheckParams {
+  obj: THREE.Mesh;
+  root: THREE.Object3D;
+  topName: string;
+  isDecal: boolean;
+  receiveOnly: boolean;
+  sizeY: number;
+  castExtra: boolean | undefined;
+  noShadowMeshes?: ReadonlySet<string>;
+  noShadowMaterials?: ReadonlySet<string>;
+}
+
+/**
+ * Decides whether a visual circuit mesh casts shadows: per-track declarative exclusions (`noShadowMeshes` /
+ * `noShadowMaterials`) win first, then glTF `castShadow` extras, then `Track_Model` (`sizeY > 1.2` excluding decals
+ * and ground-fitted road meshes) or standard `Prop_*` / `Env_*` / non-surface `Track_*` rules.
+ */
+export function shouldMeshCastShadow({
+  obj,
+  root,
+  topName,
+  isDecal,
+  receiveOnly,
+  sizeY,
+  castExtra,
+  noShadowMeshes,
+  noShadowMaterials,
+}: MeshShadowCheckParams): boolean {
+  if (isShadowExcluded(obj, root, noShadowMeshes, noShadowMaterials)) return false;
+  if (castExtra !== undefined) return castExtra;
+  if (topName === "Track_Model") {
+    const onGround = obj.userData?.onGround === true || !!inheritedTag(obj, "keepShape", root);
+    return !isDecal && !onGround && sizeY > 1.2;
+  }
+  return !receiveOnly && (topName.startsWith("Prop_") || topName.startsWith("Env_") || topName.startsWith("Track_"));
 }
 
 const COLLIDER_DEBUG_COLOURS: Record<string, number> = {
@@ -191,10 +262,16 @@ function loadTrackGlb(
   /** The layout's split model (venue-models.ts): loaded in place of `url`, which stays the fallback */
   split?: VenueModelFiles,
   /** The lap's edges are the ones whose seams get filled (seam-fill.ts) */
-  lap?: SeamFillOptions["lap"]
+  lap?: SeamFillOptions["lap"],
+  /** Mesh/node names excluded from casting shadows (track data `noShadowMeshes`) */
+  noShadowMeshes: readonly string[] = [],
+  /** Material names excluded from casting shadows (track data `noShadowMaterials`) */
+  noShadowMaterials: readonly string[] = []
 ): void {
   const cutMaterialNames = new Set(cutMaterials);
   const roadMaterialNames = new Set(roadMaterials);
+  const noShadowMeshNames = new Set(noShadowMeshes);
+  const noShadowMaterialNames = new Set(noShadowMaterials);
   if (!url || typeof window === "undefined" || typeof fetch === "undefined") {
     return;
   }
@@ -299,22 +376,29 @@ function loadTrackGlb(
         const receiveOnly = SHADOW_RECEIVE_ONLY.has(topName) || isDecal;
         obj.receiveShadow = true;
         const castExtra = castShadowExtra(obj, root);
-        if (castExtra !== undefined) {
-          // Set by the build per node or mesh: a mesh split into pieces keeps its shadow whatever each piece's size
-          obj.castShadow = castExtra;
-        } else if (topName === "Track_Model") {
-          // Converted scans have no naming contract: only tall things (stands, buildings, trees, barriers) cast. What
-          // lies on the ground never does, as a mod draws it: what the fit laid flat on the ground (`onGround`,
+        let sizeY = 0;
+        if (castExtra === undefined && topName === "Track_Model") {
+          // Converted scans have no naming contract: only tall things (stands, buildings, trees) cast. What lies on
+          // the ground never does, as a mod draws it: what the fit laid flat on the ground (`onGround`,
           // fit-visual-road.ts: the asphalt, its lines and markings) and modelled kerbs. Merged across a circuit's
           // climbs, they passed for tall, and their edges, a centimetre or two over the ground beside them, drew jagged
-          // shadow-map teeth along the lines at a low sun
-          const onGround = obj.userData?.onGround === true || !!inheritedTag(obj, "keepShape", root);
+          // shadow-map teeth along the lines at a low sun. Per-circuit exclusions also drop heavy low-relief
+          // barriers, tyre walls, marshals, workers, fence posts, and terrain meshes (`noShadowMaterials`).
           obj.geometry.computeBoundingBox();
           box.copy(obj.geometry.boundingBox!).applyMatrix4(obj.matrixWorld).getSize(size);
-          obj.castShadow = !isDecal && !onGround && size.y > 1.2;
-        } else {
-          obj.castShadow = !receiveOnly && (topName.startsWith("Prop_") || topName.startsWith("Env_") || topName.startsWith("Track_"));
+          sizeY = size.y;
         }
+        obj.castShadow = shouldMeshCastShadow({
+          obj,
+          root,
+          topName,
+          isDecal,
+          receiveOnly,
+          sizeY,
+          castExtra,
+          noShadowMeshes: noShadowMeshNames,
+          noShadowMaterials: noShadowMaterialNames,
+        });
 
         if (topName === "Track_Model") {
           for (const m of Array.isArray(obj.material) ? obj.material : [obj.material]) cleanScanMaterial(m);
@@ -1183,7 +1267,9 @@ export function buildCircuitScene(
     track.sceneryCutMaterials ?? [],
     venueModelFiles(track.id),
     // The road edges a driver sees: across the track and 15 m beyond its sides (the run-off's own asphalt, the pit exit)
-    samples.map((p) => ({ x: p.position.x, z: p.position.z, reach: p.width / 2 + 15 }))
+    samples.map((p) => ({ x: p.position.x, z: p.position.z, reach: p.width / 2 + 15 })),
+    track.noShadowMeshes ?? [],
+    track.noShadowMaterials ?? []
   );
 
   // The procedural stand-in is placed once

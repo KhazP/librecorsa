@@ -94,6 +94,10 @@ export interface BuiltTrackData {
   sceneryCutMaterials?: string[];
   /** Scenery files drawn with the circuit (relative to the base path) */
   sceneryUrls?: string[];
+  /** Mesh/node names whose meshes do not cast shadows (scene-builder.ts) */
+  noShadowMeshes?: string[];
+  /** Material names whose meshes do not cast shadows (scene-builder.ts) */
+  noShadowMaterials?: string[];
   /** Start grid slots for this layout (behind the S/F line) */
   spawnGrid: GridSlotDef[];
   samples: TrackSamplePoint[];
@@ -1116,6 +1120,8 @@ export interface TrackMetaExtras {
     conformSurfaces?: boolean;
     scenery?: string[];
     barrierMeshes?: string[];
+    noShadowMeshes?: string[];
+    noShadowMaterials?: string[];
   };
   credit?: { title: string; author: string; url: string; short?: string; license: string; licenseUrl: string };
   /** A point-to-point course (a hill climb): its finish line and the ends of its road */
@@ -1367,6 +1373,77 @@ export function catmullRomWeights(t: number): [number, number, number, number] {
     0.5 * (-3 * t3 + 4 * t2 + t),
     0.5 * (t3 - t2),
   ];
+}
+
+/**
+ * Materials of converted circuits whose `Track_Model` meshes should not cast shadows.
+ * Converted circuits merge objects by material across rolling terrain, so low barriers, tyre stacks, marshals,
+ * workers, fence posts, parked cars, and ground surfaces can span tens of metres vertically and pass `size.y > 1.2`.
+ * All layouts of the shared VIR venue (`venue-models.ts`) share this exclusion list.
+ *
+ * Checked against vir.glb on 19 Nov 2026 (share of each material's area in faces steeper than 60 degrees): no
+ * building is on the list. PADDOCK MAIN (51,000 m2), CONCRETE BEIGE and CONCRETE-LIGHT are flat slabs (0-1 % steep);
+ * "05 - Default" is the parked campers (55 % steep, up to 2.7 m tall, 99k triangles); barriers, tyre walls and parked
+ * cars stand 1.1-1.5 m; the workers and marshals are 192k triangles over 166 m2. What the list costs to the look:
+ * the barriers, tyre walls, campers, parked cars and people stand without a shadow of their own.
+ */
+const VIR_NO_SHADOW_MATERIALS: readonly string[] = [
+  // Barriers, tyre walls, cones (keep PIT-WALL for pitlane grounding)
+  "ARMCO GREEN",
+  "ARMCO ORANGE",
+  "TYRE01",
+  "TYRE WALL1",
+  "CONCRETE BARRIER",
+  "BARRIER",
+  "CONE",
+  "CONCRETE BARRIER SOUTH PADDOCK",
+  "CONCRETE WALL SOUTH PADDOCK",
+  // Trackside workers, marshals, crowd
+  "WORKERS",
+  "MARSHALLS",
+  "3DCROWD",
+  "PeopleSit1",
+  // Fence posts, paddock posts, bins
+  "METALPOST02",
+  "FENCE POST1",
+  "PADDOCK POST",
+  "RUBBISH BIN",
+  // Distant off-track parked campers & spectator cars
+  "05 - Default",
+  "PARKED CARS",
+  // Flat terrain, ground, water, edging, road, white lines spanning hill elevation
+  "TERRAIN",
+  "EDGING1",
+  "WHITE-LINE",
+  "WATER",
+  "EARTH",
+  "SKIDPAN",
+  "PADDOCK MAIN",
+  "ROAD",
+  "ROAD_ALT1__asphalt-patriot_dds",
+  "ASPHALT-PLAIN",
+  "ROAD ALT1-3",
+  "ROAD ALT1-2",
+  "ASPHALT PLAIN DARK",
+  "CONCRETE BEIGE",
+  "CONCRETE-LIGHT",
+];
+
+const TRACK_NO_SHADOW_MATERIALS: Readonly<Record<string, readonly string[]>> = {
+  vir: VIR_NO_SHADOW_MATERIALS,
+  vir_grand_east: VIR_NO_SHADOW_MATERIALS,
+  vir_grand_west: VIR_NO_SHADOW_MATERIALS,
+  vir_north: VIR_NO_SHADOW_MATERIALS,
+  vir_patriot: VIR_NO_SHADOW_MATERIALS,
+  vir_patriot_reverse: VIR_NO_SHADOW_MATERIALS,
+  vir_south: VIR_NO_SHADOW_MATERIALS,
+};
+
+/** Declarative per-circuit shadow-excluded materials, merged with any `metadata.mesh.noShadowMaterials` in JSON. */
+export function trackNoShadowMaterials(trackId: string | undefined, extra?: readonly string[]): string[] {
+  const builtIn = trackId ? TRACK_NO_SHADOW_MATERIALS[trackId] : undefined;
+  if (!builtIn?.length && !extra?.length) return [];
+  return [...new Set([...(builtIn ?? []), ...(extra ?? [])])];
 }
 
 /** Built data of the active circuit (the bundled one unless `setActiveTrack` chose another) */
@@ -2121,16 +2198,22 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     };
   };
 
-  const meshUrl = getActiveTrackMetadata().mesh?.url;
+  const meshMeta = getActiveTrackMetadata().mesh;
+  const meshUrl = meshMeta?.url;
   if (!meshUrl) console.warn(`Circuit "${ACTIVE_TRACK_ID}" has no mesh url: drawing the procedural stand-in`);
+  const noShadowMeshes = meshMeta?.noShadowMeshes?.length ? [...meshMeta.noShadowMeshes] : undefined;
+  const mergedNoShadowMaterials = trackNoShadowMaterials(ACTIVE_TRACK_ID, meshMeta?.noShadowMaterials);
+  const noShadowMaterials = mergedNoShadowMaterials.length ? mergedNoShadowMaterials : undefined;
   cachedBuiltTrack = {
     id: ACTIVE_TRACK_ID,
     pointToPoint: getActiveTrackMetadata().pointToPoint,
     meshUrl,
-    roadMaterials: getActiveTrackMetadata().mesh?.roadMaterials,
-    sceneryCuts: getActiveTrackMetadata().mesh?.cutBoxes,
-    sceneryCutMaterials: getActiveTrackMetadata().mesh?.cutMaterials,
-    sceneryUrls: getActiveTrackMetadata().mesh?.scenery,
+    roadMaterials: meshMeta?.roadMaterials,
+    sceneryCuts: meshMeta?.cutBoxes,
+    sceneryCutMaterials: meshMeta?.cutMaterials,
+    sceneryUrls: meshMeta?.scenery,
+    noShadowMeshes,
+    noShadowMaterials,
     otherLayoutRoads: getActiveTrackMetadata().otherLayoutRoads,
     spawnGrid: [...RWANDA_SPAWN_GRID],
     samples,
