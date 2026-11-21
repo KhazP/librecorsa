@@ -10,7 +10,6 @@ import { Icon, type IconName } from "@/components/ui/icons";
 import { useSettingsEnv } from "@/components/settings/env";
 import { SettingsCard } from "@/components/settings/fields";
 import { useGamepads } from "../useMenuNav";
-import { Hint } from "./setup-ui";
 import { PadMap } from "./PadMap";
 import { padFamilyOf } from "../input-mode";
 
@@ -24,15 +23,15 @@ interface DeviceChoice {
 }
 
 export const DEVICES: readonly DeviceChoice[] = [
-  { id: "keyboard", title: "Keyboard", detail: "Arrows or WASD with smoothed steering. Every key can be changed", icon: "keyboard" },
-  { id: "controller", title: "Controller", detail: "Any standard controller, with a steering assist", icon: "controller" },
-  { id: "wheel", title: "Wheel", detail: "Direct drive, belt or gear wheels with pedals, calibrated one to one", icon: "wheel" },
+  { id: "keyboard", title: "Keyboard", detail: "WASD or arrows, remappable", icon: "keyboard" },
+  { id: "controller", title: "Controller", detail: "Standard gamepad with steering assist", icon: "controller" },
+  { id: "wheel", title: "Wheel", detail: "1:1 calibrated wheel and pedals", icon: "wheel" },
 ];
 
 /** On a touch screen, ahead of the rest: the on-screen controls, steered with the slider or by tilting the device */
 const TOUCH_CHOICES: readonly DeviceChoice[] = [
-  { id: "touch", title: "Touch", detail: "A steering slider and pedals on the screen", icon: "touch" },
-  { id: "tilt", title: "Tilt", detail: "Tilt the device to steer, with the pedals on the screen", icon: "tilt" },
+  { id: "touch", title: "Touch", detail: "On-screen steering and pedals", icon: "touch" },
+  { id: "tilt", title: "Tilt", detail: "Tilt to steer, on-screen pedals", icon: "tilt" },
 ];
 
 /** The device a connected pad or wheel suggests */
@@ -92,7 +91,7 @@ export function ConnectedDevicesCard() {
   return (
     <SettingsCard
       title="Connected devices"
-      description={pads.length === 0 ? "None yet. A browser only shows a controller or wheel after one of its buttons is pressed: press one now" : undefined}
+      description={pads.length === 0 ? "Press any button on a controller or wheel to wake it." : undefined}
     >
       {pads.length > 0 ? (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
@@ -184,7 +183,6 @@ export const DeviceStep: React.FC<{
       <DeviceTiles choices={choices} value={activeChoice} detected={detected} onPick={pick} first />
       {/* Driving by touch, the call to press a pad's button is noise until one is connected */}
       {touch?.picked && pads.length === 0 ? null : <ConnectedDevicesCard />}
-      {touch?.picked ? <Hint>The touch controls can be changed later in Settings, under Controls.</Hint> : null}
     </div>
   );
 };

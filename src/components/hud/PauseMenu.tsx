@@ -37,7 +37,6 @@ import { Button, Card, SettingRow, Tabs, Toggle } from "@/components/ui";
 import { HUD_TOUCH_NOTE, HudLayoutPicker } from "@/components/settings/HudLayoutPicker";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { usePhoneLayout } from "./styles/PhoneHud";
-import { Badge } from "@/components/ui/Badge";
 import { SessionBadge } from "@/components/ui/badges/SessionBadge";
 import { Icon } from "@/components/ui/icons/Icon";
 import type { NowPlaying } from "@/lib/audio/bgm-controller";
@@ -250,18 +249,13 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
     [leaderboardPanel, mpRace, conditionsPanel, displayPanel, phoneScreen, props.reportFacts]
   );
 
-  const actions = useMemo(
+  const actions: { id: string; label: string; detail?: string; icon: IconName; run: () => void }[] = useMemo(
     () => [
       ...(canRestart
         ? [
             {
               id: "grid",
               label: aiOpponents || mpRace ? "Restart race" : "Grid start",
-              detail: mpRace
-                ? "Everyone back to the grid behind the lights"
-                : aiOpponents
-                  ? "Line up on the grid behind the lights"
-                  : "Standing start from the grid",
               icon: "restart" as const,
               run: () => restartAndResume(false),
             },
@@ -272,19 +266,18 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
             {
               id: "flying",
               label: aiOpponents ? "Rolling start" : "Flying lap",
-              detail: aiOpponents ? "Restart the race on the move" : "Timed lap from the main straight",
               icon: "flyingLap" as const,
               run: () => restartAndResume(true),
             },
           ]
         : []),
       ...(nowPlaying && onSkipTrack
-        ? [{ id: "music", label: "Skip track", detail: `${nowPlaying.title}, ${nowPlaying.composer}`, icon: "skip" as const, run: onSkipTrack }]
+        ? [{ id: "music", label: "Skip track", detail: nowPlaying.title, icon: "skip" as const, run: onSkipTrack }]
         : []),
       ...(onOpenControls
-        ? [{ id: "settings", label: "Settings", detail: "Controls, assists, display, sound", icon: "settings" as const, run: onOpenControls }]
+        ? [{ id: "settings", label: "Settings", icon: "settings" as const, run: onOpenControls }]
         : []),
-      ...(onExitToTitle ? [{ id: "title", label: "Main menu", detail: "Leave the session", icon: "leave" as const, run: onExitToTitle }] : []),
+      ...(onExitToTitle ? [{ id: "title", label: "Main menu", icon: "leave" as const, run: onExitToTitle }] : []),
     ],
     [aiOpponents, mpRace, canRestart, canFly, restartAndResume, nowPlaying, onSkipTrack, onOpenControls, onExitToTitle]
   );
@@ -374,19 +367,21 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
                 {props.pauseNotice}
               </p>
             ) : null}
-            <div className="flex flex-wrap items-center gap-2">
-              <TrackQualityBadge track={trackInfo} />
-              <Badge>{place}</Badge>
-              <Badge>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <TrackQualityBadge track={trackInfo} size="sm" />
+              <span className="lc-mono text-[12px] font-semibold tracking-[0.04em] text-lc-fog">
+                {place}
+                <span aria-hidden className="mx-2 text-lc-dim">·</span>
                 {race ? "Lap" : activeLapWord()} {Math.max(1, race?.lap ?? telemetry.lapCount)}
-                {race?.totalLaps ? ` of ${race.totalLaps}` : ""}
-              </Badge>
-              {race ? (
-                <Badge variant="solid">
-                  P{race.position} of {race.fieldSize}
-                </Badge>
-              ) : null}
-              {mpRace ? <SessionBadge session="online">Online race</SessionBadge> : null}
+                {race?.totalLaps ? `/${race.totalLaps}` : ""}
+                {race ? (
+                  <>
+                    <span aria-hidden className="mx-2 text-lc-dim">·</span>
+                    <span className="text-lc-chalk">P{race.position}/{race.fieldSize}</span>
+                  </>
+                ) : null}
+              </span>
+              {mpRace ? <SessionBadge session="online" size="sm">Online</SessionBadge> : null}
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-x-5 gap-y-3">
@@ -394,10 +389,10 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
             <UpdateReady
               endsSession={
                 mpRace
-                  ? "You leave the race. Your settings and saved laps stay."
+                  ? "Leaves the current race."
                   : props.lobby
-                    ? "You leave the room. Your settings and saved laps stay."
-                    : "This session ends. Your settings and saved laps stay."
+                    ? "Leaves the current room."
+                    : "Ends the current session."
               }
             />
             <LibreCorsaLogo variant="compact" size="sm" />
@@ -406,7 +401,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
 
         <div className="mt-5 grid flex-1 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(240px,270px)_minmax(0,1fr)] short:mt-3 short:gap-4">
           <nav className="flex flex-col gap-0.5" data-nav-zone="rail" aria-label="Pause menu">
-            <HeroAction id="resume" label="Resume" detail="Back on track" onClick={() => onTogglePause()} size="rail" />
+            <HeroAction id="resume" label="Resume" onClick={() => onTogglePause()} size="rail" />
             {actions.map((a) => (
               <RailRow key={a.id} id={a.id} label={a.label} detail={a.detail} icon={a.icon} onClick={a.run} />
             ))}
@@ -481,7 +476,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
 export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
   const mpRace = p.telemetry.race?.multiplayer === true || p.raceRunning === true;
   const autopilot = (
-    <SettingRow label="Autopilot" hint={`The AI drives your car. Key ${p.keyNames?.autopilot ?? "P"}`}>
+    <SettingRow label="Autopilot" hint={`Key ${p.keyNames?.autopilot ?? "P"}`}>
       <Toggle checked={p.telemetry.aiAutopilot} onChange={() => p.onToggleAiAutopilot()} />
     </SettingRow>
   );
@@ -521,7 +516,7 @@ const HudPanel: React.FC<{ display: DisplayPanelProps; onOpenSettings?: (categor
 }) => (
   <Card
     title="HUD layout"
-    description={isTouchDevice() ? HUD_TOUCH_NOTE : "The new layout shows when you resume."}
+    description={isTouchDevice() ? HUD_TOUCH_NOTE : undefined}
     action={
       onOpenSettings ? (
         <Button variant="ghost" size="sm" icon={<Icon name="settings" />} onClick={() => onOpenSettings("display", "hud")}>
@@ -604,7 +599,7 @@ const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect
   const hotPoint = hot == null ? undefined : map.turns.find((t) => t.number === hot);
 
   return (
-    <Card title="Jump to a corner" description={`Apex speed in ${speedUnit} and gear for each turn`}>
+    <Card title="Corners">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(340px,100%),1fr))] gap-3.5">
         <div className="flex min-w-0 flex-col gap-2.5">
           <svg
@@ -651,7 +646,7 @@ const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect
                 </span>
               </>
             ) : (
-              <span className="lc-hint">Pick a corner to jump there.</span>
+              <span className="lc-hint">Select a corner</span>
             )}
           </div>
         </div>

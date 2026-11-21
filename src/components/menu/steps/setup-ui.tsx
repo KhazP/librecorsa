@@ -13,7 +13,7 @@ export const StatusPill: React.FC<{ children: React.ReactNode; tone?: "live" | "
 }) => (
   <p
     role="status"
-    className={`m-0 flex items-center gap-2.5 rounded-full bg-lc-void px-3.5 py-2.5 lc-mono text-[12px] font-bold ${
+    className={`m-0 flex items-center gap-2.5 rounded-lc-row bg-lc-void px-3 py-2 lc-mono text-[12px] font-bold ${
       tone === "idle" ? "text-lc-slate" : "text-lc-fog"
     }`}
   >

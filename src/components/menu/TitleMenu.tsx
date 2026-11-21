@@ -209,7 +209,7 @@ const SupportNote: React.FC<{ items: PromptItem[]; onClose?: () => void; onThank
         </p>
         {onClose ? <IconButton size="sm" variant="ghost" icon={<Icon name="close" />} aria-label="Close" onClick={onClose} className="-mt-1 -mr-1 shrink-0" /> : null}
       </div>
-      <p className="lc-hint m-0">They make these for free. If you enjoyed the drive, you can thank them directly.</p>
+      <p className="lc-hint m-0">Support the makers directly.</p>
       <div className="flex flex-wrap gap-2">
         {items.map((i) => (
           <SupportButton key={i.key} support={i.support} maker={i.maker} named variant="secondary" onOpen={() => onThanked?.(i.maker)} />
@@ -504,7 +504,7 @@ const PanelFrame: React.FC<{
 interface MenuItem {
   id: string;
   label: string;
-  detail: string;
+  detail?: string;
   icon: IconName;
   run?: () => void;
   /** A link out instead of an action: opens in a new tab */
@@ -516,23 +516,18 @@ interface MenuItem {
   short?: string;
 }
 
-/** The input in use, as one quiet line: what drives the menus, and how to switch */
+/** The active input device in the header */
 const InputHint: React.FC<{ pad: PadState | undefined }> = ({ pad }) => {
-  // A phone or tablet drives with the on-screen controls until a pad is plugged in
   const touch = !pad && isTouchDevice();
   const wheel = pad ? isLikelyWheel(pad) : false;
   const kind = pad ? (wheel ? "Wheel" : "Controller") : touch ? "Touch" : "Keyboard";
   const icon: IconName = pad ? (wheel ? "wheel" : "controller") : touch ? "touch" : "keyboard";
-  const rest = pad ? padDisplayName(pad.id).slice(0, 40) : "press any button on a controller or wheel to use it";
   return (
     <p className="m-0 flex min-w-0 items-center gap-2 text-[13px] text-lc-slate">
       <Icon name={icon} className="text-lc-fog" />
       <span className="min-w-0 truncate">
         <span className="font-semibold text-lc-fog">{kind}</span>
-        <span className="max-sm:hidden short:hidden">
-          {pad ? ": " : ", or "}
-          {rest}
-        </span>
+        {pad ? <span className="max-sm:hidden short:hidden">: {padDisplayName(pad.id).slice(0, 32)}</span> : null}
       </span>
     </p>
   );
@@ -617,7 +612,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     {
       id: "drive",
       label: "Drive",
-      detail: firstRun ? "Quick setup, then out on track" : hillClimb ? "Timed runs, start to finish" : "Practice from the grid",
+      detail: firstRun ? "Quick setup" : hillClimb ? "Timed run" : undefined,
       icon: "drive" as const,
       run: onDrive,
       primary: true,
@@ -625,7 +620,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     ...(hillClimb ? [] : [{
       id: "race",
       label: "Race AI",
-      detail: `${raceSetup.opponents} AI ${raceSetup.opponents === 1 ? "car" : "cars"} · ${raceSetup.laps} ${raceSetup.laps === 1 ? "lap" : "laps"} · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)}${raceStartSuffix(raceSetup.startMode, " · ")}`,
+      detail: `${raceSetup.opponents} AI · ${raceSetup.laps} ${raceSetup.laps === 1 ? "lap" : "laps"} · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)}${raceStartSuffix(raceSetup.startMode, " · ")}`,
       icon: "race" as const,
       // The race is set up first; its panel has the start (without a setter there is nothing to set: straight to the lights)
       ...(props.onChangeRaceSetup ? { panel: "race" as const, run: () => openPanel("race") } : { run: onRaceAi }),
@@ -633,11 +628,10 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     {
       id: "multiplayer",
       label: "Multiplayer",
-      detail: props.races ? "Open races · rooms with friends" : "Race friends peer-to-peer",
       icon: "multiplayer" as const,
       panel: "multiplayer",
       run: () => openPanel("multiplayer"),
-      badge: props.races?.entry.state === "joined" ? "In the next race" : lobbyPlayers > 1 ? `${lobbyPlayers} in lobby` : undefined,
+      badge: props.races?.entry.state === "joined" ? "Entered" : lobbyPlayers > 1 ? `${lobbyPlayers} in lobby` : undefined,
     },
     ...(props.challengePanel
       ? [
@@ -645,7 +639,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             id: "challenge",
             label: "Weekly challenge",
             short: "Challenge",
-            detail: `${timeLeftLabel(props.challengePanel.challenge.endsMs, Date.now())} left · ${props.challengePanel.trackName} · ${props.challengePanel.carTitle}`,
+            detail: `${timeLeftLabel(props.challengePanel.challenge.endsMs, Date.now())} left · ${props.challengePanel.trackName}`,
             icon: "challenge" as const,
             panel: "challenge" as const,
             run: () => openPanel("challenge"),
@@ -663,7 +657,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     {
       id: "car",
       label: "Car",
-      detail: carLocked ? `${vehicle.title} · fixed for this race` : vehicle.title,
+      detail: carLocked ? `${vehicle.title} · locked` : vehicle.title,
       icon: "car" as const,
       panel: "car",
       run: () => openPanel("car"),
@@ -680,35 +674,33 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           },
         ]
       : []),
-    { id: "garage", label: "Garage", detail: "Setup, presets and livery", icon: "garage" as const, panel: "garage", run: () => openPanel("garage") },
+    { id: "garage", label: "Garage", icon: "garage" as const, panel: "garage", run: () => openPanel("garage") },
     ...(props.leaderboardPanel
-      ? [{ id: "leaderboard", label: "Lap times", detail: "Leaderboard and ghosts", icon: "lapTimes" as const, panel: "leaderboard" as const, run: () => openPanel("leaderboard") }]
+      ? [{ id: "leaderboard", label: "Lap times", icon: "lapTimes" as const, panel: "leaderboard" as const, run: () => openPanel("leaderboard") }]
       : []),
     {
       id: "settings",
       label: "Settings",
-      detail: "Controls, assists, display, sound",
       icon: "settings" as const,
       // A screen over this one: closing it lands back on this entry, with the panel that was open still open
       run: () => (props.onOpenSettings ? props.onOpenSettings() : onControls()),
     },
-    { id: "credits", label: "Credits", detail: "Open-source sim · asset sources", icon: "credits" as const, panel: "credits", run: () => openPanel("credits") },
+    { id: "credits", label: "Credits", icon: "credits" as const, panel: "credits", run: () => openPanel("credits") },
     {
       id: "request",
-      label: "Feedback & requests",
+      label: "Feedback",
       short: "Feedback",
-      detail: "Bugs, ideas, cars and tracks",
       icon: "feedback" as const,
       panel: "request",
       run: () => openPanel("request"),
     },
-    { id: "press", label: "Press & media", detail: "Coverage and press kit", icon: "press" as const, href: withBasePath("/press") },
-    { id: "privacy", label: "Privacy", detail: "What the game keeps and sends", icon: "privacy" as const, href: withBasePath("/privacy") },
+    { id: "press", label: "Press", icon: "press" as const, href: withBasePath("/press") },
+    { id: "privacy", label: "Privacy", icon: "privacy" as const, href: withBasePath("/privacy") },
     // Not in the Android app (store-mode.ts)
     ...(storeBuild
       ? []
-      : [{ id: "support", label: "Buy me a coffee", detail: "Support development", icon: "support" as const, href: SUPPORT_URL }]),
-    { id: "github", label: "GitHub", detail: "Source code", icon: "source" as const, href: REPO_URL },
+      : [{ id: "support", label: "Support", icon: "support" as const, href: SUPPORT_URL }]),
+    { id: "github", label: "GitHub", icon: "source" as const, href: REPO_URL },
   ];
   const panelItems = items.filter((i) => i.panel);
   // Some panels exist only while their props do: when an open one's go away, back to the title screen (and it stays
@@ -831,9 +823,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             <UpdateReady
               endsSession={
                 props.lobby
-                  ? "You leave the room. Your settings and saved laps stay."
+                  ? "Leaves the current room. Saved laps and settings stay."
                   : props.races?.entry.state === "joined" || props.races?.entry.state === "joining"
-                    ? "You leave the race you entered. Your settings and saved laps stay."
+                    ? "Leaves the scheduled race. Saved laps and settings stay."
                     : undefined
               }
             />

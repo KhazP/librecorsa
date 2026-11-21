@@ -11,12 +11,12 @@ import { isFramed } from "./EmbeddedBadge";
 const HIDDEN_KEY = "librecorsa.install-hint";
 
 const APPLE_STEPS = {
-  title: "Add LibreCorsa to your Home Screen",
-  body: "Opened from there, it runs full screen without the browser's bars. Tap Share, then Add to Home Screen. If you can't see Share, it's in the menu behind the three dots. The Home Screen app keeps its own settings and laps, apart from the browser's.",
+  title: "Add to Home Screen",
+  body: "Tap Share, then Add to Home Screen for full-screen play. Home Screen saves are stored separately from Safari.",
 };
 const OTHER_STEPS = {
-  title: "Install LibreCorsa",
-  body: "Installed, it opens full screen without the browser's bars. Open the browser's menu and choose Install app or Add to Home screen.",
+  title: "Install app",
+  body: "Open the browser menu and select Install app or Add to Home Screen for full-screen play.",
 };
 
 /**

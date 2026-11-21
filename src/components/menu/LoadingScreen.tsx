@@ -12,97 +12,62 @@ import { padPressTracker } from "./useMenuNav";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { Meter } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
-import { PadGlyph } from "@/components/ui/prompts";
-import { useInputMode } from "./input-mode";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn } from "@/lib/settings/units";
 import { carById, type CarId } from "@/lib/cars/car-registry";
-import { carMaker, circuitMaker, GAME_MAKER } from "@/lib/modders";
-import { useStoreBuild } from "@/lib/use-store-build";
+import { carMaker, circuitMaker } from "@/lib/modders";
 
 /** The tips, naming the player's own camera and racing-line keys as printed on their keyboard */
 const tipsFor = (camera: string, line: string) => [
-  "Esc pauses: the Garage, corner practice, AI races and multiplayer are all there.",
-  "Brake in a straight line, then trail off the pedal as you turn into the apex.",
-  `Press ${camera} to cycle cameras: cockpit, T-cam, chase and trackside TV.`,
-  `The racing line turns red where you need to brake. Press ${line} to hide it once you know the circuit.`,
-  "On a controller, the steering assist keeps the front tyres at their grip limit.",
-  "Use the boost on the straights; the battery recharges under braking.",
-  "Switch between open-wheelers, GT3s and road cars from the Car menu.",
+  "Esc opens Garage, corner jump, AI races and multiplayer.",
+  "Brake straight, then trail off into the apex.",
+  `Press ${camera} to switch camera views.`,
+  `Press ${line} to toggle the braking line.`,
+  "Deploy boost on straights; battery recharges under braking.",
 ];
 
 /** A tip for a circuit high enough for the thin air to matter (to the nearest 50 m) */
 const altitudeTip = (m: number) =>
-  `This circuit sits ${(Math.round(m / 50) * 50).toLocaleString("en-US")} m above sea level: thinner air means less downforce and less drag than you expect.`;
+  `Altitude ${(Math.round(m / 50) * 50).toLocaleString("en-US")} m: thinner air reduces downforce and drag.`;
 
 const LIGHTS = 5;
 
 /** One line of status: what is arriving now, with its size where it is known */
 function statusLine(tasks: readonly AssetTask[]): string {
   const now = tasks.find((t) => t.status === "loading") ?? tasks.find((t) => t.status === "pending");
-  if (!now) return "Everything is in";
-  if (now.id === "shaders") return now.status === "loading" ? "Preparing the shaders" : "Waiting to prepare the shaders";
+  if (!now) return "Ready";
+  if (now.id === "shaders") return now.status === "loading" ? "Compiling shaders" : "Queued: shaders";
   if (now.status === "pending") return `${now.label}: queued`;
   return now.totalBytes > 0
-    ? `${now.label}: ${formatMegabytes(now.loadedBytes)} of ${formatMegabytes(now.totalBytes)} MB`
-    : `${now.label}: loading`;
+    ? `${now.label}: ${formatMegabytes(now.loadedBytes)} / ${formatMegabytes(now.totalBytes)} MB`
+    : `${now.label}`;
 }
 
 /** Shown once loaded; touch screens are told to tap */
-const ContinuePrompt: React.FC = () => {
-  const { family } = useInputMode();
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="lc-disp lc-breathe text-[24px] text-lc-volt sm:text-[30px] phone:text-[22px]">
-        <span className="pointer-coarse:hidden">Press any key to enter the track</span>
-        <span className="hidden pointer-coarse:inline">Tap to enter the track</span>
-      </span>
-      <span className="lc-hint inline-flex flex-wrap items-center gap-1.5">
-        <span className="pointer-coarse:hidden">A key, a click,</span>
-        <span className="hidden pointer-coarse:inline">A tap, a key,</span>
-        <PadGlyph button="a" family={family} />
-        or any wheel button
-      </span>
-    </div>
-  );
-};
+const ContinuePrompt: React.FC = () => (
+  <span className="lc-disp text-[24px] text-lc-volt sm:text-[28px] phone:text-[22px]">
+    <span className="pointer-coarse:hidden">Press any key to continue</span>
+    <span className="hidden pointer-coarse:inline">Tap to continue</span>
+  </span>
+);
 
-/**
- * Who made what is about to load: the circuit's modder, the car's (in its credit's words: the Liana's is its
- * physics), and the game. A maker who takes donations says so, and where: the loading screen itself takes no clicks
- * but the one that enters the track, so the link is the circuit's and car's Source button.
- */
+/** Compact maker credits for the active circuit and car */
 const MakersLines: React.FC<{ trackId: string; trackName: string; carId: CarId }> = ({ trackId, trackName, carId }) => {
-  const store = useStoreBuild();
   const circuit = circuitMaker(trackId);
   const car = carMaker(carId);
-  const lines = [
-    circuit ? { key: "circuit", lead: `${trackName} by`, maker: circuit } : null,
-    { key: "car", lead: `${carById(carId).title}: ${car.role.toLowerCase()} by`, maker: car },
-    { key: "game", lead: "LibreCorsa by", maker: GAME_MAKER },
-  ].filter((l): l is NonNullable<typeof l> => l !== null);
-  const anySupport = !store && lines.some((l) => l.maker.support);
+  const parts = [
+    circuit ? `${trackName} by ${circuit.name}` : null,
+    `${carById(carId).title} by ${car.name}`,
+  ].filter(Boolean);
+  if (!parts.length) return null;
   return (
-    <div className="flex flex-col gap-2 border-t border-lc-line pt-3.5 short:pt-2.5">
-      <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[14px] leading-snug text-lc-slate short:text-[12px]">
-        {lines.map((l) => (
-          <li key={l.key}>
-            {l.lead} <span className="font-semibold text-lc-chalk">{l.maker.name}</span>
-            {!store && l.maker.support ? <span className="text-lc-fog"> · donations welcome</span> : null}
-          </li>
-        ))}
-      </ul>
-      {anySupport ? (
-        <p className="m-0 flex items-start gap-1.5 text-[13px] leading-snug text-lc-fog short:hidden">
-          <Icon name="support" className="mt-px shrink-0 text-lc-volt" />
-          You can donate to them any time from the Source button next to the circuit or car.
-        </p>
-      ) : null}
-    </div>
+    <p className="lc-hint m-0 border-t border-lc-line pt-3 short:pt-2">
+      {parts.join(" · ")}
+    </p>
   );
 };
 
-/** One start-light column (two lamps) inside the pill */
+/** One start-light column (two lamps) inside the gantry */
 const LightColumn: React.FC<{ lit: boolean; ready: boolean }> = ({ lit, ready }) => {
   // Real start lights: red lamps, out for the go (green here, once everything is in)
   const lamp = `size-4.5 rounded-full sm:size-5.5 phone:size-4.5 ${
@@ -113,7 +78,7 @@ const LightColumn: React.FC<{ lit: boolean; ready: boolean }> = ({ lit, ready })
         : "bg-lc-titanium inset-shadow-sm inset-shadow-lc-void"
   }`;
   return (
-    <span className="flex flex-col gap-1.5 rounded-full bg-lc-void p-1.5">
+    <span className="flex flex-col gap-1.5 rounded-lc-row bg-lc-void p-1.5">
       <span className={lamp} />
       <span className={lamp} />
     </span>
@@ -300,7 +265,7 @@ export const LoadingScreen: React.FC<{
               <div
                 role="img"
                 aria-label={ready ? "Start lights out: ready" : `Start lights: ${litLights} of ${LIGHTS}`}
-                className="flex gap-2 rounded-full border border-lc-line bg-lc-carbon px-3 py-2.5 short:mb-2 phone:gap-1.5 phone:px-2 phone:py-2"
+                className="flex gap-2 rounded-lc-tile border border-lc-line bg-lc-carbon px-3 py-2.5 short:mb-2 phone:gap-1.5 phone:px-2 phone:py-2"
               >
                 {Array.from({ length: LIGHTS }, (_, i) => (
                   <LightColumn key={i} lit={i < litLights} ready={ready} />
@@ -314,7 +279,7 @@ export const LoadingScreen: React.FC<{
               {progress.anyFailed ? (
                 <p className="m-0 flex items-start gap-2 text-[13px] leading-snug text-lc-caution">
                   <Icon name="warning" className="mt-px" />
-                  Some assets did not load; I am using the built-in geometry instead.
+                  Some assets failed to load. Using fallback geometry.
                 </p>
               ) : null}
             </div>

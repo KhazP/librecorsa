@@ -616,7 +616,7 @@ export function WheelSetup({ first }: { first?: boolean }) {
           pads.length === 0
             ? NO_WHEEL
             : !w.throttle || !w.brake
-              ? "Pedals not set up yet: Calibrate all sets steering, throttle and brake in one go"
+              ? "Pedals not calibrated."
               : undefined
         }
         rows={[wheelType]}
@@ -626,7 +626,7 @@ export function WheelSetup({ first }: { first?: boolean }) {
           reset: () => setWheel({ rotationDeg: DEFAULT_PLAYER_SETTINGS.wheel.rotationDeg }),
         }}
       >
-        <SettingRow label="All axes" hint="Steering, throttle and brake, one after the other" disabled={noWheel !== null} disabledReason={noWheel ?? undefined}>
+        <SettingRow label="All axes" hint="Steering, throttle and brake" disabled={noWheel !== null} disabledReason={noWheel ?? undefined}>
           <Button
             size="sm"
             variant="secondary"
@@ -646,7 +646,7 @@ export function WheelSetup({ first }: { first?: boolean }) {
         )}
         <SettingRow
           label="Rotation"
-          hint={`Match the wheel driver's lock to lock. Steering is one to one up to the car's lock (${CAR_WHEEL_LOCKS_DEG.lc26}° formula cars, ${CAR_WHEEL_LOCKS_DEG["amg-gt3"]}° GT3, ${CAR_WHEEL_LOCKS_DEG["lc-lmdh"]} to ${CAR_WHEEL_LOCKS_DEG["mtr-496r"]}° prototypes, ${CAR_WHEEL_LOCKS_DEG["nissan-r33-jgtc"]} to ${CAR_WHEEL_LOCKS_DEG["nissan-r32-jtcc"]}° classic racers, ${CAR_WHEEL_LOCKS_DEG.liana}° road cars)`}
+          hint={`Match wheel driver lock (1:1 up to car lock: ${CAR_WHEEL_LOCKS_DEG.lc26}° F1, ${CAR_WHEEL_LOCKS_DEG["amg-gt3"]}° GT3, ${CAR_WHEEL_LOCKS_DEG.liana}° road)`}
           changed={w.rotationDeg !== DEFAULT_PLAYER_SETTINGS.wheel.rotationDeg}
           onReset={() => {
             setCustomRotation(false);
@@ -680,7 +680,7 @@ export function WheelSetup({ first }: { first?: boolean }) {
           clutch !== null ? <TrackMeter compact label="Clutch" value={clutch} color="var(--color-lc-azure)" /> : null,
           false,
           {
-            unboundHint: "Optional, for a pedal set with a clutch. The car works its own clutch until you press it",
+            unboundHint: "Optional clutch pedal",
             extra: w.clutch ? (
               <Button size="sm" variant="ghost" disabled={calibrating !== null || capturing !== null} onClick={() => setWheel({ clutch: null })}>
                 Remove
@@ -846,7 +846,6 @@ export function ForceFeedbackSetup({ first }: { first?: boolean }) {
     <>
       <SettingsCard
         title="Forces"
-        description={w.ffbEnabled ? undefined : "Needs force feedback on: switch it on for the strength, the test and the effects"}
         rows={[ffbOn, inForces(ffbStrength)]}
         first={first}
       >
@@ -856,7 +855,7 @@ export function ForceFeedbackSetup({ first }: { first?: boolean }) {
         ) : null}
         <PerCarStrength />
         <SettingField def={invert} />
-        <SettingRow label="Test direction" hint="A pull right for a second, then left" disabled={testOff !== null} disabledReason={testOff || undefined}>
+        <SettingRow label="Test direction" hint="Pulls right, then left" disabled={testOff !== null} disabledReason={testOff || undefined}>
           <Button size="sm" variant="secondary" disabled={testOff !== null} onClick={() => wheelFfb.test(w.ffbInvert)}>
             Test
           </Button>
@@ -871,7 +870,7 @@ export function ForceFeedbackSetup({ first }: { first?: boolean }) {
       </SettingsCard>
       <SettingsCard
         title="Effects"
-        description="The wheel's overall strength stays in its own software; turn its centring spring off there"
+        description="Turn off centring spring in your wheel driver."
         rows={ffbEffects.map(withFfb)}
       />
       <SettingsCard title="Fine tuning" rows={[...ffbFineTuning, ...extras, collisionGuard].map(withFfb)} />

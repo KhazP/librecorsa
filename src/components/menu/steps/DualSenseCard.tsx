@@ -165,7 +165,7 @@ export function DualSenseCard() {
     return (
       <SettingsCard
         title="DualSense"
-        description="Adaptive triggers, HD haptics and the lightbar need Chrome or Edge. Rumble still works here."
+        description="Triggers, HD haptics and lightbar require Chrome or Edge. Standard rumble stays active."
       />
     );
   }
@@ -174,9 +174,9 @@ export function DualSenseCard() {
     return (
       <SettingsCard
         title="DualSense"
-        description="Pair it for adaptive triggers, rumble sent straight to the pad, HD haptics over USB, rev lights and gyro steering. The browser keeps it paired until you unplug it or quit the browser."
+        description="Adaptive triggers, USB HD haptics, rev lights and gyro steering via WebHID."
       >
-        <SettingRow label="Pair the controller" hint={status.message ?? "The browser lists it; pick it and press Connect"}>
+        <SettingRow label="Pair controller" hint={status.message ?? undefined}>
           <Button size="sm" variant="primary" onClick={() => void dualSenseHid.connect()}>
             Connect DualSense
           </Button>
@@ -192,10 +192,8 @@ export function DualSenseCard() {
   const hdHaptics = toggle({
     id: "dualSenseHaptics",
     label: "HD haptics",
-    hint: usb
-      ? "Kerbs, slides and the engine, felt on the side they happen. The browser asks once to list audio devices; nothing is recorded"
-      : undefined,
-    off: () => (usb ? null : "Needs the USB cable: over Bluetooth the pad uses rumble"),
+    hint: usb ? "USB audio haptics for kerbs, slip and engine" : undefined,
+    off: () => (usb ? null : "Requires USB cable"),
     read: (env) => env.settings.dualSense.hdHaptics && usb,
     write: (env, on) => {
       const set = (v: boolean) => env.update((s) => ({ ...s, dualSense: { ...s.dualSense, hdHaptics: v } }));

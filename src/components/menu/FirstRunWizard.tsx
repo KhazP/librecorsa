@@ -33,11 +33,11 @@ const STEPS: readonly WizardStepId[] = ["device", "setup", "assists", "hud", "ca
 
 const SETUP_TITLES = { keyboard: "Keyboard", controller: "Controller", wheel: "Wheel and pedals" } as const;
 
-const STEP_INFO: Record<Exclude<WizardStepId, "setup">, { title: string; detail: string }> = {
-  device: { title: "How do you drive?", detail: "Pick your input. It can be changed any time in Settings." },
-  assists: { title: "Driving assists", detail: "Pick a starting point. Every assist is in Settings, under Driving." },
-  hud: { title: "Your HUD", detail: "Pick how timing, speed and gear show on screen. Broadcast is a good start." },
-  car: { title: "Your car", detail: "Choose a car and livery, then head for the grid." },
+const STEP_INFO: Record<Exclude<WizardStepId, "setup">, { title: string }> = {
+  device: { title: "Input device" },
+  assists: { title: "Driving assists" },
+  hud: { title: "HUD layout" },
+  car: { title: "Select car" },
 };
 
 export interface FirstRunWizardProps extends SetupStepProps {
@@ -131,18 +131,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   });
 
   const device = props.settings.device;
-  const info =
-    step === "setup"
-      ? {
-          title: SETUP_TITLES[device],
-          detail:
-            device === "wheel"
-              ? "Calibrate steering and pedals, and map your paddles."
-              : device === "controller"
-                ? "Check your inputs and pick how the steering feels."
-                : "Every key can be changed: press a key's slot, then the new key.",
-        }
-      : STEP_INFO[step];
+  const title = step === "setup" ? SETUP_TITLES[device] : STEP_INFO[step].title;
 
   const stepTitle = (s: WizardStepId) => (s === "setup" ? SETUP_TITLES[device] : STEP_INFO[s].title);
   // The main column's width follows the step: the wheel's two columns get the most room, the car the least
@@ -164,32 +153,34 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
         <SettingsDetailProvider value="simple">
           <div className="flex h-full w-full flex-col pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] short:pt-[max(0.75rem,env(safe-area-inset-top))] short:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <div className="flex min-h-0 flex-1 gap-10">
-              {/* Step rail (roomy screens): where the player is in the setup */}
-              <aside className="hidden w-56 shrink-0 flex-col gap-9 not-compact:flex">
+              {/* Step rail (roomy screens): motorsport step index */}
+              <aside className="hidden w-52 shrink-0 flex-col gap-8 not-compact:flex">
                 <LibreCorsaLogo variant="compact" size="sm" />
-                <nav aria-label="Setup steps" className="flex flex-col">
+                <nav aria-label="Setup steps" className="flex flex-col gap-1">
                   {steps.map((s, i) => {
                     const done = i < stepIndex;
                     const current = i === stepIndex;
                     return (
-                      <React.Fragment key={s}>
-                        {i > 0 ? (
-                          <span aria-hidden className={cx("ml-3.5 h-6 w-0.5 rounded-full", i <= stepIndex ? "bg-lc-fog" : "bg-lc-line")} />
-                        ) : null}
-                        <div aria-current={current ? "step" : undefined} className="flex min-h-11 items-center gap-3.5">
-                          <span
-                            className={cx(
-                              "lc-mono inline-flex size-7.5 shrink-0 items-center justify-center rounded-full text-[12px] font-bold",
-                              current ? "bg-lc-chalk text-lc-void" : done ? "bg-lc-line text-lc-chalk" : "text-lc-slate inset-ring-2 inset-ring-lc-line",
-                            )}
-                          >
-                            {done ? <Icon name="check" label="Done" /> : i + 1}
-                          </span>
-                          <span className={cx("text-[16px] leading-tight", current ? "font-semibold text-lc-chalk" : done ? "text-lc-fog" : "text-lc-slate")}>
-                            {stepTitle(s)}
-                          </span>
-                        </div>
-                      </React.Fragment>
+                      <div
+                        key={s}
+                        aria-current={current ? "step" : undefined}
+                        className={cx(
+                          "flex min-h-10 items-center gap-3 rounded-lc-row border-l-2 px-3",
+                          current ? "border-lc-volt bg-lc-volt/8" : done ? "border-lc-fog/50" : "border-lc-line",
+                        )}
+                      >
+                        <span
+                          className={cx(
+                            "lc-mono w-5 shrink-0 text-[12px] font-bold",
+                            current ? "text-lc-volt" : done ? "text-lc-fog" : "text-lc-dim",
+                          )}
+                        >
+                          {done ? <Icon name="check" size="xs" label="Done" /> : `0${i + 1}`}
+                        </span>
+                        <span className={cx("lc-title text-[14px] leading-tight", current ? "text-lc-chalk" : done ? "text-lc-fog" : "text-lc-slate")}>
+                          {stepTitle(s)}
+                        </span>
+                      </div>
                     );
                   })}
                 </nav>
@@ -199,19 +190,18 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                 <span className="not-compact:hidden">
                   <LibreCorsaLogo variant="compact" size="sm" className="hidden sm:inline-flex" />
                 </span>
-                <h1 className="lc-h1 mt-3 short:mt-1">{info.title}</h1>
-                <p className="lc-body mt-2 text-[15px] short:hidden">{info.detail}</p>
+                <h1 className="lc-h1 mt-3 short:mt-1">{title}</h1>
 
                 {/* Progress (phones and short windows, where the step rail is hidden) */}
-                <div className="mt-4 flex items-center gap-1.5 not-compact:hidden short:mt-2" aria-hidden>
+                <div className="mt-3 flex items-center gap-1.5 not-compact:hidden short:mt-2" aria-hidden>
                   {steps.map((s, i) => (
                     <span
                       key={s}
-                      className={cx("h-1.5 flex-1 rounded-full", i < stepIndex ? "bg-lc-fog" : i === stepIndex ? "bg-lc-chalk" : "bg-lc-line")}
+                      className={cx("h-1 flex-1 rounded-lc-nub", i < stepIndex ? "bg-lc-fog" : i === stepIndex ? "bg-lc-volt" : "bg-lc-line")}
                     />
                   ))}
                   <span className="lc-mono ml-1.5 shrink-0 text-[11px] text-lc-slate">
-                    {stepIndex + 1} of {steps.length}
+                    {stepIndex + 1}/{steps.length}
                   </span>
                 </div>
 
@@ -236,7 +226,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                 </Button>
                 {onSkip && !last ? (
                   <Button variant="ghost" size="sm" onClick={onSkip}>
-                    Skip and use defaults
+                    Skip
                   </Button>
                 ) : null}
               </div>

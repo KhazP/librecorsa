@@ -98,7 +98,7 @@ function LayoutTile({
 }
 
 /** Which layouts a touch screen shows, for the pickers on one */
-export const HUD_TOUCH_NOTE = "Phones use the touch layout. On a tablet with touch controls, the third-party layouts keep their look.";
+export const HUD_TOUCH_NOTE = "Phones always use Touch HUD.";
 
 export interface HudLayoutPickerProps {
   value: HudPreset;
@@ -126,9 +126,8 @@ export function HudLayoutPicker({ value, onChange, navDefault, className }: HudL
         <div role="group" aria-labelledby={headingId} className="flex flex-col gap-2.5">
           <div className="flex flex-col gap-1 px-0.5">
             <h3 id={headingId} className="lc-row-label m-0">
-              Third-party
+              Community layouts
             </h3>
-            <p className="lc-hint m-0">Recreated from other open-source HUD projects, credited to their authors.</p>
           </div>
           <div className={GRID}>
             {THIRD_PARTY.map((l) => (

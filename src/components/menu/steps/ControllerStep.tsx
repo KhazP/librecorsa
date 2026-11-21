@@ -197,7 +197,7 @@ export function ControllerButtonsCard() {
     columns: 3,
     hint: () =>
       gearHint ??
-      (matchPadLayout(settings.padButtons, sources) === null ? "My own layout: press a layout to start from it" : undefined),
+      (matchPadLayout(settings.padButtons, sources) === null ? "Custom layout" : undefined),
     options: PAD_LAYOUT_IDS.map((id) => {
       const { buttons: b, pedals: p } = PAD_LAYOUTS[id];
       const gears = `${name(b.shiftUp)} / ${name(b.shiftDown)} gears`;

@@ -79,7 +79,7 @@ export function KeyBindingsCard({ first }: { first?: boolean }) {
   return (
     <SettingsCard
       title="Key bindings"
-      description="Press a key's slot, then the new key. A key taken from another action swaps with it"
+      description="Select a slot to rebind. Duplicate keys swap automatically."
       extraReset={{ changed, reset: () => update((s) => ({ ...s, keys: DEFAULT_KEY_BINDINGS })) }}
       resetWhat="every key binding"
     >
@@ -154,7 +154,7 @@ const fixedKeys = (): { label: string; keys: string[] }[] => [
 export function FixedKeysCard() {
   useKeyLayout();
   return (
-    <SettingsCard title="Fixed keys" description="These keys cannot be changed" advanced>
+    <SettingsCard title="Fixed keys" advanced>
       {fixedKeys().map((f) => (
         <div key={f.label} className="flex min-h-11 items-center justify-between gap-3">
           <span className="lc-body">{f.label}</span>

@@ -114,7 +114,7 @@ export function GyroSteeringCard() {
   const live = useGyroLive(connected && d.gyroSteer, d.gyroLockDeg, d.gyroSensitivity);
 
   const blocked = !supported
-    ? "Needs Chrome or Edge, with the controller connected here over WebHID"
+    ? "Requires Chrome or Edge (WebHID)"
     : connected
       ? null
       : "Connect a DualSense or DualShock 4 first";
@@ -125,7 +125,7 @@ export function GyroSteeringCard() {
   return (
     <SettingsCard
       title="Gyro steering"
-      description="Works with a DualSense, connected in the DualSense card, or a DualShock 4, connected here. Chrome or Edge only (WebHID). Xbox controllers have no gyro."
+      description="DualSense or DualShock 4 motion steering (WebHID)."
       rows={rows}
       before={
         connected ? (
@@ -141,7 +141,7 @@ export function GyroSteeringCard() {
       }
     >
       {supported && !connected ? (
-        <SettingRow label="DualShock 4" hint={shock.message ?? "The browser lists it; pick it and press Connect"}>
+        <SettingRow label="DualShock 4" hint={shock.message ?? undefined}>
           <Button size="sm" variant="secondary" onClick={() => void dualShock4Hid.connect()}>
             Connect DualShock 4
           </Button>
@@ -158,7 +158,7 @@ export function GyroSteeringCard() {
               centered
             />
           </div>
-          <SettingRow label="Re-centre" hint="Or press the touchpad while driving. Hold it to move the controller without steering">
+          <SettingRow label="Re-centre" hint="Touchpad button while driving (hold to pause steering)">
             <Button size="sm" variant="secondary" onClick={() => gyroSource.recentre()}>
               Re-centre
             </Button>

@@ -38,12 +38,9 @@ export const LiveLine: React.FC<{ className?: string }> = ({ className = "" }) =
   const parts: React.ReactNode[] = [];
   if (stats.live !== null) {
     parts.push(
-      <span key="live" className="inline-flex items-center gap-2">
-        <StatusDot tone="good" live />
-        <span className="lc-chip-text text-lc-chalk">Live</span>
-      </span>,
-      <span key="now">
-        <span className="font-bold text-lc-chalk">{formatCount(stats.live)}</span> driving now
+      <span key="now" className="inline-flex items-center gap-1.5">
+        <StatusDot tone="good" />
+        <span className="font-bold text-lc-chalk">{formatCount(stats.live)}</span> online
       </span>,
     );
   }
