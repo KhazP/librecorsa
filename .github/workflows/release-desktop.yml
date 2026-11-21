@@ -1,4 +1,4 @@
-name: Release Desktop App
+name: Release Apps
 
 on:
   push:
@@ -90,9 +90,77 @@ jobs:
             desktop/dist/*.blockmap
             desktop/dist/latest*.yml
 
+  build-android:
+    name: Build (android)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build Android APK
+        id: apk
+        working-directory: android
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.LIBRECORSA_ANDROID_KEYSTORE_BASE64 }}
+          LIBRECORSA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.LIBRECORSA_ANDROID_KEYSTORE_PASSWORD }}
+          LIBRECORSA_ANDROID_KEY_ALIAS: ${{ secrets.LIBRECORSA_ANDROID_KEY_ALIAS }}
+          LIBRECORSA_ANDROID_KEY_PASSWORD: ${{ secrets.LIBRECORSA_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "${JAVA_HOME_21_X64:-}" ]; then
+            export JAVA_HOME="$JAVA_HOME_21_X64"
+            export PATH="$JAVA_HOME/bin:$PATH"
+          fi
+
+          VERSION="${GITHUB_REF_NAME#desktop-v}"
+          BASE_VERSION="${VERSION%%-*}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+          if [[ "$MAJOR" =~ ^[0-9]+$ && "$MINOR" =~ ^[0-9]+$ && "$PATCH" =~ ^[0-9]+$ ]]; then
+            export LIBRECORSA_ANDROID_VERSION_NAME="$VERSION"
+            export LIBRECORSA_ANDROID_VERSION_CODE="$((10#$MAJOR * 10000 + 10#$MINOR * 100 + 10#$PATCH))"
+          fi
+
+          KEYSTORE_FILE=""
+          SIGNED=0
+          trap 'rm -f "${KEYSTORE_FILE:-}"' EXIT
+
+          if [ -n "${KEYSTORE_B64:-}" ] && [ -n "${LIBRECORSA_ANDROID_KEYSTORE_PASSWORD:-}" ] \
+            && [ -n "${LIBRECORSA_ANDROID_KEY_ALIAS:-}" ] && [ -n "${LIBRECORSA_ANDROID_KEY_PASSWORD:-}" ]; then
+            KEYSTORE_FILE="$RUNNER_TEMP/librecorsa-upload.jks"
+            printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 --decode > "$KEYSTORE_FILE"
+            chmod 600 "$KEYSTORE_FILE"
+            export LIBRECORSA_ANDROID_KEYSTORE="$KEYSTORE_FILE"
+            SIGNED=1
+          fi
+
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+          mkdir -p dist
+          if [ "$SIGNED" = "1" ]; then
+            APK="app/build/outputs/apk/release/app-release.apk"
+            SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+            APKSIGNER="$(ls -1 "$SDK_ROOT"/build-tools/*/apksigner | sort -V | tail -n 1)"
+            "$APKSIGNER" verify --verbose "$APK"
+            cp "$APK" "dist/LibreCorsa-${VERSION}-android.apk"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Android signing secrets (LIBRECORSA_ANDROID_KEYSTORE_BASE64, LIBRECORSA_ANDROID_KEYSTORE_PASSWORD, LIBRECORSA_ANDROID_KEY_ALIAS, LIBRECORSA_ANDROID_KEY_PASSWORD) are unset; skipping unsigned APK upload because Android cannot install unsigned APKs."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Android APK
+        if: steps.apk.outputs.signed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-apk
+          if-no-files-found: error
+          path: android/dist/*.apk
+
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, build-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -118,6 +186,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" artifacts/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
-            --title "LibreCorsa Desktop ($GITHUB_REF_NAME)" \
+            --title "LibreCorsa ($GITHUB_REF_NAME)" \
             --notes-file desktop/release-notes.md \
             --generate-notes

@@ -14,25 +14,37 @@ I generated the upload keystore outside the repository at `~/Documents/GitHub/_a
 
 Chrome only hides the URL bar once `https://librecorsa.org/.well-known/assetlinks.json` is live with `Content-Type: application/json` (configured in `public/_headers`).
 
-- Before deploy, Chrome shows a custom tab URL bar for `librecorsa.org`.
-- After uploading `android/app-release-bundle.aab` to Google Play with Play App Signing enabled, I must copy Google's App Signing certificate SHA-256 from Play Console (Setup -> App signing) and add it to `sha256_cert_fingerprints` in `public/.well-known/assetlinks.json` alongside the upload key fingerprint, then redeploy the site. Otherwise Play Store installs will fall back to showing the URL bar.
+- For **direct APK installs** (from GitHub Releases or `librecorsa.org/download`), `public/.well-known/assetlinks.json` already carries the upload keystore's SHA-256, so signed APKs verify and open fullscreen with no URL bar immediately.
+- If/when uploading `android/app/build/outputs/bundle/release/app-release.aab` to **Google Play** with Play App Signing enabled, copy Google's App Signing certificate SHA-256 from Play Console (Setup -> App signing) and add it to `sha256_cert_fingerprints` in `public/.well-known/assetlinks.json` alongside the upload key fingerprint, then redeploy the site. Otherwise Play Store installs will fall back to showing the URL bar.
 
 ### Build
 
-On macOS, Bubblewrap expects `~/.bubblewrap/config.json` with a `jdkPath` pointing to the `.jdk` bundle root (without `/Contents/Home`) and an `androidSdkPath` directory containing platform-tools and build-tools.
+`android/app/build.gradle` reads release signing and optional version overrides from environment variables so no secret lives in the repository. (Avoid running `npx @bubblewrap/cli update`, which would overwrite the manual changes in `AndroidManifest.xml`, `LauncherActivity.java` and `build.gradle`.)
 
 ```bash
 cd android
-export BUBBLEWRAP_KEYSTORE_PASSWORD=...
-export BUBBLEWRAP_KEY_PASSWORD=...
-npx @bubblewrap/cli build \
-  --signingKeyPath ~/Documents/GitHub/_android-signing/librecorsa-upload.jks \
-  --signingKeyAlias upload
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
+export ANDROID_HOME="$HOME/.bubblewrap/android-sdk"
+export LIBRECORSA_ANDROID_KEYSTORE="$HOME/Documents/GitHub/_android-signing/librecorsa-upload.jks"
+export LIBRECORSA_ANDROID_KEY_ALIAS="upload"
+export LIBRECORSA_ANDROID_KEYSTORE_PASSWORD=...
+export LIBRECORSA_ANDROID_KEY_PASSWORD=...
+# Optional tag/release version overrides (defaults: 0.2.0 / versionCode 2):
+# export LIBRECORSA_ANDROID_VERSION_NAME=0.2.2
+# export LIBRECORSA_ANDROID_VERSION_CODE=202
+
+./gradlew assembleRelease --no-daemon   # signed APK -> android/app/build/outputs/apk/release/app-release.apk
+./gradlew bundleRelease --no-daemon     # signed AAB -> android/app/build/outputs/bundle/release/app-release.aab
 ```
 
-This writes `android/app-release-bundle.aab` (upload to Google Play) and `android/app-release-signed.apk` (install directly via `adb install -r` for testing). Both files are git-ignored.
+With any of the four signing variables unset, Gradle still builds an unsigned release artifact (useful for CI compilation checks, though Android refuses to install unsigned APKs). Verify a signed APK locally with:
 
-### Play Store release notes
+```bash
+"$(ls -1 "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)" \
+  verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
+```
+
+### Play Store release notes (optional / later)
 
 - Google Play registration costs $25 once.
 - New personal developer accounts must complete a closed test with opted-in testers (12 testers for 14 days) before Google enables production release access.
@@ -70,17 +82,19 @@ CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:linux  # x64 AppImage
 
 Outputs land in `desktop/dist/` (git-ignored). I still need to test `.exe` on Windows and `.AppImage` on Linux because cross-building from macOS packages those binaries without running them on the target OSes.
 
-### Tag-based CI release
+### Tag-based CI release (Windows, macOS, Linux and Android together)
 
-`.github/workflows/release-desktop.yml` builds macOS, Windows, and Linux installers only when I push a `desktop-v*` tag (pushing to `main` only deploys the site):
+`.github/workflows/release-desktop.yml` builds macOS, Windows, Linux installers **and** the signed Android APK into a single GitHub Release when I push a `desktop-v*` tag (keeping all platforms on one Latest release so desktop `electron-updater` always finds `latest*.yml`):
 
 ```bash
 # Update desktop/package.json version if desired, commit on main, then tag:
-git tag desktop-v0.2.0
-git push origin desktop-v0.2.0
+git tag desktop-v0.2.2
+git push origin desktop-v0.2.2
 ```
 
-All three jobs attach installers, `.blockmap` files, and `latest*.yml` manifests to that `desktop-v*` GitHub Release.
+- The desktop jobs attach `.exe`, `.dmg`, `.zip`, `.AppImage`, `.blockmap` and `latest*.yml` files.
+- The `build-android` job derives `versionName` and a monotonic `versionCode` (`MAJOR*10000 + MINOR*100 + PATCH`) from the tag, signs `LibreCorsa-<version>-android.apk` when the four Android signing secrets are set (`LIBRECORSA_ANDROID_KEYSTORE_BASE64`, `LIBRECORSA_ANDROID_KEYSTORE_PASSWORD`, `LIBRECORSA_ANDROID_KEY_ALIAS`, `LIBRECORSA_ANDROID_KEY_PASSWORD`), and verifies the signature with `apksigner` before attaching it. If those secrets are unset, the job still verifies compilation and skips uploading an un-installable unsigned APK.
+- After publishing a tag, update `APP_RELEASE` and `PLATFORM_DOWNLOADS` in `src/lib/downloads.ts` so `librecorsa.org/download` and the home hub's Download tab point directly at the new release's assets.
 
 ### Code signing and OS warnings
 
