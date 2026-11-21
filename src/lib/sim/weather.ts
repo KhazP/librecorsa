@@ -141,10 +141,11 @@ export function effectiveConditions(
   if (override.weather === undefined && override.timeOfDay === undefined && override.timeScale === undefined) {
     return own;
   }
+  const weatherChanged = override.weather !== undefined && override.weather !== own.weather;
   return {
     ...own,
     weather: override.weather ?? own.weather,
-    weatherNodes: override.weather !== undefined ? undefined : own.weatherNodes,
+    weatherNodes: weatherChanged ? undefined : own.weatherNodes,
     timeOfDay: override.timeOfDay ?? own.timeOfDay,
     timeScale: override.timeScale ?? own.timeScale,
   };

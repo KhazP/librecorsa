@@ -496,13 +496,26 @@ async function main() {
       `victimClosed=${victim.closed}, parts=${newQ.participants.join(',')}`,
     );
 
-    // Regression (#11c): same host reconnecting while old socket is still closing does NOT hit peer_id_taken
+    // Regression (#11c): same host reconnecting while old socket is still listed as `closing` does NOT hit peer_id_taken
+    hNew.closing = true;
     const hReconnect = new FakeSocket();
     await sRoom.connect('host', TOKEN_B, hReconnect, 'private');
     await sRoom.webSocketMessage(hReconnect, JSON.stringify({ t: 'join', peerId: 'peer_new_host' }));
     check(
-      'host reconnect demotes replaced socket before close so join succeeds without peer_id_taken',
+      'host reconnect demotes replaced closing socket before close so join succeeds without peer_id_taken',
       hNew.closed === 4001 && !hReconnect.sent.some((m) => m.t === 'error' && m.code === 'peer_id_taken'),
+    );
+
+    // Demoted closing host socket does not falsely block a new host (`taken`) or suppress `nohost` for guests
+    await sRoom.webSocketClose(hReconnect, 1001);
+    const lateGuest = new FakeSocket();
+    await sRoom.connect('guest', '', lateGuest);
+    const hThird = new FakeSocket();
+    await sRoom.connect('host', TOKEN_A, hThird, 'private');
+    check(
+      'demoted closing host socket is ignored by taken and nohost checks',
+      lateGuest.last()?.t === 'nohost' && hThird.last()?.t === 'welcome',
+      `guest=${lateGuest.last()?.t}, host=${hThird.last()?.t}`,
     );
 
     // Regression (#7): wire sanitizers enforce the shared 10 s qualifying lap floor

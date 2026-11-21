@@ -568,17 +568,38 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   );
 
   // The page's one multiplayer manager (it outlives this component across circuit switches)
+  /** Host-only temporary weather/time override edited in the MP lobby (never mutates saved SP settings) */
+  const [roomConditions, setRoomConditions] = useState<RoomConditionsOverride | null>(null);
+  /** True when a guest's TrackEnvironment was synced to a host's weather/time, so leaving restores SP conditions */
+  const guestWeatherSyncedRef = useRef(false);
+  const restoreOwnConditionsNow = useCallback(() => {
+    const env = getTrackEnv();
+    const own = settingsRef.current.conditions;
+    env.setConditions(own);
+    const car = session?.car;
+    const autoCompound = autoCompoundFor(env.weather.lineWaterMm, car?.tireCompound);
+    if (car && car.tireCompound !== autoCompound) handleTireCompoundChange(autoCompound);
+  }, [getTrackEnv, session, handleTireCompoundChange]);
   const syncHostConditionsToLobby = useCallback(() => {
+    setRoomConditions(null);
+    if (guestWeatherSyncedRef.current) {
+      guestWeatherSyncedRef.current = false;
+      restoreOwnConditionsNow();
+    }
     const c = settingsRef.current.conditions;
     getMultiplayerManager().setLobbySettings({ weather: c.weather, timeOfDay: c.timeOfDay, timeScale: c.timeScale });
-  }, []);
+  }, [restoreOwnConditionsNow]);
   const handleHostP2PRoom = useCallback(() => {
     const code = getMultiplayerManager().hostRoom();
     syncHostConditionsToLobby();
     return code;
   }, [syncHostConditionsToLobby]);
   const handleJoinP2PRoom = useCallback((roomCode: string) => getMultiplayerManager().joinRoom(roomCode), []);
-  const handleCreateManualOffer = useCallback(() => getMultiplayerManager().createManualOffer(), []);
+  const handleCreateManualOffer = useCallback(() => {
+    const offer = getMultiplayerManager().createManualOffer();
+    syncHostConditionsToLobby();
+    return offer;
+  }, [syncHostConditionsToLobby]);
   const handleAcceptManualOffer = useCallback(
     (offerToken: string) => getMultiplayerManager().acceptManualOfferAndCreateAnswer(offerToken),
     []
@@ -592,9 +613,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     getMultiplayerManager().hostLocal();
     syncHostConditionsToLobby();
   }, [syncHostConditionsToLobby]);
-  /** Temporary weather/time override active only while inside a multiplayer room (never mutates saved SP settings) */
-  const [roomConditions, setRoomConditions] = useState<RoomConditionsOverride | null>(null);
-  const inRoomConditionsRef = useRef(false);
   const handleSetLobbySettings = useCallback((patch: Partial<LobbySettings>) => {
     getMultiplayerManager().setLobbySettings(patch);
     if (patch.weather !== undefined || patch.timeOfDay !== undefined || patch.timeScale !== undefined) {
@@ -664,17 +682,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     () => effectiveConditions(settings.conditions, roomConditions),
     [settings.conditions, roomConditions]
   );
+  const activeConditionsRef = useRef(activeConditions);
+  activeConditionsRef.current = activeConditions;
   const conditionsKey = JSON.stringify(activeConditions);
   useEffect(() => {
     const env = getTrackEnv();
-    const next = activeConditions;
+    const next = activeConditionsRef.current;
     if (JSON.stringify(env.weather.conditions) !== JSON.stringify(next)) {
       env.setConditions(next);
       const car = session?.car;
       const autoCompound = autoCompoundFor(env.weather.lineWaterMm, car?.tireCompound);
       if (car && car.tireCompound !== autoCompound) handleTireCompoundChange(autoCompound);
     }
-  }, [conditionsKey, activeConditions, getTrackEnv, session, handleTireCompoundChange]);
+  }, [conditionsKey, getTrackEnv, session, handleTireCompoundChange]);
   useEffect(() => {
     getTrackEnv().setSimRealism(SIM_REALISM_FLAGS[settings.realism]);
   }, [settings.realism, getTrackEnv]);
@@ -750,13 +770,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (!allowed.includes(vehicleModelRef.current)) changeCar(raceCarFor(allowed[0], mp.inScheduledRace).id);
       // A scheduled race is driven to the week's rules: its assists and realism, a dry track
       if (mp.inScheduledRace) applyWeekRules();
-      else if (start.weather || start.timeOfDay || start.timeScale !== undefined) {
-        inRoomConditionsRef.current = true;
-        setRoomConditions({
+      else if (!mp.isHost && !guestWeatherSyncedRef.current && (start.weather || start.timeOfDay || start.timeScale !== undefined)) {
+        // Fallback for guests if the host did not send a live WeatherSyncState snapshot before race start
+        const env = getTrackEnv();
+        const cur = env.weather.conditions;
+        const nextCond = effectiveConditions(cur, {
           weather: start.weather,
           timeOfDay: start.timeOfDay,
           timeScale: start.timeScale,
         });
+        if (nextCond.weather !== cur.weather || nextCond.timeOfDay !== cur.timeOfDay || nextCond.timeScale !== cur.timeScale) {
+          guestWeatherSyncedRef.current = true;
+          env.setConditions(nextCond);
+        }
       }
       const physics = session?.car;
       if (physics) {
@@ -1338,13 +1364,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const mp = getMultiplayerManager();
     setLocalPeerId(mp.localPeerId);
     setLobby(mp.lobby);
-    if (mp.lobby && mp.lobby.settings.trackId === trackId) {
-      inRoomConditionsRef.current = true;
-      const { weather, timeOfDay, timeScale } = mp.lobby.settings;
-      if (weather !== undefined || timeOfDay !== undefined || timeScale !== undefined) {
-        setRoomConditions({ weather, timeOfDay, timeScale });
-      }
-    }
     /**
      * In the menus a guest follows the host by itself: its circuit, then a car its class allows (or the one car a
      * scheduled race names). While driving it is asked instead (the lobby's "Switch circuit" and car choices), so a lap
@@ -1365,24 +1384,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (l && session) mpRaceOf(session.race)?.setPresent(l.players.map((p) => p.peerId));
       if (!l) {
         setRoomConditions(null);
-        if (inRoomConditionsRef.current) {
-          inRoomConditionsRef.current = false;
-          trackEnvRef.current?.setConditions(settingsRef.current.conditions);
+        if (guestWeatherSyncedRef.current) {
+          guestWeatherSyncedRef.current = false;
+          restoreOwnConditionsNow();
         }
       } else if (l.hostId !== mp.localPeerId && l.settings.trackId === trackId) {
-        inRoomConditionsRef.current = true;
-        const { weather, timeOfDay, timeScale } = l.settings;
-        if (weather !== undefined || timeOfDay !== undefined || timeScale !== undefined) {
-          setRoomConditions((prev) =>
-            prev?.weather === weather && prev?.timeOfDay === timeOfDay && prev?.timeScale === timeScale
-              ? prev
-              : { weather, timeOfDay, timeScale }
-          );
+        // Guests follow the host's full WeatherSyncState (weatherNodes, seed, surface preset, live clock & water)
+        // directly without touching `roomConditions` so the React conditions effect never fights `applyWeatherSync`.
+        if (l.weather) {
+          guestWeatherSyncedRef.current = true;
+          trackEnvRef.current?.applyWeatherSync(l.weather);
         }
-        // The host's weather and clock: a guest's session eases to them (a different preset restarts it)
-        if (l.weather) trackEnvRef.current?.applyWeatherSync(l.weather);
-      } else if (l.hostId === mp.localPeerId) {
-        inRoomConditionsRef.current = true;
       }
       follow(l);
     };
@@ -1444,7 +1456,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       mp.onRaceResult = undefined;
       window.clearInterval(timer);
     };
-  }, [session, trackId, onSelectTrack, takeRaceStart, takeQualifyingStart, endMpRace, changeCar]);
+  }, [session, trackId, onSelectTrack, takeRaceStart, takeQualifyingStart, endMpRace, changeCar, restoreOwnConditionsNow]);
 
   // ---- Weekly challenge
   // The week is read when the menus open (it only turns on Monday)

@@ -252,7 +252,7 @@ export class RoomServer {
     };
 
     if (role === "host") {
-      const current = this.state.getWebSockets(HOST_TAG);
+      const current = this.state.getWebSockets(HOST_TAG).filter((ws) => attachmentOf(ws)?.role === "host");
       const owner = await this.state.storage.get<string>("hostToken");
       if (current.length > 0 && owner !== token) return refuse({ t: "taken" });
       // The same host back on a new socket: demote before closing so a still-listed closing socket never triggers peer_id_taken
@@ -282,7 +282,8 @@ export class RoomServer {
     }
 
     const guests = this.state.getWebSockets().filter((ws) => attachmentOf(ws)?.role === "guest").length;
-    if (this.state.getWebSockets(HOST_TAG).length === 0) return refuse({ t: "nohost" });
+    const activeHostCount = this.state.getWebSockets(HOST_TAG).filter((ws) => attachmentOf(ws)?.role === "host").length;
+    if (activeHostCount === 0) return refuse({ t: "nohost" });
     if (guests >= MAX_GUESTS) return refuse({ t: "full" });
     const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
     this.state.acceptWebSocket(server, [guestTag(id)]);

@@ -750,21 +750,37 @@ console.log('\n== Weather regime, host sync & AI tyre call');
   const back = ai.tireCompound as TireCompound;
   check('AI comes off rain tyres onto the slick it had', inRain === 'wet' && back === 'soft', `soft → ${inRain} → ${back}`);
 
-  // Regression (#12): effectiveConditions overlays room weather/time without mutating saved SP conditions or weatherNodes
+  // Regression (#12): effectiveConditions overlays room weather/time without mutating saved SP conditions or weatherNodes,
+  // preserves custom weatherNodes when only time/scale changes, and guest applyWeatherSync -> leave restores SP conditions cleanly
   const ownNodes = defaultWeatherNodesForPreset('dynamic', 'morning', 7);
   const ownCond = { ...DEFAULT_SESSION_CONDITIONS, weather: 'dynamic' as const, timeOfDay: 'morning' as const, timeScale: 5, weatherNodes: ownNodes };
+  const sameWeatherTimeOnly = effectiveConditions(ownCond, { weather: 'dynamic', timeOfDay: 'night', timeScale: 0 });
   const inRoom = effectiveConditions(ownCond, { weather: 'heavy_rain', timeOfDay: 'night', timeScale: 0 });
   const backSolo = effectiveConditions(ownCond, null);
+  const guestLeaveEnv = new TrackEnvironment(track, ownCond);
+  const hostRainEnv = new TrackEnvironment(track, { ...DEFAULT_SESSION_CONDITIONS, weather: 'heavy_rain', timeOfDay: 'night', seed: 99 });
+  hostRainEnv.update(5, []);
+  guestLeaveEnv.applyWeatherSync(hostRainEnv.weather.snapshot());
+  const syncedRain = guestLeaveEnv.weather.conditions.weather === 'heavy_rain' && guestLeaveEnv.weather.conditions.seed === 99;
+  guestLeaveEnv.setConditions(ownCond);
+  const restoredOwn =
+    guestLeaveEnv.weather.conditions.weather === 'dynamic' &&
+    guestLeaveEnv.weather.conditions.weatherNodes?.length === 5 &&
+    guestLeaveEnv.weather.conditions.seed === ownCond.seed;
   check(
-    'effectiveConditions isolates room override from saved SP conditions and restores weatherNodes on leave',
-    inRoom.weather === 'heavy_rain' &&
+    'effectiveConditions preserves weatherNodes on same-weather override and guest leave restores SP conditions',
+    sameWeatherTimeOnly.weatherNodes === ownNodes &&
+      sameWeatherTimeOnly.timeOfDay === 'night' &&
+      inRoom.weather === 'heavy_rain' &&
       inRoom.timeOfDay === 'night' &&
       inRoom.timeScale === 0 &&
       inRoom.weatherNodes === undefined &&
       ownCond.weather === 'dynamic' &&
       ownCond.weatherNodes === ownNodes &&
-      backSolo === ownCond,
-    `inRoom=${inRoom.weather}/${inRoom.timeOfDay}, restored=${backSolo.weather}/${backSolo.weatherNodes?.length ?? 0} nodes`
+      backSolo === ownCond &&
+      syncedRain &&
+      restoredOwn,
+    `sameWxNodes=${sameWeatherTimeOnly.weatherNodes?.length ?? 0}, inRoom=${inRoom.weather}/${inRoom.timeOfDay}, syncedRain=${syncedRain}, restored=${restoredOwn}`
   );
 }
 
