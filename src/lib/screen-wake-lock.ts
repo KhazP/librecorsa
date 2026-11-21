@@ -26,25 +26,35 @@ export function shouldHoldWakeLock(state: { driving: boolean; visible: boolean }
   return state.driving && state.visible;
 }
 
+/** Cooldown between automatic re-acquire attempts after a transient rejection or OS-initiated revocation (ms). */
+const RETRY_COOLDOWN_MS = 2000;
+
 export class ScreenWakeLock {
   private readonly api: WakeLockApiLike | null;
   private readonly doc: WakeLockDocumentLike | null;
+  private readonly nowMs: () => number;
   private sentinel: WakeLockSentinelLike | null = null;
   private requesting = false;
   private desired = false;
   private disposed = false;
+  private nextRetryAtMs = -Infinity;
 
   private readonly onSentinelRelease = () => {
     this.sentinel = null;
+    if (!this.disposed && this.desired) {
+      this.nextRetryAtMs = this.nowMs() + RETRY_COOLDOWN_MS;
+    }
   };
 
   private readonly onVisibilityChange = () => {
+    if (this.isVisible()) this.nextRetryAtMs = -Infinity;
     this.sync();
   };
 
   constructor(
     api?: WakeLockApiLike | null,
-    doc?: WakeLockDocumentLike | null
+    doc?: WakeLockDocumentLike | null,
+    nowMs: () => number = () => Date.now()
   ) {
     this.api =
       api !== undefined
@@ -58,6 +68,7 @@ export class ScreenWakeLock {
         : typeof document !== "undefined"
           ? document
           : null;
+    this.nowMs = nowMs;
     this.doc?.addEventListener("visibilitychange", this.onVisibilityChange);
   }
 
@@ -68,8 +79,16 @@ export class ScreenWakeLock {
 
   /** Update whether the session wants the screen kept awake (true while driving, false in menus/pause/replay). */
   setDesired(driving: boolean): void {
-    if (this.disposed || this.desired === driving) return;
+    if (this.disposed) return;
+    if (this.desired === driving) {
+      // Allow throttled recovery if a previous request rejected or the OS revoked the sentinel while still driving
+      if (driving && !this.active && !this.requesting && this.nowMs() >= this.nextRetryAtMs) {
+        this.sync();
+      }
+      return;
+    }
     this.desired = driving;
+    if (driving) this.nextRetryAtMs = -Infinity;
     this.sync();
   }
 
@@ -105,6 +124,7 @@ export class ScreenWakeLock {
         })
         .catch(() => {
           this.requesting = false;
+          this.nextRetryAtMs = this.nowMs() + RETRY_COOLDOWN_MS;
         });
     } else {
       this.releaseNow();

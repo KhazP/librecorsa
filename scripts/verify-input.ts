@@ -1716,8 +1716,75 @@ async function asyncChecks() {
     assert.equal(lock.active, false);
     lock.dispose();
     assert.equal(docState.visCb, null);
+
+    // Transient rejection and OS-initiated revocation recover cleanly after retry cooldown, and dispose cancels in-flight request
+    let tNow = 10_000;
+    let attempt = 0;
+    const flakyState: {
+      inFlightResolve: ((s: WakeLockSentinelLike) => void) | null;
+      lastRevoke: (() => void) | null;
+    } = { inFlightResolve: null, lastRevoke: null };
+    let inFlightReleased = 0;
+    const flakyApi = {
+      request() {
+        attempt++;
+        if (attempt === 1) return Promise.reject(new Error('NotAllowedError'));
+        if (attempt === 3) {
+          return new Promise<WakeLockSentinelLike>((res) => {
+            flakyState.inFlightResolve = res;
+          });
+        }
+        let rel = false;
+        let onRel: (() => void) | null = null;
+        flakyState.lastRevoke = () => {
+          rel = true;
+          onRel?.();
+        };
+        return Promise.resolve({
+          get released() {
+            return rel;
+          },
+          async release() {
+            rel = true;
+            onRel?.();
+          },
+          addEventListener(_t: 'release', fn: () => void) {
+            onRel = fn;
+          },
+        });
+      },
+    };
+    const lock2 = new ScreenWakeLock(flakyApi, doc, () => tNow);
+    lock2.setDesired(true); // attempt 1 rejects
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(lock2.active, false);
+    lock2.setDesired(true); // inside 2 s cooldown -> throttled
+    assert.equal(attempt, 1);
+    tNow += 2500;
+    lock2.setDesired(true); // attempt 2 succeeds
+    await Promise.resolve();
+    assert.equal(attempt, 2);
+    assert.equal(lock2.active, true);
+    // OS revokes sentinel while visible & driving; cooldown expires and setDesired(true) starts attempt 3 (in-flight)
+    flakyState.lastRevoke?.();
+    assert.equal(lock2.active, false);
+    tNow += 2500;
+    lock2.setDesired(true);
+    assert.equal(attempt, 3);
+    // Dispose while attempt 3 is still in-flight -> late sentinel is immediately released
+    lock2.dispose();
+    flakyState.inFlightResolve?.({
+      async release() {
+        inFlightReleased++;
+      },
+      addEventListener() {},
+    });
+    await Promise.resolve();
+    assert.equal(inFlightReleased, 1);
+
     passed++;
-    console.log('  ok  ScreenWakeLock: holds screen awake while driving, releases in menus/hidden and re-acquires on resume');
+    console.log('  ok  ScreenWakeLock: holds screen awake while driving, recovers after rejection/revocation and cancels in-flight on dispose');
   }
   console.log(`\n${passed} checks passed`);
 }
