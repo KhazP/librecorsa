@@ -115,9 +115,9 @@ export const HomeLapTimes: React.FC<HomeLapTimesProps> = ({ circuits, circuit, c
     // A timing list reads best at a list's width, not a wall's: centred under the tiles on a wide screen
     <div ref={sentinelRef} className="mx-auto min-h-px w-full max-w-[1200px]">
       {!HAS_API || state === "off" ? (
-        <EmptyState icon={<Icon name="offline" size="lg" />}>Lap times are offline right now. Try again later.</EmptyState>
+        <EmptyState icon={<Icon name="offline" size="lg" />}>Lap times are offline right now.</EmptyState>
       ) : state === "unreachable" ? (
-        <EmptyState icon={<Icon name="offline" size="lg" />}>Couldn&apos;t reach the online board. I&apos;ll keep trying.</EmptyState>
+        <EmptyState icon={<Icon name="offline" size="lg" />}>Leaderboard unreachable. Retrying…</EmptyState>
       ) : state === "on" ? (
         <Suspense fallback={<LoadingCard />}>
           <HomeBoards

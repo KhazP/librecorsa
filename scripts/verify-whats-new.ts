@@ -121,7 +121,7 @@ if (hasFullHistory) {
 const hub = readFileSync(HOME_HUB_PATH, "utf8");
 const tabOrderMatch = /id:\s*"cars"[\s\S]*?id:\s*"whats-new"[\s\S]*?id:\s*"about"/.test(hub);
 check("HomeHub places What's new between Cars and About", tabOrderMatch);
-check("HomeHub uses cyan (lc-cyan, #00E5FF) with lc-ping for unread dot", (hub.includes("bg-lc-cyan") || hub.includes("#00E5FF")) && hub.includes("lc-ping"));
+check("HomeHub uses cyan (lc-cyan, #00E5FF) for unread dot", (hub.includes("bg-lc-cyan") || hub.includes("#00E5FF")) && hub.includes("UNREAD_DOT"));
 check("HomeHub persists seen state in librecorsa.whatsNewSeen", hub.includes("librecorsa.whatsNewSeen"));
 
 console.log(failed ? `\n${failed} What's new check(s) failed.` : "\nAll What's new checks passed.");

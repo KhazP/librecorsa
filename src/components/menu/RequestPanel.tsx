@@ -68,27 +68,27 @@ export function feedbackContextOf(
 const COPY: Record<FeedbackKind, { title: string; intro: string; send: string }> = {
   Bug: {
     title: "Report a bug",
-    intro: "Something broken, glitching or behaving wrong? Say what happened. The game adds what it knows below, and you can leave any of it out.",
+    intro: "Describe what went wrong and how to reproduce it. Session info below is optional.",
     send: "Send report",
   },
   Wheel: {
-    title: "Report a wheel",
-    intro: "Tell me how your wheel works in LibreCorsa: steering, pedals, buttons and force feedback. Every report makes more wheels work.",
+    title: "Wheel report",
+    intro: "Report steering, pedal, button, and force-feedback behaviour for your wheel.",
     send: "Send report",
   },
   Idea: {
-    title: "Share an idea",
-    intro: "A feature you miss, something that could work better, or a game that does it well. Ideas shape what gets built next.",
+    title: "Feature idea",
+    intro: "Suggest a feature or improvement.",
     send: "Send idea",
   },
   Car: {
     title: "Request a car",
-    intro: "Missing your favourite car? Tell me what it is and link the 3D model, so it can be checked and built.",
+    intro: "Name the car and link an eligible 3D model.",
     send: "Send request",
   },
   Track: {
     title: "Request a track",
-    intro: "Missing your favourite circuit? Tell me which one and link the 3D model or scan, so it can be checked and built.",
+    intro: "Name the circuit and link an eligible 3D model or scan.",
     send: "Send request",
   },
 };
@@ -623,7 +623,7 @@ export const RequestPanel: React.FC<{
           </p>
         ) : null}
         {rows.length ? (
-          <Card title="Added to your report" description="It goes in a public GitHub issue. Press a line to leave it out.">
+          <Card title="Included details" description="Posted to a public GitHub issue. Click a line to omit it.">
             <ul className="m-0 -mx-2 flex list-none flex-col p-0">
               {rows.map((r) => (
                 <AddedRow key={r.id} label={r.label} value={r.value} locked={r.locked} on={r.locked || !leftOut.has(r.id)} onToggle={() => toggleLine(r.id)} />
@@ -631,14 +631,14 @@ export const RequestPanel: React.FC<{
               {logShown ? (
                 <AddedRow
                   label="Game log"
-                  value={`${log.length} ${log.length === 1 ? "line" : "lines"} of errors and notes, newest: ${log[log.length - 1].text}`}
+                  value={`${log.length} ${log.length === 1 ? "line" : "lines"}, latest: ${log[log.length - 1].text}`}
                   on={!leftOut.has("errors")}
                   onToggle={() => toggleLine("errors")}
                 />
               ) : null}
             </ul>
             {logShown ? (
-              <Disclosure moreLabel="Show the error log" lessLabel="Hide the error log">
+              <Disclosure moreLabel="Show error log" lessLabel="Hide error log">
                 <pre className="lc-mono m-0 max-h-48 overflow-auto rounded-lc-row bg-lc-well p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap text-lc-fog">
                   {errorLogText(LOG_STEPS[0], log)}
                 </pre>
@@ -648,8 +648,7 @@ export const RequestPanel: React.FC<{
         ) : null}
         <p className="lc-hint m-0 mt-auto flex items-start gap-2">
           <Icon name="externalLink" className="mt-px text-lc-info" />
-          Opens a pre-filled issue on GitHub (free account needed); check it and press Create. Paste or drag screenshots and
-          videos in there.
+          Opens a pre-filled GitHub issue (free account required).
         </p>
       </div>
 
@@ -918,7 +917,7 @@ export const RequestPanel: React.FC<{
           </Button>
         </div>
         {kind === "Bug" && shotState !== "none" ? (
-          <Card title="Screenshot" description="The game's view when you opened this report, without the menu.">
+          <Card title="Screenshot">
             {shot ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={shot.url} alt="The circuit as it was when the report opened" className="aspect-video w-full rounded-lc-row object-cover" />

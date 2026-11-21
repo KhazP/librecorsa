@@ -1004,7 +1004,7 @@ export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }
             {tiltStatus === "ready" ? (
               <TiltMeter value={vis.steer} />
             ) : (
-              <TiltNote maxWidth="max-w-[calc(100vw-232px)]">{tiltStatus === "asking" ? "Allow motion access" : "Tap to turn on tilt"}</TiltNote>
+              <TiltNote maxWidth="max-w-[calc(100vw-232px)]">{tiltStatus === "asking" ? "Allow motion" : "Tap for tilt"}</TiltNote>
             )}
           </div>
           {/* Bottom-right: throttle under the right thumb, the other buttons over it (right-to-left so headlights never shift existing buttons) */}

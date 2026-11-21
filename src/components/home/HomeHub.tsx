@@ -20,7 +20,7 @@ import { useStoreBuild } from "@/lib/use-store-build";
 import { FeaturedBadges } from "./FeaturedBadges";
 import { SupportButton } from "@/components/SupportButton";
 import { day, GAME_FACTS, GRADE_NOTES, type HomeData, type HomeLayout, type HomeVenue, type WhatsNewDay } from "./home-data";
-import { CarThumb, GradeBadge, GradeLegend, OutlineThumb } from "./home-ui";
+import { CarThumb, GradeBadge, OutlineThumb } from "./home-ui";
 import { LapMap } from "./LapMap";
 import { HomeLapTimes } from "./HomeLapTimes";
 import { PLAY_HREF, rememberPicks, storedPicks } from "./play";
@@ -65,10 +65,7 @@ function whatsNewFingerprint(days: readonly WhatsNewDay[]): string {
 /** The cyan dot after "What's new" while it holds notes the visitor has not opened (colour is not alone: it is named) */
 const UNREAD_DOT = (
   <>
-    <span aria-hidden className="relative inline-flex size-2 shrink-0">
-      <span className="lc-ping absolute inset-0 rounded-full bg-lc-cyan motion-reduce:hidden" />
-      <span className="relative size-2 rounded-full bg-lc-cyan" />
-    </span>
+    <span aria-hidden className="inline-flex size-1.5 shrink-0 rounded-full bg-lc-cyan" />
     <span className="sr-only"> (unread updates)</span>
   </>
 );
@@ -410,7 +407,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                 >
                   <span className="flex flex-col gap-1">
                     <span className={TILE_TITLE}>Press & media</span>
-                    <span className="lc-hint text-[13px]">{data.coverageCount} articles and videos so far</span>
+                    <span className="lc-hint text-[13px]">{data.coverageCount} articles &amp; videos</span>
                   </span>
                   <span aria-hidden className="flex min-h-0 flex-1 flex-col overflow-hidden [mask-image:linear-gradient(to_bottom,#000_calc(100%-1rem),transparent)]">
                     {data.coverage.slice(0, 3).map((a) => (
@@ -446,9 +443,9 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
             {tab === "whats-new" ? (
               <div className="flex max-w-[880px] flex-col xl:max-w-[1800px]">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 pb-4">
-                  <p className="lc-body m-0 text-lc-slate">Day-by-day summary of every change to LibreCorsa.</p>
+                  <p className="lc-body m-0 text-lc-slate">Patch notes and recent updates.</p>
                   <a href={`${data.repoUrl}/commits/main`} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`inline-flex items-center gap-1 ${TEXT_LINK}`}>
-                    Full commit log on GitHub
+                    Commit log on GitHub
                     <Icon name="externalLink" />
                   </a>
                 </div>
@@ -470,7 +467,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                             rel="noopener"
                             onPointerEnter={focusOnHover}
                             data-nav-default={index === 0 ? "" : undefined}
-                            className="inline-flex items-center gap-1 rounded-full text-[12px] text-lc-slate no-underline transition-colors duration-200 hover:text-lc-chalk focus-visible:text-lc-chalk pointer-coarse:min-h-11"
+                            className="inline-flex items-center gap-1 rounded-lc-nub text-[12px] text-lc-slate no-underline transition-colors duration-200 hover:text-lc-chalk focus-visible:text-lc-chalk pointer-coarse:min-h-11"
                           >
                             <span className="lc-data">
                               {entry.commits} {entry.commits === 1 ? "commit" : "commits"}
@@ -498,7 +495,6 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
 
             {tab === "circuits" ? (
               <div className="flex flex-col gap-5">
-                <GradeLegend of="circuits" shown={data.venues.flatMap((v) => v.layouts.map((l) => l.grade))} />
                 <div role="group" aria-label="Filter circuits" className="flex flex-wrap items-center gap-2">
                   {VENUE_FILTERS.map((f) => {
                     const pool = venuesWith(f.key);
@@ -579,7 +575,6 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
 
             {tab === "cars" ? (
               <div className="flex flex-col gap-5">
-                <GradeLegend of="cars" shown={data.cars.map((c) => c.grade)} />
                 <div className={WALL}>
                   {data.cars.map((c) => {
                     const on = c === car;
@@ -606,7 +601,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
               <div className="grid gap-x-16 gap-y-12 pt-4 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
                 <div className="flex min-w-0 flex-col gap-8">
                   <p className="m-0 max-w-[34ch] text-[clamp(22px,1.5vw,30px)] leading-[1.4] font-medium text-lc-chalk">
-                    LibreCorsa is a free, open-source racing simulator that runs in your browser. I make it on my own.
+                    Free, open-source browser racing simulator.
                   </p>
                   <dl className="m-0 flex flex-col">
                     {GAME_FACTS.map(([label, text]) => (

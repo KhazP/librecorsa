@@ -136,30 +136,22 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
           />
         }
         intro={
-          <div className="flex min-w-0 flex-col gap-2">
-            <p className="lc-body m-0">
-              <span className="font-semibold text-lc-chalk">{circuitName(week.trackId)}</span>
-              <span className="text-lc-fog"> · {carName(week)}</span>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="lc-body m-0">
+                <span className="font-semibold text-lc-chalk">{circuitName(week.trackId)}</span>
+                <span className="text-lc-fog"> · {carName(week)}</span>
+              </p>
+              <Badge size="sm" icon="time" variant="outline">
+                {thisWeek ? `${timeLeftLabel(week.endsMs, now)} left` : `Ran ${weekSpan(week)}`}
+              </Badge>
+            </div>
+            <p className="lc-mono m-0 text-[12px] text-lc-slate" aria-label="Rules">
+              {rulesOf(week).join(" · ")}
             </p>
-            <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label="Rules">
-              {rulesOf(week).map((r) => (
-                <li key={r}>
-                  <Badge size="sm">{r}</Badge>
-                </li>
-              ))}
-              <li>
-                <Badge size="sm" icon="time" variant="outline">
-                  {thisWeek ? `${timeLeftLabel(week.endsMs, now)} left` : `Ran ${weekSpan(week)}`}
-                </Badge>
-              </li>
-            </ul>
           </div>
         }
-        emptyText={
-          thisWeek
-            ? "No times yet this week. Drive the weekly challenge from the game's title menu and yours can be the first."
-            : "No one set a time in the challenge that week."
-        }
+        emptyText={thisWeek ? "No times set yet this week." : "No times recorded for this week."}
         carTag={carTag}
       />
     </div>

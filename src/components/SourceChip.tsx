@@ -199,7 +199,7 @@ export const SourceChip: React.FC<{
                 rel="noreferrer"
                 className="self-start text-lc-slate underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
               >
-                Report a problem with it
+                Report issue
               </a>
             </span>,
             document.body,
