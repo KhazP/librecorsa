@@ -219,7 +219,9 @@ export async function fetchHallOfFame(): Promise<HallOfFameAnswer | null> {
 
 /** Badges read in the last few minutes, by name key: a board's pages and a re-render ask again for free */
 const BADGE_KEEP_MS = 5 * 60_000;
-const kept = new Map<string, { badges: DriverBadge[]; atMs: number }>();
+/** Backoff after a failed or 429 badge read so UI re-renders don't hammer the rate limit */
+const BADGE_FAIL_KEEP_MS = 60_000;
+const kept = new Map<string, { badges: DriverBadge[]; untilMs: number }>();
 const pending = new Map<string, Promise<void>>();
 
 /** Forgets every badge kept (the checks start each case clean) */
@@ -252,7 +254,7 @@ export async function fetchBadges(
 ): Promise<Record<string, DriverBadge[]>> {
   const nowMs = opts.nowMs ?? Date.now();
   const keys = badgeQueryNames(names);
-  const missing = keys.filter((k) => !pending.has(k) && !((kept.get(k)?.atMs ?? -Infinity) > nowMs - BADGE_KEEP_MS));
+  const missing = keys.filter((k) => !pending.has(k) && !((kept.get(k)?.untilMs ?? -Infinity) > nowMs));
   if (missing.length > 0) {
     const base = onlineUrl("/badges");
     const read =
@@ -269,8 +271,13 @@ export async function fetchBadges(
         const query = new URLSearchParams({ names: [...chunk].sort().join(",") });
         const res = await read(`${base ?? "/api/badges"}?${query.toString()}`).catch(() => null);
         const parsed = res && res.status === 200 ? parseBadges(res.body) : null;
-        if (!parsed) return;
-        for (const k of chunk) kept.set(k, { badges: parsed[k] ?? [], atMs: nowMs });
+        if (!parsed) {
+          for (const k of chunk) {
+            kept.set(k, { badges: kept.get(k)?.badges ?? [], untilMs: nowMs + BADGE_FAIL_KEEP_MS });
+          }
+          return;
+        }
+        for (const k of chunk) kept.set(k, { badges: parsed[k] ?? [], untilMs: nowMs + BADGE_KEEP_MS });
       })();
       for (const k of chunk) pending.set(k, job);
       void job.finally(() => {

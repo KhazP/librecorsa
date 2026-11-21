@@ -30,5 +30,7 @@ CREATE TABLE driver_awards (
   lap_time_ms REAL
 );
 CREATE UNIQUE INDEX driver_awards_once ON driver_awards (name_key, badge_type, event_id, physics);
+-- At most one auto-archived gold, silver and bronze per finished week and physics version
+CREATE UNIQUE INDEX driver_awards_podium ON driver_awards (event_id, physics, badge_type) WHERE awarded_by = 'auto';
 CREATE INDEX driver_awards_driver ON driver_awards (name_key);
 CREATE INDEX driver_awards_event ON driver_awards (event_id, physics, badge_type);

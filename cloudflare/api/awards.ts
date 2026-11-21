@@ -42,7 +42,7 @@ import type {
   PodiumPlace,
 } from "../../src/lib/net/awards";
 import { driverNameKey, EVENT_ID_RE } from "./board";
-import type { D1Database, D1PreparedStatement } from "./types";
+import type { D1Database } from "./types";
 
 type Answer = { status: number; body: unknown };
 const fail = (error: string, status = 400): Answer => ({ status, body: { ok: false, error } });
@@ -212,37 +212,69 @@ function archivedEvents(rows: readonly AwardRow[]): HallOfFameEvent[] {
 }
 
 /**
+ * Atomically archives a finished week's top-3 podium by ranking `laps` at write time and guarding against any
+ * existing `auto` rows for that `(event_id, physics)`. One statement per week ensures concurrent readers cannot
+ * interleave duplicate medals and a stale reader in flight during an admin lap deletion cannot re-insert the deleted
+ * lap's driver.
+ */
+const ARCHIVE_WEEK_SQL = `WITH best AS (
+  SELECT name_key, driver_name, track_id, vehicle, lap_time_ms, created_at, id,
+    ROW_NUMBER() OVER (PARTITION BY name_key ORDER BY lap_time_ms, created_at, id) AS rn
+  FROM laps
+  WHERE event = ? AND physics = ?
+), placed AS (
+  SELECT *, ROW_NUMBER() OVER (ORDER BY lap_time_ms, created_at, id) AS place
+  FROM best WHERE rn = 1
+)
+INSERT INTO driver_awards (
+  name_key, badge_type, event_id, physics, note, awarded_at, awarded_by,
+  driver_name, track_id, vehicle, lap_time_ms
+)
+SELECT
+  name_key,
+  CASE place WHEN 1 THEN 'weekly_gold' WHEN 2 THEN 'weekly_silver' ELSE 'weekly_bronze' END,
+  ?, ?, '', ?, 'auto',
+  driver_name, track_id, vehicle, lap_time_ms
+FROM placed
+WHERE place <= 3
+  AND NOT EXISTS (
+    SELECT 1 FROM driver_awards
+    WHERE event_id = ? AND physics = ? AND awarded_by = 'auto'
+  )`;
+
+/**
  * Every week's podiums: the finished weeks from the archive (writing there any finished week not in it yet), the week
  * running now from its board. Without migration 0008, every week from its board.
  */
 export async function hallOfFameEvents(db: D1Database, nowMs: number): Promise<HallOfFameEvent[]> {
   const live = rankPodiums((await db.prepare(PODIUM_SQL).all<PodiumRow>()).results, nowMs);
-  const archived = await orNull(async () =>
-    (await db.prepare("SELECT * FROM driver_awards WHERE awarded_by = 'auto' AND badge_type IN ('weekly_gold', 'weekly_silver', 'weekly_bronze')").all<AwardRow>()).results,
-  );
+  const readArchived = () =>
+    orNull(async () =>
+      (await db.prepare("SELECT * FROM driver_awards WHERE awarded_by = 'auto' AND badge_type IN ('weekly_gold', 'weekly_silver', 'weekly_bronze')").all<AwardRow>()).results,
+    );
+  const archived = await readArchived();
   const strip = ({ revision: _revision, ...e }: LiveEvent): HallOfFameEvent => e;
   if (archived === null) return live.map(strip);
 
   const kept = new Set(archived.map((r) => `${r.event_id}|${r.physics}`));
   const toKeep = live.filter((e) => !e.current && !kept.has(`${e.event}|${e.physics}`));
+  let effectiveArchived = archived;
   if (toKeep.length > 0) {
-    const writes: D1PreparedStatement[] = [];
+    // Archive each finished week in its own atomic statement so a conflict on one week never rolls back another
     for (const e of toKeep) {
-      for (const p of e.podium) {
-        writes.push(
-          db
-            .prepare(
-              "INSERT INTO driver_awards (name_key, badge_type, event_id, physics, note, awarded_at, awarded_by, driver_name, track_id, vehicle, lap_time_ms) VALUES (?, ?, ?, ?, '', ?, 'auto', ?, ?, ?, ?) ON CONFLICT (name_key, badge_type, event_id, physics) DO NOTHING",
-            )
-            .bind(p.nameKey, MEDAL_OF_PLACE[p.place], e.event, e.physics, nowMs, p.name, e.trackId, e.vehicle, p.lapTimeMs),
-        );
-      }
+      await orNull(() =>
+        db
+          .prepare(ARCHIVE_WEEK_SQL)
+          .bind(e.event, e.revision, e.event, e.physics, nowMs, e.event, e.physics)
+          .run(),
+      );
     }
-    // A write that fails (two readers at once, a read-only replica) costs nothing: the podium is shown from the laps
-    // this time and kept the next
-    await orNull(() => db.batch(writes));
+    const refreshed = await readArchived();
+    if (refreshed !== null) effectiveArchived = refreshed;
   }
-  const finished = [...archivedEvents(archived), ...toKeep.map(strip)];
+  const archivedKeys = new Set(effectiveArchived.map((r) => `${r.event_id}|${r.physics}`));
+  const unarchivedFallback = toKeep.filter((e) => !archivedKeys.has(`${e.event}|${e.physics}`)).map(strip);
+  const finished = [...archivedEvents(effectiveArchived), ...unarchivedFallback];
   const current = live.filter((e) => e.current).map(strip);
   return sortEvents([...finished, ...current]);
 }

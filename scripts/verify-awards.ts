@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { handleApi, SHARED_ANSWER_S } from "../cloudflare/api/index";
 import { driverNameKey, renameDriver, type BoardDeps } from "../cloudflare/api/board";
-import { checkAwardInput, parseBadgeNames, physicsIdOf, rankPodiums, tallyMostDecorated, type AdminAward } from "../cloudflare/api/awards";
+import { checkAwardInput, hallOfFameEvents, parseBadgeNames, physicsIdOf, rankPodiums, tallyMostDecorated, type AdminAward } from "../cloudflare/api/awards";
 import type { AdminAwardsBody } from "../cloudflare/api/admin";
 import {
   badgeDetail,
@@ -448,11 +448,125 @@ async function main(): Promise<void> {
       `statuses=${b1.status},${b2.status},${b3.status}`,
     );
 
-    // Falls back to BOARD_LIMIT when BADGES_LIMIT is unset
-    const fallbackEnv = { ONLINE_BOARD: "on", BOARD_DB: db, GHOSTS: ghosts, BOARD_LIMIT: limiter(1) } as unknown as Env;
-    const fb1 = await apiCall(fallbackEnv, "/api/badges?names=bob", { ip: "9.9.9.2" });
-    const fb2 = await apiCall(fallbackEnv, "/api/badges?names=bob", { ip: "9.9.9.2" });
-    check("badges: falls back to BOARD_LIMIT when BADGES_LIMIT is not bound", fb1.status === 200 && fb2.status === 429);
+    // /api/badges never falls back to BOARD_LIMIT (a read must never consume the lap-upload budget)
+    let boardLimitHits = 0;
+    const countedBoardLimit: RateLimit = {
+      async limit() {
+        boardLimitHits++;
+        return { success: false };
+      },
+    };
+    const noBadgesLimitEnv = { ONLINE_BOARD: "on", BOARD_DB: db, GHOSTS: ghosts, BOARD_LIMIT: countedBoardLimit } as unknown as Env;
+    const nb1 = await apiCall(noBadgesLimitEnv, "/api/badges?names=bob", { ip: "9.9.9.2" });
+    check("badges: never consumes BOARD_LIMIT when BADGES_LIMIT is unbound", nb1.status === 200 && boardLimitHits === 0);
+
+    // Every env.*_LIMIT referenced in cloudflare/api/index.ts must be bound in wrangler.jsonc
+    const repoRoot = join(__dirname, "..");
+    const indexSrc = readFileSync(join(repoRoot, "cloudflare/api/index.ts"), "utf8");
+    const wranglerSrc = readFileSync(join(repoRoot, "wrangler.jsonc"), "utf8");
+    const limitRefs = [...new Set([...indexSrc.matchAll(/\benv\.([A-Z0-9_]+_LIMIT)\b/g)].map((m) => m[1]))];
+    const missingLimits = limitRefs.filter((name) => !new RegExp(`"name"\\s*:\\s*"${name}"`).test(wranglerSrc));
+    check(
+      "wrangler.jsonc: binds every env.*_LIMIT used in cloudflare/api/index.ts",
+      limitRefs.length >= 6 && missingLimits.length === 0,
+      missingLimits.length ? `missing=${missingLimits.join(",")}` : limitRefs.join(","),
+    );
+
+    // Client fetchBadges backs off for 60s after a 429 response instead of hammering /api/badges
+    {
+      forgetBadges();
+      let calls = 0;
+      const hit429 = async () => {
+        calls++;
+        return { status: 429, body: { ok: false, error: "Too many badge requests" } };
+      };
+      await fetchBadges(["Bob"], { nowMs: 1_000_000, fetchJson: hit429 });
+      await fetchBadges(["Bob"], { nowMs: 1_030_000, fetchJson: hit429 });
+      await fetchBadges(["Bob"], { nowMs: 1_061_000, fetchJson: hit429 });
+      check("client: fetchBadges backs off for 60s on 429 before retrying", calls === 2, `calls=${calls}`);
+    }
+
+    // Schema partial unique index prevents duplicate auto podium rows for the same (event_id, physics, badge_type)
+    {
+      let dupAutoRejected = false;
+      try {
+        await db
+          .prepare(
+            "INSERT INTO driver_awards (name_key, badge_type, event_id, physics, note, awarded_at, awarded_by, driver_name, track_id, vehicle, lap_time_ms) VALUES ('impostor', 'weekly_gold', '2026-W46', 'v1', '', 999999, 'auto', 'Impostor', 'rwanda_official', 'lc26', 60000)",
+          )
+          .run();
+      } catch {
+        dupAutoRejected = true;
+      }
+      check("migration 0008: partial unique index rejects duplicate auto gold for same week & physics", dupAutoRejected);
+    }
+
+    // Stale-reader race: reader 1 reads pre-delete laps, admin deletes P1 lap and invalidates archive,
+    // then reader 1 writes its archive — atomic INSERT ... SELECT must archive the clean post-delete podium with 3 rows
+    {
+      const raceDb = fakeD1(FULL);
+      const raceEvent = "2026-W45";
+      const racePhys = lapPhysicsVersion("lc26", "rwanda_official");
+      const cheatId = await addLap(raceDb, { name: "Cheater", track: "rwanda_official", vehicle: "lc26", physics: racePhys, ms: 61_000, event: raceEvent, created: 1 });
+      await addLap(raceDb, { name: "Alice", track: "rwanda_official", vehicle: "lc26", physics: racePhys, ms: 70_000, event: raceEvent, created: 2 });
+      await addLap(raceDb, { name: "Bob", track: "rwanda_official", vehicle: "lc26", physics: racePhys, ms: 71_000, event: raceEvent, created: 3 });
+      await addLap(raceDb, { name: "Carol", track: "rwanda_official", vehicle: "lc26", physics: racePhys, ms: 72_000, event: raceEvent, created: 4 });
+      let releaseReader!: () => void;
+      let readerPaused!: () => void;
+      const paused = new Promise<void>((r) => {
+        readerPaused = r;
+      });
+      const gate = new Promise<void>((r) => {
+        releaseReader = r;
+      });
+      let gatedOnce = false;
+      const gatedDb: D1Database = {
+        prepare(sqlText: string) {
+          const stmt = raceDb.prepare(sqlText);
+          if (!gatedOnce && sqlText.includes("INSERT INTO driver_awards")) {
+            gatedOnce = true;
+            return {
+              bind(...values: unknown[]) {
+                const bound = stmt.bind(...values);
+                return {
+                  ...bound,
+                  async run() {
+                    readerPaused();
+                    await gate;
+                    return bound.run();
+                  },
+                };
+              },
+              first: stmt.first.bind(stmt),
+              all: stmt.all.bind(stmt),
+              run: stmt.run.bind(stmt),
+            };
+          }
+          return stmt;
+        },
+        batch: raceDb.batch.bind(raceDb),
+      };
+      const staleReader = hallOfFameEvents(gatedDb, NOW);
+      await paused;
+      // Admin deletes Cheater's lap before staleReader's archive INSERT executes
+      await raceDb.prepare("DELETE FROM laps WHERE id = ?").bind(cheatId).run();
+      await raceDb.prepare("DELETE FROM driver_awards WHERE awarded_by = 'auto' AND event_id = ?").bind(raceEvent).run();
+      releaseReader();
+      // Second concurrent reader runs alongside
+      await Promise.all([staleReader, hallOfFameEvents(raceDb, NOW)]);
+      const rows = (
+        await raceDb
+          .prepare("SELECT badge_type, name_key FROM driver_awards WHERE event_id = ? AND awarded_by = 'auto' ORDER BY id")
+          .bind(raceEvent)
+          .all<{ badge_type: string; name_key: string }>()
+      ).results;
+      const summary = rows.map((r: { badge_type: string; name_key: string }) => `${r.badge_type}:${r.name_key}`).join(",");
+      check(
+        "archive race: stale reader after admin delete archives clean post-delete podium with 3 rows",
+        rows.length === 3 && summary === "weekly_gold:alice,weekly_silver:bob,weekly_bronze:carol",
+        summary,
+      );
+    }
   }
 
   if (failures.length > 0) {

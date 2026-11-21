@@ -213,7 +213,7 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
   }
   if (path === "/api/badges" && request.method === "GET") {
     if (!config.board || !env.BOARD_DB) return json({ ok: false, error: "The lap boards are off" }, 404, origin);
-    if (await overLimit(env.BADGES_LIMIT ?? env.BOARD_LIMIT, request)) {
+    if (await overLimit(env.BADGES_LIMIT, request)) {
       return json({ ok: false, error: "Too many badge requests, try again shortly" }, 429, origin);
     }
     try {

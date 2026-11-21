@@ -110,7 +110,7 @@ export interface Env {
   ADMIN_LIMIT?: RateLimit;
   /** How often one address may upload a lap or change a driver name, before either touches the database */
   BOARD_LIMIT?: RateLimit;
-  /** Optional read rate limit for /api/badges; falls back to BOARD_LIMIT when unset */
+  /** Dedicated read rate limit for /api/badges (separate from BOARD_LIMIT so badge reads never block lap uploads) */
   BADGES_LIMIT?: RateLimit;
   /** Cloudflare's own numbers on the admin page (analytics.ts): a read-only analytics token (a secret), the account,
    * and optionally the boards' database and the site's zone */
