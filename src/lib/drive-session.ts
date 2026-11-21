@@ -46,6 +46,7 @@ import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from "@/lib/sim/rev-range";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/lib/sim/car-setup";
+import { clampChassisToCarSheet } from "@/lib/sim/setup-sheet";
 import { buildSharedSetup, garageTunerFrom } from "@/lib/sim/setup-share";
 import { CameraRig, type CameraRigCar } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
@@ -1072,8 +1073,8 @@ export class DriveSession {
       const tyreDefaults = car.getTyreSetup();
       const initialTyreSetup = loadTyreSetup(vehicle) ?? tyreDefaults;
       car.setTyreSetup(initialTyreSetup);
-      // and its garage chassis setup
-      const chassis = loadChassisSetup(vehicle);
+      // and its garage chassis setup (clamped to this car's own setup sheet)
+      const chassis = clampChassisToCarSheet(vehicle, loadChassisSetup(vehicle));
       car.applyChassisSetup?.(chassis);
       carSetup = { tireCompound: car.tireCompound, tyreSetup: initialTyreSetup, defaultTyreSetup: tyreDefaults, chassisSetup: chassis };
       return car;
@@ -1723,9 +1724,10 @@ export class DriveSession {
     };
     this.setChassisSetup = (setup) => {
       if (disposed) return;
+      const safe = clampChassisToCarSheet(vehicleNow, setup);
       // The garage keeps the player's own setup; the time trial's fuel stays on the car
-      physics.applyChassisSetup?.(timeTrialOn() ? lowestFuelSetup(setup) : setup);
-      this.publish({ chassisSetup: setup });
+      physics.applyChassisSetup?.(timeTrialOn() ? lowestFuelSetup(safe) : safe);
+      this.publish({ chassisSetup: safe });
     };
     this.setTimeTrial = (rules) => {
       if (disposed) return;
@@ -3349,7 +3351,7 @@ export class DriveSession {
           for (const lap of wallDeletedLaps) if (lap <= done.summary.lapNumber) wallDeletedLaps.delete(lap);
           done.recording.setup = buildSharedSetup({
             vehicle: vehicleNow,
-            chassis: this.snapshot.chassisSetup,
+            chassis: timeTrialOn() ? lowestFuelSetup(this.snapshot.chassisSetup) : this.snapshot.chassisSetup,
             tyre: this.snapshot.tyreSetup,
             compound: this.snapshot.tireCompound,
             aero: physics.aeroPreset,

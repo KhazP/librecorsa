@@ -796,8 +796,8 @@ async function main(): Promise<void> {
         vehicle: 'lc26',
         aero: 'low_downforce',
         compound: 'soft',
-        chassis: { frontWingClicks: 999, rearWingClicks: -3 },
-        tuner: { brakeBiasPct: 54.5 },
+        chassis: { frontWingClicks: 999, rearWingClicks: -3, rideHeightFrontMm: -15 },
+        tuner: { brakeBiasPct: 54.5, tcSlipAngleLevel: 12 },
       },
     };
     const posted = await post(withSetup, KEY_A);
@@ -806,9 +806,15 @@ async function main(): Promise<void> {
     const storedText = row ? await (await own.ghosts.get(`laps/${row.id}.json`))?.text() : null;
     const storedLap = storedText ? validateLapRecording(JSON.parse(storedText)) : null;
     check(
-      'setup: uploaded lap flags hasSetup on board row and clamps out-of-range setup in R2 JSON',
-      posted.status === 200 && row?.hasSetup === true && storedLap?.setup?.aero === 'low_downforce' && storedLap?.setup?.chassis?.frontWingClicks === 25 && storedLap?.setup?.chassis?.rearWingClicks === -3,
-      `status=${posted.status} hasSetup=${String(row?.hasSetup)} fw=${String(storedLap?.setup?.chassis?.frontWingClicks)} rw=${String(storedLap?.setup?.chassis?.rearWingClicks)}`,
+      'setup: uploaded lap flags hasSetup on board row and clamps out-of-range setup to car sheet in R2 JSON',
+      posted.status === 200 &&
+        row?.hasSetup === true &&
+        storedLap?.setup?.aero === 'low_downforce' &&
+        storedLap?.setup?.chassis?.frontWingClicks === 25 &&
+        storedLap?.setup?.chassis?.rearWingClicks === -3 &&
+        storedLap?.setup?.chassis?.rideHeightFrontMm === -8 &&
+        storedLap?.setup?.tuner?.tcSlipAngleLevel === undefined,
+      `status=${posted.status} hasSetup=${String(row?.hasSetup)} fw=${String(storedLap?.setup?.chassis?.frontWingClicks)} rhF=${String(storedLap?.setup?.chassis?.rideHeightFrontMm)} slip=${String(storedLap?.setup?.tuner?.tcSlipAngleLevel)}`,
     );
 
     const mismatched = await post({ ...variant(1.02, 'Wrong Car'), setup: { v: 1, vehicle: 'amg-gt3', aero: 'balanced' } }, KEY_B);

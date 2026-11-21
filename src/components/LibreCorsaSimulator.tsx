@@ -481,6 +481,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setCarId(next);
       vehicleModelRef.current = carPhysics(next);
       setVehicleModel(vehicleModelRef.current);
+      setSetupBoardNotice(null);
       saveCarChoice(next);
       session?.setCar(next);
     },
@@ -1130,17 +1131,23 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setSettings((prev) => (prev.ghost ? prev : { ...prev, ghost: true }));
   }, [session, track]);
 
-  const [setupBoardNotice, setSetupBoardNotice] = useState<{ text: string; undo?: () => void } | null>(null);
+  const [setupBoardNotice, setSetupBoardNotice] = useState<{ text: string; vehicle: VehicleModelId; undo?: () => void } | null>(null);
+  useEffect(() => {
+    setSetupBoardNotice(null);
+  }, [trackId, vehicleModel, session]);
   const handleApplyLeaderboardSetup = useCallback(
     async (entry: LeaderboardEntry) => {
+      const targetVehicle = vehicleModelRef.current;
       const rec = entry.setup
         ? null
         : entry.source === "remote" && entry.id
           ? await fetchRemoteGhost(entry.id).catch(() => null)
           : await loadBestLap(entry.trackId, entry.vehicle, entry.conditions ? lapBoardClass(entry.conditions) : null).catch(() => null);
+      // If the player switched cars while fetching a remote setup, drop the stale result
+      if (vehicleModelRef.current !== targetVehicle) return;
       const setup = entry.setup ?? rec?.setup ?? null;
       if (!setup) {
-        setSetupBoardNotice({ text: `No setup saved with ${entry.name}'s lap` });
+        setSetupBoardNotice({ text: `No setup saved with ${entry.name}'s lap`, vehicle: targetVehicle });
         return;
       }
       const snap = sessionRef.current?.getSnapshot();
@@ -1149,7 +1156,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const prevCompound = snap?.tireCompound ?? tireCompound;
       const prevAero = aeroPreset;
       const prevTuner = garageTunerFrom(snap?.telemetry.liveTuner ?? telemetry.liveTuner);
-      const targetVehicle = vehicleModelRef.current;
       const resolved = resolveSetupForCar(
         setup,
         targetVehicle,
@@ -1166,7 +1172,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       handleChangeLiveTuner(resolved.tuner);
       setSetupBoardNotice({
         text: `Applied ${entry.name}'s setup (${summarizeSharedSetup(setup)})`,
+        vehicle: targetVehicle,
         undo: () => {
+          if (vehicleModelRef.current !== targetVehicle) return;
           handleChangeChassisSetup(prevChassis);
           handleChangeTyreSetup(prevTyre);
           handleTireCompoundChange(prevCompound);

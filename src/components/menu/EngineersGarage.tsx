@@ -13,7 +13,7 @@ import {
   type GaragePreset,
   type GarageTuner,
 } from "@/lib/sim/car-setup";
-import { setupSheet, type SetupGroup, type SetupParam, type SetupState } from "@/lib/sim/setup-sheet";
+import { clampSetupToSheet, setupSheet, type SetupGroup, type SetupParam, type SetupState } from "@/lib/sim/setup-sheet";
 import {
   buildSharedSetup,
   copyTextToClipboard,
@@ -275,18 +275,16 @@ export const EngineersGarage: React.FC<
     const before = snapshot();
     // Saved presets come from storage: every value goes back through the sheet's own range (as the sliders would),
     // so a hand-edited or older preset cannot hand the car a value no slider can produce
-    let loaded: SetupState = {
-      chassis: x.chassis ?? chassis,
-      tyre: x.tyre ?? p.tyreSetup,
-      tuner: { ...currentTuner, ...(x.tuner ?? {}) },
-    };
-    for (const group of sheet) {
-      for (const param of group.params) {
-        const v = param.get(loaded);
-        const safe = Number.isFinite(v) ? Math.min(param.max, Math.max(param.min, v)) : param.base;
-        if (safe !== v) loaded = param.set(loaded, safe);
-      }
-    }
+    const loaded = clampSetupToSheet(
+      p.vehicleModel,
+      {
+        chassis: x.chassis ?? chassis,
+        tyre: x.tyre ?? p.tyreSetup,
+        tuner: { ...currentTuner, ...(x.tuner ?? {}) },
+      },
+      TYRE_SETUP_LIMITS[p.vehicleModel],
+      p.defaultTyreSetup,
+    );
     p.onChangeChassisSetup?.(loaded.chassis);
     p.onChangeTyreSetup(loaded.tyre);
     if (TIRE_COMPOUNDS.includes(x.compound)) p.onChangeTireCompound(x.compound);

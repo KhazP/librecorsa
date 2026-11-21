@@ -18,13 +18,13 @@ import {
 import {
   ARB_DETACHED_PCT,
   CHASSIS_LIMITS,
-  clampChassisSetup,
   DEFAULT_CHASSIS_SETUP,
   wheelPressuresOf,
   type ChassisSetup,
   type GaragePreset,
   type GarageTuner,
 } from "./car-setup";
+import { clampChassisToCarSheet, clampTunerToCarSheet } from "./setup-sheet";
 
 export const SHARE_CODE_PREFIX = "LC1-";
 export const MAX_SHARED_SETUP_BYTES = 4096;
@@ -35,15 +35,15 @@ const VALID_AERO: readonly AeroSetupPreset[] = ["low_downforce", "balanced", "hi
 
 const TUNER_BOUNDS: Readonly<Record<keyof GarageTuner, { min: number; max: number; step: number }>> = {
   tcLevel: { min: 0, max: 12, step: 1 },
-  tc2Level: { min: 0, max: 12, step: 1 },
-  tcSlipAngleLevel: { min: 0, max: 10, step: 1 },
+  tc2Level: { min: 1, max: 12, step: 1 },
+  tcSlipAngleLevel: { min: 0, max: 12, step: 1 },
   absLevel: { min: 0, max: 12, step: 1 },
-  brakeBiasPct: { min: 45, max: 75, step: 0.1 },
-  brakeMigrationPct: { min: -5, max: 15, step: 0.5 },
-  diffEntry: { min: 0, max: 100, step: 1 },
-  diffMid: { min: 0, max: 100, step: 1 },
-  diffExit: { min: 0, max: 100, step: 1 },
-  engineMap: { min: 1, max: 8, step: 1 },
+  brakeBiasPct: { min: 45, max: 80, step: 0.1 },
+  brakeMigrationPct: { min: 0, max: 6, step: 0.1 },
+  diffEntry: { min: 1, max: 12, step: 1 },
+  diffMid: { min: 1, max: 12, step: 1 },
+  diffExit: { min: 1, max: 12, step: 1 },
+  engineMap: { min: 1, max: 5, step: 1 },
   motorDeployKw: { min: 0, max: 500, step: 5 },
   regenKw: { min: 0, max: 500, step: 5 },
 };
@@ -97,7 +97,7 @@ export function garageTunerFrom(
   return out;
 }
 
-/** Builds a compact, validated `SharedCarSetup` keeping only non-default chassis fields */
+/** Builds a compact, validated `SharedCarSetup` keeping only non-default chassis fields within the car's sheet */
 export function buildSharedSetup(input: {
   vehicle: VehicleModelId;
   name?: string;
@@ -107,12 +107,13 @@ export function buildSharedSetup(input: {
   aero?: AeroSetupPreset;
   tuner?: Partial<GarageTuner>;
 }): SharedCarSetup {
-  const clamped = clampChassisSetup(input.chassis ?? {});
+  const clamped = clampChassisToCarSheet(input.vehicle, input.chassis ?? {});
   const diff: Partial<ChassisSetup> = {};
   for (const k of Object.keys(CHASSIS_LIMITS) as (keyof ChassisSetup)[]) {
     if (clamped[k] !== DEFAULT_CHASSIS_SETUP[k]) diff[k] = clamped[k];
   }
   const cleanName = typeof input.name === "string" ? input.name.trim().slice(0, MAX_SETUP_NAME_LEN) : "";
+  const clampedTuner = input.tuner ? clampTunerToCarSheet(input.vehicle, input.tuner) : undefined;
   const raw: SharedCarSetup = {
     v: 1,
     vehicle: input.vehicle,
@@ -121,14 +122,14 @@ export function buildSharedSetup(input: {
     ...(input.tyre ? { tyre: input.tyre } : {}),
     ...(input.compound ? { compound: input.compound } : {}),
     ...(input.aero ? { aero: input.aero } : {}),
-    ...(input.tuner && Object.keys(input.tuner).length > 0 ? { tuner: input.tuner } : {}),
+    ...(clampedTuner && Object.keys(clampedTuner).length > 0 ? { tuner: clampedTuner } : {}),
   };
   return parseSharedSetup(raw) ?? { v: 1, vehicle: input.vehicle };
 }
 
 /**
- * Strictly validates and clamps an untrusted shared setup (from a share code, JSON file, or uploaded lap).
- * Also accepts a raw `GaragePreset` JSON object for convenient `.json` import.
+ * Strictly validates and clamps an untrusted shared setup (from a share code, JSON file, or uploaded lap)
+ * against the car's exact setup sheet ranges. Also accepts a raw `GaragePreset` JSON object for `.json` import.
  */
 export function parseSharedSetup(raw: unknown): SharedCarSetup | null {
   if (!isRecord(raw)) return null;
@@ -145,17 +146,17 @@ export function parseSharedSetup(raw: unknown): SharedCarSetup | null {
 
   if (raw.chassis !== undefined) {
     if (!isRecord(raw.chassis)) return null;
-    const clamped = clampChassisSetup(raw.chassis);
-    const diff: Partial<ChassisSetup> = {};
+    const rawChassis: Partial<ChassisSetup> = {};
     for (const k of Object.keys(CHASSIS_LIMITS) as (keyof ChassisSetup)[]) {
       const rawVal = raw.chassis[k];
       if (rawVal === undefined) continue;
       if (!isFiniteNum(rawVal)) return null;
-      if ((k === "arbFrontPct" || k === "arbRearPct") && rawVal <= ARB_DETACHED_PCT) {
-        diff[k] = ARB_DETACHED_PCT;
-      } else if (clamped[k] !== DEFAULT_CHASSIS_SETUP[k]) {
-        diff[k] = clamped[k];
-      }
+      rawChassis[k] = (k === "arbFrontPct" || k === "arbRearPct") && rawVal <= ARB_DETACHED_PCT ? ARB_DETACHED_PCT : rawVal;
+    }
+    const clamped = clampChassisToCarSheet(folded, rawChassis);
+    const diff: Partial<ChassisSetup> = {};
+    for (const k of Object.keys(CHASSIS_LIMITS) as (keyof ChassisSetup)[]) {
+      if (clamped[k] !== DEFAULT_CHASSIS_SETUP[k]) diff[k] = clamped[k];
     }
     if (Object.keys(diff).length > 0) out.chassis = diff;
   }
@@ -191,15 +192,16 @@ export function parseSharedSetup(raw: unknown): SharedCarSetup | null {
 
   if (raw.tuner !== undefined) {
     if (!isRecord(raw.tuner)) return null;
-    const tuner: Partial<GarageTuner> = {};
+    const rawTuner: Partial<GarageTuner> = {};
     for (const k of Object.keys(TUNER_BOUNDS) as (keyof GarageTuner)[]) {
       const val = raw.tuner[k];
       if (val === undefined) continue;
       if (!isFiniteNum(val)) return null;
       const b = TUNER_BOUNDS[k];
-      tuner[k] = clampStep(val, b.min, b.max, b.step);
+      rawTuner[k] = clampStep(val, b.min, b.max, b.step);
     }
-    if (Object.keys(tuner).length > 0) out.tuner = tuner;
+    const clampedTuner = clampTunerToCarSheet(folded, rawTuner);
+    if (Object.keys(clampedTuner).length > 0) out.tuner = clampedTuner;
   }
 
   // Enforce strict payload size cap so shared setups never bloat lap uploads or storage
@@ -283,7 +285,7 @@ export function resolveSetupForCar(
   tuner: GarageTuner;
   differentCar: boolean;
 } {
-  const chassis = clampChassisSetup({ ...DEFAULT_CHASSIS_SETUP, ...(shared.chassis ?? {}) });
+  const chassis = clampChassisToCarSheet(targetVehicle, shared.chassis ?? {});
   const rawTyre: TyreSetup = shared.tyre
     ? {
         coldPressurePsi: { ...shared.tyre.coldPressurePsi },
@@ -296,7 +298,7 @@ export function resolveSetupForCar(
   const tyre = clampTyre(rawTyre);
   const compound = shared.compound && VALID_COMPOUNDS.includes(shared.compound) ? shared.compound : currentCompound;
   const aero = shared.aero && VALID_AERO.includes(shared.aero) ? shared.aero : currentAero;
-  const tuner: GarageTuner = { ...currentTuner, ...(shared.tuner ?? {}) };
+  const tuner: GarageTuner = clampTunerToCarSheet(targetVehicle, { ...currentTuner, ...(shared.tuner ?? {}) });
   return {
     chassis,
     tyre,

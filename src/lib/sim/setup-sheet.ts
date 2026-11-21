@@ -9,7 +9,7 @@
  */
 
 import type { TyreSetup, VehicleModelId } from "@/types/f1";
-import { ARB_DETACHED_PCT, type ChassisSetup, CHASSIS_LIMITS, FUEL_KG_PER_L, FUEL_LOAD, type GarageTuner, STEER_RATIO_BASE, WING_CLICK_DEG } from "./car-setup";
+import { ARB_DETACHED_PCT, type ChassisSetup, CHASSIS_LIMITS, DEFAULT_CHASSIS_SETUP, FUEL_KG_PER_L, FUEL_LOAD, type GarageTuner, STEER_RATIO_BASE, WING_CLICK_DEG } from "./car-setup";
 import { LC26_CHASSIS } from "./lc26-data";
 import { F12026_CAR_CONFIG } from "./f12026-car/F12026CarConfig";
 import { AMG_GT3_CONFIG } from "./gt3/AmgGt3Config";
@@ -696,4 +696,81 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
 export function setupSheet(vehicle: VehicleModelId, tyreRanges: TyreRanges, tyreDefaults: TyreSetup): SetupGroup[] {
   const b = BASELINES[vehicle];
   return SETUP_CLASS[vehicle] === "gt3" ? gt3Sheet(vehicle, b, tyreRanges, tyreDefaults) : f1Sheet(vehicle, b, tyreRanges, tyreDefaults);
+}
+
+const DUMMY_TYRE_RANGES: TyreRanges = {
+  pressurePsi: { min: 15, max: 35, step: 0.5 },
+  camberFrontDeg: { min: -5, max: 0, step: 0.1 },
+  camberRearDeg: { min: -5, max: 0, step: 0.1 },
+};
+const DUMMY_TYRE_SETUP: TyreSetup = {
+  coldPressurePsi: { fl: 25, fr: 25, rl: 25, rr: 25 },
+  camberDeg: { front: -2, rear: -1.5 },
+};
+
+/**
+ * Clamps a full garage setup (chassis, tyres, and tuner dials) through a specific car's own setup sheet.
+ * Any chassis offset not present on that car's sheet resets to baseline (0), so forged or cross-car setups can
+ * never hand the physics engine a value no slider on that car can produce.
+ */
+export function clampSetupToSheet(
+  vehicle: VehicleModelId,
+  state: SetupState,
+  tyreRanges: TyreRanges,
+  tyreDefaults: TyreSetup,
+): SetupState {
+  const sheet = setupSheet(vehicle, tyreRanges, tyreDefaults);
+  const input: SetupState = {
+    chassis: { ...DEFAULT_CHASSIS_SETUP, ...state.chassis },
+    tyre: state.tyre,
+    tuner: state.tuner ?? {},
+  };
+  let out: SetupState = {
+    chassis: { ...DEFAULT_CHASSIS_SETUP },
+    tyre: {
+      coldPressurePsi: { ...state.tyre.coldPressurePsi },
+      camberDeg: { ...state.tyre.camberDeg },
+    },
+    tuner: {},
+  };
+  for (const group of sheet) {
+    for (const param of group.params) {
+      if (param.writes === "tuner") {
+        const key = param.id as keyof GarageTuner;
+        const rawVal = input.tuner[key];
+        if (rawVal === undefined) continue;
+        const safe = Number.isFinite(rawVal) ? Math.min(param.max, Math.max(param.min, rawVal)) : param.base;
+        out = param.set(out, Number(safe.toFixed(3)));
+        continue;
+      }
+      const v = param.get(input);
+      const safe = Number.isFinite(v) ? Math.min(param.max, Math.max(param.min, v)) : param.base;
+      out = param.set(out, safe);
+    }
+  }
+  // MFD-only diffMid (not on the static garage sheet, available on F1 cars)
+  if (SETUP_CLASS[vehicle] === "f1" && input.tuner.diffMid !== undefined && Number.isFinite(input.tuner.diffMid)) {
+    out.tuner = { ...out.tuner, diffMid: Math.min(12, Math.max(1, Math.round(input.tuner.diffMid))) };
+  }
+  return out;
+}
+
+/** Clamps a chassis setup to the exact slider ranges (and available parameters) of `vehicle`'s setup sheet */
+export function clampChassisToCarSheet(vehicle: VehicleModelId, chassis: Partial<ChassisSetup>): ChassisSetup {
+  return clampSetupToSheet(
+    vehicle,
+    { chassis: { ...DEFAULT_CHASSIS_SETUP, ...chassis }, tyre: DUMMY_TYRE_SETUP, tuner: {} },
+    DUMMY_TYRE_RANGES,
+    DUMMY_TYRE_SETUP,
+  ).chassis;
+}
+
+/** Clamps a partial tuner object to the exact ranges (and available dials) of `vehicle`'s setup sheet */
+export function clampTunerToCarSheet(vehicle: VehicleModelId, tuner: Partial<GarageTuner>): GarageTuner {
+  return clampSetupToSheet(
+    vehicle,
+    { chassis: DEFAULT_CHASSIS_SETUP, tyre: DUMMY_TYRE_SETUP, tuner },
+    DUMMY_TYRE_RANGES,
+    DUMMY_TYRE_SETUP,
+  ).tuner;
 }
