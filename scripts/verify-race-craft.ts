@@ -24,7 +24,7 @@ import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { AiOpponentField, launchReactionS, type FieldIncident } from '../src/lib/sim/ai-opponents';
 import { sampleGrid } from '../src/lib/sim/ai/ai-track';
 import type { AiDrivePlan } from '../src/lib/sim/ai/drive-plan';
-import { hazardLine, inYellowZone, overlapNow, ownsCorner, passFeasible } from '../src/lib/sim/ai-racecraft';
+import { chooseAttackSide, chooseDefenseTarget, hazardLine, inYellowZone, overlapNow, ownsCorner, passFeasible } from '../src/lib/sim/ai-racecraft';
 import { COLLISION_PENALTY_S, judgeContact, RaceIncidents } from '../src/lib/sim/race-incidents';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { skipSuiteWithout } from './lib/hosted-files';
@@ -75,6 +75,20 @@ const f = (v: number, d = 1) => v.toFixed(d);
   check('Hazard: a car stopped off the road draws no one toward it', offRoad !== null && offRoad.latM === -1, offRoad ? `line ${f(offRoad.latM)} m` : 'blocked');
   check('Yellow: 300 m before an incident, not 100 m past it', inYellowZone(1000, 1300, 5000) && !inYellowZone(1400, 1300, 5000));
   check('Yellow: across the line', inYellowZone(4900, 100, 5000));
+  // Attacking side: prefers the open inside approaching a corner even when outside has slightly more total room
+  check(
+    'Attack: prefers the inside approaching a right-hander when the door is open',
+    chooseAttackSide({ roomLeftM: 6.5, roomRightM: 5.0, passSpacingM: 2.5, insideSign: 1, distToCornerM: 220, brakingZoneM: 120, myLatM: 0, aheadLatM: 0.5 }) === 1
+  );
+  check(
+    'Attack: switches to outside when the defender closes the inside door',
+    chooseAttackSide({ roomLeftM: 7.5, roomRightM: 2.2, passSpacingM: 2.5, insideSign: 1, distToCornerM: 220, brakingZoneM: 120, myLatM: 0, aheadLatM: 3.3 }) === -1
+  );
+  // Defending: covers the inside into a corner even if attacker fakes outside
+  check(
+    'Defence: covers the inside into a right-hander (ignores outside dummy)',
+    chooseDefenseTarget({ lineLatM: 0, myLatM: 0, attackerLatM: -2.0, halfRoadM: 6, insideSign: 1, defendReachM: 2.9, defendStrength: 0.8, onStartLane: false }) > 2.0
+  );
 }
 
 // ---- 2. Race control

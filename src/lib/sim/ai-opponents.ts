@@ -41,6 +41,8 @@ import { AiCarControl, aiControlTraits, KNOCK_LATERAL_MS, KNOCK_WALL_MS, KNOCK_Y
 import { CarDamage, worldToCarLocal, type CarDamageSnapshot, type DamageLevel, type DamageReport } from '@/lib/sim/car-damage';
 import {
   brakingDistanceM,
+  chooseAttackSide,
+  chooseDefenseTarget,
   hazardHalfWidthM,
   hazardLine,
   inYellowZone,
@@ -225,10 +227,10 @@ export interface RacecraftParams {
 export const DEFAULT_RACECRAFT: RacecraftParams = {
   passSpacingM: PASS_SPACING_M,
   alongsideSpacingM: ALONGSIDE_SPACING_M,
-  reactGapS: 0.35,
+  reactGapS: 0.42,
   pullOutBaseM: 3,
   pullOutClosingS: 0.9,
-  attackPush: 0.012,
+  attackPush: 0.017,
   followRelAccel: 6,
   followFadeM: 25,
   dirtyAirMargin: 0.12,
@@ -236,9 +238,9 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   plannerLine: 0.15,
   plannerProximity: 25,
   plannerConsistency: 0.4,
-  defendLookM: 30,
+  defendLookM: 45,
   defendClosingMs: 1,
-  defendReachM: 2.2,
+  defendReachM: 2.9,
   defendRoomS: 0.8,
   startLaneMaxM: 900,
   alongsideReachM: 2.5,
@@ -1873,15 +1875,24 @@ export class AiOpponentField implements AiRace {
           const aLatHere = line + aLat - aiLineOffsetM(this.track.getSampleAtDistance(ahead.sim.sMeters), me.racingLineId);
           const roomRight = half - aLat;
           const roomLeft = aLat + half;
-          let side = roomRight >= roomLeft ? 1 : -1;
-          if (craft.passTargetId === ahead.id && craft.passSide !== 0) side = craft.passSide;
-          if (craft.commitSide !== 0) side = craft.commitSide;
-          const room = side > 0 ? roomRight : roomLeft;
           // A pass that can't draw alongside before the corner is a lunge: wait for the next straight
           const cornerV = Number.isFinite(distToCorner)
             ? (this.track.getSampleAtDistance((me.sMeters + distToCorner) % L).optimalSpeedKmh / 3.6) * car.pace
             : me.vxMs;
           const brakingZone = brakingDistanceM(me.vxMs, cornerV, decel);
+          let side: number = chooseAttackSide({
+            roomLeftM: roomLeft,
+            roomRightM: roomRight,
+            passSpacingM: passSpacing,
+            insideSign,
+            distToCornerM: distToCorner,
+            brakingZoneM: brakingZone,
+            myLatM: me.lateralOffsetM,
+            aheadLatM: aLat,
+          });
+          if (craft.passTargetId === ahead.id && craft.passSide !== 0) side = craft.passSide;
+          if (craft.commitSide !== 0) side = craft.commitSide;
+          const room = side > 0 ? roomRight : roomLeft;
           // The car ahead on less grip brakes earlier for a slower corner (its speeds go with its pace, its braking with
           // pace²): the metres that buys a later braker
           const paceRatio = THREE.MathUtils.clamp(ahead.pace / Math.max(0.5, car.pace), 0.8, 1.25);
@@ -1999,18 +2010,25 @@ export class AiOpponentField implements AiRace {
       car.defending = mayDefend && (car.defending || startsDefence);
       if (car.defending && !wasDefending && attacker) {
         craft.defendMoves++;
-        // Cover the side the attacker is going for; one directly behind gets the inside of the corner ahead covered
-        const dLatAtt = attacker.sim.lateralOffsetM - me.lateralOffsetM;
-        const side = Math.abs(dLatAtt) > 0.8 || insideSign === 0 ? Math.sign(dLatAtt) || 1 : insideSign;
-        const from = onStartLane ? me.lateralOffsetM : line;
-        const reach = Math.abs(dLatAtt) > 0.8 ? Math.min(Math.abs(dLatAtt), this.rc.defendReachM * defend) : this.rc.defendReachM * defend;
-        const to = THREE.MathUtils.clamp(from + side * reach, -half, half);
+        const to = chooseDefenseTarget({
+          lineLatM: line,
+          myLatM: me.lateralOffsetM,
+          attackerLatM: attacker.sim.lateralOffsetM,
+          halfRoadM: half,
+          insideSign,
+          defendReachM: this.rc.defendReachM,
+          defendStrength: defend,
+          onStartLane,
+        });
         craft.defendOffLine = onStartLane;
         craft.defendLatM = onStartLane ? to : to - line;
         // The new lane is the one held to the first corner: going back to the grid slot's would be a second move
         if (onStartLane) car.startLaneM = to;
       }
-      if (car.defending) targetLat = THREE.MathUtils.clamp(craft.defendOffLine ? craft.defendLatM : line + craft.defendLatM, -half, half);
+      if (car.defending) {
+        targetLat = THREE.MathUtils.clamp(craft.defendOffLine ? craft.defendLatM : line + craft.defendLatM, -half, half);
+        biasRate = Math.max(biasRate, 3.0);
+      }
       // Blue flag: pull decisively off the racing line (outside of next corner, or clear side on a straight) and lift
       let blueLift = 1;
       if (lapper && targetLat === null) {
@@ -2133,8 +2151,8 @@ export class AiOpponentField implements AiRace {
       const weatherPace = this.environment.weatherPaceScale(me);
       // Yellow flag: lift through the zone
       const yellowLift = yellowFlag === 2 ? DOUBLE_YELLOW_PACE : yellow ? YELLOW_PACE : 1;
-      // Making a pass stick: a little more into the corner (a later brake, more speed) once alongside
-      const passing = craft.passTargetId !== null && ahead !== null && aheadGap < CAR_LEN_M * 1.2 && !passBlocked;
+      // Making a pass stick: a little more into the corner (a later brake, more speed) once pulling alongside
+      const passing = craft.passTargetId !== null && ahead !== null && aheadGap < CAR_LEN_M * 1.6 && !passBlocked;
       const attackPush = passing ? 1 + this.rc.attackPush * (1 + Math.max(0, this.aggressionOf(car))) : 1;
       // A car on a drive plan has its pace and the weather in the plan's grip already
       this.refreshPlan(car);

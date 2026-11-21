@@ -127,6 +127,80 @@ export function inYellowZone(s: number, incidentS: number, L: number): boolean {
   return d <= YELLOW_BEFORE_M && d >= -YELLOW_AFTER_M;
 }
 
+/**
+ * Picks which side (+1 right, -1 left) an attacking car should pass on:
+ *  - Approaching a corner (`insideSign !== 0` within `brakingZoneM + 240 m`), prefer the INSIDE whenever there is
+ *    clean passing room (`passSpacingM + 0.4 m`) so the attacker owns the apex at turn-in.
+ *  - When the defender closes the inside door, take the OUTSIDE if it has room (around-the-outside / switchback).
+ *  - On a straight with no corner nearby, keep the current side if already offset and clear, else pick the wider side.
+ */
+export function chooseAttackSide(opts: {
+  roomLeftM: number;
+  roomRightM: number;
+  passSpacingM: number;
+  insideSign: number;
+  distToCornerM: number;
+  brakingZoneM: number;
+  myLatM: number;
+  aheadLatM: number;
+}): 1 | -1 {
+  const { roomLeftM, roomRightM, passSpacingM, insideSign, distToCornerM, brakingZoneM, myLatM, aheadLatM } = opts;
+  const cornerNear = insideSign !== 0 && Number.isFinite(distToCornerM) && distToCornerM < brakingZoneM + 240;
+  if (cornerNear) {
+    const inside: 1 | -1 = insideSign > 0 ? 1 : -1;
+    const outside: 1 | -1 = inside === 1 ? -1 : 1;
+    const insideRoom = inside > 0 ? roomRightM : roomLeftM;
+    const outsideRoom = outside > 0 ? roomRightM : roomLeftM;
+    if (insideRoom >= passSpacingM + 0.4) return inside;
+    if (outsideRoom >= passSpacingM) return outside;
+    return insideRoom >= outsideRoom ? inside : outside;
+  }
+  const dLat = myLatM - aheadLatM;
+  if (Math.abs(dLat) > 0.7) {
+    const cur: 1 | -1 = dLat > 0 ? 1 : -1;
+    const curRoom = cur > 0 ? roomRightM : roomLeftM;
+    if (curRoom >= passSpacingM + 1.0) return cur;
+  }
+  return roomRightM >= roomLeftM ? 1 : -1;
+}
+
+/**
+ * Computes the target lateral offset (m, + right) for a single defensive move on a straight:
+ *  - Into a corner (`insideSign !== 0`), always prioritise covering the INSIDE line (ignores outside fakes).
+ *  - On a pure straight or off a standing start (`insideSign === 0`), cover toward the side the attacker is stepping to.
+ *  - Clamps inside `±halfRoadM` so the car stays cleanly on the asphalt.
+ */
+export function chooseDefenseTarget(opts: {
+  lineLatM: number;
+  myLatM: number;
+  attackerLatM: number;
+  halfRoadM: number;
+  insideSign: number;
+  defendReachM: number;
+  defendStrength: number;
+  onStartLane: boolean;
+}): number {
+  const { lineLatM, myLatM, attackerLatM, halfRoadM, insideSign, defendReachM, defendStrength, onStartLane } = opts;
+  const dLatAtt = attackerLatM - myLatM;
+  const maxReach = defendReachM * Math.max(0, Math.min(1, defendStrength));
+  const from = onStartLane ? myLatM : lineLatM;
+  let side: number;
+  let reach = maxReach;
+  if (insideSign !== 0 && !onStartLane) {
+    // Cover the inside of the upcoming corner decisively (don't get baited to the outside by a dummy)
+    side = Math.sign(insideSign);
+    // If attacker is already moving inside, cover far enough to shut the inside door cleanly
+    if (Math.sign(dLatAtt) === side && Math.abs(dLatAtt) > 0.8) {
+      reach = Math.min(maxReach, Math.max(1.6, Math.abs(dLatAtt) + 0.4));
+    }
+  } else {
+    side = Math.abs(dLatAtt) > 0.8 ? Math.sign(dLatAtt) : insideSign || 1;
+    if (Math.abs(dLatAtt) > 0.8) reach = Math.min(Math.abs(dLatAtt), maxReach);
+  }
+  const edge = Math.max(0.5, halfRoadM - 0.35);
+  return Math.max(-edge, Math.min(edge, from + side * reach));
+}
+
 /** Per AI car: what it remembers between frames for its racecraft */
 export class RacecraftMemory {
   /** Alongside, per other car's id */
