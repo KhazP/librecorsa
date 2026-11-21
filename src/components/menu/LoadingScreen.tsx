@@ -15,7 +15,9 @@ import { Icon } from "@/components/ui/icons";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn } from "@/lib/settings/units";
 import { carById, type CarId } from "@/lib/cars/car-registry";
-import { carMaker, circuitMaker } from "@/lib/modders";
+import { supportLabel } from "@/lib/modder-support";
+import { carMaker, circuitMaker, GAME_MAKER } from "@/lib/modders";
+import { useStoreBuild } from "@/lib/use-store-build";
 
 /** The tips, naming the player's own camera and racing-line keys as printed on their keyboard */
 const tipsFor = (camera: string, line: string) => [
@@ -51,19 +53,50 @@ const ContinuePrompt: React.FC = () => (
   </span>
 );
 
-/** Compact maker credits for the active circuit and car */
+/**
+ * Who made what is about to load: the circuit's modder, the car's (in its credit's words: the Liana's is its
+ * physics), and the game. A maker who takes donations gets a direct link plus a reminder that their Source button
+ * always carries it. Left out in the Android app (store-mode.ts).
+ */
 const MakersLines: React.FC<{ trackId: string; trackName: string; carId: CarId }> = ({ trackId, trackName, carId }) => {
+  const store = useStoreBuild();
   const circuit = circuitMaker(trackId);
   const car = carMaker(carId);
-  const parts = [
-    circuit ? `${trackName} by ${circuit.name}` : null,
-    `${carById(carId).title} by ${car.name}`,
-  ].filter(Boolean);
-  if (!parts.length) return null;
+  const lines = [
+    circuit ? { key: "circuit", lead: `${trackName} by`, maker: circuit } : null,
+    { key: "car", lead: `${carById(carId).title}: ${car.role.toLowerCase()} by`, maker: car },
+    { key: "game", lead: "LibreCorsa by", maker: GAME_MAKER },
+  ].filter((l): l is NonNullable<typeof l> => l !== null);
+  const anySupport = !store && lines.some((l) => l.maker.support);
   return (
-    <p className="lc-hint m-0 border-t border-lc-line pt-3 short:pt-2">
-      {parts.join(" · ")}
-    </p>
+    <div className="flex flex-col gap-2 border-t border-lc-line pt-3.5 short:pt-2.5">
+      <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[14px] leading-snug text-lc-slate short:text-[12px]">
+        {lines.map((l) => (
+          <li key={l.key}>
+            {l.lead} <span className="font-semibold text-lc-chalk">{l.maker.name}</span>
+            {!store && l.maker.support ? (
+              <>
+                {" · "}
+                <a
+                  href={l.maker.support.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-lc-fog underline decoration-lc-keyline underline-offset-2 transition-colors hover:text-lc-volt"
+                >
+                  {supportLabel(l.maker.support)}
+                </a>
+              </>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {anySupport ? (
+        <p className="m-0 flex items-start gap-1.5 text-[13px] leading-snug text-lc-fog short:hidden">
+          <Icon name="support" className="mt-px shrink-0 text-lc-volt" />
+          You can donate to them any time from the Source button next to the circuit or car.
+        </p>
+      ) : null}
+    </div>
   );
 };
 
@@ -195,6 +228,7 @@ export const LoadingScreen: React.FC<{
       start();
     };
     const onPointer = (e: PointerEvent) => {
+      if (e.target instanceof Element && e.target.closest("a")) return;
       if ((e.type === "pointerdown") === (e.pointerType === "mouse")) start();
     };
     window.addEventListener("keydown", onKey);

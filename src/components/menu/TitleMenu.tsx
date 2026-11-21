@@ -699,7 +699,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     // Not in the Android app (store-mode.ts)
     ...(storeBuild
       ? []
-      : [{ id: "support", label: "Support", icon: "support" as const, href: SUPPORT_URL }]),
+      : [{ id: "support", label: "Buy me a coffee", icon: "support" as const, href: SUPPORT_URL }]),
     { id: "github", label: "GitHub", icon: "source" as const, href: REPO_URL },
   ];
   const panelItems = items.filter((i) => i.panel);
