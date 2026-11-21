@@ -74,7 +74,7 @@ import {
   startPose,
   type TyreVisualState,
 } from '../simulator-car';
-import { aiLineOffsetM, type BrakingGuide, brakingGuideFor, circuitBrakingGuide, sampleProfile, type SpeedProfileCarModel, withPlanningGrip } from '../speed-profile';
+import { aiLineOffsetM, type BrakingGuide, brakingGuideFor, circuitBrakingGuide, createLc26ProfileCarModel, sampleProfile, type SpeedProfileCarModel, withPlanningGrip } from '../speed-profile';
 import { evaluateDynamicBrakingUrgency } from '../track-occupancy';
 import {
   type CarPhysicsConfig,
@@ -1014,6 +1014,7 @@ export class F12026CarSim implements SimulatorCar {
   /** This car's braking guidance (the circuit's car's when it has no planning model of its own); adapts to wet grip */
   public brakingGuide: BrakingGuide;
   private brakingGuideGripBucket = 20;
+  private lastGuideWaterMm = 0;
   /** The racing line this car follows (`CarSimProfile.racingLine`) */
   private readonly line: RacingLineId;
   public readonly wheelbaseM: number;
@@ -1645,7 +1646,7 @@ export class F12026CarSim implements SimulatorCar {
     for (const k of ["fl", "fr", "rl", "rr"] as const) deltas[k] -= prevDefault;
     this.compound = compound;
     this.vehicle.setCompound(this.config.compoundSlots[compound]);
-    this.refreshBrakingGuide();
+    this.refreshBrakingGuide(this.lastGuideWaterMm, true);
     const nextDefault = this.defaultColdPsiForCompound();
     const pr = this.profile;
     for (const k of ["fl", "fr", "rl", "rr"] as const) {
@@ -1857,24 +1858,36 @@ export class F12026CarSim implements SimulatorCar {
     v.windWorld.set(Number.isFinite(sample.windVxMs) ? sample.windVxMs! : 0, 0, Number.isFinite(sample.windVzMs) ? sample.windVzMs! : 0);
     // The circuit's altitude, and warmer air is thinner (ideal gas, about the 27 °C the cars are calibrated at)
     v.airDensity = this.circuitAirDensity() * ((AMBIENT_C + 273.15) / (sample.ambientC + 273.15));
-    this.refreshBrakingGuide();
+    this.lastGuideWaterMm = sample.lineWaterMm !== undefined ? Math.max(0, sample.lineWaterMm) : v.waterMm;
+    this.refreshBrakingGuide(this.lastGuideWaterMm, false);
   }
 
-  /** Rebuilds the cached braking guide only when wet-track grip shifts across a 5 % bucket */
-  private refreshBrakingGuide(): void {
-    const base = this.profile.speedProfile;
-    if (!base) return;
+  /** Rebuilds the cached braking guide only when lap-wide wet-track grip crosses a hysteretic 5 % bucket */
+  private refreshBrakingGuide(waterMm: number = this.lastGuideWaterMm, force = false): void {
     const v = this.vehicle;
     const traits = this.compoundData.wetTraits ?? SLICK_TRAITS;
-    const wetGrip = v.waterMm > 0.02 ? wetGripFactor(traits, v.waterMm, 50, v.realism.wetSeverity, 0) / (traits.dryGrip ?? 1) : 1;
-    const bucket = Math.max(8, Math.min(20, Math.round(wetGrip * 20)));
+    const wetGrip = waterMm > 0.02 ? wetGripFactor(traits, waterMm, 50, v.realism.wetSeverity, 0) / (traits.dryGrip ?? 1) : 1;
+    const scaled = Math.max(8, Math.min(20, wetGrip * 20));
+    // Hysteresis prevents rapid guide swapping when crossing a drying racing line near a bucket boundary
+    if (!force && Math.abs(scaled - this.brakingGuideGripBucket) < 0.75) return;
+    const bucket = Math.max(8, Math.min(20, Math.round(scaled)));
     if (bucket === this.brakingGuideGripBucket) return;
     this.brakingGuideGripBucket = bucket;
-    const gripScale = bucket / 20;
-    this.brakingGuide =
-      bucket === 20
+    const base = this.profile.speedProfile;
+    if (bucket === 20) {
+      this.brakingGuide = base
         ? brakingGuideFor(this.track.samples, this.profile.id, base, this.line)
-        : brakingGuideFor(this.track.samples, `${this.profile.id}:g${bucket}`, withPlanningGrip(base, gripScale), this.line);
+        : circuitBrakingGuide(this.track.samples, this.line);
+      return;
+    }
+    const wetBase = base ?? createLc26ProfileCarModel(this.aeroPreset);
+    const gripScale = bucket / 20;
+    this.brakingGuide = brakingGuideFor(
+      this.track.samples,
+      `${this.profile.id}:${this.aeroPreset}:g${bucket}`,
+      withPlanningGrip(wetBase, gripScale),
+      this.line
+    );
   }
 
   /** Air density at this circuit's altitude (standard atmosphere): 1.07 at Rwanda, 1.21 at a sea-level track */

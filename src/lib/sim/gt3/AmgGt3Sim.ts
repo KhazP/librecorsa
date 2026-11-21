@@ -36,7 +36,7 @@ export const AMG_GT3_PROFILE_CAR: SpeedProfileCarModel = {
   dragCoef: 0.567,
   rearDownforceShare: 0.55,
   rearWeightFraction: 1 - C.chassis.frontWeightFraction,
-  muLat: 1.6,
+  muLat: 1.52,
   muLong: 1.42,
   maxBrakeForceN:
     2 *

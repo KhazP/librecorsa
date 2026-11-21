@@ -206,7 +206,7 @@ export class TrackEnvironment {
       const sample = this.track.getSampleAtDistanceInto
         ? this.track.getSampleAtDistanceInto(sim.sMeters, this.sampleBuf)
         : this.track.getSampleAtDistance(sim.sMeters);
-      const racingLineLatM = aiLineOffsetM(sample);
+      const racingLineLatM = aiLineOffsetM(sample, sim.racingLineId);
 
       // Water under the car (the cars sweep the racing line dry), the air temperature, and the AI's tyre call
       if (Math.abs(sim.vxMs) > MIN_ROLLING_MS) {
@@ -214,10 +214,11 @@ export class TrackEnvironment {
       }
       let ws = this.weatherSamples.get(sim);
       if (!ws) {
-        ws = { waterMm: 0, wheelWaterMm: [0, 0, 0, 0], wetness: 0, ambientC: weather.ambientC, rain: 0, sprayIntensity: 0 };
+        ws = { waterMm: 0, lineWaterMm: 0, wheelWaterMm: [0, 0, 0, 0], wetness: 0, ambientC: weather.ambientC, rain: 0, sprayIntensity: 0 };
         this.weatherSamples.set(sim, ws);
       }
       ws.waterMm = weather.waterAt(sim.sMeters, sim.lateralOffsetM, racingLineLatM);
+      ws.lineWaterMm = weather.lineWaterMm;
       ws.wetness = wetnessFromWater(ws.waterMm);
       ws.ambientC = weather.ambientC;
       ws.rain = weather.rainIntensity;

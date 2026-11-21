@@ -1011,6 +1011,8 @@ export function sanitizeWeatherSync(v: unknown): WeatherSyncState | null {
 export interface WeatherContactSample {
   /** Water film under the car (mm) */
   waterMm: number;
+  /** Lap-wide racing-line water film depth (mm), for stable braking-guide grip calibration */
+  lineWaterMm?: number;
   /** Per-wheel water film depth [FR, FL, RR, RL] (mm) including topographical puddles & gutters */
   wheelWaterMm?: [number, number, number, number];
   /** How wet the road acts there (0..1) */
