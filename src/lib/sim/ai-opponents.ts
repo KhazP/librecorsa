@@ -9,7 +9,7 @@
 import { steerAngleOf, wheelRpmOf } from './car-pose';
 import * as THREE from 'three';
 import { F1Physics2026 } from '@/lib/f1-physics-2026';
-import { DEFAULT_TRACK_ID, getActiveTrackMetadata, type AiPlanCheck, type BuiltTrackData } from '@/lib/track-data';
+import { createTrackSampleBuffer, DEFAULT_TRACK_ID, getActiveTrackMetadata, type AiPlanCheck, type BuiltTrackData } from '@/lib/track-data';
 import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/sim/track-evolution';
 import { TrackEnvironment } from '@/lib/sim/track-environment';
 import { aiLineOffsetM, computeSpeedProfile, createLc26ProfileCarModel, withPlanningGrip } from '@/lib/sim/speed-profile';
@@ -90,6 +90,10 @@ import {
   type RacerProgress,
   wrapHalf,
 } from '@/lib/sim/race-session';
+
+const clamp = (x: number, lo: number, hi: number): number => (x < lo ? lo : x > hi ? hi : x);
+const EMPTY_AI_INPUTS = Object.freeze({});
+const _aiSampleBuf = createTrackSampleBuffer();
 
 export interface AiDriverDef {
   code: string;
@@ -301,7 +305,7 @@ function cornerLimitedShare(plan: AiDrivePlan, s: number, vMs: number, lookM: nu
     if (sampleGrid(plan.vOpen, s + d, ds) > v + 0.05) continue;
     vMin = Math.min(vMin, v);
   }
-  return THREE.MathUtils.clamp((1.15 - vMin / Math.max(1, vMs)) / 0.15, 0, 1);
+  return clamp((1.15 - vMin / Math.max(1, vMs)) / 0.15, 0, 1);
 }
 
 /**
@@ -321,7 +325,7 @@ const PLAN_MEMO_MAX = 48;
  * alien) a launch bogged by wheelspin or a slow clutch release, worth a few tenths. Real F1 starts react in 0.15-0.3 s
  */
 export function launchReactionS(skill: number, draw: number, badDraw: number): number {
-  const k = THREE.MathUtils.clamp(skill / 100, 0, 1);
+  const k = clamp(skill / 100, 0, 1);
   const react = 0.3 - 0.13 * k + (draw - 0.5) * 0.1;
   const badChance = 0.17 - 0.13 * k;
   const bogged = badDraw < badChance ? 0.2 + 0.3 * (badDraw / badChance) : 0;
@@ -550,7 +554,7 @@ const CONTACT_MAX_DYAW_RADS = 0.25;
  * change of the impulse itself (at most (1 + e) × the closing speed) is never cut, so a car can't drive through a
  * stopped one
  */
-const fieldContactYawCap = (impactMs: number) => THREE.MathUtils.clamp(0.25 + 0.09 * impactMs, CONTACT_MAX_DYAW_RADS, 2.5);
+const fieldContactYawCap = (impactMs: number) => clamp(0.25 + 0.09 * impactMs, CONTACT_MAX_DYAW_RADS, 2.5);
 const fieldContactDvCap = (impactMs: number) => Math.max(CONTACT_MAX_DV_MS, 2 + 1.3 * impactMs);
 /** Two boxes can only overlap with their centres within a full diagonal (m, squared) */
 const CONTACT_BROAD_M2 = CAR_LEN_M * CAR_LEN_M + CAR_WID_M * CAR_WID_M;
@@ -649,7 +653,7 @@ function applyObbDeltas(
   const ps = pl > CONTACT_MAX_POS_M ? CONTACT_MAX_POS_M / pl : 1;
   const vl = Math.hypot(vel[0], vel[1]);
   const vs = vl > maxDv ? maxDv / vl : 1;
-  const y = THREE.MathUtils.clamp(yaw, -maxYaw, maxYaw);
+  const y = clamp(yaw, -maxYaw, maxYaw);
   sim.applyRigidBodyCollision(pos[0] * ps, pos[1] * ps, vel[0] * vs, vel[1] * vs, y);
   _applied.dvx = vel[0] * vs;
   _applied.dvz = vel[1] * vs;
@@ -860,7 +864,7 @@ export class AiOpponentField implements AiRace {
     this.spectate = options.spectate ?? false;
     this.classId = options.classId ?? classOf(player);
     this.trackId = options.trackId ?? track.id ?? DEFAULT_TRACK_ID;
-    this.skillLevel = THREE.MathUtils.clamp(options.skill ?? AI_SKILL_DEFAULT, 0, 100);
+    this.skillLevel = clamp(options.skill ?? AI_SKILL_DEFAULT, 0, 100);
     this.mods = aiSkillModifiers(this.skillLevel);
     this.seed = (options.seed ?? Math.floor(Math.random() * 2 ** 31)) >>> 0;
     this.rng = seededRng(this.seed);
@@ -879,8 +883,8 @@ export class AiOpponentField implements AiRace {
       sim.aiPaceScale = d.pace;
       tuning ??= new AiTrackTuning(track, resolveAiTuning({ classId: this.classId, vehicleId: sim.vehicleId, trackId: this.trackId }, library));
       const car = this.makeCar(`ai_${d.code}`, d.code, d.teamColorHex, sim, sim, d.pace);
-      car.aggression = THREE.MathUtils.clamp(d.aggression ?? 0, -1, 1);
-      car.consistencyBias = THREE.MathUtils.clamp(d.consistencyBias ?? 0, -0.2, 0.2);
+      car.aggression = clamp(d.aggression ?? 0, -1, 1);
+      car.consistencyBias = clamp(d.consistencyBias ?? 0, -0.2, 0.2);
       car.hooks = driveHooksFor(sim, track);
       this.cars.push(car);
     }
@@ -904,7 +908,7 @@ export class AiOpponentField implements AiRace {
 
   /** Changes the AI level mid-session: pace at once, braking points and corner speeds from a rebuilt target */
   public setSkill(skill: number): void {
-    this.skillLevel = THREE.MathUtils.clamp(skill, 0, 100);
+    this.skillLevel = clamp(skill, 0, 100);
     this.mods = aiSkillModifiers(this.skillLevel);
     this.applySkill();
     for (const car of this.cars) if (car.ai) {
@@ -929,9 +933,9 @@ export class AiOpponentField implements AiRace {
 
   /** A new lap for an AI car: this lap's inconsistency (pace, braking points, maybe a mistake), then its target speed */
   private newLap(car: FieldCar): void {
-    const spread = 1 - THREE.MathUtils.clamp(this.tuning.params.consistency + car.consistencyBias, 0, 1);
+    const spread = 1 - clamp(this.tuning.params.consistency + car.consistencyBias, 0, 1);
     const m = this.mods;
-    car.pace = car.basePace * (1 + THREE.MathUtils.clamp(gaussian(car.rng) * m.lapPaceSigma * spread, -0.03, 0.03));
+    car.pace = car.basePace * (1 + clamp(gaussian(car.rng) * m.lapPaceSigma * spread, -0.03, 0.03));
     for (let k = 0; k < car.cornerBrakeErr.length; k++) {
       car.cornerBrakeErr[k] = Math.max(0, gaussian(car.rng) * m.cornerBrakeSigma * spread);
     }
@@ -977,7 +981,7 @@ export class AiOpponentField implements AiRace {
 
   /** A driver's temperament in this race: its own, moved by the race setup's aggression */
   private aggressionOf(car: FieldCar): number {
-    return THREE.MathUtils.clamp(car.aggression + this.aggressionAdd, -1, 1);
+    return clamp(car.aggression + this.aggressionAdd, -1, 1);
   }
 
   /**
@@ -1300,7 +1304,7 @@ export class AiOpponentField implements AiRace {
       car.rollingGreenAtS = 0;
       // Start from the grid slot's lane, not the racing line, so the field does not file onto the line off the grid
       car.startLaneM = car.ai ? car.sim.lateralOffsetM : null;
-      car.biasM = car.ai ? THREE.MathUtils.clamp(car.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(car.sim.sMeters), car.ai.racingLineId), -6, 6) : 0;
+      car.biasM = car.ai ? clamp(car.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(car.sim.sMeters), car.ai.racingLineId), -6, 6) : 0;
       if (car.ai) car.ai.aiLineBiasM = car.biasM;
       car.stuckS = 0;
       car.prevS = car.sim.sMeters;
@@ -1437,7 +1441,7 @@ export class AiOpponentField implements AiRace {
       // bias is rate-limited), rather than the tracker snatching it back across metres of road
       if (!wasDriving && (ctl.mode === 'racing' || ctl.mode === 'rejoining')) {
         const line = aiLineOffsetM(this.track.getSampleAtDistance(sim.sMeters), sim.racingLineId);
-        car.biasM = THREE.MathUtils.clamp(sim.lateralOffsetM - line, -8, 8);
+        car.biasM = clamp(sim.lateralOffsetM - line, -8, 8);
         sim.aiLineBiasM = car.biasM;
       }
       if (!wasSpinning && ctl.mode === 'spinning') {
@@ -1454,7 +1458,7 @@ export class AiOpponentField implements AiRace {
         if (this.rollingPaceMs > 0 && this.raceTimeS < car.rollingGreenAtS) {
           sim.aiSpeedCapMs = Math.min(sim.aiSpeedCapMs ?? Infinity, this.rollingPaceMs);
         }
-        sim.step(dt, {});
+        sim.step(dt, EMPTY_AI_INPUTS);
       } else {
         sim.aiAutopilot = false;
         sim.step(dt, out.inputs);
@@ -1578,25 +1582,40 @@ export class AiOpponentField implements AiRace {
     return this.yellowLevelAt(me.sim.sMeters, me);
   }
 
+  private readonly ctlStateBuf: AiControlCarState = {
+    vxMs: 0,
+    vyMs: 0,
+    yawRateRadS: 0,
+    roadYawRateRadS: 0,
+    headingErrRad: 0,
+    lateralM: 0,
+    steer: 0,
+    throttle: 0,
+    brake: 0,
+  };
+  private readonly trafficOrderBuf: FieldCar[] = [];
+
   /** What the driver feels of the car, for its hands (`AiCarControl`) */
   private controlState(car: FieldCar): AiControlCarState {
     const sim = car.sim;
-    const sample = this.track.getSampleAtDistance(sim.sMeters);
+    const sample = this.track.getSampleAtDistanceInto
+      ? this.track.getSampleAtDistanceInto(sim.sMeters, _aiSampleBuf)
+      : this.track.getSampleAtDistance(sim.sMeters);
     const q = sim.worldQuaternion;
     const heading = Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y));
     const err = heading - Math.atan2(sample.tangent.x, sample.tangent.z);
     const t = sim.telemetry;
-    return {
-      vxMs: sim.vxMs,
-      vyMs: sim.vyMs,
-      yawRateRadS: sim.yawRateRadS,
-      roadYawRateRadS: sim.vxMs * sample.curvature,
-      headingErrRad: Math.atan2(Math.sin(err), Math.cos(err)),
-      lateralM: sim.lateralOffsetM,
-      steer: sim.steerAngleNorm,
-      throttle: t.throttle,
-      brake: t.brake,
-    };
+    const out = this.ctlStateBuf;
+    out.vxMs = sim.vxMs;
+    out.vyMs = sim.vyMs;
+    out.yawRateRadS = sim.yawRateRadS;
+    out.roadYawRateRadS = sim.vxMs * sample.curvature;
+    out.headingErrRad = Math.atan2(Math.sin(err), Math.cos(err));
+    out.lateralM = sim.lateralOffsetM;
+    out.steer = sim.steerAngleNorm;
+    out.throttle = t.throttle;
+    out.brake = t.brake;
+    return out;
   }
 
   /** No car is coming up on this stretch for the next few seconds: a stopped car may rejoin */
@@ -1701,19 +1720,24 @@ export class AiOpponentField implements AiRace {
     const decel = this.classId === 'gt3' ? 16 : 32;
     this.capPlayerAutopilot(L);
     // Leader first: each follower then plans against the paths the cars ahead have just chosen
-    const order = [...this.cars].sort((a, b) => b.distM - a.distM);
+    const order = this.trafficOrderBuf;
+    order.length = this.cars.length;
+    for (let i = 0; i < this.cars.length; i++) order[i] = this.cars[i];
+    order.sort((a, b) => b.distM - a.distM);
     for (const car of order) {
       const me = car.ai;
       if (!me || car.removed) continue;
       const craft = car.craft;
-      const sample = this.track.getSampleAtDistance(me.sMeters);
+      const sample = this.track.getSampleAtDistanceInto
+        ? this.track.getSampleAtDistanceInto(me.sMeters, _aiSampleBuf)
+        : this.track.getSampleAtDistance(me.sMeters);
       const line = aiLineOffsetM(sample, me.racingLineId);
       const half = sample.width / 2 - 1.2;
       if (this.rollingFormation) {
         // Hold tight staggered formation pace up to Start/Finish: no racing, passing or defending before green.
         const stagger = car.gridSlot === 0 ? 0 : car.gridSlot % 2 === 1 ? -2.6 : 2.6;
         let formationCap = this.rollingPaceMs;
-        let targetLat = THREE.MathUtils.clamp(line + stagger, -half, half);
+        let targetLat = clamp(line + stagger, -half, half);
         for (const other of this.cars) {
           if (other === car || other.removed) continue;
           const ds = wrapHalf(other.sim.sMeters - me.sMeters, L);
@@ -1721,7 +1745,7 @@ export class AiOpponentField implements AiRace {
           const extraLat = other.isPlayer ? 0.5 * this.rc.playerMarginM : 0;
           if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(dLat) < this.rc.alongsideSpacingM + extraLat) {
             const away = me.lateralOffsetM >= other.sim.lateralOffsetM ? 1 : -1;
-            targetLat = THREE.MathUtils.clamp(other.sim.lateralOffsetM + away * (this.rc.alongsideSpacingM + extraLat), -half, half);
+            targetLat = clamp(other.sim.lateralOffsetM + away * (this.rc.alongsideSpacingM + extraLat), -half, half);
           }
           if (ds > 0 && ds < 80 && Math.abs(dLat) < CAR_WID_M + 0.35 + extraLat) {
             formationCap = Math.min(formationCap, followCapMs(other.sim, ds - CAR_LEN_M - (other.isPlayer ? this.rc.playerMarginM : 0), this.rc));
@@ -1740,8 +1764,8 @@ export class AiOpponentField implements AiRace {
         car.craft.passTargetId = null;
         car.craft.backOffId = null;
         car.craft.commitSide = 0;
-        const biasTarget = THREE.MathUtils.clamp(targetLat - line, -6, 6);
-        car.biasM += THREE.MathUtils.clamp(biasTarget - car.biasM, -BIAS_RATE_MS * dt, BIAS_RATE_MS * dt);
+        const biasTarget = clamp(targetLat - line, -6, 6);
+        car.biasM += clamp(biasTarget - car.biasM, -BIAS_RATE_MS * dt, BIAS_RATE_MS * dt);
         me.aiLineBiasM = car.biasM;
         this.refreshPlan(car);
         const weatherPace = this.environment.weatherPaceScale(me);
@@ -1762,7 +1786,7 @@ export class AiOpponentField implements AiRace {
       const vscActive = this.vsc.active;
       const yellowFlag = this.yellowLevelAt(me.sMeters);
       const yellow = yellowFlag > 0 || vscActive;
-      const caution = THREE.MathUtils.clamp(
+      const caution = clamp(
         T.at('overtakeCaution', me.sMeters) + this.mods.cautionAdd - 0.25 * this.aggressionOf(car) + this.raceControl.cautionOf(car.code, this.raceTimeS),
         0,
         1
@@ -1771,7 +1795,7 @@ export class AiOpponentField implements AiRace {
       let passSpacing = this.rc.passSpacingM * (1 + 0.5 * dc);
       let minClosing = -1 + 3 * dc;
       const followGap = 12 + 10 * dc;
-      const defend = THREE.MathUtils.clamp(T.params.defend * this.mods.defendMult + 0.2 * this.aggressionOf(car), 0, 1);
+      const defend = clamp(T.params.defend * this.mods.defendMult + 0.2 * this.aggressionOf(car), 0, 1);
 
       let ahead: FieldCar | null = null;
       let aheadGap = Infinity;
@@ -1846,8 +1870,10 @@ export class AiOpponentField implements AiRace {
       let kNext = sample.curvature;
       let distToCorner = Math.abs(sample.curvature) > 0.006 ? 0 : Infinity;
       const lookM = 30 + (me.vxMs * me.vxMs) / 60;
+      const sampleK = this.track.sampleCurvatureAtDistance;
       for (let d = 10; d <= lookM; d += 10) {
-        const k = this.track.getSampleAtDistance((me.sMeters + d) % L).curvature;
+        const sAhead = (me.sMeters + d) % L;
+        const k = sampleK ? sampleK(sAhead) : this.track.getSampleAtDistance(sAhead).curvature;
         if (Math.abs(k) > 0.006 && !Number.isFinite(distToCorner)) distToCorner = d;
         if (Math.abs(k) > kAbs) {
           kAbs = Math.abs(k);
@@ -1899,7 +1925,7 @@ export class AiOpponentField implements AiRace {
           const room = side > 0 ? roomRight : roomLeft;
           // The car ahead on less grip brakes earlier for a slower corner (its speeds go with its pace, its braking with
           // pace²): the metres that buys a later braker
-          const paceRatio = THREE.MathUtils.clamp(ahead.pace / Math.max(0.5, car.pace), 0.8, 1.25);
+          const paceRatio = clamp(ahead.pace / Math.max(0.5, car.pace), 0.8, 1.25);
           const itsZone = brakingDistanceM(ahead.sim.vxMs, cornerV * paceRatio, decel * paceRatio * paceRatio);
           // Holding a pass already under way needs less than starting one: the tow is gone once out of it
           const holding = craft.passTargetId === ahead.id;
@@ -1993,7 +2019,7 @@ export class AiOpponentField implements AiRace {
         // Tuck in behind: drop back by the overlap before the turn-in, not just ease off (1.5 m/s slower took a second
         // to clear a part overlap while the car ahead moved across onto its line, into the front wheel)
         const overlapM = Math.max(0, CAR_LEN_M + 0.5 - dsA);
-        if (!owns) speedCap = Math.min(speedCap, alongsideAhead.sim.vxMs - THREE.MathUtils.clamp(1.5 * overlapM, 1.5, 5));
+        if (!owns) speedCap = Math.min(speedCap, alongsideAhead.sim.vxMs - clamp(1.5 * overlapM, 1.5, 5));
       }
       if (squeezedBy) speedCap = Math.min(speedCap, squeezedBy.sim.vxMs - 2);
       // Defending: a quicker car closing from behind and a real corner coming: cover the inside, the move made while
@@ -2030,7 +2056,7 @@ export class AiOpponentField implements AiRace {
         if (onStartLane) car.startLaneM = to;
       }
       if (car.defending) {
-        targetLat = THREE.MathUtils.clamp(craft.defendOffLine ? craft.defendLatM : line + craft.defendLatM, -half, half);
+        targetLat = clamp(craft.defendOffLine ? craft.defendLatM : line + craft.defendLatM, -half, half);
         biasRate = Math.max(biasRate, 3.0);
       }
       // Blue flag: pull decisively off the racing line (outside of next corner, or clear side on a straight) and lift
@@ -2070,7 +2096,7 @@ export class AiOpponentField implements AiRace {
           speedCap = Math.min(speedCap, Math.max(0, Math.sqrt(2 * 0.6 * decel * Math.max(0, gap - 6))));
         }
       }
-      let pos = targetLat === null ? null : THREE.MathUtils.clamp(targetLat, -half, half);
+      let pos = targetLat === null ? null : clamp(targetLat, -half, half);
       // Corner margins from the tuning: keep the car's centre this far inside the inside / outside edge
       const intM = T.at('intMarginM', me.sMeters);
       const extM = T.at('extMarginM', me.sMeters);
@@ -2084,7 +2110,7 @@ export class AiOpponentField implements AiRace {
           const hi = rightM > 0 ? Math.max(0, edge - rightM) : Infinity;
           const lo = leftM > 0 ? -Math.max(0, edge - leftM) : -Infinity;
           const want = pos ?? line;
-          const kept = THREE.MathUtils.clamp(want, lo, hi);
+          const kept = clamp(want, lo, hi);
           if (Math.abs(kept - want) > 1e-3) pos = kept;
         }
       }
@@ -2099,7 +2125,7 @@ export class AiOpponentField implements AiRace {
       if (roomFor && roomRules && targetLat === roomLat && this.rc.alongsideReachM > 0) {
         maxBias = Math.max(maxBias, Math.min(Math.abs((pos ?? line) - line), maxBias + this.rc.alongsideReachM));
       }
-      let biasTarget = pos === null ? 0 : THREE.MathUtils.clamp(pos - line, -maxBias, maxBias);
+      let biasTarget = pos === null ? 0 : clamp(pos - line, -maxBias, maxBias);
       // ... and with less than a car's width of room left on our side, not clearly ahead: lift and drop in behind
       if (roomFor && roomRules && this.rc.squeezeYield > 0) {
         const dsR = wrapHalf(roomFor.sim.sMeters - me.sMeters, L);
@@ -2107,7 +2133,7 @@ export class AiOpponentField implements AiRace {
         // (another AI car makes room on its side too: only the one behind lifts, or both did and stayed side by side)
         if (sep < CAR_WID_M + 0.4 && dsR > (roomFor.isPlayer ? -0.5 * CAR_LEN_M : 0)) {
           const overlapM = Math.max(0, CAR_LEN_M + 0.5 - dsR);
-          speedCap = Math.min(speedCap, roomFor.sim.vxMs - THREE.MathUtils.clamp(1.5 * overlapM, 1.5, 5));
+          speedCap = Math.min(speedCap, roomFor.sim.vxMs - clamp(1.5 * overlapM, 1.5, 5));
         }
       }
       // A car whose path ours will run into, or one beside it that ours will squeeze: checked ahead of time
@@ -2138,10 +2164,10 @@ export class AiOpponentField implements AiRace {
         // planned offset a moment ahead instead never converged: a smooth move starts slowly, so each replan from the
         // car's own position left it where it was
         const goal = car.local ? car.local.endD : biasTarget;
-        car.biasM += THREE.MathUtils.clamp(goal - car.biasM, -biasRate * dt, biasRate * dt);
+        car.biasM += clamp(goal - car.biasM, -biasRate * dt, biasRate * dt);
       } else {
         car.local = null;
-        car.biasM += THREE.MathUtils.clamp(biasTarget - car.biasM, -biasRate * dt, biasRate * dt);
+        car.biasM += clamp(biasTarget - car.biasM, -biasRate * dt, biasRate * dt);
       }
       me.aiLineBiasM = car.biasM;
       // Off-line and in dirty air the corner is tighter than planned: give a little speed away for it
@@ -2280,7 +2306,7 @@ export class AiOpponentField implements AiRace {
     const meLat = this.lateralSpeedMs(me);
     const myN = (k: number, b0: number, b1: number) => {
       const t = k * PATH_STEP_S;
-      const planned = meN + this.pathLine[k - 1] + THREE.MathUtils.clamp(b1 - b0, -biasRate * t, biasRate * t);
+      const planned = meN + this.pathLine[k - 1] + clamp(b1 - b0, -biasRate * t, biasRate * t);
       return planned + (meN + meLat * t - planned) * Math.exp(-t / PATH_TRACK_LAG_S);
     };
     for (const o of this.cars) {
@@ -2347,7 +2373,7 @@ export class AiOpponentField implements AiRace {
           rateMs = AVOID_RATE_MS;
         }
         if ((!onRoad || !inTime) && dsNow > (human ? -0.5 * CAR_LEN_M : 0)) {
-          capMs = Math.min(capMs, oV - THREE.MathUtils.clamp(1.5 * Math.max(0, CAR_LEN_M + 0.5 - dsNow), 1.5, 5));
+          capMs = Math.min(capMs, oV - clamp(1.5 * Math.max(0, CAR_LEN_M + 0.5 - dsNow), 1.5, 5));
         }
       } else if (!conflictAt(car.biasM)) {
         // Behind: our move across would cut its nose; hold where we are until it is clear

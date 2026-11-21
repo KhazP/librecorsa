@@ -104,6 +104,10 @@ export interface BuiltTrackData {
   otherLayoutRoads?: LapStretches;
   spline: THREE.CatmullRomCurve3;
   getSampleAtDistance: (s: number) => TrackSamplePoint;
+  /** Allocation-free variant of `getSampleAtDistance` writing into a caller-owned buffer (`createTrackSampleBuffer`). */
+  getSampleAtDistanceInto?: (s: number, out: TrackSamplePoint) => TrackSamplePoint;
+  /** Fast scalar curvature lookup at lap distance `s` (1/m), avoiding full `TrackSamplePoint` construction. */
+  sampleCurvatureAtDistance?: (s: number) => number;
   projectWorldToTrack: (
     worldX: number,
     worldZ: number,
@@ -114,6 +118,13 @@ export interface BuiltTrackData {
     lateralOffset: number;
     distSq: number;
   };
+  /** Allocation-free variant of `projectWorldToTrack` writing into a caller-owned result + `sample` buffer. */
+  projectWorldToTrackInto?: (
+    worldX: number,
+    worldZ: number,
+    out: TrackProjectionResult,
+    hintS?: number
+  ) => TrackProjectionResult;
   /**
    * Continuous world → track mapping: segment `i0 → i1` at parameter `t` (s = (i0 + t)·ds),
    * with the signed horizontal lateral offset `lateralH` (+ right) used by the height profiles.
@@ -123,6 +134,47 @@ export interface BuiltTrackData {
     worldZ: number,
     hintS?: number
   ) => { i0: number; i1: number; t: number; s: number; lateralH: number };
+}
+
+/** Reusable target for `BuiltTrackData.projectWorldToTrackInto` */
+export interface TrackProjectionResult {
+  sample: TrackSamplePoint;
+  s: number;
+  lateralOffset: number;
+  distSq: number;
+}
+
+/** Allocates a reusable `TrackSamplePoint` buffer for zero-alloc `getSampleAtDistanceInto` / `projectWorldToTrackInto`. */
+export function createTrackSampleBuffer(): TrackSamplePoint {
+  return {
+    index: 0,
+    s: 0,
+    t: 0,
+    position: new THREE.Vector3(),
+    racingLinePos: new THREE.Vector3(),
+    tangent: new THREE.Vector3(0, 0, 1),
+    normal: new THREE.Vector3(0, 1, 0),
+    binormal: new THREE.Vector3(1, 0, 0),
+    bankingRad: 0,
+    width: 12,
+    curvature: 0,
+    verticalCurvature: 0,
+    slopeSin: 0,
+    sector: 1,
+    turnNumber: 0,
+    turnName: "",
+    runoffStyle: "main_straight",
+    kerbLeft: false,
+    kerbRight: false,
+    drsZone: false,
+    racingLineOffset: 0,
+    racingLineOffsetGt3: 0,
+    optimalSpeedKmh: 0,
+    brakeLimitKmh: 0,
+    brakingZone: 0,
+    gripMultiplier: 1,
+    yProf: undefined,
+  };
 }
 
 /** DRS zones of the active circuit (the name predates other circuits), with their corrections (`drs-zone-fixes.ts`) */
@@ -1661,18 +1713,33 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
       }
     }
   }
+  const samplePosX = new Float64Array(NUM_SAMPLES);
+  const samplePosZ = new Float64Array(NUM_SAMPLES);
   const hTanX = new Float64Array(NUM_SAMPLES);
   const hTanZ = new Float64Array(NUM_SAMPLES);
   for (let i = 0; i < NUM_SAMPLES; i++) {
+    samplePosX[i] = samples[i].position.x;
+    samplePosZ[i] = samples[i].position.z;
     const len = Math.hypot(splineDX[i], splineDZ[i]) || 1;
     hTanX[i] = splineDX[i] / len;
     hTanZ[i] = splineDZ[i] / len;
   }
-  /** Spline centreline point (x, z), first and second derivative w.r.t. t on segment i0 → i0+1 */
-  const hermiteXZ = (i0: number, t: number) => {
-    const i1 = (i0 + 1) % NUM_SAMPLES;
-    const p0 = samples[i0].position;
-    const p1 = samples[i1].position;
+
+  // Reusable scratch buffers for zero-alloc spline evaluation & segment projection
+  const _herm = { x: 0, z: 0, dx: 0, dz: 0, ddx: 0, ddz: 0 };
+  const _segTmp = { i0: 0, i1: 0, t: 0, lateralH: 0 };
+  const _segChosen = { i0: 0, i1: 0, t: 0, lateralH: 0 };
+  const _segFallback = { i0: 0, i1: 0, t: 0, lateralH: 0 };
+  const _locScratch = { i0: 0, i1: 0, t: 0, s: 0, lateralH: 0 };
+  const SEG_OFFSETS = [-1, 0, -2, 1] as const;
+
+  /** Spline centreline point (x, z), first and second derivative w.r.t. t on segment i0 → i0+1 into `_herm` */
+  const hermiteXZInto = (i0: number, t: number): void => {
+    const i1 = i0 + 1 < NUM_SAMPLES ? i0 + 1 : 0;
+    const p0x = samplePosX[i0];
+    const p0z = samplePosZ[i0];
+    const p1x = samplePosX[i1];
+    const p1z = samplePosZ[i1];
     const m0x = splineDX[i0];
     const m0z = splineDZ[i0];
     const m1x = splineDX[i1];
@@ -1691,14 +1758,109 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     const e10 = 6 * t - 4;
     const e01 = -12 * t + 6;
     const e11 = 6 * t - 2;
-    return {
-      x: h00 * p0.x + h10 * m0x + h01 * p1.x + h11 * m1x,
-      z: h00 * p0.z + h10 * m0z + h01 * p1.z + h11 * m1z,
-      dx: d00 * p0.x + d10 * m0x + d01 * p1.x + d11 * m1x,
-      dz: d00 * p0.z + d10 * m0z + d01 * p1.z + d11 * m1z,
-      ddx: e00 * p0.x + e10 * m0x + e01 * p1.x + e11 * m1x,
-      ddz: e00 * p0.z + e10 * m0z + e01 * p1.z + e11 * m1z,
-    };
+    _herm.x = h00 * p0x + h10 * m0x + h01 * p1x + h11 * m1x;
+    _herm.z = h00 * p0z + h10 * m0z + h01 * p1z + h11 * m1z;
+    _herm.dx = d00 * p0x + d10 * m0x + d01 * p1x + d11 * m1x;
+    _herm.dz = d00 * p0z + d10 * m0z + d01 * p1z + d11 * m1z;
+    _herm.ddx = e00 * p0x + e10 * m0x + e01 * p1x + e11 * m1x;
+    _herm.ddz = e00 * p0z + e10 * m0z + e01 * p1z + e11 * m1z;
+  };
+
+  const sampleCurvatureAtDistance = (s: number): number => {
+    const n = samples.length;
+    const wrappedS = Number.isFinite(s) ? ((s % totalLength) + totalLength) % totalLength : 0;
+    const exactIdx = (wrappedS / totalLength) * n;
+    const fIdx = Math.floor(exactIdx);
+    const idx0 = fIdx % n;
+    const idx1 = idx0 + 1 < n ? idx0 + 1 : 0;
+    const alpha = exactIdx - fIdx;
+    const c0 = samples[idx0].curvature;
+    return c0 + (samples[idx1].curvature - c0) * alpha;
+  };
+
+  const getSampleAtDistanceInto = (s: number, out: TrackSamplePoint): TrackSamplePoint => {
+    const n = samples.length;
+    const wrappedS = Number.isFinite(s) ? ((s % totalLength) + totalLength) % totalLength : 0;
+    const exactIdx = (wrappedS / totalLength) * n;
+    const fIdx = Math.floor(exactIdx);
+    const idx0 = fIdx % n;
+    const idx1 = idx0 + 1 < n ? idx0 + 1 : 0;
+    const alpha = exactIdx - fIdx;
+
+    const s0 = samples[idx0];
+    const s1 = samples[idx1];
+    const sPrev = samples[idx0 > 0 ? idx0 - 1 : n - 1];
+    const sNext = samples[idx1 + 1 < n ? idx1 + 1 : 0];
+
+    const a2 = alpha * alpha;
+    const a3 = a2 * alpha;
+    const w0 = 0.5 * (-a3 + 2 * a2 - alpha);
+    const w1 = 0.5 * (3 * a3 - 5 * a2 + 2);
+    const w2 = 0.5 * (-3 * a3 + 4 * a2 + alpha);
+    const w3 = 0.5 * (a3 - a2);
+
+    if (s0.yProf && s1.yProf && sPrev.yProf && sNext.yProf) {
+      const len = s0.yProf.length;
+      let yp = out.yProf;
+      if (!yp || yp.length !== len) {
+        yp = new Array<number>(len);
+        out.yProf = yp;
+      }
+      for (let k = 0; k < len; k++) {
+        yp[k] = w0 * sPrev.yProf[k] + w1 * s0.yProf[k] + w2 * s1.yProf[k] + w3 * sNext.yProf[k];
+      }
+    } else {
+      out.yProf = undefined;
+    }
+
+    hermiteXZInto(idx0, alpha);
+    const posY = w0 * sPrev.position.y + w1 * s0.position.y + w2 * s1.position.y + w3 * sNext.position.y;
+    out.position.set(_herm.x, posY, _herm.z);
+
+    if (s0.racingLinePos && s1.racingLinePos) {
+      (out.racingLinePos ??= new THREE.Vector3()).lerpVectors(s0.racingLinePos, s1.racingLinePos, alpha);
+    } else {
+      out.racingLinePos = undefined;
+    }
+
+    out.tangent.lerpVectors(s0.tangent, s1.tangent, alpha).normalize();
+    out.normal.lerpVectors(s0.normal, s1.normal, alpha).normalize();
+    out.binormal.lerpVectors(s0.binormal, s1.binormal, alpha).normalize();
+
+    out.index = s0.index;
+    out.s = wrappedS;
+    out.t = wrappedS / totalLength;
+    out.bankingRad = s0.bankingRad + (s1.bankingRad - s0.bankingRad) * alpha;
+    out.width = s0.width + (s1.width - s0.width) * alpha;
+    out.curvature = s0.curvature + (s1.curvature - s0.curvature) * alpha;
+    out.verticalCurvature = s0.verticalCurvature + (s1.verticalCurvature - s0.verticalCurvature) * alpha;
+    out.slopeSin = s0.slopeSin + (s1.slopeSin - s0.slopeSin) * alpha;
+    out.sector = s0.sector;
+    out.turnNumber = s0.turnNumber;
+    out.turnName = s0.turnName;
+    out.runoffStyle = s0.runoffStyle;
+    out.kerbLeft = s0.kerbLeft;
+    out.kerbRight = s0.kerbRight;
+    out.drsZone = s0.drsZone;
+    out.racingLineOffset = s0.racingLineOffset + (s1.racingLineOffset - s0.racingLineOffset) * alpha;
+    const gt30 = s0.racingLineOffsetGt3 ?? s0.racingLineOffset;
+    const gt31 = s1.racingLineOffsetGt3 ?? s1.racingLineOffset;
+    out.racingLineOffsetGt3 = gt30 + (gt31 - gt30) * alpha;
+    out.optimalSpeedKmh = s0.optimalSpeedKmh + (s1.optimalSpeedKmh - s0.optimalSpeedKmh) * alpha;
+    const bl0 = s0.brakeLimitKmh ?? s0.optimalSpeedKmh;
+    const bl1 = s1.brakeLimitKmh ?? s1.optimalSpeedKmh;
+    out.brakeLimitKmh = bl0 + (bl1 - bl0) * alpha;
+    out.brakingZone = s0.brakingZone;
+    const g0 = s0.gripMultiplier ?? 1.0;
+    const g1 = s1.gripMultiplier ?? 1.0;
+    out.gripMultiplier = g0 + (g1 - g0) * alpha;
+    out.runoffLeftM = s0.runoffLeftM;
+    out.runoffRightM = s0.runoffRightM;
+    out.gravelLeftM = s0.gravelLeftM;
+    out.gravelRightM = s0.gravelRightM;
+    out.wallLeftM = s0.wallLeftM;
+    out.wallRightM = s0.wallRightM;
+    return out;
   };
 
   const getSampleAtDistance = (s: number): TrackSamplePoint => {
@@ -1706,94 +1868,87 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     // A non-finite s (a car state that already went NaN) would index samples[NaN] and throw
     const wrappedS = Number.isFinite(s) ? ((s % totalLength) + totalLength) % totalLength : 0;
     const exactIdx = (wrappedS / totalLength) * n;
-    const idx0 = Math.floor(exactIdx) % n;
-    const idx1 = (idx0 + 1) % n;
-    const alpha = exactIdx - Math.floor(exactIdx);
+    const fIdx = Math.floor(exactIdx);
+    const idx0 = fIdx % n;
+    const idx1 = idx0 + 1 < n ? idx0 + 1 : 0;
+    const alpha = exactIdx - fIdx;
 
     const s0 = samples[idx0];
     const s1 = samples[idx1];
-    const sPrev = samples[(idx0 - 1 + n) % n];
-    const sNext = samples[(idx1 + 1) % n];
+    const sPrev = samples[idx0 > 0 ? idx0 - 1 : n - 1];
+    const sNext = samples[idx1 + 1 < n ? idx1 + 1 : 0];
+
+    const a2 = alpha * alpha;
+    const a3 = a2 * alpha;
+    const w0 = 0.5 * (-a3 + 2 * a2 - alpha);
+    const w1 = 0.5 * (3 * a3 - 5 * a2 + 2);
+    const w2 = 0.5 * (-3 * a3 + 4 * a2 + alpha);
+    const w3 = 0.5 * (a3 - a2);
 
     let interpYProf: number[] | undefined;
     if (s0.yProf && s1.yProf && sPrev.yProf && sNext.yProf) {
-      const [w0, w1, w2, w3] = catmullRomWeights(alpha);
-      interpYProf = new Array<number>(s0.yProf.length);
-      for (let k = 0; k < s0.yProf.length; k++) {
+      const len = s0.yProf.length;
+      interpYProf = new Array<number>(len);
+      for (let k = 0; k < len; k++) {
         interpYProf[k] =
           w0 * sPrev.yProf[k] + w1 * s0.yProf[k] + w2 * s1.yProf[k] + w3 * sNext.yProf[k];
       }
     }
 
+    hermiteXZInto(idx0, alpha);
+    const posY = w0 * sPrev.position.y + w1 * s0.position.y + w2 * s1.position.y + w3 * sNext.position.y;
+    const gt30 = s0.racingLineOffsetGt3 ?? s0.racingLineOffset;
+    const gt31 = s1.racingLineOffsetGt3 ?? s1.racingLineOffset;
+    const bl0 = s0.brakeLimitKmh ?? s0.optimalSpeedKmh;
+    const bl1 = s1.brakeLimitKmh ?? s1.optimalSpeedKmh;
+    const g0 = s0.gripMultiplier ?? 1.0;
+    const g1 = s1.gripMultiplier ?? 1.0;
+
     return {
       ...s0,
       s: wrappedS,
       t: wrappedS / totalLength,
-      position: (() => {
-        const hp = hermiteXZ(idx0, alpha);
-        const [w0, w1, w2, w3] = catmullRomWeights(alpha);
-        const y = w0 * sPrev.position.y + w1 * s0.position.y + w2 * s1.position.y + w3 * sNext.position.y;
-        return new THREE.Vector3(hp.x, y, hp.z);
-      })(),
+      position: new THREE.Vector3(_herm.x, posY, _herm.z),
       racingLinePos:
         s0.racingLinePos && s1.racingLinePos
-          ? s0.racingLinePos.clone().lerp(s1.racingLinePos, alpha)
+          ? new THREE.Vector3().lerpVectors(s0.racingLinePos, s1.racingLinePos, alpha)
           : undefined,
       yProf: interpYProf,
-      tangent: s0.tangent.clone().lerp(s1.tangent, alpha).normalize(),
-      normal: s0.normal.clone().lerp(s1.normal, alpha).normalize(),
-      binormal: s0.binormal.clone().lerp(s1.binormal, alpha).normalize(),
-      bankingRad: THREE.MathUtils.lerp(s0.bankingRad, s1.bankingRad, alpha),
-      width: THREE.MathUtils.lerp(s0.width, s1.width, alpha),
-      curvature: THREE.MathUtils.lerp(s0.curvature, s1.curvature, alpha),
-      verticalCurvature: THREE.MathUtils.lerp(
-        s0.verticalCurvature,
-        s1.verticalCurvature,
-        alpha
-      ),
-      slopeSin: THREE.MathUtils.lerp(s0.slopeSin, s1.slopeSin, alpha),
-      racingLineOffset: THREE.MathUtils.lerp(
-        s0.racingLineOffset,
-        s1.racingLineOffset,
-        alpha
-      ),
-      racingLineOffsetGt3: THREE.MathUtils.lerp(
-        s0.racingLineOffsetGt3 ?? s0.racingLineOffset,
-        s1.racingLineOffsetGt3 ?? s1.racingLineOffset,
-        alpha
-      ),
-      optimalSpeedKmh: THREE.MathUtils.lerp(
-        s0.optimalSpeedKmh,
-        s1.optimalSpeedKmh,
-        alpha
-      ),
-      brakeLimitKmh: THREE.MathUtils.lerp(
-        s0.brakeLimitKmh ?? s0.optimalSpeedKmh,
-        s1.brakeLimitKmh ?? s1.optimalSpeedKmh,
-        alpha
-      ),
-      gripMultiplier: THREE.MathUtils.lerp(
-        s0.gripMultiplier ?? 1.0,
-        s1.gripMultiplier ?? 1.0,
-        alpha
-      ),
+      tangent: new THREE.Vector3().lerpVectors(s0.tangent, s1.tangent, alpha).normalize(),
+      normal: new THREE.Vector3().lerpVectors(s0.normal, s1.normal, alpha).normalize(),
+      binormal: new THREE.Vector3().lerpVectors(s0.binormal, s1.binormal, alpha).normalize(),
+      bankingRad: s0.bankingRad + (s1.bankingRad - s0.bankingRad) * alpha,
+      width: s0.width + (s1.width - s0.width) * alpha,
+      curvature: s0.curvature + (s1.curvature - s0.curvature) * alpha,
+      verticalCurvature: s0.verticalCurvature + (s1.verticalCurvature - s0.verticalCurvature) * alpha,
+      slopeSin: s0.slopeSin + (s1.slopeSin - s0.slopeSin) * alpha,
+      racingLineOffset: s0.racingLineOffset + (s1.racingLineOffset - s0.racingLineOffset) * alpha,
+      racingLineOffsetGt3: gt30 + (gt31 - gt30) * alpha,
+      optimalSpeedKmh: s0.optimalSpeedKmh + (s1.optimalSpeedKmh - s0.optimalSpeedKmh) * alpha,
+      brakeLimitKmh: bl0 + (bl1 - bl0) * alpha,
+      gripMultiplier: g0 + (g1 - g0) * alpha,
     };
   };
 
   // Horizontal unit tangents per sample, used by the continuous inverse mapping below
   /**
    * Solves for the parameter t on segment i0 → i0+1 at which the world point lies on the
-   * normal of the spline centreline, i.e. (P − C(t)) · C'(t) = 0. Returns t and the signed
-   * horizontal lateral offset (+ right).
+   * normal of the spline centreline, i.e. (P − C(t)) · C'(t) = 0. Writes t and the signed
+   * horizontal lateral offset (+ right) into `out`.
    */
-  const solveSegment = (worldX: number, worldZ: number, i0: number) => {
-    const i1 = (i0 + 1) % NUM_SAMPLES;
-    const a0 = samples[i0].position;
-    const a1 = samples[i1].position;
-    const dx = a1.x - a0.x;
-    const dz = a1.z - a0.z;
-    const rx = worldX - a0.x;
-    const rz = worldZ - a0.z;
+  const solveSegmentInto = (
+    worldX: number,
+    worldZ: number,
+    i0: number,
+    out: { i0: number; i1: number; t: number; lateralH: number }
+  ): void => {
+    const i1 = i0 + 1 < NUM_SAMPLES ? i0 + 1 : 0;
+    const a0x = samplePosX[i0];
+    const a0z = samplePosZ[i0];
+    const dx = samplePosX[i1] - a0x;
+    const dz = samplePosZ[i1] - a0z;
+    const rx = worldX - a0x;
+    const rz = worldZ - a0z;
     const t0x = hTanX[i0];
     const t0z = hTanZ[i0];
     const ex = hTanX[i1] - t0x;
@@ -1809,31 +1964,39 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
       t -= (c + b * t + a * t * t) / df;
     }
     // Newton on f(t) = (P − C(t)) · C'(t) along the spline
-    let hp = hermiteXZ(i0, t);
+    hermiteXZInto(i0, t);
     for (let k = 0; k < 4; k++) {
-      const px = worldX - hp.x;
-      const pz = worldZ - hp.z;
-      const f = px * hp.dx + pz * hp.dz;
-      const df = -(hp.dx * hp.dx + hp.dz * hp.dz) + px * hp.ddx + pz * hp.ddz;
+      const px = worldX - _herm.x;
+      const pz = worldZ - _herm.z;
+      const f = px * _herm.dx + pz * _herm.dz;
+      const df = -(_herm.dx * _herm.dx + _herm.dz * _herm.dz) + px * _herm.ddx + pz * _herm.ddz;
       if (Math.abs(df) < 1e-9) break;
-      const step = THREE.MathUtils.clamp(f / df, -0.5, 0.5);
+      let step = f / df;
+      if (step < -0.5) step = -0.5;
+      else if (step > 0.5) step = 0.5;
       t -= step;
-      hp = hermiteXZ(i0, t);
+      hermiteXZInto(i0, t);
       if (Math.abs(step) < 1e-7) break;
     }
-    const tLen = Math.hypot(hp.dx, hp.dz) || 1;
+    const tLen = Math.hypot(_herm.dx, _herm.dz) || 1;
     // Horizontal right = (−tz, tx)
-    const lateralH = ((worldX - hp.x) * -hp.dz + (worldZ - hp.z) * hp.dx) / tLen;
-    return { i0, i1, t, lateralH };
+    const lateralH = ((worldX - _herm.x) * -_herm.dz + (worldZ - _herm.z) * _herm.dx) / tLen;
+    out.i0 = i0;
+    out.i1 = i1;
+    out.t = t;
+    out.lateralH = lateralH;
   };
 
   /**
-   * Locates a world XZ point on the track. Segment boundaries are the lines through each
-   * sample along its own normal, so (s, lateral) varies continuously with position.
-   * (Projecting onto the polyline chords instead leaves dead wedges on the outside of every
-   * bend where s stalls, which shows up as millimetre road-height steps at each sample.)
+   * Locates a world XZ point on the track into `out` without allocating. Segment boundaries are
+   * the lines through each sample along its own normal, so (s, lateral) varies continuously.
    */
-  const locateWorldPointFn = (worldX: number, worldZ: number, hintS?: number) => {
+  const locateWorldPointInto = (
+    worldX: number,
+    worldZ: number,
+    out: { i0: number; i1: number; t: number; s: number; lateralH: number },
+    hintS?: number
+  ): void => {
     const n = NUM_SAMPLES;
     let bestIdx = 0;
     let bestDistSq = Infinity;
@@ -1843,9 +2006,12 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
       const centerIdx = Math.floor((wrappedHint / totalLength) * n) % n;
       const searchRadius = 40;
       for (let offset = -searchRadius; offset <= searchRadius; offset++) {
-        const idx = (centerIdx + offset + n) % n;
-        const p = samples[idx].position;
-        const dSq = (worldX - p.x) ** 2 + (worldZ - p.z) ** 2;
+        let idx = centerIdx + offset;
+        if (idx < 0) idx += n;
+        else if (idx >= n) idx -= n;
+        const dx = worldX - samplePosX[idx];
+        const dz = worldZ - samplePosZ[idx];
+        const dSq = dx * dx + dz * dz;
         if (dSq < bestDistSq) {
           bestDistSq = dSq;
           bestIdx = idx;
@@ -1856,8 +2022,9 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     if (bestDistSq > 1225) {
       bestDistSq = Infinity;
       for (let i = 0; i < n; i++) {
-        const p = samples[i].position;
-        const dSq = (worldX - p.x) ** 2 + (worldZ - p.z) ** 2;
+        const dx = worldX - samplePosX[i];
+        const dz = worldZ - samplePosZ[i];
+        const dSq = dx * dx + dz * dz;
         if (dSq < bestDistSq) {
           bestDistSq = dSq;
           bestIdx = i;
@@ -1866,29 +2033,74 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     }
 
     // The containing segment touches the nearest sample except far off-line in tight bends
-    let chosen: ReturnType<typeof solveSegment> | null = null;
-    let fallback: ReturnType<typeof solveSegment> | null = null;
+    let hasChosen = false;
+    let hasFallback = false;
     let fallbackOut = Infinity;
-    for (const off of [-1, 0, -2, 1]) {
-      const seg = solveSegment(worldX, worldZ, (bestIdx + off + n) % n);
-      if (seg.t >= 0 && seg.t <= 1) {
-        if (!chosen || Math.abs(seg.lateralH) < Math.abs(chosen.lateralH)) chosen = seg;
+    for (let k = 0; k < 4; k++) {
+      const off = SEG_OFFSETS[k];
+      let segIdx = bestIdx + off;
+      if (segIdx < 0) segIdx += n;
+      else if (segIdx >= n) segIdx -= n;
+      solveSegmentInto(worldX, worldZ, segIdx, _segTmp);
+      if (_segTmp.t >= 0 && _segTmp.t <= 1) {
+        if (!hasChosen || Math.abs(_segTmp.lateralH) < Math.abs(_segChosen.lateralH)) {
+          _segChosen.i0 = _segTmp.i0;
+          _segChosen.i1 = _segTmp.i1;
+          _segChosen.t = _segTmp.t;
+          _segChosen.lateralH = _segTmp.lateralH;
+          hasChosen = true;
+        }
       } else {
-        const out = seg.t < 0 ? -seg.t : seg.t - 1;
-        if (out < fallbackOut) {
-          fallbackOut = out;
-          fallback = seg;
+        const outDist = _segTmp.t < 0 ? -_segTmp.t : _segTmp.t - 1;
+        if (outDist < fallbackOut) {
+          fallbackOut = outDist;
+          _segFallback.i0 = _segTmp.i0;
+          _segFallback.i1 = _segTmp.i1;
+          _segFallback.t = _segTmp.t;
+          _segFallback.lateralH = _segTmp.lateralH;
+          hasFallback = true;
         }
       }
-      if (chosen && off === 0) break;
+      if (hasChosen && off === 0) break;
     }
-    if (!chosen) {
-      // No fallback only for a non-finite point (NaN t fails both tests): stay on the nearest sample
-      chosen = solveSegment(worldX, worldZ, fallback?.i0 ?? bestIdx);
-      chosen.t = Number.isFinite(chosen.t) ? THREE.MathUtils.clamp(chosen.t, 0, 1) : 0;
+    if (!hasChosen) {
+      solveSegmentInto(worldX, worldZ, hasFallback ? _segFallback.i0 : bestIdx, _segChosen);
+      const tVal = _segChosen.t;
+      _segChosen.t = Number.isFinite(tVal) ? (tVal < 0 ? 0 : tVal > 1 ? 1 : tVal) : 0;
     }
-    const s = ((((chosen.i0 + chosen.t) * ds) % totalLength) + totalLength) % totalLength;
-    return { ...chosen, s };
+    const s = (((( _segChosen.i0 + _segChosen.t) * ds) % totalLength) + totalLength) % totalLength;
+    out.i0 = _segChosen.i0;
+    out.i1 = _segChosen.i1;
+    out.t = _segChosen.t;
+    out.lateralH = _segChosen.lateralH;
+    out.s = s;
+  };
+
+  const locateWorldPointFn = (worldX: number, worldZ: number, hintS?: number) => {
+    locateWorldPointInto(worldX, worldZ, _locScratch, hintS);
+    return {
+      i0: _locScratch.i0,
+      i1: _locScratch.i1,
+      t: _locScratch.t,
+      lateralH: _locScratch.lateralH,
+      s: _locScratch.s,
+    };
+  };
+
+  const projectWorldToTrackInto = (
+    worldX: number,
+    worldZ: number,
+    out: TrackProjectionResult,
+    hintS?: number
+  ): TrackProjectionResult => {
+    locateWorldPointInto(worldX, worldZ, _locScratch, hintS);
+    const sample = getSampleAtDistanceInto(_locScratch.s, out.sample);
+    const bHorizLen = Math.hypot(sample.binormal.x, sample.binormal.z) || 1;
+    const cosBank = bHorizLen > 0.85 ? bHorizLen : 0.85;
+    out.s = _locScratch.s;
+    out.lateralOffset = _locScratch.lateralH / cosBank;
+    out.distSq = _locScratch.lateralH * _locScratch.lateralH;
+    return out;
   };
 
   const projectWorldToTrackFn = (
@@ -1896,16 +2108,16 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     worldZ: number,
     hintS?: number
   ) => {
-    const loc = locateWorldPointFn(worldX, worldZ, hintS);
-    const sample = getSampleAtDistance(loc.s);
+    locateWorldPointInto(worldX, worldZ, _locScratch, hintS);
+    const sample = getSampleAtDistance(_locScratch.s);
     const bHorizLen = Math.hypot(sample.binormal.x, sample.binormal.z) || 1;
     // Account for binormal 3D tilt (cos(bankingRad)) so position + binormal * lateralOffset matches XZ
-    const cosBank = Math.max(0.85, bHorizLen);
+    const cosBank = bHorizLen > 0.85 ? bHorizLen : 0.85;
     return {
       sample,
-      s: loc.s,
-      lateralOffset: loc.lateralH / cosBank,
-      distSq: loc.lateralH * loc.lateralH,
+      s: _locScratch.s,
+      lateralOffset: _locScratch.lateralH / cosBank,
+      distSq: _locScratch.lateralH * _locScratch.lateralH,
     };
   };
 
@@ -1925,7 +2137,10 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     totalLengthM: totalLength,
     spline,
     getSampleAtDistance,
+    getSampleAtDistanceInto,
+    sampleCurvatureAtDistance,
     projectWorldToTrack: projectWorldToTrackFn,
+    projectWorldToTrackInto,
     locateWorldPoint: locateWorldPointFn,
   };
 

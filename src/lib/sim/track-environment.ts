@@ -6,7 +6,7 @@
  * any car near it in every mode (solo practice, an AI race, multiplayer). An `AiOpponentField` given this instance
  * leaves the update to its owner; without one (headless use) the field runs its own.
  */
-import type { BuiltTrackData } from '@/lib/track-data';
+import { createTrackSampleBuffer, type BuiltTrackData } from '@/lib/track-data';
 import { evaluateAeroWakeDeficit, type WakeEmitterCar } from '@/lib/sim/aero-wake';
 import { TrackEvolutionState } from '@/lib/sim/track-evolution';
 import { aiLineOffsetM } from '@/lib/sim/speed-profile';
@@ -53,6 +53,7 @@ export class TrackEnvironment {
   /** Simulation realism for every car on the track (the player's choice applies to the AI field too) */
   private realism: Readonly<SimRealismFlags> = FULL_REALISM;
   private readonly realismApplied = new WeakMap<SimulatorCar, Readonly<SimRealismFlags>>();
+  private readonly sampleBuf = createTrackSampleBuffer();
 
   constructor(
     private readonly track: BuiltTrackData,
@@ -202,7 +203,9 @@ export class TrackEnvironment {
 
     for (let i = 0; i < cars.length; i++) {
       const sim = cars[i];
-      const sample = this.track.getSampleAtDistance(sim.sMeters);
+      const sample = this.track.getSampleAtDistanceInto
+        ? this.track.getSampleAtDistanceInto(sim.sMeters, this.sampleBuf)
+        : this.track.getSampleAtDistance(sim.sMeters);
       const racingLineLatM = aiLineOffsetM(sample);
 
       // Water under the car (the cars sweep the racing line dry), the air temperature, and the AI's tyre call
