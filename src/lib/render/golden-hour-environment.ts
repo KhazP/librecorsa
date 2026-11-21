@@ -189,11 +189,21 @@ export interface PostFx {
   /** Puts the physical sky's clouds into the chain, right after the scene render (once; later calls are no-ops) */
   setClouds(sky: { readonly clouds: CloudsEffect; readonly cloudsActive: boolean }): void;
   /**
+   * Zero-pass FidelityFX RCAS sharpening strength (0 = off / skipped, up to 1). Automatically enabled when rendering
+   * below native devicePixelRatio (Low on HiDPI, Medium on 2x/3x phones, or adaptive step-down).
+   */
+  setSharpness(amount: number): void;
+  /**
    * The off-track edge glow: a CSS hex colour turns it on (breathing, or steady under reduced motion), null turns it
    * off. A colour it cannot read keeps the last one.
    */
   setEdgeGlow(color: string | null): void;
   dispose(): void;
+}
+
+/** Auto-scaled RCAS sharpening strength from `effectivePixelRatio / nativeDpr` (0 at native >= 98%, up to 0.55) */
+export function rcasSharpnessForRatio(effectiveRatio: number): number {
+  return effectiveRatio >= 0.98 ? 0 : THREE.MathUtils.clamp((1 - effectiveRatio) * 1.15, 0.15, 0.55);
 }
 
 /**
@@ -204,13 +214,16 @@ export interface PostFx {
 export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: PostFx, env: GoldenHourEnvironment, plan: RenderPlan): void {
   const { quality, renderScale } = plan;
   const dprCap = quality === "low" ? 1 : 1.5;
-  renderer.setPixelRatio(Math.max(0.35, Math.min(window.devicePixelRatio, dprCap) * renderScale));
+  const nativeDpr = Math.max(1, window.devicePixelRatio || 1);
+  const pixelRatio = Math.max(0.35, Math.min(nativeDpr, dprCap) * renderScale);
+  renderer.setPixelRatio(pixelRatio);
   // Toggling the light's shadow recompiles the lit materials on their own (shadow count is part of the program key)
   env.sunLight.castShadow = quality !== "low";
   // Half the texels per side: three resizes the shadow map in place, with no shader change
   const shadowSize = plan.shadows === "half" ? SHADOW_MAP_SIZE / 2 : SHADOW_MAP_SIZE;
   env.sunLight.shadow.mapSize.set(shadowSize, shadowSize);
   postFx.setQuality(quality, plan.msaa);
+  postFx.setSharpness(rcasSharpnessForRatio(pixelRatio / nativeDpr));
   env.setQuality(quality);
   if (env.physicalSky) postFx.setClouds(env.physicalSky);
   // Scenery noise and bump off on Low (the baked tree shading stays); fewer instanced trees and shrubs below High
@@ -709,6 +722,67 @@ export function createGoldenHourEnvironment(
 // ---------------------------------------------------------------------------
 
 /**
+ * Zero-pass HDR-safe AMD FidelityFX RCAS (5-tap contrast-adaptive sharpening) merged directly into the terminal
+ * EffectPass before AgX tone mapping. Compresses linear HDR luma via Reinhard sqrt so sun discs and bright glints
+ * never ring, fades out smoothly wherever clouds or bloom modified the pixel vs `inputBuffer`, and skips all 4
+ * neighbour taps via a uniform branch when `uSharpness <= 0.001` (native resolution).
+ */
+class RcasEffect extends Effect {
+  constructor(sharpness = 0) {
+    super(
+      "RcasEffect",
+      /* glsl */ `
+uniform float uSharpness;
+float lcRcasLuma(const in vec3 c) {
+  float y = max(dot(max(c, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722)), 0.0);
+  return sqrt(y / (1.0 + y));
+}
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  if (uSharpness <= 0.001) {
+    outputColor = inputColor;
+    return;
+  }
+  vec3 rawE = max(texture2D(inputBuffer, uv).rgb, vec3(0.0));
+  vec3 curE = max(inputColor.rgb, vec3(0.0));
+  float rawY = dot(rawE, vec3(0.2126, 0.7152, 0.0722));
+  if (rawY <= 1e-4) {
+    outputColor = inputColor;
+    return;
+  }
+  // Fade sharpening where preceding clouds/bloom significantly altered this pixel vs inputBuffer
+  float diff = length(curE - rawE) / max(0.25, length(curE) + length(rawE));
+  float strength = uSharpness * (1.0 - smoothstep(0.08, 0.28, diff));
+  if (strength <= 0.001) {
+    outputColor = inputColor;
+    return;
+  }
+  float lE = sqrt(rawY / (1.0 + rawY));
+  float lN = lcRcasLuma(texture2D(inputBuffer, uv + vec2(0.0, -texelSize.y)).rgb);
+  float lS = lcRcasLuma(texture2D(inputBuffer, uv + vec2(0.0,  texelSize.y)).rgb);
+  float lW = lcRcasLuma(texture2D(inputBuffer, uv + vec2(-texelSize.x, 0.0)).rgb);
+  float lR = lcRcasLuma(texture2D(inputBuffer, uv + vec2( texelSize.x, 0.0)).rgb);
+  float mnL = min(lE, min(min(lN, lS), min(lW, lR)));
+  float mxL = max(lE, max(max(lN, lS), max(lW, lR)));
+  float amp = sqrt(clamp(min(mnL, 1.0 - mxL) / max(mxL, 1e-4), 0.0, 1.0));
+  float w = amp * mix(0.0, -0.20, strength);
+  float sharpL = clamp((lE + w * (lN + lS + lW + lR)) / (1.0 + 4.0 * w), 0.0, 0.995);
+  float targetY = (sharpL * sharpL) / max(1.0 - sharpL * sharpL, 1e-4);
+  float gain = clamp(targetY / rawY, 0.65, 1.50);
+  outputColor = vec4(curE * gain, inputColor.a);
+}
+`,
+      {
+        uniforms: new Map<string, THREE.Uniform>([["uSharpness", new THREE.Uniform(sharpness)]]),
+      }
+    );
+  }
+
+  setSharpness(amount: number): void {
+    (this.uniforms.get("uSharpness") as THREE.Uniform<number>).value = amount;
+  }
+}
+
+/**
  * Contrast about mid-grey and saturation about luma, on the tone-mapped image; alpha forced opaque. Then the off-track
  * edge glow, when on: the HUD's colour fading in from 62 % of the way to the corners to 32 % at them, on an ellipse
  * the screen's shape. Drawn here, it costs a few instructions in a pass that runs anyway, where a full-screen page
@@ -822,16 +896,20 @@ export function createPostFx(
   // white specks). The grade had a pass of its own; here it runs the same code without the round trip through a
   // half-float buffer (whose rounding was the only difference), a full-screen write and read saved per frame,
   // multisampled on High and Medium.
-  // The grade of each of the terminal passes below: the edge glow is synced across all of them
+  // The RCAS & grade effects of each terminal pass below: sharpness and edge glow are synced across all of them
+  const rcasEffects: RcasEffect[] = [];
   const grades: DisplayGradeEffect[] = [];
+  let sharpnessNow = 0;
   let edgeGlowColor: THREE.Vector3 | null = null;
   const toneMapAndGrade = () => {
+    const rcas = new RcasEffect(sharpnessNow);
+    rcasEffects.push(rcas);
     const grade = new DisplayGradeEffect(GRADE_CONTRAST, GRADE_SATURATION);
     if (edgeGlowSinceMs !== null) {
       grade.setEdgeGlow(edgeGlowSteady ? 1 : edgeGlowLevel(performance.now() - edgeGlowSinceMs), edgeGlowColor ?? undefined);
     }
     grades.push(grade);
-    return [new ToneMappingEffect({ mode: ToneMappingMode.AGX }), grade];
+    return [rcas, new ToneMappingEffect({ mode: ToneMappingMode.AGX }), grade];
   };
   // When the edge glow came on (null: off), and whether it holds still for reduced motion
   let edgeGlowSinceMs: number | null = null;
@@ -921,6 +999,11 @@ export function createPostFx(
       composer.addPass(cloudsPass, 1);
       composer.addPass(cloudsPlainPass);
       syncPassRouting();
+    },
+
+    setSharpness(amount: number): void {
+      sharpnessNow = THREE.MathUtils.clamp(amount, 0, 1);
+      for (const rcas of rcasEffects) rcas.setSharpness(sharpnessNow);
     },
 
     setEdgeGlow(color: string | null): void {
