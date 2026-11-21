@@ -277,6 +277,53 @@ function bodyDropOf(
   return drop;
 }
 
+export interface SkinSlot {
+  mat: THREE.MeshStandardMaterial;
+  file: string;
+  own: THREE.Texture | null;
+  /** False when the material is already a per-rig clone owned (and disposed) by `installTyreDeformation`. */
+  ownedBySkin: boolean;
+}
+
+/**
+ * Clones materials named in `skinMaps` so each rig can swap liveries without mutating the shared GLB template.
+ * Materials in `preserveMaterials` (per-wheel tyre deformation materials carrying `onBeforeCompile` and
+ * `customProgramCacheKey` hooks) are already private per-rig clones and are bound directly as skin slots without
+ * cloning — Three.js `Material.clone()` does not copy shader hooks.
+ */
+export function collectSkinSlots(
+  roots: readonly THREE.Object3D[],
+  skinMaps: Readonly<Record<string, string>>,
+  preserveMaterials?: ReadonlySet<THREE.Material>
+): SkinSlot[] {
+  const slots: SkinSlot[] = [];
+  const copies = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+  const seenPreserved = new Set<THREE.Material>();
+  const visit = (o: THREE.Object3D) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+    const src = mesh.material as THREE.MeshStandardMaterial;
+    const file = skinMaps[src.name];
+    if (!file || !src.isMeshStandardMaterial) return;
+    if (preserveMaterials?.has(src)) {
+      if (!seenPreserved.has(src)) {
+        seenPreserved.add(src);
+        slots.push({ mat: src, file, own: src.map, ownedBySkin: false });
+      }
+      return;
+    }
+    let copy = copies.get(src);
+    if (!copy) {
+      copy = src.clone();
+      copies.set(src, copy);
+      slots.push({ mat: copy, file, own: src.map, ownedBySkin: true });
+    }
+    mesh.material = copy;
+  };
+  for (const r of roots) r.traverse(visit);
+  return slots;
+}
+
 /**
  * A ported car's rig: model body (and steering wheel) in `chassisGroup` (sprung), wheels on per-corner steer pivots
  * under `root` (unsprung), aligned so the model's axles sit on the physics axles.
@@ -301,7 +348,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   // The compound the sidewalls show; the tyres are built when the model loads
   let compound: TireCompound = "medium";
   // The livery: this rig's copies of the materials it repaints (with their own textures), and the skin it wears
-  const skinSlots: { mat: THREE.MeshStandardMaterial; file: string; own: THREE.Texture | null }[] = [];
+  const skinSlots: SkinSlot[] = [];
   let skin = options.skin ?? null;
   // A livery's own parts (the GLB's `partVariants`): each shown only for the liveries of its variants
   const parts: { node: THREE.Object3D; variants: readonly string[] }[] = [];
@@ -362,6 +409,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         : null;
     const cameraFit: PortedCameraFit = { steerCentre, frontAxleZ: lf[2] + offset.z };
 
+    const tyreMaterials = new Set<THREE.Material>();
     WHEELS.forEach((wheelName, i) => {
       const wheel = find(wheelName);
       if (!wheel) return;
@@ -391,6 +439,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
             gtSidewall: !options.pirelliSidewall && options.gtSidewall ? { brand: options.gtSidewall, compound } : undefined,
           })
         : null;
+      if (tyre && tyreMesh?.isMesh && !Array.isArray(tyreMesh.material)) {
+        tyreMaterials.add(tyreMesh.material);
+      }
       corners.push({ steer, spin, isFront: i < 2, isLeft: i % 2 === 1, restY: steer.position.y, tyre });
     });
 
@@ -408,26 +459,11 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       if (node) parts.push({ node, variants });
     }
     // The materials a livery repaints, copied for this car (the template's are every car's): the body's and the
-    // wheels' (a livery can recolour the rims)
+    // wheels' (a livery can recolour the rims). Tyre deformation materials are already private clones with shader
+    // hooks, so keep them in place instead of cloning over them.
     const skinMaps = extras.skinMaps;
     if (skinMaps) {
-      const copies = new Map<THREE.Material, THREE.MeshStandardMaterial>();
-      const visit = (o: THREE.Object3D) => {
-        const mesh = o as THREE.Mesh;
-        if (!mesh.isMesh || Array.isArray(mesh.material)) return;
-        const src = mesh.material as THREE.MeshStandardMaterial;
-        const file = skinMaps[src.name];
-        if (!file || !src.isMeshStandardMaterial) return;
-        let copy = copies.get(src);
-        if (!copy) {
-          copy = src.clone();
-          copies.set(src, copy);
-          skinSlots.push({ mat: copy, file, own: src.map });
-        }
-        mesh.material = copy;
-      };
-      bodyGroup.traverse(visit);
-      for (const corner of corners) corner.spin.traverse(visit);
+      skinSlots.push(...collectSkinSlots([bodyGroup, ...corners.map((c) => c.spin)], skinMaps, tyreMaterials));
     }
     applySkin();
     placeholder.removeFromParent();
@@ -494,7 +530,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     dispose: () => {
       disposed = true;
       for (const c of corners) c.tyre?.dispose();
-      for (const slot of skinSlots) slot.mat.dispose();
+      for (const slot of skinSlots) if (slot.ownedBySkin) slot.mat.dispose();
       root.removeFromParent();
     },
   };

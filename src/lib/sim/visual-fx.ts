@@ -12,10 +12,10 @@
 import { steerNormOf } from './car-pose';
 import * as THREE from 'three';
 import { createF1Car2026, type PortedSkin, type SimCarRig } from '@/lib/car-builder-2026';
-import { carForVehicle, carSkinBaseUrl } from '@/lib/cars/car-registry';
+import { anyCarForVehicle, carForVehicle, carSkinBaseUrl } from '@/lib/cars/car-registry';
 import type { WheelSeating } from '@/lib/render/corner-rig';
 import { createPortedCarRig, loadTemplate as loadPortedTemplate } from '@/lib/ported-car-model';
-import { defaultGtTyreBrand } from '@/lib/render/gt-tyre-sidewall';
+import { defaultGtTyreBrand, type GtTyreBrand } from '@/lib/render/gt-tyre-sidewall';
 import { staticFloorOf } from '@/lib/render/body-floor';
 import { CAR_WHEEL_LOCKS_DEG } from '@/lib/input/device-input';
 import { SUZUKI_LIANA_CONFIG } from './road/SuzukiLianaConfig';
@@ -1043,6 +1043,12 @@ const rigKind = (vehicle: VehicleModelId | undefined): PortedKind | 'f1' =>
           : 'f1';
 const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;
 
+export function opponentGtTyreBrand(vehicle: VehicleModelId | undefined): GtTyreBrand | null {
+  if (!vehicle) return null;
+  const def = anyCarForVehicle(vehicle);
+  return def ? defaultGtTyreBrand(def.id, def.classId) : defaultGtTyreBrand(vehicle);
+}
+
 function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryConfig): SimCarRig {
   let rig: SimCarRig;
   const kind = rigKind(vehicle);
@@ -1053,7 +1059,7 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
       chassis: own.config.chassis,
       steerLockDeg: own.lockDeg / 2,
       floor: staticFloorOf(own.config),
-      gtSidewall: defaultGtTyreBrand(kind),
+      gtSidewall: opponentGtTyreBrand(vehicle),
     });
   } else {
     rig = createF1Car2026(livery, 'medium', undefined, { opponent: true });

@@ -21,6 +21,9 @@ import {
   resolveGtTyreBrand,
   type GtTyreBrand,
 } from "../src/lib/render/gt-tyre-sidewall";
+import { installTyreDeformation } from "../src/lib/render/tyre-deformation";
+import { collectSkinSlots } from "../src/lib/ported-car-model";
+import { opponentGtTyreBrand } from "../src/lib/sim/visual-fx";
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -117,6 +120,64 @@ try {
   transitionsOk = false;
 }
 check("Compound/brand switches and dispose run cleanly", transitionsOk);
+// Regression (#13): collectSkinSlots preserves tyre deformation + GT sidewall shader hooks when a car's skinMaps
+// also repaints the tyre material (bmw-m1-procar.glb maps tyre_008 -> tyre_d_2.jpg)
+{
+  const wheelGeo = geo.clone();
+  const baseMat = new THREE.MeshStandardMaterial({ name: "tyre_008" });
+  const bodyMat = new THREE.MeshStandardMaterial({ name: "body_paint" });
+  const tyreMesh = new THREE.Mesh(wheelGeo, baseMat);
+  const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), bodyMat);
+  const root = new THREE.Group();
+  root.add(bodyMesh, tyreMesh);
+  const handle = installTyreDeformation(tyreMesh, {
+    unloadedRadiusM: 0.33,
+    halfWidthM: 0.16,
+    gtSidewall: { brand: "goodyear", compound: "medium" },
+  });
+  const deformedMat = tyreMesh.material as THREE.MeshStandardMaterial;
+  const origOnBeforeCompile = deformedMat.onBeforeCompile;
+  const origCacheKey = deformedMat.customProgramCacheKey();
+  const slots = collectSkinSlots(
+    [root],
+    { tyre_008: "tyre_d_2.jpg", body_paint: "body.png" },
+    new Set([deformedMat])
+  );
+  const tyreSlot = slots.find((s) => s.file === "tyre_d_2.jpg");
+  const bodySlot = slots.find((s) => s.file === "body.png");
+  check(
+    "collectSkinSlots keeps deformed tyre material & shader hooks intact",
+    tyreMesh.material === deformedMat &&
+      tyreSlot?.mat === deformedMat &&
+      tyreSlot?.ownedBySkin === false &&
+      deformedMat.onBeforeCompile === origOnBeforeCompile &&
+      deformedMat.customProgramCacheKey() === origCacheKey &&
+      origCacheKey.includes("-gt-sidewall") &&
+      bodySlot?.ownedBySkin === true &&
+      bodyMesh.material === bodySlot.mat &&
+      bodyMesh.material !== bodyMat
+  );
+  handle.dispose();
+  for (const s of slots) if (s.ownedBySkin) s.mat.dispose();
+  baseMat.dispose();
+  bodyMat.dispose();
+  bodyMesh.geometry.dispose();
+  wheelGeo.dispose();
+}
+
+// Regression (#14): opponent rigs for amg-gt3 and mtr-496r resolve their default GT tyre brands
+check(
+  "opponentGtTyreBrand maps amg-gt3/mtr-496r/classic and returns null for road/f1",
+  opponentGtTyreBrand("amg-gt3") === "pirelli" &&
+    opponentGtTyreBrand("mtr-496r") === "michelin" &&
+    opponentGtTyreBrand("lc-lmdh") === "michelin" &&
+    opponentGtTyreBrand("bmw-m1-procar") === "goodyear" &&
+    opponentGtTyreBrand("liana") === null &&
+    opponentGtTyreBrand("lc26") === null &&
+    opponentGtTyreBrand(undefined) === null,
+  `amg-gt3=${opponentGtTyreBrand("amg-gt3")}, mtr-496r=${opponentGtTyreBrand("mtr-496r")}`
+);
+
 geo.dispose();
 
 // Verify local ported lossless WebPs if generated in public/cars/shared/tyres/gt/
