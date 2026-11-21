@@ -111,6 +111,15 @@ console.log('\n== Contact strips');
   const sh = car.wheels[0].bandLoadShares;
   check('GT3 front at −3.5°: the inner strip carries over half the load', sh[0] > 0.5 && sh[2] < 0.1 && Math.abs(sh[0] + sh[1] + sh[2] - 1) < 1e-9,
     `inner / middle / outer ${quad(sh, 3)}`);
+  // Telemetry lists each tyre's bands left → right as seen from behind (FL/RL: O/M/I, FR/RR: I/M/O)
+  const sim = createAmgGt3Sim(getActiveTrackData());
+  sim.resetToStartGrid(true);
+  for (const w of sim.vehicle.wheels) w.bandTempsC = [105, 85, 65];
+  sim.step(1 / 60, {});
+  const tb = sim.telemetry.tireBandTempsC!;
+  check('Telemetry tireBandTempsC mirrors left tyres (O/M/I) vs right tyres (I/M/O)',
+    tb[0][2] > tb[0][0] && tb[2][2] > tb[2][0] && tb[1][0] > tb[1][2] && tb[3][0] > tb[3][2],
+    `FL=${tb[0].join('/')} FR=${tb[1].join('/')} RL=${tb[2].join('/')} RR=${tb[3].join('/')}`);
 }
 
 console.log('\n== Stints round Rwanda (autopilot)');

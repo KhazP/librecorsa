@@ -3027,11 +3027,13 @@ export class F12026CarSim implements SimulatorCar {
     t.suspensionVelocityMs = quad((w) => w.compressionVel);
     t.tireTempsC = quad((w) => Math.round(0.6 * w.surfaceTempC + 0.4 * w.coreTempC));
     t.tireWearPct = quad((w) => Math.round(w.wear * 100));
-    t.tireBandTempsC = quad((w) => [
-      Math.round(w.bandTempsC[0]),
-      Math.round(w.bandTempsC[1]),
-      Math.round(w.bandTempsC[2]),
-    ]);
+    // Inner / middle / outer surface temperatures, listed left → right as seen from behind (left tyres: O / M / I)
+    t.tireBandTempsC = quad((w) => {
+      const b0 = Math.round(w.bandTempsC[0]);
+      const b1 = Math.round(w.bandTempsC[1]);
+      const b2 = Math.round(w.bandTempsC[2]);
+      return w.isLeft ? [b2, b1, b0] : [b0, b1, b2];
+    });
     t.tireFlatSpotSeverity = quad((w) => Number(w.flatSpotSeverity.toFixed(3)));
     t.tireGrainLevel = quad((w) => Number(w.grainLevel.toFixed(3)));
     t.tireBlisterLevel = quad((w) => Number(w.blisterLevel.toFixed(3)));
