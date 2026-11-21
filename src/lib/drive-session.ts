@@ -75,7 +75,7 @@ import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
-import { DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
+import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { shapeStick } from "@/lib/input/stick-shape";
 import { combineStickAndGyro, gyroSteerValue } from "@/lib/input/gyro-steer";
@@ -1163,8 +1163,9 @@ export class DriveSession {
       0.12,
       5500
     );
-    // The view camera also draws the driving aids (the racing line), which the probe and mirrors leave out
+    // The view camera also draws the driving aids (the racing line) and close-range details left out of probe/mirrors
     camera.layers.enable(OVERLAY_LAYER);
+    camera.layers.enable(DETAIL_LAYER);
     const nameplateProjector = new OverheadNameplateProjector();
     const nameplateBadges = new NameplateBadgeCache();
     let latestRemotePeers: readonly InterpolatedPeerState[] = [];
@@ -1633,6 +1634,7 @@ export class DriveSession {
     const xrRig = new THREE.Group();
     const xrCamera = new THREE.PerspectiveCamera(70, 1, 0.05, 5500);
     xrCamera.layers.enable(OVERLAY_LAYER);
+    xrCamera.layers.enable(DETAIL_LAYER);
     xrRig.add(xrCamera);
     scene.add(xrRig);
     this.enterVr = () => {
@@ -3573,8 +3575,10 @@ export class DriveSession {
         );
         env.update(physics.worldPosition, camera);
         startupMonitor?.begin();
-        // Not in the aerial tour: the car is a speck there, and its reflections can wait for the camera to come back
-        if (!cameraRig.aerialUp) reflectionProbe.update(podium.focus ?? physics.worldPosition, carRig.root, scene.environmentIntensity);
+        // Not in the aerial tour or while paused (once primed): reflections are static when the scene is frozen
+        if (!cameraRig.aerialUp && (!frozen || reflectionProbe.texture === null)) {
+          reflectionProbe.update(podium.focus ?? physics.worldPosition, carRig.root, scene.environmentIntensity);
+        }
         startupMonitor?.end("probe");
         // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
         // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an

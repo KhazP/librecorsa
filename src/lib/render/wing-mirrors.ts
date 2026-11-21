@@ -30,7 +30,7 @@ const RT_ASPECT = RT_WIDTH / RT_HEIGHT;
 const EYE_IN_MODEL = new THREE.Vector3(0, 0.74, 0);
 const CAMERA_FOV_DEG = 35;
 const CAMERA_NEAR = 0.3;
-const CAMERA_FAR = 400;
+const CAMERA_FAR = 250;
 
 export interface WingMirrorOptions {
   /** Material names of the mirror faces (default: the LC26's `mirror_1` / `mirror_2`) */

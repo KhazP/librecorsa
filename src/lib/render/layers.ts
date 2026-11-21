@@ -19,7 +19,18 @@ export const SHADOW_PROXY_LAYER = 9;
  */
 export const OVERLAY_LAYER = 10;
 
+/**
+ * Render layer of close-range detail seen by the main view camera only (tyre contact wedges, opponent brake drums,
+ * cockpit harness and driver figure). The sun's shadow camera, car reflection probe and mirrors leave it out.
+ */
+export const DETAIL_LAYER = 11;
+
 /** Puts `root` and everything under it on the driver-head layer only (three's layers are not inherited) */
 export function moveToDriverHeadLayer(root: THREE.Object3D): void {
   root.traverse((obj) => obj.layers.set(DRIVER_HEAD_LAYER));
+}
+
+/** Puts `root` and everything under it on the view-only detail layer (three's layers are not inherited) */
+export function moveToDetailLayer(root: THREE.Object3D): void {
+  root.traverse((obj) => obj.layers.set(DETAIL_LAYER));
 }

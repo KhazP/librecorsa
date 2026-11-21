@@ -20,7 +20,7 @@ import {
   installF1LiveryPaint,
   type F1LiverySurface,
 } from "@/lib/render/livery-repaint";
-import { moveToDriverHeadLayer } from "@/lib/render/layers";
+import { moveToDetailLayer, moveToDriverHeadLayer } from "@/lib/render/layers";
 import {
   relativeMatrix,
   updateCorners,
@@ -471,12 +471,13 @@ export function attachLc26Model(
     });
   }
 
-  // Close-range opponent cockpit/hub details culled beyond 60 m (`wheels.detail < 2`)
+  // Close-range opponent cockpit/hub details: culled beyond 60 m (`wheels.detail < 2`) and kept off probe/mirror passes
   const opponentCloseDetails: THREE.Object3D[] = [];
   if (options.opponent) {
     for (const c of corners) if (c.upright) opponentCloseDetails.push(c.upright);
     if (driverFigure) opponentCloseDetails.push(driverFigure.group);
     if (harnessNode) opponentCloseDetails.push(harnessNode);
+    for (const obj of opponentCloseDetails) moveToDetailLayer(obj);
   }
   let closeDetailsVisible = true;
 

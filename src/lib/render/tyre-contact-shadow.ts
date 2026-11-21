@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { DETAIL_LAYER } from "./layers";
 
 /**
  * A soft dark patch on the road under each tyre, where the tread meets it. The car-wide contact shadow
@@ -62,6 +63,7 @@ export function createTyreContactShadow(parent: THREE.Object3D): THREE.Mesh | nu
   });
   const mesh = new THREE.Mesh(geometry, baseMaterial.clone());
   mesh.name = "TyreContactShadow";
+  mesh.layers.set(DETAIL_LAYER);
   mesh.renderOrder = -1;
   mesh.castShadow = false;
   mesh.receiveShadow = false;

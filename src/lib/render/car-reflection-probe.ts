@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { isTouchDevice } from "@/lib/input/touch-input";
 
 /**
  * Live reflections for the cars: a cube camera that rides above the player's car and films the world around it (track,
@@ -7,14 +8,16 @@ import * as THREE from "three";
  * circuit it drives through. This is what most real-time racing games do (a dynamic cube map around the player);
  * screen-space reflections would need the WebGPU renderer.
  *
- * Cost control: one cube face is drawn per update (the shadow map is reused, the player's own car hidden), and the
- * prefilter runs once per full turn of six faces. The cube is the sky bake's size (256), so the materials' shader
- * variant does not change when the probe takes over from the sky.
+ * Cost control: one cube face is drawn per update (the shadow map is reused, the player's own car hidden, far plane
+ * clipped to 350 m while both sky shaders stay pinned to the far plane), and the PMREM prefilter runs on its own 7th
+ * turn slot so the 42-draw prefilter never stacks on top of a cube face render in the same frame. The cube stays at
+ * the sky bake's size (256), so the materials' shader variant does not change when the probe takes over from the sky.
  */
 export type ReflectionQuality = "off" | "medium" | "high";
 
 const CUBE_SIZE = 256;
-const PROBE_FAR_M = 8000;
+/** Distant geometry past 350 m is sub-pixel in a 256 px blurred reflection map; both sky shaders stay pinned to far */
+const PROBE_FAR_M = 350;
 /**
  * Share of the filmed world's brightness the cars take from the probe. three.js scales a material's whole
  * environment light by it, the diffuse ambient as well as the reflections, so anything under 1 lights the cars
@@ -46,8 +49,8 @@ export class CarReflectionProbe {
     private readonly scene: THREE.Scene
   ) {
     this.cubeTarget = new THREE.WebGLCubeRenderTarget(CUBE_SIZE, { type: THREE.HalfFloatType, generateMipmaps: false });
-    // Far enough for the sky dome (a 4500 m box around the view camera): clipped, the sky filmed black and the cars
-    // reflected nothing but grass and painted markings
+    // Both classic Sky and PhysicalSky pin their vertices to the far plane (frustumCulled = false), so 350 m clips
+    // distant trackside clutter and far opponents while the full sky dome still films cleanly.
     this.cubeCamera = new THREE.CubeCamera(0.3, PROBE_FAR_M, this.cubeTarget);
     this.pmrem = new THREE.PMREMGenerator(renderer);
   }
@@ -91,7 +94,10 @@ export class CarReflectionProbe {
   update(carPos: THREE.Vector3, hide: THREE.Object3D | null, envIntensity: number): void {
     if (this.quality === "off") return;
     this.frame++;
-    if (this.quality === "medium" && this.frame % 2 === 1) return;
+    if (this.quality === "medium") {
+      const stride = isTouchDevice() ? 4 : 3;
+      if (this.primed && this.frame % stride !== 0) return;
+    }
     this.cubeCamera.position.set(carPos.x, carPos.y + PROBE_HEIGHT_M, carPos.z);
     this.cubeCamera.updateMatrixWorld();
 
@@ -119,7 +125,7 @@ export class CarReflectionProbe {
         this.face = 0;
         this.filter();
         filtered = true;
-      } else {
+      } else if (this.face < 6) {
         const cams = this.cubeCamera.children as THREE.PerspectiveCamera[];
         r.setRenderTarget(this.cubeTarget, this.face);
         // The main render updates the scene's matrices this frame anyway: the face films last frame's poses rather
@@ -131,11 +137,12 @@ export class CarReflectionProbe {
         } finally {
           this.scene.matrixWorldAutoUpdate = autoMatrices;
         }
-        this.face = (this.face + 1) % 6;
-        if (this.face === 0) {
-          this.filter();
-          filtered = true;
-        }
+        this.face++;
+      } else {
+        // Dedicated 7th slot: run the 42-draw PMREM prefilter without stacking a scene cube-face render in the same frame
+        this.filter();
+        this.face = 0;
+        filtered = true;
       }
     } finally {
       r.setRenderTarget(prevTarget);

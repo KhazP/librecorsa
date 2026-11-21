@@ -89,7 +89,7 @@ export class VirtualMirror {
     this.renderer = renderer;
     this.scene = scene;
     this.rt = new THREE.WebGLRenderTarget(RT_W, RT_H, { type: THREE.HalfFloatType, samples: 0, depthBuffer: true });
-    this.cam = new THREE.PerspectiveCamera(V_FOV_DEG, ASPECT, 0.3, 600);
+    this.cam = new THREE.PerspectiveCamera(V_FOV_DEG, ASPECT, 0.3, 300);
     this.material = new THREE.ShaderMaterial({
       uniforms: {
         map: { value: this.rt.texture },
