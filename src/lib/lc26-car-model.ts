@@ -32,6 +32,7 @@ import {
 import { singlePassTransparency } from "@/lib/render/static-scene";
 import { createSuspensionArms, type ArmHub } from "@/lib/render/suspension-arms";
 import { disableCarCastShadow } from "@/lib/render/car-shadow-proxy";
+import { mergeStaticMeshesByMaterial } from "@/lib/render/merge-static-meshes";
 
 /**
  * The 2026 Prototype's body (`public/cars/f12026/model/f12026.glb`): Qvist Designs' 2026 concept, ported by
@@ -201,6 +202,7 @@ export function attachLc26Model(
   // Per-corner pivots. Built before re-parenting so the bind matrices can be read from the clone.
   interface Corner extends RigCorner {
     discMat: THREE.MeshStandardMaterial | null;
+    upright: THREE.Object3D | null;
   }
   const corners: Corner[] = [];
   const hubs = new Map<string, ArmHub>();
@@ -219,7 +221,7 @@ export function attachLc26Model(
     const pivotInv = pivotBind.clone().invert();
 
     // Upright / hub carrier: steers with the wheel, does not spin
-    const upright = find(`SUSP_${SIDE[i]}`);
+    const upright = find(`SUSP_${SIDE[i]}`) ?? null;
     if (upright) {
       const m = pivotInv.clone().multiply(relativeMatrix(upright, vf));
       steer.add(upright);
@@ -256,6 +258,7 @@ export function attachLc26Model(
       isFront: i < 2,
       isLeft: i % 2 === 1,
       discMat,
+      upright,
       restY: steer.position.y,
       tyre: null,
     });
@@ -263,14 +266,15 @@ export function attachLc26Model(
 
   // Belts buckled with a driver in the seat; lying open on the seat otherwise
   const driver = find("DRIVER");
+  const harnessNode = find(driver ? "HARNESS_ON" : "HARNESS_OFF") ?? null;
   for (const name of ["BODY", "COCKPIT", "DRIVER", driver ? "HARNESS_ON" : "HARNESS_OFF"]) {
     const part = find(name);
     if (part) bodyGroup.add(part);
   }
   find(driver ? "HARNESS_OFF" : "HARNESS_ON")?.removeFromParent();
   chassisGroup.add(bodyGroup);
-  // Suspension arms: each keeps its outer end on its wheel's drum
-  const arms = bodyNode && modelToBody ? createSuspensionArms(bodyNode, root, hubs, modelToBody) : null;
+  // Suspension arms: articulated on the player's car; on opponents all 18 arms merge into BODY's EXT_carbon below
+  const arms = !options.opponent && bodyNode && modelToBody ? createSuspensionArms(bodyNode, root, hubs, modelToBody) : null;
 
   // Driver arms follow the wheel through the mod's driver_steer clip (time set from the wheel angle)
   const helmet = driver?.getObjectByName("HELMET") ?? null;
@@ -315,15 +319,19 @@ export function attachLc26Model(
   const lockRad = LC26_CHASSIS.steering.lockDeg * THREE.MathUtils.DEG2RAD;
   const maxRoadWheelRad = lockRad / LC26_CHASSIS.steering.ratio;
 
-  // Shift lights on the wheel rim
+  // Shift lights on the wheel rim (player car only: opponents hide the interior wheel assembly)
   const ledMats: THREE.MeshStandardMaterial[] = [];
-  bodyGroup.getObjectByName("LED_RPM_0")?.traverse((obj) => {
-    const mesh = obj as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
-    mesh.material = mat;
-    ledMats.push(mat);
-  });
+  if (!options.opponent) {
+    bodyGroup.getObjectByName("LED_RPM_0")?.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
+      mesh.material = mat;
+      ledMats.push(mat);
+    });
+  } else if (steerBase) {
+    steerBase.visible = false;
+  }
 
   // Tyres: each corner gets its own deforming clone of the tyre material (one shared shader program), so
   // the contact patch flattens, the sidewalls bulge and the carcass shears under the physics loads
@@ -436,6 +444,42 @@ export function attachLc26Model(
   // The body's baked shading, where its porter made it
   installVertexOcclusion([bodyGroup, ...corners.map((c) => c.steer)]);
 
+  // Merge static same-material meshes on BODY (on opponents this also collapses all 18 ARM_* wishbones into 1 EXT_carbon
+  // draw) and on the player's STEER_BASE (8 static wheel meshes -> 2 draws, keeping LED_RPM_0 and INT_DISPLAY separate).
+  if (bodyNode) {
+    mergeStaticMeshesByMaterial(bodyNode, {
+      namePrefix: "LC26_BODY_Merged",
+      skip: (obj) => {
+        if (obj === steerBase || obj === driver || obj === helmet || obj === harnessNode) return true;
+        if (obj.userData?.aeroClosed) return true;
+        if (!options.opponent && obj.userData?.arm) return true;
+        const m = (obj as THREE.Mesh).isMesh && !Array.isArray((obj as THREE.Mesh).material) ? ((obj as THREE.Mesh).material as THREE.Material) : null;
+        if (m && (m.name === "mirror_1" || m.name === "mirror_2" || m.name === "EXT_clearled_security")) return true;
+        return false;
+      },
+    });
+  }
+  if (!options.opponent && steerBase) {
+    const ledRoot = steerBase.getObjectByName("LED_RPM_0");
+    mergeStaticMeshesByMaterial(steerBase, {
+      namePrefix: "LC26_STEER_Merged",
+      skip: (obj) => {
+        if (obj === ledRoot) return true;
+        const m = (obj as THREE.Mesh).isMesh && !Array.isArray((obj as THREE.Mesh).material) ? ((obj as THREE.Mesh).material as THREE.Material) : null;
+        return m?.name === "INT_DISPLAY";
+      },
+    });
+  }
+
+  // Close-range opponent cockpit/hub details culled beyond 60 m (`wheels.detail < 2`)
+  const opponentCloseDetails: THREE.Object3D[] = [];
+  if (options.opponent) {
+    for (const c of corners) if (c.upright) opponentCloseDetails.push(c.upright);
+    if (driverFigure) opponentCloseDetails.push(driverFigure.group);
+    if (harnessNode) opponentCloseDetails.push(harnessNode);
+  }
+  let closeDetailsVisible = true;
+
   // Opponent cars cast through a 1-draw shadow proxy on SHADOW_PROXY_LAYER instead of ~60 high-poly meshes
   if (options.opponent) {
     disableCarCastShadow(bodyGroup);
@@ -469,8 +513,15 @@ export function attachLc26Model(
     const roadWheel = -t.steering * maxRoadWheelRad;
     updateCorners(corners, roadWheel, wheelRotationRad, wheels);
     arms?.update();
-    if (steerBase) steerBase.rotation.z = t.steering * lockRad;
-    driverFigure?.update(t.steering * lockRad, dtSeconds);
+    if (opponentCloseDetails.length) {
+      const showClose = wheels?.detail === undefined || wheels.detail >= 2;
+      if (showClose !== closeDetailsVisible) {
+        closeDetailsVisible = showClose;
+        for (const obj of opponentCloseDetails) obj.visible = showClose;
+      }
+    }
+    if (!options.opponent && steerBase) steerBase.rotation.z = t.steering * lockRad;
+    if (closeDetailsVisible) driverFigure?.update(t.steering * lockRad, dtSeconds);
     if (driverMixer && steerAction) {
       steerAction.time = steerFrame(steerTable, t.steering * LC26_CHASSIS.steering.lockDeg) / driverFps;
       driverMixer.update(0);

@@ -19,6 +19,7 @@ import {
 import { singlePassTransparency } from "@/lib/render/static-scene";
 import { bodyFloorClearance, type StaticFloor } from "@/lib/render/body-floor";
 import { disableCarCastShadow } from "@/lib/render/car-shadow-proxy";
+import { mergeStaticMeshesByMaterial } from "@/lib/render/merge-static-meshes";
 
 /**
  * Cars ported to one GLB each (a registry car's `modelUrl`), on any vehicle model. Node layout:
@@ -136,6 +137,9 @@ export function portedCarRoot(model: THREE.Object3D): THREE.Object3D {
   return root ?? model.getObjectByName("CAR") ?? model;
 }
 
+/** Named body nodes/materials kept unmerged so headlight, taillight, mirror and dash hooks can find them cleanly */
+const PRESERVED_BODY_NODE_RE = /head|light|lamp|tail|brake|stop|rear_?led|mirror|dash|display|screen|glass|lens|beam|bulb|drl|fog/i;
+
 /** Loads (once) and caches a ported car GLB; the rigs clone it. Exported to pre-warm opponents before a race */
 export function loadTemplate(url: string): Promise<THREE.Group | null> {
   let template = templates.get(url);
@@ -163,6 +167,24 @@ export function loadTemplate(url: string): Promise<THREE.Group | null> {
           }
         });
         alignWheelAxles(scene);
+        // Merge static same-material meshes under BODY once on the template (e.g. bmw-m4-gt3 217 -> ~18 body draws)
+        const car = portedCarRoot(scene);
+        const extras = (car.userData ?? {}) as PortedExtras;
+        const body = scene.getObjectByName("BODY");
+        if (body) {
+          const variantNodes = new Set(Object.keys(extras.partVariants ?? {}));
+          mergeStaticMeshesByMaterial(body, {
+            namePrefix: "PORTED_BODY_Merged",
+            disposeSources: true,
+            skip: (obj) => {
+              if (obj.name === "STEER" || variantNodes.has(obj.name) || obj.name.startsWith("PART_")) return true;
+              if (PRESERVED_BODY_NODE_RE.test(obj.name)) return true;
+              const m = (obj as THREE.Mesh).isMesh && !Array.isArray((obj as THREE.Mesh).material) ? ((obj as THREE.Mesh).material as THREE.Material) : null;
+              if (m && PRESERVED_BODY_NODE_RE.test(m.name)) return true;
+              return false;
+            },
+          });
+        }
         scene.updateMatrixWorld(true);
         assetProgress.done("car");
         return scene;
@@ -454,9 +476,14 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     const steerNode = find("STEER");
     if (steerNode) {
       bodyGroup.add(steerNode);
-      steerPivot = steerNode;
-      steerRest.copy(steerNode.quaternion);
-      if (extras.revLeds) steerNode.userData.revLeds = extras.revLeds;
+      if (options.opponent) {
+        // Interior steering wheel is not readable on opponent cars; hiding it saves 1-63 draws per car
+        steerNode.visible = false;
+      } else {
+        steerPivot = steerNode;
+        steerRest.copy(steerNode.quaternion);
+        if (extras.revLeds) steerNode.userData.revLeds = extras.revLeds;
+      }
     }
     for (const [name, variants] of Object.entries(extras.partVariants ?? {})) {
       const node = bodyGroup.getObjectByName(name) ?? find(name);
