@@ -185,7 +185,7 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
         style={anchor(scale, "bottom center")}
       >
         {race && ahead ? (
-          <div className={`inline-flex h-7.5 items-center gap-2.5 rounded-full pr-4 pl-1.5 ${HUD_GLASS}`}>
+          <div className={`inline-flex h-7.5 items-center gap-2.5 rounded-lc-row pr-3.5 pl-1.5 ${HUD_GLASS}`}>
             <PositionBadge position={race.position} player size="sm" />
             <span className={HUD_LBL}>Chasing</span>
             <span className="lc-data text-[11px] tracking-[0.1em]" style={{ color: ahead.color }}>

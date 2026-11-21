@@ -83,19 +83,19 @@ export function aeroNotice(rules: OvertakingRules | undefined, e: AeroNoticeEven
         icon: e.eligible ? "drsOpen" : "drsClosed",
       };
     }
-    if (e.kind === "queued") return { badge: "DRS", text: "Opens in the zone", tone: "info", variant: "outline", icon: "drsClosed" };
+    if (e.kind === "queued") return { badge: "DRS", text: "Queued", tone: "info", variant: "outline", icon: "drsClosed" };
     return null;
   }
   if (rules === "straight-mode-2026") {
     switch (e.kind) {
       case "straight":
-        return { badge: "X-MODE", text: "Straight Mode ahead", tone: "info", variant: "solid", icon: "drsOpen" };
+        return { badge: "X-MODE", text: "Straight Mode", tone: "info", variant: "solid", icon: "drsOpen" };
       case "queued":
-        return { badge: "X-MODE", text: "Opens on the straight", tone: "info", variant: "outline", icon: "drsClosed" };
+        return { badge: "X-MODE", text: "Queued", tone: "info", variant: "outline", icon: "drsClosed" };
       case "overtake":
         return {
           badge: "OVERTAKE",
-          text: e.earned ? "Earned for the next lap" : "Not earned this lap",
+          text: e.earned ? "Enabled" : "Locked",
           tone: e.earned ? "info" : "neutral",
           variant: e.earned ? "solid" : "soft",
           icon: "overtake",

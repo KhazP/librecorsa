@@ -310,7 +310,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     cameraMode,
     boostLatch,
     showLaunchHint = false,
-    launchHintText = "Hold W or the up arrow to launch · Esc for menu",
+    launchHintText = "Hold W to launch · Esc Menu",
     mouseSteerEnabled = false,
     gamepadAssist = true,
     paused,
@@ -645,7 +645,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               <span className="text-[15px] font-bold">{aeroNoticeNow.text}</span>
             </SkinBanner>
           ) : (
-            <div role="status" className={`inline-flex min-h-10 items-center gap-2.5 rounded-full py-1 pr-5 pl-2 text-lc-chalk ${HUD_GLASS}`}>
+            <div role="status" className={`inline-flex min-h-10 items-center gap-2.5 rounded-lc-row py-1 pr-4 pl-2 text-lc-chalk ${HUD_GLASS}`}>
               <Badge tone={aeroNoticeNow.tone} variant={aeroNoticeNow.variant} size="lg" icon={aeroNoticeNow.icon}>
                 {aeroNoticeNow.badge}
               </Badge>
@@ -662,11 +662,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               <span className="text-[13px] font-semibold sm:text-[14px]">{launchHintText}</span>
             </SkinBanner>
           ) : (
-            <div className={`inline-flex min-h-11 items-center gap-3 rounded-full py-1.5 pr-5 pl-2 ${HUD_GLASS}`}>
-              <span className="inline-flex size-7.5 flex-none items-center justify-center rounded-full bg-lc-line text-lc-chalk">
-                <Icon name="play" size="xs" />
-              </span>
-              <span className="lc-title text-[13px] text-lc-chalk sm:text-[15px]">{launchHintText}</span>
+            <div className={`inline-flex min-h-10 items-center gap-2.5 rounded-lc-row py-1.5 pr-4 pl-3 ${HUD_GLASS}`}>
+              <Icon name="play" size="xs" className="text-lc-volt" />
+              <span className="lc-title text-[13px] text-lc-chalk sm:text-[14px]">{launchHintText}</span>
             </div>
           )
         ) : null}
@@ -679,7 +677,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
                 className="h-9 gap-2 px-3.5 text-[12px] font-semibold"
               >
                 <Icon name="warning" size="xs" className={skinCss.inkCaution} />
-                Pedals not set up: calibrate throttle and brake
+                Calibrate pedals
               </SkinButton>
             ) : (
               <Button
@@ -689,7 +687,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
                 onClick={() => props.onOpenControls?.()}
                 onPointerEnter={keepFocusOffHover}
               >
-                Pedals not set up: calibrate throttle and brake
+                Calibrate pedals
               </Button>
             )}
           </span>
@@ -698,17 +696,15 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           isThirdParty ? (
             <SkinBanner cut="sm" className="inline-flex h-10 items-center gap-2.5 pr-4 pl-3">
               <Icon name="play" size="xs" />
-              <span className="lc-breathe text-[13px] font-semibold sm:text-[14px]">
-                Hold the throttle · go when the lights go out
+              <span className="text-[13px] font-semibold sm:text-[14px]">
+                Hold throttle for lights out
               </span>
             </SkinBanner>
           ) : (
-            <div className={`inline-flex h-11 items-center gap-3 rounded-full pr-5 pl-2 ${HUD_GLASS}`}>
-              <span className="inline-flex size-7.5 flex-none items-center justify-center rounded-full bg-lc-line text-lc-chalk">
-                <Icon name="play" size="xs" />
-              </span>
-              <span className="lc-title lc-breathe text-[13px] text-lc-chalk sm:text-[15px]">
-                Hold the throttle · go when the lights go out
+            <div className={`inline-flex h-10 items-center gap-2.5 rounded-lc-row pr-4 pl-3 ${HUD_GLASS}`}>
+              <Icon name="play" size="xs" className="text-lc-volt" />
+              <span className="lc-title text-[13px] text-lc-chalk sm:text-[14px]">
+                Hold throttle for lights out
               </span>
             </div>
           )
@@ -774,7 +770,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           </div>
         ) : null}
         <div
-          className={`${showKeyHints ? (style ? "2xl:flex" : "sm:flex") : ""} hidden flex-wrap items-center gap-x-3 gap-y-2 rounded-full py-2 pr-3.5 pl-2 text-[12px] font-bold text-lc-chalk ${HUD_GLASS}`}
+          className={`${showKeyHints ? (style ? "2xl:flex" : "sm:flex") : ""} hidden flex-wrap items-center gap-x-3 gap-y-2 rounded-lc-row py-1.5 pr-3 pl-2 text-[12px] font-bold text-lc-chalk ${HUD_GLASS}`}
         >
           <LibreCorsaLogo variant="mark" className="h-5.5 w-5.5" />
           {inputMode === "pad" ? (
@@ -882,14 +878,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             cut="sm"
             className="absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center px-4 text-[13px] font-semibold"
           >
-            HUD hidden{props.hudToggleButton ? ` · ${props.hudToggleButton} brings it back` : ""}
+            HUD off{props.hudToggleButton ? ` · ${props.hudToggleButton} to show` : ""}
           </SkinBanner>
         ) : (
           <div
             role="status"
-            className={`absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center rounded-full px-4 lc-title text-[13px] text-lc-chalk ${HUD_GLASS}`}
+            className={`absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center rounded-lc-row px-4 lc-title text-[13px] text-lc-chalk ${HUD_GLASS}`}
           >
-            HUD hidden{props.hudToggleButton ? ` · ${props.hudToggleButton} brings it back` : ""}
+            HUD off{props.hudToggleButton ? ` · ${props.hudToggleButton} to show` : ""}
           </div>
         )
       ) : null}

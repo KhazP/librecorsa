@@ -57,11 +57,7 @@ export function PerfReportCard({ report }: { report: () => string }) {
   return (
     <Card
       title="Performance report"
-      description={
-        done === "failed"
-          ? "Copying didn't work here. Save it as a file instead."
-          : "How smoothly the game has run on this track so far. Copy it or save it, and send it to me with what you saw."
-      }
+      description={done === "failed" ? "Clipboard unavailable. Save file instead." : "Session frame-time log."}
     >
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" size="sm" icon={<Icon name={done === "copied" ? "copied" : "copy"} />} onClick={copy}>

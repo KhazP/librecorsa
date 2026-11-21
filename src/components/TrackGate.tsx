@@ -23,9 +23,9 @@ const SAFE_START_NOTICE_MS = 9000;
 function applySafeStart(): string | null {
   if (!takeSafeStart(browserStore(), Date.now()).switchToLow) return null;
   const saved = loadPlayerSettings();
-  if (saved.graphics.quality === "low") return "Your graphics driver stopped responding last time, so the game loads more gently.";
+  if (saved.graphics.quality === "low") return "Safe start active after GPU reset.";
   savePlayerSettings({ ...saved, graphics: { ...saved.graphics, quality: "low" } });
-  return "Your graphics driver stopped responding last time, so the game starts on Low graphics.";
+  return "Graphics set to Low after GPU reset.";
 }
 
 /**
@@ -61,7 +61,7 @@ export const TrackGate: React.FC = () => {
       if (current !== null) {
         // A failed load never replaces the active circuit: the one in use stays, as it is
         console.warn(`Track switch failed, staying on ${current}:`, err);
-        setError(`Couldn't load that circuit. Staying on ${getTrackInfo(current).name}.`);
+        setError(`Track load failed. Staying on ${getTrackInfo(current).name}.`);
         return;
       }
       // The first load has nothing to stay on: the default circuit ships with the bundle
@@ -75,7 +75,7 @@ export const TrackGate: React.FC = () => {
       if (req !== requestRef.current) return;
       trackIdRef.current = DEFAULT_TRACK_ID;
       setTrackId(DEFAULT_TRACK_ID);
-      setError(`Couldn't load that circuit. Driving ${getTrackInfo(DEFAULT_TRACK_ID).name} instead.`);
+      setError(`Track load failed. Loaded ${getTrackInfo(DEFAULT_TRACK_ID).name}.`);
     }
   }, []);
 

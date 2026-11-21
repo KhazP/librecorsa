@@ -65,8 +65,8 @@ export const TowerRows: React.FC<{
           <li
             key={`${i}-${e.driverCode}`}
             title={e.name && e.name !== e.driverCode ? e.name : undefined}
-            className={`lc-data grid h-7.5 grid-cols-[22px_4px_1fr_auto_40px] items-center gap-2 text-[13px] ${
-              e.isPlayer ? "mx-1.5 my-0.5 rounded-full bg-lc-volt pr-2.5 pl-0.5 text-lc-void" : "pr-2.5 pl-2 text-lc-chalk"
+            className={`lc-data grid h-7.5 grid-cols-[22px_4px_1fr_auto_40px] items-center gap-2 pr-2.5 pl-2 text-[13px] ${
+              e.isPlayer ? "bg-lc-volt text-lc-void" : "text-lc-chalk"
             }`}
           >
             <span className={`text-center ${e.isPlayer ? "" : "text-lc-slate"}`}>{i + 1}</span>
@@ -169,8 +169,8 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
   if (variant === "minimal") {
     return (
       <div className="flex flex-col items-start gap-1.5">
-        <section aria-label="Lap" className={`flex items-center gap-3.5 rounded-full py-2 pr-4.5 pl-2 ${HUD_GLASS}`}>
-          <span className="lc-data inline-flex h-10 items-center rounded-full bg-lc-titanium px-3.5 text-[12px] tracking-[0.1em] text-lc-chalk">
+        <section aria-label="Lap" className={`flex items-center gap-3 rounded-lc-tile py-1.5 pr-4 pl-1.5 ${HUD_GLASS}`}>
+          <span className="lc-data inline-flex h-9 items-center rounded-lc-row bg-lc-titanium px-3 text-[12px] tracking-[0.1em] text-lc-chalk">
             {activeLapWord().toUpperCase()} {lap}
           </span>
           <span className="lc-data text-[30px] leading-none" style={{ color: timeColor }}>
@@ -179,7 +179,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
           {lapInvalid ? <InvalidTag /> : null}
         </section>
         {/* Sectors, delta and last / best on one quiet line */}
-        <div className={`lc-data hidden items-center gap-2.5 rounded-full px-3 py-1 text-[10px] text-lc-slate sm:flex ${HUD_GLASS}`}>
+        <div className={`lc-data hidden items-center gap-2.5 rounded-lc-row px-2.5 py-1 text-[10px] text-lc-slate sm:flex ${HUD_GLASS}`}>
           {sectors.map((s) => (
             <span key={s.sec} className="inline-flex items-center gap-1">
               <span className="h-1.5 w-3 rounded-full" style={{ backgroundColor: s.color }} />

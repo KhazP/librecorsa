@@ -205,16 +205,16 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
 
   if (variant === "minimal") {
     return (
-      <div className="flex flex-col items-end gap-2">
+      <div className="flex flex-col items-end gap-1.5">
         {/* Slim status strip: rev lights, rpm, aero / boost and battery */}
-        <div className={`flex items-center gap-2 rounded-full py-1.5 pr-3 pl-2 ${HUD_GLASS}`}>
+        <div className={`flex items-center gap-2 rounded-lc-row py-1.5 pr-3 pl-2 ${HUD_GLASS}`}>
           {controls}
-          <span className="flex w-22.5 gap-0.5 rounded-full bg-lc-well p-1" aria-label={`Shift lights: ${Math.max(0, Math.min(REV_LEDS, lit))} of ${REV_LEDS}`}>
+          <span className="flex w-22.5 gap-0.5 rounded-lc-nub bg-lc-well p-1" aria-label={`Shift lights: ${Math.max(0, Math.min(REV_LEDS, lit))} of ${REV_LEDS}`}>
             {leds("h-1.5")}
           </span>
           {readout}
         </div>
-        <section aria-label="Speed and gear" className={`flex items-center gap-4.5 rounded-full py-2.5 pr-2.5 pl-6 ${HUD_GLASS}`}>
+        <section aria-label="Speed and gear" className={`flex items-center gap-4 rounded-lc-tile py-2 pr-2 pl-4.5 ${HUD_GLASS}`}>
           {inputBars("h-13")}
           <div className="flex flex-col items-end">
             <span className="lc-data text-[52px] leading-[0.9] tracking-[-0.02em] text-lc-chalk">{speed}</span>
@@ -223,7 +223,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
             </span>
           </div>
           <span
-            className="flex size-19 items-center justify-center rounded-full text-lc-void"
+            className="flex size-18 items-center justify-center rounded-lc-row text-lc-void"
             style={{ backgroundColor: gearRing }}
             aria-label={`Gear ${gear}`}
           >
@@ -253,7 +253,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
 
       {/* 15-LED shift lights */}
       <div
-        className="my-2.5 flex gap-1 rounded-full bg-lc-well px-2 py-1.5"
+        className="my-2.5 flex gap-1 rounded-lc-nub bg-lc-well px-2 py-1.5"
         aria-label={`Shift lights: ${Math.max(0, Math.min(REV_LEDS, lit))} of ${REV_LEDS}`}
       >
         {leds("h-2")}

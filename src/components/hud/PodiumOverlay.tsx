@@ -57,7 +57,7 @@ export const PodiumOverlay: React.FC<{ rows: readonly PodiumRow[]; trackName: st
             ),
           )}
         </div>
-        <span className="lc-hint text-lc-fog">Tap or press any key to skip</span>
+        <span className="lc-hint text-lc-fog">Skip</span>
       </div>
     </div>
   );

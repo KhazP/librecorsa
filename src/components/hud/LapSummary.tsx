@@ -102,7 +102,7 @@ function useLiftOverHud(boxRef: React.RefObject<HTMLDivElement | null>): number 
 }
 
 /** How long the collapsed toast stays up before it clears itself */
-const TOAST_MS = 12_000;
+const TOAST_MS = 6_000;
 
 /**
  * Post-lap toast, bottom right above the MFD and dash (top centre on touch screens, clear of the on-screen pedals): lap time, status
@@ -300,12 +300,12 @@ const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose:
     );
   }
   return (
-    <div className="ml-auto flex w-fit max-w-full items-center gap-2 rounded-full border border-white/7 bg-lc-void/75 py-1.5 pr-1.5 pl-4.5 text-lc-chalk shadow-lc-pop backdrop-blur-[14px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto">
+    <div className="ml-auto flex w-fit max-w-full items-center gap-2 rounded-lc-row border border-white/10 bg-lc-void/84 py-1.5 pr-1.5 pl-3.5 text-lc-chalk shadow-lc-pop backdrop-blur-[8px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto">
       <button
         type="button"
         onClick={onOpen}
         aria-label={`${activeLapWord()} ${s.lapNumber}: show sector data`}
-        className="flex min-h-9 min-w-0 pointer-coarse:min-h-11 cursor-pointer items-center gap-3 rounded-full text-left transition-opacity duration-200 hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lc-volt sm:gap-3.5"
+        className="flex min-h-9 min-w-0 pointer-coarse:min-h-11 cursor-pointer items-center gap-3 rounded-lc-nub text-left transition-opacity duration-150 hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lc-volt sm:gap-3.5"
       >
         <span className="lc-mono shrink-0 text-[12px] font-bold text-lc-slate">
           {activeLapWord()} {s.lapNumber}
@@ -358,7 +358,7 @@ const ToastNote: React.FC<{ text: string }> = ({ text }) => {
   return (
     <p
       role="status"
-      className="mt-1.5 ml-auto flex w-fit max-w-full items-center gap-1.5 rounded-full border border-white/7 bg-lc-void/75 px-3 py-1 text-[12px] leading-snug font-medium text-lc-amber shadow-lc-pop backdrop-blur-[14px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto"
+      className="mt-1.5 ml-auto flex w-fit max-w-full items-center gap-1.5 rounded-lc-row border border-white/10 bg-lc-void/84 px-3 py-1 text-[12px] leading-snug font-medium text-lc-amber shadow-lc-pop backdrop-blur-[8px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto"
     >
       <Icon name="offline" size="xs" className="shrink-0" />
       {text}
@@ -459,7 +459,7 @@ const LapCard: React.FC<
     submitRank != null
       ? `Online: P${submitRank.rank}${submitRank.total ? ` of ${submitRank.total}` : ""}${submitRank.challengeRank ? `, P${submitRank.challengeRank} this week` : ""}`
       : "Online";
-  const notRanked = !s.valid ? "Invalid laps don't go online" : s.autopilot ? "Laps on autopilot aren't ranked" : undefined;
+  const notRanked = !s.valid ? "Invalid · unranked" : s.autopilot ? "Autopilot · unranked" : undefined;
 
   const stats: { label: string; value: string }[] = [
     { label: `Top ${unit}`, value: `${speed(s.topSpeedKmh, units)}` },
@@ -556,7 +556,7 @@ const LapCard: React.FC<
           ) : submitState === "waiting" ? (
             <SkinTag tone="caution" className="px-2.5 py-1 text-[12px] font-semibold">
               <Icon name="offline" size="xs" />
-              Not posted yet
+              Queued
             </SkinTag>
           ) : null}
           <SkinButton onClick={onClose} className="h-8 px-3 text-[12px] font-semibold">
@@ -669,7 +669,7 @@ const LapCard: React.FC<
         ) : submitState === "waiting" ? (
           // Waiting for the board, nothing to press: the line below says so
           <Badge tone="warn" icon="offline">
-            Not posted yet
+            Queued
           </Badge>
         ) : null}
         <Button size="sm" variant="secondary" onClick={onClose}>
@@ -718,7 +718,7 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
     if (skin !== null) {
       return (
         <p className={`-mt-1 flex flex-wrap items-center justify-end gap-x-1.5 text-right text-[12px] leading-snug ${skinCss.inkDim}`}>
-          {onBoard ? "On the board as" : "Racing as"} <span className={`font-semibold ${skinCss.ink}`}>{name}</span>
+          Driver <span className={`font-semibold ${skinCss.ink}`}>{name}</span>
           <SkinButton
             onClick={() => {
               setDraft(name);
@@ -727,14 +727,14 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
             }}
             className="h-7 px-2.5 text-[12px] font-semibold"
           >
-            Change name
+            Rename
           </SkinButton>
         </p>
       );
     }
     return (
       <p className="-mt-1 flex flex-wrap items-center justify-end gap-x-1.5 text-right text-[12px] leading-snug text-lc-slate">
-        {onBoard ? "On the board as" : "Racing as"} <span className="font-semibold text-lc-chalk">{name}</span>
+        Driver <span className="font-semibold text-lc-chalk">{name}</span>
         <Button
           size="sm"
           variant="ghost"
@@ -744,7 +744,7 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
             setEditing(true);
           }}
         >
-          Change name
+          Rename
         </Button>
       </p>
     );

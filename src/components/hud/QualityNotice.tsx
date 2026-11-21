@@ -9,8 +9,8 @@ import { SkinBanner, useHudSkin } from "./styles/third-party-skin";
 const SHOWN_MS = 4000;
 
 const TEXT = {
-  lowered: "Graphics lowered to keep it smooth",
-  floor: "Still not smooth? Try 30 fps in Settings",
+  lowered: "Graphics scaled down",
+  floor: "Low FPS · 30 fps cap available in Settings",
 } as const;
 
 type Notice = { id: number; kind: keyof typeof TEXT };
@@ -51,7 +51,7 @@ export function QualityNotice({ notice }: { notice: Notice | null }) {
             <span className="text-[13px] leading-snug font-semibold">{TEXT[shown.kind]}</span>
           </SkinBanner>
         ) : (
-          <div key={shown.id} className={`lc-toast-in inline-flex min-h-9 items-center gap-2 rounded-full py-1 pr-4 pl-3 text-lc-fog ${HUD_GLASS}`}>
+          <div key={shown.id} className={`lc-toast-in inline-flex min-h-9 items-center gap-2 rounded-lc-row py-1 pr-3.5 pl-3 text-lc-fog ${HUD_GLASS}`}>
             <Icon name="graphics" size="xs" />
             <span className="text-[13px] leading-snug font-semibold">{TEXT[shown.kind]}</span>
           </div>

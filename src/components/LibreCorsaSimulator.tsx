@@ -1598,12 +1598,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // With the touch pads up and no wheel or controller picked, the pads are what the player drives with
   const launchHintText =
     settings.device === "wheel"
-      ? `Press the throttle to launch · ${seatHintOn ? "hold the camera button for your seat · " : ""}pause button or Esc for menu`
+      ? `Throttle to launch${seatHintOn ? " · hold camera for seat" : ""}`
       : settings.device === "controller"
-        ? `${pressPedalText(settings.padTuning.pedalSources.throttle)} to launch · ${seatHintOn ? `hold ${padButtonLabel(settings.padButtons.camera)} for your seat · ` : ""}${padButtonLabel(settings.padButtons.pause)} for menu`
+        ? `${pressPedalText(settings.padTuning.pedalSources.throttle)} to launch${seatHintOn ? ` · hold ${padButtonLabel(settings.padButtons.camera)} for seat` : ""}`
         : touchVisible && vrState !== "on"
-          ? "Hold Throttle to launch"
-          : `Hold ${keyLabel(settings.keys.throttle[0])} to launch · ${seatHintOn ? `hold ${keyLabel(settings.keys.camera[0])} for your seat · ` : ""}Esc for menu`;
+          ? "Hold throttle to launch"
+          : `Hold ${keyLabel(settings.keys.throttle[0])} to launch · Esc Menu`;
 
   // The one derivation of hosting: the lobby names this client as its host
   /** Entered in a scheduled race: its lobby is the race server's, shown on the Races card, not as a room */

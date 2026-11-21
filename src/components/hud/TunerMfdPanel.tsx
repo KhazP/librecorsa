@@ -171,12 +171,12 @@ export const MfdStatusChips: React.FC<{ telemetry: CarTelemetry }> = ({ telemetr
     );
   }
   return (
-    // An aid lights caution with a live dot while it intervenes; the rest are neutral read-outs
+    // An aid lights solid caution while it intervenes; the rest are neutral read-outs
     <div className="flex items-center gap-1">
-      <Badge tone={tcActive ? "warn" : "neutral"} variant={tcActive ? "solid" : "soft"} size="sm" dot={tcActive ? "live" : undefined}>
+      <Badge tone={tcActive ? "warn" : "neutral"} variant={tcActive ? "solid" : "soft"} size="sm">
         TC {tuner.tcLevel > 0 ? `${tuner.tcLevel}/${tuner.tc2Level}` : "Off"}
       </Badge>
-      <Badge tone={absActive ? "warn" : "neutral"} variant={absActive ? "solid" : "soft"} size="sm" dot={absActive ? "live" : undefined}>
+      <Badge tone={absActive ? "warn" : "neutral"} variant={absActive ? "solid" : "soft"} size="sm">
         ABS {tuner.absLevel > 0 ? tuner.absLevel : "Off"}
       </Badge>
       <Badge size="sm" className="lc-mono">
@@ -702,7 +702,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
                 const first = dials.find((d) => d.category === cat.id);
                 if (first) pickDial(first.id);
               }}
-              className={`lc-chip-text h-7 min-w-0 flex-1 rounded-full text-[10px] ${HUD_CONTROL} ${
+              className={`lc-chip-text h-7 min-w-0 flex-1 rounded-lc-nub text-[10px] ${HUD_CONTROL} ${
                 // Chosen is chalk on line with a hairline (UI standard §4); volt stays the cursor
                 activeDial.category === cat.id ? HUD_CHOSEN : HUD_IDLE
               }`}
@@ -731,7 +731,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
               key={d.id}
               type="button"
               onClick={() => pickDial(d.id)}
-              className={`lc-chip-text h-5.5 min-w-0 flex-1 rounded-full border text-[9px] ${HUD_CONTROL} ${
+              className={`lc-chip-text h-5.5 min-w-0 flex-1 rounded-lc-nub border text-[9px] ${HUD_CONTROL} ${
                 selected ? `border-transparent ${HUD_CHOSEN}` : `border-lc-line ${HUD_IDLE}`
               }`}
             >
@@ -791,7 +791,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
   return (
     <div
       className={`pointer-events-auto select-none overflow-hidden ${HUD_GLASS} ${
-        collapsed ? "w-max rounded-full p-1.5" : "flex w-75 flex-col gap-2 rounded-lc-card p-2.5"
+        collapsed ? "w-max rounded-lc-row p-1.5" : "flex w-75 flex-col gap-2 rounded-lc-card p-2.5"
       } ${className}`}
     >
       <div className="flex items-center justify-between gap-1">
@@ -799,7 +799,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
         <button
           type="button"
           onClick={() => setCollapsed((c) => !c)}
-          className={`flex size-6.5 shrink-0 items-center justify-center rounded-full ${HUD_IDLE} ${HUD_CONTROL}`}
+          className={`flex size-6.5 shrink-0 items-center justify-center rounded-lc-nub ${HUD_IDLE} ${HUD_CONTROL}`}
           aria-label={collapsed ? "Open the tuner" : "Fold the tuner"}
         >
           <Icon name={collapsed ? "collapse" : "expand"} size="xs" />

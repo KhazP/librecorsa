@@ -17,15 +17,15 @@ export function FfbPairPrompt({ wanted }: { wanted: boolean }) {
     <div
       role="dialog"
       aria-label="Force feedback"
-      className="lc-ui-zoom pointer-events-auto fixed inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-(--z-lc-menu) mx-auto flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-full border border-white/7 bg-lc-carbon py-2 pr-2 pl-5 text-lc-chalk shadow-lc-pop"
+      className="lc-ui-zoom pointer-events-auto fixed inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-(--z-lc-menu) mx-auto flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-lc-row border border-white/10 bg-lc-carbon/95 py-2 pr-2 pl-4 text-lc-chalk shadow-lc-pop"
     >
-      <span className="lc-body min-w-0 text-lc-chalk">Force feedback needs the wheel picked once in the browser</span>
+      <span className="lc-body min-w-0 text-lc-chalk">Pair wheel for force feedback</span>
       {/* requestDevice needs this click's user activation, so it runs inside the handler */}
       <Button size="sm" variant="primary" onClick={() => void webHidFfb.connect()}>
-        Connect wheel
+        Connect
       </Button>
       <Button size="sm" variant="ghost" onClick={() => setDismissed(true)}>
-        Not now
+        Dismiss
       </Button>
     </div>
   );

@@ -107,7 +107,7 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean 
       >
         <StepRing progress={1} color={HUD_RED} done={false} />
         <span className="lc-title hud-text-shadow flex items-center gap-2 text-[16px] whitespace-nowrap uppercase sm:text-[18px]" style={{ color: HUD_RED }}>
-          <span>Engine stalled · Hold</span>
+          <span>Stalled · hold</span>
           {hasGlyph && control ? (
             <span className="mx-0.5 inline-flex scale-125">
               <ClutchPrompt control={control} />
@@ -115,7 +115,7 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean 
           ) : (
             <span>{named ?? "clutch"}</span>
           )}
-          <span>or shift to N</span>
+          <span>or N</span>
         </span>
       </div>
     );
@@ -128,7 +128,7 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean 
       <div role="status" className={`flex items-center gap-3 rounded-lc-row py-2.5 pr-5 pl-3 ${HUD_GLASS}`}>
         <StepRing progress={1} color={HUD_RED} done={false} />
         <span className="lc-title hud-text-shadow text-[16px] whitespace-nowrap uppercase sm:text-[18px]" style={{ color: HUD_RED }}>
-          Jump start: +{start.penaltyS ?? JUMP_START_PENALTY_S} s at the flag
+          Jump start · +{start.penaltyS ?? JUMP_START_PENALTY_S} s
         </span>
       </div>
     );

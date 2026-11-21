@@ -112,7 +112,7 @@ export const ReplayBar: React.FC<{
 
       <section
         aria-label="Replay controls"
-        className={`lc-ui-zoom pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom,0px)+3.5rem)] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto z-40 flex max-w-205 flex-col gap-2.5 rounded-lc-sheet px-4 py-3.5 text-lc-chalk ${HUD_GLASS} sm:bottom-[calc(env(safe-area-inset-bottom,0px)+76px)] short:bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] short:gap-2 short:py-2.5`}
+        className={`lc-ui-zoom pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom,0px)+3.5rem)] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto z-40 flex max-w-205 flex-col gap-2.5 rounded-lc-tile px-3.5 py-3 text-lc-chalk ${HUD_GLASS} sm:bottom-[calc(env(safe-area-inset-bottom,0px)+76px)] short:bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] short:gap-2 short:py-2`}
       >
         <div className="flex items-center gap-3.5">
           <button
@@ -120,7 +120,7 @@ export const ReplayBar: React.FC<{
             onClick={onTogglePlay}
             aria-label={playing ? "Pause replay" : "Play replay"}
             title="Play / pause (Space)"
-            className="inline-flex size-13 shrink-0 cursor-pointer items-center justify-center rounded-full bg-lc-volt text-lc-void shadow-lc-focus transition-colors hover:bg-lc-volt-hi active:bg-lc-volt-dim short:size-11"
+            className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-lc-row bg-lc-volt text-lc-void shadow-lc-focus transition-[background-color,transform] duration-150 hover:bg-lc-volt-hi active:scale-[0.97] active:bg-lc-volt-dim motion-reduce:active:scale-100 short:size-10"
           >
             <Icon name={playing ? "pause" : "play"} size="md" />
           </button>
@@ -150,7 +150,7 @@ export const ReplayBar: React.FC<{
           <div
             role="group"
             aria-label="Playback speed"
-            className="flex rounded-full border border-lc-line bg-lc-void p-1"
+            className="flex rounded-lc-row border border-lc-line bg-lc-void p-1"
           >
             {SPEEDS.map((s) => (
               <button
@@ -158,7 +158,7 @@ export const ReplayBar: React.FC<{
                 type="button"
                 onClick={() => onSpeed(s)}
                 aria-pressed={speed === s}
-                className={`lc-data h-8 min-w-11.5 rounded-full px-2.5 text-[12px] ${HUD_CONTROL} ${
+                className={`lc-data h-8 min-w-11.5 rounded-lc-nub px-2.5 text-[12px] ${HUD_CONTROL} ${
                   // Chosen is chalk on line with a hairline (UI standard §4); volt stays the cursor
                   speed === s ? HUD_CHOSEN : HUD_IDLE
                 }`}

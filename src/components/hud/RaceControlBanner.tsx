@@ -102,12 +102,12 @@ export const RaceControlBanner: React.FC<{
     const gain = pending.gainS;
     const giveBackPos = pending.giveBackPosition ?? null;
     const actionText = yellowPass
-      ? `Give the place back to ${yellowPass.code}`
+      ? `Give back P to ${yellowPass.code}`
       : giveBackPos !== null
-        ? `Hand back position · drop to P${giveBackPos}`
+        ? `Drop to P${giveBackPos}`
         : gain !== null
           ? `Give back ${gain.toFixed(2)} s`
-          : "Lift to give the advantage back";
+          : "Slow down";
     const flag = yellowPass ? (yellowPass.double ? "doubleYellow" : "yellow") : null;
     if (skin !== null) {
       return (
@@ -138,7 +138,7 @@ export const RaceControlBanner: React.FC<{
     return (
       <div
         role="alert"
-        className={`relative mt-1 flex min-w-60 flex-col gap-1.5 overflow-hidden rounded-lc-card px-2.5 pt-1.5 pb-2 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
+        className={`relative mt-1 flex min-w-60 flex-col gap-1.5 overflow-hidden rounded-lc-row px-2.5 pt-1.5 pb-2 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
       >
         {/* The call's badge, what to do, and the time left, on one line (the badge is the call, not a title) */}
         <div className="flex items-center gap-3">
@@ -196,7 +196,7 @@ export const RaceControlBanner: React.FC<{
     return (
       <div
         role={bad || msg.kind === "warning" ? "alert" : "status"}
-        className={`relative mt-1 inline-flex min-h-9 items-center gap-2 rounded-full py-1 pr-4 pl-1.5 text-lc-chalk inset-ring ${tone.ring} ${
+        className={`relative mt-1 inline-flex min-h-9 items-center gap-2 rounded-lc-row py-1 pr-3.5 pl-1.5 text-lc-chalk inset-ring ${tone.ring} ${
           bad ? "lc-alert" : ""
         } ${HUD_GLASS}`}
       >
@@ -239,9 +239,9 @@ export const RaceControlBanner: React.FC<{
     return (
       <div
         role="status"
-        className={`relative mt-1 inline-flex h-8 items-center gap-2 rounded-full pr-4 pl-1.5 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
+        className={`relative mt-1 inline-flex h-8 items-center gap-2 rounded-lc-row pr-3.5 pl-1.5 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
       >
-        <span className="inline-flex size-5 items-center justify-center rounded-full bg-lc-caution text-lc-void">
+        <span className="inline-flex size-5 items-center justify-center rounded-lc-nub bg-lc-caution text-lc-void">
           <Icon name="trackLimits" size="xs" />
         </span>
         <span className="lc-disp text-[14px] whitespace-nowrap">Track limits</span>

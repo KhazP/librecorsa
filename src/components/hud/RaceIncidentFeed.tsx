@@ -88,7 +88,7 @@ export const RaceIncidentFeed: React.FC<{
     return (
       <div
         role="status"
-        className={`relative mt-1 inline-flex h-8 items-center gap-2 rounded-full pr-3.5 pl-1.5 text-lc-chalk inset-ring ${blue ? "inset-ring-lc-info/60" : RING.yellow} ${HUD_GLASS}`}
+        className={`relative mt-1 inline-flex h-8 items-center gap-2 rounded-lc-row pr-3 pl-1.5 text-lc-chalk inset-ring ${blue ? "inset-ring-lc-info/60" : RING.yellow} ${HUD_GLASS}`}
       >
         <FlagBadge flag={flag} variant="solid" size="sm" />
         <span className="lc-disp text-[13px] whitespace-nowrap">{words}</span>
@@ -126,7 +126,7 @@ export const RaceIncidentFeed: React.FC<{
       <div
         key={latest.id}
         role={urgent ? "alert" : "status"}
-        className={`relative mt-1 inline-flex min-h-9 items-center gap-2 rounded-full py-1 pr-4 pl-1.5 text-lc-chalk inset-ring ${RING[latest.kind]} ${
+        className={`relative mt-1 inline-flex min-h-9 items-center gap-2 rounded-lc-row py-1 pr-3.5 pl-1.5 text-lc-chalk inset-ring ${RING[latest.kind]} ${
           bad ? "lc-alert" : ""
         } ${HUD_GLASS}`}
       >

@@ -9,13 +9,10 @@ import { PenaltyBadge, PlayerTag, PositionBadge } from "@/components/ui/badges";
 import { Icon, Trend } from "@/components/ui/icons";
 import { PromptBar } from "@/components/ui/prompts";
 import type { RaceResultEntry, RaceStatus } from "@/types/f1";
-import { STRIKES_PER_PENALTY } from "@/lib/sim/track-limits";
 import { formatLapTime } from "./hud-format";
 import { placesGained, type RaceRecord } from "@/lib/sim/race-history";
 import { countdownLabel, nextRaceSlot } from "@/lib/net/race-schedule";
 import { TRACKS } from "@/lib/track-registry";
-
-const ordinal = (n: number) => (n === 2 ? "second" : n === 3 ? "third" : n === 4 ? "fourth" : `${n}th`);
 
 /** Race time at the flag: m:ss.mmm, or h:mm:ss.mmm past one hour */
 const formatRaceTime = (totalS: number): string => formatLapTime(Math.round(totalS * 1000));
@@ -155,23 +152,12 @@ export const RaceResults: React.FC<{
                 Final
               </Badge>
             ) : (
-              <Badge tone="warn" dot="live">
+              <Badge tone="warn">
                 Provisional
               </Badge>
             )}
           </span>
         </div>
-        {/* What the badges mean, in words on the sheet (a tooltip reaches no keyboard, pad or finger) */}
-        {!final || trackLimitStrikes > 0 ? (
-          <p className="lc-hint m-0 -mt-2 short:-mt-1.5">
-            {[
-              final ? null : "Cars are still running: places can change.",
-              trackLimitStrikes > 0 ? `Every ${ordinal(STRIKES_PER_PENALTY)} track-limits strike is a time penalty.` : null,
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          </p>
-        ) : null}
 
         {me ? <PlayerSummary me={me} fieldSize={ordered.length} fastest={isFastest(me)} /> : null}
 
@@ -335,25 +321,21 @@ const PlayerSummary: React.FC<{ me: RaceResultEntry; fieldSize: number; fastest:
         <span className={`lc-mono text-[22px] leading-tight font-bold ${me.dnf ? "text-lc-loss" : "text-lc-volt"}`}>
           {me.dq ? "DSQ" : me.dnf ? "DNF" : `P${me.position}`}
         </span>
-        <span className={after}>{me.dq ? "Disqualified" : me.dnf ? "Out of the race" : `of ${fieldSize}`}</span>
+        <span className={after}>{me.dq ? "Disqualified" : me.dnf ? "Retired" : `of ${fieldSize}`}</span>
       </Well>
       <Well className={cell}>
         <span className="leading-tight">
           <PlacesGained gained={gained} large />
         </span>
         <span className={after}>
-          {me.gridPosition === undefined
-            ? "Grid not known"
-            : gained === null || gained === 0
-              ? `From P${me.gridPosition}`
-              : `${Math.abs(gained) === 1 ? "place" : "places"} ${gained > 0 ? "gained" : "lost"} from P${me.gridPosition}`}
+          {me.gridPosition === undefined ? "Grid unknown" : `Started P${me.gridPosition}`}
         </span>
       </Well>
       <Well className={cell}>
         <span className="leading-tight">
           <BestLap ms={me.bestLapMs} fastest={fastest} large />
         </span>
-        <span className={after}>{fastest ? "Fastest lap of the race" : "Your best lap"}</span>
+        <span className={after}>{fastest ? "Fastest lap" : "Best lap"}</span>
       </Well>
     </div>
   );

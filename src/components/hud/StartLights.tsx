@@ -103,7 +103,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
           </span>
         ) : null}
         <div
-          className={`flex gap-2 rounded-full px-3 py-3 sm:gap-3.5 sm:px-5 sm:py-4 short:gap-2 short:py-2 ${HUD_GLASS}`}
+          className={`flex gap-2 rounded-lc-tile px-3 py-3 sm:gap-3 sm:px-4 sm:py-3.5 short:gap-2 short:py-2 ${HUD_GLASS}`}
           role="img"
           aria-label={`Start lights: ${race.lightsOn} of 5 lit`}
         >
@@ -112,7 +112,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
             return (
               <span
                 key={i}
-                className="flex flex-col gap-2 rounded-full bg-lc-well p-2 inset-ring inset-ring-lc-titanium sm:gap-2.5 sm:p-2.5 short:gap-1.5 short:p-1.5"
+                className="flex flex-col gap-2 rounded-lc-row bg-lc-well p-2 inset-ring inset-ring-lc-titanium sm:gap-2.5 sm:p-2.5 short:gap-1.5 short:p-1.5"
               >
                 {[0, 1].map((row) => (
                   <span
@@ -150,13 +150,13 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
     return (
       <div
         role="status"
-        className={`inline-flex min-h-10 items-center gap-2.5 rounded-full py-1.5 pr-4.5 pl-2.5 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
+        className={`inline-flex min-h-10 items-center gap-2.5 rounded-lc-row py-1.5 pr-4 pl-2 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
       >
         <Badge tone="warn" variant="solid" size="sm">
           Rolling start
         </Badge>
         <span className="lc-disp text-[14px] whitespace-nowrap">
-          Hold pace · <span className="lc-data">{pace}</span> {unit} to start/finish
+          Hold <span className="lc-data">{pace}</span> {unit} to line
         </span>
       </div>
     );
@@ -173,9 +173,8 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
     }
     return (
       <div key={`green${startBanner.id}`} onAnimationEnd={fadeEnd(`green${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
-        <span className="lc-ripple absolute inset-0 rounded-full border-2 border-lc-gain/55" aria-hidden="true" />
-        <div className="relative flex flex-col items-center gap-2 rounded-full border-2 border-lc-gain/55 bg-lc-void/84 px-8 py-4 shadow-lc-pop sm:px-14 sm:py-6">
-          <span className="lc-disp text-[44px] whitespace-nowrap text-lc-gain sm:text-[76px]">Green flag</span>
+        <div className="relative flex flex-col items-center gap-2 rounded-lc-tile border-2 border-lc-gain/65 bg-lc-void/90 px-8 py-4 shadow-lc-pop sm:px-12 sm:py-5">
+          <span className="lc-disp text-[44px] whitespace-nowrap text-lc-gain sm:text-[72px]">Green flag</span>
         </div>
       </div>
     );
@@ -197,15 +196,13 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
     }
     return (
       <div key={startBanner.id} onAnimationEnd={fadeEnd(`go${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
-        {/* Ripples leaving the banner */}
-        <span className="lc-ripple absolute inset-0 rounded-full border-2 border-lc-chalk/45" aria-hidden="true" />
-        <div className="relative flex flex-col items-center gap-3 rounded-full border-2 border-lc-chalk/45 bg-lc-void/84 px-8 py-4 shadow-lc-pop sm:gap-4 sm:px-14 sm:py-6">
+        <div className="relative flex flex-col items-center gap-3 rounded-lc-tile border-2 border-lc-chalk/50 bg-lc-void/90 px-8 py-4 shadow-lc-pop sm:gap-3.5 sm:px-12 sm:py-5">
           <div className="flex gap-2" aria-hidden="true">
             {LIGHT_COLUMNS.map((i) => (
               <span key={i} className="h-3.5 w-3.5 rounded-full bg-lc-titanium" />
             ))}
           </div>
-          <span className="lc-disp text-[44px] whitespace-nowrap text-lc-chalk sm:text-[76px]">
+          <span className="lc-disp text-[44px] whitespace-nowrap text-lc-chalk sm:text-[72px]">
             Lights out
           </span>
         </div>
@@ -230,8 +227,8 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
     return (
       <div key={flags} onAnimationEnd={fadeEnd(`flag${flags}`)} className="hud-fade-out flex flex-col items-center gap-3.5">
         <ChequerStrip patternId={patternId} defs />
-        <div className="rounded-full border-2 border-lc-chalk/45 bg-lc-void/84 px-8 py-4 shadow-lc-pop sm:px-13 sm:py-5.5">
-          <span className="lc-disp block text-center text-[36px] whitespace-nowrap text-lc-chalk sm:text-[66px]">
+        <div className="rounded-lc-tile border-2 border-lc-chalk/50 bg-lc-void/90 px-8 py-4 shadow-lc-pop sm:px-12 sm:py-5">
+          <span className="lc-disp block text-center text-[36px] whitespace-nowrap text-lc-chalk sm:text-[64px]">
             Chequered flag
           </span>
         </div>

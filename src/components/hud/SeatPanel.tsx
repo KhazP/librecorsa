@@ -252,7 +252,7 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
               >
                 <span className={`w-16 shrink-0 text-[13px] font-semibold ${active ? "text-lc-chalk" : "text-lc-fog"}`}>{r.label}</span>
                 {r.key === "view" ? (
-                  <div className="flex flex-1 gap-1 rounded-full bg-lc-void/80 p-1 inset-ring inset-ring-lc-line" role="radiogroup" aria-label="View">
+                  <div className="flex flex-1 gap-1 rounded-lc-row bg-lc-void/80 p-1 inset-ring inset-ring-lc-line" role="radiogroup" aria-label="View">
                     {NUDGE_VIEWS.map((v) => (
                       <button
                         key={v}
@@ -262,7 +262,7 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
                         aria-checked={p.view === v}
                         onClick={() => p.onSetView(v)}
                         className={cx(
-                          "h-8 flex-1 cursor-pointer rounded-full text-[13px] font-semibold [text-shadow:none] pointer-coarse:h-11",
+                          "h-8 flex-1 cursor-pointer rounded-lc-nub text-[13px] font-semibold [text-shadow:none] pointer-coarse:h-11",
                           MOTION,
                           p.view === v ? CHOSEN_PILL : cx("text-lc-slate", HOVER_PILL),
                         )}
@@ -304,7 +304,7 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
             { action: "back", label: "Done", key: `Esc / ${cameraKey}`, keyPrinted: true },
           ]}
         />
-        <p className="lc-hint m-0 px-1 text-lc-fog short:hidden">Kept for this car. The car waits while this is open.</p>
+        <p className="lc-hint m-0 px-1 text-lc-fog short:hidden">Saved per car</p>
       </div>
     </div>
   );

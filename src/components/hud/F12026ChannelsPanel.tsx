@@ -15,13 +15,12 @@ const bumpColor = (m: number) => (m < 0 ? HUD_LOSS : m < 0.002 ? HUD_CAUTION : H
 /** Friction-circle use: fog while there is grip to spare, caution from 85 %, loss past the limit */
 const circleColor = (f: number) => (f >= 1 ? HUD_LOSS : f >= 0.85 ? HUD_CAUTION : "var(--color-lc-fog)");
 
-/** Driver-aid lamp, lit (caution, with a live dot) while the aid is intervening */
+/** Driver-aid lamp, lit solid caution while the aid is intervening */
 export const AidLamp: React.FC<{ label: string; active: boolean }> = ({ label, active }) => (
   <Badge
     tone={active ? "warn" : "neutral"}
     variant={active ? "solid" : "soft"}
     size="md"
-    dot={active ? "live" : undefined}
     icon={label === "ABS" ? "abs" : "tractionControl"}
     aria-label={`${label}${active ? ", intervening" : ""}`}
   >
