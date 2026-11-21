@@ -155,7 +155,11 @@ const isClean = (l: PhysicsLap) => l.offTrackFrames <= 12 && l.wallHits === 0 &&
 const oldLaps = drive(current);
 
 if (ghostsOn) {
-  const vehicles = line === 'gt3' ? ['amg-gt3', 'mtr-496r'] : ['lc26', 'f12026-car'];
+  // Include all closed-wheel classes (GT3, Prototype, Classic, Road) when seeding the closed-wheel ('gt3') line
+  const vehicles =
+    line === 'gt3'
+      ? ['lc-lmdh', 'amg-gt3', 'mtr-496r', 'bmw-m1-procar', 'porsche-934-rsr', 'nissan-r33-jgtc', 'nissan-r32-jtcc', 'chaparral-2d', 'chaparral-2d-67', 'vw-scirocco-gtx', 'liana']
+      : ['lc26', 'f12026-car'];
   // Corner segments from the current line's own lap (the first judge's), for stitching
   const segs = cornerSegments(oldLaps[0].v, cornerMinima(oldLaps[0].v, t.ds));
   for (const vehicle of vehicles) {

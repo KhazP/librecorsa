@@ -202,9 +202,11 @@ export function computeLookaheadVectors(
 }
 
 /** Reaction allowance: a marker turns red this long before the last possible brake point (s) */
-const BRAKE_REACTION_S = 0.1;
+const BRAKE_REACTION_S = 0.12;
 /** Yellow warning lead before the red brake point (s) */
-const BRAKE_WARNING_S = 0.6;
+const BRAKE_WARNING_S = 0.65;
+/** Physical distance ahead of the car where markers evaluate live speed (covers 340+ km/h straights) */
+const DYNAMIC_LINE_LOOKAHEAD_M = 340;
 
 /**
  * Evaluates the dynamic braking urgency (`0.0` = full throttle green, `0.5` = caution/lift yellow,
@@ -213,7 +215,9 @@ const BRAKE_WARNING_S = 0.6;
  *
  * Uses the car model's braking envelope (the backward pass of its speed profile: the car's own `guide`, else
  * the circuit's LC26 profile in `brakeLimitKmh`): a car arriving at the marker at its current speed must already
- * be braking there when that speed exceeds the envelope. The marker goes yellow up to 0.6 s before that point.
+ * be braking there when that speed exceeds the envelope. The marker goes yellow up to 0.65 s before that point,
+ * and upcoming static braking zones ahead (> 30 m) stay highlighted amber while accelerating toward them so tight
+ * corner entries never masquerade as full-throttle green until too late.
  */
 export function evaluateDynamicBrakingUrgency(
   track: BuiltTrackData,
@@ -225,13 +229,17 @@ export function evaluateDynamicBrakingUrgency(
   const totalLen = track.totalLengthM;
   const deltaS = (markerS - carS + totalLen) % totalLen;
 
-  // Markers further ahead just show the static braking zones
-  if (deltaS > 260) {
+  const staticZoneAt = (s: number) => {
     if (guide) {
       const n = guide.brakingZone.length;
-      return guide.brakingZone[Math.round((((markerS % totalLen) + totalLen) % totalLen) / (totalLen / n)) % n];
+      return guide.brakingZone[Math.round((((s % totalLen) + totalLen) % totalLen) / (totalLen / n)) % n];
     }
-    return THREE.MathUtils.clamp(track.getSampleAtDistance(markerS).brakingZone, 0, 1);
+    return THREE.MathUtils.clamp(track.getSampleAtDistance(s).brakingZone, 0, 1);
+  };
+
+  // Markers further ahead show the static braking zones
+  if (deltaS > DYNAMIC_LINE_LOOKAHEAD_M) {
+    return staticZoneAt(markerS);
   }
 
   const envelopeAt = (s: number) => {
@@ -247,6 +255,11 @@ export function evaluateDynamicBrakingUrgency(
   const warnDist = v * BRAKE_WARNING_S;
   for (let d = 5; d <= warnDist; d += 5) {
     if (v > envelopeAt(sRed + d) + 0.5) return 0.35 + 0.6 * (1 - d / warnDist);
+  }
+  // Upcoming braking zone ahead while still accelerating toward it: keep a caution cue visible rather than pure green
+  if (deltaS > 30 && v > 12) {
+    const sz = staticZoneAt(markerS);
+    if (sz >= 0.5) return sz >= 1 ? 0.55 : 0.38;
   }
   return 0;
 }

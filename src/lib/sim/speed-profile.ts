@@ -200,6 +200,30 @@ function lc26DownforceCurve(
   };
 }
 
+/** Catmull-Rom 1D interpolation for t in [0, 1] between p1 and p2 given neighbours p0 and p3 */
+function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (
+    0.5 *
+    (2 * p1 +
+      (-p0 + p2) * t +
+      (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+      (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
+  );
+}
+
+/**
+ * Target physical sample spacing (m) for curvature and braking-envelope solving. Circuits longer than ~7 km have
+ * coarse 1200-sample spacing (e.g. 11.4 m on Sarthe 1982) that smears tight chicanes unless subdivided first.
+ */
+const FINE_GRID_TRIGGER_M = 6.0;
+const FINE_GRID_TARGET_M = 4.5;
+/** Physical half-chord for Menger curvature (m): ~9 m matches ±2 samples on a 5 km / 1200-sample circuit */
+const CURVATURE_CHORD_HALF_M = 9.0;
+/** Physical lookahead distance for static braking-zone grading (m): matches 3 samples on Rwanda (~13.5 m) */
+const BRAKING_ZONE_LOOK_M = 13.5;
+
 export function computeSpeedProfile(
   samples: ReadonlyArray<TrackSamplePoint>,
   car: SpeedProfileCarModel,
@@ -208,9 +232,6 @@ export function computeSpeedProfile(
 ): SpeedProfile {
   const n = samples.length;
   const m = car.massKg;
-  // Weight a crest takes off the tyres, per (m/s)² of speed: how fast the road falls away under the car (1/m)
-  const crest = new Float64Array(n);
-  if (opts.crests) for (let i = 0; i < n; i++) crest[i] = Math.max(0, -samples[i].verticalCurvature);
   const lineOffsetM = new Float64Array(n);
   const px = new Float64Array(n);
   const pz = new Float64Array(n);
@@ -223,55 +244,113 @@ export function computeSpeedProfile(
   }
 
   const segLenM = new Float64Array(n);
+  let totalLenM = 0;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
-    segLenM[i] = Math.max(0.1, Math.hypot(px[j] - px[i], pz[j] - pz[i]));
+    const len = Math.max(0.1, Math.hypot(px[j] - px[i], pz[j] - pz[i]));
+    segLenM[i] = len;
+    totalLenM += len;
+  }
+  const avgStepM = totalLenM / Math.max(1, n);
+
+  // Subdivide coarse long circuits (e.g. Le Mans 13.6 km at 11.4 m/sample) onto a ~4.5 m smooth Catmull-Rom grid
+  // so tight chicanes and hairpins are resolved accurately before reducing back to the caller's sample array.
+  const sub = avgStepM > FINE_GRID_TRIGGER_M ? Math.ceil(avgStepM / FINE_GRID_TARGET_M) : 1;
+  const gn = n * sub;
+  const gx = sub === 1 ? px : new Float64Array(gn);
+  const gz = sub === 1 ? pz : new Float64Array(gn);
+  const gBank = new Float64Array(gn);
+  const gSlope = new Float64Array(gn);
+  const gCrest = new Float64Array(gn);
+  const gSegLen = sub === 1 ? segLenM : new Float64Array(gn);
+
+  if (sub === 1) {
+    for (let i = 0; i < n; i++) {
+      const sp = samples[i];
+      gBank[i] = sp.bankingRad;
+      gSlope[i] = sp.slopeSin ?? 0;
+      if (opts.crests) gCrest[i] = Math.max(0, -sp.verticalCurvature);
+    }
+  } else {
+    for (let i = 0; i < n; i++) {
+      const i0 = (i - 1 + n) % n;
+      const i1 = i;
+      const i2 = (i + 1) % n;
+      const i3 = (i + 2) % n;
+      const s1 = samples[i1];
+      const s2 = samples[i2];
+      const c1 = opts.crests ? Math.max(0, -s1.verticalCurvature) : 0;
+      const c2 = opts.crests ? Math.max(0, -s2.verticalCurvature) : 0;
+      const sl1 = s1.slopeSin ?? 0;
+      const sl2 = s2.slopeSin ?? 0;
+      for (let q = 0; q < sub; q++) {
+        const gi = i * sub + q;
+        const t = q / sub;
+        gx[gi] = q === 0 ? px[i1] : catmullRom(px[i0], px[i1], px[i2], px[i3], t);
+        gz[gi] = q === 0 ? pz[i1] : catmullRom(pz[i0], pz[i1], pz[i2], pz[i3], t);
+        gBank[gi] = s1.bankingRad + (s2.bankingRad - s1.bankingRad) * t;
+        gSlope[gi] = sl1 + (sl2 - sl1) * t;
+        gCrest[gi] = c1 + (c2 - c1) * t;
+      }
+    }
+    for (let i = 0; i < gn; i++) {
+      const j = (i + 1) % gn;
+      gSegLen[i] = Math.max(0.1, Math.hypot(gx[j] - gx[i], gz[j] - gz[i]));
+    }
   }
 
-  // Menger curvature over ±2 samples (+ right), then a short smoothing kernel
-  const raw = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    const a = (i - 2 + n) % n;
-    const c = (i + 2) % n;
-    const abx = px[i] - px[a];
-    const abz = pz[i] - pz[a];
-    const bcx = px[c] - px[i];
-    const bcz = pz[c] - pz[i];
+  const gridStepM = totalLenM / Math.max(1, gn);
+  const chordStep = Math.max(1, Math.round(CURVATURE_CHORD_HALF_M / Math.max(0.5, gridStepM)));
+
+  // Menger curvature over physical half-chord (±9 m), + right
+  const raw = new Float64Array(gn);
+  for (let i = 0; i < gn; i++) {
+    const a = (i - chordStep + gn) % gn;
+    const c = (i + chordStep) % gn;
+    const abx = gx[i] - gx[a];
+    const abz = gz[i] - gz[a];
+    const bcx = gx[c] - gx[i];
+    const bcz = gz[c] - gz[i];
     const cross = abx * bcz - abz * bcx;
-    const den = Math.hypot(abx, abz) * Math.hypot(bcx, bcz) * Math.hypot(px[c] - px[a], pz[c] - pz[a]);
+    const den = Math.hypot(abx, abz) * Math.hypot(bcx, bcz) * Math.hypot(gx[c] - gx[a], gz[c] - gz[a]);
     raw[i] = den > 1e-9 ? (2 * cross) / den : 0;
   }
-  const curvature = new Float64Array(n);
-  const kernel = [1, 2, 3, 2, 1];
-  for (let i = 0; i < n; i++) {
-    let acc = 0;
-    for (let k = -2; k <= 2; k++) acc += kernel[k + 2] * raw[(i + k + n) % n];
-    curvature[i] = acc / 9;
+
+  // Signed curvature smoothed gently (for banking direction & callers), and unsigned |κ| smoothed with [1, 2, 1]/4
+  // so tight left-right chicanes (e.g. Virage Ford / Virage du Raccordement) never cancel out to flat straights.
+  const gCurv = new Float64Array(gn);
+  const gCurvAbs = new Float64Array(gn);
+  for (let i = 0; i < gn; i++) {
+    const prev = raw[(i - 1 + gn) % gn];
+    const cur = raw[i];
+    const next = raw[(i + 1) % gn];
+    gCurv[i] = 0.25 * (prev + 2 * cur + next);
+    gCurvAbs[i] = 0.25 * (Math.abs(prev) + 2 * Math.abs(cur) + Math.abs(next));
   }
 
   // 1. Lateral limit
-  const gN = new Float64Array(n);
-  const gT = new Float64Array(n);
-  const speedMs = new Float64Array(n);
+  const gN = new Float64Array(gn);
+  const gT = new Float64Array(gn);
+  const gSpeedMs = new Float64Array(gn);
   const constantGrip = !car.muLoadExp && !car.downforceCoefAt;
   const aeroLat = (car.muLat * car.downforceCoef) / m;
   const cl = (v: number) => plannedDownforceCoef(car, v);
   const muLatAt = (v: number) => plannedMu(car, car.muLat, v);
   const muLongAt = (v: number) => plannedMu(car, car.muLong, v);
-  for (let i = 0; i < n; i++) {
-    const k = Math.abs(curvature[i]);
-    const bankInto = samples[i].bankingRad * Math.sign(curvature[i] || 1);
+  for (let i = 0; i < gn; i++) {
+    const k = gCurvAbs[i];
+    const bankInto = gBank[i] * Math.sign(gCurv[i] || raw[i] || 1);
     gN[i] = G * Math.cos(bankInto);
     gT[i] = G * Math.sin(bankInto);
     if (constantGrip) {
-      const den = k + car.muLat * crest[i] - aeroLat;
+      const den = k + car.muLat * gCrest[i] - aeroLat;
       const vLat = den > 1e-7 ? Math.sqrt(Math.max(0, (car.muLat * gN[i] + gT[i]) / den)) : car.vMaxMs;
-      speedMs[i] = Math.min(car.vMaxMs, vLat);
+      gSpeedMs[i] = Math.min(car.vMaxMs, vLat);
     } else {
       // Grip and downforce both change with speed: the highest speed whose lateral limit still covers v²·κ (bisection;
       // the limit grows slower than v²·κ above the corner speed)
-      const spare = (v: number) => muLatAt(v) * Math.max(0, gN[i] - crest[i] * v * v + (cl(v) * v * v) / m) + gT[i] - v * v * k;
-      if (spare(car.vMaxMs) >= 0) speedMs[i] = car.vMaxMs;
+      const spare = (v: number) => muLatAt(v) * Math.max(0, gN[i] - gCrest[i] * v * v + (cl(v) * v * v) / m) + gT[i] - v * v * k;
+      if (spare(car.vMaxMs) >= 0) gSpeedMs[i] = car.vMaxMs;
       else {
         let lo = 0;
         let hi = car.vMaxMs;
@@ -280,17 +359,20 @@ export function computeSpeedProfile(
           if (spare(mid) >= 0) lo = mid;
           else hi = mid;
         }
-        speedMs[i] = lo;
+        gSpeedMs[i] = lo;
       }
     }
   }
 
-  if (opts.standingStartAt !== undefined) speedMs[opts.standingStartAt] = Math.min(speedMs[opts.standingStartAt], 0.5);
+  if (opts.standingStartAt !== undefined) {
+    const startIdx = opts.standingStartAt * sub;
+    gSpeedMs[startIdx] = Math.min(gSpeedMs[startIdx], 0.5);
+  }
 
   // Fraction of the friction circle still available after the lateral demand at speed v
   const longShare = (i: number, v: number) => {
-    const latMax = muLatAt(v) * Math.max(0, gN[i] - crest[i] * v * v + (cl(v) * v * v) / m);
-    const latUsed = Math.max(0, v * v * Math.abs(curvature[i]) - gT[i]);
+    const latMax = muLatAt(v) * Math.max(0, gN[i] - gCrest[i] * v * v + (cl(v) * v * v) / m);
+    const latUsed = Math.max(0, v * v * gCurvAbs[i] - gT[i]);
     // Between a friction circle and a linear trade-off: with fixed left/right brake and drive
     // torque the less-loaded tyre saturates first, so combined grip is below the ideal circle
     const r = Math.min(1, latUsed / Math.max(1e-6, latMax));
@@ -299,39 +381,67 @@ export function computeSpeedProfile(
 
   const backwardPass = (v: Float64Array) => {
     // Deceleration available braking at speed u through sample i: tyre grip with u's downforce, the share of it the
-    // cornering at u leaves (friction circle), and u's drag
+    // cornering at u leaves (friction circle), u's drag, and road grade (slopeSin > 0 uphill helps braking, < 0 downhill hurts it)
     const decelAt = (i: number, u: number) =>
-      Math.min(muLongAt(u) * Math.max(0, G - crest[i] * u * u + (cl(u) * u * u) / m), car.maxBrakeForceN / m) * longShare(i, u) +
-      (car.dragCoef * u * u) / m;
-    for (let step = 0; step < n; step++) {
-      const i = n - 1 - step;
-      const j = (i + 1) % n;
+      Math.max(
+        0.5,
+        Math.min(muLongAt(u) * Math.max(0, G - gCrest[i] * u * u + (cl(u) * u * u) / m), car.maxBrakeForceN / m) * longShare(i, u) +
+          (car.dragCoef * u * u) / m +
+          G * gSlope[i]
+      );
+    for (let step = 0; step < gn; step++) {
+      const i = gn - 1 - step;
+      const j = (i + 1) % gn;
       const vn = v[j];
-      // Across the segment the speed runs from the entry speed down to vn: estimate the entry speed at vn, then take
-      // every speed-dependent term (downforce grip, the cornering's share of it, drag) at the segment's midpoint
-      // speed. Taking only the friction share at a higher speed, and the downforce at vn, understated the braking
-      const vEst = Math.min(v[i], Math.sqrt(vn * vn + 2 * decelAt(i, vn) * segLenM[i]));
+      const vEst = Math.min(v[i], Math.sqrt(vn * vn + 2 * decelAt(i, vn) * gSegLen[i]));
       const decel = decelAt(i, 0.5 * (vn + vEst));
-      v[i] = Math.min(v[i], Math.sqrt(vn * vn + 2 * decel * segLenM[i]));
+      v[i] = Math.min(v[i], Math.sqrt(vn * vn + 2 * decel * gSegLen[i]));
     }
   };
-  const brakeEnvelopeMs = Float64Array.from(speedMs);
-  backwardPass(brakeEnvelopeMs);
-  backwardPass(brakeEnvelopeMs);
+  const gBrakeEnvelopeMs = Float64Array.from(gSpeedMs);
+  backwardPass(gBrakeEnvelopeMs);
+  backwardPass(gBrakeEnvelopeMs);
 
   for (let pass = 0; pass < 3; pass++) {
     // 2. Backward: braking into each sample
-    backwardPass(speedMs);
+    backwardPass(gSpeedMs);
     // 3. Forward: acceleration out of each sample
-    for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n;
-      const v = speedMs[i];
+    for (let i = 0; i < gn; i++) {
+      const j = (i + 1) % gn;
+      const v = gSpeedMs[i];
       const traction =
-        muLongAt(v) * Math.max(0, car.rearWeightFraction * (G - crest[i] * v * v) + (car.rearDownforceShare * cl(v) * v * v) / m);
+        muLongAt(v) * Math.max(0, car.rearWeightFraction * (G - gCrest[i] * v * v) + (car.rearDownforceShare * cl(v) * v * v) / m);
       const power = car.maxDrivePowerW / (m * Math.max(5, v));
-      const accel = Math.min(traction, power) * longShare(i, v) - (car.dragCoef * v * v) / m;
-      speedMs[j] = Math.min(speedMs[j], Math.sqrt(Math.max(0, v * v + 2 * accel * segLenM[i])));
+      const accel = Math.min(traction, power) * longShare(i, v) - (car.dragCoef * v * v) / m - G * gSlope[i];
+      gSpeedMs[j] = Math.min(gSpeedMs[j], Math.sqrt(Math.max(0, v * v + 2 * accel * gSegLen[i])));
     }
+  }
+
+  if (sub === 1) {
+    return { lineOffsetM, curvature: gCurv, speedMs: gSpeedMs, brakeEnvelopeMs: gBrakeEnvelopeMs, segLenM, pointX: px, pointZ: pz };
+  }
+
+  // Reduce the fine-grid profile back to `samples.length`: preserve the tightest apex speed/envelope inside each
+  // sample's half-interval so linear interpolation between coarse samples never skips a tight chicane apex.
+  const curvature = new Float64Array(n);
+  const speedMs = new Float64Array(n);
+  const brakeEnvelopeMs = new Float64Array(n);
+  const halfLo = Math.floor((sub - 1) / 2);
+  const halfHi = Math.ceil((sub - 1) / 2);
+  for (let i = 0; i < n; i++) {
+    const center = i * sub;
+    let minV = gSpeedMs[center];
+    let minEnv = gBrakeEnvelopeMs[center];
+    let peakCurv = gCurv[center];
+    for (let q = -halfLo; q <= halfHi; q++) {
+      const gi = (center + q + gn) % gn;
+      if (gSpeedMs[gi] < minV) minV = gSpeedMs[gi];
+      if (gBrakeEnvelopeMs[gi] < minEnv) minEnv = gBrakeEnvelopeMs[gi];
+      if (Math.abs(gCurv[gi]) > Math.abs(peakCurv)) peakCurv = gCurv[gi];
+    }
+    speedMs[i] = minV;
+    brakeEnvelopeMs[i] = minEnv;
+    curvature[i] = peakCurv;
   }
 
   return { lineOffsetM, curvature, speedMs, brakeEnvelopeMs, segLenM, pointX: px, pointZ: pz };
@@ -384,16 +494,20 @@ export function brakingGuideFor(
     const profile = computeSpeedProfile(samples, car, line, { crests: true });
     const n = samples.length;
     const brakingZone = new Float32Array(n);
-    // The circuit's zones (`brakingZoneLevel`) are an absolute speed drop tuned to the LC26's ~4 g; for any car,
-    // grade the deceleration the profile asks for over the next three samples against what this car can brake
-    // with at that speed. These fractions give the LC26 the same 540 m of red / 300 m of amber on Rwanda.
+    // Grade the deceleration the profile asks for over a physical lookahead (~13.5 m, 3 samples on a 5 km track)
+    // against what this car can brake with at that speed, so long circuits (Le Mans 13.6 km) stay calibrated.
+    let totalSegLen = 0;
+    for (let i = 0; i < n; i++) totalSegLen += profile.segLenM[i];
+    const avgStepM = totalSegLen / Math.max(1, n);
+    const lookSteps = Math.max(1, Math.round(BRAKING_ZONE_LOOK_M / Math.max(0.5, avgStepM)));
     for (let i = 0; i < n; i++) {
       const v = profile.speedMs[i];
-      const w = profile.speedMs[(i + 3) % n];
-      const ds = profile.segLenM[i] + profile.segLenM[(i + 1) % n] + profile.segLenM[(i + 2) % n];
-      const need = (v * v - w * w) / (2 * ds);
+      const w = profile.speedMs[(i + lookSteps) % n];
+      let ds = 0;
+      for (let k = 0; k < lookSteps; k++) ds += profile.segLenM[(i + k) % n];
+      const need = (v * v - w * w) / (2 * Math.max(0.1, ds));
       const grip = plannedMu(car, car.muLong, v) * (G + (plannedDownforceCoef(car, v) * v * v) / car.massKg);
-      const can = Math.min(grip, car.maxBrakeForceN / car.massKg) + (car.dragCoef * v * v) / car.massKg;
+      const can = Math.max(0.5, Math.min(grip, car.maxBrakeForceN / car.massKg) + (car.dragCoef * v * v) / car.massKg + G * (samples[i].slopeSin ?? 0));
       brakingZone[i] = need > BRAKING_ZONE_RED * can ? 1.0 : need > BRAKING_ZONE_AMBER * can ? 0.5 : 0.0;
     }
     guide = { line, speedMs: profile.speedMs, brakeEnvelopeMs: profile.brakeEnvelopeMs, brakingZone };

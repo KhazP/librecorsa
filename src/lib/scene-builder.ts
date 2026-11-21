@@ -1030,8 +1030,10 @@ export function buildCircuitScene(
           stepM
       ) % n;
 
-    // Update window from 15 samples behind to 65 samples (~288m) ahead of the car
-    for (let offset = -15; offset <= 65; offset++) {
+    // Update physical window from ~65 m behind to ~350 m ahead of the car (independent of track length / sample spacing)
+    const behindSamples = Math.max(6, Math.ceil(65 / Math.max(0.5, stepM)));
+    const aheadSamples = Math.max(40, Math.min(n >> 1, Math.ceil(350 / Math.max(0.5, stepM))));
+    for (let offset = -behindSamples; offset <= aheadSamples; offset++) {
       const idx = (carIdx + offset + n) % n;
       const sp = samples[idx];
       const urgency =
