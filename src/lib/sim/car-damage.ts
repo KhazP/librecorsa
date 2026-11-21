@@ -70,6 +70,18 @@ export interface DamageReport {
 
 export type DamageZone = 'front' | 'rear' | 'left' | 'right';
 
+/** Plain copy of a `CarDamage` instance's state, for Flashback history restore */
+export interface CarDamageSnapshot {
+  front: number;
+  rear: number;
+  left: number;
+  right: number;
+  suspension: [number, number, number, number];
+  toeSign: [number, number, number, number];
+  punctured: [boolean, boolean, boolean, boolean];
+  terminal: boolean;
+}
+
 /** What a level does: damage scale, the terminal impact speed (m/s), whether punctures happen */
 const LEVEL: Record<DamageLevel, { scale: number; terminalMs: number; punctures: boolean }> = {
   off: { scale: 0, terminalMs: Infinity, punctures: false },
@@ -119,6 +131,35 @@ export class CarDamage {
     this.toeSign.fill(0);
     this.punctured.fill(false);
     this.terminal = false;
+    this.dirty = true;
+  }
+
+  /** Captures a plain copy of all damage fields for Flashback rewind */
+  public snapshot(): CarDamageSnapshot {
+    return {
+      front: this.front,
+      rear: this.rear,
+      left: this.left,
+      right: this.right,
+      suspension: [this.suspension[0], this.suspension[1], this.suspension[2], this.suspension[3]],
+      toeSign: [this.toeSign[0], this.toeSign[1], this.toeSign[2], this.toeSign[3]],
+      punctured: [this.punctured[0], this.punctured[1], this.punctured[2], this.punctured[3]],
+      terminal: this.terminal,
+    };
+  }
+
+  /** Restores all damage fields from a snapshot and marks cached effects dirty */
+  public restore(s: CarDamageSnapshot): void {
+    this.front = s.front;
+    this.rear = s.rear;
+    this.left = s.left;
+    this.right = s.right;
+    for (let i = 0; i < 4; i++) {
+      this.suspension[i] = s.suspension[i];
+      this.toeSign[i] = s.toeSign[i];
+      this.punctured[i] = s.punctured[i];
+    }
+    this.terminal = s.terminal;
     this.dirty = true;
   }
 

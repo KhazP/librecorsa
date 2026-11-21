@@ -38,7 +38,7 @@ import { ROLLING_START_PACE_MS, type SimulatorCar } from '@/lib/sim/simulator-ca
 import { carAheadOnRoad, earnedAtDetection, type OvertakingRaceControl } from '@/lib/sim/overtaking-rules';
 import type { RaceStatus, RacingLineId, VehicleModelId } from '@/types/f1';
 import { AiCarControl, aiControlTraits, KNOCK_LATERAL_MS, KNOCK_WALL_MS, KNOCK_YAW_RADS, type AiControlCarState } from '@/lib/sim/ai-car-control';
-import { CarDamage, worldToCarLocal, type DamageLevel, type DamageReport } from '@/lib/sim/car-damage';
+import { CarDamage, worldToCarLocal, type CarDamageSnapshot, type DamageLevel, type DamageReport } from '@/lib/sim/car-damage';
 import {
   brakingDistanceM,
   hazardHalfWidthM,
@@ -1323,6 +1323,8 @@ export class AiOpponentField implements AiRace {
     this.yellowPasses.reset();
     this.passOrder = [];
     this.passTimerS = 0;
+    this.damageHistory.length = 0;
+    this.lastDamageHistoryS = -Infinity;
     this.phase = standing ? 'lights' : 'racing';
     this.lightsOn = 0;
     this.lightsTimerS = 0;
@@ -1349,6 +1351,7 @@ export class AiOpponentField implements AiRace {
         }
       }
     }
+    this.recordDamageHistory();
   }
 
   /**
@@ -1463,6 +1466,7 @@ export class AiOpponentField implements AiRace {
     this.raceControl.update(this.raceTimeS, this.incidents, this.playerYellowLevel());
     this.judgeYellowPasses(dt);
     this.countPasses();
+    this.recordDamageHistory();
   }
 
   /**
@@ -2833,9 +2837,48 @@ export class AiOpponentField implements AiRace {
     return this.cars.flatMap((c) => (c.ai ? [c.ai] : []));
   }
 
+  /** Short history of per-car damage & retirement state (4 Hz, 45 s window) so Flashback restores DNF & damage cleanly */
+  private readonly damageHistory: Array<{
+    timeS: number;
+    cars: ReadonlyMap<string, { damage: CarDamageSnapshot; retired: boolean; retiredAtS: number | null; removed: boolean }>;
+  }> = [];
+  private lastDamageHistoryS = -Infinity;
+
+  private recordDamageHistory(): void {
+    const prev = this.damageHistory[this.damageHistory.length - 1];
+    let stateChanged = prev === undefined;
+    if (!stateChanged && prev) {
+      for (const car of this.cars) {
+        const key = car.isPlayer ? 'player' : car.id;
+        const p = prev.cars.get(key);
+        if (!p || p.retired !== car.retired || p.removed !== car.removed || p.damage.terminal !== car.damage.terminal) {
+          stateChanged = true;
+          break;
+        }
+      }
+    }
+    if (!stateChanged && this.raceTimeS - this.lastDamageHistoryS < 0.25) return;
+    this.lastDamageHistoryS = this.raceTimeS;
+    const cars = new Map<string, { damage: CarDamageSnapshot; retired: boolean; retiredAtS: number | null; removed: boolean }>();
+    for (const car of this.cars) {
+      cars.set(car.isPlayer ? 'player' : car.id, {
+        damage: car.damage.snapshot(),
+        retired: car.retired,
+        retiredAtS: car.retiredAtS,
+        removed: car.removed,
+      });
+    }
+    this.damageHistory.push({ timeS: this.raceTimeS, cars });
+    const cutoffS = this.raceTimeS - 45;
+    while (this.damageHistory.length > 2 && this.damageHistory[1].timeS < cutoffS) {
+      this.damageHistory.shift();
+    }
+  }
+
   /**
-   * Flashback rewind: puts every AI car back at its recorded replay pose, rewinds the race clock and every car's
-   * `LapClock` cleanly (without teleport glitches), and invalidates the player's current race lap.
+   * Flashback rewind: puts every AI car back at its recorded replay pose, restores per-car damage & retirement state
+   * for the rewound timestamp (keeping already-retired cars retired so they never revive into zombie hazards), rewinds
+   * the race clock, every car's `LapClock`, and yellow-flag pass orders cleanly, and invalidates the player's current lap.
    */
   public restoreField(poses: readonly FieldCarRestorePose[], rewindS: number): void {
     if (this.phase !== 'racing') return;
@@ -2845,14 +2888,36 @@ export class AiOpponentField implements AiRace {
     this.passTimerS = this.raceTimeS;
     this.gapTimer.reset();
     this.splitTimer.reset();
-    this.yellowPasses.reset();
+    this.yellowPasses.rewind(rewindS);
+
+    // Find the latest damage/retirement snapshot at or before the rewound raceTimeS and drop future snapshots
+    while (this.damageHistory.length > 0 && this.damageHistory[this.damageHistory.length - 1].timeS > this.raceTimeS) {
+      this.damageHistory.pop();
+    }
+    const histSnap = this.damageHistory[this.damageHistory.length - 1];
+    this.lastDamageHistoryS = histSnap?.timeS ?? -Infinity;
+
     for (const car of this.cars) {
-      const p = byId.get(car.isPlayer ? 'player' : car.id);
+      const key = car.isPlayer ? 'player' : car.id;
+      const snap = histSnap?.cars.get(key);
+      if (snap) {
+        car.damage.restore(snap.damage);
+        car.retired = snap.retired;
+        car.retiredAtS = snap.retiredAtS;
+        car.removed = snap.removed;
+        car.sim.setDamageEffects?.(car.damage.effects());
+      }
+      const p = byId.get(key);
       if (car.ai && !car.removed && p) {
         const target = { x: p.x, z: p.z, yawRad: p.yawRad, speedMs: Math.max(0, p.speedMs), s: p.s };
         if (car.ai.restorePose) car.ai.restorePose(target);
         else car.ai.teleportToDistance(p.s ?? car.ai.sMeters, target.speedMs);
-        car.control?.reset();
+        if (car.retired) {
+          // Keep already-retired cars retired/parked — never reset AiCarControl back to 'racing'
+          car.control?.retire();
+        } else {
+          car.control?.reset();
+        }
         car.craft.reset();
         car.stuckS = 0;
         car.contact = false;
@@ -2862,6 +2927,8 @@ export class AiOpponentField implements AiRace {
         car.local = null;
         car.localAtS = -Infinity;
         car.intentD = null;
+      } else if (car.ai && car.retired) {
+        car.control?.retire();
       }
       if (car.isPlayer) car.clock.invalidateCurrentLap();
       car.clock.rewindTo(car.sim.sMeters, this.raceTimeS, p?.distM);

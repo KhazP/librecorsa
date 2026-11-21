@@ -163,7 +163,7 @@ export interface SimulatorCar {
    * Puts the car back at a recorded pose (world x, z and heading, + yaw = atan2(forward.x, forward.z)),
    * on the ground and rolling at `speedMs`, keeping the tyres' heat and wear. `s` is a hint for the track projection.
    */
-  restorePose?(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number }): void;
+  restorePose?(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number }): void;
   getTyreSetup(): TyreSetup;
   setTyreSetup(setup: TyreSetup): void;
   activateBoostOverride(): boolean;

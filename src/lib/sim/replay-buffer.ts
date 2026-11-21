@@ -51,7 +51,13 @@ function blendCar(a: ReplayCarState, b: ReplayCarState, f: number): ReplayCarSta
           ? { s: b.s }
           : {}),
     ...(a.lap !== undefined || b.lap !== undefined ? { lap: f < 0.5 ? (a.lap ?? b.lap) : (b.lap ?? a.lap) } : {}),
-    ...(a.distM !== undefined && b.distM !== undefined ? { distM: lerp(a.distM, b.distM, f) } : a.distM !== undefined ? { distM: a.distM } : {}),
+    ...(a.distM !== undefined && b.distM !== undefined
+      ? { distM: lerp(a.distM, b.distM, f) }
+      : a.distM !== undefined
+        ? { distM: a.distM }
+        : b.distM !== undefined
+          ? { distM: b.distM }
+          : {}),
   };
 }
 
@@ -206,13 +212,14 @@ export function isInOnlineRoom(
   return false;
 }
 
-/** Extracts a `restorePose` target (x, z, yawRad, speedMs, s) from a recorded replay car state */
+/** Extracts a `restorePose` target (x, z, yawRad, speedMs, s, lapCount) from a recorded replay car state */
 export function poseFromReplayCar(car: ReplayCarState): {
   x: number;
   z: number;
   yawRad: number;
   speedMs: number;
   s?: number;
+  lapCount?: number;
 } {
   const len = Math.hypot(car.qx, car.qy, car.qz, car.qw) || 1;
   const qx = car.qx / len;
@@ -227,5 +234,6 @@ export function poseFromReplayCar(car: ReplayCarState): {
     yawRad: Math.atan2(fx, fz),
     speedMs: Math.max(0, car.speedKmh / 3.6),
     ...(car.s !== undefined ? { s: car.s } : {}),
+    ...(car.lap !== undefined ? { lapCount: car.lap } : {}),
   };
 }

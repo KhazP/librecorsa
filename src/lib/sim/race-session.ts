@@ -271,6 +271,8 @@ export class LapClock {
   private prevS = 0;
   private lapStartS = 0;
   private currentLapInvalid = false;
+  /** Completed laps recorded so Flashback can truncate laps completed inside the rewound window and restore true `lapStartS` */
+  private readonly completedLaps: Array<{ lap: number; startS: number; endS: number; lapMs: number; valid: boolean }> = [];
 
   constructor(private readonly lapLengthM: number) {}
 
@@ -288,6 +290,7 @@ export class LapClock {
     this.lapsDone = 0;
     this.lapStartS = 0;
     this.currentLapInvalid = false;
+    this.completedLaps.length = 0;
   }
 
   /** Marks the lap under way invalid (e.g. Flashback) so it never counts as this race's best lap */
@@ -309,6 +312,28 @@ export class LapClock {
       this.finishTimeS = null;
       this.finishLaps = null;
     }
+    // Truncate laps completed inside the rewound window and recover the true start time of the lap now in progress
+    let keptCount = this.completedLaps.length;
+    while (keptCount > 0) {
+      const last = this.completedLaps[keptCount - 1];
+      if (last.endS > raceTimeS || last.lap > this.lapsDone) keptCount--;
+      else break;
+    }
+    const dropped = keptCount < this.completedLaps.length;
+    if (dropped) {
+      this.completedLaps.length = keptCount;
+      this.bestLapMs = null;
+      this.lastLapMs = null;
+      this.lastCrossingLapMs = null;
+      for (const entry of this.completedLaps) {
+        this.lastCrossingLapMs = entry.lapMs;
+        if (entry.lapMs > 1000) this.lastLapMs = Math.round(entry.lapMs);
+        if (entry.valid && entry.lapMs > 1000 && (this.bestLapMs === null || entry.lapMs < this.bestLapMs)) {
+          this.bestLapMs = Math.round(entry.lapMs);
+        }
+      }
+      this.lapStartS = keptCount > 0 ? this.completedLaps[keptCount - 1].endS : 0;
+    }
     if (this.lapStartS > raceTimeS) this.lapStartS = raceTimeS;
   }
 
@@ -326,6 +351,7 @@ export class LapClock {
       this.lastCrossingLapMs = lapMs;
       const valid = !this.currentLapInvalid;
       this.currentLapInvalid = false;
+      this.completedLaps.push({ lap: laps, startS: this.lapStartS, endS: raceTimeS, lapMs, valid });
       // The first lap starts from the grid: still a lap, as on a timing screen
       if (valid && lapMs > 1000 && (this.bestLapMs === null || lapMs < this.bestLapMs)) this.bestLapMs = Math.round(lapMs);
       if (lapMs > 1000) this.lastLapMs = Math.round(lapMs);

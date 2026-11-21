@@ -1159,7 +1159,7 @@ export class F1Physics2026 {
   }
 
   /** Back at a recorded pose (heading included), rolling at its speed, with the tyres and brakes as they are */
-  public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number }): void {
+  public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number }): void {
     const p = this.track.projectWorldToTrack(pose.x, pose.z, pose.s ?? this.sMeters);
     const speedMs = Math.max(0, pose.speedMs);
     const tangent = this.track.getSampleAtDistance(p.s).tangent;
@@ -1167,6 +1167,9 @@ export class F1Physics2026 {
     this.lineCrossingStartsLap = false;
     // Put back mid-lap: the lap under way can't count
     this.invalidateLap();
+    if (pose.lapCount !== undefined && Number.isFinite(pose.lapCount)) {
+      this.telemetry.lapCount = Math.max(0, Math.floor(pose.lapCount));
+    }
     this.timeAccumulator = 0;
     this.sMeters = p.s;
     this.lateralOffsetM = p.lateralOffset;

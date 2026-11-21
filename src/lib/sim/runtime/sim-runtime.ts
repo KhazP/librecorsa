@@ -256,6 +256,8 @@ export class SimRuntime {
       case "restore":
         if (this.race) {
           this.race.field.restoreField(command.poses, command.rewindS);
+          this.race.tick = 0;
+          this.race.fresh = true;
           this.accumulatorS = 0;
           this.reportRace(true);
           this.report(true);

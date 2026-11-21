@@ -212,6 +212,8 @@ export interface TrackLimitsEvent {
 
 interface Excursion {
   startLap: number;
+  /** Session clock (`TrackLimitsMonitor.clockS`) when this excursion started, for Flashback rewind checks */
+  startedAtClockS: number;
   offS: number;
   onS: number;
   deltaAtEntry: number | null;
@@ -276,6 +278,7 @@ export class TrackLimitsMonitor {
   private wasOff = false;
   private nextLapDeleted = false;
   private nextLapWall = false;
+  private nextLapDeletedAtClockS: number | null = null;
   /** Strict limits: the lap count and lap clock last frame (null until the first frame of a run) */
   private seenLapCount: number | null = null;
   private seenLapTimeMs: number | null = null;
@@ -336,6 +339,7 @@ export class TrackLimitsMonitor {
     this.wasOff = false;
     this.nextLapDeleted = false;
     this.nextLapWall = false;
+    this.nextLapDeletedAtClockS = null;
     this.seenLapCount = null;
     this.seenLapTimeMs = null;
     this.seenDistM = null;
@@ -355,17 +359,54 @@ export class TrackLimitsMonitor {
   }
 
   /**
-   * Cancels any in-flight excursion / course-cut watch after a Flashback (the car jumped back to a recorded pose)
-   * without erasing prior race penalties or strikes, and posts the same `lap_invalid` race-control banner as a cut.
+   * Reconciles track-limits watches after a Flashback rewind by `rewindS` seconds:
+   * - Drops excursions / cuts / forfeits that began inside the rewound window (`startedAt > restoredClockS`).
+   * - Preserves any excursion, course cut, or next-lap forfeit that was already pending before the restored moment,
+   *   preventing zero-rewind or post-offence Flashback from erasing pending verdicts or give-back orders.
+   * - In strict (practice) mode, flashing back across Start/Finish or into Sector 3 also forfeits the next lap.
+   * - Resets `seenLapCount` / `seenLapTimeMs` and transient jump/wall watchers so the restore itself never registers
+   *   as a lap start or course cut.
    */
-  noteFlashback(nowMs: number): void {
-    this.exc = null;
+  noteFlashback(
+    nowMs: number,
+    rewindS = 0,
+    opts?: { crossedLine?: boolean; inLastSector?: boolean }
+  ): void {
+    const restoredClockS = Math.max(0, this.clockS - Math.max(0, rewindS));
+    if (this.exc) {
+      if (this.exc.startedAtClockS > restoredClockS) {
+        this.exc = null;
+      } else {
+        // Keep the pending excursion/give-back, dropping only the spatial trace anchor across the jump
+        this.exc.way = null;
+      }
+    }
+    if (this.cutFrom && this.cutFrom.clockS > restoredClockS) {
+      this.cutFrom = null;
+      this.afterCut = false;
+    }
+    if (
+      this.nextLapDeleted &&
+      this.nextLapDeletedAtClockS !== null &&
+      this.nextLapDeletedAtClockS > restoredClockS
+    ) {
+      this.nextLapDeleted = false;
+      this.nextLapWall = false;
+      this.nextLapDeletedAtClockS = null;
+    }
+    const forfeitNext = this.session === "practice" && Boolean(opts?.crossedLine || opts?.inLastSector);
+    if (forfeitNext && !this.nextLapDeleted) {
+      this.nextLapDeleted = true;
+      this.nextLapWall = false;
+      this.nextLapDeletedAtClockS = restoredClockS;
+    }
+    this.clockS = restoredClockS;
+    this.seenLapCount = null;
+    this.seenLapTimeMs = null;
     this.wasOff = false;
     this.seenDistM = null;
     this.cutWatch.reset();
     this.onRoad = null;
-    this.cutFrom = null;
-    this.afterCut = false;
     this.seenWallS = null;
     this.wallLog.length = 0;
     this.wallSumS = 0;
@@ -374,7 +415,7 @@ export class TrackLimitsMonitor {
     this.message = {
       kind: "lap_invalid",
       text: "Flashback · lap deleted",
-      detail: "Current lap invalidated",
+      detail: forfeitNext ? "Current & next lap invalidated" : "Current lap invalidated",
       atMs: nowMs,
     };
   }
@@ -638,7 +679,10 @@ export class TrackLimitsMonitor {
     this.wasOff = f.offTrack && f.active;
     if (!f.active) {
       // A lap the autopilot starts is not the player's: the next lap's deletion lapses with it
-      if (started) this.nextLapDeleted = this.nextLapWall = false;
+      if (started) {
+        this.nextLapDeleted = this.nextLapWall = false;
+        this.nextLapDeletedAtClockS = null;
+      }
       return null;
     }
 
@@ -651,6 +695,7 @@ export class TrackLimitsMonitor {
     if (started && (this.nextLapDeleted || (rideBreach && f.sector === undefined))) {
       wallDeleted = this.nextLapDeleted ? this.nextLapWall : true;
       this.nextLapDeleted = this.nextLapWall = false;
+      this.nextLapDeletedAtClockS = null;
       deleted = true;
       this.message = wallDeleted
         ? { kind: "lap_invalid", text: "Wall contact · lap deleted", detail: "Rode the wall before the line", atMs: f.nowMs }
@@ -671,10 +716,14 @@ export class TrackLimitsMonitor {
       if (lastSector) {
         this.nextLapDeleted = true;
         this.nextLapWall = false;
+        this.nextLapDeletedAtClockS = this.clockS;
       }
     }
     const wallNext = rideBreach && this.wallNow && f.sector === 3 && !this.nextLapDeleted;
-    if (wallNext) this.nextLapDeleted = this.nextLapWall = true;
+    if (wallNext) {
+      this.nextLapDeleted = this.nextLapWall = true;
+      this.nextLapDeletedAtClockS = this.clockS;
+    }
     if ((wallBroken || wallNext) && !deleted) {
       this.totalStrikes++;
       this.message = {
@@ -693,6 +742,7 @@ export class TrackLimitsMonitor {
   private startExcursion(f: TrackLimitsFrame): Excursion {
     return {
       startLap: f.lapCount,
+      startedAtClockS: this.clockS,
       offS: 0,
       onS: 0,
       deltaAtEntry: f.deltaS,

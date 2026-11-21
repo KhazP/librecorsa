@@ -1994,15 +1994,19 @@ export class DriveSession {
       const car = frame?.cars.find((c) => c.id === "player");
       if (!car) return false;
       const rewindS = Math.max(0, replayClockS - rp.timeS);
+      const prevLapCount = physics.telemetry.lapCount;
+      const crossedLine = car.lap !== undefined && car.lap < prevLapCount;
+      const targetS = car.s ?? physics.sMeters;
+      const inLastSector = !track.pointToPoint && track.getSampleAtDistance(targetS).sector === 3;
       // Invalidate before and after restoring pose so both the worker's immediate placement report and local twin see it
       physics.invalidateLap?.();
       const playerPose = poseFromReplayCar(car);
       if (physics.restorePose) physics.restorePose(playerPose);
-      else physics.teleportToDistance(car.s ?? physics.sMeters, playerPose.speedMs);
+      else physics.teleportToDistance(targetS, playerPose.speedMs);
       physics.invalidateLap?.();
-      // Invalidate the current lap in LapRecorder & TrackLimitsMonitor just like going off-track
+      // Invalidate the current lap in LapRecorder & reconcile TrackLimitsMonitor watches for the rewound window
       lapRecorder.invalidateCurrentLap();
-      trackLimits.noteFlashback(performance.now());
+      trackLimits.noteFlashback(performance.now(), rewindS, { crossedLine, inLastSector });
       // In an AI race, rewind every AI car and race clock together so there are no teleport glitches
       const field = aiFieldOf(raceNow());
       if (field?.restoreField && frame) {

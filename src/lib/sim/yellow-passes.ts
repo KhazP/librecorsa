@@ -69,6 +69,26 @@ export class YellowPassJudge {
     this.seeded = false;
   }
 
+  /**
+   * Flashback rewind: drops hand-back orders triggered inside the rewound window (`ageS <= rewindS`) while keeping
+   * orders that were already pending before the restored moment, and re-seeds `ahead` on the next frame so the
+   * teleport itself never invents a pass.
+   */
+  rewind(rewindS: number): void {
+    const dt = Math.max(0, rewindS);
+    for (let i = this.orders.length - 1; i >= 0; i--) {
+      const o = this.orders[i];
+      if (o.ageS <= dt) {
+        this.orders.splice(i, 1);
+      } else {
+        o.ageS = Math.max(0, o.ageS - dt);
+        o.behindS = 0;
+      }
+    }
+    this.ahead.clear();
+    this.seeded = false;
+  }
+
   /** The place owed first, if any */
   get owed(): YellowGiveBack | null {
     const o = this.orders[0];

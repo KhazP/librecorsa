@@ -11,13 +11,22 @@
  * Run: npx tsx scripts/verify-replay-flashback.ts
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
-import { getActiveTrackData } from '../src/lib/track-data';
+import { getActiveTrackData, type RawTrackJson } from '../src/lib/track-data';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { AI_DRIVERS, AiOpponentField } from '../src/lib/sim/ai-opponents';
+import { CarDamage } from '../src/lib/sim/car-damage';
 import { LapClock } from '../src/lib/sim/race-session';
 import { LapRecorder, type CompletedLap, type LapRecorderInput } from '../src/lib/sim/lap-recorder';
 import { TrackLimitsMonitor } from '../src/lib/sim/track-limits';
+import { YellowPassJudge } from '../src/lib/sim/yellow-passes';
+import { createRemoteCar } from '../src/lib/sim/runtime/remote-car';
+import { SimRuntime } from '../src/lib/sim/runtime/sim-runtime';
+import type { SimCommand, SimEvent } from '../src/lib/sim/runtime/sim-protocol';
+import { SIM_REALISM_FLAGS } from '../src/lib/sim/sim-realism';
+import { WeatherState } from '../src/lib/sim/weather';
 import {
   canFlashback,
   isInOnlineRoom,
@@ -512,6 +521,249 @@ check('LapClock ignores invalidated flashback lap for bestLapMs, then counts nex
   clock.update(50, 145, 3);
   assert.equal(clock.lapsDone, 2);
   assert.equal(clock.bestLapMs, 75_000, 'clean lap 2 sets bestLapMs');
+});
+
+console.log('5. Flashback regressions (#2, #3, #4, #5, #6)');
+
+check('#2: CarDamage snapshot/restore and retired AI cars stay retired (never revive into zombie racers) on Flashback', () => {
+  // CarDamage snapshot/restore round-trip
+  const dmg = new CarDamage('full', 2.5, 0.975, () => 0.1);
+  const pristine = dmg.snapshot();
+  dmg.registerImpact({ localX: 0.9, localZ: 2.2, speedMs: 26, source: 'wall' });
+  assert.equal(dmg.terminal, true, 'terminal impact recorded');
+  const wrecked = dmg.snapshot();
+  dmg.restore(pristine);
+  assert.equal(dmg.pristine, true, 'restored pristine');
+  dmg.restore(wrecked);
+  assert.equal(dmg.terminal, true, 'restored wrecked');
+
+  // Field-level test: AI car already retired BEFORE the rewind point must remain parked/retired after restoreField
+  const track = getActiveTrackData(1200);
+  const player = new F12026CarSim(track);
+  const field = new AiOpponentField(track, player, AI_DRIVERS.slice(0, 2), undefined, { seed: 9, damage: 'full' });
+  field.raceLaps = 3;
+  field.startRace(false);
+  const dt = 1 / 60;
+  for (let i = 0; i < 60; i++) {
+    player.step(dt, {});
+    field.update(dt);
+  }
+  // Retire AI car 0 via terminal impact at t = 1 s
+  const cars = (field as unknown as { cars: Array<{ id: string; ai: F12026CarSim | null; damage: CarDamage; retired: boolean; retiredAtS: number | null; control: { mode: string; retire(): void } | null }> }).cars;
+  const ai0 = cars.find((c) => c.ai !== null)!;
+  ai0.damage.registerImpact({ localX: 0, localZ: 2.4, speedMs: 30, source: 'wall' });
+  // Step 4 seconds so ai0 retires and parks, recording retired snapshots at t=1..5 s
+  for (let i = 0; i < 60 * 4; i++) {
+    player.step(dt, {});
+    field.update(dt);
+  }
+  assert.equal(ai0.retired, true, 'ai0 retired after terminal hit');
+  const snapAtT3 = field.peers().find((p) => p.peerId === ai0.id)!;
+  // Flashback 2 seconds (to t = 3 s, AFTER ai0 retired at t = 1 s): ai0 must stay retired and parked
+  field.restoreField(
+    [
+      {
+        id: ai0.id,
+        x: snapAtT3.position.x,
+        y: snapAtT3.position.y,
+        z: snapAtT3.position.z,
+        qx: snapAtT3.quaternion.x,
+        qy: snapAtT3.quaternion.y,
+        qz: snapAtT3.quaternion.z,
+        qw: snapAtT3.quaternion.w,
+        yawRad: 0,
+        speedMs: 0,
+        s: snapAtT3.trackS,
+      },
+    ],
+    2.0
+  );
+  assert.equal(ai0.retired, true, 'ai0 remains retired after rewinding to post-retirement moment');
+  assert.equal(ai0.control?.mode, 'retired', 'ai0 control stays retired (not reset to racing)');
+  for (let i = 0; i < 60 * 2; i++) {
+    player.step(dt, {});
+    field.update(dt);
+  }
+  assert.ok(Math.abs(ai0.ai!.vxMs) < 5, `retired ai0 stays parked (vx=${ai0.ai!.vxMs.toFixed(1)} m/s)`);
+
+  // Flashback further back to t = 0.25 s (BEFORE the crash at t = 1 s): ai0's damage and retirement roll back cleanly
+  field.restoreField(
+    [
+      {
+        id: ai0.id,
+        x: snapAtT3.position.x,
+        y: snapAtT3.position.y,
+        z: snapAtT3.position.z,
+        qx: snapAtT3.quaternion.x,
+        qy: snapAtT3.quaternion.y,
+        qz: snapAtT3.quaternion.z,
+        qw: snapAtT3.quaternion.w,
+        yawRad: 0,
+        speedMs: 30,
+        s: snapAtT3.trackS,
+      },
+    ],
+    4.75
+  );
+  assert.equal(ai0.retired, false, 'rewinding before crash restores ai0 to active');
+  assert.equal(ai0.damage.pristine, true, 'rewinding before crash restores pristine damage');
+  assert.equal(ai0.control?.mode, 'racing', 'rewinding before crash restores racing mode');
+});
+
+check('#3: LapClock rewinding across Start/Finish restores true lapStartS (no bogus ~3s fastest lap)', () => {
+  const L = 5000;
+  const clock = new LapClock(L);
+  clock.reset(0);
+  // Complete lap 1 in 80 s, cross into lap 2 at t = 82 s
+  clock.update(2000, 32, 5);
+  clock.update(4000, 64, 5);
+  clock.update(4900, 77, 5);
+  clock.update(100, 80, 5);
+  assert.equal(clock.lapsDone, 1);
+  assert.equal(clock.bestLapMs, 80_000);
+  // Rewind 5 s back across S/F to s=4800m, distM=4800m at t=77s
+  clock.rewindTo(4800, 77, 4800);
+  assert.equal(clock.lapsDone, 0);
+  assert.equal(clock.bestLapMs, null, 'lap completed inside rewound window rolled back');
+  assert.equal(clock.lastLapMs, null, 'lastLapMs rolled back cleanly');
+  // Re-cross S/F 3.5 s later at t = 80.5 s -> lap time MUST be 80.5 s, NOT 3.5 s
+  clock.update(50, 80.5, 5);
+  assert.equal(clock.lapsDone, 1);
+  assert.equal(clock.bestLapMs, 80_500, `true lap time recorded (got ${clock.bestLapMs})`);
+  assert.equal(clock.lastLapMs, 80_500, `true lastLapMs recorded (got ${clock.lastLapMs})`);
+});
+
+check('#4: Practice Flashback across S/F or in Sector 3 restores lapCount (both engines) and forfeits next lap', () => {
+  const track = getActiveTrackData(1200);
+  const s = track.getSampleAtDistance(track.totalLengthM - 100);
+  const yaw = Math.atan2(s.tangent.x, s.tangent.z);
+  for (const sim of [new F12026CarSim(track), new F1Physics2026(track)]) {
+    sim.telemetry.lapCount = 3;
+    sim.restorePose({ x: s.position.x, z: s.position.z, yawRad: yaw, speedMs: 40, s: track.totalLengthM - 100, lapCount: 2 });
+    assert.equal(sim.telemetry.lapCount, 2, 'restorePose restores recorded lapCount (prevents +1 inflation)');
+    assert.equal(sim.telemetry.lapInvalid, true, 'restorePose invalidates current lap');
+  }
+
+  // TrackLimitsMonitor: flashback in Sector 3 or across S/F forfeits the next lap too and ignores restore's lapCount jump
+  const tl = new TrackLimitsMonitor();
+  tl.reset('practice');
+  tl.update({ nowMs: 1000, dtS: 0.5, lapCount: 2, lapTimeMs: 78_000, sector: 3, distM: 4800, lapLengthM: 5000, offTrack: false, throttle: 1, brake: 0, lateralM: 0, curvature: 0, deltaS: 0, active: true });
+  tl.update({ nowMs: 3500, dtS: 2.5, lapCount: 3, lapTimeMs: 500, sector: 1, distM: 50, lapLengthM: 5000, offTrack: false, throttle: 1, brake: 0, lateralM: 0, curvature: 0, deltaS: 0, active: true });
+  tl.noteFlashback(4000, 3.0, { crossedLine: true, inLastSector: true });
+  assert.equal(tl.nextLapForfeit, true, 'flashback across S/F / in S3 arms nextLapForfeit');
+  // First frame at restored lapCount=2 must NOT spend nextLapForfeit
+  tl.update({ nowMs: 4100, dtS: 0.1, lapCount: 2, lapTimeMs: 78_000, sector: 3, distM: 4800, lapLengthM: 5000, offTrack: false, throttle: 1, brake: 0, lateralM: 0, curvature: 0, deltaS: 0, active: true });
+  assert.equal(tl.nextLapForfeit, true, 'forfeit still armed until actual line crossing');
+  // Re-crossing S/F onto lap 3 deletes lap 3
+  const ev = tl.update({ nowMs: 6000, dtS: 1.9, lapCount: 3, lapTimeMs: 200, sector: 1, distM: 20, lapLengthM: 5000, offTrack: false, throttle: 1, brake: 0, lateralM: 0, curvature: 0, deltaS: 0, active: true });
+  assert.equal(ev?.kind, 'lap_invalid', 'next lap after S3/S-F flashback is deleted');
+});
+
+check('#5: RemoteCar.restorePose keeps worker lapCount before delayed reply & SimRuntime restore emits fresh field', () => {
+  const track = getActiveTrackData(1200);
+  const posted: SimCommand[] = [];
+  const emitted: SimEvent[] = [];
+  const runtime = new SimRuntime((ev) => emitted.push(ev));
+  const link = {
+    post(cmd: SimCommand) {
+      posted.push(cmd);
+    },
+    sendColliders() {},
+  };
+  const twin = new F12026CarSim(track);
+  const remote = createRemoteCar(twin, link, () => performance.now());
+  // Initialize worker, start on grid, and deliver ready + live state with lapCount = 2
+  const rawTrack = JSON.parse(readFileSync('public/tracks/rwanda_official_short/track_data.json', 'utf8')) as RawTrackJson;
+  runtime.handle({ type: 'init', car: 1, track: { id: 'rwanda_official_short', raw: rawTrack }, vehicle: 'lc26', lc26Rigid: true });
+  remote.car.resetToStartGrid(true);
+  for (const cmd of posted.splice(0)) runtime.handle(cmd);
+  for (const ev of emitted.splice(0)) remote.receive(ev);
+  remote.setRemote(true);
+  assert.equal(remote.remote, true, 'remote car switched to worker');
+  runtime.handle({ type: 'inputs', inputs: { throttle: 0.5 } });
+  runtime.advance(0.02);
+  const stEv = emitted.find((e): e is Extract<SimEvent, { type: 'state' }> => e.type === 'state' && e.telemetry !== undefined);
+  assert.ok(stEv && stEv.telemetry, 'worker emitted state with telemetry');
+  stEv.telemetry.lapCount = 2;
+  remote.receive(stEv);
+  assert.equal(remote.car.telemetry.lapCount, 2, 'remote car reads worker lapCount = 2');
+  // Call restorePose WITHOUT delivering worker's reply yet (simulates 1-frame-late worker reply)
+  const s0 = track.getSampleAtDistance(400);
+  remote.car.restorePose?.({ x: s0.position.x, z: s0.position.z, yawRad: 0, speedMs: 30, s: 400 });
+  // Interim frame before worker replies must NOT drop lapCount to twin's unstepped 0
+  assert.equal(remote.car.telemetry.lapCount, 2, `interim lapCount stays 2 (got ${remote.car.telemetry.lapCount})`);
+  assert.equal(remote.car.telemetry.lapInvalid, true, 'interim lapInvalid is true');
+  // SimRuntime race restore immediately packs fresh field poses on the reply
+  emitted.length = 0;
+  runtime.handle({
+    type: 'race',
+    op: 'start',
+    race: 1,
+    opponents: 2,
+    skill: 75,
+    setup: {
+      laps: 3,
+      standing: false,
+      gridOrder: 'qualifying',
+      playerGrid: 'back',
+      damage: 'off',
+      aggressionAdd: 0,
+      lockAidsInYellow: false,
+      driver: null,
+    },
+    epoch: 10,
+    weather: new WeatherState(track.totalLengthM).snapshot(),
+    realism: SIM_REALISM_FLAGS.full,
+    seed: 1,
+  });
+  runtime.advance(0.05);
+  emitted.length = 0;
+  runtime.handle({ type: 'race', op: 'restore', poses: [], rewindS: 1 });
+  const replyState = emitted.find((e): e is Extract<SimEvent, { type: 'state' }> => e.type === 'state');
+  assert.ok(replyState?.field !== undefined, 'SimRuntime restore immediately packs fresh field poses');
+});
+
+check('#6: TrackLimitsMonitor and YellowPassJudge keep pre-rewind pending orders on zero/short Flashback and drop rewound-window ones', () => {
+  const tl = new TrackLimitsMonitor();
+  tl.reset('race');
+  // Off-track excursion starts at t = 0..1.5 s, rejoins at t = 1.5..2.0 s (now in 'judging' stage)
+  for (let i = 0; i < 15; i++) {
+    tl.update({ nowMs: i * 100, dtS: 0.1, lapCount: 0, distM: 500 + i * 5, lapLengthM: 5000, offTrack: true, throttle: 1, brake: 0, lateralM: 9, curvature: 0.01, deltaS: -0.5, active: true });
+  }
+  for (let i = 0; i < 6; i++) {
+    tl.update({ nowMs: 1500 + i * 100, dtS: 0.1, lapCount: 0, distM: 600 + i * 5, lapLengthM: 5000, offTrack: false, throttle: 1, brake: 0, lateralM: 0, curvature: 0, deltaS: -0.8, active: true });
+  }
+  // Zero-rewind Flashback (0.2 s back, still AFTER excursion started at clockS=0.1 s) MUST NOT wipe the pending excursion
+  tl.noteFlashback(2200, 0.2);
+  let verdictFired = false;
+  for (let i = 0; i < 30; i++) {
+    const ev = tl.update({ nowMs: 2300 + i * 100, dtS: 0.1, lapCount: 0, distM: 650 + i * 5, lapLengthM: 5000, offTrack: false, throttle: 1, brake: 0, lateralM: 0, curvature: 0, deltaS: -0.8, active: true });
+    if (ev && (ev.kind === 'warning' || ev.kind === 'penalty')) verdictFired = true;
+    if (tl.snapshot(2300 + i * 100).pending !== null) verdictFired = true;
+  }
+  assert.equal(verdictFired, true, 'zero/short rewind does not erase pending excursion verdict');
+
+  // Rewinding PAST the excursion start (rewindS = 3.0 s > clockS) DOES clear the excursion
+  const tl2 = new TrackLimitsMonitor();
+  tl2.reset('race');
+  for (let i = 0; i < 5; i++) {
+    tl2.update({ nowMs: i * 100, dtS: 0.1, lapCount: 0, distM: 400 + i * 5, lapLengthM: 5000, offTrack: false, throttle: 1, brake: 0, lateralM: 0, curvature: 0, deltaS: 0, active: true });
+  }
+  for (let i = 0; i < 10; i++) {
+    tl2.update({ nowMs: 500 + i * 100, dtS: 0.1, lapCount: 0, distM: 500 + i * 5, lapLengthM: 5000, offTrack: true, throttle: 1, brake: 0, lateralM: 9, curvature: 0.01, deltaS: -0.5, active: true });
+  }
+  tl2.noteFlashback(1600, 1.4); // restoredClockS = 0.1 s < excursion start (0.5 s)
+  assert.equal(tl2.snapshot(1700).pending, null, 'rewinding before excursion clears it');
+
+  // YellowPassJudge.rewind: keeps orders from before restored moment, drops orders from inside rewound window
+  const yp = new YellowPassJudge();
+  yp.update(0.1, 100, [{ code: 'HAM', distM: 105, exempt: false, gone: false }], 1, true);
+  yp.update(0.1, 110, [{ code: 'HAM', distM: 105, exempt: false, gone: false }], 1, true); // illegal pass at age 0
+  yp.update(2.0, 180, [{ code: 'HAM', distM: 170, exempt: false, gone: false }], 1, true); // age = 2.0 s
+  yp.rewind(0.5); // rewound 0.5 s -> order started 2.0 s ago (before rewind), MUST stay owed
+  assert.equal(yp.owed?.code, 'HAM', 'yellow pass order older than rewind stays owed');
+  yp.rewind(2.0); // rewound past the pass -> dropped
+  assert.equal(yp.owed, null, 'yellow pass order inside rewound window is dropped');
 });
 
 console.log(`\n${passed} checks passed`);

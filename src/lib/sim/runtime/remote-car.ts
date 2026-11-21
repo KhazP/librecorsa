@@ -251,6 +251,21 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
     let wrapper = wrappers.get(name);
     if (!wrapper) {
       wrapper = (...args: unknown[]) => {
+        // Before a Flashback placement bumps `epoch` (making `live()` false until the worker replies), seed the idle
+        // twin with the worker's last lap-timing telemetry so interim frames never bounce `lapCount` back to 0.
+        if (name === "restorePose" && remote && stateEpoch === epoch) {
+          const vt = view.telemetry;
+          const tt = twin.telemetry;
+          tt.lapCount = vt.lapCount;
+          tt.currentLapTimeMs = vt.currentLapTimeMs;
+          tt.lastLapTimeMs = vt.lastLapTimeMs;
+          tt.bestLapTimeMs = vt.bestLapTimeMs;
+          tt.lastLapValid = vt.lastLapValid;
+          tt.lapInvalid = vt.lapInvalid;
+          tt.currentSector = vt.currentSector;
+          tt.sectorTimesMs = [...vt.sectorTimesMs] as typeof tt.sectorTimesMs;
+          tt.bestSectorTimesMs = [...vt.bestSectorTimesMs] as typeof tt.bestSectorTimesMs;
+        }
         const result = (method as (...a: unknown[]) => unknown).apply(twin, args);
         if (name === "resetToStartGrid") twinFresh = true;
         if (callable.has(name) && (kind !== "liveCall" || remote)) {
