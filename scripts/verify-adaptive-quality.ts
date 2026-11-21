@@ -84,6 +84,24 @@ check("High at 150% (supersampling) steps to 127.5% and 105%", Math.abs(planAt("
 check("Level 0 is the preset as chosen", JSON.stringify(planAt("medium", 0.9, 0)) === JSON.stringify(presetPlan("medium", 0.9)));
 check("Each level turns down one more thing than the last", [1, 2, 3, 4, 5].every((l) => JSON.stringify(planAt("medium", 1, l)) !== JSON.stringify(planAt("medium", 1, l - 1))));
 check("The summary names what is down, the second resolution rung replacing the first", loweredSummary("medium", 1, 3) === "resolution 70%, car reflections off", loweredSummary("medium", 1, 3));
+check(
+  "Touch Medium ladder drops effects before resolution (reflections, shadows, res85, res70)",
+  ladderFor("medium", 1, { touch: true }).map((r) => r.id).join(",") === "reflections,shadows,res85,res70",
+  ladderFor("medium", 1, { touch: true }).map((r) => r.id).join(",")
+);
+check(
+  "Touch High keeps bloom on with MSAA off, and its second rung turns bloom off",
+  presetPlan("high", 1, { touch: true }).msaa === false &&
+    presetPlan("high", 1, { touch: true }).bloom === true &&
+    loweredSummary("high", 1, 2, { touch: true }) === "car reflections off, bloom off",
+  loweredSummary("high", 1, 2, { touch: true })
+);
+check(
+  "Sharp Low adds a final rung to drop back to Low's 1x DPR cap",
+  ladderFor("low", 1, { sharpLow: true }).map((r) => r.id).join(",") === "res85,res70,sharp" &&
+    planAt("low", 1, 3, { sharpLow: true }).sharpLow === false,
+  ladderFor("low", 1, { sharpLow: true }).map((r) => r.id).join(",")
+);
 
 // --- Percentile and budget ---
 check("Nearest-rank percentile", percentile([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0.9) === 9 && percentile([5], 0.9) === 5 && percentile([], 0.5) === 0);

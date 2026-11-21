@@ -110,6 +110,7 @@ import {
   QualityGovernor,
   rememberLevel,
   type GovernorEvent,
+  type PlanOptions,
 } from "@/lib/render/adaptive-quality";
 import { pageBuild } from "@/lib/build-id";
 import { addContactShadow, seatContactShadow } from "@/lib/render/contact-shadow";
@@ -915,6 +916,10 @@ export class DriveSession {
       setRaceKind(next.kind);
       trackLimits.reset(limitsSessionOf(next), limitsRulesOf(next));
       wallDeletedLaps.clear();
+      if (next.kind === "practice" && physics.telemetry.race !== undefined) {
+        physics.telemetry.race = undefined;
+        setTelemetry({ ...physics.telemetry });
+      }
     };
     this.toggleAutopilot = () => {
       if (disposed || raceNow().kind === "mp" || coolDown.active) return;
@@ -1493,13 +1498,22 @@ export class DriveSession {
     // frames that draw; input, the simulation, the network and the laps run on every frame.
     const pacer = new FramePacer(settings.graphics.fpsCap);
     const displayRate = new DisplayRate();
-    const ladderLength = (g: PlayerSettings["graphics"]) => ladderFor(g.quality, g.renderScale).length;
+    // Read the phone/touch graphics profile once per session so the ladder, probe and HUD stay consistent
+    const touchGraphics = isTouchDevice();
+    const planOpts = (g: PlayerSettings["graphics"]): PlanOptions => ({
+      touch: touchGraphics,
+      sharpLow: g.sharpLow,
+      sharpen: g.sharpen,
+    });
+    const ladderLength = (g: PlayerSettings["graphics"]) => ladderFor(g.quality, g.renderScale, planOpts(g)).length;
     const startLevel = settings.graphics.autoQuality
-      ? carriedLevel(settings.graphics.quality, settings.graphics.renderScale, performance.now())
+      ? carriedLevel(settings.graphics.quality, settings.graphics.renderScale, performance.now(), planOpts(settings.graphics))
       : 0;
     const governor = new QualityGovernor(ladderLength(settings.graphics), startLevel);
     // Carried in from the last session: this one ending without a step leaves the next one rung better again
-    if (startLevel > 0) rememberLevel(settings.graphics.quality, settings.graphics.renderScale, startLevel, performance.now());
+    if (startLevel > 0) {
+      rememberLevel(settings.graphics.quality, settings.graphics.renderScale, startLevel, performance.now(), planOpts(settings.graphics));
+    }
     /** The governor was fed last frame (driving), so the frame that stops driving restarts its grace once */
     let governorFed = false;
     let qualityNoticeId = 0;
@@ -1508,6 +1522,9 @@ export class DriveSession {
       [
         `${g.quality[0].toUpperCase()}${g.quality.slice(1)}`,
         `render ${Math.round(g.renderScale * 100)}%`,
+        touchGraphics ? "phone profile" : "desktop profile",
+        ...(g.quality === "low" && g.sharpLow ? ["Sharp Low"] : []),
+        `sharpen ${g.sharpen ? "on" : "off"}`,
         `auto quality ${g.autoQuality ? "on" : "off"}`,
         g.fpsCap ? `${g.fpsCap} fps cap` : "no fps cap",
         `lowered: ${lowered ?? "nothing"}`,
@@ -1522,12 +1539,13 @@ export class DriveSession {
     this.applyGraphics = () => {
       if (disposed) return;
       const g = settings.graphics;
+      const opts = planOpts(g);
       const level = g.autoQuality ? governor.level : 0;
-      const plan = level > 0 ? planAt(g.quality, g.renderScale, level) : presetPlan(g.quality, g.renderScale);
+      const plan = level > 0 ? planAt(g.quality, g.renderScale, level, opts) : presetPlan(g.quality, g.renderScale, opts);
       applyGraphicsQuality(renderer, postFx, env, plan);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
       postFx.setSize(container.clientWidth, container.clientHeight);
-      const lowered = level > 0 ? loweredSummary(g.quality, g.renderScale, level) : null;
+      const lowered = level > 0 ? loweredSummary(g.quality, g.renderScale, level, opts) : null;
       if (lowered !== this.snapshot.autoQualityLowered) this.publish({ autoQualityLowered: lowered });
       sessionPerf?.setRenderState({ settings: graphicsLine(g, lowered), level });
       noteFrameGraphics(graphicsLine(g, lowered));
@@ -1543,9 +1561,10 @@ export class DriveSession {
         if (g.fpsCap === 0) this.publish({ qualityNotice: { id: ++qualityNoticeId, kind: "floor" } });
         return;
       }
-      rememberLevel(g.quality, g.renderScale, event.level, nowMs);
+      const opts = planOpts(g);
+      rememberLevel(g.quality, g.renderScale, event.level, nowMs, opts);
       this.applyGraphics();
-      const lowered = loweredSummary(g.quality, g.renderScale, event.level);
+      const lowered = loweredSummary(g.quality, g.renderScale, event.level, opts);
       console.info(`[quality] stepped down (${event.level}/${governor.floor}): ${lowered}; ${why}`);
       sessionPerf?.note(nowMs, `stepped down ${event.level}/${governor.floor}: ${lowered} (${why})`);
       if (nowMs - lastQualityNoticeMs >= QUALITY_NOTICE_GAP_MS) {
@@ -1586,13 +1605,15 @@ export class DriveSession {
       }
       const g = next.graphics;
       const pg = prev.graphics;
-      if (g.quality !== pg.quality || g.renderScale !== pg.renderScale || g.autoQuality !== pg.autoQuality) {
+      if (g.quality !== pg.quality || g.renderScale !== pg.renderScale || g.autoQuality !== pg.autoQuality || g.sharpLow !== pg.sharpLow) {
         // The player's own choice: the automatic steps start over from it
         governor.reset(ladderLength(g), 0);
-        rememberLevel(g.quality, g.renderScale, 0, performance.now());
+        rememberLevel(g.quality, g.renderScale, 0, performance.now(), planOpts(g));
         this.applyGraphics();
         if (g.quality !== pg.quality) syncHeadlightSpots();
         sessionPerf?.note(performance.now(), `graphics set to ${g.quality}, render ${Math.round(g.renderScale * 100)}%, auto quality ${g.autoQuality ? "on" : "off"}`);
+      } else if (g.sharpen !== pg.sharpen) {
+        this.applyGraphics();
       }
       if (g.fpsCap !== pg.fpsCap) {
         pacer.setCap(g.fpsCap);
@@ -3686,7 +3707,7 @@ export class DriveSession {
 
       // Paused or in menus: 4 Hz keeps remote players current without burning 30 Hz HUD commits.
       // Driving: 30 Hz on desktop, 20 Hz on touch devices to reduce mobile main-thread React overhead.
-      const hudIntervalMs = frozen || inMenu ? 250 : isTouchDevice() ? 50 : 33;
+      const hudIntervalMs = frozen || inMenu ? 250 : touchGraphics ? 50 : 33;
       if (nowMs - lastHudSyncMs > hudIntervalMs) {
         lastHudSyncMs = nowMs;
         // What the player steered with against what the wheels did, for the input trace

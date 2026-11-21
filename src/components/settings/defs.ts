@@ -509,10 +509,18 @@ export const quality = choice("tiles", {
   label: "Quality",
   options: [
     { id: "low", label: "Low", detail: "No shadows or bloom, lower res" },
-    { id: "medium", label: "Medium", detail: "Shadows, no bloom" },
-    { id: "high", label: "High", detail: "Full effects" },
+    { id: "medium", label: "Medium", detail: "Shadows, no bloom (no MSAA on mobile)" },
+    { id: "high", label: "High", detail: "Full effects (no MSAA on mobile)" },
   ],
   ...graphics("quality"),
+});
+
+export const sharpLow = toggle({
+  id: "sharpLow",
+  label: "Sharp Low",
+  hint: "Draws Low at Medium resolution; auto quality can turn it off",
+  off: (env) => (env.settings.graphics.quality === "low" ? null : "Needs Quality set to Low"),
+  ...graphics("sharpLow"),
 });
 
 const RENDER_SCALES = Array.from({ length: 21 }, (_, i) => 0.5 + i * 0.05);
@@ -524,6 +532,13 @@ export const renderScale = choice("select", {
   read: (env) => (Math.round(env.settings.graphics.renderScale * 20) / 20).toFixed(2),
   write: (env, id) => env.update((s) => ({ ...s, graphics: { ...s.graphics, renderScale: Number(id) } })),
   initial: () => DEFAULT_PLAYER_SETTINGS.graphics.renderScale.toFixed(2),
+});
+
+export const sharpen = toggle({
+  id: "sharpen",
+  label: "Sharpen",
+  hint: "Crisps edges and tarmac after scaling",
+  ...graphics("sharpen"),
 });
 
 export const frameRate = choice("segmented", {

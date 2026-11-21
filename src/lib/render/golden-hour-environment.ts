@@ -186,8 +186,8 @@ export interface PostFx {
   setSize(width: number, height: number): void;
   /** swap the camera used by the render pass (the sim uses a single camera, but keep it safe) */
   setCamera(camera: THREE.Camera): void;
-  /** Graphics preset: MSAA samples and bloom on / off; `msaa` false turns both off whatever the preset (the step-down) */
-  setQuality(quality: "low" | "medium" | "high", msaa?: boolean): void;
+  /** Graphics preset: MSAA samples and bloom on / off (`bloom` decouples touch High bloom from disabled touch MSAA) */
+  setQuality(quality: "low" | "medium" | "high", msaa?: boolean, bloom?: boolean): void;
   /** Puts the physical sky's clouds (and High desktop aerial perspective) into the chain, once; later calls are no-ops */
   setClouds(sky: {
     readonly clouds: CloudsEffect;
@@ -220,8 +220,8 @@ export function rcasSharpnessForRatio(effectiveRatio: number): number {
  */
 export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: PostFx, env: GoldenHourEnvironment, plan: RenderPlan): void {
   const { quality, renderScale } = plan;
-  const dprCap = quality === "low" ? 1 : 1.5;
-  const nativeDpr = Math.max(1, window.devicePixelRatio || 1);
+  const dprCap = quality === "low" && !plan.sharpLow ? 1 : 1.5;
+  const nativeDpr = typeof window !== "undefined" ? Math.max(1, window.devicePixelRatio || 1) : 1;
   const pixelRatio = Math.max(0.35, Math.min(nativeDpr, dprCap) * renderScale);
   renderer.setPixelRatio(pixelRatio);
   // Toggling the light's shadow recompiles the lit materials on their own (shadow count is part of the program key)
@@ -229,8 +229,10 @@ export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: Post
   // Half the texels per side: three resizes the shadow map in place, with no shader change
   const shadowSize = plan.shadows === "half" ? SHADOW_MAP_SIZE / 2 : SHADOW_MAP_SIZE;
   env.sunLight.shadow.mapSize.set(shadowSize, shadowSize);
-  postFx.setQuality(quality, plan.msaa);
-  postFx.setSharpness(rcasSharpnessForRatio(pixelRatio / nativeDpr));
+  postFx.setQuality(quality, plan.msaa, plan.bloom);
+  const autoSharp = rcasSharpnessForRatio(pixelRatio / nativeDpr);
+  const sharpness = plan.sharpen === true ? Math.max(0.4, autoSharp) : plan.sharpen === false ? 0 : autoSharp;
+  postFx.setSharpness(sharpness);
   env.setQuality(quality);
   if (env.physicalSky) postFx.setClouds(env.physicalSky);
   // Scenery & asphalt aggregate noise/bump off on Low (baked shading & rubber line stay); fewer instanced trees below High
@@ -1002,12 +1004,12 @@ export function createPostFx(
       plainPass.mainCamera = next;
     },
 
-    setQuality(quality: "low" | "medium" | "high", msaa = true): void {
+    setQuality(quality: "low" | "medium" | "high", msaa = true, bloom = quality === "high" && msaa): void {
       const touch = isTouchDevice();
       // Tile-based mobile GPUs suffer heavy DRAM bandwidth penalties resolving HalfFloat MSAA buffers, so touch stays 0×
       composer.multisampling = !msaa || touch ? 0 : quality === "high" ? 4 : quality === "medium" ? 2 : 0;
       keepOutputNonMsaa();
-      bloomPass.enabled = msaa && quality === "high";
+      bloomPass.enabled = bloom && quality === "high";
       syncPassRouting();
     },
 

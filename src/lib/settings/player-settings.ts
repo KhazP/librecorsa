@@ -305,6 +305,10 @@ export interface GraphicsSettings {
   autoQuality: boolean;
   /** Frames drawn per second at most: 0 = as many as the screen shows, 30 = every other frame of a 60 Hz screen */
   fpsCap: FpsCap;
+  /** Keep the 1.5x pixel-ratio cap on Low instead of dropping to 1x ("Sharp Low") */
+  sharpLow: boolean;
+  /** Contrast-adaptive sharpening in the final post-processing pass (on by default on touch screens) */
+  sharpen: boolean;
 }
 
 export type FpsCap = 0 | 30;
@@ -442,12 +446,14 @@ export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = {
   driverBody: false,
   autoQuality: false,
   fpsCap: 0,
+  sharpLow: false,
+  sharpen: false,
 };
 
 /**
  * The graphics a player starts on until they pick their own: on a touch screen (phones and tablets) Medium (no bloom,
- * half the MSAA, fewer trees) with automatic quality on, elsewhere High with it off. It asks the device, so call it in
- * the browser (on the server it is DEFAULT_GRAPHICS_SETTINGS); a saved choice always wins over it.
+ * no MSAA, fewer trees, sharpening on) with automatic quality on, elsewhere High with it off. It asks the device, so
+ * call it in the browser (on the server it is DEFAULT_GRAPHICS_SETTINGS); a saved choice always wins over it.
  *
  * Automatic quality is off on desktops: their GPUs don't slow down with heat the way a phone's do, their players pick
  * a preset on purpose, and a desktop's stutters mostly come from stalls (shader compiles, uploads, Firefox's startup)
@@ -458,7 +464,12 @@ export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = {
  */
 export function defaultGraphicsSettings(): GraphicsSettings {
   const touch = isTouchDevice();
-  return { ...DEFAULT_GRAPHICS_SETTINGS, quality: touch ? "medium" : DEFAULT_GRAPHICS_SETTINGS.quality, autoQuality: touch };
+  return {
+    ...DEFAULT_GRAPHICS_SETTINGS,
+    quality: touch ? "medium" : DEFAULT_GRAPHICS_SETTINGS.quality,
+    autoQuality: touch,
+    sharpen: touch,
+  };
 }
 
 export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", layout: "sliders", tiltSteer: false, tiltRangeDeg: 30 };
@@ -810,9 +821,11 @@ function parseGraphics(v: unknown): GraphicsSettings {
     quality: oneOf(v.quality, ["low", "medium", "high"] as const, d.quality),
     renderScale: num(v.renderScale, 0.5, 1.5, d.renderScale),
     driverBody: bool(v.driverBody, d.driverBody),
-    // Saves from before these two take this device's defaults
+    // Saves from before these take this device's defaults
     autoQuality: bool(v.autoQuality, d.autoQuality),
     fpsCap: FPS_CAPS.includes(v.fpsCap as FpsCap) ? (v.fpsCap as FpsCap) : d.fpsCap,
+    sharpLow: bool(v.sharpLow, d.sharpLow),
+    sharpen: bool(v.sharpen, d.sharpen),
   };
 }
 

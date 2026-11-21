@@ -25,6 +25,8 @@ import {
   quality,
   radar,
   renderScale,
+  sharpLow,
+  sharpen,
   speedUnit,
   temperatureUnit,
   uiScale,
@@ -54,7 +56,7 @@ export function GraphicsTab() {
   const env = useSettingsEnv();
   const vrOff = env.vrSupported ? null : "Requires WebXR headset";
   return (
-    <SettingsCard title="Graphics" rows={[quality, renderScale, frameRate, autoQuality, driverBody]} first>
+    <SettingsCard title="Graphics" rows={[quality, sharpLow, renderScale, sharpen, frameRate, autoQuality, driverBody]} first>
       <SettingRow
         label="VR"
         disabled={vrOff !== null}

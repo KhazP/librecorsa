@@ -42,58 +42,94 @@ export interface RenderPlan {
   renderScale: number;
   /** The live car reflections (the probe); off on Low */
   reflections: boolean;
-  /** MSAA, and bloom where the preset has it */
+  /** Hardware MSAA samples (off on Low and on touch devices) */
   msaa: boolean;
+  /** Bloom post-processing (High only; stays on even when MSAA is disabled on touch screens) */
+  bloom: boolean;
   /** The sun's cascaded shadow maps: full resolution, half per side, or none (Low) */
   shadows: "full" | "half" | "off";
+  /** Keep the 1.5x pixel-ratio cap on Low instead of dropping to 1x ("Sharp Low") */
+  sharpLow?: boolean;
+  /** Contrast-adaptive sharpening in the final post-processing pass */
+  sharpen?: boolean;
+}
+
+export interface PlanOptions {
+  /** Touch device (phones / tablets): disables MSAA in presets and puts resolution rungs last */
+  touch?: boolean;
+  /** Keep the 1.5x pixel-ratio cap on Low instead of dropping to 1x ("Sharp Low") */
+  sharpLow?: boolean;
+  /** Contrast-adaptive sharpening in the final post-processing pass */
+  sharpen?: boolean;
 }
 
 /** The base plan of a preset at the player's render scale */
-export function presetPlan(quality: GraphicsQuality, renderScale: number): RenderPlan {
+export function presetPlan(quality: GraphicsQuality, renderScale: number, opts?: PlanOptions): RenderPlan {
+  const touch = opts?.touch ?? false;
   return {
     quality,
     renderScale,
     reflections: quality !== "low",
-    msaa: quality !== "low",
+    msaa: !touch && quality !== "low",
+    bloom: quality === "high",
     shadows: quality === "low" ? "off" : "full",
+    sharpLow: opts?.sharpLow ?? false,
+    sharpen: opts?.sharpen ?? false,
   };
 }
 
 /** The scale rungs never take the render resolution below this, or below the player's own when that is lower */
 export const RENDER_SCALE_FLOOR = 0.6;
 
-export type RungId = "res85" | "res70" | "reflections" | "msaa" | "shadows";
+export type RungId = "res85" | "res70" | "reflections" | "msaa" | "shadows" | "sharp";
 
 export interface Rung {
   id: RungId;
   /** What the step did, for the report */
   label: string;
+  /** Optional context-aware label (e.g. "bloom off" when MSAA was already off on touch) */
+  labelFor?: (plan: RenderPlan) => string;
   /** The plan with this rung on; the same plan when it changes nothing */
   apply(plan: RenderPlan, chosenScale: number): RenderPlan;
 }
 
 const scaled = (chosen: number, f: number) => Math.max(chosen * f, Math.min(chosen, RENDER_SCALE_FLOOR));
 
-const RUNGS: readonly Rung[] = [
-  { id: "res85", label: "resolution 85%", apply: (p, s) => ({ ...p, renderScale: Math.min(p.renderScale, scaled(s, 0.85)) }) },
-  { id: "res70", label: "resolution 70%", apply: (p, s) => ({ ...p, renderScale: Math.min(p.renderScale, scaled(s, 0.7)) }) },
-  { id: "reflections", label: "car reflections off", apply: (p) => (p.reflections ? { ...p, reflections: false } : p) },
-  { id: "msaa", label: "anti-aliasing off", apply: (p) => (p.msaa ? { ...p, msaa: false } : p) },
-  { id: "shadows", label: "lighter shadows", apply: (p) => (p.shadows === "full" ? { ...p, shadows: "half" } : p) },
-];
+const RUNG_BY_ID: Record<RungId, Rung> = {
+  res85: { id: "res85", label: "resolution 85%", apply: (p, s) => ({ ...p, renderScale: Math.min(p.renderScale, scaled(s, 0.85)) }) },
+  res70: { id: "res70", label: "resolution 70%", apply: (p, s) => ({ ...p, renderScale: Math.min(p.renderScale, scaled(s, 0.7)) }) },
+  reflections: { id: "reflections", label: "car reflections off", apply: (p) => (p.reflections ? { ...p, reflections: false } : p) },
+  msaa: {
+    id: "msaa",
+    label: "anti-aliasing off",
+    labelFor: (p) => (p.msaa ? "anti-aliasing off" : "bloom off"),
+    apply: (p) => (p.msaa || p.bloom ? { ...p, msaa: false, bloom: false } : p),
+  },
+  shadows: { id: "shadows", label: "lighter shadows", apply: (p) => (p.shadows === "full" ? { ...p, shadows: "half" } : p) },
+  sharp: { id: "sharp", label: "Sharp Low off", apply: (p) => (p.quality === "low" && p.sharpLow ? { ...p, sharpLow: false } : p) },
+};
+
+const DESKTOP_ORDER: readonly RungId[] = ["res85", "res70", "reflections", "msaa", "shadows", "sharp"];
+// On touch screens, cut costly effects before dropping render resolution so the image stays sharp until needed
+const TOUCH_ORDER: readonly RungId[] = ["reflections", "msaa", "shadows", "res85", "res70", "sharp"];
 
 const samePlan = (a: RenderPlan, b: RenderPlan) =>
   a.quality === b.quality &&
   Math.abs(a.renderScale - b.renderScale) < 1e-6 &&
   a.reflections === b.reflections &&
   a.msaa === b.msaa &&
-  a.shadows === b.shadows;
+  a.bloom === b.bloom &&
+  a.shadows === b.shadows &&
+  Boolean(a.sharpLow) === Boolean(b.sharpLow) &&
+  Boolean(a.sharpen) === Boolean(b.sharpen);
 
 /** The rungs that change something for this preset and render scale, in order: level n has the first n on */
-export function ladderFor(quality: GraphicsQuality, renderScale: number): readonly Rung[] {
+export function ladderFor(quality: GraphicsQuality, renderScale: number, opts?: PlanOptions): readonly Rung[] {
+  const order = opts?.touch ? TOUCH_ORDER : DESKTOP_ORDER;
   const out: Rung[] = [];
-  let plan = presetPlan(quality, renderScale);
-  for (const rung of RUNGS) {
+  let plan = presetPlan(quality, renderScale, opts);
+  for (const id of order) {
+    const rung = RUNG_BY_ID[id];
     const next = rung.apply(plan, renderScale);
     if (samePlan(next, plan)) continue;
     out.push(rung);
@@ -103,19 +139,24 @@ export function ladderFor(quality: GraphicsQuality, renderScale: number): readon
 }
 
 /** The plan at `level` steps down from the player's choice (clamped to the ladder) */
-export function planAt(quality: GraphicsQuality, renderScale: number, level: number): RenderPlan {
-  const ladder = ladderFor(quality, renderScale);
-  let plan = presetPlan(quality, renderScale);
+export function planAt(quality: GraphicsQuality, renderScale: number, level: number, opts?: PlanOptions): RenderPlan {
+  const ladder = ladderFor(quality, renderScale, opts);
+  let plan = presetPlan(quality, renderScale, opts);
   for (let i = 0; i < Math.min(level, ladder.length); i++) plan = ladder[i].apply(plan, renderScale);
   return plan;
 }
 
 /** What is lowered at `level`, for the Settings hint and the report ("resolution 70%, car reflections off") */
-export function loweredSummary(quality: GraphicsQuality, renderScale: number, level: number): string {
-  const ladder = ladderFor(quality, renderScale).slice(0, level);
-  // The second scale rung replaces the first in the summary
-  const shown = ladder.filter((r, i) => !(r.id === "res85" && ladder[i + 1]?.id === "res70"));
-  return shown.map((r) => r.label).join(", ");
+export function loweredSummary(quality: GraphicsQuality, renderScale: number, level: number, opts?: PlanOptions): string {
+  const ladder = ladderFor(quality, renderScale, opts).slice(0, level);
+  let plan = presetPlan(quality, renderScale, opts);
+  const labels: string[] = [];
+  ladder.forEach((r, i) => {
+    // The second scale rung replaces the first in the summary
+    if (!(r.id === "res85" && ladder[i + 1]?.id === "res70")) labels.push(r.labelFor?.(plan) ?? r.label);
+    plan = r.apply(plan, renderScale);
+  });
+  return labels.join(", ");
 }
 
 // ---------------------------------------------------------------------------
@@ -298,16 +339,17 @@ export class QualityGovernor {
  */
 let lastSession: { key: string; level: number; atMs: number } | null = null;
 
-const choiceKey = (quality: GraphicsQuality, renderScale: number) => `${quality}@${renderScale.toFixed(2)}`;
+const choiceKey = (quality: GraphicsQuality, renderScale: number, opts?: PlanOptions) =>
+  `${quality}@${renderScale.toFixed(2)}${opts?.touch ? ":t" : ""}${opts?.sharpLow ? ":s" : ""}`;
 
 /** Where a new session starts: one rung better than the last ended, when that was recent and on the same graphics */
-export function carriedLevel(quality: GraphicsQuality, renderScale: number, nowMs: number): number {
+export function carriedLevel(quality: GraphicsQuality, renderScale: number, nowMs: number, opts?: PlanOptions): number {
   const last = lastSession;
-  if (!last || last.key !== choiceKey(quality, renderScale) || nowMs - last.atMs > STEP_DOWN.carryMs) return 0;
+  if (!last || last.key !== choiceKey(quality, renderScale, opts) || nowMs - last.atMs > STEP_DOWN.carryMs) return 0;
   return Math.max(0, last.level - 1);
 }
 
 /** Remembers a session's level for the next (on every step, so a session that ends any way is remembered) */
-export function rememberLevel(quality: GraphicsQuality, renderScale: number, level: number, nowMs: number): void {
-  lastSession = level > 0 ? { key: choiceKey(quality, renderScale), level, atMs: nowMs } : null;
+export function rememberLevel(quality: GraphicsQuality, renderScale: number, level: number, nowMs: number, opts?: PlanOptions): void {
+  lastSession = level > 0 ? { key: choiceKey(quality, renderScale, opts), level, atMs: nowMs } : null;
 }
