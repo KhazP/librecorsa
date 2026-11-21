@@ -35,8 +35,21 @@ const wetUniforms = {
   uRainIntensity: { value: 0 },
   uWetTime: { value: 0 },
 };
+/** Shared across every patched asphalt material: 0 on Low skips aggregate noise + derivative normal bump */
+const qualityUniform = {
+  uAsphaltDetail: { value: 1 },
+};
 /** The same uniform objects, for other surfaces that get wet with the track (scenery-detail) */
 export const sharedWetUniforms: Readonly<typeof wetUniforms> = wetUniforms;
+
+/**
+ * Turns the asphalt's aggregate value-noise bump off on Low (saving two procedural noise evaluations,
+ * screen-space derivatives and normal perturbation per road pixel) while keeping the rubbered racing line
+ * and wetness intact.
+ */
+export function setAsphaltQuality(quality: "low" | "medium" | "high"): void {
+  qualityUniform.uAsphaltDetail.value = quality === "low" ? 0 : 1;
+}
 
 /**
  * Wet look of the track surface (0 dry … 1 soaked): darker, glossier asphalt with standing-water puddles,
@@ -184,6 +197,7 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
     uMaskMin: { value: mask.worldMin },
     uMaskSize: { value: mask.worldSize },
     uAggregateNormalScale: { value: AGGREGATE_NORMAL_SCALE },
+    ...qualityUniform,
     ...wetUniforms,
   };
 
@@ -192,7 +206,7 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
     shader.vertexShader = patchShader(shader.vertexShader, VERTEX_PATCHES, "asphalt");
     shader.fragmentShader = patchShader(shader.fragmentShader, FRAGMENT_PATCHES, "asphalt");
   };
-  material.customProgramCacheKey = () => "asphalt-sheen-v3";
+  material.customProgramCacheKey = () => "asphalt-sheen-v4";
   material.needsUpdate = true;
 }
 
@@ -262,6 +276,7 @@ uniform sampler2D uRubberMask;
 uniform vec2 uMaskMin;
 uniform vec2 uMaskSize;
 uniform float uAggregateNormalScale;
+uniform float uAsphaltDetail;
 uniform float uWetness;
 uniform float uLineWetness;
 uniform float uRainIntensity;
@@ -308,18 +323,20 @@ if ( lc26WetRaw > 0.0 ) {
 		"#include <normal_fragment_maps>",
 		/* glsl */ `
 #include <normal_fragment_maps>
-vec2 lc26AggP = vLc26WorldPos.xz;
-// Amplitude 8 mm: about 3 to 4 degrees of tilt once the 0.3 gradient scale is applied; submerged in puddles
-float lc26AggH = 0.008 * ( 0.6 * lc26ValueNoise( lc26AggP / 0.03 ) + 0.4 * lc26ValueNoise( lc26AggP / 0.12 ) );
-lc26AggH *= mix( 1.0, 0.12, lc26PuddleMask );
-if ( uRainIntensity > 0.02 && lc26WetRaw > 0.15 ) {
-	float lc26SplashFade = ( 1.0 - smoothstep( 12.0, 42.0, length( vViewPosition ) ) ) * clamp( lc26WetRaw, 0.0, 1.0 );
-	lc26AggH += 0.0035 * lc26RainSplash( lc26AggP, uWetTime, uRainIntensity ) * lc26SplashFade;
+if ( uAsphaltDetail > 0.5 ) {
+	vec2 lc26AggP = vLc26WorldPos.xz;
+	// Amplitude 8 mm: about 3 to 4 degrees of tilt once the 0.3 gradient scale is applied; submerged in puddles
+	float lc26AggH = 0.008 * ( 0.6 * lc26ValueNoise( lc26AggP / 0.03 ) + 0.4 * lc26ValueNoise( lc26AggP / 0.12 ) );
+	lc26AggH *= mix( 1.0, 0.12, lc26PuddleMask );
+	if ( uRainIntensity > 0.02 && lc26WetRaw > 0.15 ) {
+		float lc26SplashFade = ( 1.0 - smoothstep( 12.0, 42.0, length( vViewPosition ) ) ) * clamp( lc26WetRaw, 0.0, 1.0 );
+		lc26AggH += 0.0035 * lc26RainSplash( lc26AggP, uWetTime, uRainIntensity ) * lc26SplashFade;
+	}
+	float lc26AggAa = 1.0 - smoothstep( 0.25, 0.5, max( fwidth( lc26AggP.x ), fwidth( lc26AggP.y ) ) / 0.03 );
+	float lc26AggFade = lc26AggAa * ( 1.0 - smoothstep( 30.0, 90.0, length( vViewPosition ) ) );
+	vec2 lc26AggGrad = vec2( dFdx( lc26AggH ), dFdy( lc26AggH ) ) * uAggregateNormalScale * lc26AggFade;
+	normal = lc26PerturbNormal( -vViewPosition, normal, lc26AggGrad, faceDirection );
 }
-float lc26AggAa = 1.0 - smoothstep( 0.25, 0.5, max( fwidth( lc26AggP.x ), fwidth( lc26AggP.y ) ) / 0.03 );
-float lc26AggFade = lc26AggAa * ( 1.0 - smoothstep( 30.0, 90.0, length( vViewPosition ) ) );
-vec2 lc26AggGrad = vec2( dFdx( lc26AggH ), dFdy( lc26AggH ) ) * uAggregateNormalScale * lc26AggFade;
-normal = lc26PerturbNormal( -vViewPosition, normal, lc26AggGrad, faceDirection );
 `,
 	],
 ];

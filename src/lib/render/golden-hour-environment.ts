@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { SunLight } from "three/examples/jsm/lights/SunLight.js";
 import { DRIVER_HEAD_LAYER, SHADOW_PROXY_LAYER } from "@/lib/render/layers";
+import { setAsphaltQuality } from "@/lib/render/asphalt-sheen";
 import { setSceneryQuality } from "@/lib/render/scenery-detail";
 import { setSceneryDensity } from "@/lib/render/scenery-instances";
 import {
@@ -226,7 +227,8 @@ export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: Post
   postFx.setSharpness(rcasSharpnessForRatio(pixelRatio / nativeDpr));
   env.setQuality(quality);
   if (env.physicalSky) postFx.setClouds(env.physicalSky);
-  // Scenery noise and bump off on Low (the baked tree shading stays); fewer instanced trees and shrubs below High
+  // Scenery & asphalt aggregate noise/bump off on Low (baked shading & rubber line stay); fewer instanced trees below High
+  setAsphaltQuality(quality);
   setSceneryQuality(quality);
   setSceneryDensity(quality);
 }
