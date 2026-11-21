@@ -126,8 +126,9 @@ export function HudLayoutPicker({ value, onChange, navDefault, className }: HudL
         <div role="group" aria-labelledby={headingId} className="flex flex-col gap-2.5">
           <div className="flex flex-col gap-1 px-0.5">
             <h3 id={headingId} className="lc-row-label m-0">
-              Community layouts
+              Third-party
             </h3>
+            <p className="lc-hint m-0">Recreated from other open-source HUD projects, credited to their authors.</p>
           </div>
           <div className={GRID}>
             {THIRD_PARTY.map((l) => (

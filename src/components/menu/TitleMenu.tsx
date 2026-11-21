@@ -209,7 +209,7 @@ const SupportNote: React.FC<{ items: PromptItem[]; onClose?: () => void; onThank
         </p>
         {onClose ? <IconButton size="sm" variant="ghost" icon={<Icon name="close" />} aria-label="Close" onClick={onClose} className="-mt-1 -mr-1 shrink-0" /> : null}
       </div>
-      <p className="lc-hint m-0">Support the makers directly.</p>
+      <p className="lc-hint m-0">They make these for free. If you enjoyed the drive, you can thank them directly.</p>
       <div className="flex flex-wrap gap-2">
         {items.map((i) => (
           <SupportButton key={i.key} support={i.support} maker={i.maker} named variant="secondary" onOpen={() => onThanked?.(i.maker)} />

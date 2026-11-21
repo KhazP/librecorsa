@@ -272,7 +272,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
           ]
         : []),
       ...(nowPlaying && onSkipTrack
-        ? [{ id: "music", label: "Skip track", detail: nowPlaying.title, icon: "skip" as const, run: onSkipTrack }]
+        ? [{ id: "music", label: "Skip track", detail: `${nowPlaying.title}, ${nowPlaying.composer}`, icon: "skip" as const, run: onSkipTrack }]
         : []),
       ...(onOpenControls
         ? [{ id: "settings", label: "Settings", icon: "settings" as const, run: onOpenControls }]
