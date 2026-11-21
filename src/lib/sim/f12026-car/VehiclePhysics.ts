@@ -87,7 +87,7 @@ import {
 } from '../track-evolution';
 import {
   dynamicBristleRelaxationScale,
-  evaluateFlashTempAndWlfGrip,
+  evaluateWlfGripMultiplier,
   hydrodynamicDragN,
   isRearFlapAllowedInWet,
   rimWetEnvironmentCoolingWK,
@@ -798,6 +798,17 @@ const STRIP_CROWN_MAX = 0.22;
  * moves it onto the shoulders. Cornering moves the load only through the camber the roll and the uprights give the
  * wheel
  */
+const clamp = (x: number, lo: number, hi: number): number => (x < lo ? lo : x > hi ? hi : x);
+const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+const smoothstep = (x: number, min: number, max: number): number => {
+  if (x <= min) return 0;
+  if (x >= max) return 1;
+  const t = (x - min) / (max - min);
+  return t * t * (3 - 2 * t);
+};
+const ENGINE_MAP_TORQUE_SCALE = [1.0, 0.985, 0.96, 0.925, 0.87] as const;
+const DEFAULT_BRAKE_MIGRATION = { amount: 0.015, rampStart: 0 } as const;
+
 export function computeBandLoadShares(
   out: [number, number, number],
   camberInRad: number,
@@ -806,11 +817,11 @@ export function computeBandLoadShares(
   crownGain: number,
   growthM: number
 ): void {
-  const dCam = THREE.MathUtils.clamp(camberInRad * STRIP_CAMBER_SHIFT, -STRIP_CAMBER_SHIFT_MAX, STRIP_CAMBER_SHIFT_MAX);
+  const dCam = clamp(camberInRad * STRIP_CAMBER_SHIFT, -STRIP_CAMBER_SHIFT_MAX, STRIP_CAMBER_SHIFT_MAX);
   const pRel = optimalPsi > 0 ? (pressurePsi - optimalPsi) / optimalPsi : 0;
-  const dCrown = THREE.MathUtils.clamp(crownGain * pRel + STRIP_CENTRIFUGAL_CROWN_PER_M * growthM, STRIP_CROWN_MIN, STRIP_CROWN_MAX);
-  const s1 = THREE.MathUtils.clamp(1 / 3 + dCrown, 0.14, 0.62);
-  const s0 = THREE.MathUtils.clamp((1 - s1) / 2 + dCam, 0.06, 0.8);
+  const dCrown = clamp(crownGain * pRel + STRIP_CENTRIFUGAL_CROWN_PER_M * growthM, STRIP_CROWN_MIN, STRIP_CROWN_MAX);
+  const s1 = clamp(1 / 3 + dCrown, 0.14, 0.62);
+  const s0 = clamp((1 - s1) / 2 + dCam, 0.06, 0.8);
   const s2 = Math.max(0.06, 1 - s0 - s1);
   const sum = s0 + s1 + s2;
   out[0] = s0 / sum;
@@ -821,9 +832,9 @@ export function computeBandLoadShares(
 /** cot of a diff ramp angle (deg), the ramp held to 5° at least */
 const cot = (deg: number): number => 1 / Math.tan(Math.max(5, deg) * DEG2RAD);
 /** A three-phase diff dial (1–12) as its lock share 0–1 */
-const diffDialLevel = (dial: number): number => (THREE.MathUtils.clamp(dial, 1, 12) - 1) / 11;
+const diffDialLevel = (dial: number): number => (clamp(dial, 1, 12) - 1) / 11;
 /** A plain ramp diff's dial (1–12) as a scale on its data's lock: 0.65× at 1 to 1.35× at 12 */
-const rampDiffDial = (level: number): number => 0.65 + ((THREE.MathUtils.clamp(level, 1, 12) - 1) / 11) * 0.7;
+const rampDiffDial = (level: number): number => 0.65 + ((clamp(level, 1, 12) - 1) / 11) * 0.7;
 
 /** A first-order lag's step share over `h` with time constant `tau` (s); no lag at 0 */
 const aeroLag = (h: number, tau: number): number => (tau > 0 ? Math.min(1, h / tau) : 1);
@@ -866,22 +877,67 @@ function fitMagicFormula(falloff: number): { B: number; C: number } {
   return { B: Math.tan(Math.PI / (2 * C)), C };
 }
 
-/** Bilinear look-up in a ride-height table (rows rear, columns front), clamped to its edges */
-function rhTable(map: AeroRideHeightMap, table: number[][], front: number, rear: number): number {
-  const seg = (axis: number[], x: number): [number, number, number] => {
-    const n = axis.length;
-    if (x <= axis[0]) return [0, 0, 0];
-    if (x >= axis[n - 1]) return [n - 1, n - 1, 0];
+const _rhOut = { cl: 0, cd: 0, balance: 0 };
+
+/** Zero-alloc bilinear look-up of CL, CD and balance in a ride-height map (single axis search for all three tables) */
+function evalRhMap(map: AeroRideHeightMap, front: number, rear: number, out: { cl: number; cd: number; balance: number }): void {
+  const rearRh = map.rearRh;
+  const nr = rearRh.length;
+  let r0: number;
+  let r1: number;
+  let tr: number;
+  if (rear <= rearRh[0]) {
+    r0 = r1 = 0;
+    tr = 0;
+  } else if (rear >= rearRh[nr - 1]) {
+    r0 = r1 = nr - 1;
+    tr = 0;
+  } else {
     let i = 0;
-    while (i < n - 2 && x > axis[i + 1]) i++;
-    const span = axis[i + 1] - axis[i];
-    return [i, i + 1, span > 0 ? (x - axis[i]) / span : 0];
-  };
-  const [r0, r1, tr] = seg(map.rearRh, rear);
-  const [c0, c1, tc] = seg(map.frontRh, front);
-  const top = table[r0][c0] + (table[r0][c1] - table[r0][c0]) * tc;
-  const bot = table[r1][c0] + (table[r1][c1] - table[r1][c0]) * tc;
-  return top + (bot - top) * tr;
+    while (i < nr - 2 && rear > rearRh[i + 1]) i++;
+    r0 = i;
+    r1 = i + 1;
+    const span = rearRh[r1] - rearRh[r0];
+    tr = span > 0 ? (rear - rearRh[r0]) / span : 0;
+  }
+
+  const frontRh = map.frontRh;
+  const nc = frontRh.length;
+  let c0: number;
+  let c1: number;
+  let tc: number;
+  if (front <= frontRh[0]) {
+    c0 = c1 = 0;
+    tc = 0;
+  } else if (front >= frontRh[nc - 1]) {
+    c0 = c1 = nc - 1;
+    tc = 0;
+  } else {
+    let i = 0;
+    while (i < nc - 2 && front > frontRh[i + 1]) i++;
+    c0 = i;
+    c1 = i + 1;
+    const span = frontRh[c1] - frontRh[c0];
+    tc = span > 0 ? (front - frontRh[c0]) / span : 0;
+  }
+
+  const clR0 = map.cl[r0];
+  const clR1 = map.cl[r1];
+  const clTop = clR0[c0] + (clR0[c1] - clR0[c0]) * tc;
+  const clBot = clR1[c0] + (clR1[c1] - clR1[c0]) * tc;
+  out.cl = clTop + (clBot - clTop) * tr;
+
+  const cdR0 = map.cd[r0];
+  const cdR1 = map.cd[r1];
+  const cdTop = cdR0[c0] + (cdR0[c1] - cdR0[c0]) * tc;
+  const cdBot = cdR1[c0] + (cdR1[c1] - cdR1[c0]) * tc;
+  out.cd = cdTop + (cdBot - cdTop) * tr;
+
+  const balR0 = map.balance[r0];
+  const balR1 = map.balance[r1];
+  const balTop = balR0[c0] + (balR0[c1] - balR0[c0]) * tc;
+  const balBot = balR1[c0] + (balR1[c1] - balR1[c0]) * tc;
+  out.balance = balTop + (balBot - balTop) * tr;
 }
 
 function inLapWindow(p: number, start: number, end: number): boolean {
@@ -1107,6 +1163,10 @@ const _f = new THREE.Vector3();
 const _kpGeo = { kpiRad: 0, casterRad: 0, scrubRadiusM: 0, casterTrailM: 0 };
 const _p = new THREE.Vector3();
 const _plankHit = createGroundHit();
+const _plankXs = new Float64Array(4);
+const _plankYs = new Float64Array(4);
+const _plankZs = new Float64Array(4);
+const _plankHits = [createGroundHit(), createGroundHit(), createGroundHit(), createGroundHit()];
 const _wallHit = createWallHit();
 const _wallEndHit = createWallEndHit();
 const _pFrom = new THREE.Vector3();
@@ -1516,7 +1576,7 @@ export class VehiclePhysics {
     const tor = ch.chassisTorsion;
     this.torsionK = tor ? tor.torsionalStiffnessNmPerDeg * RAD2DEG : 0;
     this.torsionC = tor ? tor.torsionalDampingNmsPerDeg * RAD2DEG : 0;
-    this.torsionFrontShare = THREE.MathUtils.clamp(tor?.frontRollInertiaShare ?? 0.46, 0.2, 0.8);
+    this.torsionFrontShare = clamp(tor?.frontRollInertiaShare ?? 0.46, 0.2, 0.8);
     this.torsionMaxRad = (tor?.maxTwistDeg ?? 2.5) * DEG2RAD;
     const dials = cfg.hybridDials;
     if (dials) {
@@ -1833,7 +1893,7 @@ export class VehiclePhysics {
   public get brakeBias(): number {
     const br = this.config.brakes;
     const steps = this.config.performanceModes[this.performanceMode].ebbOffset + this.ebbUser;
-    return THREE.MathUtils.clamp(br.front_bias + br.ebbStep * steps, 0.3, 0.8);
+    return clamp(br.front_bias + br.ebbStep * steps, 0.3, 0.8);
   }
 
   /**
@@ -1842,7 +1902,7 @@ export class VehiclePhysics {
    */
   public set brakeBias(val: number) {
     const br = this.config.brakes;
-    const want = THREE.MathUtils.clamp(val, 0.3, 0.8);
+    const want = clamp(val, 0.3, 0.8);
     this.ebbUser = (want - br.front_bias) / br.ebbStep - this.config.performanceModes[this.performanceMode].ebbOffset;
   }
 
@@ -2039,7 +2099,7 @@ export class VehiclePhysics {
     const gradeRad = Math.atan2(0.5 * (fl + fr) - 0.5 * (rl + rr), a + b);
     const bankRad = Math.atan2(0.5 * (fl + rl) - 0.5 * (fr + rr), tf + tr);
     const lim = ROAD_ATTITUDE_MAX_RAD;
-    return { gradeRad: THREE.MathUtils.clamp(gradeRad, -lim, lim), bankRad: THREE.MathUtils.clamp(bankRad, -lim, lim) };
+    return { gradeRad: clamp(gradeRad, -lim, lim), bankRad: clamp(bankRad, -lim, lim) };
   }
 
   /**
@@ -2415,7 +2475,7 @@ export class VehiclePhysics {
   // ===========================================================================
 
   private sanitizeInputs(i: VehicleInputs): VehicleInputs {
-    const c = THREE.MathUtils.clamp;
+    const c = clamp;
     const fin = (v: number) => (Number.isFinite(v) ? v : 0);
     return {
       throttle: c(fin(i.throttle), 0, 1),
@@ -2483,7 +2543,7 @@ export class VehiclePhysics {
     const forwardMs = this.gear === 0 ? this.velocity.dot(_ez) : 0;
     const fromNeutralMoving = forwardMs > 2;
     if (fromNeutralMoving) target = this.gearForSpeed(forwardMs);
-    let g = THREE.MathUtils.clamp(target, -1, gb.ratios.length);
+    let g = clamp(target, -1, gb.ratios.length);
     // A sequential box has no neutral between first and reverse: down from first is reverse (only near standstill,
     // below), up from reverse is first
     if (g === 0) g = target < this.gear ? -1 : 1;
@@ -2688,7 +2748,7 @@ export class VehiclePhysics {
       this.onEvent?.({ type: 'CHANGED_DRS_OPEN', open });
     }
     const rate = dt / Math.max(1e-3, this.config.aero.drsTransitionS);
-    this.drsBlend = THREE.MathUtils.clamp(this.drsBlend + (open ? rate : -rate), 0, 1);
+    this.drsBlend = clamp(this.drsBlend + (open ? rate : -rate), 0, 1);
   }
 
   // ===========================================================================
@@ -3018,7 +3078,7 @@ export class VehiclePhysics {
       // Camber relative to the road, leaning toward +left (rad): the setup's static camber plus the solved upright's
       // camber (wishbone travel, and the caster / KPI camber of the steer angle), plus the body's lean
       // (the axle structure's twist rolls its top toward −X, the right, as it lifts the left)
-      const leanBody = Math.asin(THREE.MathUtils.clamp(_ey.dot(_lw), -1, 1)) - (twisting ? this.axleTwistRad(w.isFront) : 0);
+      const leanBody = Math.asin(clamp(_ey.dot(_lw), -1, 1)) - (twisting ? this.axleTwistRad(w.isFront) : 0);
       w.camberLeftRad = (w.isLeft ? 1 : -1) * (axle.spec.staticCamber * DEG2RAD + kin.uprightCamberRad) + leanBody;
 
       // Relaxation-length carcass: slip ratio and tan(slip angle), implicit in |vx|
@@ -3044,8 +3104,8 @@ export class VehiclePhysics {
         }
         w.slipRatio = (w.slipRatio + (h * vsx) / rx) / (1 + (h * absVx) / rx);
         w.tanSlipAngle = (w.tanSlipAngle + (h * vy) / ry) / (1 + (h * absVx) / ry);
-        w.slipRatio = THREE.MathUtils.clamp(w.slipRatio, -5, 5);
-        w.tanSlipAngle = THREE.MathUtils.clamp(w.tanSlipAngle, -5, 5);
+        w.slipRatio = clamp(w.slipRatio, -5, 5);
+        w.tanSlipAngle = clamp(w.tanSlipAngle, -5, 5);
       } else {
         w.slipRatio *= 0.9;
         w.tanSlipAngle *= 0.9;
@@ -3095,10 +3155,11 @@ export class VehiclePhysics {
             ? wetGripFactor(traits, wWaterMm, absVx, severity, w.wear) *
               surfaceWetMultiplier(g.props.wetFriction, wWetness, severity)
             : 1;
-        const wlf = evaluateFlashTempAndWlfGrip(traits, w.surfaceTempC, Math.hypot(vsx, vy), fz, wWetness);
+        const wlfMult =
+          wWetness > 0 ? evaluateWlfGripMultiplier(traits, w.surfaceTempC, Math.hypot(vsx, vy), fz, wWetness) : 1;
         const base =
           thermal *
-          wlf.viscoelasticMult *
+          wlfMult *
           pressureGrip *
           degradation *
           g.grip *
@@ -3110,10 +3171,10 @@ export class VehiclePhysics {
         const forceSign = w.tanSlipAngle > 0 ? -1 : 1;
         const gInto = w.camberLeftRad * forceSign;
         const camberGrip = tyre.camberLut
-          ? THREE.MathUtils.clamp(tyre.camberLut.evaluate(-gInto * RAD2DEG), 0.6, 1.1)
-          : THREE.MathUtils.clamp(1 + cam.dcamber0 * gInto + cam.dcamber1 * gInto * gInto, 0.7, 1.1);
+          ? clamp(tyre.camberLut.evaluate(-gInto * RAD2DEG), 0.6, 1.1)
+          : clamp(1 + cam.dcamber0 * gInto + cam.dcamber1 * gInto * gInto, 0.7, 1.1);
         const gAbs = Math.abs(w.camberLeftRad);
-        const camberGripX = THREE.MathUtils.clamp(1 + cam.dcamber0_x * gAbs + cam.dcamber1_x * gAbs * gAbs, 0.7, 1.1);
+        const camberGripX = clamp(1 + cam.dcamber0_x * gAbs + cam.dcamber1_x * gAbs * gAbs, 0.7, 1.1);
         // Peak μ at this load: the compound's load tables, else the power law about Fz0. BRAKE_DX_MOD adds
         // longitudinal grip while the tyre is braking
         const dY = tyrePeakMu(tyre, fz, 'y');
@@ -3154,7 +3215,7 @@ export class VehiclePhysics {
           tanPeak = tyrePeakSlipTan(tyre, fz) / tyreCarcassStiffnessFactor(td.thermalData, w.coreTempC);
 
           // Camber thrust (toward the lean) as an equivalent slip-angle shift
-          const gc = THREE.MathUtils.clamp(w.camberLeftRad, -tyre.camberThrustLimit, tyre.camberThrustLimit);
+          const gc = clamp(w.camberLeftRad, -tyre.camberThrustLimit, tyre.camberThrustLimit);
           const thrust = cam.camberGain * (cam.contact_camber_c1 * gc - cam.contact_camber_c2 * gc * gc * gc);
           const BC = tyre.B * tyre.C;
           const tanEff = w.tanSlipAngle - (thrust * tanPeak) / Math.max(1e-3, muY * BC);
@@ -3173,19 +3234,20 @@ export class VehiclePhysics {
         w.combinedSlip = s;
 
         // Low-speed contact damping (keeps a parked car from ringing on the carcass spring)
-        const slipUse = Math.hypot(fx / (muX * fz), fy / (muY * fz));
+        const invMaxX = 1 / (muX * fz);
+        const invMaxY = 1 / (muY * fz);
+        const slipUse = Math.hypot(fx * invMaxX, fy * invMaxY);
         const fade = Math.max(0, 1 - absVx / LOW_SPEED_FADE_MS);
+        let use = slipUse;
         if (fade > 0) {
           fx += fade * LOW_SPEED_DAMPING * muX * fz * vsx;
           fy -= fade * LOW_SPEED_DAMPING * muY * fz * vy;
-        }
-        // The slip forces sit on or inside the friction ellipse already (a brush tyre's combined-slip exponent may
-        // take them a little past it); the low-speed damping must not push them further
-        const limit = Math.max(1, slipUse);
-        const use = Math.hypot(fx / (muX * fz), fy / (muY * fz));
-        if (use > limit) {
-          fx *= limit / use;
-          fy *= limit / use;
+          const limit = Math.max(1, slipUse);
+          use = Math.hypot(fx * invMaxX, fy * invMaxY);
+          if (use > limit) {
+            fx *= limit / use;
+            fy *= limit / use;
+          }
         }
         // Telemetry only: share of the friction ellipse in use (1 = on it)
         w.circleFraction = Math.min(use, 1);
@@ -3200,7 +3262,7 @@ export class VehiclePhysics {
         w.patchHalfLengthM = contactHalfLengthM(R0, w.deflection);
         const trail0 = model.trailShare === undefined ? w.patchHalfLengthM / 3 : w.patchHalfLengthM * model.trailShare;
         w.mz = -fy * trail0 * wetTrailMult * Math.max(0, 1 - s);
-        const yCpShift = THREE.MathUtils.clamp(
+        const yCpShift = clamp(
           -0.35 * geo.width * Math.sin(w.camberLeftRad) + (fy / Math.max(500, fz)) * 0.018,
           -0.45 * geo.width,
           0.45 * geo.width
@@ -3220,7 +3282,7 @@ export class VehiclePhysics {
         w.twistRad = stepPatchTwist(w.twistRad, psiRate * h, absVx * h, w.patchHalfLengthM, maxTwist);
         const twistRate = psiRate - (absVx / Math.max(1e-3, w.patchHalfLengthM)) * w.twistRad;
         const mTwistMax = kTwist * maxTwist;
-        w.mzTwist = -THREE.MathUtils.clamp(kTwist * (w.twistRad + PATCH_TWIST_DAMPING_S * twistRate), -mTwistMax, mTwistMax);
+        w.mzTwist = -clamp(kTwist * (w.twistRad + PATCH_TWIST_DAMPING_S * twistRate), -mTwistMax, mTwistMax);
       } else {
         w.combinedSlip = 0;
         w.circleFraction = 0;
@@ -3328,7 +3390,7 @@ export class VehiclePhysics {
     if (twisting) this.stepChassisTwist(h);
     // The rim feels the driver's share of the rack torque, the power steering's assist taking the rest
     const driverNm = driverRackTorqueNm(ffbMz, this.velocity.dot(_ez), this.powerSteering);
-    this.telemetry.ffbTorqueNorm = THREE.MathUtils.clamp(driverNm / FFB_REFERENCE_NM, -1, 1);
+    this.telemetry.ffbTorqueNorm = clamp(driverNm / FFB_REFERENCE_NM, -1, 1);
     this.ffbSum += this.telemetry.ffbTorqueNorm;
     this.ffbSamples++;
     this.ffbStepSum += this.telemetry.ffbTorqueNorm;
@@ -3644,11 +3706,11 @@ export class VehiclePhysics {
         // near its idle. Off the pedal the window is the anti-stall one again
         let biteRpm = cl.biteRpm;
         if (cl.launchRpm !== undefined && Math.abs(this.gear) === 1) {
-          const launch = THREE.MathUtils.clamp((inp.throttle - 0.2) / 0.6, 0, 1);
+          const launch = clamp((inp.throttle - 0.2) / 0.6, 0, 1);
           biteRpm += launch * Math.max(0, cl.launchRpm - cl.lockRpm);
         }
         const lockRpm = biteRpm + (cl.lockRpm - cl.biteRpm);
-        const t = THREE.MathUtils.clamp((rpm - biteRpm) / (lockRpm - biteRpm), 0, 1);
+        const t = clamp((rpm - biteRpm) / (lockRpm - biteRpm), 0, 1);
         engage = wheelSideRpm >= lockRpm ? 1 : t * t * (3 - 2 * t);
         // Anti-stall: off the pedal, with the wheels turning slower than the engine idles, the auto-clutch lets go. The
         // idle controller holds the engine at or above some cars' bite speed, and its torque through the slipping clutch
@@ -3656,13 +3718,13 @@ export class VehiclePhysics {
         // turning against the gear (a car spinning backwards off a barrier, in first) count as slower than idle: through
         // the clutch they would turn the engine backwards, and a stopped engine never starts again
         if (wheelSideForwardRpm < eng.idleRpm) {
-          const pedal = THREE.MathUtils.clamp(inp.throttle / 0.05, 0, 1);
-          const turning = THREE.MathUtils.smoothstep(wheelSideForwardRpm, 0.7 * eng.idleRpm, eng.idleRpm);
+          const pedal = clamp(inp.throttle / 0.05, 0, 1);
+          const turning = smoothstep(wheelSideForwardRpm, 0.7 * eng.idleRpm, eng.idleRpm);
           engage *= Math.max(pedal, turning);
         }
         // Auto-clutch mode keeps linear 1 - clutch so manual race starts stay unchanged; the progressive bite-point
         // curve (`clutchPedalEngagement`) applies only when full manual clutch (`manualClutch`) is active.
-        if (inp.clutch !== undefined) engage = Math.min(engage, THREE.MathUtils.clamp(1 - inp.clutch, 0, 1));
+        if (inp.clutch !== undefined) engage = Math.min(engage, clamp(1 - inp.clutch, 0, 1));
       }
       // A dog box between gears: the engine is free of the wheels
       if (gb.upshiftNeutralS !== undefined && this.sinceUpshiftS < gb.upshiftNeutralS) engage = 0;
@@ -3685,8 +3747,8 @@ export class VehiclePhysics {
 
     // ---- ICE (with live Engine Torque Map 1..5)
     if (rpm >= gb.gears.redline_rpm) this.limiterTimer = eng.limiterCutS;
-    const mapIdx = THREE.MathUtils.clamp(Math.round(this.engineMap), 1, 5);
-    const engineMapTorqueScale = [1.0, 0.985, 0.96, 0.925, 0.87][mapIdx - 1] ?? 1.0;
+    const mapIdx = clamp(Math.round(this.engineMap), 1, 5);
+    const engineMapTorqueScale = ENGINE_MAP_TORQUE_SCALE[mapIdx - 1] ?? 1.0;
     // The softer low-gear pedal: the driver's own choice (engine maps 4 and 5), and on a power unit with a wet pedal map
     // the ECU's on a wet road. A car without one keeps the pedal its driver set
     const wetPedalBlend = Math.max(eng.wetPedalMap ? this.wetness : 0, mapIdx >= 4 ? (mapIdx - 3) * 0.35 : 0);
@@ -3719,8 +3781,8 @@ export class VehiclePhysics {
       this.icePlate = 0;
       plate = 0;
     } else {
-      const idleScale = manualClutch ? THREE.MathUtils.smoothstep(rpm, stallRpm, eng.idleRpm * 0.75) : 1;
-      const idleFloor = THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15) * idleScale;
+      const idleScale = manualClutch ? smoothstep(rpm, stallRpm, eng.idleRpm * 0.75) : 1;
+      const idleFloor = clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15) * idleScale;
       plate = Math.max(this.icePlate, idleFloor);
     }
     if (this.limiterTimer > 0) plate = 0;
@@ -3733,7 +3795,7 @@ export class VehiclePhysics {
     // smoother and quicker to come back; any other car cuts both alike. A managed up-shift cuts everything
     // The total it takes off is what it asked for: the engine gives up its share first (by the motor's part of the last
     // step's drive torque before the cut), the motor only what the engine cannot
-    const totalCut = shiftCut ? 1 : THREE.MathUtils.clamp(1 - (inp.ignitionCut ?? 1), 0, 1);
+    const totalCut = shiftCut ? 1 : clamp(1 - (inp.ignitionCut ?? 1), 0, 1);
     const sparkFirst = ers.ERS_MAX_DEPLOY > 0 && eng.outputPowerCap !== undefined;
     let sparkShare = 1 - totalCut;
     let motorShare = 1 - totalCut;
@@ -3774,11 +3836,11 @@ export class VehiclePhysics {
     }
     // Combustion torque at the full spark, and what the traction cut leaves of it.
     // Under manual clutch, an engine dragged below stall speed chokes and loses torque; once stalled it produces none.
-    const lugScale = this.stall.stalled ? 0 : manualClutch && rpm < stallRpm ? THREE.MathUtils.clamp(rpm / stallRpm, 0, 1) : 1;
+    const lugScale = this.stall.stalled ? 0 : manualClutch && rpm < stallRpm ? clamp(rpm / stallRpm, 0, 1) : 1;
     const tCombustionFull =
       (plate * lugScale * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * ramShare * this.coolantDerate() * 1000) / omegaE;
     const tCombustion = tCombustionFull * sparkShare;
-    const coastSpinScale = this.stall.stalled ? THREE.MathUtils.clamp(this.engineOmega / 30, 0, 1) : 1;
+    const coastSpinScale = this.stall.stalled ? clamp(this.engineOmega / 30, 0, 1) : 1;
     const tCoast = (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale * coastSpinScale;
     let tIce = tCombustion * boostShare - tCoast;
     // The same at the full spark, for the next step's spark-first split: one read back after the cut would count the cut
@@ -3808,7 +3870,7 @@ export class VehiclePhysics {
     this.clutchEngagement = engage;
     this.clutchSlipNorm =
       this.gear !== 0 && engage > 0.02 && engage < 0.99
-        ? THREE.MathUtils.clamp(Math.abs(this.engineOmega - axleOmega * ratio) / Math.max(50, eng.idleRpm * RPM2RADS), 0, 1)
+        ? clamp(Math.abs(this.engineOmega - axleOmega * ratio) / Math.max(50, eng.idleRpm * RPM2RADS), 0, 1)
         : 0;
     const clutchCap = cl.maxTorqueNm * engage;
 
@@ -3869,7 +3931,7 @@ export class VehiclePhysics {
     }
     // ---- brake bias (brake-by-wire + live-tunable dynamic brake migration)
     const br = cfg.brakes;
-    const mig = br.migration ?? { amount: 0.015, rampStart: 0 };
+    const mig = br.migration ?? DEFAULT_BRAKE_MIGRATION;
     const migAmount = this.liveBrakeMigrationAmount;
     this.dynamicBrakeBias =
       br.brakeByWire !== false || migAmount > 0
@@ -3962,7 +4024,7 @@ export class VehiclePhysics {
         const l = Math.abs(W[pl].omega);
         const r = Math.abs(W[pr].omega);
         const spin = Math.max(l, r) / Math.max(1, Math.min(l, r)) - 1;
-        const share = THREE.MathUtils.clamp((spin - map.deadZone) / Math.max(1e-6, map.fullSpin - map.deadZone), 0, 1);
+        const share = clamp((spin - map.deadZone) / Math.max(1e-6, map.fullSpin - map.deadZone), 0, 1);
         W[l > r ? pl : pr].brakeTorqueNm += share * map.torqueNm;
       }
     }
@@ -4021,27 +4083,27 @@ export class VehiclePhysics {
     // Phase weights, blended as an ECU blends its diff maps rather than switched: the entry map on the brake, the exit
     // map on the power, the mid map between. A light pedal with the lock on (trail braking into the apex, maintenance
     // throttle at it) stays with the mid map until the pedal commits
-    const smooth = THREE.MathUtils.smoothstep;
+    const smooth = smoothstep;
     const turnedIn = smooth(Math.abs(inp.steer) * this.maxSteerRad * RAD2DEG, DIFF_TURNED_IN_DEG[0], DIFF_TURNED_IN_DEG[1]);
     const brakeW = smooth(inp.brake, DIFF_BRAKE_PHASE[0], DIFF_BRAKE_PHASE[1]);
     const powerW = smooth(inp.throttle, DIFF_POWER_PHASE[0], DIFF_POWER_PHASE[1]);
     let entryW = brakeW * (1 - turnedIn * (1 - brakeW));
     let exitW = powerW * (1 - turnedIn * (1 - powerW)) * (1 - brakeW);
     let powerCoeff = diff.power;
-    let coastCoeff = THREE.MathUtils.lerp(diff.coast, diffCfg.coastBraking ?? diff.coast, entryW);
+    let coastCoeff = lerp(diff.coast, diffCfg.coastBraking ?? diff.coast, entryW);
     if (diffCfg.threePhase) {
       // Past the high-speed switch (and at a standstill launch) the exit map holds for straight-line stability
       const hiSpdW = speedKmh < 1 ? 1 : smooth(speedKmh, hiSpdKmh - DIFF_HISPD_BLEND_KMH, hiSpdKmh + DIFF_HISPD_BLEND_KMH);
       entryW *= 1 - hiSpdW;
       exitW = Math.max(exitW, hiSpdW);
       const mid = diffDialLevel(this.diffMidLevel);
-      powerCoeff = THREE.MathUtils.lerp(mid, diffDialLevel(this.diffExitLevel), exitW);
-      coastCoeff = THREE.MathUtils.lerp(mid, diffDialLevel(this.diffEntryLevel), entryW);
+      powerCoeff = lerp(mid, diffDialLevel(this.diffExitLevel), exitW);
+      coastCoeff = lerp(mid, diffDialLevel(this.diffEntryLevel), entryW);
     } else {
       // A plain ramp diff locks by its data (POWER / COAST) with the dials where the car has them; turning a dial
       // scales that lock, 0.65× at 1 to 1.35× at 12, about the car's own position. An open diff stays open (no floor)
-      powerCoeff = THREE.MathUtils.clamp((diff.power * rampDiffDial(this.diffExitLevel)) / rampDiffDial(this.diffExitDefault), 0, 1);
-      coastCoeff = THREE.MathUtils.clamp((coastCoeff * rampDiffDial(this.diffEntryLevel)) / rampDiffDial(this.diffEntryDefault), 0, 1);
+      powerCoeff = clamp((diff.power * rampDiffDial(this.diffExitLevel)) / rampDiffDial(this.diffExitDefault), 0, 1);
+      coastCoeff = clamp((coastCoeff * rampDiffDial(this.diffEntryLevel)) / rampDiffDial(this.diffEntryDefault), 0, 1);
     }
     this.diffActivePhase = entryW > 0.5 ? 'ENTRY' : exitW > 0.5 ? 'EXIT' : 'MID';
     const lockPower = powerCoeff * diff.friction_faces * cot(diff.power_ramp_deg);
@@ -4072,7 +4134,7 @@ export class VehiclePhysics {
       // Engaged with the driver's foot on the throttle, not by the torque of the moment (the limiter's and the traction
       // control's cuts don't release it), and let go as the brake pedal goes down (a down-shift's blip drives too)
       const gate =
-        THREE.MathUtils.clamp(inp.throttle / AWD_THROTTLE_ENGAGE, 0, 1) * THREE.MathUtils.clamp(1 - inp.brake / AWD_BRAKE_RELEASE, 0, 1);
+        clamp(inp.throttle / AWD_THROTTLE_ENGAGE, 0, 1) * clamp(1 - inp.brake / AWD_BRAKE_RELEASE, 0, 1);
       const cap = awd.centre.maxTorqueNm * gate * h;
       if (ratio < 0) xLo = -cap;
       else xHi = cap;
@@ -4086,14 +4148,14 @@ export class VehiclePhysics {
       for (let i = 0; i < 4; i++) {
         const max = W[i].brakeTorqueNm * h;
         const prev = accB[i];
-        accB[i] = THREE.MathUtils.clamp(prev - wW[i] * Iw[i], -max, max);
+        accB[i] = clamp(prev - wW[i] * Iw[i], -max, max);
         wW[i] += (accB[i] - prev) / Iw[i];
       }
       if (clutchCap > 0 && ratio !== 0) {
         const c = wE - half * (wW[dl] + wW[dr]);
         const max = clutchCap * h;
         const prev = accC;
-        accC = THREE.MathUtils.clamp(prev - (c + biasC + gammaC * prev) * mC, -max, max);
+        accC = clamp(prev - (c + biasC + gammaC * prev) * mC, -max, max);
         const d = accC - prev;
         wE += d / Ie;
         wW[dl] -= (half * d) / Iw[dl];
@@ -4102,7 +4164,7 @@ export class VehiclePhysics {
       if (awd && cw) {
         const c = 0.5 * (wW[sl] + wW[sr]) - 0.5 * (wW[dl] + wW[dr]);
         const prev = accX;
-        accX = THREE.MathUtils.clamp(prev - (c + gammaX * prev) * mX, xLo, xHi);
+        accX = clamp(prev - (c + gammaX * prev) * mX, xLo, xHi);
         const d = 0.5 * (accX - prev);
         wW[sl] += d / Iw[sl];
         wW[sr] += d / Iw[sr];
@@ -4117,7 +4179,7 @@ export class VehiclePhysics {
         const c = wW[dl] - wW[dr];
         const max = lockTorque * h;
         const prev = accD;
-        accD = THREE.MathUtils.clamp(prev - (c + biasD + gammaD * prev) * mD, -max, max);
+        accD = clamp(prev - (c + biasD + gammaD * prev) * mD, -max, max);
         const d = accD - prev;
         wW[dl] += d / Iw[dl];
         wW[dr] -= d / Iw[dr];
@@ -4129,7 +4191,7 @@ export class VehiclePhysics {
         const c = wW[sl] - wW[sr];
         const max = lockS * h;
         const prev = accS;
-        accS = THREE.MathUtils.clamp(prev - c * mS, -max, max);
+        accS = clamp(prev - c * mS, -max, max);
         const d = accS - prev;
         wW[sl] += d / Iw[sl];
         wW[sr] -= d / Iw[sr];
@@ -4326,19 +4388,16 @@ export class VehiclePhysics {
     const air = _air.copy(this.velocity).sub(this.windWorld);
     const vF = air.dot(_ez);
     const q = 0.5 * this.airDensity * vF * vF;
-    const rollDeg = Math.asin(THREE.MathUtils.clamp(_ex.y, -1, 1)) * RAD2DEG;
+    const rollDeg = Math.asin(clamp(_ex.y, -1, 1)) * RAD2DEG;
     // Signed here (the map's yaw tables span ±, and its balance shift may be odd in yaw); the wing path above reads
     // the magnitude, its per-wing yaw tables being one-sided
     const yawDeg = Math.abs(vF) > 1 ? Math.atan2(air.dot(_ex), Math.abs(vF)) * RAD2DEG : 0;
     this.aeroYawDeg = Math.abs(yawDeg);
     const ml = this.mapLuts!;
-    const clMult = rhTable(map, map.cl, this.rideFront, this.rideRear) * ml.rollCl.evaluate(rollDeg) * ml.yawCl.evaluate(yawDeg);
-    const cdMult = rhTable(map, map.cd, this.rideFront, this.rideRear) * ml.rollCd.evaluate(rollDeg) * ml.yawCd.evaluate(yawDeg);
-    const balance = THREE.MathUtils.clamp(
-      rhTable(map, map.balance, this.rideFront, this.rideRear) + ml.rollBalance.evaluate(rollDeg) + ml.yawBalance.evaluate(yawDeg),
-      0,
-      1
-    );
+    evalRhMap(map, this.rideFront, this.rideRear, _rhOut);
+    const clMult = _rhOut.cl * ml.rollCl.evaluate(rollDeg) * ml.yawCl.evaluate(yawDeg);
+    const cdMult = _rhOut.cd * ml.rollCd.evaluate(rollDeg) * ml.yawCd.evaluate(yawDeg);
+    const balance = clamp(_rhOut.balance + ml.rollBalance.evaluate(rollDeg) + ml.yawBalance.evaluate(yawDeg), 0, 1);
     const act = map.activeAero;
     const open = this.drsBlend;
     // Rear flap alone: no front downforce change, and the rear's share (by downforce change) of the drag reduction
@@ -4355,7 +4414,7 @@ export class VehiclePhysics {
       const s = wing.spec;
       const aoa = s.angleDeg + pitchDelta;
       const fd = q * wing.aoaCl.evaluate(aoa) * s.area;
-      const share = THREE.MathUtils.clamp((s.positionZ + b) / L, 0, 1);
+      const share = clamp((s.positionZ + b) / L, 0, 1);
       front += fd * share;
       rear += fd * (1 - share);
       cdA += wing.aoaCd.evaluate(aoa) * s.area;
@@ -4416,16 +4475,43 @@ export class VehiclePhysics {
     const pl = this.config.aero.plank;
     const y = pl ? pl.y : this.floorOffsetY;
     const halfW = PLANK_HALF_WIDTH_M;
+    const frontZ = pl ? pl.frontZ : this.cgToFrontM;
+    const rearZ = pl ? pl.rearZ : -this.cgToRearM;
+    const q = this.quaternion;
+    const pos = this.position;
+
+    let maxPy = -Infinity;
     for (let k = 0; k < 4; k++) {
-      const front = k < 2;
-      const z = front ? (pl ? pl.frontZ : this.cgToFrontM) : pl ? pl.rearZ : -this.cgToRearM;
+      const z = k < 2 ? frontZ : rearZ;
       const wornM = 0.001 * this.plankWearMm[k];
-      _p.set(k % 2 === 0 ? halfW : -halfW, y + wornM, z).applyQuaternion(this.quaternion).add(this.position);
-      if (!this.ground.query(_p.x, _p.z, _p.y + PLANK_PROBE_UP_M, _plankHit)) continue;
-      const pen = _plankHit.height - _p.y;
+      _p.set(k % 2 === 0 ? halfW : -halfW, y + wornM, z).applyQuaternion(q).add(pos);
+      _plankXs[k] = _p.x;
+      _plankYs[k] = _p.y;
+      _plankZs[k] = _p.z;
+      if (_p.y > maxPy) maxPy = _p.y;
+    }
+
+    let foundMask = 0;
+    if (this.ground.queryMany) {
+      foundMask = this.ground.queryMany(_plankXs, _plankZs, 4, maxPy + PLANK_PROBE_UP_M, _plankHits, 4);
+    } else {
+      for (let k = 0; k < 4; k++) {
+        if (this.ground.query(_plankXs[k], _plankZs[k], _plankYs[k] + PLANK_PROBE_UP_M, _plankHits[k])) {
+          foundMask |= 1 << k;
+        }
+      }
+    }
+
+    for (let k = 0; k < 4; k++) {
+      if (!((foundMask >> k) & 1)) continue;
+      const hit = _plankHits[k];
+      const py = _plankYs[k];
+      if (hit.height > py + PLANK_PROBE_UP_M) continue;
+      const pen = hit.height - py;
       if (pen <= 0) continue;
-      _n.set(_plankHit.nx, _plankHit.ny, _plankHit.nz);
-      _r.subVectors(_p, this.position);
+      _p.set(_plankXs[k], py, _plankZs[k]);
+      _n.set(hit.nx, hit.ny, hit.nz);
+      _r.subVectors(_p, pos);
       _v.crossVectors(this.angularVelocity, _r).add(this.velocity);
       const vn = _v.dot(_n);
       // A quarter of the block's stiffness at each corner
@@ -4587,7 +4673,7 @@ export class VehiclePhysics {
           const [peakFrom, peakTo] = rt.peakWindowC;
           if (core < peakFrom) w.grainLevel += Math.pow(slip, tread.grainGamma) * work * tread.grainGain * (peakFrom - core) * TREAD_CONDITION_RATE;
           const wearOff = tread.wearOffWithSlip ? Math.pow(slip, tread.grainGamma) * work : work;
-          w.grainLevel = THREE.MathUtils.clamp(w.grainLevel - wearOff * tread.grainGain * GRAIN_WEAR_OFF_RATE, 0, 1);
+          w.grainLevel = clamp(w.grainLevel - wearOff * tread.grainGain * GRAIN_WEAR_OFF_RATE, 0, 1);
           if (core > peakTo) {
             w.blisterLevel = Math.min(1, w.blisterLevel + Math.pow(slip, tread.blisterGamma) * work * tread.blisterGain * (core - peakTo) * TREAD_CONDITION_RATE);
           }

@@ -240,6 +240,39 @@ export function evaluateFlashTempAndWlfGrip(
 }
 
 /**
+ * Allocation-free scalar form of `evaluateFlashTempAndWlfGrip(...).viscoelasticMult` for the 1–2 kHz tyre loop.
+ * Short-circuits to `1` on dry roads (`!(wetness > 0)`), where `activeBlend === 0` identically.
+ */
+export function evaluateWlfGripMultiplier(
+  traits: WetTyreTraits,
+  surfaceTempC: number,
+  slipSpeedMs: number,
+  fzN: number,
+  wetness: number
+): number {
+  if (!(wetness > 0)) return 1;
+  const w = wetness > 1 ? 1 : wetness;
+  const vs = slipSpeedMs > 0 ? slipSpeedMs : 0;
+  const loadRaw = (fzN > 0 ? fzN : 0) / 3800;
+  const loadNorm = loadRaw > 2.2 ? 2.2 : loadRaw;
+  const quench = 1 - 0.62 * w;
+  const flashRaw = 3.2 * loadNorm * Math.sqrt(vs < 25 ? vs : 25) * quench;
+  const flashDeltaC = flashRaw > 24 ? 24 : flashRaw;
+  const tEff = surfaceTempC + 0.35 * flashDeltaC;
+  const tRef = 92 + traits.tempShiftC;
+  let dT = tEff - tRef;
+  if (dT < -75) dT = -75;
+  else if (dT > 80) dT = 80;
+  const logAt = (-8.86 * dT) / (101.6 + dT);
+  const logFreq = logAt + Math.log10(vs > 0.08 ? vs : 0.08);
+  const dev = logFreq + 0.35;
+  const wlfRaw = Math.exp(-0.028 * dev * dev);
+  const activeBlend = w * 0.85 > 1 ? 1 : w * 0.85;
+  const mult = 1 + (wlfRaw * (1 + 0.035 * (flashDeltaC / 12)) - 1) * activeBlend;
+  return mult < 0.84 ? 0.84 : mult > 1.05 ? 1.05 : mult;
+}
+
+/**
  * 2D bristle/brush contact-patch relaxation length multiplier (`dynamicBristleRelaxationScale`):
  * Contact patch half-length grows with vertical load (`(Fz / Fz0)^0.16`), lengthening bristle relaxation at high load,
  * while water lubrication shortens the adhesive zone of the brush footprint (`1 - 0.14 * wetness`).

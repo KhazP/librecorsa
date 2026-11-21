@@ -9,14 +9,25 @@ export type LutPoints = ReadonlyArray<readonly [number, number]>;
 export class Lut {
   private readonly xs: Float64Array;
   private readonly ys: Float64Array;
+  private readonly slopes: Float64Array;
 
   constructor(points: LutPoints) {
     if (points.length === 0) {
       throw new Error('Lut requires at least one point');
     }
     const sorted = [...points].sort((a, b) => a[0] - b[0]);
-    this.xs = Float64Array.from(sorted.map((p) => p[0]));
-    this.ys = Float64Array.from(sorted.map((p) => p[1]));
+    const n = sorted.length;
+    this.xs = new Float64Array(n);
+    this.ys = new Float64Array(n);
+    this.slopes = new Float64Array(Math.max(1, n - 1));
+    for (let i = 0; i < n; i++) {
+      this.xs[i] = sorted[i][0];
+      this.ys[i] = sorted[i][1];
+    }
+    for (let i = 0; i < n - 1; i++) {
+      const dx = this.xs[i + 1] - this.xs[i];
+      this.slopes[i] = dx !== 0 ? (this.ys[i + 1] - this.ys[i]) / dx : 0;
+    }
   }
 
   get minX(): number {
@@ -49,7 +60,6 @@ export class Lut {
       if (xs[mid] <= x) lo = mid;
       else hi = mid;
     }
-    const t = (x - xs[lo]) / (xs[hi] - xs[lo]);
-    return ys[lo] + (ys[hi] - ys[lo]) * t;
+    return ys[lo] + (x - xs[lo]) * this.slopes[lo];
   }
 }

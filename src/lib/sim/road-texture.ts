@@ -46,6 +46,17 @@ function sinc(x: number): number {
   return sincTable[i] + (sincTable[i + 1] - sincTable[i]) * (u - i);
 }
 
+/** Tabulated sin over [0, 2π) (4096 entries -> < 3e-7 error, < 0.5 nm on the 0.5 mm RMS texture) */
+const SIN_BITS = 12;
+const SIN_STEPS = 1 << SIN_BITS;
+const SIN_MASK = SIN_STEPS - 1;
+const COS_OFFSET = SIN_STEPS >> 2;
+const INV_TWO_PI_STEPS = SIN_STEPS / (2 * Math.PI);
+const sinTable = new Float64Array(SIN_STEPS + 1);
+for (let i = 0; i <= SIN_STEPS; i++) {
+  sinTable[i] = Math.sin((i * 2 * Math.PI) / SIN_STEPS);
+}
+
 const bandK = new Float64Array(BANDS);
 const bandKx = new Float64Array(BANDS);
 const bandKz = new Float64Array(BANDS);
@@ -85,12 +96,19 @@ export function roadTextureHeightM(worldX: number, worldZ: number, patchHalfLeng
   let h = 0;
   let dx = 0;
   let dz = 0;
+  const patchA = patchHalfLengthM > 0 ? patchHalfLengthM : 0;
   for (let i = 0; i < BANDS; i++) {
-    const amp = bandAmp[i] * sinc(bandK[i] * Math.max(0, patchHalfLengthM));
-    const arg = bandKx[i] * worldX + bandKz[i] * worldZ + bandPhase[i];
-    h += amp * Math.sin(arg);
+    const amp = bandAmp[i] * sinc(bandK[i] * patchA);
+    const u = (bandKx[i] * worldX + bandKz[i] * worldZ + bandPhase[i]) * INV_TWO_PI_STEPS;
+    const uf = Math.floor(u);
+    const frac = u - uf;
+    const idx = uf & SIN_MASK;
+    const sVal = sinTable[idx] + (sinTable[idx + 1] - sinTable[idx]) * frac;
+    h += amp * sVal;
     if (slope) {
-      const c = amp * Math.cos(arg);
+      const cIdx = (idx + COS_OFFSET) & SIN_MASK;
+      const cVal = sinTable[cIdx] + (sinTable[cIdx + 1] - sinTable[cIdx]) * frac;
+      const c = amp * cVal;
       dx += c * bandKx[i];
       dz += c * bandKz[i];
     }
