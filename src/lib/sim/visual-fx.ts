@@ -177,6 +177,12 @@ export class SimVisualFxManager {
   /** The player's car (mean of its wheels) while it is driven; null in replays and menus (the ghost is not faded) */
   private readonly playerPos = new THREE.Vector3();
   private playerPosValid = false;
+  /** Active graphics quality tier: Low drops opponent LOD1 threshold and skips per-frame main-thread tyre collider probing */
+  private graphicsQuality: 'low' | 'medium' | 'high' = 'high';
+
+  public setGraphicsQuality(quality: 'low' | 'medium' | 'high'): void {
+    this.graphicsQuality = quality;
+  }
   /**
    * Rigs built during loading (one racing car and one ghost per opponent model) so the shader warm-up covers them;
    * handed out to the first peers that need that model instead of being built on the first frame of a race
@@ -829,35 +835,38 @@ export class SimVisualFxManager {
       syntheticTelemetry.trackDistanceM = peer.trackS;
 
       let wheels: WheelSeating | undefined;
+      const isLow = this.graphicsQuality === 'low';
       if (peer.wheels) {
         wheels = entry.wheels ??= { ground: null, position: peer.position, quaternion: peer.quaternion };
         wheels.tyres = peer.wheels.tyres;
-        wheels.ground = peer.wheels.ground;
+        wheels.ground = isLow ? null : peer.wheels.ground;
         wheels.position = peer.position;
         wheels.quaternion = peer.quaternion;
         // Road samples under the treads, tyre shadows and opponent mesh LOD follow distance from the player's car
         if (this.playerPosValid) {
           const distM = peer.position.distanceTo(this.playerPos);
-          wheels.detail = tyreDetailAt(distM);
+          wheels.detail = isLow ? 0 : tyreDetailAt(distM);
+          const enterM = isLow ? OPPONENT_LOD1_LOW_ENTER_M : OPPONENT_LOD1_ENTER_M;
+          const exitM = isLow ? OPPONENT_LOD1_LOW_EXIT_M : OPPONENT_LOD1_EXIT_M;
           const prevLod = entry.lod ?? 0;
           const nextLod: 0 | 1 =
             prevLod === 0
-              ? distM >= OPPONENT_LOD1_ENTER_M
+              ? distM >= enterM
                 ? 1
                 : 0
-              : distM <= OPPONENT_LOD1_EXIT_M
+              : distM <= exitM
                 ? 0
                 : 1;
           entry.lod = nextLod;
           wheels.lod = nextLod;
         } else {
-          wheels.detail = 1;
-          entry.lod = 0;
-          wheels.lod = 0;
+          wheels.detail = isLow ? 0 : 1;
+          entry.lod = isLow ? 1 : 0;
+          wheels.lod = entry.lod;
         }
       }
       carRig.updateFromTelemetry(syntheticTelemetry, pitchRad, rollRad, wheelRot, dt, wheels);
-      seatContactShadow(carRig.root, wheels);
+      seatContactShadow(carRig.root, isLow ? undefined : wheels);
 
       // Opponent car rooster-tail water spray plume in wet conditions
       if (this.wetness > 0.16 && !peer.ghost && peer.speedKmh > 55) {
@@ -921,9 +930,12 @@ export class SimVisualFxManager {
 /** Distance thresholds (m) for switching opponent cars between LOD0 (full detail) and LOD1 (simplified + micro-culled) */
 const OPPONENT_LOD1_ENTER_M = 48;
 const OPPONENT_LOD1_EXIT_M = 42;
+/** On Low graphics, switch opponent cars to LOD1 much closer so packs of >4 cars stay vertex/draw-call light */
+const OPPONENT_LOD1_LOW_ENTER_M = 12;
+const OPPONENT_LOD1_LOW_EXIT_M = 8;
 
 function tyreDetailAt(distanceM: number): 0 | 1 | 2 {
-  return distanceM < 60 ? 2 : distanceM < 150 ? 1 : 0;
+  return distanceM < 28 ? 2 : distanceM < 80 ? 1 : 0;
 }
 
 /** Telemetry stand-in for an opponent's rig; the per-frame fields are refreshed in updateOpponentCars */

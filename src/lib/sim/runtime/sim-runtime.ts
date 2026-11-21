@@ -29,7 +29,7 @@ const MAX_CATCH_UP_S = 0.25;
  */
 const MAX_CATCH_UP_RACE_S = 0.05;
 /** The field steps once every this many ticks (8 ms, as the headless races step it at about 1/120 s) */
-const FIELD_TICKS = 2;
+export const FIELD_TICKS = 2;
 /** The race's standing goes to the page every this many field steps (about 20 times a second) */
 const STATUS_EVERY = 6;
 /** ... and its weather about once a second */
@@ -291,6 +291,11 @@ export class SimRuntime {
   /** Whether the clock is running (the page is driving the car) */
   get running(): boolean {
     return this.driving && this.car !== null;
+  }
+
+  /** Whether an AI race is currently running inside this runtime */
+  get inRace(): boolean {
+    return this.race !== null;
   }
 
   /** Stops the clock without a command: the page has gone quiet (a hidden tab, a stalled frame loop) */

@@ -916,6 +916,75 @@ export function createF1Car2026(
   /** LC26 mod model; replaces the procedural car once loaded (see the end of this function) */
   let lc26: Lc26ModelInstance | null = null;
 
+  // Opponent F1 rigs in the browser attach directly to the cached LC26 GLB template instead of synchronously building
+  // the 1,800-line procedural car and its 25 canvas textures only to discard them on the next microtask.
+  if (options.opponent && typeof window !== "undefined" && Boolean(modelUrl)) {
+    const helmetGroup = new THREE.Group();
+    const frontLeftSteerPivot = new THREE.Group();
+    const frontRightSteerPivot = new THREE.Group();
+    const steeringWheelGroup = new THREE.Group();
+    const dummyGeo = new THREE.BufferGeometry();
+    const dummyMat = new THREE.MeshStandardMaterial();
+    const frontWingFlapLeft = new THREE.Mesh(dummyGeo, dummyMat);
+    const frontWingFlapRight = new THREE.Mesh(dummyGeo, dummyMat);
+    const rearWingFlap = new THREE.Mesh(dummyGeo, dummyMat);
+    let currentLivery = initialLivery;
+    let currentCompound = initialCompound;
+    let rigDisposed = false;
+    void loadLc26Template(modelUrl).then((template) => {
+      if (!template || rigDisposed) return;
+      lc26 = attachLc26Model(template, root, chassisGroup, options);
+      lc26.setTireCompound(currentCompound);
+      lc26.setLivery(currentLivery);
+    });
+    return {
+      root,
+      chassisGroup,
+      helmetGroup,
+      frontLeftSteerPivot,
+      frontRightSteerPivot,
+      wheelMeshes: [],
+      frontWingFlapLeft,
+      frontWingFlapRight,
+      rearWingFlap,
+      steeringWheelGroup,
+      shiftLeds: [],
+      ersLightMaterial: dummyMat,
+      brakeGlowMaterials: [],
+      setLivery: (livery: LiveryConfig) => {
+        currentLivery = livery;
+        lc26?.setLivery(livery);
+      },
+      setTireCompound: (compound: TireCompound) => {
+        currentCompound = compound;
+        lc26?.setTireCompound(compound);
+      },
+      getCameraAnchors: () => lc26?.cameraAnchors ?? null,
+      getLc26Body: () => lc26?.bodyGroup ?? null,
+      updateFromTelemetry: (
+        telemetry: CarTelemetry,
+        pitchRad: number,
+        rollRad: number,
+        wheelRotationRad: number,
+        dtSeconds = 0,
+        wheels?: WheelSeating
+      ) => {
+        chassisGroup.rotation.x = pitchRad;
+        chassisGroup.rotation.z = rollRad;
+        if (lc26) {
+          lc26.update(telemetry, wheelRotationRad, dtSeconds > 0 && dtSeconds < 0.25 ? dtSeconds : 1 / 60, wheels);
+        }
+      },
+      dispose: () => {
+        rigDisposed = true;
+        lc26?.dispose();
+        dummyGeo.dispose();
+        dummyMat.dispose();
+        root.removeFromParent();
+      },
+    };
+  }
+
   const carbonTex = createCarbonWeaveTexture();
 
   // Satin race livery (paint-finish.ts), upgraded dynamically with procedural finish & 2048px tri-orthographic shader

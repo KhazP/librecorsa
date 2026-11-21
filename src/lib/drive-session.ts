@@ -1542,6 +1542,7 @@ export class DriveSession {
       const level = g.autoQuality ? governor.level : 0;
       const plan = level > 0 ? planAt(g.quality, g.renderScale, level, opts) : presetPlan(g.quality, g.renderScale, opts);
       applyGraphicsQuality(renderer, postFx, env, plan);
+      visualFx.setGraphicsQuality(g.quality);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
       postFx.setSize(container.clientWidth, container.clientHeight);
       const lowered = level > 0 ? loweredSummary(g.quality, g.renderScale, level, opts) : null;
@@ -3497,6 +3498,7 @@ export class DriveSession {
         peers: drawnPeers,
         soundFor: opponentSound,
         dt: dtSeconds,
+        lowQuality: settingsNow.graphics.quality === "low",
       });
       audio?.setCameraMode(mode);
       audio?.setPaused(!driving);
@@ -3633,8 +3635,15 @@ export class DriveSession {
           (view.virtualMirror === "noSideMirrors" && !(wingMirrors?.found && wingMirrors.coversSides)) ||
           (view.virtualMirror === "onRequest" && vmSetting === "always");
         const othersAbout = raceNow().kind !== "practice" || peersOnTrack > 0;
+        const lowQuality = settingsNow.graphics.quality === "low";
+        // On Low graphics, skip the extra full-scene mirror render pass unless the player explicitly forced "always"
         const vmOn =
-          driving && !inVr && !podium.playing && container.clientWidth >= 640 && vmView && (vmSetting === "always" || (vmSetting === "auto" && othersAbout));
+          driving &&
+          !inVr &&
+          !podium.playing &&
+          container.clientWidth >= 640 &&
+          vmView &&
+          (vmSetting === "always" || (!lowQuality && vmSetting === "auto" && othersAbout));
         // The mirrors refresh every other frame, 30 times a second at 60 fps; under the 30 fps cap every drawn frame
         // does, which keeps them at 30
         const mirrorFrame = pacer.cap > 0 ? 0 : frameIndex;
@@ -3643,8 +3652,8 @@ export class DriveSession {
           virtualMirrorShown = vmOn;
           setVirtualMirrorOn(vmOn);
         }
-        // Rear view into the mirrors' render target (cockpit only, every 2nd frame), then the main frame
-        wingMirrors?.update(mirrorFrame, view.driverEye && !inVr, carRig.chassisGroup);
+        // Rear view into the mirrors' render target (cockpit only, every 2nd frame; skipped on Low graphics)
+        wingMirrors?.update(mirrorFrame, view.driverEye && !inVr && !lowQuality, carRig.chassisGroup);
         // Counted here, not inside the optional call above: without wing mirrors it never advanced, which also
         // disabled the virtual mirror's every-other-frame throttle
         frameIndex++;

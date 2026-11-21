@@ -4,7 +4,7 @@
  * tick each, caught up by the clock when a wake is late), so a frame that takes long to draw does not stall it.
  */
 import { SIM_TICK_S, type SimCommand, type SimEvent } from "./sim-protocol";
-import { SimRuntime } from "./sim-runtime";
+import { FIELD_TICKS, SimRuntime } from "./sim-runtime";
 
 /** The worker's global scope, as far as this file uses it (the DOM typings describe a window, not a worker) */
 interface WorkerScope {
@@ -17,8 +17,10 @@ const scope = self as unknown as WorkerScope;
 const QUIET_PAGE_MS = 250;
 
 const wallNowMs = () => performance.timeOrigin + performance.now();
+/** Wall timestamp of the wake currently advancing (0 outside wake: immediate placement replies use wallNowMs()) */
+let stepWallMs = 0;
 const runtime = new SimRuntime((event) => {
-  if (event.type === "state") event.wallMs = wallNowMs();
+  if (event.type === "state") event.wallMs = stepWallMs > 0 ? stepWallMs : wallNowMs();
   scope.postMessage(event);
 });
 
@@ -35,11 +37,14 @@ function wake(): void {
   const now = performance.now();
   if (now - lastInputsMs > QUIET_PAGE_MS) runtime.hold();
   if (!runtime.running) return;
+  // Stamp `wallMs` at the simulated instant `now` (before `advance()` runs) so heavy AI frames never skew timestamps forward
+  stepWallMs = performance.timeOrigin + now;
   const ticks = runtime.advance((now - lastWakeMs) / 1000);
+  stepWallMs = 0;
   lastWakeMs = now;
+  const end = performance.now();
+  const busy = end - now;
   if (perf) {
-    const end = performance.now();
-    const busy = end - now;
     perf.ticks += ticks;
     perf.busyMs += busy;
     perf.maxWakeMs = Math.max(perf.maxWakeMs, busy);
@@ -48,7 +53,10 @@ function wake(): void {
       perf = { sinceMs: end, ticks: 0, busyMs: 0, maxWakeMs: 0 };
     }
   }
-  timer = setTimeout(wake, SIM_TICK_S * 1000);
+  // In an AI race, align wakes to FIELD_TICKS (8 ms = 125 Hz) and compensate for busy work so player & AI stay phase-locked
+  // with half the postMessage structured-clone load; solo practice keeps the 4 ms wake interval.
+  const nextMs = runtime.inRace ? Math.max(1, FIELD_TICKS * SIM_TICK_S * 1000 - busy) : SIM_TICK_S * 1000;
+  timer = setTimeout(wake, nextMs);
 }
 
 scope.onmessage = (event) => {

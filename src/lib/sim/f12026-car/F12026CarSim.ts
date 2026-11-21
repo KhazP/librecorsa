@@ -397,6 +397,7 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
   const raw = { neg: new Float32Array(n), pos: new Float32Array(n) };
   const rawOut = { neg: new Float32Array(n), pos: new Float32Array(n) };
   const hit = createGroundHit();
+  const COARSE_M = 0.5;
   for (let i = 0; i < n; i++) {
     const smp = track.getSampleAtDistance((i * L) / n);
     const half = smp.width / 2;
@@ -405,15 +406,31 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
       const at = (lat: number) =>
         ground.query(smp.position.x + b.x * lat, smp.position.z + b.z * lat, smp.position.y + b.y * lat + 1.5, hit) ? hit.height : null;
       let usable = half;
+      const limitLat = half + AP_EDGE_APRON_M + 1e-6;
       let prev = at(0);
-      for (let lat = AP_EDGE_PROBE_M; prev !== null && lat <= half + AP_EDGE_APRON_M + 1e-6; lat += AP_EDGE_PROBE_M) {
-        const h = at(side * lat);
-        if (h === null ? lat <= half : h - prev - b.y * side * AP_EDGE_PROBE_M > AP_EDGE_STEP_M) {
-          usable = Math.min(half, lat - AP_EDGE_PROBE_M - (h === null ? 0 : AP_EDGE_APRON_M));
+      let prevLat = 0;
+      // Coarse 0.5 m scan across the road, refining at 0.1 m only where a step or missing ground appears
+      for (let lat = COARSE_M; prev !== null && lat <= limitLat + COARSE_M; lat += COARSE_M) {
+        const probeLat = Math.min(lat, limitLat);
+        const stepM = probeLat - prevLat;
+        if (stepM <= 1e-6) break;
+        const h = at(side * probeLat);
+        const flagged = h === null || h - prev - b.y * side * stepM > AP_EDGE_STEP_M;
+        if (flagged) {
+          let finePrev = prev;
+          for (let fLat = prevLat + AP_EDGE_PROBE_M; fLat <= probeLat + 1e-6; fLat += AP_EDGE_PROBE_M) {
+            const fh = at(side * fLat);
+            if (fh === null ? fLat <= half : fh - finePrev - b.y * side * AP_EDGE_PROBE_M > AP_EDGE_STEP_M) {
+              usable = Math.min(half, fLat - AP_EDGE_PROBE_M - (fh === null ? 0 : AP_EDGE_APRON_M));
+              break;
+            }
+            if (fh === null) break;
+            finePrev = fh;
+          }
           break;
         }
-        if (h === null) break;
         prev = h;
+        prevLat = probeLat;
       }
       // how far inside the track's width the road ends
       (side < 0 ? raw.neg : raw.pos)[i] = Math.min(1, half - usable);
@@ -421,12 +438,29 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
       // the width does not count of itself (on a street circuit it runs on to the barriers)
       let out = 0;
       let last = usable >= half ? at(side * half) : null;
-      for (let d = AP_EDGE_PROBE_M; last !== null && d <= AP_KERB_PROBE_M + 1e-6; d += AP_EDGE_PROBE_M) {
-        const h = at(side * (half + d));
-        if (h === null || (hit.surface !== 'kerb' && hit.surface !== 'road')) break;
-        if (h - last - b.y * side * AP_EDGE_PROBE_M > AP_EDGE_STEP_M) break;
-        if (hit.surface === 'kerb') out = d;
+      let lastD = 0;
+      const kerbStep = 0.4;
+      for (let d = kerbStep; last !== null && d <= AP_KERB_PROBE_M + kerbStep; d += kerbStep) {
+        const probeD = Math.min(d, AP_KERB_PROBE_M);
+        const stepM = probeD - lastD;
+        if (stepM <= 1e-6) break;
+        const h = at(side * (half + probeD));
+        const okSurface = h !== null && (hit.surface === 'kerb' || hit.surface === 'road');
+        const okSlope = okSurface && h - last - b.y * side * stepM <= AP_EDGE_STEP_M;
+        if (!okSlope) {
+          let fineLast = last;
+          for (let fd = lastD + AP_EDGE_PROBE_M; fd <= probeD + 1e-6; fd += AP_EDGE_PROBE_M) {
+            const fh = at(side * (half + fd));
+            if (fh === null || (hit.surface !== 'kerb' && hit.surface !== 'road')) break;
+            if (fh - fineLast - b.y * side * AP_EDGE_PROBE_M > AP_EDGE_STEP_M) break;
+            if (hit.surface === 'kerb') out = fd;
+            fineLast = fh;
+          }
+          break;
+        }
+        if (hit.surface === 'kerb') out = probeD;
         last = h;
+        lastD = probeD;
       }
       (side < 0 ? rawOut.neg : rawOut.pos)[i] = out;
     }
@@ -500,20 +534,34 @@ function kerbLimits(track: BuiltTrackData, ground: GroundQuery, maxRiseM: number
   const hit = createGroundHit();
   const base = createGroundHit();
   let any = false;
+  const KERB_COARSE_M = 0.4;
   for (let i = 0; i < n; i++) {
     const smp = track.getSampleAtDistance((i * L) / n);
     const b = smp.binormal;
     const reach = smp.width / 2 + AP_KERB_PROBE_M;
     for (const side of [-1, 1] as const) {
-      for (let lat = 0; lat <= reach + 1e-6; lat += AP_EDGE_PROBE_M) {
+      // Coarse 0.4 m sweep from near the track edge (or centre on narrow roads), refining at 0.1 m on kerb hits
+      const startLat = Math.max(0, Math.floor((smp.width / 2 - 2.0) / KERB_COARSE_M) * KERB_COARSE_M);
+      for (let lat = startLat; lat <= reach + 1e-6; lat += KERB_COARSE_M) {
         const x = smp.position.x + b.x * side * lat;
         const z = smp.position.z + b.z * side * lat;
         const y = smp.position.y + b.y * side * lat + 1.5;
         if (!ground.query(x, z, y, hit) || hit.surface !== 'kerb') continue;
-        if (!ground.queryBase(x, z, y, base) || hit.height - base.height <= maxRiseM) continue;
-        (side < 0 ? raw.neg : raw.pos)[i] = lat;
-        any = true;
-        break;
+        // Kerb found near `lat`: refine from the previous coarse step at 0.1 m to find the exact rise edge
+        const fineStart = Math.max(0, lat - KERB_COARSE_M + AP_EDGE_PROBE_M);
+        let found = false;
+        for (let fLat = fineStart; fLat <= Math.min(reach, lat + KERB_COARSE_M) + 1e-6; fLat += AP_EDGE_PROBE_M) {
+          const fx = smp.position.x + b.x * side * fLat;
+          const fz = smp.position.z + b.z * side * fLat;
+          const fy = smp.position.y + b.y * side * fLat + 1.5;
+          if (!ground.query(fx, fz, fy, hit) || hit.surface !== 'kerb') continue;
+          if (!ground.queryBase(fx, fz, fy, base) || hit.height - base.height <= maxRiseM) continue;
+          (side < 0 ? raw.neg : raw.pos)[i] = fLat;
+          any = true;
+          found = true;
+          break;
+        }
+        if (found) break;
       }
     }
   }
@@ -1209,7 +1257,12 @@ export class F12026CarSim implements SimulatorCar {
   private chassisG = 1;
   private stuckS = 0;
 
-  constructor(track: BuiltTrackData, root?: THREE.Object3D | null, profile: CarSimProfile = F12026_SIM_PROFILE) {
+  constructor(
+    track: BuiltTrackData,
+    root?: THREE.Object3D | null,
+    profile: CarSimProfile = F12026_SIM_PROFILE,
+    opts?: { aiLite?: boolean }
+  ) {
     this.track = track;
     this.profile = profile;
     this.line = profile.racingLine ?? 'f1';
@@ -1271,6 +1324,7 @@ export class F12026CarSim implements SimulatorCar {
       onEvent: (e) => this.onVehicleEvent(e),
     });
     const v = this.vehicle;
+    if (opts?.aiLite) v.aiLitePhysics = true;
     v.turbocharged = profile.turbo;
     this.wheelbaseM = v.wheelbaseM;
     this.cgToFrontAxleM = v.cgToFrontM;
@@ -1316,7 +1370,7 @@ export class F12026CarSim implements SimulatorCar {
 
   /** Instantiate an AI opponent car with the exact same vehicle profile and track colliders */
   public createAiPeerCar(): F12026CarSim {
-    const peer = new F12026CarSim(this.track, this.trackRoot, this.profile);
+    const peer = new F12026CarSim(this.track, this.trackRoot, this.profile, { aiLite: true });
     peer.aiAutoTyres = true;
     peer.setOvertakingRules(this.rules);
     return peer;

@@ -25,8 +25,8 @@ import { FieldPeers } from "./field-frame";
 import type { SimRaceLink } from "./sim-host";
 import type { SimEvent } from "./sim-protocol";
 
-/** The AI cars are carried forward no further than this when the worker's latest is older (s), as the player's car */
-const MAX_RENDER_LEAD_S = 0.05;
+/** The AI cars are carried forward no further than this when the worker's latest is older (s), curbing overshoot on late ticks */
+const MAX_RENDER_LEAD_S = 0.032;
 /** A frame this long after the last one is the first after a stop (a pause, the menus): nothing is carried forward (ms) */
 const RESUME_GAP_MS = 100;
 
@@ -75,6 +75,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
    * neither moves on
    */
   private leadS = 0;
+  private frameDtS = 0;
   private lastUpdateMs = -Infinity;
   private stopped = false;
 
@@ -201,7 +202,9 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
     if (!this.race) return;
     // (not on the first frame after a stop, as the player's car is not: the worker's newest poses are from before it)
     const now = this.link.wallNowMs();
-    const resumed = now - this.lastUpdateMs > RESUME_GAP_MS;
+    const gapMs = now - this.lastUpdateMs;
+    const resumed = gapMs > RESUME_GAP_MS;
+    this.frameDtS = resumed || gapMs <= 0 ? 0 : Math.min(gapMs / 1000, 0.1);
     this.lastUpdateMs = now;
     this.leadS = resumed ? 0 : THREE.MathUtils.clamp((now - this.posesWallMs) / 1000 + this.posesLeadS, 0, MAX_RENDER_LEAD_S);
     if (this.lockAidsInYellow !== this.sentLockAids) {
@@ -240,7 +243,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   }
 
   peers(): InterpolatedPeerState[] {
-    return this.fieldPeers ? this.fieldPeers.shownAt(this.leadS) : [];
+    return this.fieldPeers ? this.fieldPeers.shownAt(this.leadS, this.frameDtS) : [];
   }
 
   sims(): readonly SimulatorCar[] {

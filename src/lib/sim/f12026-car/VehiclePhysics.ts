@@ -442,6 +442,10 @@ export interface WheelState {
   hardpointVel: THREE.Vector3;
   ground: GroundHit;
   grounded: boolean;
+  /** Last full collider query plane reference point (for plane-projected reuse across AI substeps) */
+  groundRefX: number;
+  groundRefY: number;
+  groundRefZ: number;
   /** Height the tyre has climbed to: rolls over an abrupt rise along its contact arc instead of jumping it (m) */
   contactY: number;
   /** Hub centre height (world Y) and vertical velocity */
@@ -1191,6 +1195,19 @@ const _outlineEdges = new Float64Array(32 * OUTLINE_EDGE_STRIDE);
 export class VehiclePhysics {
   public static readonly FIXED_DT = 0.002;
   public static readonly SUBSTEPS = 4;
+  /**
+   * Lighter physics tier for AI opponent cars (never set on the player's car):
+   * - Single-point hub ground queries instead of 5-point contact-patch enveloping
+   * - Ground probed once per 500 Hz outer step instead of every substep
+   * - 2 substeps (1 kHz) instead of 4 (2 kHz), skipping unused FFB subframe buffering
+   */
+  public aiLitePhysics = false;
+  /** Counter for decimating slow-varying AI physics work (thermal 125 Hz, collider ground re-probe 250 Hz) */
+  private aiStepTick = 0;
+
+  private get activeSubsteps(): number {
+    return this.aiLitePhysics ? 2 : VehiclePhysics.SUBSTEPS;
+  }
 
   public readonly config: CarPhysicsConfig;
   /** Car, driver and fuel (kg): see setFuelMass */
@@ -1680,6 +1697,9 @@ export class VehiclePhysics {
         hardpointVel: new THREE.Vector3(),
         ground: createGroundHit(),
         grounded: false,
+        groundRefX: 0,
+        groundRefY: 0,
+        groundRefZ: 0,
         contactY: Number.NaN,
         hubY: 0,
         hubVy: 0,
@@ -1995,8 +2015,12 @@ export class VehiclePhysics {
 
     // Settle: hold the car in place horizontally while the springs find equilibrium (on a rolling road
     // at `speedMs`, so the aero load is already on the springs), then let it sit on its brakes so the
-    // tyre carcasses wind up against any slope
-    const h = VehiclePhysics.FIXED_DT / VehiclePhysics.SUBSTEPS;
+    // tyre carcasses wind up against any slope. Always settle at full resolution (temporarily holding
+    // `aiLitePhysics = false`) so AI opponents share the player car's exact memoized static equilibrium.
+    const savedAiLite = this.aiLitePhysics;
+    this.aiLitePhysics = false;
+    const substeps = VehiclePhysics.SUBSTEPS;
+    const h = VehiclePhysics.FIXED_DT / substeps;
     const rolling = speedMs > 0;
     const hold: VehicleInputs = { throttle: 0, brake: rolling ? 0 : 1, steer: 0 };
     if (rolling) this.gear = this.gearForSpeed(speedMs);
@@ -2006,40 +2030,44 @@ export class VehiclePhysics {
     // that state never comes round again, and keeping it would only push out settles that do
     const opaque = new Set<object>([this.ground]);
     if (this.walls) opaque.add(this.walls);
-    const memo =
-      !keepTyres && this.ground.stateless === true && (this.walls === undefined || this.walls.stateless === true)
-        ? beginSettle(this, opaque, [x, z, speedMs, VehiclePhysics.FIXED_DT, VehiclePhysics.SUBSTEPS])
-        : null;
-    if (!memo?.applied) {
-      // Events seen here (a barrier hit) would not be seen by a car given this settle's result: it is not kept then
-      let events = 0;
-      const onEvent = this.onEvent;
-      this.onEvent = (e) => {
-        events++;
-        onEvent?.(e);
-      };
-      try {
-        this.pinnedForSettle = true;
-        for (let k = 0; k < 300 * VehiclePhysics.SUBSTEPS; k++) {
-          this.updateBasis();
-          this.velocity.x = speedMs * _ez.x;
-          this.velocity.z = speedMs * _ez.z;
-          // Free-rolling at the road speed under each tyre: held at speed / r, the tyres would drive (or brake) the
-          // pinned car through the whole settle, and on a grade that thrust pitches it up
-          for (const w of this.wheels) w.omega = (k === 0 ? speedMs : Math.max(0, w.vx)) / Math.max(0.2, w.rollingRadius || 0.35);
-          if (rolling) this.engineOmega = this.drivenOmega() * this.totalRatio();
-          this.substep(h, hold);
-          this.position.x = x;
-          this.position.z = z;
-          this.angularVelocity.y = 0;
+    try {
+      const memo =
+        !keepTyres && this.ground.stateless === true && (this.walls === undefined || this.walls.stateless === true)
+          ? beginSettle(this, opaque, [x, z, speedMs, VehiclePhysics.FIXED_DT, substeps])
+          : null;
+      if (!memo?.applied) {
+        // Events seen here (a barrier hit) would not be seen by a car given this settle's result: it is not kept then
+        let events = 0;
+        const onEvent = this.onEvent;
+        this.onEvent = (e) => {
+          events++;
+          onEvent?.(e);
+        };
+        try {
+          this.pinnedForSettle = true;
+          for (let k = 0; k < 300 * substeps; k++) {
+            this.updateBasis();
+            this.velocity.x = speedMs * _ez.x;
+            this.velocity.z = speedMs * _ez.z;
+            // Free-rolling at the road speed under each tyre: held at speed / r, the tyres would drive (or brake) the
+            // pinned car through the whole settle, and on a grade that thrust pitches it up
+            for (const w of this.wheels) w.omega = (k === 0 ? speedMs : Math.max(0, w.vx)) / Math.max(0.2, w.rollingRadius || 0.35);
+            if (rolling) this.engineOmega = this.drivenOmega() * this.totalRatio();
+            this.substep(h, hold, true);
+            this.position.x = x;
+            this.position.z = z;
+            this.angularVelocity.y = 0;
+          }
+          this.pinnedForSettle = false;
+          if (!rolling) for (let k = 0; k < 600 * substeps; k++) this.substep(h, hold, true);
+        } finally {
+          this.pinnedForSettle = false;
+          this.onEvent = onEvent;
         }
-        this.pinnedForSettle = false;
-        if (!rolling) for (let k = 0; k < 600 * VehiclePhysics.SUBSTEPS; k++) this.substep(h, hold);
-      } finally {
-        this.pinnedForSettle = false;
-        this.onEvent = onEvent;
+        memo?.store(events > 0);
       }
-      memo?.store(events > 0);
+    } finally {
+      this.aiLitePhysics = savedAiLite;
     }
     if (!rolling) {
       this.velocity.set(0, 0, 0);
@@ -2768,8 +2796,12 @@ export class VehiclePhysics {
     }
     this.autoShiftFor(inp.throttle, inp.brake);
     this.prevVelocity.copy(this.velocity);
-    const h = dt / VehiclePhysics.SUBSTEPS;
-    for (let k = 0; k < VehiclePhysics.SUBSTEPS; k++) this.substep(h, inp);
+    const substeps = this.activeSubsteps;
+    const h = dt / substeps;
+    const tick = this.aiStepTick++;
+    // AI cars probe the collider once every 2nd outer step (4 ms) and tangent-plane-project across the intervening substeps
+    const probeGroundThisStep = !this.aiLitePhysics || (tick & 1) === 0 || !this.wheels[0].grounded;
+    for (let k = 0; k < substeps; k++) this.substep(h, inp, !this.aiLitePhysics || (probeGroundThisStep && k === 0));
     this.iceMechanicalPowerW = this.stepPowerSamples > 0 ? this.stepIcePowerSumW / this.stepPowerSamples : 0;
     this.driveshaftPowerW = this.stepPowerSamples > 0 ? this.stepShaftPowerSumW / this.stepPowerSamples : 0;
     this.stepIcePowerSumW = 0;
@@ -2791,12 +2823,18 @@ export class VehiclePhysics {
     } else {
       this.turboBoostBar = 1;
     }
-    this.updateThermal(dt);
+    if (!this.aiLitePhysics) {
+      this.updateThermal(dt);
+    } else if ((tick & 3) === 0) {
+      this.updateThermal(dt * 4);
+    }
     this.updateOutputs(dt);
-    // Keep the newest samples: a long frame drops its oldest, not its latest, torque
-    if (this.ffbSubframeSamples.length >= FFB_SUBFRAME_MAX) this.ffbSubframeSamples.shift();
-    // The mean of the step's substeps, not its last: a 500 Hz sample of the 2 kHz torque without the aliasing
-    this.ffbSubframeSamples.push(-(this.ffbStepSamples > 0 ? this.ffbStepSum / this.ffbStepSamples : this.telemetry.ffbTorqueNorm));
+    if (!this.aiLitePhysics) {
+      // Keep the newest samples: a long frame drops its oldest, not its latest, torque
+      if (this.ffbSubframeSamples.length >= FFB_SUBFRAME_MAX) this.ffbSubframeSamples.shift();
+      // The mean of the step's substeps, not its last: a 500 Hz sample of the 2 kHz torque without the aliasing
+      this.ffbSubframeSamples.push(-(this.ffbStepSamples > 0 ? this.ffbStepSum / this.ffbStepSamples : this.telemetry.ffbTorqueNorm));
+    }
     this.ffbStepSum = 0;
     this.ffbStepSamples = 0;
   }
@@ -2904,7 +2942,7 @@ export class VehiclePhysics {
     }
   }
 
-  private substep(h: number, inp: VehicleInputs): void {
+  private substep(h: number, inp: VehicleInputs, queryGround = true): void {
     this.updateBasis();
     this.force.set(0, 0, 0);
     this.torque.set(0, 0, 0);
@@ -2928,9 +2966,24 @@ export class VehiclePhysics {
         _tmp.set(-rate * w.hardpoint.y, rate * w.hardpoint.x, 0).applyQuaternion(this.quaternion);
         w.hardpointVel.add(_tmp);
       }
-      w.grounded = this.queryContactPatch(w);
-      if (w.grounded) this.climbStep(w, h);
-      else w.contactY = Number.NaN;
+      if (queryGround) {
+        w.grounded = this.queryContactPatch(w);
+        if (w.grounded) {
+          this.climbStep(w, h);
+          w.groundRefX = w.hardpointWorld.x;
+          w.groundRefY = w.ground.height;
+          w.groundRefZ = w.hardpointWorld.z;
+        } else {
+          w.contactY = Number.NaN;
+        }
+      } else if (w.grounded) {
+        // Project onto the tangent plane captured at substep 0 so grades/banking have zero sawtooth step
+        const g = w.ground;
+        const ny = Math.max(0.2, g.ny);
+        const planeY = w.groundRefY - (g.nx * (w.hardpointWorld.x - w.groundRefX) + g.nz * (w.hardpointWorld.z - w.groundRefZ)) / ny;
+        g.height = planeY;
+        w.contactY = planeY;
+      }
       w.compression = w.staticHubDist - (w.hardpointWorld.y - w.hubY) / upY;
       w.compressionVel = (w.hubVy - w.hardpointVel.y) / upY;
     }
@@ -3495,8 +3548,9 @@ export class VehiclePhysics {
     const fz = _ez.z * c + _ex.z * s;
     const fl = Math.sqrt(fx * fx + fz * fz);
     const p = w.hardpointWorld;
-    // On its side or nose-down the wheel has no horizontal heading: probe at the hub alone
-    if (fl < 1e-3) return this.ground.query(p.x, p.z, p.y + GROUND_PROBE_UP_M, w.ground);
+    // AI opponent cars probe at the hub centre alone (5× fewer triangle tests per wheel);
+    // on its side or nose-down any car also probes at the hub alone
+    if (this.aiLitePhysics || fl < 1e-3) return this.ground.query(p.x, p.z, p.y + GROUND_PROBE_UP_M, w.ground);
     return queryContactPatch(
       this.ground,
       p.x,

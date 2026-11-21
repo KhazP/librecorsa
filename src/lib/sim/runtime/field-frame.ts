@@ -73,14 +73,33 @@ export function packFieldPoses(slots: readonly FieldSlot[], out: Float64Array | 
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _turn = new THREE.Quaternion();
+const _predPos = new THREE.Vector3();
+const _predQuat = new THREE.Quaternion();
+const _deltaPos = new THREE.Vector3();
+const _invQ = new THREE.Quaternion();
+const _identQ = new THREE.Quaternion();
 const blankTyre = (): TyreVisualState => ({ loadedRadiusM: 0, verticalDeflectionM: 0, lateralForceN: 0, camberRad: 0, onRoad: true });
+
+/** Maximum position discrepancy smoothed out instead of snapped (m); larger jumps are teleports/resets */
+const SMOOTH_MAX_ERR_M = 6.0;
+/** Time constant for decaying residual worker jitter error (s) */
+const SMOOTH_ERR_TAU_S = 0.055;
 
 interface PeerSlot {
   readonly peer: InterpolatedPeerState;
   readonly tyres: [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState];
-  /** The pose as packed, which `carryForward` moves on from */
+  /** The pose as packed, which `shownAt` moves on from */
   readonly position: THREE.Vector3;
   readonly quaternion: THREE.Quaternion;
+  /** Last pose & velocity shown on screen, plus exponentially decayed prediction-error offset */
+  readonly drawnPos: THREE.Vector3;
+  readonly drawnQuat: THREE.Quaternion;
+  readonly drawnVel: THREE.Vector3;
+  drawnYawRate: number;
+  readonly errPos: THREE.Vector3;
+  readonly errQuat: THREE.Quaternion;
+  hasDrawn: boolean;
+  dirty: boolean;
   yawRate: number;
   removed: boolean;
 }
@@ -115,6 +134,14 @@ export class FieldPeers {
         tyres,
         position: new THREE.Vector3(),
         quaternion: new THREE.Quaternion(),
+        drawnPos: new THREE.Vector3(),
+        drawnQuat: new THREE.Quaternion(),
+        drawnVel: new THREE.Vector3(),
+        drawnYawRate: 0,
+        errPos: new THREE.Vector3(),
+        errQuat: new THREE.Quaternion(),
+        hasDrawn: false,
+        dirty: false,
         yawRate: 0,
         removed: false,
       };
@@ -135,6 +162,7 @@ export class FieldPeers {
       const o = k * FIELD_POSE_STRIDE;
       s.position.set(a[o], a[o + 1], a[o + 2]);
       s.quaternion.set(a[o + 3], a[o + 4], a[o + 5], a[o + 6]);
+      s.dirty = true;
       p.position.copy(s.position);
       p.quaternion.copy(s.quaternion);
       p.linearVelocity.set(a[o + 7], a[o + 8], a[o + 9]);
@@ -185,6 +213,10 @@ export class FieldPeers {
       if (!p) continue;
       s.position.set(p.x, p.y, p.z);
       s.quaternion.set(p.qx, p.qy, p.qz, p.qw);
+      s.errPos.set(0, 0, 0);
+      s.errQuat.identity();
+      s.hasDrawn = false;
+      s.dirty = false;
       s.yawRate = 0;
       s.peer.position.copy(s.position);
       s.peer.quaternion.copy(s.quaternion);
@@ -196,19 +228,58 @@ export class FieldPeers {
 
   /**
    * The cars on the track, carried `leadS` on from the poses as packed: the position with the car's velocity, the
-   * heading with its yaw rate. Always from the packed pose, so a frame with no newer one does not add up
+   * heading with its yaw rate, plus exponentially-decayed jitter damping so late worker packets never snap backwards.
    */
-  shownAt(leadS: number): InterpolatedPeerState[] {
+  shownAt(leadS: number, dtS = 0): InterpolatedPeerState[] {
     const out = this.shown;
     out.length = 0;
     if (!this.received) return out;
     const lead = leadS > 0 ? leadS : 0;
+    const dt = dtS > 0 ? Math.min(dtS, 0.1) : 0;
+    const decay = dt > 0 ? Math.exp(-dt / SMOOTH_ERR_TAU_S) : 0;
     for (const s of this.slots) {
       if (s.removed) continue;
       const p = s.peer;
       p.position.copy(s.position).addScaledVector(p.linearVelocity, lead);
       // Yaw rate is + to the right, a turn about the car's own up axis the other way
       p.quaternion.copy(s.quaternion).multiply(_turn.setFromAxisAngle(_up, -s.yawRate * lead));
+      if (dt > 0) {
+        if (s.dirty && s.hasDrawn) {
+          // Compare where the car smoothly continued from last frame vs the new carried-forward worker pose.
+          // On a steady stream this difference is 0 (zero lag); on a late packet it absorbs only the jump.
+          _predPos.copy(s.drawnPos).addScaledVector(s.drawnVel, dt);
+          _deltaPos.subVectors(_predPos, p.position);
+          const errSq = _deltaPos.lengthSq();
+          if (errSq < SMOOTH_MAX_ERR_M * SMOOTH_MAX_ERR_M) {
+            s.errPos.copy(_deltaPos);
+            _predQuat.copy(s.drawnQuat).multiply(_turn.setFromAxisAngle(_up, -s.drawnYawRate * dt));
+            s.errQuat.copy(_invQ.copy(p.quaternion).invert()).multiply(_predQuat);
+            if (s.errQuat.w < 0) s.errQuat.set(-s.errQuat.x, -s.errQuat.y, -s.errQuat.z, -s.errQuat.w);
+          } else {
+            s.errPos.set(0, 0, 0);
+            s.errQuat.identity();
+          }
+        }
+        s.dirty = false;
+        if (s.errPos.lengthSq() > 1e-8) {
+          s.errPos.multiplyScalar(decay);
+          s.errQuat.slerp(_identQ, 1 - decay);
+          p.position.add(s.errPos);
+          p.quaternion.multiply(s.errQuat);
+        } else {
+          s.errPos.set(0, 0, 0);
+          s.errQuat.identity();
+        }
+      } else {
+        s.dirty = false;
+        s.errPos.set(0, 0, 0);
+        s.errQuat.identity();
+      }
+      s.drawnPos.copy(p.position);
+      s.drawnQuat.copy(p.quaternion);
+      s.drawnVel.copy(p.linearVelocity);
+      s.drawnYawRate = s.yawRate;
+      s.hasDrawn = true;
       out.push(p);
     }
     return out;

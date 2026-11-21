@@ -435,6 +435,8 @@ export interface OpponentAudioFrame {
   /** The sound bank of a car */
   soundFor: (peer: InterpolatedPeerState) => CarSoundSource;
   dt: number;
+  /** On Low graphics, cap active opponent voices and skip HRTF binaural convolution */
+  lowQuality?: boolean;
 }
 
 export interface OpponentVoiceStats {
@@ -506,13 +508,14 @@ export class OpponentAudio {
     this.bus.gain.setTargetAtTime(0.85 - this.interiorMix * 0.35, now, 0.03);
 
     // The nearest cars, nearest first (insertion into a fixed-size list)
+    const maxVoices = f.lowQuality ? 3 : OPPONENT_VOICES;
     let n = 0;
     if (f.active) {
       for (const p of f.peers) {
         if (p.ghost) continue;
         const d = p.position.distanceTo(this.listenerPos);
         if (!(d < CULL_DISTANCE_M)) continue;
-        if (n < OPPONENT_VOICES) n++;
+        if (n < maxVoices) n++;
         else if (d >= this.candD[n - 1]) continue;
         let i = n - 1;
         while (i > 0 && this.candD[i - 1] > d) {
@@ -564,7 +567,7 @@ export class OpponentAudio {
       const sound = f.soundFor(p);
       const bank = this.bankFor(sound.assetDir);
       v.bind(sound, bank);
-      v.setHrtf(v.rank < HRTF_VOICES);
+      v.setHrtf(!f.lowQuality && v.rank < HRTF_VOICES);
       if (bank.state !== 'ready') continue;
 
       const dist = this.candD[idx];
