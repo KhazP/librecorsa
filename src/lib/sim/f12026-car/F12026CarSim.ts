@@ -2032,21 +2032,22 @@ export class F12026CarSim implements SimulatorCar {
     // the rack turns at the rim's own speed rather than in one jump per frame
     const rim = inputs.steerRim && inputs.analogSteer !== undefined ? inputs.analogSteer : null;
     const rimFrom = rim !== null && this.lastRimSteer !== null ? this.lastRimSteer : rim;
-    const held = this.gridHold && !this.aiAutopilot;
-    // Held, the car stays on its spot until the driver lets the clutch out in gear with the throttle up
-    const pinned = held && keptOnGrid(v.velocity.length(), v.gear !== 0, inputs.clutch ?? 0, inputs.throttle ?? 0);
+    const held = this.gridHold;
+    // Held, the car stays on its spot until the driver lets the clutch out in gear with the throttle up;
+    // autopilot stays pinned on the grid through the red lights so it cannot jump the start
+    const pinned = held && (this.aiAutopilot || keptOnGrid(v.velocity.length(), v.gear !== 0, inputs.clutch ?? 0, inputs.throttle ?? 0));
     for (let k = 0; k < ticks; k++) {
       if (rim !== null && rimFrom !== null) inputs.analogSteer = rimFrom + ((rim - rimFrom) * (k + 1)) / ticks;
       const cmd: { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
         this.aiAutopilot ? this.autopilot(CONTROL_DT_S) : this.driverCommand(inputs, CONTROL_DT_S);
       const vin: VehicleInputs = {
-        throttle: cmd.throttle,
+        throttle: pinned && this.aiAutopilot ? 0 : cmd.throttle,
         // An empty tank (fuel is only burnt with fuel use on): the engine no longer fires. A race field's own car is
         // spared: it starts on a load nobody chose and has no pit stop to take
         ignitionCut: this.fuelKg > 0 || !this.realism.fuelUse || (this.aiAutopilot && !this.aiSelfRecovery) ? cmd.ignitionCut : 0,
         brake: pinned ? 1 : cmd.brake,
         brakeWheelScale: pinned ? undefined : cmd.brakeWheelScale,
-        steer: cmd.steer,
+        steer: pinned && this.aiAutopilot ? 0 : cmd.steer,
         drs: !held && (drsPress || cmd.drs),
         shiftUp: !held && shiftUp,
         shiftDown: !held && shiftDown,
@@ -2089,7 +2090,7 @@ export class F12026CarSim implements SimulatorCar {
     }
     this.simTimeMs += steppedS * 1000;
     if (this.recoverIfLost()) return this.telemetry;
-    if (this.aiAutopilot && this.aiSelfRecovery) this.recoverIfStuck(steppedS);
+    if (this.aiAutopilot && this.aiSelfRecovery && !held && this.aiSpeedCapMs >= 2) this.recoverIfStuck(steppedS);
     else this.stuckS = 0;
     this.wheelRotationRad = (this.wheelRotationRad + 0.5 * (v.wheels[2].omega + v.wheels[3].omega) * steppedS) % (Math.PI * 2);
     this.syncPose();

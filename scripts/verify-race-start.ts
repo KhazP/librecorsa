@@ -10,6 +10,8 @@
  */
 import { createFlatTestTrack } from './lib/flat-track';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
+import { AiOpponentField, aiDriversFor } from '../src/lib/sim/ai-opponents';
+import { TrackEnvironment } from '../src/lib/sim/track-environment';
 import { JumpStartWatch, LAUNCH_RPM, launchWindow, pullsAway } from '../src/lib/sim/race-start';
 import type { AiRace } from '../src/lib/sim/ai-race';
 import { DEFAULT_RACE_SETUP, parseRaceSetup, startAiRace } from '../src/lib/sim/race-setup';
@@ -164,6 +166,61 @@ console.log('\n== Jump starts');
   check('a flying start (standing forced off) is never a manual one', !startWith({ launch: 'manual' }, false));
   check('the launch is saved with the race setup', parseRaceSetup(JSON.parse(JSON.stringify({ ...DEFAULT_RACE_SETUP, launch: 'manual' }))).launch === 'manual');
   check('an unknown launch reads as assisted', parseRaceSetup({ launch: 'auto' }).launch === 'assisted');
+}
+
+// ---- Autopilot engaged before lights out (#149): stays still on the grid (no velocity kick / shake), launches cleanly behind AI
+{
+  console.log('\n== autopilot standing start (#149)');
+  for (const manualStart of [false, true]) {
+    const env = new TrackEnvironment(track);
+    const player = vehicleModelSpec('mtr-496r').createSim(track, null);
+    const field = new AiOpponentField(track, player, aiDriversFor(5), env, { skill: 70, seed: 7 });
+    field.playerGrid = 'back';
+    field.damageLevel = 'full';
+    field.manualStart = manualStart;
+    field.startRace(true);
+    const p0 = player.worldPosition.clone();
+    // Player presses P before lights turn green
+    player.aiAutopilot = true;
+
+    let maxLightsSpeedMs = 0;
+    let maxLightsMoveM = 0;
+    let lightsTicks = 0;
+    const stepDt = 1 / 120;
+    while (field.phase === 'lights' && lightsTicks < 1200) {
+      const held = field.playerFrozen && field.manualStart && !field.gridStanding;
+      player.gridHold = held;
+      if (!field.playerFrozen || held) player.step(stepDt, {});
+      field.update(stepDt);
+      maxLightsSpeedMs = Math.max(maxLightsSpeedMs, Math.hypot(player.vxMs, player.vyMs));
+      maxLightsMoveM = Math.max(maxLightsMoveM, player.worldPosition.distanceTo(p0));
+      lightsTicks++;
+    }
+    const modeLabel = manualStart ? 'manual' : 'assisted';
+    check(
+      `autopilot (${modeLabel}): stays still through red lights`,
+      field.phase === 'racing' && maxLightsSpeedMs < 0.2 && maxLightsMoveM < 0.05,
+      `vMax=${maxLightsSpeedMs.toFixed(3)} m/s, moved=${(maxLightsMoveM * 100).toFixed(1)} cm`
+    );
+
+    // Race for 4 s after lights out: must accelerate cleanly behind the AI pack with zero DNF / heavy collision
+    player.gridHold = false;
+    let maxSpeedKmh = 0;
+    for (let i = 0; i < 4 * 120; i++) {
+      player.step(stepDt, {});
+      field.update(stepDt);
+      maxSpeedKmh = Math.max(maxSpeedKmh, player.telemetry.speedKmh);
+    }
+    const status = field.status();
+    const me = status.standings.find((s) => s.isPlayer);
+    const anyRetired = status.standings.some((s) => s.retired);
+    const maxDmg = status.standings.reduce((m, s) => Math.max(m, s.damage ?? 0), 0);
+    check(
+      `autopilot (${modeLabel}): clean launch behind AI pack (no crash/DNF)`,
+      !anyRetired && maxDmg < 0.05 && me !== undefined && maxSpeedKmh > 80 && player.telemetry.speedKmh > 60,
+      `max=${maxSpeedKmh.toFixed(0)} km/h, end=${player.telemetry.speedKmh.toFixed(0)} km/h, retired=${anyRetired}, dmg=${maxDmg.toFixed(2)}`
+    );
+  }
 }
 
 console.log(failures.length ? `\n${failures.length} failed: ${failures.join(', ')}` : '\nAll race start checks passed.');

@@ -1302,8 +1302,8 @@ export class AiOpponentField implements AiRace {
       const launchDraw = car.ai ? launchReactionS(this.skillLevel, car.rng(), car.rng()) : 0;
       car.launchReactS = standing ? launchDraw : 0;
       car.rollingGreenAtS = 0;
-      // Start from the grid slot's lane, not the racing line, so the field does not file onto the line off the grid
-      car.startLaneM = car.ai ? car.sim.lateralOffsetM : null;
+      // Start from the grid slot's lane, not the racing line, so neither AI nor player autopilot swerves across rows off the grid
+      car.startLaneM = standing ? car.sim.lateralOffsetM : car.ai ? car.sim.lateralOffsetM : null;
       car.biasM = car.ai ? clamp(car.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(car.sim.sMeters), car.ai.racingLineId), -6, 6) : 0;
       if (car.ai) car.ai.aiLineBiasM = car.biasM;
       car.stuckS = 0;
@@ -1408,6 +1408,7 @@ export class AiOpponentField implements AiRace {
     this.runPlanJobs();
     if (this.phase === 'lights' && this.preStartS > 0) {
       this.preStartS = Math.max(0, this.preStartS - dt);
+      this.capPlayerAutopilot(this.track.totalLengthM);
       for (const car of this.cars) this.syncPeer(car);
       return;
     }
@@ -1418,6 +1419,8 @@ export class AiOpponentField implements AiRace {
         this.phase = 'racing';
         this.lightsOn = 0;
       }
+      // Keep player autopilot capped & aligned to its grid lane through the lights and on the exact lights-out tick
+      this.capPlayerAutopilot(this.track.totalLengthM);
       for (const car of this.cars) this.syncPeer(car);
       return;
     }
@@ -2203,8 +2206,8 @@ export class AiOpponentField implements AiRace {
   }
 
   /**
-   * The player's car on autopilot drives its line blind to traffic: in a race it gets the same "never closer than it
-   * could stop" cap as the AI cars, or it runs into the back of them
+   * The player's car on autopilot drives its line blind to traffic: in a race it gets the same grid-lane hold off the
+   * start and "never closer than it could stop" cap as the AI cars, or it swerves across rows / runs into the back of them.
    */
   private capPlayerAutopilot(L: number): void {
     const me = this.cars.find((c) => c.isPlayer);
@@ -2212,18 +2215,60 @@ export class AiOpponentField implements AiRace {
     const sim = me.sim;
     if (!sim.aiAutopilot) {
       if (sim.aiSpeedCapMs !== undefined && sim.aiSpeedCapMs !== Infinity) sim.aiSpeedCapMs = Infinity;
+      if (me.biasM !== 0) {
+        me.biasM = 0;
+        if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = 0;
+      }
       return;
     }
+    const sample = this.track.getSampleAtDistance(sim.sMeters);
+    const line = aiLineOffsetM(sample, sim.racingLineId);
+    // Hold the grid lane through the lights and off the start until a corner arrives or the opening run is done
+    if (me.startLaneM !== null) {
+      if (this.phase === 'racing') {
+        const ahead = this.track.getSampleAtDistance((sim.sMeters + Math.max(40, sim.vxMs * 2)) % L);
+        if (Math.abs(ahead.curvature) > 0.006 || me.distM > this.rc.startLaneMaxM || this.raceTimeS > 6) {
+          me.startLaneM = null;
+        }
+      }
+      if (me.startLaneM !== null) {
+        me.biasM = clamp(me.startLaneM - line, -6, 6);
+        if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = me.biasM;
+      } else if (me.biasM !== 0) {
+        // Ease back to the racing line instead of snapping
+        me.biasM = Math.abs(me.biasM) < 0.05 ? 0 : me.biasM * 0.94;
+        if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = me.biasM;
+      }
+    } else if (me.biasM !== 0) {
+      me.biasM = Math.abs(me.biasM) < 0.05 ? 0 : me.biasM * 0.94;
+      if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = me.biasM;
+    }
+
+    if (this.phase === 'lights') {
+      sim.aiSpeedCapMs = 0;
+      return;
+    }
+
     let cap = this.rollingFormation ? this.rollingPaceMs : Infinity;
     if (this.vsc.active) {
-      const sample = this.track.getSampleAtDistance(sim.sMeters);
       cap = Math.min(cap, vscReferenceSpeedMs(sample.optimalSpeedKmh));
     }
+    const targetLat = line + (sim.aiLineBiasM ?? 0);
+    const corridor = CAR_WID_M + 0.55;
     for (const other of this.cars) {
       if (other === me || other.removed) continue;
       const ds = wrapHalf(other.sim.sMeters - sim.sMeters, L);
-      if (ds > 0 && ds < 80 && Math.abs(other.sim.lateralOffsetM - sim.lateralOffsetM) < CAR_WID_M + 0.35) {
-        cap = Math.min(cap, followCapMs(other.sim, ds - CAR_LEN_M, this.rc));
+      if (ds <= 0 || ds >= 80) continue;
+      const otherLat = other.sim.lateralOffsetM;
+      const inCurrentLane = Math.abs(otherLat - sim.lateralOffsetM) < corridor;
+      const inTargetLane = Math.abs(otherLat - targetLat) < corridor;
+      const crossingPath =
+        (otherLat - sim.lateralOffsetM) * (otherLat - targetLat) <= 0 &&
+        Math.abs(targetLat - sim.lateralOffsetM) > 0.25;
+      if (inCurrentLane || inTargetLane || crossingPath) {
+        const gapM = ds - CAR_LEN_M;
+        const follow = gapM <= 2.0 ? Math.max(0, other.sim.vxMs - 1) : followCapMs(other.sim, gapM, this.rc);
+        cap = Math.min(cap, follow);
       }
     }
     sim.aiSpeedCapMs = cap;

@@ -1416,7 +1416,7 @@ export class F1Physics2026 {
    * (the line follower cannot turn it round), is put back on the AI line
    */
   private recoverStuckAi(dtSeconds: number): void {
-    if (!this.aiAutopilot || !this.aiSelfRecovery) {
+    if (!this.aiAutopilot || !this.aiSelfRecovery || this.aiSpeedCapMs < 2) {
       this.aiStuckS = 0;
       return;
     }

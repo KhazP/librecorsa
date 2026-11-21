@@ -924,7 +924,6 @@ export class DriveSession {
     this.toggleAutopilot = () => {
       if (disposed || raceNow().kind === "mp" || coolDown.active) return;
       physics.aiAutopilot = !physics.aiAutopilot;
-      if (physics.aiAutopilot && physics.vxMs < 5) physics.vxMs = 45;
     };
     // A circuit switch remounts this component: its track and warm-up load again (the car models stay cached)
     assetProgress.reset(["track", "opponents", "shaders"]);
