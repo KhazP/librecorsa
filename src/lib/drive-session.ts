@@ -127,7 +127,7 @@ import {
   resolveActiveClutchBinding,
   type KeyAction,
 } from "@/lib/input/bindings";
-import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad } from "@/lib/input/device-input";
+import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad, isLikelyWheel } from "@/lib/input/device-input";
 import { MenuIdleWatch } from "@/lib/input/menu-idle";
 import { AERIAL_IDLE_MS } from "@/lib/render/menu-aerial";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
@@ -979,8 +979,12 @@ export class DriveSession {
       endQualifying();
       endTimeTrial();
       const prev = this.currentRace;
-      // A race the worker runs ends there when the session leaves it
-      if (prev.kind === "ai" && (next.kind !== "ai" || next.field !== prev.field)) prev.field.dispose?.();
+      // A race the worker runs ends there when the session leaves it; release any grid-hold / lane-bias cap on the player
+      if (prev.kind === "ai" && (next.kind !== "ai" || next.field !== prev.field)) {
+        prev.field.dispose?.();
+        physics.aiSpeedCapMs = Infinity;
+        physics.aiLineBiasM = 0;
+      }
       this.currentRace = next;
       setRaceKind(next.kind);
       trackLimits.reset(limitsSessionOf(next), limitsRulesOf(next));
@@ -1800,9 +1804,20 @@ export class DriveSession {
     /** The camera key's hold timer (a hold opens the seat panel) and the pad camera button's press time */
     let cameraKeyHold: number | null = null;
     let padCameraHeldSinceMs: number | null = null;
+    const clearCameraOverride = () => {
+      if (cameraOverride === null) return;
+      cameraOverride = null;
+      freeCamKeys.clear();
+      freeCamDrag = null;
+      this.publish({ cameraOverride: null });
+    };
     this.setCameraOverride = (next: CameraMode | null) => {
       if (disposed) return;
       if (cameraOverride === next) return;
+      if (next === null) {
+        clearCameraOverride();
+        return;
+      }
       cameraOverride = next;
       if (next === "free") {
         cameraRig.freeCamera.reset();
@@ -1823,6 +1838,7 @@ export class DriveSession {
 
     const isFreeCamInteractive = () =>
       cameraOverride === "free" &&
+      !renderer.xr.isPresenting &&
       appPhaseNow === "driving" &&
       !this.snapshot.paused &&
       !this.snapshot.seatPanel &&
@@ -1897,7 +1913,7 @@ export class DriveSession {
       if (this.snapshot.paused) return;
 
       // Free camera mode: capture flight keys, R to reset near car, and [ / ] for FOV while keeping global hotkeys working
-      if (cameraOverride === "free") {
+      if (isFreeCamInteractive()) {
         if (code === "KeyR") {
           e.preventDefault();
           if (!e.repeat) cameraRig.freeCamera.reset();
@@ -2248,12 +2264,7 @@ export class DriveSession {
       if (!rp.active) return;
       rp.active = false;
       rp.focusedCarId = "player";
-      if (cameraOverride === "free") {
-        cameraOverride = null;
-        freeCamKeys.clear();
-        freeCamDrag = null;
-        this.publish({ cameraOverride: null });
-      }
+      clearCameraOverride();
       // The replay only moved the drawn car (the physics never left the live pose): put the drawing back
       physics.worldPosition.copy(replaySaved.pos);
       physics.worldQuaternion.copy(replaySaved.quat);
@@ -2335,6 +2346,7 @@ export class DriveSession {
       lastReplayPushS = rp.timeS;
       rp.active = false;
       rp.focusedCarId = "player";
+      clearCameraOverride();
       cameraRig.reset();
       physics.aiAutopilot = false;
       kbInput.throttle = 0;
@@ -2359,6 +2371,7 @@ export class DriveSession {
       if (disposed) return;
       runId++;
       exitReplay();
+      clearCameraOverride();
       replay.buffer.clear();
       replayNames.clear();
       if (this.snapshot.replayAvailable) this.publish({ replayAvailable: false });
@@ -2380,6 +2393,8 @@ export class DriveSession {
       cameraRig.reset();
       lapRecorder.reset();
       physics.aiAutopilot = false;
+      physics.aiSpeedCapMs = Infinity;
+      physics.aiLineBiasM = 0;
       kbInput.throttle = 0;
       kbInput.brake = 0;
       kbInput.clutch = 0;
@@ -2404,7 +2419,7 @@ export class DriveSession {
     };
     this.replaySpeed = (speed) => {
       replay.speed = speed;
-      // If user clicked rewind at the end (or play-speed at the start) while paused, start playing right away
+      // Shuttle behavior: picking a playback speed while paused starts playing unless already pinned at that boundary
       if (!replay.playing && ((speed < 0 && replay.timeS > replay.buffer.startS + 0.05) || (speed > 0 && replay.timeS < replay.buffer.endS - 0.05))) {
         replay.playing = true;
       }
@@ -2774,7 +2789,7 @@ export class DriveSession {
       // The pause menu, the seat panel or a lost GPU context: the car waits
       const frozen = this.snapshot.paused || this.snapshot.seatPanel || gpuLost;
       const driving = !inMenu && !frozen && !replaying && !device.wheelLost;
-      const freeCamControl = !inMenu && !frozen && !podium.playing && cameraOverride === "free";
+      const freeCamControl = !inMenu && !frozen && !podium.playing && !renderer.xr.isPresenting && cameraOverride === "free";
       wakeLock.setDesired(driving);
       const padTuning = settingsNow.padTuning;
       const kbTuning = settingsNow.keyboardTuning;
@@ -3761,32 +3776,41 @@ export class DriveSession {
 
         let freeMinY: number | undefined;
         if (mode === "free") {
-          let fwd = (freeCamKeys.has("KeyW") || freeCamKeys.has("ArrowUp") ? 1 : 0) - (freeCamKeys.has("KeyS") || freeCamKeys.has("ArrowDown") ? 1 : 0);
-          let right = (freeCamKeys.has("KeyD") || freeCamKeys.has("ArrowRight") ? 1 : 0) - (freeCamKeys.has("KeyA") || freeCamKeys.has("ArrowLeft") ? 1 : 0);
-          let up = (freeCamKeys.has("KeyE") || freeCamKeys.has("Space") ? 1 : 0) - (freeCamKeys.has("KeyQ") || freeCamKeys.has("ControlLeft") || freeCamKeys.has("ControlRight") ? 1 : 0);
-          let lookYaw = 0;
-          let lookPitch = 0;
-          const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : [];
-          for (const pad of pads) {
-            if (!pad || !pad.connected) continue;
-            const dz = (v: number) => (Math.abs(v) > 0.14 ? v : 0);
-            right += dz(pad.axes[0] ?? 0);
-            fwd -= dz(pad.axes[1] ?? 0);
-            lookYaw -= dz(pad.axes[2] ?? 0) * 2.0;
-            lookPitch -= dz(pad.axes[3] ?? 0) * 1.5;
-            const rt = pad.buttons[7]?.value ?? 0;
-            const lt = pad.buttons[6]?.value ?? 0;
-            if (rt > 0.1) up += rt;
-            if (lt > 0.1) up -= lt;
-            break;
+          if (freeCamControl) {
+            let fwd = (freeCamKeys.has("KeyW") || freeCamKeys.has("ArrowUp") ? 1 : 0) - (freeCamKeys.has("KeyS") || freeCamKeys.has("ArrowDown") ? 1 : 0);
+            let right = (freeCamKeys.has("KeyD") || freeCamKeys.has("ArrowRight") ? 1 : 0) - (freeCamKeys.has("KeyA") || freeCamKeys.has("ArrowLeft") ? 1 : 0);
+            let up = (freeCamKeys.has("KeyE") || freeCamKeys.has("Space") ? 1 : 0) - (freeCamKeys.has("KeyQ") || freeCamKeys.has("ControlLeft") || freeCamKeys.has("ControlRight") ? 1 : 0);
+            let lookYaw = 0;
+            let lookPitch = 0;
+            // Only fly with a standard non-wheel controller when the player isn't using a steering wheel device
+            const pad = settingsNow.device !== "wheel" ? pads.find((p) => p.mapping === "standard" && !isLikelyWheel(p)) : undefined;
+            if (pad) {
+              const dz = (v: number) => (Math.abs(v) > 0.14 ? v : 0);
+              right += dz(pad.axes[0] ?? 0);
+              fwd -= dz(pad.axes[1] ?? 0);
+              lookYaw -= dz(pad.axes[2] ?? 0) * 2.0;
+              lookPitch -= dz(pad.axes[3] ?? 0) * 1.5;
+              const rt = pad.buttons[7]?.value ?? 0;
+              const lt = pad.buttons[6]?.value ?? 0;
+              if (rt > 0.1) up += rt;
+              if (lt > 0.1) up -= lt;
+            }
+            freeCamInput.forward = THREE.MathUtils.clamp(fwd, -1, 1);
+            freeCamInput.right = THREE.MathUtils.clamp(right, -1, 1);
+            freeCamInput.up = THREE.MathUtils.clamp(up, -1, 1);
+            freeCamInput.fast = freeCamKeys.has("ShiftLeft") || freeCamKeys.has("ShiftRight");
+            freeCamInput.slow = freeCamKeys.has("AltLeft") || freeCamKeys.has("AltRight");
+            freeCamInput.lookYawRate = lookYaw;
+            freeCamInput.lookPitchRate = lookPitch;
+          } else {
+            freeCamInput.forward = 0;
+            freeCamInput.right = 0;
+            freeCamInput.up = 0;
+            freeCamInput.fast = false;
+            freeCamInput.slow = false;
+            freeCamInput.lookYawRate = 0;
+            freeCamInput.lookPitchRate = 0;
           }
-          freeCamInput.forward = THREE.MathUtils.clamp(fwd, -1, 1);
-          freeCamInput.right = THREE.MathUtils.clamp(right, -1, 1);
-          freeCamInput.up = THREE.MathUtils.clamp(up, -1, 1);
-          freeCamInput.fast = freeCamKeys.has("ShiftLeft") || freeCamKeys.has("ShiftRight");
-          freeCamInput.slow = freeCamKeys.has("AltLeft") || freeCamKeys.has("AltRight");
-          freeCamInput.lookYawRate = lookYaw;
-          freeCamInput.lookPitchRate = lookPitch;
           if (cameraRig.freeCamera.initialised && physics.groundQuery) {
             const p = cameraRig.freeCamera.position;
             if (physics.groundQuery.query(p.x, p.z, p.y + 4, freeCamGroundHit)) {

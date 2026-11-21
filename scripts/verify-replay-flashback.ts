@@ -873,4 +873,33 @@ check('supports 20-minute multi-car recording, chunk eviction, mid-session car j
   assert.equal(after.cars[0].id, 'player');
 });
 
+check('ReplayBuffer carIds() tracks cars present only briefly between start/middle/end and prunes them on truncate', () => {
+  const buf = new ReplayBuffer({ maxSeconds: 30, hz: 10 });
+  const mkCar = (id: string, x: number) => ({
+    id,
+    x,
+    y: 0.3,
+    z: 0,
+    qx: 0,
+    qy: 0,
+    qz: 0,
+    qw: 1,
+    speedKmh: 100,
+    steer: 0,
+    throttle: 1,
+    brake: 0,
+    gear: 3,
+    rpm: 8000,
+  });
+  for (let i = 0; i < 200; i++) {
+    const t = i * 0.1;
+    // ai-retire appears only around 20%..30% of the buffer (neither first, middle, nor last frame!)
+    const cars = i >= 40 && i <= 60 ? [mkCar('player', i), mkCar('ai-retire', i + 5)] : [mkCar('player', i)];
+    buf.push(t, cars);
+  }
+  assert.deepEqual(buf.carIds(), ['player', 'ai-retire'], 'mid-window retired car is reported in carIds()');
+  buf.truncateAfter(3.5);
+  assert.deepEqual(buf.carIds(), ['player'], 'carIds() drops car once its frames are truncated away');
+});
+
 console.log(`\n${passed} checks passed`);

@@ -81,6 +81,9 @@ export class ReplayBuffer {
   private readonly chunks = new Map<number, ReplayChunk>();
   private readonly carIdsList: string[] = [];
   private readonly carIdToCol = new Map<string, number>();
+  /** Earliest and latest sequence indices where each car column had a valid sample */
+  private readonly carFirstSeq: number[] = [];
+  private readonly carLastSeq: number[] = [];
   /** Monotonic sequence index of the oldest stored frame */
   private headSeq = 0;
   /** Monotonic sequence index of the next frame to write (`count = tailSeq - headSeq`) */
@@ -108,6 +111,8 @@ export class ReplayBuffer {
       if (!this.carIdToCol.has(id)) {
         this.carIdToCol.set(id, this.carIdsList.length);
         this.carIdsList.push(id);
+        this.carFirstSeq.push(Number.POSITIVE_INFINITY);
+        this.carLastSeq.push(-1);
       }
     }
 
@@ -146,6 +151,8 @@ export class ReplayBuffer {
     for (let i = 0; i < cars.length; i++) {
       const c = cars[i];
       const col = this.carIdToCol.get(c.id)!;
+      if (seq < this.carFirstSeq[col]) this.carFirstSeq[col] = seq;
+      this.carLastSeq[col] = seq;
       const o = frameBase + col * CAR_STRIDE;
       data[o] = c.x;
       data[o + 1] = c.y;
@@ -178,6 +185,8 @@ export class ReplayBuffer {
     this.chunks.clear();
     this.carIdsList.length = 0;
     this.carIdToCol.clear();
+    this.carFirstSeq.length = 0;
+    this.carLastSeq.length = 0;
     this.headSeq = 0;
     this.tailSeq = 0;
   }
@@ -195,10 +204,30 @@ export class ReplayBuffer {
       this.chunks.clear();
       this.headSeq = 0;
       this.tailSeq = 0;
+      for (let col = 0; col < this.carIdsList.length; col++) {
+        this.carFirstSeq[col] = Number.POSITIVE_INFINITY;
+        this.carLastSeq[col] = -1;
+      }
     } else {
       const maxKey = (this.tailSeq - 1) >>> CHUNK_SHIFT;
       for (const k of this.chunks.keys()) {
         if (k > maxKey) this.chunks.delete(k);
+      }
+      // Refresh lastSeq for any car whose last recorded frame was truncated away
+      for (let col = 0; col < this.carIdsList.length; col++) {
+        if (this.carLastSeq[col] < this.tailSeq) continue;
+        let found = -1;
+        for (let seq = this.tailSeq - 1; seq >= this.headSeq; seq--) {
+          const chunk = this.chunks.get(seq >>> CHUNK_SHIFT);
+          if (!chunk || col >= chunk.carCols) continue;
+          const off = seq & CHUNK_MASK;
+          if (!Number.isNaN(chunk.data[(off * chunk.carCols + col) * CAR_STRIDE])) {
+            found = seq;
+            break;
+          }
+        }
+        this.carLastSeq[col] = found;
+        if (found < 0) this.carFirstSeq[col] = Number.POSITIVE_INFINITY;
       }
     }
   }
@@ -225,26 +254,13 @@ export class ReplayBuffer {
     return this.count;
   }
 
-  /** Ordered list of car IDs recorded in the buffer ("player" first when present) */
+  /** Ordered list of car IDs recorded anywhere in the retained window ("player" first when present) */
   carIds(): readonly string[] {
     if (this.count === 0) return [];
     const present: string[] = [];
-    // Check newest, middle, and oldest frames so we only report cars actually in the retained window
-    const sampleIndices = [this.count - 1, this.count >> 1, 0];
-    const seen = new Set<string>();
-    for (const idx of sampleIndices) {
-      const seq = this.headSeq + idx;
-      const chunk = this.chunks.get(seq >>> CHUNK_SHIFT);
-      if (!chunk) continue;
-      const frameBase = (seq & CHUNK_MASK) * chunk.carCols * CAR_STRIDE;
-      for (let col = 0; col < chunk.carCols && col < this.carIdsList.length; col++) {
-        if (!Number.isNaN(chunk.data[frameBase + col * CAR_STRIDE])) {
-          const id = this.carIdsList[col];
-          if (!seen.has(id)) {
-            seen.add(id);
-            present.push(id);
-          }
-        }
+    for (let col = 0; col < this.carIdsList.length; col++) {
+      if (this.carLastSeq[col] >= this.headSeq && this.carFirstSeq[col] < this.tailSeq) {
+        present.push(this.carIdsList[col]);
       }
     }
     present.sort((a, b) => (a === "player" ? -1 : b === "player" ? 1 : a.localeCompare(b)));
