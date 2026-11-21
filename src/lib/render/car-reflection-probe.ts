@@ -15,9 +15,16 @@ import { isTouchDevice } from "@/lib/input/touch-input";
  */
 export type ReflectionQuality = "off" | "medium" | "high";
 
+export interface CarReflectionProbeOptions {
+  /** Override mobile/touch detection (`isTouchDevice()`) for deterministic tests. */
+  mobile?: boolean;
+}
+
 const CUBE_SIZE = 256;
-/** Distant geometry past 350 m is sub-pixel in a 256 px blurred reflection map; both sky shaders stay pinned to far */
+const CUBE_SIZE_MOBILE = 128;
+/** Distant geometry past 350 m (300 m mobile) is sub-pixel in a blurred reflection map; sky shaders stay pinned to far */
 const PROBE_FAR_M = 350;
+const PROBE_FAR_MOBILE_M = 300;
 /**
  * Share of the filmed world's brightness the cars take from the probe. three.js scales a material's whole
  * environment light by it, the diffuse ambient as well as the reflections, so anything under 1 lights the cars
@@ -30,6 +37,9 @@ const PROBE_INTENSITY = 1;
 const PROBE_HEIGHT_M = 1.1;
 
 export class CarReflectionProbe {
+  readonly isMobile: boolean;
+  readonly faceSize: number;
+  readonly farDistanceM: number;
   private readonly cubeTarget: THREE.WebGLCubeRenderTarget;
   private readonly cubeCamera: THREE.CubeCamera;
   private readonly pmrem: THREE.PMREMGenerator;
@@ -43,15 +53,20 @@ export class CarReflectionProbe {
   private primed = false;
   /** The visible sky's sun-disc switch: hidden while the probe films (as the sky's own environment bake does) */
   private sunDisc: { value: number } | null = null;
+  private readonly skyPosScratch = new THREE.Vector3();
 
   constructor(
     private readonly renderer: THREE.WebGLRenderer,
-    private readonly scene: THREE.Scene
+    private readonly scene: THREE.Scene,
+    options?: CarReflectionProbeOptions
   ) {
-    this.cubeTarget = new THREE.WebGLCubeRenderTarget(CUBE_SIZE, { type: THREE.HalfFloatType, generateMipmaps: false });
-    // Both classic Sky and PhysicalSky pin their vertices to the far plane (frustumCulled = false), so 350 m clips
-    // distant trackside clutter and far opponents while the full sky dome still films cleanly.
-    this.cubeCamera = new THREE.CubeCamera(0.3, PROBE_FAR_M, this.cubeTarget);
+    this.isMobile = options?.mobile ?? isTouchDevice();
+    this.faceSize = this.isMobile ? CUBE_SIZE_MOBILE : CUBE_SIZE;
+    this.farDistanceM = this.isMobile ? PROBE_FAR_MOBILE_M : PROBE_FAR_M;
+    this.cubeTarget = new THREE.WebGLCubeRenderTarget(this.faceSize, { type: THREE.HalfFloatType, generateMipmaps: false });
+    // Both classic Sky and PhysicalSky pin their vertices to the far plane (frustumCulled = false), so clipping
+    // at 300-350 m drops distant trackside clutter and far opponents while the full sky dome still films cleanly.
+    this.cubeCamera = new THREE.CubeCamera(0.3, this.farDistanceM, this.cubeTarget);
     this.pmrem = new THREE.PMREMGenerator(renderer);
   }
 
@@ -94,10 +109,8 @@ export class CarReflectionProbe {
   update(carPos: THREE.Vector3, hide: THREE.Object3D | null, envIntensity: number): void {
     if (this.quality === "off") return;
     this.frame++;
-    if (this.quality === "medium") {
-      const stride = isTouchDevice() ? 4 : 3;
-      if (this.primed && this.frame % stride !== 0) return;
-    }
+    const stride = this.isMobile ? (this.quality === "medium" ? 4 : 2) : this.quality === "medium" ? 3 : 1;
+    if (this.primed && this.frame % stride !== 0) return;
     this.cubeCamera.position.set(carPos.x, carPos.y + PROBE_HEIGHT_M, carPos.z);
     this.cubeCamera.updateMatrixWorld();
 
@@ -116,6 +129,20 @@ export class CarReflectionProbe {
     r.autoClear = true;
     const disc = this.sunDisc?.value ?? 0;
     if (this.sunDisc) this.sunDisc.value = 0;
+    // Classic Sky is a 4500 m box centered on the view camera; center it on the probe while filming so a distant
+    // camera (warmup or TV cam on a large circuit) cannot place the probe outside the box.
+    let skyObj: THREE.Object3D | null = null;
+    for (const child of this.scene.children) {
+      if ((child as { isSky?: boolean }).isSky && child.visible) {
+        skyObj = child;
+        break;
+      }
+    }
+    if (skyObj) {
+      this.skyPosScratch.copy(skyObj.position);
+      skyObj.position.copy(this.cubeCamera.position);
+      skyObj.updateMatrixWorld();
+    }
     let filtered = false;
     try {
       if (!this.primed) {
@@ -145,6 +172,10 @@ export class CarReflectionProbe {
         filtered = true;
       }
     } finally {
+      if (skyObj) {
+        skyObj.position.copy(this.skyPosScratch);
+        skyObj.updateMatrixWorld();
+      }
       r.setRenderTarget(prevTarget);
       r.shadowMap.autoUpdate = prevAutoUpdate;
       r.xr.enabled = prevXr;

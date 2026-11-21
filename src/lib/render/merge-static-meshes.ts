@@ -161,6 +161,7 @@ export function mergeStaticMeshesByMaterial(root: THREE.Object3D, options: Merge
       !(mesh as THREE.InstancedMesh).isInstancedMesh &&
       !Array.isArray(mesh.material) &&
       mesh.material &&
+      !(mesh.material as THREE.Material).transparent &&
       mesh.geometry &&
       mesh.visible &&
       Object.keys(mesh.geometry.morphAttributes).length === 0 &&
