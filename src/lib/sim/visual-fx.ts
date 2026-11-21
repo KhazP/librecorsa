@@ -183,6 +183,11 @@ export class SimVisualFxManager {
   public setGraphicsQuality(quality: 'low' | 'medium' | 'high'): void {
     this.graphicsQuality = quality;
   }
+
+  /** Active 3D car rig for an opponent peer (used by race replay cameras to ride onboard any car) */
+  public getOpponentRig(peerId: string): SimCarRig | null {
+    return this.opponentCars.get(peerId)?.rig ?? null;
+  }
   /**
    * Rigs built during loading (one racing car and one ghost per opponent model) so the shader warm-up covers them;
    * handed out to the first peers that need that model instead of being built on the first frame of a race

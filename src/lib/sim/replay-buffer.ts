@@ -1,26 +1,40 @@
 /**
- * Fixed-length ring of recent car poses, for instant replay. Frames are stored as copies and
- * played back interpolated at any session time inside the buffered window.
+ * Compact chunked typed-array ring of car poses for instant & full-race replays (up to 20+ min).
+ * Frames are allocated lazily in 512-frame chunks (zero GC pressure, ~64 B/car/frame) and played
+ * back smoothly interpolated at any session time inside the buffered window.
  */
+import * as THREE from "three";
 import type { ReplayCarState, ReplayFrame } from "./lap-types";
 import { nlerpQuat } from "./lap-recorder";
 
 export interface ReplayBufferOptions {
-  /** Seconds of history kept (default 120) */
+  /** Seconds of history kept (default 1200 = 20 minutes) */
   maxSeconds?: number;
-  /** Frames per second stored (default 30) */
+  /** Frames per second stored (default 20) */
   hz?: number;
 }
 
-interface StoredFrame {
-  t: number;
-  cars: ReplayCarState[];
+export interface ReplayLapMarker {
+  lap: number;
+  timeS: number;
 }
 
-const DEFAULT_MAX_SECONDS = 120;
-const DEFAULT_HZ = 30;
+const DEFAULT_MAX_SECONDS = 1200;
+const DEFAULT_HZ = 20;
 /** Tolerance so frames pushed exactly 1/hz apart are not dropped by float error (s) */
 const TIME_EPS_S = 1e-6;
+/** 512 frames per lazily-allocated chunk (~25.6 s at 20 Hz) */
+const CHUNK_SHIFT = 9;
+const CHUNK_SIZE = 1 << CHUNK_SHIFT;
+const CHUNK_MASK = CHUNK_SIZE - 1;
+/** Float32 fields per car: x, y, z, qx, qy, qz, qw, speedKmh, steer, throttle, brake, gear, rpm, s, lap, distM */
+const CAR_STRIDE = 16;
+
+interface ReplayChunk {
+  times: Float64Array;
+  carCols: number;
+  data: Float32Array;
+}
 
 const lerp = (a: number, b: number, f: number) => a + (b - a) * f;
 
@@ -64,17 +78,19 @@ function blendCar(a: ReplayCarState, b: ReplayCarState, f: number): ReplayCarSta
 export class ReplayBuffer {
   private readonly capacity: number;
   private readonly minIntervalS: number;
-  private readonly slots: (StoredFrame | undefined)[];
-  /** Index of the oldest stored frame */
-  private head = 0;
-  private count = 0;
+  private readonly chunks = new Map<number, ReplayChunk>();
+  private readonly carIdsList: string[] = [];
+  private readonly carIdToCol = new Map<string, number>();
+  /** Monotonic sequence index of the oldest stored frame */
+  private headSeq = 0;
+  /** Monotonic sequence index of the next frame to write (`count = tailSeq - headSeq`) */
+  private tailSeq = 0;
 
   constructor(opts: ReplayBufferOptions = {}) {
     const maxSeconds = opts.maxSeconds !== undefined && opts.maxSeconds > 0 ? opts.maxSeconds : DEFAULT_MAX_SECONDS;
     const hz = opts.hz !== undefined && opts.hz > 0 ? opts.hz : DEFAULT_HZ;
     this.capacity = Math.ceil(maxSeconds * hz) + 1;
     this.minIntervalS = 1 / hz;
-    this.slots = new Array<StoredFrame | undefined>(this.capacity);
   }
 
   /** Records a frame (ignored if less than 1/hz after the previous one, or if tS goes backwards — then clear() first) */
@@ -85,20 +101,85 @@ export class ReplayBuffer {
       if (tS < last) return;
       if (tS - last < this.minIntervalS - TIME_EPS_S) return;
     }
-    const idx = (this.head + this.count) % this.capacity;
-    this.slots[idx] = { t: tS, cars: cars.map((c) => ({ ...c })) };
-    if (this.count < this.capacity) {
-      this.count++;
+
+    // Register any newly seen car IDs
+    for (let i = 0; i < cars.length; i++) {
+      const id = cars[i].id;
+      if (!this.carIdToCol.has(id)) {
+        this.carIdToCol.set(id, this.carIdsList.length);
+        this.carIdsList.push(id);
+      }
+    }
+
+    const seq = this.tailSeq;
+    const key = seq >>> CHUNK_SHIFT;
+    const off = seq & CHUNK_MASK;
+    const neededCols = Math.max(1, this.carIdsList.length);
+    let chunk = this.chunks.get(key);
+    if (!chunk) {
+      const data = new Float32Array(CHUNK_SIZE * neededCols * CAR_STRIDE);
+      data.fill(Number.NaN);
+      chunk = { times: new Float64Array(CHUNK_SIZE), carCols: neededCols, data };
+      this.chunks.set(key, chunk);
+    } else if (chunk.carCols < neededCols) {
+      // Grow just the active tail chunk when a new car joins mid-chunk
+      const oldCols = chunk.carCols;
+      const nextData = new Float32Array(CHUNK_SIZE * neededCols * CAR_STRIDE);
+      nextData.fill(Number.NaN);
+      const oldStride = oldCols * CAR_STRIDE;
+      const newStride = neededCols * CAR_STRIDE;
+      for (let f = 0; f < off; f++) {
+        nextData.set(chunk.data.subarray(f * oldStride, f * oldStride + oldStride), f * newStride);
+      }
+      chunk.data = nextData;
+      chunk.carCols = neededCols;
     } else {
-      // Full: the slot just written was the oldest frame, so the next one becomes the oldest
-      this.head = (this.head + 1) % this.capacity;
+      // Clear this frame slot in case a previous truncateAfter left stale car entries in it
+      const frameStride = chunk.carCols * CAR_STRIDE;
+      const start = off * frameStride;
+      chunk.data.fill(Number.NaN, start, start + frameStride);
+    }
+
+    chunk.times[off] = tS;
+    const frameBase = off * chunk.carCols * CAR_STRIDE;
+    const data = chunk.data;
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i];
+      const col = this.carIdToCol.get(c.id)!;
+      const o = frameBase + col * CAR_STRIDE;
+      data[o] = c.x;
+      data[o + 1] = c.y;
+      data[o + 2] = c.z;
+      data[o + 3] = c.qx;
+      data[o + 4] = c.qy;
+      data[o + 5] = c.qz;
+      data[o + 6] = c.qw;
+      data[o + 7] = c.speedKmh;
+      data[o + 8] = c.steer;
+      data[o + 9] = c.throttle;
+      data[o + 10] = c.brake;
+      data[o + 11] = c.gear;
+      data[o + 12] = c.rpm;
+      data[o + 13] = c.s ?? Number.NaN;
+      data[o + 14] = c.lap ?? Number.NaN;
+      data[o + 15] = c.distM ?? Number.NaN;
+    }
+
+    this.tailSeq++;
+    if (this.count > this.capacity) {
+      const oldHeadKey = this.headSeq >>> CHUNK_SHIFT;
+      this.headSeq++;
+      const newHeadKey = this.headSeq >>> CHUNK_SHIFT;
+      if (newHeadKey !== oldHeadKey) this.chunks.delete(oldHeadKey);
     }
   }
 
   clear(): void {
-    this.slots.fill(undefined);
-    this.head = 0;
-    this.count = 0;
+    this.chunks.clear();
+    this.carIdsList.length = 0;
+    this.carIdToCol.clear();
+    this.headSeq = 0;
+    this.tailSeq = 0;
   }
 
   /**
@@ -107,21 +188,33 @@ export class ReplayBuffer {
    */
   truncateAfter(tS: number): void {
     if (Number.isNaN(tS)) return;
-    while (this.count > 0 && this.frame(this.count - 1).t > tS + TIME_EPS_S) {
-      this.slots[(this.head + this.count - 1) % this.capacity] = undefined;
-      this.count--;
+    while (this.count > 0 && this.timeAtIndex(this.count - 1) > tS + TIME_EPS_S) {
+      this.tailSeq--;
     }
-    if (this.count === 0) this.head = 0;
+    if (this.count === 0) {
+      this.chunks.clear();
+      this.headSeq = 0;
+      this.tailSeq = 0;
+    } else {
+      const maxKey = (this.tailSeq - 1) >>> CHUNK_SHIFT;
+      for (const k of this.chunks.keys()) {
+        if (k > maxKey) this.chunks.delete(k);
+      }
+    }
+  }
+
+  private get count(): number {
+    return this.tailSeq - this.headSeq;
   }
 
   /** Session time of the oldest frame (NaN when empty) */
   get startS(): number {
-    return this.count > 0 ? this.frame(0).t : NaN;
+    return this.count > 0 ? this.timeAtIndex(0) : Number.NaN;
   }
 
   /** Session time of the newest frame (NaN when empty) */
   get endS(): number {
-    return this.count > 0 ? this.frame(this.count - 1).t : NaN;
+    return this.count > 0 ? this.timeAtIndex(this.count - 1) : Number.NaN;
   }
 
   get durationS(): number {
@@ -132,40 +225,185 @@ export class ReplayBuffer {
     return this.count;
   }
 
-  /** Interpolated frame at tS clamped to [startS, endS]; null when empty. Cars present in both neighbouring frames are interpolated (nlerp quaternions as above, linear scalars, gear from the earlier frame); a car present in only one of them is taken from that frame as is. */
+  /** Ordered list of car IDs recorded in the buffer ("player" first when present) */
+  carIds(): readonly string[] {
+    if (this.count === 0) return [];
+    const present: string[] = [];
+    // Check newest, middle, and oldest frames so we only report cars actually in the retained window
+    const sampleIndices = [this.count - 1, this.count >> 1, 0];
+    const seen = new Set<string>();
+    for (const idx of sampleIndices) {
+      const seq = this.headSeq + idx;
+      const chunk = this.chunks.get(seq >>> CHUNK_SHIFT);
+      if (!chunk) continue;
+      const frameBase = (seq & CHUNK_MASK) * chunk.carCols * CAR_STRIDE;
+      for (let col = 0; col < chunk.carCols && col < this.carIdsList.length; col++) {
+        if (!Number.isNaN(chunk.data[frameBase + col * CAR_STRIDE])) {
+          const id = this.carIdsList[col];
+          if (!seen.has(id)) {
+            seen.add(id);
+            present.push(id);
+          }
+        }
+      }
+    }
+    present.sort((a, b) => (a === "player" ? -1 : b === "player" ? 1 : a.localeCompare(b)));
+    return present;
+  }
+
+  /** Lap transitions for `"player"` across the buffered window, for timeline markers */
+  lapMarkers(): ReplayLapMarker[] {
+    const col = this.carIdToCol.get("player");
+    if (col === undefined || this.count === 0) return [];
+    const out: ReplayLapMarker[] = [];
+    let lastLap = -1;
+    // Scan in ~0.5 s steps to stay O(duration) and instant even for 20-minute replays
+    const step = Math.max(1, Math.round(0.5 / this.minIntervalS));
+    for (let i = 0; i < this.count; i += step) {
+      const seq = this.headSeq + i;
+      const chunk = this.chunks.get(seq >>> CHUNK_SHIFT);
+      if (!chunk || col >= chunk.carCols) continue;
+      const off = seq & CHUNK_MASK;
+      const lap = chunk.data[off * chunk.carCols * CAR_STRIDE + col * CAR_STRIDE + 14];
+      if (!Number.isNaN(lap) && lap > 0 && lap !== lastLap) {
+        if (lastLap !== -1) {
+          // Refine exact transition frame backwards inside the last step
+          let exact = i;
+          while (exact > Math.max(0, i - step)) {
+            const pSeq = this.headSeq + exact - 1;
+            const pChunk = this.chunks.get(pSeq >>> CHUNK_SHIFT);
+            if (!pChunk || col >= pChunk.carCols) break;
+            const pLap = pChunk.data[(pSeq & CHUNK_MASK) * pChunk.carCols * CAR_STRIDE + col * CAR_STRIDE + 14];
+            if (pLap !== lap) break;
+            exact--;
+          }
+          out.push({ lap: Math.round(lap), timeS: this.timeAtIndex(exact) });
+        } else {
+          out.push({ lap: Math.round(lap), timeS: chunk.times[off] });
+        }
+        lastLap = lap;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Interpolated frame at tS clamped to [startS, endS]; null when empty.
+   * Cars present in both neighbouring frames are interpolated (nlerp quaternions, linear scalars,
+   * gear from the earlier frame); a car present in only one of them is taken from that frame as is.
+   */
   frameAt(tS: number): ReplayFrame | null {
     if (this.count === 0 || Number.isNaN(tS)) return null;
     const tc = Math.min(Math.max(tS, this.startS), this.endS);
 
-    // Largest stored index whose time is <= tc
-    let lo = 0;
-    let hi = this.count - 1;
-    while (hi - lo > 1) {
-      const mid = (lo + hi) >> 1;
-      if (this.frame(mid).t <= tc) lo = mid;
-      else hi = mid;
-    }
-    const a = this.frame(lo);
-    const b = this.frame(hi);
-    const span = b.t - a.t;
-    const f = span > 0 ? Math.min(Math.max((tc - a.t) / span, 0), 1) : 0;
+    const { lo, hi } = this.bracket(tc);
+    const tA = this.timeAtIndex(lo);
+    const tB = this.timeAtIndex(hi);
+    const span = tB - tA;
+    const f = span > 0 ? Math.min(Math.max((tc - tA) / span, 0), 1) : 0;
 
+    const seqA = this.headSeq + lo;
+    const seqB = this.headSeq + hi;
+    const chunkA = this.chunks.get(seqA >>> CHUNK_SHIFT)!;
+    const chunkB = this.chunks.get(seqB >>> CHUNK_SHIFT)!;
+    const offA = seqA & CHUNK_MASK;
+    const offB = seqB & CHUNK_MASK;
+    const maxCols = Math.min(this.carIdsList.length, Math.max(chunkA.carCols, chunkB.carCols));
     const cars: ReplayCarState[] = [];
-    for (const carA of a.cars) {
-      const carB = b.cars.find((c) => c.id === carA.id);
-      cars.push(carB ? blendCar(carA, carB, f) : { ...carA });
-    }
-    for (const carB of b.cars) {
-      if (!a.cars.some((c) => c.id === carB.id)) cars.push({ ...carB });
+
+    for (let col = 0; col < maxCols; col++) {
+      const carA = col < chunkA.carCols ? this.readCar(chunkA, offA, col) : null;
+      const carB = col < chunkB.carCols ? this.readCar(chunkB, offB, col) : null;
+      if (f <= 0) {
+        if (carA) cars.push(carA);
+      } else if (f >= 1) {
+        if (carB) cars.push(carB);
+      } else if (carA && carB) {
+        cars.push(blendCar(carA, carB, f));
+      } else if (carA) {
+        cars.push(carA);
+      } else if (carB) {
+        cars.push(carB);
+      }
     }
     return { t: tc, cars };
   }
 
-  private frame(i: number): StoredFrame {
-    const f = this.slots[(this.head + i) % this.capacity];
-    // Indices passed here are always below count, so the slot is filled
-    if (!f) throw new Error("ReplayBuffer: empty slot inside the stored range");
-    return f;
+  /** Finite-difference world velocity (m/s) of `carId` around `tS`, for chase & broadcast cameras during replay */
+  velocityAt(tS: number, carId: string, out = new THREE.Vector3()): THREE.Vector3 {
+    out.set(0, 0, 0);
+    const col = this.carIdToCol.get(carId);
+    if (col === undefined || this.count < 2 || Number.isNaN(tS)) return out;
+    const tc = Math.min(Math.max(tS, this.startS), this.endS);
+    const { lo, hi } = this.bracket(tc);
+    const i0 = lo === hi && lo > 0 ? lo - 1 : lo;
+    const i1 = lo === hi ? hi : hi;
+    if (i0 === i1) return out;
+    const dt = this.timeAtIndex(i1) - this.timeAtIndex(i0);
+    if (!(dt > 1e-5)) return out;
+    const seq0 = this.headSeq + i0;
+    const seq1 = this.headSeq + i1;
+    const c0 = this.chunks.get(seq0 >>> CHUNK_SHIFT);
+    const c1 = this.chunks.get(seq1 >>> CHUNK_SHIFT);
+    if (!c0 || !c1 || col >= c0.carCols || col >= c1.carCols) return out;
+    const o0 = (seq0 & CHUNK_MASK) * c0.carCols * CAR_STRIDE + col * CAR_STRIDE;
+    const o1 = (seq1 & CHUNK_MASK) * c1.carCols * CAR_STRIDE + col * CAR_STRIDE;
+    const x0 = c0.data[o0];
+    const x1 = c1.data[o1];
+    if (Number.isNaN(x0) || Number.isNaN(x1)) return out;
+    out.set(
+      (x1 - x0) / dt,
+      (c1.data[o1 + 1] - c0.data[o0 + 1]) / dt,
+      (c1.data[o1 + 2] - c0.data[o0 + 2]) / dt
+    );
+    return out;
+  }
+
+  private bracket(tc: number): { lo: number; hi: number } {
+    let lo = 0;
+    let hi = this.count - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (this.timeAtIndex(mid) <= tc) lo = mid;
+      else hi = mid;
+    }
+    return { lo, hi };
+  }
+
+  private timeAtIndex(i: number): number {
+    const seq = this.headSeq + i;
+    const chunk = this.chunks.get(seq >>> CHUNK_SHIFT);
+    if (!chunk) throw new Error("ReplayBuffer: empty chunk inside stored range");
+    return chunk.times[seq & CHUNK_MASK];
+  }
+
+  private readCar(chunk: ReplayChunk, off: number, col: number): ReplayCarState | null {
+    const o = off * chunk.carCols * CAR_STRIDE + col * CAR_STRIDE;
+    const d = chunk.data;
+    const x = d[o];
+    if (Number.isNaN(x)) return null;
+    const s = d[o + 13];
+    const lap = d[o + 14];
+    const distM = d[o + 15];
+    return {
+      id: this.carIdsList[col],
+      x,
+      y: d[o + 1],
+      z: d[o + 2],
+      qx: d[o + 3],
+      qy: d[o + 4],
+      qz: d[o + 5],
+      qw: d[o + 6],
+      speedKmh: d[o + 7],
+      steer: d[o + 8],
+      throttle: d[o + 9],
+      brake: d[o + 10],
+      gear: Math.round(d[o + 11]),
+      rpm: d[o + 12],
+      ...(Number.isNaN(s) ? {} : { s }),
+      ...(Number.isNaN(lap) ? {} : { lap: Math.round(lap) }),
+      ...(Number.isNaN(distM) ? {} : { distM }),
+    };
   }
 }
 

@@ -130,6 +130,7 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   onToggleAiAutopilot: () => void;
   onToggleMouseSteer?: () => void;
   onResetCar: (flyingStart: boolean) => void;
+  onOpenReplay?: () => void;
   onSelectTurn: (turnNumber: number) => void;
   onTogglePause: () => void;
   /** Opens the controls setup (keyboard / controller / wheel) */
@@ -198,7 +199,7 @@ const MadeBy: React.FC<{ trackSource: ReturnType<typeof trackModelSource>; carId
  * from anywhere.
  */
 export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
-  const { telemetry, onTogglePause, onResetCar, aiOpponents, onOpenControls, onExitToTitle, leaderboardPanel, conditionsPanel, displayPanel } = props;
+  const { telemetry, onTogglePause, onResetCar, onOpenReplay, aiOpponents, onOpenControls, onExitToTitle, leaderboardPanel, conditionsPanel, displayPanel } = props;
   const { nowPlaying, onSkipTrack } = props;
   const phoneScreen = usePhoneLayout();
   // Online: the host restarts the race for everyone and nobody has a flying lap; a guest in a lobby restarts nothing
@@ -274,6 +275,19 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
             },
           ]
         : []),
+      ...(!mpRace && onOpenReplay
+        ? [
+            {
+              id: "replay",
+              label: "Watch replay",
+              icon: "replay" as const,
+              run: () => {
+                onTogglePause();
+                onOpenReplay();
+              },
+            },
+          ]
+        : []),
       ...(nowPlaying && onSkipTrack
         ? [{ id: "music", label: "Skip track", detail: `${nowPlaying.title}, ${nowPlaying.composer}`, icon: "skip" as const, run: onSkipTrack }]
         : []),
@@ -282,7 +296,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         : []),
       ...(onExitToTitle ? [{ id: "title", label: "Main menu", icon: "leave" as const, run: onExitToTitle }] : []),
     ],
-    [aiOpponents, mpRace, canRestart, canFly, restartAndResume, nowPlaying, onSkipTrack, onOpenControls, onExitToTitle]
+    [aiOpponents, mpRace, canRestart, canFly, restartAndResume, onOpenReplay, onTogglePause, nowPlaying, onSkipTrack, onOpenControls, onExitToTitle]
   );
 
   // A tab that went away while open (Corners when an online race starts) shows the session tab instead

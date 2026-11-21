@@ -46,7 +46,7 @@ import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from "@/lib/sim/rev-range";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/lib/sim/car-setup";
-import { CameraRig } from "@/lib/render/camera-rig";
+import { CameraRig, type CameraRigCar } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { LEGACY_TRACK_LIMITS, TrackLimitsMonitor, type TrackLimitsRules } from "@/lib/sim/track-limits";
 import { stretchTimeS } from "@/lib/sim/course-limits";
@@ -67,7 +67,7 @@ import { CoolDown } from "@/lib/sim/cool-down";
 import { PodiumDirector } from "@/lib/render/podium-shot";
 import { NameplateBadgeCache, OverheadNameplateProjector, type OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
-import { canFlashback, isInOnlineRoom, poseFromReplayCar, ReplayBuffer } from "@/lib/sim/replay-buffer";
+import { canFlashback, isInOnlineRoom, poseFromReplayCar, ReplayBuffer, type ReplayLapMarker } from "@/lib/sim/replay-buffer";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
 import { drivingInputOf, lapConditionsNow, type LapInput, type LapRecording, type LapSummaryData, type ReplayCarState } from "@/lib/sim/lap-types";
 import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
@@ -319,6 +319,8 @@ export interface DriveSnapshot {
   nowPlaying: NowPlaying | null;
   /** Transient camera override (e.g. "free" fly camera) that does not overwrite the player's saved default camera */
   cameraOverride: CameraMode | null;
+  /** True once at least 1 s of driving has been recorded in the replay buffer */
+  replayAvailable: boolean;
 }
 
 /** A lost WebGL context: whether the page was hidden at the time, and where the player was */
@@ -332,7 +334,7 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
   const car = new F1Physics2026(track);
   return {
     telemetry: { ...car.telemetry },
-    replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1, canFlashback: false },
+    replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1, canFlashback: false, focusedCarId: "player", cars: [], lapMarkers: [] },
     steerLockDeg: undefined,
     carCockpitFovDeg: FALLBACK_COCKPIT_FOV_DEG,
     virtualMirror: false,
@@ -361,6 +363,7 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
     gpuLost: null,
     nowPlaying: null,
     cameraOverride: null,
+    replayAvailable: false,
   };
 }
 
@@ -394,13 +397,26 @@ export interface DriveKeys {
   gearUpHeld: boolean;
 }
 
+/** A car the replay camera can focus on */
+export interface ReplayCarOption {
+  id: string;
+  label: string;
+  color: string;
+  isPlayer: boolean;
+}
+
 /** The instant replay: the recording, and where it is shown from while open */
 export interface ReplayState {
   buffer: ReplayBuffer;
   active: boolean;
   playing: boolean;
   timeS: number;
+  prevTimeS: number;
   speed: number;
+  focusedCarId: string;
+  wheelRotRad: number;
+  cars: ReplayCarOption[];
+  lapMarkers: ReplayLapMarker[];
 }
 
 /** The replay bar's view of the replay */
@@ -413,6 +429,12 @@ export interface ReplayUi {
   speed: number;
   /** True only in solo Practice and active regular AI races (never online rooms, Weekly Challenge, or Qualifying) */
   canFlashback: boolean;
+  /** Which car the replay camera is currently following ("player" or an AI/peer ID) */
+  focusedCarId: string;
+  /** Cars recorded in this replay, ordered with player first */
+  cars: readonly ReplayCarOption[];
+  /** Lap transition timestamps for timeline markers */
+  lapMarkers: readonly ReplayLapMarker[];
 }
 
 /**
@@ -540,10 +562,15 @@ export class DriveSession {
   readonly setTimeTrial: (rules: TimeTrialRules | null) => void;
   /** Outside a race: the run starts over on a flying lap, under the time trial's conditions when one is driven */
   readonly restartFlyingLap: () => void;
-  /** The replay bar's play / pause (from the start again once at the end), seek and speed */
+  /** The replay bar's play / pause (from the start again once at the end), seek, speed, frame step, and car focus */
   readonly replayTogglePlay: () => void;
   readonly replaySeek: (timeS: number) => void;
   readonly replaySpeed: (speed: number) => void;
+  readonly replayStepFrame: (dir: 1 | -1) => void;
+  readonly replayFocusCar: (carId: string) => void;
+  readonly replayCycleCar: (dir: 1 | -1) => void;
+  /** Opens the replay (optionally from the start of the race, playing immediately) */
+  readonly openReplay: (opts?: { fromStart?: boolean; play?: boolean }) => boolean;
   /** Swaps the player's car in the running scene (the run starts over with it) */
   readonly setCar: (car: CarId) => void;
   /** Applies the player's graphics to the running renderer, with what the automatic quality has lowered on top */
@@ -794,8 +821,20 @@ export class DriveSession {
      * anything holding lap- or run-scoped state (race control's track limits) starts over with it.
      */
     let runId = 0;
-    /** The instant replay: the recording, and where it is shown from while open */
-    const replay: ReplayState = { buffer: new ReplayBuffer({ maxSeconds: 90, hz: 30 }), active: false, playing: true, timeS: 0, speed: 1 };
+    /** The instant / full-race replay: compact typed-array buffer up to 20 min @ 20 Hz */
+    const REPLAY_HZ = 20;
+    const replay: ReplayState = {
+      buffer: new ReplayBuffer({ maxSeconds: 1200, hz: REPLAY_HZ }),
+      active: false,
+      playing: true,
+      timeS: 0,
+      prevTimeS: 0,
+      speed: 1,
+      focusedCarId: "player",
+      wheelRotRad: 0,
+      cars: [],
+      lapMarkers: [],
+    };
     /** The time trial being driven, and the tyre the player had on before it */
     let timeTrial: TimeTrialRules | null = null;
     let ownCompound: TireCompound | null = null;
@@ -1044,7 +1083,7 @@ export class DriveSession {
     this.telemetryStructKey = telemetryStructKeyOf(initialTelemetry);
     this.snapshot = {
       telemetry: initialTelemetry,
-      replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1, canFlashback: false },
+      replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1, canFlashback: false, focusedCarId: "player", cars: [], lapMarkers: [] },
       steerLockDeg: undefined,
       carCockpitFovDeg: FALLBACK_COCKPIT_FOV_DEG,
       virtualMirror: false,
@@ -1064,6 +1103,7 @@ export class DriveSession {
       gpuLost: null,
       nowPlaying: sharedMusic().current,
       cameraOverride: null,
+      replayAvailable: false,
     };
 
     /**
@@ -2111,30 +2151,86 @@ export class DriveSession {
     let frameSimMs = 0;
     let lastHudSyncMs = 0;
     let lastTelemetryOutMs = 0;
-    // Instant replay: session clock while driving, and the live pose saved while a replay plays
+    // Instant / full-race replay: session clock while driving, live pose saved while replaying, and camera target adapter
     let replayClockS = 0;
     let lastReplayPushS = -1;
     const replaySaved = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
-    const replayPeerState = (car: ReplayCarState): InterpolatedPeerState => ({
-      peerId: car.id,
-      driverCode: replayNames.get(car.id)?.code ?? "",
-      teamColorHex: replayNames.get(car.id)?.color ?? GHOST_CAR_COLOR,
-      vehicle: replayNames.get(car.id)?.vehicle,
-      position: new THREE.Vector3(car.x, car.y, car.z),
-      quaternion: new THREE.Quaternion(car.qx, car.qy, car.qz, car.qw),
-      linearVelocity: new THREE.Vector3(),
-      steerAngle: steerAngleOf(car.steer),
-      wheelRPMs: [0, 0, 0, 0].map(() => wheelRpmAtSpeed(car.speedKmh)) as [number, number, number, number],
-      throttle: car.throttle,
-      brake: car.brake,
-      trackS: 0,
-      speedKmh: car.speedKmh,
-      isAiPeer: true,
-      // The frames hold the body's pose: the rig rests the wheels on the road under each corner
-      wheels: { ground: physics.groundQuery ?? null },
-    });
+    const replayPlayerVel = new THREE.Vector3();
+    const replayFocusVel = new THREE.Vector3();
+    let replayPlayerS = 0;
+    let replayPlayerTelemetry: CarTelemetry = { ...physics.telemetry };
+    let replayFocusTelemetry: CarTelemetry = { ...physics.telemetry };
+    let replayFocusCarFrame: ReplayCarState | null = null;
+    const replayCamCar: { -readonly [K in keyof CameraRigCar]: CameraRigCar[K] } = {
+      telemetry: replayFocusTelemetry,
+      worldPosition: new THREE.Vector3(),
+      worldQuaternion: new THREE.Quaternion(),
+      wheelbaseM: physics.wheelbaseM,
+      cgHeightM: physics.cgHeightM,
+      rideHeightOffsetM: 0,
+      pitchRad: 0,
+      rollRad: 0,
+      yawRateRadS: 0,
+      vxMs: 0,
+      vyMs: 0,
+      sMeters: 0,
+      lateralOffsetM: 0,
+    };
+    const replayPeerState = (car: ReplayCarState, timeS: number, wheelDir: number): InterpolatedPeerState => {
+      const vel = replay.buffer.velocityAt(timeS, car.id, new THREE.Vector3());
+      const rpm = wheelDir === 0 ? 0 : wheelDir * wheelRpmAtSpeed(car.speedKmh);
+      return {
+        peerId: car.id,
+        driverCode: replayNames.get(car.id)?.code ?? "",
+        teamColorHex: replayNames.get(car.id)?.color ?? GHOST_CAR_COLOR,
+        vehicle: replayNames.get(car.id)?.vehicle,
+        position: new THREE.Vector3(car.x, car.y, car.z),
+        quaternion: new THREE.Quaternion(car.qx, car.qy, car.qz, car.qw),
+        linearVelocity: vel,
+        steerAngle: steerAngleOf(car.steer),
+        wheelRPMs: [rpm, rpm, rpm, rpm],
+        throttle: car.throttle,
+        brake: car.brake,
+        trackS: car.s ?? 0,
+        speedKmh: car.speedKmh,
+        gear: car.gear,
+        rpm: car.rpm,
+        isAiPeer: true,
+        // The frames hold the body's pose: the rig rests the wheels on the road under each corner
+        wheels: { ground: physics.groundQuery ?? null },
+      };
+    };
     /** Look of every car seen in the replay window (the frames only hold poses) */
     const replayNames = new Map<string, { code: string; color: string; vehicle?: VehicleModelId }>();
+    const buildReplayCarOptions = (): ReplayCarOption[] => {
+      const playerCode = (settings.profile.code || "YOU").slice(0, 3).toUpperCase();
+      const playerColor = settings.profile.color || "#CCFF00";
+      return replay.buffer.carIds().map((id) => {
+        if (id === "player") return { id, label: playerCode, color: playerColor, isPlayer: true };
+        const info = replayNames.get(id);
+        return {
+          id,
+          label: info?.code || id.slice(0, 3).toUpperCase(),
+          color: info?.color ?? GHOST_CAR_COLOR,
+          isPlayer: false,
+        };
+      });
+    };
+    const publishReplayUi = () => {
+      const rp = replay;
+      setReplayUi({
+        active: rp.active,
+        timeS: rp.timeS,
+        startS: rp.buffer.startS,
+        endS: rp.buffer.endS,
+        playing: rp.playing,
+        speed: rp.speed,
+        canFlashback: rp.active && canFlashbackNow(),
+        focusedCarId: rp.focusedCarId,
+        cars: rp.cars,
+        lapMarkers: rp.lapMarkers,
+      });
+    };
     const canFlashbackNow = (): boolean => {
       const race = raceNow();
       return canFlashback({
@@ -2150,11 +2246,44 @@ export class DriveSession {
       const rp = replay;
       if (!rp.active) return;
       rp.active = false;
+      rp.focusedCarId = "player";
+      if (cameraOverride === "free") {
+        cameraOverride = null;
+        freeCamKeys.clear();
+        freeCamDrag = null;
+        this.publish({ cameraOverride: null });
+      }
       // The replay only moved the drawn car (the physics never left the live pose): put the drawing back
       physics.worldPosition.copy(replaySaved.pos);
       physics.worldQuaternion.copy(replaySaved.quat);
       cameraRig.reset();
-      setReplayUi((u) => ({ ...u, active: false, canFlashback: false }));
+      publishReplayUi();
+    };
+    const openReplay = (opts: { fromStart?: boolean; play?: boolean } = {}): boolean => {
+      if (disposed) return false;
+      const rp = replay;
+      // Not in a multiplayer race (the field keeps racing) and only with something recorded
+      if (raceNow().kind === "mp" || rp.buffer.durationS < 1 || appPhaseNow !== "driving") return false;
+      if (!rp.active) {
+        replaySaved.pos.copy(physics.worldPosition);
+        replaySaved.quat.copy(physics.worldQuaternion);
+      }
+      rp.active = true;
+      rp.playing = opts.play ?? false;
+      rp.speed = 1;
+      rp.timeS = opts.fromStart
+        ? rp.buffer.startS
+        : Math.max(rp.buffer.startS, rp.buffer.endS - REPLAY_OPEN_BACK_S);
+      rp.prevTimeS = rp.timeS;
+      rp.wheelRotRad = physics.wheelRotationRad;
+      rp.focusedCarId = "player";
+      rp.cars = buildReplayCarOptions();
+      rp.lapMarkers = rp.buffer.lapMarkers();
+      replayPlayerTelemetry = { ...physics.telemetry };
+      replayFocusTelemetry = { ...physics.telemetry };
+      cameraRig.reset();
+      publishReplayUi();
+      return true;
     };
     const flashbackReplay = (): boolean => {
       const rp = replay;
@@ -2204,42 +2333,25 @@ export class DriveSession {
       replayClockS = rp.timeS;
       lastReplayPushS = rp.timeS;
       rp.active = false;
+      rp.focusedCarId = "player";
       cameraRig.reset();
       physics.aiAutopilot = false;
       kbInput.throttle = 0;
       kbInput.brake = 0;
       kbInput.clutch = 0;
       kbPedalAssist.reset();
-      setReplayUi((u) => ({ ...u, active: false, canFlashback: false }));
+      publishReplayUi();
       return true;
     };
     this.exitReplay = () => {
       if (!disposed) exitReplay();
     };
+    this.openReplay = (opts) => openReplay(opts);
     this.flashbackReplay = () => (disposed ? false : flashbackReplay());
     this.toggleReplay = () => {
       if (disposed) return;
-      const rp = replay;
-      if (rp.active) return exitReplay();
-      // Not in a multiplayer race (the field keeps racing) and only with something recorded
-      if (raceNow().kind === "mp" || rp.buffer.durationS < 1 || appPhaseNow !== "driving") return;
-      replaySaved.pos.copy(physics.worldPosition);
-      replaySaved.quat.copy(physics.worldQuaternion);
-      // Opens paused a moment back, showing the car there: scrub back to the point to flash back to, or play
-      rp.active = true;
-      rp.playing = false;
-      rp.speed = 1;
-      rp.timeS = Math.max(rp.buffer.startS, rp.buffer.endS - REPLAY_OPEN_BACK_S);
-      cameraRig.reset();
-      setReplayUi({
-        active: true,
-        timeS: rp.timeS,
-        startS: rp.buffer.startS,
-        endS: rp.buffer.endS,
-        playing: false,
-        speed: 1,
-        canFlashback: canFlashbackNow(),
-      });
+      if (replay.active) return exitReplay();
+      openReplay({ fromStart: false, play: false });
     };
 
     this.resetRun = (reason) => {
@@ -2247,6 +2359,8 @@ export class DriveSession {
       runId++;
       exitReplay();
       replay.buffer.clear();
+      replayNames.clear();
+      if (this.snapshot.replayAvailable) this.publish({ replayAvailable: false });
       onRunReset(reason);
       jumpWatch.reset();
       startClutch.active = false;
@@ -2271,17 +2385,48 @@ export class DriveSession {
       kbPedalAssist.reset();
     };
     this.replayTogglePlay = () => {
-      if (!replay.playing && replay.timeS >= replay.buffer.endS - 0.05) replay.timeS = replay.buffer.startS;
+      if (!replay.playing) {
+        if (replay.speed > 0 && replay.timeS >= replay.buffer.endS - 0.05) {
+          replay.timeS = replay.buffer.startS;
+          replay.prevTimeS = replay.timeS;
+        } else if (replay.speed < 0 && replay.timeS <= replay.buffer.startS + 0.05) {
+          replay.timeS = replay.buffer.endS;
+          replay.prevTimeS = replay.timeS;
+        }
+      }
       replay.playing = !replay.playing;
-      setReplayUi((u) => ({ ...u, playing: replay.playing, timeS: replay.timeS }));
+      publishReplayUi();
     };
     this.replaySeek = (tS) => {
-      replay.timeS = tS;
-      setReplayUi((u) => ({ ...u, timeS: tS }));
+      replay.timeS = THREE.MathUtils.clamp(tS, replay.buffer.startS, replay.buffer.endS);
+      publishReplayUi();
     };
     this.replaySpeed = (speed) => {
       replay.speed = speed;
-      setReplayUi((u) => ({ ...u, speed }));
+      // If user clicked rewind at the end (or play-speed at the start) while paused, start playing right away
+      if (!replay.playing && ((speed < 0 && replay.timeS > replay.buffer.startS + 0.05) || (speed > 0 && replay.timeS < replay.buffer.endS - 0.05))) {
+        replay.playing = true;
+      }
+      publishReplayUi();
+    };
+    this.replayStepFrame = (dir) => {
+      if (!replay.active) return;
+      replay.playing = false;
+      replay.timeS = THREE.MathUtils.clamp(replay.timeS + dir / REPLAY_HZ, replay.buffer.startS, replay.buffer.endS);
+      publishReplayUi();
+    };
+    this.replayFocusCar = (carId) => {
+      if (!replay.active || replay.focusedCarId === carId) return;
+      if (!replay.cars.some((c) => c.id === carId)) return;
+      replay.focusedCarId = carId;
+      cameraRig.reset();
+      publishReplayUi();
+    };
+    this.replayCycleCar = (dir) => {
+      if (!replay.active || replay.cars.length <= 1) return;
+      const idx = Math.max(0, replay.cars.findIndex((c) => c.id === replay.focusedCarId));
+      const next = replay.cars[(idx + dir + replay.cars.length) % replay.cars.length];
+      if (next) this.replayFocusCar(next.id);
     };
 
     // Horizon-Stabilized Sim Camera State
@@ -3376,10 +3521,11 @@ export class DriveSession {
         }
       }
 
-      // Instant replay: record the field while driving, show the recorded poses while replaying
-      if (driving) {
+      // Instant / full-race replay: record the field while driving (never during post-race cool-down or podium),
+      // and reconstruct full vehicle telemetry, wheel spin, velocities, and focused-car targeting during playback
+      if (driving && !coolDown.active && !podium.playing) {
         replayClockS += dtSeconds;
-        if (replayClockS - lastReplayPushS >= 1 / 30) {
+        if (replayClockS - lastReplayPushS >= 1 / REPLAY_HZ) {
           lastReplayPushS = replayClockS;
           const standings = aiField ? physics.telemetry.race?.standings : undefined;
           const playerDistM = standings?.find((st) => st.isPlayer)?.raceDistM;
@@ -3421,29 +3567,51 @@ export class DriveSession {
               steer: steerNormOf(p.steerAngle),
               throttle: p.throttle,
               brake: p.brake,
-              gear: 0,
-              rpm: 0,
+              gear: p.gear ?? 0,
+              rpm: p.rpm ?? 0,
               s: p.trackS,
               ...(peerDistM !== undefined ? { distM: peerDistM } : {}),
             });
           }
           rp.buffer.push(replayClockS, cars);
+          if (!this.snapshot.replayAvailable && rp.buffer.durationS >= 1) {
+            this.publish({ replayAvailable: true });
+          }
         }
       } else if (replaying) {
         if (rp.playing && !frozen) {
-          rp.timeS = Math.min(rp.buffer.endS, rp.timeS + dtSeconds * rp.speed);
-          if (rp.timeS >= rp.buffer.endS) rp.playing = false;
+          rp.timeS = THREE.MathUtils.clamp(rp.timeS + dtSeconds * rp.speed, rp.buffer.startS, rp.buffer.endS);
+          if ((rp.speed > 0 && rp.timeS >= rp.buffer.endS) || (rp.speed < 0 && rp.timeS <= rp.buffer.startS)) {
+            rp.playing = false;
+          }
         }
+        const replayDeltaT = rp.timeS - rp.prevTimeS;
+        rp.prevTimeS = rp.timeS;
+        const wheelDir = rp.playing && !frozen ? Math.sign(rp.speed) * Math.min(Math.abs(rp.speed), 4) : 0;
         const frame = rp.buffer.frameAt(rp.timeS);
+        replayFocusCarFrame = null;
         if (frame) {
           const peers: InterpolatedPeerState[] = [];
           for (const car of frame.cars) {
+            if (car.id === rp.focusedCarId) replayFocusCarFrame = car;
             if (car.id === "player") {
               // Only the drawn pose: the car's physics stays where it is
               physics.worldPosition.set(car.x, car.y, car.z);
               physics.worldQuaternion.set(car.qx, car.qy, car.qz, car.qw);
+              rp.buffer.velocityAt(rp.timeS, "player", replayPlayerVel);
+              rp.wheelRotRad += ((car.speedKmh / 3.6) / 0.34) * replayDeltaT;
+              replayPlayerS = car.s ?? physics.sMeters;
+              replayPlayerTelemetry.speedKmh = car.speedKmh;
+              replayPlayerTelemetry.steering = car.steer;
+              replayPlayerTelemetry.throttle = car.throttle;
+              replayPlayerTelemetry.brake = car.brake;
+              replayPlayerTelemetry.gear = car.gear;
+              replayPlayerTelemetry.rpm = car.rpm;
+              replayPlayerTelemetry.onKerbLeft = false;
+              replayPlayerTelemetry.onKerbRight = false;
+              if (car.lap !== undefined) replayPlayerTelemetry.lapCount = car.lap;
             } else {
-              peers.push(replayPeerState(car));
+              peers.push(replayPeerState(car, rp.timeS, wheelDir));
             }
           }
           renderPeers = peers;
@@ -3498,25 +3666,30 @@ export class DriveSession {
       // drawn one, which moves it on by the time since the last (drawDtS)
       if (draw) {
         // The fixed-step physics leaves up to 2 ms unstepped each frame: draw the car (and the cameras on it) where it
-        // is at the frame's time, the pose carried forward by its velocity over that remainder. The worker's car comes
-        // carried forward to this frame already (remote-car.ts), so a capped 30 fps still draws it where it is now.
-        renderCarPos
-          .copy(carVelocityWorld)
-          .multiplyScalar(physics.renderLeadS ?? 0)
-          .add(physics.worldPosition);
+        // is at the frame's time, the pose carried forward by its velocity over that remainder. During replay, use the
+        // exact interpolated replay pose without physics lead extrapolation.
+        if (replaying) {
+          renderCarPos.copy(physics.worldPosition);
+        } else {
+          renderCarPos
+            .copy(carVelocityWorld)
+            .multiplyScalar(physics.renderLeadS ?? 0)
+            .add(physics.worldPosition);
+        }
         carRig.root.position.copy(renderCarPos);
         carRig.root.quaternion.copy(physics.worldQuaternion);
-        carRig.chassisGroup.position.y = physics.rideHeightOffsetM;
+        carRig.chassisGroup.position.y = replaying ? 0 : physics.rideHeightOffsetM;
         if (physics.tyreVisuals) {
           playerWheels.tyres = physics.tyreVisuals;
           playerWheels.ground = physics.groundQuery ?? null;
           playerWheels.quaternion = physics.worldQuaternion;
         }
+        const drawPlayerTelemetry = replaying ? replayPlayerTelemetry : physics.telemetry;
         carRig.updateFromTelemetry(
-          physics.telemetry,
-          physics.pitchRad,
-          physics.rollRad,
-          physics.wheelRotationRad,
+          drawPlayerTelemetry,
+          replaying ? 0 : physics.pitchRad,
+          replaying ? 0 : physics.rollRad,
+          replaying ? rp.wheelRotRad : physics.wheelRotationRad,
           drawDtS,
           physics.tyreVisuals ? playerWheels : undefined
         );
@@ -3612,15 +3785,65 @@ export class DriveSession {
             }
           }
         }
+        // Resolve camera target: during replay, allow focusing any car (player or AI opponent) with full camera switching
+        let camCar: CameraRigCar = physics;
+        let camCarPos: THREE.Vector3 = renderCarPos;
+        let camCarVel: THREE.Vector3 = carVelocityWorld;
+        let camChassis: THREE.Object3D = carRig.chassisGroup;
+        let camAnchors = lc26Cams;
+        if (replaying) {
+          const fc = replayFocusCarFrame;
+          if (fc && fc.id !== "player") {
+            const oppRig = visualFx.getOpponentRig(fc.id);
+            replayCamCar.worldPosition.set(fc.x, fc.y, fc.z);
+            replayCamCar.worldQuaternion.set(fc.qx, fc.qy, fc.qz, fc.qw);
+            replayCamCar.sMeters = fc.s ?? 0;
+            replayCamCar.vxMs = fc.speedKmh / 3.6;
+            replayCamCar.vyMs = 0;
+            replayCamCar.wheelbaseM = physics.wheelbaseM;
+            replayCamCar.cgHeightM = physics.cgHeightM;
+            replayFocusTelemetry.speedKmh = fc.speedKmh;
+            replayFocusTelemetry.steering = fc.steer;
+            replayFocusTelemetry.throttle = fc.throttle;
+            replayFocusTelemetry.brake = fc.brake;
+            replayFocusTelemetry.gear = fc.gear;
+            replayFocusTelemetry.rpm = fc.rpm;
+            replayFocusTelemetry.onKerbLeft = false;
+            replayFocusTelemetry.onKerbRight = false;
+            replayCamCar.telemetry = replayFocusTelemetry;
+            rp.buffer.velocityAt(rp.timeS, fc.id, replayFocusVel);
+            camCar = replayCamCar;
+            camCarPos = replayCamCar.worldPosition;
+            camCarVel = replayFocusVel;
+            if (oppRig) {
+              camChassis = oppRig.chassisGroup;
+              camAnchors = oppRig.getCameraAnchors();
+            } else {
+              camAnchors = null;
+            }
+          } else {
+            replayCamCar.worldPosition.copy(physics.worldPosition);
+            replayCamCar.worldQuaternion.copy(physics.worldQuaternion);
+            replayCamCar.sMeters = replayPlayerS;
+            replayCamCar.vxMs = replayPlayerTelemetry.speedKmh / 3.6;
+            replayCamCar.vyMs = 0;
+            replayCamCar.wheelbaseM = physics.wheelbaseM;
+            replayCamCar.cgHeightM = physics.cgHeightM;
+            replayCamCar.telemetry = replayPlayerTelemetry;
+            camCar = replayCamCar;
+            camCarPos = renderCarPos;
+            camCarVel = replayPlayerVel;
+          }
+        }
         if (!podium.placeCamera(camera)) cameraRig.update({
           dt: drawDtS,
           nowMs,
           mode,
-          car: physics,
-          carPos: renderCarPos,
-          carVelocity: carVelocityWorld,
-          anchor: onboardViews.resolve(lc26Cams, mode, carRigCar, settingsNow.cameraNudges),
-          chassis: carRig.chassisGroup,
+          car: camCar,
+          carPos: camCarPos,
+          carVelocity: camCarVel,
+          anchor: onboardViews.resolve(camAnchors, mode, carRigCar, settingsNow.cameraNudges),
+          chassis: camChassis,
           onboardFovShift,
           headMovement: settingsNow.hud.headMovement,
           driving,
@@ -3766,7 +3989,8 @@ export class DriveSession {
         const skyLight = THREE.MathUtils.clamp((skyConditions.elevationDeg + 3) / 17, 0, 1) * (1 - 0.4 * wx.cloudCover);
         const headlights = resolveHeadlightStates(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
         // Onboard views (cockpit, dash, nose, shoulder, T-cam) sit on/behind the nose; hide the player's own front flares
-        carHeadlights.setEnabled(headlights.player, physics.telemetry.brake > 0.05, camera, view.anchor !== null);
+        const playerBrakingNow = (replaying ? replayPlayerTelemetry.brake : physics.telemetry.brake) > 0.05;
+        carHeadlights.setEnabled(headlights.player, playerBrakingNow, camera, view.anchor !== null && (!replaying || rp.focusedCarId === "player"));
         visualFx.setHeadlights(headlights.opponents, camera);
         visualFx.setLightLevel(skyLight);
         rainFx.update(
@@ -3904,15 +4128,7 @@ export class DriveSession {
           peers: [...(physics.telemetry.peers ?? [])],
         });
         if (replaying) {
-          setReplayUi({
-            active: true,
-            timeS: rp.timeS,
-            startS: rp.buffer.startS,
-            endS: rp.buffer.endS,
-            playing: rp.playing,
-            speed: rp.speed,
-            canFlashback: canFlashbackNow(),
-          });
+          publishReplayUi();
         }
       }
     };

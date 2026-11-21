@@ -50,6 +50,7 @@ interface RaceResultsProps {
   trackName: string;
   onClose: () => void;
   onRestart?: () => void;
+  onWatchReplay?: () => void;
   onBackToLobby?: () => void;
   /** What going back leads to: the room's lobby, or (after a scheduled race) the races */
   backLabel?: string;
@@ -70,6 +71,7 @@ function sameRaceResults(a: RaceResultsProps, b: RaceResultsProps): boolean {
     a.nextRace !== b.nextRace ||
     a.onClose !== b.onClose ||
     a.onRestart !== b.onRestart ||
+    a.onWatchReplay !== b.onWatchReplay ||
     a.onBackToLobby !== b.onBackToLobby ||
     a.race.resultsFinal !== b.race.resultsFinal ||
     a.race.totalLaps !== b.race.totalLaps ||
@@ -103,7 +105,7 @@ function sameRaceResults(a: RaceResultsProps, b: RaceResultsProps): boolean {
   return true;
 }
 
-const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose, onRestart, onBackToLobby, backLabel = "Back to lobby", trackLimitStrikes = 0, history, nextRace }) => {
+const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose, onRestart, onWatchReplay, onBackToLobby, backLabel = "Back to lobby", trackLimitStrikes = 0, history, nextRace }) => {
   const results = race.results;
   const rootRef = useRef<HTMLDivElement | null>(null);
   // A controller closes the card with B and reaches its buttons (Esc is handled below)
@@ -301,6 +303,11 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
             {onBackToLobby ? (
               <Button variant={primary === "back" ? "primary" : "secondary"} onClick={onBackToLobby}>
                 {backLabel}
+              </Button>
+            ) : null}
+            {onWatchReplay ? (
+              <Button variant="secondary" icon={<Icon name="replay" />} onClick={onWatchReplay}>
+                Watch replay
               </Button>
             ) : null}
             {onRestart ? (

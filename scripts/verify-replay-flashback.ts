@@ -779,4 +779,98 @@ check('#6: TrackLimitsMonitor and YellowPassJudge keep pre-rewind pending orders
   assert.equal(yp.owed, null, 'yellow pass order inside rewound window is dropped');
 });
 
+console.log('6. Compact typed-array full-race ReplayBuffer (#152)');
+
+check('supports 20-minute multi-car recording, chunk eviction, mid-session car join, velocityAt, and lapMarkers', () => {
+  const buf = new ReplayBuffer({ maxSeconds: 1200, hz: 20 });
+  // Push 22 minutes (1320 s) to exercise multi-chunk allocation AND head chunk eviction
+  for (let i = 0; i <= 1320 * 20; i++) {
+    const t = i / 20;
+    const lap = Math.floor(t / 100) + 1;
+    const cars: ReplayCarState[] = [
+      {
+        id: 'player',
+        x: t * 50,
+        y: 0.3,
+        z: 0,
+        qx: 0,
+        qy: 0,
+        qz: 0,
+        qw: 1,
+        speedKmh: 180,
+        steer: 0.1,
+        throttle: 0.8,
+        brake: 0,
+        gear: 5,
+        rpm: 10500,
+        s: (t * 50) % 5000,
+        lap,
+        distM: t * 50,
+      },
+    ];
+    // Second car joins mid-session after t = 600 s (crossing chunk boundaries)
+    if (t >= 600) {
+      cars.push({
+        id: 'ai-1',
+        x: t * 48,
+        y: 0.3,
+        z: 4,
+        qx: 0,
+        qy: 0,
+        qz: 0,
+        qw: 1,
+        speedKmh: 172.8,
+        steer: 0,
+        throttle: 0.9,
+        brake: 0,
+        gear: 5,
+        rpm: 9800,
+        s: (t * 48) % 5000,
+      });
+    }
+    buf.push(t, cars);
+  }
+  assert.ok(buf.durationS >= 1199.9 && buf.durationS <= 1200.1, `duration=${buf.durationS.toFixed(2)} s`);
+  assert.ok(buf.startS >= 119.9 && buf.endS >= 1319.9, `window=[${buf.startS.toFixed(1)}, ${buf.endS.toFixed(1)}]`);
+  const ids = buf.carIds();
+  assert.deepEqual(ids, ['player', 'ai-1'], 'carIds lists player first followed by AI cars');
+
+  // Velocity reconstruction accuracy (50 m/s for player, 48 m/s for ai-1)
+  const vPlayer = buf.velocityAt(900.025, 'player');
+  const vAi = buf.velocityAt(900.025, 'ai-1');
+  assert.ok(Math.abs(vPlayer.x - 50) < 0.05, `player vx=${vPlayer.x.toFixed(3)}`);
+  assert.ok(Math.abs(vAi.x - 48) < 0.05, `ai-1 vx=${vAi.x.toFixed(3)}`);
+
+  // Lap markers detect lap boundaries
+  const markers = buf.lapMarkers();
+  assert.ok(markers.length >= 10, `found ${markers.length} lap markers`);
+  const lap10 = markers.find((m) => m.lap === 10);
+  assert.ok(lap10 && Math.abs(lap10.timeS - 900) <= 0.1, `lap 10 marker at ${lap10?.timeS}`);
+
+  // Truncate across chunk boundaries and push a frame with ONLY player -> ai-1 must NOT ghost in
+  buf.truncateAfter(700);
+  assert.ok(Math.abs(buf.endS - 700) < 0.06, `truncated endS=${buf.endS}`);
+  buf.push(700.05, [
+    {
+      id: 'player',
+      x: 123,
+      y: 0.3,
+      z: 0,
+      qx: 0,
+      qy: 0,
+      qz: 0,
+      qw: 1,
+      speedKmh: 100,
+      steer: 0,
+      throttle: 0,
+      brake: 1,
+      gear: 3,
+      rpm: 7000,
+    },
+  ]);
+  const after = buf.frameAt(700.05)!;
+  assert.equal(after.cars.length, 1, 'no stale AI car ghosts into overwritten post-truncate slot');
+  assert.equal(after.cars[0].id, 'player');
+});
+
 console.log(`\n${passed} checks passed`);

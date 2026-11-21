@@ -239,6 +239,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   resultsClosed?: boolean;
   onCloseResults?: () => void;
   onRestartRace?: () => void;
+  onWatchReplay?: () => void;
+  onOpenReplay?: () => void;
   onBackToLobby?: () => void;
   backToLobbyLabel?: string;
   /** polish:B after the flag: the podium shot (before the table), the player's last races, the next open race */
@@ -960,6 +962,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             trackName={trackInfo.name}
             onClose={handleCloseResults}
             onRestart={props.onRestartRace}
+            onWatchReplay={props.onWatchReplay}
             onBackToLobby={props.onBackToLobby}
             backLabel={props.backToLobbyLabel}
             trackLimitStrikes={telemetry.trackLimits?.totalStrikes ?? 0}
