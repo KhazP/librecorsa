@@ -18,6 +18,7 @@ import {
 } from "@/lib/render/corner-rig";
 import { singlePassTransparency } from "@/lib/render/static-scene";
 import { bodyFloorClearance, type StaticFloor } from "@/lib/render/body-floor";
+import { disableCarCastShadow } from "@/lib/render/car-shadow-proxy";
 
 /**
  * Cars ported to one GLB each (a registry car's `modelUrl`), on any vehicle model. Node layout:
@@ -53,6 +54,8 @@ export interface PortedCarOptions {
    * the textures of the materials the GLB's `skinMaps` extras name
    */
   skin?: PortedSkin | null;
+  /** Opponent car: casts shadows through a 1-draw proxy on SHADOW_PROXY_LAYER instead of its full mesh hierarchy */
+  opponent?: boolean;
 }
 
 /** A ported model's driver and nose in rig space, once loaded */
@@ -334,6 +337,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   const chassisGroup = new THREE.Group();
   root.add(chassisGroup);
   const placeholder = placeholderBody();
+  if (options.opponent) placeholder.castShadow = false;
   chassisGroup.add(placeholder);
 
   const { chassis } = options;
@@ -466,6 +470,10 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       skinSlots.push(...collectSkinSlots([bodyGroup, ...corners.map((c) => c.spin)], skinMaps, tyreMaterials));
     }
     applySkin();
+    if (options.opponent) {
+      disableCarCastShadow(bodyGroup);
+      for (const c of corners) disableCarCastShadow(c.steer);
+    }
     placeholder.removeFromParent();
     placeholder.geometry.dispose();
     (placeholder.material as THREE.Material).dispose();

@@ -31,6 +31,7 @@ import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 import { LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
+import { addCarShadowProxy } from '@/lib/render/car-shadow-proxy';
 import { CarHeadlights } from '@/lib/render/car-headlights';
 import { disposeTree } from '@/lib/render/dispose-tree';
 import { LIVERIES, liveryForDriverCode } from '@/lib/track-data';
@@ -1060,11 +1061,13 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
       steerLockDeg: own.lockDeg / 2,
       floor: staticFloorOf(own.config),
       gtSidewall: opponentGtTyreBrand(vehicle),
+      opponent: true,
     });
   } else {
     rig = createF1Car2026(livery, 'medium', undefined, { opponent: true });
   }
   addContactShadow(rig.root, vehicle);
+  addCarShadowProxy(rig.root, vehicle);
   return rig;
 }
 
@@ -1108,6 +1111,10 @@ function ghostify(root: THREE.Object3D): void {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh) return;
     mesh.castShadow = false;
+    if (mesh.name === 'CarShadowProxy') {
+      mesh.visible = false;
+      return;
+    }
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     if (mats.every((m) => m.userData.ghost)) return;
     const next = mats.map((m) => {

@@ -7,6 +7,7 @@ import {
   resolveLiveryVisual,
 } from "@/lib/render/livery-repaint";
 import { LC26_MODEL_URL, attachLc26Model, loadLc26Template, type Lc26ModelInstance } from "@/lib/lc26-car-model";
+import { disableCarCastShadow } from "@/lib/render/car-shadow-proxy";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
 import { disposeTree } from "@/lib/render/dispose-tree";
@@ -2791,6 +2792,7 @@ export function createF1Car2026(
 
   // Swap in the 3D model when available (public/cars/f12026/model/f12026.glb); without it the procedural car stays
   const proceduralParts = [...chassisGroup.children, ...root.children.filter((c) => c !== chassisGroup)];
+  if (options.opponent) disableCarCastShadow(root);
   let rigDisposed = false;
   void loadLc26Template(modelUrl).then((template) => {
     if (!template || rigDisposed) return;

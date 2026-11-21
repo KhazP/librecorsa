@@ -31,6 +31,7 @@ import {
 } from "@/lib/render/corner-rig";
 import { singlePassTransparency } from "@/lib/render/static-scene";
 import { createSuspensionArms, type ArmHub } from "@/lib/render/suspension-arms";
+import { disableCarCastShadow } from "@/lib/render/car-shadow-proxy";
 
 /**
  * The 2026 Prototype's body (`public/cars/f12026/model/f12026.glb`): Qvist Designs' 2026 concept, ported by
@@ -434,6 +435,12 @@ export function attachLc26Model(
 
   // The body's baked shading, where its porter made it
   installVertexOcclusion([bodyGroup, ...corners.map((c) => c.steer)]);
+
+  // Opponent cars cast through a 1-draw shadow proxy on SHADOW_PROXY_LAYER instead of ~60 high-poly meshes
+  if (options.opponent) {
+    disableCarCastShadow(bodyGroup);
+    for (const c of corners) disableCarCastShadow(c.steer);
+  }
 
   const cameraAnchors = {} as Lc26ModelInstance["cameraAnchors"];
   const cams = extras.cameras ?? {};
