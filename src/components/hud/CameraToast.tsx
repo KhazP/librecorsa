@@ -57,9 +57,12 @@ export function CameraToast({ cameraMode, active, freeCameraKey = "F7" }: Camera
   }, [shownSeq, shownMode]);
 
   const spec = shown ? CAMERA_MODES[shown.mode] : null;
+  const coarsePointer = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
   const freeHint =
     shown?.mode === "free"
-      ? `Drag look · WASD fly · Q/E height · Scroll speed · R reset · ${freeCameraKey} exit`
+      ? coarsePointer
+        ? "Drag to look around · Use Pause or Replay camera menu to exit"
+        : `Drag look · WASD fly · Q/E height · Scroll speed · R reset · ${freeCameraKey} exit`
       : null;
 
   return (

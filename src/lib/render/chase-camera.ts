@@ -10,6 +10,8 @@ export interface ChaseCameraPreset {
   readonly pitchDeg: number;
   readonly baseFovDeg: number;
   readonly speedFovAddDeg: number;
+  /** Extra height multiplier above F1 CG (0.30 m) so low chase clears closed roofs & GT3/road rear wings */
+  readonly tallCarScale?: number;
 }
 
 /** Tuning per chase camera angle (`chase` preserves the original defaults bit-for-bit) */
@@ -17,7 +19,7 @@ export const CHASE_CAMERA_PRESETS: Readonly<Record<ChaseCameraMode, ChaseCameraP
   chase_close: { baseDistanceM: 1.95, baseHeightM: 0.98, pitchDeg: -3.5, baseFovDeg: 62, speedFovAddDeg: 7.5 },
   chase: { baseDistanceM: 3.0, baseHeightM: 1.24, pitchDeg: -4.0, baseFovDeg: 60, speedFovAddDeg: 8 },
   chase_far: { baseDistanceM: 4.9, baseHeightM: 1.88, pitchDeg: -6.5, baseFovDeg: 58, speedFovAddDeg: 8 },
-  chase_low: { baseDistanceM: 2.4, baseHeightM: 0.56, pitchDeg: -1.0, baseFovDeg: 64, speedFovAddDeg: 7 },
+  chase_low: { baseDistanceM: 2.55, baseHeightM: 0.68, pitchDeg: -1.8, baseFovDeg: 64, speedFovAddDeg: 7, tallCarScale: 1.8 },
 };
 
 const BASE_FOV_DEG = CHASE_CAMERA_PRESETS.chase.baseFovDeg;
@@ -162,6 +164,8 @@ export class DynamicChaseCamera {
     if (Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z)) this.carVelocityRaw.copy(v);
     else this.carVelocityRaw.set(0, 0, 0);
 
+    const tallCarAddM = (preset.tallCarScale ?? 0) * Math.max(0, input.cgHeightM - 0.3);
+    const targetHeightM = preset.baseHeightM + tallCarAddM;
     if (!this.initialised) {
       this.carVelocity.copy(this.carVelocityRaw);
       this.carSpeedSmooth = this.carVelocityRaw.length();
@@ -170,7 +174,7 @@ export class DynamicChaseCamera {
       this.boostExtraDist = input.manualOverrideActive ? BOOST_EXTRA_DIST_M : 0;
       this.fovDeg = preset.baseFovDeg;
       this.presetDistM = preset.baseDistanceM;
-      this.presetHeightM = preset.baseHeightM;
+      this.presetHeightM = targetHeightM;
       this.presetPitchRad = targetPitchRad;
       this.prevRawVertG = rawVertG;
       this.hpfVertG = 0;
@@ -183,7 +187,7 @@ export class DynamicChaseCamera {
     if (h > 0) {
       const aPreset = blend(10 / 60, h);
       this.presetDistM += (preset.baseDistanceM - this.presetDistM) * aPreset;
-      this.presetHeightM += (preset.baseHeightM - this.presetHeightM) * aPreset;
+      this.presetHeightM += (targetHeightM - this.presetHeightM) * aPreset;
       this.presetPitchRad += (targetPitchRad - this.presetPitchRad) * aPreset;
       const aHp = VERT_G_HPF_RC / (VERT_G_HPF_RC + h);
       this.hpfVertG = aHp * (this.hpfVertG + rawVertG - this.prevRawVertG);

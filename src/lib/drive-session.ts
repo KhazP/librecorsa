@@ -709,10 +709,11 @@ export class DriveSession {
     let freeCamDrag: { id: number; x: number; y: number } | null = null;
     const freeCamInput: FreeCameraInput = { forward: 0, right: 0, up: 0, fast: false, slow: false, lookYawRate: 0, lookPitchRate: 0 };
     const freeCamGroundHit = createGroundHit();
+    // ControlLeft/ControlRight intentionally omitted: Ctrl+W closes browser/Electron tabs and Ctrl+Arrows switches macOS desktops
     const FREE_CAM_MOVE_CODES = new Set([
       "KeyW", "KeyS", "KeyA", "KeyD",
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
-      "KeyQ", "KeyE", "Space", "ControlLeft", "ControlRight",
+      "KeyQ", "KeyE", "Space",
       "ShiftLeft", "ShiftRight", "AltLeft", "AltRight",
     ]);
     /** Lets go of every held driving key: on pause, and when the window loses focus (its keyups never arrive) */
@@ -1777,6 +1778,7 @@ export class DriveSession {
           renderer.xr.setReferenceSpaceType("local");
           await renderer.xr.setSession(session);
           // The session may have ended while it was being set up
+          if (renderer.xr.isPresenting) clearCameraOverride();
           setVrState(renderer.xr.isPresenting ? "on" : "off");
         } catch {
           void session?.end().catch(() => {});
@@ -1811,6 +1813,7 @@ export class DriveSession {
       cameraOverride = null;
       freeCamKeys.clear();
       freeCamDrag = null;
+      renderer.domElement.style.touchAction = "";
       this.publish({ cameraOverride: null });
     };
     this.setCameraOverride = (next: CameraMode | null) => {
@@ -1824,9 +1827,11 @@ export class DriveSession {
       if (next === "free") {
         cameraRig.freeCamera.reset();
         releaseHeldKeys();
+        renderer.domElement.style.touchAction = "none";
       } else {
         freeCamKeys.clear();
         freeCamDrag = null;
+        renderer.domElement.style.touchAction = "";
       }
       this.publish({ cameraOverride: next });
     };
@@ -1873,19 +1878,23 @@ export class DriveSession {
     };
     const onFreeCamWheel = (e: WheelEvent) => {
       if (!isFreeCamInteractive()) return;
+      if (e.deltaY === 0) return;
       e.preventDefault();
-      if (e.altKey) cameraRig.freeCamera.adjustFov(e.deltaY > 0 ? 2 : -2);
-      else cameraRig.freeCamera.adjustSpeed(e.deltaY < 0 ? 1.18 : 1 / 1.18);
+      // Scale smoothly by deltaY so trackpad swipes don't jump straight to min/max
+      const mag = Math.min(1.5, Math.abs(e.deltaY) / 100);
+      const dir = Math.sign(e.deltaY);
+      if (e.altKey) cameraRig.freeCamera.adjustFov(dir * 2 * Math.max(0.25, mag));
+      else cameraRig.freeCamera.adjustSpeed(Math.pow(1.18, -dir * Math.max(0.2, mag)));
     };
     const onFreeCamContextMenu = (e: MouseEvent) => {
-      if (isFreeCamInteractive()) e.preventDefault();
+      if (isFreeCamInteractive() || freeCamDrag !== null) e.preventDefault();
     };
     renderer.domElement.addEventListener("pointerdown", onFreeCamPointerDown);
     renderer.domElement.addEventListener("pointermove", onFreeCamPointerMove);
     renderer.domElement.addEventListener("pointerup", onFreeCamPointerUp);
     renderer.domElement.addEventListener("pointercancel", onFreeCamPointerUp);
     renderer.domElement.addEventListener("wheel", onFreeCamWheel, { passive: false });
-    renderer.domElement.addEventListener("contextmenu", onFreeCamContextMenu);
+    window.addEventListener("contextmenu", onFreeCamContextMenu);
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (
@@ -1916,6 +1925,12 @@ export class DriveSession {
 
       // Free camera mode: capture flight keys, R to reset near car, and [ / ] for FOV while keeping global hotkeys working
       if (isFreeCamInteractive()) {
+        // Honour a rebound freeCamera toggle key (e.g. Q, R, or Space) before capturing flight keys
+        if (keyLookup.get(code) === "freeCamera") {
+          e.preventDefault();
+          if (!e.repeat) this.toggleFreeCamera();
+          return;
+        }
         if (code === "KeyR") {
           e.preventDefault();
           if (!e.repeat) cameraRig.freeCamera.reset();
@@ -1929,6 +1944,11 @@ export class DriveSession {
         if (FREE_CAM_MOVE_CODES.has(code)) {
           e.preventDefault();
           freeCamKeys.add(code);
+          return;
+        }
+        // Alt is the slow-fly modifier in Free cam: never let Alt combos fall through to cockpit seat-nudge
+        if (e.altKey) {
+          e.preventDefault();
           return;
         }
       }
@@ -1995,6 +2015,8 @@ export class DriveSession {
 
       const action = keyLookup.get(code);
       if (!action) return;
+      // Prevent browser built-in shortcuts (e.g. F7 caret-browsing prompt on Chrome/Edge/Firefox) for bound actions
+      if (action === "freeCamera" || /^F\d+$/.test(code)) e.preventDefault();
       // The camera key: a tap changes the view (on release), held it opens the seat panel
       if (action === "camera") {
         if (!e.repeat && cameraKeyHold === null) {
@@ -2855,7 +2877,7 @@ export class DriveSession {
       // Wheel and mouse inputs are passed through untouched.
       const keys = heldKeys;
       const kb = kbInput;
-      const touch = touchInput.active && driving ? touchInput : null;
+      const touch = touchInput.active && driving && !freeCamControl ? touchInput : null;
       // Half-throttle key: a fixed part throttle for wet-like traction or slow corners
       const kbThrottleTarget = keys.up || touch?.throttleBtn ? 1 : keys.half ? kbTuning.halfThrottle : 0;
       const throttleRising = kbThrottleTarget > kb.throttle;
@@ -2990,11 +3012,13 @@ export class DriveSession {
       }
       // Wheel, mouse and touch steer the rack directly; the car's steering assist picks between them, the keys and the
       // stick (steering-assist.ts: a pressed key takes over, and hands back once its ramp is at centre)
-      const directSteer = settings.mouseSteer
-        ? mouseSteerValue
-        : touchSteering
-          ? touch.steer
-          : gamepadSteer;
+      const directSteer = freeCamControl
+        ? undefined
+        : settings.mouseSteer
+          ? mouseSteerValue
+          : touchSteering
+            ? touch.steer
+            : gamepadSteer;
 
       const inputs: ControlInputs = {
         throttle: Math.max(kb.throttle * kbThrottleScale, gamepadThrottle, touch?.throttle ?? 0),
@@ -3781,7 +3805,7 @@ export class DriveSession {
           if (freeCamControl) {
             let fwd = (freeCamKeys.has("KeyW") || freeCamKeys.has("ArrowUp") ? 1 : 0) - (freeCamKeys.has("KeyS") || freeCamKeys.has("ArrowDown") ? 1 : 0);
             let right = (freeCamKeys.has("KeyD") || freeCamKeys.has("ArrowRight") ? 1 : 0) - (freeCamKeys.has("KeyA") || freeCamKeys.has("ArrowLeft") ? 1 : 0);
-            let up = (freeCamKeys.has("KeyE") || freeCamKeys.has("Space") ? 1 : 0) - (freeCamKeys.has("KeyQ") || freeCamKeys.has("ControlLeft") || freeCamKeys.has("ControlRight") ? 1 : 0);
+            let up = (freeCamKeys.has("KeyE") || freeCamKeys.has("Space") ? 1 : 0) - (freeCamKeys.has("KeyQ") ? 1 : 0);
             let lookYaw = 0;
             let lookPitch = 0;
             // Only fly with a standard non-wheel controller when the player isn't using a steering wheel device
@@ -4216,7 +4240,8 @@ export class DriveSession {
       renderer.domElement.removeEventListener("pointerup", onFreeCamPointerUp);
       renderer.domElement.removeEventListener("pointercancel", onFreeCamPointerUp);
       renderer.domElement.removeEventListener("wheel", onFreeCamWheel);
-      renderer.domElement.removeEventListener("contextmenu", onFreeCamContextMenu);
+      window.removeEventListener("contextmenu", onFreeCamContextMenu);
+      renderer.domElement.style.touchAction = "";
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("blur", onWindowBlur);
