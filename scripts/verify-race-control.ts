@@ -15,6 +15,7 @@ import {
 } from "../src/lib/sim/track-limits";
 import { resolveRaceRules } from "../src/lib/sim/race-rules";
 import { YellowPassJudge, type YellowPassEvent } from "../src/lib/sim/yellow-passes";
+import { BlueFlagJudge, blueFlagYieldTarget, type BlueFlagEvent } from "../src/lib/sim/blue-flags";
 import { PenaltyLedger } from "../src/lib/sim/penalty-ledger";
 import { parseRaceSetup, rulesForSetup } from "../src/lib/sim/race-setup";
 import { VEHICLE_MODELS } from "../src/lib/cars/vehicle-models";
@@ -1125,6 +1126,36 @@ console.log("Yellow flags · passing under yellow");
   ledger.add("YOU", { kind: "warning", reason: "collision", seconds: 0, atS: 20, label: "" });
   ledger.add("YOU", { kind: "time_penalty", reason: "collision", seconds: 10, atS: 30, label: "" });
   check("the ledger sums the time penalties only", ledger.secondsOf("YOU") === 15 && ledger.entriesOf("YOU").length === 3 && !ledger.disqualified("YOU"));
+}
+
+console.log("Blue flags · warnings, penalties and AI yielding");
+{
+  const L = 5000;
+  const bf = new BlueFlagJudge();
+  const runBf = (seconds: number, behindM: number, lapperDistM = 6500, speedMs = 60, active = true) => {
+    const out: BlueFlagEvent[] = [];
+    const n = Math.round(seconds / DT);
+    for (let i = 0; i < n; i++) {
+      out.push(...bf.update(DT, 1000, L, [{ code: "VER", distM: lapperDistM, behindM, speedMs, exempt: false }], active));
+    }
+    return out;
+  };
+  check("car on the same lap does not trigger a blue flag", runBf(1, 30, 1030).length === 0 && bf.active === null);
+  const evShow = runBf(1, 40, 6000, 60);
+  check("lapping car within 1.2 s shows blue flag without immediate warning", evShow.length === 0 && bf.active?.code === "VER" && !bf.active?.warned);
+  const evWarn = runBf(5.5, 40, 6000, 60);
+  check("ignoring blue flag past 6 s raises a warning", evWarn.some((e) => e.kind === "warning" && e.code === "VER") && bf.active?.warned === true);
+  const evPen = runBf(8.5, 40, 6000, 60);
+  check("ignoring blue flag past 14 s awards +5 s penalty", evPen.some((e) => e.kind === "penalty" && e.seconds === 5), JSON.stringify(evPen));
+  // Letting the lapper pass clears immediately (behindM > L/2 -> ahead on road)
+  bf.update(DT, 1000, L, [{ code: "VER", distM: 6050, behindM: L - 5, speedMs: 65, exempt: false }], true);
+  check("letting the lapping car past clears the blue flag", bf.active === null);
+
+  // AI yield target: corner -> outside (-insideSign), straight -> off line away from lapper
+  const yCorner = blueFlagYieldTarget({ lineLatM: 0, halfRoadM: 6, insideSign: 1, lapperLatM: 0.5, myLatM: 0, gapM: 25, lapperSpeedMs: 65 });
+  check("AI blue-flag yield pulls to outside of right-hand corner and lifts decisively", yCorner.targetLatM < -1.5 && yCorner.paceScale <= 0.86);
+  const yStraight = blueFlagYieldTarget({ lineLatM: 1, halfRoadM: 6, insideSign: 0, lapperLatM: 1, myLatM: 1, gapM: 20, lapperSpeedMs: 75 });
+  check("AI blue-flag yield pulls off-line on straights (not staying on line)", Math.abs(yStraight.targetLatM - 1) >= 2 && yStraight.paceScale <= 0.86);
 }
 
 console.log(`\n${passed} checks passed`);

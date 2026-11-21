@@ -624,7 +624,13 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           />
         ) : null}
         {!lightsPhase && race ? (
-          <RaceIncidentFeed messages={race.raceControl} yellow={race.yellow} doubleYellow={race.doubleYellow} blueFlag={race.blueFlag} />
+          <RaceIncidentFeed
+            messages={race.raceControl}
+            yellow={race.yellow}
+            doubleYellow={race.doubleYellow}
+            blueFlag={race.blueFlag}
+            blueFlagWarn={race.blueFlagWarn}
+          />
         ) : null}
         {aeroNoticeNow ? (
           isThirdParty ? (

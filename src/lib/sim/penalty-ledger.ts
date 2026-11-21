@@ -13,6 +13,7 @@ export type PenaltyReason =
   | "corner_cut"
   | "illegal_overtake"
   | "yellow_overtake"
+  | "blue_flag"
   | "formation_corridor"
   | "jump_start"
   | "collision"

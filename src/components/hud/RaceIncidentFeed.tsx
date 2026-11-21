@@ -64,7 +64,9 @@ export const RaceIncidentFeed: React.FC<{
   doubleYellow?: boolean;
   /** Blue flag: the code of the car lapping the player */
   blueFlag?: string;
-}> = ({ messages, yellow, doubleYellow, blueFlag }) => {
+  /** True once race control has warned the player to yield under blue flag */
+  blueFlagWarn?: boolean;
+}> = ({ messages, yellow, doubleYellow, blueFlag, blueFlagWarn }) => {
   const skin = useHudSkin();
   const latest = messages?.[0];
   if (!latest) {
@@ -72,11 +74,23 @@ export const RaceIncidentFeed: React.FC<{
     const flag = doubleYellow ? "doubleYellow" : yellow ? "yellow" : blueFlag ? "blue" : null;
     if (!flag) return null;
     if (skin === "blocks") return null;
-    const words = flag === "blue" ? `Let ${blueFlag} through` : flag === "doubleYellow" ? "Slow down · no overtaking" : "No overtaking";
+    const words =
+      flag === "blue"
+        ? blueFlagWarn
+          ? `Yield now · Let ${blueFlag} through`
+          : `Let ${blueFlag} through`
+        : flag === "doubleYellow"
+          ? "Slow down · no overtaking"
+          : "No overtaking";
     const blue = flag === "blue";
     if (skin !== null) {
       return (
-        <SkinBanner role="status" tone={blue ? "info" : "caution"} cut="sm" className="relative mt-1 inline-flex h-8 items-center gap-2 pr-3 pl-2">
+        <SkinBanner
+          role={blue && blueFlagWarn ? "alert" : "status"}
+          tone={blue ? "info" : "caution"}
+          cut="sm"
+          className={`relative mt-1 inline-flex h-8 items-center gap-2 pr-3 pl-2 ${blue && blueFlagWarn ? "lc-alert" : ""}`}
+        >
           <SkinTag tone={blue ? "info" : "caution"} filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
             <FlagIcon flag={flag} size={14} />
             {blue ? "Blue" : flag === "doubleYellow" ? "Double yellow" : "Yellow"}
@@ -87,8 +101,10 @@ export const RaceIncidentFeed: React.FC<{
     }
     return (
       <div
-        role="status"
-        className={`relative mt-1 inline-flex h-8 items-center gap-2 rounded-lc-row pr-3 pl-1.5 text-lc-chalk inset-ring ${blue ? "inset-ring-lc-info/60" : RING.yellow} ${HUD_GLASS}`}
+        role={blue && blueFlagWarn ? "alert" : "status"}
+        className={`relative mt-1 inline-flex h-8 items-center gap-2 rounded-lc-row pr-3 pl-1.5 text-lc-chalk inset-ring ${
+          blue ? (blueFlagWarn ? "inset-ring-lc-caution/80 lc-alert" : "inset-ring-lc-info/60") : RING.yellow
+        } ${HUD_GLASS}`}
       >
         <FlagBadge flag={flag} variant="solid" size="sm" />
         <span className="lc-disp text-[13px] whitespace-nowrap">{words}</span>

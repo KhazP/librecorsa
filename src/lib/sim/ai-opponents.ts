@@ -53,6 +53,7 @@ import {
 } from '@/lib/sim/ai-racecraft';
 import { RaceIncidents } from '@/lib/sim/race-incidents';
 import { YellowPassJudge, type PassCar, type YellowLevel } from '@/lib/sim/yellow-passes';
+import { BlueFlagJudge, blueFlagYieldTarget, type BlueFlagCar } from '@/lib/sim/blue-flags';
 import type { PenaltyReason } from '@/lib/sim/penalty-ledger';
 import { aiQualifyingMs, qualifyingOrder, type QualifyingGridInput, type QualifyingResult } from '@/lib/sim/qualifying';
 import { aiTrackFor, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
@@ -1321,6 +1322,7 @@ export class AiOpponentField implements AiRace {
     this.yellowCar.length = 0;
     this.doubleState.clear();
     this.yellowPasses.reset();
+    this.blueFlags.reset();
     this.passOrder = [];
     this.passTimerS = 0;
     this.damageHistory.length = 0;
@@ -1465,6 +1467,7 @@ export class AiOpponentField implements AiRace {
     if (this.rollingFormation) this.updateRollingFormation(0);
     this.raceControl.update(this.raceTimeS, this.incidents, this.playerYellowLevel());
     this.judgeYellowPasses(dt);
+    this.judgeBlueFlags(dt);
     this.countPasses();
     this.recordDamageHistory();
   }
@@ -1773,6 +1776,7 @@ export class AiOpponentField implements AiRace {
       let hazard: FieldCar | null = null;
       let hazardGap = Infinity;
       let lapper: FieldCar | null = null;
+      let lapperGap = Infinity;
       // The car beside us the room below is made for, and where that room puts us
       let roomFor: FieldCar | null = null;
       let roomLat = 0;
@@ -1818,8 +1822,11 @@ export class AiOpponentField implements AiRace {
           attacker = other;
           attackerGap = -ds;
         }
-        // Blue flag: a car a lap (or more) up, coming up behind
-        if (ds < 0 && ds > -90 && other.distM > car.distM + 0.5 * L && other.finishTimeS === null) lapper = other;
+        // Blue flag: a car a lap (or more) up, coming up behind (closest lapper within 110 m)
+        if (ds < 0 && ds > -110 && -ds < lapperGap && other.distM > car.distM + 0.5 * L && !other.retired && other.finishTimeS === null) {
+          lapper = other;
+          lapperGap = -ds;
+        }
         // A car in our path: never closer than we could still stop behind it if it braked now (the pack into a
         // braking zone, each car on its own braking point, otherwise ran into each other's gearboxes)
         if (ds > 0 && ds < 80 && Math.abs(dLat) < CAR_WID_M + 0.35 + extraLat) {
@@ -2004,11 +2011,24 @@ export class AiOpponentField implements AiRace {
         if (onStartLane) car.startLaneM = to;
       }
       if (car.defending) targetLat = THREE.MathUtils.clamp(craft.defendOffLine ? craft.defendLatM : line + craft.defendLatM, -half, half);
-      // Blue flag: give the car lapping us the inside of the next corner and a little room
+      // Blue flag: pull decisively off the racing line (outside of next corner, or clear side on a straight) and lift
       let blueLift = 1;
       if (lapper && targetLat === null) {
-        targetLat = line - insideSign * 1.8;
-        blueLift = 0.98;
+        const y = blueFlagYieldTarget({
+          lineLatM: line,
+          halfRoadM: half,
+          insideSign,
+          lapperLatM: lapper.sim.lateralOffsetM,
+          myLatM: me.lateralOffsetM,
+          gapM: lapperGap,
+          lapperSpeedMs: lapper.sim.vxMs,
+          carWidthM: CAR_WID_M,
+        });
+        targetLat = y.targetLatM;
+        blueLift = y.paceScale;
+        if (Number.isFinite(y.speedCapMs)) speedCap = Math.min(speedCap, y.speedCapMs);
+        maxBias = Math.max(maxBias, Math.min(half, 3.2));
+        biasRate = Math.max(biasRate, 3.6);
       }
       // A hazard ahead: pass it on the side with room, quicker off the line than for traffic; slowly if the gap
       // is tight, and stop short of it if the road is blocked
@@ -2537,6 +2557,44 @@ export class AiOpponentField implements AiRace {
     return owed ? { ...owed, code: this.labelOf(owed.code) } : undefined;
   }
 
+  /** Blue-flag enforcement for the player's car */
+  private readonly blueFlags = new BlueFlagJudge();
+
+  private judgeBlueFlags(dt: number): void {
+    if (this.rollingFormation) {
+      this.blueFlags.reset();
+      return;
+    }
+    const me = this.cars.find((c) => c.isPlayer);
+    if (!me) return;
+    const L = this.track.totalLengthM;
+    const active = this.phase === 'racing' && !me.retired && me.finishTimeS === null && !this.player.aiAutopilot;
+    const cars: BlueFlagCar[] = [];
+    for (const c of this.cars) {
+      if (c === me) continue;
+      const sample = this.track.getSampleAtDistance(c.sim.sMeters);
+      const gone = c.removed || c.retired || c.finishTimeS !== null;
+      const off = Math.abs(c.sim.lateralOffsetM) > sample.width / 2 + 1;
+      const behindM = (((me.sim.sMeters - c.sim.sMeters) % L) + L) % L;
+      cars.push({
+        code: c.code,
+        distM: c.distM,
+        behindM,
+        speedMs: Math.max(0, c.sim.vxMs),
+        exempt: gone || off || this.isHazard(c),
+      });
+    }
+    const t = this.raceTimeS;
+    for (const e of this.blueFlags.update(dt, me.distM, L, cars, active)) {
+      const label = this.labelOf(e.code);
+      if (e.kind === 'warning') {
+        this.raceControl.announce(t, 'warning', 'Blue flag warning', `Let ${label} through`, true);
+      } else if (e.kind === 'penalty') {
+        this.raceControl.penalise(t, me.code, e.seconds ?? 5, 'blue_flag', `Ignoring blue flag · ${label}`, true);
+      }
+    }
+  }
+
   /**
    * The car lapping the player, close behind it on the road (the blue flag), under the code the race shows; null when
    * there is none
@@ -2902,6 +2960,7 @@ export class AiOpponentField implements AiRace {
     this.gapTimer.reset();
     this.splitTimer.reset();
     this.yellowPasses.rewind(rewindS);
+    this.blueFlags.reset();
 
     // Find the latest damage/retirement snapshot at or before the rewound raceTimeS and drop future snapshots
     // (keep the earliest t=0 anchor if rewinding all the way to the start)
@@ -3194,7 +3253,8 @@ export class AiOpponentField implements AiRace {
       raceControl: this.raceControlFeed(),
       yellow: this.playerUnderYellow() || undefined,
       doubleYellow: this.playerYellowLevel() === 2 || undefined,
-      blueFlag: this.playerBlueFlag() ?? undefined,
+      blueFlag: (this.blueFlags.active ? this.labelOf(this.blueFlags.active.code) : this.playerBlueFlag()) ?? undefined,
+      blueFlagWarn: this.blueFlags.active?.warned || undefined,
       giveBack: this.giveBackStatus(),
       damage: this.playerDamageStatus(),
     };

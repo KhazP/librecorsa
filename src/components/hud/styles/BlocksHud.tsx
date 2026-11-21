@@ -211,7 +211,10 @@ const FlagRow: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapInv
               cls: "bg-(--blk-player) text-(--blk-ink)",
             }
           : race?.blueFlag
-            ? { text: `Blue flag · Let ${race.blueFlag} through`, cls: "bg-(--blk-flag-blue) text-(--blk-ink-on)" }
+            ? {
+                text: race.blueFlagWarn ? `Blue flag · Yield now to ${race.blueFlag}` : `Blue flag · Let ${race.blueFlag} through`,
+                cls: "bg-(--blk-flag-blue) text-(--blk-ink-on)",
+              }
             : race?.totalLaps && race.lap === race.totalLaps && race.phase === "racing"
               ? { text: "Last lap", cls: "bg-(--blk-flag-white) text-(--blk-ink-on)" }
               : null;

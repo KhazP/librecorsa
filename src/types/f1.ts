@@ -349,6 +349,8 @@ export interface RaceStatus {
   doubleYellow?: boolean;
   /** Blue flag: the car lapping the player is close behind (its code) */
   blueFlag?: string;
+  /** True once race control has warned the player for ignoring an active blue flag */
+  blueFlagWarn?: boolean;
   /** A place the player owes back after passing under yellow: to whom, and the time left to give it back */
   giveBack?: { code: string; double: boolean; remainingS: number; progress: number };
   /** The player's car damage (absent: none, or damage off) */
