@@ -408,7 +408,8 @@ export class PhysicalSky {
     this.quality = quality;
     const touch = isTouchDevice();
     this.clouds.qualityPreset = quality === "high" && !touch ? "medium" : "low";
-    this.clouds.resolutionScale = touch ? 0.5 : 1;
+    // Half resolution on Medium and touch: soft volumetric clouds reproject cleanly at 1/4 the fragment cost
+    this.clouds.resolutionScale = quality === "high" && !touch ? 1 : 0.5;
     this.clouds.lightShafts = false;
     this.applyLook();
   }

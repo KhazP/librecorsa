@@ -15,6 +15,7 @@ import {
 } from "postprocessing";
 import { patchShader } from "./shader-patch";
 import { PhysicalSky } from "./physical-sky";
+import { isTouchDevice } from "@/lib/input/touch-input";
 import type { RenderPlan } from "./adaptive-quality";
 import type { CloudsEffect } from "@takram/three-clouds";
 
@@ -781,12 +782,27 @@ export function createPostFx(
     frameBufferType: THREE.HalfFloatType,
     multisampling: opts?.multisampling ?? 4,
   });
+  // `outputBuffer` only ever receives fullscreen post passes (cloudsPass on High), never 3D geometry, so keeping its
+  // samples at 0 avoids a duplicate MSAA HalfFloat allocation and a redundant second MSAA resolve blit per frame.
+  const keepOutputNonMsaa = () => {
+    if (composer.outputBuffer.samples !== 0) {
+      composer.outputBuffer.samples = 0;
+      composer.outputBuffer.dispose();
+    }
+  };
+  keepOutputNonMsaa();
 
   const renderPass = new RenderPass(scene, camera);
-  // Volumetric clouds (physical sky only, added by setClouds) go over the rendered frame before bloom, so their bright
-  // edges bloom too. Their own pass: inside the bloom pass, bloom would read the frame from before the clouds.
+  renderPass.needsDepthBlit = false;
+  // Volumetric clouds (physical sky only, added by setClouds):
+  // - On High (with bloom): `cloudsPass` composites clouds into the non-MSAA `outputBuffer` before `bloomPass`, so
+  //   bright cloud edges bloom too.
+  // - On Medium / non-bloom: `cloudsPlainPass` merges clouds + AgX + display grade into ONE fullscreen pass straight
+  //   to screen, eliminating the intermediate HalfFloat write+read round-trip (and when MSAA is off, reading
+  //   `inputBuffer.depthTexture` directly with zero depth-copy blits).
   let sky: { readonly clouds: CloudsEffect; readonly cloudsActive: boolean } | null = null;
   let cloudsPass: EffectPass | null = null;
+  let cloudsPlainPass: EffectPass | null = null;
   let mainCamera = camera;
 
   const bloom = new BloomEffect({
@@ -806,10 +822,14 @@ export function createPostFx(
   // white specks). The grade had a pass of its own; here it runs the same code without the round trip through a
   // half-float buffer (whose rounding was the only difference), a full-screen write and read saved per frame,
   // multisampled on High and Medium.
-  // The grade of each of the two passes below: the edge glow is set on both, as either may be the one running
+  // The grade of each of the terminal passes below: the edge glow is synced across all of them
   const grades: DisplayGradeEffect[] = [];
+  let edgeGlowColor: THREE.Vector3 | null = null;
   const toneMapAndGrade = () => {
     const grade = new DisplayGradeEffect(GRADE_CONTRAST, GRADE_SATURATION);
+    if (edgeGlowSinceMs !== null) {
+      grade.setEdgeGlow(edgeGlowSteady ? 1 : edgeGlowLevel(performance.now() - edgeGlowSinceMs), edgeGlowColor ?? undefined);
+    }
     grades.push(grade);
     return [new ToneMappingEffect({ mode: ToneMappingMode.AGX }), grade];
   };
@@ -817,11 +837,10 @@ export function createPostFx(
   let edgeGlowSinceMs: number | null = null;
   let edgeGlowSteady = false;
   const bloomPass = new EffectPass(camera, bloom, ...toneMapAndGrade());
-  // Low and Medium have no bloom: the same pass without it. Bloom at intensity 0 left the picture as it was but still
-  // ran its luminance pass and mip-chain blur every frame
+  // Low and cloudless Medium have no bloom and no clouds: the same pass without either.
   const plainPass = new EffectPass(camera, ...toneMapAndGrade());
   plainPass.enabled = false;
-  // Both end the chain and one runs at a time (setQuality), so each draws to the screen itself. Set before they are
+  // Terminal passes end the chain and one runs at a time, so each draws to the screen itself. Set before they are
   // added, this also stops the composer moving the screen output to whichever pass is last
   bloomPass.renderToScreen = true;
   plainPass.renderToScreen = true;
@@ -830,12 +849,35 @@ export function createPostFx(
   composer.addPass(bloomPass);
   composer.addPass(plainPass);
 
+  const syncPassRouting = () => {
+    const cloudsOn = Boolean(sky?.cloudsActive && cloudsPass && cloudsPlainPass);
+    const bloomOn = bloomPass.enabled;
+    if (cloudsPass) cloudsPass.enabled = cloudsOn && bloomOn;
+    if (cloudsPlainPass) cloudsPlainPass.enabled = cloudsOn && !bloomOn;
+    plainPass.enabled = !bloomOn && !cloudsOn;
+    if (!cloudsOn) {
+      renderPass.needsDepthBlit = false;
+      return;
+    }
+    // Non-MSAA single-pass clouds straight to screen: inputBuffer is never written to after RenderPass, so clouds can
+    // sample inputBuffer.depthTexture directly without a full-screen depth blit.
+    const directDepth = !bloomOn && composer.multisampling === 0 && composer.inputBuffer.depthTexture;
+    if (directDepth && cloudsPlainPass) {
+      if (cloudsPlainPass.getDepthTexture() !== directDepth) cloudsPlainPass.setDepthTexture(directDepth);
+      renderPass.needsDepthBlit = false;
+    } else {
+      const stable = (composer as unknown as { stableDepthTexture?: THREE.DepthTexture | null }).stableDepthTexture ?? null;
+      if (cloudsPlainPass && stable && cloudsPlainPass.getDepthTexture() !== stable) cloudsPlainPass.setDepthTexture(stable);
+      if (cloudsPass && stable && cloudsPass.getDepthTexture() !== stable) cloudsPass.setDepthTexture(stable);
+      renderPass.needsDepthBlit = true;
+    }
+  };
+
   return {
     composer,
 
     render(dtSeconds: number): void {
-      // Off until the atmosphere is ready and on presets without clouds (their composite has no off switch of its own)
-      if (cloudsPass && sky) cloudsPass.enabled = sky.cloudsActive;
+      syncPassRouting();
       if (edgeGlowSinceMs !== null) {
         const level = edgeGlowSteady ? 1 : edgeGlowLevel(performance.now() - edgeGlowSinceMs);
         for (const grade of grades) grade.setEdgeGlow(level);
@@ -851,14 +893,18 @@ export function createPostFx(
       mainCamera = next;
       renderPass.mainCamera = next;
       if (cloudsPass) cloudsPass.mainCamera = next;
+      if (cloudsPlainPass) cloudsPlainPass.mainCamera = next;
       bloomPass.mainCamera = next;
       plainPass.mainCamera = next;
     },
 
     setQuality(quality: "low" | "medium" | "high", msaa = true): void {
-      composer.multisampling = !msaa ? 0 : quality === "high" ? 4 : quality === "medium" ? 2 : 0;
+      const touch = isTouchDevice();
+      // Tile-based mobile GPUs suffer heavy DRAM bandwidth penalties resolving HalfFloat MSAA buffers, so touch stays 0×
+      composer.multisampling = !msaa || touch ? 0 : quality === "high" ? 4 : quality === "medium" ? 2 : 0;
+      keepOutputNonMsaa();
       bloomPass.enabled = msaa && quality === "high";
-      plainPass.enabled = !bloomPass.enabled;
+      syncPassRouting();
     },
 
     setClouds(next): void {
@@ -867,18 +913,26 @@ export function createPostFx(
       cloudsPass = new EffectPass(mainCamera, next.clouds);
       // EffectPass gives its camera to its own material only; the clouds march their rays from the effect's camera
       cloudsPass.mainCamera = mainCamera;
-      cloudsPass.enabled = next.cloudsActive;
+      cloudsPass.enabled = false;
+      cloudsPlainPass = new EffectPass(mainCamera, next.clouds, ...toneMapAndGrade());
+      cloudsPlainPass.mainCamera = mainCamera;
+      cloudsPlainPass.renderToScreen = true;
+      cloudsPlainPass.enabled = false;
       composer.addPass(cloudsPass, 1);
+      composer.addPass(cloudsPlainPass);
+      syncPassRouting();
     },
 
     setEdgeGlow(color: string | null): void {
       if (color === null) {
         if (edgeGlowSinceMs === null) return;
         edgeGlowSinceMs = null;
+        edgeGlowColor = null;
         for (const grade of grades) grade.setEdgeGlow(0);
         return;
       }
       const rgb = hexColor(color);
+      if (rgb) edgeGlowColor = rgb;
       for (const grade of grades) grade.setEdgeGlow(1, rgb ?? undefined);
       edgeGlowSinceMs = performance.now();
       edgeGlowSteady = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -890,6 +944,7 @@ export function createPostFx(
       composer.removeAllPasses();
       renderPass.dispose();
       cloudsPass?.dispose();
+      cloudsPlainPass?.dispose();
       bloomPass.dispose();
       plainPass.dispose();
       composer.dispose();
