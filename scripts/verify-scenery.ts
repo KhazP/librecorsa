@@ -19,7 +19,7 @@ import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { SCENERY_CREDITS, type SceneryCredit } from '../src/lib/render/scenery-credits';
 import { attachSceneryInstances, resetSceneryInstances, setSceneryDensity } from '../src/lib/render/scenery-instances';
-import { SHADOW_PROXY_LAYER } from '../src/lib/render/layers';
+import { DETAIL_LAYER, SHADOW_PROXY_LAYER } from '../src/lib/render/layers';
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ''): void {
@@ -300,6 +300,82 @@ void (async () => {
     setSceneryDensity('low');
     check('density reaches every level and the shadow copy', near.count === 5 && far.count === 5 && proxy?.count === 5, `${near.count}, ${far.count}, ${proxy?.count}`);
     setSceneryDensity('high');
+
+    // Pooling far-most non-shadow levels across >= 4 tiles into one InstancedMesh
+    {
+      const poolTrack = new THREE.Group();
+      const poolScenery = new THREE.Group();
+      const nearGeom = new THREE.PlaneGeometry(1, 1);
+      const farGeom = new THREE.PlaneGeometry(1, 1);
+      const tileLods: THREE.LOD[] = [];
+      for (let t = 0; t < 6; t++) {
+        const nMesh = new THREE.InstancedMesh(nearGeom, leaves, 10);
+        const fMesh = new THREE.InstancedMesh(farGeom, leaves, 10);
+        fMesh.name = 'Acacia_LOD3';
+        for (let i = 0; i < 10; i++) {
+          m4.makeTranslation(t * 300 + i * 5, 10, 0);
+          nMesh.setMatrixAt(i, m4);
+          fMesh.setMatrixAt(i, m4);
+        }
+        nMesh.userData = { tile: `acacia:${t}:0`, level: 0, from: 0, shadow: true };
+        fMesh.userData = { tile: `acacia:${t}:0`, level: 1, from: 420, shadow: false };
+        poolScenery.add(nMesh, fMesh);
+      }
+      resetSceneryInstances();
+      attachSceneryInstances(poolTrack, poolScenery);
+      const batchMesh = poolScenery.getObjectByName('Acacia_LOD3_FarBatch') as THREE.InstancedMesh | undefined;
+      check('6 far tiles pool into one InstancedMesh on DETAIL_LAYER with tight bounds', !!batchMesh?.isInstancedMesh && batchMesh.layers.mask === 1 << DETAIL_LAYER && batchMesh.frustumCulled && batchMesh.boundingSphere !== null);
+      check('pooled far batch starts at count 0 so pre-frame occlusion skips it', batchMesh?.count === 0);
+      for (let t = 0; t < 6; t++) {
+        const lod = poolScenery.getObjectByName(`Scenery_Tile_acacia:${t}:0`) as THREE.LOD | undefined;
+        if (lod) tileLods.push(lod);
+      }
+      // Mirror / probe camera (layer 0 only) must not populate or corrupt the main-view pool
+      const probeCam = new THREE.PerspectiveCamera();
+      probeCam.position.set(0, 10, 1000);
+      probeCam.updateMatrixWorld();
+      for (const lod of tileLods) lod.update(probeCam);
+      batchMesh!.onBeforeRender(
+        undefined as unknown as THREE.WebGLRenderer,
+        undefined as unknown as THREE.Scene,
+        probeCam,
+        batchMesh!.geometry,
+        batchMesh!.material as THREE.Material,
+        null as unknown as THREE.Group
+      );
+      check('non-main camera does not mutate the pooled far batch', batchMesh!.count === 0);
+
+      // Main camera (with DETAIL_LAYER) far away activates all 6 tiles (60 instances at High, 30 at Low)
+      const mainCam = new THREE.PerspectiveCamera();
+      mainCam.layers.enable(DETAIL_LAYER);
+      mainCam.position.set(0, 10, 1000);
+      mainCam.updateMatrixWorld();
+      for (const lod of tileLods) lod.update(mainCam);
+      batchMesh!.onBeforeRender(
+        undefined as unknown as THREE.WebGLRenderer,
+        undefined as unknown as THREE.Scene,
+        mainCam,
+        batchMesh!.geometry,
+        batchMesh!.material as THREE.Material,
+        null as unknown as THREE.Group
+      );
+      poolTrack.updateMatrixWorld(true);
+      const firstPos = new THREE.Vector3();
+      batchMesh!.getMatrixAt(0, m4);
+      firstPos.setFromMatrixPosition(m4.premultiply(batchMesh!.matrixWorld));
+      check('main camera packs all active far tiles at exact world positions', batchMesh!.count === 60 && firstPos.distanceTo(new THREE.Vector3(0, 10, 0)) < 1e-3, `${batchMesh!.count}`);
+      setSceneryDensity('low');
+      batchMesh!.onBeforeRender(
+        undefined as unknown as THREE.WebGLRenderer,
+        undefined as unknown as THREE.Scene,
+        mainCam,
+        batchMesh!.geometry,
+        batchMesh!.material as THREE.Material,
+        null as unknown as THREE.Group
+      );
+      check('density change repacks the pooled far batch', batchMesh!.count === 30, `${batchMesh!.count}`);
+      setSceneryDensity('high');
+    }
 
     // A generated stand: plain meshes; each gets its own patched copy of a flat scenery material, at its own foot
     const concrete = Object.assign(new THREE.MeshStandardMaterial(), { name: 'Building_White' });
