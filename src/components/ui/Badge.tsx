@@ -196,7 +196,7 @@ export const Badge: React.FC<BadgeProps> = ({
     <span
       title={title}
       {...(ariaLabel ? { role: "img", "aria-label": ariaLabel } : {})}
-      className={`lc-chip-text inline-flex shrink-0 items-center rounded-full border leading-none whitespace-nowrap ${
+      className={`lc-chip-text inline-flex shrink-0 items-center rounded-lc-nub border leading-none whitespace-nowrap ${
         variant === "outline" ? "" : "border-transparent"
       } ${sw[variant]} ${SIZE[size]} ${className}`}
     >

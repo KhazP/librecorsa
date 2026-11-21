@@ -71,9 +71,9 @@ export const HUD_HOT = "var(--color-lc-hot)";
 export const HUD_THROTTLE = "var(--lc-sem-throttle)";
 export const HUD_BRAKE = "var(--lc-sem-brake)";
 
-/** HUD glass (UI standard §3): void at 74 %, a white/7 hairline, blur 14; each panel adds its radius and padding. Under the
+/** HUD telemetry plate: void at 84 %, a crisp white/10 hairline, light blur; each panel adds its radius and padding. Under the
  * phone HUD (data-phone-hud on <html>) the blur goes: it re-blurs the race every frame, and PhoneHud's own panels have none */
-export const HUD_GLASS = "border border-white/7 bg-lc-void/74 shadow-lc-pop backdrop-blur-[14px] in-data-[phone-hud]:backdrop-blur-none";
+export const HUD_GLASS = "border border-white/10 bg-lc-void/84 shadow-lc-pop backdrop-blur-[8px] in-data-[phone-hud]:backdrop-blur-none";
 /** Inset well inside a HUD sheet (tyre cards, light pods, elevation box) */
 export const HUD_WELL = "border border-lc-titanium bg-lc-well";
 /** The HUD's field label (`lc-hud-lbl`: mono 700, 9 px, 0.18em, caps, slate) */

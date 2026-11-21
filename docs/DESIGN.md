@@ -96,12 +96,12 @@ capitals. The wordmark's letters are outlined paths (`src/components/ui/logo/geo
 
 | Token | Radius | Use |
 |---|---|---|
-| `rounded-lc-sheet` | 28 px | A sheet over the scene |
-| `rounded-lc-card` | 24 px | A card inside a sheet |
-| `rounded-lc-tile` | 18 px | Choice tiles, picture tiles, HUD panels |
-| `rounded-lc-row` | 14 px | Setting rows, wells, text fields |
-| `rounded-lc-nub` | 10 px | Small tiles and thumbnails inside a panel |
-| `rounded-full` | pill | Buttons, segmented controls, tabs, badges, key caps, switches |
+| `rounded-lc-sheet` | 12 px | A sheet over the scene |
+| `rounded-lc-card` | 10 px | A card inside a sheet |
+| `rounded-lc-tile` | 8 px | Choice tiles, picture tiles, HUD panels, tab tracks |
+| `rounded-lc-row` | 6 px | Setting rows, buttons, selects, tabs, segments, wells, text fields |
+| `rounded-lc-nub` | 4 px | Badges, small tiles and thumbnails inside a panel |
+| `rounded-full` | pill | Circular LEDs, switches, knobs, key caps |
 
 Heights: button 52 / 44 / 36 (`lg` / `md` / `sm`), setting row 52, tab and segment 40 (36 small), badge 28 / 24 /
 20 (16 in the HUD), key cap 22, switch 30. Anything a finger presses is at least 44 px, whatever its drawing.
@@ -110,13 +110,13 @@ Layers, lowest first (`--z-lc-*`): HUD, touch pads, toasts, overlays, menus, res
 
 ## 5. Surfaces
 
-- **Sheet** (`Sheet`, `.lc-glass`): `rgba(14,16,22,0.72)`, 1 px `white/7` border, `blur(22px)`, `shadow-lc-sheet`.
+- **Sheet** (`Sheet`, `.lc-glass`): `rgba(10,12,17,0.84)`, 1 px `white/10` border, `blur(12px)`, `shadow-lc-sheet`.
   One per screen region, over the live scene.
-- **Card** (`Card`): carbon at 80 %, `white/7` border, no blur, no shadow. Content inside a sheet. Named by a plain
+- **Card** (`Card`): carbon at 85 %, `white/10` border, no blur, no shadow. Content inside a sheet. Named by a plain
   heading (`title=`), never a dot plus tracked caps. Never a card inside a card: a group inside a card is a well.
 - **Well** (`Well`): `lc-well` with an `lc-line` hairline. Inputs, stat tiles, read-outs.
-- **HUD glass**: void at 74 %, `white/7` border, `blur(14px)`, `shadow-lc-pop`. One glass for every HUD panel.
-- Over the scene use the `white/7` hairline; inside a sheet use `lc-line`.
+- **HUD plate**: void at 84 %, `white/10` border, `blur(8px)`, `shadow-lc-pop`. One plate for every HUD panel.
+- Over the scene use the `white/10` hairline; inside a sheet use `lc-line`.
 
 ## 6. Components (`src/components/ui/`)
 

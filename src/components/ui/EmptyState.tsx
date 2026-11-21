@@ -11,17 +11,14 @@ export interface EmptyStateProps {
   className?: string;
 }
 
-/** What an empty list shows: an icon, one sentence that teaches, and the action that fills it */
+/** What an empty list shows: an icon, a short status line, and an optional action */
 export function EmptyState({ icon, children, action, className }: EmptyStateProps) {
   return (
-    <div className={cx("flex flex-col items-center gap-3.5 px-6 py-9 text-center", className)}>
-      <span
-        aria-hidden
-        className="inline-flex size-12 items-center justify-center rounded-full bg-lc-titanium text-lc-slate inset-ring inset-ring-lc-line [&_svg]:size-6"
-      >
+    <div className={cx("flex flex-col items-center gap-2.5 px-6 py-7 text-center", className)}>
+      <span aria-hidden className="inline-flex text-lc-slate [&_svg]:size-6">
         {icon}
       </span>
-      <p className="lc-body m-0 max-w-[36ch] text-balance">{children}</p>
+      <p className="lc-body m-0 max-w-[36ch] text-balance text-lc-slate">{children}</p>
       {action ? <div className="pt-1">{action}</div> : null}
     </div>
   );

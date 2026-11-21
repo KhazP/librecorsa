@@ -49,16 +49,16 @@
   --color-lc-chalk: #f5f7fa; /* primary text */
 
   /* Shape */
-  --radius-lc-sheet: 28px; /* a sheet over the scene */
-  --radius-lc-card: 24px; /* a card inside a sheet */
-  --radius-lc-tile: 18px; /* choice tiles, content cards, rail entries, cards nested in a card */
-  --radius-lc-row: 14px; /* setting rows, inputs */
-  --radius-lc-nub: 10px; /* small tiles inside a row or a HUD panel */
+  --radius-lc-sheet: 12px; /* a sheet over the scene */
+  --radius-lc-card: 10px; /* a card inside a sheet */
+  --radius-lc-tile: 8px; /* choice tiles, content cards, rail entries, cards nested in a card */
+  --radius-lc-row: 6px; /* setting rows, buttons, inputs */
+  --radius-lc-nub: 4px; /* badges, small tiles inside a row or a HUD panel */
 
   /* Depth: one shadow per level, hairline or shadow but not both for the same edge */
-  --shadow-lc-pop: 0 12px 32px rgba(0, 0, 0, 0.5); /* popovers, toasts, HUD panels */
-  --shadow-lc-sheet: 0 30px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --shadow-lc-focus: 0 0 0 5px rgba(204, 255, 0, 0.12); /* the cursor's halo */
+  --shadow-lc-pop: 0 8px 24px rgba(0, 0, 0, 0.55); /* popovers, toasts, HUD panels */
+  --shadow-lc-sheet: 0 18px 44px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --shadow-lc-focus: 0 0 0 3px rgba(204, 255, 0, 0.18); /* the cursor's halo */
 
   /* Motion: 200 ms on this curve for every state change */
   --ease-lc: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -169,9 +169,9 @@
   --lc-white: #f5f7fa;         /* Pitboard High-Contrast White */
 
   /* ---- Racing Line shape & motion ---- */
-  --lc-r-sheet: 26px;          /* Rounded sheets over the live 3D scene */
-  --lc-r-card: 18px;           /* Cards, choice tiles, menu entries */
-  --lc-ease: cubic-bezier(0.2, 0.8, 0.2, 1); /* Focus moves, 220 ms */
+  --lc-r-sheet: 12px;          /* Sheets over the live 3D scene */
+  --lc-r-card: 8px;            /* Cards, choice tiles, menu entries */
+  --lc-ease: cubic-bezier(0.2, 0.8, 0.2, 1); /* Focus moves, 150 ms */
 
   /* ---- Semantic Motorsport Telemetry ---- */
   --lc-sector-purple: #b845ff; /* Overall Fastest Sector */
@@ -317,7 +317,7 @@ body {
   :where(html[data-input="pad"]) :where(label):has(:where(input):focus) {
     outline: 2px solid var(--lc-volt);
     outline-offset: 1px;
-    border-radius: 14px;
+    border-radius: 6px;
     background-color: rgba(204, 255, 0, 0.06);
   }
   :where(label) :where(input[type="range"]):focus-visible,
@@ -589,15 +589,15 @@ body {
     }
   }
 
-  /* Frosted sheet floating over the live scene */
+  /* Dark telemetry sheet floating over the live scene */
   .lc-glass {
-    background: rgba(14, 16, 22, 0.72);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    backdrop-filter: blur(22px);
-    -webkit-backdrop-filter: blur(22px);
+    background: rgba(10, 12, 17, 0.84);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     box-shadow:
-      0 30px 80px rgba(0, 0, 0, 0.45),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      0 18px 44px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
   }
 
   /* Opaque sheet (menus over a dimmed scene, cards inside a sheet use .lc-card) */

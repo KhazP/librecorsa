@@ -31,8 +31,8 @@ export function Toast({ tone = "neutral", icon, children, action, className }: T
   return (
     <div
       className={cx(
-        "lc-toast-in pointer-events-auto flex min-h-11 max-w-full items-center gap-2.5 rounded-full bg-lc-carbon/95 py-1.5 pl-3.5 shadow-lc-pop",
-        action ? "pr-1.5" : "pr-5",
+        "lc-toast-in pointer-events-auto flex min-h-11 max-w-full items-center gap-2.5 rounded-lc-row bg-lc-carbon/95 py-1.5 pl-3.5 shadow-lc-pop",
+        action ? "pr-1.5" : "pr-4",
         TONE_HAIRLINE[tone],
         className,
       )}

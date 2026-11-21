@@ -49,7 +49,7 @@ export function Card({ title, action, description, bodyClassName, className, chi
       {...rest}
       aria-labelledby={title ? titleId : rest["aria-labelledby"]}
       className={cx(
-        "flex min-w-0 flex-col gap-3 rounded-lc-card border border-white/7 bg-lc-carbon/80 p-4.5 text-lc-chalk phone:p-3.5",
+        "flex min-w-0 flex-col gap-3 rounded-lc-card border border-white/10 bg-lc-carbon/85 p-4 text-lc-chalk phone:p-3.5",
         className,
       )}
     >

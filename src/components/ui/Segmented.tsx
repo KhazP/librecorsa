@@ -101,7 +101,7 @@ export function Segmented<T extends string>({
         if (step(e.key === "ArrowRight" ? 1 : -1)) e.preventDefault();
       }}
       className={cx(
-        "flex rounded-full bg-lc-void p-1 inset-ring inset-ring-lc-line",
+        "flex rounded-lc-tile bg-lc-void p-1 inset-ring inset-ring-lc-line",
         stretch ? undefined : cx("max-w-full min-w-0", fill ? "w-full" : "w-fit"),
         className,
       )}
@@ -125,7 +125,7 @@ export function Segmented<T extends string>({
               if (!off && !chosen) onChange(o.id);
             }}
             className={cx(
-              "inline-flex min-w-0 cursor-pointer items-center justify-center gap-2 rounded-full px-3.5 leading-tight font-semibold",
+              "inline-flex min-w-0 cursor-pointer items-center justify-center gap-2 rounded-lc-row px-3.5 leading-tight font-semibold",
               "pointer-coarse:min-h-11 phone:px-2 phone:text-[13px] [&_svg]:size-4 [&_svg]:shrink-0",
               size === "md" ? "min-h-10 text-[14px]" : "min-h-9 text-[13px]",
               fill || stretch ? (byContent ? "flex-auto px-3" : "flex-1") : undefined,

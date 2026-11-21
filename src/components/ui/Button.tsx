@@ -136,8 +136,8 @@ export function Button(props: ButtonProps) {
   // A link has no disabled state; a button greyed out with a reason wears the readable recipe
   const withReason = Boolean(disabledReason) && rest.href === undefined;
   const classes = cx(
-    "relative inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full whitespace-nowrap select-none",
-    "disabled:cursor-not-allowed aria-disabled:cursor-not-allowed",
+    "relative inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lc-row whitespace-nowrap select-none",
+    "active:scale-[0.98] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:active:scale-100 aria-disabled:cursor-not-allowed aria-disabled:active:scale-100",
     MOTION,
     withReason ? WITH_REASON : VARIANT[variant],
     s.box,
@@ -247,7 +247,7 @@ export function IconButton({
         onPointerEnter?.(e);
       }}
       className={cx(
-        "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full disabled:cursor-not-allowed aria-disabled:cursor-not-allowed",
+        "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lc-row active:scale-[0.96] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:active:scale-100 aria-disabled:cursor-not-allowed aria-disabled:active:scale-100",
         MOTION,
         VARIANT[variant],
         size === "md" ? "size-11 [&_svg]:size-5" : "size-9 pointer-coarse:size-11 [&_svg]:size-4",

@@ -9,10 +9,10 @@
 /** Joins class names, dropping the empty ones */
 export const cx = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(" ");
 
-/** One timing for every state change: 200 ms on the house curve. A pad or keyboard move lands at once, and the item it
+/** One timing for every state change: 150 ms on the house curve. A pad or keyboard move lands at once, and the item it
  * left lets go at once; under the mouse the fade stays */
 export const MOTION = cx(
-  "transition-[background-color,border-color,box-shadow,color,opacity] duration-200 ease-lc",
+  "transition-[background-color,border-color,box-shadow,color,opacity,transform] duration-150 ease-lc",
   "in-data-[input=keyboard]:transition-none in-data-[input=pad]:transition-none",
 );
 
@@ -31,8 +31,9 @@ export const CURSOR_PILL = cx(
   "in-data-[input=keyboard]:focus:transition-none in-data-[input=pad]:focus:transition-none in-data-[input=keyboard]:data-cursor:transition-none in-data-[input=pad]:data-cursor:transition-none",
 );
 
-/** Pressed: one step darker, chosen and cursor alike */
-export const PRESSED_PILL = "active:bg-lc-titanium focus:active:bg-lc-volt-dim data-cursor:active:bg-lc-volt-dim";
+/** Pressed: one step darker with subtle tactile press, chosen and cursor alike */
+export const PRESSED_PILL =
+  "active:bg-lc-titanium active:scale-[0.985] motion-reduce:active:scale-100 focus:active:bg-lc-volt-dim data-cursor:active:bg-lc-volt-dim";
 
 /** A tile the setting is on: a 1.5 px white edge */
 export const CHOSEN_TILE = "border-lc-chalk/60 bg-white/5";
