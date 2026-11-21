@@ -2506,12 +2506,14 @@ export class VehiclePhysics {
     }
     this.gear = g;
     this.shiftTimer = down ? (gb.downshiftTimeS ?? gb.shiftTimeS) : gb.shiftTimeS;
-    if (fromNeutralMoving) this.engineOmega = Math.max(this.engineOmega, Math.min(this.roadRpm(g), gb.gears.redline_rpm) * RPM2RADS);
+    if (fromNeutralMoving && !this.stall.stalled) {
+      this.engineOmega = Math.max(this.engineOmega, Math.min(this.roadRpm(g), gb.gears.redline_rpm) * RPM2RADS);
+    }
     // The ECU blips the engine up to the new gear's road speed on a downshift, so the closed clutch does not
     // jerk the rear axle down by the engine's inertia (that impulse locked the rears under trail braking).
     // Road speed, not wheel speed: matching spinning wheels would feed the wheelspin.
     // A car with its own down-shift gets there by its blip and its clutch (`solveDrivetrain`)
-    if (down && !gb.downshift && this.clutchEngagement > 0.5) {
+    if (down && !gb.downshift && this.clutchEngagement > 0.5 && !this.stall.stalled) {
       const target = Math.min(this.roadRpm(g), gb.gears.redline_rpm) * RPM2RADS;
       this.engineOmega = Math.max(this.engineOmega, target);
     }

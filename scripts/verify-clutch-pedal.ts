@@ -356,5 +356,96 @@ check(
   );
 }
 
+// Regression (#15): keyboard player with idle controller/legacy HID plugged in keeps manual clutch; legacy wheel with
+// connected clutch pedal resolves bound; controller setting before pad wakes stays unbound
+{
+  const kbWithIdlePad = resolveActiveClutchBinding({
+    deviceSource: 'controller',
+    touchActive: false,
+    keyClutchCodes: ['KeyC'],
+    padClutchSource: null,
+    wheelClutchBound: false,
+    settingsDevice: 'keyboard',
+    lastDrivingInput: null,
+  });
+  const kbWithActivePad = resolveActiveClutchBinding({
+    deviceSource: 'controller',
+    touchActive: false,
+    keyClutchCodes: ['KeyC'],
+    padClutchSource: null,
+    wheelClutchBound: false,
+    settingsDevice: 'keyboard',
+    lastDrivingInput: 'controller',
+  });
+  const legacyWithClutch = resolveActiveClutchBinding({
+    deviceSource: 'legacy',
+    touchActive: false,
+    keyClutchCodes: [],
+    padClutchSource: null,
+    wheelClutchBound: true,
+    settingsDevice: 'keyboard',
+    lastDrivingInput: null,
+  });
+  const padSettingBeforeWake = resolveActiveClutchBinding({
+    deviceSource: null,
+    touchActive: false,
+    keyClutchCodes: ['KeyC'],
+    padClutchSource: null,
+    wheelClutchBound: false,
+    settingsDevice: 'controller',
+    lastDrivingInput: null,
+  });
+  check(
+    'idle pad does not disable keyboard clutch; active pad & legacy wheel clutch resolve accurately',
+    kbWithIdlePad.bound &&
+      kbWithIdlePad.activeDevice === 'keyboard' &&
+      !kbWithActivePad.bound &&
+      kbWithActivePad.activeDevice === 'controller' &&
+      legacyWithClutch.bound &&
+      legacyWithClutch.activeDevice === 'wheel' &&
+      !padSettingBeforeWake.bound &&
+      padSettingBeforeWake.activeDevice === 'controller',
+    `idlePad=${kbWithIdlePad.bound}/${kbWithIdlePad.activeDevice}, activePad=${kbWithActivePad.bound}, legacy=${legacyWithClutch.bound}, padWake=${padSettingBeforeWake.bound}`,
+  );
+}
+
+// Regression (#16): stalled engine must NOT get an instant ECU rev-match when shifting out of neutral while rolling
+{
+  const s = standing(() => createSuzukiLianaSim(track));
+  s.aiAutopilot = false;
+  s.autoGearbox = false;
+  s.autoClutch = false;
+  // Start rolling at ~20 km/h, shift up to 5th so engine RPM drops below stall threshold while still rolling (> 10 km/h)
+  s.teleportToDistance(1000, 5.5);
+  for (let g = 0; g < 4; g++) {
+    s.step(DT, { clutch: 0, clutchBound: true, shiftUp: true });
+    drive(s, 0.12, { clutch: 0, clutchBound: true });
+  }
+  for (let i = 0; i < 400 && !s.telemetry.engineStalled; i++) {
+    s.step(DT, { clutch: 0, clutchBound: true, brake: 0.15 });
+  }
+  const rollingStalled = Boolean(s.telemetry.engineStalled) && s.telemetry.speedKmh > 7.5;
+  // Shift to neutral with clutch on the floor, then immediately into 1st with clutch still on the floor
+  s.step(DT, { clutch: 1, clutchBound: true, neutral: true });
+  const rpmBeforeShift = s.telemetry.rpm;
+  const speedBeforeShift = s.telemetry.speedKmh;
+  s.step(DT, { clutch: 1, clutchBound: true, shiftUp: true });
+  const rpmAfterShift = s.telemetry.rpm;
+  const stillStalledOpenClutch = Boolean(s.telemetry.engineStalled);
+  // Release clutch while rolling: physical bump-start cranks engine via wheels and costs real momentum
+  drive(s, 0.6, { clutch: 0, clutchBound: true });
+  const bumpStarted = !s.telemetry.engineStalled;
+  const speedLossKmh = speedBeforeShift - s.telemetry.speedKmh;
+  check(
+    'stalled engine does not ECU rev-match out of neutral; physical bump-start still works',
+    rollingStalled &&
+      stillStalledOpenClutch &&
+      rpmAfterShift < rpmBeforeShift + 200 &&
+      bumpStarted &&
+      speedLossKmh > 0.3,
+    `rollingStalled=${rollingStalled} (${speedBeforeShift.toFixed(1)} km/h), rpm ${rpmBeforeShift.toFixed(0)}->${rpmAfterShift.toFixed(0)}, speedLoss=${speedLossKmh.toFixed(2)} km/h, bump=${bumpStarted}`,
+  );
+}
+
 console.log(failures.length ? `\n${failures.length} failed: ${failures.join(', ')}` : '\nAll clutch pedal checks passed.');
 process.exit(failures.length ? 1 : 0);

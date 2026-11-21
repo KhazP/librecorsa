@@ -257,6 +257,8 @@ export interface DeviceFrame {
   brake: number;
   /** Clutch pedal 0..1 (1 = pressed, the clutch open); 0 when the device has none */
   clutch: number;
+  /** True when a calibrated wheel clutch pedal is bound AND its Gamepad device is currently connected */
+  wheelClutchConnected?: boolean;
   /** Steering straight to the rack (wheel), −1..1, + = right */
   analogSteer?: number;
   /** Raw controller stick for the physics' steering assist */
@@ -527,6 +529,7 @@ export class DeviceInputReader {
       frame.throttle = pedal(wheel.throttle, 1, PAD_THROTTLE_BUTTON);
       frame.brake = pedal(wheel.brake, wheel.brakeGamma, PAD_BRAKE_BUTTON);
       frame.clutch = wheelClutch(pads, wheel.clutch);
+      frame.wheelClutchConnected = Boolean(wheel.clutch && findPad(pads, wheel.clutch.padId));
 
       for (const { id } of PAD_ACTIONS) {
         const b = wheel.buttons[id];
@@ -563,6 +566,7 @@ export class DeviceInputReader {
               ? pedalValue(bPad.axes[wheel.brake.axis] ?? wheel.brake.idle, wheel.brake, wheel.brakeGamma)
               : (pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0);
           frame.clutch = wheelClutch(pads, wheel.clutch);
+          frame.wheelClutchConnected = Boolean(wheel.clutch && findPad(pads, wheel.clutch.padId));
         }
         // A wheel not set up yet has its paddles where a pad has its bumpers: it shifts there whatever the pad layout
         const map = isLikelyWheel(pad) ? BUMPER_SHIFT_BUTTONS : settings.padButtons;

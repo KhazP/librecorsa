@@ -538,7 +538,8 @@ export function rebindPadButton(bindings: PadButtonBindings, action: PadAction, 
 /**
  * Whether the active input device has a clutch bound, plus the control prompt to display in the start / stall cue.
  * Scoped strictly to the active device so a leftover keyboard clutch binding never soft-locks a controller, wheel or
- * touch player whose own device has no clutch bound.
+ * touch player whose own device has no clutch bound, while an idle plugged-in gamepad/HID never disables a keyboard
+ * player's manual clutch.
  */
 export function resolveActiveClutchBinding(params: {
   deviceSource: "wheel" | "controller" | "legacy" | null;
@@ -546,23 +547,50 @@ export function resolveActiveClutchBinding(params: {
   keyClutchCodes: readonly string[];
   padClutchSource: PadPedalSource | null;
   wheelClutchBound: boolean;
-}): { bound: boolean; control: StartClutchControl | undefined } {
-  if (params.deviceSource === "controller") {
-    if (params.padClutchSource === null) return { bound: false, control: undefined };
+  settingsDevice?: "keyboard" | "controller" | "wheel";
+  lastDrivingInput?: "keyboard" | "controller" | "wheel" | "touch" | null;
+}): {
+  bound: boolean;
+  control: StartClutchControl | undefined;
+  activeDevice: "keyboard" | "controller" | "wheel" | "touch";
+} {
+  if (params.touchActive || params.lastDrivingInput === "touch") {
+    return { bound: false, control: undefined, activeDevice: "touch" };
+  }
+  let activeDevice: "keyboard" | "controller" | "wheel";
+  if (params.lastDrivingInput === "keyboard" || params.lastDrivingInput === "controller" || params.lastDrivingInput === "wheel") {
+    activeDevice = params.lastDrivingInput;
+  } else if (params.deviceSource === "wheel") {
+    activeDevice = "wheel";
+  } else if (params.settingsDevice === "controller") {
+    activeDevice = "controller";
+  } else if (params.settingsDevice === "wheel") {
+    activeDevice = "wheel";
+  } else if (params.settingsDevice === "keyboard") {
+    activeDevice = params.deviceSource === "legacy" && params.wheelClutchBound ? "wheel" : "keyboard";
+  } else if (params.deviceSource === "controller") {
+    activeDevice = "controller";
+  } else if (params.deviceSource === "legacy") {
+    activeDevice = "wheel";
+  } else {
+    activeDevice = "keyboard";
+  }
+
+  if (activeDevice === "controller") {
+    if (params.padClutchSource === null) return { bound: false, control: undefined, activeDevice };
     const control: StartClutchControl =
       params.padClutchSource.kind === "button"
         ? { pad: params.padClutchSource.button }
         : { name: pedalSourceText(params.padClutchSource) };
-    return { bound: true, control };
+    return { bound: true, control, activeDevice };
   }
-  if (params.deviceSource === "wheel") {
+  if (activeDevice === "wheel") {
     return params.wheelClutchBound
-      ? { bound: true, control: { name: "clutch pedal" } }
-      : { bound: false, control: undefined };
-  }
-  if (params.deviceSource === "legacy" || params.touchActive) {
-    return { bound: false, control: undefined };
+      ? { bound: true, control: { name: "clutch pedal" }, activeDevice }
+      : { bound: false, control: undefined, activeDevice };
   }
   const firstKey = params.keyClutchCodes[0];
-  return firstKey ? { bound: true, control: { key: keyLabel(firstKey) } } : { bound: false, control: undefined };
+  return firstKey
+    ? { bound: true, control: { key: keyLabel(firstKey) }, activeDevice }
+    : { bound: false, control: undefined, activeDevice };
 }

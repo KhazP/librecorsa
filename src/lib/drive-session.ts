@@ -69,7 +69,7 @@ import { NameplateBadgeCache, OverheadNameplateProjector, type OverheadNameplate
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { canFlashback, isInOnlineRoom, poseFromReplayCar, ReplayBuffer } from "@/lib/sim/replay-buffer";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
-import { drivingInputOf, lapConditionsNow, type LapRecording, type LapSummaryData, type ReplayCarState } from "@/lib/sim/lap-types";
+import { drivingInputOf, lapConditionsNow, type LapInput, type LapRecording, type LapSummaryData, type ReplayCarState } from "@/lib/sim/lap-types";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { touchInput } from "@/lib/input/touch-input";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
@@ -626,6 +626,9 @@ export class DriveSession {
     const jumpWatch = new JumpStartWatch();
     const startClutch = { active: false };
     let gridHeldLastFrame = false;
+    /** Last device that actually sent driving/clutch input; lets an idle plugged-in pad coexist with keyboard clutch. */
+    let lastDrivingInput: LapInput | null = null;
+    let prevSettingsDevice = initialSettings.device;
     /** How far the player held the clutch in on the last step (0..1), for the start cue */
     let startClutchIn = 0;
     /** Slip help on the keyboard's pedals while the car's ABS / traction control is off */
@@ -2528,32 +2531,67 @@ export class DriveSession {
         dtSeconds / (brakeRising ? kbTuning.brakeRiseS || KB_BRAKE_RISE_S : KB_BRAKE_FALL_S)
       );
       kb.clutch = approach(kb.clutch, keys.clutch ? 1 : 0, dtSeconds / (keys.clutch ? KB_CLUTCH_IN_S : KB_CLUTCH_OUT_S));
+      // What drives the car this frame (also checked before clutch resolution so an idle plugged-in gamepad never
+      // disables a keyboard player's manual clutch, while actually driving on the pad switches to pad clutch rules)
+      if (settingsNow.device !== prevSettingsDevice) {
+        prevSettingsDevice = settingsNow.device;
+        lastDrivingInput = null;
+      }
+      const inputNow = drivingInputOf({
+        touch,
+        source: device.source,
+        mouseSteer: settings.mouseSteer,
+        keys: keys.left || keys.right || keys.up || keys.down || keys.half || keys.halfBrake,
+        pad: { throttle: gamepadThrottle, brake: gamepadBrake, steer: gamepadStick ?? gamepadSteer ?? 0 },
+        setting: settingsNow.device,
+      });
+      if (driving) {
+        if (inputNow) {
+          lastDrivingInput = inputNow;
+          noteDrivingInput(inputNow);
+        } else if (keys.clutch || heldKeys.gearUpHeld) {
+          lastDrivingInput = "keyboard";
+        } else if (
+          device.source !== null &&
+          (device.clutch > 0.05 || (device.held?.size ?? 0) > 0)
+        ) {
+          lastDrivingInput =
+            device.source === "wheel" || (device.source === "legacy" && settingsNow.device === "wheel")
+              ? "wheel"
+              : "controller";
+        }
+      }
       // A manual start with no clutch bound: Gear up is the clutch from the lights until it is let go after them, as in
       // the F1 games, and its presses are not shifts meanwhile
       const padClutchSource = settingsNow.padTuning.pedalSources.clutch;
-      const { bound: clutchBound, control: boundClutchControl } = resolveActiveClutchBinding({
-        deviceSource: device.source,
-        touchActive: touchInput.active,
-        keyClutchCodes: settingsNow.keys.clutch,
-        padClutchSource,
-        wheelClutchBound: settingsNow.wheel.clutch !== null,
-      });
+      const { bound: clutchBound, control: boundClutchControl, activeDevice: activeClutchDevice } =
+        resolveActiveClutchBinding({
+          deviceSource: device.source,
+          touchActive: touchInput.active,
+          keyClutchCodes: settingsNow.keys.clutch,
+          padClutchSource,
+          wheelClutchBound:
+            settingsNow.wheel.clutch !== null && device.wheelClutchConnected === true,
+          settingsDevice: settingsNow.device,
+          lastDrivingInput,
+        });
       if (gridHeldLastFrame && !clutchBound) startClutch.active = true;
       // What the start cue (and stall recovery banner) tells the player to hold
       const padGearUp = settingsNow.padButtons.shiftUp;
       const startClutchControl: StartClutchControl =
         boundClutchControl ??
-        (device.source === "controller"
+        (activeClutchDevice === "controller"
           ? padGearUp !== null
             ? { pad: padGearUp }
             : { name: "Gear up" }
-          : device.source === "wheel"
+          : activeClutchDevice === "wheel"
             ? { name: "upshift paddle" }
             : { key: keyLabel(settingsNow.keys.shiftUp[0]) });
       const gearUpHeld = heldKeys.gearUpHeld || device.held?.has("shiftUp") === true;
       // A button as the clutch (a controller button other than a trigger, Gear up at a start) presses at once and lets
       // out over the key clutch's time: letting go slips the clutch, it does not dump it
       const digitalPadClutch =
+        activeClutchDevice === "controller" &&
         device.source === "controller" &&
         padClutchSource?.kind === "button" &&
         padClutchSource.button !== PAD_THROTTLE_BUTTON &&
@@ -2646,16 +2684,6 @@ export class DriveSession {
         const touchBtn = Boolean(touch?.throttleBtn || touch?.brakeBtn || touch?.steerLeft || touch?.steerRight);
         if (pedal > 0.15 || stick > 0.3 || touchSteer > 0.2 || touchBtn) physics.aiAutopilot = false;
       }
-      // What drives the car this frame, for the icon beside the driver's name on the boards (the lap keeps the one used most)
-      const inputNow = drivingInputOf({
-        touch,
-        source: device.source,
-        mouseSteer: settings.mouseSteer,
-        keys: keys.left || keys.right || keys.up || keys.down || keys.half || keys.halfBrake,
-        pad: { throttle: gamepadThrottle, brake: gamepadBrake, steer: gamepadStick ?? gamepadSteer ?? 0 },
-        setting: settingsNow.device,
-      });
-      if (driving && inputNow) noteDrivingInput(inputNow);
 
       // The AI field holds the player on the grid until the lights go out, then runs its cars
       if (aiFieldOf(raceNow())?.worker?.failed) {
