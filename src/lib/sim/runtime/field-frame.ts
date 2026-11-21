@@ -247,10 +247,12 @@ export class FieldPeers {
         if (s.dirty && s.hasDrawn) {
           // Compare where the car smoothly continued from last frame vs the new carried-forward worker pose.
           // On a steady stream this difference is 0 (zero lag); on a late packet it absorbs only the jump.
+          // On barrier/car contact or sharp impact velocity change (> 3 m/s), snap cleanly so the car never clips into walls.
+          const dvSq = s.drawnVel.distanceToSquared(p.linearVelocity);
           _predPos.copy(s.drawnPos).addScaledVector(s.drawnVel, dt);
           _deltaPos.subVectors(_predPos, p.position);
           const errSq = _deltaPos.lengthSq();
-          if (errSq < SMOOTH_MAX_ERR_M * SMOOTH_MAX_ERR_M) {
+          if (!p.contact && dvSq <= 9 && errSq < SMOOTH_MAX_ERR_M * SMOOTH_MAX_ERR_M) {
             s.errPos.copy(_deltaPos);
             _predQuat.copy(s.drawnQuat).multiply(_turn.setFromAxisAngle(_up, -s.drawnYawRate * dt));
             s.errQuat.copy(_invQ.copy(p.quaternion).invert()).multiply(_predQuat);

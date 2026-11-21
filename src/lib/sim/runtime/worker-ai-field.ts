@@ -25,8 +25,8 @@ import { FieldPeers } from "./field-frame";
 import type { SimRaceLink } from "./sim-host";
 import type { SimEvent } from "./sim-protocol";
 
-/** The AI cars are carried forward no further than this when the worker's latest is older (s), curbing overshoot on late ticks */
-const MAX_RENDER_LEAD_S = 0.032;
+/** The AI cars are carried forward no further than this when the worker's latest is older (s), matching player car lead */
+const MAX_RENDER_LEAD_S = 0.05;
 /** A frame this long after the last one is the first after a stop (a pause, the menus): nothing is carried forward (ms) */
 const RESUME_GAP_MS = 100;
 

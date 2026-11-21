@@ -871,7 +871,8 @@ export class SimVisualFxManager {
         }
       }
       carRig.updateFromTelemetry(syntheticTelemetry, pitchRad, rollRad, wheelRot, dt, wheels);
-      seatContactShadow(carRig.root, isLow ? undefined : wheels);
+      // On Low, wheels.ground is already null so seatContactShadow uses physics contact height with zero raycasts
+      seatContactShadow(carRig.root, wheels);
 
       // Opponent car rooster-tail water spray plume in wet conditions
       if (this.wetness > 0.16 && !peer.ghost && peer.speedKmh > 55) {
@@ -940,7 +941,7 @@ const OPPONENT_LOD1_LOW_ENTER_M = 12;
 const OPPONENT_LOD1_LOW_EXIT_M = 8;
 
 function tyreDetailAt(distanceM: number): 0 | 1 | 2 {
-  return distanceM < 28 ? 2 : distanceM < 80 ? 1 : 0;
+  return distanceM < 60 ? 2 : distanceM < 150 ? 1 : 0;
 }
 
 /** Telemetry stand-in for an opponent's rig; the per-frame fields are refreshed in updateOpponentCars */

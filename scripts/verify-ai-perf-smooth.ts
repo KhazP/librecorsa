@@ -81,6 +81,18 @@ const check = (name: string, ok: boolean, detail = "") => {
   peers.apply(pack(0, 500, 0, 0));
   const snapped = peers.shownAt(0, 1 / 60)[0].position.z;
   check("FieldPeers snaps immediately on teleports (> 6 m)", Math.abs(snapped - 500) < 1e-3, `z=${snapped.toFixed(3)} m`);
+
+  // Collision / sudden velocity step (> 3 m/s, e.g. wall impact) must snap with 0 m clipping into the barrier
+  peers.apply(pack(0, 100, 0, 60));
+  peers.shownAt(0, 1 / 60);
+  // Wall stop at z = 100.2 (velocity drops 60 -> 0 m/s): smoothing must NOT carry the car ~1 m past the wall
+  peers.apply(pack(0, 100.2, 0, 0));
+  const afterHit = peers.shownAt(0, 1 / 60)[0].position.z;
+  check(
+    "FieldPeers skips smoothing on sudden collision velocity step (no wall penetration)",
+    Math.abs(afterHit - 100.2) < 1e-3,
+    `z=${afterHit.toFixed(3)} m (wall at 100.200 m)`
+  );
 }
 
 // ---- 2. AI-lite physics isolation, stability, and pace parity on graded GLB colliders
@@ -117,6 +129,8 @@ const check = (name: string, ok: boolean, detail = "") => {
     const deltaS = Math.abs(player.sMeters - peer.sMeters);
     check("AI-lite peer stays cleanly on track over 10 s on Rwanda grades", offTrack === 0 && maxSpeedPeer > 200, `offTrack=${offTrack}, vMax=${maxSpeedPeer.toFixed(1)} km/h`);
     check("AI-lite peer matches full-physics pace parity within 12 m over 10 s", deltaS < 12.0, `player=${player.sMeters.toFixed(1)} m, peer=${peer.sMeters.toFixed(1)} m, Δs=${deltaS.toFixed(2)} m`);
+  } else {
+    console.log(`SKIP  AI-lite physics parity (${dataPath} missing)`);
   }
 }
 
@@ -141,6 +155,8 @@ const check = (name: string, ok: boolean, detail = "") => {
       ms < 150 && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z),
       `${ms.toFixed(1)} ms`
     );
+  } else {
+    console.log(`SKIP  Sarthe 1982 autopilot probe (${dataPath} not present in clean checkout)`);
   }
 }
 

@@ -1204,6 +1204,8 @@ export class VehiclePhysics {
   public aiLitePhysics = false;
   /** Counter for decimating slow-varying AI physics work (thermal 125 Hz, collider ground re-probe 250 Hz) */
   private aiStepTick = 0;
+  /** Elapsed time since the previous ground collider probe (s), so climbStep scales travel accurately on decimated probes */
+  private probeElapsedS = 0;
 
   private get activeSubsteps(): number {
     return this.aiLitePhysics ? 2 : VehiclePhysics.SUBSTEPS;
@@ -2019,6 +2021,7 @@ export class VehiclePhysics {
     // `aiLitePhysics = false`) so AI opponents share the player car's exact memoized static equilibrium.
     const savedAiLite = this.aiLitePhysics;
     this.aiLitePhysics = false;
+    this.probeElapsedS = 0;
     const substeps = VehiclePhysics.SUBSTEPS;
     const h = VehiclePhysics.FIXED_DT / substeps;
     const rolling = speedMs > 0;
@@ -2799,9 +2802,17 @@ export class VehiclePhysics {
     const substeps = this.activeSubsteps;
     const h = dt / substeps;
     const tick = this.aiStepTick++;
-    // AI cars probe the collider once every 2nd outer step (4 ms) and tangent-plane-project across the intervening substeps
-    const probeGroundThisStep = !this.aiLitePhysics || (tick & 1) === 0 || !this.wheels[0].grounded;
-    for (let k = 0; k < substeps; k++) this.substep(h, inp, !this.aiLitePhysics || (probeGroundThisStep && k === 0));
+    // AI cars probe the collider once every 2nd outer step (4 ms) when all 4 wheels are grounded,
+    // and every outer step if any wheel is airborne so landings are never delayed.
+    const anyAirborne =
+      !this.wheels[0].grounded || !this.wheels[1].grounded || !this.wheels[2].grounded || !this.wheels[3].grounded;
+    const probeGroundThisStep = !this.aiLitePhysics || (tick & 1) === 0 || anyAirborne;
+    for (let k = 0; k < substeps; k++) {
+      this.probeElapsedS += h;
+      const doProbe = !this.aiLitePhysics || (probeGroundThisStep && k === 0);
+      this.substep(h, inp, doProbe, doProbe ? this.probeElapsedS : h);
+      if (doProbe) this.probeElapsedS = 0;
+    }
     this.iceMechanicalPowerW = this.stepPowerSamples > 0 ? this.stepIcePowerSumW / this.stepPowerSamples : 0;
     this.driveshaftPowerW = this.stepPowerSamples > 0 ? this.stepShaftPowerSumW / this.stepPowerSamples : 0;
     this.stepIcePowerSumW = 0;
@@ -2942,7 +2953,7 @@ export class VehiclePhysics {
     }
   }
 
-  private substep(h: number, inp: VehicleInputs, queryGround = true): void {
+  private substep(h: number, inp: VehicleInputs, queryGround = true, probeDt = h): void {
     this.updateBasis();
     this.force.set(0, 0, 0);
     this.torque.set(0, 0, 0);
@@ -2969,7 +2980,7 @@ export class VehiclePhysics {
       if (queryGround) {
         w.grounded = this.queryContactPatch(w);
         if (w.grounded) {
-          this.climbStep(w, h);
+          this.climbStep(w, probeDt);
           w.groundRefX = w.hardpointWorld.x;
           w.groundRefY = w.ground.height;
           w.groundRefZ = w.hardpointWorld.z;
@@ -3613,7 +3624,7 @@ export class VehiclePhysics {
     let impact = 0;
     let hitX = 0;
     let hitZ = 0;
-    let budget = (WALL_MAX_PUSH_MS * VehiclePhysics.FIXED_DT) / VehiclePhysics.SUBSTEPS;
+    let budget = (WALL_MAX_PUSH_MS * VehiclePhysics.FIXED_DT) / this.activeSubsteps;
     if (wallSweep(walls, this.wallIds, n, prev.x, prev.z, p.x, p.z, p.y, WALL_Y_SLACK_M, _wallHit) >= 0) {
       this.wallContactNow = true;
       p.x += _wallHit.nx * (_wallHit.depth + WALL_SKIN_M);

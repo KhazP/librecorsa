@@ -4049,24 +4049,26 @@ export class DriveSession {
         // chase view too when the player asked for it always. Auto shows it only with other cars about: an AI race, an
         // online race, or other players in the room (practice, the hotlap and qualifying are driven alone)
         const vmSetting = settingsNow.hud.virtualMirror;
+        const lowQuality = settingsNow.graphics.quality === "low";
+        const wingMirrorsActive = !lowQuality && Boolean(wingMirrors?.found && wingMirrors.coversSides);
         const vmView =
           view.virtualMirror === "always" ||
-          (view.virtualMirror === "noSideMirrors" && !(wingMirrors?.found && wingMirrors.coversSides)) ||
+          (view.virtualMirror === "noSideMirrors" && !wingMirrorsActive) ||
           (view.virtualMirror === "onRequest" && vmSetting === "always");
         const othersAbout = raceNow().kind !== "practice" || peersOnTrack > 0;
-        const lowQuality = settingsNow.graphics.quality === "low";
-        // On Low graphics, skip the extra full-scene mirror render pass unless the player explicitly forced "always"
+        // On Low graphics wing mirrors are disabled (saving 2 passes), so keep the single virtual mirror available in cockpit/dash
         const vmOn =
           driving &&
           !inVr &&
           !podium.playing &&
           container.clientWidth >= 640 &&
           vmView &&
-          (vmSetting === "always" || (!lowQuality && vmSetting === "auto" && othersAbout));
-        // The mirrors refresh every other frame, 30 times a second at 60 fps; under the 30 fps cap every drawn frame
+          (vmSetting === "always" || (vmSetting === "auto" && othersAbout));
+        // The mirrors refresh every other frame, 30 times a second at 60 fps (every 4th frame on Low); under the 30 fps cap every drawn frame
         // does, which keeps them at 30
         const mirrorFrame = pacer.cap > 0 ? 0 : frameIndex;
-        virtualMirror.update(mirrorFrame, vmOn, carRig.chassisGroup, carRig.root);
+        const vmFrame = pacer.cap > 0 ? 0 : lowQuality ? (frameIndex % 4 === 0 ? 0 : 1) : frameIndex;
+        virtualMirror.update(vmFrame, vmOn, carRig.chassisGroup, carRig.root);
         if (vmOn !== virtualMirrorShown) {
           virtualMirrorShown = vmOn;
           setVirtualMirrorOn(vmOn);
