@@ -367,10 +367,10 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
               onChange={carPicker.onChange}
               options={[{ id: ALL_CARS, label: "All cars" }, ...carPicker.cars]}
             />
-            {car === ALL_CARS ? <span className="lc-hint">Every driver once, with their fastest car</span> : null}
+            {car === ALL_CARS ? <span className="lc-hint">Fastest lap per driver</span> : null}
           </div>
         ) : (
-          <span className="lc-hint">Every driver once, with their fastest car</span>
+          <span className="lc-hint">Fastest lap per driver</span>
         )}
         <div className="flex flex-wrap items-center gap-2">
           {choices.length <= 2 ? (
@@ -393,20 +393,20 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
 
       {older ? (
         <p className="lc-hint m-0">
-          {choice.physics !== PHYSICS_VERSION ? "I kept these laps from before the physics update." : "I kept these laps from before I changed this circuit."} New
-          laps go on {physicsVersionLabel(PHYSICS_VERSION, { short: true })}.
+          {choice.physics !== PHYSICS_VERSION ? "Archived physics version." : "Previous circuit revision."} New laps post to{" "}
+          {physicsVersionLabel(PHYSICS_VERSION, { short: true })}.
         </p>
       ) : null}
 
       {event ? null : (
         <Disclosure moreLabel={filtersOn ? `Filters · ${filtersOn} on` : "Filters"} lessLabel="Hide filters">
-          <SettingRow label="No assists" hint="Only laps driven without driving aids">
+          <SettingRow label="No assists">
             <Toggle checked={noAssists} onChange={setNoAssists} />
           </SettingRow>
-          <SettingRow label="Full realism" hint="Only laps driven on full realism">
+          <SettingRow label="Full realism">
             <Toggle checked={fullRealism} onChange={setFullRealism} />
           </SettingRow>
-          <SettingRow label="Wet laps" hint="Only laps driven on a wet track">
+          <SettingRow label="Wet laps">
             <Toggle checked={wetOnly} onChange={setWetOnly} />
           </SettingRow>
         </Disclosure>
@@ -426,7 +426,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
       {!shown && !failed ? (
         <BoardSkeleton rows={6} label="Loading online times…" />
       ) : !shown ? (
-        <BoardError onRetry={() => setReload((n) => n + 1)}>Couldn&apos;t load the online times. Check your connection.</BoardError>
+        <BoardError onRetry={() => setReload((n) => n + 1)}>Couldn&apos;t load online times.</BoardError>
       ) : shown.entries.length === 0 && total === 0 ? (
         <EmptyState
           icon={<Icon name={filtersOn ? "filter" : event ? "challenge" : "online"} />}
@@ -440,22 +440,22 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
         >
           {older
             ? filtersOn
-              ? `No laps like that here on ${versionName}. Clear the filters to see every lap.`
-              : `No laps here on ${versionName}.`
+              ? `No matching laps on ${versionName}.`
+              : `No laps on ${versionName}.`
             : filtersOn
-              ? "No online laps like that here yet. Clear the filters to see every lap."
+              ? "No laps match these filters."
               : emptyText
                 ? emptyText
                 : car === ALL_CARS
-                  ? `No online times on ${circuitName} yet. Finish a lap there and yours can be the first.`
-                  : "No online times for this circuit and car yet. Finish a lap and yours can be the first."}
+                  ? `No online times on ${circuitName} yet.`
+                  : "No online times for this circuit and car yet."}
         </EmptyState>
       ) : (
         <>
           {failed ? (
             <p role="alert" className="m-0 flex items-center gap-2 text-[13px] font-medium text-lc-caution">
               <Icon name="warning" />
-              Couldn&apos;t refresh. These are the last times loaded.
+              Refresh failed. Showing cached times.
             </p>
           ) : null}
           <BoardTable label={`Online times, ${boardName}, page ${page} of ${pages}`} rows={rows} stale={stale} />

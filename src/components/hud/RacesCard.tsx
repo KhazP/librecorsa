@@ -51,7 +51,7 @@ export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS
     <Card title={trackName} description={`${carTitle} · ${laps} laps · every ${every}`} bodyClassName="gap-4" aria-label="Races">
       <div className="flex items-baseline gap-3" aria-live="off">
         <span className="lc-mono text-[44px] leading-none font-bold">{racing ? "Go" : countdownLabel(startsMs, now)}</span>
-        <span className="lc-body">{racing ? "under way" : entered ? "until your race" : "until the next race"}</span>
+        <span className="lc-body">{racing ? "in progress" : entered ? "to start" : "to next race"}</span>
       </div>
 
       {entered ? (
@@ -65,18 +65,18 @@ export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS
               </li>
             ))}
           </ul>
-          <p className="lc-hint m-0">You&apos;re in. It starts on its own{alone ? ", against the AI if nobody else joins" : ""}.</p>
+          <p className="lc-hint m-0">Entered. Starts automatically{alone ? " (with AI if no others join)" : ""}.</p>
           <Button variant="secondary" className="self-start" onClick={onLeave}>
-            Leave the race
+            Leave race
           </Button>
         </>
       ) : (
         <>
           {waiting ? <WaitingLine waiting={waiting} /> : null}
           <Button variant="primary" block loading={entry.state === "joining"} onClick={onJoin}>
-            Join the next race
+            Join next race
           </Button>
-          <p className="lc-hint m-0">Same car for everyone. Your best challenge lap this week sets your grid slot.</p>
+          <p className="lc-hint m-0">Fixed car. Grid set by weekly challenge best lap.</p>
           {entry.state === "error" && entry.text ? (
             <p role="alert" className="m-0 flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-loss">
               <Icon name="error" size="xs" className="mt-0.5" />
@@ -99,9 +99,9 @@ const WaitingLine: React.FC<{ waiting: RaceWaiting }> = ({ waiting: w }) => {
   const more = w.waiting - shown.length;
   return (
     <p className="m-0 flex items-center gap-2.5 text-[14px] leading-snug" aria-live="polite">
-      <StatusDot tone={w.waiting > 0 ? "good" : "neutral"} live={w.waiting > 0} />
+      <StatusDot tone={w.waiting > 0 ? "good" : "neutral"} />
       {w.waiting === 0 ? (
-        <span className="text-lc-slate">Nobody waiting yet</span>
+        <span className="text-lc-slate">0 waiting</span>
       ) : (
         <span className="min-w-0 text-lc-fog">
           <span className="font-semibold text-lc-chalk">{plural(w.waiting, "driver", "drivers")} waiting</span>

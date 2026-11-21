@@ -406,7 +406,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   };
   const joinRoom = () => {
     if (!joinReady) {
-      setJoinHint("Type the code your friend sent you: at least 3 letters or digits.");
+      setJoinHint("Enter at least 3 characters.");
       return;
     }
     setJoinHint(null);
@@ -461,14 +461,12 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
       <div className="flex min-w-0 flex-col gap-3">
         <Card
           title="Lobby"
-          description={`Hosted by ${hostPlayer?.name ?? "nobody yet"}`}
+          description={hostPlayer?.name ? `Host: ${hostPlayer.name}` : undefined}
           action={
             qualifyingActive ? (
-              <Badge tone="info" dot="live">
-                Qualifying
-              </Badge>
+              <Badge tone="info">Qualifying</Badge>
             ) : isHost ? (
-              <SessionBadge session="host">You are host</SessionBadge>
+              <SessionBadge session="host">Host</SessionBadge>
             ) : null
           }
         >
@@ -508,11 +506,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             )}
           </SettingRow>
           {isPrivate ? (
-            <SettingRow
-              label="Qualifying"
-              hint={settings.qualifyingMinutes > 0 ? "Fastest valid lap starts on pole; drivers without a lap start behind" : undefined}
-              disabled={locked}
-            >
+            <SettingRow label="Qualifying" disabled={locked}>
               {isHost && !locked ? (
                 <Segmented<string>
                   value={String(settings.qualifyingMinutes)}
@@ -538,7 +532,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             )}
           </SettingRow>
           {settings.startType === "standing" ? (
-            <SettingRow label="Manual launch" hint="Hold clutch and revs through the lights" disabled={locked}>
+            <SettingRow label="Manual launch" disabled={locked}>
               {isHost && !locked ? (
                 <Toggle checked={settings.manualStart} onChange={(manualStart) => onSetLobbySettings?.({ manualStart })} />
               ) : (
@@ -702,7 +696,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             <Well className="flex flex-col gap-2.5 px-3.5 py-2.5">
               <span className="flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-caution">
                 <Icon name="warning" className="mt-px" />
-                Your car is not allowed in {optionLabel(CLASS_OPTIONS, settings.carClass)} races. Pick one:
+                Not eligible for {optionLabel(CLASS_OPTIONS, settings.carClass)}. Switch car:
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {allowedVehicles.map((id) => (
@@ -738,10 +732,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                   {qualifyingActive ? "End qualifying" : "End race for everyone"}
                 </Button>
               ) : null}
-              {!raceRunning && !qualifyingActive ? (
-                <p className={`m-0 text-center text-[12px] ${startBlocked ? "font-medium text-lc-caution" : "text-lc-slate"}`}>
-                  {startBlocked ?? "Everyone not ready will still start."}
-                </p>
+              {!raceRunning && !qualifyingActive && startBlocked ? (
+                <p className="m-0 text-center text-[12px] font-medium text-lc-caution">{startBlocked}</p>
               ) : null}
             </div>
           ) : (
@@ -761,17 +753,15 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 {raceRunning
                   ? "Race in progress."
                   : qualifyingActive
-                    ? "Qualifying in progress. Set a clean lap for grid position."
-                    : ready
-                      ? "Press again if you are not ready. The host starts the race."
-                      : "The host starts the race."}
+                    ? "Qualifying in progress."
+                    : "Waiting for host to start."}
               </p>
             </div>
           )}
         </Card>
         <ConfirmDialog
           open={confirmEnd}
-          title={qualifyingActive ? "End qualifying for everyone?" : "End the race for everyone?"}
+          title={qualifyingActive ? "End qualifying?" : "End race for all?"}
           confirmLabel={qualifyingActive ? "End qualifying" : "End race"}
           cancelLabel={qualifyingActive ? "Keep qualifying" : "Keep racing"}
           icon={<Icon name="warning" />}
@@ -781,7 +771,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             onAbortRace?.();
           }}
         >
-          Every driver in the room stops where they are and goes back to the lobby.
+          Returns all drivers to the lobby.
         </ConfirmDialog>
       </div>
     );
@@ -790,7 +780,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   const roomStatus =
     hostedCode || connected > 0 || p2pState !== "idle" ? (
       p2pState === "connected" ? (
-        <Badge tone="good" dot="live">
+        <Badge tone="good" dot>
           {connected} connected
         </Badge>
       ) : p2pState === "signaling" ? (
@@ -836,7 +826,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 >
                   {hostedCode}
                 </span>
-                <span className="lc-hint">Your room code. Friends join with it, or with the invite link.</span>
+                <span className="lc-hint">Room code</span>
               </Well>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -893,7 +883,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           </form>
           {hostedCode ? (
             <Button size="sm" variant="ghost" className="self-start" onClick={hostRoom}>
-              Host a new room instead
+              New room
             </Button>
           ) : null}
           {/* What the connection is doing; nothing to say before a room is hosted or joined (a failed join says it at the field) */}
@@ -923,18 +913,15 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
         ) : null}
 
         <div className="flex flex-col gap-1 px-2">
-          <Disclosure moreLabel="More ways to connect" lessLabel="Fewer ways to connect">
+          <Disclosure moreLabel="More ways to connect" lessLabel="Hide">
             <div className="flex flex-col gap-3.5 pb-2">
-              <ConnectSection title="Two windows on this computer" intro="Race another tab or window of this browser, without a room.">
+              <ConnectSection title="Local tabs" intro="Race another tab in this browser.">
                 <Button size="sm" variant="secondary" className="self-start" disabled={!onHostLocal} onClick={() => onHostLocal?.()}>
-                  Race these tabs
+                  Connect local tab
                 </Button>
               </ConnectSection>
 
-              <ConnectSection
-                title="Connect by hand"
-                intro="No room: the host makes an offer, the other player answers, and you swap the two tokens."
-              >
+              <ConnectSection title="Manual WebRTC" intro="Direct peer-to-peer via offer/answer token exchange.">
                 <div className="flex flex-wrap items-center gap-2">
                   {/* A guest that answered an offer does not start one of its own (Start over first) */}
                   <Button
@@ -949,7 +936,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                           setSdpInput("");
                           cancelCopiedToken();
                         }
-                      }, "Couldn't create an offer. Try again.")
+                      }, "Offer creation failed.")
                     }
                   >
                     1. Create offer (host)
@@ -967,10 +954,10 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                           setSdpInput("");
                           cancelCopiedToken();
                         }
-                      }, "That offer didn't work. Check you pasted all of it.")
+                      }, "Invalid offer token.")
                     }
                   >
-                    2. Paste offer, get answer
+                    2. Accept offer
                   </Button>
                   {/* Only the host that made the offer accepts an answer */}
                   <Button
@@ -984,20 +971,20 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                         setSdp({ stage: "accepted" });
                         setSdpInput("");
                         cancelCopiedToken();
-                      }, "That answer didn't work. Check you pasted all of it.")
+                      }, "Invalid answer token.")
                     }
                   >
                     3. Accept answer (host)
                   </Button>
                 </div>
                 <TextField
-                  label="Token from the other player"
+                  label="Remote token"
                   value={sdpInput}
                   onChange={(v) => {
                     setSdpInput(v);
                     setSdpError("");
                   }}
-                  placeholder="Paste it here"
+                  placeholder="Paste token"
                   autoComplete="off"
                   spellCheck={false}
                   error={sdpError || undefined}
@@ -1010,7 +997,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 ) : null}
                 {generatedToken ? (
                   <TextField
-                    label="Your token: send it to the other player"
+                    label="Your token"
                     value={generatedToken}
                     onChange={() => undefined}
                     readOnly
@@ -1032,15 +1019,12 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 ) : null}
                 {sdp.stage !== "idle" ? (
                   <Button size="sm" variant="ghost" className="self-start" disabled={sdpBusy} onClick={resetSdp}>
-                    Start over
+                    Reset
                   </Button>
                 ) : null}
               </ConnectSection>
 
-              <ConnectSection
-                title="Your own relay server"
-                intro="If players can't reach each other: a relay (TURN) server you run or rent, for connections made after saving."
-              >
+              <ConnectSection title="Custom TURN relay" intro="Optional relay server for restricted networks.">
                 <div className="grid gap-2.5 sm:grid-cols-3">
                   <TextField
                     label="Relay address"

@@ -276,8 +276,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       <div className="flex flex-col gap-2.5 border-t border-lc-line pt-3.5">
         <h4 className="lc-row-label m-0">Driver key</h4>
         <p className="lc-hint m-0 max-w-[62ch]">
-          Your first upload claims your name, and this browser keeps the key to it. Export the key to race under the same
-          name on another browser or device, and keep the file private.
+          Claims your driver name on the leaderboard. Export to use the same name on another device; keep the file private.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {onExportDriverKey ? (
@@ -381,8 +380,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
         {rows.length === 0 ? (
           <EmptyState icon={<Icon name="lapTimes" />}>
             {older
-              ? `No laps on ${nameOf(circuit)} on ${choice.label}.`
-              : `No laps on ${nameOf(circuit)} yet. Your best lap with each car is saved here as soon as you finish one.`}
+              ? `No laps on ${nameOf(circuit)} (${choice.label}).`
+              : `No saved laps on ${nameOf(circuit)}.`}
           </EmptyState>
         ) : (
           <BoardTable
@@ -393,9 +392,9 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
               theoretical && rows.length > 1 ? (
                 <div className="mt-1 flex items-center justify-between gap-4 rounded-lc-row bg-white/3 px-2 py-2.5">
                   <span className="flex min-w-0 flex-col">
-                    <span className="text-[14px] font-semibold text-lc-chalk">Best sectors together</span>
+                    <span className="text-[14px] font-semibold text-lc-chalk">Theoretical best</span>
                     <span className="lc-hint">
-                      {toFind < 0 ? `${formatDelta(toFind)} s left to find` : "Your best lap already has every best sector"}
+                      {toFind < 0 ? `${formatDelta(toFind)} s potential` : "All best sectors in one lap"}
                     </span>
                   </span>
                   <span className="lc-mono text-[15px] font-bold text-lc-fog">{formatLapTime(theoretical)}</span>
@@ -409,8 +408,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       {remoteEnabled || remoteStatus === "unknown" ? null : (
         <p className="lc-hint m-0 px-1">
           {remoteStatus === "unreachable"
-            ? "Couldn't reach the online board, I'll keep trying. These are the laps saved in this browser."
-            : "Online times are off in this version: these are the laps saved in this browser."}
+            ? "Leaderboard offline. Showing local times."
+            : "Online leaderboard disabled. Showing local times."}
         </p>
       )}
     </div>

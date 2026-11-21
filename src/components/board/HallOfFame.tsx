@@ -76,7 +76,7 @@ const EventBlock: React.FC<{
           Physics {physicsName(event.physics)}
         </Badge>
         {event.current ? (
-          <Badge size="sm" tone="good" variant="soft" dot="live">
+          <Badge size="sm" tone="good" variant="soft">
             In progress
           </Badge>
         ) : null}
@@ -136,7 +136,7 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
     return (
       <Card title="Hall of Fame" bodyClassName="gap-3">
         <EmptyState icon={<Icon name="challenge" size="lg" />}>
-          No weekly challenge podiums yet. Finish a flying lap in this week&apos;s challenge to put your name on the board.
+          No weekly podiums yet.
         </EmptyState>
       </Card>
     );
@@ -149,11 +149,7 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
   return (
     <div className="flex flex-col gap-3">
       {data.mostDecorated.length > 0 ? (
-        <Card
-          title="Most decorated"
-          description="Weekly challenge podiums across Physics V1 and V2"
-          bodyClassName="gap-2"
-        >
+        <Card title="Most decorated" bodyClassName="gap-2">
           <ol className="m-0 flex list-none flex-col divide-y divide-white/5 p-0" aria-label="Most decorated drivers">
             {data.mostDecorated.map((d, i) => {
               const mine = myKey !== "" && d.nameKey === myKey;
@@ -196,7 +192,6 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
 
       <Card
         title="Weekly podiums"
-        description="Top three per weekly challenge, with Physics V1 and V2 preserved"
         action={
           versions.length > 1 ? (
             <Segmented
