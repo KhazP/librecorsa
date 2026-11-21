@@ -14,6 +14,18 @@ import {
   type GarageTuner,
 } from "@/lib/sim/car-setup";
 import { setupSheet, type SetupGroup, type SetupParam, type SetupState } from "@/lib/sim/setup-sheet";
+import {
+  buildSharedSetup,
+  copyTextToClipboard,
+  decodeSetupShareCode,
+  encodeSetupShareCode,
+  exportSetupFile,
+  presetToSharedSetup,
+  resolveSetupForCar,
+  summarizeSharedSetup,
+  type SharedCarSetup,
+} from "@/lib/sim/setup-share";
+import { clampTyreSetup, TYRE_SETUP_LIMITS } from "@/lib/sim/tyre-setup";
 import type { PauseMenuProps } from "@/components/hud/PauseMenu";
 import { Button, Card, IconButton, Segmented, SettingRow, Slider, Tabs, TextField, Toast } from "@/components/ui";
 import { StatusDot } from "@/components/ui/Badge";
@@ -21,12 +33,11 @@ import { CompoundGlyph } from "@/components/ui/badges/CompoundBadge";
 import { COMPOUND_ORDER, COMPOUNDS } from "@/components/ui/badges/compounds";
 import { Icon } from "@/components/ui/icons";
 import { PadGlyph } from "@/components/ui/prompts";
-import { TYRE_SETUP_LIMITS } from "@/lib/sim/tyre-setup";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { PRESSURE_LABEL, pressureDecimals, pressureIn } from "@/lib/settings/units";
 import { CarPhysicsSwitch } from "./CarPicker";
 import { CarBrowser, CarThumb } from "./CarBrowser";
-import { CarClassTag, CarQualityBadge, CarSkinPicker, LiveryPicker } from "./menu-content-ui";
+import { carBoardTag, CarClassTag, CarQualityBadge, CarSkinPicker, LiveryPicker } from "./menu-content-ui";
 import { currentInputMode, useInputMode } from "./input-mode";
 import { focusables, useMoveHandler } from "./useFocusNav";
 import { carTakesPhysicsSwitch } from "@/lib/cars/f1-mod-physics";
@@ -166,6 +177,14 @@ export const EngineersGarage: React.FC<
   // Presets, per car
   const [presets, setPresets] = useState<GaragePreset[]>([]);
   const [name, setName] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importCode, setImportCode] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const importFileRef = useRef<HTMLInputElement | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+  }, []);
   // Each note is its own toast: the same text twice (Reset, Reset) restarts its timer. One that can be undone stays
   // until the next note or until it is dismissed: a player reading it must not lose the Undo to a timer
   const [note, setNoteState] = useState<{ text: string; seq: number; undo?: () => void } | null>(null);
@@ -289,6 +308,87 @@ export const EngineersGarage: React.FC<
       tuner: {},
     });
   const factoryPresets = FACTORY_PRESETS[p.vehicleModel] ?? [];
+  const decodedImport = useMemo(
+    () => (importCode.trim() ? decodeSetupShareCode(importCode) : null),
+    [importCode],
+  );
+  const currentSharedSetup = (): SharedCarSetup =>
+    buildSharedSetup({
+      vehicle: p.vehicleModel,
+      name: name.trim() || undefined,
+      chassis,
+      tyre: p.tyreSetup,
+      compound: p.tireCompound,
+      aero: p.aeroPreset,
+      tuner: currentTuner,
+    });
+  const copyShareCode = async (setup: SharedCarSetup, tag: string, label: string) => {
+    const code = encodeSetupShareCode(setup);
+    const ok = await copyTextToClipboard(code);
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    if (ok) {
+      setCopiedId(tag);
+      copyTimerRef.current = window.setTimeout(() => setCopiedId(null), 2000);
+      setNote(`Copied share code for ${label}`);
+    } else {
+      setNote("Copy failed: clipboard unavailable");
+    }
+  };
+  const applySharedSetup = (shared: SharedCarSetup, save = false) => {
+    const resolved = resolveSetupForCar(
+      shared,
+      p.vehicleModel,
+      p.defaultTyreSetup,
+      (t) => clampTyreSetup(p.vehicleModel, t),
+      p.tireCompound,
+      p.aeroPreset,
+      currentTuner,
+    );
+    const label = shared.name || `Imported (${carBoardTag(shared.vehicle).label})`;
+    const asPreset: GaragePreset = {
+      id: `${Date.now().toString(36)}`,
+      name: label.slice(0, 32),
+      savedAt: Date.now(),
+      vehicle: p.vehicleModel,
+      chassis: resolved.chassis,
+      tyre: resolved.tyre,
+      compound: resolved.compound,
+      aero: resolved.aero,
+      tuner: resolved.tuner,
+    };
+    loadPreset(asPreset);
+    if (save) {
+      const existing = presets.find((x) => x.name.toLowerCase() === asPreset.name.toLowerCase());
+      if (existing || presets.length < GARAGE_PRESETS_MAX) {
+        const stored: GaragePreset = { ...asPreset, id: existing?.id ?? asPreset.id };
+        const next = [stored, ...presets.filter((x) => x.id !== stored.id)].slice(0, GARAGE_PRESETS_MAX);
+        setPresets(next);
+        saveGaragePresets(p.vehicleModel, next);
+      }
+    }
+    setImportCode("");
+    setImportOpen(false);
+  };
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || file.size > 64 * 1024) {
+      if (file) setNote("Setup file is too large");
+      return;
+    }
+    try {
+      const text = await file.text();
+      const parsed = decodeSetupShareCode(text);
+      if (!parsed) {
+        setNote("File is not a valid LibreCorsa setup");
+        return;
+      }
+      setImportCode(encodeSetupShareCode(parsed));
+      setImportOpen(true);
+    } catch {
+      setNote("Could not read setup file");
+    }
+  };
   const deletePreset = (x: GaragePreset) => {
     const before = presets;
     const next = presets.filter((y) => y.id !== x.id);
@@ -537,6 +637,94 @@ export const EngineersGarage: React.FC<
               Save
             </Button>
           </div>
+          <div className="flex flex-wrap items-center gap-1.5 pt-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<Icon name={copiedId === "current" ? "copied" : "share"} />}
+              onClick={() => void copyShareCode(currentSharedSetup(), "current", "current setup")}
+              title="Copy a portable LC1 share code for your current setup"
+            >
+              {copiedId === "current" ? "Copied" : "Share code"}
+            </Button>
+            <Button
+              size="sm"
+              variant={importOpen ? "primary" : "secondary"}
+              icon={<Icon name="copy" />}
+              onClick={() => setImportOpen((o) => !o)}
+              aria-expanded={importOpen}
+            >
+              Import
+            </Button>
+            <IconButton
+              size="sm"
+              variant="secondary"
+              icon={<Icon name="download" />}
+              aria-label="Export current setup as JSON file"
+              title="Export setup (.json)"
+              onClick={() => {
+                exportSetupFile(currentSharedSetup(), car.title);
+                setNote("Exported setup .json");
+              }}
+            />
+          </div>
+          {importOpen ? (
+            <div className="mt-2 flex flex-col gap-2 rounded-lc-tile border border-lc-line bg-lc-well/80 p-3">
+              <div className="flex items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <TextField
+                    label="Paste share code or JSON"
+                    value={importCode}
+                    onChange={setImportCode}
+                    placeholder="LC1-..."
+                    autoComplete="off"
+                  />
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => importFileRef.current?.click()}>
+                  Load .json
+                </Button>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={(e) => void handleImportFile(e)}
+                />
+              </div>
+              {importCode.trim() ? (
+                decodedImport ? (
+                  <div className="flex flex-col gap-2 rounded-lc-row border border-white/10 bg-lc-carbon/80 p-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="truncate text-[13px] font-semibold text-lc-chalk">
+                        {decodedImport.name ?? "Shared setup"}
+                      </span>
+                      <span className="lc-mono text-[11px] font-semibold text-lc-fog">
+                        {carBoardTag(decodedImport.vehicle).label}
+                      </span>
+                    </div>
+                    <p className="lc-hint m-0">{summarizeSharedSetup(decodedImport)}</p>
+                    {decodedImport.vehicle !== p.vehicleModel ? (
+                      <p className="m-0 text-[12px] text-lc-caution">
+                        Built for {carBoardTag(decodedImport.vehicle).label} — tyre limits will be clamped to this car.
+                      </p>
+                    ) : null}
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      <Button size="sm" variant="primary" onClick={() => applySharedSetup(decodedImport, false)}>
+                        Apply
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => applySharedSetup(decodedImport, true)}>
+                        Save &amp; apply
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p role="alert" className="m-0 text-[12px] text-lc-loss">
+                    Not a valid LibreCorsa setup code or JSON file.
+                  </p>
+                )
+              ) : null}
+            </div>
+          ) : null}
           {presets.length > 0 || factoryPresets.length > 0 ? (
             <ul className="m-0 flex list-none flex-col gap-1 p-0 pt-2">
               {/* The car's own setups first, which cannot be deleted */}
@@ -557,6 +745,14 @@ export const EngineersGarage: React.FC<
                       <span className="truncate" title={x.name}>{x.name}</span>
                     </Button>
                   </span>
+                  <IconButton
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Copy share code for ${x.name}`}
+                    title="Copy share code"
+                    icon={<Icon name={copiedId === x.id ? "copied" : "share"} />}
+                    onClick={() => void copyShareCode(presetToSharedSetup(x), x.id, `“${x.name}”`)}
+                  />
                   <IconButton size="sm" variant="ghost" aria-label={`Delete ${x.name}`} icon={<Icon name="delete" />} onClick={() => deletePreset(x)} />
                 </li>
               ))}

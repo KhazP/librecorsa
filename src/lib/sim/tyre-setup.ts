@@ -75,6 +75,25 @@ function readPressures(value: unknown, limits: TyreSetupLimits): WheelPressures 
   return { fl: clampTo(p.fl, r), fr: clampTo(p.fr, r), rl: clampTo(p.rl, r), rr: clampTo(p.rr, r) };
 }
 
+/** Clamps a tyre setup cleanly into a vehicle model's allowed cold-pressure and camber ranges */
+export function clampTyreSetup(vehicle: VehicleModelId, setup: TyreSetup): TyreSetup {
+  const limits = TYRE_SETUP_LIMITS[vehicle];
+  const r = limits.pressurePsi;
+  const p = setup.coldPressurePsi;
+  return {
+    coldPressurePsi: {
+      fl: clampTo(p.fl, r),
+      fr: clampTo(p.fr, r),
+      rl: clampTo(p.rl, r),
+      rr: clampTo(p.rr, r),
+    },
+    camberDeg: {
+      front: clampTo(setup.camberDeg.front, limits.camberFrontDeg),
+      rear: clampTo(setup.camberDeg.rear, limits.camberRearDeg),
+    },
+  };
+}
+
 /** The tyre setup saved from an earlier session, inside today's ranges; null when none is saved or it is unusable */
 export function loadTyreSetup(vehicle: VehicleModelId): TyreSetup | null {
   try {
