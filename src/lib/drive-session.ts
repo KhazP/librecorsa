@@ -2546,13 +2546,21 @@ export class DriveSession {
         prevSettingsDevice = settingsNow.device;
         lastDrivingInput = null;
       }
+      if (
+        (lastDrivingInput === "touch" && !touchInput.active) ||
+        ((lastDrivingInput === "controller" || lastDrivingInput === "wheel") && device.source === null)
+      ) {
+        lastDrivingInput = null;
+      }
+      const wheelClutchBound = settingsNow.wheel.clutch !== null && device.wheelClutchConnected === true;
+      const legacyAsWheel = device.source === "legacy" && (settingsNow.device === "wheel" || wheelClutchBound);
       const inputNow = drivingInputOf({
         touch,
         source: device.source,
         mouseSteer: settings.mouseSteer,
         keys: keys.left || keys.right || keys.up || keys.down || keys.half || keys.halfBrake,
         pad: { throttle: gamepadThrottle, brake: gamepadBrake, steer: gamepadStick ?? gamepadSteer ?? 0 },
-        setting: settingsNow.device,
+        setting: legacyAsWheel ? "wheel" : settingsNow.device,
       });
       if (driving) {
         if (inputNow) {
@@ -2564,10 +2572,7 @@ export class DriveSession {
           device.source !== null &&
           (device.clutch > 0.05 || (device.held?.size ?? 0) > 0)
         ) {
-          lastDrivingInput =
-            device.source === "wheel" || (device.source === "legacy" && settingsNow.device === "wheel")
-              ? "wheel"
-              : "controller";
+          lastDrivingInput = device.source === "wheel" || legacyAsWheel ? "wheel" : "controller";
         }
       }
       // A manual start with no clutch bound: Gear up is the clutch from the lights until it is let go after them, as in
@@ -2579,8 +2584,7 @@ export class DriveSession {
           touchActive: touchInput.active,
           keyClutchCodes: settingsNow.keys.clutch,
           padClutchSource,
-          wheelClutchBound:
-            settingsNow.wheel.clutch !== null && device.wheelClutchConnected === true,
+          wheelClutchBound,
           settingsDevice: settingsNow.device,
           lastDrivingInput,
         });

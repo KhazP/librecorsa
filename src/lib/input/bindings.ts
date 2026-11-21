@@ -554,12 +554,20 @@ export function resolveActiveClutchBinding(params: {
   control: StartClutchControl | undefined;
   activeDevice: "keyboard" | "controller" | "wheel" | "touch";
 } {
-  if (params.touchActive || params.lastDrivingInput === "touch") {
+  if (params.touchActive) {
     return { bound: false, control: undefined, activeDevice: "touch" };
   }
+  // Ignore stale lastDrivingInput if that device has since disconnected or been turned off
+  const validLast =
+    params.lastDrivingInput === "touch"
+      ? null
+      : (params.lastDrivingInput === "controller" || params.lastDrivingInput === "wheel") && params.deviceSource === null
+        ? null
+        : params.lastDrivingInput ?? null;
+
   let activeDevice: "keyboard" | "controller" | "wheel";
-  if (params.lastDrivingInput === "keyboard" || params.lastDrivingInput === "controller" || params.lastDrivingInput === "wheel") {
-    activeDevice = params.lastDrivingInput;
+  if (validLast === "keyboard" || validLast === "controller" || validLast === "wheel") {
+    activeDevice = validLast;
   } else if (params.deviceSource === "wheel") {
     activeDevice = "wheel";
   } else if (params.settingsDevice === "controller") {

@@ -395,8 +395,26 @@ check(
     settingsDevice: 'controller',
     lastDrivingInput: null,
   });
+  const disconnectedPadStaleInput = resolveActiveClutchBinding({
+    deviceSource: null,
+    touchActive: false,
+    keyClutchCodes: ['KeyC'],
+    padClutchSource: null,
+    wheelClutchBound: false,
+    settingsDevice: 'keyboard',
+    lastDrivingInput: 'controller',
+  });
+  const disabledTouchStaleInput = resolveActiveClutchBinding({
+    deviceSource: null,
+    touchActive: false,
+    keyClutchCodes: ['KeyC'],
+    padClutchSource: null,
+    wheelClutchBound: false,
+    settingsDevice: 'keyboard',
+    lastDrivingInput: 'touch',
+  });
   check(
-    'idle pad does not disable keyboard clutch; active pad & legacy wheel clutch resolve accurately',
+    'idle pad does not disable keyboard clutch; active pad, legacy wheel clutch & unplug recovery resolve accurately',
     kbWithIdlePad.bound &&
       kbWithIdlePad.activeDevice === 'keyboard' &&
       !kbWithActivePad.bound &&
@@ -404,8 +422,12 @@ check(
       legacyWithClutch.bound &&
       legacyWithClutch.activeDevice === 'wheel' &&
       !padSettingBeforeWake.bound &&
-      padSettingBeforeWake.activeDevice === 'controller',
-    `idlePad=${kbWithIdlePad.bound}/${kbWithIdlePad.activeDevice}, activePad=${kbWithActivePad.bound}, legacy=${legacyWithClutch.bound}, padWake=${padSettingBeforeWake.bound}`,
+      padSettingBeforeWake.activeDevice === 'controller' &&
+      disconnectedPadStaleInput.bound &&
+      disconnectedPadStaleInput.activeDevice === 'keyboard' &&
+      disabledTouchStaleInput.bound &&
+      disabledTouchStaleInput.activeDevice === 'keyboard',
+    `idlePad=${kbWithIdlePad.bound}/${kbWithIdlePad.activeDevice}, activePad=${kbWithActivePad.bound}, legacy=${legacyWithClutch.bound}, padWake=${padSettingBeforeWake.bound}, unplugged=${disconnectedPadStaleInput.bound}, touchOff=${disabledTouchStaleInput.bound}`,
   );
 }
 
