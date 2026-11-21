@@ -60,12 +60,26 @@ def twaManifest = [
 android {
     compileSdkVersion 36
     namespace "org.librecorsa.app"
+    // Optional tag-driven version overrides for CI releases; local builds keep the defaults below.
+    def releaseVersionName = System.getenv('LIBRECORSA_ANDROID_VERSION_NAME')
+    def releaseVersionCodeRaw = System.getenv('LIBRECORSA_ANDROID_VERSION_CODE')
+    def resolvedVersionName = (releaseVersionName != null && !releaseVersionName.trim().isEmpty())
+        ? releaseVersionName.trim()
+        : "0.2.0"
+    def resolvedVersionCode = 2
+    if (releaseVersionCodeRaw != null && !releaseVersionCodeRaw.trim().isEmpty()) {
+        def parsed = releaseVersionCodeRaw.trim()
+        if (!parsed.isInteger() || parsed.toInteger() < 1) {
+            throw new GradleException("LIBRECORSA_ANDROID_VERSION_CODE must be a positive integer")
+        }
+        resolvedVersionCode = parsed.toInteger()
+    }
     defaultConfig {
         applicationId "org.librecorsa.app"
         minSdkVersion 24
         targetSdkVersion 36
-        versionCode 2
-        versionName "0.2.0"
+        versionCode resolvedVersionCode
+        versionName resolvedVersionName
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
