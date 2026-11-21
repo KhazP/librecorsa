@@ -285,6 +285,8 @@ export class SimRuntime {
     if (this.car) {
       this.car.raceControl = race.ownRaceControl;
       this.car.gridHold = false;
+      this.car.aiSpeedCapMs = Infinity;
+      this.car.aiLineBiasM = 0;
     }
   }
 

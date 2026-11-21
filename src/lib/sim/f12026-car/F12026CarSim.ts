@@ -2130,7 +2130,7 @@ export class F12026CarSim implements SimulatorCar {
         clutch: pinned ? 1 : this.aiAutopilot ? undefined : this.vehicle.autoClutch ? inputs.clutch : (inputs.clutch ?? 0),
       };
       // A car whose state has blown up hands back a non-finite command: the rack must not keep it past the rescue
-      this.steerCmd = Number.isFinite(cmd.steer) ? cmd.steer : 0;
+      this.steerCmd = Number.isFinite(vin.steer) ? vin.steer : 0;
       _v.copy(v.velocity);
       v.step(CONTROL_DT_S, vin);
       // Barrier contact this tick, while moving: every fixed step is counted, not only a frame's last

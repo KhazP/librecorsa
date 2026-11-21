@@ -1408,7 +1408,7 @@ export class AiOpponentField implements AiRace {
     this.runPlanJobs();
     if (this.phase === 'lights' && this.preStartS > 0) {
       this.preStartS = Math.max(0, this.preStartS - dt);
-      this.capPlayerAutopilot(this.track.totalLengthM);
+      this.capPlayerAutopilot(this.track.totalLengthM, dt);
       for (const car of this.cars) this.syncPeer(car);
       return;
     }
@@ -1420,7 +1420,7 @@ export class AiOpponentField implements AiRace {
         this.lightsOn = 0;
       }
       // Keep player autopilot capped & aligned to its grid lane through the lights and on the exact lights-out tick
-      this.capPlayerAutopilot(this.track.totalLengthM);
+      this.capPlayerAutopilot(this.track.totalLengthM, dt);
       for (const car of this.cars) this.syncPeer(car);
       return;
     }
@@ -1721,7 +1721,7 @@ export class AiOpponentField implements AiRace {
   private planTraffic(dt: number): void {
     const L = this.track.totalLengthM;
     const decel = this.classId === 'gt3' ? 16 : 32;
-    this.capPlayerAutopilot(L);
+    this.capPlayerAutopilot(L, dt);
     // Leader first: each follower then plans against the paths the cars ahead have just chosen
     const order = this.trafficOrderBuf;
     order.length = this.cars.length;
@@ -2209,10 +2209,17 @@ export class AiOpponentField implements AiRace {
    * The player's car on autopilot drives its line blind to traffic: in a race it gets the same grid-lane hold off the
    * start and "never closer than it could stop" cap as the AI cars, or it swerves across rows / runs into the back of them.
    */
-  private capPlayerAutopilot(L: number): void {
+  private capPlayerAutopilot(L: number, dtS: number): void {
     const me = this.cars.find((c) => c.isPlayer);
     if (!me) return;
     const sim = me.sim;
+    // Always retire the opening grid-lane lock once the opening run ends, even while driving manually
+    if (me.startLaneM !== null && this.phase === 'racing') {
+      const ahead = this.track.getSampleAtDistance((sim.sMeters + Math.max(40, sim.vxMs * 2)) % L);
+      if (Math.abs(ahead.curvature) > 0.006 || me.distM > this.rc.startLaneMaxM || this.raceTimeS > 6) {
+        me.startLaneM = null;
+      }
+    }
     if (!sim.aiAutopilot) {
       if (sim.aiSpeedCapMs !== undefined && sim.aiSpeedCapMs !== Infinity) sim.aiSpeedCapMs = Infinity;
       if (me.biasM !== 0) {
@@ -2225,22 +2232,12 @@ export class AiOpponentField implements AiRace {
     const line = aiLineOffsetM(sample, sim.racingLineId);
     // Hold the grid lane through the lights and off the start until a corner arrives or the opening run is done
     if (me.startLaneM !== null) {
-      if (this.phase === 'racing') {
-        const ahead = this.track.getSampleAtDistance((sim.sMeters + Math.max(40, sim.vxMs * 2)) % L);
-        if (Math.abs(ahead.curvature) > 0.006 || me.distM > this.rc.startLaneMaxM || this.raceTimeS > 6) {
-          me.startLaneM = null;
-        }
-      }
-      if (me.startLaneM !== null) {
-        me.biasM = clamp(me.startLaneM - line, -6, 6);
-        if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = me.biasM;
-      } else if (me.biasM !== 0) {
-        // Ease back to the racing line instead of snapping
-        me.biasM = Math.abs(me.biasM) < 0.05 ? 0 : me.biasM * 0.94;
-        if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = me.biasM;
-      }
+      me.biasM = clamp(me.startLaneM - line, -6, 6);
+      if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = me.biasM;
     } else if (me.biasM !== 0) {
-      me.biasM = Math.abs(me.biasM) < 0.05 ? 0 : me.biasM * 0.94;
+      // Ease back to the racing line at a frame-rate-independent rate (τ ≈ 0.25 s)
+      const decay = Math.exp(-Math.max(0, dtS) / 0.25);
+      me.biasM = Math.abs(me.biasM) < 0.05 ? 0 : me.biasM * decay;
       if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = me.biasM;
     }
 

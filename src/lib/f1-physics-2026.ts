@@ -586,6 +586,8 @@ export class F1Physics2026 {
   public readonly overtakingRules: OvertakingRules = 'straight-mode-2026';
   private readonly overtake = new OvertakeGrant();
   public aiAutopilot = false;
+  /** Held on a manual-start grid through the lights (`SimulatorCar.gridHold`) */
+  public gridHold = false;
   /** AI driver pace (fraction of the car's limit), line shift (m, + right) and speed ceiling (m/s) */
   public aiPaceScale = 1;
   public aiLineBiasM = 0;
@@ -1773,6 +1775,12 @@ export class F1Physics2026 {
         pedalCap = Math.min(pedalCap, cap);
       }
       brake = Math.min(ai.brakeCmd, Math.max(0.15, pedalCap)) * this.aiBrakeTrim;
+      if (this.gridHold) {
+        throttle = 0;
+        launchPedal = 0;
+        brake = 1;
+        steerNorm = 0;
+      }
       this.aiTargetSpeedKmh = ai.targetSpeedKmh;
       this.activeAeroMode = isRearFlapAllowedInWet(this.weatherSample.wetness) ? ai.aeroMode : 'Z_MODE';
       // An earned Overtake Mode is spent in the zones, where the AI car overtakes

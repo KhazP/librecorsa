@@ -327,5 +327,36 @@ check('and its car drives on alone', host.remote && sim.sMeters !== sBefore && r
   race4.dispose();
 }
 
+// ---- Leaving a worker race while autopilot was held on the lights must release speed cap & lane bias (#149)
+{
+  const link5 = host.raceLink();
+  if (link5) {
+    const race5 = new WorkerAiField(link5, env, car, OPPONENTS, SKILL, () => car.groundQuery ?? null);
+    startAiRace(race5, { ...DEFAULT_RACE_SETUP, launch: 'manual' }, null);
+    car.aiAutopilot = true;
+    for (let f = 0; f < 40; f++) {
+      car.step(SIM_TICK_S, {});
+      loop.advance(SIM_TICK_S);
+      host.endFrame(true);
+      race5.update();
+    }
+    // Leave race mid-lights back to solo practice with autopilot still active (4 s = 1000 ticks at 250 Hz)
+    race5.dispose();
+    const sBefore = car.sMeters;
+    for (let f = 0; f < 1000; f++) {
+      car.step(SIM_TICK_S, {});
+      loop.advance(SIM_TICK_S);
+      host.endFrame(true);
+    }
+    const movedM = ((car.sMeters - sBefore) % track.totalLengthM + track.totalLengthM) % track.totalLengthM;
+    check(
+      'leaving a worker race during lights releases autopilot speed cap & lane bias',
+      movedM > 35 && car.telemetry.speedKmh > 80,
+      `moved=${movedM.toFixed(1)} m, speed=${car.telemetry.speedKmh.toFixed(0)} km/h`
+    );
+    car.aiAutopilot = false;
+  }
+}
+
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll worker race checks passed.');
 if (failures.length) process.exitCode = 1;
