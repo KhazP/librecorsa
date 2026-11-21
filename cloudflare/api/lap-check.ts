@@ -5,6 +5,7 @@
 import { lapPlausibilityProblem } from "../../src/lib/sim/lap-plausibility";
 import { isPointToPointTrack } from "../../src/lib/track-kinds";
 import { LAP_SAMPLE_STRIDE, parseLapConditions, type LapConditions, type LapRecording } from "../../src/lib/sim/lap-types";
+import { parseSharedSetup, type SharedCarSetup } from "../../src/lib/sim/setup-share";
 import { isVehicleModelId } from "../../src/types/f1";
 
 export type CheckedLap = LapRecording & { conditions: LapConditions };
@@ -94,6 +95,14 @@ export function checkLap(raw: unknown): LapCheck {
   const problem = lapPlausibilityProblem(samples, { open: isPointToPointTrack(trackId) });
   if (problem) return bad(problem);
 
+  // Optional car setup: strictly validated and clamped server-side, must match the lap's vehicle
+  let setup: SharedCarSetup | undefined;
+  if (raw.setup !== undefined) {
+    const parsed = parseSharedSetup(raw.setup);
+    if (!parsed || parsed.vehicle !== vehicle) return bad("Invalid setup");
+    setup = parsed;
+  }
+
   return {
     ok: true,
     rec: {
@@ -108,6 +117,7 @@ export function checkLap(raw: unknown): LapCheck {
       sampleHz,
       data: samples,
       conditions,
+      ...(setup ? { setup } : {}),
     },
   };
 }

@@ -3,6 +3,7 @@
  * Plain JSON-friendly data so recordings can be stored (IndexedDB), exported as files and uploaded.
  */
 import type { AssistPreset, TireCompound, VehicleModelId } from "@/types/f1";
+import type { SharedCarSetup } from "./setup-share";
 import { lc26OnRigidBody } from "@/lib/cars/lc26-engine";
 import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
 import { USAGE_EXTRAS } from "@/lib/net/usage-modes";
@@ -351,6 +352,8 @@ export interface LapRecording {
    */
   trackGeometry?: string;
   trackLengthM?: number;
+  /** Optional car setup used to drive this lap (stored in local IDB and R2 ghost JSON for "Apply setup") */
+  setup?: SharedCarSetup;
 }
 
 /** A corner of the lap: the lowest speed through it, and the best seen on earlier laps */
@@ -400,6 +403,10 @@ export interface LeaderboardEntry {
   conditions?: LapConditions;
   /** Remote entries can carry an id to download their ghost */
   id?: string;
+  /** True when the lap carries a saved car setup that other drivers can apply */
+  hasSetup?: boolean;
+  /** Inline setup on locally loaded entries (remote entries load theirs on demand via `/api/laps/<id>`) */
+  setup?: SharedCarSetup;
 }
 
 /** One car's pose in a replay frame */

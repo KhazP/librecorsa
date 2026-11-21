@@ -79,6 +79,8 @@ export interface OnlineBoardProps {
   boardVersion?: number;
   /** Races a lap's ghost; offered on `ghostCircuit` only (the circuit loaded) */
   onRaceGhost?: (entry: LeaderboardEntry) => void;
+  /** Applies the car setup saved with a lap (offered on rows with `hasSetup` matching the player's car) */
+  onApplySetup?: (entry: LeaderboardEntry) => Promise<void> | void;
   ghostCircuit?: string;
   /** At the foot of the card, under the pager (the driver key) */
   footer?: React.ReactNode;
@@ -112,6 +114,20 @@ const RaceGhost: React.FC<{ onClick: () => void; label?: string; of?: string }> 
     <IconButton size="sm" variant="secondary" icon={<Icon name="ghost" />} aria-label={`Race the ghost of ${of}`} title="Race ghost" onClick={onClick} />
   );
 
+/** The button that applies the car setup saved with a lap */
+const ApplySetup: React.FC<{ onClick: () => void; of: string; loading?: boolean }> = ({ onClick, of, loading }) => (
+  <IconButton
+    size="sm"
+    variant="secondary"
+    icon={<Icon name="garage" />}
+    aria-label={`Apply setup from ${of}`}
+    title="Apply setup"
+    disabled={loading}
+    aria-busy={loading || undefined}
+    onClick={onClick}
+  />
+);
+
 export const OnlineBoard: React.FC<OnlineBoardProps> = ({
   title,
   headingAs: Heading = "h3",
@@ -128,6 +144,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
   driverName = "",
   boardVersion = 0,
   onRaceGhost,
+  onApplySetup,
   ghostCircuit,
   footer,
   boardChoice,
@@ -136,6 +153,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
 }) => {
   const rootRef = useRef<HTMLElement | null>(null);
   const headingId = React.useId();
+  const [applyingKey, setApplyingKey] = useState<string | null>(null);
   const [scopeChosen, setScope] = useState<Scope>("mine");
   const scope: Scope = myCar ? scopeChosen : "all";
   // Without a car being driven, the car picked from the list (every car's board until one is)
@@ -288,12 +306,23 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
   };
 
   const ghostsHere = Boolean(onRaceGhost) && circuit === ghostCircuit;
+  const applySetup = (entry: LeaderboardEntry, rowKey: string) => {
+    if (!onApplySetup || applyingKey) return;
+    setApplyingKey(rowKey);
+    void Promise.resolve(onApplySetup(entry)).finally(() => setApplyingKey(null));
+  };
   const offset = shown?.offset ?? (page - 1) * BOARD_PAGE_SIZE;
   const rows: BoardRow[] = (shown?.entries ?? []).map((e, i) => {
     const pos = offset + i + 1;
     const tag = car === ALL_CARS ? carTag(e.vehicle) : null;
+    const rowKey = e.id ?? `${e.code}-${e.recordedAt}-${pos}`;
+    const canApply = Boolean(onApplySetup && e.hasSetup && (!myCar || e.vehicle === myCar.vehicle));
+    const setupBtn = canApply ? (
+      <ApplySetup of={`${e.name}'s lap`} loading={applyingKey === rowKey} onClick={() => applySetup(e, rowKey)} />
+    ) : null;
+    const ghostBtn = ghostsHere ? <RaceGhost of={`${e.name}'s lap`} onClick={() => onRaceGhost?.(e)} /> : null;
     return {
-      key: e.id ?? `${e.code}-${e.recordedAt}-${pos}`,
+      key: rowKey,
       rank: pos,
       code: e.code,
       title: e.name,
@@ -309,7 +338,13 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
       fastest: pos === 1,
       sectorsMs: e.sectorTimesMs,
       mine: myKey !== "" && driverNameKey(e.name) === myKey,
-      action: ghostsHere ? <RaceGhost of={`${e.name}'s lap`} onClick={() => onRaceGhost?.(e)} /> : undefined,
+      action:
+        setupBtn || ghostBtn ? (
+          <span className="inline-flex items-center gap-1.5">
+            {setupBtn}
+            {ghostBtn}
+          </span>
+        ) : undefined,
     };
   });
 

@@ -277,6 +277,10 @@ export function lapToEntry(rec: LapRecording, source: "local" | "remote", id?: s
   };
   if (rec.conditions) entry.conditions = { ...rec.conditions };
   if (id !== undefined) entry.id = id;
+  if (rec.setup) {
+    entry.hasSetup = true;
+    entry.setup = rec.setup;
+  }
   return entry;
 }
 
@@ -330,6 +334,7 @@ function toWirePayload(rec: LapRecording & { conditions: LapConditions }): LapRe
     sampleHz: rec.sampleHz,
     data: rec.data,
     conditions: { ...rec.conditions },
+    ...(rec.setup ? { setup: rec.setup } : {}),
   };
 }
 

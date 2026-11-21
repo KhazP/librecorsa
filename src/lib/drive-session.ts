@@ -46,6 +46,7 @@ import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from "@/lib/sim/rev-range";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/lib/sim/car-setup";
+import { buildSharedSetup, garageTunerFrom } from "@/lib/sim/setup-share";
 import { CameraRig, type CameraRigCar } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { LEGACY_TRACK_LIMITS, TrackLimitsMonitor, type TrackLimitsRules } from "@/lib/sim/track-limits";
@@ -3331,6 +3332,14 @@ export class DriveSession {
         if (done) {
           if (!done.summary.valid && wallDeletedLaps.has(done.summary.lapNumber)) done.summary.wallContact = true;
           for (const lap of wallDeletedLaps) if (lap <= done.summary.lapNumber) wallDeletedLaps.delete(lap);
+          done.recording.setup = buildSharedSetup({
+            vehicle: vehicleNow,
+            chassis: this.snapshot.chassisSetup,
+            tyre: this.snapshot.tyreSetup,
+            compound: this.snapshot.tireCompound,
+            aero: physics.aeroPreset,
+            tuner: garageTunerFrom(physics.telemetry.liveTuner),
+          });
           for (const listener of lapListeners) listener(done.summary, done.recording);
         }
       }

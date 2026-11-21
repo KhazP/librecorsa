@@ -52,7 +52,8 @@ import { getTrackInfo, LISTED_TRACKS, TRACKS } from "@/lib/track-registry";
 import { F1TelemetryHud } from "@/components/F1TelemetryHud";
 import { roomFromUrl } from "@/lib/net/invite-room";
 import { CAMERA_MODES, nextCameraMode } from "@/lib/render/camera-modes";
-import { saveTyreSetup } from "@/lib/sim/tyre-setup";
+import { clampTyreSetup, saveTyreSetup } from "@/lib/sim/tyre-setup";
+import { garageTunerFrom, resolveSetupForCar, summarizeSharedSetup } from "@/lib/sim/setup-share";
 import { LoadingScreen } from "@/components/menu/LoadingScreen";
 import { TitleMenu } from "@/components/menu/TitleMenu";
 import { useUpdateAutoReload } from "@/components/menu/UpdateReady";
@@ -1129,6 +1130,66 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setSettings((prev) => (prev.ghost ? prev : { ...prev, ghost: true }));
   }, [session, track]);
 
+  const [setupBoardNotice, setSetupBoardNotice] = useState<{ text: string; undo?: () => void } | null>(null);
+  const handleApplyLeaderboardSetup = useCallback(
+    async (entry: LeaderboardEntry) => {
+      const rec = entry.setup
+        ? null
+        : entry.source === "remote" && entry.id
+          ? await fetchRemoteGhost(entry.id).catch(() => null)
+          : await loadBestLap(entry.trackId, entry.vehicle, entry.conditions ? lapBoardClass(entry.conditions) : null).catch(() => null);
+      const setup = entry.setup ?? rec?.setup ?? null;
+      if (!setup) {
+        setSetupBoardNotice({ text: `No setup saved with ${entry.name}'s lap` });
+        return;
+      }
+      const snap = sessionRef.current?.getSnapshot();
+      const prevChassis = snap?.chassisSetup ?? chassisSetup;
+      const prevTyre = snap?.tyreSetup ?? tyreSetup;
+      const prevCompound = snap?.tireCompound ?? tireCompound;
+      const prevAero = aeroPreset;
+      const prevTuner = garageTunerFrom(snap?.telemetry.liveTuner ?? telemetry.liveTuner);
+      const targetVehicle = vehicleModelRef.current;
+      const resolved = resolveSetupForCar(
+        setup,
+        targetVehicle,
+        snap?.defaultTyreSetup ?? defaultTyreSetup,
+        (t) => clampTyreSetup(targetVehicle, t),
+        prevCompound,
+        prevAero,
+        prevTuner,
+      );
+      handleChangeChassisSetup(resolved.chassis);
+      handleChangeTyreSetup(resolved.tyre);
+      handleTireCompoundChange(resolved.compound);
+      handleAeroPresetChange(resolved.aero);
+      handleChangeLiveTuner(resolved.tuner);
+      setSetupBoardNotice({
+        text: `Applied ${entry.name}'s setup (${summarizeSharedSetup(setup)})`,
+        undo: () => {
+          handleChangeChassisSetup(prevChassis);
+          handleChangeTyreSetup(prevTyre);
+          handleTireCompoundChange(prevCompound);
+          handleAeroPresetChange(prevAero);
+          handleChangeLiveTuner(prevTuner);
+        },
+      });
+    },
+    [
+      aeroPreset,
+      chassisSetup,
+      defaultTyreSetup,
+      handleAeroPresetChange,
+      handleChangeChassisSetup,
+      handleChangeLiveTuner,
+      handleChangeTyreSetup,
+      handleTireCompoundChange,
+      telemetry.liveTuner,
+      tireCompound,
+      tyreSetup,
+    ],
+  );
+
   const handleRaceGhostEntry = useCallback(
     async (entry: LeaderboardEntry) => {
       const rec =
@@ -1994,6 +2055,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       vehicle: vehicleModel,
       driverName: settings.profile.name,
       onRaceGhost: (entry: LeaderboardEntry) => void handleRaceGhostEntry(entry),
+      onApplySetup: handleApplyLeaderboardSetup,
+      setupNotice: setupBoardNotice,
+      onDismissSetupNotice: () => setSetupBoardNotice(null),
       boardStatus: boardStatusOf,
       onPostLap: handlePostBest,
       onImportGhost: (file: File) => void handleImportGhost(file),

@@ -5,6 +5,7 @@
  */
 import { foldVehicleModelId, isVehicleModelId, type AssistPreset, type CarTelemetry, type TireCompound, type VehicleModelId } from "@/types/f1";
 import { ASSIST_PRESETS, LAP_SAMPLE_STRIDE, lapPhysicsVersion, parseLapConditions, type LapInput } from "./lap-types";
+import { parseSharedSetup } from "./setup-share";
 import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
 import type { CornerStat, LapConditions, LapRecording, LapSample, LapSummaryData } from "./lap-types";
 
@@ -627,5 +628,10 @@ export function validateLapRecording(raw: unknown): LapRecording | null {
   // The circuit version the lap was driven on (optional: older laps and downloaded ghosts lack it)
   if (typeof r.trackGeometry === "string" && /^[0-9a-f]{8}$/.test(r.trackGeometry)) out.trackGeometry = r.trackGeometry;
   if (finite(r.trackLengthM) && r.trackLengthM > 100 && r.trackLengthM < 100_000) out.trackLengthM = r.trackLengthM;
+  // Optional car setup attached to the lap (silently dropped if corrupted on an older local save, preserved when valid)
+  if (r.setup !== undefined) {
+    const setup = parseSharedSetup(r.setup);
+    if (setup && setup.vehicle === out.vehicle) out.setup = setup;
+  }
   return out;
 }

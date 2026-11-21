@@ -336,7 +336,7 @@ const open = { ...real, data: real.data.slice(0, Math.floor(n * 0.9) * S) };
 check('a lap that stops short of the line is refused', lapPlausibilityProblem(open.data) !== null, String(lapPlausibilityProblem(open.data)));
 
 // 3. The board API -----------------------------------------------------------------------------------------------------
-const schema = ['0001_lap_boards.sql', '0007_lap_input.sql'].map((f) => readFileSync(join(__dirname, '../cloudflare/migrations', f), 'utf8')).join('\n');
+const schema = ['0001_lap_boards.sql', '0007_lap_input.sql', '0009_lap_setup.sql'].map((f) => readFileSync(join(__dirname, '../cloudflare/migrations', f), 'utf8')).join('\n');
 const ghosts = fakeR2();
 // A Wednesday noon in a week whose challenge is the test lap's circuit and car (RISE Motordrome's short lap, the 2026 prototype)
 let nowMs = Date.UTC(2026, 10, 11, 12);
@@ -782,6 +782,43 @@ async function main(): Promise<void> {
     const slower = await send(variant(1.03, 'Wheel Driver', { input: 'touch' }), KEY_A);
     laps = await rows();
     check('input: a slower lap on another device is refused as not faster', slower.notFaster === true && laps.find((l) => l.name === 'Wheel Driver')?.conditions.input === 'controller');
+  }
+
+  {
+    // Shared setups attached to laps (#148): sanitized on upload, flagged `hasSetup` on rows, preserved in R2 ghost JSON
+    const own: BoardDeps = { db: fakeD1(schema), ghosts: fakeR2(), eventRule: challengeProblem, now: () => nowMs };
+    const post = async (rec: unknown, key: string) =>
+      submitLap(own, new Request('https://librecorsa.test/api/laps', { method: 'POST', body: JSON.stringify({ rec, driverKey: key }), headers: { 'CF-Connecting-IP': `10.10.0.${ipCounter++ % 250}` } }));
+    const withSetup: LapRecording = {
+      ...variant(1.01, 'Setup Sharer'),
+      setup: {
+        v: 1,
+        vehicle: 'lc26',
+        aero: 'low_downforce',
+        compound: 'soft',
+        chassis: { frontWingClicks: 999, rearWingClicks: -3 },
+        tuner: { brakeBiasPct: 54.5 },
+      },
+    };
+    const posted = await post(withSetup, KEY_A);
+    const listRes = (await listLaps(own, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=lc26&physics=${CURRENT}`))).body as { laps: Array<{ id: string; name: string; hasSetup?: boolean }> };
+    const row = listRes.laps.find((l) => l.name === 'Setup Sharer');
+    const storedText = row ? await (await own.ghosts.get(`laps/${row.id}.json`))?.text() : null;
+    const storedLap = storedText ? validateLapRecording(JSON.parse(storedText)) : null;
+    check(
+      'setup: uploaded lap flags hasSetup on board row and clamps out-of-range setup in R2 JSON',
+      posted.status === 200 && row?.hasSetup === true && storedLap?.setup?.aero === 'low_downforce' && storedLap?.setup?.chassis?.frontWingClicks === 25 && storedLap?.setup?.chassis?.rearWingClicks === -3,
+      `status=${posted.status} hasSetup=${String(row?.hasSetup)} fw=${String(storedLap?.setup?.chassis?.frontWingClicks)} rw=${String(storedLap?.setup?.chassis?.rearWingClicks)}`,
+    );
+
+    const mismatched = await post({ ...variant(1.02, 'Wrong Car'), setup: { v: 1, vehicle: 'amg-gt3', aero: 'balanced' } }, KEY_B);
+    check('setup: setup for a different vehicle is refused on upload', mismatched.status === 400);
+
+    // Pre-0009 database (without has_setup column) still accepts uploads with setups cleanly (zero-downtime deploy)
+    const pre0009 = ['0001_lap_boards.sql', '0007_lap_input.sql'].map((f) => readFileSync(join(__dirname, '../cloudflare/migrations', f), 'utf8')).join('\n');
+    const oldDeps: BoardDeps = { db: fakeD1(pre0009), ghosts: fakeR2(), eventRule: challengeProblem, now: () => nowMs };
+    const oldPost = await submitLap(oldDeps, new Request('https://librecorsa.test/api/laps', { method: 'POST', body: JSON.stringify({ rec: withSetup, driverKey: KEY_A }), headers: { 'CF-Connecting-IP': '10.10.1.1' } }));
+    check('setup: pre-0009 schema without has_setup column still stores lap cleanly', oldPost.status === 200);
   }
 
   if (failures.length > 0) {

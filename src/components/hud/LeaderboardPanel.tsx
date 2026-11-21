@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
 import { boardChoiceOf, boardChoiceOfLap, boardChoices, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { boardLabel } from "@/lib/net/leaderboard";
-import { Button, Card, IconButton, EmptyState, Segmented, Select, SettingRow } from "@/components/ui";
+import { Button, Card, IconButton, EmptyState, Segmented, Select, SettingRow, Toast } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { OnlineBoard, type BoardCarTag } from "@/components/board/OnlineBoard";
 import { BoardTable, type BoardRow } from "@/components/board/board-table";
@@ -47,6 +47,11 @@ export interface LeaderboardPanelProps {
   /** The player's name, to mark their row */
   driverName?: string;
   onRaceGhost?: (entry: LeaderboardEntry) => void;
+  /** Applies the car setup saved with a local or online lap */
+  onApplySetup?: (entry: LeaderboardEntry) => Promise<void> | void;
+  /** Latest feedback banner after applying a setup from a leaderboard row */
+  setupNotice?: { text: string; undo?: () => void } | null;
+  onDismissSetupNotice?: () => void;
   /** Whether a saved best is on its online board (leaderboard.ts `boardStatusOf`); null for a lap that can't go on one */
   boardStatus?: (entry: LeaderboardEntry) => { posted: true } | { posted: false; error: string | null } | null;
   /** Posts a saved best that isn't on its online board; resolves with the board's answer */
@@ -92,6 +97,9 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   vehicle,
   driverName = "",
   onRaceGhost,
+  onApplySetup,
+  setupNotice = null,
+  onDismissSetupNotice,
   boardStatus,
   onPostLap,
   onImportGhost,
@@ -220,6 +228,17 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
     const unposted = status && !status.posted ? { error: status.error ?? postErrors[id] ?? null } : null;
     const sending = posting.has(id);
     const ghost = Boolean(onRaceGhost) && e.trackId === here ? <RaceGhost of={`your ${vehicleLabel(e.vehicle)} lap`} onClick={() => onRaceGhost?.(e)} /> : null;
+    const setupBtn =
+      onApplySetup && (e.hasSetup || e.setup) && (!vehicle || e.vehicle === vehicle) ? (
+        <IconButton
+          size="sm"
+          variant="secondary"
+          icon={<Icon name="garage" />}
+          aria-label={`Apply setup from your ${vehicleLabel(e.vehicle)} lap`}
+          title="Apply setup"
+          onClick={() => void onApplySetup(e)}
+        />
+      ) : null;
     // Worded where the list has room, an icon in a narrow one (a phone), where the ghost button must still fit
     const post =
       unposted && onPostLap ? (
@@ -261,9 +280,10 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
         )
       ) : undefined,
       action:
-        post || ghost ? (
+        post || setupBtn || ghost ? (
           <span className="inline-flex items-center gap-1.5">
             {post}
+            {setupBtn}
             {ghost}
           </span>
         ) : undefined,
@@ -322,6 +342,36 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
         </div>
       ) : null}
 
+      {setupNotice ? (
+        <div role="status">
+          <Toast
+            tone="neutral"
+            className="w-full"
+            action={
+              <span className="flex items-center gap-1">
+                {setupNotice.undo ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setupNotice.undo?.();
+                      onDismissSetupNotice?.();
+                    }}
+                  >
+                    Undo
+                  </Button>
+                ) : null}
+                {onDismissSetupNotice ? (
+                  <IconButton size="sm" variant="ghost" aria-label="Dismiss" icon={<Icon name="close" />} onClick={onDismissSetupNotice} />
+                ) : null}
+              </span>
+            }
+          >
+            {setupNotice.text}
+          </Toast>
+        </div>
+      ) : null}
+
       {/* The online board: its circuit picker sets the circuit for the whole panel */}
       {remoteEnabled ? (
         <OnlineBoard
@@ -334,6 +384,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
           driverName={driverName}
           boardVersion={boardVersion}
           onRaceGhost={onRaceGhost}
+          onApplySetup={onApplySetup}
           ghostCircuit={here}
           footer={driverKey}
           boardChoice={choice.id}

@@ -121,6 +121,7 @@ export function parseBoardEntry(
     conditions,
   };
   if (typeof raw.id === "string") entry.id = raw.id;
+  if (raw.hasSetup === true) entry.hasSetup = true;
   return entry;
 }
 

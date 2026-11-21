@@ -83,6 +83,8 @@ interface LapRow {
   s2_ms: number;
   s3_ms: number;
   recorded_at: number;
+  /** 1 when the lap's R2 JSON carries a car setup; absent/0 on older laps and pre-0009 schemas */
+  has_setup?: number | null;
 }
 
 /** Board row for the game: a lap without its samples */
@@ -95,6 +97,7 @@ const entryOf = (r: LapRow) => ({
   vehicle: r.vehicle,
   trackId: r.track_id,
   recordedAt: r.recorded_at,
+  ...(r.has_setup ? { hasSetup: true } : {}),
   conditions: {
     assists: r.assists,
     realism: r.realism,
@@ -188,18 +191,54 @@ async function storeLap(deps: BoardDeps, rec: CheckedLap, event: string, nameKey
   if (prev && prev.lap_time_ms <= rec.lapTimeMs) return false;
 
   const id = crypto.randomUUID();
-  // The ghost before the row that points at it
+  // The ghost (and optional sanitized setup) before the row that points at it
   await deps.ghosts.put(ghostKey(id), JSON.stringify(rec), { httpMetadata: { contentType: "application/json" } });
-  const writes: D1PreparedStatement[] = [];
-  if (prev) writes.push(deps.db.prepare("DELETE FROM laps WHERE id = ?").bind(prev.id));
-  writes.push(
-    deps.db
-      .prepare(
-        "INSERT INTO laps (id, track_id, vehicle, physics, event, assists, realism, surface, compound, input, name_key, driver_name, driver_code, lap_time_ms, s1_ms, s2_ms, s3_ms, recorded_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      )
-      .bind(id, rec.trackId, rec.vehicle, c.physicsVersion, event, c.assists, c.realism, c.surface, c.compound, c.input ?? null, nameKey, rec.driverName, rec.driverCode, rec.lapTimeMs, rec.sectorTimesMs[0], rec.sectorTimesMs[1], rec.sectorTimesMs[2], rec.recordedAt, deps.now()),
-  );
-  await deps.db.batch(writes);
+  const baseValues = [
+    id,
+    rec.trackId,
+    rec.vehicle,
+    c.physicsVersion,
+    event,
+    c.assists,
+    c.realism,
+    c.surface,
+    c.compound,
+    c.input ?? null,
+    nameKey,
+    rec.driverName,
+    rec.driverCode,
+    rec.lapTimeMs,
+    rec.sectorTimesMs[0],
+    rec.sectorTimesMs[1],
+    rec.sectorTimesMs[2],
+    rec.recordedAt,
+    deps.now(),
+  ];
+  const runInsert = async (withSetup: boolean) => {
+    const writes: D1PreparedStatement[] = [];
+    if (prev) writes.push(deps.db.prepare("DELETE FROM laps WHERE id = ?").bind(prev.id));
+    writes.push(
+      withSetup
+        ? deps.db
+            .prepare(
+              "INSERT INTO laps (id, track_id, vehicle, physics, event, assists, realism, surface, compound, input, name_key, driver_name, driver_code, lap_time_ms, s1_ms, s2_ms, s3_ms, recorded_at, created_at, has_setup) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(...baseValues, rec.setup ? 1 : 0)
+        : deps.db
+            .prepare(
+              "INSERT INTO laps (id, track_id, vehicle, physics, event, assists, realism, surface, compound, input, name_key, driver_name, driver_code, lap_time_ms, s1_ms, s2_ms, s3_ms, recorded_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(...baseValues),
+    );
+    await deps.db.batch(writes);
+  };
+  try {
+    await runInsert(true);
+  } catch (err) {
+    // Rolling-deploy / pre-0009 schema compatibility: fall back cleanly if `has_setup` column is not migrated yet
+    if (String(err).includes("has_setup")) await runInsert(false);
+    else throw err;
+  }
   if (prev) await deps.ghosts.delete(ghostKey(prev.id));
   return true;
 }
