@@ -33,6 +33,7 @@ import { singlePassTransparency } from "@/lib/render/static-scene";
 import { createSuspensionArms, type ArmHub } from "@/lib/render/suspension-arms";
 import { disableCarCastShadow } from "@/lib/render/car-shadow-proxy";
 import { mergeStaticMeshesByMaterial } from "@/lib/render/merge-static-meshes";
+import { createOpponentLodController } from "@/lib/render/car-lod";
 
 /**
  * The 2026 Prototype's body (`public/cars/f12026/model/f12026.glb`): Qvist Designs' 2026 concept, ported by
@@ -79,6 +80,8 @@ interface TemplateAssets {
 const templatePromises = new Map<string, Promise<THREE.Group | null>>();
 // Kept out of userData: Object3D.clone() JSON-serialises userData, which would encode every texture per car
 const templateAssets = new WeakMap<THREE.Object3D, TemplateAssets>();
+/** Shared merged static BODY BufferGeometries per template so every opponent reuses one GPU buffer & one LOD1 build */
+const opponentMergedCache = new WeakMap<THREE.Object3D, Map<string, THREE.BufferGeometry>>();
 
 /** `task`: the loading-screen task its download counts toward (the player's car, or the opponents' when it differs) */
 export function loadLc26Template(modelUrl: string = LC26_MODEL_URL, task: AssetTaskId = "car"): Promise<THREE.Group | null> {
@@ -354,6 +357,7 @@ export function attachLc26Model(
       // those cannot be fetched. Both follow setTireCompound. The wheels are not mirrored, so +X is the car's left
       pirelliSidewall: "medium",
       tyreWrapOuterSide: c.isLeft ? 1 : -1,
+      subdivide: !options.opponent,
     });
   });
   corners.forEach((c, i) => (c.tyre = tyreHandles[i]));
@@ -445,10 +449,19 @@ export function attachLc26Model(
   installVertexOcclusion([bodyGroup, ...corners.map((c) => c.steer)]);
 
   // Merge static same-material meshes on BODY (on opponents this also collapses all 18 ARM_* wishbones into 1 EXT_carbon
-  // draw) and on the player's STEER_BASE (8 static wheel meshes -> 2 draws, keeping LED_RPM_0 and INT_DISPLAY separate).
+  // draw and shares the merged BufferGeometry across every opponent) and on the player's STEER_BASE.
   if (bodyNode) {
+    let geometryCache: Map<string, THREE.BufferGeometry> | undefined;
+    if (options.opponent) {
+      geometryCache = opponentMergedCache.get(template);
+      if (!geometryCache) {
+        geometryCache = new Map();
+        opponentMergedCache.set(template, geometryCache);
+      }
+    }
     mergeStaticMeshesByMaterial(bodyNode, {
       namePrefix: "LC26_BODY_Merged",
+      geometryCache,
       skip: (obj) => {
         if (obj === steerBase || obj === driver || obj === helmet || obj === harnessNode) return true;
         if (obj.userData?.aeroClosed) return true;
@@ -471,14 +484,24 @@ export function attachLc26Model(
     });
   }
 
-  // Close-range opponent cockpit/hub details: culled beyond 60 m (`wheels.detail < 2`) and kept off probe/mirror passes
+  // Close-range opponent micro-details (hubs, driver, harness, mirror glass, cockpit tub, exhaust): kept off probe/mirror
+  // passes on DETAIL_LAYER and hidden completely at LOD1 (>= 48 m), where heavy body/wing/wheel meshes swap to ~22% tris.
   const opponentCloseDetails: THREE.Object3D[] = [];
   if (options.opponent) {
     for (const c of corners) if (c.upright) opponentCloseDetails.push(c.upright);
     if (driverFigure) opponentCloseDetails.push(driverFigure.group);
     if (harnessNode) opponentCloseDetails.push(harnessNode);
+    const MICRO_MATS = new Set(["mirror_1", "mirror_2", "INT_cockpit", "EXT_exhaust"]);
+    bodyGroup.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+      if (MICRO_MATS.has((mesh.material as THREE.Material).name)) opponentCloseDetails.push(mesh);
+    });
     for (const obj of opponentCloseDetails) moveToDetailLayer(obj);
   }
+  const opponentLod = options.opponent
+    ? createOpponentLodController([bodyGroup, ...corners.map((c) => c.spin)], { microMeshes: opponentCloseDetails })
+    : null;
   let closeDetailsVisible = true;
 
   // Opponent cars cast through a 1-draw shadow proxy on SHADOW_PROXY_LAYER instead of ~60 high-poly meshes
@@ -514,12 +537,10 @@ export function attachLc26Model(
     const roadWheel = -t.steering * maxRoadWheelRad;
     updateCorners(corners, roadWheel, wheelRotationRad, wheels);
     arms?.update();
-    if (opponentCloseDetails.length) {
-      const showClose = wheels?.detail === undefined || wheels.detail >= 2;
-      if (showClose !== closeDetailsVisible) {
-        closeDetailsVisible = showClose;
-        for (const obj of opponentCloseDetails) obj.visible = showClose;
-      }
+    if (opponentLod) {
+      const lod: 0 | 1 = wheels?.lod ?? (wheels?.detail !== undefined && wheels.detail < 2 ? 1 : 0);
+      opponentLod.setLod(lod);
+      closeDetailsVisible = lod === 0;
     }
     if (!options.opponent && steerBase) steerBase.rotation.z = t.steering * lockRad;
     if (closeDetailsVisible) driverFigure?.update(t.steering * lockRad, dtSeconds);
@@ -569,6 +590,7 @@ export function attachLc26Model(
   };
 
   const dispose = () => {
+    opponentLod?.dispose();
     driverMixer?.stopAllAction();
     driverHelmet?.dispose();
     driverFigure?.dispose();

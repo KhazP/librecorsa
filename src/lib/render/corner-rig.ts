@@ -48,6 +48,8 @@ export interface WheelSeating {
    * its hub. The AI field lowers it with distance.
    */
   detail?: 0 | 1 | 2;
+  /** Opponent mesh level of detail: 0 = full detail, 1 = simplified LOD1 geometry + micro-mesh culling (>45 m) */
+  lod?: 0 | 1;
 }
 
 /** The ground probe starts this far above the wheel's first estimate, so a road a little above it is still found */

@@ -17,6 +17,11 @@ export interface MergeStaticOptions {
   namePrefix?: string;
   /** Dispose replaced source geometries (set true only when mutating a one-time template, never on a shared clone) */
   disposeSources?: boolean;
+  /**
+   * Optional per-template cache for merged BufferGeometries: repeated clones from the same template reuse one GPU
+   * vertex/index buffer instead of re-baking and duplicating megabytes of static bodywork across every opponent.
+   */
+  geometryCache?: Map<string, THREE.BufferGeometry>;
 }
 
 const _invRoot = new THREE.Matrix4();
@@ -144,7 +149,7 @@ export function mergeStaticMeshesByMaterial(root: THREE.Object3D, options: Merge
   root.updateMatrixWorld(true);
   _invRoot.copy(root.matrixWorld).invert();
 
-  const buckets = new Map<string, { material: THREE.Material; meshes: THREE.Mesh[] }>();
+  const buckets = new Map<string, { material: THREE.Material; sig: string; meshes: THREE.Mesh[] }>();
 
   const visit = (obj: THREE.Object3D) => {
     if (obj !== root && skip?.(obj)) return;
@@ -167,7 +172,7 @@ export function mergeStaticMeshesByMaterial(root: THREE.Object3D, options: Merge
         const key = `${mesh.material.uuid}|${mesh.layers.mask}|${mesh.castShadow ? 1 : 0}${mesh.receiveShadow ? 1 : 0}|${mesh.renderOrder}|${sig}`;
         let bucket = buckets.get(key);
         if (!bucket) {
-          bucket = { material: mesh.material, meshes: [] };
+          bucket = { material: mesh.material, sig, meshes: [] };
           buckets.set(key, bucket);
         }
         bucket.meshes.push(mesh);
@@ -179,20 +184,27 @@ export function mergeStaticMeshesByMaterial(root: THREE.Object3D, options: Merge
 
   let saved = 0;
   let mergedIdx = 0;
-  for (const { material, meshes } of buckets.values()) {
+  for (const { material, sig, meshes } of buckets.values()) {
     if (meshes.length < 2) continue;
-    const allIndexed = meshes.every((m) => m.geometry.index !== null);
-    const forceNonIndexed = !allIndexed;
-    const baked: THREE.BufferGeometry[] = [];
-    for (const m of meshes) {
-      _rel.multiplyMatrices(_invRoot, m.matrixWorld);
-      baked.push(bakeGeometry(m.geometry, _rel, forceNonIndexed));
+    const cacheKey = options.geometryCache
+      ? `${prefix}|${material.name}|${sig}|${meshes.map((m) => m.geometry.uuid).join(",")}`
+      : null;
+    let combined = cacheKey ? options.geometryCache!.get(cacheKey) ?? null : null;
+    if (!combined) {
+      const allIndexed = meshes.every((m) => m.geometry.index !== null);
+      const forceNonIndexed = !allIndexed;
+      const baked: THREE.BufferGeometry[] = [];
+      for (const m of meshes) {
+        _rel.multiplyMatrices(_invRoot, m.matrixWorld);
+        baked.push(bakeGeometry(m.geometry, _rel, forceNonIndexed));
+      }
+      combined = mergeGeometries(baked, false);
+      for (const g of baked) g.dispose();
+      if (!combined) continue;
+      combined.computeBoundingBox();
+      combined.computeBoundingSphere();
+      if (cacheKey) options.geometryCache!.set(cacheKey, combined);
     }
-    const combined = mergeGeometries(baked, false);
-    for (const g of baked) g.dispose();
-    if (!combined) continue;
-    combined.computeBoundingBox();
-    combined.computeBoundingSphere();
 
     const ref = meshes[0];
     const mergedMesh = new THREE.Mesh(combined, material);

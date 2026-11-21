@@ -114,6 +114,8 @@ export interface TyreDeformationOptions {
    * textures cannot be fetched
    */
   tyreWrapOuterSide?: 1 | -1;
+  /** Subdivide coarse tyre treads for smooth contact-patch flattening (default true; false on distant/opponent cars) */
+  subdivide?: boolean;
 }
 
 type UniformMap = Record<string, THREE.IUniform>;
@@ -300,7 +302,7 @@ export function installTyreDeformation(
     !sidewall && opts.gtSidewall
       ? createGtTyreSidewall(originalGeometry, opts.gtSidewall.brand, opts.gtSidewall.compound ?? 'medium')
       : null;
-  mesh.geometry = subdivideTyreTread(originalGeometry);
+  mesh.geometry = opts.subdivide === false ? originalGeometry : subdivideTyreTread(originalGeometry);
   // The wrap reads the cross-section off the geometry the tyre is drawn with
   const wrap = wrapped
     ? createTyreWrap(mesh.geometry, opts.tyreWrapOuterSide!, opts.pirelliSidewall, sidewall ? loadSidewallTexture : undefined)

@@ -168,6 +168,8 @@ export class SimVisualFxManager {
       ghostMats?: THREE.Material[];
       /** Last frame's braking state for opponent tail-light brightening */
       braking?: boolean;
+      /** Current opponent mesh LOD (0 = full, 1 = simplified >48 m with 42 m exit hysteresis) */
+      lod?: 0 | 1;
     }
   >();
   /** Lights-only CarHeadlights (front/rear flares + cloned emissive lenses, zero SpotLights) attached to solid opponent rigs */
@@ -833,8 +835,26 @@ export class SimVisualFxManager {
         wheels.ground = peer.wheels.ground;
         wheels.position = peer.position;
         wheels.quaternion = peer.quaternion;
-        // Road samples under the treads and tyre shadows for the cars near the player's (in a replay: samples across)
-        wheels.detail = this.playerPosValid ? tyreDetailAt(peer.position.distanceTo(this.playerPos)) : 1;
+        // Road samples under the treads, tyre shadows and opponent mesh LOD follow distance from the player's car
+        if (this.playerPosValid) {
+          const distM = peer.position.distanceTo(this.playerPos);
+          wheels.detail = tyreDetailAt(distM);
+          const prevLod = entry.lod ?? 0;
+          const nextLod: 0 | 1 =
+            prevLod === 0
+              ? distM >= OPPONENT_LOD1_ENTER_M
+                ? 1
+                : 0
+              : distM <= OPPONENT_LOD1_EXIT_M
+                ? 0
+                : 1;
+          entry.lod = nextLod;
+          wheels.lod = nextLod;
+        } else {
+          wheels.detail = 1;
+          entry.lod = 0;
+          wheels.lod = 0;
+        }
       }
       carRig.updateFromTelemetry(syntheticTelemetry, pitchRad, rollRad, wheelRot, dt, wheels);
       seatContactShadow(carRig.root, wheels);
@@ -898,6 +918,10 @@ export class SimVisualFxManager {
  * samples cost ~25 µs a car per frame at full detail, so the radii are generous (chase and TV shots frame cars well
  * away from the player's)
  */
+/** Distance thresholds (m) for switching opponent cars between LOD0 (full detail) and LOD1 (simplified + micro-culled) */
+const OPPONENT_LOD1_ENTER_M = 48;
+const OPPONENT_LOD1_EXIT_M = 42;
+
 function tyreDetailAt(distanceM: number): 0 | 1 | 2 {
   return distanceM < 60 ? 2 : distanceM < 150 ? 1 : 0;
 }

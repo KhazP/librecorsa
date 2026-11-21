@@ -20,6 +20,7 @@ import { singlePassTransparency } from "@/lib/render/static-scene";
 import { bodyFloorClearance, type StaticFloor } from "@/lib/render/body-floor";
 import { disableCarCastShadow } from "@/lib/render/car-shadow-proxy";
 import { mergeStaticMeshesByMaterial } from "@/lib/render/merge-static-meshes";
+import { createOpponentLodController, type OpponentLodController } from "@/lib/render/car-lod";
 
 /**
  * Cars ported to one GLB each (a registry car's `modelUrl`), on any vehicle model. Node layout:
@@ -370,6 +371,8 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   const corners: RigCorner[] = [];
   let steerPivot: THREE.Object3D | null = null;
   const steerRest = new THREE.Quaternion();
+  let opponentLod: OpponentLodController | null = null;
+  let lastLod: 0 | 1 = 0;
   let disposed = false;
   // The compound the sidewalls show; the tyres are built when the model loads
   let compound: TireCompound = "medium";
@@ -463,6 +466,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
             halfWidthM: extras.tyreHalfWidth?.[SIDE[i]] ?? 0.16,
             pirelliSidewall: options.pirelliSidewall ? compound : undefined,
             gtSidewall: !options.pirelliSidewall && options.gtSidewall ? { brand: options.gtSidewall, compound } : undefined,
+            subdivide: !options.opponent,
           })
         : null;
       if (tyre && tyreMesh?.isMesh && !Array.isArray(tyreMesh.material)) {
@@ -500,6 +504,8 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     if (options.opponent) {
       disableCarCastShadow(bodyGroup);
       for (const c of corners) disableCarCastShadow(c.steer);
+      opponentLod = createOpponentLodController([bodyGroup, ...corners.map((c) => c.spin)]);
+      opponentLod.setLod(lastLod);
     }
     placeholder.removeFromParent();
     placeholder.geometry.dispose();
@@ -541,6 +547,11 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       steerPivot.rotateZ(t.steering * steerLockRad);
     }
     updateCorners(corners, roadWheel, wheelRotationRad, wheels);
+    if (options.opponent) {
+      const lod: 0 | 1 = wheels?.lod ?? 0;
+      lastLod = lod;
+      opponentLod?.setLod(lod);
+    }
   };
 
   return {
@@ -564,6 +575,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     updateFromTelemetry,
     dispose: () => {
       disposed = true;
+      opponentLod?.dispose();
       for (const c of corners) c.tyre?.dispose();
       for (const slot of skinSlots) if (slot.ownedBySkin) slot.mat.dispose();
       root.removeFromParent();
