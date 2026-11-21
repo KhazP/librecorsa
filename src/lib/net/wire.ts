@@ -21,6 +21,9 @@ import type { DamageLevel } from '../sim/car-damage';
 // The car state packet travels in binary (state-codec.ts); everything else is JSON
 export { decodeState, encodeState, MAX_STATE_BYTES, PROTOCOL_VERSION, stateInfoJson, StateInfoMemory } from './state-codec';
 
+/** Minimum plausible qualifying lap time (ms): shared by RoomServer, wire sanitizers, host and client */
+export const MIN_QUALIFYING_LAP_MS = 10_000;
+
 const PEER_COMPOUNDS: readonly TireCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet'];
 /** Network input is untrusted: only a known model id is kept */
 const asPeerVehicle = (raw: unknown): VehicleModelId | undefined => {
@@ -401,7 +404,7 @@ function sanitizeQualifyingTimes(v: unknown): QualifyingTime[] | undefined {
     if (!item || typeof item !== 'object') continue;
     const q = item as Record<string, unknown>;
     if (typeof q.peer !== 'string' || !q.peer) continue;
-    out.push({ peer: q.peer.slice(0, 64), ms: finite(q.ms, 1000, 1e7) });
+    out.push({ peer: q.peer.slice(0, 64), ms: finite(q.ms, MIN_QUALIFYING_LAP_MS, 1e7) });
   }
   return out;
 }
@@ -723,7 +726,7 @@ export function sanitizeControl(v: unknown): ControlMessage | null {
     case 'identify':
       return typeof m.driverKey === 'string' && DRIVER_KEY_RE.test(m.driverKey) ? { type: 'identify', driverKey: m.driverKey } : null;
     case 'quali_lap': {
-      const bestLapMs = finite(m.bestLapMs, 1000, 1e7);
+      const bestLapMs = finite(m.bestLapMs, MIN_QUALIFYING_LAP_MS, 1e7);
       if (typeof m.id !== 'string' || bestLapMs === null) return null;
       return { type: 'quali_lap', id: m.id.slice(0, 32), bestLapMs: Math.round(bestLapMs) };
     }

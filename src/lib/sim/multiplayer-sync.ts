@@ -28,6 +28,7 @@ import {
   buildRaceGrid,
   MAX_STATE_BYTES,
   MAX_STATE_PACKETS_PER_S,
+  MIN_QUALIFYING_LAP_MS,
   MP_QUALIFYING_MINUTES,
   PEER_ID_RE,
   PROTOCOL_VERSION,
@@ -720,6 +721,7 @@ export class MultiplayerSyncManager {
       return;
     }
     let opened = false;
+    let joinRetried = false;
     const reconnect = (code: string, next: number) => this.connectHostServer(code, next);
 
     ws.onmessage = async (ev) => {
@@ -729,6 +731,7 @@ export class MultiplayerSyncManager {
         if (msg.t === 'welcome') {
           opened = true;
           attempt = 0;
+          joinRetried = false;
           this.roomIce = sanitizeIceServers(msg.iceServers);
           // Bind our game peerId and current lobby settings on the room server
           this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
@@ -736,6 +739,14 @@ export class MultiplayerSyncManager {
           if (this.openPeerCount() === 0) {
             this.emitStatus({ state: 'signaling', statusText: `Room ${roomCode} is open • waiting for players` });
           }
+        } else if (msg.t === 'error' && msg.code === 'peer_id_taken' && !joinRetried) {
+          // A replaced host socket can briefly remain listed while closing; retry join once
+          joinRetried = true;
+          window.setTimeout(() => {
+            if (this.signalingWs === ws && ws.readyState === WebSocket.OPEN) {
+              this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
+            }
+          }, 50);
         } else if (msg.t === 'taken') {
           this.closeSignaling();
           this.emitStatus({
@@ -753,19 +764,14 @@ export class MultiplayerSyncManager {
             if (entry) await entry.pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate));
           }
         } else if (msg.t === 'qualifying_update' && this.activeQualifying && msg.sessionId === this.activeQualifying.id && Array.isArray(msg.times)) {
-          for (const row of msg.times as QualifyingTime[]) {
-            if (typeof row?.peer === 'string' && typeof row.ms === 'number' && Number.isFinite(row.ms) && row.ms >= 1000) {
-              const prev = this.qualifyingLaps.get(row.peer);
-              if (prev === undefined || row.ms < prev) this.qualifyingLaps.set(row.peer, Math.round(row.ms));
-            }
-          }
+          this.mergeQualifyingTimes(msg.times as QualifyingTime[]);
           this.refreshQualifyingTimes();
           this.broadcastLobby();
-        } else if (msg.t === 'phase' && msg.phase === 'racing' && this.activeQualifying && Array.isArray(msg.grid)) {
-          // Room server timer expired (DO alarm): launch the race with the server-sorted qualifying grid
-          const serverGrid = (msg.grid as unknown[]).filter((g): g is string => typeof g === 'string');
-          const serverQuali = Array.isArray(msg.qualifying) ? (msg.qualifying as QualifyingTime[]) : undefined;
-          this.launchRaceInternal(4000, serverGrid.length > 0 ? serverGrid : undefined, serverQuali, false);
+        } else if (msg.t === 'phase' && msg.phase === 'racing' && this.activeQualifying) {
+          // Room server timer expired (DO alarm): merge any valid server times and build the grid from the host's
+          // live lobby roster so P2P guests whose signaling WS closed are never dropped and both timers agree
+          if (Array.isArray(msg.qualifying)) this.mergeQualifyingTimes(msg.qualifying as QualifyingTime[]);
+          this.launchRaceInternal(4000, undefined, undefined, false);
         }
       } catch {
         // Ignore a malformed message
@@ -1373,7 +1379,10 @@ export class MultiplayerSyncManager {
     this.localTrackId = trackId;
     if (!changed) return;
     if (this.isHost) {
-      if (trackId) this.lobbySettings = { ...this.lobbySettings, trackId };
+      if (trackId) {
+        if (this.activeQualifying && trackId !== this.lobbySettings.trackId) this.abortQualifying();
+        this.lobbySettings = { ...this.lobbySettings, trackId };
+      }
       this.broadcastLobby();
     } else if (this.hostId) {
       this.sendControl(this.helloMessage());
@@ -1447,10 +1456,43 @@ export class MultiplayerSyncManager {
   /** Host: change the race settings */
   public setLobbySettings(patch: Partial<LobbySettings>): void {
     if (!this.isHost) return;
+    if (this.activeQualifying && patch.trackId && patch.trackId !== this.lobbySettings.trackId) {
+      this.abortQualifying();
+    }
     const kind: RoomKind = this.inScheduledRace ? 'public' : 'private';
     this.lobbySettings = sanitizeLobbySettings({ ...this.lobbySettings, ...patch }, kind);
     this.sendRoomServer({ t: 'settings', settings: this.lobbySettings });
     this.broadcastLobby();
+  }
+
+  /** True when a peer is confirmed on the active qualifying session's circuit (rejects cross-track laps) */
+  private isOnQualifyingTrack(peerId: string): boolean {
+    const expected = this.lobbySettings.trackId;
+    if (peerId === this.localPeerId) return !this.localTrackId || this.localTrackId === expected;
+    const member = this.members.get(peerId);
+    if (!member) return false;
+    return member.trackId === expected;
+  }
+
+  /** Host: records a qualifying lap if it passes the shared 10 s floor and the peer is on the qualifying circuit */
+  private recordHostQualifyingLap(peerId: string, rawMs: number): boolean {
+    if (!this.isHost || !this.activeQualifying) return false;
+    if (!Number.isFinite(rawMs) || rawMs < MIN_QUALIFYING_LAP_MS || rawMs > 1e7) return false;
+    if (!this.isOnQualifyingTrack(peerId)) return false;
+    const rounded = Math.round(rawMs);
+    const prev = this.qualifyingLaps.get(peerId);
+    if (prev !== undefined && rounded >= prev) return false;
+    this.qualifyingLaps.set(peerId, rounded);
+    return true;
+  }
+
+  /** Host: merges valid qualifying times reported by the RoomServer DO for peers on the qualifying circuit */
+  private mergeQualifyingTimes(rows: readonly QualifyingTime[]): void {
+    for (const row of rows) {
+      if (typeof row?.peer === 'string' && typeof row.ms === 'number') {
+        this.recordHostQualifyingLap(row.peer, row.ms);
+      }
+    }
   }
 
   public setReady(ready: boolean): void {
@@ -1520,16 +1562,16 @@ export class MultiplayerSyncManager {
   /** Reports this player's fastest valid lap during an active private-room qualifying session */
   public reportQualifyingLap(bestLapMs: number | null): void {
     const q = this.activeQualifying;
-    if (!q || bestLapMs === null || !Number.isFinite(bestLapMs) || bestLapMs < 1000) return;
+    if (!q || bestLapMs === null || !Number.isFinite(bestLapMs) || bestLapMs < MIN_QUALIFYING_LAP_MS || bestLapMs > 1e7) return;
+    const expectedTrack = this.isHost ? this.lobbySettings.trackId : this.lobby?.settings.trackId;
+    if (expectedTrack && this.localTrackId && this.localTrackId !== expectedTrack) return;
     const rounded = Math.round(bestLapMs);
     if (this.lastSentQualiLap && this.lastSentQualiLap.id === q.id && rounded >= this.lastSentQualiLap.ms) return;
     this.lastSentQualiLap = { id: q.id, ms: rounded };
     // Notify RoomServer DO (if connected through it) using PeerRaceProgress shape
     this.sendRoomServer({ t: 'progress', race: { id: q.id, dist: 0, fin: null, best: rounded } });
     if (this.isHost) {
-      const prev = this.qualifyingLaps.get(this.localPeerId);
-      if (prev === undefined || rounded < prev) {
-        this.qualifyingLaps.set(this.localPeerId, rounded);
+      if (this.recordHostQualifyingLap(this.localPeerId, rounded)) {
         this.refreshQualifyingTimes();
         this.broadcastLobby();
       }
@@ -1920,9 +1962,7 @@ export class MultiplayerSyncManager {
         break;
       case 'quali_lap':
         if (this.isHost && this.activeQualifying && msg.id === this.activeQualifying.id) {
-          const prev = this.qualifyingLaps.get(from);
-          if (prev === undefined || msg.bestLapMs < prev) {
-            this.qualifyingLaps.set(from, msg.bestLapMs);
+          if (this.recordHostQualifyingLap(from, msg.bestLapMs)) {
             this.refreshQualifyingTimes();
             this.broadcastLobby();
           }
@@ -2354,16 +2394,10 @@ export class MultiplayerSyncManager {
         this.activeQualifying &&
         pkt.race?.id === this.activeQualifying.id &&
         typeof pkt.race.best === 'number' &&
-        Number.isFinite(pkt.race.best) &&
-        pkt.race.best >= 1000
+        this.recordHostQualifyingLap(pkt.peerId, pkt.race.best)
       ) {
-        const rounded = Math.round(pkt.race.best);
-        const prev = this.qualifyingLaps.get(pkt.peerId);
-        if (prev === undefined || rounded < prev) {
-          this.qualifyingLaps.set(pkt.peerId, rounded);
-          this.refreshQualifyingTimes();
-          this.broadcastLobby();
-        }
+        this.refreshQualifyingTimes();
+        this.broadcastLobby();
       }
     }
     let buffer = this.peers.get(pkt.peerId);

@@ -414,6 +414,39 @@ let manualChecks: Promise<void> = Promise.resolve();
     check('a guest that lost its host says so, and stops waiting', guest.status.state === 'error' && /host/i.test(guest.status.statusText), JSON.stringify(guest.status));
   }
 
+  // Regressions (#7, #8): host qualifying enforces 10 s floor on P2P laps & state packets, rejects cross-track laps, and aborts on track change
+  {
+    const host = new MultiplayerSyncManager();
+    host.hostLocal();
+    host.setIdentity({ name: 'Host', code: 'HST', color: '#ffffff' }, 'lc26', 'spa');
+    host.setLobbySettings({ trackId: 'spa', qualifyingMinutes: 3 });
+    const goodGuest = connect(host, 'remote_good');
+    const wrongTrackGuest = connect(host, 'remote_wrong');
+    sendCtl(goodGuest, 'peer_good', { type: 'hello', name: 'Good', code: 'GOD', color: '#00ff00', trackId: 'spa', ...VERSIONS });
+    sendCtl(wrongTrackGuest, 'peer_wrong', { type: 'hello', name: 'Wrong', code: 'WRG', color: '#ff00ff', trackId: 'norisring', ...VERSIONS });
+    const session = host.startQualifying();
+    const qid = session?.id ?? '';
+    // Forged sub-10s lap over quali_lap & state packet are both rejected
+    sendCtl(goodGuest, 'peer_good', { type: 'quali_lap', id: qid, bestLapMs: 5_000 });
+    sendState(goodGuest, { ...packet('peer_good'), race: { id: qid, dist: 1000, fin: null, best: 4_000 } });
+    // Valid-length lap from a guest on the wrong circuit (Norisring vs Spa) is rejected
+    sendCtl(wrongTrackGuest, 'peer_wrong', { type: 'quali_lap', id: qid, bestLapMs: 42_000 });
+    sendState(wrongTrackGuest, { ...packet('peer_wrong'), race: { id: qid, dist: 1000, fin: null, best: 41_000 } });
+    // Legitimate >= 10s lap from guest on Spa is accepted
+    sendCtl(goodGuest, 'peer_good', { type: 'quali_lap', id: qid, bestLapMs: 92_500 });
+    const times = host.activeQualifying?.times ?? [];
+    const goodRow = times.find((t) => t.peer === 'peer_good');
+    const wrongRow = times.find((t) => t.peer === 'peer_wrong');
+    check(
+      'host qualifying rejects sub-10s P2P laps and cross-track laps while accepting valid on-track laps',
+      goodRow?.ms === 92_500 && wrongRow?.ms === null,
+      JSON.stringify(times),
+    );
+    // Changing circuit mid-qualifying aborts the qualifying session instead of shifting the track under everyone
+    host.setLobbySettings({ trackId: 'monza' });
+    check('changing circuit mid-qualifying aborts active qualifying', host.activeQualifying === null);
+  }
+
   // Manual connection: an answered offer is no longer the pending one, and not connected until its channel opens
   manualChecks = (async () => {
     const g = globalThis as unknown as { RTCSessionDescription?: unknown };

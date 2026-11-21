@@ -18,7 +18,7 @@ import type { ReportFacts } from "@/lib/diagnostics/report-details";
 import { carMaker, circuitMaker } from "@/lib/modders";
 import { isStoreBuild } from "@/lib/store-mode";
 import { markShown, markThanked, promptFor, readPromptState, writePromptState, type PromptItem } from "@/lib/support-prompt";
-import { getMultiplayerManager, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo, type ScheduledRaceStatus } from "@/lib/sim/multiplayer-sync";
+import { getMultiplayerManager, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo, type RoomSessionInfo, type ScheduledRaceStatus } from "@/lib/sim/multiplayer-sync";
 import { boardStateOf, watchOnlineConfig, type BoardState } from "@/lib/net/online-config";
 import { DEFAULT_RACE_SLOT_S } from "@/lib/net/race-schedule";
 import { MultiplayerRace } from "@/lib/sim/race-session";
@@ -120,6 +120,8 @@ const IDLE_PODIUM: PodiumUi = { stage: "idle", rows: [] };
 const idlePodium = () => IDLE_PODIUM;
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
 let pendingRaceStart: RaceStartInfo | null = null;
+/** Private-room qualifying started before this circuit loaded (or while on another circuit) */
+let pendingQualifying: { id: string; trackId: string } | null = null;
 /**
  * The weekly challenge to go out on once its circuit has loaded (asked for from another circuit's menu): its id, and
  * whether as a race against the AI (a scheduled race nobody else entered) rather than practice
@@ -784,6 +786,34 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     [session]
   );
 
+  /**
+   * Enters private-room qualifying on this circuit. If the circuit is still loading, parks the qualifying session id
+   * so it starts as soon as `assetsReady` becomes true (mirroring `takeRaceStart`).
+   */
+  const takeQualifyingStart = useCallback(
+    (quali: RoomSessionInfo, expectedTrackId: string) => {
+      if (!session || phaseRef.current === "loading") {
+        if (!session?.getSnapshot().assetsReady) {
+          pendingQualifying = { id: quali.id, trackId: expectedTrackId };
+          return;
+        }
+        session.unlockAudio();
+        setLoadingVisible(false);
+      }
+      const mp = getMultiplayerManager();
+      const lobbyNow = mp.lobby;
+      if (lobbyNow) {
+        const allowed = lobbyNow.settings.vehicle ? [lobbyNow.settings.vehicle] : vehicleModelsFor(lobbyNow.settings.carClass);
+        if (allowed.length > 0 && !allowed.includes(vehicleModelRef.current)) {
+          changeCar(raceCarFor(allowed[0], mp.inScheduledRace).id);
+        }
+      }
+      startSession({ kind: "practice" });
+      session.car.resetToStartGrid(true);
+    },
+    [session, changeCar, startSession]
+  );
+
   // ---- Laps, ghosts, leaderboards
   /** The board for what the player drives with now: their assists and realism, today's surface, this physics revision */
   const currentBoard = useCallback(
@@ -1332,19 +1362,21 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setRaceEntry(mp.raceStatus);
     mp.onRaceStatusChange = setRaceEntry;
     mp.weatherProvider = () => trackEnvRef.current?.weather.snapshot() ?? null;
-    mp.onQualifyingStart = () => {
-      if (!session || phaseRef.current === "loading") return;
-      const lobbyNow = mp.lobby;
-      if (lobbyNow) {
-        const allowed = lobbyNow.settings.vehicle ? [lobbyNow.settings.vehicle] : vehicleModelsFor(lobbyNow.settings.carClass);
-        if (allowed.length > 0 && !allowed.includes(vehicleModelRef.current)) {
-          changeCar(raceCarFor(allowed[0], mp.inScheduledRace).id);
-        }
+    mp.onQualifyingStart = (quali) => {
+      const targetTrack = mp.lobby?.settings.trackId ?? trackId;
+      if (targetTrack !== trackId && onSelectTrack && TRACKS.some((t) => t.id === targetTrack)) {
+        pendingQualifying = { id: quali.id, trackId: targetTrack };
+        onSelectTrack(targetTrack);
+        return;
       }
-      startSession({ kind: "practice" });
-      session.car.resetToStartGrid(true);
+      if (targetTrack !== trackId) return;
+      takeQualifyingStart(quali, targetTrack);
+    };
+    mp.onQualifyingEnd = (id) => {
+      if (pendingQualifying?.id === id) pendingQualifying = null;
     };
     mp.onRaceStart = (start) => {
+      pendingQualifying = null;
       // A scheduled race nobody else entered: out of it, and the same race against the AI instead
       if (mp.inScheduledRace && start.grid.length <= 1) {
         mp.leaveScheduledRace();
@@ -1376,13 +1408,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       mp.onRaceStatusChange = undefined;
       mp.weatherProvider = undefined;
       mp.onQualifyingStart = undefined;
+      mp.onQualifyingEnd = undefined;
       mp.onRaceStart = undefined;
       mp.onRaceAbort = undefined;
       mp.onRaceFinish = undefined;
       mp.onRaceResult = undefined;
       window.clearInterval(timer);
     };
-  }, [session, trackId, onSelectTrack, takeRaceStart, endMpRace, changeCar, startSession]);
+  }, [session, trackId, onSelectTrack, takeRaceStart, takeQualifyingStart, endMpRace, changeCar]);
 
   // ---- Weekly challenge
   // The week is read when the menus open (it only turns on Monday)
@@ -1492,6 +1525,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (start.trackId && start.trackId !== trackId) return;
     takeRaceStart(start);
   }, [assetsReady, trackId, takeRaceStart]);
+
+  // Private-room qualifying started before this circuit finished loading (or while switching circuits)
+  useEffect(() => {
+    if (!assetsReady || !pendingQualifying) return;
+    const asked = pendingQualifying;
+    pendingQualifying = null;
+    if (asked.trackId !== trackId) return;
+    const active = getMultiplayerManager().activeQualifying;
+    if (!active || active.id !== asked.id) return;
+    takeQualifyingStart(active, trackId);
+  }, [assetsReady, trackId, takeQualifyingStart]);
 
   // Name, code, colour and car as other players see them
   useEffect(() => {

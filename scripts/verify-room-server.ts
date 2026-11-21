@@ -14,7 +14,7 @@ import type { Env } from '../cloudflare/api/types';
 import { FakeSocket, fakeState } from './lib/fake-cloudflare';
 import { parseApiBase, parseOnlineConfig } from '../src/lib/net/online-config';
 import { sanitizeIceServers } from '../src/lib/sim/multiplayer-sync';
-import { sanitizeLobby, sanitizeLobbySettings, sanitizeStart, withLobbyDefaults } from '../src/lib/net/wire';
+import { sanitizeControl, sanitizeLobby, sanitizeLobbySettings, sanitizeStart, withLobbyDefaults } from '../src/lib/net/wire';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -476,6 +476,60 @@ async function main() {
         !afterHostClose.participants.includes('peer_h') &&
         afterHostClose.participants.includes('peer_victim'),
       `afterImpostor=${afterImpostorClose.participants.join(',')} afterHost=${afterHostClose.participants.join(',')}`,
+    );
+
+    // Regression (#11b): fresh host taking over a code evicts lingering guests from the prior room, and `lap` requires sessionId
+    const hNew = new FakeSocket();
+    await sRoom.connect('host', TOKEN_B, hNew, 'private');
+    await sRoom.webSocketMessage(hNew, JSON.stringify({ t: 'join', peerId: 'peer_new_host' }));
+    await sRoom.webSocketMessage(hNew, JSON.stringify({ t: 'settings', settings: { qualifyingMinutes: 3 } }));
+    await sRoom.webSocketMessage(hNew, JSON.stringify({ t: 'start_session' }));
+    const newQ = await sRoom.getRoomState();
+    // Missing sessionId on `lap` is rejected even from the active host
+    await sRoom.webSocketMessage(hNew, JSON.stringify({ t: 'lap', bestLapMs: 75_000 }));
+    const afterNoSid = await sRoom.getRoomState();
+    check(
+      'freshHost evicts prior room guests and `lap` requires matching sessionId',
+      victim.closed === 4001 &&
+        !newQ.participants.includes('peer_victim') &&
+        afterNoSid.qualifyingLaps['peer_new_host'] === undefined,
+      `victimClosed=${victim.closed}, parts=${newQ.participants.join(',')}`,
+    );
+
+    // Regression (#11c): same host reconnecting while old socket is still closing does NOT hit peer_id_taken
+    const hReconnect = new FakeSocket();
+    await sRoom.connect('host', TOKEN_B, hReconnect, 'private');
+    await sRoom.webSocketMessage(hReconnect, JSON.stringify({ t: 'join', peerId: 'peer_new_host' }));
+    check(
+      'host reconnect demotes replaced socket before close so join succeeds without peer_id_taken',
+      hNew.closed === 4001 && !hReconnect.sent.some((m) => m.t === 'error' && m.code === 'peer_id_taken'),
+    );
+
+    // Regression (#7): wire sanitizers enforce the shared 10 s qualifying lap floor
+    const badCtl = sanitizeControl({ type: 'quali_lap', id: 'q1', bestLapMs: 9_999 });
+    const goodCtl = sanitizeControl({ type: 'quali_lap', id: 'q1', bestLapMs: 10_000 });
+    const startWithShort = sanitizeStart({
+      id: 'r100',
+      lightsStartHostMs: 1000,
+      holdMs: 0,
+      laps: 3,
+      collisions: 'on',
+      carClass: 'any',
+      trackId: 'spa',
+      grid: ['p1', 'p2'],
+      qualifying: [
+        { peer: 'p1', ms: 5_000 },
+        { peer: 'p2', ms: 85_000 },
+      ],
+    });
+    check(
+      'wire sanitizers share the 10 s qualifying lap floor (sub-floor becomes null in qualifying table)',
+      badCtl === null &&
+        goodCtl?.type === 'quali_lap' &&
+        goodCtl.bestLapMs === 10_000 &&
+        startWithShort?.qualifying?.length === 2 &&
+        startWithShort.qualifying[0].ms === null &&
+        startWithShort.qualifying[1].ms === 85_000,
     );
   }
 

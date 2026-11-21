@@ -70,6 +70,7 @@ import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { canFlashback, isInOnlineRoom, poseFromReplayCar, ReplayBuffer } from "@/lib/sim/replay-buffer";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
 import { drivingInputOf, lapConditionsNow, type LapInput, type LapRecording, type LapSummaryData, type ReplayCarState } from "@/lib/sim/lap-types";
+import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
@@ -2838,7 +2839,11 @@ export class DriveSession {
         });
         if (state === "done") finishQualifying();
       }
-      const mpQuali = !mpRace && !aiField && !quali ? multiplayerSync.activeQualifying : null;
+      const mpQualiLobbyTrack = multiplayerSync.lobby?.settings.trackId;
+      const mpQuali =
+        !mpRace && !aiField && !quali && (!mpQualiLobbyTrack || mpQualiLobbyTrack === trackId)
+          ? multiplayerSync.activeQualifying
+          : null;
       if (mpQuali) {
         const t = physics.telemetry;
         if (mpQualiId !== mpQuali.id) {
@@ -2852,7 +2857,7 @@ export class DriveSession {
           t.lapCount > mpQualiSeenLap &&
           t.lastLapTimeMs !== null &&
           t.lastLapTimeMs !== undefined &&
-          t.lastLapTimeMs >= 1000 &&
+          t.lastLapTimeMs >= MIN_QUALIFYING_LAP_MS &&
           t.lastLapValid !== false &&
           !physics.aiAutopilot
         ) {

@@ -32,6 +32,7 @@
 import {
   buildRaceGrid,
   FALLBACK_TRACK_ID,
+  MIN_QUALIFYING_LAP_MS,
   PEER_ID_RE,
   sanitizeLobbySettings,
   sanitizeRace,
@@ -52,8 +53,8 @@ export const MAX_GUESTS = 15;
 const MAX_MESSAGE_CHARS = 32 * 1024;
 /** Messages one socket may send per ten seconds (an offer or answer plus its candidates is a few dozen) */
 const MAX_MESSAGES_PER_10S = 200;
-/** Valid qualifying lap bounds (ms): at least 10 s, under ~2.7 h */
-const MIN_LAP_MS = 10_000;
+/** Valid qualifying lap bounds (ms): shared 10 s floor, under ~2.7 h */
+const MIN_LAP_MS = MIN_QUALIFYING_LAP_MS;
 const MAX_LAP_MS = 10_000_000;
 
 type Attachment =
@@ -254,11 +255,21 @@ export class RoomServer {
       const current = this.state.getWebSockets(HOST_TAG);
       const owner = await this.state.storage.get<string>("hostToken");
       if (current.length > 0 && owner !== token) return refuse({ t: "taken" });
-      // The same host back on a new socket: the old one goes
-      for (const old of current) close(old, 4001, "replaced");
+      // The same host back on a new socket: demote before closing so a still-listed closing socket never triggers peer_id_taken
+      for (const old of current) {
+        old.serializeAttachment({ role: "refused" } satisfies Attachment);
+        close(old, 4001, "replaced");
+      }
       const freshHost = owner !== token || !(await this.state.storage.get<RoomSessionState>(STATE_KEY));
       await this.state.storage.put("hostToken", token);
       if (freshHost) {
+        // Evict lingering guests from any prior host's room before resetting room state
+        for (const ws of this.state.getWebSockets()) {
+          if (attachmentOf(ws)?.role === "guest") {
+            ws.serializeAttachment({ role: "refused" } satisfies Attachment);
+            close(ws, 4001, "room_reset");
+          }
+        }
         await this.state.storage.deleteAlarm();
         const fresh = defaultRoomState(kind);
         fresh.participants = ["host"];
@@ -503,11 +514,10 @@ export class RoomServer {
         let bestLapMs: number | null = null;
         if (msg.t === "progress") {
           const race = sanitizeRace(msg.race);
-          if (!race) return;
-          if (race.id && race.id !== roomState.sessionId) return;
+          if (!race || race.id !== roomState.sessionId) return;
           bestLapMs = race.best;
         } else {
-          if (typeof msg.sessionId === "string" && msg.sessionId !== roomState.sessionId) return;
+          if (typeof msg.sessionId !== "string" || msg.sessionId !== roomState.sessionId) return;
           bestLapMs = typeof msg.bestLapMs === "number" && Number.isFinite(msg.bestLapMs) ? msg.bestLapMs : null;
         }
         if (bestLapMs === null || bestLapMs < MIN_LAP_MS || bestLapMs > MAX_LAP_MS) return;
