@@ -341,8 +341,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** The next view in the camera cycle, from the key, the pad, the touch pads and the menus alike */
   const cycleCamera = useCallback(() => {
-    if (sessionRef.current && sessionRef.current.getSnapshot().cameraOverride !== null) {
-      sessionRef.current.setCameraOverride(null);
+    const snap = sessionRef.current?.getSnapshot();
+    if (snap?.replay.active) {
+      // Replay camera cycling is transient and never overwrites the player's saved driving camera
+      const cur = snap.cameraOverride ?? settingsRef.current.camera ?? "chase";
+      sessionRef.current?.setCameraOverride(cur === "free" ? (settingsRef.current.camera ?? "chase") : nextCameraMode(cur));
+      return;
+    }
+    if (snap && snap.cameraOverride !== null) {
+      sessionRef.current?.setCameraOverride(null);
       return;
     }
     setSettings((prev) => ({ ...prev, camera: nextCameraMode(prev.camera ?? "chase") }));
@@ -368,7 +375,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
   }, []);
   const handleOpenPauseReplay = useCallback(() => {
-    sessionRef.current?.openReplay({ fromStart: false, play: false });
+    const sess = sessionRef.current;
+    if (!sess) return;
+    // If already watching a replay, unpausing returns to the exact scrubbed position instead of resetting to the end
+    if (sess.getSnapshot().replay.active) return;
+    sess.openReplay({ fromStart: false, play: false });
   }, []);
   /** A new run re-opens the race results card */
   const onRunReset = useCallback(() => {
@@ -2228,8 +2239,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             history: raceHistory,
             nextRace: raceKind === "mp" && inScheduledRace && races.on ? { slotS: races.slotS, onJoin: handleJoinNextRace } : undefined,
           }}
-          onWatchReplay={raceKind !== "mp" && replayAvailable ? handleWatchRaceReplay : undefined}
-          onOpenReplay={raceKind !== "mp" && replayAvailable ? handleOpenPauseReplay : undefined}
+          onWatchReplay={raceKind !== "mp" && p2pStatus.state !== "connected" && p2pStatus.roomCode.length === 0 && replayAvailable ? handleWatchRaceReplay : undefined}
+          onOpenReplay={raceKind !== "mp" && p2pStatus.state !== "connected" && p2pStatus.roomCode.length === 0 && replayAvailable ? handleOpenPauseReplay : undefined}
           replay={
             replayUi.active
               ? {
@@ -2247,7 +2258,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   onSeek: (timeS: number) => session?.replaySeek(timeS),
                   onSpeed: (speed: number) => session?.replaySpeed(speed),
                   onStepFrame: (dir: 1 | -1) => session?.replayStepFrame(dir),
-                  onSelectCamera: setCameraMode,
+                  onSelectCamera: (mode: CameraMode) => session?.setCameraOverride(mode),
                   onCycleCamera: cycleCamera,
                   onCycleCar: (dir: 1 | -1) => session?.replayCycleCar(dir),
                   onExit: () => session?.exitReplay(),

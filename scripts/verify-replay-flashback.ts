@@ -902,4 +902,35 @@ check('ReplayBuffer carIds() tracks cars present only briefly between start/midd
   assert.deepEqual(buf.carIds(), ['player'], 'carIds() drops car once its frames are truncated away');
 });
 
+check('AiOpponentField damage history retains snapshots across >150 s rewinds without eviction', () => {
+  const track = getActiveTrackData(1200);
+  const player = new F12026CarSim(track, null);
+  const field = new AiOpponentField(track, player, AI_DRIVERS.slice(0, 2), undefined, { skill: 75, seed: 11 });
+  field.damageLevel = 'full';
+  field.startRace(false);
+  // Advance past lights into racing
+  for (let i = 0; i < 60 && field.phase === 'lights'; i++) {
+    player.step(1 / 60, {});
+    field.update(1 / 60);
+  }
+  // Record initial clean state, then fast-forward raceTimeS by 200 s and retire an AI car
+  field.update(1 / 60);
+  const internal = field as unknown as {
+    raceTimeS: number;
+    cars: Array<{ isPlayer: boolean; id: string; retired: boolean; retiredAtS: number | null; damage: { version: number } }>;
+    recordDamageHistory: () => void;
+    damageHistory: Array<{ timeS: number }>;
+  };
+  const targetAi = internal.cars.find((c) => !c.isPlayer)!;
+  assert.equal(targetAi.retired, false, 'AI car starts unretired');
+  internal.raceTimeS = 200;
+  targetAi.retired = true;
+  targetAi.retiredAtS = 200;
+  internal.recordDamageHistory();
+  assert.equal(internal.damageHistory.length, 2, 'change-only history keeps compact 2 snapshots across 200 s');
+  // Rewind 195 s back to t = 5 s (before the retirement at t = 200 s)
+  field.restoreField([], 195);
+  assert.equal(targetAi.retired, false, 'rewinding 195 s back cleanly restores pre-retirement state');
+});
+
 console.log(`\n${passed} checks passed`);

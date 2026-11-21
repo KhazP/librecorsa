@@ -3071,7 +3071,7 @@ export class AiOpponentField implements AiRace {
         }
       }
     }
-    if (!stateChanged && this.raceTimeS - this.lastDamageHistoryS < 0.25) return;
+    if (!stateChanged) return;
     this.lastDamageHistoryS = this.raceTimeS;
     const cars = new Map<
       string,
@@ -3087,7 +3087,8 @@ export class AiOpponentField implements AiRace {
       });
     }
     this.damageHistory.push({ timeS: this.raceTimeS, cars });
-    const cutoffS = this.raceTimeS - 125;
+    // Keep damage/retirement history for the full 20-minute replay horizon (change-only snapshots stay tiny)
+    const cutoffS = this.raceTimeS - 1260;
     while (this.damageHistory.length > 2 && this.damageHistory[1].timeS < cutoffS) {
       this.damageHistory.shift();
     }

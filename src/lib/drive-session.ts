@@ -1897,8 +1897,9 @@ export class DriveSession {
     window.addEventListener("contextmenu", onFreeCamContextMenu);
 
     const onKeyDown = (e: KeyboardEvent) => {
+      const isRangeInput = e.target instanceof HTMLInputElement && e.target.type === "range";
       if (
-        e.target instanceof HTMLInputElement ||
+        (!isRangeInput && e.target instanceof HTMLInputElement) ||
         e.target instanceof HTMLTextAreaElement
       ) {
         return;
@@ -2017,8 +2018,12 @@ export class DriveSession {
       if (!action) return;
       // Prevent browser built-in shortcuts (e.g. F7 caret-browsing prompt on Chrome/Edge/Firefox) for bound actions
       if (action === "freeCamera" || /^F\d+$/.test(code)) e.preventDefault();
-      // The camera key: a tap changes the view (on release), held it opens the seat panel
+      // The camera key: a tap changes the view (on release), held it opens the seat panel (no seat panel during replay)
       if (action === "camera") {
+        if (replay.active) {
+          if (!e.repeat) cycleCamera();
+          return;
+        }
         if (!e.repeat && cameraKeyHold === null) {
           cameraKeyHold = window.setTimeout(() => {
             cameraKeyHold = null;
@@ -2027,6 +2032,8 @@ export class DriveSession {
         }
         return;
       }
+      // During replay, driving keys (e.g. arrow keys used for timeline seek) must not steer or cancel autopilot
+      if (replay.active && isHeldKeyAction(action)) return;
       // Held controls ignore auto-repeat anyway; toggles must not flicker while a key is held
       if (isHeldKeyAction(action)) {
         heldKeys[HELD_KEYS[action]] = true;
@@ -2283,11 +2290,15 @@ export class DriveSession {
         aiRacePhase: race.kind === "ai" ? race.field.phase : undefined,
       });
     };
+    const replayLastFocusPos = new THREE.Vector3();
+    const replayLastFocusQuat = new THREE.Quaternion();
+    let replayLastFocusId: string | null = null;
     const exitReplay = () => {
       const rp = replay;
       if (!rp.active) return;
       rp.active = false;
       rp.focusedCarId = "player";
+      replayLastFocusId = null;
       clearCameraOverride();
       // The replay only moved the drawn car (the physics never left the live pose): put the drawing back
       physics.worldPosition.copy(replaySaved.pos);
@@ -2298,8 +2309,15 @@ export class DriveSession {
     const openReplay = (opts: { fromStart?: boolean; play?: boolean } = {}): boolean => {
       if (disposed) return false;
       const rp = replay;
-      // Not in a multiplayer race (the field keeps racing) and only with something recorded
-      if (raceNow().kind === "mp" || rp.buffer.durationS < 1 || appPhaseNow !== "driving") return false;
+      // Not in a multiplayer race or active online room (where replayed poses would broadcast to peers)
+      if (
+        raceNow().kind === "mp" ||
+        isInOnlineRoom(multiplayerSync.status, peersOnTrack) ||
+        rp.buffer.durationS < 1 ||
+        appPhaseNow !== "driving"
+      ) {
+        return false;
+      }
       if (!rp.active) {
         replaySaved.pos.copy(physics.worldPosition);
         replaySaved.quat.copy(physics.worldQuaternion);
@@ -2313,10 +2331,24 @@ export class DriveSession {
       rp.prevTimeS = rp.timeS;
       rp.wheelRotRad = physics.wheelRotationRad;
       rp.focusedCarId = "player";
+      replayLastFocusId = null;
       rp.cars = buildReplayCarOptions();
       rp.lapMarkers = rp.buffer.lapMarkers();
-      replayPlayerTelemetry = { ...physics.telemetry };
-      replayFocusTelemetry = { ...physics.telemetry };
+      // Neutralise live G-forces & boost flag so chase cameras don't stay locked sideways from the frame replay opened
+      replayPlayerTelemetry = {
+        ...physics.telemetry,
+        longitudinalG: 0,
+        lateralG: 0,
+        verticalG: 1,
+        manualOverrideActive: false,
+      };
+      replayFocusTelemetry = {
+        ...physics.telemetry,
+        longitudinalG: 0,
+        lateralG: 0,
+        verticalG: 1,
+        manualOverrideActive: false,
+      };
       cameraRig.reset();
       publishReplayUi();
       return true;
@@ -2370,13 +2402,12 @@ export class DriveSession {
       lastReplayPushS = rp.timeS;
       rp.active = false;
       rp.focusedCarId = "player";
+      replayLastFocusId = null;
       clearCameraOverride();
       cameraRig.reset();
       physics.aiAutopilot = false;
-      kbInput.throttle = 0;
-      kbInput.brake = 0;
-      kbInput.clutch = 0;
-      kbPedalAssist.reset();
+      // Release any held keys (e.g. F = Flashback & half throttle) so resuming driving has no throttle blip
+      releaseHeldKeys();
       publishReplayUi();
       return true;
     };
@@ -3850,12 +3881,18 @@ export class DriveSession {
         let camCarVel: THREE.Vector3 = carVelocityWorld;
         let camChassis: THREE.Object3D = carRig.chassisGroup;
         let camAnchors = lc26Cams;
+        let camCarId: CarId = carRigCar;
+        let camNudges = settingsNow.cameraNudges;
         if (replaying) {
           const fc = replayFocusCarFrame;
           if (fc && fc.id !== "player") {
             const oppRig = visualFx.getOpponentRig(fc.id);
+            const focusInfo = replayNames.get(fc.id);
             replayCamCar.worldPosition.set(fc.x, fc.y, fc.z);
             replayCamCar.worldQuaternion.set(fc.qx, fc.qy, fc.qz, fc.qw);
+            replayLastFocusId = fc.id;
+            replayLastFocusPos.copy(replayCamCar.worldPosition);
+            replayLastFocusQuat.copy(replayCamCar.worldQuaternion);
             replayCamCar.sMeters = fc.s ?? 0;
             replayCamCar.vxMs = fc.speedKmh / 3.6;
             replayCamCar.vyMs = 0;
@@ -3874,13 +3911,36 @@ export class DriveSession {
             camCar = replayCamCar;
             camCarPos = replayCamCar.worldPosition;
             camCarVel = replayFocusVel;
+            if (focusInfo?.vehicle) camCarId = carForVehicle(focusInfo.vehicle).id;
+            camNudges = {};
             if (oppRig) {
               camChassis = oppRig.chassisGroup;
               camAnchors = oppRig.getCameraAnchors();
             } else {
               camAnchors = null;
             }
+          } else if (rp.focusedCarId !== "player" && replayLastFocusId === rp.focusedCarId) {
+            // Focused AI car retired or left this frame: hold its last pose cleanly instead of silently snapping to player
+            replayCamCar.worldPosition.copy(replayLastFocusPos);
+            replayCamCar.worldQuaternion.copy(replayLastFocusQuat);
+            replayCamCar.vxMs = 0;
+            replayCamCar.vyMs = 0;
+            replayFocusVel.set(0, 0, 0);
+            replayFocusTelemetry.speedKmh = 0;
+            replayCamCar.telemetry = replayFocusTelemetry;
+            camCar = replayCamCar;
+            camCarPos = replayCamCar.worldPosition;
+            camCarVel = replayFocusVel;
+            const focusInfo = replayNames.get(rp.focusedCarId);
+            if (focusInfo?.vehicle) camCarId = carForVehicle(focusInfo.vehicle).id;
+            camNudges = {};
+            camAnchors = null;
           } else {
+            if (rp.focusedCarId !== "player") {
+              // Scrubbed to a timestamp before this car existed: visibly switch focus back to player so UI matches camera
+              rp.focusedCarId = "player";
+              publishReplayUi();
+            }
             replayCamCar.worldPosition.copy(physics.worldPosition);
             replayCamCar.worldQuaternion.copy(physics.worldQuaternion);
             replayCamCar.sMeters = replayPlayerS;
@@ -3901,7 +3961,7 @@ export class DriveSession {
           car: camCar,
           carPos: camCarPos,
           carVelocity: camCarVel,
-          anchor: onboardViews.resolve(camAnchors, mode, carRigCar, settingsNow.cameraNudges),
+          anchor: onboardViews.resolve(camAnchors, mode, camCarId, camNudges),
           chassis: camChassis,
           onboardFovShift,
           headMovement: settingsNow.hud.headMovement,

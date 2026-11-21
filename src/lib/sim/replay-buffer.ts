@@ -282,21 +282,17 @@ export class ReplayBuffer {
       const off = seq & CHUNK_MASK;
       const lap = chunk.data[off * chunk.carCols * CAR_STRIDE + col * CAR_STRIDE + 14];
       if (!Number.isNaN(lap) && lap > 0 && lap !== lastLap) {
-        if (lastLap !== -1) {
-          // Refine exact transition frame backwards inside the last step
-          let exact = i;
-          while (exact > Math.max(0, i - step)) {
-            const pSeq = this.headSeq + exact - 1;
-            const pChunk = this.chunks.get(pSeq >>> CHUNK_SHIFT);
-            if (!pChunk || col >= pChunk.carCols) break;
-            const pLap = pChunk.data[(pSeq & CHUNK_MASK) * pChunk.carCols * CAR_STRIDE + col * CAR_STRIDE + 14];
-            if (pLap !== lap) break;
-            exact--;
-          }
-          out.push({ lap: Math.round(lap), timeS: this.timeAtIndex(exact) });
-        } else {
-          out.push({ lap: Math.round(lap), timeS: chunk.times[off] });
+        // Refine exact transition frame backwards inside the last step (including the first detected lap when i > 0)
+        let exact = i;
+        while (exact > Math.max(0, i - step)) {
+          const pSeq = this.headSeq + exact - 1;
+          const pChunk = this.chunks.get(pSeq >>> CHUNK_SHIFT);
+          if (!pChunk || col >= pChunk.carCols) break;
+          const pLap = pChunk.data[(pSeq & CHUNK_MASK) * pChunk.carCols * CAR_STRIDE + col * CAR_STRIDE + 14];
+          if (pLap !== lap) break;
+          exact--;
         }
+        out.push({ lap: Math.round(lap), timeS: this.timeAtIndex(exact) });
         lastLap = lap;
       }
     }

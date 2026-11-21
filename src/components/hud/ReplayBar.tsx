@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Icon } from "@/components/ui/icons/Icon";
 import { ArrowKeys, KeyCap } from "@/components/ui/prompts";
+import { useFocusNav } from "@/components/menu/useFocusNav";
 import { HUD_GLASS, HUD_LBL } from "./hud-format";
 import { HUD_CHOSEN, HUD_CONTROL, HUD_IDLE } from "./styles/hud-style-parts";
 
-const SPEEDS = [-4, -2, -1, 0.25, 0.5, 1, 2, 4] as const;
+const SPEEDS = [-4, -2, -1, -0.5, -0.25, 0.25, 0.5, 1, 2, 4] as const;
 /** Arrow-key seek step (s) */
 const SEEK_STEP_S = 5;
 
@@ -92,6 +93,10 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
     [cars, focusedCarId]
   );
 
+  const barRef = useRef<HTMLElement>(null);
+  // Enable full gamepad / keyboard menu navigation inside ReplayBar (B / Back exits replay cleanly)
+  useFocusNav(barRef, { onBack: onExit, enabled: !inFreeCam });
+
   // The key listeners read the latest clock and callbacks from here, so they are added once
   const latest = useRef({ timeS, startS, endS, inFreeCam, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback });
   latest.current = { timeS, startS, endS, inFreeCam, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback };
@@ -102,12 +107,16 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
     const onKey = (e: KeyboardEvent) => {
       const { timeS, inFreeCam, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback } = latest.current;
       const target = e.target as HTMLElement | null;
+      const isRangeInput = target instanceof HTMLInputElement && target.type === "range";
+      const inMenuPopup = Boolean(target?.closest('[role="listbox"], [role="menu"]'));
       if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable)
+        inMenuPopup ||
+        (target &&
+          !isRangeInput &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT" ||
+            target.isContentEditable))
       ) {
         return;
       }
@@ -160,6 +169,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
       <div aria-hidden className="lc-ui-zoom pointer-events-none fixed inset-x-0 bottom-0 z-[-1] h-10 bg-black sm:h-14 short:h-6" />
 
       <section
+        ref={barRef}
         role="toolbar"
         aria-label="Replay controls"
         className={`lc-ui-zoom pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom,0px)+3.5rem)] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto z-40 flex max-w-240 flex-col gap-2.5 rounded-lc-tile px-3.5 py-3 text-lc-chalk ${HUD_GLASS} sm:bottom-[calc(env(safe-area-inset-bottom,0px)+76px)] short:bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] short:gap-2 short:py-2`}
@@ -229,6 +239,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
                 step={0.01}
                 value={shown}
                 onChange={(e) => onSeek(Number(e.target.value))}
+                onPointerUp={(e) => e.currentTarget.blur()}
                 className="lc-range -my-2 h-6 w-full [--lc-track:8px]"
                 style={{ "--lc-fill": `${fill.toFixed(2)}%` } as React.CSSProperties}
               />

@@ -811,7 +811,7 @@ export class SimVisualFxManager {
 
       // Integrated, so the spokes turn smoothly with frame-time jitter and stop when the car does (paused, replay)
       const rpm = peer.wheelRPMs[0];
-      const spinRadS = Number.isFinite(rpm) && rpm !== 0 ? (rpm * 2 * Math.PI) / 60 : peer.speedKmh / 3.6 / 0.348;
+      const spinRadS = Number.isFinite(rpm) ? (rpm * 2 * Math.PI) / 60 : peer.speedKmh / 3.6 / 0.348;
       entry.wheelRot = (entry.wheelRot + spinRadS * dt) % (2 * Math.PI);
       const wheelRot = entry.wheelRot;
       const pitchRad = peer.brake > 0.2 ? 0.012 : -peer.throttle * 0.008;
