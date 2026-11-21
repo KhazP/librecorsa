@@ -95,12 +95,17 @@ export function checkLap(raw: unknown): LapCheck {
   const problem = lapPlausibilityProblem(samples, { open: isPointToPointTrack(trackId) });
   if (problem) return bad(problem);
 
-  // Optional car setup: strictly validated and clamped server-side, must match the lap's vehicle
+  // Optional car setup: strictly validated and clamped server-side.
+  // Reject an explicit wrong-vehicle mismatch; drop unknown/future setup schemas cleanly so valid PBs are never refused.
   let setup: SharedCarSetup | undefined;
   if (raw.setup !== undefined) {
     const parsed = parseSharedSetup(raw.setup);
-    if (!parsed || parsed.vehicle !== vehicle) return bad("Invalid setup");
-    setup = parsed;
+    if (parsed) {
+      if (parsed.vehicle !== vehicle) return bad("Invalid setup");
+      // Drop arbitrary free-text name on server storage (the game never uploads setup names)
+      const { name: _dropName, ...serverSetup } = parsed;
+      setup = serverSetup;
+    }
   }
 
   return {

@@ -336,16 +336,34 @@ export const EngineersGarage: React.FC<
     const resolved = resolveSetupForCar(
       shared,
       p.vehicleModel,
-      p.defaultTyreSetup,
+      p.tyreSetup,
       (t) => clampTyreSetup(p.vehicleModel, t),
       p.tireCompound,
       p.aeroPreset,
       currentTuner,
+      chassis.fuelDeltaKg,
     );
-    const label = shared.name || `Imported (${carBoardTag(shared.vehicle).label})`;
+    const rawLabel = (shared.name || `Imported (${carBoardTag(shared.vehicle).label})`).slice(0, 32);
+    // Avoid overwriting an existing user preset on name collision when saving an imported setup
+    let finalName = rawLabel;
+    if (save) {
+      const taken = new Set(presets.map((x) => x.name.toLowerCase()));
+      if (taken.has(finalName.toLowerCase())) {
+        let n = 2;
+        while (n < 100) {
+          const suffix = ` (${n})`;
+          const candidate = `${rawLabel.slice(0, 32 - suffix.length)}${suffix}`;
+          if (!taken.has(candidate.toLowerCase())) {
+            finalName = candidate;
+            break;
+          }
+          n++;
+        }
+      }
+    }
     const asPreset: GaragePreset = {
       id: `${Date.now().toString(36)}`,
-      name: label.slice(0, 32),
+      name: finalName,
       savedAt: Date.now(),
       vehicle: p.vehicleModel,
       chassis: resolved.chassis,
@@ -354,14 +372,17 @@ export const EngineersGarage: React.FC<
       aero: resolved.aero,
       tuner: resolved.tuner,
     };
+    const before = snapshot();
     loadPreset(asPreset);
     if (save) {
-      const existing = presets.find((x) => x.name.toLowerCase() === asPreset.name.toLowerCase());
-      if (existing || presets.length < GARAGE_PRESETS_MAX) {
-        const stored: GaragePreset = { ...asPreset, id: existing?.id ?? asPreset.id };
-        const next = [stored, ...presets.filter((x) => x.id !== stored.id)].slice(0, GARAGE_PRESETS_MAX);
+      if (presets.length >= GARAGE_PRESETS_MAX) {
+        setNote(`Applied “${finalName}” (preset list full, ${GARAGE_PRESETS_MAX} max)`, () => restore(before));
+      } else {
+        const next = [asPreset, ...presets].slice(0, GARAGE_PRESETS_MAX);
         setPresets(next);
-        saveGaragePresets(p.vehicleModel, next);
+        if (!saveGaragePresets(p.vehicleModel, next)) {
+          setNote(`Applied “${finalName}” (could not save: storage is blocked)`, () => restore(before));
+        }
       }
     }
     setImportCode("");
@@ -703,7 +724,7 @@ export const EngineersGarage: React.FC<
                     <p className="lc-hint m-0">{summarizeSharedSetup(decodedImport)}</p>
                     {decodedImport.vehicle !== p.vehicleModel ? (
                       <p className="m-0 text-[12px] text-lc-caution">
-                        Built for {carBoardTag(decodedImport.vehicle).label} — tyre limits will be clamped to this car.
+                        Built for {carBoardTag(decodedImport.vehicle).label}: chassis offsets, electronics and tyres will be clamped to this car.
                       </p>
                     ) : null}
                     <div className="flex flex-wrap gap-1.5 pt-0.5">

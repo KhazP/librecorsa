@@ -140,7 +140,10 @@ export function parseSharedSetup(raw: unknown): SharedCarSetup | null {
   const out: SharedCarSetup = { v: 1, vehicle: folded };
 
   if (typeof raw.name === "string") {
-    const clean = raw.name.replace(/[\r\n\t]+/g, " ").trim().slice(0, MAX_SETUP_NAME_LEN);
+    const clean = raw.name
+      .replace(/[\u202A-\u202E\u2066-\u2069\u200E\u200F\r\n\t]+/g, " ")
+      .trim()
+      .slice(0, MAX_SETUP_NAME_LEN);
     if (clean) out.name = clean;
   }
 
@@ -268,15 +271,20 @@ export function decodeSetupShareCode(input: string): SharedCarSetup | null {
   }
 }
 
-/** Resolves a `SharedCarSetup` onto the player's current car, clamping every field to the target car's safe limits */
+/**
+ * Resolves a `SharedCarSetup` onto the player's current car, clamping every field to the target car's setup sheet.
+ * Preserves the receiver's `fuelDeltaKg` (so applying a 5 kg time-trial setup never strands the player out of fuel
+ * in a race) and keeps `currentTyre` when the shared setup omits a tyre section.
+ */
 export function resolveSetupForCar(
   shared: SharedCarSetup,
   targetVehicle: VehicleModelId,
-  defaultTyre: TyreSetup,
+  currentTyre: TyreSetup,
   clampTyre: (t: TyreSetup) => TyreSetup,
   currentCompound: TireCompound,
   currentAero: AeroSetupPreset,
   currentTuner: GarageTuner,
+  preserveFuelDeltaKg?: number,
 ): {
   chassis: ChassisSetup;
   tyre: TyreSetup;
@@ -285,15 +293,19 @@ export function resolveSetupForCar(
   tuner: GarageTuner;
   differentCar: boolean;
 } {
-  const chassis = clampChassisToCarSheet(targetVehicle, shared.chassis ?? {});
+  const rawChassis =
+    preserveFuelDeltaKg !== undefined
+      ? { ...(shared.chassis ?? {}), fuelDeltaKg: preserveFuelDeltaKg }
+      : (shared.chassis ?? {});
+  const chassis = clampChassisToCarSheet(targetVehicle, rawChassis);
   const rawTyre: TyreSetup = shared.tyre
     ? {
         coldPressurePsi: { ...shared.tyre.coldPressurePsi },
         camberDeg: { ...shared.tyre.camberDeg },
       }
     : {
-        coldPressurePsi: { ...axlePressures(defaultTyre.coldPressurePsi.fl, defaultTyre.coldPressurePsi.rl), ...defaultTyre.coldPressurePsi },
-        camberDeg: { ...defaultTyre.camberDeg },
+        coldPressurePsi: { ...axlePressures(currentTyre.coldPressurePsi.fl, currentTyre.coldPressurePsi.rl), ...currentTyre.coldPressurePsi },
+        camberDeg: { ...currentTyre.camberDeg },
       };
   const tyre = clampTyre(rawTyre);
   const compound = shared.compound && VALID_COMPOUNDS.includes(shared.compound) ? shared.compound : currentCompound;

@@ -794,6 +794,7 @@ async function main(): Promise<void> {
       setup: {
         v: 1,
         vehicle: 'lc26',
+        name: 'Unmoderated Name',
         aero: 'low_downforce',
         compound: 'soft',
         chassis: { frontWingClicks: 999, rearWingClicks: -3, rideHeightFrontMm: -15 },
@@ -806,19 +807,24 @@ async function main(): Promise<void> {
     const storedText = row ? await (await own.ghosts.get(`laps/${row.id}.json`))?.text() : null;
     const storedLap = storedText ? validateLapRecording(JSON.parse(storedText)) : null;
     check(
-      'setup: uploaded lap flags hasSetup on board row and clamps out-of-range setup to car sheet in R2 JSON',
+      'setup: uploaded lap flags hasSetup on board row, strips server name, and clamps to car sheet in R2 JSON',
       posted.status === 200 &&
         row?.hasSetup === true &&
+        storedLap?.setup?.name === undefined &&
         storedLap?.setup?.aero === 'low_downforce' &&
         storedLap?.setup?.chassis?.frontWingClicks === 25 &&
         storedLap?.setup?.chassis?.rearWingClicks === -3 &&
         storedLap?.setup?.chassis?.rideHeightFrontMm === -8 &&
         storedLap?.setup?.tuner?.tcSlipAngleLevel === undefined,
-      `status=${posted.status} hasSetup=${String(row?.hasSetup)} fw=${String(storedLap?.setup?.chassis?.frontWingClicks)} rhF=${String(storedLap?.setup?.chassis?.rideHeightFrontMm)} slip=${String(storedLap?.setup?.tuner?.tcSlipAngleLevel)}`,
+      `status=${posted.status} hasSetup=${String(row?.hasSetup)} name=${String(storedLap?.setup?.name)} fw=${String(storedLap?.setup?.chassis?.frontWingClicks)} rhF=${String(storedLap?.setup?.chassis?.rideHeightFrontMm)}`,
     );
 
     const mismatched = await post({ ...variant(1.02, 'Wrong Car'), setup: { v: 1, vehicle: 'amg-gt3', aero: 'balanced' } }, KEY_B);
     check('setup: setup for a different vehicle is refused on upload', mismatched.status === 400);
+
+    // Unknown/future setup schema (e.g. v: 2) is dropped gracefully rather than refusing a valid PB lap
+    const futureSetup = await post({ ...variant(1.02, 'Future Client'), setup: { v: 2, vehicle: 'lc26', aero: 'balanced' } }, KEY_B);
+    check('setup: future/unrecognised setup schema is dropped without refusing a valid lap', futureSetup.status === 200);
 
     // Pre-0009 database (without has_setup column) still accepts uploads with setups cleanly (zero-downtime deploy)
     const pre0009 = ['0001_lap_boards.sql', '0007_lap_input.sql'].map((f) => readFileSync(join(__dirname, '../cloudflare/migrations', f), 'utf8')).join('\n');

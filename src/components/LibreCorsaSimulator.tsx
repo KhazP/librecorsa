@@ -1149,16 +1149,31 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const handleApplyLeaderboardSetup = useCallback(
     async (entry: LeaderboardEntry) => {
       const targetVehicle = vehicleModelRef.current;
-      const rec = entry.setup
-        ? null
-        : entry.source === "remote" && entry.id
-          ? await fetchRemoteGhost(entry.id).catch(() => null)
-          : await loadBestLap(entry.trackId, entry.vehicle, entry.conditions ? lapBoardClass(entry.conditions) : null).catch(() => null);
-      // If the player switched cars while fetching a remote setup, drop the stale result
-      if (vehicleModelRef.current !== targetVehicle) return;
+      const startSession = sessionRef.current;
+      let fetchFailed = false;
+      let rec = null;
+      if (!entry.setup) {
+        if (entry.source === "remote" && entry.id) {
+          try {
+            rec = await fetchRemoteGhost(entry.id);
+            if (!rec) fetchFailed = true;
+          } catch {
+            fetchFailed = true;
+          }
+        } else {
+          rec = await loadBestLap(entry.trackId, entry.vehicle, entry.conditions ? lapBoardClass(entry.conditions) : null).catch(() => null);
+        }
+      }
+      // Drop stale result if the player switched cars or sessions while downloading
+      if (vehicleModelRef.current !== targetVehicle || sessionRef.current !== startSession) return;
       const setup = entry.setup ?? rec?.setup ?? null;
       if (!setup) {
-        setSetupBoardNotice({ text: `No setup saved with ${entry.name}'s lap`, vehicle: targetVehicle });
+        setSetupBoardNotice({
+          text: fetchFailed
+            ? `Couldn't load ${entry.name}'s setup, try again`
+            : `No setup saved with ${entry.name}'s lap`,
+          vehicle: targetVehicle,
+        });
         return;
       }
       const snap = sessionRef.current?.getSnapshot();
@@ -1170,25 +1185,27 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const resolved = resolveSetupForCar(
         setup,
         targetVehicle,
-        snap?.defaultTyreSetup ?? defaultTyreSetup,
+        prevTyre,
         (t) => clampTyreSetup(targetVehicle, t),
         prevCompound,
         prevAero,
         prevTuner,
+        prevChassis.fuelDeltaKg,
       );
+      const keepChallengeCompound = snap?.timeTrial?.vehicle === targetVehicle;
       handleChangeChassisSetup(resolved.chassis);
       handleChangeTyreSetup(resolved.tyre);
-      handleTireCompoundChange(resolved.compound);
+      if (!keepChallengeCompound) handleTireCompoundChange(resolved.compound);
       handleAeroPresetChange(resolved.aero);
       handleChangeLiveTuner(resolved.tuner);
       setSetupBoardNotice({
         text: `Applied ${entry.name}'s setup (${summarizeSharedSetup(setup)})`,
         vehicle: targetVehicle,
         undo: () => {
-          if (vehicleModelRef.current !== targetVehicle) return;
+          if (vehicleModelRef.current !== targetVehicle || sessionRef.current !== startSession) return;
           handleChangeChassisSetup(prevChassis);
           handleChangeTyreSetup(prevTyre);
-          handleTireCompoundChange(prevCompound);
+          if (!keepChallengeCompound) handleTireCompoundChange(prevCompound);
           handleAeroPresetChange(prevAero);
           handleChangeLiveTuner(prevTuner);
         },

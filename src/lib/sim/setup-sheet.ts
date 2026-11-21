@@ -744,13 +744,20 @@ export function clampSetupToSheet(
         continue;
       }
       const v = param.get(input);
-      const safe = Number.isFinite(v) ? Math.min(param.max, Math.max(param.min, v)) : param.base;
+      const clamped = Number.isFinite(v) ? Math.min(param.max, Math.max(param.min, v)) : param.base;
+      // Snap chassis parameters to real slider steps so between-step values (e.g. 2.37 clicks or 0.5 gear set) cannot pass through
+      const safe =
+        param.writes === "chassis" && param.step > 0
+          ? Math.min(param.max, Math.max(param.min, Number((param.min + Math.round((clamped - param.min) / param.step) * param.step).toFixed(4))))
+          : clamped;
       out = param.set(out, safe);
     }
   }
-  // MFD-only diffMid (not on the static garage sheet, available on F1 cars)
-  if (SETUP_CLASS[vehicle] === "f1" && input.tuner.diffMid !== undefined && Number.isFinite(input.tuner.diffMid)) {
-    out.tuner = { ...out.tuner, diffMid: Math.min(12, Math.max(1, Math.round(input.tuner.diffMid))) };
+  // MFD-adjustable differential dials (usable in-car on both F1 and GT3-class cars via TunerMfdPanel)
+  for (const diffKey of ["diffEntry", "diffMid", "diffExit"] as const) {
+    if (out.tuner[diffKey] === undefined && input.tuner[diffKey] !== undefined && Number.isFinite(input.tuner[diffKey])) {
+      out.tuner = { ...out.tuner, [diffKey]: Math.min(12, Math.max(1, Math.round(input.tuner[diffKey]!))) };
+    }
   }
   return out;
 }

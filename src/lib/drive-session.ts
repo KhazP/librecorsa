@@ -3404,9 +3404,10 @@ export class DriveSession {
         if (done) {
           if (!done.summary.valid && wallDeletedLaps.has(done.summary.lapNumber)) done.summary.wallContact = true;
           for (const lap of wallDeletedLaps) if (lap <= done.summary.lapNumber) wallDeletedLaps.delete(lap);
+          // Omit fuel load (stint / time-trial strategy) so applying another player's lap setup never strands a receiver on low fuel
           done.recording.setup = buildSharedSetup({
             vehicle: vehicleNow,
-            chassis: timeTrialOn() ? lowestFuelSetup(this.snapshot.chassisSetup) : this.snapshot.chassisSetup,
+            chassis: { ...this.snapshot.chassisSetup, fuelDeltaKg: 0 },
             tyre: this.snapshot.tyreSetup,
             compound: this.snapshot.tireCompound,
             aero: physics.aeroPreset,

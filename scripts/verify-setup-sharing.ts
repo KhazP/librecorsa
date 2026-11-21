@@ -194,4 +194,35 @@ check("resolveSetupForCar clamps tyre pressures/camber/chassis to target car she
   assert.ok(summarizeSharedSetup(gt3Setup).includes("High downforce"));
 });
 
+check("Hardening: preserves receiver fuel/tyres, keeps GT3 MFD diff dials, snaps slider steps, strips bidi chars", () => {
+  // 1. GT3 MFD diff dials survive round-trip & sheet clamp
+  const gt3 = buildSharedSetup({
+    vehicle: "amg-gt3",
+    name: "Fast\u202Egt3",
+    chassis: { rearWingClicks: 2.37, gearRatioSet: 0.5, fuelDeltaKg: -25 },
+    tuner: { diffEntry: 9, diffMid: 5, diffExit: 2, brakeBiasPct: 68 },
+  });
+  assert.equal(gt3.name, "Fast gt3", "bidi override character stripped");
+  assert.equal(gt3.chassis?.rearWingClicks, 2, "between-step rear wing snapped to integer click");
+  assert.equal(gt3.chassis?.gearRatioSet, 1, "between-step gearRatioSet snapped to integer");
+  assert.equal(gt3.tuner?.diffEntry, 9, "GT3 MFD diffEntry preserved");
+  assert.equal(gt3.tuner?.diffMid, 5, "GT3 MFD diffMid preserved");
+  assert.equal(gt3.tuner?.diffExit, 2, "GT3 MFD diffExit preserved");
+
+  // 2. Resolving onto receiver preserves receiver's fuel load and current tyres (when setup omits tyres)
+  const myTyres = { coldPressurePsi: { fl: 25.5, fr: 25.5, rl: 25.0, rr: 25.0 }, camberDeg: { front: -3.4, rear: -2.6 } };
+  const resolved = resolveSetupForCar(
+    gt3,
+    "amg-gt3",
+    myTyres,
+    (t) => clampTyreSetup("amg-gt3", t),
+    "medium",
+    "balanced",
+    { brakeBiasPct: 66 },
+    12,
+  );
+  assert.equal(resolved.chassis.fuelDeltaKg, 12, "receiver fuel load preserved instead of overwritten to -25 kg");
+  assert.deepEqual(resolved.tyre, myTyres, "receiver current tyres kept when shared setup omits tyres");
+});
+
 console.log(`\n${passed} setup-sharing checks passed.`);
