@@ -17,7 +17,7 @@ import {
   type CircuitVenue,
   type TrackInfo,
 } from "@/lib/track-registry";
-import { Disclosure, SettingRow, Skeleton } from "@/components/ui";
+import { SettingRow, Skeleton } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
 import { cx } from "@/components/ui/styles";
@@ -242,7 +242,6 @@ export const CircuitBrowser: React.FC<{
       renderDetail={(v) => {
         const t = shownLayout(v);
         const active = t.id === trackId;
-        const qMeta = circuitQualityMeta(t);
         const source = trackModelSource(t);
         const hill = circuitType(t) === "hillclimb";
         const layoutOptions = v.layouts.map((l) => ({ id: l.id, label: l.layout }));
@@ -258,7 +257,7 @@ export const CircuitBrowser: React.FC<{
                 {lengthOf(t, units)}, {t.turns} turns, {dirWord(t.direction)}
                 {active && BASE_ALTITUDE_M > 0 ? (
                   <>
-                    , {Math.round(BASE_ALTITUDE_M).toLocaleString("en-US")} m above sea level
+                    , {Math.round(BASE_ALTITUDE_M).toLocaleString("en-US")} m alt
                   </>
                 ) : null}
               </p>
@@ -280,14 +279,9 @@ export const CircuitBrowser: React.FC<{
               {t.credit?.author ? <span className="lc-hint">By {t.credit.author}</span> : <span />}
               {source ? <SourceChip source={source} /> : null}
             </div>
-            <p className="lc-hint m-0">
-              {hill
-                ? "A hill climb is one timed run from the start line to the finish, one car at a time: no AI or online races. Loading it reloads the scene."
-                : "Loading a circuit reloads the scene. Online, everyone in the room picks the same one."}
-            </p>
-            <Disclosure moreLabel="What the grade means" lessLabel="Less">
-              <p className="lc-hint m-0 pb-1">{qMeta.description}</p>
-            </Disclosure>
+            {hill ? (
+              <p className="lc-hint m-0">Point-to-point timed run. Solo only.</p>
+            ) : null}
           </>
         );
       }}

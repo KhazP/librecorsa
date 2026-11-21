@@ -365,10 +365,10 @@ export const EngineersGarage: React.FC<
   const extra = (x: string) => {
     const onlyTyre = vehicleModelSpec(car.physics).onlyTyre;
     if (x === "compound" && onlyTyre)
-      return <SettingRow key={x} label="Tyre compound" hint={`${onlyTyre}: this car runs on one compound`}>{null}</SettingRow>;
+      return <SettingRow key={x} label="Tyre compound" hint={`${onlyTyre} (spec compound)`}>{null}</SettingRow>;
     if (x === "compound")
       return (
-        <SettingRow key={x} label="Tyre compound" hint="The weather picks one for you; change it here" stacked>
+        <SettingRow key={x} label="Tyre compound" stacked>
           <Segmented<TireCompound>
             fill
             byContent
@@ -406,8 +406,8 @@ export const EngineersGarage: React.FC<
           hint={
             // A class without ABS runs the middle preset on TC alone, and ABS only on Full
             tuner.absAllowed === false
-              ? `${p.assistPreset === "semi_pro" ? "TC" : (ASSIST_WORDS[p.assistPreset] ?? p.assistPreset)}, set in Settings. This class races without ABS: only Full adds it`
-              : `${ASSIST_WORDS[p.assistPreset] ?? p.assistPreset}, set in Settings`
+              ? `${p.assistPreset === "semi_pro" ? "TC only" : (ASSIST_WORDS[p.assistPreset] ?? p.assistPreset)} · No factory ABS`
+              : `${ASSIST_WORDS[p.assistPreset] ?? p.assistPreset}`
           }
         >
           {p.onOpenSettings ? (
@@ -562,7 +562,7 @@ export const EngineersGarage: React.FC<
               ))}
             </ul>
           ) : (
-            <p className="lc-hint m-0 pt-1">Name a setup and save it to come back to it on this car.</p>
+            <p className="lc-hint m-0 pt-1">No saved setups yet.</p>
           )}
           {note ? (
             <div role="status" className="pt-2">

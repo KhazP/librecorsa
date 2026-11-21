@@ -128,26 +128,21 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
             }
             bodyClassName="gap-3.5"
           >
-            <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label="Rules">
-              {rules.map((r) => (
-                <li key={r}>
-                  <Badge>{r === "Full" || r === "Standard" || r === "Casual" ? `${r} realism` : r}</Badge>
-                </li>
-              ))}
-            </ul>
-            <p className="lc-body m-0">
-              Same circuit, car and settings for everyone, until Monday. Flying laps: leave the track and the lap is deleted,
-              and the next one too if it was before the line. Your best lap goes on the week&apos;s board by itself.
-              {hasRaces && available ? " To race others this week, open Multiplayer." : ""}
+            <p className="lc-mono m-0 text-[12px] text-lc-fog" aria-label="Rules">
+              {rules.map((r) => (r === "Full" || r === "Standard" || r === "Casual" ? `${r} realism` : r)).join(" · ")}
+            </p>
+            <p className="lc-hint m-0">
+              Fixed car and setup. Flying laps, strict track limits.
+              {hasRaces && available ? " Weekly races available in Multiplayer." : ""}
             </p>
             {available ? (
               <Button variant="primary" size="lg" block icon={<Icon name="drive" />} onClick={onDrive}>
-                Drive the challenge
+                Drive challenge
               </Button>
             ) : (
               <p className="m-0 flex items-start gap-2 text-[14px] leading-snug font-medium text-lc-caution">
                 <Icon name="warning" className="mt-0.5" />
-                This copy of the game doesn&apos;t have this week&apos;s circuit or car. Play it on librecorsa.org.
+                Circuit or car unavailable in this build. Play on librecorsa.org.
               </p>
             )}
           </Card>
@@ -164,7 +159,7 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
             )}
             {older ? (
               <p className="lc-hint m-0">
-                {choice.physics !== PHYSICS_VERSION ? "I kept these laps from before the physics update." : "I kept these laps from before I changed this circuit."}
+                {choice.physics !== PHYSICS_VERSION ? "Archived physics version." : "Previous circuit revision."}
               </p>
             ) : null}
             {me ? (
@@ -184,10 +179,10 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
             {loading && !board ? (
               <BoardSkeleton label="Loading this week's times" />
             ) : state.error && !board ? (
-              <BoardError onRetry={() => setReload((n) => n + 1)}>Couldn&apos;t load this week&apos;s times. Check your connection.</BoardError>
+              <BoardError onRetry={() => setReload((n) => n + 1)}>Couldn&apos;t load times.</BoardError>
             ) : !board || board.entries.length === 0 ? (
               <EmptyState icon={<Icon name="challenge" />}>
-                {older ? `No times this week on ${versionName}.` : "No times yet this week. Drive the challenge and yours can be the first."}
+                {older ? `No times on ${versionName}.` : "No times set yet."}
               </EmptyState>
             ) : (
               <BoardTable

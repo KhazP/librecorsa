@@ -11,8 +11,8 @@ export const RACE_START_MODES: readonly RaceStartMode[] = ['assisted', 'manual']
 export const RACE_START_MODE_LABELS: Record<RaceStartMode, string> = { assisted: 'Assisted', manual: 'Manual' };
 /** What each launch asks of the player, for the rows that set it */
 export const RACE_START_MODE_HINTS: Record<RaceStartMode, string> = {
-  assisted: 'The car waits on the grid and pulls away on the throttle at lights out',
-  manual: 'Hold the clutch and the revs through the lights, let it go at lights out. Moving early is a jump start: +5 s, +10 s for a big one',
+  assisted: 'Held on the grid until lights out',
+  manual: 'Hold clutch and revs, release at lights out (+5 s / +10 s jump penalty)',
 };
 
 /** Time added at the flag for a jump start (s) */

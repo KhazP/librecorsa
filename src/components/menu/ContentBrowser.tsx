@@ -570,11 +570,8 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
                 ) : undefined
               }
             >
-              {words.length ? `Nothing matches "${query.trim()}"` : `No ${props.noun} here yet`}
+              {words.length ? `No matches for "${query.trim()}"` : `No ${props.noun}`}
               {narrowLabels.length ? ` in ${narrowLabels.join(", ")}` : ""}.
-              {narrowing.length === 1 && narrowing[0].filter.id === "fav" && !words.length && onToggleFavorite
-                ? " Star one from its card or the detail pane."
-                : ""}
             </EmptyState>
           )}
           {props.footnote}
@@ -595,7 +592,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
               <div className="flex shrink-0 items-center gap-2 border-t border-lc-line p-3">
                 <div data-browser-primary className="flex min-w-0 flex-1 flex-col">
                   {action.current ? (
-                    <div className="inline-flex h-13 items-center justify-center gap-2.5 rounded-full bg-lc-titanium text-lc-fog phone:h-11">
+                    <div className="inline-flex h-13 items-center justify-center gap-2.5 rounded-lc-row bg-lc-titanium text-lc-fog phone:h-11">
                       <Icon name="check" className="text-lc-chalk" />
                       <span className="lc-title text-[16px]">{action.label}</span>
                     </div>

@@ -190,7 +190,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
               />
             ))}
           </OptionTileGroup>
-          <SettingRow label="Time progression" hint="How fast the clock runs" disabled={locked}>
+          <SettingRow label="Time progression" disabled={locked}>
             {steps({
               value: String(conditions.timeScale),
               onChange: (v) => set({ timeScale: Number(v) }),
@@ -211,7 +211,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
               }))}
             />
           </SettingRow>
-          <SettingRow label="Grip change" hint="How fast rubber builds up on the line" disabled={locked}>
+          <SettingRow label="Grip evolution" disabled={locked}>
             {steps({
               value: String(conditions.surfaceTimeScale ?? 1),
               onChange: (v) => set({ surfaceTimeScale: Number(v) }),
@@ -235,11 +235,9 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
           )}
         </Card>
 
-        <p className="lc-hint m-0 px-1">
-          {session ? "A change here restarts the weather and the rubber on the track. " : null}
-          Rain needs rain tyres: intermediates on a wet track, full wets in standing water. The cars dry a line as the rain
-          stops. AI opponents choose their own tyres.
-        </p>
+        {session ? (
+          <p className="lc-hint m-0 px-1">Changes reset current weather and track grip.</p>
+        ) : null}
       </div>
     </div>
   );

@@ -98,8 +98,8 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
   const pause = context === "pause";
   // Only a change of field size restarts a running AI race (the shell rebuilds the field and starts from the lights)
   const restartsNow = pause && aiOpponents === true;
-  const startNote = setup.startMode === "auto" ? "" : ` from a ${RACE_START_LABELS[setup.startMode].toLowerCase()} start`;
-  const heavy = setup.opponents > HEAVY_FIELD ? "A big field costs frame rate on slower machines" : null;
+  const startNote = setup.startMode === "auto" ? "" : ` (${RACE_START_LABELS[setup.startMode].toLowerCase()})`;
+  const heavy = setup.opponents > HEAVY_FIELD ? "Large field may reduce frame rate" : null;
 
   return (
     // data-nav-columns: up / down read down the field card, then the race card (menu-shell's reading order)
@@ -108,14 +108,14 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
         {onToggleAiOpponents ? (
           <SettingRow
             label="AI opponents"
-            hint={`Race ${setup.opponents} AI ${setup.opponents === 1 ? "car" : "cars"}${startNote}. Turning this on or off restarts the run.`}
+            hint={`${setup.opponents} AI ${setup.opponents === 1 ? "car" : "cars"}${startNote}. Toggling restarts the session.`}
           >
             <Toggle checked={aiOpponents === true} onChange={() => onToggleAiOpponents()} />
           </SettingRow>
         ) : null}
         <SettingRow
           label="Opponents"
-          hint={[restartsNow ? "Changing it restarts the race" : null, heavy].filter(Boolean).join(". ") || undefined}
+          hint={[restartsNow ? "Restarts the race" : null, heavy].filter(Boolean).join(". ") || undefined}
         >
           {pause ? (
             // In pause a new field size restarts the race: a list commits once, on confirm, where a stepper would
@@ -131,7 +131,7 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
           )}
         </SettingRow>
         {onChangeAiSkill ? (
-          <SettingRow label="AI level" hint="Applies at once">
+          <SettingRow label="AI level">
             <Slider
               value={Math.round(aiSkill)}
               min={0}
@@ -154,7 +154,7 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
         {extraFieldRows}
       </Card>
 
-      <Card title="Race" description={pause ? "These apply from the next start" : undefined}>
+      <Card title="Race" description={pause ? "Applies from next start" : undefined}>
         <SettingRow label="Laps" hint={distance ?? undefined}>
           <Stepper value={setup.laps} min={1} max={50} onChange={(laps) => onChange({ laps })} />
         </SettingRow>
@@ -165,14 +165,14 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
             onChange={(rulePreset) => onChange({ rulePreset })}
           />
         </SettingRow>
-        <SettingRow label="Track limits" hint={setup.trackLimits === "off" ? "Only course cuts are penalised" : undefined}>
+        <SettingRow label="Track limits" hint={setup.trackLimits === "off" ? "Course cuts only" : undefined}>
           <Segmented<TrackLimitsChoice>
             options={(["auto", "off"] as const).map((id) => ({ id, label: TRACK_LIMITS_CHOICE_LABELS[id] }))}
             value={setup.trackLimits}
             onChange={(trackLimits) => onChange({ trackLimits })}
           />
         </SettingRow>
-        <SettingRow label="Start" hint={setup.startMode === "auto" ? "Set by the rules" : undefined}>
+        <SettingRow label="Start" hint={setup.startMode === "auto" ? "Set by rules" : undefined}>
           <Segmented<RaceStartChoice>
             options={(["auto", "standing", "rolling"] as const).map((id) => ({ id, label: RACE_START_LABELS[id] }))}
             value={setup.startMode}
@@ -182,7 +182,7 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
         {/* The same choice as Settings > Driving > Launch */}
         <SettingRow
           label="Launch"
-          hint={setup.startMode !== "rolling" ? RACE_START_MODE_HINTS[setup.launch] : "A rolling start has no launch: this applies to standing starts"}
+          hint={setup.startMode !== "rolling" ? RACE_START_MODE_HINTS[setup.launch] : "Standing starts only"}
         >
           <Segmented<RaceStartMode>
             options={RACE_START_MODES.map((id) => ({ id, label: RACE_START_MODE_LABELS[id] }))}
@@ -192,7 +192,7 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
         </SettingRow>
         <SettingRow
           label="Qualifying"
-          hint={setup.qualifying ? "You drive alone first: your best clean lap sets your place among the AI cars' times" : undefined}
+          hint={setup.qualifying ? "Solo session; best clean lap sets grid position" : undefined}
         >
           <Segmented<QualifyingOption>
             options={QUALIFYING_MINUTES.map((m) => ({ id: qualifyingOption(m), label: m ? `${m} min` : "Off" }))}
@@ -212,7 +212,7 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
             </SettingRow>
             <SettingRow
               label="AI grid"
-              hint={setup.aiGrid === "qualifying" ? "Pace order, shuffled a little by a qualifying lap" : undefined}
+              hint={setup.aiGrid === "qualifying" ? "Pace order with qualifying variance" : undefined}
             >
               <Segmented<AiGridOrder>
                 options={(["qualifying", "pace", "reversed"] as const).map((id) => ({ id, label: AI_GRID_LABELS[id] }))}

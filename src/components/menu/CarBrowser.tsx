@@ -15,14 +15,13 @@ import {
   compareCarsByClassAndYear,
   carTakesLivery,
   FACTORY_LIVERY_NOTE,
-  PHYSICS_CHECK,
   type CarDefinition,
   type CarId,
   type CarQuality,
 } from "@/lib/cars/car-registry";
 import { useCarSkinId } from "@/lib/cars/car-skins";
-import { carPhysics, carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
-import { Disclosure, Skeleton } from "@/components/ui";
+import { carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS } from "@/lib/cars/f1-mod-physics";
+import { Skeleton } from "@/components/ui";
 import { StateBadge } from "@/components/ui/badges/StateBadge";
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { CarPhysicsSwitch } from "./CarPicker";
@@ -136,7 +135,6 @@ export const CarBrowser: React.FC<{
   lockedReason?: string;
 }> = ({ carId, onChangeCar, selectedLivery, onChangeLivery, library, onClose, toolbar, lockedReason }) => {
   const classes = carClassesInUse();
-  const modPhysics = useF1ModPhysics();
   const [hoveredLivery, setHoveredLivery] = useState<{ carId: CarId; id: string } | null>(null);
   const [hoveredSkin, setHoveredSkin] = useState<{ carId: CarId; id: string } | null>(null);
   const qualities = QUALITIES.filter((q) => CARS.some((c) => c.quality === q));
@@ -215,7 +213,6 @@ export const CarBrowser: React.FC<{
       })}
       renderDetail={(c) => {
         const own = physicsLabel(c);
-        const q = carQualityMeta(c);
         const previewLiveryId = carTakesLivery(c.id)
           ? hoveredLivery?.carId === c.id
             ? hoveredLivery.id
@@ -291,11 +288,6 @@ export const CarBrowser: React.FC<{
               </span>
               <SourceChip source={carModelSource(c)} />
             </div>
-            <Disclosure moreLabel="About the physics" lessLabel="Less">
-              <p className="lc-hint m-0 pb-1">
-                {q.description} {PHYSICS_CHECK[carPhysics(c.id, modPhysics)]}
-              </p>
-            </Disclosure>
           </>
         );
       }}
