@@ -351,6 +351,8 @@ export interface RaceStatus {
   blueFlag?: string;
   /** True once race control has warned the player for ignoring an active blue flag */
   blueFlagWarn?: boolean;
+  /** Virtual Safety Car state when deployed or ending */
+  vsc?: { phase: 'deployed' | 'ending'; deltaS: number; graceS: number; speedKmh: number };
   /** A place the player owes back after passing under yellow: to whom, and the time left to give it back */
   giveBack?: { code: string; double: boolean; remainingS: number; progress: number };
   /** The player's car damage (absent: none, or damage off) */

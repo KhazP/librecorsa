@@ -199,6 +199,11 @@ const FlagRow: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapInv
   const row =
     race?.phase === "finished"
       ? { text: "Race finished", cls: "bg-(--blk-flag-black) text-(--blk-ink)" }
+      : race?.vsc
+        ? {
+            text: `${race.vsc.phase === "ending" ? "VSC ending" : "VSC"} · ${race.vsc.deltaS >= 0 ? "+" : "−"}${Math.abs(race.vsc.deltaS).toFixed(2)}s`,
+            cls: race.vsc.deltaS < -0.5 ? "bg-(--blk-player) text-(--blk-ink)" : "bg-(--blk-flag-yellow) text-(--blk-ink-on)",
+          }
       : race?.yellow
         ? { text: race.doubleYellow ? "Double yellow" : "Yellow flag", cls: "bg-(--blk-flag-yellow) text-(--blk-ink-on)" }
         : t.offTrack || tl?.message?.kind === "lap_invalid" || (lapInvalid && t.currentLapTimeMs < 6000)

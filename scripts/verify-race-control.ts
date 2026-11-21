@@ -16,6 +16,7 @@ import {
 import { resolveRaceRules } from "../src/lib/sim/race-rules";
 import { YellowPassJudge, type YellowPassEvent } from "../src/lib/sim/yellow-passes";
 import { BlueFlagJudge, blueFlagYieldTarget, type BlueFlagEvent } from "../src/lib/sim/blue-flags";
+import { VscController, vscReferenceSpeedMs, type VscEvent } from "../src/lib/sim/vsc";
 import { PenaltyLedger } from "../src/lib/sim/penalty-ledger";
 import { parseRaceSetup, rulesForSetup } from "../src/lib/sim/race-setup";
 import { VEHICLE_MODELS } from "../src/lib/cars/vehicle-models";
@@ -1156,6 +1157,72 @@ console.log("Blue flags · warnings, penalties and AI yielding");
   check("AI blue-flag yield pulls to outside of right-hand corner and lifts decisively", yCorner.targetLatM < -1.5 && yCorner.paceScale <= 0.86);
   const yStraight = blueFlagYieldTarget({ lineLatM: 1, halfRoadM: 6, insideSign: 0, lapperLatM: 1, myLatM: 1, gapM: 20, lapperSpeedMs: 75 });
   check("AI blue-flag yield pulls off-line on straights (not staying on line)", Math.abs(yStraight.targetLatM - 1) >= 2 && yStraight.paceScale <= 0.86);
+}
+
+console.log("Virtual Safety Car · deployment, delta enforcement and ending");
+{
+  const vsc = new VscController();
+  let t = 5;
+  const stepVsc = (
+    seconds: number,
+    opts: {
+      hasRetiredOnTrack?: boolean;
+      hasDoubleYellow?: boolean;
+      playerSpeedMs?: number;
+      playerOptimalKmh?: number;
+      finalLapClosing?: boolean;
+      judgePlayer?: boolean;
+    } = {}
+  ): VscEvent[] => {
+    const out: VscEvent[] = [];
+    const n = Math.round(seconds / DT);
+    for (let i = 0; i < n; i++) {
+      t += DT;
+      out.push(
+        ...vsc.update({
+          dt: DT,
+          raceTimeS: t,
+          racing: true,
+          finalLapClosing: opts.finalLapClosing ?? false,
+          hasRetiredOnTrack: opts.hasRetiredOnTrack ?? false,
+          hasDoubleYellow: opts.hasDoubleYellow ?? false,
+          playerSpeedMs: opts.playerSpeedMs ?? 30,
+          playerOptimalKmh: opts.playerOptimalKmh ?? 180,
+          judgePlayer: opts.judgePlayer ?? true,
+          rng: () => 0.5,
+        })
+      );
+    }
+    return out;
+  };
+
+  // Early race (< 15 s): does not deploy during Lap 1 T1 bunching
+  check("VSC does not deploy in the first 15 s of a race", stepVsc(5, { hasDoubleYellow: true }).length === 0 && !vsc.active);
+  // Advance past 15 s, then trigger via persistent double yellow (3.5 s)
+  t = 20;
+  const brief = stepVsc(2.0, { hasDoubleYellow: true });
+  check("brief double yellow (< 3.5 s) does not deploy VSC", brief.length === 0 && !vsc.active);
+  const dep = stepVsc(2.0, { hasDoubleYellow: true });
+  check("persistent double yellow deploys VSC", dep.some((e) => e.kind === "deployed") && vsc.phase === "deployed");
+
+  // Driving at reference pace keeps delta positive (no penalty)
+  const vRef = vscReferenceSpeedMs(180);
+  const clean = stepVsc(6.0, { hasDoubleYellow: true, playerSpeedMs: vRef - 1 });
+  check("holding VSC pace keeps delta positive with no penalty", !clean.some((e) => e.kind === "penalty") && (vsc.status()?.deltaS ?? -1) > 0);
+
+  // Speeding well above VSC reference pace past grace + hold draws +5 s penalty
+  const fast = stepVsc(7.5, { hasDoubleYellow: true, playerSpeedMs: vRef * 1.65 });
+  check("exceeding VSC delta draws +5 s penalty", fast.some((e) => e.kind === "penalty" && e.seconds === 5), JSON.stringify(fast));
+
+  // Clear hazard and run past minimum duration -> ending -> green
+  const toEnd = stepVsc(4.0, { hasDoubleYellow: false, playerSpeedMs: vRef * 0.5 });
+  check("clearing hazard after minimum duration transitions to VSC ending", toEnd.some((e) => e.kind === "ending") && vsc.phase === "ending", JSON.stringify(toEnd));
+  const toGreen = stepVsc(8.0, { hasDoubleYellow: false, playerSpeedMs: vRef * 0.8 });
+  check("VSC ending countdown returns to green flag", toGreen.some((e) => e.kind === "green") && !vsc.active, JSON.stringify(toGreen));
+
+  // Cooldown prevents immediate re-deployment
+  const duringCd = stepVsc(5.0, { hasRetiredOnTrack: true });
+  check("cooldown suppresses immediate VSC re-deployment", duringCd.length === 0 && !vsc.active);
 }
 
 console.log(`\n${passed} checks passed`);

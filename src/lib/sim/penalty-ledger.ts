@@ -14,6 +14,7 @@ export type PenaltyReason =
   | "illegal_overtake"
   | "yellow_overtake"
   | "blue_flag"
+  | "vsc_delta"
   | "formation_corridor"
   | "jump_start"
   | "collision"

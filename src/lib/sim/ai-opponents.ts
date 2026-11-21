@@ -56,6 +56,7 @@ import {
 import { RaceIncidents } from '@/lib/sim/race-incidents';
 import { YellowPassJudge, type PassCar, type YellowLevel } from '@/lib/sim/yellow-passes';
 import { BlueFlagJudge, blueFlagYieldTarget, type BlueFlagCar } from '@/lib/sim/blue-flags';
+import { VSC_PACE_SHARE, VscController, vscReferenceSpeedMs } from '@/lib/sim/vsc';
 import type { PenaltyReason } from '@/lib/sim/penalty-ledger';
 import { aiQualifyingMs, qualifyingOrder, type QualifyingGridInput, type QualifyingResult } from '@/lib/sim/qualifying';
 import { aiTrackFor, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
@@ -1325,6 +1326,7 @@ export class AiOpponentField implements AiRace {
     this.doubleState.clear();
     this.yellowPasses.reset();
     this.blueFlags.reset();
+    this.vsc.reset();
     this.passOrder = [];
     this.passTimerS = 0;
     this.damageHistory.length = 0;
@@ -1421,6 +1423,7 @@ export class AiOpponentField implements AiRace {
     this.updateRollingFormation(dt);
     if (this.ownsEnvironment) this.environment.update(dt, this.allSims);
     this.updateYellows(dt);
+    this.updateVsc(dt);
     this.planTraffic(dt);
     for (const car of this.cars) {
       car.contact = false;
@@ -1756,8 +1759,9 @@ export class AiOpponentField implements AiRace {
       // Racecraft here: the tuning (with its section overrides), the skill level and the driver's temperament.
       // At the shipped caution the passing rules are exactly the ones this field always raced with.
       const T = this.tuning;
+      const vscActive = this.vsc.active;
       const yellowFlag = this.yellowLevelAt(me.sMeters);
-      const yellow = yellowFlag > 0;
+      const yellow = yellowFlag > 0 || vscActive;
       const caution = THREE.MathUtils.clamp(
         T.at('overtakeCaution', me.sMeters) + this.mods.cautionAdd - 0.25 * this.aggressionOf(car) + this.raceControl.cautionOf(car.code, this.raceTimeS),
         0,
@@ -2149,8 +2153,10 @@ export class AiOpponentField implements AiRace {
       const dirtyAirPenalty = 1 - dirtyAirShare * Math.max(0, 1 - wakeFrontMult);
       // Rain: the pace the tyres' grip on this much water allows (weather.ts / track-environment.ts)
       const weatherPace = this.environment.weatherPaceScale(me);
-      // Yellow flag: lift through the zone
-      const yellowLift = yellowFlag === 2 ? DOUBLE_YELLOW_PACE : yellow ? YELLOW_PACE : 1;
+      // Yellow flag / VSC: lift through the zone (VSC holds the whole field at ~65 % reference pace)
+      const vscPace = vscActive ? VSC_PACE_SHARE : 1;
+      const yellowLift = Math.min(vscPace, yellowFlag === 2 ? DOUBLE_YELLOW_PACE : yellowFlag > 0 ? YELLOW_PACE : 1);
+      if (vscActive) speedCap = Math.min(speedCap, vscReferenceSpeedMs(sample.optimalSpeedKmh));
       // Making a pass stick: a little more into the corner (a later brake, more speed) once pulling alongside
       const passing = craft.passTargetId !== null && ahead !== null && aheadGap < CAR_LEN_M * 1.6 && !passBlocked;
       const attackPush = passing ? 1 + this.rc.attackPush * (1 + Math.max(0, this.aggressionOf(car))) : 1;
@@ -2183,6 +2189,10 @@ export class AiOpponentField implements AiRace {
       return;
     }
     let cap = this.rollingFormation ? this.rollingPaceMs : Infinity;
+    if (this.vsc.active) {
+      const sample = this.track.getSampleAtDistance(sim.sMeters);
+      cap = Math.min(cap, vscReferenceSpeedMs(sample.optimalSpeedKmh));
+    }
     for (const other of this.cars) {
       if (other === me || other.removed) continue;
       const ds = wrapHalf(other.sim.sMeters - sim.sMeters, L);
@@ -2539,6 +2549,54 @@ export class AiOpponentField implements AiRace {
     return this.yellowLevelAt(s) > 0;
   }
 
+  /** Virtual Safety Car controller for persistent severe hazards or retirements on track */
+  private readonly vsc = new VscController();
+
+  public get vscActive(): boolean {
+    return this.vsc.active;
+  }
+
+  private updateVsc(dt: number): void {
+    const L = this.track.totalLengthM;
+    const racing = this.phase === 'racing' && !this.rollingFormation;
+    let hasRetiredOnTrack = false;
+    let hasDoubleYellow = false;
+    for (let i = 0; i < this.yellowCar.length; i++) {
+      if (this.yellowCar[i].retired && !this.yellowCar[i].removed) hasRetiredOnTrack = true;
+      if (this.yellowDouble[i]) hasDoubleYellow = true;
+    }
+    const leaderDistM = this.cars.reduce((m, c) => (c.removed ? m : Math.max(m, c.distM)), 0);
+    const raceTotalM = this.raceLaps * L;
+    const finalLapClosing = raceTotalM > 0 && leaderDistM >= raceTotalM - 0.4 * L;
+    const me = this.cars.find((c) => c.isPlayer);
+    const playerOptimalKmh = me ? this.track.getSampleAtDistance(me.sim.sMeters).optimalSpeedKmh : 180;
+    const judgePlayer = Boolean(me && !me.retired && me.finishTimeS === null && !this.player.aiAutopilot);
+    const events = this.vsc.update({
+      dt,
+      raceTimeS: this.raceTimeS,
+      racing,
+      finalLapClosing,
+      hasRetiredOnTrack,
+      hasDoubleYellow,
+      playerSpeedMs: me ? Math.max(0, me.sim.vxMs) : 0,
+      playerOptimalKmh,
+      judgePlayer,
+      rng: this.rng,
+    });
+    const t = this.raceTimeS;
+    for (const e of events) {
+      if (e.kind === 'deployed') {
+        this.raceControl.announce(t, 'yellow', 'Virtual Safety Car', e.detail, true);
+      } else if (e.kind === 'ending') {
+        this.raceControl.announce(t, 'yellow', 'VSC ending', e.detail, true);
+      } else if (e.kind === 'green') {
+        this.raceControl.announce(t, 'green', 'Green flag', e.detail, true);
+      } else if (e.kind === 'penalty' && me) {
+        this.raceControl.penalise(t, me.code, e.seconds ?? 5, 'vsc_delta', e.detail ?? 'VSC delta infringement', true);
+      }
+    }
+  }
+
   /** Passes the player makes under yellow, and the places owed back */
   private readonly yellowPasses = new YellowPassJudge();
 
@@ -2557,8 +2615,9 @@ export class AiOpponentField implements AiRace {
       cars.push({ code: c.code, distM: c.distM, exempt: gone || off || wrongWay || this.isHazard(c), gone });
     }
     const t = this.raceTimeS;
-    for (const e of this.yellowPasses.update(dt, me.distM, cars, this.playerYellowLevel(), active)) {
-      const flag = e.double ? 'double yellow' : 'yellow';
+    const flagLevel: YellowLevel = this.vsc.active ? 2 : this.playerYellowLevel();
+    for (const e of this.yellowPasses.update(dt, me.distM, cars, flagLevel, active)) {
+      const flag = this.vsc.active ? 'VSC' : e.double ? 'double yellow' : 'yellow';
       if (e.kind === 'order') {
         this.raceControl.announce(t, 'investigation', `Overtake under ${flag}`, `Give the place back to ${this.labelOf(e.code)}`);
       } else if (e.kind === 'returned') {
@@ -2586,7 +2645,7 @@ export class AiOpponentField implements AiRace {
     const me = this.cars.find((c) => c.isPlayer);
     if (!me) return;
     const L = this.track.totalLengthM;
-    const active = this.phase === 'racing' && !me.retired && me.finishTimeS === null && !this.player.aiAutopilot;
+    const active = this.phase === 'racing' && !this.vsc.active && !me.retired && me.finishTimeS === null && !this.player.aiAutopilot;
     const cars: BlueFlagCar[] = [];
     for (const c of this.cars) {
       if (c === me) continue;
@@ -2638,7 +2697,9 @@ export class AiOpponentField implements AiRace {
   /** A car's overtaking aids are closed: the rules say so and it is inside someone else's yellow zone, or before a rolling start's green flag */
   public aidsLockedFor(sim: SimulatorCar): boolean {
     if (this.rollingFormation) return true;
-    if (!this.lockAidsInYellow || this.phase !== 'racing' || this.yellowS.length === 0) return false;
+    if (!this.lockAidsInYellow || this.phase !== 'racing') return false;
+    if (this.vsc.active) return true;
+    if (this.yellowS.length === 0) return false;
     const car = this.cars.find((c) => c.sim === sim);
     return this.yellowLevelAt(sim.sMeters, car) > 0;
   }
@@ -2979,6 +3040,7 @@ export class AiOpponentField implements AiRace {
     this.splitTimer.reset();
     this.yellowPasses.rewind(rewindS);
     this.blueFlags.reset();
+    this.vsc.reset();
 
     // Find the latest damage/retirement snapshot at or before the rewound raceTimeS and drop future snapshots
     // (keep the earliest t=0 anchor if rewinding all the way to the start)
@@ -3273,6 +3335,7 @@ export class AiOpponentField implements AiRace {
       doubleYellow: this.playerYellowLevel() === 2 || undefined,
       blueFlag: (this.blueFlags.active ? this.labelOf(this.blueFlags.active.code) : this.playerBlueFlag()) ?? undefined,
       blueFlagWarn: this.blueFlags.active?.warned || undefined,
+      vsc: this.vsc.status(),
       giveBack: this.giveBackStatus(),
       damage: this.playerDamageStatus(),
     };

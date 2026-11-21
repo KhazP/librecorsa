@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { RaceControlFeedMessage } from "@/types/f1";
+import type { RaceControlFeedMessage, RaceStatus } from "@/types/f1";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
 import type { IconName } from "@/components/ui/icons/registry";
@@ -66,10 +66,62 @@ export const RaceIncidentFeed: React.FC<{
   blueFlag?: string;
   /** True once race control has warned the player to yield under blue flag */
   blueFlagWarn?: boolean;
-}> = ({ messages, yellow, doubleYellow, blueFlag, blueFlagWarn }) => {
+  /** Virtual Safety Car live delta and phase */
+  vsc?: RaceStatus["vsc"];
+}> = ({ messages, yellow, doubleYellow, blueFlag, blueFlagWarn, vsc }) => {
   const skin = useHudSkin();
   const latest = messages?.[0];
+
+  // Live VSC delta plate: stays visible whenever VSC is active so the driver can manage the delta even during RC calls
+  const vscBar = (() => {
+    if (!vsc || skin === "blocks") return null;
+    const neg = vsc.deltaS < 0;
+    const danger = vsc.deltaS < -0.5;
+    const sign = vsc.deltaS >= 0 ? "+" : "−";
+    const deltaText = `${sign}${Math.abs(vsc.deltaS).toFixed(2)}s`;
+    const tagText = vsc.phase === "ending" ? "VSC ending" : "VSC";
+    const cue = danger
+      ? "Slow down"
+      : vsc.graceS > 0
+        ? "Slow to target"
+        : vsc.phase === "ending"
+          ? "Prepare for green"
+          : "No overtaking";
+    if (skin !== null) {
+      return (
+        <SkinBanner
+          role={danger ? "alert" : "status"}
+          tone={danger ? "loss" : "caution"}
+          cut="sm"
+          className={`relative mt-1 inline-flex h-8 items-center gap-2 pr-3 pl-2 ${danger ? "lc-alert" : ""}`}
+        >
+          <SkinTag tone={danger ? "loss" : "caution"} filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
+            <FlagIcon flag="doubleYellow" size={14} />
+            {tagText}
+          </SkinTag>
+          <span className={`lc-data text-[15px] font-bold whitespace-nowrap ${neg ? "text-lc-loss" : "text-lc-gain"}`}>{deltaText}</span>
+          <span className="text-[12px] font-bold whitespace-nowrap uppercase opacity-85">{cue}</span>
+        </SkinBanner>
+      );
+    }
+    return (
+      <div
+        role={danger ? "alert" : "status"}
+        className={`relative mt-1 inline-flex h-9 items-center gap-2.5 rounded-lc-row pr-3.5 pl-1.5 text-lc-chalk inset-ring ${
+          danger ? "inset-ring-lc-loss/80 lc-alert" : "inset-ring-lc-caution/70"
+        } ${HUD_GLASS}`}
+      >
+        <FlagBadge flag="doubleYellow" variant="solid" size="sm">
+          {tagText}
+        </FlagBadge>
+        <span className={`lc-data text-[16px] font-bold whitespace-nowrap ${neg ? "text-lc-loss" : "text-lc-gain"}`}>{deltaText}</span>
+        <span className={`${HUD_LBL} whitespace-nowrap text-lc-fog`}>{cue}</span>
+      </div>
+    );
+  })();
+
   if (!latest) {
+    if (vscBar) return <div className="flex flex-col items-center gap-1">{vscBar}</div>;
     // The flag stays up while the player is in the zone, after its message has gone; a blue flag while the car is behind
     const flag = doubleYellow ? "doubleYellow" : yellow ? "yellow" : blueFlag ? "blue" : null;
     if (!flag) return null;
@@ -118,6 +170,7 @@ export const RaceIncidentFeed: React.FC<{
     const call = SKIN_CALL[latest.kind];
     return (
       <div className={`flex flex-col items-center gap-1 ${skinRootClass(skin) ?? ""}`}>
+        {vscBar}
         <SkinBanner
           key={latest.id}
           role={urgent ? "alert" : "status"}
@@ -139,6 +192,7 @@ export const RaceIncidentFeed: React.FC<{
   }
   return (
     <div className="flex flex-col items-center gap-1">
+      {vscBar}
       <div
         key={latest.id}
         role={urgent ? "alert" : "status"}

@@ -619,7 +619,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             status={telemetry.trackLimits}
             offTrack={telemetry.offTrack}
             race={Boolean(race)}
-            yellow={Boolean(race?.yellow)}
+            yellow={Boolean(race?.yellow || race?.vsc)}
             yellowGiveBack={race?.giveBack}
           />
         ) : null}
@@ -630,6 +630,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             doubleYellow={race.doubleYellow}
             blueFlag={race.blueFlag}
             blueFlagWarn={race.blueFlagWarn}
+            vsc={race.vsc}
           />
         ) : null}
         {aeroNoticeNow ? (
