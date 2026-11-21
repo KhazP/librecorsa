@@ -122,6 +122,34 @@ export const DEFAULT_SESSION_CONDITIONS: Readonly<SessionConditions> = {
   seed: 1,
 };
 
+/** Temporary weather/time override active while inside a multiplayer room (never overwrites saved single-player settings) */
+export interface RoomConditionsOverride {
+  weather?: WeatherPresetId;
+  timeOfDay?: TimeOfDayId;
+  timeScale?: number;
+}
+
+/**
+ * Merges a multiplayer room's temporary weather/time override onto the player's own saved single-player conditions
+ * without mutating them. Returns `own` unchanged when not in a room (`override == null`).
+ */
+export function effectiveConditions(
+  own: SessionConditions,
+  override: RoomConditionsOverride | null | undefined,
+): SessionConditions {
+  if (!override) return own;
+  if (override.weather === undefined && override.timeOfDay === undefined && override.timeScale === undefined) {
+    return own;
+  }
+  return {
+    ...own,
+    weather: override.weather ?? own.weather,
+    weatherNodes: override.weather !== undefined ? undefined : own.weatherNodes,
+    timeOfDay: override.timeOfDay ?? own.timeOfDay,
+    timeScale: override.timeScale ?? own.timeScale,
+  };
+}
+
 export const WEATHER_LABELS: Record<WeatherPresetId, { label: string; detail: string }> = {
   clear: { label: 'Clear', detail: 'Dry, sunny' },
   overcast: { label: 'Overcast', detail: 'Dry, grey sky, cooler track' },

@@ -37,6 +37,7 @@ import {
 import {
   DEFAULT_SESSION_CONDITIONS,
   defaultWeatherNodesForPreset,
+  effectiveConditions,
   dynamicWeatherAt,
   GOLDEN_HOUR_CLOCK_H,
   interpolateWeatherNodes,
@@ -748,6 +749,23 @@ console.log('\n== Weather regime, host sync & AI tyre call');
   env.update(1 / 60, [ai]);
   const back = ai.tireCompound as TireCompound;
   check('AI comes off rain tyres onto the slick it had', inRain === 'wet' && back === 'soft', `soft → ${inRain} → ${back}`);
+
+  // Regression (#12): effectiveConditions overlays room weather/time without mutating saved SP conditions or weatherNodes
+  const ownNodes = defaultWeatherNodesForPreset('dynamic', 'morning', 7);
+  const ownCond = { ...DEFAULT_SESSION_CONDITIONS, weather: 'dynamic' as const, timeOfDay: 'morning' as const, timeScale: 5, weatherNodes: ownNodes };
+  const inRoom = effectiveConditions(ownCond, { weather: 'heavy_rain', timeOfDay: 'night', timeScale: 0 });
+  const backSolo = effectiveConditions(ownCond, null);
+  check(
+    'effectiveConditions isolates room override from saved SP conditions and restores weatherNodes on leave',
+    inRoom.weather === 'heavy_rain' &&
+      inRoom.timeOfDay === 'night' &&
+      inRoom.timeScale === 0 &&
+      inRoom.weatherNodes === undefined &&
+      ownCond.weather === 'dynamic' &&
+      ownCond.weatherNodes === ownNodes &&
+      backSolo === ownCond,
+    `inRoom=${inRoom.weather}/${inRoom.timeOfDay}, restored=${backSolo.weather}/${backSolo.weatherNodes?.length ?? 0} nodes`
+  );
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll weather checks passed.');
