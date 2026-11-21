@@ -94,9 +94,9 @@ check(
 const flatSamples = leMans.samples.map((s) => ({ ...s, slopeSin: 0 }));
 const downSamples = leMans.samples.map((s) => ({ ...s, slopeSin: -0.1 }));
 const upSamples = leMans.samples.map((s) => ({ ...s, slopeSin: 0.1 }));
-const pFlat = computeSpeedProfile(flatSamples, LC_LMDH_PROFILE_CAR, 'gt3');
-const pDown = computeSpeedProfile(downSamples, LC_LMDH_PROFILE_CAR, 'gt3');
-const pUp = computeSpeedProfile(upSamples, LC_LMDH_PROFILE_CAR, 'gt3');
+const pFlat = computeSpeedProfile(flatSamples, LC_LMDH_PROFILE_CAR, 'gt3', { crests: true });
+const pDown = computeSpeedProfile(downSamples, LC_LMDH_PROFILE_CAR, 'gt3', { crests: true });
+const pUp = computeSpeedProfile(upSamples, LC_LMDH_PROFILE_CAR, 'gt3', { crests: true });
 // At s = 7620 m (mid Mulsanne braking zone), downhill envelope must be slower than flat, uphill faster
 const mIdx = Math.floor((7620 / leMans.totalLengthM) * leMans.samples.length);
 check(

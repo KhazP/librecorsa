@@ -268,8 +268,10 @@ export function computeSpeedProfile(
     for (let i = 0; i < n; i++) {
       const sp = samples[i];
       gBank[i] = sp.bankingRad;
-      gSlope[i] = sp.slopeSin ?? 0;
-      if (opts.crests) gCrest[i] = Math.max(0, -sp.verticalCurvature);
+      if (opts.crests) {
+        gSlope[i] = sp.slopeSin ?? 0;
+        gCrest[i] = Math.max(0, -sp.verticalCurvature);
+      }
     }
   } else {
     for (let i = 0; i < n; i++) {
@@ -281,8 +283,8 @@ export function computeSpeedProfile(
       const s2 = samples[i2];
       const c1 = opts.crests ? Math.max(0, -s1.verticalCurvature) : 0;
       const c2 = opts.crests ? Math.max(0, -s2.verticalCurvature) : 0;
-      const sl1 = s1.slopeSin ?? 0;
-      const sl2 = s2.slopeSin ?? 0;
+      const sl1 = opts.crests ? (s1.slopeSin ?? 0) : 0;
+      const sl2 = opts.crests ? (s2.slopeSin ?? 0) : 0;
       for (let q = 0; q < sub; q++) {
         const gi = i * sub + q;
         const t = q / sub;
@@ -300,9 +302,9 @@ export function computeSpeedProfile(
   }
 
   const gridStepM = totalLenM / Math.max(1, gn);
-  const chordStep = Math.max(1, Math.round(CURVATURE_CHORD_HALF_M / Math.max(0.5, gridStepM)));
+  const chordStep = sub === 1 ? 2 : Math.max(1, Math.round(CURVATURE_CHORD_HALF_M / Math.max(0.5, gridStepM)));
 
-  // Menger curvature over physical half-chord (±9 m), + right
+  // Menger curvature over ±2 samples (short/fine circuits) or physical ±9 m half-chord (subdivided long circuits), + right
   const raw = new Float64Array(gn);
   for (let i = 0; i < gn; i++) {
     const a = (i - chordStep + gn) % gn;
@@ -316,16 +318,32 @@ export function computeSpeedProfile(
     raw[i] = den > 1e-9 ? (2 * cross) / den : 0;
   }
 
-  // Signed curvature smoothed gently (for banking direction & callers), and unsigned |κ| smoothed with [1, 2, 1]/4
-  // so tight left-right chicanes (e.g. Virage Ford / Virage du Raccordement) never cancel out to flat straights.
   const gCurv = new Float64Array(gn);
   const gCurvAbs = new Float64Array(gn);
-  for (let i = 0; i < gn; i++) {
-    const prev = raw[(i - 1 + gn) % gn];
-    const cur = raw[i];
-    const next = raw[(i + 1) % gn];
-    gCurv[i] = 0.25 * (prev + 2 * cur + next);
-    gCurvAbs[i] = 0.25 * (Math.abs(prev) + 2 * Math.abs(cur) + Math.abs(next));
+  if (sub === 1) {
+    // Already finely sampled circuit: preserve the 5-tap signed [1, 2, 3, 2, 1]/9 kernel so narrow/bumpy
+    // short circuits (e.g. Borgloh, Rwanda) keep their exact established curvature profile without noise amplification.
+    for (let i = 0; i < gn; i++) {
+      const k =
+        (raw[(i - 2 + gn) % gn] +
+          2 * raw[(i - 1 + gn) % gn] +
+          3 * raw[i] +
+          2 * raw[(i + 1) % gn] +
+          raw[(i + 2) % gn]) /
+        9;
+      gCurv[i] = k;
+      gCurvAbs[i] = Math.abs(k);
+    }
+  } else {
+    // Subdivided coarse long circuits (e.g. Sarthe 1982): smooth Catmull-Rom grid lets us smooth |κ| with [1, 2, 1]/4
+    // so tight opposing chicanes (Virage Ford / Virage du Raccordement) never cancel out to flat straights.
+    for (let i = 0; i < gn; i++) {
+      const prev = raw[(i - 1 + gn) % gn];
+      const cur = raw[i];
+      const next = raw[(i + 1) % gn];
+      gCurv[i] = 0.25 * (prev + 2 * cur + next);
+      gCurvAbs[i] = 0.25 * (Math.abs(prev) + 2 * Math.abs(cur) + Math.abs(next));
+    }
   }
 
   // 1. Lateral limit

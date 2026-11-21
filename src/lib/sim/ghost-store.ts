@@ -13,6 +13,42 @@ const STORE_NAME = "bestLaps";
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const BROADCAST_CHANNEL = "librecorsa-best-laps";
 const STORAGE_PING_KEY = "librecorsa.bestLapsUpdatedAt";
+const SUMMARY_INDEX_KEY = "librecorsa.bestLapSummaries.v1";
+
+function readSummaryIndex(): Record<string, BestLapSummary> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(SUMMARY_INDEX_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const out: Record<string, BestLapSummary> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      const s = extractBestLapSummary(v);
+      if (s) out[k] = s;
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function writeSummaryIndex(index: Record<string, BestLapSummary>): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(SUMMARY_INDEX_KEY, JSON.stringify(index));
+  } catch {
+    // Storage full or unavailable
+  }
+}
+
+function patchSummaryIndex(key: string, summary: BestLapSummary | null): void {
+  const index = readSummaryIndex();
+  if (!index) return;
+  if (summary) index[key] = summary;
+  else delete index[key];
+  writeSummaryIndex(index);
+}
 
 export interface BestLapSummary {
   trackId: string;
@@ -72,7 +108,7 @@ function ensureCrossTabSubscription(): void {
     // Ignore
   }
   window.addEventListener("storage", (e) => {
-    if (e.key === STORAGE_PING_KEY) notifyBestLapsChanged(false);
+    if (e.key === STORAGE_PING_KEY || e.key === SUMMARY_INDEX_KEY) notifyBestLapsChanged(false);
   });
 }
 
@@ -211,7 +247,11 @@ export async function saveBestLapIfFaster(rec: LapRecording): Promise<boolean> {
         };
       };
       tx.oncomplete = () => {
-        if (stored) notifyBestLapsChanged();
+        if (stored) {
+          const summary = extractBestLapSummary(lap);
+          if (summary) patchSummaryIndex(key, summary);
+          notifyBestLapsChanged();
+        }
         resolve(stored);
       };
       tx.onabort = () => resolve(false);
@@ -221,7 +261,7 @@ export async function saveBestLapIfFaster(rec: LapRecording): Promise<boolean> {
   });
 }
 
-/** Lightweight extraction of summary metadata from a raw stored record without scanning ghost sample floats */
+/** Lightweight extraction of summary metadata from a raw stored record or summary index entry */
 export function extractBestLapSummary(raw: unknown): BestLapSummary | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -230,7 +270,8 @@ export function extractBestLapSummary(raw: unknown): BestLapSummary | null {
   if (!isVehicleModelId(vehicle)) return null;
   if (typeof r.lapTimeMs !== "number" || !Number.isFinite(r.lapTimeMs) || r.lapTimeMs <= 0) return null;
   const cond = r.conditions && typeof r.conditions === "object" ? (r.conditions as Record<string, unknown>) : null;
-  const pv = cond && typeof cond.physicsVersion === "number" && Number.isFinite(cond.physicsVersion) ? cond.physicsVersion : undefined;
+  const rawPv = typeof r.physicsVersion === "number" ? r.physicsVersion : cond?.physicsVersion;
+  const pv = typeof rawPv === "number" && Number.isFinite(rawPv) ? rawPv : undefined;
   const recordedAt = typeof r.recordedAt === "number" && Number.isFinite(r.recordedAt) ? r.recordedAt : 0;
   return {
     trackId: r.trackId,
@@ -241,17 +282,42 @@ export function extractBestLapSummary(raw: unknown): BestLapSummary | null {
   };
 }
 
-/** Fast cached summary list of every stored personal best, fastest first (skips deep ghost sample validation) */
+/** Fast cached summary list of every stored personal best, fastest first (backed by a compact localStorage index) */
 export async function listBestLapSummaries(): Promise<readonly BestLapSummary[]> {
   if (summariesCache) return summariesCache;
-  const all = await runRequest<unknown[]>("readonly", (store) => store.getAll());
-  if (!all) return [];
-  const out: BestLapSummary[] = [];
-  for (const raw of all) {
-    const s = extractBestLapSummary(raw);
-    if (s) out.push(s);
+  const indexed = readSummaryIndex();
+  if (indexed) {
+    const out = Object.values(indexed).sort((a, b) => a.lapTimeMs - b.lapTimeMs);
+    summariesCache = out;
+    return out;
   }
-  out.sort((a, b) => a.lapTimeMs - b.lapTimeMs);
+  const db = await openDb();
+  if (!db) return [];
+  const built = await new Promise<Record<string, BestLapSummary> | null>((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const keysReq = store.getAllKeys();
+      const valsReq = store.getAll();
+      tx.oncomplete = () => {
+        const keys = keysReq.result ?? [];
+        const vals = valsReq.result ?? [];
+        const map: Record<string, BestLapSummary> = {};
+        for (let i = 0; i < vals.length; i++) {
+          const s = extractBestLapSummary(vals[i]);
+          if (s) map[String(keys[i] ?? i)] = s;
+        }
+        resolve(map);
+      };
+      tx.onabort = () => resolve(null);
+      tx.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+  if (!built) return [];
+  writeSummaryIndex(built);
+  const out = Object.values(built).sort((a, b) => a.lapTimeMs - b.lapTimeMs);
   summariesCache = out;
   return out;
 }
@@ -327,7 +393,9 @@ export async function listBestLaps(): Promise<LapRecording[]> {
 
 /** Removes the stored personal best for a circuit and car (on one board class; without one, the unsplit best) */
 export async function deleteBestLap(trackId: string, vehicle: VehicleModelId, board: string | null = null): Promise<void> {
-  await runRequest("readwrite", (store) => store.delete(lapKey(trackId, vehicle, board)));
+  const key = lapKey(trackId, vehicle, board);
+  await runRequest("readwrite", (store) => store.delete(key));
+  patchSummaryIndex(key, null);
   notifyBestLapsChanged();
 }
 

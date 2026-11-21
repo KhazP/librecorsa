@@ -119,4 +119,21 @@ check("bestLapsByVehicleForCircuit returns fastest per car with current physics 
   );
 });
 
+check("extractBestLapSummary round-trips compact localStorage summary entries preserving physicsVersion", () => {
+  const s = extractBestLapSummary({
+    trackId: trackA,
+    vehicle: "lc26",
+    lapTimeMs: 74123,
+    physicsVersion: curLc26,
+    recordedAt: 42,
+  });
+  assert.deepEqual(s, {
+    trackId: trackA,
+    vehicle: "lc26",
+    lapTimeMs: 74123,
+    physicsVersion: curLc26,
+    recordedAt: 42,
+  });
+});
+
 console.log(`\n${passed} circuit best-lap checks passed.`);

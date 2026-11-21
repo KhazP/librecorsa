@@ -931,11 +931,18 @@ export function createF1Car2026(
     let currentLivery = initialLivery;
     let currentCompound = initialCompound;
     let rigDisposed = false;
+    let fallbackRig: F1CarRig2026 | null = null;
     void loadLc26Template(modelUrl).then((template) => {
-      if (!template || rigDisposed) return;
-      lc26 = attachLc26Model(template, root, chassisGroup, options);
-      lc26.setTireCompound(currentCompound);
-      lc26.setLivery(currentLivery);
+      if (rigDisposed) return;
+      if (template) {
+        lc26 = attachLc26Model(template, root, chassisGroup, options);
+        lc26.setTireCompound(currentCompound);
+        lc26.setLivery(currentLivery);
+      } else {
+        // GLB failed to load: fall back to the procedural F1 build so opponents never stay invisible
+        fallbackRig = createF1Car2026(currentLivery, currentCompound, "", { ...options, opponent: false });
+        root.add(fallbackRig.root);
+      }
     });
     return {
       root,
@@ -954,13 +961,15 @@ export function createF1Car2026(
       setLivery: (livery: LiveryConfig) => {
         currentLivery = livery;
         lc26?.setLivery(livery);
+        fallbackRig?.setLivery(livery);
       },
       setTireCompound: (compound: TireCompound) => {
         currentCompound = compound;
         lc26?.setTireCompound(compound);
+        fallbackRig?.setTireCompound(compound);
       },
-      getCameraAnchors: () => lc26?.cameraAnchors ?? null,
-      getLc26Body: () => lc26?.bodyGroup ?? null,
+      getCameraAnchors: () => lc26?.cameraAnchors ?? fallbackRig?.getCameraAnchors() ?? null,
+      getLc26Body: () => lc26?.bodyGroup ?? fallbackRig?.getLc26Body() ?? null,
       updateFromTelemetry: (
         telemetry: CarTelemetry,
         pitchRad: number,
@@ -969,6 +978,10 @@ export function createF1Car2026(
         dtSeconds = 0,
         wheels?: WheelSeating
       ) => {
+        if (fallbackRig) {
+          fallbackRig.updateFromTelemetry(telemetry, pitchRad, rollRad, wheelRotationRad, dtSeconds, wheels);
+          return;
+        }
         chassisGroup.rotation.x = pitchRad;
         chassisGroup.rotation.z = rollRad;
         if (lc26) {
@@ -978,6 +991,7 @@ export function createF1Car2026(
       dispose: () => {
         rigDisposed = true;
         lc26?.dispose();
+        fallbackRig?.dispose();
         dummyGeo.dispose();
         dummyMat.dispose();
         root.removeFromParent();
