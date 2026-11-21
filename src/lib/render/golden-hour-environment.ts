@@ -18,6 +18,7 @@ import { patchShader } from "./shader-patch";
 import { PhysicalSky } from "./physical-sky";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import type { RenderPlan } from "./adaptive-quality";
+import type { AerialPerspectiveEffect } from "@takram/three-atmosphere";
 import type { CloudsEffect } from "@takram/three-clouds";
 
 /*
@@ -187,8 +188,13 @@ export interface PostFx {
   setCamera(camera: THREE.Camera): void;
   /** Graphics preset: MSAA samples and bloom on / off; `msaa` false turns both off whatever the preset (the step-down) */
   setQuality(quality: "low" | "medium" | "high", msaa?: boolean): void;
-  /** Puts the physical sky's clouds into the chain, right after the scene render (once; later calls are no-ops) */
-  setClouds(sky: { readonly clouds: CloudsEffect; readonly cloudsActive: boolean }): void;
+  /** Puts the physical sky's clouds (and High desktop aerial perspective) into the chain, once; later calls are no-ops */
+  setClouds(sky: {
+    readonly clouds: CloudsEffect;
+    readonly cloudsActive: boolean;
+    readonly aerialPerspective?: AerialPerspectiveEffect;
+    readonly aerialActive?: boolean;
+  }): void;
   /**
    * Zero-pass FidelityFX RCAS sharpening strength (0 = off / skipped, up to 1). Automatically enabled when rendering
    * below native devicePixelRatio (Low on HiDPI, Medium on 2x/3x phones, or adaptive step-down).
@@ -568,10 +574,17 @@ export function createGoldenHourEnvironment(
     lastBakeMs = performance.now();
     pendingBake = false;
   };
+  const syncFogDensity = () => {
+    // On High desktop with physical aerial perspective active, scale back the clear-sky exponential fog so
+    // Bruneton Rayleigh/Mie scattering carries the horizon depth without double-fogging; keep overcast & rain fog intact.
+    const baseFog = physicalSky?.aerialActive ? FOG_DENSITY * 0.28 : FOG_DENSITY;
+    fog.density = baseFog + FOG_DENSITY * 1.2 * current.cloud + 0.0022 * Math.pow(current.rain, 1.2);
+  };
   /** Shows whichever sky the preset and the physical sky's readiness call for, and re-bakes the environment from it */
   const applySkyChoice = () => {
     if (disposed) return;
     sky.visible = !physicalSky?.showing;
+    syncFogDensity();
     rebake();
   };
 
@@ -596,6 +609,7 @@ export function createGoldenHourEnvironment(
     if (!physicalSky) return;
     const wasShowing = physicalSky.showing;
     physicalSky.setQuality(quality);
+    syncFogDensity();
     if (physicalSky.showing !== wasShowing) applySkyChoice();
   };
 
@@ -647,7 +661,7 @@ export function createGoldenHourEnvironment(
       .lerp(tint.setHex(RAIN_FOG), rain * (1 - 0.9 * nightShare));
     // A low sun dims the overcast / rain haze too
     if (cloud > 0 && e < 14) fog.color.multiplyScalar(1 - cloud * (1 - curve(ENV_INTENSITY_KEYS, e)));
-    fog.density = FOG_DENSITY * (1 + 1.2 * cloud) + 0.0022 * Math.pow(rain, 1.2);
+    syncFogDensity();
 
     scene.environmentIntensity = curve(ENV_INTENSITY_KEYS, e) * (1 - 0.25 * rain);
     renderer.toneMappingExposure = curve(EXPOSURE_KEYS, e) * (1 + 0.3 * cloud);
@@ -876,8 +890,14 @@ export function createPostFx(
   // - On Medium / non-bloom: `cloudsPlainPass` merges clouds + AgX + display grade into ONE fullscreen pass straight
   //   to screen, eliminating the intermediate HalfFloat write+read round-trip (and when MSAA is off, reading
   //   `inputBuffer.depthTexture` directly with zero depth-copy blits).
-  let sky: { readonly clouds: CloudsEffect; readonly cloudsActive: boolean } | null = null;
+  let sky: {
+    readonly clouds: CloudsEffect;
+    readonly cloudsActive: boolean;
+    readonly aerialPerspective?: AerialPerspectiveEffect;
+    readonly aerialActive?: boolean;
+  } | null = null;
   let cloudsPass: EffectPass | null = null;
+  let aerialPass: EffectPass | null = null;
   let cloudsPlainPass: EffectPass | null = null;
   let mainCamera = camera;
 
@@ -932,10 +952,12 @@ export function createPostFx(
   const syncPassRouting = () => {
     const cloudsOn = Boolean(sky?.cloudsActive && cloudsPass && cloudsPlainPass);
     const bloomOn = bloomPass.enabled;
+    const aerialOnlyOn = Boolean(bloomOn && !cloudsOn && sky?.aerialActive && aerialPass);
     if (cloudsPass) cloudsPass.enabled = cloudsOn && bloomOn;
+    if (aerialPass) aerialPass.enabled = aerialOnlyOn;
     if (cloudsPlainPass) cloudsPlainPass.enabled = cloudsOn && !bloomOn;
     plainPass.enabled = !bloomOn && !cloudsOn;
-    if (!cloudsOn) {
+    if (!cloudsOn && !aerialOnlyOn) {
       renderPass.needsDepthBlit = false;
       return;
     }
@@ -949,6 +971,7 @@ export function createPostFx(
       const stable = (composer as unknown as { stableDepthTexture?: THREE.DepthTexture | null }).stableDepthTexture ?? null;
       if (cloudsPlainPass && stable && cloudsPlainPass.getDepthTexture() !== stable) cloudsPlainPass.setDepthTexture(stable);
       if (cloudsPass && stable && cloudsPass.getDepthTexture() !== stable) cloudsPass.setDepthTexture(stable);
+      if (aerialPass && stable && aerialPass.getDepthTexture() !== stable) aerialPass.setDepthTexture(stable);
       renderPass.needsDepthBlit = true;
     }
   };
@@ -973,6 +996,7 @@ export function createPostFx(
       mainCamera = next;
       renderPass.mainCamera = next;
       if (cloudsPass) cloudsPass.mainCamera = next;
+      if (aerialPass) aerialPass.mainCamera = next;
       if (cloudsPlainPass) cloudsPlainPass.mainCamera = next;
       bloomPass.mainCamera = next;
       plainPass.mainCamera = next;
@@ -990,15 +1014,26 @@ export function createPostFx(
     setClouds(next): void {
       if (cloudsPass) return;
       sky = next;
-      cloudsPass = new EffectPass(mainCamera, next.clouds);
-      // EffectPass gives its camera to its own material only; the clouds march their rays from the effect's camera
+      const includeAerial = Boolean(next.aerialPerspective && !isTouchDevice());
+      // On High desktop, merge AerialPerspectiveEffect (transmittance + inscatter + drifting cloud ground shadows)
+      // directly into the pre-bloom clouds pass with zero extra FBO or fullscreen draw; keep a cloudless fallback pass.
+      cloudsPass = includeAerial
+        ? new EffectPass(mainCamera, next.aerialPerspective!, next.clouds)
+        : new EffectPass(mainCamera, next.clouds);
+      // EffectPass gives its camera to its own material only; the clouds/aerial effects read mainCamera directly
       cloudsPass.mainCamera = mainCamera;
       cloudsPass.enabled = false;
+      if (includeAerial) {
+        aerialPass = new EffectPass(mainCamera, next.aerialPerspective!);
+        aerialPass.mainCamera = mainCamera;
+        aerialPass.enabled = false;
+      }
       cloudsPlainPass = new EffectPass(mainCamera, next.clouds, ...toneMapAndGrade());
       cloudsPlainPass.mainCamera = mainCamera;
       cloudsPlainPass.renderToScreen = true;
       cloudsPlainPass.enabled = false;
       composer.addPass(cloudsPass, 1);
+      if (aerialPass) composer.addPass(aerialPass, 2);
       composer.addPass(cloudsPlainPass);
       syncPassRouting();
     },
@@ -1029,6 +1064,7 @@ export function createPostFx(
       composer.removeAllPasses();
       renderPass.dispose();
       cloudsPass?.dispose();
+      aerialPass?.dispose();
       cloudsPlainPass?.dispose();
       bloomPass.dispose();
       plainPass.dispose();

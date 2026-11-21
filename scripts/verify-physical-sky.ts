@@ -10,10 +10,12 @@
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { SkyMaterial } from '@takram/three-atmosphere';
+import { AerialPerspectiveEffect, SkyMaterial } from '@takram/three-atmosphere';
 import { CloudsEffect } from '@takram/three-clouds';
 import { Ellipsoid, Geodetic } from '@takram/three-geospatial';
 import {
+  AERIAL_PERSPECTIVE_PATCHES,
+  AERIAL_PERSPECTIVE_REVERSED_DEPTH_PATCHES,
   cloudDriftVelocity,
   CLOUDS_COMPOSITE_PATCHES,
   CLOUDS_REVERSED_DEPTH_PATCHES,
@@ -96,6 +98,16 @@ check('clouds pass is the one scene-depth reader', count(cloudsFragment, 'depthB
 const composite = clouds.getFragmentShader();
 for (const [anchorText] of CLOUDS_COMPOSITE_PATCHES) check(`clouds composite anchor once: ${anchorText.slice(0, 48)}`, count(composite, anchorText) === 1);
 clouds.dispose();
+
+const aerial = new AerialPerspectiveEffect(undefined, { sunLight: false, skyLight: false, sky: false, transmittance: true, inscatter: true });
+const aerialFragment = aerial.getFragmentShader();
+for (const [anchorText] of AERIAL_PERSPECTIVE_PATCHES) {
+  check(`aerial perspective anchor once: ${anchorText.replace(/\n/g, ' ').slice(0, 48)}`, count(aerialFragment, anchorText) === 1);
+}
+for (const [anchorText] of AERIAL_PERSPECTIVE_REVERSED_DEPTH_PATCHES) {
+  check(`aerial perspective depth anchor once: ${anchorText.slice(0, 48)}`, count(aerialFragment, anchorText) === 1);
+}
+aerial.dispose();
 
 // --- Blue noise ------------------------------------------------------------------------------------------------------
 const tile = new Uint8Array(readFileSync(join(__dirname, '..', 'public', 'sky', 'blue-noise-128.bin')));

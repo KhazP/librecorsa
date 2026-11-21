@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { PrecomputedTexturesGenerator, SkyMaterial } from "@takram/three-atmosphere";
+import { AerialPerspectiveEffect, PrecomputedTexturesGenerator, SkyMaterial } from "@takram/three-atmosphere";
 import { CloudShape, CloudShapeDetail, CloudsEffect, LocalWeather, Turbulence } from "@takram/three-clouds";
 import { Ellipsoid, Geodetic, radians } from "@takram/three-geospatial";
 import { AZIMUTH_OFFSET_DEG, LATITUDE_DEG } from "@/lib/sim/weather";
@@ -206,6 +206,47 @@ export const CLOUDS_COMPOSITE_PATCHES: readonly ShaderPatch[] = [
   ],
 ];
 
+/**
+ * Reversed-depth patches for `@takram/three-atmosphere`'s `AerialPerspectiveEffect`:
+ * under three r187 `reversedDepthBuffer` (WebGL2 `ZERO_TO_ONE`), the sky sits at `depth <= 1e-8`,
+ * `depth` is already clip-Z in `[0, 1]` (not `[-1, 1]`), and `viewZ` follows the reversed perspective formula.
+ */
+export const AERIAL_PERSPECTIVE_REVERSED_DEPTH_PATCHES: readonly ShaderPatch[] = [
+  ["if (depth >= 1.0 - 1e-8) {", "if (depth <= 1e-8) {"],
+  ["vec4 clip = vec4(vec3(uv, depth) * 2.0 - 1.0, 1.0);", "vec4 clip = vec4(uv * 2.0 - 1.0, depth, 1.0);"],
+  [
+    "getViewZ(depth),",
+    "((cameraNear * cameraFar) / ((cameraNear - cameraFar) * depth - cameraNear)),",
+  ],
+];
+
+/**
+ * Radiance scaling and drifting cloud ground shadows for `AerialPerspectiveEffect`:
+ * scales Bruneton inscatter by `SKY_RADIANCE_SCALE` (dimmed/greyed in rain to match sky & clouds),
+ * blends transmittance & inscatter by `aerialStrength`, and attenuates lit terrain/track radiance
+ * under volumetric clouds via `sunTransmittance` when `CloudsEffect.atmosphereShadow` is bound.
+ */
+export const AERIAL_PERSPECTIVE_PATCHES: readonly ShaderPatch[] = [
+  [
+    "uniform vec3 sunDirection;",
+    "uniform vec3 sunDirection;\nuniform float aerialRadianceScale;\nuniform float aerialStrength;\nuniform float cloudShadowStrength;\nuniform float aerialGrey;\nuniform vec3 aerialGreyTint;",
+  ],
+  [
+    "radiance = radiance * transmittance;",
+    "radiance = mix(radiance, radiance * transmittance, aerialStrength);",
+  ],
+  [
+    "radiance = radiance + inscatter;",
+    /* glsl */ `vec3 aerialInscatter = inscatter * aerialRadianceScale;
+  aerialInscatter = mix(aerialInscatter, vec3(dot(aerialInscatter, vec3(0.2126, 0.7152, 0.0722))) * aerialGreyTint, aerialGrey);
+  radiance = radiance + aerialInscatter * aerialStrength;`,
+  ],
+  [
+    "#else // defined(SUN_LIGHT) || defined(SKY_LIGHT)\n  radiance = inputColor.rgb;",
+    "#else // defined(SUN_LIGHT) || defined(SKY_LIGHT)\n  radiance = inputColor.rgb * mix(1.0, sunTransmittance, cloudShadowStrength);",
+  ],
+];
+
 export function createSkyMaterial(sun: boolean, reversedDepth: boolean): PatchedSkyMaterial {
   const material = new SkyMaterial({ sun, moon: false, ground: true, groundAlbedo: GROUND_ALBEDO.clone() }) as PatchedSkyMaterial;
   Object.assign(material.uniforms, {
@@ -257,6 +298,37 @@ function patchCloudsComposite(clouds: CloudsEffect): CloudsCompositeUniforms {
   return u;
 }
 
+/** The aerial-perspective effect's own uniforms: radiance scale, haze strength, cloud ground-shadow depth, rain greying */
+interface AerialUniforms {
+  aerialRadianceScale: THREE.Uniform<number>;
+  aerialStrength: THREE.Uniform<number>;
+  cloudShadowStrength: THREE.Uniform<number>;
+  aerialGrey: THREE.Uniform<number>;
+}
+
+/** Patches `AerialPerspectiveEffect` for scene radiance scaling, cloud ground shadows and (optionally) reversed depth */
+function patchAerialPerspective(aerial: AerialPerspectiveEffect, reversedDepth: boolean): AerialUniforms {
+  const effect = aerial as unknown as { getFragmentShader(): string; setFragmentShader(source: string): void };
+  let fs = patchShader(effect.getFragmentShader(), AERIAL_PERSPECTIVE_PATCHES, "aerial perspective");
+  if (reversedDepth) {
+    fs = patchShader(fs, AERIAL_PERSPECTIVE_REVERSED_DEPTH_PATCHES, "aerial perspective (reversed depth)");
+  }
+  effect.setFragmentShader(fs);
+  const u: AerialUniforms = {
+    aerialRadianceScale: new THREE.Uniform(SKY_RADIANCE_SCALE),
+    aerialStrength: new THREE.Uniform(0.85),
+    cloudShadowStrength: new THREE.Uniform(0),
+    aerialGrey: new THREE.Uniform(0),
+  };
+  const map = aerial.uniforms as unknown as Map<string, THREE.Uniform>;
+  map.set("aerialRadianceScale", u.aerialRadianceScale);
+  map.set("aerialStrength", u.aerialStrength);
+  map.set("cloudShadowStrength", u.cloudShadowStrength);
+  map.set("aerialGrey", u.aerialGrey);
+  map.set("aerialGreyTint", new THREE.Uniform(OVERCAST_TINT.clone()));
+  return u;
+}
+
 /**
  * The 128 x 128 x 64 spatiotemporal noise the clouds jitter their ray marching with: our blue-noise tile, shifted
  * by the golden ratio on every slice so each frame's noise is blue in space and well spread over time
@@ -296,6 +368,8 @@ export class PhysicalSky {
   readonly bakeMesh: THREE.Mesh<THREE.PlaneGeometry, PatchedSkyMaterial>;
   /** Volumetric clouds for the post-processing chain; the caller places it right after the scene render */
   readonly clouds: CloudsEffect;
+  /** Physical aerial perspective + drifting cloud ground shadows (High desktop only, merged into the clouds pass) */
+  readonly aerialPerspective: AerialPerspectiveEffect;
   /** The atmosphere's lookup tables are ready (until then the sky renders black: keep the classic sky up) */
   ready = false;
 
@@ -305,9 +379,11 @@ export class PhysicalSky {
   private readonly procedural: Array<{ dispose(): void }> = [];
   private stbn: THREE.Data3DTexture | null = null;
   private readonly composite: CloudsCompositeUniforms;
+  private readonly aerialUniforms: AerialUniforms;
   private quality: SkyQuality = "high";
   private cloud = 0;
   private rain = 0;
+  private sunElevationSin = 0.25;
   private windX = 0;
   private windZ = 0;
   /** The session's cloud seed and the recipe picked from it (null: pick on the next look, with the weather then) */
@@ -346,12 +422,28 @@ export class PhysicalSky {
     this.composite = patchCloudsComposite(this.clouds);
     this.clouds.skipRendering = false;
 
+    this.aerialPerspective = new AerialPerspectiveEffect(undefined, {
+      sunLight: false,
+      skyLight: false,
+      sky: false,
+      transmittance: true,
+      inscatter: true,
+    });
+    this.aerialPerspective.worldToECEFMatrix.copy(this.worldToECEF);
+    this.aerialPerspective.shadowSampleCount = 4;
+    this.aerialPerspective.shadowRadius = 4;
+    this.aerialUniforms = patchAerialPerspective(this.aerialPerspective, reversedDepth);
+    this.clouds.events.addEventListener("change", (event) => {
+      if (event.property === "atmosphereShadow") this.syncAerialShadow();
+    });
+
     this.generator = new PrecomputedTexturesGenerator(renderer);
     allowReversedDepth(this.generator);
     const textures = this.generator.textures;
     Object.assign(this.mesh.material, textures);
     Object.assign(this.bakeMesh.material, textures);
     Object.assign(this.clouds, textures);
+    Object.assign(this.aerialPerspective, textures);
     this.generator
       .update()
       .then(() => {
@@ -372,16 +464,20 @@ export class PhysicalSky {
         if (this.disposed) return;
         this.stbn = createSpatiotemporalNoise(new Uint8Array(buffer));
         this.clouds.stbnTexture = this.stbn;
+        this.aerialPerspective.stbnTexture = this.stbn;
+        this.applyLook();
       })
       .catch((error: unknown) => console.warn("[physical-sky] blue noise missing; the clouds will look grainier", error));
   }
 
   /** Sun, cloud cover and rain (cheap: uniforms only) */
   setConditions(c: PhysicalSkyConditions): void {
+    this.sunElevationSin = Number.isFinite(c.sunDirection.y) ? c.sunDirection.y : 0.25;
     this.sunECEF.copy(c.sunDirection).transformDirection(this.worldToECEF);
     this.mesh.material.sunDirection.copy(this.sunECEF);
     this.bakeMesh.material.sunDirection.copy(this.sunECEF);
     this.clouds.sunDirection.copy(this.sunECEF);
+    this.aerialPerspective.sunDirection.copy(this.sunECEF);
     this.cloud = THREE.MathUtils.clamp(c.cloud, 0, 1);
     this.rain = THREE.MathUtils.clamp(c.rain, 0, 1);
     this.windX = Number.isFinite(c.windVxMs) ? c.windVxMs! : 0;
@@ -408,8 +504,8 @@ export class PhysicalSky {
     this.quality = quality;
     const touch = isTouchDevice();
     this.clouds.qualityPreset = quality === "high" && !touch ? "medium" : "low";
-    // Half resolution on Medium and touch: soft volumetric clouds reproject cleanly at 1/4 the fragment cost
-    this.clouds.resolutionScale = quality === "high" && !touch ? 1 : 0.5;
+    // Desktop Medium keeps crisp 0.75x volumetric clouds; touch devices stay 0.5x for mobile fill-rate budget.
+    this.clouds.resolutionScale = touch ? 0.5 : quality === "high" ? 1 : 0.75;
     this.clouds.lightShafts = false;
     this.applyLook();
   }
@@ -422,6 +518,16 @@ export class PhysicalSky {
   /** Whether the clouds' pass should run this frame (they come and go with the sky, and sit out a cloudless one) */
   get cloudsActive(): boolean {
     return this.showing && this.anyClouds;
+  }
+
+  /** Whether physical aerial perspective + cloud ground shadows should run (High desktop only) */
+  get aerialActive(): boolean {
+    return this.showing && this.quality === "high" && !isTouchDevice();
+  }
+
+  private syncAerialShadow(): void {
+    const wantShadow = this.aerialActive && this.cloudsActive && this.stbn !== null;
+    this.aerialPerspective.shadow = wantShadow ? this.clouds.atmosphereShadow : null;
   }
 
   /** Picks the session's recipe (once per seed) and puts its pattern where the seed says */
@@ -471,6 +577,16 @@ export class PhysicalSky {
     this.mesh.material.uniforms.overcast.value = volumetric ? 0.3 * THREE.MathUtils.smoothstep(cloud, 0.85, 1) + 0.4 * rain : veil;
     // A thick overcast hides the sun disc (the probe zeroes this while it films and puts the value back)
     this.mesh.material.uniforms.showSunDisc.value = 1 - THREE.MathUtils.smoothstep(cloud, 0.55, 0.9);
+    // Physical aerial perspective + soft drifting cloud ground shadows on High desktop
+    const sunUp = THREE.MathUtils.smoothstep(this.sunElevationSin, 0.02, 0.22);
+    this.aerialUniforms.aerialRadianceScale.value = SKY_RADIANCE_SCALE * (1 - 0.4 * gloom);
+    this.aerialUniforms.aerialGrey.value = Math.min(1, 0.65 * gloom + 0.25 * THREE.MathUtils.smoothstep(cloud, 0.8, 1));
+    this.aerialUniforms.aerialStrength.value = this.aerialActive ? 0.85 * (1 - 0.55 * rain) : 0;
+    this.aerialUniforms.cloudShadowStrength.value =
+      this.aerialActive && volumetric && this.stbn !== null
+        ? 0.34 * sunUp * (1 - 0.85 * gloom) * (1 - 0.65 * THREE.MathUtils.smoothstep(cloud, 0.78, 1))
+        : 0;
+    this.syncAerialShadow();
   }
 
   dispose(): void {
@@ -482,6 +598,7 @@ export class PhysicalSky {
       m.material.dispose();
     }
     this.clouds.dispose();
+    this.aerialPerspective.dispose();
     for (const p of this.procedural) p.dispose();
     this.stbn?.dispose();
     this.generator.dispose();
