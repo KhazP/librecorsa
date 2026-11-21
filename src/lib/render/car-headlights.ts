@@ -23,6 +23,17 @@ export const AUTO_HEADLIGHT_SUN_DEG = 4;
 /** Rain intensity above which automatic headlights switch on (0..1) */
 export const AUTO_HEADLIGHT_RAIN = 0.35;
 
+export interface LampPlacement {
+  /** Lateral offset from the car centreline (+X = left, m) */
+  x: number;
+  /** Height above the chassis floor (m) */
+  y: number;
+  /** Longitudinal position (+Z = forward, -Z = rear, m) */
+  z: number;
+  /** Visual lens flare diameter override (m) */
+  size?: number;
+}
+
 export interface HeadlightProfile {
   /** Lateral half-spacing of the left and right beams from the car centreline (m) */
   halfWidthM: number;
@@ -48,47 +59,66 @@ export interface HeadlightProfile {
   penumbra: number;
   /** Outward toe of each lamp's aim point at 48 m ahead (m) */
   aimSpreadM: number;
-  /** Visual lens flare diameter (m) */
+  /** Visual front lens flare diameter (m) */
   flareSizeM: number;
+  /** Visual rear tail-light flare diameter when running (m; scaled up under braking) */
+  rearFlareSizeM?: number;
+  /** Optional explicit rear lamp placements (e.g. quad Skyline tails, twin proto pods, LMDh endplates) */
+  rearLamps?: readonly LampPlacement[];
+  /** True when lamp coordinates are measured from the car's GLB (skip coarse bounding-box Z clamping) */
+  measured?: boolean;
 }
+
+/** Helper to build symmetric left/right rear lamp pairs */
+const rearPairs = (pairs: readonly (readonly [number, number, number, number?])[]): LampPlacement[] =>
+  pairs.flatMap(([x, y, z, size]) =>
+    x > 0.01
+      ? [
+          { x, y, z, size },
+          { x: -x, y, z, size },
+        ]
+      : [{ x: 0, y, z, size }],
+  );
 
 const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
   f1: {
-    halfWidthM: 0.26,
-    heightM: 0.44,
-    frontZM: 2.15,
-    rearZM: -2.42,
+    halfWidthM: 0.16,
+    heightM: 0.36,
+    frontZM: 2.35,
+    rearZM: -2.31,
     rearHalfWidthM: 0,
-    rearHeightM: 0.46,
+    rearHeightM: 0.31,
     color: 0xf4f8ff,
     intensity: 175,
     distanceM: 175,
     angleRad: 0.54,
     penumbra: 0.62,
     aimSpreadM: 2.8,
-    flareSizeM: 0.24,
+    flareSizeM: 0.20,
+    rearFlareSizeM: 0.18,
   },
   gt3: {
     halfWidthM: 0.72,
-    heightM: 0.56,
+    heightM: 0.52,
     frontZM: 2.08,
     rearZM: -2.18,
-    rearHalfWidthM: 0.70,
-    rearHeightM: 0.68,
+    rearHalfWidthM: 0.60,
+    rearHeightM: 0.72,
     color: 0xf8fbff,
     intensity: 215,
     distanceM: 200,
     angleRad: 0.56,
     penumbra: 0.58,
     aimSpreadM: 3.2,
-    flareSizeM: 0.34,
+    flareSizeM: 0.32,
+    rearFlareSizeM: 0.22,
   },
   proto: {
-    halfWidthM: 0.66,
-    heightM: 0.48,
-    frontZM: 2.15,
-    rearZM: -2.25,
-    rearHalfWidthM: 0.68,
+    halfWidthM: 0.64,
+    heightM: 0.42,
+    frontZM: 2.25,
+    rearZM: -2.10,
+    rearHalfWidthM: 0.64,
     rearHeightM: 0.62,
     color: 0xf4f9ff,
     intensity: 240,
@@ -96,30 +126,32 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
     angleRad: 0.58,
     penumbra: 0.56,
     aimSpreadM: 3.4,
-    flareSizeM: 0.36,
+    flareSizeM: 0.32,
+    rearFlareSizeM: 0.20,
   },
   classic: {
-    halfWidthM: 0.64,
-    heightM: 0.56,
+    halfWidthM: 0.58,
+    heightM: 0.54,
     frontZM: 1.98,
-    rearZM: -2.05,
-    rearHalfWidthM: 0.62,
-    rearHeightM: 0.64,
+    rearZM: -1.96,
+    rearHalfWidthM: 0.54,
+    rearHeightM: 0.58,
     color: 0xffe4b0,
     intensity: 180,
     distanceM: 165,
     angleRad: 0.56,
     penumbra: 0.62,
     aimSpreadM: 2.8,
-    flareSizeM: 0.30,
+    flareSizeM: 0.28,
+    rearFlareSizeM: 0.20,
   },
   road: {
-    halfWidthM: 0.62,
-    heightM: 0.64,
-    frontZM: 1.92,
-    rearZM: -1.98,
+    halfWidthM: 0.54,
+    heightM: 0.62,
+    frontZM: 1.70,
+    rearZM: -2.28,
     rearHalfWidthM: 0.60,
-    rearHeightM: 0.72,
+    rearHeightM: 0.74,
     color: 0xfff0d4,
     intensity: 160,
     distanceM: 155,
@@ -127,13 +159,202 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
     penumbra: 0.64,
     aimSpreadM: 2.6,
     flareSizeM: 0.28,
+    rearFlareSizeM: 0.22,
+  },
+};
+
+/**
+ * Per-car lamp coordinates measured in chassisGroup space (with each car's bodyOffset applied) directly from the
+ * GLBs' headlight/taillight meshes so flares sit on the actual lenses rather than behind rear wings or ahead of noses.
+ */
+const CAR_PROFILE_OVERRIDES: Partial<Record<CarId, Partial<HeadlightProfile>>> = {
+  lc26: {
+    halfWidthM: 0.16,
+    heightM: 0.36,
+    frontZM: 2.35,
+    rearHalfWidthM: 0,
+    rearHeightM: 0.31,
+    rearZM: -2.31,
+    flareSizeM: 0.20,
+    rearFlareSizeM: 0.18,
+    measured: true,
+  },
+  "amg-gt3": {
+    halfWidthM: 0.74,
+    heightM: 0.50,
+    frontZM: 1.98,
+    rearHalfWidthM: 0.58,
+    rearHeightM: 0.695,
+    rearZM: -2.18,
+    flareSizeM: 0.30,
+    rearFlareSizeM: 0.19,
+    rearLamps: rearPairs([
+      [0.52, 0.695, -2.20, 0.19],
+      [0.66, 0.695, -2.14, 0.18],
+    ]),
+    measured: true,
+  },
+  "bmw-m4-gt3": {
+    halfWidthM: 0.70,
+    heightM: 0.50,
+    frontZM: 2.18,
+    rearHalfWidthM: 0.59,
+    rearHeightM: 0.77,
+    rearZM: -2.35,
+    flareSizeM: 0.30,
+    rearFlareSizeM: 0.19,
+    rearLamps: rearPairs([
+      [0.48, 0.77, -2.36, 0.18],
+      [0.66, 0.76, -2.32, 0.19],
+    ]),
+    measured: true,
+  },
+  "mtr-496r": {
+    halfWidthM: 0.58,
+    heightM: 0.52,
+    frontZM: 2.12,
+    rearHalfWidthM: 0.56,
+    rearHeightM: 0.65,
+    rearZM: -2.04,
+    flareSizeM: 0.30,
+    rearFlareSizeM: 0.18,
+    rearLamps: rearPairs([
+      [0.561, 0.65, -2.04, 0.18],
+      [0.73, 0.65, -1.94, 0.18],
+    ]),
+    measured: true,
+  },
+  "lc-lmdh": {
+    halfWidthM: 0.65,
+    heightM: 0.365,
+    frontZM: 2.61,
+    rearHalfWidthM: 0.958,
+    rearHeightM: 0.95,
+    rearZM: -2.37,
+    flareSizeM: 0.30,
+    rearFlareSizeM: 0.16,
+    rearLamps: rearPairs([
+      [0.958, 0.95, -2.37, 0.15],
+      [0.78, 0.40, -2.27, 0.17],
+    ]),
+    measured: true,
+  },
+  liana: {
+    halfWidthM: 0.56,
+    heightM: 0.66,
+    frontZM: 1.54,
+    rearHalfWidthM: 0.66,
+    rearHeightM: 0.80,
+    rearZM: -2.35,
+    flareSizeM: 0.28,
+    rearFlareSizeM: 0.22,
+    measured: true,
+  },
+  "nissan-r33-jgtc": {
+    halfWidthM: 0.35,
+    heightM: 0.50,
+    frontZM: 2.45,
+    rearHalfWidthM: 0.525,
+    rearHeightM: 0.68,
+    rearZM: -2.09,
+    flareSizeM: 0.24,
+    rearFlareSizeM: 0.17,
+    rearLamps: rearPairs([
+      [0.44, 0.68, -2.09, 0.17],
+      [0.61, 0.68, -2.07, 0.17],
+    ]),
+    measured: true,
+  },
+  "nissan-r32-jtcc": {
+    halfWidthM: 0.48,
+    heightM: 0.56,
+    frontZM: 1.95,
+    rearHalfWidthM: 0.545,
+    rearHeightM: 0.70,
+    rearZM: -2.43,
+    flareSizeM: 0.26,
+    rearFlareSizeM: 0.17,
+    rearLamps: rearPairs([
+      [0.46, 0.70, -2.43, 0.17],
+      [0.63, 0.70, -2.42, 0.17],
+    ]),
+    measured: true,
+  },
+  "bmw-m1-procar": {
+    halfWidthM: 0.57,
+    heightM: 0.40,
+    frontZM: 2.30,
+    rearHalfWidthM: 0.58,
+    rearHeightM: 0.66,
+    rearZM: -1.99,
+    flareSizeM: 0.24,
+    rearFlareSizeM: 0.22,
+    measured: true,
+  },
+  "vw-scirocco-gtx": {
+    halfWidthM: 0.47,
+    heightM: 0.58,
+    frontZM: 1.74,
+    rearHalfWidthM: 0.54,
+    rearHeightM: 0.70,
+    rearZM: -2.21,
+    flareSizeM: 0.26,
+    rearFlareSizeM: 0.22,
+    measured: true,
+  },
+  "chaparral-2d": {
+    halfWidthM: 0.58,
+    heightM: 0.50,
+    frontZM: 1.84,
+    rearHalfWidthM: 0.52,
+    rearHeightM: 0.50,
+    rearZM: -1.88,
+    flareSizeM: 0.26,
+    rearFlareSizeM: 0.14,
+    rearLamps: rearPairs([
+      [0.461, 0.498, -1.88, 0.14],
+      [0.585, 0.498, -1.88, 0.14],
+    ]),
+    measured: true,
+  },
+  "chaparral-2d-67": {
+    halfWidthM: 0.58,
+    heightM: 0.50,
+    frontZM: 1.99,
+    rearHalfWidthM: 0.55,
+    rearHeightM: 0.43,
+    rearZM: -1.73,
+    flareSizeM: 0.26,
+    rearFlareSizeM: 0.14,
+    rearLamps: rearPairs([
+      [0.547, 0.498, -1.73, 0.14],
+      [0.547, 0.364, -1.73, 0.14],
+    ]),
+    measured: true,
+  },
+  "porsche-934-rsr": {
+    halfWidthM: 0.63,
+    heightM: 0.63,
+    frontZM: 2.03,
+    rearHalfWidthM: 0.54,
+    rearHeightM: 0.46,
+    rearZM: -1.84,
+    flareSizeM: 0.28,
+    rearFlareSizeM: 0.16,
+    rearLamps: rearPairs([
+      [0.48, 0.46, -1.84, 0.16],
+      [0.59, 0.46, -1.83, 0.16],
+    ]),
+    measured: true,
   },
 };
 
 /** Headlight beam and visual placement profile for any car in the registry */
 export function headlightProfileFor(carId: CarId): HeadlightProfile {
   const cls = anyCarById(carId)?.classId ?? "gt3";
-  return CLASS_PROFILES[cls] ?? CLASS_PROFILES.gt3;
+  const base = CLASS_PROFILES[cls] ?? CLASS_PROFILES.gt3;
+  const override = CAR_PROFILE_OVERRIDES[carId];
+  return override ? { ...base, ...override } : base;
 }
 
 /** Whether headlights should illuminate under the current mode and sky/weather state */
@@ -219,22 +440,25 @@ function getFlareTexture(): THREE.CanvasTexture | null {
 }
 
 const HEADLIGHT_MAT_RE = /(?:head_?light|front_?light|lamp_?front|hl_glass|light_?front|farol|scheinwerfer)/i;
-/** Generic light materials on ported/GT3 GLBs (e.g. `light_004`, `BMWMAT_Lights1`, `MI_..._Lights`) — gated by front Z */
+const TAILLIGHT_MAT_RE = /(?:tail_?light|rear_?light|brake_?light|stop_?light|lamp_?rear)/i;
+/** Generic light materials on ported/GT3 GLBs (e.g. `light_004`, `BMWMAT_Lights1`, `MI_..._Lights`) — gated by Z end */
 const GENERIC_LIGHT_MAT_RE = /(?:^|_)lights?(?:_?\d+)?$|interactive_lights/i;
-const EXCLUDED_LIGHT_RE = /(?:tail|brake|reverse|indicator|dash|wheel|interior|clearled|glass)/i;
+const EXCLUDED_FRONT_LIGHT_RE = /(?:tail|brake|reverse|indicator|dash|wheel|interior|clearled|glass|caliper|disc|drum|reflector)/i;
+const EXCLUDED_REAR_LIGHT_RE = /(?:head_?light|front_?light|reverse|indicator|amber|dash|wheel|interior|clearled|glass|caliper|disc|drum|reflector)/i;
 
 const _flarePos = new THREE.Vector3();
 const _carFwd = new THREE.Vector3();
 const _camPos = new THREE.Vector3();
 const _toCam = new THREE.Vector3();
 const _box = new THREE.Box3();
-const _center = new THREE.Vector3();
 const _invRoot = new THREE.Matrix4();
+const _relMat = new THREE.Matrix4();
 
 interface BoostedMaterial {
   mat: THREE.MeshStandardMaterial;
   baseEmissive: THREE.Color;
   baseIntensity: number;
+  hasOwnEmissiveMap: boolean;
 }
 
 interface ReplacedMaterialSlot {
@@ -245,9 +469,9 @@ interface ReplacedMaterialSlot {
 }
 
 /**
- * Forward-facing car headlights (0, 1 or 2 SpotLights + directional lens flares + rear tail-light glow + cloned
- * emissive headlight lenses) mounted directly to a car's chassisGroup so beams follow body pitch, roll and bumps.
- * No shadow maps are allocated, keeping frame cost low.
+ * Forward-facing car headlights (0, 1 or 2 SpotLights + directional lens flares + rear tail/brake-light glow +
+ * cloned emissive headlight and taillight lenses) mounted directly to a car's chassisGroup so beams follow body
+ * pitch, roll and bumps. No shadow maps are allocated, keeping frame cost low.
  */
 export class CarHeadlights {
   readonly group = new THREE.Group();
@@ -256,16 +480,20 @@ export class CarHeadlights {
   private readonly spotIntensity: number;
   private readonly frontFlares: THREE.Sprite[] = [];
   private readonly rearFlares: THREE.Sprite[] = [];
+  private readonly rearFlareBaseSizes: number[] = [];
   private readonly frontMat: THREE.SpriteMaterial;
   private readonly rearMat: THREE.SpriteMaterial;
   private readonly profile: HeadlightProfile;
-  private readonly boosted: BoostedMaterial[] = [];
-  private readonly cloneByOriginal = new Map<THREE.MeshStandardMaterial, THREE.MeshStandardMaterial>();
+  private readonly frontBoosted: BoostedMaterial[] = [];
+  private readonly rearBoosted: BoostedMaterial[] = [];
+  private readonly frontCloneByOriginal = new Map<THREE.MeshStandardMaterial, THREE.MeshStandardMaterial>();
+  private readonly rearCloneByOriginal = new Map<THREE.MeshStandardMaterial, THREE.MeshStandardMaterial>();
   private readonly replacedSlots: ReplacedMaterialSlot[] = [];
   private scannedRoot: THREE.Object3D | null = null;
   private scannedChildren: THREE.Object3D[] = [];
   private enabled = false;
   private braking = false;
+  private rearActive = false;
 
   constructor(carId: CarId, options?: CarHeadlightsOptions) {
     this.group.name = "CarHeadlights";
@@ -327,22 +555,33 @@ export class CarHeadlights {
       fog: false,
     });
 
+    const frontZ = p.measured ? p.frontZM : p.frontZM + 0.04;
     for (const side of [1, -1] as const) {
       const flare = new THREE.Sprite(this.frontMat);
-      flare.position.set(side * p.halfWidthM, p.heightM, p.frontZM + 0.04);
+      flare.position.set(side * p.halfWidthM, p.heightM, frontZ);
       flare.scale.setScalar(p.flareSizeM);
       flare.visible = false;
       this.frontFlares.push(flare);
       this.group.add(flare);
     }
 
-    const rearOffsets = p.rearHalfWidthM > 0.01 ? [p.rearHalfWidthM, -p.rearHalfWidthM] : [0];
-    for (const x of rearOffsets) {
+    const defaultRearSize = p.rearFlareSizeM ?? (p.rearHalfWidthM > 0.01 ? 0.22 : 0.18);
+    const rearLamps: readonly LampPlacement[] =
+      p.rearLamps ??
+      (p.rearHalfWidthM > 0.01
+        ? [
+            { x: p.rearHalfWidthM, y: p.rearHeightM, z: p.rearZM, size: defaultRearSize },
+            { x: -p.rearHalfWidthM, y: p.rearHeightM, z: p.rearZM, size: defaultRearSize },
+          ]
+        : [{ x: 0, y: p.rearHeightM, z: p.rearZM, size: defaultRearSize }]);
+    for (const lamp of rearLamps) {
+      const size = lamp.size ?? defaultRearSize;
       const rear = new THREE.Sprite(this.rearMat);
-      rear.position.set(x, p.rearHeightM, p.rearZM);
-      rear.scale.setScalar(p.rearHalfWidthM > 0.01 ? 0.28 : 0.22);
+      rear.position.set(lamp.x, lamp.y, lamp.z);
+      rear.scale.setScalar(size);
       rear.visible = false;
       this.rearFlares.push(rear);
+      this.rearFlareBaseSizes.push(size);
       this.group.add(rear);
     }
   }
@@ -355,10 +594,11 @@ export class CarHeadlights {
   }
 
   /**
-   * Lazily discovers GLB headlight materials and body bounds whenever the chassisGroup's child list changes
-   * (including when an async loader replaces its placeholder with the real `bodyGroup` keeping child count equal).
-   * Each matched material is cloned and assigned only to matched front meshes so shared template materials (other
-   * cars, ghosts, previews, and rear lamps sharing a generic `light_*` material) are never mutated.
+   * Lazily discovers GLB headlight/taillight materials (and body bounds for unmeasured fallback profiles) whenever
+   * the chassisGroup's child list changes (including when an async loader replaces its placeholder with the real
+   * `bodyGroup` keeping child count equal).
+   * Each matched material is cloned separately for front vs rear meshes so shared template materials (other cars,
+   * ghosts, previews, and front/rear lamps sharing a generic `light_*` material) are never mutated.
    */
   private scanMaterials(): void {
     const root = this.scannedRoot;
@@ -370,29 +610,66 @@ export class CarHeadlights {
     root.updateMatrixWorld(true);
     _invRoot.copy(root.matrixWorld).invert();
 
+    const frontBandMinY = this.profile.heightM - 0.16;
+    const frontBandMaxY = this.profile.heightM + 0.16;
+    const rearBandMinY = this.profile.rearHeightM - 0.16;
+    const rearBandMaxY = this.profile.rearHeightM + 0.16;
     let bodyMaxZ = -Infinity;
     let bodyMinZ = Infinity;
+
+    const acquireClone = (
+      m: THREE.MeshStandardMaterial,
+      side: "front" | "rear",
+    ): THREE.MeshStandardMaterial => {
+      const map = side === "front" ? this.frontCloneByOriginal : this.rearCloneByOriginal;
+      let clone = map.get(m);
+      if (!clone) {
+        clone = m.clone();
+        clone.userData = { ...m.userData, __headlightClone: true };
+        const hasOwnEmissiveMap = Boolean(m.emissiveMap);
+        // Reuse the diffuse map as an emissive mask once at clone time when the material has no emissiveMap and starts
+        // dark: textured light housings keep black bezels unlit without triggering per-frame shader recompiles.
+        if (!hasOwnEmissiveMap && clone.map && m.emissiveIntensity === 0) {
+          clone.emissiveMap = clone.map;
+        }
+        map.set(m, clone);
+        const list = side === "front" ? this.frontBoosted : this.rearBoosted;
+        list.push({
+          mat: clone,
+          baseEmissive: m.emissive.clone(),
+          baseIntensity: m.emissiveIntensity,
+          hasOwnEmissiveMap,
+        });
+      }
+      return clone;
+    };
 
     for (const child of kids) {
       if (child === this.group) continue;
       child.traverse((obj) => {
         if (!(obj instanceof THREE.Mesh)) return;
         const geo = obj.geometry;
+        let hasBox = false;
         if (geo) {
           if (!geo.boundingBox) geo.computeBoundingBox();
           if (geo.boundingBox) {
-            _box.copy(geo.boundingBox).applyMatrix4(obj.matrixWorld).applyMatrix4(_invRoot);
-            if (Number.isFinite(_box.max.z) && _box.max.z - _box.min.z < 8) {
-              if (_box.max.z > bodyMaxZ) bodyMaxZ = _box.max.z;
-              if (_box.min.z < bodyMinZ) bodyMinZ = _box.min.z;
+            // Compose relative to chassisGroup BEFORE transforming the AABB so world-space yaw never inflates Z bounds.
+            _relMat.multiplyMatrices(_invRoot, obj.matrixWorld);
+            _box.copy(geo.boundingBox).applyMatrix4(_relMat);
+            hasBox = Number.isFinite(_box.min.z) && Number.isFinite(_box.max.z);
+            if (hasBox && _box.max.z - _box.min.z < 8) {
+              if (_box.max.y >= frontBandMinY && _box.min.y <= frontBandMaxY && _box.max.z > bodyMaxZ) {
+                bodyMaxZ = _box.max.z;
+              }
+              if (_box.max.y >= rearBandMinY && _box.min.y <= rearBandMaxY && _box.min.z < bodyMinZ) {
+                bodyMinZ = _box.min.z;
+              }
             }
-            _box.getCenter(_center);
-          } else {
-            _center.set(0, 0, 0);
           }
-        } else {
-          _center.set(0, 0, 0);
         }
+
+        const isStrictlyFront = hasBox && _box.min.z > 0.5;
+        const isStrictlyRear = hasBox && _box.max.z < -0.5;
 
         const isArr = Array.isArray(obj.material);
         const mats = isArr ? obj.material : [obj.material];
@@ -400,26 +677,36 @@ export class CarHeadlights {
         for (let i = 0; i < mats.length; i++) {
           const m = mats[i];
           if (!(m instanceof THREE.MeshStandardMaterial) || m.userData.__headlightClone) continue;
-          const explicit = HEADLIGHT_MAT_RE.test(m.name) || HEADLIGHT_MAT_RE.test(obj.name);
-          const genericFront =
-            !explicit &&
-            _center.z > 0.75 &&
-            !EXCLUDED_LIGHT_RE.test(m.name) &&
-            !EXCLUDED_LIGHT_RE.test(obj.name) &&
-            (GENERIC_LIGHT_MAT_RE.test(m.name) || GENERIC_LIGHT_MAT_RE.test(obj.name));
-          if (!explicit && !genericFront) continue;
 
-          let clone = this.cloneByOriginal.get(m);
-          if (!clone) {
-            clone = m.clone();
-            clone.userData = { ...m.userData, __headlightClone: true };
-            this.cloneByOriginal.set(m, clone);
-            this.boosted.push({
-              mat: clone,
-              baseEmissive: m.emissive.clone(),
-              baseIntensity: m.emissiveIntensity,
-            });
-          }
+          const explicitFront = !isStrictlyRear && (HEADLIGHT_MAT_RE.test(m.name) || HEADLIGHT_MAT_RE.test(obj.name));
+          const genericFront =
+            !explicitFront &&
+            isStrictlyFront &&
+            !EXCLUDED_FRONT_LIGHT_RE.test(m.name) &&
+            !EXCLUDED_FRONT_LIGHT_RE.test(obj.name) &&
+            (GENERIC_LIGHT_MAT_RE.test(m.name) || GENERIC_LIGHT_MAT_RE.test(obj.name));
+
+          const explicitRear =
+            !explicitFront &&
+            !genericFront &&
+            isStrictlyRear &&
+            !EXCLUDED_REAR_LIGHT_RE.test(m.name) &&
+            !EXCLUDED_REAR_LIGHT_RE.test(obj.name) &&
+            (TAILLIGHT_MAT_RE.test(m.name) || TAILLIGHT_MAT_RE.test(obj.name));
+          const genericRear =
+            !explicitFront &&
+            !genericFront &&
+            !explicitRear &&
+            isStrictlyRear &&
+            !EXCLUDED_REAR_LIGHT_RE.test(m.name) &&
+            !EXCLUDED_REAR_LIGHT_RE.test(obj.name) &&
+            (GENERIC_LIGHT_MAT_RE.test(m.name) || GENERIC_LIGHT_MAT_RE.test(obj.name));
+
+          const side: "front" | "rear" | null =
+            explicitFront || genericFront ? "front" : explicitRear || genericRear ? "rear" : null;
+          if (!side) continue;
+
+          const clone = acquireClone(m, side);
           if (isArr) {
             const arr = nextArr ?? (nextArr = mats.slice());
             arr[i] = clone;
@@ -433,23 +720,39 @@ export class CarHeadlights {
       });
     }
 
-    // Keep front/rear lens flare sprites just outside real GLB noses/tails when the car is longer than the class default
-    if (bodyMaxZ > 1.2 && bodyMaxZ < 4.0) {
-      const frontZ = Math.max(this.profile.frontZM, bodyMaxZ - 0.08);
-      for (const f of this.frontFlares) f.position.z = frontZ + 0.06;
+    // For unmeasured fallback profiles only, keep flares outside lamp-height body geometry (ignoring wings/splitters).
+    if (!this.profile.measured) {
+      if (bodyMaxZ > 1.2 && bodyMaxZ < 4.0) {
+        const frontZ = Math.max(this.profile.frontZM, bodyMaxZ - 0.04);
+        for (const f of this.frontFlares) f.position.z = frontZ + 0.06;
+      }
+      if (bodyMinZ < -1.2 && bodyMinZ > -4.0) {
+        const rearZ = Math.min(this.profile.rearZM, bodyMinZ + 0.04);
+        for (const r of this.rearFlares) r.position.z = rearZ - 0.06;
+      }
     }
-    if (bodyMinZ < -1.2 && bodyMinZ > -4.0) {
-      const rearZ = Math.min(this.profile.rearZM, bodyMinZ + 0.08);
-      for (const r of this.rearFlares) r.position.z = rearZ - 0.06;
-    }
-    if (this.enabled) this.applyMaterialBoost(true);
+    if (this.enabled) this.applyFrontBoost(true);
+    if (this.rearActive) this.applyRearBoost(true, this.braking);
   }
 
-  private applyMaterialBoost(on: boolean): void {
-    for (const b of this.boosted) {
+  private applyFrontBoost(on: boolean): void {
+    for (const b of this.frontBoosted) {
       if (on) {
-        b.mat.emissive.setHex(this.profile.color);
+        b.mat.emissive.setHex(b.hasOwnEmissiveMap ? 0xffffff : this.profile.color);
         b.mat.emissiveIntensity = Math.max(b.baseIntensity, 4.5);
+      } else {
+        b.mat.emissive.copy(b.baseEmissive);
+        b.mat.emissiveIntensity = b.baseIntensity;
+      }
+    }
+  }
+
+  private applyRearBoost(active: boolean, braking: boolean): void {
+    for (const b of this.rearBoosted) {
+      if (active) {
+        b.mat.emissive.setHex(b.hasOwnEmissiveMap ? 0xffffff : 0xff1e12);
+        const target = braking ? (b.hasOwnEmissiveMap ? 4.2 : 3.6) : b.hasOwnEmissiveMap ? 1.8 : 1.4;
+        b.mat.emissiveIntensity = Math.max(b.baseIntensity, target);
       } else {
         b.mat.emissive.copy(b.baseEmissive);
         b.mat.emissiveIntensity = b.baseIntensity;
@@ -469,14 +772,18 @@ export class CarHeadlights {
       const intensity = on ? this.spotIntensity : 0;
       for (const s of this.spots) s.intensity = intensity;
       for (const f of this.frontFlares) f.visible = on && !hideFrontFlares;
-      this.applyMaterialBoost(on);
+      this.applyFrontBoost(on);
     }
     const rearActive = on || braking;
-    const baseRearOpacity = braking ? 0.95 : 0.55;
-    if (braking !== this.braking) {
+    const baseRearOpacity = braking ? 0.92 : 0.52;
+    if (rearActive !== this.rearActive || braking !== this.braking) {
+      this.rearActive = rearActive;
       this.braking = braking;
-      const s = this.profile.rearHalfWidthM > 0.01 ? (braking ? 0.36 : 0.28) : (braking ? 0.28 : 0.22);
-      for (const r of this.rearFlares) r.scale.setScalar(s);
+      const scaleMult = braking ? 1.32 : 1.0;
+      for (let i = 0; i < this.rearFlares.length; i++) {
+        this.rearFlares[i].scale.setScalar(this.rearFlareBaseSizes[i] * scaleMult);
+      }
+      this.applyRearBoost(rearActive, braking);
     }
     if (!on) {
       this.frontMat.opacity = 0;
@@ -549,7 +856,8 @@ export class CarHeadlights {
   }
 
   dispose(): void {
-    this.applyMaterialBoost(false);
+    this.applyFrontBoost(false);
+    this.applyRearBoost(false, false);
     for (const slot of this.replacedSlots) {
       if (slot.index === null) {
         if (slot.mesh.material === slot.clone) slot.mesh.material = slot.original;
@@ -560,9 +868,12 @@ export class CarHeadlights {
       }
     }
     this.replacedSlots.length = 0;
-    for (const b of this.boosted) b.mat.dispose();
-    this.boosted.length = 0;
-    this.cloneByOriginal.clear();
+    for (const b of this.frontBoosted) b.mat.dispose();
+    for (const b of this.rearBoosted) b.mat.dispose();
+    this.frontBoosted.length = 0;
+    this.rearBoosted.length = 0;
+    this.frontCloneByOriginal.clear();
+    this.rearCloneByOriginal.clear();
     this.group.removeFromParent();
     this.frontMat.dispose();
     this.rearMat.dispose();

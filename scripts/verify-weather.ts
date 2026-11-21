@@ -193,7 +193,8 @@ console.log('\n== Weather & time of day');
   // Simulate async GLB load replacing placeholder with bodyGroup (same direct child count: 2 === 2)
   placeholder.removeFromParent();
   const bodyGroup = new THREE.Group();
-  // Shared `light_004` material on both front and rear meshes (and another car): must match `light_004`, clone onto front only
+  // Shared `light_004` material on both front and rear meshes (and another car): must clone separately for front
+  // (white headlight) and rear (red taillight/brake) without mutating the shared template material
   const sharedLight004 = new THREE.MeshStandardMaterial({ name: 'light_004', emissive: new THREE.Color(0x000000), emissiveIntensity: 0 });
   const frontMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), sharedLight004);
   frontMesh.position.set(0.6, 0.5, 2.4);
@@ -202,7 +203,11 @@ console.log('\n== Weather & time of day');
   const gt3LightMat = new THREE.MeshStandardMaterial({ name: 'MI_Mercedes_AMG_GT3_Evo_Lights', emissive: new THREE.Color(0x000000), emissiveIntensity: 0 });
   const frontMesh2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), gt3LightMat);
   frontMesh2.position.set(-0.6, 0.5, 2.4);
-  bodyGroup.add(frontMesh, rearMesh, frontMesh2);
+  // Span mesh across both front and rear must NEVER be misclassified as front-only or rear-only
+  const spanLightMat = new THREE.MeshStandardMaterial({ name: 'light_025', emissive: new THREE.Color(0x000000), emissiveIntensity: 0 });
+  const spanMesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 3.8), spanLightMat);
+  spanMesh.position.set(0, 0.5, 0);
+  bodyGroup.add(frontMesh, rearMesh, frontMesh2, spanMesh);
   hlRoot.add(bodyGroup);
   hl.setEnabled(true, true);
   const spots = hl.group.children.filter((c): c is THREE.SpotLight => c instanceof THREE.SpotLight);
@@ -212,21 +217,35 @@ console.log('\n== Weather & time of day');
   const allForward = spots.length === 2 && spots.every((s) => s.intensity > 0 && s.target.position.z > s.position.z + 20);
   const frontClonedMat = frontMesh.material as THREE.MeshStandardMaterial;
   const frontClonedMat2 = frontMesh2.material as THREE.MeshStandardMaterial;
+  const rearClonedMat = rearMesh.material as THREE.MeshStandardMaterial;
   const clonedAndIsolated =
     frontClonedMat !== sharedLight004 &&
     frontClonedMat.emissiveIntensity > 1 &&
     frontClonedMat2 !== gt3LightMat &&
     frontClonedMat2.emissiveIntensity > 1 &&
-    rearMesh.material === sharedLight004 &&
+    rearClonedMat !== sharedLight004 &&
+    rearClonedMat !== frontClonedMat &&
+    rearClonedMat.emissiveIntensity > 2 &&
+    rearClonedMat.emissive.r > 0.8 &&
+    rearClonedMat.emissive.g < 0.3 &&
+    spanMesh.material === spanLightMat &&
     sharedLight004.emissiveIntensity === 0 &&
-    gt3LightMat.emissiveIntensity === 0;
-  const flaresOutsideBody = frontSprites.every((s) => s.position.z > 2.4) && rearSprites.every((s) => s.position.z < -2.3);
-  // Directional per-flare visibility: behind car hides front; nose/dash cam (z=1.8 > 0 but behind flares) hides front too; ahead shows front unless onboard-hidden
+    gt3LightMat.emissiveIntensity === 0 &&
+    spanLightMat.emissiveIntensity === 0;
+  // Measured per-car profiles keep their exact GLB-measured lens Z (not pushed back by rear wings or test boxes)
+  const amgProfile = headlightProfileFor('amg-gt3');
+  const measuredPlacementOk =
+    amgProfile.measured === true &&
+    frontSprites.every((s) => Math.abs(s.position.z - amgProfile.frontZM) < 1e-4) &&
+    rearSprites.length === (amgProfile.rearLamps?.length ?? 2) &&
+    rearSprites.every((s, i) => Math.abs(s.position.z - (amgProfile.rearLamps?.[i].z ?? amgProfile.rearZM)) < 1e-4);
+  // Directional per-flare visibility: behind car hides front; nose/dash cam (z=1.5 > 0 but behind flares) hides front too; ahead shows front unless onboard-hidden
   const cam = new THREE.PerspectiveCamera();
   cam.position.set(0, 1.2, -6);
   hl.setEnabled(true, false, cam);
   const chaseOk = frontSprites.every((s) => !s.visible) && rearSprites.every((s) => s.visible);
-  cam.position.set(0, 0.7, 1.8);
+  const rearRunningIntensity = rearClonedMat.emissiveIntensity;
+  cam.position.set(0, 0.7, 1.5);
   hl.setEnabled(true, false, cam);
   const noseCamOk = frontSprites.every((s) => !s.visible) && rearSprites.every((s) => !s.visible);
   cam.position.set(0, 1.2, 10);
@@ -235,14 +254,15 @@ console.log('\n== Weather & time of day');
   hl.setEnabled(true, false, cam, true);
   const onboardHideOk = frontSprites.every((s) => !s.visible);
   hl.setEnabled(false);
-  const restored = spots.every((s) => s.intensity === 0) && frontClonedMat.emissiveIntensity === 0;
-  // Daytime brake lights: rear sprites light up under braking behind the car even when headlights are off,
-  // while front flares, spots and boosted lenses stay off, and releasing brake turns rear sprites back off
+  const restored = spots.every((s) => s.intensity === 0) && frontClonedMat.emissiveIntensity === 0 && rearClonedMat.emissiveIntensity === 0;
+  // Daytime brake lights: rear sprites and rear emissive lenses light up under braking behind the car even when
+  // headlights are off, while front flares, spots and boosted lenses stay off, and releasing brake turns them back off
   cam.position.set(0, 1.2, -6);
   hl.setEnabled(false, true, cam);
   const daytimeBrakeBehind =
     spots.every((s) => s.intensity === 0) &&
     frontClonedMat.emissiveIntensity === 0 &&
+    rearClonedMat.emissiveIntensity > rearRunningIntensity &&
     frontSprites.every((s) => !s.visible) &&
     rearSprites.every((s) => s.visible) &&
     (rearSprites[0].material as THREE.SpriteMaterial).opacity > 0.7;
@@ -251,7 +271,11 @@ console.log('\n== Weather & time of day');
   const daytimeBrakeFrontHidden = rearSprites.every((s) => !s.visible) && frontSprites.every((s) => !s.visible);
   cam.position.set(0, 1.2, -6);
   hl.setEnabled(false, false, cam);
-  const daytimeCoastOff = !hl.isBraking && rearSprites.every((s) => !s.visible) && frontSprites.every((s) => !s.visible);
+  const daytimeCoastOff =
+    !hl.isBraking &&
+    rearClonedMat.emissiveIntensity === 0 &&
+    rearSprites.every((s) => !s.visible) &&
+    frontSprites.every((s) => !s.visible);
   // Toggling headlights off while braking keeps rear brake lights lit while shutting down beams, front flares and lenses
   hl.setEnabled(true, true, cam);
   hl.setEnabled(false, true, cam);
@@ -260,16 +284,55 @@ console.log('\n== Weather & time of day');
     hl.isBraking &&
     spots.every((s) => s.intensity === 0) &&
     frontClonedMat.emissiveIntensity === 0 &&
+    rearClonedMat.emissiveIntensity > rearRunningIntensity &&
     frontSprites.every((s) => !s.visible) &&
     rearSprites.every((s) => s.visible) &&
     (rearSprites[0].material as THREE.SpriteMaterial).opacity > 0.7;
   hl.setEnabled(false, false, cam);
   hl.dispose();
-  const originalRestored = frontMesh.material === sharedLight004 && frontMesh2.material === gt3LightMat;
+  const originalRestored =
+    frontMesh.material === sharedLight004 &&
+    rearMesh.material === sharedLight004 &&
+    frontMesh2.material === gt3LightMat &&
+    spanMesh.material === spanLightMat;
   check(
-    'CarHeadlights clones light_004 onto front only, gates per-flare for nose/dash cams and restores on dispose',
-    allForward && clonedAndIsolated && flaresOutsideBody && chaseOk && noseCamOk && frontViewOk && onboardHideOk && restored && originalRestored,
-    `${spots.length} spots, frontZ=${frontSprites[0]?.position.z.toFixed(2)}`,
+    'CarHeadlights clones front/rear lights separately, skips spanning meshes, gates per-flare and restores on dispose',
+    allForward && clonedAndIsolated && measuredPlacementOk && chaseOk && noseCamOk && frontViewOk && onboardHideOk && restored && originalRestored,
+    `${spots.length} spots, frontZ=${frontSprites[0]?.position.z.toFixed(2)}, rearZ=${rearSprites[0]?.position.z.toFixed(2)}`,
+  );
+  // Regression check: rotating a car 45 deg in world space (e.g. diagonal start grid) must NEVER inflate AABB Z bounds
+  // or misclassify front/rear meshes, and high rear wings must not push fallback rear flares backwards.
+  const makeRotatedRig = (yaw: number) => {
+    const root = new THREE.Group();
+    root.position.set(123, 0, -456);
+    root.rotation.y = yaw;
+    const body = new THREE.Group();
+    // Wide, long chassis block at lamp height (2.0 x 0.4 x 4.4 m) + high rear wing extending to z = -2.8 m
+    const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.4, 4.4), new THREE.MeshStandardMaterial({ name: 'paint' }));
+    chassis.position.set(0, 0.65, 0);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.2, 0.4), new THREE.MeshStandardMaterial({ name: 'wing' }));
+    wing.position.set(0, 1.25, -2.6);
+    body.add(chassis, wing);
+    root.add(body);
+    const fallbackHl = new CarHeadlights('unmeasured-fallback' as never, { lightsOnly: true });
+    fallbackHl.attach(root);
+    fallbackHl.setEnabled(true, true);
+    const rearZ = fallbackHl.group.children.find((c): c is THREE.Sprite => c instanceof THREE.Sprite && c.position.z < 0)!.position.z;
+    const frontZ = fallbackHl.group.children.find((c): c is THREE.Sprite => c instanceof THREE.Sprite && c.position.z > 0)!.position.z;
+    fallbackHl.dispose();
+    return { frontZ, rearZ };
+  };
+  const rot0 = makeRotatedRig(0);
+  const rot45 = makeRotatedRig(Math.PI / 4);
+  const rotationInvariantOk =
+    Math.abs(rot0.rearZ - rot45.rearZ) < 1e-4 &&
+    Math.abs(rot0.frontZ - rot45.frontZ) < 1e-4 &&
+    rot45.rearZ > -2.35 &&
+    rot45.frontZ < 2.35;
+  check(
+    'CarHeadlights bounds scan is invariant to 45 deg world yaw and ignores high rear wings',
+    rotationInvariantOk,
+    `yaw0=(${rot0.frontZ.toFixed(2)}, ${rot0.rearZ.toFixed(2)}), yaw45=(${rot45.frontZ.toFixed(2)}, ${rot45.rearZ.toFixed(2)})`,
   );
   check(
     'CarHeadlights illuminates brake lights in daylight while keeping running lights and front beams off',
@@ -334,12 +397,29 @@ console.log('\n== Weather & time of day');
     oppIndependentOfPlayerToggle,
     `nightOff={p:${nightManualOff.player},o:${nightManualOff.opponents}}, rainOff={p:${rainManualOff.player},o:${rainManualOff.opponents}}, dayOn={p:${dayManualOn.player},o:${dayManualOn.opponents}}, wired=${driveSessionWiredOk}`,
   );
-  const sampleCarIds = ['lc26', 'amg-gt3', 'mtr-496r', 'bmw-m1-procar', 'liana'] as const;
+  const allCarIds = [
+    'lc26',
+    'amg-gt3',
+    'bmw-m4-gt3',
+    'mtr-496r',
+    'lc-lmdh',
+    'liana',
+    'nissan-r33-jgtc',
+    'nissan-r32-jtcc',
+    'bmw-m1-procar',
+    'vw-scirocco-gtx',
+    'chaparral-2d',
+    'chaparral-2d-67',
+    'porsche-934-rsr',
+  ] as const;
   check(
-    'Every car class resolves its own valid headlight profile',
-    sampleCarIds.every((id) => headlightProfileFor(id).intensity > 0 && headlightProfileFor(id).distanceM >= 100) &&
-      headlightProfileFor('amg-gt3').halfWidthM > headlightProfileFor('lc26').halfWidthM,
-    `${sampleCarIds.length} classes`,
+    'Every car in the registry resolves a measured headlight and taillight profile',
+    allCarIds.every((id) => {
+      const p = headlightProfileFor(id);
+      const lampsOk = !p.rearLamps || p.rearLamps.every((l) => l.z < -1.5 && l.y > 0.2 && l.y < 1.2);
+      return p.measured === true && p.intensity > 0 && p.distanceM >= 100 && p.frontZM > 1.3 && p.rearZM < -1.5 && lampsOk;
+    }) && headlightProfileFor('amg-gt3').halfWidthM > headlightProfileFor('lc26').halfWidthM,
+    `${allCarIds.length} cars`,
   );
 }
 
