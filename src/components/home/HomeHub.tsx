@@ -22,6 +22,7 @@ import { SupportButton } from "@/components/SupportButton";
 import { day, GAME_FACTS, GRADE_NOTES, type HomeData, type HomeLayout, type HomeVenue, type WhatsNewDay } from "./home-data";
 import { CarThumb, GradeBadge, OutlineThumb } from "./home-ui";
 import { LapMap } from "./LapMap";
+import { HomeDownloads } from "./HomeDownloads";
 import { HomeLapTimes } from "./HomeLapTimes";
 import { PLAY_HREF, rememberPicks, storedPicks } from "./play";
 import { TEXT_LINK } from "./SitePage";
@@ -37,13 +38,14 @@ import { TEXT_LINK } from "./SitePage";
  * and Start drives.
  */
 
-type Tab = "home" | "circuits" | "cars" | "laps" | "whats-new" | "about";
+type Tab = "home" | "circuits" | "cars" | "laps" | "whats-new" | "download" | "about";
 const TABS: { id: Tab; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "circuits", label: "Circuits" },
   { id: "cars", label: "Cars" },
   { id: "laps", label: "Lap times" },
   { id: "whats-new", label: "What's new" },
+  { id: "download", label: "Download" },
   { id: "about", label: "About" },
 ];
 
@@ -597,6 +599,8 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
               </div>
             ) : null}
 
+            {tab === "download" ? <HomeDownloads variant="hub" /> : null}
+
             {tab === "about" ? (
               <div className="grid gap-x-16 gap-y-12 pt-4 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
                 <div className="flex min-w-0 flex-col gap-8">
@@ -679,6 +683,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                   </ul>
                   <div className="flex flex-wrap gap-x-6 gap-y-3 text-[14px]">
                     {[
+                      ["Download apps", withBasePath("/download")],
                       ["All coverage and the press kit", withBasePath("/press")],
                       ["Privacy", withBasePath("/privacy")],
                       ["GitHub", data.repoUrl],
