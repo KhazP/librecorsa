@@ -148,6 +148,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const nameplatesRef = useRef<OverheadNameplatesSink | null>(null);
   /** The drive on the mounted circuit: the scene, the car and the frame loop (created once the container exists) */
   const [session, setSession] = useState<DriveSession | null>(null);
+  const sessionRef = useRef<DriveSession | null>(null);
+  sessionRef.current = session;
   /** The browser gave this page no WebGL context: only a page reload (or a browser restart) can bring it back */
   const [webglRefused, setWebglRefused] = useState(false);
 
@@ -192,6 +194,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     qualityNotice,
     gpuLost,
     nowPlaying,
+    cameraOverride,
   } = useSyncExternalStore(session?.subscribe ?? noSubscribe, session?.getSnapshot ?? (() => idleSnapshot), () => idleSnapshot);
 
   const [aeroPreset, setAeroPreset] =
@@ -233,10 +236,21 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     [settings.liveryId, settings.customLivery]
   );
   const cameraMode: CameraMode = settings.camera ?? "chase";
+  const activeCameraMode: CameraMode = cameraOverride ?? cameraMode;
   const setPreference = useCallback(<K extends keyof PlayerSettings>(key: K, value: PlayerSettings[K]) => {
     setSettings((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
   }, []);
-  const setCameraMode = useCallback((mode: CameraMode) => setPreference("camera", mode), [setPreference]);
+  const setCameraMode = useCallback((mode: CameraMode) => {
+    if (mode === "free") {
+      sessionRef.current?.setCameraOverride("free");
+      return;
+    }
+    sessionRef.current?.setCameraOverride(null);
+    setPreference("camera", mode);
+  }, [setPreference]);
+  const toggleFreeCamera = useCallback(() => {
+    sessionRef.current?.toggleFreeCamera();
+  }, []);
   // The session takes the settings on whenever they change, and once it exists (whichever comes first)
   useEffect(() => {
     session?.applySettings(settings);
@@ -324,7 +338,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [touchVisible, setTouchVisible] = useState(false);
 
   /** The next view in the camera cycle, from the key, the pad, the touch pads and the menus alike */
-  const cycleCamera = useCallback(() => setSettings((prev) => ({ ...prev, camera: nextCameraMode(prev.camera ?? "chase") })), []);
+  const cycleCamera = useCallback(() => {
+    if (sessionRef.current && sessionRef.current.getSnapshot().cameraOverride !== null) {
+      sessionRef.current.setCameraOverride(null);
+      return;
+    }
+    setSettings((prev) => ({ ...prev, camera: nextCameraMode(prev.camera ?? "chase") }));
+  }, []);
 
   // ---- Session and run: the one place that starts, restarts and leaves what is on track (the session resets the run)
   /** A new run re-opens the race results card */
@@ -1678,6 +1698,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const k = settings.keys;
     return {
       camera: first(k.camera),
+      freeCamera: first(k.freeCamera),
       racingLine: first(k.racingLine),
       mute: first(k.mute),
       mouseSteer: first(k.mouseSteer),
@@ -1839,7 +1860,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     pauseNotice,
     aeroPreset,
     assistPreset,
-    cameraMode,
+    cameraMode: activeCameraMode,
+    onSelectCamera: setCameraMode,
+    onToggleFreeCamera: toggleFreeCamera,
     tireCompound,
     selectedLivery,
     showRacingLine,
@@ -2118,7 +2141,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   endS: replayUi.endS,
                   playing: replayUi.playing,
                   speed: replayUi.speed,
-                  cameraLabel: CAMERA_MODES[cameraMode].label,
+                  cameraLabel: CAMERA_MODES[activeCameraMode].label,
                   onTogglePlay: () => session?.replayTogglePlay(),
                   onSeek: (timeS: number) => session?.replaySeek(timeS),
                   onSpeed: (speed: number) => session?.replaySpeed(speed),

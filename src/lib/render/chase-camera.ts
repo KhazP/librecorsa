@@ -1,13 +1,26 @@
 import * as THREE from "three";
+import type { ChaseCameraMode } from "./camera-modes";
 
 const DEG2RAD = Math.PI / 180;
 const TWO_PI = Math.PI * 2;
 
-const BASE_DISTANCE_M = 3.0;
-const BASE_HEIGHT_M = 1.24;
-const PITCH_RAD = -4.0 * DEG2RAD;
-const BASE_FOV_DEG = 60;
-const SPEED_FOV_ADD_DEG = 8;
+export interface ChaseCameraPreset {
+  readonly baseDistanceM: number;
+  readonly baseHeightM: number;
+  readonly pitchDeg: number;
+  readonly baseFovDeg: number;
+  readonly speedFovAddDeg: number;
+}
+
+/** Tuning per chase camera angle (`chase` preserves the original defaults bit-for-bit) */
+export const CHASE_CAMERA_PRESETS: Readonly<Record<ChaseCameraMode, ChaseCameraPreset>> = {
+  chase_close: { baseDistanceM: 1.95, baseHeightM: 0.98, pitchDeg: -3.5, baseFovDeg: 62, speedFovAddDeg: 7.5 },
+  chase: { baseDistanceM: 3.0, baseHeightM: 1.24, pitchDeg: -4.0, baseFovDeg: 60, speedFovAddDeg: 8 },
+  chase_far: { baseDistanceM: 4.9, baseHeightM: 1.88, pitchDeg: -6.5, baseFovDeg: 58, speedFovAddDeg: 8 },
+  chase_low: { baseDistanceM: 2.4, baseHeightM: 0.56, pitchDeg: -1.0, baseFovDeg: 64, speedFovAddDeg: 7 },
+};
+
+const BASE_FOV_DEG = CHASE_CAMERA_PRESETS.chase.baseFovDeg;
 const BOOST_FOV_ADD_DEG = 3.5;
 const BOOST_EXTRA_DIST_M = 0.24;
 /** High-pass cutoff (Hz) on the vertical G: steady aerodynamic downforce (up to ~3.5 G at 320 km/h) would otherwise
@@ -112,13 +125,16 @@ export class DynamicChaseCamera {
   private rollAdd = 0;
   private boostExtraDist = 0;
   private fovDeg = BASE_FOV_DEG;
+  private presetDistM = CHASE_CAMERA_PRESETS.chase.baseDistanceM;
+  private presetHeightM = CHASE_CAMERA_PRESETS.chase.baseHeightM;
+  private presetPitchRad = CHASE_CAMERA_PRESETS.chase.pitchDeg * DEG2RAD;
   private prevRawVertG = 0;
   private hpfVertG = 0;
   private initialised = false;
   /** Where the car was at the last update, to notice frames this camera missed (another camera was on) */
   private readonly lastCarPos = new THREE.Vector3();
 
-  update(dt: number, input: ChaseCameraInput): ChaseCameraOutput {
+  update(dt: number, input: ChaseCameraInput, preset: ChaseCameraPreset = CHASE_CAMERA_PRESETS.chase): ChaseCameraOutput {
     const out = this.out;
     const h = dt > 0 && Number.isFinite(dt) ? Math.min(dt, 0.05) : 0;
 
@@ -138,7 +154,7 @@ export class DynamicChaseCamera {
     else this.carRightFlat.set(-this.carDirFlat.z, 0, this.carDirFlat.x);
 
     const halfWheelbaseM = input.wheelbaseM * 0.5;
-    const distance = BASE_DISTANCE_M + halfWheelbaseM;
+    const targetPitchRad = preset.pitchDeg * DEG2RAD;
     const lonG = finiteOr(input.longitudinalG, 0);
     const latG = finiteOr(input.lateralG, 0);
     const rawVertG = finiteOr(input.verticalG, 1) - 1;
@@ -152,7 +168,10 @@ export class DynamicChaseCamera {
       this.camPitch = Math.asin(clamp(this.carForward.y, -1, 1));
       this.camDirFlat.copy(this.carDirFlat);
       this.boostExtraDist = input.manualOverrideActive ? BOOST_EXTRA_DIST_M : 0;
-      this.fovDeg = BASE_FOV_DEG;
+      this.fovDeg = preset.baseFovDeg;
+      this.presetDistM = preset.baseDistanceM;
+      this.presetHeightM = preset.baseHeightM;
+      this.presetPitchRad = targetPitchRad;
       this.prevRawVertG = rawVertG;
       this.hpfVertG = 0;
       this.carAccel.set(0, 0, 0);
@@ -162,6 +181,10 @@ export class DynamicChaseCamera {
     }
 
     if (h > 0) {
+      const aPreset = blend(10 / 60, h);
+      this.presetDistM += (preset.baseDistanceM - this.presetDistM) * aPreset;
+      this.presetHeightM += (preset.baseHeightM - this.presetHeightM) * aPreset;
+      this.presetPitchRad += (targetPitchRad - this.presetPitchRad) * aPreset;
       const aHp = VERT_G_HPF_RC / (VERT_G_HPF_RC + h);
       this.hpfVertG = aHp * (this.hpfVertG + rawVertG - this.prevRawVertG);
       this.prevRawVertG = rawVertG;
@@ -171,6 +194,8 @@ export class DynamicChaseCamera {
       this.carVelocity.lerp(this.carVelocityRaw, blend(8 / 60, h));
       this.carSpeedSmooth += (this.carVelocityRaw.length() - this.carSpeedSmooth) * blend(32 / 60, h);
     }
+
+    const distance = this.presetDistM + halfWheelbaseM;
 
     // Pitch with the car's climb or dive; at a crawl, follow the nose rather than the (noisy) velocity
     const speedGate = clamp01(this.carSpeedSmooth - 1);
@@ -212,7 +237,7 @@ export class DynamicChaseCamera {
     const boostTarget = input.manualOverrideActive ? BOOST_EXTRA_DIST_M : 0;
     this.boostExtraDist += (boostTarget - this.boostExtraDist) * blend(8 / 60, h);
     const boomM = distance + (Math.sin(Math.atan(1.5 * this.carAccel.z - 0.258)) + 0.25) * 0.35 + this.boostExtraDist;
-    const height = BASE_HEIGHT_M + boomM * Math.tan(-PITCH_RAD);
+    const height = this.presetHeightM + boomM * Math.tan(-this.presetPitchRad);
     const heaveM = clamp(
       Math.sin(Math.atan(-this.carAccel.y)) * 0.32 + Math.sin(Math.atan(-this.carAccelFast.y)) * 0.08 * (this.carSpeedSmooth / 30),
       -VERT_FX_LIMIT_M,
@@ -237,7 +262,7 @@ export class DynamicChaseCamera {
       .addScaledVector(this.carRight, lateralSwayM);
 
     const heavePitchRad = -Math.atan(heaveM / Math.max(0.5, boomM + halfWheelbaseM));
-    this.cameraDir.applyAxisAngle(this.cameraRight, heavePitchRad + PITCH_RAD).normalize();
+    this.cameraDir.applyAxisAngle(this.cameraRight, heavePitchRad + this.presetPitchRad).normalize();
     out.lookAt.copy(out.position).addScaledVector(this.cameraDir, 15);
 
     // Horizon tilt: about 1° under sustained lateral G, blended toward the car's up on heavy banking
@@ -246,7 +271,7 @@ export class DynamicChaseCamera {
     out.up.normalize();
 
     const speedNorm = clamp01((this.carSpeedSmooth * 3.6) / 350);
-    const fovTarget = BASE_FOV_DEG + speedNorm * SPEED_FOV_ADD_DEG + (input.manualOverrideActive ? BOOST_FOV_ADD_DEG : 0);
+    const fovTarget = preset.baseFovDeg + speedNorm * preset.speedFovAddDeg + (input.manualOverrideActive ? BOOST_FOV_ADD_DEG : 0);
     this.fovDeg += (fovTarget - this.fovDeg) * blend(10 / 60, h);
     out.fovDeg = this.fovDeg;
     return out;

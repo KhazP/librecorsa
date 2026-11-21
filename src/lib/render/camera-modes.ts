@@ -40,9 +40,42 @@ export interface CameraModeSpec {
 }
 
 export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
+  chase_close: {
+    label: "Chase close",
+    blurb: "Tight behind the car",
+    anchor: null,
+    driverEye: false,
+    driverHead: false,
+    wheelInShot: false,
+    playerFov: false,
+    interiorAudio: false,
+    virtualMirror: "onRequest",
+  },
   chase: {
     label: "Chase",
     blurb: "Behind the car",
+    anchor: null,
+    driverEye: false,
+    driverHead: false,
+    wheelInShot: false,
+    playerFov: false,
+    interiorAudio: false,
+    virtualMirror: "onRequest",
+  },
+  chase_far: {
+    label: "Chase far",
+    blurb: "Wide behind the car",
+    anchor: null,
+    driverEye: false,
+    driverHead: false,
+    wheelInShot: false,
+    playerFov: false,
+    interiorAudio: false,
+    virtualMirror: "onRequest",
+  },
+  chase_low: {
+    label: "Chase low",
+    blurb: "Low behind the rear wing",
     anchor: null,
     driverEye: false,
     driverHead: false,
@@ -124,15 +157,46 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     interiorAudio: false,
     virtualMirror: "never",
   },
+  free: {
+    label: "Free camera",
+    blurb: "Fly anywhere around the circuit",
+    anchor: null,
+    driverEye: false,
+    driverHead: false,
+    wheelInShot: false,
+    playerFov: false,
+    interiorAudio: false,
+    virtualMirror: "never",
+  },
 };
 
 export const ALL_CAMERA_MODES = Object.keys(CAMERA_MODES) as CameraMode[];
 
+/** Chase camera modes handled by DynamicChaseCamera presets */
+export type ChaseCameraMode = "chase_close" | "chase" | "chase_far" | "chase_low";
+
+export const isChaseCameraMode = (mode: CameraMode): mode is ChaseCameraMode =>
+  mode === "chase_close" || mode === "chase" || mode === "chase_far" || mode === "chase_low";
+
+/** Driving views offered as a saved default camera (excludes transient Free camera) */
+export const DRIVING_CAMERA_MODES: readonly CameraMode[] = ALL_CAMERA_MODES.filter((m) => m !== "free");
+
 export const isCameraMode = (value: unknown): value is CameraMode =>
   typeof value === "string" && Object.hasOwn(CAMERA_MODES, value);
 
-/** Views the camera key (and the pause menu's camera button) cycles through */
-export const CAMERA_CYCLE: readonly CameraMode[] = ["cockpit", "dash", "tv_pod", "chase", "tv_side"];
+export const isDrivingCameraMode = (value: unknown): value is CameraMode =>
+  isCameraMode(value) && value !== "free";
+
+/** Views the camera key (and the pause menu's camera cycle) steps through */
+export const CAMERA_CYCLE: readonly CameraMode[] = [
+  "cockpit",
+  "dash",
+  "tv_pod",
+  "chase_close",
+  "chase",
+  "chase_far",
+  "tv_side",
+];
 
 /** Views the setup screen offers to start in */
 export const STARTING_CAMERAS: readonly CameraMode[] = ["cockpit", "tv_pod", "chase"];

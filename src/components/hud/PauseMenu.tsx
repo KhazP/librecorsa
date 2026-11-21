@@ -33,7 +33,8 @@ import { focusInZone, focusOnHover, focusZone, useFocusNav } from "@/components/
 import { useInputMode } from "@/components/menu/input-mode";
 import { TrackQualityBadge } from "@/components/menu/menu-content-ui";
 import { HeroAction, RailRow, RESET_ROW_PROMPT, ShellPrompts, usePanelReadingOrder, useRowResettable } from "@/components/menu/menu-shell";
-import { Button, Card, SettingRow, Tabs, Toggle } from "@/components/ui";
+import { Button, Card, Select, SettingRow, Tabs, Toggle } from "@/components/ui";
+import { CAMERA_MODES, DRIVING_CAMERA_MODES } from "@/lib/render/camera-modes";
 import { HUD_TOUCH_NOTE, HudLayoutPicker } from "@/components/settings/HudLayoutPicker";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { usePhoneLayout } from "./styles/PhoneHud";
@@ -115,6 +116,8 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   onChangeAeroPreset: (preset: AeroSetupPreset) => void;
   onChangeAssistPreset: (preset: DriverAssistPreset) => void;
   onCycleCamera: () => void;
+  onSelectCamera?: (mode: CameraMode) => void;
+  onToggleFreeCamera?: () => void;
   onChangeTireCompound: (compound: TireCompound) => void;
   onChangeTyreSetup: (setup: TyreSetup) => void;
   /** Engineer's garage: chassis offsets from the car's baseline, and the electronics' dials */
@@ -144,7 +147,7 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   musicMuted?: boolean;
   onToggleMusicMute?: () => void;
   /** Key names for the hints on the toggles (defaults: the original layout) */
-  keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown", string>>;
+  keyNames?: Partial<Record<"camera" | "freeCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown", string>>;
   /** HUD layout, graphics, touch controls and VR */
   displayPanel?: DisplayPanelProps;
   /** Lap times, ghosts and the online board */
@@ -475,11 +478,49 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
  */
 export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
   const mpRace = p.telemetry.race?.multiplayer === true || p.raceRunning === true;
+  const cameraOptions = useMemo(
+    () => DRIVING_CAMERA_MODES.map((id) => ({ id, label: CAMERA_MODES[id].label, detail: CAMERA_MODES[id].blurb })),
+    []
+  );
+  const savedCamera: CameraMode = p.cameraMode === "free" ? (p.settings?.camera ?? "chase") : p.cameraMode;
   const autopilot = (
     <SettingRow label="Autopilot" hint={`Key ${p.keyNames?.autopilot ?? "P"}`}>
       <Toggle checked={p.telemetry.aiAutopilot} onChange={() => p.onToggleAiAutopilot()} />
     </SettingRow>
   );
+  const cameraCard =
+    p.onSelectCamera || p.onToggleFreeCamera ? (
+      <Card title="Camera">
+        {p.onSelectCamera ? (
+          <SettingRow label="Camera view" hint={`Cycle: ${p.keyNames?.camera ?? "C"}`}>
+            <Select
+              aria-label="Camera view"
+              options={cameraOptions}
+              value={savedCamera}
+              onChange={(mode) => p.onSelectCamera?.(mode)}
+            />
+          </SettingRow>
+        ) : null}
+        {p.onToggleFreeCamera ? (
+          <SettingRow
+            label="Free camera"
+            hint={`Key ${p.keyNames?.freeCamera ?? "F7"} · Drag look, WASD fly, Q/E height`}
+          >
+            <Button
+              size="sm"
+              variant={p.cameraMode === "free" ? "primary" : "secondary"}
+              icon={<Icon name="camera" size="sm" />}
+              onClick={() => {
+                p.onToggleFreeCamera?.();
+                p.onTogglePause();
+              }}
+            >
+              {p.cameraMode === "free" ? "Exit free cam" : "Free camera"}
+            </Button>
+          </SettingRow>
+        ) : null}
+      </Card>
+    ) : null;
   const rules = !p.onChangeRaceSetup ? (
     <Card title="Session">{autopilot}</Card>
   ) : (
@@ -496,11 +537,10 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
       extraFieldRows={autopilot}
     />
   );
-  // `?perf=1`: the performance report comes first, where the player lands on pausing
-  if (!p.perfReport) return rules;
   return (
     <div className="flex flex-col gap-3">
-      <PerfReportCard report={p.perfReport} />
+      {p.perfReport ? <PerfReportCard report={p.perfReport} /> : null}
+      {cameraCard}
       {rules}
     </div>
   );

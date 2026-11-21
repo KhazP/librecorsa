@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { type BuiltTrackData, getActiveTrackData, inDeadZone, type RawTrackJson, setActiveTrack } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { CameraRig, type CameraRigFrame, type CameraRigMenu } from '../src/lib/render/camera-rig';
-import { ALL_CAMERA_MODES, CAMERA_MODES } from '../src/lib/render/camera-modes';
+import { ALL_CAMERA_MODES, CAMERA_CYCLE, CAMERA_MODES, isDrivingCameraMode } from '../src/lib/render/camera-modes';
 import type { CameraMode } from '../src/types/f1';
 
 let passed = 0;
@@ -289,6 +289,52 @@ check('the aerial rises from the car, cuts back to it on input, holds still unde
   assert.ok(rain < clear * 0.75, `rain ${rain.toFixed(0)} m against clear ${clear.toFixed(0)} m`);
   rig.update(frame('chase'));
   assert.ok(!rig.aerialUp && !camera.view?.enabled, 'on track: no aerial, no view offset');
+});
+
+check('camera cycle includes chase_close and chase_far while keeping free, chase_low, helicopter, nose, shoulder outside C cycle', () => {
+  assert.ok(CAMERA_CYCLE.includes('chase_close'));
+  assert.ok(CAMERA_CYCLE.includes('chase'));
+  assert.ok(CAMERA_CYCLE.includes('chase_far'));
+  assert.ok(!CAMERA_CYCLE.includes('chase_low'));
+  assert.ok(!CAMERA_CYCLE.includes('free'));
+  assert.ok(!CAMERA_CYCLE.includes('helicopter'));
+  assert.ok(!isDrivingCameraMode('free'), 'free camera is never persisted as default driving camera');
+  assert.ok(isDrivingCameraMode('chase_close') && isDrivingCameraMode('chase_low'));
+});
+
+check('free camera spawns framing the car, flies with input, clamps to ground, adjusts FOV/speed, and resets cleanly', () => {
+  const { camera, rig, car, frame } = setup();
+  rig.update(frame('free'));
+  const spawned = camera.position.clone();
+  const spawnDist = spawned.distanceTo(car.worldPosition);
+  assert.ok(spawnDist > 4 && spawnDist < 11, `free cam spawned ${spawnDist.toFixed(2)} m from car`);
+
+  // Fly forward and up
+  for (let i = 0; i < 30; i++) {
+    rig.update(frame('free', { freeInput: { forward: 1, right: 0, up: 0.5, fast: true, slow: false } }));
+  }
+  assert.ok(camera.position.distanceTo(spawned) > 10, 'free cam moves under flight input');
+
+  // Ground clearance clamp
+  for (let i = 0; i < 40; i++) {
+    rig.update(frame('free', { freeInput: { forward: 0, right: 0, up: -1, fast: true, slow: false }, freeMinY: 5.0 }));
+  }
+  assert.ok(camera.position.y >= 4.99, `ground clamp holds y=${camera.position.y.toFixed(2)} >= 5.0`);
+
+  // Look, speed and FOV adjustments
+  const beforeQ = camera.quaternion.clone();
+  rig.freeCamera.lookDelta(0.5, 0.2);
+  rig.freeCamera.adjustFov(-10);
+  rig.freeCamera.adjustSpeed(2);
+  rig.update(frame('free'));
+  assert.ok(camera.quaternion.angleTo(beforeQ) > 0.3, 'lookDelta rotates camera');
+  assert.ok(Math.abs(camera.fov - 45) < 1e-3, `FOV adjusted to ${camera.fov}`);
+  assert.ok(rig.freeCamera.moveSpeedMs > 30, 'speed scaled');
+
+  // Reset returns near car
+  rig.freeCamera.reset();
+  rig.update(frame('free'));
+  assert.ok(camera.position.distanceTo(spawned) < 1e-4, 'reset respawns near target car');
 });
 
 console.log(`\n${passed} camera rig checks passed`);

@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { SegmentOccluder } from "./segment-occluder";
-import { carJumped, type ChaseCameraInput, DynamicChaseCamera } from "./chase-camera";
-import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG } from "./camera-modes";
+import { carJumped, CHASE_CAMERA_PRESETS, type ChaseCameraInput, DynamicChaseCamera } from "./chase-camera";
+import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG, isChaseCameraMode } from "./camera-modes";
+import { FreeCameraController, type FreeCameraInput } from "./free-camera";
 import { clampFov } from "@/lib/settings/player-settings";
 import type { CameraMode, CarTelemetry, TrackSamplePoint } from "@/types/f1";
 import type { BuiltTrackData } from "@/lib/track-data";
@@ -595,6 +596,10 @@ export interface CameraRigFrame {
   inVr: boolean;
   /** In the menus: the attract orbit (closer on the car-select step), framed for a viewport of width × height */
   menu: CameraRigMenu | null;
+  /** Optional fly-camera controls when `mode === "free"` */
+  freeInput?: FreeCameraInput;
+  /** Minimum world Y height for the free camera (optional ground clearance) */
+  freeMinY?: number;
 }
 
 export interface CameraRigMenu {
@@ -631,6 +636,8 @@ export class CameraRig {
   private readonly shakeEuler = new THREE.Euler();
   private readonly anchorPitch = new THREE.Quaternion();
   private readonly chaseCamera = new DynamicChaseCamera();
+  /** Fly-around free camera, usable while driving or watching replays */
+  readonly freeCamera = new FreeCameraController();
   private readonly chaseInput: ChaseCameraInput = {
     carPos: new THREE.Vector3(),
     carQuaternion: new THREE.Quaternion(),
@@ -697,6 +704,7 @@ export class CameraRig {
   reset(): void {
     this.cockpitShake.reset();
     this.chaseCamera.reset();
+    this.freeCamera.reset();
     this.tvDirector.reset();
     this.heliSnap = true;
   }
@@ -748,7 +756,7 @@ export class CameraRig {
         camera.fov = targetOnboardFov;
         camera.updateProjectionMatrix();
       }
-    } else if (mode === "chase") {
+    } else if (isChaseCameraMode(mode)) {
       const chaseInput = this.chaseInput;
       chaseInput.carPos = renderCarPos;
       chaseInput.carQuaternion = physics.worldQuaternion;
@@ -761,12 +769,24 @@ export class CameraRig {
       chaseInput.rideHeightOffsetM = physics.rideHeightOffsetM;
       chaseInput.kerbShakeM = kerbShake;
       chaseInput.manualOverrideActive = physics.telemetry.manualOverrideActive;
-      const chase = this.chaseCamera.update(dtSeconds, chaseInput);
+      const chase = this.chaseCamera.update(dtSeconds, chaseInput, CHASE_CAMERA_PRESETS[mode]);
       camera.position.copy(chase.position);
       camera.up.copy(chase.up);
       camera.lookAt(chase.lookAt);
       camera.fov = chase.fovDeg;
       camera.updateProjectionMatrix();
+    } else if (mode === "free") {
+      if (!this.freeCamera.initialised) {
+        this.freeCamera.spawnNear(renderCarPos, physics.worldQuaternion);
+      }
+      const free = this.freeCamera.update(dtSeconds, f.freeInput, f.freeMinY);
+      camera.position.copy(free.position);
+      camera.up.set(0, 1, 0);
+      camera.quaternion.copy(free.quaternion);
+      if (camera.fov !== free.fovDeg) {
+        camera.fov = free.fovDeg;
+        camera.updateProjectionMatrix();
+      }
     } else if (mode === "tv_pod") {
       // Broadcast Roll-Hoop T-Cam mounted at front lens of T-Cam pod looking down over painted helmet #16, butterfly wheel + gloved hand, Halo arch, mirrors, wheel brows & nose cone
       camera.position

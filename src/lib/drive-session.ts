@@ -88,6 +88,8 @@ import {
 } from "@/lib/sim/wet-tyres";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG } from "@/lib/render/camera-modes";
+import type { FreeCameraInput } from "@/lib/render/free-camera";
+import { createGroundHit } from "@/lib/sim/f12026-car/TrackColliderQuery";
 import { OnboardViews } from "@/lib/render/onboard-views";
 import { isNudgeView, NUDGE_FOV_STEP_DEG, nudgeStepForKey, stepNudge } from "@/lib/settings/camera-nudges";
 import { loadTyreSetup } from "@/lib/sim/tyre-setup";
@@ -315,6 +317,8 @@ export interface DriveSnapshot {
   gpuLost: GpuLoss | null;
   /** The music track playing, as last announced (the toast shows each new one, the pause menu names it) */
   nowPlaying: NowPlaying | null;
+  /** Transient camera override (e.g. "free" fly camera) that does not overwrite the player's saved default camera */
+  cameraOverride: CameraMode | null;
 }
 
 /** A lost WebGL context: whether the page was hidden at the time, and where the player was */
@@ -356,6 +360,7 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
     qualityNotice: null,
     gpuLost: null,
     nowPlaying: null,
+    cameraOverride: null,
   };
 }
 
@@ -560,6 +565,12 @@ export class DriveSession {
   readonly exitReplay: () => void;
   /** Resumes driving from the scrubbed replay timestamp (Practice & regular AI races only; invalidates current lap) */
   readonly flashbackReplay: () => boolean;
+  /** Sets or clears a transient camera override (e.g. Free camera) without persisting to settings */
+  readonly setCameraOverride: (mode: CameraMode | null) => void;
+  /** Toggles Free camera on/off without altering the player's saved driving view */
+  readonly toggleFreeCamera: () => void;
+  /** Repositions Free camera near the currently focused car */
+  readonly resetFreeCamera: () => void;
   /** polish:B the podium shot after a race, and the overlay's view of it */
   readonly podium: PodiumDirector;
 
@@ -663,6 +674,18 @@ export class DriveSession {
     let mouseSteerValue = 0;
     /** Typed "/boost" so far */
     let slashCommandBuffer = "";
+    /** Transient camera override (e.g. Free camera); never persisted to saved settings */
+    let cameraOverride: CameraMode | null = null;
+    const freeCamKeys = new Set<string>();
+    let freeCamDrag: { id: number; x: number; y: number } | null = null;
+    const freeCamInput: FreeCameraInput = { forward: 0, right: 0, up: 0, fast: false, slow: false, lookYawRate: 0, lookPitchRate: 0 };
+    const freeCamGroundHit = createGroundHit();
+    const FREE_CAM_MOVE_CODES = new Set([
+      "KeyW", "KeyS", "KeyA", "KeyD",
+      "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+      "KeyQ", "KeyE", "Space", "ControlLeft", "ControlRight",
+      "ShiftLeft", "ShiftRight", "AltLeft", "AltRight",
+    ]);
     /** Lets go of every held driving key: on pause, and when the window loses focus (its keyups never arrive) */
     const releaseHeldKeys = () => {
       for (const flag of Object.values(HELD_KEYS)) heldKeys[flag] = false;
@@ -672,6 +695,8 @@ export class DriveSession {
       kbInput.clutch = 0;
       kbInput.padClutch = 0;
       kbPedalAssist.reset();
+      freeCamKeys.clear();
+      freeCamDrag = null;
     };
     this.togglePause = () => {
       if (disposed) return;
@@ -685,6 +710,10 @@ export class DriveSession {
     this.endPause = () => this.publish({ paused: false, pauseNotice: null, seatPanel: false });
     this.openSeatPanel = () => {
       if (disposed || this.snapshot.seatPanel || appPhaseNow !== "driving") return;
+      if (cameraOverride !== null) {
+        cameraOverride = null;
+        this.publish({ cameraOverride: null });
+      }
       // The seat moves the views from the driver's seat: from any other view the panel starts in the cockpit
       if (!isNudgeView(settings.camera)) setSettings((prev) => ({ ...prev, camera: "cockpit" }));
       this.publish({ seatPanel: true, paused: false });
@@ -1034,6 +1063,7 @@ export class DriveSession {
       qualityNotice: null,
       gpuLost: null,
       nowPlaying: sharedMusic().current,
+      cameraOverride: null,
     };
 
     /**
@@ -1729,6 +1759,75 @@ export class DriveSession {
     /** The camera key's hold timer (a hold opens the seat panel) and the pad camera button's press time */
     let cameraKeyHold: number | null = null;
     let padCameraHeldSinceMs: number | null = null;
+    this.setCameraOverride = (next: CameraMode | null) => {
+      if (disposed) return;
+      if (cameraOverride === next) return;
+      cameraOverride = next;
+      if (next === "free") {
+        cameraRig.freeCamera.reset();
+        releaseHeldKeys();
+      } else {
+        freeCamKeys.clear();
+        freeCamDrag = null;
+      }
+      this.publish({ cameraOverride: next });
+    };
+    this.toggleFreeCamera = () => {
+      if (disposed) return;
+      this.setCameraOverride(cameraOverride === "free" ? null : "free");
+    };
+    this.resetFreeCamera = () => {
+      if (!disposed) cameraRig.freeCamera.reset();
+    };
+
+    const isFreeCamInteractive = () =>
+      cameraOverride === "free" &&
+      appPhaseNow === "driving" &&
+      !this.snapshot.paused &&
+      !this.snapshot.seatPanel &&
+      !podium.playing;
+
+    const onFreeCamPointerDown = (e: PointerEvent) => {
+      if (!isFreeCamInteractive()) return;
+      if (e.button !== 0 && e.button !== 2) return;
+      freeCamDrag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      try {
+        renderer.domElement.setPointerCapture(e.pointerId);
+      } catch {
+        // Ignore capture failure on synthetic events
+      }
+    };
+    const onFreeCamPointerMove = (e: PointerEvent) => {
+      if (!freeCamDrag || e.pointerId !== freeCamDrag.id) return;
+      if (!isFreeCamInteractive()) {
+        freeCamDrag = null;
+        return;
+      }
+      const dx = e.clientX - freeCamDrag.x;
+      const dy = e.clientY - freeCamDrag.y;
+      freeCamDrag.x = e.clientX;
+      freeCamDrag.y = e.clientY;
+      cameraRig.freeCamera.lookDelta(-dx * 0.0042, -dy * 0.0042);
+    };
+    const onFreeCamPointerUp = (e: PointerEvent) => {
+      if (freeCamDrag && e.pointerId === freeCamDrag.id) freeCamDrag = null;
+    };
+    const onFreeCamWheel = (e: WheelEvent) => {
+      if (!isFreeCamInteractive()) return;
+      e.preventDefault();
+      if (e.altKey) cameraRig.freeCamera.adjustFov(e.deltaY > 0 ? 2 : -2);
+      else cameraRig.freeCamera.adjustSpeed(e.deltaY < 0 ? 1.18 : 1 / 1.18);
+    };
+    const onFreeCamContextMenu = (e: MouseEvent) => {
+      if (isFreeCamInteractive()) e.preventDefault();
+    };
+    renderer.domElement.addEventListener("pointerdown", onFreeCamPointerDown);
+    renderer.domElement.addEventListener("pointermove", onFreeCamPointerMove);
+    renderer.domElement.addEventListener("pointerup", onFreeCamPointerUp);
+    renderer.domElement.addEventListener("pointercancel", onFreeCamPointerUp);
+    renderer.domElement.addEventListener("wheel", onFreeCamWheel, { passive: false });
+    renderer.domElement.addEventListener("contextmenu", onFreeCamContextMenu);
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
@@ -1755,6 +1854,25 @@ export class DriveSession {
         return;
       }
       if (this.snapshot.paused) return;
+
+      // Free camera mode: capture flight keys, R to reset near car, and [ / ] for FOV while keeping global hotkeys working
+      if (cameraOverride === "free") {
+        if (code === "KeyR") {
+          e.preventDefault();
+          if (!e.repeat) cameraRig.freeCamera.reset();
+          return;
+        }
+        if (code === "BracketLeft" || code === "BracketRight") {
+          e.preventDefault();
+          cameraRig.freeCamera.adjustFov(code === "BracketLeft" ? -2 : 2);
+          return;
+        }
+        if (FREE_CAM_MOVE_CODES.has(code)) {
+          e.preventDefault();
+          freeCamKeys.add(code);
+          return;
+        }
+      }
 
       // Alt + arrows, − / = (Page Up / Down) and [ / ] move the cockpit or dash view, saved for this car; Alt + 0 puts
       // it back. Nothing else sees a key pressed with Alt (the arrows don't drive, Alt + ← / → don't leave the page),
@@ -1864,6 +1982,9 @@ export class DriveSession {
         case "camera":
           cycleCamera();
           break;
+        case "freeCamera":
+          this.toggleFreeCamera();
+          break;
         case "racingLine":
           handleToggleRacingLine();
           break;
@@ -1923,6 +2044,7 @@ export class DriveSession {
       }
       cameraNudgeCodes.delete(e.code);
       boundAltsHeld.delete(e.code);
+      freeCamKeys.delete(e.code);
       const action = keyLookup.get(e.code);
       if (action === "camera" && cameraKeyHold !== null) {
         window.clearTimeout(cameraKeyHold);
@@ -2506,26 +2628,27 @@ export class DriveSession {
       // The pause menu, the seat panel or a lost GPU context: the car waits
       const frozen = this.snapshot.paused || this.snapshot.seatPanel || gpuLost;
       const driving = !inMenu && !frozen && !replaying && !device.wheelLost;
+      const freeCamControl = !inMenu && !frozen && !podium.playing && cameraOverride === "free";
       wakeLock.setDesired(driving);
       const padTuning = settingsNow.padTuning;
       const kbTuning = settingsNow.keyboardTuning;
       const isPad = device.source === "controller";
-      const gamepadThrottle = driving ? (isPad ? Math.pow(device.throttle, padTuning.throttleGamma) : device.throttle) : 0;
-      const gamepadBrake = driving ? (isPad ? Math.pow(device.brake, padTuning.brakeGamma) : device.brake) : 0;
-      const gamepadSteer = device.analogSteer;
+      const gamepadThrottle = driving && !freeCamControl ? (isPad ? Math.pow(device.throttle, padTuning.throttleGamma) : device.throttle) : 0;
+      const gamepadBrake = driving && !freeCamControl ? (isPad ? Math.pow(device.brake, padTuning.brakeGamma) : device.brake) : 0;
+      const gamepadSteer = freeCamControl ? undefined : device.analogSteer;
       // The whole curve the setup screen previews (inner and outer dead zone, then linearity), here once: the assist
       // used to apply the inner dead zone after the curve, and without the assist it was never applied
       const padStick =
-        device.padSteer === undefined
+        freeCamControl || device.padSteer === undefined
           ? undefined
           : shapeStick(device.padSteer, padTuning.deadzone, padTuning.outerDeadzone, padTuning.linearity);
       // The gyro steers only while driving, added to the stick so either one (or both) steers through the same assist.
       // The pad's lean as the car is handed back (the start, unpausing, the seat panel closed) is straight ahead
       if (driving && !gyroWasDriving) gyroSource.recentre();
-      const gyroStick = driving && gyroWasDriving ? device.gyroSteer : undefined;
+      const gyroStick = driving && !freeCamControl && gyroWasDriving ? device.gyroSteer : undefined;
       gyroWasDriving = driving;
       const gamepadStick = padStick === undefined ? undefined : combineStickAndGyro(padStick, gyroStick);
-      const gamepadBoost = driving && device.boostHeld;
+      const gamepadBoost = driving && !freeCamControl && device.boostHeld;
       // With the GPU lost the notice over the game has the buttons: the pad's Menu must not open the pause menu under it
       if (!inMenu && !gpuLost) {
         for (const action of device.pressed) {
@@ -3354,7 +3477,7 @@ export class DriveSession {
 
       // The menus film the car from outside, whatever the player's camera is
       const inVr = renderer.xr.isPresenting;
-      const mode: CameraMode = inMenu || podium.playing ? "chase" : inVr ? "cockpit" : (settings.camera ?? "chase");
+      const mode: CameraMode = inMenu || podium.playing ? "chase" : inVr ? "cockpit" : (cameraOverride ?? settings.camera ?? "chase");
       const view = CAMERA_MODES[mode];
       const lc26Cams = carRig.getCameraAnchors();
       const carFovDeg = lc26Cams ? lc26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
@@ -3454,6 +3577,41 @@ export class DriveSession {
 
         floorSparks.update(drawDtS, driving && rigModel(carRigCar).floorSparks ? physics : null);
 
+        let freeMinY: number | undefined;
+        if (mode === "free") {
+          let fwd = (freeCamKeys.has("KeyW") || freeCamKeys.has("ArrowUp") ? 1 : 0) - (freeCamKeys.has("KeyS") || freeCamKeys.has("ArrowDown") ? 1 : 0);
+          let right = (freeCamKeys.has("KeyD") || freeCamKeys.has("ArrowRight") ? 1 : 0) - (freeCamKeys.has("KeyA") || freeCamKeys.has("ArrowLeft") ? 1 : 0);
+          let up = (freeCamKeys.has("KeyE") || freeCamKeys.has("Space") ? 1 : 0) - (freeCamKeys.has("KeyQ") || freeCamKeys.has("ControlLeft") || freeCamKeys.has("ControlRight") ? 1 : 0);
+          let lookYaw = 0;
+          let lookPitch = 0;
+          const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : [];
+          for (const pad of pads) {
+            if (!pad || !pad.connected) continue;
+            const dz = (v: number) => (Math.abs(v) > 0.14 ? v : 0);
+            right += dz(pad.axes[0] ?? 0);
+            fwd -= dz(pad.axes[1] ?? 0);
+            lookYaw -= dz(pad.axes[2] ?? 0) * 2.0;
+            lookPitch -= dz(pad.axes[3] ?? 0) * 1.5;
+            const rt = pad.buttons[7]?.value ?? 0;
+            const lt = pad.buttons[6]?.value ?? 0;
+            if (rt > 0.1) up += rt;
+            if (lt > 0.1) up -= lt;
+            break;
+          }
+          freeCamInput.forward = THREE.MathUtils.clamp(fwd, -1, 1);
+          freeCamInput.right = THREE.MathUtils.clamp(right, -1, 1);
+          freeCamInput.up = THREE.MathUtils.clamp(up, -1, 1);
+          freeCamInput.fast = freeCamKeys.has("ShiftLeft") || freeCamKeys.has("ShiftRight");
+          freeCamInput.slow = freeCamKeys.has("AltLeft") || freeCamKeys.has("AltRight");
+          freeCamInput.lookYawRate = lookYaw;
+          freeCamInput.lookPitchRate = lookPitch;
+          if (cameraRig.freeCamera.initialised && physics.groundQuery) {
+            const p = cameraRig.freeCamera.position;
+            if (physics.groundQuery.query(p.x, p.z, p.y + 4, freeCamGroundHit)) {
+              freeMinY = freeCamGroundHit.height + 0.35;
+            }
+          }
+        }
         if (!podium.placeCamera(camera)) cameraRig.update({
           dt: drawDtS,
           nowMs,
@@ -3467,6 +3625,8 @@ export class DriveSession {
           headMovement: settingsNow.hud.headMovement,
           driving,
           inVr,
+          freeInput: mode === "free" ? freeCamInput : undefined,
+          freeMinY,
           menu: inMenu
             ? {
                 close: appPhase === "wizard" && wizardStep === "car",
@@ -3798,6 +3958,12 @@ export class DriveSession {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
       renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
+      renderer.domElement.removeEventListener("pointerdown", onFreeCamPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onFreeCamPointerMove);
+      renderer.domElement.removeEventListener("pointerup", onFreeCamPointerUp);
+      renderer.domElement.removeEventListener("pointercancel", onFreeCamPointerUp);
+      renderer.domElement.removeEventListener("wheel", onFreeCamWheel);
+      renderer.domElement.removeEventListener("contextmenu", onFreeCamContextMenu);
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("blur", onWindowBlur);

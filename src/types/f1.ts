@@ -43,14 +43,18 @@ export interface ControlInputs {
 }
 
 export type CameraMode =
+  | "chase_close"
   | "chase"
+  | "chase_far"
+  | "chase_low"
   | "tv_pod"
   | "cockpit_shoulder"
   | "cockpit"
   | "dash"
   | "nose"
   | "helicopter"
-  | "tv_side";
+  | "tv_side"
+  | "free";
 
 /** Dry slicks, then the treaded rain tyres: intermediate (damp / light rain) and full wet (standing water) */
 export type TireCompound = "soft" | "medium" | "hard" | "intermediate" | "wet";

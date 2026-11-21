@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { type ChaseCameraInput, DynamicChaseCamera } from '../src/lib/render/chase-camera';
+import { CHASE_CAMERA_PRESETS, type ChaseCameraInput, DynamicChaseCamera } from '../src/lib/render/chase-camera';
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -182,6 +182,20 @@ check('back from another camera with the car further on, it starts over as after
   const pb = step(b, 1 / 60, 60, 0.5);
   assert.ok(pa.position.distanceTo(pb.position) < 1e-9, `${pa.position.distanceTo(pb.position)} m from a reset camera`);
   assert.ok(Math.abs(pa.fovDeg - pb.fovDeg) < 1e-9);
+});
+
+check('chase_close, chase, chase_far, and chase_low place the camera at distinct distances and heights', () => {
+  const restOffset = (preset: keyof typeof CHASE_CAMERA_PRESETS) => {
+    const d = drive();
+    const out = d.cam.update(1 / 60, d.input, CHASE_CAMERA_PRESETS[preset]);
+    return offset(d, out.position);
+  };
+  const close = restOffset('chase_close');
+  const mid = restOffset('chase');
+  const far = restOffset('chase_far');
+  const low = restOffset('chase_low');
+  assert.ok(close.back < mid.back - 0.8 && mid.back < far.back - 1.5, `back: ${close.back.toFixed(2)} < ${mid.back.toFixed(2)} < ${far.back.toFixed(2)}`);
+  assert.ok(low.up < close.up - 0.3 && close.up < mid.up && mid.up < far.up, `up: ${low.up.toFixed(2)} < ${close.up.toFixed(2)} < ${mid.up.toFixed(2)} < ${far.up.toFixed(2)}`);
 });
 
 console.log(`\n${passed} checks passed`);

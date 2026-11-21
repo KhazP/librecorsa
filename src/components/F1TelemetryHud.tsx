@@ -31,6 +31,7 @@ import { StartLights } from "./hud/StartLights";
 import { QualifyingClock, QualifyingGrid } from "./hud/QualifyingHud";
 import { LaunchCue } from "./hud/LaunchCue";
 import { PauseMenu } from "./hud/PauseMenu";
+import { CameraToast } from "./hud/CameraToast";
 import { F12026ChannelsPanel } from "./hud/F12026ChannelsPanel";
 import { MultiPageMfd } from "./hud/MultiPageMfd";
 import { useLapDeltaTracker } from "./hud/useLapDelta";
@@ -187,6 +188,10 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onChangeAssistPreset: (preset: DriverAssistPreset) => void;
   /** The next view in the camera cycle */
   onCycleCamera: () => void;
+  /** Directly selects any camera mode (Pause menu / Replay bar) */
+  onSelectCamera?: (mode: CameraMode) => void;
+  /** Toggles transient Free camera on/off */
+  onToggleFreeCamera?: () => void;
   /** Off the track: the crimson edge glow that breathes behind the HUD, which the renderer draws into the frame */
   onOffTrackGlow?: (on: boolean) => void;
   onChangeTireCompound: (compound: TireCompound) => void;
@@ -219,7 +224,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** The music playing, and the pause menu's skip */
   nowPlaying?: NowPlaying | null;
   onSkipTrack?: () => void;
-  keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board" | "headlights", string>>;
+  keyNames?: Partial<Record<"camera" | "freeCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board" | "headlights", string>>;
   /** The lap board's gear: when it opens (the HUD setting), changed from the board itself; without it, no lap board */
   onChangeBoardWidget?: (mode: BoardWidgetMode) => void;
   /** HUD layout preset, size and optional widgets */
@@ -968,6 +973,12 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     {podiumUp && !paused && props.raceEnd ? (
       <PodiumOverlay rows={props.raceEnd.podium.rows} trackName={trackInfo.name} onSkip={props.raceEnd.onSkipPodium} />
     ) : null}
+
+    <CameraToast
+      cameraMode={cameraMode}
+      active={!paused && !props.seatPanel && !podiumUp}
+      freeCameraKey={props.keyNames?.freeCamera}
+    />
 
     {/* Instant replay: only the badge and the transport bar show (under the pause menu, neither) */}
     {props.replay && !paused ? (

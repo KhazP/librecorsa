@@ -35,7 +35,7 @@ import {
 import { KB_STEER_RETURN_S, KB_STEER_RISE_S } from "@/lib/input/keyboard-steer";
 import { GYRO_LOCK_MAX_DEG, GYRO_LOCK_MIN_DEG, GYRO_SENSITIVITY_MAX, GYRO_SENSITIVITY_MIN } from "@/lib/input/gyro-steer";
 import { isTouchDevice } from "@/lib/input/touch-input";
-import { isCameraMode } from "@/lib/render/camera-modes";
+import { isDrivingCameraMode } from "@/lib/render/camera-modes";
 import { parseCameraNudges, type CameraNudges } from "@/lib/settings/camera-nudges";
 import { resolveCarId, type CarId } from "@/lib/cars/car-registry";
 import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
@@ -956,7 +956,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     mouseSteer: bool(raw.mouseSteer, d.mouseSteer),
     liveryId: isStr(raw.liveryId) ? raw.liveryId : null,
     customLivery: parseCustomLivery(raw.customLivery),
-    camera: isCameraMode(raw.camera) ? raw.camera : null,
+    camera: isDrivingCameraMode(raw.camera) ? raw.camera : null,
     cockpitFovDeg:
       typeof raw.cockpitFovDeg === "number" && Number.isFinite(raw.cockpitFovDeg)
         ? Math.round(clampFov(raw.cockpitFovDeg))

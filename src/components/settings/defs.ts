@@ -1,7 +1,7 @@
 import { keyLabel, PAD_PEDALS, pedalsOnTriggers } from "@/lib/input/bindings";
 import { PAD_SENSITIVITY } from "@/lib/input/device-input";
 import { isTouchDevice, requestTiltPermission } from "@/lib/input/touch-input";
-import { ALL_CAMERA_MODES, CAMERA_MODES } from "@/lib/render/camera-modes";
+import { CAMERA_MODES, DRIVING_CAMERA_MODES } from "@/lib/render/camera-modes";
 import {
   COCKPIT_FOV_MAX_DEG,
   COCKPIT_FOV_MIN_DEG,
@@ -644,7 +644,7 @@ export const defaultView = choice("select", {
   id: "camera",
   label: "Default view",
   hint: (env) => `Key ${key(env, "camera")}`,
-  options: ALL_CAMERA_MODES.map((id) => ({ id, label: CAMERA_MODES[id].label, detail: CAMERA_MODES[id].blurb })),
+  options: DRIVING_CAMERA_MODES.map((id) => ({ id, label: CAMERA_MODES[id].label, detail: CAMERA_MODES[id].blurb })),
   read: (env) => env.settings.camera ?? "chase",
   write: (env, id) => env.update((s) => ({ ...s, camera: id as PlayerSettings["camera"] })),
   initial: () => DEFAULT_PLAYER_SETTINGS.camera ?? "chase",

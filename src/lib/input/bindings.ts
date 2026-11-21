@@ -18,6 +18,7 @@ export type KeyAction =
   | "shiftDown"
   | "neutral"
   | "camera"
+  | "freeCamera"
   | "racingLine"
   | "mute"
   | "nextTrack"
@@ -43,6 +44,7 @@ export type PadAction =
   | "shiftDown"
   | "neutral"
   | "camera"
+  | "freeCamera"
   | "racingLine"
   | "restart"
   | "flyingLap"
@@ -70,6 +72,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "shiftDown", label: "Gear down" },
   { id: "neutral", label: "Neutral" },
   { id: "camera", label: "Camera (hold: seat & camera)" },
+  { id: "freeCamera", label: "Free camera" },
   { id: "racingLine", label: "Racing line" },
   { id: "mute", label: "Mute" },
   { id: "nextTrack", label: "Next music track" },
@@ -95,6 +98,7 @@ export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   { id: "boost", label: "Boost" },
   { id: "aero", label: "Active aero X / Z" },
   { id: "camera", label: "Camera (hold: seat & camera)" },
+  { id: "freeCamera", label: "Free camera" },
   { id: "racingLine", label: "Racing line" },
   { id: "restart", label: "Restart" },
   { id: "flyingLap", label: "Restart lap (flying start)" },
@@ -118,6 +122,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   shiftDown: ["KeyQ"],
   neutral: ["KeyN"],
   camera: ["KeyC"],
+  freeCamera: ["F7"],
   racingLine: ["KeyR"],
   mute: ["KeyM"],
   // N is Neutral: K, free in the car and in the menus
@@ -169,6 +174,7 @@ export const BUMPER_SHIFT_BUTTONS: PadButtonBindings = {
   // Every button has a job already: a player can give it one
   board: null,
   headlights: null,
+  freeCamera: null,
 };
 
 /** Gran Turismo 7: ✕ up, □ down, R1 change view, R3 nitro / overtake, Options pause. The right thumb is free in a drive */
@@ -189,6 +195,7 @@ export const GT_STYLE_BUTTONS: PadButtonBindings = {
   racingLine: null,
   board: null,
   headlights: null,
+  freeCamera: null,
 };
 
 /** A new player's buttons: GT style, gears under the right thumb, which also holds Gear up as the clutch at a manual start */
@@ -329,6 +336,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       racingLine: null,
       board: null,
       headlights: null,
+      freeCamera: null,
     },
   },
   // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause
@@ -351,6 +359,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       racingLine: null,
       board: null,
       headlights: null,
+      freeCamera: null,
     },
   },
   // Forza: B up, X down (manual layout), RB switch camera, LS toggle convertible, Menu pause
@@ -373,6 +382,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       racingLine: null,
       board: null,
       headlights: null,
+      freeCamera: null,
     },
   },
   // Gears on the bumpers: the default until 17 Nov 2026, so the layout most saved settings still have
