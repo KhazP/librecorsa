@@ -561,16 +561,30 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                           title={v.name}
                           meta={
                             <>
-                              <span className="block truncate">
+                              <span className={pb ? "block truncate" : "block"}>
                                 {v.country} <span aria-hidden>·</span> <span className="lc-mono">{lengthOf(shown)}</span>
                               </span>
                               {pb ? (
                                 <span className="mt-0.5 flex items-center gap-1.5 text-[12px]">
-                                  <Icon name="lapTimes" size="xs" className={pb.forCurrentCar ? "text-lc-best" : "text-lc-slate"} />
-                                  <span className={cx("lc-mono font-semibold", pb.forCurrentCar ? "text-lc-chalk" : "text-lc-fog")}>
+                                  <Icon
+                                    name="lapTimes"
+                                    label="Personal best"
+                                    size="xs"
+                                    className={pb.forCurrentCar && !pb.legacyPhysics ? "text-lc-best" : "text-lc-slate"}
+                                  />
+                                  <span
+                                    className={cx(
+                                      "lc-mono font-semibold",
+                                      pb.legacyPhysics ? "text-lc-fog" : pb.forCurrentCar ? "text-lc-chalk" : "text-lc-fog",
+                                    )}
+                                  >
                                     {formatLapTime(pb.lapTimeMs)}
                                   </span>
-                                  {!pb.forCurrentCar ? (
+                                  {pb.legacyPhysics ? (
+                                    <span className="truncate text-[11px] text-lc-slate">
+                                      {pb.forCurrentCar ? "Old physics" : `${pbCarLabel} · Old`}
+                                    </span>
+                                  ) : !pb.forCurrentCar ? (
                                     <span className="truncate text-[11px] text-lc-slate">{pbCarLabel}</span>
                                   ) : null}
                                 </span>

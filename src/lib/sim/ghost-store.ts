@@ -38,7 +38,12 @@ function writeSummaryIndex(index: Record<string, BestLapSummary>): void {
   try {
     localStorage.setItem(SUMMARY_INDEX_KEY, JSON.stringify(index));
   } catch {
-    // Storage full or unavailable
+    // Storage full or unavailable: remove any previous index so future reads rebuild cleanly from IndexedDB
+    try {
+      localStorage.removeItem(SUMMARY_INDEX_KEY);
+    } catch {
+      // Ignore
+    }
   }
 }
 
@@ -48,6 +53,72 @@ function patchSummaryIndex(key: string, summary: BestLapSummary | null): void {
   if (summary) index[key] = summary;
   else delete index[key];
   writeSummaryIndex(index);
+}
+
+let idbReconcileScheduled = false;
+
+async function buildSummaryMapFromIdb(): Promise<Record<string, BestLapSummary> | null> {
+  const db = await openDb();
+  if (!db) return null;
+  return new Promise<Record<string, BestLapSummary> | null>((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const keysReq = store.getAllKeys();
+      const valsReq = store.getAll();
+      tx.oncomplete = () => {
+        const keys = keysReq.result ?? [];
+        const vals = valsReq.result ?? [];
+        const map: Record<string, BestLapSummary> = {};
+        for (let i = 0; i < vals.length; i++) {
+          const k = String(keys[i] ?? i);
+          const s = extractBestLapSummary(vals[i]);
+          if (s && k.startsWith(`${s.trackId}|`)) map[k] = s;
+        }
+        resolve(map);
+      };
+      tx.onabort = () => resolve(null);
+      tx.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+function summaryMapsEqual(a: Record<string, BestLapSummary>, b: Record<string, BestLapSummary>): boolean {
+  const aKeys = Object.keys(a);
+  if (aKeys.length !== Object.keys(b).length) return false;
+  for (const k of aKeys) {
+    const x = a[k];
+    const y = b[k];
+    if (!y || x.lapTimeMs !== y.lapTimeMs || x.vehicle !== y.vehicle || x.physicsVersion !== y.physicsVersion) return false;
+  }
+  return true;
+}
+
+/** Once per page load, reconciles the fast localStorage summary index against IndexedDB in idle time (handles stale-build tabs) */
+function scheduleIdleReconcile(initialIndex: Record<string, BestLapSummary>): void {
+  if (idbReconcileScheduled || typeof window === "undefined") return;
+  idbReconcileScheduled = true;
+  const run = () => {
+    void buildSummaryMapFromIdb().then((fresh) => {
+      if (!fresh) return;
+      const latest = readSummaryIndex() ?? initialIndex;
+      if (summaryMapsEqual(latest, fresh)) return;
+      writeSummaryIndex(fresh);
+      summariesCache = Object.values(fresh).sort((a, b) => a.lapTimeMs - b.lapTimeMs);
+      for (const cb of lapListeners) {
+        try {
+          cb();
+        } catch {
+          // Ignore subscriber errors
+        }
+      }
+    });
+  };
+  const ric = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+  if (typeof ric === "function") ric(run, { timeout: 3000 });
+  else window.setTimeout(run, 1500);
 }
 
 export interface BestLapSummary {
@@ -289,32 +360,10 @@ export async function listBestLapSummaries(): Promise<readonly BestLapSummary[]>
   if (indexed) {
     const out = Object.values(indexed).sort((a, b) => a.lapTimeMs - b.lapTimeMs);
     summariesCache = out;
+    scheduleIdleReconcile(indexed);
     return out;
   }
-  const db = await openDb();
-  if (!db) return [];
-  const built = await new Promise<Record<string, BestLapSummary> | null>((resolve) => {
-    try {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      const store = tx.objectStore(STORE_NAME);
-      const keysReq = store.getAllKeys();
-      const valsReq = store.getAll();
-      tx.oncomplete = () => {
-        const keys = keysReq.result ?? [];
-        const vals = valsReq.result ?? [];
-        const map: Record<string, BestLapSummary> = {};
-        for (let i = 0; i < vals.length; i++) {
-          const s = extractBestLapSummary(vals[i]);
-          if (s) map[String(keys[i] ?? i)] = s;
-        }
-        resolve(map);
-      };
-      tx.onabort = () => resolve(null);
-      tx.onerror = () => resolve(null);
-    } catch {
-      resolve(null);
-    }
-  });
+  const built = await buildSummaryMapFromIdb();
   if (!built) return [];
   writeSummaryIndex(built);
   const out = Object.values(built).sort((a, b) => a.lapTimeMs - b.lapTimeMs);
@@ -394,8 +443,14 @@ export async function listBestLaps(): Promise<LapRecording[]> {
 /** Removes the stored personal best for a circuit and car (on one board class; without one, the unsplit best) */
 export async function deleteBestLap(trackId: string, vehicle: VehicleModelId, board: string | null = null): Promise<void> {
   const key = lapKey(trackId, vehicle, board);
-  await runRequest("readwrite", (store) => store.delete(key));
+  const res = await runRequest("readwrite", (store) => store.delete(key));
+  if (res === null) return;
   patchSummaryIndex(key, null);
+  if (vehicle === "lc26") {
+    const oldKey = lapKey(trackId, "vf26" as VehicleModelId, board); // keep-old-id
+    const oldRes = await runRequest("readwrite", (store) => store.delete(oldKey));
+    if (oldRes !== null) patchSummaryIndex(oldKey, null);
+  }
   notifyBestLapsChanged();
 }
 

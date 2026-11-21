@@ -230,16 +230,30 @@ export const CircuitBrowser: React.FC<{
           title: v.name,
           meta: (
             <>
-              <span className="block truncate">
+              <span className={pb ? "block truncate" : "block"}>
                 {v.country}, {lengthOf(t, units)}
               </span>
               {pb ? (
                 <span className="mt-0.5 flex items-center gap-1.5 text-[12px]">
-                  <Icon name="lapTimes" size="xs" className={pb.forCurrentCar ? "text-lc-best" : "text-lc-slate"} />
-                  <span className={cx("lc-mono font-semibold", pb.forCurrentCar ? "text-lc-chalk" : "text-lc-fog")}>
+                  <Icon
+                    name="lapTimes"
+                    label="Personal best"
+                    size="xs"
+                    className={pb.forCurrentCar && !pb.legacyPhysics ? "text-lc-best" : "text-lc-slate"}
+                  />
+                  <span
+                    className={cx(
+                      "lc-mono font-semibold",
+                      pb.legacyPhysics ? "text-lc-fog" : pb.forCurrentCar ? "text-lc-chalk" : "text-lc-fog",
+                    )}
+                  >
                     {formatLapTime(pb.lapTimeMs)}
                   </span>
-                  {!pb.forCurrentCar ? (
+                  {pb.legacyPhysics ? (
+                    <span className="truncate text-[11px] text-lc-slate">
+                      {pb.forCurrentCar ? "Old physics" : `${carBoardTag(pb.vehicle).label} · Old`}
+                    </span>
+                  ) : !pb.forCurrentCar ? (
                     <span className="truncate text-[11px] text-lc-slate">{carBoardTag(pb.vehicle).label}</span>
                   ) : null}
                 </span>
@@ -295,15 +309,28 @@ export const CircuitBrowser: React.FC<{
             {circuitPbs.length > 0 ? (
               <SettingRow label="Personal best" stacked>
                 <div className="flex flex-col gap-1">
-                  {circuitPbs.slice(0, 4).map((entry) => {
+                  {(() => {
+                    const top = circuitPbs.slice(0, 4);
+                    if (vehicleModel && !top.some((e) => e.vehicle === vehicleModel)) {
+                      const mine = circuitPbs.find((e) => e.vehicle === vehicleModel);
+                      if (mine) top.splice(3, 1, mine);
+                    }
+                    return top;
+                  })().map((entry) => {
                     const isCur = vehicleModel != null && entry.vehicle === vehicleModel;
                     return (
                       <div key={entry.vehicle} className="flex items-center justify-between gap-2 text-[13px]">
                         <span className={cx("truncate", isCur ? "font-semibold text-lc-chalk" : "text-lc-fog")}>
                           {carBoardTag(entry.vehicle).label}
+                          {entry.legacyPhysics ? <span className="ml-1.5 text-[11px] font-normal text-lc-slate">Old physics</span> : null}
                         </span>
-                        <span className={cx("lc-mono inline-flex items-center gap-1.5 font-semibold", isCur ? "text-lc-best" : "text-lc-chalk")}>
-                          {isCur ? <Icon name="lapTimes" size="xs" /> : null}
+                        <span
+                          className={cx(
+                            "lc-mono inline-flex items-center gap-1.5 font-semibold",
+                            entry.legacyPhysics ? "text-lc-fog" : isCur ? "text-lc-best" : "text-lc-chalk",
+                          )}
+                        >
+                          {isCur && !entry.legacyPhysics ? <Icon name="lapTimes" label="Personal best" size="xs" /> : null}
                           {formatLapTime(entry.lapTimeMs)}
                         </span>
                       </div>
