@@ -2837,10 +2837,13 @@ export class AiOpponentField implements AiRace {
     return this.cars.flatMap((c) => (c.ai ? [c.ai] : []));
   }
 
-  /** Short history of per-car damage & retirement state (4 Hz, 45 s window) so Flashback restores DNF & damage cleanly */
+  /** Short history of per-car damage & retirement state (4 Hz + immediate on any damage/state change, 125 s window matching ReplayBuffer) */
   private readonly damageHistory: Array<{
     timeS: number;
-    cars: ReadonlyMap<string, { damage: CarDamageSnapshot; retired: boolean; retiredAtS: number | null; removed: boolean }>;
+    cars: ReadonlyMap<
+      string,
+      { damage: CarDamageSnapshot; version: number; retired: boolean; retiredAtS: number | null; removed: boolean }
+    >;
   }> = [];
   private lastDamageHistoryS = -Infinity;
 
@@ -2851,7 +2854,13 @@ export class AiOpponentField implements AiRace {
       for (const car of this.cars) {
         const key = car.isPlayer ? 'player' : car.id;
         const p = prev.cars.get(key);
-        if (!p || p.retired !== car.retired || p.removed !== car.removed || p.damage.terminal !== car.damage.terminal) {
+        if (
+          !p ||
+          p.version !== car.damage.version ||
+          p.retired !== car.retired ||
+          p.removed !== car.removed ||
+          p.damage.terminal !== car.damage.terminal
+        ) {
           stateChanged = true;
           break;
         }
@@ -2859,17 +2868,21 @@ export class AiOpponentField implements AiRace {
     }
     if (!stateChanged && this.raceTimeS - this.lastDamageHistoryS < 0.25) return;
     this.lastDamageHistoryS = this.raceTimeS;
-    const cars = new Map<string, { damage: CarDamageSnapshot; retired: boolean; retiredAtS: number | null; removed: boolean }>();
+    const cars = new Map<
+      string,
+      { damage: CarDamageSnapshot; version: number; retired: boolean; retiredAtS: number | null; removed: boolean }
+    >();
     for (const car of this.cars) {
       cars.set(car.isPlayer ? 'player' : car.id, {
         damage: car.damage.snapshot(),
+        version: car.damage.version,
         retired: car.retired,
         retiredAtS: car.retiredAtS,
         removed: car.removed,
       });
     }
     this.damageHistory.push({ timeS: this.raceTimeS, cars });
-    const cutoffS = this.raceTimeS - 45;
+    const cutoffS = this.raceTimeS - 125;
     while (this.damageHistory.length > 2 && this.damageHistory[1].timeS < cutoffS) {
       this.damageHistory.shift();
     }
@@ -2891,7 +2904,8 @@ export class AiOpponentField implements AiRace {
     this.yellowPasses.rewind(rewindS);
 
     // Find the latest damage/retirement snapshot at or before the rewound raceTimeS and drop future snapshots
-    while (this.damageHistory.length > 0 && this.damageHistory[this.damageHistory.length - 1].timeS > this.raceTimeS) {
+    // (keep the earliest t=0 anchor if rewinding all the way to the start)
+    while (this.damageHistory.length > 1 && this.damageHistory[this.damageHistory.length - 1].timeS > this.raceTimeS) {
       this.damageHistory.pop();
     }
     const histSnap = this.damageHistory[this.damageHistory.length - 1];

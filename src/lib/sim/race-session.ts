@@ -312,12 +312,10 @@ export class LapClock {
       this.finishTimeS = null;
       this.finishLaps = null;
     }
-    // Truncate laps completed inside the rewound window and recover the true start time of the lap now in progress
+    // Truncate laps completed inside the rewound window strictly by `lapsDone` (immune to small worker/page clock skew)
     let keptCount = this.completedLaps.length;
-    while (keptCount > 0) {
-      const last = this.completedLaps[keptCount - 1];
-      if (last.endS > raceTimeS || last.lap > this.lapsDone) keptCount--;
-      else break;
+    while (keptCount > 0 && this.completedLaps[keptCount - 1].lap > this.lapsDone) {
+      keptCount--;
     }
     const dropped = keptCount < this.completedLaps.length;
     if (dropped) {

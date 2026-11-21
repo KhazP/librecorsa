@@ -288,8 +288,8 @@ export class TrackLimitsMonitor {
   /** Session clock (s, the frames' dtS); where and when the car was last on the track with no jump pending */
   private clockS = 0;
   private onRoad: { distM: number; clockS: number } | null = null;
-  /** A race's course cut owing its penalty: where and when the car left the road */
-  private cutFrom: { distM: number; clockS: number } | null = null;
+  /** A race's course cut owing its penalty: where and when the car left the road, plus when the cut was detected */
+  private cutFrom: { distM: number; clockS: number; detectedClockS: number } | null = null;
   /** A course cut and the car not back on the track since: the rest of that excursion is the cut, not judged */
   private afterCut = false;
   /** The last frame was judged (`TrackLimitsFrame.active`); a verdict waiting while not is kept off the HUD */
@@ -377,11 +377,12 @@ export class TrackLimitsMonitor {
       if (this.exc.startedAtClockS > restoredClockS) {
         this.exc = null;
       } else {
-        // Keep the pending excursion/give-back, dropping only the spatial trace anchor across the jump
+        // Keep the pending excursion/give-back, dropping the spatial trace anchor so the jump doesn't inflate curvatureRad
         this.exc.way = null;
+        this.exc.lastDistM = Number.NaN;
       }
     }
-    if (this.cutFrom && this.cutFrom.clockS > restoredClockS) {
+    if (this.cutFrom && this.cutFrom.detectedClockS > restoredClockS) {
       this.cutFrom = null;
       this.afterCut = false;
     }
@@ -484,7 +485,10 @@ export class TrackLimitsMonitor {
         detail: race ? "Time penalty once back on the track" : "Left the lap's road",
         atMs: f.nowMs,
       };
-      if (race) this.cutFrom = this.onRoad ?? { distM: f.distM, clockS: this.clockS };
+      if (race) {
+        const origin = this.onRoad ?? { distM: f.distM, clockS: this.clockS };
+        this.cutFrom = { ...origin, detectedClockS: this.clockS };
+      }
       this.afterCut = f.offTrack;
       if (race && !f.offTrack) return this.cutPenalty(f);
       return { kind: "lap_invalid", lap: f.lapCount };
@@ -781,6 +785,11 @@ export class TrackLimitsMonitor {
    * while it is being judged makes one longer way): the road's inside edge and the car's own path
    */
   private trace(e: Excursion, f: TrackLimitsFrame): void {
+    if (!Number.isFinite(e.lastDistM)) {
+      e.lastDistM = f.distM;
+      this.lastDs = 0;
+      return;
+    }
     const L = f.lapLengthM;
     const ds = L ? ((((f.distM - e.lastDistM + L / 2) % L) + L) % L) - L / 2 : f.distM - e.lastDistM;
     e.lastDistM = f.distM;

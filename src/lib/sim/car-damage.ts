@@ -112,6 +112,8 @@ export class CarDamage {
   public readonly punctured: [boolean, boolean, boolean, boolean] = [false, false, false, false];
   /** Out of the race */
   public terminal = false;
+  /** Monotonic counter incremented on every damage mutation/reset/restore so Flashback history captures non-terminal hits immediately */
+  public version = 0;
   /** Damage changed since effects() was last read */
   private dirty = true;
   private cached: CarDamageEffects = { ...NO_DAMAGE_EFFECTS, wheelGripMult: [1, 1, 1, 1], wheelToeRad: [0, 0, 0, 0] };
@@ -132,6 +134,7 @@ export class CarDamage {
     this.punctured.fill(false);
     this.terminal = false;
     this.dirty = true;
+    this.version++;
   }
 
   /** Captures a plain copy of all damage fields for Flashback rewind */
@@ -161,6 +164,7 @@ export class CarDamage {
     }
     this.terminal = s.terminal;
     this.dirty = true;
+    this.version++;
   }
 
   /** Nothing broken */
@@ -208,6 +212,7 @@ export class CarDamage {
     const terminal = hit.speedMs >= L.terminalMs || this.suspension.some((s) => s >= 1);
     if (terminal) this.terminal = true;
     this.dirty = true;
+    this.version++;
     if (severity < 0.02 && !puncture && !terminal) return null;
     return { severity, zone, puncture, terminal };
   }

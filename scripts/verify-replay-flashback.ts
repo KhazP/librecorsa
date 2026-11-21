@@ -608,6 +608,15 @@ check('#2: CarDamage snapshot/restore and retired AI cars stay retired (never re
   assert.equal(ai0.retired, false, 'rewinding before crash restores ai0 to active');
   assert.equal(ai0.damage.pristine, true, 'rewinding before crash restores pristine damage');
   assert.equal(ai0.control?.mode, 'racing', 'rewinding before crash restores racing mode');
+
+  // Non-terminal damage hit taken < 0.25 s before a zero-rewind Flashback is immediately snapshotted (never free-repaired)
+  ai0.damage.registerImpact({ localX: 0, localZ: 2.4, speedMs: 12, source: 'wall' });
+  player.step(dt, {});
+  field.update(dt);
+  const frontDmg = ai0.damage.front;
+  assert.ok(frontDmg > 0.1 && !ai0.retired, `non-terminal front wing damage recorded (${frontDmg.toFixed(2)})`);
+  field.restoreField([], 0);
+  near(ai0.damage.front, frontDmg, 1e-6);
 });
 
 check('#3: LapClock rewinding across Start/Finish restores true lapStartS (no bogus ~3s fastest lap)', () => {
@@ -621,6 +630,10 @@ check('#3: LapClock rewinding across Start/Finish restores true lapStartS (no bo
   clock.update(100, 80, 5);
   assert.equal(clock.lapsDone, 1);
   assert.equal(clock.bestLapMs, 80_000);
+  // Slight negative clock skew (raceTimeS = 79.95 while still on lap 1 at distM = 5010) must NOT drop lap 1
+  clock.rewindTo(10, 79.95, 5010);
+  assert.equal(clock.lapsDone, 1, 'clock skew keeps lap 1');
+  assert.equal(clock.bestLapMs, 80_000, 'clock skew keeps lap 1 bestLapMs');
   // Rewind 5 s back across S/F to s=4800m, distM=4800m at t=77s
   clock.rewindTo(4800, 77, 4800);
   assert.equal(clock.lapsDone, 0);
