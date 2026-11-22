@@ -13,16 +13,22 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { BadgeLegend, DriverBadges } from "../src/components/ui/DriverBadges";
+import { LapConditionBadges } from "../src/components/board/LapConditionBadges";
 import { handleApi, SHARED_ANSWER_S } from "../cloudflare/api/index";
 import { driverNameKey, renameDriver, type BoardDeps } from "../cloudflare/api/board";
 import {
   checkAwardInput,
   hallOfFameEvents,
   invalidateAutoWeeklyAwardsForDriver,
+  MIN_RECORD_DRIVERS,
   parseBadgeNames,
   physicsIdOf,
   rankPodiums,
   tallyMostDecorated,
+  tallyRecordHolders,
   type AdminAward,
 } from "../cloudflare/api/awards";
 import type { AdminAwardsBody } from "../cloudflare/api/admin";
@@ -31,7 +37,10 @@ import {
   badgeLabel,
   badgeQueryNames,
   fetchBadges,
+  filterBadgesForContext,
   forgetBadges,
+  groupBoardsByClass,
+  groupBoardsByVehicle,
   MAX_BADGE_NAMES,
   parseBadges,
   parseHallOfFame,
@@ -39,7 +48,7 @@ import {
   type HallOfFameAnswer,
 } from "../src/lib/net/awards";
 import { challengeAt } from "../src/lib/net/weekly-challenge";
-import { boardPhysicsVersion, CIRCUIT_REVISION_STEP, lapPhysicsVersion } from "../src/lib/sim/lap-types";
+import { boardPhysicsVersion, CIRCUIT_REVISION_STEP, currentBoardBase, lapPhysicsVersion, shippingLapPhysicsVersion } from "../src/lib/sim/lap-types";
 import type { D1Database, Env, RateLimit } from "../cloudflare/api/types";
 import type { VehicleModelId } from "../src/types/f1";
 import { fakeD1, fakeR2 } from "./lib/fake-cloudflare";
@@ -217,26 +226,48 @@ async function main(): Promise<void> {
     const liveWeek = challengeAt(Date.now()).id;
     await addLap(db, { name: "Eve", track: "spielberg", vehicle: "amg-gt3", physics: v2Gt3, ms: 88_000, event: liveWeek });
 
-    // Open boards: track records + OG
-    // Alice holds current track record on sachsenring lc26 (V2)
+    // Open boards: contested track records (requires MIN_RECORD_DRIVERS unique drivers) + OG
+    // Alice holds P1 on sachsenring lc26 (V2 shipping engine) against 5 unique drivers -> earns track_record
     await addLap(db, { name: "Alice", track: "sachsenring", vehicle: "lc26", physics: v2Lc26, ms: 62_000 });
     await addLap(db, { name: "Dave", track: "sachsenring", vehicle: "lc26", physics: v2Lc26, ms: 63_000 });
+    await addLap(db, { name: "Rival1", track: "sachsenring", vehicle: "lc26", physics: v2Lc26, ms: 64_000 });
+    await addLap(db, { name: "Rival2", track: "sachsenring", vehicle: "lc26", physics: v2Lc26, ms: 65_000 });
+    await addLap(db, { name: "Rival3", track: "sachsenring", vehicle: "lc26", physics: v2Lc26, ms: 66_000 });
+    // Under-populated board (4 unique drivers, even with duplicate assist-class laps by Alice): must NOT grant track_record
+    await addLap(db, { name: "Alice", track: "okayama", vehicle: "amg-gt3", physics: v2Gt3, ms: 80_000, assists: "pro" });
+    await addLap(db, { name: "Alice", track: "okayama", vehicle: "amg-gt3", physics: v2Gt3, ms: 81_000, assists: "assisted" });
+    await addLap(db, { name: "Dave", track: "okayama", vehicle: "amg-gt3", physics: v2Gt3, ms: 82_000 });
+    await addLap(db, { name: "Rival1", track: "okayama", vehicle: "amg-gt3", physics: v2Gt3, ms: 83_000 });
+    await addLap(db, { name: "Rival2", track: "okayama", vehicle: "amg-gt3", physics: v2Gt3, ms: 84_000 });
+    // Legacy classic LC26 engine (base revision without rigid-body offset) with 5 drivers: must NOT grant track_record
+    const legacyLc26 = currentBoardBase("sachsenring");
+    for (const [idx, driver] of ["Alice", "Dave", "Rival1", "Rival2", "Rival3"].entries()) {
+      await addLap(db, { name: driver, track: "sachsenring", vehicle: "lc26", physics: legacyLc26, ms: 60_000 + idx * 1000 });
+    }
     // Bob holds P1 on OLD V1 board (grants OG, NOT track_record)
     await addLap(db, { name: "Bob", track: "sachsenring", vehicle: "lc26", physics: v1Lc26, ms: 61_000 });
-    // Eve holds P1 on a retired/unofficial track (NOT track_record)
-    await addLap(db, { name: "Eve", track: "retired_fake_circuit", vehicle: "amg-gt3", physics: v2Gt3, ms: 70_000 });
+    // Eve holds P1 on a retired/unofficial track even with 5 drivers (NOT track_record)
+    for (const [idx, driver] of ["Eve", "Dave", "Rival1", "Rival2", "Rival3"].entries()) {
+      await addLap(db, { name: driver, track: "retired_fake_circuit", vehicle: "amg-gt3", physics: v2Gt3, ms: 70_000 + idx * 1000 });
+    }
 
     // First Hall of Fame read archives finished week 2026-W46 (both V1 and V2)
     const hofRes = await apiCall(env, "/api/hall-of-fame");
     const hofBody = (await hofRes.json()) as HallOfFameAnswer;
     check(
-      "api: GET /api/hall-of-fame returns V1 & V2 podiums with shared cache",
+      "api: GET /api/hall-of-fame returns V1 & V2 podiums and contested recordHolders",
       hofRes.status === 200 &&
         hofRes.headers.get("Cache-Control") === `public, max-age=${SHARED_ANSWER_S.hallOfFame}` &&
         hofBody.ok &&
         hofBody.events.some((e) => e.event === "2026-W46" && e.physics === "v1" && e.podium.length === 3) &&
-        hofBody.events.some((e) => e.event === "2026-W46" && e.physics === "v2" && e.podium.length === 2),
-      hofBody.events.map((e) => `${e.event}:${e.physics}(${e.podium.length})`).join(", "),
+        hofBody.events.some((e) => e.event === "2026-W46" && e.physics === "v2" && e.podium.length === 2) &&
+        hofBody.recordHolders.minDrivers === MIN_RECORD_DRIVERS &&
+        hofBody.recordHolders.overall.length === 1 &&
+        hofBody.recordHolders.overall[0].nameKey === "alice" &&
+        hofBody.recordHolders.overall[0].count === 1 &&
+        hofBody.recordHolders.byClass.f1?.[0]?.nameKey === "alice" &&
+        hofBody.recordHolders.byClass.gt3 === undefined,
+      JSON.stringify(hofBody.recordHolders),
     );
 
     const archivedCount = (await db.prepare("SELECT COUNT(*) AS n FROM driver_awards WHERE awarded_by = 'auto'").first<{ n: number }>())?.n ?? 0;
@@ -266,12 +297,18 @@ async function main(): Promise<void> {
     const badgesRes = await apiCall(env, "/api/badges?names=Alice,Bob,Carol,Dave,Eve");
     const badgesBody = (await badgesRes.json()) as { ok: boolean; badges: Record<string, DriverBadge[]> };
     const types = (k: string) => (badgesBody.badges[k] ?? []).map((b) => `${b.type}:${b.count}`).join(",");
+    const aliceTr = badgesBody.badges.alice?.find((b) => b.type === "track_record");
     check(
-      "badges: Alice has weekly_gold (V1), weekly_silver (V2), track_record",
+      "badges: Alice has weekly_gold (V1), weekly_silver (V2), and 1 contested track_record (excludes <5 drivers & legacy LC26)",
       badgesRes.status === 200 &&
         badgesRes.headers.get("Cache-Control") === `public, max-age=${SHARED_ANSWER_S.badges}` &&
-        types("alice") === "weekly_gold:1,weekly_silver:1,track_record:1",
-      types("alice"),
+        types("alice") === "weekly_gold:1,weekly_silver:1,track_record:1" &&
+        aliceTr?.boards?.length === 1 &&
+        aliceTr.boards[0].trackId === "sachsenring" &&
+        aliceTr.boards[0].vehicle === "lc26" &&
+        aliceTr.boards[0].lapTimeMs === 62_000 &&
+        aliceTr.boards[0].drivers === 5,
+      JSON.stringify({ types: types("alice"), boards: aliceTr?.boards }),
     );
     check("badges: Bob has weekly_silver (V1) and og (V1 LC26 lap), not track_record", types("bob") === "weekly_silver:1,og:1", types("bob"));
     check("badges: Dave has weekly_gold (V2) and bulb with note, not og", types("dave") === "weekly_gold:1,bulb:1" && badgesBody.badges.dave.find((b) => b.type === "bulb")?.note === "Suggested wet-weather spray fix", types("dave"));
@@ -375,6 +412,71 @@ async function main(): Promise<void> {
     const first = await fetchBadges(["Bob", "Alice"], { nowMs: 1000, fetchJson: mockFetch });
     const second = await fetchBadges(["alice", "bob"], { nowMs: 2000, fetchJson: mockFetch });
     check("client: fetchBadges caches hits and sorts query keys", calls === 1 && first.alice?.[0]?.type === "og" && second.alice?.[0]?.type === "og" && second.bob === undefined);
+
+    // Client context-aware filtering, class grouping, richer badgeDetail and recordHolders parsing
+    {
+      const multiBadges: DriverBadge[] = [
+        { type: "weekly_gold", count: 1 },
+        {
+          type: "track_record",
+          count: 3,
+          boards: [
+            { trackId: "norisring", vehicle: "lc26", lapTimeMs: 44_800, drivers: 65 },
+            { trackId: "okayama", vehicle: "lc26", lapTimeMs: 70_100, drivers: 39 },
+            { trackId: "spielberg", vehicle: "amg-gt3", lapTimeMs: 88_200, drivers: 18 },
+          ],
+        },
+        { type: "og", count: 1 },
+      ];
+      const byClass = groupBoardsByClass(multiBadges[1].boards);
+      const byVehicle = groupBoardsByVehicle(multiBadges[1].boards);
+      const onlyGt3 = filterBadgesForContext(multiBadges, { scope: "vehicle", vehicle: "amg-gt3" });
+      const onlyRoad = filterBadgesForContext(multiBadges, { scope: "class", classId: "road" });
+      const onlyF1Class = filterBadgesForContext(multiBadges, { scope: "class", classId: "f1" });
+      check(
+        "client: groupBoardsByClass/Vehicle and filterBadgesForContext scope FL to active car/class",
+        byClass.map((g) => `${g.classId}:${g.count}`).join(",") === "f1:2,gt3:1" &&
+          byVehicle.map((g) => `${g.vehicle}:${g.count}`).join(",") === "lc26:2,amg-gt3:1" &&
+          onlyGt3.find((b) => b.type === "track_record")?.count === 1 &&
+          onlyGt3.find((b) => b.type === "track_record")?.boards?.[0]?.vehicle === "amg-gt3" &&
+          onlyRoad.some((b) => b.type === "weekly_gold") &&
+          !onlyRoad.some((b) => b.type === "track_record") &&
+          onlyF1Class.find((b) => b.type === "track_record")?.count === 2 &&
+          badgeDetail(multiBadges[1]).includes("Proto 26 ×2") &&
+          badgeDetail(multiBadges[1]).includes("GT3 ×1"),
+        JSON.stringify({ byClass: byClass.map((g) => `${g.classId}:${g.count}`), detail: badgeDetail(multiBadges[1]) }),
+      );
+
+      // Pure tallyRecordHolders ranks by count, then competition score (total drivers beaten), and separates classes
+      const tallied = tallyRecordHolders([
+        { track_id: "norisring", vehicle: "lc26", physics: shippingLapPhysicsVersion("lc26", "norisring"), name_key: "alpha", driver_name: "Alpha", lap_time_ms: 45_000, drivers: 60 },
+        { track_id: "dunsfold", vehicle: "lc26", physics: shippingLapPhysicsVersion("lc26", "dunsfold"), name_key: "beta", driver_name: "Beta", lap_time_ms: 60_000, drivers: 12 },
+        { track_id: "spielberg", vehicle: "amg-gt3", physics: shippingLapPhysicsVersion("amg-gt3", "spielberg"), name_key: "beta", driver_name: "Beta", lap_time_ms: 88_000, drivers: 20 },
+        { track_id: "okayama", vehicle: "amg-gt3", physics: shippingLapPhysicsVersion("amg-gt3", "okayama"), name_key: "gamma", driver_name: "Gamma", lap_time_ms: 89_000, drivers: 4 }, // under minDrivers
+      ]);
+      check(
+        "tallyRecordHolders: ranks overall and per-class with competition-score tie-break",
+        tallied.overall.map((h) => `${h.nameKey}:${h.count}`).join(",") === "beta:2,alpha:1" &&
+          tallied.byClass.f1?.map((h) => `${h.nameKey}:${h.count}`).join(",") === "alpha:1,beta:1" &&
+          tallied.byClass.gt3?.map((h) => `${h.nameKey}:${h.count}`).join(",") === "beta:1",
+        JSON.stringify(tallied),
+      );
+
+      const parsedHof = parseHallOfFame({
+        ok: true,
+        current: "2026-W48",
+        events: [],
+        mostDecorated: [],
+        recordHolders: tallied,
+      });
+      check(
+        "client: parseHallOfFame preserves recordHolders overall & byClass and lapTimeMs/drivers",
+        parsedHof !== null &&
+          parsedHof.recordHolders.minDrivers === MIN_RECORD_DRIVERS &&
+          parsedHof.recordHolders.overall[0]?.boards[0]?.drivers === 20 &&
+          parsedHof.recordHolders.byClass.f1?.[0]?.name === "Alpha",
+      );
+    }
 
     forgetBadges();
     const offline = await fetchBadges(["Alice"], { nowMs: 1000, fetchJson: async () => null });
@@ -638,6 +740,66 @@ async function main(): Promise<void> {
           clientMap.constructor === undefined &&
           clientMap.tostring === undefined,
         JSON.stringify({ server: body.badges.constructor, clientKeys: Object.keys(clientMap) }),
+      );
+    }
+    // 10. UI rendering: context-aware class-colored/tagged FL pills, overflow pill, legend scoping & condition pills
+    {
+      const multiClassBadges: DriverBadge[] = [
+        {
+          type: "track_record",
+          count: 4,
+          boards: [
+            { trackId: "norisring", vehicle: "lc26", lapTimeMs: 44_800, drivers: 65 },
+            { trackId: "okayama", vehicle: "lc26", lapTimeMs: 70_100, drivers: 39 },
+            { trackId: "spielberg", vehicle: "amg-gt3", lapTimeMs: 88_200, drivers: 18 },
+            { trackId: "dunsfold", vehicle: "liana", lapTimeMs: 79_000, drivers: 12 },
+          ],
+        },
+        { type: "og", count: 1 },
+      ];
+      const allHtml = renderToStaticMarkup(
+        React.createElement(DriverBadges, { badges: multiClassBadges, compact: true, context: { scope: "all" }, driverName: "Alice" }),
+      );
+      const gt3Html = renderToStaticMarkup(
+        React.createElement(DriverBadges, { badges: multiClassBadges, compact: true, context: { scope: "vehicle", vehicle: "amg-gt3" }, driverName: "Alice" }),
+      );
+      const protoHtml = renderToStaticMarkup(
+        React.createElement(DriverBadges, { badges: multiClassBadges, compact: true, context: { scope: "class", classId: "proto" }, driverName: "Alice" }),
+      );
+      const protoLegendHtml = renderToStaticMarkup(
+        React.createElement(BadgeLegend, { badges: multiClassBadges, context: { scope: "class", classId: "proto" } }),
+      );
+      check(
+        "ui: DriverBadges renders class-colored/tagged FL pills, +N overflow, dialog trigger, and context filtering",
+        allHtml.includes("FL·F1×2") &&
+          allHtml.includes("bg-lc-pink/12") &&
+          allHtml.includes("FL·GT3") &&
+          allHtml.includes("bg-lc-cyan/12") &&
+          allHtml.includes("+1") &&
+          allHtml.includes('aria-haspopup="dialog"') &&
+          gt3Html.includes("bg-lc-cyan/12") &&
+          !gt3Html.includes("FL·F1") &&
+          !protoHtml.includes("FL") &&
+          protoHtml.includes("OG") &&
+          !protoLegendHtml.includes("Fastest lap"),
+        allHtml.slice(0, 220),
+      );
+
+      const condFull = renderToStaticMarkup(React.createElement(LapConditionBadges, { assists: "pro", realism: "full", surface: "dry" }));
+      const condCasualSemiWet = renderToStaticMarkup(React.createElement(LapConditionBadges, { assists: "semi_pro", realism: "casual", surface: "wet" }));
+      const condStdAssisted = renderToStaticMarkup(React.createElement(LapConditionBadges, { assists: "assisted", realism: "standard", surface: "dry" }));
+      check(
+        "ui: LapConditionBadges renders prominent Full/Standard/Casual, Pro/Semi/Assisted, and Wet pills",
+        condFull.includes("Full") &&
+          condFull.includes("bg-lc-gain/12") &&
+          condFull.includes("Pro") &&
+          !condFull.includes("Wet") &&
+          condCasualSemiWet.includes("Casual") &&
+          condCasualSemiWet.includes("bg-lc-caution/12") &&
+          condCasualSemiWet.includes("Semi") &&
+          condCasualSemiWet.includes("Wet") &&
+          condStdAssisted.includes("Standard") &&
+          condStdAssisted.includes("Assisted"),
       );
     }
   }

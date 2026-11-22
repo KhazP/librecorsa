@@ -76,6 +76,8 @@ import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from
 import { CoolDown } from "@/lib/sim/cool-down";
 import { PodiumDirector } from "@/lib/render/podium-shot";
 import { NameplateBadgeCache, OverheadNameplateProjector, type OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
+import type { BadgeContext } from "@/lib/net/awards";
+import { isVehicleModelId } from "@/types/f1";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { canFlashback, isInOnlineRoom, poseFromReplayCar, ReplayBuffer, type ReplayLapMarker } from "@/lib/sim/replay-buffer";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
@@ -1597,6 +1599,14 @@ export class DriveSession {
     const multiplayerSync = getMultiplayerManager();
     const syncNameplateBadges = () => {
       if (disposed) return;
+      const lobbySettings = multiplayerSync.lobby?.settings;
+      const badgeCtx: BadgeContext =
+        lobbySettings?.vehicle && isVehicleModelId(lobbySettings.vehicle)
+          ? { scope: "vehicle", vehicle: lobbySettings.vehicle }
+          : lobbySettings?.carClass && lobbySettings.carClass !== "any"
+            ? { scope: "class", classId: lobbySettings.carClass }
+            : { scope: "all" };
+      nameplateBadges.setContext(badgeCtx);
       if (latestRemotePeers.length > 0) void nameplateBadges.syncPeers(latestRemotePeers);
       const lobbyPlayers = multiplayerSync.lobby?.players;
       if (lobbyPlayers && lobbyPlayers.length > 0) {
