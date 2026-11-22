@@ -12,8 +12,9 @@ import { PlayerTag } from "@/components/ui/badges/PlayerTag";
 import { PositionBadge } from "@/components/ui/badges/PositionBadge";
 import { Icon } from "@/components/ui/icons/Icon";
 import { formatLapTime, formatSectorTime } from "@/components/hud/hud-format";
-import { fetchBadges, type DriverBadge } from "@/lib/net/awards";
+import { fetchBadges, type BadgeContext, type DriverBadge } from "@/lib/net/awards";
 import type { LapInput } from "@/lib/sim/lap-types";
+import type { VehicleModelId } from "@/types/f1";
 import { InputIcon } from "./InputIcon";
 import { driverNameKey, formatCount } from "@/lib/net/board-client";
 
@@ -28,6 +29,8 @@ export interface BoardRow {
   input?: LapInput;
   /** Beside the title: the car a lap was driven in, on a board of every car */
   tag?: React.ReactNode;
+  /** Prominent condition pills (realism, assists, wet) on the row's second line */
+  meta?: React.ReactNode;
   /** One line under the title: when, and how the lap was driven */
   detail?: string;
   /** Full date for the detail's tooltip */
@@ -98,9 +101,26 @@ export const BoardTable: React.FC<{
   stale?: boolean;
   /** Whether to batch-fetch and render driver badges beside driver names (defaults to true for Driver boards) */
   showBadges?: boolean;
+  /** Board scope for Fastest Lap badges (narrows FL pills to the active car or class) */
+  badgeContext?: BadgeContext;
+  /** Resolves circuit ids inside the Fastest Lap popover */
+  circuitName?: (trackId: string) => string;
+  /** Opens a record's board when tapped inside a driver's Fastest Lap popover */
+  onOpenRecordBoard?: (trackId: string, vehicle: VehicleModelId) => void;
   /** The key to the badges under the list; off where the caller shows it elsewhere (the online board's filter row) */
   legend?: boolean;
-}> = ({ label, rows, nameHeader = "Driver", footer, stale = false, showBadges = nameHeader === "Driver", legend = true }) => {
+}> = ({
+  label,
+  rows,
+  nameHeader = "Driver",
+  footer,
+  stale = false,
+  showBadges = nameHeader === "Driver",
+  badgeContext,
+  circuitName,
+  onOpenRecordBoard,
+  legend = true,
+}) => {
   const sectors = rows.some((r) => r.sectorsMs?.length);
   const actions = rows.some((r) => r.action);
   const fetchedBadges = useDriverBadges(showBadges ? rows.filter((r) => r.badges === undefined).map((r) => r.title) : []);
@@ -157,13 +177,21 @@ export const BoardTable: React.FC<{
                     </span>
                     <InputIcon input={r.input} className="text-lc-fog" />
                     {showBadges ? (
-                      <DriverBadges badges={badgesOf(r)} compact />
+                      <DriverBadges
+                        badges={badgesOf(r)}
+                        compact
+                        context={badgeContext}
+                        driverName={r.title}
+                        circuitName={circuitName}
+                        onOpenBoard={onOpenRecordBoard}
+                      />
                     ) : null}
                     {r.mine ? <PlayerTag size="sm" /> : null}
                   </span>
-                  {r.tag || r.detail ? (
-                    <span className="flex min-w-0 items-center gap-2">
+                  {r.tag || r.meta || r.detail ? (
+                    <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
                       {r.tag ? <span className="flex shrink-0">{r.tag}</span> : null}
+                      {r.meta ? <span className="flex shrink-0 flex-wrap items-center gap-1">{r.meta}</span> : null}
                       {r.detail ? (
                         <span className="lc-hint block min-w-0 truncate" title={r.detailTitle ?? r.detail}>
                           {r.detail}
@@ -197,7 +225,7 @@ export const BoardTable: React.FC<{
           ))}
         </tbody>
       </table>
-      <BadgeLegend badges={shownBadges} className="px-2 pt-3 pb-1" />
+      <BadgeLegend badges={shownBadges} context={badgeContext} className="px-2 pt-3 pb-1" />
       {footer}
     </div>
   );

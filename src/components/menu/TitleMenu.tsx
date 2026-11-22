@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { PauseMenuProps } from "@/components/hud/PauseMenu";
+import type { VehicleModelId } from "@/types/f1";
 import { carById, carClass, carSkinSwatchBackground } from "@/lib/cars/car-registry";
 import { carSkinFor } from "@/lib/cars/car-skins";
 import { EngineersGarage } from "./EngineersGarage";
@@ -545,6 +546,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const [resume] = useState(() => (props.initialPanel ? null : peekResume(trackId)));
   // The panel asked for; `panel` below is the one shown, which must still be on offer
   const [chosenPanel, setPanel] = useState<TitlePanel | null>(props.initialPanel ?? resume?.panel ?? null);
+  const [leaderboardJump, setLeaderboardJump] = useState<{ trackId: string; vehicle: VehicleModelId; seq: number } | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const { mode } = useInputMode();
@@ -948,8 +950,22 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       onPickCircuit={onSelectTrack ? () => openPanel("circuit", { returnTo: "multiplayer" }) : undefined}
                     />
                   ) : null}
-                  {panel === "challenge" && props.challengePanel ? <ChallengePanel {...props.challengePanel} /> : null}
-                  {panel === "leaderboard" && props.leaderboardPanel ? <LeaderboardPanel {...props.leaderboardPanel} /> : null}
+                  {panel === "challenge" && props.challengePanel ? (
+                    <ChallengePanel
+                      {...props.challengePanel}
+                      onOpenBoard={
+                        props.leaderboardPanel
+                          ? (jumpTrackId, jumpVehicle) => {
+                              setLeaderboardJump((prev) => ({ trackId: jumpTrackId, vehicle: jumpVehicle, seq: (prev?.seq ?? 0) + 1 }));
+                              openPanel("leaderboard");
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : null}
+                  {panel === "leaderboard" && props.leaderboardPanel ? (
+                    <LeaderboardPanel {...props.leaderboardPanel} jumpTarget={leaderboardJump} />
+                  ) : null}
                   {panel === "credits" ? <Credits /> : null}
                   {panel === "request" ? (
                     <RequestPanel context={feedbackContext} facts={props.reportFacts ? () => props.reportFacts!(false) : undefined} />

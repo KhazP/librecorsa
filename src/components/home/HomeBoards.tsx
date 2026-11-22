@@ -8,9 +8,10 @@
  */
 import React, { useEffect, useState } from "react";
 import type { VehicleModelId } from "@/types/f1";
-import { ALL_CARS, boardLabel, type BoardCar } from "@/lib/net/board-client";
+import { ALL_CARS, type BoardCar } from "@/lib/net/board-client";
 import { challengeAt, challengeById, challengeConditionsLabel, challengesSoFar, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
 import { HallOfFame } from "@/components/board/HallOfFame";
+import { LapConditionBadges } from "@/components/board/LapConditionBadges";
 import { OnlineBoard, type BoardCarTag } from "@/components/board/OnlineBoard";
 import { Badge } from "@/components/ui/Badge";
 import { Segmented } from "@/components/ui/Segmented";
@@ -39,12 +40,6 @@ function weekSpan(w: WeeklyChallenge): string {
   return first.getUTCMonth() === last.getUTCMonth() ? `${first.getUTCDate()}–${dayOf(w.endsMs - 1)}` : `${dayOf(w.startsMs)} – ${dayOf(w.endsMs - 1)}`;
 }
 
-/** The week's rules: "Some assists", "Standard realism", "Dry track", "Soft tyres", "Low fuel" */
-function rulesOf(w: WeeklyChallenge): string[] {
-  const [assists, realism] = boardLabel({ assists: w.assists, realism: w.realism, surface: "dry" }).split(" · ");
-  return [assists, `${realism} realism`, ...challengeConditionsLabel(w.vehicle).split(" · ")];
-}
-
 export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCircuitChange, carTag, carChoices, carTitles }) => {
   const [view, setView] = useState<View>("laps");
   const [car, setCar] = useState<BoardCar>(ALL_CARS);
@@ -67,6 +62,11 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
 
   const circuitName = (id: string) => circuits.find((c) => c.id === id)?.label ?? id;
   const carName = (w: WeeklyChallenge) => carTitles[w.car ?? w.vehicle] ?? carTag(w.vehicle).label;
+  const openRecordBoard = (trackId: string, vehicle: VehicleModelId) => {
+    onCircuitChange(trackId);
+    setCar(vehicle);
+    setView("laps");
+  };
 
   const switcher = (
     <Segmented
@@ -111,6 +111,7 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
             if (namedCar && carTitles[namedCar]) return carTitles[namedCar];
             return carTitles[v] ?? carChoices.find((c) => c.id === v)?.label ?? v;
           }}
+          onOpenBoard={openRecordBoard}
         />
       </div>
     );
@@ -150,13 +151,15 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
                 {thisWeek ? `${timeLeftLabel(week.endsMs, now)} left` : `Ran ${weekSpan(week)}`}
               </Badge>
             </div>
-            <p className="lc-mono m-0 text-[12px] text-lc-slate" aria-label="Rules">
-              {rulesOf(week).join(" · ")}
-            </p>
+            <div className="flex flex-wrap items-center gap-1.5" aria-label="Rules">
+              <LapConditionBadges assists={week.assists} realism={week.realism} />
+              <span className="lc-mono text-[12px] text-lc-slate">{challengeConditionsLabel(week.vehicle)}</span>
+            </div>
           </div>
         }
         emptyText={thisWeek ? "No times set yet this week." : "No times recorded for this week."}
         carTag={carTag}
+        onOpenRecordBoard={openRecordBoard}
       />
     </div>
   );

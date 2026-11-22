@@ -41,6 +41,8 @@ import { SettingRow } from "@/components/ui/SettingRow";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Toggle } from "@/components/ui/Toggle";
 import { Icon } from "@/components/ui/icons/Icon";
+import { filterBadgesForContext, type BadgeContext } from "@/lib/net/awards";
+import { LapConditionBadges } from "./LapConditionBadges";
 import { badgesFor, BoardError, BoardSkeleton, BoardTable, MyPlace, useDriverBadges, type BoardRow } from "./board-table";
 
 /** A car on a row of every car's board: its short name, in its class colour */
@@ -94,6 +96,10 @@ export interface OnlineBoardProps {
    */
   boardChoice?: string;
   onBoardChoiceChange?: (id: string) => void;
+  /** Optional handler when a player taps a record inside an FL badge popover (e.g. jump out of a challenge view) */
+  onOpenRecordBoard?: (trackId: string, vehicle: VehicleModelId) => void;
+  /** External request to switch between "My car" and "All cars" (e.g. jumping here from Hall of Fame) */
+  scopeOverride?: { scope: "mine" | "all"; seq: number } | null;
   className?: string;
 }
 
@@ -153,12 +159,17 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
   footer,
   boardChoice,
   onBoardChoiceChange,
+  onOpenRecordBoard,
+  scopeOverride,
   className = "",
 }) => {
   const rootRef = useRef<HTMLElement | null>(null);
   const headingId = React.useId();
   const [applyingKey, setApplyingKey] = useState<string | null>(null);
   const [scopeChosen, setScope] = useState<Scope>("mine");
+  useEffect(() => {
+    if (scopeOverride) setScope(scopeOverride.scope);
+  }, [scopeOverride]);
   const scope: Scope = myCar ? scopeChosen : "all";
   // Without a car being driven, the car picked from the list (every car's board until one is)
   const picked: BoardCar = carPicker?.cars.some((c) => c.id === carPicker.value) ? carPicker.value : ALL_CARS;
@@ -366,8 +377,13 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
           {tag.label}
         </Badge>
       ) : undefined,
-      // A challenge's laps were all driven to its rules: only the day
-      detail: `${e.conditions && !event ? `${boardLabel(e.conditions)} · ` : ""}${new Date(e.recordedAt).toLocaleDateString()}`,
+      // A challenge's laps were all driven to its rules: show condition pills on open boards, date on all
+      meta:
+        e.conditions && !event ? (
+          <LapConditionBadges assists={e.conditions.assists} realism={e.conditions.realism} surface={e.conditions.surface} />
+        ) : undefined,
+      detail: new Date(e.recordedAt).toLocaleDateString(),
+      detailTitle: `${e.conditions && !event ? `${boardLabel(e.conditions)} · ` : ""}${new Date(e.recordedAt).toLocaleString()}`,
       lapMs: e.lapTimeMs,
       fastest: pos === 1,
       sectorsMs: e.sectorTimesMs,
@@ -384,7 +400,8 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
 
   // The place above the player's: from the rows round their place, wherever the page is
   const ahead = me && shown?.near && me.pos > 1 ? (shown.near.entries[me.pos - 1 - shown.near.pos] ?? null) : null;
-  const circuitName = circuits.find((c) => c.id === circuit)?.label ?? circuit;
+  const circuitNameOf = (id: string) => circuits.find((c) => c.id === id)?.label ?? id.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const circuitName = circuitNameOf(circuit);
   /** The older board's name ("Physics V1") */
   const versionName = choice.label;
   const carName = event
@@ -393,7 +410,18 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
       ? "All cars"
       : (myCar?.label ?? carPicker?.cars.find((c) => c.id === car)?.label ?? car);
   const boardName = `${carName} · ${circuitName}${event ? ` · ${event.id}` : ""}${older ? ` · ${versionName}` : ""}`;
+  const badgeContext: BadgeContext = car === ALL_CARS ? { scope: "all" } : { scope: "vehicle", vehicle: car };
   const pageBadges = rows.flatMap((r) => r.badges ?? []);
+  const visiblePageBadges = filterBadgesForContext(pageBadges, badgeContext);
+  const handleOpenRecordBoard: ((trackId: string, vehicle: VehicleModelId) => void) | undefined = onOpenRecordBoard
+    ? onOpenRecordBoard
+    : !event
+      ? (trackId, vehicle) => {
+          onCircuitChange(trackId);
+          if (carPicker) carPicker.onChange(vehicle);
+          else if (myCar) setScope(vehicle === myCar.vehicle ? "mine" : "all");
+        }
+      : undefined;
 
   return (
     <section
@@ -469,7 +497,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
       ) : null}
 
       {/* The Filters button, and on the same line the key to the badges on this page */}
-      {event && pageBadges.length === 0 ? null : (
+      {event && visiblePageBadges.length === 0 ? null : (
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
           {event ? null : (
             <Button
@@ -493,7 +521,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
               {filtersOn ? `Filters · ${filtersOn} on` : "Filters"}
             </Button>
           )}
-          <BadgeLegend badges={pageBadges} className="ml-auto justify-end phone:ml-0 phone:justify-start" />
+          <BadgeLegend badges={pageBadges} context={badgeContext} className="ml-auto justify-end phone:ml-0 phone:justify-start" />
         </div>
       )}
       {filtersOpen && !event ? (
@@ -556,7 +584,15 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
               Refresh failed. Showing cached times.
             </p>
           ) : null}
-          <BoardTable label={`Online times, ${boardName}, page ${page} of ${pages}`} rows={rows} stale={stale} legend={false} />
+          <BoardTable
+            label={`Online times, ${boardName}, page ${page} of ${pages}`}
+            rows={rows}
+            stale={stale}
+            badgeContext={badgeContext}
+            circuitName={circuitNameOf}
+            onOpenRecordBoard={handleOpenRecordBoard}
+            legend={false}
+          />
         </>
       )}
 
