@@ -136,7 +136,7 @@ export function Button(props: ButtonProps) {
   // A link has no disabled state; a button greyed out with a reason wears the readable recipe
   const withReason = Boolean(disabledReason) && rest.href === undefined;
   const classes = cx(
-    "relative inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lc-row whitespace-nowrap select-none",
+    "relative inline-flex max-w-full shrink-0 cursor-pointer items-center justify-center rounded-lc-row whitespace-nowrap select-none",
     "active:scale-[0.98] motion-reduce:active:scale-100 disabled:cursor-not-allowed disabled:active:scale-100 aria-disabled:cursor-not-allowed aria-disabled:active:scale-100",
     MOTION,
     withReason ? WITH_REASON : VARIANT[variant],
@@ -151,7 +151,7 @@ export function Button(props: ButtonProps) {
       {prompt ? <span className="inline-flex shrink-0 items-center pointer-coarse:hidden">{prompt}</span> : null}
       <span className={cx("inline-flex min-w-0 items-center gap-2.5", loading ? "invisible" : undefined)}>
         {icon ? <span className="inline-flex shrink-0" aria-hidden>{icon}</span> : null}
-        <span className={cx("lc-title truncate leading-none", s.label)}>{children}</span>
+        <span className={cx("lc-title truncate pr-0.5 leading-none", s.label)}>{children}</span>
       </span>
       {loading ? <Dots /> : null}
       {disabledReason ? (

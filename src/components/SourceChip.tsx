@@ -144,7 +144,7 @@ export const SourceChip: React.FC<{
               role="group"
               aria-label={`Source of ${source.title}`}
               onKeyDown={onPanelKey}
-              className={`pointer-events-auto fixed z-(--z-lc-notice) flex w-[min(264px,calc(100vw-32px))] flex-col gap-1.5 overflow-y-auto overscroll-contain rounded-lc-tile border border-white/7 bg-lc-carbon p-3.5 text-left text-[13px] leading-snug font-normal text-lc-fog shadow-lc-pop ${zoomed ? "lc-ui-zoom" : ""}`}
+              className={`pointer-events-auto fixed z-(--z-lc-notice) flex w-[min(320px,calc(100vw-32px))] flex-col gap-1.5 overflow-y-auto overscroll-contain rounded-lc-tile border border-white/7 bg-lc-carbon p-3.5 text-left text-[13px] leading-snug font-normal text-lc-fog shadow-lc-pop ${zoomed ? "lc-ui-zoom" : ""}`}
               // Laid out unseen at the corner first, measured, then put by the button
               style={
                 place
@@ -152,8 +152,8 @@ export const SourceChip: React.FC<{
                   : { left: 0, top: 0, visibility: "hidden" }
               }
             >
-              <SupportButton support={source.support} maker={source.author} className="mb-1 self-start" />
-              <span>
+              <SupportButton support={source.support} maker={source.author} className="mb-1 max-w-full self-start" />
+              <span className="min-w-0 [overflow-wrap:anywhere]">
                 &ldquo;
                 <a href={source.url} target="_blank" rel="noreferrer" className={linkClass}>
                   {source.title}
@@ -177,7 +177,7 @@ export const SourceChip: React.FC<{
                 )}
               </span>
               {source.model ? (
-                <span className="text-lc-slate">
+                <span className="min-w-0 text-lc-slate [overflow-wrap:anywhere]">
                   Model: &ldquo;
                   <a href={source.model.url} target="_blank" rel="noreferrer" className={linkClass}>
                     {source.model.title}
@@ -192,7 +192,7 @@ export const SourceChip: React.FC<{
                   )}
                 </span>
               ) : null}
-              {source.note ? <span className="text-lc-slate">{source.note}</span> : null}
+              {source.note ? <span className="min-w-0 text-lc-slate [overflow-wrap:anywhere]">{source.note}</span> : null}
               <a
                 href={TAKEDOWN_URL}
                 target="_blank"
