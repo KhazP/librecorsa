@@ -9,6 +9,7 @@ import { keyLabel, padButtonLabel } from "@/lib/input/bindings";
 import { DEFAULT_HUD_PRESET, type HudPreset } from "@/lib/settings/hud-layouts";
 import {
   autoQuality,
+  autoQualityMinScale,
   boardWidget,
   deltaBar,
   defaultView,
@@ -57,7 +58,7 @@ export function GraphicsTab() {
   const env = useSettingsEnv();
   const vrOff = env.vrSupported ? null : "Requires WebXR headset";
   return (
-    <SettingsCard title="Graphics" rows={[quality, sharpLow, renderScale, sharpen, frameRate, autoQuality, driverBody]} first>
+    <SettingsCard title="Graphics" rows={[quality, sharpLow, renderScale, sharpen, frameRate, autoQuality, autoQualityMinScale, driverBody]} first>
       <SettingRow
         label="VR"
         disabled={vrOff !== null}
