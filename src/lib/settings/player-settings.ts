@@ -113,6 +113,8 @@ export interface AudioSettings {
   menuMusic: number;
   raceMusic: number;
   replayMusic: number;
+  /** Music while driving (practice, qualifying and a race up to the flag); off by default, the results music plays either way */
+  raceMusicOn: boolean;
   /** Soundtrack tracks switched off (ids from music-catalog.ts) */
   musicOff: string[];
   /** The music alone is off (the title screen's music button), every other sound playing on */
@@ -487,6 +489,7 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   menuMusic: 0.8,
   raceMusic: 0.2,
   replayMusic: 0.8,
+  raceMusicOn: false,
   musicOff: [],
   musicMuted: false,
 };
@@ -869,6 +872,7 @@ function parseAudio(v: unknown): AudioSettings {
     menuMusic: num(v.menuMusic, 0, 1, d.menuMusic),
     raceMusic: num(v.raceMusic, 0, 1, d.raceMusic),
     replayMusic: num(v.replayMusic, 0, 1, d.replayMusic),
+    raceMusicOn: bool(v.raceMusicOn, d.raceMusicOn),
     musicOff: Array.isArray(v.musicOff) ? [...new Set(v.musicOff.filter((id) => isStr(id) && MUSIC_TRACK_IDS.has(id)))] : [],
     musicMuted: bool(v.musicMuted, d.musicMuted),
   };
