@@ -65,30 +65,29 @@ export function feedbackContextOf(
   };
 }
 
-const COPY: Record<FeedbackKind, { title: string; intro: string; send: string }> = {
+/**
+ * The panel is called Feedback wherever it opens (the title menu's entry, the pause menu's tab); what each kind is for
+ * is said under that heading
+ */
+const COPY: Record<FeedbackKind, { intro: string; send: string }> = {
   Bug: {
-    title: "Report a bug",
-    intro: "Describe what went wrong and how to reproduce it. Session info below is optional.",
+    intro: "Report a bug: describe what went wrong and how to reproduce it. Session info below is optional.",
     send: "Send report",
   },
   Wheel: {
-    title: "Wheel report",
-    intro: "Report steering, pedal, button, and force-feedback behaviour for your wheel.",
+    intro: "Report how your wheel behaves: steering, pedals, buttons and force feedback.",
     send: "Send report",
   },
   Idea: {
-    title: "Feature idea",
-    intro: "Suggest a feature or improvement.",
+    intro: "Suggest a feature or an improvement.",
     send: "Send idea",
   },
   Car: {
-    title: "Request a car",
-    intro: "Name the car and link an eligible 3D model.",
+    intro: "Request a car: name it and link an eligible 3D model.",
     send: "Send request",
   },
   Track: {
-    title: "Request a track",
-    intro: "Name the circuit and link an eligible 3D model or scan.",
+    intro: "Request a track: name the circuit and link an eligible 3D model or scan.",
     send: "Send request",
   },
 };
@@ -377,9 +376,11 @@ const AddedRow: React.FC<{ label: string; value: string; locked?: boolean; on: b
   );
   const grid = "grid grid-cols-[84px_minmax(0,1fr)_16px] items-start gap-x-3 py-1 text-left text-[13px] leading-snug";
   if (locked)
+    // Sent like a ticked line, but it can't be left out: a lock where the others have their tick or dash
     return (
       <li className={cx(grid, "px-2")} title="Always sent: GitHub's form needs it">
         {cells}
+        <Icon name="locked" size="sm" label="Always sent" className="mt-px text-lc-slate" />
       </li>
     );
   return (
@@ -400,7 +401,7 @@ const AddedRow: React.FC<{ label: string; value: string; locked?: boolean; on: b
 };
 
 /**
- * The feedback panel (the title menu's Feedback, the pause menu's Report a bug): bug and wheel reports, ideas, and car
+ * The feedback panel (the title menu's Feedback, and its tab in the pause menu): bug and wheel reports, ideas, and car
  * or circuit requests. It collects the details, adds what the game knows (the session, the build, the frame rate,
  * recent errors, where the car was), each line shown and switchable, and opens it all as a pre-filled GitHub issue.
  */
@@ -410,7 +411,12 @@ export const RequestPanel: React.FC<{
   facts?: () => ReportFacts;
   /** A picture of the scene, taken once when the panel opens (from the pause menu) */
   screenshot?: () => Promise<Blob | null>;
-}> = ({ context, facts, screenshot }) => {
+  /**
+   * Its own "Feedback" heading over the kind's description (the pause menu). False where the host's frame already
+   * names the panel (the title menu's, with Close beside it): the description then opens the panel
+   */
+  heading?: boolean;
+}> = ({ context, facts, screenshot, heading = true }) => {
   const [kind, setKind] = useState<FeedbackKind>("Bug");
   const [main, setMain] = useState("");
   const [second, setSecond] = useState("");
@@ -613,7 +619,7 @@ export const RequestPanel: React.FC<{
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-7 text-lc-chalk">
       <div className="flex min-w-0 flex-col gap-4">
-        <h2 className="lc-h2">{copy.title}</h2>
+        {heading ? <h2 className="lc-h2">Feedback</h2> : null}
         <p className="m-0 text-[16px] leading-snug text-lc-fog">{copy.intro}</p>
         {content ? (
           <p className="lc-body m-0">
@@ -623,7 +629,10 @@ export const RequestPanel: React.FC<{
           </p>
         ) : null}
         {rows.length ? (
-          <Card title="Included details" description="Posted to a public GitHub issue. Click a line to omit it.">
+          <Card
+            title="Included details"
+            description="Posted to a public GitHub issue. Click a line to omit it. Lines with a lock are always sent."
+          >
             <ul className="m-0 -mx-2 flex list-none flex-col p-0">
               {rows.map((r) => (
                 <AddedRow key={r.id} label={r.label} value={r.value} locked={r.locked} on={r.locked || !leftOut.has(r.id)} onToggle={() => toggleLine(r.id)} />
