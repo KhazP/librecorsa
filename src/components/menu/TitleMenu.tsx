@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { PauseMenuProps } from "@/components/hud/PauseMenu";
-import { carById, carClass } from "@/lib/cars/car-registry";
+import { carById, carClass, carSkinSwatchBackground } from "@/lib/cars/car-registry";
 import { carSkinFor } from "@/lib/cars/car-skins";
 import { EngineersGarage } from "./EngineersGarage";
 import { MultiplayerPanel } from "@/components/hud/MultiplayerPanel";
@@ -1009,7 +1009,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                             aria-hidden
                             className="h-3 w-7 shrink-0 rounded-full"
                             // A livery's own swatch is data
-                            style={{ background: `linear-gradient(135deg, ${skin.swatch[0]} 0 60%, ${skin.swatch[1]} 60% 100%)` }}
+                            style={{ background: carSkinSwatchBackground(skin) }}
                           />
                           <span className="line-clamp-2 text-right">{skin.name}</span>
                         </>

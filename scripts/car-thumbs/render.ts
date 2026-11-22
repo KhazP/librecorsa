@@ -8,7 +8,7 @@
  */
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { carById, carSkinBaseUrl, type CarId } from "@/lib/cars/car-registry";
+import { carById, portedSkinFor, type CarId } from "@/lib/cars/car-registry";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
 import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
@@ -134,12 +134,9 @@ async function main(): Promise<void> {
   const snapSkin = async (skinId: string | null): Promise<string> => {
     const skins = def.skins;
     if (!skins?.length) return snap();
-    const skin = skinId ? skins.find((s) => s.id === skinId) : null;
+    const skin = skinId ? skins.find((s) => s.id === skinId) : skins[0];
     if (skinId && !skin) throw new Error(`${id}: unknown skin ${skinId}`);
-    const ported =
-      skin && skin.id !== skins[0].id
-        ? { baseUrl: carSkinBaseUrl(def.id, skin.id), files: skin.files, variant: skin.variant }
-        : null;
+    const ported = portedSkinFor(def.id, skin);
     // Reset to the GLB's own maps first and dispose prior skin textures so multi-skin batches keep VRAM flat
     await rig.setSkin?.(null);
     await clearSkinTextureCache();

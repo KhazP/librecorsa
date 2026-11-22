@@ -22,6 +22,16 @@ import {
   renderF1LiveryToContext,
   resolveLiveryVisual,
 } from '../src/lib/render/livery-repaint';
+import {
+  GT3_ATLAS_SIZE,
+  GT3_BODY_PROFILES,
+  GT3_LIVERIES,
+  gt3LiveryById,
+  installGt3LiveryPaint,
+  renderGt3LiveryToContext,
+} from '../src/lib/render/gt3-livery-painter';
+import { AMG_GT3_SKINS, BMW_M4_GT3_SKINS } from '../src/lib/cars/gt3-skins';
+import { carSkinSwatchBackground, portedSkinFor } from '../src/lib/cars/car-registry';
 import { AI_DRIVERS, AI_RESERVE_DRIVERS } from '../src/lib/sim/ai-opponents';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
 import { resetAllSettings } from '../src/components/settings/storage';
@@ -67,6 +77,8 @@ function createMockCanvas2D(): {
     lineTo: noop,
     quadraticCurveTo: noop,
     arc: noop,
+    rect: noop,
+    clip: noop,
     createLinearGradient: () => grad,
     createPattern: () => ({}),
     measureText: (t: string) => ({ width: t.length * 14 }),
@@ -364,6 +376,69 @@ check('procedural 2048px livery canvas painter and tri-orthographic material ins
   assert.equal(controller.set(null), false);
   bodyMat.dispose();
   flapMat.dispose();
+});
+
+check('AMG GT3 Evo and BMW M4 GT3 Evo have Verstappen Racing defaults, 8 skins each, synced swatches & valid resolution', () => {
+  assert.equal(AMG_GT3_SKINS.length, 8, 'AMG GT3 Evo should have 8 liveries');
+  assert.equal(BMW_M4_GT3_SKINS.length, 8, 'BMW M4 GT3 Evo should have 8 liveries');
+  assert.equal(AMG_GT3_SKINS[0].id, 'verstappen_3', 'AMG GT3 Evo default skin must be #3 Verstappen Racing');
+  assert.equal(BMW_M4_GT3_SKINS[0].id, 'bmw_verstappen_33', 'BMW M4 GT3 Evo default skin must be #33 Verstappen Racing');
+
+  // AMG default keeps the GLB baked Verstappen texture; procedural AMG skins resolve to procedural PortedSkin
+  assert.equal(portedSkinFor('amg-gt3', AMG_GT3_SKINS[0]), null);
+  assert.equal(portedSkinFor('amg-gt3', AMG_GT3_SKINS[1])?.procedural, 'amg_mamba_48');
+
+  // BMW default is procedural #33 Verstappen Racing; BMW factory stealth restores GLB paint (null)
+  assert.equal(portedSkinFor('bmw-m4-gt3', BMW_M4_GT3_SKINS[0])?.procedural, 'bmw_verstappen_33');
+  const stealth = BMW_M4_GT3_SKINS.find((s) => s.id === 'bmw_stealth_25');
+  assert.ok(stealth, 'BMW M4 GT3 Evo should keep Factory Carbon Stealth option');
+  assert.equal(portedSkinFor('bmw-m4-gt3', stealth), null);
+
+  // Every procedural skin in gt3-skins.ts matches its painter spec 1:1 and produces a 3-colour CSS gradient swatch
+  const allGt3Skins = [...AMG_GT3_SKINS, ...BMW_M4_GT3_SKINS];
+  const seenIds = new Set<string>();
+  for (const skin of allGt3Skins) {
+    assert.ok(!seenIds.has(skin.id), `duplicate GT3 skin id: ${skin.id}`);
+    seenIds.add(skin.id);
+    assert.equal(skin.swatch.length, 3, `${skin.id} must have 3-colour swatch`);
+    for (const c of skin.swatch) assert.match(c, HEX_RE, `${skin.id} invalid swatch hex ${c}`);
+    const bg = carSkinSwatchBackground(skin);
+    assert.ok(bg.includes('linear-gradient') && bg.includes(skin.swatch[2]!), `${skin.id} 3-colour swatch css`);
+    if (skin.procedural) {
+      const spec = gt3LiveryById(skin.procedural);
+      assert.ok(spec, `missing GT3 painter spec for ${skin.procedural}`);
+      assert.equal(spec.name, skin.name, `name mismatch for ${skin.id}`);
+      assert.deepEqual(spec.swatch, skin.swatch, `swatch mismatch for ${skin.id}`);
+    }
+  }
+});
+
+check('all 14 procedural GT3 liveries render cleanly on 2048px canvas with valid PBR finishes and zero corporate trademarks', () => {
+  assert.equal(GT3_LIVERIES.length, 14, 'expected 7 BMW + 7 AMG procedural GT3 liveries');
+  const corpSponsorRe = /\b(red\s*bull|petronas|oracle|shell|pirelli|michelin|crowdstrike|viaplay|dekra|mann-?filter|mobil\s*1|schaeffler|totalenergies)\b/i;
+
+  for (const car of ['amg-gt3', 'bmw-m4-gt3'] as const) {
+    const mat = new THREE.MeshPhysicalMaterial({ color: '#111111', roughness: 0.5, metalness: 0.4 });
+    const controller = installGt3LiveryPaint([{ material: mat }], GT3_BODY_PROFILES[car]);
+    assert.ok(mat.customProgramCacheKey().includes('gt3-procedural-livery'));
+
+    for (const spec of GT3_LIVERIES.filter((s) => s.car === car)) {
+      assert.ok(spec.finish in LIVERY_FINISH_PROFILES, `${spec.id} invalid finish ${spec.finish}`);
+      const mock = createMockCanvas2D();
+      renderGt3LiveryToContext(mock.ctx, spec, GT3_ATLAS_SIZE);
+      assert.ok(mock.drawOps >= 40, `${spec.id} rendered too few draw operations (${mock.drawOps})`);
+      assert.ok(mock.texts.includes(spec.number), `${spec.id} did not draw racing number #${spec.number}`);
+      assert.ok(mock.texts.includes(spec.sponsors.door), `${spec.id} did not draw door sponsor ${spec.sponsors.door}`);
+      assert.ok(mock.texts.includes(spec.wingText), `${spec.id} did not draw wing banner ${spec.wingText}`);
+      for (const drawn of mock.texts) {
+        assert.ok(!corpSponsorRe.test(drawn), `${spec.id} drew unlicensed corporate trademark: "${drawn}"`);
+      }
+      // Headless Node gracefully returns false without throwing and preserves material state
+      assert.equal(controller.set(spec.id), false);
+    }
+    assert.equal(controller.set(null), false);
+    controller.dispose();
+  }
 });
 
 console.log(`\n${passed} checks passed`);

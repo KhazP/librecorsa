@@ -203,7 +203,7 @@ async function main(): Promise<void> {
               for (let i = 0; i < batch.length; i++) {
                 const skin = batch[i];
                 const isFirst = offset === 0 && i === 0;
-                const png = await page.evaluate((id) => window.__thumbApi!.snapSkin(id), isFirst ? null : skin.id);
+                const png = await page.evaluate((id) => window.__thumbApi!.snapSkin(id), skin.id);
                 shotsInBrowser++;
                 const webp = await encodeThumbWebp(png);
                 if (isFirst) {

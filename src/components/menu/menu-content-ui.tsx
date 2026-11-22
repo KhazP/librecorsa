@@ -4,7 +4,16 @@ import React from "react";
 import type { BadgeSize, BadgeTone } from "@/components/ui/Badge";
 import { QualityBadge } from "@/components/ui/badges/QualityBadge";
 import { circuitQualityMeta, type CircuitQuality, type TrackInfo } from "@/lib/track-registry";
-import { carById, carQualityMeta, PHYSICS_CHECK, type CarClassId, type CarDefinition, type CarId, type CarQuality } from "@/lib/cars/car-registry";
+import {
+  carById,
+  carQualityMeta,
+  carSkinSwatchBackground,
+  PHYSICS_CHECK,
+  type CarClassId,
+  type CarDefinition,
+  type CarId,
+  type CarQuality,
+} from "@/lib/cars/car-registry";
 import { ClassTag } from "@/components/ui/badges/ClassTag";
 import type { CarClassCode } from "@/components/ui/badges/class-colors";
 import { setCarSkin, useCarSkinId } from "@/lib/cars/car-skins";
@@ -414,10 +423,15 @@ export const CarSkinPicker: React.FC<{
               style={
                 {
                   "--lc-swatch-gap": surface,
-                  background: `linear-gradient(135deg, ${skin.swatch[0]} 0 60%, ${skin.swatch[1]} 60% 100%)`,
+                  background: carSkinSwatchBackground(skin),
                 } as React.CSSProperties
               }
-            />
+            >
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent"
+              />
+            </button>
           );
         })}
       </div>
