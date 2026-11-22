@@ -24,6 +24,30 @@
     "quality": "original"
   },
   {
+    "id": "qiddiya",
+    "name": "Qiddiya Speed Park",
+    "layout": "Grand Prix layout",
+    "country": "Saudi Arabia",
+    "city": "Qiddiya, Riyadh",
+    "lengthM": 8156.71,
+    "turns": 20,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/qiddiya/track_data.json",
+    "credit": {
+      "title": "Qiddiya Speed Park",
+      "author": "Maxim555 (circuit) & Zhenix (scenery)",
+      "authorUrl": "https://www.overtake.gg/members/maxim555king.1524527/",
+      "url": "https://www.overtake.gg/members/maxim555king.1524527/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/members/maxim555king.1524527/",
+      "note": "Circuit by Maxim555, scenery by Zhenix (Quaresma) from his F1 25 version. Both used with permission."
+    },
+    "quality": "sim",
+    "defaultTimeOfDay": "night",
+    "unlisted": true
+  },
+  {
     "id": "chang",
     "name": "Chang International Circuit",
     "layout": "Grand Prix layout",
@@ -717,27 +741,23 @@
     "quality": "sim"
   },
   {
-    "id": "qiddiya",
-    "name": "Qiddiya Speed Park",
+    "id": "brno",
+    "name": "Brno Circuit",
     "layout": "Grand Prix layout",
-    "country": "Saudi Arabia",
-    "city": "Qiddiya, Riyadh",
-    "lengthM": 8156.71,
-    "turns": 20,
-    "direction": "anticlockwise",
-    "dataUrl": "/tracks/qiddiya/track_data.json",
+    "country": "Czech Republic",
+    "city": "Brno",
+    "lengthM": 5394.09,
+    "turns": 13,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/brno/track_data.json",
     "credit": {
-      "title": "Qiddiya Speed Park",
-      "author": "Maxim555 (circuit) & Zhenix (scenery)",
-      "authorUrl": "https://www.overtake.gg/members/maxim555king.1524527/",
-      "url": "https://www.overtake.gg/members/maxim555king.1524527/",
+      "title": "Brno Circuit",
+      "author": "Malagoli Garage",
+      "url": "https://assettocorsa.club/mods/tracks/brno-circuit.html",
       "short": null,
-      "license": "Used with permission",
-      "licenseUrl": "https://www.overtake.gg/members/maxim555king.1524527/",
-      "note": "Circuit by Maxim555, scenery by Zhenix (Quaresma) from his F1 25 version. Both used with permission."
+      "license": "AC Mod (Assettocorsa.club)",
+      "licenseUrl": "https://assettocorsa.club/mods/tracks/brno-circuit.html"
     },
-    "quality": "sim",
-    "defaultTimeOfDay": "night",
-    "unlisted": true
+    "quality": "sim"
   }
 ]

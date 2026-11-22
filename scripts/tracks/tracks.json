@@ -553,5 +553,21 @@
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/willow-springs-big-willow.32338/"
     }
+  },
+  "brno": {
+    "folder": "brno_circuit",
+    "name": "Brno Circuit",
+    "layout": "Grand Prix layout",
+    "country": "Czech Republic",
+    "city": "Brno",
+    "baseAltitudeM": 450,
+    "credit": {
+      "title": "Brno Circuit",
+      "author": "Malagoli Garage",
+      "url": "https://assettocorsa.club/mods/tracks/brno-circuit.html",
+      "short": null,
+      "license": "AC Mod (Assettocorsa.club)",
+      "licenseUrl": "https://assettocorsa.club/mods/tracks/brno-circuit.html"
+    }
   }
 }

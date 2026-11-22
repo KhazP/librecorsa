@@ -67,6 +67,26 @@ PHYS_COLOURS = {
 SPIELBERG_AC_TEXTURES = r'^(ac_crew|misc|misc1|misc_silver_2|commissario_NEW|DRIVER_Suit2|driver_face|props_pitlane)\.dds$'
 
 AC_TRACKS = {
+    'brno': {
+        'folder': 'brno_circuit',
+        'layout_dir': '',
+        'kn5_files': ['brno_circuit.kn5'],
+        'name': 'Brno Circuit',
+        'layout': 'Grand Prix layout',
+        'country': 'Czech Republic',
+        'city': 'Brno',
+        'baseAltitudeM': 450,
+        'pitboxes': 30,
+        'description': 'Automotodrom Brno (Masaryk Circuit) in the Czech Republic — 5.40 km flowing Grand Prix circuit with sweeping elevation changes and fast technical chicanes.',
+        'credit': {
+            'title': 'Brno Circuit',
+            'author': 'Malagoli Garage',
+            'url': 'https://assettocorsa.club/mods/tracks/brno-circuit.html',
+            'short': None,
+            'license': 'AC Mod (Assettocorsa.club)',
+            'licenseUrl': 'https://assettocorsa.club/mods/tracks/brno-circuit.html',
+        },
+    },
     'chang': {
         'folder': 'chang',
         'layout_dir': 'circuit_gp',

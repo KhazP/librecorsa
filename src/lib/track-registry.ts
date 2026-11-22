@@ -153,6 +153,7 @@ const COUNTRY_REGION: Record<string, CircuitRegion> = {
   Netherlands: "Europe",
   Russia: "Europe",
   Croatia: "Europe",
+  "Czech Republic": "Europe",
   Australia: "Oceania",
   "New Zealand": "Oceania",
 };
