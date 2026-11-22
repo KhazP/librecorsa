@@ -55,10 +55,14 @@ for (const l of HUD_LAYOUTS) {
   check(`"${l.id}": no em dash in its text`, !/[—]/.test(`${l.label} ${l.detail}`));
   check(`"${l.id}": name and line are short`, l.label.length <= 22 && l.detail.length <= 52, `${l.label.length} / ${l.detail.length}`);
 }
+/** Third-party layouts contributed to this repository rather than ported from one of their own */
+const CONTRIBUTED_HERE = new Set(['grand-prix']);
 for (const l of THIRD_PARTY_HUD_LAYOUTS as readonly (typeof HUD_LAYOUTS)[number][]) {
   const c = l.credit;
   check(`"${l.id}": credits its author`, Boolean(c?.author && c.author.trim() === c.author && c.author.length > 1));
-  check(`"${l.id}": links its source repository`, Boolean(c && /^https:\/\/github\.com\/[^/]+(\/[^/]+)?$/.test(c.repoUrl)), c?.repoUrl);
+  // A layout contributed straight to this repository (Grand Prix, #162) has no repository of its own: its author's profile
+  const source = CONTRIBUTED_HERE.has(l.id) ? /^https:\/\/github\.com\/[^/]+$/ : /^https:\/\/github\.com\/[^/]+\/[^/]+$/;
+  check(`"${l.id}": links its source repository`, Boolean(c && source.test(c.repoUrl)), c?.repoUrl);
   check(`"${l.id}": the author is the repository's owner`, Boolean(c && c.repoUrl.split('/')[3]?.toLowerCase() === c.author.toLowerCase()));
   check(`"${l.id}": names a licence the game can take in`, c?.license === 'MIT' || c?.license === 'GPL-3.0');
   check(`"${l.id}": its licence has a page to link`, Boolean(c && /^https:\/\//.test(HUD_LICENSE_URL[c.license])));
