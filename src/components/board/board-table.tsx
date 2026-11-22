@@ -140,7 +140,15 @@ export const BoardTable: React.FC<{
                       {r.title}
                     </span>
                     <InputIcon input={r.input} className="text-lc-fog" />
-                    {showBadges ? <DriverBadges badges={r.badges ?? fetchedBadges[driverNameKey(r.title)] ?? []} compact /> : null}
+                    {showBadges ? (
+                      <DriverBadges
+                        badges={
+                          r.badges ??
+                          (Object.hasOwn(fetchedBadges, driverNameKey(r.title)) ? fetchedBadges[driverNameKey(r.title)] : [])
+                        }
+                        compact
+                      />
+                    ) : null}
                     {r.mine ? <PlayerTag size="sm" /> : null}
                   </span>
                   {r.tag || r.detail ? (

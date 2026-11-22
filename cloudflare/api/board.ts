@@ -130,16 +130,16 @@ export async function deleteLaps(
   opts: { refreshAutoAwards?: boolean } = {},
 ): Promise<number> {
   let deleted = 0;
-  const affected: { event: string; physics: number }[] = [];
+  const affected: { event: string; physics: number; nameKey: string }[] = [];
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     const marks = chunk.map(() => "?").join(",");
     if (opts.refreshAutoAwards) {
       const rows = await deps.db
-        .prepare(`SELECT DISTINCT event, physics FROM laps WHERE event != '' AND id IN (${marks})`)
+        .prepare(`SELECT DISTINCT event, physics, name_key FROM laps WHERE event != '' AND id IN (${marks})`)
         .bind(...chunk)
-        .all<{ event: string; physics: number }>();
-      affected.push(...rows.results);
+        .all<{ event: string; physics: number; name_key: string }>();
+      for (const r of rows.results) affected.push({ event: r.event, physics: r.physics, nameKey: r.name_key });
     }
     const done = await deps.db.prepare(`DELETE FROM laps WHERE id IN (${marks})`).bind(...chunk).run();
     deleted += done.meta?.changes ?? 0;

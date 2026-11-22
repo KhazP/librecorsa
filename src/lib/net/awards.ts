@@ -171,7 +171,7 @@ export function parseBadge(raw: unknown): DriverBadge | null {
 /** The badges of a badge read, by name key; null for an answer that isn't one */
 export function parseBadges(body: unknown): Record<string, DriverBadge[]> | null {
   if (!isRecord(body) || body.ok !== true || !isRecord(body.badges)) return null;
-  const out: Record<string, DriverBadge[]> = {};
+  const out: Record<string, DriverBadge[]> = Object.create(null);
   for (const [key, list] of Object.entries(body.badges).slice(0, MAX_BADGE_NAMES)) {
     if (!Array.isArray(list)) continue;
     out[key] = sortBadges(list.map(parseBadge).filter((b): b is DriverBadge => b !== null));
@@ -277,7 +277,7 @@ export async function fetchBadges(
           }
           return;
         }
-        for (const k of chunk) kept.set(k, { badges: parsed[k] ?? [], untilMs: nowMs + BADGE_KEEP_MS });
+        for (const k of chunk) kept.set(k, { badges: Object.hasOwn(parsed, k) ? parsed[k] : [], untilMs: nowMs + BADGE_KEEP_MS });
       })();
       for (const k of chunk) pending.set(k, job);
       void job.finally(() => {
@@ -286,7 +286,7 @@ export async function fetchBadges(
     }
   }
   await Promise.all(keys.map((k) => pending.get(k)).filter((p): p is Promise<void> => p !== undefined));
-  const out: Record<string, DriverBadge[]> = {};
+  const out: Record<string, DriverBadge[]> = Object.create(null);
   for (const k of keys) {
     const badges = kept.get(k)?.badges;
     if (badges && badges.length > 0) out[k] = badges;

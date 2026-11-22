@@ -305,7 +305,7 @@ export function parseBadgeNames(raw: string | null): string[] | null {
  * `events` is the Hall of Fame, when already read.
  */
 export async function badgesOf(db: D1Database, keys: readonly string[], nowMs: number, events?: readonly HallOfFameEvent[]): Promise<Record<string, DriverBadge[]>> {
-  const out: Record<string, DriverBadge[]> = {};
+  const out: Record<string, DriverBadge[]> = Object.create(null);
   if (keys.length === 0) return out;
   const marks = keys.map(() => "?").join(", ");
   const [weeks, records, og, manual] = await Promise.all([
@@ -361,7 +361,7 @@ export async function badgesOf(db: D1Database, keys: readonly string[], nowMs: n
     if (r.note && b.note === undefined) b.note = r.note;
   }
   const order = (t: BadgeType) => BADGE_TYPES.indexOf(t);
-  const canonical: Record<string, DriverBadge[]> = {};
+  const canonical: Record<string, DriverBadge[]> = Object.create(null);
   for (const k of [...Object.keys(out)].sort()) {
     canonical[k] = out[k].sort((a, b) => order(a.type) - order(b.type));
   }
@@ -462,36 +462,136 @@ export async function revokeAward(db: D1Database, id: number): Promise<number> {
  */
 export async function invalidateAutoWeeklyAwards(
   db: D1Database,
-  targets: readonly { event: string; physics: number | string }[],
+  targets: readonly { event: string; physics: number | string; nameKey?: string }[],
 ): Promise<number> {
-  const seen = new Set<string>();
-  const pairs: { event: string; physics: string }[] = [];
+  const buckets = new Map<string, { event: string; physics: string; removed: Set<string> | null }>();
   for (const t of targets) {
     if (!EVENT_ID_RE.test(t.event)) continue;
     const physics = typeof t.physics === "number" ? physicsIdOf(t.physics) : t.physics.trim().toLowerCase();
     if (!physics) continue;
     const k = `${t.event}|${physics}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    pairs.push({ event: t.event, physics });
+    let entry = buckets.get(k);
+    if (!entry) {
+      entry = { event: t.event, physics, removed: t.nameKey ? new Set([t.nameKey]) : null };
+      buckets.set(k, entry);
+    } else if (entry.removed !== null) {
+      if (t.nameKey) entry.removed.add(t.nameKey);
+      else entry.removed = null;
+    }
   }
-  if (pairs.length === 0) return 0;
-  const removed = await orNull(async () => {
-    const res = await db.batch(
-      pairs.map((p) =>
-        db
-          .prepare("DELETE FROM driver_awards WHERE awarded_by = 'auto' AND event_id = ? AND physics = ?")
-          .bind(p.event, p.physics),
-      ),
-    );
-    return res.reduce((sum, r) => sum + (r.meta?.changes ?? 0), 0);
-  });
-  return removed ?? 0;
+  if (buckets.size === 0) return 0;
+  let touched = 0;
+  for (const { event, physics, removed } of buckets.values()) {
+    const res = await orNull(async () => {
+      const existing = (
+        await db
+          .prepare("SELECT * FROM driver_awards WHERE awarded_by = 'auto' AND event_id = ? AND physics = ?")
+          .bind(event, physics)
+          .all<AwardRow>()
+      ).results;
+      if (existing.length === 0) return 0;
+      // Deleting a lap for a driver who was not on the archived podium leaves archived medals untouched
+      if (removed !== null && !existing.some((r) => removed.has(r.name_key))) return 0;
+
+      // Preserve surviving archived podium winners even if their laps were previously purged (e.g. claim lapse)
+      const kept = removed === null ? [] : existing.filter((r) => !removed.has(r.name_key));
+      const fallbackMeta = existing[0];
+
+      const rawLaps = (
+        await db
+          .prepare("SELECT physics, track_id, vehicle, name_key, driver_name, lap_time_ms, created_at, id FROM laps WHERE event = ?")
+          .bind(event)
+          .all<{
+            physics: number;
+            track_id: string;
+            vehicle: string;
+            name_key: string;
+            driver_name: string;
+            lap_time_ms: number;
+            created_at: number;
+            id: string;
+          }>()
+      ).results.filter((r) => physicsIdOf(r.physics) === physics && Number.isFinite(r.lap_time_ms));
+      const maxRev = rawLaps.reduce((m, r) => (r.physics > m ? r.physics : m), -Infinity);
+      const revLaps = rawLaps.filter((r) => r.physics === maxRev);
+      revLaps.sort((a, b) => a.lap_time_ms - b.lap_time_ms || a.created_at - b.created_at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+      interface Candidate {
+        nameKey: string;
+        driverName: string;
+        trackId: string;
+        vehicle: string;
+        lapTimeMs: number | null;
+        awardedAt: number;
+        placeOrder: number;
+        createdAt: number;
+        id: string;
+      }
+      const candidates: Candidate[] = kept.map((r) => ({
+        nameKey: r.name_key,
+        driverName: r.driver_name || r.name_key,
+        trackId: r.track_id,
+        vehicle: r.vehicle,
+        lapTimeMs: r.lap_time_ms,
+        awardedAt: r.awarded_at,
+        placeOrder: (MEDALS as readonly string[]).includes(r.badge_type) ? PLACE_OF_MEDAL[r.badge_type as Medal] : 4,
+        createdAt: 0,
+        id: "",
+      }));
+      const seen = new Set(kept.map((r) => r.name_key));
+      for (const l of revLaps) {
+        if (seen.has(l.name_key)) continue;
+        seen.add(l.name_key);
+        candidates.push({
+          nameKey: l.name_key,
+          driverName: l.driver_name,
+          trackId: l.track_id || fallbackMeta.track_id,
+          vehicle: l.vehicle || fallbackMeta.vehicle,
+          lapTimeMs: l.lap_time_ms,
+          awardedAt: fallbackMeta.awarded_at,
+          placeOrder: 4,
+          createdAt: l.created_at,
+          id: l.id,
+        });
+      }
+      candidates.sort(
+        (a, b) =>
+          (a.lapTimeMs ?? Infinity) - (b.lapTimeMs ?? Infinity) ||
+          a.placeOrder - b.placeOrder ||
+          a.createdAt - b.createdAt ||
+          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      );
+      const next = candidates.slice(0, 3);
+      await db.batch([
+        db.prepare("DELETE FROM driver_awards WHERE awarded_by = 'auto' AND event_id = ? AND physics = ?").bind(event, physics),
+        ...next.map((c, idx) =>
+          db
+            .prepare(
+              "INSERT INTO driver_awards (name_key, badge_type, event_id, physics, note, awarded_at, awarded_by, driver_name, track_id, vehicle, lap_time_ms) VALUES (?, ?, ?, ?, '', ?, 'auto', ?, ?, ?, ?)",
+            )
+            .bind(
+              c.nameKey,
+              MEDAL_OF_PLACE[(idx + 1) as 1 | 2 | 3],
+              event,
+              physics,
+              c.awardedAt,
+              c.driverName,
+              c.trackId,
+              c.vehicle,
+              c.lapTimeMs,
+            ),
+        ),
+      ]);
+      return existing.length;
+    });
+    touched += res ?? 0;
+  }
+  return touched;
 }
 
 /**
- * Invalidates archived `auto` weekly podiums for every finished week where `nameKey` holds an auto medal, so clearing
- * or banning that driver re-archives the promoted podium on the next read.
+ * Refreshes archived `auto` weekly podiums for every finished week where `nameKey` holds an auto medal, removing
+ * `nameKey` while keeping other drivers' archived medals intact and filling freed spots from remaining laps.
  */
 export async function invalidateAutoWeeklyAwardsForDriver(db: D1Database, nameKey: string): Promise<number> {
   const key = driverNameKey(nameKey);
@@ -507,7 +607,7 @@ export async function invalidateAutoWeeklyAwardsForDriver(db: D1Database, nameKe
   if (!rows || rows.length === 0) return 0;
   return invalidateAutoWeeklyAwards(
     db,
-    rows.map((r) => ({ event: r.event_id, physics: r.physics })),
+    rows.map((r) => ({ event: r.event_id, physics: r.physics, nameKey: key })),
   );
 }
 

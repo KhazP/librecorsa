@@ -567,6 +567,54 @@ async function main(): Promise<void> {
         summary,
       );
     }
+
+    // 8. Admin lap deletion preserves archived medals of other drivers whose laps were already purged
+    {
+      const keepDb = fakeD1(FULL);
+      const keepEnv = { ONLINE_BOARD: "on", BOARD_DB: keepDb, GHOSTS: fakeR2(), ADMIN_KEY: KEY } as unknown as Env;
+      const v1 = boardPhysicsVersion(7, "liana");
+      const cheatId = await addLap(keepDb, { name: "Cheater", track: "dunsfold", vehicle: "liana", physics: v1, ms: 50_000, event: "2026-W45" });
+      await addLap(keepDb, { name: "LapsedAlice", track: "dunsfold", vehicle: "liana", physics: v1, ms: 80_000, event: "2026-W45" });
+      await addLap(keepDb, { name: "Bob", track: "dunsfold", vehicle: "liana", physics: v1, ms: 81_000, event: "2026-W45" });
+      await addLap(keepDb, { name: "Carol", track: "dunsfold", vehicle: "liana", physics: v1, ms: 82_000, event: "2026-W45" });
+      // Archive the week, then purge LapsedAlice's laps (as happens when a 6-month claim lapses)
+      await apiCall(keepEnv, "/api/hall-of-fame");
+      await keepDb.prepare("DELETE FROM laps WHERE name_key = 'lapsedalice'").run();
+      // Admin deletes Cheater's P1 lap: LapsedAlice keeps her medal and moves to P1, Bob to P2, Carol to P3
+      const del = await apiCall(keepEnv, `/api/admin/laps/${cheatId}`, { method: "DELETE", key: KEY });
+      const hof = (await (await apiCall(keepEnv, "/api/hall-of-fame")).json()) as HallOfFameAnswer;
+      const w45 = hof.events.find((e) => e.event === "2026-W45" && e.physics === "v1");
+      const podium = w45?.podium.map((p) => `${p.place}:${p.nameKey}`).join(",") ?? "";
+      check(
+        "admin lap delete: preserves archived medals of other drivers whose laps are gone",
+        del.status === 200 && podium === "1:lapsedalice,2:bob,3:carol",
+        podium,
+      );
+    }
+
+    // 9. Prototype-key driver names ("constructor", "toString") do not crash server or client badge lookups
+    {
+      const protoDb = fakeD1(FULL);
+      const protoEnv = { ONLINE_BOARD: "on", BOARD_DB: protoDb, GHOSTS: fakeR2(), ADMIN_KEY: KEY } as unknown as Env;
+      await apiCall(protoEnv, "/api/admin/awards", { method: "POST", key: KEY, body: { name: "Constructor", note: "Proto test" } });
+      const res = await apiCall(protoEnv, "/api/badges?names=Constructor,toString");
+      const body = (await res.json()) as { ok: boolean; badges: Record<string, DriverBadge[]> };
+      forgetBadges();
+      const clientMap = await fetchBadges(["Constructor", "toString", "valueOf"], {
+        nowMs: 1000,
+        fetchJson: async () => ({ status: 200, body: { ok: true, badges: {} } }),
+      });
+      check(
+        "badges: driver names matching Object.prototype keys work on server and client",
+        res.status === 200 &&
+          body.ok &&
+          Array.isArray(body.badges.constructor) &&
+          body.badges.constructor[0]?.type === "bulb" &&
+          clientMap.constructor === undefined &&
+          clientMap.tostring === undefined,
+        JSON.stringify({ server: body.badges.constructor, clientKeys: Object.keys(clientMap) }),
+      );
+    }
   }
 
   if (failures.length > 0) {

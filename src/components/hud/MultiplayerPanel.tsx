@@ -801,7 +801,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                     <span className="truncate text-[14px] font-semibold text-lc-chalk" title={p.name}>
                       {p.name}
                     </span>
-                    <DriverBadges badges={driverBadges[driverNameKey(p.name)] ?? []} compact />
+                    <DriverBadges badges={Object.hasOwn(driverBadges, driverNameKey(p.name)) ? driverBadges[driverNameKey(p.name)] : []} compact />
                     {isMe ? <PlayerTag size="sm" /> : null}
                   </span>
                   <span className="lc-hint truncate" title={carName}>
