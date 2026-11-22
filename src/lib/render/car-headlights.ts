@@ -99,8 +99,8 @@ const rearPairs = (pairs: readonly (readonly [number, number, number, number?])[
 const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
   f1: {
     halfWidthM: 0.16,
-    heightM: 0.36,
-    frontZM: 2.35,
+    heightM: 0.6,
+    frontZM: 2.25,
     rearZM: -2.31,
     rearHalfWidthM: 0,
     rearHeightM: 0.31,
@@ -184,10 +184,12 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
  * GLBs' headlight/taillight meshes so flares sit on the actual lenses rather than behind rear wings or ahead of noses.
  */
 const CAR_PROFILE_OVERRIDES: Partial<Record<CarId, Partial<HeadlightProfile>>> = {
+  // The front lamps sit on top of the Qvist body's nose (measured 22 Nov 2026: the nose top is 0.53..0.56 m up at
+  // 2.2..2.3 m forward; the old 0.36 m height was inside it, so the flares never showed)
   lc26: {
     halfWidthM: 0.16,
-    heightM: 0.36,
-    frontZM: 2.35,
+    heightM: 0.6,
+    frontZM: 2.25,
     rearHalfWidthM: 0,
     rearHeightM: 0.31,
     rearZM: -2.31,
