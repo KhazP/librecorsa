@@ -457,12 +457,15 @@ export async function revokeAward(db: D1Database, id: number): Promise<number> {
 }
 
 /**
- * Deletes archived `auto` weekly podium rows for the given (event, physics) boards so the next Hall of Fame / badges
- * read recomputes and re-archives cleanly from valid laps. Leaves manual (`awarded_by != 'auto'`) awards untouched.
+ * Rebuilds archived `auto` weekly podiums in place for the given (event, physics) boards, preserving other drivers'
+ * archived medals (even if their laps were later purged) and filling freed spots from remaining laps. When
+ * `excludeRemovedFromLaps` is set, removed drivers are never re-added from `laps` even if rows remain in the table.
+ * Leaves manual (`awarded_by != 'auto'`) awards untouched.
  */
 export async function invalidateAutoWeeklyAwards(
   db: D1Database,
   targets: readonly { event: string; physics: number | string; nameKey?: string }[],
+  opts: { excludeRemovedFromLaps?: boolean } = {},
 ): Promise<number> {
   const buckets = new Map<string, { event: string; physics: string; removed: Set<string> | null }>();
   for (const t of targets) {
@@ -539,6 +542,9 @@ export async function invalidateAutoWeeklyAwards(
         id: "",
       }));
       const seen = new Set(kept.map((r) => r.name_key));
+      if (opts.excludeRemovedFromLaps && removed !== null) {
+        for (const key of removed) seen.add(key);
+      }
       for (const l of revLaps) {
         if (seen.has(l.name_key)) continue;
         seen.add(l.name_key);
@@ -554,13 +560,29 @@ export async function invalidateAutoWeeklyAwards(
           id: l.id,
         });
       }
-      candidates.sort(
-        (a, b) =>
-          (a.lapTimeMs ?? Infinity) - (b.lapTimeMs ?? Infinity) ||
-          a.placeOrder - b.placeOrder ||
-          a.createdAt - b.createdAt ||
-          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-      );
+      // If any kept archived medal has no stored lap time, preserve kept podium order ahead of lap-table backfill
+      const anyKeptMissingTime = kept.some((r) => r.lap_time_ms === null || !Number.isFinite(r.lap_time_ms));
+      if (anyKeptMissingTime) {
+        candidates.sort((a, b) => {
+          const aKept = a.placeOrder <= 3 ? 0 : 1;
+          const bKept = b.placeOrder <= 3 ? 0 : 1;
+          if (aKept !== bKept) return aKept - bKept;
+          if (aKept === 0) return a.placeOrder - b.placeOrder;
+          return (
+            (a.lapTimeMs ?? Infinity) - (b.lapTimeMs ?? Infinity) ||
+            a.createdAt - b.createdAt ||
+            (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+          );
+        });
+      } else {
+        candidates.sort(
+          (a, b) =>
+            (a.lapTimeMs ?? Infinity) - (b.lapTimeMs ?? Infinity) ||
+            a.placeOrder - b.placeOrder ||
+            a.createdAt - b.createdAt ||
+            (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+        );
+      }
       const next = candidates.slice(0, 3);
       await db.batch([
         db.prepare("DELETE FROM driver_awards WHERE awarded_by = 'auto' AND event_id = ? AND physics = ?").bind(event, physics),
@@ -608,6 +630,7 @@ export async function invalidateAutoWeeklyAwardsForDriver(db: D1Database, nameKe
   return invalidateAutoWeeklyAwards(
     db,
     rows.map((r) => ({ event: r.event_id, physics: r.physics, nameKey: key })),
+    { excludeRemovedFromLaps: true },
   );
 }
 

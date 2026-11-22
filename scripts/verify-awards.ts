@@ -15,7 +15,16 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { handleApi, SHARED_ANSWER_S } from "../cloudflare/api/index";
 import { driverNameKey, renameDriver, type BoardDeps } from "../cloudflare/api/board";
-import { checkAwardInput, hallOfFameEvents, parseBadgeNames, physicsIdOf, rankPodiums, tallyMostDecorated, type AdminAward } from "../cloudflare/api/awards";
+import {
+  checkAwardInput,
+  hallOfFameEvents,
+  invalidateAutoWeeklyAwardsForDriver,
+  parseBadgeNames,
+  physicsIdOf,
+  rankPodiums,
+  tallyMostDecorated,
+  type AdminAward,
+} from "../cloudflare/api/awards";
 import type { AdminAwardsBody } from "../cloudflare/api/admin";
 import {
   badgeDetail,
@@ -589,6 +598,22 @@ async function main(): Promise<void> {
         "admin lap delete: preserves archived medals of other drivers whose laps are gone",
         del.status === 200 && podium === "1:lapsedalice,2:bob,3:carol",
         podium,
+      );
+
+      // Even if a kept archived medal has lap_time_ms = NULL, it keeps its podium place ahead of slower laps
+      await keepDb
+        .prepare("UPDATE driver_awards SET lap_time_ms = NULL WHERE event_id = '2026-W45' AND name_key = 'lapsedalice'")
+        .run();
+      await addLap(keepDb, { name: "Dave", track: "dunsfold", vehicle: "liana", physics: v1, ms: 85_000, event: "2026-W45" });
+      // Calling invalidateAutoWeeklyAwardsForDriver directly removes Bob even while Bob's lap is still in `laps`
+      await invalidateAutoWeeklyAwardsForDriver(keepDb, "Bob");
+      const hofAfterDriverInvalidate = (await (await apiCall(keepEnv, "/api/hall-of-fame")).json()) as HallOfFameAnswer;
+      const w45After = hofAfterDriverInvalidate.events.find((e) => e.event === "2026-W45" && e.physics === "v1");
+      const podiumAfter = w45After?.podium.map((p) => `${p.place}:${p.nameKey}`).join(",") ?? "";
+      check(
+        "driver award invalidation excludes removed driver from laps and preserves null-time archived medals",
+        podiumAfter === "1:lapsedalice,2:carol,3:dave",
+        podiumAfter,
       );
     }
 
