@@ -344,12 +344,18 @@ export const CircuitBrowser: React.FC<{
                 <LayoutChoice options={layoutOptions} value={t.id} onChange={(id) => setLayoutOf((m) => ({ ...m, [v.id]: id }))} />
               </SettingRow>
             ) : null}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {t.credit?.author ? <span className="lc-hint">By {t.credit.author}</span> : <span />}
-              {source ? <SourceChip source={source} /> : null}
-            </div>
             {hill ? (
               <p className="lc-hint m-0">Point-to-point timed run. Solo only.</p>
+            ) : null}
+            {/* "Circuit by Alp Yalay [Source]", as the pause menu says it, at the pane's foot against the main action
+                when the pane has room */}
+            {source ? (
+              <div className="mt-auto flex items-center justify-between gap-2">
+                <span className="lc-hint min-w-0">
+                  Circuit by <span className="text-lc-fog">{source.author}</span>
+                </span>
+                <SourceChip source={source} />
+              </div>
             ) : null}
           </>
         );

@@ -34,9 +34,38 @@ import { useStoreBuild } from "@/lib/use-store-build";
 const byName = (a: CarDefinition, b: CarDefinition) => a.title.localeCompare(b.title);
 const QUALITIES: readonly CarQuality[] = ["own", "shared", "era"];
 
-/** A car's own vehicle model, for the cars without the physics switch (the GT3s say theirs in their sub line) */
-const physicsLabel = (car: CarDefinition) =>
-  car.classId === "f1" ? F1_MOD_PHYSICS_OPTIONS.find((o) => o.id === car.physics)?.title : undefined;
+/**
+ * A car's own vehicle model, for the cars without the physics switch (the GT3s say theirs in their sub line); none
+ * where the model is named after the car itself (the 2026 Prototype on its own physics)
+ */
+const physicsLabel = (car: CarDefinition) => {
+  const label = car.classId === "f1" ? F1_MOD_PHYSICS_OPTIONS.find((o) => o.id === car.physics)?.title : undefined;
+  return label && label.toLowerCase() !== car.title.toLowerCase() ? label : undefined;
+};
+
+/** The registry's sub line in its parts ("2025 · 4.0 L V8 · rear-wheel drive") */
+const SUB_SEP = " · ";
+/** Whether a piece of text names the car's year as a word ("2026 model", not "12026") */
+const saysYear = (text: string, year: string) => new RegExp(`(^|\\D)${year}(\\D|$)`).test(text);
+
+/** The card's line of facts: the class, then the year unless the title already says it ("2026 Prototype") */
+const cardFacts = (car: CarDefinition) => {
+  const year = String(car.year);
+  return [carClass(car.classId).title, saysYear(car.title, year) ? null : year].filter(Boolean).join(", ");
+};
+
+/**
+ * The detail pane's line under the title, with the year said once: a title that names it keeps it (the sub's parts
+ * that lead with it go), a sub that names it keeps it, and any other sub starts with it ("2020 · GT3 Evo · 6.2L V8")
+ */
+const detailFacts = (car: CarDefinition) => {
+  const year = String(car.year);
+  let parts = car.sub.split(SUB_SEP).filter(Boolean);
+  if (saysYear(car.title, year)) parts = parts.filter((p) => !p.startsWith(year));
+  else if (!saysYear(car.sub, year)) parts = [year, ...parts];
+  const line = parts.join(SUB_SEP);
+  return line.charAt(0).toUpperCase() + line.slice(1);
+};
 
 /**
  * The car's picture (`npm run car-thumbs`), showing the active livery or mod skin when available and falling back
@@ -204,7 +233,7 @@ export const CarBrowser: React.FC<{
       renderCard={(c) => ({
         media: <CarThumb car={c} liveryId={carTakesLivery(c.id) ? selectedLivery.id : undefined} className="p-2.5 pt-9" />,
         title: c.title,
-        meta: `${carClass(c.classId).title}, ${c.year}`,
+        meta: cardFacts(c),
         badges: (
           <>
             <CarClassTag car={c} />
@@ -214,7 +243,8 @@ export const CarBrowser: React.FC<{
         overlay: c.id === carId ? <StateBadge state="inUse" size="sm" /> : undefined,
       })}
       renderDetail={(c) => {
-        const own = physicsLabel(c);
+        const own = carTakesPhysicsSwitch(c.id) ? undefined : physicsLabel(c);
+        const facts = [detailFacts(c), own ? `${own} physics` : ""].filter(Boolean).join(", ");
         const previewLiveryId = carTakesLivery(c.id)
           ? hoveredLivery?.carId === c.id
             ? hoveredLivery.id
@@ -228,10 +258,7 @@ export const CarBrowser: React.FC<{
             </span>
             <div className="flex flex-col gap-1.5">
               <h3 className="lc-h3 m-0 [overflow-wrap:anywhere]">{c.title}</h3>
-              <p className="lc-body m-0">
-                {c.sub}
-                {own && !carTakesPhysicsSwitch(c.id) ? `, ${own} physics` : ""}
-              </p>
+              {facts ? <p className="lc-body m-0">{facts}</p> : null}
               <span className="mt-1 flex flex-wrap gap-1.5">
                 <CarClassTag car={c} />
                 <CarQualityBadge car={c} size="sm" />
@@ -263,7 +290,8 @@ export const CarBrowser: React.FC<{
             ) : (
               <p className="lc-hint m-0">{FACTORY_LIVERY_NOTE}</p>
             )}
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            {/* The credit and its source sit at the pane's foot, against the main action, when the pane has room */}
+            <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
               <span className="lc-hint">
                 {c.credit.label ?? "Model by"}{" "}
                 <a
