@@ -29,7 +29,7 @@
  */
 
 /** Bumped on every change to what goes over the wire; a room's host and the race server refuse any other */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 const FLAG_HAZARD = 1;
 const FLAG_RACE = 2;

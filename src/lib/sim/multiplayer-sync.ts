@@ -419,6 +419,8 @@ export class MultiplayerSyncManager {
   /** The entered race's number (to get back into it after a lost socket) and this page's secret for it */
   private raceIndex: number | null = null;
   private raceToken = '';
+  /** Per-instance secret sent when joining a room as a guest so reconnecting replaces our own stale socket */
+  private guestToken = '';
   private raceRetry: ReturnType<typeof setTimeout> | null = null;
   /**
    * Car state from the race server waiting for the next frame, newest per car. Its socket delivers in order, so after
@@ -908,15 +910,21 @@ export class MultiplayerSyncManager {
 
   /** Guest: joins a room through this site's room server, which says at once when nobody hosts the code */
   private joinRoomServer(roomCode: string): void {
+    if (!this.guestToken) {
+      const bytes = new Uint8Array(18);
+      crypto.getRandomValues(bytes);
+      this.guestToken = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    }
     let ws: WebSocket;
     try {
-      ws = this.openRoomServer(`/rooms/${encodeURIComponent(roomCode)}?role=guest`);
+      ws = this.openRoomServer(`/rooms/${encodeURIComponent(roomCode)}?role=guest&token=${this.guestToken}`);
     } catch {
       this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
       return;
     }
     /** The host answered: from here the connection is peer to peer, and losing the room server no longer matters */
     let answered = false;
+    let joinRetried = false;
     const fail = (statusText: string) => {
       this.closeSignaling();
       this.dropUnansweredPeer(ROOM_HOST_ID);
@@ -929,6 +937,7 @@ export class MultiplayerSyncManager {
       try {
         const msg = JSON.parse(ev.data);
         if (msg.t === 'welcome') {
+          joinRetried = false;
           this.roomIce = sanitizeIceServers(msg.iceServers);
           this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
           const sdp = await this.offerToHost(ROOM_HOST_ID, ROOM_HOST_ID);
@@ -938,6 +947,13 @@ export class MultiplayerSyncManager {
             this.joinTimer = null;
             if (!answered) notFound();
           }, JOIN_TIMEOUT_MS);
+        } else if (msg.t === 'error' && msg.code === 'peer_id_taken' && !joinRetried) {
+          joinRetried = true;
+          window.setTimeout(() => {
+            if (this.signalingWs === ws && ws.readyState === WebSocket.OPEN) {
+              this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
+            }
+          }, 50);
         } else if (msg.t === 'nohost') {
           notFound();
         } else if (msg.t === 'full') {
@@ -1943,6 +1959,12 @@ export class MultiplayerSyncManager {
         // in order with the lobby (another tab's copy can overtake it)
         if (!via && this.rtcPeers.size > 0) break;
         if (this.activeRace?.id === msg.start.id || this.doneRaceId === msg.start.id) break;
+        const endedQuali = this.activeQualifying;
+        if (endedQuali) {
+          this.activeQualifying = null;
+          this.lastSentQualiLap = null;
+          this.onQualifyingEnd?.(endedQuali.id);
+        }
         this.activeRace = msg.start;
         this.onRaceStart?.(msg.start);
         break;

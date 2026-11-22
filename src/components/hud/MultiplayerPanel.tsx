@@ -132,7 +132,7 @@ const MP_RULE_PRESET_HINTS: Record<MpRaceRules["preset"], string> = {
 
 const GRID_ORDER_HINTS: Record<MpGridOrder, string> = {
   qualifying: "Quickest lap first; without times, join order",
-  reverse: "Qualifying order, back to front",
+  reverse: "Reverse of qualifying order (or join order)",
   random: "Drawn at the start",
 };
 
@@ -421,7 +421,7 @@ function LobbySettingsCards({
           hint: settings.qualifyingMinutes > 0 ? "Best clean lap sets the grid" : undefined,
         }
       : null,
-    settings.qualifyingMinutes > 0
+    isPrivate && settings.qualifyingMinutes > 0
       ? { label: "Grid order", read: "Set by qualifying" }
       : {
           label: "Grid order",

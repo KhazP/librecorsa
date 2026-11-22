@@ -507,6 +507,12 @@ export function buildRaceGrid(
     return out;
   }
   if (order === 'reverse') {
+    if (options.qualifyingTimes) {
+      const sorted = sortQualifyingTimes(unique, toMap(options.qualifyingTimes));
+      const timed = sorted.filter((q) => q.ms !== null).reverse();
+      const untimed = sorted.filter((q) => q.ms === null);
+      return [...timed, ...untimed].map((q) => q.peer);
+    }
     return [...unique].reverse();
   }
   if (options.qualifyingTimes) {

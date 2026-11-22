@@ -59,7 +59,7 @@ const MAX_LAP_MS = 10_000_000;
 
 type Attachment =
   | { role: "host"; peerId?: string }
-  | { role: "guest"; id: string; peerId?: string }
+  | { role: "guest"; id: string; peerId?: string; token?: string }
   | { role: "refused" };
 
 export interface RoomSessionState {
@@ -281,13 +281,24 @@ export class RoomServer {
       return;
     }
 
-    const guests = this.state.getWebSockets().filter((ws) => attachmentOf(ws)?.role === "guest").length;
     const activeHostCount = this.state.getWebSockets(HOST_TAG).filter((ws) => attachmentOf(ws)?.role === "host").length;
     if (activeHostCount === 0) return refuse({ t: "nohost" });
+    const guestToken = TOKEN_RE.test(token) ? token : undefined;
+    if (guestToken) {
+      // The same guest back on a new socket: demote before closing so a half-open socket never triggers full or peer_id_taken
+      for (const old of this.state.getWebSockets()) {
+        const oa = attachmentOf(old);
+        if (oa?.role === "guest" && oa.token === guestToken) {
+          old.serializeAttachment({ role: "refused" } satisfies Attachment);
+          close(old, 4001, "replaced");
+        }
+      }
+    }
+    const guests = this.state.getWebSockets().filter((ws) => attachmentOf(ws)?.role === "guest").length;
     if (guests >= MAX_GUESTS) return refuse({ t: "full" });
     const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
     this.state.acceptWebSocket(server, [guestTag(id)]);
-    server.serializeAttachment({ role: "guest", id } satisfies Attachment);
+    server.serializeAttachment({ role: "guest", id, ...(guestToken ? { token: guestToken } : {}) } satisfies Attachment);
     const roomState = await this.loadRoomState();
     if (!roomState.participants.includes(id)) {
       roomState.participants.push(id);
@@ -428,21 +439,32 @@ export class RoomServer {
           return;
         }
         // Prevent hijacking any currently connected socket's peerId/id or claiming the host default id as a guest
-        const taken =
-          (who.role === "guest" && nextPeerId === "host") ||
-          this.state.getWebSockets().some((other) => {
-            if (other === ws) return false;
+        let taken = who.role === "guest" && nextPeerId === "host";
+        if (!taken) {
+          for (const other of this.state.getWebSockets()) {
+            if (other === ws) continue;
             const oa = attachmentOf(other);
-            if (!oa || oa.role === "refused") return false;
-            return senderPeerId(oa) === nextPeerId || (oa.role === "guest" && oa.id === nextPeerId);
-          });
+            if (!oa || oa.role === "refused") continue;
+            const conflict = senderPeerId(oa) === nextPeerId || (oa.role === "guest" && oa.id === nextPeerId);
+            if (!conflict) continue;
+            if (who.role === "guest" && who.token && oa.role === "guest" && oa.token === who.token) {
+              other.serializeAttachment({ role: "refused" } satisfies Attachment);
+              close(other, 4001, "replaced");
+              continue;
+            }
+            taken = true;
+            break;
+          }
+        }
         if (taken) {
           send(ws, { t: "error", code: "peer_id_taken", message: "Peer ID is already owned by another connection" });
           return;
         }
         const oldPeerId = senderPeerId(who);
         const updated: Attachment =
-          who.role === "host" ? { role: "host", peerId: nextPeerId } : { role: "guest", id: who.id, peerId: nextPeerId };
+          who.role === "host"
+            ? { role: "host", peerId: nextPeerId }
+            : { role: "guest", id: who.id, peerId: nextPeerId, ...(who.token ? { token: who.token } : {}) };
         ws.serializeAttachment(updated);
         const roomState = await this.loadRoomState();
         const idx = roomState.participants.indexOf(oldPeerId);

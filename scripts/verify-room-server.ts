@@ -14,7 +14,7 @@ import type { Env } from '../cloudflare/api/types';
 import { FakeSocket, fakeState } from './lib/fake-cloudflare';
 import { parseApiBase, parseOnlineConfig } from '../src/lib/net/online-config';
 import { sanitizeIceServers } from '../src/lib/sim/multiplayer-sync';
-import { sanitizeControl, sanitizeLobby, sanitizeLobbySettings, sanitizeStart, withLobbyDefaults } from '../src/lib/net/wire';
+import { buildRaceGrid, sanitizeControl, sanitizeLobby, sanitizeLobbySettings, sanitizeStart, withLobbyDefaults } from '../src/lib/net/wire';
 import { vehicleModelSpec, vehicleModelsFor } from '../src/lib/cars/vehicle-models';
 
 const failures: string[] = [];
@@ -558,6 +558,37 @@ async function main() {
         startWithShort?.qualifying?.length === 2 &&
         startWithShort.qualifying[0].ms === null &&
         startWithShort.qualifying[1].ms === 85_000,
+    );
+
+    // Same-token guest reconnect replaces its stale socket without triggering peer_id_taken
+    const gState = fakeState();
+    const gRoom = new RoomServer(gState, env, async () => ICE, () => clockMs);
+    const gh = new FakeSocket();
+    const gOld = new FakeSocket();
+    const gNew = new FakeSocket();
+    const GUEST_TOK = 'guesttok0123456789abcdef';
+    await gRoom.connect('host', TOKEN_A, gh, 'private');
+    await gRoom.connect('guest', GUEST_TOK, gOld);
+    await gRoom.webSocketMessage(gOld, JSON.stringify({ t: 'join', peerId: 'peer_guest1' }));
+    // Reconnect before gOld closes
+    await gRoom.connect('guest', GUEST_TOK, gNew);
+    await gRoom.webSocketMessage(gNew, JSON.stringify({ t: 'join', peerId: 'peer_guest1' }));
+    check(
+      'guest reconnecting with same token replaces stale socket without peer_id_taken',
+      gOld.closed === 4001 &&
+        gNew.last()?.t === 'welcome' &&
+        !gNew.sent.some((m) => m.t === 'error' && m.code === 'peer_id_taken'),
+    );
+
+    // buildRaceGrid reverse order reverses timed cars and keeps untimed cars at the back
+    const revQuali = buildRaceGrid(['p1', 'p2', 'p3', 'p4'], {
+      gridOrder: 'reverse',
+      qualifyingTimes: { p1: 90_000, p2: 80_000, p3: null, p4: 85_000 },
+    });
+    check(
+      'buildRaceGrid reverse honors qualifyingTimes with untimed cars at back',
+      revQuali.join(',') === 'p1,p4,p2,p3',
+      revQuali.join(','),
     );
   }
 
