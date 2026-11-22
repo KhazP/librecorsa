@@ -12,7 +12,7 @@
  */
 import React, { useEffect, useRef, useState } from "react";
 import type { VehicleModelId } from "@/types/f1";
-import { boardChoiceOf, boardChoices, PHYSICS_VERSION, physicsVersionLabel, revisionOnBoard, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { boardChoiceOf, boardChoices, revisionOnBoard, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import {
   ALL_CARS,
   BOARD_FILTER_PREFS_KEY,
@@ -457,18 +457,15 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
             ]}
           />
         ) : carPicker ? (
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-            <Select
-              aria-label="Car"
-              className="w-72 max-w-full"
-              value={car}
-              onChange={carPicker.onChange}
-              options={[{ id: ALL_CARS, label: "All cars" }, ...carPicker.cars]}
-            />
-            {car === ALL_CARS ? <span className="lc-hint">Fastest lap per driver</span> : null}
-          </div>
+          <Select
+            aria-label="Car"
+            className="w-72 max-w-full"
+            value={car}
+            onChange={carPicker.onChange}
+            options={[{ id: ALL_CARS, label: "All cars" }, ...carPicker.cars]}
+          />
         ) : (
-          <span className="lc-hint">Fastest lap per driver</span>
+          <span />
         )}
         <div className="flex flex-wrap items-center gap-2">
           {choices.length <= 2 ? (
@@ -489,16 +486,9 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
         </div>
       </div>
 
-      {older ? (
-        <p className="lc-hint m-0">
-          {choice.physics !== PHYSICS_VERSION ? "Archived physics version." : "Previous circuit revision."} New laps post to{" "}
-          {physicsVersionLabel(PHYSICS_VERSION, { short: true })}.
-        </p>
-      ) : null}
-
-      {/* The Filters button, and on the same line the key to the badges on this page */}
+      {/* Filters button and badge key */}
       {event && visiblePageBadges.length === 0 ? null : (
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           {event ? null : (
             <Button
               size="sm"
@@ -521,7 +511,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
               {filtersOn ? `Filters · ${filtersOn} on` : "Filters"}
             </Button>
           )}
-          <BadgeLegend badges={pageBadges} context={badgeContext} className="ml-auto justify-end phone:ml-0 phone:justify-start" />
+          <BadgeLegend badges={pageBadges} context={badgeContext} />
         </div>
       )}
       {filtersOpen && !event ? (

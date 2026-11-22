@@ -6,7 +6,7 @@ import { carBoardTag } from "@/lib/cars/board-tag";
 import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
 import { TRACKS, venueOf } from "@/lib/track-registry";
 import { driverNameKey, type RemoteBoard } from "@/lib/net/leaderboard";
-import { boardChoiceOf, boardChoices, PHYSICS_VERSION } from "@/lib/sim/lap-types";
+import { boardChoiceOf, boardChoices } from "@/lib/sim/lap-types";
 import { challengeById, challengeConditionsLabel, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
 import { HallOfFame } from "@/components/board/HallOfFame";
 import { LapConditionBadges } from "@/components/board/LapConditionBadges";
@@ -175,11 +175,6 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
             ) : (
               <Select aria-label="Physics version" className="w-64 max-w-full self-start" value={choice.id} onChange={setBoardPick} options={choices} />
             )}
-            {older ? (
-              <p className="lc-hint m-0">
-                {choice.physics !== PHYSICS_VERSION ? "Archived physics version." : "Previous circuit revision."}
-              </p>
-            ) : null}
             {me ? (
               <MyPlace
                 rank={me.rank}
