@@ -1161,11 +1161,114 @@ def reclassify_offroad(out, soup, off, paved_mats, grass_mats):
     return rest
 
 
+def lap_spline_derivatives(xz):
+    """The derivatives of the closed C2 spline through a lap's samples (uniform parameter, one unit per sample), as
+    src/lib/track-data.ts solves them: D[i-1] + 4 D[i] + D[i+1] = 3 (P[i+1] - P[i-1]). The game measures where a car is
+    across the road from this curve"""
+    n = len(xz)
+    rhs = 3 * (np.roll(xz, -1, 0) - np.roll(xz, 1, 0))
+    row = np.zeros(n)
+    row[0], row[1], row[-1] = 4.0, 1.0, 1.0
+    eig = np.fft.fft(row)
+    return np.real(np.fft.ifft(np.fft.fft(rhs, axis=0) / eig[:, None], axis=0))
+
+
+def upsample_rows(k, xz, rgt, yprof, width, bank, kerbL, kerbR, run, grav, wall, wall_open=None, closure=None):
+    """A closed circuit's sample rows cut `k` times along the lap for its collider meshes (`colliderRowsPerSample`).
+    Built from the 5 m rows, every drivable surface was a run of flat 5 m pieces laid on straight chords: on a crest
+    or a compression the slope broke at every row, and on a banking round a tight corner the chord's 2-8 cm sag inside
+    the curve the game measures the car from (lap_spline_derivatives) put the collider out of step with the road height
+    the wheels read, every 5 m (Qiddiya's T13 hairpin and T19, where the cars jumped). The new rows lie on that curve,
+    across it, and their heights follow a Catmull-Rom curve through the rows around them, as the game's road height
+    does (track-occupancy.ts); widths and walls are straight between rows. Every surface is built from the same rows,
+    so their edges meet"""
+    n = len(xz)
+    f = np.arange(n * k) / k
+    i0 = np.floor(f).astype(int)
+    t = (f - i0)[:, None]
+    i1, im, i2 = (i0 + 1) % n, (i0 - 1) % n, (i0 + 2) % n
+
+    def lin(a):
+        a = np.asarray(a)
+        tt = t if a.ndim > 1 else t[:, 0]
+        return a[i0] * (1 - tt) + a[i1] * tt
+
+    def either(a):
+        # a flag holds for a new row when it holds for either row around it
+        if a is None:
+            return None
+        a = np.asarray(a)
+        mid = (f - i0) > 0
+        return a[i0] | (a[i1] & (mid[:, None] if a.ndim > 1 else mid))
+
+    D = lap_spline_derivatives(xz)
+    t2, t3 = t * t, t * t * t
+    xz_u = ((2 * t3 - 3 * t2 + 1) * xz[i0] + (t3 - 2 * t2 + t) * D[i0] + (-2 * t3 + 3 * t2) * xz[i1]
+            + (t3 - t2) * D[i1])
+    tan = (6 * t2 - 6 * t) * xz[i0] + (3 * t2 - 4 * t + 1) * D[i0] + (-6 * t2 + 6 * t) * xz[i1] + (3 * t2 - 2 * t) * D[i1]
+    tan /= np.linalg.norm(tan, axis=1, keepdims=True)
+    rgt_u = np.stack([-tan[:, 1], tan[:, 0]], 1)
+    if np.mean(np.einsum('ij,ij->i', rgt_u[::k], rgt)) < 0:
+        rgt_u = -rgt_u
+    y0, y1, ym, y2 = yprof[i0], yprof[i1], yprof[im], yprof[i2]
+    yprof_u = 0.5 * (2 * y0 + (-ym + y1) * t + (2 * ym - 5 * y0 + 4 * y1 - y2) * t2 + (-ym + 3 * y0 - 3 * y1 + y2) * t3)
+    return (xz_u, rgt_u, yprof_u, lin(width), lin(bank), np.asarray(kerbL)[i0], np.asarray(kerbR)[i0], lin(run),
+            lin(grav), lin(wall), either(wall_open), either(closure))
+
+
+def subdivide_twisted_road(P, F, ncol, max_twist_m, k_lat=2):
+    """The road surface strip (`ncol` points across every sample row, faces between rows as collider_meshes' strip
+    builds them) cut finer where its quads twist: a quad whose crossfall changes from one row to the next folds along
+    its diagonal, and on a banking that turns quickly the folds are a few cm and every 2-3 m, which the suspension
+    feels as a washboard (Qiddiya's T19 threw the car off the ground). Each quad becomes a bilinear patch, `k_lat`
+    across and as many rows along as keep every small quad's twist under `max_twist_m`. A patch's edges are the quad's
+    own straight edges, so the kerbs, run-off and road collider beside it still meet it exactly. Heights curved
+    through the rows instead (Catmull-Rom) smoothed the turns further but put the road edge out of step with the kerbs
+    on the crests, where a car on the kerb bounced more"""
+    n = len(P) // ncol
+    G = P.reshape(n, ncol, 3)
+    ok = np.zeros(n, bool)
+    ok[np.asarray(F[0::6], np.int64) // ncol] = True
+    # every row with its points cut `k_lat` times across: M points
+    u = np.arange((ncol - 1) * k_lat + 1) / k_lat
+    c0 = np.minimum(np.floor(u).astype(int), ncol - 2)
+    fu = (u - c0)[None, :, None]
+    R = G[:, c0] * (1 - fu) + G[:, c0 + 1] * fu
+    M = R.shape[1]
+    V = [R.reshape(-1, 3)]
+    nv = n * M
+    Fo = []
+    cols = np.arange(M - 1)
+    added = 0
+    y = G[:, :, 1]
+    for i in np.where(ok)[0]:
+        i1 = (i + 1) % n
+        twist = np.abs(y[i, :-1] - y[i, 1:] - y[i1, :-1] + y[i1, 1:]).max()
+        ks = int(min(16, max(1, math.ceil(twist / (max_twist_m * k_lat)))))
+        idx = [i * M]
+        for r in range(1, ks):
+            f = r / ks
+            V.append(R[i] * (1 - f) + R[i1] * f)
+            idx.append(nv)
+            nv += M
+        idx.append(i1 * M)
+        added += ks - 1
+        for a, b in zip(idx[:-1], idx[1:]):
+            v00, v01, v10, v11 = a + cols, a + cols + 1, b + cols, b + cols + 1
+            Fo.append(np.stack([v00, v10, v01, v01, v10, v11], 1).reshape(-1))
+    Fo = np.concatenate(Fo).astype(np.uint32) if Fo else np.zeros(0, np.uint32)
+    log(f'road surface: {added} rows added where its quads twist (under {max_twist_m * 100:.1f} cm each), '
+        f'{len(F) // 3} -> {len(Fo) // 3} triangles')
+    return np.concatenate(V), Fo
+
+
 def collider_meshes(soup, road_set, kerb_mats, xz, rgt, yprof, width, bank, kerbL, kerbR, run, grav, wall, off, scan_kerbs=False,
-                    surface_mats=None, edge_blend_m=None, wall_open=None, valid_runoff=None, closure=None, skip=None):
+                    surface_mats=None, edge_blend_m=None, wall_open=None, valid_runoff=None, closure=None, skip=None,
+                    road_twist_m=None):
     """Hidden physics meshes in final world space (source world minus `off`). `scan_kerbs` (`scanKerbs`): the physics
     kerb is the scan's own kerb paint (scan_kerb_mesh) and no generated kerb is drawn over it. `skip`: samples with
-    no surfaces (a point-to-point course's dead stretch; pass `wall_open` there too)"""
+    no surfaces (a point-to-point course's dead stretch; pass `wall_open` there too). `road_twist_m` (`roadTwistM`):
+    the road surface is cut finer where its quads twist more than this (subdivide_twisted_road)"""
     n = len(xz)
 
     def prof_y(i, lat):
@@ -1372,7 +1475,10 @@ def collider_meshes(soup, road_set, kerb_mats, xz, rgt, yprof, width, bank, kerb
                                                    strip(-hw, hw, 3, road_set, 0.8, True, (0.0, 0.0), prof_road),
                                                    strip(hw, hw + 1.6, 2, road_set, 0.8, True, (0.0, 0.0), prof_road)]),
                     {'collider': 'road'}))
-    out.append(('Track_Surface_Road', *strip(-hw, hw, 7, road_set, 0.8, True, (0.0, 0.0)), {'surface': 'road', 'grip': 1.0}))
+    road_surface = strip(-hw, hw, 7, road_set, 0.8, True, (0.0, 0.0))
+    if road_twist_m:
+        road_surface = subdivide_twisted_road(*road_surface, 7, float(road_twist_m))
+    out.append(('Track_Surface_Road', *road_surface, {'surface': 'road', 'grip': 1.0}))
     kerb_w = 0.0 if scan_kerbs else KERB_PROFILE_L[-1]
     kl = np.where(kerbL, kerb_w, 0.0)
     kr = np.where(kerbR, kerb_w, 0.0)

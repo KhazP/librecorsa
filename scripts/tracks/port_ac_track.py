@@ -3949,16 +3949,24 @@ def build_from_sources(tid, cfg, args, src):
     log(f'  wrote {json_out} ({os.path.getsize(json_out) / 1e3:.0f} kB, {len(data["turns"])} turns, {len(data["cameras"])} cams, {len(data["pitLane"]["centerline"])} pit pts)')
 
     if not args.no_glb:
+        rows = (xz, rgt2, yprof, width, bank, kerbL, kerbR, run, grav, wall, wall_open, closure)
+        k_rows = int(cfg.get('colliderRowsPerSample', 1))
+        if k_rows > 1 and not p2p:
+            # the collider meshes from rows cut finer, their heights curved through the samples (upsample_rows)
+            rows = bt.upsample_rows(k_rows, *rows)
+            log(f'  collider rows: {len(xz)} -> {len(rows[0])}, heights curved between the samples')
+        c_xz, c_rgt, c_yprof, c_width, c_bank, c_kL, c_kR, c_run, c_grav, c_wall, c_open, c_closure = rows
         extra = bt.collider_meshes(
-            soup, road_set, kerb_mats, xz, rgt2, yprof, width, bank,
-            kerbL, kerbR, run, grav, wall, off,
+            soup, road_set, kerb_mats, c_xz, c_rgt, c_yprof, c_width, c_bank,
+            c_kL, c_kR, c_run, c_grav, c_wall, off,
             scan_kerbs=use_scan_kerbs,
             surface_mats=(paved_mats, grass_mats),
             edge_blend_m=(1.0, 4.0),
-            wall_open=wall_open,
+            wall_open=c_open,
             valid_runoff=None,
-            closure=closure,
+            closure=c_closure,
             skip=dead if p2p else None,
+            road_twist_m=cfg.get('roadTwistM'),
         )
         if cfg.get('offroadOverRoad'):
             extra = offroad_over_road(extra, soup, road_set, off, xz, rgt2, width, ds)
