@@ -1448,8 +1448,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, [launchHint, session]);
   // A car's first drive also names the seat panel in the launch hint; once it has shown (or the panel opened), not again
   const [seatHintOn, setSeatHintOn] = useState(false);
+  const showsSeatHint = settings.device === "wheel" || settings.device === "controller";
   useEffect(() => {
-    if (launchHint) {
+    if (launchHint && showsSeatHint) {
       setSeatHintOn(!seatHintSeen(carId));
       return;
     }
@@ -1457,7 +1458,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (on) markSeatHintSeen(carId);
       return false;
     });
-  }, [launchHint, carId]);
+  }, [launchHint, carId, showsSeatHint]);
   useEffect(() => {
     if (!seatPanel) return;
     markSeatHintSeen(carId);
@@ -2339,7 +2340,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   onStepFrame: (dir: 1 | -1) => session?.replayStepFrame(dir),
                   onSelectCamera: (mode: CameraMode) => session?.setCameraOverride(mode),
                   onCycleCamera: cycleCamera,
-                  onCycleCar: (dir: 1 | -1) => session?.replayCycleCar(dir),
+                  onCycleCar: replayUi.cars.length > 1 ? (dir: 1 | -1) => session?.replayCycleCar(dir) : undefined,
                   onExit: () => session?.exitReplay(),
                   onFlashback: replayUi.canFlashback ? () => { session?.flashbackReplay(); } : undefined,
                   exitKeyLabel: settings.keys.replay[0] ? keyLabel(settings.keys.replay[0]) : "T",

@@ -9,7 +9,7 @@
 import React, { useEffect, useState } from "react";
 import type { VehicleModelId } from "@/types/f1";
 import { ALL_CARS, boardLabel, type BoardCar } from "@/lib/net/board-client";
-import { challengeAt, challengeConditionsLabel, challengesSoFar, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
+import { challengeAt, challengeById, challengeConditionsLabel, challengesSoFar, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
 import { HallOfFame } from "@/components/board/HallOfFame";
 import { OnlineBoard, type BoardCarTag } from "@/components/board/OnlineBoard";
 import { Badge } from "@/components/ui/Badge";
@@ -106,7 +106,11 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
         {switcher}
         <HallOfFame
           circuitName={circuitName}
-          carName={(v) => carTitles[v] ?? carChoices.find((c) => c.id === v)?.label ?? v}
+          carName={(v, eventId) => {
+            const namedCar = eventId ? challengeById(eventId)?.car : undefined;
+            if (namedCar && carTitles[namedCar]) return carTitles[namedCar];
+            return carTitles[v] ?? carChoices.find((c) => c.id === v)?.label ?? v;
+          }}
         />
       </div>
     );

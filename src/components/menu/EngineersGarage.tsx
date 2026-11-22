@@ -323,12 +323,19 @@ export const EngineersGarage: React.FC<
   const copyShareCode = async (setup: SharedCarSetup, tag: string, label: string) => {
     const code = encodeSetupShareCode(setup);
     const ok = await copyTextToClipboard(code);
-    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
     if (ok) {
       setCopiedId(tag);
-      copyTimerRef.current = window.setTimeout(() => setCopiedId(null), 2000);
+      copyTimerRef.current = window.setTimeout(() => {
+        copyTimerRef.current = null;
+        setCopiedId(null);
+      }, 2000);
       setNote(`Copied share code for ${label}`);
     } else {
+      setCopiedId(null);
       setNote("Copy failed: clipboard unavailable");
     }
   };

@@ -94,18 +94,20 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
   );
 
   const barRef = useRef<HTMLElement>(null);
-  // Enable full gamepad / keyboard menu navigation inside ReplayBar (B / Back exits replay cleanly)
-  useFocusNav(barRef, { onBack: onExit, enabled: !inFreeCam });
+  // Enable gamepad / keyboard menu navigation inside ReplayBar (keyboardBack: false keeps Esc on the shell pause handler)
+  useFocusNav(barRef, { onBack: onExit, enabled: !inFreeCam, keyboardBack: false });
 
   // The key listeners read the latest clock and callbacks from here, so they are added once
-  const latest = useRef({ timeS, startS, endS, inFreeCam, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback });
-  latest.current = { timeS, startS, endS, inFreeCam, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback };
+  const canCycleCar = Boolean(onCycleCar && cars.length > 1);
+  const latest = useRef({ timeS, startS, endS, inFreeCam, canCycleCar, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback });
+  latest.current = { timeS, startS, endS, inFreeCam, canCycleCar, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback };
 
   useEffect(() => {
     const clamp = (t: number) => Math.min(latest.current.endS, Math.max(latest.current.startS, t));
     let spaceHandled = false;
     const onKey = (e: KeyboardEvent) => {
-      const { timeS, inFreeCam, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback } = latest.current;
+      if (e.defaultPrevented) return;
+      const { timeS, inFreeCam, canCycleCar, onTogglePlay, onSeek, onStepFrame, onCycleCar, onFlashback } = latest.current;
       const target = e.target as HTMLElement | null;
       const isRangeInput = target instanceof HTMLInputElement && target.type === "range";
       const inMenuPopup = Boolean(target?.closest('[role="listbox"], [role="menu"]'));
@@ -138,7 +140,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
       } else if (onStepFrame && (e.code === "Period" || e.key === ".")) {
         e.preventDefault();
         onStepFrame(1);
-      } else if (onCycleCar && e.code === "Tab") {
+      } else if (canCycleCar && onCycleCar && e.code === "Tab") {
         e.preventDefault();
         onCycleCar(e.shiftKey ? -1 : 1);
       } else if (onFlashback && (e.code === "KeyF" || e.key === "f" || e.key === "F")) {
@@ -151,10 +153,11 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
       spaceHandled = false;
       e.preventDefault();
     };
-    window.addEventListener("keydown", onKey);
+    // Capture phase so replay transport shortcuts (←/→ seek) consume keys before useFocusNav's bubble listener
+    window.addEventListener("keydown", onKey, true);
     window.addEventListener("keyup", onKeyUp, true);
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("keyup", onKeyUp, true);
     };
   }, []);
@@ -192,7 +195,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
               onClick={onTogglePlay}
               aria-label={playing ? "Pause replay" : "Play replay"}
               title={inFreeCam ? "Play / pause" : "Play / pause (Space)"}
-              className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lc-row bg-lc-volt text-lc-void shadow-lc-focus transition-[background-color,transform] duration-150 hover:bg-lc-volt-hi active:scale-[0.97] active:bg-lc-volt-dim motion-reduce:active:scale-100 sm:size-11"
+              className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lc-row bg-lc-volt text-lc-void shadow-lc-focus transition-[background-color,transform,scale] duration-150 hover:bg-lc-volt-hi active:scale-[0.97] active:bg-lc-volt-dim motion-reduce:active:scale-100 sm:size-11"
             >
               <Icon name={playing ? "pause" : "play"} size="md" />
             </button>

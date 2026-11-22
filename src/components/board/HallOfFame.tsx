@@ -19,8 +19,8 @@ import { BoardError, BoardSkeleton } from "./board-table";
 export interface HallOfFameProps {
   /** Human-readable circuit name for a track id */
   circuitName?: (trackId: string) => string;
-  /** Human-readable car name for a vehicle model id */
-  carName?: (vehicle: string) => string;
+  /** Human-readable car name for a vehicle model id (and optional week id when a week names a specific car) */
+  carName?: (vehicle: string, eventId?: string) => string;
   /** Highlight this driver's rows when present */
   driverName?: string;
   /** Reload trigger when a new lap is submitted */
@@ -113,7 +113,7 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
 
   const myKey = driverName ? driverNameKey(driverName) : "";
   const formatCircuit = (id: string) => (id ? (circuitName ? circuitName(id) : humanize(id)) : "");
-  const formatCar = (id: string) => (id ? (carName ? carName(id) : humanize(id)) : "");
+  const formatCar = (id: string, eventId?: string) => (id ? (carName ? carName(id, eventId) : humanize(id)) : "");
 
   if (state.loading && !state.data) {
     return (
@@ -213,7 +213,7 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
             key={`${e.event}-${e.physics}`}
             event={e}
             circuitLabel={formatCircuit(e.trackId)}
-            carLabel={formatCar(e.vehicle)}
+            carLabel={formatCar(e.vehicle, e.event)}
             myKey={myKey}
           />
         ))}

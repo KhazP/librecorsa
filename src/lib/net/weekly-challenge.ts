@@ -170,6 +170,21 @@ export function challengeAt(nowMs: number): WeeklyChallenge {
   return { ...rules, id: isoWeekId(startsMs), startsMs, endsMs: startsMs + WEEK_MS };
 }
 
+/** The challenge for an ISO week id (`YYYY-Www`), or null if malformed */
+export function challengeById(id: string): WeeklyChallenge | null {
+  const m = /^(\d{4})-W(\d{2})$/.exec(id);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const week = Number(m[2]);
+  if (week < 1 || week > 53) return null;
+  // ISO week 1 always contains January 4; step back to its Monday, then advance (week - 1) weeks
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Dow = (jan4.getUTCDay() + 6) % 7;
+  const week1MondayMs = jan4.getTime() - jan4Dow * 86_400_000;
+  const c = challengeAt(week1MondayMs + (week - 1) * WEEK_MS);
+  return c.id === id ? c : null;
+}
+
 /**
  * Every challenge that has run up to `nowMs`, this week's first: from the week of 9 November 2026, the first one, so
  * none is made up for a week before the challenge existed. At most `max` of them.

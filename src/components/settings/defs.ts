@@ -110,19 +110,27 @@ export const autoGearbox = toggle({
   ...top("autoGearbox"),
 });
 
+function autoClutchBlockReason(s: PlayerSettings): string | null {
+  if (s.autoGearbox) return "Requires manual gearbox";
+  if (s.device === "wheel") return s.wheel.clutch !== null ? null : "Bind clutch under Controls > Wheel";
+  if (s.device === "controller") return s.padTuning.pedalSources.clutch !== null ? null : "Bind clutch under Controls > Controller";
+  const touchActive = s.touch.mode === "on" || (s.touch.mode === "auto" && isTouchDevice());
+  if (touchActive) return "Unavailable with touch controls";
+  return s.keys.clutch.length > 0 ? null : "Bind Clutch under Controls > Keyboard";
+}
+
 export const autoClutch = toggle({
   id: "autoClutch",
   label: "Auto clutch",
-  hint: "Prevents stalling; disable for manual clutch launches",
-  off: (env) => {
-    const s = env.settings;
-    if (s.autoGearbox) return "Requires manual gearbox";
-    if (s.device === "wheel") return s.wheel.clutch !== null ? null : "Bind clutch under Controls > Wheel";
-    if (s.device === "controller") return s.padTuning.pedalSources.clutch !== null ? null : "Bind clutch under Controls > Controller";
-    const touchActive = s.touch.mode === "on" || (s.touch.mode === "auto" && isTouchDevice());
-    if (touchActive) return "Unavailable with touch controls";
-    return s.keys.clutch.length > 0 ? null : "Bind Clutch under Controls > Keyboard";
+  hint: (env) => {
+    const reason = autoClutchBlockReason(env.settings);
+    if (!env.settings.autoClutch && reason) {
+      return `Temporarily overridden (${reason.toLowerCase()}); turn on to restore default`;
+    }
+    return "Prevents stalling; disable for manual clutch launches";
   },
+  // Only block switching auto clutch OFF when no manual clutch is usable; if already off, keep it clickable so players can turn it back on or reset it
+  off: (env) => (env.settings.autoClutch ? autoClutchBlockReason(env.settings) : null),
   ...top("autoClutch"),
 });
 

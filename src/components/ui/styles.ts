@@ -12,7 +12,7 @@ export const cx = (...parts: (string | false | null | undefined)[]): string => p
 /** One timing for every state change: 150 ms on the house curve. A pad or keyboard move lands at once, and the item it
  * left lets go at once; under the mouse the fade stays */
 export const MOTION = cx(
-  "transition-[background-color,border-color,box-shadow,color,opacity,transform] duration-150 ease-lc",
+  "transition-[background-color,border-color,box-shadow,color,opacity,transform,scale] duration-150 ease-lc",
   "in-data-[input=keyboard]:transition-none in-data-[input=pad]:transition-none",
 );
 

@@ -212,6 +212,11 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   const car = data.cars.find((c) => c.id === carId) ?? data.cars[0];
   const picks = { trackId: layout.id, carId: car.id };
 
+  // Keep per-venue layout memory seeded from restored/default picks so switching venues and back restores it
+  useEffect(() => {
+    setVenueLayoutMemory((m) => (m[venue.name] === layout.id ? m : { ...m, [venue.name]: layout.id }));
+  }, [venue.name, layout.id]);
+
   // Warm the selected venue's hero while picking on another tab so returning to Home paints it immediately
   useEffect(() => {
     if (tab !== "home") preloadVenueHero(venue.hero);

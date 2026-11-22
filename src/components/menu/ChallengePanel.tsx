@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { CARS } from "@/lib/cars/car-registry";
+import { anyCarById, anyCarForVehicle, type CarId } from "@/lib/cars/car-registry";
+import { carBoardTag } from "@/lib/cars/board-tag";
+import { isVehicleModelId } from "@/types/f1";
 import { TRACKS, venueOf } from "@/lib/track-registry";
 import { boardLabel, driverNameKey, type RemoteBoard } from "@/lib/net/leaderboard";
 import { boardChoiceOf, boardChoices, PHYSICS_VERSION } from "@/lib/sim/lap-types";
-import { challengeConditionsLabel, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
+import { challengeById, challengeConditionsLabel, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
 import { HallOfFame } from "@/components/board/HallOfFame";
 import { BoardError, BoardSkeleton, BoardTable, MyPlace } from "@/components/hud/LeaderboardPanel";
 import { Button, Card, EmptyState, Select } from "@/components/ui";
@@ -41,7 +43,17 @@ const formatCircuitName = (id: string): string => {
   return layouts > 1 && t.layout ? `${t.name} · ${t.layout}` : t.name;
 };
 
-const formatCarName = (vehicle: string): string => CARS.find((c) => c.physics === vehicle)?.title ?? vehicle;
+const formatCarName = (vehicle: string, eventId?: string): string => {
+  const namedCar = eventId ? challengeById(eventId)?.car : undefined;
+  if (namedCar) {
+    const title = anyCarById(namedCar as CarId)?.title;
+    if (title) return title;
+  }
+  if (isVehicleModelId(vehicle)) {
+    return anyCarForVehicle(vehicle)?.title ?? carBoardTag(vehicle).label;
+  }
+  return vehicle;
+};
 
 type ChallengeTab = "week" | "hof";
 
