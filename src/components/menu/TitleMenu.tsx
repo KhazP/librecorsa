@@ -646,10 +646,15 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   // A hill climb is driven one car at a time, from the start line to the finish: no races against the AI
   const hillClimb = activeTrackId === trackId && getActivePointToPoint() !== null;
   const localLaps = props.leaderboardPanel?.local;
+  // This car's best on this circuit: the list is loaded for them, and filtered too so a list from before a swap never
+  // shows another car's or circuit's time
   const bestLapMs = useMemo(() => {
-    const times = (localLaps ?? []).map((e) => e.lapTimeMs).filter((ms) => Number.isFinite(ms) && ms > 0);
+    const times = (localLaps ?? [])
+      .filter((e) => e.trackId === trackId && e.vehicle === props.vehicleModel)
+      .map((e) => e.lapTimeMs)
+      .filter((ms) => Number.isFinite(ms) && ms > 0);
     return times.length ? Math.min(...times) : null;
-  }, [localLaps]);
+  }, [localLaps, trackId, props.vehicleModel]);
   const items: MenuItem[] = [
     {
       id: "drive",
