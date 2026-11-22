@@ -32,6 +32,10 @@ console.log('Catalogue');
   }
   check('the menus have an opener', MUSIC_TRACKS.some((t) => t.opener && t.pool === 'menu'));
   check('every track is CC0 or public domain', MUSIC_TRACKS.every((t) => t.licence === 'CC0' || t.licence === 'Public domain'));
+  const badTrim = MUSIC_TRACKS.filter((t) => !(Math.abs(t.gainDb) <= 3) || (t.startS ?? 0) < 0 || (t.endS !== undefined && t.endS <= (t.startS ?? 0) + 30));
+  check('every track has a level trim within 3 dB and its music between start and end', badTrim.length === 0, badTrim.map((t) => t.id).join(', '));
+  const lateStart = MUSIC_TRACKS.filter((t) => t.pool !== 'race' && (t.startS ?? 0) > 5);
+  check('only a race track skips its opening (the others trim head silence)', lateStart.length === 0, lateStart.map((t) => t.id).join(', '));
   // The files are hosted, not committed: checked only where this checkout has them
   const dir = join(__dirname, '../public/music');
   if (existsSync(dir)) {
