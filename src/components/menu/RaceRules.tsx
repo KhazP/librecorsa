@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Card, Segmented, Select, SettingRow, Slider, Stepper, Toggle } from "@/components/ui";
+import { Card, Disclosure, Segmented, Select, SettingRow, Slider, Stepper } from "@/components/ui";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { DAMAGE_LEVEL_LABELS, DAMAGE_LEVELS, type DamageLevel } from "@/lib/sim/car-damage";
 import {
@@ -42,11 +42,14 @@ const AGGRESSION_HINT: Record<RaceAggression, string> = {
   hard: "Late dives, firm defence",
 };
 
-/** The field sizes on offer in pause's list (the same range as the title's stepper) */
+/** The field sizes on offer, the same list on the title's Race panel and in pause */
 const OPPONENT_OPTIONS = Array.from({ length: MAX_RACE_OPPONENTS }, (_, i) => {
   const n = i + 1;
-  return { id: String(n), label: `${n} AI ${n === 1 ? "car" : "cars"}` };
+  return { id: String(n), label: `${n} ${n === 1 ? "car" : "cars"}` };
 });
+/** Pause in practice or an AI race: the same list, with no field at all first */
+const OFF = "off";
+const OPPONENT_OPTIONS_OR_OFF = [{ id: OFF, label: "Off" }, ...OPPONENT_OPTIONS];
 
 export interface RaceRulesProps {
   /** Where the rules are shown: the title's Race panel, or the pause menu while a session runs */
@@ -56,7 +59,10 @@ export interface RaceRulesProps {
   /** AI level, 0 (Rookie) to 100 (Alien); applies at once, mid-race too */
   aiSkill?: number;
   onChangeAiSkill?: (skill: number) => void;
-  /** Pause only: AI opponents on or off (turning them on or off restarts the run) */
+  /**
+   * Pause only: AI opponents on or off (turning them on or off restarts the run). With the switch, the AI opponents
+   * row offers Off beside the field sizes, and in practice the race and its rules wait behind a fold
+   */
   aiOpponents?: boolean;
   onToggleAiOpponents?: () => void;
   /** Circuit length in metres, for the race distance under Laps */
@@ -91,10 +97,119 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
 }) => {
   const distance = useRaceDistance(setup.laps, trackLengthM);
   const pause = context === "pause";
-  // Only a change of field size restarts a running AI race (the shell rebuilds the field and starts from the lights)
-  const restartsNow = pause && aiOpponents === true;
-  const startNote = setup.startMode === "auto" ? "" : ` (${RACE_START_LABELS[setup.startMode].toLowerCase()})`;
-  const heavy = setup.opponents > HEAVY_FIELD ? "Large field may reduce frame rate" : null;
+  // Pause with the switch at hand (not online, not on a hill climb): one row says whether there is a field and how big
+  const canSwitch = pause && onToggleAiOpponents !== undefined;
+  const racing = aiOpponents === true;
+  const fieldOff = canSwitch && !racing;
+  // In practice the race and its rules are for an AI race that is not running: they wait behind a fold
+  const folded = fieldOff;
+  const heavy = !fieldOff && setup.opponents > HEAVY_FIELD ? "Large field may reduce frame rate" : null;
+  const fieldHint =
+    [
+      // Any change of field restarts: the shell rebuilds a running AI race from the lights, and the switch restarts
+      // the session either way
+      canSwitch ? (racing ? "Changing it restarts the race" : "Picking a field restarts the session as an AI race") : null,
+      heavy,
+    ]
+      .filter(Boolean)
+      .join(". ") || undefined;
+
+  const pickField = (id: string) => {
+    if (id === OFF) {
+      if (racing) onToggleAiOpponents?.();
+      return;
+    }
+    const opponents = Number(id);
+    // The title, an online race, or an AI race running (the shell restarts it with the new field)
+    if (!fieldOff) {
+      onChange({ opponents });
+      return;
+    }
+    if (opponents === setup.opponents) {
+      onToggleAiOpponents?.();
+      return;
+    }
+    // From practice to a field of another size. The switch builds the field from the settings the session holds, which
+    // take the new size in the shell's effect after this render: switched at once, the race would start at the old
+    // size and then again at the new one. A task later the session has it, and the race starts once
+    onChange({ opponents });
+    window.setTimeout(() => onToggleAiOpponents?.(), 0);
+  };
+
+  const raceRows = (
+    <>
+      <SettingRow label="Laps" hint={distance ?? undefined}>
+        <Stepper value={setup.laps} min={1} max={50} onChange={(laps) => onChange({ laps })} />
+      </SettingRow>
+      <SettingRow label="Qualifying" hint={setup.qualifying ? "Solo session; best clean lap sets grid position" : undefined}>
+        <Segmented<QualifyingOption>
+          options={QUALIFYING_MINUTES.map((m) => ({ id: qualifyingOption(m), label: m ? `${m} min` : "Off" }))}
+          value={qualifyingOption(setup.qualifying)}
+          onChange={(m) => onChange({ qualifying: Number(m) as QualifyingMinutes })}
+        />
+      </SettingRow>
+      {/* Qualifying sets the grid: the slot and the AI order are the setup's only without it */}
+      {setup.qualifying ? null : (
+        <>
+          <SettingRow label="Grid slot">
+            <Segmented<PlayerGridSlot>
+              options={(["front", "middle", "back", "random"] as const).map((id) => ({ id, label: PLAYER_GRID_LABELS[id] }))}
+              value={setup.grid}
+              onChange={(grid) => onChange({ grid })}
+            />
+          </SettingRow>
+          <SettingRow label="AI grid" hint={setup.aiGrid === "qualifying" ? "Pace order with qualifying variance" : undefined}>
+            <Segmented<AiGridOrder>
+              options={(["qualifying", "pace", "reversed"] as const).map((id) => ({ id, label: AI_GRID_LABELS[id] }))}
+              value={setup.aiGrid}
+              onChange={(aiGrid) => onChange({ aiGrid })}
+            />
+          </SettingRow>
+        </>
+      )}
+      <SettingRow label="Start" hint={setup.startMode === "auto" ? "Set by rules" : undefined}>
+        <Segmented<RaceStartChoice>
+          options={(["auto", "standing", "rolling"] as const).map((id) => ({ id, label: RACE_START_LABELS[id] }))}
+          value={setup.startMode}
+          onChange={(startMode) => onChange({ startMode })}
+        />
+      </SettingRow>
+      {/* The same choice as Settings > Driving > Launch */}
+      <SettingRow label="Launch" hint={setup.startMode !== "rolling" ? RACE_START_MODE_HINTS[setup.launch] : "Standing starts only"}>
+        <Segmented<RaceStartMode>
+          options={RACE_START_MODES.map((id) => ({ id, label: RACE_START_MODE_LABELS[id] }))}
+          value={setup.launch}
+          onChange={(launch) => onChange({ launch })}
+        />
+      </SettingRow>
+    </>
+  );
+
+  const rulesRows = (
+    <>
+      <SettingRow label="Rules" hint={RULE_PRESET_HINTS[setup.rulePreset]}>
+        <Segmented<RulePresetId>
+          options={(["auto", "open_wheel", "endurance_sprint"] as const).map((id) => ({ id, label: RULE_PRESET_LABELS[id] }))}
+          value={setup.rulePreset}
+          onChange={(rulePreset) => onChange({ rulePreset })}
+        />
+      </SettingRow>
+      <SettingRow label="Track limits" hint={setup.trackLimits === "off" ? "Course cuts only" : undefined}>
+        <Segmented<TrackLimitsChoice>
+          options={(["auto", "off"] as const).map((id) => ({ id, label: TRACK_LIMITS_CHOICE_LABELS[id] }))}
+          value={setup.trackLimits}
+          onChange={(trackLimits) => onChange({ trackLimits })}
+        />
+      </SettingRow>
+      <SettingRow label="Damage">
+        <Segmented<DamageLevel>
+          options={DAMAGE_LEVELS.map((id) => ({ id, label: DAMAGE_LEVEL_LABELS[id] }))}
+          value={setup.damage}
+          onChange={(damage) => onChange({ damage })}
+        />
+      </SettingRow>
+    </>
+  );
 
   return (
     // data-nav-columns: up / down read down the field card, the race card, then the rules (menu-shell's reading order).
@@ -105,30 +220,15 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
         className="grid grid-cols-1 items-start gap-3 @min-[732px]:grid-cols-2 @min-[732px]:[grid-template-areas:'field_race'_'rules_race']"
       >
         <Card title="Field" className="@min-[732px]:[grid-area:field]">
-          {onToggleAiOpponents ? (
-            <SettingRow
-              label="AI opponents"
-              hint={`${setup.opponents} AI ${setup.opponents === 1 ? "car" : "cars"}${startNote}. Toggling restarts the session.`}
-            >
-              <Toggle checked={aiOpponents === true} onChange={() => onToggleAiOpponents()} />
-            </SettingRow>
-          ) : null}
-          <SettingRow
-            label="Opponents"
-            hint={[restartsNow ? "Restarts the race" : null, heavy].filter(Boolean).join(". ") || undefined}
-          >
-            {pause ? (
-              // In pause a new field size restarts the race: a list commits once, on confirm, where a stepper would
-              // restart on every step
-              <Select
-                options={OPPONENT_OPTIONS}
-                value={String(setup.opponents)}
-                onChange={(n) => onChange({ opponents: Number(n) })}
-                className="w-32"
-              />
-            ) : (
-              <Stepper value={setup.opponents} min={1} max={MAX_RACE_OPPONENTS} onChange={(opponents) => onChange({ opponents })} />
-            )}
+          {/* One control for the field on both screens: a list, which commits once (in pause a new field restarts the
+              race, where a stepper would restart it on every step). Pause adds Off, for practice */}
+          <SettingRow label="AI opponents" hint={fieldHint}>
+            <Select
+              options={canSwitch ? OPPONENT_OPTIONS_OR_OFF : OPPONENT_OPTIONS}
+              value={fieldOff ? OFF : String(setup.opponents)}
+              onChange={pickField}
+              className="w-32"
+            />
           </SettingRow>
           {onChangeAiSkill ? (
             <SettingRow label="AI level">
@@ -154,85 +254,24 @@ export const RaceRules: React.FC<RaceRulesProps> = ({
           {extraFieldRows}
         </Card>
 
-        <Card title="Race" description={pause ? "Applies from next start" : undefined} className="@min-[732px]:[grid-area:race]">
-          <SettingRow label="Laps" hint={distance ?? undefined}>
-            <Stepper value={setup.laps} min={1} max={50} onChange={(laps) => onChange({ laps })} />
-          </SettingRow>
-          <SettingRow
-            label="Qualifying"
-            hint={setup.qualifying ? "Solo session; best clean lap sets grid position" : undefined}
-          >
-            <Segmented<QualifyingOption>
-              options={QUALIFYING_MINUTES.map((m) => ({ id: qualifyingOption(m), label: m ? `${m} min` : "Off" }))}
-              value={qualifyingOption(setup.qualifying)}
-              onChange={(m) => onChange({ qualifying: Number(m) as QualifyingMinutes })}
-            />
-          </SettingRow>
-          {/* Qualifying sets the grid: the slot and the AI order are the setup's only without it */}
-          {setup.qualifying ? null : (
-            <>
-              <SettingRow label="Grid slot">
-                <Segmented<PlayerGridSlot>
-                  options={(["front", "middle", "back", "random"] as const).map((id) => ({ id, label: PLAYER_GRID_LABELS[id] }))}
-                  value={setup.grid}
-                  onChange={(grid) => onChange({ grid })}
-                />
-              </SettingRow>
-              <SettingRow
-                label="AI grid"
-                hint={setup.aiGrid === "qualifying" ? "Pace order with qualifying variance" : undefined}
-              >
-                <Segmented<AiGridOrder>
-                  options={(["qualifying", "pace", "reversed"] as const).map((id) => ({ id, label: AI_GRID_LABELS[id] }))}
-                  value={setup.aiGrid}
-                  onChange={(aiGrid) => onChange({ aiGrid })}
-                />
-              </SettingRow>
-            </>
-          )}
-          <SettingRow label="Start" hint={setup.startMode === "auto" ? "Set by rules" : undefined}>
-            <Segmented<RaceStartChoice>
-              options={(["auto", "standing", "rolling"] as const).map((id) => ({ id, label: RACE_START_LABELS[id] }))}
-              value={setup.startMode}
-              onChange={(startMode) => onChange({ startMode })}
-            />
-          </SettingRow>
-          {/* The same choice as Settings > Driving > Launch */}
-          <SettingRow
-            label="Launch"
-            hint={setup.startMode !== "rolling" ? RACE_START_MODE_HINTS[setup.launch] : "Standing starts only"}
-          >
-            <Segmented<RaceStartMode>
-              options={RACE_START_MODES.map((id) => ({ id, label: RACE_START_MODE_LABELS[id] }))}
-              value={setup.launch}
-              onChange={(launch) => onChange({ launch })}
-            />
-          </SettingRow>
-        </Card>
-
-        <Card title="Rules" description={pause ? "Applies from next start" : undefined} className="@min-[732px]:[grid-area:rules]">
-          <SettingRow label="Rules" hint={RULE_PRESET_HINTS[setup.rulePreset]}>
-            <Segmented<RulePresetId>
-              options={(["auto", "open_wheel", "endurance_sprint"] as const).map((id) => ({ id, label: RULE_PRESET_LABELS[id] }))}
-              value={setup.rulePreset}
-              onChange={(rulePreset) => onChange({ rulePreset })}
-            />
-          </SettingRow>
-          <SettingRow label="Track limits" hint={setup.trackLimits === "off" ? "Course cuts only" : undefined}>
-            <Segmented<TrackLimitsChoice>
-              options={(["auto", "off"] as const).map((id) => ({ id, label: TRACK_LIMITS_CHOICE_LABELS[id] }))}
-              value={setup.trackLimits}
-              onChange={(trackLimits) => onChange({ trackLimits })}
-            />
-          </SettingRow>
-          <SettingRow label="Damage">
-            <Segmented<DamageLevel>
-              options={DAMAGE_LEVELS.map((id) => ({ id, label: DAMAGE_LEVEL_LABELS[id] }))}
-              value={setup.damage}
-              onChange={(damage) => onChange({ damage })}
-            />
-          </SettingRow>
-        </Card>
+        {folded ? (
+          // Every row still one press away, in the same order, without two cards of them for a race that is not on
+          <Card title="AI race" description="Used once AI opponents are on" className="@min-[732px]:[grid-area:race]">
+            <Disclosure moreLabel="Show laps, start and rules" lessLabel="Hide laps, start and rules">
+              {raceRows}
+              {rulesRows}
+            </Disclosure>
+          </Card>
+        ) : (
+          <>
+            <Card title="Race" description={pause ? "Applies from next start" : undefined} className="@min-[732px]:[grid-area:race]">
+              {raceRows}
+            </Card>
+            <Card title="Rules" description={pause ? "Applies from next start" : undefined} className="@min-[732px]:[grid-area:rules]">
+              {rulesRows}
+            </Card>
+          </>
+        )}
       </div>
     </div>
   );
