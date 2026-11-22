@@ -288,8 +288,66 @@ def test_road_profile_height():
     assert abs(bt.road_profile_height(ditch, 2.0, 2.0) - float(np.interp(2.0, lat, ditch))) < 1e-12
 
 
+def test_subdivide_twisted_road():
+    """A road strip whose crossfall grows 2 % a row: its quads twist, and the cut one keeps every small quad under the
+    limit, lies on the bilinear patches (its edges the strip's own) and covers the same area, facing the same way"""
+    n, ncol = 6, 7
+    V = np.zeros((n, ncol, 3))
+    for i in range(n):
+        for c in range(ncol):
+            lat = -10 + c * 20 / 6
+            V[i, c] = (lat, 0.02 * i * lat, i * 5.0)
+    P = V.reshape(-1, 3)
+    F = []
+    for i in range(n - 2):  # the last interval missing, as a skipped stretch leaves it
+        for c in range(ncol - 1):
+            v00, v01, v10, v11 = i * ncol + c, i * ncol + c + 1, (i + 1) * ncol + c, (i + 1) * ncol + c + 1
+            F += [v00, v10, v01, v01, v10, v11]
+    F = np.array(F, np.uint32)
+    P2, F2 = bt.subdivide_twisted_road(P, F, ncol, 0.005)
+    T0, T2 = P[F.reshape(-1, 3)], P2[F2.reshape(-1, 3)]
+    assert np.abs(P2[:, 1] - 0.02 * (P2[:, 2] / 5) * P2[:, 0]).max() < 1e-9
+    fn0 = np.cross(T0[:, 1] - T0[:, 0], T0[:, 2] - T0[:, 0])
+    fn2 = np.cross(T2[:, 1] - T2[:, 0], T2[:, 2] - T2[:, 0])
+    assert (fn0[:, 1] > 0).all() == (fn2[:, 1] > 0).all()
+    area = lambda fn: 0.5 * np.linalg.norm(fn, axis=1).sum()
+    assert abs(area(fn0) - area(fn2)) < 0.05, (area(fn0), area(fn2))
+    # nothing drawn over the missing interval
+    assert T2[:, :, 2].max() <= (n - 2) * 5.0 + 1e-9
+    # each small quad (two triangles) twists less than the limit
+    Q = T2.reshape(-1, 2, 3, 3)
+    a, b, c, d = Q[:, 0, 0], Q[:, 0, 2], Q[:, 0, 1], Q[:, 1, 2]  # v00, v01, v10, v11
+    assert np.abs(a[:, 1] - b[:, 1] - c[:, 1] + d[:, 1]).max() <= 0.005 + 1e-9
+
+
+def test_upsample_rows():
+    """A circle of radius 40 m sampled every ~5 m, heights a parabola along it: the cut rows lie on the circle (the
+    chords between the samples sag 8 cm inside it), face across it, keep the samples where they were, and their heights
+    follow the parabola closer than straight lines between the samples do"""
+    R = 40.0
+    n = int(2 * np.pi * R / 5)
+    a = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    xz = np.stack([R * np.cos(a), R * np.sin(a)], 1)
+    rgt = cl.rights(cl.tangents(xz))
+    h = lambda ang: 0.5 * np.sin(ang) ** 2
+    yprof = np.tile(h(a)[:, None], (1, 9))
+    z2 = np.zeros((n, 2))
+    out = bt.upsample_rows(4, xz, rgt, yprof, np.full(n, 12.0), np.zeros(n), np.zeros(n, bool), np.zeros(n, bool),
+                           z2, z2, z2 + 10, np.zeros((n, 2), bool), np.zeros((n, 2), bool))
+    xz_u, rgt_u, yprof_u = out[0], out[1], out[2]
+    r = np.linalg.norm(xz_u, axis=1)
+    assert np.abs(r - R).max() < 1e-3, np.abs(r - R).max()
+    assert np.abs(np.einsum('ij,ij->i', rgt_u, xz_u / r[:, None])).min() > 0.9999
+    assert np.einsum('ij,ij->i', rgt_u[::4], rgt).min() > 0.99
+    assert np.allclose(xz_u[::4], xz) and np.allclose(yprof_u[::4], yprof)
+    ang = np.arctan2(xz_u[:, 1], xz_u[:, 0])
+    lin = np.repeat(yprof[:, 0], 4) + (np.roll(yprof[:, 0], -1) - yprof[:, 0]).repeat(4) * np.tile(np.arange(4) / 4, n)
+    assert np.abs(yprof_u[:, 0] - h(ang)).max() < 0.3 * np.abs(lin - h(ang)).max()
+    assert len(out[10]) == 4 * n and out[10].dtype == bool
+
+
 TESTS = [test_route_start_cut, test_wall_lane_oval, test_glb_sparse_accessors, test_turn_names_over_the_start_line,
-         test_carry_previous_lines, test_road_profile_height]
+         test_carry_previous_lines, test_road_profile_height, test_subdivide_twisted_road, test_upsample_rows]
 
 if __name__ == '__main__':
     failed = 0
