@@ -43,9 +43,10 @@ interface PaintAnalysis {
 const analyses = new WeakMap<THREE.Texture, Map<PaintKeys, PaintAnalysis | null>>();
 const repainted = new WeakMap<THREE.Texture, Map<string, THREE.Texture>>();
 const materials = new WeakMap<THREE.Material, Map<string, THREE.Material>>();
-/** Single replaceable slot for the player's active custom paint so custom picks never bloat/evict preset caches */
-const customRepainted = new WeakMap<THREE.Texture, { key: string; value: THREE.Texture }>();
-const customMaterials = new WeakMap<THREE.Material, { key: string; value: THREE.Material }>();
+/** Bounded cache for custom paint picks so concurrent custom cars don't clobber each other or evict presets */
+const MAX_CUSTOM_LIVERIES = 8;
+const customRepainted = new WeakMap<THREE.Texture, Map<string, THREE.Texture>>();
+const customMaterials = new WeakMap<THREE.Material, Map<string, THREE.Material>>();
 
 function hexBytes(css: string): [number, number, number] {
   // getHex() is sRGB (the Color itself holds linear components)
@@ -139,12 +140,14 @@ function liveryKey(livery: LiveryConfig): string {
 export function repaintTexture(texture: THREE.Texture, keys: PaintKeys, livery: LiveryConfig): THREE.Texture | null {
   const key = liveryKey(livery);
   const isCustom = livery.id === "custom";
-  if (isCustom) {
-    const prev = customRepainted.get(texture);
-    if (prev && prev.key === key) return prev.value;
-  } else {
-    const cached = repainted.get(texture)?.get(key);
-    if (cached) return cached;
+  const bucket = isCustom ? customRepainted : repainted;
+  const cached = bucket.get(texture)?.get(key);
+  if (cached) {
+    // Touch LRU order
+    const map = bucket.get(texture)!;
+    map.delete(key);
+    map.set(key, cached);
+    return cached;
   }
   const a = analyse(texture, keys);
   if (!a) return null;
@@ -183,19 +186,13 @@ export function repaintTexture(texture: THREE.Texture, keys: PaintKeys, livery: 
   out.center.copy(texture.center);
   out.matrixAutoUpdate = texture.matrixAutoUpdate;
   out.matrix.copy(texture.matrix);
-  if (isCustom) {
-    const prev = customRepainted.get(texture);
-    if (prev) prev.value.dispose();
-    customRepainted.set(texture, { key, value: out });
-  } else {
-    let cache = repainted.get(texture);
-    if (!cache) {
-      cache = new Map();
-      repainted.set(texture, cache);
-    }
-    cache.set(key, out);
-    evictOldest(cache, (t) => t.dispose());
+  let cache = bucket.get(texture);
+  if (!cache) {
+    cache = new Map();
+    bucket.set(texture, cache);
   }
+  cache.set(key, out);
+  evictOldest(cache, (t) => t.dispose(), isCustom ? MAX_CUSTOM_LIVERIES : MAX_CACHED_LIVERIES);
   return out;
 }
 
@@ -206,8 +203,8 @@ export function repaintTexture(texture: THREE.Texture, keys: PaintKeys, livery: 
  */
 const MAX_CACHED_LIVERIES = 22;
 
-function evictOldest<V>(cache: Map<string, V>, dispose: (v: V) => void): void {
-  while (cache.size > MAX_CACHED_LIVERIES) {
+function evictOldest<V>(cache: Map<string, V>, dispose: (v: V) => void, limit = MAX_CACHED_LIVERIES): void {
+  while (cache.size > limit) {
     const oldest = cache.keys().next().value;
     if (oldest === undefined) break;
     const v = cache.get(oldest);
@@ -229,12 +226,13 @@ export function liveryMaterial<M extends THREE.Material & { map: THREE.Texture |
   if (!base.map) return base;
   const key = liveryKey(livery);
   const isCustom = livery.id === "custom";
-  if (isCustom) {
-    const prev = customMaterials.get(base);
-    if (prev && prev.key === key) return prev.value as M;
-  } else {
-    const cached = materials.get(base)?.get(key);
-    if (cached) return cached as M;
+  const bucket = isCustom ? customMaterials : materials;
+  const cached = bucket.get(base)?.get(key);
+  if (cached) {
+    const map = bucket.get(base)!;
+    map.delete(key);
+    map.set(key, cached);
+    return cached as M;
   }
   const map = repaintTexture(base.map, keys, livery);
   if (!map) return base;
@@ -242,19 +240,13 @@ export function liveryMaterial<M extends THREE.Material & { map: THREE.Texture |
   out.onBeforeCompile = base.onBeforeCompile;
   out.customProgramCacheKey = base.customProgramCacheKey;
   out.map = map;
-  if (isCustom) {
-    const prev = customMaterials.get(base);
-    if (prev) prev.value.dispose();
-    customMaterials.set(base, { key, value: out });
-  } else {
-    let cache = materials.get(base);
-    if (!cache) {
-      cache = new Map();
-      materials.set(base, cache);
-    }
-    cache.set(key, out);
-    evictOldest(cache, (m) => m.dispose());
+  let cache = bucket.get(base);
+  if (!cache) {
+    cache = new Map();
+    bucket.set(base, cache);
   }
+  cache.set(key, out);
+  evictOldest(cache, (m) => m.dispose(), isCustom ? MAX_CUSTOM_LIVERIES : MAX_CACHED_LIVERIES);
   return out;
 }
 

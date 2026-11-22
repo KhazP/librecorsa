@@ -516,6 +516,18 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       bodyGroup.updateMatrixWorld(true);
       let procProfile: ProceduralBodyProfile | null = null;
       const procSurfaces: ProceduralLiverySurface[] = [];
+      const slotByMat = new Map<THREE.Material, SkinSlot>(skinSlots.map((s) => [s.mat, s]));
+      const replacedSlots = new Set<SkinSlot>();
+      const cloneForProcedural = (src: THREE.MeshStandardMaterial, frameMatrix: THREE.Matrix4): THREE.MeshStandardMaterial => {
+        const copy = src.clone();
+        procSurfaces.push({ material: copy, frameMatrix });
+        const slot = slotByMat.get(src);
+        if (slot) {
+          skinSlots.push({ mat: copy, file: slot.file, own: slot.own, ownedBySkin: false });
+          replacedSlots.add(slot);
+        }
+        return copy;
+      };
       bodyGroup.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
@@ -527,10 +539,8 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
             const prof = src.isMeshStandardMaterial ? PROCEDURAL_PROFILE_BY_MATERIAL[src.name] : undefined;
             if (!prof) return m;
             procProfile = prof;
-            const copy = src.clone();
-            procSurfaces.push({ material: copy, frameMatrix });
             changed = true;
-            return copy;
+            return cloneForProcedural(src, frameMatrix);
           });
           if (changed) mesh.material = next;
           return;
@@ -539,10 +549,26 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         const prof = src.isMeshStandardMaterial ? PROCEDURAL_PROFILE_BY_MATERIAL[src.name] : undefined;
         if (!prof) return;
         procProfile = prof;
-        const copy = src.clone();
-        mesh.material = copy;
-        procSurfaces.push({ material: copy, frameMatrix });
+        mesh.material = cloneForProcedural(src, frameMatrix);
       });
+      if (replacedSlots.size > 0) {
+        const stillUsed = new Set<THREE.Material>();
+        for (const scope of [bodyGroup, ...corners.map((c) => c.spin)]) {
+          scope.traverse((o) => {
+            const m = (o as THREE.Mesh).material;
+            if (!m) return;
+            if (Array.isArray(m)) for (const entry of m) stillUsed.add(entry);
+            else stillUsed.add(m);
+          });
+        }
+        for (let i = skinSlots.length - 1; i >= 0; i--) {
+          const slot = skinSlots[i];
+          if (replacedSlots.has(slot) && !stillUsed.has(slot.mat)) {
+            if (slot.ownedBySkin) slot.mat.dispose();
+            skinSlots.splice(i, 1);
+          }
+        }
+      }
       if (procProfile && procSurfaces.length > 0) {
         proceduralLivery = installPortedProceduralLivery(procSurfaces, procProfile);
       }

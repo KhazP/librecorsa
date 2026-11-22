@@ -22,6 +22,8 @@ export interface MergeStaticOptions {
    * vertex/index buffer instead of re-baking and duplicating megabytes of static bodywork across every opponent.
    */
   geometryCache?: Map<string, THREE.BufferGeometry>;
+  /** Optional sink collecting every uncached BufferGeometry newly allocated by this call, so the caller can dispose them */
+  createdGeometries?: THREE.BufferGeometry[];
 }
 
 const _invRoot = new THREE.Matrix4();
@@ -152,7 +154,7 @@ export function mergeStaticMeshesByMaterial(root: THREE.Object3D, options: Merge
   const buckets = new Map<string, { material: THREE.Material; sig: string; meshes: THREE.Mesh[] }>();
 
   const visit = (obj: THREE.Object3D) => {
-    if (obj !== root && skip?.(obj)) return;
+    if (obj !== root && (skip?.(obj) || !obj.visible)) return;
     if ((obj as THREE.LOD).isLOD) return;
     const mesh = obj as THREE.Mesh;
     if (
@@ -205,6 +207,7 @@ export function mergeStaticMeshesByMaterial(root: THREE.Object3D, options: Merge
       combined.computeBoundingBox();
       combined.computeBoundingSphere();
       if (cacheKey) options.geometryCache!.set(cacheKey, combined);
+      else options.createdGeometries?.push(combined);
     }
 
     const ref = meshes[0];

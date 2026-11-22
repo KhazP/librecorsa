@@ -450,6 +450,7 @@ export function attachLc26Model(
 
   // Merge static same-material meshes on BODY (on opponents this also collapses all 18 ARM_* wishbones into 1 EXT_carbon
   // draw and shares the merged BufferGeometry across every opponent) and on the player's STEER_BASE.
+  const ownMergedGeometries: THREE.BufferGeometry[] = [];
   if (bodyNode) {
     let geometryCache: Map<string, THREE.BufferGeometry> | undefined;
     if (options.opponent) {
@@ -462,6 +463,7 @@ export function attachLc26Model(
     mergeStaticMeshesByMaterial(bodyNode, {
       namePrefix: "LC26_BODY_Merged",
       geometryCache,
+      createdGeometries: geometryCache ? undefined : ownMergedGeometries,
       skip: (obj) => {
         if (obj === steerBase || obj === driver || obj === helmet || obj === harnessNode) return true;
         if (obj.userData?.aeroClosed) return true;
@@ -476,6 +478,7 @@ export function attachLc26Model(
     const ledRoot = steerBase.getObjectByName("LED_RPM_0");
     mergeStaticMeshesByMaterial(steerBase, {
       namePrefix: "LC26_STEER_Merged",
+      createdGeometries: ownMergedGeometries,
       skip: (obj) => {
         if (obj === ledRoot) return true;
         const m = (obj as THREE.Mesh).isMesh && !Array.isArray((obj as THREE.Mesh).material) ? ((obj as THREE.Mesh).material as THREE.Material) : null;
@@ -594,6 +597,7 @@ export function attachLc26Model(
     driverMixer?.stopAllAction();
     driverHelmet?.dispose();
     driverFigure?.dispose();
+    for (const g of ownMergedGeometries) g.dispose();
     for (const m of ownZone.values()) m.dispose();
     ownRimMat?.dispose();
     for (const h of liveTyreHandles) h.dispose();
