@@ -92,7 +92,14 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
 
   useEffect(() => {
     onStepChange?.(step);
-    bodyRef.current?.scrollTo({ top: 0 });
+    const stepBody = bodyRef.current;
+    stepBody?.scrollTo({ top: 0 });
+    // On roomy screens Next follows a short step's content, so the next step's controls can come up under the pointer:
+    // a quick second click must not unbind a key or move a slider there. Keys and pads are not affected.
+    if (stepBody) stepBody.style.pointerEvents = "none";
+    const settle = window.setTimeout(() => {
+      if (stepBody) stepBody.style.pointerEvents = "";
+    }, 400);
     // A new step starts on its marked first row (or its first control), never on a reset
     requestAnimationFrame(() => {
       const body = bodyRef.current;
@@ -102,6 +109,10 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
         body.querySelector<HTMLElement>("button:not([disabled]):not([data-card-reset]):not([data-nav-skip]), input:not([disabled])");
       el?.focus({ preventScroll: true });
     });
+    return () => {
+      window.clearTimeout(settle);
+      if (stepBody) stepBody.style.pointerEvents = "";
+    };
   }, [step, onStepChange]);
 
   const next = () => (last ? onFinish() : setStepIndex(stepIndex + 1));
@@ -134,15 +145,21 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   const title = step === "setup" ? SETUP_TITLES[device] : STEP_INFO[step].title;
 
   const stepTitle = (s: WizardStepId) => (s === "setup" ? SETUP_TITLES[device] : STEP_INFO[s].title);
-  // The main column's width follows the step: the wheel's two columns get the most room, the car the least
-  const mainWidth =
+  // The step's width: the wheel's two columns get the most room, the car the least (it turns on the right). The
+  // frame around the rail, the step and its actions is as wide as they are (rail 208 + gap 40 on roomy screens), so
+  // Next ends where the step does, not in the far corner, and the scene keeps the rest of the screen. Its least is
+  // 800 px, about what the actions row needs on one line (where it doesn't fit, Next wraps under Back, still right).
+  const { main: mainWidth, frame: frameWidth } =
     step === "setup" && device === "wheel"
-      ? "max-w-[1240px]"
-      : step === "hud"
-        ? "max-w-[1040px]"
-        : step === "car"
-        ? "max-w-[640px]"
-        : "max-w-[800px]";
+      ? { main: "max-w-[1240px]", frame: "max-w-[1240px] not-compact:max-w-[1488px]" }
+      : step === "setup" && device === "keyboard"
+        ? // Room for the key table's two columns with their labels on one line
+          { main: "max-w-[880px]", frame: "max-w-[880px] not-compact:max-w-[1128px]" }
+        : step === "hud"
+          ? { main: "max-w-[1040px]", frame: "max-w-[1040px] not-compact:max-w-[1288px]" }
+          : step === "car"
+            ? { main: "max-w-[640px]", frame: "max-w-[800px] not-compact:max-w-[888px]" }
+            : { main: "max-w-[800px]", frame: "max-w-[800px] not-compact:max-w-[1048px]" };
 
   return (
     <div
@@ -152,97 +169,106 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
       <SettingsEnvProvider value={env}>
         <SettingsDetailProvider value="simple">
           <div className="flex h-full w-full flex-col pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] short:pt-[max(0.75rem,env(safe-area-inset-top))] short:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            <div className="flex min-h-0 flex-1 gap-10">
-              {/* Step rail (roomy screens): motorsport step index */}
-              <aside className="hidden w-52 shrink-0 flex-col gap-8 not-compact:flex">
-                <LibreCorsaLogo variant="compact" size="sm" />
-                <nav aria-label="Setup steps" className="flex flex-col gap-1">
-                  {steps.map((s, i) => {
-                    const done = i < stepIndex;
-                    const current = i === stepIndex;
-                    return (
-                      <div
-                        key={s}
-                        aria-current={current ? "step" : undefined}
-                        className={cx(
-                          "flex min-h-10 items-center gap-3 rounded-lc-row border-l-2 px-3",
-                          current ? "border-lc-volt bg-lc-volt/8" : done ? "border-lc-fog/50" : "border-lc-line",
-                        )}
-                      >
-                        <span
+            {/* One frame: the rail, the step and its actions. On roomy screens the step is as tall as its content and the
+                actions follow it, so a short step reads as one block over the scene; a long one scrolls in its body
+                with the actions kept on screen. Compact screens keep the actions at the foot, under the thumb. */}
+            <div className={cx("flex min-h-0 w-full flex-1 flex-col", frameWidth)}>
+              <div className="flex min-h-0 flex-1 gap-10 not-compact:flex-initial">
+                {/* Step rail (roomy screens): motorsport step index */}
+                <aside className="hidden w-52 shrink-0 flex-col gap-8 not-compact:flex">
+                  <LibreCorsaLogo variant="compact" size="sm" />
+                  <nav aria-label="Setup steps" className="flex flex-col gap-1">
+                    {steps.map((s, i) => {
+                      const done = i < stepIndex;
+                      const current = i === stepIndex;
+                      return (
+                        <div
+                          key={s}
+                          aria-current={current ? "step" : undefined}
                           className={cx(
-                            "lc-mono w-5 shrink-0 text-[12px] font-bold",
-                            current ? "text-lc-volt" : done ? "text-lc-fog" : "text-lc-dim",
+                            "flex min-h-10 items-center gap-3 rounded-lc-row border-l-2 px-3",
+                            current ? "border-lc-volt bg-lc-volt/8" : done ? "border-lc-fog/50" : "border-lc-line",
                           )}
                         >
-                          {done ? <Icon name="check" size="xs" label="Done" /> : `0${i + 1}`}
-                        </span>
-                        <span className={cx("lc-title text-[14px] leading-tight", current ? "text-lc-chalk" : done ? "text-lc-fog" : "text-lc-slate")}>
-                          {stepTitle(s)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </nav>
-              </aside>
+                          <span
+                            className={cx(
+                              "lc-mono w-5 shrink-0 text-[12px] font-bold",
+                              current ? "text-lc-volt" : done ? "text-lc-fog" : "text-lc-dim",
+                            )}
+                          >
+                            {done ? <Icon name="check" size="xs" label="Done" /> : `0${i + 1}`}
+                          </span>
+                          <span className={cx("lc-title text-[14px] leading-tight", current ? "text-lc-chalk" : done ? "text-lc-fog" : "text-lc-slate")}>
+                            {stepTitle(s)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </nav>
+                </aside>
 
-              <div className={cx("flex min-w-0 flex-1 flex-col", mainWidth)}>
-                <span className="not-compact:hidden">
-                  <LibreCorsaLogo variant="compact" size="sm" className="hidden sm:inline-flex" />
-                </span>
-                <h1 className="lc-h1 mt-3 short:mt-1">{title}</h1>
-
-                {/* Progress (phones and short windows, where the step rail is hidden) */}
-                <div className="mt-3 flex items-center gap-1.5 not-compact:hidden short:mt-2" aria-hidden>
-                  {steps.map((s, i) => (
-                    <span
-                      key={s}
-                      className={cx("h-1 flex-1 rounded-lc-nub", i < stepIndex ? "bg-lc-fog" : i === stepIndex ? "bg-lc-volt" : "bg-lc-line")}
-                    />
-                  ))}
-                  <span className="lc-mono ml-1.5 shrink-0 text-[11px] text-lc-slate">
-                    {stepIndex + 1}/{steps.length}
+                <div className={cx("flex min-h-0 min-w-0 flex-1 flex-col", mainWidth)}>
+                  <span className="not-compact:hidden">
+                    <LibreCorsaLogo variant="compact" size="sm" className="hidden sm:inline-flex" />
                   </span>
-                </div>
+                  <h1 className="lc-h1 mt-3 short:mt-1">{title}</h1>
 
-                <div ref={bodyRef} className="-mx-1.5 mt-4 min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-2 not-compact:mt-6 short:mt-2">
-                  {step === "device" ? (
-                    <DeviceStep pickedRef={devicePickedRef} touch={touchFirst ? { picked: touchPicked, onPick: setTouchPicked } : null} />
-                  ) : null}
-                  {step === "setup" && device === "keyboard" ? <KeyboardStep /> : null}
-                  {step === "setup" && device === "controller" ? <ControllerStep /> : null}
-                  {step === "setup" && device === "wheel" ? <WheelStep /> : null}
-                  {step === "assists" ? <AssistsStep /> : null}
-                  {step === "hud" ? <HudStep /> : null}
-                  {step === "car" ? <CarStep {...props} /> : null}
+                  {/* Progress (phones and short windows, where the step rail is hidden) */}
+                  <div className="mt-3 flex items-center gap-1.5 not-compact:hidden short:mt-2" aria-hidden>
+                    {steps.map((s, i) => (
+                      <span
+                        key={s}
+                        className={cx("h-1 flex-1 rounded-lc-nub", i < stepIndex ? "bg-lc-fog" : i === stepIndex ? "bg-lc-volt" : "bg-lc-line")}
+                      />
+                    ))}
+                    <span className="lc-mono ml-1.5 shrink-0 text-[11px] text-lc-slate">
+                      {stepIndex + 1}/{steps.length}
+                    </span>
+                  </div>
+
+                  <div
+                    ref={bodyRef}
+                    className="-mx-1.5 mt-4 min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-2 not-compact:mt-6 not-compact:flex-auto short:mt-2"
+                  >
+                    {step === "device" ? (
+                      <DeviceStep pickedRef={devicePickedRef} touch={touchFirst ? { picked: touchPicked, onPick: setTouchPicked } : null} />
+                    ) : null}
+                    {step === "setup" && device === "keyboard" ? <KeyboardStep /> : null}
+                    {step === "setup" && device === "controller" ? <ControllerStep /> : null}
+                    {step === "setup" && device === "wheel" ? <WheelStep /> : null}
+                    {step === "assists" ? <AssistsStep /> : null}
+                    {step === "hud" ? <HudStep /> : null}
+                    {step === "car" ? <CarStep {...props} /> : null}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3.5 border-t border-lc-line pt-4 short:mt-2 short:pt-2">
-              <div className="flex items-center gap-3">
-                <Button variant="secondary" onClick={back} prompt={pad ? <PadGlyph button="b" family={family} /> : <KeyCap>Esc</KeyCap>}>
-                  {stepIndex === 0 ? (mode === "first-run" ? "Main menu" : "Close") : "Back"}
-                </Button>
-                {onSkip && !last ? (
-                  <Button variant="ghost" size="sm" onClick={onSkip}>
-                    Skip
+              <div className="mt-4 flex shrink-0 flex-wrap items-center justify-between gap-3.5 border-t border-lc-line pt-4 short:mt-2 short:pt-2">
+                <div className="flex items-center gap-3">
+                  <Button variant="secondary" onClick={back} prompt={pad ? <PadGlyph button="b" family={family} /> : <KeyCap>Esc</KeyCap>}>
+                    {stepIndex === 0 ? (mode === "first-run" ? "Main menu" : "Close") : "Back"}
                   </Button>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-5.5">
-                <PromptBar
-                  rule={false}
-                  className="hidden sm:flex"
-                  prompts={[
-                    { action: "move", label: "Move" },
-                    { action: "select", label: "Select" },
-                    { action: "tabs", label: "Step" },
-                  ]}
-                />
-                <Button variant="primary" onClick={next} prompt={pad ? <PadGlyph button="menu" family={family} /> : <KeyCap tone="ink">Enter</KeyCap>}>
-                  {last ? (mode === "first-run" ? "Lights out" : "Done") : "Next"}
-                </Button>
+                  {onSkip && !last ? (
+                    <Button variant="ghost" size="sm" onClick={onSkip}>
+                      Skip
+                    </Button>
+                  ) : null}
+                </div>
+                {/* Right-aligned even when a narrow frame wraps it under Back */}
+                <div className="ml-auto flex flex-wrap items-center justify-end gap-5.5">
+                  <PromptBar
+                    rule={false}
+                    className="hidden sm:flex"
+                    prompts={[
+                      { action: "move", label: "Move" },
+                      { action: "select", label: "Select" },
+                      { action: "tabs", label: "Step" },
+                    ]}
+                  />
+                  <Button variant="primary" onClick={next} prompt={pad ? <PadGlyph button="menu" family={family} /> : <KeyCap tone="ink">Enter</KeyCap>}>
+                    {last ? (mode === "first-run" ? "Lights out" : "Done") : "Next"}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
