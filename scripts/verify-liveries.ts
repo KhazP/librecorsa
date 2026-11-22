@@ -30,7 +30,25 @@ import {
   installGt3LiveryPaint,
   renderGt3LiveryToContext,
 } from '../src/lib/render/gt3-livery-painter';
+import {
+  LMDH_ATLAS_SIZE,
+  LMDH_LIVERIES,
+  lmdhLiveryById,
+  renderLmdhLiveryToContext,
+} from '../src/lib/render/lmdh-livery-painter';
+import {
+  LIANA_ATLAS_SIZE,
+  LIANA_LIVERIES,
+  lianaLiveryById,
+  renderLianaLiveryToContext,
+} from '../src/lib/render/liana-livery-painter';
+import {
+  installPortedProceduralLivery,
+  PROCEDURAL_BODY_PROFILES,
+} from '../src/lib/render/ported-procedural-livery';
 import { AMG_GT3_SKINS, BMW_M4_GT3_SKINS } from '../src/lib/cars/gt3-skins';
+import { LC_LMDH_SKINS } from '../src/lib/cars/lmdh-skins';
+import { LIANA_SKINS } from '../src/lib/cars/liana-skins';
 import { carSkinSwatchBackground, portedSkinFor } from '../src/lib/cars/car-registry';
 import { AI_DRIVERS, AI_RESERVE_DRIVERS } from '../src/lib/sim/ai-opponents';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
@@ -439,6 +457,51 @@ check('all 14 procedural GT3 liveries render cleanly on 2048px canvas with valid
     assert.equal(controller.set(null), false);
     controller.dispose();
   }
+});
+
+check('LC-LMDH has 8 Hypercar liveries and Suzuki Liana has Factory + Middle Gear Special comedy livery', () => {
+  assert.equal(LC_LMDH_SKINS.length, 8, 'LC-LMDH should have 8 liveries');
+  assert.equal(LC_LMDH_SKINS[0].id, 'lmdh_factory_01');
+  assert.equal(portedSkinFor('lc-lmdh', LC_LMDH_SKINS[0]), null, 'LC-LMDH factory default keeps GLB paint');
+  assert.equal(portedSkinFor('lc-lmdh', LC_LMDH_SKINS[1])?.procedural, 'lmdh_rossa_51');
+
+  assert.equal(LMDH_LIVERIES.length, 7, 'expected 7 procedural LC-LMDH Hypercar liveries');
+  const lmdhMat = new THREE.MeshPhysicalMaterial({ color: '#ffffff' });
+  const lmdhCtrl = installPortedProceduralLivery([{ material: lmdhMat }], PROCEDURAL_BODY_PROFILES['lc-lmdh']);
+  assert.ok(lmdhMat.customProgramCacheKey().includes('ported-procedural-livery'));
+  for (const skin of LC_LMDH_SKINS.slice(1)) {
+    const spec = lmdhLiveryById(skin.procedural!);
+    assert.ok(spec, `missing LMDH spec ${skin.procedural}`);
+    assert.equal(spec.name, skin.name);
+    assert.deepEqual(spec.swatch, skin.swatch);
+    const mock = createMockCanvas2D();
+    renderLmdhLiveryToContext(mock.ctx, spec, LMDH_ATLAS_SIZE);
+    assert.ok(mock.drawOps >= 35, `${spec.id} rendered too few ops (${mock.drawOps})`);
+    assert.ok(mock.texts.includes(spec.number), `${spec.id} missing number`);
+    assert.ok(mock.texts.includes(spec.wingText), `${spec.id} missing wing banner`);
+    assert.equal(lmdhCtrl.set(spec.id), false);
+  }
+  lmdhCtrl.dispose();
+
+  // Suzuki Liana: Factory default + Middle Gear comedy livery
+  assert.equal(LIANA_SKINS.length, 2, 'Suzuki Liana should have Factory + Middle Gear Special');
+  assert.equal(LIANA_SKINS[0].id, 'liana_factory_silver');
+  assert.equal(portedSkinFor('liana', LIANA_SKINS[0]), null);
+  assert.equal(portedSkinFor('liana', LIANA_SKINS[1])?.procedural, 'liana_middle_gear');
+  const lianaSpec = lianaLiveryById('liana_middle_gear');
+  assert.ok(lianaSpec && LIANA_LIVERIES.length === 1);
+  const mockLiana = createMockCanvas2D();
+  renderLianaLiveryToContext(mockLiana.ctx, lianaSpec, LIANA_ATLAS_SIZE);
+  assert.ok(mockLiana.drawOps >= 80, `Middle Gear livery drew too few ops (${mockLiana.drawOps})`);
+  assert.ok(mockLiana.texts.includes('MIDDLE GEAR'), 'Middle Gear livery must draw MIDDLE GEAR');
+  assert.ok(mockLiana.texts.includes('POWERRR!!'), 'Middle Gear livery must draw POWERRR!!');
+  assert.ok(mockLiana.texts.includes('MY OTHER CAR IS A SANDERO'), 'Middle Gear livery must draw Sandero gag');
+  assert.ok(mockLiana.texts.includes('0-60: EVENTUALLY'), 'Middle Gear livery must draw 0-60 gag');
+
+  const lianaMat = new THREE.MeshPhysicalMaterial({ color: '#ffffff' });
+  const lianaCtrl = installPortedProceduralLivery([{ material: lianaMat }], PROCEDURAL_BODY_PROFILES.liana);
+  assert.equal(lianaCtrl.set('liana_middle_gear'), false);
+  lianaCtrl.dispose();
 });
 
 console.log(`\n${passed} checks passed`);
