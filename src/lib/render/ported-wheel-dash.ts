@@ -30,6 +30,7 @@ const LED_INTENSITY = 2.4;
 export class PortedWheelDash {
   readonly found: boolean;
   private readonly screen: SteeringWheelDisplay | null = null;
+  private readonly hiddenOverlays: { mesh: THREE.Object3D; visible: boolean }[] = [];
   private readonly leds: { led: RevLed; meshes: THREE.Mesh[]; originals: THREE.Material[]; mat: THREE.MeshStandardMaterial }[] = [];
   private readonly blinkRpm: number = Infinity;
   private readonly blinkHz: number = 5;
@@ -48,6 +49,17 @@ export class PortedWheelDash {
   private constructor(steer: THREE.Object3D, table: RevLedTable | null, revRange: readonly [number, number]) {
     const screen = new SteeringWheelDisplay(steer, revRange);
     this.screen = screen.found ? screen : null;
+    if (this.screen) {
+      // Hide leftover AC LCD overlay quads (e.g. MTRacing 496R's STEER_wheel_lcd) that sit in front of INT_DISPLAY
+      steer.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || Array.isArray(m.material)) return;
+        if (m.material.name === "wheel_lcd") {
+          this.hiddenOverlays.push({ mesh: m, visible: m.visible });
+          m.visible = false;
+        }
+      });
+    }
     if (table) {
       this.blinkRpm = table.blinkRpm ?? Infinity;
       this.blinkHz = table.blinkHz ?? 5;
@@ -82,6 +94,8 @@ export class PortedWheelDash {
 
   dispose(): void {
     this.screen?.dispose();
+    for (const h of this.hiddenOverlays) h.mesh.visible = h.visible;
+    this.hiddenOverlays.length = 0;
     for (const { meshes, originals, mat } of this.leds) {
       meshes.forEach((m, i) => (m.material = originals[i]));
       mat.dispose();
