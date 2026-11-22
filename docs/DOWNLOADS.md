@@ -9,7 +9,7 @@ I only publish them in two places:
 - [librecorsa.org/download](https://librecorsa.org/download)
 - [GitHub Releases](https://github.com/KhazP/librecorsa/releases), where the download page's links point
 
-The desktop app updates itself from the same GitHub releases. A copy from anywhere else isn't mine, even if it has the name and the logo.
+The desktop app checks the same GitHub releases for updates. A copy from anywhere else isn't mine, even if it has the name and the logo.
 
 ## App IDs
 
@@ -25,12 +25,12 @@ Every file on a GitHub release lists its SHA-256 next to it. Compare it with the
 
 ```sh
 # macOS and Linux
-shasum -a 256 LibreCorsa-0.2.2-android.apk
+shasum -a 256 LibreCorsa-<version>-android.apk
 ```
 
 ```powershell
 # Windows (PowerShell)
-Get-FileHash .\LibreCorsa-0.2.2-win-x64-Setup.exe
+Get-FileHash .\LibreCorsa-<version>-win-x64-Setup.exe
 ```
 
 ## Android signing key
@@ -44,7 +44,7 @@ E0:C1:29:35:79:69:C0:83:B6:C6:19:EF:28:F7:11:1B:B6:3E:6B:91:05:FA:91:31:89:57:37
 The site publishes the same fingerprint at [librecorsa.org/.well-known/assetlinks.json](https://librecorsa.org/.well-known/assetlinks.json). Chrome checks it there before it opens the app fullscreen. To check an APK yourself, use `apksigner` from the Android SDK build tools:
 
 ```sh
-apksigner verify --print-certs LibreCorsa-0.2.2-android.apk
+apksigner verify --print-certs LibreCorsa-<version>-android.apk
 ```
 
 It prints the same fingerprint in lower case without the colons:
