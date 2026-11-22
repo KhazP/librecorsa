@@ -62,7 +62,12 @@ for (const l of THIRD_PARTY_HUD_LAYOUTS as readonly (typeof HUD_LAYOUTS)[number]
   check(`"${l.id}": the author is the repository's owner`, Boolean(c && c.repoUrl.split('/')[3]?.toLowerCase() === c.author.toLowerCase()));
   check(`"${l.id}": names a licence the game can take in`, c?.license === 'MIT' || c?.license === 'GPL-3.0');
   check(`"${l.id}": its licence has a page to link`, Boolean(c && /^https:\/\//.test(HUD_LICENSE_URL[c.license])));
+  if (c?.site) {
+    check(`"${l.id}": the author's site has a short name free of other games' names`, c.site.name.trim() === c.site.name && c.site.name.length > 1 && c.site.name.length <= 20 && !BANNED.test(c.site.name), c.site.name);
+    check(`"${l.id}": the author's site links over https`, /^https:\/\/[^/\s]+/.test(c.site.url), c.site.url);
+  }
 }
+check('Grand Prix credits adamikoo\'s site, AvgSpots', THIRD_PARTY_HUD_LAYOUTS.some((l) => l.id === 'grand-prix' && 'site' in l.credit && l.credit.site.url === 'https://avgspots.com'));
 
 // ---- Which screens show the chosen layout
 

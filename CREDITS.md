@@ -19,6 +19,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
   >
   > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+* **Contributed HUD layout**: the Grand Prix HUD layout (`src/components/hud/styles/GrandPrixHud.tsx`) is by **adamikoo · [AvgSpots](https://avgspots.com)** ([GitHub](https://github.com/adamikoo)), who designed it for LibreCorsa and contributed it under the MIT License in pull request [#162](https://github.com/KhazP/librecorsa/pull/162).
 * **3D Models & Audio Assets (`public/`)**: Each asset keeps its own licence, listed below. Several are **non-commercial only**, so `public/` as a whole may not be used commercially. This repository carries only RISE Motordrome and the 2026 prototype's model and sound (`public/cars/f12026/`), plus the AM26's steering wheel (`scripts/cars/sources/`); every other asset below is served on librecorsa.org for playing there and is not in the repository:
   | Asset | Licence |
   | :--- | :--- |

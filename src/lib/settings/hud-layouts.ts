@@ -14,6 +14,8 @@ export interface HudLayoutCredit {
   repoUrl: string;
   /** SPDX id of the project's licence */
   license: "MIT" | "GPL-3.0";
+  /** The author's own site, shown after their name as "<author> · <name>" */
+  site?: { name: string; url: string };
 }
 
 /** Where each licence a credited layout comes under can be read */
@@ -77,7 +79,12 @@ export const THIRD_PARTY_HUD_LAYOUTS = [
     id: "grand-prix",
     label: "Grand Prix",
     detail: "Race tower, round speed cluster, gear and inputs",
-    credit: { author: "adamikoo", repoUrl: "https://github.com/adamikoo", license: "MIT" },
+    credit: {
+      author: "adamikoo",
+      repoUrl: "https://github.com/adamikoo",
+      license: "MIT",
+      site: { name: "AvgSpots", url: "https://avgspots.com" },
+    },
   },
 ] as const satisfies readonly HudLayoutInfo[];
 
