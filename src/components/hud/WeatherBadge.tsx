@@ -31,6 +31,8 @@ export interface WeatherHudState {
   headlightMode?: HeadlightMode;
   /** Automatic headlights would be active (night, dusk, or heavy rain) */
   headlightsAutoOn?: boolean;
+  /** The player is flashing the headlights (high beam) right now */
+  headlightFlash?: boolean;
 }
 
 /** Track surface from the water on the racing line (the kit's `SurfaceBadge` draws it) */
@@ -86,9 +88,9 @@ const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | 
           </span>
         </span>
       ) : null}
-      {weather.headlightsOn === true || (weather.headlightMode !== undefined && weather.headlightMode !== "auto") ? (
+      {weather.headlightsOn === true || weather.headlightFlash === true || (weather.headlightMode !== undefined && weather.headlightMode !== "auto") ? (
         <span
-          className={`inline-flex items-center gap-1 ${weather.headlightsOn ? "text-lc-gain" : "text-lc-slate"}`}
+          className={`inline-flex items-center gap-1 ${weather.headlightsOn || weather.headlightFlash ? "text-lc-gain" : "text-lc-slate"}`}
           title={
             weather.headlightMode === "on"
               ? "Headlights on (manual)"
@@ -97,13 +99,17 @@ const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | 
                 : "Headlights on (auto)"
           }
         >
-          <Icon name="headlights" size="xs" label={headlightLabel} className={`size-3.5 ${weather.headlightsOn ? "" : "opacity-60"}`} />
-          {weather.headlightMode === "on" ? (
+          <Icon name="headlights" size="xs" label={headlightLabel} className={`size-3.5 ${weather.headlightsOn || weather.headlightFlash ? "" : "opacity-60"}`} />
+          {weather.headlightFlash ? (
+            <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-gain">
+              FLASH
+            </span>
+          ) : weather.headlightMode === "on" ? (
             <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-gain">
               ON
             </span>
           ) : null}
-          {weather.headlightMode === "off" ? (
+          {!weather.headlightFlash && weather.headlightMode === "off" ? (
             <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-slate">
               OFF
             </span>

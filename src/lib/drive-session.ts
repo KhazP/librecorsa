@@ -20,6 +20,7 @@ import {
   CarHeadlights,
   canSessionGetDark,
   headlightSpotCountFor,
+  MIN_FLASH_MS,
   resolveHeadlightStates,
   shouldHeadlightsBeOn,
   type HeadlightMode,
@@ -176,6 +177,8 @@ const KB_CLUTCH_IN_S = 0.08;
 const KB_CLUTCH_OUT_S = 0.4;
 /** Holding the camera key or button this long opens the seat panel; a shorter press changes the view */
 const SEAT_PANEL_HOLD_MS = 450;
+/** The controller's headlight button held this long switches the lights on or off; a shorter press is a flash */
+const LIGHTS_HOLD_MS = 500;
 
 /**
  * Session flow: assets loading → "press any key" → title menu → (first-run / controls setup) → driving.
@@ -208,6 +211,7 @@ const HELD_KEYS = {
   brakeHalf: "halfBrake",
   clutch: "clutch",
   boostHold: "boostHold",
+  headlightFlash: "headlightFlash",
 } as const satisfies Partial<Record<KeyAction, string>>;
 type HeldKeyAction = keyof typeof HELD_KEYS;
 const isHeldKeyAction = (action: KeyAction): action is HeldKeyAction => Object.hasOwn(HELD_KEYS, action);
@@ -400,6 +404,8 @@ export interface DriveKeys {
   neutral: boolean;
   /** The Gear up key is down (it is one-shot, but a manual start holds it as the clutch) */
   gearUpHeld: boolean;
+  /** The flash key: the high beam while it is held */
+  headlightFlash: boolean;
 }
 
 /** A car the replay camera can focus on */
@@ -686,6 +692,7 @@ export class DriveSession {
       clutch: false,
       neutral: false,
       gearUpHeld: false,
+      headlightFlash: false,
     };
     /** Ramped keyboard pedals 0..1 (the steering keys are shaped by the car's steering assist) */
     const kbInput = { throttle: 0, brake: 0, clutch: 0, padClutch: 0 };
@@ -1824,6 +1831,12 @@ export class DriveSession {
     /** The camera key's hold timer (a hold opens the seat panel) and the pad camera button's press time */
     let cameraKeyHold: number | null = null;
     let padCameraHeldSinceMs: number | null = null;
+    /** The controller's headlight button: when its press began (it flashes until LIGHTS_HOLD_MS, then switches) */
+    let padLightsHeldSinceMs: number | null = null;
+    /** The player's flash: wanted by a key or a button now, and when the flash began (a tap lasts MIN_FLASH_MS) */
+    let flashWanted = false;
+    let flashStartMs = -Infinity;
+    let playerFlashing = false;
     const clearCameraOverride = () => {
       if (cameraOverride === null) return;
       cameraOverride = null;
@@ -2902,8 +2915,20 @@ export class DriveSession {
             padCameraHeldSinceMs = nowMs;
             continue;
           }
-          // Boost acts while held (`boostHeld`); L3 folds the Live Tuner MFD, R3 clears the whole HUD off the screen
-          if (action !== "boost") runAction(action);
+          // The headlight button, as Gran Turismo has it: a tap flashes, a hold switches the lights on or off
+          if (action === "headlights") {
+            padLightsHeldSinceMs = nowMs;
+            continue;
+          }
+          // Boost and the flash act while held (`boostHeld`, `device.held`); the MFD and HUD buttons go to the HUD
+          if (action !== "boost" && action !== "headlightFlash") runAction(action);
+        }
+        if (padLightsHeldSinceMs !== null) {
+          if (!driving || !device.held?.has("headlights")) padLightsHeldSinceMs = null;
+          else if (nowMs - padLightsHeldSinceMs >= LIGHTS_HOLD_MS) {
+            padLightsHeldSinceMs = null;
+            runAction("headlights");
+          }
         }
         if (padCameraHeldSinceMs !== null) {
           if (!driving) padCameraHeldSinceMs = null;
@@ -2915,6 +2940,19 @@ export class DriveSession {
             this.openSeatPanel();
           }
         }
+      }
+
+      // The flash: the high beam while the flash key or button is held, or the headlight button is still short of a
+      // hold; a tap still lights it for MIN_FLASH_MS
+      const flashNow =
+        driving && (heldKeys.headlightFlash || device.held?.has("headlightFlash") === true || padLightsHeldSinceMs !== null);
+      if (flashNow && !flashWanted) flashStartMs = nowMs;
+      flashWanted = flashNow;
+      const flashing = flashNow || (driving && nowMs - flashStartMs < MIN_FLASH_MS);
+      if (flashing !== playerFlashing) {
+        playerFlashing = flashing;
+        // the HUD's headlight mark shows the flash at once
+        lastWeatherHudMs = -Infinity;
       }
 
       // Keyboard-only input shaping: keys become ramped pedals, eased back while the tyres pass their grip when the
@@ -4104,6 +4142,7 @@ export class DriveSession {
           headlightsOn: hudLights.player,
           headlightMode,
           headlightsAutoOn: hudLights.opponents,
+          headlightFlash: playerFlashing,
         };
         const key = JSON.stringify(next);
         if (key !== weatherHudKey) {
@@ -4127,6 +4166,7 @@ export class DriveSession {
         const headlights = resolveHeadlightStates(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
         // Onboard views (cockpit, dash, nose, shoulder, T-cam) sit on/behind the nose; hide the player's own front flares
         const playerBrakingNow = (replaying ? replayPlayerTelemetry.brake : physics.telemetry.brake) > 0.05;
+        carHeadlights.setFlash(playerFlashing && !replaying);
         carHeadlights.setEnabled(headlights.player, playerBrakingNow, camera, view.anchor !== null && (!replaying || rp.focusedCarId === "player"));
         visualFx.setHeadlights(headlights.opponents, camera);
         visualFx.setLightLevel(skyLight);

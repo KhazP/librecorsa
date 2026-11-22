@@ -8,6 +8,8 @@ import type { AssistPreset, CameraMode, CustomLiveryColors } from "@/types/f1";
 import {
   DEFAULT_KEY_BINDINGS,
   BUMPER_SHIFT_BUTTONS,
+  GT_STYLE_BUTTONS,
+  RETIRED_GT_STYLE_BUTTONS,
   DEFAULT_PAD_BUTTONS,
   KEY_ACTIONS,
   DEFAULT_PAD_PEDAL_SOURCES,
@@ -633,6 +635,8 @@ function parsePadButtons(v: unknown): PadButtonBindings {
     const d = base[id];
     if (!saved.has(id) && d !== null && claimed.has(d)) out[id] = null;
   }
+  // GT style as it was before the headlights joined it (22 Nov 2026): such a player gets GT style as it is now
+  if (PAD_ACTIONS.every(({ id }) => out[id] === RETIRED_GT_STYLE_BUTTONS[id])) return { ...GT_STYLE_BUTTONS };
   return out;
 }
 
