@@ -39,7 +39,15 @@ export interface HomeLayout {
   outline: LapOutline | null;
 }
 
+/** Responsive scenic backdrop for a venue's home Drive tile (`npm run venue-heroes`) */
+export interface HomeVenueHero {
+  src: string;
+  srcSet: string;
+}
+
 export interface HomeVenue {
+  /** Primary layout id (folder name under `public/tracks/`) */
+  id: string;
   name: string;
   country: string;
   /** The kinds of course its layouts are ("Permanent", "Hill climb"), for the Circuits filters */
@@ -47,6 +55,8 @@ export interface HomeVenue {
   /** Who made its model (its credited author, or LibreCorsa), for the Circuits filters */
   modders: string[];
   layouts: HomeLayout[];
+  /** Scenic golden-hour still for the Drive tile; null when this copy has none */
+  hero: HomeVenueHero | null;
   /** Where its model comes from (its layouts share one); null when there is no source to show */
   source: ModelSource | null;
 }

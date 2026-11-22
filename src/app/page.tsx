@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { HomeHub } from "@/components/home/HomeHub";
-import type { HomeData, HomeLivery, WhatsNewDay } from "@/components/home/home-data";
+import type { HomeData, HomeLivery, HomeVenueHero, WhatsNewDay } from "@/components/home/home-data";
 import { withBasePath } from "@/lib/base-path";
 import {
   CAR_CLASSES,
@@ -18,7 +18,7 @@ import {
 import { carBoardTag } from "@/lib/cars/board-tag";
 import { LIVERIES, LIVERY_CATEGORY_LABELS } from "@/lib/track-data";
 import { VEHICLE_MODEL_IDS, type LiveryConfig, type VehicleModelId } from "@/types/f1";
-import { REPO_CAR_IDS } from "@/lib/hosted-content";
+import { REPO_CAR_IDS, REPO_TRACK_IDS } from "@/lib/hosted-content";
 import outlines from "@/lib/home/circuit-outlines.json";
 import whatsNewJson from "@/lib/home/whats-new.json";
 import type { LapOutline } from "@/lib/home/lap-outline";
@@ -26,7 +26,7 @@ import { carModelSource, trackModelSource } from "@/lib/model-source";
 import { moddersList } from "@/lib/modders";
 import { coverage } from "@/lib/press";
 import { CONTACT_EMAIL, REPO_URL, SUPPORT_URL } from "@/lib/site";
-import { CIRCUIT_TYPE_LABELS, CIRCUIT_VENUES, DEFAULT_TRACK_ID, circuitModder, circuitType } from "@/lib/track-registry";
+import { CIRCUIT_TYPE_LABELS, CIRCUIT_VENUES, DEFAULT_TRACK_ID, VENUE_HERO_WIDTHS, circuitModder, circuitType, venueHeroUrl } from "@/lib/track-registry";
 
 /** Written by scripts/build-home-outlines.ts, so its shape is LapOutline's (JSON reads a tuple as an array) */
 const OUTLINES = outlines as unknown as Record<string, LapOutline>;
@@ -42,6 +42,19 @@ function variantThumbOf(id: CarId, url: string): string | null {
 
 function thumbOf(id: CarId): string | null {
   return variantThumbOf(id, carThumbUrl(id));
+}
+
+/**
+ * A venue's scenic Drive-tile hero still, or null when this copy has none. Repo circuits keep theirs in git; hosted
+ * circuits serve theirs from the asset bucket (and fall back cleanly in VenueHero if not yet uploaded).
+ */
+function venueHeroOf(venueId: string): HomeVenueHero | null {
+  const full = venueHeroUrl(venueId, 1600);
+  if (REPO_TRACK_IDS.has(venueId) && !existsSync(join(process.cwd(), "public", full))) return null;
+  return {
+    src: withBasePath(full),
+    srcSet: VENUE_HERO_WIDTHS.map((w) => `${withBasePath(venueHeroUrl(venueId, w))} ${w}w`).join(", "),
+  };
 }
 
 const F1_SWATCH = (liv: LiveryConfig): string =>
@@ -102,6 +115,7 @@ export default function HomePage() {
     defaultTrackId: DEFAULT_TRACK_ID,
     defaultCarId: CARS[0].id,
     venues: CIRCUIT_VENUES.map((v) => ({
+      id: v.id,
       name: v.name,
       country: v.country,
       types: [...new Set(v.layouts.map((t) => CIRCUIT_TYPE_LABELS[circuitType(t)]))],
@@ -114,6 +128,7 @@ export default function HomePage() {
         grade: t.quality === "sketchfab" ? "model" : "sim",
         outline: OUTLINES[t.id] ?? null,
       })),
+      hero: venueHeroOf(v.id),
       source: trackModelSource(v.layouts[0]),
     })),
     cars: CARS.map((c) => {

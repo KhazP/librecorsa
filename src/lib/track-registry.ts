@@ -211,6 +211,13 @@ export const CIRCUIT_VENUES: readonly CircuitVenue[] = LISTED_TRACKS.reduce<Circ
 
 export const venueOf = (trackId: string): CircuitVenue | undefined => CIRCUIT_VENUES.find((v) => v.layouts.some((l) => l.id === trackId));
 
+/** Responsive widths written by `npm run venue-heroes` beside each venue's primary track folder */
+export const VENUE_HERO_WIDTHS = [960, 1600] as const;
+export type VenueHeroWidth = (typeof VENUE_HERO_WIDTHS)[number];
+
+/** Pre-rendered scenic hero still for a venue's home Drive tile (`/tracks/<venueId>/hero-<width>.webp`) */
+export const venueHeroUrl = (venueId: string, width: VenueHeroWidth = 1600): string => `/tracks/${venueId}/hero-${width}.webp`;
+
 const TRACK_STORAGE_KEY = "bugesera.track";
 
 export function getTrackInfo(id: string): TrackInfo {
