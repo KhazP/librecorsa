@@ -117,6 +117,8 @@ console.log('Settings');
   check('the race music sits 12 dB under the menus by default', Math.abs(20 * Math.log10(DEFAULT_AUDIO_SETTINGS.raceMusic / DEFAULT_AUDIO_SETTINGS.menuMusic) + 12) < 0.1);
   check('the music switch is kept', parsePlayerSettings({ audio: { musicMuted: true } }).audio.musicMuted === true);
   check('an old save has the music on', old.audio.musicMuted === false);
+  check('an old save has no music while driving', old.audio.raceMusicOn === false && DEFAULT_AUDIO_SETTINGS.raceMusicOn === false);
+  check('music while driving, switched on, is kept', parsePlayerSettings({ audio: { raceMusicOn: true } }).audio.raceMusicOn === true);
   check('an old save gets the music key', parsePlayerSettings({ keys: { mute: ['KeyM'] } }).keys.nextTrack[0] === 'KeyK');
 }
 

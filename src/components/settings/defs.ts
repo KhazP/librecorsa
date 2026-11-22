@@ -728,10 +728,12 @@ export const musicOn = toggle({
   ),
 });
 export const menuMusic = slider({ id: "menuMusic", label: "Menu music", min: 0, max: 1, step: 0.05, format: pctOrOff, ...audio("menuMusic") });
+export const raceMusicOn = toggle({ id: "raceMusicOn", label: "Music while driving", ...audio("raceMusicOn") });
 export const raceMusic = slider({
   id: "raceMusic",
   label: "Race music",
   hint: (env) => `Skip track: ${key(env, "nextTrack")}`,
+  off: (env) => (env.settings.audio.raceMusicOn ? null : "Music while driving is off"),
   min: 0,
   max: 1,
   step: 0.05,

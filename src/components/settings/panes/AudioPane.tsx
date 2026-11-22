@@ -2,7 +2,7 @@
 
 import React from "react";
 import { POOL_LABEL, type MusicPool } from "@/lib/audio/music-catalog";
-import { drsBeeps, kerbVolume, masterVolume, menuMusic, musicOn, musicTrackRows, mute, raceMusic, replayMusic, shiftBeep } from "../defs";
+import { drsBeeps, kerbVolume, masterVolume, menuMusic, musicOn, musicTrackRows, mute, raceMusic, raceMusicOn, replayMusic, shiftBeep } from "../defs";
 import { SettingsCard } from "../fields";
 
 const POOLS: readonly MusicPool[] = ["menu", "race", "results"];
@@ -16,7 +16,7 @@ export function AudioPane() {
   return (
     <>
       <SettingsCard title="Sound" rows={[masterVolume, kerbVolume, mute]} first />
-      <SettingsCard title="Music" rows={[musicOn, menuMusic, raceMusic, replayMusic]} />
+      <SettingsCard title="Music" rows={[musicOn, menuMusic, raceMusicOn, raceMusic, replayMusic]} />
       {POOLS.map((pool) => (
         <SettingsCard key={pool} title={`${POOL_LABEL[pool]} tracks`} rows={TRACK_ROWS[pool]} />
       ))}
