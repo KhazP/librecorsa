@@ -139,31 +139,39 @@ uniform vec4 uAlongEnds;
 uniform vec3 uShear;
 uniform vec3 uPatch;
 
+// Safe unit vector: keeps fallback when v collapses to zero, avoiding NaN normals
+vec3 tyreSafeNormalize(vec3 v, vec3 fallback) {
+  float l2 = dot(v, v);
+  return l2 > 1e-12 ? v * inversesqrt(l2) : fallback;
+}
+
 // One side of a road profile at distance u >= 0 from the hub: 0 -> knot a (ab.xy) -> knot b (ab.zw) -> end, held
-// beyond; returns the height and its slope de/du
+// beyond; returns the height and its slope de/du (single return avoids D3D11/FXC warning X4000)
 vec2 tyreRoadSide(float u, vec4 ab, vec2 end) {
+  vec2 res = vec2(end.y, 0.0);
   if (u <= ab.x) {
     float k = ab.y / max(ab.x, 1e-4);
-    return vec2(k * u, k);
-  }
-  if (u <= ab.z) {
+    res = vec2(k * u, k);
+  } else if (u <= ab.z) {
     float k = (ab.w - ab.y) / max(ab.z - ab.x, 1e-4);
-    return vec2(ab.y + k * (u - ab.x), k);
-  }
-  if (u <= end.x) {
+    res = vec2(ab.y + k * (u - ab.x), k);
+  } else if (u <= end.x) {
     float k = (end.y - ab.w) / max(end.x - ab.z, 1e-4);
-    return vec2(ab.w + k * (u - ab.z), k);
+    res = vec2(ab.w + k * (u - ab.z), k);
   }
-  return vec2(end.y, 0.0);
+  return res;
 }
 
 // Road profile above the plane at carrier coordinate t, and its slope de/dt
 vec2 tyreRoadProfile(float t, vec4 neg, vec4 pos, vec4 ends) {
+  vec2 res = vec2(0.0);
   if (t < 0.0) {
     vec2 e = tyreRoadSide(-t, neg, ends.xy);
-    return vec2(e.x, -e.y);
+    res = vec2(e.x, -e.y);
+  } else {
+    res = tyreRoadSide(t, pos, ends.zw);
   }
-  return tyreRoadSide(t, pos, ends.zw);
+  return res;
 }
 
 void tyreDeform(in vec3 pos, in vec3 nrm, out vec3 outPos, out vec3 outNrm) {
@@ -199,18 +207,18 @@ void tyreDeform(in vec3 pos, in vec3 nrm, out vec3 outPos, out vec3 outNrm) {
   p += roadN * below;
 
   // Sidewall bulge: outward along the axle (on the road plane), at the shoulders of the patch
-  vec3 axle = normalize(vec3(1.0, 0.0, 0.0) - roadN * roadN.x);
+  vec3 axle = tyreSafeNormalize(vec3(1.0, 0.0, 0.0) - roadN * roadN.x, vec3(1.0, 0.0, 0.0));
   float bulge = 0.8 * d * w * shoulder * bead;
   p += axle * ((p.x >= 0.0) ? bulge : -bulge);
 
-  // Normals: blend toward the road's (tilted by the profile's slope) across the flattened patch
+  // Normals: blend toward the tyre's outward (road-facing, downward) normal across the flattened patch
   float flatAmt = clamp(below / max(d, 0.003), 0.0, 1.0);
-  vec3 surfN = normalize(roadN - vec3(across.y, 0.0, along.y));
-  n = normalize(mix(n, surfN, flatAmt));
+  vec3 surfN = tyreSafeNormalize(vec3(across.y, 0.0, along.y) - roadN, -roadN);
+  n = tyreSafeNormalize(mix(n, surfN, flatAmt), surfN);
 
   // Back to mesh-local space: Rx(-theta)
   outPos = vec3(p.x, c * p.y + s * p.z, -s * p.y + c * p.z);
-  outNrm = normalize(vec3(n.x, c * n.y + s * n.z, -s * n.y + c * n.z));
+  outNrm = tyreSafeNormalize(vec3(n.x, c * n.y + s * n.z, -s * n.y + c * n.z), nrm);
 }
 `;
 
