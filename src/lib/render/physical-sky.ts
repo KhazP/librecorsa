@@ -398,6 +398,7 @@ export class PhysicalSky {
   private readonly composite: CloudsCompositeUniforms;
   private readonly aerialUniforms: AerialUniforms;
   private quality: SkyQuality = "high";
+  private aerialAllowed = true;
   private cloud = 0;
   private rain = 0;
   private sunElevationSin = 0.25;
@@ -517,8 +518,9 @@ export class PhysicalSky {
   }
 
   /** The graphics preset: this sky and its clouds on Medium and High, hidden on Low (the classic sky shows there) */
-  setQuality(quality: SkyQuality): void {
+  setQuality(quality: SkyQuality, aerialAllowed = quality === "high"): void {
     this.quality = quality;
+    this.aerialAllowed = aerialAllowed;
     const touch = isTouchDevice();
     this.clouds.qualityPreset = quality === "high" && !touch ? "medium" : "low";
     // Desktop Medium keeps crisp 0.75x volumetric clouds; touch devices stay 0.5x for mobile fill-rate budget.
@@ -537,9 +539,9 @@ export class PhysicalSky {
     return this.showing && this.anyClouds;
   }
 
-  /** Whether physical aerial perspective + cloud ground shadows should run (High desktop only) */
+  /** Whether physical aerial perspective + cloud ground shadows should run (High desktop with post-chain aerial enabled) */
   get aerialActive(): boolean {
-    return this.showing && this.quality === "high" && !isTouchDevice();
+    return this.showing && this.quality === "high" && this.aerialAllowed && !isTouchDevice();
   }
 
   private syncAerialShadow(): void {

@@ -181,7 +181,7 @@ export interface GoldenHourEnvironment {
   /** The visible sky's sun-disc switch (`showSunDisc`), which the car reflection probe zeroes while it films */
   probeSky: { material: { uniforms: Record<string, { value: unknown }> } };
   /** Graphics preset: the physical sky on Medium and High, the classic sky on Low */
-  setQuality(quality: "low" | "medium" | "high"): void;
+  setQuality(quality: "low" | "medium" | "high", aerialAllowed?: boolean): void;
   /**
    * With `deferPhysicalSky`: the physical sky may be built from now on (on Medium and High), once the loading's own GPU
    * work is done. Its atmosphere precompute then never runs alongside the circuit's uploads and warm-up frame.
@@ -261,7 +261,7 @@ export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: Post
   const autoSharp = rcasSharpnessForRatio(pixelRatio / nativeDpr);
   const sharpness = plan.sharpen === true ? Math.max(0.4, autoSharp) : plan.sharpen === false ? 0 : autoSharp;
   postFx.setSharpness(sharpness);
-  env.setQuality(quality);
+  env.setQuality(quality, plan.bloom);
   if (env.physicalSky) postFx.setClouds(env.physicalSky);
   // Scenery & asphalt aggregate noise/bump off on Low (baked shading & rubber line stay); fewer instanced trees below High
   setAsphaltQuality(quality);
@@ -480,15 +480,15 @@ class SkyBaker {
   }
 
   /** Bakes the sky into the environment map and returns its texture: the same texture on every call */
-  bake(sunDir: THREE.Vector3, look: SkyLook, sun: GroundLight, fill: THREE.HemisphereLight): THREE.Texture {
+  bake(sunDir: THREE.Vector3, keyDir: THREE.Vector3, look: SkyLook, sun: GroundLight, fill: THREE.HemisphereLight): THREE.Texture {
     applySkyLook(this.sky, sunDir, look);
     // the night sky's glow lights the bake; its stars would only speckle the reflections
     this.sky.material.uniforms.nightStars.value = 0;
     this.sky.visible = !this.physicalSky?.visible;
-    // The ground takes the scene's own sun and sky light, so it sits at the brightness the real circuit has
+    // The ground takes the scene's own key (sun, moon or floodlight) and sky fill, so it sits at the real circuit's brightness
     this.groundSun.color.copy(sun.color);
     this.groundSun.intensity = sun.intensity;
-    this.groundSun.position.copy(sunDir).multiplyScalar(100);
+    this.groundSun.position.copy(keyDir).multiplyScalar(100);
     this.groundFill.color.copy(fill.color);
     this.groundFill.groundColor.copy(fill.groundColor);
     const dayFloor = THREE.MathUtils.clamp((sunDir.y + 0.08) / 0.22, 0.05, 1);
@@ -567,6 +567,7 @@ export function createGoldenHourEnvironment(
   // The first bake, before the scene's lights exist: their starting values. Later bakes refresh this same texture
   const envMap = baker.bake(
     skySunDir,
+    sunDirection,
     skyLook,
     { color: new THREE.Color(SUN_COLOR), intensity: SUN_INTENSITY },
     new THREE.HemisphereLight(FILL_SKY, FILL_GROUND, FILL_INTENSITY)
@@ -618,7 +619,7 @@ export function createGoldenHourEnvironment(
   let classicCloudClockS = 0;
 
   const rebake = () => {
-    baker.bake(skySunDir, skyLook, sunLight, fillLight);
+    baker.bake(skySunDir, sunDirection, skyLook, sunLight, fillLight);
     baked = { ...current };
     lastBakeMs = performance.now();
     pendingBake = false;
@@ -639,9 +640,11 @@ export function createGoldenHourEnvironment(
 
   let physicalSkyHeld = options.deferPhysicalSky === true;
   let qualityNow: "low" | "medium" | "high" = "high";
-  const setQuality = (quality: "low" | "medium" | "high") => {
+  let aerialAllowedNow = true;
+  const setQuality = (quality: "low" | "medium" | "high", aerialAllowed = quality === "high") => {
     if (disposed) return;
     qualityNow = quality;
+    aerialAllowedNow = aerialAllowed;
     if (!physicalSky && options.physicalSky && !physicalSkyHeld && quality !== "low") {
       physicalSky = new PhysicalSky(renderer, applySkyChoice);
       scene.add(physicalSky.mesh);
@@ -657,7 +660,7 @@ export function createGoldenHourEnvironment(
     }
     if (!physicalSky) return;
     const wasShowing = physicalSky.showing;
-    physicalSky.setQuality(quality);
+    physicalSky.setQuality(quality, aerialAllowed);
     syncFogDensity();
     if (physicalSky.showing !== wasShowing) applySkyChoice();
   };
@@ -782,7 +785,7 @@ export function createGoldenHourEnvironment(
     startPhysicalSky(): void {
       if (!physicalSkyHeld) return;
       physicalSkyHeld = false;
-      setQuality(qualityNow);
+      setQuality(qualityNow, aerialAllowedNow);
     },
 
     dispose(): void {

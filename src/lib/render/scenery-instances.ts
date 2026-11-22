@@ -307,6 +307,25 @@ const _instBox = new THREE.Box3();
 const _tileCentre = new THREE.Vector3();
 
 /**
+ * Zero-geometry LOD node inserted right after all TileLods and right before the pooled FarTileBatch meshes under
+ * `scenery`. Three.js calls `LOD.update(camera)` in child order during `projectObject`, before `objects.update(mesh)`
+ * uploads `instanceMatrix` / `instanceColor` — so dirty batches repack and upload in the same frame instead of one
+ * pass late.
+ */
+class FarBatchSyncLod extends THREE.LOD {
+  constructor(private readonly batches: FarTileBatch[]) {
+    super();
+    this.name = "Scenery_FarBatchSync";
+    this.frustumCulled = false;
+  }
+
+  override update(camera: THREE.Camera): void {
+    if (!camera.layers.test(MAIN_CAMERA_LAYERS)) return;
+    for (const batch of this.batches) batch.sync();
+  }
+}
+
+/**
  * Collapses non-shadow far-most foliage levels shared across tiles into pooled InstancedMeshes per (geometry, material)
  * pair (split into 2x2 spatial quadrants when >= 16 tiles so behind-camera halves frustum-cull cleanly). Each pooled tile
  * keeps an empty placeholder in its TileLod so LOD switching and hysteresis work identically.
@@ -314,6 +333,7 @@ const _tileCentre = new THREE.Vector3();
 function poolFarTileLevels(scenery: THREE.Object3D, tileLods: { lod: TileLod; levels: TileLevel[] }[]): void {
   scenery.updateMatrixWorld(true);
   _invScenery.copy(scenery.matrixWorld).invert();
+  const createdBatches: FarTileBatch[] = [];
 
   interface Candidate {
     lod: TileLod;
@@ -448,8 +468,13 @@ function poolFarTileLevels(scenery: THREE.Object3D, tileLods: { lod: TileLod; le
       }
 
       farBatches.add(batch);
-      scenery.add(batch.mesh);
+      createdBatches.push(batch);
     }
+  }
+  if (createdBatches.length > 0) {
+    // Insert sync node before the batch meshes so projectObject flushes dirty batches before Three uploads their buffers
+    scenery.add(new FarBatchSyncLod(createdBatches));
+    for (const batch of createdBatches) scenery.add(batch.mesh);
   }
 }
 

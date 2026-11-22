@@ -83,32 +83,65 @@ export interface OpponentBeams {
   dispose(): void;
 }
 
+interface BeamUniformHolder {
+  n: number;
+  pos: THREE.Vector4[];
+  dir: THREE.Vector4[];
+  uniforms: {
+    uLcBeamPos: { value: THREE.Vector4[] };
+    uLcBeamDir: { value: THREE.Vector4[] };
+    uLcBeamColor: { value: THREE.Color };
+    uLcBeamCone: { value: THREE.Vector2 };
+  };
+}
+
 /**
  * Patches the circuit's materials (the loaded model under `root`) for the other cars' beams, `maxBeams` of them. Call
  * once the model is in and the session can get dark, before its first night frame (a shader compile per material).
+ * Calling again on already-patched circuit materials reuses their bound uniform holder instead of double-patching GLSL.
  */
 export function createOpponentBeams(root: THREE.Object3D, maxBeams: number, color: THREE.ColorRepresentation = 0xf6f9ff): OpponentBeams {
   const n = Math.max(1, Math.round(maxBeams));
-  const pos = Array.from({ length: n }, () => new THREE.Vector4(0, 0, 0, 0));
-  const dir = Array.from({ length: n }, () => new THREE.Vector4(0, 0, 1, 1));
-  const uniforms = {
-    uLcBeamPos: { value: pos },
-    uLcBeamDir: { value: dir },
-    uLcBeamColor: { value: new THREE.Color(color) },
-    uLcBeamCone: { value: new THREE.Vector2(Math.cos(CONE_OUTER_RAD), Math.cos(CONE_OUTER_RAD * (1 - CONE_PENUMBRA))) },
-  };
-  const frag = fragmentPatches(n);
-  const patched = new Set<THREE.Material>();
+  let freshHolder: BeamUniformHolder | null = null;
+  let frag: ReturnType<typeof fragmentPatches> | null = null;
+  const holders = new Set<BeamUniformHolder>();
+  const visited = new Set<THREE.Material>();
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh) return;
     for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-      if (!(mat as THREE.MeshStandardMaterial).isMeshStandardMaterial || patched.has(mat)) continue;
-      patched.add(mat);
+      if (!(mat as THREE.MeshStandardMaterial).isMeshStandardMaterial || visited.has(mat)) continue;
+      visited.add(mat);
+      const existing = mat.userData.__lcOpponentBeams as BeamUniformHolder | undefined;
+      if (existing) {
+        existing.uniforms.uLcBeamColor.value.set(color);
+        holders.add(existing);
+        continue;
+      }
+      if (!freshHolder) {
+        const pos = Array.from({ length: n }, () => new THREE.Vector4(0, 0, 0, 0));
+        const dir = Array.from({ length: n }, () => new THREE.Vector4(0, 0, 1, 1));
+        freshHolder = {
+          n,
+          pos,
+          dir,
+          uniforms: {
+            uLcBeamPos: { value: pos },
+            uLcBeamDir: { value: dir },
+            uLcBeamColor: { value: new THREE.Color(color) },
+            uLcBeamCone: { value: new THREE.Vector2(Math.cos(CONE_OUTER_RAD), Math.cos(CONE_OUTER_RAD * (1 - CONE_PENUMBRA))) },
+          },
+        };
+        frag = fragmentPatches(n);
+      }
+      const h = freshHolder;
+      const f = frag!;
+      mat.userData.__lcOpponentBeams = h;
+      holders.add(h);
       chainShaderPatch(mat, `opponent-beams-${n}`, (shader) => {
-        Object.assign(shader.uniforms, uniforms);
+        Object.assign(shader.uniforms, h.uniforms);
         shader.vertexShader = patchShader(shader.vertexShader, vertexPatches, "opponent beams");
-        shader.fragmentShader = patchShader(shader.fragmentShader, frag, "opponent beams");
+        shader.fragmentShader = patchShader(shader.fragmentShader, f, "opponent beams");
       });
     }
   });
@@ -126,18 +159,21 @@ export function createOpponentBeams(root: THREE.Object3D, maxBeams: number, colo
         order.push(i);
       }
       order.sort((a, b) => dist[a] - dist[b]);
-      for (let k = 0; k < n; k++) {
-        const b = k < order.length ? beams[order[k]] : null;
-        if (!b) {
-          pos[k].w = 0;
-          continue;
+      for (const h of holders) {
+        const activeLimit = Math.min(n, h.n);
+        for (let k = 0; k < h.n; k++) {
+          const b = k < activeLimit && k < order.length ? beams[order[k]] : null;
+          if (!b) {
+            h.pos[k].w = 0;
+            continue;
+          }
+          h.pos[k].set(b.pos.x, b.pos.y, b.pos.z, b.intensity);
+          h.dir[k].set(b.dir.x, b.dir.y, b.dir.z, Math.max(1, b.range));
         }
-        pos[k].set(b.pos.x, b.pos.y, b.pos.z, b.intensity);
-        dir[k].set(b.dir.x, b.dir.y, b.dir.z, Math.max(1, b.range));
       }
     },
     dispose() {
-      for (const p of pos) p.w = 0;
+      for (const h of holders) for (const p of h.pos) p.w = 0;
     },
   };
 }

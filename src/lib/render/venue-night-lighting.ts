@@ -647,11 +647,16 @@ export function createVenueNightLighting(
       }
     });
   };
-  root.traverse((obj) => {
+  // Skip hidden non-LOD subtrees (e.g. replaced scenery nodes), but still visit hidden LOD levels so far trees get patched too
+  const visitVenue = (obj: THREE.Object3D) => {
+    if (obj !== root && !obj.visible && !(obj.parent as THREE.LOD | null)?.isLOD) return;
     const mesh = obj as THREE.Mesh;
-    if (!mesh.isMesh || !mesh.visible) return;
-    for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) venuePatch(mat);
-  });
+    if (mesh.isMesh) {
+      for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) venuePatch(mat);
+    }
+    for (const child of obj.children) visitVenue(child);
+  };
+  visitVenue(root);
 
   // --- Masts --------------------------------------------------------------------
   const lamps = def.lamps ?? [];
