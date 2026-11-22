@@ -55,6 +55,7 @@ export function resetAllSettings(prev: PlayerSettings): PlayerSettings {
     race: prev.race,
     aiSkill: prev.aiSkill,
     conditions: prev.conditions,
+    timeOfDayChosen: prev.timeOfDayChosen,
     liveryId: prev.liveryId,
     customLivery: prev.customLivery,
     // The detail level the player is looking at stays, so the screen does not change under them

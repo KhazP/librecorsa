@@ -18,6 +18,7 @@ import {
   WEATHER_NODE_LABELS,
   WEATHER_PRESETS,
   type SessionConditions,
+  type TimeOfDayId,
   type WeatherPresetId,
 } from "@/lib/sim/weather";
 import {
@@ -41,7 +42,10 @@ export interface ConditionsReadout {
 }
 
 export interface ConditionsPanelProps {
+  /** The player's conditions as this circuit starts them (a night circuit's own time of day until they pick one) */
   conditions: SessionConditions;
+  /** The time of day this circuit starts at by itself (a night race), marked on its tile */
+  trackTimeOfDay?: TimeOfDayId;
   realism: SimRealism;
   onChangeConditions: (next: SessionConditions) => void;
   onChangeRealism: (next: SimRealism) => void;
@@ -88,6 +92,7 @@ export function trackStateLabel(waterMm: number): string {
  */
 export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
   conditions,
+  trackTimeOfDay,
   realism,
   onChangeConditions,
   onChangeRealism,
@@ -186,7 +191,12 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
                 disabled={locked}
                 onSelect={() => set({ timeOfDay: id })}
                 title={TIME_OF_DAY_LABELS[id]}
-                description={<span className="lc-mono">{clock(TIME_OF_DAY_HOURS[id])}</span>}
+                description={
+                  <>
+                    <span className="lc-mono">{clock(TIME_OF_DAY_HOURS[id])}</span>
+                    {id === trackTimeOfDay ? " · this circuit's own" : null}
+                  </>
+                }
               />
             ))}
           </OptionTileGroup>

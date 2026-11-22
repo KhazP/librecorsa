@@ -122,6 +122,43 @@ export const DEFAULT_SESSION_CONDITIONS: Readonly<SessionConditions> = {
   seed: 1,
 };
 
+/**
+ * The player's own conditions on a circuit: their time of day when they picked one (`chosen`), else the circuit's own
+ * (`trackDefault`: a night race), else the saved one, which is then still the default. The saved conditions are never
+ * changed by it, so the next circuit starts from the same choice. Returns `own` itself when nothing differs.
+ */
+export function resolveTimeOfDay(
+  own: SessionConditions,
+  chosen: boolean,
+  trackDefault: TimeOfDayId | undefined,
+): SessionConditions {
+  if (chosen || trackDefault === undefined || trackDefault === own.timeOfDay) return own;
+  return { ...own, timeOfDay: trackDefault };
+}
+
+/**
+ * What to save when the Conditions panel hands back `next`, having shown `shown` (the resolved conditions) over the
+ * saved `saved`. Only a change of the time of day itself is a pick: a change of weather on a night circuit must not
+ * save "night" for every other circuit. Picking the time the circuit starts at anyway (`trackDefault`, or the game's
+ * default on a circuit without one) goes back to following the circuits.
+ */
+export function applyConditionsChoice(
+  saved: SessionConditions,
+  savedChosen: boolean,
+  shown: SessionConditions,
+  next: SessionConditions,
+  trackDefault: TimeOfDayId | undefined,
+): { conditions: SessionConditions; timeOfDayChosen: boolean } {
+  if (next.timeOfDay === shown.timeOfDay) {
+    return { conditions: { ...next, timeOfDay: saved.timeOfDay }, timeOfDayChosen: savedChosen };
+  }
+  const circuitTime = trackDefault ?? DEFAULT_SESSION_CONDITIONS.timeOfDay;
+  if (next.timeOfDay === circuitTime) {
+    return { conditions: { ...next, timeOfDay: DEFAULT_SESSION_CONDITIONS.timeOfDay }, timeOfDayChosen: false };
+  }
+  return { conditions: next, timeOfDayChosen: true };
+}
+
 /** Temporary weather/time override active while inside a multiplayer room (never overwrites saved single-player settings) */
 export interface RoomConditionsOverride {
   weather?: WeatherPresetId;

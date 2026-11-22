@@ -8,6 +8,7 @@ import trackIndex from "../../public/tracks/index.json";
 import { withBasePath } from "@/lib/base-path";
 import { trackListed } from "@/lib/hosted-content";
 import { DEFAULT_TRACK_ID, setActiveTrack, type RawTrackJson } from "@/lib/track-data";
+import { TIME_OF_DAY_PRESETS, type TimeOfDayId } from "@/lib/sim/weather";
 
 export { DEFAULT_TRACK_ID };
 
@@ -85,6 +86,11 @@ export interface TrackInfo {
   type?: CircuitType;
   /** Where its model comes from (index.json) */
   quality: CircuitQuality;
+  /**
+   * The time of day a session starts at here until the player picks one: "night" for a circuit raced under lights.
+   * Read through `trackDefaultTimeOfDay`, which checks it.
+   */
+  defaultTimeOfDay?: TimeOfDayId;
   /**
    * Left out of every list (circuit browser, home page, lap board picker, credits) unless the page's link names it
    * (`?track=<id>`), e.g. a new circuit its modder tries on the live site before it is listed. It still loads by id
@@ -212,6 +218,12 @@ export function getTrackInfo(id: string): TrackInfo {
   if (info) return info;
   console.warn(`Unknown circuit "${id}", using ${TRACKS[0].id}`);
   return TRACKS[0];
+}
+
+/** A circuit's own starting time of day (index.json `defaultTimeOfDay`); undefined for most, and for an unknown value */
+export function trackDefaultTimeOfDay(id: string): TimeOfDayId | undefined {
+  const value = TRACKS.find((t) => t.id === id)?.defaultTimeOfDay;
+  return value !== undefined && TIME_OF_DAY_PRESETS.includes(value) ? value : undefined;
 }
 
 /** Whether this page has opened its `?track=` circuit already */

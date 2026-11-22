@@ -47,8 +47,8 @@ import { challengeTarget, type ChallengeTarget } from "@/lib/net/challenge-targe
 import { isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
-import { effectiveConditions, type RoomConditionsOverride, type SessionConditions } from "@/lib/sim/weather";
-import { getTrackInfo, LISTED_TRACKS, TRACKS } from "@/lib/track-registry";
+import { applyConditionsChoice, effectiveConditions, resolveTimeOfDay, type RoomConditionsOverride, type SessionConditions } from "@/lib/sim/weather";
+import { getTrackInfo, LISTED_TRACKS, trackDefaultTimeOfDay, TRACKS } from "@/lib/track-registry";
 import { F1TelemetryHud } from "@/components/F1TelemetryHud";
 import { roomFromUrl } from "@/lib/net/invite-room";
 import { CAMERA_MODES, nextCameraMode } from "@/lib/render/camera-modes";
@@ -133,6 +133,8 @@ let pendingChallenge: { id: string; race: boolean } | null = null;
  * put back when they leave the car for the menus. (Outside the component: going to the week's circuit reloads it.)
  */
 let ownRules: Pick<PlayerSettings, "assistPreset" | "realism" | "conditions"> | null = null;
+/** The circuit the simulator was last mounted on: a host's room follows the next circuit's own time of day from it */
+let lastMountedTrackId: string | null = null;
 
 export interface LibreCorsaSimulatorProps {
   /** Active circuit (already set with `setActiveTrack`; the gate remounts this component on a change) */
@@ -164,9 +166,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [raceKind, setRaceKind] = useState<SessionRace["kind"]>("practice");
   /** Track evolution and aero wake for every car on the circuit (the player's in every mode); an AI field shares it */
   const trackEnvRef = useRef<TrackEnvironment | null>(null);
+  /**
+   * The player's own conditions on this circuit: a night circuit starts at night until they pick a time of day
+   * themselves (`resolveTimeOfDay`). Everything that reads their conditions reads these; the saved ones stay as picked
+   */
+  const trackTimeOfDay = useMemo(() => trackDefaultTimeOfDay(trackId), [trackId]);
+  const ownConditionsNow = useCallback(
+    () => resolveTimeOfDay(settingsRef.current.conditions, settingsRef.current.timeOfDayChosen, trackTimeOfDay),
+    [trackTimeOfDay]
+  );
   const getTrackEnv = useCallback(
-    () => (trackEnvRef.current ??= new TrackEnvironment(track, settingsRef.current.conditions)),
-    [track]
+    () => (trackEnvRef.current ??= new TrackEnvironment(track, ownConditionsNow())),
+    [track, ownConditionsNow]
   );
 
   /** What the drive shows the UI (telemetry, replay bar, weather, the car's setup …): one subscription to the session */
@@ -637,21 +648,21 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const guestWeatherSyncedRef = useRef(false);
   const restoreOwnConditionsNow = useCallback(() => {
     const env = getTrackEnv();
-    const own = settingsRef.current.conditions;
+    const own = ownConditionsNow();
     env.setConditions(own);
     const car = session?.car;
     const autoCompound = autoCompoundFor(env.weather.lineWaterMm, car?.tireCompound);
     if (car && car.tireCompound !== autoCompound) handleTireCompoundChange(autoCompound);
-  }, [getTrackEnv, session, handleTireCompoundChange]);
+  }, [getTrackEnv, ownConditionsNow, session, handleTireCompoundChange]);
   const syncHostConditionsToLobby = useCallback(() => {
     setRoomConditions(null);
     if (guestWeatherSyncedRef.current) {
       guestWeatherSyncedRef.current = false;
       restoreOwnConditionsNow();
     }
-    const c = settingsRef.current.conditions;
+    const c = ownConditionsNow();
     getMultiplayerManager().setLobbySettings({ weather: c.weather, timeOfDay: c.timeOfDay, timeScale: c.timeScale });
-  }, [restoreOwnConditionsNow]);
+  }, [restoreOwnConditionsNow, ownConditionsNow]);
   const handleHostP2PRoom = useCallback(() => {
     const code = getMultiplayerManager().hostRoom();
     syncHostConditionsToLobby();
@@ -729,24 +740,59 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** Weather and time of day: saved, and the session on track switches to them (the weather starts over) */
   const handleChangeConditions = useCallback((conditions: SessionConditions) => {
-    setSettings((prev) => ({ ...prev, conditions }));
+    // The panel shows the circuit's own time of day until the player picks one: only that pick is saved as theirs
+    setSettings((prev) => ({
+      ...prev,
+      ...applyConditionsChoice(
+        prev.conditions,
+        prev.timeOfDayChosen,
+        resolveTimeOfDay(prev.conditions, prev.timeOfDayChosen, trackTimeOfDay),
+        conditions,
+        trackTimeOfDay
+      ),
+    }));
     // If currently hosting a private room, propagate updated own conditions to the lobby so start.weather stays in sync
     const mp = getMultiplayerManager();
     if (mp.isHost && !mp.inScheduledRace) {
       setRoomConditions(null);
       mp.setLobbySettings({ weather: conditions.weather, timeOfDay: conditions.timeOfDay, timeScale: conditions.timeScale });
     }
-  }, []);
+  }, [trackTimeOfDay]);
   /** Simulation realism: saved, and every car on track takes it on its next step */
   const handleChangeRealism = useCallback((realism: SimRealism) => {
     setSettings((prev) => ({ ...prev, realism }));
   }, []);
+  const ownConditions = useMemo(
+    () => resolveTimeOfDay(settings.conditions, settings.timeOfDayChosen, trackTimeOfDay),
+    [settings.conditions, settings.timeOfDayChosen, trackTimeOfDay]
+  );
   const activeConditions = useMemo(
-    () => effectiveConditions(settings.conditions, roomConditions),
-    [settings.conditions, roomConditions]
+    () => effectiveConditions(ownConditions, roomConditions),
+    [ownConditions, roomConditions]
   );
   const activeConditionsRef = useRef(activeConditions);
   activeConditionsRef.current = activeConditions;
+  // A host's room that was on the last circuit's own time of day moves to this circuit's: picking a night circuit for
+  // the room makes it a night race, and going back makes it a day one. A time the host set for the room stays
+  const cameFromTrackRef = useRef<{ to: string; from: string | null } | null>(null);
+  useEffect(() => {
+    // Noted once per circuit (the effect runs again when the saved settings arrive, which it waits for)
+    if (cameFromTrackRef.current?.to !== trackId) {
+      cameFromTrackRef.current = { to: trackId, from: lastMountedTrackId };
+      lastMountedTrackId = trackId;
+    }
+    const previous = cameFromTrackRef.current.from;
+    if (!settingsHydrated || previous === null || previous === trackId) return;
+    cameFromTrackRef.current = { to: trackId, from: null };
+    const mp = getMultiplayerManager();
+    if (!mp.isHost || mp.inScheduledRace || !mp.lobby) return;
+    const { conditions, timeOfDayChosen } = settingsRef.current;
+    const before = resolveTimeOfDay(conditions, timeOfDayChosen, trackDefaultTimeOfDay(previous)).timeOfDay;
+    const now = ownConditionsNow().timeOfDay;
+    if (before === now || mp.lobby.settings.timeOfDay !== before) return;
+    setRoomConditions((prev) => (prev ? { ...prev, timeOfDay: undefined } : prev));
+    mp.setLobbySettings({ timeOfDay: now });
+  }, [settingsHydrated, trackId, ownConditionsNow]);
   const conditionsKey = JSON.stringify(activeConditions);
   useEffect(() => {
     if (guestWeatherSyncedRef.current) return;
@@ -2068,7 +2114,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     },
     // Weather, time of day and the track's grip: the title's Conditions panel and the pause menu's Conditions tab
     conditionsPanel: {
-      conditions: settings.conditions,
+      conditions: ownConditions,
+      trackTimeOfDay,
       realism: settings.realism,
       onChangeConditions: handleChangeConditions,
       onChangeRealism: handleChangeRealism,

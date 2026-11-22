@@ -89,6 +89,11 @@ export interface PlayerSettings {
   realism: SimRealism;
   /** Weather, time of day and time multiplier for offline sessions (the host's apply online) */
   conditions: SessionConditions;
+  /**
+   * The player picked `conditions.timeOfDay` themselves. Until they do, a circuit with a time of its own (a night
+   * race: the index's `defaultTimeOfDay`) starts at that instead (`resolveTimeOfDay`), and the others at the default
+   */
+  timeOfDayChosen: boolean;
   /** Starred and recently chosen cars and circuits (the car and circuit browsers) */
   library: ContentLibrary;
   /** Master volume and mute (Settings > Audio) */
@@ -564,6 +569,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   race: DEFAULT_RACE_SETUP,
   realism: "full",
   conditions: DEFAULT_SESSION_CONDITIONS,
+  timeOfDayChosen: false,
   library: DEFAULT_CONTENT_LIBRARY,
   audio: DEFAULT_AUDIO_SETTINGS,
   ui: DEFAULT_INTERFACE_SETTINGS,
@@ -981,6 +987,8 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     race: parseRaceSetup(raw.race),
     realism: oneOf(raw.realism, SIM_REALISM_LEVELS, d.realism),
     conditions: sanitizeConditions(raw.conditions),
+    // A save from before this flag: a time of day other than the default was the player's pick
+    timeOfDayChosen: bool(raw.timeOfDayChosen, sanitizeConditions(raw.conditions).timeOfDay !== d.conditions.timeOfDay),
     library: parseLibrary(raw.library),
     audio: parseAudio(raw.audio),
     ui: parseInterface(raw.ui),

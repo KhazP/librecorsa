@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
+import { parsePlayerSettings } from '../src/lib/settings/player-settings';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
@@ -35,15 +36,18 @@ import {
   wetPneumaticTrailScale,
 } from '../src/lib/sim/wet-tyres';
 import {
+  applyConditionsChoice,
   DEFAULT_SESSION_CONDITIONS,
   defaultWeatherNodesForPreset,
   effectiveConditions,
+  resolveTimeOfDay,
   dynamicWeatherAt,
   GOLDEN_HOUR_CLOCK_H,
   interpolateWeatherNodes,
   nearestSkyCover,
   sanitizeConditions,
   sanitizeWeatherSync,
+  type SessionConditions,
   sunPosition,
   TIME_OF_DAY_HOURS,
   TIME_OF_DAY_PRESETS,
@@ -862,6 +866,78 @@ console.log('\n== Weather regime, host sync & AI tyre call');
       restoredOwn,
     `sameWxNodes=${sameWeatherTimeOnly.weatherNodes?.length ?? 0}, inRoom=${inRoom.weather}/${inRoom.timeOfDay}, syncedRain=${syncedRain}, restored=${restoredOwn}`
   );
+}
+
+// ---------------------------------------------------------------------------
+// 10. A circuit's own time of day (a night race) against the player's pick
+// ---------------------------------------------------------------------------
+console.log('\nCircuit default time of day');
+{
+  const saved: SessionConditions = { ...DEFAULT_SESSION_CONDITIONS };
+  const NIGHT = 'night' as const;
+  // A first visit: the night circuit starts at night, the others at golden hour, and the save is not touched
+  const atNight = resolveTimeOfDay(saved, false, NIGHT);
+  check(
+    'Night circuit starts at night until the player picks a time; other circuits keep golden hour',
+    atNight.timeOfDay === 'night' && saved.timeOfDay === 'golden_hour' && resolveTimeOfDay(saved, false, undefined) === saved,
+    `${atNight.timeOfDay} / ${resolveTimeOfDay(saved, false, undefined).timeOfDay}`
+  );
+  // A weather change on the night circuit (the panel hands back what it showed, night included) saves no time of day
+  const rainAtNight = applyConditionsChoice(saved, false, atNight, { ...atNight, weather: 'light_rain' }, NIGHT);
+  check(
+    'A weather change at the night circuit does not save night for the other circuits',
+    rainAtNight.conditions.weather === 'light_rain' &&
+      rainAtNight.conditions.timeOfDay === 'golden_hour' &&
+      !rainAtNight.timeOfDayChosen &&
+      resolveTimeOfDay(rainAtNight.conditions, rainAtNight.timeOfDayChosen, undefined).timeOfDay === 'golden_hour' &&
+      resolveTimeOfDay(rainAtNight.conditions, rainAtNight.timeOfDayChosen, NIGHT).timeOfDay === 'night',
+    `${rainAtNight.conditions.timeOfDay}, chosen=${rainAtNight.timeOfDayChosen}`
+  );
+  // The player picks noon at the night circuit: theirs everywhere, the night circuit included
+  const noon = applyConditionsChoice(saved, false, atNight, { ...atNight, timeOfDay: 'noon' }, NIGHT);
+  check(
+    'A picked time of day applies on every circuit',
+    noon.timeOfDayChosen &&
+      resolveTimeOfDay(noon.conditions, noon.timeOfDayChosen, NIGHT).timeOfDay === 'noon' &&
+      resolveTimeOfDay(noon.conditions, noon.timeOfDayChosen, undefined).timeOfDay === 'noon',
+    `${noon.conditions.timeOfDay}, chosen=${noon.timeOfDayChosen}`
+  );
+  // Night picked on a day circuit is the player's own: it stays on the day circuits
+  const nightPick = applyConditionsChoice(saved, false, saved, { ...saved, timeOfDay: 'night' }, undefined);
+  check(
+    'Night picked on a day circuit stays the player\'s pick',
+    nightPick.timeOfDayChosen && resolveTimeOfDay(nightPick.conditions, true, undefined).timeOfDay === 'night',
+    `${nightPick.conditions.timeOfDay}, chosen=${nightPick.timeOfDayChosen}`
+  );
+  // Picking the time the circuit starts at anyway goes back to following the circuits
+  const shownNoon = resolveTimeOfDay(noon.conditions, noon.timeOfDayChosen, NIGHT);
+  const backToNight = applyConditionsChoice(noon.conditions, noon.timeOfDayChosen, shownNoon, { ...shownNoon, timeOfDay: 'night' }, NIGHT);
+  const backToGolden = applyConditionsChoice(noon.conditions, noon.timeOfDayChosen, noon.conditions, { ...noon.conditions, timeOfDay: 'golden_hour' }, undefined);
+  check(
+    'Picking the circuit\'s own time follows the circuits again',
+    !backToNight.timeOfDayChosen &&
+      resolveTimeOfDay(backToNight.conditions, false, undefined).timeOfDay === 'golden_hour' &&
+      resolveTimeOfDay(backToNight.conditions, false, NIGHT).timeOfDay === 'night' &&
+      !backToGolden.timeOfDayChosen &&
+      resolveTimeOfDay(backToGolden.conditions, false, NIGHT).timeOfDay === 'night',
+    `night: chosen=${backToNight.timeOfDayChosen}, golden: chosen=${backToGolden.timeOfDayChosen}`
+  );
+  // Saves from before the flag: another time than the default was the player's pick; the default was not
+  const oldNoon = parsePlayerSettings({ conditions: { weather: 'clear', timeOfDay: 'noon', timeScale: 0, seed: 1 } });
+  const oldDefault = parsePlayerSettings({ conditions: { weather: 'clear', timeOfDay: 'golden_hour', timeScale: 0, seed: 1 } });
+  const kept = parsePlayerSettings({ conditions: { weather: 'clear', timeOfDay: 'golden_hour', timeScale: 0, seed: 1 }, timeOfDayChosen: true });
+  check(
+    'Older saves: a saved noon is the player\'s, a saved golden hour follows the circuits, a saved flag is kept',
+    oldNoon.timeOfDayChosen &&
+      !oldDefault.timeOfDayChosen &&
+      kept.timeOfDayChosen &&
+      resolveTimeOfDay(oldDefault.conditions, oldDefault.timeOfDayChosen, NIGHT).timeOfDay === 'night' &&
+      resolveTimeOfDay(kept.conditions, kept.timeOfDayChosen, NIGHT).timeOfDay === 'golden_hour',
+    `noon=${oldNoon.timeOfDayChosen}, default=${oldDefault.timeOfDayChosen}, kept=${kept.timeOfDayChosen}`
+  );
+  // A room's override sits on top of the resolved conditions, as before
+  const inRoom = effectiveConditions(atNight, { timeOfDay: 'dusk' });
+  check('A room\'s time of day overrides the circuit\'s', inRoom.timeOfDay === 'dusk' && atNight.timeOfDay === 'night', inRoom.timeOfDay);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll weather checks passed.');
