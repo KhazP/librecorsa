@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 import { type BuiltTrackData, getActiveTrackData, inDeadZone, type RawTrackJson, setActiveTrack } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { CameraRig, type CameraRigFrame, type CameraRigMenu } from '../src/lib/render/camera-rig';
+import { CameraRig, type CameraRigFrame, type CameraRigMenu, TracksideBroadcastDirector } from '../src/lib/render/camera-rig';
 import { ALL_CAMERA_MODES, CAMERA_CYCLE, CAMERA_MODES, isDrivingCameraMode } from '../src/lib/render/camera-modes';
 import type { CameraMode } from '../src/types/f1';
 import { DEFAULT_KEY_BINDINGS } from '../src/lib/input/bindings';
@@ -143,6 +143,138 @@ check('the helicopter glides behind a moving car, and starts over after a reset 
   pos.addScaledVector(vel, 3); // 120 m in one frame: a replay scrub, or frames it did not see
   fly(1);
   assert.ok(camera.position.distanceTo(spot(pos)) < 1e-6, 'starts over after a jump');
+});
+
+/** Deterministic [0, 1) noise for the frame-timing checks */
+function lcg(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+/** How far (m) each frame's value is off the line between its neighbours, interpolated in time; frames next to a jump of over `cutM` left out */
+function wobbleM(times: number[], points: THREE.Vector3[], cutM = 3): number[] {
+  const out: number[] = [];
+  const mid = new THREE.Vector3();
+  for (let i = 1; i + 1 < points.length; i++) {
+    const [a, b, c] = [points[i - 1], points[i], points[i + 1]];
+    if (a.distanceTo(b) > cutM || b.distanceTo(c) > cutM) continue;
+    mid.copy(a).lerp(c, (times[i] - times[i - 1]) / (times[i + 1] - times[i - 1]));
+    out.push(b.distanceTo(mid));
+  }
+  return out;
+}
+const p99 = (xs: number[]) => [...xs].sort((x, y) => x - y)[Math.floor(xs.length * 0.99)];
+
+check('Trackside TV: the dolly glides with the car as drawn, however stale its lap distance (#160)', () => {
+  // The car is drawn where it is at the frame's time (renderCarPos); its lap distance comes from the last physics state,
+  // a few milliseconds old at a frame (3 to 15 ms in a worker race) and by a different amount each frame
+  const speed = 65;
+  const drive = (staleS: (i: number) => number, hz: number) => {
+    const { camera, rig, car, frame } = setup();
+    const times: number[] = [];
+    const cams: THREE.Vector3[] = [];
+    const pos = new THREE.Vector3();
+    const vel = new THREE.Vector3();
+    const back = new THREE.Vector3();
+    const at = (s: number, out: THREE.Vector3) => {
+      const smp = track.getSampleAtDistance(s);
+      // Off the centreline by a few metres, changing as a racing line does
+      return out.copy(smp.position).addScaledVector(smp.binormal, 4 * Math.sin(s / 70));
+    };
+    for (let i = 0; i < hz * 12; i++) {
+      const t = i / hz;
+      const s = 300 + speed * t;
+      at(s, pos);
+      at(s + 0.05, vel).sub(at(s - 0.05, back)).multiplyScalar(speed / 0.1);
+      car.sMeters = (s - speed * staleS(i)) % track.totalLengthM;
+      rig.update(frame('tv_side', { dt: 1 / hz, nowMs: t * 1000, carPos: pos.clone(), carVelocity: vel.clone() }));
+      times.push(t);
+      cams.push(camera.position.clone());
+    }
+    return p99(wobbleM(times, cams).slice(Math.round(hz * 0.5)));
+  };
+  for (const hz of [144, 75]) {
+    const exact = drive(() => 0, hz);
+    const rnd = lcg(160);
+    const stale = drive(() => rnd() * 0.015, hz);
+    assert.ok(
+      stale < exact * 1.5 + 0.005,
+      `${hz} Hz: camera wobble p99 ${(stale * 1000).toFixed(1)} mm with a stale lap distance, ${(exact * 1000).toFixed(1)} mm with an exact one`
+    );
+  }
+});
+
+check('helicopter: the same framing at any frame rate, and no wobble when frames come unevenly', () => {
+  // A car at a steady 60 m/s on a straight: once settled, the camera's place behind it must not depend on the frame time
+  const offsetAfter = (dts: () => number) => {
+    const { camera, rig, car, frame } = setup();
+    const vel = new THREE.Vector3(0, 0, 60).applyQuaternion(car.worldQuaternion);
+    const pos = car.worldPosition.clone();
+    const times: number[] = [];
+    const offsets: THREE.Vector3[] = [];
+    let t = 0;
+    while (t < 4) {
+      const dt = dts();
+      t += dt;
+      pos.addScaledVector(vel, dt);
+      rig.update(frame('helicopter', { dt, carPos: pos.clone(), carVelocity: vel }));
+      if (t > 2) {
+        times.push(t);
+        offsets.push(camera.position.clone().sub(pos));
+      }
+    }
+    return { offset: offsets[offsets.length - 1], wobble: Math.max(...wobbleM(times, offsets)) };
+  };
+  const at60 = offsetAfter(() => 1 / 60);
+  const at144 = offsetAfter(() => 1 / 144);
+  const rnd = lcg(7);
+  // 60 Hz with every tenth frame or so dropped
+  const uneven = offsetAfter(() => (rnd() < 0.1 ? 2 : 1) / 60);
+  assert.ok(at144.offset.distanceTo(at60.offset) < 0.05, `144 Hz frames it ${at144.offset.distanceTo(at60.offset).toFixed(3)} m off the 60 Hz framing`);
+  assert.ok(uneven.offset.distanceTo(at60.offset) < 0.05, `uneven frames leave it ${uneven.offset.distanceTo(at60.offset).toFixed(3)} m off the 60 Hz framing`);
+  assert.ok(uneven.wobble < 0.01, `uneven frames wobble it ${(uneven.wobble * 1000).toFixed(1)} mm against the car`);
+});
+
+check('Trackside TV: the aim settles on the car at any frame rate, and does not wobble when frames come unevenly', () => {
+  // The look-at leads the car by its velocity as far as the damping trails it: on a steady car it sits on the car
+  const aimOff = (dts: () => number) => {
+    const director = new TracksideBroadcastDirector(track);
+    const vel = new THREE.Vector3(0, 0, 70);
+    const pos = new THREE.Vector3(0, 0, 0);
+    const times: number[] = [];
+    const offsets: THREE.Vector3[] = [];
+    let t = 0;
+    while (t < 3) {
+      const dt = dts();
+      t += dt;
+      pos.addScaledVector(vel, dt);
+      const out = director.update(dt, pos, 300, vel, false);
+      if (t > 1.5) {
+        times.push(t);
+        // (it looks at the car 0.6 m up)
+        offsets.push(out.lookAt.clone().sub(pos).setY(out.lookAt.y - pos.y - 0.6));
+      }
+    }
+    return { offset: Math.max(...offsets.map((o) => o.length())), wobble: Math.max(...wobbleM(times, offsets)) };
+  };
+  const rnd = lcg(11);
+  for (const [name, dts] of [
+    ['60 Hz', () => 1 / 60],
+    ['144 Hz', () => 1 / 144],
+    ['60 Hz with dropped frames', () => (rnd() < 0.1 ? 2 : 1) / 60],
+    // A hitch the session catches up in full (MAX_FRAME_CATCH_UP_S), once the aim has settled
+    ['60 Hz with a quarter-second hitch', (() => {
+      let n = 0;
+      return () => (++n === 120 ? 0.25 : 1 / 60);
+    })()],
+  ] as const) {
+    const { offset, wobble } = aimOff(dts);
+    assert.ok(offset < 0.01, `${name}: aims up to ${offset.toFixed(3)} m off the car`);
+    assert.ok(wobble < 0.005, `${name}: the aim wobbles ${(wobble * 1000).toFixed(1)} mm against the car`);
+  }
 });
 
 // ---------------------------------------------------------------------------------------------------------------

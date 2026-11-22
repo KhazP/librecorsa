@@ -1040,7 +1040,12 @@ export class DriveSession {
         console.warn("[sim] worker unavailable, simulating on the page:", reason);
       }
     }
-    const simHost = simWorker ? createSimHost(simWorker) : null;
+    // The time on the simulation's clock that the frame being made is drawn for: its animation-frame timestamp, not the
+    // moment the frame's code reads the clock. The worker's cars are carried to it, so a frame whose callback starts a
+    // few milliseconds late (other work on the page) draws them where they are at the frame's time, as the page's own
+    // physics does (#160)
+    let frameWallMs = performance.timeOrigin + performance.now();
+    const simHost = simWorker ? createSimHost(simWorker, () => frameWallMs) : null;
     simWorker?.ping().then(
       (ms) => console.info(`[sim] worker round trip ${ms.toFixed(1)} ms`),
       (reason) => console.warn("[sim] worker unavailable, simulating on the page:", reason)
@@ -2864,6 +2869,7 @@ export class DriveSession {
       const dtSeconds = Math.min((nowMs - lastTimeMs) / 1000, MAX_FRAME_CATCH_UP_S);
       displayRate.add(nowMs - lastTimeMs);
       lastTimeMs = nowMs;
+      frameWallMs = performance.timeOrigin + nowMs;
       // The frame-rate cap: this frame draws, or only runs input, the simulation, the network and the laps. The
       // drawing catches up with the time since the last drawn frame. Never in a headset, which sets its own rate. With
       // the GPU context lost nothing is drawn at all.

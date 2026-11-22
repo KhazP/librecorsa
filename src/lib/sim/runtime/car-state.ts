@@ -221,13 +221,14 @@ export class CarStateView {
   }
 
   /**
-   * Carries the pose forward by `leadS`: the state is from a tick a few milliseconds back, the frame is drawn now.
+   * Carries the pose forward by `leadS` to the time the frame is drawn for: the state is usually from a tick a few
+   * milliseconds before it, and from a little after it (a negative lead, carried back) when the frame's code runs late.
    * The position and the wheels move with the car's velocity, the heading turns with its yaw rate. Always from the
    * state as it arrived, so calling it again (a frame with no newer state) does not add up.
    */
   carryForward(leadS: number): void {
     const v = this.worldVelocity;
-    if (!v || !(leadS > 0)) return;
+    if (!v || !Number.isFinite(leadS)) return;
     this.worldPosition.copy(this.statePosition).addScaledVector(v, leadS);
     // Yaw rate is + to the right, a turn about the car's own up axis the other way
     this.worldQuaternion.copy(this.stateQuaternion).multiply(_turn.setFromAxisAngle(_up, -this.yawRateRadS * leadS));

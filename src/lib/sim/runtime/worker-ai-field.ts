@@ -25,7 +25,7 @@ import { FieldPeers } from "./field-frame";
 import type { SimRaceLink } from "./sim-host";
 import type { SimEvent } from "./sim-protocol";
 
-/** The AI cars are carried forward no further than this when the worker's latest is older (s), matching player car lead */
+/** The AI cars are carried forward (or back, when the poses are from after the frame's time) no further than this (s), as the player's car is */
 const MAX_RENDER_LEAD_S = 0.05;
 /** A frame this long after the last one is the first after a stop (a pause, the menus): nothing is carried forward (ms) */
 const RESUME_GAP_MS = 100;
@@ -217,7 +217,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
     const resumed = gapMs > RESUME_GAP_MS;
     this.frameDtS = resumed || gapMs <= 0 ? 0 : Math.min(gapMs / 1000, 0.1);
     this.lastUpdateMs = now;
-    this.leadS = resumed ? 0 : THREE.MathUtils.clamp((now - this.posesWallMs) / 1000 + this.posesLeadS, 0, MAX_RENDER_LEAD_S);
+    this.leadS = resumed ? 0 : THREE.MathUtils.clamp((now - this.posesWallMs) / 1000 + this.posesLeadS, -MAX_RENDER_LEAD_S, MAX_RENDER_LEAD_S);
     this.peersDirty = true;
     if (this.lockAidsInYellow !== this.sentLockAids) {
       this.sentLockAids = this.lockAidsInYellow;
