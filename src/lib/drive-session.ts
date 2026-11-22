@@ -1419,23 +1419,31 @@ export class DriveSession {
     const builtCircuit = buildCircuitScene(track);
     scene.add(builtCircuit.sceneGroup);
     builtCircuit.racingLineMesh.visible = settings.racingLine;
-    // A circuit raced under lights: its floodlit night (masts, lit tunnels, the model's glowing light sources)
+    // A circuit raced under lights: its floodlit night (masts, lit tunnels, the model's glowing light sources),
+    // or one whose own model has lamps (street lamps, light poles): they glow and light the ground round them
     let venueNight: VenueNightLighting | null = null;
+    const lampSpec = track.nightLighting ? null : circuitNightSpec(trackId);
+    /**
+     * Sets the night lighting up once the circuit's model is in. A circuit with lamps of its own waits until its
+     * session can get dark: the lighting costs a map, a texture read on every circuit material and a shader compile
+     * of each, all wasted on a day that stays day
+     */
+    const ensureVenueNight = (root: THREE.Object3D) => {
+      if (venueNight || disposed) return;
+      if (!track.nightLighting && !(lampSpec && canSessionGetDark(getTrackEnv().weather.conditions))) return;
+      const modelLamps = lampSpec ? applyCircuitNightLights(root, track, lampSpec) : [];
+      const mode = lampSpec?.mode ?? "floodlit";
+      venueNight = createVenueNightLighting(root, track, track.nightLighting ?? {}, { mode, modelLamps });
+      venueNight.setQuality(settings.graphics.quality);
+      venueNight.setNight(nightShareOf(getTrackEnv().weather.sun.elevationDeg));
+      scene.add(venueNight.group);
+      if (mode === "floodlit") env.setFloodlitNight(venueNight.look);
+    };
     // Track_Collider_Road / surface colliders and Track_Collider_Wall_* barriers for the f12026-car
     void builtCircuit.trackRoot.then((root) => {
       if (disposed) return;
       trackRoot = root;
-      // or one whose own model has lamps (street lamps, light poles): they glow and light the ground round them
-      const lampSpec = track.nightLighting ? null : circuitNightSpec(trackId);
-      if (track.nightLighting || lampSpec) {
-        const modelLamps = lampSpec ? applyCircuitNightLights(root, track, lampSpec) : [];
-        const mode = lampSpec?.mode ?? "floodlit";
-        venueNight = createVenueNightLighting(root, track, track.nightLighting ?? {}, { mode, modelLamps });
-        venueNight.setQuality(settings.graphics.quality);
-        venueNight.setNight(nightShareOf(getTrackEnv().weather.sun.elevationDeg));
-        scene.add(venueNight.group);
-        if (mode === "floodlit") env.setFloodlitNight(venueNight.look);
-      }
+      ensureVenueNight(root);
       physics.attachTrackRoot?.(root);
       aiFieldOf(raceNow())?.attachTrackRoot(root);
       aiFieldSpare?.field.attachTrackRoot(root);
@@ -4120,6 +4128,8 @@ export class DriveSession {
           }
           cloudConditions = { ...wx.conditions };
           syncHeadlightSpots();
+          // a session that turns to night (or rain) on a circuit with lamps: they light up from now on
+          if (trackRoot) ensureVenueNight(trackRoot);
           env.setCloudSeed(fixedCloudSeed ?? Math.floor(Math.random() * 2 ** 31));
         }
         env.setConditions(skyConditions);

@@ -389,6 +389,8 @@ const FOG_COLOR_KEYS: readonly Key[] = [[-18, 0x060a14], [-8, 0x161a2c], [-3, 0x
 const ENV_INTENSITY_KEYS: readonly Key[] = [[-18, 0.16], [-8, 0.18], [-3, 0.3], [4, 0.7], [14, 1], [70, 1.1]];
 const EXPOSURE_KEYS: readonly Key[] = [[-18, 1.65], [-8, 1.58], [-3, 1.5], [4, 1.32], [14, EXPOSURE], [35, 1.08], [70, 1.05]];
 const NIGHT_FILL_SKY = 0x182542;
+/** Fill added on a fully overcast night */
+const NIGHT_OVERCAST_FILL = 0.1;
 const NIGHT_FILL_GROUND = 0x070a10;
 const OVERCAST_SUN = 0xe6e8ea;
 const OVERCAST_FOG = 0xb2b6ba;
@@ -704,13 +706,15 @@ export function createGoldenHourEnvironment(
     // Fill: an overcast sky lights everything from above; at night it deepens to cool indigo
     fillLight.color.setHex(FILL_SKY).lerp(tint.setHex(OVERCAST_FILL_SKY), cloud).lerp(tint.setHex(NIGHT_FILL_SKY), nightShare);
     fillLight.groundColor.setHex(FILL_GROUND).lerp(tint.setHex(WET_FILL_GROUND), rain).lerp(tint.setHex(NIGHT_FILL_GROUND), nightShare);
-    fillLight.intensity = curve(FILL_INTENSITY_KEYS, e) * (1 + 1.1 * cloud);
+    // (an overcast night is lit from the whole sky by the glow under the clouds, the moon hidden behind them)
+    fillLight.intensity = curve(FILL_INTENSITY_KEYS, e) * (1 + 1.1 * cloud) + NIGHT_OVERCAST_FILL * nightShare * cloud;
 
     colorCurve(FOG_COLOR_KEYS, e, fog.color)
       .lerp(tint.setHex(OVERCAST_FOG), 0.8 * cloud * (1 - 0.9 * nightShare))
       .lerp(tint.setHex(RAIN_FOG), rain * (1 - 0.9 * nightShare));
-    // A low sun dims the overcast / rain haze too
-    if (cloud > 0 && e < 14) fog.color.multiplyScalar(1 - cloud * (1 - curve(ENV_INTENSITY_KEYS, e)));
+    // A low sun dims the overcast / rain haze too (at night the haze keeps the night's own colour: dimmed as well it
+    // went black, and an overcast night with it)
+    if (cloud > 0 && e < 14) fog.color.multiplyScalar(1 - cloud * (1 - curve(ENV_INTENSITY_KEYS, e)) * (1 - nightShare));
     syncFogDensity();
 
     scene.environmentIntensity = curve(ENV_INTENSITY_KEYS, e) * (1 - 0.25 * rain);

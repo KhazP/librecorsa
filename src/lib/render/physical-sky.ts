@@ -7,7 +7,7 @@ import { withBasePath } from "@/lib/base-path";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { patchShader, type ShaderPatch } from "./shader-patch";
 import { cloudSkyFor, describeClouds, pickCloudRecipe, type CloudRecipe, type CloudSkySetup } from "./cloud-recipes";
-import { nightShareOfElevation, nightSkyGlsl, starShare } from "./night-sky";
+import { NIGHT_CLOUD_GLOW, nightShareOfElevation, nightSkyGlsl, starShare } from "./night-sky";
 
 /*
  * Physically based sky and volumetric clouds (@takram/three-atmosphere and @takram/three-clouds, MIT): the sky on
@@ -202,12 +202,14 @@ export const CLOUDS_COMPOSITE_PATCHES: readonly ShaderPatch[] = [
   ["#ifdef SKIP_RENDERING", "#if 0 // SKIP_RENDERING (the pass is disabled instead)"],
   [
     "uniform sampler2D cloudsBuffer;",
-    "uniform sampler2D cloudsBuffer;\nuniform float cloudsRadianceScale;\nuniform float cloudsGrey;\nuniform vec3 cloudsGreyTint;",
+    "uniform sampler2D cloudsBuffer;\nuniform float cloudsRadianceScale;\nuniform float cloudsGrey;\nuniform vec3 cloudsGreyTint;\nuniform vec3 cloudsNightGlow;",
   ],
   [
     "outputColor.rgb = inputColor.rgb * (1.0 - clouds.a) + clouds.rgb;",
     /* glsl */ `vec3 cloudsColor = clouds.rgb * cloudsRadianceScale;
   cloudsColor = mix(cloudsColor, vec3(dot(cloudsColor, vec3(0.2126, 0.7152, 0.0722))) * cloudsGreyTint, cloudsGrey);
+  // At night the clouds' undersides take the glow of the ground (towns, the haze), instead of going black
+  cloudsColor += cloudsNightGlow * clouds.a;
   outputColor.rgb = inputColor.rgb * (1.0 - clouds.a) + cloudsColor;`,
   ],
 ];
@@ -291,6 +293,8 @@ function patchCloudsForReversedDepth(clouds: CloudsEffect): void {
 interface CloudsCompositeUniforms {
   cloudsRadianceScale: THREE.Uniform<number>;
   cloudsGrey: THREE.Uniform<number>;
+  /** Scene radiance of a night cloud's underside (night-sky.ts) */
+  cloudsNightGlow: THREE.Uniform<THREE.Color>;
 }
 
 /** Scales the clouds by SKY_RADIANCE_SCALE where the effect composites them over the frame, greyed by the weather */
@@ -298,10 +302,15 @@ function patchCloudsComposite(clouds: CloudsEffect): CloudsCompositeUniforms {
   // postprocessing's Effect keeps its shader behind a protected setter
   const effect = clouds as unknown as { getFragmentShader(): string; setFragmentShader(source: string): void };
   effect.setFragmentShader(patchShader(effect.getFragmentShader(), CLOUDS_COMPOSITE_PATCHES, "clouds composite"));
-  const u: CloudsCompositeUniforms = { cloudsRadianceScale: new THREE.Uniform(SKY_RADIANCE_SCALE), cloudsGrey: new THREE.Uniform(0) };
+  const u: CloudsCompositeUniforms = {
+    cloudsRadianceScale: new THREE.Uniform(SKY_RADIANCE_SCALE),
+    cloudsGrey: new THREE.Uniform(0),
+    cloudsNightGlow: new THREE.Uniform(new THREE.Color(0, 0, 0)),
+  };
   const map = clouds.uniforms as unknown as Map<string, THREE.Uniform>;
   map.set("cloudsRadianceScale", u.cloudsRadianceScale);
   map.set("cloudsGrey", u.cloudsGrey);
+  map.set("cloudsNightGlow", u.cloudsNightGlow);
   map.set("cloudsGreyTint", new THREE.Uniform(OVERCAST_TINT.clone()));
   return u;
 }
@@ -588,6 +597,7 @@ export class PhysicalSky {
     this.mesh.material.uniforms.nightSky.value = night * (1 - 0.5 * gloom);
     this.bakeMesh.material.uniforms.nightSky.value = night * (1 - 0.5 * gloom);
     this.mesh.material.uniforms.nightStars.value = starShare(night, cloud, rain);
+    this.composite.cloudsNightGlow.value.setRGB(...NIGHT_CLOUD_GLOW).multiplyScalar(night);
     this.bakeMesh.material.uniforms.nightStars.value = 0;
     // A thick overcast hides the sun disc (the probe zeroes this while it films and puts the value back)
     this.mesh.material.uniforms.showSunDisc.value = 1 - THREE.MathUtils.smoothstep(cloud, 0.55, 0.9);
