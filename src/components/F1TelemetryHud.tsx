@@ -1,5 +1,6 @@
 "use client";
 
+import { connectedPads, isLikelyWheel } from "@/lib/input/device-input";
 import type { NowPlaying } from "@/lib/audio/bgm-controller";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type {
@@ -348,6 +349,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     fallbackTelemetry
   );
   const telemetry = telemetrySource ? liveTelemetry : props.telemetry;
+  /**
+   * "Calibrate pedals" only while a wheel is what drives: the setting can say Wheel while the car is driven on a pad or
+   * the keyboard (the input in use is picked live), and before the car first moves only when a wheel is plugged in
+   */
+  const pedalsNotice =
+    Boolean(props.wheelUncalibrated) &&
+    !telemetry.race &&
+    (telemetry.drivingInput === "wheel" || (telemetry.drivingInput === undefined && connectedPads().some(isLikelyWheel)));
 
   const inviteRoom = props.inviteRoom ?? null;
   // An invite link opens the multiplayer panel on the first pause only
@@ -726,7 +735,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             </div>
           )
         ) : null}
-        {props.wheelUncalibrated && !race ? (
+        {pedalsNotice ? (
           <span className="pointer-events-auto">
             {isThirdParty ? (
               <SkinButton
