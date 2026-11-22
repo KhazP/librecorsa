@@ -110,7 +110,7 @@ export type RaceCommand =
   | { type: "race"; op: "penalise"; seconds: number; reason: PenaltyReason; detail: string }
   | { type: "race"; op: "conditions"; conditions: SessionConditions }
   | { type: "race"; op: "realism"; flags: SimRealismFlags }
-  | { type: "race"; op: "restore"; poses: FieldCarRestorePose[]; rewindS: number }
+  | { type: "race"; op: "restore"; poses: FieldCarRestorePose[]; rewindS: number; epoch?: number }
   | { type: "race"; op: "end" };
 
 /** An AI car of the race, as the page draws it */
@@ -173,7 +173,7 @@ export type SimEvent =
        * With an AI race on, after each step of its field: every AI car's pose (`field-frame.ts`), as of `ageS` before
        * this state's own time (the field steps every other tick)
        */
-      field?: { race: number; ageS: number; poses: Float64Array };
+      field?: { race: number; epoch?: number; ageS: number; poses: Float64Array };
     }
   /**
    * An AI race's standing, a few times a second and whenever the start lights change: the race status for the HUD,
@@ -183,6 +183,7 @@ export type SimEvent =
       type: "race";
       car: number;
       race: number;
+      epoch?: number;
       status: RaceStatus;
       frozen: boolean;
       rulesActive: boolean;

@@ -38,6 +38,7 @@ const WEATHER_EVERY = 125;
 /** An AI race in this simulation, round its car */
 interface WorkerRace {
   id: number;
+  epoch: number;
   opponents: number;
   field: AiOpponentField;
   env: TrackEnvironment;
@@ -225,7 +226,7 @@ export class SimRuntime {
             earnedAtDetection: () => field.detectionEarnedFor(car),
           };
         }
-        this.race = { id: command.race, opponents: command.opponents, field, env, tick: 0, steps: 0, fresh: true, poses: null, sentPhase: "", sentLights: -1, sentRolling: false, rosterSent: false, ownRaceControl };
+        this.race = { id: command.race, epoch: 0, opponents: command.opponents, field, env, tick: 0, steps: 0, fresh: true, poses: null, sentPhase: "", sentLights: -1, sentRolling: false, rosterSent: false, ownRaceControl };
         this.epoch = command.epoch;
         this.accumulatorS = 0;
         this.reportRace(true);
@@ -256,6 +257,7 @@ export class SimRuntime {
       case "restore":
         if (this.race) {
           this.race.field.restoreField(command.poses, command.rewindS);
+          this.race.epoch = command.epoch ?? this.race.epoch;
           this.race.tick = 0;
           this.race.fresh = true;
           this.accumulatorS = 0;
@@ -372,6 +374,7 @@ export class SimRuntime {
       type: "race",
       car: this.carNumber,
       race: race.id,
+      epoch: race.epoch,
       status: field.status(),
       frozen: field.playerFrozen,
       rulesActive: field.raceRulesActive,
@@ -401,7 +404,7 @@ export class SimRuntime {
     if (race?.fresh) {
       race.fresh = false;
       race.poses = packFieldPoses(race.field.aiSlots(), race.poses);
-      event.field = { race: race.id, ageS: race.tick * SIM_TICK_S, poses: race.poses };
+      event.field = { race: race.id, epoch: race.epoch, ageS: race.tick * SIM_TICK_S, poses: race.poses };
     }
     if (withTelemetry || this.statesSent++ % TELEMETRY_EVERY_STATES === 0) {
       const telemetry: Record<string, unknown> = { ...car.telemetry };

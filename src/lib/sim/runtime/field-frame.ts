@@ -226,6 +226,11 @@ export class FieldPeers {
     }
   }
 
+  /** The poses already computed by the last `shownAt` call (idempotent within a frame and frozen while paused) */
+  current(): InterpolatedPeerState[] {
+    return this.received ? this.shown : [];
+  }
+
   /**
    * The cars on the track, carried `leadS` on from the poses as packed: the position with the car's velocity, the
    * heading with its yaw rate, plus exponentially-decayed jitter damping so late worker packets never snap backwards.

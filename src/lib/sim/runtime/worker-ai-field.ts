@@ -55,11 +55,14 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
 
   private skillLevel: number;
   private race = 0;
+  private fieldEpoch = 0;
   private latest: RaceStatus | null = null;
   private frozen = false;
   private rulesActive = false;
   private placeholderPhase: RaceStatus["phase"] = "lights";
   private fieldPeers: FieldPeers | null = null;
+  private peersDirty = false;
+  private hasShownPeers = false;
   /** The AI poses' time: the state they came with (wall clock, its lead) and how much older they are than it */
   private posesWallMs = 0;
   private posesLeadS = 0;
@@ -104,8 +107,11 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
 
   startRace(standing: boolean): void {
     this.race = ++raceNumber;
+    this.fieldEpoch = 0;
     this.latest = null;
     this.fieldPeers = null;
+    this.peersDirty = false;
+    this.hasShownPeers = false;
     this.road = null;
     this.frozen = standing;
     this.rulesActive = true;
@@ -151,19 +157,24 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
 
   private receive(event: SimEvent): void {
     if (event.type === "race") {
-      if (event.race !== this.race) return;
+      if (event.race !== this.race || (event.epoch ?? 0) !== this.fieldEpoch) return;
       this.latest = event.status;
       this.frozen = event.frozen;
       this.rulesActive = event.rulesActive;
       this.road = event.road;
-      if (event.roster) this.fieldPeers = new FieldPeers(event.roster, this.ground());
+      if (event.roster) {
+        this.fieldPeers = new FieldPeers(event.roster, this.ground());
+        this.peersDirty = true;
+        this.hasShownPeers = false;
+      }
       // The worker's weather into the page's, for the sky and the road; not across a change of conditions the worker
       // has yet to take (it would undo the player's choice)
       if (event.weather && sameConditions(event.weather.conditions, this.env.weather.conditions)) this.env.applyWeatherSync(event.weather);
       return;
     }
-    if (event.type === "state" && event.field && event.field.race === this.race) {
+    if (event.type === "state" && event.field && event.field.race === this.race && (event.field.epoch ?? 0) === this.fieldEpoch) {
       this.fieldPeers?.apply(event.field.poses);
+      if (!this.hasShownPeers) this.peersDirty = true;
       this.posesWallMs = event.wallMs;
       this.posesLeadS = event.leadS + event.field.ageS;
     }
@@ -207,6 +218,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
     this.frameDtS = resumed || gapMs <= 0 ? 0 : Math.min(gapMs / 1000, 0.1);
     this.lastUpdateMs = now;
     this.leadS = resumed ? 0 : THREE.MathUtils.clamp((now - this.posesWallMs) / 1000 + this.posesLeadS, 0, MAX_RENDER_LEAD_S);
+    this.peersDirty = true;
     if (this.lockAidsInYellow !== this.sentLockAids) {
       this.sentLockAids = this.lockAidsInYellow;
       this.link.post({ type: "race", op: "rules", lockAidsInYellow: this.lockAidsInYellow });
@@ -243,7 +255,13 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   }
 
   peers(): InterpolatedPeerState[] {
-    return this.fieldPeers ? this.fieldPeers.shownAt(this.leadS, this.frameDtS) : [];
+    if (!this.fieldPeers) return [];
+    if (this.peersDirty) {
+      this.peersDirty = false;
+      this.hasShownPeers = true;
+      return this.fieldPeers.shownAt(this.leadS, this.frameDtS);
+    }
+    return this.fieldPeers.current();
   }
 
   sims(): readonly SimulatorCar[] {
@@ -269,9 +287,12 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   /** Rewinds AI cars in the worker to their Flashback poses and updates the page's peer buffer immediately */
   restoreField(poses: readonly FieldCarRestorePose[], rewindS: number): void {
     if (!this.race || this.phase !== "racing") return;
+    const epoch = ++this.fieldEpoch;
     this.leadS = 0;
+    this.frameDtS = 0;
+    this.peersDirty = true;
     this.fieldPeers?.restorePoses(poses);
-    this.link.post({ type: "race", op: "restore", poses: poses.map((p) => ({ ...p })), rewindS });
+    this.link.post({ type: "race", op: "restore", poses: poses.map((p) => ({ ...p })), rewindS, epoch });
   }
 
   /** The session has left the race: the worker drops it, and its car drives on alone */
