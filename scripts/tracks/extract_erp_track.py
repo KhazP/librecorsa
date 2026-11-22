@@ -1095,13 +1095,13 @@ def main():
     # The credit the index already has for this circuit wins: a rebuild must not put an older one back
     credit = {
         "title": "Qiddiya Speed Park",
-        "author": "Maxim & Zhenix (Quaresma)",
+        "author": "Maxim555 (circuit) & Zhenix (scenery)",
         "authorUrl": "https://www.overtake.gg/members/maxim555king.1524527/",
         "url": "https://www.overtake.gg/members/maxim555king.1524527/",
         "short": None,
         "license": "Used with permission",
         "licenseUrl": "https://www.overtake.gg/members/maxim555king.1524527/",
-        "note": "Original Assetto Corsa circuit by Maxim, F1 25 conversion by Zhenix (Quaresma). Both used with permission.",
+        "note": "Circuit by Maxim555, scenery by Zhenix (Quaresma) from his F1 25 version. Both used with permission.",
     }
     index_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                               "public", "tracks", "index.json")

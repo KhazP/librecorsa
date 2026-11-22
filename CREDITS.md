@@ -181,7 +181,7 @@ Each circuit below is created by **LilSki** ([https://www.overtake.gg/members/li
 
 #### Qiddiya Speed Park (`public/tracks/qiddiya/`)
 
-* `"Qiddiya Speed Park"` (`qiddiya`): original Assetto Corsa circuit by **[Maxim](https://www.overtake.gg/members/maxim555king.1524527/)**, F1 25 conversion by **Zhenix (Quaresma)** — both used with permission. Extracted from the Ego ERPK archive (`scripts/tracks/extract_erp_track.py`) and built with `scripts/tracks/build_blender_track.py` with third-party sponsor billboards stripped and custom night lighting added.
+* `"Qiddiya Speed Park"` (`qiddiya`): circuit by **[Maxim555](https://www.overtake.gg/members/maxim555king.1524527/)** (originally made for Assetto Corsa), scenery by **Zhenix (Quaresma)** from his F1 25 version. Both used with permission. Extracted from the Ego ERPK archive (`scripts/tracks/extract_erp_track.py`) and built with `scripts/tracks/build_blender_track.py` with third-party sponsor billboards stripped and custom night lighting added.
 
 #### Istanbul Park (`public/tracks/istanbul_park/`)
 

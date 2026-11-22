@@ -728,13 +728,13 @@
     "dataUrl": "/tracks/qiddiya/track_data.json",
     "credit": {
       "title": "Qiddiya Speed Park",
-      "author": "Maxim & Zhenix (Quaresma)",
+      "author": "Maxim555 (circuit) & Zhenix (scenery)",
       "authorUrl": "https://www.overtake.gg/members/maxim555king.1524527/",
       "url": "https://www.overtake.gg/members/maxim555king.1524527/",
       "short": null,
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/members/maxim555king.1524527/",
-      "note": "Original Assetto Corsa circuit by Maxim, F1 25 conversion by Zhenix (Quaresma). Both used with permission."
+      "note": "Circuit by Maxim555, scenery by Zhenix (Quaresma) from his F1 25 version. Both used with permission."
     },
     "quality": "sim",
     "defaultTimeOfDay": "night",
