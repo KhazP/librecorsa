@@ -1,5 +1,6 @@
 /**
- * Automatic quality (src/lib/render/adaptive-quality.ts): the ladder each preset steps down (and its floor), when a
+ * Automatic quality (src/lib/render/adaptive-quality.ts): the ladder each preset steps down (and its floor, the
+ * player's Lowest resolution: respected, 100% never lowering the resolution, the default as before), when a
  * second counts as slow (the 90th percentile over 1.3 x the budget, i.e. more than one frame in ten missing a 60 Hz
  * vsync), three slow seconds per step, the grace periods, the frame budget under the 30 fps cap and iOS Low Power Mode,
  * and the hysteresis: never back up within a session, one rung better at the next.
@@ -13,14 +14,17 @@ import {
   ladderFor,
   loweredSummary,
   percentile,
+  pixelRatioCap,
   planAt,
   presetPlan,
   QualityGovernor,
   rememberLevel,
   RENDER_SCALE_FLOOR,
+  sharpLowStepAllowed,
   STEP_DOWN,
   type GovernorEvent,
   type GraphicsQuality,
+  type PlanOptions,
 } from "../src/lib/render/adaptive-quality";
 
 let failed = 0;
@@ -102,6 +106,131 @@ check(
     planAt("low", 1, 3, { sharpLow: true }).sharpLow === false,
   ladderFor("low", 1, { sharpLow: true }).map((r) => r.id).join(",")
 );
+
+// --- The player's Lowest resolution (PlanOptions.minScale) ---
+{
+  const QUALITIES = ["low", "medium", "high"] as const;
+  const SCALES = Array.from({ length: 21 }, (_, i) => 0.5 + i * 0.05);
+  const FLOORS = [0.6, 0.7, 0.8, 0.9, 1];
+  const BASES: PlanOptions[] = [{}, { touch: true }, { sharpLow: true }, { touch: true, sharpLow: true }, { sharpen: true }];
+  type Case = { q: GraphicsQuality; s: number; opts: PlanOptions };
+  const cases = (floors: readonly (number | undefined)[]): Case[] =>
+    QUALITIES.flatMap((q) => SCALES.flatMap((s) => BASES.flatMap((b) => floors.map((minScale) => ({ q, s, opts: minScale === undefined ? b : { ...b, minScale } })))));
+  const idsOf = (c: Case) => ladderFor(c.q, c.s, c.opts).map((r) => r.id).join(",");
+  /** The image's resolution in Render resolution units: the render scale times the change of the pixel-ratio cap */
+  const shown = (c: Case, level: number) => {
+    const p = planAt(c.q, c.s, level, c.opts);
+    return (p.renderScale * pixelRatioCap(p)) / pixelRatioCap(presetPlan(c.q, c.s, c.opts));
+  };
+
+  check("The default Lowest resolution is the old fixed floor (60%)", RENDER_SCALE_FLOOR === 0.6);
+  const defaults = cases([undefined]);
+  check(
+    "Default unchanged: no Lowest resolution given = 60%, every preset, scale, touch and Sharp Low (ladders, plans, summaries)",
+    defaults.every((c) => {
+      const explicit: Case = { ...c, opts: { ...c.opts, minScale: 0.6 } };
+      return (
+        idsOf(c) === idsOf(explicit) &&
+        [0, 1, 2, 3, 4, 5, 6].every(
+          (l) =>
+            JSON.stringify(planAt(c.q, c.s, l, c.opts)) === JSON.stringify(planAt(c.q, c.s, l, explicit.opts)) &&
+            loweredSummary(c.q, c.s, l, c.opts) === loweredSummary(c.q, c.s, l, explicit.opts)
+        )
+      );
+    }),
+    `${defaults.length} cases`
+  );
+  const all = cases(FLOORS);
+  check(
+    "Floor respected: no level takes the render scale under the Lowest resolution (or the player's own, when lower)",
+    all.every((c) => [0, 1, 2, 3, 4, 5, 6, 99].every((l) => planAt(c.q, c.s, l, c.opts).renderScale >= Math.min(c.s, c.opts.minScale!) - 1e-9)),
+    `${all.length} cases`
+  );
+  check(
+    "From 70% up the floor holds for the image too (Sharp Low off, a two-thirds drop, is not taken under it)",
+    all
+      .filter((c) => c.opts.minScale! >= 0.7)
+      .every((c) => [0, 1, 2, 3, 4, 5, 6, 99].every((l) => shown(c, l) >= Math.min(c.s, c.opts.minScale!) - 1e-9))
+  );
+  const atFull = all.filter((c) => c.opts.minScale === 1 && c.s <= 1 + 1e-9);
+  check(
+    "100% never lowers the resolution: no resolution or Sharp Low rung, the image as chosen at every level",
+    atFull.every((c) => !/res85|res70|sharp/.test(idsOf(c)) && [1, 2, 3, 4, 5, 6, 99].every((l) => Math.abs(shown(c, l) - c.s) < 1e-9)),
+    `${atFull.length} cases`
+  );
+  check(
+    "...and only drops effects: Medium/High keep reflections, MSAA (or bloom on touch) and shadows",
+    ladderFor("medium", 1, { minScale: 1 }).map((r) => r.id).join(",") === "reflections,msaa,shadows" &&
+      ladderFor("high", 1, { minScale: 1 }).map((r) => r.id).join(",") === "reflections,msaa,shadows" &&
+      ladderFor("medium", 1, { touch: true, minScale: 1 }).map((r) => r.id).join(",") === "reflections,shadows" &&
+      ladderFor("high", 1, { touch: true, minScale: 1 }).map((r) => r.id).join(",") === "reflections,msaa,shadows" &&
+      loweredSummary("medium", 1, 3, { touch: true, minScale: 1 }) === "car reflections off, lighter shadows",
+    ladderFor("medium", 1, { touch: true, minScale: 1 }).map((r) => r.id).join(",")
+  );
+  check(
+    "100% on Low (with or without Sharp Low) has nothing to step: an empty ladder",
+    ladderFor("low", 1, { minScale: 1 }).length === 0 && ladderFor("low", 1, { minScale: 1, sharpLow: true, touch: true }).length === 0
+  );
+  check(
+    "100% with supersampling (High at 150%) still steps down toward 100%, never under it",
+    Math.abs(planAt("high", 1.5, 1, { minScale: 1 }).renderScale - 1.275) < 1e-9 && Math.abs(planAt("high", 1.5, 99, { minScale: 1 }).renderScale - 1.05) < 1e-9
+  );
+  check(
+    "80%: the second resolution rung stops at 80%, and the summary says 80%",
+    ids("medium", 1) === ladderFor("medium", 1, { minScale: 0.8 }).map((r) => r.id).join(",") &&
+      Math.abs(planAt("medium", 1, 2, { minScale: 0.8 }).renderScale - 0.8) < 1e-9 &&
+      loweredSummary("medium", 1, 3, { minScale: 0.8 }) === "resolution 80%, car reflections off",
+    loweredSummary("medium", 1, 3, { minScale: 0.8 })
+  );
+  check(
+    "90%: one resolution rung (to 90%), then the effects",
+    ladderFor("medium", 1, { minScale: 0.9 }).map((r) => r.id).join(",") === "res85,reflections,msaa,shadows" &&
+      loweredSummary("medium", 1, 1, { minScale: 0.9 }) === "resolution 90%",
+    ladderFor("medium", 1, { minScale: 0.9 }).map((r) => r.id).join(",")
+  );
+  check(
+    "The touch ladder keeps its order under a floor: effects first, then resolution down to it",
+    ladderFor("medium", 1, { touch: true, minScale: 0.8 }).map((r) => r.id).join(",") === "reflections,shadows,res85,res70" &&
+      Math.abs(planAt("medium", 1, 99, { touch: true, minScale: 0.8 }).renderScale - 0.8) < 1e-9
+  );
+  check(
+    "Sharp Low off stays the last resort at 60% and is left off from 70% up",
+    ladderFor("low", 1, { sharpLow: true, minScale: 0.6 }).map((r) => r.id).join(",") === "res85,res70,sharp" &&
+      ladderFor("low", 1, { sharpLow: true, minScale: 0.7 }).map((r) => r.id).join(",") === "res85,res70" &&
+      ladderFor("low", 1, { sharpLow: true, minScale: 0.9 }).map((r) => r.id).join(",") === "res85" &&
+      sharpLowStepAllowed(0.6) &&
+      !sharpLowStepAllowed(0.7),
+    ladderFor("low", 1, { sharpLow: true, minScale: 0.7 }).map((r) => r.id).join(",")
+  );
+  check(
+    "The summary's resolution is the render scale the steps ended on (clamped by a floor too)",
+    all.every((c) =>
+      [1, 2, 3, 4, 5, 6].every((l) => {
+        const m = /resolution (\d+)%/.exec(loweredSummary(c.q, c.s, l, c.opts));
+        return !m || Number(m[1]) === Math.round(planAt(c.q, c.s, l, c.opts).renderScale * 100);
+      })
+    ) && loweredSummary("medium", 0.8, 2) === "resolution 60%",
+    loweredSummary("medium", 0.8, 2)
+  );
+  check(
+    "The manual Render resolution is the start of every ladder (level 0 is the preset as chosen, whatever the floor)",
+    all.every((c) => JSON.stringify(planAt(c.q, c.s, 0, c.opts)) === JSON.stringify(presetPlan(c.q, c.s, c.opts)))
+  );
+  {
+    const g = new QualityGovernor(ladderFor("low", 1, { minScale: 1 }).length);
+    const events = drive(g, 200, () => 2 * HZ60 + 5);
+    check(
+      "Nothing left to step (Low at 100%): slow frames say \"floor\" once, with no step",
+      g.floor === 0 && events.filter((e) => e.event.kind === "step").length === 0 && events.filter((e) => e.event.kind === "floor").length === 1
+    );
+    const m = new QualityGovernor(ladderFor("medium", 1, { minScale: 1 }).length);
+    const mEvents = drive(m, 200, () => 2 * HZ60 + 5);
+    check(
+      "Medium at 100%: three effect steps, then \"floor\" once",
+      mEvents.filter((e) => e.event.kind === "step").length === 3 && mEvents.filter((e) => e.event.kind === "floor").length === 1 && m.level === 3
+    );
+  }
+}
 
 // --- Percentile and budget ---
 check("Nearest-rank percentile", percentile([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0.9) === 9 && percentile([5], 0.9) === 5 && percentile([], 0.5) === 0);
@@ -274,6 +403,13 @@ check("Budget: the system's 30 Hz (iOS Low Power Mode) when it holds every page 
   check("One rung down last time: the next starts at the top", carriedLevel("medium", 1, 3000) === 0);
   rememberLevel("medium", 1, 0, 3000);
   check("Graphics changed by hand (level 0): nothing carried", carriedLevel("medium", 1, 4000) === 0);
+  rememberLevel("medium", 1, 3, 5000, { minScale: 0.8 });
+  check(
+    "A level is carried only to the same Lowest resolution (another floor is another ladder)",
+    carriedLevel("medium", 1, 6000, { minScale: 0.8 }) === 2 && carriedLevel("medium", 1, 6000, { minScale: 1 }) === 0 && carriedLevel("medium", 1, 6000) === 0
+  );
+  rememberLevel("medium", 1, 3, 7000);
+  check("No Lowest resolution given and an explicit 60% are the same choice", carriedLevel("medium", 1, 8000, { minScale: 0.6 }) === 2);
   const g = new QualityGovernor(5, 7);
   check("A carried level is clamped to the ladder", g.level === 5);
 }

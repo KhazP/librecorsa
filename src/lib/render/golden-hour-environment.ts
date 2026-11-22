@@ -18,7 +18,7 @@ import { patchShader } from "./shader-patch";
 import { PhysicalSky } from "./physical-sky";
 import { nightShareOfElevation, nightSkyGlsl, starShare } from "./night-sky";
 import { isTouchDevice } from "@/lib/input/touch-input";
-import type { RenderPlan } from "./adaptive-quality";
+import { pixelRatioCap, type RenderPlan } from "./adaptive-quality";
 import type { AerialPerspectiveEffect } from "@takram/three-atmosphere";
 import type { CloudsEffect } from "@takram/three-clouds";
 
@@ -248,7 +248,8 @@ export function rcasSharpnessForRatio(effectiveRatio: number): number {
  */
 export function applyGraphicsQuality(renderer: THREE.WebGLRenderer, postFx: PostFx, env: GoldenHourEnvironment, plan: RenderPlan): void {
   const { quality, renderScale } = plan;
-  const dprCap = quality === "low" && !plan.sharpLow ? 1 : 1.5;
+  // The automatic quality's Lowest resolution bounds `renderScale`, the multiplier on this cap (adaptive-quality.ts)
+  const dprCap = pixelRatioCap(plan);
   const nativeDpr = typeof window !== "undefined" ? Math.max(1, window.devicePixelRatio || 1) : 1;
   const pixelRatio = Math.max(0.35, Math.min(nativeDpr, dprCap) * renderScale);
   renderer.setPixelRatio(pixelRatio);
