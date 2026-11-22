@@ -4,6 +4,7 @@
  */
 import { DEFAULT_RACE_SETUP, parseRaceSetup, type RaceSetup } from "@/lib/sim/race-setup";
 import { MUSIC_TRACK_IDS } from "@/lib/audio/music-catalog";
+import { RENDER_SCALE_FLOOR } from "@/lib/render/adaptive-quality";
 import type { AssistPreset, CameraMode, CustomLiveryColors } from "@/types/f1";
 import {
   DEFAULT_KEY_BINDINGS,
@@ -312,6 +313,12 @@ export interface GraphicsSettings {
    * default on touch screens, whose phones slow down as they heat up
    */
   autoQuality: boolean;
+  /**
+   * "Lowest resolution": the lowest Render resolution automatic quality may step down to (one of
+   * AUTO_QUALITY_MIN_SCALES). At 1 it never lowers the resolution under 100% and only turns effects down. The default is
+   * the floor the step-down always had (RENDER_SCALE_FLOOR, 60%)
+   */
+  autoQualityMinScale: AutoQualityMinScale;
   /** Frames drawn per second at most: 0 = as many as the screen shows, 30 = every other frame of a 60 Hz screen */
   fpsCap: FpsCap;
   /** Keep the 1.5x pixel-ratio cap on Low instead of dropping to 1x ("Sharp Low") */
@@ -322,6 +329,15 @@ export interface GraphicsSettings {
 
 export type FpsCap = 0 | 30;
 export const FPS_CAPS: readonly FpsCap[] = [0, 30];
+
+export type AutoQualityMinScale = 0.6 | 0.7 | 0.8 | 0.9 | 1;
+export const AUTO_QUALITY_MIN_SCALES: readonly AutoQualityMinScale[] = [0.6, 0.7, 0.8, 0.9, 1];
+
+/** A saved Lowest resolution: the nearest of the choices (a number), else `fallback` */
+function parseAutoQualityMinScale(v: unknown, fallback: AutoQualityMinScale): AutoQualityMinScale {
+  if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+  return AUTO_QUALITY_MIN_SCALES.reduce((best, c) => (Math.abs(c - v) < Math.abs(best - v) ? c : best));
+}
 
 export type TouchMode = "auto" | "on" | "off";
 export type TouchLayout = "sliders" | "buttons";
@@ -454,6 +470,7 @@ export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = {
   renderScale: 1,
   driverBody: false,
   autoQuality: false,
+  autoQualityMinScale: RENDER_SCALE_FLOOR,
   fpsCap: 0,
   sharpLow: false,
   sharpen: false,
@@ -836,6 +853,7 @@ function parseGraphics(v: unknown): GraphicsSettings {
     driverBody: bool(v.driverBody, d.driverBody),
     // Saves from before these take this device's defaults
     autoQuality: bool(v.autoQuality, d.autoQuality),
+    autoQualityMinScale: parseAutoQualityMinScale(v.autoQualityMinScale, d.autoQualityMinScale),
     fpsCap: FPS_CAPS.includes(v.fpsCap as FpsCap) ? (v.fpsCap as FpsCap) : d.fpsCap,
     sharpLow: bool(v.sharpLow, d.sharpLow),
     sharpen: bool(v.sharpen, d.sharpen),
