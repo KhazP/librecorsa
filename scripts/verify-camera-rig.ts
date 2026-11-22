@@ -258,16 +258,21 @@ check('Trackside TV: the aim settles on the car at any frame rate, and does not 
         offsets.push(out.lookAt.clone().sub(pos).setY(out.lookAt.y - pos.y - 0.6));
       }
     }
-    return { offset: offsets[offsets.length - 1], wobble: Math.max(...wobbleM(times, offsets)) };
+    return { offset: Math.max(...offsets.map((o) => o.length())), wobble: Math.max(...wobbleM(times, offsets)) };
   };
   const rnd = lcg(11);
   for (const [name, dts] of [
     ['60 Hz', () => 1 / 60],
     ['144 Hz', () => 1 / 144],
     ['60 Hz with dropped frames', () => (rnd() < 0.1 ? 2 : 1) / 60],
+    // A hitch the session catches up in full (MAX_FRAME_CATCH_UP_S), once the aim has settled
+    ['60 Hz with a quarter-second hitch', (() => {
+      let n = 0;
+      return () => (++n === 120 ? 0.25 : 1 / 60);
+    })()],
   ] as const) {
     const { offset, wobble } = aimOff(dts);
-    assert.ok(offset.length() < 0.01, `${name}: aims ${offset.length().toFixed(3)} m off the car`);
+    assert.ok(offset < 0.01, `${name}: aims up to ${offset.toFixed(3)} m off the car`);
     assert.ok(wobble < 0.005, `${name}: the aim wobbles ${(wobble * 1000).toFixed(1)} mm against the car`);
   }
 });

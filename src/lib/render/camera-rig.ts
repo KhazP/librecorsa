@@ -469,7 +469,8 @@ export class TracksideBroadcastDirector {
       out.lookAt.copy(this.lead);
       this.lookVel.set(0, 0, 0);
     } else {
-      followDamped3(out.lookAt, this.lookVel, this.prevLead, this.lead, LOOK_SMOOTH_S, h);
+      // Over the whole frame time, however long: the step is exact, and the target moved over all of it
+      followDamped3(out.lookAt, this.lookVel, this.prevLead, this.lead, LOOK_SMOOTH_S, dt);
     }
     this.prevLead.copy(this.lead);
 
@@ -928,9 +929,9 @@ export class CameraRig {
       camera.updateProjectionMatrix();
     } else if (mode === "tv_side") {
       // Trackside broadcast: telephoto spline cameras that pan with the car and zoom in over kerbs. The dolly follows the
-      // car where it is drawn this frame. The physics' lap distance is from its last state, a few milliseconds older than
-      // the drawn car (3 to 15 ms in a worker race) and by a different amount each frame: a dolly placed from it stepped
-      // back and forth under the car, and the long lens turned that into the whole shot shaking (#160)
+      // car where it is drawn this frame. The physics' lap distance is from its last state, which in a worker race is up
+      // to ~15 ms off the drawn car and by a different amount each frame: a dolly placed from it stepped back and forth
+      // under the car, and the long lens turned that into the whole shot shaking (#160)
       const track = this.track;
       const drawnS = track.projectWorldToTrackInto
         ? track.projectWorldToTrackInto(renderCarPos.x, renderCarPos.z, this.drawnOnLap, physics.sMeters).s
