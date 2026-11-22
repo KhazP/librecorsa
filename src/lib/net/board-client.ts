@@ -303,3 +303,62 @@ export const formatCount = (n: number): string => n.toLocaleString("en-US");
 export function driverNameKey(name: string): string {
   return name.replace(/^ +| +$/g, "").replace(/[ \t\n\r\f\v]+/g, " ").toLowerCase();
 }
+
+/** Browser storage key for the player's saved online leaderboard filter toggles */
+export const BOARD_FILTER_PREFS_KEY = "librecorsa.boardFilters";
+
+/** Saved toggle state for OnlineBoard filters (unfiltered by default) */
+export interface BoardFilterPrefs {
+  noAssists: boolean;
+  fullRealism: boolean;
+  wetOnly: boolean;
+}
+
+export const DEFAULT_BOARD_FILTER_PREFS: Readonly<BoardFilterPrefs> = {
+  noAssists: false,
+  fullRealism: false,
+  wetOnly: false,
+};
+
+/** Validates a raw stored filter object; malformed or missing fields fall back to off */
+export function parseBoardFilterPrefs(raw: unknown): BoardFilterPrefs {
+  if (!isRecord(raw)) return { ...DEFAULT_BOARD_FILTER_PREFS };
+  return {
+    noAssists: raw.noAssists === true,
+    fullRealism: raw.fullRealism === true,
+    wetOnly: raw.wetOnly === true,
+  };
+}
+
+/** Reads saved online leaderboard filters from localStorage (SSR and private-mode safe) */
+export function loadBoardFilterPrefs(): BoardFilterPrefs {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return { ...DEFAULT_BOARD_FILTER_PREFS };
+    const text = window.localStorage.getItem(BOARD_FILTER_PREFS_KEY);
+    if (!text) return { ...DEFAULT_BOARD_FILTER_PREFS };
+    return parseBoardFilterPrefs(JSON.parse(text));
+  } catch {
+    return { ...DEFAULT_BOARD_FILTER_PREFS };
+  }
+}
+
+/** Saves online leaderboard filters to localStorage (clears the key when every toggle is off) */
+export function saveBoardFilterPrefs(prefs: BoardFilterPrefs): void {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    if (!prefs.noAssists && !prefs.fullRealism && !prefs.wetOnly) {
+      window.localStorage.removeItem(BOARD_FILTER_PREFS_KEY);
+    } else {
+      window.localStorage.setItem(
+        BOARD_FILTER_PREFS_KEY,
+        JSON.stringify({
+          noAssists: prefs.noAssists,
+          fullRealism: prefs.fullRealism,
+          wetOnly: prefs.wetOnly,
+        }),
+      );
+    }
+  } catch {
+    // Storage unavailable or quota exceeded
+  }
+}

@@ -15,14 +15,18 @@ import type { VehicleModelId } from "@/types/f1";
 import { boardChoiceOf, boardChoices, PHYSICS_VERSION, physicsVersionLabel, revisionOnBoard, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import {
   ALL_CARS,
+  BOARD_FILTER_PREFS_KEY,
   BOARD_PAGE_SIZE,
   boardLabel,
   driverNameKey,
   fetchBoardPage,
   fetchCircuitTotals,
   formatCount,
+  loadBoardFilterPrefs,
+  saveBoardFilterPrefs,
   type BoardCar,
   type BoardFilter,
+  type BoardFilterPrefs,
   type BoardPage,
   type CircuitTotals,
 } from "@/lib/net/board-client";
@@ -161,13 +165,31 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
   const car: BoardCar = event ? event.vehicle : myCar ? (scope === "mine" ? myCar.vehicle : ALL_CARS) : picked;
   const eventId = event?.id ?? "";
 
-  // Filters (none on a challenge's board: its rules are fixed)
-  const [noAssistsPick, setNoAssists] = useState(false);
-  const [fullRealismPick, setFullRealism] = useState(false);
-  const [wetOnlyPick, setWetOnly] = useState(false);
-  const noAssists = !event && noAssistsPick;
-  const fullRealism = !event && fullRealismPick;
-  const wetOnly = !event && wetOnlyPick;
+  // Filters (none on a challenge's board: its rules are fixed); choices persist in localStorage
+  const [filterPrefs, setFilterPrefs] = useState<BoardFilterPrefs>(() => loadBoardFilterPrefs());
+  const filterDirtyRef = useRef(false);
+  const updateFilterPref = (patch: Partial<BoardFilterPrefs>) => {
+    filterDirtyRef.current = true;
+    setFilterPrefs((prev) => ({ ...prev, ...patch }));
+  };
+  useEffect(() => {
+    if (!filterDirtyRef.current) return;
+    filterDirtyRef.current = false;
+    saveBoardFilterPrefs(filterPrefs);
+  }, [filterPrefs]);
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === BOARD_FILTER_PREFS_KEY || e.key === null) {
+        filterDirtyRef.current = false;
+        setFilterPrefs(loadBoardFilterPrefs());
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+  const noAssists = !event && filterPrefs.noAssists;
+  const fullRealism = !event && filterPrefs.fullRealism;
+  const wetOnly = !event && filterPrefs.wetOnly;
 
   // The board read: the caller's pick, else the one picked here, else the one laps go on now; a pick is held by its id
   // and found again on each circuit. A challenge week that ended with no laps on the current board but laps on an older
@@ -300,9 +322,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
   });
 
   const clearFilters = () => {
-    setNoAssists(false);
-    setFullRealism(false);
-    setWetOnly(false);
+    updateFilterPref({ noAssists: false, fullRealism: false, wetOnly: false });
   };
 
   const ghostsHere = Boolean(onRaceGhost) && circuit === ghostCircuit;
@@ -436,13 +456,13 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
       {event ? null : (
         <Disclosure moreLabel={filtersOn ? `Filters · ${filtersOn} on` : "Filters"} lessLabel="Hide filters">
           <SettingRow label="No assists">
-            <Toggle checked={noAssists} onChange={setNoAssists} />
+            <Toggle checked={noAssists} onChange={(v) => updateFilterPref({ noAssists: v })} />
           </SettingRow>
           <SettingRow label="Full realism">
-            <Toggle checked={fullRealism} onChange={setFullRealism} />
+            <Toggle checked={fullRealism} onChange={(v) => updateFilterPref({ fullRealism: v })} />
           </SettingRow>
           <SettingRow label="Wet laps">
-            <Toggle checked={wetOnly} onChange={setWetOnly} />
+            <Toggle checked={wetOnly} onChange={(v) => updateFilterPref({ wetOnly: v })} />
           </SettingRow>
         </Disclosure>
       )}

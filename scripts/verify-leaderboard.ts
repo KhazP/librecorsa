@@ -32,6 +32,12 @@ import {
   type LapRecording,
 } from '../src/lib/sim/lap-types';
 import { CIRCUIT_BOARD_RESETS, type CircuitBoardReset } from '../src/lib/circuit-board-resets';
+import {
+  BOARD_FILTER_PREFS_KEY,
+  loadBoardFilterPrefs,
+  parseBoardFilterPrefs,
+  saveBoardFilterPrefs,
+} from '../src/lib/net/board-client';
 import { VEHICLE_MODEL_IDS } from '../src/types/f1';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -831,6 +837,47 @@ async function main(): Promise<void> {
     const oldDeps: BoardDeps = { db: fakeD1(pre0009), ghosts: fakeR2(), eventRule: challengeProblem, now: () => nowMs };
     const oldPost = await submitLap(oldDeps, new Request('https://librecorsa.test/api/laps', { method: 'POST', body: JSON.stringify({ rec: withSetup, driverKey: KEY_A }), headers: { 'CF-Connecting-IP': '10.10.1.1' } }));
     check('setup: pre-0009 schema without has_setup column still stores lap cleanly', oldPost.status === 200);
+  }
+
+  {
+    // Saved online leaderboard filter toggles (#156)
+    const parsedBad = parseBoardFilterPrefs({ noAssists: 'yes', fullRealism: 1, wetOnly: true });
+    check(
+      'board filters: strict boolean parsing rejects non-boolean values',
+      !parsedBad.noAssists && !parsedBad.fullRealism && parsedBad.wetOnly,
+    );
+    const parsedNull = parseBoardFilterPrefs(null);
+    check(
+      'board filters: malformed input defaults all toggles off',
+      !parsedNull.noAssists && !parsedNull.fullRealism && !parsedNull.wetOnly,
+    );
+    const store = new Map<string, string>();
+    const prevWindow = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = {
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => { store.set(k, v); },
+        removeItem: (k: string) => { store.delete(k); },
+      },
+    };
+    try {
+      const initial = loadBoardFilterPrefs();
+      check('board filters: empty storage defaults to unfiltered', !initial.noAssists && !initial.fullRealism && !initial.wetOnly);
+      saveBoardFilterPrefs({ noAssists: true, fullRealism: true, wetOnly: false });
+      const loaded = loadBoardFilterPrefs();
+      check(
+        'board filters: saved toggles round-trip through localStorage',
+        loaded.noAssists && loaded.fullRealism && !loaded.wetOnly && store.has(BOARD_FILTER_PREFS_KEY),
+      );
+      store.set(BOARD_FILTER_PREFS_KEY, '{corrupt json');
+      const recovered = loadBoardFilterPrefs();
+      check('board filters: corrupt storage falls back cleanly to unfiltered', !recovered.noAssists && !recovered.fullRealism && !recovered.wetOnly);
+      saveBoardFilterPrefs({ noAssists: false, fullRealism: false, wetOnly: false });
+      check('board filters: clearing all toggles removes the storage key', !store.has(BOARD_FILTER_PREFS_KEY));
+    } finally {
+      if (prevWindow === undefined) delete (globalThis as { window?: unknown }).window;
+      else (globalThis as { window?: unknown }).window = prevWindow;
+    }
   }
 
   if (failures.length > 0) {
