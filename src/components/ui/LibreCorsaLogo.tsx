@@ -187,6 +187,29 @@ export const LibreCorsaMark: React.FC<LibreCorsaMarkProps> = ({
   );
 };
 
+/**
+ * The tagline as unbreakable word groups, so a narrow screen wraps it between words only: a number keeps its unit
+ * ("500 Hz") and a hyphenated word stays whole ("Open-source")
+ */
+const Tagline = ({ text }: { text: string }) => {
+  const groups = text.split(" ").reduce<string[]>((acc, word) => {
+    const prev = acc[acc.length - 1];
+    if (prev !== undefined && /^\d[\d.,]*$/.test(prev)) acc[acc.length - 1] = `${prev} ${word}`;
+    else acc.push(word);
+    return acc;
+  }, []);
+  return (
+    <>
+      {groups.map((g, i) => (
+        <React.Fragment key={i}>
+          {i > 0 ? " " : null}
+          <span className="whitespace-nowrap">{g}</span>
+        </React.Fragment>
+      ))}
+    </>
+  );
+};
+
 /** LIBRECORSA as outlines (Orbitron 900, slanted 12 degrees): one em tall, so the text size class sizes it */
 const Wordmark = ({ tone }: { tone: LogoTone }) => {
   const t = TONES[tone];
@@ -230,7 +253,9 @@ export const LibreCorsaLogo: React.FC<LibreCorsaLogoProps> = ({
                 <span key={i} className={`h-[5px] w-4 ${b}`} />
               ))}
             </span>
-            <span className={`font-lc-mono text-[11px] font-bold tracking-[0.24em] text-balance uppercase ${t.tagline}`}>{subtitle}</span>
+            <span className={`font-lc-mono text-[11px] font-bold tracking-[0.24em] text-balance uppercase ${t.tagline}`}>
+              <Tagline text={subtitle} />
+            </span>
           </div>
         ) : null}
       </div>
