@@ -70,6 +70,7 @@ import {
   type HidDeviceLike,
 } from '../src/lib/input/webhid-ffb';
 import {
+  AUTO_QUALITY_MIN_SCALES,
   DEFAULT_KEYBOARD_TUNING,
   DEFAULT_PAD_TUNING,
   DEFAULT_PLAYER_SETTINGS,
@@ -91,6 +92,7 @@ import {
   SETTINGS_STORAGE_KEY,
   toggleLibraryFavorite,
 } from '../src/lib/settings/player-settings';
+import { RENDER_SCALE_FLOOR } from '../src/lib/render/adaptive-quality';
 import {
   ASSIST_PRESETS,
   ASSIST_SLIDERS,
@@ -998,6 +1000,30 @@ check('a touch screen starts on Medium graphics until the player picks; a saved 
   }
   assert.equal(defaultGraphicsSettings().quality, 'high', 'no touch screen (or no window): High');
   assert.equal(defaultGraphicsSettings().autoQuality, false, 'no touch screen: automatic quality off');
+});
+check('automatic quality\'s Lowest resolution: 60% by default (the old floor), saved choices kept, odd values snapped', () => {
+  const g = globalThis as unknown as { window?: unknown };
+  g.window = { matchMedia: (q: string) => ({ matches: q === '(pointer: coarse)' }) };
+  try {
+    assert.equal(defaultGraphicsSettings().autoQualityMinScale, RENDER_SCALE_FLOOR, 'touch screens: the old floor');
+    assert.equal(parsePlayerSettings({ graphics: { quality: 'medium' } }).graphics.autoQualityMinScale, 0.6, 'a touch save from before it');
+  } finally {
+    delete g.window;
+  }
+  assert.equal(RENDER_SCALE_FLOOR, 0.6);
+  assert.equal(DEFAULT_PLAYER_SETTINGS.graphics.autoQualityMinScale, 0.6, 'the prerendered default');
+  assert.equal(defaultGraphicsSettings().autoQualityMinScale, 0.6, 'desktops: the old floor');
+  assert.equal(parsePlayerSettings({}).graphics.autoQualityMinScale, 0.6, 'a save without graphics');
+  assert.equal(parsePlayerSettings({ graphics: { quality: 'high', autoQuality: true } }).graphics.autoQualityMinScale, 0.6, 'a save from before it');
+  for (const v of AUTO_QUALITY_MIN_SCALES) {
+    const kept = parsePlayerSettings(JSON.parse(JSON.stringify({ graphics: { autoQualityMinScale: v } }))).graphics.autoQualityMinScale;
+    assert.equal(kept, v, `a saved ${v * 100}% is kept`);
+  }
+  assert.equal(parsePlayerSettings({ graphics: { autoQualityMinScale: 0.72 } }).graphics.autoQualityMinScale, 0.7, '72% snaps to 70%');
+  assert.equal(parsePlayerSettings({ graphics: { autoQualityMinScale: 0.3 } }).graphics.autoQualityMinScale, 0.6, 'under the range: 60%');
+  assert.equal(parsePlayerSettings({ graphics: { autoQualityMinScale: 4 } }).graphics.autoQualityMinScale, 1, 'over the range: 100%');
+  assert.equal(parsePlayerSettings({ graphics: { autoQualityMinScale: '0.8' } }).graphics.autoQualityMinScale, 0.6, 'not a number: the default');
+  assert.equal(parsePlayerSettings({ graphics: { autoQualityMinScale: Number.NaN } }).graphics.autoQualityMinScale, 0.6, 'NaN: the default');
 });
 
 check('direction test: right then left (left first inverted), zero in the gap and after', () => {

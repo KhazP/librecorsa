@@ -1655,7 +1655,11 @@ export class DriveSession {
       touch: touchGraphics,
       sharpLow: g.sharpLow,
       sharpen: g.sharpen,
+      // The player's Lowest resolution: the resolution rungs stop there (the effects rungs still run)
+      minScale: g.autoQualityMinScale,
     });
+    const autoQualityText = (g: PlayerSettings["graphics"]) =>
+      g.autoQuality ? `auto quality on (lowest ${Math.round(g.autoQualityMinScale * 100)}%)` : "auto quality off";
     const ladderLength = (g: PlayerSettings["graphics"]) => ladderFor(g.quality, g.renderScale, planOpts(g)).length;
     const startLevel = settings.graphics.autoQuality
       ? carriedLevel(settings.graphics.quality, settings.graphics.renderScale, performance.now(), planOpts(settings.graphics))
@@ -1676,7 +1680,7 @@ export class DriveSession {
         touchGraphics ? "phone profile" : "desktop profile",
         ...(g.quality === "low" && g.sharpLow ? ["Sharp Low"] : []),
         `sharpen ${g.sharpen ? "on" : "off"}`,
-        `auto quality ${g.autoQuality ? "on" : "off"}`,
+        autoQualityText(g),
         g.fpsCap ? `${g.fpsCap} fps cap` : "no fps cap",
         `lowered: ${lowered ?? "nothing"}`,
         `pixel ratio ${renderer.getPixelRatio().toFixed(2)}`,
@@ -1758,13 +1762,19 @@ export class DriveSession {
       }
       const g = next.graphics;
       const pg = prev.graphics;
-      if (g.quality !== pg.quality || g.renderScale !== pg.renderScale || g.autoQuality !== pg.autoQuality || g.sharpLow !== pg.sharpLow) {
+      if (
+        g.quality !== pg.quality ||
+        g.renderScale !== pg.renderScale ||
+        g.autoQuality !== pg.autoQuality ||
+        g.sharpLow !== pg.sharpLow ||
+        g.autoQualityMinScale !== pg.autoQualityMinScale
+      ) {
         // The player's own choice: the automatic steps start over from it
         governor.reset(ladderLength(g), 0);
         rememberLevel(g.quality, g.renderScale, 0, performance.now(), planOpts(g));
         this.applyGraphics();
         if (g.quality !== pg.quality) syncHeadlightSpots();
-        sessionPerf?.note(performance.now(), `graphics set to ${g.quality}, render ${Math.round(g.renderScale * 100)}%, auto quality ${g.autoQuality ? "on" : "off"}`);
+        sessionPerf?.note(performance.now(), `graphics set to ${g.quality}, render ${Math.round(g.renderScale * 100)}%, ${autoQualityText(g)}`);
       } else if (g.sharpen !== pg.sharpen) {
         this.applyGraphics();
       }

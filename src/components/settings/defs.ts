@@ -2,7 +2,9 @@ import { keyLabel, PAD_PEDALS, pedalsOnTriggers } from "@/lib/input/bindings";
 import { PAD_SENSITIVITY } from "@/lib/input/device-input";
 import { isTouchDevice, requestTiltPermission } from "@/lib/input/touch-input";
 import { CAMERA_MODES, DRIVING_CAMERA_MODES } from "@/lib/render/camera-modes";
+import { RENDER_SCALE_FLOOR, sharpLowStepAllowed } from "@/lib/render/adaptive-quality";
 import {
+  AUTO_QUALITY_MIN_SCALES,
   COCKPIT_FOV_MAX_DEG,
   COCKPIT_FOV_MIN_DEG,
   DEFAULT_PLAYER_SETTINGS,
@@ -531,7 +533,11 @@ export const quality = choice("tiles", {
 export const sharpLow = toggle({
   id: "sharpLow",
   label: "Sharp Low",
-  hint: "Draws Low at Medium resolution; auto quality can turn it off",
+  // From a Lowest resolution of 70% up, automatic quality keeps it on (adaptive-quality.ts, SHARP_LOW_OFF_SCALE)
+  hint: (env) =>
+    sharpLowStepAllowed(env.settings.graphics.autoQualityMinScale)
+      ? "Draws Low at Medium resolution; auto quality can turn it off"
+      : "Draws Low at Medium resolution",
   off: (env) => (env.settings.graphics.quality === "low" ? null : "Needs Quality set to Low"),
   ...graphics("sharpLow"),
 });
@@ -572,6 +578,31 @@ export const autoQuality = toggle({
   label: "Automatic quality",
   hint: (env) => (env.autoQualityLowered ? `Scaled down: ${env.autoQualityLowered}` : "Steps down on sustained frame drops"),
   ...graphics("autoQuality"),
+});
+
+/**
+ * The lowest Render resolution automatic quality may step down to (adaptive-quality.ts): the same units as Render
+ * resolution, so at 100% (with Render resolution at 100% or less) only the effects step down
+ */
+export const autoQualityMinScale = choice("select", {
+  id: "autoQualityMinScale",
+  label: "Lowest resolution",
+  advanced: true,
+  hint: (env) => {
+    const g = env.settings.graphics;
+    if (g.autoQualityMinScale < 1 || g.renderScale > 1) return "Automatic quality never drops Render resolution below this";
+    // Low has no effects on its ladder: at 100% nothing is left to step down
+    return g.quality === "low" ? "Resolution stays put; Low has no effects to drop" : "Resolution stays put; only effects step down";
+  },
+  off: (env) => (env.settings.graphics.autoQuality ? null : "Needs Automatic quality on"),
+  options: AUTO_QUALITY_MIN_SCALES.map((v) => ({ id: v.toFixed(1), label: pct(v) })),
+  read: (env) => env.settings.graphics.autoQualityMinScale.toFixed(1),
+  write: (env, id) =>
+    env.update((s) => ({
+      ...s,
+      graphics: { ...s.graphics, autoQualityMinScale: AUTO_QUALITY_MIN_SCALES.find((v) => v.toFixed(1) === id) ?? RENDER_SCALE_FLOOR },
+    })),
+  initial: () => defaultPlayerSettings().graphics.autoQualityMinScale.toFixed(1),
 });
 
 export const driverBody = toggle({
