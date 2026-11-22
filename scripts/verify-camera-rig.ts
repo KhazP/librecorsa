@@ -145,6 +145,68 @@ check('the helicopter glides behind a moving car, and starts over after a reset 
   assert.ok(camera.position.distanceTo(spot(pos)) < 1e-6, 'starts over after a jump');
 });
 
+/** Deterministic [0, 1) noise for the frame-timing checks */
+function lcg(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+/** How far (m) each frame's value is off the line between its neighbours, interpolated in time; frames next to a jump of over `cutM` left out */
+function wobbleM(times: number[], points: THREE.Vector3[], cutM = 3): number[] {
+  const out: number[] = [];
+  const mid = new THREE.Vector3();
+  for (let i = 1; i + 1 < points.length; i++) {
+    const [a, b, c] = [points[i - 1], points[i], points[i + 1]];
+    if (a.distanceTo(b) > cutM || b.distanceTo(c) > cutM) continue;
+    mid.copy(a).lerp(c, (times[i] - times[i - 1]) / (times[i + 1] - times[i - 1]));
+    out.push(b.distanceTo(mid));
+  }
+  return out;
+}
+const p99 = (xs: number[]) => [...xs].sort((x, y) => x - y)[Math.floor(xs.length * 0.99)];
+
+check('Trackside TV: the dolly glides with the car as drawn, however stale its lap distance (#160)', () => {
+  // The car is drawn where it is at the frame's time (renderCarPos); its lap distance comes from the last physics state,
+  // a few milliseconds old at a frame (3 to 15 ms in a worker race) and by a different amount each frame
+  const speed = 65;
+  const drive = (staleS: (i: number) => number, hz: number) => {
+    const { camera, rig, car, frame } = setup();
+    const times: number[] = [];
+    const cams: THREE.Vector3[] = [];
+    const pos = new THREE.Vector3();
+    const vel = new THREE.Vector3();
+    const back = new THREE.Vector3();
+    const at = (s: number, out: THREE.Vector3) => {
+      const smp = track.getSampleAtDistance(s);
+      // Off the centreline by a few metres, changing as a racing line does
+      return out.copy(smp.position).addScaledVector(smp.binormal, 4 * Math.sin(s / 70));
+    };
+    for (let i = 0; i < hz * 12; i++) {
+      const t = i / hz;
+      const s = 300 + speed * t;
+      at(s, pos);
+      at(s + 0.05, vel).sub(at(s - 0.05, back)).multiplyScalar(speed / 0.1);
+      car.sMeters = (s - speed * staleS(i)) % track.totalLengthM;
+      rig.update(frame('tv_side', { dt: 1 / hz, nowMs: t * 1000, carPos: pos.clone(), carVelocity: vel.clone() }));
+      times.push(t);
+      cams.push(camera.position.clone());
+    }
+    return p99(wobbleM(times, cams).slice(Math.round(hz * 0.5)));
+  };
+  for (const hz of [144, 75]) {
+    const exact = drive(() => 0, hz);
+    const rnd = lcg(160);
+    const stale = drive(() => rnd() * 0.015, hz);
+    assert.ok(
+      stale < exact * 1.5 + 0.005,
+      `${hz} Hz: camera wobble p99 ${(stale * 1000).toFixed(1)} mm with a stale lap distance, ${(exact * 1000).toFixed(1)} mm with an exact one`
+    );
+  }
+});
+
 // ---------------------------------------------------------------------------------------------------------------
 // The title screen's aerial tour (menu-aerial.ts)
 // ---------------------------------------------------------------------------------------------------------------

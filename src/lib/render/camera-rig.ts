@@ -5,7 +5,7 @@ import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG, isChaseCameraMode } from "./cam
 import { FreeCameraController, type FreeCameraInput } from "./free-camera";
 import { clampFov } from "@/lib/settings/player-settings";
 import type { CameraMode, CarTelemetry, TrackSamplePoint } from "@/types/f1";
-import type { BuiltTrackData } from "@/lib/track-data";
+import { type BuiltTrackData, createTrackSampleBuffer, type TrackProjectionResult } from "@/lib/track-data";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import type { Lc26CameraAnchor } from "@/lib/lc26-car-model";
 import { type AerialPose, MenuAerial } from "./menu-aerial";
@@ -653,6 +653,8 @@ export class CameraRig {
   };
   /** Automatic trackside broadcast cameras on dolly splines (telephoto, zooming in over kerbs) */
   private readonly tvDirector: TracksideBroadcastDirector;
+  /** Where the car as drawn is on the lap, for the TV cameras' dollies */
+  private readonly drawnOnLap: TrackProjectionResult = { sample: createTrackSampleBuffer(), s: 0, lateralOffset: 0, distSq: 0 };
   private readonly smoothedHeliPos = new THREE.Vector3();
   private readonly smoothedHeliLook = new THREE.Vector3();
   /** Where the helicopter last saw the car, and whether it starts over on its next frame (first use, reset()) */
@@ -888,11 +890,18 @@ export class CameraRig {
       camera.fov = 52;
       camera.updateProjectionMatrix();
     } else if (mode === "tv_side") {
-      // Trackside broadcast: telephoto spline cameras that pan with the car and zoom in over kerbs
+      // Trackside broadcast: telephoto spline cameras that pan with the car and zoom in over kerbs. The dolly follows the
+      // car where it is drawn this frame. The physics' lap distance is from its last state, a few milliseconds older than
+      // the drawn car (3 to 15 ms in a worker race) and by a different amount each frame: a dolly placed from it stepped
+      // back and forth under the car, and the long lens turned that into the whole shot shaking (#160)
+      const track = this.track;
+      const drawnS = track.projectWorldToTrackInto
+        ? track.projectWorldToTrackInto(renderCarPos.x, renderCarPos.z, this.drawnOnLap, physics.sMeters).s
+        : track.projectWorldToTrack(renderCarPos.x, renderCarPos.z, physics.sMeters).s;
       const tv = this.tvDirector.update(
         dtSeconds,
         renderCarPos,
-        physics.sMeters,
+        drawnS,
         f.carVelocity,
         physics.telemetry.onKerbLeft || physics.telemetry.onKerbRight
       );
