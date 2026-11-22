@@ -867,7 +867,9 @@ export class AudioBGMController {
   private fade(p: AudioParam, target: number, s: number): void {
     const ctx = this.ctx;
     if (!ctx || !Number.isFinite(target)) return;
-    if (!(s > 0.02) || typeof p.setValueCurveAtTime !== "function") return this.ramp(p, target, s);
+    if (!(s > 0.02) || typeof p.setValueCurveAtTime !== "function" || typeof p.cancelAndHoldAtTime !== "function") {
+      return this.ramp(p, target, s);
+    }
     const t = ctx.currentTime;
     const from = this.hold(p, t);
     if (!Number.isFinite(from)) return this.ramp(p, target, s);
