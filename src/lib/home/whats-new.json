@@ -1,5 +1,24 @@
 [
   {
+    "date": "2026-11-22",
+    "title": "Night driving, full-race replays, new liveries, Virtual Safety Car, and setup sharing",
+    "items": [
+      "Added night driving with per-car headlights, daytime brake lights and floodlit venue lighting, with a headlight toggle on keyboard, controller and touch alongside a HUD lamp indicator. Willow Springs (Big Willow) by Nukedrop is now open to all players with its drifting balloons and blimp overhead, every session gets its own clouds, High graphics adds aerial perspective and cloud shadows, and Istanbul Park's starting grid and lights now line up with its painted grid boxes.",
+      "Added a procedural livery painter with 11 new 2026 F1 grid liveries, 6 retro F1 liveries and a custom colour picker, 16 team liveries across the Mercedes-AMG GT3 and BMW M4 GT3, 8 LC-LMDH hypercar liveries and a Middle Gear Special for the Suzuki Liana, with per-livery car thumbnails and live hover previews (removing the unlicensed Oracle Red Bull livery). Ported sagatron918's six GT-M tyre sidewall packs across the GT3 and prototype cars.",
+      "Added full-race replays you can open from the pause menu or race results, switch focus between any car on track and scrub forward or in reverse, and brought Flashback rewind back to Practice and AI races while preserving damage, penalties and lap history and marking the rewound lap invalid for the boards.",
+      "Added Chase Close, Chase Far, Chase Low and Free camera presets, a camera picker in the pause menu and a brief HUD banner when changing views.",
+      "You can now share and import car setups with compact setup codes or JSON files in the Engineer's Garage, and laps recorded on the online boards carry their setup so you can apply another driver's tune straight from the leaderboard. Circuit cards on the home page and in the game now show your personal best, and online leaderboard filter toggles are remembered between visits.",
+      "Added Virtual Safety Car deployments with a live delta bar on the HUD, enforced blue-flag warnings and penalties while lapped AI yields cleanly, held rolling starts in formation until the leader crosses the line, and improved AI inside-line attacking and defending, autopilot race starts and braking-guide accuracy through chicanes, hills and rain.",
+      "Private multiplayer rooms now support qualifying, full race rules, any car class in the roster and changing the circuit straight from the lobby, with both room and AI race setups regrouped into Event, Race and Rules cards. Added a Weekly Challenge Hall of Fame, driver badges for podium winners and overhead player nameplates in multiplayer.",
+      "Added an optional full manual clutch with bite point, slip and engine stalls (auto-clutch stays on by default), WebHID gyro tilt steering for DualSense and DualShock 4 controllers (re-centred with the touchpad), snappier DualSense L2 and R2 trigger shifts, and a Kerbs volume slider in Settings > Audio.",
+      "Added a four-button mobile touch layout (left, right, brake, throttle) with thumb-rolling support, screen wake lock while driving, Android Game Mode and sticky immersive full-screen support, and a new Download tab and /download page with signed Windows installers and signed Android APKs.",
+      "Big frame-rate pass for busy races and mobile devices: added Sharp Low graphics and an optional sharpening pass when rendering below native resolution, lightweight AI-lite opponent physics, merged car meshes, single-draw opponent shadows, batched distant foliage, faster suspension lookups and decoupled HUD telemetry.",
+      "Sharpened the motorsport geometry across menus and HUD, replaced the home page's shifting circuit layout toggle with anchored layout and livery pickers that show counts up front and live-update car thumbnails, added class, grade and modder filters to the Cars tab, and fixed road-edge seams, crossover shadows and the Buy Me a Coffee button clipping inside the Source panel."
+    ],
+    "commits": 39,
+    "lastSha": "05eace611d57d65a398455c2dfb420b06c0fd8f5"
+  },
+  {
     "date": "2026-11-18",
     "title": "New physics for every car, fresh lap boards, the mods' own kerbs, and the Chaparral 2D",
     "items": [
