@@ -299,7 +299,7 @@ const HaloCluster: React.FC<{
           >
             {primarySpeed}
           </text>
-          {/* BOOST segmented meter, OVERTAKE pill and battery: only on a car with ERS (a car without shows DRS alone) */}
+          {/* BOOST segmented meter and battery: only on a car with ERS */}
           {hasErs ? (
             <>
           <text y="1" fill="#94a3b8" fontSize="5.8" fontWeight="800" textAnchor="middle" letterSpacing="1.2">
@@ -319,6 +319,11 @@ const HaloCluster: React.FC<{
               />
             );
           })}
+            </>
+          ) : null}
+          {/* The pill: OVERTAKE on a car with ERS; a car without shows it only while DRS is open */}
+          {hasErs || aeroOpen ? (
+            <>
           <rect
             x="-32"
             y="11"
@@ -332,6 +337,10 @@ const HaloCluster: React.FC<{
           <text y="18" fill={overtakeOn ? "#03261b" : "#a7f3d0"} fontSize="6.6" fontWeight="900" textAnchor="middle" letterSpacing="1">
             {aeroOpen ? "DRS OPEN" : "OVERTAKE"}
           </text>
+            </>
+          ) : null}
+          {hasErs ? (
+            <>
           {/* Depleting battery icon + percentage below */}
           <g transform="translate(-11, 25)">
             <rect x="0" y="0" width="20" height="8.5" rx="1.8" fill="rgba(255,255,255,0.08)" stroke="#94a3b8" strokeWidth="1" />
@@ -355,13 +364,6 @@ const HaloCluster: React.FC<{
           >
             {Math.round(ers)}%
           </text>
-            </>
-          ) : aeroOpen ? (
-            <>
-              <rect x="-32" y="11" width="64" height="10" rx="5" fill="#10b981" stroke="#34d399" strokeWidth="0.7" />
-              <text y="18" fill="#03261b" fontSize="6.6" fontWeight="900" textAnchor="middle" letterSpacing="1">
-                DRS OPEN
-              </text>
             </>
           ) : null}
         </g>
