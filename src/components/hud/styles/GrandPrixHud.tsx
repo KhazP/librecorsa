@@ -2,9 +2,9 @@
 
 /*
  * Grand Prix:
- * - Mode A (F1 / open-wheel car in tv_pod camera): F1 TV broadcast timing tower top-left, curved Halo-mounted
+ * - Mode A (open-wheel car in tv_pod camera): broadcast-style timing tower top-left, curved Halo-mounted
  *   speed/boost/ERS/brake/throttle/aero/gears cluster, and compact driver timing card bottom-left.
- * - Mode B (all other cameras or non-open-wheel cars): F1-game-style session & standings top-left, sector & delta
+ * - Mode B (all other cameras or non-open-wheel cars): session & standings top-left, sector & delta
  *   card top-right, sector-colored circuit map bottom-left, twin-circle battery/gear/speed cluster bottom-centre,
  *   and MFD/setup readout bottom-right.
  */
@@ -110,7 +110,7 @@ function activeSectorColor(
 }
 
 /* ============================================================================
- * MODE A: F1 TV HALO HUD (open-wheel car + tv_pod camera)
+ * MODE A: HALO HUD (open-wheel car + tv_pod camera)
  * ============================================================================ */
 
 const HaloCluster: React.FC<{
@@ -454,7 +454,7 @@ const HaloCluster: React.FC<{
 };
 
 /* ============================================================================
- * MODE B: STANDARD / IMAGE 2 CLUSTER (sculpted dual-ring F1 cluster)
+ * MODE B: STANDARD CLUSTER (sculpted dual-ring cluster)
  * ============================================================================ */
 
 const SculptedCluster: React.FC<{
@@ -663,7 +663,7 @@ const SculptedCluster: React.FC<{
 };
 
 /* ============================================================================
- * MODE B: F1-26 TYRE WEAR & CAR DIAGRAM CARD
+ * MODE B: TYRE WEAR & CAR DIAGRAM CARD
  * ============================================================================ */
 
 const TyreWearCard: React.FC<{
@@ -680,7 +680,7 @@ const TyreWearCard: React.FC<{
   return (
     <div className={`${palette.plate} w-[210px] overflow-hidden rounded-[4px] border-t-2 border-t-[#e10600]`}>
       <svg viewBox="0 0 196 98" className="block w-full bg-[rgb(7_9_14/0.9)]" aria-hidden>
-        {/* Top-down simplified F1 car silhouette */}
+        {/* Top-down simplified open-wheel car silhouette */}
         <path
           d="M 86 14 L 110 14 L 112 22 L 104 24 L 106 44 L 116 54 L 114 78 L 106 86 L 90 86 L 82 78 L 80 54 L 90 44 L 92 24 L 84 22 Z"
           fill="rgba(255,255,255,0.06)"
@@ -777,7 +777,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
   const atShift = t.rpm >= revRange[1] * 0.96;
 
   // --------------------------------------------------------------------------
-  // MODE A: F1 Car + TV Pod Camera -> Halo HUD (Images 1 & 2)
+  // MODE A: open-wheel car + TV pod camera -> Halo HUD
   // --------------------------------------------------------------------------
   if (isHaloMode) {
     const standings = race?.standings ?? [];
@@ -791,7 +791,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
 
     return (
       <div className={`pointer-events-none absolute inset-0 select-none ${palette.palette}`}>
-        {/* Top-left: F1 TV Timing Tower */}
+        {/* Top-left: timing tower */}
         <div
           data-hud-avoid
           className="absolute flex flex-col items-start gap-2"
@@ -973,7 +973,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
   }
 
   // --------------------------------------------------------------------------
-  // MODE B: Standard / Image 3 HUD (other cameras or non-open-wheel cars)
+  // MODE B: Standard HUD (other cameras or non-open-wheel cars)
   // --------------------------------------------------------------------------
   const curSectors = t.sectorTimesMs;
   const bestSectors = t.bestSectorTimesMs;
@@ -1122,7 +1122,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
         />
       </div>
 
-      {/* Bottom-right: F1-26 Tyre Wear Diagram + MFD */}
+      {/* Bottom-right: tyre wear diagram + MFD */}
       {!touch ? (
         <div
           data-hud-avoid

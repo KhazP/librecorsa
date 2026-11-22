@@ -199,7 +199,7 @@
 }
 
 .skin_grand_prix {
-  /* Grand Prix: F1-game MFD styling — deep dark glass, chamfered/sharp edges, red/amber/cyan telemetry accents */
+  /* Grand Prix: deep dark glass, chamfered/sharp edges, red/amber/cyan telemetry accents */
   --tp-bg: rgb(9 12 18 / 0.92);
   --tp-bg-soft: rgb(18 23 34 / 0.9);
   --tp-bg-deep: rgb(5 7 11 / 0.94);

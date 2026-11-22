@@ -1,5 +1,5 @@
 /*
- * Grand Prix: F1 TV Halo HUD (when driving an open-wheel car in tv_pod camera) and F1-game-style standard HUD
+ * Grand Prix: Halo HUD (when driving an open-wheel car in tv_pod camera) and a standard HUD
  * (for all other cameras or car classes). Surfaces are dark translucent technical plates; semantic colours come from
  * LibreCorsa's HUD tokens so colour-blind palettes remain supported.
  */
@@ -36,7 +36,7 @@
   backdrop-filter: blur(10px);
 }
 
-/* ---- Mode A: F1 TV Top-Left Timing Tower ---- */
+/* ---- Mode A: Top-Left Timing Tower ---- */
 
 .tvTower {
   width: clamp(205px, 19vw, 248px);
@@ -292,7 +292,7 @@
   background: var(--gp-track);
 }
 
-/* ---- Mode B: Standard / Image 3 HUD ---- */
+/* ---- Mode B: Standard HUD ---- */
 
 .stdSessionCard {
   width: clamp(220px, 21vw, 276px);

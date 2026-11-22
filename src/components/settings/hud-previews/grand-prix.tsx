@@ -4,12 +4,12 @@ import { Lines, MiniTrack } from "../hud-preview";
 import palette from "../../hud/styles/grand-prix.module.css";
 
 /**
- * Grand Prix: F1 TV timing tower top-left, curved Halo speed/ERS/gear cluster in the centre,
+ * Grand Prix: timing tower top-left, curved Halo speed/ERS/gear cluster in the centre,
  * compact driver card bottom-left, and delta/sector card top-right.
  */
 export const draw: HudPreviewDraw = () => (
   <g className={palette.palette}>
-    {/* Top-left F1 TV timing tower */}
+    {/* Top-left timing tower */}
     <rect x={4} y={4} width={28} height={52} rx={2} fill="var(--gp-panel)" stroke="var(--gp-edge)" strokeWidth={0.5} />
     <rect x={4} y={4} width={28} height={7} rx={2} fill="var(--gp-panel-deep)" />
     <rect x={7} y={6.2} width={6} height={2} rx={0.5} fill="#e10600" />
