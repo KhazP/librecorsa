@@ -71,6 +71,8 @@ export interface NetworkVehiclePacket {
   race?: PeerRaceProgress;
   /** The sender judges its own car a hazard (slow, wrong way, off the track): the others pass through it */
   hz?: boolean;
+  /** The sender is flashing its headlights (absent from older clients) */
+  fl?: boolean;
 }
 
 /**
@@ -644,6 +646,7 @@ export function sanitizePacket(v: unknown): NetworkVehiclePacket | null {
     name: typeof p.name === 'string' ? clampStr(p.name, 16, 'Driver') : undefined,
     race: sanitizeRace(p.race),
     hz: p.hz === true ? true : undefined,
+    fl: p.fl === true ? true : undefined,
   };
 }
 

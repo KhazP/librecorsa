@@ -3522,6 +3522,7 @@ export class DriveSession {
                 ? { id: "practice", dist: Math.round(physics.sMeters * 10) / 10, fin: null, best: mpPracticeBestMs, cmp: physics.tireCompound }
                 : undefined,
           hz: guard?.self.flag || undefined,
+          fl: playerFlashing || undefined,
           vehicle: vehicleNow,
           trackId,
           pos: [

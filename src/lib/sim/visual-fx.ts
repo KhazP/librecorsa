@@ -168,6 +168,8 @@ export class SimVisualFxManager {
       ghostMats?: THREE.Material[];
       /** Last frame's braking state for opponent tail-light brightening */
       braking?: boolean;
+      /** The car is flashing its headlights (a remote player's flash) */
+      flash?: boolean;
       /** Current opponent mesh LOD (0 = full, 1 = simplified >48 m with 42 m exit hysteresis) */
       lod?: 0 | 1;
     }
@@ -299,10 +301,16 @@ export class SimVisualFxManager {
   public setHeadlights(on: boolean, camera?: THREE.Camera): void {
     for (const entry of this.opponentCars.values()) {
       const hl = this.rigHeadlights.get(entry.rig);
-      if (hl) hl.setEnabled(!entry.ghost && on, !entry.ghost && entry.braking === true, camera, false);
+      if (hl) {
+        hl.setFlash(!entry.ghost && entry.flash === true);
+        hl.setEnabled(!entry.ghost && on, !entry.ghost && entry.braking === true, camera, false);
+      }
       if (entry.spare) {
         const spareHl = this.rigHeadlights.get(entry.spare);
-        if (spareHl && (spareHl.isOn || spareHl.isBraking)) spareHl.setEnabled(false, false);
+        if (spareHl && (spareHl.isOn || spareHl.isBraking || spareHl.isFlashing)) {
+          spareHl.setFlash(false);
+          spareHl.setEnabled(false, false);
+        }
       }
     }
   }
@@ -834,6 +842,7 @@ export class SimVisualFxManager {
       syntheticTelemetry.totalPowerKw = 650 * peer.throttle;
       const braking = peer.brake > 0.2;
       entry.braking = braking;
+      entry.flash = peer.flash === true;
       const bt = syntheticTelemetry.brakeTempsC;
       bt[0] = bt[1] = braking ? 780 : 340;
       bt[2] = bt[3] = braking ? 720 : 320;
