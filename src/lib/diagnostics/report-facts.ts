@@ -63,7 +63,7 @@ function settingsLine(s: PlayerSettings): string {
     `${s.autoGearbox ? "automatic" : "manual"} gearbox`,
     `racing line ${s.racingLine ? "on" : "off"}`,
     g.fpsCap ? `${g.fpsCap} fps cap` : "no fps cap",
-    `auto quality ${g.autoQuality ? "on" : "off"}`,
+    g.autoQuality ? `auto quality on (lowest ${Math.round(g.autoQualityMinScale * 100)}%)` : "auto quality off",
     `HUD ${hudLayout(s.hud.preset).label}`,
   ];
   if (s.device === "wheel") parts.push(`force feedback ${s.wheel.ffbEnabled ? (s.wheel.hidFfb ? "WebHID" : "bridge") : "off"}`);
