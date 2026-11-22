@@ -7,7 +7,7 @@ import { DualSensePairPrompt } from "@/components/hud/DualSensePairPrompt";
 import { OverheadNameplates } from "@/components/hud/OverheadNameplates";
 import type { OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
-import { CARS, carById, carForVehicle, listedVehiclesForClassRule, type CarId } from "@/lib/cars/car-registry";
+import { CARS, carById, carForVehicle, carsForClassRule, listedVehiclesForClassRule, type CarId } from "@/lib/cars/car-registry";
 import { alignGhostToTrack } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { type ChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
@@ -108,6 +108,8 @@ const roomCarSwitch = (rule: { vehicle?: VehicleModelId; carClass: CarClassRule 
   if (vehicleModelsFor(rule.carClass).includes(current)) return null;
   return listedVehiclesForClassRule(rule.carClass)[0] ?? null;
 };
+/** The listed cars a room's class rule lets in, as the lobby offers them */
+const classCars = (rule: CarClassRule) => carsForClassRule(rule).map((c) => ({ id: c.id, title: c.title }));
 /** The lap card's upload state for a board answer: sent, nothing to show, waiting for the board, or turned down */
 const cardStateOf = (res: SubmitResult, quietNotFaster: boolean): "idle" | "sent" | "error" | "waiting" =>
   res.ok ? "sent" : res.notFaster && quietNotFaster ? "idle" : res.unreachable ? "waiting" : "error";
@@ -2101,6 +2103,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     currentVehicle: vehicleModel,
     vehicleLabel,
     vehiclesForClass: vehicleModelsFor,
+    carsForClass: classCars,
     raceRunning: raceKind === "mp",
     startBlocked: getActivePointToPoint() ? "No races on a hill climb" : undefined,
     onHostLocal: handleHostLocal,
@@ -2109,7 +2112,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onStartRace: handleStartMpRace,
     onAbortRace: handleAbortMpRace,
     onSwitchTrack: onSelectTrack,
-    onSwitchVehicle: (v: string) => handleChangeCar(carForVehicle(v as VehicleModelId).id),
+    onSwitchCar: (id: string) => handleChangeCar(id as CarId),
     displayPanel: {
       settings,
       onChangeSettings: handleChangeSettings,
