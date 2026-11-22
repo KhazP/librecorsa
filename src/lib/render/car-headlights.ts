@@ -51,6 +51,11 @@ export interface LampPlacement {
 }
 
 export interface HeadlightProfile {
+  /**
+   * False for a car with no headlights (an F1 car: only its rear rain light). It then has no beams, no front flares
+   * and no flash, and lights nothing ahead; its rear light still runs at night and in rain
+   */
+  frontLamps?: boolean;
   /** Lateral half-spacing of the left and right beams from the car centreline (m) */
   halfWidthM: number;
   /** Lamp height above the chassis floor (m) */
@@ -97,7 +102,9 @@ const rearPairs = (pairs: readonly (readonly [number, number, number, number?])[
   );
 
 const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
+  // F1 cars carry no headlights, only the rear rain light (the front values only place nothing)
   f1: {
+    frontLamps: false,
     halfWidthM: 0.16,
     heightM: 0.6,
     frontZM: 2.25,
@@ -184,8 +191,7 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
  * GLBs' headlight/taillight meshes so flares sit on the actual lenses rather than behind rear wings or ahead of noses.
  */
 const CAR_PROFILE_OVERRIDES: Partial<Record<CarId, Partial<HeadlightProfile>>> = {
-  // The front lamps sit on top of the Qvist body's nose (measured 22 Nov 2026: the nose top is 0.53..0.56 m up at
-  // 2.2..2.3 m forward; the old 0.36 m height was inside it, so the flares never showed)
+  // No front lamps (an F1 car, see the class); the front values sit on the nose top of the Qvist body all the same
   lc26: {
     halfWidthM: 0.16,
     heightM: 0.6,
@@ -375,6 +381,9 @@ export function headlightProfileFor(carId: CarId): HeadlightProfile {
   return override ? { ...base, ...override } : base;
 }
 
+/** Whether a car has headlights at all (an F1 car has only its rear rain light) */
+export const carHasHeadlights = (carId: CarId): boolean => headlightProfileFor(carId).frontLamps !== false;
+
 /** Whether headlights should illuminate under the current mode and sky/weather state */
 export function shouldHeadlightsBeOn(mode: HeadlightMode, sunElevationDeg: number, rainIntensity: number): boolean {
   if (mode === "on") return true;
@@ -519,6 +528,8 @@ export class CarHeadlights {
   private scannedChildren: THREE.Object3D[] = [];
   private enabled = false;
   private flashing = false;
+  /** The car has headlights (not an F1 car) */
+  private readonly hasFront: boolean;
   /** 0 dark, 1 low beam, 2 high beam (a flash): what the front lamps last showed */
   private frontLevel: 0 | 1 | 2 = 0;
   /** Where each SpotLight aims on low beam and on high beam (chassis space) */
@@ -531,7 +542,8 @@ export class CarHeadlights {
     this.group.name = "CarHeadlights";
     this.profile = headlightProfileFor(carId);
     const p = this.profile;
-    this.spotCount = options?.lightsOnly ? 0 : (options?.spotCount ?? 2);
+    this.hasFront = p.frontLamps !== false;
+    this.spotCount = options?.lightsOnly || !this.hasFront ? 0 : (options?.spotCount ?? 2);
 
     if (this.spotCount === 2) {
       this.spotIntensity = p.intensity;
@@ -595,7 +607,7 @@ export class CarHeadlights {
     });
 
     const frontZ = p.measured ? p.frontZM : p.frontZM + 0.04;
-    for (const side of [1, -1] as const) {
+    for (const side of this.hasFront ? ([1, -1] as const) : []) {
       const flare = new THREE.Sprite(this.frontMat);
       flare.position.set(side * p.halfWidthM, p.heightM, frontZ);
       flare.scale.setScalar(p.flareSizeM);
@@ -809,7 +821,7 @@ export class CarHeadlights {
     this.scanMaterials();
     this.enabled = on;
     // The front lamps: dark, low beam, or the high beam while flashing (day or night, lights on or off)
-    const level: 0 | 1 | 2 = this.flashing ? 2 : on ? 1 : 0;
+    const level: 0 | 1 | 2 = !this.hasFront ? 0 : this.flashing ? 2 : on ? 1 : 0;
     if (level !== this.frontLevel) {
       this.frontLevel = level;
       const high = level === 2;
@@ -919,7 +931,7 @@ export class CarHeadlights {
   }
 
   get isFlashing(): boolean {
-    return this.flashing;
+    return this.hasFront && this.flashing;
   }
 
   get isBraking(): boolean {

@@ -19,6 +19,7 @@ import { FloorSparks } from "@/lib/render/floor-sparks";
 import {
   CarHeadlights,
   canSessionGetDark,
+  carHasHeadlights,
   headlightSpotCountFor,
   resolveHeadlightStates,
   shouldHeadlightsBeOn,
@@ -1529,7 +1530,9 @@ export class DriveSession {
     const initialHeadlightConditions = canSessionGetDark(getTrackEnv().weather.conditions)
       ? getTrackEnv().weather.conditions
       : settings.conditions;
-    const desiredHeadlightSpots = () => headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality);
+    // (a car without headlights, an F1 car, has no beam to build)
+    const desiredHeadlightSpots = () =>
+      carHasHeadlights(carRigCar) ? headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality) : 0;
     let carHeadlights = new CarHeadlights(carIdNow, {
       spotCount: headlightSpotCountFor(initialHeadlightConditions, settings.graphics.quality),
     });
@@ -2956,10 +2959,11 @@ export class DriveSession {
       const buttonsLive = driving && !inMenu && !gpuLost;
       const lightsButton = headlightButton.update(lightsPressed, device.held?.has("headlights") === true, nowMs, buttonsLive);
       if (lightsButton.toggle) runAction("headlights");
+      // (an F1 car has no headlights to flash)
       const flashing = flashTimer.update(
         heldKeys.headlightFlash || device.held?.has("headlightFlash") === true || lightsButton.flash,
         nowMs,
-        driving
+        driving && carHasHeadlights(carRigCar)
       );
       if (flashing !== playerFlashing) {
         playerFlashing = flashing;

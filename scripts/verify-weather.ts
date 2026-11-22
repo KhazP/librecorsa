@@ -58,6 +58,7 @@ import {
   AUTO_HEADLIGHT_RAIN,
   AUTO_HEADLIGHT_SUN_DEG,
   CarHeadlights,
+  carHasHeadlights,
   headlightProfileFor,
   headlightSpotCountFor,
   resolveHeadlightStates,
@@ -365,6 +366,22 @@ console.log('\n== Weather & time of day');
     rotationInvariantOk,
     `yaw0=(${rot0.frontZ.toFixed(2)}, ${rot0.rearZ.toFixed(2)}), yaw45=(${rot45.frontZ.toFixed(2)}, ${rot45.rearZ.toFixed(2)})`,
   );
+  // An F1 car has no headlights: no beam, no front flare, no flash; its rear rain light still runs
+  const f1Hl = new CarHeadlights('lc26', { spotCount: 2 });
+  const f1Spots = f1Hl.group.children.filter((c) => c instanceof THREE.SpotLight);
+  const f1Sprites = f1Hl.group.children.filter((c): c is THREE.Sprite => c instanceof THREE.Sprite);
+  f1Hl.setFlash(true);
+  f1Hl.setEnabled(true, false);
+  const f1NoFrontOk =
+    !carHasHeadlights('lc26') &&
+    carHasHeadlights('amg-gt3') &&
+    f1Hl.spotCount === 0 &&
+    f1Spots.length === 0 &&
+    !f1Hl.isFlashing &&
+    f1Sprites.length === (headlightProfileFor('lc26').rearLamps?.length ?? 1) &&
+    f1Sprites.every((s) => s.position.z < 0 && s.visible);
+  f1Hl.dispose();
+  check('an F1 car has no headlights: no beam, no front flare, no flash, rear rain light only', f1NoFrontOk, `spots=${f1Hl.spotCount}`);
   check(
     'CarHeadlights flash: high beam in daylight with the headlights off, then back to dark',
     flashDayOk && flashEndOk,
