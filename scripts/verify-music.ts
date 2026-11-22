@@ -4,7 +4,7 @@
  * restarts; the race's first track loaded while the grid waits; the shuffle; the
  * saved settings (levels, switched-off tracks, music while driving) round-tripping through the parser; and the player's
  * two decks on a stand-in audio graph (handovers that wait for the new track, track ends, fades, skips, refused plays,
- * switched-off tracks).
+ * switched-off tracks, the race compressor).
  * Run: npx tsx scripts/verify-music.ts
  */
 import { existsSync } from 'node:fs';
@@ -180,6 +180,9 @@ class FakeContext {
   }
   createMediaElementSource() {
     return fakeNode();
+  }
+  createDynamicsCompressor() {
+    return { ...fakeNode(), threshold: new FakeParam(), knee: new FakeParam(), ratio: new FakeParam(), attack: new FakeParam(), release: new FakeParam() };
   }
   resume() {
     return Promise.resolve();
@@ -486,6 +489,7 @@ async function playerChecks(): Promise<void> {
     await settle();
     st = c.debugState();
     check('it comes in at full level and the old tail fades', st.decks[1 - a].gain === 1 && st.decks[a].gain === 0);
+    check('a menu track plays straight, not through the compressor', !st.decks[1 - a].compressed);
   }
 
 
@@ -595,6 +599,7 @@ async function playerChecks(): Promise<void> {
     await settle();
     st = c.debugState();
     check('and comes straight in', !decks[i].paused && st.decks[i].gain === levels.race);
+    check('through the compressor', st.decks[i].compressed);
   }
   {
     const { c, decks } = await player();

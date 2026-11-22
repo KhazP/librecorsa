@@ -3,8 +3,8 @@
  * 200 MB of samples), on an audio context of its own. One for the page (`sharedMusic`): a drive session lasts one
  * circuit and closes its car audio with it, and the menu music plays on across circuit changes.
  *
- *   deck A / deck B: MediaElementSource → trim (the track's gainDb) → fade → peaking EQ → low-pass → duck → master
- *   → speakers
+ *   deck A / deck B: MediaElementSource → trim (the track's gainDb) → dry, or compressor → wet (race tracks) → fade
+ *   → peaking EQ → low-pass → duck → master → speakers
  *
  * It plays what the music director cues (music-director.ts):
  * - A change of music loads the new track on the idle deck and keeps the old one at its level until the new one really
@@ -15,6 +15,8 @@
  *   section), seeked before it sounds. While the grid waits, the race's first track loads beforehand, so it starts on
  *   the lights out.
  * - A held pool (silence) remembers where it stopped, so a restart or a trip through the menus picks it up there.
+ * - Race tracks go through a compressor (the orchestral recordings swing 10 LU and more, and their quiet passages
+ *   vanish under an engine).
  * - The pause duck (-6 dB through a 600 Hz low-pass over 150 ms) and the race carve (-3 dB at 1 kHz) move the shared
  *   filters, which stay in the chain.
  * Volume, mute and each pool's level come from the saved settings; a pool at zero plays nothing at all.
@@ -71,6 +73,13 @@ export const DUCK_LOWPASS_HZ = 600;
 export const OPEN_LOWPASS_HZ = 20000;
 export const DRIVE_EQ_HZ = 1000;
 export const DRIVE_EQ_DB = -3;
+/**
+ * The race tracks' compressor, and the trim after it that keeps their loudness where the dry files sit (the node adds
+ * make-up gain of its own, 0.7-1.5 dB here). Rendered through the real node in Chromium (scripts/music-comp.ts), it
+ * takes the race tracks' loudness range from 5.5-13.2 LU to 3.8-8.2 LU
+ */
+export const RACE_COMP = { threshold: -28, knee: 12, ratio: 2, attack: 0.05, release: 0.5 } as const;
+export const RACE_COMP_TRIM_DB = -0.9;
 
 interface Deck {
   el: HTMLAudioElement;
@@ -78,6 +87,9 @@ interface Deck {
   gain: GainNode;
   /** The track's level trim (gainDb) */
   trim: GainNode;
+  /** Straight through (menu, results), or through the compressor (race) */
+  dry: GainNode;
+  wet: GainNode;
   track: MusicTrack | null;
   pool: MusicPool | null;
   /** Bumped whenever the deck takes new work: a timer or event left from earlier work does nothing */
@@ -234,15 +246,30 @@ export class AudioBGMController {
       el.preload = "auto";
       el.crossOrigin = "anonymous";
       const trim = ctx.createGain();
+      const dry = ctx.createGain();
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = RACE_COMP.threshold;
+      comp.knee.value = RACE_COMP.knee;
+      comp.ratio.value = RACE_COMP.ratio;
+      comp.attack.value = RACE_COMP.attack;
+      comp.release.value = RACE_COMP.release;
+      const wet = ctx.createGain();
+      wet.gain.value = 0;
       const gain = ctx.createGain();
       gain.gain.value = 0;
       ctx.createMediaElementSource(el).connect(trim);
-      trim.connect(gain);
+      trim.connect(dry);
+      trim.connect(comp);
+      comp.connect(wet);
+      dry.connect(gain);
+      wet.connect(gain);
       gain.connect(eq);
       const deck: Deck = {
         el,
         gain,
         trim,
+        dry,
+        wet,
         track: null,
         pool: null,
         gen: 0,
@@ -380,6 +407,7 @@ export class AudioBGMController {
         track: d.track?.id ?? null,
         pool: d.pool,
         gain: d.gain.gain.value,
+        compressed: d.wet.gain.value > 0,
         timeS: d.el.currentTime,
         paused: d.el.paused,
         leaving: d.leaving,
@@ -549,8 +577,11 @@ export class AudioBGMController {
     const gen = this.claim(deck);
     deck.track = track;
     deck.pool = pool;
+    const race = pool === "race";
     this.ramp(deck.gain.gain, 0, 0);
     this.ramp(deck.trim.gain, dbToGain(track.gainDb), 0);
+    this.ramp(deck.dry.gain, race ? 0 : 1, 0);
+    this.ramp(deck.wet.gain, race ? dbToGain(RACE_COMP_TRIM_DB) : 0, 0);
     const url = musicUrl(track);
     if (deck.el.getAttribute("src") !== url) deck.el.src = url;
     return gen;
