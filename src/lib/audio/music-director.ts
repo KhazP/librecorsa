@@ -1,5 +1,5 @@
 /**
- * Which music plays, from where the player is. Pure: the session asks it every frame (music-controller.ts plays the
+ * Which music plays, from where the player is. Pure: the session asks it every frame (bgm-controller.ts plays the
  * answer), so a state reached without an edge (a rolling start, a restart, a replay opened from the results) still
  * gets the right music.
  *
@@ -9,6 +9,9 @@
  *   then plays on through restarts until the player leaves for the menus.
  * - The player's flag: the results pool, through the cool-down lap, the podium and the results. Replays play it too.
  * - Paused (the pause menu, the seat panel, a lost wheel): the same music, ducked and muffled.
+ *
+ * It also names the pool coming next while the grid waits (the race's, at the lights or before a practice car moves),
+ * so the player can load it beforehand and start it on the lights out.
  */
 import type { MusicPool } from "./music-catalog";
 
@@ -34,6 +37,8 @@ export interface MusicCue {
   duck: boolean;
   /** The race carve: a gentle cut at 1 kHz so the engine and tyres sit on top */
   driveEq: boolean;
+  /** The pool to load beforehand while nothing plays: it starts the moment it is cued */
+  arm: MusicPool | null;
 }
 
 /** Practice music starts above this speed (m/s): the first metres off the grid, or at once on a flying lap */
@@ -46,18 +51,22 @@ export class MusicDirector {
   cue(i: MusicInputs): MusicCue {
     if (i.phase !== "driving") {
       this.practiceStarted = false;
-      return { pool: i.phase === "loading" ? null : "menu", duck: false, driveEq: false };
+      return { pool: i.phase === "loading" ? null : "menu", duck: false, driveEq: false, arm: null };
     }
     let pool: MusicPool | null;
+    let arm: MusicPool | null = null;
     if (i.replaying || i.racePhase === "finished") pool = "results";
-    else if (i.racePhase === "lights") pool = null;
-    else if (i.racePhase === "racing") pool = "race";
+    else if (i.racePhase === "lights") {
+      pool = null;
+      arm = "race";
+    } else if (i.racePhase === "racing") pool = "race";
     else {
       if (!i.frozen && Math.abs(i.speedMs) > PRACTICE_START_MS) this.practiceStarted = true;
       pool = this.practiceStarted ? "race" : null;
+      if (!pool) arm = "race";
     }
     const duck = i.frozen;
-    return { pool, duck, driveEq: pool === "race" && !duck && !i.replaying };
+    return { pool, duck, driveEq: pool === "race" && !duck && !i.replaying, arm };
   }
 }
 
