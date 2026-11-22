@@ -4,7 +4,7 @@
  * circuit and closes its car audio with it, and the menu music plays on across circuit changes.
  *
  *   deck A / deck B: MediaElementSource → trim (the track's gainDb) → dry, or compressor → wet (race tracks) → fade
- *   → peaking EQ → low-pass → duck → master → speakers
+ *   → peaking EQ → low-pass → duck → engine duck → master → speakers
  *
  * It plays what the music director cues (music-director.ts):
  * - A change of music loads the new track on the idle deck and keeps the old one at its level until the new one really
@@ -16,7 +16,8 @@
  *   the lights out.
  * - A held pool (silence) remembers where it stopped, so a restart or a trip through the menus picks it up there.
  * - Race tracks go through a compressor (the orchestral recordings swing 10 LU and more, and their quiet passages
- *   vanish under an engine).
+ *   vanish under an engine) and dip up to 4 dB under a working engine, on an envelope seconds long so gear changes
+ *   and lifts do not pump it.
  * - The pause duck (-6 dB through a 600 Hz low-pass over 150 ms) and the race carve (-3 dB at 1 kHz) move the shared
  *   filters, which stay in the chain.
  * Volume, mute and each pool's level come from the saved settings; a pool at zero plays nothing at all.
@@ -73,6 +74,10 @@ export const DUCK_LOWPASS_HZ = 600;
 export const OPEN_LOWPASS_HZ = 20000;
 export const DRIVE_EQ_HZ = 1000;
 export const DRIVE_EQ_DB = -3;
+/** The engine duck at full load, and its envelope: down over about a second, back up over about four */
+export const ENGINE_DUCK_DB = -4;
+export const LOAD_ATTACK_S = 1;
+export const LOAD_RELEASE_S = 4;
 /**
  * The race tracks' compressor, and the trim after it that keeps their loudness where the dry files sit (the node adds
  * make-up gain of its own, 0.7-1.5 dB here). Rendered through the real node in Chromium (scripts/music-comp.ts), it
@@ -145,11 +150,12 @@ export class AudioBGMController {
   private eq: BiquadFilterNode | null = null;
   private lowpass: BiquadFilterNode | null = null;
   private duckGain: GainNode | null = null;
+  private loadGain: GainNode | null = null;
   private master: GainNode | null = null;
   private silent = "";
 
   /** What the director asked for last, and the pool playing for it (null where its level is zero) */
-  private wanted: MusicCue = { pool: null, duck: false, driveEq: false, arm: null };
+  private wanted: MusicCue = { pool: null, duck: false, driveEq: false, arm: null, load: 0 };
   private playing: MusicPool | null = null;
   private ducked = false;
   private carved = false;
@@ -166,6 +172,10 @@ export class AudioBGMController {
   private pausedForHidden = false;
   /** A new track waiting to sound: the music before it fades once it does, or once the wait runs out */
   private handover: { deck: Deck; gen: number; outS: number; timer: ReturnType<typeof setTimeout> } | null = null;
+  /** The engine duck's envelope (0 to 1), when it last moved and when its gain was last set (the context's clock) */
+  private loadEnv = 0;
+  private loadAt = 0;
+  private loadSetAt = -1;
   private warned = false;
   /**
    * Each parameter's last scheduled move, to know its value mid-fade without reading AudioParam.value back (browsers
@@ -235,11 +245,13 @@ export class AudioBGMController {
     lowpass.frequency.value = OPEN_LOWPASS_HZ;
     lowpass.Q.value = 0.707;
     const duckGain = ctx.createGain();
+    const loadGain = ctx.createGain();
     const master = ctx.createGain();
     master.gain.value = this.masterLevel();
     eq.connect(lowpass);
     lowpass.connect(duckGain);
-    duckGain.connect(master);
+    duckGain.connect(loadGain);
+    loadGain.connect(master);
     master.connect(ctx.destination);
     for (let i = 0; i < 2; i++) {
       const el = new Audio();
@@ -291,6 +303,7 @@ export class AudioBGMController {
     this.eq = eq;
     this.lowpass = lowpass;
     this.duckGain = duckGain;
+    this.loadGain = loadGain;
     this.master = master;
     document.addEventListener("visibilitychange", this.onVisibility);
   }
@@ -346,6 +359,7 @@ export class AudioBGMController {
         this.carved = cue.driveEq;
         if (this.eq) this.ramp(this.eq.gain, cue.driveEq ? DRIVE_EQ_DB : 0, CROSSFADE_S);
       }
+      this.moveLoad(cue.load);
       this.reconcile();
       // While nothing plays, the pool coming next loads beforehand (the race's first track while the grid waits)
       if (!this.playing && cue.arm && this.levelOf(cue.arm) > 0) this.armPool(cue.arm);
@@ -398,6 +412,7 @@ export class AudioBGMController {
       context: this.ctx?.state,
       master: this.master?.gain.value,
       duck: this.duckGain?.gain.value,
+      engineDuck: this.loadGain?.gain.value,
       lowpassHz: this.lowpass?.frequency.value,
       eqDb: this.eq?.gain.value,
       unavailable: [...this.unavailable],
@@ -791,6 +806,21 @@ export class AudioBGMController {
       if (deck.track && deck.pool && deck.pool === this.playing && !deck.leaving) this.startDeck(deck, deck.gen);
     }
   };
+
+  /** The engine duck: an envelope of the cue's load (fast down, slow back), its gain set ten times a second */
+  private moveLoad(load: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.loadGain) return;
+    const now = ctx.currentTime;
+    const dt = Math.min(0.5, Math.max(0, now - this.loadAt));
+    this.loadAt = now;
+    const target = Number.isFinite(load) ? Math.min(1, Math.max(0, load)) : 0;
+    const tau = target > this.loadEnv ? LOAD_ATTACK_S : LOAD_RELEASE_S;
+    this.loadEnv += (target - this.loadEnv) * (1 - Math.exp(-dt / tau));
+    if (this.loadSetAt >= 0 && now - this.loadSetAt < 0.1) return;
+    this.loadSetAt = now;
+    this.ramp(this.loadGain.gain, dbToGain(ENGINE_DUCK_DB * this.loadEnv), 0.1);
+  }
 
   /** A parameter's value at `t` from its last scheduled move (its plain value when none was scheduled) */
   private valueAt(p: AudioParam, t: number): number {

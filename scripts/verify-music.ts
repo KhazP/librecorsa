@@ -1,7 +1,7 @@
 /**
  * Checks the soundtrack's catalogue and the music director (src/lib/audio): what plays on the title, the grid, at the
  * lights out, at the flag, in a replay and in the pause menu; practice music from the first metres, kept through
- * restarts; the race's first track loaded while the grid waits; the shuffle; the
+ * restarts; the race's first track loaded while the grid waits; the engine load under the race music; the shuffle; the
  * saved settings (levels, switched-off tracks, music while driving) round-tripping through the parser; and the player's
  * two decks on a stand-in audio graph (handovers that wait for the new track, track ends, fades, skips, refused plays,
  * switched-off tracks, the race compressor).
@@ -47,7 +47,7 @@ console.log('Catalogue');
   check('the music key is not neutral\'s', !DEFAULT_KEY_BINDINGS.nextTrack.some((k) => DEFAULT_KEY_BINDINGS.neutral.includes(k)));
 }
 
-const base: MusicInputs = { phase: 'driving', racePhase: undefined, replaying: false, frozen: false, speedMs: 0 };
+const base: MusicInputs = { phase: 'driving', racePhase: undefined, replaying: false, frozen: false, speedMs: 0, engineLoad: 0 };
 
 console.log('A race');
 {
@@ -70,6 +70,9 @@ console.log('A race');
   check('the grid at the lights: the race music loads beforehand', d.cue({ ...base, racePhase: 'lights' }).arm === 'race');
   check('racing: nothing to load beforehand', d.cue({ ...base, racePhase: 'racing' }).arm === null);
   check('the menus: nothing to load beforehand', d.cue({ ...base, phase: 'title' }).arm === null);
+  check('racing: the engine load passes', d.cue({ ...base, racePhase: 'racing', engineLoad: 0.8 }).load === 0.8);
+  check('the load is clamped', d.cue({ ...base, racePhase: 'racing', engineLoad: 3 }).load === 1 && d.cue({ ...base, racePhase: 'racing', engineLoad: NaN }).load === 0);
+  check('paused, a replay, the results: no load', [{ frozen: true }, { replaying: true }, { racePhase: 'finished' as const }].every((x) => d.cue({ ...base, racePhase: 'racing', engineLoad: 1, ...x }).load === 0));
 }
 
 console.log('Practice');
@@ -315,7 +318,7 @@ async function playerChecks(): Promise<void> {
   };
   const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
   const levels = { volume: 1, muted: false, musicMuted: false, menu: 1, race: 0.5, results: 1 };
-  const cue = (pool: MusicPool | null) => ({ pool, duck: false, driveEq: false, arm: null });
+  const cue = (pool: MusicPool | null) => ({ pool, duck: false, driveEq: false, arm: null, load: 0 });
   const menuIds = MUSIC_TRACKS.filter((t) => t.pool === 'menu').map((t) => t.id);
   /** A player unlocked by a press, both decks primed */
   const player = async () => {

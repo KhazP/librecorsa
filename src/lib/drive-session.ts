@@ -4025,6 +4025,8 @@ export class DriveSession {
             replaying,
             frozen: frozen || Boolean(device.wheelLost),
             speedMs: physics.vxMs,
+            engineLoad:
+              physics.telemetry.throttle * Math.min(1, physics.telemetry.rpm / vehicleModelSpec(vehicleNow).telemetryMaxRpm),
           }),
         );
       }

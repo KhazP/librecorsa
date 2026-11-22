@@ -11,7 +11,8 @@
  * - Paused (the pause menu, the seat panel, a lost wheel): the same music, ducked and muffled.
  *
  * It also names the pool coming next while the grid waits (the race's, at the lights or before a practice car moves),
- * so the player can load it beforehand and start it on the lights out.
+ * so the player can load it beforehand and start it on the lights out, and the engine's load while the race music
+ * plays, which lowers the music a little under a working engine.
  */
 import type { MusicPool } from "./music-catalog";
 
@@ -28,6 +29,8 @@ export interface MusicInputs {
   frozen: boolean;
   /** The car's speed (m/s): practice music starts once it moves */
   speedMs: number;
+  /** How hard the engine works, 0 to 1 (throttle times the share of the rev range) */
+  engineLoad: number;
 }
 
 export interface MusicCue {
@@ -39,6 +42,8 @@ export interface MusicCue {
   driveEq: boolean;
   /** The pool to load beforehand while nothing plays: it starts the moment it is cued */
   arm: MusicPool | null;
+  /** The engine's load under the race music, 0 to 1 (0 anywhere else) */
+  load: number;
 }
 
 /** Practice music starts above this speed (m/s): the first metres off the grid, or at once on a flying lap */
@@ -51,7 +56,7 @@ export class MusicDirector {
   cue(i: MusicInputs): MusicCue {
     if (i.phase !== "driving") {
       this.practiceStarted = false;
-      return { pool: i.phase === "loading" ? null : "menu", duck: false, driveEq: false, arm: null };
+      return { pool: i.phase === "loading" ? null : "menu", duck: false, driveEq: false, arm: null, load: 0 };
     }
     let pool: MusicPool | null;
     let arm: MusicPool | null = null;
@@ -66,7 +71,9 @@ export class MusicDirector {
       if (!pool) arm = "race";
     }
     const duck = i.frozen;
-    return { pool, duck, driveEq: pool === "race" && !duck && !i.replaying, arm };
+    const driveEq = pool === "race" && !duck && !i.replaying;
+    const load = driveEq && Number.isFinite(i.engineLoad) ? Math.min(1, Math.max(0, i.engineLoad)) : 0;
+    return { pool, duck, driveEq, arm, load };
   }
 }
 
