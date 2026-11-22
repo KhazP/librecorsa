@@ -7,6 +7,7 @@ import { withBasePath } from "@/lib/base-path";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { patchShader, type ShaderPatch } from "./shader-patch";
 import { cloudSkyFor, describeClouds, pickCloudRecipe, type CloudRecipe, type CloudSkySetup } from "./cloud-recipes";
+import { nightShareOfElevation, nightSkyGlsl, starShare } from "./night-sky";
 
 /*
  * Physically based sky and volumetric clouds (@takram/three-atmosphere and @takram/three-clouds, MIT): the sky on
@@ -151,15 +152,19 @@ interface SkyExtraUniforms {
   showSunDisc: THREE.IUniform<number>;
   overcast: THREE.IUniform<number>;
   overcastTint: THREE.IUniform<THREE.Color>;
+  /** 0..1: the night sky's glow (night-sky.ts) */
+  nightSky: THREE.IUniform<number>;
+  /** 0..1: its stars (none in the environment bake) */
+  nightStars: THREE.IUniform<number>;
 }
 
 type PatchedSkyMaterial = SkyMaterial & { uniforms: SkyMaterial["uniforms"] & SkyExtraUniforms };
 
-/** The sky fragment shader's edits: radiance scale, sun-disc switch, overcast veil and the radiance cap */
+/** The sky fragment shader's edits: radiance scale, sun-disc switch, overcast veil, the night sky and the radiance cap */
 export const SKY_FRAGMENT_PATCHES: readonly ShaderPatch[] = [
   [
     "uniform vec3 groundAlbedo;",
-    "uniform vec3 groundAlbedo;\nuniform float skyRadianceScale;\nuniform float showSunDisc;\nuniform float overcast;\nuniform vec3 overcastTint;",
+    "uniform vec3 groundAlbedo;\nuniform float skyRadianceScale;\nuniform float showSunDisc;\nuniform float overcast;\nuniform vec3 overcastTint;\nuniform float nightSky;\nuniform float nightStars;",
   ],
   ["radiance += transmittance * GetSolarRadiance() * antialias;", "radiance += transmittance * GetSolarRadiance() * antialias * showSunDisc;"],
   [
@@ -167,6 +172,7 @@ export const SKY_FRAGMENT_PATCHES: readonly ShaderPatch[] = [
     /* glsl */ `outputColor.rgb *= skyRadianceScale;
   float skyLuma = dot(outputColor.rgb, vec3(0.2126, 0.7152, 0.0722));
   outputColor.rgb = mix(outputColor.rgb, vec3(skyLuma) * overcastTint, overcast);
+  ${nightSkyGlsl("outputColor.rgb", "rayDirection", "normalize(vCameraPosition)", "nightSky", "nightStars", "fragmentAngle")}
   outputColor.rgb = min(outputColor.rgb, vec3(${SKY_MAX_RADIANCE.toFixed(1)}));
   outputColor.a = 1.0;`,
   ],
@@ -254,6 +260,8 @@ export function createSkyMaterial(sun: boolean, reversedDepth: boolean): Patched
     showSunDisc: { value: 1 },
     overcast: { value: 0 },
     overcastTint: { value: OVERCAST_TINT.clone() },
+    nightSky: { value: 0 },
+    nightStars: { value: 0 },
   } satisfies SkyExtraUniforms);
   material.fragmentShader = patchShader(material.fragmentShader, SKY_FRAGMENT_PATCHES, "physical sky");
   if (reversedDepth) {
@@ -575,6 +583,12 @@ export class PhysicalSky {
     const veil = cloud * (0.75 + 0.25 * rain);
     this.bakeMesh.material.uniforms.overcast.value = veil;
     this.mesh.material.uniforms.overcast.value = volumetric ? 0.3 * THREE.MathUtils.smoothstep(cloud, 0.85, 1) + 0.4 * rain : veil;
+    // The night sky's glow, in the bake too; the stars only on the visible sky, and only on a clear night
+    const night = nightShareOfElevation(THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(this.sunElevationSin, -1, 1))));
+    this.mesh.material.uniforms.nightSky.value = night * (1 - 0.5 * gloom);
+    this.bakeMesh.material.uniforms.nightSky.value = night * (1 - 0.5 * gloom);
+    this.mesh.material.uniforms.nightStars.value = starShare(night, cloud, rain);
+    this.bakeMesh.material.uniforms.nightStars.value = 0;
     // A thick overcast hides the sun disc (the probe zeroes this while it films and puts the value back)
     this.mesh.material.uniforms.showSunDisc.value = 1 - THREE.MathUtils.smoothstep(cloud, 0.55, 0.9);
     // Physical aerial perspective + soft drifting cloud ground shadows on High desktop
