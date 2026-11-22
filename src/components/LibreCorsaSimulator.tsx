@@ -275,6 +275,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const toggleFreeCamera = useCallback(() => {
     sessionRef.current?.toggleFreeCamera();
   }, []);
+  const toggleTvCamera = useCallback(() => {
+    sessionRef.current?.toggleTvCamera();
+  }, []);
   // The session takes the settings on whenever they change, and once it exists (whichever comes first)
   useEffect(() => {
     session?.applySettings(settings);
@@ -1874,6 +1877,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     return {
       camera: first(k.camera),
       freeCamera: first(k.freeCamera),
+      tvCamera: first(k.tvCamera),
       racingLine: first(k.racingLine),
       mute: first(k.mute),
       mouseSteer: first(k.mouseSteer),
@@ -2038,6 +2042,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     cameraMode: activeCameraMode,
     onSelectCamera: setCameraMode,
     onToggleFreeCamera: toggleFreeCamera,
+    onToggleTvCamera: toggleTvCamera,
     tireCompound,
     selectedLivery,
     showRacingLine,

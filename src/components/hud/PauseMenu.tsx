@@ -118,6 +118,7 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   onCycleCamera: () => void;
   onSelectCamera?: (mode: CameraMode) => void;
   onToggleFreeCamera?: () => void;
+  onToggleTvCamera?: () => void;
   onChangeTireCompound: (compound: TireCompound) => void;
   onChangeTyreSetup: (setup: TyreSetup) => void;
   /** Engineer's garage: chassis offsets from the car's baseline, and the electronics' dials */
@@ -148,7 +149,7 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   musicMuted?: boolean;
   onToggleMusicMute?: () => void;
   /** Key names for the hints on the toggles (defaults: the original layout) */
-  keyNames?: Partial<Record<"camera" | "freeCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown", string>>;
+  keyNames?: Partial<Record<"camera" | "freeCamera" | "tvCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown", string>>;
   /** HUD layout, graphics, touch controls and VR */
   displayPanel?: DisplayPanelProps;
   /** Lap times, ghosts and the online board */
@@ -503,7 +504,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
     </SettingRow>
   );
   const cameraCard =
-    p.onSelectCamera || p.onToggleFreeCamera ? (
+    p.onSelectCamera || p.onToggleFreeCamera || p.onToggleTvCamera ? (
       <Card title="Camera">
         {p.onSelectCamera ? (
           <SettingRow label="Camera view" hint={`Cycle: ${p.keyNames?.camera ?? "C"}`}>
@@ -530,6 +531,21 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
               }}
             >
               {p.cameraMode === "free" ? "Exit free cam" : "Free camera"}
+            </Button>
+          </SettingRow>
+        ) : null}
+        {p.onToggleTvCamera ? (
+          <SettingRow label="Trackside TV" hint={`Key ${p.keyNames?.tvCamera ?? "F8"} · Broadcast cameras beside the track`}>
+            <Button
+              size="sm"
+              variant={p.cameraMode === "tv_side" ? "primary" : "secondary"}
+              icon={<Icon name="camera" size="sm" />}
+              onClick={() => {
+                p.onToggleTvCamera?.();
+                p.onTogglePause();
+              }}
+            >
+              {p.cameraMode === "tv_side" ? "Exit TV" : "Trackside TV"}
             </Button>
           </SettingRow>
         ) : null}

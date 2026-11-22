@@ -19,6 +19,7 @@ export type KeyAction =
   | "neutral"
   | "camera"
   | "freeCamera"
+  | "tvCamera"
   | "racingLine"
   | "mute"
   | "nextTrack"
@@ -46,6 +47,7 @@ export type PadAction =
   | "neutral"
   | "camera"
   | "freeCamera"
+  | "tvCamera"
   | "racingLine"
   | "restart"
   | "flyingLap"
@@ -75,6 +77,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "neutral", label: "Neutral" },
   { id: "camera", label: "Camera (hold: seat & camera)" },
   { id: "freeCamera", label: "Free camera" },
+  { id: "tvCamera", label: "Trackside TV camera" },
   { id: "racingLine", label: "Racing line" },
   { id: "mute", label: "Mute" },
   { id: "nextTrack", label: "Next music track" },
@@ -102,6 +105,7 @@ export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   { id: "aero", label: "Active aero X / Z" },
   { id: "camera", label: "Camera (hold: seat & camera)" },
   { id: "freeCamera", label: "Free camera" },
+  { id: "tvCamera", label: "Trackside TV camera" },
   { id: "racingLine", label: "Racing line" },
   { id: "restart", label: "Restart" },
   { id: "flyingLap", label: "Restart lap (flying start)" },
@@ -129,6 +133,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   neutral: ["KeyN"],
   camera: ["KeyC"],
   freeCamera: ["F7"],
+  tvCamera: ["F8"],
   racingLine: ["KeyR"],
   mute: ["KeyM"],
   // N is Neutral: K, free in the car and in the menus
@@ -184,6 +189,7 @@ export const BUMPER_SHIFT_BUTTONS: PadButtonBindings = {
   headlights: null,
   headlightFlash: null,
   freeCamera: null,
+  tvCamera: null,
 };
 
 /**
@@ -210,6 +216,7 @@ export const GT_STYLE_BUTTONS: PadButtonBindings = {
   board: null,
   headlightFlash: null,
   freeCamera: null,
+  tvCamera: null,
 };
 
 /**
@@ -362,6 +369,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       headlights: null,
       headlightFlash: null,
       freeCamera: null,
+      tvCamera: null,
     },
   },
   // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause. No headlight control found in the F1 games
@@ -386,6 +394,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       headlights: null,
       headlightFlash: null,
       freeCamera: null,
+      tvCamera: null,
     },
   },
   // Forza: B up, X down (manual layout), RB switch camera, LS toggle convertible, Menu pause. No headlight control
@@ -411,6 +420,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       headlights: null,
       headlightFlash: null,
       freeCamera: null,
+      tvCamera: null,
     },
   },
   // Gears on the bumpers: the default until 17 Nov 2026, so the layout most saved settings still have

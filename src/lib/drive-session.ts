@@ -609,6 +609,8 @@ export class DriveSession {
   readonly setCameraOverride: (mode: CameraMode | null) => void;
   /** Toggles Free camera on/off without altering the player's saved driving view */
   readonly toggleFreeCamera: () => void;
+  /** Trackside TV in and out (its own key, out of the camera key's cycle), back to the driving view */
+  readonly toggleTvCamera: () => void;
   /** Repositions Free camera near the currently focused car */
   readonly resetFreeCamera: () => void;
   /** polish:B the podium shot after a race, and the overlay's view of it */
@@ -1895,6 +1897,10 @@ export class DriveSession {
       if (disposed) return;
       this.setCameraOverride(cameraOverride === "free" ? null : "free");
     };
+    this.toggleTvCamera = () => {
+      if (disposed) return;
+      this.setCameraOverride(cameraOverride === "tv_side" ? null : "tv_side");
+    };
     this.resetFreeCamera = () => {
       if (!disposed) cameraRig.freeCamera.reset();
     };
@@ -2128,6 +2134,9 @@ export class DriveSession {
           break;
         case "freeCamera":
           this.toggleFreeCamera();
+          break;
+        case "tvCamera":
+          this.toggleTvCamera();
           break;
         case "racingLine":
           handleToggleRacingLine();
