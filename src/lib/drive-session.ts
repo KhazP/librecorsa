@@ -3410,6 +3410,7 @@ export class DriveSession {
         }
       }
       physics.telemetry.timeTrial = timeTrialOn() || undefined;
+      physics.telemetry.drivingInput = lastDrivingInput ?? undefined;
       physics.telemetry.qualifying = quali
         ? {
             remainingS: quali.session.remainingS,
