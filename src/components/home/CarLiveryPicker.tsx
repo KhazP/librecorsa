@@ -286,7 +286,7 @@ export const CarLiveryPicker: React.FC<CarLiveryPickerProps> = ({
                         <span
                           aria-hidden
                           className={cx(
-                            "lc-lbl shrink-0 px-2 pb-1 text-[10px]",
+                            "lc-lbl shrink-0 px-2 pb-1",
                             idx > 0 ? "mt-1.5 border-t border-lc-line/60 pt-2" : "pt-0.5",
                           )}
                         >

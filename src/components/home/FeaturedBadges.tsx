@@ -8,6 +8,7 @@ import { withBasePath } from "@/lib/base-path";
  * links; the pictures are served from this site, so opening About asks nothing of either site.
  */
 
+// ui-allow: arbitrary-radius matches the third-party Product Hunt / Three.js Resources 250x54 badge spec
 const BADGE = "relative inline-flex h-[54px] w-[250px] shrink-0 rounded-[10px] no-underline transition-opacity duration-200 hover:opacity-90";
 
 /** Three.js Resources' mark, drawn in the text colour */
@@ -24,6 +25,7 @@ export const FeaturedBadges: React.FC<{ className?: string }> = ({ className }) 
       target="_blank"
       rel="noopener noreferrer"
       onPointerEnter={focusOnHover}
+      // ui-allow: hex-in-class third-party Three.js Resources badge border colour
       className={cx(BADGE, "items-center gap-3 border border-[#333] bg-black px-4 text-white")}
     >
       <ThreeJsResourcesMark />
