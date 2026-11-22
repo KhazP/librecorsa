@@ -132,8 +132,8 @@ export function Tabs<T extends string>({
           pointing.current = false;
         }}
         className={cx(
-          "flex min-w-0 gap-1 rounded-lc-tile bg-lc-void/85 p-1 inset-ring inset-ring-lc-line",
-          wrap ? "flex-wrap" : "overflow-x-auto [scrollbar-width:none]",
+          "flex min-w-0 gap-1 bg-lc-void/85 p-1 inset-ring inset-ring-lc-line",
+          wrap ? "flex-wrap rounded-lc-card" : "overflow-x-auto rounded-full [scrollbar-width:none]",
           fill ? "w-full" : undefined,
         )}
       >
@@ -157,7 +157,7 @@ export function Tabs<T extends string>({
                 if (reselect || !chosen) onChange(t.id);
               }}
               className={cx(
-                "group lc-title inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-lc-row whitespace-nowrap",
+                "group lc-title inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full whitespace-nowrap",
                 fill ? "flex-1 justify-center px-3" : "px-4",
                 "pointer-coarse:min-h-11 [&_svg]:size-4 [&_svg]:shrink-0",
                 size === "md" ? "min-h-10 text-[15px]" : "min-h-9 text-[14px]",

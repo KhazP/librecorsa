@@ -32,7 +32,7 @@ const ROW_SIZE: Record<RailRowSize, { box: string; label: string; icon: "lg" | "
   },
   // The links under the title screen's grid
   sm: {
-    box: "w-auto min-h-11 gap-2 rounded-lc-row px-2.5",
+    box: "w-auto min-h-11 gap-2 rounded-full px-3",
     label: "text-[13px] font-semibold",
     icon: "sm",
   },
@@ -169,7 +169,7 @@ export const HeroAction: React.FC<{
       <span
         aria-hidden
         className={cx(
-          "inline-flex shrink-0 items-center justify-center rounded-lc-row bg-lc-volt text-lc-void",
+          "inline-flex shrink-0 items-center justify-center rounded-full bg-lc-volt text-lc-void",
           MOTION,
           "group-focus:bg-lc-void group-focus:text-lc-volt",
           "in-data-[input=keyboard]:group-focus:transition-none in-data-[input=pad]:group-focus:transition-none",
