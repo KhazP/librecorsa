@@ -35,7 +35,7 @@ import { carClass, carClassesInUse } from "@/lib/cars/car-registry";
 import { getTrackInfo, TRACKS } from "@/lib/track-registry";
 import { Button, Card, ConfirmDialog, Disclosure, Segmented, Select, SettingRow, Stepper, TextField, Toggle, Well } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
-import { DriverBadges } from "@/components/ui/DriverBadges";
+import { BadgeLegend, DriverBadges } from "@/components/ui/DriverBadges";
 import { PlayerTag, SessionBadge } from "@/components/ui/badges";
 import { Icon } from "@/components/ui/icons";
 import { TrackQualityBadge } from "@/components/menu/menu-content-ui";
@@ -837,6 +837,10 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             );
           })}
         </ul>
+        {/* What the badges beside the names mean: their tooltips need a mouse */}
+        <BadgeLegend
+          badges={orderedPlayers.flatMap((p) => (Object.hasOwn(driverBadges, driverNameKey(p.name)) ? driverBadges[driverNameKey(p.name)] : []))}
+        />
 
         {trackMismatch ? (
           <Well className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-2.5">

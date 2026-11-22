@@ -30,10 +30,10 @@ import {
   type BoardPage,
   type CircuitTotals,
 } from "@/lib/net/board-client";
-import { usePageHandler } from "@/components/menu/useFocusNav";
+import { focusables, usePageHandler } from "@/components/menu/useFocusNav";
 import { Badge, type PaletteColor } from "@/components/ui/Badge";
 import { Button, IconButton } from "@/components/ui/Button";
-import { Disclosure } from "@/components/ui/Disclosure";
+import { BadgeLegend } from "@/components/ui/DriverBadges";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Segmented } from "@/components/ui/Segmented";
 import { Select } from "@/components/ui/Select";
@@ -41,7 +41,7 @@ import { SettingRow } from "@/components/ui/SettingRow";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Toggle } from "@/components/ui/Toggle";
 import { Icon } from "@/components/ui/icons/Icon";
-import { BoardError, BoardSkeleton, BoardTable, MyPlace, type BoardRow } from "./board-table";
+import { badgesFor, BoardError, BoardSkeleton, BoardTable, MyPlace, useDriverBadges, type BoardRow } from "./board-table";
 
 /** A car on a row of every car's board: its short name, in its class colour */
 export interface BoardCarTag {
@@ -187,6 +187,17 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+  // The filters open under the row with the Filters button; opened from the keys or a pad, the cursor moves onto the first
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersId = React.useId();
+  const filtersRef = useRef<HTMLDivElement>(null);
+  const filtersMoveIn = useRef(false);
+  useEffect(() => {
+    if (!filtersOpen || !filtersMoveIn.current) return;
+    filtersMoveIn.current = false;
+    const first = filtersRef.current ? focusables(filtersRef.current)[0] : undefined;
+    first?.focus({ preventScroll: false, focusVisible: true } as FocusOptions);
+  }, [filtersOpen]);
   const noAssists = !event && filterPrefs.noAssists;
   const fullRealism = !event && filterPrefs.fullRealism;
   const wetOnly = !event && filterPrefs.wetOnly;
@@ -332,6 +343,8 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
     void Promise.resolve(onApplySetup(entry)).finally(() => setApplyingKey(null));
   };
   const offset = shown?.offset ?? (page - 1) * BOARD_PAGE_SIZE;
+  // Fetched here rather than in the table, so the key to them can sit in the filter row
+  const fetchedBadges = useDriverBadges((shown?.entries ?? []).map((e) => e.name));
   const rows: BoardRow[] = (shown?.entries ?? []).map((e, i) => {
     const pos = offset + i + 1;
     const tag = car === ALL_CARS ? carTag(e.vehicle) : null;
@@ -347,6 +360,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
       code: e.code,
       title: e.name,
       input: e.conditions?.input,
+      badges: badgesFor(fetchedBadges, e.name),
       tag: tag ? (
         <Badge tone={{ color: tag.color }} size="sm" className="max-w-[9rem] truncate">
           {tag.label}
@@ -379,6 +393,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
       ? "All cars"
       : (myCar?.label ?? carPicker?.cars.find((c) => c.id === car)?.label ?? car);
   const boardName = `${carName} · ${circuitName}${event ? ` · ${event.id}` : ""}${older ? ` · ${versionName}` : ""}`;
+  const pageBadges = rows.flatMap((r) => r.badges ?? []);
 
   return (
     <section
@@ -453,8 +468,36 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
         </p>
       ) : null}
 
-      {event ? null : (
-        <Disclosure moreLabel={filtersOn ? `Filters · ${filtersOn} on` : "Filters"} lessLabel="Hide filters">
+      {/* The Filters button, and on the same line the key to the badges on this page */}
+      {event && pageBadges.length === 0 ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+          {event ? null : (
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={
+                <Icon
+                  name="expand"
+                  className={`transition-transform duration-200 ease-lc motion-reduce:transition-none ${filtersOpen ? "rotate-180" : ""}`}
+                />
+              }
+              aria-expanded={filtersOpen}
+              aria-controls={filtersOpen ? filtersId : undefined}
+              className="-ml-2"
+              onClick={(e) => {
+                // A click from Enter or a pad's A has no pointer behind it (detail 0)
+                filtersMoveIn.current = !filtersOpen && e.detail === 0;
+                setFiltersOpen(!filtersOpen);
+              }}
+            >
+              {filtersOn ? `Filters · ${filtersOn} on` : "Filters"}
+            </Button>
+          )}
+          <BadgeLegend badges={pageBadges} className="ml-auto justify-end phone:ml-0 phone:justify-start" />
+        </div>
+      )}
+      {filtersOpen && !event ? (
+        <div ref={filtersRef} id={filtersId} className="flex min-w-0 flex-col gap-1">
           <SettingRow label="No assists">
             <Toggle checked={noAssists} onChange={(v) => updateFilterPref({ noAssists: v })} />
           </SettingRow>
@@ -464,8 +507,8 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
           <SettingRow label="Wet laps">
             <Toggle checked={wetOnly} onChange={(v) => updateFilterPref({ wetOnly: v })} />
           </SettingRow>
-        </Disclosure>
-      )}
+        </div>
+      ) : null}
 
       {/* Where the player stands */}
       {me ? (
@@ -513,7 +556,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
               Refresh failed. Showing cached times.
             </p>
           ) : null}
-          <BoardTable label={`Online times, ${boardName}, page ${page} of ${pages}`} rows={rows} stale={stale} />
+          <BoardTable label={`Online times, ${boardName}, page ${page} of ${pages}`} rows={rows} stale={stale} legend={false} />
         </>
       )}
 

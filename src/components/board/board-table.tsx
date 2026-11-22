@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { DriverBadges } from "@/components/ui/DriverBadges";
+import { BadgeLegend, DriverBadges } from "@/components/ui/DriverBadges";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { PlayerTag } from "@/components/ui/badges/PlayerTag";
 import { PositionBadge } from "@/components/ui/badges/PositionBadge";
@@ -65,6 +65,29 @@ const TH = "lc-lbl px-2 pb-2 text-left font-semibold whitespace-nowrap";
 /** Sector columns show only where the list has room for them */
 const SECTOR = "hidden text-right @2xl:table-cell";
 
+/** The badges of a list of drivers, fetched in one batch each time the names change, by name key */
+export function useDriverBadges(names: readonly string[]): Record<string, DriverBadge[]> {
+  const [fetched, setFetched] = useState<Record<string, DriverBadge[]>>({});
+  const namesKey = names.map(driverNameKey).join("\n");
+  useEffect(() => {
+    if (!namesKey) return;
+    let live = true;
+    void fetchBadges(namesKey.split("\n")).then((map) => {
+      if (live) setFetched(map);
+    });
+    return () => {
+      live = false;
+    };
+  }, [namesKey]);
+  return fetched;
+}
+
+/** One driver's badges from a `useDriverBadges` answer */
+export const badgesFor = (fetched: Record<string, DriverBadge[]>, name: string): DriverBadge[] => {
+  const key = driverNameKey(name);
+  return Object.hasOwn(fetched, key) ? fetched[key] : [];
+};
+
 /** Laps as a timing list: place, who or what, lap time, the three sectors where there is room, and an action */
 export const BoardTable: React.FC<{
   label: string;
@@ -75,21 +98,14 @@ export const BoardTable: React.FC<{
   stale?: boolean;
   /** Whether to batch-fetch and render driver badges beside driver names (defaults to true for Driver boards) */
   showBadges?: boolean;
-}> = ({ label, rows, nameHeader = "Driver", footer, stale = false, showBadges = nameHeader === "Driver" }) => {
+  /** The key to the badges under the list; off where the caller shows it elsewhere (the online board's filter row) */
+  legend?: boolean;
+}> = ({ label, rows, nameHeader = "Driver", footer, stale = false, showBadges = nameHeader === "Driver", legend = true }) => {
   const sectors = rows.some((r) => r.sectorsMs?.length);
   const actions = rows.some((r) => r.action);
-  const [fetchedBadges, setFetchedBadges] = useState<Record<string, DriverBadge[]>>({});
-  const namesKey = showBadges ? rows.filter((r) => r.badges === undefined).map((r) => driverNameKey(r.title)).join("\n") : "";
-  useEffect(() => {
-    if (!namesKey) return;
-    let live = true;
-    void fetchBadges(namesKey.split("\n")).then((map) => {
-      if (live) setFetchedBadges(map);
-    });
-    return () => {
-      live = false;
-    };
-  }, [namesKey]);
+  const fetchedBadges = useDriverBadges(showBadges ? rows.filter((r) => r.badges === undefined).map((r) => r.title) : []);
+  const badgesOf = (r: BoardRow): readonly DriverBadge[] => r.badges ?? badgesFor(fetchedBadges, r.title);
+  const shownBadges = showBadges && legend ? rows.flatMap(badgesOf) : [];
   return (
     <div className="@container min-w-0">
       <table
@@ -141,13 +157,7 @@ export const BoardTable: React.FC<{
                     </span>
                     <InputIcon input={r.input} className="text-lc-fog" />
                     {showBadges ? (
-                      <DriverBadges
-                        badges={
-                          r.badges ??
-                          (Object.hasOwn(fetchedBadges, driverNameKey(r.title)) ? fetchedBadges[driverNameKey(r.title)] : [])
-                        }
-                        compact
-                      />
+                      <DriverBadges badges={badgesOf(r)} compact />
                     ) : null}
                     {r.mine ? <PlayerTag size="sm" /> : null}
                   </span>
@@ -187,6 +197,7 @@ export const BoardTable: React.FC<{
           ))}
         </tbody>
       </table>
+      <BadgeLegend badges={shownBadges} className="px-2 pt-3 pb-1" />
       {footer}
     </div>
   );
