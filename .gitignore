@@ -40,6 +40,7 @@ __pycache__/
 
 # Local notes & scratch dumps
 HANDOFF.md
+HANDOFF-*.md
 acevo_physics_strings.txt
 
 # Wrangler local state and local-only settings (DEV_ORIGINS, a TURN key for testing)
