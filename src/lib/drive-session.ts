@@ -41,6 +41,7 @@ import {
   nightShareOf,
 } from "@/lib/render/golden-hour-environment";
 import { createVenueNightLighting, type VenueNightLighting } from "@/lib/render/venue-night-lighting";
+import { applyCircuitNightLights, circuitNightSpec } from "@/lib/render/circuit-night-lights";
 import { sameConditions, type SessionConditions } from "@/lib/sim/weather";
 import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
@@ -1417,12 +1418,16 @@ export class DriveSession {
     void builtCircuit.trackRoot.then((root) => {
       if (disposed) return;
       trackRoot = root;
-      if (track.nightLighting) {
-        venueNight = createVenueNightLighting(root, track, track.nightLighting);
+      // or one whose own model has lamps (street lamps, light poles): they glow and light the ground round them
+      const lampSpec = track.nightLighting ? null : circuitNightSpec(trackId);
+      if (track.nightLighting || lampSpec) {
+        const modelLamps = lampSpec ? applyCircuitNightLights(root, track, lampSpec) : [];
+        const mode = lampSpec?.mode ?? "floodlit";
+        venueNight = createVenueNightLighting(root, track, track.nightLighting ?? {}, { mode, modelLamps });
         venueNight.setQuality(settings.graphics.quality);
         venueNight.setNight(nightShareOf(getTrackEnv().weather.sun.elevationDeg));
         scene.add(venueNight.group);
-        env.setFloodlitNight(venueNight.look);
+        if (mode === "floodlit") env.setFloodlitNight(venueNight.look);
       }
       physics.attachTrackRoot?.(root);
       aiFieldOf(raceNow())?.attachTrackRoot(root);
