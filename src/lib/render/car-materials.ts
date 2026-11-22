@@ -19,8 +19,14 @@ import { applyPaintFinish, SATIN_PAINT } from "./paint-finish";
  *
  * - EXT_PAINT_PRIMARY / _SECONDARY / _ACCENT (`PAINT_ZONE_MATERIALS`): a body painted in zones, no texture; the same
  *   satin finish, coloured per car with the livery by lc26-car-model.ts.
+ * - mirror_1 / mirror_2 (`MIRROR_GLASS_MATERIALS`): the wing mirrors' glass wherever the live mirrors are off (every
+ *   view but the cockpit, every opponent). A bright polished mirror whose reflection is pulled up toward the horizon
+ *   behind the car (`MIRROR_GLASS_PATCH`): seen from above, as the T-cam and the chase views see it, the flat glass
+ *   reflects a direction some 20 degrees below the horizon, the ground just behind the car, and showed one even dark
+ *   navy there (most likely the stand-in ground of the sky's environment map, which the cars reflect whenever the probe
+ *   is off: Low graphics, or the automatic quality steps), a flat dark slab.
  *
- * Not touched: EXT_TYRE, mirror_*, INT_DISPLAY, INT_LED, EXT_clearled_security, glass, DRV_*, harness.
+ * Not touched: EXT_TYRE, INT_DISPLAY, INT_LED, EXT_clearled_security, glass, DRV_*, harness.
  */
 
 type PaintTarget = "skin" | "decal" | "carbon";
@@ -45,6 +51,12 @@ const PAINT_REFLECTION = 0.18;
 /** The coat over it: thinner than the satin finish's and sharper, so the sun shows in it as a line of light */
 const PAINT_COAT = 0.12;
 const PAINT_COAT_ROUGHNESS = 0.15;
+
+/** The wing mirrors' glass in the body GLB (wing-mirrors.ts swaps the live image onto the same meshes in the cockpit) */
+const MIRROR_GLASS_MATERIALS: readonly string[] = ["mirror_1", "mirror_2"];
+/** Share of the light the mirror glass reflects (linear, slightly cool): a silvered mirror, brighter than the GLB's 0.6 */
+const MIRROR_REFLECTANCE = [0.78, 0.8, 0.83] as const;
+const MIRROR_ROUGHNESS = 0.04;
 
 /** Carbon base colour floor (linear). The GLB carbon is 0.007, which is too dark for the weave to read. */
 const CARBON_BASE_FLOOR = 0.015;
@@ -101,6 +113,13 @@ function upgradeOne(m: THREE.Material, liveryMask: boolean): THREE.Material {
   if (upgradedMaterials.has(m)) return m;
   const existing = conversions.get(m);
   if (existing) return existing;
+
+  if (MIRROR_GLASS_MATERIALS.includes(m.name) && (m as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+    const glass = mirrorGlass(m as THREE.MeshStandardMaterial);
+    upgradedMaterials.add(glass);
+    conversions.set(m, glass);
+    return glass;
+  }
 
   const target = targetFor(m.name);
   if (!target) return m;
@@ -174,6 +193,39 @@ function applyBodyPaint(out: THREE.MeshPhysicalMaterial): void {
   out.clearcoat = PAINT_COAT;
   out.clearcoatRoughness = PAINT_COAT_ROUGHNESS;
 }
+
+/**
+ * The wing mirror glass: a polished silver mirror (a standard material, no clearcoat or other physical lobes, so it
+ * costs what the GLB's own did) with its environment reflection pulled toward the horizon behind the car
+ */
+function mirrorGlass(src: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+  const out = src.clone();
+  out.color.setRGB(MIRROR_REFLECTANCE[0], MIRROR_REFLECTANCE[1], MIRROR_REFLECTANCE[2]);
+  out.metalness = 1;
+  out.roughness = MIRROR_ROUGHNESS;
+  out.metalnessMap = null;
+  out.roughnessMap = null;
+  out.envMapIntensity = 1;
+  out.customProgramCacheKey = () => "lc26-mirror-glass-v1";
+  out.onBeforeCompile = (shader) => {
+    const envChunk = patchShader(THREE.ShaderChunk.envmap_physical_pars_fragment, MIRROR_GLASS_PATCH, out.name);
+    shader.fragmentShader = patchShader(shader.fragmentShader, [["#include <envmap_physical_pars_fragment>", envChunk]], out.name);
+  };
+  return out;
+}
+
+/**
+ * The mirror's reflection direction (world space, Y up), squeezed vertically and lifted: the reflections of a mirror
+ * seen from above, 20 degrees or so below the horizon, come out a few degrees above it, where both the probe and the
+ * sky's map hold the bright horizon behind the car; across the glass the image still pans side to side with the view
+ */
+const MIRROR_GLASS_PATCH: readonly ShaderPatch[] = [
+  [
+    "reflectVec = transformDirectionByInverseViewMatrix( reflectVec, viewMatrix );",
+    /* glsl */ `reflectVec = transformDirectionByInverseViewMatrix( reflectVec, viewMatrix );
+			reflectVec = normalize( vec3( reflectVec.x, reflectVec.y * 0.2 + 0.12, reflectVec.z ) );`,
+  ],
+];
 
 type Patch = ShaderPatch;
 const patch = patchShader;

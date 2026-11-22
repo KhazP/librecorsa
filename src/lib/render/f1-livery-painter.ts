@@ -3228,6 +3228,13 @@ export function getF1LiveryAtlasTexture(livery: LiveryConfig): THREE.CanvasTextu
 // Object-Space Tri-Orthographic Livery Projection Shader (LC26 & Procedural F1)
 // ---------------------------------------------------------------------------
 
+/**
+ * Where the rear face panel's wing artwork stops (car-space Z, m): it is drawn for the rear wing and crash structure
+ * (z < -1.5 on `f12026.glb`); rear-facing surfaces ahead of the fade, above its carbon base, take the top view's colour
+ */
+const REAR_PANEL_Z_FROM = -1.4;
+const REAR_PANEL_Z_TO = -1.3;
+
 const BLANK_ATLAS = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
 BLANK_ATLAS.colorSpace = THREE.SRGBColorSpace;
 BLANK_ATLAS.needsUpdate = true;
@@ -3286,11 +3293,23 @@ if ( uLiveryEnabled > 0.5 ) {
 		colSide = texture2D( uLiveryAtlas, f1AtlasClamp( uvR, vec2( 0.0, 0.609375 ), vec2( 1.0, 0.234375 ) ) ).rgb;
 	}
 
+	// The halo's inner faces (above the cockpit rim, facing the car's centre line) would take the far side's panel and
+	// its halo sponsor, squeezed onto the curved tube: they take the top view's colour, like the rest of the hoop
+	if ( lp.y > 0.80 && lp.z > -0.06 && lp.z < 0.70 && abs( lp.x ) < 0.36 && ln.x * lp.x < 0.0 ) {
+		colSide = colTop;
+	}
+
 	// 3) REAR / FRONT face panel
 	vec3 colEnd;
 	if ( ln.z < 0.0 ) {
 		vec2 uvRear = vec2( ( 0.65 - lp.x ) / 1.30, ( 1.00 - lp.y ) / 0.65 );
 		colEnd = texture2D( uLiveryAtlas, f1AtlasClamp( uvRear, vec2( 0.0, 0.84375 ), vec2( 0.5, 0.15625 ) ) ).rgb;
+		// The rear panel's upper part is the rear wing's face (its title banner spans y 0.71..0.91): projected along Z it
+		// also landed on every rear-facing surface ahead of the gearbox at that height, the halo's front arc above all,
+		// where the banner showed as smeared letter slices across the hoop. Those take the top view's colour; lower down
+		// the panel is plain carbon and stays
+		float midCar = smoothstep( ${REAR_PANEL_Z_FROM.toFixed(2)}, ${REAR_PANEL_Z_TO.toFixed(2)}, lp.z ) * smoothstep( 0.60, 0.64, lp.y );
+		colEnd = mix( colEnd, colTop, midCar );
 	} else {
 		vec2 uvFront = vec2( ( lp.x - (${X_MIN.toFixed(2)}) ) / ${X_SPAN.toFixed(2)}, ( 0.65 - lp.y ) / 0.57 );
 		colEnd = texture2D( uLiveryAtlas, f1AtlasClamp( uvFront, vec2( 0.5, 0.84375 ), vec2( 0.25, 0.15625 ) ) ).rgb;
