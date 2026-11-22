@@ -17,6 +17,9 @@ and Meshopt compression off. It needs:
 
 The circuit's settings (name, layout, country, city, baseAltitudeM, pitboxes, description, credit, and any setting
 port_ac_track.py reads, such as minWidthM or wallCapM) are a JSON file, by default the GLB's name with .json.
+Two more are for a circuit raced at night: "defaultTimeOfDay" ("night": sessions start at night until the player picks
+a time) and "nightLighting" (floodlight masts and tunnel light, see night_lighting.py). "gridBoxes" (the corner points
+of each painted grid box, in the model's coordinates) stands the start grid on the paint (painted_grid.py).
 Closed circuits only. scripts/tracks/example_circuit.py builds a small circuit this way; see docs/PORTING-TRACKS.md.
 """
 import argparse
@@ -37,6 +40,8 @@ import build_track as bt  # noqa: E402
 import centreline as cl  # noqa: E402
 import glbio  # noqa: E402
 import glbwrite  # noqa: E402
+import night_lighting  # noqa: E402
+import painted_grid  # noqa: E402
 import port_ac_track as pat  # noqa: E402
 import surface as srf  # noqa: E402
 
@@ -255,6 +260,12 @@ def update_index(tid, cfg, data):
     path = os.path.join(ROOT, 'public', 'tracks', 'index.json')
     idx = json.load(open(path, encoding='utf-8')) if os.path.exists(path) else []
     entry = pat.index_entry(tid, cfg, data)
+    if cfg.get('defaultTimeOfDay'):
+        # before `unlisted`, which stays last
+        unlisted = entry.pop('unlisted', None)
+        entry['defaultTimeOfDay'] = cfg['defaultTimeOfDay']
+        if unlisted:
+            entry['unlisted'] = True
     at = next((i for i, e in enumerate(idx) if e['id'] == tid), None)
     if at is None:
         idx.append(entry)
@@ -288,6 +299,27 @@ def main():
     if not args.no_glb and not args.no_line_opt:
         log(f'  optimising F1 and GT3 racing lines for {args.id}...')
         bt.optimise_lines(args.id, cfg.get('lineMarginM'))
+    if cfg.get('gridBoxes') or cfg.get('nightLighting') is not None:
+        finish_track_data(args.id, cfg, args.glb)
+
+
+def finish_track_data(tid, cfg, glb_path):
+    """What the written track data takes from the circuit's settings after the racing lines (which rewrite the file):
+    the start grid on the painted grid boxes, and the floodlight masts and tunnels of a night circuit"""
+    path = os.path.join(ROOT, 'public', 'tracks', tid, 'track_data.json')
+    with open(path, encoding='utf-8') as f:
+        text = f.read()
+    data = json.loads(text)
+    if cfg.get('gridBoxes'):
+        grid = painted_grid.slots(data, cfg['gridBoxes'], log)
+        if grid:
+            data['spawnGrid'] = grid
+    if cfg.get('nightLighting') is not None:
+        j, b = glbio.load(glb_path)
+        data['metadata']['nightLighting'] = night_lighting.place(data, cfg['nightLighting'], glbio.prims(j, b), log)
+    with open(path, 'w', encoding='utf-8') as f:
+        # as the file was written: compact when it has no line breaks
+        json.dump(data, f, ensure_ascii=False, **({'indent': 2} if text.count('\n') > 10 else {'separators': (',', ':')}))
 
 
 if __name__ == '__main__':
