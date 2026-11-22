@@ -602,6 +602,8 @@ export interface CarTelemetry {
   liveTuner?: LiveTunerState;
   /** The physics' own verdict on the running lap (judged track limits): false once it has been cut */
   lapInvalid?: boolean;
+  /** True while on the out-lap before the first start/finish crossing starts lap timing */
+  outLap?: boolean;
   /** Verdict on the lap that was just completed (set together with `lapCount` / `lastLapTimeMs`) */
   lastLapValid?: boolean;
   /** Reference hot pressure at which each tyre grips best (psi gauge) */

@@ -2426,7 +2426,7 @@ export class DriveSession {
       if (!car) return false;
       const rewindS = Math.max(0, replayClockS - rp.timeS);
       const prevLapCount = physics.telemetry.lapCount;
-      const crossedLine = car.lap !== undefined && car.lap < prevLapCount;
+      const crossedLine = (car.lap !== undefined && car.lap < prevLapCount) || (Boolean(car.outLap) && !physics.telemetry.outLap);
       const targetS = car.s ?? physics.sMeters;
       const inLastSector = !track.pointToPoint && track.getSampleAtDistance(targetS).sector === 3;
       // Invalidate before and after restoring pose so both the worker's immediate placement report and local twin see it
@@ -3719,6 +3719,7 @@ export class DriveSession {
               rpm: physics.telemetry.rpm,
               s: physics.sMeters,
               lap: physics.telemetry.lapCount,
+              ...(physics.telemetry.outLap ? { outLap: true } : {}),
               ...(playerDistM !== undefined ? { distM: playerDistM } : {}),
             },
           ];
@@ -4354,6 +4355,37 @@ export class DriveSession {
           tireWearPct: [...physics.telemetry.tireWearPct],
           tireGripFactor: [...physics.telemetry.tireGripFactor],
           wheelSurfaces: [...physics.telemetry.wheelSurfaces],
+          ...(physics.telemetry.tireBandTempsC
+            ? {
+                tireBandTempsC: physics.telemetry.tireBandTempsC.map(
+                  (b) => [b[0], b[1], b[2]] as [number, number, number],
+                ) as [[number, number, number], [number, number, number], [number, number, number], [number, number, number]],
+              }
+            : {}),
+          ...(physics.telemetry.tirePressuresPsi
+            ? { tirePressuresPsi: [...physics.telemetry.tirePressuresPsi] as [number, number, number, number] }
+            : {}),
+          ...(physics.telemetry.tireOptimalPsi
+            ? { tireOptimalPsi: [...physics.telemetry.tireOptimalPsi] as [number, number, number, number] }
+            : {}),
+          ...(physics.telemetry.tireFlatSpotSeverity
+            ? { tireFlatSpotSeverity: [...physics.telemetry.tireFlatSpotSeverity] as [number, number, number, number] }
+            : {}),
+          ...(physics.telemetry.tireGrainLevel
+            ? { tireGrainLevel: [...physics.telemetry.tireGrainLevel] as [number, number, number, number] }
+            : {}),
+          ...(physics.telemetry.tireBlisterLevel
+            ? { tireBlisterLevel: [...physics.telemetry.tireBlisterLevel] as [number, number, number, number] }
+            : {}),
+          ...(physics.telemetry.tireDirtyLevel
+            ? { tireDirtyLevel: [...physics.telemetry.tireDirtyLevel] as [number, number, number, number] }
+            : {}),
+          ...(physics.telemetry.brakeCoreTempsC
+            ? { brakeCoreTempsC: [...physics.telemetry.brakeCoreTempsC] as [number, number, number, number] }
+            : {}),
+          ...(physics.telemetry.brakePadMuFactor
+            ? { brakePadMuFactor: [...physics.telemetry.brakePadMuFactor] as [number, number, number, number] }
+            : {}),
           peers: [...(physics.telemetry.peers ?? [])],
         });
         if (replaying) {

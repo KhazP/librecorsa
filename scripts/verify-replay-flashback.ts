@@ -933,4 +933,72 @@ check('AiOpponentField damage history retains snapshots across >150 s rewinds wi
   assert.equal(targetAi.retired, false, 'rewinding 195 s back cleanly restores pre-retirement state');
 });
 
+check('ReplayBuffer + poseFromReplayCar preserve outLap so Lap 1 -> out-lap Flashback stays on out-lap (both engines)', () => {
+  const track = getActiveTrackData(1200);
+  const nearLineS = track.totalLengthM - 15;
+  const s = track.getSampleAtDistance(nearLineS);
+  const yaw = Math.atan2(s.tangent.x, s.tangent.z);
+  const buf = new ReplayBuffer({ maxSeconds: 30, hz: 20 });
+  buf.push(0, [
+    {
+      id: 'player',
+      x: s.position.x,
+      y: s.position.y,
+      z: s.position.z,
+      qx: 0,
+      qy: Math.sin(yaw / 2),
+      qz: 0,
+      qw: Math.cos(yaw / 2),
+      speedKmh: 180,
+      steer: 0,
+      throttle: 1,
+      brake: 0,
+      gear: 5,
+      rpm: 9000,
+      s: nearLineS,
+      lap: 0,
+      outLap: true,
+    },
+  ]);
+  buf.push(1.0, [
+    {
+      id: 'player',
+      x: s.position.x,
+      y: s.position.y,
+      z: s.position.z,
+      qx: 0,
+      qy: Math.sin(yaw / 2),
+      qz: 0,
+      qw: Math.cos(yaw / 2),
+      speedKmh: 180,
+      steer: 0,
+      throttle: 1,
+      brake: 0,
+      gear: 5,
+      rpm: 9000,
+      s: 40,
+      lap: 0,
+    },
+  ]);
+  const outFrame = buf.frameAt(0)!;
+  const lap1Frame = buf.frameAt(1.0)!;
+  assert.equal(outFrame.cars[0].lap, 0);
+  assert.equal(outFrame.cars[0].outLap, true);
+  assert.equal(lap1Frame.cars[0].outLap, undefined);
+  const outPose = poseFromReplayCar(outFrame.cars[0]);
+  assert.equal(outPose.outLap, true);
+  for (const sim of [new F12026CarSim(track), new F1Physics2026(track)]) {
+    sim.resetToStartGrid(true);
+    // Simulate having crossed onto Lap 1 (outLap=false, lapCount=0)
+    sim.restorePose({ ...outPose, outLap: false, lapCount: 0 });
+    assert.equal(sim.telemetry.outLap, false);
+    // Now rewind back onto the out-lap and drive across the start/finish line
+    sim.restorePose(outPose);
+    assert.equal(sim.telemetry.outLap, true, 'restorePose restores outLap=true');
+    for (let i = 0; i < 60; i++) sim.step(1 / 60, { throttle: 1 });
+    assert.equal(sim.telemetry.lapCount, 0, 'crossing line after rewinding onto out-lap starts lap 1 without counting out-lap as a lap');
+    assert.equal(sim.telemetry.outLap, false, 'outLap clears after crossing the line');
+  }
+});
+
 console.log(`\n${passed} checks passed`);

@@ -1128,6 +1128,7 @@ export class F1Physics2026 {
     const startedAheadOfLine = !flyingStart && !pointToPoint && this.sMeters > 0 && this.sMeters < lapLen * 0.5;
     this.lineCrossingStartsLap = !(raceStart && startedAheadOfLine);
     this.shortStartLap = raceStart && startedAheadOfLine;
+    this.telemetry.outLap = this.lineCrossingStartsLap;
     this.settleSuspension();
     this.finishPlacement();
   }
@@ -1152,6 +1153,7 @@ export class F1Physics2026 {
   public teleportToDistance(sMeters: number, speedMs = 0, lateral = 0): void {
     this.lineCrossingStartsLap = false;
     this.shortStartLap = false;
+    this.telemetry.outLap = false;
     // Moved mid-lap (corner practice, a stuck-car rescue): the lap under way can't count
     this.invalidateLap();
     const wrapped = ((sMeters % this.track.totalLengthM) + this.track.totalLengthM) % this.track.totalLengthM;
@@ -1169,18 +1171,19 @@ export class F1Physics2026 {
   }
 
   /** Back at a recorded pose (heading included), rolling at its speed, with the tyres and brakes as they are */
-  public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number }): void {
+  public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean }): void {
     const p = this.track.projectWorldToTrack(pose.x, pose.z, pose.s ?? this.sMeters);
     const speedMs = Math.max(0, pose.speedMs);
     const tangent = this.track.getSampleAtDistance(p.s).tangent;
     const trackHeadingRad = Math.atan2(tangent.x, tangent.z);
-    this.lineCrossingStartsLap = false;
+    if (pose.outLap !== undefined) this.lineCrossingStartsLap = pose.outLap;
     this.shortStartLap = false;
     // Put back mid-lap: the lap under way can't count
     this.invalidateLap();
     if (pose.lapCount !== undefined && Number.isFinite(pose.lapCount)) {
       this.telemetry.lapCount = Math.max(0, Math.floor(pose.lapCount));
     }
+    this.telemetry.outLap = this.lineCrossingStartsLap;
     this.timeAccumulator = 0;
     this.sMeters = p.s;
     this.lateralOffsetM = p.lateralOffset;
@@ -3464,6 +3467,7 @@ export class F1Physics2026 {
     const offTrack = this.lastObservation.outOfTrack;
     if (offTrack && this.trackLimitsMode === 'strict') this.lapValid = false;
     t.lapInvalid = !this.lapValid;
+    t.outLap = this.lineCrossingStartsLap;
 
     let dominantSurface: SurfaceType = 'asphalt';
     if (onKerbLeft || onKerbRight) dominantSurface = 'kerb';

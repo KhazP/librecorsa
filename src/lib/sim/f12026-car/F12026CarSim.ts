@@ -418,16 +418,21 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
         const flagged = h === null || h - prev - b.y * side * stepM > AP_EDGE_STEP_M;
         if (flagged) {
           let finePrev = prev;
+          let stopped = false;
           for (let fLat = prevLat + AP_EDGE_PROBE_M; fLat <= probeLat + 1e-6; fLat += AP_EDGE_PROBE_M) {
             const fh = at(side * fLat);
             if (fh === null ? fLat <= half : fh - finePrev - b.y * side * AP_EDGE_PROBE_M > AP_EDGE_STEP_M) {
               usable = Math.min(half, fLat - AP_EDGE_PROBE_M - (fh === null ? 0 : AP_EDGE_APRON_M));
+              stopped = true;
               break;
             }
-            if (fh === null) break;
+            if (fh === null) {
+              stopped = true;
+              break;
+            }
             finePrev = fh;
           }
-          break;
+          if (stopped) break;
         }
         prev = h;
         prevLat = probeLat;
@@ -445,20 +450,28 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
         const stepM = probeD - lastD;
         if (stepM <= 1e-6) break;
         const h = at(side * (half + probeD));
-        const okSurface = h !== null && (hit.surface === 'kerb' || hit.surface === 'road');
+        const probeSurface = hit.surface;
+        const okSurface = h !== null && (probeSurface === 'kerb' || probeSurface === 'road');
         const okSlope = okSurface && h - last - b.y * side * stepM <= AP_EDGE_STEP_M;
         if (!okSlope) {
           let fineLast = last;
+          let stopped = false;
           for (let fd = lastD + AP_EDGE_PROBE_M; fd <= probeD + 1e-6; fd += AP_EDGE_PROBE_M) {
             const fh = at(side * (half + fd));
-            if (fh === null || (hit.surface !== 'kerb' && hit.surface !== 'road')) break;
-            if (fh - fineLast - b.y * side * AP_EDGE_PROBE_M > AP_EDGE_STEP_M) break;
+            if (fh === null || (hit.surface !== 'kerb' && hit.surface !== 'road')) {
+              stopped = true;
+              break;
+            }
+            if (fh - fineLast - b.y * side * AP_EDGE_PROBE_M > AP_EDGE_STEP_M) {
+              stopped = true;
+              break;
+            }
             if (hit.surface === 'kerb') out = fd;
             fineLast = fh;
           }
-          break;
+          if (stopped) break;
         }
-        if (hit.surface === 'kerb') out = probeD;
+        if (probeSurface === 'kerb') out = probeD;
         last = h;
         lastD = probeD;
       }
@@ -2002,6 +2015,7 @@ export class F12026CarSim implements SimulatorCar {
     const startedAheadOfLine = !flyingStart && !pointToPoint && this.s > 0 && this.s < L * 0.5;
     this.lineCrossingStartsLap = !(raceStart && startedAheadOfLine);
     this.shortStartLap = raceStart && startedAheadOfLine;
+    this.telemetry.outLap = this.lineCrossingStartsLap;
     this.telemetry.currentLapTimeMs = 0;
     this.telemetry.topSpeedThisLapKmh = 0;
   }
@@ -2009,6 +2023,7 @@ export class F12026CarSim implements SimulatorCar {
   public teleportToDistance(sMeters: number, speedMs = 0, lateral = 0): void {
     this.lineCrossingStartsLap = false;
     this.shortStartLap = false;
+    this.telemetry.outLap = false;
     // Moved mid-lap (corner practice, a stuck or lost car's rescue): the lap under way can't count
     this.invalidateLap();
     this.placeAt(wrap(sMeters, this.track.totalLengthM), lateral, Math.max(0, speedMs));
@@ -2016,14 +2031,16 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /** Back on the ground at a recorded pose, rolling at its speed, with the tyres as they are now */
-  public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number }): void {
-    // Put back: the lap under way can't count. An out-lap stays one (the next crossing starts the timed lap, which the
-    // Flashback forfeits, instead of counting the out-lap as a lap)
+  public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean }): void {
+    // Put back: the lap under way can't count. Restore recorded outLap state when supplied (so rewinding from lap 1
+    // back onto the out-lap does not count the out-lap as a lap), otherwise preserve the current out-lap flag.
+    if (pose.outLap !== undefined) this.lineCrossingStartsLap = pose.outLap;
     this.shortStartLap = false;
     this.invalidateLap();
     if (pose.lapCount !== undefined && Number.isFinite(pose.lapCount)) {
       this.telemetry.lapCount = Math.max(0, Math.floor(pose.lapCount));
     }
+    this.telemetry.outLap = this.lineCrossingStartsLap;
     const p = this.track.projectWorldToTrack(pose.x, pose.z, pose.s ?? this.s);
     this.progressHintS = this.poseHintS = p.s;
     this.resetVehicle(pose.x, pose.z, pose.yawRad, Math.max(0, pose.speedMs), true);
@@ -3094,6 +3111,7 @@ export class F12026CarSim implements SimulatorCar {
     this.wasOffTrack = offTrack;
     if (offTrack && this.trackLimitsMode === 'strict') this.lapValid = false;
     t.lapInvalid = !this.lapValid;
+    t.outLap = this.lineCrossingStartsLap;
     let surface: SurfaceType = 'asphalt';
     if (onKerbLeft || onKerbRight) surface = 'kerb';
     else if (surfaces[0] === 'grass' || surfaces[1] === 'grass') surface = 'grass';

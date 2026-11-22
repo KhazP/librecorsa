@@ -199,8 +199,17 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
   const syncTwinToWorker = () => {
     if (stateEpoch !== epoch) return;
     const p = view.worldPosition;
-    if (twin.restorePose) twin.restorePose({ x: p.x, z: p.z, yawRad: yawOf(view.worldQuaternion), speedMs: view.vxMs, s: view.sMeters });
-    else twin.teleportToDistance(view.sMeters, view.vxMs, view.lateralOffsetM);
+    if (twin.restorePose) {
+      twin.restorePose({
+        x: p.x,
+        z: p.z,
+        yawRad: yawOf(view.worldQuaternion),
+        speedMs: view.vxMs,
+        s: view.sMeters,
+        lapCount: view.telemetry.lapCount,
+        ...(view.telemetry.outLap !== undefined ? { outLap: view.telemetry.outLap } : {}),
+      });
+    } else twin.teleportToDistance(view.sMeters, view.vxMs, view.lateralOffsetM);
     twinFresh = false;
   };
 
@@ -257,6 +266,7 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
           const vt = view.telemetry;
           const tt = twin.telemetry;
           tt.lapCount = vt.lapCount;
+          tt.outLap = vt.outLap;
           tt.currentLapTimeMs = vt.currentLapTimeMs;
           tt.lastLapTimeMs = vt.lastLapTimeMs;
           tt.bestLapTimeMs = vt.bestLapTimeMs;

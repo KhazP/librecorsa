@@ -429,6 +429,8 @@ export interface ReplayCarState {
   s?: number;
   /** The player's lap count here */
   lap?: number;
+  /** True while on the out-lap before the first timing-line crossing */
+  outLap?: boolean;
   /** Cumulative race distance (m) during an AI race, so flashback rewinds lap clocks cleanly */
   distM?: number;
 }

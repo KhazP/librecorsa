@@ -65,6 +65,7 @@ function blendCar(a: ReplayCarState, b: ReplayCarState, f: number): ReplayCarSta
           ? { s: b.s }
           : {}),
     ...(a.lap !== undefined || b.lap !== undefined ? { lap: f < 0.5 ? (a.lap ?? b.lap) : (b.lap ?? a.lap) } : {}),
+    ...((f < 0.5 ? a.outLap : b.outLap) ? { outLap: true } : {}),
     ...(a.distM !== undefined && b.distM !== undefined
       ? { distM: lerp(a.distM, b.distM, f) }
       : a.distM !== undefined
@@ -168,7 +169,7 @@ export class ReplayBuffer {
       data[o + 11] = c.gear;
       data[o + 12] = c.rpm;
       data[o + 13] = c.s ?? Number.NaN;
-      data[o + 14] = c.lap ?? Number.NaN;
+      data[o + 14] = c.outLap ? -1 : (c.lap ?? Number.NaN);
       data[o + 15] = c.distM ?? Number.NaN;
     }
 
@@ -413,7 +414,7 @@ export class ReplayBuffer {
       gear: Math.round(d[o + 11]),
       rpm: d[o + 12],
       ...(Number.isNaN(s) ? {} : { s }),
-      ...(Number.isNaN(lap) ? {} : { lap: Math.round(lap) }),
+      ...(Number.isNaN(lap) ? {} : lap < 0 ? { lap: 0, outLap: true } : { lap: Math.round(lap) }),
       ...(Number.isNaN(distM) ? {} : { distM }),
     };
   }
@@ -470,6 +471,7 @@ export function poseFromReplayCar(car: ReplayCarState): {
   speedMs: number;
   s?: number;
   lapCount?: number;
+  outLap?: boolean;
 } {
   const len = Math.hypot(car.qx, car.qy, car.qz, car.qw) || 1;
   const qx = car.qx / len;
@@ -484,6 +486,6 @@ export function poseFromReplayCar(car: ReplayCarState): {
     yawRad: Math.atan2(fx, fz),
     speedMs: Math.max(0, car.speedKmh / 3.6),
     ...(car.s !== undefined ? { s: car.s } : {}),
-    ...(car.lap !== undefined ? { lapCount: car.lap } : {}),
+    ...(car.lap !== undefined ? { lapCount: car.lap, outLap: Boolean(car.outLap) } : {}),
   };
 }
