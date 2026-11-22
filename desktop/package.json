@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/main.js && node --check src/hid-policy.js && node --check src/nav-policy.js && npm test",
+    "check": "node --check src/main.js && node --check src/hid-policy.js && node --check src/nav-policy.js && node --check scripts/refresh-update-info.js && npm test",
     "pack": "electron-builder --dir",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
