@@ -34,6 +34,8 @@ import {
   evaluateRadar,
   formatClock,
   fuelLapsLeft,
+  HEADLIGHT_WORD,
+  headlightState,
   leaderboardWindow,
   RADAR_CAR_L,
   RADAR_CAR_W,
@@ -451,6 +453,7 @@ const WeatherStrip: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
   const units = useUnits();
   const surface = trackSurfaceState(weather.waterMm);
   const surfaceColor = surface === "dry" ? undefined : surface === "damp" ? "var(--tp-user)" : HUD_INFO;
+  const lights = headlightState(weather);
   return (
     <section aria-label="Weather" className={`${PANEL} flex items-center gap-3 border border-white/15 px-3 py-1.5 uppercase`}>
       {weather.timeMoving ? (
@@ -464,6 +467,11 @@ const WeatherStrip: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
       {weather.rain > 0.05 ? (
         <Cell label="RAIN" color={HUD_INFO}>
           {`${Math.round(weather.rain * 100)}%`}
+        </Cell>
+      ) : null}
+      {lights ? (
+        <Cell label="LTS" color={lights === "flash" ? "var(--tp-user)" : lights === "off" ? "rgba(255,255,255,0.45)" : undefined}>
+          {HEADLIGHT_WORD[lights]}
         </Cell>
       ) : null}
     </section>

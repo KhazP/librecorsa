@@ -25,7 +25,15 @@ import { useUnits } from "@/lib/settings/ui-prefs";
 import { aidsActive, formatSpeed, formatTemp, HUD_GAIN, HUD_INFO, HUD_LOSS, HUD_SHIFT, speedUnit } from "../hud-format";
 import { aeroReadout } from "../aero-label";
 import { type WeatherHudState } from "../WeatherBadge";
-import { dayClock, fuelLapsLeft, referenceLapS, SURFACE_WORD, trackSurfaceState } from "../third-party-data";
+import {
+  dayClock,
+  fuelLapsLeft,
+  HEADLIGHT_WORD,
+  headlightState,
+  referenceLapS,
+  SURFACE_WORD,
+  trackSurfaceState,
+} from "../third-party-data";
 import { anchor, gearLabel, type HudDesignProps } from "./hud-style-parts";
 import { revLights, useFuelPerLap } from "./third-party-parts";
 import palette from "./h2h.module.css";
@@ -492,6 +500,7 @@ const WeatherCard: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
   const units = useUnits();
   const surface = trackSurfaceState(weather.waterMm);
   const rainIcon = weather.rain > 0.5 ? "weatherStorm" : weather.rain > 0.05 ? "weatherRain" : "weatherClear";
+  const lights = headlightState(weather);
   return (
     <section aria-label="Weather" className="w-[236px] border border-(--tp-border) bg-(--tp-bg-a) text-(--tp-white)">
       <div className="grid grid-cols-2 border-b border-(--tp-border)">
@@ -504,7 +513,7 @@ const WeatherCard: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
           <span className="text-[16px] leading-none font-bold">{formatTemp(weather.trackC, units)}</span>
         </div>
       </div>
-      <div className="grid grid-cols-2 bg-(--tp-card-a)">
+      <div className={`grid ${lights ? "grid-cols-3" : "grid-cols-2"} bg-(--tp-card-a)`}>
         <div className="grid justify-items-center gap-1 px-2 py-1.5">
           <span className="text-[10px] leading-none tracking-[0.15em] text-(--tp-dim) uppercase">Surface</span>
           <span
@@ -522,6 +531,17 @@ const WeatherCard: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
             {weather.rain > 0.05 ? `${Math.round(weather.rain * 100)}%` : weather.timeMoving ? dayClock(weather.clockH) : "FIXED"}
           </span>
         </div>
+        {lights ? (
+          <div className="grid justify-items-center gap-1 border-l border-(--tp-border) px-2 py-1.5">
+            <span className="text-[10px] leading-none tracking-[0.15em] text-(--tp-dim) uppercase">Lights</span>
+            <span
+              className="text-[12px] leading-none font-bold uppercase"
+              style={{ color: lights === "flash" ? "var(--tp-yellow)" : lights === "off" ? "var(--tp-dim)" : "var(--tp-white)" }}
+            >
+              {HEADLIGHT_WORD[lights]}
+            </span>
+          </div>
+        ) : null}
       </div>
     </section>
   );

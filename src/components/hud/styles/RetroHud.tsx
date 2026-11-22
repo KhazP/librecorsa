@@ -52,6 +52,8 @@ import {
   dayClock,
   driverLabel,
   evaluateRadar,
+  HEADLIGHT_WORD,
+  headlightState,
   RADAR_CAR_L,
   RADAR_CAR_W,
   RADAR_VIEW_RANGE_M,
@@ -592,6 +594,7 @@ const MapPanel: React.FC<Pick<HudDesignProps, "t" | "map" | "mapMode">> = ({ t, 
 const WeatherPanel: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
   const units = useUnits();
   const surface = trackSurfaceState(weather.waterMm);
+  const lights = headlightState(weather);
   return (
     <Frame size="medium" faceClassName="grid grid-cols-2 gap-x-2 gap-y-1.5 px-2.5 py-2">
       <div className="flex flex-col gap-0.5">
@@ -617,6 +620,17 @@ const WeatherPanel: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
           {weather.rain > 0.05 ? `${Math.round(weather.rain * 100)}%` : weather.timeMoving ? dayClock(weather.clockH) : "FIXED"}
         </span>
       </div>
+      {lights ? (
+        <div className="flex flex-col gap-0.5">
+          <span className={LBL}>Lights</span>
+          <span
+            className="text-[11px] leading-none uppercase"
+            style={{ color: lights === "flash" ? "var(--tp-amber)" : lights === "off" ? "rgba(255,255,255,0.45)" : undefined }}
+          >
+            {HEADLIGHT_WORD[lights]}
+          </span>
+        </div>
+      ) : null}
     </Frame>
   );
 };
