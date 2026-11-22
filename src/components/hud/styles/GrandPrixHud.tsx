@@ -12,6 +12,7 @@
 import React from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import { useUnits } from "@/lib/settings/ui-prefs";
+import { TEMPERATURE_LABEL, temperatureIn } from "@/lib/settings/units";
 import {
   CLASSIC_CAR_IDS,
   HUD_BEST,
@@ -28,6 +29,9 @@ import {
   formatLapTime,
   lapClockMs,
   formatSpeed,
+  formatTemp,
+  sectorDone,
+  sectorTimeColor,
   speedUnit,
 } from "../hud-format";
 import { aeroReadout } from "../aero-label";
@@ -97,20 +101,25 @@ function compoundMeta(compound: TireCompound | undefined): { letter: string; col
   }
 }
 
-/** No sector times (the out-lap's sector strip) */
-const NO_SECTORS: readonly [number, number, number] = [0, 0, 0];
+/**
+ * The standard mode's six standings rows: the top six, or the top three and the player with the cars around them once
+ * the player runs seventh or lower, so the player's own row never drops off. Each keeps its real position
+ */
+function compactStandings<E extends { isPlayer?: boolean }>(st: readonly E[]): { e: E; i: number }[] {
+  const p = st.findIndex((e) => e.isPlayer);
+  if (p < 6) return st.slice(0, 6).map((e, i) => ({ e, i }));
+  const around = p + 1 < st.length ? [p - 1, p, p + 1] : [p - 2, p - 1, p];
+  return [0, 1, 2, ...around].map((i) => ({ e: st[i], i }));
+}
 
-function activeSectorColor(
-  sectorIndex: number,
-  currentSector: number,
-  sectorMs: number | null | undefined,
-  bestSectorMs: number | null | undefined,
-): string {
-  if (sectorMs && sectorMs > 0) {
-    if (bestSectorMs && sectorMs <= bestSectorMs) return HUD_BEST;
-    return HUD_GAIN;
-  }
-  if (currentSector === sectorIndex) return "#38bdf8";
+/**
+ * A sector pip's colour, as the other layouts mark sectors (`sectorDone`, `sectorTimeColor`): a sector of this lap
+ * that is done is best, personal best or slower against the best; the sector the car is in is lit; the rest wait.
+ * Never the out-lap's or the last lap's times
+ */
+function sectorPipColor(t: CarTelemetry, index: number): string {
+  if (sectorDone(t, index)) return sectorTimeColor(t.sectorTimesMs[index], t.bestSectorTimesMs[index], !t.race);
+  if (t.currentSector === index + 1) return "#38bdf8";
   return "rgba(255,255,255,0.12)";
 }
 
@@ -125,8 +134,10 @@ const HaloCluster: React.FC<{
   driverLabel: string;
   position: number;
   teamColor: string;
+  /** A car without ERS draws no battery, boost or overtake readouts */
+  hasErs: boolean;
   scale?: number;
-}> = ({ t, revRange, units, driverLabel, position, teamColor, scale }) => {
+}> = ({ t, revRange, units, driverLabel, position, teamColor, hasErs, scale }) => {
   const primarySpeed = formatSpeed(t.speedKmh, units);
   const primaryUnit = speedUnit(units).toUpperCase();
 
@@ -265,7 +276,7 @@ const HaloCluster: React.FC<{
           <circle r="58" fill="url(#gp-pod-bg)" stroke="rgba(103, 232, 249, 0.45)" strokeWidth="1.6" />
           <circle r="53" fill="none" stroke="rgba(255, 255, 255, 0.1)" strokeWidth="0.8" />
           {/* Bottom battery arc */}
-          <circle
+          {hasErs ? <circle
             r={r}
             fill="none"
             stroke="#38bdf8"
@@ -273,7 +284,7 @@ const HaloCluster: React.FC<{
             strokeLinecap="round"
             strokeDasharray={`${ersArc} ${circ}`}
             transform="rotate(115)"
-          />
+          /> : null}
           <text y="-36" fill="#cbd5e1" fontSize="7.5" fontWeight="800" textAnchor="middle" letterSpacing="1.2">
             {primaryUnit}
           </text>
@@ -288,7 +299,9 @@ const HaloCluster: React.FC<{
           >
             {primarySpeed}
           </text>
-          {/* BOOST segmented meter + OVERTAKE pill */}
+          {/* BOOST segmented meter, OVERTAKE pill and battery: only on a car with ERS (a car without shows DRS alone) */}
+          {hasErs ? (
+            <>
           <text y="1" fill="#94a3b8" fontSize="5.8" fontWeight="800" textAnchor="middle" letterSpacing="1.2">
             BOOST
           </text>
@@ -342,6 +355,15 @@ const HaloCluster: React.FC<{
           >
             {Math.round(ers)}%
           </text>
+            </>
+          ) : aeroOpen ? (
+            <>
+              <rect x="-32" y="11" width="64" height="10" rx="5" fill="#10b981" stroke="#34d399" strokeWidth="0.7" />
+              <text y="18" fill="#03261b" fontSize="6.6" fontWeight="900" textAnchor="middle" letterSpacing="1">
+                DRS OPEN
+              </text>
+            </>
+          ) : null}
         </g>
 
         {/* Right curved bar: DEPLOY / THROTTLE */}
@@ -476,7 +498,10 @@ const SculptedCluster: React.FC<{
   overtakeActive: boolean;
   aeroOpen: boolean;
   tireTempsC: [number, number, number, number];
-}> = ({ hasErs, ers, fuelKg, gear, atShift, speedLbl, speed, rpm, maxRpm, revFrac, overtakeActive, aeroOpen, tireTempsC }) => {
+  units: ReturnType<typeof useUnits>;
+}> = ({ hasErs, ers, fuelKg, gear, atShift, speedLbl, speed, rpm, maxRpm, revFrac, overtakeActive, aeroOpen, tireTempsC, units }) => {
+  const tempLbl = TEMPERATURE_LABEL[units.temperature];
+  const temp = (c: number) => Math.round(temperatureIn(c, units.temperature));
   const leftFrac = hasErs ? ers / 100 : Math.min(1, fuelKg / 100);
   const leftColor = hasErs ? (ers > 35 ? "#d9f99d" : ers > 15 ? "#fde047" : "#ef4444") : "#fbbf24";
   const r = 36;
@@ -507,7 +532,7 @@ const SculptedCluster: React.FC<{
           </filter>
         </defs>
 
-        {/* Side tyre-temp (°C) wings */}
+        {/* Side tyre-temp wings, in the player's temperature unit */}
         <g transform="translate(-14, 54)">
           <rect
             x="-17"
@@ -520,13 +545,13 @@ const SculptedCluster: React.FC<{
             strokeWidth="0.9"
           />
           <text x="0" y="-14" fill="#e2e8f0" fontSize="7" fontWeight="800" textAnchor="middle" letterSpacing="0.8">
-            °C
+            {tempLbl}
           </text>
           <text x="0" y="-1" fill={tyreTempColor(tireTempsC[0])} fontSize="11" fontWeight="900" textAnchor="middle" fontFamily="var(--font-geist-mono), monospace">
-            {Math.round(tireTempsC[0])}
+            {temp(tireTempsC[0])}
           </text>
           <text x="0" y="15" fill={tyreTempColor(tireTempsC[2])} fontSize="11" fontWeight="900" textAnchor="middle" fontFamily="var(--font-geist-mono), monospace">
-            {Math.round(tireTempsC[2])}
+            {temp(tireTempsC[2])}
           </text>
         </g>
         <g transform="translate(330, 54)">
@@ -541,13 +566,13 @@ const SculptedCluster: React.FC<{
             strokeWidth="0.9"
           />
           <text x="0" y="-14" fill="#e2e8f0" fontSize="7" fontWeight="800" textAnchor="middle" letterSpacing="0.8">
-            °C
+            {tempLbl}
           </text>
           <text x="0" y="-1" fill={tyreTempColor(tireTempsC[1])} fontSize="11" fontWeight="900" textAnchor="middle" fontFamily="var(--font-geist-mono), monospace">
-            {Math.round(tireTempsC[1])}
+            {temp(tireTempsC[1])}
           </text>
           <text x="0" y="15" fill={tyreTempColor(tireTempsC[3])} fontSize="11" fontWeight="900" textAnchor="middle" fontFamily="var(--font-geist-mono), monospace">
-            {Math.round(tireTempsC[3])}
+            {temp(tireTempsC[3])}
           </text>
         </g>
 
@@ -674,8 +699,10 @@ const SculptedCluster: React.FC<{
 const TyreWearCard: React.FC<{
   tireWearPct: [number, number, number, number];
   ers: number;
+  /** The DEPLOY / ERS line is left out on a car without ERS */
+  hasErs: boolean;
   overtakeOn: boolean;
-}> = ({ tireWearPct, ers, overtakeOn }) => {
+}> = ({ tireWearPct, ers, hasErs, overtakeOn }) => {
   const corners = [
     { label: "FL", wear: Math.round(tireWearPct[0]), x: 34, y: 24 },
     { label: "FR", wear: Math.round(tireWearPct[1]), x: 162, y: 24 },
@@ -728,10 +755,12 @@ const TyreWearCard: React.FC<{
           TYRE WEAR
         </text>
       </svg>
-      <div className="flex items-center justify-between border-t border-white/10 bg-[rgb(16_20_28/0.95)] px-2.5 py-1 text-[10px] font-extrabold tracking-[0.08em]">
-        <span className={overtakeOn ? "text-[#facc15]" : "text-slate-400"}>{overtakeOn ? "OVERTAKE" : "DEPLOY"}</span>
-        <span className={palette.mono}>ERS {Math.round(ers)}%</span>
-      </div>
+      {hasErs ? (
+        <div className="flex items-center justify-between border-t border-white/10 bg-[rgb(16_20_28/0.95)] px-2.5 py-1 text-[10px] font-extrabold tracking-[0.08em]">
+          <span className={overtakeOn ? "text-[#facc15]" : "text-slate-400"}>{overtakeOn ? "OVERTAKE" : "DEPLOY"}</span>
+          <span className={palette.mono}>ERS {Math.round(ers)}%</span>
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -791,9 +820,6 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
       null,
     );
     const hasFastestLap = Boolean(fastestMs && me?.bestLapMs === fastestMs);
-    // None of this lap's sectors on the out-lap: a restart keeps the last run's times
-    const curSectors = t.outLap ? NO_SECTORS : t.sectorTimesMs;
-    const bestSectors = t.bestSectorTimesMs;
 
     return (
       <div className={`pointer-events-none absolute inset-0 select-none ${palette.palette}`}>
@@ -871,6 +897,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
         {/* Halo-mounted curved cluster */}
         <HaloCluster
           t={t}
+          hasErs={hasErs}
           revRange={revRange}
           units={units}
           driverLabel={driverName}
@@ -935,12 +962,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                   <div
                     className={palette.sectorPipBar}
                     style={{
-                      backgroundColor: activeSectorColor(
-                        idx + 1,
-                        t.currentSector,
-                        curSectors[idx],
-                        bestSectors[idx],
-                      ),
+                      backgroundColor: sectorPipColor(t, idx),
                     }}
                   />
                   <span>S{idx + 1}</span>
@@ -981,8 +1003,6 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
   // --------------------------------------------------------------------------
   // MODE B: Standard HUD (other cameras or non-open-wheel cars)
   // --------------------------------------------------------------------------
-  const curSectors = t.outLap ? NO_SECTORS : t.sectorTimesMs;
-  const bestSectors = t.bestSectorTimesMs;
   const deltaFillPct = deltaS === null ? 0 : Math.min(100, Math.abs(deltaS) * 35);
   const deltaColor = deltaS === null ? HUD_SLATE : deltaS <= 0 ? HUD_GAIN : HUD_LOSS;
 
@@ -1008,8 +1028,15 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
           </div>
           <div>
             {race?.standings.length ? (
-              race.standings.slice(0, 6).map((e, i) => {
+              compactStandings(race.standings).map(({ e, i }) => {
                 const cMeta = compoundMeta(e.compound);
+                const st = race.standings;
+                const gap =
+                  i === 0
+                    ? formatLapTime(e.bestLapMs || e.lastLapMs)
+                    : towerGaps === "leader"
+                      ? `+${formatGap(e.gapToLeaderS, true)}`
+                      : `+${formatGap(e.intervalS ?? e.gapToLeaderS - st[i - 1].gapToLeaderS, true)}`;
                 return (
                   <div key={`${i}-${e.driverCode}`} className={`${palette.stdRow} ${e.isPlayer ? palette.tvRowPlayer : ""}`}>
                     <span className="text-slate-400">{i + 1}</span>
@@ -1017,9 +1044,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                     <span className="font-black" style={{ color: cMeta.color }}>
                       {cMeta.letter}
                     </span>
-                    <span className={palette.mono}>
-                      {i === 0 ? formatLapTime(e.bestLapMs || e.lastLapMs) : `+${formatGap(e.gapToLeaderS, true)}`}
-                    </span>
+                    <span className={palette.mono}>{e.retired ? "OUT" : gap}</span>
                   </div>
                 );
               })
@@ -1074,7 +1099,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                   key={idx}
                   className={palette.stdSectorSeg}
                   style={{
-                    backgroundColor: activeSectorColor(idx + 1, t.currentSector, curSectors[idx], bestSectors[idx]),
+                    backgroundColor: sectorPipColor(t, idx),
                   }}
                 >
                   S{idx + 1}
@@ -1125,6 +1150,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
           overtakeActive={Boolean(t.manualOverrideActive)}
           aeroOpen={aero.open}
           tireTempsC={t.tireTempsC}
+          units={units}
         />
       </div>
 
@@ -1135,7 +1161,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
           className="pointer-events-auto absolute flex flex-col items-end gap-2"
           style={{ bottom: EDGE, right: EDGE, ...anchor(scale, "bottom right") }}
         >
-          <TyreWearCard tireWearPct={t.tireWearPct} ers={ers} overtakeOn={Boolean(t.manualOverrideActive)} />
+          <TyreWearCard tireWearPct={t.tireWearPct} ers={ers} hasErs={hasErs} overtakeOn={Boolean(t.manualOverrideActive)} />
           {mfd ?? (
             <div className={`${palette.plate} ${palette.stdAidCard}`}>
               <div className={palette.stdAidRow}>
