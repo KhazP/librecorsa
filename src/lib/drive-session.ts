@@ -1424,7 +1424,14 @@ export class DriveSession {
 
     const builtCircuit = buildCircuitScene(track);
     scene.add(builtCircuit.sceneGroup);
-    builtCircuit.racingLineMesh.visible = settings.racingLine;
+    /**
+     * The racing line is a driving aid: never drawn behind the title menu, the setup screens or Settings over them
+     * (paused and in a replay the car is still being driven). Behind the opaque loading screen nothing is drawn, and it
+     * stays on there so the shader warm-up compiles it (three's compile skips hidden meshes). The player's setting is
+     * left as it is; each frame sets the line from it and the phase
+     */
+    const racingLineShown = (on: boolean) => on && (appPhaseNow === "driving" || appPhaseNow === "loading");
+    builtCircuit.racingLineMesh.visible = racingLineShown(settings.racingLine);
     // A circuit raced under lights: its floodlit night (masts, lit tunnels, the model's glowing light sources),
     // or one whose own model has lamps (street lamps, light poles): they glow and light the ground round them
     let venueNight: VenueNightLighting | null = null;
@@ -1734,7 +1741,7 @@ export class DriveSession {
       if (next.gamepadAssist !== prev.gamepadAssist) physics.gamepadAssistEnabled = next.gamepadAssist;
       if (next.autoGearbox !== prev.autoGearbox) physics.autoGearbox = next.autoGearbox;
       if (next.autoClutch !== prev.autoClutch) physics.autoClutch = next.autoClutch;
-      builtCircuit.racingLineMesh.visible = next.racingLine;
+      builtCircuit.racingLineMesh.visible = racingLineShown(next.racingLine);
       if (prev.mouseSteer && !next.mouseSteer) mouseSteerValue = 0;
       const customChanged =
         next.customLivery.primary !== prev.customLivery.primary ||
@@ -2898,6 +2905,8 @@ export class DriveSession {
       if (rp.active && inMenu) exitReplay();
       const replaying = rp.active;
       const settingsNow = settings;
+      // Off behind the title menu and the setup screens (racingLineShown); the player's setting is left as it is
+      builtCircuit.racingLineMesh.visible = racingLineShown(settingsNow.racingLine);
       // The wheel unplugged: pause rather than hand the car to whatever pad is left (no input this frame). In a replay
       // the replay pauses with it; in the menus it waits for the car, unless by then the wheel is back (or unbound) or
       // the player has picked another device to drive with.

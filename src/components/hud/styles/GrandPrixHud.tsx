@@ -22,9 +22,11 @@ import {
   NO_TIME,
   PROTO_CAR_IDS,
   ROAD_CAR_IDS,
-  formatDelta,
+  formatDeltaFit,
   formatGap,
+  formatLapClock,
   formatLapTime,
+  lapClockMs,
   formatSpeed,
   speedUnit,
 } from "../hud-format";
@@ -94,6 +96,9 @@ function compoundMeta(compound: TireCompound | undefined): { letter: string; col
       return { letter: "S", color: "#ef4444" };
   }
 }
+
+/** No sector times (the out-lap's sector strip) */
+const NO_SECTORS: readonly [number, number, number] = [0, 0, 0];
 
 function activeSectorColor(
   sectorIndex: number,
@@ -786,7 +791,8 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
       null,
     );
     const hasFastestLap = Boolean(fastestMs && me?.bestLapMs === fastestMs);
-    const curSectors = t.sectorTimesMs;
+    // None of this lap's sectors on the out-lap: a restart keeps the last run's times
+    const curSectors = t.outLap ? NO_SECTORS : t.sectorTimesMs;
     const bestSectors = t.bestSectorTimesMs;
 
     return (
@@ -912,11 +918,11 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                   color: lapInvalid ? HUD_LOSS : deltaS === null ? "#f8fafc" : deltaS <= 0 ? HUD_GAIN : HUD_LOSS,
                 }}
               >
-                {deltaS !== null ? formatDelta(deltaS) : (t.currentLapTimeMs / 1000).toFixed(1)}
+                {deltaS !== null ? formatDeltaFit(deltaS) : (lapClockMs(t) / 1000).toFixed(1)}
               </span>
               <div className={palette.driverCardRef}>
                 <span className={palette.driverCardRefTime} style={{ color: lapInvalid ? HUD_LOSS : "#f8fafc" }}>
-                  {formatLapTime(t.currentLapTimeMs)}
+                  {formatLapClock(t)}
                 </span>
                 <span className={palette.driverCardRefLabel}>
                   {t.bestLapTimeMs ? `BEST ${formatLapTime(t.bestLapTimeMs)}` : "NO REF"}
@@ -975,7 +981,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
   // --------------------------------------------------------------------------
   // MODE B: Standard HUD (other cameras or non-open-wheel cars)
   // --------------------------------------------------------------------------
-  const curSectors = t.sectorTimesMs;
+  const curSectors = t.outLap ? NO_SECTORS : t.sectorTimesMs;
   const bestSectors = t.bestSectorTimesMs;
   const deltaFillPct = deltaS === null ? 0 : Math.min(100, Math.abs(deltaS) * 35);
   const deltaColor = deltaS === null ? HUD_SLATE : deltaS <= 0 ? HUD_GAIN : HUD_LOSS;
@@ -1078,7 +1084,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
             <div className={palette.stdTimeRow}>
               <span className={palette.stdPosCounter}>{totalLaps ? `${lap}/${totalLaps}` : `L${lap}`}</span>
               <span className={palette.stdLapClock} style={{ color: lapInvalid ? HUD_LOSS : "#f8fafc" }}>
-                {formatLapTime(t.currentLapTimeMs)}
+                {formatLapClock(t)}
               </span>
             </div>
             <div className={palette.stdDeltaBar}>
@@ -1092,7 +1098,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
               />
               <span className="relative z-10 text-slate-300">DELTA</span>
               <span className={`${palette.mono} relative z-10`} style={{ color: deltaColor }}>
-                {deltaS === null ? NO_TIME : formatDelta(deltaS)}
+                {deltaS === null ? NO_TIME : formatDeltaFit(deltaS)}
               </span>
             </div>
           </div>

@@ -578,38 +578,48 @@ export const EngineersGarage: React.FC<
     );
   }
 
+  // A car with liveries or skins to pick: the picker sits beside the picture (it previews on it), not under it
+  const hasPicker = Boolean(car.skins?.length || carTakesLivery(p.carId));
+
   return (
     <div className={sheetClass}>
-      {/* data-nav-columns: up / down read down the car card, then the saved setups (menu-shell's reading order) */}
-      <div data-nav-columns="" className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        {/* The car */}
-        <Card
-          title={car.title}
-          description={`${carClass(car.classId).title}, ${car.year}`}
-          action={
-            <Button
-              ref={browseRef}
-              size="sm"
-              variant="secondary"
-              // Where the garage starts: the car, not the setup name field
-              data-nav-default=""
-              onClick={openBrowser}
-              disabledReason={carLocked ? "The car is fixed for this race" : undefined}
-              icon={<Icon name="car" />}
-            >
-              {carLocked ? "Fixed for this race" : "Change car"}
-            </Button>
-          }
+      {/* The car, across the sheet: its picture and badges on the left, the livery on the right, so neither card stands
+          beside an empty block (the car and the saved setups grow by different amounts per car and per list).
+          data-nav-columns: up / down read down the left column (the physics switch), then the livery */}
+      <Card
+        title={car.title}
+        description={`${carClass(car.classId).title}, ${car.year}`}
+        action={
+          <Button
+            ref={browseRef}
+            size="sm"
+            variant="secondary"
+            // Where the garage starts: the car, not the setup name field
+            data-nav-default=""
+            onClick={openBrowser}
+            disabledReason={carLocked ? "The car is fixed for this race" : undefined}
+            icon={<Icon name="car" />}
+          >
+            {carLocked ? "Fixed for this race" : "Change car"}
+          </Button>
+        }
+      >
+        <div
+          data-nav-columns=""
+          className={`grid items-start gap-x-5 gap-y-1 ${hasPicker ? "sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]" : ""}`}
         >
-          <span className="flex flex-wrap gap-1.5 pb-1">
-            <CarClassTag car={car} />
-            <CarQualityBadge car={car} size="sm" />
-          </span>
-          {carTakesPhysicsSwitch(p.carId) ? <CarPhysicsSwitch /> : null}
-          <span className="relative my-1 block aspect-video max-h-44 w-full overflow-hidden rounded-lc-tile bg-lc-well [&>img]:size-full">
-            <CarThumb car={car} liveryId={previewLiveryId} skinId={previewSkinId} className="p-2" />
-          </span>
-          <SettingRow label="Livery" hint={!carTakesLivery(p.carId) && !car.skins?.length ? FACTORY_LIVERY_NOTE : undefined} stacked={Boolean(car.skins?.length || carTakesLivery(p.carId))}>
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="flex flex-wrap gap-1.5 pb-1">
+              <CarClassTag car={car} />
+              <CarQualityBadge car={car} size="sm" />
+            </span>
+            {carTakesPhysicsSwitch(p.carId) ? <CarPhysicsSwitch /> : null}
+            {/* Shorter on a landscape phone, so a setting shows on the first screen under it */}
+            <span className="relative my-1 block aspect-video max-h-44 w-full overflow-hidden rounded-lc-tile bg-lc-well short:max-h-28 [&>img]:size-full">
+              <CarThumb car={car} liveryId={previewLiveryId} skinId={previewSkinId} className="p-2" />
+            </span>
+          </div>
+          <SettingRow label="Livery" hint={!hasPicker ? FACTORY_LIVERY_NOTE : undefined} stacked={hasPicker}>
             {car.skins?.length ? (
               <CarSkinPicker
                 carId={p.carId}
@@ -634,38 +644,41 @@ export const EngineersGarage: React.FC<
               />
             ) : null}
           </SettingRow>
-        </Card>
+        </div>
+      </Card>
 
-        {/* Named setups */}
-        <Card
-          title="Saved setups"
-          action={
-            <Button size="sm" variant="ghost" icon={<Icon name="reset" />} onClick={resetAll} title="Every chassis setting, tyre pressure and camber back to the car's baseline">
-              Reset all
-            </Button>
-          }
-        >
-          <div className="flex items-end gap-2">
+      {/* Named setups: across the sheet too, the name field and its actions on one line where they fit */}
+      <Card
+        title="Saved setups"
+        action={
+          <Button size="sm" variant="ghost" icon={<Icon name="reset" />} onClick={resetAll} title="Every chassis setting, tyre pressure and camber back to the car's baseline">
+            Reset all
+          </Button>
+        }
+      >
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex min-w-0 flex-[1_1_18rem] items-end gap-2">
             <div className="min-w-0 flex-1">
-            <TextField
-              label="Name"
-              value={name}
-              onChange={setName}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") savePreset();
-              }}
-              placeholder="Setup name"
-              maxLength={32}
-              autoComplete="off"
-            />
+              <TextField
+                label="Name"
+                value={name}
+                onChange={setName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") savePreset();
+                }}
+                placeholder="Setup name"
+                maxLength={32}
+                autoComplete="off"
+              />
             </div>
             <Button size="md" variant="secondary" onClick={savePreset} icon={<Icon name="add" />}>
               Save
             </Button>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 pt-2">
+          {/* The field's height (44 px), so the row reads as one line beside it */}
+          <div className="flex flex-wrap items-center gap-2">
             <Button
-              size="sm"
+              size="md"
               variant="secondary"
               icon={<Icon name={copiedId === "current" ? "copied" : "share"} />}
               onClick={() => void copyShareCode(currentSharedSetup(), "current", "current setup")}
@@ -674,7 +687,7 @@ export const EngineersGarage: React.FC<
               {copiedId === "current" ? "Copied" : "Share code"}
             </Button>
             <Button
-              size="sm"
+              size="md"
               variant={importOpen ? "primary" : "secondary"}
               icon={<Icon name="copy" />}
               onClick={() => setImportOpen((o) => !o)}
@@ -683,7 +696,7 @@ export const EngineersGarage: React.FC<
               Import
             </Button>
             <IconButton
-              size="sm"
+              size="md"
               variant="secondary"
               icon={<Icon name="download" />}
               aria-label="Export current setup as JSON file"
@@ -694,127 +707,128 @@ export const EngineersGarage: React.FC<
               }}
             />
           </div>
-          {importOpen ? (
-            <div className="mt-2 flex flex-col gap-2 rounded-lc-tile border border-lc-line bg-lc-well/80 p-3">
-              <div className="flex items-end gap-2">
-                <div className="min-w-0 flex-1">
-                  <TextField
-                    label="Paste share code or JSON"
-                    value={importCode}
-                    onChange={setImportCode}
-                    placeholder="LC1-..."
-                    autoComplete="off"
-                  />
-                </div>
-                <Button size="sm" variant="secondary" onClick={() => importFileRef.current?.click()}>
-                  Load .json
-                </Button>
-                <input
-                  ref={importFileRef}
-                  type="file"
-                  accept=".json,application/json"
-                  className="hidden"
-                  onChange={(e) => void handleImportFile(e)}
+        </div>
+        {importOpen ? (
+          <div className="mt-2 flex flex-col gap-2 rounded-lc-tile border border-lc-line bg-lc-well/80 p-3">
+            <div className="flex items-end gap-2">
+              <div className="min-w-0 flex-1">
+                <TextField
+                  label="Paste share code or JSON"
+                  value={importCode}
+                  onChange={setImportCode}
+                  placeholder="LC1-..."
+                  autoComplete="off"
                 />
               </div>
-              {importCode.trim() ? (
-                decodedImport ? (
-                  <div className="flex flex-col gap-2 rounded-lc-row border border-white/10 bg-lc-carbon/80 p-2.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="truncate text-[13px] font-semibold text-lc-chalk">
-                        {decodedImport.name ?? "Shared setup"}
-                      </span>
-                      <span className="lc-mono text-[11px] font-semibold text-lc-fog">
-                        {carBoardTag(decodedImport.vehicle).label}
-                      </span>
-                    </div>
-                    <p className="lc-hint m-0">{summarizeSharedSetup(decodedImport)}</p>
-                    {decodedImport.vehicle !== p.vehicleModel ? (
-                      <p className="m-0 text-[12px] text-lc-caution">
-                        Built for {carBoardTag(decodedImport.vehicle).label}: chassis offsets, electronics and tyres will be clamped to this car.
-                      </p>
-                    ) : null}
-                    <div className="flex flex-wrap gap-1.5 pt-0.5">
-                      <Button size="sm" variant="primary" onClick={() => applySharedSetup(decodedImport, false)}>
-                        Apply
-                      </Button>
-                      <Button size="sm" variant="secondary" onClick={() => applySharedSetup(decodedImport, true)}>
-                        Save &amp; apply
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <p role="alert" className="m-0 text-[12px] text-lc-loss">
-                    Not a valid LibreCorsa setup code or JSON file.
-                  </p>
-                )
-              ) : null}
+              <Button size="sm" variant="secondary" onClick={() => importFileRef.current?.click()}>
+                Load .json
+              </Button>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(e) => void handleImportFile(e)}
+              />
             </div>
-          ) : null}
-          {presets.length > 0 || factoryPresets.length > 0 ? (
-            <ul className="m-0 flex list-none flex-col gap-1 p-0 pt-2">
-              {/* The car's own setups first, which cannot be deleted */}
-              {factoryPresets.map((f) => (
-                <li key={f.id} className="flex items-center gap-1">
-                  <span className="min-w-0 flex-1">
-                    <Button size="sm" variant="ghost" block onClick={() => loadFactoryPreset(f)} aria-label={`Load ${f.name}, the factory setup`}>
-                      <span className="truncate">{f.name}</span>
-                      <span className="lc-hint ml-2 shrink-0">Factory</span>
-                    </Button>
-                  </span>
-                </li>
-              ))}
-              {presets.map((x) => (
-                <li key={x.id} className="flex items-center gap-1">
-                  <span className="min-w-0 flex-1">
-                    <Button size="sm" variant="ghost" block onClick={() => loadPreset(x)} aria-label={`Load ${x.name}`}>
-                      <span className="truncate" title={x.name}>{x.name}</span>
-                    </Button>
-                  </span>
-                  <IconButton
-                    size="sm"
-                    variant="ghost"
-                    aria-label={`Copy share code for ${x.name}`}
-                    title="Copy share code"
-                    icon={<Icon name={copiedId === x.id ? "copied" : "share"} />}
-                    onClick={() => void copyShareCode(presetToSharedSetup(x), x.id, `“${x.name}”`)}
-                  />
-                  <IconButton size="sm" variant="ghost" aria-label={`Delete ${x.name}`} icon={<Icon name="delete" />} onClick={() => deletePreset(x)} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="lc-hint m-0 pt-1">No saved setups yet.</p>
-          )}
-          {note ? (
-            <div role="status" className="pt-2">
-              <Toast
-                tone="neutral"
-                className="w-full"
-                action={
-                  note.undo ? (
-                    <span className="flex items-center gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          note.undo?.();
-                          setNoteState(null);
-                        }}
-                      >
-                        Undo
-                      </Button>
-                      <IconButton size="sm" variant="ghost" aria-label="Dismiss" icon={<Icon name="close" />} onClick={() => setNoteState(null)} />
+            {importCode.trim() ? (
+              decodedImport ? (
+                <div className="flex flex-col gap-2 rounded-lc-row border border-white/10 bg-lc-carbon/80 p-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="truncate text-[13px] font-semibold text-lc-chalk">
+                      {decodedImport.name ?? "Shared setup"}
                     </span>
-                  ) : undefined
-                }
-              >
-                {note.text}
-              </Toast>
-            </div>
-          ) : null}
-        </Card>
-      </div>
+                    <span className="lc-mono text-[11px] font-semibold text-lc-fog">
+                      {carBoardTag(decodedImport.vehicle).label}
+                    </span>
+                  </div>
+                  <p className="lc-hint m-0">{summarizeSharedSetup(decodedImport)}</p>
+                  {decodedImport.vehicle !== p.vehicleModel ? (
+                    <p className="m-0 text-[12px] text-lc-caution">
+                      Built for {carBoardTag(decodedImport.vehicle).label}: chassis offsets, electronics and tyres will be clamped to this car.
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    <Button size="sm" variant="primary" onClick={() => applySharedSetup(decodedImport, false)}>
+                      Apply
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => applySharedSetup(decodedImport, true)}>
+                      Save &amp; apply
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p role="alert" className="m-0 text-[12px] text-lc-loss">
+                  Not a valid LibreCorsa setup code or JSON file.
+                </p>
+              )
+            ) : null}
+          </div>
+        ) : null}
+        {presets.length > 0 || factoryPresets.length > 0 ? (
+          // Two columns across a wide sheet, so a row is not a line of empty ghost button
+          <ul className="m-0 grid list-none grid-cols-1 gap-x-3 gap-y-1 p-0 pt-2 md:grid-cols-2">
+            {/* The car's own setups first, which cannot be deleted */}
+            {factoryPresets.map((f) => (
+              <li key={f.id} className="flex items-center gap-1">
+                <span className="min-w-0 flex-1">
+                  <Button size="sm" variant="ghost" block onClick={() => loadFactoryPreset(f)} aria-label={`Load ${f.name}, the factory setup`}>
+                    <span className="truncate">{f.name}</span>
+                    <span className="lc-hint ml-2 shrink-0">Factory</span>
+                  </Button>
+                </span>
+              </li>
+            ))}
+            {presets.map((x) => (
+              <li key={x.id} className="flex items-center gap-1">
+                <span className="min-w-0 flex-1">
+                  <Button size="sm" variant="ghost" block onClick={() => loadPreset(x)} aria-label={`Load ${x.name}`}>
+                    <span className="truncate" title={x.name}>{x.name}</span>
+                  </Button>
+                </span>
+                <IconButton
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`Copy share code for ${x.name}`}
+                  title="Copy share code"
+                  icon={<Icon name={copiedId === x.id ? "copied" : "share"} />}
+                  onClick={() => void copyShareCode(presetToSharedSetup(x), x.id, `“${x.name}”`)}
+                />
+                <IconButton size="sm" variant="ghost" aria-label={`Delete ${x.name}`} icon={<Icon name="delete" />} onClick={() => deletePreset(x)} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="lc-hint m-0 pt-1">No saved setups yet.</p>
+        )}
+        {note ? (
+          <div role="status" className="pt-2">
+            <Toast
+              tone="neutral"
+              className="w-full"
+              action={
+                note.undo ? (
+                  <span className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        note.undo?.();
+                        setNoteState(null);
+                      }}
+                    >
+                      Undo
+                    </Button>
+                    <IconButton size="sm" variant="ghost" aria-label="Dismiss" icon={<Icon name="close" />} onClick={() => setNoteState(null)} />
+                  </span>
+                ) : undefined
+              }
+            >
+              {note.text}
+            </Toast>
+          </div>
+        ) : null}
+      </Card>
 
       {/* The sheet's pages */}
       <div ref={tabsRef} className="min-w-0">

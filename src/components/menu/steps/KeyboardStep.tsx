@@ -12,7 +12,7 @@ import {
   type KeyAction,
 } from "@/lib/input/bindings";
 import { useKeyLayout } from "@/lib/input/use-key-layout";
-import { Button, IconButton, SettingRow } from "@/components/ui";
+import { Button, Disclosure, IconButton, SettingRow } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { KeyCap } from "@/components/ui/prompts";
 import { useSettingsEnv } from "@/components/settings/env";
@@ -28,10 +28,38 @@ const ARROW_WORDS: Record<string, string> = { ArrowUp: "Up", ArrowDown: "Down", 
 export const keyWord = (code: string | undefined) => (code && ARROW_WORDS[code]) || keyLabel(code);
 
 /**
- * Key bindings: press a slot, then the new key. Taking a key from another action swaps the two. Reset asks first and
- * is never where the cursor lands.
+ * The keys a newcomer drives with, in the table's own order so they pair up in two columns (throttle and brake, steer
+ * left and right, boost and aero, gear up and down, camera and restart). First-run setup shows these first.
  */
-export function KeyBindingsCard({ first }: { first?: boolean }) {
+const ESSENTIAL_KEYS: ReadonlySet<KeyAction> = new Set<KeyAction>([
+  "throttle",
+  "brake",
+  "steerLeft",
+  "steerRight",
+  "boostHold",
+  "aero",
+  "shiftUp",
+  "shiftDown",
+  "camera",
+  "restart",
+]);
+
+/**
+ * The slot columns: every row has the same two fixed-width slots, each a key cap and its unbind button, so the caps
+ * line up down the table. A third key (Boost has three by default) wraps under the first slot; a row narrower than two
+ * slots (a small phone) stacks them. On touch screens the unbind button grows to 44 px, and the slot with it.
+ */
+const SLOT_GRID = "flex w-61.5 max-w-full flex-wrap gap-1.5 pointer-coarse:w-65.5";
+const SLOT = "flex w-30 shrink-0 items-center gap-1 pointer-coarse:w-32";
+/** A key cap: fixed width so every slot starts and ends in the same place; the padding is trimmed so L-SHIFT fits */
+const CAP = "w-20 px-2.5!";
+
+/**
+ * Key bindings: press a slot, then the new key. Taking a key from another action swaps the two. Reset asks first and
+ * is never where the cursor lands. `essentials` (first-run setup) shows the keys a newcomer needs and puts the rest
+ * behind a disclosure; Settings shows every key.
+ */
+export function KeyBindingsCard({ first, essentials }: { first?: boolean; essentials?: boolean }) {
   // Key names as printed on this keyboard (AZERTY's KeyW is "Z"), re-read when the layout is known or changes
   useKeyLayout();
   const { settings, update } = useSettingsEnv();
@@ -75,6 +103,78 @@ export function KeyBindingsCard({ first }: { first?: boolean }) {
   }, [capture, settings.keys, update]);
 
   const changed = KEY_ACTIONS.some(({ id }) => settings.keys[id].join() !== DEFAULT_KEY_BINDINGS[id].join());
+  // The cursor starts on the table's first key (Throttle), shown in both hosts
+  const firstAction = KEY_ACTIONS[0]?.id;
+
+  const row = ({ id, label }: (typeof KEY_ACTIONS)[number]) => {
+    const codes = settings.keys[id];
+    // One empty slot at most: an action with no key shows a single Add, not two, in the first free column
+    const slots = Math.min(Math.max(KEY_SLOTS, codes.length), codes.length + 1);
+    return (
+      <SettingRow key={id} label={label} className={capture?.action === id ? "bg-lc-volt/6" : undefined}>
+        <span className={SLOT_GRID}>
+          {Array.from({ length: slots }, (_, slot) => {
+            const listening = capture?.action === id && capture.slot === slot;
+            // An empty slot binds the next free one, so the slot pressed and the one listening can differ
+            const target = Math.min(slot, codes.length);
+            const code = codes[slot];
+            const press = () => {
+              setNotice(null);
+              setCapture(listening ? null : { action: id, slot: target });
+            };
+            const navDefault = first && id === firstAction && slot === 0 ? "" : undefined;
+            return (
+              <span key={slot} className={SLOT}>
+                {listening ? (
+                  // Listening takes the whole slot: its unbind button is hidden meanwhile
+                  <Button size="sm" variant="primary" className="w-full px-2.5!" aria-label={`Press a key for ${label}`} data-nav-default={navDefault} onClick={press}>
+                    Press a key
+                  </Button>
+                ) : code ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className={CAP}
+                      title={keyWord(code)}
+                      aria-label={`${label}: ${keyWord(code)}. Change`}
+                      data-nav-default={navDefault}
+                      onClick={press}
+                    >
+                      {keyWord(code)}
+                    </Button>
+                    <IconButton
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Unbind ${keyWord(code)} from ${label}`}
+                      icon={<Icon name="close" />}
+                      onClick={() => update((s) => ({ ...s, keys: clearKey(s.keys, id, slot) }))}
+                    />
+                  </>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className={CAP}
+                    icon={<Icon name="add" />}
+                    aria-label={`Add a key for ${label}`}
+                    data-nav-default={navDefault}
+                    onClick={press}
+                  >
+                    Add
+                  </Button>
+                )}
+              </span>
+            );
+          })}
+        </span>
+      </SettingRow>
+    );
+  };
+
+  const TABLE = "grid gap-x-8 gap-y-1 xl:grid-cols-2";
+  const shown = essentials ? KEY_ACTIONS.filter((a) => ESSENTIAL_KEYS.has(a.id)) : KEY_ACTIONS;
+  const more = essentials ? KEY_ACTIONS.filter((a) => !ESSENTIAL_KEYS.has(a.id)) : [];
 
   return (
     <SettingsCard
@@ -83,52 +183,13 @@ export function KeyBindingsCard({ first }: { first?: boolean }) {
       extraReset={{ changed, reset: () => update((s) => ({ ...s, keys: DEFAULT_KEY_BINDINGS })) }}
       resetWhat="every key binding"
     >
-      <div className="grid gap-x-8 gap-y-1 xl:grid-cols-2">
-      {KEY_ACTIONS.map(({ id, label }, row) => {
-        const codes = settings.keys[id];
-        // One empty slot at most: an action with no key shows a single Add, not two
-        const slots = Math.min(Math.max(KEY_SLOTS, codes.length), codes.length + 1);
-        return (
-          <SettingRow key={id} label={label} className={capture?.action === id ? "bg-lc-volt/6" : undefined}>
-            <span className="flex max-w-64 flex-wrap items-center justify-end gap-1.5">
-              {Array.from({ length: slots }, (_, slot) => {
-                const listening = capture?.action === id && capture.slot === slot;
-                // An empty slot binds the next free one, so the slot pressed and the one listening can differ
-                const target = Math.min(slot, codes.length);
-                const code = codes[slot];
-                return (
-                  <span key={slot} className="inline-flex items-center">
-                    <Button
-                      size="sm"
-                      variant={listening ? "primary" : "secondary"}
-                      className="min-w-20"
-                      icon={code || listening ? undefined : <Icon name="add" />}
-                      aria-label={listening ? `Press a key for ${label}` : code ? `${label}: ${keyWord(code)}. Change` : `Add a key for ${label}`}
-                      data-nav-default={first && row === 0 && slot === 0 ? "" : undefined}
-                      onClick={() => {
-                        setNotice(null);
-                        setCapture(listening ? null : { action: id, slot: target });
-                      }}
-                    >
-                      {listening ? "Press a key" : code ? keyWord(code) : "Add"}
-                    </Button>
-                    {code && !listening ? (
-                      <IconButton
-                        size="sm"
-                        variant="ghost"
-                        aria-label={`Unbind ${keyWord(code)} from ${label}`}
-                        icon={<Icon name="close" />}
-                        onClick={() => update((s) => ({ ...s, keys: clearKey(s.keys, id, slot) }))}
-                      />
-                    ) : null}
-                  </span>
-                );
-              })}
-            </span>
-          </SettingRow>
-        );
-      })}
-      </div>
+      <div className={TABLE}>{shown.map(row)}</div>
+      {more.length ? (
+        // The rest of the table, opened in place above the button (no count: "(20)" would read as the total)
+        <Disclosure moreLabel="Show all keys" lessLabel="Show fewer keys">
+          <div className={TABLE}>{more.map(row)}</div>
+        </Disclosure>
+      ) : null}
       <div className="pt-2">
         <StatusPill tone={capture ? "live" : notice ? "info" : "idle"}>
           {capture ? (notice ?? `Press a key. Esc cancels; it stops after ${CAPTURE_TIMEOUT_S} s`) : (notice ?? "Esc always opens the pause menu.")}
@@ -169,11 +230,14 @@ export function FixedKeysCard() {
   );
 }
 
-/** Settings > Controls > Keyboard, and the keyboard step of first-run setup */
-export function KeyboardSetup() {
+/**
+ * Settings > Controls > Keyboard (every key), and the keyboard step of first-run setup (`essentials`: the driving keys
+ * first, the rest on request)
+ */
+export function KeyboardSetup({ essentials }: { essentials?: boolean }) {
   return (
     <>
-      <KeyBindingsCard first />
+      <KeyBindingsCard first essentials={essentials} />
       <SettingsCard title="Mouse" rows={[mouseSteer]} />
       <SettingsCard title="Keyboard feel" rows={keyboardFeel} />
       <FixedKeysCard />
@@ -183,6 +247,6 @@ export function KeyboardSetup() {
 
 export const KeyboardStep: React.FC = () => (
   <div className="flex flex-col gap-3">
-    <KeyboardSetup />
+    <KeyboardSetup essentials />
   </div>
 );

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
 import { DeltaBadge } from "@/components/ui/badges/DeltaBadge";
 import { useUnits } from "@/lib/settings/ui-prefs";
-import { atShiftPoint, formatLapTime, formatSpeed, HUD_BEST, HUD_GAIN, HUD_GREEN, HUD_RED, HUD_SHIFT, speedUnit } from "../hud-format";
+import { atShiftPoint, deltaDigits, formatLapClock, formatLapTime, formatSpeed, HUD_BEST, HUD_GAIN, HUD_GREEN, HUD_RED, HUD_SHIFT, speedUnit } from "../hud-format";
 import { aeroReadout } from "../aero-label";
 import { anchor, gearLabel, HUD_LBL, InvalidTag, MiniMap, type HudDesignProps } from "./hud-style-parts";
 
@@ -41,7 +41,7 @@ const PHONE_GLASS = "border border-white/7 bg-lc-void/74 shadow-lc-pop";
 /**
  * Phone: one HUD for small screens, after the mobile racers. Everything lives
  * along the top edge so the thumbs on the steering pad and pedals never cover it: speed and gear
- * top-centre, position, lap and delta top-right, a small frameless map top-left under the touch pause / camera buttons.
+ * top-centre, position, lap and delta top-right, a small map on the same glass top-left under the touch pause / camera buttons.
  * The delta and best lap wait until there is a lap to compare with.
  * In portrait the speed pod drops under the top row and the map steps aside. It sits in the HUD's
  * safe frame, so its offsets start where a notch or the Dynamic Island ends.
@@ -57,10 +57,10 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
-      {/* Top-left: map, under the touch pause / camera buttons when they are up. No card: the outline's own dark
-          under-stroke keeps it readable over the sky */}
+      {/* Top-left: map, under the touch pause / camera buttons when they are up, on the same glass as the other
+          panels so it never floats over the scenery */}
       <div
-        className="absolute hidden landscape:block"
+        className={`absolute hidden rounded-lc-tile p-1.5 landscape:block phone:rounded-lc-row phone:p-1 ${PHONE_GLASS}`}
         style={{ top: touch ? 64 : 12, left: touch ? 16 : 12, ...anchor(scale, "top left") }}
       >
         <MiniMap map={map} t={t} sectors className="block h-[92px] w-[92px] phone:h-[76px] phone:w-[76px]" stroke={34} />
@@ -119,7 +119,9 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
                 <span className="text-[16px] text-lc-slate phone:text-[13px]">/{race.standings.length}</span>
               </span>
             ) : (
-              <span className="lc-disp text-[22px] leading-none text-lc-chalk phone:text-[18px]">{activeLapWord()} {Math.max(1, t.lapCount)}</span>
+              <span className="lc-disp text-[22px] leading-none text-lc-chalk phone:text-[18px]">
+                {t.outLap ? "Out lap" : `${activeLapWord()} ${Math.max(1, t.lapCount)}`}
+              </span>
             )}
             {race ? (
               <span className={HUD_LBL}>
@@ -130,10 +132,17 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className={`lc-data text-[17px] leading-none phone:text-[15px] ${lapInvalid ? "text-lc-loss" : "text-lc-chalk"}`}>
-              {formatLapTime(t.currentLapTimeMs)}
+              {formatLapClock(t)}
             </span>
             {deltaS === null ? null : (
-              <DeltaBadge seconds={Math.max(-9.999, Math.min(9.999, deltaS))} size="sm" variant="solid" className="w-17 justify-center phone:w-15" />
+              // As wide as an ordinary delta however far off the lap is ("+41.84", "+123.4"): fewer decimals, never a held 9.999
+              <DeltaBadge
+                seconds={Math.max(-999.9, Math.min(999.9, deltaS))}
+                digits={deltaDigits(deltaS)}
+                size="sm"
+                variant="solid"
+                className="w-17 justify-center phone:w-15"
+              />
             )}
           </div>
           {/* The best lap once there is one; an invalid lap says so either way */}

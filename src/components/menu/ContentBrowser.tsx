@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { Button, EmptyState, IconButton, MediaTile, Select, TextField, type MediaTileProps } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { KeyCap, PadGlyph, PromptBar } from "@/components/ui/prompts";
+import { cx } from "@/components/ui/styles";
 import { keyLabel } from "@/lib/input/bindings";
 import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { connectedPads } from "@/lib/input/device-input";
@@ -148,9 +149,14 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
   const [picks, setPicks] = useState<Record<string, string>>({});
   const [sortId, setSortId] = useState(sorts[0]?.id ?? "");
   const [selectedId, setSelectedId] = useState<string | undefined>(props.initialSelectedId);
+  /** Phones and short screens fold the filters and sort behind one Filters button, so the cards start on screen */
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const filterBarRef = useRef<HTMLDivElement | null>(null);
+  /** Holds the Filters button, which is shown on phones and short screens only */
+  const filtersToggleRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const detailRef = useRef<HTMLElement | null>(null);
 
@@ -250,13 +256,19 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
       return next;
     });
 
-  // Ⓑ / Esc: detail → its card → close
+  // Ⓑ / Esc: detail → its card → close; on a phone the open filters fold first, back onto their button
   useBackHandler(() => {
     const root = rootRef.current;
     const active = document.activeElement;
     if (!root || !active || !root.contains(active)) return false;
     if (detailRef.current?.contains(active)) {
       if (!focusEl(cardOf(selectedKey))) focusEl(gridRef.current ? focusables(gridRef.current)[0] : null);
+      return true;
+    }
+    const toggle = filtersToggleRef.current?.querySelector<HTMLElement>("button");
+    if (filtersOpen && toggle && toggle.getClientRects().length > 0 && filterBarRef.current?.contains(active)) {
+      setFiltersOpen(false);
+      focusEl(toggle);
       return true;
     }
     if (onClose) {
@@ -424,12 +436,14 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
 
   return (
     <div ref={rootRef} className="flex min-w-0 flex-col gap-4" role="region" aria-label={props.label}>
-      {/* Search, filters and sort */}
-      <div className="flex flex-wrap items-end gap-x-3 gap-y-2.5" data-nav-zone="browser-filters">
+      {/* Search, filters and sort (on phones and short screens the filters and sort fold behind one button) */}
+      <div ref={filterBarRef} className="flex flex-wrap items-end gap-x-3 gap-y-2.5" data-nav-zone="browser-filters">
         {props.toolbar ? <div className="flex items-end self-stretch">{props.toolbar}</div> : null}
         <div className="min-w-[min(100%,220px)] flex-1">
         <TextField
           {...({ ref: searchRef } as object)}
+          // The field's icon and placeholder say what it is: on a phone its name stays for screen readers only
+          className="[&_input::-webkit-search-cancel-button]:hidden phone:[&>label]:sr-only"
           label="Search"
           type="search"
           value={query}
@@ -448,10 +462,35 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
           autoComplete="off"
           spellCheck={false}
           icon={<Icon name="search" />}
-          trailing={<span className="hidden sm:inline-flex">{pad ? <PadGlyph button="y" family={family} /> : <KeyCap>{keyLabel("Slash")}</KeyCap>}</span>}
-          className="[&_input::-webkit-search-cancel-button]:hidden"
+          // A touch screen has no keys to show: the cap waits for a controller there
+          trailing={
+            <span className={cx("hidden sm:inline-flex", pad ? undefined : "pointer-coarse:hidden!")}>
+              {pad ? <PadGlyph button="y" family={family} /> : <KeyCap>{keyLabel("Slash")}</KeyCap>}
+            </span>
+          }
         />
         </div>
+        {shownGroups.length || sorts.length > 1 ? (
+          <div ref={filtersToggleRef} className="hidden phone:flex">
+            <Button
+              variant="secondary"
+              size="md"
+              icon={<Icon name="filter" />}
+              aria-expanded={filtersOpen}
+              aria-controls={`${baseId}-filters`}
+              onClick={() => setFiltersOpen((o) => !o)}
+            >
+              Filters
+              {narrowing.length ? (
+                <>
+                  <span className="lc-mono ml-2 not-italic">{narrowing.length}</span>
+                  <span className="sr-only"> on</span>
+                </>
+              ) : null}
+            </Button>
+          </div>
+        ) : null}
+        <div id={`${baseId}-filters`} className={filtersOpen ? "contents" : "contents phone:hidden"}>
         {shownGroups.map((g, gi) => {
           const hasAll = g.filters.some((f) => f.id === ALL);
           const current = picks[g.label] && g.filters.some((f) => f.id === picks[g.label]) ? picks[g.label] : hasAll ? ALL : ANY;
@@ -485,6 +524,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
             />
           </Field>
         ) : null}
+        </div>
       </div>
 
       <div className="grid min-h-0 grid-cols-1 gap-4 lg:h-[max(380px,min(760px,calc(100dvh-300px)))] lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -520,6 +560,22 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
                           <MediaTile
                             key={id}
                             {...card}
+                            // A long name ("Willow Springs International Raceway") takes a second line instead of
+                            // being cut after a few words, and wraps in full on phones; the grid's rows keep their
+                            // tiles one height. The kit's tile keeps one line, so the name brings its own box, and its
+                            // full text on hover
+                            title={
+                              typeof card.title === "string" ? (
+                                <span
+                                  title={card.title}
+                                  className="line-clamp-2 whitespace-normal [overflow-wrap:anywhere] phone:line-clamp-none"
+                                >
+                                  {card.title}
+                                </span>
+                              ) : (
+                                card.title
+                              )
+                            }
                             // The card in the detail pane is lit white; the cursor is volt
                             chosen={isSel}
                             aria-pressed={isSel}
@@ -632,7 +688,9 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
         <span className="lc-hint tabular-nums" aria-live="polite">
           {visible.length} of {items.length} {props.noun}
         </span>
-        <span className="contents phone:hidden">
+        {/* Off on phones unless a controller is in use (its X and Y have no button on screen); the bar itself
+            hides on touch screens until a controller is used */}
+        <span className={pad ? "contents" : "contents phone:hidden"}>
         <PromptBar
           rule={false}
           prompts={[

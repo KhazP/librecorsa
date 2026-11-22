@@ -17,24 +17,28 @@ import { focusables, focusOnHover, useMoveHandler, type Dir } from "./useFocusNa
 
 export type RailRowSize = "lg" | "md" | "sm";
 
-const ROW_SIZE: Record<RailRowSize, { box: string; label: string; icon: "lg" | "md" | "sm" }> = {
+const ROW_SIZE: Record<RailRowSize, { box: string; label: string; icon: "lg" | "md" | "sm"; top: string }> = {
   // Race AI, Multiplayer on the title screen
   lg: {
     box: "w-full min-h-15 gap-4 rounded-lc-tile px-4 py-1.5 compact:min-h-13 phone:min-h-11 phone:gap-3 phone:px-3.5 phone:py-1",
     label: "lc-disp text-[24px] leading-none compact:text-[21px] phone:text-[17px]",
     icon: "lg",
+    // Top-aligned, a row with a detail line keeps about the same space above and below it as when it was centred
+    top: "pt-2 compact:pt-1.5 phone:pt-1.5",
   },
   // The setup grid of the title screen, the pause rail and the slim rail beside an open panel
   md: {
     box: "w-full min-h-12 gap-3 rounded-lc-row px-3.5 py-1 phone:min-h-11",
     label: "lc-title text-[16px] leading-tight phone:text-[15px]",
     icon: "md",
+    top: "",
   },
   // The links under the title screen's grid
   sm: {
     box: "w-auto min-h-11 gap-2 rounded-full px-3",
     label: "text-[13px] font-semibold",
     icon: "sm",
+    top: "",
   },
 };
 
@@ -57,15 +61,38 @@ export interface RailRowProps {
   badge?: React.ReactNode;
   /** Label colour at rest: chalk, or slate for a quiet list (the slim rail beside a panel) */
   tone?: "chalk" | "slate";
+  /**
+   * `center` (a list of one-line rows) or `top`: the label sits on the same line whether or not a detail line follows,
+   * and the icon is centred on the label's line. For rows that stand beside or under rows with a detail line (the
+   * title screen), so their labels line up across the grid.
+   */
+  align?: "center" | "top";
   className?: string;
 }
 
 /** One entry of a menu rail: icon, label, an optional line under it; the cursor fills it volt */
-export const RailRow: React.FC<RailRowProps> = ({ id, label, detail, icon, size = "md", chosen, expanded, href, onClick, badge, tone = "chalk", className }) => {
+export const RailRow: React.FC<RailRowProps> = ({
+  id,
+  label,
+  detail,
+  icon,
+  size = "md",
+  chosen,
+  expanded,
+  href,
+  onClick,
+  badge,
+  tone = "chalk",
+  align = "center",
+  className,
+}) => {
   const s = ROW_SIZE[size];
+  const top = align === "top";
   const classes = cx(
-    "group flex min-w-0 cursor-pointer items-center border-0 text-left no-underline",
+    "group flex min-w-0 cursor-pointer border-0 text-left no-underline",
+    top ? "items-start" : "items-center",
     s.box,
+    top ? s.top : undefined,
     MOTION,
     chosen ? CHOSEN_PILL : cx("bg-transparent", tone === "slate" ? "text-lc-slate" : "text-lc-chalk", HOVER_PILL),
     PRESSED_PILL,
@@ -74,7 +101,16 @@ export const RailRow: React.FC<RailRowProps> = ({ id, label, detail, icon, size 
   );
   const inner = (
     <>
-      <span className={cx("inline-flex shrink-0", chosen ? "text-lc-chalk" : "text-lc-slate group-hover:text-lc-fog", GROUP_CURSOR_INK)}>
+      <span
+        className={cx(
+          "inline-flex shrink-0",
+          // Top-aligned: a box one label line tall (the label's own type, so `1lh` is that line at every size), the
+          // icon centred in it
+          top ? cx(s.label, "h-[1lh] items-center") : undefined,
+          chosen ? "text-lc-chalk" : "text-lc-slate group-hover:text-lc-fog",
+          GROUP_CURSOR_INK,
+        )}
+      >
         <Icon name={icon} size={s.icon} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">

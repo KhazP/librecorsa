@@ -22,11 +22,12 @@
 import React, { useMemo } from "react";
 import type { CarTelemetry } from "@/types/f1";
 import { useUnits } from "@/lib/settings/ui-prefs";
-// The kit's one delta spelling, at the two decimals the source's delta shows
-import { formatDelta } from "@/components/ui/badges/DeltaBadge";
 import {
   aidsActive,
+  cornerLabel,
+  formatDeltaFit,
   formatGap,
+  formatLapClock,
   formatLapTime,
   formatSectorTime,
   formatSpeed,
@@ -40,6 +41,7 @@ import {
   LAP_MARK_COLOR,
   lapMark,
   NO_TIME,
+  sectorDone,
   speedUnit,
   tyreHeatColor,
 } from "../hud-format";
@@ -311,7 +313,8 @@ const RetroDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInval
       <div className="flex gap-1.5">
         <Frame edge="outline" face="raised" className="h-14 w-[180px] shrink-0 max-xl:w-full" faceClassName="flex flex-col items-center justify-center gap-1">
           <span className="text-[26px] leading-none" style={{ color: tone }}>
-            {deltaS === null ? NO_TIME : formatDelta(Math.max(-99.99, Math.min(99.99, deltaS)), 2)}
+            {/* The kit's delta spelling at the source's two decimals, one fewer past 10 s so it keeps its width */}
+            {deltaS === null ? NO_TIME : formatDeltaFit(deltaS, 2)}
           </span>
           <span className={LBL}>Live delta</span>
         </Frame>
@@ -321,7 +324,7 @@ const RetroDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInval
           </span>
           <span>
             <span className="text-(--tp-primary)">CUR</span>{" "}
-            <span style={{ color: lapInvalid ? HUD_LOSS : undefined }}>{formatLapTime(t.currentLapTimeMs)}</span>
+            <span style={{ color: lapInvalid ? HUD_LOSS : undefined }}>{formatLapClock(t)}</span>
           </span>
           <span style={{ color: HUD_LOSS }}>{lapInvalid ? "INVALID" : ""}</span>
           <span className="text-(--tp-cyan)">LAP {String(lap).padStart(2, "0")}</span>
@@ -343,10 +346,10 @@ const RetroDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInval
 const SectorBoxes: React.FC<{ t: CarTelemetry }> = ({ t }) => (
   <div className="grid grid-cols-3 gap-1">
     {[0, 1, 2].map((i) => {
-      const done = i + 1 < t.currentSector;
       const current = i + 1 === t.currentSector;
       const ms = t.sectorTimesMs[i];
-      const mark = done && ms > 0 ? lapMark(ms, t.bestSectorTimesMs[i], !t.race) : null;
+      // This lap's timed sectors only (none on the out-lap from the grid, which starts in sector 3)
+      const mark = sectorDone(t, i) ? lapMark(ms, t.bestSectorTimesMs[i], !t.race) : null;
       const color = mark ? LAP_MARK_COLOR[mark] : undefined;
       return (
         <Frame key={i} edge={current ? "cream" : "dim"} face="void" size="small" className="h-6.5" faceClassName="relative flex items-center justify-center gap-1.5 text-[10px]">
@@ -442,7 +445,7 @@ const LapsPanel: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapI
     <div className="flex flex-col gap-1.5">
       <Frame edge="outline" face="raised" size="large" className="h-15" faceClassName="flex items-center justify-center gap-3">
         <span className="text-[32px] leading-none" style={{ color: lapInvalid ? HUD_LOSS : undefined }}>
-          {formatLapTime(t.currentLapTimeMs)}
+          {formatLapClock(t)}
         </span>
         {lapInvalid ? (
           <span className="text-[11px] leading-none" style={{ color: HUD_LOSS }}>
@@ -572,22 +575,30 @@ const ConditionPanel: React.FC<{ t: CarTelemetry }> = ({ t }) => {
 
 /* ---------------------------------------------------------------- Map */
 
-const MapPanel: React.FC<Pick<HudDesignProps, "t" | "map" | "mapMode">> = ({ t, map, mapMode = "full" }) => (
-  <Frame size="large" faceClassName="flex flex-col gap-1.5 px-2.5 pt-2 pb-2">
-    <MiniMap
-      map={map}
-      t={t}
-      outline="var(--tp-primary)"
-      local={mapMode === "local"}
-      className={cx("block w-full", mapMode === "local" ? "h-[150px]" : "h-[118px]")}
-      stroke={16}
-    />
-    <div className="flex items-center justify-between gap-2 text-[10px] leading-none">
-      <span className="shrink-0 text-(--tp-amber)">S{String(t.currentSector).padStart(2, "0")}</span>
-      <span className="truncate text-(--tp-secondary)">{t.currentTurnNumber ? `T${t.currentTurnNumber} ${t.currentTurnName}` : "Straight"}</span>
-    </div>
-  </Frame>
-);
+const MapPanel: React.FC<Pick<HudDesignProps, "t" | "map" | "mapMode">> = ({ t, map, mapMode = "full" }) => {
+  const corner = cornerLabel(t.currentTurnNumber, t.currentTurnName);
+  return (
+    <Frame size="large" faceClassName="flex flex-col gap-1.5 px-2.5 pt-2 pb-2">
+      <MiniMap
+        map={map}
+        t={t}
+        outline="var(--tp-primary)"
+        local={mapMode === "local"}
+        className={cx("block w-full", mapMode === "local" ? "h-[150px]" : "h-[118px]")}
+        stroke={16}
+      />
+      {/* The sector and the corner's number, the corner's own name in full under them; two lines kept either way, so
+          the panel does not grow and shrink at every corner */}
+      <div className="flex min-h-6 flex-col gap-1 text-[10px] leading-none" title={`Sector ${t.currentSector} · ${corner ? corner.full : "Straight"}`}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-(--tp-amber)">S{String(t.currentSector).padStart(2, "0")}</span>
+          <span className="text-(--tp-secondary)">{corner ? corner.short : "Straight"}</span>
+        </div>
+        {corner?.name ? <span className="text-(--tp-secondary)">{corner.name}</span> : null}
+      </div>
+    </Frame>
+  );
+};
 
 /* ---------------------------------------------------------------- Weather & Radar */
 

@@ -24,7 +24,9 @@ import { useUnits } from "@/lib/settings/ui-prefs";
 import {
   aidsActive,
   formatDelta,
+  formatDeltaFit,
   formatGap,
+  formatLapClock,
   formatLapTime,
   formatSectorTime,
   formatSpeed,
@@ -39,6 +41,7 @@ import {
   lapMark,
   LAP_MARK_COLOR,
   NO_TIME,
+  sectorDone,
   speedUnit,
 } from "../hud-format";
 import { InputTrace } from "../InputTrace";
@@ -239,7 +242,7 @@ const LapTimer: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid: b
         <div className="relative flex min-h-13 items-center justify-center rounded-sm bg-(--tp-bar)">
           <Icon name="time" size="md" className="absolute left-2.5 text-(--tp-text-soft)" />
           <span className="text-[28px] tabular-nums" style={{ color: lapInvalid ? HUD_LOSS : undefined }}>
-            {formatLapTime(t.currentLapTimeMs)}
+            {formatLapClock(t)}
           </span>
           {lapInvalid ? <InvalidTag className="absolute right-2" /> : null}
         </div>
@@ -248,15 +251,16 @@ const LapTimer: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid: b
           <Icon name="racingLine" size="sm" className="absolute left-3 text-(--tp-text-soft)" />
           <span className="text-[18px] tabular-nums">{formatLapTime(predicted)}</span>
           <span className="absolute right-2.5 text-[13px] tabular-nums" style={{ color: deltaColor(deltaS) }}>
-            {deltaS === null ? NO_TIME : formatDelta(Math.max(-99.999, Math.min(99.999, deltaS)))}
+            {deltaS === null ? NO_TIME : formatDeltaFit(deltaS)}
           </span>
         </div>
         {/* Sectors of the running lap */}
         <div className="grid grid-cols-3 gap-0.5">
           {[0, 1, 2].map((i) => {
-            const done = i + 1 < t.currentSector;
+            // This lap's timed sectors only (none on the out-lap from the grid, which starts in sector 3)
+            const done = sectorDone(t, i);
             const ms = t.sectorTimesMs[i];
-            const mark = done && ms ? lapMark(ms, t.bestSectorTimesMs[i]) : null;
+            const mark = done ? lapMark(ms, t.bestSectorTimesMs[i]) : null;
             return (
               <div
                 key={i}
@@ -377,7 +381,7 @@ const Inputs: React.FC<{ t: CarTelemetry; deltaS: number | null; trace: boolean 
   const chips: React.ReactNode[] = [];
   if (t.race) {
     chips.push(
-      <Chip key="d" label="Δ" value={deltaS === null ? NO_TIME : formatDelta(Math.max(-9.999, Math.min(9.999, deltaS)))} color={deltaColor(deltaS)} />,
+      <Chip key="d" label="Δ" value={deltaS === null ? NO_TIME : formatDeltaFit(deltaS)} color={deltaColor(deltaS)} />,
     );
   }
   if (tuner) {
@@ -486,7 +490,7 @@ const IrDashiesDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapI
     >
       <div className="flex items-baseline justify-between gap-2 text-[13px] leading-none tabular-nums">
         <span className="font-semibold" style={{ color: lapInvalid ? HUD_LOSS : deltaColor(deltaS) }}>
-          {has ? formatDelta(Math.max(-99.999, Math.min(99.999, deltaS))) : NO_TIME}
+          {has ? formatDeltaFit(deltaS) : NO_TIME}
         </span>
         {lapInvalid ? (
           <InvalidTag />

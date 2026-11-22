@@ -20,7 +20,7 @@ import {
   HUD_SLATE,
   HUD_VOLT,
   HUD_YELLOW,
-  formatDelta,
+  formatDeltaFit,
   LAP_MARK_COLOR,
   LAP_MARK_WORD,
   NO_TIME,
@@ -357,25 +357,31 @@ export function useLapInvalid(t: CarTelemetry): boolean {
 export function useSectorFlash(t: CarTelemetry, holdMs = 3500): { sector: number; ms: number; color: string; mark: LapMark } | null {
   const [flash, setFlash] = useState<{ sector: number; ms: number; color: string; mark: LapMark } | null>(null);
   const runId = t.runId ?? 0;
-  const prev = useRef({ sector: t.currentSector, lap: t.lapCount, runId });
+  const prev = useRef({ sector: t.currentSector, lap: t.lapCount, runId, outLap: Boolean(t.outLap) });
   // Edges only set the flash; its timer belongs to the flash itself, so a frame that changes a dependency without an
   // edge can no longer cancel it
   useEffect(() => {
     const p = prev.current;
-    if (p.sector === t.currentSector && p.lap === t.lapCount && p.runId === runId) return;
-    prev.current = { sector: t.currentSector, lap: t.lapCount, runId };
+    if (p.sector === t.currentSector && p.lap === t.lapCount && p.runId === runId) {
+      // The out-lap flag is followed between edges too, in case it changes on a frame of its own
+      p.outLap = Boolean(t.outLap);
+      return;
+    }
+    prev.current = { sector: t.currentSector, lap: t.lapCount, runId, outLap: Boolean(t.outLap) };
     if (p.runId !== runId) {
       // A restart is not a completed sector
       setFlash(null);
       return;
     }
+    // Nor is a sector line or the start line crossed on the out-lap: no lap was being timed there
+    if (p.outLap) return;
     const done = p.sector;
     const ms = t.lapCount !== p.lap ? (t.lastLapTimeMs ?? 0) : t.sectorTimesMs[done - 1];
     if (!ms) return;
     const best = t.lapCount !== p.lap ? t.bestLapTimeMs : t.bestSectorTimesMs[done - 1];
     const mark = lapMark(ms, best, !t.race);
     setFlash({ sector: t.lapCount !== p.lap ? 0 : done, ms, color: LAP_MARK_COLOR[mark], mark });
-  }, [t.currentSector, t.lapCount, runId, t.lastLapTimeMs, t.sectorTimesMs, t.bestSectorTimesMs, t.bestLapTimeMs, t.race]);
+  }, [t.currentSector, t.lapCount, runId, t.outLap, t.lastLapTimeMs, t.sectorTimesMs, t.bestSectorTimesMs, t.bestLapTimeMs, t.race]);
   useEffect(() => {
     if (!flash) return;
     const id = window.setTimeout(() => setFlash(null), holdMs);
@@ -389,7 +395,11 @@ export const gearLabel = (g: number) => (g < 0 ? "R" : g === 0 ? "N" : String(g)
 /** Live delta colour: gaining or level, losing, or slate without a reference lap (semantic, so the palette applies) */
 export const deltaColor = (d: number | null) => (d === null ? HUD_SLATE : d <= 0 ? HUD_GAIN : HUD_LOSS);
 
-/** Gap ahead / behind the player in a race (s), null at the front / back */
+/**
+ * Gap ahead / behind the player in a race (s), null at the front / back. The split gap (the time between the two cars
+ * at the same point of the track, which the Ahead / Behind box shows) where the race has one for that car, else the
+ * difference of the standings' gaps to the leader, so two readouts of the gap to one car agree
+ */
 export function raceNeighbours(t: CarTelemetry) {
   const st = t.race?.standings;
   if (!st) return null;
@@ -398,9 +408,12 @@ export function raceNeighbours(t: CarTelemetry) {
   const me = st[i];
   const ahead = i > 0 ? st[i - 1] : null;
   const behind = i < st.length - 1 ? st[i + 1] : null;
+  const splits = t.race?.splits;
+  const splitAhead = ahead && splits?.ahead?.driverCode === ahead.driverCode ? splits.ahead.gapS : null;
+  const splitBehind = behind && splits?.behind?.driverCode === behind.driverCode ? splits.behind.gapS : null;
   return {
-    ahead: ahead ? { code: ahead.driverCode, color: ahead.teamColorHex, gap: me.gapToLeaderS - ahead.gapToLeaderS } : null,
-    behind: behind ? { code: behind.driverCode, color: behind.teamColorHex, gap: behind.gapToLeaderS - me.gapToLeaderS } : null,
+    ahead: ahead ? { code: ahead.driverCode, color: ahead.teamColorHex, gap: splitAhead ?? me.gapToLeaderS - ahead.gapToLeaderS } : null,
+    behind: behind ? { code: behind.driverCode, color: behind.teamColorHex, gap: splitBehind ?? behind.gapToLeaderS - me.gapToLeaderS } : null,
   };
 }
 
@@ -426,12 +439,13 @@ export const AeroBadge: React.FC<{ open: boolean; armed: boolean; label: string;
 );
 
 /**
- * A big live delta read-out for the tiles and dash cells: the arrow and the signed time (clamped to ±99.999), in the
- * current colour, so the tile or cell decides the tone. Placeholder without a reference lap.
+ * A big live delta read-out for the tiles and dash cells: the arrow and the signed time, as wide as an ordinary delta
+ * however large ("+41.84", "+123.4": `formatDeltaFit`), in the current colour, so the tile or cell decides the tone.
+ * Placeholder without a reference lap.
  */
 export const DeltaReadout: React.FC<{ deltaS: number | null; className?: string }> = ({ deltaS, className = "" }) => {
   if (deltaS === null) return <span className={`lc-data leading-none whitespace-nowrap ${className}`}>{NO_TIME}</span>;
-  const text = formatDelta(Math.max(-99.999, Math.min(99.999, deltaS)));
+  const text = formatDeltaFit(deltaS);
   const level = text.startsWith("\u00b1");
   return (
     <span className={`lc-data inline-flex items-center gap-1 leading-none whitespace-nowrap ${className}`}>

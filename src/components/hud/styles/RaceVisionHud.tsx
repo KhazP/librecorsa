@@ -24,7 +24,7 @@ import type { CarTelemetry, RaceStandingEntry } from "@/types/f1";
 import { Icon } from "@/components/ui/icons/Icon";
 import { tokenColor } from "@/components/ui/token-color";
 import { useUnits } from "@/lib/settings/ui-prefs";
-import { aidsActive, CLASSIC_CAR_IDS, formatDelta, formatGap, formatLapTime, formatSpeed, formatTemp, HUD_BEST, HUD_CAUTION, HUD_GAIN, HUD_INFO, HUD_LOSS, HUD_SHIFT, HUD_SLATE, NO_TIME, PROTO_CAR_IDS, ROAD_CAR_IDS, speedUnit } from "../hud-format";
+import { aidsActive, CLASSIC_CAR_IDS, formatDeltaFit, formatGap, formatLapTime, formatSpeed, formatTemp, HUD_BEST, HUD_CAUTION, HUD_GAIN, HUD_INFO, HUD_LOSS, HUD_SHIFT, HUD_SLATE, NO_TIME, PROTO_CAR_IDS, ROAD_CAR_IDS, speedUnit } from "../hud-format";
 import { aeroReadout } from "../aero-label";
 import { useHudModeRef } from "../hud-mode";
 import { type WeatherHudState } from "../WeatherBadge";
@@ -187,10 +187,11 @@ const Standings: React.FC<{
             <PosBox user>{Math.max(1, t.lapCount)}</PosBox>
             <span aria-hidden className="w-1.5 shrink-0 bg-(--tp-user)" />
             <span className="flex-1 self-center px-2 text-center" style={{ color: lapInvalid ? HUD_LOSS : "var(--tp-user)" }}>
-              {lapInvalid ? "INVALID" : lapTime(t.currentLapTimeMs)}
+              {/* Held at zero on the out-lap, where no lap is timed yet */}
+              {lapInvalid ? "INVALID" : t.outLap ? "00:00.000" : lapTime(t.currentLapTimeMs)}
             </span>
             <span className="w-20 shrink-0 self-center text-right" style={{ color: deltaS === null ? HUD_SLATE : deltaS <= 0 ? HUD_GAIN : HUD_LOSS }}>
-              {deltaS === null ? NO_TIME : formatDelta(Math.max(-99.999, Math.min(99.999, deltaS)))}
+              {deltaS === null ? NO_TIME : formatDeltaFit(deltaS)}
             </span>
           </div>
           {laps.slice(0, short ? 4 : 8).map((l) => {
@@ -328,7 +329,7 @@ const InputsPill: React.FC<{ t: CarTelemetry; deltaS: number | null; revRange: [
           {narrow ? null : <Cell label="RPM">{Math.round(t.rpm)}</Cell>}
           {showDeltaBar ? (
             <Cell label="DELTA" color={deltaS === null ? HUD_SLATE : deltaS <= 0 ? HUD_GAIN : HUD_LOSS}>
-              {deltaS === null ? NO_TIME : formatDelta(Math.max(-9.999, Math.min(9.999, deltaS)))}
+              {deltaS === null ? NO_TIME : formatDeltaFit(deltaS)}
             </Cell>
           ) : null}
           {hasErs ? (

@@ -51,6 +51,11 @@ export interface SliderDef extends RowBase<number> {
   step: number;
   bigStep?: number;
   format?: (value: number, env: SettingsEnv) => string;
+  /**
+   * A value named under the track at its place: 1 (100 %) on a slider whose range goes past 100 %, so 100 % is never
+   * taken for the end of the range
+   */
+  mark?: number;
 }
 
 export interface ChoiceOption {
@@ -153,6 +158,7 @@ export function SettingField({ def, first }: { def: RowDef; first?: boolean }) {
       );
     case "slider": {
       const max = typeof def.max === "function" ? def.max(env) : def.max;
+      const format = def.format ? (v: number) => def.format!(v, env) : undefined;
       return (
         <SettingRow {...row}>
           <Slider
@@ -162,7 +168,8 @@ export function SettingField({ def, first }: { def: RowDef; first?: boolean }) {
             step={def.step}
             bigStep={def.bigStep}
             defaultValue={def.initial(env)}
-            format={def.format ? (v) => def.format!(v, env) : undefined}
+            mark={def.mark !== undefined ? { value: def.mark, label: format ? format(def.mark) : String(def.mark) } : undefined}
+            format={format}
             onChange={(v) => def.write(env, v)}
           />
         </SettingRow>
