@@ -132,7 +132,7 @@ RISE Motordrome is my reading of the circuit planned beside Lake Kidogo at Buges
 - **Usage counter**: when you stop driving, the game sends the circuit, the car, the mode and the minutes driven, and the site only adds them to daily totals by country. No player id, no cookie, no address is kept, and nothing ties one drive to the next. What the site keeps is set out on the [privacy page](https://librecorsa.org/privacy).
 
 The online side (rooms, boards, scheduled races) is a Cloudflare Worker in [`cloudflare/`](cloudflare/README.md). It is optional: a copy of the game without it still has peer-to-peer rooms and local lap times.
-- **Cameras**: cockpit eye-point with live mirrors and the steering-wheel display, a broadcast T-cam, chase, and trackside TV cameras that pan, zoom and cut between corners.
+- **Cameras**: cockpit eye-point with live mirrors and the steering-wheel display, a broadcast T-cam, chase presets, trackside TV cameras (`F8`) that pan, zoom and cut between corners, and a free-flying camera (`F7`).
 
 ### Hardware
 - **Wheels**: steering, pedals and buttons through the browser for any wheel. Force feedback straight from the browser over WebHID for bases that use the standard HID PID protocol, or through a local bridge on Windows. See [Wheels and force feedback](#wheels-and-force-feedback) for what has been tested.
@@ -194,7 +194,9 @@ The physics is checked against data, not just tuned by feel, and the evidence is
 | `E` / `Q` | Upshift / downshift |
 | `Space` / `Shift` / `B` | Manual override boost (MGU-K) |
 | `X` | Active aero (Z-mode / X-mode) or DRS |
-| `C` | Cycle cameras |
+| `C` | Cycle driving cameras |
+| `F7` | Free camera (`WASD` fly · `Q`/`E` height · drag look · scroll speed · `R` reset) |
+| `F8` | Trackside TV cameras |
 | `R` | Racing and braking line |
 | `P` | Racing-line autopilot |
 | `V` | 1:1 mouse steering |

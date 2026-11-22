@@ -999,7 +999,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           <span className="lc-disp text-[18px]">Replay</span>
         </div>
         <div className="pointer-events-auto">
-          <ReplayBar {...props.replay} />
+          <ReplayBar {...props.replay} freeCameraKeyLabel={props.keyNames?.freeCamera} />
         </div>
       </div>
     ) : null}

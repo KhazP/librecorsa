@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Button, ConfirmDialog, SettingRow } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
+import { KeyCap } from "@/components/ui/prompts";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { keyLabel, padButtonLabel } from "@/lib/input/bindings";
 import { DEFAULT_HUD_PRESET, type HudPreset } from "@/lib/settings/hud-layouts";
@@ -87,9 +88,17 @@ export function CameraTab() {
   const [asking, setAsking] = useState(false);
   const nudged = Object.keys(env.settings.cameraNudges).length > 0;
   const cameraKey = keyLabel(env.settings.keys.camera[0]);
+  const freeCameraKey = env.settings.keys.freeCamera[0] ? keyLabel(env.settings.keys.freeCamera[0]) : null;
+  const tvCameraKey = env.settings.keys.tvCamera[0] ? keyLabel(env.settings.keys.tvCamera[0]) : null;
   const cameraButton = padButtonLabel(env.settings.padButtons.camera);
   return (
     <SettingsCard title="Camera" rows={[defaultView, fieldOfView, headMovement]} first>
+      <SettingRow label="Free camera" hint="Drag look · WASD fly · Q/E height · Scroll speed · R reset">
+        {freeCameraKey ? <KeyCap>{freeCameraKey}</KeyCap> : <span className="lc-hint">Unbound</span>}
+      </SettingRow>
+      <SettingRow label="Trackside TV">
+        {tvCameraKey ? <KeyCap>{tvCameraKey}</KeyCap> : <span className="lc-hint">Unbound</span>}
+      </SettingRow>
       <SettingRow
         label="Adjust seat"
         hint={`Hold ${cameraKey} or ${cameraButton} on track`}
