@@ -25,6 +25,7 @@ export const MODDER_SUPPORT: Readonly<Record<string, SupportLink>> = {
   dazzyb2k3: { url: "https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=XT8V5ELVZTGGQ", via: "PayPal" },
   // The Chaparral 2D team's donations go to Pasta, their finances (NPanic's word)
   NPanic: { url: "https://www.paypal.com/paypalme/williampasta", via: "PayPal" },
+  sagatron918: { url: "https://www.paypal.me/SagarNaikB", via: "PayPal" },
 };
 
 /** The support button's words: a donation on PayPal, support on a membership site */

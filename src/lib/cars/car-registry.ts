@@ -284,6 +284,9 @@ export const CAR_CLASSES: readonly CarClass[] = [
   { id: "road", title: "Road cars", sub: "Road-legal · street tyres", color: "#FF8A3D" },
 ];
 
+/** GT, prototype and classic racing tyre sidewall packs (gt-tyre-sidewall.ts, CREDITS.md) */
+const SAGATRON_GT_TYRES = { author: "sagatron918", url: "https://www.paypal.me/SagarNaikB" };
+
 /** Every car the game knows, whether or not this copy has its files (`hosted-content.ts`) */
 const ALL_CARS: readonly CarDefinition[] = [
   {
@@ -313,6 +316,7 @@ const ALL_CARS: readonly CarDefinition[] = [
       ...CC_BY_NC_SA,
       note: "In the Red Bull Racing livery of toddeppe's and VTX's versions of it.",
     },
+    tyreCredit: SAGATRON_GT_TYRES,
     physics: "amg-gt3",
     // The model's title gives no year: the Evo's homologation year
     year: 2020,
@@ -335,6 +339,7 @@ const ALL_CARS: readonly CarDefinition[] = [
       url: "https://sketchfab.com/3d-models/2025-bmw-m4-gt3-evo-g82-113f83dd87064697a5ec2511d280b9d5",
       ...CC_BY_NC_SA,
     },
+    tyreCredit: SAGATRON_GT_TYRES,
     physics: "amg-gt3",
     year: 2025,
     modelUrl: "/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb",
@@ -358,6 +363,7 @@ const ALL_CARS: readonly CarDefinition[] = [
       license: "Used with the author's permission",
       licenseUrl: "https://www.overtake.gg/members/munyuturbo.1202939/",
     },
+    tyreCredit: SAGATRON_GT_TYRES,
     physics: "mtr-496r",
     year: 2025,
     modelUrl: "/cars/mtr-496r/model/mtr-496r.glb",
@@ -378,6 +384,7 @@ const ALL_CARS: readonly CarDefinition[] = [
       note: "Cut to the simulator's budget, its marks removed and repainted",
       ...CC_BY,
     },
+    tyreCredit: SAGATRON_GT_TYRES,
     physics: "lc-lmdh",
     year: 2026,
     modelUrl: "/cars/lc-lmdh/model/lc-lmdh.glb",
@@ -417,6 +424,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     badge: "R33 GT500",
     quality: "own",
     credit: gregSt("Nissan Skyline BCNR33 JGTC 1998", "https://www.gtplanet.net/forum/downloads/nissan-skyline-bcnr33-jgtc-1998.7199/"),
+    tyreCredit: SAGATRON_GT_TYRES,
     physics: "nissan-r33-jgtc",
     year: 1998,
     modelUrl: "/cars/nissan-r33-jgtc/model/nissan-r33-jgtc.glb",
@@ -431,6 +439,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     badge: "R32 GR.A",
     quality: "own",
     credit: gregSt("Nissan R32 JTCC (Base 5)", "https://www.gtplanet.net/forum/downloads/nissan-r32-jtcc-base-5.6522/"),
+    tyreCredit: SAGATRON_GT_TYRES,
     physics: "nissan-r32-jtcc",
     year: 1993,
     modelUrl: "/cars/nissan-r32-jtcc/model/nissan-r32-jtcc.glb",
@@ -445,6 +454,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     badge: "M1 PROCAR",
     quality: "own",
     credit: pfalzdriver("BMW M1 Procar 1979", "https://www.gtplanet.net/forum/downloads/bmw-m1-procar-1979.7616/"),
+    tyreCredit: SAGATRON_GT_TYRES,
     physics: "bmw-m1-procar",
     year: 1979,
     modelUrl: "/cars/bmw-m1-procar/model/bmw-m1-procar.glb",
@@ -473,6 +483,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     badge: "2D 1966",
     quality: "own",
     credit: npanic("1966-1967 Chaparral 2D"),
+    tyreCredit: SAGATRON_GT_TYRES,
     physics: "chaparral-2d",
     year: 1966,
     modelUrl: "/cars/chaparral-2d/model/chaparral-2d.glb",
@@ -487,6 +498,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     badge: "2D 1967",
     quality: "own",
     credit: npanic("1966-1967 Chaparral 2D"),
+    tyreCredit: SAGATRON_GT_TYRES,
     physics: "chaparral-2d-67",
     year: 1967,
     modelUrl: "/cars/chaparral-2d-67/model/chaparral-2d-67.glb",
@@ -502,6 +514,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     quality: "own",
     // The car's GTPlanet page is gone; the mod links its author's channel
     credit: pfalzdriver("Porsche 934 Turbo RSR", "https://www.youtube.com/@Pfalzdriver"),
+    tyreCredit: SAGATRON_GT_TYRES,
     physics: "porsche-934-rsr",
     year: 1976,
     modelUrl: "/cars/porsche-934-rsr/model/porsche-934-rsr.glb",

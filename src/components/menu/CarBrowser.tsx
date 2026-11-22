@@ -29,6 +29,7 @@ import { withBasePath } from "@/lib/base-path";
 import { CarClassTag, CarQualityBadge, CarSkinPicker, LiveryPicker } from "./menu-content-ui";
 import { SourceChip } from "@/components/SourceChip";
 import { carModelSource } from "@/lib/model-source";
+import { useStoreBuild } from "@/lib/use-store-build";
 
 const byName = (a: CarDefinition, b: CarDefinition) => a.title.localeCompare(b.title);
 const QUALITIES: readonly CarQuality[] = ["own", "shared", "era"];
@@ -134,6 +135,7 @@ export const CarBrowser: React.FC<{
   /** The car cannot change now (an online race): the detail pane says why instead of offering Choose car */
   lockedReason?: string;
 }> = ({ carId, onChangeCar, selectedLivery, onChangeLivery, library, onClose, toolbar, lockedReason }) => {
+  const storeBuild = useStoreBuild();
   const classes = carClassesInUse();
   const [hoveredLivery, setHoveredLivery] = useState<{ carId: CarId; id: string } | null>(null);
   const [hoveredSkin, setHoveredSkin] = useState<{ carId: CarId; id: string } | null>(null);
@@ -275,14 +277,18 @@ export const CarBrowser: React.FC<{
                 {c.tyreCredit ? (
                   <>
                     , tyres by{" "}
-                    <a
-                      href={c.tyreCredit.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-lc-fog underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
-                    >
-                      {c.tyreCredit.author}
-                    </a>
+                    {storeBuild ? (
+                      <span className="text-lc-fog">{c.tyreCredit.author}</span>
+                    ) : (
+                      <a
+                        href={c.tyreCredit.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-lc-fog underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
+                      >
+                        {c.tyreCredit.author}
+                      </a>
+                    )}
                   </>
                 ) : null}
               </span>

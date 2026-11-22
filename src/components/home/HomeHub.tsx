@@ -855,9 +855,13 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                         {data.modders.map((m) => (
                           <li key={m.name} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-lc-line py-3 last:border-b">
                             <span className="flex min-w-0 flex-col gap-0.5">
-                              <a href={m.url} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`self-start inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
-                                {m.name}
-                              </a>
+                              {storeBuild && m.support && m.url === m.support.url ? (
+                                <span className="self-start text-lc-chalk">{m.name}</span>
+                              ) : (
+                                <a href={m.url} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`self-start inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
+                                  {m.name}
+                                </a>
+                              )}
                               <span className="lc-hint text-[13px]">{m.works.join(", ")}</span>
                             </span>
                             <SupportButton support={m.support} maker={m.name} variant="secondary" />

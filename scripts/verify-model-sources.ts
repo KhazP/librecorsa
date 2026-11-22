@@ -84,6 +84,12 @@ const strays = Object.keys(MODDER_SUPPORT).filter((name) => !credited.has(name))
 check("Every donation link matches a credited modder", !HOSTED_CONTENT || strays.length === 0, HOSTED_CONTENT ? strays.join(", ") : "skipped without hosted content");
 const list = moddersList();
 check("The modders list puts those with a link first", list.findIndex((m) => !m.support) === -1 || list.slice(list.findIndex((m) => !m.support)).every((m) => !m.support));
+const sagatron = list.find((m) => m.name === "sagatron918");
+check(
+  "sagatron918 is in the modders list with PayPal support and GT/proto/classic tyre credits",
+  !HOSTED_CONTENT || (sagatron?.support?.via === "PayPal" && sagatron.works.length >= 10),
+  HOSTED_CONTENT ? `${sagatron?.works.length ?? 0} cars` : "skipped without hosted content"
+);
 
 console.log(failed ? `\n${failed} model source check(s) failed.` : "\nAll model source checks passed.");
 if (failed) process.exit(1);
