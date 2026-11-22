@@ -372,6 +372,9 @@ AC_TRACKS = {
         'turnSplitAtM': [1525.0],
         # The crew panels with the Assetto Corsa logo and Assetto Corsa's pit props: left out
         'hideTextures': r'^(ac_crew|props_pitlane)\.dds$',
+        # Istanbul Park's timing/finish line (AC_TIME_0, s=0) sits ~190 m behind the painted starting grid
+        # boxes and overhead start gantry (AC_START_0..19 at s=179.7..27.3 m): place spawnGrid on AC_START_*
+        'useAcStartGrid': True,
         'description': 'Istanbul Park in Tuzla, on the Asian side of Istanbul: a 5.34 km anticlockwise Grand Prix circuit over four levels, with the long, fast multi-apex Turn 8.',
         'credit': {
             'title': 'Intercity Istanbul Park',
@@ -3839,36 +3842,83 @@ def build_from_sources(tid, cfg, args, src):
     # Ensure grid slots stay safely within narrow street/skill-course widths
     t3 = np.roll(pos3, -1, 0) - np.roll(pos3, 1, 0)
     t3 /= np.linalg.norm(t3, axis=1, keepdims=True)
+    ac_slots = None
+    if cfg.get('useAcStartGrid') and base and not p2p:
+        mk_grid = {}
+        kn5_candidates = ([cfg['markersKn5']] if cfg.get('markersKn5') else []) + list(cfg.get('kn5_files') or [])
+        for kn5_name in kn5_candidates:
+            kn5_path = os.path.join(base, kn5_name)
+            if os.path.exists(kn5_path):
+                mk_grid.update(read_ac_markers(kn5_path))
+                if 'AC_START_0' in mk_grid:
+                    break
+        if 'AC_START_0' in mk_grid:
+            ac_slots = []
+            for k in range(20):
+                key = f'AC_START_{k}'
+                if key not in mk_grid:
+                    break
+                pt_xz = mk_grid[key][[0, 2]]
+                idx_near = int(np.argmin(np.linalg.norm(xz - pt_xz, axis=1)))
+                dp = pt_xz - xz[idx_near]
+                ss_k = (idx_near * ds + float(np.dot(dp, tan2[idx_near]))) % L
+                lat_k = float(np.dot(dp, rgt2[idx_near]))
+                ac_slots.append((k + 1, ss_k, lat_k))
     spawn = []
-    for slot in range(1, 21):
-        ss = L - 11.6 - 8.0 * (slot - 1)
-        if p2p:
-            # One behind the other on the road before the start gate, the first 6 m short of it
-            ss = L - 6.0 - 8.0 * (slot - 1)
-            if ss < stS + 4.0:
-                break
-        x = ss / ds
-        i0 = int(math.floor(x)) % n
-        i1 = (i0 + 1) % n
-        a = x - math.floor(x)
-        w_slot = float(width[i0] * (1 - a) + width[i1] * a)
-        lat_mag = round(min(3.4, max(1.8, w_slot * 0.24)), 2)
-        lat = 0.0 if p2p else lat_mag if slot % 2 == 1 else -lat_mag
-        c = pos3[i0] * (1 - a) + pos3[i1] * a
-        rg = rgt2[i0] * (1 - a) + rgt2[i1] * a
-        rg /= np.linalg.norm(rg)
-        fw = t3[i0] * (1 - a) + t3[i1] * a
-        fw /= np.linalg.norm(fw)
-        bk = bank[i0] * (1 - a) + bank[i1] * a
-        pos = c + np.array([rg[0] * lat, -math.sin(bk) * lat + 0.11, rg[1] * lat])
-        spawn.append({
-            'slot': slot,
-            's': round(ss, 2),
-            'lateral': lat,
-            'position': [round(float(v), 3) for v in pos],
-            'yawRad': round(math.atan2(fw[0], fw[2]), 4),
-            'forward': [round(float(v), 5) for v in fw],
-        })
+    if ac_slots:
+        for slot, ss, lat_raw in ac_slots:
+            x = ss / ds
+            i0 = int(math.floor(x)) % n
+            i1 = (i0 + 1) % n
+            a = x - math.floor(x)
+            w_slot = float(width[i0] * (1 - a) + width[i1] * a)
+            lat_limit = max(1.0, w_slot * 0.5 - 1.5)
+            lat = round(float(np.clip(lat_raw, -lat_limit, lat_limit)), 2)
+            c = pos3[i0] * (1 - a) + pos3[i1] * a
+            rg = rgt2[i0] * (1 - a) + rgt2[i1] * a
+            rg /= np.linalg.norm(rg)
+            fw = t3[i0] * (1 - a) + t3[i1] * a
+            fw /= np.linalg.norm(fw)
+            bk = bank[i0] * (1 - a) + bank[i1] * a
+            pos = c + np.array([rg[0] * lat, -math.sin(bk) * lat + 0.11, rg[1] * lat])
+            spawn.append({
+                'slot': slot,
+                's': round(ss, 2),
+                'lateral': lat,
+                'position': [round(float(v), 3) for v in pos],
+                'yawRad': round(math.atan2(fw[0], fw[2]), 4),
+                'forward': [round(float(v), 5) for v in fw],
+            })
+    else:
+        for slot in range(1, 21):
+            ss = L - 11.6 - 8.0 * (slot - 1)
+            if p2p:
+                # One behind the other on the road before the start gate, the first 6 m short of it
+                ss = L - 6.0 - 8.0 * (slot - 1)
+                if ss < stS + 4.0:
+                    break
+            x = ss / ds
+            i0 = int(math.floor(x)) % n
+            i1 = (i0 + 1) % n
+            a = x - math.floor(x)
+            w_slot = float(width[i0] * (1 - a) + width[i1] * a)
+            lat_mag = round(min(3.4, max(1.8, w_slot * 0.24)), 2)
+            lat = 0.0 if p2p else lat_mag if slot % 2 == 1 else -lat_mag
+            c = pos3[i0] * (1 - a) + pos3[i1] * a
+            rg = rgt2[i0] * (1 - a) + rgt2[i1] * a
+            rg /= np.linalg.norm(rg)
+            fw = t3[i0] * (1 - a) + t3[i1] * a
+            fw /= np.linalg.norm(fw)
+            bk = bank[i0] * (1 - a) + bank[i1] * a
+            pos = c + np.array([rg[0] * lat, -math.sin(bk) * lat + 0.11, rg[1] * lat])
+            spawn.append({
+                'slot': slot,
+                's': round(ss, 2),
+                'lateral': lat,
+                'position': [round(float(v), 3) for v in pos],
+                'yawRad': round(math.atan2(fw[0], fw[2]), 4),
+                'forward': [round(float(v), 5) for v in fw],
+            })
     data['spawnGrid'] = spawn
 
     # Populate turns, DRS zones, cameras, and pitLane from AC data

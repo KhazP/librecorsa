@@ -2011,7 +2011,7 @@ export class AiOpponentField implements AiRace {
 
       // Off the start: run down the grid lane, side by side, until the first corner comes into view
       if (car.startLaneM !== null) {
-        if (kAbs > 0.006 || car.distM > this.rc.startLaneMaxM) car.startLaneM = null;
+        if (kAbs > 0.006 || car.distM - car.clock.startDistM > this.rc.startLaneMaxM) car.startLaneM = null;
         else if (targetLat === null) targetLat = car.startLaneM;
       }
       // Two cars can't take one corner side by side: the one behind on the way in gives the place up and tucks in
@@ -2216,7 +2216,7 @@ export class AiOpponentField implements AiRace {
     // Always retire the opening grid-lane lock once the opening run ends, even while driving manually
     if (me.startLaneM !== null && this.phase === 'racing') {
       const ahead = this.track.getSampleAtDistance((sim.sMeters + Math.max(40, sim.vxMs * 2)) % L);
-      if (Math.abs(ahead.curvature) > 0.006 || me.distM > this.rc.startLaneMaxM || this.raceTimeS > 6) {
+      if (Math.abs(ahead.curvature) > 0.006 || me.distM - me.clock.startDistM > this.rc.startLaneMaxM || this.raceTimeS > 6) {
         me.startLaneM = null;
       }
     }
@@ -2539,7 +2539,7 @@ export class AiOpponentField implements AiRace {
     if (this.rollingFormation) return car.retired;
     if (car.retired || car.control?.incident) return true;
     // Off the start everyone is slow; and a finished car on its in-lap is no obstacle anyone races
-    if (this.raceTimeS < 10 || car.distM < 150) return false;
+    if (this.raceTimeS < 10 || car.distM - car.clock.startDistM < 150) return false;
     const road = this.track.getSampleAtDistance(car.sim.sMeters).optimalSpeedKmh / 3.6;
     return isHazardSpeed(Math.abs(car.sim.vxMs), road) || Math.abs(this.headingErr(car.sim)) > 1.2;
   }

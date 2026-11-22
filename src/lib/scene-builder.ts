@@ -1072,7 +1072,11 @@ export function buildCircuitScene(
   // F1 start lights: five pods over the first red-lamp row of the light assembly hung in the start gantry
   // (s = 14 m, right of the centreline). Until the circuit GLB is live (and headless) they hang at the same
   // place from the track frame; once it loads they snap onto the authored assembly (Prop_StartLights_0).
-  const START_LINE_S = 14;
+  const poleSlot = track.spawnGrid[0];
+  const START_LINE_S =
+    poleSlot && Number.isFinite(poleSlot.s) && poleSlot.s > 0 && poleSlot.s < track.totalLengthM * 0.5
+      ? (poleSlot.s + 26) % track.totalLengthM
+      : 14;
   const startSample = track.getSampleAtDistance(START_LINE_S);
   const startFwd = startSample.tangent.clone().normalize();
   const startRight = startSample.binormal.clone().normalize();
@@ -1177,18 +1181,20 @@ export function buildCircuitScene(
     if (startLightState !== undefined) applySemaphoreMaterials(startLightState);
 
     /** The pods across the front of a gantry model, on its first red row, at least `minSpacing` apart */
-    const placePodsOn = (gantry: THREE.Object3D, minSpacing: number) => {
-      const box = new THREE.Box3().setFromObject(gantry);
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
-      center.y -= size.y * 0.125;
+    const placePodsOn = (gantry: THREE.Object3D, minSpacing: number, bounds?: { minF: number; maxF: number }) => {
       // Extent of the model along the start direction and across it, from its own vertices: on a diagonal straight
-      // the axis-aligned box of a thin panel is far deeper than the panel, and the pods would hang in front of it
+      // the axis-aligned box of a thin panel is far deeper than the panel, and the pods would hang in front of it.
+      // `bounds` lets a shared mesh (e.g. Istanbul Park's main gantry + mid-grid repeater) frame only the main gantry.
       let minF = Infinity;
       let maxF = -Infinity;
       let minR = Infinity;
       let maxR = -Infinity;
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      let minZ = Infinity;
+      let maxZ = -Infinity;
       const v = new THREE.Vector3();
       gantry.traverse((obj) => {
         const pos = obj instanceof THREE.Mesh ? obj.geometry.getAttribute("position") : undefined;
@@ -1196,21 +1202,37 @@ export function buildCircuitScene(
         for (let i = 0; i < pos.count; i++) {
           v.fromBufferAttribute(pos, i).applyMatrix4(obj.matrixWorld);
           const f = v.dot(startFwd);
+          if (bounds && (f < bounds.minF || f > bounds.maxF)) continue;
           const r = v.dot(startRight);
           minF = Math.min(minF, f);
           maxF = Math.max(maxF, f);
           minR = Math.min(minR, r);
           maxR = Math.max(maxR, r);
+          minX = Math.min(minX, v.x);
+          maxX = Math.max(maxX, v.x);
+          minY = Math.min(minY, v.y);
+          maxY = Math.max(maxY, v.y);
+          minZ = Math.min(minZ, v.z);
+          maxZ = Math.max(maxZ, v.z);
         }
       });
       if (minF > maxF) return;
+      const center = new THREE.Vector3((minX + maxX) * 0.5, (minY + maxY) * 0.5, (minZ + maxZ) * 0.5);
+      // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
+      center.y -= (maxY - minY) * 0.125;
       placePods(center, (maxF - minF) * 0.5, Math.max(minSpacing, (maxR - minR) / 5));
     };
     const gantry = root.getObjectByName("Prop_StartLights_0");
     const acGantry = root.getObjectByName("startlight_SUB1");
+    const istLights = root.getObjectByName("core_start_lights_a_chunk0");
+    const istGantry = root.getObjectByName("ist_start_gantry_a_chunk0");
     if (gantry) placePodsOn(gantry, 0);
     else if (acGantry) placePodsOn(acGantry, 0.28);
-    else if (ownLamps) startLightGroup.visible = false;
+    else if (istLights && istGantry) {
+      const gb = new THREE.Box3().setFromObject(istGantry);
+      const gf = gb.getCenter(new THREE.Vector3()).dot(startFwd);
+      placePodsOn(istLights, 0.28, { minF: gf - 15, maxF: gf + 15 });
+    } else if (ownLamps) startLightGroup.visible = false;
   };
 
   /** A converted circuit's balloons and blimp (drifting-objects.ts), once the circuit has loaded */

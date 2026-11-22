@@ -113,7 +113,7 @@ export class MultiplayerFlags {
    * One frame. `active`: the player is racing (lights out, not yet flagged); otherwise the flag is down and nothing
    * is posted.
    */
-  update(dtS: number, raceTimeS: number, playerS: number, lapLengthM: number, cars: readonly FlagCar[], active = true): void {
+  update(dtS: number, raceTimeS: number, playerS: number, lapLengthM: number, cars: readonly FlagCar[], active = true, startOriginM = 0): void {
     const quiet = !active || raceTimeS < START_QUIET_S || !(lapLengthM > 0);
     const seen = new Set<string>();
     let nearest: { d: number; cause: YellowCause } | null = null;
@@ -124,7 +124,7 @@ export class MultiplayerFlags {
         f = { causeS: 0, clearS: 0, on: false, cause: null };
         this.cars.set(c.id, f);
       }
-      const offTheStart = c.distM < START_QUIET_M && raceTimeS < START_GRACE_S;
+      const offTheStart = c.distM - startOriginM < START_QUIET_M && raceTimeS < START_GRACE_S;
       const cause = quiet || offTheStart ? null : causeOf(c);
       if (cause) {
         f.causeS += dtS;
@@ -180,6 +180,7 @@ export class MultiplayerFlags {
 /** What of the circuit the remote cars are placed on */
 export interface FlagTrack {
   totalLengthM: number;
+  spawnGrid?: readonly { s: number }[];
   projectWorldToTrack: (
     x: number,
     z: number,
@@ -234,7 +235,9 @@ export function flagMultiplayerRace(
     flags = new MultiplayerFlags();
     byRace.set(race, flags);
   }
-  flags.update(dtS, raceTimeS, playerS, track.totalLengthM, flagCarsOf(track, peers, race.start.id), status.phase === 'racing');
+  const poleS = track.spawnGrid?.[0]?.s;
+  const startOriginM = poleS !== undefined && Number.isFinite(poleS) && poleS > 0 && poleS < track.totalLengthM * 0.5 ? poleS : 0;
+  flags.update(dtS, raceTimeS, playerS, track.totalLengthM, flagCarsOf(track, peers, race.start.id), status.phase === 'racing', startOriginM);
   status.yellow = flags.yellow || undefined;
   const feed = flags.feed(raceTimeS);
   if (feed) status.raceControl = [...feed, ...(status.raceControl ?? [])].slice(0, 2);

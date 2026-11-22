@@ -8,6 +8,7 @@
  * Every car has a launch window inside its rev range, and the jump start watch calls the car moving off its spot
  * through the lights, not a few centimetres of roll, revs on a car that stays put or a start the car is not held for.
  */
+import { existsSync, readFileSync } from 'node:fs';
 import { createFlatTestTrack } from './lib/flat-track';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
 import { AiOpponentField, aiDriversFor } from '../src/lib/sim/ai-opponents';
@@ -16,6 +17,7 @@ import { JumpStartWatch, LAUNCH_RPM, launchWindow, pullsAway } from '../src/lib/
 import type { AiRace } from '../src/lib/sim/ai-race';
 import { DEFAULT_RACE_SETUP, parseRaceSetup, startAiRace } from '../src/lib/sim/race-setup';
 import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from '../src/lib/sim/rev-range';
+import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { isVehicleModelId, type ControlInputs, type VehicleModelId } from '../src/types/f1';
 
 const failures: string[] = [];
@@ -220,6 +222,105 @@ console.log('\n== Jump starts');
       !anyRetired && maxDmg < 0.05 && me !== undefined && maxSpeedKmh > 80 && player.telemetry.speedKmh > 60,
       `max=${maxSpeedKmh.toFixed(0)} km/h, end=${player.telemetry.speedKmh.toFixed(0)} km/h, retired=${anyRetired}, dmg=${maxDmg.toFixed(2)}`
     );
+  }
+}
+
+// ---- Forward-offset starting grid (#155, e.g. Istanbul Park where grid boxes sit ~180 m ahead of s = 0)
+{
+  console.log('\n== forward-offset starting grid (#155)');
+  const fwdTrack = createFlatTestTrack(1500, 150);
+  const L = fwdTrack.totalLengthM;
+  const makeSlot = (slot: number, s: number, lateral: number) => {
+    const smp = fwdTrack.getSampleAtDistance(s);
+    const pos = smp.position.clone().addScaledVector(smp.binormal, lateral);
+    const fwd = smp.tangent.clone().normalize();
+    return {
+      slot,
+      s,
+      lateral,
+      position: [pos.x, pos.y, pos.z] as [number, number, number],
+      yawRad: Math.atan2(fwd.x, fwd.z),
+      forward: [fwd.x, fwd.y, fwd.z] as [number, number, number],
+    };
+  };
+  fwdTrack.spawnGrid = [makeSlot(1, 180, 3.0), makeSlot(2, 172, -3.0), makeSlot(3, 164, 3.0), makeSlot(4, 156, -3.0)];
+
+  for (const id of ['f12026-car', 'lc26'] as const) {
+    // 1. Standing race start: first crossing of s = 0 finishes Lap 1 without recording a shorter-lap PB or Sector 1 best
+    const raceCar = vehicleModelSpec(id).createSim(fwdTrack, null);
+    raceCar.autoGearbox = true;
+    raceCar.resetToStartGrid(false, 0, undefined, true);
+    const startS = raceCar.sMeters;
+    const startLap = raceCar.telemetry.lapCount;
+    let crossed = false;
+    for (let i = 0; i < 60 * 120; i++) {
+      raceCar.step(1 / 120, { throttle: 1 });
+      if (raceCar.telemetry.lapCount > startLap) {
+        crossed = true;
+        break;
+      }
+    }
+    check(
+      `${id} forward grid (race): spawns at s=180 and completes Lap 1 on first s=0 crossing`,
+      Math.abs(startS - 180) < 2 && crossed && raceCar.telemetry.lapCount === 2 && raceCar.telemetry.lastLapValid === false && raceCar.telemetry.bestLapTimeMs === null && raceCar.telemetry.bestSectorTimesMs[0] === null,
+      `s0=${startS.toFixed(1)}m, lap=${raceCar.telemetry.lapCount}, lastValid=${raceCar.telemetry.lastLapValid}, best=${raceCar.telemetry.bestLapTimeMs}, bestS1=${raceCar.telemetry.bestSectorTimesMs[0]}`
+    );
+
+    // 2. Solo standing start: first crossing of s = 0 starts timed Lap 1 cleanly (out-lap, lapCount stays 1)
+    const soloCar = vehicleModelSpec(id).createSim(fwdTrack, null);
+    soloCar.autoGearbox = true;
+    soloCar.resetToStartGrid(false, 0, undefined, false);
+    let prevS = soloCar.sMeters;
+    let crossedSolo = false;
+    for (let i = 0; i < 60 * 120; i++) {
+      soloCar.step(1 / 120, { throttle: 1 });
+      if (prevS > L * 0.85 && soloCar.sMeters < L * 0.15) {
+        crossedSolo = true;
+        break;
+      }
+      prevS = soloCar.sMeters;
+    }
+    check(
+      `${id} forward grid (solo): first s=0 crossing starts timed Lap 1 cleanly`,
+      crossedSolo && soloCar.telemetry.lapCount === 1 && soloCar.telemetry.currentLapTimeMs < 500 && soloCar.telemetry.bestLapTimeMs === null,
+      `crossed=${crossedSolo}, lap=${soloCar.telemetry.lapCount}, clock=${soloCar.telemetry.currentLapTimeMs.toFixed(0)}ms`
+    );
+  }
+
+  // 3. Real Istanbul Park track_data.json (when hosted asset is present locally)
+  const istPath = 'public/tracks/istanbul_park/track_data.json';
+  if (existsSync(istPath)) {
+    const raw = JSON.parse(readFileSync(istPath, 'utf8')) as RawTrackJson;
+    setActiveTrack('istanbul_park', raw);
+    const ist = getActiveTrackData(1200);
+    const slots = ist.spawnGrid;
+    const pole = slots[0];
+    let monotonic = slots.length === 20;
+    let insideRoad = slots.length === 20;
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      if (i > 0 && !(slots[i - 1].s - s.s > 6 && slots[i - 1].s - s.s < 10)) monotonic = false;
+      const p = ist.projectWorldToTrack(s.position[0], s.position[2], s.s);
+      if (Math.abs(p.lateralOffset) > p.sample.width / 2 - 1.5) insideRoad = false;
+    }
+    check(
+      'Istanbul Park: spawnGrid matches forward grid boxes (P1 ~180 m, 20 slots on road)',
+      pole !== undefined && pole.s >= 175 && pole.s <= 185 && monotonic && insideRoad,
+      `slots=${slots.length}, P1 s=${pole?.s}m lat=${pole?.lateral}m, P20 s=${slots[slots.length - 1]?.s}m`
+    );
+    const env = new TrackEnvironment(ist);
+    const pCar = vehicleModelSpec('f12026-car').createSim(ist, null);
+    const field = new AiOpponentField(ist, pCar, aiDriversFor(5), env, { skill: 70, seed: 3 });
+    field.playerGrid = 'front';
+    field.startRace(true);
+    const st = field.status();
+    check(
+      'Istanbul Park: AI race standing start orders P1..P6 on forward grid',
+      st.standings.length === 6 && Math.abs(pCar.sMeters - pole.s) < 2 && st.standings[0].isPlayer && st.lap === 1,
+      `playerS=${pCar.sMeters.toFixed(1)}m, P1isPlayer=${st.standings[0]?.isPlayer}, lap=${st.lap}`
+    );
+  } else {
+    console.log(`SKIP  Istanbul Park forward-grid asset check (${istPath} absent)`);
   }
 }
 

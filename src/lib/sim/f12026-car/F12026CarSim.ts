@@ -1225,6 +1225,8 @@ export class F12026CarSim implements SimulatorCar {
   public trackLimitsMode: 'strict' | 'judged' = 'strict';
   public trackLimitsHold = false;
   private lineCrossingStartsLap = true;
+  /** Standing race start from a forward-offset grid (ahead of the finish/control line `s = 0`): Lap 1 is shorter than a full lap and must not set a PB or sector 1 best */
+  private shortStartLap = false;
   /** Jumps of the lap position round the course: one that stands cuts the lap (course-limits.ts) */
   private readonly cutWatch = new CourseCutWatch();
   private drsPressPending = false;
@@ -1994,13 +1996,19 @@ export class F12026CarSim implements SimulatorCar {
     this.sectorStartMs = 0;
     this.lapValid = true;
     this.telemetry.lapInvalid = false;
-    this.lineCrossingStartsLap = true;
+    // Standing race starts on circuits whose painted grid lies ahead of the control/finish line (s = 0, e.g. Istanbul
+    // Park) complete Lap 1 on their first crossing of s = 0, matching RaceClock; solo standing starts still treat that
+    // opening stretch as an out-lap so no shorter-than-full lap is ever timed or submitted.
+    const startedAheadOfLine = !flyingStart && !pointToPoint && this.s > 0 && this.s < L * 0.5;
+    this.lineCrossingStartsLap = !(raceStart && startedAheadOfLine);
+    this.shortStartLap = raceStart && startedAheadOfLine;
     this.telemetry.currentLapTimeMs = 0;
     this.telemetry.topSpeedThisLapKmh = 0;
   }
 
   public teleportToDistance(sMeters: number, speedMs = 0, lateral = 0): void {
     this.lineCrossingStartsLap = false;
+    this.shortStartLap = false;
     // Moved mid-lap (corner practice, a stuck or lost car's rescue): the lap under way can't count
     this.invalidateLap();
     this.placeAt(wrap(sMeters, this.track.totalLengthM), lateral, Math.max(0, speedMs));
@@ -2010,6 +2018,7 @@ export class F12026CarSim implements SimulatorCar {
   /** Back on the ground at a recorded pose, rolling at its speed, with the tyres as they are now */
   public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number }): void {
     this.lineCrossingStartsLap = false;
+    this.shortStartLap = false;
     this.invalidateLap();
     if (pose.lapCount !== undefined && Number.isFinite(pose.lapCount)) {
       this.telemetry.lapCount = Math.max(0, Math.floor(pose.lapCount));
@@ -2037,6 +2046,7 @@ export class F12026CarSim implements SimulatorCar {
     const [xa, za] = onLine(target.s - 2.5);
     const [xb, zb] = onLine(target.s + 2.5);
     this.lineCrossingStartsLap = false;
+    this.shortStartLap = false;
     // Corner practice moves the car mid-lap: the lap under way can't count
     this.invalidateLap();
     this.progressHintS = this.poseHintS = target.s;
@@ -3004,18 +3014,21 @@ export class F12026CarSim implements SimulatorCar {
     if (duration > Math.min(8000, this.minLapMs / 5)) {
       t.sectorTimesMs[sector - 1] = duration;
       const best = t.bestSectorTimesMs[sector - 1];
-      // A best sector only from a lap that still counts (not one off the track, or one that cut the course)
-      if (this.lapValid && (best === null || duration < best)) t.bestSectorTimesMs[sector - 1] = duration;
+      // A best sector only from a lap that still counts (and never Sector 1 of a forward-offset grid's shorter Lap 1)
+      const shortSector1 = sector === 1 && this.shortStartLap;
+      if (!shortSector1 && this.lapValid && (best === null || duration < best)) t.bestSectorTimesMs[sector - 1] = duration;
     }
   }
 
   private onLapCompleted(): void {
     const t = this.telemetry;
     const lapTime = this.simTimeMs - this.lapStartMs;
+    const shortStart = this.shortStartLap;
+    this.shortStartLap = false;
     this.onSectorCompleted(3);
     this.lapStartMs = this.simTimeMs;
     // Judged track limits: a lap that ends while an excursion is still being judged cannot count
-    const valid = this.lapValid && !(this.trackLimitsMode === 'judged' && (this.trackLimitsHold || t.offTrack));
+    const valid = !shortStart && this.lapValid && !(this.trackLimitsMode === 'judged' && (this.trackLimitsHold || t.offTrack));
     if (lapTime > this.minLapMs) {
       t.lastLapTimeMs = lapTime;
       if (valid && (t.bestLapTimeMs === null || lapTime < t.bestLapTimeMs)) t.bestLapTimeMs = lapTime;

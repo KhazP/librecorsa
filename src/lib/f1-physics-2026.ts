@@ -646,6 +646,8 @@ export class F1Physics2026 {
   private lastSector: 1 | 2 | 3 = 1;
   /** Set by a grid / flying-start reset: the next S/F crossing starts lap timing instead of completing a lap */
   private lineCrossingStartsLap = false;
+  /** Standing race start from a forward-offset grid (ahead of `s = 0`): Lap 1 is shorter than a full lap and must not set a PB or sector 1 best */
+  private shortStartLap = false;
   /** On a point-to-point course: a run is under way (started at the start line, not yet at the finish) */
   private runActive = false;
   /** On a point-to-point course: the car has stood still just behind the start line, so its next run starts from rest */
@@ -1046,9 +1048,10 @@ export class F1Physics2026 {
    * of the main straight for a flying lap (further slots queue up 28 m apart, alternating sides). With `fieldSize`
    * (a race's rolling start) every car of the field takes the one speed `rollingStartSpeedMs` gives.
    */
-  public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number): void {
+  public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number, raceStart = false): void {
     // A point-to-point course is driven from a standing start: its road ends behind the start line
-    if (this.track.pointToPoint) flyingStart = false;
+    const pointToPoint = !!this.track.pointToPoint;
+    if (pointToPoint) flyingStart = false;
     this.runActive = false;
     this.atRestOnLine = false;
     const lapLen = this.track.totalLengthM;
@@ -1120,7 +1123,11 @@ export class F1Physics2026 {
     this.currentLapStartMs = 0;
     this.currentSectorStartMs = 0;
     this.lapValid = true;
-    this.lineCrossingStartsLap = true;
+    // Standing race starts from a forward-offset grid (ahead of s = 0, e.g. Istanbul Park) finish Lap 1 on the first
+    // crossing of s = 0 in lockstep with RaceClock, without timing that shorter lap as a PB.
+    const startedAheadOfLine = !flyingStart && !pointToPoint && this.sMeters > 0 && this.sMeters < lapLen * 0.5;
+    this.lineCrossingStartsLap = !(raceStart && startedAheadOfLine);
+    this.shortStartLap = raceStart && startedAheadOfLine;
     this.settleSuspension();
     this.finishPlacement();
   }
@@ -1144,6 +1151,7 @@ export class F1Physics2026 {
 
   public teleportToDistance(sMeters: number, speedMs = 0, lateral = 0): void {
     this.lineCrossingStartsLap = false;
+    this.shortStartLap = false;
     // Moved mid-lap (corner practice, a stuck-car rescue): the lap under way can't count
     this.invalidateLap();
     const wrapped = ((sMeters % this.track.totalLengthM) + this.track.totalLengthM) % this.track.totalLengthM;
@@ -1167,6 +1175,7 @@ export class F1Physics2026 {
     const tangent = this.track.getSampleAtDistance(p.s).tangent;
     const trackHeadingRad = Math.atan2(tangent.x, tangent.z);
     this.lineCrossingStartsLap = false;
+    this.shortStartLap = false;
     // Put back mid-lap: the lap under way can't count
     this.invalidateLap();
     if (pose.lapCount !== undefined && Number.isFinite(pose.lapCount)) {
@@ -3591,8 +3600,9 @@ export class F1Physics2026 {
     if (sectorDuration > Math.min(8000, this.minLapMs / 5)) {
       this.telemetry.sectorTimesMs[idx] = sectorDuration;
       const prevBest = this.telemetry.bestSectorTimesMs[idx];
-      // A best sector only from a lap that still counts (not one off the track, or one that cut the course)
-      if (this.lapValid && (prevBest === null || sectorDuration < prevBest)) {
+      // A best sector only from a lap that still counts (and never Sector 1 of a forward-offset grid's shorter Lap 1)
+      const shortSector1 = completedSector === 1 && this.shortStartLap;
+      if (!shortSector1 && this.lapValid && (prevBest === null || sectorDuration < prevBest)) {
         this.telemetry.bestSectorTimesMs[idx] = sectorDuration;
       }
     }
@@ -3609,10 +3619,12 @@ export class F1Physics2026 {
   private onLapCompleted(): void {
     const nowMs = this.simTimeMs;
     const lapTime = nowMs - this.currentLapStartMs;
+    const shortStart = this.shortStartLap;
+    this.shortStartLap = false;
     this.onSectorCompleted(3);
     this.currentLapStartMs = nowMs;
     // Judged track limits: a lap that ends while an excursion is still being judged cannot count
-    const valid = this.lapValid && !(this.trackLimitsMode === 'judged' && (this.trackLimitsHold || this.lastObservation.outOfTrack));
+    const valid = !shortStart && this.lapValid && !(this.trackLimitsMode === 'judged' && (this.trackLimitsHold || this.lastObservation.outOfTrack));
     if (lapTime > this.minLapMs) {
       this.telemetry.lastLapTimeMs = lapTime;
       if (valid && (this.telemetry.bestLapTimeMs === null || lapTime < this.telemetry.bestLapTimeMs)) {
