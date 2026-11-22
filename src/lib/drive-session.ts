@@ -1350,10 +1350,15 @@ export class DriveSession {
     // Rain streaks around the camera (one GPU-animated draw, hidden in the dry)
     const rainFx = createRainFx(scene);
     // Scene render + one merged effect pass (mipmap bloom on High, then AgX tone mapping and the grade);
-    // applyGraphicsQuality puts the physical sky's clouds in front of it
-    const postFx = createPostFx(renderer, scene, camera);
+    // applyGraphicsQuality puts the physical sky's clouds in front of it.
+    // Read the phone profile once per session so MSAA, the reflection probe, the step-down order and the
+    // HUD rate always agree (and phones never allocate a 4x MSAA renderbuffer at startup).
+    const touchGraphics = isTouchDevice();
+    const postFx = createPostFx(renderer, scene, camera, {
+      multisampling: touchGraphics ? 0 : undefined,
+    });
     // Live reflections of the world on the cars (High / Medium); Low keeps the sky's
-    const reflectionProbe = new CarReflectionProbe(renderer, scene);
+    const reflectionProbe = new CarReflectionProbe(renderer, scene, { mobile: touchGraphics });
     // `?perf=1`: a report of the first 30 s on track (startup-monitor.ts), and a line every 10 s for the whole session
     // (session-perf.ts) with the simulation worker's own timing in it
     const startupMonitor = StartupMonitor.requested() ? new StartupMonitor(renderer) : null;
@@ -1585,8 +1590,6 @@ export class DriveSession {
     // frames that draw; input, the simulation, the network and the laps run on every frame.
     const pacer = new FramePacer(settings.graphics.fpsCap);
     const displayRate = new DisplayRate();
-    // Read the phone/touch graphics profile once per session so the ladder, probe and HUD stay consistent
-    const touchGraphics = isTouchDevice();
     const planOpts = (g: PlayerSettings["graphics"]): PlanOptions => ({
       touch: touchGraphics,
       sharpLow: g.sharpLow,
