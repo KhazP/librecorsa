@@ -443,6 +443,13 @@ function loadTrackGlb(
             mat.polygonOffsetFactor = offset;
             mat.polygonOffsetUnits = offset;
             if (isDecal) mat.depthWrite = false;
+          } else if (typeof mat.userData?.depthOffset === "number") {
+            // A converted circuit's paint that lies a millimetre or two over the ground under it (glTF material extras
+            // `depthOffset`, as DECAL_NODES gives by node name): its kerbs and lines, which fought the run-off and
+            // asphalt beneath for depth and came out in jagged, cut-off pieces at a distance
+            mat.polygonOffset = true;
+            mat.polygonOffsetFactor = mat.userData.depthOffset;
+            mat.polygonOffsetUnits = mat.userData.depthOffset;
           }
         }
         if (offset !== undefined) obj.renderOrder = 1;
