@@ -12,7 +12,7 @@
 import { steerNormOf } from './car-pose';
 import * as THREE from 'three';
 import { createF1Car2026, type PortedSkin, type SimCarRig } from '@/lib/car-builder-2026';
-import { anyCarForVehicle, carForVehicle, carSkinBaseUrl } from '@/lib/cars/car-registry';
+import { anyCarForVehicle, carForVehicle, portedSkinFor } from '@/lib/cars/car-registry';
 import type { WheelSeating } from '@/lib/render/corner-rig';
 import { createPortedCarRig, loadTemplate as loadPortedTemplate } from '@/lib/ported-car-model';
 import { defaultGtTyreBrand, type GtTyreBrand } from '@/lib/render/gt-tyre-sidewall';
@@ -1133,7 +1133,7 @@ function opponentSkin(vehicle: VehicleModelId | undefined, driverCode: string): 
   let h = 0;
   for (const ch of driverCode) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   const skin = skins[h % skins.length];
-  return skin === skins[0] ? null : { baseUrl: carSkinBaseUrl(car.id, skin.id), files: skin.files, variant: skin.variant };
+  return portedSkinFor(car.id, skin);
 }
 
 /** The translucent materials `ghostify` gave a car */

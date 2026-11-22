@@ -13,6 +13,8 @@ import { CHAPARRAL_2D_67_SOUND, CHAPARRAL_2D_SOUND } from "@/lib/sim/classic/Cha
 import { NISSAN_R32_SKINS, NISSAN_R33_SKINS } from "./classic-skins";
 import { BMW_M1_PROCAR_SKINS, PORSCHE_934_RSR_SKINS, VW_SCIROCCO_SKINS } from "./pfalzdriver-skins";
 import { CHAPARRAL_2D_67_SKINS, CHAPARRAL_2D_SKINS } from "./chaparral-skins";
+import { AMG_GT3_SKINS, BMW_M4_GT3_SKINS } from "./gt3-skins";
+import type { PortedSkin } from "@/lib/car-builder-2026";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
 import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
 
@@ -141,8 +143,8 @@ export interface CarCredit {
 export interface CarSkin {
   id: string;
   name: string;
-  /** Its two main colours, for the picker */
-  swatch: readonly [string, string];
+  /** Its two or three main colours, for the picker */
+  swatch: readonly [string, string] | readonly [string, string, string];
   /**
    * The livery files it has, when it changes only some of what a livery can (the classic Nissans' skins): the rest stay
    * as the model was made. Absent: every file the model's `skinMaps` name
@@ -153,6 +155,10 @@ export interface CarSkin {
    * model's PART_ nodes the GLB's `partVariants` extras list for this name are shown, the others hidden. Absent: "base"
    */
   variant?: string;
+  /** Procedural livery id (`gt3-livery-painter.ts`), projected directly onto the GLB's exterior paint material */
+  procedural?: string;
+  /** Explicitly keeps the GLB's built-in factory paint (even when this skin is not `skins[0]`) */
+  useModelPaint?: boolean;
 }
 
 const CC_BY = { license: "CC BY 4.0", licenseUrl: "https://creativecommons.org/licenses/by/4.0/" } as const;
@@ -308,6 +314,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     // The model's title gives no year: the Evo's homologation year
     year: 2020,
     modelUrl: "/cars/amg-gt3-evo/model/amg-gt3-evo.glb",
+    skins: AMG_GT3_SKINS,
     sound: AMG_GT3_SOUND,
   },
 
@@ -328,6 +335,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     physics: "amg-gt3",
     year: 2025,
     modelUrl: "/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb",
+    skins: BMW_M4_GT3_SKINS,
     // 28 cm longer than the AMG's, its tail 18 cm further back
     bodyPlan: [[0.0, 2.32], [0.61, 2.24], [0.94, 2.01], [1.02, 1.84], [1.02, 0.8], [1.02, -1.83], [0.87, -2.27], [0.61, -2.46], [0.48, -2.52], [0.0, -2.52]],
     sound: BMW_M4_GT3_SOUND,
@@ -590,6 +598,30 @@ export const carSkin = (id: CarId, skinId: string | null | undefined): CarSkin |
 
 /** Where a skin's files are: beside the car's model, so they go up to R2 with it */
 export const carSkinBaseUrl = (id: CarId, skinId: string): string => `/cars/${id}/skins/${skinId}`;
+
+/**
+ * Resolves a car's selected `CarSkin` into the `PortedSkin` consumed by `createPortedCarRig`:
+ * - Procedural skins (including procedural defaults such as BMW's `#33 Verstappen Racing`) return `{ baseUrl: "", procedural }`
+ * - Skins marked `useModelPaint` (or traditional mod `skins[0]` without `procedural`) return `null` to keep the GLB's own paint
+ * - File-based mod skins return their hosted folder URL, file list and optional part variant
+ */
+export function portedSkinFor(id: CarId, skin: CarSkin | null | undefined): PortedSkin | null {
+  if (!skin) return null;
+  if (skin.procedural) return { baseUrl: "", procedural: skin.procedural, variant: skin.variant };
+  if (skin.useModelPaint) return null;
+  const skins = anyCarById(id)?.skins;
+  if (!skins?.length || skin.id === skins[0].id) return null;
+  return { baseUrl: carSkinBaseUrl(id, skin.id), files: skin.files, variant: skin.variant };
+}
+
+/** Rich CSS gradient swatch background for a car's skin picker (supports 2-colour mod skins and 3-colour GT3 skins) */
+export function carSkinSwatchBackground(skin: Pick<CarSkin, "swatch">): string {
+  const s = skin.swatch;
+  if (s.length === 3) {
+    return `linear-gradient(130deg, ${s[0]} 0 52%, ${s[2]} 52% 64%, ${s[1]} 64% 100%)`;
+  }
+  return `linear-gradient(135deg, ${s[0]} 0 60%, ${s[1]} 60% 100%)`;
+}
 
 /** Shown in place of the livery swatches for a car that keeps its own paint */
 export const FACTORY_LIVERY_NOTE = "Factory livery: this car keeps its original paint.";

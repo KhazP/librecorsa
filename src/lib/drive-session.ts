@@ -27,7 +27,7 @@ import {
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
-import { carById, carForVehicle, carOvertakingRules, carSkinBaseUrl, type CarId } from "@/lib/cars/car-registry";
+import { carById, carForVehicle, carOvertakingRules, portedSkinFor, type CarId } from "@/lib/cars/car-registry";
 import { carSkinFor, subscribeCarSkins } from "@/lib/cars/car-skins";
 import { trackGeometryKey } from "@/lib/sim/ghost-align";
 import type { GuardBody } from "@/lib/sim/contact-guard";
@@ -1463,11 +1463,7 @@ export class DriveSession {
     // keeps the geometry it was fitted to
     const rigModel = (car: CarId) => vehicleModelSpec(carById(car).physics);
     /** The livery the player picked for a car with its own (null: the paint its model was made in) */
-    const skinFor = (car: CarId): PortedSkin | null => {
-      const skins = carById(car).skins;
-      const skin = carSkinFor(car);
-      return skin && skins && skin.id !== skins[0].id ? { baseUrl: carSkinBaseUrl(car, skin.id), files: skin.files, variant: skin.variant } : null;
-    };
+    const skinFor = (car: CarId): PortedSkin | null => portedSkinFor(car, carSkinFor(car));
     const createCarRig = (car: CarId): SimCarRig => {
       const def = carById(car);
       const model = rigModel(car);

@@ -23,6 +23,8 @@ export interface PortedSkin {
   files?: readonly string[];
   /** The parts it wears (`CarSkin.variant`); absent: the model's base parts */
   variant?: string;
+  /** Procedural livery id painted onto the car's body paint material (`gt3-livery-painter.ts`) */
+  procedural?: string;
 }
 
 export interface SimCarRig {

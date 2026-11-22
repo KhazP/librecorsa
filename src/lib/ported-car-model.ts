@@ -21,6 +21,14 @@ import { bodyFloorClearance, type StaticFloor } from "@/lib/render/body-floor";
 import { disableCarCastShadow } from "@/lib/render/car-shadow-proxy";
 import { mergeStaticMeshesByMaterial } from "@/lib/render/merge-static-meshes";
 import { createOpponentLodController, type OpponentLodController } from "@/lib/render/car-lod";
+import {
+  clearGt3LiveryCache,
+  GT3_BODY_PROFILE_BY_MATERIAL,
+  installGt3LiveryPaint,
+  type Gt3BodyProfile,
+  type Gt3LiveryPaintController,
+  type Gt3LiverySurface,
+} from "@/lib/render/gt3-livery-painter";
 
 /**
  * Cars ported to one GLB each (a registry car's `modelUrl`), on any vehicle model. Node layout:
@@ -111,6 +119,7 @@ function loadSkinTexture(url: string, like: THREE.Texture | null): Promise<THREE
 
 /** Disposes and clears cached skin textures (used by offline batch thumbnail rendering to cap VRAM across dozens of skins) */
 export async function clearSkinTextureCache(): Promise<void> {
+  clearGt3LiveryCache();
   const entries = [...skinTextures.values()];
   skinTextures.clear();
   for (const p of entries) {
@@ -378,6 +387,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   let compound: TireCompound = "medium";
   // The livery: this rig's copies of the materials it repaints (with their own textures), and the skin it wears
   const skinSlots: SkinSlot[] = [];
+  let gt3Livery: Gt3LiveryPaintController | null = null;
   let skin = options.skin ?? null;
   // A livery's own parts (the GLB's `partVariants`): each shown only for the liveries of its variants
   const parts: { node: THREE.Object3D; variants: readonly string[] }[] = [];
@@ -385,10 +395,11 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     const wearing = skin;
     const variant = wearing?.variant ?? "base";
     for (const part of parts) part.node.visible = part.variants.includes(variant);
+    gt3Livery?.set(wearing?.procedural ?? null);
     const pending: Promise<void>[] = [];
     for (const slot of skinSlots) {
-      // No livery, or one that leaves this file as the model has it
-      if (!wearing || (wearing.files && !wearing.files.includes(slot.file))) {
+      // No livery, procedural GT3 livery, or one that leaves this file as the model has it
+      if (!wearing || wearing.procedural || (wearing.files && !wearing.files.includes(slot.file))) {
         slot.mat.map = slot.own;
         slot.mat.needsUpdate = true;
         continue;
@@ -500,6 +511,26 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     if (skinMaps) {
       skinSlots.push(...collectSkinSlots([bodyGroup, ...corners.map((c) => c.spin)], skinMaps, tyreMaterials));
     }
+    // Procedural GT3 livery paint controller (AMG GT3 Evo & BMW M4 GT3 Evo exterior bodywork)
+    if (body) {
+      bodyGroup.updateMatrixWorld(true);
+      let gt3Profile: Gt3BodyProfile | null = null;
+      const gt3Surfaces: Gt3LiverySurface[] = [];
+      bodyGroup.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+        const src = mesh.material as THREE.MeshStandardMaterial;
+        const prof = src.isMeshStandardMaterial ? GT3_BODY_PROFILE_BY_MATERIAL[src.name] : undefined;
+        if (!prof) return;
+        gt3Profile = prof;
+        const copy = src.clone();
+        mesh.material = copy;
+        gt3Surfaces.push({ material: copy, frameMatrix: relativeMatrix(mesh, body) });
+      });
+      if (gt3Profile && gt3Surfaces.length > 0) {
+        gt3Livery = installGt3LiveryPaint(gt3Surfaces, gt3Profile);
+      }
+    }
     applySkin();
     if (options.opponent) {
       disableCarCastShadow(bodyGroup);
@@ -562,7 +593,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     // compound
     setLivery: () => {},
     setSkin: (next) => {
-      if (next?.baseUrl === skin?.baseUrl && next?.variant === skin?.variant) return Promise.resolve();
+      if (next?.baseUrl === skin?.baseUrl && next?.variant === skin?.variant && next?.procedural === skin?.procedural) {
+        return Promise.resolve();
+      }
       skin = next;
       return applySkin();
     },
@@ -576,6 +609,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     dispose: () => {
       disposed = true;
       opponentLod?.dispose();
+      gt3Livery?.dispose();
       for (const c of corners) c.tyre?.dispose();
       for (const slot of skinSlots) if (slot.ownedBySkin) slot.mat.dispose();
       root.removeFromParent();
