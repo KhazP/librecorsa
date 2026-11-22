@@ -11,12 +11,13 @@
       "Added Virtual Safety Car deployments with a live delta bar on the HUD, enforced blue-flag warnings and penalties while lapped AI yields cleanly, held rolling starts in formation until the leader crosses the line, and improved AI inside-line attacking and defending, autopilot race starts and braking-guide accuracy through chicanes, hills and rain.",
       "Private multiplayer rooms now support qualifying, full race rules, any car class in the roster and changing the circuit straight from the lobby, with both room and AI race setups regrouped into Event, Race and Rules cards. Added a Weekly Challenge Hall of Fame, driver badges for podium winners and overhead player nameplates in multiplayer.",
       "Added an optional full manual clutch with bite point, slip and engine stalls (auto-clutch stays on by default), WebHID gyro tilt steering for DualSense and DualShock 4 controllers (re-centred with the touchpad), snappier DualSense L2 and R2 trigger shifts, and a Kerbs volume slider in Settings > Audio.",
+      "Music is now off while you drive. Switch it back on with Music while driving in Settings > Audio; the results music still plays at the flag. Music changes no longer drop out on a slow connection, tracks run into each other without silent gaps, every track plays at the same loudness, and race music starts right on the lights out, skips the quietest openings, is evened out so soft passages don't vanish under the engine, and dips a little while the engine works hard.",
       "Added a four-button mobile touch layout (left, right, brake, throttle) with thumb-rolling support, screen wake lock while driving, Android Game Mode and sticky immersive full-screen support, and a new Download tab and /download page with signed Windows installers and signed Android APKs.",
       "Big frame-rate pass for busy races and mobile devices: added Sharp Low graphics and an optional sharpening pass when rendering below native resolution, lightweight AI-lite opponent physics, merged car meshes, single-draw opponent shadows, batched distant foliage, faster suspension lookups and decoupled HUD telemetry.",
       "Sharpened the motorsport geometry across menus and HUD, replaced the home page's shifting circuit layout toggle with anchored layout and livery pickers that show counts up front and live-update car thumbnails, added class, grade and modder filters to the Cars tab, and fixed road-edge seams, crossover shadows and the Buy Me a Coffee button clipping inside the Source panel."
     ],
-    "commits": 39,
-    "lastSha": "05eace611d57d65a398455c2dfb420b06c0fd8f5"
+    "commits": 45,
+    "lastSha": "3a1694fbf451cc30a06176052a248791b890aedf"
   },
   {
     "date": "2026-11-18",
