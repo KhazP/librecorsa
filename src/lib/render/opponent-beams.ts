@@ -95,6 +95,9 @@ interface BeamUniformHolder {
   };
 }
 
+/** Keyed by material identity (not userData) so Material.clone() never inherits a JSON-copied holder without the shader patch */
+const patchedBeamHolders = new WeakMap<THREE.Material, BeamUniformHolder>();
+
 /**
  * Patches the circuit's materials (the loaded model under `root`) for the other cars' beams, `maxBeams` of them. Call
  * once the model is in and the session can get dark, before its first night frame (a shader compile per material).
@@ -112,7 +115,7 @@ export function createOpponentBeams(root: THREE.Object3D, maxBeams: number, colo
     for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
       if (!(mat as THREE.MeshStandardMaterial).isMeshStandardMaterial || visited.has(mat)) continue;
       visited.add(mat);
-      const existing = mat.userData.__lcOpponentBeams as BeamUniformHolder | undefined;
+      const existing = patchedBeamHolders.get(mat);
       if (existing) {
         existing.uniforms.uLcBeamColor.value.set(color);
         holders.add(existing);
@@ -136,7 +139,7 @@ export function createOpponentBeams(root: THREE.Object3D, maxBeams: number, colo
       }
       const h = freshHolder;
       const f = frag!;
-      mat.userData.__lcOpponentBeams = h;
+      patchedBeamHolders.set(mat, h);
       holders.add(h);
       chainShaderPatch(mat, `opponent-beams-${n}`, (shader) => {
         Object.assign(shader.uniforms, h.uniforms);
