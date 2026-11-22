@@ -1,0 +1,16 @@
+// docs.librecorsa.org: the built docs site (./dist) served as static files, no Worker script.
+// Deploy: npm run deploy (in docs-site/), or .github/workflows/deploy-docs.yml on a push that changes the docs.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "librecorsa-docs",
+  "account_id": "e8e4c67fe1996448b0e6ab6238f31867",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "routes": [{ "pattern": "docs.librecorsa.org", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false
+}
