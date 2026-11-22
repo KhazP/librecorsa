@@ -198,6 +198,46 @@
   font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
 }
 
+.skin_grand_prix {
+  /* Grand Prix: F1-game MFD styling — deep dark glass, chamfered/sharp edges, red/amber/cyan telemetry accents */
+  --tp-bg: rgb(9 12 18 / 0.92);
+  --tp-bg-soft: rgb(18 23 34 / 0.9);
+  --tp-bg-deep: rgb(5 7 11 / 0.94);
+  --tp-bg-head: rgb(16 20 30 / 0.96);
+  --tp-row-a: rgb(255 255 255 / 0.03);
+  --tp-row-b: rgb(255 255 255 / 0.06);
+  --tp-border: rgb(255 255 255 / 0.18);
+  --tp-border-soft: rgb(255 255 255 / 0.1);
+  --tp-ink: #ffffff;
+  --tp-ink-soft: #e2e8f0;
+  --tp-ink-dim: #94a3b8;
+  --tp-accent: #facc15;
+  --tp-accent-text: #fde047;
+  --tp-fill-ink: #0a0d14;
+  --tp-player-bg: rgb(250 204 21 / 0.18);
+  --tp-player-ink: #fde047;
+  --tp-player-box: #facc15;
+  --tp-radius: 3px;
+  --tp-radius-sm: 2px;
+  --tp-btn-bg: rgb(255 255 255 / 0.07);
+  --tp-btn-bg-hover: rgb(255 255 255 / 0.15);
+  --tp-btn-edge: rgb(255 255 255 / 0.16);
+  --tp-btn-ink: #f8fafc;
+  --tp-sel-bg: #facc15;
+  --tp-sel-edge: #facc15;
+  --tp-sel-ink: #0a0d14;
+  --tp-soft-bg: rgb(250 204 21 / 0.18);
+  --tp-soft-edge: rgb(250 204 21 / 0.45);
+  --tp-soft-ink: #fde047;
+  font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+}
+
+.skin_grand_prix:is(.panel, .banner) {
+  border-top: 2px solid #e10600;
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.65);
+  font-weight: 700;
+}
+
 /*
  * The type of our own surfaces (never the layout's own panels, which sit under the same HUD root and set theirs): the
  * weight, and the game's number face in the layout's, sans in irDashies and Blocks, Courier in Head to Head

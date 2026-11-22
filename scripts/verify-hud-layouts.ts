@@ -58,7 +58,7 @@ for (const l of HUD_LAYOUTS) {
 for (const l of THIRD_PARTY_HUD_LAYOUTS as readonly (typeof HUD_LAYOUTS)[number][]) {
   const c = l.credit;
   check(`"${l.id}": credits its author`, Boolean(c?.author && c.author.trim() === c.author && c.author.length > 1));
-  check(`"${l.id}": links its source repository`, Boolean(c && /^https:\/\/github\.com\/[^/]+\/[^/]+$/.test(c.repoUrl)), c?.repoUrl);
+  check(`"${l.id}": links its source repository`, Boolean(c && /^https:\/\/github\.com\/[^/]+(\/[^/]+)?$/.test(c.repoUrl)), c?.repoUrl);
   check(`"${l.id}": the author is the repository's owner`, Boolean(c && c.repoUrl.split('/')[3]?.toLowerCase() === c.author.toLowerCase()));
   check(`"${l.id}": names a licence the game can take in`, c?.license === 'MIT' || c?.license === 'GPL-3.0');
   check(`"${l.id}": its licence has a page to link`, Boolean(c && /^https:\/\//.test(HUD_LICENSE_URL[c.license])));

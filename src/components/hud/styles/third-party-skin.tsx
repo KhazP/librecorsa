@@ -16,6 +16,7 @@ const SKIN_CLASS: Record<ThirdPartySkin, string> = {
   h2h: `${skinCss.skinRoot} ${skinCss.skin_h2h}`,
   retro: `${skinCss.skinRoot} ${skinCss.skin_retro}`,
   blocks: `${skinCss.skinRoot} ${skinCss.skin_blocks}`,
+  "grand-prix": `${skinCss.skinRoot} ${skinCss.skin_grand_prix}`,
 };
 
 const TONE_CLASS: Record<SkinTone, string> = {

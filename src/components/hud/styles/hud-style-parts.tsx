@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from "react";
-import type { CarTelemetry, TireCompound } from "@/types/f1";
+import type { CameraMode, CarTelemetry, TireCompound } from "@/types/f1";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 import { inDeadZone, type BuiltTrackData, type PointToPointDef } from "@/lib/track-data";
 import { Badge, type BadgeSize } from "@/components/ui/Badge";
@@ -137,6 +137,8 @@ export interface HudDesignProps {
   showDeltaBar?: boolean;
   /** Whether the user's Proximity radar HUD setting is on */
   showRadar?: boolean;
+  /** Active camera mode (e.g. "tv_pod", "cockpit", "chase") */
+  cameraMode?: CameraMode;
 }
 
 /** Rev light range of the car (the same as the classic speed cluster's) */
