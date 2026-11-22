@@ -137,6 +137,28 @@ export interface SkyConditions {
   windVzMs?: number;
 }
 
+/** How far into the night a sun elevation is: 0 until the sun is 3 deg under the horizon, 1 from 13 deg under */
+export function nightShareOf(elevationDeg: number): number {
+  return THREE.MathUtils.clamp((-elevationDeg - 3) / 10, 0, 1);
+}
+
+/**
+ * The night of a circuit raced under floodlights (venue-night-lighting.ts): what the key light, the fill, the
+ * environment and the exposure blend to with the night share, in place of moonlight.
+ */
+export interface FloodlitNightLook {
+  keyColor: number;
+  /** As the sun's intensity (5 at golden hour) */
+  keyIntensity: number;
+  /** How high the light stands (deg): steep, as from masts on both sides */
+  keyElevationDeg: number;
+  fillIntensity: number;
+  environmentIntensity: number;
+  exposure: number;
+  /** Haze lit by the venue, for the fog */
+  fogColor: number;
+}
+
 /** The original look: clear sky, sun at 14 deg / 127 deg */
 export const GOLDEN_HOUR_SKY: Readonly<SkyConditions> = {
   elevationDeg: SUN_ELEVATION_DEG,
@@ -170,6 +192,11 @@ export interface GoldenHourEnvironment {
   update(carWorldPos: THREE.Vector3, camera: THREE.Camera): void;
   /** Time of day and weather: moves the sun and sets sky, fill, fog and exposure (cheap; re-bakes the environment only on a visible change) */
   setConditions(conditions: SkyConditions): void;
+  /**
+   * A circuit raced under floodlights: at night the key light is its floodlight (steep, near white, with the shadows)
+   * instead of the moon, and fill, environment, fog and exposure follow. null: moonlit nights again. Day is unchanged.
+   */
+  setFloodlitNight(look: Readonly<FloodlitNightLook> | null): void;
   /**
    * A new session's clouds: the seed picks the cloud types, their heights and where the pattern sits (cloud-recipes.ts),
    * with the conditions of the next setConditions. Call it before that setConditions. Cheap: no shader change
@@ -372,7 +399,7 @@ interface SkyLook {
 function skyLookFor(c: SkyConditions, out: SkyLook): SkyLook {
   const cloud = THREE.MathUtils.clamp(c.cloud, 0, 1);
   const rain = THREE.MathUtils.clamp(c.rain, 0, 1);
-  const nightShare = THREE.MathUtils.clamp((-c.elevationDeg - 3) / 10, 0, 1);
+  const nightShare = nightShareOf(c.elevationDeg);
   out.turbidity = SKY_TURBIDITY + 6 * cloud;
   out.rayleigh = SKY_RAYLEIGH * (1 - 0.5 * cloud);
   // 0 keeps the Sky shader's cloud pass off entirely on a clear day
@@ -565,6 +592,7 @@ export function createGoldenHourEnvironment(
 
   let disposed = false;
   let current: SkyConditions = { ...GOLDEN_HOUR_SKY };
+  let floodlit: Readonly<FloodlitNightLook> | null = null;
   const tint = new THREE.Color();
   let cloudSeed = 1;
   /** Where the classic sky's drifting clouds start (s on its cloud clock), from the cloud seed */
@@ -632,7 +660,7 @@ export function createGoldenHourEnvironment(
     const rain = THREE.MathUtils.clamp(c.rain, 0, 1);
     current = { elevationDeg: e, azimuthDeg: c.azimuthDeg, cloud, rain, windVxMs: c.windVxMs, windVzMs: c.windVzMs };
 
-    const nightShare = THREE.MathUtils.clamp((-e - 3) / 10, 0, 1);
+    const nightShare = nightShareOf(e);
     // Sun: the light never comes from below the horizon (shadows stay sane at dawn / dusk); between -2° and -6° it
     // smoothly arcs over to a high cool moon so shadows never abruptly flip while headlights carry the road lighting
     const moonBlend = THREE.MathUtils.smoothstep(-e, 2, 6);
@@ -647,6 +675,9 @@ export function createGoldenHourEnvironment(
       if (sunDirection.lengthSq() < 1e-4) sunDirection.set(0, 1, 0);
       else sunDirection.normalize();
     }
+    // Under floodlights the night's key light stands steep over the circuit instead
+    const flood = floodlit && nightShare > 0 ? floodlit : null;
+    if (flood) sunDirection.lerp(sunDirectionUnit(flood.keyElevationDeg, (c.azimuthDeg + 180) % 360), nightShare).normalize();
     skySunDir.copy(sunDirectionUnit(e, c.azimuthDeg));
     sunLight.position.copy(sunDirection).multiplyScalar(SUN_DISTANCE_M);
     colorCurve(SUN_COLOR_KEYS, e, sunLight.color).lerp(tint.setHex(OVERCAST_SUN), 0.6 * cloud * (1 - nightShare));
@@ -667,6 +698,15 @@ export function createGoldenHourEnvironment(
 
     scene.environmentIntensity = curve(ENV_INTENSITY_KEYS, e) * (1 - 0.25 * rain);
     renderer.toneMappingExposure = curve(EXPOSURE_KEYS, e) * (1 + 0.3 * cloud);
+    if (flood) {
+      // Cloud does not dim a floodlight; rain and cloud keep their share of the haze
+      sunLight.color.lerp(tint.setHex(flood.keyColor), nightShare);
+      sunLight.intensity = THREE.MathUtils.lerp(sunLight.intensity, flood.keyIntensity, nightShare);
+      fillLight.intensity = THREE.MathUtils.lerp(fillLight.intensity, flood.fillIntensity, nightShare);
+      fog.color.lerp(tint.setHex(flood.fogColor), nightShare);
+      scene.environmentIntensity = THREE.MathUtils.lerp(scene.environmentIntensity, flood.environmentIntensity, nightShare);
+      renderer.toneMappingExposure = THREE.MathUtils.lerp(renderer.toneMappingExposure, flood.exposure, nightShare);
+    }
 
     skyLookFor(current, skyLook);
     applySkyLook(sky, skySunDir, skyLook);
@@ -701,6 +741,13 @@ export function createGoldenHourEnvironment(
     },
 
     setConditions,
+    setFloodlitNight(look): void {
+      if (disposed || look === floodlit) return;
+      floodlit = look;
+      setConditions(current);
+      // the environment's ground is lit by the key light: bake it again if it is night now
+      if (nightShareOf(current.elevationDeg) > 0) pendingBake = true;
+    },
     setCloudSeed(seed: number): void {
       if (disposed) return;
       cloudSeed = seed;

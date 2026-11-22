@@ -38,7 +38,9 @@ import {
   configureRenderer,
   createGoldenHourEnvironment,
   createPostFx,
+  nightShareOf,
 } from "@/lib/render/golden-hour-environment";
+import { createVenueNightLighting, type VenueNightLighting } from "@/lib/render/venue-night-lighting";
 import { sameConditions, type SessionConditions } from "@/lib/sim/weather";
 import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
@@ -1404,10 +1406,19 @@ export class DriveSession {
     const builtCircuit = buildCircuitScene(track);
     scene.add(builtCircuit.sceneGroup);
     builtCircuit.racingLineMesh.visible = settings.racingLine;
+    // A circuit raced under lights: its floodlit night (masts, lit tunnels, the model's glowing light sources)
+    let venueNight: VenueNightLighting | null = null;
     // Track_Collider_Road / surface colliders and Track_Collider_Wall_* barriers for the f12026-car
     void builtCircuit.trackRoot.then((root) => {
       if (disposed) return;
       trackRoot = root;
+      if (track.nightLighting) {
+        venueNight = createVenueNightLighting(root, track, track.nightLighting);
+        venueNight.setQuality(settings.graphics.quality);
+        venueNight.setNight(nightShareOf(getTrackEnv().weather.sun.elevationDeg));
+        scene.add(venueNight.group);
+        env.setFloodlitNight(venueNight.look);
+      }
       physics.attachTrackRoot?.(root);
       aiFieldOf(raceNow())?.attachTrackRoot(root);
       aiFieldSpare?.field.attachTrackRoot(root);
@@ -1619,6 +1630,7 @@ export class DriveSession {
       const level = g.autoQuality ? governor.level : 0;
       const plan = level > 0 ? planAt(g.quality, g.renderScale, level, opts) : presetPlan(g.quality, g.renderScale, opts);
       applyGraphicsQuality(renderer, postFx, env, plan);
+      venueNight?.setQuality(g.quality);
       visualFx.setGraphicsQuality(g.quality);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
       postFx.setSize(container.clientWidth, container.clientHeight);
@@ -4068,6 +4080,7 @@ export class DriveSession {
           env.setCloudSeed(fixedCloudSeed ?? Math.floor(Math.random() * 2 ** 31));
         }
         env.setConditions(skyConditions);
+        venueNight?.setNight(nightShareOf(skyConditions.elevationDeg));
         setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity);
         // The water under the player's own wheels, not the lap's mean line water
         // (in a race the worker runs, its road under the car)
@@ -4321,6 +4334,7 @@ export class DriveSession {
       unsubscribeCarSkins();
       postFx.dispose();
       reflectionProbe.dispose();
+      venueNight?.dispose();
       env.dispose();
       rainFx.dispose();
       virtualMirror.dispose();

@@ -60,6 +60,18 @@ export interface TracksideTvCameraDef {
 }
 
 /**
+ * A circuit raced under lights (track data `metadata.nightLighting`, written by scripts/tracks/night_lighting.py).
+ * At night its road is floodlit, its light sources glow and its tunnels take their own light
+ * (render/venue-night-lighting.ts).
+ */
+export interface NightLightingDef {
+  /** Floodlight masts: foot x, y, z (world), lamp height (m), and the level unit vector from the mast to the road */
+  lamps?: [x: number, y: number, z: number, heightM: number, towardX: number, towardZ: number][];
+  /** Covered stretches of the lap (m, in lap order) and the colour of the light inside each */
+  tunnels?: { s0: number; s1: number; color: string }[];
+}
+
+/**
  * A point-to-point course (a hill climb): one timed run from the start line to a finish line somewhere else.
  *
  * Its track data is still a closed loop, so everything built on a lap keeps working: the start line is s = 0, the
@@ -98,6 +110,8 @@ export interface BuiltTrackData {
   noShadowMeshes?: string[];
   /** Material names whose meshes do not cast shadows (scene-builder.ts) */
   noShadowMaterials?: string[];
+  /** Floodlight masts and tunnels of a circuit raced at night (track data `nightLighting`; venue-night-lighting.ts) */
+  nightLighting?: NightLightingDef;
   /** Start grid slots for this layout (behind the S/F line) */
   spawnGrid: GridSlotDef[];
   samples: TrackSamplePoint[];
@@ -1133,6 +1147,8 @@ export interface TrackMetaExtras {
    * leaves it, beyond its edges. There this lap's road edge and kerbs are the track limits (course-limits.ts)
    */
   otherLayoutRoads?: [number, number][];
+  /** A circuit raced under lights: its floodlight masts and covered stretches (scripts/tracks/night_lighting.py) */
+  nightLighting?: NightLightingDef;
   /**
    * Drive-plan check per car (scripts/ai/check-lines.ts): a flying AI lap on the full physics tracking the stored line.
    * The field drives a car on plans only where its check passed (no barrier hit, on the road, on the line, near the
@@ -2215,6 +2231,7 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     noShadowMeshes,
     noShadowMaterials,
     otherLayoutRoads: getActiveTrackMetadata().otherLayoutRoads,
+    nightLighting: getActiveTrackMetadata().nightLighting,
     spawnGrid: [...RWANDA_SPAWN_GRID],
     samples,
     totalLengthM: totalLength,
