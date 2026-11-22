@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 import { type BuiltTrackData, getActiveTrackData, inDeadZone, type RawTrackJson, setActiveTrack } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { CameraRig, type CameraRigFrame, type CameraRigMenu } from '../src/lib/render/camera-rig';
+import { CameraRig, type CameraRigFrame, type CameraRigMenu, TracksideBroadcastDirector } from '../src/lib/render/camera-rig';
 import { ALL_CAMERA_MODES, CAMERA_CYCLE, CAMERA_MODES, isDrivingCameraMode } from '../src/lib/render/camera-modes';
 import type { CameraMode } from '../src/types/f1';
 import { DEFAULT_KEY_BINDINGS } from '../src/lib/input/bindings';
@@ -204,6 +204,71 @@ check('Trackside TV: the dolly glides with the car as drawn, however stale its l
       stale < exact * 1.5 + 0.005,
       `${hz} Hz: camera wobble p99 ${(stale * 1000).toFixed(1)} mm with a stale lap distance, ${(exact * 1000).toFixed(1)} mm with an exact one`
     );
+  }
+});
+
+check('helicopter: the same framing at any frame rate, and no wobble when frames come unevenly', () => {
+  // A car at a steady 60 m/s on a straight: once settled, the camera's place behind it must not depend on the frame time
+  const offsetAfter = (dts: () => number) => {
+    const { camera, rig, car, frame } = setup();
+    const vel = new THREE.Vector3(0, 0, 60).applyQuaternion(car.worldQuaternion);
+    const pos = car.worldPosition.clone();
+    const times: number[] = [];
+    const offsets: THREE.Vector3[] = [];
+    let t = 0;
+    while (t < 4) {
+      const dt = dts();
+      t += dt;
+      pos.addScaledVector(vel, dt);
+      rig.update(frame('helicopter', { dt, carPos: pos.clone(), carVelocity: vel }));
+      if (t > 2) {
+        times.push(t);
+        offsets.push(camera.position.clone().sub(pos));
+      }
+    }
+    return { offset: offsets[offsets.length - 1], wobble: Math.max(...wobbleM(times, offsets)) };
+  };
+  const at60 = offsetAfter(() => 1 / 60);
+  const at144 = offsetAfter(() => 1 / 144);
+  const rnd = lcg(7);
+  // 60 Hz with every tenth frame or so dropped
+  const uneven = offsetAfter(() => (rnd() < 0.1 ? 2 : 1) / 60);
+  assert.ok(at144.offset.distanceTo(at60.offset) < 0.05, `144 Hz frames it ${at144.offset.distanceTo(at60.offset).toFixed(3)} m off the 60 Hz framing`);
+  assert.ok(uneven.offset.distanceTo(at60.offset) < 0.05, `uneven frames leave it ${uneven.offset.distanceTo(at60.offset).toFixed(3)} m off the 60 Hz framing`);
+  assert.ok(uneven.wobble < 0.01, `uneven frames wobble it ${(uneven.wobble * 1000).toFixed(1)} mm against the car`);
+});
+
+check('Trackside TV: the aim settles on the car at any frame rate, and does not wobble when frames come unevenly', () => {
+  // The look-at leads the car by its velocity as far as the damping trails it: on a steady car it sits on the car
+  const aimOff = (dts: () => number) => {
+    const director = new TracksideBroadcastDirector(track);
+    const vel = new THREE.Vector3(0, 0, 70);
+    const pos = new THREE.Vector3(0, 0, 0);
+    const times: number[] = [];
+    const offsets: THREE.Vector3[] = [];
+    let t = 0;
+    while (t < 3) {
+      const dt = dts();
+      t += dt;
+      pos.addScaledVector(vel, dt);
+      const out = director.update(dt, pos, 300, vel, false);
+      if (t > 1.5) {
+        times.push(t);
+        // (it looks at the car 0.6 m up)
+        offsets.push(out.lookAt.clone().sub(pos).setY(out.lookAt.y - pos.y - 0.6));
+      }
+    }
+    return { offset: offsets[offsets.length - 1], wobble: Math.max(...wobbleM(times, offsets)) };
+  };
+  const rnd = lcg(11);
+  for (const [name, dts] of [
+    ['60 Hz', () => 1 / 60],
+    ['144 Hz', () => 1 / 144],
+    ['60 Hz with dropped frames', () => (rnd() < 0.1 ? 2 : 1) / 60],
+  ] as const) {
+    const { offset, wobble } = aimOff(dts);
+    assert.ok(offset.length() < 0.01, `${name}: aims ${offset.length().toFixed(3)} m off the car`);
+    assert.ok(wobble < 0.005, `${name}: the aim wobbles ${(wobble * 1000).toFixed(1)} mm against the car`);
   }
 });
 
