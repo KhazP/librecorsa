@@ -4,7 +4,9 @@ import React from "react";
 import { QualityBadge } from "@/components/ui/badges";
 import type { BadgeSize } from "@/components/ui/Badge";
 import type { LapOutline } from "@/lib/home/lap-outline";
-import { GRADE_BADGES, GRADE_NOTES, type HomeGrade } from "./home-data";
+import type { CarQuality } from "@/lib/cars/car-registry";
+import type { CircuitQuality } from "@/lib/track-registry";
+import { CAR_QUALITY_TONE, CIRCUIT_QUALITY_TONE, type HomeCar, type HomeLayout, type HomeQualityText, type HomeQualityTexts } from "./home-data";
 
 const PAD = 70;
 
@@ -51,28 +53,29 @@ export const CarThumb: React.FC<{ src: string | null; fallbackSrc?: string | nul
   );
 };
 
-/** Sim grade or 3D model: the game's own quality badge, with what it means on hover */
-export const GradeBadge: React.FC<{ grade: HomeGrade; title?: string; size?: BadgeSize; className?: string }> = ({
-  grade,
-  title,
+/** The game's words for a layout's grade: its badge, its filter option, what it means */
+export const circuitQualityText = (l: Pick<HomeLayout, "quality">, text: HomeQualityTexts): HomeQualityText => text.circuits[l.quality];
+/** The game's words for a car's physics: its badge, its filter option ("Own physics"), what it means */
+export const carQualityText = (c: Pick<HomeCar, "quality">, text: HomeQualityTexts): HomeQualityText => text.cars[c.quality];
+
+/** Original, Sim grade or Scan: the game's circuit badge (TrackQualityBadge's words and tone), with what it means on hover */
+export const CircuitQualityTag: React.FC<{ layout: HomeLayout; text: HomeQualityTexts; size?: BadgeSize; className?: string }> = ({
+  layout,
+  text,
   size = "md",
   className,
 }) => {
-  const { label, tone } = GRADE_BADGES[grade];
-  return <QualityBadge label={label} tone={tone} description={title} size={size} className={className} />;
+  const { badge, description } = circuitQualityText(layout, text);
+  return <QualityBadge label={badge} tone={CIRCUIT_QUALITY_TONE[layout.quality]} description={description} size={size} className={className} />;
 };
 
-/** What the badges on a wall of cards mean, for the grades that appear on it */
-export const GradeLegend: React.FC<{ of: keyof typeof GRADE_NOTES; shown: readonly HomeGrade[] }> = ({ of, shown }) => (
-  <dl className="m-0 flex flex-wrap gap-x-8 gap-y-2.5">
-    {(["sim", "model"] as const).filter((grade) => shown.includes(grade)).map((grade) => (
-      <div key={grade} className="flex min-w-0 items-start gap-2.5">
-        {/* Stacked on a phone: the same width for both, so the two notes start in line */}
-        <dt className="shrink-0 max-sm:min-w-[104px]">
-          <GradeBadge grade={grade} />
-        </dt>
-        <dd className="lc-body m-0 pt-0.5">{GRADE_NOTES[of][grade]}</dd>
-      </div>
-    ))}
-  </dl>
-);
+/** Own physics or Shared physics: the game's car badge (CarQualityBadge's words and tone), with what it means on hover */
+export const CarQualityTag: React.FC<{ car: HomeCar; text: HomeQualityTexts; size?: BadgeSize; className?: string }> = ({
+  car,
+  text,
+  size = "md",
+  className,
+}) => {
+  const { badge, description } = carQualityText(car, text);
+  return <QualityBadge label={badge} tone={CAR_QUALITY_TONE[car.quality]} description={description} size={size} className={className} />;
+};

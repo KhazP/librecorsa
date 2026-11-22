@@ -1,32 +1,31 @@
 import type { LapOutline } from "@/lib/home/lap-outline";
 import type { ModelSource } from "@/lib/model-source";
 import type { VehicleModelId } from "@/types/f1";
-import type { PaletteColor } from "@/components/ui/Badge";
+import type { BadgeTone, PaletteColor } from "@/components/ui/Badge";
+// Types only: the registries' values stay out of the home page's bundle (page.tsx reads them on the server)
+import type { CarQuality } from "@/lib/cars/car-registry";
+import type { CircuitQuality } from "@/lib/track-registry";
 
 /**
- * How far a circuit or car can be trusted, in the two kinds the home page shows (from the registries' `quality`):
- * - "sim": a circuit built for LibreCorsa or hand-built for sims, with its own surfaces; a car on physics built for it
- * - "model": a circuit converted from a community 3D model; a car's 3D body driving on another car's physics
+ * A circuit's or car's grade in the game's words (`CIRCUIT_QUALITY_META` / `CAR_QUALITY_META`), which page.tsx reads
+ * on the server through `homeQualityText` (src/lib/home/quality.ts) and hands to the page
  */
-export type HomeGrade = "sim" | "model";
+export interface HomeQualityText {
+  /** The badge ("ORIGINAL", "SIM GRADE", "SCAN", "OWN PHYSICS", "SHARED PHYSICS") */
+  badge: string;
+  /** The filter option ("LibreCorsa originals", "Own physics") */
+  filterLabel: string;
+  /** What it means, on hover */
+  description: string;
+}
+export interface HomeQualityTexts {
+  circuits: Record<CircuitQuality, HomeQualityText>;
+  cars: Record<CarQuality, HomeQualityText>;
+}
 
-/** The tones the game's own quality badges use: sim grade green, a converted model amber (the wrappers in menu-content-ui.tsx) */
-export const GRADE_BADGES: Record<HomeGrade, { label: string; tone: "good" | "warn" }> = {
-  sim: { label: "Sim grade", tone: "good" },
-  model: { label: "3D model", tone: "warn" },
-};
-
-/** The legend above the circuit and car cards, and each badge's hover text */
-export const GRADE_NOTES: Record<"circuits" | "cars", Record<HomeGrade, string>> = {
-  circuits: {
-    sim: "Hand-built road, kerbs and barriers, each with its own grip.",
-    model: "Converted from a 3D model of the venue, so details can differ from the real one.",
-  },
-  cars: {
-    sim: "Physics built for this car.",
-    model: "This car's body, driving on another car's physics.",
-  },
-};
+/** The game's badge tones by grade (menu-content-ui.tsx `CIRCUIT_TONE` / `CAR_TONE`): an original circuit is information, not volt */
+export const CIRCUIT_QUALITY_TONE: Record<CircuitQuality, Exclude<BadgeTone, "player">> = { original: "info", sim: "good", sketchfab: "warn" };
+export const CAR_QUALITY_TONE: Record<CarQuality, Exclude<BadgeTone, "player">> = { own: "good", shared: "warn", era: "neutral" };
 
 /** What the home page is built with: the game's own lists, read when the page is built */
 export interface HomeLayout {
@@ -34,7 +33,8 @@ export interface HomeLayout {
   layout: string;
   lengthM: number;
   turns: number;
-  grade: HomeGrade;
+  /** Where its model comes from, as the game grades it (track-registry `quality`) */
+  quality: CircuitQuality;
   /** null when the outlines file has none for it (`npm run home-outlines`) */
   outline: LapOutline | null;
 }
@@ -81,7 +81,8 @@ export interface HomeCar {
   title: string;
   classTitle: string;
   year: number;
-  grade: HomeGrade;
+  /** Whether its physics are its own, as the game grades it (car-registry `quality`) */
+  quality: CarQuality;
   /** null when this copy of the game has no picture of it */
   thumb: string | null;
   /** Where this car persists its chosen livery: player settings (`liveryId`) or per-car skins (`librecorsa.carSkins`) */
@@ -118,7 +119,12 @@ export interface HomeData {
   defaultCarId: string;
   venues: HomeVenue[];
   cars: HomeCar[];
-  /** The newest few */
+  /** The game's words for each circuit and car grade (`homeQualityText()`) */
+  qualityText: HomeQualityTexts;
+  /**
+   * The newest few. The Press & media card folds one piece posted on several platforms ("AppMunchies on Instagram",
+   * "… on YouTube") into one row (`groupCoverage`), so pass enough for three rows after that
+   */
   coverage: HomeCoverage[];
   /** How many articles and videos the press page lists in all */
   coverageCount: number;

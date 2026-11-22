@@ -25,6 +25,7 @@ import type { LapOutline } from "@/lib/home/lap-outline";
 import { carModelSource, trackModelSource } from "@/lib/model-source";
 import { moddersList } from "@/lib/modders";
 import { coverage } from "@/lib/press";
+import { homeQualityText } from "@/lib/home/quality";
 import { CONTACT_EMAIL, REPO_URL, SUPPORT_URL } from "@/lib/site";
 import { CIRCUIT_TYPE_LABELS, CIRCUIT_VENUES, DEFAULT_TRACK_ID, VENUE_HERO_WIDTHS, circuitModder, circuitType, venueHeroUrl } from "@/lib/track-registry";
 
@@ -125,7 +126,7 @@ export default function HomePage() {
         layout: t.layout,
         lengthM: t.lengthM,
         turns: t.turns,
-        grade: t.quality === "sketchfab" ? "model" : "sim",
+        quality: t.quality,
         outline: OUTLINES[t.id] ?? null,
       })),
       hero: venueHeroOf(v.id),
@@ -139,14 +140,16 @@ export default function HomePage() {
         title: c.title,
         classTitle: CAR_CLASSES.find((k) => k.id === c.classId)?.title ?? "",
         year: c.year,
-        grade: c.quality === "own" ? "sim" : "model",
+        quality: c.quality,
         thumb: thumbOf(c.id),
         liveryStore,
         liveries,
         source: carModelSource(c),
       };
     }),
-    coverage: articles.slice(0, 4).map((a) => ({ outlet: a.outlet, title: a.title, url: a.url, date: a.date })),
+    qualityText: homeQualityText(),
+    // Enough for the Press & media card's three rows once a piece posted on several platforms is one row
+    coverage: articles.slice(0, 9).map((a) => ({ outlet: a.outlet, title: a.title, url: a.url, date: a.date })),
     coverageCount: articles.length,
     contactEmail: CONTACT_EMAIL,
     repoUrl: REPO_URL,
