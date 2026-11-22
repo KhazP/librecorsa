@@ -954,9 +954,9 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                       ["Docs", DOCS_URL],
                       ["Privacy", withBasePath("/privacy")],
                       ["GitHub", data.repoUrl],
-                      ...AUTHOR_LINKS.map(({ label, href }) => [label, href]),
                       // Not in the Android app (store-mode.ts)
                       ...(storeBuild ? [] : [["Buy me a coffee", data.supportUrl]]),
+                      ...AUTHOR_LINKS.map(({ label, href }) => [label, href]),
                     ].map(([label, href]) => (
                       <a key={label} href={href} onPointerEnter={focusOnHover} className={`inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
                         {label}
