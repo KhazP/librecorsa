@@ -1223,6 +1223,24 @@ console.log("Virtual Safety Car · deployment, delta enforcement and ending");
   // Cooldown prevents immediate re-deployment
   const duringCd = stepVsc(5.0, { hasRetiredOnTrack: true });
   check("cooldown suppresses immediate VSC re-deployment", duringCd.length === 0 && !vsc.active);
+
+  // Active VSC clears cleanly when racing goes false (race finish / DNF / DQ) without post-finish messages
+  t += 90;
+  const redep = stepVsc(0.1, { hasRetiredOnTrack: true });
+  check("VSC redeploys after cooldown", redep.some((e) => e.kind === "deployed") && vsc.active);
+  const postFinish = vsc.update({
+    dt: DT,
+    raceTimeS: t + DT,
+    racing: false,
+    finalLapClosing: false,
+    hasRetiredOnTrack: true,
+    hasDoubleYellow: true,
+    playerSpeedMs: 50,
+    playerOptimalKmh: 180,
+    judgePlayer: true,
+    rng: () => 0.5,
+  });
+  check("active VSC clears silently when racing becomes false", postFinish.length === 0 && !vsc.active && vsc.status() === undefined);
 }
 
 console.log(`\n${passed} checks passed`);

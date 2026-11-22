@@ -149,6 +149,12 @@ export class VscController {
     const events: VscEvent[] = [];
     if (!inp.racing) {
       this.triggerAccumS = 0;
+      if (this._phase !== 'none') {
+        this._phase = 'none';
+        this.phaseAgeS = 0;
+        this.graceS = 0;
+        this.violationS = 0;
+      }
       return events;
     }
 

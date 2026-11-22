@@ -256,8 +256,9 @@ export function evaluateDynamicBrakingUrgency(
   for (let d = 5; d <= warnDist; d += 5) {
     if (v > envelopeAt(sRed + d) + 0.5) return 0.35 + 0.6 * (1 - d / warnDist);
   }
-  // Upcoming braking zone ahead while still accelerating toward it: keep a caution cue visible rather than pure green
-  if (deltaS > 30 && v > 12) {
+  // Upcoming braking zone ahead while still accelerating toward it: keep a caution cue visible rather than pure green,
+  // but stay green if the car is slow enough that even accelerating toward the marker stays below the braking envelope
+  if (deltaS > 30 && v > 12 && Math.sqrt(v * v + 2 * 8 * deltaS) > envelopeAt(sRed) + 0.5) {
     const sz = staticZoneAt(markerS);
     if (sz >= 0.5) return sz >= 1 ? 0.55 : 0.38;
   }
