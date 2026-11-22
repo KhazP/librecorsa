@@ -4,7 +4,7 @@
  * Manual driver badge management in the owner's dashboard (/admin): search claimed drivers, grant the Bulb
  * (Idea Contributor) or manual OG / Track Record badges with an optional note, and revoke existing manual awards.
  */
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Button, Segmented, TextField } from "@/components/ui";
 import { DriverBadges } from "@/components/ui/DriverBadges";
 import { Icon } from "@/components/ui/icons";
@@ -35,6 +35,7 @@ export function AwardsSection({ adminKey }: { adminKey: string }) {
   const [saving, setSaving] = useState(false);
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [matches, setMatches] = useState<{ nameKey: string; name: string }[]>([]);
+  const pickedRef = useRef<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -56,7 +57,7 @@ export function AwardsSection({ adminKey }: { adminKey: string }) {
   // Live driver search while typing a name so the owner can pick an exact claimed driver
   useEffect(() => {
     const q = name.trim();
-    if (q.length < 2 || !ready) {
+    if (q.length < 2 || !ready || pickedRef.current === name) {
       setMatches([]);
       return;
     }
@@ -87,6 +88,7 @@ export function AwardsSection({ adminKey }: { adminKey: string }) {
     if (res.state === "ok") {
       const granted = res.body.award;
       setAwards((prev) => [granted, ...prev.filter((a) => a.id !== granted.id)]);
+      pickedRef.current = null;
       setName("");
       setNote("");
       setMatches([]);
@@ -131,7 +133,10 @@ export function AwardsSection({ adminKey }: { adminKey: string }) {
                   label="Driver name"
                   placeholder="Search or enter a driver name"
                   value={name}
-                  onChange={setName}
+                  onChange={(value) => {
+                    pickedRef.current = null;
+                    setName(value);
+                  }}
                   maxLength={64}
                   autoComplete="off"
                 />
@@ -144,6 +149,7 @@ export function AwardsSection({ adminKey }: { adminKey: string }) {
                         size="sm"
                         variant="secondary"
                         onClick={() => {
+                          pickedRef.current = d.name;
                           setName(d.name);
                           setMatches([]);
                         }}

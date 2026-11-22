@@ -36,6 +36,7 @@ export async function sendAdmin<T>(
       const error = parsed && typeof parsed === "object" && "error" in parsed && typeof parsed.error === "string" ? parsed.error : undefined;
       return { state: "failed", error };
     }
+    if (parsed === null) return { state: "failed" };
     return { state: "ok", body: parsed as T };
   } catch {
     return { state: "failed" };
