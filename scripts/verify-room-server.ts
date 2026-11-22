@@ -15,6 +15,7 @@ import { FakeSocket, fakeState } from './lib/fake-cloudflare';
 import { parseApiBase, parseOnlineConfig } from '../src/lib/net/online-config';
 import { sanitizeIceServers } from '../src/lib/sim/multiplayer-sync';
 import { sanitizeControl, sanitizeLobby, sanitizeLobbySettings, sanitizeStart, withLobbyDefaults } from '../src/lib/net/wire';
+import { vehicleModelSpec, vehicleModelsFor } from '../src/lib/cars/vehicle-models';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -184,6 +185,7 @@ async function main() {
         defaulted.rules.preset === 'classic' &&
         defaulted.rules.damage === 'off',
     );
+    const startBase = { id: 'r1', lightsStartHostMs: 0, holdMs: 0, laps: 3, trackId: 'spa', grid: ['p1'] };
     const fullSettings = sanitizeLobbySettings(
       {
         trackId: 'spa',
@@ -213,6 +215,19 @@ async function main() {
         fullSettings.rules?.penalties === false &&
         fullSettings.rules?.damage === 'full' &&
         fullSettings.qualifyingMinutes === 5,
+    );
+    const classRules = (['f1', 'gt3', 'proto', 'classic', 'road'] as const).every(
+      (c) => sanitizeLobbySettings({ carClass: c }).carClass === c && sanitizeStart({ ...startBase, carClass: c })?.carClass === c,
+    );
+    check(
+      'every registry class survives the lobby and start sanitizers; an unknown one is any',
+      classRules && sanitizeLobbySettings({ carClass: 'kart' }).carClass === 'any' && sanitizeStart({ ...startBase, carClass: 'kart' })?.carClass === 'any',
+    );
+    const byClass = (['f1', 'gt3', 'proto', 'classic', 'road'] as const).map((c) => vehicleModelsFor(c));
+    check(
+      'a class rule lets in that class only, and every model is in one class',
+      byClass.every((ids, i) => ids.length > 0 && ids.every((id) => vehicleModelSpec(id).classId === (['f1', 'gt3', 'proto', 'classic', 'road'] as const)[i])) &&
+        byClass.flat().length === vehicleModelsFor('any').length,
     );
     const pubSettings = sanitizeLobbySettings({ ...fullSettings, qualifyingMinutes: 10 }, 'public');
     check('sanitizeLobbySettings forces qualifyingMinutes = 0 on public rooms', pubSettings.qualifyingMinutes === 0);

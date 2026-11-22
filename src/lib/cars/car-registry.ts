@@ -1,4 +1,5 @@
 import type { VehicleModelId } from "@/types/f1";
+import type { CarClassRule } from "@/lib/net/wire";
 import { BMW_M4_GT3_SOUND, F1_2026_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
@@ -635,6 +636,14 @@ export const carClassesInUse = (): CarClass[] => CAR_CLASSES.filter((k) => CARS.
 
 /** A class's cars in registry order */
 export const carsInClass = (id: CarClassId): CarDefinition[] => CARS.filter((c) => c.classId === id);
+
+/** The listed cars an online room's class rule lets in, in list order ("any": every listed car) */
+export const carsForClassRule = (rule: CarClassRule): CarDefinition[] => (rule === "any" ? [...CARS] : carsInClass(rule));
+
+/** Their vehicle models, each once (two cars can share one), in list order: what a guest switches to */
+export const listedVehiclesForClassRule = (rule: CarClassRule): VehicleModelId[] => [
+  ...new Set(carsForClassRule(rule).map((c) => c.physics)),
+];
 
 /** A class's cars by year, newest first (registry order within a year), for the year headings in the menus */
 export const carsByYear = (id: CarClassId): { year: number; cars: CarDefinition[] }[] => {

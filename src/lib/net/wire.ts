@@ -17,6 +17,7 @@ import {
 } from '../sim/weather';
 import type { RulePresetId, TrackLimitsChoice } from '../sim/race-rules';
 import type { DamageLevel } from '../sim/car-damage';
+import type { CarClassId } from '../cars/car-registry';
 
 // The car state packet travels in binary (state-codec.ts); everything else is JSON
 export { decodeState, encodeState, MAX_STATE_BYTES, PROTOCOL_VERSION, stateInfoJson, StateInfoMemory } from './state-codec';
@@ -109,7 +110,8 @@ export interface PeerRaceProgress {
  * can't touch them (src/lib/sim/contact-guard.ts)
  */
 export type CollisionMode = 'on' | 'ghost_lap1' | 'off' | 'protected';
-export type CarClassRule = 'any' | 'f1' | 'gt3';
+/** Which cars a room lets in: any car, or one class of the registry's (car-registry.ts `CAR_CLASSES`) */
+export type CarClassRule = 'any' | CarClassId;
 
 /** How the cars leave the grid: from a standstill behind the lights, or queued at formation speed */
 export type MpStartType = 'standing' | 'rolling';
@@ -321,7 +323,10 @@ const finite = (v: unknown, lo: number, hi: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null;
 const COLLISION_MODES: readonly CollisionMode[] = ['on', 'ghost_lap1', 'off', 'protected'];
 const version = (v: unknown): number | undefined => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 1e6 ? v : undefined);
-const CAR_CLASSES: readonly CarClassRule[] = ['any', 'f1', 'gt3'];
+// Every class id, kept by the compiler: a class added to the registry fails here until it is listed (no value import:
+// the Worker loads this file without the car registry)
+const CAR_CLASS_RULE_IDS: Record<CarClassRule, true> = { any: true, f1: true, gt3: true, proto: true, classic: true, road: true };
+const CAR_CLASSES = Object.keys(CAR_CLASS_RULE_IDS) as readonly CarClassRule[];
 
 export function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
   if (!v || typeof v !== 'object') return undefined;
