@@ -101,12 +101,24 @@ clouds.dispose();
 
 const aerial = new AerialPerspectiveEffect(undefined, { sunLight: false, skyLight: false, sky: false, transmittance: true, inscatter: true });
 const aerialFragment = aerial.getFragmentShader();
-for (const [anchorText] of AERIAL_PERSPECTIVE_PATCHES) {
+let patchedAerial = aerialFragment;
+for (const [anchorText, replacement] of AERIAL_PERSPECTIVE_PATCHES) {
   check(`aerial perspective anchor once: ${anchorText.replace(/\n/g, ' ').slice(0, 48)}`, count(aerialFragment, anchorText) === 1);
+  patchedAerial = patchedAerial.replace(anchorText, replacement);
 }
-for (const [anchorText] of AERIAL_PERSPECTIVE_REVERSED_DEPTH_PATCHES) {
+for (const [anchorText, replacement] of AERIAL_PERSPECTIVE_REVERSED_DEPTH_PATCHES) {
   check(`aerial perspective depth anchor once: ${anchorText.slice(0, 48)}`, count(aerialFragment, anchorText) === 1);
+  patchedAerial = patchedAerial.replace(anchorText, replacement);
 }
+// Regression (issue #161): near-camera ECEF cancellation and shadow-texel projection NaN guards
+check(
+  'aerial perspective skips Bruneton lookup within 10 m and rejects non-finite outputs',
+  patchedAerial.includes('!(aerialDistSq >= 1e-4)') &&
+    patchedAerial.includes('sqrt(max(discriminant, 0.0))') &&
+    patchedAerial.includes('!(projected.w > 1e-4') &&
+    patchedAerial.includes('any(isnan(transmittance))') &&
+    patchedAerial.includes('isnan(sunTransmittance)')
+);
 aerial.dispose();
 
 // --- Blue noise ------------------------------------------------------------------------------------------------------
