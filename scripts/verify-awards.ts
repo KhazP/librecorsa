@@ -785,6 +785,27 @@ async function main(): Promise<void> {
         allHtml.slice(0, 220),
       );
 
+      const fullLegendHtml = renderToStaticMarkup(
+        React.createElement(BadgeLegend, {
+          badges: [
+            { type: "weekly_gold", count: 2 },
+            { type: "weekly_silver", count: 1 },
+            { type: "weekly_bronze", count: 1 },
+            ...multiClassBadges,
+          ],
+          context: { scope: "all" },
+        }),
+      );
+      check(
+        "ui: BadgeLegend groups weekly medals and uses concise labels",
+        fullLegendHtml.includes("Weekly 1st–3rd") &&
+          fullLegendHtml.includes("Fastest lap") &&
+          fullLegendHtml.includes("Physics V1") &&
+          !fullLegendHtml.includes("N times") &&
+          !fullLegendHtml.includes("Won a weekly challenge"),
+        fullLegendHtml.slice(0, 260),
+      );
+
       const condFull = renderToStaticMarkup(React.createElement(LapConditionBadges, { assists: "pro", realism: "full", surface: "dry" }));
       const condCasualSemiWet = renderToStaticMarkup(React.createElement(LapConditionBadges, { assists: "semi_pro", realism: "casual", surface: "wet" }));
       const condStdAssisted = renderToStaticMarkup(React.createElement(LapConditionBadges, { assists: "assisted", realism: "standard", surface: "dry" }));

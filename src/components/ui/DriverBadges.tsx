@@ -554,24 +554,37 @@ export const DriverBadges: React.FC<DriverBadgesProps> = ({
   );
 };
 
-/** One line per badge for the key under a board */
-const MEANING: Record<BadgeType, string> = {
-  weekly_gold: "Won a weekly challenge",
-  weekly_silver: "2nd in a weekly challenge",
-  weekly_bronze: "3rd in a weekly challenge",
-  track_record: `Fastest lap (${MIN_RECORD_DRIVERS}+ drivers), by car class — tap to view`,
-  og: "Original driver: raced on Physics V1",
-  bulb: "Idea that went into the game",
+const WEEKLY_MEDALS = ["weekly_gold", "weekly_silver", "weekly_bronze"] as const;
+type WeeklyMedalType = (typeof WEEKLY_MEDALS)[number];
+const isWeeklyMedal = (t: BadgeType): t is WeeklyMedalType => (WEEKLY_MEDALS as readonly BadgeType[]).includes(t);
+
+const WEEKLY_PLACE: Record<WeeklyMedalType, string> = {
+  weekly_gold: "1st",
+  weekly_silver: "2nd",
+  weekly_bronze: "3rd",
 };
 
-function flLegendMeta(context?: BadgeContext): { tone: BadgeToneProp; short: string; meaning: string } {
+function weeklyGroupLabel(medals: readonly WeeklyMedalType[]): string {
+  if (medals.length === 1) return `Weekly ${WEEKLY_PLACE[medals[0]]}`;
+  if (medals.length === 3) return "Weekly 1st–3rd";
+  if (medals[0] === "weekly_gold" && medals[1] === "weekly_silver") return "Weekly 1st–2nd";
+  if (medals[0] === "weekly_silver" && medals[1] === "weekly_bronze") return "Weekly 2nd–3rd";
+  return `Weekly ${medals.map((m) => WEEKLY_PLACE[m]).join(", ")}`;
+}
+
+const MEANING: Record<Exclude<BadgeType, WeeklyMedalType>, string> = {
+  track_record: "Fastest lap",
+  og: "Physics V1",
+  bulb: "Game idea",
+};
+
+function flLegendMeta(context?: BadgeContext): { tone: BadgeToneProp; short: string } {
   if (context?.scope === "vehicle") {
     const classId = vehicleClassOf(context.vehicle);
     const meta = classId ? VEHICLE_CLASS_META[classId] : null;
     return {
       tone: meta ? { color: meta.color } : "best",
       short: "FL",
-      meaning: `Fastest lap in this car (${MIN_RECORD_DRIVERS}+ drivers) — tap to view`,
     };
   }
   if (context?.scope === "class") {
@@ -579,58 +592,63 @@ function flLegendMeta(context?: BadgeContext): { tone: BadgeToneProp; short: str
     return {
       tone: { color: meta.color },
       short: `FL·${meta.short}`,
-      meaning: `Fastest lap in ${meta.label} (${MIN_RECORD_DRIVERS}+ drivers) — tap to view`,
     };
   }
   return {
     tone: "best",
     short: "FL",
-    meaning: MEANING.track_record,
   };
 }
 
 export interface BadgeLegendProps {
-  /** The badges a board shows; each kind gets one line, in the badges' own order */
+  /** The badges a board shows; each kind present gets a compact entry */
   badges: readonly DriverBadge[];
   /** Matches the context passed to DriverBadges so hidden FL badges aren't listed in the key */
   context?: BadgeContext;
   className?: string;
 }
 
-/**
- * What the compact pills on a board mean, for the kinds the board shows. The pills' tooltips need a mouse, so on a
- * phone this key is the only place the letters are spelled out.
- */
+/** Compact key for the badge pills visible on a board or lobby */
 export const BadgeLegend: React.FC<BadgeLegendProps> = ({ badges, context, className = "" }) => {
   const visible = filterBadgesForContext(badges, context);
   const present = new Set(visible.map((b) => b.type));
-  const types = BADGE_TYPES.filter((t) => present.has(t));
-  if (types.length === 0) return null;
-  const counted = visible.some((b) => b.count > 1);
+  const weekly = WEEKLY_MEDALS.filter((t) => present.has(t));
+  const others = BADGE_TYPES.filter((t): t is Exclude<BadgeType, WeeklyMedalType> => !isWeeklyMedal(t) && present.has(t));
+  if (weekly.length === 0 && others.length === 0) return null;
   const flMeta = flLegendMeta(context);
+
   return (
-    <ul className={`m-0 flex list-none flex-wrap items-center gap-x-4 gap-y-1.5 p-0 ${className}`} aria-label="What the badges mean">
-      {types.map((t) => {
+    <ul className={cx("m-0 flex list-none flex-wrap items-center gap-x-4 gap-y-1.5 p-0", className)} aria-label="Badge key">
+      {weekly.length > 0 ? (
+        <li className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          <span aria-hidden="true" className="inline-flex items-center gap-1">
+            {weekly.map((t) => {
+              const s = STYLE[t];
+              return (
+                <Badge key={t} tone={s.tone} variant={s.variant} size="sm" icon={s.icon} className="px-1.5">
+                  {s.short}
+                </Badge>
+              );
+            })}
+          </span>
+          <span className="text-[12px] leading-none text-lc-fog">{weeklyGroupLabel(weekly)}</span>
+        </li>
+      ) : null}
+      {others.map((t) => {
         const s = STYLE[t];
         const tone = t === "track_record" ? flMeta.tone : s.tone;
         const short = t === "track_record" ? flMeta.short : s.short;
-        const meaning = t === "track_record" ? flMeta.meaning : MEANING[t];
         return (
-          <li key={t} className="flex items-center gap-1.5">
+          <li key={t} className="inline-flex items-center gap-1.5 whitespace-nowrap">
             <span aria-hidden="true" className="inline-flex">
               <Badge tone={tone} variant={s.variant} size="sm" icon={s.icon} className="px-1.5">
                 {short || null}
               </Badge>
             </span>
-            <span className="lc-hint">{meaning}</span>
+            <span className="text-[12px] leading-none text-lc-fog">{MEANING[t]}</span>
           </li>
         );
       })}
-      {counted ? (
-        <li className="lc-hint">
-          <span className="lc-mono font-bold text-lc-fog">×N</span> N times
-        </li>
-      ) : null}
     </ul>
   );
 };
