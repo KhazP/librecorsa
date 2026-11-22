@@ -51,10 +51,6 @@ def slots(data, boxes, log=print):
         # one stretch of road even across the start line
         s = np.where(s - s[0] > lap / 2, s - lap, np.where(s[0] - s > lap / 2, s + lap, s))
         found.append((float(s.max()), 0.5 * float(lat.min() + lat.max())))
-    if len(found) < 2:
-        log(f'  painted grid: {len(found)} box(es) on the road, the grid stays as built')
-        return None
-
     # Pole first: the boxes run back from the start line, so the lap distance behind the line orders them
     found.sort(key=lambda b: (lap - b[0]) % lap)
     # One slot per box: a model can carry the same paint twice (a copy per level of detail)
@@ -63,6 +59,9 @@ def slots(data, boxes, log=print):
         if not any(abs(front - f) < 2.0 and abs(lat - l) < 1.5 for f, l in boxes_once[-4:]):
             boxes_once.append((front, lat))
     found = boxes_once
+    if len(found) < 2:
+        log(f'  painted grid: {len(found)} box(es) on the road, the grid stays as built')
+        return None
     out = []
     for slot, (front, lat_raw) in enumerate(found[:MAX_SLOTS], start=1):
         ss = (front - CAR_BEHIND_FRONT_LINE_M) % lap

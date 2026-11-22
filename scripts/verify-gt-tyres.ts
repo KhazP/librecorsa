@@ -8,6 +8,7 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as THREE from "three";
 import {
   canLoadGtTyreSidewall,
@@ -181,7 +182,7 @@ check(
 geo.dispose();
 
 // Verify local ported lossless WebPs if generated in public/cars/shared/tyres/gt/
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const gtDir = path.join(root, "public/cars/shared/tyres/gt");
 if (existsSync(gtDir)) {
   const urls = GT_TYRE_BRANDS.flatMap((b) => {

@@ -184,8 +184,8 @@ interface OccluderEntry {
 
 function collectOccluderMeshes(root: THREE.Object3D): OccluderEntry[] {
   const entries: OccluderEntry[] = [];
-  root.traverse((obj) => {
-    if (!obj.visible) return;
+  root.updateMatrixWorld(true);
+  root.traverseVisible((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     if (obj.userData?.collider || obj.userData?.hidden) return;
     // Skip transparent decals / soft overlays that shouldn't reject a camera sightline
@@ -198,9 +198,16 @@ function collectOccluderMeshes(root: THREE.Object3D): OccluderEntry[] {
       return true;
     });
     if (!hasSolid) return;
-    if (!obj.geometry.boundingBox) obj.geometry.computeBoundingBox();
-    if (!obj.geometry.boundingBox) return;
-    const box = obj.geometry.boundingBox.clone().applyMatrix4(obj.matrixWorld);
+    let localBox: THREE.Box3 | null;
+    if (obj instanceof THREE.InstancedMesh) {
+      if (!obj.boundingBox) obj.computeBoundingBox();
+      localBox = obj.boundingBox;
+    } else {
+      if (!obj.geometry.boundingBox) obj.geometry.computeBoundingBox();
+      localBox = obj.geometry.boundingBox;
+    }
+    if (!localBox) return;
+    const box = localBox.clone().applyMatrix4(obj.matrixWorld);
     entries.push({ mesh: obj, box });
   });
   return entries;
@@ -212,8 +219,10 @@ function rayHitsAny(raycaster: THREE.Raycaster, entries: readonly OccluderEntry[
   const farSq = raycaster.far * raycaster.far;
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
-    if (!raycaster.ray.intersectBox(e.box, _boxHit)) continue;
-    if (_boxHit.distanceToSquared(origin) > farSq) continue;
+    if (!e.box.containsPoint(origin)) {
+      if (!raycaster.ray.intersectBox(e.box, _boxHit)) continue;
+      if (_boxHit.distanceToSquared(origin) > farSq) continue;
+    }
     if (raycaster.intersectObject(e.mesh, false).length > 0) return true;
   }
   return false;
