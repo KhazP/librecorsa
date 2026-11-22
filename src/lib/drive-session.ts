@@ -43,6 +43,7 @@ import {
 import { createVenueNightLighting, type VenueNightLighting } from "@/lib/render/venue-night-lighting";
 import { applyCircuitNightLights, circuitNightSpec } from "@/lib/render/circuit-night-lights";
 import { FlashTimer, HeadlightButton } from "@/lib/input/headlight-button";
+import { lightCarByLamps, prepareCarForLamps } from "@/lib/render/car-lamp-light";
 import { sameConditions, type SessionConditions } from "@/lib/sim/weather";
 import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
@@ -1436,6 +1437,15 @@ export class DriveSession {
       venueNight.setNight(nightShareOf(getTrackEnv().weather.sun.elevationDeg));
       scene.add(venueNight.group);
       if (mode === "floodlit") env.setFloodlitNight(venueNight.look);
+      // the cars take the lamps' light too (car-lamp-light.ts): their materials compile for it now, not under a lamp
+      else {
+        prepareCarForLamps(carRig.root);
+        visualFx.forEachRigRoot(prepareCarForLamps);
+      }
+    };
+    const lampLight = new THREE.Color();
+    const lightOpponentByLamps = (root: THREE.Object3D) => {
+      if (venueNight) lightCarByLamps(root, venueNight.lightAt(root.position.x, root.position.z, lampLight), performance.now());
     };
     // Track_Collider_Road / surface colliders and Track_Collider_Wall_* barriers for the f12026-car
     void builtCircuit.trackRoot.then((root) => {
@@ -4171,6 +4181,12 @@ export class DriveSession {
         const headlights = resolveHeadlightStates(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
         // Onboard views (cockpit, dash, nose, shoulder, T-cam) sit on/behind the nose; hide the player's own front flares
         const playerBrakingNow = (replaying ? replayPlayerTelemetry.brake : physics.telemetry.brake) > 0.05;
+        // Under a street lamp the cars are lit as the road is
+        if (venueNight?.mode === "lamps") {
+          const p = carRig.root.position;
+          lightCarByLamps(carRig.root, venueNight.lightAt(p.x, p.z, lampLight), nowMs);
+          visualFx.forEachOpponentRoot(lightOpponentByLamps);
+        }
         carHeadlights.setFlash(playerFlashing && !replaying);
         carHeadlights.setEnabled(headlights.player, playerBrakingNow, camera, view.anchor !== null && (!replaying || rp.focusedCarId === "player"));
         visualFx.setHeadlights(headlights.opponents, camera);

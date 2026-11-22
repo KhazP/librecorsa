@@ -48,6 +48,13 @@ export interface VenueNightLighting {
   /** Masts, lamp heads and their glow: add to the scene */
   readonly group: THREE.Group;
   readonly look: Readonly<FloodlitNightLook>;
+  readonly mode: CircuitNightMode;
+  /**
+   * The lamps' light at a ground point (x, z) as irradiance (linear), as the circuit's materials take it: a moonlit
+   * circuit's pools at the night share now. Black on a floodlit circuit (its key light lights the cars) and by day.
+   * For the cars (car-lamp-light.ts), which the map does not reach
+   */
+  lightAt(x: number, z: number, out: THREE.Color): THREE.Color;
   /** 0 by day .. 1 at night (the environment's night share) */
   setNight(share: number): void;
   setQuality(quality: "low" | "medium" | "high"): void;
@@ -92,7 +99,7 @@ const isNightEmissive = (v: unknown): v is NightEmissive =>
   !!v && typeof v === "object" && typeof (v as NightEmissive).day === "number" && typeof (v as NightEmissive).night === "number";
 
 /** Adds to a material's shader hooks, keeping the ones it has (asphalt, scenery detail, leaves ...) */
-function chainShaderPatch(mat: THREE.Material, key: string, patch: (shader: THREE.WebGLProgramParametersWithUniforms) => void): void {
+export function chainShaderPatch(mat: THREE.Material, key: string, patch: (shader: THREE.WebGLProgramParametersWithUniforms) => void): void {
   const prev = mat.onBeforeCompile;
   const prevKey = mat.customProgramCacheKey.bind(mat);
   mat.onBeforeCompile = (shader, renderer) => {
@@ -170,6 +177,10 @@ interface VenueMap {
   texture: THREE.DataTexture;
   /** min x, min z, 1 / size x, 1 / size z */
   box: THREE.Vector4;
+  /** The map's texels (RGBA, sRGB colour) and size, kept for lightAt */
+  data: Uint8Array;
+  w: number;
+  h: number;
 }
 
 /** A soft-edged band along a polyline: strokes from the widest, each adding a share, so the light fades with distance */
@@ -554,8 +565,11 @@ function buildVenueMap(
   texture.generateMipmaps = true;
   texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.needsUpdate = true;
-  return { texture, box: new THREE.Vector4(minX, minZ, 1 / sizeX, 1 / sizeZ) };
+  return { texture, box: new THREE.Vector4(minX, minZ, 1 / sizeX, 1 / sizeZ), data, w, h };
 }
+
+/** sRGB byte to linear, as the texture's sampler decodes it */
+const SRGB_TO_LINEAR = Float32Array.from({ length: 256 }, (_, i) => srgbToLinear(i / 255));
 
 /** A soft disc for the lamps' glow points */
 function glowSprite(): THREE.Texture | null {
@@ -763,6 +777,31 @@ export function createVenueNightLighting(
   const api: VenueNightLighting = {
     group,
     look: VENUE_NIGHT_LOOK,
+    mode,
+    lightAt(x: number, z: number, out: THREE.Color): THREE.Color {
+      const k = Math.max(0, night);
+      if (!map || mode !== "lamps" || k <= 0) return out.setRGB(0, 0, 0);
+      const { data, w, h, box } = map;
+      // bilinear, texel centres at half steps, as the sampler reads it
+      const fx = (x - box.x) * box.z * w - 0.5;
+      const fz = (z - box.y) * box.w * h - 0.5;
+      if (fx < -1 || fz < -1 || fx > w || fz > h) return out.setRGB(0, 0, 0);
+      const x0 = Math.max(0, Math.min(w - 1, Math.floor(fx)));
+      const z0 = Math.max(0, Math.min(h - 1, Math.floor(fz)));
+      const x1 = Math.min(w - 1, x0 + 1);
+      const z1 = Math.min(h - 1, z0 + 1);
+      const tx = THREE.MathUtils.clamp(fx - x0, 0, 1);
+      const tz = THREE.MathUtils.clamp(fz - z0, 0, 1);
+      const scale = uniforms.uLcVenueAccent.value * k;
+      const ch = (c: number) => {
+        const a = SRGB_TO_LINEAR[data[(z0 * w + x0) * 4 + c]];
+        const b = SRGB_TO_LINEAR[data[(z0 * w + x1) * 4 + c]];
+        const d = SRGB_TO_LINEAR[data[(z1 * w + x0) * 4 + c]];
+        const e = SRGB_TO_LINEAR[data[(z1 * w + x1) * 4 + c]];
+        return ((a + (b - a) * tx) * (1 - tz) + (d + (e - d) * tx) * tz) * scale;
+      };
+      return out.setRGB(ch(0), ch(1), ch(2));
+    },
     setNight(share: number): void {
       const k = THREE.MathUtils.clamp(share, 0, 1);
       if (Math.abs(k - night) < 0.004) return;

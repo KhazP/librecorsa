@@ -186,6 +186,20 @@ export class SimVisualFxManager {
     this.graphicsQuality = quality;
   }
 
+  /** Every solid (non-ghost) opponent car drawn now: its rig's root */
+  public forEachOpponentRoot(cb: (root: THREE.Object3D) => void): void {
+    for (const entry of this.opponentCars.values()) if (!entry.ghost) cb(entry.rig.root);
+  }
+
+  /** Every opponent rig built so far, drawn or waiting in the pool (to prepare their materials while loading) */
+  public forEachRigRoot(cb: (root: THREE.Object3D) => void): void {
+    for (const entry of this.opponentCars.values()) {
+      cb(entry.rig.root);
+      if (entry.spare) cb(entry.spare.root);
+    }
+    for (const rigs of this.pool.values()) for (const rig of rigs) cb(rig.root);
+  }
+
   /** Active 3D car rig for an opponent peer (used by race replay cameras to ride onboard any car) */
   public getOpponentRig(peerId: string): SimCarRig | null {
     return this.opponentCars.get(peerId)?.rig ?? null;
