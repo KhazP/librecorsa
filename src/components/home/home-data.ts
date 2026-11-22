@@ -51,6 +51,19 @@ export interface HomeVenue {
   source: ModelSource | null;
 }
 
+export interface HomeLivery {
+  id: string;
+  name: string;
+  /** Optional team or subtitle */
+  detail?: string;
+  /** Optional collection heading (e.g. LibreCorsa, 2026 Grid, Retro) */
+  group?: string;
+  /** CSS colour or gradient for the swatch pill */
+  swatch: string;
+  /** Pre-rendered car picture wearing this livery, or null when unavailable */
+  thumb: string | null;
+}
+
 export interface HomeCar {
   id: string;
   /** Shared physics / leaderboard model id */
@@ -61,6 +74,10 @@ export interface HomeCar {
   grade: HomeGrade;
   /** null when this copy of the game has no picture of it */
   thumb: string | null;
+  /** Where this car persists its chosen livery: player settings (`liveryId`) or per-car skins (`librecorsa.carSkins`) */
+  liveryStore?: "settings" | "skin";
+  /** Liveries or mod skins available for this car (empty when a car keeps a single factory paint) */
+  liveries: HomeLivery[];
   /** Where its 3D body comes from */
   source: ModelSource;
 }

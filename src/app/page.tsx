@@ -1,11 +1,23 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { HomeHub } from "@/components/home/HomeHub";
-import type { HomeData, WhatsNewDay } from "@/components/home/home-data";
+import type { HomeData, HomeLivery, WhatsNewDay } from "@/components/home/home-data";
 import { withBasePath } from "@/lib/base-path";
-import { CAR_CLASSES, CARS, anyCarForVehicle, carThumbUrl, type CarDefinition, type CarId } from "@/lib/cars/car-registry";
+import {
+  CAR_CLASSES,
+  CARS,
+  anyCarForVehicle,
+  carLiveryThumbUrl,
+  carSkinSwatchBackground,
+  carSkinThumbUrl,
+  carTakesLivery,
+  carThumbUrl,
+  type CarDefinition,
+  type CarId,
+} from "@/lib/cars/car-registry";
 import { carBoardTag } from "@/lib/cars/board-tag";
-import { VEHICLE_MODEL_IDS, type VehicleModelId } from "@/types/f1";
+import { LIVERIES, LIVERY_CATEGORY_LABELS } from "@/lib/track-data";
+import { VEHICLE_MODEL_IDS, type LiveryConfig, type VehicleModelId } from "@/types/f1";
 import { REPO_CAR_IDS } from "@/lib/hosted-content";
 import outlines from "@/lib/home/circuit-outlines.json";
 import whatsNewJson from "@/lib/home/whats-new.json";
@@ -23,10 +35,46 @@ const OUTLINES = outlines as unknown as Record<string, LapOutline>;
  * A car's picture, or null when this copy has none. The repository's own cars keep theirs in the repository, so a
  * missing file means there is no picture; a hosted car's is served from the asset bucket, not from this folder.
  */
-function thumbOf(id: CarId): string | null {
-  const url = carThumbUrl(id);
+function variantThumbOf(id: CarId, url: string): string | null {
   if (REPO_CAR_IDS.has(id) && !existsSync(join(process.cwd(), "public", url))) return null;
   return withBasePath(url);
+}
+
+function thumbOf(id: CarId): string | null {
+  return variantThumbOf(id, carThumbUrl(id));
+}
+
+const F1_SWATCH = (liv: LiveryConfig): string =>
+  liv.visual?.swatchCss ?? `linear-gradient(130deg, ${liv.primary} 0 52%, ${liv.accent} 52% 64%, ${liv.secondary} 64% 100%)`;
+
+const F1_LIVERY_ORDER = ["house", "grid2026", "retro"] as const;
+
+function liveriesOf(c: CarDefinition): { liveryStore?: "settings" | "skin"; liveries: HomeLivery[] } {
+  if (carTakesLivery(c.id)) {
+    const ordered = F1_LIVERY_ORDER.flatMap((cat) =>
+      LIVERIES.filter((liv) => (liv.category ?? "house") === cat).map((liv) => ({
+        id: liv.id,
+        name: liv.name,
+        detail: liv.team,
+        group: LIVERY_CATEGORY_LABELS[cat],
+        swatch: F1_SWATCH(liv),
+        thumb: variantThumbOf(c.id, carLiveryThumbUrl(c.id, liv.id)),
+      })),
+    );
+    return { liveryStore: "settings", liveries: ordered };
+  }
+  if (c.skins && c.skins.length > 1) {
+    return {
+      liveryStore: "skin",
+      liveries: c.skins.map((skin) => ({
+        id: skin.id,
+        name: skin.name,
+        swatch: carSkinSwatchBackground(skin),
+        thumb: variantThumbOf(c.id, carSkinThumbUrl(c.id, skin.id)),
+      })),
+    };
+  }
+  return { liveries: [] };
 }
 
 /**
@@ -68,16 +116,21 @@ export default function HomePage() {
       })),
       source: trackModelSource(v.layouts[0]),
     })),
-    cars: CARS.map((c) => ({
-      id: c.id,
-      vehicle: c.physics,
-      title: c.title,
-      classTitle: CAR_CLASSES.find((k) => k.id === c.classId)?.title ?? "",
-      year: c.year,
-      grade: c.quality === "own" ? "sim" : "model",
-      thumb: thumbOf(c.id),
-      source: carModelSource(c),
-    })),
+    cars: CARS.map((c) => {
+      const { liveryStore, liveries } = liveriesOf(c);
+      return {
+        id: c.id,
+        vehicle: c.physics,
+        title: c.title,
+        classTitle: CAR_CLASSES.find((k) => k.id === c.classId)?.title ?? "",
+        year: c.year,
+        grade: c.quality === "own" ? "sim" : "model",
+        thumb: thumbOf(c.id),
+        liveryStore,
+        liveries,
+        source: carModelSource(c),
+      };
+    }),
     coverage: articles.slice(0, 4).map((a) => ({ outlet: a.outlet, title: a.title, url: a.url, date: a.date })),
     coverageCount: articles.length,
     contactEmail: CONTACT_EMAIL,

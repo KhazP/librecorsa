@@ -3,9 +3,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { currentInputMode, useInputMode } from "@/components/menu/input-mode";
 import { focusables, focusOnHover, useFocusNav } from "@/components/menu/useFocusNav";
-import { LayoutChoice } from "@/components/LayoutChoice";
 import { SourceChip } from "@/components/SourceChip";
 import { Button, EmptyState, MediaTile, Select, Tabs } from "@/components/ui";
+import { CarLiveryPicker } from "./CarLiveryPicker";
+import { VenueLayoutPicker } from "./VenueLayoutPicker";
 import { Icon } from "@/components/ui/icons";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { KeyCap, PadGlyph, PromptBar, type Prompt } from "@/components/ui/prompts";
@@ -19,7 +20,7 @@ import { SITE_DESCRIPTION } from "@/lib/site";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { FeaturedBadges } from "./FeaturedBadges";
 import { SupportButton } from "@/components/SupportButton";
-import { day, GAME_FACTS, GRADE_NOTES, type HomeData, type HomeLayout, type HomeVenue, type WhatsNewDay } from "./home-data";
+import { day, GAME_FACTS, GRADE_NOTES, type HomeCar, type HomeData, type HomeLayout, type HomeVenue, type WhatsNewDay } from "./home-data";
 import { CarThumb, GradeBadge, OutlineThumb } from "./home-ui";
 import { LapMap } from "./LapMap";
 import { HomeDownloads } from "./HomeDownloads";
@@ -27,7 +28,8 @@ import { HomeLapTimes } from "./HomeLapTimes";
 import { bestLapForCircuit } from "@/lib/sim/ghost-store";
 import { useBestLapSummaries } from "@/lib/sim/use-best-laps";
 import { formatLapTime } from "@/components/hud/hud-format";
-import { PLAY_HREF, rememberPicks, storedPicks } from "./play";
+import type { CustomLiveryColors } from "@/types/f1";
+import { PLAY_HREF, rememberCarSkin, rememberF1Livery, rememberPicks, storedPicks } from "./play";
 import { TEXT_LINK } from "./SitePage";
 
 /*
@@ -163,14 +165,26 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   }, [tab, whatsNewToken]);
   const tabs = useMemo(() => TABS.map((t) => (t.id === "whats-new" && unseenUpdates ? { ...t, badge: UNREAD_DOT } : t)), [unseenUpdates]);
 
-  // A returning player's last circuit and car (the page is built with the defaults)
+  // A returning player's last circuit, car and liveries (the page is built with the defaults)
+  const [f1LiveryId, setF1LiveryId] = useState<string | null>(null);
+  const [customLivery, setCustomLivery] = useState<CustomLiveryColors | null>(null);
+  const [carSkins, setCarSkins] = useState<Record<string, string>>({});
   useEffect(() => {
-    const { trackId, carId: stored } = storedPicks();
+    const { trackId, carId: stored, f1LiveryId: savedF1, customLivery: savedCustom, carSkins: savedSkins } = storedPicks();
     if (trackId && data.venues.some((v) => v.layouts.some((l) => l.id === trackId))) setLayoutId(trackId);
     if (stored && data.cars.some((c) => c.id === stored)) setCarId(stored);
+    if (savedF1) setF1LiveryId(savedF1);
+    if (savedCustom) setCustomLivery(savedCustom);
+    if (Object.keys(savedSkins).length) setCarSkins(savedSkins);
   }, [data.venues, data.cars]);
 
   const [venueFilters, setVenueFilters] = useState(NO_VENUE_FILTERS);
+  /** Which venue's layout popover is open on the Circuits wall (at most one at a time) */
+  const [openLayoutsFor, setOpenLayoutsFor] = useState<string | null>(null);
+  /** Which car's livery popover is open on the Cars wall (at most one at a time) */
+  const [openLiveriesFor, setOpenLiveriesFor] = useState<string | null>(null);
+  /** Last layout picked per venue, so switching away and back keeps the player's choice */
+  const [venueLayoutMemory, setVenueLayoutMemory] = useState<Record<string, string>>({});
   /** The venues the filters leave, `except` one of them (for that filter's own options and their counts) */
   const venuesWith = (except?: VenueFilterKey) =>
     data.venues.filter((v) => VENUE_FILTERS.every((f) => f.key === except || !venueFilters[f.key] || f.of(v).includes(venueFilters[f.key])));
@@ -185,8 +199,39 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   const lengthOf = (l: HomeLayout) =>
     `${distanceIn(l.lengthM / 1000, units.speed).toFixed(2)} ${DISTANCE_LABEL[units.speed]}, ${l.turns} turns`;
 
+  const activeLiveryIdOf = (c: HomeCar): string => {
+    if (c.liveryStore === "settings") {
+      if (f1LiveryId === "custom") return "custom";
+      if (f1LiveryId && c.liveries.some((l) => l.id === f1LiveryId)) return f1LiveryId;
+      return c.liveries[0]?.id ?? "";
+    }
+    if (c.liveryStore === "skin") {
+      const saved = carSkins[c.id];
+      if (saved && c.liveries.some((l) => l.id === saved)) return saved;
+      return c.liveries[0]?.id ?? "";
+    }
+    return "";
+  };
+  const activeThumbOf = (c: HomeCar): string | null => {
+    const lid = activeLiveryIdOf(c);
+    if (!lid || lid === "custom") return c.thumb;
+    return c.liveries.find((l) => l.id === lid)?.thumb ?? c.thumb;
+  };
+  const selectCarLivery = (c: HomeCar, liveryId: string) => {
+    setCarId(c.id);
+    if (c.liveryStore === "settings") {
+      setF1LiveryId(liveryId);
+      rememberF1Livery(liveryId);
+    } else if (c.liveryStore === "skin") {
+      setCarSkins((prev) => ({ ...prev, [c.id]: liveryId }));
+      rememberCarSkin(c.id, liveryId);
+    }
+  };
+
   const go = useCallback((next: Tab, moveCursor = false) => {
     focusOnOpen.current = moveCursor && currentInputMode() !== "pointer";
+    setOpenLayoutsFor(null);
+    setOpenLiveriesFor(null);
     setTab(next);
     panelRef.current?.scrollTo({ top: 0 });
   }, []);
@@ -390,7 +435,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                   className={`${TILE} flex min-h-[230px] cursor-pointer flex-col gap-3 p-5 lg:col-span-3`}
                 >
                   <span className="flex min-h-0 flex-1 items-center justify-center">
-                    <CarThumb key={car.id} src={car.thumb} eager className="h-auto max-h-full w-full object-contain" />
+                    <CarThumb key={car.id} src={activeThumbOf(car)} fallbackSrc={car.thumb} eager className="h-auto max-h-full w-full object-contain" />
                   </span>
                   <span className="flex flex-col items-start gap-1.5">
                     <span className={TILE_TITLE}>{car.title}</span>
@@ -546,17 +591,32 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                 <div className={WALL}>
                   {shownVenues.map((v) => {
                     const on = v === venue;
-                    const shown = on ? layout : v.layouts[0];
+                    const multi = v.layouts.length > 1;
+                    const shown = on ? layout : (v.layouts.find((l) => l.id === venueLayoutMemory[v.name]) ?? v.layouts[0]);
                     const pb = bestLapForCircuit(bestLaps, shown.id, car.vehicle);
                     const pbCarLabel = pb ? (data.boardCars[pb.vehicle]?.label ?? pb.vehicle) : "";
                     return (
-                      <div key={v.name} className="flex min-w-0 flex-col gap-2">
+                      <div key={v.name} data-venue-card={v.name} className="min-w-0">
                         <MediaTile
-                          onSelect={() => setLayoutId(v.layouts[0].id)}
+                          className="h-full"
+                          controlProps={{ "data-venue-tile-btn": "" }}
+                          onSelect={() => {
+                            if (on && multi) {
+                              setOpenLayoutsFor((cur) => (cur === v.name ? null : v.name));
+                              return;
+                            }
+                            setOpenLayoutsFor(null);
+                            setLayoutId(shown.id);
+                          }}
                           aria-pressed={on}
                           chosen={on}
                           navDefault={on}
-                          media={<OutlineThumb outline={shown.outline} className={`p-4 pt-10 ${on ? "text-lc-chalk" : "text-lc-slate"}`} />}
+                          media={
+                            <OutlineThumb
+                              outline={shown.outline}
+                              className={cx("p-4 pt-10", multi ? "pb-10" : undefined, on ? "text-lc-chalk" : "text-lc-slate")}
+                            />
+                          }
                           overlay={<GradeBadge grade={shown.grade} size="sm" title={GRADE_NOTES.circuits[shown.grade]} />}
                           title={v.name}
                           meta={
@@ -592,15 +652,34 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                             </>
                           }
                           action={v.source ? <SourceChip source={v.source} /> : undefined}
+                          mediaFooter={
+                            multi ? (
+                              <VenueLayoutPicker
+                                venueName={v.name}
+                                layouts={v.layouts}
+                                value={shown.id}
+                                chosen={on}
+                                open={openLayoutsFor === v.name}
+                                onOpenChange={(next) => setOpenLayoutsFor(next ? v.name : null)}
+                                lengthOf={lengthOf}
+                                bestLapOf={(id) => {
+                                  const lpb = bestLapForCircuit(bestLaps, id, car.vehicle);
+                                  return lpb
+                                    ? {
+                                        text: formatLapTime(lpb.lapTimeMs),
+                                        forCurrentCar: lpb.forCurrentCar,
+                                        legacyPhysics: lpb.legacyPhysics,
+                                      }
+                                    : null;
+                                }}
+                                onSelect={(id) => {
+                                  setVenueLayoutMemory((m) => ({ ...m, [v.name]: id }));
+                                  setLayoutId(id);
+                                }}
+                              />
+                            ) : undefined
+                          }
                         />
-                        {on && v.layouts.length > 1 ? (
-                          <LayoutChoice
-                            aria-label={`${v.name} layout`}
-                            value={layout.id}
-                            onChange={setLayoutId}
-                            options={v.layouts.map((l) => ({ id: l.id, label: l.layout }))}
-                          />
-                        ) : null}
                       </div>
                     );
                   })}
@@ -613,19 +692,55 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                 <div className={WALL}>
                   {data.cars.map((c) => {
                     const on = c === car;
+                    const multi = c.liveries.length > 1;
+                    const activeLiveryId = activeLiveryIdOf(c);
+                    const customSwatch = customLivery
+                      ? `linear-gradient(130deg, ${customLivery.primary} 0 52%, ${customLivery.accent} 52% 64%, ${customLivery.secondary} 64% 100%)`
+                      : undefined;
                     return (
-                      <MediaTile
-                        key={c.id}
-                        onSelect={() => setCarId(c.id)}
-                        aria-pressed={on}
-                        chosen={on}
-                        navDefault={on}
-                        media={<CarThumb src={c.thumb} className="object-contain p-2.5 pt-8" />}
-                        overlay={<GradeBadge grade={c.grade} size="sm" title={GRADE_NOTES.cars[c.grade]} />}
-                        title={c.title}
-                        meta={`${c.classTitle}, ${c.year}`}
-                        action={<SourceChip source={c.source} />}
-                      />
+                      <div key={c.id} data-car-card={c.id} className="min-w-0">
+                        <MediaTile
+                          className="h-full"
+                          controlProps={{ "data-car-tile-btn": "" }}
+                          onSelect={() => {
+                            if (on && multi) {
+                              setOpenLiveriesFor((cur) => (cur === c.id ? null : c.id));
+                              return;
+                            }
+                            setOpenLiveriesFor(null);
+                            setCarId(c.id);
+                          }}
+                          aria-pressed={on}
+                          chosen={on}
+                          navDefault={on}
+                          media={
+                            <CarThumb
+                              src={activeThumbOf(c)}
+                              fallbackSrc={c.thumb}
+                              className={cx("object-contain p-2.5 pt-8", multi ? "pb-9" : undefined)}
+                            />
+                          }
+                          overlay={<GradeBadge grade={c.grade} size="sm" title={GRADE_NOTES.cars[c.grade]} />}
+                          title={c.title}
+                          meta={`${c.classTitle}, ${c.year}`}
+                          action={<SourceChip source={c.source} />}
+                          mediaFooter={
+                            multi ? (
+                              <CarLiveryPicker
+                                carTitle={c.title}
+                                liveries={c.liveries}
+                                value={activeLiveryId}
+                                customSwatch={customSwatch}
+                                fallbackThumb={c.thumb}
+                                chosen={on}
+                                open={openLiveriesFor === c.id}
+                                onOpenChange={(next) => setOpenLiveriesFor(next ? c.id : null)}
+                                onSelect={(id) => selectCarLivery(c, id)}
+                              />
+                            ) : undefined
+                          }
+                        />
+                      </div>
                     );
                   })}
                 </div>

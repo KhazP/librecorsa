@@ -19,23 +19,37 @@ export const OutlineThumb: React.FC<{ outline: LapOutline | null; className?: st
     <span aria-hidden className={className} />
   );
 
-/** A car's picture. A copy of the game without that car's files has none: the space stays empty, with no broken-image mark */
-export const CarThumb: React.FC<{ src: string | null; className?: string; eager?: boolean }> = ({ src, className, eager }) =>
-  src === null ? null : (
+/** A car's picture. Falls back smoothly to `fallbackSrc` when a livery thumbnail is missing, or stays empty with no broken-image mark */
+export const CarThumb: React.FC<{ src: string | null; fallbackSrc?: string | null; className?: string; eager?: boolean }> = ({
+  src,
+  fallbackSrc = null,
+  className,
+  eager,
+}) => {
+  const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
+  const [hiddenSrc, setHiddenSrc] = React.useState<string | null>(null);
+  const effectiveSrc = src && failedSrc !== src ? src : fallbackSrc;
+  if (effectiveSrc === null || hiddenSrc === effectiveSrc) return null;
+  return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={src}
+      src={effectiveSrc}
       alt=""
       width={640}
       height={360}
       loading={eager ? "eager" : "lazy"}
       decoding="async"
       className={className}
-      onError={(e) => {
-        e.currentTarget.style.visibility = "hidden";
+      onError={() => {
+        if (src && effectiveSrc === src && fallbackSrc && fallbackSrc !== src) {
+          setFailedSrc(src);
+        } else {
+          setHiddenSrc(effectiveSrc);
+        }
       }}
     />
   );
+};
 
 /** Sim grade or 3D model: the game's own quality badge, with what it means on hover */
 export const GradeBadge: React.FC<{ grade: HomeGrade; title?: string; size?: BadgeSize; className?: string }> = ({

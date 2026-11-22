@@ -7,8 +7,8 @@ import { Segmented, Select } from "@/components/ui";
 const SEGMENTED_UP_TO = 2;
 
 /**
- * A venue's layout picker, on the home page's circuit cards and in the game's circuit browser: a segmented row for a
- * few layouts, a `Select` for more. Inside a `SettingRow` the row names it; elsewhere pass `aria-label`.
+ * A venue's layout picker in the game's circuit browser: a segmented row for a few layouts, a `Select` for more.
+ * Inside a `SettingRow` the row names it; elsewhere pass `aria-label`.
  */
 export function LayoutChoice({
   options,
