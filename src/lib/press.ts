@@ -73,15 +73,6 @@ export const COVERAGE: CoverageItem[] = [
     lang: "es",
   },
   {
-    outlet: "Tech Insider",
-    title: "LibreCorsa: F1 Open Source nel Browser, 500 Hz",
-    url: "https://tech-insider.org/it/librecorsa-f1-open-source-browser-500-hz-2026/",
-    date: "2026-11-03",
-    kind: "Article",
-    author: "Lorenzo Ferrari",
-    lang: "it",
-  },
-  {
     outlet: "Punto Informatico",
     title: "LibreCorsa: la F1 open source nel browser, senza download",
     url: "https://www.punto-informatico.it/librecorsa-corse-f1-browser-senza-download/",
