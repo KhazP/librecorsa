@@ -235,13 +235,9 @@ export const vehicleModelSpec = (id: VehicleModelId): VehicleModel => VEHICLE_MO
 export const isVehicleModelId = (value: unknown): value is VehicleModelId =>
   typeof value === "string" && Object.hasOwn(VEHICLE_MODELS, value);
 
-/**
- * The vehicle models an online room's class rule lets in: an F1 or GT3 room admits that class's models, "any" every
- * model. There is no road-car or prototype rule, so those race only in "any" rooms.
- */
+/** The vehicle models an online room's class rule lets in: "any" every model, a class its own models */
 export function vehicleModelsFor(rule: CarClassRule): VehicleModelId[] {
-  const classId: CarClassId | null = rule === "f1" ? "f1" : rule === "gt3" ? "gt3" : null;
   return Object.values(VEHICLE_MODELS)
-    .filter((m) => classId === null || m.classId === classId)
+    .filter((m) => rule === "any" || m.classId === rule)
     .map((m) => m.id);
 }

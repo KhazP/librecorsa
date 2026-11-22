@@ -7,7 +7,7 @@ import { DualSensePairPrompt } from "@/components/hud/DualSensePairPrompt";
 import { OverheadNameplates } from "@/components/hud/OverheadNameplates";
 import type { OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
-import { CARS, carById, carForVehicle, type CarId } from "@/lib/cars/car-registry";
+import { CARS, carById, carForVehicle, listedVehiclesForClassRule, type CarId } from "@/lib/cars/car-registry";
 import { alignGhostToTrack } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { type ChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
@@ -18,7 +18,7 @@ import type { ReportFacts } from "@/lib/diagnostics/report-details";
 import { carMaker, circuitMaker } from "@/lib/modders";
 import { isStoreBuild } from "@/lib/store-mode";
 import { markShown, markThanked, promptFor, readPromptState, writePromptState, type PromptItem } from "@/lib/support-prompt";
-import { getMultiplayerManager, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo, type RoomSessionInfo, type ScheduledRaceStatus } from "@/lib/sim/multiplayer-sync";
+import { getMultiplayerManager, type CarClassRule, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo, type RoomSessionInfo, type ScheduledRaceStatus } from "@/lib/sim/multiplayer-sync";
 import { boardStateOf, watchOnlineConfig, type BoardState } from "@/lib/net/online-config";
 import { DEFAULT_RACE_SLOT_S } from "@/lib/net/race-schedule";
 import { MultiplayerRace } from "@/lib/sim/race-session";
@@ -98,6 +98,15 @@ const weekCar = (rules: { vehicle: VehicleModelId; car?: string }) => CARS.find(
 const raceCarFor = (vehicle: VehicleModelId, scheduled: boolean) => {
   const race = challengeAt(Date.now()).race;
   return scheduled && race.vehicle === vehicle ? weekCar(race) : carForVehicle(vehicle);
+};
+/**
+ * The car to take for a room's rule: null when the one driven is allowed, else the race's one car or the first listed
+ * car the class lets in (null too when this copy lists none)
+ */
+const roomCarSwitch = (rule: { vehicle?: VehicleModelId; carClass: CarClassRule }, current: VehicleModelId): VehicleModelId | null => {
+  if (rule.vehicle) return current === rule.vehicle ? null : rule.vehicle;
+  if (vehicleModelsFor(rule.carClass).includes(current)) return null;
+  return listedVehiclesForClassRule(rule.carClass)[0] ?? null;
 };
 /** The lap card's upload state for a board answer: sent, nothing to show, waiting for the board, or turned down */
 const cardStateOf = (res: SubmitResult, quietNotFaster: boolean): "idle" | "sent" | "error" | "waiting" =>
@@ -876,8 +885,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       startSession({ kind: "mp", race });
       // The class may rule out the current car, or the race names one car for everyone (a scheduled race): take it,
       // or the first allowed one (after the session reset, so the swap finds no replay or AI field to carry over)
-      const allowed = start.vehicle ? [start.vehicle] : vehicleModelsFor(start.carClass);
-      if (!allowed.includes(vehicleModelRef.current)) changeCar(raceCarFor(allowed[0], mp.inScheduledRace).id);
+      const switchTo = roomCarSwitch(start, vehicleModelRef.current);
+      if (switchTo) changeCar(raceCarFor(switchTo, mp.inScheduledRace).id);
       // A scheduled race is driven to the week's rules: its assists and realism, a dry track
       if (mp.inScheduledRace) applyWeekRules();
       else if (!mp.isHost && !guestWeatherSyncedRef.current && (start.weather || start.timeOfDay || start.timeScale !== undefined)) {
@@ -942,10 +951,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const mp = getMultiplayerManager();
       const lobbyNow = mp.lobby;
       if (lobbyNow) {
-        const allowed = lobbyNow.settings.vehicle ? [lobbyNow.settings.vehicle] : vehicleModelsFor(lobbyNow.settings.carClass);
-        if (allowed.length > 0 && !allowed.includes(vehicleModelRef.current)) {
-          changeCar(raceCarFor(allowed[0], mp.inScheduledRace).id);
-        }
+        const switchTo = roomCarSwitch(lobbyNow.settings, vehicleModelRef.current);
+        if (switchTo) changeCar(raceCarFor(switchTo, mp.inScheduledRace).id);
       }
       startSession({ kind: "practice" });
       session.car.resetToStartGrid(true);
@@ -1576,8 +1583,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         if (onSelectTrack && TRACKS.some((t) => t.id === l.settings.trackId)) onSelectTrack(l.settings.trackId);
         return;
       }
-      const allowed = l.settings.vehicle ? [l.settings.vehicle] : vehicleModelsFor(l.settings.carClass);
-      if (allowed.length > 0 && !allowed.includes(vehicleModelRef.current)) changeCar(raceCarFor(allowed[0], mp.inScheduledRace).id);
+      const switchTo = roomCarSwitch(l.settings, vehicleModelRef.current);
+      if (switchTo) changeCar(raceCarFor(switchTo, mp.inScheduledRace).id);
     };
     mp.onLobbyChange = (l) => {
       setLobby(l ? { ...l, players: [...l.players] } : null);
