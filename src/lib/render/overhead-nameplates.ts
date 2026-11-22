@@ -7,12 +7,12 @@ const NAMEPLATE_BADGE_SHORT: Record<BadgeType, string> = {
   weekly_gold: "G",
   weekly_silver: "S",
   weekly_bronze: "B",
-  track_record: "TR",
+  track_record: "FL",
   og: "OG",
   bulb: "IDEA",
 };
 
-/** Concise uppercase chip codes for overhead nameplates ("G", "G×2", "S", "B", "TR", "OG", "IDEA") */
+/** Concise uppercase chip codes for overhead nameplates ("G", "G×2", "S", "B", "FL", "OG", "IDEA") */
 export function formatNameplateBadges(badges: readonly DriverBadge[]): string[] {
   if (badges.length === 0) return [];
   return sortBadges(badges).map((b) => {

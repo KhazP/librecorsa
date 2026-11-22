@@ -15,7 +15,7 @@ const STYLE: Record<BadgeType, BadgeStyle> = {
   weekly_gold: { icon: "challenge", tone: { color: "amber" }, variant: "soft", short: "G" },
   weekly_silver: { icon: "medal", tone: { color: "chalk" }, variant: "soft", short: "S" },
   weekly_bronze: { icon: "medal", tone: { color: "amber" }, variant: "outline", short: "B" },
-  track_record: { icon: "lapTimes", tone: "best", variant: "soft", short: "TR" },
+  track_record: { icon: "lapTimes", tone: "best", variant: "soft", short: "FL" },
   og: { icon: "favouriteOn", tone: { color: "cyan" }, variant: "soft", short: "OG" },
   bulb: { icon: "idea", tone: { color: "lemon" }, variant: "soft", short: "" },
 };
@@ -34,7 +34,7 @@ function tooltipOf(b: DriverBadge): string {
   return detail ? `${label} — ${detail}` : label;
 }
 
-/** A driver's earned badges (weekly podiums, track records, OG, Bulb) as accessible design-token pills */
+/** A driver's earned badges (weekly podiums, fastest laps, OG, Bulb) as accessible design-token pills */
 export const DriverBadges: React.FC<DriverBadgesProps> = ({ badges, compact = false, className = "" }) => {
   if (badges.length === 0) return null;
   const ordered = sortBadges(badges);
@@ -72,7 +72,7 @@ const MEANING: Record<BadgeType, string> = {
   weekly_gold: "Won a weekly challenge",
   weekly_silver: "2nd in a weekly challenge",
   weekly_bronze: "3rd in a weekly challenge",
-  track_record: "Track record: fastest lap on a board",
+  track_record: "Fastest lap: holds a board's best time",
   og: "Original driver: raced on Physics V1",
   bulb: "Idea that went into the game",
 };

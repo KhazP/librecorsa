@@ -292,7 +292,7 @@ check("formatNameplateBadges orders badges canonically with concise codes and co
     { type: "weekly_gold", count: 2 },
     { type: "weekly_silver", count: 1 },
   ];
-  assert.deepEqual(formatNameplateBadges(badges), ["G×2", "S", "B", "TR×3", "OG", "IDEA"]);
+  assert.deepEqual(formatNameplateBadges(badges), ["G×2", "S", "B", "FL×3", "OG", "IDEA"]);
 });
 
 async function runAsyncChecks() {
@@ -334,7 +334,7 @@ async function runAsyncChecks() {
   await batchRenamed;
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[1], ["Alice V2"]);
-  assert.deepEqual(cache.get("Alice V2"), ["TR"]);
+  assert.deepEqual(cache.get("Alice V2"), ["FL"]);
 
   // Projector attaches cached badges to remote human peers and skips AI peers even with matching names
   const cam = makeCamera();

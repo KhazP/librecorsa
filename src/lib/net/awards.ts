@@ -7,7 +7,7 @@
  * The badges:
  *   weekly_gold / weekly_silver / weekly_bronze   first, second or third on a finished week's board, under a physics
  *                                                 version (a week driven on V1 and V2 has a podium on each)
- *   track_record                                  holds the fastest lap on an open board laps go on now (a circuit in
+ *   track_record (Fastest Lap, FL)                holds the fastest lap on an open board laps go on now (a circuit in
  *                                                 the game, a car on its current physics)
  *   og                                            has a lap on a Physics V1 board: drove LibreCorsa before Physics V2
  *   bulb                                          given by hand, for an idea or a contribution, with a note
@@ -41,7 +41,7 @@ export interface DriverBadge {
   count: number;
   /** The weeks of a weekly medal, newest first */
   events?: BadgeEvent[];
-  /** The boards of a track record: circuit and car */
+  /** The boards of a fastest lap: circuit and car */
   boards?: { trackId: string; vehicle: string }[];
   /** What a badge given by hand was given for (the Bulb's idea) */
   note?: string;
@@ -101,7 +101,7 @@ const BADGE_NAME: Record<BadgeType, string> = {
   weekly_gold: "Weekly Gold",
   weekly_silver: "Weekly Silver",
   weekly_bronze: "Weekly Bronze",
-  track_record: "Track Record",
+  track_record: "Fastest Lap",
   og: "OG Driver",
   bulb: "Idea Contributor",
 };
@@ -113,7 +113,7 @@ export const badgeName = (type: BadgeType): string => BADGE_NAME[type];
 export const physicsName = (physics: string): string => physics.toUpperCase();
 
 /**
- * The words of a badge's tooltip and spoken name: "Weekly Gold ×2", "Track Record ×3", "OG Driver",
+ * The words of a badge's tooltip and spoken name: "Weekly Gold ×2", "Fastest Lap ×3", "OG Driver",
  * "Idea Contributor — Wet weather tyres"
  */
 export function badgeLabel(b: DriverBadge): string {
@@ -133,7 +133,7 @@ export function badgeDetail(b: DriverBadge): string {
       return `${place} in a weekly challenge${weeks.length ? `: ${weeks.join(", ")}${(b.events?.length ?? 0) > weeks.length ? "…" : ""}` : ""}`;
     }
     case "track_record":
-      return `Fastest lap on ${b.count === 1 ? "an open board" : `${b.count} open boards`}`;
+      return `Holds the fastest lap on ${b.count === 1 ? "an open board" : `${b.count} open boards`}`;
     case "og":
       return "Drove LibreCorsa on Physics V1";
     case "bulb":
