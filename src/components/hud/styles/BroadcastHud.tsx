@@ -26,6 +26,7 @@ import {
   speedUnit,
   TYRE_CONDITION_SHOW,
   tyreHeatColor,
+  sessionWord,
 } from "../hud-format";
 import { predictedLapMs } from "../third-party-data";
 import { LibreCorsaMark } from "../../ui/LibreCorsaLogo";
@@ -75,7 +76,7 @@ export const BroadcastTower: React.FC<{
                 "Out lap"
               ) : (
                 <>
-                  {t.qualifying ? "Qualifying" : "Practice"}{" "}
+                  {sessionWord(t)}{" "}
                   <span className="opacity-45">· {`${activeLapWord()} ${Math.max(1, t.lapCount)}`}</span>
                 </>
               )}

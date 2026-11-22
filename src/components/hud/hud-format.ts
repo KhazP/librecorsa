@@ -116,6 +116,11 @@ export function sectorDone(t: Pick<CarTelemetry, "currentSector" | "sectorTimesM
   return !t.outLap && index + 1 < t.currentSector && t.sectorTimesMs[index] > 0;
 }
 
+/** What a session outside a race is called on the HUD: qualifying, the weekly challenge's time trial, or practice */
+export function sessionWord(t: Pick<CarTelemetry, "qualifying" | "timeTrial">): string {
+  return t.qualifying ? "Qualifying" : t.timeTrial ? "Time trial" : "Practice";
+}
+
 /** ss.mmm for sector times */
 export function formatSectorTime(ms: number | null | undefined): string {
   if (ms === null || ms === undefined || !Number.isFinite(ms) || ms <= 0) return "--.---";

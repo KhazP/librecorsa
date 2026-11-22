@@ -7,7 +7,7 @@ export type SessionKind = "practice" | "race" | "timeAttack" | "hillClimb" | "on
 const SESSION: Record<SessionKind, { label: string; icon: IconName; tone: BadgeTone }> = {
   practice: { label: "Practice", icon: "drive", tone: "neutral" },
   race: { label: "Race", icon: "race", tone: "neutral" },
-  timeAttack: { label: "Time attack", icon: "lapTimes", tone: "neutral" },
+  timeAttack: { label: "Time trial", icon: "lapTimes", tone: "neutral" },
   hillClimb: { label: "Hill climb", icon: "trackHillClimb", tone: "neutral" },
   online: { label: "Online", icon: "online", tone: "info" },
   offline: { label: "Offline", icon: "offline", tone: "neutral" },

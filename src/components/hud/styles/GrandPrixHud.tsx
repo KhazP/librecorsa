@@ -33,6 +33,7 @@ import {
   sectorDone,
   sectorTimeColor,
   speedUnit,
+  sessionWord,
 } from "../hud-format";
 import { aeroReadout } from "../aero-label";
 import { ProximityRadar } from "../ProximityRadar";
@@ -81,7 +82,7 @@ function sessionLabel(t: CarTelemetry): string {
   if (t.race) return t.race.phase === "finished" ? "FINISHED" : "RACE";
   if (t.qualifying) return "QUALIFYING";
   if (t.outLap) return "OUT LAP";
-  return "TIME TRIAL";
+  return sessionWord(t).toUpperCase();
 }
 
 function compoundMeta(compound: TireCompound | undefined): { letter: string; color: string } {

@@ -24,7 +24,7 @@ import type { CarTelemetry, RaceStandingEntry } from "@/types/f1";
 import { Icon } from "@/components/ui/icons/Icon";
 import { tokenColor } from "@/components/ui/token-color";
 import { useUnits } from "@/lib/settings/ui-prefs";
-import { aidsActive, CLASSIC_CAR_IDS, formatDeltaFit, formatGap, formatLapTime, formatSpeed, formatTemp, HUD_BEST, HUD_CAUTION, HUD_GAIN, HUD_INFO, HUD_LOSS, HUD_SHIFT, HUD_SLATE, NO_TIME, PROTO_CAR_IDS, ROAD_CAR_IDS, speedUnit } from "../hud-format";
+import { aidsActive, CLASSIC_CAR_IDS, formatDeltaFit, formatGap, formatLapTime, formatSpeed, formatTemp, HUD_BEST, HUD_CAUTION, HUD_GAIN, HUD_INFO, HUD_LOSS, HUD_SHIFT, HUD_SLATE, NO_TIME, PROTO_CAR_IDS, ROAD_CAR_IDS, sessionWord, speedUnit } from "../hud-format";
 import { aeroReadout } from "../aero-label";
 import { useHudModeRef } from "../hud-mode";
 import { type WeatherHudState } from "../WeatherBadge";
@@ -158,7 +158,7 @@ const Standings: React.FC<{
     <section aria-label={race ? "Standings" : "Laps"} className={`${PANEL} flex flex-col gap-1.5 p-2`}>
       <div className="flex items-center justify-between gap-3 px-0.5 font-black">
         <span className="truncate">
-          {race ? "RACE" : "PRACTICE"}
+          {race ? "RACE" : sessionWord(t).toUpperCase()}
           <span className="pl-2">{race ? `L${race.lap}${race.totalLaps ? `/${race.totalLaps}` : ""}` : `L${Math.max(1, t.lapCount)}`}</span>
         </span>
         {/* The session's running time, where the source shows its clock */}

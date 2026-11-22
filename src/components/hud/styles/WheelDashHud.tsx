@@ -212,7 +212,7 @@ export const PositionTag: React.FC<{ t: HudDesignProps["t"] }> = ({ t }) => {
       {race ? (
         <span className="lc-data flex h-9 items-center rounded-full bg-lc-volt px-3 text-[18px] text-lc-void">P{race.position}</span>
       ) : (
-        <SessionBadge session="practice" size="lg" />
+        <SessionBadge session={t.timeTrial ? "timeAttack" : "practice"} size="lg" />
       )}
       <span className="flex flex-col leading-[1.05]">
         <span className={HUD_LBL}>Lap</span>
