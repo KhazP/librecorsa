@@ -16,7 +16,7 @@ import { CURSOR_TILE, cx, MOTION } from "@/components/ui/styles";
 import { withBasePath } from "@/lib/base-path";
 import { useSavedInterfaceSettings, useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn, SPEED_LABEL, speedIn } from "@/lib/settings/units";
-import { SITE_DESCRIPTION } from "@/lib/site";
+import { AUTHOR_LINKS, DOCS_URL, SITE_DESCRIPTION } from "@/lib/site";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { FeaturedBadges } from "./FeaturedBadges";
 import { SupportButton } from "@/components/SupportButton";
@@ -951,8 +951,10 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     {[
                       ["Download apps", withBasePath("/download")],
                       ["All coverage and the press kit", withBasePath("/press")],
+                      ["Docs", DOCS_URL],
                       ["Privacy", withBasePath("/privacy")],
                       ["GitHub", data.repoUrl],
+                      ...AUTHOR_LINKS.map(({ label, href }) => [label, href]),
                       // Not in the Android app (store-mode.ts)
                       ...(storeBuild ? [] : [["Buy me a coffee", data.supportUrl]]),
                     ].map(([label, href]) => (

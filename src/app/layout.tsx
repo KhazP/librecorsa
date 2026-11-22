@@ -4,7 +4,7 @@ import "./globals.css";
 import { withBasePath } from "@/lib/base-path";
 import { buildIdFromEnv } from "@/lib/build-id";
 import { FORWARD_TO_GAME } from "@/lib/home/forward-to-game";
-import { REPO_URL, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
+import { AUTHOR_LINKS, DOCS_URL, REPO_URL, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 /*
  * The UI fonts ship with the app (Latin subsets, as Google Fonts serves them; SIL OFL 1.1, licences in ./fonts).
@@ -118,8 +118,13 @@ const jsonLd = {
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
   license: "https://www.gnu.org/licenses/agpl-3.0.html",
   codeRepository: REPO_URL,
-  sameAs: [REPO_URL],
-  author: { "@type": "Person", name: "KhazP", url: "https://github.com/KhazP" },
+  sameAs: [REPO_URL, DOCS_URL],
+  author: {
+    "@type": "Person",
+    name: "KhazP",
+    url: "https://github.com/KhazP",
+    sameAs: AUTHOR_LINKS.map(({ href }) => href),
+  },
 };
 
 export default function RootLayout({

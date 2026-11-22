@@ -7,6 +7,8 @@
   &nbsp;·&nbsp;
   <a href="https://librecorsa.org/download">Download</a>
   &nbsp;·&nbsp;
+  <a href="https://docs.librecorsa.org/">Docs</a>
+  &nbsp;·&nbsp;
   <a href="#features">Features</a>
   &nbsp;·&nbsp;
   <a href="#controls">Controls</a>
@@ -236,10 +238,10 @@ The tech is **Next.js 16** (static export), **React 19**, **Three.js** (WebGL2, 
 ### What's in the repository
 A clone carries **RISE Motordrome** and the **2026 prototype car** (both versions: its body and sound in `public/cars/f12026/`), so `npm run dev` gives you a working game with those. Every other car and circuit is hosted on librecorsa.org only and is gitignored: the files sit in the `librecorsa-assets` R2 bucket, and `cloudflare/worker.js` serves them at the same paths. A clone lists only what it has (`src/lib/hosted-content.ts`); the deploy sets `NEXT_PUBLIC_HOSTED_CONTENT=1` to list everything, and you can set it in `.env.local` if you have the hosted files in `public/`. The verify suites skip checks that need files a clone doesn't have.
 
-To add your own car, see **[Porting a car](docs/PORTING-CARS.md)**, and for a circuit, **[Porting a circuit](docs/PORTING-TRACKS.md)**. To publish a hosted car or circuit, upload its folder with `npm run upload-hosted -- public/cars/<id>` (car models go up compressed), then push to `main` so the edge cache picks it up.
+To add your own car, see **[Porting a car](docs/PORTING-CARS.md)**, and for a circuit, **[Porting a circuit](docs/PORTING-TRACKS.md)**. The same guides are on [docs.librecorsa.org](https://docs.librecorsa.org/), built from `docs/` by `docs-site/`. To publish a hosted car or circuit, upload its folder with `npm run upload-hosted -- public/cars/<id>` (car models go up compressed), then push to `main` so the edge cache picks it up.
 
 ### Deployment
-Every push to `main` runs typecheck and the verify suites, then builds `./out` and deploys it to Cloudflare at [librecorsa.org](https://librecorsa.org/) (`.github/workflows/deploy-pages.yml`, `wrangler.jsonc`). The old GitHub Pages address, `khazp.github.io/librecorsa/`, serves a redirect page that keeps old links working and carries a returning player's saved settings, setups and ghost laps over (`cloudflare/old-site-redirect.html`, `cloudflare/worker.js`). Cloudflare's asset store takes files up to 25 MiB, so CI moves anything bigger into the `librecorsa-assets` R2 bucket; the hosted-only cars and circuits live there too, and the Worker serves both at the same URL. Hosting runs on Cloudflare startup credits until March 2027.
+Every push to `main` runs typecheck and the verify suites, then builds `./out` and deploys it to Cloudflare at [librecorsa.org](https://librecorsa.org/) (`.github/workflows/deploy-pages.yml`, `wrangler.jsonc`). The old GitHub Pages address, `khazp.github.io/librecorsa/`, serves a redirect page that keeps old links working and carries a returning player's saved settings, setups and ghost laps over (`cloudflare/old-site-redirect.html`, `cloudflare/worker.js`). Cloudflare's asset store takes files up to 25 MiB, so CI moves anything bigger into the `librecorsa-assets` R2 bucket; the hosted-only cars and circuits live there too, and the Worker serves both at the same URL. The docs site at [docs.librecorsa.org](https://docs.librecorsa.org/) is a separate Worker (`docs-site/`), deployed by `.github/workflows/deploy-docs.yml` when a push changes `docs/` or `docs-site/`. Hosting runs on Cloudflare startup credits until March 2027.
 
 ---
 
