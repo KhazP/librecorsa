@@ -20,7 +20,7 @@ import { SITE_DESCRIPTION } from "@/lib/site";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { FeaturedBadges } from "./FeaturedBadges";
 import { SupportButton } from "@/components/SupportButton";
-import { day, GAME_FACTS, GRADE_NOTES, type HomeCar, type HomeData, type HomeLayout, type HomeVenue, type WhatsNewDay } from "./home-data";
+import { day, GAME_FACTS, GRADE_BADGES, GRADE_NOTES, type HomeCar, type HomeData, type HomeLayout, type HomeVenue, type WhatsNewDay } from "./home-data";
 import { CarThumb, GradeBadge, OutlineThumb } from "./home-ui";
 import { LapMap } from "./LapMap";
 import { HomeDownloads } from "./HomeDownloads";
@@ -113,6 +113,15 @@ const VENUE_FILTERS: readonly { key: VenueFilterKey; all: string; label: string;
 ];
 const NO_VENUE_FILTERS: Record<VenueFilterKey, string> = { type: "", country: "", modder: "" };
 
+/** The Cars filters: one pick each, narrowing the wall together */
+type CarFilterKey = "class" | "grade" | "modder";
+const CAR_FILTERS: readonly { key: CarFilterKey; all: string; label: string; of: (c: HomeCar) => string }[] = [
+  { key: "class", all: "All classes", label: "Class", of: (c) => c.classTitle },
+  { key: "grade", all: "All grades", label: "Grade", of: (c) => GRADE_BADGES[c.grade].label },
+  { key: "modder", all: "All modders", label: "Modder", of: (c) => c.source.author },
+];
+const NO_CAR_FILTERS: Record<CarFilterKey, string> = { class: "", grade: "", modder: "" };
+
 export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   // The Q / E caps name physical keys as printed on this keyboard
   useKeyLayout();
@@ -179,6 +188,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   }, [data.venues, data.cars]);
 
   const [venueFilters, setVenueFilters] = useState(NO_VENUE_FILTERS);
+  const [carFilters, setCarFilters] = useState(NO_CAR_FILTERS);
   /** Which venue's layout popover is open on the Circuits wall (at most one at a time) */
   const [openLayoutsFor, setOpenLayoutsFor] = useState<string | null>(null);
   /** Which car's livery popover is open on the Cars wall (at most one at a time) */
@@ -190,6 +200,11 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
     data.venues.filter((v) => VENUE_FILTERS.every((f) => f.key === except || !venueFilters[f.key] || f.of(v).includes(venueFilters[f.key])));
   const shownVenues = venuesWith();
   const venuesFiltered = VENUE_FILTERS.some((f) => venueFilters[f.key]);
+  /** The cars the filters leave, `except` one of them (for that filter's own options and their counts) */
+  const carsWith = (except?: CarFilterKey) =>
+    data.cars.filter((c) => CAR_FILTERS.every((f) => f.key === except || !carFilters[f.key] || f.of(c) === carFilters[f.key]));
+  const shownCars = carsWith();
+  const carsFiltered = CAR_FILTERS.some((f) => carFilters[f.key]);
 
   const venue = data.venues.find((v) => v.layouts.some((l) => l.id === layoutId)) ?? data.venues[0];
   const layout = venue.layouts.find((l) => l.id === layoutId) ?? venue.layouts[0];
@@ -689,8 +704,61 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
 
             {tab === "cars" ? (
               <div className="flex flex-col gap-5">
+                <div role="group" aria-label="Filter cars" className="flex flex-wrap items-center gap-2">
+                  {CAR_FILTERS.map((f) => {
+                    const pool = carsWith(f.key);
+                    const all = [...new Set(data.cars.map((c) => f.of(c)).filter(Boolean))];
+                    if (f.key === "modder") all.sort((a, b) => a.localeCompare(b));
+                    // A filter with one option narrows nothing
+                    if (all.length < 2) return null;
+                    const picked = carFilters[f.key];
+                    const countOf = (o: string) => pool.filter((c) => f.of(c) === o).length;
+                    const options = all.filter((o) => o === picked || countOf(o) > 0);
+                    return (
+                      <Select
+                        key={f.key}
+                        aria-label={f.label}
+                        value={picked}
+                        onChange={(v) => {
+                          setOpenLiveriesFor(null);
+                          setCarFilters((cur) => ({ ...cur, [f.key]: v }));
+                        }}
+                        options={[{ id: "", label: f.all }, ...options.map((o) => ({ id: o, label: `${o} (${countOf(o)})` }))]}
+                      />
+                    );
+                  })}
+                  {carsFiltered ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<Icon name="reset" />}
+                      onClick={() => {
+                        setOpenLiveriesFor(null);
+                        setCarFilters(NO_CAR_FILTERS);
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  ) : null}
+                  {/* Mounted from the start, so the first change of filter is announced */}
+                  <p role="status" className="lc-data m-0 ml-auto text-[12px] font-medium text-lc-slate">
+                    {carsFiltered ? `${shownCars.length} of ${data.cars.length} cars` : ""}
+                  </p>
+                </div>
+                {shownCars.length ? null : (
+                  <EmptyState
+                    icon={<Icon name="filter" />}
+                    action={
+                      <Button size="sm" onClick={() => setCarFilters(NO_CAR_FILTERS)}>
+                        Clear filters
+                      </Button>
+                    }
+                  >
+                    No car matches these filters.
+                  </EmptyState>
+                )}
                 <div className={WALL}>
-                  {data.cars.map((c) => {
+                  {shownCars.map((c) => {
                     const on = c === car;
                     const multi = c.liveries.length > 1;
                     const activeLiveryId = activeLiveryIdOf(c);
