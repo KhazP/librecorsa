@@ -12,3 +12,5 @@ export const TAKEDOWN_URL = `${REPO_URL}/issues/new?template=takedown-request.ym
 export const SUPPORT_URL = "https://buymeacoffee.com/alpyalayg";
 /** Where to write to me: the press page, privacy requests and mods sent in from the home page's About section */
 export const CONTACT_EMAIL = "contact@alpyalay.org";
+/** Private vulnerability reports (SECURITY.md, /.well-known/security.txt) */
+export const SECURITY_REPORT_URL = `${REPO_URL}/security/advisories/new`;
