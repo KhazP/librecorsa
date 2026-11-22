@@ -14,6 +14,8 @@ import { NISSAN_R32_SKINS, NISSAN_R33_SKINS } from "./classic-skins";
 import { BMW_M1_PROCAR_SKINS, PORSCHE_934_RSR_SKINS, VW_SCIROCCO_SKINS } from "./pfalzdriver-skins";
 import { CHAPARRAL_2D_67_SKINS, CHAPARRAL_2D_SKINS } from "./chaparral-skins";
 import { AMG_GT3_SKINS, BMW_M4_GT3_SKINS } from "./gt3-skins";
+import { LC_LMDH_SKINS } from "./lmdh-skins";
+import { LIANA_SKINS } from "./liana-skins";
 import type { PortedSkin } from "@/lib/car-builder-2026";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
 import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
@@ -378,6 +380,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     physics: "lc-lmdh",
     year: 2026,
     modelUrl: "/cars/lc-lmdh/model/lc-lmdh.glb",
+    skins: LC_LMDH_SKINS,
     sound: LC_LMDH_SOUND,
   },
   {
@@ -402,6 +405,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     physics: "liana",
     year: 2002,
     modelUrl: "/cars/liana/model/liana.glb",
+    skins: LIANA_SKINS,
     sound: SUZUKI_LIANA_SOUND,
   },
   {
