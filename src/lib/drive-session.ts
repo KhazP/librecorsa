@@ -43,7 +43,7 @@ import { stretchTimeS } from "@/lib/sim/course-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
 import { rulesForSetup, startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
-import { JumpStartWatch } from "@/lib/sim/race-start";
+import { autopilotKickMs, JumpStartWatch } from "@/lib/sim/race-start";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
@@ -858,7 +858,9 @@ export class DriveSession {
     this.toggleAutopilot = () => {
       if (disposed || raceNow().kind === "mp" || coolDown.active) return;
       physics.aiAutopilot = !physics.aiAutopilot;
-      if (physics.aiAutopilot && physics.vxMs < 5) physics.vxMs = 45;
+      // A kick from rest only in practice: in a race the grid holds the car and the autopilot pulls away itself (#149)
+      const kick = physics.aiAutopilot ? autopilotKickMs(raceNow().kind !== "practice", physics.vxMs) : null;
+      if (kick !== null) physics.vxMs = kick;
     };
     // A circuit switch remounts this component: its track and warm-up load again (the car models stay cached)
     assetProgress.reset(["track", "opponents", "shaders"]);

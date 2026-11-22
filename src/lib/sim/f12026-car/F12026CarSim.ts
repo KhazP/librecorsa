@@ -2013,9 +2013,10 @@ export class F12026CarSim implements SimulatorCar {
     // the rack turns at the rim's own speed rather than in one jump per frame
     const rim = inputs.steerRim && inputs.analogSteer !== undefined ? inputs.analogSteer : null;
     const rimFrom = rim !== null && this.lastRimSteer !== null ? this.lastRimSteer : rim;
-    const held = this.gridHold && !this.aiAutopilot;
-    // Held, the car stays on its spot until the driver lets the clutch out in gear with the throttle up
-    const pinned = held && keptOnGrid(v.velocity.length(), v.gear !== 0, inputs.clutch ?? 0, inputs.throttle ?? 0);
+    const held = this.gridHold;
+    // Held, the car stays on its spot until the driver lets the clutch out in gear with the throttle up; on the
+    // autopilot it stays there until the lights go out (it drove off through them into the car ahead, #149)
+    const pinned = held && (this.aiAutopilot || keptOnGrid(v.velocity.length(), v.gear !== 0, inputs.clutch ?? 0, inputs.throttle ?? 0));
     for (let k = 0; k < ticks; k++) {
       if (rim !== null && rimFrom !== null) inputs.analogSteer = rimFrom + ((rim - rimFrom) * (k + 1)) / ticks;
       const cmd: { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
@@ -2070,7 +2071,9 @@ export class F12026CarSim implements SimulatorCar {
     }
     this.simTimeMs += steppedS * 1000;
     if (this.recoverIfLost()) return this.telemetry;
-    if (this.aiAutopilot && this.aiSelfRecovery) this.recoverIfStuck(steppedS);
+    // (not while held on the grid: standing there is no being stuck, and the rescue teleported the car up the road)
+    if (held) this.stuckS = 0;
+    else if (this.aiAutopilot && this.aiSelfRecovery) this.recoverIfStuck(steppedS);
     else this.stuckS = 0;
     this.wheelRotationRad = (this.wheelRotationRad + 0.5 * (v.wheels[2].omega + v.wheels[3].omega) * steppedS) % (Math.PI * 2);
     this.syncPose();

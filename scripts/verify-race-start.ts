@@ -7,10 +7,11 @@
  * gear on the throttle, it goes. Let go after the lights, it waits on a held clutch and goes as the clutch comes out.
  * Every car has a launch window inside its rev range, and the jump start watch calls the car moving off its spot
  * through the lights, not a few centimetres of roll, revs on a car that stays put or a start the car is not held for.
+ * The autopilot taken on the grid waits there through the lights, and only practice kicks a car at rest away (#149).
  */
 import { createFlatTestTrack } from './lib/flat-track';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
-import { JumpStartWatch, LAUNCH_RPM, launchWindow, pullsAway } from '../src/lib/sim/race-start';
+import { AUTOPILOT_KICK_MS, autopilotKickMs, JumpStartWatch, LAUNCH_RPM, launchWindow, pullsAway } from '../src/lib/sim/race-start';
 import type { AiRace } from '../src/lib/sim/ai-race';
 import { DEFAULT_RACE_SETUP, parseRaceSetup, startAiRace } from '../src/lib/sim/race-setup';
 import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from '../src/lib/sim/rev-range';
@@ -76,6 +77,26 @@ for (const id of CARS) {
   for (let t = 0; t < 2; t += DT) sim.step(DT, { throttle: 0.8 });
   check('after the lights: waits on a held clutch, goes as it comes out', waited < 0.05 && sim.telemetry.speedKmh > 20, `${(waited * 100).toFixed(1)} cm while held, then ${sim.telemetry.speedKmh.toFixed(0)} km/h`);
 }
+
+// ---- The autopilot taken on the grid (#149): held through the lights however long they last (no stuck-car rescue up
+// the road), it pulls away by itself once they go out, from rest
+console.log('\n== Autopilot on the grid');
+for (const id of CARS) {
+  const sim = vehicleModelSpec(id).createSim(track, null);
+  sim.teleportToDistance(1000, 0);
+  sim.step(DT, {});
+  const p0 = sim.worldPosition.clone();
+  sim.gridHold = true;
+  sim.aiAutopilot = true;
+  for (let t = 0; t < 8; t += DT) sim.step(DT, {});
+  const moved = sim.worldPosition.distanceTo(p0);
+  sim.gridHold = false;
+  for (let t = 0; t < 3; t += DT) sim.step(DT, {});
+  check(`${id}: held through 8 s of lights, then away on its own`, moved < 0.05 && sim.telemetry.speedKmh > 30, `${(moved * 100).toFixed(1)} cm held, ${sim.telemetry.speedKmh.toFixed(0)} km/h 3 s after`);
+}
+check('practice: the autopilot kicks a car at rest away', autopilotKickMs(false, 0) === AUTOPILOT_KICK_MS);
+check('a race: never (the grid holds it; it pulled away into the car ahead at 160 km/h)', autopilotKickMs(true, 0) === null);
+check('a car already moving: never', autopilotKickMs(false, 20) === null);
 
 console.log('\n== Launch windows');
 {

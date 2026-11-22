@@ -67,6 +67,18 @@ export function pullsAway(inGear: boolean, clutch: number, throttle: number): bo
   return inGear && clutch < BITE && throttle > DRIVE_AWAY_THROTTLE;
 }
 
+/** The speed the autopilot gives a car it takes at (near) rest in practice (m/s): a rolling restart in place */
+export const AUTOPILOT_KICK_MS = 45;
+
+/**
+ * The speed the autopilot sets a car it takes off (near) rest to, or null to leave it be. Only in practice: in a race
+ * the car may be on the grid, where a kick sent it at lights out into the car ahead at 160 km/h (#149), and the
+ * autopilot pulls away from rest itself behind the traffic cap, as the AI cars do.
+ */
+export function autopilotKickMs(inRace: boolean, vxMs: number): number | null {
+  return !inRace && vxMs < 5 ? AUTOPILOT_KICK_MS : null;
+}
+
 /**
  * Whether a car held on the grid is kept on its spot this step: standing, and not being driven away. A car that has
  * gone early is the driver's from then on: a lift does not stop it dead
