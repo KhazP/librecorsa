@@ -97,7 +97,7 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
     name: "Linux",
     summary: "Portable AppImage with silent WebHID for racing wheels and DualSense, and no background throttling.",
     installNote: "Mark the AppImage executable and run it (requires FUSE2 / libfuse2 on older distributions):",
-    installCommand: "chmod +x LibreCorsa-0.2.1-linux-x86_64.AppImage",
+    installCommand: "chmod +x LibreCorsa-0.2.2-linux-x86_64.AppImage",
     signed: false,
     statusLabel: "AppImage",
     artifacts: [
