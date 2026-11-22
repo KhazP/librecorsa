@@ -3409,6 +3409,7 @@ export class DriveSession {
           mpPracticeSeenLap = t.lapCount;
         }
       }
+      physics.telemetry.timeTrial = timeTrialOn() || undefined;
       physics.telemetry.qualifying = quali
         ? {
             remainingS: quali.session.remainingS,
