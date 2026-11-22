@@ -6,6 +6,16 @@ import { SKY_COVER_SPECS, type SessionConditions } from "@/lib/sim/weather";
 export type HeadlightMode = "auto" | "on" | "off";
 export type HeadlightSpotCount = 0 | 1 | 2;
 
+/** A car's headlight beam in world space, for a lighting pass with no SpotLight for it (opponent-beams.ts) */
+export interface HeadlightBeam {
+  /** Where the beam starts (between the lamps) and its unit direction */
+  pos: THREE.Vector3;
+  dir: THREE.Vector3;
+  /** Intensity as a SpotLight's with decay 1 (cd-scaled), and its reach (m) */
+  intensity: number;
+  range: number;
+}
+
 export interface CarHeadlightsOptions {
   /**
    * Number of SpotLights to allocate for forward road beams:
@@ -916,6 +926,27 @@ export class CarHeadlights {
         for (const r of this.rearFlares) r.visible = true;
       }
     }
+  }
+
+  /**
+   * The beam as one merged light between the lamps (as Medium's single SpotLight), in world space at the car's last
+   * drawn pose: low or high beam, false while the front lamps are dark. For the opponents, whose rigs carry no
+   * SpotLight: opponent-beams.ts lights the road with it
+   */
+  beam(out: HeadlightBeam): boolean {
+    if (this.frontLevel === 0) return false;
+    const p = this.profile;
+    const high = this.frontLevel === 2;
+    const m = this.group.matrixWorld;
+    out.pos.set(0, p.heightM + 0.3, p.frontZM).applyMatrix4(m);
+    out.dir
+      .set(0, high ? p.heightM + 0.6 : 0, p.frontZM + (high ? HIGH_BEAM_AIM_M : LOW_BEAM_AIM_M))
+      .applyMatrix4(m)
+      .sub(out.pos)
+      .normalize();
+    out.intensity = p.intensity * 1.65 * (high ? HIGH_BEAM_GAIN : 1);
+    out.range = p.distanceM * (high ? HIGH_BEAM_REACH : 1);
+    return true;
   }
 
   /**

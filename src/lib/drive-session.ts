@@ -23,6 +23,7 @@ import {
   headlightSpotCountFor,
   resolveHeadlightStates,
   shouldHeadlightsBeOn,
+  type HeadlightBeam,
   type HeadlightMode,
 } from "@/lib/render/car-headlights";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
@@ -45,6 +46,7 @@ import { createVenueNightLighting, type VenueNightLighting } from "@/lib/render/
 import { applyCircuitNightLights, circuitNightSpec } from "@/lib/render/circuit-night-lights";
 import { FlashTimer, HeadlightButton } from "@/lib/input/headlight-button";
 import { lightCarByLamps, prepareCarForLamps } from "@/lib/render/car-lamp-light";
+import { createOpponentBeams, MAX_BEAMS, type OpponentBeams } from "@/lib/render/opponent-beams";
 import { sameConditions, type SessionConditions } from "@/lib/sim/weather";
 import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
@@ -1444,6 +1446,13 @@ export class DriveSession {
         visualFx.forEachRigRoot(prepareCarForLamps);
       }
     };
+    // The other cars' headlights on the road (opponent-beams.ts): set up with the night, on every circuit
+    let opponentBeams: OpponentBeams | null = null;
+    const beamScratch: HeadlightBeam[] = [];
+    const ensureOpponentBeams = (root: THREE.Object3D) => {
+      if (opponentBeams || disposed || !canSessionGetDark(getTrackEnv().weather.conditions)) return;
+      opponentBeams = createOpponentBeams(root, MAX_BEAMS[settings.graphics.quality]);
+    };
     const lampLight = new THREE.Color();
     const lightOpponentByLamps = (root: THREE.Object3D) => {
       if (venueNight) lightCarByLamps(root, venueNight.lightAt(root.position.x, root.position.z, lampLight), performance.now());
@@ -1453,6 +1462,7 @@ export class DriveSession {
       if (disposed) return;
       trackRoot = root;
       ensureVenueNight(root);
+      ensureOpponentBeams(root);
       physics.attachTrackRoot?.(root);
       aiFieldOf(raceNow())?.attachTrackRoot(root);
       aiFieldSpare?.field.attachTrackRoot(root);
@@ -4137,7 +4147,10 @@ export class DriveSession {
           cloudConditions = { ...wx.conditions };
           syncHeadlightSpots();
           // a session that turns to night (or rain) on a circuit with lamps: they light up from now on
-          if (trackRoot) ensureVenueNight(trackRoot);
+          if (trackRoot) {
+            ensureVenueNight(trackRoot);
+            ensureOpponentBeams(trackRoot);
+          }
           env.setCloudSeed(fixedCloudSeed ?? Math.floor(Math.random() * 2 ** 31));
         }
         env.setConditions(skyConditions);
@@ -4194,6 +4207,7 @@ export class DriveSession {
         carHeadlights.setFlash(playerFlashing && !replaying);
         carHeadlights.setEnabled(headlights.player, playerBrakingNow, camera, view.anchor !== null && (!replaying || rp.focusedCarId === "player"));
         visualFx.setHeadlights(headlights.opponents, camera);
+        if (opponentBeams) opponentBeams.update(beamScratch, visualFx.collectBeams(beamScratch), rainCamPos);
         visualFx.setLightLevel(skyLight);
         rainFx.update(
           drawDtS,
@@ -4404,6 +4418,7 @@ export class DriveSession {
       postFx.dispose();
       reflectionProbe.dispose();
       venueNight?.dispose();
+      opponentBeams?.dispose();
       env.dispose();
       rainFx.dispose();
       virtualMirror.dispose();

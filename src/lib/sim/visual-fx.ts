@@ -32,7 +32,7 @@ import { LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
 import { addCarShadowProxy } from '@/lib/render/car-shadow-proxy';
-import { CarHeadlights } from '@/lib/render/car-headlights';
+import { CarHeadlights, type HeadlightBeam } from '@/lib/render/car-headlights';
 import { disposeTree } from '@/lib/render/dispose-tree';
 import { LIVERIES, liveryForDriverCode } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
@@ -184,6 +184,22 @@ export class SimVisualFxManager {
 
   public setGraphicsQuality(quality: 'low' | 'medium' | 'high'): void {
     this.graphicsQuality = quality;
+  }
+
+  /**
+   * The lit headlight beams of the solid opponents (after `setHeadlights` this frame), into `out` from slot 0 (it
+   * grows as needed); returns how many. For opponent-beams.ts, which lights the road with them
+   */
+  public collectBeams(out: HeadlightBeam[]): number {
+    let n = 0;
+    for (const entry of this.opponentCars.values()) {
+      if (entry.ghost || !entry.rig.root.visible) continue;
+      const hl = this.rigHeadlights.get(entry.rig);
+      if (!hl) continue;
+      const slot = (out[n] ??= { pos: new THREE.Vector3(), dir: new THREE.Vector3(), intensity: 0, range: 1 });
+      if (hl.beam(slot)) n++;
+    }
+    return n;
   }
 
   /** Every solid (non-ghost) opponent car drawn now: its rig's root */
