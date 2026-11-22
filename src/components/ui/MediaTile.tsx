@@ -24,6 +24,12 @@ interface CommonProps {
    * own focus.
    */
   action?: React.ReactNode;
+  /**
+   * A compact control anchored along the bottom edge of the stacked picture frame (such as a venue's layout picker).
+   * Like `action`, it sits as a sibling of the tile's button so neither nests interactive elements nor changes tile
+   * height. Interactive children inside it must set `pointer-events-auto`.
+   */
+  mediaFooter?: React.ReactNode;
   /** The tile is the one in use (white edge); the cursor is the volt edge */
   chosen?: boolean;
   /** Text and picture side by side from `sm` up instead of stacked */
@@ -62,6 +68,7 @@ export function MediaTile(props: MediaTileProps) {
     badges,
     overlay,
     action,
+    mediaFooter,
     chosen,
     horizontal,
     disabled,
@@ -146,6 +153,13 @@ export function MediaTile(props: MediaTileProps) {
         </button>
       )}
       {action ? <span className={cx("absolute right-2 flex", horizontal ? "bottom-2" : "top-2")}>{action}</span> : null}
+      {mediaFooter && !horizontal ? (
+        <span className={cx("pointer-events-none absolute inset-x-[1.5px] top-[1.5px]", ASPECT[aspect])}>
+          <span className="pointer-events-none absolute right-2 bottom-2 left-2 flex items-end justify-start">
+            {mediaFooter}
+          </span>
+        </span>
+      ) : null}
     </div>
   );
 }

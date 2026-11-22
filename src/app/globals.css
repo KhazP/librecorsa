@@ -826,8 +826,22 @@ body {
 .lc-panel-in {
   animation: lc-panel-in 180ms ease-out backwards;
 }
+@keyframes lc-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.lc-pop-in {
+  animation: lc-pop-in 140ms ease-out backwards;
+}
 @media (prefers-reduced-motion: reduce) {
-  .lc-panel-in {
+  .lc-panel-in,
+  .lc-pop-in {
     animation: none;
   }
 }
@@ -845,7 +859,8 @@ body {
   .lc-menu-covered {
     visibility: hidden;
   }
-  .lc-panel-in {
+  .lc-panel-in,
+  .lc-pop-in {
     animation: none;
   }
   .lc-menu-screen *,
