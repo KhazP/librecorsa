@@ -552,8 +552,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const musicShown = Boolean(props.onToggleMusicMute) && (Boolean(props.nowPlaying) || props.musicMuted === true);
   const units = useUnits();
   const storeBuild = useStoreBuild();
-  // The circuit panel opened from the race setup's Event card: loading a circuit then returns to the race setup
-  const fromRaceRef = useRef(false);
+  // The panel the circuit, car or conditions panel was opened from (the race setup's Event card, the room's Circuit
+  // row): picking there returns to it
+  const returnToRef = useRef<"race" | "multiplayer" | null>(null);
 
   // Scrolled down a long panel, LB / RB or Ⓑ still lands on an entry the player can see
   const focusRail = (id: string) => {
@@ -579,8 +580,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   };
 
   // Below lg the panel opens under the rail, usually off-screen: render it now and bring it into view
-  const openPanel = (next: TitlePanel, opts: { fromRace?: boolean } = {}) => {
-    fromRaceRef.current = Boolean(opts.fromRace);
+  const openPanel = (next: TitlePanel, opts: { returnTo?: "race" | "multiplayer" } = {}) => {
+    returnToRef.current = opts.returnTo ?? null;
     flushSync(() => setPanel(next));
     keepFocus(next);
     if (window.matchMedia("(min-width: 64rem)").matches) return;
@@ -726,7 +727,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     const from = i >= 0 ? i : step > 0 ? -1 : 0;
     const next = panelItems[(from + step + panelItems.length) % panelItems.length] ?? panelItems[0];
     if (!next?.panel) return;
-    fromRaceRef.current = false;
+    returnToRef.current = null;
     flushSync(() => setPanel(next.panel!));
     const entry = rootRef.current?.querySelector<HTMLElement>(`[data-rail-id="${next.id}"]`);
     // Below lg the slim rail is hidden: the cursor goes into the panel instead of nowhere
@@ -898,9 +899,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       car={{ id: vehicle.id, quality: vehicle.quality, title: vehicle.title, badge: vehicle.badge, color: vehicleColor }}
                       playerCode={props.profile?.code}
                       playerColor={props.profile?.color}
-                      onOpenCircuit={() => openPanel("circuit", { fromRace: true })}
-                      onOpenConditions={props.conditionsPanel ? () => openPanel("conditions", { fromRace: true }) : undefined}
-                      onOpenGarage={() => openPanel("car", { fromRace: true })}
+                      onOpenCircuit={() => openPanel("circuit", { returnTo: "race" })}
+                      onOpenConditions={props.conditionsPanel ? () => openPanel("conditions", { returnTo: "race" }) : undefined}
+                      onOpenGarage={() => openPanel("car", { returnTo: "race" })}
                       onStart={onRaceAi}
                     />
                   ) : null}
@@ -911,8 +912,10 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       onSelect={
                         onSelectTrack
                           ? (id) => {
-                              // The scene reloads: come back to the race setup if that is where the player came from
-                              const back: TitlePanel = fromRaceRef.current && props.onChangeRaceSetup ? "race" : "circuit";
+                              // The scene reloads: come back to the race setup or the room if that is where the player came from
+                              const from = returnToRef.current;
+                              const back: TitlePanel =
+                                from === "race" && props.onChangeRaceSetup ? "race" : from === "multiplayer" ? "multiplayer" : "circuit";
                               resumeHere(back, back, id);
                               return onSelectTrack(id);
                             }
@@ -930,7 +933,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       onChangeCar={(id) => {
                         props.onChangeCar(id);
                         // Picked from the race setup's Event card: back to the race with its new car
-                        if (fromRaceRef.current && props.onChangeRaceSetup) openPanel("race");
+                        if (returnToRef.current === "race" && props.onChangeRaceSetup) openPanel("race");
                       }}
                       selectedLivery={props.selectedLivery}
                       onChangeLivery={props.onChangeLivery}
@@ -939,7 +942,12 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     />
                   ) : null}
                   {panel === "garage" ? <EngineersGarage {...props} onOpenCarBrowser={() => openPanel("car")} /> : null}
-                  {panel === "multiplayer" ? <MultiplayerPanel {...props} /> : null}
+                  {panel === "multiplayer" ? (
+                    <MultiplayerPanel
+                      {...props}
+                      onPickCircuit={onSelectTrack ? () => openPanel("circuit", { returnTo: "multiplayer" }) : undefined}
+                    />
+                  ) : null}
                   {panel === "challenge" && props.challengePanel ? <ChallengePanel {...props.challengePanel} /> : null}
                   {panel === "leaderboard" && props.leaderboardPanel ? <LeaderboardPanel {...props.leaderboardPanel} /> : null}
                   {panel === "credits" ? <Credits /> : null}
