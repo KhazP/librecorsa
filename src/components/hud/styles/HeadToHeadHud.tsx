@@ -216,14 +216,15 @@ const RaceStack: React.FC<{ t: CarTelemetry }> = ({ t }) => {
 
 /** Practice: the player's band alone, with the running lap and the live delta to the best lap */
 const PracticeBand: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid: boolean }> = ({ t, deltaS, lapInvalid }) => {
-  const deltaShown = deltaS !== null && Number.isFinite(deltaS) ? Math.max(-99.99, Math.min(99.99, deltaS)) : null;
+  // Not held at ±99.99: "+123.40s" fits the column a lap time ("--:--.---") fits
+  const deltaShown = deltaS !== null && Number.isFinite(deltaS) ? deltaS : null;
   return (
     <div className="grid h-22 grid-rows-[2fr_1fr] xl:h-26 border-y border-(--tp-border-player) bg-(--tp-player-a) py-1">
       <DriverInfo name="You" place={`Lap ${Math.max(1, t.lapCount)}`} bestMs={t.bestLapTimeMs} lastMs={t.lastLapTimeMs} />
       <div className={`grid h-full ${COLS}`}>
         <span />
         <Stat
-          value={lapTime(t.currentLapTimeMs)}
+          value={t.outLap ? "00:00.000" : lapTime(t.currentLapTimeMs)}
           caption={lapInvalid ? "Invalid" : "Lap"}
           color={lapInvalid ? HUD_LOSS : undefined}
           align="end"

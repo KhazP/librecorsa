@@ -4,12 +4,15 @@ import { activeLapWord } from "@/lib/track-data";
 import React from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import { Icon } from "@/components/ui/icons/Icon";
+import { Trend } from "@/components/ui/icons/Trend";
 import { CompoundGlyph } from "@/components/ui/badges/CompoundBadge";
 import { PositionBadge } from "@/components/ui/badges/PositionBadge";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import {
   atShiftPoint,
+  cornerLabel,
   formatGap,
+  formatLapClock,
   formatLapTime,
   formatSectorTime,
   formatSpeed,
@@ -19,10 +22,12 @@ import {
   HUD_RED,
   HUD_SHIFT,
   LAP_MARK_COLOR,
+  sectorDone,
   speedUnit,
   TYRE_CONDITION_SHOW,
   tyreHeatColor,
 } from "../hud-format";
+import { predictedLapMs } from "../third-party-data";
 import { LibreCorsaMark } from "../../ui/LibreCorsaLogo";
 import {
   AeroBadge,
@@ -39,7 +44,7 @@ import {
   type HudDesignProps,
 } from "./hud-style-parts";
 import { PedalBars } from "../PedalBars";
-import { TowerRows } from "../TimingPanels";
+import { TowerHeader, TowerRows } from "../TimingPanels";
 import { aeroReadout } from "../aero-label";
 
 /** Timing tower in a race, the session card (lap time, sectors, best / last) in practice. Fills its parent's width. */
@@ -64,25 +69,38 @@ export const BroadcastTower: React.FC<{
             </>
           ) : (
             <>
-              {t.qualifying ? "Qualifying" : "Practice"} <span className="opacity-45">· {activeLapWord()} {Math.max(1, t.lapCount)}</span>
+              {/* On the out-lap no lap is timed yet: the header says so on its own (the session word would not fit
+                  beside it), as the clock holds at zero */}
+              {t.outLap ? (
+                "Out lap"
+              ) : (
+                <>
+                  {t.qualifying ? "Qualifying" : "Practice"}{" "}
+                  <span className="opacity-45">· {`${activeLapWord()} ${Math.max(1, t.lapCount)}`}</span>
+                </>
+              )}
             </>
           )}
         </div>
         <span className={`${HUD_LBL} text-lc-void/60`}>{trackCode}</span>
       </div>
       {race ? (
-        <TowerRows race={race} gaps={gaps} />
+        <>
+          <TowerHeader gaps={gaps} />
+          <TowerRows race={race} gaps={gaps} />
+        </>
       ) : (
         <div className="px-3 pt-2.5 pb-3">
           <div className="flex items-center gap-2">
             <span className={`lc-data text-[30px] leading-none ${lapInvalid ? "text-lc-loss" : "text-lc-chalk"}`}>
-              {formatLapTime(t.currentLapTimeMs)}
+              {formatLapClock(t)}
             </span>
             {lapInvalid ? <InvalidTag /> : null}
           </div>
           <div className="mt-2 grid grid-cols-3 gap-1">
             {[0, 1, 2].map((i) => {
-              const done = i + 1 < t.currentSector;
+              // Done only with a time of this lap: the grid's out-lap starts in sector 3, with no S1 or S2 to mark
+              const done = sectorDone(t, i);
               const active = i + 1 === t.currentSector;
               const ms = t.sectorTimesMs[i];
               const mark = done ? lapMark(ms, t.bestSectorTimesMs[i]) : null;
@@ -125,17 +143,23 @@ export const BroadcastTower: React.FC<{
 };
 
 /** Circuit map card with the sector and the corner you are in. Fills its parent's width. */
-export const BroadcastMap: React.FC<Pick<HudDesignProps, "t" | "map" | "mapMode">> = ({ t, map, mapMode = "full" }) => (
-  <section aria-label="Circuit map" className={`w-full rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`}>
-    <MiniMap map={map} t={t} sectors local={mapMode === "local"} className={`block w-full ${mapMode === "local" ? "h-[180px]" : "h-[140px]"}`} stroke={22} />
-    <div className={`mt-1.5 flex items-center justify-between ${HUD_LBL}`}>
-      <span className="shrink-0">Sector {t.currentSector}</span>
-      <span className="truncate pl-2 text-lc-chalk">
-        {t.currentTurnNumber ? `T${t.currentTurnNumber} ${t.currentTurnName}` : "Straight"}
-      </span>
-    </div>
-  </section>
-);
+export const BroadcastMap: React.FC<Pick<HudDesignProps, "t" | "map" | "mapMode">> = ({ t, map, mapMode = "full" }) => {
+  const corner = cornerLabel(t.currentTurnNumber, t.currentTurnName);
+  return (
+    <section aria-label="Circuit map" className={`w-full rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`}>
+      <MiniMap map={map} t={t} sectors local={mapMode === "local"} className={`block w-full ${mapMode === "local" ? "h-[180px]" : "h-[140px]"}`} stroke={22} />
+      {/* The sector and the corner's number on one line, the corner's own name in full under them. Two lines are kept
+          either way, so the panel under the map does not move at every corner */}
+      <div className={`mt-1.5 min-h-[2lh] ${HUD_LBL}`} title={`Sector ${t.currentSector} · ${corner ? corner.full : "Straight"}`}>
+        <div className="flex items-center justify-between gap-2">
+          <span>Sector {t.currentSector}</span>
+          <span className="text-lc-chalk">{corner ? corner.short : "Straight"}</span>
+        </div>
+        {corner?.name ? <div className="text-lc-chalk">{corner.name}</div> : null}
+      </div>
+    </section>
+  );
+};
 
 /** Rev lights: 18 segments along the top of the pod (green, red, then the shift colour) */
 const LEDS = 18;
@@ -146,8 +170,30 @@ const ledColor = (i: number) => (i < 8 ? HUD_GREEN : i < 14 ? HUD_RED : HUD_SHIF
  * and one telemetry pod along the bottom, a strip of rev lights over speed, gear, energy and the
  * delta: everything reads at a glance from the sofa, nothing covers the racing line.
  */
-export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compound = "soft", revRange, scale, trackCode, mfd, lapInvalid, towerGaps, mapMode, leftExtra, rightExtra }) => {
+export const BroadcastHud: React.FC<HudDesignProps> = ({
+  t,
+  deltaS,
+  map,
+  compound = "soft",
+  revRange,
+  scale,
+  trackCode,
+  mfd,
+  lapInvalid,
+  towerGaps,
+  mapMode,
+  leftExtra,
+  rightExtra,
+  showDeltaBar,
+}) => {
   const race = t.race;
+  // The pod shows the delta only where the top-centre delta bar is switched off; the bar is also down through the start
+  // lights, and the pod keeps its predicted lap there rather than switching words for a few seconds
+  const podDelta = showDeltaBar === false && race?.phase !== "lights";
+  const predictedMs = predictedLapMs(t.bestLapTimeMs, deltaS);
+  const predictedText = formatLapTime(predictedMs);
+  // The tile's tone and arrow follow what it shows: no predicted lap (no best lap of this car yet), no tone
+  const podTone = podDelta || predictedMs !== null ? deltaS : null;
   const [revStart, revFull] = revRange;
   const lit = Math.round(Math.min(1, Math.max(0, (t.rpm - revStart) / (revFull - revStart))) * LEDS);
   const shift = atShiftPoint(t.rpm, revFull);
@@ -284,14 +330,31 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
               )}
             </div>
 
-            {/* Delta: fixed width so the number never reflows the pod */}
+            {/* The lap the live delta predicts, toned by the delta's sign, while the delta bar at the top centre shows
+                the delta itself; the delta here when that bar is switched off. Fixed width, so the pod never reflows */}
             <div
-              className={`flex h-17 w-33 shrink-0 flex-col justify-center gap-1 rounded-lc-tile px-4 ${
-                deltaS === null ? "bg-lc-titanium text-lc-slate" : deltaS <= 0 ? "bg-lc-gain text-lc-void" : "bg-lc-loss text-lc-void"
+              className={`flex h-17 w-33 shrink-0 flex-col justify-center gap-1 rounded-lc-tile px-3.5 ${
+                podTone === null ? "bg-lc-titanium text-lc-slate" : podTone <= 0 ? "bg-lc-gain text-lc-void" : "bg-lc-loss text-lc-void"
               }`}
             >
-              <span className={`${HUD_LBL} text-current opacity-70`}>Delta</span>
-              <DeltaReadout deltaS={deltaS} className="text-[24px]" />
+              {podDelta ? (
+                <>
+                  <span className={`${HUD_LBL} text-current opacity-70`}>Delta</span>
+                  <DeltaReadout deltaS={deltaS} className="text-[24px]" />
+                </>
+              ) : (
+                <>
+                  <span className={`inline-flex items-center gap-1 ${HUD_LBL} text-current`}>
+                    <span className="opacity-70">Predicted</span>
+                    {podTone !== null ? (
+                      <Trend direction={podTone <= 0 ? "up" : "down"} size={9} label={podTone <= 0 ? "Quicker than your best" : "Slower than your best"} />
+                    ) : null}
+                  </span>
+                  <span className={`lc-data leading-none whitespace-nowrap ${predictedText.length > 8 ? "text-[17px]" : "text-[20px]"}`}>
+                    {predictedText}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>

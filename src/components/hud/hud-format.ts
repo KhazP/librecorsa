@@ -92,6 +92,30 @@ export function formatLapTime(ms: number | null | undefined): string {
   return hours > 0 ? `${hours}:${(totalMin % 60).toString().padStart(2, "0")}:${rest}` : `${totalMin}:${rest}`;
 }
 
+/**
+ * The running lap's clock as the HUD shows it (ms). On the out-lap, from the grid or the pit lane to the line, the
+ * sim's timer already runs but no lap is being timed until the car crosses the line: the clock holds at zero there, so
+ * a car waiting on the grid shows no seconds ticking. Display only: the timing itself stays the sim's.
+ */
+export function lapClockMs(t: Pick<CarTelemetry, "currentLapTimeMs" | "outLap">): number {
+  return t.outLap ? 0 : t.currentLapTimeMs;
+}
+
+/** `lapClockMs` as m:ss.mmm, "0:00.000" while it holds on the out-lap */
+export function formatLapClock(t: Pick<CarTelemetry, "currentLapTimeMs" | "outLap">): string {
+  const ms = lapClockMs(t);
+  return ms > 0 ? formatLapTime(ms) : "0:00.000";
+}
+
+/**
+ * A sector of the running lap that is done and has a time: before the current sector, timed above zero, and never on
+ * the out-lap (the car starts on the grid in the last sector, and a restart keeps the last run's times). A sector that
+ * is not done is drawn as one to come: neutral, without a time or a mark.
+ */
+export function sectorDone(t: Pick<CarTelemetry, "currentSector" | "sectorTimesMs" | "outLap">, index: number): boolean {
+  return !t.outLap && index + 1 < t.currentSector && t.sectorTimesMs[index] > 0;
+}
+
 /** ss.mmm for sector times */
 export function formatSectorTime(ms: number | null | undefined): string {
   if (ms === null || ms === undefined || !Number.isFinite(ms) || ms <= 0) return "--.---";
@@ -105,6 +129,45 @@ export const NO_TIME = "--.---";
 export function formatDelta(seconds: number): string {
   if (!Number.isFinite(seconds)) return NO_TIME;
   return kitFormatDelta(seconds);
+}
+
+/** The largest live delta a readout spells out (s); beyond it the readout holds */
+const DELTA_FIT_MAX_S = 999.9;
+
+/**
+ * Decimals for a delta that keeps the width of an ordinary one: `digits` under 10 s, one fewer for each further whole
+ * digit (the rounding counted, so 9.9996 is already "10.00"), never fewer than one
+ */
+export function deltaDigits(seconds: number, digits = 3): number {
+  const a = Math.min(DELTA_FIT_MAX_S, Math.abs(seconds));
+  let d = digits;
+  for (let limit = 10; d > 1 && a >= limit - 0.5 * 10 ** -d; limit *= 10) d--;
+  return d;
+}
+
+/**
+ * A live delta as wide as "+0.000" however far off the lap is: "+41.84", "+123.4" (held at ±999.9), so a box sized
+ * for an ordinary delta fits every one. `digits` is the most decimals it shows.
+ */
+export function formatDeltaFit(seconds: number, digits = 3): string {
+  if (!Number.isFinite(seconds)) return NO_TIME;
+  const s = Math.max(-DELTA_FIT_MAX_S, Math.min(DELTA_FIT_MAX_S, seconds));
+  return kitFormatDelta(s, deltaDigits(s, digits));
+}
+
+/**
+ * The corner the car is in, for a map's caption: its number ("T4") and its own name with any leading "Turn 4" and
+ * separator taken off ("West Hill Hairpin"), or no name where the data has only the number. Off a corner (turn 0) it
+ * is null.
+ */
+export function cornerLabel(turnNumber: number, turnName: string | undefined): { short: string; name: string | null; full: string } | null {
+  if (!(turnNumber > 0)) return null;
+  const short = `T${turnNumber}`;
+  const raw = (turnName ?? "").trim();
+  // "Turn 4" and a dash, a colon or a dot before the name, "T4 West Hill", or "Turn 4" alone
+  const m = raw.match(/^(?:turn|t)\s*(\d+)\b\s*(?:[\u2014\u2013\-:\u00b7|,.]\s*)?(.*)$/i);
+  const name = (m && Number(m[1]) === turnNumber ? m[2] : raw).trim() || null;
+  return { short, name, full: name ? `${short} · ${name}` : short };
 }
 
 /**

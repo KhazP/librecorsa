@@ -12,11 +12,14 @@ import {
   HUD_LOSS,
   HUD_SLATE,
   LAP_MARK_COLOR,
+  deltaDigits,
   formatGap,
+  formatLapClock,
   formatLapTime,
   formatSectorTime,
   lapMark,
   NO_TIME,
+  sectorDone,
   type LapMark,
 } from "./hud-format";
 import { LibreCorsaMark } from "../ui/LibreCorsaLogo";
@@ -32,9 +35,31 @@ import { skinCss, SkinPanel, useHudSkin } from "./styles/third-party-skin";
 import { challengePlaceLabel, type ChallengeTarget } from "@/lib/net/challenge-target";
 
 
+/** The tower's columns: position, livery bar, driver, gap, last lap against yours (the header and the rows share them) */
+const TOWER_COLS = "grid grid-cols-[22px_4px_1fr_auto_40px] gap-2 pr-2.5 pl-2";
+
+/**
+ * The tower's column names, over `TowerRows`: the gap and last-lap values sit right-aligned under theirs, so the signed
+ * last-lap column reads without a tooltip
+ */
+export const TowerHeader: React.FC<{ gaps?: "interval" | "leader" }> = ({ gaps = "interval" }) => (
+  <div className={`${TOWER_COLS} items-end pt-2 pb-0.5 leading-[1.2] ${HUD_LBL}`}>
+    <span />
+    <span />
+    <span>Driver</span>
+    <span className="text-right">{gaps === "leader" ? "Gap" : "Interval"}</span>
+    <span className="text-right whitespace-nowrap" title="Their last lap against yours; on your line, against your best">
+      Last
+      <br />
+      vs you
+    </span>
+  </div>
+);
+
 /**
  * The tower's lines: position, livery bar, driver code with the tyre, fastest-lap and penalty badges, the gap (to the
  * car ahead or to the leader) and the last lap against the player's (yours against your best on your own line).
+ * `TowerHeader` names the columns above them.
  */
 export const TowerRows: React.FC<{
   race: RaceStatus;
@@ -43,12 +68,23 @@ export const TowerRows: React.FC<{
   mono?: boolean;
 }> = ({ race, gaps = "interval" }) => {
   const st = race.standings;
-  const me = st.find((e) => e.isPlayer);
+  const meIdx = st.findIndex((e) => e.isPlayer);
+  const me = meIdx >= 0 ? st[meIdx] : undefined;
   const fastest = st.reduce<number | null>((m, e) => (e.bestLapMs && (m === null || e.bestLapMs < m) ? e.bestLapMs : m), null);
+  // Interval: on the player's row and the one behind it the split gap (the time between the two cars at the same point,
+  // as the Ahead / Behind box and the chasing chip read it), so the same gap never shows two values
+  const splits = race.splits;
+  const splitInterval = (i: number): number | null => {
+    if (gaps !== "interval" || meIdx < 0) return null;
+    if (i === meIdx && i > 0 && splits?.ahead?.driverCode === st[i - 1].driverCode) return splits.ahead.gapS;
+    if (i === meIdx + 1 && splits?.behind?.driverCode === st[i].driverCode) return splits.behind.gapS;
+    return null;
+  };
   return (
-    <ol className="m-0 list-none pt-1.5 pb-2">
+    <ol className="m-0 list-none pt-0.5 pb-2">
       {st.map((e, i) => {
-        const gap = i === 0 ? null : gaps === "leader" ? e.gapToLeaderS : (e.intervalS ?? e.gapToLeaderS - st[i - 1].gapToLeaderS);
+        const gap =
+          i === 0 ? null : gaps === "leader" ? e.gapToLeaderS : (splitInterval(i) ?? e.intervalS ?? e.gapToLeaderS - st[i - 1].gapToLeaderS);
         // Their last lap against yours: − (loss) they were quicker, + (gain) you were
         const lastD = e.isPlayer
           ? e.lastLapMs && e.bestLapMs
@@ -65,7 +101,7 @@ export const TowerRows: React.FC<{
           <li
             key={`${i}-${e.driverCode}`}
             title={e.name && e.name !== e.driverCode ? e.name : undefined}
-            className={`lc-data grid h-7.5 grid-cols-[22px_4px_1fr_auto_40px] items-center gap-2 pr-2.5 pl-2 text-[13px] ${
+            className={`lc-data ${TOWER_COLS} h-7.5 items-center text-[13px] ${
               e.isPlayer ? "bg-lc-volt text-lc-void" : "text-lc-chalk"
             }`}
           >
@@ -133,6 +169,7 @@ export const TimingTower: React.FC<{ race: RaceStatus; trackCode?: string; gaps?
       </span>
       {trackCode ? <span className={`${HUD_LBL} text-lc-void/60`}>{trackCode}</span> : null}
     </div>
+    <TowerHeader gaps={gaps} />
     <TowerRows race={race} gaps={gaps} />
   </section>
 );
@@ -146,11 +183,14 @@ interface LapPanelProps {
   lapInvalid: boolean;
 }
 
-/** Sector state (`lapMark`): best, personal best or slower once done, info in progress, a faint line to come */
+/**
+ * Sector state (`lapMark`): best, personal best or slower once done, info in progress, a faint line to come. A sector
+ * without a time of this lap (the grid's out-lap starts in sector 3) is one to come, not a best
+ */
 function sectorCells(telemetry: CarTelemetry) {
   return [0, 1, 2].map((idx) => {
     const sec = (idx + 1) as 1 | 2 | 3;
-    const done = sec < telemetry.currentSector;
+    const done = sectorDone(telemetry, idx);
     const active = sec === telemetry.currentSector;
     const t = done ? telemetry.sectorTimesMs[idx] : null;
     const mark: LapMark | null = t !== null ? lapMark(t, telemetry.bestSectorTimesMs[idx], !telemetry.race) : null;
@@ -163,6 +203,8 @@ function sectorCells(telemetry: CarTelemetry) {
 export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant = "full", lapInvalid }) => {
   const sectors = sectorCells(telemetry);
   const lap = Math.max(1, telemetry.lapCount);
+  // On the out-lap no lap is timed yet: the clock holds at zero and the counter says so
+  const lapWord = telemetry.outLap ? "Out lap" : `${activeLapWord()} ${lap}`;
   // A cut lap is invalid: the clock shows it in the loss colour, with the word, until the next lap starts
   const timeColor = lapInvalid ? HUD_LOSS : "var(--color-lc-chalk)";
 
@@ -170,11 +212,11 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
     return (
       <div className="flex flex-col items-start gap-1.5">
         <section aria-label="Lap" className={`flex items-center gap-3 rounded-lc-tile py-1.5 pr-4 pl-1.5 ${HUD_GLASS}`}>
-          <span className="lc-data inline-flex h-9 items-center rounded-lc-row bg-lc-titanium px-3 text-[12px] tracking-[0.1em] text-lc-chalk">
-            {activeLapWord().toUpperCase()} {lap}
+          <span className="lc-data inline-flex h-9 items-center rounded-lc-row bg-lc-titanium px-3 text-[12px] tracking-[0.1em] text-lc-chalk uppercase">
+            {lapWord}
           </span>
           <span className="lc-data text-[30px] leading-none" style={{ color: timeColor }}>
-            {formatLapTime(telemetry.currentLapTimeMs)}
+            {formatLapClock(telemetry)}
           </span>
           {lapInvalid ? <InvalidTag /> : null}
         </section>
@@ -188,7 +230,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
               {s.mark ? <LapMarkGlyph mark={s.mark} /> : null}
             </span>
           ))}
-          {deltaS !== null ? <DeltaBadge seconds={deltaS} size="hud" /> : null}
+          {deltaS !== null ? <DeltaBadge seconds={deltaS} digits={deltaDigits(deltaS)} size="hud" /> : null}
           <span className="inline-flex items-baseline gap-1">
             <span className={HUD_LBL}>Last</span> <span className="text-lc-chalk/90">{formatLapTime(telemetry.lastLapTimeMs)}</span>
           </span>
@@ -208,11 +250,11 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
     <section aria-label="Lap" className={`w-[256px] rounded-lc-card p-3.5 ${HUD_GLASS}`}>
       {/* Header: lap counter and live delta pill */}
       <div className="flex items-center justify-between gap-2">
-        <span className="lc-data inline-flex items-center gap-2 text-[13px] tracking-[0.1em] text-lc-chalk">
-          {activeLapWord().toUpperCase()} {lap}
+        <span className="lc-data inline-flex items-center gap-2 text-[13px] tracking-[0.1em] text-lc-chalk uppercase">
+          {lapWord}
         </span>
         {deltaS !== null ? (
-          <DeltaBadge seconds={deltaS} size="sm" variant="solid" />
+          <DeltaBadge seconds={deltaS} digits={deltaDigits(deltaS)} size="sm" variant="solid" />
         ) : (
           <span className={HUD_LBL}>No ref lap</span>
         )}
@@ -235,7 +277,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
       {/* Current lap clock */}
       <div className="flex items-center gap-2">
         <span className="lc-data text-[38px] leading-none tracking-[-0.01em]" style={{ color: timeColor }}>
-          {formatLapTime(telemetry.currentLapTimeMs)}
+          {formatLapClock(telemetry)}
         </span>
         {lapInvalid ? <InvalidTag /> : null}
       </div>
