@@ -130,7 +130,7 @@ The other cards:
 
 ## Which wheels work
 
-The MOZA R9 V2 with the KS rim is the only wheel I've driven. Everything else is what the code should do, not a promise.
+The MOZA R9 V2 with the KS rim is the only wheel I've driven, and its force feedback works in the browser. Everything else is what the code should do, not a promise.
 
 | Wheel | Browser | Bridge |
 | :-- | :-- | :-- |
