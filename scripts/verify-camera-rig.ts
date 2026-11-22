@@ -10,6 +10,7 @@ import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { CameraRig, type CameraRigFrame, type CameraRigMenu } from '../src/lib/render/camera-rig';
 import { ALL_CAMERA_MODES, CAMERA_CYCLE, CAMERA_MODES, isDrivingCameraMode } from '../src/lib/render/camera-modes';
 import type { CameraMode } from '../src/types/f1';
+import { DEFAULT_KEY_BINDINGS } from '../src/lib/input/bindings';
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -291,13 +292,16 @@ check('the aerial rises from the car, cuts back to it on input, holds still unde
   assert.ok(!rig.aerialUp && !camera.view?.enabled, 'on track: no aerial, no view offset');
 });
 
-check('camera cycle includes chase_close and chase_far while keeping free, chase_low, helicopter, nose, shoulder outside C cycle', () => {
+check('camera cycle includes chase_close and chase_far while keeping free, chase_low, helicopter, nose, shoulder and Trackside TV outside C cycle', () => {
   assert.ok(CAMERA_CYCLE.includes('chase_close'));
   assert.ok(CAMERA_CYCLE.includes('chase'));
   assert.ok(CAMERA_CYCLE.includes('chase_far'));
   assert.ok(!CAMERA_CYCLE.includes('chase_low'));
   assert.ok(!CAMERA_CYCLE.includes('free'));
   assert.ok(!CAMERA_CYCLE.includes('helicopter'));
+  // Trackside TV has its own key (F8) and pause menu button, like the free camera
+  assert.ok(!CAMERA_CYCLE.includes('tv_side'));
+  assert.deepEqual(DEFAULT_KEY_BINDINGS.tvCamera, ['F8']);
   assert.ok(!isDrivingCameraMode('free'), 'free camera is never persisted as default driving camera');
   assert.ok(isDrivingCameraMode('chase_close') && isDrivingCameraMode('chase_low'));
 });

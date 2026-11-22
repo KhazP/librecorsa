@@ -187,7 +187,10 @@ export const isCameraMode = (value: unknown): value is CameraMode =>
 export const isDrivingCameraMode = (value: unknown): value is CameraMode =>
   isCameraMode(value) && value !== "free";
 
-/** Views the camera key (and the pause menu's camera cycle) steps through */
+/**
+ * Views the camera key (and the pause menu's camera cycle) steps through. Trackside TV is not one of them: it has its
+ * own key and pause menu button (`tvCamera`), as the free camera has, and the camera key leaves it for the driving view
+ */
 export const CAMERA_CYCLE: readonly CameraMode[] = [
   "cockpit",
   "dash",
@@ -195,7 +198,6 @@ export const CAMERA_CYCLE: readonly CameraMode[] = [
   "chase_close",
   "chase",
   "chase_far",
-  "tv_side",
 ];
 
 /** Views the setup screen offers to start in */

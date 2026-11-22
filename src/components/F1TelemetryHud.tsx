@@ -192,6 +192,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onSelectCamera?: (mode: CameraMode) => void;
   /** Toggles transient Free camera on/off */
   onToggleFreeCamera?: () => void;
+  /** Trackside TV in and out (its own key, not in the camera cycle) */
+  onToggleTvCamera?: () => void;
   /** Off the track: the crimson edge glow that breathes behind the HUD, which the renderer draws into the frame */
   onOffTrackGlow?: (on: boolean) => void;
   onChangeTireCompound: (compound: TireCompound) => void;
@@ -224,7 +226,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** The music playing, and the pause menu's skip */
   nowPlaying?: NowPlaying | null;
   onSkipTrack?: () => void;
-  keyNames?: Partial<Record<"camera" | "freeCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board" | "headlights", string>>;
+  keyNames?: Partial<Record<"camera" | "freeCamera" | "tvCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board" | "headlights", string>>;
   /** The lap board's gear: when it opens (the HUD setting), changed from the board itself; without it, no lap board */
   onChangeBoardWidget?: (mode: BoardWidgetMode) => void;
   /** HUD layout preset, size and optional widgets */
