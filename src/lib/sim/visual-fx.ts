@@ -32,7 +32,7 @@ import { LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
 import { addCarShadowProxy } from '@/lib/render/car-shadow-proxy';
-import { CarHeadlights } from '@/lib/render/car-headlights';
+import { CarHeadlights, type HeadlightBeam } from '@/lib/render/car-headlights';
 import { disposeTree } from '@/lib/render/dispose-tree';
 import { LIVERIES, liveryForDriverCode } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
@@ -168,6 +168,8 @@ export class SimVisualFxManager {
       ghostMats?: THREE.Material[];
       /** Last frame's braking state for opponent tail-light brightening */
       braking?: boolean;
+      /** The car is flashing its headlights (a remote player's flash) */
+      flash?: boolean;
       /** Current opponent mesh LOD (0 = full, 1 = simplified >48 m with 42 m exit hysteresis) */
       lod?: 0 | 1;
     }
@@ -182,6 +184,36 @@ export class SimVisualFxManager {
 
   public setGraphicsQuality(quality: 'low' | 'medium' | 'high'): void {
     this.graphicsQuality = quality;
+  }
+
+  /**
+   * The lit headlight beams of the solid opponents (after `setHeadlights` this frame), into `out` from slot 0 (it
+   * grows as needed); returns how many. For opponent-beams.ts, which lights the road with them
+   */
+  public collectBeams(out: HeadlightBeam[]): number {
+    let n = 0;
+    for (const entry of this.opponentCars.values()) {
+      if (entry.ghost || !entry.rig.root.visible) continue;
+      const hl = this.rigHeadlights.get(entry.rig);
+      if (!hl) continue;
+      const slot = (out[n] ??= { pos: new THREE.Vector3(), dir: new THREE.Vector3(), intensity: 0, range: 1 });
+      if (hl.beam(slot)) n++;
+    }
+    return n;
+  }
+
+  /** Every solid (non-ghost) opponent car drawn now: its rig's root */
+  public forEachOpponentRoot(cb: (root: THREE.Object3D) => void): void {
+    for (const entry of this.opponentCars.values()) if (!entry.ghost) cb(entry.rig.root);
+  }
+
+  /** Every opponent rig built so far, drawn or waiting in the pool (to prepare their materials while loading) */
+  public forEachRigRoot(cb: (root: THREE.Object3D) => void): void {
+    for (const entry of this.opponentCars.values()) {
+      cb(entry.rig.root);
+      if (entry.spare) cb(entry.spare.root);
+    }
+    for (const rigs of this.pool.values()) for (const rig of rigs) cb(rig.root);
   }
 
   /** Active 3D car rig for an opponent peer (used by race replay cameras to ride onboard any car) */
@@ -299,10 +331,16 @@ export class SimVisualFxManager {
   public setHeadlights(on: boolean, camera?: THREE.Camera): void {
     for (const entry of this.opponentCars.values()) {
       const hl = this.rigHeadlights.get(entry.rig);
-      if (hl) hl.setEnabled(!entry.ghost && on, !entry.ghost && entry.braking === true, camera, false);
+      if (hl) {
+        hl.setFlash(!entry.ghost && entry.flash === true);
+        hl.setEnabled(!entry.ghost && on, !entry.ghost && entry.braking === true, camera, false);
+      }
       if (entry.spare) {
         const spareHl = this.rigHeadlights.get(entry.spare);
-        if (spareHl && (spareHl.isOn || spareHl.isBraking)) spareHl.setEnabled(false, false);
+        if (spareHl && (spareHl.isOn || spareHl.isBraking || spareHl.isFlashing)) {
+          spareHl.setFlash(false);
+          spareHl.setEnabled(false, false);
+        }
       }
     }
   }
@@ -834,6 +872,7 @@ export class SimVisualFxManager {
       syntheticTelemetry.totalPowerKw = 650 * peer.throttle;
       const braking = peer.brake > 0.2;
       entry.braking = braking;
+      entry.flash = peer.flash === true;
       const bt = syntheticTelemetry.brakeTempsC;
       bt[0] = bt[1] = braking ? 780 : 340;
       bt[2] = bt[3] = braking ? 720 : 320;

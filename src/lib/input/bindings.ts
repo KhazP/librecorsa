@@ -34,7 +34,8 @@ export type KeyAction =
   | "mfd"
   | "hud"
   | "board"
-  | "headlights";
+  | "headlights"
+  | "headlightFlash";
 
 /** Actions a controller or wheel button can trigger */
 export type PadAction =
@@ -53,7 +54,8 @@ export type PadAction =
   | "mfdPage"
   | "hud"
   | "board"
-  | "headlights";
+  | "headlights"
+  | "headlightFlash";
 
 export type KeyBindings = Record<KeyAction, string[]>;
 
@@ -88,7 +90,8 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "mfd", label: "Open / close MFD" },
   { id: "hud", label: "Show / hide HUD" },
   { id: "board", label: "Open / close lap board" },
-  { id: "headlights", label: "Headlights" },
+  { id: "headlights", label: "Headlights on / off" },
+  { id: "headlightFlash", label: "Flash headlights (hold)" },
 ];
 
 export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
@@ -107,7 +110,10 @@ export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   { id: "mfdPage", label: "Next MFD page" },
   { id: "hud", label: "Show / hide HUD" },
   { id: "board", label: "Open / close lap board" },
-  { id: "headlights", label: "Headlights" },
+  // One button for both, as GT7's L3 carries the switch and the flash: a tap flashes, a hold switches them on or off
+  // (headlight-button.ts)
+  { id: "headlights", label: "Headlights (tap: flash, hold: on / off)" },
+  { id: "headlightFlash", label: "Flash headlights (hold)" },
 ];
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
@@ -144,6 +150,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   // Beside the HUD's own key, away from L (which restarts the lap)
   board: ["KeyJ"],
   headlights: ["KeyU"],
+  // Beside the headlights' own key (on QWERTZ the key printed Z, still beside U)
+  headlightFlash: ["KeyY"],
 };
 
 /** Keys that cannot be bound: Esc opens the menu, "/" starts the /boost command */
@@ -174,10 +182,15 @@ export const BUMPER_SHIFT_BUTTONS: PadButtonBindings = {
   // Every button has a job already: a player can give it one
   board: null,
   headlights: null,
+  headlightFlash: null,
   freeCamera: null,
 };
 
-/** Gran Turismo 7: ✕ up, □ down, R1 change view, R3 nitro / overtake, Options pause. The right thumb is free in a drive */
+/**
+ * Gran Turismo 7: ✕ up, □ down, R1 change view, R3 nitro / overtake, L3 headlights (the switch and the flash on the
+ * one button), Options pause. The right thumb is free in a drive. L3 was the MFD's own button: the MFD has none now,
+ * since a D-pad press opens it and it folds itself away again
+ */
 export const GT_STYLE_BUTTONS: PadButtonBindings = {
   shiftUp: 0, // A (✕)
   shiftDown: 2, // X (□)
@@ -189,13 +202,24 @@ export const GT_STYLE_BUTTONS: PadButtonBindings = {
   restart: 8, // View (Create)
   flyingLap: null,
   aero: 3, // Y (△)
-  mfd: 10, // LS (L3)
+  headlights: 10, // LS (L3)
+  mfd: null,
   mfdPage: 1, // B (○)
   hud: 4, // LB (L1)
   racingLine: null,
   board: null,
-  headlights: null,
+  headlightFlash: null,
   freeCamera: null,
+};
+
+/**
+ * GT style as it was until 22 Nov 2026 (L3 the MFD, no headlights). A saved map that is exactly this is a player who
+ * picked GT style (or kept the default) then, and moves on to GT style as it is now (parsePlayerSettings)
+ */
+export const RETIRED_GT_STYLE_BUTTONS: PadButtonBindings = {
+  ...GT_STYLE_BUTTONS,
+  headlights: null,
+  mfd: 10,
 };
 
 /** A new player's buttons: GT style, gears under the right thumb, which also holds Gear up as the clutch at a manual start */
@@ -316,7 +340,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
   gt: { label: "GT style", pedals: "triggers", buttons: GT_STYLE_BUTTONS },
   // Classic Gran Turismo on a pad: right stick up throttle, down brake, R2 up, L2 down; the rest as GT style, with
   // the boost off R3 (now under the pedal thumb) onto ✕ and the HUD onto □, so L1 and the left stick's up / down
-  // stay free (a clutch or a starter can go there)
+  // stay free (a clutch or a starter can go there). No headlight button found in GT4 to GT6, so none here
   gtClassic: {
     label: "GT classic",
     pedals: "stick",
@@ -336,10 +360,11 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       racingLine: null,
       board: null,
       headlights: null,
+      headlightFlash: null,
       freeCamera: null,
     },
   },
-  // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause
+  // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause. No headlight control found in the F1 games
   f1: {
     label: "Formula style",
     pedals: "triggers",
@@ -359,10 +384,12 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       racingLine: null,
       board: null,
       headlights: null,
+      headlightFlash: null,
       freeCamera: null,
     },
   },
-  // Forza: B up, X down (manual layout), RB switch camera, LS toggle convertible, Menu pause
+  // Forza: B up, X down (manual layout), RB switch camera, LS toggle convertible, Menu pause. No headlight control
+  // found in Forza Motorsport (its players say the lights follow the time of day)
   forza: {
     label: "Forza style",
     pedals: "triggers",
@@ -382,6 +409,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       racingLine: null,
       board: null,
       headlights: null,
+      headlightFlash: null,
       freeCamera: null,
     },
   },

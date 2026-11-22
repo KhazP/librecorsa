@@ -22,6 +22,7 @@ import {
   sessionBestLapMs,
   SURFACE_WORD,
   trackSurfaceState,
+  headlightState,
   wrapLap,
 } from '../src/components/hud/third-party-data';
 import { revLights } from '../src/components/hud/styles/third-party-parts';
@@ -63,6 +64,15 @@ const t = {
   race: { standings },
 } as unknown as CarTelemetry;
 
+check(
+  'headlights: the flash first, then on, then switched off by hand; nothing on a day on automatic',
+  headlightState({ headlightsOn: true, headlightFlash: true, headlightMode: 'auto' }) === 'flash' &&
+    headlightState({ headlightsOn: false, headlightFlash: true, headlightMode: 'off' }) === 'flash' &&
+    headlightState({ headlightsOn: true, headlightMode: 'auto' }) === 'on' &&
+    headlightState({ headlightsOn: false, headlightMode: 'off' }) === 'off' &&
+    headlightState({ headlightsOn: false, headlightMode: 'auto' }) === null &&
+    headlightState({}) === null,
+);
 check('the reference lap is the best lap', referenceLapS(t) === 100);
 check('...a typical lap without a time yet', referenceLapS({ bestLapTimeMs: null, lastLapTimeMs: null }) === 95);
 check('wrapLap takes the short way across the line', wrapLap(4900, L) === -100 && wrapLap(-4900, L) === 100 && wrapLap(200, L) === 200);

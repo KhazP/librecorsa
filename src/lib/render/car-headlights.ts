@@ -6,6 +6,16 @@ import { SKY_COVER_SPECS, type SessionConditions } from "@/lib/sim/weather";
 export type HeadlightMode = "auto" | "on" | "off";
 export type HeadlightSpotCount = 0 | 1 | 2;
 
+/** A car's headlight beam in world space, for a lighting pass with no SpotLight for it (opponent-beams.ts) */
+export interface HeadlightBeam {
+  /** Where the beam starts (between the lamps) and its unit direction */
+  pos: THREE.Vector3;
+  dir: THREE.Vector3;
+  /** Intensity as a SpotLight's with decay 1 (cd-scaled), and its reach (m) */
+  intensity: number;
+  range: number;
+}
+
 export interface CarHeadlightsOptions {
   /**
    * Number of SpotLights to allocate for forward road beams:
@@ -17,6 +27,22 @@ export interface CarHeadlightsOptions {
   /** Shorthand for `spotCount: 0` (opponent rigs: front/rear flares + cloned emissive lenses, zero SpotLights) */
   lightsOnly?: boolean;
 }
+
+/** High beam (a flash) against the low beam: SpotLight intensity and reach, front flare size */
+export const HIGH_BEAM_GAIN = 2.2;
+export const HIGH_BEAM_REACH = 1.6;
+export const HIGH_BEAM_FLARE = 2.4;
+/**
+ * Brightness of the front flare on high beam against the low beam's (an HDR colour): a flash has to read in full
+ * daylight, where a plain white additive sprite vanishes against a sunlit car, and it blooms where there is bloom
+ */
+export const HIGH_BEAM_FLARE_GAIN = 7;
+/** Running tail light and brake light glow of a lamp material (its own emissive map / a plain red one) */
+const TAIL_GLOW = { own: 1.1, plain: 0.85 } as const;
+const BRAKE_GLOW = { own: 4.2, plain: 3.6 } as const;
+/** Lens glow of the headlight materials: low beam, high beam */
+const LENS_GLOW_LOW = 4.5;
+const LENS_GLOW_HIGH = 10;
 
 /** Sun elevation below which automatic headlights switch on (deg; covers dusk, night, early dawn) */
 export const AUTO_HEADLIGHT_SUN_DEG = 4;
@@ -35,6 +61,11 @@ export interface LampPlacement {
 }
 
 export interface HeadlightProfile {
+  /**
+   * False for a car with no headlights (an F1 car: only its rear rain light). It then has no beams, no front flares
+   * and no flash, and lights nothing ahead; its rear light still runs at night and in rain
+   */
+  frontLamps?: boolean;
   /** Lateral half-spacing of the left and right beams from the car centreline (m) */
   halfWidthM: number;
   /** Lamp height above the chassis floor (m) */
@@ -81,10 +112,12 @@ const rearPairs = (pairs: readonly (readonly [number, number, number, number?])[
   );
 
 const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
+  // F1 cars carry no headlights, only the rear rain light (the front values only place nothing)
   f1: {
+    frontLamps: false,
     halfWidthM: 0.16,
-    heightM: 0.36,
-    frontZM: 2.35,
+    heightM: 0.6,
+    frontZM: 2.25,
     rearZM: -2.31,
     rearHalfWidthM: 0,
     rearHeightM: 0.31,
@@ -168,10 +201,11 @@ const CLASS_PROFILES: Readonly<Record<CarClassId, HeadlightProfile>> = {
  * GLBs' headlight/taillight meshes so flares sit on the actual lenses rather than behind rear wings or ahead of noses.
  */
 const CAR_PROFILE_OVERRIDES: Partial<Record<CarId, Partial<HeadlightProfile>>> = {
+  // No front lamps (an F1 car, see the class); the front values sit on the nose top of the Qvist body all the same
   lc26: {
     halfWidthM: 0.16,
-    heightM: 0.36,
-    frontZM: 2.35,
+    heightM: 0.6,
+    frontZM: 2.25,
     rearHalfWidthM: 0,
     rearHeightM: 0.31,
     rearZM: -2.31,
@@ -357,6 +391,9 @@ export function headlightProfileFor(carId: CarId): HeadlightProfile {
   return override ? { ...base, ...override } : base;
 }
 
+/** Whether a car has headlights at all (an F1 car has only its rear rain light) */
+export const carHasHeadlights = (carId: CarId): boolean => headlightProfileFor(carId).frontLamps !== false;
+
 /** Whether headlights should illuminate under the current mode and sky/weather state */
 export function shouldHeadlightsBeOn(mode: HeadlightMode, sunElevationDeg: number, rainIntensity: number): boolean {
   if (mode === "on") return true;
@@ -405,12 +442,13 @@ export function canSessionGetDark(conditions: SessionConditions): boolean {
 
 /**
  * SpotLight budget for the player's car headlights: three.js iterates every SpotLight in the scene on every lit
- * fragment even at intensity 0, so daytime-only sessions and Low quality skip SpotLights entirely (keeping flares and
- * emissive lenses only). Medium uses 1 merged centre SpotLight; High uses 2 twin SpotLights.
+ * fragment even at intensity 0, so daytime-only sessions skip SpotLights entirely (keeping flares and emissive lenses
+ * only). Low and Medium use 1 merged centre SpotLight, High 2 twin SpotLights. Low used to have none, and an unlit
+ * circuit at night was then undrivable on it: one light is a few ALU ops a fragment.
  */
 export function headlightSpotCountFor(conditions: SessionConditions, quality: GraphicsQuality): HeadlightSpotCount {
-  if (quality === "low" || !canSessionGetDark(conditions)) return 0;
-  return quality === "medium" ? 1 : 2;
+  if (!canSessionGetDark(conditions)) return 0;
+  return quality === "high" ? 2 : 1;
 }
 
 let sharedFlareTexture: THREE.CanvasTexture | null = null;
@@ -438,6 +476,13 @@ function getFlareTexture(): THREE.CanvasTexture | null {
   sharedFlareTexture = tex;
   return tex;
 }
+
+/** The beam's cone against the profile's, and its soft edge: a narrower cone with a wide falloff reads as a real beam */
+const BEAM_ANGLE = 0.86;
+const BEAM_PENUMBRA = 0.86;
+/** Where the low beam's middle meets the road, and the high beam's aim (m ahead of the lamps) */
+const LOW_BEAM_AIM_M = 75;
+const HIGH_BEAM_AIM_M = 140;
 
 const HEADLIGHT_MAT_RE = /(?:head_?light|front_?light|lamp_?front|hl_glass|light_?front|farol|scheinwerfer)/i;
 const TAILLIGHT_MAT_RE = /(?:tail_?light|rear_?light|brake_?light|stop_?light|lamp_?rear)/i;
@@ -492,6 +537,14 @@ export class CarHeadlights {
   private scannedRoot: THREE.Object3D | null = null;
   private scannedChildren: THREE.Object3D[] = [];
   private enabled = false;
+  private flashing = false;
+  /** The car has headlights (not an F1 car) */
+  private readonly hasFront: boolean;
+  /** 0 dark, 1 low beam, 2 high beam (a flash): what the front lamps last showed */
+  private frontLevel: 0 | 1 | 2 = 0;
+  /** Where each SpotLight aims on low beam and on high beam (chassis space) */
+  private readonly lowAims: THREE.Vector3[] = [];
+  private readonly highAims: THREE.Vector3[] = [];
   private braking = false;
   private rearActive = false;
 
@@ -499,18 +552,24 @@ export class CarHeadlights {
     this.group.name = "CarHeadlights";
     this.profile = headlightProfileFor(carId);
     const p = this.profile;
-    this.spotCount = options?.lightsOnly ? 0 : (options?.spotCount ?? 2);
+    this.hasFront = p.frontLamps !== false;
+    this.spotCount = options?.lightsOnly || !this.hasFront ? 0 : (options?.spotCount ?? 2);
 
     if (this.spotCount === 2) {
       this.spotIntensity = p.intensity;
       const makeSpot = (side: 1 | -1): THREE.SpotLight => {
         // Decay 1.0 + slightly raised virtual beam origin avoids grazing-angle Lambertian collapse on flat asphalt
         // past 30 m while keeping near-nose intensity balanced under AgX tone mapping.
-        const spot = new THREE.SpotLight(p.color, 0, p.distanceM, p.angleRad, p.penumbra, 1.0);
+        const spot = new THREE.SpotLight(p.color, 0, p.distanceM, p.angleRad * BEAM_ANGLE, Math.max(p.penumbra, BEAM_PENUMBRA), 1.0);
         spot.castShadow = false;
         spot.position.set(side * p.halfWidthM, p.heightM + 0.3, p.frontZM);
-        // Aimed ~52 m down the road, slightly down onto the asphalt and gently outward for corner apexes
-        spot.target.position.set(side * (p.halfWidthM + p.aimSpreadM), 0, p.frontZM + 52);
+        // Low beam: aimed far down the road, nearly level, gently outward for corner apexes, so the hot middle of
+        // the beam lies 30..80 m ahead and the road just ahead of the nose sits in its soft lower edge (a real low
+        // beam's pattern; aimed close it painted a hard bright trapezoid in front of the car and little beyond).
+        // High beam: level, further out
+        this.lowAims.push(new THREE.Vector3(side * (p.halfWidthM + p.aimSpreadM), 0, p.frontZM + LOW_BEAM_AIM_M));
+        this.highAims.push(new THREE.Vector3(side * (p.halfWidthM + 0.6 * p.aimSpreadM), p.heightM + 0.6, p.frontZM + HIGH_BEAM_AIM_M));
+        spot.target.position.copy(this.lowAims[this.lowAims.length - 1]);
         this.group.add(spot, spot.target);
         return spot;
       };
@@ -522,13 +581,15 @@ export class CarHeadlights {
         p.color,
         0,
         p.distanceM,
-        Math.min(Math.PI * 0.45, p.angleRad * 1.18),
-        p.penumbra,
+        Math.min(Math.PI * 0.45, p.angleRad * 1.18 * BEAM_ANGLE),
+        Math.max(p.penumbra, BEAM_PENUMBRA),
         1.0
       );
       spot.castShadow = false;
       spot.position.set(0, p.heightM + 0.3, p.frontZM);
-      spot.target.position.set(0, 0, p.frontZM + 52);
+      this.lowAims.push(new THREE.Vector3(0, 0, p.frontZM + LOW_BEAM_AIM_M));
+      this.highAims.push(new THREE.Vector3(0, p.heightM + 0.6, p.frontZM + HIGH_BEAM_AIM_M));
+      spot.target.position.copy(this.lowAims[0]);
       this.group.add(spot, spot.target);
       this.spots.push(spot);
     } else {
@@ -556,7 +617,7 @@ export class CarHeadlights {
     });
 
     const frontZ = p.measured ? p.frontZM : p.frontZM + 0.04;
-    for (const side of [1, -1] as const) {
+    for (const side of this.hasFront ? ([1, -1] as const) : []) {
       const flare = new THREE.Sprite(this.frontMat);
       flare.position.set(side * p.halfWidthM, p.heightM, frontZ);
       flare.scale.setScalar(p.flareSizeM);
@@ -731,15 +792,15 @@ export class CarHeadlights {
         for (const r of this.rearFlares) r.position.z = rearZ - 0.06;
       }
     }
-    if (this.enabled) this.applyFrontBoost(true);
+    if (this.frontLevel > 0) this.applyFrontBoost(this.frontLevel);
     if (this.rearActive) this.applyRearBoost(true, this.braking);
   }
 
-  private applyFrontBoost(on: boolean): void {
+  private applyFrontBoost(level: 0 | 1 | 2): void {
     for (const b of this.frontBoosted) {
-      if (on) {
+      if (level > 0) {
         b.mat.emissive.setHex(b.hasOwnEmissiveMap ? 0xffffff : this.profile.color);
-        b.mat.emissiveIntensity = Math.max(b.baseIntensity, 4.5);
+        b.mat.emissiveIntensity = Math.max(b.baseIntensity, level === 2 ? LENS_GLOW_HIGH : LENS_GLOW_LOW);
       } else {
         b.mat.emissive.copy(b.baseEmissive);
         b.mat.emissiveIntensity = b.baseIntensity;
@@ -751,7 +812,8 @@ export class CarHeadlights {
     for (const b of this.rearBoosted) {
       if (active) {
         b.mat.emissive.setHex(b.hasOwnEmissiveMap ? 0xffffff : 0xff1e12);
-        const target = braking ? (b.hasOwnEmissiveMap ? 4.2 : 3.6) : b.hasOwnEmissiveMap ? 1.8 : 1.4;
+        const glow = braking ? BRAKE_GLOW : TAIL_GLOW;
+        const target = b.hasOwnEmissiveMap ? glow.own : glow.plain;
         b.mat.emissiveIntensity = Math.max(b.baseIntensity, target);
       } else {
         b.mat.emissive.copy(b.baseEmissive);
@@ -767,15 +829,30 @@ export class CarHeadlights {
    */
   setEnabled(on: boolean, braking = false, camera?: THREE.Camera, hideFrontFlares = false): void {
     this.scanMaterials();
-    if (on !== this.enabled) {
-      this.enabled = on;
-      const intensity = on ? this.spotIntensity : 0;
-      for (const s of this.spots) s.intensity = intensity;
-      for (const f of this.frontFlares) f.visible = on && !hideFrontFlares;
-      this.applyFrontBoost(on);
+    this.enabled = on;
+    // The front lamps: dark, low beam, or the high beam while flashing (day or night, lights on or off)
+    const level: 0 | 1 | 2 = !this.hasFront ? 0 : this.flashing ? 2 : on ? 1 : 0;
+    if (level !== this.frontLevel) {
+      this.frontLevel = level;
+      const high = level === 2;
+      for (let i = 0; i < this.spots.length; i++) {
+        const s = this.spots[i];
+        s.intensity = level === 0 ? 0 : this.spotIntensity * (high ? HIGH_BEAM_GAIN : 1);
+        s.distance = this.profile.distanceM * (high ? HIGH_BEAM_REACH : 1);
+        s.target.position.copy(high ? this.highAims[i] : this.lowAims[i]);
+      }
+      const flareSize = this.profile.flareSizeM * (high ? HIGH_BEAM_FLARE : 1);
+      this.frontMat.color.setHex(this.profile.color).multiplyScalar(high ? HIGH_BEAM_FLARE_GAIN : 1);
+      for (const f of this.frontFlares) {
+        f.scale.setScalar(flareSize);
+        f.visible = level > 0 && !hideFrontFlares;
+      }
+      this.applyFrontBoost(level);
     }
+    const lit = level > 0;
+    const frontOpacity = level === 2 ? 1 : 0.9;
     const rearActive = on || braking;
-    const baseRearOpacity = braking ? 0.92 : 0.52;
+    const baseRearOpacity = braking ? 0.92 : 0.36;
     if (rearActive !== this.rearActive || braking !== this.braking) {
       this.rearActive = rearActive;
       this.braking = braking;
@@ -785,22 +862,22 @@ export class CarHeadlights {
       }
       this.applyRearBoost(rearActive, braking);
     }
-    if (!on) {
+    if (!lit) {
       this.frontMat.opacity = 0;
       for (const f of this.frontFlares) f.visible = false;
     }
     if (!rearActive) {
       this.rearMat.opacity = 0;
       for (const r of this.rearFlares) r.visible = false;
-      return;
     }
+    if (!lit && !rearActive) return;
     if (camera) {
       this.group.updateWorldMatrix(true, true);
       // Local +Z is forward in every car rig's chassisGroup
       _carFwd.set(0, 0, 1).transformDirection(this.group.matrixWorld);
       camera.getWorldPosition(_camPos);
 
-      if (on) {
+      if (lit) {
         let maxFrontVis = 0;
         for (const f of this.frontFlares) {
           if (hideFrontFlares) {
@@ -819,36 +896,73 @@ export class CarHeadlights {
           f.visible = vis > 0.01;
           if (vis > maxFrontVis) maxFrontVis = vis;
         }
-        this.frontMat.opacity = 0.9 * maxFrontVis;
+        this.frontMat.opacity = frontOpacity * maxFrontVis;
       }
 
-      let maxRearVis = 0;
-      for (const r of this.rearFlares) {
-        _flarePos.setFromMatrixPosition(r.matrixWorld);
-        _toCam.subVectors(_camPos, _flarePos);
-        const lenSq = _toCam.lengthSq();
-        if (lenSq <= 1e-6) {
-          r.visible = false;
-          continue;
+      if (rearActive) {
+        let maxRearVis = 0;
+        for (const r of this.rearFlares) {
+          _flarePos.setFromMatrixPosition(r.matrixWorld);
+          _toCam.subVectors(_camPos, _flarePos);
+          const lenSq = _toCam.lengthSq();
+          if (lenSq <= 1e-6) {
+            r.visible = false;
+            continue;
+          }
+          const alongBack = -_toCam.dot(_carFwd);
+          const vis = alongBack > 0.1 ? THREE.MathUtils.smoothstep(alongBack / Math.sqrt(lenSq), 0.05, 0.45) : 0;
+          r.visible = vis > 0.01;
+          if (vis > maxRearVis) maxRearVis = vis;
         }
-        const alongBack = -_toCam.dot(_carFwd);
-        const vis = alongBack > 0.1 ? THREE.MathUtils.smoothstep(alongBack / Math.sqrt(lenSq), 0.05, 0.45) : 0;
-        r.visible = vis > 0.01;
-        if (vis > maxRearVis) maxRearVis = vis;
+        this.rearMat.opacity = baseRearOpacity * maxRearVis;
       }
-      this.rearMat.opacity = baseRearOpacity * maxRearVis;
     } else {
-      if (on) {
-        this.frontMat.opacity = hideFrontFlares ? 0 : 0.9;
+      if (lit) {
+        this.frontMat.opacity = hideFrontFlares ? 0 : frontOpacity;
         for (const f of this.frontFlares) f.visible = !hideFrontFlares;
       }
-      this.rearMat.opacity = baseRearOpacity;
-      for (const r of this.rearFlares) r.visible = true;
+      if (rearActive) {
+        this.rearMat.opacity = baseRearOpacity;
+        for (const r of this.rearFlares) r.visible = true;
+      }
     }
+  }
+
+  /**
+   * The beam as one merged light between the lamps (as Medium's single SpotLight), in world space at the car's last
+   * drawn pose: low or high beam, false while the front lamps are dark. For the opponents, whose rigs carry no
+   * SpotLight: opponent-beams.ts lights the road with it
+   */
+  beam(out: HeadlightBeam): boolean {
+    if (this.frontLevel === 0) return false;
+    const p = this.profile;
+    const high = this.frontLevel === 2;
+    const m = this.group.matrixWorld;
+    out.pos.set(0, p.heightM + 0.3, p.frontZM).applyMatrix4(m);
+    out.dir
+      .set(0, high ? p.heightM + 0.6 : 0, p.frontZM + (high ? HIGH_BEAM_AIM_M : LOW_BEAM_AIM_M))
+      .applyMatrix4(m)
+      .sub(out.pos)
+      .normalize();
+    out.intensity = p.intensity * 1.65 * (high ? HIGH_BEAM_GAIN : 1);
+    out.range = p.distanceM * (high ? HIGH_BEAM_REACH : 1);
+    return true;
+  }
+
+  /**
+   * The high beam on (a flash) or off; it shows from the next `setEnabled`. A flash lights the front lamps whether
+   * the headlights are on or not, and never changes the headlight mode.
+   */
+  setFlash(on: boolean): void {
+    this.flashing = on;
   }
 
   get isOn(): boolean {
     return this.enabled;
+  }
+
+  get isFlashing(): boolean {
+    return this.hasFront && this.flashing;
   }
 
   get isBraking(): boolean {
@@ -856,7 +970,7 @@ export class CarHeadlights {
   }
 
   dispose(): void {
-    this.applyFrontBoost(false);
+    this.applyFrontBoost(0);
     this.applyRearBoost(false, false);
     for (const slot of this.replacedSlots) {
       if (slot.index === null) {

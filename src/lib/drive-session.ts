@@ -19,9 +19,11 @@ import { FloorSparks } from "@/lib/render/floor-sparks";
 import {
   CarHeadlights,
   canSessionGetDark,
+  carHasHeadlights,
   headlightSpotCountFor,
   resolveHeadlightStates,
   shouldHeadlightsBeOn,
+  type HeadlightBeam,
   type HeadlightMode,
 } from "@/lib/render/car-headlights";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
@@ -41,6 +43,10 @@ import {
   nightShareOf,
 } from "@/lib/render/golden-hour-environment";
 import { createVenueNightLighting, type VenueNightLighting } from "@/lib/render/venue-night-lighting";
+import { applyCircuitNightLights, circuitNightSpec } from "@/lib/render/circuit-night-lights";
+import { FlashTimer, HeadlightButton } from "@/lib/input/headlight-button";
+import { lightCarByLamps, prepareCarForLamps } from "@/lib/render/car-lamp-light";
+import { createOpponentBeams, MAX_BEAMS, type OpponentBeams } from "@/lib/render/opponent-beams";
 import { sameConditions, type SessionConditions } from "@/lib/sim/weather";
 import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
@@ -207,6 +213,7 @@ const HELD_KEYS = {
   brakeHalf: "halfBrake",
   clutch: "clutch",
   boostHold: "boostHold",
+  headlightFlash: "headlightFlash",
 } as const satisfies Partial<Record<KeyAction, string>>;
 type HeldKeyAction = keyof typeof HELD_KEYS;
 const isHeldKeyAction = (action: KeyAction): action is HeldKeyAction => Object.hasOwn(HELD_KEYS, action);
@@ -399,6 +406,8 @@ export interface DriveKeys {
   neutral: boolean;
   /** The Gear up key is down (it is one-shot, but a manual start holds it as the clutch) */
   gearUpHeld: boolean;
+  /** The flash key: the high beam while it is held */
+  headlightFlash: boolean;
 }
 
 /** A car the replay camera can focus on */
@@ -685,6 +694,7 @@ export class DriveSession {
       clutch: false,
       neutral: false,
       gearUpHeld: false,
+      headlightFlash: false,
     };
     /** Ramped keyboard pedals 0..1 (the steering keys are shaped by the car's steering assist) */
     const kbInput = { throttle: 0, brake: 0, clutch: 0, padClutch: 0 };
@@ -1411,19 +1421,48 @@ export class DriveSession {
     const builtCircuit = buildCircuitScene(track);
     scene.add(builtCircuit.sceneGroup);
     builtCircuit.racingLineMesh.visible = settings.racingLine;
-    // A circuit raced under lights: its floodlit night (masts, lit tunnels, the model's glowing light sources)
+    // A circuit raced under lights: its floodlit night (masts, lit tunnels, the model's glowing light sources),
+    // or one whose own model has lamps (street lamps, light poles): they glow and light the ground round them
     let venueNight: VenueNightLighting | null = null;
+    const lampSpec = track.nightLighting ? null : circuitNightSpec(trackId);
+    /**
+     * Sets the night lighting up once the circuit's model is in. A circuit with lamps of its own waits until its
+     * session can get dark: the lighting costs a map, a texture read on every circuit material and a shader compile
+     * of each, all wasted on a day that stays day
+     */
+    const ensureVenueNight = (root: THREE.Object3D) => {
+      if (venueNight || disposed) return;
+      if (!track.nightLighting && !(lampSpec && canSessionGetDark(getTrackEnv().weather.conditions))) return;
+      const modelLamps = lampSpec ? applyCircuitNightLights(root, track, lampSpec) : [];
+      const mode = lampSpec?.mode ?? "floodlit";
+      venueNight = createVenueNightLighting(root, track, track.nightLighting ?? {}, { mode, modelLamps });
+      venueNight.setQuality(settings.graphics.quality);
+      venueNight.setNight(nightShareOf(getTrackEnv().weather.sun.elevationDeg));
+      scene.add(venueNight.group);
+      if (mode === "floodlit") env.setFloodlitNight(venueNight.look);
+      // the cars take the lamps' light too (car-lamp-light.ts): their materials compile for it now, not under a lamp
+      else {
+        prepareCarForLamps(carRig.root);
+        visualFx.forEachRigRoot(prepareCarForLamps);
+      }
+    };
+    // The other cars' headlights on the road (opponent-beams.ts): set up with the night, on every circuit
+    let opponentBeams: OpponentBeams | null = null;
+    const beamScratch: HeadlightBeam[] = [];
+    const ensureOpponentBeams = (root: THREE.Object3D) => {
+      if (opponentBeams || disposed || !canSessionGetDark(getTrackEnv().weather.conditions)) return;
+      opponentBeams = createOpponentBeams(root, MAX_BEAMS[settings.graphics.quality]);
+    };
+    const lampLight = new THREE.Color();
+    const lightOpponentByLamps = (root: THREE.Object3D) => {
+      if (venueNight) lightCarByLamps(root, venueNight.lightAt(root.position.x, root.position.z, lampLight), performance.now());
+    };
     // Track_Collider_Road / surface colliders and Track_Collider_Wall_* barriers for the f12026-car
     void builtCircuit.trackRoot.then((root) => {
       if (disposed) return;
       trackRoot = root;
-      if (track.nightLighting) {
-        venueNight = createVenueNightLighting(root, track, track.nightLighting);
-        venueNight.setQuality(settings.graphics.quality);
-        venueNight.setNight(nightShareOf(getTrackEnv().weather.sun.elevationDeg));
-        scene.add(venueNight.group);
-        env.setFloodlitNight(venueNight.look);
-      }
+      ensureVenueNight(root);
+      ensureOpponentBeams(root);
       physics.attachTrackRoot?.(root);
       aiFieldOf(raceNow())?.attachTrackRoot(root);
       aiFieldSpare?.field.attachTrackRoot(root);
@@ -1501,7 +1540,9 @@ export class DriveSession {
     const initialHeadlightConditions = canSessionGetDark(getTrackEnv().weather.conditions)
       ? getTrackEnv().weather.conditions
       : settings.conditions;
-    const desiredHeadlightSpots = () => headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality);
+    // (a car without headlights, an F1 car, has no beam to build)
+    const desiredHeadlightSpots = () =>
+      carHasHeadlights(carRigCar) ? headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality) : 0;
     let carHeadlights = new CarHeadlights(carIdNow, {
       spotCount: headlightSpotCountFor(initialHeadlightConditions, settings.graphics.quality),
     });
@@ -1819,6 +1860,10 @@ export class DriveSession {
     /** The camera key's hold timer (a hold opens the seat panel) and the pad camera button's press time */
     let cameraKeyHold: number | null = null;
     let padCameraHeldSinceMs: number | null = null;
+    /** The controller's headlight button (a tap flashes, a hold switches the lights) and the flash's least length */
+    const headlightButton = new HeadlightButton();
+    const flashTimer = new FlashTimer();
+    let playerFlashing = false;
     const clearCameraOverride = () => {
       if (cameraOverride === null) return;
       cameraOverride = null;
@@ -2877,6 +2922,7 @@ export class DriveSession {
       const gamepadStick = padStick === undefined ? undefined : combineStickAndGyro(padStick, gyroStick);
       const gamepadBoost = driving && !freeCamControl && device.boostHeld;
       // With the GPU lost the notice over the game has the buttons: the pad's Menu must not open the pause menu under it
+      let lightsPressed = false;
       if (!inMenu && !gpuLost) {
         for (const action of device.pressed) {
           // polish:B any pad button skips the podium shot
@@ -2897,9 +2943,15 @@ export class DriveSession {
             padCameraHeldSinceMs = nowMs;
             continue;
           }
-          // Boost acts while held (`boostHeld`); L3 folds the Live Tuner MFD, R3 clears the whole HUD off the screen
-          if (action !== "boost") runAction(action);
+          // The headlight button carries both jobs (headlight-button.ts): a tap flashes, a hold switches the lights
+          if (action === "headlights") {
+            lightsPressed = true;
+            continue;
+          }
+          // Boost and the flash act while held (`boostHeld`, `device.held`); the MFD and HUD buttons go to the HUD
+          if (action !== "boost" && action !== "headlightFlash") runAction(action);
         }
+
         if (padCameraHeldSinceMs !== null) {
           if (!driving) padCameraHeldSinceMs = null;
           else if (!device.held?.has("camera")) {
@@ -2910,6 +2962,23 @@ export class DriveSession {
             this.openSeatPanel();
           }
         }
+      }
+
+      // The flash: the high beam while the flash key or button is held, or the headlight button is still short of a
+      // hold (which switches the lights instead); a tap still lights it for MIN_FLASH_MS
+      const buttonsLive = driving && !inMenu && !gpuLost;
+      const lightsButton = headlightButton.update(lightsPressed, device.held?.has("headlights") === true, nowMs, buttonsLive);
+      if (lightsButton.toggle) runAction("headlights");
+      // (an F1 car has no headlights to flash)
+      const flashing = flashTimer.update(
+        heldKeys.headlightFlash || device.held?.has("headlightFlash") === true || lightsButton.flash,
+        nowMs,
+        driving && carHasHeadlights(carRigCar)
+      );
+      if (flashing !== playerFlashing) {
+        playerFlashing = flashing;
+        // the HUD's headlight mark shows the flash at once
+        lastWeatherHudMs = -Infinity;
       }
 
       // Keyboard-only input shaping: keys become ramped pedals, eased back while the tyres pass their grip when the
@@ -3479,6 +3548,7 @@ export class DriveSession {
                 ? { id: "practice", dist: Math.round(physics.sMeters * 10) / 10, fin: null, best: mpPracticeBestMs, cmp: physics.tireCompound }
                 : undefined,
           hz: guard?.self.flag || undefined,
+          fl: playerFlashing || undefined,
           vehicle: vehicleNow,
           trackId,
           pos: [
@@ -4078,6 +4148,11 @@ export class DriveSession {
           }
           cloudConditions = { ...wx.conditions };
           syncHeadlightSpots();
+          // a session that turns to night (or rain) on a circuit with lamps: they light up from now on
+          if (trackRoot) {
+            ensureVenueNight(trackRoot);
+            ensureOpponentBeams(trackRoot);
+          }
           env.setCloudSeed(fixedCloudSeed ?? Math.floor(Math.random() * 2 ** 31));
         }
         env.setConditions(skyConditions);
@@ -4101,6 +4176,7 @@ export class DriveSession {
           headlightsOn: hudLights.player,
           headlightMode,
           headlightsAutoOn: hudLights.opponents,
+          headlightFlash: playerFlashing,
         };
         const key = JSON.stringify(next);
         if (key !== weatherHudKey) {
@@ -4124,8 +4200,16 @@ export class DriveSession {
         const headlights = resolveHeadlightStates(headlightMode, skyConditions.elevationDeg, wx.rainIntensity);
         // Onboard views (cockpit, dash, nose, shoulder, T-cam) sit on/behind the nose; hide the player's own front flares
         const playerBrakingNow = (replaying ? replayPlayerTelemetry.brake : physics.telemetry.brake) > 0.05;
+        // Under a street lamp the cars are lit as the road is
+        if (venueNight?.mode === "lamps") {
+          const p = carRig.root.position;
+          lightCarByLamps(carRig.root, venueNight.lightAt(p.x, p.z, lampLight), nowMs);
+          visualFx.forEachOpponentRoot(lightOpponentByLamps);
+        }
+        carHeadlights.setFlash(playerFlashing && !replaying);
         carHeadlights.setEnabled(headlights.player, playerBrakingNow, camera, view.anchor !== null && (!replaying || rp.focusedCarId === "player"));
         visualFx.setHeadlights(headlights.opponents, camera);
+        if (opponentBeams) opponentBeams.update(beamScratch, visualFx.collectBeams(beamScratch), rainCamPos);
         visualFx.setLightLevel(skyLight);
         rainFx.update(
           drawDtS,
@@ -4336,6 +4420,7 @@ export class DriveSession {
       postFx.dispose();
       reflectionProbe.dispose();
       venueNight?.dispose();
+      opponentBeams?.dispose();
       env.dispose();
       rainFx.dispose();
       virtualMirror.dispose();

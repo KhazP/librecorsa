@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { BuiltTrackData, NightLightingDef } from "@/lib/track-data";
 import type { FloodlitNightLook } from "./golden-hour-environment";
+import type { CircuitNightMode, ModelLamp } from "./circuit-night-lights";
 import { patchShader } from "./shader-patch";
 
 /*
@@ -23,6 +24,12 @@ import { patchShader } from "./shader-patch";
  * Masts: one instanced pole, one instanced lamp head and one glow point each (three draws for the circuit). The glow
  * points give the lamps their halo where there is no bloom (Low and Medium).
  *
+ * A circuit whose own model has lamps (circuit-night-lights.ts) uses the same map in one of two ways. Lit all round
+ * ("floodlit"), its lamps' pools go into the key as the masts' do. On a moonlit night ("lamps"), the key stays the moon
+ * and each lamp's pool is light that is simply there, in the lamp's colour, in the map's colour channels: the road
+ * under a street lamp is lit, and between the lamps the night is dark. Such lamps get glow points of their own and no
+ * masts (the model has its poles).
+ *
  * Costs per frame: nothing here (the uniforms change only when the night share does); in the shaders one texture read.
  */
 
@@ -41,6 +48,13 @@ export interface VenueNightLighting {
   /** Masts, lamp heads and their glow: add to the scene */
   readonly group: THREE.Group;
   readonly look: Readonly<FloodlitNightLook>;
+  readonly mode: CircuitNightMode;
+  /**
+   * The lamps' light at a ground point (x, z) as irradiance (linear), as the circuit's materials take it: a moonlit
+   * circuit's pools at the night share now. Black on a floodlit circuit (its key light lights the cars) and by day.
+   * For the cars (car-lamp-light.ts), which the map does not reach
+   */
+  lightAt(x: number, z: number, out: THREE.Color): THREE.Color;
   /** 0 by day .. 1 at night (the environment's night share) */
   setNight(share: number): void;
   setQuality(quality: "low" | "medium" | "high"): void;
@@ -55,6 +69,11 @@ const FLOOD_REACH_M = 42;
 const POOL_RADIUS_M = 34;
 /** Strength of the map's coloured light as ambient irradiance */
 const ACCENT_IRRADIANCE = 1.5;
+/**
+ * The same on a moonlit circuit with lamps, where the colour channels hold the lamps' pools: a street lamp lights the
+ * road under it many times brighter than the moon does
+ */
+const LAMP_POOL_IRRADIANCE = 6;
 /** Light sources of the model light what stands round them: triangles read per mesh at most (larger meshes are thinned) */
 const SPILL_MAX_TRIS = 60000;
 /** How far their light spreads (m, about one standard deviation) */
@@ -63,6 +82,8 @@ const SPILL_SPREAD_M = 10;
 const SPILL_GAIN = 42;
 const SPILL_MAX = 0.62;
 const LAMP_COLOR = 0xfff4e2;
+/** A model lamp's pool at its brightest, as the share of its colour in the map (sRGB, before ACCENT_IRRADIANCE) */
+const LAMP_POOL_PEAK = 0.9;
 const LAMP_NIGHT_INTENSITY = 9;
 const LAMP_DAY_INTENSITY = 0.25;
 
@@ -70,13 +91,15 @@ interface NightEmissive {
   day: number;
   night: number;
   vertexColor?: boolean;
+  /** False: the light source lights the ground through its own pool, not as glow gathered from above */
+  spill?: boolean;
 }
 
 const isNightEmissive = (v: unknown): v is NightEmissive =>
   !!v && typeof v === "object" && typeof (v as NightEmissive).day === "number" && typeof (v as NightEmissive).night === "number";
 
 /** Adds to a material's shader hooks, keeping the ones it has (asphalt, scenery detail, leaves ...) */
-function chainShaderPatch(mat: THREE.Material, key: string, patch: (shader: THREE.WebGLProgramParametersWithUniforms) => void): void {
+export function chainShaderPatch(mat: THREE.Material, key: string, patch: (shader: THREE.WebGLProgramParametersWithUniforms) => void): void {
   const prev = mat.onBeforeCompile;
   const prevKey = mat.customProgramCacheKey.bind(mat);
   mat.onBeforeCompile = (shader, renderer) => {
@@ -118,7 +141,7 @@ const venueFragmentPatches = () =>
   [
     [
       "#include <common>",
-      "#include <common>\nuniform sampler2D uLcVenueMap;\nuniform float uLcVenueNight;\nuniform float uLcVenueAccent;\nvarying vec2 vLcVenueUv;",
+      "#include <common>\nuniform sampler2D uLcVenueMap;\nuniform float uLcVenueNight;\nuniform float uLcVenueFlood;\nuniform float uLcVenueAccent;\nvarying vec2 vLcVenueUv;",
     ],
     [
       "#include <lights_fragment_begin>",
@@ -126,7 +149,8 @@ const venueFragmentPatches = () =>
 	vec4 lcVenue = texture2D( uLcVenueMap, vLcVenueUv );
 	// off the map: the open country, in moonlight
 	float lcVenueIn = step( 0.0, vLcVenueUv.x ) * step( vLcVenueUv.x, 1.0 ) * step( 0.0, vLcVenueUv.y ) * step( vLcVenueUv.y, 1.0 );
-	vec3 lcVenueKey = mix( vec3( 1.0 ), max( vec3( lcVenue.a * lcVenueIn ), ${MOONLIGHT_FLOOR} ), uLcVenueNight );
+	// (a moonlit circuit with lamps keeps its key light as it is: uLcVenueFlood 0)
+	vec3 lcVenueKey = mix( vec3( 1.0 ), max( vec3( lcVenue.a * lcVenueIn ), ${MOONLIGHT_FLOOR} ), uLcVenueNight * uLcVenueFlood );
 ${venueLightsBegin()}`,
     ],
     [
@@ -153,6 +177,10 @@ interface VenueMap {
   texture: THREE.DataTexture;
   /** min x, min z, 1 / size x, 1 / size z */
   box: THREE.Vector4;
+  /** The map's texels (RGBA, sRGB colour) and size, kept for lightAt */
+  data: Uint8Array;
+  w: number;
+  h: number;
 }
 
 /** A soft-edged band along a polyline: strokes from the widest, each adding a share, so the light fades with distance */
@@ -236,7 +264,7 @@ function emitterSpill(
     if (!mesh.isMesh || !mesh.visible) return;
     const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial;
     const spec = mat?.userData?.nightEmissive as unknown;
-    if (!isNightEmissive(spec) || spec.night <= 0) return;
+    if (!isNightEmissive(spec) || spec.night <= 0 || spec.spill === false) return;
     const pos = mesh.geometry.getAttribute("position");
     if (!pos) return;
     const index = mesh.geometry.getIndex();
@@ -334,7 +362,24 @@ function emitterSpill(
   return image;
 }
 
-function buildVenueMap(root: THREE.Object3D, track: BuiltTrackData, def: NightLightingDef, maxSize: number): VenueMap | null {
+/** A model lamp's pool of light on the ground: its radius (m) from the lamp's height, and its centre toward the road */
+export function lampPool(lamp: ModelLamp): { x: number; z: number; radiusM: number } {
+  const radiusM = THREE.MathUtils.clamp(6 + 1.5 * lamp.heightM, 9, 34);
+  // a lamp leans its light over the road: the pool lies between its foot and the road, never past the road's middle
+  const lean = Math.min(lamp.roadDistM, 0.45 * lamp.heightM);
+  return { x: lamp.x + lamp.towardX * lean, z: lamp.z + lamp.towardZ * lean, radiusM };
+}
+
+const srgbHex = (hex: number) => `${(hex >> 16) & 255},${(hex >> 8) & 255},${hex & 255}`;
+
+function buildVenueMap(
+  root: THREE.Object3D,
+  track: BuiltTrackData,
+  def: NightLightingDef,
+  maxSize: number,
+  mode: CircuitNightMode,
+  modelLamps: readonly ModelLamp[]
+): VenueMap | null {
   if (typeof document === "undefined") return null;
   const samples = track.samples;
   let minX = Infinity;
@@ -399,10 +444,13 @@ function buildVenueMap(root: THREE.Object3D, track: BuiltTrackData, def: NightLi
   });
   lap.closePath();
 
-  // The floodlit band: the road and its run-off at 0.7, fading out over the reach; each mast adds its pool on top
-  const inner = 2 * (halfWidth + 9) * m;
-  const outer = 2 * (halfWidth + FLOOD_REACH_M) * m;
-  strokeFalloff(key.ctx, lap, inner, outer, 0.7);
+  // The floodlit band: the road and its run-off at 0.7, fading out over the reach; each mast adds its pool on top.
+  // A moonlit circuit has no band: its light is its lamps' pools alone
+  if (mode === "floodlit") {
+    const inner = 2 * (halfWidth + 9) * m;
+    const outer = 2 * (halfWidth + FLOOD_REACH_M) * m;
+    strokeFalloff(key.ctx, lap, inner, outer, 0.7);
+  }
   const lamps = def.lamps ?? [];
   key.ctx.globalCompositeOperation = "lighter";
   for (const [x, , z, , tx, tz] of lamps) {
@@ -416,6 +464,24 @@ function buildVenueMap(root: THREE.Object3D, track: BuiltTrackData, def: NightLi
     g.addColorStop(1, "rgba(255,255,255,0)");
     key.ctx.fillStyle = g;
     key.ctx.fillRect(cx - r, cz - r, 2 * r, 2 * r);
+  }
+  // The model's own lamps: under lights, more key; on a moonlit night, light of their own colour
+  for (const lamp of modelLamps) {
+    if (lamp.pool <= 0) continue;
+    const pool = lampPool(lamp);
+    const cx = px(pool.x);
+    const cz = pz(pool.z);
+    const r = pool.radiusM * m;
+    if (cx + r < 0 || cz + r < 0 || cx - r > w || cz - r > h) continue;
+    const ctx = mode === "floodlit" ? key.ctx : null;
+    if (ctx) {
+      const g = ctx.createRadialGradient(cx, cz, 0, cx, cz, r);
+      g.addColorStop(0, `rgba(255,255,255,${(0.34 * lamp.pool).toFixed(3)})`);
+      g.addColorStop(0.45, `rgba(255,255,255,${(0.2 * lamp.pool).toFixed(3)})`);
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - r, cz - r, 2 * r, 2 * r);
+    }
   }
   key.ctx.globalCompositeOperation = "source-over";
 
@@ -434,6 +500,28 @@ function buildVenueMap(root: THREE.Object3D, track: BuiltTrackData, def: NightLi
       accent.ctx.imageSmoothingQuality = "high";
       accent.ctx.drawImage(small, 0, 0, w, h);
     }
+  }
+
+  // A moonlit circuit's lamps: each pool in its lamp's colour, brightest under the lamp, adding where pools meet
+  if (mode === "lamps") {
+    accent.ctx.globalCompositeOperation = "lighter";
+    for (const lamp of modelLamps) {
+      if (lamp.pool <= 0) continue;
+      const pool = lampPool(lamp);
+      const cx = px(pool.x);
+      const cz = pz(pool.z);
+      const r = pool.radiusM * m;
+      if (cx + r < 0 || cz + r < 0 || cx - r > w || cz - r > h) continue;
+      const rgb = srgbHex(lamp.color);
+      const g = accent.ctx.createRadialGradient(cx, cz, 0, cx, cz, r);
+      g.addColorStop(0, `rgba(${rgb},${(LAMP_POOL_PEAK * lamp.pool).toFixed(3)})`);
+      g.addColorStop(0.35, `rgba(${rgb},${(0.55 * LAMP_POOL_PEAK * lamp.pool).toFixed(3)})`);
+      g.addColorStop(0.7, `rgba(${rgb},${(0.16 * LAMP_POOL_PEAK * lamp.pool).toFixed(3)})`);
+      g.addColorStop(1, `rgba(${rgb},0)`);
+      accent.ctx.fillStyle = g;
+      accent.ctx.fillRect(cx - r, cz - r, 2 * r, 2 * r);
+    }
+    accent.ctx.globalCompositeOperation = "source-over";
   }
 
   // No floodlight in the tunnels (with shadows off nothing else keeps it out); their mouths fade over a few metres
@@ -477,8 +565,11 @@ function buildVenueMap(root: THREE.Object3D, track: BuiltTrackData, def: NightLi
   texture.generateMipmaps = true;
   texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.needsUpdate = true;
-  return { texture, box: new THREE.Vector4(minX, minZ, 1 / sizeX, 1 / sizeZ) };
+  return { texture, box: new THREE.Vector4(minX, minZ, 1 / sizeX, 1 / sizeZ), data, w, h };
 }
+
+/** sRGB byte to linear, as the texture's sampler decodes it */
+const SRGB_TO_LINEAR = Float32Array.from({ length: 256 }, (_, i) => srgbToLinear(i / 255));
 
 /** A soft disc for the lamps' glow points */
 function glowSprite(): THREE.Texture | null {
@@ -507,19 +598,28 @@ export function createVenueNightLighting(
   root: THREE.Object3D,
   track: BuiltTrackData,
   def: NightLightingDef,
-  opts: { mapSize?: number } = {}
+  opts: {
+    mapSize?: number;
+    /** "floodlit" (the default, as track data `nightLighting`): the night's key light is the venue's; "lamps": moonlit */
+    mode?: CircuitNightMode;
+    /** Lamps of the circuit's own model (circuit-night-lights.ts): pools and glow points, no masts */
+    modelLamps?: readonly ModelLamp[];
+  } = {}
 ): VenueNightLighting {
   const group = new THREE.Group();
   group.name = "VenueNightLighting";
   const disposables: { dispose(): void }[] = [];
+  const mode = opts.mode ?? "floodlit";
+  const modelLamps = opts.modelLamps ?? [];
 
   // --- The venue map on the circuit's own materials ---------------------------
-  const map = buildVenueMap(root, track, def, opts.mapSize ?? 2048);
+  const map = buildVenueMap(root, track, def, opts.mapSize ?? 2048, mode, modelLamps);
   const uniforms = {
     uLcVenueMap: { value: map?.texture ?? null },
     uLcVenueBox: { value: map?.box ?? new THREE.Vector4(0, 0, 1, 1) },
     uLcVenueNight: { value: 0 },
-    uLcVenueAccent: { value: ACCENT_IRRADIANCE },
+    uLcVenueFlood: { value: mode === "floodlit" ? 1 : 0 },
+    uLcVenueAccent: { value: mode === "lamps" ? LAMP_POOL_IRRADIANCE : ACCENT_IRRADIANCE },
   };
   if (map) disposables.push(map.texture);
   const fragmentPatches = venueFragmentPatches();
@@ -536,7 +636,7 @@ export function createVenueNightLighting(
       if (emissive.vertexColor) std.emissive.setRGB(1, 1, 1);
     }
     if (!map && !emissive?.vertexColor) return;
-    chainShaderPatch(mat, `venue-night-v1${emissive?.vertexColor ? "-vc" : ""}${map ? "" : "-nomap"}`, (shader) => {
+    chainShaderPatch(mat, `venue-night-v2${emissive?.vertexColor ? "-vc" : ""}${map ? "" : "-nomap"}`, (shader) => {
       if (map) {
         Object.assign(shader.uniforms, uniforms);
         shader.vertexShader = patchShader(shader.vertexShader, VENUE_VERTEX_PATCHES, "venue night");
@@ -618,6 +718,45 @@ export function createVenueNightLighting(
     if (sprite) disposables.push(sprite);
   }
 
+  // --- The model's own lamps: a glow point under each head (one draw per size and colour) -------------
+  const lampGlowMaterials: THREE.PointsMaterial[] = [];
+  const lampSprite = modelLamps.some((l) => l.glowSizeM > 0) ? glowSprite() : null;
+  if (lampSprite) disposables.push(lampSprite);
+  const buckets = new Map<string, ModelLamp[]>();
+  for (const lamp of modelLamps) {
+    if (lamp.glowSizeM <= 0) continue;
+    const key = `${lamp.glowSizeM}|${lamp.color}`;
+    const list = buckets.get(key);
+    if (list) list.push(lamp);
+    else buckets.set(key, [lamp]);
+  }
+  for (const list of buckets.values()) {
+    const positions = new Float32Array(list.length * 3);
+    // just under the head, a little toward the road: where its lamps face
+    list.forEach((l, i) => positions.set([l.x + l.towardX * 0.3, l.y - 0.35, l.z + l.towardZ * 0.3], i * 3));
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({
+      map: lampSprite,
+      color: list[0].color,
+      size: list[0].glowSizeM,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+    });
+    const points = new THREE.Points(geometry, material);
+    points.frustumCulled = false;
+    points.matrixAutoUpdate = false;
+    points.renderOrder = 3;
+    points.name = "VenueLampGlow";
+    group.add(points);
+    lampGlowMaterials.push(material);
+    disposables.push(geometry, material);
+  }
+
   let night = -1;
   let glowGain = 0.55;
   const apply = () => {
@@ -629,11 +768,40 @@ export function createVenueNightLighting(
       glowMaterial.opacity = glowGain * k;
       glowMaterial.visible = k > 0.02;
     }
+    for (const mat of lampGlowMaterials) {
+      mat.opacity = glowGain * k;
+      mat.visible = k > 0.02;
+    }
   };
 
   const api: VenueNightLighting = {
     group,
     look: VENUE_NIGHT_LOOK,
+    mode,
+    lightAt(x: number, z: number, out: THREE.Color): THREE.Color {
+      const k = Math.max(0, night);
+      if (!map || mode !== "lamps" || k <= 0) return out.setRGB(0, 0, 0);
+      const { data, w, h, box } = map;
+      // bilinear, texel centres at half steps, as the sampler reads it
+      const fx = (x - box.x) * box.z * w - 0.5;
+      const fz = (z - box.y) * box.w * h - 0.5;
+      if (fx < -1 || fz < -1 || fx > w || fz > h) return out.setRGB(0, 0, 0);
+      const x0 = Math.max(0, Math.min(w - 1, Math.floor(fx)));
+      const z0 = Math.max(0, Math.min(h - 1, Math.floor(fz)));
+      const x1 = Math.min(w - 1, x0 + 1);
+      const z1 = Math.min(h - 1, z0 + 1);
+      const tx = THREE.MathUtils.clamp(fx - x0, 0, 1);
+      const tz = THREE.MathUtils.clamp(fz - z0, 0, 1);
+      const scale = uniforms.uLcVenueAccent.value * k;
+      const ch = (c: number) => {
+        const a = SRGB_TO_LINEAR[data[(z0 * w + x0) * 4 + c]];
+        const b = SRGB_TO_LINEAR[data[(z0 * w + x1) * 4 + c]];
+        const d = SRGB_TO_LINEAR[data[(z1 * w + x0) * 4 + c]];
+        const e = SRGB_TO_LINEAR[data[(z1 * w + x1) * 4 + c]];
+        return ((a + (b - a) * tx) * (1 - tz) + (d + (e - d) * tx) * tz) * scale;
+      };
+      return out.setRGB(ch(0), ch(1), ch(2));
+    },
     setNight(share: number): void {
       const k = THREE.MathUtils.clamp(share, 0, 1);
       if (Math.abs(k - night) < 0.004) return;

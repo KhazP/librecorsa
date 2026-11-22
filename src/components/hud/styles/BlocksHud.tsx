@@ -53,6 +53,8 @@ import {
   driverLabel,
   evaluateRadar,
   fuelLapsLeft,
+  HEADLIGHT_WORD,
+  headlightState,
   idealLapMs,
   leaderboardWindow,
   predictedLapMs,
@@ -558,13 +560,14 @@ const Tyres: React.FC<{ t: CarTelemetry }> = ({ t }) => {
 const WeatherBlocks: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
   const units = useUnits();
   const surface = trackSurfaceState(weather.waterMm);
+  const lights = headlightState(weather);
   return (
     <section aria-label="Weather" className="w-[196px] text-[12px] leading-none font-bold">
       <div className={`flex h-5 items-center justify-between px-2 ${HEAD} uppercase`}>
         <span>Weather</span>
         <span>{weather.rain > 0.05 ? `${Math.round(weather.rain * 100)}% RAIN` : weather.timeMoving ? dayClock(weather.clockH) : SURFACE_WORD[surface]}</span>
       </div>
-      <div className={`grid grid-cols-3 gap-1 px-2 py-1.5 ${BLOCK}`}>
+      <div className={`grid ${lights ? "grid-cols-4" : "grid-cols-3"} gap-1 px-2 py-1.5 ${BLOCK}`}>
         <div className="flex flex-col gap-0.5">
           <span className="text-[9px] font-black text-(--blk-ink-dim) uppercase">Air</span>
           <span>{formatTemp(weather.airC, units)}</span>
@@ -579,6 +582,17 @@ const WeatherBlocks: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
             {SURFACE_WORD[surface]}
           </span>
         </div>
+        {lights ? (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[9px] font-black text-(--blk-ink-dim) uppercase">Lights</span>
+            <span
+              className="uppercase"
+              style={{ color: lights === "flash" ? "var(--blk-flag-yellow)" : lights === "off" ? "var(--blk-ink-dim)" : undefined }}
+            >
+              {HEADLIGHT_WORD[lights]}
+            </span>
+          </div>
+        ) : null}
       </div>
     </section>
   );

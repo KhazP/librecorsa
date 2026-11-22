@@ -145,6 +145,22 @@ export function completedLap(
   return { lap, ms: lapMs, sectorsMs: [s1, s2, s3], valid };
 }
 
+/** The player's headlights as a HUD shows them */
+export type HeadlightState = "flash" | "on" | "off";
+
+/**
+ * The player's headlights for a HUD's weather panel: flashing, on, or switched off by hand; null while they are off
+ * and nothing asked for them (a day on automatic), when the panel shows nothing for them
+ */
+export function headlightState(w: { headlightsOn?: boolean; headlightFlash?: boolean; headlightMode?: string }): HeadlightState | null {
+  if (w.headlightFlash) return "flash";
+  if (w.headlightsOn) return "on";
+  if (w.headlightMode === "off") return "off";
+  return null;
+}
+
+export const HEADLIGHT_WORD: Record<HeadlightState, string> = { flash: "Flash", on: "On", off: "Off" };
+
 export type TrackSurfaceState = "dry" | "damp" | "wet" | "flooded";
 
 /** Track wetness word thresholds shared with WeatherBadge */

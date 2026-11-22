@@ -11,7 +11,7 @@
  *  32  f16  velocity x, y, z (m/s)
  *  38  f16  angular velocity x, y, z (rad/s)
  *  44  i8   steering (-1..1), u8 throttle, u8 brake (0..1)
- *  47  u8   (unused)
+ *  47  u8   lights: 1 flashing the headlights (0 from clients and servers older than it; read as not flashing)
  *  48  f16  wheel speeds ×4 (rpm)
  *  56  f32  lap position (m)
  *  60  u16  speed (0.01 km/h)
@@ -34,6 +34,8 @@ export const PROTOCOL_VERSION = 2;
 const FLAG_HAZARD = 1;
 const FLAG_RACE = 2;
 const FLAG_INFO = 4;
+/** Byte 47's bits */
+const LIGHT_FLASH = 1;
 const FIXED_BYTES = 63;
 /** Longest packet accepted (bytes): a peer id and the slow fields are short */
 export const MAX_STATE_BYTES = 1024;
@@ -136,6 +138,8 @@ export interface StatePacketFields {
   trackS: number;
   speedKmh: number;
   hz?: boolean;
+  /** Flashing the headlights */
+  fl?: boolean;
   driverCode: string;
   teamColorHex: string;
   name?: string;
@@ -177,6 +181,7 @@ export function encodeState(p: StatePacketFields, infoJson?: string): ArrayBuffe
   v.setInt8(44, Math.round(clamp(p.steerAngle, -1, 1) * 127));
   v.setUint8(45, Math.round(clamp(p.throttle, 0, 1) * 255));
   v.setUint8(46, Math.round(clamp(p.brake, 0, 1) * 255));
+  v.setUint8(47, p.fl ? LIGHT_FLASH : 0);
   for (let i = 0; i < 4; i++) v.setUint16(48 + 2 * i, toHalf(p.wheelRPMs[i]), true);
   v.setFloat32(56, p.trackS, true);
   v.setUint16(60, Math.round(clamp(p.speedKmh, 0, 655.35) * 100), true);
@@ -282,6 +287,7 @@ export function decodeState(data: ArrayBuffer | ArrayBufferView, memory: StateIn
       trackS: v.getFloat32(56, true),
       speedKmh: v.getUint16(60, true) / 100,
       hz: (flags & FLAG_HAZARD) !== 0 ? true : undefined,
+      fl: (v.getUint8(47) & LIGHT_FLASH) !== 0 ? true : undefined,
     },
   };
 }

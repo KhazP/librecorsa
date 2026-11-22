@@ -48,7 +48,10 @@ import { type WeatherHudState } from "../WeatherBadge";
 import {
   dayClock,
   evaluateRadar,
+  formatClock,
   fuelLapsLeft,
+  HEADLIGHT_WORD,
+  headlightState,
   leaderboardWindow,
   predictedLapMs,
   RADAR_CAR_L,
@@ -56,7 +59,6 @@ import {
   RADAR_VIEW_RANGE_M,
   radarSideArcPath,
   sessionBestLapMs,
-  formatClock,
   SURFACE_WORD,
   trackSurfaceState,
 } from "../third-party-data";
@@ -437,6 +439,7 @@ const IrDashiesWeatherPanel: React.FC<{ weather: WeatherHudState }> = ({ weather
   const units = useUnits();
   const surface = SURFACE_WORD[trackSurfaceState(weather.waterMm)];
   const rainIcon = weather.rain > 0.5 ? "weatherStorm" : weather.rain > 0.05 ? "weatherRain" : "weatherClear";
+  const lights = headlightState(weather);
   return (
     <section aria-label="Weather" className="rounded-md bg-(--tp-panel) p-1.5 text-(--tp-text)">
       <div className={BAR}>
@@ -446,7 +449,7 @@ const IrDashiesWeatherPanel: React.FC<{ weather: WeatherHudState }> = ({ weather
         </span>
         <span>{weather.timeMoving ? dayClock(weather.clockH) : "Track"}</span>
       </div>
-      <div className="mt-1 grid grid-cols-2 gap-1 text-center">
+      <div className={`mt-1 grid ${lights ? "grid-cols-3" : "grid-cols-2"} gap-1 text-center`}>
         <div className={`flex flex-col py-1 ${CELL}`}>
           <span className="text-[9px] font-semibold text-(--tp-text-dim) uppercase">Air</span>
           <span className="text-[13px] font-semibold tabular-nums">{formatTemp(weather.airC, units)}</span>
@@ -455,6 +458,17 @@ const IrDashiesWeatherPanel: React.FC<{ weather: WeatherHudState }> = ({ weather
           <span className="text-[9px] font-semibold text-(--tp-text-dim) uppercase">Track</span>
           <span className="text-[13px] font-semibold tabular-nums">{formatTemp(weather.trackC, units)}</span>
         </div>
+        {lights ? (
+          <div className={`flex flex-col py-1 ${CELL}`}>
+            <span className="text-[9px] font-semibold text-(--tp-text-dim) uppercase">Lights</span>
+            <span
+              className="text-[13px] font-semibold"
+              style={{ color: lights === "flash" ? HUD_INFO : lights === "off" ? "var(--tp-text-dim)" : undefined }}
+            >
+              {HEADLIGHT_WORD[lights]}
+            </span>
+          </div>
+        ) : null}
       </div>
     </section>
   );

@@ -16,6 +16,7 @@ import {
 } from "postprocessing";
 import { patchShader } from "./shader-patch";
 import { PhysicalSky } from "./physical-sky";
+import { nightShareOfElevation, nightSkyGlsl, starShare } from "./night-sky";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import type { RenderPlan } from "./adaptive-quality";
 import type { AerialPerspectiveEffect } from "@takram/three-atmosphere";
@@ -139,7 +140,7 @@ export interface SkyConditions {
 
 /** How far into the night a sun elevation is: 0 until the sun is 3 deg under the horizon, 1 from 13 deg under */
 export function nightShareOf(elevationDeg: number): number {
-  return THREE.MathUtils.clamp((-elevationDeg - 3) / 10, 0, 1);
+  return nightShareOfElevation(elevationDeg);
 }
 
 /**
@@ -302,14 +303,21 @@ function configureSkyUniforms(sky: Sky, showSunDisc: boolean): void {
   // stays well above the 1.1 bloom threshold and blooms into a halo instead.
   // The stock sky is tuned for exposure ~0.5: at 14° its horizon toward the sun reaches ~29 linear, so a
   // quarter of the frame crossed the bloom threshold. Scaled, only the glow around the sun blooms.
+  u.nightSky = { value: 0 };
+  u.nightStars = { value: 0 };
   sky.material.fragmentShader = patchShader(
-    "uniform float skyRadianceScale;\n" + sky.material.fragmentShader,
+    "uniform float skyRadianceScale;\nuniform float nightSky;\nuniform float nightStars;\n" + sky.material.fragmentShader,
     [
       [
         "vec3 sundiscColor = ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 );",
         "vec3 sundiscColor = min( ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 ), vec3( SUN_DISC_MAX ) );",
       ],
-      ["gl_FragColor = vec4( texColor, 1.0 );", "gl_FragColor = vec4( texColor * skyRadianceScale, 1.0 );"],
+      [
+        "gl_FragColor = vec4( texColor, 1.0 );",
+        `vec3 lcSkyOut = texColor * skyRadianceScale;
+${nightSkyGlsl("lcSkyOut", "direction", "vec3( 0.0, 1.0, 0.0 )", "nightSky", "nightStars", "length( fwidth( direction ) )")}
+	gl_FragColor = vec4( lcSkyOut, 1.0 );`,
+      ],
     ],
     "sky"
   );
@@ -373,14 +381,16 @@ function colorCurve(keys: readonly Key[], x: number, out: THREE.Color): THREE.Co
 // Keys by sun elevation (deg). Each passes through the golden-hour constant at 14 deg, and extends smoothly into
 // moonlit night below -3 deg while keeping dawn..noon curves identical.
 const SUN_COLOR_KEYS: readonly Key[] = [[-18, 0x7692c8], [-6, 0x8088b2], [-2, 0xff6a2a], [4, 0xffa262], [14, SUN_COLOR], [35, 0xfff4e8], [70, 0xfff8f2]];
-const SUN_INTENSITY_KEYS: readonly Key[] = [[-18, 0.14], [-6, 0.08], [-3, 0], [1, 0.8], [6, 3.0], [14, SUN_INTENSITY], [35, 5.8], [70, 6.2]];
+const SUN_INTENSITY_KEYS: readonly Key[] = [[-18, 0.42], [-6, 0.1], [-3, 0], [1, 0.8], [6, 3.0], [14, SUN_INTENSITY], [35, 5.8], [70, 6.2]];
 // The sky's prefiltered environment already lights everything from the sky dome; this flat fill on top of it only
 // washes out shading and reflections (cars read as matte plastic), so it is kept to a trace
-const FILL_INTENSITY_KEYS: readonly Key[] = [[-18, 0.018], [-8, 0.025], [-3, 0.05], [4, 0.1], [14, FILL_INTENSITY], [40, 0.17], [70, 0.19]];
+const FILL_INTENSITY_KEYS: readonly Key[] = [[-18, 0.04], [-8, 0.04], [-3, 0.05], [4, 0.1], [14, FILL_INTENSITY], [40, 0.17], [70, 0.19]];
 const FOG_COLOR_KEYS: readonly Key[] = [[-18, 0x060a14], [-8, 0x161a2c], [-3, 0x5e5468], [4, 0xd49c7c], [14, FOG_COLOR], [35, 0xd8dade], [70, 0xc8d4e2]];
-const ENV_INTENSITY_KEYS: readonly Key[] = [[-18, 0.055], [-8, 0.12], [-3, 0.3], [4, 0.7], [14, 1], [70, 1.1]];
+const ENV_INTENSITY_KEYS: readonly Key[] = [[-18, 0.16], [-8, 0.18], [-3, 0.3], [4, 0.7], [14, 1], [70, 1.1]];
 const EXPOSURE_KEYS: readonly Key[] = [[-18, 1.65], [-8, 1.58], [-3, 1.5], [4, 1.32], [14, EXPOSURE], [35, 1.08], [70, 1.05]];
 const NIGHT_FILL_SKY = 0x182542;
+/** Fill added on a fully overcast night */
+const NIGHT_OVERCAST_FILL = 0.1;
 const NIGHT_FILL_GROUND = 0x070a10;
 const OVERCAST_SUN = 0xe6e8ea;
 const OVERCAST_FOG = 0xb2b6ba;
@@ -394,6 +404,9 @@ interface SkyLook {
   cloudCoverage: number;
   cloudDensity: number;
   radianceScale: number;
+  /** The night sky's glow and its stars, 0..1 (night-sky.ts) */
+  nightSky: number;
+  nightStars: number;
 }
 
 function skyLookFor(c: SkyConditions, out: SkyLook): SkyLook {
@@ -406,6 +419,8 @@ function skyLookFor(c: SkyConditions, out: SkyLook): SkyLook {
   out.cloudCoverage = cloud < 0.02 ? 0 : cloud;
   out.cloudDensity = 0.4 + 0.45 * cloud + 0.15 * rain;
   out.radianceScale = SKY_RADIANCE_SCALE * (1 - 0.35 * rain) * (1 - 0.94 * nightShare);
+  out.nightSky = nightShare * (1 - 0.4 * rain);
+  out.nightStars = starShare(nightShare, cloud, rain);
   return out;
 }
 
@@ -416,6 +431,8 @@ function applySkyLook(sky: Sky, sunDir: THREE.Vector3, look: SkyLook): void {
   u.cloudCoverage.value = look.cloudCoverage;
   u.cloudDensity.value = look.cloudDensity;
   u.skyRadianceScale.value = look.radianceScale;
+  u.nightSky.value = look.nightSky;
+  u.nightStars.value = look.nightStars;
   (u.sunPosition.value as THREE.Vector3).copy(sunDir);
 }
 
@@ -465,6 +482,8 @@ class SkyBaker {
   /** Bakes the sky into the environment map and returns its texture: the same texture on every call */
   bake(sunDir: THREE.Vector3, look: SkyLook, sun: GroundLight, fill: THREE.HemisphereLight): THREE.Texture {
     applySkyLook(this.sky, sunDir, look);
+    // the night sky's glow lights the bake; its stars would only speckle the reflections
+    this.sky.material.uniforms.nightStars.value = 0;
     this.sky.visible = !this.physicalSky?.visible;
     // The ground takes the scene's own sun and sky light, so it sits at the brightness the real circuit has
     this.groundSun.color.copy(sun.color);
@@ -687,13 +706,15 @@ export function createGoldenHourEnvironment(
     // Fill: an overcast sky lights everything from above; at night it deepens to cool indigo
     fillLight.color.setHex(FILL_SKY).lerp(tint.setHex(OVERCAST_FILL_SKY), cloud).lerp(tint.setHex(NIGHT_FILL_SKY), nightShare);
     fillLight.groundColor.setHex(FILL_GROUND).lerp(tint.setHex(WET_FILL_GROUND), rain).lerp(tint.setHex(NIGHT_FILL_GROUND), nightShare);
-    fillLight.intensity = curve(FILL_INTENSITY_KEYS, e) * (1 + 1.1 * cloud);
+    // (an overcast night is lit from the whole sky by the glow under the clouds, the moon hidden behind them)
+    fillLight.intensity = curve(FILL_INTENSITY_KEYS, e) * (1 + 1.1 * cloud) + NIGHT_OVERCAST_FILL * nightShare * cloud;
 
     colorCurve(FOG_COLOR_KEYS, e, fog.color)
       .lerp(tint.setHex(OVERCAST_FOG), 0.8 * cloud * (1 - 0.9 * nightShare))
       .lerp(tint.setHex(RAIN_FOG), rain * (1 - 0.9 * nightShare));
-    // A low sun dims the overcast / rain haze too
-    if (cloud > 0 && e < 14) fog.color.multiplyScalar(1 - cloud * (1 - curve(ENV_INTENSITY_KEYS, e)));
+    // A low sun dims the overcast / rain haze too (at night the haze keeps the night's own colour: dimmed as well it
+    // went black, and an overcast night with it)
+    if (cloud > 0 && e < 14) fog.color.multiplyScalar(1 - cloud * (1 - curve(ENV_INTENSITY_KEYS, e)) * (1 - nightShare));
     syncFogDensity();
 
     scene.environmentIntensity = curve(ENV_INTENSITY_KEYS, e) * (1 - 0.25 * rain);

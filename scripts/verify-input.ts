@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { ScreenWakeLock, shouldHoldWakeLock, type WakeLockSentinelLike } from '../src/lib/screen-wake-lock';
+import { FlashTimer, HeadlightButton, LIGHTS_HOLD_MS, MIN_FLASH_MS } from '../src/lib/input/headlight-button';
 import {
   buildKeyLookup,
   clearKey,
@@ -12,6 +13,7 @@ import {
   DEFAULT_PAD_BUTTONS,
   DEFAULT_PAD_PEDAL_SOURCES,
   freePedalButtons,
+  KEY_ACTIONS,
   matchPadLayout,
   matchPedalSet,
   PAD_ACTIONS,
@@ -27,6 +29,7 @@ import {
   withPedalSet,
   type PadPedalSources,
   rebindPadButton,
+  RETIRED_GT_STYLE_BUTTONS,
 } from '../src/lib/input/bindings';
 import {
   autoConfigureWheel,
@@ -187,11 +190,71 @@ check('a new player gets GT style; a saved map keeps its buttons, and an action 
   // An older save without the HUD action: Bumper shift's R3, not GT style's LB (gear down there)
   const { hud: _hud, ...noHud } = old;
   assert.equal(parsePlayerSettings({ padButtons: noHud }).padButtons.hud, PAD_LAYOUTS.bumper.buttons.hud);
-  // Headlights is bindable on controller (unbound by default) and survives save/load
-  assert.equal(DEFAULT_PAD_BUTTONS.headlights, null);
+  // Headlights are on L3 by default (GT7's button), can move, and survive save/load
+  assert.equal(DEFAULT_PAD_BUTTONS.headlights, 10);
   const withHeadlights = rebindPadButton(DEFAULT_PAD_BUTTONS, 'headlights', 3);
   assert.equal(withHeadlights.headlights, 3);
   assert.equal(parsePlayerSettings({ padButtons: withHeadlights }).padButtons.headlights, 3);
+  const withFlash = rebindPadButton(BUMPER_SHIFT_BUTTONS, 'headlightFlash', 1);
+  assert.equal(parsePlayerSettings({ padButtons: withFlash }).padButtons.headlightFlash, 1);
+});
+check('GT style as saved before the headlights (L3 the MFD) moves on to GT style as it is now', () => {
+  const { headlightFlash: _flash, ...oldGt } = RETIRED_GT_STYLE_BUTTONS;
+  const saved = JSON.parse(JSON.stringify({ ...DEFAULT_PLAYER_SETTINGS, padButtons: oldGt }));
+  const reloaded = parsePlayerSettings(saved).padButtons;
+  assert.deepEqual(reloaded, PAD_LAYOUTS.gt.buttons);
+  assert.equal(matchPadLayout(reloaded), 'gt');
+  // A player who changed one button of it keeps their own map
+  const custom = parsePlayerSettings({ padButtons: { ...oldGt, racingLine: 4, hud: null } }).padButtons;
+  assert.equal(custom.racingLine, 4);
+  assert.equal(custom.mfd, 10);
+  assert.equal(custom.headlights, null);
+});
+check('flash headlights: Y on the keyboard by default, beside the headlights key, and no other action shares it', () => {
+  assert.deepEqual(DEFAULT_KEY_BINDINGS.headlightFlash, ['KeyY']);
+  assert.deepEqual(DEFAULT_KEY_BINDINGS.headlights, ['KeyU']);
+  const owners = KEY_ACTIONS.filter(({ id }) => DEFAULT_KEY_BINDINGS[id].includes('KeyY'));
+  assert.deepEqual(owners.map((a) => a.id), ['headlightFlash']);
+  // An older save without it gets Y unless the player put Y on something else
+  assert.deepEqual(parsePlayerSettings({ keys: { ...DEFAULT_KEY_BINDINGS, headlightFlash: undefined } }).keys.headlightFlash, ['KeyY']);
+  assert.deepEqual(parsePlayerSettings({ keys: { ...DEFAULT_KEY_BINDINGS, headlightFlash: undefined, racingLine: ['KeyY'] } }).keys.headlightFlash, []);
+});
+check('the headlight button: a tap flashes, a hold switches the lights once, nothing in the menus', () => {
+  // Frames 16 ms apart; `pressed` is the rising edge the device reader gives
+  const run = (heldMs: number, active = true) => {
+    const button = new HeadlightButton();
+    let flashFrames = 0;
+    let toggles = 0;
+    for (let t = 0, wasDown = false; t <= heldMs + 200; t += 16) {
+      const down = t < heldMs;
+      const step = button.update(down && !wasDown, down, t, active);
+      if (step.flash) flashFrames++;
+      if (step.toggle) toggles++;
+      wasDown = down;
+    }
+    return { flashFrames, toggles };
+  };
+  const tap = run(150);
+  assert.ok(tap.flashFrames > 0 && tap.toggles === 0, `a tap flashes (${JSON.stringify(tap)})`);
+  const hold = run(LIGHTS_HOLD_MS + 300);
+  assert.equal(hold.toggles, 1, 'a hold switches the lights once');
+  assert.ok(hold.flashFrames <= Math.ceil(LIGHTS_HOLD_MS / 16) + 1, 'and the flash stops when it switches');
+  assert.deepEqual(run(LIGHTS_HOLD_MS + 300, false), { flashFrames: 0, toggles: 0 }, 'in the menus it does nothing');
+  // A hold interrupted by the menus starts over
+  const b = new HeadlightButton();
+  b.update(true, true, 0, true);
+  b.update(false, true, 300, false);
+  assert.equal(b.update(false, true, 600, true).toggle, false);
+});
+check('a flash lasts at least MIN_FLASH_MS, and as long as it is held', () => {
+  const timer = new FlashTimer();
+  assert.equal(timer.update(true, 0, true), true);
+  assert.equal(timer.update(false, 16, true), true, 'a one-frame tap keeps flashing');
+  assert.equal(timer.update(false, MIN_FLASH_MS + 1, true), false);
+  assert.equal(timer.update(true, 1000, true), true);
+  assert.equal(timer.update(true, 1600, true), true, 'held: still on');
+  assert.equal(timer.update(false, 1616, true), false, 'released after the least length: off at once');
+  assert.equal(new FlashTimer().update(true, 0, false), false, 'not driving: no flash');
 });
 check('controller layouts: every action set, no shared button, pedal buttons / D-pad / thumb-restart left alone', () => {
   assert.equal(PAD_LAYOUTS.gt.buttons, DEFAULT_PAD_BUTTONS);
@@ -222,6 +285,14 @@ check('controller layouts: every action set, no shared button, pedal buttons / D
   assert.ok(!Object.values(PAD_LAYOUTS.gtClassic.buttons).includes(4), 'GT classic leaves LB free');
   assert.deepEqual([PAD_LAYOUTS.f1.buttons.boost, PAD_LAYOUTS.f1.buttons.aero, PAD_LAYOUTS.f1.buttons.camera], [1, 3, 5]);
   assert.deepEqual([PAD_LAYOUTS.forza.buttons.shiftUp, PAD_LAYOUTS.forza.buttons.shiftDown, PAD_LAYOUTS.forza.buttons.camera], [1, 2, 5]);
+  // Headlights where the game has them: GT7 on L3 (a tap flashes, a hold switches); classic GT, the F1 games and
+  // Forza Motorsport have no headlight button, so those layouts leave them for the player to place
+  assert.equal(PAD_LAYOUTS.gt.buttons.headlights, 10);
+  // The MFD loses its own button there (a D-pad press opens it); the HUD keeps L1
+  assert.equal(PAD_LAYOUTS.gt.buttons.mfd, null);
+  assert.equal(PAD_LAYOUTS.gt.buttons.hud, 4);
+  for (const id of ['gtClassic', 'f1', 'forza', 'bumper'] as const) assert.equal(PAD_LAYOUTS[id].buttons.headlights, null, `${id} has no headlight button`);
+  for (const id of PAD_LAYOUT_IDS) assert.equal(PAD_LAYOUTS[id].buttons.headlightFlash, null, `${id}: the flash is the headlight button's tap`);
 });
 const STICK_SOURCES: PadPedalSources = withPedalSet(DEFAULT_PAD_PEDAL_SOURCES, 'stick');
 check('the picked layout is read back from the bindings and pedal sources, through a save, and lost on a rebind', () => {

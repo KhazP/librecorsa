@@ -180,6 +180,14 @@ const startOf = (trackId: string) => ({
   other[0] = PROTOCOL_VERSION + 1;
   check('another protocol version is refused', (decodeState(other.buffer, memory) as { reason?: string }).reason === 'version');
   check('a cut-short packet is refused', (decodeState(bytes.slice(0, 40), memory) as { reason?: string }).reason === 'malformed' && (decodeState(bytes.slice(0, bytes.byteLength - 3), memory) as { reason?: string }).reason === 'malformed');
+  // The headlight flash rides in byte 47, which older senders leave at 0: read as no flash
+  const flashing = decodeState(encodeState({ ...p, fl: true } as unknown as StatePacketFields), memory);
+  const flashBack = flashing.ok ? sanitizePacket(flashing.packet) : null;
+  check('a headlight flash survives the binary round trip', flashBack?.fl === true && back?.fl === undefined);
+  const olderSender = new Uint8Array(encodeState({ ...p, fl: true } as unknown as StatePacketFields));
+  olderSender[47] = 0;
+  const olderBack = decodeState(olderSender.buffer, memory);
+  check('a packet from before the flash reads as not flashing', olderBack.ok && sanitizePacket(olderBack.packet)?.fl === undefined);
 }
 
 // 2. Host: guests are bound to their own id ---------------------------------------------------------------------------
