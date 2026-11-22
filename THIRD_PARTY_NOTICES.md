@@ -5,10 +5,14 @@ from other open-source projects. Each is listed here with its copyright notice a
 
 ## HUD layouts
 
-Six of the in-race HUD layouts (Settings > Display > HUD, under Third-party) recreate the look and layout of other
+Five of the in-race HUD layouts (Settings > Display > HUD, under Third-party) recreate the look and layout of other
 open-source HUD projects. Each was rewritten for LibreCorsa in React and TypeScript and reads LibreCorsa's own
 telemetry; parts of the source projects that have no counterpart in LibreCorsa were left out. No images, icons, fonts
 or logos from these projects are included: the layouts use LibreCorsa's own fonts and icons.
+
+One more layout under Third-party, Grand Prix by adamikoo (`src/components/hud/styles/GrandPrixHud.tsx`), is not a
+recreation of another project: adamikoo designed it for LibreCorsa and contributed it in pull request #162
+(https://github.com/KhazP/librecorsa/pull/162).
 
 ### irDashies
 
