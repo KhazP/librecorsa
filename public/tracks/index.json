@@ -722,7 +722,7 @@
     "layout": "Grand Prix layout",
     "country": "Saudi Arabia",
     "city": "Qiddiya, Riyadh",
-    "lengthM": 8158.18,
+    "lengthM": 8156.71,
     "turns": 20,
     "direction": "anticlockwise",
     "dataUrl": "/tracks/qiddiya/track_data.json",

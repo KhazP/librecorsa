@@ -79,7 +79,18 @@ EMISSIVE_RULES: list[tuple[str, float, float]] = [
 TOWER_SKIN_KEYS = ("v36w_skin_",)
 # The paint of the start grid: its boxes are where the cars stand (painted_grid.py, through the settings' gridBoxes)
 GRID_BOX_KEYS = ("core_grid_boxes",)
+# The painted lines on the road (its edges, the pit lane's): each keeps its own mesh, unsimplified (MESHOPT_SIMPLIFY_JS
+# keys on these stems), so they stay on the asphalt they are painted on. Folded into the flat-colour scenery and
+# simplified with it, a white edge line came out as wedges and spikes up to a metre off its place
+LINE_KEYS = ("v12s_line_white", "_line_1_")
+# Kerbs and painted lines lie a millimetre or two over the run-off and asphalt under them: drawn with this depth offset
+# (glTF material extras `depthOffset`, read by src/lib/scene-builder.ts), they no longer fight those for depth and break
+# up into jagged, cut-off pieces at a distance
+PAINT_DEPTH_OFFSET = -2
 TOWER_GLASS_RGB = (44, 58, 80)
+# The glass between a tower's panels glows this share of its colour at night, so the towers stand against the sky as
+# buildings and not only as rows of lit windows
+TOWER_GLASS_NIGHT = 0.5
 TOWER_WINDOWS_NIGHT = 1.5
 # High-poly foliage / decorative fence textures trimmed for web/mobile budget
 HEAVY_FOLIAGE_KEYS = ("palm_frond", "palm_bark", "palmleaf", "rpalmbark")
@@ -256,6 +267,11 @@ def emissive_gains(tex_name: str):
     return None
 
 
+def is_line_texture(tex_name: str) -> bool:
+    tl = tex_name.lower()
+    return any(k in tl for k in LINE_KEYS)
+
+
 def is_neon_texture(tex_name: str) -> bool:
     return emissive_gains(tex_name) is not None
 
@@ -300,7 +316,7 @@ def bake_tower_skin(im: Image.Image, seed: int):
     rng = np.random.default_rng(seed)
     lit = np.where(rng.random(count + 1) < 0.45, rng.uniform(0.35, 1.0, count + 1), 0.0).astype(np.float32)
     lit[0] = 0.0
-    glow = rgb * lit[labels][:, :, None]
+    glow = np.where(panel[:, :, None], rgb * lit[labels][:, :, None], glass * TOWER_GLASS_NIGHT)
     to_im = lambda arr: Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB")
     return to_im(base), to_im(glow)
 
@@ -397,6 +413,8 @@ def build_glb(
             mat["doubleSided"] = True
         if meta.get("double_sided"):
             mat["doubleSided"] = True
+        if meta.get("role") == "Kerb" or is_line_texture(tex_key):
+            mat["extras"] = {"depthOffset": PAINT_DEPTH_OFFSET}
         if is_neon:
             if flat_rgb is not None:
                 lin = srgb_to_linear_rgb(flat_rgb)
@@ -406,7 +424,7 @@ def build_glb(
                 glow_key = meta.get("emissive_tex", tex_key)
                 if glow_key in tex_to_gltf_idx:
                     mat["emissiveTexture"] = {"index": tex_to_gltf_idx[glow_key]}
-            mat["extras"] = {"nightEmissive": {"day": gains[0], "night": gains[1]}}
+            mat.setdefault("extras", {})["nightEmissive"] = {"day": gains[0], "night": gains[1]}
             if not meta.get("keep_rough"):
                 pbr["roughnessFactor"] = 0.35
 
@@ -650,7 +668,9 @@ for (const mesh of doc.getRoot().listMeshes()) {
   }
   beforeTris += mTris;
 
-  const isExact = name.startsWith("Road") || name.startsWith("Kerb") || name.startsWith("PitLane") || name.startsWith("Track_");
+  // The road's painted lines (LINE_KEYS) lie a few mm over the asphalt: any simplification lifts or drops them
+  const isExact = name.startsWith("Road") || name.startsWith("Kerb") || name.startsWith("PitLane") || name.startsWith("Track_") ||
+    /v12s_line_white|_line_1(_|$)/.test(name);
   if (isExact || mTris < 1200) {
     afterTris += mTris;
     continue;
@@ -666,8 +686,10 @@ for (const mesh of doc.getRoot().listMeshes()) {
     errorM = 0.05;
   } else if (name.startsWith("Scenery")) {
     if (name.includes("flat_opaque")) {
-      ratio = 0.08;
-      errorM = 1.60;
+      // Every flat-coloured building, stand and structure in one mesh: at 1.6 m the walls of the smaller buildings
+      // folded away and left their windows hanging in the air
+      ratio = 0.3;
+      errorM = 0.12;
     } else if (name.includes("palm")) {
       ratio = 0.16;
       errorM = 0.70;
@@ -683,11 +705,12 @@ for (const mesh of doc.getRoot().listMeshes()) {
     }
   } else if (name.startsWith("Grass") || name.startsWith("Gravel")) {
     ratio = 0.25;
-    errorM = 0.50;
+    // Ground beside the road: its edges meet the kerbs and run-off, which a coarse error turned into jagged teeth
+    errorM = 0.05;
     flags = ["ErrorAbsolute", "LockBorder"];
   } else if (name.startsWith("Runoff") || name.startsWith("Wall")) {
     ratio = 0.28;
-    errorM = 0.35;
+    errorM = 0.05;
     flags = ["ErrorAbsolute", "LockBorder"];
   }
 
@@ -977,14 +1000,14 @@ def main():
             max_std = float(rgb_arr.std(axis=(0, 1)).max())
             mean_rgb01 = tuple(float(x) / 255.0 for x in rgb_arr.mean(axis=(0, 1)))
 
-            if meta["role"] == "Scenery" and not meta["alpha_mask"] and max_std < 12.0:
+            if meta["role"] == "Scenery" and not meta["alpha_mask"] and max_std < 12.0 and not is_line_texture(tex_key):
                 flat_vcol_rgb[tex_key] = srgb_to_linear_rgb(mean_rgb01)
                 collapsed_flat += 1
                 continue
             # A light source with a picture on it (the tunnels' banners, the screens) keeps it however few triangles
             # it has: its mean colour would be a dark smear
             if (meta["role"] == "Scenery" and not meta["alpha_mask"] and meta["gains"] is None
-                    and scenery_tex_tris[tex_key] < args.tiny_scenery_min_tris):
+                    and scenery_tex_tris[tex_key] < args.tiny_scenery_min_tris and not is_line_texture(tex_key)):
                 flat_vcol_rgb[tex_key] = srgb_to_linear_rgb(mean_rgb01)
                 collapsed_tiny += 1
                 continue
@@ -1095,8 +1118,17 @@ def main():
         "city": "Qiddiya, Riyadh",
         "baseAltitudeM": 650,
         "pitboxes": 22,
+        # The Blade's crest is sharp at its outer edge: a smoother profile (crest radius 150 m) cut it by up to half a metre
+        # and the cars drove under the drawn road
         "crestMinRadiusM": 20,
         "profileSmoothSamples": 0.6,
+        # T19, T13-T15 and the Blade bank quickly: the road surface is cut finer there (build_track.subdivide_twisted_road)
+        "roadTwistM": 0.005,
+        # T13 (the hairpin) and T19 (banked 10 degrees) are tight and curve vertically: built from 5 m rows on straight
+        # chords, the collider broke its slope at every row and sagged off the road height the wheels read, and the cars
+        # jumped (build_track.upsample_rows). Two rows a sample: T19's bounce 0.77 -> 0.10 g rms on an autopilot lap
+        # (four: 0.05, but 4 MB more of uncompressed collider in the GLB)
+        "colliderRowsPerSample": 2,
         "unlisted": True,
         "turns_override": [[740, "The Blade"]],
         "description": "High-speed desert circuit featuring the 55 m elevated Turn 1 Blade hairpin and neon tunnel sections.",
