@@ -179,14 +179,14 @@ console.log('\n== Weather & time of day');
     'auto/on/off',
   );
   check(
-    'SpotLight budget skips Low & daytime-only sessions, uses 1 on Medium and 2 on High',
+    'SpotLight budget skips daytime-only sessions, uses 1 on Low and Medium and 2 on High',
     headlightSpotCountFor({ ...DEFAULT_SESSION_CONDITIONS, timeOfDay: 'noon', weather: 'clear', timeScale: 0 }, 'high') === 0 &&
-      headlightSpotCountFor({ ...DEFAULT_SESSION_CONDITIONS, timeOfDay: 'night' }, 'low') === 0 &&
+      headlightSpotCountFor({ ...DEFAULT_SESSION_CONDITIONS, timeOfDay: 'night' }, 'low') === 1 &&
       headlightSpotCountFor({ ...DEFAULT_SESSION_CONDITIONS, timeOfDay: 'night' }, 'medium') === 1 &&
       headlightSpotCountFor({ ...DEFAULT_SESSION_CONDITIONS, timeOfDay: 'night' }, 'high') === 2 &&
       headlightSpotCountFor({ ...DEFAULT_SESSION_CONDITIONS, timeOfDay: 'noon', timeScale: 10 }, 'medium') === 1 &&
       headlightSpotCountFor({ ...DEFAULT_SESSION_CONDITIONS, timeOfDay: 'noon', weather: 'light_rain' }, 'high') === 2,
-    'low/day=0, med=1, high=2',
+    'day=0, low=1, med=1, high=2',
   );
   const hlRoot = new THREE.Group();
   const placeholder = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshStandardMaterial({ name: 'placeholder' }));
@@ -292,6 +292,33 @@ console.log('\n== Weather & time of day');
     frontSprites.every((s) => !s.visible) &&
     rearSprites.every((s) => s.visible) &&
     (rearSprites[0].material as THREE.SpriteMaterial).opacity > 0.7;
+  // Flash (high beam): lights the front lamps in daylight with the headlights off, brighter, further and aimed higher
+  // than the low beam; the rear lamps and the headlight state are left alone, and it ends cleanly
+  hl.setEnabled(false, false, cam);
+  hl.setEnabled(true, false, cam);
+  const lowBeamIntensity = spots[0].intensity;
+  const lowBeamAimY = spots[0].target.position.y;
+  hl.setEnabled(false, false, cam);
+  cam.position.set(0, 1.2, 10);
+  hl.setFlash(true);
+  hl.setEnabled(false, false, cam);
+  const flashDayOk =
+    !hl.isOn &&
+    hl.isFlashing &&
+    spots.every((s) => s.intensity > lowBeamIntensity * 1.5) &&
+    spots[0].target.position.y > lowBeamAimY &&
+    frontSprites.every((s) => s.visible && s.scale.x > amgProfile.flareSizeM * 1.5) &&
+    (frontSprites[0].material as THREE.SpriteMaterial).opacity > 0.5 &&
+    frontClonedMat.emissiveIntensity > 4.5 &&
+    rearSprites.every((s) => !s.visible) &&
+    rearClonedMat.emissiveIntensity === 0;
+  hl.setFlash(false);
+  hl.setEnabled(false, false, cam);
+  const flashEndOk =
+    !hl.isFlashing &&
+    spots.every((s) => s.intensity === 0) &&
+    frontSprites.every((s) => !s.visible) &&
+    frontClonedMat.emissiveIntensity === 0;
   hl.setEnabled(false, false, cam);
   hl.dispose();
   const originalRestored =
@@ -337,6 +364,11 @@ console.log('\n== Weather & time of day');
     'CarHeadlights bounds scan is invariant to 45 deg world yaw and ignores high rear wings',
     rotationInvariantOk,
     `yaw0=(${rot0.frontZ.toFixed(2)}, ${rot0.rearZ.toFixed(2)}), yaw45=(${rot45.frontZ.toFixed(2)}, ${rot45.rearZ.toFixed(2)})`,
+  );
+  check(
+    'CarHeadlights flash: high beam in daylight with the headlights off, then back to dark',
+    flashDayOk && flashEndOk,
+    `flashDay=${flashDayOk}, flashEnd=${flashEndOk}`,
   );
   check(
     'CarHeadlights illuminates brake lights in daylight while keeping running lights and front beams off',
