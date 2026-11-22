@@ -1236,8 +1236,6 @@ AC_TRACKS = {
         }],
         # That layout's models ini also floats 31 hot-air balloons and a blimp over the circuit
         'driftingObjects': 'models_big_willow.ini',
-        # Opened by link only (?track=willow_springs) while Nukedrop tries it on the live site; drop to list it
-        'unlisted': True,
         'description': 'Willow Springs in the Mojave Desert, California: Big Willow, a fast and open 4.0 km lap of nine turns that climbs over a hill and drops back down to the long front straight.',
         'credit': {
             'title': 'Willow Springs - Big Willow',

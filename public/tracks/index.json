@@ -714,7 +714,30 @@
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/willow-springs-big-willow.32338/"
     },
+    "quality": "sim"
+  },
+  {
+    "id": "qiddiya",
+    "name": "Qiddiya Speed Park",
+    "layout": "Grand Prix layout",
+    "country": "Saudi Arabia",
+    "city": "Qiddiya, Riyadh",
+    "lengthM": 8158.18,
+    "turns": 20,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/qiddiya/track_data.json",
+    "credit": {
+      "title": "Qiddiya Speed Park",
+      "author": "Maxim & Zhenix (Quaresma)",
+      "authorUrl": "https://www.overtake.gg/members/maxim555king.1524527/",
+      "url": "https://www.overtake.gg/members/maxim555king.1524527/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/members/maxim555king.1524527/",
+      "note": "Original Assetto Corsa circuit by Maxim, F1 25 conversion by Zhenix (Quaresma). Both used with permission."
+    },
     "quality": "sim",
+    "defaultTimeOfDay": "night",
     "unlisted": true
   }
 ]
