@@ -71,6 +71,7 @@ import { RaceVisionHud } from "./hud/styles/RaceVisionHud";
 import { HeadToHeadHud } from "./hud/styles/HeadToHeadHud";
 import { RetroHud } from "./hud/styles/RetroHud";
 import { BlocksHud } from "./hud/styles/BlocksHud";
+import { GrandPrixHud } from "./hud/styles/GrandPrixHud";
 import { HudRunProvider } from "./hud/styles/third-party-parts";
 import {
   HudSkinProvider,
@@ -125,6 +126,7 @@ const HUD_STYLES: Partial<Record<HudPreset, HudStyleDef>> = {
   h2h: { component: HeadToHeadHud, bottomClearance: 200, ownsBottomLeft: true, mfdFolded: true, ownDeltaBar: true, ownRadar: true },
   retro: { component: RetroHud, bottomClearance: 292, ownsBottomLeft: true, mfdFolded: true, topClearance: 120, ownDeltaBar: true, ownRadar: true, ownDamage: true },
   blocks: { component: BlocksHud, bottomClearance: 200, ownsBottomLeft: true, mfdFolded: true, topClearance: 124, ownDeltaBar: true, ownRadar: true },
+  "grand-prix": { component: GrandPrixHud, bottomClearance: 120, ownsBottomLeft: true, ownTrace: true, mfdFolded: true, ownDeltaBar: true, ownRadar: true },
 };
 /** Every preset gives way to the Phone HUD on a phone-sized screen, and the game's own wherever the touch controls are up (`showsPhoneHud`) */
 const PHONE_STYLE: HudStyleDef = { component: PhoneHud, bottomClearance: 16 };
@@ -617,6 +619,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           weather={!lightsPhase ? (props.weather ?? null) : null}
           showDeltaBar={showDelta}
           showRadar={showRadar}
+          cameraMode={cameraMode}
         />
       ) : (
         /* Classic / Minimal top-left: timing tower (race) and lap timing */

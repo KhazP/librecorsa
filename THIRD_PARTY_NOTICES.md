@@ -5,7 +5,7 @@ from other open-source projects. Each is listed here with its copyright notice a
 
 ## HUD layouts
 
-Five of the in-race HUD layouts (Settings > Display > HUD, under Third-party) recreate the look and layout of other
+Six of the in-race HUD layouts (Settings > Display > HUD, under Third-party) recreate the look and layout of other
 open-source HUD projects. Each was rewritten for LibreCorsa in React and TypeScript and reads LibreCorsa's own
 telemetry; parts of the source projects that have no counterpart in LibreCorsa were left out. No images, icons, fonts
 or logos from these projects are included: the layouts use LibreCorsa's own fonts and icons.
