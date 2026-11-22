@@ -1,6 +1,6 @@
 # Porting circuits
 
-The repository includes one circuit, RISE Motordrome. Every other circuit is hosted on librecorsa.org and is gitignored. This guide is how I convert an Assetto Corsa circuit mod for a local clone, and how to build a circuit of your own in Blender.
+The repository includes one circuit, RISE Motordrome. Every other circuit is hosted on librecorsa.org and is gitignored. This guide is how I convert an Assetto Corsa circuit mod for a local clone, and how to build a circuit of your own in Blender. An F1 25 track mod has its own page: [Porting a circuit from an F1 25 mod](PORTING-F1-MODS.md).
 
 The converter was written circuit by circuit, so expect to read it and adjust it for a new one.
 
