@@ -1091,7 +1091,7 @@ def main():
     if args.simplify:
         run_meshopt_simplify(args.out_glb)
 
-    # 7. Write settings JSON for build_blender_track.py (unlisted: opened by its link only)
+    # 7. Write settings JSON for build_blender_track.py
     # The credit the index already has for this circuit wins: a rebuild must not put an older one back
     credit = {
         "title": "Qiddiya Speed Park",
@@ -1129,7 +1129,6 @@ def main():
         # jumped (build_track.upsample_rows). Two rows a sample: T19's bounce 0.77 -> 0.10 g rms on an autopilot lap
         # (four: 0.05, but 4 MB more of uncompressed collider in the GLB)
         "colliderRowsPerSample": 2,
-        "unlisted": True,
         "turns_override": [[740, "The Blade"]],
         "description": "High-speed desert circuit featuring the 55 m elevated Turn 1 Blade hairpin and neon tunnel sections.",
         "credit": credit,
