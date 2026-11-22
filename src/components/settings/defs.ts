@@ -440,6 +440,7 @@ export const ffbStrength = slider({
   max: 2,
   step: 0.05,
   format: pct,
+  mark: 1,
   ...wheel("ffbGain"),
 });
 
@@ -515,11 +516,15 @@ export const revLights = toggle({
 export const quality = choice("tiles", {
   id: "quality",
   label: "Quality",
-  options: [
-    { id: "low", label: "Low", detail: "No shadows or bloom, lower res" },
-    { id: "medium", label: "Medium", detail: "Shadows, no bloom (no MSAA on mobile)" },
-    { id: "high", label: "High", detail: "Full effects (no MSAA on mobile)" },
-  ],
+  // Phones and tablets draw without MSAA at every level (drive-session.ts): only they are told so
+  options: () => {
+    const touch = isTouchDevice();
+    return [
+      { id: "low", label: "Low", detail: "No shadows or bloom, lower res" },
+      { id: "medium", label: "Medium", detail: touch ? "Shadows, no bloom or MSAA" : "Shadows, no bloom" },
+      { id: "high", label: "High", detail: touch ? "Full effects except MSAA" : "Full effects" },
+    ];
+  },
   ...graphics("quality"),
 });
 
@@ -579,7 +584,7 @@ export const driverBody = toggle({
 
 /* The layout itself is chosen in its own picker (HudLayoutPicker, the list in hud-layouts.ts) */
 
-export const hudSize = slider({ id: "hudScale", label: "Size", min: 0.75, max: 1.5, step: 0.05, format: pct, ...hud("scale") });
+export const hudSize = slider({ id: "hudScale", label: "Size", min: 0.75, max: 1.5, step: 0.05, format: pct, mark: 1, ...hud("scale") });
 
 export const deltaBar = toggle({ id: "deltaBar", label: "Delta bar", ...hud("deltaBar") });
 export const lapSummary = toggle({ id: "lapSummary", label: "Lap summary", ...hud("lapSummary") });
@@ -699,6 +704,7 @@ export const uiScale = slider({
   max: UI_SCALE_MAX,
   step: 0.05,
   format: pct,
+  mark: 1,
   ...ui("scale"),
 });
 
@@ -717,7 +723,8 @@ export const palette = choice("select", {
 // ---- Audio
 
 export const masterVolume = slider({ id: "volume", label: "Master volume", min: 0, max: 1, step: 0.05, format: pct, ...audio("volume") });
-export const kerbVolume = slider({ id: "kerbs", label: "Kerbs", min: 0, max: 1.5, step: 0.05, format: pct, ...audio("kerbs") });
+// The kerbs go up to 150 %: the named 100 % keeps it from reading like Master volume, whose 100 % is the end
+export const kerbVolume = slider({ id: "kerbs", label: "Kerbs", min: 0, max: 1.5, step: 0.05, format: pct, mark: 1, ...audio("kerbs") });
 export const mute = toggle({
   id: "muted",
   label: "Mute",
