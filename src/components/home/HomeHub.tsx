@@ -22,6 +22,7 @@ import { FeaturedBadges } from "./FeaturedBadges";
 import { SupportButton } from "@/components/SupportButton";
 import { day, GAME_FACTS, GRADE_BADGES, GRADE_NOTES, type HomeCar, type HomeData, type HomeLayout, type HomeVenue, type WhatsNewDay } from "./home-data";
 import { CarThumb, GradeBadge, OutlineThumb } from "./home-ui";
+import { preloadVenueHero, VenueHero } from "./VenueHero";
 import { LapMap } from "./LapMap";
 import { HomeDownloads } from "./HomeDownloads";
 import { HomeLapTimes } from "./HomeLapTimes";
@@ -210,6 +211,11 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   const layout = venue.layouts.find((l) => l.id === layoutId) ?? venue.layouts[0];
   const car = data.cars.find((c) => c.id === carId) ?? data.cars[0];
   const picks = { trackId: layout.id, carId: car.id };
+
+  // Warm the selected venue's hero while picking on another tab so returning to Home paints it immediately
+  useEffect(() => {
+    if (tab !== "home") preloadVenueHero(venue.hero);
+  }, [tab, venue.hero]);
   /** A layout's length and corners, in the player's units */
   const lengthOf = (l: HomeLayout) =>
     `${distanceIn(l.lengthM / 1000, units.speed).toFixed(2)} ${DISTANCE_LABEL[units.speed]}, ${l.turns} turns`;
@@ -382,15 +388,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                   aria-label={`Drive: ${venue.name}, ${layout.layout}, in the ${car.title}`}
                   className={`${TILE} flex min-h-[300px] lg:col-span-7 lg:row-span-2`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={withBasePath("/home/hero-1600.webp")}
-                    srcSet={[960, 1600, 2560].map((w) => `${withBasePath(`/home/hero-${w}.webp`)} ${w}w`).join(", ")}
-                    sizes="(min-width: 64rem) 58vw, 100vw"
-                    alt=""
-                    fetchPriority="high"
-                    className="absolute inset-0 h-full w-full object-cover object-[62%_50%] transition-transform duration-500 ease-lc group-hover:scale-[1.02] motion-reduce:transition-none"
-                  />
+                  <VenueHero venueId={venue.id} hero={venue.hero} />
                   {/* A scrim under the words, so they read over any frame of the picture */}
                   <span aria-hidden className="absolute inset-0 bg-linear-to-t from-lc-void/95 via-lc-void/40 via-45% to-transparent to-70%" />
                   <span className="relative mt-auto flex w-full flex-col gap-3 p-6 sm:p-8">
