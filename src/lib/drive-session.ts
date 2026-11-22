@@ -20,7 +20,6 @@ import {
   CarHeadlights,
   canSessionGetDark,
   headlightSpotCountFor,
-  MIN_FLASH_MS,
   resolveHeadlightStates,
   shouldHeadlightsBeOn,
   type HeadlightMode,
@@ -43,6 +42,7 @@ import {
 } from "@/lib/render/golden-hour-environment";
 import { createVenueNightLighting, type VenueNightLighting } from "@/lib/render/venue-night-lighting";
 import { applyCircuitNightLights, circuitNightSpec } from "@/lib/render/circuit-night-lights";
+import { FlashTimer, HeadlightButton } from "@/lib/input/headlight-button";
 import { sameConditions, type SessionConditions } from "@/lib/sim/weather";
 import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
@@ -177,8 +177,6 @@ const KB_CLUTCH_IN_S = 0.08;
 const KB_CLUTCH_OUT_S = 0.4;
 /** Holding the camera key or button this long opens the seat panel; a shorter press changes the view */
 const SEAT_PANEL_HOLD_MS = 450;
-/** The controller's headlight button held this long switches the lights on or off; a shorter press is a flash */
-const LIGHTS_HOLD_MS = 500;
 
 /**
  * Session flow: assets loading → "press any key" → title menu → (first-run / controls setup) → driving.
@@ -1839,11 +1837,9 @@ export class DriveSession {
     /** The camera key's hold timer (a hold opens the seat panel) and the pad camera button's press time */
     let cameraKeyHold: number | null = null;
     let padCameraHeldSinceMs: number | null = null;
-    /** The controller's headlight button: when its press began (it flashes until LIGHTS_HOLD_MS, then switches) */
-    let padLightsHeldSinceMs: number | null = null;
-    /** The player's flash: wanted by a key or a button now, and when the flash began (a tap lasts MIN_FLASH_MS) */
-    let flashWanted = false;
-    let flashStartMs = -Infinity;
+    /** The controller's headlight button (a tap flashes, a hold switches the lights) and the flash's least length */
+    const headlightButton = new HeadlightButton();
+    const flashTimer = new FlashTimer();
     let playerFlashing = false;
     const clearCameraOverride = () => {
       if (cameraOverride === null) return;
@@ -2903,6 +2899,7 @@ export class DriveSession {
       const gamepadStick = padStick === undefined ? undefined : combineStickAndGyro(padStick, gyroStick);
       const gamepadBoost = driving && !freeCamControl && device.boostHeld;
       // With the GPU lost the notice over the game has the buttons: the pad's Menu must not open the pause menu under it
+      let lightsPressed = false;
       if (!inMenu && !gpuLost) {
         for (const action of device.pressed) {
           // polish:B any pad button skips the podium shot
@@ -2923,21 +2920,15 @@ export class DriveSession {
             padCameraHeldSinceMs = nowMs;
             continue;
           }
-          // The headlight button, as Gran Turismo has it: a tap flashes, a hold switches the lights on or off
+          // The headlight button carries both jobs (headlight-button.ts): a tap flashes, a hold switches the lights
           if (action === "headlights") {
-            padLightsHeldSinceMs = nowMs;
+            lightsPressed = true;
             continue;
           }
           // Boost and the flash act while held (`boostHeld`, `device.held`); the MFD and HUD buttons go to the HUD
           if (action !== "boost" && action !== "headlightFlash") runAction(action);
         }
-        if (padLightsHeldSinceMs !== null) {
-          if (!driving || !device.held?.has("headlights")) padLightsHeldSinceMs = null;
-          else if (nowMs - padLightsHeldSinceMs >= LIGHTS_HOLD_MS) {
-            padLightsHeldSinceMs = null;
-            runAction("headlights");
-          }
-        }
+
         if (padCameraHeldSinceMs !== null) {
           if (!driving) padCameraHeldSinceMs = null;
           else if (!device.held?.has("camera")) {
@@ -2951,12 +2942,15 @@ export class DriveSession {
       }
 
       // The flash: the high beam while the flash key or button is held, or the headlight button is still short of a
-      // hold; a tap still lights it for MIN_FLASH_MS
-      const flashNow =
-        driving && (heldKeys.headlightFlash || device.held?.has("headlightFlash") === true || padLightsHeldSinceMs !== null);
-      if (flashNow && !flashWanted) flashStartMs = nowMs;
-      flashWanted = flashNow;
-      const flashing = flashNow || (driving && nowMs - flashStartMs < MIN_FLASH_MS);
+      // hold (which switches the lights instead); a tap still lights it for MIN_FLASH_MS
+      const buttonsLive = driving && !inMenu && !gpuLost;
+      const lightsButton = headlightButton.update(lightsPressed, device.held?.has("headlights") === true, nowMs, buttonsLive);
+      if (lightsButton.toggle) runAction("headlights");
+      const flashing = flashTimer.update(
+        heldKeys.headlightFlash || device.held?.has("headlightFlash") === true || lightsButton.flash,
+        nowMs,
+        driving
+      );
       if (flashing !== playerFlashing) {
         playerFlashing = flashing;
         // the HUD's headlight mark shows the flash at once

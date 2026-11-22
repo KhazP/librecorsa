@@ -635,7 +635,7 @@ function parsePadButtons(v: unknown): PadButtonBindings {
     const d = base[id];
     if (!saved.has(id) && d !== null && claimed.has(d)) out[id] = null;
   }
-  // GT style as it was before the headlights joined it (22 Nov 2026): such a player gets GT style as it is now
+  // GT style as it was before the headlights took L3 (22 Nov 2026): such a player gets GT style as it is now
   if (PAD_ACTIONS.every(({ id }) => out[id] === RETIRED_GT_STYLE_BUTTONS[id])) return { ...GT_STYLE_BUTTONS };
   return out;
 }

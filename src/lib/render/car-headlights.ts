@@ -27,8 +27,6 @@ export const HIGH_BEAM_FLARE = 2.4;
  * daylight, where a plain white additive sprite vanishes against a sunlit car, and it blooms where there is bloom
  */
 export const HIGH_BEAM_FLARE_GAIN = 7;
-/** A tap of the flash still lights the high beam this long (ms), so it reads as a flash and not a flicker */
-export const MIN_FLASH_MS = 160;
 /** Running tail light and brake light glow of a lamp material (its own emissive map / a plain red one) */
 const TAIL_GLOW = { own: 1.1, plain: 0.85 } as const;
 const BRAKE_GLOW = { own: 4.2, plain: 3.6 } as const;

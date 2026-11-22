@@ -110,7 +110,8 @@ export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   { id: "mfdPage", label: "Next MFD page" },
   { id: "hud", label: "Show / hide HUD" },
   { id: "board", label: "Open / close lap board" },
-  // One button for both, as Gran Turismo has it: a tap flashes, a hold switches them on or off
+  // One button for both, as GT7's L3 carries the switch and the flash: a tap flashes, a hold switches them on or off
+  // (headlight-button.ts)
   { id: "headlights", label: "Headlights (tap: flash, hold: on / off)" },
   { id: "headlightFlash", label: "Flash headlights (hold)" },
 ];
@@ -186,9 +187,9 @@ export const BUMPER_SHIFT_BUTTONS: PadButtonBindings = {
 };
 
 /**
- * Gran Turismo 7: ✕ up, □ down, R1 change view, R3 nitro / overtake, L3 headlights (flash and on / off on the one
- * button), Options pause. The right thumb is free in a drive. The MFD's own button is L1, where GT7 can put a second
- * headlight function; the D-pad opens the MFD anyway
+ * Gran Turismo 7: ✕ up, □ down, R1 change view, R3 nitro / overtake, L3 headlights (the switch and the flash on the
+ * one button), Options pause. The right thumb is free in a drive. L3 was the MFD's own button: the MFD has none now,
+ * since a D-pad press opens it and it folds itself away again
  */
 export const GT_STYLE_BUTTONS: PadButtonBindings = {
   shiftUp: 0, // A (✕)
@@ -202,10 +203,9 @@ export const GT_STYLE_BUTTONS: PadButtonBindings = {
   flyingLap: null,
   aero: 3, // Y (△)
   headlights: 10, // LS (L3)
-  mfd: 4, // LB (L1)
+  mfd: null,
   mfdPage: 1, // B (○)
-  // No button left: the H key and the pause menu still show and hide it
-  hud: null,
+  hud: 4, // LB (L1)
   racingLine: null,
   board: null,
   headlightFlash: null,
@@ -213,14 +213,13 @@ export const GT_STYLE_BUTTONS: PadButtonBindings = {
 };
 
 /**
- * GT style as it was until 22 Nov 2026 (L3 the MFD, L1 the HUD, no headlights). A saved map that is exactly this is a
- * player who picked GT style (or kept the default) then, and moves on to GT style as it is now (parsePlayerSettings)
+ * GT style as it was until 22 Nov 2026 (L3 the MFD, no headlights). A saved map that is exactly this is a player who
+ * picked GT style (or kept the default) then, and moves on to GT style as it is now (parsePlayerSettings)
  */
 export const RETIRED_GT_STYLE_BUTTONS: PadButtonBindings = {
   ...GT_STYLE_BUTTONS,
   headlights: null,
   mfd: 10,
-  hud: 4,
 };
 
 /** A new player's buttons: GT style, gears under the right thumb, which also holds Gear up as the clutch at a manual start */
@@ -341,7 +340,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
   gt: { label: "GT style", pedals: "triggers", buttons: GT_STYLE_BUTTONS },
   // Classic Gran Turismo on a pad: right stick up throttle, down brake, R2 up, L2 down; the rest as GT style, with
   // the boost off R3 (now under the pedal thumb) onto ✕ and the HUD onto □, so L1 and the left stick's up / down
-  // stay free (a clutch or a starter can go there). GT4 to GT6 had no headlight button, so neither does this
+  // stay free (a clutch or a starter can go there). No headlight button found in GT4 to GT6, so none here
   gtClassic: {
     label: "GT classic",
     pedals: "stick",
@@ -365,7 +364,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       freeCamera: null,
     },
   },
-  // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause. The F1 games have no headlight control
+  // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause. No headlight control found in the F1 games
   f1: {
     label: "Formula style",
     pedals: "triggers",
@@ -389,8 +388,8 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       freeCamera: null,
     },
   },
-  // Forza: B up, X down (manual layout), RB switch camera, LS toggle convertible, Menu pause. Forza Motorsport has no
-  // headlight control (its lights follow the time of day)
+  // Forza: B up, X down (manual layout), RB switch camera, LS toggle convertible, Menu pause. No headlight control
+  // found in Forza Motorsport (its players say the lights follow the time of day)
   forza: {
     label: "Forza style",
     pedals: "triggers",
