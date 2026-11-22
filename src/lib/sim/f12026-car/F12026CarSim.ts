@@ -2017,7 +2017,8 @@ export class F12026CarSim implements SimulatorCar {
 
   /** Back on the ground at a recorded pose, rolling at its speed, with the tyres as they are now */
   public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number }): void {
-    this.lineCrossingStartsLap = false;
+    // Put back: the lap under way can't count. An out-lap stays one (the next crossing starts the timed lap, which the
+    // Flashback forfeits, instead of counting the out-lap as a lap)
     this.shortStartLap = false;
     this.invalidateLap();
     if (pose.lapCount !== undefined && Number.isFinite(pose.lapCount)) {

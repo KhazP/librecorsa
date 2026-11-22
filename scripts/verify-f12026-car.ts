@@ -1056,10 +1056,14 @@ console.log('\n== F12026CarSim (simulator adapter)');
   const afterRestart = sim.telemetry.lapInvalid === true;
   sim.teleportToTurn(1);
   const afterTurn = sim.telemetry.lapInvalid === true;
-  // Flashback on the out-lap (12 m behind the line, not yet timed) keeps it; once over the line it deletes the lap
+  // Flashback on the out-lap (12 m behind the line, not yet timed) forfeits the timed lap it leads into, but the out-lap
+  // stays one: the next crossing starts timing instead of counting a lap. Once over the line it deletes the lap
   sim.resetToStartGrid(false);
+  const lapsAtStart = sim.telemetry.lapCount;
   sim.restorePose({ x: sim.worldPosition.x, z: sim.worldPosition.z, yawRad: 0, speedMs: 0 });
   const outLapFlashback = sim.telemetry.lapInvalid === true;
+  for (let i = 0; i < 150; i++) sim.step(1 / 60, { throttle: 1 });
+  const outLapKept = sim.telemetry.lapCount === lapsAtStart && sim.telemetry.currentLapTimeMs < 2400;
   sim.resetToStartGrid(false);
   for (let i = 0; i < 150; i++) sim.step(1 / 60, { throttle: 1 });
   const timing = sim.telemetry.currentLapTimeMs < 2400;
@@ -1067,9 +1071,9 @@ console.log('\n== F12026CarSim (simulator adapter)');
   const afterFlashback = sim.telemetry.lapInvalid === true;
   check(
     'A mid-lap placement deletes the lap; a restart starts clean',
-    cleanBefore && afterTeleport && !afterRestart && afterTurn && !outLapFlashback && timing && afterFlashback,
+    cleanBefore && afterTeleport && !afterRestart && afterTurn && outLapFlashback && outLapKept && timing && afterFlashback,
     `before ${cleanBefore ? 'clean' : 'invalid'}, teleport ${afterTeleport}, restart ${afterRestart}, corner practice ${afterTurn}, ` +
-      `out-lap flashback ${outLapFlashback}, timed-lap flashback ${afterFlashback}${timing ? '' : ' (line not crossed)'}`
+      `out-lap flashback ${outLapFlashback} (out-lap ${outLapKept ? 'kept' : 'counted as a lap'}), timed-lap flashback ${afterFlashback}${timing ? '' : ' (line not crossed)'}`
   );
 
   sim.autoXMode = true;
