@@ -22,8 +22,9 @@ const HOLD_DELAY_MS = 400;
 const HOLD_RATE_MS = 90;
 
 /**
- * Minus, the value, plus: for small integer ranges (laps, opponents, cars drawn in full). The part that takes the
- * focus is a range input laid over the whole control, so left / right step it from the keyboard and the D-pad alike
+ * Minus, the value, plus: for small integer ranges that are cheap to change (laps, cars drawn in full; the AI field is a
+ * list, as a new one restarts a running race). The part that takes the focus is a range input laid over the whole
+ * control, so left / right step it from the keyboard and the D-pad alike
  * (the menu navigation adjusts range inputs), and a screen reader hears one slider. The two round buttons are for the
  * mouse and touch; they hold to repeat.
  */
