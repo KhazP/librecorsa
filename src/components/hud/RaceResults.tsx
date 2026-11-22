@@ -41,6 +41,9 @@ const penaltySeconds = (s: number) => (s % 1 === 0 ? s : Math.round(s * 10) / 10
 
 const TH = "lc-lbl px-2 pb-2 text-left font-semibold whitespace-nowrap";
 
+/** A press this soon after the card opens is the one that skipped the podium shot, not a choice on the card */
+const EARLY_PRESS_MS = 400;
+
 /**
  * Final classification of a race (AI or multiplayer). Renders nothing until `race.results` is set.
  * The backdrop only dims the screen; clicks outside the card still reach the sim.
@@ -126,17 +129,25 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
     return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [results, onClose, hudModeRef]);
 
-  // The key that skipped the podium shot, still held or pressed twice, must not press the button the card opens on
+  // The key that skipped the podium shot, still held or pressed twice, must not press the button the card opens on (its
+  // main action, Restart race): a key's Enter or Space here, a pad's A (a click with no pointer behind it) below
   const open = Boolean(results);
+  const openedMs = useRef(0);
   useEffect(() => {
     if (!open) return;
-    const openedMs = performance.now();
+    openedMs.current = performance.now();
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key === "Enter" || e.key === " ") && (e.repeat || performance.now() - openedMs < 400)) e.preventDefault();
+      if ((e.key === "Enter" || e.key === " ") && (e.repeat || performance.now() - openedMs.current < EARLY_PRESS_MS)) e.preventDefault();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open]);
+  const swallowEarlyPress = (e: React.MouseEvent) => {
+    if (e.detail === 0 && performance.now() - openedMs.current < EARLY_PRESS_MS) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
 
   // Tab stays inside the card while it is open
   useEffect(() => {
@@ -166,8 +177,10 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
   const isFastest = (r: RaceResultEntry) => r.bestLapMs !== null && r.bestLapMs === fastestMs;
   const me = ordered.find((r) => r.isPlayer);
   const showGrid = ordered.some((r) => r.gridPosition !== undefined);
-  // One main action: restart where there is one, else the way on, else closing
+  // One main action: restart where there is one, else the way on, else closing. The card opens with the cursor on it:
+  // on the first button instead (Watch replay), the cursor's volt fill beside the main action's read as two main actions
   const primary = onRestart ? "restart" : nextRace ? "next" : onBackToLobby ? "back" : "close";
+  const startHere = (which: typeof primary) => (primary === which ? "" : undefined);
 
   return (
     <div className="lc-ui-zoom pointer-events-none fixed inset-0 z-(--z-lc-results) flex items-center justify-center bg-lc-void/55 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))]">
@@ -176,6 +189,7 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
         role="dialog"
         aria-modal="true"
         aria-label="Race result"
+        onClickCapture={swallowEarlyPress}
         className="lc-glass pointer-events-auto flex max-h-full w-full max-w-[760px] flex-col gap-4 overflow-hidden rounded-lc-sheet p-5 text-lc-chalk shadow-lc-sheet sm:px-6 short:gap-3 short:p-3.5"
       >
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -301,7 +315,7 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
           <div className="flex flex-wrap justify-end gap-2">
             {nextRace ? <JoinNextRace {...nextRace} primary={primary === "next"} /> : null}
             {onBackToLobby ? (
-              <Button variant={primary === "back" ? "primary" : "secondary"} onClick={onBackToLobby}>
+              <Button variant={primary === "back" ? "primary" : "secondary"} onClick={onBackToLobby} data-nav-default={startHere("back")}>
                 {backLabel}
               </Button>
             ) : null}
@@ -311,11 +325,11 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
               </Button>
             ) : null}
             {onRestart ? (
-              <Button variant="primary" icon={<Icon name="restart" />} onClick={onRestart}>
+              <Button variant="primary" icon={<Icon name="restart" />} onClick={onRestart} data-nav-default={startHere("restart")}>
                 Restart race
               </Button>
             ) : null}
-            <Button variant={primary === "close" ? "primary" : "secondary"} onClick={onClose}>
+            <Button variant={primary === "close" ? "primary" : "secondary"} onClick={onClose} data-nav-default={startHere("close")}>
               Close
             </Button>
           </div>
@@ -451,7 +465,7 @@ const JoinNextRace: React.FC<NextRaceProps & { primary: boolean }> = ({ slotS, o
   // Worked out every tick: past the join cut-off it rolls on to the race after
   const startsMs = nextRaceSlot(now, slotS).startsMs;
   return (
-    <Button variant={primary ? "primary" : "secondary"} onClick={onJoin}>
+    <Button variant={primary ? "primary" : "secondary"} onClick={onJoin} data-nav-default={primary ? "" : undefined}>
       Join the next race <span className="lc-mono not-italic tabular-nums opacity-80">{countdownLabel(startsMs, now)}</span>
     </Button>
   );
