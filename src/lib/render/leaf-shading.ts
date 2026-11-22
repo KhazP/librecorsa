@@ -37,7 +37,7 @@ export function leafShading(mat: THREE.Material): void {
 	vec2 leafTexel = vMapUv * vec2( textureSize( map, 0 ) );
 	vec2 leafDx = dFdx( leafTexel );
 	vec2 leafDy = dFdy( leafTexel );
-	float leafMip = max( 0.0, 0.5 * log2( max( dot( leafDx, leafDx ), dot( leafDy, leafDy ) ) ) );
+	float leafMip = max( 0.0, 0.5 * log2( max( max( dot( leafDx, leafDx ), dot( leafDy, leafDy ) ), 1e-8 ) ) );
 	diffuseColor.a *= 1.0 + leafMip * 0.6;
 #endif
 #include <alphatest_fragment>`,
