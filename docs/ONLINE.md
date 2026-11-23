@@ -169,9 +169,9 @@ An account is optional. Without one, the game works as it always has: each brows
 
 ### Your save
 
-- The account keeps one save for all your devices: your best laps and their ghosts, race history, setups, liveries, your last car and circuit, and the settings that are about you, such as assists, profile, sessions and music.
+- The account keeps one save for all your devices: your best laps and their ghosts, race history, careers, setups, liveries, your last car and circuit, and the settings that are about you, such as assists, profile, sessions and music.
 - Controls, graphics, field of view, the HUD, volumes and the driver key stay on each device.
-- When this device and the account both have a save, the game asks: **Combine** (the default), **Use the cloud save** or **Keep this device's save**. Combining keeps both sets of best laps, the faster one where both have the same, and both race histories and setup lists.
+- When this device and the account both have a save, the game asks: **Combine** (the default), **Use the cloud save** or **Keep this device's save**. Combining keeps both sets of best laps, the faster one where both have the same, both race histories and setup lists, and every career either device has (of the same career, the copy played last).
 
 ### Deleting your account
 
