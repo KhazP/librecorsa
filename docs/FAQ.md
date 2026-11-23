@@ -61,7 +61,7 @@ The board checks every lap for plausibility, but it can't prove a lap was driven
 
 No account is needed, and you don't have to give a name to play. When you stop driving, the game sends what you drove and for how long, and the site only adds it to daily totals. No player id, cookie or address is kept. The [privacy page](https://librecorsa.org/privacy) has the details.
 
-Optional accounts are coming, signed in with Discord, Google, Steam or a passkey. One keeps your driver names, settings, setups, liveries, race history and personal bests the same on every device you sign in on. If you only play on one device, you don't need one. Without one, your name is held by a driver key saved in your browser, so save the key to a file (Settings > Profile and data > Data) before clearing site data.
+Accounts are optional, and you sign in with Discord, Google, Steam or a passkey. An account keeps your driver names, settings, setups, liveries, race history and personal bests the same on every device you sign in on. If you only play on one device, you don't need one. Without one, your name is held by a driver key saved in your browser, so save the key to a file (Settings > Profile and data > Data) before clearing site data.
 
 ## Cars and circuits
 
