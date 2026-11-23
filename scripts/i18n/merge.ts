@@ -4,17 +4,18 @@
  * English: it must parse, and keep the same placeholders, plurals and tags. Bad ones are listed and left out.
  *
  *   npm run i18n:merge -- tr tr.json
+ *   npm run i18n:merge -- tr tr.1.json tr.2.json tr.3.json
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { flatten, MESSAGES, readLocale, setKey, signature, SOURCE, writeJson, type Tree } from "./catalog";
 
-const [locale, file] = process.argv.slice(2);
-if (!locale || !file) {
-  console.error("Usage: npm run i18n:merge -- <locale> <file.json>");
+const [locale, ...files] = process.argv.slice(2);
+if (!locale || !files.length) {
+  console.error("Usage: npm run i18n:merge -- <locale> <file.json> [more files…]");
   process.exit(1);
 }
-const input = JSON.parse(readFileSync(file, "utf8")) as Record<string, string | { translation?: string }>;
+const input = Object.assign({}, ...files.map((f) => JSON.parse(readFileSync(f, "utf8")))) as Record<string, string | { translation?: string }>;
 const englishTrees = readLocale(SOURCE);
 const english = flatten(englishTrees);
 const trees = readLocale(locale);

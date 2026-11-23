@@ -6,6 +6,8 @@
  *   npm run i18n:missing -- tr                  (prints)
  *   npm run i18n:missing -- tr --out tr.json    (writes a file)
  *   npm run i18n:missing -- tr --area settings  (one area only)
+ *   npm run i18n:missing -- tr --out tr.json --max 300   (tr.1.json, tr.2.json…: at most 300 messages each, a size one
+ *                                                          model reply can return whole)
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -35,9 +37,18 @@ for (const [key, en] of english) {
 }
 
 const file = opt("--out");
-if (file) {
+const max = Number(opt("--max") ?? 0);
+const entries = Object.entries(out);
+if (file && max > 0 && entries.length > max) {
+  const parts = Math.ceil(entries.length / max);
+  for (let i = 0; i < parts; i++) {
+    const part = file.replace(/(\.json)?$/, `.${i + 1}.json`);
+    writeJson(part, Object.fromEntries(entries.slice(i * max, (i + 1) * max)));
+  }
+  console.log(`${entries.length} messages missing in ${locale}, written to ${parts} files of at most ${max}: ${file.replace(/(\.json)?$/, ".1.json")} …`);
+} else if (file) {
   writeJson(file, out);
-  console.log(`${Object.keys(out).length} messages missing in ${locale}, written to ${file}`);
+  console.log(`${entries.length} messages missing in ${locale}, written to ${file}`);
 } else {
   console.log(JSON.stringify(out, null, 2));
 }

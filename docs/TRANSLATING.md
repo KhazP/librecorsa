@@ -26,7 +26,7 @@ The code is the one browsers report for the language (`tr`, `pt-BR`, `zh-Hant`),
    npm run i18n:missing -- tr --out tr.json
    ```
 
-   Each entry has the English text, a note on where it shows when there is one, and an empty `translation`. `--area settings` limits it to one area, which keeps a request small.
+   Each entry has the English text, a note on where it shows when there is one, and an empty `translation`. The whole game is about 3,400 messages, more than a model returns in one reply, so split it: `--area hud` writes one area, and `--max 300` cuts the output into files of at most 300 messages (`tr.1.json`, `tr.2.json`…). Translate each file in its own request.
 
 2. Give the file to the model with the rules below, and ask it to fill in every `translation` and return the same JSON. A prompt that works:
 
@@ -35,7 +35,7 @@ The code is the one browsers report for the language (`tr`, `pt-BR`, `zh-Hant`),
 3. Put the answers back:
 
    ```bash
-   npm run i18n:merge -- tr tr-translated.json
+   npm run i18n:merge -- tr tr.1.json tr.2.json tr.3.json
    ```
 
    It checks each translation against its English: it must parse, and keep the same placeholders, plurals and tags. Any that don't are listed and left out, so you can fix them and merge again.
