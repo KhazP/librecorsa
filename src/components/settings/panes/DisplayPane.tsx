@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Button, ConfirmDialog, SettingRow } from "@/components/ui";
+import { Button, ConfirmDialog, SettingRow, Toggle } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { keyLabel, padButtonLabel } from "@/lib/input/bindings";
@@ -31,6 +31,13 @@ import {
   temperatureUnit,
   uiScale,
 } from "../defs";
+import {
+  DEFAULT_HUD_PART,
+  HUD_PART_OFFSET_MAX,
+  HUD_PART_SCALE_MAX,
+  HUD_PART_SCALE_MIN,
+  type HudPart,
+} from "@/lib/settings/player-settings";
 import { useSettingsEnv } from "../env";
 import { SettingsCard } from "../fields";
 import { HUD_TOUCH_NOTE, HudLayoutPicker } from "../HudLayoutPicker";
@@ -73,14 +80,55 @@ export function GraphicsTab() {
   );
 }
 
+/** Button that opens the live in-game HUD layout editor: drag each part to move it, drag the corner or scroll to scale it. */
+function HudEditModeRow() {
+  const env = useSettingsEnv();
+  return (
+    <SettingRow label="Edit HUD layout" hint="Shows the live in-game HUD so you can drag and rescale every panel.">
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={() => env. update((s) => ({ ...s, hud: { ...s.hud, editMode: true } }))}
+      >
+        Edit layout
+      </Button>
+    </SettingRow>
+  );
+}
+
+/** Reset every saved HUD part offset and scale back to its default spot. */
+function HudResetRow() {
+  const env = useSettingsEnv();
+  const changed = Object.values(env.settings.hud.parts).some(
+    (p) => p.x !== 0 || p.y !== 0 || p.scale !== 1,
+  );
+  return (
+    <SettingRow
+      label="Reset HUD positions"
+      disabled={!changed}
+      disabledReason="Already at default"
+    >
+      <Button size="sm" variant="danger" disabled={!changed} onClick={() => env.update((s) => ({ ...s, hud: { ...s.hud, parts: {} } }))}>
+        Reset
+      </Button>
+    </SettingRow>
+  );
+}
+
 export function HudTab() {
   return (
     <>
       <HudLayoutCard />
-      <SettingsCard title="What the HUD shows" rows={[hudSize, deltaBar, lapSummary, mirror, radar, playerNames, boardWidget, ...hudAdvanced]} />
+      <SettingsCard title="HUD layout" rows={[hudSize]}>
+        <HudEditModeRow />
+        <HudResetRow />
+      </SettingsCard>
+      <SettingsCard title="What the HUD shows" rows={[deltaBar, lapSummary, mirror, radar, playerNames, boardWidget, ...hudAdvanced]} />
     </>
   );
 }
+
+
 
 export function CameraTab() {
   const env = useSettingsEnv();

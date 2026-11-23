@@ -258,6 +258,10 @@ export interface HudSettings {
   preset: HudPreset;
   /** Overall HUD size (0.75..1.5) */
   scale: number;
+  /** Per part: offset (px from its default spot) and scale (0.5..2). Keyed by part id. Empty = defaults. */
+  parts: Record<string, HudPart>;
+  /** While true, the in-race HUD shows the visual layout editor (drag parts, scale them). */
+  editMode: boolean;
   /** Rolling throttle / brake / steering trace */
   inputTrace: boolean;
   /** Live delta bar against the best lap */
@@ -296,6 +300,21 @@ export interface HudSettings {
 
 export type BoardWidgetMode = "lapEnd" | "open" | "closed";
 export const BOARD_WIDGET_MODES: readonly BoardWidgetMode[] = ["lapEnd", "open", "closed"];
+
+/** One HUD part's saved offset (px from its default spot) and scale (0.5 .. 2). Empty parts means defaults. */
+export interface HudPart {
+  /** Horizontal offset from the part's default place, px (positive right) */
+  x: number;
+  /** Vertical offset from the part's default place, px (positive down) */
+  y: number;
+  /** Scale multiplier, 0.5 .. 2 */
+  scale: number;
+}
+
+export const DEFAULT_HUD_PART: HudPart = { x: 0, y: 0, scale: 1 };
+export const HUD_PART_SCALE_MIN = 0.5;
+export const HUD_PART_SCALE_MAX = 2;
+export const HUD_PART_OFFSET_MAX = 2000;
 
 export type VirtualMirrorMode = "auto" | "always" | "off";
 
@@ -422,6 +441,8 @@ export const resetKeyboardTuning = (tuning: KeyboardTuning, fields: readonly (ke
 export const DEFAULT_HUD_SETTINGS: HudSettings = {
   preset: DEFAULT_HUD_PRESET,
   scale: 1,
+  parts: {},
+  editMode: false,
   inputTrace: false,
   deltaBar: true,
   lapSummary: true,
@@ -819,11 +840,34 @@ function parseHud(v: unknown): HudSettings {
     mfdAutoCollapse: bool(v.mfdAutoCollapse, d.mfdAutoCollapse),
     drsBeep: bool(v.drsBeep, d.drsBeep),
     shiftBeep: bool(v.shiftBeep, d.shiftBeep),
+    parts: parseHudParts(v.parts),
+    editMode: bool(v.editMode, d.editMode),
     // Older saves: Neck FX switched off asked for a still camera
     headMovement: oneOf(v.headMovement, ["natural", "static"] as const, v.neckFx === false ? "static" : d.headMovement),
     boardWidget: oneOf(v.boardWidget, BOARD_WIDGET_MODES, d.boardWidget),
     showPlayerNames: bool(v.showPlayerNames, d.showPlayerNames),
   };
+}
+
+function parseHudPart(v: unknown): HudPart | null {
+  if (!isObj(v)) return null;
+  const x = num(v.x, -HUD_PART_OFFSET_MAX, HUD_PART_OFFSET_MAX, 0);
+  const y = num(v.y, -HUD_PART_OFFSET_MAX, HUD_PART_OFFSET_MAX, 0);
+  const scale = num(v.scale, HUD_PART_SCALE_MIN, HUD_PART_SCALE_MAX, 1);
+  return { x, y, scale };
+}
+
+function parseHudParts(v: unknown): Record<string, HudPart> {
+  const out: Record<string, HudPart> = {};
+  if (!isObj(v)) return out;
+  let n = 0;
+  for (const [id, part] of Object.entries(v)) {
+    if (n >= 64) break;
+    const p = parseHudPart(part);
+    if (p) out[id.slice(0, 32)] = p;
+    n++;
+  }
+  return out;
 }
 
 function parseGraphics(v: unknown): GraphicsSettings {
