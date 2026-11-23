@@ -42,14 +42,14 @@ uv run --python 3.14 --no-project --with numpy --with pillow \
   path/to/<car folder> public/cars/<id>/model/<id>.glb --skin <skin folder>
 ```
 
-Options: `--kn5 <file>` (default `<folder name>.kn5`), `--max-tex`, `--small-tex` and `--normal-tex` (texture caps in px, defaults 2048, 1024 and 512), `--jpeg-quality` (default 88). Keep the folder's original name: `data.acd` is decoded with a key made from it.
+Options: `--car <preset>` (default: the preset for the folder's name, from `PRESET_BY_FOLDER`), `--kn5 <file>` (default `<folder name>.kn5`), `--max-tex`, `--small-tex` and `--normal-tex` (texture caps in px, defaults 2048, 1024 and 512), `--jpeg-quality` (default 88), `--skins-out <folder>` (also writes every skin's livery files there). Keep the folder's original name: `data.acd` is decoded with a key made from it.
 
-I wrote it for one car, so another mod needs a few edits in the script:
+Each car I wrote it for has a preset in `PRESETS`, and the script stops without one, so another mod needs a preset of its own. Copy the closest:
 
-- `MATERIALS` maps that car's materials to glTF names and PBR values. A material missing from it falls back to its diffuse texture on a plain surface. The names matter: `src/lib/render/ported-car-materials.ts` picks the paint, rubber, metal, glass and mirror treatments by material name.
-- `classify()` finds each tyre by the node prefix `object__90`. Change it to your car's tyre node, or the script stops with "expected one tyre under each WHEEL_xx". Each tyre must use a single material.
-- `SKIN_FILES` and the `bake:` entries in `MATERIALS` bake the skin's detail map into the paint; `--skin` defaults to `light_blue`.
-- The dash camera is fitted to the material named `window`, and `source.title` in the extras is fixed. Change both.
+- `materials` maps that car's materials to glTF names and PBR values. A material missing from it falls back to its diffuse texture on a plain surface. A preset with `auto=True` leaves `materials` empty and makes every material from its shader values, naming only the paint in `paint`. The names matter: `src/lib/render/ported-car-materials.ts` picks the paint, rubber, metal, glass and mirror treatments by material name.
+- `tyre_prefix` (the tyre nodes' name prefix, `object__90` on the Liana) or `tyre_materials` finds each tyre under its wheel. Set one for your car, or the script stops with "expected one tyre under each WHEEL_xx". With `tyre_prefix`, each tyre must use a single material.
+- `skin_files` and the `bake:` entries in `materials` bake the skin's detail map into the paint (an `auto` preset takes the skin folder's textures by name instead); `--skin` defaults to the preset's `default_skin`.
+- `windscreen` names the glass material the dash camera is fitted to, and `title` goes into `source.title` in the extras.
 
 ### Sound
 
@@ -109,14 +109,14 @@ For another closed-wheel car, add a `port_<model>` function beside those two, mo
 ## Registering the car
 
 1. In `src/lib/cars/car-registry.ts`, add the id to the `CarId` union and an entry to `ALL_CARS`:
-   - `id`, `classId` (`"f1"`, `"gt3"` or `"road"`), `title`, `sub`, `badge`, `year`
+   - `id`, `classId` (`"f1"`, `"gt3"`, `"proto"`, `"classic"` or `"road"`), `title`, `sub`, `badge`, `year`
    - `quality`: `"own"`, `"shared"` or `"era"`, i.e. whether the physics were built for this car
-   - `physics`: the vehicle model under it, one of `"lc26"`, `"f12026-car"`, `"amg-gt3"` or `"liana"`
+   - `physics`: the vehicle model under it, a `VehicleModelId` from `src/types/f1.ts` such as `"lc26"`, `"f12026-car"`, `"amg-gt3"` or `"liana"`
    - `modelUrl: "/cars/<id>/model/<id>.glb"`
    - `credit: { title, author, url, license, licenseUrl }` for the model's author
    - `sound`: a `CarSoundSource` (next section)
 2. In `src/lib/hosted-content.ts`, add the id to `REPO_CAR_IDS`. A clone lists only those cars, so yours stays hidden without it. Setting `NEXT_PUBLIC_HOSTED_CONTENT=1` instead lists every car, including hosted ones whose files you don't have.
-3. In `scripts/verify-car-sounds.ts`, add the id to `EXPECTED_SOUNDS` with its sound and `maxIdleRpm`. It is typed `Record<CarId, ...>`, so `npx tsc --noEmit` fails until you do.
+3. In `scripts/verify-car-sounds.ts`, add the id to `EXPECTED_SOUNDS` with its sound and `maxIdleRpm`, and in `src/lib/render/onboard-views.ts` add the car's dash view to `OVER_WHEEL`. Both are typed `Record<CarId, ...>`, so `npx tsc --noEmit` fails until you do.
 
 A ported car of class `f1` follows the open-wheel physics switch in the menu; its `physics` sets the chassis the body is fitted to. A car on `amg-gt3` uses the AMG GT3's cameras, framed on its own steering wheel.
 
@@ -140,7 +140,7 @@ npm run dev
 
 Then open `http://localhost:3000/?car=<id>`. For a ported car of class `f1`, add `&f1physics=lc26` or `&f1physics=f12026-car` to try each physics model.
 
-`verify-ported-cars.ts` and `verify-ported-gt3.ts` check the cars hosted on librecorsa.org by name (and skip them in a clone), so they don't check yours. Read them for what a good port measures: GLB size, one-primitive tyres, mirrored wheel centres, the body's height off the road, all six cameras.
+`verify-ported-gt3.ts` checks the GT3s hosted on librecorsa.org by name (and skips them in a clone), so it doesn't check yours. Read it for what a good port measures: GLB size, one-primitive tyres, mirrored wheel centres, the body's height off the road, all six cameras.
 
 The deploy meshopt-compresses every car GLB before building, and the game reads both kinds. I keep the raw file locally, since the porters and the checks above work on it. `node scripts/compress-car-glb.mjs <file.glb>` shows the compressed size, but it rewrites the file in place, so run it on a copy.
 

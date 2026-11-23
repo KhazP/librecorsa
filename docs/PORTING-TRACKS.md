@@ -62,7 +62,7 @@ From the mod it reads:
 - the `.kn5` models: visual meshes, and the physics meshes by their surface names
 - `ai/fast_lane.ai`: required, since the centreline and the road width are taken from it
 - `ai/pit_lane.ai`: optional, the pit lane
-- `data/`: `surfaces.ini`, `sections.ini`, `drs_zones.ini`, `cameras*.ini`, `groove.ini`, `crew.ini` and `lighting.ini`, each optional
+- `data/`: `surfaces.ini`, `sections.ini`, `drs_zones.ini`, `cameras.ini` and `groove.ini`, each optional
 
 ## Building a circuit in Blender
 
@@ -135,7 +135,7 @@ It writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`
 
 ## Problems you're likely to hit
 
-I ran into these porting Qiddiya Speed Park, a modelled circuit with a sharp crest, tight banked corners and a night race. The settings go in the circuit's settings JSON and work with both converters.
+I ran into these porting Qiddiya Speed Park, a modelled circuit with a sharp crest, tight banked corners and a night race. The settings go in the circuit's settings JSON and work with both converters, except `gridBoxes`, `defaultTimeOfDay` and `nightLighting`, which only `build_blender_track.py` reads.
 
 - **A crest comes out lower than the model.** The road's height profile is smoothed along the lap (`profileSmoothSamples`, 1.5 samples by default, about 7.5 m) and crests are eased to a 400 m radius (`crestMinRadiusM`), so scan ripple doesn't launch the cars. On a clean model with a real sharp crest that cuts the crest down, and the car drives under the drawn road. Lower both: Qiddiya uses `"crestMinRadiusM": 20` and `"profileSmoothSamples": 0.6`.
 - **The car bounces through a tight banked corner.** The physics surface is built from rows 5 m apart joined by straight lines. Round a tight banked corner those lines sag a few centimetres off the curve the wheels read the road height from, and the car bounces every 5 m. `"colliderRowsPerSample": 2` puts the rows on that curve, two per 5 m. Four smooths it more but makes the GLB a few MB bigger. If the road also twists quickly, `"roadTwistM"` (Qiddiya: 0.005) cuts the road surface finer where it twists.
