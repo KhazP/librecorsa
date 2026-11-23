@@ -131,7 +131,7 @@ The game's car simulation runs the result in the browser and in its simulation w
 
 A broken rule, a misspelt key or a value of the wrong kind stops the car loading (the rest of the package still loads), and the Mods panel names its path. A new `gearbox.gears.redline_rpm` moves the car's limiter for its sound and the shift beep too. The car's garage ranges, AI and HUD are the base model's.
 
-`npm run physics:report` and the `scripts/verify-*.ts` checks show how the game's own cars were measured, which is a good start for checking yours. Its laps are kept for the session only, so they never stand in the base model's bests or ghosts.
+`npm run physics:report` and the `scripts/verify/verify-*.ts` checks show how the game's own cars were measured, which is a good start for checking yours. Its laps are kept for the session only, so they never stand in the base model's bests or ghosts.
 
 Any base works except `lc26`, which runs a simulation of its own.
 

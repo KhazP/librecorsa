@@ -29,7 +29,7 @@ const AIR = 0.5 * C.aero.airDensity;
  * the body's, 0.17 m behind the CG). Its aero at sea-level air: CL·A 0.19 m², CD·A 0.33 m²; brake force and power at the wheels from the
  * car's data. Grip as `scripts/ai/measure-ggv.ts` measures it: 0.91–0.94 g held in a corner at any speed (the
  * downforce is too small to show), 1.13 g on the brakes at 54 km/h rising to 1.2 g at 160 with the drag. It brakes on
- * μ 1.02, so a 100→0 km/h stop is planned 4 % longer than the car takes (scripts/verify-vw-scirocco-gtx.ts).
+ * μ 1.02, so a 100→0 km/h stop is planned 4 % longer than the car takes (scripts/verify/verify-vw-scirocco-gtx.ts).
  */
 export const VW_SCIROCCO_PROFILE_CAR: SpeedProfileCarModel = {
   massKg: C.chassis.totalMassKg,
@@ -68,7 +68,7 @@ export const VW_SCIROCCO_SIM_PROFILE: CarSimProfile = {
   // and 0.81 g on the brakes, under the 1.13 g it stops at
   braking: { lowG: 0.95, aeroG: 0, refMs: 50 },
   // 9.2° of front against 2.3° of rear slip at the peak of a 110 km/h steer ramp (1.07 g,
-  // scripts/verify-vw-scirocco-gtx.ts): a nose-heavy front-driver
+  // scripts/verify/verify-vw-scirocco-gtx.ts): a nose-heavy front-driver
   understeerRadPerMs2: 0.0115,
   speedProfile: VW_SCIROCCO_PROFILE_CAR,
   // The slower line: lower grip than an F1 car moves the apexes and braking points

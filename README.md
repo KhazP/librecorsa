@@ -235,7 +235,7 @@ npm run build            # static export into ./out
 | Script | What it does |
 | :-- | :-- |
 | `npm run typecheck` | `tsc --noEmit` over the whole project |
-| `npm run verify` | Every `scripts/verify-*.ts` suite (physics, every car, input, lap tools, race session and race server, realism, weather, AI tuning, netcode, telemetry out, WebHID FFB and DualSense) |
+| `npm run verify` | Every `scripts/verify/verify-*.ts` suite (physics, every car, input, lap tools, race session and race server, realism, weather, AI tuning, netcode, telemetry out, WebHID FFB and DualSense) |
 | `npm run verify:laps` | Slow: player-style laps for every car and assist preset at full pace |
 | `npm run physics:report` | Regenerate the [physics validation page](docs/physics/README.md): tyre curves, the GT3 against MoTeC logs, frame-rate checks |
 | `npm run race:headless` | A full-physics AI race without rendering, faster than real time, with a results table. `-- --track rwanda_official --car amg-gt3 --weather heavy_rain --sweep skill` |

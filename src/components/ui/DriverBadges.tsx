@@ -29,7 +29,7 @@ import { cx, uiZoomOf } from "./styles";
 
 /*
  * The words come from the language runtime (`t`, re-rendered by useI18nState) rather than the provider, so the badges
- * also draw on their own (scripts/verify-awards.ts renders them bare).
+ * also draw on their own (scripts/verify/verify-awards.ts renders them bare).
  */
 
 interface BadgeStyle {

@@ -86,7 +86,7 @@ export const BMW_M1_PROCAR_SIM_PROFILE: CarSimProfile = {
   // 1.35–1.79 g (measure-ggv), so the envelope is held under the corners: 1.1 × 0.85 × it is 1.00 g at 54 km/h and
   // 1.16 g at 306, and its braking (0.91–1.05 g) sits well under the brakes'
   braking: { lowG: 1.07, aeroG: 0.15, refMs: 80 },
-  // 9.8° of front against 4.5° of rear slip at the peak of a 100 km/h steer ramp (1.32 g, scripts/verify-bmw-m1-procar.ts)
+  // 9.8° of front against 4.5° of rear slip at the peak of a 100 km/h steer ramp (1.32 g, scripts/verify/verify-bmw-m1-procar.ts)
   understeerRadPerMs2: 0.007,
   speedProfile: BMW_M1_PROCAR_PROFILE_CAR,
   // The GT3's line: closed-wheel grip, nearer a GT3's than an F1 car's

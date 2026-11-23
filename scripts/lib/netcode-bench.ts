@@ -326,7 +326,7 @@ export class SimClient {
   }
 }
 
-/** The manager's private surface a transport uses (as in scripts/verify-multiplayer-security.ts) */
+/** The manager's private surface a transport uses (as in scripts/verify/verify-multiplayer-security.ts) */
 interface ManagerInternals {
   rtcPeers: Map<string, { remoteId: string; pc: { close(): void; onconnectionstatechange: null }; dc: SimChannel; ctl: SimChannel }>;
   bindControlChannel(entry: unknown, ctl: SimChannel): void;

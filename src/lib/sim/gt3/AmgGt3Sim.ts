@@ -22,7 +22,7 @@ const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.s
 
 /**
  * The GT3's planning model for its lap-time line, braking zones, braking urgency and HUD target speed: what this
- * car's vehicle model does on warm tyres at ρ 1.06 on the flat (scripts/verify-gt3.ts checks it). Held corners
+ * car's vehicle model does on warm tyres at ρ 1.06 on the flat (scripts/verify/verify-gt3.ts checks it). Held corners
  * pull μ ≈1.62 up to 190 km/h, easing to 1.5 at 250 km/h as the load rises; a threshold stop from 250 to 80 km/h
  * takes ≈117–120 m on the fixed 71 % balance-bar bias (the tyres' hot pressure moves it by a few metres), μ ≈1.42–1.45
  * on the full brake force. The plan corners on μ 1.6 and brakes on 1.42 (≈121 m, never shorter than the car), so its

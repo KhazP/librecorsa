@@ -721,7 +721,7 @@ export const LC26_BRAKES = {
 
 /**
  * Reference performance envelope recorded by the mod's own AI calibration
- * (`aicardata`). Used by `scripts/verify-sim.ts` as validation targets.
+ * (`aicardata`). Used by `scripts/verify/verify-sim.ts` as validation targets.
  */
 export const LC26_AI_REFERENCE = {
   topSpeedKmh: 331,

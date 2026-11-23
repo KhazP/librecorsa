@@ -3,7 +3,7 @@ import type { FrameSummary } from "@/lib/render/frame-stats";
 /**
  * What a bug report adds by itself, as rows the player sees (and can leave out) before it goes to GitHub, and the
  * text of the issue's "Game details" field. The facts are read once, when the report opens (the telemetry keeps
- * moving under the pause menu), by the game; this module only words them, so scripts/verify-report-details.ts can
+ * moving under the pause menu), by the game; this module only words them, so scripts/verify/verify-report-details.ts can
  * check it without a browser.
  *
  * Each row answers a question a report had to be asked back: which build (#111), the frame rate (#111, #116), the

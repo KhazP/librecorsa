@@ -69,7 +69,7 @@ export interface PhysicalSkyConditions {
 
 /**
  * The scene's frame on the globe: scene +Y is local up, compass north lies along the three.js Sky azimuth
- * AZIMUTH_OFFSET_DEG (x = sin θ, z = cos θ). Exported for scripts/verify-physical-sky.ts.
+ * AZIMUTH_OFFSET_DEG (x = sin θ, z = cos θ). Exported for scripts/verify/verify-physical-sky.ts.
  */
 export function sceneToECEFMatrix(result = new THREE.Matrix4()): THREE.Matrix4 {
   const anchor = new Geodetic(radians(ANCHOR_LONGITUDE_DEG), radians(LATITUDE_DEG), 0).toECEF();

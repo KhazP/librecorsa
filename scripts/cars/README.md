@@ -164,7 +164,7 @@ scripts keep that honest:
 npx tsx scripts/cars/mod-physics-import.ts <folder> > /tmp/NewCarConfig.draft.ts
 
 # Check every value a config takes from its data against the files, and list the keys it leaves uncarried
-npx tsx scripts/verify-mod-parity.ts [--unread]
+npx tsx scripts/verify/verify-mod-parity.ts [--unread]
 ```
 
 The draft carries each value converted to this sim's units and tagged with its file and key; what the data does not

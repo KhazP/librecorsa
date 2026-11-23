@@ -72,7 +72,7 @@ warning. An AI driver at fault races with more caution for 20 s.
 ## Checking it
 
 ```
-npx tsx scripts/verify-race-contact.ts     # rear-end, taps, spins, rejoin, a stopped car, barriers, damage off
-npx tsx scripts/verify-race-craft.ts       # judgements, race control, grid, a duel, a stopped car on the line
+npx tsx scripts/verify/verify-race-contact.ts     # rear-end, taps, spins, rejoin, a stopped car, barriers, damage off
+npx tsx scripts/verify/verify-race-craft.ts       # judgements, race control, grid, a duel, a stopped car on the line
 npm run race:headless -- --track rwanda_official_short --car f12026-car --laps 3 --cars 8 --grid qualifying --damage full
 ```

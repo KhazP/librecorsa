@@ -378,7 +378,7 @@ const perArea = (lut: LutPoints): LutPoints => lut.map(([x, v]) => [x, Number((v
  * and the figures for it are in an appendix that was not retrieved. The numbers here make a car of CL·A ≈ 4.25 m² and
  * CD·A ≈ 0.99 m² (4.3 : 1) with 44.5 % of the downforce on the front axle from 100 to 300 km/h held steady, running
  * 30 mm front and 42 mm rear at speed on a 5.5° rear wing. The drag is held by the class's speed-trap figures
- * (scripts/verify-lc-lmdh.ts); the downforce was raised from 3.96 m² after the corner speeds read off a race lap's
+ * (scripts/verify/verify-lc-lmdh.ts); the downforce was raised from 3.96 m² after the corner speeds read off a race lap's
  * onboard footage of one of the class's cars came out about a tenth above what the car could hold between 110 and
  * 145 km/h (each ± 15 %: the radii are an ideal line's), all of the gain under the floor, where it costs the least drag.
  * The balance stays behind the 46 % of the weight on the front axle as the car settles, so the car keeps its understeer
@@ -847,7 +847,7 @@ export const LC_LMDH_CONFIG = config(LMDH_GEAR_SETS.short, 5.5);
 
 /**
  * The same car in its low-drag trim: the long gear set, the rear wing at its 1° minimum and the front trimmed 5° off,
- * as the garage's gear set and low-drag package make it: `scripts/verify-lc-lmdh.ts` checks its top speed
+ * as the garage's gear set and low-drag package make it: `scripts/verify/verify-lc-lmdh.ts` checks its top speed
  */
 export const LC_LMDH_LONG_CONFIG = config(LMDH_GEAR_SETS.long, 1, -5);
 

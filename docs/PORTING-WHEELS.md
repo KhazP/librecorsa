@@ -103,7 +103,7 @@ These hold for every driver, because nobody may be holding the rim when the page
 
 ## Tests
 
-`scripts/verify-webhid-ffb.ts` drives every path through `FakeHidDevice`, which logs each report and each feature read. Write the reference bytes by hand from the protocol source, not from the driver's own output, then check:
+`scripts/verify/verify-webhid-ffb.ts` drives every path through `FakeHidDevice`, which logs each report and each feature read. Write the reference bytes by hand from the protocol source, not from the driver's own output, then check:
 
 - the setup order and bytes;
 - the force bytes and their sign (+1 must push the way the PID convention says, see the header of `webhid-ffb.ts`);

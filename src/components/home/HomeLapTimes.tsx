@@ -64,7 +64,7 @@ const LoadingCard: React.FC = () => (
 
 export const HomeLapTimes: React.FC<HomeLapTimesProps> = ({ circuits, circuit, carTags, carChoices, carTitles, scrollRoot, onShown }) => {
   // The words from the language runtime rather than the provider: the section also draws on its own
-  // (scripts/verify-home-lap-times.ts)
+  // (scripts/verify/verify-home-lap-times.ts)
   useI18nState();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [state, setState] = useState<"waiting" | "on" | "off" | "unreachable">("waiting");

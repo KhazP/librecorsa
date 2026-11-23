@@ -116,7 +116,7 @@ For another closed-wheel car, add a `port_<model>` function beside those two, mo
    - `credit: { title, author, url, license, licenseUrl }` for the model's author
    - `sound`: a `CarSoundSource` (next section)
 2. In `src/lib/hosted-content.ts`, add the id to `REPO_CAR_IDS`. A clone lists only those cars, so yours stays hidden without it. Setting `NEXT_PUBLIC_HOSTED_CONTENT=1` instead lists every car, including hosted ones whose files you don't have.
-3. In `scripts/verify-car-sounds.ts`, add the id to `EXPECTED_SOUNDS` with its sound and `maxIdleRpm`, and in `src/lib/render/onboard-views.ts` add the car's dash view to `OVER_WHEEL`. Both are typed `Record<CarId, ...>`, so `npx tsc --noEmit` fails until you do.
+3. In `scripts/verify/verify-car-sounds.ts`, add the id to `EXPECTED_SOUNDS` with its sound and `maxIdleRpm`, and in `src/lib/render/onboard-views.ts` add the car's dash view to `OVER_WHEEL`. Both are typed `Record<CarId, ...>`, so `npx tsc --noEmit` fails until you do.
 
 A ported car of class `f1` follows the open-wheel physics switch in the menu; its `physics` sets the chassis the body is fitted to. A car on `amg-gt3` uses the AMG GT3's cameras, framed on its own steering wheel.
 
@@ -134,7 +134,7 @@ export const MY_CAR_SOUND: CarSoundSource = { id: "<id>", assetDir: "/cars/<id>/
 
 ```bash
 npx tsc --noEmit
-npx tsx scripts/verify-ported-roots.ts   # loads every listed ported GLB the way the browser does
+npx tsx scripts/verify/verify-ported-roots.ts   # loads every listed ported GLB the way the browser does
 npm run dev
 ```
 

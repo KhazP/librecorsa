@@ -115,7 +115,7 @@ function revisionIn(physics: number, lc26Offset: number, vehicle?: VehicleModelI
  * The physics versions the boards are named by, oldest first: the PHYSICS_VERSION each one's laps were driven under,
  * and the LC26's rigid-body offset then. The last is the one driven now, the only one a lap goes up to; the boards of
  * the ones before it stay readable as they were. A new version is one more line here, with PHYSICS_VERSION raised to
- * its number (scripts/verify-leaderboard.ts holds the two together).
+ * its number (scripts/verify/verify-leaderboard.ts holds the two together).
  */
 export const PHYSICS_VERSIONS = [
   { name: "V1", physics: 7, lc26Offset: 520 },

@@ -1,6 +1,6 @@
 /*
  * The headlight controls' timing, kept apart from the drive loop so the checks can run it frame by frame
- * (scripts/verify-input.ts).
+ * (scripts/verify/verify-input.ts).
  *
  * A controller's headlight button carries both jobs, as GT7's L3 carries the headlight switch and the flash: a press
  * flashes the high beam until the button has been held LIGHTS_HOLD_MS, and then switches the lights on or off instead.

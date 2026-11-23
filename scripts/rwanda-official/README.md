@@ -94,7 +94,7 @@ AI lap the GT3 has a wheel off for 11 % of its time on the Grand Prix lap's kerb
 at 25 mm at 17 % on the Grand Prix lap, at 32 mm at 21 %. The AI's Liana never touches a kerb, so it is not measured. `bl_kerbs.py` lays the blocks one sees over the hump, that same shape 5 mm higher, in two
 rows of 0.75 m, red and white in turn and the second row a block out of step, and rewrites the humps' texture
 coordinate along the kerb, which the game reads the blocks from, so that both start on the same line (within 2 mm at
-every corner of every block, `scripts/verify-rwanda-official.ts`). 5,316 blocks, 81,100 triangles; they carry no
+every corner of every block, `scripts/verify/verify-rwanda-official.ts`). 5,316 blocks, 81,100 triangles; they carry no
 surface. The hump under them is bare concrete and shows only where a block is left out: where a road's paving lies
 over or beside the kerb, and at the cut ends of a kerb at a junction. The older LC26 physics (the 2026 Prototype
 only with `?lc26engine=classic`) reads kerbs off the track data, along the lap's distance: it feels the same blocks, not in
@@ -145,8 +145,8 @@ for id in rwanda_official rwanda_official_short; do
 done
 
 node scripts/rwanda-official/foliage.mjs             # scenery/foliage.glb: the trees, instanced (reads the track data)
-npx tsx scripts/verify-rwanda-official.ts
-npx tsx scripts/verify-rwanda-official.ts short
+npx tsx scripts/verify/verify-rwanda-official.ts
+npx tsx scripts/verify/verify-rwanda-official.ts short
 ```
 
 `prep.py terrain` rebuilds the ground alone. After a change to the terrain or the scenery only, the track data and the

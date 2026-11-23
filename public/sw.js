@@ -20,7 +20,7 @@
  * is dropped. Files unused for MAX_IDLE_MS are dropped, and once the kept files pass the budget (MAX_BYTES, or
  * QUOTA_SHARE of the site's storage quota if that is smaller) the least recently used go first.
  *
- * scripts/verify-asset-cache.ts runs this file against a stand-in server and cache.
+ * scripts/verify/verify-asset-cache.ts runs this file against a stand-in server and cache.
  */
 
 /** The kept files, one per URL */

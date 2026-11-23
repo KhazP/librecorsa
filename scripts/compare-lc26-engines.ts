@@ -7,7 +7,7 @@
  *
  * Flat ground, sea-level air, soft tyres, no driver aids, the same pedal and steering traces for both: straight-line
  * times, top speed, a stop from 300 km/h, sustained lateral g at five speeds, the steering it takes, and what the car
- * does past the limit. Prints a table; `scripts/verify-lc26-fold.ts` asserts the bands.
+ * does past the limit. Prints a table; `scripts/verify/verify-lc26-fold.ts` asserts the bands.
  */
 import { measureLc26, LC26_ENGINES, LC26_TUNED, type Lc26Measurement } from './lib/lc26-measure';
 import { LC26_AI_REFERENCE } from '../src/lib/sim/lc26-data';

@@ -7,7 +7,7 @@
  * a reload, from its board's saved best when it is that very lap. A lap the board turns down is not sent again by
  * itself, and neither is one that has had its tries: Your best laps keeps it with Retry.
  *
- * Kept free of React and the scene, so scripts/verify-board-retry.ts drives the same code the game does.
+ * Kept free of React and the scene, so scripts/verify/verify-board-retry.ts drives the same code the game does.
  */
 import type { VehicleModelId } from "@/types/f1";
 import { lapGoesOnBoards, type LapRecording } from "@/lib/sim/lap-types";

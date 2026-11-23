@@ -1,6 +1,6 @@
 /**
  * The byte-level part of the KTX2 texture converter (scripts/ktx2-track-textures.mjs) and its check
- * (scripts/verify-ktx2-models.ts): no basisu, no image decoding, so CI can run it.
+ * (scripts/verify/verify-ktx2-models.ts): no basisu, no image decoding, so CI can run it.
  *
  * A circuit GLB is rewritten without a glTF library: its JSON is edited and its binary chunk rebuilt from the original
  * buffer views, so every view that is not an image (meshopt-compressed geometry, physics, animation) keeps its bytes

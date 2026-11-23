@@ -42,7 +42,7 @@ The code is the one browsers report for the language (`tr`, `pt-BR`, `zh-Hant`),
 
 4. When a new term comes up that the game will use again, add it to the language's glossary.
 
-5. Check it: `npm run i18n:status`, `npx tsx scripts/verify-i18n.ts`, then play with `?lang=tr` (or pick it in Settings) and look for text that's cut off or too long.
+5. Check it: `npm run i18n:status`, `npx tsx scripts/verify/verify-i18n.ts`, then play with `?lang=tr` (or pick it in Settings) and look for text that's cut off or too long.
 
 ## Rules for the messages
 
@@ -62,4 +62,4 @@ The code is the one browsers report for the language (`tr`, `pt-BR`, `zh-Hant`),
 - **Labels, not values**: translate what the player reads. Ids, saved values, anything sent to the server, compared in code or written into a ghost file, a bug report or diagnostics stay as they are.
 - **A note** in `src/i18n/notes/<area>.json` for any message that's ambiguous on its own.
 - **Right to left (Arabic)**: write sides as start and end, not left and right: `ms-2` / `pe-4` / `start-0` / `text-end` / `border-s` / `rounded-e-md`, which mirror on an Arabic page and are the same CSS everywhere else. `node scripts/i18n/logical-classes.mjs --check` lists physical classes, `--write` rewrites them. A list that steps through its items with the arrow keys flips the step when `getComputedStyle(el).direction` is `rtl` (Tabs, Segmented). The race HUD is drawn left to right in every language (`dir="ltr"` in F1TelemetryHud), and so are slider tracks. Icons that point the way the page reads (`next`, `previous`, `back`) mirror on their own.
-- **Checks**: `scripts/verify-i18n.ts` runs with `npm run verify`. It checks every English message parses and every language keeps its placeholders.
+- **Checks**: `scripts/verify/verify-i18n.ts` runs with `npm run verify`. It checks every English message parses and every language keeps its placeholders.

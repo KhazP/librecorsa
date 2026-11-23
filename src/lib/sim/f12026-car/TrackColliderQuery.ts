@@ -890,7 +890,7 @@ export class TrackColliderQuery implements GroundQuery {
   constructor(
     sources: ColliderLayerSource[] | TrackColliderBuffers,
     table: SurfaceTable = DEFAULT_SURFACE_TABLE,
-    /** `splitDenseCells: false` keeps every grid cell whole (scripts/verify-collider-split.ts compares the two) */
+    /** `splitDenseCells: false` keeps every grid cell whole (scripts/verify/verify-collider-split.ts compares the two) */
     options: { conformSurfaces?: boolean; splitDenseCells?: boolean } = {}
   ) {
     if (!Array.isArray(sources)) {

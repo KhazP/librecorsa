@@ -42,7 +42,7 @@ function readGlb(path: string): Buffer {
   const decoded = join(tmpdir(), `glb-geometry-${basename(path, '.glb')}-${Math.round(mtimeMs)}-${size}.glb`);
   if (!existsSync(decoded)) {
     // The meshopt decoder's WASM only starts asynchronously, so decode in a child process to keep this sync.
-    // The verify suites run side by side (scripts/run-verify.mjs), so the copy is written under this process's own
+    // The verify suites run side by side (scripts/verify/run-verify.mjs), so the copy is written under this process's own
     // name and renamed into place: another suite never reads a half-written file.
     const partial = `${decoded}.${process.pid}.partial`;
     execFileSync(process.execPath, [join(__dirname, 'decode-meshopt-glb.mjs'), path, partial], { stdio: 'inherit' });

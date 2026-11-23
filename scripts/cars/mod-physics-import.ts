@@ -8,7 +8,7 @@
  * What it prints is the part of a config the data states. What a config also needs and the data does not have (this
  * sim's tyre heat capacities, the kinematic camber gain and roll-centre heights the solver reports, rain tyres, the
  * autopilot's profile) is left to the author, marked TODO. Once the config exists, add the car to
- * `scripts/verify-mod-parity.ts`, which checks every value against the same files and lists the keys left uncarried.
+ * `scripts/verify/verify-mod-parity.ts`, which checks every value against the same files and lists the keys left uncarried.
  *
  * The conversions (all in one place, here and in `src/lib/sim/mod-suspension.ts`):
  *  - power.lut is torque after the driveline: crank power = torque ÷ efficiency × rpm
