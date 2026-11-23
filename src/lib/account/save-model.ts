@@ -67,6 +67,7 @@ export const KEY_CLASSES: Readonly<Record<string, KeyClass>> = {
   "librecorsa.dualsense-prompt": "device",
   "librecorsa.supportPrompt": "device",
   "librecorsa.whatsNewSeen": "device",
+  "librecorsa.signInHintShown": "device",
   // UI state
   "lc.mfdPage": "device",
   "lc.seatHintCars": "device",
