@@ -183,6 +183,17 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
       setUnseenUpdates(true);
     }
   }, [whatsNewToken]);
+  // A link to a section by its id (/#whats-new, as the RSS feed's items link) opens that section
+  useEffect(() => {
+    const openFromHash = () => {
+      const id = window.location.hash.slice(1);
+      const named = TABS.find((t) => t.id === id);
+      if (named) setTab(named.id);
+    };
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
+  }, []);
   // Opening the section marks this feed read
   useEffect(() => {
     if (tab !== "whats-new" || !whatsNewToken) return;
