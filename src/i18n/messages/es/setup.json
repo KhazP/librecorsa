@@ -70,8 +70,8 @@
     "pressButton": "Pulsa un botón",
     "add": "Añadir",
     "clutch": "Embrague",
-    "clutchHintSet": "Mantenido, abre el embrague: acelera en el sitio y suéltalo poco a poco en la salida",
-    "clutchHintUnset": "Opcional. El auto maneja su propio embrague hasta que lo pulses",
+    "clutchHintSet": "Al mantenerlo, abre el embrague: acelera detenido y suéltalo poco a poco en la salida",
+    "clutchHintUnset": "Opcional. El auto controla su propio embrague hasta que lo pulses",
     "pressForClutch": "Pulsa un botón para el embrague",
     "clutchAria": "Embrague: {source}. Cambiar",
     "clutchUnsetAria": "Embrague: sin asignar. Cambiar",
@@ -129,7 +129,7 @@
   "fixedKeys": {
     "title": "Teclas fijas",
     "pause": "Menú de pausa",
-    "moveView": "Mover la vista (cabina, salpicadero)",
+    "moveView": "Mover la vista (cabina, tablero)",
     "viewHeight": "Altura de la vista y campo de visión",
     "mfdDials": "Diales del MFD",
     "boostChat": "Comando de chat para boost",
@@ -137,7 +137,7 @@
     "arrows": "Flechas"
   },
   "keyboard": {
-    "mouse": "Ratón",
+    "mouse": "Mouse",
     "feel": "Sensación del teclado"
   },
   "dualSense": {
@@ -162,7 +162,7 @@
     "lightbarHint": "Revoluciones: de verde a rojo, parpadeo azul en el punto de cambio",
     "lightbarRevs": "Revoluciones",
     "lightbarDriver": "Color del piloto",
-    "lightbarOff": "Off",
+    "lightbarOff": "Apagada",
     "revLights": "Luces de revoluciones",
     "revLightsHint": "Los cinco LED de jugador se llenan hasta el punto de cambio; el LED del micrófono muestra el boost de adelantamiento",
     "needsChrome": "Los gatillos, la háptica HD y la barra de luz requieren Chrome o Edge. La vibración estándar sigue activa.",
@@ -204,7 +204,7 @@
     "tilt": "Inclinación",
     "noMotion": "Sin movimiento",
     "recentre": "Recentrar",
-    "recentreHint": "Botón del panel táctil al conducir (mantenlo para pausar la dirección)",
+    "recentreHint": "Botón del touchpad al conducir (mantenlo para pausar la dirección)",
     "recentreButton": "Recentrar"
   },
   "calibration": {
@@ -286,7 +286,7 @@
     "bound": "Bot. {button}",
     "add": "Añadir",
     "capturing": "Pulsa un botón de cualquier dispositivo. Esc cancela; se detiene tras {seconds} s",
-    "moved": "Bt {button} movido desde {action}"
+    "moved": "Bot. {button} movido desde {action}"
   },
   "bridge": {
     "takenOver": "Tomado",
@@ -298,13 +298,13 @@
     "lookingLine": "Buscando el puente en este PC.",
     "bridge": "Puente",
     "connected": "Conectado",
-    "driving": "Manejando {device} mediante el puente.",
+    "driving": "Controlando {device} mediante el puente.",
     "waiting": "Conectado, esperando al volante."
   },
   "browserFfb": {
     "connected": "Conectado",
-    "driving": "Manejando {device} desde el navegador.",
-    "drivingWheel": "Manejando el volante desde el navegador.",
+    "driving": "Controlando {device} desde el navegador.",
+    "drivingWheel": "Controlando el volante desde el navegador.",
     "connecting": "Conectando",
     "connectingTo": "Conectando con {device}.",
     "connectingLine": "Conectando.",
@@ -341,7 +341,7 @@
     "test": "Probar",
     "connection": "Conexión",
     "browserConnection": "Conexión del navegador",
-    "browserConnectionHint": "Maneja el volante directamente desde el navegador cuando puede. Desactivada, o con un volante que no puede manejar, lo hace el puente",
+    "browserConnectionHint": "Controla el volante directamente desde el navegador cuando puede. Desactivada, o con un volante que no puede controlar, lo hace el puente",
     "browserCantTalk": "Este navegador no puede comunicarse directamente con el volante",
     "effects": "Efectos",
     "effectsDescription": "Desactiva el resorte de centrado en el driver de tu volante.",

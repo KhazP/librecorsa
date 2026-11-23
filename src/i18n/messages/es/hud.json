@@ -2,7 +2,7 @@
   "racesCard": {
     "region": "Carreras",
     "description": "{car} · {laps, plural, one {# vuelta} other {# vueltas}} · cada {interval}",
-    "racing": "<big>Go</big> <small>en curso</small>",
+    "racing": "<big>¡Ya!</big> <small>en curso</small>",
     "toStart": "<big>{time}</big> <small>para empezar</small>",
     "toNextRace": "<big>{time}</big> <small>para la próxima carrera</small>",
     "entrants": "En esta carrera",
@@ -37,8 +37,8 @@
       "rightLess": "Mover a la izquierda",
       "rightMore": "Mover a la derecha",
       "tilt": "Inclinación",
-      "tiltLess": "Inclinar abajo",
-      "tiltMore": "Inclinar arriba",
+      "tiltLess": "Inclinar hacia abajo",
+      "tiltMore": "Inclinar hacia arriba",
       "fov": "FOV",
       "fovLess": "Más estrecho",
       "fovMore": "Más amplio"
@@ -218,10 +218,10 @@
       "confirmEndRaceButton": "Terminar carrera",
       "keepQualifying": "Seguir clasificando",
       "keepRacing": "Seguir corriendo",
-      "confirmBody": "Devuelve a todos los pilotos al lobby."
+      "confirmBody": "Devuelve a todos los pilotos a la sala."
     },
     "room": {
-      "connected": "{count} conectados",
+      "connected": "Conectados: {count}",
       "connecting": "Conectando",
       "notConnected": "Sin conexión",
       "title": "Sala privada",
@@ -358,8 +358,8 @@
     "cardLabel": "Resumen de la vuelta {lap}",
     "invalid": "Anulada",
     "pb": "MP",
-    "invalidWall": "Inválida: contacto con el muro",
-    "invalidLimits": "Inválida: límites de pista",
+    "invalidWall": "Anulada: contacto con el muro",
+    "invalidLimits": "Anulada: límites de pista",
     "autopilot": "Piloto automático: sin clasificar",
     "personalBest": "Mejor marca personal",
     "online": "En línea",
@@ -367,7 +367,7 @@
     "onlineRankOf": "En línea: P{rank} de {total}",
     "onlineRankWeek": "En línea: P{rank}, P{week} esta semana",
     "onlineRankOfWeek": "En línea: P{rank} de {total}, P{week} esta semana",
-    "invalidUnranked": "Inválida · sin clasificar",
+    "invalidUnranked": "Anulada · sin clasificar",
     "autopilotUnranked": "Piloto automático · sin clasificar",
     "topSpeed": "Máx {unit}",
     "avgSpeed": "Prom {unit}",
@@ -419,7 +419,7 @@
     "penaltyTitle": "{seconds} s de sanciones de tiempo, incluidos en el tiempo",
     "promptSelect": "Seleccionar",
     "promptClose": "Cerrar",
-    "backToLobby": "Volver al lobby",
+    "backToLobby": "Volver a la sala",
     "watchReplay": "Ver repetición",
     "restart": "Reiniciar carrera",
     "close": "Cerrar",
@@ -434,7 +434,7 @@
     "retired": "Retirado",
     "ofField": "de {count}",
     "gridUnknown": "Parrilla desconocida",
-    "started": "Salió P{position}",
+    "started": "Salida P{position}",
     "fastestLap": "Vuelta más rápida",
     "bestLap": "Mejor vuelta",
     "lastRaces": {
@@ -516,7 +516,7 @@
       "perLap": "Por vuelta",
       "target": "objetivo {kg}",
       "lift": "Levantar · ahorrar {kg} kg",
-      "fuelOk": "Combustible ok"
+      "fuelOk": "Combustible OK"
     },
     "tyres": {
       "label": "Neumáticos y frenos"
@@ -616,7 +616,7 @@
       "tcOff": "TC Off",
       "abs": "ABS {level}",
       "absOff": "ABS Off",
-      "bias": "BB {bias}"
+      "bias": "BF {bias}"
     },
     "hero": {
       "off": "OFF",
@@ -644,8 +644,8 @@
     "lowerHint": "{hint} (D-pad abajo o -)",
     "raise": "Subir {dial}",
     "raiseHint": "{hint} (D-pad arriba o =)",
-    "openTuner": "Abrir el afinador",
-    "foldTuner": "Plegar el afinador"
+    "openTuner": "Abrir el panel electrónico",
+    "foldTuner": "Plegar el panel electrónico"
   },
   "f12026ChannelsPanel": {
     "region": "Canales de ingeniería",
@@ -672,8 +672,8 @@
       "zone": "Zona",
       "off": "Off"
     },
-    "overtakeEarned": "OVERTAKE OBTENIDO",
-    "overtakeLocked": "OVERTAKE BLOQUEADO",
+    "overtakeEarned": "ADELANT. OBTENIDO",
+    "overtakeLocked": "ADELANT. BLOQUEADO",
     "noVerdict": "SIN VEREDICTO",
     "zoneEarned": "{zone} OBTENIDA",
     "zoneLocked": "{zone} BLOQUEADA",
@@ -845,9 +845,9 @@
     "chequeredFlag": "Bandera a cuadros"
   },
   "launchCue": {
-    "stalledLabel": "Motor calado: mantén {control} o pon punto muerto para reiniciar",
+    "stalledLabel": "Motor apagado: mantén {control} o pon punto muerto para volver a arrancar",
     "clutch": "embrague",
-    "stalled": "Calado · mantén <control></control> o N",
+    "stalled": "Motor apagado · mantén <control></control> o N",
     "jumpStart": "Salida en falso · +{seconds} s",
     "manualStart": "Salida manual: {clutch, select, held {embrague pisado} other {pisa el embrague}}, {revs, select, up {revoluciones altas} other {sube las revoluciones}}",
     "holdNamed": "Mantén {control}",
@@ -864,8 +864,8 @@
     "aeroToggle": "{label}: alternar",
     "drsTitle": "DRS ({key}): alerón trasero, en zona DRS; en carrera solo a menos de 1 s del auto de delante en el punto de detección, desde la vuelta 3",
     "straightModeTitle": "Straight Mode ({key}): ambos alerones abiertos en las rectas; si lo pulsas justo antes de una, se abren al empezar",
-    "overtakeLockedTitle": "Overtake Mode ({keys}): se gana a menos de 1 s del auto de delante en el punto de detección, para la vuelta siguiente",
-    "overtakeTitle": "Overtake Mode ({keys})",
+    "overtakeLockedTitle": "Modo de adelantamiento ({keys}): se obtiene a menos de 1 s del auto de delante en el punto de detección, para la vuelta siguiente",
+    "overtakeTitle": "Modo de adelantamiento ({keys})",
     "boostTitle": "Boost de anulación manual ({keys})",
     "overtake": "Adelantar",
     "boost": "Boost",
@@ -918,16 +918,16 @@
       "drsOpen": "DRS ABIERTO",
       "drsQueued": "DRS EN ESPERA",
       "drsArmed": "DRS LISTO",
-      "xMode": "X-MODE",
+      "xMode": "MODO X",
       "xQueued": "X EN ESPERA",
       "xArmed": "X LISTO",
-      "zMode": "Z-MODE"
+      "zMode": "MODO Z"
     },
     "notice": {
       "drsEnabled": "DRS habilitado",
       "drsNotEnabled": "DRS no habilitado",
       "drsQueued": "En espera",
-      "xModeBadge": "X-MODE",
+      "xModeBadge": "MODO X",
       "straightMode": "Straight Mode",
       "xModeQueued": "En espera",
       "overtakeBadge": "ADELANTAR",
@@ -956,7 +956,7 @@
       "flat": "Plano",
       "flatTitle": "Plano por bloqueo: vibración y menos agarre",
       "dirt": "Suciedad",
-      "dirtTitle": "Suciedad / canicas fuera de la línea: se limpia en unas curvas"
+      "dirtTitle": "Suciedad / restos de goma fuera de la línea: se limpia en unas curvas"
     },
     "conditionTitle": "{title} ({level}%)",
     "brakeTitle": "Disco de freno {disc}{hasCore, select, yes { · núcleo {core}} other {}}{hasBite, select, yes { · mordida de pastillas {bite}%} other {}}",
@@ -982,10 +982,10 @@
     "headlightsOn": "Luces encendidas",
     "headlightsTitleManualOn": "Luces encendidas (manual)",
     "headlightsTitleManualOff": "Luces apagadas (manual)",
-    "headlightsTitleAuto": "Luces encendidas (auto)",
-    "chipFlash": "Ráfaga",
-    "chipOn": "Enc.",
-    "chipOff": "Apag."
+    "headlightsTitleAuto": "Luces encendidas (automático)",
+    "chipFlash": "RÁFAGA",
+    "chipOn": "ENC.",
+    "chipOff": "APAG."
   },
   "damageWidget": {
     "label": "Daños",

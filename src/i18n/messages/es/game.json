@@ -52,7 +52,7 @@
     "fullDetail": "Modelo completo de neumáticos y lluvia, neumáticos y frenos fríos al salir del garaje"
   },
   "raceRules": {
-    "auto": "Auto",
+    "auto": "Automático",
     "openWheel": "Monoplaza",
     "endurance": "Resistencia",
     "autoHint": "Reglas de monoplaza para los monoplazas, de resistencia para el resto",
@@ -74,7 +74,7 @@
     "aiGridPace": "Por ritmo",
     "aiGridQualifying": "Clasificación",
     "aiGridReversed": "Invertido",
-    "startAuto": "Auto",
+    "startAuto": "Automática",
     "startStanding": "Parada",
     "startRolling": "Lanzada",
     "standingStart": "salida parada",
@@ -89,13 +89,13 @@
     "light": "Ligero",
     "lightDetail": "Goma de inicio de fin de semana",
     "medium": "Medio",
-    "mediumDetail": "Surco con goma moderada",
+    "mediumDetail": "Trazada con goma moderada",
     "natural": "Natural",
-    "naturalDetail": "Surco de goma estándar para carrera",
+    "naturalDetail": "Trazada con goma estándar para carrera",
     "heavy": "Intenso",
     "heavyDetail": "Línea de resistencia bien cargada de goma",
     "saturated": "Saturado",
-    "saturatedDetail": "Surco de goma oscura completamente saturado"
+    "saturatedDetail": "Trazada oscura completamente saturada de goma"
   },
   "aiSkill": {
     "rookie": "Novato",
@@ -115,7 +115,7 @@
     "placeNoTime": "Aún sin tiempo",
     "placeFirst": "P1 · el más rápido de la semana",
     "place": "P{place}",
-    "placeGap": "P{place} · {gap} de P{above}"
+    "placeGap": "P{place} · a {gap} de P{above}"
   },
   "board": {
     "conditions": "{assists} · {realism} · {surface}",
@@ -165,7 +165,7 @@
     "cockpitDetail": "Ojos del piloto",
     "dash": "Tablero",
     "dashDetail": "Frente al volante, con el tablero en cuadro",
-    "nose": "Morro",
+    "nose": "Nariz",
     "helicopter": "Helicóptero",
     "tvSide": "TV de pista",
     "free": "Cámara libre",
@@ -188,7 +188,7 @@
     "eraDetail": "Usa la física de 2026, así que se comporta como un auto de 2026 y no como en su propia temporada."
   },
   "carClass": {
-    "f1": "Monoplazas Formula",
+    "f1": "Monoplazas de Fórmula",
     "f1Detail": "Monoplazas · DRS / aerodinámica activa",
     "gt3Detail": "Ruedas cubiertas · ABS / TC",
     "proto": "Prototipos",
@@ -299,7 +299,7 @@
   "padLayouts": {
     "gt": "Estilo GT",
     "gtClassic": "GT clásico",
-    "f1": "Estilo Formula",
+    "f1": "Estilo Fórmula",
     "forza": "Estilo Forza",
     "bumper": "Cambio con bumpers"
   },
@@ -310,7 +310,7 @@
     "pxn": "Sin probar; HID PID con valores Set Effect propios, que ningún volante PXN ha confirmado",
     "logitechClassic": "Sin probar; arranca con WebHID y los comandos clásicos de Logitech tal como los envía hid-lg4ff en Linux, incluidos los LED de revoluciones del G27 y el G29",
     "logitechHidpp": "Sin probar; arranca con WebHID y force feedback HID++ tal como lo envía hid-logitech-hidpp en Linux, una vez que Logitech G HUB pone el volante en modo PC",
-    "logitechBridgeOnly": "Sin probar; solo con puente: ningún driver principal de Linux maneja el G923 para PlayStation ni el G PRO, y el navegador no puede reescalar el eje de dirección del DFP",
+    "logitechBridgeOnly": "Sin probar; solo con puente: ningún driver principal de Linux controla el G923 para PlayStation ni el G PRO, y el navegador no puede reescalar el eje de dirección del DFP",
     "thrustmaster": "Sin probar; los comandos de hid-tmff2 de Linux, una vez que un driver saca el volante de su modo de arranque. Si no lo hace, o Windows rechaza los comandos, toma el control el puente",
     "thrustmasterBridgeOnly": "Sin probar; solo con puente: el T150 y el TMX usan otro conjunto de comandos, y hid-tmff2 no cubre el T500RS",
     "fanatecCslElite": "Sin probar; si no hay force feedback HID PID, la página cambia al puente",
@@ -491,7 +491,7 @@
     },
     "engineBraking": {
       "more": "Más freno trasero al levantar, rota",
-      "less": "Más calmo al levantar, frenadas más largas"
+      "less": "Más calmado al levantar, frenadas más largas"
     },
     "camberFront": {
       "more": "Más agarre delantero en mitad de curva",
@@ -590,7 +590,7 @@
       "less": "Toca los topes antes, plataforma más plana"
     },
     "preload": {
-      "more": "Estable en curvas rápidas, empuja en lentas",
+      "more": "Estable en curvas rápidas, subvira en lentas",
       "less": "Rota al entrar, salidas más sueltas"
     },
     "bump": {
@@ -675,7 +675,7 @@
     "intermediate": "Inter",
     "wet": "Lluvia",
     "chassisChanges": "{count, plural, one {# cambio de chasis} other {# cambios de chasis}}",
-    "brakeBias": "BB {bias}%",
+    "brakeBias": "BF {bias}%",
     "baseline": "Setup base",
     "factoryLowDrag": "Baja resistencia"
   },
@@ -709,7 +709,7 @@
     "limitsMajorCut": "Límites de pista · gran atajo",
     "why": "{reason, select, illegal_overtake {Adelantamiento ilegal · posición no devuelta} corner_cut {Curva cortada} not_lifted {No levantó} other {Tiempo ganado}}",
     "limitsWhy": "Límites de pista · {reason, select, illegal_overtake {adelantamiento ilegal · posición no devuelta} corner_cut {curva cortada} not_lifted {no levantó} other {tiempo ganado}}",
-    "warningCount": "Límites de pista · advertencia {count}/{max}",
+    "warningCount": "Límites de pista · aviso {count}/{max}",
     "points": "{points} pts",
     "strikes": "{count, plural, one {# infracción} other {# infracciones}}",
     "disqualified": "Descalificado · límites de pista",
@@ -717,7 +717,7 @@
     "blackWhiteFlag": "Bandera blanca y negra",
     "nextPenalty": "{why} · la siguiente es +{seconds} s",
     "nextDisqualification": "{why} · la siguiente es descalificación",
-    "warning": "Límites de pista · advertencia",
+    "warning": "Límites de pista · aviso",
     "warningDetail": "{why} · {points}"
   },
   "flags": {
@@ -796,7 +796,7 @@
     "shaders": "Shaders"
   },
   "session": {
-    "wheelDisconnected": "Volante desconectado. Vuelve a conectarlo o reanuda para conducir con lo que queda.",
+    "wheelDisconnected": "Volante desconectado. Vuelve a conectarlo o reanuda para conducir con los demás controles.",
     "bigJumpStart": "Salida en falso · muy lejos del puesto de parrilla",
     "jumpStart": "Salida en falso",
     "clutchGearUp": "Subir marcha",
@@ -807,7 +807,7 @@
     "blocked": "Este navegador bloquea el guardado"
   },
   "simulator": {
-    "formulaTeamCars": "Autos de equipo Formula",
+    "formulaTeamCars": "Autos de equipos de Fórmula",
     "lapNoLongerSaved": "Esta vuelta ya no está guardada aquí",
     "nameNotChanged": "No se pudo cambiar el nombre",
     "setupLoadFailed": "No se pudo cargar el setup de {driver}, inténtalo de nuevo",

@@ -69,7 +69,7 @@
     "showAdvanced": "Mostrar avanzados"
   },
   "values": {
-    "off": "Off",
+    "off": "Desactivado",
     "linear": "Lineal",
     "progressive": "Progresiva {value}",
     "aggressive": "Agresiva {value}",
@@ -97,7 +97,7 @@
     "assistPreset": {
       "label": "Control de tracción y ABS",
       "options": {
-        "pro": "Off",
+        "pro": "Desactivado",
         "semi_pro": "TC + ABS",
         "assisted": "Total"
       }
@@ -112,7 +112,7 @@
     },
     "autoClutch": {
       "label": "Embrague automático",
-      "hint": "Evita que se cale; desactívalo para arranques con embrague manual",
+      "hint": "Evita que se apague el motor; desactívalo para arranques con embrague manual",
       "off": {
         "gearbox": "Requiere cambio manual",
         "wheel": "Asigna el embrague en Controles > Volante",
@@ -232,9 +232,9 @@
     "touchMode": {
       "label": "Controles táctiles",
       "options": {
-        "auto": "Auto",
-        "on": "On",
-        "off": "Off"
+        "auto": "Automático",
+        "on": "Sí",
+        "off": "No"
       }
     },
     "touchLayout": {
@@ -258,7 +258,7 @@
     },
     "ffbGain": {
       "label": "Intensidad",
-      "hintPerCar": "Anulada por la ganancia por auto ({gain}) de abajo"
+      "hintPerCar": "Anulada por la intensidad por auto ({gain}) de abajo"
     },
     "ffbDamping": {
       "label": "Amortiguación"
@@ -338,7 +338,7 @@
     },
     "fpsCap": {
       "label": "Tasa de fotogramas",
-      "hint": "30 fps reduce el calor en móviles",
+      "hint": "30 fps reduce el calor en dispositivos móviles",
       "options": {
         "full": "Completa",
         "fps30": "30 fps"
@@ -371,9 +371,9 @@
     "virtualMirror": {
       "label": "Retrovisor",
       "options": {
-        "auto": "Auto",
+        "auto": "Automático",
         "always": "Siempre",
-        "off": "Off"
+        "off": "No"
       }
     },
     "radar": {
@@ -492,7 +492,7 @@
     },
     "raceMusic": {
       "label": "Música de carrera",
-      "hint": "Saltar pista: {key}",
+      "hint": "Saltar tema: {key}",
       "off": "La música al conducir está desactivada"
     },
     "replayMusic": {
@@ -515,7 +515,7 @@
   },
   "controls": {
     "activeDevice": "Dispositivo activo",
-    "quickSetup": "Setup rápido",
+    "quickSetup": "Configuración rápida",
     "runSetupWizard": "Ejecutar el asistente de configuración",
     "runSetup": "Ejecutar configuración",
     "touch": "Táctil"
@@ -552,7 +552,7 @@
       "resetSeatsButton": "Restablecer",
       "resetSeatsTitle": "¿Restablecer las posiciones del asiento?",
       "resetSeatsConfirm": "Restablecer todo",
-      "resetSeatsBody": "Restablece los desplazamientos del asiento en cabina y salpicadero de todos los autos."
+      "resetSeatsBody": "Restablece los desplazamientos del asiento en cabina y tablero de todos los autos."
     },
     "interface": {
       "language": "Idioma",
@@ -563,9 +563,9 @@
   "audio": {
     "sound": "Sonido",
     "music": "Música",
-    "menuTracks": "Pistas del menú",
-    "raceTracks": "Pistas de carrera",
-    "resultsTracks": "Pistas de resultados y repetición",
+    "menuTracks": "Temas del menú",
+    "raceTracks": "Temas de carrera",
+    "resultsTracks": "Temas de resultados y repetición",
     "cockpitCues": "Avisos en cabina"
   },
   "profile": {

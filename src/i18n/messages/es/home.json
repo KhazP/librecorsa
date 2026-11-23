@@ -33,7 +33,7 @@
       "page": "Página de tiempos",
       "drive": "Conducir"
     },
-    "length": "{distance} {unit}, {turns, plural, one {# curva} other {# curvas}}",
+    "length": "{distance} {unit}, {turns, plural, one {# curva} other {# curvas}}",
     "classYear": "{class}, {year}",
     "footer": "{venue}, {car}",
     "driveTile": {
@@ -136,7 +136,7 @@
       },
       "platforms": {
         "label": "Funciona en",
-        "text": "Cualquier navegador moderno: computadora, teléfono o tableta"
+        "text": "Cualquier navegador moderno: PC, teléfono o tablet"
       },
       "conditions": {
         "label": "Condiciones",
@@ -198,7 +198,7 @@
     "highlights": {
       "desktop": {
         "label": "Escritorio",
-        "text": "Pide la GPU dedicada en laptops con varias GPU, concede WebHID en silencio para volantes y DualSense, desactiva la limitación en segundo plano y busca actualizaciones en GitHub Releases."
+        "text": "Solicita la GPU dedicada en equipos portátiles con varias GPU, concede WebHID en silencio para volantes y DualSense, desactiva la limitación en segundo plano y busca actualizaciones en GitHub Releases."
       },
       "android": {
         "label": "Android",
@@ -210,7 +210,7 @@
       },
       "browser": {
         "label": "Navegador e iOS",
-        "text": "No hay nada que instalar si prefieres jugar directamente en una pestaña. En iPhone y iPad, usa Compartir > Agregar a pantalla de inicio de Safari."
+        "text": "No hay nada que instalar si prefieres jugar directamente en una pestaña. En iPhone y iPad, usa Compartir > Añadir a pantalla de inicio de Safari."
       }
     },
     "buildsTitle": "Compilaciones y firma",
