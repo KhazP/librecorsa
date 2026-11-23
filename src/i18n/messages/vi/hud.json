@@ -1069,12 +1069,12 @@
     "hint": "Kéo một bảng để di chuyển. Kéo góc của bảng, hoặc cuộn trên bảng, để đổi kích thước.",
     "parts": {
       "top-left": "Trên bên trái",
-      "top-center": "Trên ở giữa",
+      "top-center": "Trên giữa",
       "top-right": "Trên bên phải",
-      "center-right": "Danh sách xuất phát",
+      "center-right": "Quy trình xuất phát",
       "center": "Radar",
       "bottom-left": "Dưới bên trái",
-      "bottom-center": "Dưới ở giữa",
+      "bottom-center": "Dưới giữa",
       "bottom-right": "Dưới bên phải"
     },
     "resetPart": "Đặt lại",
