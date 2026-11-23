@@ -2,7 +2,7 @@
 
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "use-intl/react";
-import type { CarTelemetry, RaceStatus } from "@/types/f1";
+import type { RaceStatus } from "@/types/f1";
 import { Badge } from "@/components/ui/Badge";
 import { currentUnits } from "@/lib/settings/ui-prefs";
 import { SPEED_LABEL, speedIn } from "@/lib/settings/units";
@@ -29,8 +29,15 @@ const ChequerStrip: React.FC<{ patternId: string; defs?: boolean }> = ({ pattern
   </svg>
 );
 
-/** Five-light start gantry overlay (the lights are red: identity, not state); "Lights out" / "Green flag" when the race starts, "Chequered flag" when the player finishes */
-export const StartLights: React.FC<{ race: RaceStatus | undefined; /** Live driving telemetry, to time the player's reaction to lights out */ telemetry?: CarTelemetry }> = ({ race, telemetry }) => {
+/** How long the reaction time stays up once the launch comes (ms) */
+const REACTION_SHOWN_MS = 4500;
+
+/** Five-light start gantry overlay (the lights are red: identity, not state); "Lights out" / "Green flag" when the race starts with the player's reaction time under it, "Chequered flag" when the player finishes */
+export const StartLights: React.FC<{
+  race: RaceStatus | undefined;
+  /** The player's reaction to the lights going out (ms, telemetry.startReactionMs) */
+  reactionMs?: number;
+}> = ({ race, reactionMs }) => {
   const skin = useHudSkin();
   // The gantry re-renders every frame: its words are resolved once per language
   const tx = useTranslations("hud.startLights");
@@ -51,63 +58,14 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined; /** Live driv
     if (e.target === e.currentTarget) setFaded(id);
   };
   const prevPhase = useRef(race?.phase);
-  const phaseRef = useRef(race?.phase);
-  phaseRef.current = race?.phase;
   const prevRolling = useRef(Boolean(race?.rollingFormation));
   const patternId = `lc-chk-${useId().replace(/:/g, "")}`;
-
-  /** Exact timestamp when lights went out (phase lights → racing), or null */
-  const lightsOutAt = useRef<number | null>(null);
-  const recordedForStart = useRef(false);
-  /** Measured reaction time in ms for the current start */
-  const [reactionMs, setReactionMs] = useState<number | null>(null);
-  const [reactionVisible, setReactionVisible] = useState(false);
 
   // The banner follows the player's own flag (raceState().finished), not the classification
   const flagged = raceState(race).finished;
   const rolling = Boolean(race?.rollingFormation);
-
-  const recordReaction = (ms: number) => {
-    if (recordedForStart.current) return;
-    recordedForStart.current = true;
-    lightsOutAt.current = null;
-    setReactionMs(Math.max(1, Math.round(ms)));
-    setReactionVisible(true);
-  };
-
-  // Synchronously arm the reaction clock on the exact render frame where lights → racing
-  if (race?.phase === "lights" || !race) {
-    lightsOutAt.current = null;
-    recordedForStart.current = false;
-  } else if (prevPhase.current === "lights" && race?.phase === "racing" && !recordedForStart.current && lightsOutAt.current === null) {
-    lightsOutAt.current = performance.now();
-  }
-
-  // Direct keyboard listener for instant reaction measurement after lights out (within the 3 s start window)
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat) return;
-      if (e.code === "KeyW" || e.code === "ArrowUp") {
-        const goAt = lightsOutAt.current;
-        if (goAt !== null && !recordedForStart.current && phaseRef.current === "racing") {
-          const elapsed = performance.now() - goAt;
-          if (elapsed >= 0 && elapsed <= 3000) {
-            recordReaction(Math.max(1, elapsed));
-          }
-        }
-      }
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, []);
-
-  useEffect(() => {
-    if (race?.phase === "lights" || !race) {
-      lightsOutAt.current = null;
-      recordedForStart.current = false;
-      setReactionMs(null);
-      setReactionVisible(false);
-    } else if (prevPhase.current === "lights" && race?.phase === "racing") {
+    if (prevPhase.current === "lights" && race?.phase === "racing") {
       setStartBanner((b) => ({ kind: "go", id: (b?.id ?? 0) + 1 }));
     } else if (prevRolling.current && !rolling && race?.phase === "racing") {
       setStartBanner((b) => ({ kind: "green", id: (b?.id ?? 0) + 1 }));
@@ -115,58 +73,29 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined; /** Live driv
     if (flagged && prevPhase.current !== "finished") setFlags((n) => n + 1);
     prevPhase.current = race?.phase;
     prevRolling.current = rolling;
-  }, [race, race?.phase, rolling, flagged]);
+  }, [race?.phase, rolling, flagged]);
 
-  // Keep the reaction pill visible for 4.5 s after it is recorded
+  // The reaction to the lights (timed by the session), under the banner for a few seconds once the launch comes
+  const [shownReaction, setShownReaction] = useState<number | null>(null);
   useEffect(() => {
-    if (!reactionVisible || reactionMs === null) return;
-    const timer = window.setTimeout(() => setReactionVisible(false), 4500);
-    return () => window.clearTimeout(timer);
-  }, [reactionVisible, reactionMs]);
-
-  // Measure driver reaction from live telemetry within the 3 s launch window
-  useEffect(() => {
-    const goAt = lightsOutAt.current;
-    const t = telemetry;
-    if (!t || goAt === null || recordedForStart.current || race?.phase !== "racing") return;
-
-    const elapsed = performance.now() - goAt;
-
-    if (elapsed > 3000) {
-      lightsOutAt.current = null;
+    if (reactionMs === undefined) {
+      setShownReaction(null);
       return;
     }
-
-    const curThrottle = t.throttle ?? 0;
-    const curClutchIn = t.start?.clutchIn ?? 1;
-
-    if (t.start) {
-      // Manual start: driver releases clutch with throttle up, or car begins rolling
-      if ((curClutchIn < 0.5 && curThrottle > 0.1) || Math.abs(t.speedMs) > 0.25) {
-        recordReaction(elapsed);
-      }
-    } else {
-      // Assisted start: time until throttle is applied and the car starts moving
-      if (curThrottle > 0.15 && Math.abs(t.speedMs) > 0.15) {
-        recordReaction(elapsed);
-      }
-    }
-  }, [race?.phase, telemetry, telemetry?.throttle, telemetry?.start?.clutchIn, telemetry?.speedMs]);
-
-  // Standalone reaction pill that never fades out early with the "Lights out" banner
+    setShownReaction(reactionMs);
+    const timer = window.setTimeout(() => setShownReaction(null), REACTION_SHOWN_MS);
+    return () => window.clearTimeout(timer);
+  }, [reactionMs]);
+  const reaction = (cls: string) => tx.rich("reaction", { ms: shownReaction ?? 0, n: (chunks) => <span className={cls}>{chunks}</span> });
   const reactionPill =
-    reactionMs !== null && reactionVisible && race?.phase === "racing" ? (
+    shownReaction !== null && race?.phase === "racing" ? (
       skin !== null ? (
-        <SkinBanner cut="sm" tone="accent" className="inline-flex h-10 items-center gap-2 px-4">
-          <span className="text-[16px] font-bold whitespace-nowrap uppercase sm:text-[20px]">
-            Reaction <span className="lc-data">{reactionMs}</span> ms
-          </span>
+        <SkinBanner cut="sm" tone="accent" className="inline-flex h-10 items-center px-4">
+          <span className="text-[16px] font-bold whitespace-nowrap uppercase sm:text-[20px]">{reaction("lc-data")}</span>
         </SkinBanner>
       ) : (
         <div className={`inline-flex h-10 items-center rounded-lc-row px-4 shadow-lc-pop ${HUD_GLASS}`}>
-          <span className="lc-disp text-[18px] whitespace-nowrap text-lc-chalk sm:text-[22px]">
-            Reaction <span className="lc-data text-lc-volt">{reactionMs}</span> ms
-          </span>
+          <span className="lc-disp text-[18px] whitespace-nowrap text-lc-chalk sm:text-[22px]">{reaction("lc-data text-lc-volt")}</span>
         </div>
       )
     ) : null;

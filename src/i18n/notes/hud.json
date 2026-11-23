@@ -742,5 +742,6 @@
   "overheadNameplates.fastestLap": "Tiny chip on the name floating above a car: this driver set the fastest lap. Abbreviation of Fastest lap.",
   "overheadNameplates.rank": "Place in the order on the name floating above a car, e.g. P3 = third. {rank}: the place number.",
   "hiddenNote.off": "Banner while the player has hidden the HUD.",
-  "hiddenNote.offKey": "The same banner with the key or button that shows the HUD again. {key}: a key or button name, untranslated."
+  "hiddenNote.offKey": "The same banner with the key or button that shows the HUD again. {key}: a key or button name, untranslated.",
+  "startLights.reaction": "Pill under the 'Lights out' banner: how long the player took to launch after the lights went out. <n> wraps the number ({ms}, whole milliseconds); keep 'ms'."
 }

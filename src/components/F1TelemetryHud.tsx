@@ -716,7 +716,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       <div className="flex flex-col items-center gap-2" style={partCorner("top center", "start-lights")}>
         {/* The touch controls carry their own pause button */}
         {style && !touch ? menuButton : null}
-        <StartLights race={race} telemetry={telemetry} />
+        <StartLights race={race} reactionMs={telemetry.startReactionMs} />
         {telemetry.qualifying ? <QualifyingClock q={telemetry.qualifying} /> : null}
         {/* The grid qualifying set, while it stands before the first red light */}
         {lightsPhase && race?.qualifying && race.countdownS ? <QualifyingGrid rows={race.qualifying} /> : null}

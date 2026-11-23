@@ -842,7 +842,8 @@
     "holdPace": "Hold <n>{pace}</n> {unit} to line",
     "greenFlag": "Green flag",
     "lightsOut": "Lights out",
-    "chequeredFlag": "Chequered flag"
+    "chequeredFlag": "Chequered flag",
+    "reaction": "Reaction <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Engine stalled: hold {control} or shift to neutral to restart",
