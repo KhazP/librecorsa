@@ -390,6 +390,8 @@ export interface DriveKeys {
   left: boolean;
   right: boolean;
   boostHold: boolean;
+  /** The Overtake key pressed since the last frame */
+  overtake: boolean;
   shiftUp: boolean;
   shiftDown: boolean;
   toggleX: boolean;
@@ -673,6 +675,8 @@ export class DriveSession {
     const coolDown = new CoolDown();
     /** The boost latch, for the frame loop and the HUD at once */
     const setLatch = (boostLatch: boolean) => this.publish({ boostLatch });
+    /** The latched boost has seen full throttle since it was latched: a lift from it lets the latch go */
+    let latchSawFull = false;
     this.setBoostLatch = setLatch;
 
     /** The driving keys held down, and the one-shot presses waiting for the next frame */
@@ -682,6 +686,7 @@ export class DriveSession {
       left: false,
       right: false,
       boostHold: false,
+      overtake: false,
       shiftUp: false,
       shiftDown: false,
       toggleX: false,
@@ -872,6 +877,8 @@ export class DriveSession {
      * hands every car the session's realism again whenever that changes, so it is re-asserted after each update)
      */
     let fuelHeld: { car: SimulatorCar; flags: object } | null = null;
+    /** The energy session last given the car (`setEnergySession`) */
+    let energyHeld: { car: SimulatorCar | null; quali: boolean } = { car: null, quali: false };
     const holdTimeTrialFuel = () => {
       const flags = getTrackEnv().simRealism;
       if (!timeTrialOn() || !flags.fuelUse) {
@@ -1084,6 +1091,7 @@ export class DriveSession {
       car.assistPreset = prefs.assistPreset;
       car.gamepadAssistEnabled = prefs.gamepadAssist;
       car.autoGearbox = prefs.autoGearbox;
+      car.autoOvertake = prefs.autoOvertake;
       car.autoClutch = prefs.autoClutch;
       car.aeroPreset = prev?.aeroPreset ?? DEFAULT_AERO_PRESET;
       if (prev) {
@@ -1753,6 +1761,7 @@ export class DriveSession {
       if (next.assistPreset !== prev.assistPreset) physics.assistPreset = next.assistPreset;
       if (next.gamepadAssist !== prev.gamepadAssist) physics.gamepadAssistEnabled = next.gamepadAssist;
       if (next.autoGearbox !== prev.autoGearbox) physics.autoGearbox = next.autoGearbox;
+      if (next.autoOvertake !== prev.autoOvertake) physics.autoOvertake = next.autoOvertake;
       if (next.autoClutch !== prev.autoClutch) physics.autoClutch = next.autoClutch;
       builtCircuit.racingLineMesh.visible = racingLineShown(next.racingLine);
       if (prev.mouseSteer && !next.mouseSteer) mouseSteerValue = 0;
@@ -2187,6 +2196,9 @@ export class DriveSession {
           break;
         case "boostLatch":
           setLatch(!this.snapshot.boostLatch);
+          break;
+        case "overtake":
+          heldKeys.overtake = true;
           break;
         case "camera":
           cycleCamera();
@@ -3202,8 +3214,9 @@ export class DriveSession {
           if (touchInput.shiftDown) runAction("shiftDown");
           if (touchInput.aero) runAction("aero");
           if (touchInput.boost) runAction("boostLatch");
+          if (touchInput.overtake) runAction("overtake");
         }
-        touchInput.shiftUp = touchInput.shiftDown = touchInput.aero = touchInput.boost = false;
+        touchInput.shiftUp = touchInput.shiftDown = touchInput.aero = touchInput.boost = touchInput.overtake = false;
       }
       // Wheel, mouse and touch steer the rack directly; the car's steering assist picks between them, the keys and the
       // stick (steering-assist.ts: a pressed key takes over, and hands back once its ramp is at centre)
@@ -3228,6 +3241,7 @@ export class DriveSession {
         padSteer: directSteer === undefined ? gamepadStick : undefined,
         manualOverride:
           heldKeys.boostHold || this.snapshot.boostLatch || gamepadBoost,
+        overtake: heldKeys.overtake,
         toggleXMode: heldKeys.toggleX,
         shiftUp: heldKeys.shiftUp && !startClutch.active,
         shiftDown: heldKeys.shiftDown,
@@ -3236,6 +3250,7 @@ export class DriveSession {
         ...(clutchPedal > 0 ? { clutch: clutchPedal } : {}),
       };
       heldKeys.toggleX = false;
+      heldKeys.overtake = false;
       heldKeys.shiftUp = false;
       heldKeys.shiftDown = false;
       heldKeys.neutral = false;
@@ -3293,6 +3308,13 @@ export class DriveSession {
         soloCars[0] = physics;
         trackEnv.update(dtSeconds, aiField ? aiField.sims() : soloCars, remoteWake);
         holdTimeTrialFuel();
+        // A 2026 F1 car's energy allowances: qualifying's in a time trial or a qualifying session, practice's otherwise
+        // (a race's come from race control)
+        const qualiEnergy = timeTrialOn() || quali !== null || multiplayerSync.activeQualifying !== null;
+        if (energyHeld.car !== physics || energyHeld.quali !== qualiEnergy) {
+          physics.setEnergySession?.(qualiEnergy);
+          energyHeld = { car: physics, quali: qualiEnergy };
+        }
         // The autopilot backs off for rain like the AI field does, from the car's own pace
         if (physics.aiPaceScale !== undefined) {
           const base = autopilotPace;
@@ -3916,8 +3938,14 @@ export class DriveSession {
         mouseSteerValue = physics.steerAngleNorm;
       }
 
-      // The latched boost lets go once the battery is empty (where the cars stop deploying it)
-      if (this.snapshot.boostLatch && physics.ersEnergyJ <= 0) setLatch(false);
+      // The latched boost lets go once the battery is empty (where the cars stop deploying it), and on the brake or a
+      // lift from full throttle (iRacing's push-to-pass rule: a latch never stays on into the next straight unasked)
+      if (!this.snapshot.boostLatch) latchSawFull = false;
+      else {
+        const t = physics.telemetry;
+        if (t.throttle >= 0.9) latchSawFull = true;
+        if (physics.ersEnergyJ <= 0 || (driving && (t.brake > 0.05 || (latchSawFull && t.throttle < 0.5)))) setLatch(false);
+      }
 
       // The menus film the car from outside, whatever the player's camera is
       const inVr = renderer.xr.isPresenting;

@@ -8,6 +8,7 @@ import {
   assistSliders,
   autoClutch,
   autoGearbox,
+  autoOvertake,
   brakeHelp,
   controllerSteerAssist,
   ghost,
@@ -31,7 +32,7 @@ export function AssistsTab() {
       <SettingsCard
         title="Driving aids"
         first
-        rows={[assistLevel, tcAbs, racingLine, autoGearbox, autoClutch, launch, { ...controllerSteerAssist, advanced: !onPad }]}
+        rows={[assistLevel, tcAbs, racingLine, autoGearbox, autoClutch, autoOvertake, launch, { ...controllerSteerAssist, advanced: !onPad }]}
       />
       <SettingsCard title="Pedal help" rows={[throttleHelp, brakeHelp]} />
       <SettingsCard title="On track" rows={[realism, practiceDamage, ghost]} />

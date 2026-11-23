@@ -59,6 +59,11 @@ export interface PlayerSettings {
   gamepadAssist: boolean;
   /** Automatic gearbox; off = shift with Gear up / Gear down */
   autoGearbox: boolean;
+  /**
+   * A 2026 F1 car uses the Overtake earned in a race on the overtaking straights by itself, with a little less of it than
+   * the driver's own press of Overtake gives
+   */
+  autoOvertake: boolean;
   /** Automatic clutch and anti-stall; off with manual gears = bite point, clutch slip and stalls */
   autoClutch: boolean;
   mouseSteer: boolean;
@@ -578,6 +583,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   racingLine: true,
   gamepadAssist: true,
   autoGearbox: true,
+  autoOvertake: true,
   autoClutch: true,
   mouseSteer: false,
   liveryId: null,
@@ -991,6 +997,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     racingLine: bool(raw.racingLine, d.racingLine),
     gamepadAssist: bool(raw.gamepadAssist, d.gamepadAssist),
     autoGearbox: bool(raw.autoGearbox, d.autoGearbox),
+    autoOvertake: bool(raw.autoOvertake, d.autoOvertake),
     autoClutch: bool(raw.autoClutch, d.autoClutch),
     mouseSteer: bool(raw.mouseSteer, d.mouseSteer),
     liveryId: isStr(raw.liveryId) ? raw.liveryId : null,

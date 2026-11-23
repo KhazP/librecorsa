@@ -113,6 +113,13 @@ export const autoGearbox = toggle({
   ...top("autoGearbox"),
 });
 
+export const autoOvertake = toggle({
+  id: "autoOvertake",
+  label: "Automatic Overtake",
+  hint: (env) => `2026 F1: uses an earned Overtake on the straights, with less power than pressing ${key(env, "overtake")}`,
+  ...top("autoOvertake"),
+});
+
 function autoClutchBlockReason(s: PlayerSettings): string | null {
   if (s.autoGearbox) return "Requires manual gearbox";
   if (s.device === "wheel") return s.wheel.clutch !== null ? null : "Bind clutch under Controls > Wheel";
