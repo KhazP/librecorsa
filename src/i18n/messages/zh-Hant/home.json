@@ -1,0 +1,221 @@
+{
+  "notice": {
+    "back": "返回首頁",
+    "notFound": {
+      "title": "找不到頁面",
+      "body": "此網址沒有任何內容，連結可能已失效或輸入有誤。"
+    },
+    "error": {
+      "title": "發生錯誤",
+      "body": "此頁面因錯誤而停止載入。"
+    }
+  },
+  "hub": {
+    "tabs": {
+      "home": "首頁",
+      "circuits": "賽道",
+      "cars": "車輛",
+      "laps": "圈速紀錄",
+      "whatsNew": "更新資訊",
+      "download": "下載",
+      "about": "關於"
+    },
+    "unread": "（有未讀更新）",
+    "sections": "頁面分區",
+    "skip": "跳至主要內容",
+    "heading": "LibreCorsa：免費開源的瀏覽器模擬賽車遊戲",
+    "drive": "開始駕駛",
+    "prompts": {
+      "move": "移動",
+      "select": "選擇",
+      "back": "返回",
+      "switchSection": "切換分頁",
+      "page": "切換圈速頁碼",
+      "drive": "開始駕駛"
+    },
+    "length": "{distance} {unit}，{turns, plural, other {# 個彎道}}",
+    "classYear": "{class}，{year}",
+    "footer": "{venue}，{car}",
+    "driveTile": {
+      "label": "開始駕駛：{venue}（{layout}），駕駛 {car}",
+      "title": "開始駕駛",
+      "detail": "{venue}，{layout}。{car}。"
+    },
+    "circuitTile": {
+      "label": "更換賽道：{venue}，{layout}",
+      "more": "更換賽道",
+      "map": "{venue}（{layout}）賽道地圖",
+      "onLine": "理想行車線車速"
+    },
+    "carTile": {
+      "label": "更換車輛：{car}",
+      "more": "更換車輛"
+    },
+    "press": {
+      "title": "媒體與報導",
+      "label": "媒體與報導：{count, plural, other {{n} 篇報導與影片}}，以及媒體素材包",
+      "count": "{count, plural, other {{n} 篇報導與影片}}",
+      "onPlatform": "{outlet}（{platform}）",
+      "more": "相關報導與媒體素材包"
+    },
+    "whatsNew": {
+      "intro": "更新日誌與近期變動。",
+      "commitLog": "GitHub 提交紀錄",
+      "empty": "尚無更新日誌。",
+      "commits": "{count, plural, other {# 筆提交}}"
+    },
+    "filterOption": "{option}（{count}）",
+    "clearFilters": "清除篩選",
+    "venueFilters": {
+      "type": {
+        "label": "類型",
+        "all": "所有類型"
+      },
+      "country": {
+        "label": "地點",
+        "all": "所有地點"
+      },
+      "modder": {
+        "label": "模組作者",
+        "all": "所有模組作者"
+      }
+    },
+    "carFilters": {
+      "class": {
+        "label": "組別",
+        "all": "所有組別"
+      },
+      "physics": {
+        "label": "物理",
+        "all": "所有物理"
+      },
+      "modder": {
+        "label": "模組作者",
+        "all": "所有模組作者"
+      }
+    },
+    "circuits": {
+      "filter": "篩選賽道",
+      "shown": "顯示 {shown}／{total} 條賽道",
+      "empty": "沒有符合這些篩選條件的賽道。",
+      "personalBest": "個人最佳",
+      "oldPhysics": "舊版物理",
+      "carOldPhysics": "{car} · 舊版"
+    },
+    "cars": {
+      "filter": "篩選車輛",
+      "shown": "顯示 {shown}／{total} 輛賽車",
+      "empty": "沒有符合這些篩選條件的車輛。"
+    },
+    "about": {
+      "lead": "免費、開源的瀏覽器模擬賽車遊戲。",
+      "addMod": "投稿你的模組",
+      "addModText": "製作了車輛或賽道模組，想在 LibreCorsa 中登場嗎？歡迎附上連結寄信給我：<mail>{email}</mail>。每位模組作者都會在遊戲內署名致謝。",
+      "modders": "模組作者群",
+      "moddersText": "遊戲內的賽道與車輛皆為原作者心血，並經授權收錄。若你喜歡某款作品，歡迎直接向作者表達支持。",
+      "links": {
+        "download": "下載應用程式",
+        "press": "所有媒體報導與素材包",
+        "docs": "說明文件",
+        "privacy": "隱私權",
+        "support": "請我喝杯咖啡"
+      }
+    },
+    "facts": {
+      "physics": {
+        "label": "物理",
+        "text": "每秒 500 次物理模擬，涵蓋輪胎溫度、主動空力與混合動力系統"
+      },
+      "racing": {
+        "label": "賽事模式",
+        "text": "單圈計時、AI 賽事、多人連線房間與線上圈速榜"
+      },
+      "controls": {
+        "label": "控制方式",
+        "text": "支援鍵盤、控制器、觸控螢幕或力回饋方向盤"
+      },
+      "platforms": {
+        "label": "支援平台",
+        "text": "任何現代瀏覽器：電腦、手機或平板皆可遊玩"
+      },
+      "conditions": {
+        "label": "賽道條件",
+        "text": "自由選擇天氣與時段"
+      },
+      "price": {
+        "label": "價格",
+        "text": "完全免費。免註冊、無廣告；贊助純屬自願，不解鎖任何內容"
+      }
+    }
+  },
+  "lapTimes": {
+    "loading": "正在載入圈速紀錄……",
+    "offline": "圈速紀錄目前離線。",
+    "unreachable": "無法連線至圈速榜，正在重試……"
+  },
+  "boards": {
+    "board": "圈速榜分類",
+    "allLaps": "所有單圈",
+    "challenge": "每週挑戰",
+    "hallOfFame": "名人堂",
+    "lapTimesTitle": "圈速紀錄",
+    "challengeTitle": "每週挑戰",
+    "week": "週次",
+    "thisWeek": "本週 · {circuit}",
+    "pastWeek": "{dates} · {circuit}",
+    "timeLeft": "剩餘 {timeLeft}",
+    "ran": "舉辦期間：{dates}",
+    "rules": "規則",
+    "emptyThisWeek": "本週尚無圈速紀錄。",
+    "emptyPastWeek": "該週沒有圈速紀錄。"
+  },
+  "layoutPicker": {
+    "chosen": "{venue} 賽道佈局：{layout}（第 {index}／{count} 項）",
+    "closed": "{venue}：{count, plural, other {# 種佈局}}",
+    "count": "{count, plural, other {# 種佈局}}",
+    "list": "{venue} 賽道佈局列表"
+  },
+  "liveryPicker": {
+    "custom": "自訂塗裝",
+    "chosen": "{car} 塗裝：{livery}（第 {index}／{count} 項）",
+    "chosenCustom": "{car} 塗裝：自訂塗裝（{count, plural, other {# 款預設}}）",
+    "closed": "{car}：{count, plural, other {# 款塗裝}}",
+    "count": "{count, plural, other {# 款塗裝}}",
+    "list": "{car} 塗裝列表"
+  },
+  "downloads": {
+    "intro": "提供 Windows、macOS、Linux 與 Android 的選用原生封裝應用程式。程式直接開啟 librecorsa.org，遊戲更新無需重新安裝。",
+    "directLink": "直接連結",
+    "platforms": "支援平台",
+    "thisDevice": "此裝置",
+    "installed": "已安裝",
+    "artifact": "{label}——{platform}（{detail}）",
+    "artifactSized": "{label}——{platform}（{detail}，{size}）",
+    "detailSized": "{detail}，{size}",
+    "detailPending": "{detail}（將於下次版本發佈時提供）",
+    "installCommand": "{platform} 安裝指令",
+    "whyInstall": "為何安裝應用程式",
+    "highlights": {
+      "desktop": {
+        "label": "桌面版",
+        "text": "在雙顯卡筆電上請求啟用獨立 GPU、為方向盤與 DualSense 靜默授權 WebHID、停用背景降速，並透過 GitHub Releases 檢查更新。"
+      },
+      "android": {
+        "label": "Android",
+        "text": "全螢幕無網址列 Trusted Web Activity、沉浸式邊緣手勢、Android Game Mode，以及「開始駕駛／圈速榜」桌面捷徑。"
+      },
+      "current": {
+        "label": "永遠保持最新",
+        "text": "所有封裝程式皆直接開啟 librecorsa.org，不另外打包賽道或車輛，物理引擎、賽道與多人連線更新都會即時套用。"
+      },
+      "browser": {
+        "label": "瀏覽器與 iOS",
+        "text": "若習慣直接在分頁遊玩，完全不需安裝。在 iPhone 與 iPad 上，可點選 Safari 的「分享 > 加入主畫面」。"
+      }
+    },
+    "buildsTitle": "建置與簽章",
+    "builds": "所有安裝檔與 APK 均由 GitHub Actions 自本專案原始碼建置，並連同 SHA-256 雜湊值發佈於 GitHub Releases。透過 SignPath Foundation 申請的免費 Windows 程式碼簽章正在設定中；macOS 版本目前為未簽章；Android APK 則以 <code>{file}</code> 驗證的上傳金鑰簽章。",
+    "allReleases": "GitHub 所有發行版本",
+    "signingPolicy": "程式碼簽章政策"
+  }
+}
