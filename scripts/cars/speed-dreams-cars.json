@@ -1,0 +1,756 @@
+{
+  "about": "Speed Dreams cars the sd-car importer fetches (npm run mod -- import sd-car --fetch <car>): every car in the official asset database at the pinned date, each at a fixed commit of its own repository on forge.a-lec.org, or for the few without one the database's zip and its sha256. name, category, author and license are the database's. Regenerate with scripts/cars/speed-dreams-pins.ts.",
+  "pinned": "2026-11-24",
+  "assetsDatabase": "https://www.speed-dreams.net/assets.json",
+  "data": {
+    "repo": "https://forge.a-lec.org/speed-dreams/speed-dreams-data.git",
+    "commit": "ca89759acffc34ed457a587e94bd85ec17e25772"
+  },
+  "code": {
+    "repo": "https://forge.a-lec.org/speed-dreams/speed-dreams-code.git",
+    "commit": "15454c90c9bb773f2afbc74b32957600a039ea84"
+  },
+  "cars": {
+    "22mp1-sector-mcl36": {
+      "name": "22MP1 Sector MCL36",
+      "category": "Monoposto 1 2022",
+      "author": "Peter Collings",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/22mp1-sector-mcl36.git",
+      "commit": "34229dbd04f2986ae5c3d278682d8e3f2f033af1"
+    },
+    "23mp1-archer-amr23": {
+      "name": "Archer AMR 23",
+      "category": "23MP1",
+      "author": "Peter Collings, W-E-C",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/23mp1-archer-amr23.git",
+      "commit": "0991264a9c5e1c42b2072b85c185cf0c3dcb617a"
+    },
+    "23mp1-cavallo-sc23": {
+      "name": "Cavallo sc23",
+      "category": "23MP1",
+      "author": "Peter Collings, W-E-C, June Ravenmoon, Leillo1975",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/23mp1-cavallo-sc23.git",
+      "commit": "ea2a766bead62d375b50d402708fe222e3e9744a"
+    },
+    "23mp1-conner-mcl37": {
+      "name": "Conner MCL37",
+      "category": "23MP1",
+      "author": "Peter Collings, W-E-C, June Ravenmoon, Leillo1975",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/23mp1-conner-mcl37.git",
+      "commit": "7227bd07bdcecf11c03ffb53be0dc44aae6fffb5"
+    },
+    "23mp1-gammachevre-gc04": {
+      "name": "GammaChevre GC 04",
+      "category": "23MP1",
+      "author": "Peter Collings, W-E-C, June Ravenmoon, Leillo1975",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/23mp1-gammachevre-gc04.git",
+      "commit": "95412be5941cb828def68bdd621b232304d8724e"
+    },
+    "23mp1-konijn-vf23": {
+      "name": "Konijn VF-23",
+      "category": "23MP1",
+      "author": "Peter Collings, W-E-C, June Ravenmoon, Leillo1975",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/23mp1-konijn-vf23.git",
+      "commit": "3a98b040c0b71a1e7d145ad92ff95d56f72ab322"
+    },
+    "23mp1-milano-c43": {
+      "name": "Milano C43",
+      "category": "23MP1",
+      "author": "Peter Collings, W-E-C, June Ravenmoon, Leillo1975",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/23mp1-milano-c43.git",
+      "commit": "7880c1f873c03c380ce2bd7c2814e58a3f4b1b28"
+    },
+    "23mp1-scarletgoat-sg19": {
+      "name": "Scarlet Goat SG-19",
+      "category": "23MP1",
+      "author": "Peter Collings, W-E-C, June Ravenmoon, Leillo1975",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/23mp1-scarletgoat-sg19.git",
+      "commit": "999bbb36ea2d53a65717423e181a24d1ac936ef0"
+    },
+    "23mp1-silber-w14": {
+      "name": "Silber W14",
+      "category": "23MP1",
+      "author": "Peter Collings, W-E-C, June Ravenmoon, Leillo1975",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/23mp1-silber-w14.git",
+      "commit": "a634f43e7f8e6e1d9d5d48711e87692a87f3dbdd"
+    },
+    "23mp1-vosges-v523": {
+      "name": "Vosges V523",
+      "category": "23MP1",
+      "author": "Peter Collings, W-E-C, Leillo1975, June Ravenmoon",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/23mp1-vosges-v523.git",
+      "commit": "bf2e9c4fd72b4f9b1aac0784cc7caf2fd08a10b0"
+    },
+    "23mp1-wilton-fw45": {
+      "name": "Wilton FW45",
+      "category": "23MP1",
+      "author": "Peter Collings, W-E-C, Leillo1975, June Ravenmoon",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/23mp1-wilton-fw45.git",
+      "commit": "c99a3629bb6878b6dec04f2802afe9edb34d0476"
+    },
+    "36gp-ettore-t59": {
+      "name": "36GP Ettore T59",
+      "category": "36GP",
+      "author": "Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/36gp-ettore-t59.git",
+      "commit": "9f91397994bff2d79522e1694c5b14db23867643"
+    },
+    "36gp-milano-12c36": {
+      "name": "Milano 12c/36",
+      "category": "36GP",
+      "author": "Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/36gp-milano-12c36.git",
+      "commit": "fa6778cb55ff455c9782f4e320354debc82c20fb"
+    },
+    "36gp-motorunion-typec": {
+      "name": "Motor Union Type C",
+      "category": "36GP",
+      "author": "Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/36gp-motorunion-typec.git",
+      "commit": "1180b4782a344aaee5e24f80127c9134c200458a"
+    },
+    "36gp-silber-w25b": {
+      "name": "Silber W25B",
+      "category": "36GP",
+      "author": "Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/36gp-silber-w25b.git",
+      "commit": "fac3097edc2753cd92efe8711c0d0f5a443edf78"
+    },
+    "36gp-tridenti-6c34": {
+      "name": "Tridenti 6C/34",
+      "category": "36GP",
+      "author": "Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/36gp-tridenti-6c34.git",
+      "commit": "ff935738f417b4f49c3cad167cae7f516644e974"
+    },
+    "36gp-tridenti-v8ri": {
+      "name": "Tridenti V8RI",
+      "category": "36GP",
+      "author": "Andew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/36gp-tridenti-v8ri.git",
+      "commit": "60ecadee6662f220e5e1854f4d5fc5f7ebdeef90"
+    },
+    "67gp-cavallo-123": {
+      "name": "Cavallo 123",
+      "category": "67GP",
+      "author": "W-E-C, txChange, Xavier Bertaux",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/67gp-cavallo-123.git",
+      "commit": "edf33a67807f579fc3bc3aa341c8b3c4fa22489c"
+    },
+    "67gp-guthrie-eagle": {
+      "name": "Guthrie Eagle",
+      "category": "67GP",
+      "author": "CHAD",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/67gp-guthrie-eagle.git",
+      "commit": "01c82922ba16697e1a7d4766013ebadea26bd72c"
+    },
+    "67gp-kuiper-t81": {
+      "name": "Kuiper T81",
+      "category": "67GP",
+      "author": "CHAD",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/67gp-kuiper-t81.git",
+      "commit": "141cc7a922238b3772c15dc4bfbd7d4eb4872f2d"
+    },
+    "67gp-mango-ms7": {
+      "name": "Mango MS7",
+      "category": "67GP",
+      "author": "CHAD",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/67gp-mango-ms7.git",
+      "commit": "5ef9f5c3555a375d3002cc6fe55d40f1303d7e3d"
+    },
+    "67gp-murasama-37a": {
+      "name": "Murasama 37a",
+      "category": "67GP",
+      "author": "W-E-C",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/67gp-murasama-37a.git",
+      "commit": "1fe116f1bdec85abc3fd5a1b45b6aafac877f01b"
+    },
+    "67gp-upping-ut19": {
+      "name": "Uppington UT19",
+      "category": "67GP",
+      "author": "CHAD",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/67gp-upping-ut19.git",
+      "commit": "12de53e34d2d8fdf7c41b5185dfb734ff8c67240"
+    },
+    "MPE-Arc": {
+      "name": "Arc MPE Gen 3",
+      "category": "MPE",
+      "author": "Peter Collings, W.E.C, Xavier Del Campo Romero",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/MPE-Arc.git",
+      "commit": "70864997583ddc3a88963229985d320846dbfee8"
+    },
+    "fun-racer": {
+      "name": "Advanced",
+      "category": "Fun-Racer",
+      "author": "Julien Schaffo",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/fun-racer.git",
+      "commit": "55149dc2cf163c9a1aac0f83005833a217eac44c"
+    },
+    "ls1-archer-r9": {
+      "name": "Archer R-9",
+      "category": "LS-GT1",
+      "author": "Czech SCGT (Lukas, Lubos), Andrew Sumner, Eckhard M. Jaeger (Bar), W-E-C, June Ravenmoon",
+      "license": "CC-BY, Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/ls1-archer-r9.git",
+      "commit": "0962cc547ef8d58c01b3882525917c73f0d7687f"
+    },
+    "ls1-newcastle-fury": {
+      "name": "Newcastle Fury LS1",
+      "category": "LS-GT1",
+      "author": "Czech SCGT (Lukas, Lubos), Andrew Sumner, Eckhard M. Jaeger (Bar), Dario Badagnani",
+      "license": "CC-BY, Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/ls1-newcastle-fury.git",
+      "commit": "3fe0164ad04030313a2cce1aff49c29f3619d474"
+    },
+    "ls1-taipan-ltsr": {
+      "name": "Taipan LTS-R",
+      "category": "LS-GT1",
+      "author": "ViPer, Eric Espie, Bernhard Wymann, Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/ls1-taipan-ltsr.git",
+      "commit": "2d6e57acab8e2eb2e5147dfb3e205c14b324121a"
+    },
+    "ls1-vulture-v5r": {
+      "name": "Vulture V5.R",
+      "category": "LS-GT1",
+      "author": "Julien Schaffo (JJSCA)",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/ls1-vulture-v5r.git",
+      "commit": "79e567da8e51f4cb2670beca8eed2d18e97e94b7"
+    },
+    "ls2-boxer-96rsr": {
+      "name": "Boxer 96 LS-RSR",
+      "category": "LS-GT2",
+      "author": "Eric Espie, Olaf Sa'ick, Bernhard Wymann, Wolf-Dieter Beelitz, Krist'f K'ly-Kullai, W-E-C",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/ls2-boxer-96rsr.git",
+      "commit": "ad13e0968939bf7f43b32c8507e159b563bd0bca"
+    },
+    "ls2-cavallo-360r": {
+      "name": "Cavallo 360-R",
+      "category": "LS-GT2",
+      "author": "Eric Espie, Bernhard Wymann, Olaf Sa'ick, Bernhard Wymann, Andrew Sumner, Eckhard M. Jaeger",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/ls2-cavallo-360r.git",
+      "commit": "3e919c2272ebdc40a8180d5bcc053aad7b6e0c4d"
+    },
+    "ls2-morley-r900": {
+      "name": "Morley R900",
+      "category": "LS-GT2",
+      "author": "Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/ls2-morley-r900.git",
+      "commit": "913744b991bee6eb448134b2c6d4aa5514f37636"
+    },
+    "ls2-vortex-gt": {
+      "name": "Vortex GT",
+      "category": "LS-GT2",
+      "author": "Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/ls2-vortex-gt.git",
+      "commit": "c26db5d5784ac9953a3dfd36d9396db29611d734"
+    },
+    "mp1-vicente": {
+      "name": "MP1 Vicente",
+      "category": "Monoposto 1",
+      "author": "Vicente Marti",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/mp1-vicente.git",
+      "commit": "25a4c647d2761252c737eee3bccbdd51cbda6c3e"
+    },
+    "mp10-tuxkart": {
+      "name": "Tux Kart",
+      "category": "MP10",
+      "author": "Vicente Marti, SuperTuxKart",
+      "license": "GPL 2.0, CC-BY-SA 3.0, Free Art License*",
+      "repo": "https://forge.a-lec.org/speed-dreams/mp10-tuxkart.git",
+      "commit": "ecbe927bb47338e46cf808103faf383434f4133f"
+    },
+    "mp5-fmc": {
+      "name": "MP5 fmc",
+      "category": "MP5",
+      "author": "Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/mp5-fmc.git",
+      "commit": "1ad694924490f0dfaa9725de98f54e796c4dcbc7"
+    },
+    "mp5-fmc-drift": {
+      "name": "MP5 fmc Team Drift",
+      "category": "MP5",
+      "author": "Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/mp5-fmc-drift.git",
+      "commit": "792bdd6bdc6b2e728d69a9666cb8723f12161e9f"
+    },
+    "mp5-fmc-speedy": {
+      "name": "MP5 fmc Team Speedy",
+      "category": "MP5",
+      "author": "Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/mp5-fmc-speedy.git",
+      "commit": "716c9b1872bc71336b3f4d4c877e1dd78afcbfdb"
+    },
+    "mpa11-murasama": {
+      "name": "Murasama 2011",
+      "category": "MPA11",
+      "author": "W-E-C, JJSCA (Julien Schaffo)",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/mpa11-murasama.git",
+      "commit": "696e9730e5fbc9fdb867f2406898559e626b1862"
+    },
+    "mpa11-murasama-v41": {
+      "name": "Murasama 2011 - 4.1TEST",
+      "category": "MPA11",
+      "author": "W-E-C, JJSCA (Julien Schaffo)",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/mpa11-murasama-v41.git",
+      "commit": "3d425d2ecd7ca3c306aab0e981254b62f4e48a38"
+    },
+    "mpa12-deckard": {
+      "name": "Deckard MPA",
+      "category": "MPA12",
+      "author": "W-E-C, JJSCA (Julien Schaffo)",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/mpa12-deckard.git",
+      "commit": "4425adb8e140bfed43fbe8bcba3e7c19358e9b39"
+    },
+    "mpa12-murasama": {
+      "name": "Murasama 2012",
+      "category": "MPA12",
+      "author": "W-E-C, JJSCA (Julien Schaffo)",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/mpa12-murasama.git",
+      "commit": "1cf220f89416cd96ade95746e7dc71125b4a277c"
+    },
+    "mpa12-spirit": {
+      "name": "Spirit DC00",
+      "category": "MPA12",
+      "author": "W-E-C, JJSCA (Julien Schaffo)",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/mpa12-spirit.git",
+      "commit": "28ad1dda2c704c4a07febf79aa62df76876f4ad6"
+    },
+    "preview-milano-155": {
+      "name": "Milano 155 Touring",
+      "category": "Preview",
+      "author": "Philipp Körber, Bernhard Wymann, Andrea Alfieri, Olaf Saßnick, Bernhard Wymann",
+      "license": "Free Art License",
+      "zip": "https://files.speed-dreams.net/public/b765a6ccdf679b8e704da8c82f449f3f",
+      "sha256": "9e2cdbce63a2e828e69dfd270216ef19fa75e2e2f2157d230f2fd5bb49e26b70",
+      "size": 2798009
+    },
+    "preview-murasama-coffee": {
+      "name": "Murasama Coffee",
+      "category": "Preview",
+      "author": "Anri Dellal, W.E.C",
+      "license": "Free Art License, GPLv2-or-later",
+      "zip": "https://files.speed-dreams.net/public/7792ac791b04bb207770be46ee49906a",
+      "sha256": "710a1345ecf84cd327a7500929a5bf3dde13a754acf31ef36e9d62f0dec6a31a",
+      "size": 4410051
+    },
+    "ref-boxer-gt3-rs-2010": {
+      "name": "Boxer GT3 RS 2010",
+      "category": "References",
+      "author": "Eric Espie, Jean-Christophe Durieu, Olaf Sassnick, Bernhard Wymann, Wolf-Dieter Beelitz, Jean-Philippe Meuret",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/ref-boxer-gt3-rs-2010.git",
+      "commit": "eca8d98d621906ea2b99cce4b60fa3e30280a584"
+    },
+    "rs1-fmc-centre04": {
+      "name": "FMC Centre 04",
+      "category": "RS",
+      "author": "W-E-C",
+      "license": "Free Art License",
+      "zip": "https://files.speed-dreams.net/public/53d2ee3709ace99446a8ecdfaa927ebf",
+      "sha256": "a352478139a6e9afb07c7e227d000e66cd4fd9233ec9b5337be9c7da0a61b855",
+      "size": 7554767
+    },
+    "rs1-kafka-color": {
+      "name": "Kafka Color",
+      "category": "RS",
+      "author": "W-E-C, Xavier Bertaux",
+      "license": "GPLv2+",
+      "repo": "https://forge.a-lec.org/speed-dreams/rs1-kafka-color.git",
+      "commit": "c8aaa72d343adf0e8bb8786fb58e31e0ddd8b93e"
+    },
+    "rs2-saxxon-hatcho": {
+      "name": "Saxxom Hatcho",
+      "category": "RS",
+      "author": "W-E-C",
+      "license": "Free Art License",
+      "zip": "https://files.speed-dreams.net/public/24a244a67888be2e8b0b37a7c70f9d8b",
+      "sha256": "6ac9086a5d691a0c1ccde07793c8df48984d6975d216248ada033380664d7742",
+      "size": 3071640
+    },
+    "sc-boxer-96": {
+      "name": "Boxer 96",
+      "category": "Supercars",
+      "author": "Eric Espie, Jean-Christophe Durieu, Olaf Assnick, Bernhard Wymann, W.E.C, Eckhard M. Jaeger, Jean-Philippe Meuret",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sc-boxer-96.git",
+      "commit": "fb04fe05abed87b148ea70e1a1d2af8a7bf2fb9c"
+    },
+    "sc-boxer-96-2": {
+      "name": "Boxer 96-2 Turbo",
+      "category": "Supercars",
+      "author": "Eric Espie, Jean-Christophe Durieu, Olaf Assnick, Bernhard Wymann, W.E.C, Eckhard M. Jaeger, Jean-Philippe Meuret, Chad Phillips",
+      "license": "Free Art License",
+      "zip": "https://files.speed-dreams.net/public/9ff8e47150740901f777e65d88177b16",
+      "sha256": "d0d20e802f7240c61f3c6887e1872d2fd1d619abee81fd7e064ecb60dde7c524",
+      "size": 7250875
+    },
+    "sc-carson-96": {
+      "name": "Boxer 96 Carson Tuners Edition",
+      "category": "Supercars",
+      "author": "Eric Espie, Jean-Christophe Durieu, Olaf Sassnick, Bernhard Wymann, Jean-Philippe Meuret, W.E.C, Eckhard M. Jaeger, Chad Phillips",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sc-carson-96.git",
+      "commit": "df202bcb9df324384a4ef209420c104e689b2246"
+    },
+    "sc-deckard-conejo": {
+      "name": "Deckard Conejo RR",
+      "category": "Supercars",
+      "author": "Tom_D3, W.E.C, Chad Phillips, June Ravenmoon, Leillo1975",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sc-deckard-conejo.git",
+      "commit": "ba52857eac4d415510685403e06263de67bffee9"
+    },
+    "sc-kanagawa-z35gts": {
+      "name": "Kanagawa Z35 GT-S",
+      "category": "Supercars",
+      "author": "William Brun, W-E-C, Eckhard M. Jaeger",
+      "license": "CC-BY, Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sc-kanagawa-z35gts.git",
+      "commit": "c27d54783399bd13ae1819c2a51c4303c5a06ab6"
+    },
+    "sc-kongei-kk8s": {
+      "name": "Kongei KK8S",
+      "category": "Supercars",
+      "author": "Alex P. (ANP), rick_82, Eckhard M. Jaeger",
+      "license": "CC-BY, Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sc-kongei-kk8s.git",
+      "commit": "89aad394346e4d14ee49fd852c6b0ae840df54ab"
+    },
+    "sc-lynx-220": {
+      "name": "Lynx 220",
+      "category": "Supercars",
+      "author": "Olaf Sassnick, Andrew Sumner, Eckhard M. Jaeger, Jean-Philippe Meuret, W-E-C, Anri Dellal",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sc-lynx-220.git",
+      "commit": "26363e7fae9ccf0081a44af94ae2d41609051f4b"
+    },
+    "sc-murasama-nsx": {
+      "name": "Murasama NSX",
+      "category": "Supercars",
+      "author": "ViPeR, Jean-Christophe Durieu, Andrew Sumner, Jean-Philippe Meuret, Eckhard M. Jaeger, W-E-C",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sc-murasama-nsx.git",
+      "commit": "6ff4662b88f704d06f5d69fe9978de3b89dd133d"
+    },
+    "sc-spirit-300": {
+      "name": "Spirit 300",
+      "category": "Supercars",
+      "author": "Olaf Sassnick, Andrew Sumner, Eckhard M. Jaeger",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sc-spirit-300.git",
+      "commit": "5700ae0320ae07005c530be505cb5fb56d5ef6a6"
+    },
+    "sgtp-archer-gbr9": {
+      "name": "Archer GBR-9 GT-P",
+      "category": "SD-GTP",
+      "author": "SCGT Team (Lukas, Lubos), Andrew Sumner, Eckhard M. Jager, W-E-C, June Ravenmoon",
+      "license": "Free Art License, CC-BY 4.0",
+      "repo": "https://forge.a-lec.org/speed-dreams/sgtp-archer-gbr9.git",
+      "commit": "d6c1e380cd52c34430036efcc20887928045d18a"
+    },
+    "sgtp-boxer-gt98": {
+      "name": "Boxer GT1-98",
+      "category": "SD-GTP",
+      "author": "W-E-C",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sgtp-boxer-gt98.git",
+      "commit": "4e28a062508bc72a812bba018b2f2684ce6c714f"
+    },
+    "sgtp-newcastle-fury": {
+      "name": "Newcastle Fury GT-P",
+      "category": "SD-GTP",
+      "author": "Czech SCGT Team (Lukas, Lobos), Andrew Sumner, Dario Badagnani, Echard M. Jager",
+      "license": "Free Art License, CC-BY 4.0",
+      "repo": "https://forge.a-lec.org/speed-dreams/sgtp-newcastle-fury.git",
+      "commit": "dee0abf28b5fef48bfba2d00256d3f7e0658de06"
+    },
+    "sgtp-satriani-razzogr": {
+      "name": "Satriani Razzo GR-P",
+      "category": "SD-GTP",
+      "author": "Wolf-Dieter Beelitz, Bernhard Wymann, W-E-C",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sgtp-satriani-razzogr.git",
+      "commit": "bedff8936aa0daddf1882a5207834aa8865aff1f"
+    },
+    "sgtp-spirit-roselt": {
+      "name": "Spirit Rose GT1-LT",
+      "category": "SD-GTP",
+      "author": "ViPer, Jean-Cristophe Durieu, Olaf Sassnick, Andrew Sumner, Bernhard Wymann, Eckhard M. Jager",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sgtp-spirit-roselt.git",
+      "commit": "8858b261f3c375cc3ad1f522b52d5fda36dce7da"
+    },
+    "sgtp-taipan-gtsp": {
+      "name": "Taipan GTS-P",
+      "category": "SD-GTP",
+      "author": "ViPer, Eric Espie, Bernhard Wymann, Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sgtp-taipan-gtsp.git",
+      "commit": "e140f1d47f7e27929519f67e2d2350aa7855ec9b"
+    },
+    "sgtp-vulture-v5r": {
+      "name": "Vulture V5.R GT-P",
+      "category": "SD-GTP",
+      "author": "Julien Schaffo (JJSCA), Leillo1975",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/sgtp-vulture-v5r.git",
+      "commit": "da745f5b2dd5ca39d3256ea0213d5ddb6f95a903"
+    },
+    "srw-boxer-ts": {
+      "name": "Boxer MTS",
+      "category": "SRW",
+      "author": "chad3006",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/srw-boxer-ts.git",
+      "commit": "1c15ada782ece65dd4d35f380703cca388b13088"
+    },
+    "srw-kanagawa-gtr": {
+      "name": "Kanagawa GT-R",
+      "category": "SRW",
+      "author": "William Brun, W-E-C, Eckhard M. Jaeger",
+      "license": "CC-BY, Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/srw-kanagawa-gtr.git",
+      "commit": "e960d668cbf5748306ff7d232a4628bcf2d54d78"
+    },
+    "srw-kongei-kk8s": {
+      "name": "Kongei KK8S",
+      "category": "SRW",
+      "author": "Alex P. (ANP), rick_82, Eckhard M. Jaeger",
+      "license": "CC-BY, Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/srw-kongei-kk8s.git",
+      "commit": "b649863a77f9de67fe67987124e88f7c414e511c"
+    },
+    "srw-sector-p4": {
+      "name": "Sector P4",
+      "category": "SRW",
+      "author": "Wolf-Dieter Beelitz",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/srw-sector-p4.git",
+      "commit": "804fee9eaaa55914fdda3c65260b15cd6a7e2510"
+    },
+    "stock-deckard-72montecristo": {
+      "name": "1972 Deckard Monte Cristo",
+      "category": "Stock",
+      "author": "chad3006",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/stock-deckard-72montecristo.git",
+      "commit": "94f8ee2e6f3651948b1ec4d1f3892bc5366ff9ce"
+    },
+    "stock-fmc-71tortilla": {
+      "name": "1971 FMC Tortilla",
+      "category": "Stock",
+      "author": "chad3006",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/stock-fmc-71tortilla.git",
+      "commit": "070b5be2e19cd7c1f5bd838a512121c36518d9dd"
+    },
+    "stock-mercurial-71coldfront": {
+      "name": "1971 Mercurial Coldfront",
+      "category": "Stock",
+      "author": "chad3006",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/stock-mercurial-71coldfront.git",
+      "commit": "d4d9064236f6a3aafd7b4318f0573c238e2eb4bd"
+    },
+    "stock-patriot-72bullfighter": {
+      "name": "1972 Patriot Bullfighter",
+      "category": "Stock",
+      "author": "chad3006",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/stock-patriot-72bullfighter.git",
+      "commit": "4737e4bddf5b13de3eb3b9e88e8be8904a47e2d2"
+    },
+    "stock-plethora-71rumrunner": {
+      "name": "1971 Plethora Rum Runner",
+      "category": "Stock",
+      "author": "chad3006",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/stock-plethora-71rumrunner.git",
+      "commit": "15e92bcca3787ca27a8f5374471f972af6d017df"
+    },
+    "stock-taipan-71chaparral": {
+      "name": "1971 Taipan Chaparral",
+      "category": "Stock",
+      "author": "chad3006",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/stock-taipan-71chaparral.git",
+      "commit": "7fd00169058dbd14d79d35bd8d73f7847956f2c9"
+    },
+    "ta50-deckard-conejo67": {
+      "name": "1967 Deckard Conejo",
+      "category": "TA50",
+      "author": "chad3006",
+      "license": "GNU Public License (v2?)",
+      "repo": "https://forge.a-lec.org/speed-dreams/ta50-deckard-conejo67.git",
+      "commit": "80786683171d5ca2c508782f6f5a6434bfc75eb8"
+    },
+    "ta50-fmc-brumby67": {
+      "name": "1967 FMC Brumby",
+      "category": "TA50",
+      "author": "chad3006",
+      "license": "GNU Public License (v2?)",
+      "repo": "https://forge.a-lec.org/speed-dreams/ta50-fmc-brumby67.git",
+      "commit": "70a0debf167d08c4ab19531067602b835f4d76cb"
+    },
+    "ta50-fmc-brumby69": {
+      "name": "1969 FMC Brumby",
+      "category": "TA50",
+      "author": "chad3006",
+      "license": "GNU Public License (v2?)",
+      "repo": "https://forge.a-lec.org/speed-dreams/ta50-fmc-brumby69.git",
+      "commit": "daba247ff7569f9ef8d3b08e0f6cd208a95291fa"
+    },
+    "ta50-fmc-brumby70": {
+      "name": "1970 FMC Brumby",
+      "category": "TA50",
+      "author": "chad3006",
+      "license": "GNU Public License (v2?)",
+      "repo": "https://forge.a-lec.org/speed-dreams/ta50-fmc-brumby70.git",
+      "commit": "d081261ae68ac95af55d66ec6459acb99ba3875d"
+    },
+    "ta50-mercurial-meerkat67": {
+      "name": "1967 FMC Meerkat",
+      "category": "TA50",
+      "author": "chad3006",
+      "license": "GNU Public License (v2?)",
+      "repo": "https://forge.a-lec.org/speed-dreams/ta50-mercurial-meerkat67.git",
+      "commit": "c68c31658b6bd6efa94a3231df69d4bdde2b4e0e"
+    },
+    "ta50-patriot-javelina72": {
+      "name": "1972 Patriot Javelina",
+      "category": "TA50",
+      "author": "chad3006, Leillo1975",
+      "license": "GNU Public License (v2?)",
+      "repo": "https://forge.a-lec.org/speed-dreams/ta50-patriot-javelina72.git",
+      "commit": "4275200481a39a26655599d441dadb5ad6707087"
+    },
+    "ta50-plethora-tarpon70": {
+      "name": "1970 Plethora Tarpon70",
+      "category": "TA50",
+      "author": "chad3006",
+      "license": "GNU Public License (v2?)",
+      "repo": "https://forge.a-lec.org/speed-dreams/ta50-plethora-tarpon70.git",
+      "commit": "bb537916e0429b16e33ea489133574b96ebd06a1"
+    },
+    "ta50-ponton-firefly68": {
+      "name": "1968 Ponton Firefly",
+      "category": "TA50",
+      "author": "chad3006",
+      "license": "GNU Public License (v2?)",
+      "repo": "https://forge.a-lec.org/speed-dreams/ta50-ponton-firefly68.git",
+      "commit": "8bc1517532ab54898c3bcda77003951a065cd069"
+    },
+    "ta50-taipan-ch70": {
+      "name": "1970 Taipan CH70",
+      "category": "TA50",
+      "author": "chad3006",
+      "license": "GNU Public License (v2?)",
+      "repo": "https://forge.a-lec.org/speed-dreams/ta50-taipan-ch70.git",
+      "commit": "b04f69e44954eea55d419c04e2504cf89be39a6f"
+    },
+    "trb1-boxer-trbrs": {
+      "name": "Boxer TRB-RS",
+      "category": "TRB1",
+      "author": "Eric Espie, Jean-Christophe Durieu, Olaf Sassnick, Bernhard Wymann, Anri Dellal",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/trb1-boxer-trbrs.git",
+      "commit": "c588b59b0bc452ea132d6620a44a74adc89a0e4e"
+    },
+    "trb1-cavallo-360rb": {
+      "name": "Cavallo 360RB",
+      "category": "TRB1",
+      "author": "Eric Espie, Jean-Christophe Durieu, Bernhard Wymann, Anri Dellal",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/trb1-cavallo-360rb.git",
+      "commit": "4b2fedcef50cc2cd19fdebe8d67cf85ba61f627c"
+    },
+    "trb1-sector-rb1": {
+      "name": "Sector RB-1",
+      "category": "TRB1",
+      "author": "Eric Espie, Jean-Christophe Durieu, Olaf Sassnick, Bernhard Wymann, Andrew Sumner, Wolf-Dieter Beelitz, Anri Dellal",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/trb1-sector-rb1.git",
+      "commit": "6075d08f1fa9ca5363efdb90f4a8be5775ae2cab"
+    },
+    "trb1-silber-rblk": {
+      "name": "Silber RBLK",
+      "category": "TRB1",
+      "author": "Christophe Guionneau, Eliam Speedychonchon, Bernhard Wymann, Eckhard M. Jaeger, Anri Dellal",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/trb1-silber-rblk.git",
+      "commit": "4e3721a8f178195e0bcae2e1cec9be506e731561"
+    },
+    "trb1-spirit-rb1lt": {
+      "name": "Spirit RB1 LT",
+      "category": "TRB1",
+      "author": "ViPeR, Jean-Christophe Durieu, Olaf Sassnick, Andrew Sumner, Bernhard Wymann, Eckhard M. Jaeger",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/trb1-spirit-rb1lt.git",
+      "commit": "ab368f603dbf743b0a71e9b3f54205b95cb6596a"
+    },
+    "trb1-taipan-rb1": {
+      "name": "Taipan RB1",
+      "category": "TRB1",
+      "author": "ViPer, Eric Espie, Bernhard Wymann, Andrew Sumner",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/trb1-taipan-rb1.git",
+      "commit": "e198ce3f88a434001cfcf97859a50dc1801277c7"
+    },
+    "trb1-vieringe-5rb": {
+      "name": "Vieringe 5 RB",
+      "category": "TRB1",
+      "author": "Bernhard Wymann, Olaf Sassnick, Andrew Sumner, Eckhard M. Jaeger, Anri Dellal",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/trb1-vieringe-5rb.git",
+      "commit": "3a2329571e31fe76f850231856578538dfcdaf16"
+    },
+    "trb1-zaxxon-rb": {
+      "name": "Zaxxon RB",
+      "category": "TRB1",
+      "author": "Bernhard Wymann, Olaf Sassnick, Andrew Sumner, Wolf-Dieter Beelitz, Anri Dellal",
+      "license": "Free Art License",
+      "repo": "https://forge.a-lec.org/speed-dreams/trb1-zaxxon-rb.git",
+      "commit": "627a5e1b5aca29ed317dce1562a27a8e2be08650"
+    }
+  }
+}

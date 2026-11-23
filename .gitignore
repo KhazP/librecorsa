@@ -75,6 +75,8 @@ UI-RESEARCH-*.md
 /public/music/
 # Mod packages a developer tries in a clone (docs/modding.md, npm run mod -- index)
 /public/mods/
+# Sources the mod importers download (npm run mod -- import <name> --fetch …)
+/scripts/mods/.cache/
 
 # F1 2026 local reference datasets & headless Blender audit outputs
 /reference_data/
