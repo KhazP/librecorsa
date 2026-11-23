@@ -107,8 +107,11 @@ and in `.env.local` for `npm run dev`: `NEXT_PUBLIC_ONLINE_API=http://127.0.0.1:
 committed): `DEV_ORIGINS=http://127.0.0.1:3000,http://localhost:3000`, `ADMIN_KEY=<any local key>` for `/admin`, and `RACE_SLOT_S=120` for a race every two
 minutes instead of twenty.
 
-Accounts locally: `npx wrangler d1 migrations apply librecorsa-accounts --local` as well. On plain http the session
-cookie is `lc_session` (not `__Host-lc_session`, which needs https). Cookies and passkeys go by host name, so use
+Accounts locally: `npx wrangler d1 migrations apply librecorsa-accounts --local` as well, and start the Worker with
+`npx wrangler dev --port 8787 --infer-origin-from-routes=false`: without the flag it sees every request as one to
+librecorsa.org (the route in `wrangler.jsonc`), and passkeys and sign-in redirects then name the wrong site. On plain
+http the session cookie is `lc_session` (not `__Host-lc_session`, which needs https). Cookies and passkeys go by host
+name, so use
 `localhost` for both the game and the Worker (`NEXT_PUBLIC_ONLINE_API=http://localhost:8787/api`, and
 `http://localhost:3000` in `DEV_ORIGINS`): `127.0.0.1` and `localhost` are different sites to a browser. A sign-in
 started from a `DEV_ORIGINS` page comes back to it. Discord and Google sign-in locally need
