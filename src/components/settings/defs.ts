@@ -18,6 +18,7 @@ import { SIM_REALISM_LABELS, SIM_REALISM_LEVELS } from "@/lib/sim/sim-realism";
 import { ASSIST_SLIDERS, type AssistSliderSpec } from "@/lib/sim/steering-assist";
 import type { AssistPreset } from "@/types/f1";
 import { MUSIC_TRACKS, type MusicPool } from "@/lib/audio/music-catalog";
+import { languageChoices } from "@/i18n/catalogs";
 import type { SettingsEnv } from "./env";
 import {
   audio,
@@ -723,6 +724,17 @@ export const headMovement = choice("segmented", {
 });
 
 // ---- Display > Interface
+
+/** Automatic follows the browser; each language is listed under its own name, as its speakers look for it */
+export const language = choice("select", {
+  id: "language",
+  label: "Language",
+  options: () => [
+    { id: "auto", label: "Automatic", detail: "Your browser's language" },
+    ...languageChoices().map(({ code, name }) => ({ id: code, label: name })),
+  ],
+  ...ui("language"),
+});
 
 export const speedUnit = choice("segmented", { id: "speedUnit", label: "Speed", options: [{ id: "kmh", label: "km/h" }, { id: "mph", label: "mph" }], ...units("speed") });
 export const temperatureUnit = choice("segmented", { id: "temperatureUnit", label: "Temperature", options: [{ id: "c", label: "°C" }, { id: "f", label: "°F" }], ...units("temperature") });

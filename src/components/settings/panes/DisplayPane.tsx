@@ -21,6 +21,7 @@ import {
   hudSize,
   lapSummary,
   mirror,
+  language,
   palette,
   playerNames,
   pressureUnit,
@@ -138,7 +139,8 @@ export function CameraTab() {
 export function InterfaceTab() {
   return (
     <>
-      <SettingsCard title="Units" rows={[speedUnit, temperatureUnit, pressureUnit]} first />
+      <SettingsCard title="Language" rows={[language]} first />
+      <SettingsCard title="Units" rows={[speedUnit, temperatureUnit, pressureUnit]} />
       <SettingsCard title="Size and colour" rows={[uiScale, palette]} />
     </>
   );

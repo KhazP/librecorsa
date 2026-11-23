@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
+import { applyLanguage } from "@/i18n/runtime";
 import {
   DEFAULT_INTERFACE_SETTINGS,
   parseInterface,
@@ -19,6 +20,7 @@ const listeners = new Set<() => void>();
 export function applyInterfaceSettings(ui: InterfaceSettings): void {
   const changed = ui !== current;
   current = ui;
+  void applyLanguage(ui.language);
   if (typeof document !== "undefined") {
     const root = document.documentElement;
     if (ui.palette === "standard") delete root.dataset.palette;
