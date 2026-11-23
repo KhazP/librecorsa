@@ -167,6 +167,8 @@ class Browser {
     headers.set('CF-Connecting-IP', opts.freshIp ? `10.9.${Math.floor(++ipCounter / 250)}.${ipCounter % 250}` : this.ip);
     const cookie = [...this.jar].map(([k, v]) => `${k}=${v}`).join('; ');
     if (cookie) headers.set('Cookie', cookie);
+    // A sign-in starts from one of the site's own pages, as the browser says
+    if (url.pathname.startsWith('/api/auth/start/') && !headers.has('Sec-Fetch-Site')) headers.set('Sec-Fetch-Site', 'same-origin');
     const origin = opts.origin === undefined ? (method === 'GET' ? null : this.base) : opts.origin;
     if (origin) headers.set('Origin', origin);
     let body: string | undefined;
@@ -425,6 +427,23 @@ async function main() {
     check('steam: an identity unlike the claimed id fails', (await viaSteam(w, new Browser(w), '76561197960287933', { mangle: (q) => q.set('openid.identity', 'https://steamcommunity.com/openid/id/76561197960287934') })).result === 'failed');
     check('steam: another op_endpoint fails', (await viaSteam(w, new Browser(w), '76561197960287935', { mangle: (q) => q.set('openid.op_endpoint', 'https://evil.example/openid/login') })).result === 'failed');
     check('steam: claimed_id left out of the signed fields fails', (await viaSteam(w, new Browser(w), '76561197960287936', { mangle: (q) => q.set('openid.signed', 'signed,op_endpoint,identity,return_to,response_nonce') })).result === 'failed');
+    {
+      // A forged claimed_id and identity in front of Steam's genuine, signed ones
+      const victim = 'https://steamcommunity.com/openid/id/76561197960287999';
+      const calls = w.providers.calls.length;
+      const forged = await viaSteam(w, new Browser(w), '76561197960287938', {
+        mangle: (q) => {
+          const all = [...q];
+          for (const [k] of all) q.delete(k);
+          q.append('openid.claimed_id', victim);
+          q.append('openid.identity', victim);
+          for (const [k, v] of all) q.append(k, v);
+        },
+      });
+      check('steam: an answer with a field sent twice fails, unchecked', forged.result === 'failed' && w.providers.calls.length === calls);
+      const twoStates = await viaSteam(w, new Browser(w), '76561197960287939', { mangle: (q) => q.append('state', 'another') });
+      check('steam: a state sent twice fails', twoStates.result === 'failed');
+    }
     check('steam: backing out is "cancelled"', (await viaSteam(w, new Browser(w), '76561197960287937', { mangle: (q) => q.set('openid.mode', 'cancel') })).result === 'cancelled');
   }
 
@@ -509,7 +528,7 @@ async function main() {
   const K2 = keyNo(2); // holds gamma
   const K5 = keyNo(5); // a second device of A, no names of its own
   const K6 = keyNo(6); // on no account
-  const K9 = keyNo(9); // holds a name on account A without being on it (a state an earlier fault could leave)
+  const K9 = 'signout-cafe'.padEnd(43, 'c'); // holds a name on account A without being on it (a state an earlier fault could leave)
   const a = new Browser(w);
   const accountB = new Browser(w);
   let aId = '';
@@ -632,6 +651,28 @@ async function main() {
     check('keys/remove: the account\'s other keys still do', (await rename('', 'Beta', K5)).status === 200);
     const me = (await a.account()).body;
     check('keys/remove: the device that used it is no longer joined', me.thisDevice.joined === false && me.account.keys.length === 1);
+    {
+      // Signing out takes the device's key off the account, unless another session still holds it
+      const visit = new Browser(w);
+      await viaSteam(w, visit, '76561197960287990');
+      const K9 = keyNo(9);
+      check('signout: a device joins', (await visit.post('/api/account/device', { driverKey: K9, label: 'Cafe PC' })).status === 200);
+      await claim(w, 'visitor', K9);
+      const visitorAccount = (await visit.account()).body.account.id as string;
+      await w.board.prepare("UPDATE drivers SET account_id = ? WHERE name_key = 'visitor'").bind(visitorAccount).run();
+      const K10 = 'signout-home'.padEnd(43, 'h');
+      await (async () => {
+        const second = new Browser(w);
+        await viaSteam(w, second, '76561197960287990');
+        await second.post('/api/account/device', { driverKey: K10, label: 'Home' });
+      })();
+      check('signout: before it, the key posts under the name', (await rename('', 'Visitor', K9)).status === 200);
+      check('signout: ok', (await visit.post('/api/auth/signout')).status === 200);
+      const left = await one<{ key_hash: string }>(w.board, "SELECT key_hash FROM drivers WHERE name_key = 'visitor'");
+      check('signout: the key leaves the account', !(await one(w.board, 'SELECT 1 FROM account_keys WHERE key_hash = ?', await hex(K9))) && left?.key_hash === `account:${visitorAccount}`);
+      check('signout: the next person at that device can\'t post under the name', (await rename('', 'Visitor', K9)).status === 409);
+      check('signout: the account\'s other device still can', (await rename('', 'Visitor', K10)).status === 200);
+    }
     check('keys/remove: an id not on the account is 404', (await a.post('/api/account/keys/remove', { id: (await hex(K2)).slice(0, 12) })).status === 404);
 
     await claim(w, 'omega', keyNo(7), { lastSeen: clock - 200 * DAY });
@@ -794,6 +835,10 @@ async function main() {
     check('link: without a session it fails', (await viaSteam(w, new Browser(w), '76561197960289998', { intent: 'link' })).result === 'failed');
     const switched = new Browser(w);
     await viaSteam(w, switched, '76561197960289997');
+    const crossSite = await switched.get('/api/auth/start/discord?intent=link', { headers: { 'Sec-Fetch-Site': 'cross-site' } });
+    check('link: a start from another site is refused', resultOf(crossSite) === 'failed');
+    const noSignal = await switched.get('/api/auth/start/discord?intent=link', { headers: { 'Sec-Fetch-Site': 'none' } });
+    check('link: a start typed or bookmarked is refused', resultOf(noSignal) === 'failed');
     const startLink = await switched.get('/api/auth/start/discord?intent=link');
     const linkState = new URL(startLink.headers.get('Location')!).searchParams.get('state')!;
     const keepAuth = switched.jar.get('__Host-lc_auth')!;
