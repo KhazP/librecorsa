@@ -107,6 +107,8 @@ export const BoardTable: React.FC<{
   circuitName?: (trackId: string) => string;
   /** Opens a record's board when tapped inside a driver's Fastest Lap popover */
   onOpenRecordBoard?: (trackId: string, vehicle: VehicleModelId) => void;
+  /** Opens a driver's profile modal when their name is clicked */
+  onSelectDriver?: (name: string) => void;
   /** The key to the badges under the list; off where the caller shows it elsewhere (the online board's filter row) */
   legend?: boolean;
 }> = ({
@@ -119,6 +121,7 @@ export const BoardTable: React.FC<{
   badgeContext,
   circuitName,
   onOpenRecordBoard,
+  onSelectDriver,
   legend = true,
 }) => {
   const sectors = rows.some((r) => r.sectorsMs?.length);
@@ -172,9 +175,22 @@ export const BoardTable: React.FC<{
                   <span className="flex min-w-0 items-center gap-2">
                     {/* The code gives way to the name in a narrow list (a phone) */}
                     {r.code ? <span className="lc-mono hidden w-8 shrink-0 text-[12px] font-bold tracking-[0.08em] text-lc-slate @sm:inline">{r.code.slice(0, 3)}</span> : null}
-                    <span dir="auto" className="truncate text-[14px] font-semibold text-lc-chalk" title={r.title}>
-                      {r.title}
-                    </span>
+                    {onSelectDriver ? (
+                      <button
+                        type="button"
+                        dir="auto"
+                        onClick={() => onSelectDriver(r.title)}
+                        title={`View ${r.title}'s profile`}
+                        aria-haspopup="dialog"
+                        className="min-w-0 cursor-pointer truncate rounded-lc-nub border-0 bg-transparent px-1 -mx-1 py-1.5 text-left text-[14px] font-semibold text-lc-chalk decoration-lc-slate/70 underline-offset-4 transition-colors duration-150 ease-lc hover:underline pointer-coarse:py-2.5"
+                      >
+                        {r.title}
+                      </button>
+                    ) : (
+                      <span dir="auto" className="truncate text-[14px] font-semibold text-lc-chalk" title={r.title}>
+                        {r.title}
+                      </span>
+                    )}
                     <InputIcon input={r.input} className="text-lc-fog" />
                     {showBadges ? (
                       <DriverBadges

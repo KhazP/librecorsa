@@ -9,6 +9,7 @@ import { driverNameKey, type RemoteBoard } from "@/lib/net/leaderboard";
 import { boardChoiceOf, boardChoices } from "@/lib/sim/lap-types";
 import { challengeById, challengeConditionsLabel, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
 import { HallOfFame } from "@/components/board/HallOfFame";
+import { DriverProfileModal } from "@/components/board/DriverProfileModal";
 import { LapConditionBadges } from "@/components/board/LapConditionBadges";
 import { BoardError, BoardSkeleton, BoardTable, MyPlace } from "@/components/hud/LeaderboardPanel";
 import { Button, Card, EmptyState, Select } from "@/components/ui";
@@ -77,6 +78,7 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   onOpenBoard,
 }) => {
   const [tab, setTab] = useState<ChallengeTab>("week");
+  const [profileDriver, setProfileDriver] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -203,6 +205,7 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
                 badgeContext={{ scope: "vehicle", vehicle: challenge.vehicle }}
                 circuitName={formatCircuitName}
                 onOpenRecordBoard={onOpenBoard}
+                onSelectDriver={setProfileDriver}
                 rows={board.entries.map((e, i) => ({
                   key: e.id ?? `${e.code}-${i}`,
                   rank: i + 1,
@@ -218,6 +221,14 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
           </Card>
         </div>
       )}
+      <DriverProfileModal
+        driverName={profileDriver}
+        onClose={() => setProfileDriver(null)}
+        isMe={Boolean(profileDriver && myKey !== "" && driverNameKey(profileDriver) === myKey)}
+        circuitName={formatCircuitName}
+        carTag={carBoardTag}
+        onOpenBoard={onOpenBoard}
+      />
     </div>
   );
 };

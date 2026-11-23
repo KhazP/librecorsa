@@ -12,6 +12,7 @@
  *   GET/POST /api/admin/awards, DELETE /api/admin/awards/<id>  driver badges given by hand (awards.ts, admin.ts)
  *   GET /api/hall-of-fame, GET /api/badges                     weekly challenge podiums (V1 & V2) and driver badges (awards.ts)
  *   GET /api/races/results, GET /api/drivers/record     the open races' results (results.ts)
+ *   GET /api/drivers/profile                            a driver's best laps, ranks and rating across circuits (profile.ts)
  *   GET /api/stats, GET /api/stats/circuit              tabs in view and drivers to date; a circuit's laps and drivers (stats.ts)
  *   POST /api/live                a heartbeat from a tab with the game in view, for the live count (presence.ts)
  * Every feature is optional: with its binding missing or its switch off (wrangler.jsonc `vars`), the config says
@@ -26,6 +27,7 @@ import { DEFAULT_RACE_SLOT_S, nextRaceSlot, raceSlot } from "../../src/lib/net/r
 import { challengeProblem } from "../../src/lib/net/weekly-challenge";
 import { boardDeps, ghostOf, listLaps, renameDriver, submitLap } from "./board";
 import { driverRecord, listRaceResults } from "./results";
+import { driverProfile } from "./profile";
 import { ROOM_CODE_RE } from "./room";
 import { adminClearDriverLaps, adminDeleteLap, adminGrantAward, adminKeyMatches, adminListAwards, adminRevokeAward, adminStats } from "./admin";
 import { hallOfFame, listBadges } from "./awards";
@@ -87,7 +89,7 @@ function allowedOrigin(request: Request, url: URL, env: Env): string | null {
  * How long the answers anyone may share are kept, in the browser and in Workers caching at the edge (seconds): the
  * home page and the title screen read them on every view, and none of them is about the one asking
  */
-export const SHARED_ANSWER_S = { board: 30, circuit: 60, stats: 30, hallOfFame: 60, badges: 60 } as const;
+export const SHARED_ANSWER_S = { board: 30, circuit: 60, stats: 30, hallOfFame: 60, badges: 60, profile: 60 } as const;
 
 function headersFor(origin: string | null, sharedForS = 0): Record<string, string> {
   const headers: Record<string, string> = { "Cache-Control": sharedForS > 0 ? `public, max-age=${sharedForS}` : "no-store", Vary: "Origin" };
@@ -197,6 +199,21 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
     } catch (err) {
       console.error("race results", err);
       return json({ ok: false, error: "The race results had a problem. Try again in a moment" }, 500, origin);
+    }
+  }
+
+  // A driver's cross-circuit lap profile and rating (profile.ts), on the lap boards' database
+  if (path === "/api/drivers/profile" && request.method === "GET") {
+    if (!config.board || !env.BOARD_DB) return json({ ok: false, error: "The lap boards are off" }, 404, origin);
+    if (await overLimit(env.PROFILE_LIMIT, request)) {
+      return json({ ok: false, error: "Too many profile requests, try again shortly" }, 429, origin);
+    }
+    try {
+      const answer = await driverProfile(env.BOARD_DB, url);
+      return json(answer.body, answer.status, origin, SHARED_ANSWER_S.profile);
+    } catch (err) {
+      console.error("driver profile", err);
+      return json({ ok: false, error: "The driver profile could not be read" }, 500, origin);
     }
   }
 
