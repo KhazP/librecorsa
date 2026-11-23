@@ -25,6 +25,7 @@ import {
   combineSaves,
   contentHash,
   differsLocally,
+  dropsOf,
   emptySyncState,
   firstSyncDecision,
   localHash,
@@ -313,8 +314,8 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
     let behind = false;
     for (let tries = 1; ; tries++) {
       let next = cloud ? combineSaves(local, cloud, choice, { base }) : local;
-      // A folded account's save joins without a question; the account's own save wins its ties
-      for (const p of pending) next = combineSaves(p.doc, next, "cloud");
+      // A folded account's save joins without a question, combined value by value; the account's own save wins its ties
+      for (const p of pending) next = combineSaves(p.doc, next, "combine");
       next = { ...next, savedAt: env.now(), savedBy: env.label() };
       if (quick && tries === 1) {
         const held = withCloudGhosts(next, cloud);
@@ -349,7 +350,8 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
     const applied = typeof req.apply === "function" ? req.apply() : req.apply;
     let changedLocal = false;
     if (applied) {
-      const done = apply(storage, result, state);
+      // Keys the result leaves out go too (Use the cloud save, or another device's Keep this device's save)
+      const done = apply(storage, result, state, dropsOf(local, result));
       state = done.state;
       changedLocal = done.changed;
     }

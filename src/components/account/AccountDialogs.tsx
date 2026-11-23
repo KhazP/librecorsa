@@ -210,10 +210,21 @@ function FirstSyncDialog({ open, local, cloud }: { open: boolean; local: SaveSum
         <SaveSide title="This device" summary={local} />
         <SaveSide title="Cloud save" summary={cloud} />
       </div>
-      <p className="m-0">
-        Combine keeps every best lap (the faster one where both have the same), every setup and race, and the newest
-        settings. The other two replace one save with the other.
-      </p>
+      <ul className="m-0 flex list-none flex-col gap-1 p-0">
+        <li>
+          <strong className="font-semibold text-lc-chalk">Combine.</strong> Keeps both. Where both changed the same thing,
+          the newer change wins.
+        </li>
+        <li>
+          <strong className="font-semibold text-lc-chalk">Use the cloud save.</strong> This device takes the account&rsquo;s
+          settings, setups and race history. Its own are replaced.
+        </li>
+        <li>
+          <strong className="font-semibold text-lc-chalk">Keep this device&rsquo;s save.</strong> The account takes this
+          device&rsquo;s settings, setups and race history. Other devices get them at their next start.
+        </li>
+      </ul>
+      <p className="m-0">Best laps from both are always kept.</p>
     </AccountDialog>
   );
 }

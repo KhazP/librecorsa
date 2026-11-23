@@ -35,6 +35,7 @@ import {
   combinePresets,
   combineRaceHistory,
   combineSaves,
+  dropsOf,
   emptySave,
   emptySyncState,
   firstSyncDecision,
@@ -285,10 +286,11 @@ function main1(): void {
     const many = JSON.parse(combinePresets(JSON.stringify(Array.from({ length: 20 }, (_, i) => preset(`a${i}`, `A${i}`, i))), JSON.stringify(Array.from({ length: 20 }, (_, i) => preset(`b${i}`, `B${i}`, 100 + i)))));
     check("presets: the garage's cap holds, the oldest go", many.length === PRESETS_MAX && many.every((p: { savedAt: number }) => p.savedAt >= 4));
     const presetsKey = "lc.garage.presets.lc26";
-    const sides = combineSaves(doc({ keys: { [presetsKey]: { value: JSON.stringify(pa), t: 5 } } }), doc({ keys: { [presetsKey]: { value: JSON.stringify(pb), t: 9 } } }), "local");
-    check("presets in a save combine per car, the chosen side keeping its names", JSON.parse(sides.keys[presetsKey].value).find((p: { id: string }) => p.id === "1")?.name === "Quali");
+    const sides = combineSaves(doc({ keys: { [presetsKey]: { value: JSON.stringify(pa), t: 5 } } }), doc({ keys: { [presetsKey]: { value: JSON.stringify(pb), t: 9 } } }), "combine");
+    const sideNames = JSON.parse(sides.keys[presetsKey].value);
+    check("presets in a save combine per car on Combine, the cloud's keeping their names", sideNames.find((p: { id: string }) => p.id === "3")?.name === "Quali" && sideNames.find((p: { id: string }) => p.id === "1")?.name === "Quali (2)");
 
-    // Single values: the newer change; ties and unknown times by the choice
+    // Combine, single values: the newer change; a known time over an unknown one; the cloud's on a tie
     const one = (t: number, value: string) => doc({ keys: { "bugesera.vehicle": { value, t } }, settings: { realism: { value, t } } });
     const winner = (lt: number, ct: number, choice: FirstSyncChoice) => {
       const out = combineSaves(one(lt, "local"), one(ct, "cloud"), choice);
@@ -296,24 +298,68 @@ function main1(): void {
       const s = out.settings.realism.value;
       return k === s ? k : "split";
     };
-    check("newest wins by stamp, whatever the choice", (["combine", "cloud", "local"] as const).every((c) => winner(9, 5, c) === "local" && winner(5, 9, c) === "cloud"));
-    const table: [number, number, FirstSyncChoice, string][] = [
-      [0, 0, "combine", "cloud"],
-      [7, 0, "combine", "local"],
-      [0, 7, "combine", "cloud"],
-      [7, 7, "combine", "cloud"],
-      [0, 0, "cloud", "cloud"],
-      [7, 0, "cloud", "cloud"],
-      [0, 7, "cloud", "cloud"],
-      [7, 7, "cloud", "cloud"],
-      [0, 0, "local", "local"],
-      [7, 0, "local", "local"],
-      [0, 7, "local", "local"],
-      [7, 7, "local", "local"],
+    const table: [number, number, string][] = [
+      [9, 5, "local"],
+      [5, 9, "cloud"],
+      [0, 0, "cloud"],
+      [7, 0, "local"],
+      [0, 7, "cloud"],
+      [7, 7, "cloud"],
     ];
-    const wrong = table.filter(([lt, ct, c, want]) => winner(lt, ct, c) !== want);
-    check("ties and unknown times go by the choice (12 cases)", wrong.length === 0, JSON.stringify(wrong));
-    check("pickSide matches the table", table.every(([lt, ct, c, want]) => pickSide(lt, ct, c) === want));
+    const wrong = table.filter(([lt, ct, want]) => winner(lt, ct, "combine") !== want);
+    check("Combine: the newer change, a known time over an unknown one, the cloud's on a tie (6 cases)", wrong.length === 0, JSON.stringify(wrong));
+    check("pickSide matches the table", table.every(([lt, ct, want]) => pickSide(lt, ct) === want));
+    check(
+      "Use the cloud save and Keep this device's save take their side whatever the times",
+      [9, 5, 0].every((lt) => [9, 5, 0].every((ct) => winner(lt, ct, "cloud") === "cloud" && winner(lt, ct, "local") === "local"))
+    );
+
+    // Use the cloud save / Keep this device's save replace the other side's save; best laps stay combined
+    {
+      const mineDoc = doc({
+        keys: {
+          [presetsKey]: { value: JSON.stringify([preset("p1", "Sibling setup", 5)]), t: 9 },
+          "librecorsa.raceHistory": { value: JSON.stringify([race("r-local", 5)]), t: 9 },
+          "bugesera.tyreSetup.amg-gt3": { value: '{"local":1}', t: 9 },
+        },
+        settings: { assistPreset: { value: "assisted", t: 9 }, ghost: { value: false, t: 9 } },
+        bestLaps: { monza: lapRef(80_000, sha("a")), spa: lapRef(91_000, sha("c")) },
+      });
+      const theirsDoc = doc({
+        keys: {
+          [presetsKey]: { value: JSON.stringify([preset("p2", "Mine", 4)]), t: 1 },
+          "librecorsa.raceHistory": { value: JSON.stringify([race("r-cloud", 4)]), t: 1 },
+          "lc.garage.chassis.lc26": { value: '{"cloud":1}', t: 1 },
+        },
+        removed: { "bugesera.track": 3 },
+        settings: { assistPreset: { value: "pro", t: 1 } },
+        bestLaps: { spa: lapRef(90_000, sha("b")) },
+      });
+      const cloudWins = combineSaves(mineDoc, theirsDoc, "cloud");
+      check(
+        "Use the cloud save: the account's setups, races and settings as they are, newer local changes or not",
+        cloudWins.keys[presetsKey].value === theirsDoc.keys[presetsKey].value &&
+          cloudWins.keys["librecorsa.raceHistory"].value === theirsDoc.keys["librecorsa.raceHistory"].value &&
+          cloudWins.settings.assistPreset.value === "pro" &&
+          cloudWins.removed["bugesera.track"] === 3
+      );
+      check("Use the cloud save: a key only this device has is left out, and taken off it", !cloudWins.keys["bugesera.tyreSetup.amg-gt3"] && same(Object.keys(dropsOf(mineDoc, cloudWins)), ["bugesera.tyreSetup.amg-gt3"]));
+      check("Use the cloud save: a settings field the account lacks stays", cloudWins.settings.ghost?.value === false);
+      const localWins = combineSaves(mineDoc, theirsDoc, "local");
+      check(
+        "Keep this device's save: this device's setups, races and settings as they are, and the account's other keys go",
+        localWins.keys[presetsKey].value === mineDoc.keys[presetsKey].value &&
+          localWins.keys["librecorsa.raceHistory"].value === mineDoc.keys["librecorsa.raceHistory"].value &&
+          localWins.settings.assistPreset.value === "assisted" &&
+          !localWins.keys["lc.garage.chassis.lc26"] &&
+          localWins.removed["bugesera.track"] === undefined
+      );
+      check(
+        "both choices keep both sides' best laps, the faster one where both have one",
+        [cloudWins, localWins].every((d) => d.bestLaps.monza?.ghost === sha("a") && d.bestLaps.spa?.ghost === sha("b"))
+      );
+    }
+
     const kept = combineSaves(doc({ keys: { "bugesera.track": { value: "a", t: 3 } } }), doc({ keys: { "librecorsa.carSkins": { value: "{}", t: 3 } } }), "combine");
     check("a value on one side only is kept", kept.keys["bugesera.track"]?.value === "a" && kept.keys["librecorsa.carSkins"]?.value === "{}");
 
@@ -717,6 +763,79 @@ async function main2(): Promise<void> {
       left.kind === "synced" && same(server.calls.slice(at), ["PUT /account/save"]) && cloudDoc(server).keys["bugesera.track"]?.value === "suzuka",
       server.calls.slice(at).join(),
     );
+  }
+
+  {
+    // A fresh device downloads the account's save as it is: settings it changed while setting up (stamped later than
+    // the account's) don't win over the account's
+    const server = fakeServer();
+    const clock = { t: 1_000 };
+    const favorites = { favorites: { cars: ["lc26", "amg-gt3"], circuits: ["spa"] }, recent: { cars: ["lc26"], circuits: ["spa"] } };
+    server.doc = doc({ savedBy: "PC", settings: { assistPreset: { value: "pro", t: 500 }, library: { value: favorites, t: 500 } } });
+    server.rev = 1;
+    const fresh = memoryStorage({ [SETTINGS_KEY]: settingsWith({}) });
+    const phone = device(server, "Phone", fresh, memoryGhosts(), clock);
+    phone.track();
+    clock.t = 2_000;
+    fresh.setItem(SETTINGS_KEY, settingsWith({ assistPreset: "assisted", library: { favorites: { cars: [], circuits: [] }, recent: { cars: ["amg-gt3"], circuits: ["monza"] } } }));
+    const got = await phone.sync({ accountId: "acc1", apply: true });
+    const after = JSON.parse(fresh.getItem(SETTINGS_KEY) as string);
+    check("an empty device downloads the account's settings as they are", got.kind === "synced" && after.assistPreset === "pro" && same(after.library, favorites), JSON.stringify(after.library));
+
+    // Use the cloud save: this device's own setups go, its keys the account lacks too; nothing of them goes up
+    const cloudSave = () =>
+      doc({ savedBy: "PC", keys: { "lc.garage.presets.lc26": { value: JSON.stringify([preset("p2", "Mine", 4)]), t: 1 }, "librecorsa.raceHistory": { value: JSON.stringify([race("r-cloud", 4)]), t: 1 } } });
+    const own = () =>
+      memoryStorage({
+        "lc.garage.presets.lc26": JSON.stringify([preset("p1", "Sibling setup", 5)]),
+        "bugesera.tyreSetup.amg-gt3": '{"local":1}',
+        "librecorsa.raceHistory": JSON.stringify([race("r-local", 5)]),
+      });
+    const s1 = fakeServer();
+    s1.doc = cloudSave();
+    s1.rev = 1;
+    const st1 = own();
+    const d1 = device(s1, "Phone", st1, memoryGhosts(), clock);
+    const asked = await d1.sync({ accountId: "acc1", apply: true });
+    const took = await d1.sync({ accountId: "acc1", apply: true, choice: "cloud" });
+    check(
+      "Use the cloud save: this device's setups and races are replaced, its own tyre setup goes",
+      asked.kind === "ask" && took.kind === "synced" && took.changedLocal && st1.getItem("lc.garage.presets.lc26") === cloudSave().keys["lc.garage.presets.lc26"].value && st1.getItem("bugesera.tyreSetup.amg-gt3") === null && st1.getItem("librecorsa.raceHistory") === cloudSave().keys["librecorsa.raceHistory"].value
+    );
+    check("Use the cloud save: nothing of this device's went up", s1.savePuts === 0 && s1.rev === 1);
+
+    // The same, chosen where the game can't reload (the values wait): later syncs send none of it, the next start takes it
+    const s2 = fakeServer();
+    s2.doc = cloudSave();
+    s2.rev = 1;
+    const st2 = own();
+    const d2 = device(s2, "Phone", st2, memoryGhosts(), clock);
+    const waited = await d2.sync({ accountId: "acc1", apply: false, choice: "cloud" });
+    check("Use the cloud save, not applied yet: this device is untouched and the values wait", waited.kind === "synced" && waited.deferred && st2.getItem("bugesera.tyreSetup.amg-gt3") !== null);
+    clock.t = 3_000;
+    const between = await d2.sync({ accountId: "acc1", apply: false });
+    check("in between, this device's replaced save doesn't go up", between.kind === "synced" && !between.pushed && !(s2.doc as SaveDoc).keys["bugesera.tyreSetup.amg-gt3"]);
+    const next = await d2.sync({ accountId: "acc1", apply: () => true });
+    check(
+      "the next start takes the account's save as it is",
+      next.kind === "synced" && next.changedLocal && st2.getItem("bugesera.tyreSetup.amg-gt3") === null && st2.getItem("lc.garage.presets.lc26") === cloudSave().keys["lc.garage.presets.lc26"].value
+    );
+
+    // Keep this device's save on another device: the account's keys that device lacks leave this one at its next start
+    const s3 = fakeServer();
+    const st3 = memoryStorage({ "lc.garage.chassis.lc26": '{"a":1}', "librecorsa.raceHistory": JSON.stringify([race("r1", 1)]) });
+    const pc = device(s3, "PC", st3, memoryGhosts(), clock);
+    await pc.sync({ accountId: "acc1", apply: true });
+    const phoneStore = memoryStorage({ "librecorsa.raceHistory": JSON.stringify([race("r2", 2)]) });
+    const keeper = device(s3, "Phone", phoneStore, memoryGhosts(), clock);
+    clock.t = 4_000;
+    const kept = await keeper.sync({ accountId: "acc1", apply: true, choice: "local" });
+    check("Keep this device's save: the account holds this device's save as it is", kept.kind === "synced" && kept.pushed && !(s3.doc as SaveDoc).keys["lc.garage.chassis.lc26"] && (s3.doc as SaveDoc).keys["librecorsa.raceHistory"].value === phoneStore.getItem("librecorsa.raceHistory"));
+    clock.t = 5_000;
+    const pcLater = await pc.sync({ accountId: "acc1", apply: false });
+    check("the other device doesn't send back what the account let go", pcLater.kind === "synced" && !pcLater.pushed && !(s3.doc as SaveDoc).keys["lc.garage.chassis.lc26"] && pcLater.deferred);
+    const pcStart = await pc.sync({ accountId: "acc1", apply: () => true });
+    check("the other device takes the account's save at its next start", pcStart.kind === "synced" && st3.getItem("lc.garage.chassis.lc26") === null && st3.getItem("librecorsa.raceHistory") === phoneStore.getItem("librecorsa.raceHistory"));
   }
 }
 

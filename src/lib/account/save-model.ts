@@ -482,9 +482,11 @@ export function collect(
  * Writes a save into this device's storage: each synced key it holds, the removal of each key it says was removed,
  * and its settings fields merged into the stored settings (this device's own fields untouched). Anything in the save
  * that isn't synced (a driver key, a device setting) is ignored. The sync state takes the save's change times, so the
- * next collect sees nothing new. `changed`: something in storage is different now (the page reloads to use it).
+ * next collect sees nothing new. `drop`: keys of this device's that the save leaves out (`dropsOf`), each with the
+ * value it had when read; one changed since is kept. They go without a tombstone: only this device lets them go.
+ * `changed`: something in storage is different now (the page reloads to use it).
  */
-export function apply(storage: StorageLike, doc: SaveDoc, state: SyncState): { state: SyncState; changed: boolean } {
+export function apply(storage: StorageLike, doc: SaveDoc, state: SyncState, drop: Record<string, string> = {}): { state: SyncState; changed: boolean } {
   const keys = { ...state.keys };
   const seenSettings = { ...state.settings };
   const removed = { ...state.removed };
@@ -518,6 +520,12 @@ export function apply(storage: StorageLike, doc: SaveDoc, state: SyncState): { s
     }
     delete keys[key];
     removed[key] = Math.max(removed[key] ?? 0, t);
+  }
+  for (const [key, value] of Object.entries(drop)) {
+    if (!isSyncedKey(key) || doc.keys[key] || doc.removed[key] !== undefined || read(storage, key) !== value) continue;
+    if (!write(key, null)) continue;
+    changed = true;
+    delete keys[key];
   }
 
   const fields = Object.entries(doc.settings).filter(([field, s]) => isAccountField(field) && isObj(s) && s.value !== undefined);
@@ -596,15 +604,12 @@ function keySide(doc: SaveDoc, key: string): KeySide {
 const keySideHash = (s: Exclude<KeySide, null>) => (s.removed ? REMOVED_HASH : hashText(s.value));
 
 /**
- * Which side a single value comes from when both changed it: the newer change when both times are known and differ.
- * Otherwise (a tie, or a time not known) the choice decides: "cloud" and "local" take their side; "combine" takes a
- * known change over one not known, and the cloud's on a tie or when neither is known (the account's save is what this
- * device joined).
+ * Which side a single value comes from when both changed it (Combine): the newer change when both times are known and
+ * differ; a known change over one not known; the cloud's on a tie or when neither is known (the account's save is what
+ * this device joined)
  */
-export function pickSide(localT: number, cloudT: number, choice: FirstSyncChoice): "local" | "cloud" {
+export function pickSide(localT: number, cloudT: number): "local" | "cloud" {
   if (localT > 0 && cloudT > 0 && localT !== cloudT) return localT > cloudT ? "local" : "cloud";
-  if (choice === "local") return "local";
-  if (choice === "cloud") return "cloud";
   return localT > 0 && cloudT === 0 ? "local" : "cloud";
 }
 
@@ -687,40 +692,26 @@ export interface CombineOptions {
   base?: SyncBase | null;
 }
 
-/**
- * One save from two: `local` (this device's, or a folded account's) and `cloud` (the account's).
- *   Best laps: both sides' laps, the faster one where both have one; nothing is lost.
- *   Race history: both sides' races once each, within the game's cap.
- *   Saved setups: both sides' per car; a clash on a name keeps both, one renamed "(2)".
- *   Everything else (settings fields, car and tyre setups, liveries, last car and circuit): the newer change by its
- *   time; ties and unknown times go by `choice` (pickSide). Removals count as changes, so a tombstone newer than the
- *   value removes it.
- * With a `base`, a side whose value is still the base one didn't change: the other side's value is taken as it is
- * (a deleted setup stays deleted). The result is written by this device: `savedAt` and `savedBy` are local's.
- */
-export function combineSaves(local: SaveDoc, cloud: SaveDoc, choice: FirstSyncChoice, opts: CombineOptions = {}): SaveDoc {
-  const base = opts.base ?? null;
-  const preferLocal = choice === "local";
-  const out = emptySave(local.savedAt, local.savedBy);
-
+/** Combine: both sides' values, value by value (see combineSaves) */
+function combineValues(local: SaveDoc, cloud: SaveDoc, base: SyncBase | null, out: SaveDoc): void {
   const keys = new Set([...Object.keys(local.keys), ...Object.keys(cloud.keys), ...Object.keys(local.removed), ...Object.keys(cloud.removed)]);
   for (const key of keys) {
     if (!isSyncedKey(key)) continue;
     const l = keySide(local, key);
     const c = keySide(cloud, key);
+    const b = base?.keys[key];
     let res: KeySide;
-    if (!l || !c) res = l ?? c;
-    else if (keySideHash(l) === keySideHash(c)) res = { ...(preferLocal ? l : c), t: Math.max(l.t, c.t) };
-    else {
-      const b = base?.keys[key];
-      if (b !== undefined && keySideHash(l) === b) res = c;
-      else if (b !== undefined && keySideHash(c) === b) res = l;
-      else if (!l.removed && !c.removed && (key === RACE_HISTORY_KEY || isPresetsKey(key))) {
-        const [first, second] = preferLocal ? [l.value, c.value] : [c.value, l.value];
-        const value = key === RACE_HISTORY_KEY ? combineRaceHistory(first, second) : combinePresets(first, second);
-        res = { removed: false, value, t: Math.max(l.t, c.t) };
-      } else res = pickSide(l.t, c.t, choice) === "local" ? l : c;
-    }
+    // The cloud no longer has a value this device still holds as agreed: it was taken out there (the account took
+    // another device's save as it was), so it goes here too
+    if (l && !c && b !== undefined && keySideHash(l) === b) res = null;
+    else if (!l || !c) res = l ?? c;
+    else if (keySideHash(l) === keySideHash(c)) res = { ...c, t: Math.max(l.t, c.t) };
+    else if (b !== undefined && keySideHash(l) === b) res = c;
+    else if (b !== undefined && keySideHash(c) === b) res = l;
+    else if (!l.removed && !c.removed && (key === RACE_HISTORY_KEY || isPresetsKey(key))) {
+      const value = key === RACE_HISTORY_KEY ? combineRaceHistory(c.value, l.value) : combinePresets(c.value, l.value);
+      res = { removed: false, value, t: Math.max(l.t, c.t) };
+    } else res = pickSide(l.t, c.t) === "local" ? l : c;
     if (!res) continue;
     if (res.removed) out.removed[key] = res.t;
     else out.keys[key] = { value: res.value, t: res.t };
@@ -737,14 +728,51 @@ export function combineSaves(local: SaveDoc, cloud: SaveDoc, choice: FirstSyncCh
       const lh = hashValue(l.value);
       const ch = hashValue(c.value);
       const b = base?.settings[field];
-      if (lh === ch) res = { value: (preferLocal ? l : c).value, t: Math.max(l.t, c.t) };
+      if (lh === ch) res = { value: c.value, t: Math.max(l.t, c.t) };
       else if (b !== undefined && lh === b) res = c;
       else if (b !== undefined && ch === b) res = l;
-      else res = pickSide(l.t, c.t, choice) === "local" ? l : c;
+      else res = pickSide(l.t, c.t) === "local" ? l : c;
     }
     if (res) out.settings[field] = { value: res.value, t: res.t };
   }
+}
 
+/**
+ * Use the cloud save / Keep this device's save: the chosen side's synced keys, removals and settings as they are. A
+ * key only the other side has is left out (`dropsOf` takes it off this device); a settings field only the other side
+ * has is kept, as nothing on the chosen side says otherwise.
+ */
+function takeValues(chosen: SaveDoc, other: SaveDoc, out: SaveDoc): void {
+  for (const [key, s] of Object.entries(chosen.keys)) if (isSyncedKey(key)) out.keys[key] = { value: s.value, t: s.t };
+  for (const [key, t] of Object.entries(chosen.removed)) if (isSyncedKey(key) && !chosen.keys[key]) out.removed[key] = t;
+  for (const field of ACCOUNT_SETTINGS_FIELDS) {
+    const s = chosen.settings[field] ?? other.settings[field];
+    if (s) out.settings[field] = { value: s.value, t: s.t };
+  }
+}
+
+/**
+ * One save from two: `local` (this device's, or a folded account's) and `cloud` (the account's), as `choice` says.
+ *   combine  Both sides, value by value:
+ *            - race history: both sides' races once each, within the game's cap
+ *            - saved setups: both sides' per car; a clash on a name keeps both, one renamed "(2)"
+ *            - everything else (settings fields, car and tyre setups, liveries, last car and circuit): the newer
+ *              change by its time, a known time over an unknown one, the cloud's on a tie (pickSide). Removals count
+ *              as changes, so a tombstone newer than the value removes it.
+ *            With a `base`, a side whose value is still the base one didn't change: the other side's value is taken as
+ *            it is (a setup deleted on one device stays deleted).
+ *   cloud    The account's save as it is: this device's own values are replaced, and its keys the account lacks go.
+ *   local    This device's save as it is: the account's values are replaced, and its keys this device lacks go.
+ * Under every choice the best laps are both sides', the faster where both have one: a personal best is never thrown
+ * away. The result is written by this device: `savedAt` and `savedBy` are local's.
+ */
+export function combineSaves(local: SaveDoc, cloud: SaveDoc, choice: FirstSyncChoice, opts: CombineOptions = {}): SaveDoc {
+  const out = emptySave(local.savedAt, local.savedBy);
+  if (choice === "combine") combineValues(local, cloud, opts.base ?? null, out);
+  else if (choice === "cloud") takeValues(cloud, local, out);
+  else takeValues(local, cloud, out);
+
+  const preferLocal = choice === "local";
   for (const key of new Set([...Object.keys(local.bestLaps), ...Object.keys(cloud.bestLaps)])) {
     const l = local.bestLaps[key];
     const c = cloud.bestLaps[key];
@@ -753,6 +781,16 @@ export function combineSaves(local: SaveDoc, cloud: SaveDoc, choice: FirstSyncCh
   }
 
   out.removed = trimRemoved(out.removed);
+  return out;
+}
+
+/**
+ * This device's synced keys that `result` leaves out (neither a value nor a removal), with the value each had: what
+ * Use the cloud save, or another device's Keep this device's save, takes off this device (`apply`'s `drop`)
+ */
+export function dropsOf(local: SaveDoc, result: SaveDoc): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, s] of Object.entries(local.keys)) if (isSyncedKey(key) && !result.keys[key] && result.removed[key] === undefined) out[key] = s.value;
   return out;
 }
 
@@ -775,22 +813,32 @@ export function localHash(doc: SaveDoc, laps: Record<string, number>): string {
   return hashValue({ c: contentHash({ ...doc, bestLaps: {} }), laps });
 }
 
-/** The sync base after a sync: per value, the result's where this device now holds it, else what it was */
+/**
+ * The sync base after a sync, value by value: the result's where this device holds it now. Where it doesn't (not
+ * written yet, `applied` false), what this device holds: that is what it agreed to replace, so at the next sync a value
+ * still at it takes the cloud's.
+ */
 export function nextBase(result: SaveDoc, local: SaveDoc, applied: boolean, old: SyncBase | null): SyncBase {
   const base: SyncBase = { keys: {}, settings: {} };
-  const keys = new Set([...Object.keys(result.keys), ...Object.keys(result.removed)]);
+  const keys = new Set([...Object.keys(result.keys), ...Object.keys(result.removed), ...Object.keys(local.keys), ...Object.keys(local.removed)]);
   for (const key of keys) {
+    if (!isSyncedKey(key)) continue;
     const r = keySide(result, key);
-    if (!r) continue;
     const l = keySide(local, key);
-    const rh = keySideHash(r);
-    if (applied || (l && keySideHash(l) === rh)) base.keys[key] = rh;
+    const rh = r ? keySideHash(r) : undefined;
+    const lh = l ? keySideHash(l) : undefined;
+    if (rh !== undefined && (applied || lh === rh)) base.keys[key] = rh;
+    else if (!applied && lh !== undefined) base.keys[key] = lh;
     else if (old?.keys[key] !== undefined) base.keys[key] = old.keys[key];
   }
-  for (const [field, s] of Object.entries(result.settings)) {
-    const rh = hashValue(s.value);
+  for (const field of new Set([...Object.keys(result.settings), ...Object.keys(local.settings)])) {
+    if (!isAccountField(field)) continue;
+    const r = result.settings[field];
     const l = local.settings[field];
-    if (applied || (l && hashValue(l.value) === rh)) base.settings[field] = rh;
+    const rh = r ? hashValue(r.value) : undefined;
+    const lh = l ? hashValue(l.value) : undefined;
+    if (rh !== undefined && (applied || lh === rh)) base.settings[field] = rh;
+    else if (!applied && lh !== undefined) base.settings[field] = lh;
     else if (old?.settings[field] !== undefined) base.settings[field] = old.settings[field];
   }
   return base;
@@ -798,9 +846,11 @@ export function nextBase(result: SaveDoc, local: SaveDoc, applied: boolean, old:
 
 /** Whether writing `result` would change any synced key or settings field of the device whose save is `local` */
 export function differsLocally(local: SaveDoc, result: SaveDoc): boolean {
-  for (const [k, s] of Object.entries(result.keys)) if (local.keys[k]?.value !== s.value) return true;
-  for (const k of Object.keys(result.removed)) if (local.keys[k] && !result.keys[k]) return true;
+  for (const [k, s] of Object.entries(result.keys)) if (isSyncedKey(k) && local.keys[k]?.value !== s.value) return true;
+  for (const k of Object.keys(result.removed)) if (isSyncedKey(k) && local.keys[k] && !result.keys[k]) return true;
+  if (Object.keys(dropsOf(local, result)).length) return true;
   for (const [f, s] of Object.entries(result.settings)) {
+    if (!isAccountField(f)) continue;
     const l = local.settings[f];
     if (!l || hashValue(l.value) !== hashValue(s.value)) return true;
   }
