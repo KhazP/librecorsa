@@ -9,6 +9,7 @@ import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { LapRecorder, validateLapRecording, type CompletedLap } from '../src/lib/sim/lap-recorder';
 import { lapPlausibilityProblem } from '../src/lib/sim/lap-plausibility';
+import { checkLap } from '../cloudflare/api/lap-check';
 import {
   LAP_SAMPLE_STRIDE,
   PHYSICS_VERSION,
@@ -25,6 +26,7 @@ import {
   isCurrentLapPhysics,
   lapBoardClass,
   lapConditionsNow,
+  lapGoesOnBoards,
   lapPhysicsVersion,
   parseLapConditions,
   physicsVersionLabel,
@@ -878,6 +880,20 @@ async function main(): Promise<void> {
       if (prevWindow === undefined) delete (globalThis as { window?: unknown }).window;
       else (globalThis as { window?: unknown }).window = prevWindow;
     }
+  }
+
+  // --- Mod content stays off the boards (src/lib/mods) ---
+  {
+    const rec = lap as LapRecording;
+    check('mods: a lap of the game\'s own car and circuit goes on the boards', lapGoesOnBoards(rec));
+    check('mods: a lap marked mod (a mod car) does not', !lapGoesOnBoards({ ...rec, mod: true }));
+    check('mods: nor one on a mod circuit, mark or not', !lapGoesOnBoards({ ...rec, trackId: 'mod:jdoe.pack/ring' }));
+    check('mods: the mark survives a save and reload', validateLapRecording({ ...rec, mod: true })?.mod === true && validateLapRecording(rec)?.mod === undefined);
+    const madeUp = checkLap({ ...rec, trackId: 'made_up_circuit' });
+    check('mods: the server refuses a lap on a circuit the game does not ship', !madeUp.ok && /Unknown circuit/.test(madeUp.error), madeUp.ok ? 'accepted' : madeUp.error);
+    const marked = checkLap({ ...rec, mod: true });
+    check('mods: and a lap marked mod', !marked.ok && /mod/.test(marked.error), marked.ok ? 'accepted' : marked.error);
+    check('mods: a lap on a shipped circuit still passes the server check', checkLap(rec).ok);
   }
 
   if (failures.length > 0) {
