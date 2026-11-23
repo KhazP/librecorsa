@@ -4,6 +4,7 @@ import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { focusables, focusOnHover, useFocusNav } from "@/components/menu/useFocusNav";
 import { Icon } from "@/components/ui/icons";
+import { accountWords } from "@/lib/account/account-words";
 import { cx, CURSOR_ROW, MOTION } from "@/components/ui/styles";
 
 export interface AccountDialogProps {
@@ -197,7 +198,7 @@ export function ErrorLine({ error, className }: { error?: string | null; classNa
       {error ? (
         <p className="m-0 flex items-start gap-1.5 text-[13px] leading-[1.4] font-medium text-lc-loss">
           <Icon name="error" size="sm" className="mt-px" />
-          <span>{error}</span>
+          <span>{accountWords(error)}</span>
         </p>
       ) : null}
     </div>
@@ -228,7 +229,7 @@ export function TickBox({
       onPointerEnter={focusOnHover}
       onClick={() => onChange(!checked)}
       className={cx(
-        "group -mx-2 flex min-h-11 w-[calc(100%+1rem)] cursor-pointer items-start gap-3 rounded-lc-row px-2 py-2.5 text-left outline-none hover:bg-white/4 disabled:cursor-not-allowed disabled:opacity-40",
+        "group -mx-2 flex min-h-11 w-[calc(100%+1rem)] cursor-pointer items-start gap-3 rounded-lc-row px-2 py-2.5 text-start outline-none hover:bg-white/4 disabled:cursor-not-allowed disabled:opacity-40",
         MOTION,
         CURSOR_ROW,
       )}

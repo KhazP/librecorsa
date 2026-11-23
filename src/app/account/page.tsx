@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { AccountPageBody } from "@/components/account/AccountPage";
-import { LEAD, SiteIntro, SitePage, TEXT_LINK } from "@/components/home/SitePage";
+import { AccountIntro, AccountPageBody } from "@/components/account/AccountPage";
+import { SitePage } from "@/components/home/SitePage";
 import { SITE_NAME } from "@/lib/site";
 
 // The account outside the game: sign in, see what the account holds, sign out or delete it. App stores ask for a web
@@ -19,19 +18,7 @@ export const metadata: Metadata = {
 export default function AccountPage() {
   return (
     <SitePage>
-      <SiteIntro title="Account">
-        <p className={LEAD}>
-          Accounts are optional. An account keeps your driver names and save on every device, and no email is
-          collected. Sign in here to see what your account holds, or to delete it.
-        </p>
-        <p className="lc-hint m-0">
-          What an account stores is on the{" "}
-          <Link href="/privacy#accounts" className={TEXT_LINK}>
-            privacy page
-          </Link>
-          .
-        </p>
-      </SiteIntro>
+      <AccountIntro />
       <AccountPageBody />
     </SitePage>
   );

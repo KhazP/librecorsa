@@ -31,6 +31,7 @@ import { browserGhosts, createSyncEngine, sha256Hex, type SyncEngine } from "./s
 import { onlineApiBase, watchOnlineConfig } from "@/lib/net/online-config";
 import { getOrCreateDriverKey } from "@/lib/net/driver-key";
 import { isStoreBuild } from "@/lib/store-mode";
+import { text } from "@/lib/text";
 
 export type AccountPhase =
   /** No online side, or ONLINE_ACCOUNTS is off: nothing about accounts is shown */
@@ -615,8 +616,13 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
       }
       e.sync.forget(account.id);
       toSignedOut();
-      const laps = ans.removedLaps === 1 ? "1 lap came" : `${ans.removedLaps} laps came`;
-      notice({ kind: "ok", text: removeLaps && ans.removedLaps > 0 ? `Your account is deleted. ${laps} off the boards.` : "Your account is deleted." });
+      notice({
+        kind: "ok",
+        text:
+          removeLaps && ans.removedLaps > 0
+            ? text("game.account.notices.deletedLaps", { count: ans.removedLaps })
+            : text("game.account.notices.deleted"),
+      });
       return null;
     },
 

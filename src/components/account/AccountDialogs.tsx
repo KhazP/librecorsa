@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button, Toast, Well } from "@/components/ui";
 import { accountActions, useAccountState, type FirstSyncChoice, type SaveSummary } from "@/lib/account/account-store";
+import { accountWords } from "@/lib/account/account-words";
 import { AccountDialog } from "./AccountDialog";
 import { formatAgo, joinQuestion } from "./format";
 import { accountUi, useAccountUi } from "./ui-state";
@@ -104,6 +106,8 @@ function JoinDialog({
   error: string | null;
   onError: (error: string | null) => void;
 }) {
+  const tx = useTranslations("settings.account.join");
+  const tc = useTranslations("common.confirm");
   const [pressed, setBusy] = useState<"join" | "decline" | null>(null);
   const busy = pressed ?? (joining ? "join" : null);
   const join = async () => {
@@ -133,48 +137,50 @@ function JoinDialog({
           <Button
             variant="ghost"
             loading={busy === "decline"}
-            disabledReason={busy === "join" ? "Wait for it to finish" : undefined}
+            disabledReason={busy === "join" ? tc("busy") : undefined}
             onClick={() => void decline()}
           >
-            Not now
+            {tx("notNow")}
           </Button>
           <Button variant="primary" loading={busy === "join"} onClick={() => void join()} data-nav-default="">
-            Join
+            {tx("join")}
           </Button>
         </>
       }
     >
       {busy === "join" ? (
-        <p className="m-0">Joining&hellip; This device&rsquo;s save is syncing with the account. It can take a moment.</p>
+        <p className="m-0">{tx("joining")}</p>
       ) : (
-        <p className="m-0">This device&rsquo;s driver names and save become part of that account. Not now signs this device out.</p>
+        <p className="m-0">{tx("body")}</p>
       )}
     </AccountDialog>
   );
 }
 
+/** The choice's name in bold, at the start of each explanation */
+const b = (chunks: React.ReactNode) => <strong className="font-semibold text-lc-chalk">{chunks}</strong>;
+
 /** One side of the first sync: what it holds */
 function SaveSide({ title, summary }: { title: string; summary: SaveSummary }) {
+  const tx = useTranslations("settings.account.firstSync");
   // Numbers in mono, words in the body face
-  const count = (n: number, one: string, many: string) => (
-    <>
-      <span className="lc-data">{n}</span> {n === 1 ? one : many}
-    </>
-  );
+  const n = (chunks: React.ReactNode) => <span className="lc-data">{chunks}</span>;
   const when =
     summary.savedAt !== null
-      ? `Saved ${formatAgo(summary.savedAt)}${summary.savedBy ? ` on ${summary.savedBy}` : ""}`
+      ? summary.savedBy
+        ? tx("savedAgoOn", { ago: formatAgo(summary.savedAt), device: summary.savedBy })
+        : tx("savedAgo", { ago: formatAgo(summary.savedAt) })
       : summary.savedBy
-        ? `Saved on ${summary.savedBy}`
+        ? tx("savedOn", { device: summary.savedBy })
         : null;
   return (
     <Well className="flex min-w-0 flex-col gap-1.5 px-4 py-3 short:gap-1 short:py-2.5">
       <h3 className="lc-row-label m-0">{title}</h3>
       {/* One line on a short screen, so the choices stay in view */}
       <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-[14px] leading-[1.45] text-lc-chalk short:flex-row short:flex-wrap short:gap-x-3">
-        <li>{count(summary.bestLaps, "best lap", "best laps")}</li>
-        <li>{count(summary.setups, "saved setup", "saved setups")}</li>
-        <li>{count(summary.races, "race", "races")}</li>
+        <li>{tx.rich("bestLaps", { count: summary.bestLaps, n })}</li>
+        <li>{tx.rich("setups", { count: summary.setups, n })}</li>
+        <li>{tx.rich("races", { count: summary.races, n })}</li>
       </ul>
       {when ? <span className="lc-hint">{when}</span> : null}
     </Well>
@@ -182,6 +188,8 @@ function SaveSide({ title, summary }: { title: string; summary: SaveSummary }) {
 }
 
 function FirstSyncDialog({ open, local, cloud }: { open: boolean; local: SaveSummary; cloud: SaveSummary }) {
+  const tx = useTranslations("settings.account.firstSync");
+  const tc = useTranslations("common.confirm");
   const [busy, setBusy] = useState<FirstSyncChoice | null>(null);
   const [error, setError] = useState<string | null>(null);
   const choose = async (choice: FirstSyncChoice) => {
@@ -192,13 +200,13 @@ function FirstSyncDialog({ open, local, cloud }: { open: boolean; local: SaveSum
     setBusy(null);
     setError(failed);
   };
-  const waiting = busy ? "Wait for it to finish" : undefined;
+  const waiting = busy ? tc("busy") : undefined;
   return (
     <AccountDialog
       open={open}
       wide
       stackActions
-      title="Combine the two saves?"
+      title={tx("title")}
       // Putting it off loses nothing: it is asked again from the Account tab, or on the next start
       onDismiss={accountUi.deferFirstSync}
       busy={busy !== null}
@@ -206,40 +214,31 @@ function FirstSyncDialog({ open, local, cloud }: { open: boolean; local: SaveSum
       actions={
         <>
           <Button variant="primary" loading={busy === "combine"} disabledReason={busy && busy !== "combine" ? waiting : undefined} onClick={() => void choose("combine")} data-nav-default="">
-            Combine
+            {tx("combine")}
           </Button>
           <Button variant="secondary" loading={busy === "cloud"} disabledReason={busy && busy !== "cloud" ? waiting : undefined} onClick={() => void choose("cloud")}>
-            Use the cloud save
+            {tx("useCloud")}
           </Button>
           <Button variant="secondary" loading={busy === "local"} disabledReason={busy && busy !== "local" ? waiting : undefined} onClick={() => void choose("local")}>
-            Keep this device&rsquo;s save
+            {tx("keepLocal")}
           </Button>
           <Button variant="ghost" disabledReason={waiting} onClick={accountUi.deferFirstSync}>
-            Not now
+            {tx("notNow")}
           </Button>
         </>
       }
     >
-      <p className="m-0">This device and the account both have a save.</p>
+      <p className="m-0">{tx("intro")}</p>
       <div className="grid grid-cols-2 gap-2.5 max-[24rem]:grid-cols-1">
-        <SaveSide title="This device" summary={local} />
-        <SaveSide title="Cloud save" summary={cloud} />
+        <SaveSide title={tx("thisDevice")} summary={local} />
+        <SaveSide title={tx("cloud")} summary={cloud} />
       </div>
       <ul className="m-0 flex list-none flex-col gap-1 p-0">
-        <li>
-          <strong className="font-semibold text-lc-chalk">Combine.</strong> Keeps both. Where both changed the same thing,
-          the newer change wins.
-        </li>
-        <li>
-          <strong className="font-semibold text-lc-chalk">Use the cloud save.</strong> This device takes the account&rsquo;s
-          settings, setups and race history. Its own are replaced.
-        </li>
-        <li>
-          <strong className="font-semibold text-lc-chalk">Keep this device&rsquo;s save.</strong> The account takes this
-          device&rsquo;s settings, setups and race history. Other devices get them at their next start.
-        </li>
+        <li>{tx.rich("combineExplain", { b })}</li>
+        <li>{tx.rich("cloudExplain", { b })}</li>
+        <li>{tx.rich("localExplain", { b })}</li>
       </ul>
-      <p className="m-0">Best laps from both are always kept.</p>
+      <p className="m-0">{tx("bestLapsKept")}</p>
     </AccountDialog>
   );
 }
@@ -257,7 +256,7 @@ export function AccountNotice() {
       aria-live="polite"
       className="lc-ui-zoom pointer-events-none fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] left-[max(1rem,env(safe-area-inset-left))] z-(--z-lc-notice) mx-auto flex w-fit max-w-[calc(100%-2rem)] justify-center"
     >
-      {notice ? <Toast tone={notice.kind === "ok" ? "good" : "bad"}>{notice.text}</Toast> : null}
+      {notice ? <Toast tone={notice.kind === "ok" ? "good" : "bad"}>{accountWords(notice.text)}</Toast> : null}
     </div>
   );
 }

@@ -4,35 +4,44 @@
  */
 import { useSyncExternalStore } from "react";
 import { LINK_CODE_ALPHABET, PROVIDER_LABELS, type AccountProvider } from "@/lib/account/api-types";
+import { formatLocale } from "@/i18n/catalogs";
+import { text, textLocale } from "@/lib/text";
 
 const DAY_MS = 86_400_000;
 
-/** "23 Nov 2026" */
+/** "23 Nov 2026", in the player's language (Latin digits, as everywhere in the game) */
 export function formatDay(ms: number): string {
-  return new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(ms).toLocaleDateString(formatLocale(textLocale()), { day: "numeric", month: "short", year: "numeric" });
 }
 
-/** "just now", "5 minutes ago", "3 hours ago", "yesterday", "4 days ago", then the date */
+/**
+ * "just now", "5 minutes ago", "3 hours ago", "yesterday", "4 days ago", "2 months ago", in the player's language: a
+ * phrase that goes into a sentence ("Synced {ago}")
+ */
 export function formatAgo(ms: number, now = Date.now()): string {
   const s = Math.max(0, now - ms) / 1000;
-  if (s < 60) return "just now";
+  if (s < 60) return text("game.account.justNow");
+  const rtf = new Intl.RelativeTimeFormat(formatLocale(textLocale()), { numeric: "auto" });
   const m = Math.floor(s / 60);
-  if (m < 60) return m === 1 ? "a minute ago" : `${m} minutes ago`;
+  if (m < 60) return rtf.format(-m, "minute");
   const h = Math.floor(m / 60);
-  if (h < 24) return h === 1 ? "an hour ago" : `${h} hours ago`;
-  const d = Math.floor((now - ms) / DAY_MS);
-  if (d <= 1) return "yesterday";
-  if (d < 14) return `${d} days ago`;
-  return `on ${formatDay(ms)}`;
+  if (h < 24) return rtf.format(-h, "hour");
+  const d = Math.max(1, Math.floor((now - ms) / DAY_MS));
+  if (d < 31) return rtf.format(-d, "day");
+  if (d < 365) return rtf.format(-Math.floor(d / 30), "month");
+  return rtf.format(-Math.floor(d / 365), "year");
 }
 
-/** What is left of a link code: "9 minutes left", "Less than a minute left"; null once it has run out */
-export function formatTimeLeft(expiresAt: number, now = Date.now()): string | null {
+/** Whole minutes a link code has left (0 under a minute); null once it has run out */
+export function minutesLeft(expiresAt: number, now = Date.now()): number | null {
   const left = expiresAt - now;
-  if (left <= 0) return null;
-  const m = Math.floor(left / 60_000);
-  if (m < 1) return "Less than a minute left";
-  return m === 1 ? "1 minute left" : `${m} minutes left`;
+  return left <= 0 ? null : Math.floor(left / 60_000);
+}
+
+/** "Discord, Google and a passkey" in the player's language */
+function listOf(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return new Intl.ListFormat(formatLocale(textLocale()), { style: "long", type: "conjunction" }).format(names);
 }
 
 /**
@@ -41,15 +50,22 @@ export function formatTimeLeft(expiresAt: number, now = Date.now()): string | nu
  */
 export function providerList(providers: readonly AccountProvider[], inSentence = false): string {
   const unique = [...new Set(providers)];
-  const names = unique.map((p) => (p === "passkey" && (inSentence || unique.length > 1) ? "a passkey" : PROVIDER_LABELS[p]));
-  if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const names = unique.map((p) =>
+    p === "passkey" ? text(inSentence || unique.length > 1 ? "game.account.aPasskey" : "game.account.passkey") : PROVIDER_LABELS[p],
+  );
+  return listOf(names);
+}
+
+/** "Alp", "Alp and Bo", "Alp, Bo and Cy" */
+export function nameList(names: readonly string[]): string {
+  return listOf([...names]);
 }
 
 /** The question before a device joins an account: whose it is, and how it is signed in to */
 export function joinQuestion(driverName: string | null, providers: readonly AccountProvider[]): string {
-  const how = providers.length ? ` (${providerList(providers)})` : "";
-  return driverName ? `Join the account of ${driverName}${how}?` : `Join this account${how}?`;
+  const ways = providers.length ? providerList(providers) : "";
+  if (driverName) return ways ? text("game.account.join.named", { name: driverName, ways }) : text("game.account.join.namedOnly", { name: driverName });
+  return ways ? text("game.account.join.this", { ways }) : text("game.account.join.thisOnly");
 }
 
 /**

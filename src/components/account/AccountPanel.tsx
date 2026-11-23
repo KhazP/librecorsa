@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button, Card, ConfirmDialog, SettingRow } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons";
@@ -12,8 +13,9 @@ import {
   type PasskeyMode,
   type SignInProvider,
 } from "@/lib/account/api-types";
+import { accountWords } from "@/lib/account/account-words";
 import { AccountDialog, ErrorLine, TickBox } from "./AccountDialog";
-import { formatAgo, formatDay, providerList, useInDesktopApp } from "./format";
+import { formatAgo, formatDay, nameList, providerList, useInDesktopApp } from "./format";
 import { LinkCodeDialog } from "./LinkCodeDialog";
 import { ShowCodeRow } from "./ShowCodeRow";
 import { accountUi, useAccountUi } from "./ui-state";
@@ -59,19 +61,20 @@ function Quiet({ children }: { children: React.ReactNode }) {
 
 /** The account screen: signed out, the ways in; signed in, the account and everything on it */
 export function AccountPanel({ where }: { where: AccountWhere }) {
+  const tx = useTranslations("settings.account");
   const state = useAccountState();
   /** What the last thing done here said once the account went (deleted) */
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useState<"deleted" | "deletedLaps" | null>(null);
   if (state.phase === "off") return null;
-  if (state.phase === "loading") return <Quiet>Checking your account</Quiet>;
-  if (state.phase === "signed-out") return <SignedOut where={where} state={state} note={note} />;
-  if (!state.account) return <Quiet>Checking your account</Quiet>;
+  if (state.phase === "loading") return <Quiet>{tx("checking")}</Quiet>;
+  if (state.phase === "signed-out") return <SignedOut where={where} state={state} note={note ? tx(note) : null} />;
+  if (!state.account) return <Quiet>{tx("checking")}</Quiet>;
   return (
     <SignedIn
       where={where}
       state={state}
       account={state.account}
-      onDeleted={(removedLaps) => setNote(removedLaps ? "The account and its laps are deleted." : "The account is deleted.")}
+      onDeleted={(removedLaps) => setNote(removedLaps ? "deletedLaps" : "deleted")}
     />
   );
 }
@@ -80,6 +83,7 @@ export function AccountPanel({ where }: { where: AccountWhere }) {
 // Signed out
 
 function SignedOut({ where, state, note }: { where: AccountWhere; state: AccountState; note: string | null }) {
+  const tx = useTranslations("settings.account.signedOut");
   const desktop = useInDesktopApp();
   const { busy, error, run } = useAction();
   const [codeOpen, setCodeOpen] = useState(false);
@@ -106,11 +110,11 @@ function SignedOut({ where, state, note }: { where: AccountWhere; state: Account
   const codeRow =
     where === "settings" ? (
       <SettingRow
-        label="Use a code from another device"
-        hint="On a device that is signed in, choose Show a code, then type it here"
+        label={tx("codeLabel")}
+        hint={tx("codeHint")}
       >
         <Button size="sm" variant="secondary" onClick={() => setCodeOpen(true)} data-nav-default={codeFirst ? "" : undefined}>
-          Enter a code
+          {tx("enterCode")}
         </Button>
       </SettingRow>
     ) : null;
@@ -125,14 +129,14 @@ function SignedOut({ where, state, note }: { where: AccountWhere; state: Account
       ) : null}
       {/* On /account the page's own heading already says Account */}
       <Card
-        title={where === "page" ? "Sign in" : "Account"}
-        description="Sign in to keep your driver names and save on every device. No email is collected."
+        title={where === "page" ? tx("titlePage") : tx("title")}
+        description={tx("description")}
       >
         {codeFirst ? codeRow : null}
         {showOauth || passkeys ? (
           <SettingRow
-            label="Sign in with"
-            hint={showOauth ? "Opens their sign-in page, then comes back here" : "A passkey on this device, a phone or a security key"}
+            label={tx("signInWith")}
+            hint={showOauth ? tx("oauthHint") : tx("passkeyHint")}
           >
             <div className="flex min-w-0 flex-wrap justify-end gap-2">
               {showOauth
@@ -159,16 +163,16 @@ function SignedOut({ where, state, note }: { where: AccountWhere; state: Account
                   onClick={() => passkey("signin")}
                   data-nav-default={!codeFirst && !showOauth ? "" : undefined}
                 >
-                  Passkey
+                  {tx("passkey")}
                 </Button>
               ) : null}
             </div>
           </SettingRow>
         ) : null}
         {passkeys && where === "settings" ? (
-          <SettingRow label="Create an account with a passkey" hint="No other sign-in needed">
+          <SettingRow label={tx("createLabel")} hint={tx("createHint")}>
             <Button size="sm" variant="secondary" loading={busy === "create"} onClick={() => passkey("create")}>
-              Create
+              {tx("create")}
             </Button>
           </SettingRow>
         ) : null}
@@ -176,8 +180,8 @@ function SignedOut({ where, state, note }: { where: AccountWhere; state: Account
         {desktop && oauth.length > 0 ? (
           <p className="lc-hint m-0 pt-1">
             {where === "settings"
-              ? `${providerList(oauth)} sign-in needs a browser. Sign in at librecorsa.org/account, choose Show a code, and type it here.`
-              : `${providerList(oauth)} sign-in needs a browser.`}
+              ? tx("needsBrowserCode", { providers: providerList(oauth) })
+              : tx("needsBrowser", { providers: providerList(oauth) })}
           </p>
         ) : null}
         <ErrorLine error={error} className="pt-1" />
@@ -195,25 +199,16 @@ type Removal =
   | { kind: "passkey"; id: string }
   | { kind: "key"; id: string; label: string };
 
-const REMOVAL_TEXT = {
-  identity: (r: Extract<Removal, { kind: "identity" }>) => ({
-    title: `Remove the ${PROVIDER_LABELS[r.provider]} sign-in?`,
-    body: `${PROVIDER_LABELS[r.provider]} no longer signs in to this account. You can add it again later.`,
-  }),
-  passkey: () => ({
-    title: "Remove this passkey?",
-    body: "It no longer signs in to this account. You can also delete it from the device or password manager that keeps it.",
-  }),
-  key: (r: Extract<Removal, { kind: "key" }>) => ({
-    title: "Remove this driver key?",
-    body: `Laps from ${r.label} no longer post under the account's names. Its laps already on the boards stay.`,
-  }),
-};
+type Words = ReturnType<typeof useTranslations<"settings.account">>;
 
-function removalText(r: Removal) {
-  if (r.kind === "identity") return REMOVAL_TEXT.identity(r);
-  if (r.kind === "passkey") return REMOVAL_TEXT.passkey();
-  return REMOVAL_TEXT.key(r);
+/** The question and its explanation before a way in or a driver key comes off the account */
+function removalText(r: Removal, tx: Words) {
+  if (r.kind === "identity") {
+    const provider = PROVIDER_LABELS[r.provider];
+    return { title: tx("remove.identityTitle", { provider }), body: tx("remove.identityBody", { provider }) };
+  }
+  if (r.kind === "passkey") return { title: tx("remove.passkeyTitle"), body: tx("remove.passkeyBody") };
+  return { title: tx("remove.keyTitle"), body: tx("remove.keyBody", { label: r.label }) };
 }
 
 function SignedIn({
@@ -227,6 +222,7 @@ function SignedIn({
   account: AccountInfo;
   onDeleted: (removedLaps: boolean) => void;
 }) {
+  const tx = useTranslations("settings.account");
   const desktop = useInDesktopApp();
   const ui = useAccountUi();
   const top = useAction();
@@ -241,7 +237,7 @@ function SignedIn({
   const offered = SIGN_IN_PROVIDERS.filter((p) => linked.has(p) || (state.providers.includes(p) && !desktop));
   const passkeysOffered = state.providers.includes("passkey") || account.passkeys.length > 0;
   const waysIn = account.identities.length + account.passkeys.length;
-  const lastWay = waysIn <= 1 ? "The last way in can't be removed. Delete the account instead." : undefined;
+  const lastWay = waysIn <= 1 ? tx("signedIn.lastWay") : undefined;
   const signedInWith = providerList(
     [...account.identities.map((i) => i.provider), ...(account.passkeys.length ? ["passkey" as const] : [])],
     true,
@@ -250,14 +246,14 @@ function SignedIn({
   const sync = state.sync;
   const syncHint =
     sync.status === "syncing"
-      ? "Syncing now"
+      ? tx("signedIn.syncing")
       : sync.status === "error" && sync.error
-        ? sync.error
+        ? accountWords(sync.error)
         : sync.lastSyncedAt
-          ? `Synced ${formatAgo(sync.lastSyncedAt, now)}`
+          ? tx("signedIn.synced", { ago: formatAgo(sync.lastSyncedAt, now) })
           : account.save
-            ? `The cloud save was written ${formatAgo(account.save.updatedAt, now)}`
-            : "Not synced yet";
+            ? tx("signedIn.cloudWritten", { ago: formatAgo(account.save.updatedAt, now) })
+            : tx("signedIn.notSynced");
   const firstSyncWaiting = where === "settings" && state.firstSync !== null && ui.firstSyncDeferred;
 
   const confirmRemoval = async () => {
@@ -274,23 +270,23 @@ function SignedIn({
     setRemoving(null);
   };
   const removalBusy = removing ? (removing.kind === "key" ? keys.busy : ways.busy) !== null : false;
-  const text = removing ? removalText(removing) : null;
+  const text = removing ? removalText(removing, tx) : null;
 
   return (
     <>
       {/* Named by its driver name, the way other players know it; no label line above it */}
       <Card
-        title={account.driverName ?? "Your account"}
-        description={signedInWith ? `Signed in with ${signedInWith}` : undefined}
+        title={account.driverName ?? tx("signedIn.yourAccount")}
+        description={signedInWith ? tx("signedIn.signedInWith", { ways: signedInWith }) : undefined}
       >
         {firstSyncWaiting ? (
-          <SettingRow label="Saves to combine" hint="This device and the account both have a save">
+          <SettingRow label={tx("signedIn.combineLabel")} hint={tx("signedIn.combineHint")}>
             <Button size="sm" variant="primary" onClick={accountUi.reopenFirstSync} data-nav-default="">
-              Choose
+              {tx("signedIn.choose")}
             </Button>
           </SettingRow>
         ) : null}
-        <SettingRow label="Save" hint={<span className={sync.status === "error" ? "text-lc-loss" : undefined}>{syncHint}</span>}>
+        <SettingRow label={tx("signedIn.save")} hint={<span className={sync.status === "error" ? "text-lc-loss" : undefined}>{syncHint}</span>}>
           <Button
             size="sm"
             variant="secondary"
@@ -299,12 +295,12 @@ function SignedIn({
             onClick={() => void top.run("sync", () => accountActions.syncNow())}
             data-nav-default={firstSyncWaiting ? undefined : ""}
           >
-            Sync now
+            {tx("signedIn.syncNow")}
           </Button>
         </SettingRow>
-        <SettingRow label="Sign out" hint="This device keeps its save. It posts laps under your names again once you sign in">
+        <SettingRow label={tx("signedIn.signOut")} hint={tx("signedIn.signOutHint")}>
           <Button size="sm" variant="secondary" icon={<Icon name="leave" />} loading={top.busy === "signout"} onClick={() => void top.run("signout", () => accountActions.signOut())}>
-            Sign out
+            {tx("signedIn.signOut")}
           </Button>
         </SettingRow>
         <ShowCodeRow />
@@ -312,94 +308,104 @@ function SignedIn({
       </Card>
 
       <Card
-        title="Driver names"
-        description="Every device on this account can post laps under these names. They stay yours while the account exists."
+        title={tx("names.title")}
+        description={tx("names.description")}
       >
         {account.names.length ? (
           <ul className="m-0 flex list-none flex-col p-0">
             {account.names.map((n) => (
               <li key={n.nameKey} className="flex min-h-11 flex-wrap items-center justify-between gap-x-4 gap-y-0.5 border-b border-lc-line py-2 last:border-b-0">
                 <span className="lc-row-label min-w-0 truncate">{n.displayName}</span>
-                <span className="lc-hint">{n.lastSeen ? `Last lap ${formatAgo(n.lastSeen, now)}` : "No laps yet"}</span>
+                <span className="lc-hint">{n.lastSeen ? tx("names.lastLap", { ago: formatAgo(n.lastSeen, now) }) : tx("names.noLaps")}</span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="lc-body m-0 py-1">No driver names yet. The name you post your first lap under joins the account.</p>
+          <p className="lc-body m-0 py-1">{tx("names.none")}</p>
         )}
         {state.elsewhere.length ? (
           <div className="flex flex-col gap-2 pt-2">
             <p className="m-0 flex items-start gap-2 text-[13px] leading-[1.45] font-medium text-lc-caution">
               <Icon name="warning" size="sm" className="mt-px" />
               <span>
-                {`${listNames(state.elsewhere)} ${state.elsewhere.length === 1 ? "is" : "are"} on another account. To combine the two, add that account's sign-in below.`}
+                {tx("names.elsewhere", { count: state.elsewhere.length, names: nameList(state.elsewhere) })}
               </span>
             </p>
           </div>
         ) : null}
       </Card>
 
-      <Card title="Ways to sign in" description="Only the account's id at each is kept: no email, user name or picture.">
+      <Card title={tx("ways.title")} description={tx("ways.description")}>
         {offered.map((p) => {
           const id = account.identities.find((i) => i.provider === p);
           return (
             <SettingRow
               key={p}
               label={PROVIDER_LABELS[p]}
-              hint={id ? `Added ${formatDay(id.linkedAt)}${id.lastUsedAt ? `, used ${formatAgo(id.lastUsedAt, now)}` : ""}` : "Not added"}
+              hint={
+                id
+                  ? id.lastUsedAt
+                    ? tx("ways.addedUsed", { date: formatDay(id.linkedAt), ago: formatAgo(id.lastUsedAt, now) })
+                    : tx("ways.added", { date: formatDay(id.linkedAt) })
+                  : tx("ways.notAdded")
+              }
             >
               {id ? (
                 <Button size="sm" variant="ghost" icon={<Icon name="remove" />} disabledReason={lastWay} onClick={() => setRemoving({ kind: "identity", provider: p })}>
-                  Remove
+                  {tx("ways.remove")}
                 </Button>
               ) : (
                 <Button size="sm" variant="secondary" icon={<Icon name="add" />} onClick={() => accountActions.signIn(p, "link", RETURN_TO[where])}>
-                  Add
+                  {tx("ways.add")}
                 </Button>
               )}
             </SettingRow>
           );
         })}
         {account.passkeys.map((k) => (
-          <SettingRow key={k.id} label={k.label} hint={k.lastUsedAt ? `Used ${formatAgo(k.lastUsedAt, now)}` : `Added ${formatDay(k.createdAt)}`}>
+          <SettingRow
+            key={k.id}
+            label={tx("ways.passkeyName", { date: formatDay(k.createdAt) })}
+            hint={k.lastUsedAt ? tx("ways.used", { ago: formatAgo(k.lastUsedAt, now) }) : tx("ways.added", { date: formatDay(k.createdAt) })}
+          >
             <Button size="sm" variant="ghost" icon={<Icon name="remove" />} disabledReason={lastWay} onClick={() => setRemoving({ kind: "passkey", id: k.id })}>
-              Remove
+              {tx("ways.remove")}
             </Button>
           </SettingRow>
         ))}
         {passkeysOffered ? (
-          <SettingRow label="Add a passkey" hint="Signs in with this device's screen lock, a phone or a security key">
+          <SettingRow label={tx("ways.addPasskey")} hint={tx("ways.addPasskeyHint")}>
             <Button size="sm" variant="secondary" icon={<Icon name="add" />} loading={ways.busy === "add"} onClick={() => void ways.run("add", () => accountActions.passkey("add"))}>
-              Add
+              {tx("ways.add")}
             </Button>
           </SettingRow>
         ) : null}
         {passkeysOffered && state.elsewhere.length ? (
-          <SettingRow label="Combine with an account that has a passkey" hint="Its names, devices and save join this account">
+          <SettingRow label={tx("ways.combinePasskey")} hint={tx("ways.combinePasskeyHint")}>
             <Button size="sm" variant="secondary" loading={ways.busy === "link"} onClick={() => void ways.run("link", () => accountActions.passkey("link"))}>
-              Use passkey
+              {tx("ways.usePasskey")}
             </Button>
           </SettingRow>
         ) : null}
-        {desktop ? <p className="lc-hint m-0 pt-1">Other sign-ins can be added at librecorsa.org/account in a browser.</p> : null}
+        {desktop ? <p className="lc-hint m-0 pt-1">{tx("ways.desktopOthers")}</p> : null}
         <ErrorLine error={ways.error} className="pt-1" />
       </Card>
 
-      <Card title="Devices" description="The browsers and apps signed in to this account.">
+      <Card title={tx("devices.title")} description={tx("devices.description")}>
         {account.sessions.map((s) => (
           <SettingRow
             key={s.id}
             label={
               <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="min-w-0">{s.label || (s.current ? "This browser" : "A device that hasn't joined yet")}</span>
-                {s.current ? <Badge size="sm" tone="info">This device</Badge> : null}
+                <span className="min-w-0">{s.label || (s.current ? tx("devices.thisBrowser") : tx("devices.notJoined"))}</span>
+                {s.current ? <Badge size="sm" tone="info">{tx("devices.thisDevice")}</Badge> : null}
               </span>
             }
-            hint={`Signed in ${formatDay(s.createdAt)}, last seen ${formatAgo(s.lastSeenAt, now)}`}
+            hint={tx("devices.seen", { date: formatDay(s.createdAt), ago: formatAgo(s.lastSeenAt, now) })}
           >
             {s.current ? null : (
               <Button size="sm" variant="ghost" icon={<Icon name="leave" />} loading={devices.busy === `session:${s.id}`} onClick={() => void devices.run(`session:${s.id}`, () => accountActions.removeSession(s.id))}>
-                Sign out
+                {tx("devices.signOut")}
               </Button>
             )}
           </SettingRow>
@@ -408,41 +414,45 @@ function SignedIn({
       </Card>
 
       <Card
-        title="Driver keys"
-        description="Each device signs its laps with its own driver key. Every key here may post under the account's names."
+        title={tx("keys.title")}
+        description={tx("keys.description")}
       >
         {account.keys.length ? (
           account.keys.map((k) => {
-            const label = k.label || `Driver key ${k.id.slice(0, 6)}`;
+            const label = k.label || tx("keys.fallback", { id: k.id.slice(0, 6) });
             return (
               <SettingRow
                 key={k.id}
                 label={
                   <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="min-w-0">{label}</span>
-                    {k.current ? <Badge size="sm" tone="info">This device</Badge> : null}
+                    {k.current ? <Badge size="sm" tone="info">{tx("devices.thisDevice")}</Badge> : null}
                   </span>
                 }
-                hint={`Added ${formatDay(k.addedAt)}${k.lastUsedAt ? `, last lap ${formatAgo(k.lastUsedAt, now)}` : ""}`}
+                hint={
+                  k.lastUsedAt
+                    ? tx("keys.addedLap", { date: formatDay(k.addedAt), ago: formatAgo(k.lastUsedAt, now) })
+                    : tx("keys.added", { date: formatDay(k.addedAt) })
+                }
               >
                 {k.current ? null : (
                   <Button size="sm" variant="ghost" icon={<Icon name="remove" />} onClick={() => setRemoving({ kind: "key", id: k.id, label })}>
-                    Remove
+                    {tx("ways.remove")}
                   </Button>
                 )}
               </SettingRow>
             );
           })
         ) : (
-          <p className="lc-body m-0 py-1">No driver keys yet. A device adds its key when it joins the account.</p>
+          <p className="lc-body m-0 py-1">{tx("keys.none")}</p>
         )}
         <ErrorLine error={keys.error} className="pt-1" />
       </Card>
 
-      <Card title="Delete account">
-        <SettingRow label="Delete this account" hint="Deletes its sign-ins and cloud save. You choose whether your laps stay">
+      <Card title={tx("delete.title")}>
+        <SettingRow label={tx("delete.label")} hint={tx("delete.hint")}>
           <Button size="sm" variant="danger" icon={<Icon name="delete" />} onClick={() => setDeleting(true)}>
-            Delete
+            {tx("delete.button")}
           </Button>
         </SettingRow>
       </Card>
@@ -450,7 +460,7 @@ function SignedIn({
       <ConfirmDialog
         open={removing !== null}
         title={text?.title ?? ""}
-        confirmLabel="Remove"
+        confirmLabel={tx("remove.confirm")}
         busy={removalBusy}
         onCancel={() => setRemoving(null)}
         onConfirm={() => void confirmRemoval()}
@@ -460,12 +470,6 @@ function SignedIn({
       <DeleteDialog open={deleting} onClose={() => setDeleting(false)} onDeleted={onDeleted} />
     </>
   );
-}
-
-/** "Alp", "Alp and Bo", "Alp, Bo and Cy" */
-function listNames(names: readonly string[]): string {
-  if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 /** Delete account: the one question, with the tick box for the laps (off unless ticked) */
@@ -478,6 +482,8 @@ function DeleteDialog({
   onClose: () => void;
   onDeleted: (removedLaps: boolean) => void;
 }) {
+  const tx = useTranslations("settings.account.delete");
+  const tc = useTranslations("common.confirm");
   const [removeLaps, setRemoveLaps] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -506,29 +512,27 @@ function DeleteDialog({
     <AccountDialog
       open={open}
       tone="danger"
-      title="Delete this account?"
+      title={tx("question")}
       onDismiss={onClose}
       busy={busy}
       error={error}
       actions={
         <>
-          <Button variant="secondary" onClick={onClose} disabledReason={busy ? "Wait for it to finish" : undefined} data-nav-default="">
-            Cancel
+          <Button variant="secondary" onClick={onClose} disabledReason={busy ? tc("busy") : undefined} data-nav-default="">
+            {tc("cancel")}
           </Button>
           <Button variant="danger" icon={<Icon name="delete" />} loading={busy} onClick={() => void confirm()}>
-            Delete account
+            {tx("confirm")}
           </Button>
         </>
       }
     >
-      <p className="m-0">This deletes the account, its sign-ins and its cloud save. What is saved on this device stays.</p>
+      <p className="m-0">{tx("body")}</p>
       <p className="m-0">
-        {removeLaps
-          ? "Your driver names come off the boards with their laps, race results and badges, and are free for anyone to take."
-          : "Your driver names and laps stay on the boards. Without an account, a name lapses after six months without a lap."}
+        {removeLaps ? tx("lapsGo") : tx("lapsStay")}
       </p>
       <TickBox checked={removeLaps} onChange={setRemoveLaps} disabled={busy}>
-        Also remove my laps and race results from the boards
+        {tx("tick")}
       </TickBox>
     </AccountDialog>
   );

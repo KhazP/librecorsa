@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button, TextField } from "@/components/ui";
 import { accountActions } from "@/lib/account/account-store";
+import { accountWords } from "@/lib/account/account-words";
 import { normaliseLinkCode, type AccountProvider } from "@/lib/account/api-types";
 import { AccountDialog } from "./AccountDialog";
 import { joinQuestion, typedLinkCode } from "./format";
@@ -18,6 +20,8 @@ type Step =
  * account without the player seeing whose it is.
  */
 export function LinkCodeDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const tx = useTranslations("settings.account");
+  const tc = useTranslations("common.confirm");
   const [step, setStep] = useState<Step>({ at: "type" });
   const [typed, setTyped] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +41,7 @@ export function LinkCodeDialog({ open, onClose }: { open: boolean; onClose: () =
   const check = async () => {
     if (busy) return;
     if (!code) {
-      setError("A code is 8 letters and numbers, like ABCD-EFGH");
+      setError(tx("code.format"));
       return;
     }
     setBusy(true);
@@ -78,16 +82,16 @@ export function LinkCodeDialog({ open, onClose }: { open: boolean; onClose: () =
         error={error}
         actions={
           <>
-            <Button variant="ghost" onClick={onClose} disabledReason={busy ? "Wait for it to finish" : undefined}>
-              Not now
+            <Button variant="ghost" onClick={onClose} disabledReason={busy ? tc("busy") : undefined}>
+              {tx("join.notNow")}
             </Button>
             <Button variant="primary" loading={busy} onClick={() => void join()} data-nav-default="">
-              Join
+              {tx("join.join")}
             </Button>
           </>
         }
       >
-        <p className="m-0">This device&rsquo;s driver names and save become part of that account.</p>
+        <p className="m-0">{tx("join.codeBody")}</p>
       </AccountDialog>
     );
   }
@@ -95,26 +99,24 @@ export function LinkCodeDialog({ open, onClose }: { open: boolean; onClose: () =
   return (
     <AccountDialog
       open={open}
-      title="Use a code from another device"
+      title={tx("code.title")}
       step="type"
       onDismiss={onClose}
       busy={busy}
       actions={
         <>
-          <Button variant="ghost" onClick={onClose} disabledReason={busy ? "Wait for it to finish" : undefined}>
-            Cancel
+          <Button variant="ghost" onClick={onClose} disabledReason={busy ? tc("busy") : undefined}>
+            {tc("cancel")}
           </Button>
           <Button variant="primary" loading={busy} onClick={() => void check()}>
-            Continue
+            {tx("code.continue")}
           </Button>
         </>
       }
     >
-      <p className="m-0">
-        On a device that is signed in, open Settings, then Profile and data, then Account, and choose Show a code.
-      </p>
+      <p className="m-0">{tx("code.how")}</p>
       <TextField
-        label="Code"
+        label={tx("code.label")}
         value={typed}
         onChange={(v) => {
           setTyped(typedLinkCode(v));
@@ -124,12 +126,14 @@ export function LinkCodeDialog({ open, onClose }: { open: boolean; onClose: () =
           if (e.key === "Enter") void check();
         }}
         placeholder="ABCD-EFGH"
+        // A code reads left to right in every language
+        dir="ltr"
         maxLength={9}
         autoComplete="one-time-code"
         autoCapitalize="characters"
         autoCorrect="off"
         spellCheck={false}
-        error={error ?? undefined}
+        error={accountWords(error) ?? undefined}
         data-nav-default=""
         className="[&_input]:lc-mono [&_input]:text-[20px] [&_input]:tracking-[0.18em] [&_input]:uppercase"
       />

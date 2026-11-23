@@ -3,9 +3,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button, SettingRow, Well } from "@/components/ui";
 import { cx } from "@/components/ui/styles";
+import { useTranslations } from "use-intl/react";
 import { accountActions } from "@/lib/account/account-store";
 import { ErrorLine } from "./AccountDialog";
-import { formatTimeLeft } from "./format";
+import { minutesLeft } from "./format";
 
 /** The time now, ticking every `everyMs` while `on` (a countdown) */
 function useNow(on: boolean, everyMs = 1000): number {
@@ -25,11 +26,12 @@ function useNow(on: boolean, everyMs = 1000): number {
  * minutes it has left; New code replaces it.
  */
 export function ShowCodeRow() {
+  const tx = useTranslations("settings.account.showCode");
   const [shown, setShown] = useState<{ code: string; expiresAt: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const now = useNow(shown !== null);
-  const left = shown ? formatTimeLeft(shown.expiresAt, now) : null;
+  const left = shown ? minutesLeft(shown.expiresAt, now) : null;
   // The code opens below its row: on a short screen it would be out of sight
   const wellRef = useRef<HTMLDivElement | null>(null);
   const code = shown?.code;
@@ -55,16 +57,16 @@ export function ShowCodeRow() {
   return (
     <>
       <SettingRow
-        label="Show a code for another device"
-        hint="Signs another device in to this account, such as the desktop app"
+        label={tx("label")}
+        hint={tx("hint")}
       >
         {shown ? (
           <Button size="sm" variant="ghost" onClick={() => setShown(null)}>
-            Hide
+            {tx("hide")}
           </Button>
         ) : null}
         <Button size="sm" variant="secondary" loading={busy} onClick={() => void make()}>
-          {shown ? "New code" : "Show a code"}
+          {shown ? tx("new") : tx("show")}
         </Button>
       </SettingRow>
       {shown ? (
@@ -72,10 +74,12 @@ export function ShowCodeRow() {
           <Well className="flex flex-col items-center gap-2.5 px-4 py-5 text-center phone:py-4">
             <span
               role="img"
-              aria-label={`Code ${[...shown.code].join(" ")}`}
+              // A code reads left to right in every language
+              dir="ltr"
+              aria-label={tx("aria", { code: [...shown.code].join(" ") })}
               className={cx(
                 "lc-mono flex items-center gap-3 text-[44px] leading-none font-semibold tracking-[0.14em] text-lc-chalk phone:text-[32px]",
-                left ? undefined : "opacity-40",
+                left !== null ? undefined : "opacity-40",
               )}
             >
               <span>{shown.code.slice(0, 4)}</span>
@@ -84,12 +88,11 @@ export function ShowCodeRow() {
               </span>
               <span>{shown.code.slice(4)}</span>
             </span>
-            <span className={cx("lc-hint", left ? undefined : "text-lc-caution")}>
-              {left ? `${left}. It works once.` : "This code has run out. Choose New code for another."}
+            <span className={cx("lc-hint", left !== null ? undefined : "text-lc-caution")}>
+              {left !== null ? tx("left", { minutes: left }) : tx("expired")}
             </span>
             <p className="lc-body m-0 max-w-[46ch] text-balance">
-              On the other device, open Settings, then Profile and data, then Account. Choose Use a code from another
-              device and type this code.
+              {tx("how")}
             </p>
           </Well>
         </div>
