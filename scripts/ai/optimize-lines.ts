@@ -8,12 +8,15 @@
  *       [--replace (write the quickest clean line even if it is not quicker: the current one breaks a new limit)]
  *       [--edge 1.4 (m the car's centre keeps from the road's edges: a narrow road lined with barriers)]
  *       [--seed line-seed.json [--lock 650:900,2100:2400]] (scripts/line-from-lap.ts: a lap you drove as a start)
+ *       [--no-mintime (skip the optimal-control start, scripts/ai/mintime/solve.py)]
  *   npx tsx scripts/ai/optimize-lines.ts --all [--write] (every circuit, both lines, one process each)
  *
  * A new circuit's lines come from here: the track converters (scripts/tracks) run it with `--write` for the F1 line
  * and the GT3's once the circuit is built, on its geometric (minimum-curvature) line.
  *
- * Starts: the current line and a minimum-curvature line from the centre; with `--ghosts`, also the players' lines from
+ * Starts: the minimum-lap-time line of an optimal-control solve on a single-track car (scripts/ai/mintime/solve.py, as
+ * solved: a car that has to rotate, where the point-mass plan turns for free), the current line and a
+ * minimum-curvature line from the centre; with `--ghosts`, also the players' lines from
  * the online boards' fastest laps of this line's cars (scripts/ai/fetch-ghosts.ts): each car's fastest lap, and a line
  * stitched from whichever lap was quickest through each corner, each driven as it is (smoothed, inside the road) and
  * refined. On Rwanda's short lap (GT3) and Spielberg (F1) in Nov 2026 they finished 0.4-1.6 s behind the other two
@@ -50,6 +53,7 @@ import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
 import { physicsLap, type PhysicsLap, type PhysicsLapCar } from './lib/physics-lap';
 import { cornerMinima, cornerSegments, filled, loadGhostLines, smoothLine, stitchFastest } from './lib/ghosts';
+import { mintimeLine, type MintimeChassis } from './lib/mintime';
 import { loadFastLane } from './lib/references';
 import { roadFacing } from '../../src/lib/sim/track-colliders';
 
@@ -206,6 +210,25 @@ if (seedPath) {
   }
   if (lockRanges.length) console.log(`Locked to the seed: ${lockRanges.map(([a, b]) => `${a}-${b} m`).join(', ')} (${locked.reduce((x, y) => x + y, 0)} of ${param.m} controls)`);
   asDrivenAndRefined(`${seedName} (${seedPath.split('/').pop()})`, onGrid, lockRanges.length ? locked : undefined);
+}
+// The minimum-lap-time line of a single-track car (scripts/ai/mintime/solve.py: yaw inertia, load transfer, a grip
+// ellipse per axle, calibrated on the car's measured limits), as solved: a car that has to rotate, where the
+// point-mass plan turns for free. On Qiddiya in Nov 2026 it tied with the refined starts (same shape, within 0.3 s on
+// the physics) and was not kept. `--no-mintime` skips it (it needs uv on PATH)
+const mintimeOn = !argv.includes('--no-mintime') && !(preferAcPct > 0) && !lockRanges.length;
+if (mintimeOn) {
+  const chassis = (boundsCar as unknown as { config?: { chassis?: MintimeChassis } }).config?.chassis;
+  const vehicle = line === 'gt3' ? 'amg-gt3' : 'f12026-car';
+  const startV = lineCost(t, current, limits, 0, undefined, 0, run).plan.v;
+  const mt = chassis
+    ? mintimeLine(t, bounds, current, startV, vehicle, chassis, { grip, run, step: Math.max(1, Math.round(4 / t.ds)), verbose, log })
+    : null;
+  if (!chassis) console.log('mintime: no chassis data for this car');
+  else if (mt?.solved) {
+    const plan = lineCost(t, mt.n, limits, 40, walls, 0, run);
+    console.log(`minimum lap time (single-track car): solver ${mt.lapS.toFixed(3)} s, plan ${plan.lapS.toFixed(3)} s (${secs()} s)`);
+    candidates.push({ name: 'minimum lap time (single-track car), as solved', n: mt.n, planS: plan.lapS });
+  } else if (mt) console.log(`mintime: ${mt.status}; not a candidate`);
 }
 if (!(preferAcPct > 0) && !lockRanges.length) {
   refine('from the current line', param.fromGrid(current));
