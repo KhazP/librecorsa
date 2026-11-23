@@ -9,6 +9,8 @@
   &nbsp;·&nbsp;
   <a href="https://docs.librecorsa.org/">Docs</a>
   &nbsp;·&nbsp;
+  <a href="https://docs.librecorsa.org/faq/">FAQ</a>
+  &nbsp;·&nbsp;
   <a href="#features">Features</a>
   &nbsp;·&nbsp;
   <a href="#controls">Controls</a>
