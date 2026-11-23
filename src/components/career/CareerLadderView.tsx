@@ -255,7 +255,10 @@ export const CareerLadderView: React.FC<{
   }, [inspecting, isLarge, archiveView]);
 
   const scrollLadder = (dir: -1 | 1) => {
-    scrollRef.current?.scrollBy({ left: dir * 300, behavior: "smooth" });
+    const el = scrollRef.current;
+    // Right to left (Arabic) the ladder runs the other way: "next" scrolls towards the left
+    const rtl = el ? getComputedStyle(el).direction === "rtl" : false;
+    el?.scrollBy({ left: dir * 300 * (rtl ? -1 : 1), behavior: "smooth" });
   };
 
   const canChooseInspecting = Boolean(

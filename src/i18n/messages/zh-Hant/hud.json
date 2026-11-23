@@ -1125,6 +1125,8 @@
     "boxIn": "距 {box} 號維修位 {metres} m",
     "boxPassed": "已駛過 {box} 號維修位",
     "approach": "維修區入口 · 限速 {limit} km/h",
-    "limiterKey": "限速器：{key}"
+    "limiterKey": "限速器：{key}",
+    "stopsPill": "進站 {made}/{required}",
+    "stopRequired": "{remaining, plural, other {進站 · 尚需 # 次強制進站}}"
   }
 }

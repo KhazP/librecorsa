@@ -1125,6 +1125,8 @@
     "boxIn": "Ô pit {box} còn {metres} m",
     "boxPassed": "Đã qua ô pit {box}",
     "approach": "Lối vào pit · giới hạn {limit} km/h",
-    "limiterKey": "Giới hạn pit: {key}"
+    "limiterKey": "Giới hạn pit: {key}",
+    "stopsPill": "Pit {made}/{required}",
+    "stopRequired": "{remaining, plural, other {Box · bắt buộc dừng pit # lần}}"
   }
 }

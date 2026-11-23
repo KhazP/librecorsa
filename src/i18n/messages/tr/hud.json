@@ -1125,6 +1125,8 @@
     "boxIn": "Box {box}: {metres} m kaldı",
     "boxPassed": "Box {box} geçildi",
     "approach": "Pit girişi · sınır {limit} km/h",
-    "limiterKey": "Sınırlayıcı: {key}"
+    "limiterKey": "Sınırlayıcı: {key}",
+    "stopsPill": "Pit {made}/{required}",
+    "stopRequired": "{remaining, plural, one {Pite gir · # zorunlu pit stop} other {Pite gir · # zorunlu pit stop}}"
   }
 }

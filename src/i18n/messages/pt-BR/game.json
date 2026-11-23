@@ -835,7 +835,8 @@
     "launchKey": "Segure {key} para largar · Esc Menu",
     "noRacesOnHillClimb": "Sem corridas em uma subida de montanha",
     "backToRaces": "Voltar às corridas",
-    "backToCareer": "Voltar à carreira"
+    "backToCareer": "Voltar à carreira",
+    "restartMulligan": "{count, plural, one {Usa um mulligan: resta #} other {Usa um mulligan: restam #}}"
   },
   "telemetryHud": {
     "menu": "Menu",

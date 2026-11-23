@@ -1125,6 +1125,8 @@
     "boxIn": "المرآب {box} بعد {metres} m",
     "boxPassed": "تجاوزت المرآب {box}",
     "approach": "مدخل الصيانة · الحد {limit} km/h",
-    "limiterKey": "المحدد: {key}"
+    "limiterKey": "المحدد: {key}",
+    "stopsPill": "التوقفات {made}/{required}",
+    "stopRequired": "{remaining, plural, zero {ادخل · لا توقفات مطلوبة} one {ادخل · توقف إلزامي واحد} two {ادخل · توقفان إلزاميان} few {ادخل · # توقفات إلزامية} many {ادخل · # توقفًا إلزاميًا} other {ادخل · # توقف إلزامي}}"
   }
 }

@@ -835,7 +835,8 @@
     "launchKey": "{key} 길게 눌러 출발 · Esc 메뉴",
     "noRacesOnHillClimb": "힐 클라임에서는 레이스를 진행할 수 없습니다",
     "backToRaces": "레이스 목록으로 돌아가기",
-    "backToCareer": "커리어로 돌아가기"
+    "backToCareer": "커리어로 돌아가기",
+    "restartMulligan": "{count, plural, other {멀리건 1회 사용: #회 남음}}"
   },
   "telemetryHud": {
     "menu": "메뉴",

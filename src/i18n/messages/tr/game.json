@@ -835,7 +835,8 @@
     "launchKey": "Kalkış için {key} tuşuna basılı tut · Esc Menü",
     "noRacesOnHillClimb": "Tırmanma etabında yarış yapılamaz",
     "backToRaces": "Yarışlara dön",
-    "backToCareer": "Kariyere dön"
+    "backToCareer": "Kariyere dön",
+    "restartMulligan": "{count, plural, one {Bir tekrar hakkı kullanılır: # kaldı} other {Bir tekrar hakkı kullanılır: # kaldı}}"
   },
   "telemetryHud": {
     "menu": "Menü",

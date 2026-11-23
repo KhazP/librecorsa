@@ -835,7 +835,8 @@
     "launchKey": "Tahan {key} untuk meluncur · Esc Menu",
     "noRacesOnHillClimb": "Tidak ada balapan di lintasan hill climb",
     "backToRaces": "Kembali ke daftar balapan",
-    "backToCareer": "Kembali ke karier"
+    "backToCareer": "Kembali ke karier",
+    "restartMulligan": "{count, plural, other {Memakai satu mulligan: sisa #}}"
   },
   "telemetryHud": {
     "menu": "Menu",

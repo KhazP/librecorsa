@@ -835,7 +835,8 @@
     "launchKey": "Tieni premuto {key} per partire · Esc Menu",
     "noRacesOnHillClimb": "Niente gare in una cronoscalata",
     "backToRaces": "Torna alle gare",
-    "backToCareer": "Torna alla carriera"
+    "backToCareer": "Torna alla carriera",
+    "restartMulligan": "{count, plural, one {Usa un mulligan: ne resta #} other {Usa un mulligan: ne restano #}}"
   },
   "telemetryHud": {
     "menu": "Menu",

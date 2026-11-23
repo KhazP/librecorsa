@@ -835,7 +835,8 @@
     "launchKey": "Giữ {key} để xuất phát · Esc Menu",
     "noRacesOnHillClimb": "Không hỗ trợ đua chính trên đường đua leo đồi",
     "backToRaces": "Quay lại danh sách cuộc đua",
-    "backToCareer": "Quay lại sự nghiệp"
+    "backToCareer": "Quay lại sự nghiệp",
+    "restartMulligan": "{count, plural, other {Dùng một lượt đua lại: còn #}}"
   },
   "telemetryHud": {
     "menu": "Menu",

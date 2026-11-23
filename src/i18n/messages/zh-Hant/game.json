@@ -835,7 +835,8 @@
     "launchKey": "按住 {key} 起跑 · Esc 選單",
     "noRacesOnHillClimb": "爬山賽不開放競速賽事",
     "backToRaces": "返回賽事列表",
-    "backToCareer": "返回生涯模式"
+    "backToCareer": "返回生涯模式",
+    "restartMulligan": "{count, plural, other {將使用一次重賽機會：剩 # 次}}"
   },
   "telemetryHud": {
     "menu": "選單",

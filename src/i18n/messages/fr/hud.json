@@ -1125,6 +1125,8 @@
     "boxIn": "Stand {box} dans {metres} m",
     "boxPassed": "Stand {box} dépassé",
     "approach": "Entrée des stands · limite {limit} km/h",
-    "limiterKey": "Limiteur : {key}"
+    "limiterKey": "Limiteur : {key}",
+    "stopsPill": "Arrêts {made}/{required}",
+    "stopRequired": "{remaining, plural, one {Box · # arrêt obligatoire} other {Box · # arrêts obligatoires}}"
   }
 }

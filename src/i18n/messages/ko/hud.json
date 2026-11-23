@@ -1125,6 +1125,8 @@
     "boxIn": "{box}번 박스까지 {metres} m",
     "boxPassed": "{box}번 박스 지나침",
     "approach": "피트 진입 · 제한 {limit} km/h",
-    "limiterKey": "리미터: {key}"
+    "limiterKey": "리미터: {key}",
+    "stopsPill": "피트 {made}/{required}",
+    "stopRequired": "{remaining, plural, other {박스 · 의무 피트 스톱 #회}}"
   }
 }

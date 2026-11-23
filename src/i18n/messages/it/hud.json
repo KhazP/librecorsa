@@ -1125,6 +1125,8 @@
     "boxIn": "Box {box} tra {metres} m",
     "boxPassed": "Box {box} superato",
     "approach": "Ingresso box · limite {limit} km/h",
-    "limiterKey": "Limitatore: {key}"
+    "limiterKey": "Limitatore: {key}",
+    "stopsPill": "Soste {made}/{required}",
+    "stopRequired": "{remaining, plural, one {Box · # sosta obbligatoria} other {Box · # soste obbligatorie}}"
   }
 }

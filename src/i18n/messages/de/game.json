@@ -835,7 +835,8 @@
     "launchKey": "{key} halten zum Losfahren · Esc Menü",
     "noRacesOnHillClimb": "Keine Rennen bei einem Bergrennen",
     "backToRaces": "Zurück zu den Rennen",
-    "backToCareer": "Zurück zur Karriere"
+    "backToCareer": "Zurück zur Karriere",
+    "restartMulligan": "{count, plural, one {Kostet einen Mulligan: # übrig} other {Kostet einen Mulligan: # übrig}}"
   },
   "telemetryHud": {
     "menu": "Menü",

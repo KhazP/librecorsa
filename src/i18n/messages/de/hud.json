@@ -1125,6 +1125,8 @@
     "boxIn": "Box {box} in {metres} m",
     "boxPassed": "Box {box} vorbei",
     "approach": "Boxeneinfahrt · Limit {limit} km/h",
-    "limiterKey": "Limiter: {key}"
+    "limiterKey": "Limiter: {key}",
+    "stopsPill": "Stopps {made}/{required}",
+    "stopRequired": "{remaining, plural, one {Box · # Pflichtstopp offen} other {Box · # Pflichtstopps offen}}"
   }
 }
