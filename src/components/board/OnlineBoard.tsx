@@ -514,7 +514,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
               }
               aria-expanded={filtersOpen}
               aria-controls={filtersOpen ? filtersId : undefined}
-              className="-ml-2"
+              className="-ms-2"
               onClick={(e) => {
                 // A click from Enter or a pad's A has no pointer behind it (detail 0)
                 filtersMoveIn.current = !filtersOpen && e.detail === 0;

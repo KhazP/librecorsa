@@ -59,7 +59,7 @@ export function Disclosure({ children, moreLabel, lessLabel, count, forceCursor,
           setOpen(!open);
         }}
         className={cx(
-          "-mx-2 flex min-h-11 cursor-pointer items-center gap-2 rounded-lc-row px-2 text-left text-lc-slate hover:bg-white/4 hover:text-lc-chalk active:bg-white/2",
+          "-mx-2 flex min-h-11 cursor-pointer items-center gap-2 rounded-lc-row px-2 text-start text-lc-slate hover:bg-white/4 hover:text-lc-chalk active:bg-white/2",
           MOTION,
           CURSOR_ROW,
         )}
@@ -70,7 +70,7 @@ export function Disclosure({ children, moreLabel, lessLabel, count, forceCursor,
         />
         <span className="text-[14px] font-semibold">
           {open ? (lessLabel ?? tx("less")) : (moreLabel ?? tx("more"))}
-          {!open && count ? <span className="lc-mono ml-1.5 text-lc-slate">({count})</span> : null}
+          {!open && count ? <span className="lc-mono ms-1.5 text-lc-slate">({count})</span> : null}
         </span>
       </button>
     </div>

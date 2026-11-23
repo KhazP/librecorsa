@@ -54,7 +54,7 @@ export const TrackMeter: React.FC<{
           <>
             <span aria-hidden className="absolute inset-y-0 left-1/2 w-px bg-lc-chalk/50" />
             <span
-              className={`absolute inset-y-0 ${v >= 0 ? "rounded-r-full" : "rounded-l-full"}`}
+              className={`absolute inset-y-0 ${v >= 0 ? "rounded-e-full" : "rounded-s-full"}`}
               style={{
                 background: color,
                 ...(v >= 0 ? { left: "50%", width: `${v * 50}%` } : { right: "50%", width: `${-v * 50}%` }),
@@ -62,11 +62,11 @@ export const TrackMeter: React.FC<{
             />
           </>
         ) : (
-          <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.round(v * 100)}%`, background: color }} />
+          <span className="absolute inset-y-0 start-0 rounded-full" style={{ width: `${Math.round(v * 100)}%`, background: color }} />
         )}
       </span>
       <span
-        className="text-right lc-mono text-[12px] font-extrabold tabular-nums"
+        className="text-end lc-mono text-[12px] font-extrabold tabular-nums"
         style={{ color: idle ? "var(--color-lc-slate)" : centered ? color : "var(--color-lc-chalk)" }}
       >
         {detail ??

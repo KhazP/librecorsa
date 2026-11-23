@@ -58,7 +58,7 @@ export const CompoundBadge: React.FC<{
       tone={{ color: c.color }}
       variant={variant}
       size={size}
-      leading={<CompoundGlyph compound={compound} size={GLYPH_PX[size]} decorative className="-ml-1.5" />}
+      leading={<CompoundGlyph compound={compound} size={GLYPH_PX[size]} decorative className="-ms-1.5" />}
       className={className}
     >
       {tx(compound)}

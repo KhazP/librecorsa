@@ -166,7 +166,7 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
       key={s.lapNumber}
       ref={boxRef}
       inert={hidden}
-      className={`lc-ui-zoom lc-panel-in pointer-events-auto fixed right-[calc(env(safe-area-inset-right,0px)+0.75rem)] bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] z-(--z-lc-toast) w-[min(440px,calc(100vw-1.5rem))] sm:right-[calc(env(safe-area-inset-right,0px)+1rem)] pointer-coarse:top-[calc(env(safe-area-inset-top,0px)+104px)] pointer-coarse:portrait:top-[calc(env(safe-area-inset-top,0px)+216px)] pointer-coarse:right-auto pointer-coarse:bottom-auto pointer-coarse:left-1/2 pointer-coarse:w-[min(400px,calc(100vw-1.5rem))] pointer-coarse:-translate-x-1/2 ${hidden ? "invisible" : ""} ${skinRootClass(skin) ?? ""}`}
+      className={`lc-ui-zoom lc-panel-in pointer-events-auto fixed right-[calc(env(safe-area-inset-right,0px)+0.75rem)] bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] z-(--z-lc-toast) w-[min(440px,calc(100vw-1.5rem))] sm:right-[calc(env(safe-area-inset-right,0px)+1rem)] pointer-coarse:top-[calc(env(safe-area-inset-top,0px)+104px)] pointer-coarse:portrait:top-[calc(env(safe-area-inset-top,0px)+216px)] pointer-coarse:end-auto pointer-coarse:bottom-auto pointer-coarse:left-1/2 pointer-coarse:w-[min(400px,calc(100vw-1.5rem))] pointer-coarse:-translate-x-1/2 ${hidden ? "invisible" : ""} ${skinRootClass(skin) ?? ""}`}
       style={
         lift === null
           ? undefined
@@ -280,14 +280,14 @@ const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose:
     return (
       <SkinPanel
         cut="sm"
-        className="ml-auto w-fit max-w-full pointer-coarse:mx-auto"
-        innerClassName="flex items-center gap-2 py-1.5 pr-1.5 pl-3.5"
+        className="ms-auto w-fit max-w-full pointer-coarse:mx-auto"
+        innerClassName="flex items-center gap-2 py-1.5 pe-1.5 ps-3.5"
       >
         <button
           type="button"
           onClick={onOpen}
           aria-label={words.open}
-          className={`flex min-h-9 min-w-0 cursor-pointer items-center gap-3 text-left transition-opacity duration-200 hover:opacity-85 pointer-coarse:min-h-11 sm:gap-3.5 ${skinCss.ink}`}
+          className={`flex min-h-9 min-w-0 cursor-pointer items-center gap-3 text-start transition-opacity duration-200 hover:opacity-85 pointer-coarse:min-h-11 sm:gap-3.5 ${skinCss.ink}`}
         >
           <span className={`lc-mono shrink-0 text-[12px] font-bold uppercase ${skinCss.inkDim}`}>
             {words.title}
@@ -319,12 +319,12 @@ const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose:
     );
   }
   return (
-    <div className="ml-auto flex w-fit max-w-full items-center gap-2 rounded-lc-row border border-white/10 bg-lc-void/84 py-1.5 pr-1.5 pl-3.5 text-lc-chalk shadow-lc-pop backdrop-blur-[8px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto">
+    <div className="ms-auto flex w-fit max-w-full items-center gap-2 rounded-lc-row border border-white/10 bg-lc-void/84 py-1.5 pe-1.5 ps-3.5 text-lc-chalk shadow-lc-pop backdrop-blur-[8px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto">
       <button
         type="button"
         onClick={onOpen}
         aria-label={words.open}
-        className="flex min-h-9 min-w-0 pointer-coarse:min-h-11 cursor-pointer items-center gap-3 rounded-lc-nub text-left transition-opacity duration-150 hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lc-volt sm:gap-3.5"
+        className="flex min-h-9 min-w-0 pointer-coarse:min-h-11 cursor-pointer items-center gap-3 rounded-lc-nub text-start transition-opacity duration-150 hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lc-volt sm:gap-3.5"
       >
         <span className="lc-mono shrink-0 text-[12px] font-bold text-lc-slate">
           {words.title}
@@ -367,7 +367,7 @@ const ToastNote: React.FC<{ text: string }> = ({ text }) => {
         role="status"
         tone="caution"
         cut="sm"
-        className="mt-1.5 ml-auto flex w-fit max-w-full items-center gap-1.5 px-3 py-1 text-[12px] leading-snug font-medium pointer-coarse:mx-auto"
+        className="mt-1.5 ms-auto flex w-fit max-w-full items-center gap-1.5 px-3 py-1 text-[12px] leading-snug font-medium pointer-coarse:mx-auto"
       >
         <Icon name="offline" size="xs" className="shrink-0" />
         {text}
@@ -377,7 +377,7 @@ const ToastNote: React.FC<{ text: string }> = ({ text }) => {
   return (
     <p
       role="status"
-      className="mt-1.5 ml-auto flex w-fit max-w-full items-center gap-1.5 rounded-lc-row border border-white/10 bg-lc-void/84 px-3 py-1 text-[12px] leading-snug font-medium text-lc-amber shadow-lc-pop backdrop-blur-[8px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto"
+      className="mt-1.5 ms-auto flex w-fit max-w-full items-center gap-1.5 rounded-lc-row border border-white/10 bg-lc-void/84 px-3 py-1 text-[12px] leading-snug font-medium text-lc-amber shadow-lc-pop backdrop-blur-[8px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto"
     >
       <Icon name="offline" size="xs" className="shrink-0" />
       {text}
@@ -586,7 +586,7 @@ const LapCard: React.FC<
           <span className="sr-only" aria-live="polite">
             {submitState === "sent" ? sentLabel : submitState === "sending" ? words.posting : submitState === "waiting" ? (submitError ?? "") : ""}
           </span>
-          {onSubmit && notRanked && submitState !== "sent" ? <span className={`mr-auto text-[12px] ${skinCss.inkDim}`}>{notRanked}</span> : null}
+          {onSubmit && notRanked && submitState !== "sent" ? <span className={`me-auto text-[12px] ${skinCss.inkDim}`}>{notRanked}</span> : null}
           {onSaveGhost ? (
             <SkinButton onClick={onSaveGhost} className="h-8 px-3 text-[12px] font-semibold">
               {words.saveGhost}
@@ -621,12 +621,12 @@ const LapCard: React.FC<
         </div>
 
         {submitState === "error" && submitError ? (
-          <p role="alert" className={`-mt-1.5 flex items-start justify-end gap-1.5 text-right text-[12px] leading-snug font-medium ${skinCss.inkLoss}`}>
+          <p role="alert" className={`-mt-1.5 flex items-start justify-end gap-1.5 text-end text-[12px] leading-snug font-medium ${skinCss.inkLoss}`}>
             <Icon name="error" size="xs" className="mt-px" />
             {submitError}
           </p>
         ) : submitState === "waiting" && submitError ? (
-          <p className={`-mt-1.5 flex items-start justify-end gap-1.5 text-right text-[12px] leading-snug font-medium ${skinCss.inkCaution}`}>
+          <p className={`-mt-1.5 flex items-start justify-end gap-1.5 text-end text-[12px] leading-snug font-medium ${skinCss.inkCaution}`}>
             <Icon name="offline" size="xs" className="mt-px" />
             {submitError}
           </p>
@@ -694,7 +694,7 @@ const LapCard: React.FC<
           {submitState === "sent" ? sentLabel : submitState === "sending" ? words.posting : submitState === "waiting" ? (submitError ?? "") : ""}
         </span>
         {/* Why the lap cannot go online, in words beside the greyed button */}
-        {onSubmit && notRanked && submitState !== "sent" ? <span className="lc-hint mr-auto">{notRanked}</span> : null}
+        {onSubmit && notRanked && submitState !== "sent" ? <span className="lc-hint me-auto">{notRanked}</span> : null}
         {onSaveGhost ? (
           <Button size="sm" variant="ghost" onClick={onSaveGhost}>
             {words.saveGhost}
@@ -728,13 +728,13 @@ const LapCard: React.FC<
         </Button>
       </div>
       {submitState === "error" && submitError ? (
-        <p role="alert" className="-mt-1.5 flex items-start justify-end gap-1.5 text-right text-[12px] leading-snug font-medium text-lc-loss">
+        <p role="alert" className="-mt-1.5 flex items-start justify-end gap-1.5 text-end text-[12px] leading-snug font-medium text-lc-loss">
           <Icon name="error" size="xs" className="mt-px" />
           {submitError}
         </p>
       ) : submitState === "waiting" && submitError ? (
         // Not a refusal: the board didn't answer, and the lap goes up by itself once it does
-        <p className="-mt-1.5 flex items-start justify-end gap-1.5 text-right text-[12px] leading-snug font-medium text-lc-amber">
+        <p className="-mt-1.5 flex items-start justify-end gap-1.5 text-end text-[12px] leading-snug font-medium text-lc-amber">
           <Icon name="offline" size="xs" className="mt-px" />
           {submitError}
         </p>
@@ -781,7 +781,7 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
   if (!editing) {
     if (skin !== null) {
       return (
-        <p className={`-mt-1 flex flex-wrap items-center justify-end gap-x-1.5 text-right text-[12px] leading-snug ${skinCss.inkDim}`}>
+        <p className={`-mt-1 flex flex-wrap items-center justify-end gap-x-1.5 text-end text-[12px] leading-snug ${skinCss.inkDim}`}>
           {words.driver}
           <SkinButton
             onClick={() => {
@@ -797,7 +797,7 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
       );
     }
     return (
-      <p className="-mt-1 flex flex-wrap items-center justify-end gap-x-1.5 text-right text-[12px] leading-snug text-lc-slate">
+      <p className="-mt-1 flex flex-wrap items-center justify-end gap-x-1.5 text-end text-[12px] leading-snug text-lc-slate">
         {words.driver}
         <Button
           size="sm"

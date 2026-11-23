@@ -20,7 +20,7 @@ export const FlagBadge: React.FC<{
       tone={FLAGS[flag].tone}
       variant={variant}
       size={size}
-      leading={<FlagIcon flag={flag} size={FLAG_PX[size]} className="-ml-0.5" />}
+      leading={<FlagIcon flag={flag} size={FLAG_PX[size]} className="-ms-0.5" />}
       className={className}
     >
       {children ?? tx(flag)}

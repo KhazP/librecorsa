@@ -83,7 +83,7 @@ const GridList: React.FC<{ grid: GridSlot[]; drawn: boolean; drawnNote: string }
     <ol className="m-0 grid list-none grid-cols-2 gap-x-3 gap-y-1 p-0 sm:grid-cols-3">
       {grid.map((g, i) => (
         <li key={g.code} className={`flex items-center gap-2 rounded-lc-nub px-2 py-1 ${g.player ? "bg-lc-volt/10" : ""}`}>
-          <span className="lc-data w-[2.5ch] text-right text-[12px] text-lc-slate">{i + 1}</span>
+          <span className="lc-data w-[2.5ch] text-end text-[12px] text-lc-slate">{i + 1}</span>
           <span
             aria-hidden
             className={`h-3 w-1 shrink-0 rounded-full ${g.player && !g.color ? "bg-lc-volt" : ""}`}
@@ -166,7 +166,7 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
       {/* Pinned to the bottom of the screen while the setup scrolls under it: the start is never below the fold. The
           scrim hides the rows passing behind and below the bar, so nothing shows in the gap under it */}
       <div className="pointer-events-none sticky -bottom-5 z-10 -mt-3 rounded-b-lc-card bg-linear-to-t from-lc-carbon from-70% to-transparent pt-6 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div data-nav-pinned="" className="pointer-events-auto flex items-center justify-between gap-x-4 rounded-lc-card border border-lc-line bg-lc-carbon py-2.5 pr-2.5 pl-4.5 shadow-lc-pop phone:gap-x-3">
+        <div data-nav-pinned="" className="pointer-events-auto flex items-center justify-between gap-x-4 rounded-lc-card border border-lc-line bg-lc-carbon py-2.5 pe-2.5 ps-4.5 shadow-lc-pop phone:gap-x-3">
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="lc-row-label truncate">
               {distance

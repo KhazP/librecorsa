@@ -225,7 +225,7 @@ function PortRow() {
           if (Number.isInteger(n) && n >= 1024 && n <= 65535) env.update((s) => ({ ...s, wheel: { ...s.wheel, telemetryPort: n } }));
         }}
         onBlur={() => setText(String(w.telemetryPort))}
-        className="lc-mono h-10 w-28 rounded-lc-row border border-lc-line bg-lc-well px-3.5 text-right text-[14px] pointer-coarse:text-[16px] text-lc-chalk outline-none focus:border-lc-volt focus:shadow-lc-focus disabled:cursor-not-allowed disabled:opacity-40"
+        className="lc-mono h-10 w-28 rounded-lc-row border border-lc-line bg-lc-well px-3.5 text-end text-[14px] pointer-coarse:text-[16px] text-lc-chalk outline-none focus:border-lc-volt focus:shadow-lc-focus disabled:cursor-not-allowed disabled:opacity-40"
       />
     </SettingRow>
   );

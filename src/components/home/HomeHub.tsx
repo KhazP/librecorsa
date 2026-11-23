@@ -93,7 +93,7 @@ const GUTTER =
  * cursor (the kit's tile cursor)
  */
 const TILE = cx(
-  "group relative overflow-hidden rounded-lc-card border-[1.5px] border-lc-line bg-lc-carbon text-left text-lc-chalk no-underline hover:border-lc-keyline",
+  "group relative overflow-hidden rounded-lc-card border-[1.5px] border-lc-line bg-lc-carbon text-start text-lc-chalk no-underline hover:border-lc-keyline",
   MOTION,
   CURSOR_TILE,
 );
@@ -353,7 +353,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
 
   return (
     <>
-      <div className="sr-only focus-within:not-sr-only focus-within:fixed focus-within:top-3 focus-within:left-3 focus-within:z-(--z-lc-notice)">
+      <div className="sr-only focus-within:not-sr-only focus-within:fixed focus-within:top-3 focus-within:start-3 focus-within:z-(--z-lc-notice)">
         <Button href={`#${PANEL_ID}`} native variant="secondary" size="sm">
           {tx("skip")}
         </Button>
@@ -394,7 +394,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
             size="lg"
             icon={<Icon name="drive" />}
             onClick={() => rememberPicks(picks)}
-            className="ml-auto"
+            className="ms-auto"
           >
             {tx("drive")}
           </Button>
@@ -456,7 +456,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                   </span>
                   {layout.outline ? (
                     // The map hugs its drawing (its viewBox's shape), so the speed sits right under the lap it follows
-                    <span className="absolute inset-y-3 right-3 flex w-[50%] flex-col items-center justify-center gap-2">
+                    <span className="absolute inset-y-3 end-3 flex w-[50%] flex-col items-center justify-center gap-2">
                       <LapMap
                         key={layout.id}
                         outline={layout.outline}
@@ -469,7 +469,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                       {layout.outline.kmh.length ? (
                         <span className="flex shrink-0 flex-wrap items-baseline justify-center gap-x-1.5 text-center text-[12px] font-medium text-lc-slate">
                           <span className="flex items-baseline gap-1">
-                            <span ref={speedRef} className="lc-data inline-block min-w-[3ch] text-right text-[20px] leading-none text-lc-chalk">
+                            <span ref={speedRef} className="lc-data inline-block min-w-[3ch] text-end text-[20px] leading-none text-lc-chalk">
                               {Math.round(speedIn(layout.outline.kmh[0], units.speed))}
                             </span>
                             {SPEED_LABEL[units.speed]}
@@ -604,8 +604,8 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                           <h2 className="lc-title m-0 text-[17px] leading-snug text-lc-chalk">{entry.title}</h2>
                           <ul className="m-0 -mb-1.5 list-none p-0 xl:columns-[26rem] xl:gap-x-10">
                             {entry.items.map((item) => (
-                              <li key={item} className="relative break-inside-avoid pb-1.5 pl-4 text-[14px] leading-relaxed text-lc-fog">
-                                <span aria-hidden className="absolute top-[9px] left-0 size-1 rounded-full bg-lc-slate" />
+                              <li key={item} className="relative break-inside-avoid pb-1.5 ps-4 text-[14px] leading-relaxed text-lc-fog">
+                                <span aria-hidden className="absolute top-[9px] start-0 size-1 rounded-full bg-lc-slate" />
                                 {item}
                               </li>
                             ))}
@@ -649,7 +649,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                     </Button>
                   ) : null}
                   {/* Mounted from the start, so the first change of filter is announced */}
-                  <p role="status" className="lc-data m-0 ml-auto text-[12px] font-medium text-lc-slate">
+                  <p role="status" className="lc-data m-0 ms-auto text-[12px] font-medium text-lc-slate">
                     {venuesFiltered ? tx("circuits.shown", { shown: String(shownVenues.length), total: String(data.venues.length) }) : ""}
                   </p>
                 </div>
@@ -806,7 +806,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                     </Button>
                   ) : null}
                   {/* Mounted from the start, so the first change of filter is announced */}
-                  <p role="status" className="lc-data m-0 ml-auto text-[12px] font-medium text-lc-slate">
+                  <p role="status" className="lc-data m-0 ms-auto text-[12px] font-medium text-lc-slate">
                     {carsFiltered ? tx("cars.shown", { shown: String(shownCars.length), total: String(data.cars.length) }) : ""}
                   </p>
                 </div>

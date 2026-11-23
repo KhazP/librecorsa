@@ -235,14 +235,14 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
     return (
       <div className="flex flex-col items-end gap-1.5">
         {/* Slim status strip: rev lights, rpm, aero / boost and battery */}
-        <div className={`flex items-center gap-2 rounded-lc-row py-1.5 pr-3 pl-2 ${HUD_GLASS}`}>
+        <div className={`flex items-center gap-2 rounded-lc-row py-1.5 pe-3 ps-2 ${HUD_GLASS}`}>
           {controls}
           <span className="flex w-22.5 gap-0.5 rounded-lc-nub bg-lc-well p-1" aria-label={shiftLights}>
             {leds("h-1.5")}
           </span>
           {readout}
         </div>
-        <section aria-label={L.minimalRegion} className={`flex items-center gap-4 rounded-lc-tile py-2 pr-2 pl-4.5 ${HUD_GLASS}`}>
+        <section aria-label={L.minimalRegion} className={`flex items-center gap-4 rounded-lc-tile py-2 pe-2 ps-4.5 ${HUD_GLASS}`}>
           {inputBars("h-13")}
           <div className="flex flex-col items-end">
             <span className="lc-data text-[52px] leading-[0.9] tracking-[-0.02em] text-lc-chalk">{speed}</span>

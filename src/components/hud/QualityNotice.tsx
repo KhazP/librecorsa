@@ -45,13 +45,13 @@ export function QualityNotice({ notice }: { notice: Notice | null }) {
             key={shown.id}
             tone="caution"
             cut="sm"
-            className="lc-toast-in inline-flex min-h-9 items-center gap-2 py-1 pr-4 pl-3"
+            className="lc-toast-in inline-flex min-h-9 items-center gap-2 py-1 pe-4 ps-3"
           >
             <Icon name="graphics" size="xs" />
             <span className="text-[13px] leading-snug font-semibold">{text}</span>
           </SkinBanner>
         ) : (
-          <div key={shown.id} className={`lc-toast-in inline-flex min-h-9 items-center gap-2 rounded-lc-row py-1 pr-3.5 pl-3 text-lc-fog ${HUD_GLASS}`}>
+          <div key={shown.id} className={`lc-toast-in inline-flex min-h-9 items-center gap-2 rounded-lc-row py-1 pe-3.5 ps-3 text-lc-fog ${HUD_GLASS}`}>
             <Icon name="graphics" size="xs" />
             <span className="text-[13px] leading-snug font-semibold">{text}</span>
           </div>

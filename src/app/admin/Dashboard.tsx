@@ -776,7 +776,7 @@ function SiteSection({ cloudflare }: { cloudflare: CloudflareState }) {
       <Section id="site" title="Site" intro={intro}>
         {cloudflare.state === "off" ? (
           <Card>
-            <ol className="lc-body m-0 flex list-decimal flex-col gap-2 pl-5 leading-relaxed">
+            <ol className="lc-body m-0 flex list-decimal flex-col gap-2 ps-5 leading-relaxed">
               <li>
                 In the Cloudflare dashboard, create an API token with <b className="text-lc-chalk">Account Analytics: Read</b> (and{" "}
                 <b className="text-lc-chalk">Zone Analytics: Read</b> for the site’s visitors).

@@ -57,7 +57,7 @@ const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | 
   const shape =
     variant === "panel"
       ? "flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lc-tile px-3.5 py-2.5" // under the circuit map
-      : "inline-flex h-8 items-center gap-3 rounded-full py-1 pr-3.5 pl-3.5";
+      : "inline-flex h-8 items-center gap-3 rounded-full py-1 pe-3.5 ps-3.5";
   const headlightLabel =
     weather.headlightMode === "on"
       ? tx("headlightsForcedOn")

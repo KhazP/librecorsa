@@ -255,7 +255,7 @@ const RecordPopover: React.FC<RecordPopoverProps> = ({
           icon={<Icon name="close" />}
           aria-label={t("board.driverBadges.close")}
           onClick={() => onClose(true)}
-          className="-mt-1 -mr-1 shrink-0"
+          className="-mt-1 -me-1 shrink-0"
         />
       </div>
 
@@ -286,7 +286,7 @@ const RecordPopover: React.FC<RecordPopoverProps> = ({
       ) : null}
 
       {/* Scrollable per-vehicle record list */}
-      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain pr-0.5">
+      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain pe-0.5">
         {groups.map((g) => {
           const classMeta = g.classId ? VEHICLE_CLASS_META[g.classId] : null;
           return (
@@ -338,7 +338,7 @@ const RecordPopover: React.FC<RecordPopoverProps> = ({
                             onOpenBoard?.(b.trackId, b.vehicle as VehicleModelId);
                             onClose(false);
                           }}
-                          className="group flex w-full cursor-pointer items-center justify-between gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-white/[0.06] focus-visible:bg-lc-volt focus-visible:text-lc-void focus-visible:outline-none group-focus-visible:[&_span]:text-lc-void"
+                          className="group flex w-full cursor-pointer items-center justify-between gap-2 px-2.5 py-1.5 text-start transition-colors hover:bg-white/[0.06] focus-visible:bg-lc-volt focus-visible:text-lc-void focus-visible:outline-none group-focus-visible:[&_span]:text-lc-void"
                         >
                           {rowContent}
                         </button>

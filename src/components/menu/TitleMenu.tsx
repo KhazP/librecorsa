@@ -217,7 +217,7 @@ const SupportNote: React.FC<{ items: PromptItem[]; onClose?: () => void; onThank
     <Sheet role="region" aria-label={tx("region")} className="flex w-full flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <p className="lc-body m-0 text-[15px] leading-snug text-lc-fog">{drove}</p>
-        {onClose ? <IconButton size="sm" variant="ghost" icon={<Icon name="close" />} aria-label={tx("close")} onClick={onClose} className="-mt-1 -mr-1 shrink-0" /> : null}
+        {onClose ? <IconButton size="sm" variant="ghost" icon={<Icon name="close" />} aria-label={tx("close")} onClick={onClose} className="-mt-1 -me-1 shrink-0" /> : null}
       </div>
       <p className="lc-hint m-0">{tx("thanks")}</p>
       <div className="flex flex-wrap gap-2">
@@ -1095,7 +1095,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 <dt className="lc-hint">{tn("car")}</dt>
                 <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
                   <CarClassTag car={vehicle} size="sm" />
-                  <span className="line-clamp-2 text-right">{vehicle.title}</span>
+                  <span className="line-clamp-2 text-end">{vehicle.title}</span>
                 </dd>
                 {livery ? (
                   <>
@@ -1109,7 +1109,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                             // A livery's own swatch is data
                             style={{ background: carSkinSwatchBackground(skin) }}
                           />
-                          <span className="line-clamp-2 text-right">{skin.name}</span>
+                          <span className="line-clamp-2 text-end">{skin.name}</span>
                         </>
                       ) : vehicle.modelUrl ? (
                         <span className="truncate">{tn("factory")}</span>
@@ -1123,14 +1123,14 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                               background: `linear-gradient(135deg, ${livery.primary} 0 50%, ${livery.secondary} 50% 62%, ${livery.accent} 62% 100%)`,
                             }}
                           />
-                          <span className="line-clamp-2 text-right">{livery.name}</span>
+                          <span className="line-clamp-2 text-end">{livery.name}</span>
                         </>
                       )}
                     </dd>
                   </>
                 ) : null}
                 <dt className="lc-hint">{tn("assists")}</dt>
-                <dd className="m-0 line-clamp-2 text-right text-[14px] font-semibold">
+                <dd className="m-0 line-clamp-2 text-end text-[14px] font-semibold">
                   {(() => {
                     // A class without ABS runs the middle preset on TC alone
                     const assists =
@@ -1143,7 +1143,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 {hudPreset ? (
                   <>
                     <dt className="lc-hint">{tn("hud")}</dt>
-                    <dd className="m-0 line-clamp-2 text-right text-[14px] font-semibold">{hudLayout(hudPreset).label}</dd>
+                    <dd className="m-0 line-clamp-2 text-end text-[14px] font-semibold">{hudLayout(hudPreset).label}</dd>
                   </>
                 ) : null}
               </dl>

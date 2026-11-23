@@ -75,7 +75,7 @@ function LayoutTile({
           if (!checked) onSelect(layout.id);
         }}
         className={cx(
-          "flex min-w-0 cursor-pointer flex-col gap-2 text-left outline-none",
+          "flex min-w-0 cursor-pointer flex-col gap-2 text-start outline-none",
           // The whole tile is the button's hit area
           "after:absolute after:inset-0 after:rounded-lc-tile after:content-['']",
         )}
@@ -92,7 +92,7 @@ function LayoutTile({
       </button>
       {credit ? (
         // Above the tile's hit area; only the links take clicks, the gap between them selects the tile
-        <span className="pointer-events-none relative z-10 -mt-1 mr-auto ml-1 inline-flex max-w-full min-w-0 items-center gap-1.5 text-[12px] leading-tight text-lc-slate">
+        <span className="pointer-events-none relative z-10 -mt-1 me-auto ms-1 inline-flex max-w-full min-w-0 items-center gap-1.5 text-[12px] leading-tight text-lc-slate">
           <a
             href={credit.repoUrl}
             target="_blank"

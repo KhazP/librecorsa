@@ -180,7 +180,7 @@ export const VenueLayoutPicker: React.FC<VenueLayoutPickerProps> = ({
           }
         }}
         className={cx(
-          "pointer-events-auto group inline-flex h-7 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-lc-nub px-2.5 text-left text-[12px] leading-none font-semibold select-none pointer-coarse:h-9",
+          "pointer-events-auto group inline-flex h-7 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-lc-nub px-2.5 text-start text-[12px] leading-none font-semibold select-none pointer-coarse:h-9",
           chosen || open
             ? "bg-lc-titanium text-lc-chalk inset-ring inset-ring-lc-keyline hover:bg-lc-line"
             : "bg-lc-carbon/90 text-lc-fog inset-ring inset-ring-lc-line backdrop-blur-xs hover:bg-lc-titanium hover:text-lc-chalk hover:inset-ring-lc-keyline",
@@ -259,7 +259,7 @@ export const VenueLayoutPicker: React.FC<VenueLayoutPickerProps> = ({
                       onPointerEnter={focusOnHover}
                       onClick={() => choose(l.id)}
                       className={cx(
-                        "group flex w-full shrink-0 cursor-pointer items-center gap-2.5 rounded-lc-nub px-2 py-2 text-left pointer-coarse:min-h-12",
+                        "group flex w-full shrink-0 cursor-pointer items-center gap-2.5 rounded-lc-nub px-2 py-2 text-start pointer-coarse:min-h-12",
                         MOTION,
                         isSelected ? CHOSEN_PILL : cx("text-lc-fog", HOVER_PILL),
                         PRESSED_PILL,

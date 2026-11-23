@@ -80,7 +80,7 @@ export function MediaTile(props: MediaTileProps) {
   } = props;
   const tx = useTranslations("common.mediaTile");
   const classes = cx(
-    "group relative flex h-full w-full min-w-0 cursor-pointer overflow-hidden rounded-lc-tile border-[1.5px] text-left",
+    "group relative flex h-full w-full min-w-0 cursor-pointer overflow-hidden rounded-lc-tile border-[1.5px] text-start",
     horizontal ? "flex-col sm:flex-row" : "flex-col",
     "active:bg-white/2",
     MOTION,
@@ -98,7 +98,7 @@ export function MediaTile(props: MediaTileProps) {
         )}
       >
         {media}
-        {overlay ? <span className="absolute top-2 left-2 flex flex-wrap gap-1">{overlay}</span> : null}
+        {overlay ? <span className="absolute top-2 start-2 flex flex-wrap gap-1">{overlay}</span> : null}
       </span>
       {/* Side by side, the action sits on its own row under the text; stacked, it sits on the picture */}
       <span className={cx("flex min-w-0 flex-1 flex-col gap-1 p-3", action && horizontal ? "pb-12" : undefined)}>
@@ -154,10 +154,10 @@ export function MediaTile(props: MediaTileProps) {
           {inner}
         </button>
       )}
-      {action ? <span className={cx("absolute right-2 flex", horizontal ? "bottom-2" : "top-2")}>{action}</span> : null}
+      {action ? <span className={cx("absolute end-2 flex", horizontal ? "bottom-2" : "top-2")}>{action}</span> : null}
       {mediaFooter && !horizontal ? (
         <span className={cx("pointer-events-none absolute inset-x-[1.5px] top-[1.5px]", ASPECT[aspect])}>
-          <span className="pointer-events-none absolute right-2 bottom-2 left-2 flex items-end justify-start">
+          <span className="pointer-events-none absolute end-2 bottom-2 start-2 flex items-end justify-start">
             {mediaFooter}
           </span>
         </span>

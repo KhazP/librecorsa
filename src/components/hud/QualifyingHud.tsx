@@ -28,7 +28,7 @@ export const QualifyingClock: React.FC<{ q: NonNullable<CarTelemetry["qualifying
     <div
       role="status"
       aria-label={words.label}
-      className={`relative inline-flex h-8 items-center gap-2 rounded-full pr-3.5 pl-1.5 text-lc-chalk ${HUD_GLASS}`}
+      className={`relative inline-flex h-8 items-center gap-2 rounded-full pe-3.5 ps-1.5 text-lc-chalk ${HUD_GLASS}`}
     >
       {q.lastLap ? (
         <Badge tone="neutral" variant="solid" size="sm" leading={<FlagIcon flag="chequered" size={14} />}>
@@ -63,7 +63,7 @@ export const QualifyingGrid: React.FC<{ rows: NonNullable<RaceStatus["qualifying
           >
             <span className="text-lc-slate">{i + 1}</span>
             <span className="tracking-[0.1em]">{r.code}</span>
-            <span className="text-right">
+            <span className="text-end">
               {r.lapMs === null ? noTime : i === 0 || pole === null ? formatLapTime(r.lapMs) : `+${((r.lapMs - pole) / 1000).toFixed(3)}`}
             </span>
           </li>

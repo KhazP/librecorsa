@@ -41,7 +41,7 @@ function timeTone(r: RaceResultEntry, resultsFinal: boolean): string {
 /** Whole seconds when whole, else one decimal (the kit's penalty badge prints the number as given) */
 const penaltySeconds = (s: number) => (s % 1 === 0 ? s : Math.round(s * 10) / 10);
 
-const TH = "lc-lbl px-2 pb-2 text-left font-semibold whitespace-nowrap";
+const TH = "lc-lbl px-2 pb-2 text-start font-semibold whitespace-nowrap";
 
 /** A press this soon after the card opens is the one that skipped the podium shot, not a choice on the card */
 const EARLY_PRESS_MS = 400;
@@ -241,13 +241,13 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
                 <th scope="col" className={`${TH} w-full`}>
                   {tx("colDriver")}
                 </th>
-                <th scope="col" className={`${TH} text-right max-sm:hidden`}>
+                <th scope="col" className={`${TH} text-end max-sm:hidden`}>
                   {tx("colLaps")}
                 </th>
-                <th scope="col" className={`${TH} text-right`}>
+                <th scope="col" className={`${TH} text-end`}>
                   {tx("colTime")}
                 </th>
-                <th scope="col" className={`${TH} text-right max-sm:hidden`}>
+                <th scope="col" className={`${TH} text-end max-sm:hidden`}>
                   {tx("colBest")}
                 </th>
               </tr>
@@ -282,8 +282,8 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
                         {r.isPlayer ? <PlayerTag size="sm" /> : null}
                       </span>
                     </td>
-                    <td className="lc-mono px-2 text-right text-[13px] font-bold text-lc-fog max-sm:hidden">{r.lapsCompleted}</td>
-                    <td className="px-2 text-right whitespace-nowrap">
+                    <td className="lc-mono px-2 text-end text-[13px] font-bold text-lc-fog max-sm:hidden">{r.lapsCompleted}</td>
+                    <td className="px-2 text-end whitespace-nowrap">
                       <span className="inline-flex items-center justify-end gap-2">
                         {r.dq ? <PenaltyBadge penalty={{ kind: "disqualified" }} size="sm" /> : null}
                         {r.penaltyS && !r.dq ? (
@@ -294,7 +294,7 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
                         <span className={`lc-mono text-[13px] font-bold ${timeTone(r, final)}`}>{timeOrGap(r, final)}</span>
                       </span>
                     </td>
-                    <td className="px-2 text-right whitespace-nowrap max-sm:hidden">
+                    <td className="px-2 text-end whitespace-nowrap max-sm:hidden">
                       <BestLap ms={r.bestLapMs} fastest={fastest} />
                     </td>
                   </tr>
@@ -309,7 +309,7 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
         <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2.5 border-t border-lc-line pt-3.5 short:pt-2.5">
           <PromptBar
             rule={false}
-            className="mr-auto max-sm:hidden"
+            className="me-auto max-sm:hidden"
             prompts={[
               { action: "select", label: tx("promptSelect") },
               { action: "back", label: tx("promptClose") },
@@ -451,7 +451,7 @@ const LastRaces: React.FC<{ history: readonly RaceRecord[] }> = ({ history }) =>
               <td className="w-12 px-2">
                 <PlacesGained gained={placesGained(r.grid, r.finish)} />
               </td>
-              <td className="lc-mono w-24 px-2 text-right text-[13px] font-bold text-lc-fog">{formatLapTime(r.bestLapMs)}</td>
+              <td className="lc-mono w-24 px-2 text-end text-[13px] font-bold text-lc-fog">{formatLapTime(r.bestLapMs)}</td>
             </tr>
           ))}
         </tbody>

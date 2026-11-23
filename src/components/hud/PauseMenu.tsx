@@ -762,7 +762,7 @@ const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect
                 aria-label={tx("rowLabel", { turn: t.number, name: cornerName(t.name), complex: t.complexName, apex, unit: speedUnit, gear: t.gear })}
                 title={`${cornerName(t.name)} · ${t.complexName}`}
                 className={cx(
-                  "group grid min-h-11 cursor-pointer grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lc-row bg-lc-well px-3 py-1 text-left text-lc-chalk inset-ring inset-ring-lc-line",
+                  "group grid min-h-11 cursor-pointer grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lc-row bg-lc-well px-3 py-1 text-start text-lc-chalk inset-ring inset-ring-lc-line",
                   MOTION,
                   HOVER_PILL,
                   PRESSED_PILL,

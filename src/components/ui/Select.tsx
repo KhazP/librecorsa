@@ -156,7 +156,7 @@ export function Select<T extends string>({
           }
         }}
         className={cx(
-          "group inline-flex h-10 w-48 max-w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-full pr-3 pl-4 text-left",
+          "group inline-flex h-10 w-48 max-w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-full pe-3 ps-4 text-start",
           "bg-lc-titanium text-lc-chalk inset-ring inset-ring-lc-line hover:bg-lc-line hover:inset-ring-lc-keyline",
           "pointer-coarse:h-11 phone:w-full",
           open ? "bg-lc-line inset-ring-lc-keyline" : undefined,
@@ -216,7 +216,7 @@ export function Select<T extends string>({
                     onPointerEnter={focusOnHover}
                     onClick={() => choose(o)}
                     className={cx(
-                      "group flex min-h-10 w-full shrink-0 cursor-pointer items-center gap-3 rounded-lc-nub px-3 py-2 text-left pointer-coarse:min-h-11",
+                      "group flex min-h-10 w-full shrink-0 cursor-pointer items-center gap-3 rounded-lc-nub px-3 py-2 text-start pointer-coarse:min-h-11",
                       MOTION,
                       DISABLED,
                       chosen ? CHOSEN_PILL : cx("text-lc-fog", HOVER_PILL),

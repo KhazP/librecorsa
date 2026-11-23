@@ -551,7 +551,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
             <span className={skinned ? skinCss.label : MFD_LBL}>{text.cut}</span>
             {skinned ? <LiveBar frac={tuner.tcCutFraction} skinned fillClass={skinCss.fillCaution} /> : <LiveBar frac={tuner.tcCutFraction} color={HUD_CAUTION} />}
             <span
-              className={`lc-data w-9.5 text-right text-[12px] ${skinned ? (tcActive ? skinCss.inkCaution : skinCss.ink) : ""}`}
+              className={`lc-data w-9.5 text-end text-[12px] ${skinned ? (tcActive ? skinCss.inkCaution : skinCss.ink) : ""}`}
               style={skinned ? undefined : { color: tcActive ? HUD_CAUTION : "var(--color-lc-chalk)" }}
             >
               {Math.round(tuner.tcCutFraction * 100)}%
@@ -599,14 +599,14 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
                 </Badge>
               ),
             )}
-            <span className={`lc-data ml-auto text-[12px] ${skinned ? skinCss.ink : "text-lc-chalk"}`}>{tuner.diffLockingTorqueNm} Nm</span>
+            <span className={`lc-data ms-auto text-[12px] ${skinned ? skinCss.ink : "text-lc-chalk"}`}>{tuner.diffLockingTorqueNm} Nm</span>
           </>
         );
       case "pwr":
         return activeDial.id === "engine_map" ? (
           <>
             <span className={skinned ? `text-[10px] font-semibold uppercase ${skinCss.inkDim}` : MFD_LBL}>{text.torque}</span>
-            <span className={`lc-data ml-auto text-[12px] ${skinned ? skinCss.ink : "text-lc-chalk"}`}>{ENGINE_MAPS[tuner.engineMap]?.torquePct ?? 100}%</span>
+            <span className={`lc-data ms-auto text-[12px] ${skinned ? skinCss.ink : "text-lc-chalk"}`}>{ENGINE_MAPS[tuner.engineMap]?.torquePct ?? 100}%</span>
           </>
         ) : (
           <>
@@ -616,7 +616,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
             ) : (
               <LiveBar frac={telemetry.ersBatteryPercent / 100} color={HUD_INFO} />
             )}
-            <span className={`lc-data w-9.5 text-right text-[12px] ${skinned ? skinCss.inkInfo : "text-lc-info"}`}>
+            <span className={`lc-data w-9.5 text-end text-[12px] ${skinned ? skinCss.inkInfo : "text-lc-info"}`}>
               {Math.round(telemetry.ersBatteryPercent)}%
             </span>
           </>

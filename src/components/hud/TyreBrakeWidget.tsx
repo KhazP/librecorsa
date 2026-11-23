@@ -216,7 +216,7 @@ export const TyreCornerCard: React.FC<{ t: CarTelemetry; i: number; dense?: bool
   return (
     <div
       className={`flex min-w-0 items-start gap-2 rounded-lc-row border border-lc-titanium bg-lc-well ${dense ? "p-1.5" : "p-2"} ${
-        right ? "flex-row-reverse text-right" : ""
+        right ? "flex-row-reverse text-end" : ""
       }`}
       title={cardTitle}
     >
@@ -237,17 +237,17 @@ export const TyreCornerCard: React.FC<{ t: CarTelemetry; i: number; dense?: bool
           <span className="lc-data text-[10px] text-lc-fog" title={pressureTitle}>
             {formatPressurePsi(c.psi, units)}
             {c.psiDelta !== null ? (
-              <span className="ml-1 inline-block whitespace-nowrap" style={{ color: psiDeltaColor(c.psiDelta) }}>
+              <span className="ms-1 inline-block whitespace-nowrap" style={{ color: psiDeltaColor(c.psiDelta) }}>
                 ({formatPressureDeltaPsi(c.psiDelta, units)})
               </span>
             ) : (
-              <span className="ml-1 text-lc-slate">{pressureUnit(units)}</span>
+              <span className="ms-1 text-lc-slate">{pressureUnit(units)}</span>
             )}
           </span>
         ) : null}
         <span className="lc-data text-[10px] text-lc-slate">
           <span style={{ color: brakeGlowColor(c.brake) }}>{formatTemp(c.brake, units)}</span>
-          {c.padMu !== null && c.padMu < 0.97 ? <span className="ml-1 text-lc-caution">μ{Math.round(c.padMu * 100)}</span> : null}
+          {c.padMu !== null && c.padMu < 0.97 ? <span className="ms-1 text-lc-caution">μ{Math.round(c.padMu * 100)}</span> : null}
         </span>
         {c.conditions.length ? (
           <span className={`mt-0.5 flex flex-wrap gap-0.75 ${right ? "justify-end" : ""}`}>
@@ -352,7 +352,7 @@ export const TyreMini: React.FC<{ t: CarTelemetry; i: number }> = ({ t, i }) => 
         <span className="lc-data text-[12px] text-lc-chalk">{formatTemp(c.temp, units)}</span>
       </span>
       {c.psiDelta !== null ? (
-        <span className="lc-data ml-auto text-[10px]" style={{ color: psiDeltaColor(c.psiDelta) }}>
+        <span className="lc-data ms-auto text-[10px]" style={{ color: psiDeltaColor(c.psiDelta) }}>
           {formatPressureDeltaPsi(c.psiDelta, units)}
         </span>
       ) : null}

@@ -259,7 +259,7 @@ function ReadRow({ label, children }: { label: string; children: React.ReactNode
   return (
     <div className="flex min-h-9 items-center justify-between gap-4 border-b border-white/5 py-1.5 last:border-b-0">
       <dt className="shrink-0 text-[13px] font-medium text-lc-slate">{label}</dt>
-      <dd className="m-0 flex min-w-0 flex-wrap items-center justify-end gap-1.5 text-right text-[14px] leading-tight font-semibold text-lc-chalk">
+      <dd className="m-0 flex min-w-0 flex-wrap items-center justify-end gap-1.5 text-end text-[14px] leading-tight font-semibold text-lc-chalk">
         {children}
       </dd>
     </div>
@@ -1069,7 +1069,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               enterKeyHint="go"
               error={joinError}
               trailing={
-                <Button type="submit" size="sm" variant={joinReady && !hostedCode && !races && !lobby ? "primary" : "secondary"} className="-mr-2">
+                <Button type="submit" size="sm" variant={joinReady && !hostedCode && !races && !lobby ? "primary" : "secondary"} className="-me-2">
                   {tx("room.join")}
                 </Button>
               }
@@ -1093,7 +1093,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
         </Card>
 
         {profile ? (
-          <Well className="flex min-h-11 min-w-0 items-center gap-2.5 py-1 pr-1 pl-3.5" aria-label={tx("room.racingAs", { name: profile.name })}>
+          <Well className="flex min-h-11 min-w-0 items-center gap-2.5 py-1 pe-1 ps-3.5" aria-label={tx("room.racingAs", { name: profile.name })}>
             {/* The driver's own colour: data */}
             <span aria-hidden className="size-3 shrink-0 rounded-full" style={{ backgroundColor: profile.color }} />
             <span className="lc-mono text-[12px] font-bold tracking-[0.08em] text-lc-slate">{profile.code}</span>
@@ -1201,7 +1201,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                       <Button
                         size="sm"
                         variant="secondary"
-                        className="-mr-2"
+                        className="-me-2"
                         icon={<Icon name={copiedToken ? "copied" : "copy"} />}
                         onClick={() => {
                           navigator.clipboard?.writeText(generatedToken).catch(() => undefined);

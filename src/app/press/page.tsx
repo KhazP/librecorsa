@@ -223,7 +223,7 @@ export default function PressPage() {
               decoding="async"
               className="aspect-video w-full object-cover"
             />
-            <span className="absolute bottom-4 left-4">
+            <span className="absolute bottom-4 start-4">
               <Badge variant="solid" size="lg" icon="play">
                 {"Trailer, 40 s, MP4"}
               </Badge>

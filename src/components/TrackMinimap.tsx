@@ -318,7 +318,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
           <span className="lc-data text-[12px] text-lc-chalk">
             {telemetry.trackElevationM >= 0 ? "+" : ""}
             {height(telemetry.trackElevationM, 1)}
-            <span className="ml-1 text-lc-slate">Δ {height(elevation.span)}</span>
+            <span className="ms-1 text-lc-slate">Δ {height(elevation.span)}</span>
           </span>
         </div>
         <div className="mt-0.5 flex items-center justify-between">

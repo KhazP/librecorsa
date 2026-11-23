@@ -41,7 +41,7 @@ export function DualSensePairPrompt({ wanted }: { wanted: boolean }) {
     <div
       role="dialog"
       aria-label="DualSense"
-      className="lc-ui-zoom pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto z-50 flex w-fit items-center gap-3 rounded-lc-row border border-lc-line bg-lc-carbon/95 py-2 pr-2 pl-4 text-[13px] text-lc-chalk shadow-lc-pop"
+      className="lc-ui-zoom pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto z-50 flex w-fit items-center gap-3 rounded-lc-row border border-lc-line bg-lc-carbon/95 py-2 pe-2 ps-4 text-[13px] text-lc-chalk shadow-lc-pop"
     >
       <span className="min-w-0">
         {tx.rich("text", { b: (chunks) => <b className="font-semibold text-lc-volt">{chunks}</b> })}

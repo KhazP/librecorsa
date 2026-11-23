@@ -296,7 +296,7 @@ export const LoadingScreen: React.FC<{
       <svg
         aria-hidden
         viewBox="-60 -60 220 220"
-        className="pointer-events-none fixed top-1/2 left-1/2 h-[170vmax] w-[170vmax] -translate-x-1/2 -translate-y-1/2 lg:left-[74%] lg:h-[150vmin] lg:w-[150vmin]"
+        className="pointer-events-none fixed top-1/2 left-1/2 h-[170vmax] w-[170vmax] -translate-x-1/2 -translate-y-1/2 lg:start-[74%] lg:h-[150vmin] lg:w-[150vmin]"
       >
         <g fill="none" stroke="var(--color-lc-carbon)" strokeWidth="1">
           {[

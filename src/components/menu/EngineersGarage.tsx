@@ -778,7 +778,7 @@ export const EngineersGarage: React.FC<
                 <span className="min-w-0 flex-1">
                   <Button size="sm" variant="ghost" block onClick={() => loadFactoryPreset(f)} aria-label={tx("loadFactoryAria", { name: f.name })}>
                     <span className="truncate">{f.name}</span>
-                    <span className="lc-hint ml-2 shrink-0">{tx("factory")}</span>
+                    <span className="lc-hint ms-2 shrink-0">{tx("factory")}</span>
                   </Button>
                 </span>
               </li>

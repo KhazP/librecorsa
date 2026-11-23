@@ -173,13 +173,13 @@ const SteerPad: React.FC<SteerPadProps> = ({ label, value, onChange, suspended }
         <span className="absolute inset-y-0" style={travel}>
           <span className="absolute top-1/2 left-1/2 h-1 w-1/2 -translate-y-1/2 overflow-hidden">
             <span
-              className="block h-full rounded-r-full"
+              className="block h-full rounded-e-full"
               style={{ backgroundColor: HUD_VOLT, transform: `translateX(${(Math.max(0, value) - 1) * 100}%)` }}
             />
           </span>
           <span className="absolute top-1/2 right-1/2 h-1 w-1/2 -translate-y-1/2 overflow-hidden">
             <span
-              className="block h-full rounded-l-full"
+              className="block h-full rounded-s-full"
               style={{ backgroundColor: HUD_VOLT, transform: `translateX(${(1 - Math.max(0, -value)) * 100}%)` }}
             />
           </span>
@@ -190,7 +190,7 @@ const SteerPad: React.FC<SteerPadProps> = ({ label, value, onChange, suspended }
         <span className="absolute inset-y-0" style={travel}>
           <span className="absolute inset-0" style={{ transform: `translateX(${frac * 100}%)` }}>
             <span
-              className="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] phone:scale-[0.82]"
+              className="absolute top-1/2 start-0 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] phone:scale-[0.82]"
               style={{
                 width: KNOB,
                 height: KNOB,
@@ -212,13 +212,13 @@ const TiltMeter: React.FC<{ value: number }> = ({ value }) => {
     <div aria-hidden className="relative h-1 w-[min(36vw,168px)] rounded-full bg-white/24 shadow-[0_0_0_1px_rgb(0_0_0/0.16)]">
       <span className="absolute inset-y-0 left-1/2 w-1/2 overflow-hidden">
         <span
-          className="block h-full rounded-r-full"
+          className="block h-full rounded-e-full"
           style={{ backgroundColor: HUD_VOLT, transform: `translateX(${(Math.max(0, value) - 1) * 100}%)` }}
         />
       </span>
       <span className="absolute inset-y-0 right-1/2 w-1/2 overflow-hidden">
         <span
-          className="block h-full rounded-l-full"
+          className="block h-full rounded-s-full"
           style={{ backgroundColor: HUD_VOLT, transform: `translateX(${(1 - Math.max(0, -value)) * 100}%)` }}
         />
       </span>
@@ -230,7 +230,7 @@ const TiltMeter: React.FC<{ value: number }> = ({ value }) => {
 /** One line about tilt while it is not steering: off, being asked for, refused or missing */
 const TiltNote: React.FC<{ children: React.ReactNode; onRetry?: () => void; maxWidth: string }> = ({ children, onRetry, maxWidth }) => {
   // Capped to the room it has on a portrait phone (between the pedals, or over the slider)
-  const cls = `inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-full bg-lc-void/62 pr-3.5 pl-2.5 text-[12px] font-bold text-lc-chalk ${maxWidth}`;
+  const cls = `inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-full bg-lc-void/62 pe-3.5 ps-2.5 text-[12px] font-bold text-lc-chalk ${maxWidth}`;
   const body = (
     <>
       <Icon name="tilt" size="xs" />

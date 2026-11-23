@@ -68,9 +68,9 @@ const Timed: React.FC<{ ms: number; best: boolean; lap?: boolean }> = ({ ms, bes
   );
 };
 
-const TH = "lc-lbl px-2 pb-2 text-left font-semibold whitespace-nowrap";
+const TH = "lc-lbl px-2 pb-2 text-start font-semibold whitespace-nowrap";
 /** Sector columns show only where the list has room for them */
-const SECTOR = "hidden text-right @2xl:table-cell";
+const SECTOR = "hidden text-end @2xl:table-cell";
 
 /** The badges of a list of drivers, fetched in one batch each time the names change, by name key */
 export function useDriverBadges(names: readonly string[]): Record<string, DriverBadge[]> {
@@ -147,7 +147,7 @@ export const BoardTable: React.FC<{
             <th scope="col" className={`${TH} w-full`}>
               {nameHeader ?? tx("driver")}
             </th>
-            <th scope="col" className={`${TH} text-right`}>
+            <th scope="col" className={`${TH} text-end`}>
               {tx("lap")}
             </th>
             {sectors
@@ -206,7 +206,7 @@ export const BoardTable: React.FC<{
                     </span>
                   ) : null}
                 </td>
-                <td className="px-2 text-right">
+                <td className="px-2 text-end">
                   <Timed ms={r.lapMs} best={Boolean(r.fastest)} lap />
                 </td>
                 {sectors
@@ -216,7 +216,7 @@ export const BoardTable: React.FC<{
                       </td>
                     ))
                   : null}
-                {actions ? <td className="py-1.5 pl-2 text-right whitespace-nowrap">{r.action}</td> : null}
+                {actions ? <td className="py-1.5 ps-2 text-end whitespace-nowrap">{r.action}</td> : null}
               </tr>
               {/* The note gets a line of its own under the row, wide enough to read on a phone */}
               {r.note ? (
@@ -244,7 +244,7 @@ export const BoardSkeleton: React.FC<{ rows?: number; label: string }> = ({ rows
       <div key={i} className="flex h-13 items-center gap-3 border-b border-white/5 px-2 last:border-b-0">
         <Skeleton shape="line" className="h-5 w-10" />
         <Skeleton shape="line" className="w-2/5" />
-        <Skeleton shape="line" className="ml-auto w-20" />
+        <Skeleton shape="line" className="ms-auto w-20" />
       </div>
     ))}
   </div>
@@ -284,7 +284,7 @@ export const MyPlace: React.FC<{ rank: number; total: number; lapMs: number; det
         <span className="flex min-w-0 flex-col">
           <span className="text-[14px] font-semibold text-lc-chalk">
             {tx("myPlace", { rank: formatCount(rank), total: formatCount(total) })}
-            <span className="lc-mono ml-2 font-bold text-lc-fog">{formatLapTime(lapMs)}</span>
+            <span className="lc-mono ms-2 font-bold text-lc-fog">{formatLapTime(lapMs)}</span>
           </span>
           {detail ? <span className="lc-hint truncate">{detail}</span> : null}
         </span>

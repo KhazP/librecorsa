@@ -337,7 +337,7 @@ export const CircuitBrowser: React.FC<{
                       <div key={entry.vehicle} className="flex items-center justify-between gap-2 text-[13px]">
                         <span className={cx("truncate", isCur ? "font-semibold text-lc-chalk" : "text-lc-fog")}>
                           {carBoardTag(entry.vehicle).label}
-                          {entry.legacyPhysics ? <span className="ml-1.5 text-[11px] font-normal text-lc-slate">{tx("oldPhysicsTag")}</span> : null}
+                          {entry.legacyPhysics ? <span className="ms-1.5 text-[11px] font-normal text-lc-slate">{tx("oldPhysicsTag")}</span> : null}
                         </span>
                         <span
                           className={cx(

@@ -34,7 +34,7 @@ const Split: React.FC<{ split: RaceSplit; side: "ahead" | "behind"; wide?: boole
       <span className="lc-data text-[12px] tracking-[0.1em] text-lc-chalk">{split.driverCode}</span>
       {wide ? <span className="flex-1" /> : null}
       {/* The side says which way; the number is the time between the cars */}
-      <span className="lc-data min-w-13 text-right text-[13px]" style={{ color }}>
+      <span className="lc-data min-w-13 text-end text-[13px]" style={{ color }}>
         {formatGap(split.gapS, true)}
       </span>
       {/* How the gap moved: up when it went your way, down when it did not */}
@@ -71,7 +71,7 @@ export const SplitGaps: React.FC<{ splits: RaceSplits | undefined; variant?: "pi
     );
   }
   return (
-    <div className={`inline-flex h-9 items-center gap-3 rounded-full py-1 pr-2 pl-4 ${HUD_GLASS}`} aria-label={region}>
+    <div className={`inline-flex h-9 items-center gap-3 rounded-full py-1 pe-2 ps-4 ${HUD_GLASS}`} aria-label={region}>
       {splits.ahead ? <Split split={splits.ahead} side="ahead" /> : null}
       {splits.ahead && splits.behind ? <span aria-hidden className="h-4 w-px bg-lc-line" /> : null}
       {splits.behind ? <Split split={splits.behind} side="behind" /> : null}

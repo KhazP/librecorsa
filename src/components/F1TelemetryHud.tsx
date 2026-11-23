@@ -653,7 +653,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         />
       ) : (
         /* Classic / Minimal top-left: timing tower (race) and lap timing */
-        <div className="absolute top-3 left-3 flex flex-col gap-2 sm:top-4 sm:left-4" style={corner("top left")}>
+        <div className="absolute top-3 start-3 flex flex-col gap-2 sm:top-4 sm:start-4" style={corner("top left")}>
           {race ? <TimingTower race={race} trackCode={trackInfo.country.slice(0, 3).toUpperCase()} gaps={hud?.towerGaps} /> : null}
           <LapPanel telemetry={telemetry} deltaS={deltaS} variant={minimal ? "minimal" : "full"} lapInvalid={lapInvalid} />
           {leftNode}
@@ -720,7 +720,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               role="status"
               tone={aeroSkinTone}
               cut="sm"
-              className="inline-flex min-h-10 items-center gap-2.5 py-1 pr-4 pl-2.5"
+              className="inline-flex min-h-10 items-center gap-2.5 py-1 pe-4 ps-2.5"
             >
               <SkinTag
                 tone={aeroSkinTone}
@@ -733,7 +733,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               <span className="text-[15px] font-bold">{aeroNoticeNow.text}</span>
             </SkinBanner>
           ) : (
-            <div role="status" className={`inline-flex min-h-10 items-center gap-2.5 rounded-lc-row py-1 pr-4 pl-2 text-lc-chalk ${HUD_GLASS}`}>
+            <div role="status" className={`inline-flex min-h-10 items-center gap-2.5 rounded-lc-row py-1 pe-4 ps-2 text-lc-chalk ${HUD_GLASS}`}>
               <Badge tone={aeroNoticeNow.tone} variant={aeroNoticeNow.variant} size="lg" icon={aeroNoticeNow.icon}>
                 {aeroNoticeNow.badge}
               </Badge>
@@ -745,12 +745,12 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         <QualityNotice notice={props.qualityNotice ?? null} />
         {showLaunchHint && !race ? (
           isThirdParty ? (
-            <SkinBanner cut="sm" className="inline-flex min-h-10 items-center gap-2.5 py-1.5 pr-4 pl-3">
+            <SkinBanner cut="sm" className="inline-flex min-h-10 items-center gap-2.5 py-1.5 pe-4 ps-3">
               <Icon name="play" size="xs" />
               <span className="text-[13px] font-semibold sm:text-[14px]">{launchHintText}</span>
             </SkinBanner>
           ) : (
-            <div className={`inline-flex min-h-10 items-center gap-2.5 rounded-lc-row py-1.5 pr-4 pl-3 ${HUD_GLASS}`}>
+            <div className={`inline-flex min-h-10 items-center gap-2.5 rounded-lc-row py-1.5 pe-4 ps-3 ${HUD_GLASS}`}>
               <Icon name="play" size="xs" className="text-lc-volt" />
               <span className="lc-title text-[13px] text-lc-chalk sm:text-[14px]">{launchHintText}</span>
             </div>
@@ -782,14 +782,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         ) : null}
         {throttleCue ? (
           isThirdParty ? (
-            <SkinBanner cut="sm" className="inline-flex h-10 items-center gap-2.5 pr-4 pl-3">
+            <SkinBanner cut="sm" className="inline-flex h-10 items-center gap-2.5 pe-4 ps-3">
               <Icon name="play" size="xs" />
               <span className="text-[13px] font-semibold sm:text-[14px]">
                 {words.holdForLightsOut}
               </span>
             </SkinBanner>
           ) : (
-            <div className={`inline-flex h-10 items-center gap-2.5 rounded-lc-row pr-4 pl-3 ${HUD_GLASS}`}>
+            <div className={`inline-flex h-10 items-center gap-2.5 rounded-lc-row pe-4 ps-3 ${HUD_GLASS}`}>
               <Icon name="play" size="xs" className="text-lc-volt" />
               <span className="lc-title text-[13px] text-lc-chalk sm:text-[14px]">
                 {words.holdForLightsOut}
@@ -829,7 +829,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
       {/* A manual start's checklist on the right edge, between the right-hand corners, as the F1 games place it: the
           centre stays the lights' own */}
-      <div className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 sm:right-4">
+      <div className="pointer-events-none absolute top-1/2 end-3 -translate-y-1/2 sm:end-4">
         <div style={corner("center right")}>
           <LaunchCue telemetry={telemetry} hudHidden={hudHidden} />
         </div>
@@ -839,7 +839,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       <>
       {/* Classic / Minimal top-right: circuit map, and on touch screens (no Esc key) a button for the pause menu */}
       {!style ? (
-        <div className="pointer-events-auto absolute top-3 right-3 flex flex-col items-end gap-2 sm:top-4 sm:right-4" style={corner("top right")}>
+        <div className="pointer-events-auto absolute top-3 end-3 flex flex-col items-end gap-2 sm:top-4 sm:end-4" style={corner("top right")}>
           {menuButton}
           <div className={showMap ? "hidden md:block" : "hidden"}>
             <TrackMinimap track={track} telemetry={telemetry} onSelectTurn={props.onSelectTurn} />
@@ -849,7 +849,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
       {/* Bottom-left: 4-corner tyre matrix, LibreCorsa badge, and key hints */}
       {/* data-hud-floor: the lap board above this corner keeps clear of it */}
-      <div data-hud-floor className="absolute bottom-3 left-3 flex flex-col items-start gap-2 sm:bottom-4 sm:left-4" style={corner("bottom left")}>
+      <div data-hud-floor className="absolute bottom-3 start-3 flex flex-col items-start gap-2 sm:bottom-4 sm:start-4" style={corner("bottom left")}>
         {showFfb && props.ffbMeter ? <FfbMeter {...props.ffbMeter} /> : null}
         {/* Classic's centred speed cluster spans a phone's width, so the tyre matrix waits for tablet width */}
         {showTyres ? (
@@ -859,7 +859,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         ) : null}
         {showKeyHints ? (
           <div
-            className={`${style ? "2xl:flex" : "sm:flex"} hidden flex-wrap items-center gap-x-3 gap-y-2 rounded-lc-row py-1.5 pr-3 pl-2 text-[12px] font-bold text-lc-chalk ${HUD_GLASS}`}
+            className={`${style ? "2xl:flex" : "sm:flex"} hidden flex-wrap items-center gap-x-3 gap-y-2 rounded-lc-row py-1.5 pe-3 ps-2 text-[12px] font-bold text-lc-chalk ${HUD_GLASS}`}
           >
             <LibreCorsaLogo variant="mark" className="h-5.5 w-5.5" />
             {inputMode === "pad" ? (
@@ -896,7 +896,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       {/* Classic / Minimal bottom-right: Live Tuner MFD, engineering channels (when active); Minimal's speed pills sit here too */}
       {/* Only without a full-screen style: a style draws its own MFD, and a second (hidden) one would still take the D-pad */}
       {!style ? (
-      <div className="absolute right-3 bottom-3 flex flex-col items-end gap-2 sm:right-4 sm:bottom-4" style={corner("bottom right")}>
+      <div className="absolute end-3 bottom-3 flex flex-col items-end gap-2 sm:end-4 sm:bottom-4" style={corner("bottom right")}>
         <div className="hidden sm:block">
           {mfdNode}
         </div>
@@ -1023,7 +1023,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       <div className="lc-safe-frame pointer-events-none fixed z-20 select-none">
         <div
           role="status"
-          className={`lc-ui-zoom absolute top-13 left-1/2 inline-flex h-9.5 -translate-x-1/2 items-center gap-2.5 rounded-full pr-4.5 pl-3.5 text-lc-chalk sm:top-17 short:top-8 ${HUD_GLASS}`}
+          className={`lc-ui-zoom absolute top-13 left-1/2 inline-flex h-9.5 -translate-x-1/2 items-center gap-2.5 rounded-full pe-4.5 ps-3.5 text-lc-chalk sm:top-17 short:top-8 ${HUD_GLASS}`}
         >
           <Icon name="replay" size="sm" />
           <span className="lc-disp text-[18px]">{words.replay}</span>

@@ -155,7 +155,7 @@ const RelativePage: React.FC<{ rows: RelativeRow[]; racing: boolean }> = ({ rows
                 r.isPlayer ? `${skinCss.playerRow} font-bold` : ""
               }`}
             >
-              <span className={`w-4.5 text-right text-[10px] ${skinCss.pos} ${r.isPlayer ? "" : skinCss.inkDim}`}>
+              <span className={`w-4.5 text-end text-[10px] ${skinCss.pos} ${r.isPlayer ? "" : skinCss.inkDim}`}>
                 {racing && r.position ? r.position : ""}
               </span>
               <span
@@ -171,7 +171,7 @@ const RelativePage: React.FC<{ rows: RelativeRow[]; racing: boolean }> = ({ rows
               </span>
               <PenaltyChip s={r.penaltyS} skinned />
               {r.isPlayer ? null : (
-                <span className={`ml-auto flex items-center gap-1 ${!lapColor ? skinCss.ink : ""}`} style={lapColor ? { color: lapColor } : undefined}>
+                <span className={`ms-auto flex items-center gap-1 ${!lapColor ? skinCss.ink : ""}`} style={lapColor ? { color: lapColor } : undefined}>
                   <span className={`inline-flex ${skinCss.inkDim}`}>
                     <Trend direction={r.gapS > 0 ? "up" : "down"} size={8} label={r.gapS > 0 ? text.ahead : text.behind} />
                   </span>
@@ -196,7 +196,7 @@ const RelativePage: React.FC<{ rows: RelativeRow[]; racing: boolean }> = ({ rows
               r.isPlayer ? "bg-lc-volt text-lc-void" : "bg-white/3"
             }`}
           >
-            <span className={`w-4.5 text-right text-[10px] ${r.isPlayer ? "" : "text-lc-slate"}`}>{racing && r.position ? r.position : ""}</span>
+            <span className={`w-4.5 text-end text-[10px] ${r.isPlayer ? "" : "text-lc-slate"}`}>{racing && r.position ? r.position : ""}</span>
             <span className="h-3 w-0.75 shrink-0 rounded-full" style={{ backgroundColor: r.isPlayer ? "var(--color-lc-void)" : r.color }} />
             <span className="w-8.5 tracking-[0.06em]" style={{ color: tone }}>
               {r.code}
@@ -207,7 +207,7 @@ const RelativePage: React.FC<{ rows: RelativeRow[]; racing: boolean }> = ({ rows
             </span>
             <PenaltyChip s={r.penaltyS} />
             {r.isPlayer ? null : (
-              <span className="ml-auto flex items-center gap-1" style={{ color: tone }}>
+              <span className="ms-auto flex items-center gap-1" style={{ color: tone }}>
                 {/* Ahead or behind on the road: the arrow shows which way, the number how far */}
                 <span className="inline-flex text-lc-slate">
                   <Trend direction={r.gapS > 0 ? "up" : "down"} size={8} label={r.gapS > 0 ? text.ahead : text.behind} />
@@ -351,7 +351,7 @@ const TyreCorner: React.FC<{ t: CarTelemetry; i: number }> = ({ t, i }) => {
         <span className={`lc-data text-[11px] leading-none whitespace-nowrap ${skin !== null ? skinCss.inkSoft : "text-lc-fog"}`}>
           {c.psi !== null ? formatPressurePsi(c.psi, units) : NONE}
           {c.psiDelta !== null ? (
-            <span className="ml-1 text-[10px]" style={{ color: psiDeltaColor(c.psiDelta) }}>
+            <span className="ms-1 text-[10px]" style={{ color: psiDeltaColor(c.psiDelta) }}>
               {formatPressureDeltaPsi(c.psiDelta, units)}
             </span>
           ) : null}
@@ -412,7 +412,7 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
             if (skin !== null) {
               return (
                 <tr key={`${s.driverCode}-${pos}`} className={`h-5.75 ${skinCss.row} ${s.isPlayer ? `${skinCss.playerRow} font-bold` : skinCss.ink}`}>
-                  <td className={`w-6 pr-2 text-right ${skinCss.pos} ${s.isPlayer ? "" : skinCss.inkDim}`}>{pos}</td>
+                  <td className={`w-6 pe-2 text-end ${skinCss.pos} ${s.isPlayer ? "" : skinCss.inkDim}`}>{pos}</td>
                   <td className="w-1.5" />
                   <td>
                     <span className="inline-flex items-center gap-1.5">
@@ -425,7 +425,7 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
                     </span>
                   </td>
                   <td
-                    className={`text-right ${s.isPlayer || purple ? "" : skinCss.inkSoft}`}
+                    className={`text-end ${s.isPlayer || purple ? "" : skinCss.inkSoft}`}
                     style={!s.isPlayer && purple ? { color: HUD_BEST } : undefined}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -437,14 +437,14 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
                       {formatLapTime(s.bestLapMs)}
                     </span>
                   </td>
-                  <td className="w-13 pr-1 text-right">{pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
+                  <td className="w-13 pe-1 text-end">{pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
                 </tr>
               );
             }
             return (
               // The player's row is volt with void ink; the fill sits on the cells so the row's ends can round
               <tr key={`${s.driverCode}-${pos}`} className={`h-5.75 ${s.isPlayer ? "text-lc-void [&>td]:bg-lc-volt" : "text-lc-chalk"}`}>
-                <td className={`w-6 rounded-l-lc-nub pr-2 text-right ${s.isPlayer ? "" : "text-lc-slate"}`}>{pos}</td>
+                <td className={`w-6 rounded-s-lc-nub pe-2 text-end ${s.isPlayer ? "" : "text-lc-slate"}`}>{pos}</td>
                 <td>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="h-3 w-0.75 rounded-full" style={{ backgroundColor: s.isPlayer ? "var(--color-lc-void)" : s.teamColorHex }} />
@@ -452,13 +452,13 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
                     <PenaltyChip s={s.penaltyS} />
                   </span>
                 </td>
-                <td className="text-right" style={s.isPlayer ? undefined : { color: purple ? HUD_BEST : "var(--color-lc-fog)" }}>
+                <td className="text-end" style={s.isPlayer ? undefined : { color: purple ? HUD_BEST : "var(--color-lc-fog)" }}>
                   <span className="inline-flex items-center gap-1">
                     {purple ? <Badge tone="best" variant="solid" size="hud" aria-label={text.fastestLap}>{text.fastestLapShort}</Badge> : null}
                     {formatLapTime(s.bestLapMs)}
                   </span>
                 </td>
-                <td className="w-13 rounded-r-lc-nub pr-1 text-right">{pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
+                <td className="w-13 rounded-e-lc-nub pe-1 text-end">{pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
               </tr>
             );
           })}
@@ -483,7 +483,7 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
             if (skin !== null) {
               return (
                 <tr key={l.lap} className={`h-5.75 ${skinCss.row} ${l.valid ? skinCss.ink : `${skinCss.inkLoss} opacity-80 line-through`}`}>
-                  <td className={`w-6 pr-2 text-right ${skinCss.pos} ${skinCss.inkDim}`}>{l.lap}</td>
+                  <td className={`w-6 pe-2 text-end ${skinCss.pos} ${skinCss.inkDim}`}>{l.lap}</td>
                   <td className="w-1.5" />
                   <td style={l.valid && l.timeMs === best ? { color: HUD_BEST } : undefined}>
                     <span className="inline-flex items-center gap-1">
@@ -496,7 +496,7 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
                     return (
                       <td
                         key={i}
-                        className={`text-right ${secBest ? "underline decoration-2 underline-offset-2" : skinCss.inkDim}`}
+                        className={`text-end ${secBest ? "underline decoration-2 underline-offset-2" : skinCss.inkDim}`}
                         style={secBest ? { color: HUD_BEST } : undefined}
                       >
                         {ms > 0 ? formatSectorTime(ms) : NONE}
@@ -509,7 +509,7 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
             return (
               // An invalid lap is struck through as well as in the loss colour; the session best wears the best colour and its arrow
               <tr key={l.lap} className={`h-5.75 ${l.valid ? "text-lc-chalk" : "text-lc-loss/80 line-through"}`}>
-                <td className="w-6 pr-2 text-right text-lc-slate">{l.lap}</td>
+                <td className="w-6 pe-2 text-end text-lc-slate">{l.lap}</td>
                 <td style={l.valid && l.timeMs === best ? { color: HUD_BEST } : undefined}>
                   <span className="inline-flex items-center gap-1">
                     {formatLapTime(l.timeMs)}
@@ -519,7 +519,7 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
                 {l.sectorsMs.map((ms, i) => (
                   <td
                     key={i}
-                    className={`text-right ${l.valid && ms > 0 && ms === bestS[i] ? "underline decoration-2 underline-offset-2" : ""}`}
+                    className={`text-end ${l.valid && ms > 0 && ms === bestS[i] ? "underline decoration-2 underline-offset-2" : ""}`}
                     style={l.valid && ms > 0 && ms === bestS[i] ? { color: HUD_BEST } : { color: "var(--color-lc-slate)" }}
                   >
                     {ms > 0 ? formatSectorTime(ms) : NONE}

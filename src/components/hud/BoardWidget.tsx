@@ -269,7 +269,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
         cut="sm"
         role="menu"
         aria-label={tx("modeMenu")}
-        className="absolute top-full right-0 z-20 mt-1.5 w-44"
+        className="absolute top-full end-0 z-20 mt-1.5 w-44"
         innerClassName="flex flex-col gap-0.5 p-1"
       >
         {MODES.map((m) => (
@@ -286,7 +286,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
               setLapOpenUntil(0);
               onChangeMode(m);
             }}
-            className="h-8 justify-start px-2.5 text-left text-[12px] font-semibold"
+            className="h-8 justify-start px-2.5 text-start text-[12px] font-semibold"
           >
             <span className="inline-flex size-3.5 shrink-0 items-center justify-center">
               {m === mode ? <Icon name="check" size="xs" className="size-3.5" /> : null}
@@ -310,7 +310,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
               aria-expanded
               aria-label={foldLabel}
               title={trackName}
-              className={`flex h-11 w-full cursor-pointer items-center gap-2.5 pr-2.5 pl-3 text-left ${skinCss.headerBar} ${skinCss.ink}`}
+              className={`flex h-11 w-full cursor-pointer items-center gap-2.5 pe-2.5 ps-3 text-start ${skinCss.headerBar} ${skinCss.ink}`}
             >
               <span className="min-w-0 flex-1 truncate text-[15px] leading-none font-bold tracking-[0.04em] uppercase">{trackName}</span>
               {rank !== null ? (
@@ -339,27 +339,27 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
                       title={l.entry.name}
                       style={posCol}
                       aria-current={l.mine ? "true" : undefined}
-                      className={`lc-data grid h-7 grid-cols-[var(--lc-pos-w,26px)_34px_minmax(0,1fr)_auto] items-center gap-1.5 pr-2.5 pl-2 text-[13px] ${skinCss.row} ${
+                      className={`lc-data grid h-7 grid-cols-[var(--lc-pos-w,26px)_34px_minmax(0,1fr)_auto] items-center gap-1.5 pe-2.5 ps-2 text-[13px] ${skinCss.row} ${
                         l.mine ? `font-bold ${skinCss.playerRow}` : skinCss.ink
                       }`}
                     >
                       <span className={`text-center ${skinCss.pos} ${l.mine ? "" : skinCss.inkDim}`}>{l.pos}</span>
                       <span className="tracking-[0.1em]">{l.entry.code.slice(0, 3)}</span>
-                      <span dir="auto" className={`truncate text-left font-sans text-[12px] ${l.mine ? "" : skinCss.inkSoft}`}>{l.entry.name}</span>
-                      <span className="text-right text-[12px]">{formatLapTime(l.entry.lapTimeMs)}</span>
+                      <span dir="auto" className={`truncate text-start font-sans text-[12px] ${l.mine ? "" : skinCss.inkSoft}`}>{l.entry.name}</span>
+                      <span className="text-end text-[12px]">{formatLapTime(l.entry.lapTimeMs)}</span>
                     </li>
                   ),
                 )}
               </ol>
             )}
-            <div className={`flex h-8 items-center gap-2 border-t pr-1 pl-3 ${skinCss.divider}`}>
+            <div className={`flex h-8 items-center gap-2 border-t pe-1 ps-3 ${skinCss.divider}`}>
               <span className={`flex-1 ${skinCss.label}`}>{tx("lapsDriven")}</span>
               <span className={`lc-data text-[11px] ${skinCss.inkSoft}`}>{laps !== null ? formatCount(laps) : "--"}</span>
               {gearButton}
             </div>
           </SkinPanel>
         ) : (
-          <SkinPanel cut="sm" innerClassName="flex h-9 items-center gap-1.5 pr-1.5 pl-3">
+          <SkinPanel cut="sm" innerClassName="flex h-9 items-center gap-1.5 pe-1.5 ps-3">
             <button
               type="button"
               onClick={(e) => {
@@ -369,7 +369,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
               aria-expanded={false}
               aria-label={openLabel}
               title={trackName}
-              className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-left ${skinCss.ink}`}
+              className={`flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-start ${skinCss.ink}`}
             >
               <span className="min-w-0 flex-1 truncate text-[13px] leading-none font-bold uppercase">{trackName}</span>
               <span className={`lc-data shrink-0 text-[12px] ${skinCss.ink}`}>
@@ -402,7 +402,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
         <Icon name="settings" size="xs" className="size-3.5" />
       </button>
       {menu ? (
-        <div role="menu" aria-label={tx("modeMenu")} className={`absolute top-full right-0 z-10 mt-1.5 flex w-44 flex-col rounded-lc-row p-1 ${HUD_GLASS}`}>
+        <div role="menu" aria-label={tx("modeMenu")} className={`absolute top-full end-0 z-10 mt-1.5 flex w-44 flex-col rounded-lc-row p-1 ${HUD_GLASS}`}>
           {MODES.map((m) => (
             <button
               key={m}
@@ -416,7 +416,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
                 setLapOpenUntil(0);
                 onChangeMode(m);
               }}
-              className={`flex h-8 items-center gap-2 rounded-lc-nub px-2.5 text-left text-[12px] font-semibold text-lc-fog transition-colors duration-150 ease-lc hover:bg-white/8 hover:text-lc-chalk aria-checked:text-lc-chalk ${FOCUS}`}
+              className={`flex h-8 items-center gap-2 rounded-lc-nub px-2.5 text-start text-[12px] font-semibold text-lc-fog transition-colors duration-150 ease-lc hover:bg-white/8 hover:text-lc-chalk aria-checked:text-lc-chalk ${FOCUS}`}
             >
               <span className="inline-flex size-3.5 shrink-0 items-center justify-center">{m === mode ? <Icon name="check" size="xs" className="size-3.5" /> : null}</span>
               {modeLabel(m)}
@@ -441,7 +441,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
             aria-expanded
             aria-label={foldLabel}
             title={trackName}
-            className={`flex h-11 w-full items-center gap-2.5 rounded-t-lc-tile rounded-b-lc-row bg-lc-chalk pr-2.5 pl-3 text-left text-lc-void ${FOCUS}`}
+            className={`flex h-11 w-full items-center gap-2.5 rounded-t-lc-tile rounded-b-lc-row bg-lc-chalk pe-2.5 ps-3 text-start text-lc-void ${FOCUS}`}
           >
             <span className="lc-disp min-w-0 flex-1 truncate text-[17px] leading-none">{trackName}</span>
             {rank !== null ? (
@@ -468,7 +468,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
                     title={l.entry.name}
                     style={posCol}
                     aria-current={l.mine ? "true" : undefined}
-                    className={`lc-data grid h-7 grid-cols-[var(--lc-pos-w,26px)_34px_minmax(0,1fr)_auto] items-center gap-1.5 pr-2.5 pl-2 text-[13px] ${
+                    className={`lc-data grid h-7 grid-cols-[var(--lc-pos-w,26px)_34px_minmax(0,1fr)_auto] items-center gap-1.5 pe-2.5 ps-2 text-[13px] ${
                       l.mine ? "bg-lc-volt text-lc-void" : "text-lc-chalk"
                     }`}
                   >
@@ -478,21 +478,21 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
                       <span dir="auto" className={`truncate font-sans text-[12px] ${l.mine ? "" : "text-lc-fog"}`}>{l.entry.name}</span>
                       <InputIcon input={l.entry.conditions?.input} className={l.mine ? "" : "text-lc-slate"} />
                     </span>
-                    <span className="text-right text-[12px]">{formatLapTime(l.entry.lapTimeMs)}</span>
+                    <span className="text-end text-[12px]">{formatLapTime(l.entry.lapTimeMs)}</span>
                   </li>
                 ),
               )}
             </ol>
           )}
           {/* The foot: how many laps the circuit has seen in this car, and the gear */}
-          <div className="flex h-8 items-center gap-2 border-t border-white/7 pr-1 pl-3">
+          <div className="flex h-8 items-center gap-2 border-t border-white/7 pe-1 ps-3">
             <span className={`${HUD_LBL} flex-1`}>{tx("lapsDriven")}</span>
             <span className="lc-data text-[11px] text-lc-fog">{laps !== null ? formatCount(laps) : "--"}</span>
             {gear}
           </div>
         </section>
       ) : (
-        <div className={`flex h-9 items-center gap-1 rounded-lc-row pr-1 pl-3 ${HUD_GLASS}`}>
+        <div className={`flex h-9 items-center gap-1 rounded-lc-row pe-1 ps-3 ${HUD_GLASS}`}>
           <button
             type="button"
             onClick={(e) => {
@@ -502,7 +502,7 @@ const BoardWidgetImpl: React.FC<BoardWidgetProps> = ({ trackId, trackName, vehic
             aria-expanded={false}
             aria-label={openLabel}
             title={trackName}
-            className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lc-nub text-left text-lc-chalk ${FOCUS}`}
+            className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lc-nub text-start text-lc-chalk ${FOCUS}`}
           >
             <span className="lc-disp min-w-0 flex-1 truncate text-[14px] leading-none">{trackName}</span>
             <span className="lc-data shrink-0 text-[12px] text-lc-chalk">{place ?? <span className="text-lc-slate">{tx("noTime")}</span>}</span>

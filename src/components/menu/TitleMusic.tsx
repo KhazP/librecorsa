@@ -22,10 +22,10 @@ export function TitleMusic({ nowPlaying, musicMuted, onSkip, onToggleMute }: Tit
   if (!nowPlaying && !musicMuted) return null;
   return (
     <div className="flex min-w-0 items-center gap-1" data-nav-zone="music" role="group" aria-label={tx("group")}>
-      <span aria-hidden className="mr-1 inline-flex shrink-0 text-lc-slate">
+      <span aria-hidden className="me-1 inline-flex shrink-0 text-lc-slate">
         <Icon name="music" size="sm" />
       </span>
-      <span className="mr-1.5 flex min-w-0 max-w-[340px] items-baseline gap-2 text-[13px] leading-snug" aria-live="polite">
+      <span className="me-1.5 flex min-w-0 max-w-[340px] items-baseline gap-2 text-[13px] leading-snug" aria-live="polite">
         {musicMuted || !nowPlaying ? (
           <span className="text-lc-slate">{tx("off")}</span>
         ) : (

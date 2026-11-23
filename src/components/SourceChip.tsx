@@ -146,7 +146,7 @@ export const SourceChip: React.FC<{
               role="group"
               aria-label={tx("sourceOf", { title: source.title })}
               onKeyDown={onPanelKey}
-              className={`pointer-events-auto fixed z-(--z-lc-notice) flex w-[min(320px,calc(100vw-32px))] flex-col gap-1.5 overflow-y-auto overscroll-contain rounded-lc-tile border border-white/7 bg-lc-carbon p-3.5 text-left text-[13px] leading-snug font-normal text-lc-fog shadow-lc-pop ${zoomed ? "lc-ui-zoom" : ""}`}
+              className={`pointer-events-auto fixed z-(--z-lc-notice) flex w-[min(320px,calc(100vw-32px))] flex-col gap-1.5 overflow-y-auto overscroll-contain rounded-lc-tile border border-white/7 bg-lc-carbon p-3.5 text-start text-[13px] leading-snug font-normal text-lc-fog shadow-lc-pop ${zoomed ? "lc-ui-zoom" : ""}`}
               // Laid out unseen at the corner first, measured, then put by the button
               style={
                 place

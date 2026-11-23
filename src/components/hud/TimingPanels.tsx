@@ -37,7 +37,7 @@ import { challengePlaceLabel, type ChallengeTarget } from "@/lib/net/challenge-t
 
 
 /** The tower's columns: position, livery bar, driver, gap, last lap against yours (the header and the rows share them) */
-const TOWER_COLS = "grid grid-cols-[22px_4px_1fr_auto_40px] gap-2 pr-2.5 pl-2";
+const TOWER_COLS = "grid grid-cols-[22px_4px_1fr_auto_40px] gap-2 pe-2.5 ps-2";
 
 /**
  * The tower's column names, over `TowerRows`: the gap and last-lap values sit right-aligned under theirs, so the signed
@@ -60,8 +60,8 @@ export const TowerHeader: React.FC<{ gaps?: "interval" | "leader" }> = ({ gaps =
       <span />
       <span />
       <span>{L.driver}</span>
-      <span className="text-right">{gaps === "leader" ? L.gap : L.interval}</span>
-      <span className="text-right whitespace-nowrap" title={L.lastVsYouTitle}>
+      <span className="text-end">{gaps === "leader" ? L.gap : L.interval}</span>
+      <span className="text-end whitespace-nowrap" title={L.lastVsYouTitle}>
         {L.lastVsYou}
       </span>
     </div>
@@ -170,7 +170,7 @@ export const TowerRows: React.FC<{
               {e.retired ? L.out : gap === null ? (gaps === "leader" ? L.leader : L.lead) : `+${formatGap(gap)}`}
             </span>
             <span
-              className="text-right text-[10px]"
+              className="text-end text-[10px]"
               style={{ color: e.isPlayer && lastD !== null ? "var(--color-lc-void)" : lastColor, opacity: lastD === null ? 0.5 : 1 }}
               title={e.isPlayer ? L.lastVsBestTitle : L.lastVsTheirsTitle}
             >
@@ -203,7 +203,7 @@ export const TimingTower: React.FC<{ race: RaceStatus; trackCode?: string; gaps?
   return (
     <section aria-label={region} className={`w-[264px] overflow-hidden rounded-lc-tile ${HUD_GLASS}`}>
       {/* Pitboard header: mark, lap of laps, position and track code */}
-      <div className="flex h-11 items-center gap-2.5 rounded-t-lc-tile rounded-b-lc-row bg-lc-chalk pr-3 pl-2 text-lc-void">
+      <div className="flex h-11 items-center gap-2.5 rounded-t-lc-tile rounded-b-lc-row bg-lc-chalk pe-3 ps-2 text-lc-void">
         <LibreCorsaMark className="h-7 w-7 shrink-0" />
         <span className="lc-disp flex-1 text-[18px] leading-none">{lapText}</span>
         <span className="inline-flex items-center gap-1">
@@ -273,7 +273,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
   if (variant === "minimal") {
     return (
       <div className="flex flex-col items-start gap-1.5">
-        <section aria-label={L.region} className={`flex items-center gap-3 rounded-lc-tile py-1.5 pr-4 pl-1.5 ${HUD_GLASS}`}>
+        <section aria-label={L.region} className={`flex items-center gap-3 rounded-lc-tile py-1.5 pe-4 ps-1.5 ${HUD_GLASS}`}>
           <span className="lc-data inline-flex h-9 items-center rounded-lc-row bg-lc-titanium px-3 text-[12px] tracking-[0.1em] text-lc-chalk uppercase">
             {lapWord}
           </span>
@@ -366,7 +366,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
           <div className={HUD_LBL}>{L.lastLap}</div>
           <div className="lc-data text-[15px] text-lc-chalk/90">{formatLapTime(telemetry.lastLapTimeMs)}</div>
         </div>
-        <div className="text-right">
+        <div className="text-end">
           <div className={HUD_LBL}>{L.bestLap}</div>
           <div className="lc-data text-[15px]" style={{ color: telemetry.bestLapTimeMs ? HUD_BEST : "var(--color-lc-chalk)" }}>
             {formatLapTime(telemetry.bestLapTimeMs)}
@@ -389,7 +389,7 @@ export const ChallengeTargetPanel: React.FC<{ target: ChallengeTarget }> = ({ ta
           <div className={skin ? `text-[9px] font-bold tracking-[0.08em] uppercase ${skinCss.inkDim}` : HUD_LBL}>{L.yourBest}</div>
           <div className={`lc-data text-[15px] ${skin ? skinCss.ink : "text-lc-chalk"}`}>{formatLapTime(target.bestMs)}</div>
         </div>
-        <div className="text-right">
+        <div className="text-end">
           <div className={skin ? `text-[9px] font-bold tracking-[0.08em] uppercase ${skinCss.inkDim}` : HUD_LBL}>{L.weekFastest}</div>
           <div className="lc-data text-[15px]" style={{ color: HUD_BEST }}>
             {formatLapTime(target.leaderMs)}

@@ -175,7 +175,7 @@ export function SettingRow({
             </span>
           ) : null}
         </div>
-        <div className={cx("flex min-w-0 shrink-0 items-center justify-end gap-2", stacked ? "basis-full" : "ml-auto max-w-full phone:grow")}>
+        <div className={cx("flex min-w-0 shrink-0 items-center justify-end gap-2", stacked ? "basis-full" : "ms-auto max-w-full phone:grow")}>
           {changed && onReset && !disabled ? (
             <IconButton
               size="sm"

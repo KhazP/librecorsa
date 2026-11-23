@@ -207,7 +207,7 @@ export const RaceControlBanner: React.FC<{
           role={bad || msg.kind === "warning" ? "alert" : "status"}
           tone={skinTone}
           cut="sm"
-          className={`relative mt-1 inline-flex min-h-8 items-center gap-2 py-1 pr-3 pl-2 ${bad ? "lc-alert" : ""}`}
+          className={`relative mt-1 inline-flex min-h-8 items-center gap-2 py-1 pe-3 ps-2 ${bad ? "lc-alert" : ""}`}
         >
           <SkinTag tone={skinTone} filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
             {msg.kind === "final_warning" || msg.kind === "disqualified" ? (
@@ -228,7 +228,7 @@ export const RaceControlBanner: React.FC<{
     return (
       <div
         role={bad || msg.kind === "warning" ? "alert" : "status"}
-        className={`relative mt-1 inline-flex min-h-9 items-center gap-2 rounded-lc-row py-1 pr-3.5 pl-1.5 text-lc-chalk inset-ring ${tone.ring} ${
+        className={`relative mt-1 inline-flex min-h-9 items-center gap-2 rounded-lc-row py-1 pe-3.5 ps-1.5 text-lc-chalk inset-ring ${tone.ring} ${
           bad ? "lc-alert" : ""
         } ${HUD_GLASS}`}
       >
@@ -258,7 +258,7 @@ export const RaceControlBanner: React.FC<{
     if (skin === "blocks" && !yellow && offTrack && (!pending || pending.stage === "off")) return null;
     if (skin !== null) {
       return (
-        <SkinBanner role="status" tone="caution" cut="sm" className="relative mt-1 inline-flex h-8 items-center gap-2 pr-3 pl-2">
+        <SkinBanner role="status" tone="caution" cut="sm" className="relative mt-1 inline-flex h-8 items-center gap-2 pe-3 ps-2">
           <SkinTag tone="caution" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
             <Icon name="trackLimits" size="xs" />
             {L.trackLimits}
@@ -271,7 +271,7 @@ export const RaceControlBanner: React.FC<{
     return (
       <div
         role="status"
-        className={`relative mt-1 inline-flex h-8 items-center gap-2 rounded-lc-row pr-3.5 pl-1.5 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
+        className={`relative mt-1 inline-flex h-8 items-center gap-2 rounded-lc-row pe-3.5 ps-1.5 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
       >
         <span className="inline-flex size-5 items-center justify-center rounded-lc-nub bg-lc-caution text-lc-void">
           <Icon name="trackLimits" size="xs" />

@@ -120,8 +120,8 @@ export const DeltaBar: React.FC<{ deltaS: number | null; width?: number; /** The
           style={{ transform: `scaleX(${behindK})` }}
         />
         {/* ±0.5 s ticks */}
-        <span className="absolute inset-y-0 left-1/4 w-px bg-lc-chalk/15" />
-        <span className="absolute inset-y-0 left-3/4 w-px bg-lc-chalk/15" />
+        <span className="absolute inset-y-0 start-1/4 w-px bg-lc-chalk/15" />
+        <span className="absolute inset-y-0 start-3/4 w-px bg-lc-chalk/15" />
         <span className="absolute inset-y-0 left-1/2 w-px bg-lc-chalk/50" />
       </div>
       <span className="absolute top-0 left-1/2 flex -translate-x-1/2 items-center gap-1">

@@ -185,7 +185,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                           key={s}
                           aria-current={current ? "step" : undefined}
                           className={cx(
-                            "flex min-h-10 items-center gap-3 rounded-lc-row border-l-2 px-3",
+                            "flex min-h-10 items-center gap-3 rounded-lc-row border-s-2 px-3",
                             current ? "border-lc-volt bg-lc-volt/8" : done ? "border-lc-fog/50" : "border-lc-line",
                           )}
                         >
@@ -220,7 +220,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                         className={cx("h-1 flex-1 rounded-lc-nub", i < stepIndex ? "bg-lc-fog" : i === stepIndex ? "bg-lc-volt" : "bg-lc-line")}
                       />
                     ))}
-                    <span className="lc-mono ml-1.5 shrink-0 text-[11px] text-lc-slate">
+                    <span className="lc-mono ms-1.5 shrink-0 text-[11px] text-lc-slate">
                       {stepIndex + 1}/{steps.length}
                     </span>
                   </div>
@@ -254,7 +254,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                   ) : null}
                 </div>
                 {/* Right-aligned even when a narrow frame wraps it under Back */}
-                <div className="ml-auto flex flex-wrap items-center justify-end gap-5.5">
+                <div className="ms-auto flex flex-wrap items-center justify-end gap-5.5">
                   <PromptBar
                     rule={false}
                     className="hidden sm:flex"

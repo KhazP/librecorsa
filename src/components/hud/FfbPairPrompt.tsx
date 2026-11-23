@@ -19,7 +19,7 @@ export function FfbPairPrompt({ wanted }: { wanted: boolean }) {
     <div
       role="dialog"
       aria-label={tx("region")}
-      className="lc-ui-zoom pointer-events-auto fixed inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-(--z-lc-menu) mx-auto flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-lc-row border border-white/10 bg-lc-carbon/95 py-2 pr-2 pl-4 text-lc-chalk shadow-lc-pop"
+      className="lc-ui-zoom pointer-events-auto fixed inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-(--z-lc-menu) mx-auto flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-lc-row border border-white/10 bg-lc-carbon/95 py-2 pe-2 ps-4 text-lc-chalk shadow-lc-pop"
     >
       <span className="lc-body min-w-0 text-lc-chalk">{tx("text")}</span>
       {/* requestDevice needs this click's user activation, so it runs inside the handler */}

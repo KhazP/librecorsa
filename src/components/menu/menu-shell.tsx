@@ -92,7 +92,7 @@ export const RailRow: React.FC<RailRowProps> = ({
   const s = ROW_SIZE[size];
   const top = align === "top";
   const classes = cx(
-    "group flex min-w-0 cursor-pointer border-0 text-left no-underline",
+    "group flex min-w-0 cursor-pointer border-0 text-start no-underline",
     top ? "items-start" : "items-center",
     s.box,
     top ? s.top : undefined,
@@ -152,7 +152,7 @@ export type HeroSize = "hero" | "rail" | "slim";
 
 const HERO_SIZE: Record<HeroSize, { box: string; disc: string; icon: "sm" | "md"; label: string; prompt: boolean; detail: boolean }> = {
   hero: {
-    box: "min-h-22 gap-4.5 rounded-lc-card bg-lc-volt/6 py-3 pr-5 pl-3.5 inset-ring-2 inset-ring-lc-volt/40 hover:bg-lc-volt/10 compact:min-h-18 short:min-h-15 phone:min-h-13 phone:gap-3 phone:rounded-lc-tile phone:py-1.5 phone:pl-2.5",
+    box: "min-h-22 gap-4.5 rounded-lc-card bg-lc-volt/6 py-3 pe-5 ps-3.5 inset-ring-2 inset-ring-lc-volt/40 hover:bg-lc-volt/10 compact:min-h-18 short:min-h-15 phone:min-h-13 phone:gap-3 phone:rounded-lc-tile phone:py-1.5 phone:ps-2.5",
     disc: "size-14 compact:size-12 short:size-10 phone:size-9",
     icon: "md",
     label: "text-[44px] compact:text-[36px] short:text-[28px] phone:text-[24px]",
@@ -160,7 +160,7 @@ const HERO_SIZE: Record<HeroSize, { box: string; disc: string; icon: "sm" | "md"
     detail: true,
   },
   rail: {
-    box: "mb-1 min-h-17 gap-3.5 rounded-lc-card bg-lc-volt/6 py-2 pr-4 pl-3 inset-ring-2 inset-ring-lc-volt/40 hover:bg-lc-volt/10 short:min-h-14 phone:min-h-13 phone:rounded-lc-tile",
+    box: "mb-1 min-h-17 gap-3.5 rounded-lc-card bg-lc-volt/6 py-2 pe-4 ps-3 inset-ring-2 inset-ring-lc-volt/40 hover:bg-lc-volt/10 short:min-h-14 phone:min-h-13 phone:rounded-lc-tile",
     disc: "size-11 short:size-9 phone:size-8",
     icon: "md",
     label: "text-[30px] short:text-[24px] phone:text-[20px]",
@@ -198,7 +198,7 @@ export const HeroAction: React.FC<{
       onPointerEnter={focusOnHover}
       onClick={onClick}
       className={cx(
-        "group flex w-full min-w-0 cursor-pointer items-center border-0 text-left text-lc-chalk",
+        "group flex w-full min-w-0 cursor-pointer items-center border-0 text-start text-lc-chalk",
         MOTION,
         "outline-none focus-visible:outline-none focus:bg-lc-volt focus:text-lc-void focus:shadow-lc-focus focus:inset-ring-transparent active:bg-lc-volt-dim",
         "in-data-[input=keyboard]:focus:transition-none in-data-[input=pad]:focus:transition-none",

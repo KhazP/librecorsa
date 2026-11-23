@@ -414,7 +414,7 @@ const AddedRow: React.FC<{ label: string; value: string; locked?: boolean; on: b
     </>
   );
   const tx = useTranslations("menu.feedback");
-  const grid = "grid grid-cols-[84px_minmax(0,1fr)_16px] items-start gap-x-3 py-1 text-left text-[13px] leading-snug";
+  const grid = "grid grid-cols-[84px_minmax(0,1fr)_16px] items-start gap-x-3 py-1 text-start text-[13px] leading-snug";
   if (locked)
     // Sent like a ticked line, but it can't be left out: a lock where the others have their tick or dash
     return (

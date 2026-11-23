@@ -150,7 +150,7 @@ export function NavList<T extends string>({
               if (!chosen) onChange(it.id);
             }}
             className={cx(
-              "group flex min-h-12 w-full min-w-0 cursor-pointer items-center gap-3 rounded-lc-row px-3.5 text-left",
+              "group flex min-h-12 w-full min-w-0 cursor-pointer items-center gap-3 rounded-lc-row px-3.5 text-start",
               "phone:min-h-11 phone:w-auto phone:shrink-0 phone:rounded-full phone:px-4",
               "[&_svg]:size-5 [&_svg]:shrink-0",
               MOTION,

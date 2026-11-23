@@ -494,7 +494,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
               {narrowing.length
                 ? tx.rich("filtersActive", {
                     count: narrowing.length,
-                    n: (chunks) => <span className="lc-mono ml-2 not-italic">{chunks}</span>,
+                    n: (chunks) => <span className="lc-mono ms-2 not-italic">{chunks}</span>,
                     sr: (chunks) => <span className="sr-only">{chunks}</span>,
                   })
                 : tx("filters")}
@@ -543,7 +543,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
           data-nav-scroll
           aria-label={tx("gridLabel", { label: props.label, shownOf: shownOf })}
           role="group"
-          className="relative min-h-0 min-w-0 lg:-mr-1 lg:overflow-y-auto lg:pr-1 lg:[scrollbar-width:thin]"
+          className="relative min-h-0 min-w-0 lg:-me-1 lg:overflow-y-auto lg:pe-1 lg:[scrollbar-width:thin]"
         >
           {groups.length ? (
             groups.map((g) => (

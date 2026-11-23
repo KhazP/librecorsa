@@ -115,7 +115,7 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean 
       <div
         role="status"
         aria-label={tx("stalledLabel", { control: ariaControl })}
-        className={`flex items-center gap-3 rounded-lc-row py-2.5 pr-5 pl-3 ${HUD_GLASS}`}
+        className={`flex items-center gap-3 rounded-lc-row py-2.5 pe-5 ps-3 ${HUD_GLASS}`}
       >
         <StepRing progress={1} color={HUD_RED} done={false} />
         <span className="lc-title hud-text-shadow flex items-center gap-2 text-[16px] whitespace-nowrap uppercase sm:text-[18px]" style={{ color: HUD_RED }}>
@@ -129,7 +129,7 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean 
 
   if (jumped) {
     return (
-      <div role="status" className={`flex items-center gap-3 rounded-lc-row py-2.5 pr-5 pl-3 ${HUD_GLASS}`}>
+      <div role="status" className={`flex items-center gap-3 rounded-lc-row py-2.5 pe-5 ps-3 ${HUD_GLASS}`}>
         <StepRing progress={1} color={HUD_RED} done={false} />
         <span className="lc-title hud-text-shadow text-[16px] whitespace-nowrap uppercase sm:text-[18px]" style={{ color: HUD_RED }}>
           {tx("jumpStart", { seconds: start.penaltyS ?? JUMP_START_PENALTY_S })}
@@ -151,7 +151,7 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean 
     <div
       role="status"
       aria-label={tx("manualStart", { clutch: clutchIn ? "held" : "out", revs: revsUp ? "up" : "down" })}
-      className={`flex flex-col gap-2.5 rounded-lc-row py-3 pr-5 pl-3 ${HUD_GLASS}`}
+      className={`flex flex-col gap-2.5 rounded-lc-row py-3 pe-5 ps-3 ${HUD_GLASS}`}
     >
       <Step
         ring={<StepRing progress={start.clutchIn} color={clutchIn ? HUD_GAIN : HUD_WHITE} done={clutchIn} />}

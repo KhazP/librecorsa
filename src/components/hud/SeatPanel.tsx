@@ -237,7 +237,7 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
 
   return (
     <div
-      className="pointer-events-none fixed inset-y-0 left-0 z-(--z-lc-overlay) flex items-center p-3 sm:p-5"
+      className="pointer-events-none fixed inset-y-0 start-0 z-(--z-lc-overlay) flex items-center p-3 sm:p-5"
       role="dialog"
       aria-modal="false"
       aria-label={tx("dialog", { car: p.carTitle })}

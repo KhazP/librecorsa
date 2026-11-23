@@ -151,7 +151,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
     const unit = SPEED_LABEL[units.speed];
     if (skin !== null) {
       return (
-        <SkinBanner role="status" tone="caution" cut="sm" className="inline-flex min-h-10 items-center gap-2.5 py-1.5 pr-4 pl-2.5">
+        <SkinBanner role="status" tone="caution" cut="sm" className="inline-flex min-h-10 items-center gap-2.5 py-1.5 pe-4 ps-2.5">
           <SkinTag tone="caution" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
             {L.rollingStart}
           </SkinTag>
@@ -164,7 +164,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
     return (
       <div
         role="status"
-        className={`inline-flex min-h-10 items-center gap-2.5 rounded-lc-row py-1.5 pr-4 pl-2 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
+        className={`inline-flex min-h-10 items-center gap-2.5 rounded-lc-row py-1.5 pe-4 ps-2 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
       >
         <Badge tone="warn" variant="solid" size="sm">
           {L.rollingStart}

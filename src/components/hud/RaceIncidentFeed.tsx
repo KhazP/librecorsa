@@ -136,7 +136,7 @@ export const RaceIncidentFeed: React.FC<{
           role={danger ? "alert" : "status"}
           tone={danger ? "loss" : "caution"}
           cut="sm"
-          className={`relative mt-1 inline-flex h-8 items-center gap-2 pr-3 pl-2 ${danger ? "lc-alert" : ""}`}
+          className={`relative mt-1 inline-flex h-8 items-center gap-2 pe-3 ps-2 ${danger ? "lc-alert" : ""}`}
         >
           <SkinTag tone={danger ? "loss" : "caution"} filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
             <FlagIcon flag="doubleYellow" size={14} />
@@ -150,7 +150,7 @@ export const RaceIncidentFeed: React.FC<{
     return (
       <div
         role={danger ? "alert" : "status"}
-        className={`relative mt-1 inline-flex h-9 items-center gap-2.5 rounded-lc-row pr-3.5 pl-1.5 text-lc-chalk inset-ring ${
+        className={`relative mt-1 inline-flex h-9 items-center gap-2.5 rounded-lc-row pe-3.5 ps-1.5 text-lc-chalk inset-ring ${
           danger ? "inset-ring-lc-loss/80 lc-alert" : "inset-ring-lc-caution/70"
         } ${HUD_GLASS}`}
       >
@@ -177,7 +177,7 @@ export const RaceIncidentFeed: React.FC<{
           role={blue && blueFlagWarn ? "alert" : "status"}
           tone={blue ? "info" : "caution"}
           cut="sm"
-          className={`relative mt-1 inline-flex h-8 items-center gap-2 pr-3 pl-2 ${blue && blueFlagWarn ? "lc-alert" : ""}`}
+          className={`relative mt-1 inline-flex h-8 items-center gap-2 pe-3 ps-2 ${blue && blueFlagWarn ? "lc-alert" : ""}`}
         >
           <SkinTag tone={blue ? "info" : "caution"} filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
             <FlagIcon flag={flag} size={14} />
@@ -190,7 +190,7 @@ export const RaceIncidentFeed: React.FC<{
     return (
       <div
         role={blue && blueFlagWarn ? "alert" : "status"}
-        className={`relative mt-1 inline-flex h-8 items-center gap-2 rounded-lc-row pr-3 pl-1.5 text-lc-chalk inset-ring ${
+        className={`relative mt-1 inline-flex h-8 items-center gap-2 rounded-lc-row pe-3 ps-1.5 text-lc-chalk inset-ring ${
           blue ? (blueFlagWarn ? "inset-ring-lc-caution/80 lc-alert" : "inset-ring-lc-info/60") : RING.yellow
         } ${HUD_GLASS}`}
       >
@@ -212,7 +212,7 @@ export const RaceIncidentFeed: React.FC<{
           role={urgent ? "alert" : "status"}
           tone={call.tone}
           cut="sm"
-          className={`relative mt-1 inline-flex min-h-8 items-center gap-2 py-1 pr-3 pl-2 ${bad ? "lc-alert" : ""}`}
+          className={`relative mt-1 inline-flex min-h-8 items-center gap-2 py-1 pe-3 ps-2 ${bad ? "lc-alert" : ""}`}
         >
           <SkinTag tone={call.tone} filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
             <Icon name={call.icon} size="xs" />
@@ -232,7 +232,7 @@ export const RaceIncidentFeed: React.FC<{
       <div
         key={latest.id}
         role={urgent ? "alert" : "status"}
-        className={`relative mt-1 inline-flex min-h-9 items-center gap-2 rounded-lc-row py-1 pr-3.5 pl-1.5 text-lc-chalk inset-ring ${RING[latest.kind]} ${
+        className={`relative mt-1 inline-flex min-h-9 items-center gap-2 rounded-lc-row py-1 pe-3.5 ps-1.5 text-lc-chalk inset-ring ${RING[latest.kind]} ${
           bad ? "lc-alert" : ""
         } ${HUD_GLASS}`}
       >

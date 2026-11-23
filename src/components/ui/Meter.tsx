@@ -66,7 +66,7 @@ export function Meter({ label, value, tone = "good", detail, labelClassName = "w
         {label}
       </span>
       {track}
-      <span aria-hidden className="lc-data w-14 shrink-0 text-right text-[12px] text-lc-chalk">
+      <span aria-hidden className="lc-data w-14 shrink-0 text-end text-[12px] text-lc-chalk">
         {text}
       </span>
     </div>

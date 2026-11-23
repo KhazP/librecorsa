@@ -216,7 +216,7 @@ export const PadGlyph: React.FC<{ button: PadButtonName; family?: PadGlyphFamily
     // The click: a pressed stick (ring with its centre filled) and the button's printed name
     const text = family === "xbox" ? `${side}S` : `${side}3`;
     return (
-      <span role="img" aria-label={tx("stickPress", { side: sideKey, name: text })} className={`${PILL} gap-1 pl-1 ${className}`}>
+      <span role="img" aria-label={tx("stickPress", { side: sideKey, name: text })} className={`${PILL} gap-1 ps-1 ${className}`}>
         <svg viewBox="0 0 14 14" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={1.25} aria-hidden className="size-3.5!">
           <circle cx={7} cy={7} r={5.75} strokeOpacity={0.55} />
           <circle cx={7} cy={7} r={2.75} fill="currentColor" stroke="none" />
@@ -231,9 +231,9 @@ export const PadGlyph: React.FC<{ button: PadButtonName; family?: PadGlyphFamily
     <span
       role="img"
       aria-label={tx("stickDirection", { side: sideKey, direction: dir })}
-      className={`inline-flex h-5.5 shrink-0 items-center gap-0.5 rounded-full border border-lc-keyline bg-lc-void pr-1.5 text-lc-chalk ${className}`}
+      className={`inline-flex h-5.5 shrink-0 items-center gap-0.5 rounded-full border border-lc-keyline bg-lc-void pe-1.5 text-lc-chalk ${className}`}
     >
-      <span aria-hidden className="relative -my-px -ml-px inline-flex size-5.5 items-center justify-center">
+      <span aria-hidden className="relative -my-px -ms-px inline-flex size-5.5 items-center justify-center">
         <span className="absolute inset-0.5 rounded-full border border-lc-chalk/45" />
         <span className="lc-chip-text relative text-[11px] leading-none tracking-normal">{side}</span>
       </span>
