@@ -18,7 +18,7 @@ import {
 } from "@/lib/career/career-state";
 import type { CareerDisciplineId } from "@/lib/career/ladder";
 import type { CareerScreenProps } from "./career-screen-types";
-import { adjacentTab, Button, Tabs } from "@/components/ui";
+import { adjacentTab, Button, IconButton, Tabs } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons";
 import { KeyCap, PadGlyph, PromptBar, type Prompt } from "@/components/ui/prompts";
@@ -69,6 +69,7 @@ export const CareerScreen: React.FC<CareerScreenProps> = ({
 
   const [selectedId, setSelectedId] = useState<string | null>(initialRunId);
   const [tab, setTab] = useState<CareerTab>("season");
+  const [revealRunId, setRevealRunId] = useState<string | null>(null);
 
   const activeRun = useMemo(
     () => (selectedId ? save.runs.find((r) => r.id === selectedId) ?? null : null),
@@ -233,6 +234,7 @@ export const CareerScreen: React.FC<CareerScreenProps> = ({
   const handleStartSeason = useCallback(() => {
     if (!activeRun) return;
     onSave(withRun(save, startSeason(activeRun)));
+    setRevealRunId(activeRun.id);
   }, [activeRun, onSave, save]);
 
   const handleChooseSeries = useCallback(
@@ -247,7 +249,7 @@ export const CareerScreen: React.FC<CareerScreenProps> = ({
     { action: "move", label: tx("prompts.move") },
     { action: "select", label: tx("prompts.select") },
     ...(activeRun ? [{ action: "tabs" as const, label: tx("prompts.tabs") }] : []),
-    ...(canRaceNow ? [{ action: "start" as const, label: tx("prompts.race") }] : []),
+    ...(canRaceNow && pad ? [{ action: "start" as const, label: tx("prompts.race") }] : []),
     { action: "back", label: tx("prompts.back") },
   ];
 
@@ -264,32 +266,45 @@ export const CareerScreen: React.FC<CareerScreenProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label={tx("dialogLabel")}
-      className="lc-menu-screen lc-ui-zoom pointer-events-auto fixed inset-0 z-(--z-lc-menu) flex flex-col overflow-y-auto [scrollbar-gutter:stable_both-edges] bg-lc-void/90 pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] backdrop-blur-md sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] short:pt-[max(0.75rem,env(safe-area-inset-top))]"
+      className="lc-menu-screen lc-ui-zoom pointer-events-auto fixed inset-0 z-(--z-lc-menu) flex flex-col overflow-y-auto [scrollbar-gutter:stable_both-edges] bg-lc-void/90 pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] backdrop-blur-md sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] short:pt-[max(0.5rem,env(safe-area-inset-top))] short:pb-[max(0.5rem,env(safe-area-inset-bottom))]"
     >
-      <div className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-5 short:gap-3">
-        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-lc-line pb-4 short:pb-2.5">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
+      <div className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-5 short:gap-2">
+        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-lc-line pb-4 short:flex-nowrap short:gap-2 short:pb-2">
+          <div className="flex min-w-0 items-center gap-3 short:gap-2">
             {activeRun ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={<Icon name="back" />}
-                onClick={() => setSelectedId(null)}
-              >
-                {tx("backToCareers")}
-              </Button>
+              <>
+                <span className="inline-flex short:hidden">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<Icon name="back" />}
+                    onClick={() => setSelectedId(null)}
+                  >
+                    {tx("backToCareers")}
+                  </Button>
+                </span>
+                <span className="hidden short:inline-flex">
+                  <IconButton
+                    size="sm"
+                    variant="ghost"
+                    icon={<Icon name="back" />}
+                    aria-label={tx("backToCareers")}
+                    onClick={() => setSelectedId(null)}
+                  />
+                </span>
+              </>
             ) : null}
-            <h1 className="lc-h1 m-0 min-w-0 truncate">
+            <h1 className="lc-h1 m-0 min-w-0 truncate short:text-[20px] short:leading-none">
               {activeRun ? tx(`discipline.${activeRun.discipline}`) : tx("title")}
             </h1>
             {activeRun ? (
-              <Badge tone="info" size="md">
+              <Badge tone="info" size="md" className="short:h-5 short:px-2">
                 {tx("careerScoreShort", { score: format.number(activeRun.score) })}
               </Badge>
             ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3 short:gap-1.5">
             {activeRun ? (
               <Tabs
                 aria-label={tx("tabsLabel")}
@@ -303,20 +318,39 @@ export const CareerScreen: React.FC<CareerScreenProps> = ({
                 ]}
                 value={tab}
                 onChange={setTab}
-                prevPrompt={pad ? <PadGlyph button="lb" family={family} /> : <KeyCap>{keyLabel("KeyQ")}</KeyCap>}
-                nextPrompt={pad ? <PadGlyph button="rb" family={family} /> : <KeyCap>{keyLabel("KeyE")}</KeyCap>}
+                prevPrompt={
+                  <span className="inline-flex short:hidden">
+                    {pad ? <PadGlyph button="lb" family={family} /> : <KeyCap>{keyLabel("KeyQ")}</KeyCap>}
+                  </span>
+                }
+                nextPrompt={
+                  <span className="inline-flex short:hidden">
+                    {pad ? <PadGlyph button="rb" family={family} /> : <KeyCap>{keyLabel("KeyE")}</KeyCap>}
+                  </span>
+                }
               />
             ) : null}
 
-            <Button
-              size="sm"
-              variant="ghost"
-              icon={<Icon name="close" />}
-              prompt={pad ? <PadGlyph button="b" family={family} /> : <KeyCap>Esc</KeyCap>}
-              onClick={onClose}
-            >
-              {tx("close")}
-            </Button>
+            <span className="inline-flex short:hidden">
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<Icon name="close" />}
+                prompt={pad ? <PadGlyph button="b" family={family} /> : <KeyCap>Esc</KeyCap>}
+                onClick={onClose}
+              >
+                {tx("close")}
+              </Button>
+            </span>
+            <span className="hidden short:inline-flex">
+              <IconButton
+                size="sm"
+                variant="ghost"
+                icon={<Icon name="close" />}
+                aria-label={tx("close")}
+                onClick={onClose}
+              />
+            </span>
           </div>
         </header>
 
@@ -328,6 +362,8 @@ export const CareerScreen: React.FC<CareerScreenProps> = ({
               content={content}
               playerName={playerName}
               playerCode={playerCode}
+              objectivesReveal={revealRunId === activeRun.id}
+              onDismissObjectivesReveal={() => setRevealRunId(null)}
               onUpdateSeasonSettings={handleUpdateSeasonSettings}
               onUpdateRaceSettings={handleUpdateRaceSettings}
               onStartSeason={handleStartSeason}

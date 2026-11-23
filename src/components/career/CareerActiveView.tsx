@@ -6,10 +6,8 @@ import {
   SEASON_LENGTHS,
   lapsFor,
   roundsFor,
-  seriesAvailable,
   seriesById,
   seriesContent,
-  seriesOf,
   stopsFor,
   type CareerContent,
   type CareerSeries,
@@ -18,19 +16,24 @@ import {
 import {
   MAX_ATTEMPTS,
   MAX_MULLIGANS,
+  mulliganBonus,
   nextRound,
+  objectiveProgress,
   promotionPlaces,
   raceMultiplier,
+  raceScore,
   seasonStandings,
   type CareerRun,
   type RaceSettings,
+  type SeasonRecord,
   type SeasonSettings,
   type SeasonState,
 } from "@/lib/career/career-state";
+import type { CareerSummary } from "./career-screen-types";
+import { focusOnHover } from "@/components/menu/useFocusNav";
 import {
   Button,
   Card,
-  ConfirmDialog,
   EmptyState,
   MediaTile,
   Meter,
@@ -45,8 +48,10 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { PositionBadge } from "@/components/ui/badges";
 import { Icon } from "@/components/ui/icons";
+import { CURSOR_TILE, IDLE_TILE, MOTION } from "@/components/ui/styles";
 import {
   CareerCircuitOutline,
+  CareerPathStrip,
   MultiplierBadge,
   ObjectiveRow,
   RaceSettingsFields,
@@ -54,10 +59,20 @@ import {
   StandingsTable,
   StatTile,
   carTitle,
+  driverDisplay,
   seriesName,
   trackLabel,
 } from "./career-ui";
-import { CircuitPickerModal, RaceSettingsModal, SeriesDetailModal } from "./CareerModals";
+import {
+  CircuitPickerModal,
+  ObjectivesRevealModal,
+  RaceSettingsModal,
+  RaceSummaryModal,
+  SeasonArchiveModal,
+  StartSeasonConfirmModal,
+  SwitchSeriesModal,
+} from "./CareerModals";
+import { CareerLadderView } from "./CareerLadderView";
 
 export type CareerTab = "season" | "ladder" | "history";
 
@@ -67,6 +82,8 @@ export const CareerActiveView: React.FC<{
   content: CareerContent;
   playerName: string;
   playerCode: string;
+  objectivesReveal?: boolean;
+  onDismissObjectivesReveal?: () => void;
   onUpdateSeasonSettings: (patch: Partial<SeasonSettings>) => void;
   onUpdateRaceSettings: (patch: Partial<RaceSettings>) => void;
   onStartSeason: () => void;
@@ -81,6 +98,8 @@ export const CareerActiveView: React.FC<{
   content,
   playerName,
   playerCode,
+  objectivesReveal,
+  onDismissObjectivesReveal,
   onUpdateSeasonSettings,
   onUpdateRaceSettings,
   onStartSeason,
@@ -92,9 +111,11 @@ export const CareerActiveView: React.FC<{
 }) => {
   if (tab === "ladder") {
     return (
-      <CareerLadderTab
+      <CareerLadderView
         run={run}
         content={content}
+        playerName={playerName}
+        playerCode={playerCode}
         onChooseSeries={(seriesId) => {
           onChooseSeries(seriesId);
           onGoToTab("season");
@@ -103,7 +124,7 @@ export const CareerActiveView: React.FC<{
     );
   }
   if (tab === "history") {
-    return <CareerHistoryTab run={run} />;
+    return <CareerHistoryTab run={run} playerName={playerName} playerCode={playerCode} />;
   }
   return (
     <CareerSeasonTab
@@ -111,6 +132,8 @@ export const CareerActiveView: React.FC<{
       content={content}
       playerName={playerName}
       playerCode={playerCode}
+      objectivesReveal={objectivesReveal}
+      onDismissObjectivesReveal={onDismissObjectivesReveal}
       onUpdateSeasonSettings={onUpdateSeasonSettings}
       onUpdateRaceSettings={onUpdateRaceSettings}
       onStartSeason={onStartSeason}
@@ -130,6 +153,8 @@ const CareerSeasonTab: React.FC<{
   content: CareerContent;
   playerName: string;
   playerCode: string;
+  objectivesReveal?: boolean;
+  onDismissObjectivesReveal?: () => void;
   onUpdateSeasonSettings: (patch: Partial<SeasonSettings>) => void;
   onUpdateRaceSettings: (patch: Partial<RaceSettings>) => void;
   onStartSeason: () => void;
@@ -143,6 +168,8 @@ const CareerSeasonTab: React.FC<{
   content,
   playerName,
   playerCode,
+  objectivesReveal,
+  onDismissObjectivesReveal,
   onUpdateSeasonSettings,
   onUpdateRaceSettings,
   onStartSeason,
@@ -165,20 +192,31 @@ const CareerSeasonTab: React.FC<{
           onUpdateSeasonSettings={onUpdateSeasonSettings}
           onUpdateRaceSettings={onUpdateRaceSettings}
           onStartSeason={onStartSeason}
+          onChooseSeries={onChooseSeries}
           onTestDay={onTestDay}
+          onOpenLadder={() => onGoToTab("ladder")}
         />
       );
     }
     return (
-      <ActiveSeasonView
-        run={run}
-        season={run.season}
-        series={series}
-        playerName={playerName}
-        playerCode={playerCode}
-        onUpdateRaceSettings={onUpdateRaceSettings}
-        onRaceNext={onRaceNext}
-      />
+      <>
+        <ActiveSeasonView
+          run={run}
+          season={run.season}
+          series={series}
+          playerName={playerName}
+          playerCode={playerCode}
+          onUpdateRaceSettings={onUpdateRaceSettings}
+          onRaceNext={onRaceNext}
+          onOpenLadder={() => onGoToTab("ladder")}
+        />
+        <ObjectivesRevealModal
+          open={Boolean(objectivesReveal && run.season.objectives.length > 0)}
+          series={series}
+          season={run.season}
+          onContinue={() => onDismissObjectivesReveal?.()}
+        />
+      </>
     );
   }
 
@@ -199,17 +237,36 @@ const PreSeasonView: React.FC<{
   onUpdateSeasonSettings: (patch: Partial<SeasonSettings>) => void;
   onUpdateRaceSettings: (patch: Partial<RaceSettings>) => void;
   onStartSeason: () => void;
+  onChooseSeries: (seriesId: string) => void;
   onTestDay: () => void;
-}> = ({ run, season, series, content, onUpdateSeasonSettings, onUpdateRaceSettings, onStartSeason, onTestDay }) => {
+  onOpenLadder: () => void;
+}> = ({
+  run,
+  season,
+  series,
+  content,
+  onUpdateSeasonSettings,
+  onUpdateRaceSettings,
+  onStartSeason,
+  onChooseSeries,
+  onTestDay,
+  onOpenLadder,
+}) => {
   const tx = useTranslations("menu.career");
+  const format = useFormatter();
   const [confirmStart, setConfirmStart] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [switchOpen, setSwitchOpen] = useState(false);
 
   const avail = useMemo(() => seriesContent(series, content), [series, content]);
   const promo = promotionPlaces(series, season.race.gridSize);
   const requiredStops = series.stops?.[season.race.raceLength] ?? 0;
   const seasonNum = run.history.length + 1;
   const neededRounds = roundsFor(season.settings.length, avail.calendar.length);
+  const liveMulliganBonus = mulliganBonus(season.settings.mulligans);
+  const testTrackId = season.settings.circuits[0];
+  const testCircuitName = testTrackId ? trackLabel(testTrackId).name : "";
+  const canSwitchSeries = run.choices.filter((id) => id !== season.seriesId).length > 0;
 
   const lengthLabel = (len: SeasonLength) => {
     const label =
@@ -224,13 +281,15 @@ const PreSeasonView: React.FC<{
   };
 
   return (
-    <div className="flex min-w-0 flex-col gap-5 short:gap-3">
+    <div className="flex min-w-0 flex-col gap-5 short:gap-2.5">
+      <CareerPathStrip run={run} currentSeries={series} onOpenLadder={onOpenLadder} />
+
       {/* Series Hero */}
-      <section className="lc-glass relative overflow-hidden rounded-lc-card p-5 phone:p-4">
-        <div className="grid grid-cols-1 items-center gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.95fr)]">
-          <div className="flex min-w-0 flex-col gap-3.5">
-            <div className="flex flex-col gap-1.5">
-              <h2 className="lc-h2 m-0 text-lc-chalk">{seriesName(series, tx)}</h2>
+      <section className="lc-glass relative overflow-hidden rounded-lc-card p-5 phone:p-4 short:p-3">
+        <div className="grid grid-cols-1 items-center gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.95fr)] short:gap-3">
+          <div className="flex min-w-0 flex-col gap-3.5 short:gap-2">
+            <div className="flex flex-col gap-1.5 short:gap-1">
+              <h2 className="lc-h2 m-0 text-lc-chalk short:text-[22px]">{seriesName(series, tx)}</h2>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="lc-body">{carTitle(season.settings.car)}</span>
                 <Badge tone="warn" size="sm">
@@ -247,14 +306,14 @@ const PreSeasonView: React.FC<{
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 short:gap-2">
               <StatTile label={tx("statRounds")} value={season.settings.circuits.length} />
               <StatTile label={tx("statPromotion")} value={tx("topN", { place: promo })} />
               <StatTile label={tx("statPitStops")} value={tx("stopsCount", { count: requiredStops })} />
               <StatTile label={tx("statGrid")} value={tx("carsCount", { count: season.race.gridSize })} />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 pt-1">
+            <div className="flex flex-wrap items-center gap-2.5 pt-1 short:pt-0">
               <Button
                 variant="primary"
                 size="lg"
@@ -265,12 +324,17 @@ const PreSeasonView: React.FC<{
                 {tx("startSeason")}
               </Button>
               <Button variant="secondary" size="md" icon={<Icon name="drive" />} onClick={onTestDay}>
-                {tx("testDay")}
+                {testCircuitName ? tx("testDayCircuit", { circuit: testCircuitName }) : tx("testDay")}
               </Button>
+              {canSwitchSeries ? (
+                <Button variant="ghost" size="md" icon={<Icon name="browse" />} onClick={() => setSwitchOpen(true)}>
+                  {tx("switchSeries")}
+                </Button>
+              ) : null}
             </div>
           </div>
 
-          <div className="relative aspect-video w-full overflow-hidden rounded-lc-tile border border-lc-line bg-lc-well p-3">
+          <div className="relative aspect-video w-full overflow-hidden rounded-lc-tile border border-lc-line bg-lc-well p-3 short:hidden">
             <SeriesCarThumb carId={season.settings.car} />
           </div>
         </div>
@@ -331,12 +395,19 @@ const PreSeasonView: React.FC<{
           </SettingRow>
 
           <SettingRow label={tx("mulligans")} hint={tx("mulligansHint")}>
-            <Stepper
-              min={0}
-              max={MAX_MULLIGANS}
-              value={season.settings.mulligans}
-              onChange={(mulligans) => onUpdateSeasonSettings({ mulligans })}
-            />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Badge tone={liveMulliganBonus > 0 ? "good" : "neutral"} size="sm">
+                {liveMulliganBonus > 0
+                  ? tx("mulliganBonusBadge", { bonus: format.number(liveMulliganBonus) })
+                  : tx("mulliganBonusNone")}
+              </Badge>
+              <Stepper
+                min={0}
+                max={MAX_MULLIGANS}
+                value={season.settings.mulligans}
+                onChange={(mulligans) => onUpdateSeasonSettings({ mulligans })}
+              />
+            </div>
           </SettingRow>
         </Card>
 
@@ -355,20 +426,27 @@ const PreSeasonView: React.FC<{
         onClose={() => setPickerOpen(false)}
       />
 
-      <ConfirmDialog
+      <StartSeasonConfirmModal
         open={confirmStart}
-        tone="info"
-        icon={<Icon name="info" />}
-        title={tx("startSeasonTitle")}
-        confirmLabel={tx("startSeasonConfirm")}
+        series={series}
+        season={season}
         onCancel={() => setConfirmStart(false)}
         onConfirm={() => {
           setConfirmStart(false);
           onStartSeason();
         }}
-      >
-        {tx("startSeasonBody")}
-      </ConfirmDialog>
+      />
+
+      {canSwitchSeries ? (
+        <SwitchSeriesModal
+          open={switchOpen}
+          choices={run.choices}
+          currentSeriesId={season.seriesId}
+          content={content}
+          onSelect={onChooseSeries}
+          onClose={() => setSwitchOpen(false)}
+        />
+      ) : null}
     </div>
   );
 };
@@ -383,10 +461,12 @@ const ActiveSeasonView: React.FC<{
   playerCode: string;
   onUpdateRaceSettings: (patch: Partial<RaceSettings>) => void;
   onRaceNext: () => void;
-}> = ({ run, season, series, playerName, playerCode, onUpdateRaceSettings, onRaceNext }) => {
+  onOpenLadder: () => void;
+}> = ({ run, season, series, playerName, playerCode, onUpdateRaceSettings, onRaceNext, onOpenLadder }) => {
   const tx = useTranslations("menu.career");
   const format = useFormatter();
   const [raceSettingsOpen, setRaceSettingsOpen] = useState(false);
+  const [inspectRoundIdx, setInspectRoundIdx] = useState<number | null>(null);
 
   const standings = useMemo(() => seasonStandings(season), [season]);
   const promo = promotionPlaces(series, season.race.gridSize);
@@ -404,6 +484,47 @@ const ActiveSeasonView: React.FC<{
   const nextLaps = lapsFor(series, season.race.raceLength, nextTrack.lengthM);
   const nextStops = stopsFor(series, season.race.raceLength, nextLaps);
   const mulligansLeft = Math.max(0, season.settings.mulligans - season.mulligansUsed);
+
+  const warnQualifyingOff = useMemo(
+    () =>
+      season.race.qualifying === 0 &&
+      season.objectives.some((o) => {
+        if (o.kind !== "poleThreat" && o.kind !== "qualifyPro") return false;
+        const p = objectiveProgress(o, season);
+        return !p.done && !p.failed;
+      }),
+    [season],
+  );
+
+  // Build read-only RaceSummary when inspecting a past schedule round
+  const inspectedRoundSummary = useMemo<Extract<CareerSummary, { kind: "race" }> | null>(() => {
+    if (inspectRoundIdx === null) return null;
+    const res = season.rounds[inspectRoundIdx];
+    if (!res) return null;
+    const before =
+      inspectRoundIdx > 0
+        ? seasonStandings({
+            ...season,
+            rounds: season.rounds.map((r, i) => (i < inspectRoundIdx ? r : null)),
+          })
+        : [];
+    const after = seasonStandings({
+      ...season,
+      rounds: season.rounds.map((r, i) => (i <= inspectRoundIdx ? r : null)),
+    });
+    return {
+      kind: "race",
+      runId: run.id,
+      seriesId: season.seriesId,
+      roundIndex: inspectRoundIdx,
+      rounds: totalRounds,
+      result: res,
+      parts: raceScore(res, season.race.gridSize, season.race),
+      before,
+      after,
+      promotion: promo,
+    };
+  }, [inspectRoundIdx, season, run.id, totalRounds, promo]);
 
   // Gap to promotion cut
   let cutNote: string | null = null;
@@ -424,22 +545,24 @@ const ActiveSeasonView: React.FC<{
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-5 short:gap-3">
+    <div className="flex min-w-0 flex-col gap-5 short:gap-2.5">
+      <CareerPathStrip run={run} currentSeries={series} onOpenLadder={onOpenLadder} />
+
       {/* Top Row: Next Race Hero + Promotion Fight */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(290px,0.9fr)] short:gap-3">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(290px,0.9fr)] short:gap-2.5">
         {/* Next Race Hero */}
-        <section className="lc-glass relative flex min-w-0 flex-col justify-between gap-4 overflow-hidden rounded-lc-card p-5 phone:p-4 short:gap-2.5 short:p-3">
+        <section className="lc-glass relative flex min-w-0 flex-col justify-between gap-4 overflow-hidden rounded-lc-card p-5 phone:p-4 short:gap-2 short:p-3">
           <div className="flex flex-col gap-3 short:gap-2">
             <div className="flex flex-col gap-1.5 short:gap-1">
-              <h2 className="lc-h2 m-0 text-lc-chalk">{nextTrack.name}</h2>
-              <div className="flex flex-wrap items-center gap-2">
+              <h2 className="lc-h2 m-0 text-lc-chalk short:text-[22px]">{nextTrack.name}</h2>
+              <div className="flex flex-wrap items-center gap-2 short:gap-1.5">
                 <Badge tone="info" size="sm">
                   {tx("roundOf", { round: (nextIdx ?? totalRounds - 1) + 1, total: totalRounds })}
                 </Badge>
                 <Badge tone="neutral" size="sm">
                   {seriesName(series, tx)}
                 </Badge>
-                <span className="lc-body">
+                <span className="lc-body short:text-[13px]">
                   {nextTrack.layout ? `${nextTrack.layout} · ${carTitle(season.settings.car)}` : carTitle(season.settings.car)}
                 </span>
                 {season.settings.mulligans > 0 ? (
@@ -451,8 +574,8 @@ const ActiveSeasonView: React.FC<{
             </div>
 
             {/* Circuit outline + Car render side-by-side showcase */}
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-              <Well className="relative flex aspect-video items-center justify-center overflow-hidden p-4 short:aspect-auto short:h-20 short:p-2">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] short:gap-2">
+              <Well className="relative flex aspect-video items-center justify-center overflow-hidden p-4 short:aspect-auto short:h-16 short:p-2">
                 <CareerCircuitOutline
                   trackId={nextTrackId}
                   className="max-h-full max-w-full"
@@ -463,7 +586,7 @@ const ActiveSeasonView: React.FC<{
                   {(nextTrack.lengthM / 1000).toFixed(2)} km
                 </span>
               </Well>
-              <Well className="relative aspect-video overflow-hidden p-3 short:aspect-auto short:h-20 short:p-1.5">
+              <Well className="relative aspect-video overflow-hidden p-3 short:aspect-auto short:h-16 short:p-1.5">
                 <SeriesCarThumb carId={season.settings.car} />
               </Well>
             </div>
@@ -483,7 +606,7 @@ const ActiveSeasonView: React.FC<{
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 pt-1 short:pt-0">
+          <div className="flex flex-wrap items-center gap-3 pt-1 short:gap-2 short:pt-0">
             {nextIdx !== null ? (
               <Button
                 variant="primary"
@@ -524,7 +647,13 @@ const ActiveSeasonView: React.FC<{
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <PositionBadge position={myPlace} player size="lg" />
+              {anyRaced ? (
+                <PositionBadge position={myPlace} player size="lg" />
+              ) : (
+                <Badge tone="neutral" size="lg" className="lc-mono">
+                  {tx("unranked")}
+                </Badge>
+              )}
               <div className="flex flex-col gap-0.5">
                 <span className="lc-row-label">{tx("promotionTarget", { place: promo })}</span>
                 <span className="lc-hint">
@@ -549,7 +678,7 @@ const ActiveSeasonView: React.FC<{
               label={tx("promotionProgress", { raced: racedCount, total: totalRounds })}
               value={totalRounds > 0 ? racedCount / totalRounds : 0}
               detail={`${racedCount}/${totalRounds}`}
-              tone={onPace ? "good" : "warn"}
+              tone={!anyRaced ? "info" : onPace ? "good" : "warn"}
             />
           </Well>
 
@@ -606,6 +735,60 @@ const ActiveSeasonView: React.FC<{
               const res = season.rounds[idx];
               const isNext = idx === nextIdx;
               const info = trackLabel(trackId);
+              const winnerLine = res?.lines.find((l) => l.position === 1);
+              const winnerCode = winnerLine
+                ? driverDisplay(run.rivals, winnerLine.who, playerName, playerCode).code
+                : null;
+
+              if (res) {
+                return (
+                  <button
+                    key={`${trackId}-${idx}`}
+                    type="button"
+                    data-own-ring=""
+                    onPointerEnter={focusOnHover}
+                    onClick={() => setInspectRoundIdx(idx)}
+                    className={cx(
+                      "group flex min-h-11 w-full cursor-pointer items-center justify-between gap-2.5 rounded-lc-row border-[1.5px] px-3 py-2 text-start",
+                      MOTION,
+                      IDLE_TILE,
+                      CURSOR_TILE,
+                    )}
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="lc-mono w-7 shrink-0 text-[12px] font-bold text-lc-slate">
+                        {tx("roundTag", { round: idx + 1 })}
+                      </span>
+                      <CareerCircuitOutline
+                        trackId={trackId}
+                        className="h-6 w-10 shrink-0 phone:hidden"
+                        strokeClassName="stroke-lc-slate"
+                      />
+                      <div className="flex min-w-0 flex-col">
+                        <span className="truncate text-[14px] font-semibold text-lc-chalk">{info.name}</span>
+                        <span className="lc-hint truncate">
+                          {winnerCode ? tx("scheduleWinner", { code: winnerCode }) : info.layout}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      {res.dnf ? (
+                        <Badge tone="bad" size="sm">
+                          {tx("scheduleDnf")}
+                        </Badge>
+                      ) : (
+                        <PositionBadge position={res.position} size="sm" />
+                      )}
+                      <span className="lc-data text-[13px] text-lc-fog">
+                        {tx("schedulePoints", { points: res.points })}
+                      </span>
+                      <Icon name="next" size="xs" className="text-lc-slate group-hover:text-lc-chalk group-focus:text-lc-chalk" />
+                    </div>
+                  </button>
+                );
+              }
+
               return (
                 <div
                   key={`${trackId}-${idx}`}
@@ -632,21 +815,8 @@ const ActiveSeasonView: React.FC<{
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
-                    {res ? (
-                      <>
-                        {res.dnf ? (
-                          <Badge tone="bad" size="sm">
-                            {tx("scheduleDnf")}
-                          </Badge>
-                        ) : (
-                          <PositionBadge position={res.position} player={res.position <= 3} size="sm" />
-                        )}
-                        <span className="lc-data text-[13px] text-lc-fog">
-                          {tx("schedulePoints", { points: res.points })}
-                        </span>
-                      </>
-                    ) : isNext ? (
-                      <Badge tone="player" variant="solid" size="sm">
+                    {isNext ? (
+                      <Badge tone="info" size="sm">
                         {tx("scheduleNext")}
                       </Badge>
                     ) : (
@@ -664,9 +834,22 @@ const ActiveSeasonView: React.FC<{
         open={raceSettingsOpen}
         series={series}
         race={season.race}
+        warnQualifyingOff={warnQualifyingOff}
         onChange={onUpdateRaceSettings}
         onClose={() => setRaceSettingsOpen(false)}
       />
+
+      {inspectedRoundSummary ? (
+        <RaceSummaryModal
+          summary={inspectedRoundSummary}
+          run={run}
+          playerName={playerName}
+          playerCode={playerCode}
+          seasonOverride={season}
+          readOnly
+          onContinue={() => setInspectRoundIdx(null)}
+        />
+      ) : null}
     </div>
   );
 };
@@ -793,135 +976,27 @@ const CareerEndView: React.FC<{
   );
 };
 
-// ---- Ladder Tab
-
-const CareerLadderTab: React.FC<{
-  run: CareerRun;
-  content: CareerContent;
-  onChooseSeries: (seriesId: string) => void;
-}> = ({ run, content, onChooseSeries }) => {
-  const tx = useTranslations("menu.career");
-  const [inspecting, setInspecting] = useState<CareerSeries | null>(null);
-
-  const columns = useMemo(() => {
-    const all = seriesOf(run.discipline);
-    const byTier = new Map<number, CareerSeries[]>();
-    for (const s of all) {
-      byTier.set(s.tier, [...(byTier.get(s.tier) ?? []), s]);
-    }
-    return [...byTier.entries()].sort(([a], [b]) => a - b);
-  }, [run.discipline]);
-
-  // Best promoted place per series from history
-  const promotedPlace = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const h of run.history) {
-      if (!h.promoted) continue;
-      const prev = map.get(h.seriesId);
-      if (prev === undefined || h.position < prev) map.set(h.seriesId, h.position);
-    }
-    return map;
-  }, [run.history]);
-
-  return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <Card
-        title={tx("ladderTitle", { discipline: tx(`discipline.${run.discipline}`) })}
-        bodyClassName="overflow-x-auto pb-2"
-      >
-        <div
-          className={cx(
-            "flex min-w-max items-start gap-3",
-            columns.length <= 3 ? "md:grid md:min-w-0 md:grid-cols-3" : "xl:grid xl:min-w-0 xl:grid-cols-6",
-          )}
-        >
-          {columns.map(([tier, list]) => (
-            <div key={tier} className={cx("flex shrink-0 flex-col gap-3", columns.length <= 3 ? "w-64 md:w-auto" : "w-52 xl:w-auto")}>
-              <div className="flex items-center justify-between border-b border-lc-line pb-2">
-                <h4 className="lc-h3 text-[15px] text-lc-fog">{tx("tierHeading", { tier: tier + 1 })}</h4>
-              </div>
-              <div className="flex flex-col gap-3">
-                {list.map((series) => {
-                  const donePlace = promotedPlace.get(series.id);
-                  const isCurrent = run.season?.seriesId === series.id;
-                  const isOpen = run.season === null && run.choices.includes(series.id);
-                  const available = seriesAvailable(series, content);
-                  const isLocked = !isCurrent && !isOpen && donePlace === undefined;
-                  const carId = series.cars[0];
-
-                  let overlay: React.ReactNode;
-                  if (isCurrent) {
-                    overlay = (
-                      <Badge tone="player" variant="solid" size="sm">
-                        {tx("ladderCurrent")}
-                      </Badge>
-                    );
-                  } else if (donePlace !== undefined) {
-                    overlay = (
-                      <Badge tone="good" variant="solid" size="sm" icon="success">
-                        {tx("ladderDone", { place: donePlace })}
-                      </Badge>
-                    );
-                  } else if (isOpen) {
-                    overlay = (
-                      <Badge tone="info" variant="solid" size="sm">
-                        {tx("ladderOpen")}
-                      </Badge>
-                    );
-                  } else {
-                    overlay = (
-                      <Badge tone="neutral" variant="solid" size="sm" icon="locked">
-                        {available ? tx("ladderLocked") : tx("ladderUnavailable")}
-                      </Badge>
-                    );
-                  }
-
-                  return (
-                    <MediaTile
-                      key={series.id}
-                      chosen={isCurrent}
-                      navDefault={isCurrent || isOpen}
-                      className={isLocked ? "opacity-65" : undefined}
-                      media={<SeriesCarThumb carId={carId} />}
-                      title={tx(`series.${series.family}`)}
-                      meta={series.region ? tx(`region.${series.region}`) : carTitle(carId)}
-                      overlay={overlay}
-                      onSelect={() => setInspecting(series)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <SeriesDetailModal
-        series={inspecting}
-        content={content}
-        canChoose={Boolean(inspecting && run.season === null && run.choices.includes(inspecting.id))}
-        onChoose={onChooseSeries}
-        onClose={() => setInspecting(null)}
-      />
-    </div>
-  );
-};
-
 // ---- History Tab
 
-const CareerHistoryTab: React.FC<{ run: CareerRun }> = ({ run }) => {
+const CareerHistoryTab: React.FC<{
+  run: CareerRun;
+  playerName: string;
+  playerCode: string;
+}> = ({ run, playerName, playerCode }) => {
   const tx = useTranslations("menu.career");
   const format = useFormatter();
+  const [inspecting, setInspecting] = useState<{ record: SeasonRecord; seasonNumber: number } | null>(null);
 
   const totalWins = run.history.reduce((a, h) => a + h.wins, 0);
   const totalPodiums = run.history.reduce((a, h) => a + h.podiums, 0);
   const totalPromotions = run.history.filter((h) => h.promoted).length;
+  const totalRaces = run.history.reduce((a, h) => a + h.rounds, 0);
 
   return (
     <div className="flex min-w-0 flex-col gap-5 short:gap-3">
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
-        <StatTile label={tx("careerScore")} value={format.number(run.score)} />
         <StatTile label={tx("statSeasons")} value={run.history.length} />
+        <StatTile label={tx("historyStatRaces")} value={totalRaces} />
         <StatTile label={tx("statPromotions")} value={totalPromotions} />
         <StatTile label={tx("statWins")} value={totalWins} />
         <StatTile label={tx("statPodiums")} value={totalPodiums} />
@@ -934,18 +1009,28 @@ const CareerHistoryTab: React.FC<{ run: CareerRun }> = ({ run }) => {
           [...run.history].reverse().map((record, revIdx) => {
             const seasonNum = run.history.length - revIdx;
             const series = seriesById(record.seriesId);
+            const title = series ? seriesName(series, tx) : record.seriesId;
             return (
-              <Well
+              <button
                 key={`${record.seriesId}-${record.endedAt}-${seasonNum}`}
-                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                type="button"
+                aria-label={tx("historyRowAria", { series: title, season: seasonNum, place: record.position })}
+                data-own-ring=""
+                data-nav-default={revIdx === 0 ? "" : undefined}
+                onPointerEnter={focusOnHover}
+                onClick={() => setInspecting({ record, seasonNumber: seasonNum })}
+                className={cx(
+                  "group flex w-full cursor-pointer flex-wrap items-center justify-between gap-3 rounded-lc-row border-[1.5px] px-4 py-3 text-start",
+                  MOTION,
+                  IDLE_TILE,
+                  CURSOR_TILE,
+                )}
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <PositionBadge position={record.position} player={record.promoted} size="md" />
+                  <PositionBadge position={record.position} size="md" />
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="lc-row-label truncate">
-                        {series ? seriesName(series, tx) : record.seriesId}
-                      </span>
+                      <span className="lc-row-label truncate">{title}</span>
                       <Badge tone={record.promoted ? "good" : "bad"} size="sm" icon={record.promoted ? "success" : "error"}>
                         {record.promoted ? tx("historyPromoted") : tx("historyMissed")}
                       </Badge>
@@ -972,12 +1057,24 @@ const CareerHistoryTab: React.FC<{ run: CareerRun }> = ({ run }) => {
                   <Badge tone="info" size="md">
                     {format.number(record.score)}
                   </Badge>
+                  <Icon name="next" size="sm" className="text-lc-slate group-hover:text-lc-chalk group-focus:text-lc-chalk" />
                 </div>
-              </Well>
+              </button>
             );
           })
         )}
       </Card>
+
+      {inspecting ? (
+        <SeasonArchiveModal
+          record={inspecting.record}
+          seasonNumber={inspecting.seasonNumber}
+          run={run}
+          playerName={playerName}
+          playerCode={playerCode}
+          onClose={() => setInspecting(null)}
+        />
+      ) : null}
     </div>
   );
 };

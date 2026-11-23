@@ -105,6 +105,11 @@ function buildSampleData() {
   roadMid = updateRaceSettings(roadMid, { aiLevel: "high", raceLength: "medium", damage: "reduced", qualifying: 5 });
   roadMid = startSeason(roadMid);
   roadMid = finishSeason(roadMid, content, [1, 2, 1]).run;
+  // Strip archive from the oldest season record so the kit demonstrates both archived and legacy history rows
+  if (roadMid.history[0]) {
+    const { archive: _omit, ...legacyRecord } = roadMid.history[0];
+    roadMid = { ...roadMid, history: [legacyRecord, ...roadMid.history.slice(1)] };
+  }
 
   roadMid = chooseSeries(roadMid, "touringCup_europe", content);
   roadMid = updateSeasonSettings(roadMid, { length: "short", mulligans: 2 }, content);

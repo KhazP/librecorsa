@@ -15,7 +15,7 @@ import { nextRound, type CareerRun } from "@/lib/career/career-state";
 import { Card, ConfirmDialog, IconButton, MediaTile, OptionTile, OptionTileGroup } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons";
-import { SeriesCarThumb, coverCarForRun, seriesName } from "./career-ui";
+import { CareerCircuitOutline, SeriesCarThumb, coverCarForRun, seriesName, trackLabel } from "./career-ui";
 
 export const CareerHomeView: React.FC<{
   runs: readonly CareerRun[];
@@ -134,18 +134,39 @@ export const CareerHomeView: React.FC<{
             const available = seriesAvailable(series, content);
             const sc = seriesContent(series, content);
             const carId = sc.cars[0] ?? series.cars[0];
+            const leadTrackId = sc.calendar[0] ?? series.calendar[0];
+            const leadCircuitNames = Array.from(
+              new Set(sc.calendar.slice(0, 4).map((id) => trackLabel(id).name)),
+            )
+              .slice(0, 3)
+              .join(", ");
             return (
               <MediaTile
                 key={series.id}
                 disabled={!available}
-                media={<SeriesCarThumb carId={carId} />}
+                media={
+                  <span className="relative block size-full">
+                    <SeriesCarThumb carId={carId} />
+                    {leadTrackId ? (
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute end-2 bottom-2 flex items-center justify-center rounded-lc-nub border border-white/10 bg-lc-void/75 px-2 py-1 backdrop-blur-xs"
+                      >
+                        <CareerCircuitOutline
+                          trackId={leadTrackId}
+                          className="h-10 w-16"
+                          strokeClassName="stroke-lc-chalk/90"
+                        />
+                      </span>
+                    ) : null}
+                  </span>
+                }
                 title={seriesName(series, tx)}
                 meta={
                   available
-                    ? tx("seriesPreviewMeta", {
+                    ? tx("starterCircuitsMeta", {
+                        circuits: leadCircuitNames,
                         rounds: sc.calendar.length,
-                        promote: series.promoteTop,
-                        grid: series.grid,
                       })
                     : tx("unavailableSeries")
                 }
@@ -158,9 +179,14 @@ export const CareerHomeView: React.FC<{
                 }
                 badges={
                   available ? (
-                    <Badge tone="good" size="sm" icon="race">
-                      {tx("topN", { place: series.promoteTop })}
-                    </Badge>
+                    <>
+                      <Badge tone="good" size="sm" icon="race">
+                        {tx("topN", { place: series.promoteTop })}
+                      </Badge>
+                      <Badge tone="neutral" size="sm">
+                        {tx("carsCount", { count: series.grid })}
+                      </Badge>
+                    </>
                   ) : (
                     <Badge tone="neutral" size="sm" icon="locked">
                       {tx("ladderUnavailable")}
