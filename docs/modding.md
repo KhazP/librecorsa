@@ -4,9 +4,9 @@ A mod package adds circuits, cars and liveries to LibreCorsa without changing th
 
 A package holds **data only, never code**. The game's page holds each player's driver key and saves, so nothing in a package is ever run: no scripts, no shaders, no HTML.
 
-Laps driven with mod content are the player's own and never go on the online boards or the weekly challenge. A mod circuit keeps its personal bests and ghosts. A mod car's laps last the session only, because the car shares its vehicle model's id. Online rooms work: a host on a mod circuit names the package and its content hash, and a guest can ready up only with the same version installed. Other drivers see a car only by its vehicle model. So in a scheduled race a mod car is swapped for the model's own car, and in any room so is a mod car with physics of its own.
+Laps on a mod circuit or in a mod car are the player's own and never go on the online boards or the weekly challenge. A livery changes only the paint, so a lap in one of the game's cars wearing a mod livery counts as usual. A mod circuit keeps its personal bests and ghosts. A mod car's laps last the session only, because the car shares its vehicle model's id: it starts with no best of its own, and never stands in its model's. Online rooms work: a host on a mod circuit names the package and its content hash, and a guest without the same version can't ready up and sits out the race. Other drivers see a car only by its vehicle model. So in a scheduled race a mod car is swapped for the model's own car, and in any room (qualifying too) so is a mod car with physics of its own. The weekly challenge is always driven in the game's own car.
 
-If a package keeps the game from starting, open it with `?mods=off` at the end of the address (`/play?mods=off`). The packages are then listed in the Mods panel but add nothing, so you can switch the broken one off or remove it.
+If a package keeps the game from starting, open it with `?mods=off` at the end of the address (`/play?mods=off`). The packages are then listed in the Mods panel but add nothing, so you can switch the broken one off or remove it. The panel's restart button then reloads with mods on again.
 
 ## The package
 
@@ -26,7 +26,7 @@ jdoe.monza-66/
   cars/gt-x/skins/red/…      its liveries
 ```
 
-A package may carry `.glb .gltf .bin .json .webp .png .jpg .ktx2 .ogg .wav .mp3 .txt .md` files. Paths are relative and use forward slashes, with no `..`. At most 2 GB uncompressed.
+A package may carry `.glb .gltf .bin .json .webp .png .jpg .jpeg .ktx2 .ogg .wav .mp3 .txt .md` files. Paths are relative and use forward slashes, with no `..`, and no two may differ only in a letter's case (they would be one file on Windows and macOS). Links aren't followed: put the file itself in the package. At most 20,000 files and 2 GB uncompressed, imported from a zip or a folder.
 
 ## mod.json
 
@@ -79,20 +79,20 @@ A package may carry `.glb .gltf .bin .json .webp .png .jpg .ktx2 .ogg .wav .mp3 
 }
 ```
 
-- **`id`**: `author.name`, in lowercase letters, digits, `-` and `_`. The author part is at most 16 characters and the name at most 24. It is also the folder's name in `mods/`. Never change it between versions: the game treats a new id as a new package.
-- **`version`**: any string. Players see it, and an online room shows it when a guest's copy differs.
-- **Ids inside the package** (circuits, cars, liveries): at most 16 characters. The game names them `mod:<package>/<id>`, so they can never collide with the game's own or with another package's.
-- **`credit`**: shown in the game's credits and on each circuit and car. Links must be `https://`. A circuit or car may have its own `credit` when it is someone else's work.
+- **`id`**: `author.name`, in lowercase letters, digits, `-` and `_`, each part starting with a letter or digit. The author part is at most 16 characters and the name at most 24. It is also the folder's name in `mods/`. Never change it between versions: the game treats a new id as a new package.
+- **`version`**: up to 32 characters, any you like (`1.0.0`, `2024-rc2`). Players see it, and an online room shows it when a guest's copy differs.
+- **Ids inside the package** (circuits, cars, liveries): lowercase letters, digits, `-` and `_`, starting with a letter or digit, at most 16 characters. The game names them `mod:<package>/<id>`, so they can never collide with the game's own or with another package's.
+- **`credit`**: `author` and `license` are required; `url`, `authorUrl`, `licenseUrl` and `note` are optional. Shown on each circuit and car, and for circuits in the game's credits. Links must be `https://`. A circuit or car may have its own `credit` when it is someone else's work.
 
 ### Circuits
 
-`data` is a `track_data.json` as the game's converters write it (see [Porting circuits](PORTING-TRACKS.md)). Its `metadata.mesh.url` and `metadata.mesh.scenery` name the model and scenery by their paths in the package (`"monza/monza.glb"`), not `/tracks/…` URLs. Everything else in the file is read exactly as for the game's own circuits: surfaces, kerbs, DRS zones, the racing line, the AI plans and the pit lane.
+`data` is a `track_data.json` as the game's converters write it (see [Porting circuits](PORTING-TRACKS.md)). Its `metadata.mesh.url` and `metadata.mesh.scenery` name the model and scenery by their paths in the package (`"monza/monza.glb"`), not `/tracks/…` URLs. They must be `.glb` files in the package: a web address, a file on the game's site or in another package, or a `.gltf` (which can name files anywhere) stops the circuit loading. Everything else in the file is read exactly as for the game's own circuits: surfaces, kerbs, DRS zones, the racing line, the AI plans and the pit lane.
 
 `type` (`permanent`, `street`, `oval`, `hillclimb`) and `defaultTimeOfDay` (`dawn`, `morning`, `noon`, `afternoon`, `golden_hour`, `dusk`, `night`) are optional.
 
 ### Liveries for the game's cars
 
-`car` is one of the game's car ids: `amg-gt3`, `bmw-m4-gt3`, `mtr-496r`, `lc-lmdh`, `liana`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, `porsche-934-rsr`. A livery's files sit in `skins/<id>/`, or the folder its `dir` names. Their file names are the car model's own texture names, as in the game's livery folders (`public/cars/<car>/skins/<skin>/`). `files` lists them when a livery changes only some, and `variant` picks a body variant when the car has them. A `thumb.webp` in the folder is its picture in the picker.
+`car` is one of the game's cars with liveries: `amg-gt3`, `bmw-m4-gt3`, `mtr-496r`, `lc-lmdh`, `liana`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, `porsche-934-rsr`. Each livery needs an `id`, a `name` and a `swatch` of two or three `"#rrggbb"` colours (its colours in the picker). Its files sit in `skins/<id>/`, or the folder its `dir` names. Their file names are the car model's own texture names, as in the game's livery folders (`public/cars/<car>/skins/<skin>/`). `files` lists them when a livery changes only some (each must then be in the folder), and `variant` picks a body variant when the car has them. A `thumb.webp` in the folder is its picture in the picker.
 
 ### Cars
 
@@ -100,9 +100,9 @@ A car is a new body and sound on one of the game's vehicle models (`physics`): `
 
 - **`model`**: a GLB laid out as the game's rig expects. `scripts/cars/port_ac_car.py` writes one ([Porting cars](PORTING-CARS.md)).
 - **`bodyPlan`**: optional. The body's outline at barrier height, so barriers meet this car's shape rather than the model's own. `scripts/measure-car-plans.ts` prints one.
-- **`sound`**: a sound bank folder in the package with the bank's own limiter rpm (`{ "dir": …, "limiterRpm": … }`), or one of the game's cars (`{ "car": "amg-gt3" }`).
+- **`sound`**: a sound bank folder in the package with the bank's own limiter rpm (`{ "dir": …, "limiterRpm": … }`), or one of the game's cars, `lc26` included (`{ "car": "amg-gt3" }`). Either way the bank sweeps its range on the car's own limiter.
 - **`skins`**: the first is the paint the model was made in. The others are file liveries as above, in `<model folder>/skins/<id>/` by default.
-- **`classId`**: `f1`, `gt3`, `proto`, `classic` or `road`. Along with `year`, it decides where the car sits in the menus.
+- **`classId`**: `f1`, `gt3`, `proto`, `classic` or `road`. Along with `year`, it decides where the car sits in the menus, and for `f1` which rules (DRS or the 2026 overtake mode) it races under.
 
 ### A car with its own physics
 
@@ -121,7 +121,15 @@ Instead of driving exactly like a vehicle model, a car can change one: `"physics
 }
 ```
 
-The game's car simulation runs the result in the browser and in its simulation worker, just as it runs the game's own cars. Its profile has the same shape as the profiles in `src/lib/sim/*/` (`*_SIM_PROFILE`, with `config` from `*Config.ts`). The patch can only change values the base has, and each must stay the same kind: a number for a number, a list for a list, objects merged key by key. A misspelt key or a value of the wrong kind stops the car loading, and the Mods panel names its path. The car's garage ranges, AI and HUD are the base model's.
+The game's car simulation runs the result in the browser and in its simulation worker, just as it runs the game's own cars. Its profile has the same shape as the profiles in `src/lib/sim/*/` (`*_SIM_PROFILE`, with `config` from `*Config.ts`). The patch can only change values the base has, and each must stay the same kind: a number for a number, a list for a list, objects merged key by key. A few rules keep the simulation sound:
+
+- What the simulation divides by stays above zero when the base's is: masses, inertias, the wheelbase, track widths and centre of gravity height, the wheels' radius and width, gear ratios, the redline and shift points, and the steering lock. Anything else may be zero (a part switched off, as in other models) or negative (a position, a camber).
+- Tables keep their shape. A curve's points stay `[x, y]` pairs with x rising, a suspension point stays `[x, y, z]`, and a two-value range stays two values. Gear ratios and a ride-height map's heights may change in number (the heights rising), and the map's grids must then match them.
+- Each item of a list is checked against the base's item at the same place (the rear wing against the rear wing). A list the base has empty (a road car's wings) can't be filled.
+- `frontWeightFraction` stays between 0 and 1, and `totalMassKg` stays above the four wheels' unsprung mass.
+- `id`, `model` and `bodyPlan` are the game's to set (the outline goes in mod.json). The optional values a base may leave out (`steerRatio`, `fuelFlowKgS`, `fuelLPerS1000Rpm`, `setupPressureRefC`, `understeerRadPerMs2`, `aiMaxKerbRiseM`) must be above zero.
+
+A broken rule, a misspelt key or a value of the wrong kind stops the car loading (the rest of the package still loads), and the Mods panel names its path. A new `gearbox.gears.redline_rpm` moves the car's limiter for its sound and the shift beep too. The car's garage ranges, AI and HUD are the base model's.
 
 `npm run physics:report` and the `scripts/verify-*.ts` checks show how the game's own cars were measured, which is a good start for checking yours. Its laps are kept for the session only, so they never stand in the base model's bests or ghosts.
 
@@ -134,7 +142,7 @@ npm run mod -- check path/to/jdoe.monza-66
 npm run mod -- pack  path/to/jdoe.monza-66 [out.zip]
 ```
 
-`check` reads the package as the game's importer does. It catches every problem in `mod.json`, every file it names but the package lacks, and paths or file types the game refuses. It also prints the package's content hash, which online rooms compare. `pack` does the same, then writes a zip the importer reads (deflate, no zip64). Any zip tool works as well, as long as `mod.json` is at the top of the archive or in its one folder.
+`check` reads the package as the game's importer does. It catches every problem in `mod.json`, every file it names but the package lacks (models, track data, physics files, listed livery files), track data that names files outside the package, every problem in a physics file, and paths, links, names or file types the game refuses. It also prints the package's content hash, which online rooms compare. `pack` does the same, then writes a zip the importer reads (deflate, no zip64). Any zip tool works as well, as long as `mod.json` is at the top of the archive or in its one folder, and no name is in it twice.
 
 ## Trying it in a clone
 
