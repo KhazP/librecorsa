@@ -4,7 +4,9 @@ A mod package adds circuits, cars and liveries to LibreCorsa without changing th
 
 A package holds **data only, never code**. The game's page holds each player's driver key and saves, so nothing in a package is ever run: no scripts, no shaders, no HTML.
 
-Laps driven with mod content are the player's own. They count as personal bests and ghosts, but they never go on the online boards or the weekly challenge. Online rooms work: a host on a mod circuit names the package and its content hash, and a guest joins only with the same version installed.
+Laps driven with mod content are the player's own and never go on the online boards or the weekly challenge. A mod circuit keeps its personal bests and ghosts. A mod car's laps last the session only, because the car shares its vehicle model's id. Online rooms work: a host on a mod circuit names the package and its content hash, and a guest can ready up only with the same version installed. Other drivers see a car only by its vehicle model. So in a scheduled race a mod car is swapped for the model's own car, and in any room so is a mod car with physics of its own.
+
+If a package keeps the game from starting, open it with `?mods=off` at the end of the address (`/play?mods=off`). The packages are then listed in the Mods panel but add nothing, so you can switch the broken one off or remove it.
 
 ## The package
 
