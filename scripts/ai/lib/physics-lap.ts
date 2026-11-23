@@ -1,6 +1,7 @@
 /**
  * A flying lap of the AI car on the full physics, tracking a supplied line with its speed plan (the D1 tracker),
- * timed on its second lap from a flying start. Reports the lap time, the frames spent off the track, the barrier hits
+ * timed on its second lap from a flying start; on a point-to-point course (a hill climb) the run from the grid, timed
+ * from the start line to the finish. Reports the lap time, the frames spent off the track, the barrier hits
  * and the worst distance from the line. `line` names the car: the F1 line is driven by the f12026-car, or by the LC26
  * (`lc26`, its own physics and limits on the same line), on the rigid-body engine it ships on.
  */
@@ -37,6 +38,8 @@ export interface PhysicsLap {
   v: Float64Array;
   /** Time since the timed lap's start at each AI grid point (s; NaN where not visited) */
   t: Float64Array;
+  /** Gear at each AI grid point (NaN where not visited) */
+  gear: Float64Array;
 }
 
 /** Who drives a physics lap: `f1` is the f12026-car and `gt3` the AMG (the cars each line was made for), or any car by id */
@@ -91,13 +94,20 @@ export function physicsLap(
   car.aiAutopilot = true;
   car.aiPaceScale = 1;
   car.aiPlan = plan;
-  car.resetToStartGrid(true, 0);
-  // On the line being judged from the start (the flying start puts the car on the stored line)
-  car.teleportToDistance(car.sMeters, car.vxMs, plan.n[((Math.round(car.sMeters / t.ds) % t.n) + t.n) % t.n]);
+  // A hill climb's run starts from rest on the grid, short of the start line
+  const p2p = track.pointToPoint;
+  if (p2p) car.resetToStartGrid(false, 0);
+  else {
+    car.resetToStartGrid(true, 0);
+    // On the line being judged from the start (the flying start puts the car on the stored line)
+    car.teleportToDistance(car.sMeters, car.vxMs, plan.n[((Math.round(car.sMeters / t.ds) % t.n) + t.n) % t.n]);
+  }
   const L = track.totalLengthM;
   const n = new Float64Array(t.n).fill(NaN), v = new Float64Array(t.n).fill(NaN), tAt = new Float64Array(t.n).fill(NaN);
+  const gear = new Float64Array(t.n).fill(NaN);
   let laps = 0, prev = car.sMeters, lapStart = 0, time = 0, off = 0, maxErr = 0, sumErr = 0, cnt = 0;
   let walls = 0, lastWallMs = 0, prevVx = car.vxMs, inHit = false;
+  let runS = Infinity;
   const dt = 1 / 120;
   while (laps < 2 && time < maxS) {
     car.step(dt, {});
@@ -108,6 +118,10 @@ export function physicsLap(
       if (laps === 1) lapStart = time;
     }
     prev = s;
+    if (p2p && laps === 1 && s >= p2p.finishS) {
+      runS = time - lapStart;
+      break;
+    }
     // Impacts: the rigid-body cars report theirs; on the LC26 one is a deceleration no brake can give, counted once
     const wall = car.telemetry.f12026?.wallImpact;
     const rigidHit = !!wall && wall.atMs !== lastWallMs && wall.speedMs > 2;
@@ -119,6 +133,7 @@ export function physicsLap(
       n[i] = car.lateralOffsetM;
       v[i] = car.vxMs;
       if (!Number.isFinite(tAt[i])) tAt[i] = time - lapStart;
+      gear[i] = car.telemetry.gear;
       if (car.telemetry.offTrack) off++;
       if (rigidHit || (decelHit && !inHit)) walls++;
       const e = Math.abs(car.lateralOffsetM - plan.n[i]);
@@ -128,5 +143,5 @@ export function physicsLap(
     }
     inHit = decelHit;
   }
-  return { lapS: laps >= 2 ? time - lapStart : Infinity, offTrackFrames: off, maxErrM: maxErr, meanErrM: cnt ? sumErr / cnt : NaN, wallHits: walls, plan, n, v, t: tAt };
+  return { lapS: p2p ? runS : laps >= 2 ? time - lapStart : Infinity, offTrackFrames: off, maxErrM: maxErr, meanErrM: cnt ? sumErr / cnt : NaN, wallHits: walls, plan, n, v, t: tAt, gear };
 }

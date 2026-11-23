@@ -1,0 +1,3 @@
+# scripts/ai/mintime/solve.py (uv run --no-project --python 3.12 --with-requirements scripts/ai/mintime/requirements.txt)
+casadi==3.8.2
+numpy==2.5.5
