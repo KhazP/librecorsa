@@ -13,7 +13,7 @@
       "Added a Most driven sort to the circuit and car pickers, ranking them by hours driven over the last 30 days, and a Players section on the press page with the hours, laps, drivers and countries counted so far.",
       "Click a driver on a lap board to open their profile, with their best laps, board positions and rating across every circuit. The title screen's Up next sheet shows your personal best, the circuit browser shows your board position next to each personal best, and my own driver names now carry a Creator badge.",
       "Added optional car damage in practice and time trials, under Settings > Driving > Practice damage: Off (the default), Reduced or Full, shown on the HUD. A wrecked car restarts its flying lap, repaired.",
-      "Added two HUD layouts, GT-Like and F1-Like, and redrew the Grand Prix layout's halo as one glass band.",
+      "Added two HUD layouts, GT-Like and F1-Like, and redrew the Grand Prix layout's halo as one glass band. You can now move and resize the HUD's panels over the live game under Settings > Display > HUD > Edit layout, kept separately for each layout, and after a standing start the HUD shows your reaction time to the lights going out. Both are by adamikoo.",
       "The kerb roar now rises in pitch and volume with your speed, the sun's glare on dry asphalt is softer, and RISE Motordrome's road no longer shows stripes when you drive into a low sun."
     ],
     "commits": 198,

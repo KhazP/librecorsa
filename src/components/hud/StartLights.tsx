@@ -29,8 +29,15 @@ const ChequerStrip: React.FC<{ patternId: string; defs?: boolean }> = ({ pattern
   </svg>
 );
 
-/** Five-light start gantry overlay (the lights are red: identity, not state); "Lights out" / "Green flag" when the race starts, "Chequered flag" when the player finishes */
-export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }) => {
+/** How long the reaction time stays up once the launch comes (ms) */
+const REACTION_SHOWN_MS = 4500;
+
+/** Five-light start gantry overlay (the lights are red: identity, not state); "Lights out" / "Green flag" when the race starts with the player's reaction time under it, "Chequered flag" when the player finishes */
+export const StartLights: React.FC<{
+  race: RaceStatus | undefined;
+  /** The player's reaction to the lights going out (ms, telemetry.startReactionMs) */
+  reactionMs?: number;
+}> = ({ race, reactionMs }) => {
   const skin = useHudSkin();
   // The gantry re-renders every frame: its words are resolved once per language
   const tx = useTranslations("hud.startLights");
@@ -67,6 +74,31 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
     prevPhase.current = race?.phase;
     prevRolling.current = rolling;
   }, [race?.phase, rolling, flagged]);
+
+  // The reaction to the lights (timed by the session), under the banner for a few seconds once the launch comes
+  const [shownReaction, setShownReaction] = useState<number | null>(null);
+  useEffect(() => {
+    if (reactionMs === undefined) {
+      setShownReaction(null);
+      return;
+    }
+    setShownReaction(reactionMs);
+    const timer = window.setTimeout(() => setShownReaction(null), REACTION_SHOWN_MS);
+    return () => window.clearTimeout(timer);
+  }, [reactionMs]);
+  const reaction = (cls: string) => tx.rich("reaction", { ms: shownReaction ?? 0, n: (chunks) => <span className={cls}>{chunks}</span> });
+  const reactionPill =
+    shownReaction !== null && race?.phase === "racing" ? (
+      skin !== null ? (
+        <SkinBanner cut="sm" tone="accent" className="inline-flex h-10 items-center px-4">
+          <span className="text-[16px] font-bold whitespace-nowrap uppercase sm:text-[20px]">{reaction("lc-data")}</span>
+        </SkinBanner>
+      ) : (
+        <div className={`inline-flex h-10 items-center rounded-lc-row px-4 shadow-lc-pop ${HUD_GLASS}`}>
+          <span className="lc-disp text-[18px] whitespace-nowrap text-lc-chalk sm:text-[22px]">{reaction("lc-data text-lc-volt")}</span>
+        </div>
+      )
+    ) : null;
 
   if (race?.phase === "lights") {
     const countdown =
@@ -196,30 +228,36 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
   if (startBanner?.kind === "go" && race?.phase === "racing" && faded !== `go${startBanner.id}`) {
     if (skin !== null) {
       return (
-        <div key={startBanner.id} onAnimationEnd={fadeEnd(`go${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
-          <SkinPanel cut="lg" tone="accent" innerClassName="flex flex-col items-center gap-3 px-8 py-4 sm:gap-4 sm:px-14 sm:py-6">
-            <div className="flex gap-2" aria-hidden="true">
-              {LIGHT_COLUMNS.map((i) => (
-                <span key={i} className={`size-3.5 rounded-full ${skinCss.fillDim}`} />
-              ))}
-            </div>
-            <span className="text-[40px] leading-none font-bold whitespace-nowrap uppercase sm:text-[68px]">{L.lightsOut}</span>
-          </SkinPanel>
+        <div className="flex flex-col items-center gap-2">
+          <div key={startBanner.id} onAnimationEnd={fadeEnd(`go${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
+            <SkinPanel cut="lg" tone="accent" innerClassName="flex flex-col items-center gap-3 px-8 py-4 sm:gap-4 sm:px-14 sm:py-6">
+              <div className="flex gap-2" aria-hidden="true">
+                {LIGHT_COLUMNS.map((i) => (
+                  <span key={i} className={`size-3.5 rounded-full ${skinCss.fillDim}`} />
+                ))}
+              </div>
+              <span className="text-[40px] leading-none font-bold whitespace-nowrap uppercase sm:text-[68px]">{L.lightsOut}</span>
+            </SkinPanel>
+          </div>
+          {reactionPill}
         </div>
       );
     }
     return (
-      <div key={startBanner.id} onAnimationEnd={fadeEnd(`go${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
-        <div className="relative flex flex-col items-center gap-3 rounded-lc-tile border-2 border-lc-chalk/50 bg-lc-void/90 px-8 py-4 shadow-lc-pop sm:gap-3.5 sm:px-12 sm:py-5">
-          <div className="flex gap-2" aria-hidden="true">
-            {LIGHT_COLUMNS.map((i) => (
-              <span key={i} className="h-3.5 w-3.5 rounded-full bg-lc-titanium" />
-            ))}
+      <div className="flex flex-col items-center gap-2">
+        <div key={startBanner.id} onAnimationEnd={fadeEnd(`go${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
+          <div className="relative flex flex-col items-center gap-3 rounded-lc-tile border-2 border-lc-chalk/50 bg-lc-void/90 px-8 py-4 shadow-lc-pop sm:gap-3.5 sm:px-12 sm:py-5">
+            <div className="flex gap-2" aria-hidden="true">
+              {LIGHT_COLUMNS.map((i) => (
+                <span key={i} className="h-3.5 w-3.5 rounded-full bg-lc-titanium" />
+              ))}
+            </div>
+            <span className="lc-disp text-[44px] whitespace-nowrap text-lc-chalk sm:text-[72px]">
+              {L.lightsOut}
+            </span>
           </div>
-          <span className="lc-disp text-[44px] whitespace-nowrap text-lc-chalk sm:text-[72px]">
-            {L.lightsOut}
-          </span>
         </div>
+        {reactionPill}
       </div>
     );
   }
@@ -250,5 +288,5 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
       </div>
     );
   }
-  return null;
+  return reactionPill;
 };

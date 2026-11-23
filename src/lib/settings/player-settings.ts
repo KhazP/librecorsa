@@ -46,6 +46,7 @@ import { resolveCarId, type CarId } from "@/lib/cars/car-registry";
 import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
 import { DEFAULT_DEVICE_ASSIST_TUNING, sanitizeAssistTuning, type DeviceAssistTuning } from "@/lib/sim/steering-assist";
 import { DEFAULT_HUD_PRESET, parseHudPreset, type HudPreset } from "@/lib/settings/hud-layouts";
+import { parseHudParts, type HudParts } from "@/lib/settings/hud-parts";
 import { SIM_REALISM_LEVELS, type SimRealism } from "@/lib/sim/sim-realism";
 import { DAMAGE_LEVELS, type DamageLevel } from "@/lib/sim/car-damage";
 import { DEFAULT_SESSION_CONDITIONS, sanitizeConditions, type SessionConditions } from "@/lib/sim/weather";
@@ -274,6 +275,8 @@ export interface HudSettings {
   preset: HudPreset;
   /** Overall HUD size (0.75..1.5) */
   scale: number;
+  /** Where the player has moved and resized each layout's corner groups (hud-parts.ts); a layout without one is as it comes */
+  parts: HudParts;
   /** Rolling throttle / brake / steering trace */
   inputTrace: boolean;
   /** Live delta bar against the best lap */
@@ -453,6 +456,7 @@ export const resetKeyboardTuning = (tuning: KeyboardTuning, fields: readonly (ke
 export const DEFAULT_HUD_SETTINGS: HudSettings = {
   preset: DEFAULT_HUD_PRESET,
   scale: 1,
+  parts: {},
   inputTrace: false,
   deltaBar: true,
   lapSummary: true,
@@ -856,6 +860,7 @@ function parseHud(v: unknown): HudSettings {
     mfdAutoCollapse: bool(v.mfdAutoCollapse, d.mfdAutoCollapse),
     drsBeep: bool(v.drsBeep, d.drsBeep),
     shiftBeep: bool(v.shiftBeep, d.shiftBeep),
+    parts: parseHudParts(v.parts),
     // Older saves: Neck FX switched off asked for a still camera
     headMovement: oneOf(v.headMovement, ["natural", "static"] as const, v.neckFx === false ? "static" : d.headMovement),
     boardWidget: oneOf(v.boardWidget, BOARD_WIDGET_MODES, d.boardWidget),

@@ -6,6 +6,7 @@ import type { CameraMode, CarTelemetry, TireCompound } from "@/types/f1";
 import type { CarId } from "@/lib/cars/car-registry";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 import { inDeadZone, type BuiltTrackData, type PointToPointDef } from "@/lib/track-data";
+import { hudPartOfOrigin, type HudLayoutParts } from "@/lib/settings/hud-parts";
 import { Badge, type BadgeSize } from "@/components/ui/Badge";
 import { CHOSEN_PILL, cx, DISABLED, HOVER_PILL, MOTION, PRESSED_PILL } from "@/components/ui/styles";
 import { Trend } from "@/components/ui/icons/Trend";
@@ -150,9 +151,28 @@ export function revRangeOf(t: CarTelemetry): [number, number] {
   return revRangeFor(t.f12026?.carId);
 }
 
-/** Scales a corner group of the HUD about that corner */
-export const anchor = (scale: number | undefined, origin: string): React.CSSProperties | undefined =>
-  !scale || scale === 1 ? undefined : { transform: `scale(${scale})`, transformOrigin: origin };
+/** The layout's moved and resized parts, set by F1TelemetryHud on each render (the save, or the layout editor's copy) */
+let activeHudParts: HudLayoutParts = {};
+
+export function setActiveHudParts(parts: HudLayoutParts | undefined): void {
+  activeHudParts = parts ?? {};
+}
+
+/**
+ * A corner group of the HUD, scaled about its corner by the HUD size, and moved (% of the window) and resized where
+ * the player has put it (hud-parts.ts). `--lc-hud-part` marks it for the layout editor.
+ */
+export const anchor = (scale: number | undefined, origin: string): React.CSSProperties => {
+  const id = hudPartOfOrigin(origin);
+  const part = id ? activeHudParts[id] : undefined;
+  const s = (scale ?? 1) * (part?.scale ?? 1);
+  const move = part && (part.x !== 0 || part.y !== 0) ? `translate(${part.x}vw, ${part.y}vh) ` : "";
+  return {
+    transformOrigin: origin,
+    ...(id ? ({ "--lc-hud-part": id } as React.CSSProperties) : null),
+    ...(move || s !== 1 ? { transform: `${move}scale(${s})` } : null),
+  };
+};
 
 /** The one HUD glass and the one HUD label (hud-format), for the styles that import them from here */
 export { HUD_GLASS, HUD_LBL };

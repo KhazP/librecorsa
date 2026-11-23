@@ -538,6 +538,13 @@
       "title": "Layout",
       "resetWhat": "the HUD layout"
     },
+    "placement": {
+      "title": "Size and position",
+      "resetWhat": "the HUD size and this layout's panel positions",
+      "edit": "Panel positions",
+      "editHint": "Move and resize this layout's panels on the live HUD.",
+      "editButton": "Edit layout"
+    },
     "graphics": {
       "title": "Graphics",
       "vr": "VR",

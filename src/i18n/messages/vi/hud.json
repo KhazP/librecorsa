@@ -844,7 +844,8 @@
     "holdPace": "Giữ <n>{pace}</n> {unit} tới vạch",
     "greenFlag": "Cờ xanh lá",
     "lightsOut": "Tắt đèn xuất phát",
-    "chequeredFlag": "Cờ ca-rô"
+    "chequeredFlag": "Cờ ca-rô",
+    "reaction": "Phản xạ <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Chết máy: giữ {control} hoặc về số N để khởi động lại",
@@ -1072,5 +1073,24 @@
   "hiddenNote": {
     "off": "Đã ẩn HUD",
     "offKey": "Đã ẩn HUD · {key} để hiện"
+  },
+  "hudEditor": {
+    "title": "Chỉnh bố cục HUD",
+    "hint": "Kéo một bảng để di chuyển. Kéo góc của bảng, hoặc cuộn trên bảng, để đổi kích thước.",
+    "parts": {
+      "top-left": "Trên bên trái",
+      "top-center": "Trên giữa",
+      "top-right": "Trên bên phải",
+      "center-right": "Quy trình xuất phát",
+      "center": "Radar",
+      "bottom-left": "Dưới bên trái",
+      "bottom-center": "Dưới giữa",
+      "bottom-right": "Dưới bên phải"
+    },
+    "resetPart": "Đặt lại",
+    "resize": "Kéo để đổi kích thước",
+    "resetAll": "Đặt lại bố cục",
+    "cancel": "Hủy",
+    "done": "Xong"
   }
 }

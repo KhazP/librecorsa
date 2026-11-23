@@ -844,7 +844,8 @@
     "holdPace": "<n>{pace}</n> {unit} bis zur Linie halten",
     "greenFlag": "Grüne Flagge",
     "lightsOut": "Lichter aus",
-    "chequeredFlag": "Zielflagge"
+    "chequeredFlag": "Zielflagge",
+    "reaction": "Reaktion <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Motor abgewürgt: {control} halten oder in den Leerlauf schalten",
@@ -1072,5 +1073,24 @@
   "hiddenNote": {
     "off": "HUD aus",
     "offKey": "HUD aus · {key} zum Einblenden"
+  },
+  "hudEditor": {
+    "title": "HUD-Layout bearbeiten",
+    "hint": "Zieh ein Element, um es zu verschieben. Zieh an seiner Ecke oder scrolle darüber, um die Größe zu ändern.",
+    "parts": {
+      "top-left": "Oben links",
+      "top-center": "Oben Mitte",
+      "top-right": "Oben rechts",
+      "center-right": "Start-Checkliste",
+      "center": "Radar",
+      "bottom-left": "Unten links",
+      "bottom-center": "Unten Mitte",
+      "bottom-right": "Unten rechts"
+    },
+    "resetPart": "Zurücksetzen",
+    "resize": "Ziehen zum Skalieren",
+    "resetAll": "Layout zurücksetzen",
+    "cancel": "Abbrechen",
+    "done": "Fertig"
   }
 }

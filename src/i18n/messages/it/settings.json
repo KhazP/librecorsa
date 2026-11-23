@@ -538,6 +538,13 @@
       "title": "Layout",
       "resetWhat": "il layout HUD"
     },
+    "placement": {
+      "title": "Dimensione e posizione",
+      "resetWhat": "la dimensione dell’HUD e la posizione dei pannelli di questo layout",
+      "edit": "Posizione dei pannelli",
+      "editHint": "Sposta e ridimensiona i pannelli di questo layout direttamente sull’HUD.",
+      "editButton": "Modifica layout"
+    },
     "graphics": {
       "title": "Grafica",
       "vr": "VR",

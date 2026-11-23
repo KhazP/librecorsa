@@ -844,7 +844,8 @@
     "holdPace": "Mantieni <n>{pace}</n> {unit} fino alla linea",
     "greenFlag": "Bandiera verde",
     "lightsOut": "Semafori spenti",
-    "chequeredFlag": "Bandiera a scacchi"
+    "chequeredFlag": "Bandiera a scacchi",
+    "reaction": "Reazione <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Motore spento: tieni premuto {control} o metti in folle per riavviare",
@@ -1072,5 +1073,24 @@
   "hiddenNote": {
     "off": "HUD nascosto",
     "offKey": "HUD nascosto · {key} per mostrare"
+  },
+  "hudEditor": {
+    "title": "Modifica layout HUD",
+    "hint": "Trascina un pannello per spostarlo. Trascina il suo angolo, o scorri sopra di esso, per ridimensionarlo.",
+    "parts": {
+      "top-left": "In alto a sinistra",
+      "top-center": "In alto al centro",
+      "top-right": "In alto a destra",
+      "center-right": "Procedura di partenza",
+      "center": "Radar",
+      "bottom-left": "In basso a sinistra",
+      "bottom-center": "In basso al centro",
+      "bottom-right": "In basso a destra"
+    },
+    "resetPart": "Reimposta",
+    "resize": "Trascina per ridimensionare",
+    "resetAll": "Reimposta layout",
+    "cancel": "Annulla",
+    "done": "Fatto"
   }
 }

@@ -538,6 +538,13 @@
       "title": "Düzen",
       "resetWhat": "HUD düzeni"
     },
+    "placement": {
+      "title": "Boyut ve konum",
+      "resetWhat": "HUD boyutu ve bu düzendeki panellerin konumları",
+      "edit": "Panel konumları",
+      "editHint": "Bu düzenin panellerini canlı HUD üzerinde taşı ve boyutlandır.",
+      "editButton": "Düzeni değiştir"
+    },
     "graphics": {
       "title": "Grafikler",
       "vr": "VR",

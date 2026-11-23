@@ -844,7 +844,8 @@
     "holdPace": "출발선까지 <n>{pace}</n> {unit} 유지",
     "greenFlag": "녹기",
     "lightsOut": "라이트 아웃",
-    "chequeredFlag": "체커기"
+    "chequeredFlag": "체커기",
+    "reaction": "반응 <n>{ms}</n>ms"
   },
   "launchCue": {
     "stalledLabel": "엔진 시동 꺼짐: 재시동하려면 {control}을(를) 길게 누르거나 중립으로 변속하십시오",
@@ -1072,5 +1073,24 @@
   "hiddenNote": {
     "off": "HUD 꺼짐",
     "offKey": "HUD 꺼짐 · 표시: {key}"
+  },
+  "hudEditor": {
+    "title": "HUD 레이아웃 편집",
+    "hint": "패널을 드래그해 옮기고, 모서리를 드래그하거나 패널 위에서 스크롤해 크기를 바꿉니다.",
+    "parts": {
+      "top-left": "왼쪽 위",
+      "top-center": "가운데 위",
+      "top-right": "오른쪽 위",
+      "center-right": "스타트 체크리스트",
+      "center": "레이더",
+      "bottom-left": "왼쪽 아래",
+      "bottom-center": "가운데 아래",
+      "bottom-right": "오른쪽 아래"
+    },
+    "resetPart": "초기화",
+    "resize": "드래그해 크기 조절",
+    "resetAll": "레이아웃 초기화",
+    "cancel": "취소",
+    "done": "완료"
   }
 }

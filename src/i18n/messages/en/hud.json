@@ -844,7 +844,8 @@
     "holdPace": "Hold <n>{pace}</n> {unit} to line",
     "greenFlag": "Green flag",
     "lightsOut": "Lights out",
-    "chequeredFlag": "Chequered flag"
+    "chequeredFlag": "Chequered flag",
+    "reaction": "Reaction <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Engine stalled: hold {control} or shift to neutral to restart",
@@ -1072,5 +1073,24 @@
   "hiddenNote": {
     "off": "HUD off",
     "offKey": "HUD off · {key} to show"
+  },
+  "hudEditor": {
+    "title": "Edit HUD layout",
+    "hint": "Drag a panel to move it. Drag its corner, or scroll over it, to resize it.",
+    "parts": {
+      "top-left": "Top left",
+      "top-center": "Top centre",
+      "top-right": "Top right",
+      "center-right": "Start checklist",
+      "center": "Radar",
+      "bottom-left": "Bottom left",
+      "bottom-center": "Bottom centre",
+      "bottom-right": "Bottom right"
+    },
+    "resetPart": "Reset",
+    "resize": "Drag to resize",
+    "resetAll": "Reset layout",
+    "cancel": "Cancel",
+    "done": "Done"
   }
 }

@@ -844,7 +844,8 @@
     "holdPace": "حافظ على <n>{pace}</n> {unit} حتى الخط",
     "greenFlag": "علم أخضر",
     "lightsOut": "انطفاء الأضواء",
-    "chequeredFlag": "علم الشطرنج"
+    "chequeredFlag": "علم الشطرنج",
+    "reaction": "زمن رد الفعل <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "توقف المحرك: اضغط مطوّلًا على {control} أو انتقل إلى الوضع المحايد لإعادة التشغيل",
@@ -1072,5 +1073,24 @@
   "hiddenNote": {
     "off": "HUD مخفي",
     "offKey": "HUD مخفي · {key} للإظهار"
+  },
+  "hudEditor": {
+    "title": "تعديل تخطيط HUD",
+    "hint": "اسحب لوحة لنقلها. اسحب زاويتها، أو مرّر فوقها، لتغيير حجمها.",
+    "parts": {
+      "top-left": "أعلى اليسار",
+      "top-center": "أعلى الوسط",
+      "top-right": "أعلى اليمين",
+      "center-right": "خطوات الانطلاق",
+      "center": "الرادار",
+      "bottom-left": "أسفل اليسار",
+      "bottom-center": "أسفل الوسط",
+      "bottom-right": "أسفل اليمين"
+    },
+    "resetPart": "إعادة تعيين",
+    "resize": "اسحب لتغيير الحجم",
+    "resetAll": "إعادة تعيين التخطيط",
+    "cancel": "إلغاء",
+    "done": "تم"
   }
 }

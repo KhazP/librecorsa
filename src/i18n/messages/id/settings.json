@@ -538,6 +538,13 @@
       "title": "Tata letak",
       "resetWhat": "tata letak HUD"
     },
+    "placement": {
+      "title": "Ukuran dan posisi",
+      "resetWhat": "ukuran HUD dan posisi panel di tata letak ini",
+      "edit": "Posisi panel",
+      "editHint": "Pindahkan dan ubah ukuran panel tata letak ini langsung di HUD.",
+      "editButton": "Edit tata letak"
+    },
     "graphics": {
       "title": "Grafis",
       "vr": "VR",

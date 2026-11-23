@@ -538,6 +538,13 @@
       "title": "Disposition",
       "resetWhat": "la disposition du HUD"
     },
+    "placement": {
+      "title": "Taille et position",
+      "resetWhat": "la taille du HUD et la position des éléments de cette disposition",
+      "edit": "Position des éléments",
+      "editHint": "Déplacez et redimensionnez les éléments de cette disposition directement sur le HUD.",
+      "editButton": "Modifier la disposition"
+    },
     "graphics": {
       "title": "Graphismes",
       "vr": "VR",

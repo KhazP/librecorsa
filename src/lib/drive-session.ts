@@ -66,7 +66,7 @@ import { SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
 import { resolveRaceRules } from "@/lib/sim/race-rules";
 import { rulesForSetup, startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
-import { JumpStartWatch } from "@/lib/sim/race-start";
+import { JumpStartWatch, ReactionWatch } from "@/lib/sim/race-start";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
@@ -708,6 +708,8 @@ export class DriveSession {
     const kbInput = { throttle: 0, brake: 0, clutch: 0, padClutch: 0 };
     /** A manual start: the clutch watched through the lights, and Gear up held as the clutch when none is bound */
     const jumpWatch = new JumpStartWatch();
+    /** The reaction to the lights going out, for the HUD */
+    const reactionWatch = new ReactionWatch();
     const startClutch = { active: false };
     let gridHeldLastFrame = false;
     /** Last device that actually sent driving/clutch input; lets an idle plugged-in pad coexist with keyboard clutch. */
@@ -2580,6 +2582,7 @@ export class DriveSession {
       if (this.snapshot.replayAvailable) this.publish({ replayAvailable: false });
       onRunReset(reason);
       jumpWatch.reset();
+      reactionWatch.reset();
       startClutch.active = false;
       gridHeldLastFrame = false;
       startClutchIn = 0;
@@ -3414,6 +3417,19 @@ export class DriveSession {
         vehicleNow
       );
       physics.telemetry.race = mpRace && mpFrame ? mpRace.status(mpFrame, physics.vxMs) : aiField?.status();
+      // The reaction to the lights: from the frame they go out, as this frame's status has it (a rolling start has none)
+      {
+        const status = physics.telemetry.race;
+        reactionWatch.update(
+          driving ? dtSeconds : 0,
+          status?.phase === "lights" && !status.rollingFormation,
+          gridHeldLastFrame,
+          inputs.throttle,
+          inputs.clutch ?? 0
+        );
+        // A jump start has no reaction to show (a clutch let out and pressed again before the lights went out)
+        physics.telemetry.startReactionMs = jumpWatch.jumped ? undefined : (reactionWatch.ms ?? undefined);
+      }
       // Qualifying: the clock, the reference lap behind it, and the race once the session is over
       if (quali && driving) {
         const t = physics.telemetry;
