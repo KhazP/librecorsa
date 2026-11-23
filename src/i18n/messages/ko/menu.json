@@ -314,6 +314,8 @@
     "back": "차고",
     "carFacts": "{carClass}, {year}",
     "carFixedReason": "이 레이스에서는 차량이 고정되어 있습니다",
+    "carSeason": "시즌 차량",
+    "carSeasonReason": "커리어 시즌은 지정된 차량으로 달립니다",
     "carFixed": "이 레이스에서 고정됨",
     "changeCar": "차량 변경",
     "livery": "리버리",

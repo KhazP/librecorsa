@@ -314,6 +314,8 @@
     "back": "車庫",
     "carFacts": "{carClass}，{year}",
     "carFixedReason": "本場賽事固定使用此車款",
+    "carSeason": "賽季賽車",
+    "carSeasonReason": "生涯賽季須使用該賽季指定的賽車",
     "carFixed": "本場賽事固定車款",
     "changeCar": "更換車輛",
     "livery": "塗裝",

@@ -2146,8 +2146,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onToggleMouseSteer: handleToggleMouseSteer,
     onResetCar: handleResetCar,
     challengeTarget: targetShown ? challengeTargetNow : null,
-    onSelectTurn: career.driving ? noTurnJump : handleSelectTurn,
+    // A round is raced from the lights; a test day is practice, round the circuit as the player likes
+    onSelectTurn: career.racing ? noTurnJump : handleSelectTurn,
     careerRound: career.racing ? { restartNote: career.canRestart ? tx("restartMulligan", { count: career.mulligansLeft }) : null } : undefined,
+    careerDrive: career.driving,
     onHostP2PRoom: handleHostP2PRoom,
     onJoinP2PRoom: handleJoinP2PRoom,
     onCreateManualOffer: handleCreateManualOffer,

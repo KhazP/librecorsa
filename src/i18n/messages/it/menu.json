@@ -314,6 +314,8 @@
     "back": "Garage",
     "carFacts": "{carClass}, {year}",
     "carFixedReason": "L’auto è fissa per questa gara",
+    "carSeason": "Auto della stagione",
+    "carSeasonReason": "Una stagione della carriera si corre con la sua auto",
     "carFixed": "Fissa per questa gara",
     "changeCar": "Cambia auto",
     "livery": "Livrea",

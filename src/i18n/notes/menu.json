@@ -192,6 +192,8 @@
   "garage.back": "Button that returns from the car browser to the Garage.",
   "garage.carFacts": "{carClass}: e.g. GT3. {year}: e.g. 2025.",
   "garage.carFixedReason": "Why the Change car button is disabled during an online race.",
+  "garage.carSeason": "Change car button label while driving a career round or test day: the car is the season's own.",
+  "garage.carSeasonReason": "Why the Change car button is disabled while driving for the career.",
   "garage.carFixed": "The Change car button during an online race.",
   "garage.name": "Label of the field for a saved setup's name.",
   "garage.shareCode": "Button: copies a text code another player can paste to load this setup.",

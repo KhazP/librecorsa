@@ -314,6 +314,8 @@
     "back": "Garasi",
     "carFacts": "{carClass}, {year}",
     "carFixedReason": "Mobil ditetapkan untuk balapan ini",
+    "carSeason": "Mobil musim ini",
+    "carSeasonReason": "Musim karier dikendarai dengan mobilnya sendiri",
     "carFixed": "Terkunci untuk balapan ini",
     "changeCar": "Ganti mobil",
     "livery": "Livery",

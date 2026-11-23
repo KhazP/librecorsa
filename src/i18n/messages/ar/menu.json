@@ -314,6 +314,8 @@
     "back": "المرآب",
     "carFacts": "{carClass}، {year}",
     "carFixedReason": "السيارة موحّدة لهذا السباق",
+    "carSeason": "سيارة الموسم",
+    "carSeasonReason": "يُخاض موسم المسيرة المهنية بسيارته الخاصة",
     "carFixed": "موحّدة لهذا السباق",
     "changeCar": "تغيير السيارة",
     "livery": "الطلاء",

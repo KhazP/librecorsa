@@ -147,6 +147,11 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
    * mulligan, `restartNote` says so (null: none left, no restart)
    */
   careerRound?: { restartNote: string | null };
+  /**
+   * Driving for the career (a round or a test day): the season's car (the garage can't change it) and no online play
+   * from here (a room joined mid-round would leave the round unfinished)
+   */
+  careerDrive?: boolean;
   onTogglePause: () => void;
   /** Opens the controls setup (keyboard / controller / wheel) */
   onOpenControls?: () => void;
@@ -262,13 +267,13 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         { id: "setup" as const, label: tx("tabs.garage"), icon: "garage" as const },
         // No jumping round the circuit in an online race
         ...(mpRace || career ? [] : [{ id: "corners" as const, label: tx("tabs.corners"), icon: "corners" as const }]),
-        { id: "multiplayer" as const, label: tx("tabs.multiplayer"), icon: "multiplayer" as const },
+        ...(props.careerDrive ? [] : [{ id: "multiplayer" as const, label: tx("tabs.multiplayer"), icon: "multiplayer" as const }]),
         ...(leaderboardPanel ? [{ id: "leaderboard" as const, label: tx("tabs.lapTimes"), icon: "lapTimes" as const }] : []),
         // A bug report from where it happened: the car's place on the circuit and a picture of the scene go with it. The
         // title menu's name for the same form
         ...(props.reportFacts ? [{ id: "report" as const, label: tx("tabs.feedback"), icon: "feedback" as const }] : []),
       ] satisfies { id: Panel; label: string; icon: IconName }[],
-    [leaderboardPanel, mpRace, career, conditionsPanel, displayPanel, phoneScreen, props.reportFacts, tx]
+    [leaderboardPanel, mpRace, career, props.careerDrive, conditionsPanel, displayPanel, phoneScreen, props.reportFacts, tx]
   );
 
   const actions: { id: string; label: string; detail?: string; icon: IconName; run: () => void }[] = useMemo(

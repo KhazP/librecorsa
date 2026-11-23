@@ -314,6 +314,8 @@
     "back": "Garaj",
     "carFacts": "{carClass}, {year}",
     "carFixedReason": "Bu yarış için araç sabit",
+    "carSeason": "Sezon aracı",
+    "carSeasonReason": "Kariyer sezonu kendi aracıyla sürülür",
     "carFixed": "Bu yarış için sabit",
     "changeCar": "Araç değiştir",
     "livery": "Kaplama",

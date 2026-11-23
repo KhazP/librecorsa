@@ -314,6 +314,8 @@
     "back": "Garage",
     "carFacts": "{carClass}, {year}",
     "carFixedReason": "Xe được cố định cho cuộc đua này",
+    "carSeason": "Xe của mùa giải",
+    "carSeasonReason": "Mỗi mùa giải sự nghiệp được lái bằng xe riêng của nó",
     "carFixed": "Cố định cho cuộc đua này",
     "changeCar": "Đổi xe",
     "livery": "Màu sơn",
