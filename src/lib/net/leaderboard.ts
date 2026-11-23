@@ -242,12 +242,14 @@ export function clearBoardMiss(key: string, lapTimeMs: number): void {
 /**
  * Whether a saved best is on its online board, as far as this browser knows: `posted` once the board took it (or has a
  * faster lap of the driver's), else not, with the reason its last upload failed when it was this lap's. Null for a lap
- * that can't go on a current board (no conditions, or an older physics revision)
+ * that can't go on a current board (no conditions, an older physics revision, or a mod circuit's)
  */
 export function boardStatusOf(
   lap: Pick<LeaderboardEntry, "trackId" | "vehicle" | "conditions" | "lapTimeMs" | "recordedAt">,
 ): { posted: true } | { posted: false; error: string | null } | null {
   if (!lap.conditions || lap.conditions.physicsVersion !== lapPhysicsVersion(lap.vehicle, lap.trackId)) return null;
+  // A mod circuit's best is the player's own: no board to be on
+  if (!lapGoesOnBoards(lap)) return null;
   const key = boardKeyOf(lap);
   if (!key) return null;
   const best = loadBoardBest(key);

@@ -1014,6 +1014,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const loadPbGhost = useCallback(async () => {
     // A ghost picked (or another car's PB requested) while this one loads wins over it
     const req = ++ghostReqRef.current;
+    // A mod car keeps no best (its laps would stand in its vehicle model's): it starts the session with none
+    if (carById(carIdRef.current).mod) {
+      ghostSourceRef.current = "pb";
+      session?.setGhost(null);
+      session?.lapRecorder.setContext({ personalBestMs: null });
+      return;
+    }
     // The best on the board the player is driving now (an assisted best is not their pro reference)
     const rec = await loadBestLap(trackId, vehicleModelRef.current, lapBoardClass(currentBoard())).catch(() => null);
     if (req !== ghostReqRef.current) return;
@@ -1109,7 +1116,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
    */
   const handleSubmitLap = useCallback(async (driver?: { name: string; code: string }) => {
     const rec = lapSummary?.recording;
-    if (!rec) return;
+    if (!rec || !lapGoesOnBoards(rec)) return;
     const as = driver ?? settingsRef.current.profile;
     const req = ++submitReqRef.current;
     const problem = nameProblem(as.name);
@@ -1741,7 +1748,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // After the session reset, so the swap finds no replay or AI field to carry over (as a multiplayer race's)
       // A week that names its car is driven in it (a no-op when already in it); any other in the car one is in, if it is the week's vehicle
       const rules = race ? week.race : week;
-      if (vehicleModelRef.current !== rules.vehicle || rules.car !== undefined) changeCar(weekCar(rules).id);
+      // A mod car is never the week's, whatever its vehicle model
+      if (vehicleModelRef.current !== rules.vehicle || rules.car !== undefined || carById(carIdRef.current).mod) changeCar(weekCar(rules).id);
       if (race && session) {
         // The field for the car now on track, over the week's race distance
         const field = session.takeAiField();
@@ -1826,12 +1834,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     session?.lapRecorder.setContext({ driverName: settings.profile.name, driverCode: settings.profile.code });
   }, [session, settings.profile, vehicleModel, trackId]);
 
-  // A car change brings back that car's personal-best ghost and leaderboard
+  // A car change brings back that car's personal-best ghost and leaderboard. Bests are kept per vehicle model, so the
+  // model's cars share one; a mod car (which keeps none) is a car of its own
+  const pbOwner = carById(carId).mod ? carId : vehicleModel;
   useEffect(() => {
     void loadPbGhost();
     void refreshLeaderboard();
     wheelFfb.resetMeter();
-  }, [vehicleModel, loadPbGhost, refreshLeaderboard]);
+  }, [pbOwner, loadPbGhost, refreshLeaderboard]);
 
   const ffbMeterOn = phase === "driving" && settings.device === "wheel" && settings.wheel.ffbEnabled;
   useEffect(() => {
@@ -2318,6 +2328,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   // that hasn't answered yet is asked again by the press)
                   onSubmit:
                     (boardState === "on" || boardState === "unreachable") &&
+                    lapGoesOnBoards(lapSummary.recording) &&
                     lapSummary.summary.valid &&
                     !lapSummary.summary.autopilot &&
                     (!settings.profile.autoUpload || submitState === "error" || submitState === "waiting")

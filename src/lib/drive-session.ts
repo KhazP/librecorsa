@@ -1276,7 +1276,7 @@ export class DriveSession {
       this.publish(carSetup);
       swapCarRig(car);
       prefetchSoundBank(soundFor(car).assetDir);
-      lapRecorder.setContext({ vehicle, mod: !!carById(car).mod });
+      lapRecorder.setContext({ vehicle, modCar: carById(car).mod ? car : null });
       lapDelta.reset();
       // A running race restarts from the lights with the new car
       if (raceNow().kind === "ai") {
@@ -1666,7 +1666,7 @@ export class DriveSession {
       vehicle: vehicleNow,
       driverName: settings.profile.name,
       driverCode: settings.profile.code,
-      mod: !!carById(carIdNow).mod,
+      modCar: carById(carIdNow).mod ? carIdNow : null,
     });
     this.lapRecorder = lapRecorder;
 

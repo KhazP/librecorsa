@@ -50,8 +50,11 @@ export interface LapRecorderOptions {
   driverCode: string;
   sampleHz?: number;
   personalBestMs?: number | null;
-  /** The car is a mod package's (its laps are marked `mod` and stay off the boards); the circuit's id says so itself */
-  mod?: boolean;
+  /**
+   * The mod package's car driven, if any: its laps are marked `mod` and stay off the boards (a mod circuit's id says so
+   * itself). Each mod car is a car of its own for the session's bests, though it shares its vehicle model's id
+   */
+  modCar?: string | null;
 }
 
 export interface QuatLike {
@@ -150,8 +153,8 @@ export class LapRecorder {
   /** Turns in track order, with the half-width of each corner window */
   private readonly corners: CornerWindow[];
   private vehicle: VehicleModelId;
-  /** Driving a mod package's car */
-  private mod: boolean;
+  /** The mod package's car driven, or null */
+  private modCar: string | null;
   /** The revision this car's laps on this circuit are ranked under, read once when the car is set */
   private physicsVersion: number;
   private driverName: string;
@@ -184,7 +187,7 @@ export class LapRecorder {
     this.sampleHz = opts.sampleHz ?? DEFAULT_SAMPLE_HZ;
     this.period = 1 / this.sampleHz;
     this.vehicle = opts.vehicle;
-    this.mod = opts.mod ?? false;
+    this.modCar = opts.modCar ?? null;
     this.physicsVersion = lapPhysicsVersion(opts.vehicle, opts.trackId);
     this.driverName = cleanDriverName(opts.driverName);
     this.driverCode = opts.driverCode;
@@ -206,11 +209,15 @@ export class LapRecorder {
   }
 
   /** Change car / driver / known personal best (a car change also clears session bests) */
-  setContext(ctx: Partial<Pick<LapRecorderOptions, "vehicle" | "driverName" | "driverCode" | "personalBestMs" | "mod">>): void {
-    if (ctx.mod !== undefined) this.mod = ctx.mod;
-    if (ctx.vehicle !== undefined && ctx.vehicle !== this.vehicle) {
+  setContext(ctx: Partial<Pick<LapRecorderOptions, "vehicle" | "driverName" | "driverCode" | "personalBestMs" | "modCar">>): void {
+    const newVehicle = ctx.vehicle !== undefined && ctx.vehicle !== this.vehicle;
+    const newModCar = ctx.modCar !== undefined && ctx.modCar !== this.modCar;
+    if (ctx.vehicle !== undefined && newVehicle) {
       this.vehicle = ctx.vehicle;
       this.physicsVersion = lapPhysicsVersion(ctx.vehicle, this.trackId);
+    }
+    if (ctx.modCar !== undefined) this.modCar = ctx.modCar;
+    if (newVehicle || newModCar) {
       this.sessionSectorBest = [null, null, null];
       this.sessionCornerBest = this.corners.map(() => null);
     }
@@ -438,7 +445,7 @@ export class LapRecorder {
         return acc;
       }, []),
     };
-    if (this.mod || this.trackId.startsWith("mod:")) recording.mod = true;
+    if (this.modCar || this.trackId.startsWith("mod:")) recording.mod = true;
     if (this.lapConditions) {
       recording.conditions = { ...this.lapConditions };
       const used = this.mostUsedInput();
