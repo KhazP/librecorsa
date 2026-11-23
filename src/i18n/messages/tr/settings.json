@@ -1,0 +1,626 @@
+{
+  "screen": {
+    "title": "Ayarlar",
+    "dialogLabel": "Ayarlar",
+    "detailLabel": "Kaç ayar gösterileceği",
+    "simple": "Basit",
+    "advanced": "Gelişmiş",
+    "close": "Kapat",
+    "categoriesLabel": "Ayar kategorileri",
+    "sectionsLabel": "{category} bölümleri",
+    "paneLabel": "{category}: {tab}",
+    "noAdvancedHere": "Bu sayfada gelişmiş ayar yok",
+    "moreInAdvanced": "Daha fazla ayar Gelişmiş görünümde",
+    "steeringInAdvanced": "Direksiyon yardımı Gelişmiş görünümde",
+    "categories": {
+      "driving": "Sürüş",
+      "controls": "Kontroller",
+      "ffb": "Force feedback",
+      "display": "Görüntü",
+      "audio": "Ses",
+      "profile": "Profil ve veriler"
+    },
+    "tabs": {
+      "driving": {
+        "assists": "Destekler",
+        "steering": "Direksiyon yardımı"
+      },
+      "controls": {
+        "device": "Aygıt",
+        "keyboard": "Klavye",
+        "controller": "Kontrolcü",
+        "wheel": "Direksiyon",
+        "touch": "Dokunmatik"
+      },
+      "ffb": {
+        "main": "Force feedback"
+      },
+      "display": {
+        "graphics": "Grafikler",
+        "hud": "HUD",
+        "camera": "Kamera",
+        "interface": "Arayüz"
+      },
+      "audio": {
+        "main": "Ses"
+      },
+      "profile": {
+        "driver": "Pilot",
+        "data": "Veriler"
+      }
+    },
+    "prompts": {
+      "move": "Gezin",
+      "change": "Değiştir",
+      "tabs": "Sekmeler",
+      "resetRow": "Satırı sıfırla",
+      "showAdvanced": "Gelişmişi göster",
+      "showSimple": "Basiti göster",
+      "back": "Geri"
+    }
+  },
+  "field": {
+    "resetRow": "Varsayılana sıfırla: {setting}",
+    "reset": "Sıfırla",
+    "resetTitle": "Sıfırlansın mı: {card}?",
+    "resetConfirm": "Sıfırla",
+    "resetBody": "Varsayılana sıfırlanacak: {what}.",
+    "resetBodyDefault": "Bu ayarları varsayılana sıfırlar.",
+    "showAdvanced": "Gelişmişi göster"
+  },
+  "values": {
+    "off": "Kapalı",
+    "linear": "Doğrusal",
+    "progressive": "Kademeli {value}",
+    "aggressive": "Agresif {value}",
+    "raw": "Ham",
+    "fullLock": "{value}, tam kilit"
+  },
+  "off": {
+    "triggerPedals": "Tetik pedalları gerekir",
+    "touchScreen": "Dokunmatik ekran gerekir"
+  },
+  "rows": {
+    "assistLevel": {
+      "label": "Destek seviyesi",
+      "options": {
+        "beginner": "Başlangıç",
+        "intermediate": "Orta",
+        "sim": "Sim"
+      },
+      "details": {
+        "beginner": "Tam TC ve ABS, yarış çizgisi, direksiyon desteği",
+        "intermediate": "TC ve ABS, yarış çizgisi",
+        "sim": "TC yok, ABS yok, yarış çizgisi yok"
+      }
+    },
+    "assistPreset": {
+      "label": "Çekiş kontrolü ve ABS",
+      "options": {
+        "pro": "Kapalı",
+        "semi_pro": "TC + ABS",
+        "assisted": "Tam"
+      }
+    },
+    "racingLine": {
+      "label": "Yarış çizgisi",
+      "hint": "Tuş {key}"
+    },
+    "autoGearbox": {
+      "label": "Otomatik vites",
+      "hint": "Manuel tuşlar: {up} / {down}"
+    },
+    "autoClutch": {
+      "label": "Otomatik debriyaj",
+      "hint": "Stop etmeyi önler; manuel debriyajlı kalkış için kapat",
+      "off": {
+        "gearbox": "Manuel vites gerekir",
+        "wheel": "Kontroller > Direksiyon altından debriyaj ata",
+        "controller": "Kontroller > Kontrolcü altından debriyaj ata",
+        "touch": "Dokunmatik kontrollerle kullanılamaz",
+        "keyboard": "Kontroller > Klavye altından Debriyaj ata"
+      },
+      "overridden": {
+        "gearbox": "Geçici olarak devre dışı (manuel vites gerekir); varsayılana dönmek için aç",
+        "wheel": "Geçici olarak devre dışı (kontroller > direksiyon altından debriyaj ata); varsayılana dönmek için aç",
+        "controller": "Geçici olarak devre dışı (kontroller > kontrolcü altından debriyaj ata); varsayılana dönmek için aç",
+        "touch": "Geçici olarak devre dışı (dokunmatik kontrollerle kullanılamaz); varsayılana dönmek için aç",
+        "keyboard": "Geçici olarak devre dışı (kontroller > klavye altından debriyaj ata); varsayılana dönmek için aç"
+      }
+    },
+    "gamepadAssist": {
+      "label": "Kontrolcü direksiyon desteği",
+      "hint": "Direksiyon açısını ön lastik tutuşuna göre sınırlar, kaymaları yakalar"
+    },
+    "exitAssist": {
+      "label": "Gaz yardımı",
+      "hint": "Arka kaymada gazı otomatik ayarlar (klavye, TC kapalı)"
+    },
+    "brakeAssist": {
+      "label": "Fren yardımı",
+      "hint": "Kilitlenmede freni otomatik ayarlar (klavye, ABS kapalı)"
+    },
+    "realism": {
+      "label": "Simülasyon gerçekçiliği"
+    },
+    "launch": {
+      "label": "Kalkış yöntemi"
+    },
+    "ghost": {
+      "label": "En iyi tur hayaleti"
+    },
+    "steeringPreset": {
+      "label": "Hazır ayar",
+      "custom": "Özel",
+      "options": {
+        "custom": "Özel"
+      }
+    },
+    "pedalAssistStrength": {
+      "label": "Pedal yardımı gücü",
+      "hint": "Gaz ve Fren yardımının tuş değerini ne kadar erken ve ne ölçüde azaltacağı"
+    },
+    "mouseSteer": {
+      "label": "Fare ile direksiyon",
+      "hint": "Tuş {key}"
+    },
+    "throttleRiseS": {
+      "label": "Gaz yükselme süresi"
+    },
+    "brakeRiseS": {
+      "label": "Fren yükselme süresi"
+    },
+    "steerRiseS": {
+      "label": "Direksiyon yumuşatma",
+      "hint": "Düşük değer daha keskin"
+    },
+    "steerReturnS": {
+      "label": "Direksiyon geri dönüşü"
+    },
+    "halfThrottle": {
+      "label": "Yarım gaz"
+    },
+    "halfBrake": {
+      "label": "Yarım fren"
+    },
+    "rumble": {
+      "label": "Titreşim"
+    },
+    "steeringRate": {
+      "label": "Direksiyon hızı"
+    },
+    "deadzone": {
+      "label": "İç ölü bölge"
+    },
+    "outerDeadzone": {
+      "label": "Dış ölü bölge"
+    },
+    "linearity": {
+      "label": "Analog doğrusallığı",
+      "hint": "1’in üstü merkezi yumuşatır"
+    },
+    "throttleGamma": {
+      "label": "Gaz eğrisi",
+      "hint": "1’in üstü düşük gazı yumuşatır"
+    },
+    "brakeGamma": {
+      "label": "Fren eğrisi",
+      "hint": "1’in üstü hafif freni yumuşatır"
+    },
+    "stickPedalDeadzone": {
+      "label": "Pedal analoğu ölü bölgesi",
+      "off": "Analog pedallar gerekir"
+    },
+    "triggerRumble": {
+      "label": "Tetik titreşimi",
+      "hint": "Tetiklerde kayma, ABS ve patinaj geri bildirimi"
+    },
+    "triggerSlipAlwaysOn": {
+      "label": "ABS/TC açıkken tetik kayma uyarısı",
+      "off": "Tetik titreşimi gerekir"
+    },
+    "steerDeadzone": {
+      "label": "Merkez ölü bölgesi"
+    },
+    "steerSmoothingS": {
+      "label": "Girdi filtresi"
+    },
+    "wheelBrakeGamma": {
+      "label": "Fren eğrisi",
+      "hint": "Load cell için 1.0 · potansiyometre için 1.3–1.6"
+    },
+    "touchMode": {
+      "label": "Dokunmatik kontroller",
+      "options": {
+        "auto": "Otomatik",
+        "on": "Açık",
+        "off": "Kapalı"
+      }
+    },
+    "touchLayout": {
+      "label": "Dokunmatik tarzı",
+      "hint": "Analog sürükleme çubukları veya dijital tuşlar",
+      "off": "Dokunmatik kontroller kapalı",
+      "options": {
+        "sliders": "Kaydırıcılar",
+        "buttons": "Tuşlar"
+      }
+    },
+    "tiltSteer": {
+      "label": "Eğimle direksiyon"
+    },
+    "tiltRangeDeg": {
+      "label": "Eğim aralığı",
+      "off": "Eğimle direksiyon gerekir"
+    },
+    "ffbEnabled": {
+      "label": "Force feedback"
+    },
+    "ffbGain": {
+      "label": "Güç",
+      "hintPerCar": "Aşağıdaki araca özel güç ({gain}) bunu geçersiz kılar"
+    },
+    "ffbDamping": {
+      "label": "Sönümleme"
+    },
+    "ffbKerb": {
+      "label": "Kerb titreşimi"
+    },
+    "ffbAbs": {
+      "label": "ABS titreşimi"
+    },
+    "ffbSlip": {
+      "label": "Kayma titreşimi",
+      "hint": "Yalnızca WebHID"
+    },
+    "ffbShift": {
+      "label": "Vites uyarısı",
+      "hint": "Yalnızca WebHID"
+    },
+    "ffbCurve": {
+      "label": "Kuvvet eğrisi",
+      "hint": "Negatif düşük kuvvetleri yükseltir · pozitif tepe payı ayırır"
+    },
+    "ffbMinForce": {
+      "label": "Minimum kuvvet",
+      "hint": "Merkezdeki ölü bölgeyi giderir",
+      "hintPerCar": "Araca özel minimum kuvvet bunu geçersiz kılar"
+    },
+    "ffbFilterS": {
+      "label": "Yumuşatma"
+    },
+    "ffbDownforceComp": {
+      "label": "Yere basma telafisi",
+      "hint": "Yüksek hızda aero kırpılmasını azaltır"
+    },
+    "ffbFriction": {
+      "label": "Sürtünme",
+      "hint": "Direksiyonun donanım efekti"
+    },
+    "ffbInertia": {
+      "label": "Eylemsizlik",
+      "hint": "Direksiyonun donanım efekti"
+    },
+    "ffbCollisionGuard": {
+      "label": "Çarpışma koruması",
+      "hint": "Ani darbe kuvveti sıçramalarını sınırlar"
+    },
+    "revLeds": {
+      "label": "Devir ışıkları"
+    },
+    "quality": {
+      "label": "Kalite",
+      "options": {
+        "low": "Düşük",
+        "medium": "Orta",
+        "high": "Yüksek"
+      },
+      "details": {
+        "low": "Gölge ve parlama yok, düşük çözünürlük",
+        "medium": "Gölgeler açık, parlama yok",
+        "mediumTouch": "Gölgeler açık, parlama ve MSAA yok",
+        "high": "Tam efektler",
+        "highTouch": "MSAA hariç tam efektler"
+      }
+    },
+    "sharpLow": {
+      "label": "Keskin Düşük",
+      "hint": "Düşük ayarı Orta çözünürlükte çizer",
+      "hintAuto": "Düşük ayarı Orta çözünürlükte çizer; otomatik kalite kapatabilir",
+      "off": "Kalite ayarı Düşük olmalı"
+    },
+    "renderScale": {
+      "label": "Render çözünürlüğü"
+    },
+    "sharpen": {
+      "label": "Keskinleştir",
+      "hint": "Ölçekleme sonrası kenarları ve asfaltı netleştirir"
+    },
+    "fpsCap": {
+      "label": "Kare hızı",
+      "hint": "30 fps mobilde ısınmayı azaltır",
+      "options": {
+        "full": "Tam",
+        "fps30": "30 fps"
+      }
+    },
+    "autoQuality": {
+      "label": "Otomatik kalite",
+      "hint": "Sürekli kare düşüşlerinde kademeli azaltır",
+      "hintLowered": "Düşürüldü: {what}"
+    },
+    "autoQualityMinScale": {
+      "label": "En düşük çözünürlük",
+      "hint": "Otomatik kalite, Render çözünürlüğünü bunun altına indirmez",
+      "hintLow": "Çözünürlük sabit kalır; Düşük ayarda kapatılacak efekt yok",
+      "hintEffects": "Çözünürlük sabit kalır; yalnızca efektler düşürülür",
+      "off": "Otomatik kalite açık olmalı"
+    },
+    "driverBody": {
+      "label": "Pilot gövdesi"
+    },
+    "hudScale": {
+      "label": "Boyut"
+    },
+    "deltaBar": {
+      "label": "Delta çubuğu"
+    },
+    "lapSummary": {
+      "label": "Tur özeti"
+    },
+    "virtualMirror": {
+      "label": "Ayna",
+      "options": {
+        "auto": "Otomatik",
+        "always": "Her zaman",
+        "off": "Kapalı"
+      }
+    },
+    "radar": {
+      "label": "Yakınlık radarı"
+    },
+    "showPlayerNames": {
+      "label": "Oyuncu isimlikleri"
+    },
+    "boardWidget": {
+      "label": "Tur tablosu",
+      "options": {
+        "lapEnd": "Tur sonunda",
+        "open": "Açık",
+        "closed": "Kapalı"
+      }
+    },
+    "inputTrace": {
+      "label": "Girdi grafiği"
+    },
+    "towerGaps": {
+      "label": "Zamanlama kulesi farkları",
+      "options": {
+        "interval": "Öndekine",
+        "leader": "Lidere"
+      }
+    },
+    "mapMode": {
+      "label": "Harita modu",
+      "options": {
+        "full": "Tam tur",
+        "local": "Yakınlaştırılmış"
+      }
+    },
+    "splitGaps": {
+      "label": "Ara farklar"
+    },
+    "mfdAutoCollapse": {
+      "label": "MFD otomatik daralması"
+    },
+    "camera": {
+      "label": "Varsayılan görünüm",
+      "hint": "Tuş {key}"
+    },
+    "cockpitFovDeg": {
+      "label": "Görüş açısı",
+      "hintCarOwn": "Her aracın kendi varsayılanı kullanılıyor",
+      "hintCarDefault": "Araç varsayılanı: {degrees}°",
+      "valueCar": "{value}° (araç)"
+    },
+    "headMovement": {
+      "label": "Baş hareketi",
+      "options": {
+        "natural": "Doğal",
+        "static": "Sabit"
+      }
+    },
+    "language": {
+      "label": "Dil",
+      "options": {
+        "auto": "Otomatik"
+      },
+      "details": {
+        "auto": "Tarayıcının dili"
+      }
+    },
+    "speedUnit": {
+      "label": "Hız"
+    },
+    "temperatureUnit": {
+      "label": "Sıcaklık"
+    },
+    "pressureUnit": {
+      "label": "Lastik basıncı"
+    },
+    "uiScale": {
+      "label": "Arayüz boyutu"
+    },
+    "palette": {
+      "label": "Renk körlüğü paleti",
+      "options": {
+        "standard": "Standart",
+        "protan": "Kırmızı zayıflığı",
+        "deutan": "Yeşil zayıflığı",
+        "tritan": "Mavi zayıflığı"
+      },
+      "details": {
+        "protan": "Protanopi ve protanomali",
+        "deutan": "Deuteranopi ve deuteranomali",
+        "tritan": "Tritanopi ve tritanomali"
+      }
+    },
+    "volume": {
+      "label": "Ana ses"
+    },
+    "kerbs": {
+      "label": "Kerbler"
+    },
+    "muted": {
+      "label": "Sesi kapat",
+      "hint": "Tuş {key}"
+    },
+    "drsBeep": {
+      "label": "DRS uyarı sesleri"
+    },
+    "shiftBeep": {
+      "label": "Vites uyarı sesi"
+    },
+    "musicOn": {
+      "label": "Müzik"
+    },
+    "menuMusic": {
+      "label": "Menü müziği"
+    },
+    "raceMusicOn": {
+      "label": "Sürüş sırasında müzik"
+    },
+    "raceMusic": {
+      "label": "Yarış müziği",
+      "hint": "Parçayı atla: {key}",
+      "off": "Sürüş sırasında müzik kapalı"
+    },
+    "replayMusic": {
+      "label": "Sonuç ve tekrar müziği"
+    },
+    "autoUpload": {
+      "label": "En iyi turları otomatik yükle"
+    },
+    "telemetryOut": {
+      "label": "UDP telemetri",
+      "hint": "Yerel köprüye canlı telemetri gönderir (gösterge ekranları, bass shaker’lar)"
+    }
+  },
+  "driving": {
+    "drivingAids": "Sürüş destekleri",
+    "pedalHelp": "Pedal yardımı",
+    "onTrack": "Pistte",
+    "keyboardSteering": "Klavye direksiyonu",
+    "controllerSteering": "Kontrolcü direksiyonu"
+  },
+  "controls": {
+    "activeDevice": "Etkin aygıt",
+    "quickSetup": "Hızlı kurulum",
+    "runSetupWizard": "Kurulum sihirbazını çalıştır",
+    "runSetup": "Kurulumu başlat",
+    "touch": "Dokunmatik"
+  },
+  "display": {
+    "layout": {
+      "title": "Düzen",
+      "resetWhat": "HUD düzeni"
+    },
+    "graphics": {
+      "title": "Grafikler",
+      "vr": "VR",
+      "vrOff": "WebXR destekli VR başlığı gerekir",
+      "experimental": "Deneysel",
+      "inVr": "VR’da",
+      "enterVr": "VR’a gir"
+    },
+    "hud": {
+      "title": "HUD’da neler görünsün"
+    },
+    "camera": {
+      "title": "Kamera",
+      "freeCamera": "Serbest kamera",
+      "freeCameraHint": "Sürükle: bak · WASD: uç · Q/E: yükseklik · Tekerlek: hız · R: sıfırla",
+      "freeCameraUnbound": "Atanmamış",
+      "tvCamera": "Pist Kenarı TV",
+      "tvCameraUnbound": "Atanmamış",
+      "adjustSeat": "Koltuğu ayarla",
+      "adjustSeatHint": "Pistteyken {key} veya {button} tuşunu basılı tut",
+      "adjustSeatOff": "Sürerken kullanılabilir ({key} veya {button} tuşunu basılı tut)",
+      "adjust": "Ayarla",
+      "resetSeats": "Koltuk konumlarını sıfırla",
+      "resetSeatsOff": "Zaten varsayılanda",
+      "resetSeatsButton": "Sıfırla",
+      "resetSeatsTitle": "Koltuk konumları sıfırlansın mı?",
+      "resetSeatsConfirm": "Tümünü sıfırla",
+      "resetSeatsBody": "Tüm araçlar için kokpit ve gösterge koltuk konumlarını sıfırlar."
+    },
+    "interface": {
+      "language": "Dil",
+      "units": "Birimler",
+      "sizeColour": "Boyut ve renk"
+    }
+  },
+  "audio": {
+    "sound": "Ses",
+    "music": "Müzik",
+    "menuTracks": "Menü parçaları",
+    "raceTracks": "Yarış parçaları",
+    "resultsTracks": "Sonuç ve tekrar parçaları",
+    "cockpitCues": "Kokpit uyarıları"
+  },
+  "profile": {
+    "driver": {
+      "title": "Pilot",
+      "name": "Ad",
+      "code": "Kod",
+      "colour": "Renk",
+      "colourGroup": "Renk",
+      "otherColour": "Başka renk",
+      "colours": {
+        "red": "Kırmızı",
+        "teal": "Petrol yeşili",
+        "orange": "Turuncu",
+        "blue": "Mavi",
+        "racingGreen": "Yarış yeşili",
+        "navy": "Lacivert",
+        "silver": "Gümüş",
+        "lime": "Fıstık yeşili"
+      }
+    },
+    "data": {
+      "driverKey": "Pilot anahtarı",
+      "identityKey": "Kimlik anahtarı",
+      "identityKeyHint": "Çevrimiçi turları imzalar. Başka tarayıcıda kullanmak için yedekle",
+      "save": "Kaydet",
+      "load": "Yükle",
+      "telemetry": "Telemetri",
+      "udpPort": "UDP portu",
+      "udpPortField": "UDP portu",
+      "portConflict": "{port} portu {app} ile çakışıyor (varsayılan {defaultPort})",
+      "portOff": "UDP telemetri gerekir",
+      "reset": "Sıfırla",
+      "resetAll": "Tüm ayarları sıfırla",
+      "resetAllHint": "Kontroller, destekler, görüntü ve ses varsayılana döner",
+      "resetAllButton": "Sıfırla",
+      "resetAllTitle": "Tüm ayarlar sıfırlansın mı?",
+      "resetAllConfirm": "Tümünü sıfırla",
+      "resetAllBody": "Tüm ayarlar, tuş atamaları ve kalibrasyon varsayılana döner. Profil, araç ayarları ve tur zamanları korunur.",
+      "clear": "Kayıtlı verileri temizle",
+      "clearHint": "Yerel ayarları, pilot anahtarını, turları, hayaletleri ve araç ayarlarını siler",
+      "clearButton": "Temizle",
+      "clearTitle": "Kayıtlı veriler temizlensin mi?",
+      "clearConfirm": "Her şeyi temizle",
+      "clearBody": "Bu tarayıcıdaki tüm ayarları, pilot anahtarını, turları, hayaletleri ve araç ayarlarını kalıcı olarak siler ve sayfayı yeniler."
+    }
+  },
+  "hudPicker": {
+    "label": "HUD düzeni",
+    "thirdParty": "Üçüncü taraf",
+    "thirdPartyNote": "Diğer açık kaynaklı HUD projelerinden yeniden oluşturuldu; yapımcıları belirtilmiştir.",
+    "touchNote": "Telefonlar her zaman Dokunmatik HUD kullanır.",
+    "description": "{detail}. Yapımcı: {author}",
+    "descriptionSite": "{detail}. Yapımcı: {author} · {site}",
+    "sourceLink": "{layout} kaynağı, yapımcı: {author} (yeni sekmede açılır)",
+    "siteLink": "{site}, {author} sitesi (yeni sekmede açılır)"
+  }
+}

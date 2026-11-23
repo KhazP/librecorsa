@@ -1,0 +1,1062 @@
+{
+  "racesCard": {
+    "region": "Yarışlar",
+    "description": "{car} · {laps, plural, one {# tur} other {# tur}} · her {interval}",
+    "racing": "<big>Canlı</big> <small>devam ediyor</small>",
+    "toStart": "<big>{time}</big> <small>başlangıca kaldı</small>",
+    "toNextRace": "<big>{time}</big> <small>sonraki yarışa kaldı</small>",
+    "entrants": "Bu yarışta",
+    "entered": "Katıldın. Otomatik başlar.",
+    "enteredAlone": "Katıldın. Otomatik başlar (kimse katılmazsa yapay zeka ile).",
+    "leave": "Yarıştan ayrıl",
+    "join": "Sonraki yarışa katıl",
+    "rules": "Sabit araç. Grid sırası haftalık mücadeledeki en iyi tura göre belirlenir.",
+    "nobodyWaiting": "0 bekliyor",
+    "waiting": "<b>{count, plural, one {# pilot} other {# pilot}} bekliyor</b>",
+    "waitingNames": "<b>{count, plural, one {# pilot} other {# pilot}} bekliyor</b>: {names}",
+    "waitingNamesMore": "<b>{count, plural, one {# pilot} other {# pilot}} bekliyor</b>: {names} ve {more} kişi daha",
+    "topDrivers": "Bu haftanın en iyi pilotları",
+    "winsPodiums": "{wins, plural, one {{wins} galibiyet} other {{wins} galibiyet}} · {podiums, plural, one {{podiums} podyum} other {{podiums} podyum}}",
+    "record": "Sen: {starts, plural, one {{starts} yarış} other {{starts} yarış}} · {wins, plural, one {{wins} galibiyet} other {{wins} galibiyet}} · {podiums, plural, one {{podiums} podyum} other {{podiums} podyum}}",
+    "recordBest": "Sen: {starts, plural, one {{starts} yarış} other {{starts} yarış}} · {wins, plural, one {{wins} galibiyet} other {{wins} galibiyet}} · {podiums, plural, one {{podiums} podyum} other {{podiums} podyum}} · en iyi P{best}"
+  },
+  "seatPanel": {
+    "dialog": "Koltuk ve kamera, {car}",
+    "title": "Koltuk ve kamera",
+    "rows": {
+      "view": "Görünüm",
+      "viewLess": "Kokpit görünümü",
+      "viewMore": "Gösterge görünümü",
+      "fwd": "İleri",
+      "fwdLess": "Geriye kaydır",
+      "fwdMore": "İleri kaydır",
+      "up": "Yükseklik",
+      "upLess": "Alçalt",
+      "upMore": "Yükselt",
+      "right": "Yan",
+      "rightLess": "Sola kaydır",
+      "rightMore": "Sağa kaydır",
+      "tilt": "Eğim",
+      "tiltLess": "Aşağı eğ",
+      "tiltMore": "Yukarı eğ",
+      "fov": "FOV",
+      "fovLess": "Daralt",
+      "fovMore": "Genişlet"
+    },
+    "viewGroup": "Görünüm",
+    "resetView": "Görünümü sıfırla",
+    "done": "Tamam",
+    "prompts": {
+      "row": "Satır",
+      "change": "Değiştir",
+      "resetRow": "Satırı sıfırla",
+      "resetView": "Görünümü sıfırla",
+      "done": "Tamam"
+    },
+    "savedPerCar": "Araç başına kaydedilir"
+  },
+  "leaderboardPanel": {
+    "raceGhost": "{car} turunun hayaletiyle yarış",
+    "raceGhostTitle": "Hayaletle yarış",
+    "postUnreachable": "Tur tablosuna ulaşılamadı",
+    "applySetup": "{car} turundaki araç ayarını uygula",
+    "applySetupTitle": "Ayarı uygula",
+    "retry": "Tekrar dene",
+    "post": "Gönder",
+    "retryAria": "Bu turu çevrimiçi göndermeyi tekrar dene",
+    "postAria": "Bu turu çevrimiçi gönder",
+    "retryTitle": "Tekrar dene",
+    "postTitle": "Çevrimiçi gönder",
+    "notPosted": "Çevrimiçi tabloda değil: {error}",
+    "notPostedYet": "Henüz çevrimiçi tabloda değil",
+    "driverKey": "Pilot anahtarı",
+    "driverKeyIntro": "Tur tablosundaki pilot adını sana bağlar. Aynı adı başka bir cihazda kullanmak için dışa aktar; dosyayı gizli tut.",
+    "exportKey": "Anahtarı dışa aktar",
+    "importKey": "Anahtarı içe aktar",
+    "importGhost": "Hayalet dosyasını içe aktar",
+    "exportBest": "En iyi turumu dışa aktar",
+    "undo": "Geri al",
+    "dismiss": "Kapat",
+    "onlineTimes": "Çevrimiçi süreler",
+    "circuit": "Pist",
+    "circuitLaps": "{count, plural, one {{count} tur} other {{count} tur}}",
+    "allCars": "Tüm araçlar",
+    "yourBestLaps": "En iyi turların",
+    "physicsVersion": "Fizik sürümü",
+    "car": "Araç",
+    "carLaps": "{count, plural, one {{count} tur} other {{count} tur}}",
+    "noLapsOlder": "{circuit} ({board}) üzerinde tur yok.",
+    "noLaps": "{circuit} pistinde kayıtlı tur yok.",
+    "tableLabel": "{circuit} pistindeki en iyi turlar",
+    "carColumn": "Araç",
+    "theoreticalBest": "Teorik en iyi",
+    "potential": "{delta} s potansiyel",
+    "allBestSectors": "Tüm en iyi sektörler tek turda",
+    "offline": "Tur tablosu çevrimdışı. Yerel süreler gösteriliyor.",
+    "disabled": "Çevrimiçi tur tablosu kapalı. Yerel süreler gösteriliyor."
+  },
+  "boardWidget": {
+    "modes": {
+      "lapEnd": "Tur sonunda aç",
+      "open": "Her zaman açık",
+      "closed": "Her zaman kapalı"
+    },
+    "gear": "Tur tablosu ne zaman açılsın",
+    "modeMenu": "Tur tablosu ne zaman açılsın",
+    "region": "Tur tablosu",
+    "fold": "Tur tablosunu daralt",
+    "foldKey": "Tur tablosunu daralt ({key})",
+    "open": "Tur tablosunu aç: {circuit}, {place}",
+    "openNoTime": "Tur tablosunu aç: {circuit}, henüz süre yok",
+    "openKey": "Tur tablosunu aç ({key}): {circuit}, {place}",
+    "openKeyNoTime": "Tur tablosunu aç ({key}): {circuit}, henüz süre yok",
+    "drivers": "{total, plural, one {{count} pilot} other {{count} pilot}}",
+    "noTimes": "Henüz süre yok.",
+    "placesBetween": "Aradaki sıralar",
+    "lapsDriven": "Atılan turlar",
+    "noTime": "Henüz süre yok",
+    "place": "P{rank}/{total}"
+  },
+  "multiplayerPanel": {
+    "collision": {
+      "on": "Açık",
+      "ghostLap1": "1. tur hayalet",
+      "off": "Kapalı",
+      "protected": "Korumalı"
+    },
+    "collisionHint": {
+      "on": "Tam temas",
+      "ghostLap1": "İlk turda temas yok",
+      "off": "Araçlar birbirinin içinden geçer",
+      "protected": "1. tur hayalet, ardından tehlikeli süren araç diğerlerine temas edemez"
+    },
+    "anyCar": "Herhangi bir araç",
+    "startType": {
+      "standing": "Durarak",
+      "rolling": "Hareketli"
+    },
+    "gridOrder": {
+      "qualifying": "Sıralama turları",
+      "reverse": "Ters",
+      "random": "Rastgele"
+    },
+    "gridOrderHint": {
+      "qualifying": "En hızlı tur öne; süre yoksa katılım sırası",
+      "reverse": "Sıralama (veya katılım) sırasının tersi",
+      "random": "Başlangıçta kura çekilir"
+    },
+    "presetClassic": "Klasik",
+    "presetClassicHint": "İhlal sayısına göre pist sınırları: her üçüncü ihlalde önce +3 s, sonra +5 s",
+    "timeScaleFixed": "Sabit",
+    "qualifyingOff": "Kapalı",
+    "settings": {
+      "event": "Etkinlik",
+      "race": "Yarış",
+      "rules": "Kurallar",
+      "circuit": "Pist",
+      "changeCircuit": "Pist değiştir: {circuit}",
+      "change": "Değiştir",
+      "circuitHint": "Ana menüden değiştir",
+      "cars": "Araçlar",
+      "oneCar": "Herkes için tek araç",
+      "classesMixed": "Tüm araçlar, karma sınıflar",
+      "weather": "Hava durumu",
+      "timeOfDay": "Günün saati",
+      "timeSpeed": "Zaman hızı",
+      "laps": "Tur sayısı",
+      "qualifying": "Sıralama turları",
+      "qualifyingHint": "Grid sırasını en iyi temiz tur belirler",
+      "gridOrder": "Grid sırası",
+      "setByQualifying": "Sıralama turlarıyla belirlenir",
+      "start": "Kalkış",
+      "launch": "Kalkış kontrolü",
+      "rulePreset": "Kurallar",
+      "trackLimits": "Pist sınırları",
+      "penalties": "Cezalar",
+      "penaltiesOn": "Açık",
+      "penaltiesOff": "Kapalı",
+      "penaltiesHint": "Pist sınırları ve erken çıkış için zaman eklenir",
+      "damage": "Hasar",
+      "collisions": "Çarpışmalar",
+      "lockedQualifying": "Sıralama turları sürerken kilitli",
+      "lockedRace": "Yarış sürerken kilitli"
+    },
+    "net": {
+      "relayedTitle": "Trafik sana oda kurucusu üzerinden ulaşıyor",
+      "relayed": "Aktarmalı",
+      "measuring": "Ölçülüyor",
+      "pingLoss": "{ping} ms · %{loss} kayıp"
+    },
+    "drivers": {
+      "title": "Pilotlar",
+      "host": "Kurucu: {name}",
+      "qualifying": "Sıralama",
+      "noCar": "Henüz araç seçilmedi",
+      "noTime": "Süre yok",
+      "wrongClassTitle": "Bu odanın sınıfında değil ({class})",
+      "wrongClass": "Yanlış sınıf",
+      "ready": "Hazır",
+      "notReady": "Hazır değil",
+      "hostOn": "Oda kurucusu {circuit} pistinde",
+      "switchCircuit": "Pisti değiştir",
+      "wrongCar": "Aracın bu odanın sınıfında değil ({class}).",
+      "wrongCarSwitch": "Aracın bu odanın sınıfında değil ({class}). Araç değiştir:",
+      "raceInProgress": "Yarış devam ediyor",
+      "startRaceNow": "Yarışı şimdi başlat",
+      "startQualifying": "{minutes} dk sıralama turlarını başlat",
+      "startRace": "Yarışı başlat",
+      "endQualifying": "Sıralamayı bitir",
+      "endRaceForEveryone": "Yarışı herkes için bitir",
+      "readyButton": "Hazır",
+      "readyUp": "Hazır ol",
+      "raceRunning": "Yarış devam ediyor.",
+      "qualifyingRunning": "Sıralama turları devam ediyor.",
+      "waitingForHost": "Oda kurucusunun başlatması bekleniyor.",
+      "confirmEndQualifying": "Sıralama turları bitirilsin mi?",
+      "confirmEndRace": "Yarış herkes için bitirilsin mi?",
+      "confirmEndQualifyingButton": "Sıralamayı bitir",
+      "confirmEndRaceButton": "Yarışı bitir",
+      "keepQualifying": "Sıralamaya devam et",
+      "keepRacing": "Yarışa devam et",
+      "confirmBody": "Tüm pilotları lobiye döndürür."
+    },
+    "room": {
+      "connected": "{count} bağlı",
+      "connecting": "Bağlanılıyor",
+      "notConnected": "Bağlı değil",
+      "title": "Özel oda",
+      "codeAria": "Oda kodu {code}",
+      "codeCaption": "Oda kodu",
+      "linkCopied": "Bağlantı kopyalandı",
+      "copyLink": "Davet bağlantısını kopyala",
+      "share": "Paylaş",
+      "host": "Oda kur",
+      "joinAnother": "Başka bir odaya katıl",
+      "joinFriend": "Arkadaşının odasına katıl",
+      "codePlaceholder": "Oda kodu",
+      "join": "Katıl",
+      "newRoom": "Yeni oda",
+      "codeTooShort": "En az 3 karakter gir.",
+      "joinFailed": "Bu odaya katılınamadı. Kodu kontrol et.",
+      "shareTitle": "LibreCorsa yarışı",
+      "shareText": "Yarışıma katıl",
+      "racingAs": "{name} olarak yarışıyorsun",
+      "edit": "Düzenle"
+    },
+    "connect": {
+      "more": "Diğer bağlantı yolları",
+      "hide": "Gizle",
+      "localTitle": "Yerel sekmeler",
+      "localIntro": "Bu tarayıcıdaki başka bir sekmeyle yarış.",
+      "localConnect": "Yerel sekmeye bağlan",
+      "manualTitle": "Manuel WebRTC",
+      "manualIntro": "Davet/yanıt jetonu paylaşarak doğrudan eşler arası bağlantı.",
+      "createOffer": "1. Davet oluştur (kurucu)",
+      "acceptOffer": "2. Daveti kabul et",
+      "acceptAnswer": "3. Yanıtı kabul et (kurucu)",
+      "offerFailed": "Davet oluşturulamadı.",
+      "badOffer": "Geçersiz davet jetonu.",
+      "badAnswer": "Geçersiz yanıt jetonu.",
+      "remoteToken": "Karşı tarafın jetonu",
+      "pasteToken": "Jetonu yapıştır",
+      "answerAccepted": "Yanıt kabul edildi. Bağlanılıyor…",
+      "yourToken": "Senin jetonun",
+      "copied": "Kopyalandı",
+      "copy": "Kopyala",
+      "reset": "Sıfırla",
+      "turnTitle": "Özel TURN aktarıcısı",
+      "turnIntro": "Kısıtlı ağlar için isteğe bağlı aktarıcı sunucu.",
+      "relayAddress": "Aktarıcı adresi",
+      "username": "Kullanıcı adı",
+      "password": "Parola",
+      "saved": "Kaydedildi",
+      "save": "Kaydet",
+      "clear": "Temizle",
+      "turnPrefix": "Adres turn: veya turns: ile başlamalı",
+      "ownRelay": "Kendi aktarıcı sunucun kullanılıyor"
+    }
+  },
+  "pauseMenu": {
+    "tabs": {
+      "label": "Bölümler",
+      "session": "Seans",
+      "hud": "HUD",
+      "conditions": "Koşullar",
+      "garage": "Garaj",
+      "corners": "Virajlar",
+      "multiplayer": "Çok Oyunculu",
+      "lapTimes": "Tur zamanları",
+      "feedback": "Geri Bildirim"
+    },
+    "actions": {
+      "label": "Duraklatma menüsü",
+      "resume": "Devam Et",
+      "restartRace": "Yarışı yeniden başlat",
+      "gridStart": "Grid kalkışı",
+      "rollingStart": "Hareketli kalkış",
+      "flyingLap": "Uçan tur",
+      "watchReplay": "Tekrarı izle",
+      "skipTrack": "Parçayı atla",
+      "nowPlaying": "{title}, {composer}",
+      "settings": "Ayarlar",
+      "mainMenu": "Ana menü"
+    },
+    "prompts": {
+      "move": "Gezin",
+      "select": "Seç",
+      "jumpThere": "Oraya git",
+      "tabs": "Sekmeler",
+      "page": "Sayfa",
+      "back": "Geri",
+      "resume": "Devam Et"
+    },
+    "header": {
+      "lap": "Tur {lap}",
+      "lapOf": "Tur {lap}/{total}",
+      "run": "Tırmanış {lap}",
+      "position": "P{position}/{field}",
+      "online": "Çevrimiçi",
+      "leavesRace": "Mevcut yarıştan çıkarır.",
+      "leavesRoom": "Mevcut odadan çıkarır.",
+      "endsSession": "Mevcut seansı sonlandırır."
+    },
+    "session": {
+      "title": "Seans",
+      "autopilot": "Otopilot",
+      "key": "Tuş {key}",
+      "camera": "Kamera",
+      "cameraView": "Kamera açısı",
+      "cycle": "Değiştir: {key}",
+      "freeCamera": "Serbest kamera",
+      "freeCameraHint": "Tuş {key} · Sürükleyerek bak, WASD ile uç, Q/E yükseklik",
+      "freeCameraButton": "Serbest kamera",
+      "exitFreeCamera": "Kameradan çık",
+      "tv": "Pist Kenarı TV",
+      "tvHint": "Tuş {key} · Pist kenarı yayın kameraları",
+      "tvButton": "Pist Kenarı TV",
+      "exitTv": "TV’den çık"
+    },
+    "hud": {
+      "title": "HUD düzeni",
+      "settings": "HUD ayarları"
+    },
+    "corners": {
+      "title": "Virajlar",
+      "mapLabel": "{count, plural, one {Numaralandırılmış # virajlı pist haritası} other {Numaralandırılmış # virajlı pist haritası}}",
+      "turn": "T{turn}",
+      "detail": "{complex} · Sektör {sector}",
+      "pick": "Bir viraj seç",
+      "rowLabel": "T{turn}, {turn}. viraj: {name}, {complex}. Apeks {apex} {unit}, {gear}. vites",
+      "gear": "Vites <n>{gear}</n>"
+    }
+  },
+  "lapSummary": {
+    "title": "{kind, select, run {Tırmanış {lap}} other {Tur {lap}}}",
+    "open": "{kind, select, run {Tırmanış {lap}: sektör verilerini göster} other {Tur {lap}: sektör verilerini göster}}",
+    "dismiss": "Tur özetini kapat",
+    "collapse": "Tur özetini daralt",
+    "cardLabel": "Tur {lap} özeti",
+    "invalid": "Geçersiz",
+    "pb": "PB",
+    "invalidWall": "Geçersiz: duvar teması",
+    "invalidLimits": "Geçersiz: pist sınırları",
+    "autopilot": "Otopilot: sıralamaya girmez",
+    "personalBest": "Kişisel en iyi",
+    "online": "Çevrimiçi",
+    "onlineRank": "Çevrimiçi: P{rank}",
+    "onlineRankOf": "Çevrimiçi: P{rank} / {total}",
+    "onlineRankWeek": "Çevrimiçi: P{rank}, bu hafta P{week}",
+    "onlineRankOfWeek": "Çevrimiçi: P{rank} / {total}, bu hafta P{week}",
+    "invalidUnranked": "Geçersiz · sıralamasız",
+    "autopilotUnranked": "Otopilot · sıralamasız",
+    "topSpeed": "Maks {unit}",
+    "avgSpeed": "Ort {unit}",
+    "fullThrottle": "Tam gaz",
+    "braking": "Frenleme",
+    "sector": "{mark, select, best {Sektör {n}: en iyi} pb {Sektör {n}: kişisel en iyi} slower {Sektör {n}: daha yavaş} other {Sektör {n}}}",
+    "theoreticalBest": "Teorik en iyi",
+    "posting": "Gönderiliyor",
+    "postingNow": "Gönderiliyor…",
+    "retry": "Yüklemeyi tekrar dene",
+    "post": "Çevrimiçi gönder",
+    "queued": "Sırada",
+    "close": "Kapat",
+    "saveGhost": "Hayalet dosyasını kaydet",
+    "driver": "Pilot <b>{name}</b>",
+    "rename": "Adı değiştir",
+    "driverName": "Pilot adı",
+    "cancel": "İptal",
+    "saving": "Kaydediliyor…",
+    "saveName": "Adı kaydet",
+    "chart": {
+      "title": "Viraj başına en düşük hız",
+      "turn": "T{turn}",
+      "empty": "Bu tur için viraj verisi yok.",
+      "bar": "T{turn} {name}: {speed} {unit}, {state, select, none {henüz referans yok} same {{delta}, en iyiyle aynı} faster {{delta}, en iyiden hızlı} other {{delta}, en iyiden yavaş}}",
+      "faster": "Daha hızlı",
+      "slower": "Daha yavaş",
+      "same": "Aynı"
+    }
+  },
+  "raceResults": {
+    "dialog": "Yarış sonucu",
+    "dsq": "DSQ",
+    "dnf": "DNF",
+    "running": "Yarışıyor",
+    "lapsDown": "{count, plural, one {+# tur} other {+# tur}}",
+    "laps": "{count, plural, one {# tur} other {# tur}}",
+    "trackLimits": "Pist sınırları {count}",
+    "final": "Kesin",
+    "provisional": "Geçici",
+    "table": "Tam klasman",
+    "colPos": "Sıra",
+    "colGainedTitle": "Gridden kazanılan veya kaybedilen sıralar",
+    "colGained": "Kazanılan sıra",
+    "colDriver": "Pilot",
+    "colLaps": "Tur",
+    "colTime": "Süre / fark",
+    "colBest": "En iyi tur",
+    "penaltyTitle": "Süreye dahil {seconds} s zaman cezası",
+    "promptSelect": "Seç",
+    "promptClose": "Kapat",
+    "backToLobby": "Lobiye dön",
+    "watchReplay": "Tekrarı izle",
+    "restart": "Yarışı yeniden başlat",
+    "close": "Kapat",
+    "fastestLapIcon": "En hızlı tur",
+    "noChange": "Değişim yok",
+    "notKnown": "Bilinmiyor",
+    "placesGained": "{count, plural, one {# sıra kazanıldı} other {# sıra kazanıldı}}",
+    "placesLost": "{count, plural, one {# sıra kaybedildi} other {# sıra kaybedildi}}",
+    "yourRace": "Yarışın",
+    "position": "P{position}",
+    "disqualified": "Diskalifiye",
+    "retired": "Yarış dışı",
+    "ofField": "/ {count}",
+    "gridUnknown": "Grid bilinmiyor",
+    "started": "Başlangıç P{position}",
+    "fastestLap": "En hızlı tur",
+    "bestLap": "En iyi tur",
+    "lastRaces": {
+      "title": "Son yarışların",
+      "date": "Tarih",
+      "circuit": "Pist",
+      "finish": "Bitiş",
+      "gained": "Kazanılan sıra",
+      "best": "En iyi tur",
+      "dnf": "DNF",
+      "position": "P{position}"
+    },
+    "joinNext": "Sonraki yarışa katıl <time>{countdown}</time>"
+  },
+  "podiumOverlay": {
+    "label": "Podyum",
+    "first": "1.",
+    "second": "2.",
+    "third": "3.",
+    "skip": "Atla"
+  },
+  "qualifyingHud": {
+    "clock": "Sıralama turları",
+    "lastLap": "Son tur",
+    "badge": "Sıralama",
+    "finishIt": "Turu bitir",
+    "lapDeleted": "Tur silindi",
+    "best": "En iyi",
+    "grid": "Sıralama sonucu",
+    "noTime": "Süre yok"
+  },
+  "perfReportCard": {
+    "title": "Performans raporu",
+    "description": "Seans kare süresi günlüğü.",
+    "failed": "Pano kullanılamıyor. Bunun yerine dosyayı kaydet.",
+    "copy": "Kopyala",
+    "copied": "Kopyalandı",
+    "saveFile": "Dosyayı kaydet",
+    "saved": "Kaydedildi"
+  },
+  "qualityNotice": {
+    "lowered": "Grafikler düşürüldü",
+    "floor": "Düşük FPS · Ayarlar’da 30 fps sınırı mevcut"
+  },
+  "multiPageMfd": {
+    "pages": {
+      "elecTag": "ELEC",
+      "elecTitle": "Elektronik",
+      "relTag": "Yakın",
+      "relTitle": "Yakın araçlar",
+      "tyreTag": "Lastik",
+      "tyreTitle": "Lastikler ve frenler",
+      "fuelTag": "Yakıt",
+      "fuelTitle": "Yakıt ve enerji",
+      "stndTag": "Sıra",
+      "stndTitle": "Sıralama"
+    },
+    "panel": "MFD · {page}",
+    "pagesLabel": "MFD sayfaları",
+    "pagesHint": "D-pad sol/sağ veya Ins: sonraki sayfa",
+    "open": "MFD’yi aç",
+    "fold": "MFD’yi daralt",
+    "relative": {
+      "label": "Yakın araçlar",
+      "noCars": "Pistte araç yok",
+      "lapsUp": "+{count}L",
+      "lapsDown": "−{count}L",
+      "ahead": "Önde",
+      "behind": "Arkada",
+      "clear": "Temiz",
+      "you": "SEN"
+    },
+    "fuel": {
+      "battery": "Batarya",
+      "ersPerLap": "ERS / tur",
+      "treadPerLap": "Aşınma / tur",
+      "fuel": "Yakıt",
+      "lapsOfFuel": "{laps} tur",
+      "perLap": "Tur başına",
+      "target": "hedef {kg}",
+      "lift": "Gaz kes · {kg} kg tasarruf",
+      "fuelOk": "Yakıt yeterli"
+    },
+    "tyres": {
+      "label": "Lastikler ve frenler"
+    },
+    "standings": {
+      "label": "Sıralama",
+      "fastestLap": "En hızlı tur",
+      "fastestLapShort": "FL",
+      "lead": "Lider",
+      "noLaps": "Henüz tur yok",
+      "lapTimes": "Tur zamanları"
+    },
+    "pill": {
+      "position": "P{position}/{fieldSize}",
+      "laps": "{count, plural, one {# tur} other {# tur}}"
+    }
+  },
+  "tunerMfdPanel": {
+    "categories": {
+      "bias": "BIAS",
+      "diff": "DIFF",
+      "pwr": "Güç"
+    },
+    "dials": {
+      "tc1": {
+        "title": "Çekiş kontrolü",
+        "low": "Daha fazla patinaj",
+        "high": "Daha güvenli"
+      },
+      "tc2": {
+        "title": "TC kesme",
+        "low": "Daha yumuşak kesme",
+        "high": "Daha sert kesme"
+      },
+      "abs": {
+        "title": "ABS",
+        "low": "Daha geç",
+        "high": "Daha erken"
+      },
+      "bias": {
+        "label": "BIAS",
+        "title": "Fren dengesi",
+        "low": "Arkaya",
+        "high": "Öne"
+      },
+      "diffEntry": {
+        "label": "Giriş",
+        "title": "Giriş diferansiyeli",
+        "low": "Çevik",
+        "high": "Stabil"
+      },
+      "diffMid": {
+        "label": "Orta",
+        "title": "Orta diferansiyel",
+        "low": "Daha iyi döner",
+        "high": "Kilitli"
+      },
+      "diffExit": {
+        "label": "Çıkış",
+        "title": "Çıkış diferansiyeli",
+        "low": "Daha az savrulma",
+        "high": "Daha fazla çekiş"
+      },
+      "engineMap": {
+        "label": "MAP",
+        "title": "Motor haritası",
+        "low": "Daha keskin",
+        "high": "Daha yumuşak"
+      },
+      "ersMode": {
+        "title": "ERS dağıtımı",
+        "low": "Geri kazanım",
+        "high": "Atak"
+      }
+    },
+    "engineMaps": {
+      "quali": "Quali",
+      "race": "Yarış",
+      "smooth": "Yumuşak",
+      "lean": "Kısık",
+      "wet": "Islak"
+    },
+    "ersModes": {
+      "charge": "Şarj",
+      "lowSpeed": "Düşük hız",
+      "balanced": "Dengeli",
+      "race": "Yarış",
+      "attack": "Atak"
+    },
+    "phases": {
+      "entry": "Giriş",
+      "mid": "Orta",
+      "exit": "Çıkış"
+    },
+    "chips": {
+      "tc": "TC {level}/{cut}",
+      "tcOff": "TC Kapalı",
+      "abs": "ABS {level}",
+      "absOff": "ABS Kapalı",
+      "bias": "BB {bias}"
+    },
+    "hero": {
+      "off": "Kapalı",
+      "ofMax": "/ {max}",
+      "lock": "%{pct} kilit",
+      "front": "% ön",
+      "map": "M{map}"
+    },
+    "live": {
+      "cut": "Kesme",
+      "wheelFl": "FL",
+      "wheelFr": "FR",
+      "wheelRl": "RL",
+      "wheelRr": "RR",
+      "front": "Ön {bias}",
+      "rear": "Arka {bias}",
+      "torque": "Tork",
+      "battery": "Batarya"
+    },
+    "previousDial": "Önceki kadran",
+    "previousDialHint": "Önceki kadran (D-pad sol veya ,)",
+    "nextDial": "Sonraki kadran",
+    "nextDialHint": "Sonraki kadran (D-pad sağ veya .)",
+    "lower": "{dial} azalt",
+    "lowerHint": "{hint} (D-pad aşağı veya -)",
+    "raise": "{dial} artır",
+    "raiseHint": "{hint} (D-pad yukarı veya =)",
+    "openTuner": "Ayarlayıcıyı aç",
+    "foldTuner": "Ayarlayıcıyı daralt"
+  },
+  "f12026ChannelsPanel": {
+    "region": "Mühendislik kanalları",
+    "wheels": {
+      "lf": "LF",
+      "rf": "RF",
+      "lr": "LR",
+      "rr": "RR"
+    },
+    "wheelTitle": "{wheel}: kayma oranı, stopere kalan mesafe, kullanılan tutuş",
+    "slipRatio": "%SR",
+    "aeroHeightTitle": "Aero sürüş yüksekliği",
+    "aeroHeight": "Yükseklik",
+    "aeroBalanceTitle": "Aero dengesi (ön aksın yere basma payı)",
+    "aeroBalance": "Denge",
+    "lsdTitle": "Diferansiyel kilitleme torku",
+    "lsd": "LSD kilit",
+    "straightModeTitle": "Straight Mode durumu ve bu seanstaki açılmalar",
+    "drsTitle": "DRS durumu ve bu seanstaki açılmalar",
+    "xMode": "X-mode",
+    "drsState": {
+      "open": "Açık",
+      "armed": "Hazır",
+      "zone": "Bölge",
+      "off": "Kapalı"
+    },
+    "overtakeEarned": "Geçiş modu açıldı",
+    "overtakeLocked": "Geçiş modu kilitli",
+    "noVerdict": "Karar yok",
+    "zoneEarned": "{zone} açıldı",
+    "zoneLocked": "{zone} kilitli",
+    "noDetection": "Algılama yok",
+    "wall": "Duvar",
+    "aidIntervening": "{aid}, devrede"
+  },
+  "touchControls": {
+    "steering": "Direksiyon",
+    "drive": "İleri",
+    "reverse": "Geri",
+    "shiftDown": "Vites düşür",
+    "shiftUp": "Vites yükselt",
+    "boost": "Takviye",
+    "activeAero": "Aktif aero",
+    "headlights": "Farlar",
+    "brake": "Fren",
+    "throttle": "Gaz",
+    "steerLeft": "Sola kır",
+    "steerRight": "Sağa kır",
+    "pause": "Duraklat",
+    "camera": "Kamera",
+    "recentreTilt": "Eğimi ortala",
+    "allowMotion": "Harekete izin ver",
+    "tapForTilt": "Eğim için dokun",
+    "tiltBlocked": "Eğim engellendi · Tekrar dene",
+    "noTiltSensor": "Eğim sensörü yok"
+  },
+  "replayBar": {
+    "region": "Tekrar kontrolleri",
+    "transport": "Oynatma",
+    "previousFrame": "Önceki kare",
+    "previousFrameTitle": "Önceki kare ({key})",
+    "pause": "Tekrarı duraklat",
+    "play": "Tekrarı oynat",
+    "playPauseTitle": "Oynat / duraklat",
+    "playPauseTitleKey": "Oynat / duraklat ({key})",
+    "nextFrame": "Sonraki kare",
+    "nextFrameTitle": "Sonraki kare ({key})",
+    "jumpToLap": "{lap}. tura git",
+    "lapMarker": "L{lap}",
+    "timeline": "Tekrar zaman çizelgesi",
+    "timelineValue": "{elapsed} / {duration}",
+    "playbackSpeed": "Oynatma hızı",
+    "focusedCar": "Odaklanılan araç",
+    "previousCar": "Önceki araç",
+    "previousCarTitle": "Önceki araç ({key})",
+    "switchCarTitle": "Odaklanılan aracı değiştir ({key})",
+    "nextCar": "Sonraki araç",
+    "nextCarTitle": "Sonraki araç ({key})",
+    "cameraAngle": "Tekrar kamera açısı",
+    "cycleCamera": "Tekrar kamerasını değiştir",
+    "flashbackTitle": "Flashback — bu andan sürmeye devam et ({key}, mevcut turu geçersiz kılar)",
+    "flashback": "Flashback",
+    "exit": "Çık",
+    "hints": {
+      "freeCam": "Serbest kamera · Sürükle bak · WASD uç · Q/E yükseklik · Tekerlek hız · R sıfırla",
+      "playPause": "Oynat / duraklat",
+      "seek": "{seconds} s sar",
+      "step": "Kare",
+      "switchCar": "Araç değiştir",
+      "freeCamKey": "Serbest kam",
+      "flashback": "Flashback"
+    }
+  },
+  "timingPanels": {
+    "tower": {
+      "region": "Zamanlama kulesi",
+      "lap": "Tur {lap}",
+      "lapOf": "Tur {lap}<dim>/{total}</dim>",
+      "driver": "Pilot",
+      "gap": "Fark",
+      "interval": "Ara",
+      "lastVsYouTitle": "Onların son turu seninkine göre; kendi satırında ise en iyine göre",
+      "lastVsYou": "Son<br></br>fark",
+      "fastestLap": "En hızlı tur",
+      "fastestLapShort": "FL",
+      "finished": "Bitirdi",
+      "damagedTitle": "Hasarlı (%{percent})",
+      "damagedLabel": "Hasarlı, %{percent}",
+      "out": "DNF",
+      "leader": "Lider",
+      "lead": "Lider",
+      "lastVsBestTitle": "Son tur, en iyine göre",
+      "lastVsTheirsTitle": "Onun son turu, seninkine göre",
+      "personalBest": "PB"
+    },
+    "lap": {
+      "region": "Tur",
+      "outLap": "Çıkış turu",
+      "counter": "{kind, select, run {Tırmanış {lap}} other {Tur {lap}}}",
+      "sector": "S{sector}",
+      "last": "Son",
+      "best": "En iyi",
+      "noRefLap": "Ref tur yok",
+      "lastLap": "Son tur",
+      "bestLap": "En iyi tur"
+    },
+    "challenge": {
+      "region": "Bu haftanın mücadelesi",
+      "yourBest": "En iyin",
+      "weekFastest": "Bu haftanın en hızlısı"
+    }
+  },
+  "raceIncidentFeed": {
+    "calls": {
+      "investigation": "İnceleme",
+      "penalty": "Ceza",
+      "noAction": "İşlem yok",
+      "out": "DNF",
+      "raceControl": "Yarış yönetimi",
+      "yellow": "Sarı",
+      "green": "Yeşil",
+      "warning": "Uyarı"
+    },
+    "vsc": {
+      "tag": "VSC",
+      "ending": "VSC bitiyor",
+      "slowDown": "Yavaşla",
+      "slowToTarget": "Hedef tempoya in",
+      "prepareForGreen": "Yeşile hazırlan",
+      "noOvertaking": "Geçiş yasak"
+    },
+    "flag": {
+      "yieldNow": "Hemen yol ver · {code} geçsin",
+      "letThrough": "{code} geçsin",
+      "doubleYellowCue": "Yavaşla · geçiş yasak",
+      "yellowCue": "Geçiş yasak",
+      "blue": "Mavi",
+      "doubleYellow": "Çift sarı",
+      "yellow": "Sarı"
+    }
+  },
+  "raceControlBanner": {
+    "decisions": {
+      "warning": "Uyarı",
+      "finalWarning": "Son uyarı",
+      "penalty": "Ceza",
+      "disqualified": "Diskalifiye",
+      "lapInvalid": "Tur silindi",
+      "cleared": "Geri verildi",
+      "noAdvantage": "İşlem yok"
+    },
+    "warningsMeter": "{total} uyarıdan {count}",
+    "pointsMeter": "{allowed} pist sınırı puanından {points}",
+    "giveBack": {
+      "toCar": "{code} pilotuna sırayı geri ver",
+      "dropTo": "P{position} sırasına gerile",
+      "time": "{seconds} s geri ver",
+      "slowDown": "Yavaşla",
+      "underYellow": "Sarı bayrakta geçiş",
+      "illegalOvertake": "Kural dışı geçiş",
+      "trackLimits": "Pist sınırları"
+    },
+    "offTrack": {
+      "trackLimits": "Pist sınırları",
+      "offTrack": "Pist dışı",
+      "underReview": "İnceleniyor"
+    }
+  },
+  "startLights": {
+    "startsIn": "Yarış <n>{seconds}</n> sn içinde başlıyor",
+    "lightsLabel": "Kalkış ışıkları: {total} ışıktan {lit} tanesi yanıyor",
+    "rollingStart": "Hareketli kalkış",
+    "holdPaceSkin": "Tempoyu koru · çizgiye kadar <n>{pace}</n> {unit}",
+    "holdPace": "Çizgiye kadar <n>{pace}</n> {unit}",
+    "greenFlag": "Yeşil bayrak",
+    "lightsOut": "Işıklar söndü",
+    "chequeredFlag": "Damalı bayrak"
+  },
+  "launchCue": {
+    "stalledLabel": "Motor stop etti: yeniden çalıştırmak için {control} basılı tut veya boşa al",
+    "clutch": "debriyaj",
+    "stalled": "Stop etti · <control></control> basılı tut veya N",
+    "jumpStart": "Erken çıkış · +{seconds} s",
+    "manualStart": "Manuel kalkış: {clutch, select, held {debriyaj basılı} other {debriyaja basılı tut}}, {revs, select, up {devir hazır} other {devri yükselt}}",
+    "holdNamed": "{control} basılı tut",
+    "holdClutch": "Debriyaja basılı tut",
+    "revsUp": "Devri yükselt"
+  },
+  "speedCluster": {
+    "region": "Hız göstergesi",
+    "minimalRegion": "Hız ve vites",
+    "shiftLights": "Vites ışıkları: {lit} / {total}",
+    "gearLabel": "Vites {gear}",
+    "gear": "Vites",
+    "shift": "Vites at",
+    "aeroToggle": "{label}: aç / kapat",
+    "drsTitle": "DRS ({key}): arka kanat, DRS bölgesinde; yarışta 3. turdan itibaren algılama noktasında öndeki araçla 1 s içindeyken açılır",
+    "straightModeTitle": "Straight Mode ({key}): düzlüklerde her iki kanat açılır; düzlükten hemen önce basarsan başlar başlamaz açılır",
+    "overtakeLockedTitle": "Geçiş modu ({keys}): algılama noktasında öndeki araçla 1 s içinde olunca sonraki tur için kazanılır",
+    "overtakeTitle": "Geçiş modu ({keys})",
+    "boostTitle": "Manuel takviye ({keys})",
+    "overtake": "Geçiş",
+    "boost": "Takviye",
+    "harvest": "Şarj",
+    "deploy": "Dağıtım",
+    "ersSoc": "ERS SOC",
+    "lonG": "Boyuna G",
+    "inputs": "Fren, gaz, kuvvet",
+    "brakeLetter": "B",
+    "brakeTitle": "Fren girdisi",
+    "throttleLetter": "T",
+    "throttleTitle": "Gaz girdisi",
+    "forceLetter": "F",
+    "clip": "Clip",
+    "forceTitle": "Direksiyon torku / Force Feedback (Kırmızı = Kırpılma)",
+    "latG": "{g} g yanal",
+    "ersBattery": "ERS batarya şarjı",
+    "rpmBand": "Motor RPM bandı"
+  },
+  "hudFormat": {
+    "session": {
+      "qualifying": "Sıralama turları",
+      "timeTrial": "Zamana karşı",
+      "practice": "Antrenman"
+    },
+    "cornerShort": "T{turn}",
+    "lapMark": {
+      "best": "En iyi",
+      "pb": "Kişisel en iyi",
+      "slower": "Daha yavaş"
+    }
+  },
+  "thirdPartyData": {
+    "you": "Sen",
+    "headlight": {
+      "flash": "Selektör",
+      "on": "Açık",
+      "off": "Kapalı"
+    },
+    "surface": {
+      "dry": "Kuru",
+      "damp": "Nemli",
+      "wet": "Islak",
+      "flooded": "Su birikintili"
+    }
+  },
+  "aeroLabel": {
+    "readout": {
+      "noDrs": "DRS yok",
+      "drsOpen": "DRS açık",
+      "drsQueued": "DRS sırada",
+      "drsArmed": "DRS hazır",
+      "xMode": "X-Mode",
+      "xQueued": "X sırada",
+      "xArmed": "X hazır",
+      "zMode": "Z-Mode"
+    },
+    "notice": {
+      "drsEnabled": "DRS etkin",
+      "drsNotEnabled": "DRS etkin değil",
+      "drsQueued": "Sırada",
+      "xModeBadge": "X-Mode",
+      "straightMode": "Straight Mode",
+      "xModeQueued": "Sırada",
+      "overtakeBadge": "Geçiş",
+      "overtakeEnabled": "Etkin",
+      "overtakeLocked": "Kilitli"
+    }
+  },
+  "tyreBrakeWidget": {
+    "corner": {
+      "fl": "FL",
+      "fr": "FR",
+      "rl": "RL",
+      "rr": "RR"
+    },
+    "tread": {
+      "inner": "I",
+      "middle": "M",
+      "outer": "O",
+      "title": "Dış, orta, iç sırt"
+    },
+    "condition": {
+      "grain": "Tanelenme",
+      "grainTitle": "Tanelenme: lastik sırtı yırtılıyor (alt katman soğukken kayma)",
+      "blister": "Kabarma",
+      "blisterTitle": "Kabarma: lastik çekirdeği aşırı ısındı",
+      "flat": "Düzleşme",
+      "flatTitle": "Kilitlenmeden kaynaklı düzleşme: titreşim ve daha az tutuş",
+      "dirt": "Kir",
+      "dirtTitle": "Çizgi dışından toplanan kir / lastik kırıntıları: birkaç virajda temizlenir"
+    },
+    "conditionTitle": "{title} (%{level})",
+    "brakeTitle": "Fren diski {disc}{hasCore, select, yes { · çekirdek {core}} other {}}{hasBite, select, yes { · balata tutuşu %{bite}} other {}}",
+    "cardTitle": "{corner} sırt {temps} (arkadan bakış)",
+    "treadLife": "Kalan lastik ömrü",
+    "pressureTitle": "Basınç ({unit})",
+    "windowTitle": "Lastik sırtı çalışma aralığı",
+    "window": "Aralık",
+    "miniTitle": "{corner}: sırt {temps} · {pressure} · fren {brake}{hasCondition, select, yes { · {condition}} other {}}"
+  },
+  "tyrePanel": {
+    "region": "Lastikler"
+  },
+  "weatherBadge": {
+    "region": "Hava durumu",
+    "air": "Hava",
+    "track": "Pist",
+    "rain": "Yağmur",
+    "heavyRain": "Sağanak",
+    "wind": "Rüzgar",
+    "headlightsForcedOn": "Farlar elle açıldı",
+    "headlightsForcedOff": "Farlar elle kapatıldı",
+    "headlightsOn": "Farlar açık",
+    "headlightsTitleManualOn": "Farlar açık (manuel)",
+    "headlightsTitleManualOff": "Farlar kapalı (manuel)",
+    "headlightsTitleAuto": "Farlar açık (otomatik)",
+    "chipFlash": "Flaş",
+    "chipOn": "Açık",
+    "chipOff": "Kapalı"
+  },
+  "damageWidget": {
+    "label": "Hasar",
+    "out": "DNF",
+    "puncture": "Patlak",
+    "title": "Ön {front} · arka {rear} · sol {left} · sağ {right}",
+    "titlePunctured": "Ön {front} · arka {rear} · sol {left} · sağ {right} · patlak",
+    "part": {
+      "frontWing": "Ön kanat",
+      "rearWing": "Arka kanat",
+      "floor": "Taban",
+      "suspension": "Süspansiyon"
+    }
+  },
+  "inputTrace": {
+    "throttle": "Gaz",
+    "brake": "Fren",
+    "steering": "Dir",
+    "steeringTitle": "Sürekli çizgi tekerlek açısı, kesikli çizgi senin girdin",
+    "trace": "Gaz, fren ve direksiyon grafiği: kesikli direksiyon senin girdin, sürekli çizgi tekerlek açısı",
+    "region": "Girdiler"
+  },
+  "pedalBars": {
+    "region": "Pedallar ve elektronik",
+    "clutch": "CLU",
+    "clip": "Clip",
+    "steering": "Direksiyon"
+  },
+  "splitGaps": {
+    "region": "Ara farklar",
+    "ahead": "Önde",
+    "behind": "Arkada",
+    "carAhead": "Öndeki araç {driver}: {gap} saniye",
+    "carBehind": "Arkadaki araç {driver}: {gap} saniye",
+    "goingYourWay": "Senin lehine",
+    "goingAgainstYou": "Senin aleyhine",
+    "steady": "Sabit"
+  },
+  "deltaBar": {
+    "label": "Referans tura göre delta",
+    "valueText": "{delta} saniye, {trend, select, gaining {kazanıyor} losing {kaybediyor} other {sabit}}",
+    "noReference": "Referans tur yok"
+  },
+  "ffbMeter": {
+    "title": "Force feedback",
+    "clipping": "Kırpılma",
+    "inRange": "Aralıkta",
+    "peak": "Tepe <v>%{value}</v>",
+    "setCar": "Bu aracı %{value} yap"
+  },
+  "proximityRadar": {
+    "carsClose": "{count, plural, one {Yakında # araç var} other {Yakında # araç var}}{side, select, left {, solda yan yana bir araç} right {, sağda yan yana bir araç} both {, hem solda hem sağda yan yana birer araç} other {}}",
+    "clear": "Radar temiz"
+  },
+  "cameraToast": {
+    "freeHintTouch": "Etrafa bakmak için sürükle · Çıkmak için Duraklat veya Tekrar kamera menüsünü kullan",
+    "freeHintKeys": "Sürükle bak · WASD uç · Q/E yükseklik · Tekerlek hız · R sıfırla · {key} çıkış"
+  },
+  "ffbPairPrompt": {
+    "region": "Force feedback",
+    "text": "Force feedback için direksiyonu eşleştir",
+    "connect": "Bağlan",
+    "dismiss": "Kapat"
+  },
+  "dualSensePairPrompt": {
+    "text": "<b>DualSense algılandı</b> · tetikler ve dokunsal titreşim için eşleştir",
+    "pair": "Eşleştir",
+    "dismiss": "Kapat"
+  },
+  "overheadNameplates": {
+    "fastestLap": "FL",
+    "rank": "P{rank}"
+  }
+}

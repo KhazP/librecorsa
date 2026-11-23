@@ -1,0 +1,221 @@
+{
+  "notice": {
+    "back": "Ana sayfaya dön",
+    "notFound": {
+      "title": "Sayfa bulunamadı",
+      "body": "Bu adreste hiçbir şey yok. Bağlantı eskimiş veya yanlış yazılmış olabilir."
+    },
+    "error": {
+      "title": "Bir şeyler ters gitti",
+      "body": "Bu sayfa bir hatayla durdu."
+    }
+  },
+  "hub": {
+    "tabs": {
+      "home": "Ana Sayfa",
+      "circuits": "Pistler",
+      "cars": "Araçlar",
+      "laps": "Tur zamanları",
+      "whatsNew": "Yenilikler",
+      "download": "İndir",
+      "about": "Hakkında"
+    },
+    "unread": "(okunmamış güncellemeler)",
+    "sections": "Bölümler",
+    "skip": "İçeriğe geç",
+    "heading": "LibreCorsa: tarayıcında ücretsiz, açık kaynaklı yarış simülatörü",
+    "drive": "Sür",
+    "prompts": {
+      "move": "Gezin",
+      "select": "Seç",
+      "back": "Geri",
+      "switchSection": "Bölüm değiştir",
+      "page": "Tur zamanları sayfası",
+      "drive": "Sür"
+    },
+    "length": "{distance} {unit}, {turns, plural, one {# viraj} other {# viraj}}",
+    "classYear": "{class}, {year}",
+    "footer": "{venue}, {car}",
+    "driveTile": {
+      "label": "Sür: {venue}, {layout}, araç: {car}",
+      "title": "Sür",
+      "detail": "{venue}, {layout}. {car}."
+    },
+    "circuitTile": {
+      "label": "Pist değiştir: {venue}, {layout}",
+      "more": "Pist değiştir",
+      "map": "{venue}, {layout} haritası",
+      "onLine": "yarış çizgisinde"
+    },
+    "carTile": {
+      "label": "Araç değiştir: {car}",
+      "more": "Araç değiştir"
+    },
+    "press": {
+      "title": "Basın ve medya",
+      "label": "Basın ve medya: {count, plural, one {{n} yazı ve video} other {{n} yazı ve video}} ve basın kiti",
+      "count": "{count, plural, one {{n} yazı ve video} other {{n} yazı ve video}}",
+      "onPlatform": "{platform} üzerinde {outlet}",
+      "more": "Basın haberleri ve basın kiti"
+    },
+    "whatsNew": {
+      "intro": "Yama notları ve son güncellemeler.",
+      "commitLog": "GitHub’da commit günlüğü",
+      "empty": "Henüz yama notu yok.",
+      "commits": "{count, plural, one {# commit} other {# commit}}"
+    },
+    "filterOption": "{option} ({count})",
+    "clearFilters": "Filtreleri temizle",
+    "venueFilters": {
+      "type": {
+        "label": "Tür",
+        "all": "Tüm türler"
+      },
+      "country": {
+        "label": "Konum",
+        "all": "Tüm konumlar"
+      },
+      "modder": {
+        "label": "Mod yapımcısı",
+        "all": "Tüm mod yapımcıları"
+      }
+    },
+    "carFilters": {
+      "class": {
+        "label": "Sınıf",
+        "all": "Tüm sınıflar"
+      },
+      "physics": {
+        "label": "Fizik",
+        "all": "Tüm fizikler"
+      },
+      "modder": {
+        "label": "Mod yapımcısı",
+        "all": "Tüm mod yapımcıları"
+      }
+    },
+    "circuits": {
+      "filter": "Pistleri filtrele",
+      "shown": "{total} pistten {shown} tanesi",
+      "empty": "Bu filtrelere uyan pist yok.",
+      "personalBest": "Kişisel en iyi",
+      "oldPhysics": "Eski fizik",
+      "carOldPhysics": "{car} · Eski"
+    },
+    "cars": {
+      "filter": "Araçları filtrele",
+      "shown": "{total} araçtan {shown} tanesi",
+      "empty": "Bu filtrelere uyan araç yok."
+    },
+    "about": {
+      "lead": "Ücretsiz, açık kaynaklı tarayıcı yarış simülatörü.",
+      "addMod": "Modunu ekle",
+      "addModText": "Bir araç veya pist modu yaptın ve LibreCorsa’da görmek mi istiyorsun? Bağlantısıyla birlikte bana <mail>{email}</mail> adresinden e-posta gönder. Her mod yapımcısı oyunda adıyla anılır.",
+      "modders": "Mod yapımcıları",
+      "moddersText": "Pistler ve araçlar onların emeği, izinleriyle kullanılıyor. Beğendiğin bir iş varsa yapımcısına doğrudan teşekkür edebilirsin.",
+      "links": {
+        "download": "Uygulamaları indir",
+        "press": "Tüm haberler ve basın kiti",
+        "docs": "Belgeler",
+        "privacy": "Gizlilik",
+        "support": "Bana bir kahve ısmarla"
+      }
+    },
+    "facts": {
+      "physics": {
+        "label": "Fizik",
+        "text": "Saniyede 500 kez simüle edilir; lastik sıcaklıkları, aktif aero ve hibrit güç dahil"
+      },
+      "racing": {
+        "label": "Yarış",
+        "text": "Hızlı turlar, yapay zekaya karşı yarışlar, çok oyunculu odalar ve çevrimiçi tur zamanları"
+      },
+      "controls": {
+        "label": "Kontroller",
+        "text": "Klavye, kontrolcü, dokunmatik ekran veya force feedback direksiyon"
+      },
+      "platforms": {
+        "label": "Çalıştığı yerler",
+        "text": "Herhangi bir modern tarayıcı: bilgisayar, telefon veya tablet"
+      },
+      "conditions": {
+        "label": "Koşullar",
+        "text": "İstediğin hava durumu ve günün saati"
+      },
+      "price": {
+        "label": "Fiyat",
+        "text": "Ücretsiz. Hesap yok, reklam yok; bağışlar isteğe bağlıdır ve oyunda hiçbir şeyin kilidini açmaz"
+      }
+    }
+  },
+  "lapTimes": {
+    "loading": "Tur zamanları yükleniyor…",
+    "offline": "Tur zamanları şu anda çevrimdışı.",
+    "unreachable": "Tur tablosuna ulaşılamıyor. Yeniden deneniyor…"
+  },
+  "boards": {
+    "board": "Tablo",
+    "allLaps": "Tüm turlar",
+    "challenge": "Haftalık mücadele",
+    "hallOfFame": "Onur Listesi",
+    "lapTimesTitle": "Tur zamanları",
+    "challengeTitle": "Haftalık mücadele",
+    "week": "Hafta",
+    "thisWeek": "Bu hafta · {circuit}",
+    "pastWeek": "{dates} · {circuit}",
+    "timeLeft": "{timeLeft} kaldı",
+    "ran": "{dates} tarihlerinde yapıldı",
+    "rules": "Kurallar",
+    "emptyThisWeek": "Bu hafta henüz süre kaydedilmedi.",
+    "emptyPastWeek": "Bu hafta için kayıtlı süre yok."
+  },
+  "layoutPicker": {
+    "chosen": "{venue} düzeni: {layout} ({index} / {count})",
+    "closed": "{venue}: {count, plural, one {# düzen} other {# düzen}}",
+    "count": "{count, plural, one {# düzen} other {# düzen}}",
+    "list": "{venue} düzenleri"
+  },
+  "liveryPicker": {
+    "custom": "Özel Boya",
+    "chosen": "{car} kaplaması: {livery} ({index} / {count})",
+    "chosenCustom": "{car} kaplaması: Özel Boya ({count, plural, one {# hazır kaplama} other {# hazır kaplama}})",
+    "closed": "{car}: {count, plural, one {# kaplama} other {# kaplama}}",
+    "count": "{count, plural, one {# kaplama} other {# kaplama}}",
+    "list": "{car} kaplamaları"
+  },
+  "downloads": {
+    "intro": "Windows, macOS, Linux ve Android için isteğe bağlı yerel sarmalayıcılar. Doğrudan librecorsa.org’u açtıkları için oyun güncellemeleri yeniden kurulum gerekmeden gelir.",
+    "directLink": "Doğrudan bağlantı",
+    "platforms": "Platformlar",
+    "thisDevice": "Bu cihaz",
+    "installed": "Yüklü",
+    "artifact": "{label} — {platform} ({detail})",
+    "artifactSized": "{label} — {platform} ({detail}, {size})",
+    "detailSized": "{detail}, {size}",
+    "detailPending": "{detail} (sonraki sürüm etiketinde yayımlanacak)",
+    "installCommand": "{platform} kurulum komutu",
+    "whyInstall": "Neden uygulamayı kurmalısın",
+    "highlights": {
+      "desktop": {
+        "label": "Masaüstü",
+        "text": "Çoklu GPU’lu dizüstülerde harici GPU’yu ister, yarış direksiyonları ve DualSense için sessiz WebHID izni verir, arka plan kısıtlamasını kapatır ve GitHub Releases üzerinden güncellemeleri denetler."
+      },
+      "android": {
+        "label": "Android",
+        "text": "Adres çubuğu olmayan tam ekran Trusted Web Activity, kenar kaydırma koruması, Android Game Mode ve Sür / Tablolar başlatıcı kısayolları."
+      },
+      "current": {
+        "label": "Her zaman güncel",
+        "text": "Her sarmalayıcı pist veya araç paketlemek yerine doğrudan librecorsa.org’u açar; böylece fizik, pist ve çok oyunculu güncellemeleri anında gelir."
+      },
+      "browser": {
+        "label": "Tarayıcı ve iOS",
+        "text": "Doğrudan sekmede oynamayı tercih ediyorsan kurulum gerekmez. iPhone ve iPad’de Safari’den Paylaş > Ana Ekrana Ekle’yi kullan."
+      }
+    },
+    "buildsTitle": "Derlemeler ve imzalama",
+    "builds": "Tüm yükleyiciler ve APK’lar bu deponun kaynak kodundan GitHub Actions ile derlenir ve SHA-256 özetleriyle GitHub Releases üzerinde yayımlanır. SignPath Foundation üzerinden ücretsiz Windows kod imzalama kurulumu sürüyor; macOS derlemeleri şimdilik imzasız; Android APK’sı <code>{file}</code> ile doğrulanan yükleme anahtarıyla imzalanmıştır.",
+    "allReleases": "GitHub’daki tüm sürümler",
+    "signingPolicy": "Kod imzalama politikası"
+  }
+}
