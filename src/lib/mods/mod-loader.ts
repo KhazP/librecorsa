@@ -93,7 +93,8 @@ export function modTrackInfos(m: ModManifest, origin: ModOrigin): TrackInfo[] {
   }));
 }
 
-async function load(): Promise<ModsState> {
+/** The installed packages, read and checked afresh, without adding anything to the game (the Mods panel's list) */
+export async function readPackages(): Promise<LoadedPackage[]> {
   const [local, folder] = await Promise.all([modsStorageAvailable() ? readInstalled() : Promise.resolve([]), readFolderIndex()]);
   const off = disabledPackages();
   const known = modDefinitions();
@@ -122,7 +123,11 @@ async function load(): Promise<ModsState> {
     }
     packages.push(pkg);
   }
+  return packages;
+}
 
+async function load(): Promise<ModsState> {
+  const packages = await readPackages();
   const tracks: TrackInfo[] = [];
   const active = packages.filter((p): p is LoadedPackage & { manifest: ModManifest } => p.enabled && !!p.manifest);
   for (const p of active) {

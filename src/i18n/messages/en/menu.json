@@ -21,6 +21,8 @@
     "lapTimesBest": "Best {time}",
     "settings": "Settings",
     "credits": "Credits",
+    "mods": "Mods",
+    "modsDetail": "{count, plural, one {# on} other {# on}}",
     "feedback": "Feedback",
     "press": "Press",
     "privacy": "Privacy",
@@ -648,5 +650,30 @@
   },
   "pad": {
     "unbound": "None"
+  },
+  "mods": {
+    "intro": "Mod packages add circuits, cars and liveries to the game. A package holds data only, never code, and stays in this browser until you remove it. Laps driven with mod content are yours alone: they stay off the online boards and the weekly challenge.",
+    "importZip": "Import .zip",
+    "importFolder": "Import folder",
+    "howTo": "How to make a mod",
+    "importing": "Importing {name}…",
+    "imported": "{name} {version} is installed.",
+    "replaced": "{name} is updated to {version}.",
+    "importFailed": "{name} couldn't be installed:",
+    "empty": "No mods yet. Import a package's .zip or folder to add its circuits, cars and liveries.",
+    "sourceBrowser": "Imported",
+    "sourceFolder": "Mods folder",
+    "circuits": "{count, plural, one {# circuit} other {# circuits}}",
+    "cars": "{count, plural, one {# car} other {# cars}}",
+    "liveries": "{count, plural, one {# livery} other {# liveries}}",
+    "use": "Use {name}",
+    "remove": "Remove",
+    "removeTitle": "Remove {name}?",
+    "removeBody": "Its circuits, cars and liveries leave the game when it restarts. Your laps with them stay saved.",
+    "broken": "Not loaded:",
+    "restartNeeded": "Changes take effect when the game restarts.",
+    "restart": "Restart now",
+    "storageUnavailable": "This browser can't keep mods here: a private window, or a page not served over https. The offline launcher's mods folder works instead.",
+    "folderNote": "Packages in the mods folder beside the game are listed here too. To remove one, delete its folder."
   }
 }

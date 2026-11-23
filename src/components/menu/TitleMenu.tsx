@@ -39,6 +39,8 @@ import { CarClassTag, TrackQualityBadge } from "./menu-content-ui";
 import { HeroAction, RailRow, RESET_ROW_PROMPT, ShellPrompts, usePanelReadingOrder, useRowResettable } from "./menu-shell";
 import { feedbackContextOf, RequestPanel, type FeedbackContext } from "./RequestPanel";
 import { CircuitBrowser } from "./CircuitBrowser";
+import { ModsPanel } from "./ModsPanel";
+import { modsState } from "@/lib/mods/mod-loader";
 import { CarBrowser } from "./CarBrowser";
 import { TrackOutline } from "./circuit-outline";
 import { ConditionsPanel } from "./ConditionsPanel";
@@ -62,7 +64,7 @@ import { LiveLine } from "./LiveLine";
 import { UpdateReady } from "./UpdateReady";
 import { TitleMusic } from "./TitleMusic";
 
-type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "request";
+type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "mods" | "request";
 
 /**
  * How far a panel reaches beside the rail, in CSS px (the big-screen zoom scales them): each as wide as its content
@@ -643,6 +645,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     () => bestLapForCircuit(bestLaps.filter((s) => s.vehicle === props.vehicleModel), trackId, props.vehicleModel),
     [bestLaps, trackId, props.vehicleModel],
   );
+  // The mod packages switched on (read once, as the game started with them)
+  const modCount = useMemo(() => modsState().packages.filter((p) => p.enabled && p.manifest).length, []);
   const items: MenuItem[] = [
     {
       id: "drive",
@@ -747,6 +751,15 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       run: () => (props.onOpenSettings ? props.onOpenSettings() : onControls()),
     },
     { id: "credits", label: t("credits"), icon: "credits" as const, panel: "credits", run: () => openPanel("credits") },
+    {
+      id: "mods",
+      label: t("mods"),
+      // How many packages are switched on, when any are installed
+      detail: modCount > 0 ? t("modsDetail", { count: modCount }) : undefined,
+      icon: "mods" as const,
+      panel: "mods",
+      run: () => openPanel("mods"),
+    },
     {
       id: "request",
       label: t("feedback"),
@@ -953,7 +966,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               <div aria-hidden className="h-3" />
               {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md", true))}
               <div aria-hidden className="h-3" />
-              {byId(["credits", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "md", true))}
+              {byId(["credits", "mods", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "md", true))}
             </nav>
 
             <section ref={panelRef} className="min-h-0 min-w-0 scroll-mt-4" data-nav-zone="panel" aria-label={panelTitle}>
@@ -1042,6 +1055,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     <LeaderboardPanel {...props.leaderboardPanel} jumpTarget={leaderboardJump} />
                   ) : null}
                   {panel === "credits" ? <Credits /> : null}
+                  {panel === "mods" ? <ModsPanel /> : null}
                   {panel === "request" ? (
                     // The frame above names it, with Close beside the name: the panel leaves out its own heading
                     <RequestPanel
@@ -1072,7 +1086,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md"))}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-0.5 gap-y-0.5 border-t border-lc-line pt-2.5 short:pt-1.5">
-                  {byId(["credits", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "sm"))}
+                  {byId(["credits", "mods", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "sm"))}
                 </div>
               </div>
             </nav>
