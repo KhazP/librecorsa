@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button, Card, Disclosure, SettingRow } from "@/components/ui";
 import { PadGlyph } from "@/components/ui/prompts";
 import { useInputMode } from "./input-mode";
@@ -57,23 +58,27 @@ function gridPreview(setup: RaceSetup, playerCode: string, playerColor: string |
   return out;
 }
 
-/** A summary row that opens another panel (circuit, conditions, car) */
-const LinkRow: React.FC<{ label: string; value: string; onClick?: () => void; navDefault?: boolean }> = ({
+/** A summary row that opens another panel (circuit, conditions, car); `changeLabel` names its button for screen readers */
+const LinkRow: React.FC<{ label: string; value: string; changeLabel?: string; onClick?: () => void; navDefault?: boolean }> = ({
   label,
   value,
+  changeLabel,
   onClick,
   navDefault,
-}) => (
-  <SettingRow label={label} hint={value}>
-    {onClick ? (
-      <Button size="sm" variant="secondary" onClick={onClick} data-nav-default={navDefault ? "" : undefined} aria-label={`Change ${label.toLowerCase()}: ${value}`}>
-        Change
-      </Button>
-    ) : null}
-  </SettingRow>
-);
+}) => {
+  const tx = useTranslations("menu.raceSetup");
+  return (
+    <SettingRow label={label} hint={value}>
+      {onClick ? (
+        <Button size="sm" variant="secondary" onClick={onClick} data-nav-default={navDefault ? "" : undefined} aria-label={changeLabel}>
+          {tx("change")}
+        </Button>
+      ) : null}
+    </SettingRow>
+  );
+};
 
-const GridList: React.FC<{ grid: GridSlot[]; drawn: boolean }> = ({ grid, drawn }) => (
+const GridList: React.FC<{ grid: GridSlot[]; drawn: boolean; drawnNote: string }> = ({ grid, drawn, drawnNote }) => (
   <div className="flex flex-col gap-2 pb-1">
     <ol className="m-0 grid list-none grid-cols-2 gap-x-3 gap-y-1 p-0 sm:grid-cols-3">
       {grid.map((g, i) => (
@@ -89,7 +94,7 @@ const GridList: React.FC<{ grid: GridSlot[]; drawn: boolean }> = ({ grid, drawn 
         </li>
       ))}
     </ol>
-    {drawn ? <p className="lc-hint m-0">Your slot is drawn at the start.</p> : null}
+    {drawn ? <p className="lc-hint m-0">{drawnNote}</p> : null}
   </div>
 );
 
@@ -110,6 +115,10 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
   onStart,
 }) => {
   const { mode, family } = useInputMode();
+  const tx = useTranslations("menu.raceSetup");
+  const circuitValue = track.layout ? `${track.name} · ${track.layout}` : track.name;
+  const conditionsValue = conditionsLabel ?? tx("conditionsAsSet");
+  const carValue = tx("carForField", { car: car.title });
   const grid = gridPreview(setup, playerCode, playerColor);
   const fieldSize = grid.length + (setup.grid === "random" ? 1 : 0);
   const distance = useRaceDistance(setup.laps, track.lengthM);
@@ -132,17 +141,22 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
   return (
     // Rows the cursor lands on scroll clear of the pinned start bar
     <div ref={rootRef} className="flex flex-col gap-3 [&_button]:scroll-mb-28 [&_input]:scroll-mb-28">
-      <Card title="Event">
-        <LinkRow navDefault label="Circuit" value={track.layout ? `${track.name} · ${track.layout}` : track.name} onClick={onOpenCircuit} />
-        <LinkRow label="Conditions" value={conditionsLabel ?? "As set"} onClick={onOpenConditions} />
-        <LinkRow label="Car" value={`${car.title}, for the whole field`} onClick={onOpenGarage} />
+      <Card title={tx("event")}>
+        <LinkRow navDefault label={tx("circuit")} value={circuitValue} changeLabel={tx("changeCircuit", { value: circuitValue })} onClick={onOpenCircuit} />
+        <LinkRow
+          label={tx("conditions")}
+          value={conditionsValue}
+          changeLabel={tx("changeConditions", { value: conditionsValue })}
+          onClick={onOpenConditions}
+        />
+        <LinkRow label={tx("car")} value={carValue} changeLabel={tx("changeCar", { value: carValue })} onClick={onOpenGarage} />
         {/* Qualifying sets the grid, so there is no order to preview. A random slot leaves the player out of the
             preview, not out of the field */}
         {setup.qualifying ? (
-          <LinkRow label="Grid" value={`Set by qualifying, ${fieldSize} cars`} />
+          <LinkRow label={tx("grid")} value={tx("gridByQualifying", { count: fieldSize })} />
         ) : (
-          <Disclosure moreLabel={`Show the grid (${fieldSize} cars)`} lessLabel="Hide the grid">
-            <GridList grid={grid} drawn={setup.grid === "random"} />
+          <Disclosure moreLabel={tx("showGrid", { count: fieldSize })} lessLabel={tx("hideGrid")}>
+            <GridList grid={grid} drawn={setup.grid === "random"} drawnNote={tx("slotDrawn")} />
           </Disclosure>
         )}
       </Card>
@@ -155,16 +169,19 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
         <div data-nav-pinned="" className="pointer-events-auto flex items-center justify-between gap-x-4 rounded-lc-card border border-lc-line bg-lc-carbon py-2.5 pr-2.5 pl-4.5 shadow-lc-pop phone:gap-x-3">
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="lc-row-label truncate">
-              {setup.laps} {setup.laps === 1 ? "lap" : "laps"}
-              {distance ? `, ${distance}` : ""}, {setup.opponents} AI {setup.opponents === 1 ? "car" : "cars"}
+              {distance
+                ? tx("summaryDistance", { laps: setup.laps, distance, opponents: setup.opponents })
+                : tx("summary", { laps: setup.laps, opponents: setup.opponents })}
             </span>
             <span className="lc-hint truncate phone:hidden">
-              {aiSkillLabel(aiSkill)} AI{raceStartSuffix(setup.startMode, ", ")}
-              {setup.startMode !== "rolling" && setup.launch === "manual" ? ", manual launch" : ""}
+              {tx(setup.startMode !== "rolling" && setup.launch === "manual" ? "aiLineManual" : "aiLine", {
+                skill: aiSkillLabel(aiSkill),
+                start: raceStartSuffix(setup.startMode, ", "),
+              })}
             </span>
           </span>
           <Button ref={startRef} variant="primary" size="lg" onClick={onStart} prompt={mode === "pad" ? <PadGlyph button="menu" family={family} /> : undefined}>
-            Start race
+            {tx("startRace")}
           </Button>
         </div>
       </div>

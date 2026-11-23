@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { t } from "@/i18n/runtime";
 import { padButtonLabel } from "@/lib/input/bindings";
 import { connectedPads } from "@/lib/input/device-input";
 
@@ -38,7 +39,7 @@ export const PAD_BUTTON_NAMES: Record<PadFamily, Record<number, string>> = {
 
 /** A standard-mapping button's name on this pad family ("None" when unbound) */
 export const padButtonName = (button: number | null | undefined, family: PadFamily): string =>
-  button === null || button === undefined ? "None" : (PAD_BUTTON_NAMES[family][button] ?? padButtonLabel(button));
+  button === null || button === undefined ? t("menu.pad.unbound") : (PAD_BUTTON_NAMES[family][button] ?? padButtonLabel(button));
 
 let mode: InputMode = "pointer";
 let family: PadFamily = "xbox";

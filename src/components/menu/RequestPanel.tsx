@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button, Card, Disclosure, Segmented, Select, SettingRow, TextField, Toggle } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { CURSOR_ROW, cx, MOTION } from "@/components/ui/styles";
@@ -65,31 +66,66 @@ export function feedbackContextOf(
   };
 }
 
+type FeedbackTranslator = ReturnType<typeof useTranslations<"menu.feedback">>;
+
 /**
  * The panel is called Feedback wherever it opens (the title menu's entry, the pause menu's tab); what each kind is for
  * is said under that heading
  */
-const COPY: Record<FeedbackKind, { intro: string; send: string }> = {
-  Bug: {
-    intro: "Report a bug: describe what went wrong and how to reproduce it. Session info below is optional.",
-    send: "Send report",
-  },
-  Wheel: {
-    intro: "Report how your wheel behaves: steering, pedals, buttons and force feedback.",
-    send: "Send report",
-  },
-  Idea: {
-    intro: "Suggest a feature or an improvement.",
-    send: "Send idea",
-  },
-  Car: {
-    intro: "Request a car: name it and link an eligible 3D model.",
-    send: "Send request",
-  },
-  Track: {
-    intro: "Request a track: name the circuit and link an eligible 3D model or scan.",
-    send: "Send request",
-  },
+const copyOf = (tx: FeedbackTranslator, kind: FeedbackKind): { label: string; intro: string; send: string } =>
+  ({
+    Bug: { label: tx("kindBug"), intro: tx("introBug"), send: tx("sendReport") },
+    Wheel: { label: tx("kindWheel"), intro: tx("introWheel"), send: tx("sendReport") },
+    Idea: { label: tx("kindIdea"), intro: tx("introIdea"), send: tx("sendIdea") },
+    Car: { label: tx("kindCar"), intro: tx("introCar"), send: tx("sendRequest") },
+    Track: { label: tx("kindTrack"), intro: tx("introTrack"), send: tx("sendRequest") },
+  })[kind];
+
+/**
+ * The licence and permission choices as the player reads them. Their values, which the issue gets and the form
+ * compares, stay as they are; the licences' own names are shown as they are too
+ */
+const licenseOptions = (tx: FeedbackTranslator) => {
+  const labels: Partial<Record<(typeof LICENSES)[number], string>> = {
+    [LICENSES[1]]: tx("licenseCc0"),
+    [LICENSES[3]]: tx("licenseOther"),
+    [LICENSES[4]]: tx("licenseUnknown"),
+  };
+  return LICENSES.map((id) => ({ id, label: labels[id] ?? id }));
+};
+const permissionOptions = (tx: FeedbackTranslator) => {
+  const labels: Record<(typeof PERMISSIONS)[number], string> = {
+    [PERMISSIONS[0]]: tx("permissionLicense"),
+    [PERMISSIONS[1]]: tx("permissionWritten"),
+    [PERMISSIONS[2]]: tx("permissionNotAsked"),
+    [PERMISSIONS[3]]: tx("permissionUnknown"),
+  };
+  return PERMISSIONS.map((id) => ({ id, label: labels[id] }));
+};
+
+/** A line the report adds, named for the player (the issue gets the line's own English name) */
+const rowLabel = (tx: FeedbackTranslator, row: ReportRow): string => {
+  const keys: Record<string, Parameters<FeedbackTranslator>[0]> = {
+    circuit: "rowCircuit",
+    car: "rowCar",
+    input: "rowInput",
+    devices: "rowDevices",
+    graphics: "rowGraphics",
+    browser: "rowBrowser",
+    screen: "rowScreen",
+    gpu: "rowGpu",
+    where: "rowWhere",
+    build: "rowBuild",
+    frames: "rowFrames",
+    drawn: "rowDrawn",
+    app: "rowApp",
+    settings: "rowSettings",
+    device: "rowDevice",
+    board: "rowBoard",
+    driver: "rowDriver",
+  };
+  const key = keys[row.id];
+  return key ? tx(key) : row.label;
 };
 
 /** A field's hint, with a caution line under it when there is one */
@@ -107,19 +143,22 @@ const hintWith = (hint?: string, caution?: string): React.ReactNode =>
   );
 
 /** A labelled drop-down in the form: the field label above, the kit's select at full width */
-const FieldSelect: React.FC<{ label: string; value: string; onChange: (value: string) => void; options: readonly string[] }> = ({
-  label,
-  value,
-  onChange,
-  options,
-}) => (
-  <div className="flex min-w-0 flex-col gap-1.5">
-    <span className="lc-field-label" aria-hidden>
-      {label}
-    </span>
-    <Select aria-label={label} className="w-full" placeholder="Choose" value={value} onChange={onChange} options={options.map((o) => ({ id: o, label: o }))} />
-  </div>
-);
+const FieldSelect: React.FC<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly { id: string; label: string }[];
+}> = ({ label, value, onChange, options }) => {
+  const tx = useTranslations("menu.feedback");
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <span className="lc-field-label" aria-hidden>
+        {label}
+      </span>
+      <Select aria-label={label} className="w-full" placeholder={tx("choose")} value={value} onChange={onChange} options={options} />
+    </div>
+  );
+};
 
 /** A problem with the request, said in the loss colour on the form itself */
 const Problem: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -374,13 +413,14 @@ const AddedRow: React.FC<{ label: string; value: string; locked?: boolean; on: b
       </span>
     </>
   );
+  const tx = useTranslations("menu.feedback");
   const grid = "grid grid-cols-[84px_minmax(0,1fr)_16px] items-start gap-x-3 py-1 text-left text-[13px] leading-snug";
   if (locked)
     // Sent like a ticked line, but it can't be left out: a lock where the others have their tick or dash
     return (
-      <li className={cx(grid, "px-2")} title="Always sent: GitHub's form needs it">
+      <li className={cx(grid, "px-2")} title={tx("alwaysSentTitle")}>
         {cells}
-        <Icon name="locked" size="sm" label="Always sent" className="mt-px text-lc-slate" />
+        <Icon name="locked" size="sm" label={tx("alwaysSent")} className="mt-px text-lc-slate" />
       </li>
     );
   return (
@@ -417,6 +457,7 @@ export const RequestPanel: React.FC<{
    */
   heading?: boolean;
 }> = ({ context, facts, screenshot, heading = true }) => {
+  const tx = useTranslations("menu.feedback");
   const [kind, setKind] = useState<FeedbackKind>("Bug");
   const [main, setMain] = useState("");
   const [second, setSecond] = useState("");
@@ -497,7 +538,7 @@ export const RequestPanel: React.FC<{
   const overtake = content && isOvertake(second);
   const moddersOk = (!sketchfab || askedModders) && (!overtake || modderSaidYes);
   const ready = mainOk && secondOk && sketchfabLinkOk && !tagsChecking && !rippedModel && permitted && moddersOk;
-  const copy = COPY[kind];
+  const copy = copyOf(tx, kind);
 
   const clearFields = () => {
     setMain("");
@@ -598,56 +639,52 @@ export const RequestPanel: React.FC<{
   };
   const pictureNoteText =
     pictureNote === "copied"
-      ? "Copied. Paste it into the report on GitHub with Ctrl+V (Cmd+V on a Mac)."
+      ? tx("pictureCopied")
       : pictureNote === "saved"
-        ? "Saved. Drag the file into the report on GitHub."
+        ? tx("pictureSaved")
         : pictureNote === "failed"
-          ? "This browser won't copy pictures. Save it instead and drag the file in."
+          ? tx("pictureFailed")
           : null;
   const pictureCopyable = typeof window !== "undefined" && typeof ClipboardItem !== "undefined" && Boolean(navigator.clipboard?.write);
 
   const lockedReason = rippedModel
-    ? "Models ripped from other games can't be added."
+    ? tx("lockedRipped")
     : !permitted
-      ? "It needs an open license or the creator's written permission first."
+      ? tx("lockedLicense")
       : !moddersOk
         ? overtake
-          ? "Ask the modder for permission first."
-          : "Sketchfab is the last resort. Ask the sim modders first."
+          ? tx("lockedModder")
+          : tx("lockedSketchfab")
         : undefined;
 
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-7 text-lc-chalk">
       <div className="flex min-w-0 flex-col gap-4">
-        {heading ? <h2 className="lc-h2">Feedback</h2> : null}
+        {heading ? <h2 className="lc-h2">{tx("heading")}</h2> : null}
         <p className="m-0 text-[16px] leading-snug text-lc-fog">{copy.intro}</p>
         {content ? (
-          <p className="lc-body m-0">
-            LibreCorsa can only ship models it is allowed to share: ones under an open or non-commercial license (CC BY, CC BY-SA, CC0,
-            CC BY-NC, CC BY-NC-SA) or with <span className="text-lc-chalk">written permission from the creator</span>. Mods taken from
-            other games can only be used if their original creator agrees.
-          </p>
+          <p className="lc-body m-0">{tx.rich("contentRules", { em: (chunks) => <span className="text-lc-chalk">{chunks}</span> })}</p>
         ) : null}
         {rows.length ? (
           <Card
-            title="Included details"
-            description="Posted to a public GitHub issue. Click a line to omit it. Lines with a lock are always sent."
+            title={tx("included")}
+            description={tx("includedHint")}
           >
             <ul className="m-0 -mx-2 flex list-none flex-col p-0">
               {rows.map((r) => (
-                <AddedRow key={r.id} label={r.label} value={r.value} locked={r.locked} on={r.locked || !leftOut.has(r.id)} onToggle={() => toggleLine(r.id)} />
+                <AddedRow key={r.id} label={rowLabel(tx, r)} value={r.value} locked={r.locked} on={r.locked || !leftOut.has(r.id)} onToggle={() => toggleLine(r.id)} />
               ))}
               {logShown ? (
                 <AddedRow
-                  label="Game log"
-                  value={`${log.length} ${log.length === 1 ? "line" : "lines"}, latest: ${log[log.length - 1].text}`}
+                  label={tx("gameLog")}
+                  value={tx("gameLogValue", { count: log.length, latest: log[log.length - 1].text })}
                   on={!leftOut.has("errors")}
                   onToggle={() => toggleLine("errors")}
                 />
               ) : null}
             </ul>
             {logShown ? (
-              <Disclosure moreLabel="Show error log" lessLabel="Hide error log">
+              <Disclosure moreLabel={tx("showLog")} lessLabel={tx("hideLog")}>
                 <pre className="lc-mono m-0 max-h-48 overflow-auto rounded-lc-row bg-lc-well p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap text-lc-fog">
                   {errorLogText(LOG_STEPS[0], log)}
                 </pre>
@@ -657,37 +694,34 @@ export const RequestPanel: React.FC<{
         ) : null}
         <p className="lc-hint m-0 mt-auto flex items-start gap-2">
           <Icon name="externalLink" className="mt-px text-lc-info" />
-          Opens a pre-filled GitHub issue (free account required).
+          {tx("opensIssue")}
         </p>
       </div>
 
       {sent ? (
         <div className="self-start">
-          <Card title="Opened on GitHub" bodyClassName="gap-3.5">
+          <Card title={tx("opened")} bodyClassName="gap-3.5">
             <p id={sentNoteId} className="lc-body m-0">
-              Check the new tab and press Create there to send it.
-              {shot ? " Add the screenshot there: copy it below, then paste it into the report." : ""} Thanks.
+              {shot ? tx("sentNoteShot") : tx("sentNote")}
             </p>
-            {trimmed ? (
+            {trimmed && (trimmed.details || trimmed.log) ? (
               <p className="lc-hint m-0">
-                {[
-                  trimmed.details ? `${trimmed.details} ${trimmed.details === 1 ? "line" : "lines"} of game details` : null,
-                  trimmed.log ? "the older errors" : null,
-                ]
-                  .filter(Boolean)
-                  .join(" and ")}{" "}
-                didn&apos;t fit in GitHub&apos;s link and were left out.
+                {trimmed.details
+                  ? trimmed.log
+                    ? tx("trimmedBoth", { count: trimmed.details })
+                    : tx("trimmedDetails", { count: trimmed.details })
+                  : tx("trimmedLog")}
               </p>
             ) : null}
             {shot ? (
               <div className="flex flex-wrap items-center gap-2">
                 {pictureCopyable ? (
                   <Button size="sm" variant="secondary" icon={<Icon name="copy" />} onClick={() => picture("copy")}>
-                    Copy picture
+                    {tx("copyPicture")}
                   </Button>
                 ) : null}
                 <Button size="sm" variant="ghost" icon={<Icon name="download" />} onClick={() => picture("save")}>
-                  Save picture
+                  {tx("savePicture")}
                 </Button>
               </div>
             ) : null}
@@ -698,44 +732,44 @@ export const RequestPanel: React.FC<{
             ) : null}
             {/* The focus lands here once sent: the button reads the note with it */}
             <Button ref={newReportRef} variant="secondary" className="self-start" aria-describedby={sentNoteId} onClick={newReport}>
-              Write another
+              {tx("writeAnother")}
             </Button>
           </Card>
         </div>
       ) : null}
       {/* Hidden, not unmounted, once sent: "Write another" clears it */}
       <form ref={formRef} onSubmit={submit} noValidate className={`${sent ? "hidden" : "flex"} min-w-0 flex-col gap-4`}>
-        <Segmented aria-label="What is it about?" fill options={KINDS.map((k) => ({ id: k, label: k }))} value={kind} onChange={pickKind} />
+        <Segmented aria-label={tx("kinds")} fill options={KINDS.map((k) => ({ id: k, label: copyOf(tx, k).label }))} value={kind} onChange={pickKind} />
 
         {kind === "Bug" ? (
           <>
             <TextField
-              label="What happened? *"
+              label={tx("bugWhat")}
               required
               multiline
               rows={3}
               maxLength={1500}
-              hint={main.length > 1200 ? `${main.length.toLocaleString("en-US")} of 1,500 characters` : "And what you expected instead."}
-              placeholder="The car's wheels sink into the road in the last corner…"
+              hint={main.length > 1200 ? tx("bugWhatCount", { count: main.length.toLocaleString("en-US") }) : tx("bugWhatHint")}
+              placeholder={tx("bugWhatPlaceholder")}
               value={main}
               onChange={setMain}
-              error={tried && !mainOk ? "Say what happened, in a few words at least." : undefined}
+              error={tried && !mainOk ? tx("bugWhatError") : undefined}
             />
             <TextField
-              label="How to make it happen *"
+              label={tx("bugSteps")}
               required
               multiline
               rows={2}
               maxLength={1500}
-              hint="The steps, even rough ones, e.g. “Load the circuit in the GT3, drive out of the pits”."
+              hint={tx("bugStepsHint")}
               value={second}
               onChange={setSecond}
-              error={tried && !secondOk ? "Add the steps, even rough ones." : undefined}
+              error={tried && !secondOk ? tx("bugStepsError") : undefined}
             />
             {context && context.device !== "Keyboard" ? (
               <TextField
-                label="Controller or wheel model"
-                hint="The make and model, as written on the box."
+                label={tx("bugDevice")}
+                hint={tx("bugDeviceHint")}
                 maxLength={80}
                 autoComplete="off"
                 value={third}
@@ -748,29 +782,29 @@ export const RequestPanel: React.FC<{
         {kind === "Wheel" ? (
           <>
             <TextField
-              label="Wheel base and rim *"
+              label={tx("wheelModel")}
               required
               maxLength={120}
               autoComplete="off"
-              hint="The make and model of the base and of the rim."
+              hint={tx("wheelModelHint")}
               value={main}
               onChange={setMain}
-              error={tried && !mainOk ? "Name the wheel base and rim." : undefined}
+              error={tried && !mainOk ? tx("wheelModelError") : undefined}
             />
             <TextField
-              label="Firmware or driver version"
+              label={tx("wheelFirmware")}
               maxLength={80}
               autoComplete="off"
-              hint="Optional. The wheel maker's own app shows it."
+              hint={tx("wheelFirmwareHint")}
               value={second}
               onChange={setSecond}
             />
             <TextField
-              label="What worked, and what didn't?"
+              label={tx("wheelNotes")}
               multiline
               rows={3}
               maxLength={1500}
-              hint="GitHub then asks which force-feedback path you used, with one click."
+              hint={tx("wheelNotesHint")}
               value={notes}
               onChange={setNotes}
             />
@@ -780,30 +814,30 @@ export const RequestPanel: React.FC<{
         {kind === "Idea" ? (
           <>
             <TextField
-              label="Your idea *"
+              label={tx("ideaMain")}
               required
               multiline
               rows={3}
               maxLength={1500}
-              placeholder="A replay camera that follows the leader…"
+              placeholder={tx("ideaPlaceholder")}
               value={main}
               onChange={setMain}
-              error={tried && !mainOk ? "Describe the idea, in a few words at least." : undefined}
+              error={tried && !mainOk ? tx("ideaError") : undefined}
             />
             <TextField
-              label="Why it matters"
+              label={tx("ideaWhy")}
               multiline
               rows={2}
               maxLength={1500}
-              hint="What it would fix or make more fun. Games that do it well help too."
+              hint={tx("ideaWhyHint")}
               value={second}
               onChange={setSecond}
             />
             <TextField
-              label="Area"
+              label={tx("ideaArea")}
               maxLength={60}
               autoComplete="off"
-              hint="Menus, HUD, physics, AI, multiplayer, wheel, sound, graphics…"
+              hint={tx("ideaAreaHint")}
               value={third}
               onChange={setThird}
             />
@@ -813,33 +847,30 @@ export const RequestPanel: React.FC<{
         {content ? (
           <>
             <TextField
-              label={kind === "Track" ? "Which track? *" : "Which car? *"}
+              label={kind === "Track" ? tx("whichTrack") : tx("whichCar")}
               required
               maxLength={120}
               autoComplete="off"
-              hint={kind === "Track" ? "The name, and the layout or year." : "Make, model and year."}
+              hint={kind === "Track" ? tx("whichTrackHint") : tx("whichCarHint")}
               value={main}
               onChange={setMain}
-              error={tried && !mainOk ? (kind === "Track" ? "Name the track." : "Name the car.") : undefined}
+              error={tried && !mainOk ? (kind === "Track" ? tx("nameTrack") : tx("nameCar")) : undefined}
             />
             <TextField
-              label="Model link *"
+              label={tx("modelLink")}
               required
               type="url"
               inputMode="url"
               autoComplete="url"
               placeholder="https://"
-              hint={hintWith(
-                "The page of the 3D model: Sketchfab, a mod site or a scan. Requests without a model can't be built.",
-                sketchfab || overtake ? undefined : "A mod made for a racing sim is far better than Sketchfab: ask its modders first.",
-              )}
+              hint={hintWith(tx("modelLinkHint"), sketchfab || overtake ? undefined : tx("modelLinkCaution"))}
               value={second}
               onChange={setSecond}
               error={
                 (tried || second.trim() !== "") && !secondOk
-                  ? "Add a link to the 3D model, starting with https://"
+                  ? tx("modelLinkError")
                   : sketchfab && !sketchfabId
-                    ? "Paste the model's full page link (sketchfab.com/3d-models/…), not a short link, so its tags can be checked."
+                    ? tx("modelLinkShort")
                     : undefined
               }
             />
@@ -850,55 +881,56 @@ export const RequestPanel: React.FC<{
               className={rippedModel || tagsChecking || (sketchfab && tagCheck?.state === "unknown") ? undefined : "-mt-4"}
             >
               {rippedModel ? (
-                <Problem>
-                  This model is tagged {rippedModel.map((t) => `“${t}”`).join(", ")} on Sketchfab: it was ripped from another game,
-                  so it can&apos;t be added. Find the mod&apos;s author and ask them for permission instead.
-                </Problem>
+                <Problem>{tx("rippedTags", { tags: rippedModel.map((t) => `“${t}”`).join(", ") })}</Problem>
               ) : tagsChecking ? (
-                <p className="lc-hint m-0">Checking the model&apos;s tags on Sketchfab…</p>
+                <p className="lc-hint m-0">{tx("checkingTags")}</p>
               ) : sketchfab && tagCheck?.state === "unknown" ? (
-                <p className="lc-hint m-0">Sketchfab didn&apos;t answer, so the model&apos;s tags will be checked by hand.</p>
+                <p className="lc-hint m-0">{tx("tagsUnknown")}</p>
               ) : null}
             </div>
             {overtake ? (
               <SettingRow
-                label={`I asked the modder who made this ${kind === "Track" ? "track" : "car"} for permission to use it in LibreCorsa, and they said yes. *`}
-                hint="Mods can only be added with their author's permission. Link their answer under Anything else."
+                label={kind === "Track" ? tx("modderSaidYesTrack") : tx("modderSaidYesCar")}
+                hint={tx("modderSaidYesHint")}
               >
-                <Toggle checked={modderSaidYes} onChange={setModderSaidYes} onLabel="Yes" offLabel="No" />
+                <Toggle checked={modderSaidYes} onChange={setModderSaidYes} onLabel={tx("yes")} offLabel={tx("no")} />
               </SettingRow>
             ) : null}
             {sketchfab && !rippedModel ? (
               <SettingRow
-                label={`I asked the modders who made this ${kind === "Track" ? "track" : "car"} for other sim racing games for permission, and they said no. *`}
-                hint={
-                  kind === "Track"
-                    ? "Sketchfab tracks are made to look at, not to race on: no grip for the tarmac, no real kerbs, no racing line. A sim mod is far better, so ask its modders first."
-                    : "Sketchfab cars are made to look at, not to drive: no physics comes with them. A sim mod is far better, so ask its modders first."
-                }
+                label={kind === "Track" ? tx("askedModdersTrack") : tx("askedModdersCar")}
+                hint={kind === "Track" ? tx("askedModdersTrackHint") : tx("askedModdersCarHint")}
               >
-                <Toggle checked={askedModders} onChange={setAskedModders} onLabel="Yes" offLabel="No" />
+                <Toggle checked={askedModders} onChange={setAskedModders} onLabel={tx("yes")} offLabel={tx("no")} />
               </SettingRow>
             ) : null}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <TextField label="Creator / modder" maxLength={80} autoComplete="off" value={third} onChange={setThird} />
-              <FieldSelect label="License" value={license} onChange={setLicense} options={LICENSES} />
+              <TextField label={tx("creator")} maxLength={80} autoComplete="off" value={third} onChange={setThird} />
+              <FieldSelect
+                label={tx("license")}
+                value={license}
+                onChange={setLicense}
+                options={licenseOptions(tx)}
+              />
             </div>
-            <FieldSelect label="Permission to use it *" value={permission} onChange={setPermission} options={PERMISSIONS} />
+            <FieldSelect
+              label={tx("permission")}
+              value={permission}
+              onChange={setPermission}
+              options={permissionOptions(tx)}
+            />
             {ripped ? (
               <p className="m-0 flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-caution">
                 <Icon name="warning" size="xs" className="mt-0.5" />
-                {license === "Don't know" && !writtenPermission
-                  ? "Find out the model's license, or ask the creator for written permission: without either it can't be added."
-                  : "Ask the creator first, and link their answer under Anything else. Without an open license or their permission it can't be added."}
+                {license === "Don't know" && !writtenPermission ? tx("rippedUnknownLicense") : tx("rippedAskCreator")}
               </p>
             ) : null}
             <TextField
-              label="Anything else?"
+              label={tx("notes")}
               multiline
               rows={2}
               maxLength={1500}
-              placeholder="Why it would be fun, a link to the creator's permission, reference photos…"
+              placeholder={tx("notesPlaceholder")}
               value={notes}
               onChange={setNotes}
             />
@@ -910,12 +942,12 @@ export const RequestPanel: React.FC<{
           {tried && !ready && !lockedReason ? (
             <Problem>
               {content && !secondOk
-                ? "Add a link to the 3D model (starting with https://)."
+                ? tx("problemLink")
                 : !sketchfabLinkOk
-                  ? "Paste the model's full Sketchfab page link."
+                  ? tx("problemShortLink")
                   : tagsChecking
-                    ? "Still checking the model's tags on Sketchfab."
-                    : "Fill in the fields marked *."}
+                    ? tx("problemChecking")
+                    : tx("problemRequired")}
             </Problem>
           ) : null}
         </div>
@@ -926,21 +958,21 @@ export const RequestPanel: React.FC<{
           </Button>
         </div>
         {kind === "Bug" && shotState !== "none" ? (
-          <Card title="Screenshot">
+          <Card title={tx("screenshot")}>
             {shot ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={shot.url} alt="The circuit as it was when the report opened" className="aspect-video w-full rounded-lc-row object-cover" />
+              <img src={shot.url} alt={tx("screenshotAlt")} className="aspect-video w-full rounded-lc-row object-cover" />
             ) : (
               <div className="lc-skeleton aspect-video w-full rounded-lc-row bg-lc-well" />
             )}
             <div className="flex flex-wrap items-center gap-2">
               {pictureCopyable ? (
                 <Button size="sm" variant="secondary" icon={<Icon name="copy" />} disabled={!shot} onClick={() => picture("copy")}>
-                  Copy picture
+                  {tx("copyPicture")}
                 </Button>
               ) : null}
               <Button size="sm" variant="ghost" icon={<Icon name="download" />} disabled={!shot} onClick={() => picture("save")}>
-                Save picture
+                {tx("savePicture")}
               </Button>
             </div>
             <p aria-live="polite" className="lc-hint m-0">

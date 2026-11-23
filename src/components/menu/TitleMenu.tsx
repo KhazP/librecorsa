@@ -117,13 +117,6 @@ const linkClass = "text-lc-chalk underline decoration-lc-keyline underline-offse
 /** A licence's name never breaks at its hyphen or space ("CC BY-NC-" / "SA 4.0") */
 const licenceClass = cx(linkClass, "whitespace-nowrap");
 
-const ASSIST_LABELS: Record<PauseMenuProps["assistPreset"], string> = {
-  pro: "No assists",
-  semi_pro: "TC + ABS",
-  assisted: "Full assists",
-};
-
-
 /** A circuit's length in the player's units ("5.34 km") */
 const lengthOf = (t: TrackInfo, unit: SpeedUnit) => `${distanceIn(t.lengthM / 1000, unit).toFixed(2)} ${DISTANCE_LABEL[unit]}`;
 
@@ -148,7 +141,8 @@ const SagatronDonateLink: React.FC = () =>
   );
 
 /** "Monaco, Red Bull Ring, Chang and 7 more" */
-const worksLine = (works: readonly string[]) => (works.length > 3 ? `${works.slice(0, 3).join(", ")} and ${works.length - 3} more` : works.join(", "));
+const worksLine = (works: readonly string[], more: (works: string, count: number) => string) =>
+  works.length > 3 ? more(works.slice(0, 3).join(", "), works.length - 3) : works.join(", ");
 
 /**
  * The modders who take donations, first in the Credits: their name, what of theirs is in the game, and their
@@ -156,17 +150,15 @@ const worksLine = (works: readonly string[]) => (works.length > 3 ? `${works.sli
  */
 const ModderSupport: React.FC = () => {
   const store = useStoreBuild();
+  const tx = useTranslations("menu.credits");
   const modders = useMemo(() => moddersList().filter((m) => m.support), []);
   if (store || !modders.length) return null;
   return (
     <section aria-labelledby="support-modders" className="flex flex-col gap-1.5 border-t border-lc-line py-4">
       <h3 id="support-modders" className="lc-row-label m-0">
-        Support the modders
+        {tx("supportModders")}
       </h3>
-      <p className="lc-body m-0 max-w-[70ch]">
-        The circuits and cars are their work, used with their permission. If you enjoy one, you can thank its maker
-        directly.
-      </p>
+      <p className="lc-body m-0 max-w-[70ch]">{tx("supportModdersBody")}</p>
       {/* The buttons share one width from sm up, so their left edges line up down each column (the labels differ:
           "Donate via PayPal", "Support on Streamlabs"); a column is wide enough for a name beside the widest. On a
           narrow phone each button goes under its name, at the left */}
@@ -181,7 +173,7 @@ const ModderSupport: React.FC = () => {
                 {m.name}
               </a>
               <span className="lc-hint truncate" title={m.works.join(", ")}>
-                {worksLine(m.works)}
+                {worksLine(m.works, (works, count) => tx("moreWorks", { works, count }))}
               </span>
             </span>
             <SupportButton support={m.support} maker={m.name} variant="secondary" className="shrink-0 sm:min-w-60" />
@@ -189,21 +181,6 @@ const ModderSupport: React.FC = () => {
         ))}
       </ul>
     </section>
-  );
-};
-
-/** "Circuit de Monaco by Mitja Bonca", "the Suzuki Liana 1.6, physics by alekabul": in the credit's own words */
-const madeBy = (i: PromptItem): React.ReactNode => {
-  const name = <span className="font-semibold text-lc-chalk">{i.maker}</span>;
-  if (i.kind === "circuit") return <>{i.title} by {name}</>;
-  return i.role === "Model" ? (
-    <>
-      the {i.title} by {name}
-    </>
-  ) : (
-    <>
-      the {i.title}, {i.role.toLowerCase()} by {name}
-    </>
   );
 };
 
@@ -216,19 +193,33 @@ const SupportNote: React.FC<{ items: PromptItem[]; onClose?: () => void; onThank
   onClose,
   onThanked,
 }) => {
+  const tx = useTranslations("menu.supportNote");
   const circuit = items.find((i) => i.kind === "circuit");
   const car = items.find((i) => i.kind === "car");
+  // "Circuit de Monaco by Mitja Bonca", "the Suzuki Liana 1.6, physics by alekabul": in the credit's own words
+  const values = {
+    circuit: circuit?.title ?? "",
+    circuitMaker: circuit?.maker ?? "",
+    car: car?.title ?? "",
+    carMaker: car?.maker ?? "",
+    role: car?.role.toLowerCase() ?? "",
+    maker: (chunks: React.ReactNode) => <span className="font-semibold text-lc-chalk">{chunks}</span>,
+  };
+  const role = car?.role === "Model" ? "" : car?.role === "Physics" ? "Physics" : "Role";
+  const drove = circuit
+    ? car
+      ? tx.rich(`both${role}` as const, values)
+      : tx.rich("circuit", values)
+    : car
+      ? tx.rich(role ? (`car${role}` as const) : "car", values)
+      : null;
   return (
-    <Sheet role="region" aria-label="Who made this drive" className="flex w-full flex-col gap-3">
+    <Sheet role="region" aria-label={tx("region")} className="flex w-full flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
-        <p className="lc-body m-0 text-[15px] leading-snug text-lc-fog">
-          You drove {circuit ? madeBy(circuit) : null}
-          {circuit && car ? " in " : null}
-          {car ? madeBy(car) : null}.
-        </p>
-        {onClose ? <IconButton size="sm" variant="ghost" icon={<Icon name="close" />} aria-label="Close" onClick={onClose} className="-mt-1 -mr-1 shrink-0" /> : null}
+        <p className="lc-body m-0 text-[15px] leading-snug text-lc-fog">{drove}</p>
+        {onClose ? <IconButton size="sm" variant="ghost" icon={<Icon name="close" />} aria-label={tx("close")} onClick={onClose} className="-mt-1 -mr-1 shrink-0" /> : null}
       </div>
-      <p className="lc-hint m-0">They make these for free. If you enjoyed the drive, you can thank them directly.</p>
+      <p className="lc-hint m-0">{tx("thanks")}</p>
       <div className="flex flex-wrap gap-2">
         {items.map((i) => (
           <SupportButton key={i.key} support={i.support} maker={i.maker} named variant="secondary" onOpen={() => onThanked?.(i.maker)} />
@@ -238,262 +229,249 @@ const SupportNote: React.FC<{ items: PromptItem[]; onClose?: () => void; onThank
   );
 };
 
-const Credits: React.FC = () => (
-  <div className="flex flex-col gap-4.5">
-    <p className="m-0 max-w-[760px] text-[18px] leading-snug font-semibold text-lc-chalk sm:text-[20px]">
-      LibreCorsa is an open-source racing sim that runs in the browser. Drive open-wheelers, GT3 cars, LMDh and other
-      prototypes, road cars, and classics like the Chaparral 2D, Porsche 934 and BMW M1 Procar, on circuits and hill
-      climbs.
-    </p>
+const Credits: React.FC = () => {
+  const tx = useTranslations("menu.credits");
+  return (
+    <div className="flex flex-col gap-4.5">
+      <p className="m-0 max-w-[760px] text-[18px] leading-snug font-semibold text-lc-chalk sm:text-[20px]">{tx("intro")}</p>
 
-    <ModderSupport />
+      <ModderSupport />
 
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))] gap-x-8">
-      <div>
-        <CreditRow title="Physics & dynamics">
-          500 Hz 6-DOF rigid-body solver, Pacejka Magic Formula &amp; normalized-slip tyre models with 9-node thermal
-          dynamics, active aerodynamics, and hybrid ERS.
-        </CreditRow>
-        <CreditRow title="Graphics & audio">
-          WebGL2 PBR rendering with GPU tyre deformation, times of day from dawn to night, rain with wet and drying
-          tracks, headlights and circuit lamps for night races, and multi-layer Web Audio synthesis.
-        </CreditRow>
-        <CreditRow title="HUD layouts">
-          The third-party HUD layouts are recreated from other open-source HUD projects, with LibreCorsa&apos;s own
-          telemetry:
-          <br />
-          {THIRD_PARTY_HUD_LAYOUTS.map((l) => {
-            const credit: HudLayoutCredit = l.credit;
-            return (
-              <React.Fragment key={l.id}>
-                &ldquo;{l.label}&rdquo; (
-                <a href={credit.repoUrl} target="_blank" rel="noreferrer" className={linkClass}>
-                  github.com
-                </a>
-                ) by {credit.author} ·{" "}
-                {credit.site ? (
-                  <>
-                    <a href={credit.site.url} target="_blank" rel="noreferrer" className={linkClass}>
-                      {credit.site.name}
-                    </a>{" "}
-                    ·{" "}
-                  </>
-                ) : null}
-                <a href={HUD_LICENSE_URL[credit.license]} target="_blank" rel="noreferrer" className={licenceClass}>
-                  {credit.license === "MIT" ? "MIT" : "GPL v3"}
-                </a>
-                <br />
-              </React.Fragment>
-            );
-          })}
-          Their licence texts are in{" "}
-          <a href={`${REPO_URL}/blob/main/THIRD_PARTY_NOTICES.md`} target="_blank" rel="noreferrer" className={linkClass}>
-            THIRD_PARTY_NOTICES.md
-          </a>
-          .
-        </CreditRow>
-      </div>
-      <div>
-        <CreditRow title="3D car models">
-          2026 Prototype: &ldquo;F1 2026 concept (polygon model)&rdquo; by{" "}
-          <a href="https://qvistdesigns.framer.website/" target="_blank" rel="noreferrer" className={linkClass}>
-            Qvist Designs
-          </a>
-          , steering wheel from DeX&apos;s AM26 (
-          <a href="https://skfb.ly/pKNCK" target="_blank" rel="noreferrer" className={linkClass}>
-            skfb.ly/pKNCK
-          </a>
-          ) ·{" "}
-          <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
-            CC BY 4.0
-          </a>
-          <br />
-          Mercedes-AMG GT3 Evo: &ldquo;Mercedes-AMG GT3&rdquo; (
-          <a
-            href="https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07"
-            target="_blank"
-            rel="noreferrer"
-            className={linkClass}
-          >
-            sketchfab.com
-          </a>
-          ) by{" "}
-          <a href="https://vecarz.com/" target="_blank" rel="noreferrer" className={linkClass}>
-            Vecarz
-          </a>
-          , Red Bull Racing livery from toddeppe&apos;s and VTX&apos;s versions ·{" "}
-          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
-            CC BY-NC-SA 4.0
-          </a>
-          <br />
-          &ldquo;2025 BMW M4 GT3 EVO G82&rdquo; (
-          <a
-            href="https://sketchfab.com/3d-models/2025-bmw-m4-gt3-evo-g82-113f83dd87064697a5ec2511d280b9d5"
-            target="_blank"
-            rel="noreferrer"
-            className={linkClass}
-          >
-            sketchfab.com
-          </a>
-          ) by Ddiaz Design ·{" "}
-          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
-            CC BY-NC-SA 4.0
-          </a>
-        </CreditRow>
-        <CreditRow title="Tyres">
-          &ldquo;2025 Pirelli tyres&rdquo; by{" "}
-          <a href="https://www.overtake.gg/members/purple-sector.3636642/" target="_blank" rel="noreferrer" className={linkClass}>
-            Purple Sector
-          </a>{" "}
-          (
-          <a href="https://www.patreon.com/cw/PurpleSector" target="_blank" rel="noreferrer" className={linkClass}>
-            patreon.com/cw/PurpleSector
-          </a>
-          ) · the 2026 car&apos;s tyres · used with permission
-          <br />
-          &ldquo;2026 Pirelli Tire Pack&rdquo; (
-          <a
-            href="https://www.overtake.gg/downloads/pirelli-tire-pack-for-formula-hybrid-x-2026.81209/"
-            target="_blank"
-            rel="noreferrer"
-            className={linkClass}
-          >
-            overtake.gg
-          </a>
-          ) by{" "}
-          <a href="https://www.overtake.gg/members/cxjovich.4261212/" target="_blank" rel="noreferrer" className={linkClass}>
-            Cxjovich
-          </a>{" "}
-          ·{" "}
-          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
-            CC BY-NC-SA 4.0
-          </a>{" "}
-          · used with permission
-          <br />
-          &ldquo;RSS GT-M Tyre Extension Packs&rdquo; (Pirelli, Michelin, Goodyear, Bridgestone, Yokohama, Falken) by
-          sagatron918
-          <SagatronDonateLink /> · GT, prototype and classic racing tyres · used with permission
-        </CreditRow>
-        <CreditRow title="MTRacing 496R">
-          Model, sound and physics from &ldquo;MTRacing 496R&rdquo; by{" "}
-          <a href="https://www.overtake.gg/members/munyuturbo.1202939/" target="_blank" rel="noreferrer" className={linkClass}>
-            munyuturbo
-          </a>{" "}
-          · used with permission
-        </CreditRow>
-        <CreditRow title="Classic Nissans">
-          Models, liveries, sound and physics of the Skyline GT-R R33 JGTC and Skyline GT-R R32 JTCC by{" "}
-          <a href="https://www.gtplanet.net/forum/members/greg_st.314907/" target="_blank" rel="noreferrer" className={linkClass}>
-            gregsediting
-          </a>{" "}
-          (
-          <a href="https://www.patreon.com/cw/gregsediting" target="_blank" rel="noreferrer" className={linkClass}>
-            Patreon
-          </a>
-          ) · used with permission. R32 liveries also by Shin956 (UNISIA, Castrol), TOHIRA official (OTX, WISE SPORTS) and
-          tomo 427 S/C (427 Motorsports, Tamiya); R32 sound by Neko Taisen
-        </CreditRow>
-        <CreditRow title="BMW M1 Procar, VW Scirocco and Porsche 934">
-          Models, liveries, sound and physics of the BMW M1 Procar, the Volkswagen Scirocco GTX 16V and the Porsche 934 Turbo
-          RSR by{" "}
-          <a href="https://www.gtplanet.net/forum/members/pfalzdriver.315633/" target="_blank" rel="noreferrer" className={linkClass}>
-            Pfalzdriver
-          </a>{" "}
-          · used with permission. M1 Procar with DaWallace, its liveries by Johnny23, its sound by Ama FMOD
-        </CreditRow>
-        <CreditRow title="Chaparral 2D">
-          Models, liveries, sound and physics of the 1966 and 1967 Chaparral 2D by{" "}
-          <a href="https://www.overtake.gg/members/npanic.761347/" target="_blank" rel="noreferrer" className={linkClass}>
-            NPanic
-          </a>{" "}
-          (
-          <a href="https://www.paypal.com/paypalme/williampasta" target="_blank" rel="noreferrer" className={linkClass}>
-            the team&rsquo;s PayPal
-          </a>
-          ) · used with permission. 3D model by Nugget &amp; NPanic, LoDs by Dodge33, skins by Pasta, physics by Bazza, CSP
-          config by Valentin K, sound by Felix789
-        </CreditRow>
-        <CreditRow title="Suzuki Liana">
-          Physics from &ldquo;Physics reworked for Top Gear Liana 1.6 GLX&rdquo; (
-          <a
-            href="https://www.overtake.gg/downloads/physics-reworked-for-top-gear-liana-1-6-glx.28636/"
-            target="_blank"
-            rel="noreferrer"
-            className={linkClass}
-          >
-            overtake.gg
-          </a>
-          ) by{" "}
-          <a href="https://www.overtake.gg/members/alekabul.294399/" target="_blank" rel="noreferrer" className={linkClass}>
-            alekabul
-          </a>{" "}
-          · used with permission
-        </CreditRow>
-        {LISTED_TRACKS.some((t) => t.credit) ? (
-          <CreditRow title="Circuits">
-            {LISTED_TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => o.credit?.url === t.credit?.url) === i).map((t) => (
-              <React.Fragment key={t.id}>
-                &ldquo;{t.credit!.title}&rdquo; (
-                <a href={t.credit!.short ?? t.credit!.url} target="_blank" rel="noreferrer" className={linkClass}>
-                  {t.credit!.short ? t.credit!.short.replace(/^https?:\/\//, "") : t.credit!.url.replace(/^https?:\/\/(www\.)?([^/]+).*$/, "$2")}
-                </a>
-                ) by{" "}
-                {t.credit!.authorUrl ? (
-                  <a href={t.credit!.authorUrl} target="_blank" rel="noreferrer" className={linkClass}>
-                    {t.credit!.author}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))] gap-x-8">
+        <div>
+          <CreditRow title={tx("physicsTitle")}>{tx("physicsBody")}</CreditRow>
+          <CreditRow title={tx("graphicsTitle")}>{tx("graphicsBody")}</CreditRow>
+          <CreditRow title={tx("hudTitle")}>
+            {tx("hudBody")}
+            <br />
+            {THIRD_PARTY_HUD_LAYOUTS.map((l) => {
+              const credit: HudLayoutCredit = l.credit;
+              return (
+                <React.Fragment key={l.id}>
+                  &ldquo;{l.label}&rdquo; (
+                  <a href={credit.repoUrl} target="_blank" rel="noreferrer" className={linkClass}>
+                    github.com
                   </a>
-                ) : (
-                  t.credit!.author
-                )}{" "}
-                ·{" "}
-                <a href={t.credit!.licenseUrl} target="_blank" rel="noreferrer" className={licenceClass}>
-                  {t.credit!.license}
+                  ) by {credit.author} ·{" "}
+                  {credit.site ? (
+                    <>
+                      <a href={credit.site.url} target="_blank" rel="noreferrer" className={linkClass}>
+                        {credit.site.name}
+                      </a>{" "}
+                      ·{" "}
+                    </>
+                  ) : null}
+                  <a href={HUD_LICENSE_URL[credit.license]} target="_blank" rel="noreferrer" className={licenceClass}>
+                    {credit.license === "MIT" ? "MIT" : "GPL v3"}
+                  </a>
+                  <br />
+                </React.Fragment>
+              );
+            })}
+            {tx.rich("hudLicences", {
+              link: (chunks) => (
+                <a href={`${REPO_URL}/blob/main/THIRD_PARTY_NOTICES.md`} target="_blank" rel="noreferrer" className={linkClass}>
+                  {chunks}
+                </a>
+              ),
+            })}
+          </CreditRow>
+        </div>
+        <div>
+          <CreditRow title={tx("carModelsTitle")}>
+            2026 Prototype: &ldquo;F1 2026 concept (polygon model)&rdquo; by{" "}
+            <a href="https://qvistdesigns.framer.website/" target="_blank" rel="noreferrer" className={linkClass}>
+              Qvist Designs
+            </a>
+            , steering wheel from DeX&apos;s AM26 (
+            <a href="https://skfb.ly/pKNCK" target="_blank" rel="noreferrer" className={linkClass}>
+              skfb.ly/pKNCK
+            </a>
+            ) ·{" "}
+            <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
+              CC BY 4.0
+            </a>
+            <br />
+            Mercedes-AMG GT3 Evo: &ldquo;Mercedes-AMG GT3&rdquo; (
+            <a
+              href="https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07"
+              target="_blank"
+              rel="noreferrer"
+              className={linkClass}
+            >
+              sketchfab.com
+            </a>
+            ) by{" "}
+            <a href="https://vecarz.com/" target="_blank" rel="noreferrer" className={linkClass}>
+              Vecarz
+            </a>
+            , Red Bull Racing livery from toddeppe&apos;s and VTX&apos;s versions ·{" "}
+            <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
+              CC BY-NC-SA 4.0
+            </a>
+            <br />
+            &ldquo;2025 BMW M4 GT3 EVO G82&rdquo; (
+            <a
+              href="https://sketchfab.com/3d-models/2025-bmw-m4-gt3-evo-g82-113f83dd87064697a5ec2511d280b9d5"
+              target="_blank"
+              rel="noreferrer"
+              className={linkClass}
+            >
+              sketchfab.com
+            </a>
+            ) by Ddiaz Design ·{" "}
+            <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
+              CC BY-NC-SA 4.0
+            </a>
+          </CreditRow>
+          <CreditRow title={tx("tyresTitle")}>
+            &ldquo;2025 Pirelli tyres&rdquo; by{" "}
+            <a href="https://www.overtake.gg/members/purple-sector.3636642/" target="_blank" rel="noreferrer" className={linkClass}>
+              Purple Sector
+            </a>{" "}
+            (
+            <a href="https://www.patreon.com/cw/PurpleSector" target="_blank" rel="noreferrer" className={linkClass}>
+              patreon.com/cw/PurpleSector
+            </a>
+            ) · the 2026 car&apos;s tyres · used with permission
+            <br />
+            &ldquo;2026 Pirelli Tire Pack&rdquo; (
+            <a
+              href="https://www.overtake.gg/downloads/pirelli-tire-pack-for-formula-hybrid-x-2026.81209/"
+              target="_blank"
+              rel="noreferrer"
+              className={linkClass}
+            >
+              overtake.gg
+            </a>
+            ) by{" "}
+            <a href="https://www.overtake.gg/members/cxjovich.4261212/" target="_blank" rel="noreferrer" className={linkClass}>
+              Cxjovich
+            </a>{" "}
+            ·{" "}
+            <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
+              CC BY-NC-SA 4.0
+            </a>{" "}
+            · used with permission
+            <br />
+            &ldquo;RSS GT-M Tyre Extension Packs&rdquo; (Pirelli, Michelin, Goodyear, Bridgestone, Yokohama, Falken) by
+            sagatron918
+            <SagatronDonateLink /> · GT, prototype and classic racing tyres · used with permission
+          </CreditRow>
+          <CreditRow title="MTRacing 496R">
+            Model, sound and physics from &ldquo;MTRacing 496R&rdquo; by{" "}
+            <a href="https://www.overtake.gg/members/munyuturbo.1202939/" target="_blank" rel="noreferrer" className={linkClass}>
+              munyuturbo
+            </a>{" "}
+            · used with permission
+          </CreditRow>
+          <CreditRow title={tx("nissansTitle")}>
+            Models, liveries, sound and physics of the Skyline GT-R R33 JGTC and Skyline GT-R R32 JTCC by{" "}
+            <a href="https://www.gtplanet.net/forum/members/greg_st.314907/" target="_blank" rel="noreferrer" className={linkClass}>
+              gregsediting
+            </a>{" "}
+            (
+            <a href="https://www.patreon.com/cw/gregsediting" target="_blank" rel="noreferrer" className={linkClass}>
+              Patreon
+            </a>
+            ) · used with permission. R32 liveries also by Shin956 (UNISIA, Castrol), TOHIRA official (OTX, WISE SPORTS) and
+            tomo 427 S/C (427 Motorsports, Tamiya); R32 sound by Neko Taisen
+          </CreditRow>
+          <CreditRow title={tx("pfalzdriverTitle")}>
+            Models, liveries, sound and physics of the BMW M1 Procar, the Volkswagen Scirocco GTX 16V and the Porsche 934 Turbo
+            RSR by{" "}
+            <a href="https://www.gtplanet.net/forum/members/pfalzdriver.315633/" target="_blank" rel="noreferrer" className={linkClass}>
+              Pfalzdriver
+            </a>{" "}
+            · used with permission. M1 Procar with DaWallace, its liveries by Johnny23, its sound by Ama FMOD
+          </CreditRow>
+          <CreditRow title="Chaparral 2D">
+            Models, liveries, sound and physics of the 1966 and 1967 Chaparral 2D by{" "}
+            <a href="https://www.overtake.gg/members/npanic.761347/" target="_blank" rel="noreferrer" className={linkClass}>
+              NPanic
+            </a>{" "}
+            (
+            <a href="https://www.paypal.com/paypalme/williampasta" target="_blank" rel="noreferrer" className={linkClass}>
+              the team&rsquo;s PayPal
+            </a>
+            ) · used with permission. 3D model by Nugget &amp; NPanic, LoDs by Dodge33, skins by Pasta, physics by Bazza, CSP
+            config by Valentin K, sound by Felix789
+          </CreditRow>
+          <CreditRow title="Suzuki Liana">
+            Physics from &ldquo;Physics reworked for Top Gear Liana 1.6 GLX&rdquo; (
+            <a
+              href="https://www.overtake.gg/downloads/physics-reworked-for-top-gear-liana-1-6-glx.28636/"
+              target="_blank"
+              rel="noreferrer"
+              className={linkClass}
+            >
+              overtake.gg
+            </a>
+            ) by{" "}
+            <a href="https://www.overtake.gg/members/alekabul.294399/" target="_blank" rel="noreferrer" className={linkClass}>
+              alekabul
+            </a>{" "}
+            · used with permission
+          </CreditRow>
+          {LISTED_TRACKS.some((t) => t.credit) ? (
+            <CreditRow title={tx("circuitsTitle")}>
+              {LISTED_TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => o.credit?.url === t.credit?.url) === i).map((t) => (
+                <React.Fragment key={t.id}>
+                  &ldquo;{t.credit!.title}&rdquo; (
+                  <a href={t.credit!.short ?? t.credit!.url} target="_blank" rel="noreferrer" className={linkClass}>
+                    {t.credit!.short ? t.credit!.short.replace(/^https?:\/\//, "") : t.credit!.url.replace(/^https?:\/\/(www\.)?([^/]+).*$/, "$2")}
+                  </a>
+                  ) by{" "}
+                  {t.credit!.authorUrl ? (
+                    <a href={t.credit!.authorUrl} target="_blank" rel="noreferrer" className={linkClass}>
+                      {t.credit!.author}
+                    </a>
+                  ) : (
+                    t.credit!.author
+                  )}{" "}
+                  ·{" "}
+                  <a href={t.credit!.licenseUrl} target="_blank" rel="noreferrer" className={licenceClass}>
+                    {t.credit!.license}
+                  </a>
+                  <br />
+                </React.Fragment>
+              ))}
+              {tx("circuitsConverted")}
+            </CreditRow>
+          ) : null}
+          <CreditRow title={tx("sceneryTitle")}>
+            {SCENERY_CREDITS.map((c) => (
+              <React.Fragment key={c.id}>
+                &ldquo;{c.title}&rdquo; (
+                <a href={c.url} target="_blank" rel="noreferrer" className={linkClass}>
+                  sketchfab.com
+                </a>
+                ) by {c.author} ·{" "}
+                <a href={c.licenseUrl} target="_blank" rel="noreferrer" className={licenceClass}>
+                  {c.license}
                 </a>
                 <br />
               </React.Fragment>
             ))}
-            Converted for the simulator (rescaled, recentred, textures re-encoded, physics colliders added).
+            {tx("sceneryNote")}
           </CreditRow>
-        ) : null}
-        <CreditRow title="Trackside scenery (RISE Motordrome)">
-          {SCENERY_CREDITS.map((c) => (
-            <React.Fragment key={c.id}>
-              &ldquo;{c.title}&rdquo; (
-              <a href={c.url} target="_blank" rel="noreferrer" className={linkClass}>
-                sketchfab.com
-              </a>
-              ) by {c.author} ·{" "}
-              <a href={c.licenseUrl} target="_blank" rel="noreferrer" className={licenceClass}>
-                {c.license}
-              </a>
-              <br />
-            </React.Fragment>
-          ))}
-          Simplified, textures re-encoded, placed at the circuit&apos;s tree, bush and helicopter spots. The stands
-          and other props are the project&apos;s own.
-        </CreditRow>
+        </div>
       </div>
-    </div>
 
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-lc-tile border border-lc-line bg-lc-well px-4 py-3.5 sm:px-5 sm:py-4">
-      <div className="flex max-w-[600px] min-w-0 flex-col gap-1">
-        <h3 className="lc-row-label m-0">Rights holders and takedown</h3>
-        <p className="lc-body m-0">
-          If you made a model, texture, sound or other asset used here and it is uncredited, credited wrongly, under the
-          wrong license, or not meant to be in LibreCorsa, tell me: I will fix it or take it down, usually within 7 days.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lc-tile border border-lc-line bg-lc-well px-4 py-3.5 sm:px-5 sm:py-4">
+        <div className="flex max-w-[600px] min-w-0 flex-col gap-1">
+          <h3 className="lc-row-label m-0">{tx("rightsTitle")}</h3>
+          <p className="lc-body m-0">{tx("rightsBody")}</p>
+        </div>
+        <Button href={TAKEDOWN_URL} target="_blank" rel="noopener noreferrer" variant="secondary" size="md" icon={<Icon name="externalLink" />}>
+          {tx("rightsButton")}
+        </Button>
       </div>
-      <Button href={TAKEDOWN_URL} target="_blank" rel="noopener noreferrer" variant="secondary" size="md" icon={<Icon name="externalLink" />}>
-        Rights or takedown request
-      </Button>
-    </div>
 
-    <p className="lc-hint m-0 max-w-[620px] border-t border-lc-line pt-3.5">
-      Built with Next.js, React, Three.js and Tailwind CSS. Source code licensed under the GNU AGPL v3.0; 3D and audio assets are for
-      non-commercial educational use only.
-    </p>
-  </div>
-);
+      <p className="lc-hint m-0 max-w-[620px] border-t border-lc-line pt-3.5">{tx("builtWith")}</p>
+    </div>
+  );
+};
 
 /**
  * The frosted sheet an open panel sits on, with its heading and a Close button. `.lc-title-frame` lets the
@@ -507,6 +485,7 @@ const PanelFrame: React.FC<{
   children: React.ReactNode;
 }> = ({ subtitle, title, onClose, children }) => {
   const { mode, family } = useInputMode();
+  const tx = useTranslations("menu.panel");
   return (
     <div className="lc-title-frame lc-glass flex min-w-0 flex-col gap-4.5 rounded-lc-sheet p-5 text-lc-chalk sm:px-7 sm:pt-6 sm:pb-6.5 phone:gap-3.5 phone:p-3.5">
       {title ? (
@@ -528,7 +507,7 @@ const PanelFrame: React.FC<{
             prompt={mode === "pad" ? <PadGlyph button="b" family={family} /> : <KeyCap>Esc</KeyCap>}
             icon={mode === "pad" ? undefined : <Icon name="close" />}
           >
-            Close
+            {tx("close")}
           </Button>
         </div>
       ) : null}
@@ -554,9 +533,10 @@ interface MenuItem {
 
 /** The active input device in the header */
 const InputHint: React.FC<{ pad: PadState | undefined }> = ({ pad }) => {
+  const tx = useTranslations("menu.title");
   const touch = !pad && isTouchDevice();
   const wheel = pad ? isLikelyWheel(pad) : false;
-  const kind = pad ? (wheel ? "Wheel" : "Controller") : touch ? "Touch" : "Keyboard";
+  const kind = pad ? (wheel ? tx("inputWheel") : tx("inputController")) : touch ? tx("inputTouch") : tx("inputKeyboard");
   const icon: IconName = pad ? (wheel ? "wheel" : "controller") : touch ? "touch" : "keyboard";
   return (
     <p className="m-0 flex min-w-0 items-center gap-2 text-[13px] text-lc-slate">
@@ -837,6 +817,11 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   // A car with liveries of its own wears the one picked for it (read on each render: the menus re-render as panels change)
   const skin = carSkinFor(vehicle.id);
   const hudPreset = props.displayPanel?.settings.hud.preset;
+  const assistLabels: Record<PauseMenuProps["assistPreset"], string> = {
+    pro: tn("assistsPro"),
+    semi_pro: tn("assistsSemiPro"),
+    assisted: tn("assistsAssisted"),
+  };
   // What a bug report gets without the player typing it
   const feedbackContext: FeedbackContext = feedbackContextOf(track, vehicle.title, props.displayPanel?.settings);
 
@@ -909,9 +894,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             <UpdateReady
               endsSession={
                 props.lobby
-                  ? "Leaves the current room. Saved laps and settings stay."
+                  ? t("updateLeavesRoom")
                   : props.races?.entry.state === "joined" || props.races?.entry.state === "joining"
-                    ? "Leaves the scheduled race. Saved laps and settings stay."
+                    ? t("updateLeavesRace")
                     : undefined
               }
             />
@@ -924,7 +909,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 variant="secondary"
                 size="sm"
                 // The name shown comes first, so saying it presses the button
-                aria-label={`${props.profile.name}, edit driver profile`}
+                aria-label={t("editProfile", { name: props.profile.name })}
                 onClick={() => props.onOpenSettings?.("profile")}
                 icon={
                   <span
@@ -1024,7 +1009,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       selectedLivery={props.selectedLivery}
                       onChangeLivery={props.onChangeLivery}
                       library={props.library}
-                      lockedReason={carLocked ? "Fixed for this race" : undefined}
+                      lockedReason={carLocked ? t("carFixed") : undefined}
                     />
                   ) : null}
                   {panel === "garage" ? <EngineersGarage {...props} onOpenCarBrowser={() => openPanel("car")} /> : null}
@@ -1151,7 +1136,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     const assists =
                       props.assistPreset === "semi_pro" && props.telemetry.liveTuner?.absAllowed === false
                         ? tn("assistsTcOnly")
-                        : (ASSIST_LABELS[props.assistPreset] ?? props.assistPreset);
+                        : (assistLabels[props.assistPreset] ?? props.assistPreset);
                     return props.showRacingLine ? tn("withRacingLine", { assists }) : assists;
                   })()}
                 </dd>

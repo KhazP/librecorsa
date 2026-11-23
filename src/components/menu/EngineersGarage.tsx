@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import type { AeroSetupPreset, LiveTunerPatch, LiveTunerState, TireCompound } from "@/types/f1";
 import {
   DEFAULT_CHASSIS_SETUP,
@@ -46,12 +47,8 @@ import { LIVERIES } from "@/lib/track-data";
 import { FACTORY_LIVERY_NOTE, carById, carClass, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 
-/** Short tab names for the pages whose full name would push the strip onto a second row */
-const TAB_NAME: Record<string, string> = {
-  Aerodynamics: "Aero",
-  "Suspension geometry": "Geometry",
-  "Mechanical grip": "Mechanical",
-};
+/** Short tab names (message keys) for the pages whose full name would push the strip onto a second row, by page id */
+const TAB_NAME = { aero: "tabAero", geometry: "tabGeometry", mechanical: "tabMechanical" } as const;
 
 /** The `phone:` variant's query: phones either way up */
 const PHONE_QUERY = "(max-width: 40rem), (max-height: 32rem)";
@@ -73,19 +70,17 @@ const FALLBACK_TUNER: Pick<
 /** Changed from the car's baseline (the electronics have no fixed baseline: each car and assist level brings its own) */
 const isChanged = (q: SetupParam, st: SetupState) => q.writes !== "tuner" && Math.abs(q.get(st) - q.base) > 1e-6;
 
-/** The electronics' dials, named as on the MFD (the sheet's own labels name them differently) */
-const DIAL_NAMES: Record<string, string> = {
-  tcLevel: "Traction control (TC1)",
-  tc2Level: "TC cut (TC2)",
-  absLevel: "ABS",
-  brakeBiasPct: "Brake bias",
-  diffEntry: "Diff entry",
-  diffExit: "Diff exit",
-  engineMap: "Engine map",
-};
-
-/** Words for the assist preset, as Settings > Driving names them */
-const ASSIST_WORDS: Record<string, string> = { pro: "Off", semi_pro: "TC + ABS", assisted: "Full" };
+/** The electronics' dials, named as on the MFD (the sheet's own labels name them differently): message keys by param id */
+const DIAL_NAMES = {
+  tcLevel: "dialTc",
+  tc2Level: "dialTc2",
+  absLevel: "dialAbs",
+  brakeBiasPct: "dialBias",
+  diffEntry: "dialDiffEntry",
+  diffExit: "dialDiffExit",
+  engineMap: "dialEngineMap",
+} as const;
+const dialKey = (id: string) => (Object.hasOwn(DIAL_NAMES, id) ? DIAL_NAMES[id as keyof typeof DIAL_NAMES] : null);
 
 /** Effect texts without a leading arrow glyph (the sheet writes some with one) */
 const plain = (t: string) => t.replace(/^[\u25B2\u25BC\u25B4\u25BE]\s*/, "");
@@ -105,6 +100,7 @@ const SetupRow: React.FC<{
   format: (v: number) => string;
   onChange: (v: number) => void;
 }> = ({ q, value, disabled, format, onChange }) => {
+  const tx = useTranslations("menu.garage");
   const tuner = q.writes === "tuner";
   const base = tuner ? undefined : q.base;
   // Without a baseline (the electronics' dials), the text follows the way the slider last moved
@@ -114,7 +110,9 @@ const SetupRow: React.FC<{
   const dir = (base === undefined ? moved : Math.sign(value - base)) * invert;
   const right = invert > 0 ? q.fx.more : q.fx.less;
   const left = invert > 0 ? q.fx.less : q.fx.more;
-  const hint = near ? `Right: ${plain(right)}. Left: ${plain(left)}.` : dir > 0 ? plain(q.fx.more) : dir < 0 ? plain(q.fx.less) : undefined;
+  const hint = near ? tx("hintBothWays", { right: plain(right), left: plain(left) }) : dir > 0 ? plain(q.fx.more) : dir < 0 ? plain(q.fx.less) : undefined;
+  const dial = dialKey(q.id);
+  const label = dial ? tx(dial) : q.label;
   const changed = !tuner && Math.abs(value - q.base) > 1e-6;
   const change = (v: number) => {
     if (v !== value) setMoved(Math.sign(v - value));
@@ -130,20 +128,20 @@ const SetupRow: React.FC<{
       }}
     >
       <SettingRow
-        label={DIAL_NAMES[q.id] ?? q.label}
+        label={label}
         hint={hint}
         disabled={disabled}
         changed={changed}
         onReset={changed ? () => change(q.base) : undefined}
-        resetLabel={`Reset ${(DIAL_NAMES[q.id] ?? q.label).toLowerCase()} to the baseline, ${format(q.base)}`}
+        resetLabel={tx("resetRow", { setting: label.toLowerCase(), value: format(q.base) })}
       >
         {q.toggle ? (
           <Segmented<"off" | "on">
             value={value >= 1 ? "on" : "off"}
             onChange={(id) => change(id === "on" ? 1 : 0)}
             options={[
-              { id: "off", label: "Off" },
-              { id: "on", label: "On" },
+              { id: "off", label: tx("toggleOff") },
+              { id: "on", label: tx("toggleOn") },
             ]}
           />
         ) : (
@@ -166,6 +164,7 @@ export const EngineersGarage: React.FC<
     onOpenSettings?: (category: "driving") => void;
   }
 > = (p) => {
+  const tx = useTranslations("menu.garage");
   const sheet = useMemo(() => setupSheet(p.vehicleModel, TYRE_SETUP_LIMITS[p.vehicleModel], p.defaultTyreSetup), [p.vehicleModel, p.defaultTyreSetup]);
   const [tabId, setTab] = useState(sheet[0].id);
   const group: SetupGroup = sheet.find((g) => g.id === tabId) ?? sheet[0];
@@ -236,7 +235,7 @@ export const EngineersGarage: React.FC<
     for (const q of g.params) if (q.writes !== "tuner") next = q.set(next, q.base);
     if (g.params.some((q) => q.writes === "chassis")) p.onChangeChassisSetup?.(next.chassis);
     if (g.params.some((q) => q.writes === "tyre")) p.onChangeTyreSetup(next.tyre);
-    setNote(`${g.label} back to baseline`, () => restore(before));
+    setNote(tx("pageReset", { page: g.label }), () => restore(before));
   };
 
   const savePreset = () => {
@@ -252,7 +251,7 @@ export const EngineersGarage: React.FC<
     const existing = presets.find((x) => x.name.toLowerCase() === label.toLowerCase());
     // A full list takes no new setup (it would push the oldest out unseen); a save over an existing name still works
     if (!existing && presets.length >= GARAGE_PRESETS_MAX) {
-      setNote(`${GARAGE_PRESETS_MAX} setups saved: delete one first`);
+      setNote(tx("listFull", { max: GARAGE_PRESETS_MAX }));
       return;
     }
     const preset: GaragePreset = {
@@ -269,7 +268,7 @@ export const EngineersGarage: React.FC<
     const next = [preset, ...presets.filter((x) => x.id !== preset.id)].slice(0, GARAGE_PRESETS_MAX);
     setPresets(next);
     setName("");
-    setNote(saveGaragePresets(p.vehicleModel, next) ? `Saved “${preset.name}”` : "Could not save: storage is blocked");
+    setNote(saveGaragePresets(p.vehicleModel, next) ? tx("saved", { name: preset.name }) : tx("saveBlocked"));
   };
   const loadPreset = (x: GaragePreset) => {
     const before = snapshot();
@@ -290,7 +289,7 @@ export const EngineersGarage: React.FC<
     if (TIRE_COMPOUNDS.includes(x.compound)) p.onChangeTireCompound(x.compound);
     if (AERO_PRESETS.includes(x.aero)) p.onChangeAeroPreset(x.aero);
     p.onChangeLiveTuner?.(loaded.tuner);
-    setNote(`Loaded “${x.name}”`, () => restore(before));
+    setNote(tx("loaded", { name: x.name }), () => restore(before));
   };
   /** A factory setup: the car's baseline with the preset's changes, loaded as a saved one is */
   const loadFactoryPreset = (f: FactoryPreset) =>
@@ -320,7 +319,8 @@ export const EngineersGarage: React.FC<
       aero: p.aeroPreset,
       tuner: currentTuner,
     });
-  const copyShareCode = async (setup: SharedCarSetup, tag: string, label: string) => {
+  /** `copied` is the note once the code is on the clipboard */
+  const copyShareCode = async (setup: SharedCarSetup, tag: string, copied: string) => {
     const code = encodeSetupShareCode(setup);
     const ok = await copyTextToClipboard(code);
     if (copyTimerRef.current !== null) {
@@ -333,10 +333,10 @@ export const EngineersGarage: React.FC<
         copyTimerRef.current = null;
         setCopiedId(null);
       }, 2000);
-      setNote(`Copied share code for ${label}`);
+      setNote(copied);
     } else {
       setCopiedId(null);
-      setNote("Copy failed: clipboard unavailable");
+      setNote(tx("copyFailed"));
     }
   };
   const applySharedSetup = (shared: SharedCarSetup, save = false) => {
@@ -383,12 +383,12 @@ export const EngineersGarage: React.FC<
     loadPreset(asPreset);
     if (save) {
       if (presets.length >= GARAGE_PRESETS_MAX) {
-        setNote(`Applied “${finalName}” (preset list full, ${GARAGE_PRESETS_MAX} max)`, () => restore(before));
+        setNote(tx("appliedListFull", { name: finalName, max: String(GARAGE_PRESETS_MAX) }), () => restore(before));
       } else {
         const next = [asPreset, ...presets].slice(0, GARAGE_PRESETS_MAX);
         setPresets(next);
         if (!saveGaragePresets(p.vehicleModel, next)) {
-          setNote(`Applied “${finalName}” (could not save: storage is blocked)`, () => restore(before));
+          setNote(tx("appliedSaveBlocked", { name: finalName }), () => restore(before));
         }
       }
     }
@@ -399,20 +399,20 @@ export const EngineersGarage: React.FC<
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || file.size > 64 * 1024) {
-      if (file) setNote("Setup file is too large");
+      if (file) setNote(tx("fileTooLarge"));
       return;
     }
     try {
       const text = await file.text();
       const parsed = decodeSetupShareCode(text);
       if (!parsed) {
-        setNote("File is not a valid LibreCorsa setup");
+        setNote(tx("fileInvalid"));
         return;
       }
       setImportCode(encodeSetupShareCode(parsed));
       setImportOpen(true);
     } catch {
-      setNote("Could not read setup file");
+      setNote(tx("fileUnreadable"));
     }
   };
   const deletePreset = (x: GaragePreset) => {
@@ -420,7 +420,7 @@ export const EngineersGarage: React.FC<
     const next = presets.filter((y) => y.id !== x.id);
     setPresets(next);
     saveGaragePresets(p.vehicleModel, next);
-    setNote(`Deleted “${x.name}”`, () => {
+    setNote(tx("deleted", { name: x.name }), () => {
       setPresets(before);
       saveGaragePresets(p.vehicleModel, before);
     });
@@ -430,7 +430,7 @@ export const EngineersGarage: React.FC<
     p.onChangeChassisSetup?.({ ...DEFAULT_CHASSIS_SETUP });
     p.onChangeTyreSetup(p.defaultTyreSetup);
     p.onChangeAeroPreset("balanced");
-    setNote("Every setting back to baseline", () => restore(before));
+    setNote(tx("allReset"), () => restore(before));
   };
 
   // The car browser takes the garage's place while it is open; Ⓑ / Esc (or Garage) comes back to the Change car button
@@ -491,10 +491,10 @@ export const EngineersGarage: React.FC<
   const extra = (x: string) => {
     const onlyTyre = vehicleModelSpec(car.physics).onlyTyre;
     if (x === "compound" && onlyTyre)
-      return <SettingRow key={x} label="Tyre compound" hint={`${onlyTyre} (spec compound)`}>{null}</SettingRow>;
+      return <SettingRow key={x} label={tx("tyreCompound")} hint={tx("specCompound", { tyre: onlyTyre })}>{null}</SettingRow>;
     if (x === "compound")
       return (
-        <SettingRow key={x} label="Tyre compound" stacked>
+        <SettingRow key={x} label={tx("tyreCompound")} stacked>
           <Segmented<TireCompound>
             fill
             byContent
@@ -510,39 +510,43 @@ export const EngineersGarage: React.FC<
       );
     if (x === "aeroPackage")
       return (
-        <SettingRow key={x} label="Aero package" stacked>
+        <SettingRow key={x} label={tx("aeroPackage")} stacked>
           <Segmented<AeroSetupPreset>
             fill
             value={p.aeroPreset}
             onChange={p.onChangeAeroPreset}
             options={[
-              { id: "low_downforce", label: "Low downforce" },
-              { id: "balanced", label: "Balanced" },
-              { id: "high_downforce", label: "High downforce" },
+              { id: "low_downforce", label: tx("lowDownforce") },
+              { id: "balanced", label: tx("balanced") },
+              { id: "high_downforce", label: tx("highDownforce") },
             ]}
           />
         </SettingRow>
       );
-    if (x === "assists")
+    if (x === "assists") {
+      // Words for the assist preset, as Settings > Driving names them
+      const assistWords: Record<string, string> = { pro: tx("assistOff"), semi_pro: tx("assistTcAbs"), assisted: tx("assistFull") };
+      const assists = assistWords[p.assistPreset] ?? p.assistPreset;
       // The TC & ABS preset lives in Settings > Driving now: the Garage shows it and links there
       return (
         <SettingRow
           key={x}
-          label="Traction control & ABS"
+          label={tx("assists")}
           hint={
             // A class without ABS runs the middle preset on TC alone, and ABS only on Full
             tuner.absAllowed === false
-              ? `${p.assistPreset === "semi_pro" ? "TC only" : (ASSIST_WORDS[p.assistPreset] ?? p.assistPreset)} · No factory ABS`
-              : `${ASSIST_WORDS[p.assistPreset] ?? p.assistPreset}`
+              ? tx("noFactoryAbs", { assists: p.assistPreset === "semi_pro" ? tx("tcOnly") : assists })
+              : assists
           }
         >
           {p.onOpenSettings ? (
             <Button size="sm" variant="secondary" icon={<Icon name="settings" />} onClick={() => p.onOpenSettings?.("driving")}>
-              Settings
+              {tx("settings")}
             </Button>
           ) : null}
         </SettingRow>
       );
+    }
     return null;
   };
 
@@ -566,11 +570,11 @@ export const EngineersGarage: React.FC<
               variant="secondary"
               data-nav-skip=""
               onClick={closeBrowser}
-              aria-label="Back to the Garage"
+              aria-label={tx("backAria")}
               prompt={mode === "pad" ? <PadGlyph button="b" family={family} /> : undefined}
               icon={mode === "pad" ? undefined : <Icon name="back" />}
             >
-              Garage
+              {tx("back")}
             </Button>
           }
         />
@@ -588,7 +592,7 @@ export const EngineersGarage: React.FC<
           data-nav-columns: up / down read down the left column (the physics switch), then the livery */}
       <Card
         title={car.title}
-        description={`${carClass(car.classId).title}, ${car.year}`}
+        description={tx("carFacts", { carClass: carClass(car.classId).title, year: String(car.year) })}
         action={
           <Button
             ref={browseRef}
@@ -597,10 +601,10 @@ export const EngineersGarage: React.FC<
             // Where the garage starts: the car, not the setup name field
             data-nav-default=""
             onClick={openBrowser}
-            disabledReason={carLocked ? "The car is fixed for this race" : undefined}
+            disabledReason={carLocked ? tx("carFixedReason") : undefined}
             icon={<Icon name="car" />}
           >
-            {carLocked ? "Fixed for this race" : "Change car"}
+            {carLocked ? tx("carFixed") : tx("changeCar")}
           </Button>
         }
       >
@@ -619,7 +623,7 @@ export const EngineersGarage: React.FC<
               <CarThumb car={car} liveryId={previewLiveryId} skinId={previewSkinId} className="p-2" />
             </span>
           </div>
-          <SettingRow label="Livery" hint={!hasPicker ? FACTORY_LIVERY_NOTE : undefined} stacked={hasPicker}>
+          <SettingRow label={tx("livery")} hint={!hasPicker ? FACTORY_LIVERY_NOTE : undefined} stacked={hasPicker}>
             {car.skins?.length ? (
               <CarSkinPicker
                 carId={p.carId}
@@ -649,10 +653,10 @@ export const EngineersGarage: React.FC<
 
       {/* Named setups: across the sheet too, the name field and its actions on one line where they fit */}
       <Card
-        title="Saved setups"
+        title={tx("savedSetups")}
         action={
-          <Button size="sm" variant="ghost" icon={<Icon name="reset" />} onClick={resetAll} title="Every chassis setting, tyre pressure and camber back to the car's baseline">
-            Reset all
+          <Button size="sm" variant="ghost" icon={<Icon name="reset" />} onClick={resetAll} title={tx("resetAllTitle")}>
+            {tx("resetAll")}
           </Button>
         }
       >
@@ -660,19 +664,19 @@ export const EngineersGarage: React.FC<
           <div className="flex min-w-0 flex-[1_1_18rem] items-end gap-2">
             <div className="min-w-0 flex-1">
               <TextField
-                label="Name"
+                label={tx("name")}
                 value={name}
                 onChange={setName}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") savePreset();
                 }}
-                placeholder="Setup name"
+                placeholder={tx("namePlaceholder")}
                 maxLength={32}
                 autoComplete="off"
               />
             </div>
             <Button size="md" variant="secondary" onClick={savePreset} icon={<Icon name="add" />}>
-              Save
+              {tx("save")}
             </Button>
           </div>
           {/* The field's height (44 px), so the row reads as one line beside it */}
@@ -681,10 +685,10 @@ export const EngineersGarage: React.FC<
               size="md"
               variant="secondary"
               icon={<Icon name={copiedId === "current" ? "copied" : "share"} />}
-              onClick={() => void copyShareCode(currentSharedSetup(), "current", "current setup")}
-              title="Copy a portable LC1 share code for your current setup"
+              onClick={() => void copyShareCode(currentSharedSetup(), "current", tx("copiedCurrent"))}
+              title={tx("shareCodeTitle")}
             >
-              {copiedId === "current" ? "Copied" : "Share code"}
+              {copiedId === "current" ? tx("shareCodeCopied") : tx("shareCode")}
             </Button>
             <Button
               size="md"
@@ -693,17 +697,17 @@ export const EngineersGarage: React.FC<
               onClick={() => setImportOpen((o) => !o)}
               aria-expanded={importOpen}
             >
-              Import
+              {tx("import")}
             </Button>
             <IconButton
               size="md"
               variant="secondary"
               icon={<Icon name="download" />}
-              aria-label="Export current setup as JSON file"
-              title="Export setup (.json)"
+              aria-label={tx("exportAria")}
+              title={tx("exportTitle")}
               onClick={() => {
                 exportSetupFile(currentSharedSetup(), car.title);
-                setNote("Exported setup .json");
+                setNote(tx("exported"));
               }}
             />
           </div>
@@ -713,7 +717,7 @@ export const EngineersGarage: React.FC<
             <div className="flex items-end gap-2">
               <div className="min-w-0 flex-1">
                 <TextField
-                  label="Paste share code or JSON"
+                  label={tx("pasteLabel")}
                   value={importCode}
                   onChange={setImportCode}
                   placeholder="LC1-..."
@@ -721,7 +725,7 @@ export const EngineersGarage: React.FC<
                 />
               </div>
               <Button size="sm" variant="secondary" onClick={() => importFileRef.current?.click()}>
-                Load .json
+                {tx("loadFile")}
               </Button>
               <input
                 ref={importFileRef}
@@ -736,7 +740,7 @@ export const EngineersGarage: React.FC<
                 <div className="flex flex-col gap-2 rounded-lc-row border border-white/10 bg-lc-carbon/80 p-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="truncate text-[13px] font-semibold text-lc-chalk">
-                      {decodedImport.name ?? "Shared setup"}
+                      {decodedImport.name ?? tx("sharedSetup")}
                     </span>
                     <span className="lc-mono text-[11px] font-semibold text-lc-fog">
                       {carBoardTag(decodedImport.vehicle).label}
@@ -745,21 +749,21 @@ export const EngineersGarage: React.FC<
                   <p className="lc-hint m-0">{summarizeSharedSetup(decodedImport)}</p>
                   {decodedImport.vehicle !== p.vehicleModel ? (
                     <p className="m-0 text-[12px] text-lc-caution">
-                      Built for {carBoardTag(decodedImport.vehicle).label}: chassis offsets, electronics and tyres will be clamped to this car.
+                      {tx("builtFor", { car: carBoardTag(decodedImport.vehicle).label })}
                     </p>
                   ) : null}
                   <div className="flex flex-wrap gap-1.5 pt-0.5">
                     <Button size="sm" variant="primary" onClick={() => applySharedSetup(decodedImport, false)}>
-                      Apply
+                      {tx("apply")}
                     </Button>
                     <Button size="sm" variant="secondary" onClick={() => applySharedSetup(decodedImport, true)}>
-                      Save &amp; apply
+                      {tx("saveApply")}
                     </Button>
                   </div>
                 </div>
               ) : (
                 <p role="alert" className="m-0 text-[12px] text-lc-loss">
-                  Not a valid LibreCorsa setup code or JSON file.
+                  {tx("invalidCode")}
                 </p>
               )
             ) : null}
@@ -772,9 +776,9 @@ export const EngineersGarage: React.FC<
             {factoryPresets.map((f) => (
               <li key={f.id} className="flex items-center gap-1">
                 <span className="min-w-0 flex-1">
-                  <Button size="sm" variant="ghost" block onClick={() => loadFactoryPreset(f)} aria-label={`Load ${f.name}, the factory setup`}>
+                  <Button size="sm" variant="ghost" block onClick={() => loadFactoryPreset(f)} aria-label={tx("loadFactoryAria", { name: f.name })}>
                     <span className="truncate">{f.name}</span>
-                    <span className="lc-hint ml-2 shrink-0">Factory</span>
+                    <span className="lc-hint ml-2 shrink-0">{tx("factory")}</span>
                   </Button>
                 </span>
               </li>
@@ -782,24 +786,24 @@ export const EngineersGarage: React.FC<
             {presets.map((x) => (
               <li key={x.id} className="flex items-center gap-1">
                 <span className="min-w-0 flex-1">
-                  <Button size="sm" variant="ghost" block onClick={() => loadPreset(x)} aria-label={`Load ${x.name}`}>
+                  <Button size="sm" variant="ghost" block onClick={() => loadPreset(x)} aria-label={tx("loadAria", { name: x.name })}>
                     <span className="truncate" title={x.name}>{x.name}</span>
                   </Button>
                 </span>
                 <IconButton
                   size="sm"
                   variant="ghost"
-                  aria-label={`Copy share code for ${x.name}`}
-                  title="Copy share code"
+                  aria-label={tx("copyAria", { name: x.name })}
+                  title={tx("copyTitle")}
                   icon={<Icon name={copiedId === x.id ? "copied" : "share"} />}
-                  onClick={() => void copyShareCode(presetToSharedSetup(x), x.id, `“${x.name}”`)}
+                  onClick={() => void copyShareCode(presetToSharedSetup(x), x.id, tx("copiedPreset", { name: x.name }))}
                 />
-                <IconButton size="sm" variant="ghost" aria-label={`Delete ${x.name}`} icon={<Icon name="delete" />} onClick={() => deletePreset(x)} />
+                <IconButton size="sm" variant="ghost" aria-label={tx("deleteAria", { name: x.name })} icon={<Icon name="delete" />} onClick={() => deletePreset(x)} />
               </li>
             ))}
           </ul>
         ) : (
-          <p className="lc-hint m-0 pt-1">No saved setups yet.</p>
+          <p className="lc-hint m-0 pt-1">{tx("noSetups")}</p>
         )}
         {note ? (
           <div role="status" className="pt-2">
@@ -817,9 +821,9 @@ export const EngineersGarage: React.FC<
                         setNoteState(null);
                       }}
                     >
-                      Undo
+                      {tx("undo")}
                     </Button>
-                    <IconButton size="sm" variant="ghost" aria-label="Dismiss" icon={<Icon name="close" />} onClick={() => setNoteState(null)} />
+                    <IconButton size="sm" variant="ghost" aria-label={tx("dismiss")} icon={<Icon name="close" />} onClick={() => setNoteState(null)} />
                   </span>
                 ) : undefined
               }
@@ -833,7 +837,7 @@ export const EngineersGarage: React.FC<
       {/* The sheet's pages */}
       <div ref={tabsRef} className="min-w-0">
       <Tabs<string>
-        aria-label="Garage pages"
+        aria-label={tx("pages")}
         navZone="garage-pages"
         // One row always: the tabs share the width (short names for the long pages); on a phone, and wherever they
         // still do not fit, the strip scrolls sideways
@@ -843,12 +847,14 @@ export const EngineersGarage: React.FC<
         onChange={setTab}
         tabs={sheet.map((g) => {
           const n = changedIn(g);
-          const short = TAB_NAME[g.label];
+          const shortKey = Object.hasOwn(TAB_NAME, g.id) ? TAB_NAME[g.id as keyof typeof TAB_NAME] : null;
+          // A page whose own name is already short keeps it (the GT3s' Aero)
+          const short = shortKey && tx(shortKey) !== g.label ? tx(shortKey) : undefined;
           return {
             id: g.id,
             label: short ?? g.label,
             title: short ? g.label : undefined,
-            badge: n ? <StatusDot tone="info" label={`${n} changed`} /> : undefined,
+            badge: n ? <StatusDot tone="info" label={tx("changed", { count: n })} /> : undefined,
           };
         })}
       />
@@ -859,8 +865,8 @@ export const EngineersGarage: React.FC<
           aria-label={group.label}
           action={
             groupChanged ? (
-              <Button size="sm" variant="ghost" icon={<Icon name="reset" />} onClick={() => resetGroup(group)} title="This page back to the car's baseline">
-                Reset page ({groupChanged})
+              <Button size="sm" variant="ghost" icon={<Icon name="reset" />} onClick={() => resetGroup(group)} title={tx("resetPageTitle")}>
+                {tx("resetPage", { count: String(groupChanged) })}
               </Button>
             ) : undefined
           }
@@ -871,7 +877,7 @@ export const EngineersGarage: React.FC<
           ))}
         </Card>
         {live ? (
-          <Card title="Tyres and brakes now">
+          <Card title={tx("tyresNow")}>
             <TyreBrakeGrid t={p.telemetry} compound={p.tireCompound} dense />
           </Card>
         ) : null}

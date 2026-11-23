@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { Icon } from "@/components/ui/icons/Icon";
 import type { IconName } from "@/components/ui/icons/registry";
 import { KeyCap } from "@/components/ui/prompts/KeyCap";
 import { PadGlyph } from "@/components/ui/prompts/PadGlyph";
 import { PromptBar, type Prompt } from "@/components/ui/prompts/PromptBar";
 import { CHOSEN_PILL, CURSOR_PILL, cx, GROUP_CURSOR_INK, HOVER_PILL, MOTION, PRESSED_PILL } from "@/components/ui/styles";
+import { t } from "@/i18n/runtime";
 import { useInputMode } from "./input-mode";
 import { focusables, focusOnHover, useMoveHandler, type Dir } from "./useFocusNav";
 
@@ -86,6 +88,7 @@ export const RailRow: React.FC<RailRowProps> = ({
   align = "center",
   className,
 }) => {
+  const tx = useTranslations("menu.shell");
   const s = ROW_SIZE[size];
   const top = align === "top";
   const classes = cx(
@@ -128,7 +131,7 @@ export const RailRow: React.FC<RailRowProps> = ({
       </span>
       {href ? (
         <span className={cx("inline-flex shrink-0 text-lc-slate", GROUP_CURSOR_INK)}>
-          <Icon name="externalLink" size="xs" label="Opens in a new tab" />
+          <Icon name="externalLink" size="xs" label={tx("newTab")} />
         </span>
       ) : null}
     </>
@@ -256,8 +259,15 @@ export function useRowResettable(on: boolean): boolean {
   return on && resettable;
 }
 
-/** The prompt for it, the same words as in Settings */
-export const RESET_ROW_PROMPT = { action: "select", label: "Reset row", key: "Delete", pad: "x" } as const;
+/** The prompt for it, the same words as in Settings (its label read when the prompt bar draws it) */
+export const RESET_ROW_PROMPT = {
+  action: "select",
+  get label() {
+    return t("menu.shell.resetRow");
+  },
+  key: "Delete",
+  pad: "x",
+} as const;
 
 export const ShellPrompts: React.FC<{ prompts: readonly Prompt[]; phonePrompts: readonly Prompt[] }> = ({ prompts, phonePrompts }) => (
   <>

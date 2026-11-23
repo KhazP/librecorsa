@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { fetchSiteStats, formatCount, type SiteStats } from "@/lib/net/board-client";
 import { StatusDot } from "@/components/ui/Badge";
 
@@ -15,6 +16,7 @@ const REFRESH_MS = 60_000;
  */
 export const LiveLine: React.FC<{ className?: string }> = ({ className = "" }) => {
   const [stats, setStats] = useState<SiteStats | null>(null);
+  const tx = useTranslations("menu.liveLine");
   useEffect(() => {
     let live = true;
     const read = () =>
@@ -40,14 +42,21 @@ export const LiveLine: React.FC<{ className?: string }> = ({ className = "" }) =
     parts.push(
       <span key="now" className="inline-flex items-center gap-1.5">
         <StatusDot tone="good" />
-        <span className="font-bold text-lc-chalk">{formatCount(stats.live)}</span> online
+        {tx.rich("online", {
+          count: formatCount(stats.live),
+          n: (chunks) => <span className="font-bold text-lc-chalk">{chunks}</span>,
+        })}
       </span>,
     );
   }
   if (stats.drivers !== null) {
     parts.push(
       <span key="drivers">
-        <span className="font-bold text-lc-chalk">{formatCount(stats.drivers)}</span> {stats.drivers === 1 ? "driver" : "drivers"}
+        {tx.rich("drivers", {
+          total: stats.drivers,
+          count: formatCount(stats.drivers),
+          n: (chunks) => <span className="font-bold text-lc-chalk">{chunks}</span>,
+        })}
       </span>,
     );
   }

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import { Button, EmptyState, IconButton, MediaTile, Select, TextField, type MediaTileProps } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { KeyCap, PadGlyph, PromptBar } from "@/components/ui/prompts";
@@ -30,10 +31,14 @@ export interface BrowserFilter<T> {
 /**
  * A filter and its categories (Library; then groups taken from the data), drawn as one `Select`. One category is
  * picked per group and the groups narrow the list together (Germany + Hill climb + one modder). A group without an
- * `all` filter offers "Any"; picking the `all` filter lets every group's pick go.
+ * `all` filter offers `anyLabel` ("Any class"); picking the `all` filter lets every group's pick go.
  */
 export interface BrowserFilterGroup<T> {
+  /** Keeps the group's pick (its label is shown, and changes with the language) */
+  id: string;
   label: string;
+  /** The choice that lets this group's pick go, for a group without an `all` filter */
+  anyLabel?: string;
   filters: BrowserFilter<T>[];
 }
 
@@ -65,11 +70,14 @@ export interface BrowserAction {
 /** What a card shows: the parts of a `MediaTile` */
 export type BrowserCard = Pick<MediaTileProps, "media" | "title" | "meta" | "badges" | "overlay" | "aspect">;
 
+/** What the browser lists, for its counts ("11 of 11 venues") */
+export type BrowserKind = "cars" | "venues";
+
 export interface ContentBrowserProps<T> {
   /** Accessible name ("Circuits") */
   label: string;
   /** Count wording: "11 of 11 venues" */
-  noun: string;
+  kind: BrowserKind;
   items: readonly T[];
   idOf: (item: T) => string;
   /** Everything a search may match (name, class, country…) */
@@ -142,10 +150,12 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
   useKeyLayout();
   const { items, idOf, sorts, filterGroups, onToggleFavorite, onClose, searchText } = props;
   const { mode, family } = useInputMode();
+  const tx = useTranslations("menu.browser");
+  const kind = props.kind;
   const pad = mode === "pad";
   const baseId = useId();
   const [query, setQuery] = useState("");
-  /** The picked category of each group, by the group's label */
+  /** The picked category of each group, by the group's id */
   const [picks, setPicks] = useState<Record<string, string>>({});
   const [sortId, setSortId] = useState(sorts[0]?.id ?? "");
   const [selectedId, setSelectedId] = useState<string | undefined>(props.initialSelectedId);
@@ -167,11 +177,11 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
    * group with the `all` filter falls back to it
    */
   const pickOf = (g: BrowserFilterGroup<T>): BrowserFilter<T> | undefined =>
-    g.filters.find((f) => f.id === picks[g.label]) ?? g.filters.find((f) => f.id === ALL);
+    g.filters.find((f) => f.id === picks[g.id]) ?? g.filters.find((f) => f.id === ALL);
   /** The picks that narrow the list (`all` does not) */
   const narrowing = filterGroups.flatMap((g) => {
     const f = pickOf(g);
-    return f && f.id !== ALL ? [{ group: g.label, filter: f }] : [];
+    return f && f.id !== ALL ? [{ group: g.id, filter: f }] : [];
   });
   const narrowKey = narrowing.map((n) => n.filter.id).join("|");
   const visible = useMemo(
@@ -251,8 +261,8 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
     setPicks((p) => {
       if (id === ALL) return {};
       const next = { ...p };
-      if (id === ANY) delete next[g.label];
-      else next[g.label] = id;
+      if (id === ANY) delete next[g.id];
+      else next[g.id] = id;
       return next;
     });
 
@@ -426,11 +436,12 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
 
   /** How many entries a category would show with the other groups' picks kept */
   const countOf = (g: BrowserFilterGroup<T>, f: BrowserFilter<T>) => {
-    const others = narrowing.filter((n) => n.group !== g.label);
+    const others = narrowing.filter((n) => n.group !== g.id);
     return searched.reduce((n, i) => n + (f.test(i) && others.every((o) => o.filter.test(i)) ? 1 : 0), 0);
   };
   const filtered = query.trim() !== "" || narrowing.length > 0;
   const narrowLabels = narrowing.map((n) => n.filter.label);
+  const shownOf = tx("shownOf", { kind, shown: visible.length, total: items.length });
   // A group with one category narrows nothing worth a control
   const shownGroups = filterGroups.filter((g) => g.filters.length > 1 || g.filters.some((f) => f.id === ALL));
 
@@ -444,7 +455,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
           {...({ ref: searchRef } as object)}
           // The field's icon and placeholder say what it is: on a phone its name stays for screen readers only
           className="[&_input::-webkit-search-cancel-button]:hidden phone:[&>label]:sr-only"
-          label="Search"
+          label={tx("search")}
           type="search"
           value={query}
           onChange={setQuery}
@@ -480,44 +491,41 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
               aria-controls={`${baseId}-filters`}
               onClick={() => setFiltersOpen((o) => !o)}
             >
-              Filters
-              {narrowing.length ? (
-                <>
-                  <span className="lc-mono ml-2 not-italic">{narrowing.length}</span>
-                  <span className="sr-only"> on</span>
-                </>
-              ) : null}
+              {narrowing.length
+                ? tx.rich("filtersActive", {
+                    count: narrowing.length,
+                    n: (chunks) => <span className="lc-mono ml-2 not-italic">{chunks}</span>,
+                    sr: (chunks) => <span className="sr-only">{chunks}</span>,
+                  })
+                : tx("filters")}
             </Button>
           </div>
         ) : null}
         <div id={`${baseId}-filters`} className={filtersOpen ? "contents" : "contents phone:hidden"}>
         {shownGroups.map((g, gi) => {
           const hasAll = g.filters.some((f) => f.id === ALL);
-          const current = picks[g.label] && g.filters.some((f) => f.id === picks[g.label]) ? picks[g.label] : hasAll ? ALL : ANY;
+          const current = picks[g.id] && g.filters.some((f) => f.id === picks[g.id]) ? picks[g.id] : hasAll ? ALL : ANY;
           const fieldId = `${baseId}-filter-${gi}`;
           return (
-            <Field key={g.label} label={g.label} htmlFor={fieldId}>
+            <Field key={g.id} label={g.label} htmlFor={fieldId}>
               <Select
                 id={fieldId}
                 aria-label={g.label}
                 value={current}
                 onChange={(id) => pick(g, id)}
                 options={[
-                  ...(hasAll ? [] : [{ id: ANY, label: `Any ${g.label.toLowerCase()}` }]),
-                  ...g.filters.map((f) => {
-                    const n = countOf(g, f);
-                    return { id: f.id, label: f.label, detail: `${n} ${n === 1 ? props.noun.replace(/s$/, "") : props.noun}` };
-                  }),
+                  ...(hasAll ? [] : [{ id: ANY, label: g.anyLabel ?? g.label }]),
+                  ...g.filters.map((f) => ({ id: f.id, label: f.label, detail: tx("count", { kind, count: countOf(g, f) }) })),
                 ]}
               />
             </Field>
           );
         })}
         {sorts.length > 1 ? (
-          <Field label="Sort" htmlFor={`${baseId}-sort`}>
+          <Field label={tx("sort")} htmlFor={`${baseId}-sort`}>
             <Select
               id={`${baseId}-sort`}
-              aria-label="Sort"
+              aria-label={tx("sort")}
               value={sort.id}
               onChange={setSortId}
               options={sorts.map((s) => ({ id: s.id, label: s.label }))}
@@ -533,7 +541,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
           ref={gridRef}
           data-nav-zone="browser-grid"
           data-nav-scroll
-          aria-label={`${props.label}: ${visible.length} of ${items.length} ${props.noun}`}
+          aria-label={tx("gridLabel", { label: props.label, shownOf: shownOf })}
           role="group"
           className="relative min-h-0 min-w-0 lg:-mr-1 lg:overflow-y-auto lg:pr-1 lg:[scrollbar-width:thin]"
         >
@@ -599,7 +607,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
                                   variant="secondary"
                                   tabIndex={-1}
                                   data-nav-skip=""
-                                  aria-label={fav ? "Remove from favourites" : "Add to favourites"}
+                                  aria-label={fav ? tx("favRemove") : tx("favAdd")}
                                   aria-pressed={fav}
                                   disabled={!onToggleFavorite}
                                   onClick={() => onToggleFavorite?.(it)}
@@ -621,13 +629,18 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
               action={
                 filtered ? (
                   <Button size="sm" variant="secondary" onClick={clearAll}>
-                    Clear search and filters
+                    {tx("clear")}
                   </Button>
                 ) : undefined
               }
             >
-              {words.length ? `No matches for "${query.trim()}"` : `No ${props.noun}`}
-              {narrowLabels.length ? ` in ${narrowLabels.join(", ")}` : ""}.
+              {words.length
+                ? narrowLabels.length
+                  ? tx("noMatchesIn", { query: query.trim(), filters: narrowLabels.join(", ") })
+                  : tx("noMatches", { query: query.trim() })
+                : narrowLabels.length
+                  ? tx("noItemsIn", { kind, filters: narrowLabels.join(", ") })
+                  : tx("noItems", { kind })}
             </EmptyState>
           )}
           {props.footnote}
@@ -636,7 +649,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
         {/* Detail */}
         <aside
           ref={detailRef}
-          aria-label="Details"
+          aria-label={tx("details")}
           data-nav-zone="browser-detail"
           className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lc-card border border-white/7 bg-lc-carbon/80"
         >
@@ -670,8 +683,8 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
                   <IconButton
                     variant="secondary"
                     aria-pressed={selectedFav}
-                    aria-label={selectedFav ? "Remove from favourites" : "Add to favourites"}
-                    title={selectedFav ? "Favourite" : "Add to favourites"}
+                    aria-label={selectedFav ? tx("favRemove") : tx("favAdd")}
+                    title={selectedFav ? tx("favourite") : tx("favAdd")}
                     onClick={() => onToggleFavorite(selected)}
                     icon={<Icon name={selectedFav ? "favouriteOn" : "favourite"} />}
                   />
@@ -679,14 +692,14 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
               </div>
             </>
           ) : (
-            <p className="lc-body m-0 p-4.5">{visible.length ? "Pick a card to see it here." : "No card to show. Clear the search or filters."}</p>
+            <p className="lc-body m-0 p-4.5">{visible.length ? tx("pickCard") : tx("noCard")}</p>
           )}
         </aside>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <span className="lc-hint tabular-nums" aria-live="polite">
-          {visible.length} of {items.length} {props.noun}
+          {shownOf}
         </span>
         {/* Off on phones unless a controller is in use (its X and Y have no button on screen); the bar itself
             hides on touch screens until a controller is used */}
@@ -694,9 +707,9 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
         <PromptBar
           rule={false}
           prompts={[
-            { action: "select", label: "Details" },
-            ...(onToggleFavorite ? [{ action: "select" as const, key: "F", pad: "x" as const, label: "Favourite" }] : []),
-            { action: "select", key: "/", pad: "y", label: "Search" },
+            { action: "select", label: tx("detailsPrompt") },
+            ...(onToggleFavorite ? [{ action: "select" as const, key: "F", pad: "x" as const, label: tx("favouritePrompt") }] : []),
+            { action: "select", key: "/", pad: "y", label: tx("searchPrompt") },
           ]}
         />
         </span>

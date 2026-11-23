@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { anyCarById, anyCarForVehicle, type CarId } from "@/lib/cars/car-registry";
 import { carBoardTag } from "@/lib/cars/board-tag";
 import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
@@ -76,6 +77,7 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   hasRaces = false,
   onOpenBoard,
 }) => {
+  const tx = useTranslations("menu.challenge");
   const [tab, setTab] = useState<ChallengeTab>("week");
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -115,13 +117,13 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   return (
     <div className="flex flex-col gap-3">
       <Segmented
-        aria-label="Challenge view"
+        aria-label={tx("view")}
         size="sm"
         value={tab}
         onChange={setTab}
         options={[
-          { id: "week", label: "This week" },
-          { id: "hof", label: "Hall of Fame" },
+          { id: "week", label: tx("thisWeek") },
+          { id: "hof", label: tx("hallOfFame") },
         ]}
         className="self-start"
       />
@@ -140,40 +142,37 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
             description={carTitle}
             action={
               <Badge icon="time" variant="outline">
-                {timeLeftLabel(challenge.endsMs, now)} left
+                {tx("timeLeft", { timeLeft: timeLeftLabel(challenge.endsMs, now) })}
               </Badge>
             }
             bodyClassName="gap-3.5"
           >
-            <div className="flex flex-wrap items-center gap-1.5" aria-label="Rules">
+            <div className="flex flex-wrap items-center gap-1.5" aria-label={tx("rules")}>
               <LapConditionBadges assists={challenge.assists} realism={challenge.realism} />
               <span className="lc-mono text-[12px] text-lc-fog">{challengeConditionsLabel(challenge.vehicle)}</span>
             </div>
-            <p className="lc-hint m-0">
-              Fixed car and setup. Flying laps, strict track limits.
-              {hasRaces && available ? " Weekly races available in Multiplayer." : ""}
-            </p>
+            <p className="lc-hint m-0">{hasRaces && available ? tx("aboutWithRaces") : tx("about")}</p>
             {available ? (
               <Button variant="primary" size="lg" block icon={<Icon name="drive" />} onClick={onDrive}>
-                Drive challenge
+                {tx("drive")}
               </Button>
             ) : (
               <p className="m-0 flex items-start gap-2 text-[14px] leading-snug font-medium text-lc-caution">
                 <Icon name="warning" className="mt-0.5" />
-                Circuit or car unavailable in this build. Play on librecorsa.org.
+                {tx("unavailable")}
               </p>
             )}
           </Card>
 
           <Card
-            title="This week's times"
-            action={board ? <Badge variant="outline">{board.total === 1 ? "1 driver" : `${formatCount(board.total)} drivers`}</Badge> : null}
+            title={tx("times")}
+            action={board ? <Badge variant="outline">{tx("drivers", { total: board.total, count: formatCount(board.total) })}</Badge> : null}
             bodyClassName="gap-3"
           >
             {choices.length <= 2 ? (
-              <Segmented aria-label="Physics version" size="sm" value={choice.id} onChange={setBoardPick} options={choices} className="self-start" />
+              <Segmented aria-label={tx("physicsVersion")} size="sm" value={choice.id} onChange={setBoardPick} options={choices} className="self-start" />
             ) : (
-              <Select aria-label="Physics version" className="w-64 max-w-full self-start" value={choice.id} onChange={setBoardPick} options={choices} />
+              <Select aria-label={tx("physicsVersion")} className="w-64 max-w-full self-start" value={choice.id} onChange={setBoardPick} options={choices} />
             )}
             {me ? (
               <MyPlace
@@ -182,24 +181,26 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
                 lapMs={me.entry.lapTimeMs}
                 detail={
                   me.rank === 1
-                    ? "Fastest this week"
+                    ? tx("fastest")
                     : aboveMs !== null
-                      ? `${((me.entry.lapTimeMs - aboveMs) / 1000).toFixed(3)} s behind ${ahead && ahead.lapTimeMs === aboveMs ? ahead.name : `P${me.rank - 1}`}`
+                      ? ahead && ahead.lapTimeMs === aboveMs
+                        ? tx("behindDriver", { gap: ((me.entry.lapTimeMs - aboveMs) / 1000).toFixed(3), driver: ahead.name })
+                        : tx("behindPlace", { gap: ((me.entry.lapTimeMs - aboveMs) / 1000).toFixed(3), place: String(me.rank - 1) })
                       : ""
                 }
               />
             ) : null}
             {loading && !board ? (
-              <BoardSkeleton label="Loading this week's times" />
+              <BoardSkeleton label={tx("loadingTimes")} />
             ) : state.error && !board ? (
-              <BoardError onRetry={() => setReload((n) => n + 1)}>Couldn&apos;t load times.</BoardError>
+              <BoardError onRetry={() => setReload((n) => n + 1)}>{tx("loadFailed")}</BoardError>
             ) : !board || board.entries.length === 0 ? (
               <EmptyState icon={<Icon name="challenge" />}>
-                {older ? `No times on ${versionName}.` : "No times set yet."}
+                {older ? tx("noTimesVersion", { version: versionName }) : tx("noTimes")}
               </EmptyState>
             ) : (
               <BoardTable
-                label={older ? `This week's times, ${versionName}` : "This week's times"}
+                label={older ? tx("tableLabelVersion", { version: versionName }) : tx("tableLabel")}
                 badgeContext={{ scope: "vehicle", vehicle: challenge.vehicle }}
                 circuitName={formatCircuitName}
                 onOpenRecordBoard={onOpenBoard}
