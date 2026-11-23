@@ -6,6 +6,12 @@
  *       [--margin 0.4 (m kept between the car and a barrier)] [--robust-grip 1] [--ghosts] [--ac-line] [--straighten 2 [--slack 0.1]]
  *       [--prefer-ac 2 (% the AC author's line may lose)] [--verbose]
  *       [--replace (write the quickest clean line even if it is not quicker: the current one breaks a new limit)]
+ *       [--edge 1.4 (m the car's centre keeps from the road's edges: a narrow road lined with barriers)]
+ *       [--seed line-seed.json [--lock 650:900,2100:2400]] (scripts/line-from-lap.ts: a lap you drove as a start)
+ *   npx tsx scripts/ai/optimize-lines.ts --all [--write] (every circuit, both lines, one process each)
+ *
+ * A new circuit's lines come from here: the track converters (scripts/tracks) run it with `--write` for the F1 line
+ * and the GT3's once the circuit is built, on its geometric (minimum-curvature) line.
  *
  * Starts: the current line and a minimum-curvature line from the centre; with `--ghosts`, also the players' lines from
  * the online boards' fastest laps of this line's cars (scripts/ai/fetch-ghosts.ts): each car's fastest lap, and a line
@@ -17,14 +23,27 @@
  * the most a race field plans with), stays clean for every car that is clean there on the current line: a line quick
  * at the check's grip but over the edge just above it crashed cars on Rwanda's short lap.
  * The written line keeps the track data's own sample spacing (`ro` / `roGt3` in metres, `r` its world position).
+ * `--write` also refreshes what is read off the line, whether it changed or not: the braking zones of its plan
+ * (`metadata.racingLine[Gt3].brakingZones`), the physics laps, and for the F1 line each turn's apex speed and gear and
+ * the samples' plan speed / pedal reference (`v`, `gas`, `brk`).
+ *
+ * `--seed FILE`: a line to start from, one lateral offset per track sample (m, + = right; scripts/line-from-lap.ts
+ * makes one from a lap saved in the game), driven as it is and refined. With `--lock s0:s1[,…]` (m along the lap) the
+ * refinement leaves those stretches as seeded, and the seeded line is written whenever it is clean, quicker or not:
+ * the planner's optimum can be a line no driver takes (a hairpin hugged from turn-in), so lock the driven shape there.
+ *
+ * On a point-to-point course (a hill climb, `metadata.pointToPoint`) the time is the run's, from rest at the start
+ * line to the finish, the line keeps to the centre on the stretch with no road, and each physics check is one run
+ * from the grid.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { getActiveTrackData, getActiveTrackMetadata, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
+import { spawnSync } from 'node:child_process';
+import { getActiveTrackData, getActiveTrackMetadata, inDeadZone, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
 import { aiLineOffsetM } from '../../src/lib/sim/speed-profile';
 import { aiTrackFor, sampleGrid } from '../../src/lib/sim/ai/ai-track';
 import { carLimitsFor } from '../../src/lib/sim/ai/ggv';
 import { loadGlbGeometry } from '../lib/glb-geometry';
-import { lineBoundsFromCar, lineCost, LineParam, minCurvatureLine, optimiseLapTime, wallPenalty, type WallClearance } from './lib/line-opt';
+import { lineBoundsFromCar, lineCost, LineParam, minCurvatureLine, optimiseLapTime, wallPenalty, type RunSpec, type WallClearance } from './lib/line-opt';
 import { TrackWallQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
 import { vehicleModelSpec } from '../../src/lib/cars/vehicle-models';
 import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
@@ -39,6 +58,21 @@ const opt = (name: string, fallback: string) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : fallback;
 };
+if (argv.includes('--all')) {
+  // One process per circuit and line: the track module holds one active circuit
+  const pass = argv.filter((a, i) => a !== '--all' && !['--track', '--car'].includes(a) && !['--track', '--car'].includes(argv[i - 1]));
+  const ids = (JSON.parse(readFileSync('public/tracks/index.json', 'utf8')) as { id: string }[]).map((e) => e.id);
+  const failed: string[] = [];
+  for (const id of ids) {
+    for (const car of ['f1', 'gt3']) {
+      console.log(`\n===== ${id} / ${car} =====`);
+      const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], '--track', id, '--car', car, ...pass], { stdio: 'inherit' });
+      if (r.status !== 0) failed.push(`${id}/${car}`);
+    }
+  }
+  console.log(failed.length ? `\nFailed: ${failed.join(', ')}` : '\nAll circuits done.');
+  process.exit(failed.length ? 1 : 0);
+}
 const trackId = opt('track', 'spielberg');
 const line = opt('car', 'f1') as 'f1' | 'gt3';
 const iters = Number(opt('iters', '3'));
@@ -88,6 +122,21 @@ const bounds = lineBoundsFromCar(t, (s) => {
   const b = Math.min(hi, other[1]);
   return a <= b ? [a, b] : [0.5 * (a + b), 0.5 * (a + b)];
 });
+// `--edge M`: the car's centre at least M from the road's edges (the converters' `lineMarginM`)
+const edgeM = Number(opt('edge', '0'));
+if (edgeM > 0) {
+  for (let i = 0; i < t.n; i++) {
+    const half = Math.max(0, t.width[i] / 2 - edgeM);
+    bounds.lo[i] = Math.max(bounds.lo[i], -half);
+    bounds.hi[i] = Math.min(bounds.hi[i], half);
+    if (bounds.lo[i] > bounds.hi[i]) bounds.lo[i] = bounds.hi[i] = 0.5 * (bounds.lo[i] + bounds.hi[i]);
+  }
+}
+// A hill climb: timed from rest at the start line to the finish, and on the stretch with no road the line keeps to
+// the centre
+const p2p = track.pointToPoint;
+const run: RunSpec | undefined = p2p ? { finishI: Math.min(t.n - 1, Math.round(p2p.finishS / t.ds)) } : undefined;
+if (p2p) for (let i = 0; i < t.n; i++) if (inDeadZone(p2p, i * t.ds)) bounds.lo[i] = bounds.hi[i] = 0;
 const param = new LineParam(t, 6);
 // The barriers each side, found by stepping out from the centreline, and the car's own barrier probes
 const wallQ = root ? TrackWallQuery.fromTrackRoot(root, getActiveTrackMetadata().mesh?.barrierMeshes, roadFacing) : null;
@@ -121,12 +170,44 @@ interface Candidate {
   planS: number;
 }
 const candidates: Candidate[] = [];
-const refine = (name: string, startC: Float64Array) => {
-  const r = optimiseLapTime(param, bounds, limits, startC, { iters, log: verbose ? log : undefined, walls, straightW });
+const refine = (name: string, startC: Float64Array, locked?: Uint8Array) => {
+  const r = optimiseLapTime(param, bounds, limits, startC, { iters, log: verbose ? log : undefined, walls, straightW, run, locked });
   console.log(`${name}: plan ${r.lapS.toFixed(3)} s (${r.iters} sweeps, ${secs()} s)`);
   candidates.push({ name, n: r.n, planS: r.lapS });
 };
-if (!(preferAcPct > 0)) {
+/** A start line driven as it is (smoothed, inside the road), then refined */
+const asDrivenAndRefined = (name: string, n: ArrayLike<number>, locked?: Uint8Array) => {
+  const c = param.fromGrid(smoothLine(filled(n, current), t.ds));
+  const asIs = param.toGrid(c, bounds);
+  const plan = lineCost(t, asIs, limits, 40, walls, 0, run);
+  console.log(`${name}, as driven: plan ${plan.lapS.toFixed(3)} s`);
+  candidates.push({ name: `${name}, as driven`, n: asIs, planS: plan.lapS });
+  refine(`${name}, refined`, c, locked);
+};
+
+// `--seed FILE` (+ `--lock`): a driven line, one offset per track sample, onto the AI grid
+const seedPath = opt('seed', '');
+const lockRanges = opt('lock', '').split(',').filter(Boolean).map((r) => r.split(':').map(Number));
+if (lockRanges.length && !seedPath) throw new Error('--lock keeps a seeded shape: give the line with --seed');
+const seedName = 'seed';
+if (seedPath) {
+  const seed = JSON.parse(readFileSync(seedPath, 'utf8')) as number[];
+  const ns = seed.length, Ls = track.totalLengthM;
+  const onGrid = new Float64Array(t.n);
+  for (let i = 0; i < t.n; i++) {
+    const x = (((i * t.ds) % Ls) / Ls) * ns;
+    const k = Math.floor(x) % ns, f = x - Math.floor(x);
+    onGrid[i] = seed[k] * (1 - f) + seed[(k + 1) % ns] * f;
+  }
+  const locked = new Uint8Array(param.m);
+  for (let k = 0; k < param.m; k++) {
+    const sk = (k * t.lengthM) / param.m;
+    locked[k] = lockRanges.some(([a, b]) => sk >= a && sk <= b) ? 1 : 0;
+  }
+  if (lockRanges.length) console.log(`Locked to the seed: ${lockRanges.map(([a, b]) => `${a}-${b} m`).join(', ')} (${locked.reduce((x, y) => x + y, 0)} of ${param.m} controls)`);
+  asDrivenAndRefined(`${seedName} (${seedPath.split('/').pop()})`, onGrid, lockRanges.length ? locked : undefined);
+}
+if (!(preferAcPct > 0) && !lockRanges.length) {
   refine('from the current line', param.fromGrid(current));
   refine('from minimum curvature', minCurvatureLine(param, bounds, new Float64Array(param.m)));
 }
@@ -141,7 +222,7 @@ if (acLineOn) {
     const known = ref.n.reduce((a, v) => a + (Number.isFinite(v) ? 1 : 0), 0);
     const c = param.fromGrid(smoothLine(filled(ref.n, current), t.ds));
     const asIs = param.toGrid(c, bounds);
-    const plan = lineCost(t, asIs, limits, 40, walls);
+    const plan = lineCost(t, asIs, limits, 40, walls, 0, run);
     console.log(`AC author's line (${((100 * known) / t.n).toFixed(0)} % of the lap), as driven: plan ${plan.lapS.toFixed(3)} s`);
     candidates.push({ name: "AC author's line, as driven", n: asIs, planS: plan.lapS });
     refine("AC author's line, refined", c);
@@ -170,19 +251,13 @@ if (ghostsOn) {
       const st = stitchFastest(laps, segs, current);
       starts.push([`${vehicle} players stitched (${laps.length} laps, ideal ${st.idealS.toFixed(3)} s)`, st.n]);
     }
-    for (const [name, n] of starts) {
-      const c = param.fromGrid(smoothLine(filled(n, current), t.ds));
-      const asIs = param.toGrid(c, bounds);
-      const plan = lineCost(t, asIs, limits, 40, walls);
-      console.log(`${name}, as driven: plan ${plan.lapS.toFixed(3)} s`);
-      candidates.push({ name: `${name}, as driven`, n: asIs, planS: plan.lapS });
-      refine(`${name}, refined`, c);
-    }
+    for (const [name, n] of starts) asDrivenAndRefined(name, n);
   }
 }
 
+// A hill climb's drive plan times the whole loop, not the run: no plan time beside its runs
 const fmt = (l: PhysicsLap) =>
-  `${l.lapS.toFixed(3)} s (plan ${l.plan.lapS.toFixed(3)} s, ${l.offTrackFrames} off, ${l.wallHits} hits, worst ${l.maxErrM.toFixed(2)} m)`;
+  `${l.lapS.toFixed(3)} s (${p2p ? '' : `plan ${l.plan.lapS.toFixed(3)} s, `}${l.offTrackFrames} off, ${l.wallHits} hits, worst ${l.maxErrM.toFixed(2)} m)`;
 const sum = (ls: PhysicsLap[]) => ls.reduce((a, l) => a + l.lapS, 0);
 // A judge already off the current line (the LC26 through Monaco's barriers) does not hold the others back
 const mustBeClean = oldLaps.map((l) => isClean(l));
@@ -211,11 +286,12 @@ let best: { name: string; n: Float64Array; laps: PhysicsLap[] } | null = null;
 let notQuicker = false;
 const acWithin = (cand: { name: string; laps: PhysicsLap[] }) =>
   cand.name.startsWith("AC author's line") && timed(cand.laps) <= timed(oldLaps) * (1 + preferAcPct / 100);
-const pool = preferAcPct > 0 ? quick.filter(acWithin) : quick;
+// `--lock`: the seeded shape is wanted on purpose, so the seeded candidates are the only ones, quicker or not
+const pool = lockRanges.length ? quick.filter((c) => c.name.startsWith(seedName)) : preferAcPct > 0 ? quick.filter(acWithin) : quick;
 if (preferAcPct > 0) console.log(`AC author's lines within ${preferAcPct} % of the current line (${timed(oldLaps).toFixed(3)} s): ${pool.length}`);
 for (const cand of pool.sort((a, b) => timed(a.laps) - timed(b.laps))) {
   // Only a quicker line (or any clean one, when the current line is not) is worth the check
-  if (!(preferAcPct > 0) && !replace && currentClean && timed(cand.laps) >= timed(oldLaps) - 0.05 + slackS) {
+  if (!(preferAcPct > 0) && !lockRanges.length && !replace && currentClean && timed(cand.laps) >= timed(oldLaps) - 0.05 + slackS) {
     notQuicker = true;
     break;
   }
@@ -227,39 +303,116 @@ for (const cand of pool.sort((a, b) => timed(a.laps) - timed(b.laps))) {
     break;
   }
 }
-const better = !!best && (preferAcPct > 0 || replace || timed(best.laps) < timed(oldLaps) - 0.05 + slackS || !currentClean);
+const better = !!best && (preferAcPct > 0 || lockRanges.length > 0 || replace || timed(best.laps) < timed(oldLaps) - 0.05 + slackS || !currentClean);
 if (opt('dump', '') && best) writeFileSync(opt('dump', ''), JSON.stringify({ n: Array.from(best.n), ds: t.ds, name: best.name }));
 console.log(
   best && better
     ? `Using: ${best.name} (${timed(oldLaps).toFixed(3)} → ${timed(best.laps).toFixed(3)} s${judges.length > 1 ? ', laps summed' : ''}).`
-    : `Keeping the current line (${!pool.length ? (preferAcPct > 0 ? `no clean AC line within ${preferAcPct} %` : 'nothing clean') : notQuicker ? 'nothing quicker' : `nothing clean at grip ${robustGrip}`}).`
+    : `Keeping the current line (${!pool.length ? (lockRanges.length ? 'no clean seeded line' : preferAcPct > 0 ? `no clean AC line within ${preferAcPct} %` : 'nothing clean') : notQuicker ? 'nothing quicker' : `nothing clean at grip ${robustGrip}`}).`
 );
-const newLap = best?.laps[0];
+const changed = !!best && better;
+const chosen = changed && best ? best : { name: 'current line', n: current, laps: oldLaps };
 
-if (write && best && better && newLap) {
-  const scale = t.lengthM / (raw.samples[raw.samples.length - 1].s + (raw.samples[1].s - raw.samples[0].s));
+if (write) {
+  const L = raw.samples[raw.samples.length - 1].s + (raw.samples[1].s - raw.samples[0].s);
+  const scale = t.lengthM / L;
+  const r1 = (x: number) => Math.round(x * 10) / 10;
+  const r3 = (x: number) => Math.round(x * 1000) / 1000;
+  const fin = (x: number) => (Number.isFinite(x) ? r3(x) : null);
+  // The chosen line's plan: its speeds, braking zones and model time
+  const final = lineCost(t, chosen.n, limits, 0, undefined, 0, run);
+  const v = final.plan.v;
+  const seg = final.plan.geometry.seg;
+  const N = t.n;
+  const accel = (i: number) => (v[(i + 1) % N] ** 2 - v[i] ** 2) / (2 * Math.max(1e-3, seg[i]));
+  // Braking zones: where the plan slows faster than drag alone explains, by more than 30 km/h; stops a short coast
+  // apart are one zone (one set of boards)
+  const zones: { startS: number; endS: number; entryKmh: number; minKmh: number }[] = [];
+  {
+    const brakingAt = (i: number) => accel(i) < -6;
+    let first = -1;
+    for (let k = 0; k < N; k++) if (!brakingAt(k) && brakingAt((k + 1) % N)) { first = (k + 1) % N; break; }
+    if (first >= 0) {
+      for (let cnt = 0, i = first; cnt < N; ) {
+        if (!brakingAt(i)) { i = (i + 1) % N; cnt++; continue; }
+        const i0 = i;
+        while (brakingAt(i) && cnt < N) { i = (i + 1) % N; cnt++; }
+        if (v[i0] - v[i] > 30 / 3.6) zones.push({ startS: (i0 * t.ds) / scale, endS: (i * t.ds) / scale, entryKmh: v[i0] * 3.6, minKmh: v[i] * 3.6 });
+      }
+    }
+    zones.sort((a, b) => a.startS - b.startS);
+    for (let k = zones.length - 1; k > 0; k--) {
+      const a = zones[k - 1], b = zones[k];
+      if (b.startS - a.endS < 40) {
+        a.endS = b.endS;
+        a.entryKmh = Math.max(a.entryKmh, b.entryKmh);
+        a.minKmh = b.minKmh;
+        zones.splice(k, 1);
+      }
+    }
+    // A hill climb's are the run's
+    if (p2p) for (let k = zones.length - 1; k >= 0; k--) if (zones[k].startS > p2p.finishS) zones.splice(k, 1);
+  }
   for (const smp of raw.samples) {
     const s = smp.s * scale;
-    const nOff = Math.round(sampleGrid(best.n, s, t.ds) * 1000) / 1000;
-    if (line === 'gt3') smp.roGt3 = nOff;
-    else {
-      smp.ro = nOff;
-      // World position of the line: the centreline moved along the flattened right vector, banking lifting it
-      const i = Math.round(s / t.ds) % t.n;
-      smp.r = [smp.p[0] + t.rx[i] * nOff, smp.p[1] - Math.tan(smp.b) * nOff, smp.p[2] + t.rz[i] * nOff].map((v) => Math.round(v * 1000) / 1000);
+    if (changed) {
+      const nOff = r3(sampleGrid(chosen.n, s, t.ds));
+      if (line === 'gt3') smp.roGt3 = nOff;
+      else {
+        smp.ro = nOff;
+        // World position of the line: the centreline moved along the flattened right vector, banking lifting it
+        const i = Math.round(s / t.ds) % t.n;
+        smp.r = [smp.p[0] + t.rx[i] * nOff, smp.p[1] - Math.tan(smp.b) * nOff, smp.p[2] + t.rz[i] * nOff].map(r3);
+      }
+    }
+    if (line === 'f1') {
+      // The plan's speed and a pedal reference from its acceleration, for tools reading the samples
+      const i = ((Math.round(s / t.ds) % N) + N) % N;
+      const a = accel(i);
+      smp.v = r1(sampleGrid(v, s, t.ds) * 3.6);
+      smp.gas = a > 0.5 ? 1 : a > -6 ? 0.35 : 0;
+      smp.brk = a < -6 ? Math.round(Math.min(1, -a / 40) * 100) / 100 : 0;
+    }
+  }
+  if (line === 'f1') {
+    // Each turn's apex: the plan's slowest point within 60 m of it, in the gear the first judge used at its own slowest
+    const lap = chosen.laps[0];
+    const reach = Math.round(60 / t.ds);
+    for (const turn of (raw as unknown as { turns?: { sApprox: number; apexSpeedKmh?: number; gear?: number; description?: string }[] }).turns ?? []) {
+      const c = Math.round((turn.sApprox * scale) / t.ds);
+      let minV = Infinity, minPhys = Infinity, gear: number | undefined;
+      for (let d = -reach; d <= reach; d++) {
+        const i = (((c + d) % N) + N) % N;
+        minV = Math.min(minV, v[i]);
+        if (Number.isFinite(lap.v[i]) && lap.v[i] < minPhys && Number.isFinite(lap.gear[i])) {
+          minPhys = lap.v[i];
+          gear = lap.gear[i];
+        }
+      }
+      turn.apexSpeedKmh = Math.round(minV * 3.6);
+      if (gear !== undefined && gear > 0) turn.gear = gear;
+      turn.description = turn.description?.replace(/apex \d+ km\/h in gear \d+/, `apex ${turn.apexSpeedKmh} km/h in gear ${turn.gear}`);
     }
   }
   const key = line === 'gt3' ? 'racingLineGt3' : 'racingLine';
-  (raw.metadata as Record<string, unknown>)[key] = {
-    ...((raw.metadata[key] as object) ?? {}),
-    method: 'lap-time optimised on the car\'s measured limits (scripts/ai/optimize-lines.ts)',
-    modelLapS: Math.round(newLap.plan.lapS * 1000) / 1000,
-    physicsAiLapS: Math.round(newLap.lapS * 1000) / 1000,
-    ...(judges.includes('lc26') ? { physicsLc26LapS: Math.round(best.laps[1].lapS * 1000) / 1000 } : {}),
-    start: best.name.replace(/ \(.*?\)/g, ''),
-    planGrip: grip,
-    ...(straightW > 0 ? { straightW } : {}),
-  };
+  const meta = { ...((raw.metadata[key] as Record<string, unknown>) ?? {}) };
+  if (changed) {
+    meta.method = 'lap-time optimised on the car\'s measured limits (scripts/ai/optimize-lines.ts)';
+    meta.start = chosen.name.replace(/ \(.*?\)/g, '');
+    meta.planGrip = grip;
+    if (straightW > 0) meta.straightW = straightW;
+    else delete meta.straightW;
+  }
+  meta.modelLapS = fin(final.lapS);
+  if (line === 'gt3') {
+    meta.physicsLapS = fin(chosen.laps[0].lapS);
+    delete meta.physicsAiLapS;
+  } else {
+    meta.physicsAiLapS = fin(chosen.laps[0].lapS);
+    if (judges.includes('lc26')) meta.physicsLc26LapS = fin(chosen.laps[1].lapS);
+  }
+  meta.brakingZones = zones.map((z) => ({ startS: r1(z.startS), endS: r1(z.endS), entryKmh: Math.round(z.entryKmh), minKmh: Math.round(z.minKmh) }));
+  (raw.metadata as Record<string, unknown>)[key] = meta;
   writeFileSync(path, JSON.stringify(raw));
-  console.log(`Wrote ${path}`);
+  console.log(`Wrote ${path} (${changed ? 'new line' : 'line kept'}; ${zones.length} braking zones, model ${final.lapS.toFixed(3)} s)`);
 }
