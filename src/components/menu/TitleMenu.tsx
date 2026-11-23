@@ -983,6 +983,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     <CircuitBrowser
                       trackId={trackId}
                       vehicleModel={props.vehicleModel}
+                      driverName={props.profile?.name ?? props.leaderboardPanel?.driverName}
+                      boardVersion={props.leaderboardPanel?.boardVersion}
                       onSelect={
                         onSelectTrack
                           ? (id) => {
