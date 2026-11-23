@@ -69,6 +69,8 @@ export const KEY_CLASSES: Readonly<Record<string, KeyClass>> = {
   "librecorsa.dualsense-prompt": "device",
   "librecorsa.supportPrompt": "device",
   "librecorsa.whatsNewSeen": "device",
+  // The player's own rules while a challenge or a career round has its own (LibreCorsaSimulator.tsx): put back on this device
+  "librecorsa.ownRules": "device",
   // UI state
   "lc.mfdPage": "device",
   "lc.seatHintCars": "device",
