@@ -2,8 +2,8 @@
  * The owner's numbers: GET /api/admin/stats?days=30 with `Authorization: Bearer <key>`, the key equal to the Worker
  * secret ADMIN_KEY. Without the secret, or with any other key, the route answers as any unknown path does, so it does
  * not reveal itself (index.ts, which also limits how often one address may try).
- * It reads the usage totals and their extras (usage.ts), the boards, and the race results; a part whose table or
- * column is not there yet (an older database) reads as null or zero, and the rest still answers. About thirty reads,
+ * It reads the usage totals and their extras (usage.ts), the boards, the race results and the player accounts' counts; a
+ * part whose table or column is not there yet (an older database) reads as null or zero, and the rest still answers. About thirty reads,
  * run side by side after one that asks whether the usage rows count laps yet.
  */
 import trackIndex from "../../public/tracks/index.json";
@@ -19,6 +19,8 @@ export interface AdminDeps {
   now: () => number;
   /** The next open race and who is waiting for it; absent when the races are off */
   nextRace?: () => Promise<{ startsMs: number; waiting: number }>;
+  /** The player accounts' database (accounts/), for their counts; absent when accounts are off */
+  accountsDb?: D1Database;
 }
 
 const DAY_MS = 86_400_000;
@@ -150,6 +152,16 @@ export interface AdminStats {
   } | null;
   /** The next open race and who is waiting for it, right now; null when the races are off */
   live: { startsMs: number; waiting: number } | null;
+  /**
+   * Player accounts, counts only: all of them, those with each way in (an account with two counts under both), those
+   * with a cloud save, and those made in the last 7 days; null when accounts are off or their database can't be read
+   */
+  accounts: {
+    total: number;
+    byProvider: { discord: number; google: number; steam: number; passkey: number };
+    withSave: number;
+    last7d: number;
+  } | null;
 }
 
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -313,13 +325,16 @@ export async function adminStats(deps: AdminDeps, url: URL): Promise<Answer> {
   );
 
   const live = deps.nextRace ? orNull(deps.nextRace) : Promise.resolve(null);
+  const accountsDb = deps.accountsDb;
+  const accounts = accountsDb ? orNull(() => accountCounts(accountsDb, nowMs)) : Promise.resolve(null);
 
   const [
     [sums, perDay, countries, circuits, circuitDays, byCar, byMode, byCountry, circuitModes, extraRows, buildRows],
     [names, namesPerDay, laps, lapsPerDay, lapsByRows, lapsByClass, boards, topDrivers, challenges],
     raceRows,
     liveNow,
-  ] = await Promise.all([usage, board, races, live]);
+    accountNumbers,
+  ] = await Promise.all([usage, board, races, live, accounts]);
 
   const extra = (name: string): UsageGroup[] => (extraRows ?? []).filter((r) => r.name === name).map((r) => ({ id: String(r.value), ...total(r) }));
   const lapsBy = (dim: string): Count[] => counts(lapsByRows.filter((r) => r.dim === dim).sort((a, b) => num(b.n) - num(a.n)));
@@ -395,8 +410,27 @@ export async function adminStats(deps: AdminDeps, url: URL): Promise<Answer> {
     },
     races: raceStats,
     live: liveNow,
+    accounts: accountNumbers,
   };
   return { status: 200, body };
+}
+
+/** The player accounts' counts (AdminStats `accounts`): four reads of the accounts database, nothing about anyone */
+async function accountCounts(db: D1Database, nowMs: number): Promise<NonNullable<AdminStats["accounts"]>> {
+  const [accounts, providers, passkeys, saves] = await db.batch([
+    db.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS fresh FROM accounts").bind(nowMs - 7 * DAY_MS),
+    db.prepare("SELECT provider, COUNT(DISTINCT account_id) AS n FROM identities GROUP BY provider"),
+    db.prepare("SELECT COUNT(DISTINCT account_id) AS n FROM passkeys"),
+    db.prepare("SELECT COUNT(*) AS n FROM saves"),
+  ]);
+  const totals = (accounts.results[0] ?? {}) as { total?: unknown; fresh?: unknown };
+  const by = (provider: string) => num((providers.results as { provider: string; n: unknown }[]).find((r) => r.provider === provider)?.n);
+  return {
+    total: num(totals.total),
+    byProvider: { discord: by("discord"), google: by("google"), steam: by("steam"), passkey: num((passkeys.results[0] as { n?: unknown } | undefined)?.n) },
+    withSave: num((saves.results[0] as { n?: unknown } | undefined)?.n),
+    last7d: num(totals.fresh),
+  };
 }
 
 export interface AdminAwardsBody {

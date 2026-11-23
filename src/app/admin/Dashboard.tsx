@@ -142,6 +142,7 @@ const SECTIONS = [
   { id: "sessions", name: "Sessions" },
   { id: "builds", name: "Builds" },
   { id: "drivers", name: "Drivers" },
+  { id: "accounts", name: "Accounts" },
   { id: "boards", name: "Boards" },
   { id: "races", name: "Races" },
   { id: "awards", name: "Badges" },
@@ -658,6 +659,8 @@ function Numbers({
         </Tiles>
       </Section>
 
+      <AccountsSection accounts={stats.accounts ?? null} />
+
       <Section id="boards" title="Boards" intro="A newer best replaces the older one, so these are the times still standing, by the day each was set.">
         <Tiles>
           <Tile label="Times on the boards" value={count(board.laps)} note="All time" />
@@ -761,6 +764,37 @@ function Numbers({
 
       <SiteSection cloudflare={cloudflare} />
     </div>
+  );
+}
+
+/** Player accounts: counts only, nothing about anyone */
+function AccountsSection({ accounts }: { accounts: StatsBody["accounts"] }) {
+  if (!accounts) {
+    return (
+      <Section id="accounts" title="Accounts" intro="Accounts are off, or their database isn't set up yet.">
+        {null}
+      </Section>
+    );
+  }
+  const ways = [
+    { id: "discord", name: "Discord", value: accounts.byProvider.discord },
+    { id: "google", name: "Google", value: accounts.byProvider.google },
+    { id: "steam", name: "Steam", value: accounts.byProvider.steam },
+    { id: "passkey", name: "Passkey", value: accounts.byProvider.passkey },
+  ]
+    .sort((a, b) => b.value - a.value)
+    .map((w) => ({ ...w, shown: count(w.value), extra: percent(w.value, accounts.total) }));
+  return (
+    <Section id="accounts" title="Accounts" intro="Player accounts, all time. No email or user name is kept, so these are counts only.">
+      <Tiles three>
+        <Tile label="Accounts" value={count(accounts.total)} note="All time" />
+        <Tile label="New accounts" value={count(accounts.last7d)} note="In the last 7 days" />
+        <Tile label="With a cloud save" value={count(accounts.withSave)} note={`${percent(accounts.withSave, accounts.total)} of the accounts`} />
+      </Tiles>
+      <Card title="Ways in" aside="Accounts with each; one with two counts under both">
+        <RankList rows={ways} empty="No accounts yet." />
+      </Card>
+    </Section>
   );
 }
 

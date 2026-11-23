@@ -383,7 +383,7 @@ export async function handleApi(request: Request, env: Env, url: URL, inject: Ap
       const races = config.races ? env.RACES : undefined;
       try {
         const nextRace = races ? async () => (({ startsMs, waiting }) => ({ startsMs, waiting }))(await raceWaiting(races, config.raceSlotS, url)) : undefined;
-        const answer = await adminStats({ db: env.BOARD_DB, now: Date.now, nextRace }, url);
+        const answer = await adminStats({ db: env.BOARD_DB, now: Date.now, nextRace, accountsDb: config.accounts ? env.ACCOUNTS_DB : undefined }, url);
         return json(answer.body, answer.status, origin);
       } catch (err) {
         // The message only: the request (and so the key) stays out of the logs
