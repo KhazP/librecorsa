@@ -80,3 +80,6 @@ UI-RESEARCH-*.md
 /reference_data/
 /artifacts/
 *.blend1
+
+# Source content an importer downloads (npm run mod -- import … --fetch)
+/scripts/mods/.cache/

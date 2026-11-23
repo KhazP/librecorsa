@@ -1,212 +1,136 @@
 /**
- * The modder's tool for mod packages (docs/modding.md):
+ * The modder's tool for mod packages (docs/modding.md, docs/importing-mods.md):
  *
- *   npm run mod -- check <folder>            checks a package as the game will: its mod.json, its paths, every file it names
- *   npm run mod -- pack <folder> [out.zip]   checks it, then zips it the way the game's importer reads (deflate, no zip64)
- *   npm run mod -- index [mods folder]       writes <mods folder>/_index.json (default public/mods), listing every
- *                                            package in it with its content hash, so a clone's dev server serves them
+ *   npm run mod -- check <folder>              checks a package as the game will: its mod.json, paths, every file it names
+ *   npm run mod -- pack <folder> [out.zip]     checks it, then zips it the way the game's importer reads it
+ *   npm run mod -- index [mods folder]         lists the packages in a folder (default public/mods) for the dev server
+ *   npm run mod -- import                      lists the importers: content from other games and tools to packages
+ *   npm run mod -- import <name> …             runs one (scripts/mods/importers/<name>.ts)
+ *   npm run mod -- from-circuit <built id> …   packages a circuit the converters built in public/tracks/
+ *   npm run mod -- from-car <spec.json>        packages a converted car, as the spec describes it
  *
  * A package's content hash is the one online rooms compare (src/lib/mods/mod-manifest.ts `packageHash`).
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
-import { deflateRawSync } from "node:zlib";
-import { isModPackageId, isSafeModPath, manifestFiles, packageHash, sha256Hex, validateModManifest } from "../src/lib/mods/mod-manifest";
-import { modCarProfile, modDefinitions } from "../src/lib/mods/mod-content";
-import { packageFileProblems } from "../src/lib/mods/mod-store";
-import { crc32, isArchiveJunk, ZIP_MAX_ENTRIES, ZIP_MAX_TOTAL_BYTES } from "../src/lib/mods/zip-reader";
-import { resolveModTrackUrls } from "../src/lib/mods/mod-urls";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
+import { packageCar, type CarPackageOptions } from "./lib/car-package";
+import { packageCircuit, readCircuitEntry } from "./lib/circuit-package";
+import { importTarget, PACKAGE_USAGE, parseImportArgs, type Importer } from "./lib/importer";
+import { localIdFrom, packageCredit } from "./lib/manifest-file";
+import { writeModsIndex } from "./lib/mods-index";
+import { checkPackage, hashFolder, report } from "./lib/package-check";
+import { BUILT_TRACKS_DIR, DEFAULT_MODS_DIR } from "./lib/toolchain";
+import { zipPackage } from "./lib/zip-writer";
 
-/** The package's files, and its links: a link isn't packed as one (a zip holds it as the file, or not at all) */
-function walk(dir: string, links: string[] = []): { files: string[]; links: string[] } {
-  const files: string[] = [];
-  for (const e of readdirSync(dir, { withFileTypes: true })) {
-    const p = join(dir, e.name);
-    if (e.isSymbolicLink()) links.push(p);
-    else if (e.isDirectory()) files.push(...walk(p, links).files);
-    else if (e.isFile()) files.push(p);
-  }
-  return { files, links };
+const IMPORTERS_DIR = join(__dirname, "importers");
+
+/** The importers there are: one file each in importers/ */
+const importerNames = (): string[] =>
+  readdirSync(IMPORTERS_DIR)
+    .filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"))
+    .map((f) => f.slice(0, -3))
+    .sort();
+
+async function loadImporter(name: string): Promise<Importer> {
+  if (!importerNames().includes(name)) throw new Error(`no importer "${name}"; the importers are: ${importerNames().join(", ")}`);
+  const mod = (await import(join(IMPORTERS_DIR, `${name}.ts`))) as { default: Importer };
+  return mod.default;
 }
 
-const relPath = (root: string, file: string) => relative(root, file).split(sep).join("/");
-
-interface Checked {
-  ok: boolean;
-  id?: string;
-  files: string[];
-  problems: string[];
-}
-
-function check(folder: string): Checked {
-  const problems: string[] = [];
-  const manifestPath = join(folder, "mod.json");
-  if (!existsSync(manifestPath)) return { ok: false, files: [], problems: ["no mod.json at the top of the folder"] };
-  let raw: unknown;
-  try {
-    raw = JSON.parse(readFileSync(manifestPath, "utf8"));
-  } catch (err) {
-    return { ok: false, files: [], problems: [`mod.json is not valid JSON: ${(err as Error).message}`] };
-  }
-  const result = validateModManifest(raw, modDefinitions());
-  if (!result.ok) return { ok: false, files: [], problems: result.errors };
-  const tree = walk(folder);
-  for (const link of tree.links) problems.push(`${relPath(folder, link)}: a link; put the file itself in the package`);
-  const files = tree.files.map((f) => relPath(folder, f)).filter((p) => !isArchiveJunk(p));
-  problems.push(...packageFileProblems(files));
-  if (files.length > ZIP_MAX_ENTRIES) problems.push(`the package holds more than ${ZIP_MAX_ENTRIES} files`);
-  if (files.reduce((n, p) => n + statSync(join(folder, p)).size, 0) > ZIP_MAX_TOTAL_BYTES) problems.push("the package is larger than 2 GB, more than the game imports");
-  const present = new Set(files);
-  for (const needed of manifestFiles(result.manifest)) if (!present.has(needed)) problems.push(`${needed}: named in mod.json but missing`);
-  // A circuit's track data: parsed, with the model it names in the package
-  for (const t of result.manifest.tracks ?? []) {
-    if (!present.has(t.data)) continue;
-    try {
-      const data = JSON.parse(readFileSync(join(folder, t.data), "utf8")) as { metadata?: { mesh?: { url?: unknown; scenery?: unknown } }; samples?: unknown };
-      const url = data.metadata?.mesh?.url;
-      if (typeof url !== "string") problems.push(`${t.data}: metadata.mesh.url (the circuit's model) is missing`);
-      try {
-        // As the game reads it: every file it names is a path in the package
-        resolveModTrackUrls(data, result.manifest.id);
-      } catch (err) {
-        problems.push(`${t.data}: ${(err as Error).message}`);
-      }
-      const named = [url, ...(Array.isArray(data.metadata?.mesh?.scenery) ? data.metadata.mesh.scenery : [])];
-      for (const f of named) if (typeof f === "string" && isSafeModPath(f) && !present.has(f)) problems.push(`${t.data}: names ${f}, which is not in the package`);
-      if (!Array.isArray(data.samples) || data.samples.length < 10) problems.push(`${t.data}: has no samples (scripts/tracks write them)`);
-    } catch (err) {
-      problems.push(`${t.data}: not valid JSON (${(err as Error).message})`);
-    }
-  }
-  // A car's physics file, read as the game reads it: every value it changes checked against its base model
-  for (const c of result.manifest.cars ?? []) {
-    if (typeof c.physics === "string" || !present.has(c.physics.file)) continue;
-    let file: unknown;
-    try {
-      file = JSON.parse(readFileSync(join(folder, c.physics.file), "utf8"));
-    } catch (err) {
-      problems.push(`${c.physics.file}: not valid JSON (${(err as Error).message})`);
-      continue;
-    }
-    const physics = modCarProfile(result.manifest, c, file, undefined);
-    if (!physics.ok) problems.push(...physics.errors);
-  }
-  return { ok: problems.length === 0, id: result.manifest.id, files, problems };
-}
-
-async function hashFolder(folder: string, files: string[]): Promise<string> {
-  const hashes: Record<string, string> = {};
-  for (const p of files) hashes[p] = await sha256Hex(readFileSync(join(folder, p)));
-  return packageHash(hashes);
-}
-
-/** A zip of the files as the game's reader takes them: deflated (stored when that is no smaller), UTF-8 names */
-function zip(folder: string, files: string[]): Buffer {
-  const locals: Buffer[] = [];
-  const centrals: Buffer[] = [];
-  let offset = 0;
-  for (const p of files) {
-    const data = readFileSync(join(folder, p));
-    const deflated = deflateRawSync(data, { level: 9 });
-    const store = deflated.length >= data.length;
-    const body = store ? data : deflated;
-    const name = Buffer.from(p, "utf8");
-    const crc = crc32(data);
-    const local = Buffer.alloc(30);
-    local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(20, 4);
-    local.writeUInt16LE(0x0800, 6);
-    local.writeUInt16LE(store ? 0 : 8, 8);
-    local.writeUInt32LE(crc, 14);
-    local.writeUInt32LE(body.length, 18);
-    local.writeUInt32LE(data.length, 22);
-    local.writeUInt16LE(name.length, 26);
-    const central = Buffer.alloc(46);
-    central.writeUInt32LE(0x02014b50, 0);
-    central.writeUInt16LE(20, 4);
-    central.writeUInt16LE(20, 6);
-    central.writeUInt16LE(0x0800, 8);
-    central.writeUInt16LE(store ? 0 : 8, 10);
-    central.writeUInt32LE(crc, 16);
-    central.writeUInt32LE(body.length, 20);
-    central.writeUInt32LE(data.length, 24);
-    central.writeUInt16LE(name.length, 28);
-    central.writeUInt32LE(offset, 42);
-    locals.push(local, name, body);
-    centrals.push(central, name);
-    offset += local.length + name.length + body.length;
-    if (offset > 0xfffffffe) throw new Error("the package is over 4 GB zipped: split it in two");
-  }
-  const cd = Buffer.concat(centrals);
-  const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(files.length, 8);
-  end.writeUInt16LE(files.length, 10);
-  end.writeUInt32LE(cd.length, 12);
-  end.writeUInt32LE(offset, 16);
-  return Buffer.concat([...locals, cd, end]);
-}
-
-function report(folder: string, c: Checked): void {
-  if (c.ok) console.log(`OK    ${c.id} (${c.files.length} files) in ${folder}`);
-  else {
-    console.log(`FAIL  ${folder}`);
-    for (const p of c.problems) console.log(`      ${p}`);
-  }
+/** After an import into the mods folder the dev server serves: its list, so the package shows up there at once */
+async function reindex(packageDir: string): Promise<void> {
+  if (resolve(dirname(packageDir)) === resolve(DEFAULT_MODS_DIR)) await writeModsIndex(DEFAULT_MODS_DIR, true);
 }
 
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
+
   if (command === "check" && args[0]) {
     const folder = resolve(args[0]);
-    const c = check(folder);
+    const c = checkPackage(folder);
     report(folder, c);
     if (c.ok) console.log(`      content hash ${await hashFolder(folder, c.files)}`);
     process.exit(c.ok ? 0 : 1);
   }
+
   if (command === "pack" && args[0]) {
     const folder = resolve(args[0]);
-    const c = check(folder);
+    const c = checkPackage(folder);
     report(folder, c);
     if (!c.ok) process.exit(1);
     const out = resolve(args[1] ?? `${c.id}.zip`);
-    writeFileSync(out, zip(folder, c.files));
+    writeFileSync(out, zipPackage(folder, c.files));
     console.log(`      wrote ${out} (${(statSync(out).size / 1024 / 1024).toFixed(1)} MB), content hash ${await hashFolder(folder, c.files)}`);
     return;
   }
+
   if (command === "index") {
-    const dir = resolve(args[0] ?? "public/mods");
-    mkdirSync(dir, { recursive: true });
-    const packages: { id: string; hash: string }[] = [];
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      if (!e.isDirectory()) continue;
-      const folder = join(dir, e.name);
-      if (!isModPackageId(e.name)) {
-        console.log(`SKIP  ${e.name}: a package folder is named by its id ("author.name")`);
-        continue;
-      }
-      const c = check(folder);
-      report(folder, c);
-      if (!c.ok) continue;
-      if (c.id !== e.name) {
-        console.log(`      its mod.json names "${c.id}": rename the folder to match`);
-        continue;
-      }
-      packages.push({ id: e.name, hash: await hashFolder(folder, c.files) });
-    }
-    writeFileSync(join(dir, "_index.json"), `${JSON.stringify({ format: 1, packages }, null, 2)}\n`);
-    console.log(`\nwrote ${join(dir, "_index.json")}: ${packages.length} package(s)`);
+    await writeModsIndex(args[0] ?? DEFAULT_MODS_DIR);
     return;
   }
+
+  if (command === "import") {
+    const [name, ...rest] = args;
+    if (!name || name === "--help") {
+      console.log("Importers (npm run mod -- import <name> --help for one's options):\n");
+      for (const n of importerNames()) console.log(`  ${n.padEnd(16)} ${(await loadImporter(n)).summary}`);
+      return;
+    }
+    const importer = await loadImporter(name);
+    if (rest.includes("--help")) {
+      console.log(`npm run mod -- import ${name} ${importer.usage}`);
+      return;
+    }
+    await importer.run(rest);
+    // The dev server's list of packages, so what was imported shows up there at once
+    await writeModsIndex(DEFAULT_MODS_DIR, true);
+    return;
+  }
+
+  if (command === "from-circuit" && args[0] && !args[0].startsWith("-")) {
+    const [builtId, ...rest] = args;
+    const { values } = parseImportArgs(rest, { id: { type: "string" } });
+    const entry = readCircuitEntry(join(BUILT_TRACKS_DIR, builtId), builtId);
+    const credit = packageCredit(entry.credit ?? {});
+    const localId = localIdFrom(values.id ?? builtId);
+    const { info, packageDir } = importTarget(values, { author: credit.author, name: entry.name, credit });
+    const out = packageCircuit({ builtId, packageDir, info, localId, removeBuild: false });
+    report(packageDir, out.checked);
+    if (out.skipped.length) console.log(`      left out (the track data doesn't name them): ${out.skipped.join(", ")}`);
+    await reindex(packageDir);
+    process.exit(out.checked.ok ? 0 : 1);
+  }
+
+  if (command === "from-car" && args[0]) {
+    const specPath = resolve(args[0]);
+    // Paths in the spec are relative to it
+    const spec = JSON.parse(readFileSync(specPath, "utf8")) as CarPackageOptions;
+    const at = (p: string) => resolve(dirname(specPath), p);
+    const out = packageCar({
+      ...spec,
+      packageDir: resolve(spec.packageDir ? at(spec.packageDir) : join(DEFAULT_MODS_DIR, spec.info.id)),
+      model: at(spec.model),
+      thumb: spec.thumb && at(spec.thumb),
+      skins: spec.skins?.map((s) => ({ ...s, dir: at(s.dir) })),
+      sound: "dir" in spec.sound ? { ...spec.sound, dir: at(spec.sound.dir) } : spec.sound,
+    });
+    report(basename(specPath), out.checked);
+    if (out.skipped.length) console.log(`      left out: ${out.skipped.join(", ")}`);
+    process.exit(out.checked.ok ? 0 : 1);
+  }
+
   console.log(`Usage:
   npm run mod -- check <folder>
   npm run mod -- pack <folder> [out.zip]
-  npm run mod -- index [mods folder, default public/mods]`);
+  npm run mod -- index [mods folder, default public/mods]
+  npm run mod -- import [<name> …]          (no name: list the importers)
+  npm run mod -- from-circuit <built id> [--id <circuit id>]
+${PACKAGE_USAGE}
+  npm run mod -- from-car <spec.json>      (scripts/mods/lib/car-package.ts CarPackageOptions, paths relative to it)`);
   process.exit(command ? 1 : 0);
 }
 
 void main().catch((err) => {
-  console.error(err);
+  console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });
-
