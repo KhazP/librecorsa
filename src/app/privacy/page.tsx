@@ -121,6 +121,13 @@ export default function PrivacyPage() {
           services. Signing in with Discord or Steam works the same way: the site keeps only the account id they give it.
         </p>
         <p className={READ}>
+          LibreCorsa’s use and transfer of information received from Google APIs adheres to the{" "}
+          <a href="https://developers.google.com/terms/api-services-user-data-policy" className={TEXT_LINK}>
+            Google API Services User Data Policy
+          </a>
+          , including the Limited Use requirements.
+        </p>
+        <p className={READ}>
           To delete an account, open Settings, then Profile and data, then Account, or sign in at{" "}
           <Link href="/account" className={TEXT_LINK}>
             librecorsa.org/account
