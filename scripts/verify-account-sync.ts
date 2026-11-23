@@ -476,6 +476,8 @@ function fakeServer() {
     /** A status to refuse the nth ghost upload / download with (the rate limit, too big), or null */
     ghostPutFail: null as null | ((n: number) => number | null),
     ghostGetFail: null as null | ((n: number) => number | null),
+    /** Holds ghost downloads until it settles (a slow connection) */
+    ghostGate: null as Promise<void> | null,
     account(): AccountInfo {
       return {
         id: "acc1",
@@ -534,6 +536,7 @@ function fakeServer() {
         return json(200, { ok: true });
       }
       if (ghost && method === "GET") {
+        if (s.ghostGate) await s.ghostGate;
         s.ghostGets++;
         const refused = s.ghostGetFail?.(s.ghostGets);
         if (refused) return json(refused, { ok: false, error: "Refused" });
@@ -969,6 +972,8 @@ function fakeEnv(server: ReturnType<typeof fakeServer>, opts: { accounts: boolea
   const clock = { t: 100_000 };
   const timers: { fn: () => void; ms: number }[] = [];
   const log = { hashes: [] as string[], reloads: 0, navigations: [] as string[], configWatch: 0 };
+  /** What is on screen: the title menu (the default), the loading screen, or neither (the pause menu, a session) */
+  const screen = { title: true, loading: false };
   /** What the store does when the page is hidden (false) or goes away (true) */
   const leave = { cb: null as ((leaving: boolean) => void) | null };
   const storage = opts.storage ?? memoryStorage();
@@ -1002,6 +1007,8 @@ function fakeEnv(server: ReturnType<typeof fakeServer>, opts: { accounts: boolea
     driverName: () => "Alp",
     returnPath: () => "/play",
     passkey: async () => ({}),
+    loadingScreen: () => screen.loading,
+    titleMenu: () => screen.title,
     onLeave(cb) {
       leave.cb = cb;
       return () => {
@@ -1013,7 +1020,7 @@ function fakeEnv(server: ReturnType<typeof fakeServer>, opts: { accounts: boolea
   const runTimers = (ms: number) => {
     for (const t of timers.splice(0).filter((x) => x.ms <= ms)) t.fn();
   };
-  return { env, clock, timers, log, storage, runTimers, leave };
+  return { env, clock, timers, log, storage, runTimers, leave, screen };
 }
 
 async function main3(): Promise<void> {
@@ -1035,6 +1042,71 @@ async function main3(): Promise<void> {
     const none = createAccountStore(() => null);
     none.actions.start();
     check("no online side: off", none.getState().phase === "off");
+  }
+  {
+    // Joining where the game can't reload (Settings over the pause menu): the account's save waits for the next start
+    const cloudWithLap = async (server: ReturnType<typeof fakeServer>) => {
+      const text = JSON.stringify(lap("spa", 90_000));
+      const ghostSha = await sha256Hex(text);
+      server.ghosts.set(ghostSha, text);
+      server.doc = doc({
+        savedBy: "PC",
+        keys: { "bugesera.vehicle": { value: "chaparral-2d", t: 5 } },
+        bestLaps: { "spa|lc26|p1-pro-full-dry": { trackId: "spa", vehicle: "lc26", lapTimeMs: 90_000, recordedAt: 90_000, ghost: ghostSha } },
+      });
+      server.rev = 1;
+    };
+    const server = fakeServer();
+    server.joined = false;
+    await cloudWithLap(server);
+    const f = fakeEnv(server, { accounts: true });
+    f.screen.title = false;
+    const store = createAccountStore(() => f.env);
+    store.actions.start();
+    await settle(() => store.getState().join !== null);
+    const err = await store.actions.confirmJoin();
+    check(
+      "a join over the pause menu doesn't reload: the account's save waits, and the player is told",
+      err === null && f.log.reloads === 0 && f.storage.getItem("bugesera.vehicle") === null && /next time the game starts/.test(store.getState().notice?.text ?? ""),
+      `${err} ${store.getState().notice?.text}`
+    );
+    const next = fakeEnv(server, { accounts: true, storage: f.storage });
+    const restarted = createAccountStore(() => next.env);
+    restarted.actions.start();
+    await settle(() => next.log.reloads > 0);
+    check("the next start on the title menu takes it", f.storage.getItem("bugesera.vehicle") === "chaparral-2d" && next.log.reloads === 1);
+
+    // The join question stays up, busy, until its first sync is done (a slow ghost download here)
+    const s2 = fakeServer();
+    s2.joined = false;
+    await cloudWithLap(s2);
+    let release: () => void = () => {};
+    s2.ghostGate = new Promise<void>((r) => (release = r));
+    const g = fakeEnv(s2, { accounts: true });
+    const st2 = createAccountStore(() => g.env);
+    st2.actions.start();
+    await settle(() => st2.getState().join !== null);
+    const joining = st2.actions.confirmJoin();
+    await settle(() => s2.calls.some((c) => c.startsWith("GET /account/ghosts/")));
+    await settle();
+    const during = st2.getState();
+    check("while the first sync runs the join question stays up, busy", during.join !== null && during.joining && g.log.reloads === 0);
+    release();
+    await joining;
+    const done = st2.getState();
+    check("once it's done the question goes, and on the title menu the save is used at once", done.join === null && !done.joining && g.log.reloads === 1 && g.storage.getItem("bugesera.vehicle") === "chaparral-2d");
+
+    // The first-sync choice made over the pause menu waits too
+    const s3 = fakeServer();
+    s3.doc = doc({ savedBy: "PC", keys: { "librecorsa.raceHistory": { value: JSON.stringify([race("r1", 1)]), t: 1 } } });
+    s3.rev = 1;
+    const h = fakeEnv(s3, { accounts: true, storage: memoryStorage({ "librecorsa.raceHistory": JSON.stringify([race("r2", 2)]) }) });
+    h.screen.title = false;
+    const st3 = createAccountStore(() => h.env);
+    st3.actions.start();
+    await settle(() => st3.getState().firstSync !== null);
+    await st3.actions.chooseFirstSync("cloud");
+    check("a first-sync choice over the pause menu doesn't reload; the choice waits for the next start", h.log.reloads === 0 && JSON.parse(h.storage.getItem("librecorsa.raceHistory") as string)[0].id === "r2" && st3.getState().firstSync === null);
   }
   {
     // The device's key changed under a joined session (saved data cleared, a key file imported)

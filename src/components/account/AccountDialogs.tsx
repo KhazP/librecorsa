@@ -64,7 +64,8 @@ export function AccountDialogs() {
 
   const asking = state.phase === "signed-in" && (state.join !== null || state.firstSync !== null);
   const menu = useMenuUp(asking);
-  const showJoin = menu && state.join !== null && !autoJoining && !accountUi.codeJoinStands(ui);
+  // While a join and its first sync are under way the question stays up, busy, whoever answered it
+  const showJoin = menu && state.join !== null && (state.joining || (!autoJoining && !accountUi.codeJoinStands(ui)));
   const showFirstSync = menu && state.join === null && state.firstSync !== null && !ui.firstSyncDeferred;
 
   return (
@@ -74,6 +75,7 @@ export function AccountDialogs() {
           open={showJoin}
           driverName={state.join.driverName}
           providers={state.join.providers}
+          joining={state.joining}
           error={joinError}
           onError={setJoinError}
         />
@@ -90,16 +92,20 @@ function JoinDialog({
   open,
   driverName,
   providers,
+  joining,
   error,
   onError,
 }: {
   open: boolean;
   driverName: string | null;
   providers: Parameters<typeof joinQuestion>[1];
+  /** The join and its first sync are under way (answered here or in the code flow) */
+  joining: boolean;
   error: string | null;
   onError: (error: string | null) => void;
 }) {
-  const [busy, setBusy] = useState<"join" | "decline" | null>(null);
+  const [pressed, setBusy] = useState<"join" | "decline" | null>(null);
+  const busy = pressed ?? (joining ? "join" : null);
   const join = async () => {
     if (busy) return;
     setBusy("join");
@@ -124,7 +130,12 @@ function JoinDialog({
       error={error}
       actions={
         <>
-          <Button variant="ghost" loading={busy === "decline"} onClick={() => void decline()}>
+          <Button
+            variant="ghost"
+            loading={busy === "decline"}
+            disabledReason={busy === "join" ? "Wait for it to finish" : undefined}
+            onClick={() => void decline()}
+          >
             Not now
           </Button>
           <Button variant="primary" loading={busy === "join"} onClick={() => void join()} data-nav-default="">
@@ -133,7 +144,11 @@ function JoinDialog({
         </>
       }
     >
-      <p className="m-0">This device&rsquo;s driver names and save become part of that account. Not now signs this device out.</p>
+      {busy === "join" ? (
+        <p className="m-0">Joining&hellip; This device&rsquo;s save is syncing with the account. It can take a moment.</p>
+      ) : (
+        <p className="m-0">This device&rsquo;s driver names and save become part of that account. Not now signs this device out.</p>
+      )}
     </AccountDialog>
   );
 }
