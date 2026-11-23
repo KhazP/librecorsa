@@ -3405,7 +3405,8 @@ export class DriveSession {
           inputs.throttle,
           inputs.clutch ?? 0
         );
-        physics.telemetry.startReactionMs = reactionWatch.ms ?? undefined;
+        // A jump start has no reaction to show (a clutch let out and pressed again before the lights went out)
+        physics.telemetry.startReactionMs = jumpWatch.jumped ? undefined : (reactionWatch.ms ?? undefined);
       }
       // Qualifying: the clock, the reference lap behind it, and the race once the session is over
       if (quali && driving) {
