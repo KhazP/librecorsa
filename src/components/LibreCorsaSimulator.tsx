@@ -113,6 +113,15 @@ const roomCarSwitch = (rule: { vehicle?: VehicleModelId; carClass: CarClassRule 
   if (vehicleModelsFor(rule.carClass).includes(current)) return null;
   return listedVehiclesForClassRule(rule.carClass)[0] ?? null;
 };
+/**
+ * The game's own car to race in place of a mod car, or null when the car may race: the others see a car by its
+ * vehicle model only, so no mod car runs in a scheduled race (an official result), and none with physics of its own
+ * runs in any room
+ */
+const modCarSwap = (car: CarId, scheduled: boolean): CarId | null => {
+  const def = carById(car);
+  return def.mod && (scheduled || def.simProfile) ? raceCarFor(def.physics, scheduled).id : null;
+};
 /** The listed cars a room's class rule lets in, as the lobby offers them */
 const classCars = (rule: CarClassRule) => carsForClassRule(rule).map((c) => ({ id: c.id, title: c.title }));
 /** The lap card's upload state for a board answer: sent, nothing to show, waiting for the board, or turned down */
@@ -902,7 +911,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // The class may rule out the current car, or the race names one car for everyone (a scheduled race): take it,
       // or the first allowed one (after the session reset, so the swap finds no replay or AI field to carry over)
       const switchTo = roomCarSwitch(start, vehicleModelRef.current);
+      const modSwap = switchTo ? null : modCarSwap(carIdRef.current, mp.inScheduledRace);
       if (switchTo) changeCar(raceCarFor(switchTo, mp.inScheduledRace).id);
+      else if (modSwap) changeCar(modSwap);
       // A scheduled race is driven to the week's rules: its assists and realism, a dry track
       if (mp.inScheduledRace) applyWeekRules();
       else if (!mp.isHost && !guestWeatherSyncedRef.current && (start.weather || start.timeOfDay || start.timeScale !== undefined)) {
@@ -1031,9 +1042,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const ghostReq = ghostReqRef.current;
       // The upload this lap's card may show the result of (a later card, or a manual upload, takes over)
       const submitReq = submitReqRef.current;
-      // A car with physics of its own (a mod car's) shares its vehicle model's id: its laps would stand in that model's
-      // bests and ghosts, so they stay this session's only
-      if (carById(carIdRef.current).simProfile) return;
+      // A mod car shares its vehicle model's id: its laps (on another body, or physics of its own) would stand in that
+      // model's bests and ghosts, so they stay this session's only. A mod circuit's laps keep their own id and are saved
+      if (carById(carIdRef.current).mod) return;
       void saveBestLapIfFaster(recording)
         .then((saved) => {
           if (saved) {
@@ -1605,7 +1616,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         return;
       }
       const switchTo = roomCarSwitch(l.settings, vehicleModelRef.current);
+      const modSwap = switchTo ? null : modCarSwap(carIdRef.current, mp.inScheduledRace);
       if (switchTo) changeCar(raceCarFor(switchTo, mp.inScheduledRace).id);
+      else if (modSwap) changeCar(modSwap);
     };
     mp.onLobbyChange = (l) => {
       setLobby(l ? { ...l, players: [...l.players] } : null);

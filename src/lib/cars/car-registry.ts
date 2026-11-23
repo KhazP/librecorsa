@@ -744,5 +744,6 @@ export const carsByYear = (id: CarClassId): { year: number; cars: CarDefinition[
  */
 export const anyCarForVehicle = (vehicle: VehicleModelId): CarDefinition | undefined => ALL_CARS.find((c) => c.physics === vehicle);
 
+/** A mod car never stands for its model: a race or a board that names the model gets one of the game's own cars */
 export const carForVehicle = (vehicle: VehicleModelId): CarDefinition =>
-  KNOWN_CARS.find((c) => c.physics === vehicle) ?? CARS[0];
+  KNOWN_CARS.find((c) => c.physics === vehicle && !c.mod) ?? CARS[0];
