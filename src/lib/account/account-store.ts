@@ -176,7 +176,7 @@ export interface AccountStoreEnv {
   onLeave(cb: (leaving: boolean) => void): () => void;
   /** The game's loading screen is up: nothing is running that a reload would cut short */
   loadingScreen?(): boolean;
-  /** The title menu is up (Settings open over it or not): no session is running that a reload would cut short */
+  /** The title menu is up (Settings open over it or not), with no room or entered race: nothing a reload would cut short */
   titleMenu?(): boolean;
 }
 
@@ -709,7 +709,8 @@ function browserEnv(): AccountStoreEnv | null {
     },
     // LoadingScreen.tsx and TitleMenu.tsx mark their roots; the pause menu and a session have neither
     loadingScreen: () => document.querySelector("[data-loading-screen]") !== null,
-    titleMenu: () => document.querySelector("[data-title-menu]") !== null,
+    // Not while a room or an entered race is open on it: the reload would drop the player from it
+    titleMenu: () => document.querySelector("[data-title-menu]:not([data-in-room])") !== null,
     onLeave(cb) {
       const onVisibility = () => {
         if (document.visibilityState === "hidden") cb(false);
