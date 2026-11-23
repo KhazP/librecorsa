@@ -244,6 +244,12 @@ export interface RacecraftParams {
    */
   predictAiLat: number;
   /**
+   * The lateral prediction on a wet road too (1), or only in the dry (0). Off the racing line the road holds the full
+   * water film (weather.ts waterAt), and the moves the prediction set off took the cars into it: in light rain spins
+   * 53 -> 104 and offs 48 -> 93 with it, 50 / 55 without
+   */
+  predictAiLatWet: number;
+  /**
    * Behind a braking car, the follower's own stopping distance × (1 + 0.3 × this) must fit in the gap plus the other
    * car's, both on the class's braking (TUM's follow mode, Speed Dreams usr: × 1.3). The default lead assumes the
    * follower can brake 6 m/s² harder than a car already on its limit. 0: off
@@ -292,6 +298,7 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   sandwichMiddle: 1,
   yawMargin: 1,
   predictAiLat: 1,
+  predictAiLatWet: 0,
   followStop: 1,
   followClosingOnly: 0,
   earlyHazard: 0,
@@ -891,6 +898,8 @@ export class AiOpponentField implements AiRace {
   public localPlanner: boolean;
   /** Racecraft knobs */
   public readonly rc: RacecraftParams;
+  /** Whether the car being planned predicts the other cars' moves across (predictAiLat, and in the wet predictAiLatWet) */
+  private predictShare = 1;
   /** The braking the class's cars plan on behind traffic (m/s²) */
   private get classDecelMs2(): number {
     return this.classId === 'gt3' ? 16 : 32;
@@ -2247,6 +2256,8 @@ export class AiOpponentField implements AiRace {
       }
       // A car whose path ours will run into, or one beside it that ours will squeeze: checked ahead of time
       // (a car spun or rejoining keeps to its rejoin: steered round the others as well, it was run across the grass)
+      // (a wet road: only with predictAiLatWet)
+      this.predictShare = this.rc.predictAiLatWet > 0 || this.environment.weatherPaceScale(me) >= 0.999 ? 1 : 0;
       if (this.rc.predictS > 0 && car.control?.racing !== false) {
         const check = this.pathCheck(car, biasTarget, biasRate, half, line);
         speedCap = Math.min(speedCap, check.capMs);
@@ -2495,7 +2506,7 @@ export class AiOpponentField implements AiRace {
           if (Math.abs(dsT) >= lenGap + spreadS * t) continue;
           // (another AI car: down its own line, and with predictAiLat on its way to the offset it chose, at its rate;
           // Speed Dreams' drivers extrapolate every car's lateral motion)
-          const oMove = !human && this.rc.predictAiLat > 0 ? this.rc.predictAiLat * clamp(o.biasTargetM - o.biasM, -o.biasRateMs * t, o.biasRateMs * t) : 0;
+          const oMove = !human && this.rc.predictAiLat > 0 ? this.rc.predictAiLat * this.predictShare * clamp(o.biasTargetM - o.biasM, -o.biasRateMs * t, o.biasRateMs * t) : 0;
           const oN = human
             ? os.lateralOffsetM + oLat * Math.min(t, 0.5)
             : os.lateralOffsetM + aiLineOffsetM(this.track.getSampleAtDistance((os.sMeters + travelM(oV, oA, t)) % L), os.racingLineId) - oLine0 + oMove;
