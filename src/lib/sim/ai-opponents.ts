@@ -250,6 +250,12 @@ export interface RacecraftParams {
    */
   followStop: number;
   /**
+   * With followStop: the margin on the closing part only, (v² − v_ahead²) × (1 + 0.3 × followStop) ≤ 2a · gap, as
+   * Speed Dreams' usr has it (its distance to slow to the other car's speed × 1.3). 0: on the whole stopping distance
+   * (TUM's form with the margin), which keeps a time gap even at equal speeds and left a slower car unpassed
+   */
+  followClosingOnly: number;
+  /**
    * A spun, crawling or sideways car is a hazard from 50 m off the grid (not after 10 s / 150 m), sideways from 0.6 rad
    * (not 1.2), and stays one for 2 s (simplix unitopponent.cpp). 0: off
    */
@@ -287,6 +293,7 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   yawMargin: 1,
   predictAiLat: 1,
   followStop: 1,
+  followClosingOnly: 0,
   earlyHazard: 0,
   passCooldownS: 0,
 };
@@ -327,7 +334,9 @@ function followCapMs(ahead: SimulatorCar, gapM: number, rc: RacecraftParams = DE
   if (rc.followStop <= 0 || decelAhead <= 5) return lead;
   // Both on the class's brakes: our stopping distance (with its margin) within the gap plus the other car's
   // (TUM calc_vel_profile_follow.py, LGPL-3.0; Speed Dreams usr driver.cpp, Daniel Schellhammer, GPL-2.0+)
-  const stop = Math.sqrt(Math.max(0, (2 * classDecelMs2 * Math.max(0, gapM - margin) + vAhead * vAhead) / (1 + 0.3 * rc.followStop)));
+  const room = 2 * classDecelMs2 * Math.max(0, gapM - margin);
+  const k = 1 + 0.3 * rc.followStop;
+  const stop = rc.followClosingOnly > 0 ? Math.sqrt(vAhead * vAhead + room / k) : Math.sqrt(Math.max(0, (room + vAhead * vAhead) / k));
   return Math.min(lead, stop);
 }
 
