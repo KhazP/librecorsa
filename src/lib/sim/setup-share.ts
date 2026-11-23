@@ -15,6 +15,7 @@ import {
   type TyreSetup,
   type VehicleModelId,
 } from "@/types/f1";
+import { text as t } from "@/lib/text";
 import {
   ARB_DETACHED_PCT,
   CHASSIS_LIMITS,
@@ -48,19 +49,19 @@ const TUNER_BOUNDS: Readonly<Record<keyof GarageTuner, { min: number; max: numbe
   regenKw: { min: 0, max: 500, step: 5 },
 };
 
-const AERO_LABELS: Readonly<Record<AeroSetupPreset, string>> = {
-  low_downforce: "Low drag",
-  balanced: "Balanced aero",
-  high_downforce: "High downforce",
-};
+const AERO_LABELS = {
+  low_downforce: "game.setupShare.aeroLow",
+  balanced: "game.setupShare.aeroBalanced",
+  high_downforce: "game.setupShare.aeroHigh",
+} as const satisfies Readonly<Record<AeroSetupPreset, string>>;
 
-const COMPOUND_LABELS: Readonly<Record<TireCompound, string>> = {
-  soft: "Soft",
-  medium: "Medium",
-  hard: "Hard",
-  intermediate: "Inter",
-  wet: "Wet",
-};
+const COMPOUND_LABELS = {
+  soft: "game.setupShare.soft",
+  medium: "game.setupShare.medium",
+  hard: "game.setupShare.hard",
+  intermediate: "game.setupShare.intermediate",
+  wet: "game.setupShare.wet",
+} as const satisfies Readonly<Record<TireCompound, string>>;
 
 /** Portable v1 setup payload attached to recorded laps and encoded in `LC1-...` share codes */
 export interface SharedCarSetup {
@@ -337,12 +338,12 @@ export function presetToSharedSetup(preset: GaragePreset): SharedCarSetup {
 /** Short human-readable summary of a shared setup for previews & toasts */
 export function summarizeSharedSetup(setup: SharedCarSetup): string {
   const parts: string[] = [];
-  if (setup.aero) parts.push(AERO_LABELS[setup.aero]);
-  if (setup.compound) parts.push(COMPOUND_LABELS[setup.compound]);
+  if (setup.aero) parts.push(t(AERO_LABELS[setup.aero]));
+  if (setup.compound) parts.push(t(COMPOUND_LABELS[setup.compound]));
   const chassisCount = setup.chassis ? Object.keys(setup.chassis).length : 0;
-  if (chassisCount > 0) parts.push(`${chassisCount} chassis ${chassisCount === 1 ? "change" : "changes"}`);
-  if (setup.tuner?.brakeBiasPct !== undefined) parts.push(`BB ${setup.tuner.brakeBiasPct.toFixed(1)}%`);
-  if (parts.length === 0) parts.push("Baseline setup");
+  if (chassisCount > 0) parts.push(t("game.setupShare.chassisChanges", { count: chassisCount }));
+  if (setup.tuner?.brakeBiasPct !== undefined) parts.push(t("game.setupShare.brakeBias", { bias: setup.tuner.brakeBiasPct.toFixed(1) }));
+  if (parts.length === 0) parts.push(t("game.setupShare.baseline"));
   return parts.join(" · ");
 }
 

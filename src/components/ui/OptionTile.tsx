@@ -73,7 +73,7 @@ export function OptionTile({
         if (!disabled && (reselect || !checked)) onSelect();
       }}
       className={cx(
-        "group relative flex min-h-14 min-w-0 cursor-pointer flex-col items-start gap-1 rounded-lc-tile border-[1.5px] p-3 text-left",
+        "group relative flex min-h-14 min-w-0 cursor-pointer flex-col items-start gap-1 rounded-lc-tile border-[1.5px] p-3 text-start",
         "active:bg-white/2",
         MOTION,
         DISABLED,

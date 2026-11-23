@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/icons/Icon";
@@ -25,6 +26,7 @@ import {
 export function UpdateReady({ endsSession }: { endsSession?: string }) {
   const { ready } = useSyncExternalStore(updateStore.subscribe, updateStore.getSnapshot, updateStore.getServerSnapshot);
   const [asking, setAsking] = useState(false);
+  const tx = useTranslations("menu.update");
   if (!ready) return null;
   return (
     <div role="status" className="flex min-w-0">
@@ -33,18 +35,18 @@ export function UpdateReady({ endsSession }: { endsSession?: string }) {
         icon={<Icon name="refresh" size="md" />}
         action={
           <Button size="sm" variant="ghost" onClick={endsSession ? () => setAsking(true) : reloadForUpdate}>
-            Reload
+            {tx("reload")}
           </Button>
         }
       >
-        Update ready
+        {tx("ready")}
       </Toast>
       {endsSession ? (
         <ConfirmDialog
           open={asking}
-          title="Reload for the update?"
-          confirmLabel="Reload"
-          cancelLabel="Not now"
+          title={tx("confirmTitle")}
+          confirmLabel={tx("confirmReload")}
+          cancelLabel={tx("notNow")}
           icon={<Icon name="refresh" size="lg" />}
           onConfirm={reloadForUpdate}
           onCancel={() => setAsking(false)}

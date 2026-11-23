@@ -18,6 +18,7 @@
  */
 
 import * as THREE from 'three';
+import { text as tx } from '@/lib/text';
 import { DEFAULT_TRACK_ID } from '@/lib/track-data';
 import type { VehicleModelId } from '@/types/f1';
 import type { WeatherSyncState } from './weather';
@@ -341,18 +342,21 @@ const JOIN_TIMEOUT_MS = 15000;
 
 /** How often a lost race-server socket is reopened during a race before giving up, and the pauses between (ms) */
 const RACE_RECONNECT_MS = [500, 1500, 3000, 5000];
-const RACE_REFUSALS: Record<string, string> = {
-  closed: 'That race is about to start. You are in time for the next one.',
-  full: 'That race is full. Join the next one.',
-  started: 'That race has started without you. Join the next one.',
-  taken: 'You are already in this race in another window.',
-  bad: "Couldn't join the race. Reload the game and try again.",
-  update: 'LibreCorsa has been updated. Reload the page to join the race.',
-};
+/** The race server's refusals by their code, said in the current language when they come */
+const RACE_REFUSALS = {
+  closed: 'game.connection.raceClosed',
+  full: 'game.connection.raceFull',
+  started: 'game.connection.raceStarted',
+  taken: 'game.connection.raceTaken',
+  bad: 'game.connection.raceBad',
+  update: 'game.connection.raceUpdate',
+} as const;
+const raceRefusal = (code: string): string =>
+  tx(Object.prototype.hasOwnProperty.call(RACE_REFUSALS, code) ? RACE_REFUSALS[code as keyof typeof RACE_REFUSALS] : RACE_REFUSALS.bad);
 /** A guest refused for its version is disconnected this long after being told (ms), so the refusal reaches it first */
 const REFUSED_CLOSE_MS = 1500;
 /** A room whose host and guest run different versions of the game (protocol or physics) */
-const VERSION_MISMATCH = 'This room runs another version of LibreCorsa. Everyone in it needs to reload the page.';
+const VERSION_MISMATCH = () => tx('game.connection.versionMismatch');
 /** A car's name, colour, car and race progress go with its state this often (ms), and with every change */
 const STATE_INFO_EVERY_MS = 250;
 
@@ -364,8 +368,7 @@ const ROOM_HOST_ID = 'room_host';
 const ROOM_GUEST_PREFIX = 'room_guest_';
 const HOST_TOKEN_KEY = 'lc.roomHostToken';
 
-const BROKER_UNREACHABLE =
-  "Couldn't reach the room server. Check your connection and try again, or use a manual connection under Advanced.";
+const BROKER_UNREACHABLE = () => tx('game.connection.roomServerUnreachable');
 
 const GOOGLE_STUN_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -451,7 +454,9 @@ export class MultiplayerSyncManager {
     roomCode: '',
     state: 'idle',
     connectedWebRtcPeers: 0,
-    statusText: "Host a room and send the link, or join with a friend's code.",
+    get statusText() {
+      return tx('game.connection.idle');
+    },
   };
   public onStatusChange?: (status: P2PConnectionStatus) => void;
 
@@ -641,7 +646,7 @@ export class MultiplayerSyncManager {
       mode: 'room_host',
       roomCode,
       state: 'signaling',
-      statusText: `Opening room ${roomCode}…`,
+      statusText: tx('game.connection.openingRoom', { code: roomCode }),
     });
     this.viaRoomServer((server) => (server ? this.connectHostServer(roomCode, 0) : this.connectHostBroker(roomCode, 0)));
     return roomCode;
@@ -676,7 +681,7 @@ export class MultiplayerSyncManager {
       connect(roomCode, attempt + 1);
     }, BROKER_RETRY_MS[Math.min(attempt, BROKER_RETRY_MS.length - 1)]);
     if (this.openPeerCount() === 0) {
-      this.emitStatus({ state: 'signaling', statusText: `Reconnecting room ${roomCode}…` });
+      this.emitStatus({ state: 'signaling', statusText: tx('game.connection.reconnectingRoom', { code: roomCode }) });
     }
   }
 
@@ -721,7 +726,7 @@ export class MultiplayerSyncManager {
     try {
       ws = this.openRoomServer(`/rooms/${encodeURIComponent(roomCode)}?role=host&token=${this.hostToken()}`);
     } catch {
-      this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
+      this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE() });
       return;
     }
     let opened = false;
@@ -741,7 +746,7 @@ export class MultiplayerSyncManager {
           this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
           this.sendRoomServer({ t: 'settings', settings: this.lobbySettings });
           if (this.openPeerCount() === 0) {
-            this.emitStatus({ state: 'signaling', statusText: `Room ${roomCode} is open • waiting for players` });
+            this.emitStatus({ state: 'signaling', statusText: tx('game.connection.roomOpen', { code: roomCode }) });
           }
         } else if (msg.t === 'error' && msg.code === 'peer_id_taken') {
           if (!joinRetried) {
@@ -757,7 +762,7 @@ export class MultiplayerSyncManager {
             this.emitStatus({
               state: 'error',
               roomCode: '',
-              statusText: 'This session ID is already active in the room. Wait a moment and try hosting again.',
+              statusText: tx('game.connection.sessionActive'),
             });
           }
         } else if (msg.t === 'taken') {
@@ -765,7 +770,7 @@ export class MultiplayerSyncManager {
           this.emitStatus({
             state: 'error',
             roomCode: '',
-            statusText: `Room ${roomCode} is already open on another device. Press Join to race in it, or host a new room.`,
+            statusText: tx('game.connection.roomOpenElsewhere', { code: roomCode }),
           });
         } else if (msg.t === 'signal' && typeof msg.from === 'string' && /^[a-f0-9]{12}$/.test(msg.from)) {
           const remoteId = `${ROOM_GUEST_PREFIX}${msg.from}`;
@@ -796,7 +801,7 @@ export class MultiplayerSyncManager {
       if (!opened && attempt === 0) {
         this.signalingWs = null;
         this.clearBrokerTimers();
-        this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
+        this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE() });
         return;
       }
       this.putRoomBack(ws, roomCode, attempt, reconnect);
@@ -812,7 +817,7 @@ export class MultiplayerSyncManager {
     try {
       ws = this.openBroker(`rwanda2026_room_${roomCode}_host`);
     } catch {
-      this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
+      this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE() });
       return;
     }
     let opened = false;
@@ -831,7 +836,7 @@ export class MultiplayerSyncManager {
           opened = true;
           attempt = 0;
           if (this.openPeerCount() === 0) {
-            this.emitStatus({ state: 'signaling', statusText: `Room ${roomCode} is open • waiting for players` });
+            this.emitStatus({ state: 'signaling', statusText: tx('game.connection.roomOpen', { code: roomCode }) });
           }
         } else if (msg.type === 'ID-TAKEN') {
           // On a reconnect it is this room's own old socket, which the broker hasn't cleared yet: try again shortly
@@ -843,7 +848,7 @@ export class MultiplayerSyncManager {
           this.emitStatus({
             state: 'error',
             roomCode: '',
-            statusText: `Room ${roomCode} is already open on another device. Press Join to race in it, or host a new room.`,
+            statusText: tx('game.connection.roomOpenElsewhere', { code: roomCode }),
           });
         } else if (msg.type === 'ERROR' || msg.type === 'INVALID-KEY') {
           // Refused before the room ever opened: say so. Refused once it had been up: put it back, as after a drop
@@ -852,7 +857,7 @@ export class MultiplayerSyncManager {
             return;
           }
           this.closeSignaling();
-          this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
+          this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE() });
         } else if (msg.type === 'OFFER' && msg.src && msg.payload?.sdp) {
           await this.handleBrokerOffer(msg.src, msg.payload.sdp, msg.payload.connectionId);
         } else if (msg.type === 'CANDIDATE' && msg.src && msg.payload?.candidate) {
@@ -871,7 +876,7 @@ export class MultiplayerSyncManager {
       if (!opened && attempt === 0) {
         this.signalingWs = null;
         this.clearBrokerTimers();
-        this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
+        this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE() });
         return;
       }
       putBack();
@@ -894,7 +899,7 @@ export class MultiplayerSyncManager {
       mode: 'room_guest',
       roomCode,
       state: 'signaling',
-      statusText: `Joining room ${roomCode}…`,
+      statusText: tx('game.connection.joiningRoom', { code: roomCode }),
     });
     this.viaRoomServer((server) => (server ? this.joinRoomServer(roomCode) : this.joinRoomBroker(roomCode)));
   }
@@ -928,7 +933,7 @@ export class MultiplayerSyncManager {
     try {
       ws = this.openRoomServer(`/rooms/${encodeURIComponent(roomCode)}?role=guest&token=${this.guestToken}`);
     } catch {
-      this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
+      this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE() });
       return;
     }
     /** The host answered: from here the connection is peer to peer, and losing the room server no longer matters */
@@ -939,7 +944,7 @@ export class MultiplayerSyncManager {
       this.dropUnansweredPeer(ROOM_HOST_ID);
       this.emitStatus({ state: 'error', roomCode: '', statusText });
     };
-    const notFound = () => fail(`Couldn't find room ${roomCode}. Check the code, and ask the host to keep the game open on screen.`);
+    const notFound = () => fail(tx('game.connection.roomNotFound', { code: roomCode }));
 
     ws.onmessage = async (ev) => {
       if (this.signalingWs !== ws || typeof ev.data !== 'string' || ev.data === 'pong') return;
@@ -966,12 +971,12 @@ export class MultiplayerSyncManager {
               }
             }, 50);
           } else {
-            fail('This player ID is already in the room. Wait a moment and try joining again.');
+            fail(tx('game.connection.playerIdTaken'));
           }
         } else if (msg.t === 'nohost') {
           notFound();
         } else if (msg.t === 'full') {
-          fail(`Room ${roomCode} is full.`);
+          fail(tx('game.connection.roomFull', { code: roomCode }));
         } else if (msg.t === 'signal' && msg.data?.sdp) {
           const entry = this.rtcPeers.get(ROOM_HOST_ID);
           if (entry) {
@@ -993,7 +998,7 @@ export class MultiplayerSyncManager {
       if (this.signalingWs !== ws) return; // Closed on purpose
       this.signalingWs = null;
       this.clearBrokerTimers();
-      if (!answered) fail(BROKER_UNREACHABLE);
+      if (!answered) fail(BROKER_UNREACHABLE());
     };
   }
 
@@ -1007,7 +1012,7 @@ export class MultiplayerSyncManager {
     try {
       ws = this.openBroker(guestBrokerId);
     } catch {
-      this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
+      this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE() });
       return;
     }
     /** The host answered: from here the connection is peer to peer, and losing the broker no longer matters */
@@ -1018,7 +1023,7 @@ export class MultiplayerSyncManager {
       this.emitStatus({ state: 'error', roomCode: '', statusText });
     };
     const notFound = () =>
-      fail(`Couldn't find room ${roomCode}. Check the code, and ask the host to keep the game open on screen.`);
+      fail(tx('game.connection.roomNotFound', { code: roomCode }));
 
     ws.onmessage = async (ev) => {
       if (this.signalingWs !== ws) return;
@@ -1053,7 +1058,7 @@ export class MultiplayerSyncManager {
           if (!answered) notFound();
         } else if (msg.type === 'ID-TAKEN' || msg.type === 'ERROR' || msg.type === 'INVALID-KEY') {
           // Once the host has answered the broker no longer matters: a late error must not close the working link
-          if (!answered) fail(BROKER_UNREACHABLE);
+          if (!answered) fail(BROKER_UNREACHABLE());
         } else if (msg.type === 'ANSWER' && msg.src && msg.payload?.sdp) {
           const entry = this.rtcPeers.get(msg.src);
           if (entry) {
@@ -1081,7 +1086,7 @@ export class MultiplayerSyncManager {
       if (this.signalingWs !== ws) return; // Closed on purpose
       this.signalingWs = null;
       this.clearBrokerTimers();
-      if (!answered) fail(BROKER_UNREACHABLE);
+      if (!answered) fail(BROKER_UNREACHABLE());
     };
   }
 
@@ -1248,25 +1253,25 @@ export class MultiplayerSyncManager {
   private emitPeersStatus(strictNat: boolean): void {
     const open = this.openPeerCount();
     if (open > 0) {
-      this.emitStatus({ state: 'connected', statusText: open === 1 ? 'Connected to 1 player' : `Connected to ${open} players` });
+      this.emitStatus({ state: 'connected', statusText: tx('game.connection.connectedPlayers', { count: open }) });
     } else if (strictNat) {
       this.emitStatus({
         state: 'error',
         statusText: hasRelay(iceServers(this.roomIce))
-          ? "Couldn't connect to the other player. Try again, or use the same Wi-Fi."
-          : "Couldn't connect: one of your networks blocks direct links. Use the same Wi-Fi, or try another network.",
+          ? tx('game.connection.peerFailed')
+          : tx('game.connection.peerBlocked'),
       });
     } else if (!this.isHost) {
       // A guest's one connection is to its host, and nothing dials it again: say so rather than wait forever
-      this.emitStatus({ state: 'error', statusText: 'Lost the host. Join again.' });
+      this.emitStatus({ state: 'error', statusText: tx('game.connection.lostHost') });
     } else if (this.status.mode === 'room_host') {
       const code = this.status.roomCode;
       const up = this.signalingWs !== null && this.signalingWs.readyState === WebSocket.OPEN;
-      this.emitStatus({ state: 'signaling', statusText: up ? `Room ${code} is open • waiting for players` : `Reconnecting room ${code}…` });
+      this.emitStatus({ state: 'signaling', statusText: up ? tx('game.connection.roomOpen', { code }) : tx('game.connection.reconnectingRoom', { code }) });
     } else if (this.status.mode === 'local') {
-      this.emitStatus({ state: 'connected', statusText: 'Hosting a race for the tabs of this browser' });
+      this.emitStatus({ state: 'connected', statusText: tx('game.connection.hostingTabs') });
     } else {
-      this.emitStatus({ state: 'signaling', statusText: 'Player left. Make a new offer to connect again.' });
+      this.emitStatus({ state: 'signaling', statusText: tx('game.connection.playerLeft') });
     }
   }
 
@@ -1333,7 +1338,7 @@ export class MultiplayerSyncManager {
     dc.onopen = () => {
       this.emitStatus({
         state: 'connected',
-        statusText: 'Connected',
+        statusText: tx('game.connection.connected'),
       });
     };
     dc.onclose = () => {
@@ -1395,7 +1400,7 @@ export class MultiplayerSyncManager {
   private leaveForVersion(): void {
     this.closeSignaling();
     this.becomeGuest();
-    this.emitStatus({ state: 'error', roomCode: '', statusText: VERSION_MISMATCH });
+    this.emitStatus({ state: 'error', roomCode: '', statusText: VERSION_MISMATCH() });
   }
 
   /** Name, code and colour shown to other players; car and circuit for the lobby */
@@ -1481,7 +1486,7 @@ export class MultiplayerSyncManager {
   public hostLocal(): void {
     // A room left on the broker would keep retrying and write its own status over this one
     this.closeSignaling();
-    this.emitStatus({ mode: 'local', state: 'connected', statusText: 'Hosting a race for the tabs of this browser' });
+    this.emitStatus({ mode: 'local', state: 'connected', statusText: tx('game.connection.hostingTabs') });
     this.becomeHost();
   }
 
@@ -1940,7 +1945,7 @@ export class MultiplayerSyncManager {
         if (this.hostId !== null && from !== this.hostId && nowMs - this.lastHostLobbyMs < HOST_SILENT_MS) break;
         // A host on another version of the game (an older one says none; the race server says no physics revision)
         if (msg.lobby.proto !== PROTOCOL_VERSION || (msg.lobby.sim !== undefined && msg.lobby.sim !== this.simVersion())) {
-          if (this.inScheduledRace) this.failRace(RACE_REFUSALS.update);
+          if (this.inScheduledRace) this.failRace(tx(RACE_REFUSALS.update));
           else this.leaveForVersion();
           break;
         }
@@ -2099,7 +2104,7 @@ export class MultiplayerSyncManager {
     crypto.getRandomValues(bytes);
     this.raceToken = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
     this.raceIndex = null;
-    this.emitStatus({ mode: 'race_server', roomCode: '', state: 'signaling', statusText: 'Joining the next race…' });
+    this.emitStatus({ mode: 'race_server', roomCode: '', state: 'signaling', statusText: tx('game.connection.joiningRace') });
     this.emitRaceStatus({ state: 'joining', startsMs: null, text: '' });
     this.openRaceServer('next', 0);
   }
@@ -2109,7 +2114,7 @@ export class MultiplayerSyncManager {
     if (!this.raceWs && this.raceStatus.state === 'idle') return;
     this.closeRaceServer();
     this.becomeGuest();
-    this.emitStatus({ mode: 'local', state: 'idle', statusText: "Host a room and send the link, or join with a friend's code." });
+    this.emitStatus({ mode: 'local', state: 'idle', statusText: tx('game.connection.idle') });
   }
 
   /** Closes the race server's socket without telling the game anything (the caller says what happens next) */
@@ -2147,21 +2152,21 @@ export class MultiplayerSyncManager {
       // Left, or another race or room chosen, while the config was read
       if (this.raceStatus.state === 'idle' || this.raceStatus.state === 'error' || this.raceWs) return;
       if (reach === 'unreachable' && !config.races) {
-        this.failRace("Couldn't reach the race server. Check your connection and try again.");
+        this.failRace(tx('game.connection.raceServerUnreachable'));
         return;
       }
       const url = config.races
         ? onlineSocketUrl(`/races/${which}?peer=${encodeURIComponent(this.localPeerId)}&token=${this.raceToken}&v=${PROTOCOL_VERSION}`)
         : null;
       if (!url) {
-        this.failRace('Scheduled races are not running right now.');
+        this.failRace(tx('game.connection.racesOff'));
         return;
       }
       let ws: WebSocket;
       try {
         ws = new WebSocket(url);
       } catch {
-        this.failRace("Couldn't reach the race server. Check your connection and try again.");
+        this.failRace(tx('game.connection.raceServerUnreachable'));
         return;
       }
       this.raceWs = ws;
@@ -2197,9 +2202,9 @@ export class MultiplayerSyncManager {
             this.raceIndex = data.index;
             // The server's start time on this device's clock (off by the trip here, which a countdown doesn't show)
             this.emitRaceStatus({ state: 'joined', startsMs: data.startsMs - data.now + Date.now(), text: '' });
-            this.emitStatus({ mode: 'race_server', state: 'connected', statusText: 'In the next race' });
+            this.emitStatus({ mode: 'race_server', state: 'connected', statusText: tx('game.connection.inNextRace') });
           } else if (data.t !== 'welcome') {
-            this.failRace(RACE_REFUSALS[data.t] ?? RACE_REFUSALS.bad);
+            this.failRace(raceRefusal(String(data.t)));
           }
           return;
         }
@@ -2219,7 +2224,7 @@ export class MultiplayerSyncManager {
           }, RACE_RECONNECT_MS[attempt]);
           return;
         }
-        this.failRace(welcomed ? 'Lost the connection to the race.' : "Couldn't reach the race server. Check your connection and try again.");
+        this.failRace(welcomed ? tx('game.connection.raceLost') : tx('game.connection.raceServerUnreachable'));
       };
     });
   }
@@ -2254,7 +2259,7 @@ export class MultiplayerSyncManager {
     this.emitStatus({
       mode: 'manual_sdp',
       state: 'signaling',
-      statusText: 'Making an offer…',
+      statusText: tx('game.connection.makingOffer'),
     });
 
     const offer = await pc.createOffer();
@@ -2265,7 +2270,7 @@ export class MultiplayerSyncManager {
     this.emitStatus({
       mode: 'manual_sdp',
       state: 'signaling',
-      statusText: 'Offer ready. Send it to the other player, then paste their answer.',
+      statusText: tx('game.connection.offerReady'),
     });
     return token;
   }
@@ -2302,7 +2307,7 @@ export class MultiplayerSyncManager {
     this.emitStatus({
       mode: 'manual_sdp',
       state: 'signaling',
-      statusText: 'Answer ready. Send it back to the host.',
+      statusText: tx('game.connection.answerReady'),
     });
     return answerToken;
   }
@@ -2319,7 +2324,7 @@ export class MultiplayerSyncManager {
     if (this.manualPendingPc === pc) this.manualPendingPc = null;
     // Connected only once its channel opens (bindDataChannel); until then it is still being set up
     if (this.openPeerCount() === 0) {
-      this.emitStatus({ mode: 'manual_sdp', state: 'signaling', statusText: 'Answer accepted • connecting…' });
+      this.emitStatus({ mode: 'manual_sdp', state: 'signaling', statusText: tx('game.connection.answerAccepted') });
     }
   }
 

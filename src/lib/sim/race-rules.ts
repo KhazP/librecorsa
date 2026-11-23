@@ -11,6 +11,7 @@
  *
  * No three.js and no DOM: the worker and the race server can import this file.
  */
+import { text as t } from "@/lib/text";
 import type { CarClassId } from "@/lib/cars/car-registry";
 import type { RaceStartKind } from "./race-setup";
 
@@ -69,14 +70,17 @@ export function resolveRaceRules(classId: CarClassId, choice: Partial<RaceRulesC
 }
 
 export const RULE_PRESET_LABELS: Record<RulePresetId, string> = {
-  auto: "Auto",
-  open_wheel: "Open-wheel",
-  endurance_sprint: "Endurance",
+  get auto() { return t("game.raceRules.auto"); },
+  get open_wheel() { return t("game.raceRules.openWheel"); },
+  get endurance_sprint() { return t("game.raceRules.endurance"); },
 };
 /** What each preset judges, for the rows that pick one (the AI race and a private room) */
 export const RULE_PRESET_HINTS: Record<RulePresetId, string> = {
-  auto: "Open-wheel rules for single-seaters, endurance rules for the rest",
-  open_wheel: "Track limits by strikes: 4 is +5 s, 8 is +10 s, 12 is a disqualification",
-  endurance_sprint: "Track limits by weighted points: 5 is +5 s, 10 is +10 s, 15 is a disqualification",
+  get auto() { return t("game.raceRules.autoHint"); },
+  get open_wheel() { return t("game.raceRules.openWheelHint"); },
+  get endurance_sprint() { return t("game.raceRules.enduranceHint"); },
 };
-export const TRACK_LIMITS_CHOICE_LABELS: Record<TrackLimitsChoice, string> = { auto: "On", off: "Off" };
+export const TRACK_LIMITS_CHOICE_LABELS: Record<TrackLimitsChoice, string> = {
+  get auto() { return t("game.raceRules.trackLimitsOn"); },
+  get off() { return t("game.raceRules.trackLimitsOff"); },
+};

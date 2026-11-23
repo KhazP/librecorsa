@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import {
   clearKey,
   DEFAULT_KEY_BINDINGS,
@@ -62,9 +63,11 @@ const CAP = "w-20 px-2.5!";
 export function KeyBindingsCard({ first, essentials }: { first?: boolean; essentials?: boolean }) {
   // Key names as printed on this keyboard (AZERTY's KeyW is "Z"), re-read when the layout is known or changes
   useKeyLayout();
+  const tx = useTranslations("setup.keyBindings");
   const { settings, update } = useSettingsEnv();
   const [capture, setCapture] = useState<{ action: KeyAction; slot: number } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  /** A key the game keeps, or one taken from another action (worded when drawn) */
+  const [notice, setNotice] = useState<{ code: string; from?: KeyAction } | null>(null);
 
   useEffect(() => {
     if (!capture) return;
@@ -80,12 +83,12 @@ export function KeyBindingsCard({ first, essentials }: { first?: boolean; essent
       }
       if (RESERVED_CODES.has(e.code)) {
         // Still listening: the line says so until another key is pressed
-        setNotice(`${keyWord(e.code)} is kept for the game. Press another key`);
+        setNotice({ code: e.code });
         return;
       }
       const owner = KEY_ACTIONS.find((a) => settings.keys[a.id].includes(e.code) && a.id !== capture.action);
       update((s) => ({ ...s, keys: rebindKey(s.keys, capture.action, capture.slot, e.code) }));
-      setNotice(owner ? `${keyWord(e.code)} moved from ${owner.label}` : null);
+      setNotice(owner ? { code: e.code, from: owner.id } : null);
       setCapture(null);
     };
     window.addEventListener("keydown", onKey, { capture: true });
@@ -102,6 +105,11 @@ export function KeyBindingsCard({ first, essentials }: { first?: boolean; essent
     };
   }, [capture, settings.keys, update]);
 
+  const noticeText = notice
+    ? notice.from
+      ? tx("moved", { key: keyWord(notice.code), action: KEY_ACTIONS.find((a) => a.id === notice.from)?.label ?? notice.from })
+      : tx("reserved", { key: keyWord(notice.code) })
+    : null;
   const changed = KEY_ACTIONS.some(({ id }) => settings.keys[id].join() !== DEFAULT_KEY_BINDINGS[id].join());
   // The cursor starts on the table's first key (Throttle), shown in both hosts
   const firstAction = KEY_ACTIONS[0]?.id;
@@ -127,8 +135,8 @@ export function KeyBindingsCard({ first, essentials }: { first?: boolean; essent
               <span key={slot} className={SLOT}>
                 {listening ? (
                   // Listening takes the whole slot: its unbind button is hidden meanwhile
-                  <Button size="sm" variant="primary" className="w-full px-2.5!" aria-label={`Press a key for ${label}`} data-nav-default={navDefault} onClick={press}>
-                    Press a key
+                  <Button size="sm" variant="primary" className="w-full px-2.5!" aria-label={tx("pressKeyFor", { action: label })} data-nav-default={navDefault} onClick={press}>
+                    {tx("pressKey")}
                   </Button>
                 ) : code ? (
                   <>
@@ -137,7 +145,7 @@ export function KeyBindingsCard({ first, essentials }: { first?: boolean; essent
                       variant="secondary"
                       className={CAP}
                       title={keyWord(code)}
-                      aria-label={`${label}: ${keyWord(code)}. Change`}
+                      aria-label={tx("boundAria", { action: label, key: keyWord(code) })}
                       data-nav-default={navDefault}
                       onClick={press}
                     >
@@ -146,7 +154,7 @@ export function KeyBindingsCard({ first, essentials }: { first?: boolean; essent
                     <IconButton
                       size="sm"
                       variant="ghost"
-                      aria-label={`Unbind ${keyWord(code)} from ${label}`}
+                      aria-label={tx("unbind", { key: keyWord(code), action: label })}
                       icon={<Icon name="close" />}
                       onClick={() => update((s) => ({ ...s, keys: clearKey(s.keys, id, slot) }))}
                     />
@@ -157,11 +165,11 @@ export function KeyBindingsCard({ first, essentials }: { first?: boolean; essent
                     variant="secondary"
                     className={CAP}
                     icon={<Icon name="add" />}
-                    aria-label={`Add a key for ${label}`}
+                    aria-label={tx("addFor", { action: label })}
                     data-nav-default={navDefault}
                     onClick={press}
                   >
-                    Add
+                    {tx("add")}
                   </Button>
                 )}
               </span>
@@ -178,50 +186,55 @@ export function KeyBindingsCard({ first, essentials }: { first?: boolean; essent
 
   return (
     <SettingsCard
-      title="Key bindings"
-      description="Select a slot to rebind. Duplicate keys swap automatically."
+      title={tx("title")}
+      description={tx("description")}
       extraReset={{ changed, reset: () => update((s) => ({ ...s, keys: DEFAULT_KEY_BINDINGS })) }}
-      resetWhat="every key binding"
+      resetWhat={tx("resetWhat")}
     >
       <div className={TABLE}>{shown.map(row)}</div>
       {more.length ? (
         // The rest of the table, opened in place above the button (no count: "(20)" would read as the total)
-        <Disclosure moreLabel="Show all keys" lessLabel="Show fewer keys">
+        <Disclosure moreLabel={tx("showAll")} lessLabel={tx("showFewer")}>
           <div className={TABLE}>{more.map(row)}</div>
         </Disclosure>
       ) : null}
       <div className="pt-2">
         <StatusPill tone={capture ? "live" : notice ? "info" : "idle"}>
-          {capture ? (notice ?? `Press a key. Esc cancels; it stops after ${CAPTURE_TIMEOUT_S} s`) : (notice ?? "Esc always opens the pause menu.")}
+          {capture
+            ? (noticeText ?? tx("capturing", { seconds: CAPTURE_TIMEOUT_S }))
+            : (noticeText ?? tx("escPauses"))}
         </StatusPill>
       </div>
     </SettingsCard>
   );
 }
 
+type FixedKey = "pause" | "moveView" | "viewHeight" | "mfdDials" | "boostChat" | "switchTabs";
+
 /**
  * Keys the game keeps for itself, listed so they can be found (S137). The view and tab keys are physical positions
  * (KeyboardEvent.code), named as printed on this keyboard; the MFD and chat keys are the characters typed (event.key)
  */
-const fixedKeys = (): { label: string; keys: string[] }[] => [
-  { label: "Pause menu", keys: ["Esc"] },
-  { label: "Move the view (cockpit, dash)", keys: ["Alt", "Arrows"] },
-  { label: "View height and field of view", keys: ["Minus", "Equal", "BracketLeft", "BracketRight"].map(keyLabel) },
-  { label: "MFD dials", keys: [",", ".", "-", "="] },
-  { label: "Chat command for boost", keys: ["/"] },
-  { label: "Switch tabs in menus", keys: ["KeyQ", "KeyE"].map(keyLabel) },
+const fixedKeys = (arrows: string): { id: FixedKey; keys: string[] }[] => [
+  { id: "pause", keys: ["Esc"] },
+  { id: "moveView", keys: ["Alt", arrows] },
+  { id: "viewHeight", keys: ["Minus", "Equal", "BracketLeft", "BracketRight"].map(keyLabel) },
+  { id: "mfdDials", keys: [",", ".", "-", "="] },
+  { id: "boostChat", keys: ["/"] },
+  { id: "switchTabs", keys: ["KeyQ", "KeyE"].map(keyLabel) },
 ];
 
 export function FixedKeysCard() {
   useKeyLayout();
+  const tx = useTranslations("setup.fixedKeys");
   return (
-    <SettingsCard title="Fixed keys" advanced>
-      {fixedKeys().map((f) => (
-        <div key={f.label} className="flex min-h-11 items-center justify-between gap-3">
-          <span className="lc-body">{f.label}</span>
+    <SettingsCard title={tx("title")} advanced>
+      {fixedKeys(tx("arrows")).map((f) => (
+        <div key={f.id} className="flex min-h-11 items-center justify-between gap-3">
+          <span className="lc-body">{tx(f.id)}</span>
           <span className="flex shrink-0 items-center gap-1">
-            {f.keys.map((k) => (
-              <KeyCap key={k}>{k}</KeyCap>
+            {f.keys.map((k, i) => (
+              <KeyCap key={i}>{k}</KeyCap>
             ))}
           </span>
         </div>
@@ -235,11 +248,12 @@ export function FixedKeysCard() {
  * first, the rest on request)
  */
 export function KeyboardSetup({ essentials }: { essentials?: boolean }) {
+  const tx = useTranslations("setup.keyboard");
   return (
     <>
       <KeyBindingsCard first essentials={essentials} />
-      <SettingsCard title="Mouse" rows={[mouseSteer]} />
-      <SettingsCard title="Keyboard feel" rows={keyboardFeel} />
+      <SettingsCard title={tx("mouse")} rows={[mouseSteer]} />
+      <SettingsCard title={tx("feel")} rows={keyboardFeel} />
       <FixedKeysCard />
     </>
   );

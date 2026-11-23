@@ -12,7 +12,21 @@
  *                 rename takes the laps and the results with it, so a renamed driver counts once), and only names
  *                 a driver key proved: a race result under a name nobody claimed is not a driver this can count
  *        live:    tabs on /play right now (presence.ts), null with the live count off
+ *
+ * And the usage totals' public side, read by the circuit and car browsers and the press page. Each is one dimension on
+ * its own over a whole range, never crossed with the day, the country or another field, so no number here can point at
+ * one player:
+ *   GET /api/stats/popular                            -> { ok: true, days, circuits, cars }
+ *        circuits, cars: the ids driven most over the last POPULAR_DAYS days, most hours first, as ranks with no
+ *                 numbers. Only what the game still has (a retired circuit stays out), and only ids with at least
+ *                 POPULAR_MIN_SESSIONS sessions in the range, so a few players can't set the order
+ *   GET /api/stats/totals                             -> { ok: true, since, hours, laps, countries, drivers }
+ *        since:   the first day the usage totals counted, "2026-11-11"; hours, laps and countries are since then
+ *        hours:   whole hours driven; laps: laps driven, or the laps on the boards when that is more (as above)
+ *        countries: countries the driving came from; drivers: drivers to date, null with the boards off
+ * Neither takes a query string (index.ts): one copy of each is kept at the edge for everyone.
  */
+import { CIRCUIT_IDS } from "./admin";
 import { currentBoardBase, lapPhysicsVersion, MAX_LAP_REVISION } from "../../src/lib/sim/lap-types";
 import { isVehicleModelId } from "../../src/types/f1";
 import { ALL_CARS, askedBoardBase, currentPhysicsWhere } from "./board";
@@ -92,4 +106,62 @@ export async function circuitStats(db: D1Database, url: URL): Promise<Answer> {
   }
   const totals = await circuitTotals(db, track, vehicle, physics);
   return { status: 200, body: { ok: true, ...totals } };
+}
+
+/** The window the most-driven ranks cover */
+export const POPULAR_DAYS = 30;
+/** Sessions a circuit or car needs in that window to be ranked */
+export const POPULAR_MIN_SESSIONS = 50;
+const DAY_MS = 86_400_000;
+
+export interface PopularRanks {
+  days: number;
+  circuits: string[];
+  cars: string[];
+}
+
+/** The circuits and cars driven most over the last POPULAR_DAYS UTC days (today included), most hours first */
+export async function popularRanks(db: D1Database, nowMs: number): Promise<PopularRanks> {
+  const from = new Date(nowMs - (POPULAR_DAYS - 1) * DAY_MS).toISOString().slice(0, 10);
+  const ranked = async (column: "track_id" | "vehicle", keep: (id: string) => boolean): Promise<string[]> => {
+    const rows = await db
+      .prepare(
+        `SELECT ${column} AS id FROM usage_daily WHERE day >= ? GROUP BY ${column} HAVING SUM(sessions) >= ? ORDER BY SUM(minutes) DESC, ${column} LIMIT 500`,
+      )
+      .bind(from, POPULAR_MIN_SESSIONS)
+      .all<{ id: unknown }>();
+    return rows.results.map((r) => String(r.id)).filter(keep);
+  };
+  const [circuits, cars] = await Promise.all([ranked("track_id", (id) => CIRCUIT_IDS.has(id)), ranked("vehicle", isVehicleModelId)]);
+  return { days: POPULAR_DAYS, circuits, cars };
+}
+
+export interface SiteTotals {
+  since: string | null;
+  hours: number;
+  laps: number;
+  countries: number;
+  drivers: number | null;
+}
+
+/** Everything the usage totals have counted, and drivers to date when the boards are on */
+export async function siteTotals(db: D1Database, withDrivers: boolean): Promise<SiteTotals> {
+  const usage = async (laps: string) =>
+    db
+      .prepare(`SELECT MIN(day) AS since, SUM(minutes) AS minutes, ${laps} AS laps, COUNT(DISTINCT CASE WHEN country != 'XX' THEN country END) AS countries FROM usage_daily`)
+      .first<{ since: unknown; minutes: unknown; laps: unknown; countries: unknown }>();
+  // Before migration 0006 the usage rows count no laps: the boards' own then
+  const row = await usage("SUM(laps)").catch(() => usage("0"));
+  const whole = (v: unknown) => Math.max(0, Math.floor(Number(v ?? 0)) || 0);
+  const [stored, drivers] = await Promise.all([
+    countOr0(db, "SELECT COUNT(*) AS n FROM laps WHERE event = ''", []),
+    withDrivers ? driversToDate(db) : Promise.resolve(null),
+  ]);
+  return {
+    since: typeof row?.since === "string" ? row.since : null,
+    hours: Math.floor(whole(row?.minutes) / 60),
+    laps: Math.max(whole(row?.laps), stored),
+    countries: whole(row?.countries),
+    drivers,
+  };
 }

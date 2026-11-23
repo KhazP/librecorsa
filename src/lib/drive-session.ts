@@ -1,5 +1,7 @@
 import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
+import { text as tx } from "@/lib/text";
+import { perLanguage } from "@/lib/per-language";
 import { TURN_METADATA, getActiveTrackMetadata, inDeadZone, resolveLivery, type BuiltTrackData } from "@/lib/track-data";
 import { AUTOPILOT_REF_BASE, LINE_CHECK_REF_BASE, QualifyingSession } from "@/lib/sim/qualifying";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
@@ -168,6 +170,9 @@ import type {
   TyreSetup,
   VehicleModelId,
 } from "@/types/f1";
+
+/** What the start cue names as the clutch when no clutch is bound: the controller's Gear up, a wheel's paddle */
+const startClutchNames = perLanguage(() => ({ gearUp: tx("game.session.clutchGearUp"), paddle: tx("game.session.clutchPaddle") }));
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
 export const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
@@ -350,7 +355,9 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
       roomCode: "",
       state: "idle",
       connectedWebRtcPeers: 0,
-      statusText: "Ready. Tabs in this browser find each other; other devices join with a room code.",
+      get statusText() {
+        return tx("game.connection.ready");
+      },
     },
     vr: "off",
     muted: false,
@@ -2988,7 +2995,7 @@ export class DriveSession {
       if (wheelLostPending && !inMenu) {
         wheelLostPending = false;
         if (!this.snapshot.paused) this.togglePause();
-        setPauseNotice("Steering wheel disconnected. Reconnect it, or resume to drive with what's left.");
+        setPauseNotice(tx("game.session.wheelDisconnected"));
       }
       // The pause menu, the seat panel or a lost GPU context: the car waits
       const frozen = this.snapshot.paused || this.snapshot.seatPanel || gpuLost;
@@ -3158,9 +3165,9 @@ export class DriveSession {
         (activeClutchDevice === "controller"
           ? padGearUp !== null
             ? { pad: padGearUp }
-            : { name: "Gear up" }
+            : { name: startClutchNames().gearUp }
           : activeClutchDevice === "wheel"
-            ? { name: "upshift paddle" }
+            ? { name: startClutchNames().paddle }
             : { key: keyLabel(settingsNow.keys.shiftUp[0]) });
       const gearUpHeld = heldKeys.gearUpHeld || device.held?.has("shiftUp") === true;
       // A button as the clutch (a controller button other than a trigger, Gear up at a start) presses at once and lets
@@ -3346,7 +3353,7 @@ export class DriveSession {
         if (startCall === "jump") console.info(`[race] jump start`);
         if (startCall === "verdict") {
           console.info(`[race] jump start: +${jumpWatch.penaltyS} s at the flag`);
-          aiField?.penalisePlayer(jumpWatch.penaltyS, "jump_start", jumpWatch.big ? "Jump start · well off the grid spot" : "Jump start");
+          aiField?.penalisePlayer(jumpWatch.penaltyS, "jump_start", jumpWatch.big ? tx("game.session.bigJumpStart") : tx("game.session.jumpStart"));
         }
         gridHeldLastFrame = gridHeld;
         startClutchIn = inputs.clutch ?? 0;

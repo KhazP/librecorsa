@@ -1,0 +1,139 @@
+{
+  "newTab": "(s’ouvre dans un nouvel onglet)",
+  "confirm": {
+    "cancel": "Annuler",
+    "busy": "Attendez la fin de l’opération"
+  },
+  "toggle": {
+    "on": "Activé",
+    "off": "Désactivé"
+  },
+  "disclosure": {
+    "more": "Plus",
+    "less": "Moins"
+  },
+  "select": {
+    "placeholder": "Choisir",
+    "labelValue": "{label} : {value}"
+  },
+  "settingRow": {
+    "changed": "Modifié par rapport à la valeur par défaut",
+    "resetNamed": "Réinitialiser {setting} à la valeur par défaut",
+    "resetThis": "Réinitialiser ce réglage à la valeur par défaut",
+    "reset": "Réinitialiser à la valeur par défaut"
+  },
+  "mediaTile": {
+    "chosen": "Sélectionné"
+  },
+  "keys": {
+    "up": "Haut",
+    "down": "Bas",
+    "left": "Gauche",
+    "right": "Droite",
+    "wheelButton": "Btn {button}"
+  },
+  "pad": {
+    "namedButton": "Bouton {name}",
+    "shapeButton": "{shape, select, cross {Bouton Croix} circle {Bouton Rond} square {Bouton Carré} other {Bouton Triangle}}",
+    "faceButton": "{position, select, bottom {Bouton du bas} right {Bouton de droite} left {Bouton de gauche} other {Bouton du haut}}",
+    "dpad": "Croix directionnelle",
+    "dpadDirection": "{direction, select, up {Croix directionnelle haut} down {Croix directionnelle bas} left {Croix directionnelle gauche} right {Croix directionnelle droite} horizontal {Croix directionnelle gauche et droite} other {Croix directionnelle haut et bas}}",
+    "shoulder": "{button, select, lb {Gâchette supérieure gauche} rb {Gâchette supérieure droite} lt {Gâchette gauche} other {Gâchette droite}} ({name})",
+    "touchpad": "Pavé tactile",
+    "stick": "{side, select, left {Stick gauche} other {Stick droit}}",
+    "stickPress": "{side, select, left {Appui sur le stick gauche} other {Appui sur le stick droit}} ({name})",
+    "stickDirection": "{side, select, left {Stick gauche} other {Stick droit}} {direction, select, up {vers le haut} down {vers le bas} left {vers la gauche} right {vers la droite} horizontal {à gauche et à droite} other {vers le haut et le bas}}"
+  },
+  "badges": {
+    "you": "Vous",
+    "position": "Position {position}",
+    "qualityDescription": ": {description}"
+  },
+  "delta": {
+    "spoken": "{trend, select, level {Égal} faster {{seconds} secondes plus rapide} other {{seconds} secondes plus lent}}{best, select, yes {, meilleur} other {}}",
+    "best": "Meilleur"
+  },
+  "penalty": {
+    "time": "+{seconds} s",
+    "driveThrough": "Passage par les stands",
+    "warning": "Avertissement",
+    "trackLimits": "Limites de piste {strikes}/{of}",
+    "disqualified": "Disqualifié"
+  },
+  "flags": {
+    "green": "Drapeau vert",
+    "yellow": "Drapeau jaune",
+    "doubleYellow": "Double jaune",
+    "blue": "Drapeau bleu",
+    "red": "Drapeau rouge",
+    "white": "Drapeau blanc",
+    "black": "Drapeau noir",
+    "blackWhite": "Noir et blanc",
+    "chequered": "Drapeau à damier"
+  },
+  "compounds": {
+    "name": {
+      "soft": "Tendre",
+      "medium": "Medium",
+      "hard": "Dur",
+      "intermediate": "Intermédiaire",
+      "wet": "Pluie"
+    },
+    "short": {
+      "soft": "Tendre",
+      "medium": "Med",
+      "hard": "Dur",
+      "intermediate": "Inter",
+      "wet": "Pluie"
+    },
+    "long": {
+      "soft": "Pneus tendres",
+      "medium": "Pneus medium",
+      "hard": "Pneus durs",
+      "intermediate": "Pneus intermédiaires (piste mouillée)",
+      "wet": "Pneus pluie (eau stagnante)"
+    },
+    "tyres": {
+      "soft": "Pneus tendres",
+      "medium": "Pneus medium",
+      "hard": "Pneus durs",
+      "intermediate": "Pneus intermédiaires",
+      "wet": "Pneus pluie"
+    }
+  },
+  "carClass": {
+    "openWheel": "Monoplace",
+    "gt3": "GT3",
+    "proto": "Proto",
+    "classic": "Classique",
+    "road": "Route"
+  },
+  "session": {
+    "practice": "Essais libres",
+    "race": "Course",
+    "timeAttack": "Contre-la-montre",
+    "hillClimb": "Course de côte",
+    "online": "En ligne",
+    "offline": "Hors ligne",
+    "host": "Hôte"
+  },
+  "state": {
+    "new": "Nouveau",
+    "beta": "Bêta",
+    "wip": "WIP",
+    "experimental": "Expérimental",
+    "downloaded": "Téléchargé",
+    "downloading": "Téléchargement",
+    "updateAvailable": "Mise à jour disponible",
+    "inUse": "Utilisé"
+  },
+  "surface": {
+    "dry": "Sèche",
+    "damp": "Humide",
+    "wet": "Mouillée",
+    "flooded": "Inondée"
+  },
+  "dialog": {
+    "close": "Fermer"
+  }
+}

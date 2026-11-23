@@ -57,9 +57,9 @@ const WITH_REASON = cx(
 );
 
 const SIZE: Record<ButtonSize, { box: string; label: string; withPrompt: string; icon: string }> = {
-  lg: { box: "h-13 gap-3 px-6.5 phone:h-11 phone:px-5", label: "text-[20px] phone:text-[17px]", withPrompt: "pl-2.5", icon: "[&_svg]:size-5" },
-  md: { box: "h-11 gap-2.5 px-5", label: "text-[16px]", withPrompt: "pl-2", icon: "[&_svg]:size-5" },
-  sm: { box: "h-9 gap-2 px-4 pointer-coarse:h-11", label: "text-[14px]", withPrompt: "pl-1.5", icon: "[&_svg]:size-4" },
+  lg: { box: "h-13 gap-3 px-6.5 phone:h-11 phone:px-5", label: "text-[20px] phone:text-[17px]", withPrompt: "ps-2.5", icon: "[&_svg]:size-5" },
+  md: { box: "h-11 gap-2.5 px-5", label: "text-[16px]", withPrompt: "ps-2", icon: "[&_svg]:size-5" },
+  sm: { box: "h-9 gap-2 px-4 pointer-coarse:h-11", label: "text-[14px]", withPrompt: "ps-1.5", icon: "[&_svg]:size-4" },
 };
 
 interface CommonProps {
@@ -151,7 +151,7 @@ export function Button(props: ButtonProps) {
       {prompt ? <span className="inline-flex shrink-0 items-center pointer-coarse:hidden">{prompt}</span> : null}
       <span className={cx("inline-flex min-w-0 items-center gap-2.5", loading ? "invisible" : undefined)}>
         {icon ? <span className="inline-flex shrink-0" aria-hidden>{icon}</span> : null}
-        <span className={cx("lc-title truncate pr-0.5 leading-none", s.label)}>{children}</span>
+        <span className={cx("lc-title truncate pe-0.5 leading-none", s.label)}>{children}</span>
       </span>
       {loading ? <Dots /> : null}
       {disabledReason ? (

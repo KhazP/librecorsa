@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import { useFocusNav } from "@/components/menu/useFocusNav";
 import { IconButton } from "./Button";
 import { Icon } from "./icons/Icon";
@@ -47,6 +48,7 @@ export function Modal({
   size = "lg",
   children,
 }: ModalProps) {
+  const tx = useTranslations("common.dialog");
   const sheetRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const closeLatest = useRef(onClose);
@@ -138,7 +140,7 @@ export function Modal({
               size="sm"
               variant="ghost"
               icon={<Icon name="close" />}
-              aria-label="Close"
+              aria-label={tx("close")}
               data-nav-default=""
               onClick={dismiss}
             />

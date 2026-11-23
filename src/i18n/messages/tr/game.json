@@ -1,0 +1,875 @@
+{
+  "sky": {
+    "clear": "Açık",
+    "lightClouds": "Az bulutlu",
+    "partiallyCloudy": "Parçalı bulutlu",
+    "mostlyCloudy": "Çok bulutlu",
+    "overcast": "Kapalı",
+    "cloudyDrizzle": "Bulutlu ve çisenti",
+    "cloudyLightRain": "Bulutlu ve hafif yağmurlu",
+    "overcastLightRain": "Kapalı ve hafif yağmurlu",
+    "overcastRain": "Kapalı ve yağmurlu",
+    "overcastHeavyRain": "Kapalı ve sağanak yağışlı",
+    "overcastStorm": "Kapalı ve fırtınalı"
+  },
+  "weather": {
+    "nodeStart": "Başlangıç",
+    "nodeFinish": "Bitiş",
+    "clear": "Açık",
+    "clearDetail": "Kuru, güneşli",
+    "overcast": "Kapalı",
+    "overcastDetail": "Kuru, gri gökyüzü, daha serin pist",
+    "lightRain": "Hafif yağmur",
+    "lightRainDetail": "Islak pist, geçiş lastikleri",
+    "heavyRain": "Sağanak yağmur",
+    "heavyRainDetail": "Su birikintisi, tam yağmur lastikleri",
+    "drying": "Kuruyor",
+    "dryingDetail": "Yağmur durdu, kuru çizgi oluşuyor",
+    "dynamic": "Dinamik",
+    "dynamicDetail": "Seans boyunca değişir"
+  },
+  "timeOfDay": {
+    "dawn": "Şafak",
+    "morning": "Sabah",
+    "noon": "Öğle",
+    "afternoon": "Öğleden sonra",
+    "goldenHour": "Altın saat",
+    "dusk": "Alacakaranlık",
+    "night": "Gece"
+  },
+  "raceStart": {
+    "assisted": "Destekli",
+    "manual": "Manuel",
+    "assistedHint": "Işıklar sönene kadar gridde tutulur",
+    "manualHint": "Debriyaj ve devri tut, ışıklar sönünce bırak (+5 s / +10 s erken çıkış cezası)"
+  },
+  "realism": {
+    "casual": "Rahat",
+    "casualDetail": "Lastik aşınması yok, toleranslı lastik sıcaklıkları, daha hafif yağmur",
+    "standard": "Standart",
+    "standardDetail": "Lastik aşınması var, yumuşatılmış lastik sıcaklıkları, yağmurun çoğu devrede",
+    "full": "Tam",
+    "fullDetail": "Tam lastik ve yağmur modeli, garaj çıkışında soğuk lastikler ve frenler"
+  },
+  "raceRules": {
+    "auto": "Otomatik",
+    "openWheel": "Açık tekerlekli",
+    "endurance": "Dayanıklılık",
+    "autoHint": "Tek koltuklular için açık tekerlekli yarış kuralları, diğerleri için dayanıklılık kuralları",
+    "openWheelHint": "İhlal sayısına göre pist sınırları: 4 ihlal +5 s, 8 ihlal +10 s, 12 ihlal diskalifiye",
+    "enduranceHint": "Ağırlıklı puana göre pist sınırları: 5 puan +5 s, 10 puan +10 s, 15 puan diskalifiye",
+    "trackLimitsOn": "Açık",
+    "trackLimitsOff": "Kapalı"
+  },
+  "damage": {
+    "off": "Kapalı",
+    "reduced": "Azaltılmış",
+    "full": "Tam"
+  },
+  "raceSetup": {
+    "gridBack": "Arka",
+    "gridMiddle": "Orta",
+    "gridPole": "Pole",
+    "gridRandom": "Rastgele",
+    "aiGridPace": "Tempoya göre",
+    "aiGridQualifying": "Sıralama turları",
+    "aiGridReversed": "Ters grid",
+    "startAuto": "Otomatik",
+    "startStanding": "Durarak",
+    "startRolling": "Hareketli",
+    "standingStart": "durarak kalkış",
+    "rollingStart": "hareketli kalkış",
+    "aggressionClean": "Temiz",
+    "aggressionNormal": "Normal",
+    "aggressionHard": "Sert"
+  },
+  "grip": {
+    "green": "Ham",
+    "greenDetail": "Yeni yıkanmış asfalt, çok az kauçuk",
+    "light": "Hafif",
+    "lightDetail": "Hafta sonunun başındaki kauçuk birikimi",
+    "medium": "Orta",
+    "mediumDetail": "Orta düzeyde kauçuk tutmuş çizgi",
+    "natural": "Doğal",
+    "naturalDetail": "Yarışa hazır standart kauçuk çizgisi",
+    "heavy": "Yoğun",
+    "heavyDetail": "Dayanıklılık yarışı için iyice kauçuklanmış çizgi",
+    "saturated": "Doygun",
+    "saturatedDetail": "Tamamen doymuş koyu kauçuk çizgisi"
+  },
+  "aiSkill": {
+    "rookie": "Çaylak",
+    "amateur": "Amatör",
+    "pro": "Pro",
+    "alien": "Uzaylı"
+  },
+  "challenge": {
+    "conditions": "Kuru pist · {tyres} · Az yakıt",
+    "tyresSoft": "Yumuşak lastikler",
+    "tyresStreet": "Sokak lastikleri",
+    "tyresVintageSlicks": "Klasik slick lastikler",
+    "tyresSlicks": "Slick lastikler",
+    "timeLeftDays": "{days} g {hours} sa",
+    "timeLeftHours": "{hours} sa {minutes} dk",
+    "timeLeftMinutes": "{minutes} dk",
+    "placeNoTime": "Henüz süre yok",
+    "placeFirst": "P1 · bu haftanın en hızlısı",
+    "place": "P{place}",
+    "placeGap": "P{place} · P{above} ile fark {gap}"
+  },
+  "board": {
+    "conditions": "{assists} · {realism} · {surface}",
+    "assistsPro": "Desteksiz",
+    "assistsSemiPro": "Bazı destekler",
+    "assistsAssisted": "Destekli",
+    "realismCasual": "Rahat",
+    "realismStandard": "Standart",
+    "realismFull": "Tam",
+    "surfaceDry": "Kuru",
+    "surfaceWet": "Islak",
+    "renameUnreachable": "Çevrimiçi tabloya ulaşılamadı. Birazdan tekrar dene",
+    "renameFailed": "İsim değiştirilemedi (HTTP {status})"
+  },
+  "badges": {
+    "weeklyGold": "Haftalık Altın",
+    "weeklySilver": "Haftalık Gümüş",
+    "weeklyBronze": "Haftalık Bronz",
+    "fastestLap": "En Hızlı Tur",
+    "og": "OG Pilot",
+    "bulb": "Fikir Veren",
+    "times": "{badge} ×{count}",
+    "withNote": "{badge} — {note}",
+    "medalDetail": "Haftalık mücadelede {place, select, first {birinci} second {ikinci} other {üçüncü}}",
+    "medalDetailWeeks": "Haftalık mücadelede {place, select, first {birinci} second {ikinci} other {üçüncü}}: {weeks}",
+    "recordDetailCount": "{count, plural, one {Açık bir tabloda} other {# açık tabloda}} en hızlı tura sahip",
+    "recordCar": "{car} ×{count}",
+    "recordManual": "+{count} elle",
+    "recordDetail": "{boards} — pistleri görmek için dokun",
+    "ogDetail": "LibreCorsa’yı Fizik V1 ile sürdü",
+    "bulbDetailNote": "Fikir Veren: {note}",
+    "bulbDetail": "Fikir veya topluluk katkısı",
+    "creator": "Yapımcı",
+    "creatorDetail": "LibreCorsa’yı yaptı"
+  },
+  "camera": {
+    "chaseClose": "Yakın takip",
+    "chaseCloseDetail": "Aracın hemen arkasından",
+    "chase": "Takip",
+    "chaseDetail": "Aracın arkasından",
+    "chaseFar": "Uzak takip",
+    "chaseFarDetail": "Aracın gerisinden geniş açı",
+    "chaseLow": "Alçak takip",
+    "chaseLowDetail": "Arka kanadın hemen gerisinden alçak açı",
+    "tvPod": "T-cam",
+    "tvPodDetail": "Kaskın üstünden",
+    "cockpitShoulder": "Omuz",
+    "cockpit": "Kokpit",
+    "cockpitDetail": "Pilotun gözünden",
+    "dash": "Gösterge",
+    "dashDetail": "Direksiyonun önünden, gösterge kadrajda",
+    "nose": "Burun",
+    "helicopter": "Helikopter",
+    "tvSide": "Pist Kenarı TV",
+    "free": "Serbest kamera",
+    "freeDetail": "Pistin her yerinde özgürce uç"
+  },
+  "music": {
+    "poolMenu": "Menü",
+    "poolRace": "Yarış",
+    "poolResults": "Sonuçlar ve tekrar"
+  },
+  "carQuality": {
+    "ownBadge": "Kendi fiziği",
+    "own": "Kendi fiziği",
+    "ownDetail": "Bu araç için özel hazırlanmış fizikle sürülür.",
+    "sharedBadge": "Ortak fizik",
+    "shared": "Ortak fizik",
+    "sharedDetail": "Aynı sınıf ve dönemden başka bir aracın fiziğini kullanır; kendine özgü değil o araç gibi tepki verir.",
+    "eraBadge": "2026 fiziği",
+    "era": "Eski araçlar",
+    "eraDetail": "2026 fiziğiyle sürülür; kendi sezonundaki gibi değil 2026 aracı gibi tepki verir."
+  },
+  "carClass": {
+    "f1": "Formula Açık Tekerlekli",
+    "f1Detail": "Tek koltuklular · DRS / aktif aero",
+    "gt3Detail": "Kapalı tekerlekli · ABS / TC",
+    "proto": "Prototipler",
+    "protoDetail": "Kapalı tekerlekli · yüksek yere basma · TC",
+    "classic": "Klasik GT ve Touring",
+    "classicDetail": "Spor prototipler, Group 4, Group A ve JGTC · 1966–1998",
+    "road": "Yol araçları",
+    "roadDetail": "Trafiğe uygun · sokak lastikleri"
+  },
+  "circuitQuality": {
+    "originalBadge": "Özgün",
+    "original": "LibreCorsa özgünleri",
+    "originalDetail": "Kendi yüzeyleri, kerbleri, yükseltisi ve pist kenarı detaylarıyla LibreCorsa için yapıldı.",
+    "simBadge": "Sim seviyesi",
+    "sim": "Sim seviyesi pistler",
+    "simDetail": "Kendi yol, kerb ve bariyer modelleri ile yüzey fiziğine sahip, elle yapılmış sim pisti.",
+    "scanBadge": "Tarama",
+    "scan": "Dönüştürülmüş taramalar",
+    "scanDetail": "Topluluk yapımı 3B modelden otomatik dönüştürüldü: yol, kerbler, kaçış alanları ve bariyerler modelden çıkarıldığı için gerçek pistten farklılıklar olabilir."
+  },
+  "circuitType": {
+    "permanent": "Kalıcı",
+    "street": "Sokak",
+    "oval": "Oval",
+    "hillclimb": "Tırmanma"
+  },
+  "livery": {
+    "grid2026": "2026 Gridi",
+    "retro": "Retro",
+    "colourChalk": "Tebeşir",
+    "colourCarbon": "Karbon",
+    "colourAlloy": "Alaşım",
+    "colourVermilion": "Vermilyon",
+    "colourPapaya": "Papaya",
+    "colourGold": "Altın",
+    "colourVolt": "Volt",
+    "colourEmerald": "Zümrüt",
+    "colourCyan": "Camgöbeği",
+    "colourCobalt": "Kobalt",
+    "colourIndigo": "Çivit",
+    "colourMagenta": "Macenta"
+  },
+  "keyActions": {
+    "throttle": "Gaz",
+    "brake": "Fren",
+    "steerLeft": "Sola kır",
+    "steerRight": "Sağa kır",
+    "boostHold": "Takviye (basılı tut)",
+    "boostLatch": "Takviye (aç / kapa)",
+    "aero": "Aktif aero X / Z",
+    "shiftUp": "Vites yükselt",
+    "shiftDown": "Vites düşür",
+    "neutral": "Boş vites",
+    "camera": "Kamera (basılı tut: koltuk ve kamera)",
+    "freeCamera": "Serbest kamera",
+    "tvCamera": "Pist Kenarı TV kamerası",
+    "racingLine": "Yarış çizgisi",
+    "mute": "Sesi kapat",
+    "nextTrack": "Sonraki müzik parçası",
+    "autopilot": "Otopilot",
+    "mouseSteer": "Fare ile direksiyon",
+    "restart": "Yeniden başlat",
+    "flyingLap": "Turu yeniden başlat (hareketli çıkış)",
+    "throttleHalf": "Yarım gaz (basılı tut)",
+    "brakeHalf": "Yarım fren (basılı tut)",
+    "clutch": "Debriyaj (basılı tut)",
+    "replay": "Anlık tekrar",
+    "mfdPage": "Sonraki MFD sayfası",
+    "mfd": "MFD aç / kapat",
+    "hud": "HUD göster / gizle",
+    "board": "Tur tablosunu aç / kapat",
+    "headlights": "Farlar açık / kapalı",
+    "headlightFlash": "Selektör (basılı tut)"
+  },
+  "padActions": {
+    "shiftUp": "Vites yükselt",
+    "shiftDown": "Vites düşür",
+    "neutral": "Boş vites",
+    "boost": "Takviye",
+    "aero": "Aktif aero X / Z",
+    "camera": "Kamera (basılı tut: koltuk ve kamera)",
+    "freeCamera": "Serbest kamera",
+    "tvCamera": "Pist Kenarı TV kamerası",
+    "racingLine": "Yarış çizgisi",
+    "restart": "Yeniden başlat",
+    "flyingLap": "Turu yeniden başlat (hareketli çıkış)",
+    "pause": "Duraklatma menüsü",
+    "mfd": "MFD aç / kapat",
+    "mfdPage": "Sonraki MFD sayfası",
+    "hud": "HUD göster / gizle",
+    "board": "Tur tablosunu aç / kapat",
+    "headlights": "Farlar (bas: selektör, basılı tut: aç / kapa)",
+    "headlightFlash": "Selektör (basılı tut)"
+  },
+  "pedals": {
+    "throttle": "Gaz",
+    "brake": "Fren",
+    "clutch": "Debriyaj",
+    "notSet": "atanmadı",
+    "trigger": "tetik",
+    "stick": "{side, select, left {sol} other {sağ}} analog {way, select, up {yukarı} down {aşağı} left {sola} other {sağa}}",
+    "pressThrottle": "Gaza bas",
+    "holdButton": "{button} tuşuna basılı tut",
+    "pushStick": "{side, select, left {Sol} other {Sağ}} analoğu {way, select, up {yukarı} down {aşağı} left {sola} other {sağa}} it",
+    "clutchPedal": "debriyaj pedalı",
+    "button": "Tuş {number}"
+  },
+  "padLayouts": {
+    "gt": "GT tarzı",
+    "gtClassic": "GT klasik",
+    "f1": "Formula tarzı",
+    "forza": "Forza tarzı",
+    "bumper": "Omuz tuşuyla vites"
+  },
+  "wheelSupport": {
+    "moza": "WebHID üzerinden bağlanır, yönlendirir ve force feedback verir",
+    "hidPid": "Test edilmedi; aynı standart force feedback raporlarını kullanır",
+    "directDrive": "Test edilmedi; HID PID force feedback yoksa sayfa bridge’e geçer",
+    "pxn": "Test edilmedi; kendi Set Effect değerleriyle HID PID kullanır, henüz hiçbir PXN direksiyonunda doğrulanmadı",
+    "logitechClassic": "Test edilmedi; Linux hid-lg4ff’in gönderdiği klasik Logitech komutlarıyla WebHID üzerinde başlar, G27 ve G29’daki devir LED’leri dahil",
+    "logitechHidpp": "Test edilmedi; Logitech G HUB direksiyonu PC moduna geçirdikten sonra Linux hid-logitech-hidpp’nin gönderdiği HID++ force feedback ile WebHID üzerinde başlar",
+    "logitechBridgeOnly": "Test edilmedi; yalnızca bridge: ana akım Linux sürücüleri PlayStation için G923 veya G PRO’yu desteklemez, tarayıcı da DFP’nin direksiyon eksenini yeniden ölçekleyemez",
+    "thrustmaster": "Test edilmedi; bir sürücü direksiyonu başlangıç modundan çıkardıktan sonra Linux hid-tmff2 komutlarını kullanır. Çıkmazsa veya Windows komutları reddederse bridge devreye girer",
+    "thrustmasterBridgeOnly": "Test edilmedi; yalnızca bridge: T150 ve TMX farklı bir komut seti alır, hid-tmff2 ise T500RS’yi kapsamaz",
+    "fanatecCslElite": "Test edilmedi; HID PID force feedback yoksa sayfa bridge’e geçer",
+    "tested": "Test edildi",
+    "expected": "Bekleniyor",
+    "unknown": "Bilinmiyor",
+    "no": "Hayır"
+  },
+  "hudLayouts": {
+    "broadcast": "Yayın",
+    "broadcastDetail": "TV grafikleri: sıra kulesi, harita, telemetri şeridi",
+    "dash": "Direksiyon ekranı",
+    "dashDetail": "Altta ve ortada, yarış direksiyonu ekranı",
+    "telemetry": "Telemetri",
+    "telemetryDetail": "Direksiyon ekranı artı lastikler, G kuvveti, güç ve girdiler",
+    "classic": "Klasik",
+    "classicDetail": "Orijinal köşe panelleri",
+    "minimal": "Minimal",
+    "minimalDetail": "Yalnızca hız, vites ve tur",
+    "irdashiesDetail": "Sıralama, tur sayacı, girdiler ve vites ışıkları",
+    "racevisionDetail": "Sıralama, yakın araçlar, girdi çubuğu ve grafiği",
+    "h2hDetail": "Öndeki ve arkadaki araçlar, farklar ve tur deltaları",
+    "retroDetail": "Sıcak tonlu göstergeler: yuvarlak kadran, delta çubuğu, turlar",
+    "blocksDetail": "Koyu kare bloklar: zamanlama, sektörler, lastikler, yakıt",
+    "grandPrixDetail": "Yarış kulesi, yuvarlak hız göstergesi, vites ve girdiler"
+  },
+  "steeringAssist": {
+    "selfSteerStrength": "Otomatik yönlendirme ve kontra",
+    "selfSteerStrengthHint": "Tekerleklerin aracın gidiş yönünü ne kadar güçlü takip edeceği ve arka kaymaları yakalayacağı",
+    "dampingStrength": "Savrulma sönümleme",
+    "dampingStrengthHint": "Kaymadan çıkarken ani geri savrulmaları ve sarkaç hareketini sakinleştirir",
+    "speedSensitivity": "Yüksek hızda sakinlik",
+    "speedSensitivityHint": "Yüksek hızda direksiyonun ne kadar yavaşlayacağını ayarlar; küçük dokunuşlar yumuşak kalır",
+    "slipLimitMargin": "Lastik kayma payı",
+    "slipLimitMarginHint": "Negatif: daha güvenli önden kayma payı · Pozitif: ön lastiklerin tepe kayma açısını aşmasına izin verir",
+    "maxSelfSteerAngleDeg": "Maksimum kontra açısı",
+    "maxSelfSteerAngleDegHint": "Kaymayı yakalamak için desteğin ön tekerlekleri kendi başına çevirebileceği en fazla açı",
+    "presetBalanced": "Dengeli",
+    "presetStable": "Stabil",
+    "presetLoose": "Serbest",
+    "presetDrift": "Drift",
+    "presetCalm": "Hızda sakin",
+    "fullLock": "tam kilit",
+    "presetDetail": "otomatik yönlendirme {selfSteer}, savrulma sönümleme {damping}, hızda sakinlik {calm}, ön lastikler tepe kaymanın %{grip} düzeyinde, {cap} açısına kadar kontra"
+  },
+  "support": {
+    "donatePayPal": "PayPal ile bağış yap",
+    "supportOn": "{site} üzerinden destekle",
+    "donateToVia": "{maker} için {site} üzerinden bağış yap",
+    "supportOnSite": "{maker} için {site} üzerinden destek ol",
+    "donateTo": "{maker} için bağış yap",
+    "supportMaker": "{maker} için destek ol"
+  },
+  "setupSheet": {
+    "tcSlip": "TC patinaj",
+    "tc1": "TC 1",
+    "tcCut": "TC kesme",
+    "tc2": "TC 2",
+    "tcSlipAngle": "TC kayma açısı",
+    "abs": "ABS",
+    "engineMap": "Motor haritası",
+    "motorDeployment": "Elektrik motoru dağıtımı",
+    "regeneration": "Enerji geri kazanımı",
+    "startingFuel": "Başlangıç yakıtı",
+    "frontWing": "Ön kanat",
+    "rearWing": "Arka kanat",
+    "diffOnThrottle": "Gazda diferansiyel",
+    "diffOffThrottle": "Gazsız diferansiyel",
+    "engineBraking": "Motor freni",
+    "frontToe": "Ön toe",
+    "rearToe": "Arka toe",
+    "frontSuspension": "Ön süspansiyon",
+    "rearSuspension": "Arka süspansiyon",
+    "frontAntiRollBar": "Ön viraj demiri",
+    "rearAntiRollBar": "Arka viraj demiri",
+    "frontRideHeight": "Ön sürüş yüksekliği",
+    "rearRideHeight": "Arka sürüş yüksekliği",
+    "brakePressure": "Fren basıncı",
+    "frontBrakeBias": "Ön fren dengesi",
+    "brakeMigration": "Fren kaydırma",
+    "brakePower": "Fren gücü",
+    "brakeBias": "Fren dengesi",
+    "steeringRatio": "Direksiyon oranı",
+    "frontBumpStopRange": "Ön stoper mesafesi",
+    "rearBumpStopRange": "Arka stoper mesafesi",
+    "diffPreload": "Diferansiyel ön yükleme",
+    "gearSet": "Vites seti",
+    "frontThirdPacker": "Ön üçüncü takoz",
+    "rearThirdPacker": "Arka üçüncü takoz",
+    "frontBrakeDucts": "Ön fren kanalları",
+    "rearBrakeDucts": "Arka fren kanalları",
+    "radiatorOpening": "Radyatör açıklığı",
+    "frontBump": "Ön sıkıştırma",
+    "rearBump": "Arka sıkıştırma",
+    "frontFastBump": "Ön hızlı sıkıştırma",
+    "rearFastBump": "Arka hızlı sıkıştırma",
+    "frontRebound": "Ön geri sekme",
+    "rearRebound": "Arka geri sekme",
+    "frontFastRebound": "Ön hızlı geri sekme",
+    "rearFastRebound": "Arka hızlı geri sekme",
+    "frontThirdSpring": "Ön üçüncü yay",
+    "rearThirdSpring": "Arka üçüncü yay",
+    "frontThirdBump": "Ön üçüncü sıkıştırma",
+    "rearThirdBump": "Arka üçüncü sıkıştırma",
+    "frontThirdFastBump": "Ön üçüncü hızlı sıkıştırma",
+    "rearThirdFastBump": "Arka üçüncü hızlı sıkıştırma",
+    "frontThirdRebound": "Ön üçüncü geri sekme",
+    "rearThirdRebound": "Arka üçüncü geri sekme",
+    "frontThirdFastRebound": "Ön üçüncü hızlı geri sekme",
+    "rearThirdFastRebound": "Arka üçüncü hızlı geri sekme",
+    "frontCornerPackers": "Ön köşe takozları",
+    "rearCornerPackers": "Arka köşe takozları",
+    "frontWheelRate": "Ön tekerlek yay sertliği",
+    "rearWheelRate": "Arka tekerlek yay sertliği",
+    "frontBumpStopRate": "Ön stoper sertliği",
+    "rearBumpStopRate": "Arka stoper sertliği",
+    "frontCamber": "Ön kamber",
+    "rearCamber": "Arka kamber",
+    "frontLeftPressure": "Sol ön basınç",
+    "frontRightPressure": "Sağ ön basınç",
+    "rearLeftPressure": "Sol arka basınç",
+    "rearRightPressure": "Sağ arka basınç",
+    "tyreBlankets": "Lastik battaniyeleri",
+    "detached": "Bağlantısız",
+    "toeIn": "{angle} içe",
+    "toeOut": "{angle} dışa",
+    "dialOff": "KAPALI",
+    "blanketsOn": "Açık",
+    "blanketsOff": "Kapalı",
+    "engineMapMax": "1 · Maks",
+    "engineMapRace": "2 · Yarış",
+    "engineMapSmooth": "3 · Yumuşak",
+    "engineMapLean": "4 · Ekonomik",
+    "engineMapSave": "5 · Tasarruf"
+  },
+  "setupGroups": {
+    "fuel": "Yakıt",
+    "aerodynamics": "Aerodinamik",
+    "aerodynamicsShort": "Aero",
+    "transmission": "Aktarma",
+    "transmissionShort": "Akt.",
+    "suspensionGeometry": "Süspansiyon geometrisi",
+    "suspensionGeometryShort": "Geometri",
+    "suspension": "Süspansiyon",
+    "suspensionShort": "Süsp.",
+    "dampers": "Amortisörler",
+    "brakes": "Frenler",
+    "tyres": "Lastikler",
+    "electronics": "Elektronik",
+    "electronicsShort": "Elektr.",
+    "mechanicalGrip": "Mekanik tutuş",
+    "mechanicalGripShort": "Mek.",
+    "thirdElements": "Üçüncü elemanlar",
+    "thirdElementsShort": "3. Yay",
+    "aero": "Aero",
+    "fuelShort": "Yakıt",
+    "dampersShort": "Amort.",
+    "brakesShort": "Fren",
+    "tyresShort": "Lastik",
+    "aeroShort": "Aero"
+  },
+  "setupFx": {
+    "frontWing": {
+      "more": "Yüksek hızda daha fazla ön tutuş, daha serbest arka",
+      "less": "Daha stabil arka, yüksek hızda daha fazla önden kayma"
+    },
+    "rearWing": {
+      "more": "Daha fazla denge ve çekiş, daha fazla hava direnci",
+      "less": "Düzlüklerde daha hızlı, daha gergin arka"
+    },
+    "diffOn": {
+      "more": "Daha güçlü ivmelenme, gazda arkadan kayma",
+      "less": "Arka lastikleri daha az yorar, iç tekerlek patinaj çeker"
+    },
+    "diffOff": {
+      "more": "Gaz bırakınca stabil, viraj girişine direnir",
+      "less": "Girişte daha iyi döner, arka serbest hissedebilir"
+    },
+    "engineBraking": {
+      "more": "Gaz bırakınca arka daha çok frenler, burun döner",
+      "less": "Gaz bırakınca daha sakin, fren mesafesi uzar"
+    },
+    "camberFront": {
+      "more": "Viraj ortasında daha fazla ön tutuş",
+      "less": "Daha iyi frenleme, daha dengeli aşınma"
+    },
+    "camberRear": {
+      "more": "Daha fazla arka yanal tutuş",
+      "less": "Yavaş viraj çıkışlarında daha iyi çekiş"
+    },
+    "toeFront": {
+      "more": "Düzlüklerde daha stabil, daha ağır viraj girişi",
+      "less": "Daha keskin giriş, yüksek hızda tedirgin"
+    },
+    "toeRear": {
+      "more": "Stabil arka, biraz daha fazla hava direnci",
+      "less": "Daha çevik döner, daha az stabil"
+    },
+    "springFront": {
+      "more": "Daha keskin tepki, tümseklerde daha az tutuş",
+      "less": "Tümseklerde daha fazla ön tutuş"
+    },
+    "springRear": {
+      "more": "Daha iyi döner, daha az çekiş",
+      "less": "Daha iyi çekiş, daha ağır dönüş"
+    },
+    "arbFront": {
+      "more": "Hızlı yön değişimi, önden kayma",
+      "less": "Viraj ortasında daha fazla ön tutuş"
+    },
+    "arbRear": {
+      "more": "Daha iyi dönüş, çıkışta daha az çekiş",
+      "less": "Daha fazla arka tutuş, daha fazla önden kayma"
+    },
+    "rideFront": {
+      "more": "Kerblerde daha güvenli, daha az yere basma",
+      "less": "Daha fazla yere basma, taban hava akışını kaybedebilir"
+    },
+    "rideRear": {
+      "more": "Daha fazla eğim: daha keskin, daha serbest arka",
+      "less": "Daha sakin arka, daha fazla önden kayma"
+    },
+    "brakePressure": {
+      "more": "Daha kısa fren mesafesi, daha çabuk kilitlenir",
+      "less": "Dozajlaması daha kolay, fren mesafesi uzar"
+    },
+    "bias": {
+      "more": "Stabil frenleme, önce önler kilitlenir",
+      "less": "Girişte daha iyi döner, önce arkalar kilitlenir"
+    },
+    "migration": {
+      "more": "Fren bırakırken virajda daha iyi döner",
+      "less": "Fren bırakırken denge sabit kalır"
+    },
+    "coldPsi": {
+      "more": "Daha çabuk ısınır, tepe tutuşu düşer",
+      "less": "Daha fazla tutuş, daha yavaş ısınır"
+    },
+    "blankets": {
+      "more": "İlk virajdan itibaren sıcak lastikler",
+      "less": "Garajdan soğuk çıkar, çıkış turunda ısıt"
+    },
+    "tc": {
+      "more": "Daha az patinaj, daha yavaş çıkış",
+      "less": "Daha hızlı çıkış, arka kopabilir"
+    },
+    "tc2": {
+      "more": "Sert kesme: kaymaları sıkıca yakalar",
+      "less": "Yumuşak kesme: daha fazla çekiş korur"
+    },
+    "abs": {
+      "more": "Kilitlenme olmaz, fren mesafesi uzar",
+      "less": "Hassas frenlersen daha kısa fren mesafesi"
+    },
+    "map": {
+      "more": "Daha yumuşak gaz, daha az güç",
+      "less": "Tam güç, daha keskin gaz tepkisi"
+    },
+    "steerRatio": {
+      "more": "Daha yavaş direksiyon, daha az kilit",
+      "less": "Daha hızlı direksiyon, daha fazla kilit"
+    },
+    "wheelRateFront": {
+      "more": "Daha keskin ön, tümseklerde daha az tutuş",
+      "less": "Tümseklerde daha fazla ön tutuş"
+    },
+    "wheelRateRear": {
+      "more": "Daha iyi döner, daha az çekiş",
+      "less": "Daha iyi çekiş, daha ağır dönüş"
+    },
+    "bumpStopRate": {
+      "more": "Stopere oturunca daha sert",
+      "less": "Stopere daha yumuşak oturur"
+    },
+    "bumpStopRange": {
+      "more": "Stoper öncesi daha fazla çalışma mesafesi",
+      "less": "Stopere daha erken oturur, daha düz şasi"
+    },
+    "preload": {
+      "more": "Hızlı virajlarda stabil, yavaş virajlarda önden kayar",
+      "less": "Girişte daha iyi döner, çıkışlarda daha serbest"
+    },
+    "bump": {
+      "more": "Gövde daha az oynar, tümseklerde daha sert",
+      "less": "Tümsekleri emer, şasi daha fazla hareket eder"
+    },
+    "fastBump": {
+      "more": "Kerblerde sert",
+      "less": "Kerbleri yumuşatır"
+    },
+    "rebound": {
+      "more": "Ağırlık yavaş döner, dengeli çıkışlar",
+      "less": "Lastikler yolu daha iyi takip eder"
+    },
+    "fastRebound": {
+      "more": "Kerb sonrası tekerlek daha yavaş iner",
+      "less": "Tekerlek yola hızla geri oturur"
+    },
+    "ductFront": {
+      "more": "Daha serin ön frenler, daha fazla hava direnci",
+      "less": "Daha sıcak ön frenler, daha az hava direnci"
+    },
+    "ductRear": {
+      "more": "Daha serin arka frenler, daha fazla hava direnci",
+      "less": "Daha sıcak arka frenler, daha az hava direnci"
+    },
+    "radiator": {
+      "more": "Daha serin motor, daha fazla hava direnci",
+      "less": "Daha az hava direnci, motor daha sıcak çalışır"
+    },
+    "gearSet": {
+      "more": "Uzun vitesler: uzun düzlüklerde son hız",
+      "less": "Kısa vitesler: yavaş viraj çıkışında daha seri"
+    },
+    "heaveSpring": {
+      "more": "Hızda daha düz şasi, tümseklerde daha sert",
+      "less": "Tümsekleri emer, taban daha çok oynar"
+    },
+    "heavePacker": {
+      "more": "Takoza kadar daha fazla hareket",
+      "less": "Takoz tabanı daha erken tutar"
+    },
+    "cornerPacker": {
+      "more": "Stoperler erken devreye girer, virajlarda daha düz",
+      "less": "Daha fazla serbest hareket, daha fazla yatma"
+    },
+    "tcSlipAngle": {
+      "more": "Arka kaymaya başladığında daha erken keser",
+      "less": "Gazda arkanın daha fazla kaymasına izin verir"
+    },
+    "motorDeploy": {
+      "more": "Daha fazla elektrik itişi, bataryayı hızla tüketir",
+      "less": "Şarjı korur, daha az itiş"
+    },
+    "regen": {
+      "more": "Daha fazla şarj geri kazanımı, daha fazla arka frenleme",
+      "less": "Frende daha sakin arka, daha az şarj"
+    },
+    "fuel": {
+      "more": "Daha uzun stint, daha ağır ve yavaş",
+      "less": "Daha hafif ve hızlı, daha kısa stint"
+    }
+  },
+  "padFeel": {
+    "smooth": "Yumuşak",
+    "smoothDetail": "Daha yavaş, daha sakin direksiyon",
+    "default": "Varsayılan",
+    "defaultDetail": "Dengeli tepki",
+    "sharp": "Keskin",
+    "sharpDetail": "Hızlı viraj girişi"
+  },
+  "tyres": {
+    "street": "Sokak lastikleri"
+  },
+  "setupShare": {
+    "aeroLow": "Düşük hava direnci",
+    "aeroBalanced": "Dengeli aero",
+    "aeroHigh": "Yüksek yere basma",
+    "soft": "Yumuşak",
+    "medium": "Orta",
+    "hard": "Sert",
+    "intermediate": "Geçiş",
+    "wet": "Yağmur",
+    "chassisChanges": "{count, plural, one {# şasi değişikliği} other {# şasi değişikliği}}",
+    "brakeBias": "BB %{bias}",
+    "baseline": "Temel araç ayarı",
+    "factoryLowDrag": "Düşük hava direnci"
+  },
+  "trackLimits": {
+    "flashbackDeleted": "Flashback · tur silindi",
+    "currentAndNextInvalid": "Bu tur ve sonraki tur geçersiz",
+    "currentInvalid": "Bu tur geçersiz",
+    "courseCutDeleted": "Pist kesme · tur silindi",
+    "penaltyOnceBack": "Piste dönünce zaman cezası verilecek",
+    "leftLapRoad": "Tur yolundan çıkıldı",
+    "noTimeGained": "Zaman kazanımı yok",
+    "courseCutPenalty": "Pist kesme · +{seconds}s zaman cezası",
+    "secondsGained": "{seconds} s kazanıldı",
+    "lapDeleted": "Tur silindi",
+    "wallDeleted": "Duvar teması · tur silindi",
+    "rodeWallBeforeLine": "Bitiş çizgisinden önce duvara sürtüldü",
+    "limitsDeleted": "Pist sınırları · tur silindi",
+    "offBeforeLine": "Bitiş çizgisinden önce pist dışına çıkıldı",
+    "nextLapToo": "Sonraki tur da geçersiz",
+    "offTrack": "Pist dışına çıkıldı",
+    "touchedBarrier": "Bariyere temas edildi",
+    "rodeWall": "Duvara sürtüldü",
+    "positionHandedBack": "Sıra geri verildi",
+    "advantageGivenBack": "Avantaj geri verildi",
+    "noFurtherAction": "Ek işlem yok",
+    "trackLimits": "Pist sınırları",
+    "noAdvantage": "Avantaj yok · işlem yok",
+    "timePenalty": "+{seconds}s zaman cezası",
+    "limitsGained": "Pist sınırları · {seconds} s kazanıldı",
+    "limitsCutMetres": "Pist sınırları · {metres} m kesildi",
+    "limitsMajorCut": "Pist sınırları · büyük kesme",
+    "why": "{reason, select, illegal_overtake {Kural dışı geçiş · sıra geri verilmedi} corner_cut {Viraj kesme} not_lifted {Gazdan çekilmedi} other {Zaman kazanımı}}",
+    "limitsWhy": "Pist sınırları · {reason, select, illegal_overtake {kural dışı geçiş · sıra geri verilmedi} corner_cut {viraj kesme} not_lifted {gazdan çekilmedi} other {zaman kazanımı}}",
+    "warningCount": "Pist sınırları · uyarı {count}/{max}",
+    "points": "{points} puan",
+    "strikes": "{count, plural, one {# ihlal} other {# ihlal}}",
+    "disqualified": "Diskalifiye · pist sınırları",
+    "limitsPoints": "Pist sınırları · {points}",
+    "blackWhiteFlag": "Siyah-beyaz bayrak",
+    "nextPenalty": "{why} · sonraki +{seconds} s",
+    "nextDisqualification": "{why} · sonraki diskalifiye",
+    "warning": "Pist sınırları · uyarı",
+    "warningDetail": "{why} · {points}"
+  },
+  "flags": {
+    "yellow": "Sarı bayrak",
+    "trackClear": "Pist temiz",
+    "carStopped": "Önde duran araç",
+    "slowCar": "Önde yavaş araç",
+    "wrongWay": "Ters yöne giden araç",
+    "carOffTrack": "Önde pist dışında araç",
+    "incident": "Önde olay var"
+  },
+  "connection": {
+    "raceClosed": "Bu yarış başlamak üzere. Bir sonrakine yetişebilirsin.",
+    "raceFull": "Bu yarış dolu. Bir sonrakine katıl.",
+    "raceStarted": "Bu yarış sensiz başladı. Bir sonrakine katıl.",
+    "raceTaken": "Bu yarışta zaten başka bir pencerede yer alıyorsun.",
+    "raceBad": "Yarışa katılınamadı. Oyunu yenileyip tekrar dene.",
+    "raceUpdate": "LibreCorsa güncellendi. Yarışa katılmak için sayfayı yenile.",
+    "versionMismatch": "Bu oda LibreCorsa’nın farklı bir sürümünü çalıştırıyor. Odadaki herkesin sayfayı yenilemesi gerekiyor.",
+    "roomServerUnreachable": "Oda sunucusuna ulaşılamadı. Bağlantını kontrol edip tekrar dene veya Gelişmiş altından manuel bağlantı kullan.",
+    "idle": "Bir oda kurup bağlantıyı gönder ya da arkadaşının koduyla katıl.",
+    "openingRoom": "{code} odası açılıyor…",
+    "reconnectingRoom": "{code} odasına yeniden bağlanılıyor…",
+    "roomOpen": "{code} odası açık • oyuncular bekleniyor",
+    "sessionActive": "Bu oturum kimliği odada zaten etkin. Biraz bekleyip yeniden oda kurmayı dene.",
+    "roomOpenElsewhere": "{code} odası başka bir cihazda zaten açık. Yarışmak için Katıl’a bas ya da yeni bir oda kur.",
+    "joiningRoom": "{code} odasına katılınıyor…",
+    "roomNotFound": "{code} odası bulunamadı. Kodu kontrol et ve oda kurucusundan oyunu ekranda açık tutmasını iste.",
+    "playerIdTaken": "Bu oyuncu kimliği odada zaten var. Biraz bekleyip yeniden katılmayı dene.",
+    "roomFull": "{code} odası dolu.",
+    "connectedPlayers": "{count, plural, one {# oyuncuya bağlı} other {# oyuncuya bağlı}}",
+    "peerFailed": "Diğer oyuncuya bağlanılamadı. Tekrar dene veya aynı Wi-Fi ağını kullan.",
+    "peerBlocked": "Bağlanılamadı: ağlarınızdan biri doğrudan bağlantıları engelliyor. Aynı Wi-Fi’yi kullan veya başka bir ağ dene.",
+    "lostHost": "Oda kurucusuyla bağlantı kesildi. Tekrar katıl.",
+    "hostingTabs": "Bu tarayıcının sekmeleri için yarış kuruluyor",
+    "playerLeft": "Oyuncu ayrıldı. Yeniden bağlanmak için yeni bir davet kodu oluştur.",
+    "connected": "Bağlı",
+    "joiningRace": "Sonraki yarışa katılınıyor…",
+    "inNextRace": "Sonraki yarıştasın",
+    "makingOffer": "Davet kodu oluşturuluyor…",
+    "offerReady": "Davet kodu hazır. Diğer oyuncuya gönder, sonra onun yanıt kodunu yapıştır.",
+    "answerReady": "Yanıt kodu hazır. Oda kurucusuna geri gönder.",
+    "answerAccepted": "Yanıt kabul edildi • bağlanılıyor…",
+    "raceServerUnreachable": "Yarış sunucusuna ulaşılamadı. Bağlantını kontrol edip tekrar dene.",
+    "racesOff": "Planlı yarışlar şu anda çalışmıyor.",
+    "raceLost": "Yarışla bağlantı kesildi.",
+    "ready": "Hazır. Bu tarayıcıdaki sekmeler birbirini otomatik bulur; diğer cihazlar oda koduyla katılır."
+  },
+  "downloads": {
+    "windowsSummary": "Harici GPU tercihi, yarış direksiyonları ve DualSense için sessiz WebHID erişimi ve arka plan kısıtlaması olmayan masaüstü uygulaması.",
+    "windowsInstallNote": "SignPath Foundation kurulumu tamamlanana kadar şimdilik imzasız. SmartScreen engellerse Ek bilgi, ardından Yine de çalıştır’a tıkla.",
+    "windowsStatusLabel": "İmzasız",
+    "windowsX64Label": ".exe indir",
+    "windowsX64Detail": "Windows x64 yükleyici",
+    "macosSummary": "Harici GPU tercihi, direksiyonlar ve DualSense için sessiz WebHID erişimi ve arka plan kısıtlaması olmayan masaüstü uygulaması.",
+    "macosInstallNote": "İmzasız derleme. Sistem Ayarları > Gizlilik ve Güvenlik bölümünden izin ver veya Uygulamalar’a kopyaladıktan sonra karantinayı kaldır:",
+    "macosStatusLabel": "İmzasız",
+    "macosArm64Label": "Apple Silicon (.dmg)",
+    "macosArm64Detail": "M1–M4 Mac’ler",
+    "macosX64Label": "Intel (.dmg)",
+    "macosX64Detail": "Intel x64 Mac’ler",
+    "linuxSummary": "Yarış direksiyonları ve DualSense için sessiz WebHID erişimi ve arka plan kısıtlaması olmayan taşınabilir AppImage.",
+    "linuxInstallNote": "AppImage dosyasını çalıştırılabilir yapıp başlat (eski dağıtımlarda FUSE2 / libfuse2 gerekir):",
+    "linuxX64Label": ".AppImage indir",
+    "linuxX64Detail": "Linux x64",
+    "androidSummary": "Kenar kaydırma korumalı tam ekran Trusted Web Activity, Android Game Mode ve başlatıcı kısayolları. Android 7+ ve Chrome gerekir.",
+    "androidInstallNote": "İmzalı sürüm APK’sı. İstendiğinde tarayıcıdan yüklemeye izin ver; librecorsa.org üzerinden doğrulanır ve adres çubuğu olmadan açılır.",
+    "androidStatusLabel": "İmzalı APK",
+    "androidApkLabel": ".apk indir",
+    "androidApkDetail": "Android 7+ (evrensel)"
+  },
+  "loading": {
+    "circuit": "Pist",
+    "car": "Araç",
+    "opponents": "Rakipler",
+    "shaders": "Gölgelendiriciler"
+  },
+  "session": {
+    "wheelDisconnected": "Direksiyon bağlantısı kesildi. Yeniden bağla ya da kalan kontrollerle sürmek için devam et.",
+    "bigJumpStart": "Erken çıkış · grid yerinden çok fazla çıkıldı",
+    "jumpStart": "Erken çıkış",
+    "clutchGearUp": "Vites yükselt",
+    "clutchPaddle": "vites yükseltme kulakçığı"
+  },
+  "driverKey": {
+    "notAKeyFile": "Bu bir pilot anahtarı dosyası değil",
+    "blocked": "Bu tarayıcı kaydetmeyi engelliyor"
+  },
+  "simulator": {
+    "formulaTeamCars": "Formula takım araçları",
+    "lapNoLongerSaved": "Bu tur artık burada kayıtlı değil",
+    "nameNotChanged": "İsim değiştirilemedi",
+    "setupLoadFailed": "{driver} pilotunun araç ayarı yüklenemedi, tekrar dene",
+    "setupMissing": "{driver} pilotunun turunda kayıtlı araç ayarı yok",
+    "setupApplied": "{driver} pilotunun araç ayarı uygulandı ({summary})",
+    "keySaved": "Anahtar kaydedildi. Bu dosyaya sahip herkes senin adına tur gönderebilir.",
+    "noKeyYet": "Henüz anahtar yok: ilk yüklemen anahtarı oluşturur.",
+    "keyImportedFor": "{name} için anahtar içe aktarıldı. Buradan yapılan yüklemeler bunu kullanacak.",
+    "keyImported": "Anahtar içe aktarıldı. Buradan yapılan yüklemeler bunu kullanacak.",
+    "launchWheel": "Kalkış için gaza bas",
+    "launchWheelSeat": "Kalkış için gaza bas · koltuk için kameraya basılı tut",
+    "launchPad": "Kalkış için: {press}",
+    "launchPadSeat": "Kalkış için: {press} · koltuk için {button} tuşuna basılı tut",
+    "launchTouch": "Kalkış için gaza basılı tut",
+    "launchKey": "Kalkış için {key} tuşuna basılı tut · Esc Menü",
+    "noRacesOnHillClimb": "Tırmanma etabında yarış yapılamaz",
+    "backToRaces": "Yarışlara dön"
+  },
+  "telemetryHud": {
+    "menu": "Menü",
+    "calibratePedals": "Pedalları kalibre et",
+    "holdForLightsOut": "Işıklar sönene kadar gaza basılı tut",
+    "mouseSteering": "Fare ile direksiyon · çıkış: {key}",
+    "keyMenu": "Menü",
+    "keyCamera": "Kamera",
+    "keyLine": "Çizgi",
+    "keyRestart": "Yeniden",
+    "keyBoard": "Tablo",
+    "keyLights": "Farlar",
+    "replay": "Tekrar"
+  },
+  "trackGate": {
+    "safeStart": "GPU sıfırlaması sonrası güvenli başlangıç etkin.",
+    "graphicsLow": "GPU sıfırlaması sonrası grafikler Düşük olarak ayarlandı.",
+    "loadFailedStaying": "Pist yüklenemedi. {circuit} pistinde kalınıyor.",
+    "loadFailedDefault": "Pist yüklenemedi. {circuit} yüklendi."
+  },
+  "minimap": {
+    "map": "Pist haritası",
+    "mapAtTurn": "Pist haritası; {turn}. virajdasın",
+    "facts": "{country} · {length} {unit} · {turns, plural, one {# viraj} other {# viraj}}",
+    "sector": "Sektör {sector}",
+    "elevation": "Yükselti",
+    "altitude": "Rakım {height}",
+    "grade": "Eğim %{grade}",
+    "profileStart": "Başlangıç {height}",
+    "profileStartFinish": "S/F {height}"
+  },
+  "source": {
+    "sourceOf": "{title} kaynağı",
+    "source": "Kaynak",
+    "reportIssue": "Sorun bildir"
+  },
+  "playError": {
+    "title": "Simülatör durdu",
+    "body": "WebGL veya fizik motoru başlatılamadı. Tarayıcını veya ekran kartı sürücünü güncellemek ya da donanım hızlandırmayı açmak genellikle sorunu çözer.",
+    "detail": "Hata ayrıntısı",
+    "restart": "Simülatörü yeniden başlat"
+  },
+  "dash": {
+    "yellowFlag": "Sarı bayrak"
+  }
+}

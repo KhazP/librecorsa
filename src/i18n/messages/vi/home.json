@@ -1,0 +1,221 @@
+{
+  "notice": {
+    "back": "Về trang chủ",
+    "notFound": {
+      "title": "Không tìm thấy trang",
+      "body": "Không có nội dung tại địa chỉ này. Liên kết có thể đã cũ hoặc bị nhập sai."
+    },
+    "error": {
+      "title": "Đã xảy ra sự cố",
+      "body": "Trang này đã dừng do gặp lỗi."
+    }
+  },
+  "hub": {
+    "tabs": {
+      "home": "Trang chủ",
+      "circuits": "Đường đua",
+      "cars": "Xe",
+      "laps": "Thành tích vòng",
+      "whatsNew": "Có gì mới",
+      "download": "Tải xuống",
+      "about": "Giới thiệu"
+    },
+    "unread": "(có cập nhật chưa đọc)",
+    "sections": "Các mục",
+    "skip": "Chuyển đến nội dung chính",
+    "heading": "LibreCorsa: game mô phỏng đua xe miễn phí, mã nguồn mở ngay trên trình duyệt",
+    "drive": "Lái xe",
+    "prompts": {
+      "move": "Di chuyển",
+      "select": "Chọn",
+      "back": "Quay lại",
+      "switchSection": "Chuyển mục",
+      "page": "Trang thành tích vòng",
+      "drive": "Lái xe"
+    },
+    "length": "{distance} {unit}, {turns, plural, other {# khúc cua}}",
+    "classYear": "{class}, {year}",
+    "footer": "{venue}, {car}",
+    "driveTile": {
+      "label": "Lái xe: {venue}, {layout}, trên chiếc {car}",
+      "title": "Lái xe",
+      "detail": "{venue}, {layout}. {car}."
+    },
+    "circuitTile": {
+      "label": "Đổi đường đua: {venue}, {layout}",
+      "more": "Đổi đường đua",
+      "map": "Bản đồ {venue}, {layout}",
+      "onLine": "trên đường chạy lý tưởng"
+    },
+    "carTile": {
+      "label": "Đổi xe: {car}",
+      "more": "Đổi xe"
+    },
+    "press": {
+      "title": "Báo chí & truyền thông",
+      "label": "Báo chí & truyền thông: {count, plural, other {{n} bài viết và video}}, cùng bộ tài liệu báo chí",
+      "count": "{count, plural, other {{n} bài viết & video}}",
+      "onPlatform": "{outlet} trên {platform}",
+      "more": "Bài đưa tin và bộ tài liệu báo chí"
+    },
+    "whatsNew": {
+      "intro": "Ghi chú bản vá và các cập nhật gần đây.",
+      "commitLog": "Nhật ký commit trên GitHub",
+      "empty": "Chưa có ghi chú bản vá nào.",
+      "commits": "{count, plural, other {# commit}}"
+    },
+    "filterOption": "{option} ({count})",
+    "clearFilters": "Xóa bộ lọc",
+    "venueFilters": {
+      "type": {
+        "label": "Loại",
+        "all": "Tất cả loại"
+      },
+      "country": {
+        "label": "Địa điểm",
+        "all": "Tất cả địa điểm"
+      },
+      "modder": {
+        "label": "Tác giả mod",
+        "all": "Tất cả tác giả mod"
+      }
+    },
+    "carFilters": {
+      "class": {
+        "label": "Hạng xe",
+        "all": "Tất cả hạng xe"
+      },
+      "physics": {
+        "label": "Vật lý",
+        "all": "Mọi mô hình vật lý"
+      },
+      "modder": {
+        "label": "Tác giả mod",
+        "all": "Tất cả tác giả mod"
+      }
+    },
+    "circuits": {
+      "filter": "Lọc đường đua",
+      "shown": "{shown} trên {total} đường đua",
+      "empty": "Không có đường đua nào khớp với bộ lọc này.",
+      "personalBest": "Kỷ lục cá nhân",
+      "oldPhysics": "Vật lý cũ",
+      "carOldPhysics": "{car} · Cũ"
+    },
+    "cars": {
+      "filter": "Lọc xe",
+      "shown": "{shown} trên {total} xe",
+      "empty": "Không có xe nào khớp với bộ lọc này."
+    },
+    "about": {
+      "lead": "Game mô phỏng đua xe trên trình duyệt miễn phí, mã nguồn mở.",
+      "addMod": "Đóng góp bản mod của bạn",
+      "addModText": "Bạn có bản mod xe hoặc đường đua muốn đưa vào LibreCorsa? Hãy gửi email cho tôi tại <mail>{email}</mail> kèm liên kết. Mọi tác giả mod đều được ghi tên trong game.",
+      "modders": "Các tác giả mod",
+      "moddersText": "Các đường đua và xe là công sức của họ, được sử dụng với sự cho phép. Nếu bạn thích mẫu nào, bạn có thể cảm ơn trực tiếp tác giả.",
+      "links": {
+        "download": "Tải ứng dụng",
+        "press": "Toàn bộ bài đưa tin và bộ tài liệu báo chí",
+        "docs": "Tài liệu",
+        "privacy": "Quyền riêng tư",
+        "support": "Ủng hộ nhà phát triển"
+      }
+    },
+    "facts": {
+      "physics": {
+        "label": "Vật lý",
+        "text": "Mô phỏng 500 lần mỗi giây, có nhiệt độ lốp, khí động học chủ động và động cơ hybrid"
+      },
+      "racing": {
+        "label": "Chế độ đua",
+        "text": "Đua tính giờ, đua với AI, phòng chơi mạng và bảng xếp hạng vòng trực tuyến"
+      },
+      "controls": {
+        "label": "Điều khiển",
+        "text": "Bàn phím, tay cầm, cảm ứng hoặc vô lăng phản hồi lực"
+      },
+      "platforms": {
+        "label": "Nền tảng",
+        "text": "Mọi trình duyệt hiện đại: máy tính, điện thoại hoặc máy tính bảng"
+      },
+      "conditions": {
+        "label": "Điều kiện",
+        "text": "Tự do chọn thời tiết và thời gian trong ngày"
+      },
+      "price": {
+        "label": "Chi phí",
+        "text": "Miễn phí. Không tài khoản, không quảng cáo; ủng hộ hoàn toàn tự nguyện và không mở khóa tính năng nào"
+      }
+    }
+  },
+  "lapTimes": {
+    "loading": "Đang tải thành tích vòng…",
+    "offline": "Bảng thành tích vòng hiện đang ngoại tuyến.",
+    "unreachable": "Không thể kết nối bảng xếp hạng. Đang thử lại…"
+  },
+  "boards": {
+    "board": "Bảng xếp hạng",
+    "allLaps": "Tất cả vòng",
+    "challenge": "Thử thách tuần",
+    "hallOfFame": "Đại sảnh Danh vọng",
+    "lapTimesTitle": "Thành tích vòng",
+    "challengeTitle": "Thử thách tuần",
+    "week": "Tuần",
+    "thisWeek": "Tuần này · {circuit}",
+    "pastWeek": "{dates} · {circuit}",
+    "timeLeft": "Còn {timeLeft}",
+    "ran": "Diễn ra {dates}",
+    "rules": "Quy tắc",
+    "emptyThisWeek": "Chưa có thành tích nào trong tuần này.",
+    "emptyPastWeek": "Không có thành tích nào được ghi nhận cho tuần này."
+  },
+  "layoutPicker": {
+    "chosen": "Bố cục {venue}: {layout} ({index} trên {count})",
+    "closed": "{venue}: {count, plural, other {# bố cục}}",
+    "count": "{count, plural, other {# bố cục}}",
+    "list": "Các bố cục {venue}"
+  },
+  "liveryPicker": {
+    "custom": "Sơn tùy chỉnh",
+    "chosen": "Màu sơn {car}: {livery} ({index} trên {count})",
+    "chosenCustom": "Màu sơn {car}: Sơn tùy chỉnh ({count, plural, other {# mẫu có sẵn}})",
+    "closed": "{car}: {count, plural, other {# màu sơn}}",
+    "count": "{count, plural, other {# màu sơn}}",
+    "list": "Các màu sơn {car}"
+  },
+  "downloads": {
+    "intro": "Ứng dụng gói gọn tùy chọn cho Windows, macOS, Linux và Android. Mở trực tiếp librecorsa.org nên mọi bản cập nhật sẽ có ngay mà không cần cài lại.",
+    "directLink": "Liên kết trực tiếp",
+    "platforms": "Nền tảng",
+    "thisDevice": "Thiết bị này",
+    "installed": "Đã cài đặt",
+    "artifact": "{label} — {platform} ({detail})",
+    "artifactSized": "{label} — {platform} ({detail}, {size})",
+    "detailSized": "{detail}, {size}",
+    "detailPending": "{detail} (sẽ phát hành ở bản tiếp theo)",
+    "installCommand": "Lệnh cài đặt trên {platform}",
+    "whyInstall": "Vì sao nên cài ứng dụng",
+    "highlights": {
+      "desktop": {
+        "label": "Máy tính",
+        "text": "Ưu tiên dùng GPU rời trên laptop đa GPU, tự động cấp quyền WebHID cho vô lăng đua và DualSense, tắt giới hạn khi chạy nền và kiểm tra bản cập nhật từ GitHub Releases."
+      },
+      "android": {
+        "label": "Android",
+        "text": "Toàn màn hình Trusted Web Activity không thanh địa chỉ, vuốt cạnh ẩn thanh điều hướng, Android Game Mode và lối tắt Lái xe / Bảng xếp hạng."
+      },
+      "current": {
+        "label": "Luôn mới nhất",
+        "text": "Mọi ứng dụng đều mở trực tiếp librecorsa.org thay vì đóng gói đường đua hay xe, nên bản cập nhật vật lý, đường đua và chơi mạng có ngay lập tức."
+      },
+      "browser": {
+        "label": "Trình duyệt & iOS",
+        "text": "Không cần cài đặt nếu bạn thích chơi ngay trên thẻ trình duyệt. Trên iPhone và iPad, dùng mục Chia sẻ > Thêm vào Màn hình chính của Safari."
+      }
+    },
+    "buildsTitle": "Bản dựng & chữ ký số",
+    "builds": "Mọi trình cài đặt và tệp APK đều được dựng từ mã nguồn kho lưu trữ này qua GitHub Actions và phát hành trên GitHub Releases kèm mã băm SHA-256. Chữ ký số Windows miễn phí qua SignPath Foundation đang được thiết lập; bản dựng macOS hiện chưa ký số; tệp APK Android được ký bằng khóa tải lên xác thực qua <code>{file}</code>.",
+    "allReleases": "Tất cả bản phát hành trên GitHub",
+    "signingPolicy": "Chính sách ký mã số"
+  }
+}

@@ -6,6 +6,7 @@
  * driven with (assists, realism, dry or wet, and the input: keyboard, controller, wheel or touch). The board can be narrowed to laps of one kind ("no assists").
  * Only the LapRecording and the driver key are ever sent; answers are validated before use.
  */
+import { text as t } from "@/lib/text";
 import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
 import { listBestLaps } from "@/lib/sim/ghost-store";
 import { lapPlausibilityProblem } from "@/lib/sim/lap-plausibility";
@@ -393,20 +394,20 @@ export async function renameOnBoard(from: string, to: string, code?: string): Pr
   const url = onlineUrl("/drivers/rename");
   if (!url) return { ok: true };
   const online = await readOnlineConfig({ fresh: true });
-  if (online.reach === "unreachable") return { ok: false, error: "Couldn't reach the online board. Try again in a moment" };
+  if (online.reach === "unreachable") return { ok: false, error: t("game.board.renameUnreachable") };
   if (!online.config.board) return { ok: true };
   const body = JSON.stringify({ from, to, ...(code ? { code } : {}), driverKey: getOrCreateDriverKey() });
   const res = await requestJson(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
   if (!res) {
     markOnlineUnreachable();
-    return { ok: false, error: "Couldn't reach the online board. Try again in a moment" };
+    return { ok: false, error: t("game.board.renameUnreachable") };
   }
   markOnlineAnswered();
   const answer: Record<string, unknown> = isRecord(res.body) ? res.body : {};
   if (res.status >= 200 && res.status < 300 && answer.ok === true) return { ok: true };
   return {
     ok: false,
-    error: cappedString(answer.error, MAX_ERROR_LENGTH) ?? `The name could not be changed (HTTP ${res.status})`,
+    error: cappedString(answer.error, MAX_ERROR_LENGTH) ?? t("game.board.renameFailed", { status: String(res.status) }),
     taken: answer.taken === true,
   };
 }

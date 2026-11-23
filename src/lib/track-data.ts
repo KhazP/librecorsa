@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { text as tx } from "@/lib/text";
 import {
   CustomLiveryColors,
   LiveryCategory,
@@ -952,8 +953,8 @@ export const LIVERIES: LiveryConfig[] = [
 
 export const LIVERY_CATEGORY_LABELS: Readonly<Record<Exclude<LiveryCategory, "custom">, string>> = {
   house: "LibreCorsa",
-  grid2026: "2026 Grid",
-  retro: "Retro",
+  get grid2026() { return tx("game.livery.grid2026"); },
+  get retro() { return tx("game.livery.retro"); },
 };
 
 export const DEFAULT_CUSTOM_LIVERY: Readonly<CustomLiveryColors> = {
@@ -964,18 +965,18 @@ export const DEFAULT_CUSTOM_LIVERY: Readonly<CustomLiveryColors> = {
 
 /** Curated motorsport swatches for controller / keyboard custom livery picking alongside the native colour input */
 export const CUSTOM_LIVERY_PALETTE: readonly { hex: string; name: string }[] = [
-  { hex: "#eef2f6", name: "Chalk" },
-  { hex: "#141820", name: "Carbon" },
-  { hex: "#b4b9c0", name: "Alloy" },
-  { hex: "#dc0000", name: "Vermilion" },
-  { hex: "#ff7a00", name: "Papaya" },
-  { hex: "#f0b429", name: "Gold" },
-  { hex: "#cedc00", name: "Volt" },
-  { hex: "#0d6e4f", name: "Emerald" },
-  { hex: "#00c8ff", name: "Cyan" },
-  { hex: "#1d4ed8", name: "Cobalt" },
-  { hex: "#1c2e6b", name: "Indigo" },
-  { hex: "#ff4d94", name: "Magenta" },
+  { hex: "#eef2f6", get name() { return tx("game.livery.colourChalk"); } },
+  { hex: "#141820", get name() { return tx("game.livery.colourCarbon"); } },
+  { hex: "#b4b9c0", get name() { return tx("game.livery.colourAlloy"); } },
+  { hex: "#dc0000", get name() { return tx("game.livery.colourVermilion"); } },
+  { hex: "#ff7a00", get name() { return tx("game.livery.colourPapaya"); } },
+  { hex: "#f0b429", get name() { return tx("game.livery.colourGold"); } },
+  { hex: "#cedc00", get name() { return tx("game.livery.colourVolt"); } },
+  { hex: "#0d6e4f", get name() { return tx("game.livery.colourEmerald"); } },
+  { hex: "#00c8ff", get name() { return tx("game.livery.colourCyan"); } },
+  { hex: "#1d4ed8", get name() { return tx("game.livery.colourCobalt"); } },
+  { hex: "#1c2e6b", get name() { return tx("game.livery.colourIndigo"); } },
+  { hex: "#ff4d94", get name() { return tx("game.livery.colourMagenta"); } },
 ];
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;

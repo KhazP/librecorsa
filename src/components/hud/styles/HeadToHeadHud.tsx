@@ -17,7 +17,8 @@
  * fuel-to-add margins (no pit stops), the welcome pages.
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CarTelemetry, RaceStandingEntry } from "@/types/f1";
 import { Icon } from "@/components/ui/icons/Icon";
 import type { IconName } from "@/components/ui/icons/registry";
@@ -34,9 +35,59 @@ import {
   SURFACE_WORD,
   trackSurfaceState,
 } from "../third-party-data";
-import { anchor, gearLabel, type HudDesignProps } from "./hud-style-parts";
+import { anchor, formatOnce, gearLabel, type HudDesignProps } from "./hud-style-parts";
 import { revLights, useFuelPerLap } from "./third-party-parts";
 import palette from "./h2h.module.css";
+
+/** The Head to Head layout's words in the current language, resolved once per language */
+function useH2hWords() {
+  const tx = useTranslations("hudStyles.h2h");
+  return useMemo(
+    () => ({
+      notAvailable: tx("notAvailable"),
+      best: tx("best"),
+      last: tx("last"),
+      gap: tx("gap"),
+      deltaLap: tx("deltaLap"),
+      raceLeader: tx("raceLeader"),
+      lastPlace: tx("lastPlace"),
+      you: tx("you"),
+      lapPlace: formatOnce((lap: number) => tx("lapPlace", { lap: String(lap) })),
+      runningLap: tx("runningLap"),
+      runningInvalid: tx("runningInvalid"),
+      delta: tx("delta"),
+      brakeBias: tx("brakeBias"),
+      fuel: tx("fuel"),
+      aidOff: tx("aidOff"),
+      gear: tx("gear"),
+      car: tx("car"),
+      fuelPanel: tx("fuelPanel"),
+      fuelLevel: tx("fuelLevel"),
+      remaining: tx("remaining"),
+      perLap: tx("perLap"),
+      laps: tx("laps"),
+      atFlag: tx("atFlag"),
+      alongside: formatOnce((side: "both" | "left" | "right") => tx("alongside", { side })),
+      left: tx("left"),
+      right: tx("right"),
+      weather: tx("weather"),
+      air: tx("air"),
+      track: tx("track"),
+      surface: tx("surface"),
+      rain: tx("rain"),
+      time: tx("time"),
+      timeFixed: tx("timeFixed"),
+      lights: tx("lights"),
+      liveDelta: tx("liveDelta"),
+      barInvalid: tx("barInvalid"),
+      barDelta: tx("barDelta"),
+      headToHead: tx("headToHead"),
+      lapCard: tx("lapCard"),
+    }),
+    [tx],
+  );
+}
+type H2hWords = ReturnType<typeof useH2hWords>;
 
 /* ---- The source's number formats */
 
@@ -50,18 +101,18 @@ function lapTime(ms: number | null | undefined): string {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}.${String(milli).padStart(3, "0")}`;
 }
 
-/** A gap: seconds to a tenth, a lap time over a minute, whole laps when a lap or more */
-function gapText(gapS: number | null, lapS: number): string {
-  if (gapS === null || !Number.isFinite(gapS)) return "N/A";
+/** A gap: seconds to a tenth, a lap time over a minute, whole laps when a lap or more (`none` without one) */
+function gapText(gapS: number | null, lapS: number, none: string): string {
+  if (gapS === null || !Number.isFinite(gapS)) return none;
   const g = Math.abs(gapS);
   if (g >= lapS) return `${Math.floor(g / lapS)}L`;
   if (g > 60) return lapTime(g * 1000);
   return `${g.toFixed(1)}s`;
 }
 
-/** A lap-time difference, signed to the hundredth ("−0.66s"): − is the player quicker */
-function deltaText(d: number | null): string {
-  if (d === null || !Number.isFinite(d)) return "N/A";
+/** A lap-time difference, signed to the hundredth ("−0.66s"): − is the player quicker (`none` without one) */
+function deltaText(d: number | null, none: string): string {
+  if (d === null || !Number.isFinite(d)) return none;
   const sign = d > 0 ? "+" : d < 0 ? "−" : "";
   return `${sign}${Math.abs(d).toFixed(2)}s`;
 }
@@ -121,12 +172,13 @@ const Stat: React.FC<{
 );
 
 /** Name and place on the left, best and last lap on the right (the source's driver grid) */
-const DriverInfo: React.FC<{ name: string; place: string; bestMs: number | null | undefined; lastMs: number | null | undefined }> = ({
-  name,
-  place,
-  bestMs,
-  lastMs,
-}) => {
+const DriverInfo: React.FC<{
+  name: string;
+  place: string;
+  bestMs: number | null | undefined;
+  lastMs: number | null | undefined;
+  w: H2hWords;
+}> = ({ name, place, bestMs, lastMs, w }) => {
   const bestPulse = usePulse(bestMs);
   const lastPulse = usePulse(lastMs);
   return (
@@ -134,22 +186,22 @@ const DriverInfo: React.FC<{ name: string; place: string; bestMs: number | null 
       <span className="flex min-w-0 items-center pl-2.5 text-[14px] leading-none font-bold xl:pl-3.5 xl:text-[19px] text-(--tp-white)">
         <span className="truncate">{name}</span>
       </span>
-      <Stat value={lapTime(bestMs)} caption="Best" pulse={bestPulse} className="row-span-2" />
-      <Stat value={lapTime(lastMs)} caption="Last" pulse={lastPulse} className="row-span-2" />
+      <Stat value={lapTime(bestMs)} caption={w.best} pulse={bestPulse} className="row-span-2" />
+      <Stat value={lapTime(lastMs)} caption={w.last} pulse={lastPulse} className="row-span-2" />
       <span className="flex items-center pl-2.5 text-[13px] leading-none font-bold xl:pl-3.5 xl:text-[17px] text-(--tp-white)">{place}</span>
     </div>
   );
 };
 
 /** The gap to a neighbour (under the best lap) and the last-lap delta to it (under the last lap) */
-const GapRow: React.FC<{ gapS: number | null; deltaS: number | null; lapS: number }> = ({ gapS, deltaS, lapS }) => {
+const GapRow: React.FC<{ gapS: number | null; deltaS: number | null; lapS: number; w: H2hWords }> = ({ gapS, deltaS, lapS, w }) => {
   const deltaPulse = usePulse(deltaS === null ? null : String(Math.round(deltaS * 1000)));
   return (
     <div className={`grid h-full ${COLS}`}>
       <span />
-      <Stat value={gapText(gapS, lapS)} caption="Gap" color={gapS === null ? "var(--tp-dim)" : "var(--tp-yellow)"} align="end" />
+      <Stat value={gapText(gapS, lapS, w.notAvailable)} caption={w.gap} color={gapS === null ? "var(--tp-dim)" : "var(--tp-yellow)"} align="end" />
       <span className={deltaPulse ? "animate-pulse" : undefined}>
-        <Stat value={deltaText(deltaS)} caption="Delta lap" color={deltaColor(deltaS)} className="h-full" />
+        <Stat value={deltaText(deltaS, w.notAvailable)} caption={w.deltaLap} color={deltaColor(deltaS)} className="h-full" />
       </span>
     </div>
   );
@@ -170,7 +222,7 @@ const CARD = "h-13 border-(--tp-border) bg-(--tp-card-a) xl:h-16";
 const COLS = "grid-cols-[minmax(0,1fr)_5rem_5rem] xl:grid-cols-[minmax(0,1fr)_7.75rem_7.75rem]";
 
 /** The race: the car ahead, the player's band between its gaps, the car behind */
-const RaceStack: React.FC<{ t: CarTelemetry }> = ({ t }) => {
+const RaceStack: React.FC<{ t: CarTelemetry; w: H2hWords }> = ({ t, w }) => {
   const standings = t.race?.standings ?? [];
   const i = standings.findIndex((e) => e.isPlayer);
   const me = i >= 0 ? standings[i] : null;
@@ -193,21 +245,21 @@ const RaceStack: React.FC<{ t: CarTelemetry }> = ({ t }) => {
     <>
       <div className={`${CARD} border-b`}>
         {ahead ? (
-          <DriverInfo key={aheadKey} name={shortName(ahead)} place={`P${i}`} bestMs={ahead.bestLapMs} lastMs={ahead.lastLapMs} />
+          <DriverInfo key={aheadKey} name={shortName(ahead)} place={`P${i}`} bestMs={ahead.bestLapMs} lastMs={ahead.lastLapMs} w={w} />
         ) : (
-          <Placeholder>Race leader</Placeholder>
+          <Placeholder>{w.raceLeader}</Placeholder>
         )}
       </div>
       <div className="grid h-28 grid-rows-[1fr_2fr_1fr] xl:h-34 border-y border-(--tp-border-player) bg-(--tp-player-a) py-1">
-        <GapRow key={aheadKey} gapS={gapAhead} deltaS={ahead ? lapDelta(myLast, ahead.lastLapMs) : null} lapS={lapS} />
-        <DriverInfo key="me" name={me ? shortName(me) : "You"} place={`P${t.race?.position ?? i + 1}`} bestMs={myBest} lastMs={myLast} />
-        <GapRow key={behindKey} gapS={gapBehind} deltaS={behind ? lapDelta(myLast, behind.lastLapMs) : null} lapS={lapS} />
+        <GapRow key={aheadKey} gapS={gapAhead} deltaS={ahead ? lapDelta(myLast, ahead.lastLapMs) : null} lapS={lapS} w={w} />
+        <DriverInfo key="me" name={me ? shortName(me) : w.you} place={`P${t.race?.position ?? i + 1}`} bestMs={myBest} lastMs={myLast} w={w} />
+        <GapRow key={behindKey} gapS={gapBehind} deltaS={behind ? lapDelta(myLast, behind.lastLapMs) : null} lapS={lapS} w={w} />
       </div>
       <div className={`${CARD} border-t`}>
         {behind ? (
-          <DriverInfo key={behindKey} name={shortName(behind)} place={`P${i + 2}`} bestMs={behind.bestLapMs} lastMs={behind.lastLapMs} />
+          <DriverInfo key={behindKey} name={shortName(behind)} place={`P${i + 2}`} bestMs={behind.bestLapMs} lastMs={behind.lastLapMs} w={w} />
         ) : (
-          <Placeholder>Last place</Placeholder>
+          <Placeholder>{w.lastPlace}</Placeholder>
         )}
       </div>
     </>
@@ -215,21 +267,21 @@ const RaceStack: React.FC<{ t: CarTelemetry }> = ({ t }) => {
 };
 
 /** Practice: the player's band alone, with the running lap and the live delta to the best lap */
-const PracticeBand: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid: boolean }> = ({ t, deltaS, lapInvalid }) => {
+const PracticeBand: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid: boolean; w: H2hWords }> = ({ t, deltaS, lapInvalid, w }) => {
   // Not held at ±99.99: "+123.40s" fits the column a lap time ("--:--.---") fits
   const deltaShown = deltaS !== null && Number.isFinite(deltaS) ? deltaS : null;
   return (
     <div className="grid h-22 grid-rows-[2fr_1fr] xl:h-26 border-y border-(--tp-border-player) bg-(--tp-player-a) py-1">
-      <DriverInfo name="You" place={`Lap ${Math.max(1, t.lapCount)}`} bestMs={t.bestLapTimeMs} lastMs={t.lastLapTimeMs} />
+      <DriverInfo name={w.you} place={w.lapPlace(Math.max(1, t.lapCount))} bestMs={t.bestLapTimeMs} lastMs={t.lastLapTimeMs} w={w} />
       <div className={`grid h-full ${COLS}`}>
         <span />
         <Stat
           value={t.outLap ? "00:00.000" : lapTime(t.currentLapTimeMs)}
-          caption={lapInvalid ? "Invalid" : "Lap"}
+          caption={lapInvalid ? w.runningInvalid : w.runningLap}
           color={lapInvalid ? HUD_LOSS : undefined}
           align="end"
         />
-        <Stat value={deltaText(deltaShown)} caption="Delta" color={deltaColor(deltaShown)} />
+        <Stat value={deltaText(deltaShown, w.notAvailable)} caption={w.delta} color={deltaColor(deltaShown)} />
       </div>
     </div>
   );
@@ -290,16 +342,17 @@ const CarCells: React.FC<{ t: CarTelemetry; revRange: [number, number]; fuelPerL
   const showAero = t.overtakingRules !== undefined && t.overtakingRules !== "none";
   const revs = revLights(t.rpm, revRange, REV_LIGHTS);
   const lapsLeft = fuelLapsLeft(t.fuelKg, fuelPerLap);
+  const w = useH2hWords();
 
   const left: Cell[] = tuner
     ? [
-        { key: "abs", label: "ABS", icon: "abs", value: tuner.absLevel > 0 ? tuner.absLevel : "OFF", tone: "red", active: aids.abs },
-        { key: "bb", label: "BB", icon: "brake", value: `${tuner.brakeBiasPct.toFixed(1)}%`, tone: "white" },
+        { key: "abs", label: "ABS", icon: "abs", value: tuner.absLevel > 0 ? tuner.absLevel : w.aidOff, tone: "red", active: aids.abs },
+        { key: "bb", label: w.brakeBias, icon: "brake", value: `${tuner.brakeBiasPct.toFixed(1)}%`, tone: "white" },
       ]
     : [];
   const right: Cell[] = [
     ...(tuner
-      ? [{ key: "tc", label: "TC", icon: "tractionControl", value: tuner.tcLevel > 0 ? tuner.tcLevel : "OFF", tone: "blue", active: aids.tc } satisfies Cell]
+      ? [{ key: "tc", label: "TC", icon: "tractionControl", value: tuner.tcLevel > 0 ? tuner.tcLevel : w.aidOff, tone: "blue", active: aids.tc } satisfies Cell]
       : []),
     // The source's pit limiter cell: the battery on a hybrid, the fuel on a car that burns it (lit and pulsing under
     // two laps left, as the limiter's cell is while it is on)
@@ -309,7 +362,7 @@ const CarCells: React.FC<{ t: CarTelemetry; revRange: [number, number]; fuelPerL
         ? [
             {
               key: "fuel",
-              label: "Fuel",
+              label: w.fuel,
               icon: "fuel",
               value: (
                 <>
@@ -326,7 +379,7 @@ const CarCells: React.FC<{ t: CarTelemetry; revRange: [number, number]; fuelPerL
   ];
 
   return (
-    <section aria-label="Car" className="w-fit border border-(--tp-border) bg-(--tp-bg-a)">
+    <section aria-label={w.car} className="w-fit border border-(--tp-border) bg-(--tp-bg-a)">
       {/* Rev lights: green, yellow, red, then all in the shift colour at the shift point */}
       <div className="flex gap-0.75 px-2 pt-2 pb-1" aria-hidden>
         {Array.from({ length: REV_LIGHTS }, (_, i) => (
@@ -346,7 +399,7 @@ const CarCells: React.FC<{ t: CarTelemetry; revRange: [number, number]; fuelPerL
           className="grid w-34 place-items-center content-center gap-1 border border-(--tp-border) text-(--tp-white)"
           style={revs.atShift ? { color: HUD_SHIFT } : undefined}
         >
-          <span className="text-[13px] leading-none font-bold tracking-[0.25em] uppercase">Gear</span>
+          <span className="text-[13px] leading-none font-bold tracking-[0.25em] uppercase">{w.gear}</span>
           <span className="text-[56px] leading-[0.9] font-black">{gearLabel(t.gear)}</span>
           <span className="flex items-baseline gap-1 text-(--tp-white)">
             <span className="text-[22px] leading-none font-black">{formatSpeed(t.speedKmh, units)}</span>
@@ -397,36 +450,37 @@ const FuelPanel: React.FC<{ t: CarTelemetry; fuelPerLap: number | null }> = ({ t
   const lapsToGo = race?.totalLaps ? Math.max(0, race.totalLaps - race.lap + 1) : null;
   // Fuel left at the flag at the measured use: what the source's margins add up to without a pit stop
   const atFlag = lapsToGo !== null && fuelPerLap !== null ? t.fuelKg - lapsToGo * fuelPerLap : null;
+  const w = useH2hWords();
   return (
-    <section aria-label="Fuel" className="w-72 border border-(--tp-border) bg-(--tp-bg-a) text-(--tp-white)">
+    <section aria-label={w.fuelPanel} className="w-72 border border-(--tp-border) bg-(--tp-bg-a) text-(--tp-white)">
       <div className="grid grid-cols-2 border-b border-(--tp-border) bg-(--tp-bg-a)">
         <div className="grid justify-items-center gap-1.5 px-2 py-2.5">
-          <Head icon="fuel">Fuel level</Head>
+          <Head icon="fuel">{w.fuelLevel}</Head>
           <span className="text-[26px] leading-none font-black">
             {t.fuelKg.toFixed(1)}
             <Unit>kg</Unit>
           </span>
         </div>
         <div className="grid justify-items-center gap-1.5 px-2 py-2.5">
-          <Head icon="time">Remaining</Head>
+          <Head icon="time">{w.remaining}</Head>
           <span className="text-[18px] leading-none font-bold">{remainingS !== null ? clock(remainingS) : "--:--:--"}</span>
         </div>
       </div>
       <div className={`grid ${atFlag !== null ? "grid-cols-3" : "grid-cols-2"} bg-(--tp-card-a)`}>
         <div className="grid justify-items-center gap-1.5 px-2 py-2.5">
-          <Head icon="restart">Per lap</Head>
+          <Head icon="restart">{w.perLap}</Head>
           <span className="text-[20px] leading-none font-black">
             {fuelPerLap !== null ? fuelPerLap.toFixed(2) : "-.--"}
             <Unit>kg</Unit>
           </span>
         </div>
         <div className="grid justify-items-center gap-1.5 px-2 py-2.5">
-          <Head icon="flyingLap">Laps</Head>
+          <Head icon="flyingLap">{w.laps}</Head>
           <span className="text-[20px] leading-none font-black">{lapsLeft !== null ? lapsLeft.toFixed(1) : "-.-"}</span>
         </div>
         {atFlag !== null ? (
           <div className="grid justify-items-center gap-1.5 px-2 py-2.5">
-            <Head icon="chequered">At flag</Head>
+            <Head icon="chequered">{w.atFlag}</Head>
             <span className="text-[20px] leading-none font-black" style={{ color: atFlag >= 0 ? HUD_GAIN : HUD_LOSS }}>
               {atFlag >= 0 ? "" : "−"}
               {Math.abs(atFlag).toFixed(1)}
@@ -480,17 +534,18 @@ const SpotterSide: React.FC<{ label: string; seg: [number, number] | null }> = (
 
 /** Left and right overlap bars, only while a car is alongside */
 const Spotter: React.FC<{ t: CarTelemetry; top?: number }> = ({ t, top }) => {
+  const w = useH2hWords();
   const { left, right } = spotterSides(t);
   if (!left && !right) return null;
   return (
     <div
       role="status"
-      aria-label={`Car alongside on the ${left && right ? "left and right" : left ? "left" : "right"}`}
+      aria-label={w.alongside(left && right ? "both" : left ? "left" : "right")}
       className={`absolute left-1/2 flex -translate-x-1/2 gap-[min(46vw,560px)] ${top === undefined ? "top-[18%]" : ""}`}
       style={top === undefined ? undefined : { top }}
     >
-      <SpotterSide label="Left" seg={left} />
-      <SpotterSide label="Right" seg={right} />
+      <SpotterSide label={w.left} seg={left} />
+      <SpotterSide label={w.right} seg={right} />
     </div>
   );
 };
@@ -502,21 +557,22 @@ const WeatherCard: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
   const surface = trackSurfaceState(weather.waterMm);
   const rainIcon = weather.rain > 0.5 ? "weatherStorm" : weather.rain > 0.05 ? "weatherRain" : "weatherClear";
   const lights = headlightState(weather);
+  const w = useH2hWords();
   return (
-    <section aria-label="Weather" className="w-[236px] border border-(--tp-border) bg-(--tp-bg-a) text-(--tp-white)">
+    <section aria-label={w.weather} className="w-[236px] border border-(--tp-border) bg-(--tp-bg-a) text-(--tp-white)">
       <div className="grid grid-cols-2 border-b border-(--tp-border)">
         <div className="grid justify-items-center gap-1 px-2 py-2">
-          <Head icon={rainIcon}>Air</Head>
+          <Head icon={rainIcon}>{w.air}</Head>
           <span className="text-[16px] leading-none font-bold">{formatTemp(weather.airC, units)}</span>
         </div>
         <div className="grid justify-items-center gap-1 border-l border-(--tp-border) px-2 py-2">
-          <Head icon="conditions">Track</Head>
+          <Head icon="conditions">{w.track}</Head>
           <span className="text-[16px] leading-none font-bold">{formatTemp(weather.trackC, units)}</span>
         </div>
       </div>
       <div className={`grid ${lights ? "grid-cols-3" : "grid-cols-2"} bg-(--tp-card-a)`}>
         <div className="grid justify-items-center gap-1 px-2 py-1.5">
-          <span className="text-[10px] leading-none tracking-[0.15em] text-(--tp-dim) uppercase">Surface</span>
+          <span className="text-[10px] leading-none tracking-[0.15em] text-(--tp-dim) uppercase">{w.surface}</span>
           <span
             className="text-[12px] leading-none font-bold uppercase"
             style={{ color: surface === "dry" ? "var(--tp-white)" : surface === "damp" ? "var(--tp-yellow)" : HUD_INFO }}
@@ -526,15 +582,15 @@ const WeatherCard: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
         </div>
         <div className="grid justify-items-center gap-1 border-l border-(--tp-border) px-2 py-1.5">
           <span className="text-[10px] leading-none tracking-[0.15em] text-(--tp-dim) uppercase">
-            {weather.rain > 0.05 ? "Rain" : "Time"}
+            {weather.rain > 0.05 ? w.rain : w.time}
           </span>
           <span className="text-[12px] leading-none font-bold">
-            {weather.rain > 0.05 ? `${Math.round(weather.rain * 100)}%` : weather.timeMoving ? dayClock(weather.clockH) : "FIXED"}
+            {weather.rain > 0.05 ? `${Math.round(weather.rain * 100)}%` : weather.timeMoving ? dayClock(weather.clockH) : w.timeFixed}
           </span>
         </div>
         {lights ? (
           <div className="grid justify-items-center gap-1 border-l border-(--tp-border) px-2 py-1.5">
-            <span className="text-[10px] leading-none tracking-[0.15em] text-(--tp-dim) uppercase">Lights</span>
+            <span className="text-[10px] leading-none tracking-[0.15em] text-(--tp-dim) uppercase">{w.lights}</span>
             <span
               className="text-[12px] leading-none font-bold uppercase"
               style={{ color: lights === "flash" ? "var(--tp-yellow)" : lights === "off" ? "var(--tp-dim)" : "var(--tp-white)" }}
@@ -552,14 +608,15 @@ const H2hDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid
   const has = deltaS !== null && Number.isFinite(deltaS);
   const gain = has && deltaS < 0;
   const frac = has ? Math.min(1, Math.abs(deltaS)) * 50 : 0;
+  const w = useH2hWords();
   return (
     <section
-      aria-label="Live delta"
+      aria-label={w.liveDelta}
       className="flex w-[228px] flex-col gap-1.5 border border-(--tp-border) bg-(--tp-bg-a) px-2.5 py-1.5 text-(--tp-white)"
     >
       <div className="flex items-baseline justify-between gap-2 text-[12px] leading-none font-bold">
-        <span className="tracking-[0.12em] text-(--tp-dim) uppercase">{lapInvalid ? "Invalid" : "Delta"}</span>
-        <span style={{ color: lapInvalid ? HUD_LOSS : deltaColor(deltaS) }}>{deltaText(deltaS)}</span>
+        <span className="tracking-[0.12em] text-(--tp-dim) uppercase">{lapInvalid ? w.barInvalid : w.barDelta}</span>
+        <span style={{ color: lapInvalid ? HUD_LOSS : deltaColor(deltaS) }}>{deltaText(deltaS, w.notAvailable)}</span>
         <span className="text-(--tp-dim)">{lapTime(t.bestLapTimeMs)}</span>
       </div>
       <div className="relative h-1.5 overflow-hidden border border-(--tp-border) bg-(--tp-card-a)" aria-hidden>
@@ -605,6 +662,7 @@ export const HeadToHeadHud: React.FC<HudDesignProps> = ({
   showRadar,
 }) => {
   const fuelPerLap = useFuelPerLap();
+  const w = useH2hWords();
   const race = t.race;
   const showRaceDelta = Boolean(race) && showDeltaBar !== false;
   // With the touch controls up their pause and camera buttons take the top-left, the pads both bottom corners
@@ -612,8 +670,8 @@ export const HeadToHeadHud: React.FC<HudDesignProps> = ({
   return (
     <div className={`${palette.palette} pointer-events-none absolute inset-0 select-none`}>
       <div className="absolute flex w-[264px] flex-col gap-2 xl:w-[420px]" style={{ top, left: EDGE, ...anchor(scale, "top left") }}>
-        <section aria-label={race ? "Head to head" : "Lap"} className="flex flex-col text-(--tp-white)">
-          {race ? <RaceStack t={t} /> : <PracticeBand t={t} deltaS={deltaS} lapInvalid={lapInvalid} />}
+        <section aria-label={race ? w.headToHead : w.lapCard} className="flex flex-col text-(--tp-white)">
+          {race ? <RaceStack t={t} w={w} /> : <PracticeBand t={t} deltaS={deltaS} lapInvalid={lapInvalid} w={w} />}
         </section>
         {leftExtra}
       </div>

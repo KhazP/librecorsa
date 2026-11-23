@@ -2,6 +2,29 @@ import type { CarTelemetry } from "@/types/f1";
 import type { OvertakingRules } from "@/lib/sim/overtaking-rules";
 import type { BadgeToneProp, BadgeVariant } from "@/components/ui/Badge";
 import type { IconName } from "@/components/ui/icons/registry";
+import { t as tr } from "@/i18n/runtime";
+import { perLanguage } from "./hud-format";
+
+/** The words of the dash and the notices, built once per language: every HUD reads the readout every frame */
+const words = perLanguage(() => ({
+  noDrs: tr("hud.aeroLabel.readout.noDrs"),
+  drsOpen: tr("hud.aeroLabel.readout.drsOpen"),
+  drsQueued: tr("hud.aeroLabel.readout.drsQueued"),
+  drsArmed: tr("hud.aeroLabel.readout.drsArmed"),
+  xMode: tr("hud.aeroLabel.readout.xMode"),
+  xQueued: tr("hud.aeroLabel.readout.xQueued"),
+  xArmed: tr("hud.aeroLabel.readout.xArmed"),
+  zMode: tr("hud.aeroLabel.readout.zMode"),
+  drsEnabled: tr("hud.aeroLabel.notice.drsEnabled"),
+  drsNotEnabled: tr("hud.aeroLabel.notice.drsNotEnabled"),
+  drsQueuedNotice: tr("hud.aeroLabel.notice.drsQueued"),
+  xModeBadge: tr("hud.aeroLabel.notice.xModeBadge"),
+  straightMode: tr("hud.aeroLabel.notice.straightMode"),
+  xModeQueued: tr("hud.aeroLabel.notice.xModeQueued"),
+  overtakeBadge: tr("hud.aeroLabel.notice.overtakeBadge"),
+  overtakeEnabled: tr("hud.aeroLabel.notice.overtakeEnabled"),
+  overtakeLocked: tr("hud.aeroLabel.notice.overtakeLocked"),
+}));
 
 /** The flaps as every HUD panel shows them */
 export interface AeroReadout {
@@ -26,16 +49,17 @@ export interface AeroReadout {
  * DRS channels.
  */
 export function aeroReadout(t: Pick<CarTelemetry, "activeAeroMode" | "overtakingRules" | "f12026">): AeroReadout {
-  if (t.overtakingRules === "none") return { label: "NO DRS", open: false, armed: false, queued: false, straightMode: false };
+  const w = words();
+  if (t.overtakingRules === "none") return { label: w.noDrs, open: false, armed: false, queued: false, straightMode: false };
   const open = t.activeAeroMode === "X_MODE";
   const fitted = t.f12026?.hasDrs === true;
   const armed = !open && fitted && t.f12026?.drsAvailable === true;
   const queued = !open && fitted && t.f12026?.drsQueued === true;
   if (t.overtakingRules === "drs-rear") {
-    return { label: open ? "DRS OPEN" : queued ? "DRS QUEUED" : armed ? "DRS ARMED" : "DRS", open, armed, queued, straightMode: false };
+    return { label: open ? w.drsOpen : queued ? w.drsQueued : armed ? w.drsArmed : "DRS", open, armed, queued, straightMode: false };
   }
   return {
-    label: open ? "X-MODE" : queued ? "X QUEUED" : armed ? "X ARMED" : "Z-MODE",
+    label: open ? w.xMode : queued ? w.xQueued : armed ? w.xArmed : w.zMode,
     open,
     armed,
     queued,
@@ -73,29 +97,30 @@ export interface AeroNotice {
  * open on every straight for every car, so it never hears "DRS (not) enabled": the 1 s gap there earns Overtake Mode
  */
 export function aeroNotice(rules: OvertakingRules | undefined, e: AeroNoticeEvent): AeroNotice | null {
+  const w = words();
   if (rules === "drs-rear") {
     if (e.kind === "detection") {
       return {
         badge: e.zone,
-        text: e.eligible ? "DRS enabled" : "DRS not enabled",
+        text: e.eligible ? w.drsEnabled : w.drsNotEnabled,
         tone: e.eligible ? "info" : "neutral",
         variant: e.eligible ? "solid" : "soft",
         icon: e.eligible ? "drsOpen" : "drsClosed",
       };
     }
-    if (e.kind === "queued") return { badge: "DRS", text: "Queued", tone: "info", variant: "outline", icon: "drsClosed" };
+    if (e.kind === "queued") return { badge: "DRS", text: w.drsQueuedNotice, tone: "info", variant: "outline", icon: "drsClosed" };
     return null;
   }
   if (rules === "straight-mode-2026") {
     switch (e.kind) {
       case "straight":
-        return { badge: "X-MODE", text: "Straight Mode", tone: "info", variant: "solid", icon: "drsOpen" };
+        return { badge: w.xModeBadge, text: w.straightMode, tone: "info", variant: "solid", icon: "drsOpen" };
       case "queued":
-        return { badge: "X-MODE", text: "Queued", tone: "info", variant: "outline", icon: "drsClosed" };
+        return { badge: w.xModeBadge, text: w.xModeQueued, tone: "info", variant: "outline", icon: "drsClosed" };
       case "overtake":
         return {
-          badge: "OVERTAKE",
-          text: e.earned ? "Enabled" : "Locked",
+          badge: w.overtakeBadge,
+          text: e.earned ? w.overtakeEnabled : w.overtakeLocked,
           tone: e.earned ? "info" : "neutral",
           variant: e.earned ? "solid" : "soft",
           icon: "overtake",

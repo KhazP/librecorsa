@@ -17,9 +17,14 @@ export interface IconProps {
 }
 
 /** Every icon in the game: one concept, one drawing, one weight */
+/** Icons that point the way the page reads (on, back): mirrored right to left. Key caps (keyLeft) name a key and stay. */
+const READING_ICONS: ReadonlySet<IconName> = new Set<IconName>(["next", "previous", "back"]);
+
 export const Icon: React.FC<IconProps> = ({ name, size = "sm", label, className = "" }) => {
   const Glyph = ICONS[name];
   const spin = SPINNING_ICONS.has(name) ? "motion-safe:animate-spin" : "";
+  // :dir() follows the nearest dir attribute, so the left-to-right HUD keeps its arrows as drawn
+  const reading = READING_ICONS.has(name) ? "[&:dir(rtl)]:-scale-x-100" : "";
   return (
     <Glyph
       size={ICON_PX[size]}
@@ -27,7 +32,7 @@ export const Icon: React.FC<IconProps> = ({ name, size = "sm", label, className 
       fill={FILLED_ICONS.has(name) ? "currentColor" : "none"}
       focusable="false"
       {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })}
-      className={`shrink-0 ${spin} ${className}`}
+      className={`shrink-0 ${spin} ${reading} ${className}`}
     />
   );
 };

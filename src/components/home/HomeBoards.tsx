@@ -7,6 +7,7 @@
  * (weekly-challenge.ts), so the weeks are worked out here and each read from its own board.
  */
 import React, { useEffect, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import type { VehicleModelId } from "@/types/f1";
 import { ALL_CARS, type BoardCar } from "@/lib/net/board-client";
 import { challengeAt, challengeById, challengeConditionsLabel, challengesSoFar, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
@@ -41,6 +42,7 @@ function weekSpan(w: WeeklyChallenge): string {
 }
 
 export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCircuitChange, carTag, carChoices, carTitles }) => {
+  const tx = useTranslations("home.boards");
   const [view, setView] = useState<View>("laps");
   const [car, setCar] = useState<BoardCar>(ALL_CARS);
 
@@ -70,13 +72,13 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
 
   const switcher = (
     <Segmented
-      aria-label="Board"
+      aria-label={tx("board")}
       value={view}
       onChange={setView}
       options={[
-        { id: "laps", label: "All laps" },
-        { id: "challenge", label: "Weekly challenge" },
-        { id: "hof", label: "Hall of Fame" },
+        { id: "laps", label: tx("allLaps") },
+        { id: "challenge", label: tx("challenge") },
+        { id: "hof", label: tx("hallOfFame") },
       ]}
       className="self-start phone:self-stretch"
       fill
@@ -88,7 +90,7 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
       <div className="flex flex-col gap-3">
         {switcher}
         <OnlineBoard
-          title="Lap times"
+          title={tx("lapTimesTitle")}
           headingAs="h2"
           circuits={circuits}
           circuit={circuit}
@@ -121,7 +123,7 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
     <div className="flex flex-col gap-3">
       {switcher}
       <OnlineBoard
-        title="Weekly challenge"
+        title={tx("challengeTitle")}
         headingAs="h2"
         circuits={circuits}
         circuit={week.trackId}
@@ -129,13 +131,13 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
         event={{ id: week.id, vehicle: week.vehicle, carLabel: carName(week), ended: !thisWeek }}
         picker={
           <Select
-            aria-label="Week"
+            aria-label={tx("week")}
             className="w-80 max-w-full"
             value={week.id}
             onChange={(id) => setWeekPick(id === weeks[0].id ? null : id)}
             options={weeks.map((w, i) => ({
               id: w.id,
-              label: `${i === 0 ? "This week" : weekSpan(w)} · ${circuitName(w.trackId)}`,
+              label: i === 0 ? tx("thisWeek", { circuit: circuitName(w.trackId) }) : tx("pastWeek", { dates: weekSpan(w), circuit: circuitName(w.trackId) }),
               detail: carName(w),
             }))}
           />
@@ -148,16 +150,16 @@ export const HomeBoards: React.FC<HomeBoardsProps> = ({ circuits, circuit, onCir
                 <span className="text-lc-fog"> · {carName(week)}</span>
               </p>
               <Badge size="sm" icon="time" variant="outline">
-                {thisWeek ? `${timeLeftLabel(week.endsMs, now)} left` : `Ran ${weekSpan(week)}`}
+                {thisWeek ? tx("timeLeft", { timeLeft: timeLeftLabel(week.endsMs, now) }) : tx("ran", { dates: weekSpan(week) })}
               </Badge>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5" aria-label="Rules">
+            <div className="flex flex-wrap items-center gap-1.5" aria-label={tx("rules")}>
               <LapConditionBadges assists={week.assists} realism={week.realism} />
               <span className="lc-mono text-[12px] text-lc-slate">{challengeConditionsLabel(week.vehicle)}</span>
             </div>
           </div>
         }
-        emptyText={thisWeek ? "No times set yet this week." : "No times recorded for this week."}
+        emptyText={thisWeek ? tx("emptyThisWeek") : tx("emptyPastWeek")}
         carTag={carTag}
         onOpenRecordBoard={openRecordBoard}
       />

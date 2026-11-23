@@ -1,0 +1,139 @@
+{
+  "newTab": "(يفتح في علامة تبويب جديدة)",
+  "confirm": {
+    "cancel": "إلغاء",
+    "busy": "انتظر حتى يكتمل"
+  },
+  "toggle": {
+    "on": "مفعّل",
+    "off": "معطّل"
+  },
+  "disclosure": {
+    "more": "المزيد",
+    "less": "أقل"
+  },
+  "select": {
+    "placeholder": "اختر",
+    "labelValue": "{label}: {value}"
+  },
+  "settingRow": {
+    "changed": "معدّل عن الافتراضي",
+    "resetNamed": "إعادة تعيين {setting} إلى الافتراضي",
+    "resetThis": "إعادة تعيين هذا الإعداد إلى الافتراضي",
+    "reset": "إعادة تعيين إلى الافتراضي"
+  },
+  "mediaTile": {
+    "chosen": "مختار"
+  },
+  "keys": {
+    "up": "أعلى",
+    "down": "أسفل",
+    "left": "يسار",
+    "right": "يمين",
+    "wheelButton": "زر {button}"
+  },
+  "pad": {
+    "namedButton": "زر {name}",
+    "shapeButton": "{shape, select, cross {زر X} circle {زر الدائرة} square {زر المربع} other {زر المثلث}}",
+    "faceButton": "{position, select, bottom {الزر السفلي} right {الزر الأيمن} left {الزر الأيسر} other {الزر العلوي}}",
+    "dpad": "أزرار الاتجاهات",
+    "dpadDirection": "{direction, select, up {أزرار الاتجاهات للأعلى} down {أزرار الاتجاهات للأسفل} left {أزرار الاتجاهات لليسار} right {أزرار الاتجاهات لليمين} horizontal {أزرار الاتجاهات يمينًا ويسارًا} other {أزرار الاتجاهات أعلى وأسفل}}",
+    "shoulder": "{button, select, lb {الزر العلوي الأيسر} rb {الزر العلوي الأيمن} lt {الزناد الأيسر} other {الزناد الأيمن}} ({name})",
+    "touchpad": "لوحة اللمس",
+    "stick": "{side, select, left {العصا اليسرى} other {العصا اليمنى}}",
+    "stickPress": "{side, select, left {ضغط العصا اليسرى} other {ضغط العصا اليمنى}} ({name})",
+    "stickDirection": "{side, select, left {العصا اليسرى} other {العصا اليمنى}} {direction, select, up {للأعلى} down {للأسفل} left {لليسار} right {لليمين} horizontal {يمينًا ويسارًا} other {أعلى وأسفل}}"
+  },
+  "badges": {
+    "you": "أنت",
+    "position": "المركز {position}",
+    "qualityDescription": ": {description}"
+  },
+  "delta": {
+    "spoken": "{trend, select, level {متساوٍ} faster {أسرع بـ {seconds} ثانية} other {أبطأ بـ {seconds} ثانية}}{best, select, yes {، الأفضل} other {}}",
+    "best": "الأفضل"
+  },
+  "penalty": {
+    "time": "+{seconds} s",
+    "driveThrough": "مرور بحارة الصيانة",
+    "warning": "تحذير",
+    "trackLimits": "حدود الحلبة {strikes}/{of}",
+    "disqualified": "مستبعد"
+  },
+  "flags": {
+    "green": "علم أخضر",
+    "yellow": "علم أصفر",
+    "doubleYellow": "علم أصفر مزدوج",
+    "blue": "علم أزرق",
+    "red": "علم أحمر",
+    "white": "علم أبيض",
+    "black": "علم أسود",
+    "blackWhite": "علم أبيض وأسود",
+    "chequered": "علم الشطرنج"
+  },
+  "compounds": {
+    "name": {
+      "soft": "ناعم",
+      "medium": "متوسط",
+      "hard": "صلب",
+      "intermediate": "وسيط",
+      "wet": "مبلل"
+    },
+    "short": {
+      "soft": "ناعم",
+      "medium": "متوسط",
+      "hard": "صلب",
+      "intermediate": "وسيط",
+      "wet": "مبلل"
+    },
+    "long": {
+      "soft": "إطارات ناعمة",
+      "medium": "إطارات متوسطة",
+      "hard": "إطارات صلبة",
+      "intermediate": "إطارات وسيطة (مسار مبلل)",
+      "wet": "إطارات مبللة بالكامل (مياه راكدة)"
+    },
+    "tyres": {
+      "soft": "إطارات ناعمة",
+      "medium": "إطارات متوسطة",
+      "hard": "إطارات صلبة",
+      "intermediate": "إطارات وسيطة",
+      "wet": "إطارات مبللة"
+    }
+  },
+  "carClass": {
+    "openWheel": "عجلات مكشوفة",
+    "gt3": "GT3",
+    "proto": "نماذج أولية",
+    "classic": "كلاسيكية",
+    "road": "طرقية"
+  },
+  "session": {
+    "practice": "تدريب",
+    "race": "سباق",
+    "timeAttack": "تجربة الزمن",
+    "hillClimb": "تسلق الهضاب",
+    "online": "عبر الإنترنت",
+    "offline": "دون اتصال",
+    "host": "المضيف"
+  },
+  "state": {
+    "new": "جديد",
+    "beta": "تجريبي",
+    "wip": "قيد التطوير",
+    "experimental": "اختباري",
+    "downloaded": "تم التنزيل",
+    "downloading": "جارٍ التنزيل",
+    "updateAvailable": "يتوفر تحديث",
+    "inUse": "قيد الاستخدام"
+  },
+  "surface": {
+    "dry": "جاف",
+    "damp": "رطب",
+    "wet": "مبلل",
+    "flooded": "مغمور بالمياه"
+  },
+  "dialog": {
+    "close": "إغلاق"
+  }
+}

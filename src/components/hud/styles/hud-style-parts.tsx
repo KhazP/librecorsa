@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CameraMode, CarTelemetry, TireCompound } from "@/types/f1";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 import { inDeadZone, type BuiltTrackData, type PointToPointDef } from "@/lib/track-data";
@@ -318,12 +319,50 @@ export const LapMarkGlyph: React.FC<{ mark: LapMark; className?: string }> = ({ 
   </span>
 );
 
+/**
+ * A message with values for a HUD reading that changes now and then (a lap number, a strike count): each set of values
+ * is formatted once and kept, so the frames that show the same reading format nothing. Made inside a layout's
+ * `useMemo` on its translator, so a change of language starts with an empty set.
+ */
+export function formatOnce<A extends (string | number | boolean)[], R>(format: (...args: A) => R, keep = 64): (...args: A) => R {
+  const seen = new Map<string, R>();
+  return (...args) => {
+    const key = args.join("\u0001");
+    if (seen.has(key)) return seen.get(key) as R;
+    if (seen.size >= keep) seen.clear();
+    const out = format(...args);
+    seen.set(key, out);
+    return out;
+  };
+}
+
+/**
+ * A message with values that change every frame (a speed, an rpm): formatted once with a marker in place of each
+ * value, then each frame puts the readings in by plain text, with no formatting. For messages whose values are plain
+ * placeholders only (no plural or select on them). Made inside a layout's `useMemo` on its translator, like `formatOnce`.
+ */
+export function liveMessage<K extends string>(names: readonly K[], format: (marks: Record<K, string>) => string): (values: Record<K, string>) => string {
+  const marks = {} as Record<K, string>;
+  names.forEach((name, i) => (marks[name] = `\u0001${i}\u0001`));
+  // Text and marker indices in turn: text, index, text, index, …, text
+  const pieces = format(marks).split("\u0001");
+  return (values) => {
+    let out = pieces[0];
+    for (let i = 1; i < pieces.length; i += 2) out += values[names[Number(pieces[i])]] + (pieces[i + 1] ?? "");
+    return out;
+  };
+}
+
 /** The running lap was cut: the word beside the crimson clock, in every style */
-export const InvalidTag: React.FC<{ className?: string }> = ({ className = "" }) => (
-  <Badge tone="bad" variant="solid" size="hud" icon="trackLimits" className={className}>
-    Invalid
-  </Badge>
-);
+export const InvalidTag: React.FC<{ className?: string }> = ({ className = "" }) => {
+  const tx = useTranslations("hudStyles.parts");
+  const invalid = useMemo(() => tx("invalid"), [tx]);
+  return (
+    <Badge tone="bad" variant="solid" size="hud" icon="trackLimits" className={className}>
+      {invalid}
+    </Badge>
+  );
+};
 
 export { lapMark, type LapMark };
 

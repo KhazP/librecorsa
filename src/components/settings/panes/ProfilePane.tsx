@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button, ConfirmDialog, SettingRow, TextField } from "@/components/ui";
 import { CHOSEN_TILE, cx, MOTION } from "@/components/ui/styles";
 import { Icon } from "@/components/ui/icons";
@@ -14,17 +15,18 @@ import { clearSavedData, resetAllSettings } from "../storage";
 
 // ui-allow: hex-in-style driver colours are data: the colour other players see on the timing tower
 const DRIVER_COLORS = ["#E10600", "#00D2BE", "#FF8700", "#0600EF", "#006F62", "#2B4562", "#B6BABD", "#CCFF00"] as const;
-/** What each swatch above is called, in the same order, for a screen reader (a hex code says nothing) */
-const COLOR_NAMES = ["Red", "Teal", "Orange", "Blue", "Racing green", "Navy", "Silver", "Lime"] as const;
+/** What each swatch above is called (its message), in the same order, for a screen reader (a hex code says nothing) */
+const COLOR_NAMES = ["red", "teal", "orange", "blue", "racingGreen", "navy", "silver", "lime"] as const;
 
 /** The driver's colour: eight swatches and a picker for any other */
 function ColourRow() {
   const env = useSettingsEnv();
+  const tx = useTranslations("settings.profile.driver");
   const current = env.settings.profile.color;
   const set = (c: string) => env.update((s) => ({ ...s, profile: { ...s.profile, color: sanitizeColor(c) } }));
   return (
-    <SettingRow label="Colour" stacked>
-      <div role="radiogroup" aria-label="Colour" className="flex flex-wrap items-center gap-2">
+    <SettingRow label={tx("colour")} stacked>
+      <div role="radiogroup" aria-label={tx("colourGroup")} className="flex flex-wrap items-center gap-2">
         {DRIVER_COLORS.map((c, i) => {
           const chosen = current.toUpperCase() === c;
           return (
@@ -33,7 +35,7 @@ function ColourRow() {
               type="button"
               role="radio"
               aria-checked={chosen}
-              aria-label={COLOR_NAMES[i]}
+              aria-label={tx(`colours.${COLOR_NAMES[i]}`)}
               onClick={() => set(c)}
               onPointerEnter={focusOnHover}
               className={cx(
@@ -55,7 +57,7 @@ function ColourRow() {
             onChange={(e) => set(e.target.value)}
             className="size-5.5 cursor-pointer rounded-full border-0 bg-transparent p-0 [&::-moz-color-swatch]:rounded-full [&::-moz-color-swatch]:border-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
           />
-          Other colour
+          {tx("otherColour")}
         </label>
       </div>
     </SettingRow>
@@ -65,6 +67,7 @@ function ColourRow() {
 /** Settings > Profile and data > Driver: who other players see */
 export function DriverTab() {
   const env = useSettingsEnv();
+  const tx = useTranslations("settings.profile.driver");
   const { profile } = env.settings;
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -142,11 +145,11 @@ export function DriverTab() {
   };
 
   return (
-    <SettingsCard title="Driver" rows={[autoUpload]} before={
+    <SettingsCard title={tx("title")} rows={[autoUpload]} before={
       <>
       <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3 pb-2">
         <TextField
-          label="Name"
+          label={tx("name")}
           maxLength={16}
           autoComplete="off"
           spellCheck={false}
@@ -162,7 +165,7 @@ export function DriverTab() {
           data-nav-default=""
         />
         <TextField
-          label="Code"
+          label={tx("code")}
           maxLength={3}
           autoComplete="off"
           autoCapitalize="characters"
@@ -184,6 +187,7 @@ export function DriverTab() {
 /** The telemetry port: typed as text, so a half-typed number never snaps to the range's edge */
 function PortRow() {
   const env = useSettingsEnv();
+  const tx = useTranslations("settings.profile.data");
   const w = env.settings.wheel;
   const [text, setText] = useState(String(w.telemetryPort));
   const ref = useRef<HTMLInputElement | null>(null);
@@ -193,11 +197,15 @@ function PortRow() {
   const claimed = CLAIMED_TELEMETRY_PORTS[w.telemetryPort];
   return (
     <SettingRow
-      label="UDP port"
+      label={tx("udpPort")}
       advanced
-      hint={claimed ? `Port ${w.telemetryPort} conflicts with ${claimed} (default ${DEFAULT_TELEMETRY_PORT})` : undefined}
+      hint={
+        claimed
+          ? tx("portConflict", { port: String(w.telemetryPort), app: claimed, defaultPort: String(DEFAULT_TELEMETRY_PORT) })
+          : undefined
+      }
       disabled={!w.telemetryOut}
-      disabledReason="Requires UDP telemetry"
+      disabledReason={tx("portOff")}
       changed={w.telemetryPort !== DEFAULT_TELEMETRY_PORT}
       onReset={() => env.update((s) => ({ ...s, wheel: { ...s.wheel, telemetryPort: DEFAULT_TELEMETRY_PORT } }))}
     >
@@ -208,7 +216,7 @@ function PortRow() {
         min={1024}
         max={65535}
         step={1}
-        aria-label="UDP port"
+        aria-label={tx("udpPortField")}
         disabled={!w.telemetryOut}
         value={text}
         onChange={(e) => {
@@ -217,7 +225,7 @@ function PortRow() {
           if (Number.isInteger(n) && n >= 1024 && n <= 65535) env.update((s) => ({ ...s, wheel: { ...s.wheel, telemetryPort: n } }));
         }}
         onBlur={() => setText(String(w.telemetryPort))}
-        className="lc-mono h-10 w-28 rounded-lc-row border border-lc-line bg-lc-well px-3.5 text-right text-[14px] pointer-coarse:text-[16px] text-lc-chalk outline-none focus:border-lc-volt focus:shadow-lc-focus disabled:cursor-not-allowed disabled:opacity-40"
+        className="lc-mono h-10 w-28 rounded-lc-row border border-lc-line bg-lc-well px-3.5 text-end text-[14px] pointer-coarse:text-[16px] text-lc-chalk outline-none focus:border-lc-volt focus:shadow-lc-focus disabled:cursor-not-allowed disabled:opacity-40"
       />
     </SettingRow>
   );
@@ -226,23 +234,24 @@ function PortRow() {
 /** Settings > Profile and data > Data: the driver key, telemetry out, and putting everything back */
 export function DataTab() {
   const env = useSettingsEnv();
+  const tx = useTranslations("settings.profile.data");
   const [asking, setAsking] = useState<"reset" | "clear" | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   return (
     <>
       {env.driverKey ? (
-        <SettingsCard title="Driver key">
+        <SettingsCard title={tx("driverKey")}>
           <SettingRow
-            label="Identity key"
-            hint={env.driverKey.notice ?? "Signs online laps. Back up to use on another browser"}
+            label={tx("identityKey")}
+            hint={env.driverKey.notice ?? tx("identityKeyHint")}
             navDefault
           >
             <Button size="sm" variant="secondary" icon={<Icon name="download" />} onClick={env.driverKey.onExport} data-nav-default="">
-              Save
+              {tx("save")}
             </Button>
             <Button size="sm" variant="secondary" onClick={() => fileRef.current?.click()}>
-              Load
+              {tx("load")}
             </Button>
             <input
               ref={fileRef}
@@ -258,25 +267,25 @@ export function DataTab() {
           </SettingRow>
         </SettingsCard>
       ) : null}
-      <SettingsCard title="Telemetry" rows={[telemetryOut]} first={!env.driverKey}>
+      <SettingsCard title={tx("telemetry")} rows={[telemetryOut]} first={!env.driverKey}>
         <PortRow />
       </SettingsCard>
-      <SettingsCard title="Reset">
-        <SettingRow label="Reset all settings" hint="Restores default controls, assists, display and audio">
+      <SettingsCard title={tx("reset")}>
+        <SettingRow label={tx("resetAll")} hint={tx("resetAllHint")}>
           <Button size="sm" variant="danger" onClick={() => setAsking("reset")}>
-            Reset
+            {tx("resetAllButton")}
           </Button>
         </SettingRow>
-        <SettingRow label="Clear saved data" hint="Deletes local settings, driver key, laps, ghosts and setups">
+        <SettingRow label={tx("clear")} hint={tx("clearHint")}>
           <Button size="sm" variant="danger" icon={<Icon name="delete" />} onClick={() => setAsking("clear")}>
-            Clear
+            {tx("clearButton")}
           </Button>
         </SettingRow>
       </SettingsCard>
       <ConfirmDialog
         open={asking === "reset"}
-        title="Reset all settings?"
-        confirmLabel="Reset all"
+        title={tx("resetAllTitle")}
+        confirmLabel={tx("resetAllConfirm")}
         onCancel={() => setAsking(null)}
         onConfirm={() => {
           env.update(resetAllSettings);
@@ -284,12 +293,12 @@ export function DataTab() {
           setAsking(null);
         }}
       >
-        Resets all settings, bindings and calibration to defaults. Profile, setups and lap times stay.
+        {tx("resetAllBody")}
       </ConfirmDialog>
       <ConfirmDialog
         open={asking === "clear"}
-        title="Clear saved data?"
-        confirmLabel="Clear everything"
+        title={tx("clearTitle")}
+        confirmLabel={tx("clearConfirm")}
         busy={busy}
         onCancel={() => setAsking(null)}
         onConfirm={() => {
@@ -297,7 +306,7 @@ export function DataTab() {
           void clearSavedData();
         }}
       >
-        Permanently removes all settings, driver key, laps, ghosts and setups from this browser, then reloads.
+        {tx("clearBody")}
       </ConfirmDialog>
     </>
   );

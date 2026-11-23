@@ -2,6 +2,7 @@
  * What the time trial shows while the challenge is driven: the player's best this week, the leader's time, and the
  * player's place with the gap to the place above, from the week's board (`fetchRemoteBoard` with its `event`).
  */
+import { text as tx } from "@/lib/text";
 import type { RemoteBoard } from "./leaderboard";
 
 export interface ChallengeTarget {
@@ -32,8 +33,8 @@ export function challengeTarget(board: RemoteBoard): ChallengeTarget {
 
 /** "P7 · 0.214 to P6", "P1 · fastest this week", or "No time yet" */
 export function challengePlaceLabel(t: ChallengeTarget): string {
-  if (t.rank === null) return "No time yet";
-  if (t.rank === 1) return "P1 · fastest this week";
-  if (t.gapAboveMs === null) return `P${t.rank}`;
-  return `P${t.rank} · ${(t.gapAboveMs / 1000).toFixed(3)} to P${t.rank - 1}`;
+  if (t.rank === null) return tx("game.challenge.placeNoTime");
+  if (t.rank === 1) return tx("game.challenge.placeFirst");
+  if (t.gapAboveMs === null) return tx("game.challenge.place", { place: String(t.rank) });
+  return tx("game.challenge.placeGap", { place: String(t.rank), gap: (t.gapAboveMs / 1000).toFixed(3), above: String(t.rank - 1) });
 }

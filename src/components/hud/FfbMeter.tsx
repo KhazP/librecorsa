@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { cx } from "@/components/ui/styles";
@@ -29,13 +30,23 @@ export const FfbMeter: React.FC<FfbMeterProps> = ({ force, clipping, peak, sugge
   const peakMag = Math.abs(peak);
   const peakPct = Math.min(1, peakMag) * 50;
   const fill = clipping ? "bg-lc-loss" : "bg-lc-info";
+  // The meter re-renders with the force every frame: its words are resolved once per language (the valued ones per value)
+  const tx = useTranslations("hud.ffbMeter");
+  const L = useMemo(() => ({ title: tx("title"), clipping: tx("clipping"), inRange: tx("inRange") }), [tx]);
+  const peakValue = Math.round(peakMag * 100);
+  const peakText = useMemo(
+    () => tx.rich("peak", { value: peakValue, v: (chunks) => <span className="lc-mono text-[11px] tracking-normal text-lc-fog">{chunks}</span> }),
+    [tx, peakValue]
+  );
+  const gainValue = typeof suggestedGain === "number" ? Math.round(suggestedGain * 100) : null;
+  const setCarText = useMemo(() => (gainValue === null ? "" : tx("setCar", { value: gainValue })), [tx, gainValue]);
 
   return (
-    <section aria-label="Force feedback" className={`w-64 rounded-lc-tile px-3.5 py-3 ${HUD_GLASS}`}>
+    <section aria-label={L.title} className={`w-64 rounded-lc-tile px-3.5 py-3 ${HUD_GLASS}`}>
       <div className="mb-2 flex items-center justify-between">
-        <span className={HUD_LBL}>Force feedback</span>
+        <span className={HUD_LBL}>{L.title}</span>
         <Badge size="hud" tone={clipping ? "bad" : "neutral"} variant={clipping ? "solid" : "outline"}>
-          {clipping ? "Clipping" : "In range"}
+          {clipping ? L.clipping : L.inRange}
         </Badge>
       </div>
 
@@ -69,14 +80,14 @@ export const FfbMeter: React.FC<FfbMeterProps> = ({ force, clipping, peak, sugge
           {Math.round(Math.abs(f) * 100)}%
         </span>
         <span className={HUD_LBL}>
-          Peak <span className="lc-mono text-[11px] tracking-normal text-lc-fog">{Math.round(peakMag * 100)}%</span>
+          {peakText}
         </span>
       </div>
 
       {typeof suggestedGain === "number" ? (
         <div className="mt-2 flex justify-end">
           <Button size="sm" variant="secondary" onClick={onApplySuggestedGain} disabled={!onApplySuggestedGain}>
-            {`Set this car to ${Math.round(suggestedGain * 100)}%`}
+            {setCarText}
           </Button>
         </div>
       ) : null}

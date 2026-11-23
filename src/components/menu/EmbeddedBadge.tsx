@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icons";
 import { SITE_URL } from "@/lib/site";
@@ -25,6 +26,7 @@ export function isFramed(): boolean {
  */
 export const EmbeddedBadge: React.FC = () => {
   const framed = useSyncExternalStore(subscribe, isFramed, () => false);
+  const tx = useTranslations("menu.embedded");
   if (!framed) return null;
   return (
     <Button
@@ -35,10 +37,10 @@ export const EmbeddedBadge: React.FC = () => {
       size="sm"
       variant="secondary"
       icon={<Icon name="externalLink" />}
-      title={`Full screen, wheels and your saves work best on ${SITE_HOST}`}
+      title={tx("title", { site: SITE_HOST })}
       className="max-w-full"
     >
-      <span className="truncate">Play full screen on {SITE_HOST}</span>
+      <span className="truncate">{tx("play", { site: SITE_HOST })}</span>
     </Button>
   );
 };

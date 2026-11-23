@@ -1,0 +1,139 @@
+{
+  "newTab": "(opens in a new tab)",
+  "confirm": {
+    "cancel": "Cancel",
+    "busy": "Wait for it to finish"
+  },
+  "toggle": {
+    "on": "On",
+    "off": "Off"
+  },
+  "disclosure": {
+    "more": "More",
+    "less": "Less"
+  },
+  "select": {
+    "placeholder": "Choose",
+    "labelValue": "{label}: {value}"
+  },
+  "settingRow": {
+    "changed": "Changed from the default",
+    "resetNamed": "Reset {setting} to the default",
+    "resetThis": "Reset this setting to the default",
+    "reset": "Reset to the default"
+  },
+  "mediaTile": {
+    "chosen": "Chosen"
+  },
+  "keys": {
+    "up": "Up",
+    "down": "Down",
+    "left": "Left",
+    "right": "Right",
+    "wheelButton": "Btn {button}"
+  },
+  "pad": {
+    "namedButton": "{name} button",
+    "shapeButton": "{shape, select, cross {Cross button} circle {Circle button} square {Square button} other {Triangle button}}",
+    "faceButton": "{position, select, bottom {Bottom face button} right {Right face button} left {Left face button} other {Top face button}}",
+    "dpad": "D-pad",
+    "dpadDirection": "{direction, select, up {D-pad up} down {D-pad down} left {D-pad left} right {D-pad right} horizontal {D-pad left and right} other {D-pad up and down}}",
+    "shoulder": "{button, select, lb {Left bumper} rb {Right bumper} lt {Left trigger} other {Right trigger}} ({name})",
+    "touchpad": "Touchpad",
+    "stick": "{side, select, left {Left stick} other {Right stick}}",
+    "stickPress": "{side, select, left {Left stick press} other {Right stick press}} ({name})",
+    "stickDirection": "{side, select, left {Left stick} other {Right stick}} {direction, select, up {up} down {down} left {left} right {right} horizontal {left and right} other {up and down}}"
+  },
+  "badges": {
+    "you": "You",
+    "position": "Position {position}",
+    "qualityDescription": ": {description}"
+  },
+  "delta": {
+    "spoken": "{trend, select, level {Level} faster {{seconds} seconds faster} other {{seconds} seconds slower}}{best, select, yes {, best} other {}}",
+    "best": "Best"
+  },
+  "penalty": {
+    "time": "+{seconds} s",
+    "driveThrough": "Drive-through",
+    "warning": "Warning",
+    "trackLimits": "Track limits {strikes}/{of}",
+    "disqualified": "Disqualified"
+  },
+  "flags": {
+    "green": "Green flag",
+    "yellow": "Yellow flag",
+    "doubleYellow": "Double yellow",
+    "blue": "Blue flag",
+    "red": "Red flag",
+    "white": "White flag",
+    "black": "Black flag",
+    "blackWhite": "Black and white",
+    "chequered": "Chequered flag"
+  },
+  "compounds": {
+    "name": {
+      "soft": "Soft",
+      "medium": "Medium",
+      "hard": "Hard",
+      "intermediate": "Intermediate",
+      "wet": "Wet"
+    },
+    "short": {
+      "soft": "Soft",
+      "medium": "Med",
+      "hard": "Hard",
+      "intermediate": "Inter",
+      "wet": "Wet"
+    },
+    "long": {
+      "soft": "Soft tyres",
+      "medium": "Medium tyres",
+      "hard": "Hard tyres",
+      "intermediate": "Intermediate tyres (wet track)",
+      "wet": "Full wet tyres (standing water)"
+    },
+    "tyres": {
+      "soft": "Soft tyres",
+      "medium": "Medium tyres",
+      "hard": "Hard tyres",
+      "intermediate": "Intermediate tyres",
+      "wet": "Wet tyres"
+    }
+  },
+  "carClass": {
+    "openWheel": "Open-wheel",
+    "gt3": "GT3",
+    "proto": "Proto",
+    "classic": "Classic",
+    "road": "Road"
+  },
+  "session": {
+    "practice": "Practice",
+    "race": "Race",
+    "timeAttack": "Time trial",
+    "hillClimb": "Hill climb",
+    "online": "Online",
+    "offline": "Offline",
+    "host": "Host"
+  },
+  "state": {
+    "new": "New",
+    "beta": "Beta",
+    "wip": "WIP",
+    "experimental": "Experimental",
+    "downloaded": "Downloaded",
+    "downloading": "Downloading",
+    "updateAvailable": "Update available",
+    "inUse": "In use"
+  },
+  "surface": {
+    "dry": "Dry",
+    "damp": "Damp",
+    "wet": "Wet",
+    "flooded": "Flooded"
+  },
+  "dialog": {
+    "close": "Close"
+  }
+}

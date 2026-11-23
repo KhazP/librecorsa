@@ -98,7 +98,9 @@ export function Segmented<T extends string>({
       {...a11y}
       onKeyDown={(e) => {
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-        if (step(e.key === "ArrowRight" ? 1 : -1)) e.preventDefault();
+        // Right to left the options run the other way on screen
+        const rtl = getComputedStyle(e.currentTarget).direction === "rtl";
+        if (step((e.key === "ArrowRight") !== rtl ? 1 : -1)) e.preventDefault();
       }}
       className={cx(
         "flex rounded-full bg-lc-void p-1 inset-ring inset-ring-lc-line",

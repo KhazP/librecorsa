@@ -5,5 +5,5 @@ export const metadata: Metadata = { title: "Page not found", robots: { index: fa
 
 /** Any address the site does not have */
 export default function NotFound() {
-  return <SiteNotice title="Page not found">Nothing is at this address. The link may be old or mistyped.</SiteNotice>;
+  return <SiteNotice notice="notFound" />;
 }

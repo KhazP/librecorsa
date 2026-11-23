@@ -1,3 +1,4 @@
+import { text as t } from "@/lib/text";
 import { REPO_URL } from "./site";
 
 /**
@@ -53,15 +54,15 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
   {
     id: "windows",
     name: "Windows",
-    summary: "Desktop app with discrete GPU preference, silent WebHID for racing wheels and DualSense, and no background throttling.",
-    installNote: "Unsigned for now while SignPath Foundation setup finishes. If SmartScreen stops it, click More info, then Run anyway.",
+    get summary() { return t("game.downloads.windowsSummary"); },
+    get installNote() { return t("game.downloads.windowsInstallNote"); },
     signed: false,
-    statusLabel: "Unsigned",
+    get statusLabel() { return t("game.downloads.windowsStatusLabel"); },
     artifacts: [
       {
         id: "windows-x64",
-        label: "Download .exe",
-        detail: "Windows x64 installer",
+        get label() { return t("game.downloads.windowsX64Label"); },
+        get detail() { return t("game.downloads.windowsX64Detail"); },
         file: "LibreCorsa-0.2.2-win-x64-Setup.exe",
         sizeBytes: 121_681_197,
       },
@@ -70,23 +71,23 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
   {
     id: "macos",
     name: "macOS",
-    summary: "Desktop app with discrete GPU preference, silent WebHID for wheels and DualSense, and no background throttling.",
-    installNote: "Unsigned build. Allow it in System Settings > Privacy & Security, or clear quarantine after copying to Applications:",
+    get summary() { return t("game.downloads.macosSummary"); },
+    get installNote() { return t("game.downloads.macosInstallNote"); },
     installCommand: "xattr -cr /Applications/LibreCorsa.app",
     signed: false,
-    statusLabel: "Unsigned",
+    get statusLabel() { return t("game.downloads.macosStatusLabel"); },
     artifacts: [
       {
         id: "macos-arm64",
-        label: "Apple Silicon (.dmg)",
-        detail: "M1–M4 Macs",
+        get label() { return t("game.downloads.macosArm64Label"); },
+        get detail() { return t("game.downloads.macosArm64Detail"); },
         file: "LibreCorsa-0.2.2-mac-arm64.dmg",
         sizeBytes: 121_566_744,
       },
       {
         id: "macos-x64",
-        label: "Intel (.dmg)",
-        detail: "Intel x64 Macs",
+        get label() { return t("game.downloads.macosX64Label"); },
+        get detail() { return t("game.downloads.macosX64Detail"); },
         file: "LibreCorsa-0.2.2-mac-x64.dmg",
         sizeBytes: 125_687_175,
       },
@@ -95,16 +96,16 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
   {
     id: "linux",
     name: "Linux",
-    summary: "Portable AppImage with silent WebHID for racing wheels and DualSense, and no background throttling.",
-    installNote: "Mark the AppImage executable and run it (requires FUSE2 / libfuse2 on older distributions):",
+    get summary() { return t("game.downloads.linuxSummary"); },
+    get installNote() { return t("game.downloads.linuxInstallNote"); },
     installCommand: "chmod +x LibreCorsa-0.2.2-linux-x86_64.AppImage",
     signed: false,
     statusLabel: "AppImage",
     artifacts: [
       {
         id: "linux-x64",
-        label: "Download .AppImage",
-        detail: "Linux x64",
+        get label() { return t("game.downloads.linuxX64Label"); },
+        get detail() { return t("game.downloads.linuxX64Detail"); },
         file: "LibreCorsa-0.2.2-linux-x86_64.AppImage",
         sizeBytes: 126_167_482,
       },
@@ -113,15 +114,15 @@ export const PLATFORM_DOWNLOADS: readonly PlatformDownload[] = [
   {
     id: "android",
     name: "Android",
-    summary: "Fullscreen Trusted Web Activity with sticky-immersive controls, Android Game Mode, and launcher shortcuts. Requires Android 7+ and Chrome.",
-    installNote: "Signed release APK. Allow installing from your browser when prompted; it verifies against librecorsa.org and opens without a URL bar.",
+    get summary() { return t("game.downloads.androidSummary"); },
+    get installNote() { return t("game.downloads.androidInstallNote"); },
     signed: true,
-    statusLabel: "Signed APK",
+    get statusLabel() { return t("game.downloads.androidStatusLabel"); },
     artifacts: [
       {
         id: "android-apk",
-        label: "Download .apk",
-        detail: "Android 7+ (universal)",
+        get label() { return t("game.downloads.androidApkLabel"); },
+        get detail() { return t("game.downloads.androidApkDetail"); },
         file: "LibreCorsa-0.2.2-android.apk",
         sizeBytes: 1_329_339,
       },

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import { useFocusNav } from "@/components/menu/useFocusNav";
 import { Button } from "./Button";
 import { cx } from "./styles";
@@ -47,7 +48,7 @@ export function ConfirmDialog({
   title,
   children,
   confirmLabel,
-  cancelLabel = "Cancel",
+  cancelLabel,
   onConfirm,
   onCancel,
   onDismiss,
@@ -55,6 +56,7 @@ export function ConfirmDialog({
   icon,
   busy,
 }: ConfirmDialogProps) {
+  const tx = useTranslations("common.confirm");
   const info = tone === "info";
   const sheetRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -167,9 +169,9 @@ export function ConfirmDialog({
             size="md"
             onClick={onCancel}
             data-nav-default={info ? undefined : ""}
-            disabledReason={busy ? "Wait for it to finish" : undefined}
+            disabledReason={busy ? tx("busy") : undefined}
           >
-            {cancelLabel}
+            {cancelLabel ?? tx("cancel")}
           </Button>
           <Button
             variant={info ? "primary" : "danger"}

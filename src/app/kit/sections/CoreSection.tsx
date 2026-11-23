@@ -87,7 +87,7 @@ function Scene({ children, className }: { children: React.ReactNode; className?:
     >
       <div aria-hidden className="absolute inset-0 -z-10 bg-radial-[at_12%_0%] from-lc-cyan/16 via-transparent via-40% to-transparent" />
       <div aria-hidden className="absolute inset-0 -z-10 bg-radial-[at_92%_100%] from-lc-amber/14 via-transparent via-45% to-transparent" />
-      <div aria-hidden className="absolute -top-24 right-1/4 -z-10 size-72 rounded-full bg-lc-fog/6 blur-3xl" />
+      <div aria-hidden className="absolute -top-24 end-1/4 -z-10 size-72 rounded-full bg-lc-fog/6 blur-3xl" />
       <div aria-hidden className="absolute inset-x-0 top-[62%] -z-10 h-px bg-white/8" />
       <div aria-hidden className="absolute inset-x-0 bottom-0 -z-10 h-2/5 bg-linear-to-t from-lc-void/90 to-transparent" />
       {children}

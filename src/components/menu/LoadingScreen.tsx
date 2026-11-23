@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { BASE_ALTITUDE_M, type BuiltTrackData, DEFAULT_TRACK_ID, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 import { formatMegabytes, useAssetProgress, type AssetTask } from "@/lib/loading/asset-progress";
@@ -19,40 +20,45 @@ import { supportLabel } from "@/lib/modder-support";
 import { carMaker, circuitMaker, GAME_MAKER } from "@/lib/modders";
 import { useStoreBuild } from "@/lib/use-store-build";
 
+type LoadingTranslator = ReturnType<typeof useTranslations<"menu.loading">>;
+
 /** The tips, naming the player's own camera and racing-line keys as printed on their keyboard */
-const tipsFor = (camera: string, line: string, freeCamera: string, tvCamera: string) => [
-  "Esc opens Garage, corner jump, AI races and multiplayer.",
-  "Brake straight, then trail off into the apex.",
-  `Press ${camera} to switch camera views.`,
-  `Press ${freeCamera} for free camera, ${tvCamera} for trackside TV.`,
-  `Press ${line} to toggle the braking line.`,
-  "Deploy boost on straights; battery recharges under braking.",
+const tipsFor = (tx: LoadingTranslator, camera: string, line: string, freeCamera: string, tvCamera: string) => [
+  tx("tipMenu"),
+  tx("tipBraking"),
+  tx("tipCamera", { key: camera }),
+  tx("tipFreeCamera", { freeKey: freeCamera, tvKey: tvCamera }),
+  tx("tipLine", { key: line }),
+  tx("tipBoost"),
 ];
 
 /** A tip for a circuit high enough for the thin air to matter (to the nearest 50 m) */
-const altitudeTip = (m: number) =>
-  `Altitude ${(Math.round(m / 50) * 50).toLocaleString("en-US")} m: thinner air reduces downforce and drag.`;
+const altitudeTip = (tx: LoadingTranslator, m: number) =>
+  tx("tipAltitude", { altitude: (Math.round(m / 50) * 50).toLocaleString("en-US") });
 
 const LIGHTS = 5;
 
 /** One line of status: what is arriving now, with its size where it is known */
-function statusLine(tasks: readonly AssetTask[]): string {
+function statusLine(tx: LoadingTranslator, tasks: readonly AssetTask[]): string {
   const now = tasks.find((t) => t.status === "loading") ?? tasks.find((t) => t.status === "pending");
-  if (!now) return "Ready";
-  if (now.id === "shaders") return now.status === "loading" ? "Compiling shaders" : "Queued: shaders";
-  if (now.status === "pending") return `${now.label}: queued`;
+  if (!now) return tx("ready");
+  if (now.id === "shaders") return now.status === "loading" ? tx("compilingShaders") : tx("shadersQueued");
+  if (now.status === "pending") return tx("assetQueued", { asset: now.label });
   return now.totalBytes > 0
-    ? `${now.label}: ${formatMegabytes(now.loadedBytes)} / ${formatMegabytes(now.totalBytes)} MB`
+    ? tx("assetProgress", { asset: now.label, loaded: formatMegabytes(now.loadedBytes), total: formatMegabytes(now.totalBytes) })
     : `${now.label}`;
 }
 
 /** Shown once loaded; touch screens are told to tap */
-const ContinuePrompt: React.FC = () => (
-  <span className="lc-disp text-[24px] text-lc-volt sm:text-[28px] phone:text-[22px]">
-    <span className="pointer-coarse:hidden">Press any key to continue</span>
-    <span className="hidden pointer-coarse:inline">Tap to continue</span>
-  </span>
-);
+const ContinuePrompt: React.FC = () => {
+  const tx = useTranslations("menu.loading");
+  return (
+    <span className="lc-disp text-[24px] text-lc-volt sm:text-[28px] phone:text-[22px]">
+      <span className="pointer-coarse:hidden">{tx("pressAnyKey")}</span>
+      <span className="hidden pointer-coarse:inline">{tx("tapToContinue")}</span>
+    </span>
+  );
+};
 
 /**
  * Who made what is about to load: the circuit's modder, the car's (in its credit's words: the Liana's is its
@@ -61,12 +67,25 @@ const ContinuePrompt: React.FC = () => (
  */
 const MakersLines: React.FC<{ trackId: string; trackName: string; carId: CarId }> = ({ trackId, trackName, carId }) => {
   const store = useStoreBuild();
+  const tx = useTranslations("menu.loading");
   const circuit = circuitMaker(trackId);
   const car = carMaker(carId);
+  const carTitle = carById(carId).title;
+  const name = (chunks: React.ReactNode) => <span className="font-semibold text-lc-chalk">{chunks}</span>;
   const lines = [
-    circuit ? { key: "circuit", lead: `${trackName} by`, maker: circuit } : null,
-    { key: "car", lead: `${carById(carId).title}: ${car.role.toLowerCase()} by`, maker: car },
-    { key: "game", lead: "LibreCorsa by", maker: GAME_MAKER },
+    circuit ? { key: "circuit", text: tx.rich("circuitBy", { circuit: trackName, maker: circuit.name, name }), maker: circuit } : null,
+    {
+      key: "car",
+      // In the credit's own words: the Liana's is its physics
+      text:
+        car.role === "Model"
+          ? tx.rich("carModelBy", { car: carTitle, maker: car.name, name })
+          : car.role === "Physics"
+            ? tx.rich("carPhysicsBy", { car: carTitle, maker: car.name, name })
+            : tx.rich("carRoleBy", { car: carTitle, role: car.role.toLowerCase(), maker: car.name, name }),
+      maker: car,
+    },
+    { key: "game", text: tx.rich("gameBy", { maker: GAME_MAKER.name, name }), maker: GAME_MAKER },
   ].filter((l): l is NonNullable<typeof l> => l !== null);
   const anySupport = !store && lines.some((l) => l.maker.support);
   return (
@@ -74,7 +93,7 @@ const MakersLines: React.FC<{ trackId: string; trackName: string; carId: CarId }
       <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[14px] leading-snug text-lc-slate short:text-[12px]">
         {lines.map((l) => (
           <li key={l.key}>
-            {l.lead} <span className="font-semibold text-lc-chalk">{l.maker.name}</span>
+            {l.text}
             {!store && l.maker.support ? (
               <>
                 {" · "}
@@ -94,7 +113,7 @@ const MakersLines: React.FC<{ trackId: string; trackName: string; carId: CarId }
       {anySupport ? (
         <p className="m-0 flex items-start gap-1.5 text-[13px] leading-snug text-lc-fog short:hidden">
           <Icon name="support" className="mt-px shrink-0 text-lc-volt" />
-          You can donate to them any time from the Source button next to the circuit or car.
+          {tx("donateHint")}
         </p>
       ) : null}
     </div>
@@ -141,16 +160,18 @@ export const LoadingScreen: React.FC<{
   const progress = useAssetProgress();
   const units = useUnits();
   const layout = useKeyLayout();
+  const tx = useTranslations("menu.loading");
   const tips = useMemo(() => {
     const base = tipsFor(
+      tx,
       keyLabel(cameraKey ?? "KeyC"),
       keyLabel(lineKey ?? "KeyR"),
       keyLabel(freeCameraKey ?? "F7"),
       keyLabel(tvCameraKey ?? "F8"),
     );
-    return BASE_ALTITUDE_M >= 1000 ? [altitudeTip(BASE_ALTITUDE_M), ...base] : base;
-    // Re-run when the layout is read (its identity changes): the key names follow it
-  }, [layout, cameraKey, freeCameraKey, tvCameraKey, lineKey]);
+    return BASE_ALTITUDE_M >= 1000 ? [altitudeTip(tx, BASE_ALTITUDE_M), ...base] : base;
+    // Re-run when the layout is read (its identity changes): the key names follow it; and with the language
+  }, [layout, cameraKey, freeCameraKey, tvCameraKey, lineKey, tx]);
   const [tip, setTip] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const leavingRef = useRef(false);
@@ -269,13 +290,13 @@ export const LoadingScreen: React.FC<{
     >
       {/* The one thing a player waits for here, read out once: the track is ready (not the percentage, which climbs) */}
       <span className="sr-only" aria-live="polite">
-        {ready ? "Ready. Press any key, click, tap or press a controller button to enter the track." : ""}
+        {ready ? tx("readyAnnouncement") : ""}
       </span>
       {/* The circuit's own outline echoed in faint contour rings behind the drawing */}
       <svg
         aria-hidden
         viewBox="-60 -60 220 220"
-        className="pointer-events-none fixed top-1/2 left-1/2 h-[170vmax] w-[170vmax] -translate-x-1/2 -translate-y-1/2 lg:left-[74%] lg:h-[150vmin] lg:w-[150vmin]"
+        className="pointer-events-none fixed top-1/2 left-1/2 h-[170vmax] w-[170vmax] -translate-x-1/2 -translate-y-1/2 lg:start-[74%] lg:h-[150vmin] lg:w-[150vmin]"
       >
         <g fill="none" stroke="var(--color-lc-carbon)" strokeWidth="1">
           {[
@@ -306,7 +327,7 @@ export const LoadingScreen: React.FC<{
               </span>
               <div
                 role="img"
-                aria-label={ready ? "Start lights out: ready" : `Start lights: ${litLights} of ${LIGHTS}`}
+                aria-label={ready ? tx("lightsOut") : tx("lights", { lit: String(litLights), total: String(LIGHTS) })}
                 className="flex gap-2 rounded-lc-tile border border-lc-line bg-lc-carbon px-3 py-2.5 short:mb-2 phone:gap-1.5 phone:px-2 phone:py-2"
               >
                 {Array.from({ length: LIGHTS }, (_, i) => (
@@ -317,11 +338,11 @@ export const LoadingScreen: React.FC<{
 
             {/* What is arriving now: the overall progress and one line of status; once all of it is in, compact screens drop it for the pinned prompt */}
             <div className={`flex flex-col gap-2.5 ${ready ? "compact:hidden" : ""}`}>
-              <Meter label={ready ? "Ready" : statusLine(progress.tasks)} value={shown} tone={ready ? "good" : "info"} stacked />
+              <Meter label={ready ? tx("ready") : statusLine(tx, progress.tasks)} value={shown} tone={ready ? "good" : "info"} stacked />
               {progress.anyFailed ? (
                 <p className="m-0 flex items-start gap-2 text-[13px] leading-snug text-lc-caution">
                   <Icon name="warning" className="mt-px" />
-                  Some assets failed to load. Using fallback geometry.
+                  {tx("assetsFailed")}
                 </p>
               ) : null}
             </div>
@@ -345,7 +366,7 @@ export const LoadingScreen: React.FC<{
               viewBox="-8 -8 116 116"
               className="h-auto w-full overflow-visible"
               role="img"
-              aria-label={`${trackInfo.name} drawing itself as it loads`}
+              aria-label={tx("drawing", { circuit: trackInfo.name })}
             >
               <path d={outline} fill="none" stroke="var(--color-lc-carbon)" strokeWidth="5.6" strokeLinejoin="round" />
               <path d={outline} fill="none" stroke="var(--color-lc-titanium)" strokeWidth="1.6" strokeLinejoin="round" />
@@ -385,8 +406,11 @@ export const LoadingScreen: React.FC<{
             <div className="flex flex-col items-center gap-0.5 text-center">
               <span className="lc-h3 text-balance text-lc-chalk short:text-[14px]">{trackInfo.name}</span>
               <span className="lc-hint short:text-[11px]">
-                {[trackInfo.layout, trackInfo.city].filter(Boolean).join(" · ")} ·{" "}
-                {distanceIn(lengthKm, units.speed).toFixed(2)} {DISTANCE_LABEL[units.speed]} · {TURN_METADATA.length} turns
+                {tx("trackLine", {
+                  place: [trackInfo.layout, trackInfo.city].filter(Boolean).join(" · "),
+                  length: `${distanceIn(lengthKm, units.speed).toFixed(2)} ${DISTANCE_LABEL[units.speed]}`,
+                  turns: TURN_METADATA.length,
+                })}
               </span>
             </div>
           </div>

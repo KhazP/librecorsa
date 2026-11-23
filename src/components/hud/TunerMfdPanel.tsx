@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { connectedPads } from "@/lib/input/device-input";
 import { HUD_TOGGLE_EVENT } from "@/lib/input/bindings";
 import { notePadInput } from "@/components/menu/input-mode";
@@ -22,6 +23,11 @@ export type MfdDialId = "tc1" | "tc2" | "abs" | "bias" | "diff_entry" | "diff_mi
 interface DialMeta {
   id: MfdDialId;
   category: MfdCategoryId;
+  accent: string;
+}
+
+/** A dial's words (see `useTunerText`) */
+interface DialText {
   /** Pill label */
   label: string;
   /** Name over the value */
@@ -29,47 +35,92 @@ interface DialMeta {
   /** What lowering / raising it does (button tooltips) */
   lowHint: string;
   highHint: string;
-  accent: string;
 }
 
-const CATEGORIES: { id: MfdCategoryId; label: string }[] = [
-  { id: "tc", label: "TC" },
-  { id: "abs", label: "ABS" },
-  { id: "bias", label: "BIAS" },
-  { id: "diff", label: "DIFF" },
-  { id: "pwr", label: "PWR" },
-];
+const CATEGORIES: { id: MfdCategoryId }[] = [{ id: "tc" }, { id: "abs" }, { id: "bias" }, { id: "diff" }, { id: "pwr" }];
 
 const ALL_DIALS: DialMeta[] = [
-  { id: "tc1", category: "tc", label: "TC1", title: "Traction control", lowHint: "More slip", highHint: "Safer", accent: DIAL_ACCENT },
-  { id: "tc2", category: "tc", label: "TC2", title: "TC cut", lowHint: "Smoother cut", highHint: "Harder cut", accent: DIAL_ACCENT },
-  { id: "abs", category: "abs", label: "ABS", title: "ABS", lowHint: "Later", highHint: "Earlier", accent: DIAL_ACCENT },
-  { id: "bias", category: "bias", label: "BIAS", title: "Brake bias", lowHint: "Rearward", highHint: "Forward", accent: DIAL_ACCENT },
-  { id: "diff_entry", category: "diff", label: "ENTRY", title: "Diff entry", lowHint: "Agile", highHint: "Stable", accent: DIAL_ACCENT },
-  { id: "diff_mid", category: "diff", label: "MID", title: "Diff mid", lowHint: "Rotates", highHint: "Locked", accent: DIAL_ACCENT },
-  { id: "diff_exit", category: "diff", label: "EXIT", title: "Diff exit", lowHint: "Less snap", highHint: "More drive", accent: DIAL_ACCENT },
-  { id: "engine_map", category: "pwr", label: "MAP", title: "Engine map", lowHint: "Sharper", highHint: "Smoother", accent: DIAL_ACCENT },
-  { id: "ers_mode", category: "pwr", label: "ERS", title: "ERS deploy", lowHint: "Harvest", highHint: "Attack", accent: DIAL_ACCENT },
+  { id: "tc1", category: "tc", accent: DIAL_ACCENT },
+  { id: "tc2", category: "tc", accent: DIAL_ACCENT },
+  { id: "abs", category: "abs", accent: DIAL_ACCENT },
+  { id: "bias", category: "bias", accent: DIAL_ACCENT },
+  { id: "diff_entry", category: "diff", accent: DIAL_ACCENT },
+  { id: "diff_mid", category: "diff", accent: DIAL_ACCENT },
+  { id: "diff_exit", category: "diff", accent: DIAL_ACCENT },
+  { id: "engine_map", category: "pwr", accent: DIAL_ACCENT },
+  { id: "ers_mode", category: "pwr", accent: DIAL_ACCENT },
 ];
 
-const ENGINE_MAPS: Record<number, { tag: string; torquePct: number }> = {
-  1: { tag: "QUALI", torquePct: 100 },
-  2: { tag: "RACE", torquePct: 100 },
-  3: { tag: "SMOOTH", torquePct: 96 },
-  4: { tag: "LEAN", torquePct: 92 },
-  5: { tag: "WET", torquePct: 88 },
+const ENGINE_MAPS: Record<number, { tag: "quali" | "race" | "smooth" | "lean" | "wet"; torquePct: number }> = {
+  1: { tag: "quali", torquePct: 100 },
+  2: { tag: "race", torquePct: 100 },
+  3: { tag: "smooth", torquePct: 96 },
+  4: { tag: "lean", torquePct: 92 },
+  5: { tag: "wet", torquePct: 88 },
 };
 
 const ERS_MODES = ["CHR", "LIC", "BAL", "RAC", "PSH"] as const;
-const ERS_TAG: Record<(typeof ERS_MODES)[number], string> = {
-  CHR: "CHARGE",
-  LIC: "LOW SPEED",
-  BAL: "BALANCED",
-  RAC: "RACE",
-  PSH: "ATTACK",
-};
 
-const PHASE_LABEL: Record<DiffPhase, string> = { ENTRY: "Entry", MID: "Mid", EXIT: "Exit" };
+/**
+ * The tuner's words in the current language, resolved once per language: the tuner redraws with every telemetry tick.
+ * TC, ABS and ERS are kept as they are in every language.
+ */
+function useTunerText() {
+  const tx = useTranslations("hud.tunerMfdPanel");
+  return useMemo(() => {
+    const dial = (label: string, key: "tc1" | "tc2" | "abs" | "bias" | "diffEntry" | "diffMid" | "diffExit" | "engineMap" | "ersMode", title?: string): DialText => ({
+      label,
+      title: title ?? tx(`dials.${key}.title`),
+      lowHint: tx(`dials.${key}.low`),
+      highHint: tx(`dials.${key}.high`),
+    });
+    return {
+      categories: { tc: "TC", abs: "ABS", bias: tx("categories.bias"), diff: tx("categories.diff"), pwr: tx("categories.pwr") } satisfies Record<MfdCategoryId, string>,
+      dials: {
+        tc1: dial("TC1", "tc1"),
+        tc2: dial("TC2", "tc2"),
+        abs: dial("ABS", "abs", "ABS"),
+        bias: dial(tx("dials.bias.label"), "bias"),
+        diff_entry: dial(tx("dials.diffEntry.label"), "diffEntry"),
+        diff_mid: dial(tx("dials.diffMid.label"), "diffMid"),
+        diff_exit: dial(tx("dials.diffExit.label"), "diffExit"),
+        engine_map: dial(tx("dials.engineMap.label"), "engineMap"),
+        ers_mode: dial("ERS", "ersMode"),
+      } satisfies Record<MfdDialId, DialText>,
+      engineMaps: {
+        quali: tx("engineMaps.quali"),
+        race: tx("engineMaps.race"),
+        smooth: tx("engineMaps.smooth"),
+        lean: tx("engineMaps.lean"),
+        wet: tx("engineMaps.wet"),
+      },
+      ersModes: {
+        CHR: tx("ersModes.charge"),
+        LIC: tx("ersModes.lowSpeed"),
+        BAL: tx("ersModes.balanced"),
+        RAC: tx("ersModes.race"),
+        PSH: tx("ersModes.attack"),
+      } satisfies Record<(typeof ERS_MODES)[number], string>,
+      phases: { ENTRY: tx("phases.entry"), MID: tx("phases.mid"), EXIT: tx("phases.exit") } satisfies Record<DiffPhase, string>,
+      tcOff: tx("chips.tcOff"),
+      absOff: tx("chips.absOff"),
+      off: tx("hero.off"),
+      ofMax: tx("hero.ofMax", { max: 12 }),
+      front: tx("hero.front"),
+      cut: tx("live.cut"),
+      wheels: [tx("live.wheelFl"), tx("live.wheelFr"), tx("live.wheelRl"), tx("live.wheelRr")],
+      torque: tx("live.torque"),
+      battery: tx("live.battery"),
+      previousDial: tx("previousDial"),
+      previousDialHint: tx("previousDialHint"),
+      nextDial: tx("nextDial"),
+      nextDialHint: tx("nextDialHint"),
+      openTuner: tx("openTuner"),
+      foldTuner: tx("foldTuner"),
+      tx,
+    };
+  }, [tx]);
+}
 
 const FALLBACK_TUNER: LiveTunerState = {
   tcLevel: 5,
@@ -154,19 +205,23 @@ export interface TunerMfdPanelProps {
 /** TC / ABS / bias / diff phase chips: the MFD's one-line status */
 export const MfdStatusChips: React.FC<{ telemetry: CarTelemetry }> = ({ telemetry }) => {
   const skin = useHudSkin();
+  const text = useTunerText();
   const tuner = telemetry.liveTuner ?? FALLBACK_TUNER;
   const { tc: tcActive, abs: absActive } = aidsActive(telemetry);
+  const tc = tuner.tcLevel > 0 ? text.tx("chips.tc", { level: tuner.tcLevel, cut: tuner.tc2Level }) : text.tcOff;
+  const abs = tuner.absLevel > 0 ? text.tx("chips.abs", { level: tuner.absLevel }) : text.absOff;
+  const bias = text.tx("chips.bias", { bias: tuner.brakeBiasPct.toFixed(1) });
   if (skin !== null) {
     return (
       <div className="flex items-center gap-1">
         <SkinTag tone={tcActive ? "caution" : "default"} filled={tcActive} className="px-1.5 py-0.5 text-[10px] font-semibold">
-          TC {tuner.tcLevel > 0 ? `${tuner.tcLevel}/${tuner.tc2Level}` : "Off"}
+          {tc}
         </SkinTag>
         <SkinTag tone={absActive ? "caution" : "default"} filled={absActive} className="px-1.5 py-0.5 text-[10px] font-semibold">
-          ABS {tuner.absLevel > 0 ? tuner.absLevel : "Off"}
+          {abs}
         </SkinTag>
-        <SkinTag className="lc-mono px-1.5 py-0.5 text-[10px] font-semibold">BB {tuner.brakeBiasPct.toFixed(1)}</SkinTag>
-        <SkinTag className="px-1.5 py-0.5 text-[10px] font-semibold">{PHASE_LABEL[tuner.diffActivePhase]}</SkinTag>
+        <SkinTag className="lc-mono px-1.5 py-0.5 text-[10px] font-semibold">{bias}</SkinTag>
+        <SkinTag className="px-1.5 py-0.5 text-[10px] font-semibold">{text.phases[tuner.diffActivePhase]}</SkinTag>
       </div>
     );
   }
@@ -174,15 +229,15 @@ export const MfdStatusChips: React.FC<{ telemetry: CarTelemetry }> = ({ telemetr
     // An aid lights solid caution while it intervenes; the rest are neutral read-outs
     <div className="flex items-center gap-1">
       <Badge tone={tcActive ? "warn" : "neutral"} variant={tcActive ? "solid" : "soft"} size="sm">
-        TC {tuner.tcLevel > 0 ? `${tuner.tcLevel}/${tuner.tc2Level}` : "Off"}
+        {tc}
       </Badge>
       <Badge tone={absActive ? "warn" : "neutral"} variant={absActive ? "solid" : "soft"} size="sm">
-        ABS {tuner.absLevel > 0 ? tuner.absLevel : "Off"}
+        {abs}
       </Badge>
       <Badge size="sm" className="lc-mono">
-        BB {tuner.brakeBiasPct.toFixed(1)}
+        {bias}
       </Badge>
-      <Badge size="sm">{PHASE_LABEL[tuner.diffActivePhase]}</Badge>
+      <Badge size="sm">{text.phases[tuner.diffActivePhase]}</Badge>
     </div>
   );
 };
@@ -206,6 +261,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
   onInteract,
 }) => {
   const skin = useHudSkin();
+  const text = useTunerText();
   const tuner = telemetry.liveTuner ?? FALLBACK_TUNER;
 
   const dials = useMemo(() => ALL_DIALS.filter((d) => (d.id === "ers_mode" ? tuner.hasErs : true)), [tuner.hasErs]);
@@ -236,6 +292,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
     dials.find((d) => d.id === dialId) ??
     dials.find((d) => d.category === ALL_DIALS.find((a) => a.id === dialId)?.category) ??
     dials[0];
+  const activeText = text.dials[activeDial.id];
   const categoryDials = useMemo(() => dials.filter((d) => d.category === activeDial.category), [dials, activeDial.category]);
 
   const tcActive = aidsActive(telemetry).tc;
@@ -434,13 +491,13 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
   // The active dial's value, a short tag beside its name, and its segment bar
   const hero = useMemo((): { text: string; tag: string; segments: number; filled: number; off: boolean } => {
     const lvl = (v: number, offAtZero: boolean) => ({
-      text: offAtZero && v <= 0 ? "OFF" : String(v),
-      tag: offAtZero && v <= 0 ? "" : "OF 12",
+      text: offAtZero && v <= 0 ? text.off : String(v),
+      tag: offAtZero && v <= 0 ? "" : text.ofMax,
       segments: 12,
       filled: v,
       off: offAtZero && v <= 0,
     });
-    const lock = (v: number) => ({ ...lvl(v, false), tag: `${Math.round(((v - 1) / 11) * 100)}% LOCK` });
+    const lock = (v: number) => ({ ...lvl(v, false), tag: text.tx("hero.lock", { pct: Math.round(((v - 1) / 11) * 100) }) });
     switch (activeDial.id) {
       case "tc1":
         return lvl(tuner.tcLevel, true);
@@ -451,7 +508,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
       case "bias":
         return {
           text: tuner.brakeBiasPct.toFixed(1),
-          tag: "% FRONT",
+          tag: text.front,
           segments: 14,
           filled: Math.round(Math.max(0, Math.min(1, (tuner.brakeBiasPct - 47) / (75 - 47))) * 14),
           off: false,
@@ -463,19 +520,25 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
       case "diff_exit":
         return lock(tuner.diffExit);
       case "engine_map":
-        return { text: `M${tuner.engineMap}`, tag: ENGINE_MAPS[tuner.engineMap]?.tag ?? "", segments: 5, filled: tuner.engineMap, off: false };
+        return {
+          text: text.tx("hero.map", { map: tuner.engineMap }),
+          tag: ENGINE_MAPS[tuner.engineMap] ? text.engineMaps[ENGINE_MAPS[tuner.engineMap].tag] : "",
+          segments: 5,
+          filled: tuner.engineMap,
+          off: false,
+        };
       case "ers_mode": {
         const idx = Math.max(0, ERS_MODES.indexOf(tuner.ersMode as (typeof ERS_MODES)[number]));
         return {
           text: tuner.ersMode,
-          tag: ERS_TAG[tuner.ersMode as (typeof ERS_MODES)[number]] ?? "",
+          tag: text.ersModes[tuner.ersMode as (typeof ERS_MODES)[number]] ?? "",
           segments: 5,
           filled: idx + 1,
           off: tuner.ersMode === "CHR",
         };
       }
     }
-  }, [activeDial.id, tuner]);
+  }, [activeDial.id, tuner, text]);
 
   if (embedded && hidden) return null;
 
@@ -485,10 +548,10 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
       case "tc":
         return (
           <>
-            <span className={skinned ? skinCss.label : MFD_LBL}>Cut</span>
+            <span className={skinned ? skinCss.label : MFD_LBL}>{text.cut}</span>
             {skinned ? <LiveBar frac={tuner.tcCutFraction} skinned fillClass={skinCss.fillCaution} /> : <LiveBar frac={tuner.tcCutFraction} color={HUD_CAUTION} />}
             <span
-              className={`lc-data w-9.5 text-right text-[12px] ${skinned ? (tcActive ? skinCss.inkCaution : skinCss.ink) : ""}`}
+              className={`lc-data w-9.5 text-end text-[12px] ${skinned ? (tcActive ? skinCss.inkCaution : skinCss.ink) : ""}`}
               style={skinned ? undefined : { color: tcActive ? HUD_CAUTION : "var(--color-lc-chalk)" }}
             >
               {Math.round(tuner.tcCutFraction * 100)}%
@@ -498,7 +561,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
       case "abs":
         return (["FL", "FR", "RL", "RR"] as const).map((c, i) => (
           <span key={c} className="flex min-w-0 flex-1 items-center gap-1">
-            <span className={skinned ? skinCss.label : `${HUD_LBL} tracking-normal`}>{c}</span>
+            <span className={skinned ? skinCss.label : `${HUD_LBL} tracking-normal`}>{text.wheels[i]}</span>
             {skinned ? (
               <LiveBar frac={tuner.absCutPerWheel[i] ?? 0} skinned fillClass={skinCss.fillCaution} />
             ) : (
@@ -509,12 +572,12 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
       case "bias":
         return (
           <>
-            <span className={`lc-data text-[12px] ${skinned ? skinCss.ink : "text-lc-chalk"}`}>F {tuner.brakeBiasPct.toFixed(1)}</span>
+            <span className={`lc-data text-[12px] ${skinned ? skinCss.ink : "text-lc-chalk"}`}>{text.tx("live.front", { bias: tuner.brakeBiasPct.toFixed(1) })}</span>
             <span className={`flex h-1.25 min-w-0 flex-1 gap-px overflow-hidden ${skinned ? skinCss.radiusSm : "rounded-full"}`}>
               <span className={`h-full ${skinned ? skinCss.fillAccent : "bg-lc-chalk"}`} style={{ width: `${tuner.brakeBiasPct}%` }} />
               <span className={`h-full flex-1 ${skinned ? skinCss.fillDim : "bg-lc-keyline"}`} />
             </span>
-            <span className={`lc-data text-[12px] ${skinned ? skinCss.inkSoft : "text-lc-fog"}`}>R {(100 - tuner.brakeBiasPct).toFixed(1)}</span>
+            <span className={`lc-data text-[12px] ${skinned ? skinCss.inkSoft : "text-lc-fog"}`}>{text.tx("live.rear", { bias: (100 - tuner.brakeBiasPct).toFixed(1) })}</span>
           </>
         );
       case "diff":
@@ -528,32 +591,32 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
                   filled={tuner.diffActivePhase === ph}
                   className="px-1.5 py-0.5 text-[9px] font-bold uppercase"
                 >
-                  {PHASE_LABEL[ph]}
+                  {text.phases[ph]}
                 </SkinTag>
               ) : (
                 <Badge key={ph} size="hud" variant={tuner.diffActivePhase === ph ? "solid" : "soft"} dot={tuner.diffActivePhase === ph ? true : undefined}>
-                  {PHASE_LABEL[ph]}
+                  {text.phases[ph]}
                 </Badge>
               ),
             )}
-            <span className={`lc-data ml-auto text-[12px] ${skinned ? skinCss.ink : "text-lc-chalk"}`}>{tuner.diffLockingTorqueNm} Nm</span>
+            <span className={`lc-data ms-auto text-[12px] ${skinned ? skinCss.ink : "text-lc-chalk"}`}>{tuner.diffLockingTorqueNm} Nm</span>
           </>
         );
       case "pwr":
         return activeDial.id === "engine_map" ? (
           <>
-            <span className={skinned ? `text-[10px] font-semibold uppercase ${skinCss.inkDim}` : MFD_LBL}>Torque</span>
-            <span className={`lc-data ml-auto text-[12px] ${skinned ? skinCss.ink : "text-lc-chalk"}`}>{ENGINE_MAPS[tuner.engineMap]?.torquePct ?? 100}%</span>
+            <span className={skinned ? `text-[10px] font-semibold uppercase ${skinCss.inkDim}` : MFD_LBL}>{text.torque}</span>
+            <span className={`lc-data ms-auto text-[12px] ${skinned ? skinCss.ink : "text-lc-chalk"}`}>{ENGINE_MAPS[tuner.engineMap]?.torquePct ?? 100}%</span>
           </>
         ) : (
           <>
-            <span className={skinned ? `text-[10px] font-semibold uppercase ${skinCss.inkDim}` : MFD_LBL}>Battery</span>
+            <span className={skinned ? `text-[10px] font-semibold uppercase ${skinCss.inkDim}` : MFD_LBL}>{text.battery}</span>
             {skinned ? (
               <LiveBar frac={telemetry.ersBatteryPercent / 100} skinned fillClass={skinCss.fillInfo} />
             ) : (
               <LiveBar frac={telemetry.ersBatteryPercent / 100} color={HUD_INFO} />
             )}
-            <span className={`lc-data w-9.5 text-right text-[12px] ${skinned ? skinCss.inkInfo : "text-lc-info"}`}>
+            <span className={`lc-data w-9.5 text-end text-[12px] ${skinned ? skinCss.inkInfo : "text-lc-info"}`}>
               {Math.round(telemetry.ersBatteryPercent)}%
             </span>
           </>
@@ -569,8 +632,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
             active={flashDir === "left"}
             onClick={() => cycleDial(-1)}
             className="size-7 shrink-0"
-            title="Previous dial (D-pad left or ,)"
-            aria-label="Previous dial"
+            title={text.previousDialHint}
+            aria-label={text.previousDial}
           >
             <Icon name="previous" size="sm" />
           </SkinButton>
@@ -585,7 +648,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
                 }}
                 className="h-7 min-w-0 flex-1 text-[10px] font-bold tracking-[0.06em] uppercase"
               >
-                {cat.label}
+                {text.categories[cat.id]}
               </SkinButton>
             ))}
           </div>
@@ -593,8 +656,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
             active={flashDir === "right"}
             onClick={() => cycleDial(1)}
             className="size-7 shrink-0"
-            title="Next dial (D-pad right or .)"
-            aria-label="Next dial"
+            title={text.nextDialHint}
+            aria-label={text.nextDial}
           >
             <Icon name="next" size="sm" />
           </SkinButton>
@@ -611,7 +674,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
                 onClick={() => pickDial(d.id)}
                 className="h-5.5 min-w-0 flex-1 text-[9px] font-bold tracking-[0.06em] uppercase"
               >
-                {d.label}
+                {text.dials[d.id].label}
               </SkinButton>
             );
           })}
@@ -619,7 +682,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
 
         <div className={`flex min-h-0 flex-1 flex-col justify-between px-2.5 py-2 ${skinCss.deepBox}`}>
           <div className="flex items-baseline justify-between">
-            <span className={`${skinCss.label} ${skinCss.ink}`}>{activeDial.title}</span>
+            <span className={`${skinCss.label} ${skinCss.ink}`}>{activeText.title}</span>
             <span className={skinCss.label}>{hero.tag}</span>
           </div>
           <div className="flex items-center justify-between">
@@ -627,8 +690,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
               active={flashDir === "down"}
               onClick={() => adjustActiveDial(-1)}
               className="size-9 shrink-0"
-              aria-label={`Lower ${activeDial.title}`}
-              title={`${activeDial.lowHint} (D-pad down or -)`}
+              aria-label={text.tx("lower", { dial: activeText.title })}
+              title={text.tx("lowerHint", { hint: activeText.lowHint })}
             >
               <Icon name="remove" size="sm" />
             </SkinButton>
@@ -637,8 +700,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
               active={flashDir === "up"}
               onClick={() => adjustActiveDial(1)}
               className="size-9 shrink-0"
-              aria-label={`Raise ${activeDial.title}`}
-              title={`${activeDial.highHint} (D-pad up or =)`}
+              aria-label={text.tx("raise", { dial: activeText.title })}
+              title={text.tx("raiseHint", { hint: activeText.highHint })}
             >
               <Icon name="add" size="sm" />
             </SkinButton>
@@ -670,7 +733,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
           <SkinButton
             onClick={() => setCollapsed((c) => !c)}
             className="size-6.5 shrink-0"
-            aria-label={collapsed ? "Open the tuner" : "Fold the tuner"}
+            aria-label={collapsed ? text.openTuner : text.foldTuner}
           >
             <Icon name={collapsed ? "collapse" : "expand"} size="xs" />
           </SkinButton>
@@ -688,8 +751,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
           type="button"
           onClick={() => cycleDial(-1)}
           className={`${MFD_ROUND_BTN} size-7 ${flashDir === "left" ? MFD_ROUND_FLASH : `${MFD_ROUND_IDLE} text-lc-slate`}`}
-          title="Previous dial (D-pad left or ,)"
-          aria-label="Previous dial"
+          title={text.previousDialHint}
+          aria-label={text.previousDial}
         >
           <Icon name="previous" size="sm" />
         </button>
@@ -707,7 +770,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
                 activeDial.category === cat.id ? HUD_CHOSEN : HUD_IDLE
               }`}
             >
-              {cat.label}
+              {text.categories[cat.id]}
             </button>
           ))}
         </div>
@@ -715,8 +778,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
           type="button"
           onClick={() => cycleDial(1)}
           className={`${MFD_ROUND_BTN} size-7 ${flashDir === "right" ? MFD_ROUND_FLASH : `${MFD_ROUND_IDLE} text-lc-slate`}`}
-          title="Next dial (D-pad right or .)"
-          aria-label="Next dial"
+          title={text.nextDialHint}
+          aria-label={text.nextDial}
         >
           <Icon name="next" size="sm" />
         </button>
@@ -735,7 +798,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
                 selected ? `border-transparent ${HUD_CHOSEN}` : `border-lc-line ${HUD_IDLE}`
               }`}
             >
-              {d.label}
+              {text.dials[d.id].label}
             </button>
           );
         })}
@@ -744,7 +807,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
       {/* Value card */}
       <div className="flex min-h-0 flex-1 flex-col justify-between rounded-lc-tile border border-lc-titanium bg-lc-well px-2.5 py-2">
         <div className="flex items-baseline justify-between">
-          <span className="lc-chip-text text-lc-chalk">{activeDial.title}</span>
+          <span className="lc-chip-text text-lc-chalk">{activeText.title}</span>
           <span className={MFD_LBL}>{hero.tag}</span>
         </div>
         <div className="flex items-center justify-between">
@@ -752,8 +815,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
             type="button"
             onClick={() => adjustActiveDial(-1)}
             className={`${MFD_ROUND_BTN} size-9 ${flashDir === "down" ? MFD_ROUND_FLASH : `${MFD_ROUND_IDLE} text-lc-chalk`}`}
-            aria-label={`Lower ${activeDial.title}`}
-            title={`${activeDial.lowHint} (D-pad down or -)`}
+            aria-label={text.tx("lower", { dial: activeText.title })}
+            title={text.tx("lowerHint", { hint: activeText.lowHint })}
           >
             <Icon name="remove" size="sm" />
           </button>
@@ -764,8 +827,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
             type="button"
             onClick={() => adjustActiveDial(1)}
             className={`${MFD_ROUND_BTN} size-9 ${flashDir === "up" ? MFD_ROUND_FLASH : `${MFD_ROUND_IDLE} text-lc-chalk`}`}
-            aria-label={`Raise ${activeDial.title}`}
-            title={`${activeDial.highHint} (D-pad up or =)`}
+            aria-label={text.tx("raise", { dial: activeText.title })}
+            title={text.tx("raiseHint", { hint: activeText.highHint })}
           >
             <Icon name="add" size="sm" />
           </button>
@@ -800,7 +863,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
           type="button"
           onClick={() => setCollapsed((c) => !c)}
           className={`flex size-6.5 shrink-0 items-center justify-center rounded-lc-nub ${HUD_IDLE} ${HUD_CONTROL}`}
-          aria-label={collapsed ? "Open the tuner" : "Fold the tuner"}
+          aria-label={collapsed ? text.openTuner : text.foldTuner}
         >
           <Icon name={collapsed ? "collapse" : "expand"} size="xs" />
         </button>

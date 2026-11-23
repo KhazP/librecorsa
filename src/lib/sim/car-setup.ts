@@ -4,6 +4,7 @@
  * electronics' starting dials).
  */
 
+import { text as t } from "@/lib/text";
 import type { AeroSetupPreset, LiveTunerPatch, TireCompound, TyreSetup, VehicleModelId, WheelPressures } from "@/types/f1";
 import { axlePressures } from "@/types/f1";
 import { LC26_CHASSIS } from "./lc26-data";
@@ -365,12 +366,19 @@ export interface FactoryPreset {
 
 /** The endurance cars' low-drag trims for long-straight circuits: low-downforce aero on the long gear set */
 export const FACTORY_PRESETS: Partial<Record<VehicleModelId, readonly FactoryPreset[]>> = {
-  "amg-gt3": [{ id: "low_drag_gt3", name: "Low drag", aero: "low_downforce", chassis: { gearRatioSet: 1 } }],
+  "amg-gt3": [
+    {
+      id: "low_drag_gt3",
+      get name() { return t("game.setupShare.factoryLowDrag"); },
+      aero: "low_downforce",
+      chassis: { gearRatioSet: 1 },
+    },
+  ],
   // The prototype also runs its rear bar detached and less camber for the straights
   "lc-lmdh": [
     {
       id: "low_drag_proto",
-      name: "Low drag",
+      get name() { return t("game.setupShare.factoryLowDrag"); },
       aero: "low_downforce",
       chassis: { gearRatioSet: 1, arbRearPct: ARB_DETACHED_PCT },
       camberDeg: { front: -1.2, rear: -1.0 },

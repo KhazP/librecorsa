@@ -1,0 +1,634 @@
+{
+  "screen": {
+    "title": "設定",
+    "dialogLabel": "設定",
+    "detailLabel": "顯示設定的詳細程度",
+    "simple": "精簡",
+    "advanced": "進階",
+    "close": "關閉",
+    "categoriesLabel": "設定分類",
+    "sectionsLabel": "{category}分區",
+    "paneLabel": "{category}：{tab}",
+    "noAdvancedHere": "此頁面沒有進階設定",
+    "moreInAdvanced": "「進階」模式提供更多設定",
+    "steeringInAdvanced": "轉向輔助位於「進階」模式中",
+    "categories": {
+      "driving": "駕駛",
+      "controls": "控制",
+      "ffb": "力回饋",
+      "display": "顯示",
+      "audio": "音訊",
+      "profile": "檔案與資料"
+    },
+    "tabs": {
+      "driving": {
+        "assists": "駕駛輔助",
+        "steering": "轉向輔助"
+      },
+      "controls": {
+        "device": "裝置",
+        "keyboard": "鍵盤",
+        "controller": "控制器",
+        "wheel": "方向盤",
+        "touch": "觸控"
+      },
+      "ffb": {
+        "main": "力回饋"
+      },
+      "display": {
+        "graphics": "畫面",
+        "hud": "HUD",
+        "camera": "視角",
+        "interface": "介面"
+      },
+      "audio": {
+        "main": "音訊"
+      },
+      "profile": {
+        "driver": "車手",
+        "data": "資料"
+      }
+    },
+    "prompts": {
+      "move": "移動",
+      "change": "調整",
+      "tabs": "切換分頁",
+      "resetRow": "重設此項",
+      "showAdvanced": "顯示進階",
+      "showSimple": "顯示精簡",
+      "back": "返回"
+    }
+  },
+  "field": {
+    "resetRow": "將「{setting}」重設為預設值",
+    "reset": "重設",
+    "resetTitle": "要重設「{card}」嗎？",
+    "resetConfirm": "重設",
+    "resetBody": "這會將「{what}」恢復為預設值。",
+    "resetBodyDefault": "這會將這些設定恢復為預設值。",
+    "showAdvanced": "顯示進階"
+  },
+  "values": {
+    "off": "關閉",
+    "linear": "線性",
+    "progressive": "漸進 {value}",
+    "aggressive": "靈敏 {value}",
+    "raw": "原始訊號",
+    "fullLock": "{value}，轉向打滿"
+  },
+  "off": {
+    "triggerPedals": "需要將踏板設於扳機鍵",
+    "touchScreen": "需要觸控螢幕"
+  },
+  "rows": {
+    "assistLevel": {
+      "label": "輔助等級",
+      "options": {
+        "beginner": "新手",
+        "intermediate": "中階",
+        "sim": "擬真"
+      },
+      "details": {
+        "beginner": "完整 TC 與 ABS、行車線、轉向輔助",
+        "intermediate": "TC 與 ABS、行車線",
+        "sim": "無 TC、無 ABS、無行車線"
+      }
+    },
+    "assistPreset": {
+      "label": "循跡控制與 ABS",
+      "options": {
+        "pro": "關閉",
+        "semi_pro": "TC + ABS",
+        "assisted": "全開"
+      }
+    },
+    "racingLine": {
+      "label": "行車線",
+      "hint": "按鍵 {key}"
+    },
+    "autoGearbox": {
+      "label": "自動變速箱",
+      "hint": "手動換檔鍵：{up}／{down}"
+    },
+    "autoClutch": {
+      "label": "自動離合器",
+      "hint": "防止熄火；關閉即可使用手動離合器起跑",
+      "off": {
+        "gearbox": "需要手動變速箱",
+        "wheel": "請至「控制 > 方向盤」綁定離合器",
+        "controller": "請至「控制 > 控制器」綁定離合器",
+        "touch": "觸控操作不支援此項",
+        "keyboard": "請至「控制 > 鍵盤」綁定離合器"
+      },
+      "overridden": {
+        "gearbox": "暫時被覆寫（需要手動變速箱）；開啟即可恢復預設",
+        "wheel": "暫時被覆寫（請至「控制 > 方向盤」綁定離合器）；開啟即可恢復預設",
+        "controller": "暫時被覆寫（請至「控制 > 控制器」綁定離合器）；開啟即可恢復預設",
+        "touch": "暫時被覆寫（觸控操作不支援此項）；開啟即可恢復預設",
+        "keyboard": "暫時被覆寫（請至「控制 > 鍵盤」綁定離合器）；開啟即可恢復預設"
+      }
+    },
+    "gamepadAssist": {
+      "label": "控制器轉向輔助",
+      "hint": "將轉向角限制於前輪抓地力極限內，並協助救回打滑"
+    },
+    "exitAssist": {
+      "label": "油門輔助",
+      "hint": "後輪打滑時自動調節油門（鍵盤、關閉 TC 時生效）"
+    },
+    "brakeAssist": {
+      "label": "煞車輔助",
+      "hint": "車輪鎖死時自動調節煞車（鍵盤、關閉 ABS 時生效）"
+    },
+    "realism": {
+      "label": "模擬擬真度"
+    },
+    "launch": {
+      "label": "起步控制"
+    },
+    "ghost": {
+      "label": "最佳單圈幽靈車"
+    },
+    "steeringPreset": {
+      "label": "預設組合",
+      "custom": "自訂",
+      "options": {
+        "custom": "自訂"
+      }
+    },
+    "pedalAssistStrength": {
+      "label": "踏板輔助強度",
+      "hint": "決定油門輔助與煞車輔助介入的早晚及收放幅度"
+    },
+    "mouseSteer": {
+      "label": "滑鼠轉向",
+      "hint": "按鍵 {key}"
+    },
+    "throttleRiseS": {
+      "label": "油門上升時間"
+    },
+    "brakeRiseS": {
+      "label": "煞車上升時間"
+    },
+    "steerRiseS": {
+      "label": "轉向平滑度",
+      "hint": "數值越低越敏銳"
+    },
+    "steerReturnS": {
+      "label": "轉向回正速度"
+    },
+    "halfThrottle": {
+      "label": "半油門比例"
+    },
+    "halfBrake": {
+      "label": "半煞車比例"
+    },
+    "rumble": {
+      "label": "震動回饋"
+    },
+    "steeringRate": {
+      "label": "轉向速度"
+    },
+    "deadzone": {
+      "label": "內側死區"
+    },
+    "outerDeadzone": {
+      "label": "外側死區"
+    },
+    "linearity": {
+      "label": "搖桿線性度",
+      "hint": "大於 1 會使中央區域更柔和"
+    },
+    "throttleGamma": {
+      "label": "油門曲線",
+      "hint": "大於 1 會使輕踩區段更柔和"
+    },
+    "brakeGamma": {
+      "label": "煞車曲線",
+      "hint": "大於 1 會使輕煞區段更柔和"
+    },
+    "stickPedalDeadzone": {
+      "label": "搖桿踏板死區",
+      "off": "需要將踏板設於搖桿"
+    },
+    "triggerRumble": {
+      "label": "扳機震動",
+      "hint": "於扳機鍵提供打滑、ABS 與車輪空轉震動回饋"
+    },
+    "triggerSlipAlwaysOn": {
+      "label": "開啟 ABS/TC 時保留扳機打滑回饋",
+      "off": "需要開啟「扳機震動」"
+    },
+    "steerDeadzone": {
+      "label": "中央死區"
+    },
+    "steerSmoothingS": {
+      "label": "輸入濾波"
+    },
+    "wheelBrakeGamma": {
+      "label": "煞車曲線",
+      "hint": "壓力感測踏板建議 1.0 · 電位計踏板建議 1.3 至 1.6"
+    },
+    "touchMode": {
+      "label": "觸控操作",
+      "options": {
+        "auto": "自動",
+        "on": "開啟",
+        "off": "關閉"
+      }
+    },
+    "touchLayout": {
+      "label": "觸控樣式",
+      "hint": "類比拖曳滑桿或數位按鍵",
+      "off": "觸控操作已關閉",
+      "options": {
+        "sliders": "滑桿",
+        "buttons": "按鍵"
+      }
+    },
+    "tiltSteer": {
+      "label": "傾斜轉向"
+    },
+    "tiltRangeDeg": {
+      "label": "傾斜角度範圍",
+      "off": "需要開啟「傾斜轉向」"
+    },
+    "ffbEnabled": {
+      "label": "力回饋"
+    },
+    "ffbGain": {
+      "label": "強度",
+      "hintPerCar": "已由下方的單車強度覆寫（{gain}）"
+    },
+    "ffbDamping": {
+      "label": "阻尼"
+    },
+    "ffbKerb": {
+      "label": "路緣石震動"
+    },
+    "ffbAbs": {
+      "label": "ABS 震動"
+    },
+    "ffbSlip": {
+      "label": "打滑震動",
+      "hint": "僅支援 WebHID"
+    },
+    "ffbShift": {
+      "label": "升檔提示震動",
+      "hint": "僅支援 WebHID"
+    },
+    "ffbCurve": {
+      "label": "力回饋曲線",
+      "hint": "負值放大微弱力道 · 正值保留峰值餘裕"
+    },
+    "ffbMinForce": {
+      "label": "最小力道",
+      "hint": "消除方向盤中央空行程死區",
+      "hintPerCar": "已由單車最小力道設定覆寫"
+    },
+    "ffbFilterS": {
+      "label": "平滑濾波"
+    },
+    "ffbDownforceComp": {
+      "label": "下壓力補償",
+      "hint": "減少高速空力下壓力造成的過載截頂"
+    },
+    "ffbFriction": {
+      "label": "摩擦力",
+      "hint": "方向盤硬體效果"
+    },
+    "ffbInertia": {
+      "label": "慣性",
+      "hint": "方向盤硬體效果"
+    },
+    "ffbCollisionGuard": {
+      "label": "碰撞保護",
+      "hint": "限制撞擊瞬間的尖峰扭力"
+    },
+    "revLeds": {
+      "label": "轉速燈"
+    },
+    "quality": {
+      "label": "畫質",
+      "options": {
+        "low": "低",
+        "medium": "中",
+        "high": "高"
+      },
+      "details": {
+        "low": "無陰影與泛光，較低解析度",
+        "medium": "有陰影，無泛光",
+        "mediumTouch": "有陰影，無泛光與 MSAA",
+        "high": "完整特效",
+        "highTouch": "完整特效（不含 MSAA）"
+      }
+    },
+    "sharpLow": {
+      "label": "高清晰低畫質",
+      "hint": "以「中」解析度繪製「低」畫質",
+      "hintAuto": "以「中」解析度繪製「低」畫質；自動畫質可能會關閉此項",
+      "off": "需要將「畫質」設為「低」"
+    },
+    "renderScale": {
+      "label": "渲染解析度"
+    },
+    "sharpen": {
+      "label": "銳利化",
+      "hint": "縮放後強化邊緣與柏油路面清晰度"
+    },
+    "fpsCap": {
+      "label": "幀率",
+      "hint": "30 fps 可降低行動裝置發熱",
+      "options": {
+        "full": "無上限",
+        "fps30": "30 fps"
+      }
+    },
+    "autoQuality": {
+      "label": "自動畫質",
+      "hint": "持續掉幀時自動降低畫質",
+      "hintLowered": "已自動調降：{what}"
+    },
+    "autoQualityMinScale": {
+      "label": "最低解析度",
+      "hint": "自動畫質不會將「渲染解析度」降至此值以下",
+      "hintLow": "維持目前解析度；「低」畫質已無可關閉的特效",
+      "hintEffects": "維持目前解析度；僅調降畫面特效",
+      "off": "需要開啟「自動畫質」"
+    },
+    "driverBody": {
+      "label": "車手身體模型"
+    },
+    "hudScale": {
+      "label": "大小"
+    },
+    "deltaBar": {
+      "label": "時間差條"
+    },
+    "lapSummary": {
+      "label": "單圈摘要"
+    },
+    "virtualMirror": {
+      "label": "後視鏡",
+      "options": {
+        "auto": "自動",
+        "always": "永遠顯示",
+        "off": "關閉"
+      }
+    },
+    "radar": {
+      "label": "車距雷達"
+    },
+    "showPlayerNames": {
+      "label": "玩家名稱標籤"
+    },
+    "boardWidget": {
+      "label": "圈速榜",
+      "options": {
+        "lapEnd": "完成單圈時",
+        "open": "永遠展開",
+        "closed": "永遠收合"
+      }
+    },
+    "inputTrace": {
+      "label": "輸入曲線"
+    },
+    "towerGaps": {
+      "label": "排名欄差距顯示",
+      "options": {
+        "interval": "與前車差距",
+        "leader": "與領先者差距"
+      }
+    },
+    "mapMode": {
+      "label": "地圖模式",
+      "options": {
+        "full": "完整賽道",
+        "local": "局部放大"
+      }
+    },
+    "splitGaps": {
+      "label": "賽段車距"
+    },
+    "mfdAutoCollapse": {
+      "label": "MFD 自動收合"
+    },
+    "camera": {
+      "label": "預設視角",
+      "hint": "按鍵 {key}"
+    },
+    "cockpitFovDeg": {
+      "label": "視野角度（FOV）",
+      "hintCarOwn": "使用各車款預設值",
+      "hintCarDefault": "車款預設：{degrees}°",
+      "valueCar": "{value}°（車款預設）"
+    },
+    "headMovement": {
+      "label": "頭部動態",
+      "options": {
+        "natural": "自然",
+        "static": "鎖定"
+      }
+    },
+    "language": {
+      "label": "語言",
+      "options": {
+        "auto": "自動"
+      },
+      "details": {
+        "auto": "跟隨瀏覽器語言"
+      }
+    },
+    "speedUnit": {
+      "label": "車速"
+    },
+    "temperatureUnit": {
+      "label": "溫度"
+    },
+    "pressureUnit": {
+      "label": "胎壓"
+    },
+    "uiScale": {
+      "label": "介面大小"
+    },
+    "palette": {
+      "label": "色盲友善配色",
+      "options": {
+        "standard": "標準",
+        "protan": "紅弱",
+        "deutan": "綠弱",
+        "tritan": "藍弱"
+      },
+      "details": {
+        "protan": "紅色盲與紅色弱",
+        "deutan": "綠色盲與綠色弱",
+        "tritan": "藍色盲與藍色弱"
+      }
+    },
+    "volume": {
+      "label": "主音量"
+    },
+    "kerbs": {
+      "label": "路緣石"
+    },
+    "muted": {
+      "label": "靜音",
+      "hint": "按鍵 {key}"
+    },
+    "drsBeep": {
+      "label": "DRS 提示音"
+    },
+    "shiftBeep": {
+      "label": "升檔提示音"
+    },
+    "musicOn": {
+      "label": "音樂"
+    },
+    "menuMusic": {
+      "label": "選單音樂"
+    },
+    "raceMusicOn": {
+      "label": "駕駛時播放音樂"
+    },
+    "raceMusic": {
+      "label": "正賽音樂",
+      "hint": "跳至下一首：{key}",
+      "off": "「駕駛時播放音樂」已關閉"
+    },
+    "replayMusic": {
+      "label": "結算與重播音樂"
+    },
+    "autoUpload": {
+      "label": "自動上傳最佳單圈"
+    },
+    "telemetryOut": {
+      "label": "UDP 遙測",
+      "hint": "將即時遙測傳送至本機 bridge（供外部儀錶板、低音震動器使用）"
+    },
+    "practiceDamage": {
+      "label": "練習車損",
+      "hints": {
+        "off": "練習賽與計時賽中無車損",
+        "reduced": "車損減半；車輛全毀後會修復並以飛行單圈重新開始",
+        "full": "正賽車損；車輛全毀後會修復並以飛行單圈重新開始"
+      }
+    }
+  },
+  "driving": {
+    "drivingAids": "駕駛輔助",
+    "pedalHelp": "踏板輔助",
+    "onTrack": "場上設定",
+    "keyboardSteering": "鍵盤轉向",
+    "controllerSteering": "控制器轉向"
+  },
+  "controls": {
+    "activeDevice": "使用中裝置",
+    "quickSetup": "快速設定",
+    "runSetupWizard": "執行設定精靈",
+    "runSetup": "開始設定",
+    "touch": "觸控"
+  },
+  "display": {
+    "layout": {
+      "title": "配置",
+      "resetWhat": "HUD 配置"
+    },
+    "graphics": {
+      "title": "畫面",
+      "vr": "VR",
+      "vrOff": "需要 WebXR 頭戴裝置",
+      "experimental": "實驗性",
+      "inVr": "VR 模式中",
+      "enterVr": "進入 VR"
+    },
+    "hud": {
+      "title": "HUD 顯示項目"
+    },
+    "camera": {
+      "title": "視角",
+      "freeCamera": "自由視角",
+      "freeCameraHint": "拖曳轉向 · WASD 移動 · Q/E 升降 · 滾輪調速 · R 重設",
+      "freeCameraUnbound": "未綁定",
+      "tvCamera": "場邊轉播視角",
+      "tvCameraUnbound": "未綁定",
+      "adjustSeat": "調整座椅",
+      "adjustSeatHint": "於賽道上長按 {key} 或 {button}",
+      "adjustSeatOff": "駕駛時方可使用（長按 {key} 或 {button}）",
+      "adjust": "調整",
+      "resetSeats": "重設座椅位置",
+      "resetSeatsOff": "已是預設值",
+      "resetSeatsButton": "重設",
+      "resetSeatsTitle": "要重設座椅位置嗎？",
+      "resetSeatsConfirm": "全部重設",
+      "resetSeatsBody": "這會將所有車款的駕駛艙與儀錶板座椅偏移恢復為預設值。"
+    },
+    "interface": {
+      "language": "語言",
+      "units": "單位",
+      "sizeColour": "大小與色彩"
+    }
+  },
+  "audio": {
+    "sound": "音效",
+    "music": "音樂",
+    "menuTracks": "選單曲目",
+    "raceTracks": "正賽曲目",
+    "resultsTracks": "結算與重播曲目",
+    "cockpitCues": "座艙提示音"
+  },
+  "profile": {
+    "driver": {
+      "title": "車手",
+      "name": "名稱",
+      "code": "代碼",
+      "colour": "代表色",
+      "colourGroup": "代表色",
+      "otherColour": "其他顏色",
+      "colours": {
+        "red": "紅色",
+        "teal": "藍綠色",
+        "orange": "橘色",
+        "blue": "藍色",
+        "racingGreen": "賽車綠",
+        "navy": "海軍藍",
+        "silver": "銀色",
+        "lime": "萊姆綠"
+      }
+    },
+    "data": {
+      "driverKey": "車手金鑰",
+      "identityKey": "身分金鑰",
+      "identityKeyHint": "用於簽署線上單圈。可備份以供其他瀏覽器使用",
+      "save": "儲存",
+      "load": "載入",
+      "telemetry": "遙測",
+      "udpPort": "UDP 連接埠",
+      "udpPortField": "UDP 連接埠",
+      "portConflict": "連接埠 {port} 與 {app} 衝突（預設 {defaultPort}）",
+      "portOff": "需要開啟「UDP 遙測」",
+      "reset": "重設",
+      "resetAll": "重設所有設定",
+      "resetAllHint": "恢復預設的控制、輔助、顯示與音訊設定",
+      "resetAllButton": "重設",
+      "resetAllTitle": "要重設所有設定嗎？",
+      "resetAllConfirm": "全部重設",
+      "resetAllBody": "這會將所有設定、按鍵綁定與校準恢復為預設值。車手檔案、車輛調校與圈速紀錄將保留。",
+      "clear": "清除已儲存資料",
+      "clearHint": "刪除本機設定、車手金鑰、單圈、幽靈車與車輛調校",
+      "clearButton": "清除",
+      "clearTitle": "要清除所有已儲存資料嗎？",
+      "clearConfirm": "全部清除",
+      "clearBody": "這會永久移除此瀏覽器中的所有設定、車手金鑰、單圈、幽靈車與調校，並重新載入頁面。"
+    }
+  },
+  "hudPicker": {
+    "label": "HUD 配置",
+    "thirdParty": "第三方配置",
+    "thirdPartyNote": "參考其他開源 HUD 專案重製，並署名致謝原作者。",
+    "touchNote": "手機裝置一律使用 Touch HUD。",
+    "description": "{detail}。作者：{author}",
+    "descriptionSite": "{detail}。作者：{author} · {site}",
+    "sourceLink": "{layout} 原始碼，作者：{author}（於新分頁開啟）",
+    "siteLink": "{site}，{author} 的網站（於新分頁開啟）"
+  }
+}

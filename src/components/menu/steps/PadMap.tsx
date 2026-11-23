@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslations } from "use-intl/react";
+import { t } from "@/i18n/runtime";
 import {
   PAD_ACTIONS,
   PAD_BRAKE_BUTTON,
@@ -44,7 +46,7 @@ const rows = (sources: PadPedalSources): { left: Row[]; right: Row[] } => {
     const pedal = pedalOnButton(sources, b);
     return pedal ? btn(b, PAD_PEDAL_LABELS[pedal]) : btn(b);
   };
-  // "Throttle up, brake down": the pedals on one axis, the up / left half first
+  // "Throttle up, brake down": the pedals on one axis (one per half, so two at most), the up / left half first
   const axisRow = (axis: number): Row[] => {
     const on = PAD_PEDALS.flatMap((p) => {
       const s = sources[p];
@@ -52,26 +54,31 @@ const rows = (sources: PadPedalSources): { left: Row[]; right: Row[] } => {
     }).sort((a, b) => a.sign - b.sign);
     if (!on.length) return [];
     const vertical = axis % 2 === 1;
-    const text = on
-      .map(({ p, sign }, i) => {
-        const label = i === 0 ? PAD_PEDAL_LABELS[p] : PAD_PEDAL_LABELS[p].toLowerCase();
-        return `${label} ${vertical ? (sign < 0 ? "up" : "down") : sign < 0 ? "left" : "right"}`;
-      })
-      .join(", ");
+    const direction = (sign: number) => (vertical ? (sign < 0 ? "up" : "down") : sign < 0 ? "left" : "right");
+    const [first, second] = on;
+    const text = () =>
+      second
+        ? t("setup.padMap.axisPedals", {
+            first: first.p,
+            firstDirection: direction(first.sign),
+            second: second.p,
+            secondDirection: direction(second.sign),
+          })
+        : t("setup.padMap.axisPedal", { pedal: first.p, direction: direction(first.sign) });
     const glyph: PadButtonName = `${axis < 2 ? "ls" : "rs"}-${vertical ? "vertical" : "horizontal"}`;
-    return [{ key: `axis${axis}`, buttons: [], glyph, action: () => text, axis }];
+    return [{ key: `axis${axis}`, buttons: [], glyph, action: text, axis }];
   };
   return {
     left: [
       button(PAD_BRAKE_BUTTON),
       button(4),
       button(8),
-      { key: "lstick", buttons: [], glyph: "ls", action: () => "Steer" },
+      { key: "lstick", buttons: [], glyph: "ls", action: () => t("setup.padMap.steer") },
       ...axisRow(0),
       ...axisRow(1),
       button(10),
-      { key: "dpad-x", buttons: [14, 15], glyph: "dpad-horizontal", action: () => "MFD dial" },
-      { key: "dpad-y", buttons: [12, 13], glyph: "dpad-vertical", action: () => "MFD value" },
+      { key: "dpad-x", buttons: [14, 15], glyph: "dpad-horizontal", action: () => t("setup.padMap.mfdDial") },
+      { key: "dpad-y", buttons: [12, 13], glyph: "dpad-vertical", action: () => t("setup.padMap.mfdValue") },
     ],
     right: [
       button(PAD_THROTTLE_BUTTON),
@@ -172,6 +179,7 @@ const PsSymbol: React.FC<{ button: number; x: number; y: number; color: string }
 };
 
 const PadArt: React.FC<{ family: PadFamily; look: (button: number) => Look; axes: number[] }> = ({ family, look, axes }) => {
+  const tx = useTranslations("setup.padMap");
   const L = LAYOUT[family];
   const part = (button: number) => {
     const l = look(button);
@@ -194,7 +202,7 @@ const PadArt: React.FC<{ family: PadFamily; look: (button: number) => Look; axes
   ];
 
   return (
-    <svg viewBox="140 62 480 300" className="block h-auto w-full" role="img" aria-label="Controller">
+    <svg viewBox="140 62 480 300" className="block h-auto w-full" role="img" aria-label={tx("controller")}>
       {/* Triggers and bumpers sit behind the body */}
       {L.triggers.map(([x, y, w, h], i) => (
         <rect key={`t${i}`} x={x} y={y} width={w} height={h} rx={8} {...part(i ? 7 : 6)} />
@@ -263,6 +271,7 @@ export const PadMap: React.FC<{
   pedalSources: PadPedalSources;
   pad?: PadState | null;
 }> = ({ family, bindings, pedalSources, pad }) => {
+  const tx = useTranslations("setup.padMap");
   const [picked, setPicked] = useState<string | null>(null);
   const { left, right } = rows(pedalSources);
   const pressed = (b: number) => Boolean(pad?.buttons[b]?.pressed);
@@ -287,7 +296,7 @@ export const PadMap: React.FC<{
           >
             <Chip row={r} family={family} lit={lit} />
             <span className={`min-w-0 text-[13px] leading-tight font-semibold ${action ? "text-lc-chalk" : "text-lc-slate"}`}>
-              {action ?? "Not used"}
+              {action ?? tx("notUsed")}
             </span>
           </li>
         );

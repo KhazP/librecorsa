@@ -1,3 +1,4 @@
+import { text as t } from "@/lib/text";
 import type { CameraMode } from "@/types/f1";
 
 /** The car model's onboard camera anchors (`SimCarRig.getCameraAnchors()`) */
@@ -41,8 +42,8 @@ export interface CameraModeSpec {
 
 export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
   chase_close: {
-    label: "Chase close",
-    blurb: "Tight behind the car",
+    get label() { return t("game.camera.chaseClose"); },
+    get blurb() { return t("game.camera.chaseCloseDetail"); },
     anchor: null,
     driverEye: false,
     driverHead: false,
@@ -52,8 +53,8 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     virtualMirror: "onRequest",
   },
   chase: {
-    label: "Chase",
-    blurb: "Behind the car",
+    get label() { return t("game.camera.chase"); },
+    get blurb() { return t("game.camera.chaseDetail"); },
     anchor: null,
     driverEye: false,
     driverHead: false,
@@ -63,8 +64,8 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     virtualMirror: "onRequest",
   },
   chase_far: {
-    label: "Chase far",
-    blurb: "Wide behind the car",
+    get label() { return t("game.camera.chaseFar"); },
+    get blurb() { return t("game.camera.chaseFarDetail"); },
     anchor: null,
     driverEye: false,
     driverHead: false,
@@ -74,8 +75,8 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     virtualMirror: "onRequest",
   },
   chase_low: {
-    label: "Chase low",
-    blurb: "Low behind the rear wing",
+    get label() { return t("game.camera.chaseLow"); },
+    get blurb() { return t("game.camera.chaseLowDetail"); },
     anchor: null,
     driverEye: false,
     driverHead: false,
@@ -85,8 +86,8 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     virtualMirror: "onRequest",
   },
   tv_pod: {
-    label: "T-cam",
-    blurb: "Over the helmet",
+    get label() { return t("game.camera.tvPod"); },
+    get blurb() { return t("game.camera.tvPodDetail"); },
     anchor: "tcam",
     driverEye: false,
     driverHead: false,
@@ -96,7 +97,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     virtualMirror: "always",
   },
   cockpit_shoulder: {
-    label: "Shoulder",
+    get label() { return t("game.camera.cockpitShoulder"); },
     anchor: "shoulder",
     driverEye: false,
     driverHead: true,
@@ -106,8 +107,8 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     virtualMirror: "always",
   },
   cockpit: {
-    label: "Cockpit",
-    blurb: "Driver's eye",
+    get label() { return t("game.camera.cockpit"); },
+    get blurb() { return t("game.camera.cockpitDetail"); },
     anchor: "cockpit",
     driverEye: true,
     driverHead: true,
@@ -117,8 +118,8 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     virtualMirror: "noSideMirrors",
   },
   dash: {
-    label: "Dash",
-    blurb: "Ahead of the wheel, the dash in shot",
+    get label() { return t("game.camera.dash"); },
+    get blurb() { return t("game.camera.dashDetail"); },
     anchor: "overWheel",
     driverEye: false,
     driverHead: false,
@@ -128,7 +129,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     virtualMirror: "always",
   },
   nose: {
-    label: "Nose",
+    get label() { return t("game.camera.nose"); },
     anchor: "bumper",
     driverEye: false,
     driverHead: false,
@@ -138,7 +139,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     virtualMirror: "always",
   },
   helicopter: {
-    label: "Helicopter",
+    get label() { return t("game.camera.helicopter"); },
     anchor: null,
     driverEye: false,
     driverHead: false,
@@ -148,7 +149,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     virtualMirror: "never",
   },
   tv_side: {
-    label: "Trackside TV",
+    get label() { return t("game.camera.tvSide"); },
     anchor: null,
     driverEye: false,
     driverHead: false,
@@ -158,8 +159,8 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     virtualMirror: "never",
   },
   free: {
-    label: "Free camera",
-    blurb: "Fly anywhere around the circuit",
+    get label() { return t("game.camera.free"); },
+    get blurb() { return t("game.camera.freeDetail"); },
     anchor: null,
     driverEye: false,
     driverHead: false,

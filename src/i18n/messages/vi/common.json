@@ -1,0 +1,139 @@
+{
+  "newTab": "(mở trong thẻ mới)",
+  "confirm": {
+    "cancel": "Hủy",
+    "busy": "Chờ thao tác hoàn tất"
+  },
+  "toggle": {
+    "on": "Bật",
+    "off": "Tắt"
+  },
+  "disclosure": {
+    "more": "Xem thêm",
+    "less": "Thu gọn"
+  },
+  "select": {
+    "placeholder": "Chọn",
+    "labelValue": "{label}: {value}"
+  },
+  "settingRow": {
+    "changed": "Đã thay đổi so với mặc định",
+    "resetNamed": "Đặt lại {setting} về mặc định",
+    "resetThis": "Đặt lại cài đặt này về mặc định",
+    "reset": "Đặt lại về mặc định"
+  },
+  "mediaTile": {
+    "chosen": "Đã chọn"
+  },
+  "keys": {
+    "up": "Lên",
+    "down": "Xuống",
+    "left": "Trái",
+    "right": "Phải",
+    "wheelButton": "Nút {button}"
+  },
+  "pad": {
+    "namedButton": "Nút {name}",
+    "shapeButton": "{shape, select, cross {Nút Cross} circle {Nút Circle} square {Nút Square} other {Nút Triangle}}",
+    "faceButton": "{position, select, bottom {Nút mặt dưới} right {Nút mặt phải} left {Nút mặt trái} other {Nút mặt trên}}",
+    "dpad": "D-pad",
+    "dpadDirection": "{direction, select, up {D-pad lên} down {D-pad xuống} left {D-pad trái} right {D-pad phải} horizontal {D-pad trái và phải} other {D-pad lên và xuống}}",
+    "shoulder": "{button, select, lb {Nút vai trái} rb {Nút vai phải} lt {Cò trái} other {Cò phải}} ({name})",
+    "touchpad": "Bàn di cảm ứng",
+    "stick": "{side, select, left {Cần trái} other {Cần phải}}",
+    "stickPress": "{side, select, left {Nhấn cần trái} other {Nhấn cần phải}} ({name})",
+    "stickDirection": "{side, select, left {Cần trái} other {Cần phải}} {direction, select, up {lên} down {xuống} left {trái} right {phải} horizontal {trái và phải} other {lên và xuống}}"
+  },
+  "badges": {
+    "you": "Bạn",
+    "position": "Vị trí {position}",
+    "qualityDescription": ": {description}"
+  },
+  "delta": {
+    "spoken": "{trend, select, level {Ngang bằng} faster {Nhanh hơn {seconds} giây} other {Chậm hơn {seconds} giây}}{best, select, yes {, tốt nhất} other {}}",
+    "best": "Tốt nhất"
+  },
+  "penalty": {
+    "time": "+{seconds} s",
+    "driveThrough": "Chạy qua pit",
+    "warning": "Cảnh cáo",
+    "trackLimits": "Giới hạn đường đua {strikes}/{of}",
+    "disqualified": "Bị truất quyền thi đấu"
+  },
+  "flags": {
+    "green": "Cờ xanh lá",
+    "yellow": "Cờ vàng",
+    "doubleYellow": "Cờ vàng kép",
+    "blue": "Cờ xanh dương",
+    "red": "Cờ đỏ",
+    "white": "Cờ trắng",
+    "black": "Cờ đen",
+    "blackWhite": "Cờ đen trắng",
+    "chequered": "Cờ ca-rô"
+  },
+  "compounds": {
+    "name": {
+      "soft": "Mềm",
+      "medium": "Trung bình",
+      "hard": "Cứng",
+      "intermediate": "Trung gian",
+      "wet": "Mưa"
+    },
+    "short": {
+      "soft": "Mềm",
+      "medium": "Trung bình",
+      "hard": "Cứng",
+      "intermediate": "Trung gian",
+      "wet": "Mưa"
+    },
+    "long": {
+      "soft": "Lốp mềm",
+      "medium": "Lốp trung bình",
+      "hard": "Lốp cứng",
+      "intermediate": "Lốp trung gian (đường ướt)",
+      "wet": "Lốp mưa toàn phần (đọng nước)"
+    },
+    "tyres": {
+      "soft": "Lốp mềm",
+      "medium": "Lốp trung bình",
+      "hard": "Lốp cứng",
+      "intermediate": "Lốp trung gian",
+      "wet": "Lốp mưa"
+    }
+  },
+  "carClass": {
+    "openWheel": "Xe công thức",
+    "gt3": "GT3",
+    "proto": "Nguyên mẫu",
+    "classic": "Cổ điển",
+    "road": "Xe đường phố"
+  },
+  "session": {
+    "practice": "Luyện tập",
+    "race": "Đua chính",
+    "timeAttack": "Đua tính giờ",
+    "hillClimb": "Đua leo đồi",
+    "online": "Trực tuyến",
+    "offline": "Ngoại tuyến",
+    "host": "Chủ phòng"
+  },
+  "state": {
+    "new": "Mới",
+    "beta": "Beta",
+    "wip": "Đang phát triển",
+    "experimental": "Thử nghiệm",
+    "downloaded": "Đã tải xuống",
+    "downloading": "Đang tải xuống",
+    "updateAvailable": "Có bản cập nhật",
+    "inUse": "Đang dùng"
+  },
+  "surface": {
+    "dry": "Khô",
+    "damp": "Ẩm",
+    "wet": "Ướt",
+    "flooded": "Ngập nước"
+  },
+  "dialog": {
+    "close": "Đóng"
+  }
+}

@@ -18,6 +18,7 @@ import {
 } from "@/lib/press";
 import { CONTACT_EMAIL, REPO_URL, SITE_NAME } from "@/lib/site";
 import { CoverageList } from "./CoverageList";
+import { PlayerNumbers } from "./PlayerNumbers";
 import { CARD, CARD_ICON, CARD_LINK, day } from "./press-ui";
 
 const DESCRIPTION = "Coverage of LibreCorsa, the free browser racing sim, plus a press kit: facts, logos, screenshots and the trailer.";
@@ -135,6 +136,7 @@ export default function PressPage() {
   const parts = [
     { id: "coverage", name: "Coverage" },
     ...(threads.length ? [{ id: "discussion", name: "Mentions" }] : []),
+    { id: "players", name: "Players" },
     { id: "kit", name: "Press kit" },
     { id: "rise", name: "RISE Motordrome" },
     { id: "contact", name: "Contact" },
@@ -206,6 +208,10 @@ export default function PressPage() {
         </SiteSection>
       ) : null}
 
+      <SiteSection id="players" title="Players">
+        <PlayerNumbers />
+      </SiteSection>
+
       <SiteSection id="kit" title="Press kit" gap="gap-6">
         <div className="grid gap-3 lg:grid-cols-2">
           <a
@@ -223,7 +229,7 @@ export default function PressPage() {
               decoding="async"
               className="aspect-video w-full object-cover"
             />
-            <span className="absolute bottom-4 left-4">
+            <span className="absolute bottom-4 start-4">
               <Badge variant="solid" size="lg" icon="play">
                 {"Trailer, 40 s, MP4"}
               </Badge>

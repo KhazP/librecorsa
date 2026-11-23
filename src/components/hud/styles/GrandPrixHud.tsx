@@ -9,7 +9,9 @@
  *   and MFD/setup readout bottom-right.
  */
 
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
+import { upper } from "@/i18n/runtime";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { TEMPERATURE_LABEL, temperatureIn } from "@/lib/settings/units";
@@ -37,7 +39,7 @@ import {
 } from "../hud-format";
 import { aeroReadout } from "../aero-label";
 import { ProximityRadar } from "../ProximityRadar";
-import { anchor, gearLabel, MiniMap, type HudDesignProps } from "./hud-style-parts";
+import { anchor, formatOnce, gearLabel, MiniMap, type HudDesignProps } from "./hud-style-parts";
 import palette from "./grand-prix.module.css";
 
 const EDGE = "clamp(14px,2.2vw,24px)";
@@ -56,6 +58,57 @@ const HALO_GEAR_PTS = GEARS.map((g, idx) => {
   const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
   return { g, x, y, angle };
 });
+
+/** The Grand Prix layout's words in the current language, resolved once per language */
+function useGrandPrixWords() {
+  const tx = useTranslations("hudStyles.grandPrix");
+  return useMemo(
+    () => ({
+      sessionFinished: tx("sessionFinished"),
+      sessionRace: tx("sessionRace"),
+      sessionQualifying: tx("sessionQualifying"),
+      sessionOutLap: tx("sessionOutLap"),
+      turn: tx("turn"),
+      straight: tx("straight"),
+      recharge: tx("recharge"),
+      brake: tx("brake"),
+      boost: tx("boost"),
+      drsOpen: tx("drsOpen"),
+      overtake: tx("overtake"),
+      deploy: tx("deploy"),
+      throttle: tx("throttle"),
+      activeAero: tx("activeAero"),
+      aeroOpen: tx("aeroOpen"),
+      aeroClosed: tx("aeroClosed"),
+      gears: tx("gears"),
+      battery: tx("battery"),
+      fuel: tx("fuel"),
+      tyreWear: tx("tyreWear"),
+      ersOvertake: tx("ersOvertake"),
+      ersDeploy: tx("ersDeploy"),
+      youCode: tx("youCode"),
+      youName: tx("youName"),
+      towerLap: formatOnce((lap: number, total: number) =>
+        total ? tx("towerLapOfTotal", { lap: String(lap), total: String(total) }) : tx("towerLap", { lap: String(lap) }),
+      ),
+      towerOut: tx("towerOut"),
+      towerLast: tx("towerLast"),
+      fastestLap: tx("fastestLap"),
+      finished: tx("finished"),
+      bestRef: formatOnce((time: string) => tx("bestRef", { time })),
+      noRef: tx("noRef"),
+      stripLap: formatOnce((lap: number, total: number) =>
+        total ? tx("stripLapOfTotal", { lap: String(lap), total: String(total) }) : tx("stripLap", { lap: String(lap) }),
+      ),
+      standingsOut: tx("standingsOut"),
+      lastLap: tx("lastLap"),
+      delta: tx("delta"),
+      brakeBias: tx("brakeBias"),
+    }),
+    [tx],
+  );
+}
+type GrandPrixWords = ReturnType<typeof useGrandPrixWords>;
 
 function tyreTempColor(tempC: number): string {
   if (tempC < 65) return "#38bdf8";
@@ -78,11 +131,11 @@ function carClassOf(carId: string | undefined): "openWheel" | "gt3" | "road" | "
   return "openWheel";
 }
 
-function sessionLabel(t: CarTelemetry): string {
-  if (t.race) return t.race.phase === "finished" ? "FINISHED" : "RACE";
-  if (t.qualifying) return "QUALIFYING";
-  if (t.outLap) return "OUT LAP";
-  return sessionWord(t).toUpperCase();
+function sessionLabel(t: CarTelemetry, w: GrandPrixWords): string {
+  if (t.race) return t.race.phase === "finished" ? w.sessionFinished : w.sessionRace;
+  if (t.qualifying) return w.sessionQualifying;
+  if (t.outLap) return w.sessionOutLap;
+  return upper(sessionWord(t));
 }
 
 function compoundMeta(compound: TireCompound | undefined): { letter: string; color: string } {
@@ -139,6 +192,7 @@ const HaloCluster: React.FC<{
   hasErs: boolean;
   scale?: number;
 }> = ({ t, revRange, units, driverLabel, position, teamColor, hasErs, scale }) => {
+  const w = useGrandPrixWords();
   const primarySpeed = formatSpeed(t.speedKmh, units);
   const primaryUnit = speedUnit(units).toUpperCase();
 
@@ -200,14 +254,14 @@ const HaloCluster: React.FC<{
         <path d="M 36 202 Q 98 142 158 112" fill="none" stroke={teamColor} strokeWidth="2.5" strokeLinecap="round" />
         <text fill="#f8fafc" fontSize="11" fontWeight="800" letterSpacing="1">
           <textPath href="#gp-curve-driver" startOffset="12%">
-            {position}  {driverLabel.slice(0, 11).toUpperCase()}
+            {position}  {upper(driverLabel.slice(0, 11))}
           </textPath>
         </text>
 
         {/* Left wing: Live Turn counter + directional arrow */}
         <g transform="translate(182, 98) rotate(-18)">
           <text x="0" y="-10" fill="#94a3b8" fontSize="6.5" fontWeight="800" textAnchor="middle" letterSpacing="1">
-            TURN
+            {w.turn}
           </text>
           {turnNum ? (
             <path
@@ -230,7 +284,7 @@ const HaloCluster: React.FC<{
             />
           )}
           <text x="0" y="13" fill="#f8fafc" fontSize="11" fontWeight="900" textAnchor="middle">
-            {turnNum ?? "STR"}
+            {turnNum ?? w.straight}
           </text>
         </g>
 
@@ -246,7 +300,7 @@ const HaloCluster: React.FC<{
             transform="rotate(-76 215 78)"
             textAnchor="middle"
           >
-            RECHARGE
+            {w.recharge}
           </text>
           {Array.from({ length: SEGMENTS }, (_, i) => {
             const idx = SEGMENTS - 1 - i;
@@ -268,7 +322,7 @@ const HaloCluster: React.FC<{
             );
           })}
           <text x="235" y="106" fill="#f87171" fontSize="7" fontWeight="800" textAnchor="middle" letterSpacing="0.8">
-            BRAKE
+            {w.brake}
           </text>
         </g>
 
@@ -304,7 +358,7 @@ const HaloCluster: React.FC<{
           {hasErs ? (
             <>
           <text y="1" fill="#94a3b8" fontSize="5.8" fontWeight="800" textAnchor="middle" letterSpacing="1.2">
-            BOOST
+            {w.boost}
           </text>
           {Array.from({ length: 10 }, (_, i) => {
             const lit = (i + 1) * 10 <= ers;
@@ -336,7 +390,7 @@ const HaloCluster: React.FC<{
             strokeWidth="0.7"
           />
           <text y="18" fill={overtakeOn ? "#03261b" : "#a7f3d0"} fontSize="6.6" fontWeight="900" textAnchor="middle" letterSpacing="1">
-            {aeroOpen ? "DRS OPEN" : "OVERTAKE"}
+            {aeroOpen ? w.drsOpen : w.overtake}
           </text>
             </>
           ) : null}
@@ -400,17 +454,17 @@ const HaloCluster: React.FC<{
             transform="rotate(76 425 78)"
             textAnchor="middle"
           >
-            DEPLOY
+            {w.deploy}
           </text>
           <text x="405" y="106" fill="#94a3b8" fontSize="7" fontWeight="800" textAnchor="middle" letterSpacing="0.8">
-            THROTTLE
+            {w.throttle}
           </text>
         </g>
 
         {/* Active Aero indicator: dual-element wing profile that physically opens when X-Mode / DRS is open */}
         <g transform="translate(460, 88) rotate(16)">
           <text x="0" y="-12" fill="#94a3b8" fontSize="6.5" fontWeight="800" textAnchor="middle" letterSpacing="0.9">
-            ACTIVE AERO
+            {w.activeAero}
           </text>
           {/* Mainplane */}
           <path d="M -13 4 Q 0 6 12 2" fill="none" stroke={aeroOpen ? "#e2e8f0" : "#94a3b8"} strokeWidth="2.4" strokeLinecap="round" />
@@ -426,12 +480,12 @@ const HaloCluster: React.FC<{
             <>
               <line x1="-14" y1="0" x2="14" y2="-2" stroke="#22d3ee" strokeWidth="1" strokeDasharray="3 2" opacity="0.9" />
               <text x="0" y="14" fill="#22d3ee" fontSize="6.5" fontWeight="900" textAnchor="middle" letterSpacing="1">
-                OPEN
+                {w.aeroOpen}
               </text>
             </>
           ) : (
             <text x="0" y="14" fill="#64748b" fontSize="6.5" fontWeight="800" textAnchor="middle" letterSpacing="1">
-              CLOSED
+              {w.aeroClosed}
             </text>
           )}
         </g>
@@ -439,7 +493,7 @@ const HaloCluster: React.FC<{
         {/* Right wing: GEARS + RPM x1000 wrapped along the halo curve */}
         <text fill="#94a3b8" fontSize="7" fontWeight="800" letterSpacing="1.4">
           <textPath href="#gp-curve-gears-lbl" startOffset="28%">
-            GEARS
+            {w.gears}
           </textPath>
         </text>
         {HALO_GEAR_PTS.map(({ g, x, y, angle }) => {
@@ -503,6 +557,7 @@ const SculptedCluster: React.FC<{
   tireTempsC: [number, number, number, number];
   units: ReturnType<typeof useUnits>;
 }> = ({ hasErs, ers, fuelKg, gear, atShift, speedLbl, speed, rpm, maxRpm, revFrac, overtakeActive, aeroOpen, tireTempsC, units }) => {
+  const w = useGrandPrixWords();
   const tempLbl = TEMPERATURE_LABEL[units.temperature];
   const temp = (c: number) => Math.round(temperatureIn(c, units.temperature));
   const leftFrac = hasErs ? ers / 100 : Math.min(1, fuelKg / 100);
@@ -626,7 +681,7 @@ const SculptedCluster: React.FC<{
             filter="url(#gp-glow)"
           />
           <text y="-10" fill="#cbd5e1" fontSize="8" fontWeight="700" textAnchor="middle" letterSpacing="1">
-            {hasErs ? "BATT" : "FUEL"}
+            {hasErs ? w.battery : w.fuel}
           </text>
           <text y="10" fill={leftColor} fontSize="20" fontWeight="900" textAnchor="middle">
             {hasErs ? `${Math.round(ers)}%` : `${fuelKg.toFixed(0)}`}
@@ -706,6 +761,7 @@ const TyreWearCard: React.FC<{
   hasErs: boolean;
   overtakeOn: boolean;
 }> = ({ tireWearPct, ers, hasErs, overtakeOn }) => {
+  const w = useGrandPrixWords();
   const corners = [
     { label: "FL", wear: Math.round(tireWearPct[0]), x: 34, y: 24 },
     { label: "FR", wear: Math.round(tireWearPct[1]), x: 162, y: 24 },
@@ -752,15 +808,15 @@ const TyreWearCard: React.FC<{
           );
         })}
         <text x="34" y="51" fill="#94a3b8" fontSize="6" fontWeight="800" textAnchor="middle" letterSpacing="0.8">
-          TYRE WEAR
+          {w.tyreWear}
         </text>
         <text x="162" y="51" fill="#94a3b8" fontSize="6" fontWeight="800" textAnchor="middle" letterSpacing="0.8">
-          TYRE WEAR
+          {w.tyreWear}
         </text>
       </svg>
       {hasErs ? (
         <div className="flex items-center justify-between border-t border-white/10 bg-[rgb(16_20_28/0.95)] px-2.5 py-1 text-[10px] font-extrabold tracking-[0.08em]">
-          <span className={overtakeOn ? "text-[#facc15]" : "text-slate-400"}>{overtakeOn ? "OVERTAKE" : "DEPLOY"}</span>
+          <span className={overtakeOn ? "text-[#facc15]" : "text-slate-400"}>{overtakeOn ? w.ersOvertake : w.ersDeploy}</span>
           <span className={palette.mono}>ERS {Math.round(ers)}%</span>
         </div>
       ) : null}
@@ -789,6 +845,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
   cameraMode,
 }) => {
   const units = useUnits();
+  const w = useGrandPrixWords();
   const race = t.race;
   const channels = t.f12026;
   const isFormulaCar = carClassOf(channels?.carId) === "openWheel";
@@ -798,11 +855,11 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
   const totalLaps = race?.totalLaps;
   const me = race?.standings.find((e) => e.isPlayer);
   const myPos = race?.position ?? 1;
-  const driverCode = me?.driverCode ?? "YOU";
-  const driverName = me?.name?.trim() || "YOU";
+  const driverCode = me?.driverCode ?? w.youCode;
+  const driverName = me?.name?.trim() || w.youName;
   const teamColor = me?.teamColorHex ?? "#22d3ee";
   const comp = compoundMeta(me?.compound ?? compound);
-  const sess = sessionLabel(t);
+  const sess = sessionLabel(t, w);
   const aero = aeroReadout(t);
 
   const hasErs = channels?.hasErs ?? t.liveTuner?.hasErs ?? false;
@@ -840,7 +897,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                   GP
                 </span>
                 <span className="text-[10px] font-bold tracking-[0.12em] text-slate-400">
-                  {totalLaps ? `LAP ${lap}/${totalLaps}` : `LAP ${lap}`}
+                  {w.towerLap(lap, totalLaps ?? 0)}
                 </span>
               </div>
               <div className={palette.tvSessionBar}>{sess}</div>
@@ -863,7 +920,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                       <span className={`${palette.tvPos} ${i === 0 ? palette.tvPosLead : ""}`}>{i + 1}</span>
                       <span className="h-3.5 rounded-full" style={{ backgroundColor: e.teamColorHex }} />
                       <span className={palette.tvCode}>{e.driverCode}</span>
-                      <span className={palette.tvGap}>{e.retired ? "OUT" : gap}</span>
+                      <span className={palette.tvGap}>{e.retired ? w.towerOut : gap}</span>
                       <span className={palette.tvTyre} style={{ color: cMeta.color }}>
                         {cMeta.letter}
                       </span>
@@ -885,7 +942,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                     <li className={palette.tvRow}>
                       <span className={palette.tvPos}>L</span>
                       <span className="h-3.5 rounded-full bg-slate-600" />
-                      <span className={palette.tvCode}>LAST</span>
+                      <span className={palette.tvCode}>{w.towerLast}</span>
                       <span className={palette.tvGap}>{formatLapTime(t.lastLapTimeMs)}</span>
                       <span className={palette.tvTyre} />
                     </li>
@@ -922,7 +979,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                 <span className={palette.driverCardName}>{driverName}</span>
                 {hasFastestLap ? (
                   <span className="rounded-[2px] bg-[#a855f7] px-1 text-[9px] font-black tracking-wider text-white">
-                    FL
+                    {w.fastestLap}
                   </span>
                 ) : null}
                 {me?.penaltyS ? (
@@ -932,7 +989,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                 ) : null}
                 {me?.finished ? (
                   <span className="rounded-[2px] bg-white/90 px-1 text-[9px] font-black text-black">
-                    FIN
+                    {w.finished}
                   </span>
                 ) : null}
               </span>
@@ -955,7 +1012,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                   {formatLapClock(t)}
                 </span>
                 <span className={palette.driverCardRefLabel}>
-                  {t.bestLapTimeMs ? `BEST ${formatLapTime(t.bestLapTimeMs)}` : "NO REF"}
+                  {t.bestLapTimeMs ? w.bestRef(formatLapTime(t.bestLapTimeMs)) : w.noRef}
                 </span>
               </div>
             </div>
@@ -1026,7 +1083,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
             <span className={palette.stdSessionTitle}>{sess}</span>
           </div>
           <div className={palette.stdLapStrip}>
-            <span>{totalLaps ? `LAP ${lap} / ${totalLaps}` : `LAP ${lap}`}</span>
+            <span>{w.stripLap(lap, totalLaps ?? 0)}</span>
             <span className="text-slate-400">{race ? `P${myPos}` : ""}</span>
           </div>
           <div>
@@ -1047,7 +1104,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                     <span className="font-black" style={{ color: cMeta.color }}>
                       {cMeta.letter}
                     </span>
-                    <span className={palette.mono}>{e.retired ? "OUT" : gap}</span>
+                    <span className={palette.mono}>{e.retired ? w.standingsOut : gap}</span>
                   </div>
                 );
               })
@@ -1063,7 +1120,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                 </div>
                 <div className={palette.stdRow}>
                   <span className="text-slate-400">2</span>
-                  <span className="truncate text-slate-300">LAST LAP</span>
+                  <span className="truncate text-slate-300">{w.lastLap}</span>
                   <span className="font-black" style={{ color: comp.color }}>
                     {comp.letter}
                   </span>
@@ -1124,7 +1181,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
                   left: 0,
                 }}
               />
-              <span className="relative z-10 text-slate-300">DELTA</span>
+              <span className="relative z-10 text-slate-300">{w.delta}</span>
               <span className={`${palette.mono} relative z-10`} style={{ color: deltaColor }}>
                 {deltaS === null ? NO_TIME : formatDeltaFit(deltaS)}
               </span>
@@ -1168,7 +1225,7 @@ export const GrandPrixHud: React.FC<HudDesignProps> = ({
           {mfd ?? (
             <div className={`${palette.plate} ${palette.stdAidCard}`}>
               <div className={palette.stdAidRow}>
-                <span className="text-slate-400">BRAKE BIAS</span>
+                <span className="text-slate-400">{w.brakeBias}</span>
                 <span className={palette.mono}>{(t.liveTuner?.brakeBiasPct ?? 56).toFixed(0)}%</span>
               </div>
               <div className={palette.stdAidRow}>

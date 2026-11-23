@@ -166,6 +166,8 @@ export interface InterfaceSettings {
   scale: number;
   palette: ColorPalette;
   detail: SettingsDetail;
+  /** The language the game shows: "auto" follows the browser, else a language code (src/i18n/catalogs.ts) */
+  language: string;
 }
 
 export type LibraryKind = "cars" | "circuits";
@@ -531,6 +533,7 @@ export const DEFAULT_INTERFACE_SETTINGS: InterfaceSettings = {
   scale: 1,
   palette: "standard",
   detail: "simple",
+  language: "auto",
 };
 
 export const DEFAULT_DRIVER_PROFILE: DriverProfile = { name: "Driver", code: "DRV", color: "#E10600", generated: false, autoUpload: true };
@@ -930,6 +933,8 @@ export function parseInterface(v: unknown): InterfaceSettings {
     scale: num(v.scale, UI_SCALE_MIN, UI_SCALE_MAX, d.scale),
     palette: oneOf(v.palette, COLOR_PALETTES, d.palette),
     detail: oneOf(v.detail, ["simple", "advanced"] as const, d.detail),
+    // Any well-formed code is kept: a language added later, or one a newer build has, still resolves (resolveLocale)
+    language: isStr(v.language) && (v.language === "auto" || /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,4})?$/.test(v.language)) ? v.language : d.language,
   };
 }
 

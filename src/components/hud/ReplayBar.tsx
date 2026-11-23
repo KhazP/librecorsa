@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CameraMode } from "@/types/f1";
 import type { ReplayCarOption } from "@/lib/drive-session";
 import type { ReplayLapMarker } from "@/lib/sim/replay-buffer";
@@ -85,6 +86,47 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
   const durationS = Math.max(0, endS - startS);
   const elapsedS = Math.max(0, shown - startS);
   const inFreeCam = cameraMode === "free";
+  // The bar re-renders with the replay clock: its words are resolved once per language
+  const tx = useTranslations("hud.replayBar");
+  const L = useMemo(
+    () => ({
+      region: tx("region"),
+      transport: tx("transport"),
+      previousFrame: tx("previousFrame"),
+      previousFrameTitle: tx("previousFrameTitle", { key: "," }),
+      pause: tx("pause"),
+      play: tx("play"),
+      playPauseTitle: tx("playPauseTitle"),
+      playPauseTitleKey: tx("playPauseTitleKey", { key: "Space" }),
+      nextFrame: tx("nextFrame"),
+      nextFrameTitle: tx("nextFrameTitle", { key: "." }),
+      timeline: tx("timeline"),
+      playbackSpeed: tx("playbackSpeed"),
+      focusedCar: tx("focusedCar"),
+      previousCar: tx("previousCar"),
+      previousCarTitle: tx("previousCarTitle", { key: "Shift+Tab" }),
+      switchCarTitle: tx("switchCarTitle", { key: "Tab" }),
+      nextCar: tx("nextCar"),
+      nextCarTitle: tx("nextCarTitle", { key: "Tab" }),
+      cameraAngle: tx("cameraAngle"),
+      cycleCamera: tx("cycleCamera"),
+      flashbackTitle: tx("flashbackTitle", { key: "F" }),
+      flashback: tx("flashback"),
+      exit: tx("exit"),
+      hintFreeCam: tx("hints.freeCam"),
+      hintPlayPause: tx("hints.playPause"),
+      hintSeek: tx("hints.seek", { seconds: SEEK_STEP_S }),
+      hintStep: tx("hints.step"),
+      hintSwitchCar: tx("hints.switchCar"),
+      hintFreeCamKey: tx("hints.freeCamKey"),
+      hintFlashback: tx("hints.flashback"),
+    }),
+    [tx]
+  );
+  const markers = useMemo(
+    () => lapMarkers.slice(0, 8).map((m) => ({ ...m, title: tx("jumpToLap", { lap: m.lap }), text: tx("lapMarker", { lap: m.lap }) })),
+    [lapMarkers, tx]
+  );
 
   const cameraOptions = useMemo(
     () => ALL_CAMERA_MODES.map((id) => ({ id, label: CAMERA_MODES[id].label, detail: CAMERA_MODES[id].blurb })),
@@ -177,17 +219,17 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
       <section
         ref={barRef}
         role="toolbar"
-        aria-label="Replay controls"
+        aria-label={L.region}
         className={`lc-ui-zoom pointer-events-auto fixed bottom-[calc(env(safe-area-inset-bottom,0px)+3.5rem)] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto z-40 flex max-w-240 flex-col gap-2.5 rounded-lc-tile px-3.5 py-3 text-lc-chalk ${HUD_GLASS} sm:bottom-[calc(env(safe-area-inset-bottom,0px)+76px)] short:bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] short:gap-2 short:py-2`}
       >
         <div className="flex items-center gap-2.5 sm:gap-3">
-          <div role="group" aria-label="Transport" className="flex shrink-0 items-center gap-1.5">
+          <div role="group" aria-label={L.transport} className="flex shrink-0 items-center gap-1.5">
             {onStepFrame ? (
               <button
                 type="button"
                 onClick={() => onStepFrame(-1)}
-                aria-label="Previous frame"
-                title="Previous frame (,)"
+                aria-label={L.previousFrame}
+                title={L.previousFrameTitle}
                 className={`inline-flex size-9 cursor-pointer items-center justify-center rounded-lc-row border border-lc-line bg-lc-void text-lc-fog hover:text-lc-chalk ${HUD_CONTROL}`}
               >
                 <Icon name="previous" size="sm" />
@@ -196,8 +238,8 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
             <button
               type="button"
               onClick={onTogglePlay}
-              aria-label={playing ? "Pause replay" : "Play replay"}
-              title={inFreeCam ? "Play / pause" : "Play / pause (Space)"}
+              aria-label={playing ? L.pause : L.play}
+              title={inFreeCam ? L.playPauseTitle : L.playPauseTitleKey}
               className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lc-row bg-lc-volt text-lc-void shadow-lc-focus transition-[background-color,transform,scale] duration-150 hover:bg-lc-volt-hi active:scale-[0.97] active:bg-lc-volt-dim motion-reduce:active:scale-100 sm:size-11"
             >
               <Icon name={playing ? "pause" : "play"} size="md" />
@@ -206,8 +248,8 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
               <button
                 type="button"
                 onClick={() => onStepFrame(1)}
-                aria-label="Next frame"
-                title="Next frame (.)"
+                aria-label={L.nextFrame}
+                title={L.nextFrameTitle}
                 className={`inline-flex size-9 cursor-pointer items-center justify-center rounded-lc-row border border-lc-line bg-lc-void text-lc-fog hover:text-lc-chalk ${HUD_CONTROL}`}
               >
                 <Icon name="next" size="sm" />
@@ -220,15 +262,15 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
               <span>{formatReplayClock(elapsedS)}</span>
               {lapMarkers.length > 1 ? (
                 <div className="hidden items-center gap-1 sm:flex">
-                  {lapMarkers.slice(0, 8).map((m) => (
+                  {markers.map((m) => (
                     <button
                       key={`lap-${m.lap}-${m.timeS}`}
                       type="button"
                       onClick={() => onSeek(m.timeS)}
                       className="lc-mono cursor-pointer rounded-lc-nub border border-white/10 bg-lc-void/70 px-1.5 py-0.5 text-[10px] font-semibold text-lc-fog transition-colors hover:border-white/25 hover:text-lc-chalk"
-                      title={`Jump to Lap ${m.lap}`}
+                      title={m.title}
                     >
-                      L{m.lap}
+                      {m.text}
                     </button>
                   ))}
                 </div>
@@ -238,8 +280,8 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
             <div className="relative flex items-center">
               <input
                 type="range"
-                aria-label="Replay timeline"
-                aria-valuetext={`${formatReplayClock(elapsedS)} of ${formatReplayClock(durationS)}`}
+                aria-label={L.timeline}
+                aria-valuetext={tx("timelineValue", { elapsed: formatReplayClock(elapsedS), duration: formatReplayClock(durationS) })}
                 min={startS}
                 max={endS}
                 step={0.01}
@@ -256,7 +298,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div
             role="group"
-            aria-label="Playback speed"
+            aria-label={L.playbackSpeed}
             className="flex rounded-lc-row border border-lc-line bg-lc-void p-1"
           >
             {SPEEDS.map((s) => (
@@ -278,14 +320,14 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
             {cars.length > 1 && focusedCar && onCycleCar ? (
               <div
                 role="group"
-                aria-label="Focused car"
+                aria-label={L.focusedCar}
                 className="inline-flex items-center rounded-lc-row border border-lc-line bg-lc-void p-0.5"
               >
                 <button
                   type="button"
                   onClick={() => onCycleCar(-1)}
-                  aria-label="Previous car"
-                  title="Previous car (Shift+Tab)"
+                  aria-label={L.previousCar}
+                  title={L.previousCarTitle}
                   className={`inline-flex size-8 cursor-pointer items-center justify-center rounded-lc-nub text-lc-fog hover:text-lc-chalk ${HUD_CONTROL}`}
                 >
                   <Icon name="previous" size="xs" />
@@ -293,7 +335,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
                 <button
                   type="button"
                   onClick={() => onCycleCar(1)}
-                  title="Switch focused car (Tab)"
+                  title={L.switchCarTitle}
                   className="inline-flex h-8 min-w-16 cursor-pointer items-center justify-center gap-1.5 px-2 text-[12px] font-semibold text-lc-chalk"
                 >
                   <span
@@ -306,8 +348,8 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
                 <button
                   type="button"
                   onClick={() => onCycleCar(1)}
-                  aria-label="Next car"
-                  title="Next car (Tab)"
+                  aria-label={L.nextCar}
+                  title={L.nextCarTitle}
                   className={`inline-flex size-8 cursor-pointer items-center justify-center rounded-lc-nub text-lc-fog hover:text-lc-chalk ${HUD_CONTROL}`}
                 >
                   <Icon name="next" size="xs" />
@@ -317,14 +359,14 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
 
             {onSelectCamera ? (
               <Select
-                aria-label="Replay camera angle"
+                aria-label={L.cameraAngle}
                 options={cameraOptions}
                 value={cameraMode}
                 onChange={onSelectCamera}
                 className="h-9 min-w-34 text-[12px]"
               />
             ) : (
-              <Button variant="secondary" size="sm" icon={<Icon name="camera" />} onClick={onCycleCamera} title="Cycle replay camera">
+              <Button variant="secondary" size="sm" icon={<Icon name="camera" />} onClick={onCycleCamera} title={L.cycleCamera}>
                 {cameraLabel}
               </Button>
             )}
@@ -336,14 +378,14 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
                 icon={<Icon name="restart" />}
                 prompt={<KeyCap tone="ink">F</KeyCap>}
                 onClick={onFlashback}
-                title="Flashback — resume driving from this moment (F, invalidates current lap)"
+                title={L.flashbackTitle}
               >
-                Flashback
+                {L.flashback}
               </Button>
             ) : null}
 
             <Button variant="secondary" size="sm" prompt={<KeyCap>{exitKeyLabel}</KeyCap>} onClick={onExit}>
-              Exit
+              {L.exit}
             </Button>
           </div>
         </div>
@@ -355,39 +397,39 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
       >
         {inFreeCam ? (
           <span className="lc-mono text-[12px] text-lc-fog">
-            Free cam · Drag look · WASD fly · Q/E height · Scroll speed · R reset
+            {L.hintFreeCam}
           </span>
         ) : (
           <>
             <span className="inline-flex items-center gap-2">
               <KeyCap>Space</KeyCap>
-              Play / pause
+              {L.hintPlayPause}
             </span>
             <span className="inline-flex items-center gap-2">
               <ArrowKeys set="horizontal" />
-              Seek {SEEK_STEP_S} s
+              {L.hintSeek}
             </span>
             <span className="inline-flex items-center gap-2">
               <KeyCap>,</KeyCap>
               <KeyCap>.</KeyCap>
-              Step
+              {L.hintStep}
             </span>
             {cars.length > 1 ? (
               <span className="inline-flex items-center gap-2">
                 <KeyCap>Tab</KeyCap>
-                Switch car
+                {L.hintSwitchCar}
               </span>
             ) : null}
             {freeCameraKeyLabel && freeCameraKeyLabel !== "—" ? (
               <span className="inline-flex items-center gap-2">
                 <KeyCap>{freeCameraKeyLabel}</KeyCap>
-                Free cam
+                {L.hintFreeCamKey}
               </span>
             ) : null}
             {onFlashback ? (
               <span className="inline-flex items-center gap-2">
                 <KeyCap>F</KeyCap>
-                Flashback
+                {L.hintFlashback}
               </span>
             ) : null}
           </>

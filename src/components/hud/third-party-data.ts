@@ -1,4 +1,6 @@
 import type { CarTelemetry, RaceStandingEntry, RadarBlip } from "@/types/f1";
+import { t as tr } from "@/i18n/runtime";
+import { perLanguage } from "./hud-format";
 
 /**
  * Readings the third-party HUD layouts share (styles/*Hud.tsx from other projects): the cars around the player on the
@@ -16,6 +18,22 @@ export interface LapRecord {
   /** The lap counted (not cut) */
   valid: boolean;
 }
+
+/** The words the layouts read every frame, built once per language */
+const words = perLanguage(() => ({
+  you: tr("hud.thirdPartyData.you"),
+  headlight: {
+    flash: tr("hud.thirdPartyData.headlight.flash"),
+    on: tr("hud.thirdPartyData.headlight.on"),
+    off: tr("hud.thirdPartyData.headlight.off"),
+  },
+  surface: {
+    dry: tr("hud.thirdPartyData.surface.dry"),
+    damp: tr("hud.thirdPartyData.surface.damp"),
+    wet: tr("hud.thirdPartyData.surface.wet"),
+    flooded: tr("hud.thirdPartyData.surface.flooded"),
+  },
+}));
 
 /** A car near the player on the road */
 export interface RelativeCar {
@@ -115,7 +133,7 @@ export function fuelLapsLeft(fuelKg: number, perLapKg: number | null): number | 
  * A driver as a short label: the multiplayer name, else the three-letter code. The player is "You" online, where the
  * others go by name, and goes by their own code against the AI, as the field does
  */
-export function driverLabel(e: Pick<RaceStandingEntry, "isPlayer" | "name" | "driverCode">, you = "You"): string {
+export function driverLabel(e: Pick<RaceStandingEntry, "isPlayer" | "name" | "driverCode">, you = words().you): string {
   if (e.isPlayer) return e.name === undefined ? e.driverCode : you;
   return e.name?.trim() || e.driverCode;
 }
@@ -159,7 +177,17 @@ export function headlightState(w: { headlightsOn?: boolean; headlightFlash?: boo
   return null;
 }
 
-export const HEADLIGHT_WORD: Record<HeadlightState, string> = { flash: "Flash", on: "On", off: "Off" };
+export const HEADLIGHT_WORD: Record<HeadlightState, string> = {
+  get flash() {
+    return words().headlight.flash;
+  },
+  get on() {
+    return words().headlight.on;
+  },
+  get off() {
+    return words().headlight.off;
+  },
+};
 
 export type TrackSurfaceState = "dry" | "damp" | "wet" | "flooded";
 
@@ -172,10 +200,18 @@ export function trackSurfaceState(wetness: number): TrackSurfaceState {
 }
 
 export const SURFACE_WORD: Record<TrackSurfaceState, string> = {
-  dry: "Dry",
-  damp: "Damp",
-  wet: "Wet",
-  flooded: "Flooded",
+  get dry() {
+    return words().surface.dry;
+  },
+  get damp() {
+    return words().surface.damp;
+  },
+  get wet() {
+    return words().surface.wet;
+  },
+  get flooded() {
+    return words().surface.flooded;
+  },
 };
 
 /** 24-hour clock HH:MM from time-of-day in hours */

@@ -3,6 +3,7 @@
  * A tiny external store: the loaders report into it and React reads it with `useAssetProgress()`.
  */
 import { useSyncExternalStore } from "react";
+import { text as tx } from "@/lib/text";
 
 export type AssetTaskId = "track" | "car" | "opponents" | "shaders";
 export type AssetTaskStatus = "pending" | "loading" | "done" | "failed";
@@ -39,20 +40,31 @@ const KNOWN_BYTES: Record<AssetTaskId, number> = {
   shaders: 0,
 };
 
-const INITIAL: Record<AssetTaskId, Omit<AssetTask, "lastProgressMs">> = {
-  track: { id: "track", label: "Circuit", weight: 0.5, loadedBytes: 0, totalBytes: KNOWN_BYTES.track, status: "pending" },
-  car: { id: "car", label: "Car", weight: 0.3, loadedBytes: 0, totalBytes: KNOWN_BYTES.car, status: "pending" },
+const INITIAL: Record<AssetTaskId, Omit<AssetTask, "lastProgressMs" | "label">> = {
+  track: { id: "track", weight: 0.5, loadedBytes: 0, totalBytes: KNOWN_BYTES.track, status: "pending" },
+  car: { id: "car", weight: 0.3, loadedBytes: 0, totalBytes: KNOWN_BYTES.car, status: "pending" },
   // The opponents' and ghost's car (its own download only when the player drives a different model)
-  opponents: { id: "opponents", label: "Opponents", weight: 0.1, loadedBytes: 0, totalBytes: KNOWN_BYTES.opponents, status: "pending" },
-  shaders: { id: "shaders", label: "Shaders", weight: 0.1, loadedBytes: 0, totalBytes: 0, status: "pending" },
+  opponents: { id: "opponents", weight: 0.1, loadedBytes: 0, totalBytes: KNOWN_BYTES.opponents, status: "pending" },
+  shaders: { id: "shaders", weight: 0.1, loadedBytes: 0, totalBytes: 0, status: "pending" },
 };
+
+const LABEL = {
+  track: "game.loading.circuit",
+  car: "game.loading.car",
+  opponents: "game.loading.opponents",
+  shaders: "game.loading.shaders",
+} as const satisfies Record<AssetTaskId, string>;
+
+/** The task with its label read in the current language, however often the task is copied */
+const withLabel = (task: Omit<AssetTask, "label"> & { label?: string }): AssetTask =>
+  Object.defineProperty(task, "label", { get: () => tx(LABEL[task.id]), enumerable: true, configurable: true }) as AssetTask;
 
 const ORDER: readonly AssetTaskId[] = ["track", "car", "opponents", "shaders"];
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : 0);
 
 let tasks: Record<AssetTaskId, AssetTask> = Object.fromEntries(
-  ORDER.map((id) => [id, { ...INITIAL[id], lastProgressMs: 0 }])
+  ORDER.map((id) => [id, withLabel({ ...INITIAL[id], lastProgressMs: 0 })])
 ) as Record<AssetTaskId, AssetTask>;
 
 function buildSnapshot(): AssetProgressSnapshot {
@@ -82,7 +94,7 @@ function update(id: AssetTaskId, patch: Partial<AssetTask>) {
   const prev = tasks[id];
   // A finished task stays finished (a second loader call, e.g. React StrictMode, reuses the cache)
   if ((prev.status === "done" || prev.status === "failed") && patch.status === "loading") return;
-  tasks = { ...tasks, [id]: { ...prev, ...patch } };
+  tasks = { ...tasks, [id]: withLabel({ ...prev, ...patch }) };
   snapshot = buildSnapshot();
   for (const l of listeners) l();
 }
@@ -93,7 +105,7 @@ export const assetProgress = {
    * models are cached across mounts, so their tasks keep what they reached
    */
   reset(ids: readonly AssetTaskId[]) {
-    for (const id of ids) tasks = { ...tasks, [id]: { ...INITIAL[id], lastProgressMs: 0 } };
+    for (const id of ids) tasks = { ...tasks, [id]: withLabel({ ...INITIAL[id], lastProgressMs: 0 }) };
     snapshot = buildSnapshot();
     for (const l of listeners) l();
   },

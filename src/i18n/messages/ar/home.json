@@ -1,0 +1,221 @@
+{
+  "notice": {
+    "back": "العودة إلى الرئيسية",
+    "notFound": {
+      "title": "الصفحة غير موجودة",
+      "body": "لا يوجد شيء في هذا العنوان. ربما يكون الرابط قديمًا أو مكتوبًا بشكل خاطئ."
+    },
+    "error": {
+      "title": "حدث خطأ ما",
+      "body": "توقفت هذه الصفحة بسبب خطأ."
+    }
+  },
+  "hub": {
+    "tabs": {
+      "home": "الرئيسية",
+      "circuits": "الحلبات",
+      "cars": "السيارات",
+      "laps": "أزمنة اللفات",
+      "whatsNew": "الجديد",
+      "download": "التنزيل",
+      "about": "حول"
+    },
+    "unread": "(تحديثات غير مقروءة)",
+    "sections": "الأقسام",
+    "skip": "تخطّ إلى المحتوى",
+    "heading": "LibreCorsa: محاكي سباقات مجاني ومفتوح المصدر في متصفحك",
+    "drive": "القيادة",
+    "prompts": {
+      "move": "تنقّل",
+      "select": "اختيار",
+      "back": "رجوع",
+      "switchSection": "تبديل القسم",
+      "page": "صفحة أزمنة اللفات",
+      "drive": "القيادة"
+    },
+    "length": "{distance} {unit}، {turns, plural, zero {0 منعطفات} one {منعطف واحد} two {منعطفان} few {# منعطفات} many {# منعطفًا} other {# منعطف}}",
+    "classYear": "{class}، {year}",
+    "footer": "{venue}، {car}",
+    "driveTile": {
+      "label": "القيادة: {venue}، {layout}، بسيارة {car}",
+      "title": "القيادة",
+      "detail": "{venue}، {layout}. {car}."
+    },
+    "circuitTile": {
+      "label": "تغيير الحلبة: {venue}، {layout}",
+      "more": "تغيير الحلبة",
+      "map": "خريطة {venue}، {layout}",
+      "onLine": "على خط السباق"
+    },
+    "carTile": {
+      "label": "تغيير السيارة: {car}",
+      "more": "تغيير السيارة"
+    },
+    "press": {
+      "title": "الصحافة والإعلام",
+      "label": "الصحافة والإعلام: {count, plural, zero {لا مقالات أو فيديوهات} one {مادة واحدة من المقالات والفيديوهات} two {مادتان من المقالات والفيديوهات} few {{n} من المقالات والفيديوهات} many {{n} من المقالات والفيديوهات} other {{n} من المقالات والفيديوهات}}، والملف الصحفي",
+      "count": "{count, plural, zero {لا مقالات أو فيديوهات} one {مقال أو فيديو واحد} two {مادتان من المقالات والفيديوهات} few {{n} من المقالات والفيديوهات} many {{n} من المقالات والفيديوهات} other {{n} من المقالات والفيديوهات}}",
+      "onPlatform": "{outlet} على {platform}",
+      "more": "التغطية الإعلامية والملف الصحفي"
+    },
+    "whatsNew": {
+      "intro": "ملاحظات الإصدارات وآخر التحديثات.",
+      "commitLog": "سجل التعديلات على GitHub",
+      "empty": "لا توجد ملاحظات إصدار بعد.",
+      "commits": "{count, plural, zero {لا تعديلات} one {تعديل واحد} two {تعديلان} few {# تعديلات} many {# تعديلًا} other {# تعديل}}"
+    },
+    "filterOption": "{option} ({count})",
+    "clearFilters": "مسح الفلاتر",
+    "venueFilters": {
+      "type": {
+        "label": "النوع",
+        "all": "كل الأنواع"
+      },
+      "country": {
+        "label": "الموقع",
+        "all": "كل المواقع"
+      },
+      "modder": {
+        "label": "صانع الإضافة",
+        "all": "كل صنّاع الإضافات"
+      }
+    },
+    "carFilters": {
+      "class": {
+        "label": "الفئة",
+        "all": "كل الفئات"
+      },
+      "physics": {
+        "label": "الفيزياء",
+        "all": "أي فيزياء"
+      },
+      "modder": {
+        "label": "صانع الإضافة",
+        "all": "كل صنّاع الإضافات"
+      }
+    },
+    "circuits": {
+      "filter": "تصفية الحلبات",
+      "shown": "{shown} من {total} حلبة",
+      "empty": "لا توجد حلبة تطابق هذه الفلاتر.",
+      "personalBest": "أفضل زمن شخصي",
+      "oldPhysics": "فيزياء قديمة",
+      "carOldPhysics": "{car} · قديمة"
+    },
+    "cars": {
+      "filter": "تصفية السيارات",
+      "shown": "{shown} من {total} سيارة",
+      "empty": "لا توجد سيارة تطابق هذه الفلاتر."
+    },
+    "about": {
+      "lead": "محاكي سباقات مجاني ومفتوح المصدر يعمل في المتصفح.",
+      "addMod": "أضف إضافتك",
+      "addModText": "صممت إضافة لسيارة أو حلبة وتريد رؤيتها في LibreCorsa؟ راسلني على <mail>{email}</mail> مع رابط لها. يُذكر اسم كل صانع إضافة في اللعبة.",
+      "modders": "صنّاع الإضافات",
+      "moddersText": "الحلبات والسيارات من إبداعهم وتُستخدم بإذنهم. إذا أعجبك أحد الأعمال، يمكنك شكر صانعه مباشرة.",
+      "links": {
+        "download": "تنزيل التطبيقات",
+        "press": "جميع التغطيات والملف الصحفي",
+        "docs": "التوثيق",
+        "privacy": "الخصوصية",
+        "support": "ادعم المطور"
+      }
+    },
+    "facts": {
+      "physics": {
+        "label": "الفيزياء",
+        "text": "محاكاة 500 مرة في الثانية، مع حرارة الإطارات والانسيابية النشطة والطاقة الهجينة"
+      },
+      "racing": {
+        "label": "السباقات",
+        "text": "لفات سريعة وسباقات ضد الذكاء الاصطناعي وغرف متعددة اللاعبين وأزمنة لفات عبر الإنترنت"
+      },
+      "controls": {
+        "label": "التحكم",
+        "text": "لوحة المفاتيح أو وحدة التحكم أو اللمس أو عجلة قيادة برد فعل قسري"
+      },
+      "platforms": {
+        "label": "يعمل على",
+        "text": "أي متصفح حديث: حاسوب أو هاتف أو جهاز لوحي"
+      },
+      "conditions": {
+        "label": "الظروف",
+        "text": "اختيارك للطقس ووقت اليوم"
+      },
+      "price": {
+        "label": "السعر",
+        "text": "مجاني. دون حساب ودون إعلانات؛ التبرعات اختيارية ولا تفتح أي مزايا إضافية"
+      }
+    }
+  },
+  "lapTimes": {
+    "loading": "جارٍ تحميل أزمنة اللفات…",
+    "offline": "أزمنة اللفات غير متاحة حاليًا.",
+    "unreachable": "تعذر الوصول إلى لوحة الأزمنة. جارٍ إعادة المحاولة…"
+  },
+  "boards": {
+    "board": "لوحة الأزمنة",
+    "allLaps": "كل اللفات",
+    "challenge": "التحدي الأسبوعي",
+    "hallOfFame": "قاعة المشاهير",
+    "lapTimesTitle": "أزمنة اللفات",
+    "challengeTitle": "التحدي الأسبوعي",
+    "week": "الأسبوع",
+    "thisWeek": "هذا الأسبوع · {circuit}",
+    "pastWeek": "{dates} · {circuit}",
+    "timeLeft": "متبقٍ {timeLeft}",
+    "ran": "أُقيم في {dates}",
+    "rules": "القوانين",
+    "emptyThisWeek": "لم تُسجّل أي أزمنة هذا الأسبوع بعد.",
+    "emptyPastWeek": "لم تُسجّل أي أزمنة لهذا الأسبوع."
+  },
+  "layoutPicker": {
+    "chosen": "مسار {venue}: {layout} ({index} من {count})",
+    "closed": "{venue}: {count, plural, zero {لا مسارات} one {مسار واحد} two {مساران} few {# مسارات} many {# مسارًا} other {# مسار}}",
+    "count": "{count, plural, zero {لا مسارات} one {مسار واحد} two {مساران} few {# مسارات} many {# مسارًا} other {# مسار}}",
+    "list": "مسارات {venue}"
+  },
+  "liveryPicker": {
+    "custom": "طلاء مخصص",
+    "chosen": "طلاء {car}: {livery} ({index} من {count})",
+    "chosenCustom": "طلاء {car}: طلاء مخصص ({count, plural, zero {لا طلاءات جاهزة} one {طلاء جاهز واحد} two {طلاءان جاهزان} few {# طلاءات جاهزة} many {# طلاءً جاهزًا} other {# طلاء جاهز}})",
+    "closed": "{car}: {count, plural, zero {لا طلاءات} one {طلاء واحد} two {طلاءان} few {# طلاءات} many {# طلاءً} other {# طلاء}}",
+    "count": "{count, plural, zero {لا طلاءات} one {طلاء واحد} two {طلاءان} few {# طلاءات} many {# طلاءً} other {# طلاء}}",
+    "list": "طلاءات {car}"
+  },
+  "downloads": {
+    "intro": "تطبيقات أصلية اختيارية لأنظمة Windows وmacOS وLinux وAndroid. تفتح librecorsa.org مباشرة، فتصل تحديثات اللعبة دون إعادة تثبيت.",
+    "directLink": "رابط مباشر",
+    "platforms": "المنصات",
+    "thisDevice": "هذا الجهاز",
+    "installed": "مثبّت",
+    "artifact": "{label} — {platform} ({detail})",
+    "artifactSized": "{label} — {platform} ({detail}، {size})",
+    "detailSized": "{detail}، {size}",
+    "detailPending": "{detail} (يُنشر مع وسم الإصدار القادم)",
+    "installCommand": "أمر تثبيت {platform}",
+    "whyInstall": "لماذا تثبّت التطبيق",
+    "highlights": {
+      "desktop": {
+        "label": "سطح المكتب",
+        "text": "يطلب البطاقة الرسومية المنفصلة على الحواسيب المحمولة متعددة البطاقات، ويمنح WebHID صامتًا لمقاود السباق وDualSense، ويعطّل التقييد في الخلفية، ويتحقق من GitHub Releases للتحديثات."
+      },
+      "android": {
+        "label": "Android",
+        "text": "Trusted Web Activity بملء الشاشة دون شريط عنوان المتصفح، وسحب حواف غامر ثابت، وAndroid Game Mode، واختصارات القيادة ولوحات الأزمنة."
+      },
+      "current": {
+        "label": "محدّث دائمًا",
+        "text": "يفتح كل تطبيق librecorsa.org مباشرة بدلًا من تضمين الحلبات أو السيارات، فتصل تحديثات الفيزياء والحلبات واللعب الجماعي فورًا."
+      },
+      "browser": {
+        "label": "المتصفح وiOS",
+        "text": "لا حاجة للتثبيت إذا كنت تفضّل اللعب مباشرة في علامة تبويب. على iPhone وiPad، استخدم «مشاركة > الإضافة إلى الشاشة الرئيسية» في Safari."
+      }
+    },
+    "buildsTitle": "البناء والتوقيع",
+    "builds": "تُبنى جميع المثبّتات وملفات APK من الشيفرة المصدرية لهذا المستودع عبر GitHub Actions وتُنشر على GitHub Releases مع بصمات SHA-256. جارٍ إعداد التوقيع المجاني لنظام Windows عبر SignPath Foundation؛ نسخ macOS غير موقّعة حاليًا؛ وملف Android APK موقّع بمفتاح الرفع المتحقق منه عبر <code>{file}</code>.",
+    "allReleases": "جميع الإصدارات على GitHub",
+    "signingPolicy": "سياسة توقيع الشيفرة"
+  }
+}

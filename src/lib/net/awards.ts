@@ -15,6 +15,7 @@
  *
  * The types are shared with the Worker, which imports them only as types: nothing here runs on the server.
  */
+import { text as t } from "@/lib/text";
 import { getOnlineConfig, onlineUrl } from "./online-config";
 import { driverNameKey, requestJson } from "./board-client";
 import type { VehicleModelId } from "@/types/f1";
@@ -160,13 +161,13 @@ const ORDER: Record<BadgeType, number> = { creator: 0, weekly_gold: 1, weekly_si
 export const sortBadges = (badges: readonly DriverBadge[]): DriverBadge[] => [...badges].sort((a, b) => ORDER[a.type] - ORDER[b.type]);
 
 const BADGE_NAME: Record<BadgeType, string> = {
-  weekly_gold: "Weekly Gold",
-  weekly_silver: "Weekly Silver",
-  weekly_bronze: "Weekly Bronze",
-  track_record: "Fastest Lap",
-  og: "OG Driver",
-  bulb: "Idea Contributor",
-  creator: "Creator",
+  get weekly_gold() { return t("game.badges.weeklyGold"); },
+  get weekly_silver() { return t("game.badges.weeklySilver"); },
+  get weekly_bronze() { return t("game.badges.weeklyBronze"); },
+  get track_record() { return t("game.badges.fastestLap"); },
+  get og() { return t("game.badges.og"); },
+  get bulb() { return t("game.badges.bulb"); },
+  get creator() { return t("game.badges.creator"); },
 };
 
 /** "Weekly Gold", "Idea Contributor" */
@@ -180,9 +181,8 @@ export const physicsName = (physics: string): string => physics.toUpperCase();
  * "Idea Contributor — Wet weather tyres"
  */
 export function badgeLabel(b: DriverBadge): string {
-  const times = b.count > 1 ? ` ×${b.count}` : "";
-  const note = b.type === "bulb" && b.note ? ` — ${b.note}` : "";
-  return `${BADGE_NAME[b.type]}${times}${note}`;
+  const name = b.count > 1 ? t("game.badges.times", { badge: BADGE_NAME[b.type], count: String(b.count) }) : BADGE_NAME[b.type];
+  return b.type === "bulb" && b.note ? t("game.badges.withNote", { badge: name, note: b.note }) : name;
 }
 
 const CLASS_RANK = new Map<VehicleClassId, number>(VEHICLE_CLASS_IDS.map((c, i) => [c, i]));
@@ -259,27 +259,29 @@ export function badgeDetail(b: DriverBadge): string {
     case "weekly_gold":
     case "weekly_silver":
     case "weekly_bronze": {
-      const place = b.type === "weekly_gold" ? "First" : b.type === "weekly_silver" ? "Second" : "Third";
+      const place = b.type === "weekly_gold" ? "first" : b.type === "weekly_silver" ? "second" : "third";
       const weeks = (b.events ?? []).slice(0, 4).map((e) => `${e.event} ${physicsName(e.physics)}`);
-      return `${place} in a weekly challenge${weeks.length ? `: ${weeks.join(", ")}${(b.events?.length ?? 0) > weeks.length ? "…" : ""}` : ""}`;
+      return weeks.length
+        ? t("game.badges.medalDetailWeeks", { place, weeks: `${weeks.join(", ")}${(b.events?.length ?? 0) > weeks.length ? "…" : ""}` })
+        : t("game.badges.medalDetail", { place });
     }
     case "track_record": {
       const groups = groupBoardsByVehicle(b.boards);
       if (groups.length === 0) {
-        return `Holds the fastest lap on ${b.count === 1 ? "an open board" : `${b.count} open boards`}`;
+        return t("game.badges.recordDetailCount", { count: b.count });
       }
-      const parts = groups.slice(0, 4).map((g) => `${vehicleDisplayName(g.vehicle)} ×${g.count}`);
+      const parts = groups.slice(0, 4).map((g) => t("game.badges.recordCar", { car: vehicleDisplayName(g.vehicle), count: String(g.count) }));
       const extra = groups.length > 4 ? "…" : "";
       const manual = Math.max(0, b.count - (b.boards?.length ?? 0));
-      if (manual > 0) parts.push(`+${manual} manual`);
-      return `${parts.join(" · ")}${extra} — tap to view tracks`;
+      if (manual > 0) parts.push(t("game.badges.recordManual", { count: String(manual) }));
+      return t("game.badges.recordDetail", { boards: `${parts.join(" · ")}${extra}` });
     }
     case "og":
-      return "Drove LibreCorsa on Physics V1";
+      return t("game.badges.ogDetail");
     case "bulb":
-      return b.note ? `Idea Contributor: ${b.note}` : "Idea or community contribution";
+      return b.note ? t("game.badges.bulbDetailNote", { note: b.note }) : t("game.badges.bulbDetail");
     case "creator":
-      return "Made LibreCorsa";
+      return t("game.badges.creatorDetail");
   }
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
 import { boardChoiceOf, boardChoiceOfLap, boardChoices, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { boardLabel } from "@/lib/net/leaderboard";
@@ -14,9 +15,9 @@ import { formatDelta, formatLapTime } from "./hud-format";
 // The board table's parts live with the online board (src/components/board): the weekly challenge reads them from here
 export { BoardError, BoardSkeleton, BoardTable, MyPlace, type BoardRow } from "@/components/board/board-table";
 
-/** The button that races a lap's ghost: a round icon button in a row */
-const RaceGhost: React.FC<{ onClick: () => void; of: string }> = ({ onClick, of }) => (
-  <IconButton size="sm" variant="secondary" icon={<Icon name="ghost" />} aria-label={`Race the ghost of ${of}`} title="Race ghost" onClick={onClick} />
+/** The button that races a lap's ghost: a round icon button in a row (`label`: what it races, for a screen reader) */
+const RaceGhost: React.FC<{ onClick: () => void; label: string; title: string }> = ({ onClick, label, title }) => (
+  <IconButton size="sm" variant="secondary" icon={<Icon name="ghost" />} aria-label={label} title={title} onClick={onClick} />
 );
 
 export interface LeaderboardPanelProps {
@@ -112,6 +113,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   driverKeyNotice = null,
   jumpTarget = null,
 }) => {
+  const tx = useTranslations("hud.leaderboardPanel");
   const fileRef = useRef<HTMLInputElement | null>(null);
   const keyFileRef = useRef<HTMLInputElement | null>(null);
   // Laps on their way to the online board from here, by lap. An answer redraws the rows (their state is in storage);
@@ -122,7 +124,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
     if (!onPostLap || posting.has(id)) return;
     setPosting((s) => new Set(s).add(id));
     void onPostLap(e)
-      .catch((): { ok: boolean; error?: string } => ({ ok: false, error: "Could not reach the leaderboard" }))
+      .catch((): { ok: boolean; error?: string } => ({ ok: false, error: tx("postUnreachable") }))
       .then((res) => {
         setPosting((s) => {
           const next = new Set(s);
@@ -201,10 +203,10 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   const cars = useMemo(() => {
     const ids: string[] = [...new Set(onCircuit.map((e) => e.vehicle))];
     return [
-      { id: ALL_CARS, label: "All cars", count: onCircuit.length },
+      { id: ALL_CARS, label: tx("allCars"), count: onCircuit.length },
       ...ids.map((id) => ({ id, label: vehicleLabel(id), count: onCircuit.filter((e) => e.vehicle === id).length })),
     ];
-  }, [onCircuit, vehicleLabel]);
+  }, [onCircuit, vehicleLabel, tx]);
   const carShown = cars.some((c) => c.id === car) ? car : ALL_CARS;
 
   // Fastest first, whatever order the caller passed
@@ -239,15 +241,18 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
     const id = `${e.trackId}|${e.vehicle}|${e.recordedAt}`;
     const unposted = status && !status.posted ? { error: status.error ?? postErrors[id] ?? null } : null;
     const sending = posting.has(id);
-    const ghost = Boolean(onRaceGhost) && e.trackId === here ? <RaceGhost of={`your ${vehicleLabel(e.vehicle)} lap`} onClick={() => onRaceGhost?.(e)} /> : null;
+    const ghost =
+      Boolean(onRaceGhost) && e.trackId === here ? (
+        <RaceGhost label={tx("raceGhost", { car: vehicleLabel(e.vehicle) })} title={tx("raceGhostTitle")} onClick={() => onRaceGhost?.(e)} />
+      ) : null;
     const setupBtn =
       onApplySetup && (e.hasSetup || e.setup) && (!vehicle || e.vehicle === vehicle) ? (
         <IconButton
           size="sm"
           variant="secondary"
           icon={<Icon name="garage" />}
-          aria-label={`Apply setup from your ${vehicleLabel(e.vehicle)} lap`}
-          title="Apply setup"
+          aria-label={tx("applySetup", { car: vehicleLabel(e.vehicle) })}
+          title={tx("applySetupTitle")}
           onClick={() => void onApplySetup(e)}
         />
       ) : null;
@@ -257,7 +262,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
         <>
           <span className="hidden @lg:inline-flex">
             <Button size="sm" variant="secondary" loading={sending} disabled={sending} onClick={() => postLap(e, id)}>
-              {unposted.error ? "Retry" : "Post"}
+              {unposted.error ? tx("retry") : tx("post")}
             </Button>
           </span>
           <span className="inline-flex @lg:hidden">
@@ -265,8 +270,8 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
               size="sm"
               variant="secondary"
               icon={<Icon name={unposted.error ? "refresh" : "online"} />}
-              aria-label={unposted.error ? "Retry posting this lap online" : "Post this lap online"}
-              title={unposted.error ? "Retry" : "Post online"}
+              aria-label={unposted.error ? tx("retryAria") : tx("postAria")}
+              title={unposted.error ? tx("retryTitle") : tx("postTitle")}
               disabled={sending}
               aria-busy={sending || undefined}
               onClick={() => postLap(e, id)}
@@ -289,9 +294,9 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       bestSectors: e.sectorTimesMs.map((s, k) => s > 0 && s === bestSector[k] && rows.length > 1),
       note: unposted ? (
         unposted.error ? (
-          <span className="text-lc-amber">Not on the online board: {unposted.error}</span>
+          <span className="text-lc-amber">{tx("notPosted", { error: unposted.error })}</span>
         ) : (
-          <span className="text-lc-slate">Not on the online board yet</span>
+          <span className="text-lc-slate">{tx("notPostedYet")}</span>
         )
       ) : undefined,
       action:
@@ -309,20 +314,18 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   const driverKey =
     onExportDriverKey || onImportDriverKey ? (
       <div className="flex flex-col gap-2.5 border-t border-lc-line pt-3.5">
-        <h4 className="lc-row-label m-0">Driver key</h4>
-        <p className="lc-hint m-0 max-w-[62ch]">
-          Claims your driver name on the leaderboard. Export to use the same name on another device; keep the file private.
-        </p>
+        <h4 className="lc-row-label m-0">{tx("driverKey")}</h4>
+        <p className="lc-hint m-0 max-w-[62ch]">{tx("driverKeyIntro")}</p>
         <div className="flex flex-wrap items-center gap-2">
           {onExportDriverKey ? (
             <Button size="sm" variant="secondary" icon={<Icon name="download" />} onClick={onExportDriverKey}>
-              Export key
+              {tx("exportKey")}
             </Button>
           ) : null}
           {onImportDriverKey ? (
             <>
               <Button size="sm" variant="secondary" onClick={() => keyFileRef.current?.click()}>
-                Import key
+                {tx("importKey")}
               </Button>
               <input ref={keyFileRef} type="file" accept="application/json,.json" className="hidden" onChange={handleKeyFile} />
             </>
@@ -344,14 +347,14 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
           {onImportGhost ? (
             <>
               <Button size="sm" variant="secondary" onClick={() => fileRef.current?.click()}>
-                Import ghost file
+                {tx("importGhost")}
               </Button>
               <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={handleFile} />
             </>
           ) : null}
           {onExportBest ? (
             <Button size="sm" variant="secondary" icon={<Icon name="download" />} onClick={onExportBest}>
-              Export my best
+              {tx("exportBest")}
             </Button>
           ) : null}
         </div>
@@ -373,11 +376,11 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
                       onDismissSetupNotice?.();
                     }}
                   >
-                    Undo
+                    {tx("undo")}
                   </Button>
                 ) : null}
                 {onDismissSetupNotice ? (
-                  <IconButton size="sm" variant="ghost" aria-label="Dismiss" icon={<Icon name="close" />} onClick={onDismissSetupNotice} />
+                  <IconButton size="sm" variant="ghost" aria-label={tx("dismiss")} icon={<Icon name="close" />} onClick={onDismissSetupNotice} />
                 ) : null}
               </span>
             }
@@ -390,7 +393,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       {/* The online board: its circuit picker sets the circuit for the whole panel */}
       {remoteEnabled ? (
         <OnlineBoard
-          title="Online times"
+          title={tx("onlineTimes")}
           circuits={boardCircuits}
           circuit={circuit}
           onCircuitChange={setCircuit}
@@ -407,37 +410,37 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
           scopeOverride={scopeOverride}
         />
       ) : localCircuits.length > 1 ? (
-        <SettingRow label="Circuit">
+        <SettingRow label={tx("circuit")}>
           <Select
             className="w-64 max-w-full"
             value={circuit}
             onChange={setCircuit}
-            options={localCircuits.map((c) => ({ id: c.id, label: c.label, detail: c.count === 1 ? "1 lap" : `${c.count} laps` }))}
+            options={localCircuits.map((c) => ({ id: c.id, label: c.label, detail: tx("circuitLaps", { count: c.count }) }))}
           />
         </SettingRow>
       ) : null}
 
       {/* Your laps */}
       <Card
-        title="Your best laps"
+        title={tx("yourBestLaps")}
         description={older ? `${nameOf(circuit)} · ${choice.label}` : nameOf(circuit)}
         action={
           cars.length > 2 || localPicker ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
               {localPicker ? (
                 choices.length <= 2 ? (
-                  <Segmented aria-label="Physics version" size="sm" value={choice.id} onChange={setBoardPick} options={choices} />
+                  <Segmented aria-label={tx("physicsVersion")} size="sm" value={choice.id} onChange={setBoardPick} options={choices} />
                 ) : (
-                  <Select aria-label="Physics version" className="w-56 max-w-full" value={choice.id} onChange={setBoardPick} options={choices} />
+                  <Select aria-label={tx("physicsVersion")} className="w-56 max-w-full" value={choice.id} onChange={setBoardPick} options={choices} />
                 )
               ) : null}
               {cars.length > 2 ? (
                 <Select
-                  aria-label="Car"
+                  aria-label={tx("car")}
                   className="w-56 max-w-full"
                   value={carShown}
                   onChange={setCar}
-                  options={cars.map((c) => ({ id: c.id, label: c.label, detail: c.count === 1 ? "1 lap" : `${c.count} laps` }))}
+                  options={cars.map((c) => ({ id: c.id, label: c.label, detail: tx("carLaps", { count: c.count }) }))}
                 />
               ) : null}
             </div>
@@ -446,23 +449,19 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       >
         {rows.length === 0 ? (
           <EmptyState icon={<Icon name="lapTimes" />}>
-            {older
-              ? `No laps on ${nameOf(circuit)} (${choice.label}).`
-              : `No saved laps on ${nameOf(circuit)}.`}
+            {older ? tx("noLapsOlder", { circuit: nameOf(circuit), board: choice.label }) : tx("noLaps", { circuit: nameOf(circuit) })}
           </EmptyState>
         ) : (
           <BoardTable
-            label={`Best laps on ${nameOf(circuit)}`}
-            nameHeader="Car"
+            label={tx("tableLabel", { circuit: nameOf(circuit) })}
+            nameHeader={tx("carColumn")}
             rows={localRows}
             footer={
               theoretical && rows.length > 1 ? (
                 <div className="mt-1 flex items-center justify-between gap-4 rounded-lc-row bg-white/3 px-2 py-2.5">
                   <span className="flex min-w-0 flex-col">
-                    <span className="text-[14px] font-semibold text-lc-chalk">Theoretical best</span>
-                    <span className="lc-hint">
-                      {toFind < 0 ? `${formatDelta(toFind)} s potential` : "All best sectors in one lap"}
-                    </span>
+                    <span className="text-[14px] font-semibold text-lc-chalk">{tx("theoreticalBest")}</span>
+                    <span className="lc-hint">{toFind < 0 ? tx("potential", { delta: formatDelta(toFind) }) : tx("allBestSectors")}</span>
                   </span>
                   <span className="lc-mono text-[15px] font-bold text-lc-fog">{formatLapTime(theoretical)}</span>
                 </div>
@@ -474,9 +473,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
 
       {remoteEnabled || remoteStatus === "unknown" ? null : (
         <p className="lc-hint m-0 px-1">
-          {remoteStatus === "unreachable"
-            ? "Leaderboard offline. Showing local times."
-            : "Online leaderboard disabled. Showing local times."}
+          {remoteStatus === "unreachable" ? tx("offline") : tx("disabled")}
         </p>
       )}
     </div>

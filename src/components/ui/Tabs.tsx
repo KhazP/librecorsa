@@ -119,8 +119,10 @@ export function Tabs<T extends string>({
         return;
       }
       // The ends that have tabs past them fade (a strip that wraps never scrolls)
-      const start = !wrap && over && list.scrollLeft > 1;
-      const end = !wrap && over && list.scrollLeft < list.scrollWidth - list.clientWidth - 1;
+      // Right to left, scrollLeft runs from 0 down to negative: its size is the distance from the start either way
+      const scrolled = Math.abs(list.scrollLeft);
+      const start = !wrap && over && scrolled > 1;
+      const end = !wrap && over && scrolled < list.scrollWidth - list.clientWidth - 1;
       setEdges((e) => (e.start === start && e.end === end ? e : { start, end }));
     };
     check();
@@ -165,7 +167,9 @@ export function Tabs<T extends string>({
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const keys: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity };
+    // Right to left the list runs the other way on screen, so the arrows step the other way through it
+    const ahead = getComputedStyle(e.currentTarget).direction === "rtl" ? -1 : 1;
+    const keys: Record<string, number> = { ArrowLeft: -ahead, ArrowRight: ahead, Home: -Infinity, End: Infinity };
     const d = keys[e.key];
     if (d === undefined) return;
     const buttons = Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []);

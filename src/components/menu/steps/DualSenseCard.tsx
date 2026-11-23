@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useSyncExternalStore } from "react";
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button, SettingRow } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { useSettingsEnv } from "@/components/settings/env";
@@ -23,83 +24,91 @@ const ds = <K extends keyof DualSenseSettings>(key: K) =>
 
 /** Trigger stiffness: each sets the trigger strength the brake ramp and the throttle resistance scale with */
 const TRIGGER_FEELS = [
-  { id: "soft", strength: 0.35, label: "Soft", detail: "Light brake, throttle almost free" },
-  { id: "medium", strength: 0.6, label: "Medium", detail: "Firm brake, light throttle" },
-  { id: "hard", strength: 1, label: "Hard", detail: "Stiff brake, firmer throttle" },
+  { id: "soft", strength: 0.35 },
+  { id: "medium", strength: 0.6 },
+  { id: "hard", strength: 1 },
 ] as const;
 
-const needsTriggers = (on: boolean) => (on ? null : "Needs Adaptive triggers on");
+/** The card's own rows, named in the current language */
+function useDualSenseRows() {
+  const tx = useTranslations("setup.dualSense");
+  return useMemo(() => {
+    const needsTriggers = (on: boolean) => (on ? null : tx("needsAdaptiveTriggers"));
 
-const adaptiveTriggers = toggle({
-  id: "dualSenseTriggers",
-  label: "Adaptive triggers",
-  hint: "L2 firms up like a brake pedal; ABS, lock-ups and wheelspin buzz in L2 and R2",
-  // With stick pedals L2 / R2 shift gears: they stay free
-  off: needsTriggerPedals,
-  ...ds("adaptiveTriggers"),
-});
+    const adaptiveTriggers = toggle({
+      id: "dualSenseTriggers",
+      label: tx("adaptiveTriggers"),
+      hint: tx("adaptiveTriggersHint"),
+      // With stick pedals L2 / R2 shift gears: they stay free
+      off: needsTriggerPedals,
+      ...ds("adaptiveTriggers"),
+    });
 
-const triggerFeel: RowDef = choice("tiles", {
-  id: "dualSenseTriggerFeel",
-  label: "Trigger stiffness",
-  options: TRIGGER_FEELS.map(({ id, label, detail }) => ({ id, label, detail })),
-  read: (env) => TRIGGER_FEELS.find((f) => Math.abs(env.settings.dualSense.triggerStrength - f.strength) < 0.05)?.id ?? "custom",
-  write: (env, id) => {
-    const feel = TRIGGER_FEELS.find((f) => f.id === id);
-    if (feel) env.update((s) => ({ ...s, dualSense: { ...s.dualSense, triggerStrength: feel.strength } }));
-  },
-  initial: () => "medium",
-  off: (env) => needsTriggers(env.settings.dualSense.adaptiveTriggers),
-});
+    const triggerFeel: RowDef = choice("tiles", {
+      id: "dualSenseTriggerFeel",
+      label: tx("triggerStiffness"),
+      options: TRIGGER_FEELS.map(({ id }) => ({ id, label: tx(`feel.${id}`), detail: tx(`feelDetail.${id}`) })),
+      read: (env) => TRIGGER_FEELS.find((f) => Math.abs(env.settings.dualSense.triggerStrength - f.strength) < 0.05)?.id ?? "custom",
+      write: (env, id) => {
+        const feel = TRIGGER_FEELS.find((f) => f.id === id);
+        if (feel) env.update((s) => ({ ...s, dualSense: { ...s.dualSense, triggerStrength: feel.strength } }));
+      },
+      initial: () => "medium",
+      off: (env) => needsTriggers(env.settings.dualSense.adaptiveTriggers),
+    });
 
-const rumbleStrength = slider({
-  id: "dualSenseRumble",
-  label: "Rumble strength",
-  min: 0.1,
-  max: 1.5,
-  step: 0.05,
-  format: pct,
-  ...ds("rumbleStrength"),
-});
+    const rumbleStrength = slider({
+      id: "dualSenseRumble",
+      label: tx("rumbleStrength"),
+      min: 0.1,
+      max: 1.5,
+      step: 0.05,
+      format: pct,
+      ...ds("rumbleStrength"),
+    });
 
-const hapticStrength = slider({
-  id: "dualSenseHapticStrength",
-  label: "Haptics strength",
-  min: 0.1,
-  max: 1.5,
-  step: 0.05,
-  format: pct,
-  ...ds("hapticStrength"),
-});
+    const hapticStrength = slider({
+      id: "dualSenseHapticStrength",
+      label: tx("hapticStrength"),
+      min: 0.1,
+      max: 1.5,
+      step: 0.05,
+      format: pct,
+      ...ds("hapticStrength"),
+    });
 
-const engineHaptics = slider({
-  id: "dualSenseEngine",
-  label: "Engine vibration",
-  min: 0,
-  max: 1,
-  step: 0.05,
-  format: pctOrOff,
-  ...ds("engineHaptics"),
-});
+    const engineHaptics = slider({
+      id: "dualSenseEngine",
+      label: tx("engineVibration"),
+      min: 0,
+      max: 1,
+      step: 0.05,
+      format: pctOrOff,
+      ...ds("engineHaptics"),
+    });
 
-const lightbar: RowDef = choice("segmented", {
-  id: "dualSenseLightbar",
-  label: "Lightbar",
-  hint: "Revs: green to red, flashing blue at the shift point",
-  options: [
-    { id: "revs", label: "Revs" },
-    { id: "driver", label: "Driver colour" },
-    { id: "off", label: "Off" },
-  ],
-  ...ds("lightbar"),
-});
+    const lightbar: RowDef = choice("segmented", {
+      id: "dualSenseLightbar",
+      label: tx("lightbar"),
+      hint: tx("lightbarHint"),
+      options: [
+        { id: "revs", label: tx("lightbarRevs") },
+        { id: "driver", label: tx("lightbarDriver") },
+        { id: "off", label: tx("lightbarOff") },
+      ],
+      ...ds("lightbar"),
+    });
 
-const revLeds = toggle({
-  id: "dualSenseRevLeds",
-  label: "Rev lights",
-  hint: "The five player LEDs fill up to the shift point; the mic LED shows the overtake boost",
-  ...ds("revLeds"),
-});
+    const revLeds = toggle({
+      id: "dualSenseRevLeds",
+      label: tx("revLights"),
+      hint: tx("revLightsHint"),
+      ...ds("revLeds"),
+    });
+
+    return { adaptiveTriggers, triggerFeel, rumbleStrength, hapticStrength, engineHaptics, lightbar, revLeds };
+  }, [tx]);
+}
 
 /** Brake resistance, then the ABS buzz, in L2; throttle resistance, then the wheelspin buzz, in R2 */
 function testTriggers(strength: number) {
@@ -147,6 +156,8 @@ export function testDualSenseRumble(settings: DualSenseSettings) {
  */
 export function DualSenseCard() {
   const { settings } = useSettingsEnv();
+  const tx = useTranslations("setup.dualSense");
+  const { adaptiveTriggers, triggerFeel, rumbleStrength, hapticStrength, engineHaptics, lightbar, revLeds } = useDualSenseRows();
   const d = settings.dualSense;
   /** The triggers firm up and buzz: switched on, and the pedals are on them */
   const triggerFeedback = d.adaptiveTriggers && pedalsOnTriggers(settings.padTuning.pedalSources);
@@ -163,22 +174,16 @@ export function DualSenseCard() {
 
   if (!supported) {
     return (
-      <SettingsCard
-        title="DualSense"
-        description="Triggers, HD haptics and lightbar require Chrome or Edge. Standard rumble stays active."
-      />
+      <SettingsCard title="DualSense" description={tx("needsChrome")} />
     );
   }
 
   if (!connected) {
     return (
-      <SettingsCard
-        title="DualSense"
-        description="Adaptive triggers, USB HD haptics, rev lights and gyro steering via WebHID."
-      >
-        <SettingRow label="Pair controller" hint={status.message ?? undefined}>
+      <SettingsCard title="DualSense" description={tx("description")}>
+        <SettingRow label={tx("pair")} hint={status.message ?? undefined}>
           <Button size="sm" variant="primary" onClick={() => void dualSenseHid.connect()}>
-            Connect DualSense
+            {tx("connect")}
           </Button>
         </SettingRow>
       </SettingsCard>
@@ -187,13 +192,21 @@ export function DualSenseCard() {
 
   const usb = status.transport === "usb";
   const hd = d.hdHaptics && usb;
-  const battery = status.battery ? `, ${Math.round(status.battery.level * 100)}%${status.battery.charging ? " charging" : ""}` : "";
+  const padName = status.name ?? "DualSense";
+  const transport = usb ? "USB" : "Bluetooth";
+  const padLine = status.battery
+    ? tx(status.battery.charging ? "padLineCharging" : "padLineBattery", {
+        name: padName,
+        transport,
+        battery: Math.round(status.battery.level * 100),
+      })
+    : tx("padLine", { name: padName, transport });
 
   const hdHaptics = toggle({
     id: "dualSenseHaptics",
-    label: "HD haptics",
-    hint: usb ? "USB audio haptics for kerbs, slip and engine" : undefined,
-    off: () => (usb ? null : "Requires USB cable"),
+    label: tx("hdHaptics"),
+    hint: usb ? tx("hdHapticsHint") : undefined,
+    off: () => (usb ? null : tx("needsUsb")),
     read: (env) => env.settings.dualSense.hdHaptics && usb,
     write: (env, on) => {
       const set = (v: boolean) => env.update((s) => ({ ...s, dualSense: { ...s.dualSense, hdHaptics: v } }));
@@ -226,26 +239,25 @@ export function DualSenseCard() {
       before={
         <span className="flex items-center gap-2 pb-1">
           <Badge tone="good" dot>
-            Connected
+            {tx("connected")}
           </Badge>
-          <span className="lc-body truncate" title={`${status.name ?? "DualSense"}, ${usb ? "USB" : "Bluetooth"}${battery}`}>
-            {status.name ?? "DualSense"}, {usb ? "USB" : "Bluetooth"}
-            {battery}
+          <span className="lc-body truncate" title={padLine}>
+            {padLine}
           </span>
         </span>
       }
     >
       {audio.state === "error" && audio.message ? <StatusPill tone="info">{audio.message}</StatusPill> : null}
       {triggerFeedback ? (
-        <SettingRow label="Test triggers" hint="L2 and R2 stiffen, then buzz">
+        <SettingRow label={tx("testTriggers")} hint={tx("testTriggersHint")}>
           <Button size="sm" variant="secondary" onClick={() => testTriggers(d.triggerStrength)}>
-            Test
+            {tx("test")}
           </Button>
         </SettingRow>
       ) : null}
-      <SettingRow label={hd ? "Test haptics" : "Test rumble"} hint="Left grip, then right, then both">
+      <SettingRow label={hd ? tx("testHaptics") : tx("testRumble")} hint={tx("testGripsHint")}>
         <Button size="sm" variant="secondary" onClick={() => testDualSenseRumble(d)}>
-          Test
+          {tx("test")}
         </Button>
       </SettingRow>
     </SettingsCard>

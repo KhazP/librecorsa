@@ -14,6 +14,7 @@
  *
  * No three.js, no DOM.
  */
+import { text as tx } from '@/lib/text';
 import type { RaceControlFeedMessage, RaceStatus } from '@/types/f1';
 import type { InterpolatedPeerState } from './multiplayer-sync';
 import { SLOW_MS, WRONG_WAY_MS } from './contact-guard';
@@ -45,13 +46,13 @@ const MESSAGE_LIFE_S = 6;
 
 export type YellowCause = 'stopped' | 'slow' | 'wrong_way' | 'off_track' | 'hazard';
 
-const DETAIL: Record<YellowCause, string> = {
-  stopped: 'Car stopped ahead',
-  slow: 'Slow car ahead',
-  wrong_way: 'Car going the wrong way',
-  off_track: 'Car off the track ahead',
-  hazard: 'Incident ahead',
-};
+const DETAIL = {
+  stopped: 'game.flags.carStopped',
+  slow: 'game.flags.slowCar',
+  wrong_way: 'game.flags.wrongWay',
+  off_track: 'game.flags.carOffTrack',
+  hazard: 'game.flags.incident',
+} as const satisfies Record<YellowCause, string>;
 
 /** One other car, as this client sees it */
 export interface FlagCar {
@@ -152,7 +153,7 @@ export class MultiplayerFlags {
     }
     if (nearest) {
       this.holdS = 0;
-      if (!this.yellow) this.post(raceTimeS, 'yellow', 'Yellow flag', DETAIL[nearest.cause]);
+      if (!this.yellow) this.post(raceTimeS, 'yellow', tx('game.flags.yellow'), tx(DETAIL[nearest.cause]));
       this.yellow = true;
       this.cause = nearest.cause;
     } else if (this.yellow) {
@@ -160,7 +161,7 @@ export class MultiplayerFlags {
       if (this.holdS >= YELLOW_HOLD_S) {
         this.yellow = false;
         this.cause = null;
-        this.post(raceTimeS, 'green', 'Track clear');
+        this.post(raceTimeS, 'green', tx('game.flags.trackClear'));
       }
     }
   }

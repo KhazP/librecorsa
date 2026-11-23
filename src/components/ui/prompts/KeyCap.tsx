@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslations } from "use-intl/react";
 import { keyLabel } from "@/lib/input/bindings";
 import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { Icon } from "../icons/Icon";
@@ -7,7 +8,6 @@ import type { IconName } from "../icons/registry";
 export type ArrowKey = "up" | "down" | "left" | "right";
 
 const ARROW_ICON: Record<ArrowKey, IconName> = { up: "keyUp", down: "keyDown", left: "keyLeft", right: "keyRight" };
-const ARROW_NAME: Record<ArrowKey, string> = { up: "Up", down: "Down", left: "Left", right: "Right" };
 
 const CAP =
   "lc-chip-text inline-flex h-5.5 min-w-5.5 shrink-0 items-center justify-center rounded-full border px-1.5 text-[11px] leading-none";
@@ -28,18 +28,21 @@ export const KeyCap: React.FC<{
   arrow?: ArrowKey;
   tone?: keyof typeof TONE;
   className?: string;
-}> = ({ children, arrow, tone = "default", className = "" }) => (
-  <kbd className={`${CAP} ${TONE[tone]} ${arrow ? "px-0" : ""} ${className}`}>
-    {arrow ? (
-      <>
-        <Icon name={ARROW_ICON[arrow]} size="xs" className="size-3!" />
-        <span className="sr-only">{ARROW_NAME[arrow]}</span>
-      </>
-    ) : (
-      children
-    )}
-  </kbd>
-);
+}> = ({ children, arrow, tone = "default", className = "" }) => {
+  const tx = useTranslations("common.keys");
+  return (
+    <kbd className={`${CAP} ${TONE[tone]} ${arrow ? "px-0" : ""} ${className}`}>
+      {arrow ? (
+        <>
+          <Icon name={ARROW_ICON[arrow]} size="xs" className="size-3!" />
+          <span className="sr-only">{tx(arrow)}</span>
+        </>
+      ) : (
+        children
+      )}
+    </kbd>
+  );
+};
 
 /** A set of arrow keys, one cap each */
 export const ArrowKeys: React.FC<{ set: "all" | "horizontal" | "vertical"; tone?: keyof typeof TONE }> = ({
@@ -57,9 +60,10 @@ export const ArrowKeys: React.FC<{ set: "all" | "horizontal" | "vertical"; tone?
 };
 
 /** A wheel button, shown by number */
-export const WheelButton: React.FC<{ button: number; tone?: keyof typeof TONE }> = ({ button, tone }) => (
-  <KeyCap tone={tone}>Btn {button}</KeyCap>
-);
+export const WheelButton: React.FC<{ button: number; tone?: keyof typeof TONE }> = ({ button, tone }) => {
+  const tx = useTranslations("common.keys");
+  return <KeyCap tone={tone}>{tx("wheelButton", { button: String(button) })}</KeyCap>;
+};
 
 const ARROW_CHAR: Record<string, ArrowKey> = { "\u2191": "up", "\u2193": "down", "\u2190": "left", "\u2192": "right" };
 

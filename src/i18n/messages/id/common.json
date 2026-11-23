@@ -1,0 +1,139 @@
+{
+  "newTab": "(terbuka di tab baru)",
+  "confirm": {
+    "cancel": "Batal",
+    "busy": "Tunggu hingga selesai"
+  },
+  "toggle": {
+    "on": "Aktif",
+    "off": "Mati"
+  },
+  "disclosure": {
+    "more": "Lebih banyak",
+    "less": "Lebih sedikit"
+  },
+  "select": {
+    "placeholder": "Pilih",
+    "labelValue": "{label}: {value}"
+  },
+  "settingRow": {
+    "changed": "Diubah dari bawaan",
+    "resetNamed": "Reset {setting} ke bawaan",
+    "resetThis": "Reset pengaturan ini ke bawaan",
+    "reset": "Reset ke bawaan"
+  },
+  "mediaTile": {
+    "chosen": "Dipilih"
+  },
+  "keys": {
+    "up": "Atas",
+    "down": "Bawah",
+    "left": "Kiri",
+    "right": "Kanan",
+    "wheelButton": "Tmb {button}"
+  },
+  "pad": {
+    "namedButton": "Tombol {name}",
+    "shapeButton": "{shape, select, cross {Tombol Silang} circle {Tombol Lingkaran} square {Tombol Kotak} other {Tombol Segitiga}}",
+    "faceButton": "{position, select, bottom {Tombol depan bawah} right {Tombol depan kanan} left {Tombol depan kiri} other {Tombol depan atas}}",
+    "dpad": "D-pad",
+    "dpadDirection": "{direction, select, up {D-pad atas} down {D-pad bawah} left {D-pad kiri} right {D-pad kanan} horizontal {D-pad kiri dan kanan} other {D-pad atas dan bawah}}",
+    "shoulder": "{button, select, lb {Bumper kiri} rb {Bumper kanan} lt {Trigger kiri} other {Trigger kanan}} ({name})",
+    "touchpad": "Touchpad",
+    "stick": "{side, select, left {Stik kiri} other {Stik kanan}}",
+    "stickPress": "{side, select, left {Tekan stik kiri} other {Tekan stik kanan}} ({name})",
+    "stickDirection": "{side, select, left {Stik kiri} other {Stik kanan}} {direction, select, up {atas} down {bawah} left {kiri} right {kanan} horizontal {kiri dan kanan} other {atas dan bawah}}"
+  },
+  "badges": {
+    "you": "Kamu",
+    "position": "Posisi {position}",
+    "qualityDescription": ": {description}"
+  },
+  "delta": {
+    "spoken": "{trend, select, level {Sama} faster {{seconds} detik lebih cepat} other {{seconds} detik lebih lambat}}{best, select, yes {, terbaik} other {}}",
+    "best": "Terbaik"
+  },
+  "penalty": {
+    "time": "+{seconds} s",
+    "driveThrough": "Drive-through",
+    "warning": "Peringatan",
+    "trackLimits": "Batas trek {strikes}/{of}",
+    "disqualified": "Didiskualifikasi"
+  },
+  "flags": {
+    "green": "Bendera hijau",
+    "yellow": "Bendera kuning",
+    "doubleYellow": "Bendera kuning ganda",
+    "blue": "Bendera biru",
+    "red": "Bendera merah",
+    "white": "Bendera putih",
+    "black": "Bendera hitam",
+    "blackWhite": "Hitam-putih",
+    "chequered": "Bendera finis"
+  },
+  "compounds": {
+    "name": {
+      "soft": "Soft",
+      "medium": "Medium",
+      "hard": "Hard",
+      "intermediate": "Intermediate",
+      "wet": "Wet"
+    },
+    "short": {
+      "soft": "Soft",
+      "medium": "Med",
+      "hard": "Hard",
+      "intermediate": "Inter",
+      "wet": "Wet"
+    },
+    "long": {
+      "soft": "Ban Soft",
+      "medium": "Ban Medium",
+      "hard": "Ban Hard",
+      "intermediate": "Ban Intermediate (trek basah)",
+      "wet": "Ban Full Wet (genangan air)"
+    },
+    "tyres": {
+      "soft": "Ban Soft",
+      "medium": "Ban Medium",
+      "hard": "Ban Hard",
+      "intermediate": "Ban Intermediate",
+      "wet": "Ban Wet"
+    }
+  },
+  "carClass": {
+    "openWheel": "Open-wheel",
+    "gt3": "GT3",
+    "proto": "Proto",
+    "classic": "Klasik",
+    "road": "Jalan raya"
+  },
+  "session": {
+    "practice": "Latihan",
+    "race": "Balapan",
+    "timeAttack": "Time Trial",
+    "hillClimb": "Hill climb",
+    "online": "Online",
+    "offline": "Offline",
+    "host": "Host"
+  },
+  "state": {
+    "new": "Baru",
+    "beta": "Beta",
+    "wip": "WIP",
+    "experimental": "Eksperimental",
+    "downloaded": "Terunduh",
+    "downloading": "Mengunduh",
+    "updateAvailable": "Pembaruan tersedia",
+    "inUse": "Dipakai"
+  },
+  "surface": {
+    "dry": "Kering",
+    "damp": "Lembap",
+    "wet": "Basah",
+    "flooded": "Tergenang"
+  },
+  "dialog": {
+    "close": "Tutup"
+  }
+}

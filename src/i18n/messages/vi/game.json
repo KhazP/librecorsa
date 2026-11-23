@@ -1,0 +1,875 @@
+{
+  "sky": {
+    "clear": "Trời quang",
+    "lightClouds": "Ít mây",
+    "partiallyCloudy": "Có mây rải rác",
+    "mostlyCloudy": "Nhiều mây",
+    "overcast": "U ám",
+    "cloudyDrizzle": "Có mây & mưa phùn",
+    "cloudyLightRain": "Có mây & mưa nhẹ",
+    "overcastLightRain": "U ám & mưa nhẹ",
+    "overcastRain": "U ám & mưa",
+    "overcastHeavyRain": "U ám & mưa lớn",
+    "overcastStorm": "U ám & giông bão"
+  },
+  "weather": {
+    "nodeStart": "Bắt đầu",
+    "nodeFinish": "Kết thúc",
+    "clear": "Trời quang",
+    "clearDetail": "Khô ráo, nắng đẹp",
+    "overcast": "U ám",
+    "overcastDetail": "Khô ráo, trời xám, mặt đường mát hơn",
+    "lightRain": "Mưa nhẹ",
+    "lightRainDetail": "Đường ướt, dùng lốp trung gian",
+    "heavyRain": "Mưa lớn",
+    "heavyRainDetail": "Đọng nước, dùng lốp mưa toàn phần",
+    "drying": "Đang khô dần",
+    "dryingDetail": "Mưa đã tạnh, xuất hiện vệt khô trên đường chạy",
+    "dynamic": "Thay đổi linh hoạt",
+    "dynamicDetail": "Thay đổi trong suốt phiên chạy"
+  },
+  "timeOfDay": {
+    "dawn": "Bình minh",
+    "morning": "Buổi sáng",
+    "noon": "Buổi trưa",
+    "afternoon": "Buổi chiều",
+    "goldenHour": "Giờ vàng",
+    "dusk": "Hoàng hôn",
+    "night": "Ban đêm"
+  },
+  "raceStart": {
+    "assisted": "Hỗ trợ",
+    "manual": "Thủ công",
+    "assistedHint": "Giữ xe trên hàng xuất phát cho đến khi tắt đèn xuất phát",
+    "manualHint": "Giữ côn và vòng tua, nhả khi tắt đèn xuất phát (phạt +5 s / +10 s nếu xuất phát sớm)"
+  },
+  "realism": {
+    "casual": "Dễ",
+    "casualDetail": "Không mòn lốp, nhiệt độ lốp dễ chịu, mưa nhẹ hơn",
+    "standard": "Tiêu chuẩn",
+    "standardDetail": "Bật độ mòn lốp, nhiệt độ lốp ít khắt khe hơn, gần đủ hiệu ứng mưa",
+    "full": "Tối đa",
+    "fullDetail": "Mô hình lốp và đường ướt đầy đủ, lốp và phanh nguội khi rời garage"
+  },
+  "raceRules": {
+    "auto": "Tự động",
+    "openWheel": "Xe công thức",
+    "endurance": "Đua sức bền",
+    "autoHint": "Luật xe công thức cho xe một chỗ ngồi, luật sức bền cho các hạng còn lại",
+    "openWheelHint": "Giới hạn đường đua theo số lần vi phạm: 4 lần phạt +5 s, 8 lần phạt +10 s, 12 lần bị loại",
+    "enduranceHint": "Giới hạn đường đua theo điểm trọng số: 5 điểm phạt +5 s, 10 điểm phạt +10 s, 15 điểm bị loại",
+    "trackLimitsOn": "Bật",
+    "trackLimitsOff": "Tắt"
+  },
+  "damage": {
+    "off": "Tắt",
+    "reduced": "Giảm nhẹ",
+    "full": "Đầy đủ"
+  },
+  "raceSetup": {
+    "gridBack": "Cuối hàng",
+    "gridMiddle": "Giữa hàng",
+    "gridPole": "Pole",
+    "gridRandom": "Ngẫu nhiên",
+    "aiGridPace": "Theo tốc độ",
+    "aiGridQualifying": "Phân hạng",
+    "aiGridReversed": "Đảo ngược",
+    "startAuto": "Tự động",
+    "startStanding": "Xuất phát đứng",
+    "startRolling": "Xuất phát lăn bánh",
+    "standingStart": "xuất phát đứng",
+    "rollingStart": "xuất phát lăn bánh",
+    "aggressionClean": "Nhường đường",
+    "aggressionNormal": "Bình thường",
+    "aggressionHard": "Quyết liệt"
+  },
+  "grip": {
+    "green": "Mặt đường mới",
+    "greenDetail": "Mặt nhựa mới rửa, hầu như chưa có lớp cao su",
+    "light": "Nhẹ",
+    "lightDetail": "Lớp cao su mới tích tụ đầu cuối tuần đua",
+    "medium": "Trung bình",
+    "mediumDetail": "Vệt cao su tích tụ ở mức vừa phải",
+    "natural": "Tự nhiên",
+    "naturalDetail": "Vệt cao su tiêu chuẩn sẵn sàng cho cuộc đua",
+    "heavy": "Dày",
+    "heavyDetail": "Đường chạy đua sức bền phủ dày cao su",
+    "saturated": "Bão hòa",
+    "saturatedDetail": "Vệt cao su sẫm màu bão hòa hoàn toàn"
+  },
+  "aiSkill": {
+    "rookie": "Tân binh",
+    "amateur": "Nghiệp dư",
+    "pro": "Chuyên nghiệp",
+    "alien": "Siêu hạng"
+  },
+  "challenge": {
+    "conditions": "Đường khô · {tyres} · Ít nhiên liệu",
+    "tyresSoft": "Lốp mềm",
+    "tyresStreet": "Lốp đường phố",
+    "tyresVintageSlicks": "Lốp trơn cổ điển",
+    "tyresSlicks": "Lốp trơn",
+    "timeLeftDays": "{days} ngày {hours} giờ",
+    "timeLeftHours": "{hours} giờ {minutes} phút",
+    "timeLeftMinutes": "{minutes} phút",
+    "placeNoTime": "Chưa có thành tích",
+    "placeFirst": "P1 · nhanh nhất tuần này",
+    "place": "P{place}",
+    "placeGap": "P{place} · kém P{above} {gap}"
+  },
+  "board": {
+    "conditions": "{assists} · {realism} · {surface}",
+    "assistsPro": "Không hỗ trợ lái",
+    "assistsSemiPro": "Một số hỗ trợ lái",
+    "assistsAssisted": "Có hỗ trợ lái",
+    "realismCasual": "Dễ",
+    "realismStandard": "Tiêu chuẩn",
+    "realismFull": "Tối đa",
+    "surfaceDry": "Khô",
+    "surfaceWet": "Ướt",
+    "renameUnreachable": "Không thể kết nối tới bảng xếp hạng trực tuyến. Hãy thử lại sau giây lát",
+    "renameFailed": "Không thể đổi tên (HTTP {status})"
+  },
+  "badges": {
+    "weeklyGold": "Vàng tuần",
+    "weeklySilver": "Bạc tuần",
+    "weeklyBronze": "Đồng tuần",
+    "fastestLap": "Vòng nhanh nhất",
+    "og": "Tay đua OG",
+    "bulb": "Đóng góp ý tưởng",
+    "times": "{badge} ×{count}",
+    "withNote": "{badge} — {note}",
+    "medalDetail": "{place, select, first {Hạng nhất} second {Hạng nhì} other {Hạng ba}} trong thử thách tuần",
+    "medalDetailWeeks": "{place, select, first {Hạng nhất} second {Hạng nhì} other {Hạng ba}} trong thử thách tuần: {weeks}",
+    "recordDetailCount": "Giữ vòng nhanh nhất trên {count, plural, other {# bảng đang mở}}",
+    "recordCar": "{car} ×{count}",
+    "recordManual": "+{count} thủ công",
+    "recordDetail": "{boards} — chạm để xem đường đua",
+    "ogDetail": "Đã lái LibreCorsa trên Vật lý V1",
+    "bulbDetailNote": "Đóng góp ý tưởng: {note}",
+    "bulbDetail": "Ý tưởng hoặc đóng góp cho cộng đồng",
+    "creator": "Người tạo",
+    "creatorDetail": "Đã tạo ra LibreCorsa"
+  },
+  "camera": {
+    "chaseClose": "Sau xe gần",
+    "chaseCloseDetail": "Sát phía sau xe",
+    "chase": "Sau xe",
+    "chaseDetail": "Phía sau xe",
+    "chaseFar": "Sau xe xa",
+    "chaseFarDetail": "Góc rộng phía sau xe",
+    "chaseLow": "Sau xe thấp",
+    "chaseLowDetail": "Thấp phía sau cánh gió sau",
+    "tvPod": "T-cam",
+    "tvPodDetail": "Phía trên mũ bảo hiểm",
+    "cockpitShoulder": "Vai tay đua",
+    "cockpit": "Buồng lái",
+    "cockpitDetail": "Góc nhìn mắt tay đua",
+    "dash": "Bảng đồng hồ",
+    "dashDetail": "Trước vô lăng, thấy bảng đồng hồ",
+    "nose": "Mũi xe",
+    "helicopter": "Trực thăng",
+    "tvSide": "TV ven đường đua",
+    "free": "Camera tự do",
+    "freeDetail": "Bay tự do quanh đường đua"
+  },
+  "music": {
+    "poolMenu": "Menu",
+    "poolRace": "Cuộc đua",
+    "poolResults": "Kết quả và phát lại"
+  },
+  "carQuality": {
+    "ownBadge": "Vật lý riêng",
+    "own": "Vật lý riêng",
+    "ownDetail": "Chạy bằng mô hình vật lý được xây dựng riêng cho chiếc xe này.",
+    "sharedBadge": "Vật lý dùng chung",
+    "shared": "Vật lý dùng chung",
+    "sharedDetail": "Dùng mô hình vật lý của một xe khác cùng hạng và thời kỳ, nên cảm giác lái giống xe đó hơn là giống chính nó.",
+    "eraBadge": "Vật lý 2026",
+    "era": "Xe đời cũ",
+    "eraDetail": "Chạy trên mô hình vật lý 2026, nên cảm giác lái giống xe năm 2026 hơn là như ở mùa giải gốc của nó."
+  },
+  "carClass": {
+    "f1": "Xe công thức bánh hở",
+    "f1Detail": "Xe một chỗ ngồi · DRS / khí động học chủ động",
+    "gt3Detail": "Bánh kín · ABS / TC",
+    "proto": "Xe nguyên mẫu",
+    "protoDetail": "Bánh kín · lực ép lớn · TC",
+    "classic": "GT & Touring cổ điển",
+    "classicDetail": "Xe thể thao nguyên mẫu, Group 4, Group A và JGTC · 1966–1998",
+    "road": "Xe đường phố",
+    "roadDetail": "Được phép lưu thông · lốp đường phố"
+  },
+  "circuitQuality": {
+    "originalBadge": "Nguyên bản",
+    "original": "Đường đua nguyên bản LibreCorsa",
+    "originalDetail": "Được xây dựng riêng cho LibreCorsa với mặt đường, gờ lề, độ cao địa hình và cảnh quan ven đường riêng.",
+    "simBadge": "Chuẩn mô phỏng",
+    "sim": "Đường đua chuẩn mô phỏng",
+    "simDetail": "Đường đua mô phỏng được dựng thủ công với lưới mặt đường, gờ lề, rào chắn và vật lý bề mặt riêng.",
+    "scanBadge": "Bản quét",
+    "scan": "Bản quét chuyển đổi",
+    "scanDetail": "Chuyển đổi tự động từ mô hình 3D cộng đồng: mặt đường, gờ lề, vùng thoát hiểm và rào chắn được dựng lại từ lưới nên chi tiết có thể khác ngoài đời thực."
+  },
+  "circuitType": {
+    "permanent": "Cố định",
+    "street": "Đường phố",
+    "oval": "Bầu dục",
+    "hillclimb": "Đua leo đồi"
+  },
+  "livery": {
+    "grid2026": "Mùa giải 2026",
+    "retro": "Cổ điển",
+    "colourChalk": "Trắng phấn",
+    "colourCarbon": "Đen carbon",
+    "colourAlloy": "Xám hợp kim",
+    "colourVermilion": "Đỏ son",
+    "colourPapaya": "Cam đu đủ",
+    "colourGold": "Vàng kim",
+    "colourVolt": "Vàng chanh điện",
+    "colourEmerald": "Xanh ngọc lục bảo",
+    "colourCyan": "Xanh lơ",
+    "colourCobalt": "Xanh coban",
+    "colourIndigo": "Chàm",
+    "colourMagenta": "Hồng sẫm"
+  },
+  "keyActions": {
+    "throttle": "Chân ga",
+    "brake": "Phanh",
+    "steerLeft": "Đánh lái trái",
+    "steerRight": "Đánh lái phải",
+    "boostHold": "Tăng lực (giữ)",
+    "boostLatch": "Tăng lực (bật/tắt)",
+    "aero": "Khí động học chủ động X / Z",
+    "shiftUp": "Lên số",
+    "shiftDown": "Về số",
+    "neutral": "Số N (mo)",
+    "camera": "Camera (giữ: chỉnh ghế & camera)",
+    "freeCamera": "Camera tự do",
+    "tvCamera": "Camera TV ven đường đua",
+    "racingLine": "Đường chạy lý tưởng",
+    "mute": "Tắt tiếng",
+    "nextTrack": "Bản nhạc tiếp theo",
+    "autopilot": "Tự lái",
+    "mouseSteer": "Lái bằng chuột",
+    "restart": "Bắt đầu lại",
+    "flyingLap": "Bắt đầu lại vòng (chạy đà)",
+    "throttleHalf": "Nửa ga (giữ)",
+    "brakeHalf": "Nửa phanh (giữ)",
+    "clutch": "Côn (giữ)",
+    "replay": "Phát lại tức thì",
+    "mfdPage": "Trang MFD tiếp theo",
+    "mfd": "Mở / đóng MFD",
+    "hud": "Hiện / ẩn HUD",
+    "board": "Mở / đóng bảng xếp hạng vòng",
+    "headlights": "Bật / tắt đèn pha",
+    "headlightFlash": "Nháy đèn pha (giữ)"
+  },
+  "padActions": {
+    "shiftUp": "Lên số",
+    "shiftDown": "Về số",
+    "neutral": "Số N (mo)",
+    "boost": "Tăng lực",
+    "aero": "Khí động học chủ động X / Z",
+    "camera": "Camera (giữ: chỉnh ghế & camera)",
+    "freeCamera": "Camera tự do",
+    "tvCamera": "Camera TV ven đường đua",
+    "racingLine": "Đường chạy lý tưởng",
+    "restart": "Bắt đầu lại",
+    "flyingLap": "Bắt đầu lại vòng (chạy đà)",
+    "pause": "Menu tạm dừng",
+    "mfd": "Mở / đóng MFD",
+    "mfdPage": "Trang MFD tiếp theo",
+    "hud": "Hiện / ẩn HUD",
+    "board": "Mở / đóng bảng xếp hạng vòng",
+    "headlights": "Đèn pha (nhấn: nháy, giữ: bật / tắt)",
+    "headlightFlash": "Nháy đèn pha (giữ)"
+  },
+  "pedals": {
+    "throttle": "Chân ga",
+    "brake": "Phanh",
+    "clutch": "Côn",
+    "notSet": "chưa gán",
+    "trigger": "cò bấm",
+    "stick": "{side, select, left {cần trái} other {cần phải}} {way, select, up {lên} down {xuống} left {trái} other {phải}}",
+    "pressThrottle": "Đạp chân ga",
+    "holdButton": "Giữ {button}",
+    "pushStick": "Đẩy {side, select, left {cần trái} other {cần phải}} {way, select, up {lên} down {xuống} left {trái} other {phải}}",
+    "clutchPedal": "bàn đạp côn",
+    "button": "Nút {number}"
+  },
+  "padLayouts": {
+    "gt": "Kiểu GT",
+    "gtClassic": "GT cổ điển",
+    "f1": "Kiểu Formula",
+    "forza": "Kiểu Forza",
+    "bumper": "Chuyển số nút vai"
+  },
+  "wheelSupport": {
+    "moza": "Kết nối, đánh lái và phát phản hồi lực qua WebHID",
+    "hidPid": "Chưa kiểm thử; dùng cùng báo cáo phản hồi lực tiêu chuẩn",
+    "directDrive": "Chưa kiểm thử; nếu không có phản hồi lực HID PID, trang sẽ chuyển sang bridge",
+    "pxn": "Chưa kiểm thử; HID PID dùng các giá trị Set Effect riêng, chưa được xác nhận trên vô lăng PXN nào",
+    "logitechClassic": "Chưa kiểm thử; khởi chạy qua WebHID với lệnh Logitech cổ điển giống cách hid-lg4ff trên Linux gửi, bao gồm cả đèn LED vòng tua trên G27 và G29",
+    "logitechHidpp": "Chưa kiểm thử; khởi chạy qua WebHID với phản hồi lực HID++ giống cách hid-logitech-hidpp trên Linux gửi, sau khi Logitech G HUB chuyển vô lăng sang chế độ PC",
+    "logitechBridgeOnly": "Chưa kiểm thử; chỉ dùng bridge: không có trình điều khiển Linux chính thức nào hỗ trợ G923 bản PlayStation hay G PRO, và trình duyệt không thể chia lại tỉ lệ trục lái của DFP",
+    "thrustmaster": "Chưa kiểm thử; dùng bộ lệnh của hid-tmff2 trên Linux sau khi trình điều khiển chuyển vô lăng ra khỏi chế độ khởi động. Nếu chưa chuyển hoặc Windows từ chối lệnh, bridge sẽ tiếp quản",
+    "thrustmasterBridgeOnly": "Chưa kiểm thử; chỉ dùng bridge: T150 và TMX dùng bộ lệnh khác, còn hid-tmff2 không hỗ trợ T500RS",
+    "fanatecCslElite": "Chưa kiểm thử; nếu không có phản hồi lực HID PID, trang sẽ chuyển sang bridge",
+    "tested": "Đã kiểm thử",
+    "expected": "Dự kiến hỗ trợ",
+    "unknown": "Chưa rõ",
+    "no": "Không"
+  },
+  "hudLayouts": {
+    "broadcast": "Truyền hình",
+    "broadcastDetail": "Đồ họa TV: bảng thứ hạng, bản đồ, dải thông số",
+    "dash": "Màn hình vô lăng",
+    "dashDetail": "Màn hình kiểu vô lăng xe đua, đặt thấp ở giữa",
+    "telemetry": "Dữ liệu đo từ xa",
+    "telemetryDetail": "Màn hình vô lăng kèm lốp, lực G, công suất và thao tác lái",
+    "classic": "Cổ điển",
+    "classicDetail": "Các bảng góc màn hình nguyên bản",
+    "minimal": "Tối giản",
+    "minimalDetail": "Chỉ hiển thị tốc độ, cấp số và vòng đua",
+    "irdashiesDetail": "Bảng xếp hạng, đồng hồ vòng, thao tác lái và đèn chuyển số",
+    "racevisionDetail": "Bảng xếp hạng, xe lân cận, thanh thao tác và biểu đồ",
+    "h2hDetail": "Các xe phía trước và phía sau, khoảng cách và delta vòng",
+    "retroDetail": "Đồng hồ tông màu ấm: mặt tròn, thanh delta, vòng đua",
+    "blocksDetail": "Các khối vuông tối màu: thời gian, sector, lốp, nhiên liệu",
+    "grandPrixDetail": "Bảng thứ hạng cuộc đua, cụm tốc độ tròn, cấp số và thao tác lái"
+  },
+  "steeringAssist": {
+    "selfSteerStrength": "Tự đánh lái & trả lái",
+    "selfSteerStrengthHint": "Mức độ bánh xe tự hướng theo chiều di chuyển của xe và bắt trượt đuôi",
+    "dampingStrength": "Giảm chấn xoay thân xe",
+    "dampingStrengthHint": "Làm dịu hiện tượng giật ngược và văng đuôi qua lại khi thoát trượt",
+    "speedSensitivity": "Êm tay lái tốc độ cao",
+    "speedSensitivityHint": "Mức độ làm chậm thao tác đánh lái ở tốc độ cao để các cú điều chỉnh nhỏ luôn mượt",
+    "slipLimitMargin": "Biên độ trượt lốp",
+    "slipLimitMarginHint": "Âm: thêm khoảng an toàn thiếu lái · Dương: cho bánh trước vượt nhẹ ngưỡng bám tối đa",
+    "maxSelfSteerAngleDeg": "Góc trả lái tối đa",
+    "maxSelfSteerAngleDegHint": "Góc xoay bánh xe tối đa mà hệ thống hỗ trợ tự đánh lái để cứu trượt",
+    "presetBalanced": "Cân bằng",
+    "presetStable": "Ổn định",
+    "presetLoose": "Thả lỏng",
+    "presetDrift": "Drift",
+    "presetCalm": "Êm ở tốc độ cao",
+    "fullLock": "đánh hết lái",
+    "presetDetail": "tự đánh lái {selfSteer}, giảm chấn xoay {damping}, êm tốc độ cao {calm}, bánh trước ở {grip}% ngưỡng bám tối đa, trả lái tối đa {cap}"
+  },
+  "support": {
+    "donatePayPal": "Ủng hộ qua PayPal",
+    "supportOn": "Ủng hộ trên {site}",
+    "donateToVia": "Ủng hộ {maker} qua {site}",
+    "supportOnSite": "Ủng hộ {maker} trên {site}",
+    "donateTo": "Ủng hộ {maker}",
+    "supportMaker": "Ủng hộ {maker}"
+  },
+  "setupSheet": {
+    "tcSlip": "Độ trượt TC",
+    "tc1": "TC 1",
+    "tcCut": "Cắt lực TC",
+    "tc2": "TC 2",
+    "tcSlipAngle": "Góc trượt TC",
+    "abs": "ABS",
+    "engineMap": "Bản đồ động cơ",
+    "motorDeployment": "Xả mô-tơ điện",
+    "regeneration": "Thu hồi năng lượng",
+    "startingFuel": "Nhiên liệu xuất phát",
+    "frontWing": "Cánh gió trước",
+    "rearWing": "Cánh gió sau",
+    "diffOnThrottle": "Vi sai khi đạp ga",
+    "diffOffThrottle": "Vi sai khi nhả ga",
+    "engineBraking": "Phanh động cơ",
+    "frontToe": "Độ chụm trước",
+    "rearToe": "Độ chụm sau",
+    "frontSuspension": "Hệ thống treo trước",
+    "rearSuspension": "Hệ thống treo sau",
+    "frontAntiRollBar": "Thanh cân bằng trước",
+    "rearAntiRollBar": "Thanh cân bằng sau",
+    "frontRideHeight": "Độ cao gầm trước",
+    "rearRideHeight": "Độ cao gầm sau",
+    "brakePressure": "Áp suất phanh",
+    "frontBrakeBias": "Phân bổ lực phanh trước",
+    "brakeMigration": "Dịch chuyển lực phanh",
+    "brakePower": "Lực phanh",
+    "brakeBias": "Phân bổ lực phanh",
+    "steeringRatio": "Tỉ số truyền lái",
+    "frontBumpStopRange": "Hành trình đệm chặn trước",
+    "rearBumpStopRange": "Hành trình đệm chặn sau",
+    "diffPreload": "Tải trước vi sai",
+    "gearSet": "Bộ tỉ số truyền",
+    "frontThirdPacker": "Đệm giới hạn thứ ba trước",
+    "rearThirdPacker": "Đệm giới hạn thứ ba sau",
+    "frontBrakeDucts": "Hốc gió phanh trước",
+    "rearBrakeDucts": "Hốc gió phanh sau",
+    "radiatorOpening": "Độ mở két tản nhiệt",
+    "frontBump": "Nén trước",
+    "rearBump": "Nén sau",
+    "frontFastBump": "Nén nhanh trước",
+    "rearFastBump": "Nén nhanh sau",
+    "frontRebound": "Hồi trước",
+    "rearRebound": "Hồi sau",
+    "frontFastRebound": "Hồi nhanh trước",
+    "rearFastRebound": "Hồi nhanh sau",
+    "frontThirdSpring": "Lò xo thứ ba trước",
+    "rearThirdSpring": "Lò xo thứ ba sau",
+    "frontThirdBump": "Nén thứ ba trước",
+    "rearThirdBump": "Nén thứ ba sau",
+    "frontThirdFastBump": "Nén nhanh thứ ba trước",
+    "rearThirdFastBump": "Nén nhanh thứ ba sau",
+    "frontThirdRebound": "Hồi thứ ba trước",
+    "rearThirdRebound": "Hồi thứ ba sau",
+    "frontThirdFastRebound": "Hồi nhanh thứ ba trước",
+    "rearThirdFastRebound": "Hồi nhanh thứ ba sau",
+    "frontCornerPackers": "Đệm góc treo trước",
+    "rearCornerPackers": "Đệm góc treo sau",
+    "frontWheelRate": "Độ cứng lò xo bánh trước",
+    "rearWheelRate": "Độ cứng lò xo bánh sau",
+    "frontBumpStopRate": "Độ cứng đệm chặn trước",
+    "rearBumpStopRate": "Độ cứng đệm chặn sau",
+    "frontCamber": "Góc camber trước",
+    "rearCamber": "Góc camber sau",
+    "frontLeftPressure": "Áp suất lốp trước trái",
+    "frontRightPressure": "Áp suất lốp trước phải",
+    "rearLeftPressure": "Áp suất lốp sau trái",
+    "rearRightPressure": "Áp suất lốp sau phải",
+    "tyreBlankets": "Chăn ủ lốp",
+    "detached": "Ngắt kết nối",
+    "toeIn": "{angle} chụm vào",
+    "toeOut": "{angle} loe ra",
+    "dialOff": "Tắt",
+    "blanketsOn": "Bật",
+    "blanketsOff": "Tắt",
+    "engineMapMax": "1 · Tối đa",
+    "engineMapRace": "2 · Đua",
+    "engineMapSmooth": "3 · Êm ái",
+    "engineMapLean": "4 · Tiết kiệm nhẹ",
+    "engineMapSave": "5 · Tiết kiệm"
+  },
+  "setupGroups": {
+    "fuel": "Nhiên liệu",
+    "aerodynamics": "Khí động học",
+    "aerodynamicsShort": "Khí động",
+    "transmission": "Hộp số",
+    "transmissionShort": "Hộp số",
+    "suspensionGeometry": "Hình học hệ thống treo",
+    "suspensionGeometryShort": "Hình học",
+    "suspension": "Hệ thống treo",
+    "suspensionShort": "Treo",
+    "dampers": "Giảm chấn",
+    "brakes": "Phanh",
+    "tyres": "Lốp",
+    "electronics": "Điện tử",
+    "electronicsShort": "Điện tử",
+    "mechanicalGrip": "Độ bám cơ khí",
+    "mechanicalGripShort": "Cơ khí",
+    "thirdElements": "Phần tử thứ ba",
+    "thirdElementsShort": "Thứ 3",
+    "aero": "Khí động",
+    "fuelShort": "N. liệu",
+    "dampersShort": "Giảm chấn",
+    "brakesShort": "Phanh",
+    "tyresShort": "Lốp",
+    "aeroShort": "Khí động"
+  },
+  "setupFx": {
+    "frontWing": {
+      "more": "Bám đầu tốt hơn ở tốc độ cao, đuôi dễ trượt hơn",
+      "less": "Đuôi ổn định hơn, dễ thiếu lái ở tốc độ cao"
+    },
+    "rearWing": {
+      "more": "Ổn định và kéo tốt hơn, tăng lực cản gió",
+      "less": "Nhanh hơn trên đường thẳng, đuôi dễ chao"
+    },
+    "diffOn": {
+      "more": "Tăng sức kéo, dễ thừa lái khi đạp ga",
+      "less": "Nhẹ tải lốp sau, bánh trong cua dễ quay trơn"
+    },
+    "diffOff": {
+      "more": "Ổn định khi nhả ga, vào cua ít nhạy hơn",
+      "less": "Xoay đầu tốt khi vào cua, có thể hơi chao đuôi"
+    },
+    "engineBraking": {
+      "more": "Hãm đuôi mạnh hơn khi nhả ga, dễ xoay xe",
+      "less": "Êm hơn khi nhả ga, quãng đường phanh dài hơn"
+    },
+    "camberFront": {
+      "more": "Tăng độ bám trước ở giữa cua",
+      "less": "Phanh tốt hơn, lốp mòn đều hơn"
+    },
+    "camberRear": {
+      "more": "Tăng độ bám ngang phía sau",
+      "less": "Bám tốt hơn khi tăng tốc thoát cua chậm"
+    },
+    "toeFront": {
+      "more": "Ổn định hơn trên đường thẳng, vào cua kém nhạy hơn",
+      "less": "Vào cua sắc bén hơn, dễ giật ở tốc độ cao"
+    },
+    "toeRear": {
+      "more": "Đuôi ổn định, tăng nhẹ lực cản gió",
+      "less": "Xoay xe nhanh hơn, kém ổn định hơn"
+    },
+    "springFront": {
+      "more": "Phản hồi sắc nét hơn, giảm độ bám qua chỗ xóc",
+      "less": "Tăng độ bám trước khi qua chỗ xóc"
+    },
+    "springRear": {
+      "more": "Xoay xe nhiều hơn, giảm lực kéo",
+      "less": "Tăng lực kéo, xoay xe chậm hơn"
+    },
+    "arbFront": {
+      "more": "Đổi hướng nhanh, dễ thiếu lái",
+      "less": "Tăng độ bám trước ở giữa cua"
+    },
+    "arbRear": {
+      "more": "Xoay xe nhanh hơn, giảm lực kéo khi thoát cua",
+      "less": "Tăng độ bám sau, dễ thiếu lái hơn"
+    },
+    "rideFront": {
+      "more": "An toàn hơn qua gờ lề, giảm lực ép",
+      "less": "Tăng lực ép, gầm xe có thể mất lực hút"
+    },
+    "rideRear": {
+      "more": "Tăng độ chúi mũi: sắc bén hơn, đuôi dễ trượt hơn",
+      "less": "Đuôi êm hơn, dễ thiếu lái hơn"
+    },
+    "brakePressure": {
+      "more": "Quãng phanh ngắn hơn, dễ bó cứng sớm hơn",
+      "less": "Dễ điều tiết lực phanh, quãng phanh dài hơn"
+    },
+    "bias": {
+      "more": "Phanh ổn định, bánh trước bó cứng trước",
+      "less": "Xoay đầu khi vào cua, bánh sau bó cứng trước"
+    },
+    "migration": {
+      "more": "Xoay đầu tốt hơn khi rà phanh vào cua",
+      "less": "Giữ cân bằng ổn định khi nhả phanh"
+    },
+    "coldPsi": {
+      "more": "Lốp nóng nhanh hơn, độ bám đỉnh thấp hơn",
+      "less": "Độ bám tốt hơn, lốp nóng chậm hơn"
+    },
+    "blankets": {
+      "more": "Lốp ấm sẵn ngay từ khúc cua đầu tiên",
+      "less": "Lốp nguội khi rời garage, cần làm nóng ở vòng xuất pit"
+    },
+    "tc": {
+      "more": "Giảm trượt bánh, thoát cua chậm hơn",
+      "less": "Thoát cua nhanh hơn, đuôi xe dễ văng"
+    },
+    "tc2": {
+      "more": "Cắt gắt: giữ xe chặt khi trượt",
+      "less": "Cắt êm: giữ lại nhiều sức kéo hơn"
+    },
+    "abs": {
+      "more": "Không bó cứng bánh, quãng phanh dài hơn",
+      "less": "Quãng phanh ngắn hơn nếu đạp phanh chuẩn xác"
+    },
+    "map": {
+      "more": "Chân ga dịu hơn, ít công suất hơn",
+      "less": "Toàn bộ công suất, chân ga nhạy hơn"
+    },
+    "steerRatio": {
+      "more": "Đánh lái chậm hơn, góc quay ít hơn",
+      "less": "Đánh lái nhanh hơn, góc quay lớn hơn"
+    },
+    "wheelRateFront": {
+      "more": "Đầu xe sắc bén hơn, giảm độ bám qua chỗ xóc",
+      "less": "Tăng độ bám trước khi qua chỗ xóc"
+    },
+    "wheelRateRear": {
+      "more": "Xoay xe nhiều hơn, giảm lực kéo",
+      "less": "Tăng lực kéo, xoay xe chậm hơn"
+    },
+    "bumpStopRate": {
+      "more": "Cứng hơn khi chạm đệm chặn",
+      "less": "Êm hơn khi chạm đệm chặn"
+    },
+    "bumpStopRange": {
+      "more": "Hành trình treo dài hơn trước khi chạm đệm chặn",
+      "less": "Chạm đệm chặn sớm hơn, thân xe phẳng hơn"
+    },
+    "preload": {
+      "more": "Ổn định ở cua nhanh, hơi đẩy mũi ở cua chậm",
+      "less": "Xoay xe tốt khi vào cua, thoát cua dễ trượt hơn"
+    },
+    "bump": {
+      "more": "Thân xe ít dao động hơn, xóc hơn qua gờ",
+      "less": "Êm qua chỗ xóc, thân xe dao động nhiều hơn"
+    },
+    "fastBump": {
+      "more": "Cứng chắc khi leo gờ lề",
+      "less": "Hấp thụ gờ lề tốt hơn"
+    },
+    "rebound": {
+      "more": "Trọng lượng hồi chậm, thoát cua ổn định",
+      "less": "Lốp bám sát mặt đường tốt hơn"
+    },
+    "fastRebound": {
+      "more": "Bánh xe hạ xuống chậm hơn sau khi qua gờ lề",
+      "less": "Bánh xe hạ xuống nhanh hơn"
+    },
+    "ductFront": {
+      "more": "Phanh trước mát hơn, tăng lực cản gió",
+      "less": "Phanh trước nóng hơn, giảm lực cản gió"
+    },
+    "ductRear": {
+      "more": "Phanh sau mát hơn, tăng lực cản gió",
+      "less": "Phanh sau nóng hơn, giảm lực cản gió"
+    },
+    "radiator": {
+      "more": "Động cơ mát hơn, tăng lực cản gió",
+      "less": "Giảm lực cản gió, động cơ chạy nóng hơn"
+    },
+    "gearSet": {
+      "more": "Số dài: đạt tốc độ tối đa trên đoạn thẳng dài",
+      "less": "Số ngắn: bứt tốc nhanh khi thoát cua chậm"
+    },
+    "heaveSpring": {
+      "more": "Thân xe phẳng hơn ở tốc độ cao, xóc hơn qua gờ",
+      "less": "Êm qua chỗ xóc, gầm xe dao động nhiều hơn"
+    },
+    "heavePacker": {
+      "more": "Hành trình dài hơn trước khi chạm đệm giới hạn",
+      "less": "Đệm giới hạn giữ gầm xe sớm hơn"
+    },
+    "cornerPacker": {
+      "more": "Chạm đệm sớm hơn, thân xe ít nghiêng trong cua",
+      "less": "Hành trình tự do nhiều hơn, thân xe nghiêng nhiều hơn"
+    },
+    "tcSlipAngle": {
+      "more": "Can thiệp sớm hơn khi đuôi xe bắt đầu trượt",
+      "less": "Cho phép đuôi trượt nhiều hơn khi đạp ga"
+    },
+    "motorDeploy": {
+      "more": "Tăng lực đẩy điện, hao pin nhanh hơn",
+      "less": "Tiết kiệm pin, lực đẩy ít hơn"
+    },
+    "regen": {
+      "more": "Thu hồi nhiều điện hơn, tăng lực hãm bánh sau",
+      "less": "Đuôi êm hơn khi phanh, thu hồi ít điện hơn"
+    },
+    "fuel": {
+      "more": "Chạy được chặng dài hơn, xe nặng và chậm hơn",
+      "less": "Xe nhẹ và nhanh hơn, chặng chạy ngắn hơn"
+    }
+  },
+  "padFeel": {
+    "smooth": "Mượt",
+    "smoothDetail": "Đánh lái chậm và êm hơn",
+    "default": "Mặc định",
+    "defaultDetail": "Phản hồi cân bằng",
+    "sharp": "Nhạy",
+    "sharpDetail": "Vào cua nhanh nhạy"
+  },
+  "tyres": {
+    "street": "Lốp đường phố"
+  },
+  "setupShare": {
+    "aeroLow": "Lực cản thấp",
+    "aeroBalanced": "Khí động cân bằng",
+    "aeroHigh": "Lực ép cao",
+    "soft": "Mềm",
+    "medium": "Trung bình",
+    "hard": "Cứng",
+    "intermediate": "Trung gian",
+    "wet": "Mưa",
+    "chassisChanges": "{count, plural, other {# thay đổi khung gầm}}",
+    "brakeBias": "BB {bias}%",
+    "baseline": "Thiết lập cơ bản",
+    "factoryLowDrag": "Lực cản thấp"
+  },
+  "trackLimits": {
+    "flashbackDeleted": "Flashback · vòng bị hủy",
+    "currentAndNextInvalid": "Vòng hiện tại và vòng tiếp theo không hợp lệ",
+    "currentInvalid": "Vòng hiện tại không hợp lệ",
+    "courseCutDeleted": "Cắt đường · vòng bị hủy",
+    "penaltyOnceBack": "Án phạt thời gian sẽ áp dụng khi trở lại đường đua",
+    "leftLapRoad": "Rời khỏi tuyến đường của vòng đua",
+    "noTimeGained": "Không có lợi thế thời gian",
+    "courseCutPenalty": "Cắt đường · phạt +{seconds}s",
+    "secondsGained": "Lợi thêm {seconds} s",
+    "lapDeleted": "Vòng bị hủy",
+    "wallDeleted": "Cạ tường · vòng bị hủy",
+    "rodeWallBeforeLine": "Cạ tường trước vạch đích",
+    "limitsDeleted": "Giới hạn đường đua · vòng bị hủy",
+    "offBeforeLine": "Ra ngoài lề trước vạch đích",
+    "nextLapToo": "Áp dụng cho cả vòng tiếp theo",
+    "offTrack": "Ra ngoài đường đua",
+    "touchedBarrier": "Chạm rào chắn",
+    "rodeWall": "Cạ tường",
+    "positionHandedBack": "Đã trả lại vị trí",
+    "advantageGivenBack": "Đã trả lại lợi thế",
+    "noFurtherAction": "Không xử phạt",
+    "trackLimits": "Giới hạn đường đua",
+    "noAdvantage": "Không có lợi thế · không xử phạt",
+    "timePenalty": "Phạt thời gian +{seconds}s",
+    "limitsGained": "Giới hạn đường đua · lợi {seconds} s",
+    "limitsCutMetres": "Giới hạn đường đua · cắt {metres} m",
+    "limitsMajorCut": "Giới hạn đường đua · cắt góc nghiêm trọng",
+    "why": "{reason, select, illegal_overtake {Vượt trái luật · chưa trả vị trí} corner_cut {Cắt cua} not_lifted {Không nhả ga} other {Thu lợi thời gian}}",
+    "limitsWhy": "Giới hạn đường đua · {reason, select, illegal_overtake {vượt trái luật · chưa trả vị trí} corner_cut {cắt cua} not_lifted {không nhả ga} other {thu lợi thời gian}}",
+    "warningCount": "Giới hạn đường đua · cảnh cáo {count}/{max}",
+    "points": "{points} điểm",
+    "strikes": "{count, plural, other {# lần vi phạm}}",
+    "disqualified": "Bị loại · giới hạn đường đua",
+    "limitsPoints": "Giới hạn đường đua · {points}",
+    "blackWhiteFlag": "Cờ đen trắng",
+    "nextPenalty": "{why} · lần tới phạt +{seconds} s",
+    "nextDisqualification": "{why} · lần tới sẽ bị loại",
+    "warning": "Giới hạn đường đua · cảnh cáo",
+    "warningDetail": "{why} · {points}"
+  },
+  "flags": {
+    "yellow": "Cờ vàng",
+    "trackClear": "Đường đua thông thoáng",
+    "carStopped": "Có xe dừng phía trước",
+    "slowCar": "Có xe chạy chậm phía trước",
+    "wrongWay": "Có xe chạy ngược chiều",
+    "carOffTrack": "Có xe văng khỏi đường đua phía trước",
+    "incident": "Có sự cố phía trước"
+  },
+  "connection": {
+    "raceClosed": "Cuộc đua đó sắp bắt đầu. Bạn vẫn kịp tham gia lượt tiếp theo.",
+    "raceFull": "Cuộc đua đó đã đủ người. Hãy tham gia lượt tiếp theo.",
+    "raceStarted": "Cuộc đua đó đã bắt đầu mà chưa có bạn. Hãy tham gia lượt tiếp theo.",
+    "raceTaken": "Bạn đã ở trong cuộc đua này ở một cửa sổ khác.",
+    "raceBad": "Không thể tham gia cuộc đua. Hãy tải lại game và thử lại.",
+    "raceUpdate": "LibreCorsa vừa được cập nhật. Hãy tải lại trang để tham gia cuộc đua.",
+    "versionMismatch": "Phòng này đang chạy phiên bản LibreCorsa khác. Mọi người trong phòng cần tải lại trang.",
+    "roomServerUnreachable": "Không thể kết nối tới máy chủ phòng. Hãy kiểm tra kết nối và thử lại, hoặc dùng kết nối thủ công trong mục Nâng cao.",
+    "idle": "Tạo phòng và gửi liên kết, hoặc tham gia bằng mã của bạn bè.",
+    "openingRoom": "Đang mở phòng {code}…",
+    "reconnectingRoom": "Đang kết nối lại phòng {code}…",
+    "roomOpen": "Phòng {code} đã mở • đang chờ người chơi",
+    "sessionActive": "ID phiên này đang hoạt động trong phòng. Hãy đợi giây lát rồi thử tạo phòng lại.",
+    "roomOpenElsewhere": "Phòng {code} đã mở trên một thiết bị khác. Nhấn Tham gia để vào đua, hoặc tạo một phòng mới.",
+    "joiningRoom": "Đang vào phòng {code}…",
+    "roomNotFound": "Không tìm thấy phòng {code}. Hãy kiểm tra lại mã và nhờ chủ phòng giữ game mở trên màn hình.",
+    "playerIdTaken": "ID người chơi này đã có trong phòng. Hãy đợi giây lát rồi thử tham gia lại.",
+    "roomFull": "Phòng {code} đã đầy.",
+    "connectedPlayers": "{count, plural, other {Đã kết nối với # người chơi}}",
+    "peerFailed": "Không thể kết nối với người chơi kia. Hãy thử lại hoặc dùng chung mạng Wi-Fi.",
+    "peerBlocked": "Không thể kết nối: một trong hai mạng đang chặn kết nối trực tiếp. Hãy dùng chung Wi-Fi hoặc thử mạng khác.",
+    "lostHost": "Mất kết nối với chủ phòng. Hãy tham gia lại.",
+    "hostingTabs": "Đang làm chủ phòng cho các thẻ của trình duyệt này",
+    "playerLeft": "Người chơi đã rời đi. Hãy tạo mã mời mới để kết nối lại.",
+    "connected": "Đã kết nối",
+    "joiningRace": "Đang tham gia cuộc đua tiếp theo…",
+    "inNextRace": "Đã đăng ký cuộc đua tiếp theo",
+    "makingOffer": "Đang tạo mã mời…",
+    "offerReady": "Mã mời đã sẵn sàng. Gửi mã này cho người chơi kia, rồi dán mã phản hồi của họ vào đây.",
+    "answerReady": "Mã phản hồi đã sẵn sàng. Hãy gửi lại cho chủ phòng.",
+    "answerAccepted": "Đã chấp nhận phản hồi • đang kết nối…",
+    "raceServerUnreachable": "Không thể kết nối tới máy chủ cuộc đua. Hãy kiểm tra kết nối và thử lại.",
+    "racesOff": "Các cuộc đua theo lịch hiện không hoạt động.",
+    "raceLost": "Mất kết nối tới cuộc đua.",
+    "ready": "Sẵn sàng. Các thẻ trong trình duyệt này sẽ tự tìm thấy nhau; thiết bị khác tham gia bằng mã phòng."
+  },
+  "downloads": {
+    "windowsSummary": "Ứng dụng máy tính ưu tiên GPU rời, cấp quyền WebHID tự động cho vô lăng đua và DualSense, không bị giới hạn khi chạy nền.",
+    "windowsInstallNote": "Tạm thời chưa ký số trong khi hoàn tất thiết lập với SignPath Foundation. Nếu SmartScreen chặn, hãy bấm Thông tin khác, rồi chọn Vẫn chạy.",
+    "windowsStatusLabel": "Chưa ký số",
+    "windowsX64Label": "Tải xuống .exe",
+    "windowsX64Detail": "Trình cài đặt Windows x64",
+    "macosSummary": "Ứng dụng máy tính ưu tiên GPU rời, cấp quyền WebHID tự động cho vô lăng đua và DualSense, không bị giới hạn khi chạy nền.",
+    "macosInstallNote": "Bản dựng chưa ký số. Hãy cho phép chạy trong Cài đặt hệ thống > Quyền riêng tư & Bảo mật, hoặc gỡ kiểm dịch sau khi sao chép vào Ứng dụng:",
+    "macosStatusLabel": "Chưa ký số",
+    "macosArm64Label": "Apple Silicon (.dmg)",
+    "macosArm64Detail": "Máy Mac chip M1–M4",
+    "macosX64Label": "Intel (.dmg)",
+    "macosX64Detail": "Máy Mac Intel x64",
+    "linuxSummary": "Bản AppImage chạy ngay với quyền WebHID tự động cho vô lăng đua và DualSense, không bị giới hạn khi chạy nền.",
+    "linuxInstallNote": "Cấp quyền thực thi cho tệp AppImage rồi chạy (cần FUSE2 / libfuse2 trên các bản phân phối cũ hơn):",
+    "linuxX64Label": "Tải xuống .AppImage",
+    "linuxX64Detail": "Linux x64",
+    "androidSummary": "Ứng dụng toàn màn hình Trusted Web Activity với điều khiển ẩn thanh hệ thống, Android Game Mode và lối tắt màn hình chính. Yêu cầu Android 7+ và Chrome.",
+    "androidInstallNote": "Tệp APK phát hành đã ký số. Cho phép cài đặt từ trình duyệt khi được hỏi; ứng dụng xác thực với librecorsa.org và mở không có thanh địa chỉ.",
+    "androidStatusLabel": "APK đã ký số",
+    "androidApkLabel": "Tải xuống .apk",
+    "androidApkDetail": "Android 7+ (tương thích mọi máy)"
+  },
+  "loading": {
+    "circuit": "Đường đua",
+    "car": "Xe",
+    "opponents": "Đối thủ",
+    "shaders": "Bộ đổ bóng"
+  },
+  "session": {
+    "wheelDisconnected": "Vô lăng đã bị ngắt kết nối. Hãy kết nối lại, hoặc tiếp tục lái bằng thiết bị còn lại.",
+    "bigJumpStart": "Xuất phát sớm · rời xa vị trí xuất phát",
+    "jumpStart": "Xuất phát sớm",
+    "clutchGearUp": "Lên số",
+    "clutchPaddle": "lẫy lên số"
+  },
+  "driverKey": {
+    "notAKeyFile": "Đây không phải là tệp khóa tay đua",
+    "blocked": "Trình duyệt này chặn lưu tệp khóa"
+  },
+  "simulator": {
+    "formulaTeamCars": "Xe đội đua công thức",
+    "lapNoLongerSaved": "Vòng đua này không còn được lưu tại đây",
+    "nameNotChanged": "Không thể đổi tên",
+    "setupLoadFailed": "Không thể tải thiết lập của {driver}, hãy thử lại",
+    "setupMissing": "Không có thiết lập nào được lưu kèm vòng của {driver}",
+    "setupApplied": "Đã áp dụng thiết lập của {driver} ({summary})",
+    "keySaved": "Đã lưu khóa. Bất kỳ ai có tệp này đều có thể đăng thành tích dưới tên bạn.",
+    "noKeyYet": "Chưa có khóa: lần tải lên đầu tiên sẽ tự động tạo khóa.",
+    "keyImportedFor": "Đã nhập khóa cho {name}. Các lần tải lên từ thiết bị này sẽ dùng khóa đó.",
+    "keyImported": "Đã nhập khóa. Các lần tải lên từ thiết bị này sẽ dùng khóa đó.",
+    "launchWheel": "Đạp ga để xuất phát",
+    "launchWheelSeat": "Đạp ga để xuất phát · giữ nút camera để chỉnh ghế",
+    "launchPad": "{press} để xuất phát",
+    "launchPadSeat": "{press} để xuất phát · giữ {button} để chỉnh ghế",
+    "launchTouch": "Giữ chân ga để xuất phát",
+    "launchKey": "Giữ {key} để xuất phát · Esc Menu",
+    "noRacesOnHillClimb": "Không hỗ trợ đua chính trên đường đua leo đồi",
+    "backToRaces": "Quay lại danh sách cuộc đua"
+  },
+  "telemetryHud": {
+    "menu": "Menu",
+    "calibratePedals": "Hiệu chỉnh bàn đạp",
+    "holdForLightsOut": "Giữ chân ga chờ tắt đèn xuất phát",
+    "mouseSteering": "Lái bằng chuột · nhấn {key} để thoát",
+    "keyMenu": "Menu",
+    "keyCamera": "Camera",
+    "keyLine": "Đường chạy",
+    "keyRestart": "Bắt đầu lại",
+    "keyBoard": "Bảng",
+    "keyLights": "Đèn",
+    "replay": "Phát lại"
+  },
+  "trackGate": {
+    "safeStart": "Đang khởi động chế độ an toàn sau sự cố GPU.",
+    "graphicsLow": "Đồ họa đã chuyển về Thấp sau sự cố GPU.",
+    "loadFailedStaying": "Tải đường đua thất bại. Tiếp tục ở {circuit}.",
+    "loadFailedDefault": "Tải đường đua thất bại. Đã tải {circuit}."
+  },
+  "minimap": {
+    "map": "Bản đồ đường đua",
+    "mapAtTurn": "Bản đồ đường đua; bạn đang ở khúc cua {turn}",
+    "facts": "{country} · {length} {unit} · {turns, plural, other {# khúc cua}}",
+    "sector": "Sector {sector}",
+    "elevation": "Độ cao",
+    "altitude": "Cao {height}",
+    "grade": "Độ dốc {grade}%",
+    "profileStart": "Xuất phát {height}",
+    "profileStartFinish": "S/F {height}"
+  },
+  "source": {
+    "sourceOf": "Nguồn của {title}",
+    "source": "Nguồn",
+    "reportIssue": "Báo cáo sự cố"
+  },
+  "playError": {
+    "title": "Trình mô phỏng đã dừng",
+    "body": "WebGL hoặc hệ thống vật lý không thể khởi động. Cập nhật trình duyệt, trình điều khiển đồ họa hoặc bật tăng tốc phần cứng thường sẽ khắc phục được.",
+    "detail": "Chi tiết lỗi",
+    "restart": "Khởi động lại trình mô phỏng"
+  },
+  "dash": {
+    "yellowFlag": "Cờ vàng"
+  }
+}
