@@ -24,8 +24,9 @@
  *                              V1 boards are read only, so the rule never takes the badge from anyone who has it
  *   bulb                       given by hand, for an idea or a contribution, with a note
  *   creator                    the game's maker: a name claimed (board.ts) with a driver key whose SHA-256 is in the
- *                              Worker's CREATOR_KEY_HASH. Bound to the key, not the name, so it follows a rename and
- *                              never passes to whoever claims the name after it lapses. No stored row, never by hand
+ *                              Worker's CREATOR_KEY_HASH, or a name on a player account that such a key is on. Bound to
+ *                              the key, not the name, so it follows a rename and never passes to whoever claims the
+ *                              name after it lapses. No stored row, never by hand
  * The owner may also give an OG or a track record by hand (set somewhere the boards don't see); the weekly medals come
  * from the boards alone.
  *
@@ -50,6 +51,7 @@ import type {
   RecordHolder,
 } from "../../src/lib/net/awards";
 import { driverNameKey, EVENT_ID_RE } from "./board";
+import { missingAccountsSchema } from "./name-proof";
 import type { D1Database } from "./types";
 
 type Answer = { status: number; body: unknown };
@@ -433,6 +435,30 @@ export function parseBadgeNames(raw: string | null): string[] | null {
 }
 
 /**
+ * Which of these names (keys) the game's maker holds: claimed by one of `creatorKeyHashes`, or on a player account
+ * one of them is on (migration 0011; without it, the claim alone)
+ */
+async function creatorNames(db: D1Database, keys: readonly string[], creatorKeyHashes: readonly string[]): Promise<{ results: { name_key: string }[] }> {
+  if (creatorKeyHashes.length === 0) return { results: [] };
+  const marks = keys.map(() => "?").join(", ");
+  const creators = creatorKeyHashes.map(() => "?").join(", ");
+  try {
+    return await db
+      .prepare(
+        `SELECT name_key FROM drivers WHERE name_key IN (${marks}) AND (key_hash IN (${creators}) OR account_id IN (SELECT account_id FROM account_keys WHERE key_hash IN (${creators})))`,
+      )
+      .bind(...keys, ...creatorKeyHashes, ...creatorKeyHashes)
+      .all<{ name_key: string }>();
+  } catch (err) {
+    if (!missingAccountsSchema(err)) throw err;
+    return db
+      .prepare(`SELECT name_key FROM drivers WHERE name_key IN (${marks}) AND key_hash IN (${creators})`)
+      .bind(...keys, ...creatorKeyHashes)
+      .all<{ name_key: string }>();
+  }
+}
+
+/**
  * The badges of these drivers (name keys): what their podiums, records and V1 laps say, what was given by hand, and
  * the Creator for a name held by one of `creatorKeyHashes`. `events` is the Hall of Fame, when already read.
  */
@@ -461,12 +487,7 @@ export async function badgesOf(
     orNull(async () =>
       (await db.prepare(`SELECT * FROM driver_awards WHERE awarded_by != 'auto' AND name_key IN (${marks}) ORDER BY awarded_at DESC, id DESC`).bind(...keys).all<AwardRow>()).results,
     ),
-    creatorKeyHashes.length === 0
-      ? Promise.resolve({ results: [] as { name_key: string }[] })
-      : db
-          .prepare(`SELECT name_key FROM drivers WHERE name_key IN (${marks}) AND key_hash IN (${creatorKeyHashes.map(() => "?").join(", ")})`)
-          .bind(...keys, ...creatorKeyHashes)
-          .all<{ name_key: string }>(),
+    creatorNames(db, keys, creatorKeyHashes),
   ]);
 
   const wanted = new Set(keys);
