@@ -50,6 +50,8 @@ export const KEY_CLASSES: Readonly<Record<string, KeyClass>> = {
   "lc.garage.presets.<car>": "synced",
   "librecorsa.carSkins": "synced",
   "librecorsa.raceHistory": "synced",
+  // Careers (career/career-state.ts): combined per career, the newer of the two copies of one winning
+  "librecorsa.career": "synced",
   "librecorsa.f1ModPhysics": "synced",
   // Credentials and network: each device keeps its own key and registers it with the account
   "bugesera.driverKey": "device",
@@ -734,8 +736,13 @@ function combineValues(local: SaveDoc, cloud: SaveDoc, base: SyncBase | null, ou
     else if (keySideHash(l) === keySideHash(c)) res = { ...c, t: Math.max(l.t, c.t) };
     else if (b !== undefined && keySideHash(l) === b) res = c;
     else if (b !== undefined && keySideHash(c) === b) res = l;
-    else if (!l.removed && !c.removed && (key === RACE_HISTORY_KEY || isPresetsKey(key))) {
-      const value = key === RACE_HISTORY_KEY ? combineRaceHistory(c.value, l.value) : combinePresets(c.value, l.value);
+    else if (!l.removed && !c.removed && (key === RACE_HISTORY_KEY || key === CAREER_KEY || isPresetsKey(key))) {
+      const value =
+        key === RACE_HISTORY_KEY
+          ? combineRaceHistory(c.value, l.value)
+          : key === CAREER_KEY
+            ? combineCareers(c.value, l.value)
+            : combinePresets(c.value, l.value);
       res = { removed: false, value, t: Math.max(l.t, c.t) };
     } else res = pickSide(l.t, c.t) === "local" ? l : c;
     if (!res) continue;
@@ -935,6 +942,35 @@ export function summarizeSave(doc: SaveDoc | null, side: "local" | "cloud"): Sav
   };
 }
 
+const CAREER_KEY = "librecorsa.career";
+
+/**
+ * Two devices' careers: every career either holds, and of a career both hold (the same id), the copy last changed. The
+ * career shown is the one changed last. Text the game cannot read keeps the other side's
+ */
+export function combineCareers(cloud: string, local: string): string {
+  const read = (t: string): { v: number; runs: { id: string; updatedAt: number }[]; activeId: string | null } | null => {
+    try {
+      const v: unknown = JSON.parse(t);
+      return isObj(v) && Array.isArray(v.runs) ? (v as never) : null;
+    } catch {
+      return null;
+    }
+  };
+  const c = read(cloud);
+  const l = read(local);
+  if (!c || !l) return c ? cloud : local;
+  const byId = new Map<string, { id: string; updatedAt: number }>();
+  for (const r of [...c.runs, ...l.runs]) {
+    if (!r || typeof r.id !== "string") continue;
+    const had = byId.get(r.id);
+    if (!had || (r.updatedAt ?? 0) > (had.updatedAt ?? 0)) byId.set(r.id, r);
+  }
+  const runs = [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+  const latest = runs.reduce<{ id: string; updatedAt: number } | null>((m, r) => (!m || r.updatedAt > m.updatedAt ? r : m), null);
+  return JSON.stringify({ v: 1, runs, activeId: latest?.id ?? null });
+}
+
 /**
  * Nothing in the save is the player's own work: no best laps, races, saved setups, car or tyre setups or liveries.
  * The settings, the last car and circuit don't count: every device that opened the game once has them.
@@ -942,6 +978,15 @@ export function summarizeSave(doc: SaveDoc | null, side: "local" | "cloud"): Sav
 export function isEmptySave(doc: SaveDoc): boolean {
   if (Object.keys(doc.bestLaps).length) return false;
   for (const [key, s] of Object.entries(doc.keys)) {
+    if (key === CAREER_KEY) {
+      try {
+        const v: unknown = JSON.parse(s.value);
+        if (isObj(v) && Array.isArray(v.runs) && v.runs.length) return false;
+      } catch {
+        // Unreadable: nothing the game would use
+      }
+      continue;
+    }
     if (key === RACE_HISTORY_KEY || isPresetsKey(key)) {
       if ((parseList(s.value)?.length ?? 0) > 0) return false;
     } else if (key === "librecorsa.carSkins") {
