@@ -188,3 +188,18 @@
 | post | Einreichen | Lap to the online board |
 | upload | Hochladen | |
 | Lap times | Rundenzeiten | |
+
+## Accounts
+| English | German | Note |
+|---|---|---|
+| account | Konto | Not "Account" |
+| sign in / sign-in | Anmelden / Anmeldung | "Anmeldemöglichkeit" for "way in" |
+| sign out | Abmelden | |
+| create (account) | Erstellen | |
+| passkey | Passkey | As Google, Apple and Microsoft say it in German |
+| code / one-time code | Code | Button "Code anzeigen" |
+| save (game save) | Spielstand | "Cloud-Spielstand" |
+| sync | Synchronisieren / Synchronisierung | |
+| device | Gerät | |
+| join an account | Beitreten | "Dem Konto beitreten" |
+| combine saves | Zusammenführen | |

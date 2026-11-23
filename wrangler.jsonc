@@ -28,6 +28,15 @@
       "database_name": "librecorsa-board",
       "database_id": "25f4a169-a3fe-454b-995f-eb0509f4f56f",
       "migrations_dir": "cloudflare/migrations"
+    },
+    // Player accounts (cloudflare/api/accounts): sign-ins, sessions, passkeys and cloud saves. No email is kept.
+    // After changing cloudflare/migrations-accounts:
+    //   npx wrangler d1 migrations apply librecorsa-accounts --remote
+    {
+      "binding": "ACCOUNTS_DB",
+      "database_name": "librecorsa-accounts",
+      "database_id": "c355c447-ad19-4bd4-bd9f-a00c1a327ea1",
+      "migrations_dir": "cloudflare/migrations-accounts"
     }
   ],
   // Online switches, read by the game at run time (GET /api/config). Set one to "off" and deploy to turn that
@@ -39,6 +48,9 @@
   //                 input, kind of screen, weather, assists and build (off: nothing sent)
   //   ONLINE_LIVE   the live count on the title screen: tabs with the game in view send an empty heartbeat a minute
   //                 (off: no heartbeats, and the title screen shows the drivers to date alone)
+  //   ONLINE_ACCOUNTS  optional player accounts: sign in with Discord, Google, Steam or a passkey, names kept on the
+  //                 account, saves synced between devices (off: the driver key on each device, as before). Discord and
+  //                 Google show only once their secrets are set (DISCORD_CLIENT_ID/SECRET, GOOGLE_CLIENT_ID/SECRET)
   // ANALYTICS_*: where Cloudflare's own numbers on the /admin page come from (cloudflare/api/analytics.ts), read with
   // the secret CF_ANALYTICS_TOKEN (npx wrangler secret put CF_ANALYTICS_TOKEN). ANALYTICS_ZONE_ID is librecorsa.org's
   // zone, for the site's traffic per day (the zone id on the domain's overview page in the dashboard)
@@ -48,6 +60,7 @@
     "ONLINE_RACES": "on",
     "ONLINE_USAGE": "on",
     "ONLINE_LIVE": "on",
+    "ONLINE_ACCOUNTS": "on",
     "ANALYTICS_ACCOUNT_ID": "e8e4c67fe1996448b0e6ab6238f31867",
     "ANALYTICS_D1_ID": "25f4a169-a3fe-454b-995f-eb0509f4f56f",
     "ANALYTICS_ZONE_ID": "419e313480b2e43867440fdad85d0704"
@@ -77,7 +90,10 @@
     { "name": "ADMIN_LIMIT", "namespace_id": "1004", "simple": { "limit": 20, "period": 60 } },
     { "name": "BOARD_LIMIT", "namespace_id": "1005", "simple": { "limit": 20, "period": 60 } },
     { "name": "BADGES_LIMIT", "namespace_id": "1006", "simple": { "limit": 60, "period": 60 } },
-    { "name": "PROFILE_LIMIT", "namespace_id": "1007", "simple": { "limit": 60, "period": 60 } }
+    { "name": "PROFILE_LIMIT", "namespace_id": "1007", "simple": { "limit": 60, "period": 60 } },
+    // Sign-ins, link codes and passkey ceremonies one address may start per minute; cloud save reads and writes
+    { "name": "AUTH_LIMIT", "namespace_id": "1008", "simple": { "limit": 20, "period": 60 } },
+    { "name": "SAVE_LIMIT", "namespace_id": "1009", "simple": { "limit": 60, "period": 60 } }
   ],
   // Workers caching: the circuit GLBs from R2 are kept at the edge, tiered, with byte ranges served from the cache
   "cache": { "enabled": true },

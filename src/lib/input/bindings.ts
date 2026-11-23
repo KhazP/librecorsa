@@ -15,6 +15,7 @@ export type KeyAction =
   | "steerRight"
   | "boostHold"
   | "boostLatch"
+  | "overtake"
   | "aero"
   | "shiftUp"
   | "shiftDown"
@@ -43,6 +44,7 @@ export type KeyAction =
 /** Actions a controller or wheel button can trigger */
 export type PadAction =
   | "boost"
+  | "overtake"
   | "aero"
   | "shiftUp"
   | "shiftDown"
@@ -73,6 +75,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "steerRight", get label() { return t("game.keyActions.steerRight"); } },
   { id: "boostHold", get label() { return t("game.keyActions.boostHold"); } },
   { id: "boostLatch", get label() { return t("game.keyActions.boostLatch"); } },
+  { id: "overtake", get label() { return t("game.keyActions.overtake"); } },
   { id: "aero", get label() { return t("game.keyActions.aero"); } },
   { id: "shiftUp", get label() { return t("game.keyActions.shiftUp"); } },
   { id: "shiftDown", get label() { return t("game.keyActions.shiftDown"); } },
@@ -104,6 +107,7 @@ export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   { id: "shiftDown", get label() { return t("game.padActions.shiftDown"); } },
   { id: "neutral", get label() { return t("game.padActions.neutral"); } },
   { id: "boost", get label() { return t("game.padActions.boost"); } },
+  { id: "overtake", get label() { return t("game.padActions.overtake"); } },
   { id: "aero", get label() { return t("game.padActions.aero"); } },
   { id: "camera", get label() { return t("game.padActions.camera"); } },
   { id: "freeCamera", get label() { return t("game.padActions.freeCamera"); } },
@@ -129,6 +133,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   steerRight: ["KeyD", "ArrowRight"],
   boostHold: ["Space", "ShiftLeft", "ShiftRight"],
   boostLatch: ["KeyB"],
+  // The one free key by the left hand (EA's M is the mute here)
+  overtake: ["KeyZ"],
   aero: ["KeyX"],
   shiftUp: ["KeyE"],
   shiftDown: ["KeyQ"],
@@ -173,6 +179,7 @@ export type PadButtonBindings = Record<PadAction, number | null>;
  */
 export const BUMPER_SHIFT_BUTTONS: PadButtonBindings = {
   boost: 0, // A
+  overtake: null,
   aero: 2, // X
   camera: 3, // Y
   shiftDown: 4, // LB
@@ -205,6 +212,8 @@ export const GT_STYLE_BUTTONS: PadButtonBindings = {
   // Gear up and gear down pressed together are neutral too, on every layout
   neutral: null,
   boost: 11, // RS (R3)
+  // Every button has a job: bind one, or let the assist use it (GT7 has one nitro / overtake button)
+  overtake: null,
   camera: 5, // RB (R1)
   pause: 9, // Menu (Options)
   restart: 8, // View (Create)
@@ -385,6 +394,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       shiftDown: 6, // LT (L2)
       neutral: null,
       boost: 0, // A (✕)
+      overtake: null,
       camera: 5, // RB (R1)
       pause: 9, // Menu (Options)
       restart: 8, // View (Create)
@@ -401,7 +411,9 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       tvCamera: null,
     },
   },
-  // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause. No headlight control found in the F1 games
+  // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause; F1 25's 2026 pack: LB its Overtake / Boost
+  // (EA's controls hub), so Overtake there, and the MFD's pages on the D-pad that opens it. No headlight control found
+  // in the F1 games
   f1: {
     get label() { return t("game.padLayouts.f1"); },
     pedals: "triggers",
@@ -410,13 +422,14 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       shiftDown: 2, // X (□)
       neutral: null,
       boost: 1, // B (○)
+      overtake: 4, // LB (L1)
       aero: 3, // Y (△)
       camera: 5, // RB (R1)
       pause: 9, // Menu (Options)
       restart: 8, // View (Create)
       flyingLap: null,
       mfd: 10, // LS (L3)
-      mfdPage: 4, // LB (L1)
+      mfdPage: null,
       hud: 11, // RS (R3)
       racingLine: null,
       board: null,
@@ -436,6 +449,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       shiftDown: 2, // X (□)
       neutral: null,
       boost: 0, // A (✕)
+      overtake: null,
       camera: 5, // RB (R1)
       aero: 10, // LS (L3)
       pause: 9, // Menu (Options)
@@ -457,6 +471,16 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
 };
 
 export const PAD_LAYOUT_IDS = Object.keys(PAD_LAYOUTS) as PadLayout[];
+
+/**
+ * Formula style as it was until 23 Nov 2026 (LB the MFD's pages, no Overtake button). A saved map that is exactly this
+ * is a player who picked Formula style then, and moves on to it as it is now (parsePlayerSettings)
+ */
+export const RETIRED_FORMULA_STYLE_BUTTONS: PadButtonBindings = {
+  ...PAD_LAYOUTS.f1.buttons,
+  overtake: null,
+  mfdPage: 4,
+};
 
 /** The ready-made layout these bindings and pedals are, or null once the player has rebound a button or moved the pedals */
 export function matchPadLayout(bindings: PadButtonBindings, sources: PadPedalSources = DEFAULT_PAD_PEDAL_SOURCES): PadLayout | null {

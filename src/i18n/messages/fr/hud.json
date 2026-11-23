@@ -688,6 +688,8 @@
     "shiftDown": "Rétrograder",
     "shiftUp": "Monter le rapport",
     "boost": "Boost",
+    "overtake": "Dépassement",
+    "overtakeShort": "OT",
     "activeAero": "Aéro active",
     "headlights": "Phares",
     "brake": "Frein",
@@ -842,7 +844,8 @@
     "holdPace": "Tenez <n>{pace}</n> {unit} jusqu’à la ligne",
     "greenFlag": "Drapeau vert",
     "lightsOut": "Extinction des feux",
-    "chequeredFlag": "Drapeau à damier"
+    "chequeredFlag": "Drapeau à damier",
+    "reaction": "Réaction <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Moteur calé : maintenez {control} ou passez au point mort pour redémarrer",
@@ -867,8 +870,16 @@
     "overtakeLockedTitle": "Mode dépassement ({keys}) : obtenu à moins de 1 s de la voiture devant au point de détection, pour le tour suivant",
     "overtakeTitle": "Mode dépassement ({keys})",
     "boostTitle": "Boost manuel ({keys})",
+    "boost2026Title": "Boost ({keys}) : maintient ou augmente la puissance du moteur électrique ; en course jusqu’à sa puissance au moment de l’appui, ou 150 kW",
+    "boostLowGripTitle": "Boost ({keys}) : conditions de faible adhérence, il empêche seulement la puissance du moteur électrique de baisser",
+    "overtake2026Title": "Dépassement ({key}) : toute la puissance du moteur électrique jusqu’à 337 km/h pour le reste du tour",
+    "overtake2026LockedTitle": "Dépassement ({key}) : obtenu à moins de 1 s de la voiture devant à la ligne de détection, pour le tour à partir de la ligne d’activation",
+    "overtake2026AutoTitle": "Dépassement : le Dépassement automatique l’utilise ; appuyez sur {key} pour en avoir toute la puissance",
+    "overtakeLowGripTitle": "Conditions de faible adhérence : la direction de course a désactivé le Dépassement, et le Straight Mode n’ouvre que les volets avant",
     "overtake": "Dépassement",
     "boost": "Boost",
+    "overtakeAuto": "Dépassement auto",
+    "lowGrip": "Faible adhérence",
     "harvest": "Récupération",
     "deploy": "Déploiement",
     "ersSoc": "ERS SOC",
@@ -1062,5 +1073,24 @@
   "hiddenNote": {
     "off": "HUD masqué",
     "offKey": "HUD masqué · {key} pour afficher"
+  },
+  "hudEditor": {
+    "title": "Modifier la disposition du HUD",
+    "hint": "Faites glisser un élément pour le déplacer. Faites glisser son coin, ou faites défiler dessus, pour le redimensionner.",
+    "parts": {
+      "top-left": "En haut à gauche",
+      "top-center": "En haut au centre",
+      "top-right": "En haut à droite",
+      "center-right": "Procédure de départ",
+      "center": "Radar",
+      "bottom-left": "En bas à gauche",
+      "bottom-center": "En bas au centre",
+      "bottom-right": "En bas à droite"
+    },
+    "resetPart": "Réinitialiser",
+    "resize": "Faites glisser pour redimensionner",
+    "resetAll": "Réinitialiser la disposition",
+    "cancel": "Annuler",
+    "done": "Terminé"
   }
 }

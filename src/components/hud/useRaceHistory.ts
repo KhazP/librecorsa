@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { RaceStatus } from "@/types/f1";
 import { loadRaceHistory, recordFromResults, saveRaceRecord, type RaceKind, type RaceRecord } from "@/lib/sim/race-history";
+import { accountActions } from "@/lib/account/account-store";
 
 /**
  * Keeps the race on track in the browser's race history as soon as the player has a result, saved again as it firms
@@ -39,6 +40,7 @@ export function useRaceHistory(
     }
     const record = recordFromResults(results, final, { id: cur.id, atMs: cur.atMs, trackId: meta.trackId, carId: meta.carId, kind: meta.kind });
     if (record) setHistory(saveRaceRecord(record));
+    if (record) accountActions.pushSoon();
     // Saved on a change of `key` alone (the results array is new every frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);

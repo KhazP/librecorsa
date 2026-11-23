@@ -36,6 +36,8 @@ export interface ControlInputs {
   /** False when the active input device has no clutch bound; forces auto-clutch fallback so manual clutch cannot soft-lock */
   clutchBound?: boolean;
   manualOverride: boolean;
+  /** One-frame press: use the Overtake earned in a race, or stop using it (a 2026 F1 car) */
+  overtake?: boolean;
   toggleXMode: boolean;
   shiftUp: boolean;
   shiftDown: boolean;
@@ -482,12 +484,25 @@ export interface CarTelemetry {
   driveshaftTorqueNm?: number;
   totalPowerKw: number;
   ersBatteryPercent: number; // 0..100
-  manualOverrideActive: boolean; // 2026 MOM 350kW boost
+  /** The motor pushed by the driver: the Boost, or (a 2026 F1 car in a race) the Overtake in use */
+  manualOverrideActive: boolean;
   boostRemainingS: number;
+  /** A 2026 F1 car's Boost held (it keeps or raises the motor's power; in a race to its power when pressed or 150 kW) */
+  ersBoostActive?: boolean;
+  /** A 2026 F1 car's Overtake in use in a race (the higher speed curve), and whether the assist is using it */
+  overtakeInUse?: boolean;
+  overtakeAuto?: boolean;
+  /** A 2026 F1 car in a race, where Overtake is earned at the Detection Line (outside a race it is on all the time) */
+  overtakeRace?: boolean;
   /** The car's overtaking aids (`overtaking-rules.ts`): 2026 Straight Mode + Overtake, rear-flap DRS, or none (pre-2011) */
   overtakingRules?: import('@/lib/sim/overtaking-rules').OvertakingRules;
   /** The override (Overtake Mode on a 2026 car) may be used now: in a race only once earned within 1 s */
   overtakeAvailable?: boolean;
+  /**
+   * Race control's Low Grip Conditions for a 2026 F1 car: Overtake off, the Boost only holding the power, the front
+   * flaps alone in Straight Mode
+   */
+  lowGrip?: boolean;
   turboBoostBar: number;
   fuelKg: number;
   // 4-Corner Tires, Suspension & Brakes (Ordered FL, FR, RL, RR for HUD display)
@@ -585,6 +600,8 @@ export interface CarTelemetry {
     clutch: StartClutchControl;
     clutchIn: number;
   };
+  /** The player's reaction to the lights going out at the last start (ms), set by the session (race-start.ts ReactionWatch) */
+  startReactionMs?: number;
   /**
    * Qualifying before an AI race (qualifying.ts), set by the session: the clock left (s), whether the lap under way is
    * the last one (the clock has run out) and still counts, and the best clean lap so far (ms)

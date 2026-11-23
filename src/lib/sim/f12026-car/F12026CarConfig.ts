@@ -12,6 +12,7 @@
  */
 
 import type { LutPoints } from '../lut';
+import type { EnergyManagementData } from './ers-2026';
 import { F1_RAIN_TYRE_PACK, f1RainTraits, WET_TYRE_TRAITS, type WetTyreTraits } from '../wet-tyres';
 
 // ---------------------------------------------------------------------------
@@ -268,6 +269,20 @@ export interface ERSData {
   liftHarvestEveryGear?: { maxAxleTorqueNm: number };
   /** Deploy multiplier by gear (gear number → 0..1, the source's per-gear table); default 1 in every gear */
   deployVsGear?: LutPoints;
+  /**
+   * The rules the energy runs under (`ers-2026.ts`). 'f1-2026': the 2026 F1 car's, by the FIA's numbers: the ERS-K's
+   * power against road speed, with Overtake or not, in place of `ERS_MAX_DEPLOY`; no deploy limit a lap
+   * (`deployPerLapJ` is not read), the lap's recharge limit `harvestPerLapJ` plus Overtake's extra; the cuts with the
+   * driver flat out at the rules' rates; and each mode's `energyManagement` in place of its `socFloor`. Absent: the
+   * mode tables as they stand
+   */
+  regulations?: 'f1-2026';
+  /**
+   * The motor's torque demand may not vary faster than `maxHz` below `belowKmh` with the driver on the throttle (over
+   * 10 %), off the brake and out of a shift, the drive torque positive (the LMDh regulations, Art. 5.5.2): the
+   * traction control's cut reaches the motor through a filter there. Absent: the motor's share of a cut acts at once
+   */
+  mguDemandFilter?: { maxHz: number; belowKmh: number };
 }
 
 /** `PerformanceModeData`: one ERS / engine map selectable from the wheel */
@@ -287,6 +302,8 @@ export interface PerformanceModeData {
   topGearClipHarvestW: number;
   /** ICE power diverted to the MGU-K at part throttle (W) */
   partThrottleHarvestW: number;
+  /** Under `ERSData.regulations` 'f1-2026': where the control unit deploys and superclips; absent, it deploys to the limit */
+  energyManagement?: EnergyManagementData;
   /** Closed-throttle engine-braking multiplier */
   coastTorqueScale: number;
   /** Electronic brake balance offset in EBB steps (+ = forward) */
@@ -1138,7 +1155,7 @@ export interface CarPhysicsConfig {
 /**
  * A prototype's hybrid as its driver runs it: the motor's deployment and the braking regeneration each on their own
  * dial (kW caps), the battery's charge cycling between them, instead of an F1 car's combined modes. Deployment only
- * above `minDeploySpeedKmh` (the class's balance of performance)
+ * above `minDeploySpeedKmh` where the class has such a speed (an LMH car's front axle; an LMDh has none)
  */
 export interface EnduranceHybridDialsData {
   /** The deploy dial's steps (kW) and the one a car starts on */
@@ -1147,7 +1164,7 @@ export interface EnduranceHybridDialsData {
   /** The regeneration dial's steps (kW) and the one a car starts on */
   regenStepsKw: ReadonlyArray<number>;
   defaultRegenIndex: number;
-  /** No deployment below this road speed (km/h) */
+  /** No deployment below this road speed (km/h); 0 for none */
   minDeploySpeedKmh: number;
   /**
    * The charge the controller holds the battery about (0..1): above it the motor deploys at the shaft limit (the engine

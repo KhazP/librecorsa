@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "@formatjs/icu-messageformat-parser": "3.5.23",
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.1.0",
     "@takram/three-atmosphere": "^0.19.1",
     "@takram/three-clouds": "^0.7.6",
     "@takram/three-geospatial": "^0.9.1",

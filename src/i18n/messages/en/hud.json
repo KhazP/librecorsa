@@ -688,6 +688,8 @@
     "shiftDown": "Shift down",
     "shiftUp": "Shift up",
     "boost": "Boost",
+    "overtake": "Overtake",
+    "overtakeShort": "OT",
     "activeAero": "Active aero",
     "headlights": "Headlights",
     "brake": "Brake",
@@ -842,7 +844,8 @@
     "holdPace": "Hold <n>{pace}</n> {unit} to line",
     "greenFlag": "Green flag",
     "lightsOut": "Lights out",
-    "chequeredFlag": "Chequered flag"
+    "chequeredFlag": "Chequered flag",
+    "reaction": "Reaction <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Engine stalled: hold {control} or shift to neutral to restart",
@@ -867,8 +870,16 @@
     "overtakeLockedTitle": "Overtake Mode ({keys}): earned within 1 s of the car ahead at the detection point, for the next lap",
     "overtakeTitle": "Overtake Mode ({keys})",
     "boostTitle": "Manual override boost ({keys})",
+    "boost2026Title": "Boost ({keys}): keeps the motor's power or raises it; in a race to its power when pressed, or 150 kW",
+    "boostLowGripTitle": "Boost ({keys}): Low Grip Conditions, so it only stops the motor's power dropping",
+    "overtake2026Title": "Overtake ({key}): the motor's full power held to 337 km/h for the rest of the lap",
+    "overtake2026LockedTitle": "Overtake ({key}): earned within 1 s of the car ahead at the detection line, for the lap from the activation line",
+    "overtake2026AutoTitle": "Overtake: the Automatic Overtake is using it; press {key} for all of it",
+    "overtakeLowGripTitle": "Low Grip Conditions: race control has disabled Overtake, and Straight Mode opens the front flaps alone",
     "overtake": "Overtake",
     "boost": "Boost",
+    "overtakeAuto": "Overtake auto",
+    "lowGrip": "Low grip",
     "harvest": "Harvest",
     "deploy": "Deploy",
     "ersSoc": "ERS SOC",
@@ -1062,5 +1073,24 @@
   "hiddenNote": {
     "off": "HUD off",
     "offKey": "HUD off · {key} to show"
+  },
+  "hudEditor": {
+    "title": "Edit HUD layout",
+    "hint": "Drag a panel to move it. Drag its corner, or scroll over it, to resize it.",
+    "parts": {
+      "top-left": "Top left",
+      "top-center": "Top centre",
+      "top-right": "Top right",
+      "center-right": "Start checklist",
+      "center": "Radar",
+      "bottom-left": "Bottom left",
+      "bottom-center": "Bottom centre",
+      "bottom-right": "Bottom right"
+    },
+    "resetPart": "Reset",
+    "resize": "Drag to resize",
+    "resetAll": "Reset layout",
+    "cancel": "Cancel",
+    "done": "Done"
   }
 }

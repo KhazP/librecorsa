@@ -79,7 +79,9 @@ const m = measureLc26(LC26_TUNED.make);
   // MGU-K is held back under 100 km/h; the auto-clutch holds the engine at 7000 rpm off the line, where it has its
   // torque. From 100 to 200 km/h it takes 2.4 s, as they do
   check('0–100 km/h in 2.7 to 3.3 s, 0–200 in 5.0 to 5.8 s', between(m.accelS[100], 2.7, 3.3) && between(m.accelS[200], 5.0, 5.8), `${f(m.accelS[100])} s, ${f(m.accelS[200])} s`);
-  check('Top speed with the wings closed 288 to 303 km/h', between(m.topSpeedKmh, 288, 303), `${f(m.topSpeedKmh, 0)} km/h`);
+  // The FIA's 2026 curve: on a practice run Overtake's, 350 kW of the motor to 337 km/h (the data's maps had cut it from
+  // 285 km/h, and the car topped out at 288 to 303)
+  check('Top speed with the wings closed 295 to 312 km/h', between(m.topSpeedKmh, 295, 312), `${f(m.topSpeedKmh, 0)} km/h`);
   // From a restart: the discs at the 250 °C they start with (hot and cold discs: "Carbon brakes" below)
   check('300–100 km/h in 80 to 92 m, peaking at 4.5 to 5.0 g on discs at 250 °C', between(m.brakeM, 80, 92) && between(m.brakePeakG, 4.5, 5.0), `${f(m.brakeM, 1)} m, ${f(m.brakePeakG)} g`);
   // Cornering: where the tune put it, ± 4 %
@@ -206,7 +208,8 @@ console.log('\n== Against 2026 qualifying laps, flat out');
   ];
   for (const [kmh, real] of laps) {
     const sim = fresh(kmh - 40, straight);
-    sim.setLiveTuner({ ersMode: 'BAL' });
+    // Attack: the rules' whole curve, as a qualifying lap deploys on its straights (Overtake on, as in qualifying)
+    sim.setLiveTuner({ ersMode: 'PSH' });
     let sum = 0;
     let n = 0;
     let gear = sim.telemetry.gear;

@@ -688,6 +688,8 @@
     "shiftDown": "降檔",
     "shiftUp": "升檔",
     "boost": "加速助推",
+    "overtake": "超車",
+    "overtakeShort": "OT",
     "activeAero": "主動空力",
     "headlights": "頭燈",
     "brake": "煞車",
@@ -842,7 +844,8 @@
     "holdPace": "維持 <n>{pace}</n> {unit} 至起跑線",
     "greenFlag": "綠旗",
     "lightsOut": "燈滅起跑",
-    "chequeredFlag": "方格旗"
+    "chequeredFlag": "方格旗",
+    "reaction": "反應 <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "引擎熄火：按住 {control} 或排入空檔重新發動",
@@ -867,8 +870,16 @@
     "overtakeLockedTitle": "超車模式（{keys}）：於偵測點落後前車 1 秒內即可於下一圈獲得",
     "overtakeTitle": "超車模式（{keys}）",
     "boostTitle": "手動超控加速（{keys}）",
+    "boost2026Title": "助推（{keys}）：維持或提高電動馬達功率；正賽中最多回到按下時的功率，或 150 kW",
+    "boostLowGripTitle": "助推（{keys}）：低抓地力狀況，只能防止電動馬達功率下降",
+    "overtake2026Title": "超車（{key}）：本圈剩餘路段，電動馬達全功率維持到 337 km/h",
+    "overtake2026LockedTitle": "超車（{key}）：於偵測線落後前車 1 秒內即可獲得，從啟動線起用於該圈",
+    "overtake2026AutoTitle": "超車：自動超車正在使用；按 {key} 可用全功率",
+    "overtakeLowGripTitle": "低抓地力狀況：賽事管制已停用超車，直線模式只開啟前翼片",
     "overtake": "超車",
     "boost": "助推",
+    "overtakeAuto": "自動超車",
+    "lowGrip": "低抓地力",
     "harvest": "回收",
     "deploy": "釋放",
     "ersSoc": "ERS 電量",
@@ -1062,5 +1073,24 @@
   "hiddenNote": {
     "off": "HUD 已隱藏",
     "offKey": "HUD 已隱藏 · 按 {key} 顯示"
+  },
+  "hudEditor": {
+    "title": "編輯 HUD 配置",
+    "hint": "拖曳面板即可移動；拖曳面板角落或在面板上捲動即可調整大小。",
+    "parts": {
+      "top-left": "左上",
+      "top-center": "上方中央",
+      "top-right": "右上",
+      "center-right": "起跑檢查清單",
+      "center": "雷達",
+      "bottom-left": "左下",
+      "bottom-center": "下方中央",
+      "bottom-right": "右下"
+    },
+    "resetPart": "重設",
+    "resize": "拖曳以調整大小",
+    "resetAll": "重設配置",
+    "cancel": "取消",
+    "done": "完成"
   }
 }

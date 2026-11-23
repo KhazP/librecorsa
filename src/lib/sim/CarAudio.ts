@@ -15,7 +15,8 @@
  * 3. `calculateTyreSound`:
  *    - Per-wheel (`i = 0..3`) tire squeal & scrub driven by combined slip `s = hypot(sx, sy)`
  *      multiplied by vertical normal load `Fz` (AC's `0.4 * s * Fz * 0.0002 - 0.1`, here with s × 4.5 and −0.12)
- *    - A kerb roar swelling at the rate the tyres cross the kerb's ridges, panned to its side, over a low kerb rumble,
+ *    - A kerb roar swelling at the rate the tyres cross the kerb's ridges, its tone and level rising with speed,
+ *      panned to its side, over a low kerb rumble,
  *      and the off-track grass/gravel skid layers.
  * 4. `ContactAcousticsRig` (`contact-acoustics.ts`) adds road roar, damper thump and chassis rattle, brake squeal
  *    and debris clicks.
@@ -70,8 +71,43 @@ const KERB_EDGE_S = 0.05;
  * between 400 and 2500 Hz, the compressor barely moving
  */
 const KERB_ROAR_LEVEL = 0.57;
-/** The part of the kerb roar that rises and falls with each ridge; the rest rolls on between them */
+/**
+ * The part of the kerb roar that rises and falls with each ridge at the reference ridge rate; the rest rolls on between
+ * them (see `kerbRidgeDepth`)
+ */
 const KERB_RIDGE_DEPTH = 0.4;
+/**
+ * The speed (m/s) the kerb roar's tone is voiced at, 120 km/h. Faster over the kerb the whole roar rises in pitch and
+ * slower it falls, as a recorded kerb run played faster or slower would
+ */
+const KERB_TONE_REF_MS = 120 / 3.6;
+/** How closely the roar's tone follows the speed: its filters move by (speed / reference) to this power */
+const KERB_TONE_EXP = 0.75;
+/** The roar's tone at its lowest and highest, as factors of its voiced tone (about 54 and 340 km/h) */
+const KERB_TONE_MIN = 0.55;
+const KERB_TONE_MAX = 2.2;
+/** The roar's low-pass and the centre of its rattle at the voiced speed (Hz) */
+const KERB_ROAR_LOWPASS_HZ = 700;
+const KERB_ROAR_RATTLE_HZ = 1600;
+/** The ridge rate (Hz) above which the swell starts to flatten: 120 km/h over the most common, 0.65 m ridges */
+const KERB_DEPTH_FLATTEN_HZ = 51;
+
+/**
+ * How far the kerb roar swells with each ridge at a ridge rate (Hz): as voiced up to 51 ridges a second, then
+ * shallower as the ridges come faster and blur into a buzz
+ */
+function kerbRidgeDepth(ridgeHz: number): number {
+  return KERB_RIDGE_DEPTH - 0.08 * THREE.MathUtils.clamp((ridgeHz - KERB_DEPTH_FLATTEN_HZ) / 49, 0, 1);
+}
+
+/**
+ * The kerb roar's loudness at a speed (m/s), as a factor of KERB_ROAR_LEVEL: 0.7 at a crawl rising to 1 at 144 km/h
+ * as voiced, then still rising, to 1.5 (+3.5 dB) by 250 km/h
+ */
+function kerbSpeedLevel(speedMs: number): number {
+  const clamp = THREE.MathUtils.clamp;
+  return (0.7 + 0.3 * clamp((speedMs - 4) / 36, 0, 1)) * (1 + 0.5 * clamp((speedMs - 40) / 30, 0, 1));
+}
 
 /**
  * One ridge of the kerb roar's swell as harmonics for a PeriodicWave: a strike rising over 2 % of the cycle, then
@@ -189,8 +225,13 @@ export class CarAudioEngine {
   private kerbFilter: BiquadFilterNode | null = null;
   private kerbGain: GainNode | null = null;
 
-  /** Per side (left, right): the kerb roar's ridge-rate swell oscillator and its level */
+  /** The kerb roar's low-pass and rattle band, both sides' */
+  private kerbRoarLow: BiquadFilterNode | null = null;
+  private kerbRoarRattle: BiquadFilterNode | null = null;
+  /** Per side (left, right): the kerb roar's ridge-rate swell oscillator, its swell and depth, and its level */
   private kerbRidgeOsc: OscillatorNode[] = [];
+  private kerbSwell: GainNode[] = [];
+  private kerbSwellDepth: GainNode[] = [];
   private kerbRoarLevel: GainNode[] = [];
   /** Per side: how long it has been on the kerbs, and off them (s) */
   private readonly kerbOnS = [0, 0];
@@ -413,21 +454,22 @@ export class CarAudioEngine {
     this.kerbFilter = kerbFilter;
     this.kerbGain = kerbGain;
 
-    // Kerb roar: what a tyre rolling over a kerb sounds like, a rough low roar (noise under ~700 Hz with a little
-    // ~1.6 kHz rattle, all where laptop and phone speakers still reach) that never stops while a side is on the kerb,
-    // swelling with each ridge it crosses: per side, a wave at the ridge rate sways the roar between 60 % and full.
-    // Each side is panned to its own side
+    // Kerb roar: what a tyre rolling over a kerb sounds like, a rough low roar (at 120 km/h noise under ~700 Hz with a
+    // little ~1.6 kHz rattle, all where laptop and phone speakers still reach) that never stops while a side is on the
+    // kerb, swelling with each ridge it crosses: per side, a wave at the ridge rate sways the roar between 60 % and full
+    // (shallower when the ridges come very fast). Its tone and level rise with the speed over the kerb. Each side is
+    // panned to its own side
     const ridgeWave = kerbRidgeWave(ctx);
     const roar = ctx.createBufferSource();
     roar.buffer = noiseBuffer;
     roar.loop = true;
     const roarLow = ctx.createBiquadFilter();
     roarLow.type = 'lowpass';
-    roarLow.frequency.value = 700;
+    roarLow.frequency.value = KERB_ROAR_LOWPASS_HZ;
     roarLow.Q.value = 0.7;
     const roarRattle = ctx.createBiquadFilter();
     roarRattle.type = 'bandpass';
-    roarRattle.frequency.value = 1600;
+    roarRattle.frequency.value = KERB_ROAR_RATTLE_HZ;
     roarRattle.Q.value = 1.2;
     const roarBed = ctx.createGain();
     roarBed.gain.value = 10;
@@ -436,6 +478,8 @@ export class CarAudioEngine {
     roar.connect(roarLow).connect(roarBed);
     roar.connect(roarRattle).connect(rattleMix);
     const ridgeOsc: OscillatorNode[] = [];
+    const swells: GainNode[] = [];
+    const depths: GainNode[] = [];
     const roarLevel: GainNode[] = [];
     for (const pan of [-0.7, 0.7]) {
       // The swell: the gain sits at 1 − depth and the ridge wave (peak ±1) adds ±depth to it
@@ -463,11 +507,17 @@ export class CarAudioEngine {
       }
       osc.start();
       ridgeOsc.push(osc);
+      swells.push(swell);
+      depths.push(depth);
       roarLevel.push(level);
     }
     // An eighth into the shared buffer, where no other loop of it starts (they start at 0, ¼, ½ and ¾)
     roar.start(0, 0.125 * noiseBuffer.duration);
+    this.kerbRoarLow = roarLow;
+    this.kerbRoarRattle = roarRattle;
     this.kerbRidgeOsc = ridgeOsc;
+    this.kerbSwell = swells;
+    this.kerbSwellDepth = depths;
     this.kerbRoarLevel = roarLevel;
 
     // Off-track Grass / Gravel noise (`SURF_GRASS` / `SURF_SAND` in `CarSoundData.cpp`)
@@ -993,22 +1043,30 @@ export class CarAudioEngine {
     interior: boolean
   ): number {
     const ridgeM = getActiveSurfaceTable().kerb.bumpLengthM;
-    const ridgeHz = Math.min(KERB_MAX_RIDGE_HZ, speedMs / (ridgeM > 0.2 ? ridgeM : KERB_RIDGE_FALLBACK_M));
-    // Softer at a crawl, and a little quieter from outside the car
-    const strength =
-      KERB_ROAR_LEVEL * this.kerbVolume * (0.7 + 0.3 * THREE.MathUtils.clamp((speedMs - 4) / 36, 0, 1)) * (interior ? 1 : 0.8);
+    const rateHz = speedMs / (ridgeM > 0.2 ? ridgeM : KERB_RIDGE_FALLBACK_M);
+    const ridgeHz = Math.min(KERB_MAX_RIDGE_HZ, rateHz);
+    // The roar's tone follows the speed over the kerb: low and dull when slow, bright and rasping flat out
+    const tone = THREE.MathUtils.clamp((speedMs / KERB_TONE_REF_MS) ** KERB_TONE_EXP, KERB_TONE_MIN, KERB_TONE_MAX);
+    this.kerbRoarLow?.frequency.setTargetAtTime(KERB_ROAR_LOWPASS_HZ * tone, now, 0.03);
+    this.kerbRoarRattle?.frequency.setTargetAtTime(KERB_ROAR_RATTLE_HZ * tone, now, 0.03);
+    const depth = kerbRidgeDepth(rateHz);
+    // Louder with speed, and a little quieter from outside the car
+    const strength = KERB_ROAR_LEVEL * this.kerbVolume * kerbSpeedLevel(speedMs) * (interior ? 1 : 0.8);
     for (let side = 0; side < 2; side++) {
       const osc = this.kerbRidgeOsc[side];
       const gain = this.kerbRoarLevel[side]?.gain;
       if (!osc || !gain) continue;
       // Slightly apart, so two sides on kerbs beat against each other rather than stacking into one tone
       osc.frequency.setTargetAtTime(Math.max(5, ridgeHz) * (side === 1 ? 1.015 : 1), now, 0.03);
+      this.kerbSwell[side]?.gain.setTargetAtTime(1 - depth, now, 0.03);
+      this.kerbSwellDepth[side]?.gain.setTargetAtTime(depth, now, 0.03);
       const on = sides[side];
       if (on > 0) {
         const level = on * strength;
         if (this.kerbOffS[side] > KERB_REENTRY_S) {
           this.kerbOnS[side] = 0;
-          gain.setTargetAtTime(level * 1.8, now, 0.003);
+          // The edge strike stops at full level, so the louder roar at high speed does not slam the compressor
+          gain.setTargetAtTime(Math.min(level * 1.8, Math.max(level, 1)), now, 0.003);
         } else {
           gain.setTargetAtTime(level, now, this.kerbOnS[side] < KERB_EDGE_S ? 0.025 : 0.012);
         }

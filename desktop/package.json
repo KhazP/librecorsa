@@ -40,7 +40,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "KhazP",
+        "owner": "librecorsa",
         "repo": "librecorsa",
         "releaseType": "release"
       }

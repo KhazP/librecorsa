@@ -8,8 +8,8 @@
  * refined by projected gradient descent with finite-difference gradients and a backtracking step, and the faster wins.
  */
 import { pathGeometry, type AiTrack } from '../../../src/lib/sim/ai/ai-track';
-import type { CarLimits } from '../../../src/lib/sim/ai/ggv';
-import { planSpeeds } from '../../../src/lib/sim/ai/speed-plan';
+import { G, type CarLimits } from '../../../src/lib/sim/ai/ggv';
+import { planSpeeds, type SpeedPlan } from '../../../src/lib/sim/ai/speed-plan';
 
 export interface LineBounds {
   lo: Float64Array;
@@ -116,6 +116,36 @@ export interface OptOptions {
    * wherever the start left it (often the inside). 0: off
    */
   straightW?: number;
+  /** A point-to-point course: the run is timed, not a lap */
+  run?: RunSpec;
+  /** Control points the search leaves where the start put them (1): a seeded shape kept on purpose (`--lock`) */
+  locked?: Uint8Array;
+}
+
+/** A point-to-point course (a hill climb): timed from rest at the start line (grid point 0) to the finish (`finishI`) */
+export interface RunSpec {
+  finishI: number;
+}
+
+/**
+ * Time of a standing run from grid point 0 to `finishI` on a plan: speed-plan.ts's forward (traction) pass, here from
+ * rest, under the plan's cornering and braking envelope (`vLimit`). The plan's own lap closes the loop through the
+ * stretch with no road, so its lap time is no measure of a hill climb's run
+ */
+export function standingRunS(t: AiTrack, plan: SpeedPlan, limits: CarLimits, finishI: number): number {
+  const { kappa, seg } = plan.geometry;
+  let v = 0, time = 0;
+  for (let i = 0; i < finishI; i++) {
+    const gEff = G * Math.cos(t.slope[i]) * Math.cos(t.bank[i]) + v * v * t.vcurv[i];
+    const aLatMax = limits.lateral(v, gEff) + G * Math.sin(t.bank[i]) * Math.sign(kappa[i] || 1);
+    // Grip left along the road (the plan's friction ellipse, exponent 2)
+    const r = Math.min(1, Math.abs(v * v * kappa[i]) / Math.max(1e-6, aLatMax));
+    const aAcc = limits.traction(v) * Math.sqrt(Math.max(0, 1 - r * r)) - G * Math.sin(t.slope[i]);
+    const vNext = Math.min(plan.vLimit[(i + 1) % t.n], Math.sqrt(Math.max(0, v * v + 2 * aAcc * seg[i])));
+    time += seg[i] / Math.max(0.5, 0.5 * (v + vNext));
+    v = vNext;
+  }
+  return time;
 }
 
 export interface OptResult {
@@ -211,14 +241,26 @@ function curvatureEnergy(kappa: Float64Array, seg: Float64Array): number {
   return sum;
 }
 
-/** Lap time plus the smoothness penalty of a line, and a wall at the car's steering lock (`straightW`: OptOptions) */
-export function lineCost(t: AiTrack, n: Float64Array, limits: CarLimits, smoothW: number, walls?: WallClearance, straightW = 0): { cost: number; lapS: number } {
+/**
+ * Lap time (a point-to-point course's run time, with `run`) plus the smoothness penalty of a line, and a wall at the
+ * car's steering lock (`straightW`: OptOptions)
+ */
+export function lineCost(
+  t: AiTrack,
+  n: Float64Array,
+  limits: CarLimits,
+  smoothW: number,
+  walls?: WallClearance,
+  straightW = 0,
+  run?: RunSpec
+): { cost: number; lapS: number; plan: SpeedPlan } {
   const geo = pathGeometry(t, n);
   const plan = planSpeeds(t, n, limits, geo);
-  let cost = plan.lapS + smoothW * curvatureRatePenalty(geo.kappa, t.ds) + LOCK_W * lockPenalty(geo.kappa, geo.seg, limits.maxKappa);
+  const lapS = run ? standingRunS(t, plan, limits, run.finishI) : plan.lapS;
+  let cost = lapS + smoothW * curvatureRatePenalty(geo.kappa, t.ds) + LOCK_W * lockPenalty(geo.kappa, geo.seg, limits.maxKappa);
   if (walls) cost += WALL_W * wallPenalty(t, n, walls);
   if (straightW > 0) cost += straightW * curvatureEnergy(geo.kappa, geo.seg);
-  return { cost, lapS: plan.lapS };
+  return { cost, lapS, plan };
 }
 
 /** Minimum Σκ²·ds line by projected gradient on the controls (a smooth, symmetric starting line) */
@@ -280,7 +322,8 @@ export function optimiseLapTime(param: LineParam, b: LineBounds, limits: CarLimi
   const c = Float64Array.from(start);
   for (let k = 0; k < m; k++) c[k] = Math.min(cb.hi[k], Math.max(cb.lo[k], c[k]));
   const grid = new Float64Array(t.n);
-  const evalC = () => lineCost(t, param.toGrid(c, b, grid), limits, smoothW, opts.walls, opts.straightW ?? 0);
+  const evalC = () => lineCost(t, param.toGrid(c, b, grid), limits, smoothW, opts.walls, opts.straightW ?? 0, opts.run);
+  const locked = opts.locked;
   let cur = evalC();
   let sweeps = 0;
   const saved = new Float64Array(64);
@@ -307,7 +350,7 @@ export function optimiseLapTime(param: LineParam, b: LineBounds, limits: CarLimi
               let changed = false;
               for (let j = -half; j <= half; j++) {
                 const k = (k0 + j + m) % m;
-                const v = Math.min(cb.hi[k], Math.max(cb.lo[k], c[k] + dir * delta * w[j + half]));
+                const v = locked?.[k] ? c[k] : Math.min(cb.hi[k], Math.max(cb.lo[k], c[k] + dir * delta * w[j + half]));
                 if (v !== c[k]) changed = true;
                 c[k] = v;
               }

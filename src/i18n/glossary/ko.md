@@ -131,3 +131,20 @@
 | physics / physics version | 물리 / 물리 버전 | 문맥에 따라 `물리 엔진` |
 | post / upload | 등록 / 업로드 | 온라인 보드에 랩 등록 / 업로드 |
 | Lap times | 랩 타임 | 랩 타임 목록 화면 |
+
+## Accounts
+
+| English | 한국어 | 비고 |
+|---|---|---|
+| account | 계정 | |
+| sign in / sign out | 로그인 / 로그아웃 | Google·Apple·Microsoft 표기와 동일 |
+| passkey | 패스키 | |
+| code / one-time code | 코드 | 일회용은 `한 번만 사용할 수 있습니다`로 풀어 씀 |
+| cloud save | 클라우드 저장 데이터 | 계정의 저장 데이터 |
+| save | 저장 데이터 | |
+| sync | 동기화 | |
+| device | 기기 | |
+| join an account | 계정에 연결 / 연결 | 버튼은 `연결` |
+| combine saves / accounts | 합치기 | |
+| ways to sign in | 로그인 방법 | |
+| driver key | 드라이버 키 | 기존 용어 유지 |

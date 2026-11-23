@@ -50,8 +50,9 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
   python -P scripts/tracks/port_ac_track.py <id> --src path/to/<track folder>
 ```
 
-`<id>` can be one circuit, several separated by commas, or `all`. It writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`, adds the circuit to `public/tracks/index.json` and `scripts/tracks/tracks.json`, then runs the lap-time racing-line optimiser for the F1 and GT3 cars (`scripts/optimize-racing-line.ts`, a few minutes per circuit) and meshopt-compresses the GLB.
+`<id>` can be one circuit, several separated by commas, or `all`. It writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`, adds the circuit to `public/tracks/index.json` and `scripts/tracks/tracks.json`, then runs the lap-time racing-line optimiser for the F1 and GT3 cars (`scripts/ai/optimize-lines.ts`, which judges every candidate line on full physics laps: about 10 to 30 minutes per line, by the lap's length: Qiddiya's 8.2 km took 20-25) and meshopt-compresses the GLB.
 
+- One of the optimiser's starts is an optimal-control solve of a single-track car (`scripts/ai/mintime/solve.py`, CasADi + IPOPT, run through `uv`; its packages are fetched on the first run). Without `uv` on PATH it says so and works from the other starts.
 - `--no-line-opt` skips the optimiser. The circuit keeps the racing lines of its last build when the new centreline has as many samples; otherwise it gets the minimum-curvature line.
 - `--no-glb` writes only the track data. The optimiser needs the GLB, so it is skipped too and the lines are kept the same way.
 - `--no-compress` keeps the raw GLB.
@@ -179,5 +180,5 @@ A GLB and a `track_data.json` in `public/tracks/<id>/`:
 - Only port circuits you have the right to use. A mod's terms come with it, and a game's own assets usually can't be redistributed at all.
 - **Unlicensed or unauthorised mods are for local use only.** If a mod has no licence, or its author hasn't said you can use it, keep it on your own machine: don't commit it, upload it, host it or share it in any form.
 - **Releasing a ported circuit needs permission.** Before you publish one on your fork, your own site or anywhere else, get the author's permission, or check that its licence allows redistribution, and keep a record of it.
-- Keep ported content local by default. `public/tracks/` is gitignored apart from RISE Motordrome and `index.json`. Please don't open pull requests that add third-party circuits.
+- Keep ported content local by default. `public/tracks/` is gitignored apart from RISE Motordrome and `index.json`, so never commit a circuit's files. To get a circuit you have permission for into the game, open a pull request with its entries and a download link to the files, as [Get involved](GET-INVOLVED.md#bring-a-circuit-or-a-car) describes.
 - If you share a ported circuit anywhere, credit its author the way `CREDITS.md` does: title, author, link, licence, and what you changed.

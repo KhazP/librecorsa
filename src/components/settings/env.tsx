@@ -32,6 +32,8 @@ export interface SettingsEnv {
   onRenameDriver?: (name: string) => Promise<string | null>;
   /** Closes the menus onto the seat panel (only while driving) */
   onOpenSeatPanel?: () => void;
+  /** Opens the live HUD's layout editor in place of Settings (absent where there is no HUD to show, as in setup) */
+  onEditHudLayout?: () => void;
   /** Opens first-run setup again */
   onRunSetup?: () => void;
   /** The driver key: save it to a file, load it from one, and what the last try said */

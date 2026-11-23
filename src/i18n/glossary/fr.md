@@ -188,3 +188,18 @@
 | post | publier | Lap to the online board |
 | upload | envoyer | |
 | Lap times | Temps au tour | |
+
+## Accounts
+| English | French | Note |
+|---|---|---|
+| sign in / sign out | se connecter / se déconnecter | "Connexion" as noun |
+| account | compte | |
+| passkey | clé d’accès | Term used by Google, Apple, Microsoft |
+| code / one-time code | code (à usage unique) | "Utilisable une seule fois" |
+| cloud save | sauvegarde cloud | |
+| sync | synchroniser / synchronisation | |
+| device | appareil | |
+| join an account | rejoindre un compte | |
+| combine saves | fusionner les sauvegardes | |
+| sign-in method | méthode de connexion | |
+| driver key | clé de pilote | Unchanged |

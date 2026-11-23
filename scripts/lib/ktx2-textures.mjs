@@ -122,7 +122,44 @@ export function replaceImagesWithKtx2(glb, ktx2, { materialExtras = new Map(), i
     tex.extensions = { ...tex.extensions, [BASISU]: { source: image } };
   }
 
-  // Rebuild the binary chunk in the original order, each range on a 4-byte boundary
+  const bin = rebuildBin(json, glb.bin, imageViews);
+
+  for (const [m, extras] of materialExtras) json.materials[m].extras = { ...json.materials[m].extras, ...extras };
+  for (const [i, extras] of imageExtras) json.images[i].extras = { ...json.images[i].extras, ...extras };
+  if (assetExtras) json.asset.extras = { ...json.asset.extras, ...assetExtras };
+
+  const stillUsed = (name) => (json.textures ?? []).some((t) => t.extensions?.[name]);
+  for (const key of ["extensionsUsed", "extensionsRequired"]) {
+    const list = (json[key] ?? []).filter((e) => (e !== WEBP && e !== AVIF) || stillUsed(e));
+    if (!list.includes(BASISU)) list.push(BASISU);
+    json[key] = list;
+  }
+  return { json, bin };
+}
+
+/**
+ * The GLB with some images' bytes replaced in the same format (`images` maps image index → bytes): textures,
+ * materials and every other buffer view keep their indices and bytes.
+ *
+ * @param {{ json: any, bin: Buffer }} glb
+ * @param {Map<number, Buffer>} images
+ */
+export function replaceImages(glb, images) {
+  const json = structuredClone(glb.json);
+  const imageViews = new Map();
+  for (const [image, bytes] of images) {
+    const def = json.images[image];
+    if (def?.bufferView === undefined) throw new Error(`image ${image}: not stored in the GLB`);
+    imageViews.set(def.bufferView, bytes);
+  }
+  return { json, bin: rebuildBin(json, glb.bin, imageViews) };
+}
+
+/**
+ * The binary chunk rebuilt in its original order, each range on a 4-byte boundary, the views in `imageViews` (buffer
+ * view index → bytes) holding their new bytes; `json`'s buffer views and buffer length are updated in place to match.
+ */
+function rebuildBin(json, oldBin, imageViews) {
   const segments = binSegments(json).sort((a, b) => a.offset - b.offset || a.view - b.view);
   const parts = [];
   let length = 0;
@@ -135,7 +172,7 @@ export function replaceImagesWithKtx2(glb, ktx2, { materialExtras = new Map(), i
       if (seg.offset < lastEnd) throw new Error(`buffer view ${seg.view}: overlaps another view`);
       lastEnd = seg.offset + seg.length;
       const replacement = !seg.meshopt ? imageViews.get(seg.view) : undefined;
-      const bytes = replacement ?? glb.bin.subarray(seg.offset, seg.offset + seg.length);
+      const bytes = replacement ?? oldBin.subarray(seg.offset, seg.offset + seg.length);
       at = pad4(length);
       if (at > length) parts.push(Buffer.alloc(at - length));
       parts.push(bytes);
@@ -153,18 +190,7 @@ export function replaceImagesWithKtx2(glb, ktx2, { materialExtras = new Map(), i
   }
   const bin = Buffer.concat(parts, length);
   json.buffers[0].byteLength = bin.length;
-
-  for (const [m, extras] of materialExtras) json.materials[m].extras = { ...json.materials[m].extras, ...extras };
-  for (const [i, extras] of imageExtras) json.images[i].extras = { ...json.images[i].extras, ...extras };
-  if (assetExtras) json.asset.extras = { ...json.asset.extras, ...assetExtras };
-
-  const stillUsed = (name) => (json.textures ?? []).some((t) => t.extensions?.[name]);
-  for (const key of ["extensionsUsed", "extensionsRequired"]) {
-    const list = (json[key] ?? []).filter((e) => (e !== WEBP && e !== AVIF) || stillUsed(e));
-    if (!list.includes(BASISU)) list.push(BASISU);
-    json[key] = list;
-  }
-  return { json, bin };
+  return bin;
 }
 
 /**

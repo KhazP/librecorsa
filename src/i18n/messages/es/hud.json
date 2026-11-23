@@ -688,6 +688,8 @@
     "shiftDown": "Bajar marcha",
     "shiftUp": "Subir marcha",
     "boost": "Boost",
+    "overtake": "Adelantar",
+    "overtakeShort": "OT",
     "activeAero": "Aerodinámica activa",
     "headlights": "Faros",
     "brake": "Freno",
@@ -842,7 +844,8 @@
     "holdPace": "Mantén <n>{pace}</n> {unit} hasta la línea",
     "greenFlag": "Bandera verde",
     "lightsOut": "Semáforo apagado",
-    "chequeredFlag": "Bandera a cuadros"
+    "chequeredFlag": "Bandera a cuadros",
+    "reaction": "Reacción <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Motor apagado: mantén {control} o pon punto muerto para volver a arrancar",
@@ -867,8 +870,16 @@
     "overtakeLockedTitle": "Modo de adelantamiento ({keys}): se obtiene a menos de 1 s del auto de delante en el punto de detección, para la vuelta siguiente",
     "overtakeTitle": "Modo de adelantamiento ({keys})",
     "boostTitle": "Boost de anulación manual ({keys})",
+    "boost2026Title": "Boost ({keys}): mantiene o aumenta la potencia del motor eléctrico; en carrera hasta la potencia que tenía al pulsarlo, o 150 kW",
+    "boostLowGripTitle": "Boost ({keys}): condiciones de bajo agarre, así que solo evita que baje la potencia del motor eléctrico",
+    "overtake2026Title": "Adelantar ({key}): toda la potencia del motor eléctrico hasta 337 km/h durante el resto de la vuelta",
+    "overtake2026LockedTitle": "Adelantar ({key}): se obtiene a menos de 1 s del auto de delante en la línea de detección, para la vuelta desde la línea de activación",
+    "overtake2026AutoTitle": "Adelantar: lo está usando el adelantamiento automático; pulsa {key} para usarlo entero",
+    "overtakeLowGripTitle": "Condiciones de bajo agarre: la dirección de carrera desactivó Adelantar y el Straight Mode solo abre los alerones delanteros",
     "overtake": "Adelantar",
     "boost": "Boost",
+    "overtakeAuto": "Adelantar auto",
+    "lowGrip": "Bajo agarre",
     "harvest": "Recuperación",
     "deploy": "Despliegue",
     "ersSoc": "ERS SOC",
@@ -1062,5 +1073,24 @@
   "hiddenNote": {
     "off": "HUD oculto",
     "offKey": "HUD oculto · {key} para mostrar"
+  },
+  "hudEditor": {
+    "title": "Editar diseño del HUD",
+    "hint": "Arrastra un panel para moverlo. Arrastra su esquina, o desplázate sobre él, para cambiar su tamaño.",
+    "parts": {
+      "top-left": "Arriba a la izquierda",
+      "top-center": "Arriba al centro",
+      "top-right": "Arriba a la derecha",
+      "center-right": "Salida manual",
+      "center": "Radar",
+      "bottom-left": "Abajo a la izquierda",
+      "bottom-center": "Abajo al centro",
+      "bottom-right": "Abajo a la derecha"
+    },
+    "resetPart": "Restablecer",
+    "resize": "Arrastra para cambiar el tamaño",
+    "resetAll": "Restablecer diseño",
+    "cancel": "Cancelar",
+    "done": "Listo"
   }
 }

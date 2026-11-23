@@ -688,6 +688,8 @@
     "shiftDown": "Về số",
     "shiftUp": "Lên số",
     "boost": "Tăng lực",
+    "overtake": "Vượt",
+    "overtakeShort": "OT",
     "activeAero": "Khí động học chủ động",
     "headlights": "Đèn pha",
     "brake": "Phanh",
@@ -842,7 +844,8 @@
     "holdPace": "Giữ <n>{pace}</n> {unit} tới vạch",
     "greenFlag": "Cờ xanh lá",
     "lightsOut": "Tắt đèn xuất phát",
-    "chequeredFlag": "Cờ ca-rô"
+    "chequeredFlag": "Cờ ca-rô",
+    "reaction": "Phản xạ <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Chết máy: giữ {control} hoặc về số N để khởi động lại",
@@ -867,8 +870,16 @@
     "overtakeLockedTitle": "Chế độ vượt ({keys}): nhận được khi cách xe trước dưới 1 s tại điểm đo, dùng cho vòng tiếp theo",
     "overtakeTitle": "Chế độ vượt ({keys})",
     "boostTitle": "Tăng lực điện thủ công ({keys})",
+    "boost2026Title": "Tăng lực ({keys}): giữ hoặc tăng công suất mô-tơ điện; trong cuộc đua tối đa bằng công suất lúc nhấn, hoặc 150 kW",
+    "boostLowGripTitle": "Tăng lực ({keys}): điều kiện độ bám thấp, nên chỉ giữ công suất mô-tơ điện không giảm",
+    "overtake2026Title": "Vượt ({key}): giữ toàn bộ công suất mô-tơ điện đến 337 km/h trong phần còn lại của vòng",
+    "overtake2026LockedTitle": "Vượt ({key}): nhận được khi cách xe trước dưới 1 s tại vạch đo, dùng cho vòng tính từ vạch kích hoạt",
+    "overtake2026AutoTitle": "Vượt: Vượt tự động đang dùng; nhấn {key} để dùng toàn bộ công suất",
+    "overtakeLowGripTitle": "Điều kiện độ bám thấp: Ban điều hành đã tắt chế độ Vượt, và Straight Mode chỉ mở cánh gió trước",
     "overtake": "Vượt",
     "boost": "Tăng lực",
+    "overtakeAuto": "Vượt tự động",
+    "lowGrip": "Độ bám thấp",
     "harvest": "Thu hồi",
     "deploy": "Xả",
     "ersSoc": "Pin ERS",
@@ -1062,5 +1073,24 @@
   "hiddenNote": {
     "off": "Đã ẩn HUD",
     "offKey": "Đã ẩn HUD · {key} để hiện"
+  },
+  "hudEditor": {
+    "title": "Chỉnh bố cục HUD",
+    "hint": "Kéo một bảng để di chuyển. Kéo góc của bảng, hoặc cuộn trên bảng, để đổi kích thước.",
+    "parts": {
+      "top-left": "Trên bên trái",
+      "top-center": "Trên giữa",
+      "top-right": "Trên bên phải",
+      "center-right": "Quy trình xuất phát",
+      "center": "Radar",
+      "bottom-left": "Dưới bên trái",
+      "bottom-center": "Dưới giữa",
+      "bottom-right": "Dưới bên phải"
+    },
+    "resetPart": "Đặt lại",
+    "resize": "Kéo để đổi kích thước",
+    "resetAll": "Đặt lại bố cục",
+    "cancel": "Hủy",
+    "done": "Xong"
   }
 }

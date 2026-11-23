@@ -32,7 +32,7 @@ describe("nav-policy", () => {
   });
 
   it("routes external http(s) URLs to the system browser", () => {
-    assert.deepEqual(decideNavigation("https://github.com/KhazP/librecorsa"), {
+    assert.deepEqual(decideNavigation("https://github.com/librecorsa/librecorsa"), {
       allowInApp: false,
       openExternal: true,
     });

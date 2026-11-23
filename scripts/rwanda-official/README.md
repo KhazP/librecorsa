@@ -102,7 +102,9 @@ step with the ones one sees, and laps within 0.02 s of what it did without them.
 
 The road, the pit lane and the gravel wear scanned surfaces: Poly Haven's Asphalt Track, Asphalt Pit Lane and Gravel
 Floor 02 (CC0), each a 2 m tile with its normal map. `prep_scans.py` keeps a scan's grain and gives it the colour of
-the drawn texture it stands in for, so the circuit's tones stay; the materials repeat the tile (`bl_common.mat`'s
+the drawn texture it stands in for, so the circuit's tones stay, and takes the slow tilt out of its normal map (the
+asphalt's lit the road in a band every 2 m driving into a low sun; the game's model got the new maps through
+`node scripts/replace-glb-images.mjs`); the materials repeat the tile (`bl_common.mat`'s
 `tile`), and no mesh's texture coordinates change, as the game reads the gravel's and the kerbs' bumps from them.
 Grass, concrete and paint stay drawn.
 
@@ -137,8 +139,8 @@ node scripts/rwanda-official/post.mjs                # rwanda_official.glb: alph
 $PY scripts/rwanda-official/export_json.py           # both laps' track_data.json
 npx tsx scripts/rwanda-official/layout-limits.ts     # each lap's otherLayoutRoads: where the other lap's road leaves it
 for id in rwanda_official rwanda_official_short; do
-  npx tsx scripts/optimize-racing-line.ts --track $id --car f1
-  npx tsx scripts/optimize-racing-line.ts --track $id --car gt3
+  npx tsx scripts/ai/optimize-lines.ts --track $id --car f1 --write
+  npx tsx scripts/ai/optimize-lines.ts --track $id --car gt3 --write
   npx tsx scripts/ai/check-lines.ts --track $id --ceiling 1,1.04,1.08 --write
 done
 

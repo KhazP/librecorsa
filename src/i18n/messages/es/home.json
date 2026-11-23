@@ -113,6 +113,8 @@
       "addModText": "¿Hiciste un mod de auto o de circuito y quieres verlo en LibreCorsa? Escríbeme a <mail>{email}</mail> con un enlace. Cada modder recibe crédito con su nombre en el juego.",
       "modders": "Los modders",
       "moddersText": "Los circuitos y los autos son obra suya, usados con su permiso. Si te gusta alguno, puedes agradecérselo directamente a su autor.",
+      "contributors": "Colaboradores de código",
+      "contributorsText": "Su código forma parte del juego. Gracias.",
       "links": {
         "download": "Descargar apps",
         "press": "Toda la cobertura y el kit de prensa",
@@ -144,7 +146,7 @@
       },
       "price": {
         "label": "Precio",
-        "text": "Gratis. Sin cuenta ni anuncios; las propinas son opcionales y no desbloquean nada"
+        "text": "Gratis. Sin necesidad de cuenta ni anuncios; las propinas son opcionales y no desbloquean nada"
       }
     }
   },

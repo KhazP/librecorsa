@@ -158,4 +158,4 @@ Switch Settings to Advanced first. Once a wheel is connected, the Connection car
 - **A Thrustmaster wheel is refused**: a driver has to switch it out of its start-up mode first (Thrustmaster's own on Windows), which the browser can't do.
 - **Connected, but the rim doesn't move**: check the wheel's centring spring is off, and press Test. Then set Damping to 100 % and turn the rim by hand. If it feels heavier, the wheel takes effects and the problem is the steering force itself, so send a report.
 - **Taken over** (bridge): another tab took the wheel. Close it, or switch force feedback off and on.
-- **Reporting it**: press **Copy diagnostics** in the Connection card and add the text to a [wheel report](https://github.com/KhazP/librecorsa/issues/new?template=wheel-report.yml). A report moves a wheel into the table.
+- **Reporting it**: press **Copy diagnostics** in the Connection card and add the text to a [wheel report](https://github.com/librecorsa/librecorsa/issues/new?template=wheel-report.yml). A report moves a wheel into the table.

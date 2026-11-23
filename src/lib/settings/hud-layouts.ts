@@ -42,6 +42,9 @@ export const BUILT_IN_HUD_LAYOUTS = [
   { id: "telemetry", get label() { return t("game.hudLayouts.telemetry"); }, get detail() { return t("game.hudLayouts.telemetryDetail"); } },
   { id: "classic", get label() { return t("game.hudLayouts.classic"); }, get detail() { return t("game.hudLayouts.classicDetail"); } },
   { id: "minimal", get label() { return t("game.hudLayouts.minimal"); }, get detail() { return t("game.hudLayouts.minimalDetail"); } },
+  // Laid out the way a road-racing game and a Formula game lay out their race screens, drawn in the game's own look
+  { id: "touring", get label() { return t("game.hudLayouts.touring"); }, get detail() { return t("game.hudLayouts.touringDetail"); } },
+  { id: "formula", get label() { return t("game.hudLayouts.formula"); }, get detail() { return t("game.hudLayouts.formulaDetail"); } },
 ] as const satisfies readonly HudLayoutInfo[];
 
 /** Layouts recreated from other open-source HUD projects, credited to their authors */
@@ -113,11 +116,14 @@ export function showsPhoneHud(preset: HudPreset, screen: { phone: boolean; touch
   return screen.phone || (screen.touchControls && !hudLayout(preset).credit);
 }
 
+/** A layout id this build has */
+export const isHudPreset = (value: unknown): value is HudPreset => HUD_PRESETS.includes(value as HudPreset);
+
 /**
  * A saved layout id as this build reads it: a known id is kept, "engineer" (renamed) moves to Telemetry, and
  * anything else (an older or newer build's layout, a hand-edited save) falls back to Broadcast
  */
 export function parseHudPreset(value: unknown): HudPreset {
   if (value === "engineer") return "telemetry";
-  return HUD_PRESETS.includes(value as HudPreset) ? (value as HudPreset) : DEFAULT_HUD_PRESET;
+  return isHudPreset(value) ? value : DEFAULT_HUD_PRESET;
 }

@@ -113,6 +113,8 @@
       "addModText": "Bir araç veya pist modu yaptın ve LibreCorsa’da görmek mi istiyorsun? Bağlantısıyla birlikte bana <mail>{email}</mail> adresinden e-posta gönder. Her mod yapımcısı oyunda adıyla anılır.",
       "modders": "Mod yapımcıları",
       "moddersText": "Pistler ve araçlar onların emeği, izinleriyle kullanılıyor. Beğendiğin bir iş varsa yapımcısına doğrudan teşekkür edebilirsin.",
+      "contributors": "Koda katkıda bulunanlar",
+      "contributorsText": "Kodları oyunun bir parçası. Teşekkürler.",
       "links": {
         "download": "Uygulamaları indir",
         "press": "Tüm haberler ve basın kiti",
@@ -144,7 +146,7 @@
       },
       "price": {
         "label": "Fiyat",
-        "text": "Ücretsiz. Hesap yok, reklam yok; bağışlar isteğe bağlıdır ve oyunda hiçbir şeyin kilidini açmaz"
+        "text": "Ücretsiz. Hesap gerekmez, reklam yok; bağışlar isteğe bağlıdır ve hiçbir şeyin kilidini açmaz"
       }
     }
   },

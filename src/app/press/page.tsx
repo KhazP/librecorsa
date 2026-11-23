@@ -65,7 +65,7 @@ const FACTS: [string, React.ReactNode][] = [
   [
     "Source",
     <a key="src" href={REPO_URL} translate="no" className={TEXT_LINK}>
-      github.com/KhazP/librecorsa
+      github.com/librecorsa/librecorsa
     </a>,
   ],
 ];

@@ -113,6 +113,8 @@
       "addModText": "Vous avez créé un mod de voiture ou de circuit et vous voulez le voir dans LibreCorsa ? Écrivez-moi à <mail>{email}</mail> avec un lien. Chaque moddeur est crédité par son nom dans le jeu.",
       "modders": "Les moddeurs",
       "moddersText": "Les circuits et les voitures sont leur travail, utilisés avec leur autorisation. Si l’un d’eux vous plaît, vous pouvez remercier directement son auteur.",
+      "contributors": "Contributeurs au code",
+      "contributorsText": "Leur code fait partie du jeu. Merci.",
       "links": {
         "download": "Télécharger les apps",
         "press": "Toute la couverture et le kit presse",
@@ -144,7 +146,7 @@
       },
       "price": {
         "label": "Prix",
-        "text": "Gratuit. Sans compte ni publicité ; les dons sont facultatifs et ne débloquent rien"
+        "text": "Gratuit. Aucun compte requis, sans publicité ; les dons sont facultatifs et ne débloquent rien"
       }
     }
   },

@@ -1,5 +1,6 @@
 "use client";
 
+import { ersButtons } from "./hud/ers-buttons";
 import { connectedPads, isLikelyWheel } from "@/lib/input/device-input";
 import type { NowPlaying } from "@/lib/audio/bgm-controller";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -34,6 +35,7 @@ import { StartLights } from "./hud/StartLights";
 import { QualifyingClock, QualifyingGrid } from "./hud/QualifyingHud";
 import { LaunchCue } from "./hud/LaunchCue";
 import { PauseMenu } from "./hud/PauseMenu";
+import { HudEditor } from "./hud/HudEditor";
 import { CameraToast } from "./hud/CameraToast";
 import { F12026ChannelsPanel } from "./hud/F12026ChannelsPanel";
 import { MultiPageMfd } from "./hud/MultiPageMfd";
@@ -75,6 +77,8 @@ import { HeadToHeadHud } from "./hud/styles/HeadToHeadHud";
 import { RetroHud } from "./hud/styles/RetroHud";
 import { BlocksHud } from "./hud/styles/BlocksHud";
 import { GrandPrixHud } from "./hud/styles/GrandPrixHud";
+import { GtLikeHud } from "./hud/styles/GtLikeHud";
+import { F1LikeHud } from "./hud/styles/F1LikeHud";
 import { HudRunProvider } from "./hud/styles/third-party-parts";
 import {
   HudSkinProvider,
@@ -88,7 +92,8 @@ import {
   thirdPartySkinOf,
 } from "./hud/styles/third-party-skin";
 import { useUiZoom } from "@/lib/ui-zoom";
-import { buildHudMap, revRangeOf, useLapInvalid, type HudDesignProps } from "./hud/styles/hud-style-parts";
+import { anchor, buildHudMap, revRangeOf, setActiveHudParts, useLapInvalid, type HudDesignProps } from "./hud/styles/hud-style-parts";
+import { hudPartsKey, withLayoutParts, type HudLayoutParts } from "@/lib/settings/hud-parts";
 import type { BoardWidgetMode, HudPreset } from "@/lib/settings/player-settings";
 import { showsPhoneHud } from "@/lib/settings/hud-layouts";
 import { BoardWidget, useLargeScreen } from "./hud/BoardWidget";
@@ -130,6 +135,9 @@ const HUD_STYLES: Partial<Record<HudPreset, HudStyleDef>> = {
   retro: { component: RetroHud, bottomClearance: 292, ownsBottomLeft: true, mfdFolded: true, topClearance: 120, ownDeltaBar: true, ownRadar: true, ownDamage: true },
   blocks: { component: BlocksHud, bottomClearance: 200, ownsBottomLeft: true, mfdFolded: true, topClearance: 124, ownDeltaBar: true, ownRadar: true },
   "grand-prix": { component: GrandPrixHud, bottomClearance: 120, ownsBottomLeft: true, ownTrace: true, mfdFolded: true, ownDeltaBar: true, ownRadar: true },
+  // The game's own layouts after a road-racing game's and a Formula game's race screens
+  touring: { component: GtLikeHud, bottomClearance: 228, ownsBottomLeft: true, mfdFolded: true, topClearance: 58, ownDeltaBar: true },
+  formula: { component: F1LikeHud, bottomClearance: 160, ownsBottomLeft: true, mfdFolded: true, ownDeltaBar: true, ownDamage: true },
 };
 /** Every preset gives way to the Phone HUD on a phone-sized screen, and the game's own wherever the touch controls are up (`showsPhoneHud`) */
 const PHONE_STYLE: HudStyleDef = { component: PhoneHud, bottomClearance: 16 };
@@ -209,6 +217,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onToggleAiAutopilot: () => void;
   onToggleXMode: () => void;
   onToggleBoostLatch: () => void;
+  /** Use the Overtake earned in a race, or stop using it (a 2026 F1 car) */
+  onOvertake?: () => void;
   onChangeLiveTuner?: (patch: LiveTunerPatch) => void;
   onToggleMouseSteer?: () => void;
   onResetCar: (flyingStart: boolean) => void;
@@ -257,6 +267,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** On-screen pedals and steering (touch screens) */
   touchControls?: TouchControlsProps | null;
   displayPanel?: DisplayPanelProps;
+  /** Settings > Display > HUD > Edit layout is open over this HUD: the layout's parts are moved here, then it closes */
+  hudEditor?: { onClose: () => void } | null;
   leaderboardPanel?: LeaderboardPanelProps;
   /** Air / track temperature and the track's wetness (weather.ts) */
   weather?: WeatherHudState | null;
@@ -305,7 +317,7 @@ function useAeroNotice(t: CarTelemetry): AeroNotice | null {
 function touchCarState(t: CarTelemetry, lights: boolean): TouchCarState {
   const channels = t.f12026;
   const aero = aeroReadout(t);
-  const overtakeLocked = t.overtakingRules === "straight-mode-2026" && t.overtakeAvailable === false;
+  const ersCtl = ersButtons(t);
   // TouchControls only branches on |speed| < 5 (offer reverse) and |speed| > 15 (driven off) and gear < 0: bucket them
   // so TouchControls memoization holds across every frame of normal driving instead of re-rendering at 20 Hz.
   const absSpeed = Math.abs(t.speedKmh);
@@ -316,8 +328,9 @@ function touchCarState(t: CarTelemetry, lights: boolean): TouchCarState {
     aeroOpen: aero.open,
     // A car without the DRS channel cannot say where the flaps may open: its button never looks unusable
     aeroArmed: aero.armed || !channels,
-    boostOn: !overtakeLocked && t.manualOverrideActive,
-    boostLocked: overtakeLocked,
+    boostOn: ersCtl.boostOn,
+    boostLocked: ersCtl.boostLocked,
+    overtake: ersCtl.overtake,
     gear: t.gear < 0 ? -1 : 1,
     speedKmh: speedBand,
     runId: t.runId ?? 0,
@@ -423,13 +436,28 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const podiumStage = props.raceEnd?.podium.stage;
   const podiumUp = podiumStage === "playing";
   const showResults = raceState(race).classified && !props.resultsClosed && podiumStage !== "waiting" && !podiumUp;
+  // The layout editor: the HUD stays on screen but takes no input, and draws the editor's copy of the layout's parts
+  // until Done saves it
+  const editMode = Boolean(props.hudEditor);
+  const hudRootRef = useRef<HTMLDivElement | null>(null);
+  const [draftParts, setDraftParts] = useState<HudLayoutParts | null>(null);
+  // Kept per layout drawn: a phone's HUD (or the touch pads') has its own, apart from the layout it stands in for
+  const partsKey = hudPartsKey(preset, phone);
+  const savedParts = hud?.parts?.[partsKey];
+  const layoutParts = editMode ? (draftParts ?? savedParts) : savedParts;
+  setActiveHudParts(layoutParts);
   // Paused or in a replay, the HUD stays mounted (folds, lap history and timers carry on) but hides and takes no input;
   // the results card owns the D-pad and keys while it is up
-  const hudMode: HudMode = paused || props.seatPanel || props.replay || podiumUp ? "hidden" : showResults ? "results" : "live";
+  const hudMode: HudMode = editMode || paused || props.seatPanel || props.replay || podiumUp ? "hidden" : showResults ? "results" : "live";
   const hudModeRef = useRef(hudMode);
   hudModeRef.current = hudMode;
   // The HUD pad button (R3 by default) clears every panel off the screen; start lights and alerts stay
   const [hudHidden, setHudHidden] = useState(false);
+  // The editor opens on the HUD with every panel up, from the layout as saved
+  useEffect(() => {
+    if (editMode) setHudHidden(false);
+    else setDraftParts(null);
+  }, [editMode]);
   const [hiddenNote, setHiddenNote] = useState(false);
   useEffect(() => {
     const toggle = () => {
@@ -551,7 +579,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               : showDelta
                 ? 124
                 : 52
-            : (style?.topClearance ?? 0);
+            : preset === "touring" && lightsPhase
+              ? 0
+              : (style?.topClearance ?? 0);
   // Touch screens have no Esc key: a Menu button opens the pause menu
   const menuButton = (
     <span className="pointer-events-auto hidden pointer-coarse:block">
@@ -571,9 +601,6 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       )}
     </span>
   );
-  /** Scales a corner group of the HUD about that corner */
-  const corner = (origin: string): React.CSSProperties | undefined =>
-    scale === 1 ? undefined : { transform: `scale(${scale})`, transformOrigin: origin };
   // Classic and Telemetry fill both right-hand corners, and on a laptop Broadcast's sits over the pod, so the MFD starts as its status pill there
   // The lap summary toast lifts itself above anything marked data-hud-avoid
   const mfdNode = (
@@ -591,7 +618,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     </div>
   );
 
-  const hidden = hudMode === "hidden";
+  // Inert as well as invisible, except under the layout editor, which shows it
+  const hidden = hudMode === "hidden" && !editMode;
   // The off-track edge glow is drawn into the frame (the last render pass), not as a page layer over the canvas; it
   // hides with the HUD and during the start lights
   const offTrackGlow = telemetry.offTrack && !lightsPhase && !hidden;
@@ -616,14 +644,24 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     {/* The corner groups keep clear of a notch and the home indicator, and past 2.4:1 (a 32:9 screen) they keep to
         a centred frame instead of the far edges. What belongs to the whole window is fixed to it instead. */}
     <div
-      inert={hidden}
+      ref={hudRootRef}
+      inert={hudMode === "hidden"}
       dir="ltr"
       className={`lc-safe-frame pointer-events-none fixed z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4 ${hidden ? "invisible" : ""} ${skinRootClass(thirdPartySkin) ?? ""}`}
     >
-      {/* Proximity radar: centred just under the horizon, invisible until a car is within 25 m */}
+      {/* Proximity radar: centred just under the horizon, invisible until a car is within 25 m (shown with a sample blip in HUD edit mode) */}
       {hud?.radar !== false && !style?.ownRadar && !hudHidden && !lightsPhase && !phone ? (
-        <div className="absolute top-[58%] left-1/2 -translate-x-1/2 -translate-y-1/2">
-          <ProximityRadar blips={telemetry.radar} />
+        <div
+          className="absolute top-[58%] left-1/2 -translate-x-1/2 -translate-y-1/2"
+          style={anchor(undefined, "center")}
+        >
+          <ProximityRadar
+            blips={
+              editMode && (!telemetry.radar || telemetry.radar.length === 0)
+                ? [{ x: 2.2, z: -1.2, yaw: 0, color: "#ef4444" }]
+                : telemetry.radar
+            }
+          />
         </div>
       ) : null}
       {/* A full-screen style (Broadcast, Wheel Dash, Telemetry, a third-party layout): one layer. The run's laps, fuel
@@ -651,10 +689,11 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           showDeltaBar={showDelta}
           showRadar={showRadar}
           cameraMode={cameraMode}
+          carId={props.carId}
         />
       ) : (
         /* Classic / Minimal top-left: timing tower (race) and lap timing */
-        <div className="absolute top-3 start-3 flex flex-col gap-2 sm:top-4 sm:start-4" style={corner("top left")}>
+        <div className="absolute top-3 start-3 flex flex-col gap-2 sm:top-4 sm:start-4" style={anchor(scale, "top left")}>
           {race ? <TimingTower race={race} trackCode={trackInfo.country.slice(0, 3).toUpperCase()} gaps={hud?.towerGaps} /> : null}
           <LapPanel telemetry={telemetry} deltaS={deltaS} variant={minimal ? "minimal" : "full"} lapInvalid={lapInvalid} />
           {leftNode}
@@ -686,10 +725,10 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               : undefined
         }
       >
-      <div className="flex flex-col items-center gap-2" style={corner("top center")}>
+      <div className="flex flex-col items-center gap-2" style={anchor(scale, "top center")}>
         {/* The touch controls carry their own pause button */}
         {style && !touch ? menuButton : null}
-        <StartLights race={race} />
+        <StartLights race={race} reactionMs={telemetry.startReactionMs} />
         {telemetry.qualifying ? <QualifyingClock q={telemetry.qualifying} /> : null}
         {/* The grid qualifying set, while it stands before the first red light */}
         {lightsPhase && race?.qualifying && race.countdownS ? <QualifyingGrid rows={race.qualifying} /> : null}
@@ -831,7 +870,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       {/* A manual start's checklist on the right edge, between the right-hand corners, as the F1 games place it: the
           centre stays the lights' own */}
       <div className="pointer-events-none absolute top-1/2 end-3 -translate-y-1/2 sm:end-4">
-        <div style={corner("center right")}>
+        <div style={anchor(scale, "center right")}>
           <LaunchCue telemetry={telemetry} hudHidden={hudHidden} />
         </div>
       </div>
@@ -840,7 +879,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       <>
       {/* Classic / Minimal top-right: circuit map, and on touch screens (no Esc key) a button for the pause menu */}
       {!style ? (
-        <div className="pointer-events-auto absolute top-3 end-3 flex flex-col items-end gap-2 sm:top-4 sm:end-4" style={corner("top right")}>
+        <div className="pointer-events-auto absolute top-3 end-3 flex flex-col items-end gap-2 sm:top-4 sm:end-4" style={anchor(scale, "top right")}>
           {menuButton}
           <div className={showMap ? "hidden md:block" : "hidden"}>
             <TrackMinimap track={track} telemetry={telemetry} onSelectTurn={props.onSelectTurn} />
@@ -850,7 +889,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
       {/* Bottom-left: 4-corner tyre matrix, LibreCorsa badge, and key hints */}
       {/* data-hud-floor: the lap board above this corner keeps clear of it */}
-      <div data-hud-floor className="absolute bottom-3 start-3 flex flex-col items-start gap-2 sm:bottom-4 sm:start-4" style={corner("bottom left")}>
+      <div data-hud-floor className="absolute bottom-3 start-3 flex flex-col items-start gap-2 sm:bottom-4 sm:start-4" style={anchor(scale, "bottom left")}>
         {showFfb && props.ffbMeter ? <FfbMeter {...props.ffbMeter} /> : null}
         {/* Classic's centred speed cluster spans a phone's width, so the tyre matrix waits for tablet width */}
         {showTyres ? (
@@ -897,7 +936,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       {/* Classic / Minimal bottom-right: Live Tuner MFD, engineering channels (when active); Minimal's speed pills sit here too */}
       {/* Only without a full-screen style: a style draws its own MFD, and a second (hidden) one would still take the D-pad */}
       {!style ? (
-      <div className="absolute end-3 bottom-3 flex flex-col items-end gap-2 sm:end-4 sm:bottom-4" style={corner("bottom right")}>
+      <div className="absolute end-3 bottom-3 flex flex-col items-end gap-2 sm:end-4 sm:bottom-4" style={anchor(scale, "bottom right")}>
         <div className="hidden sm:block">
           {mfdNode}
         </div>
@@ -912,6 +951,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             telemetry={telemetry}
             boostLatch={boostLatch}
             onToggleBoostLatch={props.onToggleBoostLatch}
+            onOvertake={props.onOvertake}
             onToggleXMode={props.onToggleXMode}
             variant="minimal"
           />
@@ -925,7 +965,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         className="absolute bottom-3 left-1/2 -translate-x-1/2 sm:bottom-4"
         style={style ? { bottom: Math.round(style.bottomClearance * scale) } : undefined}
       >
-        <div className="flex flex-col items-center gap-2" style={corner("bottom center")}>
+        <div className="flex flex-col items-center gap-2" style={anchor(scale, "bottom center")}>
           {showTrace ? (() => {
             const p = pedalLayers(telemetry);
             return (
@@ -952,6 +992,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               telemetry={telemetry}
               boostLatch={boostLatch}
               onToggleBoostLatch={props.onToggleBoostLatch}
+              onOvertake={props.onOvertake}
               onToggleXMode={props.onToggleXMode}
               variant="full"
             />
@@ -1035,7 +1076,21 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       </div>
     ) : null}
 
-    {paused ? (
+    {editMode ? (
+      <HudEditor
+        parts={layoutParts ?? {}}
+        hudRootRef={hudRootRef}
+        onChange={setDraftParts}
+        onDone={() => {
+          const next = draftParts;
+          if (next) props.displayPanel?.onChangeSettings((st) => ({ ...st, hud: { ...st.hud, parts: withLayoutParts(st.hud.parts, partsKey, next) } }));
+          props.hudEditor?.onClose();
+        }}
+        onCancel={() => props.hudEditor?.onClose()}
+      />
+    ) : null}
+
+    {paused && !editMode ? (
       <PauseMenu
         {...props}
         mouseSteerEnabled={mouseSteerEnabled}

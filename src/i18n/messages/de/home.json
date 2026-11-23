@@ -113,6 +113,8 @@
       "addModText": "Du hast eine Auto- oder Streckenmod gebaut und möchtest sie in LibreCorsa sehen? Schreib mir eine E-Mail an <mail>{email}</mail> mit einem Link dazu. Jeder Modder wird im Spiel namentlich genannt.",
       "modders": "Die Modder",
       "moddersText": "Die Strecken und Autos sind ihr Werk und werden mit ihrer Erlaubnis verwendet. Wenn dir eines gefällt, kannst du dich direkt beim Macher bedanken.",
+      "contributors": "Code-Mitwirkende",
+      "contributorsText": "Ihr Code steckt im Spiel. Danke!",
       "links": {
         "download": "Apps herunterladen",
         "press": "Alle Berichte und das Pressekit",
@@ -144,7 +146,7 @@
       },
       "price": {
         "label": "Preis",
-        "text": "Kostenlos. Kein Konto und keine Werbung; Spenden sind freiwillig und schalten nichts frei"
+        "text": "Kostenlos. Kein Konto nötig und keine Werbung; Spenden sind freiwillig und schalten nichts frei"
       }
     }
   },

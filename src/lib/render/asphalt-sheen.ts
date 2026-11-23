@@ -22,6 +22,16 @@ export interface RacingLineMask {
 const MASK_MARGIN_M = 40;
 /** Normal bump strength multiplier on the aggregate noise (dimensionless gradient scale) */
 const AGGREGATE_NORMAL_SCALE = 0.3;
+/**
+ * Dry asphalt roughness off the racing line, a floor under the material's own value. The aggregate bump fades out
+ * a few metres from the camera, so past that the road is one flat normal and this number alone sets its sheen.
+ */
+const DRY_ROUGHNESS = 0.86;
+/**
+ * Roughness on the rubbered-in line. It was 0.32: driving into a low sun, the line's GGX highlight came out tens of
+ * times over the bloom threshold, a white streak down the road. 0.6 keeps a bright sheen into the sun.
+ */
+const RUBBER_ROUGHNESS = 0.6;
 
 const maskCache = new WeakMap<BuiltTrackData, Map<string, RacingLineMask>>();
 
@@ -186,7 +196,7 @@ export function createRacingLineMask(
 }
 
 /**
- * Patches a MeshStandardMaterial in place: rubber-dependent roughness (0.78 -> 0.32) and darkening (x0.85),
+ * Patches a MeshStandardMaterial in place: rubber-dependent roughness (at least 0.86 -> 0.6) and darkening (x0.85),
  * plus a world-space aggregate normal bump (3 cm + 12 cm value noise, faded by pixel footprint and distance).
  * Rain (`setAsphaltWetness`) darkens the asphalt and drops its roughness towards a wet gloss, patchy at metre scale.
  * Idempotent per material: calling it again simply replaces the earlier patch.
@@ -206,7 +216,7 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
     shader.vertexShader = patchShader(shader.vertexShader, VERTEX_PATCHES, "asphalt");
     shader.fragmentShader = patchShader(shader.fragmentShader, FRAGMENT_PATCHES, "asphalt");
   };
-  material.customProgramCacheKey = () => "asphalt-sheen-v4";
+  material.customProgramCacheKey = () => "asphalt-sheen-v5";
   material.needsUpdate = true;
 }
 
@@ -290,7 +300,7 @@ const FRAGMENT_PATCHES: readonly Patch[] = [
 		"#include <roughnessmap_fragment>",
 		/* glsl */ `
 float lc26Rubber = texture2D( uRubberMask, ( vLc26WorldPos.xz - uMaskMin ) / uMaskSize ).r;
-float roughnessFactor = mix( 0.78, 0.32, lc26Rubber );
+float roughnessFactor = mix( max( roughness, ${DRY_ROUGHNESS.toFixed(2)} ), ${RUBBER_ROUGHNESS.toFixed(2)}, lc26Rubber );
 #ifdef USE_ROUGHNESSMAP
 	// The map's variation only nudges the result
 	roughnessFactor *= mix( 1.0, texture2D( roughnessMap, vRoughnessMapUv ).g, 0.35 );

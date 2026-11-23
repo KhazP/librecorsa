@@ -129,3 +129,20 @@
 | physics / physics version | fisika / versi fisika | — |
 | post / upload | kirim / unggah | Mengirim/mengunggah catatan lap ke papan waktu lap daring |
 | Lap times | Waktu Lap | Layar daftar waktu lap |
+
+## Accounts
+
+| English | Bahasa Indonesia | Catatan |
+|---|---|---|
+| account | akun | — |
+| sign in / signed in | masuk / sudah masuk | Seperti Google dan Microsoft; bukan *login* |
+| sign out | keluar | — |
+| way to sign in | cara masuk | Discord, Google, Steam, passkey |
+| passkey | passkey | Dipakai apa adanya oleh Google dan Apple di Indonesia |
+| code / one-time code | kode / hanya bisa dipakai sekali | — |
+| cloud save | simpanan cloud | — |
+| sync / synced | sinkronkan / tersinkron | — |
+| device | perangkat | — |
+| join an account | gabung ke akun | — |
+| combine saves | gabungkan simpanan | — |
+| driver key | kunci pembalap | Istilah lama |
