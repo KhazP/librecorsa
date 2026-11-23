@@ -1,0 +1,819 @@
+/**
+ * Checks the game's side of player accounts (src/lib/account): which stored data follows the account and which stays
+ * on the device (every key and every PlayerSettings field placed), reading a save from storage and writing it back,
+ * every combine rule, the first-sync decision, the sync engine against a fake server (push, pull, 409, a folded
+ * account's save, ghosts by hash), the sign-in return's notice, the device label, and that nothing happens with
+ * accounts off.
+ * Run: node scripts/run-verify.mjs account-sync
+ */
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { STORAGE_KEYS, STORAGE_PREFIXES } from "../src/components/settings/storage";
+import {
+  DEFAULT_AUDIO_SETTINGS,
+  DEFAULT_INTERFACE_SETTINGS,
+  DEFAULT_PLAYER_SETTINGS,
+  SETTINGS_STORAGE_KEY,
+} from "../src/lib/settings/player-settings";
+import { GARAGE_PRESETS_MAX } from "../src/lib/sim/car-setup";
+import { RACE_HISTORY_MAX } from "../src/lib/sim/race-history";
+import { parseOnlineConfig } from "../src/lib/net/online-config";
+import { AUTH_RESULTS, type AccountInfo, type CloudBestLap, type SaveDoc } from "../src/lib/account/api-types";
+import {
+  ACCOUNT_SETTINGS_FIELDS,
+  AUDIO_SPLIT,
+  KEY_CLASSES,
+  PRESETS_MAX,
+  SETTINGS_KEY,
+  SETTINGS_SPLIT,
+  SYNC_STATE_KEY,
+  UI_SPLIT,
+  apply,
+  classifyKey,
+  collect,
+  combinePresets,
+  combineRaceHistory,
+  combineSaves,
+  emptySave,
+  emptySyncState,
+  firstSyncDecision,
+  isEmptySave,
+  parseSyncState,
+  pickSide,
+  readSaveDoc,
+  summarizeSave,
+  type StorageLike,
+  type SyncState,
+} from "../src/lib/account/save-model";
+import { createAccountApi } from "../src/lib/account/account-api";
+import { BUSY, MAX_TRIES, NEWER_SAVE, createSyncEngine, sha256Hex, type LocalGhosts } from "../src/lib/account/sync-engine";
+import { AUTH_NOTICES, deviceLabelFor, readAuthReturn } from "../src/lib/account/account-text";
+import {
+  PUSH_DELAY_MS,
+  accountActions,
+  createAccountStore,
+  getAccountState,
+  safeReturnPath,
+  type AccountStoreEnv,
+  type FirstSyncChoice,
+} from "../src/lib/account/account-store";
+
+let passed = 0;
+let failed = 0;
+function check(name: string, ok: boolean, detail = ""): void {
+  if (ok) {
+    passed++;
+    console.log(`  ok  ${name}`);
+  } else {
+    failed++;
+    console.error(`FAIL  ${name}${detail ? `: ${detail}` : ""}`);
+  }
+}
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const sorted = (xs: Iterable<string>) => [...xs].sort();
+
+/** localStorage in memory */
+function memoryStorage(init: Record<string, string> = {}): StorageLike & { data: Map<string, string> } {
+  const data = new Map(Object.entries(init));
+  return {
+    data,
+    get length() {
+      return data.size;
+    },
+    key: (i) => [...data.keys()][i] ?? null,
+    getItem: (k) => data.get(k) ?? null,
+    setItem: (k, v) => void data.set(k, String(v)),
+    removeItem: (k) => void data.delete(k),
+  };
+}
+
+const settingsWith = (patch: Record<string, unknown>) => JSON.stringify({ ...structuredClone(DEFAULT_PLAYER_SETTINGS), ...patch });
+const preset = (id: string, name: string, savedAt: number, aero = "medium") => ({ id, name, savedAt, vehicle: "lc26", chassis: { a: 1 }, aero });
+const race = (id: string, atMs: number, final = true) => ({ id, atMs, trackId: "t", carId: "lc26", kind: "ai_race", grid: 1, finish: 1, fieldSize: 4, bestLapMs: 90_000, raceTimeS: 300, penaltyS: 0, final });
+const lapRef = (lapTimeMs: number, ghost: string): CloudBestLap => ({ trackId: "t", vehicle: "lc26", lapTimeMs, recordedAt: 1, ghost });
+const sha = (c: string) => c.repeat(64);
+const doc = (patch: Partial<SaveDoc>): SaveDoc => ({ ...emptySave(10, "test"), ...patch });
+
+function main1(): void {
+  console.log("What is stored where");
+  {
+    const missing = STORAGE_KEYS.filter((k) => !(k.key in KEY_CLASSES)).map((k) => k.key);
+    check("every key Settings lists (storage.ts STORAGE_KEYS) is placed", missing.length === 0, missing.join(", "));
+    const sample = (k: string) => k.replace(/<[^>]+>/g, "x");
+    const wrong = Object.entries(KEY_CLASSES).filter(([k, cls]) => classifyKey(sample(k)) !== cls);
+    check("each placed key and family classifies as placed", wrong.length === 0, wrong.map(([k]) => k).join(", "));
+    check("every placed key is under one of the game's prefixes", Object.keys(KEY_CLASSES).every((k) => STORAGE_PREFIXES.some((p) => k.startsWith(p))));
+
+    // Every key the game's code names under its prefixes, read from the source: a new key there must be placed
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path);
+        else if (/\.(ts|tsx)$/.test(name)) files.push(path);
+      }
+    };
+    walk(join(__dirname, "..", "src"));
+    const unplaced = new Set<string>();
+    let seen = 0;
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      for (const m of text.matchAll(/["'`]((?:bugesera|librecorsa|lc)\.[A-Za-z0-9_.-]*)/g)) {
+        const key = m[1];
+        if (key === "librecorsa.org" || STORAGE_PREFIXES.includes(key as (typeof STORAGE_PREFIXES)[number])) continue;
+        seen++;
+        // A template literal's head ("lc.garage.presets.") stands for its family
+        if (classifyKey(key.endsWith(".") ? `${key}x` : key) === null) unplaced.add(key);
+      }
+    }
+    check(`every storage key named in src (${seen} mentions) is placed`, seen > 30 && unplaced.size === 0, [...unplaced].join(", "));
+
+    const synced = Object.entries(KEY_CLASSES).filter(([, c]) => c === "synced").map(([k]) => k);
+    check(
+      "the synced keys are the plan's",
+      same(sorted(synced), sorted([
+        "bugesera.settings.v1",
+        "bugesera.tyreSetup",
+        "bugesera.tyreSetup.<car>",
+        "lc.garage.chassis.<car>",
+        "lc.garage.presets.<car>",
+        "librecorsa.carSkins",
+        "librecorsa.raceHistory",
+        "librecorsa.f1ModPhysics",
+        "bugesera.vehicle",
+        "bugesera.track",
+      ])),
+      synced.join(", ")
+    );
+    const rebuilt = Object.entries(KEY_CLASSES).filter(([, c]) => c === "rebuilt").map(([k]) => k);
+    check("the rebuilt keys are the plan's", same(sorted(rebuilt), sorted(["librecorsa.bestLapSummaries.v1", "librecorsa.bestLapsUpdatedAt", "lc.boardBest", "lc.challengeBest"])));
+    check(
+      "credentials, hardware and one-time prompts stay on the device",
+      ["bugesera.driverKey", "bugesera.turn", "lc.roomHostToken", "bugesera.gpu", "bugesera.rumble", "bugesera.onboarded", "librecorsa.adminKey", SYNC_STATE_KEY, "librecorsa.ai-learn.v1.t.c.d"].every((k) => classifyKey(k) === "device")
+    );
+    check("a key the game doesn't know is never synced", classifyKey("librecorsa.somethingNew") === null && classifyKey("other.key") === null);
+    check("the settings key and limits agree with the game's", SETTINGS_KEY === SETTINGS_STORAGE_KEY && PRESETS_MAX === GARAGE_PRESETS_MAX && RACE_HISTORY_MAX === 50);
+
+    check("every PlayerSettings field is placed", same(sorted(Object.keys(SETTINGS_SPLIT)), sorted(Object.keys(DEFAULT_PLAYER_SETTINGS))));
+    check("every audio setting is placed", same(sorted(Object.keys(AUDIO_SPLIT)), sorted(Object.keys(DEFAULT_AUDIO_SETTINGS))));
+    check("every interface setting is placed", same(sorted(Object.keys(UI_SPLIT)), sorted(Object.keys(DEFAULT_INTERFACE_SETTINGS))));
+    check(
+      "the account's settings are the plan's",
+      same(sorted(ACCOUNT_SETTINGS_FIELDS), sorted(["assistPreset", "racingLine", "autoGearbox", "autoClutch", "ghost", "profile", "liveryId", "customLivery", "camera", "aiSkill", "race", "realism", "practiceDamage", "conditions", "timeOfDayChosen", "library", "audio", "ui"]))
+    );
+    check(
+      "music choices and units follow the account, volumes and scale stay",
+      same(sorted(Object.entries(AUDIO_SPLIT).filter(([, s]) => s === "account").map(([k]) => k)), ["musicMuted", "musicOff", "raceMusicOn"]) &&
+        same(sorted(Object.entries(UI_SPLIT).filter(([, s]) => s === "account").map(([k]) => k)), ["palette", "units"])
+    );
+  }
+
+  console.log("Reading a save from storage and writing it back");
+  {
+    const a = memoryStorage({
+      [SETTINGS_KEY]: settingsWith({
+        profile: { name: "Alp", code: "ALP", color: "#112233", generated: false, autoUpload: true },
+        graphics: { ...DEFAULT_PLAYER_SETTINGS.graphics, quality: "low" },
+        audio: { ...DEFAULT_PLAYER_SETTINGS.audio, volume: 0.3, musicOff: ["t1"] },
+        ui: { ...DEFAULT_PLAYER_SETTINGS.ui, scale: 1.3, palette: "deutan" },
+      }),
+      "bugesera.vehicle": "amg-gt3",
+      "bugesera.tyreSetup.amg-gt3": '{"camberDeg":{"front":-3,"rear":-2}}',
+      "lc.garage.presets.amg-gt3": JSON.stringify([preset("p1", "Quali", 5)]),
+      "librecorsa.raceHistory": JSON.stringify([race("r1", 100)]),
+      "bugesera.driverKey": "secret-key-of-device-a-0123456789abcdef",
+      "bugesera.gpu": "Apple M3",
+      "librecorsa.ai-learn.v1.t.gt3.ALP": "{}",
+      "other.app": "x",
+    });
+    let state = emptySyncState();
+    const first = collect(a, state, { now: 1000, savedBy: "A" });
+    state = first.state;
+    const d = first.doc;
+    check("only synced keys go in", same(sorted(Object.keys(d.keys)), ["bugesera.tyreSetup.amg-gt3", "bugesera.vehicle", "lc.garage.presets.amg-gt3", "librecorsa.raceHistory"]));
+    check("the driver key, GPU and AI learning stay out", !JSON.stringify(d).includes("secret-key") && !JSON.stringify(d).includes("Apple M3"));
+    check("only the account's settings go in", same(sorted(Object.keys(d.settings)), sorted(ACCOUNT_SETTINGS_FIELDS)));
+    const audio = d.settings.audio?.value as Record<string, unknown>;
+    const ui = d.settings.ui?.value as Record<string, unknown>;
+    check("split fields hold only their synced members", audio.volume === undefined && same(audio.musicOff, ["t1"]) && ui.scale === undefined && ui.palette === "deutan");
+    check("graphics and controls stay out", d.settings.graphics === undefined && d.settings.keys === undefined && d.settings.wheel === undefined);
+    check("the first collect marks every time as not known", Object.values(d.keys).every((s) => s.t === 0) && Object.values(d.settings).every((s) => s.t === 0));
+
+    a.setItem("bugesera.vehicle", "lc26");
+    a.removeItem("bugesera.tyreSetup.amg-gt3");
+    a.setItem("lc.garage.chassis.lc26", '{"x":1}');
+    const second = collect(a, state, { now: 2000, savedBy: "A" });
+    state = second.state;
+    check("a changed value takes the time of the collect", second.doc.keys["bugesera.vehicle"].t === 2000);
+    check("an unchanged value keeps its time", second.doc.keys["librecorsa.raceHistory"].t === 0 && second.doc.settings.profile.t === 0);
+    check("a key new since tracking began is a change", second.doc.keys["lc.garage.chassis.lc26"].t === 2000);
+    check("a removed key becomes a tombstone", second.doc.removed["bugesera.tyreSetup.amg-gt3"] === 2000 && !second.doc.keys["bugesera.tyreSetup.amg-gt3"]);
+    const third = collect(a, state, { now: 3000, savedBy: "A" });
+    check("the tombstone keeps its time", third.doc.removed["bugesera.tyreSetup.amg-gt3"] === 2000);
+    check("the sync state survives storage", same(parseSyncState(JSON.stringify(third.state)), third.state) && same(parseSyncState("junk"), emptySyncState()));
+
+    // Another device with its own graphics, volume and key takes A's save
+    const b = memoryStorage({
+      [SETTINGS_KEY]: settingsWith({
+        graphics: { ...DEFAULT_PLAYER_SETTINGS.graphics, quality: "high" },
+        audio: { ...DEFAULT_PLAYER_SETTINGS.audio, volume: 0.9 },
+        ui: { ...DEFAULT_PLAYER_SETTINGS.ui, scale: 0.9 },
+      }),
+      "bugesera.driverKey": "device-b-key-0123456789abcdef0123456789",
+      "bugesera.tyreSetup.amg-gt3": "{}",
+    });
+    const bState = collect(b, emptySyncState(), { now: 500, savedBy: "B" }).state;
+    const applied = apply(b, third.doc, bState);
+    const bSettings = JSON.parse(b.getItem(SETTINGS_KEY) as string);
+    check("applying writes the synced keys", b.getItem("bugesera.vehicle") === "lc26" && b.getItem("librecorsa.raceHistory") === a.getItem("librecorsa.raceHistory"));
+    check("applying removes what the save removed", b.getItem("bugesera.tyreSetup.amg-gt3") === null);
+    check("applying takes the account's settings", bSettings.profile.name === "Alp" && same(bSettings.audio.musicOff, ["t1"]) && bSettings.ui.palette === "deutan");
+    check("applying keeps this device's own settings", bSettings.graphics.quality === "high" && bSettings.audio.volume === 0.9 && bSettings.ui.scale === 0.9);
+    check("applying keeps this device's driver key", b.getItem("bugesera.driverKey") === "device-b-key-0123456789abcdef0123456789");
+    check("applying says it changed something", applied.changed);
+    const again = collect(b, applied.state, { now: 9000, savedBy: "B" });
+    check("the round trip gives the same values", same(Object.fromEntries(Object.entries(again.doc.keys).map(([k, s]) => [k, s.value])), Object.fromEntries(Object.entries(third.doc.keys).map(([k, s]) => [k, s.value]))));
+    check("the applied values keep the save's times", again.doc.keys["bugesera.vehicle"].t === 2000 && again.doc.settings.profile.t === 0);
+    check("applying the same save again changes nothing", !apply(b, third.doc, again.state).changed);
+
+    const hostile = doc({
+      keys: { "bugesera.driverKey": { value: "stolen", t: 1 }, "bugesera.gpu": { value: "x", t: 1 } },
+      settings: { graphics: { value: { quality: "low" }, t: 1 }, keys: { value: {}, t: 1 } },
+    });
+    const c = memoryStorage({ "bugesera.driverKey": "mine", [SETTINGS_KEY]: settingsWith({}) });
+    const before = c.getItem(SETTINGS_KEY);
+    apply(c, hostile, emptySyncState());
+    check("a save can't write a device key or a device setting", c.getItem("bugesera.driverKey") === "mine" && c.getItem("bugesera.gpu") === null && c.getItem(SETTINGS_KEY) === before);
+    check("a save from the network is read entry by entry", readSaveDoc({ v: 1, keys: { a: { value: 1 }, b: { value: "x", t: 5 } }, bestLaps: { k: { ghost: "nope" } } })?.keys.b?.t === 5);
+    check("a newer version's save isn't read", readSaveDoc({ v: 2, keys: {} }) === null && readSaveDoc(null) === null);
+  }
+
+  console.log("Combining two saves");
+  {
+    // Best laps
+    const l = doc({ bestLaps: { a: lapRef(90_000, sha("1")), b: lapRef(80_000, sha("2")), c: lapRef(70_000, sha("3")) } });
+    const cl = doc({ bestLaps: { a: lapRef(89_000, sha("4")), b: lapRef(81_000, sha("5")), d: lapRef(60_000, sha("6")), c: lapRef(70_000, sha("7")) } });
+    const laps = combineSaves(l, cl, "combine").bestLaps;
+    check("best laps: the faster one on the same key, either side", laps.a.ghost === sha("4") && laps.b.ghost === sha("2"));
+    check("best laps: the union of both", Object.keys(laps).length === 4 && laps.d.ghost === sha("6"));
+    check("best laps: the same time goes to the choice", combineSaves(l, cl, "local").bestLaps.c.ghost === sha("3") && combineSaves(l, cl, "cloud").bestLaps.c.ghost === sha("7"));
+
+    // Race history
+    const mine = Array.from({ length: 40 }, (_, i) => race(`m${i}`, 1000 + i * 10));
+    const theirs = Array.from({ length: 30 }, (_, i) => race(`t${i}`, 1005 + i * 10));
+    const both = JSON.parse(combineRaceHistory(JSON.stringify(mine), JSON.stringify([...theirs, race("m3", 1030)])));
+    check("race history: the union within the game's cap", both.length === RACE_HISTORY_MAX);
+    check("race history: newest first", both.every((r: { atMs: number }, i: number) => i === 0 || both[i - 1].atMs >= r.atMs) && both[0].id === "m39");
+    check("race history: each race once", new Set(both.map((r: { id: string }) => r.id)).size === both.length);
+    const firm = JSON.parse(combineRaceHistory(JSON.stringify([race("x", 1, false)]), JSON.stringify([race("x", 1, true)])));
+    check("race history: a final result beats a provisional one", firm.length === 1 && firm[0].final === true);
+
+    // Saved setups
+    const pa = [preset("1", "Quali", 10), preset("2", "Race", 20)];
+    const pb = [preset("3", "Quali", 30, "low"), preset("4", "Wet", 40), preset("5", "Race", 50)];
+    const merged = JSON.parse(combinePresets(JSON.stringify(pa), JSON.stringify(pb)));
+    const names = merged.map((p: { name: string }) => p.name);
+    check("presets: a name clash keeps both, one renamed (2)", names.includes("Quali") && names.includes("Quali (2)") && merged.find((p: { name: string }) => p.name === "Quali (2)")?.id === "3");
+    check("presets: the same setup under the same name is kept once", names.filter((n: string) => n.startsWith("Race")).length === 1);
+    check("presets: newest first", merged[0].id === "4");
+    const thrice = JSON.parse(combinePresets(JSON.stringify([preset("1", "Quali", 1), preset("9", "Quali (2)", 2)]), JSON.stringify([preset("3", "quali", 3, "low")])));
+    check("presets: (3) when (2) is taken, names compared without case", thrice.some((p: { name: string; id: string }) => p.name === "quali (3)" && p.id === "3"));
+    const byId = JSON.parse(combinePresets(JSON.stringify([preset("1", "Quali", 10)]), JSON.stringify([{ ...preset("1", "Quali", 20, "low") }])));
+    check("presets: the same setup by id keeps the newer save", byId.length === 1 && byId[0].aero === "low");
+    const many = JSON.parse(combinePresets(JSON.stringify(Array.from({ length: 20 }, (_, i) => preset(`a${i}`, `A${i}`, i))), JSON.stringify(Array.from({ length: 20 }, (_, i) => preset(`b${i}`, `B${i}`, 100 + i)))));
+    check("presets: the garage's cap holds, the oldest go", many.length === PRESETS_MAX && many.every((p: { savedAt: number }) => p.savedAt >= 4));
+    const presetsKey = "lc.garage.presets.lc26";
+    const sides = combineSaves(doc({ keys: { [presetsKey]: { value: JSON.stringify(pa), t: 5 } } }), doc({ keys: { [presetsKey]: { value: JSON.stringify(pb), t: 9 } } }), "local");
+    check("presets in a save combine per car, the chosen side keeping its names", JSON.parse(sides.keys[presetsKey].value).find((p: { id: string }) => p.id === "1")?.name === "Quali");
+
+    // Single values: the newer change; ties and unknown times by the choice
+    const one = (t: number, value: string) => doc({ keys: { "bugesera.vehicle": { value, t } }, settings: { realism: { value, t } } });
+    const winner = (lt: number, ct: number, choice: FirstSyncChoice) => {
+      const out = combineSaves(one(lt, "local"), one(ct, "cloud"), choice);
+      const k = out.keys["bugesera.vehicle"].value;
+      const s = out.settings.realism.value;
+      return k === s ? k : "split";
+    };
+    check("newest wins by stamp, whatever the choice", (["combine", "cloud", "local"] as const).every((c) => winner(9, 5, c) === "local" && winner(5, 9, c) === "cloud"));
+    const table: [number, number, FirstSyncChoice, string][] = [
+      [0, 0, "combine", "cloud"],
+      [7, 0, "combine", "local"],
+      [0, 7, "combine", "cloud"],
+      [7, 7, "combine", "cloud"],
+      [0, 0, "cloud", "cloud"],
+      [7, 0, "cloud", "cloud"],
+      [0, 7, "cloud", "cloud"],
+      [7, 7, "cloud", "cloud"],
+      [0, 0, "local", "local"],
+      [7, 0, "local", "local"],
+      [0, 7, "local", "local"],
+      [7, 7, "local", "local"],
+    ];
+    const wrong = table.filter(([lt, ct, c, want]) => winner(lt, ct, c) !== want);
+    check("ties and unknown times go by the choice (12 cases)", wrong.length === 0, JSON.stringify(wrong));
+    check("pickSide matches the table", table.every(([lt, ct, c, want]) => pickSide(lt, ct, c) === want));
+    const kept = combineSaves(doc({ keys: { "bugesera.track": { value: "a", t: 3 } } }), doc({ keys: { "librecorsa.carSkins": { value: "{}", t: 3 } } }), "combine");
+    check("a value on one side only is kept", kept.keys["bugesera.track"]?.value === "a" && kept.keys["librecorsa.carSkins"]?.value === "{}");
+
+    // Tombstones
+    const gone = doc({ removed: { "bugesera.tyreSetup": 50 } });
+    const there = (t: number) => doc({ keys: { "bugesera.tyreSetup": { value: "{}", t } } });
+    const r1 = combineSaves(gone, there(40), "combine");
+    check("a removal newer than the value removes it", !r1.keys["bugesera.tyreSetup"] && r1.removed["bugesera.tyreSetup"] === 50);
+    const r2 = combineSaves(gone, there(60), "combine");
+    check("a value newer than the removal stays", r2.keys["bugesera.tyreSetup"]?.value === "{}" && r2.removed["bugesera.tyreSetup"] === undefined);
+    check("a removal beats a value of unknown time on combine", !combineSaves(gone, there(0), "combine").keys["bugesera.tyreSetup"]);
+    check("a removal on the cloud side reaches this device", !combineSaves(there(10), doc({ removed: { "bugesera.tyreSetup": 20 } }), "combine").keys["bugesera.tyreSetup"]);
+
+    // Three ways, against the base
+    const oldList = JSON.stringify([preset("1", "Quali", 1), preset("2", "Race", 2)]);
+    const newList = JSON.stringify([preset("2", "Race", 2)]);
+    const baseOf = (value: string) => {
+      const s = collect(memoryStorage({ [presetsKey]: value }), emptySyncState(), { now: 1, savedBy: "" });
+      return { keys: { [presetsKey]: Object.values(s.state.keys)[0].h }, settings: {} };
+    };
+    const deleted = combineSaves(doc({ keys: { [presetsKey]: { value: oldList, t: 0 } } }), doc({ keys: { [presetsKey]: { value: newList, t: 0 } } }), "combine", { base: baseOf(oldList) });
+    check("three ways: a setup deleted on another device stays deleted", deleted.keys[presetsKey].value === newList);
+    const unioned = combineSaves(doc({ keys: { [presetsKey]: { value: oldList, t: 0 } } }), doc({ keys: { [presetsKey]: { value: newList, t: 0 } } }), "combine");
+    check("without a base the two lists are combined", JSON.parse(unioned.keys[presetsKey].value).length === 2);
+    const mineChanged = combineSaves(one(1, "local"), one(5, "base"), "combine", { base: { keys: { "bugesera.vehicle": baseOfValue("base") }, settings: {} } });
+    check("three ways: a side still at the base takes the other's change, even an older one", mineChanged.keys["bugesera.vehicle"].value === "local");
+    check("junk keys in a save are dropped", !combineSaves(doc({ keys: { "bugesera.driverKey": { value: "k", t: 1 } } }), doc({}), "combine").keys["bugesera.driverKey"]);
+  }
+
+  console.log("The first sync");
+  {
+    const empty = doc({ keys: { "bugesera.vehicle": { value: "lc26", t: 0 } }, settings: { realism: { value: "full", t: 0 } } });
+    const full = doc({ keys: { "librecorsa.raceHistory": { value: JSON.stringify([race("r", 1)]), t: 0 }, "lc.garage.presets.lc26": { value: JSON.stringify([preset("1", "A", 1), preset("2", "B", 2)]), t: 0 } }, bestLaps: { k: lapRef(1, sha("a")) } });
+    check("settings and the last car alone are an empty save", isEmptySave(empty) && !isEmptySave(full));
+    check("a car setup or a livery is not empty", !isEmptySave(doc({ keys: { "lc.garage.chassis.lc26": { value: "{}", t: 0 } } })) && !isEmptySave(doc({ keys: { "librecorsa.carSkins": { value: '{"a":"b"}', t: 0 } } })));
+    check("this device has a save, the cloud none: upload", firstSyncDecision(full, null) === "upload");
+    check("this device empty, the cloud has one: download", firstSyncDecision(empty, full) === "download");
+    check("both have one: ask", firstSyncDecision(full, full) === "ask");
+    check("both empty: download (the account's settings win)", firstSyncDecision(empty, empty) === "download");
+    const sum = summarizeSave({ ...full, savedAt: 77, savedBy: "Chrome on macOS" }, "cloud");
+    check("the summary counts laps, setups and races", sum.bestLaps === 1 && sum.setups === 2 && sum.races === 1 && sum.savedAt === 77 && sum.savedBy === "Chrome on macOS");
+    check("this device's summary has no date or writer", summarizeSave(full, "local").savedAt === null && summarizeSave(full, "local").savedBy === null);
+  }
+
+  console.log("The sign-in return, the device label, the switches");
+  {
+    check("#lc-account=<result> reads as that result", AUTH_RESULTS.every((r) => readAuthReturn(`#lc-account=${r}`)?.result === r));
+    check("other fragment parts are kept", same(readAuthReturn("#tab=2&lc-account=linked&x=1"), { result: "linked", rest: "tab=2&x=1" }));
+    check("an unknown result is stripped without a notice", same(readAuthReturn("#lc-account=hacked"), { result: null, rest: "" }));
+    check("no return, nothing to do", readAuthReturn("") === null && readAuthReturn("#tab=2") === null);
+    const texts = Object.values(AUTH_NOTICES).map((n) => n.text);
+    check("each result has a plain sentence (no exclamation marks, no dashes)", texts.length === AUTH_RESULTS.length && texts.every((t) => /\.$/.test(t) && !/[!—–]/.test(t)));
+    check("only a failure reads as an error", Object.entries(AUTH_NOTICES).every(([r, n]) => (n.kind === "error") === (r === "failed")));
+
+    const mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+    const iphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+    const ipad = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
+    const edge = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0";
+    const firefox = "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0";
+    const android = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36";
+    const electron = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) librecorsa-desktop/1.2.0 Chrome/130.0.0.0 Electron/33.0.0 Safari/537.36";
+    check("Chrome on macOS", deviceLabelFor(mac) === "Chrome on macOS");
+    check("Safari on iOS", deviceLabelFor(iphone) === "Safari on iOS");
+    check("Safari on iPadOS (a Mac agent with touch)", deviceLabelFor(ipad, { maxTouchPoints: 5 }) === "Safari on iPadOS" && deviceLabelFor(ipad) === "Safari on macOS");
+    check("Edge on Windows", deviceLabelFor(edge) === "Edge on Windows");
+    check("Firefox on Linux", deviceLabelFor(firefox) === "Firefox on Linux");
+    check("Chrome on Android", deviceLabelFor(android) === "Chrome on Android");
+    check("the desktop app", deviceLabelFor(electron) === "LibreCorsa app on Windows");
+    check("the store app", deviceLabelFor(android, { storeBuild: true }) === "LibreCorsa app on Android");
+
+    check("accounts are off unless the server says true", !parseOnlineConfig({ board: true }).accounts && !parseOnlineConfig({ accounts: "yes" }).accounts && !parseOnlineConfig(null).accounts);
+    const cfg = parseOnlineConfig({ board: true, accounts: true, accountProviders: ["steam", "myspace", "passkey", "steam", 3] });
+    check("unknown providers are dropped, each kept once", cfg.accounts && same(cfg.accountProviders, ["steam", "passkey"]));
+    check("no providers while accounts are off", same(parseOnlineConfig({ accounts: false, accountProviders: ["discord"] }).accountProviders, []));
+    check("a return path the server takes", safeReturnPath("/play") === "/play" && safeReturnPath("/account/") === "/account/" && safeReturnPath("//evil.com") === "/play" && safeReturnPath("https://x") === "/play" && safeReturnPath("/a?b") === "/play");
+  }
+}
+
+/** For the three-way check: the base hash of a raw stored value */
+function baseOfValue(value: string): string {
+  const s = collect(memoryStorage({ "bugesera.vehicle": value }), emptySyncState(), { now: 1, savedBy: "" });
+  return s.state.keys["bugesera.vehicle"].h;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The engine against a fake server
+
+const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+interface Pending {
+  id: number;
+  doc: unknown;
+}
+
+function fakeServer() {
+  const s = {
+    rev: 0,
+    doc: null as unknown,
+    pending: [] as Pending[],
+    ghosts: new Map<string, string>(),
+    calls: [] as string[],
+    savePuts: 0,
+    ghostPuts: 0,
+    ghostGets: 0,
+    signedIn: true,
+    joined: true,
+    alwaysConflict: false,
+    /** Runs once, just before the next save PUT is looked at: another device writing first */
+    beforePut: null as null | (() => void),
+    account(): AccountInfo {
+      return {
+        id: "acc1",
+        createdAt: 1,
+        driverName: "Alp",
+        names: [],
+        identities: [{ provider: "discord", linkedAt: 1, lastUsedAt: 1 }],
+        passkeys: [{ id: "pk", label: "Passkey", createdAt: 1, lastUsedAt: null }],
+        sessions: [],
+        keys: [],
+        save: s.rev ? { rev: s.rev, updatedAt: 1, bytes: 1 } : null,
+        pendingMerges: s.pending.length,
+      };
+    },
+    async fetch(url: string, init: RequestInit = {}): Promise<Response> {
+      const path = new URL(url).pathname.replace(/^\/api/, "");
+      const method = init.method ?? "GET";
+      s.calls.push(`${method} ${path}`);
+      if (!s.signedIn) return json(401, { ok: false, error: "Signed out", signedOut: true });
+      const body = typeof init.body === "string" && method !== "PUT" ? JSON.parse(init.body) : null;
+      if (path === "/account" && method === "GET") return json(200, { ok: true, account: s.account(), thisDevice: { joined: s.joined } });
+      if (path === "/account/device") {
+        s.joined = true;
+        return json(200, { ok: true, attached: ["alp"], elsewhere: ["other"], keyElsewhere: false });
+      }
+      if (path === "/auth/signout") {
+        s.signedIn = false;
+        return json(200, { ok: true });
+      }
+      if (path === "/account/save" && method === "GET") return json(200, { ok: true, rev: s.rev, updatedAt: s.rev ? 1 : null, doc: s.doc, pending: s.pending });
+      if (path === "/account/save" && method === "PUT") {
+        s.savePuts++;
+        const hook = s.beforePut;
+        s.beforePut = null;
+        hook?.();
+        const req = JSON.parse(init.body as string);
+        if (s.alwaysConflict) s.rev++;
+        if (s.alwaysConflict || req.baseRev !== s.rev) return json(409, { ok: false, error: "Changed", conflict: true, rev: s.rev, doc: s.doc });
+        s.rev++;
+        s.doc = req.doc;
+        s.pending = s.pending.filter((p) => !req.combinedPending.includes(p.id));
+        return json(200, { ok: true, rev: s.rev, updatedAt: 1 });
+      }
+      if (path === "/account/ghosts/missing") return json(200, { ok: true, missing: body.shas.filter((x: string) => !s.ghosts.has(x)) });
+      const ghost = path.match(/^\/account\/ghosts\/([0-9a-f]{64})$/);
+      if (ghost && method === "PUT") {
+        s.ghostPuts++;
+        const text = init.body as string;
+        if ((await sha256Hex(text)) !== ghost[1]) return json(400, { ok: false, error: "Hash" });
+        s.ghosts.set(ghost[1], text);
+        return json(200, { ok: true });
+      }
+      if (ghost && method === "GET") {
+        s.ghostGets++;
+        const text = s.ghosts.get(ghost[1]);
+        return text ? new Response(text, { status: 200 }) : json(404, { ok: false, error: "Not found" });
+      }
+      return json(404, { ok: false, error: "Accounts are off" });
+    },
+  };
+  return s;
+}
+
+/** Best laps in memory, keyed like ghost-store (the lap's own key), kept when new or faster */
+function memoryGhosts(init: Record<string, unknown>[] = []): LocalGhosts & { laps: Map<string, string> } {
+  const laps = new Map<string, string>();
+  const keyOf = (lap: { trackId: string; vehicle: string; board: string }) => `${lap.trackId}|${lap.vehicle}|${lap.board}`;
+  const put = (text: string): boolean => {
+    const lap = JSON.parse(text);
+    const key = keyOf(lap);
+    const had = laps.get(key);
+    if (had && JSON.parse(had).lapTimeMs <= lap.lapTimeMs) return false;
+    laps.set(key, text);
+    return true;
+  };
+  for (const lap of init) put(JSON.stringify(lap));
+  return {
+    laps,
+    async list() {
+      return [...laps.entries()].map(([key, text]) => {
+        const l = JSON.parse(text);
+        return { key, trackId: l.trackId, vehicle: l.vehicle, lapTimeMs: l.lapTimeMs, recordedAt: l.recordedAt };
+      });
+    },
+    async text(key) {
+      return laps.get(key) ?? null;
+    },
+    async save(text) {
+      return put(text);
+    },
+  };
+}
+
+const lap = (trackId: string, lapTimeMs: number, extra: Record<string, unknown> = {}) => ({ trackId, vehicle: "lc26", board: "p1-pro-full-dry", lapTimeMs, recordedAt: lapTimeMs, samples: [1, 2, 3], ...extra });
+
+function device(server: ReturnType<typeof fakeServer>, name: string, storage: StorageLike, ghosts: LocalGhosts, clock: { t: number }) {
+  const api = createAccountApi({ base: "http://test/api", fetch: (u, i) => server.fetch(u, i) });
+  return createSyncEngine({ api, storage, ghosts, sha256: sha256Hex, now: () => clock.t, label: () => name });
+}
+
+const stateOf = (s: StorageLike): SyncState => parseSyncState(s.getItem(SYNC_STATE_KEY));
+const cloudDoc = (server: ReturnType<typeof fakeServer>) => server.doc as SaveDoc;
+
+async function main2(): Promise<void> {
+  console.log("The sync engine against a fake server");
+  const server = fakeServer();
+  const clock = { t: 1_000 };
+  const aStore = memoryStorage({
+    [SETTINGS_KEY]: settingsWith({ profile: { name: "Alp", code: "ALP", color: "#112233", generated: false, autoUpload: true } }),
+    "bugesera.vehicle": "amg-gt3",
+    "lc.garage.presets.lc26": JSON.stringify([preset("1", "Quali", 1), preset("2", "Race", 2)]),
+    "librecorsa.raceHistory": JSON.stringify([race("r1", 100)]),
+    "bugesera.driverKey": "device-a-key",
+  });
+  const aLaps = memoryGhosts([lap("t1", 90_000)]);
+  const a = device(server, "Device A", aStore, aLaps, clock);
+
+  // Push: the first sync with an empty cloud uploads
+  const up = await a.sync({ accountId: "acc1", apply: true });
+  check("first sync, cloud empty: uploaded without a question", up.kind === "synced" && up.pushed && server.rev === 1, JSON.stringify(up));
+  check("the cloud save holds the synced keys and not the driver key", !!cloudDoc(server).keys["lc.garage.presets.lc26"] && !JSON.stringify(server.doc).includes("device-a-key"));
+  check("the lap's ghost went up once, by its hash", server.ghostPuts === 1 && server.ghosts.size === 1 && Object.values(cloudDoc(server).bestLaps)[0].ghost === [...server.ghosts.keys()][0]);
+  check("this device keeps a record of the sync", stateOf(aStore).account?.rev === 1 && stateOf(aStore).account?.appliedRev === 1);
+
+  const puts = server.savePuts;
+  clock.t = 2_000;
+  const idle = await a.sync({ accountId: "acc1", apply: false });
+  check("nothing changed: nothing is written", idle.kind === "synced" && !idle.pushed && server.savePuts === puts && server.rev === 1);
+  check("nothing changed: changedSince says so", !(await a.changedSince("acc1")));
+
+  clock.t = 3_000;
+  aStore.setItem("bugesera.vehicle", "lc26");
+  check("a change: changedSince says so", await a.changedSince("acc1"));
+  const pushed = await a.sync({ accountId: "acc1", apply: false });
+  check("a change goes up", pushed.kind === "synced" && pushed.pushed && server.rev === 2 && cloudDoc(server).keys["bugesera.vehicle"].value === "lc26");
+  check("its change time goes with it", cloudDoc(server).keys["bugesera.vehicle"].t === 3_000);
+
+  // Pull: an empty second device downloads, settings of its own kept
+  const bStore = memoryStorage({
+    [SETTINGS_KEY]: settingsWith({ graphics: { ...DEFAULT_PLAYER_SETTINGS.graphics, quality: "low" } }),
+    "bugesera.driverKey": "device-b-key",
+  });
+  const bLaps = memoryGhosts();
+  const b = device(server, "Device B", bStore, bLaps, clock);
+  const putsBefore = server.savePuts;
+  const down = await b.sync({ accountId: "acc1", apply: true });
+  const bSettings = JSON.parse(bStore.getItem(SETTINGS_KEY) as string);
+  check("first sync, this device empty: downloaded without a question", down.kind === "synced" && down.changedLocal && !down.pushed && server.savePuts === putsBefore, JSON.stringify(down));
+  check("the download wrote the synced keys", bStore.getItem("bugesera.vehicle") === "lc26" && bStore.getItem("lc.garage.presets.lc26") === aStore.getItem("lc.garage.presets.lc26"));
+  check("the download took the account's settings and kept this device's", bSettings.profile.name === "Alp" && bSettings.graphics.quality === "low");
+  check("the ghost came down through the save path", bLaps.laps.size === 1 && server.ghostGets === 1);
+  const again = await b.sync({ accountId: "acc1", apply: true });
+  check("a ghost already here is not fetched again", again.kind === "synced" && server.ghostGets === 1 && !again.changedLocal);
+
+  // Ghost dedupe: a third device with the same lap and saves of its own
+  const cStore = memoryStorage({ "lc.garage.presets.lc26": JSON.stringify([preset("9", "Quali", 9, "low")]), "librecorsa.raceHistory": JSON.stringify([race("r9", 900)]) });
+  const cLaps = memoryGhosts([lap("t1", 90_000), lap("t2", 70_000)]);
+  const c = device(server, "Device C", cStore, cLaps, clock);
+  const ask = await c.sync({ accountId: "acc1", apply: true });
+  check("first sync, both hold a save: the player is asked", ask.kind === "ask" && ask.local.setups === 1 && ask.cloud.setups === 2 && ask.cloud.bestLaps === 1 && ask.cloud.savedBy === "Device A", JSON.stringify(ask));
+  check("nothing went up while asking", server.rev === 2);
+  const ghostPutsBefore = server.ghostPuts;
+  clock.t = 4_000;
+  const combined = await c.sync({ accountId: "acc1", apply: true, choice: "combine" });
+  check("Combine: written and applied", combined.kind === "synced" && combined.pushed && combined.changedLocal && server.rev === 3);
+  check("a ghost the cloud has (same hash) is not sent again", server.ghostPuts === ghostPutsBefore + 1 && server.ghosts.size === 2);
+  const cPresets = JSON.parse(cStore.getItem("lc.garage.presets.lc26") as string).map((p: { name: string }) => p.name);
+  check("Combine: saved setups of both, the clash renamed", sorted(cPresets).join() === ["Quali", "Quali (2)", "Race"].join(), cPresets.join());
+  check("Combine: races of both", JSON.parse(cStore.getItem("librecorsa.raceHistory") as string).length === 2);
+
+  // 409: another device writes between this one's read and write
+  clock.t = 5_000;
+  await a.sync({ accountId: "acc1", apply: true });
+  aStore.setItem("bugesera.track", "monza");
+  server.beforePut = () => {
+    const d = structuredClone(cloudDoc(server));
+    d.keys["librecorsa.f1ModPhysics"] = { value: "lc26", t: 5_500 };
+    server.doc = d;
+    server.rev++;
+  };
+  const putsAt = server.savePuts;
+  clock.t = 6_000;
+  const raced = await a.sync({ accountId: "acc1", apply: true });
+  check("409: combined with what the cloud has now and written again", raced.kind === "synced" && raced.pushed && server.savePuts === putsAt + 2, JSON.stringify(raced));
+  check("409: both devices' changes are in the save", cloudDoc(server).keys["bugesera.track"]?.value === "monza" && cloudDoc(server).keys["librecorsa.f1ModPhysics"]?.value === "lc26");
+  check("409: the other device's change reached this one", aStore.getItem("librecorsa.f1ModPhysics") === "lc26");
+
+  server.alwaysConflict = true;
+  aStore.setItem("bugesera.track", "spa");
+  const putsBusy = server.savePuts;
+  const busy = await a.sync({ accountId: "acc1", apply: false });
+  check(`409 every time: gives up after ${MAX_TRIES} writes`, busy.kind === "failed" && busy.error === BUSY && server.savePuts === putsBusy + MAX_TRIES);
+  server.alwaysConflict = false;
+
+  // A folded account's save waiting to be combined
+  const folded = doc({
+    savedBy: "Old phone",
+    keys: { "lc.garage.presets.amg-gt3": { value: JSON.stringify([preset("f1", "Old setup", 3)]), t: 0 } },
+    bestLaps: {},
+  });
+  const foldedLap = JSON.stringify(lap("t3", 60_000));
+  const foldedSha = await sha256Hex(foldedLap);
+  server.ghosts.set(foldedSha, foldedLap);
+  folded.bestLaps["t3|lc26|p1-pro-full-dry"] = { trackId: "t3", vehicle: "lc26", lapTimeMs: 60_000, recordedAt: 60_000, ghost: foldedSha };
+  server.pending = [{ id: 7, doc: folded }];
+  clock.t = 7_000;
+  const merged = await a.sync({ accountId: "acc1", apply: false });
+  check("a folded account's save is combined without a question", merged.kind === "synced" && merged.pushed && server.pending.length === 0, JSON.stringify(merged));
+  check("its setups and laps are in the account's save", !!cloudDoc(server).keys["lc.garage.presets.amg-gt3"] && !!cloudDoc(server).bestLaps["t3|lc26|p1-pro-full-dry"]);
+  check("not applied: the values wait for the next start", merged.kind === "synced" && merged.deferred && aStore.getItem("lc.garage.presets.amg-gt3") === null);
+  check("not applied: the record says so", (stateOf(aStore).account?.appliedRev ?? 0) < (stateOf(aStore).account?.rev ?? 0));
+  check("ghosts come in even when the values wait", aLaps.laps.has("t3|lc26|p1-pro-full-dry"));
+  const periodic = await a.sync({ accountId: "acc1", apply: false });
+  check("a later sync that may not apply sends nothing", periodic.kind === "synced" && !periodic.pushed);
+  const start = await a.sync({ accountId: "acc1", apply: () => true });
+  check("the next start applies them", start.kind === "synced" && start.changedLocal && aStore.getItem("lc.garage.presets.amg-gt3") !== null && stateOf(aStore).account?.appliedRev === stateOf(aStore).account?.rev);
+
+  // A deletion on one device sticks on the others (three-way against the base)
+  clock.t = 8_000;
+  await b.sync({ accountId: "acc1", apply: true });
+  const bBefore = JSON.parse(bStore.getItem("lc.garage.presets.lc26") as string);
+  aStore.setItem("lc.garage.presets.lc26", JSON.stringify(JSON.parse(aStore.getItem("lc.garage.presets.lc26") as string).filter((p: { name: string }) => p.name !== "Race")));
+  clock.t = 9_000;
+  await a.sync({ accountId: "acc1", apply: true });
+  clock.t = 10_000;
+  await b.sync({ accountId: "acc1", apply: true });
+  const bAfter = JSON.parse(bStore.getItem("lc.garage.presets.lc26") as string);
+  check("a setup deleted on one device is deleted on the other", bBefore.some((p: { name: string }) => p.name === "Race") && !bAfter.some((p: { name: string }) => p.name === "Race"));
+
+  // Failures
+  server.doc = { v: 2, keys: {} };
+  const putsNewer = server.savePuts;
+  const newer = await a.sync({ accountId: "acc1", apply: true });
+  check("a newer version's cloud save is never written over", newer.kind === "failed" && newer.error === NEWER_SAVE && server.savePuts === putsNewer);
+  server.signedIn = false;
+  const out = await a.sync({ accountId: "acc1", apply: true });
+  check("a 401 reads as signed out", out.kind === "failed" && out.signedOut === true);
+  const noStorage = createSyncEngine({ api: createAccountApi({ base: "http://test/api", fetch: (u, i) => server.fetch(u, i) }), storage: null, ghosts: null, sha256: null, now: () => 1, label: () => "x" });
+  check("no storage: a sentence, no throw", (await noStorage.sync({ accountId: "acc1", apply: true })).kind === "failed");
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The store
+
+async function settle(until: () => boolean = () => false, rounds = 200): Promise<void> {
+  for (let i = 0; i < rounds && !until(); i++) await new Promise((r) => setImmediate(r));
+}
+
+function fakeEnv(server: ReturnType<typeof fakeServer>, opts: { accounts: boolean; hash?: string; storage?: StorageLike; laps?: LocalGhosts; providers?: string[] }) {
+  const clock = { t: 100_000 };
+  const timers: { fn: () => void; ms: number }[] = [];
+  const log = { hashes: [] as string[], reloads: 0, navigations: [] as string[], configWatch: 0 };
+  const storage = opts.storage ?? memoryStorage();
+  const api = createAccountApi({ base: "http://test/api", fetch: (u, i) => server.fetch(u, i) });
+  const session = new Map<string, string>();
+  const env: AccountStoreEnv = {
+    api,
+    sync: createSyncEngine({ api, storage, ghosts: opts.laps ?? memoryGhosts(), sha256: sha256Hex, now: () => clock.t, label: () => "Test on Device" }),
+    watchConfig(cb) {
+      log.configWatch++;
+      cb({ accounts: opts.accounts, providers: (opts.providers ?? ["discord", "passkey"]) as never });
+      return () => {};
+    },
+    now: () => clock.t,
+    setTimer(fn, ms) {
+      const t = { fn, ms };
+      timers.push(t);
+      return t;
+    },
+    clearTimer(id) {
+      const at = timers.indexOf(id as (typeof timers)[number]);
+      if (at >= 0) timers.splice(at, 1);
+    },
+    readHash: () => opts.hash ?? "",
+    setHash: (rest) => void log.hashes.push(rest),
+    navigate: (url) => void log.navigations.push(url),
+    reload: () => void log.reloads++,
+    session: { getItem: (k) => session.get(k) ?? null, setItem: (k, v) => void session.set(k, v) },
+    deviceLabel: () => "Test on Device",
+    driverKey: () => "test-driver-key",
+    driverName: () => "Alp",
+    returnPath: () => "/play",
+    passkey: async () => ({}),
+    onLeave: () => () => {},
+  };
+  /** Runs the timers due within `ms` (the push delay) */
+  const runTimers = (ms: number) => {
+    for (const t of timers.splice(0).filter((x) => x.ms <= ms)) t.fn();
+  };
+  return { env, clock, timers, log, storage, runTimers };
+}
+
+async function main3(): Promise<void> {
+  console.log("The account store");
+  {
+    accountActions.start();
+    accountActions.pushSoon();
+    check("on the server (no window): start does nothing, accounts stay off", getAccountState().phase === "off");
+
+    const server = fakeServer();
+    const off = fakeEnv(server, { accounts: false, hash: "#lc-account=signed-in" });
+    const offStore = createAccountStore(() => off.env);
+    offStore.actions.start();
+    offStore.actions.pushSoon();
+    await settle();
+    check("accounts off: phase off, nothing asked of the server", offStore.getState().phase === "off" && server.calls.length === 0);
+    check("accounts off: no timers, the address untouched", off.timers.length === 0 && off.log.hashes.length === 0);
+    check("accounts off: actions say so", (await offStore.actions.syncNow()) !== null && (await offStore.actions.redeemLinkCode("ABCD-EFGH")) !== null && server.calls.length === 0);
+    const none = createAccountStore(() => null);
+    none.actions.start();
+    check("no online side: off", none.getState().phase === "off");
+  }
+  {
+    // A sign-in return, then the join question, then the first sync (cloud empty: upload)
+    const server = fakeServer();
+    server.joined = false;
+    const f = fakeEnv(server, {
+      accounts: true,
+      hash: "#lc-account=created",
+      storage: memoryStorage({ "lc.garage.presets.lc26": JSON.stringify([preset("1", "Quali", 1)]) }),
+    });
+    const store = createAccountStore(() => f.env);
+    store.actions.start();
+    store.actions.start();
+    await settle(() => store.getState().phase === "signed-in");
+    const st = store.getState();
+    check("the return's notice is shown", st.notice?.text === AUTH_NOTICES.created.text && st.notice?.kind === "ok");
+    check("the return is stripped once", same(f.log.hashes, [""]) && f.log.configWatch === 1);
+    check("signed in, not joined: the join question with whose account it is", st.phase === "signed-in" && st.join?.driverName === "Alp" && same(st.join?.providers, ["discord", "passkey"]));
+    check("nothing went up before joining", !server.calls.some((c) => c.startsWith("PUT")));
+    store.actions.pushSoon();
+    f.runTimers(PUSH_DELAY_MS);
+    await settle();
+    check("a save point before joining sends nothing", !server.calls.some((c) => c.includes("/account/save")));
+    const joined = await store.actions.confirmJoin();
+    check("joining registers this device's key and label", joined === null && server.calls.includes("POST /account/device"), String(joined));
+    check("joining uploads to an empty cloud", server.rev === 1 && store.getState().join === null && store.getState().sync.lastSyncedAt !== null);
+    check("names elsewhere are passed on", same(store.getState().elsewhere, ["other"]));
+
+    // A save point pushes after the delay, only when something changed
+    f.storage.setItem("bugesera.track", "spa");
+    store.actions.pushSoon();
+    store.actions.pushSoon();
+    check("a burst of save points waits once", f.timers.filter((t) => t.ms === PUSH_DELAY_MS).length === 1);
+    f.runTimers(PUSH_DELAY_MS);
+    await settle(() => server.rev === 2);
+    check("the save point's push went up", server.rev === 2 && (server.doc as SaveDoc).keys["bugesera.track"]?.value === "spa");
+
+    const deferredMsg = await (async () => {
+      const d = structuredClone(server.doc as SaveDoc);
+      d.keys["bugesera.vehicle"] = { value: "chaparral-2d", t: 999_999 };
+      server.doc = d;
+      server.rev++;
+      const err = await store.actions.syncNow();
+      return { err, notice: store.getState().notice?.text ?? "" };
+    })();
+    check("Sync now leaves the cloud's changes for the next start, and says so", deferredMsg.err === null && /next time the game starts/.test(deferredMsg.notice) && f.storage.getItem("bugesera.vehicle") === null && f.log.reloads === 0);
+
+    await store.actions.signOut();
+    check("signing out", store.getState().phase === "signed-out" && store.getState().account === null);
+  }
+  {
+    // Both hold a save: the first-sync question, then Combine, which reloads once to use what it wrote
+    const server = fakeServer();
+    const seed = fakeEnv(server, { accounts: true, storage: memoryStorage({ "librecorsa.raceHistory": JSON.stringify([race("r1", 1)]) }) });
+    const seedStore = createAccountStore(() => seed.env);
+    seedStore.actions.start();
+    await settle(() => server.rev === 1);
+    const f = fakeEnv(server, { accounts: true, storage: memoryStorage({ "librecorsa.raceHistory": JSON.stringify([race("r2", 2)]) }) });
+    const store = createAccountStore(() => f.env);
+    store.actions.start();
+    await settle(() => store.getState().firstSync !== null);
+    check("both hold a save: the store asks", store.getState().firstSync?.local.races === 1 && store.getState().firstSync?.cloud.races === 1);
+    check("a sync while the question is open waits for it", (await store.actions.syncNow()) !== null && server.rev === 1);
+    const err = await store.actions.chooseFirstSync("combine");
+    check("the choice combines and writes", err === null && store.getState().firstSync === null && server.rev === 2);
+    check("the page reloads once to use the save", f.log.reloads === 1);
+    check("the reload isn't made twice for the same save", (await store.actions.syncNow()) === null && f.log.reloads === 1);
+    store.actions.signIn("steam", "link");
+    check("sign-in goes to the provider through the API", f.log.navigations[0] === "http://test/api/auth/start/steam?intent=link&return=%2Fplay");
+    check("a bad link code is caught before the server", (await store.actions.redeemLinkCode("nope")) === "A code has 8 letters and digits, like ABCD-EFGH.");
+  }
+}
+
+async function main(): Promise<void> {
+  main1();
+  await main2();
+  await main3();
+  console.log(`\n${passed} passed, ${failed} failed`);
+  process.exit(failed ? 1 : 0);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -13,6 +13,7 @@
  * rather than asking once.
  */
 
+import { ACCOUNT_PROVIDERS, type AccountProvider } from "@/lib/account/api-types";
 import { DEFAULT_RACE_SLOT_S } from "./race-schedule";
 
 export interface OnlineConfig {
@@ -30,9 +31,23 @@ export interface OnlineConfig {
   usage: boolean;
   /** The live count takes heartbeats from tabs with the game in view (src/lib/net/live-heartbeat.ts) */
   live: boolean;
+  /** Player accounts (src/lib/account): sign-in and the cloud save */
+  accounts: boolean;
+  /** The ways into an account this server offers (Discord and Google only once set up); [] while accounts are off */
+  accountProviders: readonly AccountProvider[];
 }
 
-const OFF: OnlineConfig = { rooms: false, relay: false, races: false, board: false, raceSlotS: DEFAULT_RACE_SLOT_S, usage: false, live: false };
+const OFF: OnlineConfig = {
+  rooms: false,
+  relay: false,
+  races: false,
+  board: false,
+  raceSlotS: DEFAULT_RACE_SLOT_S,
+  usage: false,
+  live: false,
+  accounts: false,
+  accountProviders: [],
+};
 
 /** One read of the switches gives up after this long (ms): as long as every other read of the API is given */
 export const CONFIG_TIMEOUT_MS = 8000;
@@ -95,7 +110,17 @@ export function parseOnlineConfig(raw: unknown): OnlineConfig {
     raceSlotS: typeof slot === "number" && Number.isInteger(slot) && slot >= 30 && slot <= 86_400 ? slot : DEFAULT_RACE_SLOT_S,
     usage: r.usage === true,
     live: r.live === true,
+    accounts: r.accounts === true,
+    accountProviders: r.accounts === true ? parseAccountProviders(r.accountProviders) : [],
   };
+}
+
+/** The providers named in the answer that this build knows, each once, in the order the server gave them */
+function parseAccountProviders(raw: unknown): AccountProvider[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AccountProvider[] = [];
+  for (const p of raw) if (ACCOUNT_PROVIDERS.includes(p as AccountProvider) && !out.includes(p as AccountProvider)) out.push(p as AccountProvider);
+  return out;
 }
 
 /** The answer of GET <base>/config: an object that says whether the board is on (anything else is no answer) */
@@ -103,7 +128,11 @@ function isConfigAnswer(raw: unknown): raw is Record<string, unknown> {
   return typeof raw === "object" && raw !== null && !Array.isArray(raw) && typeof (raw as Record<string, unknown>).board === "boolean";
 }
 
-const sameConfig = (a: OnlineConfig, b: OnlineConfig): boolean => (Object.keys(OFF) as (keyof OnlineConfig)[]).every((k) => a[k] === b[k]);
+const sameConfig = (a: OnlineConfig, b: OnlineConfig): boolean =>
+  (Object.keys(OFF) as (keyof OnlineConfig)[]).every((k) =>
+    // The one list compares by its members: every answer parses to a new array
+    k === "accountProviders" ? a[k].join() === b[k].join() : a[k] === b[k]
+  );
 
 /**
  * Whether the online side answered:
