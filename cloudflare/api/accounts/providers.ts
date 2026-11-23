@@ -188,6 +188,17 @@ const STEAM_SIGNED = ["op_endpoint", "claimed_id", "identity", "return_to", "res
  * player backed out; null otherwise. `returnTo` is what was sent: the answer must name the same.
  */
 export async function steamSubject(deps: AccountsDeps, query: URLSearchParams, returnTo: string): Promise<string | "cancelled" | null> {
+  // Each openid field once: with a field sent twice, what is read here and what Steam checks could be different copies
+  // (one forged in front of Steam's own), so such an answer is refused outright
+  const seen = new Set<string>();
+  for (const k of query.keys()) {
+    if (!k.startsWith("openid.") && k !== "state") continue;
+    if (seen.has(k)) {
+      logFail("steam", "duplicate");
+      return null;
+    }
+    seen.add(k);
+  }
   const mode = query.get("openid.mode");
   if (mode === "cancel") return "cancelled";
   const claimed = query.get("openid.claimed_id") ?? "";
@@ -207,7 +218,7 @@ export async function steamSubject(deps: AccountsDeps, query: URLSearchParams, r
   }
   // Steam checks its own signature: every openid.* field as received, with the mode changed
   const check = new URLSearchParams();
-  for (const [k, v] of query) if (k.startsWith("openid.")) check.append(k, k === "openid.mode" ? "check_authentication" : v);
+  for (const k of seen) if (k.startsWith("openid.")) check.set(k, k === "openid.mode" ? "check_authentication" : (query.get(k) as string));
   const res = await deps.fetch(STEAM_LOGIN, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
