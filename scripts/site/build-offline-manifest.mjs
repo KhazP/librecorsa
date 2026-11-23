@@ -5,7 +5,7 @@
 // Runs after `next build` (npm's postbuild) and writes out/offline-manifest.json. The build id is a hash of the files'
 // names and the pages' contents, so a deploy that changes nothing keeps the shell the players have.
 //
-// Usage: node scripts/build-offline-manifest.mjs [outDir]
+// Usage: node scripts/site/build-offline-manifest.mjs [outDir]
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";

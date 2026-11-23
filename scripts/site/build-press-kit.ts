@@ -10,12 +10,12 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import { PRESS_KIT_ZIP, PRESS_SCREENSHOTS, RISE_PRESS_KIT_ZIP, RISE_RENDERS } from "../src/lib/press";
+import { PRESS_KIT_ZIP, PRESS_SCREENSHOTS, RISE_PRESS_KIT_ZIP, RISE_RENDERS } from "../../src/lib/press";
 
 const PUBLIC = join(process.cwd(), "public");
 const SHOTS = join(PUBLIC, "press/screenshots");
 const THUMBS = join(SHOTS, "thumbs");
-// The logo files come from `npm run brand` (scripts/build-brand.ts); run it first when the logo changes
+// The logo files come from `npm run brand` (scripts/site/build-brand.ts); run it first when the logo changes
 const LOGOS = [
   "branding/librecorsa-logo.svg",
   "branding/librecorsa-logo-on-light.svg",

@@ -1,7 +1,7 @@
 /**
  * A circuit's outline and the racing line's pace round it, small enough to sit in a page. Built from the same
  * `track_data.json` the scene uses: the outline keeps only the points its shape needs, the pace is a fixed number of
- * speeds spread evenly over the lap. scripts/build-home-outlines.ts writes them to circuit-outlines.json for the
+ * speeds spread evenly over the lap. scripts/site/build-home-outlines.ts writes them to circuit-outlines.json for the
  * home page.
  */
 export interface LapOutline {

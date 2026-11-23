@@ -1,10 +1,10 @@
 // Moves UI source from hard-coded colours, radii, old font classes and arbitrary spacing onto the design tokens
 // in the `@theme` block of src/app/globals.css (UI standard §0, §1, §2).
 //
-//   node scripts/codemod-ui-tokens.mjs                    dry run: what would change, per rule and per file,
+//   node scripts/site/codemod-ui-tokens.mjs                    dry run: what would change, per rule and per file,
 //                                                         and every value it refuses
-//   node scripts/codemod-ui-tokens.mjs --write            apply
-//   node scripts/codemod-ui-tokens.mjs <path> [...]       only these files or folders
+//   node scripts/site/codemod-ui-tokens.mjs --write            apply
+//   node scripts/site/codemod-ui-tokens.mjs <path> [...]       only these files or folders
 //   --root <dir>                                          run against another checkout or a copy of `src`
 //   --report <file.md>                                    also write the report to a file
 //   --json <file.json>                                    also write every replacement and refusal as JSON
@@ -156,7 +156,7 @@ if (!COLORS.size) throw new Error("no --color-lc-* tokens found in the @theme bl
 
 // Tailwind's own values for white, black and the spacing unit: from its theme.css when installed, else its defaults
 function tailwindTheme() {
-  for (const base of [ROOT, join(SCRIPT_DIR, "..")]) {
+  for (const base of [ROOT, join(SCRIPT_DIR, "..", "..")]) {
     const p = join(base, "node_modules/tailwindcss/theme.css");
     if (existsSync(p)) return { path: relative(ROOT, p) || p, text: readFileSync(p, "utf8") };
   }

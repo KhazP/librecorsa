@@ -3,8 +3,8 @@
  * src/lib/hosted-content.ts) to the librecorsa-assets R2 bucket, at the path the site serves them from.
  * cloudflare/worker.js answers any path with no static file from that bucket.
  *
- *   node scripts/upload-hosted.mjs public/cars/bmw-m4-gt3 public/tracks/monaco/track_data.json [more files or folders ...]
- *   node scripts/upload-hosted.mjs --dry-run public/cars/bmw-m4-gt3
+ *   node scripts/site/upload-hosted.mjs public/cars/bmw-m4-gt3 public/tracks/monaco/track_data.json [more files or folders ...]
+ *   node scripts/site/upload-hosted.mjs --dry-run public/cars/bmw-m4-gt3
  *
  * Car and cockpit GLBs (any .glb outside public/tracks) go up meshopt-compressed, the copy the site has always served
  * (scripts/cars/compress-car-glb.mjs, run on a temporary copy so the raw file the car tools edit stays as it is). Circuit
@@ -24,7 +24,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PUBLIC = path.join(ROOT, "public");
 const BUCKET = "librecorsa-assets";
 const TYPES = { ".glb": "model/gltf-binary", ".json": "application/json", ".ogg": "audio/ogg", ".wav": "audio/wav", ".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg", ".ktx2": "image/ktx2", ".mp4": "video/mp4", ".mp3": "audio/mpeg" };
@@ -33,7 +33,7 @@ const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const targets = args.filter((a) => a !== "--dry-run");
 if (!targets.length) {
-  console.error("Usage: node scripts/upload-hosted.mjs [--dry-run] <file or folder under public/> ...");
+  console.error("Usage: node scripts/site/upload-hosted.mjs [--dry-run] <file or folder under public/> ...");
   process.exit(1);
 }
 

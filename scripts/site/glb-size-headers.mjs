@@ -6,7 +6,7 @@
  * bytes as they arrive. three's FileLoader reads `X-File-Size` before Content-Length. The bigger files CI moves to R2
  * get the same header from cloudflare/worker.js.
  *
- *   node scripts/glb-size-headers.mjs out
+ *   node scripts/site/glb-size-headers.mjs out
  *
  * Run after the files over 25 MiB have gone to R2 (.github/workflows/deploy-pages.yml).
  */
@@ -42,5 +42,5 @@ const rules = glbs.map((f) => {
   const url = "/" + path.relative(dir, f).split(path.sep).map(encodeURIComponent).join("/");
   return `${url}\n  X-File-Size: ${statSync(f).size}\n`;
 });
-if (rules.length) appendFileSync(headersFile, `\n# Full size of each GLB for the loading screen (scripts/glb-size-headers.mjs)\n${rules.join("")}`);
+if (rules.length) appendFileSync(headersFile, `\n# Full size of each GLB for the loading screen (scripts/site/glb-size-headers.mjs)\n${rules.join("")}`);
 for (const r of rules) console.log(r.trim().replace(/\n\s+/, "  "));

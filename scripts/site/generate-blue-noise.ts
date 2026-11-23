@@ -4,7 +4,7 @@
  * (`src/lib/render/physical-sky.ts` stacks 64 golden-ratio-shifted copies into the spatiotemporal noise volume
  * they expect). Generated here so the game ships no third-party noise texture.
  *
- *   npx tsx scripts/generate-blue-noise.ts
+ *   npx tsx scripts/site/generate-blue-noise.ts
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -144,7 +144,7 @@ function voidAndCluster(seed: number): Uint8Array {
 }
 
 const tile = voidAndCluster(0x5ca1ab1e);
-const outPath = path.join(__dirname, '..', 'public', 'sky', 'blue-noise-128.bin');
+const outPath = path.join(__dirname, '..', '..', 'public', 'sky', 'blue-noise-128.bin');
 fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, tile);
 

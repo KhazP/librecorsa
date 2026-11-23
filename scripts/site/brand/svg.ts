@@ -22,7 +22,7 @@ import {
   type LogoTone,
   type MonoEmblem,
   type Paint,
-} from "../../src/components/ui/logo/geometry";
+} from "../../../src/components/ui/logo/geometry";
 import { TAGLINE_OUTLINE } from "./tagline-outline";
 
 const n = (v: number) => String(Math.round(v * 1000) / 1000);

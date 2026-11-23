@@ -15,7 +15,7 @@
  *   favicon-16.png, favicon-32.png the favicon's two small frames as PNG files
  * public/favicon.ico             16 and 32 px from the small emblem, 48 px from the full one
  *
- * Run it after changing the geometry. The wordmark and tagline outlines come from scripts/brand/outline-text.py.
+ * Run it after changing the geometry. The wordmark and tagline outlines come from scripts/site/brand/outline-text.py.
  */
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -23,7 +23,7 @@ import sharp from "sharp";
 import {
   EMBLEM_TIGHT_VIEWBOX,
   LOGO_COLORS,
-} from "../src/components/ui/logo/geometry";
+} from "../../src/components/ui/logo/geometry";
 import {
   emblemMarkup,
   fullLockup,

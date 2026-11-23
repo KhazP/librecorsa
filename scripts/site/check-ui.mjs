@@ -1,6 +1,6 @@
 // Checks UI source against the rules of docs/DESIGN.md that a typecheck cannot see.
-//   node scripts/check-ui.mjs                 every UI file, summary per rule
-//   node scripts/check-ui.mjs <path> [...]    only these files or folders, every finding listed
+//   node scripts/site/check-ui.mjs                 every UI file, summary per rule
+//   node scripts/site/check-ui.mjs <path> [...]    only these files or folders, every finding listed
 //   --strict                                  exit 1 when anything is found
 // A line that has to break a rule says so, on the line or the one above it:  // ui-allow: <rule-id> <the reason>
 // (a driver's own colour, a livery swatch, a flag's real colours). Allowed lines are counted and listed, never hidden.

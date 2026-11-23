@@ -7,8 +7,8 @@
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import trackIndex from "../public/tracks/index.json";
-import { lapOutlineOf, type LapOutline, type RawLap } from "../src/lib/home/lap-outline";
+import trackIndex from "../../public/tracks/index.json";
+import { lapOutlineOf, type LapOutline, type RawLap } from "../../src/lib/home/lap-outline";
 
 const OUT = join(process.cwd(), "src/lib/home/circuit-outlines.json");
 

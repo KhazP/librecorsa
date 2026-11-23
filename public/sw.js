@@ -39,7 +39,7 @@ const BASE = self.location.pathname.replace(/[^/]*$/, "");
 const MODS = "librecorsa-mods-v1";
 /** The shell: one cache per build (`librecorsa-shell-<build>`), the previous build's deleted once the next is whole */
 const SHELL_PREFIX = "librecorsa-shell-";
-/** What the build lists for the shell (scripts/build-offline-manifest.mjs) */
+/** What the build lists for the shell (scripts/site/build-offline-manifest.mjs) */
 const SHELL_MANIFEST = `${self.location.origin}${BASE}offline-manifest.json`;
 /** The record in a shell cache that says every file of its build is in it */
 const SHELL_COMPLETE = "__librecorsa-shell-complete";
