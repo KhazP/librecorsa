@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Skeleton } from "@/components/ui";
 import { TEXT_LINK } from "@/components/home/SitePage";
 import { fetchSiteTotals, formatCount, type SiteTotals } from "@/lib/net/board-client";
+import { onlineUrl } from "@/lib/net/online-config";
 import { CARD, day } from "./press-ui";
 
 /**
@@ -26,6 +27,8 @@ export function PlayerNumbers() {
     };
   }, []);
 
+  // A copy of the game without an online side (a clone, a fork) has no totals to read
+  if (totals === null && !onlineUrl("/stats/totals")) return <p className="lc-hint m-0 text-[14px]">This copy of the game has no online side, so there are no numbers to show.</p>;
   if (totals === null) return <p className="lc-hint m-0 text-[14px]">The numbers can’t be read right now. Try again in a moment.</p>;
 
   const tiles: [string, string][] = totals
@@ -55,7 +58,9 @@ export function PlayerNumbers() {
             ))}
       </dl>
       <p className="lc-hint m-0 text-[13px]">
-        {totals ? `Counted since ${day(totals.since)} from anonymous daily totals, updated every quarter hour. ` : "Reading the totals… "}
+        {totals
+          ? `Hours, laps and countries are counted since ${day(totals.since)} from anonymous daily totals; drivers are every name with a lap on the boards. Updated hourly. `
+          : "Reading the totals… "}
         <Link href="/privacy#online" className={TEXT_LINK}>
           How they’re counted
         </Link>
