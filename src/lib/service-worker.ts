@@ -2,8 +2,8 @@ import { withBasePath } from "@/lib/base-path";
 
 /**
  * Production builds register public/sw.js, which keeps the circuits, cars and sounds a player downloads and serves
- * them again once the server says they are current. Development never caches (and drops a worker a preview build may
- * have left on this origin).
+ * them again once the server says they are current, keeps the game's pages and scripts for offline play, and serves
+ * imported mod packages. Development never caches (and drops a worker a preview build may have left on this origin).
  */
 export function registerAssetCache(): void {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
@@ -17,4 +17,9 @@ export function registerAssetCache(): void {
   navigator.serviceWorker
     .register(withBasePath("/sw.js"), { scope: withBasePath("/") })
     .catch((err) => console.warn("Asset cache not available", err));
+  // Once a worker is running: bring its offline copy of the game up to the build the server lists (a no-op when it is
+  // already). Asked on every load, since a deploy that leaves sw.js as it was installs no new worker
+  void navigator.serviceWorker.ready
+    .then((reg) => reg.active?.postMessage({ type: "librecorsa:sync-shell" }))
+    .catch(() => {});
 }
