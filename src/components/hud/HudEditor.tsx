@@ -293,12 +293,15 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
         })}
       </div>
 
-      {/* The bar sits mid-screen, where no layout puts a panel */}
-      <div className="pointer-events-none absolute inset-x-0 top-[34%] flex -translate-y-1/2 justify-center px-4">
-      <div className="pointer-events-auto flex w-full max-w-[560px] flex-col gap-3 rounded-lc-tile border border-lc-line bg-lc-void/90 p-4 shadow-lc-pop sm:flex-row sm:items-center">
+      {/* The bar sits mid-screen, where no layout puts a panel (a phone's: between its top row and the touch pads),
+          and steps aside while a panel is dragged */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 top-[34%] flex -translate-y-1/2 justify-center px-4 transition-opacity duration-150 short:top-1/2 ${active ? "opacity-0" : ""}`}
+      >
+      <div className={`flex w-full max-w-[560px] flex-col gap-3 rounded-lc-tile border border-lc-line bg-lc-void/90 p-4 shadow-lc-pop sm:flex-row sm:items-center short:p-3 ${active ? "" : "pointer-events-auto"}`}>
         <div className="min-w-0 flex-1">
           <h2 className="lc-title text-[15px] text-lc-chalk">{tx("title")}</h2>
-          <p className="mt-1 text-[12px] leading-snug text-lc-fog">{tx("hint")}</p>
+          <p className="mt-1 text-[12px] leading-snug text-lc-fog short:hidden">{tx("hint")}</p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Button size="sm" variant="ghost" disabled={!moved} onClick={() => onChange({})}>
