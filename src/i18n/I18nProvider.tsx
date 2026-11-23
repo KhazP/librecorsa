@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, type ReactNode } from "react";
 import { IntlProvider } from "use-intl/react";
-import { parseInterface, SETTINGS_STORAGE_KEY } from "@/lib/settings/player-settings";
+import { parseInterface, SETTINGS_STORAGE_KEY } from "@/lib/settings/interface-settings";
 import { bindText } from "@/lib/text";
 import { formatLocale } from "./catalogs";
 import { applyLanguage, currentLocale, getMessageFallback, onError, t, useI18nState } from "./runtime";

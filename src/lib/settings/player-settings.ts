@@ -42,7 +42,6 @@ import { GYRO_LOCK_MAX_DEG, GYRO_LOCK_MIN_DEG, GYRO_SENSITIVITY_MAX, GYRO_SENSIT
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { isDrivingCameraMode } from "@/lib/render/camera-modes";
 import { parseCameraNudges, type CameraNudges } from "@/lib/settings/camera-nudges";
-import { resolveCarId, type CarId } from "@/lib/cars/car-registry";
 import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
 import { DEFAULT_DEVICE_ASSIST_TUNING, sanitizeAssistTuning, type DeviceAssistTuning } from "@/lib/sim/steering-assist";
 import { DEFAULT_HUD_PRESET, parseHudPreset, type HudPreset } from "@/lib/settings/hud-layouts";
@@ -137,38 +136,10 @@ export interface AudioSettings {
   musicMuted: boolean;
 }
 
-export type SpeedUnit = "kmh" | "mph";
-export type TemperatureUnit = "c" | "f";
-export type PressureUnit = "bar" | "psi";
-
-export interface UnitSettings {
-  speed: SpeedUnit;
-  temperature: TemperatureUnit;
-  pressure: PressureUnit;
-}
-
-/**
- * Which colours carry gain / loss, cold / hot and the like. "standard" is the palette of docs/DESIGN.md; the others
- * swap the pairs that the named colour-vision type confuses. The volt cursor never changes.
- */
-export type ColorPalette = "standard" | "protan" | "deutan" | "tritan";
-export const COLOR_PALETTES: readonly ColorPalette[] = ["standard", "protan", "deutan", "tritan"];
-
-/** Simple shows the short list of settings; Advanced shows every row */
-export type SettingsDetail = "simple" | "advanced";
-
-export const UI_SCALE_MIN = 0.8;
-export const UI_SCALE_MAX = 1.5;
-
-export interface InterfaceSettings {
-  units: UnitSettings;
-  /** Multiplies the automatic big-screen scale (src/lib/ui-zoom.ts); 1 = as the screen size decides */
-  scale: number;
-  palette: ColorPalette;
-  detail: SettingsDetail;
-  /** The language the game shows: "auto" follows the browser, else a language code (src/i18n/catalogs.ts) */
-  language: string;
-}
+// The interface settings (units, scale, palette, detail, language) live in interface-settings.ts, which every page's
+// language provider reads without the rest of these settings
+export * from "./interface-settings";
+import { DEFAULT_INTERFACE_SETTINGS, parseInterface, SETTINGS_STORAGE_KEY, type InterfaceSettings } from "./interface-settings";
 
 export type LibraryKind = "cars" | "circuits";
 
@@ -528,14 +499,6 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   musicMuted: false,
 };
 
-export const DEFAULT_INTERFACE_SETTINGS: InterfaceSettings = {
-  units: { speed: "kmh", temperature: "c", pressure: "bar" },
-  scale: 1,
-  palette: "standard",
-  detail: "simple",
-  language: "auto",
-};
-
 export const DEFAULT_DRIVER_PROFILE: DriverProfile = { name: "Driver", code: "DRV", color: "#E10600", generated: false, autoUpload: true };
 
 /** Words for generated names; any pair plus " 99" fits the 16-character name limit */
@@ -568,7 +531,6 @@ export const sanitizeDriverName = (v: string) =>
   Array.from(v.replace(/[\u0000-\u001f\u007f<>]/g, "").trim()).slice(0, 16).join("") || DEFAULT_DRIVER_PROFILE.name;
 export const sanitizeColor = (v: string) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v.toUpperCase() : DEFAULT_DRIVER_PROFILE.color);
 
-export const SETTINGS_STORAGE_KEY = "bugesera.settings.v1";
 /** Set once the force direction was flipped to match DirectInput / PID: an older save's `ffbInvert: true` is reset once */
 export const FFB_POLARITY_V2_KEY = "bugesera.ffb_polarity_v2";
 
@@ -920,24 +882,6 @@ function parseAudio(v: unknown): AudioSettings {
   };
 }
 
-export function parseInterface(v: unknown): InterfaceSettings {
-  const d = DEFAULT_INTERFACE_SETTINGS;
-  if (!isObj(v)) return structuredClone(d);
-  const units = isObj(v.units) ? v.units : {};
-  return {
-    units: {
-      speed: oneOf(units.speed, ["kmh", "mph"] as const, d.units.speed),
-      temperature: oneOf(units.temperature, ["c", "f"] as const, d.units.temperature),
-      pressure: oneOf(units.pressure, ["bar", "psi"] as const, d.units.pressure),
-    },
-    scale: num(v.scale, UI_SCALE_MIN, UI_SCALE_MAX, d.scale),
-    palette: oneOf(v.palette, COLOR_PALETTES, d.palette),
-    detail: oneOf(v.detail, ["simple", "advanced"] as const, d.detail),
-    // Any well-formed code is kept: a language added later, or one a newer build has, still resolves (resolveLocale)
-    language: isStr(v.language) && (v.language === "auto" || /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,4})?$/.test(v.language)) ? v.language : d.language,
-  };
-}
-
 function parseProfile(v: unknown): DriverProfile {
   if (!isObj(v)) return { ...DEFAULT_DRIVER_PROFILE };
   return {
@@ -1110,28 +1054,7 @@ export function saveOnboarded() {
   }
 }
 
-const CAR_STORAGE_KEY = "bugesera.vehicle";
 const RUMBLE_STORAGE_KEY = "bugesera.rumble";
-
-/** The car to drive: `?car=` in the URL, else the last choice, else the LC26 */
-export function loadCarChoice(): CarId {
-  try {
-    const fromUrl = new URLSearchParams(window.location.search).get("car");
-    const linked = resolveCarId(fromUrl);
-    if (linked) return linked;
-    return resolveCarId(localStorage.getItem(CAR_STORAGE_KEY)) ?? "lc26";
-  } catch {
-    return "lc26";
-  }
-}
-
-export function saveCarChoice(car: CarId) {
-  try {
-    localStorage.setItem(CAR_STORAGE_KEY, car);
-  } catch {
-    // Storage unavailable: the choice lasts for this session only
-  }
-}
 
 /** Gamepad rumble is on unless it was switched off last time */
 export function loadRumble(): boolean {
