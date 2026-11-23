@@ -45,9 +45,30 @@ interface FolderEntry {
   hash?: string;
 }
 
-async function readFolderIndex(): Promise<FolderEntry[]> {
+/** How long the start waits for a folder of packages to answer before going on without it */
+const FOLDER_INDEX_TIMEOUT_MS = 1500;
+
+/**
+ * Whether this copy of the game can have a folder of packages beside it: the launcher, a clone's dev server, a copy
+ * served from anywhere else. librecorsa.org has none, so its players never wait on the question
+ */
+const mayHaveModsFolder = (): boolean => !/(^|\.)librecorsa\.org$/i.test(window.location.hostname);
+
+/** `?mods=off`: start without any package, to get past one that keeps the game from starting (the Mods panel can then remove it) */
+export const modsSwitchedOff = (): boolean => {
   try {
-    const res = await fetch(withBasePath(FOLDER_INDEX_PATH), { cache: "no-cache" });
+    return new URLSearchParams(window.location.search).get("mods") === "off";
+  } catch {
+    return false;
+  }
+};
+
+async function readFolderIndex(): Promise<FolderEntry[]> {
+  if (!mayHaveModsFolder()) return [];
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), FOLDER_INDEX_TIMEOUT_MS);
+  try {
+    const res = await fetch(withBasePath(FOLDER_INDEX_PATH), { cache: "no-cache", signal: abort.signal });
     if (!res.ok) return [];
     const index = (await res.json()) as { packages?: unknown };
     if (!Array.isArray(index.packages)) return [];
@@ -55,8 +76,10 @@ async function readFolderIndex(): Promise<FolderEntry[]> {
       .filter((p): p is FolderEntry => !!p && isModPackageId((p as FolderEntry).id))
       .map((p) => ({ id: p.id, hash: isSha256Hex(p.hash) ? p.hash : undefined }));
   } catch {
-    // No folder of packages beside this copy of the game (the usual case on the website)
+    // No folder of packages beside this copy of the game, or none that answered in time
     return [];
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -155,6 +178,11 @@ export async function readPackages(): Promise<LoadedPackage[]> {
 
 async function load(): Promise<ModsState> {
   const packages = await readPackages();
+  if (modsSwitchedOff()) {
+    // Listed (the panel can switch one off or remove it), nothing added
+    state = { packages };
+    return state;
+  }
   const tracks: TrackInfo[] = [];
   const active = packages.filter((p): p is LoadedPackage & { manifest: ModManifest } => p.enabled && !!p.manifest);
   const content = [];
