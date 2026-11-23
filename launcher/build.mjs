@@ -1,7 +1,8 @@
 // Cross-compiles the offline launcher (launcher/*.go) into launcher/dist/<os>-<arch>/.
 //
-// With --bundle, each build also gets the game (`out/`, from `npm run build`) as game/ beside the binary and an empty
-// mods/ folder with a README: a folder a player can unzip and run.
+// With --bundle, each build also gets the game (`out/`, from `npm run build`) as game/ beside the binary, an empty
+// mods/ folder with a README, the converter (launcher/converter/build.mjs) as converter/ and an import/ folder with a
+// README: a folder a player can unzip and run.
 //
 // Usage: npm run launcher:build [-- --bundle] [-- --only darwin-arm64,linux-amd64]
 // Needs Go (launcher/go.mod names the version).
@@ -41,6 +42,11 @@ if (bundle && !existsSync(join(outDir, "index.html"))) {
 }
 
 const { version } = JSON.parse(readFileSync(join(repoDir, "package.json"), "utf8"));
+
+// The converter is the same for every platform (scripts, no programs): built once, copied beside each launcher
+const converterDir = join(distDir, "converter");
+if (bundle) execFileSync(process.execPath, [join(launcherDir, "converter", "build.mjs"), "--out", converterDir], { stdio: "inherit" });
+const IMPORT_README = readFileSync(join(launcherDir, "import-readme.txt"), "utf8");
 
 /**
  * What of out/ a release leaves behind: Cloudflare's `_headers` (the launcher sets its own), a clone's test packages
@@ -83,6 +89,9 @@ for (const { os, arch } of targets) {
     cpSync(outDir, join(dir, "game"), { recursive: true, filter: (src) => !leftOut(relative(outDir, src)) });
     mkdirSync(join(dir, "mods"), { recursive: true });
     writeFileSync(join(dir, "mods", "README.txt"), os === "windows" ? MODS_README.replace(/\n/g, "\r\n") : MODS_README);
+    cpSync(converterDir, join(dir, "converter"), { recursive: true, filter: (src) => !src.split(/[\\/]/).includes("__pycache__") });
+    mkdirSync(join(dir, "import"), { recursive: true });
+    writeFileSync(join(dir, "import", "README.txt"), os === "windows" ? IMPORT_README.replace(/\n/g, "\r\n") : IMPORT_README);
   }
-  console.log(`${relative(repoDir, binary)}${bundle ? " + game/ + mods/" : ""}`);
+  console.log(`${relative(repoDir, binary)}${bundle ? " + game/ + mods/ + converter/ + import/" : ""}`);
 }
