@@ -97,6 +97,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   setLiveTuner: "call",
   setOvertakingRules: "call",
   setDamageEffects: "call",
+  servicePitStop: "call",
   setSimRealism: "call",
   invalidateLap: "liveCall",
   setAeroWakeState: "liveCall",

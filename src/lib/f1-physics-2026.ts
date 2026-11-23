@@ -1518,6 +1518,26 @@ export class F1Physics2026 {
     this.axles[1].tyreDamp = set.rear.damp;
   }
 
+  public servicePitStop(compound: TireCompound): void {
+    this.tireCompound = compound;
+    const set = LC26_TYRES[compound];
+    for (const w of this.wheels) {
+      const targetSpec = w.isFront ? set.front : set.rear;
+      const newShift = targetSpec.wet?.tempShiftC ?? 0;
+      setTyreSpec(w.tyre, targetSpec);
+      setTyreTemperature(w.tyre, INITIAL_TYRE_TEMP_C + 0.55 * newShift);
+      w.tyre.wear = 0;
+      w.tyre.flatSpotSeverity = 0;
+      w.tyre.grainLevel = 0;
+      w.tyre.blisterLevel = 0;
+    }
+    this.applyColdPressures();
+    this.drivetrain.fuelKg = startingFuelKg('lc26', this.chassis);
+    this.telemetry.fuelKg = this.drivetrain.fuelKg;
+    this.telemetry.tireWearPct = [0, 0, 0, 0];
+    this.setDamageEffects?.(null);
+  }
+
   /** Pushes the setup's cold pressures into each tyre (the hot pressure follows the ideal gas law) */
   private applyColdPressures(): void {
     for (const w of this.wheels) {

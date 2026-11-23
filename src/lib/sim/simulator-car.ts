@@ -194,6 +194,8 @@ export interface SimulatorCar {
 
   /** Apply the car's damage (`car-damage.ts`): aero, per-wheel grip and toe, engine; null = undamaged */
   setDamageEffects?(effects: Readonly<import('./car-damage').CarDamageEffects> | null): void;
+  /** Pit stop service: fits a fresh set of `compound`, refills fuel and clears damage */
+  servicePitStop?(compound: TireCompound): void;
   /** The car puts itself back on the line when stuck on autopilot (default true; a race field rejoins its own cars) */
   aiSelfRecovery?: boolean;
   /** Apply trailing vortex wake / slipstream deficit from cars ahead */

@@ -135,6 +135,9 @@ export class SimRuntime {
         if (!this.car || !callable.has(command.name)) return;
         const method = (this.car as unknown as Record<string, ((...args: unknown[]) => unknown) | undefined>)[command.name];
         method?.apply(this.car, command.args);
+        if (command.name === "servicePitStop") {
+          this.race?.field.repairPlayerDamage();
+        }
         if (command.epoch !== undefined) {
           this.epoch = command.epoch;
           // The car stands where it was put: the page sees it there before the next tick
