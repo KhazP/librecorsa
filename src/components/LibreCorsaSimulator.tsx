@@ -84,7 +84,7 @@ import { useRaceHistory } from "@/components/hud/useRaceHistory";
 import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type CameraNudge, type NudgeView } from "@/lib/settings/camera-nudges";
 import { dashViewFovDeg } from "@/lib/render/onboard-views";
 import { SeatPanel } from "@/components/hud/SeatPanel";
-import { accountActions } from "@/lib/account/account-store";
+import { accountActions, useAccountState } from "@/lib/account/account-store";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
@@ -1375,6 +1375,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     [session]
   );
   const closeSettings = useCallback(() => setSettingsOpen(null), []);
+  // Signed out with accounts on: the Lap times panel and the first lap on a board offer Settings > Account
+  const signedOut = useAccountState().phase === "signed-out";
   // Every way out of the pause (the touch pause button, a wheel's pause button, a race restart) closes it too
   const wasPausedRef = useRef(paused);
   useEffect(() => {
@@ -2184,6 +2186,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       onExportDriverKey: handleExportDriverKey,
       onImportDriverKey: (file: File) => void handleImportDriverKey(file),
       driverKeyNotice,
+      onSignIn: signedOut ? () => openSettings(phase === "title" ? "title" : "pause", "profile", "account") : undefined,
     },
   };
 
@@ -2333,6 +2336,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                         return null;
                       }
                     : undefined,
+                  // Settings pauses the session under it, which an online race can't do
+                  onSignIn: signedOut && raceKind !== "mp" ? () => openSettings("pause", "profile", "account") : undefined,
                 }
               : null
           }

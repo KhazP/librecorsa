@@ -24,6 +24,7 @@ import {
 } from "./hud-format";
 import { SkinBanner, SkinButton, skinCss, SkinPanel, skinRootClass, SkinTag, type SkinTone, useHudSkin } from "./styles/third-party-skin";
 import { useHudMode } from "./hud-mode";
+import { claimSignInHint } from "@/lib/account/sign-in-hint";
 
 const EMPTY = "-";
 const MINUS = "−";
@@ -62,6 +63,11 @@ interface LapSummaryProps {
   driverName?: string;
   /** Changes the driver's name on the board (their laps move with it): null once it has taken, else why not */
   onRename?: (name: string) => Promise<string | null>;
+  /**
+   * Opens Settings > Profile and data > Account. Given only while accounts are on and this device is signed out; the
+   * card says what an account is for once, on the first lap that goes up to an online board
+   */
+  onSignIn?: () => void;
 }
 
 /** Gap between the toast and the HUD block it clears (px) */
@@ -126,10 +132,17 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
 
   // A new lap starts collapsed and un-hovered again (the box is re-keyed under a still pointer, which sends no
   // pointerleave)
+  const [signInHint, setSignInHint] = useState(false);
   useEffect(() => {
     setExpanded(false);
     setHovered(false);
+    setSignInHint(false);
   }, [s.lapNumber]);
+  // The first lap on a board while signed out says once that an account keeps it on every device
+  const canSignIn = Boolean(props.onSignIn);
+  useEffect(() => {
+    if (canSignIn && submitState === "sent" && claimSignInHint()) setSignInHint(true);
+  }, [canSignIn, submitState, s.lapNumber]);
   // The pause menu or a replay covers the toast: the pointer is no longer on it
   useEffect(() => {
     if (hidden) setHovered(false);
@@ -138,9 +151,10 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
   // Hidden, the clock stops: the toast gets its full time again once the HUD is back
   useEffect(() => {
     if (expanded || hovered || hidden || submitState === "sending") return;
-    const id = window.setTimeout(() => closeRef.current(), TOAST_MS);
+    // The one-time sign-in note gets the time to be read as well
+    const id = window.setTimeout(() => closeRef.current(), signInHint ? TOAST_MS * 2 : TOAST_MS);
     return () => window.clearTimeout(id);
-  }, [expanded, hovered, hidden, submitState, s.lapNumber]);
+  }, [expanded, hovered, hidden, submitState, s.lapNumber, signInHint]);
 
   // Escape folds the open card back into the toast (not while it is hidden: there Esc resumes the game)
   useEffect(() => {
@@ -181,11 +195,12 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
       }}
     >
       {expanded ? (
-        <LapCard {...props} onCollapse={() => setExpanded(false)} />
+        <LapCard {...props} signInHint={signInHint} onCollapse={() => setExpanded(false)} />
       ) : (
         <>
           <LapToast summary={s} onOpen={() => setExpanded(true)} onClose={onClose} />
           {submitState === "waiting" && props.submitError ? <ToastNote text={props.submitError} /> : null}
+          {signInHint && props.onSignIn ? <SignInNote place="toast" onSignIn={props.onSignIn} /> : null}
         </>
       )}
     </div>,
@@ -385,6 +400,57 @@ const ToastNote: React.FC<{ text: string }> = ({ text }) => {
   );
 };
 
+/**
+ * The one-time note that an account keeps best laps and driver names on every device, with a way to sign in: under
+ * the toast (it clears itself like the toast) or as a line at the foot of the card
+ */
+const SignInNote: React.FC<{ place: "toast" | "card"; onSignIn: () => void }> = ({ place, onSignIn }) => {
+  const skin = useHudSkin();
+  const tx = useTranslations("hud.lapSummary");
+  // Drawn under the HUD, which re-renders every frame: the words are read once per language
+  const words = useMemo(() => ({ hint: tx("signInHint"), signIn: tx("signIn") }), [tx]);
+  const row = "flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] leading-snug";
+  if (skin !== null) {
+    const button = (
+      <SkinButton onClick={onSignIn} className="h-7 px-2.5 text-[12px] font-semibold">
+        {words.signIn}
+      </SkinButton>
+    );
+    return place === "toast" ? (
+      <SkinBanner role="status" cut="sm" className={`mt-1.5 ms-auto w-fit max-w-full px-3 py-1 font-medium pointer-coarse:mx-auto ${row}`}>
+        <Icon name="profile" size="xs" className="shrink-0" />
+        {words.hint}
+        {button}
+      </SkinBanner>
+    ) : (
+      <p className={`-mt-1 justify-end text-end ${row} ${skinCss.inkDim}`}>
+        {words.hint}
+        {button}
+      </p>
+    );
+  }
+  const button = (
+    <Button size="sm" variant={place === "toast" ? "secondary" : "ghost"} onClick={onSignIn}>
+      {words.signIn}
+    </Button>
+  );
+  return place === "toast" ? (
+    <p
+      role="status"
+      className={`mt-1.5 ms-auto w-fit max-w-full rounded-lc-row border border-white/10 bg-lc-void/84 px-3 py-1 font-medium text-lc-chalk shadow-lc-pop backdrop-blur-[8px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto ${row}`}
+    >
+      <Icon name="profile" size="xs" className="shrink-0" />
+      {words.hint}
+      {button}
+    </p>
+  ) : (
+    <p className={`-mt-1 justify-end text-end text-lc-slate ${row}`}>
+      {words.hint}
+      {button}
+    </p>
+  );
+};
+
 /** A read-out inside the card: the value, then the words that say what it is (no label above) */
 const Stat: React.FC<{ value: React.ReactNode; label: string; className?: string }> = ({ value, label, className = "" }) => {
   const skin = useHudSkin();
@@ -409,6 +475,8 @@ const Stat: React.FC<{ value: React.ReactNode; label: string; className?: string
 const LapCard: React.FC<
   LapSummaryProps & {
     onCollapse: () => void;
+    /** This lap's card carries the one-time note on signing in */
+    signInHint?: boolean;
   }
 > = ({
   summary: s,
@@ -421,6 +489,8 @@ const LapCard: React.FC<
   submitError = null,
   driverName,
   onRename,
+  onSignIn,
+  signInHint = false,
 }) => {
   const skin = useHudSkin();
   const units = useUnits();
@@ -634,6 +704,7 @@ const LapCard: React.FC<
         {onRename && driverName && (submitState === "sent" || submitState === "error") ? (
           <DriverNameLine name={driverName} onBoard={submitState === "sent"} onRename={onRename} />
         ) : null}
+        {signInHint && onSignIn ? <SignInNote place="card" onSignIn={onSignIn} /> : null}
       </SkinPanel>
     );
   }
@@ -742,6 +813,7 @@ const LapCard: React.FC<
       {onRename && driverName && (submitState === "sent" || submitState === "error") ? (
         <DriverNameLine name={driverName} onBoard={submitState === "sent"} onRename={onRename} />
       ) : null}
+      {signInHint && onSignIn ? <SignInNote place="card" onSignIn={onSignIn} /> : null}
     </div>
   );
 };
