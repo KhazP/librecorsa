@@ -27,7 +27,7 @@ import { AiOpponentField, aiDriversFor, type FieldIncident, type RacecraftParams
 import { judgeContact } from '../../../src/lib/sim/race-incidents';
 import type { SimulatorCar } from '../../../src/lib/sim/simulator-car';
 import { TrackEnvironment } from '../../../src/lib/sim/track-environment';
-import { DEFAULT_SESSION_CONDITIONS } from '../../../src/lib/sim/weather';
+import { DEFAULT_SESSION_CONDITIONS, type WeatherPresetId } from '../../../src/lib/sim/weather';
 import { loadGlbGeometry } from '../../lib/glb-geometry';
 
 export const STAND_IN_PROFILES = ['none', 'line', 'slow', 'early', 'weave'] as const;
@@ -47,6 +47,8 @@ export interface StandInRaceOptions {
   /** The stand-in's grid slot (default 'middle': cars to race on both sides of it) */
   playerGrid?: 'back' | 'middle' | 'front' | 'random';
   localPlanner?: boolean;
+  /** The session's weather (default clear) */
+  weather?: WeatherPresetId;
 }
 
 /** One kind of contact, counted once per pair per second */
@@ -181,7 +183,7 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
   const L = track.totalLengthM;
   const player = makeTemplate(o.car, track);
   const spectate = o.standIn === 'none';
-  const env = new TrackEnvironment(track, { ...DEFAULT_SESSION_CONDITIONS, weather: 'clear' });
+  const env = new TrackEnvironment(track, { ...DEFAULT_SESSION_CONDITIONS, weather: o.weather ?? 'clear' });
   const field = new AiOpponentField(track, player, aiDriversFor(o.aiCars), env, {
     skill: o.skill,
     seed: o.seed,
