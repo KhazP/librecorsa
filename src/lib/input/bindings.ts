@@ -443,6 +443,16 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
 
 export const PAD_LAYOUT_IDS = Object.keys(PAD_LAYOUTS) as PadLayout[];
 
+/**
+ * Formula style as it was until 23 Nov 2026 (LB the MFD's pages, no Overtake button). A saved map that is exactly this
+ * is a player who picked Formula style then, and moves on to it as it is now (parsePlayerSettings)
+ */
+export const RETIRED_FORMULA_STYLE_BUTTONS: PadButtonBindings = {
+  ...PAD_LAYOUTS.f1.buttons,
+  overtake: null,
+  mfdPage: 4,
+};
+
 /** The ready-made layout these bindings and pedals are, or null once the player has rebound a button or moved the pedals */
 export function matchPadLayout(bindings: PadButtonBindings, sources: PadPedalSources = DEFAULT_PAD_PEDAL_SOURCES): PadLayout | null {
   const set = matchPedalSet(sources);

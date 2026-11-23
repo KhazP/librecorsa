@@ -10,6 +10,8 @@ import {
   DEFAULT_KEY_BINDINGS,
   BUMPER_SHIFT_BUTTONS,
   GT_STYLE_BUTTONS,
+  PAD_LAYOUTS,
+  RETIRED_FORMULA_STYLE_BUTTONS,
   RETIRED_GT_STYLE_BUTTONS,
   DEFAULT_PAD_BUTTONS,
   KEY_ACTIONS,
@@ -670,6 +672,8 @@ function parsePadButtons(v: unknown): PadButtonBindings {
   }
   // GT style as it was before the headlights took L3 (22 Nov 2026): such a player gets GT style as it is now
   if (PAD_ACTIONS.every(({ id }) => out[id] === RETIRED_GT_STYLE_BUTTONS[id])) return { ...GT_STYLE_BUTTONS };
+  // Formula style as it was before Overtake took LB (23 Nov 2026): such a player gets Formula style as it is now
+  if (PAD_ACTIONS.every(({ id }) => out[id] === RETIRED_FORMULA_STYLE_BUTTONS[id])) return { ...PAD_LAYOUTS.f1.buttons };
   return out;
 }
 
