@@ -25,6 +25,10 @@ import { getActiveTrackData, RWANDA_DRS_ZONES, setActiveTrack, type RawTrackJson
 import { f1EnergyCircuit, inStretch } from '../src/lib/sim/f1-energy-circuits';
 import { straightModeWindows } from '../src/lib/sim/straight-mode-zones';
 import { lowGripCall, recommendedCompound } from '../src/lib/sim/wet-tyres';
+import { TrackEnvironment } from '../src/lib/sim/track-environment';
+import { DEFAULT_SESSION_CONDITIONS } from '../src/lib/sim/weather';
+import { ersButtons } from '../src/components/hud/ers-buttons';
+import type { CarTelemetry } from '../src/types/f1';
 import { OvertakeGrant } from '../src/lib/sim/overtaking-rules';
 import { createSimHost, loopbackTransport } from '../src/lib/sim/runtime/sim-host';
 import { parsePlayerSettings } from '../src/lib/settings/player-settings';
@@ -398,6 +402,47 @@ console.log('\n== Low Grip Conditions (B1.5.11, B7.1.2 b, B7.2.1 g, B7.2.2 d, C5
   run(big, 50, { cutStepW: 350_000 });
   const first = run(big, 1, { cutStepW: 350_000, valueSPerMJ: 0.5 })[0];
   check('A bigger-cut sector\'s cut takes at least 250 kW at once (all of it)', 350_000 - first >= 250_000, `${kW(first)} left`);
+
+  // The Boost never gives less than no Boost: held from off the throttle or part throttle, then flat out where the
+  // management deploys and then where it cuts. In a race, in practice, and in Low Grip
+  const phases = (k: number): Partial<ErsStepInput> => (k < 40 ? { throttle: k < 20 ? 0 : 0.5 } : { valueSPerMJ: k < 400 ? 10 : 0.5 });
+  const worst = (boost: Partial<ErsStepInput>) => {
+    const plain = run(new Ers2026Control(), 900, phases);
+    const boosted = run(new Ers2026Control(), 900, (k) => ({ ...phases(k), boost: true, ...boost }));
+    return Math.min(...plain.map((p, k) => boosted[k] - p));
+  };
+  const wRace = worst({ boostCapped: true });
+  const wPractice = worst({});
+  const wLow = worst({ boostHoldOnly: true, boostCapped: true });
+  check('The Boost held from off the throttle never gives less than no Boost (race, practice, Low Grip)', wRace >= -1 && wPractice >= -1 && wLow >= -1, `${kW(wRace)} / ${kW(wPractice)} / ${kW(wLow)} at worst`);
+  // ... and a Low Grip Boost held from part throttle stops the management's cut, but raises nothing
+  const lowHeld = run(new Ers2026Control(), 900, (k) => ({ ...phases(k), boost: true, boostHoldOnly: true }));
+  check('... a Low Grip Boost keeps the power through the management\'s cut, never over it', lowHeld.slice(400).every((p) => Math.abs(p - lowHeld[399]) < 1) && Math.max(...lowHeld) <= 350_000 + 1, `${kW(lowHeld[899])} at the end`);
+
+  // The HUD: the badge reads Low Grip in any session; the call's off is a plain false, not a missing key
+  const tel = (o: Partial<CarTelemetry>) => ({ ersBoostActive: false, overtakeRace: false, overtakeInUse: false, overtakeAuto: false, overtakeAvailable: true, manualOverrideActive: false, ...o }) as CarTelemetry;
+  check('HUD: Overtake reads Low Grip in practice and in a race, and nothing special without the call',
+    ersButtons(tel({ lowGrip: true })).overtake === 'lowGrip' && ersButtons(tel({ lowGrip: true, overtakeRace: true })).overtake === 'lowGrip' && ersButtons(tel({ lowGrip: false })).overtake === null && ersButtons(tel({ lowGrip: false })).lowGrip === false);
+
+  // End to end: a heavy-rain session declares Low Grip, and the car in the simulation worker takes it
+  const env = new TrackEnvironment(pad, { ...DEFAULT_SESSION_CONDITIONS, weather: 'heavy_rain' });
+  const loop = loopbackTransport();
+  const host = createSimHost(loop.transport, loop.wallNowMs);
+  const car = host.adopt(vehicleModelSpec('lc26').createSim(pad, null), 'lc26');
+  car.resetToStartGrid(false);
+  host.endFrame(true);
+  for (let k = 0; k < 120 && !env.lowGrip; k++) env.update(0.5, [car]);
+  const declaredAfterS = env.weather.lineWaterMm;
+  for (let k = 0; k < 3; k++) {
+    env.update(1 / 60, [car]);
+    car.step(1 / 60, {});
+    loop.advance(1 / 60);
+    host.endFrame(true);
+  }
+  const worker = loop.runtime.simulatedCar as unknown as { vehicle: { flapsLowGrip: boolean | null; ersLowGrip: boolean }; telemetry: CarTelemetry } | null;
+  check('Heavy rain: race control declares Low Grip, and the worker\'s car and its telemetry follow',
+    env.lowGrip && worker?.vehicle.flapsLowGrip === true && worker.vehicle.ersLowGrip && car.telemetry.lowGrip === true,
+    `line water ${declaredAfterS.toFixed(2)} mm, worker ${worker?.vehicle.flapsLowGrip}, telemetry ${car.telemetry.lowGrip}`);
 
   // Through the car: race control's call in the weather sample
   const wet = (lowGrip: boolean) => ({ waterMm: 0, wetness: 0, ambientC: 25, rain: 0, lowGrip });

@@ -3320,7 +3320,7 @@ export class F12026CarSim implements SimulatorCar {
     t.boostRemainingS = this.boostRemainingS;
     t.overtakingRules = this.profile.hasDrs ? this.rules : undefined;
     t.overtakeAvailable = this.profile.hasErs && this.overtakeAvailable && !(this.rules === 'straight-mode-2026' && this.lowGrip);
-    t.lowGrip = this.rules === 'straight-mode-2026' && this.lowGrip ? true : undefined;
+    t.lowGrip = rules2026 ? this.rules === 'straight-mode-2026' && this.lowGrip : undefined;
     t.turboBoostBar = this.profile.turbo ? Math.round(v.turboBoostBar * 100) / 100 : 1;
     t.fuelKg = Math.round(this.fuelKg * 100) / 100;
 
