@@ -224,6 +224,9 @@ export class RacecraftMemory {
   /** A pass called off with the car still out beside the other's gearbox: that car (its id), and the side we are out on */
   public backOffId: string | null = null;
   public backOffSide = 0;
+  /** A pass called off: the car it was on (its id), and the race time a new try on it may start (passCooldownS) */
+  public passRetryId: string | null = null;
+  public passRetryAtS = 0;
 
   public reset(): void {
     this.alongside.clear();
@@ -237,5 +240,7 @@ export class RacecraftMemory {
     this.passSide = 0;
     this.backOffId = null;
     this.backOffSide = 0;
+    this.passRetryId = null;
+    this.passRetryAtS = 0;
   }
 }
