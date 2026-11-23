@@ -3,7 +3,9 @@
  * server and Cache Storage: a kept file is served after a 304 and never downloaded again, across pages and across a
  * new worker (a deploy); a file changed under the same name is downloaded and replaces the kept one; offline, a slow
  * server or a server error serves the kept copy; a 404 drops it; the kept files stay within the budget, least
- * recently used first, and files idle too long go; the earlier worker's per-build caches are deleted.
+ * recently used first, and files idle too long go; the earlier worker's per-build caches are deleted. Also its other
+ * two jobs: imported mod packages served from their own cache and never swept, and the shell (the game's pages and
+ * scripts) kept per build for offline play, a page served from it only when the server doesn't answer.
  *
  *   npx tsx scripts/verify-asset-cache.ts
  */
@@ -169,7 +171,9 @@ const clock = { now: Date.UTC(2026, 10, 15) };
 
 interface Worker {
   fire(type: string, event: object): void;
-  get(p: string, opts?: { client?: string; init?: RequestInit; origin?: string }): Promise<{ intercepted: boolean; res?: Response; body?: Uint8Array }>;
+  get(p: string, opts?: { client?: string; init?: RequestInit; origin?: string; navigate?: boolean }): Promise<{ intercepted: boolean; res?: Response; body?: Uint8Array }>;
+  /** A page's message to the worker; resolves when the work it started is done */
+  message(data: unknown): Promise<void>;
 }
 
 function startWorker(site: Site, storage: FakeStorage): Worker {
@@ -188,11 +192,19 @@ function startWorker(site: Site, storage: FakeStorage): Worker {
   const fire = (type: string, event: object) => (listeners.get(type) ?? []).forEach((fn) => fn(event));
   return {
     fire,
-    async get(p, { client = "page", init, origin = ORIGIN } = {}) {
+    async message(data) {
+      const work: Promise<unknown>[] = [];
+      fire("message", { data, waitUntil: (w: Promise<unknown>) => work.push(w) });
+      await Promise.all(work);
+    },
+    async get(p, { client = "page", init, origin = ORIGIN, navigate = false } = {}) {
       let answer: Promise<Response> | null = null;
       const later: Promise<unknown>[] = [];
+      const request = new Request(origin + p, init);
+      // A page load: Node won't construct a navigate-mode request
+      if (navigate) Object.defineProperty(request, "mode", { value: "navigate" });
       fire("fetch", {
-        request: new Request(origin + p, init),
+        request,
         clientId: client,
         respondWith: (r: Promise<Response>) => (answer = Promise.resolve(r)),
         waitUntil: (w: Promise<unknown>) => later.push(w),
@@ -226,7 +238,7 @@ async function main() {
   check("A byte range is left to the network", !(await sw.get(GLB, { init: { headers: { Range: "bytes=0-99" } } })).intercepted);
   check("A URL with a query string is left to the network", !(await sw.get(`${GLB}?v=2`)).intercepted);
   check("Another origin is left to the network", !(await sw.get(GLB, { origin: "https://example.com" })).intercepted);
-  check("Pages and scripts are left to the network", !(await sw.get("/play.html")).intercepted && !(await sw.get("/_next/static/chunks/a.js")).intercepted);
+  check("API calls and page data are left to the network", !(await sw.get("/api/laps")).intercepted && !(await sw.get("/play.txt")).intercepted);
   check("A no-store request is left to the network", !(await sw.get(GLB, { init: { cache: "no-store" } })).intercepted);
 
   // --- First download ---
@@ -401,11 +413,111 @@ async function main() {
   await sw.get("/tracks/h/h.glb", { client: "q3" });
   check("A kept file without a record gets one, sized from its headers", tight.record("/tracks/g/g.glb")?.size === 300 * KB, JSON.stringify(tight.record("/tracks/g/g.glb")));
 
+  await modChecks();
+  await shellChecks();
+
   if (failed) {
     console.log(`\n${failed} check(s) failed`);
     process.exit(1);
   }
   console.log("\nAll asset cache checks passed");
+}
+
+const enc = (text: string) => new TextEncoder().encode(text);
+const host = (site: Site, p: string, text: string, etag: string) => site.files.set(p, { body: enc(text), etag, headers: { "Content-Type": "text/html" } });
+const textOf = (r: { body?: Uint8Array }) => (r.body ? new TextDecoder().decode(r.body) : "");
+
+/** Imported mod packages: their own cache, never swept */
+async function modChecks(): Promise<void> {
+  const site = new Site();
+  const box = new FakeStorage();
+  box.quota = 2 * 1024 * KB; // a 1 MB budget for kept files
+  const sw = startWorker(site, box);
+  const MOD_GLB = "/mods/jdoe.pack/ring/ring.glb";
+  await (await box.open("librecorsa-mods-v1")).put(ORIGIN + MOD_GLB, new Response(new Uint8Array(900 * KB).fill(7), { headers: { "X-File-Size": String(900 * KB) } }));
+  let mark = site.log.length;
+  let r = await sw.get(MOD_GLB);
+  check("An imported mod's file comes from its own cache, the server never asked", r.intercepted && r.body?.length === 900 * KB && site.since(mark).requests === 0);
+  r = await sw.get(MOD_GLB, { init: { headers: { Range: "bytes=0-9" } } });
+  check("Even for a byte range (the server hasn't got it)", r.intercepted && r.body?.length === 900 * KB);
+  host(site, "/mods/_index.json", '{"format":1,"packages":[]}', '"idx"');
+  mark = site.log.length;
+  r = await sw.get("/mods/_index.json");
+  check("A /mods/ file not imported comes from the server (public/mods/, the launcher)", r.res?.status === 200 && site.since(mark).requests === 1);
+  for (const [i, name] of ["a", "b", "c", "d"].entries()) {
+    site.put(`/tracks/${name}/${name}.glb`, 300 * KB, 40 + i);
+    clock.now += 20 * 60_000;
+    await sw.get(`/tracks/${name}/${name}.glb`, { client: `m-${name}` });
+  }
+  check("Circuit files past the budget are swept", box.kept().length < 4, box.kept().join());
+  clock.now += 46 * DAY;
+  site.put("/tracks/e/e.glb", 10 * KB, 50);
+  await startWorker(site, box).get("/tracks/e/e.glb", { client: "m-e" });
+  check("But the sweep (budget or 45 idle days) never touches an imported mod", !!(await (await box.open("librecorsa-mods-v1")).match(ORIGIN + MOD_GLB)));
+}
+
+/** The shell: the game's pages and scripts, per build, for offline play */
+async function shellChecks(): Promise<void> {
+  const site = new Site();
+  const box = new FakeStorage();
+  let sw = startWorker(site, box);
+  const manifest = (build: string, files: string[]) => host(site, "/offline-manifest.json", JSON.stringify({ build, files }), `"${build}"`);
+  host(site, "/", "<html>home v1</html>", '"h1"');
+  host(site, "/play", "<html>play v1</html>", '"p1"');
+  host(site, "/_next/static/chunks/a.js", "console.log('a')", '"a"');
+  manifest("b1", ["/", "/play", "/_next/static/chunks/a.js"]);
+
+  site.mode = "offline";
+  const offlineFirst = await sw.get("/play", { navigate: true }).catch(() => null);
+  check("Offline before any shell: the page fails as it would without the worker", offlineFirst === null);
+  site.mode = "up";
+
+  let mark = site.log.length;
+  let r = await sw.get("/play", { navigate: true });
+  check("Online, a page always comes from the server", textOf(r) === "<html>play v1</html>" && site.since(mark).requests === 1);
+
+  await sw.message({ type: "librecorsa:sync-shell" });
+  const shell = box.caches.get("librecorsa-shell-b1");
+  check("A sync keeps every file the build lists, and marks the shell whole", !!shell && shell.entries.size === 4, `${shell?.entries.size} entries`);
+
+  site.mode = "offline";
+  r = await sw.get("/play", { navigate: true });
+  check("Offline, a page comes from the shell", textOf(r) === "<html>play v1</html>");
+  r = await sw.get("/play.html", { navigate: true });
+  const root = await sw.get("/", { navigate: true });
+  check("Its .html and the home page too", textOf(r) === "<html>play v1</html>" && textOf(root) === "<html>home v1</html>");
+  r = await sw.get("/_next/static/chunks/a.js");
+  check("And the scripts it names", textOf(r) === "console.log('a')");
+  site.mode = "error";
+  r = await sw.get("/play", { navigate: true });
+  check("A server error serves the shell's page", textOf(r) === "<html>play v1</html>");
+  site.mode = "up";
+
+  mark = site.log.length;
+  r = await sw.get("/_next/static/chunks/a.js");
+  check("A hashed script comes from the shell even online, the server not asked", textOf(r) === "console.log('a')" && site.since(mark).requests === 0);
+
+  // A deploy: new pages, one new script, one kept
+  host(site, "/play", "<html>play v2</html>", '"p2"');
+  host(site, "/_next/static/chunks/b.js", "console.log('b')", '"b"');
+  manifest("b2", ["/", "/play", "/_next/static/chunks/a.js", "/_next/static/chunks/b.js"]);
+  mark = site.log.length;
+  await sw.message({ type: "librecorsa:sync-shell" });
+  const fetched = site.log.slice(mark).map((e) => e.path);
+  check("The next build's shell copies the scripts it shares, downloading only what's new", !fetched.includes("/_next/static/chunks/a.js") && fetched.includes("/_next/static/chunks/b.js") && fetched.includes("/play"), fetched.join(", "));
+  check("And the older shell goes once the new one is whole", box.caches.has("librecorsa-shell-b2") && !box.caches.has("librecorsa-shell-b1"));
+  mark = site.log.length;
+  await sw.message({ type: "librecorsa:sync-shell" });
+  check("A sync with the shell current downloads nothing but the list", site.since(mark).requests === 1);
+
+  // A download cut short: the last whole shell stays
+  manifest("b3", ["/", "/play", "/_next/static/chunks/missing.js"]);
+  await sw.message({ type: "librecorsa:sync-shell" });
+  sw = startWorker(site, box);
+  site.mode = "offline";
+  r = await sw.get("/play", { navigate: true });
+  check("A sync cut short leaves the last whole shell serving", textOf(r) === "<html>play v2</html>" && box.caches.has("librecorsa-shell-b2"));
+  site.mode = "up";
 }
 
 main().catch((err) => {
