@@ -26,6 +26,7 @@ import {
 } from "../cloudflare/api/profile";
 import type { D1Database, Env, RateLimit } from "../cloudflare/api/types";
 import { CIRCUIT_BOARD_RESETS, type CircuitBoardReset } from "../src/lib/circuit-board-resets";
+import { fetchDriverProfile, lapBoardPercentile, parseDriverProfile } from "../src/lib/net/driver-profile";
 import { boardPhysicsVersion, lapPhysicsVersion, PHYSICS_VERSION, PHYSICS_VERSIONS, shippingLapPhysicsVersion } from "../src/lib/sim/lap-types";
 import type { VehicleModelId } from "../src/types/f1";
 import { fakeD1, fakeR2 } from "./lib/fake-cloudflare";
@@ -419,6 +420,53 @@ async function main(): Promise<void> {
         /SEARCH l USING INDEX laps_board/.test(planPre) &&
         !/SCAN (?:laps|l)\b/.test(planPre),
       planPre,
+    );
+  }
+
+  // 5. Client parser & fetch (src/lib/net/driver-profile.ts) ---------------------------------------------------------
+  {
+    const db = fakeD1(FULL);
+    const env = { ONLINE_BOARD: "on", BOARD_DB: db, GHOSTS: fakeR2() } as unknown as Env;
+    await addLap(db, { name: "Max Pace", code: "MAX", track: "spielberg", vehicle: "lc26", ms: 69_500 });
+    await addLap(db, { name: "Other Driver", track: "spielberg", vehicle: "lc26", ms: 71_000 });
+    const raw = await (await apiCall(env, "/api/drivers/profile?name=Max%20Pace")).json();
+    const parsed = parseDriverProfile(raw);
+    check(
+      "client: parseDriverProfile validates server response",
+      parsed !== null &&
+        parsed.name === "Max Pace" &&
+        parsed.code === "MAX" &&
+        parsed.circuitsDriven === 1 &&
+        parsed.boardsEntered === 1 &&
+        parsed.laps[0]?.position === 1 &&
+        parsed.laps[0]?.boardSize === 2,
+      JSON.stringify(parsed && { name: parsed.name, rating: parsed.rating, laps: parsed.laps.length }),
+    );
+    check(
+      "client: parseDriverProfile rejects malformed payloads and drops invalid lap rows",
+      parseDriverProfile(null) === null &&
+        parseDriverProfile({ ok: false, error: "bad" }) === null &&
+        parseDriverProfile({ ...(raw as object), rating: 120 }) === null &&
+        parseDriverProfile({ ...(raw as object), laps: [...(raw as DriverProfileAnswer).laps, { id: "bad", position: 5, boardSize: 2 }] })?.laps.length === 1,
+    );
+    check(
+      "client: lapBoardPercentile matches server boardPercentile",
+      lapBoardPercentile(1, 1) === boardPercentile(1, 1) && lapBoardPercentile(3, 10) === boardPercentile(3, 10),
+    );
+
+    let seenUrl = "";
+    const fetched = await fetchDriverProfile("  Max   Pace  ", {
+      fetchJson: async (u) => {
+        seenUrl = u;
+        return { status: 200, body: raw };
+      },
+    });
+    const failed = await fetchDriverProfile("Max Pace", { fetchJson: async () => ({ status: 500, body: { ok: false } }) });
+    const blank = await fetchDriverProfile("   ", { fetchJson: async () => ({ status: 200, body: raw }) });
+    check(
+      "client: fetchDriverProfile canonicalizes name query and returns null on failure or blank name",
+      seenUrl.endsWith("?name=max+pace") && fetched?.name === "Max Pace" && failed === null && blank === null,
+      seenUrl,
     );
   }
 
