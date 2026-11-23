@@ -223,6 +223,8 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
   let pushTimer: unknown = null;
   let periodicTimer: unknown = null;
   let stopLeave: (() => void) | null = null;
+  /** A push on the way out, under way: hidden and gone come one after the other, and one request is all there is time for */
+  let leavingPush: Promise<void> | null = null;
   /** Syncs run one at a time */
   let queue: Promise<unknown> = Promise.resolve();
 
@@ -379,7 +381,12 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
     const withinWindow = () => e.now() - startedAt < RELOAD_WINDOW_MS || e.loadingScreen?.() === true;
     if ((account.save?.rev ?? 0) > rec.appliedRev || account.pendingMerges > 0) await runSync({ apply: withinWindow });
     else if (await e.sync.changedSince(account.id)) await runSync({ apply: false });
-    else schedulePeriodic();
+    else {
+      schedulePeriodic();
+      // Nothing to sync: the cloud's save is read once all the same, so a change made just before the page goes away
+      // can go up in the one request there is time for then
+      await e.sync.prime(account.id);
+    }
   }
 
   function onConfig(config: { accounts: boolean; providers: readonly AccountProvider[] }): void {
@@ -403,7 +410,12 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
     }
     if (was) return;
     set({ phase: "loading" });
-    stopLeave = e.onLeave((leaving) => void pushIfChanged(leaving));
+    // Hidden is often the last moment too (a phone puts the page away, a tab closes after it): both go up the quick way
+    stopLeave = e.onLeave(() => {
+      leavingPush ??= pushIfChanged(true).finally(() => {
+        leavingPush = null;
+      });
+    });
     void enter();
   }
 

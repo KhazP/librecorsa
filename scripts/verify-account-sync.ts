@@ -416,6 +416,8 @@ function fakeServer() {
     ghosts: new Map<string, string>(),
     calls: [] as string[],
     savePuts: 0,
+    /** Save writes sent with keepalive (the page going away) */
+    keepalives: 0,
     ghostPuts: 0,
     ghostGets: 0,
     signedIn: true,
@@ -459,6 +461,7 @@ function fakeServer() {
       if (path === "/account/save" && method === "GET") return json(200, { ok: true, rev: s.rev, updatedAt: s.rev ? 1 : null, doc: s.doc, pending: s.pending });
       if (path === "/account/save" && method === "PUT") {
         s.savePuts++;
+        if (init.keepalive) s.keepalives++;
         const hook = s.beforePut;
         s.beforePut = null;
         hook?.();
@@ -666,6 +669,55 @@ async function main2(): Promise<void> {
   check("a 401 reads as signed out", out.kind === "failed" && out.signedOut === true);
   const noStorage = createSyncEngine({ api: createAccountApi({ base: "http://test/api", fetch: (u, i) => server.fetch(u, i) }), storage: null, ghosts: null, sha256: null, now: () => 1, label: () => "x" });
   check("no storage: a sentence, no throw", (await noStorage.sync({ accountId: "acc1", apply: true })).kind === "failed");
+
+  {
+    // Leaving (the page hidden or going away): a read of the cloud's save first would not come back before the page
+    // is gone, and the write after it would never go out. One keepalive write from the cloud's save as this page last
+    // saw it, no ghosts
+    const server = fakeServer();
+    const clock = { t: 1_000 };
+    const store = memoryStorage({ "bugesera.track": "spa", "lc.garage.presets.lc26": JSON.stringify([preset("1", "Quali", 1)]) });
+    const laps = memoryGhosts();
+    const leaver = device(server, "Leaver", store, laps, clock);
+    await leaver.sync({ accountId: "acc1", apply: true });
+    clock.t = 2_000;
+    store.setItem("bugesera.track", "monza");
+    await laps.save(JSON.stringify(lap("vir", 95_000)));
+    const from = server.calls.length;
+    const out = await leaver.sync({ accountId: "acc1", apply: false, leaving: true });
+    check(
+      "leaving: one keepalive write, no read of the cloud's save before it and no ghosts",
+      out.kind === "synced" && out.pushed && same(server.calls.slice(from), ["PUT /account/save"]) && server.keepalives === 1,
+      server.calls.slice(from).join(),
+    );
+    check("leaving: the change is in the cloud, the new lap's ghost waits", cloudDoc(server).keys["bugesera.track"]?.value === "monza" && Object.keys(cloudDoc(server).bestLaps).length === 0);
+    check("the lap held back reads as a change, and the next sync sends it", (await leaver.changedSince("acc1")) && (await leaver.sync({ accountId: "acc1", apply: false })).kind === "synced" && Object.keys(cloudDoc(server).bestLaps).length === 1 && server.ghostPuts === 1);
+
+    // Another device wrote since: the quick write is refused, then combined with what it wrote
+    clock.t = 3_000;
+    const other = structuredClone(cloudDoc(server));
+    other.keys["bugesera.vehicle"] = { value: "chaparral-2d", t: 2_500 };
+    server.doc = other;
+    server.rev++;
+    store.setItem("bugesera.track", "imola");
+    const again = await leaver.sync({ accountId: "acc1", apply: false, leaving: true });
+    check(
+      "leaving after another device wrote: refused, then both changes are kept",
+      again.kind === "synced" && cloudDoc(server).keys["bugesera.vehicle"]?.value === "chaparral-2d" && cloudDoc(server).keys["bugesera.track"]?.value === "imola",
+    );
+
+    // A new page with nothing to sync on start reads the cloud's save once (prime), so leaving still takes one request
+    const page = device(server, "Leaver", store, laps, clock);
+    await page.prime("acc1");
+    store.setItem("bugesera.track", "suzuka");
+    const at = server.calls.length;
+    const left = await page.sync({ accountId: "acc1", apply: false, leaving: true });
+    check(
+      "a page that only primed: leaving is one write",
+      left.kind === "synced" && same(server.calls.slice(at), ["PUT /account/save"]) && cloudDoc(server).keys["bugesera.track"]?.value === "suzuka",
+      server.calls.slice(at).join(),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -679,6 +731,8 @@ function fakeEnv(server: ReturnType<typeof fakeServer>, opts: { accounts: boolea
   const clock = { t: 100_000 };
   const timers: { fn: () => void; ms: number }[] = [];
   const log = { hashes: [] as string[], reloads: 0, navigations: [] as string[], configWatch: 0 };
+  /** What the store does when the page is hidden (false) or goes away (true) */
+  const leave = { cb: null as ((leaving: boolean) => void) | null };
   const storage = opts.storage ?? memoryStorage();
   const api = createAccountApi({ base: "http://test/api", fetch: (u, i) => server.fetch(u, i) });
   const session = new Map<string, string>();
@@ -710,13 +764,18 @@ function fakeEnv(server: ReturnType<typeof fakeServer>, opts: { accounts: boolea
     driverName: () => "Alp",
     returnPath: () => "/play",
     passkey: async () => ({}),
-    onLeave: () => () => {},
+    onLeave(cb) {
+      leave.cb = cb;
+      return () => {
+        leave.cb = null;
+      };
+    },
   };
   /** Runs the timers due within `ms` (the push delay) */
   const runTimers = (ms: number) => {
     for (const t of timers.splice(0).filter((x) => x.ms <= ms)) t.fn();
   };
-  return { env, clock, timers, log, storage, runTimers };
+  return { env, clock, timers, log, storage, runTimers, leave };
 }
 
 async function main3(): Promise<void> {
@@ -790,6 +849,19 @@ async function main3(): Promise<void> {
     f.runTimers(PUSH_DELAY_MS);
     await settle(() => server.rev === 2);
     check("the save point's push went up", server.rev === 2 && (server.doc as SaveDoc).keys["bugesera.track"]?.value === "spa");
+
+    // The page is hidden, then goes away: a change since goes up in one write, with no read of the cloud's save first
+    f.storage.setItem("bugesera.track", "monza");
+    const before = server.calls.length;
+    f.leave.cb?.(false);
+    f.leave.cb?.(true);
+    await settle(() => server.rev === 3);
+    await settle();
+    check(
+      "hidden then gone: one keepalive write of the change, nothing read first",
+      server.rev === 3 && (server.doc as SaveDoc).keys["bugesera.track"]?.value === "monza" && same(server.calls.slice(before), ["PUT /account/save"]) && server.keepalives === 1,
+      server.calls.slice(before).join(),
+    );
 
     const deferredMsg = await (async () => {
       const d = structuredClone(server.doc as SaveDoc);
