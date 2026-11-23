@@ -742,5 +742,9 @@
   "overheadNameplates.fastestLap": "Tiny chip on the name floating above a car: this driver set the fastest lap. Abbreviation of Fastest lap.",
   "overheadNameplates.rank": "Place in the order on the name floating above a car, e.g. P3 = third. {rank}: the place number.",
   "hiddenNote.off": "Banner while the player has hidden the HUD.",
-  "hiddenNote.offKey": "The same banner with the key or button that shows the HUD again. {key}: a key or button name, untranslated."
+  "hiddenNote.offKey": "The same banner with the key or button that shows the HUD again. {key}: a key or button name, untranslated.",
+  "speedCluster.lowGrip": "Badge where the Overtake button sits once race control declares Low Grip Conditions (a wet track) under F1's 2026 rules. Short.",
+  "speedCluster.overtakeAuto": "Badge while the game's Automatic Overtake setting is using the car's Overtake. Short.",
+  "speedCluster.overtake2026LockedTitle": "Tooltip. The detection line and activation line are painted lines on the track in F1's 2026 rules.",
+  "touchControls.overtakeShort": "Two-letter abbreviation of Overtake on a small round touch button; keep it two or three letters."
 }

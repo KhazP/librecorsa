@@ -47,7 +47,18 @@ function fresh(make: () => SimulatorCar, speedMs: number): SimulatorCar {
 }
 const bodySlip = (sim: SimulatorCar) => Math.atan2(sim.vyMs, Math.max(1, Math.abs(sim.vxMs)));
 
-export function measureLc26(make: () => SimulatorCar): Lc26Measurement {
+/** Empties a car's energy store, on either engine: what it drives then is its engine alone */
+function emptyStore(sim: SimulatorCar): void {
+  const car = sim as unknown as { vehicle?: { ersEnergyJ: number }; drivetrain?: { ersEnergyJ: number } };
+  if (car.vehicle) car.vehicle.ersEnergyJ = 0;
+  if (car.drivetrain) car.drivetrain.ersEnergyJ = 0;
+}
+
+/**
+ * `engineOnly`: the straight line with the energy store held empty, so the engines are compared without their energy
+ * rules (the rigid-body car runs the FIA's 2026 ones, the older engine its data's delivery maps)
+ */
+export function measureLc26(make: () => SimulatorCar, opts: { engineOnly?: boolean } = {}): Lc26Measurement {
   // Straight line: from rest on a throttle eased whenever a rear wheel passes 9 % slip (a driver's foot: neither
   // engine's traction control), then on to the top speed
   let sim = fresh(make, 0);
@@ -57,6 +68,7 @@ export function measureLc26(make: () => SimulatorCar): Lc26Measurement {
   for (let t = 0; t < 45; t += H) {
     const spin = Math.max(sim.telemetry.wheelSlipRatios[2], sim.telemetry.wheelSlipRatios[3]);
     foot = THREE.MathUtils.clamp(foot + (spin > 0.09 ? -0.05 : 0.025), 0.15, 1);
+    if (opts.engineOnly) emptyStore(sim);
     sim.step(H, { throttle: foot });
     const kmh = sim.vxMs * 3.6;
     for (const mark of [100, 200, 300]) if (accelS[mark] === undefined && kmh >= mark) accelS[mark] = t;

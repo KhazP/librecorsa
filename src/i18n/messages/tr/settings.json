@@ -110,6 +110,10 @@
       "label": "Otomatik vites",
       "hint": "Manuel tuşlar: {up} / {down}"
     },
+    "autoOvertake": {
+      "label": "Otomatik geçiş",
+      "hint": "F1 2026: kazanılan Geçiş'i düzlüklerde kullanır, {key} tuşuna basmaktan daha az güçle"
+    },
     "autoClutch": {
       "label": "Otomatik debriyaj",
       "hint": "Stop etmeyi önler; manuel debriyajlı kalkış için kapat",

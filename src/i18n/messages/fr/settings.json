@@ -110,6 +110,10 @@
       "label": "Boîte automatique",
       "hint": "Touches manuelles : {up} / {down}"
     },
+    "autoOvertake": {
+      "label": "Dépassement automatique",
+      "hint": "F1 2026 : utilise dans les lignes droites le Dépassement obtenu, avec moins de puissance qu’un appui sur {key}"
+    },
     "autoClutch": {
       "label": "Embrayage auto",
       "hint": "Évite de caler ; à désactiver pour les départs à l’embrayage manuel",

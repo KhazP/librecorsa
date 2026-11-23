@@ -20,7 +20,7 @@ import {
   WeatherState,
   type WeatherSyncState,
 } from '@/lib/sim/weather';
-import { recommendedCompound, WET_TYRE_TRAITS, wetGripFactor, wetnessFromWater } from '@/lib/sim/wet-tyres';
+import { lowGripCall, recommendedCompound, WET_TYRE_TRAITS, wetGripFactor, wetnessFromWater } from '@/lib/sim/wet-tyres';
 import { FULL_REALISM, type SimRealismFlags } from '@/lib/sim/sim-realism';
 
 /** Below this speed a car lays no rubber (m/s) */
@@ -48,6 +48,8 @@ export class TrackEnvironment {
   /** Per simulated car: its weather sample (reused) and its AI's tyre call (`aiTyreCall`) */
   private readonly weatherSamples = new WeakMap<SimulatorCar, WeatherContactSample>();
   private readonly tyreCalls = new WeakMap<SimulatorCar, AiTyreCall>();
+  /** Race control's Low Grip Conditions, declared for the whole track from the racing line's water (`lowGripCall`) */
+  private lowGripDeclared = false;
   /** True until the first update of a session: the AI cars start on the right tyres */
   private freshSession = true;
   /** Simulation realism for every car on the track (the player's choice applies to the AI field too) */
@@ -78,6 +80,12 @@ export class TrackEnvironment {
     this.trackEvolution.timeScale = this.weather.conditions.surfaceTimeScale ?? 1;
     this.trackEvolution.baseTrackTempC = this.weather.trackTempC;
     this.freshSession = true;
+    this.lowGripDeclared = false;
+  }
+
+  /** Race control's Low Grip Conditions now (FIA 2026 F1 Section B1.5.11) */
+  public get lowGrip(): boolean {
+    return this.lowGripDeclared;
   }
 
   /** Simulation realism (tyre wear, temperature grip, fuel, wet severity): reaches each car on its next update */
@@ -193,6 +201,7 @@ export class TrackEnvironment {
     const fresh = this.freshSession;
     this.freshSession = false;
     const calledFor = recommendedCompound(weather.lineWaterMm);
+    this.lowGripDeclared = lowGripCall(weather.lineWaterMm, this.lowGripDeclared);
 
     // Cars driven elsewhere (remote players) sweep the racing line dry here too, as they do on their own clients
     for (const o of others) {
@@ -225,6 +234,7 @@ export class TrackEnvironment {
       ws.humidityPct = weather.humidityPct;
       ws.windVxMs = weather.windVxMs;
       ws.windVzMs = weather.windVzMs;
+      ws.lowGrip = this.lowGripDeclared;
 
       // Topographical per-wheel water film depth [FR, FL, RR, RL]
       const bankDeg = (sample.bankingRad ?? 0) * (180 / Math.PI);

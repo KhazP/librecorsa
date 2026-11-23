@@ -595,6 +595,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     session?.runAction("boostLatch");
   }, [session]);
 
+  const handleOvertake = useCallback(() => {
+    session?.unlockAudio();
+    session?.runAction("overtake");
+  }, [session]);
+
   const handleChangeLiveTuner = useCallback((patch: LiveTunerPatch) => session?.setLiveTuner(patch), [session]);
 
   const handleToggleMouseSteer = useCallback(() => {
@@ -2258,6 +2263,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onChangeCockpitFov={handleCockpitFovChange}
           onToggleXMode={handleToggleXMode}
           onToggleBoostLatch={handleToggleBoostLatch}
+          onOvertake={handleOvertake}
           onChangeLiveTuner={handleChangeLiveTuner}
           paused={paused}
           pauseMenuCovered={settingsOpen?.from === "pause"}

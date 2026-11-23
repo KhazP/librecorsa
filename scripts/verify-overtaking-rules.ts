@@ -10,7 +10,7 @@ import {
   crossedForward,
   DETECTION_GAP_S,
   earnedAtDetection,
-  OVERTAKE_EXTRA_DEPLOY_J,
+  OVERTAKE_EXTRA_RECHARGE_J,
   OvertakeGrant,
   overtakeDetectionZone,
   overtakingRulesForSeason,
@@ -105,24 +105,24 @@ console.log('\n== Overtake Mode grant');
   let earn = true;
   const race: OvertakingRaceControl = { racing: true, earnedAtDetection: () => earn };
   const g = new OvertakeGrant();
-  check('Practice: free, no extra energy', g.available(null) && g.extraDeployJ(null) === 0);
-  check('Race: not before the detection point', !g.available(race) && g.extraDeployJ(race) === 0);
+  check('Practice: free, no extra energy', g.available(null) && g.extraRechargeJ(null) === 0);
+  check('Race: not before the detection point', !g.available(race) && g.extraRechargeJ(race) === 0);
   g.observe(0.5, 0.52, zones, race);
   check('Other zones\' detection points do not grant it', !g.available(race));
   g.observe(0.88, 0.91, zones, race);
-  check('Earned within 1 s: override + 0.5 MJ for the lap', g.available(race) && g.extraDeployJ(race) === OVERTAKE_EXTRA_DEPLOY_J);
+  check('Earned within 1 s: override + 0.5 MJ for the lap', g.available(race) && g.extraRechargeJ(race) === OVERTAKE_EXTRA_RECHARGE_J);
   g.observe(0.3, 0.33, zones, race);
   check('Kept around the lap', g.available(race));
   earn = false;
   g.observe(0.895, 0.905, zones, race);
-  check('Judged afresh next lap: lost when over 1 s', !g.available(race) && g.extraDeployJ(race) === 0);
+  check('Judged afresh next lap: lost when over 1 s', !g.available(race) && g.extraRechargeJ(race) === 0);
   let lockedEarn = true;
   const locked: OvertakingRaceControl = { racing: true, aidsLocked: true, earnedAtDetection: () => lockedEarn };
   const lg = new OvertakeGrant();
   lg.observe(0.88, 0.91, zones, locked);
-  check('Yellow zone (aids locked): no Overtake Mode and no extra energy even when earned', !lg.available(locked) && lg.extraDeployJ(locked) === 0);
+  check('Yellow zone (aids locked): no Overtake Mode and no extra energy even when earned', !lg.available(locked) && lg.extraRechargeJ(locked) === 0);
   const unlocked: OvertakingRaceControl = { racing: true, aidsLocked: false, earnedAtDetection: () => lockedEarn };
-  check('Out of the yellow: the earned override is back', lg.available(unlocked) && lg.extraDeployJ(unlocked) === OVERTAKE_EXTRA_DEPLOY_J);
+  check('Out of the yellow: the earned override is back', lg.available(unlocked) && lg.extraRechargeJ(unlocked) === OVERTAKE_EXTRA_RECHARGE_J);
   lockedEarn = false;
   g.observe(0.895, 0.905, zones, { racing: false, earnedAtDetection: () => true });
   check('After the flag: free again', g.available({ racing: false, earnedAtDetection: () => false }));

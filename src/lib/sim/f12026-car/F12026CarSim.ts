@@ -51,7 +51,8 @@ import {
 } from '@/lib/track-data';
 import { SteeringAssist, type SteeringAssistCarState } from '../steering-assist';
 import { OPEN_WHEEL_KEYBOARD_STEER, type KeyboardSteerProfile } from '@/lib/input/keyboard-steer';
-import { type OvertakingRaceControl, type OvertakingRules, OvertakeGrant } from '../overtaking-rules';
+import { type OvertakeLines, type OvertakingRaceControl, type OvertakingRules, OvertakeGrant } from '../overtaking-rules';
+import { f1EnergyCircuit, inStretch } from '../f1-energy-circuits';
 import { inLapWindow, straightModeWindows } from '../straight-mode-zones';
 import { AxleSlipScratch } from '../tyre-slip';
 import type { AeroWakeState } from '../aero-wake';
@@ -861,6 +862,67 @@ const MAX_CATCH_UP_S = 0.25;
  * (its driver's reaction, under half a second) keeps them; a takeover after a real stint off resets them.
  */
 const AUTOPILOT_STALE_S = 1;
+/**
+ * The braking zones of a circuit as the 2026 energy management maps them, from the speed profile baked into its samples
+ * (the same on the page and in the simulation worker, as the autopilot's is): where the profile asks for over half of a
+ * car's braking (as the braking guide's red does: 1.6 g slow, rising with downforce to 5.1 g) and falls by at least
+ * 36 km/h in all. Per sample, the distance on to the next such zone (m; 0 inside one, Infinity on a lap without)
+ */
+const brakeAheadCache = new WeakMap<ReadonlyArray<TrackSamplePoint>, Float32Array>();
+const BRAKE_ZONE_LOOK_M = 13.5;
+const BRAKE_ZONE_MIN_DROP_MS = 10;
+
+function brakeAheadTable(samples: ReadonlyArray<TrackSamplePoint>, lapM: number): Float32Array {
+  let ahead = brakeAheadCache.get(samples);
+  if (ahead) return ahead;
+  const n = samples.length;
+  const ds = lapM / n;
+  const v = Float64Array.from(samples, (p) => (p.brakeLimitKmh ?? p.optimalSpeedKmh) / 3.6);
+  const k = Math.max(1, Math.round(BRAKE_ZONE_LOOK_M / ds));
+  const hard = (i: number): boolean => {
+    const a = v[i];
+    const b = v[(i + k) % n];
+    return (a * a - b * b) / (2 * k * ds) > 0.52 * 9.81 * (1.6 + 3.5 * Math.min(1, (a / 83) ** 2));
+  };
+  const zone = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (!hard(i) || hard((i - 1 + n) % n)) continue;
+    let j = i;
+    let vMin = v[i];
+    while (hard(j % n) && j - i < n) vMin = Math.min(vMin, v[(++j + k - 1) % n]);
+    if (v[i] - vMin >= BRAKE_ZONE_MIN_DROP_MS) for (let m = i; m < j; m++) zone[m % n] = 1;
+  }
+  ahead = new Float32Array(n).fill(Number.POSITIVE_INFINITY);
+  const first = zone.indexOf(1);
+  // Back round the lap from a braking sample: each sample's distance on to the nearest braking sample ahead of it
+  if (first >= 0) {
+    let d = 0;
+    for (let m = 0; m < n; m++) {
+      const i = (first - m + n) % n;
+      d = zone[i] ? 0 : d + ds;
+      ahead[i] = d;
+    }
+  }
+  brakeAheadCache.set(samples, ahead);
+  return ahead;
+}
+
+/** Distance from lap distance `s` on to the next braking zone (`brakeAheadTable`) (m) */
+function brakeAheadM(ahead: Float32Array, s: number, lapM: number): number {
+  const n = ahead.length;
+  if (n === 0 || !(lapM > 0)) return Number.POSITIVE_INFINITY;
+  const x = ((((s % lapM) + lapM) % lapM) / lapM) * n;
+  const i = Math.min(n - 1, Math.floor(x));
+  return Math.max(0, ahead[i] - (x - i) * (lapM / n));
+}
+
+/**
+ * The game's Automatic Overtake: the share of Overtake's extra power over the normal curve it uses, so a driver's own
+ * press of Overtake ends a long straight about a car's length ahead of it (no game found that makes its assist slower
+ * on purpose; F1 25's automatic ERS is "nowhere near as efficient" as a driver's) [est]
+ */
+const AUTO_OVERTAKE_SHARE = 0.75;
+
 const BOOST_S = 8;
 const BOOST_COOLDOWN_S = 4;
 const AMBIENT_C = 27;
@@ -1120,6 +1182,16 @@ export class F12026CarSim implements SimulatorCar {
   private userErsMode: PerformanceModeName = 'RAC';
   /** Push mode is running (the override held or latched, the 8 s boost, or the AI's Overtake Mode), not just picked */
   private pushActive = false;
+  /** 2026: the Overtake earned in a race is in use this lap (the driver's press), the assist using it, the Boost held */
+  private overtakeInUse = false;
+  private overtakeAutoNow = false;
+  private ersBoostNow = false;
+  /** The Overtake grant's lap the use belongs to (`OvertakeGrant.activations`) */
+  private overtakeLap = 0;
+  /** The player's Automatic Overtake (2026 F1) */
+  public autoOvertake = true;
+  /** Race control's Low Grip Conditions (`WeatherContactSample.lowGrip`): the 2026 rules' wet-weather limits */
+  private lowGrip = false;
   /** Seconds the autopilot has been off: `step` decides from it whether a takeover starts it afresh */
   private autopilotIdleS = 0;
   public gamepadAssistEnabled = true;
@@ -1147,6 +1219,10 @@ export class F12026CarSim implements SimulatorCar {
   /** The car's era: 2026 Straight Mode + Overtake Mode, or rear-flap DRS (`setOvertakingRules`) */
   private rules: OvertakingRules = 'straight-mode-2026';
   private readonly overtake = new OvertakeGrant();
+  /** The circuit's Overtake Detection and Activation Lines (2026 energy rules); null: the last DRS zone's detection */
+  private overtakeLines: OvertakeLines | null = null;
+  /** A time trial (the weekly challenge) is driven: the energy rules' qualifying allowances (`setEnergySession`) */
+  private energyTimeTrial = false;
 
   private readonly track: BuiltTrackData;
   private trackRoot: THREE.Object3D | null = null;
@@ -1341,6 +1417,19 @@ export class F12026CarSim implements SimulatorCar {
     });
     const v = this.vehicle;
     if (opts?.aiLite) v.aiLitePhysics = true;
+    // The circuit as the 2026 energy management knows it: how far the next braking zone is, from the circuit's own
+    // speed profile (one table for the car's life, the same in the simulation worker, so its choices never hang on
+    // when a frame fell or which thread drives it)
+    if (profile.hasErs && track.samples.length > 0) {
+      const ahead = brakeAheadTable(track.samples, L);
+      v.ersBrakeAheadAt = (s) => brakeAheadM(ahead, s, L);
+      // The circuit's 2026 energy rules: the FIA's for an event it holds, else derived (`f1-energy-circuits.ts`)
+      if (profile.config.ers.regulations === 'f1-2026') {
+        v.ersCircuit = f1EnergyCircuit(track.id ?? '', track.samples, L, straightModeWindows(track), RWANDA_DRS_ZONES);
+        const c = v.ersCircuit;
+        this.overtakeLines = c.detectionM !== null ? { detection: c.detectionM / L, activation: c.activationM !== null ? c.activationM / L : null } : null;
+      }
+    }
     v.turbocharged = profile.turbo;
     this.wheelbaseM = v.wheelbaseM;
     this.cgToFrontAxleM = v.cgToFrontM;
@@ -1822,8 +1911,20 @@ export class F12026CarSim implements SimulatorCar {
     this.applyColdPressures();
   }
 
-  /** Push mode (PSH) for 8 s; on a 2026 car in a race only with Overtake Mode earned */
+  /**
+   * The session's energy allowances (2026 rules): a time trial's are qualifying's, a practice's free practice's (a race
+   * is known from race control)
+   */
+  public setEnergySession(timeTrial: boolean): void {
+    this.energyTimeTrial = timeTrial;
+  }
+
+  /**
+   * The latched boost. Under the 2026 rules the Boost, any time the store has charge (the latch is the session's); on
+   * other cars push mode (PSH) for 8 s, on a 2026 car in a race only with Overtake Mode earned
+   */
   public activateBoostOverride(): boolean {
+    if (this.config.ers.regulations === 'f1-2026') return this.profile.hasErs && this.vehicle.ersEnergyJ > 200_000;
     if (this.profile.hasErs && this.overtakeAvailable && this.vehicle.ersEnergyJ > 200_000 && this.boostCooldownS <= 0) {
       this.boostRemainingS = BOOST_S;
       return true;
@@ -1858,6 +1959,7 @@ export class F12026CarSim implements SimulatorCar {
   public setWeatherSample(sample: WeatherContactSample): void {
     if (![sample.waterMm, sample.wetness, sample.ambientC].every(Number.isFinite)) return;
     const v = this.vehicle;
+    this.lowGrip = sample.lowGrip === true;
     v.waterMm = Math.max(0, sample.waterMm);
     if (sample.wheelWaterMm) {
       // sample.wheelWaterMm is [FR, FL, RR, RL]; v.wheelWaterMm is [LF, RF, LR, RR]
@@ -2004,6 +2106,7 @@ export class F12026CarSim implements SimulatorCar {
     this.vehicle.coldGarageStart = false;
     this.vehicle.ersEnergyJ = this.config.ers.ERS_MAX_CHARGE;
     this.vehicle.resetLapEnergy();
+    if (!flyingStart) this.vehicle.armStandingStart();
     this.simTimeMs = 0;
     this.lapStartMs = 0;
     this.sectorStartMs = 0;
@@ -2085,6 +2188,7 @@ export class F12026CarSim implements SimulatorCar {
       kbSteer: raw.kbSteer !== undefined ? Math.sign(raw.kbSteer) : undefined,
       steerRim: raw.steerRim === true && Number.isFinite(raw.analogSteer),
       manualOverride: raw.manualOverride ?? false,
+      overtake: raw.overtake ?? false,
       toggleXMode: raw.toggleXMode ?? false,
       shiftUp: raw.shiftUp ?? false,
       shiftDown: raw.shiftDown ?? false,
@@ -2120,13 +2224,51 @@ export class F12026CarSim implements SimulatorCar {
     // 2026: the override is Overtake Mode, earned in a race within 1 s at the detection point for the lap after it
     // (with its extra energy); an AI car spends it in the zones, where it overtakes
     const overtakeOk = this.overtakeAvailable;
-    if (!overtakeOk) this.boostRemainingS = 0;
-    const aiOvertake =
-      this.aiAutopilot && this.rules === 'straight-mode-2026' && !!this.raceControl?.racing && overtakeOk && inOvertakingZone(v.trackProgress);
-    const push = this.profile.hasErs && overtakeOk && (inputs.manualOverride || this.boostRemainingS > 0 || aiOvertake) && v.ersEnergyJ > 0;
-    this.pushActive = push;
-    v.setPerformanceMode(push ? 'PSH' : this.userErsMode);
-    v.extraDeployJ = this.rules === 'straight-mode-2026' ? this.overtake.extraDeployJ(this.raceControl) : 0;
+    const straight2026 = this.rules === 'straight-mode-2026';
+    const racing = !!this.raceControl?.racing;
+    // Where an Overtake is spent: under the 2026 rules the circuit's overtaking stretches (Monaco's longest runs too), else
+    // the circuit's DRS zones
+    const zoneNow =
+      v.ersCircuit && Number.isFinite(v.trackProgress)
+        ? v.ersCircuit.overtakeZones.some((w) => inStretch(v.trackProgress * this.track.totalLengthM, w))
+        : inOvertakingZone(v.trackProgress);
+    // Low Grip Conditions (2026): Overtake disabled in every session (Section B7.2.2 d), the Boost only holding the power
+    // (B7.2.1 g), only the front flaps (B7.1.2 b)
+    const lowGrip = straight2026 && this.lowGrip;
+    v.flapsLowGrip = straight2026 ? this.lowGrip : null;
+    v.ersLowGrip = lowGrip;
+    const aiOvertake = this.aiAutopilot && straight2026 && racing && overtakeOk && !lowGrip && zoneNow;
+    v.extraRechargeJ = straight2026 && !lowGrip ? this.overtake.extraRechargeJ(this.raceControl) : 0;
+    v.ersSession = racing ? 'race' : this.energyTimeTrial ? 'timeTrial' : 'practice';
+    if (this.config.ers.regulations === 'f1-2026') {
+      // The 2026 rules: the Boost and Overtake are two things (FIA 2026 Section C5.12.5, B7.2.3). The Boost: the driver's,
+      // any time, held or latched, capped in a race (`ers-2026.ts`). Overtake: all the time outside a race; in one, from
+      // the Activation Line after an earned detection to the next, used from the driver's press of Overtake (a second
+      // press stops it) or by the Automatic Overtake on the overtaking straights, flat out, with less of its power
+      if (this.overtake.activations !== this.overtakeLap) {
+        this.overtakeLap = this.overtake.activations;
+        this.overtakeInUse = false;
+      }
+      if (inputs.overtake && racing && overtakeOk && !lowGrip) this.overtakeInUse = !this.overtakeInUse;
+      if (!overtakeOk || lowGrip) this.overtakeInUse = false;
+      const autoOt =
+        straight2026 && racing && overtakeOk && !lowGrip && !this.overtakeInUse && !this.aiAutopilot && this.autoOvertake &&
+        zoneNow && inputs.throttle >= 0.98;
+      const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake) && v.ersEnergyJ > 0;
+      v.setPerformanceMode(this.userErsMode);
+      v.ersBoost = boost;
+      v.ersOvertake = straight2026 && !lowGrip && (!racing || this.overtakeInUse || aiOvertake || autoOt);
+      v.ersOvertakeShare = autoOt ? AUTO_OVERTAKE_SHARE : 1;
+      this.ersBoostNow = boost;
+      this.overtakeAutoNow = autoOt;
+      this.pushActive = boost || (racing && (this.overtakeInUse || aiOvertake || autoOt));
+    } else {
+      if (!overtakeOk) this.boostRemainingS = 0;
+      const push = this.profile.hasErs && overtakeOk && (inputs.manualOverride || this.boostRemainingS > 0 || aiOvertake) && v.ersEnergyJ > 0;
+      this.pushActive = push;
+      v.setPerformanceMode(push ? 'PSH' : this.userErsMode);
+      v.ersOvertake = push;
+    }
     const progressBefore = v.trackProgress;
 
     // The paddles and the DRS button go to every tick of the frame: VehiclePhysics compares each tick with the one
@@ -2199,7 +2341,10 @@ export class F12026CarSim implements SimulatorCar {
     if (ticks > 0 || rim === null) this.lastRimSteer = rim;
     if (this.rules === 'straight-mode-2026' && this.profile.hasDrs) {
       // Race control's verdict at the detection point, for the HUD (judged only in a race)
-      if (this.overtake.observe(progressBefore, v.trackProgress, RWANDA_DRS_ZONES, this.raceControl)) {
+      const judged = this.overtakeLines
+        ? this.overtake.observeLines(progressBefore, v.trackProgress, this.overtakeLines, this.raceControl)
+        : this.overtake.observe(progressBefore, v.trackProgress, RWANDA_DRS_ZONES, this.raceControl);
+      if (judged) {
         this.channels.overtakeDetection = { earned: this.overtake.earned, atMs: this.simTimeMs };
       }
     }
@@ -2868,8 +3013,9 @@ export class F12026CarSim implements SimulatorCar {
     this.apLaunch = false;
     this.drsPressPending = false;
     this.boostRemainingS = 0;
-    this.pushActive = false;
+    this.pushActive = this.overtakeInUse = this.overtakeAutoNow = this.ersBoostNow = false;
     this.overtake.reset();
+    this.overtakeLap = 0;
     this.lastAxMs2 = this.lastAyMs2 = 0;
     this.chassisG = 1;
     this.stuckS = 0;
@@ -3166,9 +3312,15 @@ export class F12026CarSim implements SimulatorCar {
     t.ersBatteryPercent = vt.ERS_CHARGE * 100;
     // Push actually running (the override or the boost), not PSH picked in the tuner
     t.manualOverrideActive = this.pushActive;
+    const rules2026 = this.config.ers.regulations === 'f1-2026' && this.profile.hasErs;
+    t.ersBoostActive = rules2026 ? this.ersBoostNow : undefined;
+    t.overtakeRace = rules2026 && this.rules === 'straight-mode-2026' && !!this.raceControl?.racing;
+    t.overtakeInUse = t.overtakeRace && (this.overtakeInUse || this.overtakeAutoNow);
+    t.overtakeAuto = t.overtakeRace && this.overtakeAutoNow;
     t.boostRemainingS = this.boostRemainingS;
     t.overtakingRules = this.profile.hasDrs ? this.rules : undefined;
-    t.overtakeAvailable = this.profile.hasErs && this.overtakeAvailable;
+    t.overtakeAvailable = this.profile.hasErs && this.overtakeAvailable && !(this.rules === 'straight-mode-2026' && this.lowGrip);
+    t.lowGrip = this.rules === 'straight-mode-2026' && this.lowGrip ? true : undefined;
     t.turboBoostBar = this.profile.turbo ? Math.round(v.turboBoostBar * 100) / 100 : 1;
     t.fuelKg = Math.round(this.fuelKg * 100) / 100;
 

@@ -30,6 +30,7 @@ import {
   inLapWindow,
   type LapWindow,
   lapWindowFor,
+  LOW_GRIP_ZONE_DELAY_M,
   mergeLapWindows,
   STRAIGHT_NOTICE_M,
   straightModeStretches,
@@ -118,6 +119,8 @@ function flatRun(opts: {
   maxT?: number;
   /** Race control shuts the flaps from this lap distance on (a yellow flag) */
   barredFromS?: number;
+  /** Race control's grip call (2026): null none, false Normal Grip, true Low Grip */
+  lowGrip?: boolean | null;
 }) {
   const events: VehicleEvent[] = [];
   const car = new VehiclePhysics({
@@ -134,7 +137,9 @@ function flatRun(opts: {
   car.drsFlaps = opts.gated ? 'rear' : 'front-rear';
   car.reset(0, 0, 0, opts.startMs ?? 40);
   car.wetness = opts.wetness ?? 0;
-  const log: { s: number; open: boolean; queued: boolean; t: number }[] = [];
+  car.flapsLowGrip = opts.lowGrip ?? null;
+  // Front and rear downforce and drag over speed squared (N s²/m²), with the flaps' blend
+  const log: { s: number; open: boolean; queued: boolean; t: number; blend: number; front: number; rear: number; drag: number }[] = [];
   let t = 0;
   const untilS = opts.untilS ?? 1400;
   const maxT = opts.maxT ?? 40;
@@ -144,7 +149,10 @@ function flatRun(opts: {
     // The script holds the button down for one step: one press
     car.step(DT, { throttle: 1, brake: 0, steer: 0, ...opts.script(s) });
     t += DT;
-    log.push({ s: sOf(car), open: car.drsOpen, queued: car.telemetry.drsQueued, t });
+    const v2 = Math.max(1, car.velocity.lengthSq());
+    const tel = car.telemetry;
+    const front = (tel.downforceN * tel.AERO_BALANCE) / 100;
+    log.push({ s: sOf(car), open: car.drsOpen, queued: car.telemetry.drsQueued, t, blend: car.drsBlend, front: front / v2, rear: (tel.downforceN - front) / v2, drag: tel.dragN / v2 });
   }
   const openAt = log.find((r) => r.open)?.s ?? null;
   return { car, log, events, openAt };
@@ -254,6 +262,27 @@ const pressAt = (at: number) => {
   const p15 = pressAt(zoneStart - 100);
   const wet = flatRun({ wetness: 1, script: (s) => ({ drs: p15(s) }) });
   check('Too wet for the flaps: a press is not kept, and they stay shut', wet.openAt === null && !wet.log.some((r) => r.queued), `queued ${wet.log.filter((r) => r.queued).length} steps`);
+
+  // Race control's grip call (2026): Normal Grip opens both flaps on a wet road; Low Grip the front ones alone, from
+  // `LOW_GRIP_ZONE_DELAY_M` into the stretch
+  const p16 = pressAt(zoneStart - 100);
+  const normalWet = flatRun({ wetness: 1, lowGrip: false, script: (s) => ({ drs: p16(s) }) });
+  check('Normal Grip declared: both flaps open, however wet the road under the car', normalWet.openAt !== null && normalWet.openAt < zoneStart + 6, `open at ${normalWet.openAt?.toFixed(1)} m`);
+  const p17 = pressAt(zoneStart - 100);
+  const low = flatRun({ wetness: 1, lowGrip: true, script: (s) => ({ drs: p17(s) }) });
+  check('Low Grip: kept, and opened from 50 m into the stretch', low.openAt !== null && low.openAt >= zoneStart + LOW_GRIP_ZONE_DELAY_M - 1 && low.openAt < zoneStart + LOW_GRIP_ZONE_DELAY_M + 6, `open at ${low.openAt?.toFixed(1)} m`);
+  // The flaps' aero at the same speed band: shut, both open, the front alone
+  const shut = flatRun({ script: () => ({}), untilS: 1150 });
+  const p18 = pressAt(zoneStart - 100);
+  const p19 = pressAt(zoneStart - 100);
+  const both = flatRun({ lowGrip: false, script: (s) => ({ drs: p18(s) }), untilS: 1150 });
+  const front = flatRun({ lowGrip: true, script: (s) => ({ drs: p19(s) }), untilS: 1150 });
+  const f2 = (x: number) => x.toFixed(3);
+  const last = (r: ReturnType<typeof flatRun>) => r.log[r.log.length - 1];
+  const [sh, bo, fr] = [last(shut), last(both), last(front)];
+  check('The front flaps alone: less front downforce, the rear\'s as shut, less drag than shut but more than both',
+    fr.blend === 1 && bo.blend === 1 && fr.front < sh.front * 0.97 && Math.abs(fr.rear / sh.rear - 1) < 0.03 && fr.drag < sh.drag && fr.drag > bo.drag && bo.rear < sh.rear * 0.97,
+    `front ${f2(sh.front)}/${f2(bo.front)}/${f2(fr.front)}, rear ${f2(sh.rear)}/${f2(bo.rear)}/${f2(fr.rear)}, drag ${f2(sh.drag)}/${f2(bo.drag)}/${f2(fr.drag)} (shut/both/front)`);
 
   // 9. The notice: 2026 only, `STRAIGHT_NOTICE_M` before the zone
   const ungated = flatRun({ script: () => ({}) });

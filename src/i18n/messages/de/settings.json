@@ -110,6 +110,10 @@
       "label": "Automatikgetriebe",
       "hint": "Manuelle Tasten: {up} / {down}"
     },
+    "autoOvertake": {
+      "label": "Automatisches Überholen",
+      "hint": "F1 2026: nutzt ein freigeschaltetes Überholen auf den Geraden, mit weniger Leistung als ein Druck auf {key}"
+    },
     "autoClutch": {
       "label": "Auto-Kupplung",
       "hint": "Verhindert Abwürgen; für manuelle Kupplungsstarts ausschalten",

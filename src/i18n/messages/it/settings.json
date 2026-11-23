@@ -110,6 +110,10 @@
       "label": "Cambio automatico",
       "hint": "Tasti manuali: {up} / {down}"
     },
+    "autoOvertake": {
+      "label": "Sorpasso automatico",
+      "hint": "F1 2026: usa il Sorpasso ottenuto sui rettilinei, con meno potenza che premendo {key}"
+    },
     "autoClutch": {
       "label": "Frizione automatica",
       "hint": "Evita lo spegnimento; disattivala per le partenze con frizione manuale",

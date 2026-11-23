@@ -48,6 +48,18 @@ export const inLapWindow = (p: number, start: number, end: number): boolean =>
 
 const wrap01 = (x: number): number => ((x % 1) + 1) % 1;
 
+/**
+ * m: in Low Grip Conditions (2026; FIA Section B7.1.2 b) only the front flaps open, on Low Grip Activation Zones that
+ * start later than the normal ones. The FIA's 2026 circuit maps give both for 25 zones at 9 events (Austria, Baku, Spa,
+ * Silverstone, Hungary, Monza, Las Vegas, Miami, São Paulo): the Low Grip zone starts 30 to 70 m later (one at Spa
+ * 300 m), 50 m at the median, and two zones have none. The game's stretches are its own, so each starts this much later
+ */
+export const LOW_GRIP_ZONE_DELAY_M = 50;
+
+/** Whether lap fraction p is on a stretch started `delay` (lap fraction) later; on none shorter than that */
+export const inDelayedLapWindow = (p: number, start: number, end: number, delay: number): boolean =>
+  delay <= 0 ? inLapWindow(p, start, end) : wrap01(end - start) > delay && inLapWindow(p, wrap01(start + delay), end);
+
 const cache = new WeakMap<BuiltTrackData, LapWindow[]>();
 
 /** The circuit's straights, in lap order from the first corner after the line */

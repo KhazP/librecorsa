@@ -25,6 +25,8 @@ export interface TouchInputState {
   shiftDown: boolean;
   /** set true for one frame by a button tap; the consumer clears them */
   boost: boolean;
+  /** One-shot: use the Overtake earned in a race, or stop using it */
+  overtake: boolean;
   /** set true for one frame by a button tap; the consumer clears them */
   aero: boolean;
 }
@@ -43,6 +45,7 @@ export const touchInput: TouchInputState = {
   shiftUp: false,
   shiftDown: false,
   boost: false,
+  overtake: false,
   aero: false,
 };
 
@@ -60,6 +63,7 @@ export function resetTouchInput(): void {
   touchInput.shiftUp = false;
   touchInput.shiftDown = false;
   touchInput.boost = false;
+  touchInput.overtake = false;
   touchInput.aero = false;
 }
 

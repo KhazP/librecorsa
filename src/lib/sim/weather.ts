@@ -1087,6 +1087,8 @@ export interface WeatherContactSample {
   windVzMs?: number;
   /** Airborne rooster-tail water spray intensity from leading cars ahead (0..1) */
   sprayIntensity?: number;
+  /** Race control's Low Grip Conditions, for the whole track (`lowGripCall`) */
+  lowGrip?: boolean;
 }
 
 export const DRY_WEATHER_SAMPLE: Readonly<WeatherContactSample> = {
