@@ -34,7 +34,7 @@ export const KTX2_MODELS: readonly Ktx2Model[] = [
   { model: "/tracks/monaco/monaco.glb", build: "60cb8a7b" },
   { model: "/tracks/norisring/norisring.glb", build: "243ef1c7" },
   { model: "/tracks/oschersleben/oschersleben.glb", build: "eadf95c6" },
-  { model: "/tracks/rwanda_official/rwanda_official.glb", build: "2e64c928" },
+  { model: "/tracks/rwanda_official/rwanda_official.glb", build: "de092d00" },
   { model: "/tracks/speedvegas/speedvegas.glb", build: "8c9ab5b8" },
   { model: "/tracks/willow_springs/willow_springs.glb", build: "905545a8" },
 ];
