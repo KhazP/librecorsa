@@ -15,7 +15,7 @@ export interface MusicTrack {
   composer: string;
   performer: string;
   pool: MusicPool;
-  /** The file's level against the -16 LUFS target: what the player adds to match the others (scripts/music-cues.ts) */
+  /** The file's level against the -16 LUFS target: what the player adds to match the others (scripts/audio/music-cues.ts) */
   gainDb: number;
   /**
    * Where a play from the top starts (s): past the head silence, or for a race track with a quiet opening, at its first

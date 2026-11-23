@@ -4,17 +4,17 @@
  * tail (endS). A race track whose first 20 s sit 2 LU or more under the whole also gets a candidate start at the first
  * loud section, cut as a 10 s clip into --clips <dir> to listen to before it goes in the catalogue.
  * Needs ffmpeg on the PATH and the MP3s in public/music (they are hosted, not committed).
- * Run: npx tsx scripts/music-cues.ts [--clips <dir>]
+ * Run: npx tsx scripts/audio/music-cues.ts [--clips <dir>]
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { MUSIC_TRACKS } from '../src/lib/audio/music-catalog';
+import { MUSIC_TRACKS } from '../../src/lib/audio/music-catalog';
 
 const TARGET_LUFS = -16;
 /** Quieter than this is silence at the head or the tail of a file */
 const SILENCE_DB = -50;
-const DIR = join(__dirname, '../public/music');
+const DIR = join(__dirname, '../../public/music');
 const clipsAt = process.argv.indexOf('--clips');
 const clipsDir = clipsAt > 0 ? process.argv[clipsAt + 1] : null;
 

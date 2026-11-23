@@ -4,18 +4,18 @@
  * through, and ffmpeg measures both. Prints each track's loudness and loudness range, dry and compressed, and the trim
  * that puts the compressed loudness back on the dry one (RACE_COMP_TRIM_DB).
  * Needs ffmpeg on the PATH, Playwright's Chromium (npx playwright-core install chromium) and the MP3s in public/music.
- * Run: npx tsx scripts/music-comp.ts [track ids] [--threshold -30 --knee 12 --ratio 3 --attack 0.05 --release 0.5]
+ * Run: npx tsx scripts/audio/music-comp.ts [track ids] [--threshold -30 --knee 12 --ratio 3 --attack 0.05 --release 0.5]
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
-import { RACE_COMP } from '../src/lib/audio/bgm-controller';
-import { MUSIC_TRACKS } from '../src/lib/audio/music-catalog';
+import { RACE_COMP } from '../../src/lib/audio/bgm-controller';
+import { MUSIC_TRACKS } from '../../src/lib/audio/music-catalog';
 
 const RATE = 22050;
-const DIR = join(__dirname, '../public/music');
+const DIR = join(__dirname, '../../public/music');
 const args = process.argv.slice(2);
 const comp: Record<string, number> = { ...RACE_COMP };
 const ids: string[] = [];

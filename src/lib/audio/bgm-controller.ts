@@ -80,7 +80,7 @@ export const LOAD_ATTACK_S = 1;
 export const LOAD_RELEASE_S = 4;
 /**
  * The race tracks' compressor, and the trim after it that keeps their loudness where the dry files sit (the node adds
- * make-up gain of its own, 0.7-1.5 dB here). Rendered through the real node in Chromium (scripts/music-comp.ts), it
+ * make-up gain of its own, 0.7-1.5 dB here). Rendered through the real node in Chromium (scripts/audio/music-comp.ts), it
  * takes the race tracks' loudness range from 5.5-13.2 LU to 3.8-8.2 LU
  */
 export const RACE_COMP = { threshold: -28, knee: 12, ratio: 2, attack: 0.05, release: 0.5 } as const;
