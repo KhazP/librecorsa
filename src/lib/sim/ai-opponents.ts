@@ -315,7 +315,7 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   followClosingOnly: 0,
   earlyHazard: 0,
   passCooldownS: 0,
-  followWet: 0,
+  followWet: 1,
   sideLanes: 0,
 };
 /** The path check's step (s) */
