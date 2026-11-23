@@ -883,7 +883,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           context={lobbyBadgeContext}
         />
 
-        {trackMismatch ? (
+        {/* On another circuit, or on the room's mod circuit in another version of its package (a different road) */}
+        {trackMismatch || roomTrack !== "ok" ? (
           <Well className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-2.5">
             <span className="flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-caution">
               <Icon name="warning" className="mt-px" />
@@ -955,7 +956,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               block
               aria-pressed={ready}
               icon={ready ? <Icon name="success" /> : undefined}
-              disabled={!onSetReady}
+              // Another version of the room's mod circuit is another road: no lining up on it
+              disabled={!onSetReady || (roomTrack !== "ok" && !ready)}
               onClick={toggleReady}
             >
               {ready ? tx("drivers.readyButton") : tx("drivers.readyUp")}
