@@ -307,8 +307,10 @@ async function main(): Promise<void> {
     check('api: with the boards off, totals without drivers', noBoard.drivers === null && noBoard.hours > 0);
     const noUsage = { ...usageEnv, ONLINE_USAGE: 'off' } as Env;
     check('api: with the usage counter off, neither', (await api('/api/stats/popular', noUsage)).status === 404 && (await api('/api/stats/totals', noUsage)).status === 404);
-    const parsed = parsePopular(popularBody);
-    check('client: the ranks read back', parsed !== null && parsed.circuits[0] === 'monaco' && parsed.cars[0] === 'lc26');
+    check('api: a query string is refused, so the edge keeps one copy', (await api('/api/stats/popular?x=1', usageEnv)).status === 400 && (await api('/api/stats/totals?x=1', usageEnv)).status === 400);
+    // Read back from the fixed-day ranks: the API's own month moves with the clock
+    const parsed = parsePopular(JSON.parse(JSON.stringify({ ok: true, ...ranks })));
+    check('client: the ranks read back', parsed !== null && JSON.stringify(parsed) === JSON.stringify(ranks) && parsePopular(popularBody) !== null);
     check('client: junk ids are dropped, a malformed answer is refused', JSON.stringify(parsePopular({ ok: true, days: 30, circuits: ['spielberg', '../x', 7], cars: ['lc26', 'bus'] })) === JSON.stringify({ days: 30, circuits: ['spielberg'], cars: ['lc26'] }) && parsePopular({ ok: true, days: 30, circuits: 'spielberg', cars: [] }) === null);
     const parsedTotals = parseSiteTotals(totalsBody);
     check('client: the totals read back', parsedTotals !== null && parsedTotals.since === '2026-10-01' && parsedTotals.drivers === 0);
