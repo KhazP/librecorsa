@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl/react";
 import { webHidFfb } from "@/lib/input/wheel-ffb";
 import { Button } from "@/components/ui";
 
@@ -12,20 +13,21 @@ import { Button } from "@/components/ui";
 export function FfbPairPrompt({ wanted }: { wanted: boolean }) {
   const status = useSyncExternalStore(webHidFfb.subscribe, webHidFfb.getStatus, webHidFfb.getStatus);
   const [dismissed, setDismissed] = useState(false);
+  const tx = useTranslations("hud.ffbPairPrompt");
   if (!wanted || dismissed || status.state !== "idle") return null;
   return (
     <div
       role="dialog"
-      aria-label="Force feedback"
+      aria-label={tx("region")}
       className="lc-ui-zoom pointer-events-auto fixed inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-(--z-lc-menu) mx-auto flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-lc-row border border-white/10 bg-lc-carbon/95 py-2 pr-2 pl-4 text-lc-chalk shadow-lc-pop"
     >
-      <span className="lc-body min-w-0 text-lc-chalk">Pair wheel for force feedback</span>
+      <span className="lc-body min-w-0 text-lc-chalk">{tx("text")}</span>
       {/* requestDevice needs this click's user activation, so it runs inside the handler */}
       <Button size="sm" variant="primary" onClick={() => void webHidFfb.connect()}>
-        Connect
+        {tx("connect")}
       </Button>
       <Button size="sm" variant="ghost" onClick={() => setDismissed(true)}>
-        Dismiss
+        {tx("dismiss")}
       </Button>
     </div>
   );

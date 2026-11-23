@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import {
   requestTiltPermission,
   resetTouchInput,
@@ -86,6 +87,8 @@ function currentOrientationAngle(): number {
 }
 
 interface SteerPadProps {
+  /** Accessible name */
+  label: string;
   value: number;
   onChange: (v: number) => void;
   /** Hidden under the pause menu or a replay: a finger still down is let go */
@@ -103,7 +106,7 @@ function releaseCapture(el: Element | null, id: number): void {
 }
 
 /** Horizontal steering slider: the finger's travel from its touch-down point maps to −1..1 */
-const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
+const SteerPad: React.FC<SteerPadProps> = ({ label, value, onChange, suspended }) => {
   const pid = useRef<number | null>(null);
   const padRef = useRef<HTMLDivElement | null>(null);
   const origin = useRef(0);
@@ -151,7 +154,7 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
     <div
       ref={padRef}
       role="slider"
-      aria-label="Steering"
+      aria-label={label}
       aria-valuemin={-100}
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
@@ -660,6 +663,32 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
   }, []);
   // Paused or in a replay the overlay stays mounted (tilt keeps its permission) but drives nothing
   const suspended = useHudMode() === "hidden";
+  const tx = useTranslations("hud.touchControls");
+  // Redrawn with the steering and the car's state: the words are resolved once per language
+  const lbl = useMemo(
+    () => ({
+      steering: tx("steering"),
+      drive: tx("drive"),
+      reverse: tx("reverse"),
+      shiftDown: tx("shiftDown"),
+      shiftUp: tx("shiftUp"),
+      boost: tx("boost"),
+      activeAero: tx("activeAero"),
+      headlights: tx("headlights"),
+      brake: tx("brake"),
+      throttle: tx("throttle"),
+      steerLeft: tx("steerLeft"),
+      steerRight: tx("steerRight"),
+      pause: tx("pause"),
+      camera: tx("camera"),
+      recentreTilt: tx("recentreTilt"),
+      allowMotion: tx("allowMotion"),
+      tapForTilt: tx("tapForTilt"),
+      tiltBlocked: tx("tiltBlocked"),
+      noTiltSensor: tx("noTiltSensor"),
+    }),
+    [tx],
+  );
 
   const live = useRef<Visual>({ ...ZERO_VISUAL });
   const frame = useRef<number | null>(null);
@@ -845,34 +874,34 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
   }, [speed, car.runId, drivenOffRun]);
   const drivenOff = drivenOffRun === car.runId;
   const gearButton = !autoGearbox || car.lights ? null : car.gear < 0 ? (
-    <GhostButton key="drive" label="Drive" onTap={() => { touchInput.shiftUp = true; }}>
+    <GhostButton key="drive" label={lbl.drive} onTap={() => { touchInput.shiftUp = true; }}>
       <span className="lc-disp text-[20px] leading-none">D</span>
     </GhostButton>
   ) : drivenOff && speed < REVERSE_OFFER_KMH ? (
-    <GhostButton key="reverse" label="Reverse" onTap={() => { touchInput.shiftDown = true; }}>
+    <GhostButton key="reverse" label={lbl.reverse} onTap={() => { touchInput.shiftDown = true; }}>
       <span className="lc-disp text-[20px] leading-none">R</span>
     </GhostButton>
   ) : null;
 
   const shiftDown = autoGearbox ? null : (
-    <GhostButton key="down" label="Shift down" onTap={() => { touchInput.shiftDown = true; }}>
+    <GhostButton key="down" label={lbl.shiftDown} onTap={() => { touchInput.shiftDown = true; }}>
       <Icon name="shiftDown" size="md" />
     </GhostButton>
   );
   const shiftUp = autoGearbox ? null : (
-    <GhostButton key="up" label="Shift up" onTap={() => { touchInput.shiftUp = true; }}>
+    <GhostButton key="up" label={lbl.shiftUp} onTap={() => { touchInput.shiftUp = true; }}>
       <Icon name="shiftUp" size="md" />
     </GhostButton>
   );
   const boost = car.hasErs ? (
-    <GhostButton key="boost" label="Boost" on={car.boostOn} dim={car.boostLocked} onTap={() => { touchInput.boost = true; }}>
+    <GhostButton key="boost" label={lbl.boost} on={car.boostOn} dim={car.boostLocked} onTap={() => { touchInput.boost = true; }}>
       <Icon name="overtake" size="md" />
     </GhostButton>
   ) : null;
   const aero = car.hasAero ? (
     <GhostButton
       key="aero"
-      label="Active aero"
+      label={lbl.activeAero}
       on={car.aeroOpen}
       armed={car.aeroArmed}
       dim={!car.aeroOpen && !car.aeroArmed}
@@ -886,7 +915,7 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
     onToggleHeadlights && (showHeadlights || headlightsOn) ? (
       <GhostButton
         key="headlights"
-        label="Headlights"
+        label={lbl.headlights}
         on={Boolean(headlightsOn)}
         tone={HUD_GAIN}
         onTap={onToggleHeadlights}
@@ -911,7 +940,7 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
 
   const brakePedal = buttonsMode ? (
     <HoldButton
-      label="Brake"
+      label={lbl.brake}
       color={HUD_BRAKE}
       icon="brake"
       pressed={vis.brakeBtn}
@@ -920,11 +949,11 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
       className={pedalBtnCls}
     />
   ) : (
-    <Pedal label="Brake" color={HUD_BRAKE} icon="brake" value={vis.brake} onChange={setBrake} suspended={suspended} />
+    <Pedal label={lbl.brake} color={HUD_BRAKE} icon="brake" value={vis.brake} onChange={setBrake} suspended={suspended} />
   );
   const throttlePedal = buttonsMode ? (
     <HoldButton
-      label="Throttle"
+      label={lbl.throttle}
       color={HUD_THROTTLE}
       icon="keyUp"
       pressed={vis.throttleBtn}
@@ -933,12 +962,12 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
       className={pedalBtnCls}
     />
   ) : (
-    <Pedal label="Throttle" color={HUD_THROTTLE} icon="keyUp" value={vis.throttle} onChange={setThrottle} suspended={suspended} />
+    <Pedal label={lbl.throttle} color={HUD_THROTTLE} icon="keyUp" value={vis.throttle} onChange={setThrottle} suspended={suspended} />
   );
   const pedalPair = buttonsMode ? (
     <HoldButtonPair
-      left={{ label: "Brake", color: HUD_BRAKE, icon: "brake", pressed: vis.brakeBtn, onChange: setBrakeBtn }}
-      right={{ label: "Throttle", color: HUD_THROTTLE, icon: "keyUp", pressed: vis.throttleBtn, onChange: setThrottleBtn }}
+      left={{ label: lbl.brake, color: HUD_BRAKE, icon: "brake", pressed: vis.brakeBtn, onChange: setBrakeBtn }}
+      right={{ label: lbl.throttle, color: HUD_THROTTLE, icon: "keyUp", pressed: vis.throttleBtn, onChange: setThrottleBtn }}
       suspended={suspended}
       buttonClassName={pedalBtnCls}
       gapClassName="gap-3 short:gap-2 max-sm:portrait:gap-2"
@@ -951,14 +980,14 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
   );
   const steerControl = buttonsMode ? (
     <HoldButtonPair
-      left={{ label: "Steer left", color: HUD_VOLT, icon: "keyLeft", pressed: vis.steerLeft, onChange: setSteerLeft }}
-      right={{ label: "Steer right", color: HUD_VOLT, icon: "keyRight", pressed: vis.steerRight, onChange: setSteerRight }}
+      left={{ label: lbl.steerLeft, color: HUD_VOLT, icon: "keyLeft", pressed: vis.steerLeft, onChange: setSteerLeft }}
+      right={{ label: lbl.steerRight, color: HUD_VOLT, icon: "keyRight", pressed: vis.steerRight, onChange: setSteerRight }}
       suspended={suspended}
       buttonClassName={steerBtnCls}
       gapClassName="gap-3 short:gap-2 max-sm:portrait:gap-2"
     />
   ) : (
-    <SteerPad value={vis.steer} onChange={setSteer} suspended={suspended} />
+    <SteerPad label={lbl.steering} value={vis.steer} onChange={setSteer} suspended={suspended} />
   );
   /**
    * Driving buttons over a pedal; nothing at all when the car and gearbox use none.
@@ -984,9 +1013,9 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
     <div className="pointer-events-none fixed inset-0 z-30 touch-none select-none">
       {/* Top-left: pause, camera and (tilt steering) recentre — max 3 buttons (164 px) so it stays clear of PhoneHud */}
       <div className="absolute flex gap-2" style={{ top: edge("top", 12), left: edge("left", 16) }}>
-        <ChromeButton label="Pause" icon="pause" onTap={onPause} />
-        <ChromeButton label="Camera" icon="camera" onTap={onCycleCamera} />
-        {tilt && tiltStatus === "ready" ? <ChromeButton label="Recentre tilt" icon="tilt" onTap={onRecentre} /> : null}
+        <ChromeButton label={lbl.pause} icon="pause" onTap={onPause} />
+        <ChromeButton label={lbl.camera} icon="camera" onTap={onCycleCamera} />
+        {tilt && tiltStatus === "ready" ? <ChromeButton label={lbl.recentreTilt} icon="tilt" onTap={onRecentre} /> : null}
       </div>
 
       {tilt ? (
@@ -1004,7 +1033,7 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
             {tiltStatus === "ready" ? (
               <TiltMeter value={vis.steer} />
             ) : (
-              <TiltNote maxWidth="max-w-[calc(100vw-232px)]">{tiltStatus === "asking" ? "Allow motion" : "Tap for tilt"}</TiltNote>
+              <TiltNote maxWidth="max-w-[calc(100vw-232px)]">{tiltStatus === "asking" ? lbl.allowMotion : lbl.tapForTilt}</TiltNote>
             )}
           </div>
           {/* Bottom-right: throttle under the right thumb, the other buttons over it (right-to-left so headlights never shift existing buttons) */}
@@ -1025,9 +1054,9 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
           >
             {tiltFallback ? (
               tiltStatus === "denied" ? (
-                <TiltNote maxWidth="max-w-[calc(100vw-216px)]" onRetry={onRetryTilt}>Tilt blocked · Retry</TiltNote>
+                <TiltNote maxWidth="max-w-[calc(100vw-216px)]" onRetry={onRetryTilt}>{lbl.tiltBlocked}</TiltNote>
               ) : (
-                <TiltNote maxWidth="max-w-[calc(100vw-216px)]">No tilt sensor</TiltNote>
+                <TiltNote maxWidth="max-w-[calc(100vw-216px)]">{lbl.noTiltSensor}</TiltNote>
               )
             ) : null}
             {steerControl}

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
+import { useTranslations } from "use-intl/react";
 import { useHudModeRef } from "./hud-mode";
 import { tokenColor } from "@/components/ui/token-color";
 import { HUD_BRAKE, HUD_GLASS, HUD_INFO, HUD_LBL, HUD_THROTTLE } from "./hud-format";
@@ -232,15 +233,27 @@ export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, wid
     return () => cancelAnimationFrame(raf);
   }, [seconds, width, hasAside]);
 
+  const tx = useTranslations("hud.inputTrace");
+  const L = useMemo(
+    () => ({
+      throttle: tx("throttle"),
+      brake: tx("brake"),
+      steering: tx("steering"),
+      steeringTitle: tx("steeringTitle"),
+      trace: tx("trace"),
+      region: tx("region"),
+    }),
+    [tx]
+  );
   const legendClass = `flex items-center gap-2.5 text-[9px] font-bold tracking-[0.12em] uppercase ${skin || frameless ? skinCss.inkDim : "text-lc-slate"}`;
   const inner = (
     <>
       {/* The legend names the traces; the panel needs no title of its own */}
       <div className={legendClass}>
-        <span style={{ color: HUD_THROTTLE }}>Thr</span>
-        <span style={{ color: HUD_BRAKE }}>Brk</span>
-        <span style={{ color: HUD_INFO }} title="Road wheels solid, your input dashed">
-          Str
+        <span style={{ color: HUD_THROTTLE }}>{L.throttle}</span>
+        <span style={{ color: HUD_BRAKE }}>{L.brake}</span>
+        <span style={{ color: HUD_INFO }} title={L.steeringTitle}>
+          {L.steering}
           {steerLockDeg !== undefined ? (
             <span className="lc-mono ml-1 inline-block min-w-[5ch] text-right">{`${Math.abs(steering * steerLockDeg).toFixed(1)}°`}</span>
           ) : null}
@@ -250,7 +263,7 @@ export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, wid
         <canvas
           ref={canvasRef}
           role="img"
-          aria-label="Throttle, brake and steering trace: dashed steering is your input, solid the road-wheel angle"
+          aria-label={L.trace}
           className={`block ${skin && !frameless ? skinCss.radiusSm : frameless ? "rounded-sm" : "rounded-lg"}`}
           style={{ width, height: HEIGHT }}
         />
@@ -261,7 +274,7 @@ export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, wid
 
   if (frameless) {
     return (
-      <section aria-label="Inputs" className="inline-flex flex-col gap-1.5">
+      <section aria-label={L.region} className="inline-flex flex-col gap-1.5">
         {inner}
       </section>
     );
@@ -270,7 +283,7 @@ export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, wid
   if (skin) {
     return (
       <SkinPanel cut="sm" innerClassName="inline-flex flex-col gap-1.5 px-3 pt-2 pb-2.5">
-        <section aria-label="Inputs" className="contents">
+        <section aria-label={L.region} className="contents">
           {inner}
         </section>
       </SkinPanel>
@@ -278,7 +291,7 @@ export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, wid
   }
 
   return (
-    <section aria-label="Inputs" className={`inline-flex flex-col gap-1.5 rounded-lc-tile px-3 pt-2 pb-2.5 ${HUD_GLASS}`}>
+    <section aria-label={L.region} className={`inline-flex flex-col gap-1.5 rounded-lc-tile px-3 pt-2 pb-2.5 ${HUD_GLASS}`}>
       {inner}
     </section>
   );

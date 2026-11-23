@@ -3,6 +3,7 @@ import { COMPOUNDS } from "@/components/ui/badges/compounds";
 import { formatDelta as kitFormatDelta } from "@/components/ui/badges/DeltaBadge";
 import { tokenColor, type ColorToken } from "@/components/ui/token-color";
 import { currentUnits } from "@/lib/settings/ui-prefs";
+import { currentLocale, t as tr } from "@/i18n/runtime";
 import type { UnitSettings } from "@/lib/settings/player-settings";
 import {
   PRESSURE_LABEL,
@@ -79,6 +80,20 @@ export const HUD_WELL = "border border-lc-titanium bg-lc-well";
 /** The HUD's field label (`lc-hud-lbl`: mono 700, 9 px, 0.18em, caps, slate) */
 export const HUD_LBL = "lc-hud-lbl";
 
+/**
+ * Text built from the messages once per language, for code the HUD runs every frame outside a component's render (a
+ * label helper other panels call, a pooled DOM layer): `const words = perLanguage(() => ({ best: tr("hud.x.best") }))`,
+ * then `words().best`. It builds again when the language changes.
+ */
+export function perLanguage<T>(build: () => T): () => T {
+  let cached: { locale: string; value: T } | null = null;
+  return () => {
+    const locale = currentLocale();
+    if (cached?.locale !== locale) cached = { locale, value: build() };
+    return cached.value;
+  };
+}
+
 /** m:ss.mmm (h:mm:ss.mmm from an hour on), or dashes when there is no time yet (or it is not a finite number) */
 export function formatLapTime(ms: number | null | undefined): string {
   if (ms === null || ms === undefined || !Number.isFinite(ms) || ms <= 0) return "-:--.---";
@@ -116,9 +131,16 @@ export function sectorDone(t: Pick<CarTelemetry, "currentSector" | "sectorTimesM
   return !t.outLap && index + 1 < t.currentSector && t.sectorTimesMs[index] > 0;
 }
 
+const sessionWords = perLanguage(() => ({
+  qualifying: tr("hud.hudFormat.session.qualifying"),
+  timeTrial: tr("hud.hudFormat.session.timeTrial"),
+  practice: tr("hud.hudFormat.session.practice"),
+}));
+
 /** What a session outside a race is called on the HUD: qualifying, the weekly challenge's time trial, or practice */
 export function sessionWord(t: Pick<CarTelemetry, "qualifying" | "timeTrial">): string {
-  return t.qualifying ? "Qualifying" : t.timeTrial ? "Time trial" : "Practice";
+  const w = sessionWords();
+  return t.qualifying ? w.qualifying : t.timeTrial ? w.timeTrial : w.practice;
 }
 
 /** ss.mmm for sector times */
@@ -160,6 +182,9 @@ export function formatDeltaFit(seconds: number, digits = 3): string {
   return kitFormatDelta(s, deltaDigits(s, digits));
 }
 
+/** "T4" for each corner number, built once per language: the maps' captions read it every frame */
+const cornerShorts = perLanguage(() => new Map<number, string>());
+
 /**
  * The corner the car is in, for a map's caption: its number ("T4") and its own name with any leading "Turn 4" and
  * separator taken off ("West Hill Hairpin"), or no name where the data has only the number. Off a corner (turn 0) it
@@ -167,7 +192,12 @@ export function formatDeltaFit(seconds: number, digits = 3): string {
  */
 export function cornerLabel(turnNumber: number, turnName: string | undefined): { short: string; name: string | null; full: string } | null {
   if (!(turnNumber > 0)) return null;
-  const short = `T${turnNumber}`;
+  const shorts = cornerShorts();
+  let short = shorts.get(turnNumber);
+  if (short === undefined) {
+    short = tr("hud.hudFormat.cornerShort", { turn: turnNumber });
+    shorts.set(turnNumber, short);
+  }
   const raw = (turnName ?? "").trim();
   // "Turn 4" and a dash, a colon or a dot before the name, "T4 West Hill", or "Turn 4" alone
   const m = raw.match(/^(?:turn|t)\s*(\d+)\b\s*(?:[\u2014\u2013\-:\u00b7|,.]\s*)?(.*)$/i);
@@ -231,8 +261,23 @@ export function lapMark(ms: number, best: number | null | undefined, solo = true
 
 /** The colour of each `LapMark` */
 export const LAP_MARK_COLOR: Record<LapMark, string> = { best: HUD_BEST, pb: HUD_GAIN, slower: HUD_CAUTION };
+const lapMarkWords = perLanguage(() => ({
+  best: tr("hud.hudFormat.lapMark.best"),
+  pb: tr("hud.hudFormat.lapMark.pb"),
+  slower: tr("hud.hudFormat.lapMark.slower"),
+}));
 /** The word of each `LapMark`, for the spoken name and the tooltip */
-export const LAP_MARK_WORD: Record<LapMark, string> = { best: "Best", pb: "Personal best", slower: "Slower" };
+export const LAP_MARK_WORD: Record<LapMark, string> = {
+  get best() {
+    return lapMarkWords().best;
+  },
+  get pb() {
+    return lapMarkWords().pb;
+  },
+  get slower() {
+    return lapMarkWords().slower;
+  },
+};
 
 /** Colour of a completed sector (or lap) time against the best (see `lapMark`) */
 export function sectorTimeColor(ms: number, best: number | null | undefined, solo = true): string {

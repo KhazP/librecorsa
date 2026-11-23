@@ -2,10 +2,25 @@
 
 import React, { useEffect, useRef, type MutableRefObject } from "react";
 import type { OverheadNameplateEntry, OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
+import { t as tr } from "@/i18n/runtime";
+import { perLanguage } from "./hud-format";
 
 const INITIAL_POOL_SIZE = 24;
 const MAX_POOL_SIZE = 64;
 const ANCHOR_LIFT_PX = 6;
+
+/** The fastest-lap chip and each place's "P3", built once per language: the pool writes them every frame */
+const words = perLanguage(() => ({ fastestLap: tr("hud.overheadNameplates.fastestLap"), ranks: new Map<number, string>() }));
+
+function rankLabel(rank: number): string {
+  const ranks = words().ranks;
+  let text = ranks.get(rank);
+  if (text === undefined) {
+    text = tr("hud.overheadNameplates.rank", { rank });
+    ranks.set(rank, text);
+  }
+  return text;
+}
 
 interface NameplateSlot {
   root: HTMLDivElement;
@@ -24,6 +39,7 @@ interface NameplateSlot {
   rankVisible: boolean;
   label: string;
   fastestLap: boolean;
+  fastestLapText: string;
   badgesKey: string;
 }
 
@@ -42,7 +58,8 @@ function createSlot(container: HTMLDivElement): NameplateSlot {
 
   const flEl = document.createElement("span");
   flEl.className = "lc-nameplate-fl";
-  flEl.textContent = "FL";
+  const fastestLapText = words().fastestLap;
+  flEl.textContent = fastestLapText;
   flEl.style.display = "none";
 
   const badgesEl = document.createElement("span");
@@ -69,6 +86,7 @@ function createSlot(container: HTMLDivElement): NameplateSlot {
     rankVisible: false,
     label: "",
     fastestLap: false,
+    fastestLapText,
     badgesKey: "",
   };
 }
@@ -111,8 +129,8 @@ function applySlot(slot: NameplateSlot, entry: OverheadNameplateEntry): void {
     slot.rankEl.style.display = rankVisible ? "" : "none";
     slot.rankVisible = rankVisible;
   }
-  if (rankVisible) {
-    const rankText = `P${entry.rank}`;
+  if (entry.rank !== null) {
+    const rankText = rankLabel(entry.rank);
     if (slot.rankText !== rankText) {
       slot.rankEl.textContent = rankText;
       slot.rankText = rankText;
@@ -127,6 +145,12 @@ function applySlot(slot: NameplateSlot, entry: OverheadNameplateEntry): void {
   if (slot.fastestLap !== entry.fastestLap) {
     slot.flEl.style.display = entry.fastestLap ? "" : "none";
     slot.fastestLap = entry.fastestLap;
+  }
+  // A change of language reaches a chip already made
+  const fastestLapText = words().fastestLap;
+  if (slot.fastestLapText !== fastestLapText) {
+    slot.flEl.textContent = fastestLapText;
+    slot.fastestLapText = fastestLapText;
   }
 
   const badges = entry.badges;

@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
+import { t as tr } from "@/i18n/runtime";
 import {
   hasTurnServer,
   loadUserTurnServer,
@@ -88,63 +90,65 @@ export interface MultiplayerPanelProps {
 const MIN_LAPS = 1;
 const MAX_LAPS = 50;
 
+/** A collision mode's message key */
+const COLLISION_KEY = { on: "on", ghost_lap1: "ghostLap1", off: "off", protected: "protected" } as const satisfies Record<CollisionMode, string>;
+const collisionLabel = (mode: CollisionMode) => tr(`hud.multiplayerPanel.collision.${COLLISION_KEY[mode]}`);
+const collisionHint = (mode: CollisionMode) => tr(`hud.multiplayerPanel.collisionHint.${COLLISION_KEY[mode]}`);
 /** What a private room's host offers; a public room's `protected` rule only ever shows as its label */
-const COLLISION_OPTIONS: { value: CollisionMode; label: string }[] = [
-  { value: "on", label: "On" },
-  { value: "ghost_lap1", label: "Ghosted lap 1" },
-  { value: "off", label: "Off" },
-];
-const COLLISION_LABELS: Record<CollisionMode, string> = { on: "On", ghost_lap1: "Ghosted lap 1", off: "Off", protected: "Protected" };
-const COLLISION_HINTS: Record<CollisionMode, string> = {
-  on: "Full contact",
-  ghost_lap1: "No contact on the opening lap",
-  off: "Cars pass through each other",
-  protected: "Ghosted lap 1, then a dangerous car can't touch the others",
-};
+const COLLISION_OPTIONS: { value: CollisionMode; label: string }[] = (["on", "ghost_lap1", "off"] as const).map((value) => ({
+  value,
+  get label() {
+    return collisionLabel(value);
+  },
+}));
 
 /** "Any car", or the class's name as the registry has it ("GT3", "Prototypes"): every class with cars is on offer */
-const classRuleLabel = (rule: CarClassRule) => (rule === "any" ? "Any car" : carClass(rule).title);
+const classRuleLabel = (rule: CarClassRule) => (rule === "any" ? tr("hud.multiplayerPanel.anyCar") : carClass(rule).title);
 const classRuleOptions = (): { id: CarClassRule; label: string }[] => [
   { id: "any", label: classRuleLabel("any") },
   ...carClassesInUse().map((k) => ({ id: k.id, label: k.title })),
 ];
 
-const START_TYPE_OPTIONS: { value: MpStartType; label: string }[] = [
-  { value: "standing", label: "Standing" },
-  { value: "rolling", label: "Rolling" },
-];
+const START_TYPE_OPTIONS: { value: MpStartType; label: string }[] = (["standing", "rolling"] as const).map((value) => ({
+  value,
+  get label() {
+    return tr(`hud.multiplayerPanel.startType.${value}`);
+  },
+}));
 
-const GRID_ORDER_OPTIONS: { value: MpGridOrder; label: string }[] = [
-  { value: "qualifying", label: "Qualifying" },
-  { value: "reverse", label: "Reverse" },
-  { value: "random", label: "Random" },
-];
+const GRID_ORDER_OPTIONS: { value: MpGridOrder; label: string }[] = (["qualifying", "reverse", "random"] as const).map((value) => ({
+  value,
+  get label() {
+    return tr(`hud.multiplayerPanel.gridOrder.${value}`);
+  },
+}));
 
-const MP_RULE_PRESET_OPTIONS: { value: MpRaceRules["preset"]; label: string }[] = [
-  { value: "classic", label: "Classic" },
-  { value: "auto", label: RULE_PRESET_LABELS.auto },
-  { value: "open_wheel", label: RULE_PRESET_LABELS.open_wheel },
-  { value: "endurance_sprint", label: RULE_PRESET_LABELS.endurance_sprint },
-];
-const MP_RULE_PRESET_HINTS: Record<MpRaceRules["preset"], string> = {
-  classic: "Track limits by strikes: every third is +3 s, then +5 s",
-  ...RULE_PRESET_HINTS,
-};
+/** The rule presets, the AI race's labels read when shown (race-rules.ts) */
+const MP_RULE_PRESET_OPTIONS: { value: MpRaceRules["preset"]; label: string }[] = (["classic", "auto", "open_wheel", "endurance_sprint"] as const).map(
+  (value) => ({
+    value,
+    get label() {
+      return value === "classic" ? tr("hud.multiplayerPanel.presetClassic") : RULE_PRESET_LABELS[value];
+    },
+  }),
+);
+const mpRulePresetHint = (preset: MpRaceRules["preset"]) =>
+  preset === "classic" ? tr("hud.multiplayerPanel.presetClassicHint") : RULE_PRESET_HINTS[preset];
 
-const GRID_ORDER_HINTS: Record<MpGridOrder, string> = {
-  qualifying: "Quickest lap first; without times, join order",
-  reverse: "Reverse of qualifying order (or join order)",
-  random: "Drawn at the start",
-};
+const gridOrderHint = (order: MpGridOrder) => tr(`hud.multiplayerPanel.gridOrderHint.${order}`);
 
 const TIME_SCALE_OPTIONS = TIME_SCALES.map((s) => ({
   id: String(s),
-  label: s === 0 ? "Fixed" : `${s}x`,
+  get label() {
+    return s === 0 ? tr("hud.multiplayerPanel.timeScaleFixed") : `${s}x`;
+  },
 }));
 
 const QUALIFYING_OPTIONS = MP_QUALIFYING_MINUTES.map((m) => ({
   id: String(m),
-  label: m === 0 ? "Off" : `${m} min`,
+  get label() {
+    return m === 0 ? tr("hud.multiplayerPanel.qualifyingOff") : `${m} min`;
+  },
 }));
 
 /** A circuit's name, with the layout when the venue has more than one, so a guest knows which (an unknown id stays itself) */
@@ -216,21 +220,22 @@ function ConnectSection({ title, intro, children }: { title: string; intro: stri
 }
 
 function NetBadge({ stats }: { stats?: PeerNetStats }) {
+  const tx = useTranslations("hud.multiplayerPanel.net");
   if (!stats) return null;
   return (
     <>
       {stats.relayed ? (
-        <Badge size="sm" tone="info" icon="relay" title="Traffic reaches you through the host">
-          Relayed
+        <Badge size="sm" tone="info" icon="relay" title={tx("relayedTitle")}>
+          {tx("relayed")}
         </Badge>
       ) : null}
       {stats.rttMs == null ? (
         <Badge size="sm" variant="outline">
-          Measuring
+          {tx("measuring")}
         </Badge>
       ) : (
         <Badge size="sm" tone={pingTone(stats.rttMs)} icon="latency" className="lc-mono">
-          {Math.round(stats.rttMs)} ms · {Math.round(stats.lossPct)}% loss
+          {tx("pingLoss", { ping: Math.round(stats.rttMs), loss: Math.round(stats.lossPct) })}
         </Badge>
       )}
     </>
@@ -239,6 +244,8 @@ function NetBadge({ stats }: { stats?: PeerNetStats }) {
 
 /** One setting of the room: how it reads, and the host's control for it */
 interface LobbyRow {
+  /** Names the row for React (the label is translated) */
+  id: string;
   label: string;
   /** The value as read (a guest, or the host once a session is under way) */
   read: React.ReactNode;
@@ -276,14 +283,14 @@ function SettingsCard({
     <Card title={title} description={description}>
       {editable ? (
         shown.map((r) => (
-          <SettingRow key={r.label} label={r.label} hint={r.hint}>
+          <SettingRow key={r.id} label={r.label} hint={r.hint}>
             {r.edit ?? <ReadValue>{r.read}</ReadValue>}
           </SettingRow>
         ))
       ) : (
         <dl className="m-0 flex flex-col">
           {shown.map((r) => (
-            <ReadRow key={r.label} label={r.label}>
+            <ReadRow key={r.id} label={r.label}>
               {r.read}
             </ReadRow>
           ))}
@@ -322,6 +329,7 @@ function LobbySettingsCards({
   carsForClass,
   vehicleLabel,
 }: LobbySettingsCardsProps) {
+  const tx = useTranslations("hud.multiplayerPanel.settings");
   const set = (patch: Partial<LobbySettings>) => onSetLobbySettings?.(patch);
   const rules = settings.rules;
   const updateRules = (patch: Partial<MpRaceRules>) => set({ rules: { ...rules, ...patch } });
@@ -337,9 +345,9 @@ function LobbySettingsCards({
 
   const cars = settings.vehicle ? (vehicleLabel?.(settings.vehicle) ?? settings.vehicle) : classRuleLabel(settings.carClass);
   const carsHint = settings.vehicle
-    ? "One car for everyone"
+    ? tx("oneCar")
     : settings.carClass === "any"
-      ? "Every car, classes mixed"
+      ? tx("classesMixed")
       : carsForClass?.(settings.carClass)
           .map((c) => c.title)
           .join(", ") || undefined;
@@ -347,7 +355,8 @@ function LobbySettingsCards({
 
   const event: (LobbyRow | null)[] = [
     {
-      label: "Circuit",
+      id: "circuit",
+      label: tx("circuit"),
       read: (
         <>
           {circuit}
@@ -357,15 +366,16 @@ function LobbySettingsCards({
       edit: onPickCircuit ? (
         <>
           {qualityBadge}
-          <Button size="sm" variant="secondary" onClick={onPickCircuit} aria-label={`Change circuit: ${circuit}`}>
-            Change
+          <Button size="sm" variant="secondary" onClick={onPickCircuit} aria-label={tx("changeCircuit", { circuit })}>
+            {tx("change")}
           </Button>
         </>
       ) : undefined,
-      hint: onPickCircuit ? circuit : "Change it from the main menu",
+      hint: onPickCircuit ? circuit : tx("circuitHint"),
     },
     {
-      label: "Cars",
+      id: "cars",
+      label: tx("cars"),
       read: cars,
       edit: settings.vehicle ? undefined : (
         <Select<CarClassRule> value={settings.carClass} options={classRuleOptions()} onChange={(carClass) => set({ carClass })} />
@@ -373,7 +383,8 @@ function LobbySettingsCards({
       hint: carsHint,
     },
     {
-      label: "Weather",
+      id: "weather",
+      label: tx("weather"),
       read: WEATHER_LABELS[weather].label,
       edit: (
         <Select<WeatherPresetId>
@@ -384,7 +395,8 @@ function LobbySettingsCards({
       ),
     },
     {
-      label: "Time of day",
+      id: "timeOfDay",
+      label: tx("timeOfDay"),
       read: TIME_OF_DAY_LABELS[timeOfDay],
       edit: (
         <Select<TimeOfDayId>
@@ -395,23 +407,26 @@ function LobbySettingsCards({
       ),
     },
     {
-      label: "Time speed",
-      read: timeScale === 0 ? "Fixed" : `${timeScale}x`,
+      id: "timeSpeed",
+      label: tx("timeSpeed"),
+      read: timeScale === 0 ? tr("hud.multiplayerPanel.timeScaleFixed") : `${timeScale}x`,
       edit: <Select<string> value={String(timeScale)} options={TIME_SCALE_OPTIONS} onChange={(v) => set({ timeScale: Number(v) })} />,
     },
   ];
 
   const race: (LobbyRow | null)[] = [
     {
-      label: "Laps",
+      id: "laps",
+      label: tx("laps"),
       read: distance ? `${settings.laps} · ${distance}` : settings.laps,
       edit: <Stepper value={settings.laps} min={MIN_LAPS} max={MAX_LAPS} onChange={(laps) => set({ laps: Math.min(MAX_LAPS, Math.max(MIN_LAPS, laps)) })} />,
       hint: distance ?? undefined,
     },
     isPrivate
       ? {
-          label: "Qualifying",
-          read: settings.qualifyingMinutes > 0 ? `${settings.qualifyingMinutes} min` : "Off",
+          id: "qualifying",
+          label: tx("qualifying"),
+          read: settings.qualifyingMinutes > 0 ? `${settings.qualifyingMinutes} min` : tr("hud.multiplayerPanel.qualifyingOff"),
           edit: (
             <Segmented<string>
               value={String(settings.qualifyingMinutes)}
@@ -419,13 +434,14 @@ function LobbySettingsCards({
               onChange={(v) => set({ qualifyingMinutes: Number(v) as MpQualifyingMinutes })}
             />
           ),
-          hint: settings.qualifyingMinutes > 0 ? "Best clean lap sets the grid" : undefined,
+          hint: settings.qualifyingMinutes > 0 ? tx("qualifyingHint") : undefined,
         }
       : null,
     isPrivate && settings.qualifyingMinutes > 0
-      ? { label: "Grid order", read: "Set by qualifying" }
+      ? { id: "gridOrder", label: tx("gridOrder"), read: tx("setByQualifying") }
       : {
-          label: "Grid order",
+          id: "gridOrder",
+          label: tx("gridOrder"),
           read: optionLabel(GRID_ORDER_OPTIONS, settings.gridOrder),
           edit: (
             <Segmented<MpGridOrder>
@@ -434,10 +450,11 @@ function LobbySettingsCards({
               onChange={(gridOrder) => set({ gridOrder })}
             />
           ),
-          hint: GRID_ORDER_HINTS[settings.gridOrder],
+          hint: gridOrderHint(settings.gridOrder),
         },
     {
-      label: "Start",
+      id: "start",
+      label: tx("start"),
       read: optionLabel(START_TYPE_OPTIONS, settings.startType),
       edit: (
         <Segmented<MpStartType>
@@ -449,7 +466,8 @@ function LobbySettingsCards({
     },
     settings.startType === "standing"
       ? {
-          label: "Launch",
+          id: "launch",
+          label: tx("launch"),
           read: RACE_START_MODE_LABELS[launch],
           edit: (
             <Segmented<RaceStartMode>
@@ -465,7 +483,8 @@ function LobbySettingsCards({
 
   const rulesRows: (LobbyRow | null)[] = [
     {
-      label: "Rules",
+      id: "rules",
+      label: tx("rulePreset"),
       read: optionLabel(MP_RULE_PRESET_OPTIONS, rules.preset),
       edit: (
         <Select<MpRaceRules["preset"]>
@@ -474,10 +493,11 @@ function LobbySettingsCards({
           onChange={(preset) => updateRules({ preset })}
         />
       ),
-      hint: MP_RULE_PRESET_HINTS[rules.preset],
+      hint: mpRulePresetHint(rules.preset),
     },
     {
-      label: "Track limits",
+      id: "trackLimits",
+      label: tx("trackLimits"),
       read: TRACK_LIMITS_CHOICE_LABELS[rules.trackLimits],
       edit: (
         <Segmented<TrackLimitsChoice>
@@ -488,13 +508,15 @@ function LobbySettingsCards({
       ),
     },
     {
-      label: "Penalties",
-      read: rules.penalties !== false ? "On" : "Off",
+      id: "penalties",
+      label: tx("penalties"),
+      read: rules.penalties !== false ? tx("penaltiesOn") : tx("penaltiesOff"),
       edit: <Toggle checked={rules.penalties !== false} onChange={(penalties) => updateRules({ penalties })} />,
-      hint: "Time added for track limits and jump starts",
+      hint: tx("penaltiesHint"),
     },
     {
-      label: "Damage",
+      id: "damage",
+      label: tx("damage"),
       read: DAMAGE_LEVEL_LABELS[rules.damage ?? "off"],
       edit: (
         <Segmented<DamageLevel>
@@ -505,8 +527,9 @@ function LobbySettingsCards({
       ),
     },
     {
-      label: "Collisions",
-      read: COLLISION_LABELS[settings.collisions],
+      id: "collisions",
+      label: tx("collisions"),
+      read: collisionLabel(settings.collisions),
       edit: (
         <Select<CollisionMode>
           value={settings.collisions}
@@ -514,16 +537,16 @@ function LobbySettingsCards({
           onChange={(collisions) => set({ collisions })}
         />
       ),
-      hint: COLLISION_HINTS[settings.collisions],
+      hint: collisionHint(settings.collisions),
     },
   ];
 
-  const lockedNote = isHost && locked ? (qualifyingActive ? "Locked while qualifying runs" : "Locked while the race runs") : undefined;
+  const lockedNote = isHost && locked ? (qualifyingActive ? tx("lockedQualifying") : tx("lockedRace")) : undefined;
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <SettingsCard title="Event" description={lockedNote} rows={event} editable={editable} />
-      <SettingsCard title="Race" rows={race} editable={editable} />
-      <SettingsCard title="Rules" rows={rulesRows} editable={editable} />
+      <SettingsCard title={tx("event")} description={lockedNote} rows={event} editable={editable} />
+      <SettingsCard title={tx("race")} rows={race} editable={editable} />
+      <SettingsCard title={tx("rules")} rows={rulesRows} editable={editable} />
     </div>
   );
 }
@@ -559,6 +582,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   onOpenProfile,
   races,
 }) => {
+  const tx = useTranslations("hud.multiplayerPanel");
   // Connect box
   const [roomCodeInput, setRoomCodeInput] = useState(initialRoomCode);
   /** What the player did last in the room card: a failed join is told at the code field */
@@ -675,7 +699,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     const url = getInviteUrl();
     if (!url || typeof navigator === "undefined" || typeof navigator.share !== "function") return;
     try {
-      await navigator.share({ title: "LibreCorsa race", text: "Join my race", url });
+      await navigator.share({ title: tx("room.shareTitle"), text: tx("room.shareText"), url });
     } catch {
       // Share sheet dismissed or unavailable
     }
@@ -690,7 +714,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   const saveTurn = () => {
     const url = turnUrl.trim();
     if (!/^turns?:/i.test(url)) {
-      setTurnError("The address must start with turn: or turns:");
+      setTurnError(tx("connect.turnPrefix"));
       return;
     }
     setTurnError("");
@@ -722,7 +746,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   };
   const joinRoom = () => {
     if (!joinReady) {
-      setJoinHint("Enter at least 3 characters.");
+      setJoinHint(tx("room.codeTooShort"));
       return;
     }
     setJoinHint(null);
@@ -735,7 +759,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   const p2pState = p2pStatus?.state ?? "idle";
   // A failed join is said under the code field; any other failure under the room card
   const joinFailed = lastAction === "join" && p2pState === "error";
-  const joinError = joinHint ?? (joinFailed ? p2pStatus?.statusText || "Couldn't join that room. Check the code." : undefined);
+  const joinError = joinHint ?? (joinFailed ? p2pStatus?.statusText || tx("room.joinFailed") : undefined);
 
   // The room's race, worked out once for the drivers card and the settings beside it
   const view = lobby ? lobbyView(lobby) : null;
@@ -783,11 +807,11 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
 
     return (
       <Card
-        title="Drivers"
-        description={hostPlayer?.name ? `Host: ${hostPlayer.name}` : undefined}
+        title={tx("drivers.title")}
+        description={hostPlayer?.name ? tx("drivers.host", { name: hostPlayer.name }) : undefined}
         action={
           <>
-            {qualifyingActive ? <Badge tone="info">Qualifying</Badge> : null}
+            {qualifyingActive ? <Badge tone="info">{tx("drivers.qualifying")}</Badge> : null}
             <Badge variant="outline">{state.players.length}</Badge>
           </>
         }
@@ -796,7 +820,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
         <ul className="m-0 flex list-none flex-col p-0">
           {orderedPlayers.map((p) => {
             const isMe = p.peerId === localPeerId;
-            const carName = p.vehicle ? (vehicleLabel?.(p.vehicle) ?? p.vehicle) : "No car yet";
+            const carName = p.vehicle ? (vehicleLabel?.(p.vehicle) ?? p.vehicle) : tx("drivers.noCar");
             const qLapMs = qualifyingActive ? (qualifyingTimes.get(p.peerId) ?? null) : null;
             return (
               <li key={p.peerId} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-white/5 py-2.5 last:border-b-0">
@@ -824,24 +848,24 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 <div className="flex flex-wrap items-center gap-1.5">
                   {qualifyingActive ? (
                     <Badge size="sm" tone={qLapMs !== null ? "info" : undefined} variant={qLapMs !== null ? undefined : "outline"} className="lc-mono">
-                      {qLapMs !== null ? formatLapTime(qLapMs) : "No time"}
+                      {qLapMs !== null ? formatLapTime(qLapMs) : tx("drivers.noTime")}
                     </Badge>
                   ) : null}
                   {isHostPlayer(p) ? <SessionBadge session="host" size="sm" /> : null}
                   {outOfClass(p.vehicle) ? (
-                    <Badge size="sm" tone="warn" icon="warning" title={`Not in this room's class (${classRuleLabel(settings.carClass)})`}>
-                      Wrong class
+                    <Badge size="sm" tone="warn" icon="warning" title={tx("drivers.wrongClassTitle", { class: classRuleLabel(settings.carClass) })}>
+                      {tx("drivers.wrongClass")}
                     </Badge>
                   ) : null}
                   {!isMe ? <NetBadge stats={peerStats?.find((s) => s.peerId === p.peerId)} /> : null}
                   {!qualifyingActive ? (
                     p.ready ? (
                       <Badge size="sm" tone="good" icon="success">
-                        Ready
+                        {tx("drivers.ready")}
                       </Badge>
                     ) : (
                       <Badge size="sm" variant="outline">
-                        Not ready
+                        {tx("drivers.notReady")}
                       </Badge>
                     )
                   ) : null}
@@ -860,11 +884,11 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           <Well className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-2.5">
             <span className="flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-caution">
               <Icon name="warning" className="mt-px" />
-              The host is on {trackName(settings.trackId)}
+              {tx("drivers.hostOn", { circuit: trackName(settings.trackId) })}
             </span>
             {onSwitchTrack ? (
               <Button size="sm" variant="secondary" onClick={() => onSwitchTrack(settings.trackId)}>
-                Switch circuit
+                {tx("drivers.switchCircuit")}
               </Button>
             ) : null}
           </Well>
@@ -873,7 +897,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           <Well className="flex flex-col gap-2.5 px-3.5 py-2.5">
             <span className="flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-caution">
               <Icon name="warning" className="mt-px" />
-              {`Your car isn't in this room's class (${classRuleLabel(settings.carClass)}).${switchCars.length > 0 ? " Switch car:" : ""}`}
+              {tx(switchCars.length > 0 ? "drivers.wrongCarSwitch" : "drivers.wrongCar", { class: classRuleLabel(settings.carClass) })}
             </span>
             {switchCars.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
@@ -899,16 +923,16 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               onClick={() => onStartRace?.()}
             >
               {raceRunning
-                ? "Race in progress"
+                ? tx("drivers.raceInProgress")
                 : qualifyingActive
-                  ? "Start race now"
+                  ? tx("drivers.startRaceNow")
                   : settings.qualifyingMinutes > 0 && isPrivate
-                    ? `Start ${settings.qualifyingMinutes} min qualifying`
-                    : "Start race"}
+                    ? tx("drivers.startQualifying", { minutes: settings.qualifyingMinutes })
+                    : tx("drivers.startRace")}
             </Button>
             {(raceRunning || qualifyingActive) && onAbortRace ? (
               <Button variant="danger" block onClick={() => setConfirmEnd(true)}>
-                {qualifyingActive ? "End qualifying" : "End race for everyone"}
+                {qualifyingActive ? tx("drivers.endQualifying") : tx("drivers.endRaceForEveryone")}
               </Button>
             ) : null}
             {!raceRunning && !qualifyingActive && startBlocked ? (
@@ -926,18 +950,18 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               disabled={!onSetReady}
               onClick={toggleReady}
             >
-              {ready ? "Ready" : "Ready up"}
+              {ready ? tx("drivers.readyButton") : tx("drivers.readyUp")}
             </Button>
             <p className="lc-hint m-0 text-center">
-              {raceRunning ? "Race in progress." : qualifyingActive ? "Qualifying in progress." : "Waiting for host to start."}
+              {raceRunning ? tx("drivers.raceRunning") : qualifyingActive ? tx("drivers.qualifyingRunning") : tx("drivers.waitingForHost")}
             </p>
           </div>
         )}
         <ConfirmDialog
           open={confirmEnd}
-          title={qualifyingActive ? "End qualifying?" : "End race for all?"}
-          confirmLabel={qualifyingActive ? "End qualifying" : "End race"}
-          cancelLabel={qualifyingActive ? "Keep qualifying" : "Keep racing"}
+          title={qualifyingActive ? tx("drivers.confirmEndQualifying") : tx("drivers.confirmEndRace")}
+          confirmLabel={qualifyingActive ? tx("drivers.confirmEndQualifyingButton") : tx("drivers.confirmEndRaceButton")}
+          cancelLabel={qualifyingActive ? tx("drivers.keepQualifying") : tx("drivers.keepRacing")}
           icon={<Icon name="warning" />}
           onCancel={() => setConfirmEnd(false)}
           onConfirm={() => {
@@ -945,7 +969,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             onAbortRace?.();
           }}
         >
-          Returns all drivers to the lobby.
+          {tx("drivers.confirmBody")}
         </ConfirmDialog>
       </Card>
     );
@@ -955,18 +979,18 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     hostedCode || connected > 0 || p2pState !== "idle" ? (
       p2pState === "connected" ? (
         <Badge tone="good" dot>
-          {connected} connected
+          {tx("room.connected", { count: connected })}
         </Badge>
       ) : p2pState === "signaling" ? (
         <Badge tone="warn" dot>
-          Connecting
+          {tx("room.connecting")}
         </Badge>
       ) : p2pState === "error" ? (
         <Badge tone="bad" icon="error">
-          Not connected
+          {tx("room.notConnected")}
         </Badge>
       ) : (
-        <Badge variant="outline">{connected} connected</Badge>
+        <Badge variant="outline">{tx("room.connected", { count: connected })}</Badge>
       )
     ) : null;
 
@@ -979,28 +1003,24 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
       {/* The connection the player waits on, read out as it changes (the badge on the room card says it on screen;
           an error is also an alert under the field or the room) */}
       <span className="sr-only" aria-live="polite">
-        {p2pState === "connected"
-          ? `${connected} connected`
-          : p2pState === "signaling"
-            ? "Connecting"
-            : ""}
+        {p2pState === "connected" ? tx("room.connected", { count: connected }) : p2pState === "signaling" ? tx("room.connecting") : ""}
       </span>
       {/* Open races: not while in a friend's room, whose lobby takes this place */}
       {races && !lobby ? <RacesCard {...races} /> : null}
 
       {/* Room */}
       <div className="flex min-w-0 flex-col gap-3">
-        <Card title="Private room" action={roomStatus} bodyClassName="gap-3.5">
+        <Card title={tx("room.title")} action={roomStatus} bodyClassName="gap-3.5">
           {hostedCode ? (
             <>
               <Well className="flex flex-col gap-1 px-4 py-3">
                 <span
                   className="lc-mono text-[40px] leading-none font-bold tracking-[0.14em] break-all text-lc-chalk sm:text-[46px]"
-                  aria-label={`Room code ${hostedCode}`}
+                  aria-label={tx("room.codeAria", { code: hostedCode })}
                 >
                   {hostedCode}
                 </span>
-                <span className="lc-hint">Room code</span>
+                <span className="lc-hint">{tx("room.codeCaption")}</span>
               </Well>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -1010,18 +1030,18 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                   icon={<Icon name={copiedLink ? "copied" : "copy"} />}
                   onClick={copyLink}
                 >
-                  {copiedLink ? "Link copied" : "Copy invite link"}
+                  {copiedLink ? tx("room.linkCopied") : tx("room.copyLink")}
                 </Button>
                 {canShare ? (
                   <Button variant="secondary" className="flex-1" disabled={!activeCode} icon={<Icon name="share" />} onClick={() => void shareInvite()}>
-                    Share
+                    {tx("room.share")}
                   </Button>
                 ) : null}
               </div>
             </>
           ) : (
             <Button variant={races || lobby || joinReady ? "secondary" : "primary"} block onClick={hostRoom}>
-              Host a room
+              {tx("room.host")}
             </Button>
           )}
           <form
@@ -1033,14 +1053,14 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           >
             <TextField
               id="lc-room-code"
-              label={hostedCode ? "Join another room" : "Join a friend's room"}
+              label={hostedCode ? tx("room.joinAnother") : tx("room.joinFriend")}
               value={roomCodeInput}
               onChange={(v) => {
                 setRoomCodeInput(v.toUpperCase());
                 setJoinHint(null);
                 if (lastAction === "join") setLastAction(null);
               }}
-              placeholder="Room code"
+              placeholder={tx("room.codePlaceholder")}
               maxLength={6}
               autoComplete="off"
               autoCapitalize="characters"
@@ -1050,14 +1070,14 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               error={joinError}
               trailing={
                 <Button type="submit" size="sm" variant={joinReady && !hostedCode && !races && !lobby ? "primary" : "secondary"} className="-mr-2">
-                  Join
+                  {tx("room.join")}
                 </Button>
               }
             />
           </form>
           {hostedCode ? (
             <Button size="sm" variant="ghost" className="self-start" onClick={hostRoom}>
-              New room
+              {tx("room.newRoom")}
             </Button>
           ) : null}
           {/* What the connection is doing; nothing to say before a room is hosted or joined (a failed join says it at the field) */}
@@ -1073,14 +1093,14 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
         </Card>
 
         {profile ? (
-          <Well className="flex min-h-11 min-w-0 items-center gap-2.5 py-1 pr-1 pl-3.5" aria-label={`Racing as ${profile.name}`}>
+          <Well className="flex min-h-11 min-w-0 items-center gap-2.5 py-1 pr-1 pl-3.5" aria-label={tx("room.racingAs", { name: profile.name })}>
             {/* The driver's own colour: data */}
             <span aria-hidden className="size-3 shrink-0 rounded-full" style={{ backgroundColor: profile.color }} />
             <span className="lc-mono text-[12px] font-bold tracking-[0.08em] text-lc-slate">{profile.code}</span>
             <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{profile.name}</span>
             {onOpenProfile ? (
               <Button size="sm" variant="ghost" icon={<Icon name="edit" />} onClick={onOpenProfile}>
-                Edit
+                {tx("room.edit")}
               </Button>
             ) : null}
           </Well>
@@ -1089,15 +1109,15 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
         {view ? renderDrivers(view) : null}
 
         <div className="flex flex-col gap-1 px-2">
-          <Disclosure moreLabel="More ways to connect" lessLabel="Hide">
+          <Disclosure moreLabel={tx("connect.more")} lessLabel={tx("connect.hide")}>
             <div className="flex flex-col gap-3.5 pb-2">
-              <ConnectSection title="Local tabs" intro="Race another tab in this browser.">
+              <ConnectSection title={tx("connect.localTitle")} intro={tx("connect.localIntro")}>
                 <Button size="sm" variant="secondary" className="self-start" disabled={!onHostLocal} onClick={() => onHostLocal?.()}>
-                  Connect local tab
+                  {tx("connect.localConnect")}
                 </Button>
               </ConnectSection>
 
-              <ConnectSection title="Manual WebRTC" intro="Direct peer-to-peer via offer/answer token exchange.">
+              <ConnectSection title={tx("connect.manualTitle")} intro={tx("connect.manualIntro")}>
                 <div className="flex flex-wrap items-center gap-2">
                   {/* A guest that answered an offer does not start one of its own (Start over first) */}
                   <Button
@@ -1112,10 +1132,10 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                           setSdpInput("");
                           cancelCopiedToken();
                         }
-                      }, "Offer creation failed.")
+                      }, tx("connect.offerFailed"))
                     }
                   >
-                    1. Create offer (host)
+                    {tx("connect.createOffer")}
                   </Button>
                   {/* A host waiting on the answer to its own offer does not paste an offer (Start over first) */}
                   <Button
@@ -1130,10 +1150,10 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                           setSdpInput("");
                           cancelCopiedToken();
                         }
-                      }, "Invalid offer token.")
+                      }, tx("connect.badOffer"))
                     }
                   >
-                    2. Accept offer
+                    {tx("connect.acceptOffer")}
                   </Button>
                   {/* Only the host that made the offer accepts an answer */}
                   <Button
@@ -1147,20 +1167,20 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                         setSdp({ stage: "accepted" });
                         setSdpInput("");
                         cancelCopiedToken();
-                      }, "Invalid answer token.")
+                      }, tx("connect.badAnswer"))
                     }
                   >
-                    3. Accept answer (host)
+                    {tx("connect.acceptAnswer")}
                   </Button>
                 </div>
                 <TextField
-                  label="Remote token"
+                  label={tx("connect.remoteToken")}
                   value={sdpInput}
                   onChange={(v) => {
                     setSdpInput(v);
                     setSdpError("");
                   }}
-                  placeholder="Paste token"
+                  placeholder={tx("connect.pasteToken")}
                   autoComplete="off"
                   spellCheck={false}
                   error={sdpError || undefined}
@@ -1168,12 +1188,12 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 {sdp.stage === "accepted" ? (
                   <p className="m-0 flex items-center gap-2 text-[13px] font-medium text-lc-gain">
                     <Icon name="success" size="xs" />
-                    Answer accepted. Connecting…
+                    {tx("connect.answerAccepted")}
                   </p>
                 ) : null}
                 {generatedToken ? (
                   <TextField
-                    label="Your token"
+                    label={tx("connect.yourToken")}
                     value={generatedToken}
                     onChange={() => undefined}
                     readOnly
@@ -1188,22 +1208,22 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                           flashCopiedToken();
                         }}
                       >
-                        {copiedToken ? "Copied" : "Copy"}
+                        {copiedToken ? tx("connect.copied") : tx("connect.copy")}
                       </Button>
                     }
                   />
                 ) : null}
                 {sdp.stage !== "idle" ? (
                   <Button size="sm" variant="ghost" className="self-start" disabled={sdpBusy} onClick={resetSdp}>
-                    Reset
+                    {tx("connect.reset")}
                   </Button>
                 ) : null}
               </ConnectSection>
 
-              <ConnectSection title="Custom TURN relay" intro="Optional relay server for restricted networks.">
+              <ConnectSection title={tx("connect.turnTitle")} intro={tx("connect.turnIntro")}>
                 <div className="grid gap-2.5 sm:grid-cols-3">
                   <TextField
-                    label="Relay address"
+                    label={tx("connect.relayAddress")}
                     value={turnUrl}
                     onChange={(v) => {
                       setTurnUrl(v);
@@ -1215,8 +1235,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                     spellCheck={false}
                     error={turnError || undefined}
                   />
-                  <TextField label="Username" value={turnUser} onChange={setTurnUser} autoComplete="off" spellCheck={false} />
-                  <TextField label="Password" type="password" value={turnCred} onChange={setTurnCred} autoComplete="new-password" />
+                  <TextField label={tx("connect.username")} value={turnUser} onChange={setTurnUser} autoComplete="off" spellCheck={false} />
+                  <TextField label={tx("connect.password")} type="password" value={turnCred} onChange={setTurnCred} autoComplete="new-password" />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
@@ -1226,10 +1246,10 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                     disabled={!turnUrl.trim()}
                     onClick={saveTurn}
                   >
-                    {turnSaved ? "Saved" : "Save"}
+                    {turnSaved ? tx("connect.saved") : tx("connect.save")}
                   </Button>
                   <Button size="sm" variant="ghost" onClick={clearTurn}>
-                    Clear
+                    {tx("connect.clear")}
                   </Button>
                 </div>
               </ConnectSection>
@@ -1238,7 +1258,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           {turnConfigured ? (
             <p className="lc-hint m-0 flex items-center gap-1.5">
               <Icon name="relay" size="xs" />
-              Using your own relay server
+              {tx("connect.ownRelay")}
             </p>
           ) : null}
         </div>

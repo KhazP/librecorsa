@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import type { RaceStatus } from "@/types/f1";
 import { Badge } from "@/components/ui/Badge";
 import { currentUnits } from "@/lib/settings/ui-prefs";
@@ -31,6 +32,17 @@ const ChequerStrip: React.FC<{ patternId: string; defs?: boolean }> = ({ pattern
 /** Five-light start gantry overlay (the lights are red: identity, not state); "Lights out" / "Green flag" when the race starts, "Chequered flag" when the player finishes */
 export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }) => {
   const skin = useHudSkin();
+  // The gantry re-renders every frame: its words are resolved once per language
+  const tx = useTranslations("hud.startLights");
+  const L = useMemo(
+    () => ({
+      rollingStart: tx("rollingStart"),
+      greenFlag: tx("greenFlag"),
+      lightsOut: tx("lightsOut"),
+      chequeredFlag: tx("chequeredFlag"),
+    }),
+    [tx]
+  );
   const [startBanner, setStartBanner] = useState<{ kind: "go" | "green"; id: number } | null>(null);
   const [flags, setFlags] = useState(0);
   // Which banner has finished fading: it is then removed, so it stops holding space above the delta bar
@@ -59,12 +71,14 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
   if (race?.phase === "lights") {
     const countdown =
       typeof race.countdownS === "number" && race.countdownS > 0 ? Math.ceil(race.countdownS) : null;
+    const startsIn = (n: number) => tx.rich("startsIn", { seconds: n, n: (chunks) => <span className="lc-data not-italic">{chunks}</span> });
+    const lightsLabel = tx("lightsLabel", { lit: race.lightsOn, total: LIGHT_COLUMNS.length });
     if (skin !== null) {
       return (
         <div className="flex flex-col items-center gap-3">
           {countdown !== null ? (
             <span className={`hud-text-shadow text-[24px] font-bold uppercase sm:text-[28px] ${skinCss.ink}`}>
-              Race starts in <span className="lc-data not-italic">{countdown}</span>
+              {startsIn(countdown)}
             </span>
           ) : null}
           <SkinPanel
@@ -72,7 +86,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
             className={skinCss.pill}
             innerClassName="flex gap-2 px-3 py-3 sm:gap-3.5 sm:px-5 sm:py-4 short:gap-2 short:py-2"
             role="img"
-            aria-label={`Start lights: ${race.lightsOn} of 5 lit`}
+            aria-label={lightsLabel}
           >
             {LIGHT_COLUMNS.map((i) => {
               const on = i < race.lightsOn;
@@ -99,13 +113,13 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
       <div className="flex flex-col items-center gap-3">
         {countdown !== null ? (
           <span className="lc-disp hud-text-shadow text-[26px] text-lc-chalk sm:text-[30px]">
-            Race starts in <span className="lc-data not-italic">{countdown}</span>
+            {startsIn(countdown)}
           </span>
         ) : null}
         <div
           className={`flex gap-2 rounded-lc-tile px-3 py-3 sm:gap-3 sm:px-4 sm:py-3.5 short:gap-2 short:py-2 ${HUD_GLASS}`}
           role="img"
-          aria-label={`Start lights: ${race.lightsOn} of 5 lit`}
+          aria-label={lightsLabel}
         >
           {LIGHT_COLUMNS.map((i) => {
             const on = i < race.lightsOn;
@@ -139,10 +153,10 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
       return (
         <SkinBanner role="status" tone="caution" cut="sm" className="inline-flex min-h-10 items-center gap-2.5 py-1.5 pr-4 pl-2.5">
           <SkinTag tone="caution" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
-            Rolling start
+            {L.rollingStart}
           </SkinTag>
           <span className="text-[14px] font-bold whitespace-nowrap uppercase">
-            Hold pace · <span className="lc-data">{pace}</span> {unit} to start/finish
+            {tx.rich("holdPaceSkin", { pace, unit, n: (chunks) => <span className="lc-data">{chunks}</span> })}
           </span>
         </SkinBanner>
       );
@@ -153,10 +167,10 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
         className={`inline-flex min-h-10 items-center gap-2.5 rounded-lc-row py-1.5 pr-4 pl-2 text-lc-chalk inset-ring inset-ring-lc-caution/60 ${HUD_GLASS}`}
       >
         <Badge tone="warn" variant="solid" size="sm">
-          Rolling start
+          {L.rollingStart}
         </Badge>
         <span className="lc-disp text-[14px] whitespace-nowrap">
-          Hold <span className="lc-data">{pace}</span> {unit} to line
+          {tx.rich("holdPace", { pace, unit, n: (chunks) => <span className="lc-data">{chunks}</span> })}
         </span>
       </div>
     );
@@ -166,7 +180,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
       return (
         <div key={`green${startBanner.id}`} onAnimationEnd={fadeEnd(`green${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
           <SkinPanel cut="lg" tone="gain" innerClassName="flex flex-col items-center gap-2 px-8 py-4 sm:px-14 sm:py-6">
-            <span className="text-[40px] leading-none font-bold whitespace-nowrap uppercase sm:text-[68px]">Green flag</span>
+            <span className="text-[40px] leading-none font-bold whitespace-nowrap uppercase sm:text-[68px]">{L.greenFlag}</span>
           </SkinPanel>
         </div>
       );
@@ -174,7 +188,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
     return (
       <div key={`green${startBanner.id}`} onAnimationEnd={fadeEnd(`green${startBanner.id}`)} className="hud-fade-out relative flex items-center justify-center">
         <div className="relative flex flex-col items-center gap-2 rounded-lc-tile border-2 border-lc-gain/65 bg-lc-void/90 px-8 py-4 shadow-lc-pop sm:px-12 sm:py-5">
-          <span className="lc-disp text-[44px] whitespace-nowrap text-lc-gain sm:text-[72px]">Green flag</span>
+          <span className="lc-disp text-[44px] whitespace-nowrap text-lc-gain sm:text-[72px]">{L.greenFlag}</span>
         </div>
       </div>
     );
@@ -189,7 +203,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
                 <span key={i} className={`size-3.5 rounded-full ${skinCss.fillDim}`} />
               ))}
             </div>
-            <span className="text-[40px] leading-none font-bold whitespace-nowrap uppercase sm:text-[68px]">Lights out</span>
+            <span className="text-[40px] leading-none font-bold whitespace-nowrap uppercase sm:text-[68px]">{L.lightsOut}</span>
           </SkinPanel>
         </div>
       );
@@ -203,7 +217,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
             ))}
           </div>
           <span className="lc-disp text-[44px] whitespace-nowrap text-lc-chalk sm:text-[72px]">
-            Lights out
+            {L.lightsOut}
           </span>
         </div>
       </div>
@@ -217,7 +231,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
           <ChequerStrip patternId={patternId} defs />
           <SkinPanel cut="lg" innerClassName="px-8 py-4 sm:px-13 sm:py-5.5">
             <span className="block text-center text-[34px] leading-none font-bold whitespace-nowrap uppercase sm:text-[60px]">
-              Chequered flag
+              {L.chequeredFlag}
             </span>
           </SkinPanel>
           <ChequerStrip patternId={patternId} />
@@ -229,7 +243,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
         <ChequerStrip patternId={patternId} defs />
         <div className="rounded-lc-tile border-2 border-lc-chalk/50 bg-lc-void/90 px-8 py-4 shadow-lc-pop sm:px-12 sm:py-5">
           <span className="lc-disp block text-center text-[36px] whitespace-nowrap text-lc-chalk sm:text-[64px]">
-            Chequered flag
+            {L.chequeredFlag}
           </span>
         </div>
         <ChequerStrip patternId={patternId} />

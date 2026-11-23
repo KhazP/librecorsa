@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "use-intl/react";
 import { Icon } from "@/components/ui/icons/Icon";
 import { SurfaceBadge, type TrackSurface } from "@/components/ui/badges/SurfaceBadge";
 import type { HeadlightMode } from "@/lib/render/car-headlights";
@@ -52,37 +53,38 @@ const clock = (h: number) => {
 const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | "panel" }> = ({ weather, variant = "pill" }) => {
   const s = surface(weather.waterMm);
   const units = useUnits();
+  const tx = useTranslations("hud.weatherBadge");
   const shape =
     variant === "panel"
       ? "flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lc-tile px-3.5 py-2.5" // under the circuit map
       : "inline-flex h-8 items-center gap-3 rounded-full py-1 pr-3.5 pl-3.5";
   const headlightLabel =
     weather.headlightMode === "on"
-      ? "Headlights forced on"
+      ? tx("headlightsForcedOn")
       : weather.headlightMode === "off"
-        ? "Headlights forced off"
-        : "Headlights on";
+        ? tx("headlightsForcedOff")
+        : tx("headlightsOn");
   return (
-    <div role="group" className={`${shape} ${HUD_GLASS}`} aria-label="Weather">
+    <div role="group" className={`${shape} ${HUD_GLASS}`} aria-label={tx("region")}>
       {weather.timeMoving ? <span className="lc-data text-[11px] text-lc-chalk">{clock(weather.clockH)}</span> : null}
       <span className="flex items-center gap-1.5">
-        <span className={HUD_LBL}>Air</span>
+        <span className={HUD_LBL}>{tx("air")}</span>
         <span className="lc-data text-[12px] text-lc-chalk">{formatTemp(weather.airC, units)}</span>
       </span>
       <span className="flex items-center gap-1.5">
-        <span className={HUD_LBL}>Track</span>
+        <span className={HUD_LBL}>{tx("track")}</span>
         <span className="lc-data text-[12px] text-lc-chalk">{formatTemp(weather.trackC, units)}</span>
       </span>
       <SurfaceBadge surface={s} size="sm" />
       {weather.rain > 0.05 ? (
         <span className={`inline-flex items-center gap-1 ${HUD_LBL} ${weather.rain > 0.5 ? "text-lc-info" : ""}`}>
           <Icon name={weather.rain > 0.5 ? "weatherStorm" : "weatherRain"} size="xs" className="size-3" />
-          {weather.rain > 0.5 ? "Heavy rain" : "Rain"}
+          {weather.rain > 0.5 ? tx("heavyRain") : tx("rain")}
         </span>
       ) : null}
       {weather.windSpeedMs !== undefined && weather.windSpeedMs >= 0.5 ? (
         <span className="flex items-center gap-1">
-          <span className={HUD_LBL}>{weather.windDirection ?? "Wind"}</span>
+          <span className={HUD_LBL}>{weather.windDirection ?? tx("wind")}</span>
           <span className="lc-data text-[11px] text-lc-fog">
             {formatSpeed(weather.windSpeedMs * 3.6, units)} {speedUnit(units)}
           </span>
@@ -93,25 +95,25 @@ const WeatherBadgeView: React.FC<{ weather: WeatherHudState; variant?: "pill" | 
           className={`inline-flex items-center gap-1 ${weather.headlightsOn || weather.headlightFlash ? "text-lc-gain" : "text-lc-slate"}`}
           title={
             weather.headlightMode === "on"
-              ? "Headlights on (manual)"
+              ? tx("headlightsTitleManualOn")
               : weather.headlightMode === "off"
-                ? "Headlights off (manual)"
-                : "Headlights on (auto)"
+                ? tx("headlightsTitleManualOff")
+                : tx("headlightsTitleAuto")
           }
         >
           <Icon name="headlights" size="xs" label={headlightLabel} className={`size-3.5 ${weather.headlightsOn || weather.headlightFlash ? "" : "opacity-60"}`} />
           {weather.headlightFlash ? (
             <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-gain">
-              FLASH
+              {tx("chipFlash")}
             </span>
           ) : weather.headlightMode === "on" ? (
             <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-gain">
-              ON
+              {tx("chipOn")}
             </span>
           ) : null}
           {!weather.headlightFlash && weather.headlightMode === "off" ? (
             <span aria-hidden="true" className="lc-chip-text text-[9px] text-lc-slate">
-              OFF
+              {tx("chipOff")}
             </span>
           ) : null}
         </span>

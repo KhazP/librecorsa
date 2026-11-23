@@ -1,8 +1,9 @@
 "use client";
 
-import { activeLapWord } from "@/lib/track-data";
-import React, { useEffect, useId, useRef, useState } from "react";
+import { getActivePointToPoint } from "@/lib/track-data";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import { useUiZoom } from "@/lib/ui-zoom";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { SPEED_LABEL, speedIn } from "@/lib/settings/units";
@@ -16,7 +17,6 @@ import {
   HUD_CAUTION,
   HUD_GAIN,
   LAP_MARK_COLOR,
-  LAP_MARK_WORD,
   formatLapTime,
   formatSectorTime,
   lapMark,
@@ -30,14 +30,17 @@ const MINUS = "−";
 /** Bar colour for a corner with no change (or no reference yet) */
 const SAME = "var(--color-lc-keyline)";
 
-/** Corner delta vs the best minimum speed, in the player's unit: green faster, amber slower, dash with no reference */
-function cornerDelta(c: CornerStat, u: UnitSettings): { text: string; color: string; bar: string; word: string } {
-  if (c.bestMinSpeedKmh === null) return { text: EMPTY, color: "var(--color-lc-slate)", bar: SAME, word: "no reference yet" };
+/**
+ * Corner delta vs the best minimum speed, in the player's unit: green faster, amber slower, dash with no reference.
+ * `state` picks the words the bar's spoken name ends with.
+ */
+function cornerDelta(c: CornerStat, u: UnitSettings): { text: string; color: string; bar: string; state: "none" | "same" | "faster" | "slower" } {
+  if (c.bestMinSpeedKmh === null) return { text: EMPTY, color: "var(--color-lc-slate)", bar: SAME, state: "none" };
   const d = speedIn(c.minSpeedKmh, u.speed) - speedIn(c.bestMinSpeedKmh, u.speed);
-  if (Math.abs(d) < 0.05) return { text: "0.0", color: "var(--color-lc-slate)", bar: SAME, word: "same as best" };
+  if (Math.abs(d) < 0.05) return { text: "0.0", color: "var(--color-lc-slate)", bar: SAME, state: "same" };
   return d > 0
-    ? { text: `+${d.toFixed(1)}`, color: HUD_GAIN, bar: HUD_GAIN, word: "faster than best" }
-    : { text: `${MINUS}${Math.abs(d).toFixed(1)}`, color: HUD_CAUTION, bar: HUD_CAUTION, word: "slower than best" };
+    ? { text: `+${d.toFixed(1)}`, color: HUD_GAIN, bar: HUD_GAIN, state: "faster" }
+    : { text: `${MINUS}${Math.abs(d).toFixed(1)}`, color: HUD_CAUTION, bar: HUD_CAUTION, state: "slower" };
 }
 
 /** A speed in km/h as a whole number in the player's unit */
@@ -197,13 +200,13 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
 const PB_TONE = lapMark(1, null) === "best" ? "best" : "good";
 
 /** The lap's status in the toast: invalid, a personal best, or the gap to the best */
-function statusBadge(s: LapSummaryData, skinned = false): React.ReactNode {
+function statusBadge(s: LapSummaryData, words: { invalid: string; pb: string }, skinned = false): React.ReactNode {
   if (skinned) {
     if (!s.valid) {
       return (
         <SkinTag tone="loss" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
           <Icon name="trackLimits" size="xs" />
-          Invalid
+          {words.invalid}
         </SkinTag>
       );
     }
@@ -211,7 +214,7 @@ function statusBadge(s: LapSummaryData, skinned = false): React.ReactNode {
       return (
         <SkinTag tone={PB_TONE === "best" ? "best" : "gain"} filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
           <Icon name="success" size="xs" />
-          PB
+          {words.pb}
         </SkinTag>
       );
     }
@@ -227,28 +230,31 @@ function statusBadge(s: LapSummaryData, skinned = false): React.ReactNode {
   if (!s.valid)
     return (
       <Badge tone="bad" size="sm" icon="trackLimits">
-        Invalid
+        {words.invalid}
       </Badge>
     );
   if (s.isPersonalBest)
     return (
       <Badge tone={PB_TONE} size="sm" icon="success">
-        PB
+        {words.pb}
       </Badge>
     );
   if (s.deltaToBestMs === null) return null;
   return <DeltaBadge seconds={s.deltaToBestMs / 1000} size="sm" />;
 }
 
-/** Colour and word of a sector against the best (no time: neither) */
+/** Colour and mark of a sector against the best (no time: neither) */
 function sectorMark(
   ms: number | null | undefined,
   best: number | null | undefined,
-): { color: string; word: string; mark: LapMark | null } {
-  if (!ms || !Number.isFinite(ms) || ms <= 0) return { color: "var(--color-lc-slate)", word: "", mark: null };
+): { color: string; mark: LapMark | null } {
+  if (!ms || !Number.isFinite(ms) || ms <= 0) return { color: "var(--color-lc-slate)", mark: null };
   const mark = lapMark(ms, best);
-  return { color: LAP_MARK_COLOR[mark], word: LAP_MARK_WORD[mark], mark };
+  return { color: LAP_MARK_COLOR[mark], mark };
 }
+
+/** The lap's name ("Lap 3", or "Run 3" on a hill climb) as the message's `kind` */
+const lapKind = () => (getActivePointToPoint() ? "run" : "lap");
 
 /** Collapsed toast: lap time, status and the three sector colours; the whole card opens the details */
 const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose: () => void }> = ({
@@ -257,6 +263,19 @@ const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose:
   onClose,
 }) => {
   const skin = useHudSkin();
+  const tx = useTranslations("hud.lapSummary");
+  // The HUD re-renders every frame: the toast's words are read once per lap and language
+  const kind = lapKind();
+  const words = useMemo(
+    () => ({
+      title: tx("title", { kind, lap: s.lapNumber }),
+      open: tx("open", { kind, lap: s.lapNumber }),
+      dismiss: tx("dismiss"),
+      invalid: tx("invalid"),
+      pb: tx("pb"),
+    }),
+    [tx, kind, s.lapNumber]
+  );
   if (skin !== null) {
     return (
       <SkinPanel
@@ -267,14 +286,14 @@ const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose:
         <button
           type="button"
           onClick={onOpen}
-          aria-label={`${activeLapWord()} ${s.lapNumber}: show sector data`}
+          aria-label={words.open}
           className={`flex min-h-9 min-w-0 cursor-pointer items-center gap-3 text-left transition-opacity duration-200 hover:opacity-85 pointer-coarse:min-h-11 sm:gap-3.5 ${skinCss.ink}`}
         >
           <span className={`lc-mono shrink-0 text-[12px] font-bold uppercase ${skinCss.inkDim}`}>
-            {activeLapWord()} {s.lapNumber}
+            {words.title}
           </span>
           <span className={`lc-mono text-[22px] leading-none font-bold sm:text-[24px] ${skinCss.readout}`}>{formatLapTime(s.lapTimeMs)}</span>
-          {statusBadge(s, true)}
+          {statusBadge(s, words, true)}
           <span className="flex shrink-0 items-center gap-0.5" aria-hidden>
             {s.sectorTimesMs.map((t, idx) => {
               const m = sectorMark(t, s.bestSectorTimesMs[idx]);
@@ -293,7 +312,7 @@ const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose:
           </span>
           <Icon name="next" size="xs" className={`${skinCss.inkDim} max-sm:hidden`} />
         </button>
-        <SkinButton onClick={onClose} aria-label="Dismiss lap summary" className="size-8 shrink-0">
+        <SkinButton onClick={onClose} aria-label={words.dismiss} className="size-8 shrink-0">
           <Icon name="close" size="xs" />
         </SkinButton>
       </SkinPanel>
@@ -304,14 +323,14 @@ const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose:
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`${activeLapWord()} ${s.lapNumber}: show sector data`}
+        aria-label={words.open}
         className="flex min-h-9 min-w-0 pointer-coarse:min-h-11 cursor-pointer items-center gap-3 rounded-lc-nub text-left transition-opacity duration-150 hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lc-volt sm:gap-3.5"
       >
         <span className="lc-mono shrink-0 text-[12px] font-bold text-lc-slate">
-          {activeLapWord()} {s.lapNumber}
+          {words.title}
         </span>
         <span className="lc-mono text-[22px] leading-none font-bold sm:text-[24px]">{formatLapTime(s.lapTimeMs)}</span>
-        {statusBadge(s)}
+        {statusBadge(s, words)}
         {/* Shape as well as colour: a best sector is a solid bar, a slower one an outline */}
         <span className="flex shrink-0 items-center gap-0.5" aria-hidden>
           {s.sectorTimesMs.map((t, idx) => {
@@ -331,7 +350,7 @@ const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose:
         </span>
         <Icon name="next" size="xs" className="text-lc-slate max-sm:hidden" />
       </button>
-      <IconButton size="sm" variant="ghost" aria-label="Dismiss lap summary" icon={<Icon name="close" />} onClick={onClose} />
+      <IconButton size="sm" variant="ghost" aria-label={words.dismiss} icon={<Icon name="close" />} onClick={onClose} />
     </div>
   );
 };
@@ -406,43 +425,86 @@ const LapCard: React.FC<
   const skin = useHudSkin();
   const units = useUnits();
   const unit = SPEED_LABEL[units.speed];
+  const tx = useTranslations("hud.lapSummary");
+  // The HUD re-renders every frame: the card's words are read once per lap, upload result and language
+  const kind = lapKind();
+  const rank = submitRank?.rank;
+  const rankTotal = submitRank?.total;
+  const rankWeek = submitRank?.challengeRank;
+  const words = useMemo(
+    () => ({
+      title: tx("title", { kind, lap: s.lapNumber }),
+      cardLabel: tx("cardLabel", { lap: s.lapNumber }),
+      collapse: tx("collapse"),
+      invalidWall: tx("invalidWall"),
+      invalidLimits: tx("invalidLimits"),
+      autopilot: tx("autopilot"),
+      personalBest: tx("personalBest"),
+      sent:
+        rank != null
+          ? rankTotal
+            ? rankWeek
+              ? tx("onlineRankOfWeek", { rank, total: rankTotal, week: rankWeek })
+              : tx("onlineRankOf", { rank, total: rankTotal })
+            : rankWeek
+              ? tx("onlineRankWeek", { rank, week: rankWeek })
+              : tx("onlineRank", { rank })
+          : tx("online"),
+      invalidUnranked: tx("invalidUnranked"),
+      autopilotUnranked: tx("autopilotUnranked"),
+      topSpeed: tx("topSpeed", { unit }),
+      avgSpeed: tx("avgSpeed", { unit }),
+      fullThrottle: tx("fullThrottle"),
+      braking: tx("braking"),
+      theoreticalBest: tx("theoreticalBest"),
+      posting: tx("posting"),
+      postingNow: tx("postingNow"),
+      retry: tx("retry"),
+      post: tx("post"),
+      queued: tx("queued"),
+      close: tx("close"),
+      saveGhost: tx("saveGhost"),
+      sectors: s.sectorTimesMs.map((ms, idx) => tx("sector", { n: idx + 1, mark: sectorMark(ms, s.bestSectorTimesMs[idx]).mark ?? "none" })),
+    }),
+    [tx, kind, s.lapNumber, s.sectorTimesMs, s.bestSectorTimesMs, rank, rankTotal, rankWeek, unit]
+  );
 
   let badge: React.ReactNode = null;
   let skinnedBadge: React.ReactNode = null;
   if (!s.valid) {
     badge = (
       <Badge tone="bad" icon="trackLimits">
-        {s.wallContact ? "Invalid: wall contact" : "Invalid: track limits"}
+        {s.wallContact ? words.invalidWall : words.invalidLimits}
       </Badge>
     );
     skinnedBadge = (
       <SkinTag tone="loss" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
         <Icon name="trackLimits" size="xs" />
-        {s.wallContact ? "Invalid: wall contact" : "Invalid: track limits"}
+        {s.wallContact ? words.invalidWall : words.invalidLimits}
       </SkinTag>
     );
   } else if (s.autopilot) {
     badge = (
       <Badge tone="warn" icon="warning">
-        Autopilot: not ranked
+        {words.autopilot}
       </Badge>
     );
     skinnedBadge = (
       <SkinTag tone="caution" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
         <Icon name="warning" size="xs" />
-        Autopilot: not ranked
+        {words.autopilot}
       </SkinTag>
     );
   } else if (s.isPersonalBest) {
     badge = (
       <Badge tone={PB_TONE} icon="success">
-        Personal best
+        {words.personalBest}
       </Badge>
     );
     skinnedBadge = (
       <SkinTag tone={PB_TONE === "best" ? "best" : "gain"} filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
         <Icon name="success" size="xs" />
-        Personal best
+        {words.personalBest}
       </SkinTag>
     );
   } else if (s.deltaToBestMs !== null) {
@@ -455,17 +517,14 @@ const LapCard: React.FC<
     );
   }
 
-  const sentLabel =
-    submitRank != null
-      ? `Online: P${submitRank.rank}${submitRank.total ? ` of ${submitRank.total}` : ""}${submitRank.challengeRank ? `, P${submitRank.challengeRank} this week` : ""}`
-      : "Online";
-  const notRanked = !s.valid ? "Invalid · unranked" : s.autopilot ? "Autopilot · unranked" : undefined;
+  const sentLabel = words.sent;
+  const notRanked = !s.valid ? words.invalidUnranked : s.autopilot ? words.autopilotUnranked : undefined;
 
-  const stats: { label: string; value: string }[] = [
-    { label: `Top ${unit}`, value: `${speed(s.topSpeedKmh, units)}` },
-    { label: `Avg ${unit}`, value: `${speed(s.avgSpeedKmh, units)}` },
-    { label: "Full throttle", value: `${s.fullThrottlePct.toFixed(0)}%` },
-    { label: "Braking", value: `${s.brakingPct.toFixed(0)}%` },
+  const stats: { id: string; label: string; value: string }[] = [
+    { id: "top", label: words.topSpeed, value: `${speed(s.topSpeedKmh, units)}` },
+    { id: "avg", label: words.avgSpeed, value: `${speed(s.avgSpeedKmh, units)}` },
+    { id: "throttle", label: words.fullThrottle, value: `${s.fullThrottlePct.toFixed(0)}%` },
+    { id: "braking", label: words.braking, value: `${s.brakingPct.toFixed(0)}%` },
   ];
 
   if (skin !== null) {
@@ -473,18 +532,18 @@ const LapCard: React.FC<
       <SkinPanel
         cut="lg"
         role="dialog"
-        aria-label={`Lap ${s.lapNumber} summary`}
+        aria-label={words.cardLabel}
         className="w-full"
         innerClassName="flex max-h-[min(calc(100dvh-9rem),var(--lc-room,100dvh))] flex-col gap-3.5 overflow-y-auto p-5 pointer-coarse:max-h-[calc(100dvh-12rem)] short:gap-2.5 short:p-4"
       >
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[18px] leading-none font-bold uppercase">
-              {activeLapWord()} {s.lapNumber}
+              {words.title}
             </h2>
             <div className="flex min-w-0 items-center gap-1.5">
               {skinnedBadge}
-              <SkinButton onClick={onCollapse} aria-label="Collapse lap summary" className="size-8 shrink-0">
+              <SkinButton onClick={onCollapse} aria-label={words.collapse} className="size-8 shrink-0">
                 <Icon name="expand" size="xs" />
               </SkinButton>
             </div>
@@ -502,10 +561,7 @@ const LapCard: React.FC<
                 <span className={`lc-mono text-[18px] leading-tight font-bold ${skinCss.readout}`} style={{ color: mark.color }}>
                   {formatSectorTime(t)}
                 </span>
-                <span className={`truncate text-[11px] ${skinCss.inkDim}`}>
-                  Sector {idx + 1}
-                  {mark.word ? `: ${mark.word.toLowerCase()}` : ""}
-                </span>
+                <span className={`truncate text-[11px] ${skinCss.inkDim}`}>{words.sectors[idx]}</span>
               </div>
             );
           })}
@@ -513,12 +569,12 @@ const LapCard: React.FC<
 
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
           {stats.map((st) => (
-            <Stat key={st.label} value={st.value} label={st.label} />
+            <Stat key={st.id} value={st.value} label={st.label} />
           ))}
         </div>
 
         <div className={`flex items-center justify-between gap-2 px-3.5 py-2.5 ${skinCss.deepBox}`}>
-          <span className={`text-[13px] font-semibold ${skinCss.inkSoft}`}>Theoretical best</span>
+          <span className={`text-[13px] font-semibold ${skinCss.inkSoft}`}>{words.theoreticalBest}</span>
           <span className={`lc-mono text-[18px] font-bold ${skinCss.ink}`}>
             {s.theoreticalBestMs === null ? EMPTY : formatLapTime(s.theoreticalBestMs)}
           </span>
@@ -528,12 +584,12 @@ const LapCard: React.FC<
 
         <div className="flex flex-wrap items-center justify-end gap-2">
           <span className="sr-only" aria-live="polite">
-            {submitState === "sent" ? sentLabel : submitState === "sending" ? "Posting" : submitState === "waiting" ? (submitError ?? "") : ""}
+            {submitState === "sent" ? sentLabel : submitState === "sending" ? words.posting : submitState === "waiting" ? (submitError ?? "") : ""}
           </span>
           {onSubmit && notRanked && submitState !== "sent" ? <span className={`mr-auto text-[12px] ${skinCss.inkDim}`}>{notRanked}</span> : null}
           {onSaveGhost ? (
             <SkinButton onClick={onSaveGhost} className="h-8 px-3 text-[12px] font-semibold">
-              Save ghost file
+              {words.saveGhost}
             </SkinButton>
           ) : null}
           {submitState === "sent" ? (
@@ -542,7 +598,7 @@ const LapCard: React.FC<
               {sentLabel}
             </SkinTag>
           ) : !onSubmit && submitState === "sending" ? (
-            <SkinTag className="px-2.5 py-1 text-[12px] font-semibold">Posting</SkinTag>
+            <SkinTag className="px-2.5 py-1 text-[12px] font-semibold">{words.posting}</SkinTag>
           ) : onSubmit ? (
             <SkinButton
               active={submitState !== "error" && submitState !== "waiting"}
@@ -551,16 +607,16 @@ const LapCard: React.FC<
               onClick={onSubmit}
               className="h-8 px-3 text-[12px] font-semibold"
             >
-              {submitState === "sending" ? "Posting…" : submitState === "error" || submitState === "waiting" ? "Retry upload" : "Post online"}
+              {submitState === "sending" ? words.postingNow : submitState === "error" || submitState === "waiting" ? words.retry : words.post}
             </SkinButton>
           ) : submitState === "waiting" ? (
             <SkinTag tone="caution" className="px-2.5 py-1 text-[12px] font-semibold">
               <Icon name="offline" size="xs" />
-              Queued
+              {words.queued}
             </SkinTag>
           ) : null}
           <SkinButton onClick={onClose} className="h-8 px-3 text-[12px] font-semibold">
-            Close
+            {words.close}
           </SkinButton>
         </div>
 
@@ -585,18 +641,16 @@ const LapCard: React.FC<
   return (
     <div
       role="dialog"
-      aria-label={`Lap ${s.lapNumber} summary`}
+      aria-label={words.cardLabel}
       className="lc-glass flex max-h-[min(calc(100dvh-9rem),var(--lc-room,100dvh))] w-full flex-col gap-3.5 overflow-y-auto rounded-lc-sheet p-5 text-lc-chalk shadow-lc-sheet pointer-coarse:max-h-[calc(100dvh-12rem)] short:gap-2.5 short:p-4"
     >
       {/* The lap and its status, then the lap time on a row of its own (a long badge left it too little room beside it) */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="lc-h3">
-            {activeLapWord()} {s.lapNumber}
-          </h2>
+          <h2 className="lc-h3">{words.title}</h2>
           <div className="flex min-w-0 items-center gap-1.5">
             {badge}
-            <IconButton size="sm" variant="ghost" aria-label="Collapse lap summary" icon={<Icon name="expand" />} onClick={onCollapse} />
+            <IconButton size="sm" variant="ghost" aria-label={words.collapse} icon={<Icon name="expand" />} onClick={onCollapse} />
           </div>
         </div>
         <span className="lc-mono text-[40px] leading-none font-bold tracking-[-0.02em] sm:text-[46px] short:text-[34px]">
@@ -613,10 +667,7 @@ const LapCard: React.FC<
               <span className="lc-mono text-[18px] leading-tight font-bold" style={{ color: mark.color }}>
                 {formatSectorTime(t)}
               </span>
-              <span className="lc-hint truncate">
-                Sector {idx + 1}
-                {mark.word ? `: ${mark.word.toLowerCase()}` : ""}
-              </span>
+              <span className="lc-hint truncate">{words.sectors[idx]}</span>
             </Well>
           );
         })}
@@ -624,12 +675,12 @@ const LapCard: React.FC<
 
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         {stats.map((st) => (
-          <Stat key={st.label} value={st.value} label={st.label} />
+          <Stat key={st.id} value={st.value} label={st.label} />
         ))}
       </div>
 
       <Well className="flex items-center justify-between gap-2 px-3.5 py-2.5">
-        <span className="text-[13px] font-semibold text-lc-fog">Theoretical best</span>
+        <span className="text-[13px] font-semibold text-lc-fog">{words.theoreticalBest}</span>
         <span className="lc-mono text-[18px] font-bold">{s.theoreticalBestMs === null ? EMPTY : formatLapTime(s.theoreticalBestMs)}</span>
       </Well>
 
@@ -640,13 +691,13 @@ const LapCard: React.FC<
       <div className="flex flex-wrap items-center justify-end gap-2">
         {/* Where posting the lap went, said once it changes (the badges below come and go) */}
         <span className="sr-only" aria-live="polite">
-          {submitState === "sent" ? sentLabel : submitState === "sending" ? "Posting" : submitState === "waiting" ? (submitError ?? "") : ""}
+          {submitState === "sent" ? sentLabel : submitState === "sending" ? words.posting : submitState === "waiting" ? (submitError ?? "") : ""}
         </span>
         {/* Why the lap cannot go online, in words beside the greyed button */}
         {onSubmit && notRanked && submitState !== "sent" ? <span className="lc-hint mr-auto">{notRanked}</span> : null}
         {onSaveGhost ? (
           <Button size="sm" variant="ghost" onClick={onSaveGhost}>
-            Save ghost file
+            {words.saveGhost}
           </Button>
         ) : null}
         {submitState === "sent" ? (
@@ -655,7 +706,7 @@ const LapCard: React.FC<
           </Badge>
         ) : !onSubmit && submitState === "sending" ? (
           // Posted by itself: where the lap went, nothing to press
-          <Badge>Posting</Badge>
+          <Badge>{words.posting}</Badge>
         ) : onSubmit ? (
           <Button
             size="sm"
@@ -664,16 +715,16 @@ const LapCard: React.FC<
             disabledReason={notRanked}
             onClick={onSubmit}
           >
-            {submitState === "error" || submitState === "waiting" ? "Retry upload" : "Post online"}
+            {submitState === "error" || submitState === "waiting" ? words.retry : words.post}
           </Button>
         ) : submitState === "waiting" ? (
           // Waiting for the board, nothing to press: the line below says so
           <Badge tone="warn" icon="offline">
-            Queued
+            {words.queued}
           </Badge>
         ) : null}
         <Button size="sm" variant="secondary" onClick={onClose}>
-          Close
+          {words.close}
         </Button>
       </div>
       {submitState === "error" && submitError ? (
@@ -701,10 +752,23 @@ const LapCard: React.FC<
  */
 const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name: string) => Promise<string | null> }> = ({ name, onBoard, onRename }) => {
   const skin = useHudSkin();
+  const tx = useTranslations("hud.lapSummary");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Drawn inside the card, which re-renders every frame: the words are read once per name, skin and language
+  const words = useMemo(
+    () => ({
+      driver: tx.rich("driver", { name, b: (chunks) => <span className={`font-semibold ${skin !== null ? skinCss.ink : "text-lc-chalk"}`}>{chunks}</span> }),
+      rename: tx("rename"),
+      driverName: tx("driverName"),
+      cancel: tx("cancel"),
+      saving: tx("saving"),
+      saveName: tx("saveName"),
+    }),
+    [tx, name, skin]
+  );
 
   const save = async () => {
     setBusy(true);
@@ -718,7 +782,7 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
     if (skin !== null) {
       return (
         <p className={`-mt-1 flex flex-wrap items-center justify-end gap-x-1.5 text-right text-[12px] leading-snug ${skinCss.inkDim}`}>
-          Driver <span className={`font-semibold ${skinCss.ink}`}>{name}</span>
+          {words.driver}
           <SkinButton
             onClick={() => {
               setDraft(name);
@@ -727,14 +791,14 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
             }}
             className="h-7 px-2.5 text-[12px] font-semibold"
           >
-            Rename
+            {words.rename}
           </SkinButton>
         </p>
       );
     }
     return (
       <p className="-mt-1 flex flex-wrap items-center justify-end gap-x-1.5 text-right text-[12px] leading-snug text-lc-slate">
-        Driver <span className="font-semibold text-lc-chalk">{name}</span>
+        {words.driver}
         <Button
           size="sm"
           variant="ghost"
@@ -744,7 +808,7 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
             setEditing(true);
           }}
         >
-          Rename
+          {words.rename}
         </Button>
       </p>
     );
@@ -758,7 +822,7 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
       className="flex flex-col gap-2"
     >
       <TextField
-        label="Driver name"
+        label={words.driverName}
         autoFocus
         maxLength={16}
         autoComplete="nickname"
@@ -777,7 +841,7 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
         {skin !== null ? (
           <>
             <SkinButton onClick={() => setEditing(false)} className="h-8 px-3 text-[12px] font-semibold">
-              Cancel
+              {words.cancel}
             </SkinButton>
             <SkinButton
               type="submit"
@@ -785,16 +849,16 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
               disabled={busy || draft.trim() === ""}
               className="h-8 px-3 text-[12px] font-semibold"
             >
-              {busy ? "Saving…" : "Save name"}
+              {busy ? words.saving : words.saveName}
             </SkinButton>
           </>
         ) : (
           <>
             <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              Cancel
+              {words.cancel}
             </Button>
             <Button size="sm" variant="secondary" type="submit" loading={busy} disabled={draft.trim() === ""}>
-              Save name
+              {words.saveName}
             </Button>
           </>
         )}
@@ -837,16 +901,35 @@ const CornerChart: React.FC<{ corners: CornerStat[]; units: UnitSettings }> = ({
   const cur = corners[sel];
   const curDelta = cur ? cornerDelta(cur, units) : null;
   const unit = SPEED_LABEL[units.speed];
+  const tx = useTranslations("hud.lapSummary.chart");
+  // The HUD re-renders every frame: the chart's words, and each bar's spoken name, are read once per lap and language
+  const words = useMemo(
+    () => ({
+      title: tx("title"),
+      empty: tx("empty"),
+      turns: corners.map((c) => tx("turn", { turn: c.turnNumber })),
+      bars: corners.map((c) => {
+        const d = cornerDelta(c, units);
+        return tx("bar", { turn: c.turnNumber, name: cornerName(c.name), speed: speed(c.minSpeedKmh, units), unit, delta: d.text, state: d.state });
+      }),
+      key: [
+        { id: "faster", label: tx("faster"), color: HUD_GAIN },
+        { id: "slower", label: tx("slower"), color: HUD_CAUTION },
+        { id: "same", label: tx("same"), color: SAME },
+      ],
+    }),
+    [tx, corners, units, unit]
+  );
 
   const chartBody = (
     <>
       <div className="flex items-baseline justify-between gap-3">
         <span id={titleId} className={`shrink-0 text-[13px] font-semibold ${skin !== null ? skinCss.inkSoft : "text-lc-fog"}`}>
-          Slowest speed per corner
+          {words.title}
         </span>
         {cur && curDelta ? (
           <span className="lc-mono flex min-w-0 items-baseline gap-1.5 text-[12px] font-bold">
-            <span className={skin !== null ? skinCss.ink : "text-lc-chalk"}>T{cur.turnNumber}</span>
+            <span className={skin !== null ? skinCss.ink : "text-lc-chalk"}>{words.turns[sel]}</span>
             <span className={`min-w-0 truncate ${skin !== null ? skinCss.inkDim : "text-lc-slate"}`} title={cornerName(cur.name)}>
               {cornerName(cur.name)}
             </span>
@@ -861,7 +944,7 @@ const CornerChart: React.FC<{ corners: CornerStat[]; units: UnitSettings }> = ({
       </div>
 
       {corners.length === 0 ? (
-        <p className={`m-0 py-2 ${skin !== null ? `text-[12px] ${skinCss.inkDim}` : "lc-hint"}`}>No corner data for this lap.</p>
+        <p className={`m-0 py-2 ${skin !== null ? `text-[12px] ${skinCss.inkDim}` : "lc-hint"}`}>{words.empty}</p>
       ) : (
         <>
           <div
@@ -896,7 +979,7 @@ const CornerChart: React.FC<{ corners: CornerStat[]; units: UnitSettings }> = ({
                   type="button"
                   role="radio"
                   aria-checked={i === sel}
-                  aria-label={`T${c.turnNumber} ${cornerName(c.name)}: ${speed(c.minSpeedKmh, units)} ${unit}, ${d.text === EMPTY ? d.word : `${d.text}, ${d.word}`}`}
+                  aria-label={words.bars[i]}
                   tabIndex={i === sel ? 0 : -1}
                   className={`flex h-full min-w-0 cursor-pointer items-end ${skin !== null ? skinCss.radiusSm : "rounded-full"}`}
                   onPointerEnter={() => setPicked(i)}
@@ -919,12 +1002,8 @@ const CornerChart: React.FC<{ corners: CornerStat[]; units: UnitSettings }> = ({
             ))}
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1" aria-hidden>
-            {[
-              { label: "Faster", color: HUD_GAIN },
-              { label: "Slower", color: HUD_CAUTION },
-              { label: "Same", color: SAME },
-            ].map((k) => (
-              <span key={k.label} className={`inline-flex items-center gap-1.5 ${skin !== null ? `text-[11px] ${skinCss.inkDim}` : "lc-hint"}`}>
+            {words.key.map((k) => (
+              <span key={k.id} className={`inline-flex items-center gap-1.5 ${skin !== null ? `text-[11px] ${skinCss.inkDim}` : "lc-hint"}`}>
                 <span className={`size-2 ${skin !== null ? skinCss.radiusSm : "rounded-full"}`} style={{ background: k.color }} />
                 {k.label}
               </span>

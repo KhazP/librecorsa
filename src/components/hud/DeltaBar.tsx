@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { Trend as TrendArrow } from "@/components/ui/icons/Trend";
 import { HUD_GAIN, HUD_LOSS, HUD_SLATE, NO_TIME, formatDelta, formatDeltaFit } from "./hud-format";
 
@@ -83,8 +84,13 @@ export const DeltaBar: React.FC<{ deltaS: number | null; width?: number; /** The
   runId = 0,
 }) => {
   const { trend, rate } = useDeltaTrend(deltaS, runId);
+  const tx = useTranslations("hud.deltaBar");
   const has = deltaS !== null;
   const d = deltaS ?? 0;
+  // The bar moves every frame: its name is resolved once per language, the spoken value once per shown value
+  const label = useMemo(() => tx("label"), [tx]);
+  const deltaText = has ? formatDelta(d) : null;
+  const valueText = useMemo(() => (deltaText === null ? tx("noReference") : tx("valueText", { delta: deltaText, trend })), [tx, deltaText, trend]);
   const ahead = d <= 0;
   const frac = Math.min(1, Math.abs(d));
   const aheadK = has && ahead ? frac : 0;
@@ -97,11 +103,11 @@ export const DeltaBar: React.FC<{ deltaS: number | null; width?: number; /** The
       className="relative h-6.5"
       style={{ width }}
       role="meter"
-      aria-label="Delta to reference lap"
+      aria-label={label}
       aria-valuemin={-1}
       aria-valuemax={1}
       aria-valuenow={has ? Math.max(-1, Math.min(1, d)) : 0}
-      aria-valuetext={has ? `${formatDelta(d)} seconds, ${trend}` : "No reference lap"}
+      aria-valuetext={valueText}
     >
       <div className="absolute inset-x-0 top-2 h-2.5 overflow-hidden rounded-full bg-lc-void/70 inset-ring inset-ring-white/8">
         {/* Each half scales from the centre line (transform only, so the bar never re-lays out) */}

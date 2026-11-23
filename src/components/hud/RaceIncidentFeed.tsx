@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import type { RaceControlFeedMessage, RaceStatus } from "@/types/f1";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
@@ -13,13 +14,31 @@ import { SkinBanner, skinCss, skinRootClass, SkinTag, type SkinTone, useHudSkin 
 
 type Kind = RaceControlFeedMessage["kind"];
 
-/** The badge each call wears (word and icon), and the hairline of its pill */
-const BADGE: Record<Exclude<Kind, "yellow" | "green" | "warning">, { tone: BadgeTone; label: string; icon: IconName }> = {
-  investigation: { tone: "warn", label: "Investigation", icon: "search" },
-  penalty: { tone: "bad", label: "Penalty", icon: "penalty" },
-  nfa: { tone: "neutral", label: "No action", icon: "info" },
-  retired: { tone: "bad", label: "Out", icon: "damage" },
-  info: { tone: "neutral", label: "Race control", icon: "info" },
+/** The word each call wears on its badge, resolved once per language */
+function useCallWords(): Record<Kind, string> {
+  const tx = useTranslations("hud.raceIncidentFeed.calls");
+  return useMemo(
+    () => ({
+      yellow: tx("yellow"),
+      green: tx("green"),
+      warning: tx("warning"),
+      investigation: tx("investigation"),
+      penalty: tx("penalty"),
+      nfa: tx("noAction"),
+      retired: tx("out"),
+      info: tx("raceControl"),
+    }),
+    [tx]
+  );
+}
+
+/** The badge each call wears (tone and icon; the word is `useCallWords`), and the hairline of its pill */
+const BADGE: Record<Exclude<Kind, "yellow" | "green" | "warning">, { tone: BadgeTone; icon: IconName }> = {
+  investigation: { tone: "warn", icon: "search" },
+  penalty: { tone: "bad", icon: "penalty" },
+  nfa: { tone: "neutral", icon: "info" },
+  retired: { tone: "bad", icon: "damage" },
+  info: { tone: "neutral", icon: "info" },
 };
 
 const RING: Record<Kind, string> = {
@@ -33,25 +52,26 @@ const RING: Record<Kind, string> = {
   info: "inset-ring-white/7",
 };
 
-const SKIN_CALL: Record<Kind, { tone: SkinTone; label: string; icon: IconName }> = {
-  yellow: { tone: "caution", label: "Yellow", icon: "warning" },
-  green: { tone: "gain", label: "Green", icon: "success" },
-  warning: { tone: "caution", label: "Warning", icon: "warning" },
-  investigation: { tone: "caution", label: "Investigation", icon: "search" },
-  penalty: { tone: "loss", label: "Penalty", icon: "penalty" },
-  nfa: { tone: "default", label: "No action", icon: "info" },
-  retired: { tone: "loss", label: "Out", icon: "damage" },
-  info: { tone: "info", label: "Race control", icon: "info" },
+const SKIN_CALL: Record<Kind, { tone: SkinTone; icon: IconName }> = {
+  yellow: { tone: "caution", icon: "warning" },
+  green: { tone: "gain", icon: "success" },
+  warning: { tone: "caution", icon: "warning" },
+  investigation: { tone: "caution", icon: "search" },
+  penalty: { tone: "loss", icon: "penalty" },
+  nfa: { tone: "default", icon: "info" },
+  retired: { tone: "loss", icon: "damage" },
+  info: { tone: "info", icon: "info" },
 };
 
 const CallBadge: React.FC<{ kind: Kind; text?: string }> = ({ kind, text }) => {
+  const words = useCallWords();
   if (kind === "yellow") return <FlagBadge flag={text === "Double yellow" ? "doubleYellow" : "yellow"} variant="solid" size="sm" />;
   if (kind === "green") return <FlagBadge flag="green" variant="solid" size="sm" />;
   if (kind === "warning") return <PenaltyBadge penalty={{ kind: "warning" }} variant="solid" size="sm" />;
   const b = BADGE[kind];
   return (
     <Badge tone={b.tone} variant="solid" size="sm" icon={b.icon}>
-      {b.label}
+      {words[kind]}
     </Badge>
   );
 };
@@ -71,6 +91,29 @@ export const RaceIncidentFeed: React.FC<{
 }> = ({ messages, yellow, doubleYellow, blueFlag, blueFlagWarn, vsc }) => {
   const skin = useHudSkin();
   const latest = messages?.[0];
+  // The feed re-renders every frame: its words are resolved once per language (the blue flag's once per car)
+  const callWords = useCallWords();
+  const tx = useTranslations("hud.raceIncidentFeed");
+  const L = useMemo(
+    () => ({
+      vsc: tx("vsc.tag"),
+      vscEnding: tx("vsc.ending"),
+      slowDown: tx("vsc.slowDown"),
+      slowToTarget: tx("vsc.slowToTarget"),
+      prepareForGreen: tx("vsc.prepareForGreen"),
+      vscNoOvertaking: tx("vsc.noOvertaking"),
+      doubleYellowCue: tx("flag.doubleYellowCue"),
+      yellowCue: tx("flag.yellowCue"),
+      blue: tx("flag.blue"),
+      doubleYellow: tx("flag.doubleYellow"),
+      yellow: tx("flag.yellow"),
+    }),
+    [tx]
+  );
+  const blueWords = useMemo(
+    () => (blueFlag ? (blueFlagWarn ? tx("flag.yieldNow", { code: blueFlag }) : tx("flag.letThrough", { code: blueFlag })) : ""),
+    [tx, blueFlag, blueFlagWarn]
+  );
 
   // Live VSC delta plate: stays visible whenever VSC is active so the driver can manage the delta even during RC calls
   const vscBar = (() => {
@@ -79,14 +122,14 @@ export const RaceIncidentFeed: React.FC<{
     const danger = vsc.deltaS < -0.5;
     const sign = vsc.deltaS >= 0 ? "+" : "−";
     const deltaText = `${sign}${Math.abs(vsc.deltaS).toFixed(2)}s`;
-    const tagText = vsc.phase === "ending" ? "VSC ending" : "VSC";
+    const tagText = vsc.phase === "ending" ? L.vscEnding : L.vsc;
     const cue = danger
-      ? "Slow down"
+      ? L.slowDown
       : vsc.graceS > 0
-        ? "Slow to target"
+        ? L.slowToTarget
         : vsc.phase === "ending"
-          ? "Prepare for green"
-          : "No overtaking";
+          ? L.prepareForGreen
+          : L.vscNoOvertaking;
     if (skin !== null) {
       return (
         <SkinBanner
@@ -126,14 +169,7 @@ export const RaceIncidentFeed: React.FC<{
     const flag = doubleYellow ? "doubleYellow" : yellow ? "yellow" : blueFlag ? "blue" : null;
     if (!flag) return null;
     if (skin === "blocks") return null;
-    const words =
-      flag === "blue"
-        ? blueFlagWarn
-          ? `Yield now · Let ${blueFlag} through`
-          : `Let ${blueFlag} through`
-        : flag === "doubleYellow"
-          ? "Slow down · no overtaking"
-          : "No overtaking";
+    const words = flag === "blue" ? blueWords : flag === "doubleYellow" ? L.doubleYellowCue : L.yellowCue;
     const blue = flag === "blue";
     if (skin !== null) {
       return (
@@ -145,7 +181,7 @@ export const RaceIncidentFeed: React.FC<{
         >
           <SkinTag tone={blue ? "info" : "caution"} filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
             <FlagIcon flag={flag} size={14} />
-            {blue ? "Blue" : flag === "doubleYellow" ? "Double yellow" : "Yellow"}
+            {blue ? L.blue : flag === "doubleYellow" ? L.doubleYellow : L.yellow}
           </SkinTag>
           <span className="text-[14px] font-bold whitespace-nowrap uppercase">{words}</span>
         </SkinBanner>
@@ -180,7 +216,7 @@ export const RaceIncidentFeed: React.FC<{
         >
           <SkinTag tone={call.tone} filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
             <Icon name={call.icon} size="xs" />
-            {call.label}
+            {callWords[latest.kind]}
           </SkinTag>
           <span className="flex min-w-0 flex-col leading-tight">
             <span className="text-[13px] font-bold whitespace-nowrap sm:text-[14px]">{latest.text}</span>

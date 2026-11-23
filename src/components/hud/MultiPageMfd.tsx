@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CarTelemetry, LiveTunerPatch, TireCompound } from "@/types/f1";
 import type { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { HUD_TOGGLE_EVENT } from "@/lib/input/bindings";
@@ -34,13 +35,7 @@ import { useHudModeRef } from "./hud-mode";
 
 export type MfdPageId = "elec" | "rel" | "tyre" | "fuel" | "stnd";
 
-const PAGES: { id: MfdPageId; tag: string; title: string }[] = [
-  { id: "elec", tag: "ELEC", title: "Electronics" },
-  { id: "rel", tag: "REL", title: "Relative" },
-  { id: "tyre", tag: "TYRE", title: "Tyres & brakes" },
-  { id: "fuel", tag: "FUEL", title: "Fuel & energy" },
-  { id: "stnd", tag: "STND", title: "Standings" },
-];
+const PAGES: { id: MfdPageId }[] = [{ id: "elec" }, { id: "rel" }, { id: "tyre" }, { id: "fuel" }, { id: "stnd" }];
 
 /** D-pad quiet time after which an MFD opened via D-pad folds back to its compact status pill */
 const AUTO_FOLD_MS = 3500;
@@ -52,6 +47,51 @@ const LAP_DOWN = "var(--color-lc-azure)";
 const NONE = "--";
 
 const LBL = HUD_LBL;
+
+/** The MFD's fixed words in the current language, resolved once per language: the MFD redraws with every telemetry tick */
+function useMfdText() {
+  const tx = useTranslations("hud.multiPageMfd");
+  return useMemo(
+    () => ({
+      pages: {
+        elec: { tag: tx("pages.elecTag"), title: tx("pages.elecTitle") },
+        rel: { tag: tx("pages.relTag"), title: tx("pages.relTitle") },
+        tyre: { tag: tx("pages.tyreTag"), title: tx("pages.tyreTitle") },
+        fuel: { tag: tx("pages.fuelTag"), title: tx("pages.fuelTitle") },
+        stnd: { tag: tx("pages.stndTag"), title: tx("pages.stndTitle") },
+      } satisfies Record<MfdPageId, { tag: string; title: string }>,
+      pagesLabel: tx("pagesLabel"),
+      pagesHint: tx("pagesHint"),
+      open: tx("open"),
+      fold: tx("fold"),
+      relative: tx("relative.label"),
+      noCars: tx("relative.noCars"),
+      ahead: tx("relative.ahead"),
+      behind: tx("relative.behind"),
+      clear: tx("relative.clear"),
+      you: tx("relative.you"),
+      battery: tx("fuel.battery"),
+      ersPerLap: tx("fuel.ersPerLap"),
+      treadPerLap: tx("fuel.treadPerLap"),
+      fuel: tx("fuel.fuel"),
+      perLap: tx("fuel.perLap"),
+      fuelOk: tx("fuel.fuelOk"),
+      tyres: tx("tyres.label"),
+      standings: tx("standings.label"),
+      fastestLap: tx("standings.fastestLap"),
+      fastestLapShort: tx("standings.fastestLapShort"),
+      lead: tx("standings.lead"),
+      noLaps: tx("standings.noLaps"),
+      lapTimes: tx("standings.lapTimes"),
+      tx,
+    }),
+    [tx],
+  );
+}
+
+/** A car's laps up (+) or down (−) on the player, as the relative shows it: "+1L" */
+const lapDiffText = (text: ReturnType<typeof useMfdText>, lapDiff: number) =>
+  lapDiff > 0 ? text.tx("relative.lapsUp", { count: lapDiff }) : text.tx("relative.lapsDown", { count: Math.abs(lapDiff) });
 
 function readPage(): MfdPageId {
   try {
@@ -99,12 +139,13 @@ function skinToneOf(tone: BadgeTone): SkinTone {
 
 const RelativePage: React.FC<{ rows: RelativeRow[]; racing: boolean }> = ({ rows, racing }) => {
   const skin = useHudSkin();
+  const text = useMfdText();
   if (rows.length <= 1) {
-    return <Empty text="No cars on track" />;
+    return <Empty text={text.noCars} />;
   }
   if (skin !== null) {
     return (
-      <ol className="flex flex-col gap-0.75" aria-label="Relative">
+      <ol className="flex flex-col gap-0.75" aria-label={text.relative}>
         {rows.map((r) => {
           const lapColor = r.isPlayer ? undefined : r.lapDiff > 0 ? LAP_UP : r.lapDiff < 0 ? LAP_DOWN : undefined;
           return (
@@ -126,13 +167,13 @@ const RelativePage: React.FC<{ rows: RelativeRow[]; racing: boolean }> = ({ rows
               </span>
               <CompoundBadge c={r.compound} />
               <span className="w-6.5 text-[9px]" style={lapColor ? { color: lapColor } : undefined}>
-                {r.lapDiff !== 0 ? `${r.lapDiff > 0 ? "+" : "\u2212"}${Math.abs(r.lapDiff)}L` : ""}
+                {r.lapDiff !== 0 ? lapDiffText(text, r.lapDiff) : ""}
               </span>
               <PenaltyChip s={r.penaltyS} skinned />
               {r.isPlayer ? null : (
                 <span className={`ml-auto flex items-center gap-1 ${!lapColor ? skinCss.ink : ""}`} style={lapColor ? { color: lapColor } : undefined}>
                   <span className={`inline-flex ${skinCss.inkDim}`}>
-                    <Trend direction={r.gapS > 0 ? "up" : "down"} size={8} label={r.gapS > 0 ? "Ahead" : "Behind"} />
+                    <Trend direction={r.gapS > 0 ? "up" : "down"} size={8} label={r.gapS > 0 ? text.ahead : text.behind} />
                   </span>
                   {formatGap(r.gapS, true)}
                 </span>
@@ -144,7 +185,7 @@ const RelativePage: React.FC<{ rows: RelativeRow[]; racing: boolean }> = ({ rows
     );
   }
   return (
-    <ol className="flex flex-col gap-0.75" aria-label="Relative">
+    <ol className="flex flex-col gap-0.75" aria-label={text.relative}>
       {rows.map((r) => {
         // The player's own row is volt with void ink (every table); laps up / down tint the others
         const tone = r.isPlayer ? undefined : r.lapDiff > 0 ? LAP_UP : r.lapDiff < 0 ? LAP_DOWN : "var(--color-lc-chalk)";
@@ -162,14 +203,14 @@ const RelativePage: React.FC<{ rows: RelativeRow[]; racing: boolean }> = ({ rows
             </span>
             <CompoundBadge c={r.compound} />
             <span className="w-6.5 text-[9px]" style={{ color: tone }}>
-              {r.lapDiff !== 0 ? `${r.lapDiff > 0 ? "+" : "\u2212"}${Math.abs(r.lapDiff)}L` : ""}
+              {r.lapDiff !== 0 ? lapDiffText(text, r.lapDiff) : ""}
             </span>
             <PenaltyChip s={r.penaltyS} />
             {r.isPlayer ? null : (
               <span className="ml-auto flex items-center gap-1" style={{ color: tone }}>
                 {/* Ahead or behind on the road: the arrow shows which way, the number how far */}
                 <span className="inline-flex text-lc-slate">
-                  <Trend direction={r.gapS > 0 ? "up" : "down"} size={8} label={r.gapS > 0 ? "Ahead" : "Behind"} />
+                  <Trend direction={r.gapS > 0 ? "up" : "down"} size={8} label={r.gapS > 0 ? text.ahead : text.behind} />
                 </span>
                 {formatGap(r.gapS, true)}
               </span>
@@ -212,19 +253,20 @@ const Stat: React.FC<{ label: string; value: string; sub?: string; tone?: string
 
 const FuelPage: React.FC<{ t: CarTelemetry; laps: LapRecord[]; L: number }> = ({ t, laps, L }) => {
   const skin = useHudSkin();
+  const text = useMfdText();
   const f = fuelStrategy(t, laps, L);
   const ers = f.avgErsPct;
   const energy = [
-    <Stat key="b" label="Battery" value={`${Math.round(t.ersBatteryPercent)}%`} tone={HUD_INFO} toneClass={skinCss.inkInfo} big={!f.hasFuel} />,
+    <Stat key="b" label={text.battery} value={`${Math.round(t.ersBatteryPercent)}%`} tone={HUD_INFO} toneClass={skinCss.inkInfo} big={!f.hasFuel} />,
     <Stat
       key="e"
-      label="ERS / lap"
+      label={text.ersPerLap}
       value={ers === null ? NONE : `${ers > 0 ? "\u2212" : "+"}${Math.abs(ers).toFixed(1)}%`}
       tone={ers === null ? HUD_SLATE : ers > 2 ? HUD_CAUTION : undefined}
       toneClass={ers === null ? skinCss.inkDim : ers > 2 ? skinCss.inkCaution : skinCss.ink}
       big={!f.hasFuel}
     />,
-    <Stat key="w" label="Tread / lap" value={f.avgWearPct === null ? NONE : `${f.avgWearPct.toFixed(1)}%`} big={!f.hasFuel} />,
+    <Stat key="w" label={text.treadPerLap} value={f.avgWearPct === null ? NONE : `${f.avgWearPct.toFixed(1)}%`} big={!f.hasFuel} />,
   ];
   if (!f.hasFuel) {
     return <div className="grid h-full grid-cols-3 gap-1.5">{energy}</div>;
@@ -232,11 +274,16 @@ const FuelPage: React.FC<{ t: CarTelemetry; laps: LapRecord[]; L: number }> = ({
   return (
     <div className="flex h-full flex-col gap-1.5">
       <div className="grid flex-1 grid-cols-2 gap-1.5">
-        <Stat label="Fuel" value={f.fuelKg.toFixed(1)} sub={f.lapsOfFuel !== null ? `${f.lapsOfFuel.toFixed(1)} laps` : "kg"} big />
         <Stat
-          label="Per lap"
+          label={text.fuel}
+          value={f.fuelKg.toFixed(1)}
+          sub={f.lapsOfFuel !== null ? text.tx("fuel.lapsOfFuel", { laps: f.lapsOfFuel.toFixed(1) }) : "kg"}
+          big
+        />
+        <Stat
+          label={text.perLap}
           value={f.avgFuelKg !== null ? f.avgFuelKg.toFixed(2) : NONE}
-          sub={f.targetKg !== null ? `target ${f.targetKg.toFixed(2)}` : "kg"}
+          sub={f.targetKg !== null ? text.tx("fuel.target", { kg: f.targetKg.toFixed(2) }) : "kg"}
           big
         />
       </div>
@@ -246,7 +293,7 @@ const FuelPage: React.FC<{ t: CarTelemetry; laps: LapRecord[]; L: number }> = ({
             <SkinTag tone="caution" filled className="w-full justify-between px-2 py-1 text-[11px] font-bold">
               <span className="inline-flex items-center gap-1.5">
                 <Icon name="fuel" size="xs" />
-                Lift · save {f.saveKg.toFixed(2)} kg
+                {text.tx("fuel.lift", { kg: f.saveKg.toFixed(2) })}
               </span>
               <span className="lc-mono">≈{(f.liftS ?? 0).toFixed(1)} s</span>
             </SkinTag>
@@ -254,7 +301,7 @@ const FuelPage: React.FC<{ t: CarTelemetry; laps: LapRecord[]; L: number }> = ({
             <SkinTag tone="gain" className="w-full justify-between px-2 py-1 text-[11px] font-bold">
               <span className="inline-flex items-center gap-1.5">
                 <Icon name="success" size="xs" />
-                Fuel ok
+                {text.fuelOk}
               </span>
               <span className="lc-mono">+{(f.marginKg ?? 0).toFixed(1)} kg</span>
             </SkinTag>
@@ -262,14 +309,14 @@ const FuelPage: React.FC<{ t: CarTelemetry; laps: LapRecord[]; L: number }> = ({
         ) : f.saveKg !== null ? (
           <Badge tone="warn" variant="solid" size="lg" icon="fuel" className="w-full">
             <span className="flex flex-1 justify-between">
-              <span>Lift · save {f.saveKg.toFixed(2)} kg</span>
+              <span>{text.tx("fuel.lift", { kg: f.saveKg.toFixed(2) })}</span>
               <span className="lc-mono">≈{(f.liftS ?? 0).toFixed(1)} s</span>
             </span>
           </Badge>
         ) : (
           <Badge tone="good" size="lg" icon="success" className="w-full">
             <span className="flex flex-1 justify-between">
-              <span>Fuel ok</span>
+              <span>{text.fuelOk}</span>
               <span className="lc-mono">+{(f.marginKg ?? 0).toFixed(1)} kg</span>
             </span>
           </Badge>
@@ -328,13 +375,16 @@ const TyreCorner: React.FC<{ t: CarTelemetry; i: number }> = ({ t, i }) => {
   );
 };
 
-const TyrePage: React.FC<{ t: CarTelemetry }> = ({ t }) => (
-  <div className="grid h-full grid-cols-2 grid-rows-2 gap-1.5" aria-label="Tyres and brakes">
-    {[0, 1, 2, 3].map((i) => (
-      <TyreCorner key={i} t={t} i={i} />
-    ))}
-  </div>
-);
+const TyrePage: React.FC<{ t: CarTelemetry }> = ({ t }) => {
+  const text = useMfdText();
+  return (
+    <div className="grid h-full grid-cols-2 grid-rows-2 gap-1.5" aria-label={text.tyres}>
+      {[0, 1, 2, 3].map((i) => (
+        <TyreCorner key={i} t={t} i={i} />
+      ))}
+    </div>
+  );
+};
 
 const Empty: React.FC<{ text: string }> = ({ text }) => {
   const skin = useHudSkin();
@@ -345,6 +395,7 @@ const Empty: React.FC<{ text: string }> = ({ text }) => {
 
 const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, laps }) => {
   const skin = useHudSkin();
+  const text = useMfdText();
   const standings = t.race?.standings;
   if (standings && standings.length > 0) {
     const fastest = standings.reduce<number | null>((m, s) => (s.bestLapMs && (m === null || s.bestLapMs < m) ? s.bestLapMs : m), null);
@@ -353,7 +404,7 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
     const from = Math.max(0, Math.min(standings.length - 9, meIdx - 4));
     const shown = standings.slice(from, from + 9);
     return (
-      <table className="lc-data w-full text-[11px]" aria-label="Standings">
+      <table className="lc-data w-full text-[11px]" aria-label={text.standings}>
         <tbody>
           {shown.map((s, k) => {
             const pos = from + k + 1;
@@ -379,14 +430,14 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
                   >
                     <span className="inline-flex items-center gap-1">
                       {purple ? (
-                        <SkinTag tone="best" filled className="px-1 py-0 text-[9px] font-bold" aria-label="Fastest lap">
-                          FL
+                        <SkinTag tone="best" filled className="px-1 py-0 text-[9px] font-bold" aria-label={text.fastestLap}>
+                          {text.fastestLapShort}
                         </SkinTag>
                       ) : null}
                       {formatLapTime(s.bestLapMs)}
                     </span>
                   </td>
-                  <td className="w-13 pr-1 text-right">{pos === 1 ? "Lead" : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
+                  <td className="w-13 pr-1 text-right">{pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
                 </tr>
               );
             }
@@ -403,11 +454,11 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
                 </td>
                 <td className="text-right" style={s.isPlayer ? undefined : { color: purple ? HUD_BEST : "var(--color-lc-fog)" }}>
                   <span className="inline-flex items-center gap-1">
-                    {purple ? <Badge tone="best" variant="solid" size="hud" aria-label="Fastest lap">FL</Badge> : null}
+                    {purple ? <Badge tone="best" variant="solid" size="hud" aria-label={text.fastestLap}>{text.fastestLapShort}</Badge> : null}
                     {formatLapTime(s.bestLapMs)}
                   </span>
                 </td>
-                <td className="w-13 rounded-r-lc-nub pr-1 text-right">{pos === 1 ? "Lead" : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
+                <td className="w-13 rounded-r-lc-nub pr-1 text-right">{pos === 1 ? text.lead : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
               </tr>
             );
           })}
@@ -416,14 +467,14 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
     );
   }
   // Practice: the driver's own laps
-  if (laps.length === 0) return <Empty text="No laps yet" />;
+  if (laps.length === 0) return <Empty text={text.noLaps} />;
   const valid = laps.filter((l) => l.valid);
   const best = valid.reduce<number | null>((m, l) => (m === null || l.timeMs < m ? l.timeMs : m), null);
   const bestS = [0, 1, 2].map((i) =>
     valid.reduce<number | null>((m, l) => (l.sectorsMs[i] > 0 && (m === null || l.sectorsMs[i] < m) ? l.sectorsMs[i] : m), null)
   );
   return (
-    <table className="lc-data w-full text-[11px]" aria-label="Lap times">
+    <table className="lc-data w-full text-[11px]" aria-label={text.lapTimes}>
       <tbody>
         {laps
           .slice(-9)
@@ -509,11 +560,13 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
   tracker,
   trackLengthM,
   compound,
-  playerCode = "YOU",
+  playerCode,
   defaultFolded = false,
   autoFold = true,
 }) => {
   const skin = useHudSkin();
+  const text = useMfdText();
+  const code = playerCode ?? text.you;
   const [page, setPage] = useState<MfdPageId>(readPage);
   const [folded, setFolded] = useState(defaultFolded);
   const laps = useLapHistory(t);
@@ -625,10 +678,10 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
 
   const racing = Boolean(t.race);
   const rows = useMemo(
-    () => (page === "rel" ? computeRelatives(t, tracker, trackLengthM, compound, playerCode) : []),
-    [page, t, tracker, trackLengthM, compound, playerCode],
+    () => (page === "rel" ? computeRelatives(t, tracker, trackLengthM, compound, code) : []),
+    [page, t, tracker, trackLengthM, compound, code],
   );
-  const meta = PAGES.find((p) => p.id === page) ?? PAGES[0];
+  const meta = text.pages[page] ?? text.pages.elec;
 
   const pillSummary = (skinned = false): React.ReactNode => {
     const inkCls = skinned ? skinCss.ink : "text-lc-chalk";
@@ -643,17 +696,17 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
         <span className={`lc-data flex items-center gap-2 text-[10px] ${inkCls}`}>
           {ahead ? (
             <span className="inline-flex items-center gap-1">
-              <Trend direction="up" size={8} label="Ahead" />
+              <Trend direction="up" size={8} label={text.ahead} />
               {ahead.code} {formatGap(ahead.gapS)}
             </span>
           ) : null}
           {behind ? (
             <span className="inline-flex items-center gap-1">
-              <Trend direction="down" size={8} label="Behind" />
+              <Trend direction="down" size={8} label={text.behind} />
               {behind.code} {formatGap(behind.gapS)}
             </span>
           ) : null}
-          {!ahead && !behind ? <span className={dimCls}>Clear</span> : null}
+          {!ahead && !behind ? <span className={dimCls}>{text.clear}</span> : null}
         </span>
       );
     }
@@ -675,7 +728,9 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
     }
     return (
       <span className={`lc-data text-[10px] ${inkCls}`}>
-        {t.race ? `P${t.race.position}/${t.race.fieldSize}` : `${laps.length} laps`}
+        {t.race
+          ? text.tx("pill.position", { position: t.race.position, fieldSize: t.race.fieldSize })
+          : text.tx("pill.laps", { count: laps.length })}
       </span>
     );
   };
@@ -716,7 +771,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
         cut={folded ? "sm" : "md"}
         className={`pointer-events-auto select-none ${folded ? `w-max min-w-[300px] ${skinCss.pill}` : "w-[300px]"}`}
         innerClassName={folded ? "flex items-center gap-2 px-2 py-1.5" : "flex flex-col gap-2 p-2.5"}
-        aria-label={`MFD · ${meta.title}`}
+        aria-label={text.tx("panel", { page: meta.title })}
       >
         {folded ? (
           <div className="flex w-full items-center gap-2">
@@ -731,15 +786,15 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
                 setFolded(false);
               }}
               className="size-6.5 shrink-0"
-              title="Open the MFD"
-              aria-label="Open the MFD"
+              title={text.open}
+              aria-label={text.open}
             >
               <Icon name="collapse" size="xs" />
             </SkinButton>
           </div>
         ) : (
           <div className="flex items-center gap-1">
-            <div className={`flex min-w-0 flex-1 gap-1 ${skinCss.tablist}`} role="tablist" aria-label="MFD pages" title="D-pad left or right, or Ins: next page">
+            <div className={`flex min-w-0 flex-1 gap-1 ${skinCss.tablist}`} role="tablist" aria-label={text.pagesLabel} title={text.pagesHint}>
               {PAGES.map((p) => (
                 <SkinButton
                   key={p.id}
@@ -752,9 +807,9 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
                     choose(p.id);
                   }}
                   className="h-6.5 flex-1 text-[10px] font-bold tracking-[0.06em] uppercase"
-                  title={p.title}
+                  title={text.pages[p.id].title}
                 >
-                  {p.tag}
+                  {text.pages[p.id].tag}
                 </SkinButton>
               ))}
             </div>
@@ -765,8 +820,8 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
                 setFolded(true);
               }}
               className="size-6.5 shrink-0"
-              title="Fold the MFD"
-              aria-label="Fold the MFD"
+              title={text.fold}
+              aria-label={text.fold}
             >
               <Icon name="expand" size="xs" />
             </SkinButton>
@@ -783,7 +838,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
         // Folded, the pill takes its summary's width (Geist Mono chips run past 300 px), never narrower than the panel
         folded ? "w-max min-w-[300px] rounded-full p-1.5" : "flex w-[300px] flex-col gap-2 rounded-lc-card p-2.5"
       }`}
-      aria-label={`MFD · ${meta.title}`}
+      aria-label={text.tx("panel", { page: meta.title })}
     >
       {folded ? (
         <div className="flex items-center gap-2">
@@ -799,8 +854,8 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
               setFolded(false);
             }}
             className={`flex size-6.5 shrink-0 items-center justify-center rounded-full ${HUD_IDLE} ${HUD_CONTROL}`}
-            title="Open the MFD"
-            aria-label="Open the MFD"
+            title={text.open}
+            aria-label={text.open}
           >
             <Icon name="collapse" size="xs" />
           </button>
@@ -809,7 +864,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
         <>
           {/* Page strip */}
           <div className="flex items-center gap-1">
-            <div className="flex min-w-0 flex-1 gap-1" role="tablist" aria-label="MFD pages" title="D-pad left or right, or Ins: next page">
+            <div className="flex min-w-0 flex-1 gap-1" role="tablist" aria-label={text.pagesLabel} title={text.pagesHint}>
               {PAGES.map((p) => (
                 <button
                   key={p.id}
@@ -825,9 +880,9 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
                     // Chosen is chalk on line with a hairline (UI standard §4); volt stays the cursor
                     p.id === page ? HUD_CHOSEN : `bg-lc-titanium ${HUD_IDLE}`
                   }`}
-                  title={p.title}
+                  title={text.pages[p.id].title}
                 >
-                  {p.tag}
+                  {text.pages[p.id].tag}
                 </button>
               ))}
             </div>
@@ -839,8 +894,8 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
                 setFolded(true);
               }}
               className={`flex size-6.5 shrink-0 items-center justify-center rounded-full ${HUD_IDLE} ${HUD_CONTROL}`}
-              title="Fold the MFD"
-              aria-label="Fold the MFD"
+              title={text.fold}
+              aria-label={text.fold}
             >
               <Icon name="expand" size="xs" />
             </button>

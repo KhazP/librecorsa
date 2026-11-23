@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import type { RaceStatus, TrackLimitsStatus } from "@/types/f1";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
@@ -17,14 +18,14 @@ type MessageKind = NonNullable<TrackLimitsStatus["message"]>["kind"];
  * Each decision as the kit's badge (word and icon, in its tone) on a HUD glass pill with a hairline in the same tone.
  * Tone comes from the badge and the hairline, never a full fill; only the bad news pulses (`lc-alert` is a crimson halo).
  */
-const TONES: Record<MessageKind, { tone: BadgeTone; ring: string; label: string; icon?: IconName }> = {
-  warning: { tone: "warn", ring: "inset-ring-lc-caution/60", label: "Warning" },
-  final_warning: { tone: "warn", ring: "inset-ring-lc-caution/80", label: "Final warning" },
-  penalty: { tone: "bad", ring: "inset-ring-lc-loss/70", label: "Penalty", icon: "penalty" },
-  disqualified: { tone: "bad", ring: "inset-ring-lc-loss/80", label: "Disqualified" },
-  lap_invalid: { tone: "bad", ring: "inset-ring-lc-loss/70", label: "Lap deleted", icon: "trackLimits" },
-  cleared: { tone: "good", ring: "inset-ring-lc-gain/60", label: "Cleared", icon: "success" },
-  no_advantage: { tone: "neutral", ring: "inset-ring-white/7", label: "No action", icon: "info" },
+const TONES: Record<MessageKind, { tone: BadgeTone; ring: string; icon?: IconName }> = {
+  warning: { tone: "warn", ring: "inset-ring-lc-caution/60" },
+  final_warning: { tone: "warn", ring: "inset-ring-lc-caution/80" },
+  penalty: { tone: "bad", ring: "inset-ring-lc-loss/70", icon: "penalty" },
+  disqualified: { tone: "bad", ring: "inset-ring-lc-loss/80" },
+  lap_invalid: { tone: "bad", ring: "inset-ring-lc-loss/70", icon: "trackLimits" },
+  cleared: { tone: "good", ring: "inset-ring-lc-gain/60", icon: "success" },
+  no_advantage: { tone: "neutral", ring: "inset-ring-white/7", icon: "info" },
 };
 
 const SKIN_TONES: Record<MessageKind, SkinTone> = {
@@ -38,33 +39,41 @@ const SKIN_TONES: Record<MessageKind, SkinTone> = {
 };
 
 /** Strike pips: the warnings of the current cycle towards the next penalty, filled and outlined (never colour alone) */
-const Pips: React.FC<{ n: number; of: number; skinned?: boolean }> = ({ n, of, skinned = false }) => (
-  <span className="inline-flex gap-1" role="img" aria-label={`${n} of ${of} warnings`}>
-    {Array.from({ length: of }, (_, i) => (
-      <span
-        key={i}
-        className={
-          skinned
-            ? `size-2 ${skinCss.pip} ${i < n ? skinCss.fillCaution : skinCss.pipOff}`
-            : `size-2 rounded-full ${i < n ? "bg-lc-caution" : "inset-ring-[1.5px] inset-ring-lc-keyline"}`
-        }
-      />
-    ))}
-  </span>
-);
+const Pips: React.FC<{ n: number; of: number; skinned?: boolean }> = ({ n, of, skinned = false }) => {
+  const tx = useTranslations("hud.raceControlBanner");
+  const label = useMemo(() => tx("warningsMeter", { count: n, total: of }), [tx, n, of]);
+  return (
+    <span className="inline-flex gap-1" role="img" aria-label={label}>
+      {Array.from({ length: of }, (_, i) => (
+        <span
+          key={i}
+          className={
+            skinned
+              ? `size-2 ${skinCss.pip} ${i < n ? skinCss.fillCaution : skinCss.pipOff}`
+              : `size-2 rounded-full ${i < n ? "bg-lc-caution" : "inset-ring-[1.5px] inset-ring-lc-keyline"}`
+          }
+        />
+      ))}
+    </span>
+  );
+};
 
 /**
  * The meter towards the next track-limits step: pips for strikes, the points for the weighted ladder (quarter points
  * don't fit pips)
  */
 const Meter: React.FC<{ status: TrackLimitsStatus; skinned?: boolean }> = ({ status, skinned = false }) => {
+  const tx = useTranslations("hud.raceControlBanner");
   const ladder = status.ladder;
+  const points = status.warnings.toFixed(2);
+  const allowed = ladder?.pointsAllowed;
+  const pointsLabel = useMemo(() => (allowed === undefined ? "" : tx("pointsMeter", { points, allowed })), [tx, points, allowed]);
   if (status.strikesPerPenalty <= 0) return null;
   if (ladder?.scoring === "weighted_pts") {
     return (
       <span
         className={`lc-data text-[12px] whitespace-nowrap ${skinned ? skinCss.inkCaution : "text-lc-caution"}`}
-        aria-label={`${status.warnings.toFixed(2)} of ${ladder.pointsAllowed} track-limits points`}
+        aria-label={pointsLabel}
       >
         {status.warnings.toFixed(2)}/{ladder.pointsAllowed.toFixed(1)}
       </span>
@@ -89,6 +98,29 @@ export const RaceControlBanner: React.FC<{
   yellowGiveBack?: RaceStatus["giveBack"];
 }> = ({ status, offTrack, race, yellow, yellowGiveBack }) => {
   const skin = useHudSkin();
+  // The banner re-renders every frame: its words are resolved once per language
+  const tx = useTranslations("hud.raceControlBanner");
+  const L = useMemo(
+    () => ({
+      decisions: {
+        warning: tx("decisions.warning"),
+        final_warning: tx("decisions.finalWarning"),
+        penalty: tx("decisions.penalty"),
+        disqualified: tx("decisions.disqualified"),
+        lap_invalid: tx("decisions.lapInvalid"),
+        cleared: tx("decisions.cleared"),
+        no_advantage: tx("decisions.noAdvantage"),
+      } satisfies Record<MessageKind, string>,
+      slowDown: tx("giveBack.slowDown"),
+      underYellow: tx("giveBack.underYellow"),
+      illegalOvertake: tx("giveBack.illegalOvertake"),
+      giveBackTrackLimits: tx("giveBack.trackLimits"),
+      trackLimits: tx("offTrack.trackLimits"),
+      offTrack: tx("offTrack.offTrack"),
+      underReview: tx("offTrack.underReview"),
+    }),
+    [tx]
+  );
   const tlPending = status?.pending ?? null;
   const msg = status?.message ?? null;
   // A yellow-flag pass owed back shows in the same card when track limits owe nothing
@@ -102,12 +134,12 @@ export const RaceControlBanner: React.FC<{
     const gain = pending.gainS;
     const giveBackPos = pending.giveBackPosition ?? null;
     const actionText = yellowPass
-      ? `Give back P to ${yellowPass.code}`
+      ? tx("giveBack.toCar", { code: yellowPass.code })
       : giveBackPos !== null
-        ? `Drop to P${giveBackPos}`
+        ? tx("giveBack.dropTo", { position: giveBackPos })
         : gain !== null
-          ? `Give back ${gain.toFixed(2)} s`
-          : "Slow down";
+          ? tx("giveBack.time", { seconds: gain.toFixed(2) })
+          : L.slowDown;
     const flag = yellowPass ? (yellowPass.double ? "doubleYellow" : "yellow") : null;
     if (skin !== null) {
       return (
@@ -121,7 +153,7 @@ export const RaceControlBanner: React.FC<{
           <div className="flex items-center gap-3">
             <SkinTag tone="caution" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
               {flag ? <FlagIcon flag={flag} size={14} /> : <Icon name={giveBackPos !== null ? "overtake" : "trackLimits"} size="xs" />}
-              {flag ? "Overtake under yellow" : giveBackPos !== null ? "Illegal overtake" : "Track limits"}
+              {flag ? L.underYellow : giveBackPos !== null ? L.illegalOvertake : L.giveBackTrackLimits}
             </SkinTag>
             <span className="flex-1 text-[13px] leading-none font-bold whitespace-nowrap">{actionText}</span>
             <span className={`lc-data text-[12px] ${skinCss.inkCaution}`}>{pending.remainingS.toFixed(1)} s</span>
@@ -144,11 +176,11 @@ export const RaceControlBanner: React.FC<{
         <div className="flex items-center gap-3">
           {flag ? (
             <FlagBadge flag={flag} variant="solid" size="sm">
-              Overtake under yellow
+              {L.underYellow}
             </FlagBadge>
           ) : (
             <Badge tone="warn" variant="solid" size="sm" icon={giveBackPos !== null ? "overtake" : "trackLimits"}>
-              {giveBackPos !== null ? "Illegal overtake" : "Track limits"}
+              {giveBackPos !== null ? L.illegalOvertake : L.giveBackTrackLimits}
             </Badge>
           )}
           <span className="lc-disp flex-1 text-[15px] leading-none whitespace-nowrap">{actionText}</span>
@@ -183,7 +215,7 @@ export const RaceControlBanner: React.FC<{
             ) : (
               <Icon name={msg.kind === "warning" ? "warning" : (tone.icon ?? "info")} size="xs" />
             )}
-            {tone.label}
+            {L.decisions[msg.kind]}
           </SkinTag>
           <span className="flex min-w-0 flex-col leading-tight">
             <span className="text-[13px] font-bold whitespace-nowrap sm:text-[14px]">{msg.text}</span>
@@ -206,11 +238,11 @@ export const RaceControlBanner: React.FC<{
           <PenaltyBadge penalty={{ kind: "disqualified" }} size="sm" variant="solid" />
         ) : msg.kind === "final_warning" ? (
           <Badge tone="warn" variant="solid" size="sm" leading={<FlagIcon flag="blackWhite" size={16} />}>
-            {tone.label}
+            {L.decisions[msg.kind]}
           </Badge>
         ) : (
           <Badge tone={tone.tone} variant="solid" size="sm" icon={tone.icon}>
-            {tone.label}
+            {L.decisions[msg.kind]}
           </Badge>
         )}
         <span className="flex min-w-0 flex-col leading-tight">
@@ -229,9 +261,9 @@ export const RaceControlBanner: React.FC<{
         <SkinBanner role="status" tone="caution" cut="sm" className="relative mt-1 inline-flex h-8 items-center gap-2 pr-3 pl-2">
           <SkinTag tone="caution" filled className="px-2 py-0.5 text-[11px] font-bold uppercase">
             <Icon name="trackLimits" size="xs" />
-            Track limits
+            {L.trackLimits}
           </SkinTag>
-          <span className={`text-[12px] font-semibold uppercase ${skinCss.inkCaution}`}>{offTrack ? "Off track" : "Under review"}</span>
+          <span className={`text-[12px] font-semibold uppercase ${skinCss.inkCaution}`}>{offTrack ? L.offTrack : L.underReview}</span>
           {race && status ? <Meter skinned status={status} /> : null}
         </SkinBanner>
       );
@@ -244,8 +276,8 @@ export const RaceControlBanner: React.FC<{
         <span className="inline-flex size-5 items-center justify-center rounded-lc-nub bg-lc-caution text-lc-void">
           <Icon name="trackLimits" size="xs" />
         </span>
-        <span className="lc-disp text-[14px] whitespace-nowrap">Track limits</span>
-        <span className={`${HUD_LBL} text-lc-caution`}>{offTrack ? "Off track" : "Under review"}</span>
+        <span className="lc-disp text-[14px] whitespace-nowrap">{L.trackLimits}</span>
+        <span className={`${HUD_LBL} text-lc-caution`}>{offTrack ? L.offTrack : L.underReview}</span>
         {race && status ? <Meter status={status} /> : null}
       </div>
     );

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CarTelemetry, StartClutchControl } from "@/types/f1";
 import { JUMP_START_PENALTY_S, launchWindow } from "@/lib/sim/race-start";
 import { revRangeFor, SHIFT_BEEP_BELOW_LIMITER_RPM } from "@/lib/sim/rev-range";
@@ -72,6 +73,9 @@ const ClutchPrompt: React.FC<{ control: StartClutchControl }> = ({ control }) =>
  * launch revs. Each step has a ring that fills as the player gets there. A jump start turns it into the penalty.
  */
 export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean }> = ({ telemetry, hudHidden = false }) => {
+  // The cue re-renders every frame: its words are resolved once per language
+  const tx = useTranslations("hud.launchCue");
+  const L = useMemo(() => ({ clutch: tx("clutch"), holdClutch: tx("holdClutch"), revsUp: tx("revsUp") }), [tx]);
   const start = telemetry.start;
   const held = start?.held === true;
   const jumped = start?.jumped === true;
@@ -98,24 +102,24 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean 
         ? control.key
         : control && "pad" in control
           ? (PAD_GLYPHS[control.pad]?.toUpperCase() ?? `B${control.pad}`)
-          : "clutch");
+          : L.clutch);
+    const controlNode =
+      hasGlyph && control ? (
+        <span className="mx-0.5 inline-flex scale-125">
+          <ClutchPrompt control={control} />
+        </span>
+      ) : (
+        <span>{named ?? L.clutch}</span>
+      );
     return (
       <div
         role="status"
-        aria-label={`Engine stalled: hold ${ariaControl} or shift to neutral to restart`}
+        aria-label={tx("stalledLabel", { control: ariaControl })}
         className={`flex items-center gap-3 rounded-lc-row py-2.5 pr-5 pl-3 ${HUD_GLASS}`}
       >
         <StepRing progress={1} color={HUD_RED} done={false} />
         <span className="lc-title hud-text-shadow flex items-center gap-2 text-[16px] whitespace-nowrap uppercase sm:text-[18px]" style={{ color: HUD_RED }}>
-          <span>Stalled · hold</span>
-          {hasGlyph && control ? (
-            <span className="mx-0.5 inline-flex scale-125">
-              <ClutchPrompt control={control} />
-            </span>
-          ) : (
-            <span>{named ?? "clutch"}</span>
-          )}
-          <span>or N</span>
+          {tx.rich("stalled", { control: () => controlNode })}
         </span>
       </div>
     );
@@ -128,7 +132,7 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean 
       <div role="status" className={`flex items-center gap-3 rounded-lc-row py-2.5 pr-5 pl-3 ${HUD_GLASS}`}>
         <StepRing progress={1} color={HUD_RED} done={false} />
         <span className="lc-title hud-text-shadow text-[16px] whitespace-nowrap uppercase sm:text-[18px]" style={{ color: HUD_RED }}>
-          Jump start · +{start.penaltyS ?? JUMP_START_PENALTY_S} s
+          {tx("jumpStart", { seconds: start.penaltyS ?? JUMP_START_PENALTY_S })}
         </span>
       </div>
     );
@@ -146,17 +150,17 @@ export const LaunchCue: React.FC<{ telemetry: CarTelemetry; hudHidden?: boolean 
   return (
     <div
       role="status"
-      aria-label={`Manual start: ${clutchIn ? "clutch held" : "hold the clutch"}, ${revsUp ? "revs up" : "bring the revs up"}`}
+      aria-label={tx("manualStart", { clutch: clutchIn ? "held" : "out", revs: revsUp ? "up" : "down" })}
       className={`flex flex-col gap-2.5 rounded-lc-row py-3 pr-5 pl-3 ${HUD_GLASS}`}
     >
       <Step
         ring={<StepRing progress={start.clutchIn} color={clutchIn ? HUD_GAIN : HUD_WHITE} done={clutchIn} />}
         prompt={<ClutchPrompt control={start.clutch} />}
-        label={named ? `Hold the ${named}` : "Hold clutch"}
+        label={named ? tx("holdNamed", { control: named }) : L.holdClutch}
       />
       <Step
         ring={<StepRing progress={rpm / lo} color={revsUp ? HUD_GAIN : HUD_WHITE} done={revsUp} />}
-        label="Revs up"
+        label={L.revsUp}
       />
     </div>
   );
