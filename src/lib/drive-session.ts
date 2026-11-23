@@ -159,11 +159,14 @@ import { clampFov, DEFAULT_KEYBOARD_TUNING, type PlayerSettings } from "@/lib/se
 import { sharedMusic, type NowPlaying } from "@/lib/audio/bgm-controller";
 import { MusicDirector } from "@/lib/audio/music-director";
 import { noteDrivingFrame, noteDrivingInput, noteFrameGraphics } from "@/lib/render/frame-stats";
+import { PitStopManager } from "@/lib/sim/pit/pit-stop";
+import { createPitBoxVisual } from "@/lib/render/pit-box-visual";
 import type {
   AeroSetupPreset,
   CameraMode,
   CarTelemetry,
   LiveTunerPatch,
+  PitStrategyState,
   RadarBlip,
   StartClutchControl,
   TireCompound,
@@ -567,6 +570,10 @@ export class DriveSession {
   readonly applySettings: (settings: PlayerSettings) => void;
   /** Puts the tyre compound on the car and its model */
   readonly setTireCompound: (compound: TireCompound) => void;
+  /** What the crew does at the next stop, and the call to box (pit/pit-stop.ts) */
+  readonly setPitStrategy: (patch: Partial<PitStrategyState>) => void;
+  /** The Pit limiter key (outside the speed-limit zone, where it is on by itself) */
+  readonly togglePitLimiter: () => void;
   /** The garage's tyre and chassis setup, and the live tuner, on the car */
   readonly setTyreSetup: (setup: TyreSetup) => void;
   readonly setChassisSetup: (setup: ChassisSetup) => void;
@@ -1456,6 +1463,20 @@ export class DriveSession {
      */
     const racingLineShown = (on: boolean) => on && (appPhaseNow === "driving" || appPhaseNow === "loading");
     builtCircuit.racingLineMesh.visible = racingLineShown(settings.racingLine);
+    /** The player's pit stops (pit/pit-stop.ts); a circuit without a pit lane has none */
+    const pitStop = new PitStopManager(track.pitLane ?? null, physics.tireCompound);
+    /** The race's required stops were not made: called once per run, at the player's flag */
+    let pitMissCalled = false;
+    /** The player's box painted in the lane; it follows the box the race gives the player */
+    let pitBoxVisual = pitStop.box ? createPitBoxVisual(pitStop.box) : null;
+    let pitBoxShownIndex = pitStop.box?.index ?? -1;
+    if (pitBoxVisual) scene.add(pitBoxVisual.group);
+    const pitGroundHit = createGroundHit();
+    const seatPitBox = () => {
+      const ground = physics.groundQuery;
+      if (!pitBoxVisual || !ground) return;
+      pitBoxVisual.seatOnGround((x, z) => (ground.query(x, z, (pitStop.box?.y ?? 0) + 4, pitGroundHit) ? pitGroundHit.height : null));
+    };
     // A circuit raced under lights: its floodlit night (masts, lit tunnels, the model's glowing light sources),
     // or one whose own model has lamps (street lamps, light poles): they glow and light the ground round them
     let venueNight: VenueNightLighting | null = null;
@@ -1528,6 +1549,7 @@ export class DriveSession {
       scheduleIdle(occlusionSlice);
       const ground = trackColliders(root).ground;
       if (ground) builtCircuit.seatRacingLine(ground);
+      seatPitBox();
     });
 
     /**
@@ -1825,6 +1847,22 @@ export class DriveSession {
       physics.tireCompound = compound;
       carRig.setTireCompound(compound);
       this.publish({ tireCompound: compound });
+    };
+    this.setPitStrategy = (patch) => {
+      if (!disposed) pitStop.setStrategy(patch);
+    };
+    this.togglePitLimiter = () => {
+      if (!disposed) pitStop.toggleLimiter();
+    };
+    /** The crew's work done: fresh tyres of the compound (the compound setter fits a new set), and the repairs */
+    const servicePitStop = (compound: TireCompound, repair: boolean) => {
+      this.setTireCompound(compound);
+      if (!repair) return;
+      physics.setDamageEffects?.(null);
+      aiFieldOf(raceNow())?.repairPlayerDamage?.();
+      damageFeed.restart(physics.telemetry);
+      practiceDamage.reset();
+      practiceWreckS = 0;
     };
     this.setTyreSetup = (setup) => {
       if (disposed) return;
@@ -2242,6 +2280,9 @@ export class DriveSession {
         case "autopilot":
           this.toggleAutopilot();
           break;
+        case "pitLimiter":
+          pitStop.toggleLimiter();
+          break;
         case "headlights": {
           const onNow = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, getTrackEnv().weather.rainIntensity);
           headlightMode = onNow ? "off" : "on";
@@ -2608,6 +2649,8 @@ export class DriveSession {
       kbInput.brake = 0;
       kbInput.clutch = 0;
       kbPedalAssist.reset();
+      pitStop.reset(physics.tireCompound);
+      pitMissCalled = false;
     };
     this.replayTogglePlay = () => {
       if (!replay.playing) {
@@ -3360,6 +3403,34 @@ export class DriveSession {
         }
         gridHeldLastFrame = gridHeld;
         startClutchIn = inputs.clutch ?? 0;
+        // The pit lane: limiter, speeding calls and the crew. Not online (no other client knows of stops yet)
+        if (pitStop.lane) {
+          pitStop.enabled = !mpRace;
+          pitStop.stopsRequired = aiField?.pitStopsRequired ?? 0;
+          const dmg = physics.telemetry.race?.damage;
+          const step = pitStop.update({
+            dtS: dtSeconds,
+            lane: physics.telemetry.pitLane,
+            trackS: physics.sMeters,
+            speedMs: Math.abs(physics.vxMs),
+            damage: dmg?.overall ?? physics.telemetry.practiceDamage?.overall ?? 0,
+            punctures: dmg?.punctured?.filter(Boolean).length ?? 0,
+            canService: !coolDown.active && !aiField?.playerFrozen && physics.telemetry.race?.phase !== "finished",
+          });
+          if (step.speeding) {
+            aiField?.penalisePlayer(5, "pit_speeding", tx("game.pit.speeding", { limit: pitStop.limitKmh }));
+          }
+          if (step.serviced) servicePitStop(step.serviced.compound, step.serviced.repair);
+          if (!coolDown.active) pitStop.filterInputs(inputs, Math.abs(physics.vxMs));
+          physics.telemetry.pit = pitStop.enabled ? step.telemetry : undefined;
+          // At the flag: a required stop not made is time added (30 s each)
+          const status = physics.telemetry.race;
+          const missing = pitStop.stopsRequired - step.telemetry.stopsMade;
+          if (aiField && !pitMissCalled && missing > 0 && status?.phase === "finished" && status.results?.some((r) => r.isPlayer)) {
+            pitMissCalled = true;
+            aiField.penalisePlayer(30 * missing, "pit_stop_missed", tx("game.pit.stopMissed", { count: missing }));
+          }
+        }
         if (raceInWorker || (!aiField?.playerFrozen && !mpFrozen) || gridHeld) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
         aiField?.update(dtSeconds);
         if (sessionPerf) frameSimMs = performance.now() - simStartMs;
@@ -3584,6 +3655,15 @@ export class DriveSession {
           mpRace.compound = physics.tireCompound;
         }
         t.trackLimits = trackLimits.snapshot(nowMs);
+        // The player's box: the race may have moved it (its field gives each car a box)
+        if (pitStop.box && pitStop.box.index !== pitBoxShownIndex) {
+          pitBoxVisual?.dispose();
+          pitBoxVisual = createPitBoxVisual(pitStop.box);
+          pitBoxShownIndex = pitStop.box.index;
+          scene.add(pitBoxVisual.group);
+          seatPitBox();
+        }
+        pitBoxVisual?.update(t.pit, Boolean(aiField) && pitStop.enabled, nowMs / 1000);
       }
       builtCircuit.setStartLights(
         mpFrame
@@ -4622,6 +4702,7 @@ export class DriveSession {
       env.dispose();
       rainFx.dispose();
       virtualMirror.dispose();
+      pitBoxVisual?.dispose();
       floorSparks.dispose();
       setKtx2Renderer(null);
       renderer.dispose();

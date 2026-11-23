@@ -3319,6 +3319,14 @@ export class AiOpponentField implements AiRace {
     if (me) this.raceControl.penalise(this.raceTimeS, me.code, seconds, reason, detail, true);
   }
 
+  /** The pit crew repaired the player's car: the field's damage model starts over, and so do its effects on the car */
+  public repairPlayerDamage(): void {
+    const me = this.cars.find((c) => c.isPlayer);
+    if (!me) return;
+    me.damage.reset();
+    me.sim.setDamageEffects?.(null);
+  }
+
   public get playerDisqualified(): boolean {
     return this.playerDq;
   }

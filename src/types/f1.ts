@@ -632,6 +632,8 @@ export interface CarTelemetry {
   outLap?: boolean;
   /** In the pit lane (pit/pit-lane.ts): where along it, how far off its centreline, and inside the speed-limit zone */
   pitLane?: { laneM: number; offsetM: number; inLimitZone: boolean } | null;
+  /** The player's pit stop: limiter, the way to the box, the crew's work (pit/pit-stop.ts); absent where there are none */
+  pit?: PitTelemetry;
   /** Verdict on the lap that was just completed (set together with `lapCount` / `lastLapTimeMs`) */
   lastLapValid?: boolean;
   /** Reference hot pressure at which each tyre grips best (psi gauge) */
@@ -640,6 +642,43 @@ export interface CarTelemetry {
   tireOptimalTempC?: [number, number];
   /** Track-limits judging: warnings, penalties and the excursion being judged */
   trackLimits?: TrackLimitsStatus;
+}
+
+/** Where the player is in a pit stop */
+export type PitPhase = "track" | "approach" | "lane" | "box" | "servicing" | "released";
+
+/** What the crew does at the next stop, and whether the player has called it */
+export interface PitStrategyState {
+  nextCompound: TireCompound;
+  repairDamage: boolean;
+  boxRequested: boolean;
+}
+
+export interface PitTelemetry {
+  phase: PitPhase;
+  limiterOn: boolean;
+  /** Switched on by the speed-limit zone (it cannot be switched off there) */
+  limiterAuto: boolean;
+  limitKmh: number;
+  overLimit: boolean;
+  /** Pit-lane speeding calls this race */
+  speedingCount: number;
+  /** Metres to the player's box along the lane (from the lane entry onwards), else null */
+  toBoxM: number | null;
+  /** Sideways error to the box (m, + right), in the lane only */
+  boxSideM: number | null;
+  boxIndex: number;
+  /** Crew at work: seconds left of the whole stop, its length, and the parts of it */
+  serviceLeftS: number;
+  serviceTotalS: number;
+  tyreS: number;
+  repairS: number;
+  /** Damage the crew would repair (0..1) */
+  damage: number;
+  strategy: PitStrategyState;
+  stopsMade: number;
+  /** Stops this race requires (0: none) */
+  stopsRequired: number;
 }
 
 /** Why an excursion counted against the driver */

@@ -39,7 +39,8 @@ export type KeyAction =
   | "hud"
   | "board"
   | "headlights"
-  | "headlightFlash";
+  | "headlightFlash"
+  | "pitLimiter";
 
 /** Actions a controller or wheel button can trigger */
 export type PadAction =
@@ -61,7 +62,8 @@ export type PadAction =
   | "hud"
   | "board"
   | "headlights"
-  | "headlightFlash";
+  | "headlightFlash"
+  | "pitLimiter";
 
 export type KeyBindings = Record<KeyAction, string[]>;
 
@@ -100,6 +102,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "board", get label() { return t("game.keyActions.board"); } },
   { id: "headlights", get label() { return t("game.keyActions.headlights"); } },
   { id: "headlightFlash", get label() { return t("game.keyActions.headlightFlash"); } },
+  { id: "pitLimiter", get label() { return t("game.keyActions.pitLimiter"); } },
 ];
 
 export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
@@ -124,6 +127,7 @@ export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   // (headlight-button.ts)
   { id: "headlights", get label() { return t("game.padActions.headlights"); } },
   { id: "headlightFlash", get label() { return t("game.padActions.headlightFlash"); } },
+  { id: "pitLimiter", get label() { return t("game.padActions.pitLimiter"); } },
 ];
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
@@ -165,6 +169,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   headlights: ["KeyU"],
   // Beside the headlights' own key (on QWERTZ the key printed Z, still beside U)
   headlightFlash: ["KeyY"],
+  // iRacing's pit limiter key is A; here A steers, so the key beside the brackets
+  pitLimiter: ["Backslash"],
 };
 
 /** Keys that cannot be bound: Esc opens the menu, "/" starts the /boost command */
@@ -197,6 +203,7 @@ export const BUMPER_SHIFT_BUTTONS: PadButtonBindings = {
   board: null,
   headlights: null,
   headlightFlash: null,
+  pitLimiter: null,
   freeCamera: null,
   tvCamera: null,
 };
@@ -226,6 +233,7 @@ export const GT_STYLE_BUTTONS: PadButtonBindings = {
   racingLine: null,
   board: null,
   headlightFlash: null,
+  pitLimiter: null,
   freeCamera: null,
   tvCamera: null,
 };
@@ -407,6 +415,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       board: null,
       headlights: null,
       headlightFlash: null,
+      pitLimiter: null,
       freeCamera: null,
       tvCamera: null,
     },
@@ -435,6 +444,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       board: null,
       headlights: null,
       headlightFlash: null,
+      pitLimiter: null,
       freeCamera: null,
       tvCamera: null,
     },
@@ -462,6 +472,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       board: null,
       headlights: null,
       headlightFlash: null,
+      pitLimiter: null,
       freeCamera: null,
       tvCamera: null,
     },

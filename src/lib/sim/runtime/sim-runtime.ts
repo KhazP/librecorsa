@@ -248,6 +248,9 @@ export class SimRuntime {
       case "penalise":
         this.race?.field.penalisePlayer(command.seconds, command.reason, command.detail);
         return;
+      case "repair":
+        this.race?.field.repairPlayerDamage();
+        return;
       case "conditions":
         this.race?.env.setConditions(command.conditions);
         return;

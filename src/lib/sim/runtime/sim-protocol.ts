@@ -110,6 +110,8 @@ export type RaceCommand =
   | { type: "race"; op: "penalty"; seconds: number; dq?: boolean }
   | { type: "race"; op: "rules"; lockAidsInYellow: boolean }
   | { type: "race"; op: "penalise"; seconds: number; reason: PenaltyReason; detail: string }
+  /** The pit crew repaired the player's car */
+  | { type: "race"; op: "repair" }
   | { type: "race"; op: "conditions"; conditions: SessionConditions }
   | { type: "race"; op: "realism"; flags: SimRealismFlags }
   | { type: "race"; op: "restore"; poses: FieldCarRestorePose[]; rewindS: number; epoch?: number }

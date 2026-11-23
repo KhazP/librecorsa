@@ -70,6 +70,10 @@ export interface AiRace {
   playerDisqualified: boolean;
   /** Race control's time penalty on the player for a call the page makes (a jump start): in the ledger and on the feed */
   penalisePlayer(seconds: number, reason: PenaltyReason, detail: string): void;
+  /** The pit crew repaired the player's car (pit/pit-stop.ts) */
+  repairPlayerDamage?(): void;
+  /** Pit stops every car has to make this race (RaceSetup.pitStops); 0 or absent: none */
+  readonly pitStopsRequired?: number;
   /** The race's rules close the overtaking aids inside a yellow zone (race-rules.ts) */
   lockAidsInYellow: boolean;
   /** A car on this page has its overtaking aids closed by a yellow flag (a field in the worker answers there) */

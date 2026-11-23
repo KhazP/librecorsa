@@ -264,7 +264,8 @@
     "hud": "Show / hide HUD",
     "board": "Open / close lap board",
     "headlights": "Headlights on / off",
-    "headlightFlash": "Flash headlights (hold)"
+    "headlightFlash": "Flash headlights (hold)",
+    "pitLimiter": "Pit speed limiter"
   },
   "padActions": {
     "shiftUp": "Gear up",
@@ -285,7 +286,8 @@
     "hud": "Show / hide HUD",
     "board": "Open / close lap board",
     "headlights": "Headlights (tap: flash, hold: on / off)",
-    "headlightFlash": "Flash headlights (hold)"
+    "headlightFlash": "Flash headlights (hold)",
+    "pitLimiter": "Pit speed limiter"
   },
   "pedals": {
     "throttle": "Throttle",
@@ -944,5 +946,9 @@
       "saveChanged": "The cloud save changed on another device",
       "tooManyLaps": "The cloud holds up to {count} best laps"
     }
+  },
+  "pit": {
+    "speeding": "Pit lane speeding (over {limit} km/h)",
+    "stopMissed": "{count, plural, one {Required pit stop not made} other {# required pit stops not made}}"
   }
 }

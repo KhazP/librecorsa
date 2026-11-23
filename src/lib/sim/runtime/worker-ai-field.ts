@@ -47,6 +47,9 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
   penalisePlayer(seconds: number, reason: PenaltyReason, detail: string): void {
     if (this.race) this.link.post({ type: "race", op: "penalise", seconds, reason, detail });
   }
+  repairPlayerDamage(): void {
+    if (this.race) this.link.post({ type: "race", op: "repair" });
+  }
   private sentLockAids = true;
   qualifying: QualifyingGridInput | undefined = undefined;
   readonly worker: WorkerRaceView = this;

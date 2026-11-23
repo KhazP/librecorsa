@@ -437,5 +437,9 @@
   "account.join.named": "Question before this device joins an account. {name} is the account's driver name; {ways} is a list of sign-in names already joined in the player's language: “Discord”, “Discord and Google”, “Discord, Google and a passkey”.",
   "account.join.namedOnly": "Question before this device joins an account. {name} is the account's driver name.",
   "account.join.this": "Question before this device joins an account with no driver name yet. {ways} is a list of sign-in names already joined in the player's language: “Discord”, “Discord and Google”, “Discord, Google and a passkey”.",
-  "account.join.thisOnly": "Question before this device joins an account with no driver name yet."
+  "account.join.thisOnly": "Question before this device joins an account with no driver name yet.",
+  "keyActions.pitLimiter": "Key binding (Controls): switches the pit lane speed limiter on and off. In the pit lane's speed zone it is on by itself.",
+  "padActions.pitLimiter": "Controller button binding: switches the pit lane speed limiter on and off.",
+  "pit.speeding": "Race control's call shown in the race feed and penalties: the driver went over the pit lane speed limit. {limit} is the limit in km/h.",
+  "pit.stopMissed": "Race control's penalty at the flag: the race required pit stops and the driver made fewer."
 }
