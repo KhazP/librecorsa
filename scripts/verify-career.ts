@@ -24,6 +24,7 @@ import {
   chooseSeries,
   endSeason,
   newCareer,
+  objectiveProgress,
   parseCareerSave,
   racePlan,
   recordRound,
@@ -37,6 +38,8 @@ import {
   withRun,
   EMPTY_SAVE,
   type CareerRun,
+  type RoundResult,
+  type SeasonState,
 } from "../src/lib/career/career-state";
 import { combineCareers } from "../src/lib/account/save-model";
 
@@ -238,6 +241,22 @@ function raceRound(run: CareerRun, playerPlace: number, playerCode = "ZZZ"): Car
   const deleted = withoutRun(a, a.runs[0].id);
   const merged = JSON.parse(combineCareers(JSON.stringify(a), JSON.stringify(deleted))) as typeof a;
   check("a career deleted on one device stays deleted when the saves combine", merged.runs.length === 0);
+}
+
+{
+  // An average objective is judged at one decimal both ways: never "failed" while the rounds left can still bring it in
+  const base = startSeason(updateRaceSettings(newCareer("road", "clubCup_europe", allContent, 5)!, { gridSize: 10 })).season!;
+  const finishes = (places: number[]): SeasonState => ({
+    ...base,
+    objectives: [{ kind: "consistent", target: 4.8 }],
+    rounds: Array.from({ length: 6 }, (_, i) => (i < places.length ? ({ position: places[i], grid: places[i], dnf: false } as unknown as RoundResult) : null)),
+  });
+  const five = objectiveProgress({ kind: "consistent", target: 4.8 }, finishes([5, 5, 6, 6, 6]));
+  check("an average a win in the last round still brings in is not failed", !five.failed, JSON.stringify(five));
+  const six = objectiveProgress({ kind: "consistent", target: 4.8 }, finishes([5, 5, 6, 6, 6, 1]));
+  check("...and that win completes it, not failed", six.done && !six.failed, JSON.stringify(six));
+  const out = objectiveProgress({ kind: "consistent", target: 4.8 }, finishes([6, 6, 6, 6, 6]));
+  check("an average out of reach is failed before the last round", out.failed && !out.done, JSON.stringify(out));
 }
 
 if (failures) {

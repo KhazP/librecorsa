@@ -300,9 +300,12 @@ export function objectiveProgress(o: BonusObjective, season: SeasonState): Objec
   const n = raced.length;
   const left = season.rounds.length - n;
   const total = season.rounds.length || 1;
-  const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
-  /** An average still within reach: even P1 in every round left would not bring it to the target */
-  const averageOut = (xs: number[]) => n > 0 && (xs.reduce((a, b) => a + b, 0) + left) / total > o.target;
+  // Averages to one decimal, as shown and as judged: the reach check rounds the same way, or a season P1 in every round
+  // left would still complete could read failed first
+  const tenth = (v: number) => Math.round(v * 10) / 10;
+  const avg = (xs: number[]) => (xs.length ? tenth(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+  /** An average out of reach: even P1 in every round left would not bring it to the target */
+  const averageOut = (xs: number[]) => n > 0 && tenth((xs.reduce((a, b) => a + b, 0) + left) / total) > o.target;
   const once = (best: number | null) => {
     const done = best !== null && best <= o.target;
     return { value: best, done, failed: left === 0 && !done, onPace: false };
