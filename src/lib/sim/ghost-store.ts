@@ -428,6 +428,21 @@ export function bestLapsByVehicleForCircuit(
     .sort((a, b) => Number(a.legacyPhysics) - Number(b.legacyPhysics) || a.lapTimeMs - b.lapTimeMs);
 }
 
+/**
+ * Every stored personal best's summary under its store key (the cloud save, src/lib/account, keys best laps by it).
+ * Read from the summary index, so no recording is loaded; the index is built from IndexedDB when there is none.
+ */
+export async function listBestLapIndex(): Promise<Record<string, BestLapSummary>> {
+  await listBestLapSummaries();
+  return readSummaryIndex() ?? (await buildSummaryMapFromIdb()) ?? {};
+}
+
+/** The personal best stored under a store key ("<track>|<car>|<board>"), validated; null when there is none */
+export async function loadBestLapByKey(key: string): Promise<LapRecording | null> {
+  const raw = await runRequest("readonly", (store) => store.get(key));
+  return raw === null || raw === undefined ? null : validateLapRecording(raw);
+}
+
 /** Every stored personal best (for the local leaderboard), fastest first */
 export async function listBestLaps(): Promise<LapRecording[]> {
   const all = await runRequest<unknown[]>("readonly", (store) => store.getAll());
