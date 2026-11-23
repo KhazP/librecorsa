@@ -490,7 +490,9 @@
       "fuelTag": "FUEL",
       "fuelTitle": "Fuel & energy",
       "stndTag": "STND",
-      "stndTitle": "Standings"
+      "stndTitle": "Standings",
+      "pitTag": "PIT",
+      "pitTitle": "Pit stop"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "MFD pages",
@@ -532,6 +534,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, one {# lap} other {# laps}}"
+    },
+    "pit": {
+      "tyres": "Next tyres",
+      "repair": "Repair damage",
+      "repairTime": "{damage}% damage · +{seconds} s",
+      "noDamage": "No damage",
+      "box": "Box this lap",
+      "limit": "Limit {limit} km/h · box {box}",
+      "on": "On",
+      "off": "Off",
+      "boxCalled": "Boxing",
+      "callBox": "Call",
+      "stops": "Stops",
+      "stopsOf": "{made} of {required}",
+      "stopsShort": "{made, plural, =0 {No stops} one {# stop} other {# stops}}"
     }
   },
   "tunerMfdPanel": {
@@ -1092,5 +1109,21 @@
     "resetAll": "Reset layout",
     "cancel": "Cancel",
     "done": "Done"
+  },
+  "pit": {
+    "boxBox": "Box",
+    "limiter": "Limiter",
+    "stop": "Stop",
+    "go": "Go",
+    "crew": "Crew",
+    "fitting": "Fitting {compound}",
+    "fittingRepairing": "Fitting {compound} · repairing",
+    "stopTime": "Stop {seconds} s",
+    "inBox": "Box {box}",
+    "lane": "Pit lane",
+    "boxIn": "Box {box} in {metres} m",
+    "boxPassed": "Box {box} passed",
+    "approach": "Pit entry · limit {limit} km/h",
+    "limiterKey": "Limiter: {key}"
   }
 }

@@ -73,7 +73,7 @@ import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { nameProblem } from "@/lib/net/name-filter";
 import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type BoardWidgetMode, type PlayerSettings } from "@/lib/settings/player-settings";
 import { signalBoardLap } from "@/components/hud/BoardWidget";
-import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
+import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, PitStrategyState, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, WebGLUnavailableError, type AppPhase, type SessionRace } from "@/lib/drive-session";
 import { GpuLostNotice } from "@/components/menu/GpuLostNotice";
 import { NowPlayingToast } from "@/components/hud/NowPlayingToast";
@@ -503,6 +503,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, [gamepadRumble]);
 
   const handleTireCompoundChange = useCallback((compound: TireCompound) => session?.setTireCompound(compound), [session]);
+  const handlePitStrategy = useCallback((patch: Partial<PitStrategyState>) => session?.setPitStrategy(patch), [session]);
 
   const handleChangeTyreSetup = useCallback((next: TyreSetup) => {
     session?.setTyreSetup(next);
@@ -1904,6 +1905,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       shiftDown: first(k.shiftDown),
       board: first(k.board),
       headlights: first(k.headlights),
+      pitLimiter: first(k.pitLimiter),
     };
   }, [settings.keys]);
   /** The lap board's gear sets when it opens: the same HUD setting as in Settings */
@@ -2088,6 +2090,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onChangeAeroPreset: handleAeroPresetChange,
     onChangeAssistPreset: handleAssistPresetChange,
     onChangeTireCompound: handleTireCompoundChange,
+    onChangePitStrategy: handlePitStrategy,
     tyreSetup,
     defaultTyreSetup,
     onChangeTyreSetup: handleChangeTyreSetup,

@@ -13,6 +13,7 @@ import type {
   DriverAssistPreset,
   LiveTunerPatch,
   LiveryConfig,
+  PitStrategyState,
   TireCompound,
   TyreSetup,
   VehicleModelId,
@@ -59,6 +60,7 @@ import { FfbMeter } from "./hud/FfbMeter";
 import { LapSummary } from "./hud/LapSummary";
 import { RaceResults } from "./hud/RaceResults";
 import { RaceControlBanner } from "./hud/RaceControlBanner";
+import { PitStopOverlay } from "./hud/PitStopOverlay";
 import { QualityNotice } from "./hud/QualityNotice";
 import { RaceIncidentFeed } from "./hud/RaceIncidentFeed";
 import { DamageWidget } from "./hud/DamageWidget";
@@ -210,6 +212,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** Off the track: the crimson edge glow that breathes behind the HUD, which the renderer draws into the frame */
   onOffTrackGlow?: (on: boolean) => void;
   onChangeTireCompound: (compound: TireCompound) => void;
+  /** The MFD Pit page's choices: next tyres, repairs, the box call (pit/pit-stop.ts) */
+  onChangePitStrategy?: (patch: Partial<PitStrategyState>) => void;
   onChangeTyreSetup: (setup: TyreSetup) => void;
   onChangeLivery: (livery: LiveryConfig) => void;
   onToggleRacingLine: () => void;
@@ -241,7 +245,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** The music playing, and the pause menu's skip */
   nowPlaying?: NowPlaying | null;
   onSkipTrack?: () => void;
-  keyNames?: Partial<Record<"camera" | "freeCamera" | "tvCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board" | "headlights", string>>;
+  keyNames?: Partial<Record<"camera" | "freeCamera" | "tvCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board" | "headlights" | "pitLimiter", string>>;
   /** The lap board's gear: when it opens (the HUD setting), changed from the board itself; without it, no lap board */
   onChangeBoardWidget?: (mode: BoardWidgetMode) => void;
   /** HUD layout preset, size and optional widgets */
@@ -612,6 +616,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         trackLengthM={track.totalLengthM}
         compound={tireCompound}
         playerCode={props.profile?.code}
+        onChangePitStrategy={props.onChangePitStrategy}
         autoFold={hud?.mfdAutoCollapse ?? false}
         defaultFolded={(hud?.mfdAutoCollapse ?? false) || classic || Boolean(style?.mfdFolded) || (preset === "broadcast" && window.innerWidth < 1280)}
       />
@@ -744,6 +749,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             yellowGiveBack={race?.giveBack}
           />
         ) : null}
+        {!lightsPhase && telemetry.pit ? <PitStopOverlay telemetry={telemetry} limiterKey={props.keyNames?.pitLimiter} /> : null}
         {!lightsPhase && race ? (
           <RaceIncidentFeed
             messages={race.raceControl}
