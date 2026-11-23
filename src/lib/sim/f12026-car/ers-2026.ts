@@ -161,9 +161,9 @@ export interface ErsStepInput {
   resetSector: boolean;
   /**
    * The driver's Boost, held: maintains or raises the motor's power whatever the management wants, and gives back a cut
-   * (C5.12.5). `boostCapped` (a race): no more than the power when pressed, or 150 kW if that was less.
-   * `boostHoldOnly` (Low Grip Conditions, any session; Section B7.2.1 g i): it only stops the power dropping, at the
-   * power when pressed, and gives nothing back
+   * (C5.12.5); never less than without it. `boostCapped` (a race): it raises it to no more than the power when
+   * pressed, or 150 kW if that was less. `boostHoldOnly` (Low Grip Conditions, any session; Section B7.2.1 g i): it
+   * only stops the power dropping (no cut while held), and raises and gives back nothing
    */
   boost: boolean;
   boostCapped: boolean;
@@ -245,36 +245,43 @@ export class Ers2026Control {
     if (this.standingStart && i.speedKmh >= R.standingStartKmh) this.standingStart = false;
     const share = Math.max(0, i.share);
     this.flatS = i.throttle >= PENDING_THROTTLE ? this.flatS + i.h : 0;
-    // The Boost: from the press, the power then (in a race no more than that, or 150 kW if it was less; in Low Grip
-    // Conditions no more than that at all)
+    // The Boost: from the press, the power then (in a race no more than that, or 150 kW if it was less)
     if (i.boost && !this.boostHeld) this.boostFromW = Math.max(0, this.lastDcW);
     this.boostHeld = i.boost;
+    // In Low Grip Conditions it only stops the power dropping: no cut while it is held, and nothing raised or given back
+    const boostRaises = this.boostHeld && !i.boostHoldOnly;
+    const boostHolds = this.boostHeld && i.boostHoldOnly;
     const alt1 = i.alt1Sector && this.flatS >= PENDING_S;
     let capW = ersKDeployLimitW(i.speedKmh, i.overtake, i.curves, alt1);
     if (i.overtake && i.overtakeShare < 1) {
       const normalW = ersKDeployLimitW(i.speedKmh, false, i.curves, alt1);
       capW = normalW + Math.max(0, i.overtakeShare) * (capW - normalW);
     }
-    // What the management wants of the motor: all of it where a joule buys enough time, none where it does not
-    let wantW = R.maxDcW * share;
-    const managed = !this.boostHeld && !Number.isNaN(i.deployAboveSPerMJ);
+    // What the management wants of the motor: all of it where a joule buys enough time, none where it does not. The
+    // Boost never asks for less than that: it raises the want to the whole curve (in a race to its power when pressed,
+    // or 150 kW)
+    const fullW = R.maxDcW * share;
+    const managed = !Number.isNaN(i.deployAboveSPerMJ);
     const managedCut = managed && !(i.valueSPerMJ > i.deployAboveSPerMJ);
-    if (this.boostHeld && i.boostHoldOnly) wantW = Math.min(wantW, this.boostFromW);
-    else if (this.boostHeld && i.boostCapped) wantW = Math.min(wantW, Math.max(this.boostFromW, BOOST_RACE_FLOOR_W));
+    let wantW = fullW;
+    if (boostRaises && managedCut) wantW = i.boostCapped ? Math.min(fullW, Math.max(this.boostFromW, BOOST_RACE_FLOOR_W)) : fullW;
     // The store is never run empty under power: a cut from the most the motor may deploy here, at the rules' rates,
     // needs this much (an empty store would drop the motor at once, faster than they allow)
     const mostW = Math.max(this.lastDcW, capW * Math.max(share, i.fillShare));
-    const allowed = !managedCut && i.soc * R.storeJ > cutEnergyJ(mostW, i.cutRateWps) && !this.standingStart;
+    const storeOk = i.soc * R.storeJ > cutEnergyJ(mostW, i.cutRateWps) && !this.standingStart;
+    const allowed = (!managedCut || boostRaises) && storeOk;
     if (!allowed) wantW = 0;
 
     const flatOut = i.throttle >= FLAT_OUT;
     const free = !flatOut || i.shifting || i.speedKmh < R.limitFreeBelowKmh;
-    if (free || this.boostHeld || i.resetSector) {
+    if (free || i.resetSector || (boostRaises && wantW >= this.levelW)) {
       // Off the throttle, in a shift or slow, no power-limited period: the ceiling follows the management at once. The
-      // Boost, or a sector the FIA names, gives back what a period cut (C5.12.5); a Low Grip Boost wants only the power
-      // it was pressed at, so it holds the cut where it was
+      // Boost, or a sector the FIA names, gives back what a period cut (C5.12.5). A race's Boost asking for less than
+      // the ceiling goes on down to it at the rules' rates, as without it
       this.limited = this.superclipping = false;
       this.levelW = wantW;
+    } else if (boostHolds && storeOk && wantW < this.levelW) {
+      // A Low Grip Boost: the ceiling stays where it is
     } else if (wantW < this.levelW - 1) {
       // A cut with the driver flat out: from the power being deployed, as much as the sector allows at once (150 kW,
       // C5.12.4), then at the circuit's rate while over 100 kW, under which the rest may go at once
@@ -285,7 +292,7 @@ export class Ers2026Control {
     } else if (!this.limited) {
       this.levelW = wantW;
     }
-    // (inside a power-limited period nothing cut is given back: the ceiling holds)
+    // (inside a power-limited period nothing cut is given back: the ceiling holds; a Low Grip Boost holds it too)
 
     this.deployCeilingW = Math.min(this.levelW, capW * share);
     this.fillCeilingW = allowed && !this.limited ? capW * Math.max(0, i.fillShare) : this.deployCeilingW;
@@ -294,7 +301,7 @@ export class Ers2026Control {
 
     // The cut done and a joule worth little here: the engine's power goes on into the store, to the end of the period
     // (it gives none back), or until the lap's recharge limit or a full store stops it
-    if (!free && managed && this.levelW <= 0) {
+    if (!free && managed && !this.boostHeld && this.levelW <= 0) {
       if (!this.superclipping && i.valueSPerMJ < i.superclipBelowSPerMJ) this.superclipping = this.limited = true;
       if (this.superclipping && i.superclipRoomJ > 0 && i.soc < 1) {
         return -Math.min(SUPERCLIP_DC_W, i.superclipRoomJ / Math.max(i.h, 1e-6));
