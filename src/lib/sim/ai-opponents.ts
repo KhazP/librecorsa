@@ -59,7 +59,8 @@ import { BlueFlagJudge, blueFlagYieldTarget, type BlueFlagCar } from '@/lib/sim/
 import { VSC_PACE_SHARE, VscController, vscReferenceSpeedMs } from '@/lib/sim/vsc';
 import type { PenaltyReason } from '@/lib/sim/penalty-ledger';
 import { aiQualifyingMs, qualifyingOrder, type QualifyingGridInput, type QualifyingResult } from '@/lib/sim/qualifying';
-import { aiTrackFor, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
+import { aiTrackFor, gridIndex, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
+import { buildSideLanes, type SideLanes } from '@/lib/sim/ai/side-lanes';
 import { carLimitsFor } from '@/lib/sim/ai/ggv';
 import { drivePlanJob, driveLineOf, makeDrivePlan, type AiDrivePlan, type DriveLine } from '@/lib/sim/ai/drive-plan';
 import { planCost } from '@/lib/sim/ai/speed-plan';
@@ -268,6 +269,12 @@ export interface RacecraftParams {
   earlyHazard: number;
   /** After a pass is called off, no new try on the same car for this long (s; Game AI Pro 38.5.2). 0: off */
   passCooldownS: number;
+  /**
+   * Side by side with another car into a corner (a dry road), each car takes its own side's lane (side-lanes.ts: the
+   * line held to one half of the road, with its own speeds) at the lane's speed, instead of being held near its line.
+   * A car already too fast for the lane there keeps the yield rules. 0: off
+   */
+  sideLanes: number;
 }
 
 export const DEFAULT_RACECRAFT: RacecraftParams = {
@@ -303,6 +310,7 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   followClosingOnly: 0,
   earlyHazard: 0,
   passCooldownS: 0,
+  sideLanes: 0,
 };
 /** The path check's step (s) */
 const PATH_STEP_S = 0.1;
@@ -1045,6 +1053,25 @@ export class AiOpponentField implements AiRace {
 
   /** The AI grid and the racing line per class, built on first use */
   private aiTrack: AiTrack | null = null;
+  /** Side lanes per racing line and car (sideLanes); null where the car has no usable-road query */
+  private readonly sideLanes = new Map<string, SideLanes | null>();
+
+  private lanesFor(sim: SimulatorCar): SideLanes | null {
+    if (this.track.pointToPoint) return null;
+    const lineId = sim.racingLineId ?? 'f1';
+    const key = `${lineId}|${sim.vehicleId ?? ''}`;
+    let lanes = this.sideLanes.get(key);
+    if (lanes !== undefined) return lanes;
+    const rangeAt = (sim as unknown as { lateralRangeAt?: (s: number) => [number, number] }).lateralRangeAt;
+    if (typeof rangeAt !== 'function') {
+      this.sideLanes.set(key, null);
+      return null;
+    }
+    const t = (this.aiTrack ??= aiTrackFor(this.track));
+    lanes = buildSideLanes(t, this.driveLineFor(lineId).n, (s) => rangeAt.call(sim, s), carLimitsFor(sim.vehicleId, PLAN_GRIP), carLimitsFor(sim.vehicleId, PLAN_GRIP * 0.95));
+    this.sideLanes.set(key, lanes);
+    return lanes;
+  }
 
   /** A driver's temperament in this race: its own, moved by the race setup's aggression */
   private aggressionOf(car: FieldCar): number {
@@ -2227,6 +2254,49 @@ export class AiOpponentField implements AiRace {
           const want = pos ?? line;
           const kept = clamp(want, lo, hi);
           if (Math.abs(kept - want) > 1e-3) pos = kept;
+        }
+      }
+      // Side by side into a corner on a dry road: our own side's lane, at its speed (sideLanes; Speed Dreams' usr keeps
+      // each car on its own side when an opponent is alongside)
+      // (a two-car battle after the first lap: on lap 1 and with a third car near, a car moving out to its lane was
+      // pushed into the third car or hit from behind on the slower inside lane, lap-1 contacts at Spielberg 15 -> 27)
+      const other = roomFor;
+      if (
+        this.rc.sideLanes > 0 &&
+        other &&
+        car.clock.lapsDone >= 1 &&
+        !sandwiched &&
+        kAbs > 0.006 &&
+        !yellow &&
+        this.environment.weatherPaceScale(me) >= 0.999 &&
+        this.cars.every((o) => o === car || o === other || o.removed || Math.abs(wrapHalf(o.sim.sMeters - me.sMeters, L)) > 10)
+      ) {
+        const lanes = this.lanesFor(me);
+        const t = this.aiTrack;
+        if (lanes && t) {
+          const side = me.lateralOffsetM >= other.sim.lateralOffsetM ? 1 : -1;
+          const lane = side > 0 ? lanes.right : lanes.left;
+          const gi = gridIndex(me.sMeters, t.ds, t.n);
+          // ... usable here and through the next 40 m
+          let usable = true;
+          for (let k = 0; k <= Math.round(40 / t.ds) && usable; k += 2) usable = lane.ok[(gi + k) % t.n] === 1;
+          if (usable) {
+            const laneN = sampleGrid(lane.n, me.sMeters, t.ds);
+            const ratio = sampleGrid(lane.ratio, me.sMeters, t.ds);
+            const planV = me.aiPlan ? sampleGrid(me.aiPlan.v, me.sMeters, t.ds) : (sample.optimalSpeedKmh / 3.6) * car.pace;
+            const laneV = planV * ratio;
+            // Only at a speed the lane takes here: a car moving onto it under braking was suddenly 10 m/s over the
+            // lane's speed, braked flat out and was hit by the car beside it on its own braking point. Too fast for the
+            // lane (on it or not), it keeps the yield rules
+            // (how far across to it the car is: its bias against the lane's offset from the line)
+            const toLane = Math.abs(laneN - line) > 0.3 ? clamp(car.biasM / (laneN - line), 0, 1) : 1;
+            if (me.vxMs <= laneV + 1) {
+              const want = side > 0 ? Math.max(laneN, roomLat) : Math.min(laneN, roomLat);
+              pos = clamp(want, -half, half);
+              maxBias = Math.max(maxBias, Math.abs(pos - line));
+              speedCap = Math.min(speedCap, planV * (1 - toLane * (1 - ratio)));
+            }
+          }
         }
       }
       // (backing off beside a car, the corner's room is no limit: held to it, the car was taken back across into the other)
