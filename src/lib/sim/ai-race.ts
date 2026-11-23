@@ -91,7 +91,7 @@ export interface AiRace {
   readonly worker?: WorkerRaceView;
   /** Rewinds AI cars and race clocks to a recorded Flashback frame, and invalidates the player's current race lap */
   restoreField?(poses: readonly FieldCarRestorePose[], rewindS: number): void;
-  /** Pit stop repair: resets the player's car damage back to pristine */
+  /** Repairs player car damage during a pit stop */
   repairPlayerDamage?(): void;
   /** The session has left the race (another race, practice) */
   dispose?(): void;

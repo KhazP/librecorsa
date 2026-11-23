@@ -209,6 +209,8 @@ export const CIRCUIT_VENUES: readonly CircuitVenue[] = LISTED_TRACKS.reduce<Circ
   return venues;
 }, []);
 
+export const venueKeyOf = (t: Pick<TrackInfo, "name" | "country">): string => `${t.name}::${t.country}`;
+
 export const venueOf = (trackId: string): CircuitVenue | undefined => CIRCUIT_VENUES.find((v) => v.layouts.some((l) => l.id === trackId));
 
 /** Responsive widths written by `npm run venue-heroes` beside each venue's primary track folder */

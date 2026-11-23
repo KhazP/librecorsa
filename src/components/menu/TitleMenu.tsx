@@ -692,7 +692,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               id: "career",
               label: "Career",
               detail: `${tier.title} · ${roundLabel} · P${pIdx >= 0 ? pIdx + 1 : "-"} (${pPts} pts)`,
-              icon: "chequered" as const,
+              icon: "podium" as const,
               panel: "career" as const,
               run: () => openPanel("career"),
               badge: `S${c.seasonNumber}`,

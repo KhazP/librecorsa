@@ -36,7 +36,8 @@ export type KeyAction =
   | "hud"
   | "board"
   | "headlights"
-  | "headlightFlash";
+  | "headlightFlash"
+  | "pitLimiter";
 
 /** Actions a controller or wheel button can trigger */
 export type PadAction =
@@ -57,7 +58,8 @@ export type PadAction =
   | "hud"
   | "board"
   | "headlights"
-  | "headlightFlash";
+  | "headlightFlash"
+  | "pitLimiter";
 
 export type KeyBindings = Record<KeyAction, string[]>;
 
@@ -95,6 +97,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "board", label: "Open / close lap board" },
   { id: "headlights", label: "Headlights on / off" },
   { id: "headlightFlash", label: "Flash headlights (hold)" },
+  { id: "pitLimiter", label: "Pit speed limiter" },
 ];
 
 export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
@@ -118,6 +121,7 @@ export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   // (headlight-button.ts)
   { id: "headlights", label: "Headlights (tap: flash, hold: on / off)" },
   { id: "headlightFlash", label: "Flash headlights (hold)" },
+  { id: "pitLimiter", label: "Pit speed limiter" },
 ];
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
@@ -157,6 +161,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   headlights: ["KeyU"],
   // Beside the headlights' own key (on QWERTZ the key printed Z, still beside U)
   headlightFlash: ["KeyY"],
+  pitLimiter: ["Backslash"],
 };
 
 /** Keys that cannot be bound: Esc opens the menu, "/" starts the /boost command */
@@ -190,6 +195,7 @@ export const BUMPER_SHIFT_BUTTONS: PadButtonBindings = {
   headlightFlash: null,
   freeCamera: null,
   tvCamera: null,
+  pitLimiter: null,
 };
 
 /**
@@ -217,6 +223,7 @@ export const GT_STYLE_BUTTONS: PadButtonBindings = {
   headlightFlash: null,
   freeCamera: null,
   tvCamera: null,
+  pitLimiter: null,
 };
 
 /**
@@ -370,6 +377,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       headlightFlash: null,
       freeCamera: null,
       tvCamera: null,
+      pitLimiter: null,
     },
   },
   // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause. No headlight control found in the F1 games
@@ -395,6 +403,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       headlightFlash: null,
       freeCamera: null,
       tvCamera: null,
+      pitLimiter: null,
     },
   },
   // Forza: B up, X down (manual layout), RB switch camera, LS toggle convertible, Menu pause. No headlight control
@@ -421,6 +430,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
       headlightFlash: null,
       freeCamera: null,
       tvCamera: null,
+      pitLimiter: null,
     },
   },
   // Gears on the bumpers: the default until 17 Nov 2026, so the layout most saved settings still have

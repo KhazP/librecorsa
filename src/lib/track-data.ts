@@ -91,11 +91,21 @@ export interface PointToPointDef {
 /** Whether `s` (m along the loop) is on the stretch of a point-to-point course that has no road */
 export const inDeadZone = (p: PointToPointDef, s: number): boolean => s > p.endS && s < p.startS;
 
+export interface PitLaneDef {
+  entryS: number;
+  exitS: number;
+  widthM: number;
+  centerline: [number, number, number][];
+  pitboxes?: number;
+}
+
 export interface BuiltTrackData {
   /** Circuit id (a folder under public/tracks); absent on synthetic test tracks */
   id?: string;
   /** Set on a point-to-point course (a hill climb); absent on a circuit */
   pointToPoint?: PointToPointDef;
+  /** Track pit lane geometry & speed-zone endpoints when present in track_data.json */
+  pitLane?: PitLaneDef;
   /** Circuit GLB (relative to the base path); absent on synthetic test tracks */
   meshUrl?: string;
   /** Materials of the circuit GLB's scan that are the racing surface (asphalt shader); none for a circuit with its own road meshes */
@@ -2220,9 +2230,20 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
   const noShadowMeshes = meshMeta?.noShadowMeshes?.length ? [...meshMeta.noShadowMeshes] : undefined;
   const mergedNoShadowMaterials = trackNoShadowMaterials(ACTIVE_TRACK_ID, meshMeta?.noShadowMaterials);
   const noShadowMaterials = mergedNoShadowMaterials.length ? mergedNoShadowMaterials : undefined;
+  const rawPitLane = (activeRaw as RawTrackJson & { pitLane?: PitLaneDef }).pitLane;
+  const rawPitBoxes = (activeRaw.metadata as RawTrackJson["metadata"] & { pitboxes?: number }).pitboxes;
   cachedBuiltTrack = {
     id: ACTIVE_TRACK_ID,
     pointToPoint: getActiveTrackMetadata().pointToPoint,
+    pitLane: rawPitLane
+      ? {
+          entryS: rawPitLane.entryS,
+          exitS: rawPitLane.exitS,
+          widthM: rawPitLane.widthM,
+          centerline: rawPitLane.centerline,
+          pitboxes: rawPitBoxes,
+        }
+      : undefined,
     meshUrl,
     roadMaterials: meshMeta?.roadMaterials,
     sceneryCuts: meshMeta?.cutBoxes,

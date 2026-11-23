@@ -56,13 +56,13 @@ export const CAR_CALLABLE = [
   "setOvertakingRules",
   "invalidateLap",
   "setDamageEffects",
-  "servicePitStop",
   "setAeroWakeState",
   "setTrackEvolutionSample",
   "setWeatherSample",
   "setSimRealism",
   "activateBoostOverride",
   "applyRigidBodyCollision",
+  "servicePitStop",
 ] as const;
 export type CarCallable = (typeof CAR_CALLABLE)[number];
 
@@ -112,6 +112,7 @@ export type RaceCommand =
   | { type: "race"; op: "conditions"; conditions: SessionConditions }
   | { type: "race"; op: "realism"; flags: SimRealismFlags }
   | { type: "race"; op: "restore"; poses: FieldCarRestorePose[]; rewindS: number; epoch?: number }
+  | { type: "race"; op: "repair" }
   | { type: "race"; op: "end" };
 
 /** An AI car of the race, as the page draws it */

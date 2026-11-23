@@ -616,6 +616,50 @@ export interface CarTelemetry {
   tireOptimalTempC?: [number, number];
   /** Track-limits judging: warnings, penalties and the excursion being judged */
   trackLimits?: TrackLimitsStatus;
+  /** Pit lane, pit limiter, pit box guidance and service timer state */
+  pit?: PitTelemetry;
+}
+
+export type PitPhase =
+  | "track"
+  | "entry_warning"
+  | "lane"
+  | "in_box"
+  | "servicing"
+  | "released";
+
+export interface PitStrategyState {
+  nextCompound: TireCompound;
+  repairDamage: boolean;
+  boxRequested: boolean;
+}
+
+export interface PitStopServiceOptions {
+  repairDamage?: boolean;
+  refuel?: boolean;
+}
+
+export interface PitTelemetry {
+  phase: PitPhase;
+  limiterActive: boolean;
+  limiterAuto: boolean;
+  speedLimitKmh: number;
+  overLimit: boolean;
+  speedWarning: boolean;
+  speedingPenaltyCount: number;
+  distToDetectM: number | null;
+  distToBoxM: number | null;
+  lateralErrM: number | null;
+  alignedInBox: boolean;
+  controlsLocked: boolean;
+  serviceRemainingS: number;
+  serviceTotalS: number;
+  tyreDurationS: number;
+  repairDurationS: number;
+  hasDamage: boolean;
+  damagePct: number;
+  strategy: PitStrategyState;
+  assignedBoxIndex: number;
 }
 
 /** Why an excursion counted against the driver */

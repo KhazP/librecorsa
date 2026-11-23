@@ -11,7 +11,7 @@ export const HOSTED_CONTENT = process.env.NEXT_PUBLIC_HOSTED_CONTENT === "1";
 export const REPO_CAR_IDS: ReadonlySet<string> = new Set(["lc26"]);
 
 /** The circuits in the repository */
-export const REPO_TRACK_IDS: ReadonlySet<string> = new Set(["rwanda_official_short", "rwanda_official", "brno"]);
+export const REPO_TRACK_IDS: ReadonlySet<string> = new Set(["rwanda_official_short", "rwanda_official"]);
 
 /** Whether this copy lists a car */
 export const carListed = (id: string): boolean => HOSTED_CONTENT || REPO_CAR_IDS.has(id);

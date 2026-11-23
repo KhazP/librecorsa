@@ -182,6 +182,17 @@ export const ghost = toggle({
   ...top("ghost"),
 });
 
+export const pitSpeedLimit = slider({
+  id: "pitSpeedLimitKmh",
+  label: "Pit speed limit",
+  hint: (env) => `Auto-limiter & auto-brake target in pit lane · Key ${key(env, "pitLimiter")}`,
+  min: 40,
+  max: 100,
+  step: 5,
+  format: (v) => `${Math.round(v)} km/h`,
+  ...top("pitSpeedLimitKmh"),
+});
+
 // ---- Driving > Steering help
 
 /** A device's steering assist sliders; the countersteer cap stops at the current car's lock */

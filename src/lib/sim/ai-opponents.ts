@@ -1364,19 +1364,6 @@ export class AiOpponentField implements AiRace {
     this.recordDamageHistory();
   }
 
-  /** Pit stop repair: resets the player's car damage back to pristine */
-  public repairPlayerDamage(): void {
-    for (const car of this.cars) {
-      if (car.isPlayer) {
-        car.damage.reset();
-        car.sim.setDamageEffects?.(null);
-        car.retired = false;
-        car.retiredAtS = null;
-      }
-    }
-    this.player.setDamageEffects?.(null);
-  }
-
   /**
    * Grid slots for the race: the AI cars by pace, or by a qualifying session's worth of scatter (each driver's pace
    * with a lap's spread of luck), and the player's slot among them
@@ -3299,6 +3286,13 @@ export class AiOpponentField implements AiRace {
   /** The player's damage (for the HUD) */
   public playerDamage(): CarDamage | null {
     return this.cars.find((c) => c.isPlayer)?.damage ?? null;
+  }
+
+  public repairPlayerDamage(): void {
+    const me = this.cars.find((c) => c.isPlayer);
+    if (!me) return;
+    me.damage.reset();
+    me.sim.setDamageEffects?.(null);
   }
 
   /**

@@ -90,6 +90,8 @@ export interface PlayerSettings {
   race: RaceSetup;
   /** Simulation realism: tyre wear, temperature grip, fuel use and how hard rain bites (Full = the whole model) */
   realism: SimRealism;
+  /** Pit lane speed limit in km/h (default 60 km/h; auto pit limiter clamps and brakes to this speed) */
+  pitSpeedLimitKmh: number;
   /** Weather, time of day and time multiplier for offline sessions (the host's apply online) */
   conditions: SessionConditions;
   /**
@@ -293,7 +295,22 @@ export interface HudSettings {
   boardWidget: BoardWidgetMode;
   /** Names over the other players' and AI cars, the top three in podium colours */
   showPlayerNames: boolean;
+  /** Per-panel offset and scale overrides edited in HUD layout editor */
+  parts: Record<string, HudPart>;
+  /** Live in-game HUD layout editor toggle */
+  editMode: boolean;
 }
+
+export interface HudPart {
+  x: number;
+  y: number;
+  scale: number;
+}
+
+export const DEFAULT_HUD_PART: HudPart = { x: 0, y: 0, scale: 1 };
+export const HUD_PART_OFFSET_MAX = 600;
+export const HUD_PART_SCALE_MIN = 0.5;
+export const HUD_PART_SCALE_MAX = 2;
 
 export type BoardWidgetMode = "lapEnd" | "open" | "closed";
 export const BOARD_WIDGET_MODES: readonly BoardWidgetMode[] = ["lapEnd", "open", "closed"];
@@ -453,6 +470,8 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   headMovement: "natural",
   boardWidget: "lapEnd",
   showPlayerNames: true,
+  parts: {},
+  editMode: false,
 };
 
 export const DEFAULT_CONTENT_LIBRARY: ContentLibrary = {
@@ -590,6 +609,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   aiSkill: AI_SKILL_DEFAULT,
   race: DEFAULT_RACE_SETUP,
   realism: "full",
+  pitSpeedLimitKmh: 60,
   conditions: DEFAULT_SESSION_CONDITIONS,
   timeOfDayChosen: false,
   library: DEFAULT_CONTENT_LIBRARY,
@@ -840,7 +860,23 @@ function parseHud(v: unknown): HudSettings {
     headMovement: oneOf(v.headMovement, ["natural", "static"] as const, v.neckFx === false ? "static" : d.headMovement),
     boardWidget: oneOf(v.boardWidget, BOARD_WIDGET_MODES, d.boardWidget),
     showPlayerNames: bool(v.showPlayerNames, d.showPlayerNames),
+    parts: parseHudParts(v.parts),
+    editMode: false,
   };
+}
+
+function parseHudParts(v: unknown): Record<string, HudPart> {
+  if (!isObj(v)) return {};
+  const out: Record<string, HudPart> = {};
+  for (const [k, raw] of Object.entries(v)) {
+    if (!isObj(raw) || k.length > 64) continue;
+    out[k] = {
+      x: num(raw.x, -HUD_PART_OFFSET_MAX, HUD_PART_OFFSET_MAX, 0),
+      y: num(raw.y, -HUD_PART_OFFSET_MAX, HUD_PART_OFFSET_MAX, 0),
+      scale: num(raw.scale, HUD_PART_SCALE_MIN, HUD_PART_SCALE_MAX, 1),
+    };
+  }
+  return out;
 }
 
 function parseGraphics(v: unknown): GraphicsSettings {
@@ -1012,6 +1048,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     aiSkill: Math.round(num(raw.aiSkill, 0, 100, d.aiSkill)),
     race: parseRaceSetup(raw.race),
     realism: oneOf(raw.realism, SIM_REALISM_LEVELS, d.realism),
+    pitSpeedLimitKmh: Math.round(num(raw.pitSpeedLimitKmh, 40, 100, d.pitSpeedLimitKmh)),
     conditions: sanitizeConditions(raw.conditions),
     // A save from before this flag: a time of day other than the default was the player's pick
     timeOfDayChosen: bool(raw.timeOfDayChosen, sanitizeConditions(raw.conditions).timeOfDay !== d.conditions.timeOfDay),

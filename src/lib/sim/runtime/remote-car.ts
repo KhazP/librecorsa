@@ -97,7 +97,6 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   setLiveTuner: "call",
   setOvertakingRules: "call",
   setDamageEffects: "call",
-  servicePitStop: "call",
   setSimRealism: "call",
   invalidateLap: "liveCall",
   setAeroWakeState: "liveCall",
@@ -116,6 +115,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   aiPlanGrip: "localCall",
   aiBaseSpeedProfile: "localCall",
   createAiPeerCar: "localCall",
+  servicePitStop: "call",
 
   renderLeadS: "own",
   steeringAssist: "own",
