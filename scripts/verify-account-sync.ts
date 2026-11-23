@@ -51,6 +51,7 @@ import { BUSY, MAX_TRIES, NEWER_SAVE, createSyncEngine, sha256Hex, type LocalGho
 import { AUTH_NOTICES, deviceLabelFor, readAuthReturn } from "../src/lib/account/account-text";
 import {
   PUSH_DELAY_MS,
+  RELOAD_WINDOW_MS,
   accountActions,
   createAccountStore,
   getAccountState,
@@ -820,6 +821,26 @@ async function main3(): Promise<void> {
     check("the choice combines and writes", err === null && store.getState().firstSync === null && server.rev === 2);
     check("the page reloads once to use the save", f.log.reloads === 1);
     check("the reload isn't made twice for the same save", (await store.actions.syncNow()) === null && f.log.reloads === 1);
+
+    // Another device writes a newer save, and this one starts again (a page load). Its sync on start comes back after
+    // the window: past the loading screen the save waits for the next start; while the loading screen is still up (a
+    // slow device still loading the circuit) it is used at once
+    const newer = structuredClone(server.doc as SaveDoc);
+    newer.keys["bugesera.vehicle"] = { value: "chaparral-2d", t: 999_999 };
+    server.doc = newer;
+    server.rev++;
+    for (const loading of [false, true]) {
+      const again = fakeEnv(server, { accounts: true, storage: f.storage });
+      again.env.loadingScreen = () => loading;
+      const restarted = createAccountStore(() => again.env);
+      restarted.actions.start();
+      // The answer comes back after the window
+      again.clock.t += RELOAD_WINDOW_MS + 1;
+      await settle();
+      const applied = f.storage.getItem("bugesera.vehicle") === "chaparral-2d";
+      if (loading) check("a late sync on start while the loading screen is up uses the newer save", applied && again.log.reloads === 1);
+      else check("a late sync on start past the loading screen leaves the newer save for the next start", !applied && again.log.reloads === 0);
+    }
     store.actions.signIn("steam", "link");
     check("sign-in goes to the provider through the API", f.log.navigations[0] === "http://test/api/auth/start/steam?intent=link&return=%2Fplay");
     check("a bad link code is caught before the server", (await store.actions.redeemLinkCode("nope")) === "A code has 8 letters and digits, like ABCD-EFGH.");

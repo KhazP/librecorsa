@@ -263,6 +263,9 @@ export const LoadingScreen: React.FC<{
 
   return (
     <div
+      // The account side may reload the page for a newer cloud save while this is up and not yet pressed through
+      // (src/lib/account/account-store.ts)
+      data-loading-screen={leaving ? undefined : ""}
       className={`lc-ui-zoom pointer-events-auto fixed inset-0 z-50 flex flex-col overflow-y-auto bg-lc-void text-lc-chalk transition-opacity duration-500 ${
         leaving ? "opacity-0" : "opacity-100"
       }`}

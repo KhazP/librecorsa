@@ -8,8 +8,9 @@
  * Nothing happens until `start()` (the play shell calls it on mount), and nothing at all without an online side,
  * while /api/config says accounts are off, or on the server. When the cloud save brings values the running game holds
  * in memory (settings, setups, liveries), the page reloads once to use them: right after the first-sync choice, or
- * when a sync on start comes back within RELOAD_WINDOW_MS (still on the loading screen or the title). Later syncs
- * only send: what they bring waits for the next start, so a drive is never cut short.
+ * when a sync on start comes back within RELOAD_WINDOW_MS (still on the loading screen or the title) or while the
+ * loading screen is still up (a slow device can take longer than that to load a circuit). Later syncs only send: what
+ * they bring waits for the next start, so a drive is never cut short.
  */
 import { useSyncExternalStore } from "react";
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
@@ -165,6 +166,8 @@ export interface AccountStoreEnv {
   passkey(mode: PasskeyMode, options: unknown): Promise<unknown>;
   /** Calls `cb` when the page is hidden (`leaving` false) or goes away (true); returns the way to stop */
   onLeave(cb: (leaving: boolean) => void): () => void;
+  /** The game's loading screen is up: nothing is running that a reload would cut short */
+  loadingScreen?(): boolean;
 }
 
 /** This driver key is the one the account says the session joined with (AccountKey.id: its SHA-256's first 12 hex) */
@@ -371,7 +374,9 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
       await runSync({ apply: true });
       return;
     }
-    const withinWindow = () => e.now() - startedAt < RELOAD_WINDOW_MS;
+    // A slow device can still be loading the circuit long after the window: a reload there cuts nothing short, and
+    // without it such a device would leave the cloud's changes for a next start that is just as slow, every time
+    const withinWindow = () => e.now() - startedAt < RELOAD_WINDOW_MS || e.loadingScreen?.() === true;
     if ((account.save?.rev ?? 0) > rec.appliedRev || account.pendingMerges > 0) await runSync({ apply: withinWindow });
     else if (await e.sync.changedSince(account.id)) await runSync({ apply: false });
     else schedulePeriodic();
@@ -634,6 +639,8 @@ function browserEnv(): AccountStoreEnv | null {
         ? webauthn.startRegistration({ optionsJSON: options as PublicKeyCredentialCreationOptionsJSON })
         : webauthn.startAuthentication({ optionsJSON: options as PublicKeyCredentialRequestOptionsJSON });
     },
+    // LoadingScreen.tsx marks its root
+    loadingScreen: () => document.querySelector("[data-loading-screen]") !== null,
     onLeave(cb) {
       const onVisibility = () => {
         if (document.visibilityState === "hidden") cb(false);
