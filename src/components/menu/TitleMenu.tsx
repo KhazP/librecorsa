@@ -120,6 +120,8 @@ export interface TitleMenuProps extends PauseMenuProps {
 const linkClass = "text-lc-chalk underline decoration-lc-keyline underline-offset-2 hover:decoration-lc-chalk";
 /** A licence's name never breaks at its hyphen or space ("CC BY-NC-" / "SA 4.0") */
 const licenceClass = cx(linkClass, "whitespace-nowrap");
+/** What a circuit's credit line is for: its source's address, else its own title and author (a mod circuit may have no link) */
+const creditKey = (t: TrackInfo): string => t.credit?.url || `${t.credit?.title}\u0000${t.credit?.author}`;
 
 /** A circuit's length in the player's units ("5.34 km") */
 const lengthOf = (t: TrackInfo, unit: SpeedUnit) => `${distanceIn(t.lengthM / 1000, unit).toFixed(2)} ${DISTANCE_LABEL[unit]}`;
@@ -423,13 +425,20 @@ const Credits: React.FC = () => {
           </CreditRow>
           {LISTED_TRACKS.some((t) => t.credit) ? (
             <CreditRow title={tx("circuitsTitle")}>
-              {LISTED_TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => o.credit?.url === t.credit?.url) === i).map((t) => (
+              {/* One line per source: a venue's layouts share one, and a mod circuit with no link of its own is its own line */}
+              {LISTED_TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => creditKey(o) === creditKey(t)) === i).map((t) => (
                 <React.Fragment key={t.id}>
-                  &ldquo;{t.credit!.title}&rdquo; (
-                  <a href={t.credit!.short ?? t.credit!.url} target="_blank" rel="noreferrer" className={linkClass}>
-                    {t.credit!.short ? t.credit!.short.replace(/^https?:\/\//, "") : t.credit!.url.replace(/^https?:\/\/(www\.)?([^/]+).*$/, "$2")}
-                  </a>
-                  ) by{" "}
+                  &ldquo;{t.credit!.title}&rdquo;{" "}
+                  {t.credit!.short || t.credit!.url ? (
+                    <>
+                      (
+                      <a href={t.credit!.short ?? t.credit!.url} target="_blank" rel="noreferrer" className={linkClass}>
+                        {t.credit!.short ? t.credit!.short.replace(/^https?:\/\//, "") : t.credit!.url.replace(/^https?:\/\/(www\.)?([^/]+).*$/, "$2")}
+                      </a>
+                      ){" "}
+                    </>
+                  ) : null}
+                  by{" "}
                   {t.credit!.authorUrl ? (
                     <a href={t.credit!.authorUrl} target="_blank" rel="noreferrer" className={linkClass}>
                       {t.credit!.author}
@@ -438,9 +447,13 @@ const Credits: React.FC = () => {
                     t.credit!.author
                   )}{" "}
                   ·{" "}
-                  <a href={t.credit!.licenseUrl} target="_blank" rel="noreferrer" className={licenceClass}>
-                    {t.credit!.license}
-                  </a>
+                  {t.credit!.licenseUrl ? (
+                    <a href={t.credit!.licenseUrl} target="_blank" rel="noreferrer" className={licenceClass}>
+                      {t.credit!.license}
+                    </a>
+                  ) : (
+                    t.credit!.license
+                  )}
                   <br />
                 </React.Fragment>
               ))}
@@ -755,7 +768,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       id: "mods",
       label: t("mods"),
       // How many packages are switched on, when any are installed
-      detail: modCount > 0 ? t("modsDetail", { count: modCount }) : undefined,
+      badge: modCount > 0 ? t("modsDetail", { count: modCount }) : undefined,
       icon: "mods" as const,
       panel: "mods",
       run: () => openPanel("mods"),
