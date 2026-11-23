@@ -1,12 +1,14 @@
 [
   {
     "date": "2026-11-23",
-    "title": "Most driven circuits and cars, and player numbers on the press page",
+    "title": "11 languages, docs.librecorsa.org, and Most driven circuits and cars",
     "items": [
+      "Added 11 languages: Italian, German, Spanish, French, Brazilian Portuguese, Indonesian, Traditional Chinese, Korean, Vietnamese, Arabic and Turkish. The game and the home page follow your browser's language, or you can pick one under Settings > Display > Interface > Language. In Arabic the menus and Settings lay out right to left, while the race HUD keeps its usual layout.",
+      "Opened docs.librecorsa.org, with guides to controls and wheels, online play, performance, the desktop and Android apps, and porting cars and circuits, and added a security.txt with a private way to report security issues.",
       "Added a Most driven sort to the circuit and car pickers, ranking them by hours driven over the last 30 days, and a Players section on the press page with the hours, laps, drivers and countries counted so far."
     ],
-    "commits": 56,
-    "lastSha": "ee9a432279a96a1ac2452e77056e8a1b5fa838d8"
+    "commits": 97,
+    "lastSha": "43d9f6e77b8ec4813d3652878e177355e74da5fb"
   },
   {
     "date": "2026-11-22",
