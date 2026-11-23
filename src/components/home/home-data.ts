@@ -24,8 +24,8 @@ export interface HomeQualityTexts {
 }
 
 /** The game's badge tones by grade (menu-content-ui.tsx `CIRCUIT_TONE` / `CAR_TONE`): an original circuit is information, not volt */
-export const CIRCUIT_QUALITY_TONE: Record<CircuitQuality, Exclude<BadgeTone, "player">> = { original: "info", sim: "good", sketchfab: "warn" };
-export const CAR_QUALITY_TONE: Record<CarQuality, Exclude<BadgeTone, "player">> = { own: "good", shared: "warn", era: "neutral" };
+export const CIRCUIT_QUALITY_TONE: Record<CircuitQuality, Exclude<BadgeTone, "player">> = { original: "info", sim: "good", sketchfab: "warn", mod: "neutral" };
+export const CAR_QUALITY_TONE: Record<CarQuality, Exclude<BadgeTone, "player">> = { own: "good", shared: "warn", era: "neutral", mod: "neutral" };
 
 /** What the home page is built with: the game's own lists, read when the page is built */
 export interface HomeLayout {

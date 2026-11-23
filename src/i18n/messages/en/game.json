@@ -187,7 +187,10 @@
     "sharedDetail": "Drives on the physics of another car from the same class and era, so it handles like that car rather than its own.",
     "eraBadge": "2026 PHYSICS",
     "era": "Older cars",
-    "eraDetail": "Drives on 2026 physics, so it handles like a 2026 car rather than the way it did in its own season."
+    "eraDetail": "Drives on 2026 physics, so it handles like a 2026 car rather than the way it did in its own season.",
+    "modBadge": "MOD",
+    "mod": "Installed mods",
+    "modDetail": "From a mod package you installed, on one of the game's vehicle models. LibreCorsa hasn't checked it, and its laps stay off the online boards."
   },
   "carClass": {
     "f1": "Formula Open-Wheel",
@@ -209,7 +212,10 @@
     "simDetail": "A hand-built sim circuit, with its own road, kerb and barrier meshes and surface physics.",
     "scanBadge": "SCAN",
     "scan": "Converted scans",
-    "scanDetail": "Converted automatically from a community 3D model: the road, kerbs, run-off and barriers are traced from the mesh, so details can differ from the real venue."
+    "scanDetail": "Converted automatically from a community 3D model: the road, kerbs, run-off and barriers are traced from the mesh, so details can differ from the real venue.",
+    "modBadge": "MOD",
+    "mod": "Installed mods",
+    "modDetail": "From a mod package you installed. LibreCorsa hasn't checked it, and its laps stay off the online boards."
   },
   "circuitType": {
     "permanent": "Permanent",

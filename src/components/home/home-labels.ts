@@ -17,11 +17,13 @@ export function useLocalizedHome(data: HomeData): HomeData {
         original: { badge: t("circuitQuality.originalBadge"), filterLabel: t("circuitQuality.original"), description: t("circuitQuality.originalDetail") },
         sim: { badge: t("circuitQuality.simBadge"), filterLabel: t("circuitQuality.sim"), description: t("circuitQuality.simDetail") },
         sketchfab: { badge: t("circuitQuality.scanBadge"), filterLabel: t("circuitQuality.scan"), description: t("circuitQuality.scanDetail") },
+        mod: { badge: t("circuitQuality.modBadge"), filterLabel: t("circuitQuality.mod"), description: t("circuitQuality.modDetail") },
       },
       cars: {
         own: { badge: t("carQuality.ownBadge"), filterLabel: t("carQuality.own"), description: t("carQuality.ownDetail") },
         shared: { badge: t("carQuality.sharedBadge"), filterLabel: t("carQuality.shared"), description: t("carQuality.sharedDetail") },
         era: { badge: t("carQuality.eraBadge"), filterLabel: t("carQuality.era"), description: t("carQuality.eraDetail") },
+        mod: { badge: t("carQuality.modBadge"), filterLabel: t("carQuality.mod"), description: t("carQuality.modDetail") },
       },
     };
     const type: Record<CircuitType, string> = {
