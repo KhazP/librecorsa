@@ -58,6 +58,7 @@ import { RaceControlBanner } from "./hud/RaceControlBanner";
 import { QualityNotice } from "./hud/QualityNotice";
 import { RaceIncidentFeed } from "./hud/RaceIncidentFeed";
 import { DamageWidget } from "./hud/DamageWidget";
+import { PitStopOverlay } from "./hud/PitStopOverlay";
 import { ReplayBar } from "./hud/ReplayBar";
 import { TouchControls, type TouchCarState, type TouchControlsProps } from "./hud/TouchControls";
 import { getTrackInfo } from "@/lib/track-registry";
@@ -200,6 +201,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** Off the track: the crimson edge glow that breathes behind the HUD, which the renderer draws into the frame */
   onOffTrackGlow?: (on: boolean) => void;
   onChangeTireCompound: (compound: TireCompound) => void;
+  /** Completes a pit stop service (fresh tyres of `compound`, full fuel, damage repaired) */
+  onServicePitStop?: (compound: TireCompound) => void;
   onChangeTyreSetup: (setup: TyreSetup) => void;
   onChangeLivery: (livery: LiveryConfig) => void;
   onToggleRacingLine: () => void;
@@ -961,6 +964,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
       {/* Portalled to the page: places itself bottom right over the MFD and dash, top centre on touch */}
       {props.lapSummary ? <LapSummary {...props.lapSummary} /> : null}
+
+      {!hidden && !editMode ? (
+        <PitStopOverlay
+          telemetry={telemetry}
+          currentCompound={tireCompound}
+          onServicePitStop={props.onServicePitStop}
+        />
+      ) : null}
 
       {props.touchControls && touchCar ? (
         <div className="pointer-events-auto">

@@ -566,6 +566,8 @@ export class DriveSession {
   readonly applySettings: (settings: PlayerSettings) => void;
   /** Puts the tyre compound on the car and its model */
   readonly setTireCompound: (compound: TireCompound) => void;
+  /** Pit stop service: fits a fresh set of `compound`, refills fuel and repairs damage */
+  readonly servicePitStop: (compound: TireCompound) => void;
   /** The garage's tyre and chassis setup, and the live tuner, on the car */
   readonly setTyreSetup: (setup: TyreSetup) => void;
   readonly setChassisSetup: (setup: ChassisSetup) => void;
@@ -1803,6 +1805,13 @@ export class DriveSession {
       physics.tireCompound = compound;
       carRig.setTireCompound(compound);
       this.publish({ tireCompound: compound });
+    };
+    this.servicePitStop = (compound) => {
+      if (disposed) return;
+      this.setTireCompound(compound);
+      physics.servicePitStop?.(compound);
+      aiFieldOf(raceNow())?.repairPlayerDamage?.();
+      mpRaceOf(raceNow())?.damage?.reset();
     };
     this.setTyreSetup = (setup) => {
       if (disposed) return;

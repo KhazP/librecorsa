@@ -1672,6 +1672,22 @@ export class F12026CarSim implements SimulatorCar {
     this.applyColdPressures();
   }
 
+  public servicePitStop(compound: TireCompound): void {
+    this.tireCompound = compound;
+    this.vehicle.setCompound(this.config.compoundSlots[compound]);
+    for (const w of this.vehicle.wheels) {
+      w.wear = 0;
+      w.flatSpotSeverity = 0;
+      w.grainLevel = 0;
+      w.blisterLevel = 0;
+    }
+    this.fuelKg = startingFuelKg(this.setupCar, this.chassis);
+    this.vehicle.setFuelMass(this.fuelKg);
+    this.telemetry.fuelKg = Number(this.fuelKg.toFixed(2));
+    this.telemetry.tireWearPct = [0, 0, 0, 0];
+    this.setDamageEffects(null);
+  }
+
   get assistPreset(): DriverAssistPreset {
     return this._assistPreset;
   }

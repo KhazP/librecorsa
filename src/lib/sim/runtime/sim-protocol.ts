@@ -56,6 +56,7 @@ export const CAR_CALLABLE = [
   "setOvertakingRules",
   "invalidateLap",
   "setDamageEffects",
+  "servicePitStop",
   "setAeroWakeState",
   "setTrackEvolutionSample",
   "setWeatherSample",

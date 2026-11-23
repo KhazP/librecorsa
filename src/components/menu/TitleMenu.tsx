@@ -12,6 +12,8 @@ import { formatLapTime } from "@/components/hud/hud-format";
 import { EngineersGarage } from "./EngineersGarage";
 import { MultiplayerPanel } from "@/components/hud/MultiplayerPanel";
 import { ChallengePanel, type ChallengePanelProps } from "@/components/menu/ChallengePanel";
+import { CareerPanel, type CareerPanelProps } from "@/components/menu/CareerPanel";
+import { getCareerTier, sortedCareerStandings } from "@/lib/sim/career-mode";
 import { timeLeftLabel } from "@/lib/net/weekly-challenge";
 import { LeaderboardPanel } from "@/components/hud/LeaderboardPanel";
 import { buildHudMap } from "@/components/hud/styles/hud-style-parts";
@@ -59,7 +61,7 @@ import { LiveLine } from "./LiveLine";
 import { UpdateReady } from "./UpdateReady";
 import { TitleMusic } from "./TitleMusic";
 
-type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "request";
+type TitlePanel = "race" | "career" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "request";
 
 /**
  * How far a panel reaches beside the rail, in CSS px (the big-screen zoom scales them): each as wide as its content
@@ -70,6 +72,7 @@ type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multip
  */
 const PANEL_WIDTH = "lg:grid-cols-[240px_minmax(0,1160px)]";
 const PANEL_COLUMNS: Partial<Record<TitlePanel, string>> = {
+  career: "lg:grid-cols-[240px_minmax(0,1280px)]",
   circuit: "lg:grid-cols-[240px_minmax(0,1480px)]",
   car: "lg:grid-cols-[240px_minmax(0,1480px)]",
   leaderboard: "lg:grid-cols-[240px_minmax(0,1200px)]",
@@ -105,6 +108,8 @@ export interface TitleMenuProps extends PauseMenuProps {
   onSelectTrack?: (id: string) => void | Promise<void>;
   /** This week's challenge (only with an online board) */
   challengePanel?: ChallengePanelProps;
+  /** Single-player Career / Championship progression */
+  careerPanel?: CareerPanelProps;
   /** The note after a drive (support-prompt.ts): the circuit and car just driven whose makers take donations */
   supportNote?: PromptItem[] | null;
   onCloseSupportNote?: () => void;
@@ -672,6 +677,29 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       // The race is set up first; its panel has the start (without a setter there is nothing to set: straight to the lights)
       ...(props.onChangeRaceSetup ? { panel: "race" as const, run: () => openPanel("race") } : { run: onRaceAi }),
     } satisfies MenuItem]),
+    ...(props.careerPanel && !hillClimb
+      ? (() => {
+          const c = props.careerPanel.career;
+          const tier = getCareerTier(c.tierId);
+          const standings = sortedCareerStandings(c);
+          const pIdx = standings.findIndex((s) => s.isPlayer);
+          const pPts = pIdx >= 0 ? standings[pIdx].points : 0;
+          const roundLabel = c.seasonCompleted
+            ? "Season complete"
+            : `Round ${c.currentRoundIndex + 1}/${c.rounds.length}`;
+          return [
+            {
+              id: "career",
+              label: "Career",
+              detail: `${tier.title} · ${roundLabel} · P${pIdx >= 0 ? pIdx + 1 : "-"} (${pPts} pts)`,
+              icon: "chequered" as const,
+              panel: "career" as const,
+              run: () => openPanel("career"),
+              badge: `S${c.seasonNumber}`,
+            } satisfies MenuItem,
+          ];
+        })()
+      : []),
     {
       id: "multiplayer",
       label: "Multiplayer",
@@ -948,7 +976,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             {/* Below lg the rail would stack 13 rows above the panel: the panel takes the screen, Close goes back */}
             <nav className="flex flex-col gap-0.5 max-lg:hidden" data-nav-zone="rail" aria-label="Main menu">
               <HeroAction id={drive.id} label={drive.label} onClick={drive.run!} size="slim" />
-              {byId(["race", "multiplayer", "challenge"]).map((item) => row(item, "md", true))}
+              {byId(["race", "career", "multiplayer", "challenge"]).map((item) => row(item, "md", true))}
               <div aria-hidden className="h-3" />
               {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md", true))}
               <div aria-hidden className="h-3" />
@@ -1035,6 +1063,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       }
                     />
                   ) : null}
+                  {panel === "career" && props.careerPanel ? <CareerPanel {...props.careerPanel} /> : null}
                   {panel === "leaderboard" && props.leaderboardPanel ? (
                     <LeaderboardPanel {...props.leaderboardPanel} jumpTarget={leaderboardJump} />
                   ) : null}
@@ -1062,7 +1091,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             >
               <div className="flex flex-col gap-1 phone:gap-0.5">
                 <HeroAction id={drive.id} label={drive.label} detail={drive.detail} onClick={drive.run!} />
-                {byId(["race", "multiplayer", "challenge"]).map((item) => row(item, "lg"))}
+                {byId(["race", "career", "multiplayer", "challenge"]).map((item) => row(item, "lg"))}
               </div>
               <div className="flex flex-col gap-3 pt-4 compact:pt-2 short:pt-0">
                 <div className="grid grid-cols-1 gap-1 min-[360px]:grid-cols-2">

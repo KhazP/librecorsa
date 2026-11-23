@@ -77,6 +77,16 @@ import { GpuLostNotice } from "@/components/menu/GpuLostNotice";
 import { NowPlayingToast } from "@/components/hud/NowPlayingToast";
 import { browserStore, lostRecently, probeRenderer, settleLoss } from "@/lib/render/gpu-health";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
+import {
+  createInitialCareerState,
+  getCareerTier,
+  loadCareerState,
+  recordCareerRoundResult,
+  saveCareerState,
+  syncPlayerIntoCareer,
+  type CareerState,
+  type CareerTierId,
+} from "@/lib/sim/career-mode";
 import type { PodiumUi } from "@/lib/render/podium-shot";
 import { useRaceHistory } from "@/components/hud/useRaceHistory";
 import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type CameraNudge, type NudgeView } from "@/lib/settings/camera-nudges";
@@ -139,6 +149,8 @@ let pendingQualifying: { id: string; trackId: string } | null = null;
  * whether as a race against the AI (a scheduled race nobody else entered) rather than practice
  */
 let pendingChallenge: { id: string; race: boolean } | null = null;
+/** A Career Mode round waiting for its circuit to finish loading before starting */
+let pendingCareerRound: { trackId: string } | null = null;
 /**
  * The player's own assists, realism and weather while a challenge or a scheduled race has the week's in their place:
  * put back when they leave the car for the menus. (Outside the component: going to the week's circuit reloads it.)
@@ -497,6 +509,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, [gamepadRumble]);
 
   const handleTireCompoundChange = useCallback((compound: TireCompound) => session?.setTireCompound(compound), [session]);
+  const handleServicePitStop = useCallback((compound: TireCompound) => session?.servicePitStop(compound), [session]);
 
   const handleChangeTyreSetup = useCallback((next: TyreSetup) => {
     session?.setTyreSetup(next);
@@ -1340,13 +1353,110 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, []);
 
   const [localPeerId, setLocalPeerId] = useState("");
-  /** The title menu's panel on its next visit (back to the lobby after a race); used up once the title is left */
-  const [titleInitialPanel, setTitleInitialPanel] = useState<"multiplayer" | null>(null);
+  /** The title menu's panel on its next visit (back to the lobby or career after a race); used up once the title is left */
+  const [titleInitialPanel, setTitleInitialPanel] = useState<"multiplayer" | "career" | null>(null);
   const handleBackToLobby = useCallback(() => {
     // The room's lobby, or after a scheduled race the open races: both are on the Multiplayer panel
     setTitleInitialPanel("multiplayer");
     leaveSession();
   }, [leaveSession]);
+
+  // ---- Career / Championship Mode
+  const [careerState, setCareerState] = useState<CareerState>(() =>
+    createInitialCareerState("rookie", DEFAULT_PLAYER_SETTINGS.profile)
+  );
+  const [careerRaceActive, setCareerRaceActive] = useState(false);
+  const careerRecordedRunIdRef = useRef<number>(-1);
+
+  useEffect(() => {
+    if (!settingsHydrated) return;
+    setCareerState(loadCareerState(settings.profile));
+  }, [settingsHydrated]);
+
+  useEffect(() => {
+    if (!settingsHydrated) return;
+    setCareerState((prev) => {
+      const synced = syncPlayerIntoCareer(prev, settings.profile);
+      if (synced !== prev) saveCareerState(synced);
+      return synced;
+    });
+  }, [settingsHydrated, settings.profile]);
+
+  const handleSelectCareerTier = useCallback((tierId: CareerTierId) => {
+    const fresh = createInitialCareerState(tierId, settingsRef.current.profile, 1);
+    saveCareerState(fresh);
+    setCareerState(fresh);
+  }, []);
+
+  const handleResetCareerSeason = useCallback((nextSeason = false) => {
+    setCareerState((prev) => {
+      const fresh = createInitialCareerState(
+        prev.tierId,
+        settingsRef.current.profile,
+        nextSeason ? prev.seasonNumber + 1 : prev.seasonNumber
+      );
+      saveCareerState(fresh);
+      return fresh;
+    });
+  }, []);
+
+  const launchCareerRoundOnLoadedTrack = useCallback(() => {
+    if (!session) return;
+    const currentCareer = loadCareerState(settingsRef.current.profile);
+    setCareerState(currentCareer);
+    const tier = getCareerTier(currentCareer.tierId);
+    const round = currentCareer.rounds[currentCareer.currentRoundIndex];
+    if (!round || currentCareer.seasonCompleted) return;
+    setSettings((prev) => ({
+      ...prev,
+      aiSkill: tier.aiSkill,
+      race: {
+        ...prev.race,
+        laps: round.laps,
+        opponents: tier.opponents,
+      },
+    }));
+    const field = aiFieldOf(session.race) ?? session.takeAiField();
+    field.setSkill(tier.aiSkill);
+    const raceSetup: RaceSetup = {
+      ...settingsRef.current.race,
+      laps: round.laps,
+      opponents: tier.opponents,
+    };
+    startSession({ kind: "ai", field });
+    startAiRace(field, raceSetup, settingsRef.current.profile);
+    setCareerRaceActive(true);
+    setLaunchHint(true);
+  }, [session, startSession]);
+
+  const handleStartCareerRound = useCallback(() => {
+    const currentCareer = loadCareerState(settingsRef.current.profile);
+    const round = currentCareer.rounds[currentCareer.currentRoundIndex];
+    if (!round || currentCareer.seasonCompleted) return;
+    if (round.trackId !== trackId && onSelectTrack && TRACKS.some((t) => t.id === round.trackId)) {
+      pendingCareerRound = { trackId: round.trackId };
+      void onSelectTrack(round.trackId);
+      return;
+    }
+    launchCareerRoundOnLoadedTrack();
+  }, [trackId, onSelectTrack, launchCareerRoundOnLoadedTrack]);
+
+  const handleBackToCareer = useCallback(() => {
+    setCareerRaceActive(false);
+    setTitleInitialPanel("career");
+    leaveSession();
+  }, [leaveSession]);
+
+  // Record Career Championship points as soon as the player finishes a Career round
+  useEffect(() => {
+    if (!careerRaceActive || phase !== "driving") return;
+    const race = telemetry.race;
+    if (!race || race.phase !== "finished" || !race.results || race.results.length === 0) return;
+    const runId = telemetry.runId ?? 0;
+    if (careerRecordedRunIdRef.current === runId) return;
+    careerRecordedRunIdRef.current = runId;
+    setCareerState((prev) => recordCareerRoundResult(prev, race.results!));
+  }, [careerRaceActive, phase, telemetry.race, telemetry.runId]);
 
   /** The Settings screen, over the title menu or the pause menu, and where it opens */
   const [settingsOpen, setSettingsOpen] = useState<{ from: "title" | "pause"; category?: SettingsCategory; tab?: string } | null>(null);
@@ -1380,6 +1490,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** Title "Drive" / "Race AI": the first time through, the setup comes first */
   const handleTitleStart = useCallback(
     (race: boolean) => {
+      setCareerRaceActive(false);
       if (onboarded) {
         startDriving(race);
         return;
@@ -1772,6 +1883,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     driveChallenge(asked.race);
   }, [assetsReady, trackId, session, driveChallenge]);
 
+  // Career round requested from another circuit, now that this circuit has loaded
+  useEffect(() => {
+    if (!assetsReady || !pendingCareerRound) return;
+    const asked = pendingCareerRound;
+    pendingCareerRound = null;
+    if (asked.trackId !== trackId) return;
+    if (phaseRef.current === "loading") {
+      session?.unlockAudio();
+      setLoadingVisible(false);
+    }
+    launchCareerRoundOnLoadedTrack();
+  }, [assetsReady, trackId, session, launchCareerRoundOnLoadedTrack]);
+
   // The race the host started before this circuit loaded
   useEffect(() => {
     if (!assetsReady || !pendingRaceStart) return;
@@ -2068,6 +2192,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onChangeAeroPreset: handleAeroPresetChange,
     onChangeAssistPreset: handleAssistPresetChange,
     onChangeTireCompound: handleTireCompoundChange,
+    onServicePitStop: handleServicePitStop,
     tyreSetup,
     defaultTyreSetup,
     onChangeTyreSetup: handleChangeTyreSetup,
@@ -2311,8 +2436,20 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onRestartRace={
             raceKind === "mp" && !isMpHost ? undefined : () => handleResetCar(false)
           }
-          onBackToLobby={raceKind === "mp" ? handleBackToLobby : undefined}
-          backToLobbyLabel={inScheduledRace ? "Back to the races" : undefined}
+          onBackToLobby={
+            raceKind === "mp"
+              ? handleBackToLobby
+              : careerRaceActive
+                ? handleBackToCareer
+                : undefined
+          }
+          backToLobbyLabel={
+            inScheduledRace
+              ? "Back to the races"
+              : careerRaceActive
+                ? "Career Standings"
+                : undefined
+          }
           raceEnd={{
             podium: podiumUi,
             onSkipPodium: () => session?.podium.skip(),
@@ -2387,6 +2524,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onOpenSettings={(category?: SettingsCategory) => openSettings("title", category)}
           trackId={trackId}
           onSelectTrack={onSelectTrack}
+          careerPanel={{
+            career: careerState,
+            carTitle: carById(carId).title,
+            onSelectTier: handleSelectCareerTier,
+            onResetSeason: handleResetCareerSeason,
+            onStartRound: handleStartCareerRound,
+          }}
           challengePanel={
             boardOn
               ? {
