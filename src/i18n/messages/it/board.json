@@ -11,7 +11,7 @@
     "myPlace": "Sei P{rank} su {total}"
   },
   "input": {
-    "drivenWith": "Guidato con: {input, select, keyboard {tastiera} controller {controller} wheel {volante} other {touch screen}}"
+    "drivenWith": "Guidato con: {input, select, keyboard {tastiera} controller {controller} wheel {volante} other {touchscreen}}"
   },
   "conditions": {
     "full": "Completo",
@@ -61,7 +61,7 @@
     "emptyFiltered": "Nessun giro corrisponde a questi filtri.",
     "emptyCircuit": "Ancora nessun tempo online su {circuit}.",
     "emptyCar": "Ancora nessun tempo online per questo circuito e questa auto.",
-    "refreshFailed": "Aggiornamento non riuscito. Mostro i tempi salvati.",
+    "refreshFailed": "Aggiornamento non riuscito. Visualizzati i tempi salvati.",
     "tableLabel": "Tempi online, {board}, pagina {page} di {pages}",
     "pages": "Pagine",
     "previousPage": "Pagina precedente",
@@ -87,9 +87,9 @@
     "classRecordHolders": "Detentori del record di giro più veloce: {class}",
     "mostDecorated": "I più decorati",
     "mostDecoratedDrivers": "Piloti più decorati",
-    "goldCount": "{count, plural, other {# d’oro}}",
-    "silverCount": "{count, plural, other {# d’argento}}",
-    "bronzeCount": "{count, plural, other {# di bronzo}}",
+    "goldCount": "{count, plural, one {# medaglia d’oro} other {# medaglie d’oro}}",
+    "silverCount": "{count, plural, one {# medaglia d’argento} other {# medaglie d’argento}}",
+    "bronzeCount": "{count, plural, one {# medaglia di bronzo} other {# medaglie di bronzo}}",
     "weeklyPodiums": "Podi settimanali",
     "physicsFilter": "Filtro versione della fisica",
     "allVersions": "Tutte"
@@ -118,7 +118,7 @@
     "close": "Chiudi i giri più veloci",
     "scopeCount": "{scope} ({count})",
     "allClasses": "Tutte le classi ({count})",
-    "boardDrivers": "{count, plural, other {{drivers} piloti in questa classifica}}",
+    "boardDrivers": "{count, plural, one {{drivers} pilota in questa classifica} other {{drivers} piloti in questa classifica}}",
     "driversShort": "{drivers} pil.",
     "manual": "+{count} assegnati manualmente",
     "manualNote": "+{count} assegnati manualmente — {note}",

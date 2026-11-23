@@ -38,7 +38,7 @@
     "faceButton": "{position, select, bottom {Tasto inferiore} right {Tasto destro} left {Tasto sinistro} other {Tasto superiore}}",
     "dpad": "D-pad",
     "dpadDirection": "{direction, select, up {D-pad su} down {D-pad giù} left {D-pad sinistra} right {D-pad destra} horizontal {D-pad sinistra e destra} other {D-pad su e giù}}",
-    "shoulder": "{button, select, lb {Dorsale sinistro} rb {Dorsale destro} lt {Grilletto sinistro} other {Grilletto destro}} ({name})",
+    "shoulder": "{button, select, lb {Dorsale sinistro} rb {Dorsale destro} lt {Trigger sinistro} other {Trigger destro}} ({name})",
     "touchpad": "Touchpad",
     "stick": "{side, select, left {Stick sinistro} other {Stick destro}}",
     "stickPress": "{side, select, left {Pressione stick sinistro} other {Pressione stick destro}} ({name})",

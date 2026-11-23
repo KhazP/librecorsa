@@ -121,11 +121,11 @@
         "keyboard": "Assegna la frizione in Comandi > Tastiera"
       },
       "overridden": {
-        "gearbox": "Disattivata temporaneamente (richiede il cambio manuale); riattivala per ripristinare il predefinito",
-        "wheel": "Disattivata temporaneamente (assegna la frizione in comandi > volante); riattivala per ripristinare il predefinito",
-        "controller": "Disattivata temporaneamente (assegna la frizione in comandi > controller); riattivala per ripristinare il predefinito",
-        "touch": "Disattivata temporaneamente (non disponibile con i comandi touch); riattivala per ripristinare il predefinito",
-        "keyboard": "Disattivata temporaneamente (assegna la frizione in comandi > tastiera); riattivala per ripristinare il predefinito"
+        "gearbox": "Temporaneamente forzata (richiede il cambio manuale); attivala per ripristinare il predefinito",
+        "wheel": "Temporaneamente forzata (assegna la frizione in comandi > volante); attivala per ripristinare il predefinito",
+        "controller": "Temporaneamente forzata (assegna la frizione in comandi > controller); attivala per ripristinare il predefinito",
+        "touch": "Temporaneamente forzata (non disponibile con i comandi touch); attivala per ripristinare il predefinito",
+        "keyboard": "Temporaneamente forzata (assegna la frizione in comandi > tastiera); attivala per ripristinare il predefinito"
       }
     },
     "gamepadAssist": {
@@ -172,7 +172,7 @@
     },
     "steerRiseS": {
       "label": "Morbidezza dello sterzo",
-      "hint": "Più basso è più preciso"
+      "hint": "Più basso è più reattivo"
     },
     "steerReturnS": {
       "label": "Ritorno dello sterzo"
@@ -258,7 +258,7 @@
     },
     "ffbGain": {
       "label": "Intensità",
-      "hintPerCar": "Sostituita dal guadagno per auto ({gain}) più sotto"
+      "hintPerCar": "Sostituita dall’intensità per auto ({gain}) più sotto"
     },
     "ffbDamping": {
       "label": "Smorzamento"
@@ -287,7 +287,7 @@
       "hintPerCar": "Sostituita dalla forza minima per auto"
     },
     "ffbFilterS": {
-      "label": "Smorzamento del segnale"
+      "label": "Filtro del segnale"
     },
     "ffbDownforceComp": {
       "label": "Compensazione deportanza",
@@ -325,8 +325,8 @@
     },
     "sharpLow": {
       "label": "Bassa nitida",
-      "hint": "Disegna Bassa a risoluzione Media",
-      "hintAuto": "Disegna Bassa a risoluzione Media; la qualità automatica può disattivarla",
+      "hint": "Renderizza Bassa a risoluzione Media",
+      "hintAuto": "Renderizza Bassa a risoluzione Media; la qualità automatica può disattivarla",
       "off": "Richiede Qualità impostata su Bassa"
     },
     "renderScale": {
@@ -552,7 +552,7 @@
       "resetSeatsButton": "Reimposta",
       "resetSeatsTitle": "Reimpostare le posizioni dei sedili?",
       "resetSeatsConfirm": "Reimposta tutto",
-      "resetSeatsBody": "Reimposta gli scostamenti del sedile nell’abitacolo e sul cruscotto per tutte le auto."
+      "resetSeatsBody": "Reimposta le regolazioni del sedile per vista abitacolo e cruscotto di tutte le auto."
     },
     "interface": {
       "language": "Lingua",

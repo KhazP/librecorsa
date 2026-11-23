@@ -13,8 +13,8 @@
     "overcastStorm": "Coperto e temporale"
   },
   "weather": {
-    "nodeStart": "Via",
-    "nodeFinish": "Arrivo",
+    "nodeStart": "Inizio",
+    "nodeFinish": "Fine",
     "clear": "Sereno",
     "clearDetail": "Asciutto, soleggiato",
     "overcast": "Coperto",
@@ -38,16 +38,16 @@
     "night": "Notte"
   },
   "raceStart": {
-    "assisted": "Assistita",
+    "assisted": "Assistito",
     "manual": "Manuale",
     "assistedHint": "Ferma in griglia fino allo spegnimento dei semafori",
-    "manualHint": "Tieni frizione e giri, rilascia allo spegnimento dei semafori (falsa partenza: +5 s / +10 s)"
+    "manualHint": "Tieni la frizione e porta su i giri, rilascia allo spegnimento dei semafori (falsa partenza: +5 s / +10 s)"
   },
   "realism": {
     "casual": "Casual",
     "casualDetail": "Nessuna usura gomme, temperature gomme permissive, pioggia più lieve",
     "standard": "Standard",
-    "standardDetail": "Usura gomme attiva, temperature gomme attenuate, quasi tutta la pioggia",
+    "standardDetail": "Usura gomme attiva, temperature gomme attenuate, effetti pioggia quasi completi",
     "full": "Completo",
     "fullDetail": "Modello completo di gomme e bagnato, gomme e freni freddi in uscita dal box"
   },
@@ -56,8 +56,8 @@
     "openWheel": "Monoposto",
     "endurance": "Endurance",
     "autoHint": "Regole monoposto per le monoposto, endurance per tutte le altre",
-    "openWheelHint": "Limiti della pista a infrazioni: 4 sono +5 s, 8 sono +10 s, 12 la squalifica",
-    "enduranceHint": "Limiti della pista a punti ponderati: 5 sono +5 s, 10 sono +10 s, 15 la squalifica",
+    "openWheelHint": "Limiti della pista a infrazioni: 4 valgono +5 s, 8 valgono +10 s, 12 la squalifica",
+    "enduranceHint": "Limiti della pista a punti ponderati: 5 valgono +5 s, 10 valgono +10 s, 15 la squalifica",
     "trackLimitsOn": "On",
     "trackLimitsOff": "Off"
   },
@@ -84,15 +84,15 @@
     "aggressionHard": "Dura"
   },
   "grip": {
-    "green": "Nuova",
-    "greenDetail": "Asfalto appena lavato, gomma minima",
+    "green": "Verde",
+    "greenDetail": "Asfalto appena lavato, gommatura minima",
     "light": "Leggera",
-    "lightDetail": "Gomma da inizio weekend",
+    "lightDetail": "Gommatura da inizio weekend",
     "medium": "Media",
-    "mediumDetail": "Traiettoria con gomma moderata",
+    "mediumDetail": "Traiettoria moderatamente gommata",
     "natural": "Naturale",
     "naturalDetail": "Traiettoria standard pronta per la gara",
-    "heavy": "Pesante",
+    "heavy": "Elevata",
     "heavyDetail": "Traiettoria da endurance ben gommata",
     "saturated": "Satura",
     "saturatedDetail": "Traiettoria scura completamente satura di gomma"
@@ -179,13 +179,13 @@
   "carQuality": {
     "ownBadge": "FISICA DEDICATA",
     "own": "Fisica dedicata",
-    "ownDetail": "Guida con una fisica creata per questa auto.",
+    "ownDetail": "Usa una fisica creata per quest’auto.",
     "sharedBadge": "FISICA CONDIVISA",
     "shared": "Fisica condivisa",
-    "sharedDetail": "Guida con la fisica di un’altra auto della stessa classe ed epoca, quindi si comporta come quell’auto e non come la propria.",
+    "sharedDetail": "Usa la fisica di un’altra auto della stessa classe ed epoca, quindi si comporta come quell’auto invece di avere una fisica propria.",
     "eraBadge": "FISICA 2026",
-    "era": "Auto storiche",
-    "eraDetail": "Guida con la fisica 2026, quindi si comporta come un’auto del 2026 e non come nella sua stagione."
+    "era": "Auto precedenti",
+    "eraDetail": "Usa la fisica 2026, quindi si comporta come un’auto del 2026 e non come nella sua stagione."
   },
   "carClass": {
     "f1": "Formula monoposto",
@@ -204,7 +204,7 @@
     "originalDetail": "Creato per LibreCorsa con superfici, cordoli, altimetria e scenografia a bordo pista propri.",
     "simBadge": "LIVELLO SIM",
     "sim": "Circuiti livello sim",
-    "simDetail": "Un circuito sim costruito a mano, con mesh di strada, cordoli e barriere e fisica delle superfici propri.",
+    "simDetail": "Un circuito sim costruito a mano, con mesh di strada, cordoli e barriere e fisica delle superfici proprie.",
     "scanBadge": "SCANSIONE",
     "scan": "Scansioni convertite",
     "scanDetail": "Convertito automaticamente da un modello 3D della community: strada, cordoli, vie di fuga e barriere sono ricavati dalla mesh, quindi i dettagli possono differire dal circuito reale."
@@ -237,7 +237,7 @@
     "steerLeft": "Sterza a sinistra",
     "steerRight": "Sterza a destra",
     "boostHold": "Boost (tieni premuto)",
-    "boostLatch": "Boost (alternato)",
+    "boostLatch": "Boost (on/off)",
     "aero": "Aerodinamica attiva X / Z",
     "shiftUp": "Marcia su",
     "shiftDown": "Marcia giù",
@@ -288,7 +288,7 @@
     "brake": "Freno",
     "clutch": "Frizione",
     "notSet": "non assegnato",
-    "trigger": "grilletto",
+    "trigger": "trigger",
     "stick": "stick {side, select, left {sinistro} other {destro}} {way, select, up {su} down {giù} left {a sinistra} other {a destra}}",
     "pressThrottle": "Premi l’acceleratore",
     "holdButton": "Tieni premuto {button}",
@@ -339,15 +339,15 @@
   },
   "steeringAssist": {
     "selfSteerStrength": "Autosterzo e controsterzo",
-    "selfSteerStrengthHint": "Quanto le ruote seguono la direzione di marcia dell’auto e correggono gli slittamenti del posteriore",
+    "selfSteerStrengthHint": "Quanto le ruote seguono la direzione di marcia dell’auto e correggono le sbandate del posteriore",
     "dampingStrength": "Smorzamento d’imbardata",
-    "dampingStrengthHint": "Calma i ritorni bruschi e le oscillazioni a pendolo mentre recuperi uno slittamento",
+    "dampingStrengthHint": "Calma i ritorni bruschi e le oscillazioni a pendolo mentre recuperi una sbandata",
     "speedSensitivity": "Calma ad alta velocità",
     "speedSensitivityHint": "Quanto lo sterzo rallenta con la velocità, così i piccoli input restano morbidi",
     "slipLimitMargin": "Margine di slittamento gomme",
     "slipLimitMarginHint": "Negativo: cuscinetto di sottosterzo più sicuro · Positivo: lascia le anteriori oltre il picco di slittamento",
     "maxSelfSteerAngleDeg": "Controsterzo massimo",
-    "maxSelfSteerAngleDegHint": "Massimo angolo che l’aiuto imprime da solo alle ruote per recuperare uno slittamento",
+    "maxSelfSteerAngleDegHint": "Massimo angolo che l’aiuto imprime da solo alle ruote per recuperare una sbandata",
     "presetBalanced": "Bilanciato",
     "presetStable": "Stabile",
     "presetLoose": "Libero",
@@ -435,8 +435,8 @@
     "rearRightPressure": "Pressione posteriore destra",
     "tyreBlankets": "Termocoperte",
     "detached": "Scollegata",
-    "toeIn": "{angle} dentro",
-    "toeOut": "{angle} fuori",
+    "toeIn": "{angle} chiusa",
+    "toeOut": "{angle} aperta",
     "dialOff": "OFF",
     "blanketsOn": "On",
     "blanketsOff": "Off",
@@ -466,20 +466,20 @@
     "thirdElements": "Terze molle",
     "thirdElementsShort": "3ª",
     "aero": "Aero",
-    "fuelShort": "Carburante",
-    "dampersShort": "Ammortizzatori",
+    "fuelShort": "Carb.",
+    "dampersShort": "Ammort.",
     "brakesShort": "Freni",
     "tyresShort": "Gomme",
     "aeroShort": "Aero"
   },
   "setupFx": {
     "frontWing": {
-      "more": "Più aderenza davanti ad alta velocità, retro più scarico",
-      "less": "Retro più stabile, più sottosterzo ad alta velocità"
+      "more": "Più aderenza anteriore ad alta velocità, posteriore più scarico",
+      "less": "Posteriore più stabile, più sottosterzo ad alta velocità"
     },
     "rearWing": {
       "more": "Più stabilità e trazione, più resistenza",
-      "less": "Più veloce nei rettilinei, retro nervoso"
+      "less": "Più veloce nei rettilinei, posteriore nervoso"
     },
     "diffOn": {
       "more": "Più spinta, sovrasterzo in potenza",
@@ -490,7 +490,7 @@
       "less": "Ruota in inserimento, può sembrare instabile"
     },
     "engineBraking": {
-      "more": "Più frenata al retro in rilascio, ruota",
+      "more": "Più frenata al posteriore in rilascio, ruota",
       "less": "Più calma in rilascio, frenate più lunghe"
     },
     "camberFront": {
@@ -498,7 +498,7 @@
       "less": "Frenata migliore, usura uniforme"
     },
     "camberRear": {
-      "more": "Più aderenza laterale al retro",
+      "more": "Più aderenza laterale al posteriore",
       "less": "Trazione migliore in uscita dalle curve lente"
     },
     "toeFront": {
@@ -506,7 +506,7 @@
       "less": "Inserimento più pronto, nervosa ad alta velocità"
     },
     "toeRear": {
-      "more": "Retro stabile, un po’ più di resistenza",
+      "more": "Posteriore stabile, un po’ più di resistenza",
       "less": "Ruota di più, meno stabile"
     },
     "springFront": {
@@ -523,18 +523,18 @@
     },
     "arbRear": {
       "more": "Più rotazione, meno trazione in uscita",
-      "less": "Più aderenza al retro, più sottosterzo"
+      "less": "Più aderenza al posteriore, più sottosterzo"
     },
     "rideFront": {
       "more": "Più sicura sui cordoli, meno deportanza",
       "less": "Più deportanza, il fondo può stallare"
     },
     "rideRear": {
-      "more": "Più inclinazione: più pronta, retro più scarico",
-      "less": "Retro più calmo, più sottosterzo"
+      "more": "Più inclinazione: più pronta, posteriore più scarico",
+      "less": "Posteriore più calmo, più sottosterzo"
     },
     "brakePressure": {
-      "more": "Frenate più corte, bloccaggio prima",
+      "more": "Frenate più corte, blocca prima",
       "less": "Più facile da dosare, frenate più lunghe"
     },
     "bias": {
@@ -546,8 +546,8 @@
       "less": "Il bilanciamento resta fermo al rilascio"
     },
     "coldPsi": {
-      "more": "Si scalda prima, meno aderenza di picco",
-      "less": "Più aderenza, si scalda più lentamente"
+      "more": "Si scaldano prima, meno aderenza di picco",
+      "less": "Più aderenza, si scaldano più lentamente"
     },
     "blankets": {
       "more": "Gomme calde dalla prima curva",
@@ -555,7 +555,7 @@
     },
     "tc": {
       "more": "Meno pattinamento, uscite più lente",
-      "less": "Uscite più veloci, il retro può scappare"
+      "less": "Uscite più veloci, il posteriore può scappare"
     },
     "tc2": {
       "more": "Taglio netto: corregge gli slittamenti con decisione",
@@ -583,14 +583,14 @@
     },
     "bumpStopRate": {
       "more": "Più rigido quando arriva sui tamponi",
-      "less": "Atterraggio più morbido sui tamponi"
+      "less": "Appoggio più morbido sui tamponi"
     },
     "bumpStopRange": {
       "more": "Più corsa prima dei tamponi",
       "less": "Arriva prima sui tamponi, assetto più piatto"
     },
     "preload": {
-      "more": "Stabile nelle curve veloci, spinge in quelle lente",
+      "more": "Stabile nelle curve veloci, sottosterza in quelle lente",
       "less": "Ruota in inserimento, uscite più scariche"
     },
     "bump": {
@@ -619,7 +619,7 @@
     },
     "radiator": {
       "more": "Motore più freddo, più resistenza",
-      "less": "Meno resistenza, il motore va caldo"
+      "less": "Meno resistenza, il motore scalda di più"
     },
     "gearSet": {
       "more": "Rapporti lunghi: velocità massima sui rettilinei lunghi",
@@ -638,16 +638,16 @@
       "less": "Più corsa libera, più rollio"
     },
     "tcSlipAngle": {
-      "more": "Taglia prima quando il retro scivola",
-      "less": "Lascia scivolare di più il retro in potenza"
+      "more": "Taglia prima quando il posteriore scivola",
+      "less": "Lascia scivolare di più il posteriore in potenza"
     },
     "motorDeploy": {
       "more": "Più spinta elettrica, scarica la batteria",
       "less": "Risparmia carica, meno spinta"
     },
     "regen": {
-      "more": "Più carica recuperata, più frenata al retro",
-      "less": "Retro più calmo in frenata, meno carica"
+      "more": "Più carica recuperata, più frenata al posteriore",
+      "less": "Posteriore più calmo in frenata, meno carica"
     },
     "fuel": {
       "more": "Stint più lungo, più pesante e lenta",
@@ -691,13 +691,13 @@
     "secondsGained": "{seconds} s guadagnati",
     "lapDeleted": "Giro cancellato",
     "wallDeleted": "Contatto con il muro · giro cancellato",
-    "rodeWallBeforeLine": "Muro sfiorato prima della linea",
+    "rodeWallBeforeLine": "Strisciato sul muro prima della linea",
     "limitsDeleted": "Limiti della pista · giro cancellato",
     "offBeforeLine": "Fuori pista prima della linea",
     "nextLapToo": "Anche il giro successivo",
     "offTrack": "Fuori pista",
     "touchedBarrier": "Barriera toccata",
-    "rodeWall": "Muro sfiorato",
+    "rodeWall": "Strisciato sul muro",
     "positionHandedBack": "Posizione restituita",
     "advantageGivenBack": "Vantaggio restituito",
     "noFurtherAction": "Nessun ulteriore provvedimento",
@@ -796,14 +796,14 @@
     "shaders": "Shader"
   },
   "session": {
-    "wheelDisconnected": "Volante scollegato. Ricollegalo, oppure riprendi per guidare con ciò che resta.",
+    "wheelDisconnected": "Volante scollegato. Ricollegalo, oppure riprendi per guidare con i comandi rimasti.",
     "bigJumpStart": "Falsa partenza · molto fuori dalla posizione in griglia",
     "jumpStart": "Falsa partenza",
     "clutchGearUp": "Marcia su",
-    "clutchPaddle": "paddle di cambiata su"
+    "clutchPaddle": "paddle marcia su"
   },
   "driverKey": {
-    "notAKeyFile": "Non è un file di chiave pilota",
+    "notAKeyFile": "Non è un file di chiave del pilota",
     "blocked": "Questo browser ne blocca il salvataggio"
   },
   "simulator": {
@@ -818,7 +818,7 @@
     "keyImportedFor": "Chiave importata per {name}. I caricamenti da qui la usano.",
     "keyImported": "Chiave importata. I caricamenti da qui la usano.",
     "launchWheel": "Acceleratore per partire",
-    "launchWheelSeat": "Acceleratore per partire · tieni premuta la camera per il sedile",
+    "launchWheelSeat": "Acceleratore per partire · tieni premuto Camera per il sedile",
     "launchPad": "{press} per partire",
     "launchPadSeat": "{press} per partire · tieni premuto {button} per il sedile",
     "launchTouch": "Tieni premuto l’acceleratore per partire",
@@ -854,7 +854,7 @@
     "altitude": "Alt {height}",
     "grade": "PENDENZA {grade}%",
     "profileStart": "Partenza {height}",
-    "profileStartFinish": "S/F {height}"
+    "profileStartFinish": "P/A {height}"
   },
   "source": {
     "sourceOf": "Fonte di {title}",

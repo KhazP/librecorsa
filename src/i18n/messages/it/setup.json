@@ -70,7 +70,7 @@
     "pressButton": "Premi un pulsante",
     "add": "Aggiungi",
     "clutch": "Frizione",
-    "clutchHintSet": "Tenuto premuto apre la frizione: accelera da fermo, falla slittare alla partenza",
+    "clutchHintSet": "Tenuto premuto stacca la frizione: accelera da fermo, modulala alla partenza",
     "clutchHintUnset": "Facoltativo. L’auto gestisce da sola la frizione finché non la premi",
     "pressForClutch": "Premi un pulsante per la frizione",
     "clutchAria": "Frizione: {source}. Cambia",
@@ -94,10 +94,10 @@
     "pedalReadout": "{raw}% in ingresso, {shaped}% in uscita"
   },
   "assistCurve": {
-    "title": "Curva di autosterzata",
+    "title": "Curva di autosterzo",
     "summaryFullLock": "{grip}% aderenza · fondo sterzo",
     "summaryCap": "{grip}% aderenza · limite {cap}°",
-    "curve": "Curva di risposta dell’autosterzata",
+    "curve": "Curva di risposta dell’autosterzo",
     "slide": "Sbandata {deg}°"
   },
   "padMap": {
@@ -260,8 +260,8 @@
       "formula": "Monoposto",
       "prototypes": "Prototipi",
       "lmdh": "Prototipo LMDh",
-      "groupA": "Turismo Group A",
-      "group4": "Group 4 Procar"
+      "groupA": "Turismo Gruppo A",
+      "group4": "Gruppo 4 Procar"
     }
   },
   "pedals": {
@@ -286,10 +286,10 @@
     "bound": "Tasto {button}",
     "add": "Aggiungi",
     "capturing": "Premi un pulsante su un dispositivo qualsiasi. Esc annulla; si interrompe dopo {seconds} s",
-    "moved": "Pls {button} spostato da {action}"
+    "moved": "Tasto {button} spostato da {action}"
   },
   "bridge": {
-    "takenOver": "Preso in carico",
+    "takenOver": "In uso altrove",
     "takenOverLine": "Un’altra scheda ha preso il controllo del volante. Chiudila, oppure disattiva e riattiva qui il force feedback per riprenderlo.",
     "off": "Bridge off",
     "offLine": "Il bridge gira su Windows da una copia del progetto: esegui <cmd>{command}</cmd> in un terminale lì e tienilo aperto.",
@@ -298,17 +298,17 @@
     "lookingLine": "Ricerca del bridge su questo PC.",
     "bridge": "Bridge",
     "connected": "Collegato",
-    "driving": "Controllo di {device} tramite il bridge.",
+    "driving": "{device} gestito tramite il bridge.",
     "waiting": "Collegato, in attesa del volante."
   },
   "browserFfb": {
     "connected": "Collegato",
-    "driving": "Controllo di {device} dal browser.",
-    "drivingWheel": "Controllo del volante dal browser.",
+    "driving": "{device} gestito dal browser.",
+    "drivingWheel": "Volante gestito dal browser.",
     "connecting": "Connessione",
     "connectingTo": "Connessione a {device}.",
     "connectingLine": "Connessione.",
-    "stopped": "Fermo",
+    "stopped": "Interrotto",
     "stoppedLine": "{reason}. Il force feedback passa dal bridge.",
     "stoppedDevice": "{device}: {reason}. Il force feedback passa dal bridge.",
     "failed": "Force feedback dal browser non riuscito",

@@ -2,7 +2,7 @@
   "racesCard": {
     "region": "Gare",
     "description": "{car} · {laps, plural, one {# giro} other {# giri}} · ogni {interval}",
-    "racing": "<big>Via</big> <small>in corso</small>",
+    "racing": "<big>Gara</big> <small>in corso</small>",
     "toStart": "<big>{time}</big> <small>alla partenza</small>",
     "toNextRace": "<big>{time}</big> <small>alla prossima gara</small>",
     "entrants": "In questa gara",
@@ -92,8 +92,8 @@
     "theoreticalBest": "Migliore teorico",
     "potential": "{delta} s di potenziale",
     "allBestSectors": "Tutti i settori migliori in un solo giro",
-    "offline": "Classifica offline. Mostro i tempi locali.",
-    "disabled": "Classifica online disattivata. Mostro i tempi locali."
+    "offline": "Classifica offline. Visualizzati i tempi locali.",
+    "disabled": "Classifica online disattivata. Visualizzati i tempi locali."
   },
   "boardWidget": {
     "modes": {
@@ -137,16 +137,16 @@
     },
     "gridOrder": {
       "qualifying": "Qualifica",
-      "reverse": "Inversa",
+      "reverse": "Invertita",
       "random": "Casuale"
     },
     "gridOrderHint": {
       "qualifying": "Prima il giro più veloce; senza tempi, ordine di ingresso",
-      "reverse": "Inverso dell’ordine di qualifica (o di ingresso)",
+      "reverse": "Ordine di qualifica (o di ingresso) invertito",
       "random": "Sorteggiata al via"
     },
     "presetClassic": "Classico",
-    "presetClassicHint": "Limiti della pista a infrazioni: ogni terza è +3 s, poi +5 s",
+    "presetClassicHint": "Limiti della pista a infrazioni: ogni 3 infrazioni +3 s, poi +5 s",
     "timeScaleFixed": "Fisso",
     "qualifyingOff": "Off",
     "settings": {
@@ -208,7 +208,7 @@
       "endQualifying": "Termina la qualifica",
       "endRaceForEveryone": "Termina la gara per tutti",
       "readyButton": "Pronto",
-      "readyUp": "Mettiti pronto",
+      "readyUp": "Sono pronto",
       "raceRunning": "Gara in corso.",
       "qualifyingRunning": "Qualifica in corso.",
       "waitingForHost": "In attesa che l’host avvii.",
@@ -330,11 +330,11 @@
       "freeCamera": "Camera libera",
       "freeCameraHint": "Tasto {key} · Trascina per guardare, WASD per volare, Q/E per l’altezza",
       "freeCameraButton": "Camera libera",
-      "exitFreeCamera": "Esci camera libera",
+      "exitFreeCamera": "Chiudi camera libera",
       "tv": "TV a bordo pista",
-      "tvHint": "Tasto {key} · Camere da broadcast a bordo pista",
+      "tvHint": "Tasto {key} · Telecamere TV a bordo pista",
       "tvButton": "TV a bordo pista",
-      "exitTv": "Esci TV"
+      "exitTv": "Chiudi TV"
     },
     "hud": {
       "title": "Layout HUD",
@@ -559,8 +559,8 @@
       "bias": {
         "label": "BIL",
         "title": "Bilanciamento dei freni",
-        "low": "Verso dietro",
-        "high": "Verso avanti"
+        "low": "Al posteriore",
+        "high": "All’anteriore"
       },
       "diffEntry": {
         "label": "INGR",
@@ -577,7 +577,7 @@
       "diffExit": {
         "label": "USC",
         "title": "Diff uscita",
-        "low": "Meno scarto",
+        "low": "Più progressivo",
         "high": "Più spinta"
       },
       "engineMap": {
@@ -636,10 +636,10 @@
       "torque": "Coppia",
       "battery": "Batteria"
     },
-    "previousDial": "Quadrante precedente",
-    "previousDialHint": "Quadrante precedente (D-pad sinistra o ,)",
-    "nextDial": "Quadrante successivo",
-    "nextDialHint": "Quadrante successivo (D-pad destra o .)",
+    "previousDial": "Selettore precedente",
+    "previousDialHint": "Selettore precedente (D-pad sinistra o ,)",
+    "nextDial": "Selettore successivo",
+    "nextDialHint": "Selettore successivo (D-pad destra o .)",
     "lower": "Riduci {dial}",
     "lowerHint": "{hint} (D-pad giù o -)",
     "raise": "Aumenta {dial}",
@@ -668,7 +668,7 @@
     "xMode": "X-mode",
     "drsState": {
       "open": "Aperto",
-      "armed": "Armato",
+      "armed": "Pronto",
       "zone": "Zona",
       "off": "Off"
     },
@@ -698,13 +698,13 @@
     "camera": "Camera",
     "recentreTilt": "Ricentra inclinazione",
     "allowMotion": "Consenti movimento",
-    "tapForTilt": "Tocca per inclinare",
+    "tapForTilt": "Attiva inclinazione",
     "tiltBlocked": "Inclinazione bloccata · Riprova",
     "noTiltSensor": "Nessun sensore di inclinazione"
   },
   "replayBar": {
     "region": "Comandi del replay",
-    "transport": "Trasporto",
+    "transport": "Controlli di riproduzione",
     "previousFrame": "Fotogramma precedente",
     "previousFrameTitle": "Fotogramma precedente ({key})",
     "pause": "Metti in pausa il replay",
@@ -732,8 +732,8 @@
     "hints": {
       "freeCam": "Camera libera · Trascina per guardare · WASD vola · Q/E altezza · Scorri per la velocità · R reimposta",
       "playPause": "Riproduci / pausa",
-      "seek": "Cerca {seconds} s",
-      "step": "Passo",
+      "seek": "Salta {seconds} s",
+      "step": "Fotogramma",
       "switchCar": "Cambia auto",
       "freeCamKey": "Camera libera",
       "flashback": "Flashback"
@@ -793,7 +793,7 @@
       "tag": "VSC",
       "ending": "Fine VSC",
       "slowDown": "Rallenta",
-      "slowToTarget": "Rallenta al ritmo",
+      "slowToTarget": "Rallenta al passo",
       "prepareForGreen": "Preparati al verde",
       "noOvertaking": "Vietato sorpassare"
     },
@@ -814,24 +814,24 @@
       "penalty": "Penalità",
       "disqualified": "Squalificato",
       "lapInvalid": "Giro cancellato",
-      "cleared": "Chiarito",
+      "cleared": "Risolto",
       "noAdvantage": "Nessun provvedimento"
     },
     "warningsMeter": "{count} avvisi su {total}",
     "pointsMeter": "{points} punti su {allowed} per i limiti della pista",
     "giveBack": {
-      "toCar": "Restituisci la P a {code}",
+      "toCar": "Cedi pos. a {code}",
       "dropTo": "Scendi in P{position}",
       "time": "Restituisci {seconds} s",
       "slowDown": "Rallenta",
-      "underYellow": "Sorpasso in giallo",
-      "illegalOvertake": "Sorpasso illegale",
+      "underYellow": "Sorpasso con gialla",
+      "illegalOvertake": "Sorpasso irregolare",
       "trackLimits": "Limiti della pista"
     },
     "offTrack": {
       "trackLimits": "Limiti della pista",
       "offTrack": "Fuori pista",
-      "underReview": "In revisione"
+      "underReview": "In valutazione"
     }
   },
   "startLights": {
@@ -906,10 +906,10 @@
       "off": "Spenti"
     },
     "surface": {
-      "dry": "Asciutta",
-      "damp": "Umida",
-      "wet": "Bagnata",
-      "flooded": "Allagata"
+      "dry": "Asciutto",
+      "damp": "Umido",
+      "wet": "Bagnato",
+      "flooded": "Allagato"
     }
   },
   "aeroLabel": {
@@ -931,8 +931,8 @@
       "straightMode": "Straight Mode",
       "xModeQueued": "In attesa",
       "overtakeBadge": "SORPASSO",
-      "overtakeEnabled": "Attiva",
-      "overtakeLocked": "Bloccata"
+      "overtakeEnabled": "Attivo",
+      "overtakeLocked": "Bloccato"
     }
   },
   "tyreBrakeWidget": {
@@ -949,9 +949,9 @@
       "title": "Battistrada esterno, centrale, interno"
     },
     "condition": {
-      "grain": "Grana",
+      "grain": "Grain",
       "grainTitle": "Graining: la superficie del battistrada si strappa (troppo fredda sotto mentre scivola)",
-      "blister": "Bolle",
+      "blister": "Blister",
       "blisterTitle": "Blistering: il nucleo si è surriscaldato",
       "flat": "Piatto",
       "flatTitle": "Piatto da bloccaggio: vibrazioni e meno aderenza",
@@ -983,7 +983,7 @@
     "headlightsTitleManualOn": "Fari accesi (manuale)",
     "headlightsTitleManualOff": "Fari spenti (manuale)",
     "headlightsTitleAuto": "Fari accesi (auto)",
-    "chipFlash": "LAMPEGGIO",
+    "chipFlash": "LAMP.",
     "chipOn": "ON",
     "chipOff": "OFF"
   },
