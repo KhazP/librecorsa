@@ -110,6 +110,10 @@
       "label": "Câmbio automático",
       "hint": "Teclas manuais: {up} / {down}"
     },
+    "autoOvertake": {
+      "label": "Overtake automático",
+      "hint": "F1 2026: usa nas retas o Overtake conquistado, com menos potência do que apertando {key}"
+    },
     "autoClutch": {
       "label": "Embreagem automática",
       "hint": "Evita apagar o motor; desative para largadas com embreagem manual",

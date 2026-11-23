@@ -110,6 +110,10 @@
       "label": "Transmisi otomatis",
       "hint": "Tombol manual: {up} / {down}"
     },
+    "autoOvertake": {
+      "label": "Overtake otomatis",
+      "hint": "F1 2026: memakai Overtake yang sudah diperoleh di lintasan lurus, dengan tenaga lebih kecil daripada menekan {key}"
+    },
     "autoClutch": {
       "label": "Kopling otomatis",
       "hint": "Mencegah mesin mati; nonaktifkan untuk start kopling manual",

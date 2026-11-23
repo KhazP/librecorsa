@@ -110,6 +110,10 @@
       "label": "Hộp số tự động",
       "hint": "Phím số sàn: {up} / {down}"
     },
+    "autoOvertake": {
+      "label": "Vượt tự động",
+      "hint": "F1 2026: dùng chế độ Vượt đã nhận trên đường thẳng, với công suất thấp hơn khi nhấn {key}"
+    },
     "autoClutch": {
       "label": "Côn tự động",
       "hint": "Chống chết máy; tắt để đề-pa bằng côn thủ công",

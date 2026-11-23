@@ -110,6 +110,10 @@
       "label": "Cambio automático",
       "hint": "Teclas manuales: {up} / {down}"
     },
+    "autoOvertake": {
+      "label": "Adelantamiento automático",
+      "hint": "F1 2026: usa en las rectas el adelantamiento obtenido, con menos potencia que pulsando {key}"
+    },
     "autoClutch": {
       "label": "Embrague automático",
       "hint": "Evita que se apague el motor; desactívalo para arranques con embrague manual",
