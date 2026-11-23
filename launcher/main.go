@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -33,6 +34,9 @@ func main() {
 func run() int {
 	gameFlag := flag.String("game", "", "folder of the game's static export (default: game/ beside the launcher, else ../out)")
 	modsFlag := flag.String("mods", "", "folder of mod packages (default: mods/ beside the launcher, else ../public/mods)")
+	importFlag := flag.String("import", "", "folder of circuits and cars to convert (default: import/ beside the launcher)")
+	converterFlag := flag.String("converter", "", "the converter bundle (default: converter/ beside the launcher, else dist/converter)")
+	toolchainFlag := flag.String("toolchain", "", "where the converter's downloaded tools go (default: beside the browser profile)")
 	port := flag.Int("port", defaultPort, "port on 127.0.0.1 (keep it fixed: the browser keeps saves per port)")
 	noBrowser := flag.Bool("no-browser", false, "only serve; don't open a browser")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -53,18 +57,41 @@ func run() int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	modsDir := *modsFlag
-	if modsDir == "" {
-		// Beside the launcher; in a clone (serving ../out, or `go run .`, whose binary sits in a temporary folder) in
-		// public/mods, where `npm run mod -- index` lists them for the dev server too
-		if inClone || exeDir == "" || isGoRunDir(exeDir) {
-			if modsDir, err = filepath.Abs(filepath.Join("..", "public", "mods")); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return 1
-			}
-		} else {
-			modsDir = filepath.Join(exeDir, "mods")
+	// Beside the launcher; in a clone (serving ../out, or `go run .`, whose binary sits in a temporary folder) the mods
+	// in public/mods, where `npm run mod -- index` lists them for the dev server too, and the import folder and the
+	// converter (launcher/converter/build.mjs) in launcher/
+	clone := inClone || exeDir == "" || isGoRunDir(exeDir)
+	beside := func(flagValue, release, inClone string) (string, error) {
+		switch {
+		case flagValue != "":
+			return filepath.Abs(flagValue)
+		case clone:
+			return filepath.Abs(inClone)
+		default:
+			return filepath.Join(exeDir, release), nil
 		}
+	}
+	modsDir, err := beside(*modsFlag, "mods", filepath.Join("..", "public", "mods"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	importDir, err := beside(*importFlag, "import", "import")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	converterDir, err := beside(*converterFlag, "converter", filepath.Join("dist", "converter"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	toolchainDir := *toolchainFlag
+	if toolchainDir == "" {
+		toolchainDir = defaultToolchainDir()
+	} else if toolchainDir, err = filepath.Abs(toolchainDir); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
 
 	origin := fmt.Sprintf("http://127.0.0.1:%d", *port)
@@ -98,6 +125,19 @@ func run() int {
 		return 1
 	}
 	defer s.Close()
+	// The import folder, and the converter if the release has one: the game runs without either
+	convNote := "none (converting circuits and cars needs a release's converter/ folder)"
+	conv, convErr := loadConverter(converterDir)
+	if convErr == nil {
+		convNote = fmt.Sprintf("%s (%s)", conv.Dir, strings.Join(conv.Importers, ", "))
+	} else if !errors.Is(convErr, os.ErrNotExist) {
+		convNote = fmt.Sprintf("%s can't be used: %v", converterDir, convErr)
+	}
+	if err := makeImportDir(importDir); err != nil {
+		fmt.Fprintf(os.Stderr, "can't create the import folder %s: %v\n", importDir, err)
+	} else {
+		s.enableImports(importDir, newJobs(importDir, modsDir, conv, newToolchain(toolchainDir, runtime.GOOS, runtime.GOARCH)))
+	}
 	srv := &http.Server{Handler: s, ReadHeaderTimeout: 10 * time.Second}
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
@@ -105,7 +145,7 @@ func run() int {
 	// Ctrl+C stops the server cleanly from here on, while a browser starts too
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	fmt.Printf("LibreCorsa %s\n  game: %s\n  mods: %s\n  open: %s\n", version, gameDir, modsDir, playURL)
+	fmt.Printf("LibreCorsa %s\n  game: %s\n  mods: %s\n  import: %s\n  converter: %s\n  open: %s\n", version, gameDir, modsDir, importDir, convNote, playURL)
 	if !*noBrowser {
 		openGame(playURL)
 	}

@@ -25,6 +25,8 @@ type server struct {
 	game *os.Root
 	mods *modsFolder
 	port int
+	// imports is the import folder's API (api.go), when the launcher has one
+	imports *importsAPI
 }
 
 // newServer serves the static export in gameDir and the packages in modsDir to requests for 127.0.0.1:port or
@@ -43,6 +45,9 @@ func newServer(gameDir, modsDir string, port int) (*server, error) {
 }
 
 func (s *server) Close() error {
+	if s.imports != nil {
+		s.imports.jobs.Close()
+	}
 	s.mods.Close()
 	return s.game.Close()
 }
@@ -64,6 +69,14 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "This server only answers http://127.0.0.1:"+fmt.Sprint(s.port), http.StatusForbidden)
 		return
 	}
+	p := r.URL.Path
+	// The import folder's API, which alone takes a POST, with checks of its own (api.go)
+	if s.imports != nil && isAPIPath(p) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+		s.imports.serve(s, w, r, p)
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -73,7 +86,6 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Nothing here is for another site's page to embed (an image, a sound, a probe of what is installed)
 	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 
-	p := r.URL.Path
 	switch {
 	case p == identityPath:
 		s.serveIdentity(w)
@@ -89,7 +101,12 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *server) serveIdentity(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	json.NewEncoder(w).Encode(map[string]any{"app": identityApp, "version": version})
+	id := map[string]any{"app": identityApp, "version": version}
+	if s.imports != nil {
+		// The Mods panel offers conversion only from a launcher that has the import folder
+		id["imports"] = true
+	}
+	json.NewEncoder(w).Encode(id)
 }
 
 // splitPath turns a request's (already decoded) path into the segments of a relative file name, or reports it unsafe:
