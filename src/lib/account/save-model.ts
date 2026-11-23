@@ -305,9 +305,14 @@ export interface SyncState {
   /** The SHA-256 of each best lap's ghost by its store key, kept while its time and date stay the same */
   ghosts: Record<string, { ms: number; at: number; sha: string }>;
   account: AccountSyncRecord | null;
+  /**
+   * By account id: the driver key (its AccountKey id) whose join was answered `keyElsewhere`. That key stays on the
+   * other account, so the session has no current key here; it isn't sent again on every start
+   */
+  keyElsewhere: Record<string, string>;
 }
 
-export const emptySyncState = (): SyncState => ({ v: 1, since: 0, keys: {}, settings: {}, removed: {}, ghosts: {}, account: null });
+export const emptySyncState = (): SyncState => ({ v: 1, since: 0, keys: {}, settings: {}, removed: {}, ghosts: {}, account: null, keyElsewhere: {} });
 
 /** Tombstones kept at most; the oldest go first */
 const MAX_REMOVED = 200;
@@ -355,6 +360,7 @@ export function parseSyncState(text: string | null): SyncState {
       if (isObj(g) && isTime(g.ms) && isTime(g.at) && typeof g.sha === "string" && SHA256_HEX_RE.test(g.sha)) state.ghosts[k] = { ms: g.ms, at: g.at, sha: g.sha };
     }
   }
+  state.keyElsewhere = parseHashes(raw.keyElsewhere);
   const a = raw.account;
   if (isObj(a) && typeof a.id === "string" && isTime(a.rev) && isTime(a.appliedRev)) {
     const base = isObj(a.base) ? a.base : {};

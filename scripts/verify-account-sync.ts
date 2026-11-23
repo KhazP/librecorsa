@@ -476,6 +476,9 @@ function fakeServer() {
     /** A status to refuse the nth ghost upload / download with (the rate limit, too big), or null */
     ghostPutFail: null as null | ((n: number) => number | null),
     ghostGetFail: null as null | ((n: number) => number | null),
+    /** /account/device refuses with this sentence, or answers that the key is on another account */
+    deviceFail: null as string | null,
+    keyElsewhere: false,
     /** Holds ghost downloads until it settles (a slow connection) */
     ghostGate: null as Promise<void> | null,
     account(): AccountInfo {
@@ -501,9 +504,11 @@ function fakeServer() {
       const body = typeof init.body === "string" && method !== "PUT" ? JSON.parse(init.body) : null;
       if (path === "/account" && method === "GET") return json(200, { ok: true, account: s.account(), thisDevice: { joined: s.joined } });
       if (path === "/account/device") {
+        if (s.deviceFail) return json(400, { ok: false, error: s.deviceFail });
         s.joined = true;
-        s.keyId = createHash("sha256").update(String(body?.driverKey)).digest("hex").slice(0, 12);
-        return json(200, { ok: true, attached: ["alp"], elsewhere: ["other"], keyElsewhere: false });
+        // A key on another account stays there: the session has no current key on this one
+        s.keyId = s.keyElsewhere ? null : createHash("sha256").update(String(body?.driverKey)).digest("hex").slice(0, 12);
+        return json(200, { ok: true, attached: s.keyElsewhere ? [] : ["alp"], elsewhere: ["other"], keyElsewhere: s.keyElsewhere });
       }
       if (path === "/auth/signout") {
         s.signedIn = false;
@@ -1123,6 +1128,38 @@ async function main3(): Promise<void> {
       server.calls.filter((c) => c === "POST /account/device").length === 1 && store.getState().join === null && server.keyId === keyIdOf("test-driver-key"),
       server.calls.join(),
     );
+  }
+  {
+    // A new account's join without the question fails: the question comes back with what went wrong
+    const server = fakeServer();
+    server.joined = false;
+    server.deviceFail = "The server had a problem. Try again in a moment.";
+    const f = fakeEnv(server, { accounts: true, hash: "#lc-account=created" });
+    const store = createAccountStore(() => f.env);
+    store.actions.start();
+    await settle(() => server.calls.includes("POST /account/device"));
+    await settle();
+    const st = store.getState();
+    check("a failed join without the question brings the question back, with the error", st.join?.driverName === "Alp" && st.notice?.kind === "error" && st.notice.text === server.deviceFail && !st.joining, JSON.stringify(st.notice));
+    server.deviceFail = null;
+    check("answering it then joins", (await store.actions.confirmJoin()) === null && server.joined && store.getState().join === null);
+  }
+  {
+    // A device whose key is on another account: joined, but no key of this account is current. Settled once, it
+    // isn't sent again on every start
+    const server = fakeServer();
+    server.keyId = null;
+    server.keyElsewhere = true;
+    const storage = memoryStorage();
+    const posts = () => server.calls.filter((c) => c === "POST /account/device").length;
+    for (let start = 0; start < 3; start++) {
+      const f = fakeEnv(server, { accounts: true, storage });
+      const store = createAccountStore(() => f.env);
+      store.actions.start();
+      await settle(() => store.getState().sync.lastSyncedAt !== null || store.getState().firstSync !== null);
+      await settle();
+    }
+    check("a key on another account is sent once, not on every start", posts() === 1, `${posts()} joins`);
   }
   {
     // An account made just now on this device joins it without the question

@@ -144,6 +144,10 @@ export interface SyncEngine {
   changedSince(accountId: string): Promise<boolean>;
   /** Drops the record of an account (deleted): a sign-in to it again would be a first sync */
   forget(accountId: string): void;
+  /** The key (AccountKey id) whose last join with this account was answered `keyElsewhere`; null when none */
+  keyElsewhere(accountId: string): string | null;
+  /** Notes how a join of the key `keyId` with this account was answered */
+  noteJoin(accountId: string, keyId: string, keyElsewhere: boolean): void;
   /**
    * Reads the cloud's save without syncing, so a sync on leaving can start from it: for a page that had nothing to
    * sync on start (it is kept only when it is the save this device last synced with)
@@ -450,6 +454,14 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
       if (!got.ok || got.doc === null || got.pending?.length || rec?.id !== accountId || rec.rev !== got.rev) return;
       const doc = readSaveDoc(got.doc);
       if (doc && lastCloud === null) lastCloud = { accountId, rev: got.rev, doc };
+    },
+    keyElsewhere: (accountId) => loadState().keyElsewhere[accountId] ?? null,
+    noteJoin(accountId, keyId, keyElsewhere) {
+      const state = loadState();
+      const notes = { ...state.keyElsewhere };
+      if (keyElsewhere) notes[accountId] = keyId;
+      else delete notes[accountId];
+      saveState({ ...state, keyElsewhere: notes });
     },
     forget(accountId) {
       if (lastCloud?.accountId === accountId) lastCloud = null;

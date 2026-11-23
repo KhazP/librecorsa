@@ -180,16 +180,22 @@ export interface AccountStoreEnv {
   titleMenu?(): boolean;
 }
 
-/** This driver key is the one the account says the session joined with (AccountKey.id: its SHA-256's first 12 hex) */
+/** A driver key's AccountKey id (its SHA-256's first 12 hex); null without WebCrypto (an insecure page) */
+async function keyIdOf(driverKey: string): Promise<string | null> {
+  try {
+    return (await sha256Hex(driverKey)).slice(0, 12);
+  } catch {
+    return null;
+  }
+}
+
+/** This driver key is the one the account says the session joined with */
 async function keyIsCurrent(driverKey: string, account: AccountInfo): Promise<boolean> {
   const current = account.keys.find((k) => k.current);
   if (!current) return false;
-  try {
-    return (await sha256Hex(driverKey)).slice(0, 12) === current.id;
-  } catch {
-    // No WebCrypto (an insecure page): keep the session as it is
-    return true;
-  }
+  const id = await keyIdOf(driverKey);
+  // No WebCrypto: keep the session as it is
+  return id === null || id === current.id;
 }
 
 /** A return path the server takes ("/play", "/account"); anything else goes back to /play */
@@ -380,19 +386,28 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
     if (!joined) {
       if (joinWithoutAsking) {
         joinWithoutAsking = false;
-        await actions.confirmJoin();
+        const failed = await actions.confirmJoin();
+        // It didn't join: the question comes back, with what went wrong
+        const account = state.account;
+        if (failed && !joined && state.phase === "signed-in" && account) {
+          notice({ kind: "error", text: failed });
+          set({ join: { driverName: account.driverName, providers: providersOf(account) } });
+        }
       }
       return;
     }
     let account = ans.account;
     // The session's driver key is no longer this device's (saved data cleared, a key file imported): the session
-    // was confirmed on this device already, so its key now joins without asking again
-    if (!(await keyIsCurrent(e.driverKey(), account))) {
+    // was confirmed on this device already, so its key now joins without asking again. A key that the server said is
+    // on another account stays there: the session never gets a current key here, and it isn't sent again each start
+    const keyId = await keyIdOf(e.driverKey());
+    if (!(await keyIsCurrent(e.driverKey(), account)) && (keyId === null || e.sync.keyElsewhere(account.id) !== keyId)) {
       const again = await e.api.joinDevice({ driverKey: e.driverKey(), label: e.deviceLabel() });
       if (!again.ok) {
         if (again.signedOut) toSignedOut();
         return;
       }
+      if (keyId !== null) e.sync.noteJoin(account.id, keyId, again.keyElsewhere);
       const reread = await refresh();
       if (!reread.ok || !joined) return;
       account = reread.account;
@@ -516,6 +531,8 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
         }
         joined = true;
         set({ elsewhere: ans.elsewhere });
+        const keyId = await keyIdOf(e.driverKey());
+        if (keyId !== null) e.sync.noteJoin(account.id, keyId, ans.keyElsewhere);
         if (ans.keyElsewhere) notice({ kind: "error", text: KEY_ELSEWHERE });
         // The names this key brought, then the first sync: its values come in now only where a reload cuts nothing
         // short (the title menu, the loading screen), else at the next start
