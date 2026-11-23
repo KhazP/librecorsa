@@ -1337,6 +1337,8 @@ export class VehiclePhysics {
   private readonly ers2026: Ers2026Control | null;
   /** How much the engine sped up over the last step (rad/s), for the 2026 motor's torque */
   private ersOmegaStep = 0;
+  /** The motor's share of a traction-control cut after `ERSData.mguDemandFilter` (0..1) */
+  private mguShareFiltered = 1;
   public performanceMode: PerformanceModeName;
   /** Driver EBB offset in steps (+ = forward), on top of the performance mode's */
   public ebbUser = 0;
@@ -3961,6 +3963,15 @@ export class VehiclePhysics {
       const f = iceNm + motorNm > 1 ? Math.min(SPARK_FIRST_MAX_MOTOR_SHARE, motorNm / (iceNm + motorNm)) : 0;
       sparkShare = Math.max(0, 1 - totalCut / (1 - f));
       motorShare = totalCut <= 1 - f ? 1 : Math.max(0, (1 - totalCut) / Math.max(1e-6, f));
+    }
+    // A motor whose torque demand may not vary fast (`ERSData.mguDemandFilter`): there its share of the cut through a
+    // first-order filter at that frequency, which takes the traction control's chatter off it
+    const mguFilter = ers.mguDemandFilter;
+    if (mguFilter) {
+      const slow =
+        inp.throttle > 0.1 && inp.brake < 0.02 && !shiftCut && this.shiftTimer <= 0 && this.velocity.length() * 3.6 < mguFilter.belowKmh && this.lastIceDriveNm + this.lastMotorDriveNm > 0;
+      this.mguShareFiltered = slow ? this.mguShareFiltered + (motorShare - this.mguShareFiltered) * (1 - Math.exp(-2 * Math.PI * mguFilter.maxHz * h)) : motorShare;
+      motorShare = this.mguShareFiltered;
     }
     // Turbo lag: the curve is the torque with the boost this plate makes in steady state; while the rotor trails it the
     // torque is (1 + boost made) / (1 + boost asked for) of that, as torque ∝ 1 + boost. A rotor still spinning faster

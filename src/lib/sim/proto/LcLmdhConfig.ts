@@ -4,8 +4,9 @@
  * class's spec hybrid system on a seven-speed spec gearbox, rear-wheel drive and brake-by-wire rear brakes.
  *
  * Where each number comes from:
- *  - [spec]     read from a retrieved document: the LMDh technical regulations (19 October 2026 issue), the article
- *               named, or where said the spec gearbox's published data or a simulator's manual for the car
+ *  - [spec]     read from a retrieved document: the LMDh technical regulations, the article named (the 2026 season's
+ *               issue of 16 October 2025; Articles 4 to 9 read the same in the 2027 issue of 19 October 2026), or where
+ *               said the spec gearbox's or the hybrid's published data or a simulator's manual for the car
  *  - [claim]    a published balance-of-performance or supplier figure taken from the car's brief, whose source
  *               document was not retrieved: to be checked against the bulletin before it is relied on
  *  - [est]      an estimate: nothing public gives it (centre of gravity, inertia, gear ratios, spring and damper
@@ -56,7 +57,8 @@ const DRIVELINE_EFFICIENCY = 0.94;
 
 /**
  * The engine speed the regulated power curve is normalised to (rpm): the endurance trim's 8300 rpm limiter over the
- * curve's 1.025 Nmax, so the 507 kW peak falls at 7693 rpm [bop]; engines may not exceed 10 000 rpm (Art. 5.2.1) [spec]
+ * curve's 1.025 Nmax, so the 507 kW peak falls at 7693 rpm [bop: inside the maximum engine speeds IMSA lists for the
+ * twin-turbo V8s in 2026, 8000 to 8158 rpm]; engines may not exceed 10 000 rpm (Art. 5.2.1) [spec]
  */
 const N_MAX = 8098;
 
@@ -88,8 +90,9 @@ const POWER_CURVE_500: [number, number][] = [
 ];
 
 /**
- * The car's peak on that curve (kW) [claim: balance-of-performance bulletin]: 507 kW up to 230 km/h and 506 kW from
- * 240 km/h, in a straight line between. The whole curve scales with it
+ * The car's peak on that curve (kW) [bop: IMSA's two-stage form; its 2026 bulletins give these cars 500.76 to 520 kW
+ * below 230 km/h and 503.88 to 520 kW from 240 km/h]: 507 kW up to 230 km/h and 506 kW from 240 km/h, in a straight
+ * line between. The whole curve scales with it
  */
 const P_MAX_KW = 507;
 const POWER_SCALE_VS_KMH: LutPoints = [
@@ -153,10 +156,13 @@ const ENGINE = {
 
 /**
  * The spec hybrid system: one motor-generator on the gearbox's clutch shaft (Art. 5.3.2) [spec], so here on the crank
- * whenever the clutch is closed. 50 kW of deployment [spec: the spec gearbox's published data; the regulations leave
- * the figure to the balance of performance] and 200 kW of regeneration [claim], on a 1.35 kWh store [claim] with 3.6 MJ
- * of usable charge [est]. The regulations do not ration its energy by lap or distance (Art. 5.3.10) [spec]: no per-lap
- * allowance. Regeneration is on the brake pedal only [est: the regulations also allow it off the throttle]
+ * whenever the clutch is closed. 50 kW of deployment, the motor's continuous output [spec: Bosch's and the spec
+ * gearbox's published data; the regulations leave the figure to the balance of performance] and up to 200 kW of
+ * regeneration [spec: Bosch], about 170 kW in use [IMSA: 173 kW], on a 1.35 kWh store [spec: Porsche's 963 press kit]
+ * with 3.6 MJ of usable charge [est]. The regulations do not ration its energy by lap or distance (Art. 5.3.10)
+ * [spec]: no per-lap allowance. Regeneration is on the brake pedal only [est: the regulations also allow it off the
+ * throttle, as each team chooses (Art. 5.3.11)]. Below 160 km/h on the throttle the motor's torque demand may not vary
+ * faster than 50 Hz (Art. 5.5.2) [spec]: it is no fast traction control
  */
 const ERS = {
   // The motor's torque at the crank [est]; the power limits bind above ≈ 3400 rpm (deploy) and 6000 rpm (harvest)
@@ -178,6 +184,7 @@ const ERS = {
   harvestEfficiency: 0.9,
   liftThrottle: 0,
   topGearLiftHarvestW: 0,
+  mguDemandFilter: { maxHz: 50, belowKmh: 160 },
 };
 
 const FLAT: LutPoints = [
@@ -782,13 +789,15 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
     gearbox: gearbox(set),
     gearSets: [LMDH_GEAR_SETS.short, LMDH_GEAR_SETS.long],
     // The motor's deployment (0–50 kW in 10 kW steps, 40 by default) and the braking regeneration (up to 200 kW, 170 by
-    // default) on their own dials, deploying from 120 km/h [bop]
+    // default) on their own dials, deploying at any speed: the LMDh regulations set no speed for it (Art. 5.3.10–11),
+    // and the balance of performance's front-axle deployment speed is the LMH cars' (120 km/h once, 190 km/h in 2025);
+    // it shows "-" for every LMDh [spec]
     hybridDials: {
       deployStepsKw: [0, 10, 20, 30, 40, 50],
       defaultDeployIndex: 4,
       regenStepsKw: [0, 20, 40, 60, 80, 100, 120, 140, 160, 170, 180, 190, 200],
       defaultRegenIndex: 9,
-      minDeploySpeedKmh: 120,
+      minDeploySpeedKmh: 0,
     },
     // [est]: the launch slips the clutch at 4500 rpm
     clutch: { maxTorqueNm: 1300, biteRpm: 1800, lockRpm: 1900, launchRpm: 4500 },

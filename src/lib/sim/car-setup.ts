@@ -225,9 +225,9 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   liana: { defaultKg: 22, minKg: 4, maxKg: 37 },
   // 30 l of a 90 l tank [spec car.ini FUEL / MAX_FUEL]
   "mtr-496r": { defaultKg: 22, minKg: 4, maxKg: 67 },
-  // A sprint's fixed 28 kg (≈ 38 l) [est]: the regulations ask for a cell of at least 110 l (Art. 13.14) [spec], and hold
-  // the class to an energy per stint
-  "lc-lmdh": { defaultKg: 28, minKg: 5, maxKg: 81 },
+  // A sprint's fixed 28 kg (≈ 38 l) [est]: the regulations ask for a cell of at least 110 l (Art. 13.14) [spec], 81.4 kg
+  // of race fuel, and hold the class to an energy per stint
+  "lc-lmdh": { defaultKg: 28, minKg: 5, maxKg: 82 },
   // 40 l of a 100 l tank [spec car.ini FUEL / MAX_FUEL]
   "nissan-r33-jgtc": { defaultKg: 30, minKg: 4, maxKg: 74 },
   // 30 l of a 120 l tank [spec car.ini FUEL / MAX_FUEL]
