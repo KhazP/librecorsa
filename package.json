@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/run-verify.mjs",
     "verify:laps": "node scripts/run-verify.mjs driver-laps",
+    "mod": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/mod-tool.ts",
     "race:headless": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/race-headless.ts",
     "physics:report": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/physics-report.ts",
     "ffb": "tsx scripts/ffb-bridge.ts",
