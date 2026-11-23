@@ -34,7 +34,7 @@
   },
   "pad": {
     "namedButton": "Taste {name}",
-    "shapeButton": "{shape, select, cross {X-Taste} circle {Kreis-Taste} square {Quadrat-Taste} other {Dreieck-Taste}}",
+    "shapeButton": "{shape, select, cross {Kreuz-Taste} circle {Kreis-Taste} square {Quadrat-Taste} other {Dreieck-Taste}}",
     "faceButton": "{position, select, bottom {Untere Aktionstaste} right {Rechte Aktionstaste} left {Linke Aktionstaste} other {Obere Aktionstaste}}",
     "dpad": "D-Pad",
     "dpadDirection": "{direction, select, up {D-Pad hoch} down {D-Pad runter} left {D-Pad links} right {D-Pad rechts} horizontal {D-Pad links und rechts} other {D-Pad hoch und runter}}",
@@ -55,7 +55,7 @@
   },
   "penalty": {
     "time": "+{seconds} s",
-    "driveThrough": "Durchfahrt",
+    "driveThrough": "Durchfahrtsstrafe",
     "warning": "Verwarnung",
     "trackLimits": "Streckenlimits {strikes}/{of}",
     "disqualified": "Disqualifiziert"

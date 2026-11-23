@@ -1,6 +1,6 @@
 {
   "assists": {
-    "title": "Hilfen"
+    "title": "Fahrhilfen"
   },
   "car": {
     "car": "Auto",
@@ -23,7 +23,7 @@
   },
   "connectedDevices": {
     "title": "Verbundene Geräte",
-    "wake": "Drücke eine beliebige Taste auf Controller oder Lenkrad, um es aufzuwecken.",
+    "wake": "Drücke eine beliebige Taste auf Controller oder Lenkrad, um das Gerät aufzuwecken.",
     "wheel": "Lenkrad",
     "controller": "Controller",
     "axesButtons": "{axes, plural, one {# Achse} other {# Achsen}}, {buttons, plural, one {# Taste} other {# Tasten}}",
@@ -58,7 +58,7 @@
     "customLayout": "Eigenes Layout",
     "layoutStickPedals": "Pedale auf rechtem Stick, {up} / {down} schalten",
     "layoutTriggerPedals": "{up} / {down} schalten, {boost} Boost",
-    "stickClick": "{button} löst weiterhin {action} aus: Ein fester Druck auf den Stick kann sie drücken",
+    "stickClick": "{button} löst weiterhin {action} aus: Ein fester Druck auf den Stick kann diese Taste auslösen",
     "pedals": "Pedale",
     "triggers": "Trigger",
     "triggersDetail": "{throttle} Gas, {brake} Bremse",
@@ -98,7 +98,7 @@
     "summaryFullLock": "{grip} % Grip · voller Einschlag",
     "summaryCap": "{grip} % Grip · {cap}° Limit",
     "curve": "Selbstlenk-Ansprechkurve",
-    "slide": "{deg}° Rutschen"
+    "slide": "{deg}° Drift"
   },
   "padMap": {
     "controller": "Controller",
@@ -111,7 +111,7 @@
   },
   "keyBindings": {
     "title": "Tastenbelegung",
-    "description": "Wähle einen Slot zum Neu-Belegen. Doppelte Tasten werden automatisch getauscht.",
+    "description": "Wähle einen Slot zum Neubelegen. Doppelte Tasten werden automatisch getauscht.",
     "resetWhat": "alle Tastenbelegungen",
     "showAll": "Alle Tasten zeigen",
     "showFewer": "Weniger Tasten zeigen",
@@ -129,7 +129,7 @@
   "fixedKeys": {
     "title": "Feste Tasten",
     "pause": "Pausenmenü",
-    "moveView": "Ansicht verschieben (Cockpit, Dash)",
+    "moveView": "Ansicht verschieben (Cockpit, Armaturenbrett)",
     "viewHeight": "Ansichtshöhe und Sichtfeld",
     "mfdDials": "MFD-Regler",
     "boostChat": "Chat-Befehl für Boost",
@@ -149,9 +149,9 @@
     "feelDetail": {
       "soft": "Leichte Bremse, Gas fast frei",
       "medium": "Feste Bremse, leichtes Gas",
-      "hard": "Steife Bremse, festeres Gas"
+      "hard": "Straffe Bremse, festeres Gas"
     },
-    "needsAdaptiveTriggers": "Benötigt Adaptive Trigger an",
+    "needsAdaptiveTriggers": "Benötigt aktivierte Adaptive Trigger",
     "adaptiveTriggers": "Adaptive Trigger",
     "adaptiveTriggersHint": "L2 wird fest wie ein Bremspedal; ABS, Blockieren und Wheelspin vibrieren in L2 und R2",
     "triggerStiffness": "Trigger-Härte",
@@ -164,7 +164,7 @@
     "lightbarDriver": "Fahrerfarbe",
     "lightbarOff": "Aus",
     "revLights": "Drehzahllichter",
-    "revLightsHint": "Die fünf Spieler-LEDs füllen sich bis zum Schaltpunkt; die Mikro-LED zeigt den Overtake-Boost",
+    "revLightsHint": "Die fünf Spieler-LEDs füllen sich bis zum Schaltpunkt; die Mikro-LED zeigt den Überhol-Boost",
     "needsChrome": "Trigger, HD-Haptik und Lightbar benötigen Chrome oder Edge. Die Standardvibration bleibt aktiv.",
     "description": "Adaptive Trigger, USB-HD-Haptik, Drehzahllichter und Gyro-Lenkung über WebHID.",
     "pair": "Controller koppeln",
@@ -172,12 +172,12 @@
     "connected": "Verbunden",
     "padLine": "{name}, {transport}",
     "padLineBattery": "{name}, {transport}, {battery} %",
-    "padLineCharging": "{name}, {transport}, {battery} % wird geladen",
+    "padLineCharging": "{name}, {transport}, {battery} %, lädt",
     "hdHaptics": "HD-Haptik",
     "hdHapticsHint": "USB-Audio-Haptik für Kerbs, Schlupf und Motor",
     "needsUsb": "Benötigt USB-Kabel",
     "testTriggers": "Trigger testen",
-    "testTriggersHint": "L2 und R2 werden steif, dann vibrieren sie",
+    "testTriggersHint": "L2 und R2 werden fest, dann vibrieren sie",
     "testHaptics": "Haptik testen",
     "testRumble": "Vibration testen",
     "testGripsHint": "Linker Griff, dann rechter, dann beide",
@@ -188,7 +188,7 @@
     "description": "Bewegungslenkung per DualSense oder DualShock 4 (WebHID).",
     "toggle": "Gyro-Lenkung",
     "toggleHint": "Drehe den Controller wie ein Lenkrad. Der Stick lenkt weiterhin mit",
-    "needsGyro": "Benötigt Gyro-Lenkung an",
+    "needsGyro": "Benötigt aktivierte Gyro-Lenkung",
     "lock": "Neigung für vollen Einschlag",
     "lockHint": "Wie weit du den Controller in jede Richtung drehst für vollen Einschlag",
     "sensitivity": "Empfindlichkeit",
@@ -245,7 +245,7 @@
     "steeringMeter": "Lenkrad",
     "axisBound": "{device}, Achse {axis}",
     "notCalibrated": "Noch nicht kalibriert",
-    "calibrating": "Kalibriere",
+    "calibrating": "Kalibrierung…",
     "recalibrate": "Neu kalibrieren",
     "calibrate": "Kalibrieren",
     "rotation": "Drehung",
@@ -278,7 +278,7 @@
   "wheelButtons": {
     "title": "Tasten",
     "description": "Schaltwippen und eine Pause-Taste sind das Nötigste. Beide Wippen zusammen wählen den Leerlauf",
-    "resetWhat": "alle Lenkradtasten (sie werden geleert)",
+    "resetWhat": "alle Lenkradtasten (Belegungen werden gelöscht)",
     "pressFor": "Drücke eine Taste für {action}",
     "boundAria": "{action}: Taste {button}. Ändern",
     "unboundAria": "{action}: nicht belegt. Ändern",
@@ -286,28 +286,28 @@
     "bound": "Taste {button}",
     "add": "Hinzufügen",
     "capturing": "Drücke eine Taste an einem beliebigen Gerät. Esc bricht ab; endet nach {seconds} s",
-    "moved": "Tst {button} von {action} verschoben"
+    "moved": "Taste {button} von {action} verschoben"
   },
   "bridge": {
     "takenOver": "Übernommen",
     "takenOverLine": "Ein anderer Tab hat das Lenkrad übernommen. Schließe ihn oder schalte Force Feedback hier aus und wieder ein, um es zurückzuholen.",
     "off": "Bridge aus",
     "offLine": "Die Bridge läuft unter Windows aus einer Kopie des Projekts: Führe dort <cmd>{command}</cmd> in einem Terminal aus und lass es offen.",
-    "remoteOrigin": "Diese Seite liegt nicht auf diesem PC, starte sie also mit <cmd>{command}</cmd>.",
+    "remoteOrigin": "Diese Seite läuft nicht auf diesem PC, starte die Bridge also mit <cmd>{command}</cmd>.",
     "looking": "Suche",
-    "lookingLine": "Suche die Bridge auf diesem PC.",
+    "lookingLine": "Suche nach der Bridge auf diesem PC.",
     "bridge": "Bridge",
     "connected": "Verbunden",
     "driving": "{device} läuft über die Bridge.",
-    "waiting": "Verbunden, warte auf das Lenkrad."
+    "waiting": "Verbunden, Warten auf das Lenkrad."
   },
   "browserFfb": {
     "connected": "Verbunden",
     "driving": "{device} läuft über den Browser.",
     "drivingWheel": "Lenkrad läuft über den Browser.",
     "connecting": "Verbindung wird aufgebaut",
-    "connectingTo": "Verbinde mit {device}.",
-    "connectingLine": "Verbinde.",
+    "connectingTo": "Verbindung zu {device} wird aufgebaut.",
+    "connectingLine": "Verbindung wird aufgebaut.",
     "stopped": "Gestoppt",
     "stoppedLine": "{reason}. Force Feedback läuft über die Bridge.",
     "stoppedDevice": "{device}: {reason}. Force Feedback läuft über die Bridge.",
@@ -332,7 +332,7 @@
   },
   "forces": {
     "title": "Kräfte",
-    "needsFfb": "Benötigt Force Feedback an",
+    "needsFfb": "Benötigt aktiviertes Force Feedback",
     "needsWheel": "Benötigt ein verbundenes Lenkrad",
     "invert": "Umkehren",
     "invertHint": "Halte den Kranz und drücke Test: Er sollte erst nach rechts, dann nach links ziehen. Zieht er zuerst nach links, schalte dies ein",
@@ -341,7 +341,7 @@
     "test": "Test",
     "connection": "Verbindung",
     "browserConnection": "Browser-Verbindung",
-    "browserConnectionHint": "Steuert das Lenkrad direkt aus dem Browser, wo möglich. Aus oder bei einem Lenkrad, das er nicht steuern kann, übernimmt die Bridge",
+    "browserConnectionHint": "Steuert das Lenkrad direkt aus dem Browser, wo möglich. Wenn ausgeschaltet oder bei einem nicht unterstützten Lenkrad übernimmt die Bridge",
     "browserCantTalk": "Dieser Browser kann nicht direkt mit dem Lenkrad kommunizieren",
     "effects": "Effekte",
     "effectsDescription": "Schalte die Zentrierfeder in deinem Lenkradtreiber aus.",
@@ -349,7 +349,7 @@
   },
   "perCar": {
     "label": "Stärke pro Auto",
-    "noneHint": "Kein Auto hat eine eigene. Das Kraftmeter im Auto kann eine setzen",
+    "noneHint": "Kein Auto hat eine eigene Stärke. Über die Kraftanzeige im Auto lässt sich eine festlegen",
     "none": "Keine",
     "carLabel": "Stärke pro Auto: {car}",
     "hint": "{strength} Stärke, {minForce} Mindestkraft. Wird anstelle von Stärke und Mindestkraft verwendet",

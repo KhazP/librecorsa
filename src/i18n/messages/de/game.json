@@ -40,8 +40,8 @@
   "raceStart": {
     "assisted": "Assistiert",
     "manual": "Manuell",
-    "assistedHint": "Bis Lichter aus in der Startaufstellung gehalten",
-    "manualHint": "Kupplung und Drehzahl halten, bei Lichter aus loslassen (+5 s / +10 s Frühstartstrafe)"
+    "assistedHint": "Bis „Lichter aus“ in der Startaufstellung gehalten",
+    "manualHint": "Kupplung und Drehzahl halten, bei „Lichter aus“ loslassen (+5 s / +10 s Frühstartstrafe)"
   },
   "realism": {
     "casual": "Casual",
@@ -56,8 +56,8 @@
     "openWheel": "Formel",
     "endurance": "Langstrecke",
     "autoHint": "Formelregeln für Einsitzer, Langstreckenregeln für den Rest",
-    "openWheelHint": "Streckenlimits nach Verstößen: 4 sind +5 s, 8 sind +10 s, 12 sind eine Disqualifikation",
-    "enduranceHint": "Streckenlimits nach gewichteten Punkten: 5 sind +5 s, 10 sind +10 s, 15 sind eine Disqualifikation",
+    "openWheelHint": "Streckenlimits nach Verstößen: bei 4 gibt es +5 s, bei 8 +10 s, bei 12 die Disqualifikation",
+    "enduranceHint": "Streckenlimits nach gewichteten Punkten: bei 5 gibt es +5 s, bei 10 +10 s, bei 15 die Disqualifikation",
     "trackLimitsOn": "An",
     "trackLimitsOff": "Aus"
   },
@@ -85,15 +85,15 @@
   },
   "grip": {
     "green": "Grün",
-    "greenDetail": "Frisch gewaschener Asphalt, kaum Gummi",
+    "greenDetail": "Frisch abgespülter Asphalt, kaum Gummi",
     "light": "Leicht",
     "lightDetail": "Gummiaufbau zu Beginn des Wochenendes",
     "medium": "Mittel",
-    "mediumDetail": "Mäßig eingegummierte Spur",
+    "mediumDetail": "Mäßig mit Gummi belegte Spur",
     "natural": "Natürlich",
     "naturalDetail": "Übliche renntaugliche Gummispur",
     "heavy": "Stark",
-    "heavyDetail": "Gut eingegummierte Langstrecken-Ideallinie",
+    "heavyDetail": "Stark mit Gummi belegte Langstrecken-Ideallinie",
     "saturated": "Gesättigt",
     "saturatedDetail": "Komplett gesättigte dunkle Gummispur"
   },
@@ -179,13 +179,13 @@
   "carQuality": {
     "ownBadge": "EIGENE PHYSIK",
     "own": "Eigene Physik",
-    "ownDetail": "Fährt mit einer für dieses Auto gebauten Physik.",
+    "ownDetail": "Fährt mit einer speziell für dieses Auto entwickelten Physik.",
     "sharedBadge": "GETEILTE PHYSIK",
     "shared": "Geteilte Physik",
-    "sharedDetail": "Fährt mit der Physik eines anderen Autos derselben Klasse und Ära, verhält sich also wie dieses Auto und nicht wie das eigene.",
+    "sharedDetail": "Fährt mit der Physik eines anderen Autos derselben Klasse und Ära und hat daher dessen Fahrverhalten statt eines eigenen.",
     "eraBadge": "2026-PHYSIK",
     "era": "Ältere Autos",
-    "eraDetail": "Fährt mit der 2026-Physik, verhält sich also wie ein 2026er Auto und nicht wie in der eigenen Saison."
+    "eraDetail": "Fährt mit der 2026-Physik, verhält sich also wie ein 2026er-Auto und nicht wie in seiner eigenen Saison."
   },
   "carClass": {
     "f1": "Formel",
@@ -246,10 +246,10 @@
     "freeCamera": "Freie Kamera",
     "tvCamera": "Trackside-TV-Kamera",
     "racingLine": "Ideallinie",
-    "mute": "Stumm",
+    "mute": "Stummschalten",
     "nextTrack": "Nächster Musiktitel",
     "autopilot": "Autopilot",
-    "mouseSteer": "Maus-Lenkung",
+    "mouseSteer": "Mauslenkung",
     "restart": "Neustart",
     "flyingLap": "Runde neu starten (fliegender Start)",
     "throttleHalf": "Halbgas (halten)",
@@ -307,7 +307,7 @@
     "moza": "Verbindet sich, lenkt und gibt Force Feedback über WebHID aus",
     "hidPid": "Ungetestet; nutzt dieselben Standard-Force-Feedback-Reports",
     "directDrive": "Ungetestet; ohne HID-PID-Force-Feedback wechselt die Seite zur Bridge",
-    "pxn": "Ungetestet; HID PID mit eigenen Set-Effect-Werten, die kein PXN-Lenkrad bestätigt hat",
+    "pxn": "Ungetestet; HID PID mit eigenen Set-Effect-Werten, die bisher auf keinem PXN-Lenkrad bestätigt wurden",
     "logitechClassic": "Ungetestet; startet über WebHID mit den klassischen Logitech-Befehlen, wie sie Linux hid-lg4ff sendet, inklusive Drehzahl-LEDs beim G27 und G29",
     "logitechHidpp": "Ungetestet; startet über WebHID mit HID++ Force Feedback, wie es Linux hid-logitech-hidpp sendet, sobald Logitech G HUB das Lenkrad in den PC-Modus geschaltet hat",
     "logitechBridgeOnly": "Ungetestet; nur Bridge: Kein Mainline-Linux-Treiber steuert das G923 für PlayStation oder das G PRO an, und der Browser kann die Lenkachse des DFP nicht skalieren",
@@ -322,7 +322,7 @@
   "hudLayouts": {
     "broadcast": "Broadcast",
     "broadcastDetail": "TV-Grafiken: Turm, Karte, Telemetrieleiste",
-    "dash": "Wheel Dash",
+    "dash": "Lenkraddisplay",
     "dashDetail": "Ein Lenkraddisplay, tief und mittig",
     "telemetry": "Telemetrie",
     "telemetryDetail": "Das Display plus Reifen, G, Leistung und Eingaben",
@@ -331,11 +331,11 @@
     "minimal": "Minimal",
     "minimalDetail": "Nur Tempo, Gang und Runde",
     "irdashiesDetail": "Wertung, Rundentimer, Eingaben und Schaltlichter",
-    "racevisionDetail": "Wertung, Relative, Eingabeanzeige und Graph",
+    "racevisionDetail": "Wertung, Relativ, Eingabeanzeige und Graph",
     "h2hDetail": "Die Autos davor und dahinter, Abstände und Rundendeltas",
     "retroDetail": "Warme Instrumente: Rundinstrument, Deltabalken, Runden",
     "blocksDetail": "Eckige dunkle Blöcke: Zeiten, Sektoren, Reifen, Kraftstoff",
-    "grandPrixDetail": "Renn-Turm, rundes Tempo-Cluster, Gang und Eingaben"
+    "grandPrixDetail": "Zeitenturm, rundes Kombiinstrument, Gang und Eingaben"
   },
   "steeringAssist": {
     "selfSteerStrength": "Selbstlenkung & Gegenlenken",
@@ -359,15 +359,15 @@
   "support": {
     "donatePayPal": "Per PayPal spenden",
     "supportOn": "Auf {site} unterstützen",
-    "donateToVia": "{maker} über {site} spenden",
+    "donateToVia": "An {maker} über {site} spenden",
     "supportOnSite": "{maker} auf {site} unterstützen",
-    "donateTo": "{maker} spenden",
+    "donateTo": "An {maker} spenden",
     "supportMaker": "{maker} unterstützen"
   },
   "setupSheet": {
     "tcSlip": "TC-Schlupf",
     "tc1": "TC 1",
-    "tcCut": "TC-Cut",
+    "tcCut": "TC-Eingriff",
     "tc2": "TC 2",
     "tcSlipAngle": "TC-Schlupfwinkel",
     "abs": "ABS",
@@ -398,8 +398,8 @@
     "rearBumpStopRange": "Anschlagpuffer-Weg hinten",
     "diffPreload": "Differenzial-Vorspannung",
     "gearSet": "Getriebesatz",
-    "frontThirdPacker": "Third-Packer vorne",
-    "rearThirdPacker": "Third-Packer hinten",
+    "frontThirdPacker": "Hub-Packer vorne",
+    "rearThirdPacker": "Hub-Packer hinten",
     "frontBrakeDucts": "Bremsbelüftung vorne",
     "rearBrakeDucts": "Bremsbelüftung hinten",
     "radiatorOpening": "Kühleröffnung",
@@ -411,18 +411,18 @@
     "rearRebound": "Zugstufe hinten",
     "frontFastRebound": "Schnelle Zugstufe vorne",
     "rearFastRebound": "Schnelle Zugstufe hinten",
-    "frontThirdSpring": "Third-Feder vorne",
-    "rearThirdSpring": "Third-Feder hinten",
-    "frontThirdBump": "Third-Druckstufe vorne",
-    "rearThirdBump": "Third-Druckstufe hinten",
-    "frontThirdFastBump": "Schnelle Third-Druckstufe vorne",
-    "rearThirdFastBump": "Schnelle Third-Druckstufe hinten",
-    "frontThirdRebound": "Third-Zugstufe vorne",
-    "rearThirdRebound": "Third-Zugstufe hinten",
-    "frontThirdFastRebound": "Schnelle Third-Zugstufe vorne",
-    "rearThirdFastRebound": "Schnelle Third-Zugstufe hinten",
-    "frontCornerPackers": "Eck-Packer vorne",
-    "rearCornerPackers": "Eck-Packer hinten",
+    "frontThirdSpring": "Hubfeder vorne",
+    "rearThirdSpring": "Hubfeder hinten",
+    "frontThirdBump": "Hub-Druckstufe vorne",
+    "rearThirdBump": "Hub-Druckstufe hinten",
+    "frontThirdFastBump": "Schnelle Hub-Druckstufe vorne",
+    "rearThirdFastBump": "Schnelle Hub-Druckstufe hinten",
+    "frontThirdRebound": "Hub-Zugstufe vorne",
+    "rearThirdRebound": "Hub-Zugstufe hinten",
+    "frontThirdFastRebound": "Schnelle Hub-Zugstufe vorne",
+    "rearThirdFastRebound": "Schnelle Hub-Zugstufe hinten",
+    "frontCornerPackers": "Rad-Packer vorne",
+    "rearCornerPackers": "Rad-Packer hinten",
     "frontWheelRate": "Radrate vorne",
     "rearWheelRate": "Radrate hinten",
     "frontBumpStopRate": "Anschlagpuffer-Rate vorne",
@@ -441,10 +441,10 @@
     "blanketsOn": "An",
     "blanketsOff": "Aus",
     "engineMapMax": "1 · Max",
-    "engineMapRace": "2 · Race",
-    "engineMapSmooth": "3 · Smooth",
-    "engineMapLean": "4 · Lean",
-    "engineMapSave": "5 · Save"
+    "engineMapRace": "2 · Rennen",
+    "engineMapSmooth": "3 · Sanft",
+    "engineMapLean": "4 · Mager",
+    "engineMapSave": "5 · Sparen"
   },
   "setupGroups": {
     "fuel": "Kraftstoff",
@@ -463,8 +463,8 @@
     "electronicsShort": "Elektr.",
     "mechanicalGrip": "Mechanischer Grip",
     "mechanicalGripShort": "Mech.",
-    "thirdElements": "Third-Elemente",
-    "thirdElementsShort": "3rd",
+    "thirdElements": "Hubelemente",
+    "thirdElementsShort": "Hub",
     "aero": "Aero",
     "fuelShort": "Kraftst.",
     "dampersShort": "Dämpfer",
@@ -546,7 +546,7 @@
       "less": "Balance bleibt beim Lösen der Bremse"
     },
     "coldPsi": {
-      "more": "Wärmer schneller, weniger Spitzengrip",
+      "more": "Wärmt schneller auf, weniger Spitzengrip",
       "less": "Mehr Grip, wärmt langsamer auf"
     },
     "blankets": {
@@ -606,7 +606,7 @@
       "less": "Reifen folgen der Straße besser"
     },
     "fastRebound": {
-      "more": "Rad bleibt nach Kerbs langsamer unten",
+      "more": "Rad setzt nach Kerbs langsamer wieder auf",
       "less": "Rad fällt schnell zurück"
     },
     "ductFront": {
@@ -691,12 +691,12 @@
     "secondsGained": "{seconds} s gewonnen",
     "lapDeleted": "Runde gestrichen",
     "wallDeleted": "Wandkontakt · Runde gestrichen",
-    "rodeWallBeforeLine": "An der Wand entlanggefahren vor der Linie",
+    "rodeWallBeforeLine": "Vor der Linie an der Wand entlanggefahren",
     "limitsDeleted": "Streckenlimits · Runde gestrichen",
-    "offBeforeLine": "Neben der Strecke vor der Linie",
+    "offBeforeLine": "Vor der Linie neben der Strecke",
     "nextLapToo": "Nächste Runde auch",
     "offTrack": "Neben der Strecke",
-    "touchedBarrier": "Barriere berührt",
+    "touchedBarrier": "Bande berührt",
     "rodeWall": "An der Wand entlanggefahren",
     "positionHandedBack": "Position zurückgegeben",
     "advantageGivenBack": "Vorteil zurückgegeben",
@@ -709,15 +709,15 @@
     "limitsMajorCut": "Streckenlimits · große Abkürzung",
     "why": "{reason, select, illegal_overtake {Illegales Überholen · Position nicht zurückgegeben} corner_cut {Kurve abgekürzt} not_lifted {Nicht gelupft} other {Zeit gewonnen}}",
     "limitsWhy": "Streckenlimits · {reason, select, illegal_overtake {illegales Überholen · Position nicht zurückgegeben} corner_cut {Kurve abgekürzt} not_lifted {nicht gelupft} other {Zeit gewonnen}}",
-    "warningCount": "Streckenlimits · Warnung {count}/{max}",
-    "points": "{points} Pkt",
+    "warningCount": "Streckenlimits · Verwarnung {count}/{max}",
+    "points": "{points} Pkt.",
     "strikes": "{count, plural, one {# Verstoß} other {# Verstöße}}",
     "disqualified": "Disqualifiziert · Streckenlimits",
     "limitsPoints": "Streckenlimits · {points}",
     "blackWhiteFlag": "Schwarz-weiße Flagge",
     "nextPenalty": "{why} · als Nächstes +{seconds} s",
     "nextDisqualification": "{why} · als Nächstes die Disqualifikation",
-    "warning": "Streckenlimits · Warnung",
+    "warning": "Streckenlimits · Verwarnung",
     "warningDetail": "{why} · {points}"
   },
   "flags": {
@@ -753,7 +753,7 @@
     "peerBlocked": "Verbindung fehlgeschlagen: Eines eurer Netzwerke blockiert direkte Verbindungen. Nutzt dasselbe WLAN oder versucht ein anderes Netzwerk.",
     "lostHost": "Host verloren. Tritt erneut bei.",
     "hostingTabs": "Rennen für die Tabs dieses Browsers wird gehostet",
-    "playerLeft": "Spieler ist gegangen. Erstelle ein neues Angebot, um dich erneut zu verbinden.",
+    "playerLeft": "Spieler hat die Verbindung getrennt. Erstelle ein neues Angebot, um dich erneut zu verbinden.",
     "connected": "Verbunden",
     "joiningRace": "Nächstem Rennen wird beigetreten…",
     "inNextRace": "Im nächsten Rennen",
@@ -767,19 +767,19 @@
     "ready": "Bereit. Tabs in diesem Browser finden sich selbst; andere Geräte treten mit einem Raumcode bei."
   },
   "downloads": {
-    "windowsSummary": "Desktop-App mit Bevorzugung der dedizierten GPU, stillem WebHID für Lenkräder und DualSense und ohne Drosselung im Hintergrund.",
+    "windowsSummary": "Desktop-App mit Bevorzugung der dedizierten GPU, WebHID ohne Rückfrage für Lenkräder und DualSense und ohne Drosselung im Hintergrund.",
     "windowsInstallNote": "Vorerst unsigniert, bis die Einrichtung bei der SignPath Foundation abgeschlossen ist. Wenn SmartScreen die Datei stoppt, klicke auf „Weitere Informationen“ und dann auf „Trotzdem ausführen“.",
     "windowsStatusLabel": "Unsigniert",
     "windowsX64Label": ".exe herunterladen",
     "windowsX64Detail": "Windows-x64-Installer",
-    "macosSummary": "Desktop-App mit Bevorzugung der dedizierten GPU, stillem WebHID für Lenkräder und DualSense und ohne Drosselung im Hintergrund.",
+    "macosSummary": "Desktop-App mit Bevorzugung der dedizierten GPU, WebHID ohne Rückfrage für Lenkräder und DualSense und ohne Drosselung im Hintergrund.",
     "macosInstallNote": "Unsignierter Build. Erlaube ihn unter Systemeinstellungen > Datenschutz & Sicherheit oder entferne die Quarantäne, nachdem du ihn nach Programme kopiert hast:",
     "macosStatusLabel": "Unsigniert",
     "macosArm64Label": "Apple Silicon (.dmg)",
     "macosArm64Detail": "M1–M4-Macs",
     "macosX64Label": "Intel (.dmg)",
     "macosX64Detail": "Intel-x64-Macs",
-    "linuxSummary": "Portables AppImage mit stillem WebHID für Lenkräder und DualSense und ohne Drosselung im Hintergrund.",
+    "linuxSummary": "Portables AppImage mit WebHID ohne Rückfrage für Lenkräder und DualSense und ohne Drosselung im Hintergrund.",
     "linuxInstallNote": "Markiere das AppImage als ausführbar und starte es (erfordert FUSE2 / libfuse2 auf älteren Distributionen):",
     "linuxX64Label": ".AppImage herunterladen",
     "linuxX64Detail": "Linux x64",
@@ -796,7 +796,7 @@
     "shaders": "Shader"
   },
   "session": {
-    "wheelDisconnected": "Lenkrad getrennt. Verbinde es erneut oder setze fort, um mit dem Rest weiterzufahren.",
+    "wheelDisconnected": "Lenkrad getrennt. Verbinde es erneut oder setze fort, um mit der übrigen Steuerung weiterzufahren.",
     "bigJumpStart": "Frühstart · weit von der Startposition weg",
     "jumpStart": "Frühstart",
     "clutchGearUp": "Hochschalten",
@@ -813,7 +813,7 @@
     "setupLoadFailed": "Setup von {driver} konnte nicht geladen werden, versuche es erneut",
     "setupMissing": "Kein Setup mit der Runde von {driver} gespeichert",
     "setupApplied": "Setup von {driver} angewendet ({summary})",
-    "keySaved": "Schlüssel gespeichert. Jeder mit der Datei kann als du einreichen.",
+    "keySaved": "Schlüssel gespeichert. Jeder mit der Datei kann unter deinem Namen einreichen.",
     "noKeyYet": "Noch kein Schlüssel: Dein erster Upload erstellt ihn.",
     "keyImportedFor": "Schlüssel für {name} importiert. Uploads von hier nutzen ihn.",
     "keyImported": "Schlüssel importiert. Uploads von hier nutzen ihn.",
@@ -829,8 +829,8 @@
   "telemetryHud": {
     "menu": "Menü",
     "calibratePedals": "Pedale kalibrieren",
-    "holdForLightsOut": "Gas halten für Lichter aus",
-    "mouseSteering": "Maus-Lenkung · {key} zum Beenden",
+    "holdForLightsOut": "Gas halten bis „Lichter aus“",
+    "mouseSteering": "Mauslenkung · {key} zum Beenden",
     "keyMenu": "Menü",
     "keyCamera": "Kamera",
     "keyLine": "Linie",
@@ -842,7 +842,7 @@
   "trackGate": {
     "safeStart": "Sicherer Start aktiv nach GPU-Reset.",
     "graphicsLow": "Grafik nach GPU-Reset auf Niedrig gesetzt.",
-    "loadFailedStaying": "Laden der Strecke fehlgeschlagen. Bleibe auf {circuit}.",
+    "loadFailedStaying": "Laden der Strecke fehlgeschlagen. {circuit} bleibt geladen.",
     "loadFailedDefault": "Laden der Strecke fehlgeschlagen. {circuit} geladen."
   },
   "minimap": {

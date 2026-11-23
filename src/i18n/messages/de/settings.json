@@ -22,7 +22,7 @@
     },
     "tabs": {
       "driving": {
-        "assists": "Hilfen",
+        "assists": "Fahrhilfen",
         "steering": "Lenkhilfe"
       },
       "controls": {
@@ -82,14 +82,14 @@
   },
   "rows": {
     "assistLevel": {
-      "label": "Hilfenstufe",
+      "label": "Fahrhilfen-Stufe",
       "options": {
         "beginner": "Anfänger",
         "intermediate": "Fortgeschritten",
         "sim": "Sim"
       },
       "details": {
-        "beginner": "Volle TC & ABS, Ideallinie, Lenkhilfe",
+        "beginner": "Volle TC & volles ABS, Ideallinie, Lenkhilfe",
         "intermediate": "TC & ABS, Ideallinie",
         "sim": "Keine TC, kein ABS, keine Ideallinie"
       }
@@ -121,11 +121,11 @@
         "keyboard": "Kupplung belegen unter Steuerung > Tastatur"
       },
       "overridden": {
-        "gearbox": "Vorübergehend übersteuert (benötigt Schaltgetriebe); zum Wiederherstellen des Standards einschalten",
-        "wheel": "Vorübergehend übersteuert (Kupplung belegen unter Steuerung > Lenkrad); zum Wiederherstellen des Standards einschalten",
-        "controller": "Vorübergehend übersteuert (Kupplung belegen unter Steuerung > Controller); zum Wiederherstellen des Standards einschalten",
-        "touch": "Vorübergehend übersteuert (mit Touch-Steuerung nicht verfügbar); zum Wiederherstellen des Standards einschalten",
-        "keyboard": "Vorübergehend übersteuert (Kupplung belegen unter Steuerung > Tastatur); zum Wiederherstellen des Standards einschalten"
+        "gearbox": "Vorübergehend überschrieben (benötigt Schaltgetriebe); zum Wiederherstellen des Standards einschalten",
+        "wheel": "Vorübergehend überschrieben (Kupplung belegen unter Steuerung > Lenkrad); zum Wiederherstellen des Standards einschalten",
+        "controller": "Vorübergehend überschrieben (Kupplung belegen unter Steuerung > Controller); zum Wiederherstellen des Standards einschalten",
+        "touch": "Vorübergehend überschrieben (mit Touch-Steuerung nicht verfügbar); zum Wiederherstellen des Standards einschalten",
+        "keyboard": "Vorübergehend überschrieben (Kupplung belegen unter Steuerung > Tastatur); zum Wiederherstellen des Standards einschalten"
       }
     },
     "gamepadAssist": {
@@ -181,7 +181,7 @@
       "label": "Halbgas"
     },
     "halfBrake": {
-      "label": "Halbbremse"
+      "label": "Halbe Bremse"
     },
     "rumble": {
       "label": "Vibration"
@@ -220,7 +220,7 @@
       "off": "Benötigt Trigger-Vibration"
     },
     "steerDeadzone": {
-      "label": "Mittlere Totzone"
+      "label": "Mitten-Totzone"
     },
     "steerSmoothingS": {
       "label": "Eingabefilter"
@@ -239,11 +239,11 @@
     },
     "touchLayout": {
       "label": "Touch-Stil",
-      "hint": "Analoge Schieberegler oder digitale Buttons",
+      "hint": "Analoge Schieberegler oder digitale Tasten",
       "off": "Touch-Steuerung ist aus",
       "options": {
         "sliders": "Schieberegler",
-        "buttons": "Buttons"
+        "buttons": "Tasten"
       }
     },
     "tiltSteer": {
@@ -258,7 +258,7 @@
     },
     "ffbGain": {
       "label": "Stärke",
-      "hintPerCar": "Überschrieben durch Gain pro Auto ({gain}) unten"
+      "hintPerCar": "Überschrieben durch Stärke pro Auto ({gain}) unten"
     },
     "ffbDamping": {
       "label": "Dämpfung"
@@ -279,7 +279,7 @@
     },
     "ffbCurve": {
       "label": "Kraftkurve",
-      "hint": "Negativ hebt kleine Kräfte an · positiv reserviert Spitzenreserve"
+      "hint": "Negativ hebt kleine Kräfte an · positiv hält Reserve für Kraftspitzen frei"
     },
     "ffbMinForce": {
       "label": "Mindestkraft",
@@ -325,8 +325,8 @@
     },
     "sharpLow": {
       "label": "Scharf Niedrig",
-      "hint": "Zeichnet Niedrig in Mittel-Auflösung",
-      "hintAuto": "Zeichnet Niedrig in Mittel-Auflösung; die automatische Qualität kann es abschalten",
+      "hint": "Rendert Niedrig in Auflösung „Mittel“",
+      "hintAuto": "Rendert Niedrig in Auflösung „Mittel“; die automatische Qualität kann dies abschalten",
       "off": "Qualität muss auf Niedrig stehen"
     },
     "renderScale": {
@@ -338,7 +338,7 @@
     },
     "fpsCap": {
       "label": "Bildrate",
-      "hint": "30 fps senkt die Hitze am Handy",
+      "hint": "30 fps verringert die Wärmeentwicklung am Handy",
       "options": {
         "full": "Voll",
         "fps30": "30 fps"
@@ -408,7 +408,7 @@
       }
     },
     "splitGaps": {
-      "label": "Teilabstände"
+      "label": "Zwischenabstände"
     },
     "mfdAutoCollapse": {
       "label": "MFD automatisch einklappen"
@@ -552,7 +552,7 @@
       "resetSeatsButton": "Zurücksetzen",
       "resetSeatsTitle": "Sitzpositionen zurücksetzen?",
       "resetSeatsConfirm": "Alle zurücksetzen",
-      "resetSeatsBody": "Setzt Cockpit- und Dash-Sitzversatz aller Autos zurück."
+      "resetSeatsBody": "Setzt Cockpit- und Armaturenbrett-Sitzversatz aller Autos zurück."
     },
     "interface": {
       "language": "Sprache",
@@ -600,7 +600,7 @@
       "portOff": "Benötigt UDP-Telemetrie",
       "reset": "Zurücksetzen",
       "resetAll": "Alle Einstellungen zurücksetzen",
-      "resetAllHint": "Stellt Standard für Steuerung, Hilfen, Anzeige und Audio wieder her",
+      "resetAllHint": "Stellt Standard für Steuerung, Fahrhilfen, Anzeige und Audio wieder her",
       "resetAllButton": "Zurücksetzen",
       "resetAllTitle": "Alle Einstellungen zurücksetzen?",
       "resetAllConfirm": "Alle zurücksetzen",

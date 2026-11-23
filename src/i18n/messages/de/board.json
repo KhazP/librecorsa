@@ -81,7 +81,7 @@
     "inProgress": "Läuft",
     "podium": "{event} Physik {version} Podium",
     "recordHolders": "Rekordhalter Schnellste Runde",
-    "recordHoldersHint": "Aktuell P1 auf umkämpften Listen (ab {min} Fahrern). Tippe auf ein Abzeichen, um es anzusehen oder herauszufordern.",
+    "recordHoldersHint": "Aktuell P1 auf umkämpften Listen (ab {min} Fahrern). Tippe auf ein Abzeichen, um Rekorde anzusehen oder herauszufordern.",
     "filterByClass": "Rekordhalter nach Autoklasse filtern",
     "allClasses": "Alle Klassen",
     "classRecordHolders": "Rekordhalter Schnellste Runde {class}",
@@ -91,7 +91,7 @@
     "silverCount": "{count, plural, other {# Silber}}",
     "bronzeCount": "{count, plural, other {# Bronze}}",
     "weeklyPodiums": "Wochenpodien",
-    "physicsFilter": "Physikversion-Filter",
+    "physicsFilter": "Physikversionsfilter",
     "allVersions": "Alle"
   },
   "driverBadges": {

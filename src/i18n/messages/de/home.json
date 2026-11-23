@@ -30,10 +30,10 @@
       "select": "Auswählen",
       "back": "Zurück",
       "switchSection": "Bereich wechseln",
-      "page": "Seite Rundenzeiten",
+      "page": "Rundenzeiten-Seite",
       "drive": "Fahren"
     },
-    "length": "{distance} {unit}, {turns, plural, one {# Kurve} other {# Kurven}}",
+    "length": "{distance} {unit}, {turns, plural, one {# Kurve} other {# Kurven}}",
     "classYear": "{class}, {year}",
     "footer": "{venue}, {car}",
     "driveTile": {
@@ -87,7 +87,7 @@
       },
       "physics": {
         "label": "Physik",
-        "all": "Alle Physiken"
+        "all": "Alle Physikmodelle"
       },
       "modder": {
         "label": "Modder",
@@ -109,8 +109,8 @@
     },
     "about": {
       "lead": "Kostenloser Open-Source-Rennsimulator im Browser.",
-      "addMod": "Dein Mod",
-      "addModText": "Du hast einen Auto- oder Streckenmod gebaut und möchtest ihn in LibreCorsa sehen? Schreib mir eine E-Mail an <mail>{email}</mail> mit einem Link dazu. Jeder Modder wird im Spiel namentlich genannt.",
+      "addMod": "Deine Mod hinzufügen",
+      "addModText": "Du hast eine Auto- oder Streckenmod gebaut und möchtest sie in LibreCorsa sehen? Schreib mir eine E-Mail an <mail>{email}</mail> mit einem Link dazu. Jeder Modder wird im Spiel namentlich genannt.",
       "modders": "Die Modder",
       "moddersText": "Die Strecken und Autos sind ihr Werk und werden mit ihrer Erlaubnis verwendet. Wenn dir eines gefällt, kannst du dich direkt beim Macher bedanken.",
       "links": {
@@ -136,7 +136,7 @@
       },
       "platforms": {
         "label": "Läuft auf",
-        "text": "Jedem modernen Browser: Computer, Handy oder Tablet"
+        "text": "Computer, Handy oder Tablet – in jedem modernen Browser"
       },
       "conditions": {
         "label": "Bedingungen",
@@ -144,7 +144,7 @@
       },
       "price": {
         "label": "Preis",
-        "text": "Kostenlos. Kein Konto und keine Werbung; Trinkgelder sind freiwillig und schalten nichts frei"
+        "text": "Kostenlos. Kein Konto und keine Werbung; Spenden sind freiwillig und schalten nichts frei"
       }
     }
   },
