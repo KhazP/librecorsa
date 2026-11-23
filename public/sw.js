@@ -101,7 +101,7 @@ self.addEventListener("fetch", (event) => {
   }
   if (req.headers.has("range") || req.cache === "no-store" || req.cache === "reload") return;
   // A query string asks past the edge copy: that request is left to the network as it is
-  if (url.origin !== self.location.origin || url.search || !(ASSET_PATH.test(url.pathname) || TRANSCODER_PATH.test(url.pathname))) return;
+  if (url.search || !(ASSET_PATH.test(url.pathname) || TRANSCODER_PATH.test(url.pathname))) return;
   // The work after the answer (keeping a download, noting a use, the clean-up) is collected while serving it
   const later = [];
   const answer = serve(event, url.origin + url.pathname, later);
@@ -390,9 +390,12 @@ async function runSweep(need, keepKey, force, ifDue) {
 /** `completeShell`'s answer while this worker runs (a sync resets it): every page and script asks */
 let shellName;
 
-/** The newest whole shell cache's name, or null (none yet: the first visit, or a download cut short) */
+/**
+ * The newest whole shell cache's name, or null (none yet: the first visit, a download cut short, or no Cache Storage to
+ * read). Never rejects: a page or script is then fetched as if there were no shell
+ */
 async function completeShell() {
-  if (shellName === undefined) shellName = findCompleteShell();
+  if (shellName === undefined) shellName = findCompleteShell().catch(() => (shellName = undefined, null));
   return shellName;
 }
 
@@ -409,19 +412,30 @@ async function findCompleteShell() {
   return best ? best.name : null;
 }
 
-/** A page's shell copy: `/play`, `/play/` and `/play.html` are one page */
+/**
+ * A page's shell copy: `/play`, `/play/` and `/play.html` are one page, as are `/` and `/index.html`. Made anonymous,
+ * so the page keeps the address it was opened at (`/play?mods=off`, a room link), not the one it was kept under
+ */
 async function shellPage(url) {
-  const name = await completeShell();
-  if (!name) return null;
-  const cache = await caches.open(name);
-  const path = url.pathname.replace(/\/+$/, "") || "/";
-  const forms = path === BASE.replace(/\/+$/, "") || path === "/" ? [BASE, `${BASE}index.html`] : [path, `${path}.html`, path.replace(/\.html$/, "")];
-  for (const form of forms) {
-    const hit = await cache.match(self.location.origin + form);
-    if (hit) return hit;
+  try {
+    const name = await completeShell();
+    if (!name) return null;
+    const cache = await caches.open(name);
+    const root = BASE.replace(/\/+$/, "");
+    const path = url.pathname.replace(/\/+$/, "") || "/";
+    const forms = path === root || path === "/" || path === `${root}/index.html` ? [BASE, `${BASE}index.html`] : [path, `${path}.html`, path.replace(/\.html$/, "")];
+    for (const form of forms) {
+      const hit = await cache.match(self.location.origin + form, { ignoreVary: true });
+      if (hit) return anonymous(hit);
+    }
+  } catch {
+    // No Cache Storage to read: no shell
   }
   return null;
 }
+
+/** Lets a response nobody will read go, so its connection isn't held open */
+const discard = (res) => void res?.body?.cancel().catch(() => {});
 
 /** The server's page when it answers; the shell's when it doesn't, or not within PAGE_TIMEOUT_MS */
 async function servePage(req, url) {
@@ -434,12 +448,18 @@ async function servePage(req, url) {
     const res = await Promise.race([network, slow]);
     if (res === null) {
       const copy = await shellPage(url);
-      return copy || (await network);
+      if (!copy) return await network;
+      // The server's answer, when it comes, isn't needed
+      network.then(discard, () => {});
+      return copy;
     }
     // A server error with a shell copy at hand: the copy
     if (res.status >= 500) {
       const copy = await shellPage(url);
-      if (copy) return copy;
+      if (copy) {
+        discard(res);
+        return copy;
+      }
     }
     return res;
   } catch (err) {
@@ -456,15 +476,27 @@ async function servePage(req, url) {
  * query included. Turbopack's worker bootstrap reads its config from there (`#params=`); a kept or fetched response
  * carries the URL it was stored or fetched under, without them, and the worker would start without its config.
  */
-const anonymous = (res) => new Response(res.body, { status: res.status, statusText: res.statusText, headers: res.headers });
+const anonymous = (res) => {
+  // Its body is already decoded: it no longer is what these described
+  const headers = new Headers(res.headers);
+  headers.delete("content-encoding");
+  headers.delete("content-length");
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+};
 
 async function serveStatic(req) {
   const worker = req.destination === "worker" || req.destination === "sharedworker";
-  const name = await completeShell();
-  if (name) {
-    // Next may add a query to its script URLs (a deployment id): the file is the same
-    const hit = await (await caches.open(name)).match(req, { ignoreSearch: true });
-    if (hit) return worker || new URL(req.url).search ? anonymous(hit) : hit;
+  try {
+    const name = await completeShell();
+    if (name) {
+      // Next may add a query to its script URLs (a deployment id): the file is the same. Looked up by its address
+      // alone, as the sync stored it (a header the request carries and a Vary names would miss it)
+      const url = new URL(req.url);
+      const hit = await (await caches.open(name)).match(url.origin + url.pathname, { ignoreSearch: true, ignoreVary: true });
+      if (hit) return worker || url.search ? anonymous(hit) : hit;
+    }
+  } catch {
+    // No Cache Storage to read: the server's copy
   }
   const res = await fetch(req);
   return worker && res.ok ? anonymous(res) : res;
@@ -475,21 +507,41 @@ let syncing = null;
 /**
  * Brings the shell up to the build the server lists: every file of it in a new cache (a file the last build had
  * under the same name, a hashed script, is copied over rather than downloaded again), then the older caches go. A
- * download cut short leaves the last whole shell in use, and the next page load tries again.
+ * download cut short leaves the last whole shell in use, and the next page load carries on where it stopped.
  */
 function syncShell() {
   syncing = syncing || runSync().catch(() => {}).finally(() => (syncing = null));
   return syncing;
 }
 
-async function runSync() {
+/** The build the server lists now, or null (no manifest: `next dev`, an older deploy) */
+async function listedShell() {
   const res = await fetch(SHELL_MANIFEST, { cache: "no-store" });
-  if (!res.ok) return;
+  if (!res.ok) return null;
   const manifest = await res.json();
-  if (!manifest || typeof manifest.build !== "string" || !Array.isArray(manifest.files)) return;
+  return manifest && typeof manifest.build === "string" && Array.isArray(manifest.files) ? manifest : null;
+}
+
+async function runSync() {
+  const manifest = await listedShell();
+  if (!manifest) return;
   const name = SHELL_PREFIX + manifest.build;
   const current = await completeShell();
   if (current === name) return;
+  // A build that never finished downloading (the player went offline, a deploy came first) is of no use now
+  for (const other of await caches.keys()) {
+    if (other.startsWith(SHELL_PREFIX) && other !== name && other !== current) await caches.delete(other);
+  }
+  try {
+    await fillShell(name, current, manifest);
+  } catch (err) {
+    // Out of space: this build's files go (the last whole shell stays), and the next load tries again
+    if (err && err.name === "QuotaExceededError") await caches.delete(name);
+    throw err;
+  }
+}
+
+async function fillShell(name, current, manifest) {
   const cache = await caches.open(name);
   const previous = current ? await caches.open(current) : null;
   for (const file of manifest.files) {
@@ -507,6 +559,13 @@ async function runSync() {
     if (!got.ok || got.type !== "basic") throw new Error(`${file}: HTTP ${got.status}`);
     // A page the server redirected to can't answer a navigation as it is: kept as a response of its own
     await cache.put(url, got.redirected ? anonymous(got) : got);
+  }
+  // A deploy while this ran may have sent the new build's pages with the old build's scripts: whole only if not
+  const now = await listedShell();
+  if (!now || now.build !== manifest.build) {
+    // Gone, so a later sync of this build (a deploy rolled back) never builds on the other build's pages
+    await caches.delete(name);
+    throw new Error("the build changed while its shell downloaded");
   }
   await cache.put(`${self.location.origin}/${SHELL_COMPLETE}`, new Response(JSON.stringify({ at: Date.now() }), { headers: { "Content-Type": "application/json" } }));
   shellName = Promise.resolve(name);

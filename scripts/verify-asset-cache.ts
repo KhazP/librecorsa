@@ -25,6 +25,11 @@ const KB = 1024;
 
 /** Marks a response the way a same-origin fetch does (a constructed one is "default") */
 const basic = (res: Response): Response => Object.defineProperty(res, "type", { value: "basic" });
+/**
+ * Gives a response the URL a fetched (or kept) one has: the one it was fetched by, without its fragment. A response
+ * made with `new Response` has none, and only such a one lets a page or worker keep the URL it was opened at
+ */
+const withUrl = (res: Response, url: string): Response => (url ? Object.defineProperty(res, "url", { value: url.replace(/#.*$/, "") }) : res);
 
 // --- A stand-in for the site: ETag/304, X-File-Size, brotli-style bodies with no Content-Length ---
 
@@ -47,6 +52,8 @@ class Site {
   log: Served[] = [];
   hung: Request[] = [];
   mode: "up" | "offline" | "hang" | "error" | "ignore-conditions" = "up";
+  /** Called as each request is answered (a deploy landing mid-download) */
+  onServe?: (path: string) => void;
 
   put(p: string, size: number, seed: number, extra: Partial<HostedFile> = {}): void {
     const body = new Uint8Array(size).map((_, i) => (i * 31 + seed) & 255);
@@ -55,6 +62,12 @@ class Site {
 
   fetch = async (input: Request | string, init?: RequestInit): Promise<Response> => {
     const req = input instanceof Request ? input : new Request(input, init);
+    const res = await this.answer(req);
+    this.onServe?.(new URL(req.url).pathname);
+    return withUrl(res, req.url);
+  };
+
+  private answer = async (req: Request): Promise<Response> => {
     const p = new URL(req.url).pathname;
     if (this.mode === "offline") throw new TypeError("Failed to fetch");
     if (this.mode === "hang") {
@@ -106,6 +119,8 @@ interface Stored {
   status: number;
   headers: [string, string][];
   body: Uint8Array;
+  /** The kept response's own URL ("" for one made with `new Response`), which a match gives back */
+  url: string;
 }
 /** The Cache API matches a URL without its fragment */
 const keyOf = (r: Request | string) => (typeof r === "string" ? r : r.url).replace(/#.*$/, "");
@@ -115,18 +130,18 @@ class FakeCache {
   /** Lookups made, to see how much work the clean-up does */
   matches = 0;
   constructor(private storage: FakeStorage) {}
-  async match(r: Request | string, opts?: { ignoreSearch?: boolean }): Promise<Response | undefined> {
+  async match(r: Request | string, opts?: { ignoreSearch?: boolean; ignoreVary?: boolean }): Promise<Response | undefined> {
     this.matches++;
     const url = keyOf(r);
     const s = this.entries.get(opts?.ignoreSearch ? url.replace(/\?.*$/, "") : url);
-    return s ? new Response(s.body.length || s.status === 200 ? s.body.slice() : null, { status: s.status, headers: s.headers }) : undefined;
+    return s ? withUrl(new Response(s.body.length || s.status === 200 ? s.body.slice() : null, { status: s.status, headers: s.headers }), s.url) : undefined;
   }
   async put(r: Request | string, res: Response): Promise<void> {
     const body = new Uint8Array(await res.arrayBuffer());
     const key = keyOf(r);
     const others = this.storage.used() - (this.entries.get(key)?.body.length ?? 0);
     if (others + body.length > this.storage.hardLimit) throw new DOMException("full", "QuotaExceededError");
-    this.entries.set(key, { status: res.status, headers: [...res.headers], body });
+    this.entries.set(key, { status: res.status, headers: [...res.headers], body, url: res.url });
   }
   async delete(r: Request | string): Promise<boolean> {
     return this.entries.delete(keyOf(r));
@@ -488,7 +503,10 @@ async function shellChecks(): Promise<void> {
   check("Offline, a page comes from the shell", textOf(r) === "<html>play v1</html>");
   r = await sw.get("/play.html", { navigate: true });
   const root = await sw.get("/", { navigate: true });
-  check("Its .html and the home page too", textOf(r) === "<html>play v1</html>" && textOf(root) === "<html>home v1</html>");
+  const index = await sw.get("/index.html", { navigate: true });
+  check("Its .html and the home page too, as / or /index.html", textOf(r) === "<html>play v1</html>" && textOf(root) === "<html>home v1</html>" && textOf(index) === "<html>home v1</html>");
+  r = await sw.get("/play?mods=off", { navigate: true });
+  check("A page opened with a query keeps it: the shell's copy carries no URL of its own", textOf(r) === "<html>play v1</html>" && r.res?.url === "", r.res?.url);
   r = await sw.get("/_next/static/chunks/a.js");
   check("And the scripts it names", textOf(r) === "console.log('a')");
   r = await sw.get("/_next/static/chunks/a.js?dpl=abc");
@@ -525,6 +543,38 @@ async function shellChecks(): Promise<void> {
   r = await sw.get("/play", { navigate: true });
   check("A sync cut short leaves the last whole shell serving", textOf(r) === "<html>play v2</html>" && box.caches.has("librecorsa-shell-b2"));
   site.mode = "up";
+
+  // The next build: the one that never finished goes before its files pile up
+  manifest("b4", ["/", "/play", "/_next/static/chunks/a.js"]);
+  await sw.message({ type: "librecorsa:sync-shell" });
+  check("A build's shell that never finished is deleted by the next sync", !box.caches.has("librecorsa-shell-b3") && box.caches.has("librecorsa-shell-b4"), [...box.caches.keys()].join(", "));
+
+  // A deploy while the shell downloads: the pages may be the new build's, the scripts the old one's, so it isn't whole
+  manifest("b5", ["/", "/play", "/_next/static/chunks/a.js"]);
+  site.onServe = (p) => {
+    if (p === "/play") manifest("b6", ["/", "/play", "/_next/static/chunks/a.js"]);
+  };
+  await sw.message({ type: "librecorsa:sync-shell" });
+  site.onServe = undefined;
+  check(
+    "A shell whose build changed while it downloaded is dropped, never marked whole",
+    !box.caches.has("librecorsa-shell-b5") && box.caches.has("librecorsa-shell-b4"),
+    [...box.caches.keys()].join(", "),
+  );
+
+  // No Cache Storage to read (a browser that refuses it): pages and scripts come from the server, never an error
+  const broken = new FakeStorage();
+  broken.keys = async () => {
+    throw new DOMException("denied", "SecurityError");
+  };
+  broken.open = async () => {
+    throw new DOMException("denied", "SecurityError");
+  };
+  const lost = startWorker(site, broken);
+  const script = await lost.get("/_next/static/chunks/a.js").catch(() => null);
+  const page = await lost.get("/play", { navigate: true }).catch(() => null);
+  const again = await lost.get("/_next/static/chunks/a.js").catch(() => null);
+  check("Without Cache Storage, scripts and pages still come from the server (again and again)", textOf(script ?? {}) === "console.log('a')" && textOf(page ?? {}) === "<html>play v2</html>" && textOf(again ?? {}) === "console.log('a')");
 }
 
 main().catch((err) => {

@@ -52,6 +52,7 @@ import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import { applyConditionsChoice, effectiveConditions, resolveTimeOfDay, type RoomConditionsOverride, type SessionConditions } from "@/lib/sim/weather";
 import { getTrackInfo, LISTED_TRACKS, trackDefaultTimeOfDay, TRACKS } from "@/lib/track-registry";
 import { roomTrackStatus } from "@/lib/mods/room-content";
+import { requestShellSync } from "@/lib/service-worker";
 import { F1TelemetryHud } from "@/components/F1TelemetryHud";
 import { roomFromUrl } from "@/lib/net/invite-room";
 import { CAMERA_MODES, nextCameraMode } from "@/lib/render/camera-modes";
@@ -1815,6 +1816,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
     driveChallenge(asked.race);
   }, [assetsReady, trackId, session, driveChallenge]);
+
+  // The first circuit is in: the offline copy of the game may download now, without slowing it
+  useEffect(() => {
+    if (assetsReady) requestShellSync();
+  }, [assetsReady]);
 
   // The race the host started before this circuit loaded
   useEffect(() => {
