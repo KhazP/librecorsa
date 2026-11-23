@@ -869,6 +869,45 @@ async function main2(): Promise<void> {
     const retried = await engine.sync({ accountId: "acc1", apply: () => true });
     check("storage full: the next start writes it", retried.kind === "synced" && st.getItem("lc.garage.chassis.amg-gt3") === '{"wing":9}');
   }
+
+  {
+    // A save from a newer build: a synced key, a settings field and an audio member this build doesn't know
+    const newerBuild = () =>
+      doc({
+        savedBy: "Newer build",
+        keys: { "lc.garage.wheels.gt3": { value: '{"rim":18}', t: 5 }, "bugesera.track": { value: "spa", t: 5 } },
+        settings: { pitStrategy: { value: { stops: 2 }, t: 5 }, audio: { value: { musicOff: [], spatial: true }, t: 5 } },
+      });
+    const mineNow = doc({ keys: { "bugesera.track": { value: "monza", t: 9 } }, settings: { audio: { value: { musicOff: ["t1"] }, t: 9 } } });
+    const kept = (["combine", "cloud", "local"] as const).every((choice) => {
+      const out = combineSaves(mineNow, readSaveDoc(newerBuild()) as SaveDoc, choice);
+      const audio = out.settings.audio?.value as Record<string, unknown>;
+      return out.keys["lc.garage.wheels.gt3"]?.value === '{"rim":18}' && same(out.settings.pitStrategy?.value, { stops: 2 }) && audio?.spatial === true;
+    });
+    check("a newer build's keys, fields and audio members are kept under every choice", kept);
+    const won = combineSaves(mineNow, readSaveDoc(newerBuild()) as SaveDoc, "combine").settings.audio.value as Record<string, unknown>;
+    check("this device's newer audio choice wins and the unknown member stays with it", same(won.musicOff, ["t1"]) && won.spatial === true);
+
+    const server = fakeServer();
+    server.doc = newerBuild();
+    server.rev = 1;
+    const clock = { t: 1_000 };
+    const st = memoryStorage({ [SETTINGS_KEY]: settingsWith({}) });
+    const older = device(server, "Older build", st, memoryGhosts(), clock);
+    await older.sync({ accountId: "acc1", apply: true });
+    const stored = JSON.parse(st.getItem(SETTINGS_KEY) as string);
+    check("they are never written into this device's storage", st.getItem("lc.garage.wheels.gt3") === null && stored.pitStrategy === undefined && stored.audio.spatial === undefined);
+    clock.t = 2_000;
+    st.setItem("bugesera.track", "imola");
+    const pushed = await older.sync({ accountId: "acc1", apply: false });
+    const up = cloudDoc(server);
+    check(
+      "an older build's write keeps them",
+      pushed.kind === "synced" && pushed.pushed && up.keys["bugesera.track"].value === "imola" && up.keys["lc.garage.wheels.gt3"]?.value === '{"rim":18}' && same(up.settings.pitStrategy?.value, { stops: 2 }) && (up.settings.audio?.value as Record<string, unknown>).spatial === true
+    );
+    const idle = await older.sync({ accountId: "acc1", apply: false });
+    check("nothing changed: an older build doesn't rewrite the newer save", idle.kind === "synced" && !idle.pushed);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------

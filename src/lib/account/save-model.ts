@@ -209,6 +209,21 @@ function accountShare(field: string, value: unknown): unknown {
   return Object.keys(out).length ? out : undefined;
 }
 
+/**
+ * What a newer build saves that this one doesn't know: a key no class here names, a settings field PlayerSettings
+ * doesn't have, a member of a split field neither split names. A save keeps them as they are, so an older build never
+ * drops a newer one's data; they are never written into this device's storage.
+ */
+const isUnknownKey = (key: string) => classifyKey(key) === null;
+const isUnknownField = (field: string) => !Object.hasOwn(SETTINGS_SPLIT, field);
+function unknownMembers(field: string, value: unknown): Obj {
+  const sub = SUB_SPLITS[field];
+  const out: Obj = {};
+  if (!sub || !isObj(value)) return out;
+  for (const [member, v] of Object.entries(value)) if (!Object.hasOwn(sub, member)) out[member] = v;
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Hashing (change detection only: fast and synchronous, not for security)
 
@@ -238,6 +253,8 @@ export function hashText(s: string): string {
 }
 
 const hashValue = (v: unknown) => hashText(stableStringify(v));
+/** A settings field's value as this build compares it: its account share (a split field's known members only) */
+const fieldHash = (field: string, value: unknown) => hashValue(accountShare(field, value));
 /** What a removed key hashes to in the sync base */
 const REMOVED_HASH = "-";
 
@@ -725,8 +742,8 @@ function combineValues(local: SaveDoc, cloud: SaveDoc, base: SyncBase | null, ou
     let res: Stamped<unknown> | undefined;
     if (!l || !c) res = l ?? c;
     else {
-      const lh = hashValue(l.value);
-      const ch = hashValue(c.value);
+      const lh = fieldHash(field, l.value);
+      const ch = fieldHash(field, c.value);
       const b = base?.settings[field];
       if (lh === ch) res = { value: c.value, t: Math.max(l.t, c.t) };
       else if (b !== undefined && lh === b) res = c;
@@ -752,6 +769,36 @@ function takeValues(chosen: SaveDoc, other: SaveDoc, out: SaveDoc): void {
 }
 
 /**
+ * A newer build's keys, settings fields and split-field members, kept whatever the choice: by their times where both
+ * sides have one (the cloud's on a tie), else from the side that has it
+ */
+function carryUnknown(local: SaveDoc, cloud: SaveDoc, out: SaveDoc): void {
+  const keys = new Set([...Object.keys(local.keys), ...Object.keys(cloud.keys), ...Object.keys(local.removed), ...Object.keys(cloud.removed)]);
+  for (const key of keys) {
+    if (!isUnknownKey(key)) continue;
+    const l = keySide(local, key);
+    const c = keySide(cloud, key);
+    const res = !l || !c ? (l ?? c) : pickSide(l.t, c.t) === "local" ? l : c;
+    if (!res) continue;
+    if (res.removed) out.removed[key] = res.t;
+    else out.keys[key] = { value: res.value, t: res.t };
+  }
+  for (const field of new Set([...Object.keys(local.settings), ...Object.keys(cloud.settings)])) {
+    const l = local.settings[field];
+    const c = cloud.settings[field];
+    if (isUnknownField(field)) {
+      const res = !l || !c ? (l ?? c) : pickSide(l.t, c.t) === "local" ? l : c;
+      if (res) out.settings[field] = { value: res.value, t: res.t };
+      continue;
+    }
+    const kept = out.settings[field];
+    if (!kept || !SUB_SPLITS[field]) continue;
+    const extra = { ...unknownMembers(field, l?.value), ...unknownMembers(field, c?.value) };
+    if (Object.keys(extra).length) out.settings[field] = { value: { ...extra, ...(accountShare(field, kept.value) as Obj | undefined) }, t: kept.t };
+  }
+}
+
+/**
  * One save from two: `local` (this device's, or a folded account's) and `cloud` (the account's), as `choice` says.
  *   combine  Both sides, value by value:
  *            - race history: both sides' races once each, within the game's cap
@@ -771,6 +818,7 @@ export function combineSaves(local: SaveDoc, cloud: SaveDoc, choice: FirstSyncCh
   if (choice === "combine") combineValues(local, cloud, opts.base ?? null, out);
   else if (choice === "cloud") takeValues(cloud, local, out);
   else takeValues(local, cloud, out);
+  carryUnknown(local, cloud, out);
 
   const preferLocal = choice === "local";
   for (const key of new Set([...Object.keys(local.bestLaps), ...Object.keys(cloud.bestLaps)])) {
@@ -834,13 +882,13 @@ export function nextBase(result: SaveDoc, local: SaveDoc, after: SaveDoc, old: S
     else if (ah !== undefined && ah === sideHash(local, key)) base.keys[key] = ah;
     else if (old?.keys[key] !== undefined) base.keys[key] = old.keys[key];
   }
-  const fieldHash = (doc: SaveDoc, field: string) => (doc.settings[field] ? hashValue(doc.settings[field].value) : undefined);
+  const hashIn = (doc: SaveDoc, field: string) => (doc.settings[field] ? fieldHash(field, doc.settings[field].value) : undefined);
   for (const field of new Set([...Object.keys(result.settings), ...Object.keys(local.settings)])) {
     if (!isAccountField(field)) continue;
-    const rh = fieldHash(result, field);
-    const ah = fieldHash(after, field);
+    const rh = hashIn(result, field);
+    const ah = hashIn(after, field);
     if (ah !== undefined && ah === rh) base.settings[field] = rh;
-    else if (ah !== undefined && ah === fieldHash(local, field)) base.settings[field] = ah;
+    else if (ah !== undefined && ah === hashIn(local, field)) base.settings[field] = ah;
     else if (old?.settings[field] !== undefined) base.settings[field] = old.settings[field];
   }
   return base;
@@ -854,7 +902,7 @@ export function differsLocally(local: SaveDoc, result: SaveDoc): boolean {
   for (const [f, s] of Object.entries(result.settings)) {
     if (!isAccountField(f)) continue;
     const l = local.settings[f];
-    if (!l || hashValue(l.value) !== hashValue(s.value)) return true;
+    if (!l || fieldHash(f, l.value) !== fieldHash(f, s.value)) return true;
   }
   return false;
 }
