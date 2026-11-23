@@ -18,7 +18,7 @@
     "topDrivers": "Meilleurs pilotes de la semaine",
     "winsPodiums": "{wins, plural, one {{wins} victoire} other {{wins} victoires}} · {podiums, plural, one {{podiums} podium} other {{podiums} podiums}}",
     "record": "Vous : {starts, plural, one {{starts} course} other {{starts} courses}} · {wins, plural, one {{wins} victoire} other {{wins} victoires}} · {podiums, plural, one {{podiums} podium} other {{podiums} podiums}}",
-    "recordBest": "Vous : {starts, plural, one {{starts} course} other {{starts} courses}} · {wins, plural, one {{wins} victoire} other {{wins} victoires}} · {podiums, plural, one {{podiums} podium} other {{podiums} podiums}} · meilleur P{best}"
+    "recordBest": "Vous : {starts, plural, one {{starts} course} other {{starts} courses}} · {wins, plural, one {{wins} victoire} other {{wins} victoires}} · {podiums, plural, one {{podiums} podium} other {{podiums} podiums}} · meilleur : P{best}"
   },
   "seatPanel": {
     "dialog": "Siège et caméra, {car}",
@@ -57,7 +57,7 @@
   },
   "leaderboardPanel": {
     "raceGhost": "Courir contre le fantôme de votre tour en {car}",
-    "raceGhostTitle": "Fantôme de course",
+    "raceGhostTitle": "Courir contre le fantôme",
     "postUnreachable": "Classement injoignable",
     "applySetup": "Appliquer les réglages de votre tour en {car}",
     "applySetupTitle": "Appliquer les réglages",
@@ -185,7 +185,7 @@
       "relayedTitle": "Le trafic vous parvient via l’hôte",
       "relayed": "Relayé",
       "measuring": "Mesure",
-      "pingLoss": "{ping} ms · {loss} % de perte"
+      "pingLoss": "{ping} ms · {loss} % de perte"
     },
     "drivers": {
       "title": "Pilotes",
@@ -212,8 +212,8 @@
       "raceRunning": "Course en cours.",
       "qualifyingRunning": "Qualifications en cours.",
       "waitingForHost": "En attente du lancement par l’hôte.",
-      "confirmEndQualifying": "Terminer les qualifications ?",
-      "confirmEndRace": "Terminer la course pour tous ?",
+      "confirmEndQualifying": "Terminer les qualifications ?",
+      "confirmEndRace": "Terminer la course pour tous ?",
       "confirmEndQualifyingButton": "Terminer les qualifications",
       "confirmEndRaceButton": "Terminer la course",
       "keepQualifying": "Continuer les qualifications",
@@ -239,7 +239,7 @@
       "codeTooShort": "Saisissez au moins 3 caractères.",
       "joinFailed": "Impossible de rejoindre ce salon. Vérifiez le code.",
       "shareTitle": "Course LibreCorsa",
-      "shareText": "Rejoins ma course",
+      "shareText": "Rejoignez ma course",
       "racingAs": "Vous courez sous le nom {name}",
       "edit": "Modifier"
     },
@@ -343,10 +343,10 @@
     "corners": {
       "title": "Virages",
       "mapLabel": "{count, plural, one {Carte du circuit avec # virage numéroté} other {Carte du circuit avec # virages numérotés}}",
-      "turn": "T{turn}",
+      "turn": "V{turn}",
       "detail": "{complex} · Secteur {sector}",
       "pick": "Sélectionnez un virage",
-      "rowLabel": "T{turn}, virage {turn} : {name}, {complex}. Point de corde {apex} {unit}, rapport {gear}",
+      "rowLabel": "V{turn}, virage {turn} : {name}, {complex}. Point de corde {apex} {unit}, rapport {gear}",
       "gear": "Rapport <n>{gear}</n>"
     }
   },
@@ -390,7 +390,7 @@
     "saveName": "Enregistrer le nom",
     "chart": {
       "title": "Vitesse minimale par virage",
-      "turn": "T{turn}",
+      "turn": "V{turn}",
       "empty": "Aucune donnée de virage pour ce tour.",
       "bar": "V{turn} {name} : {speed} {unit}, {state, select, none {pas encore de référence} same {{delta}, identique au meilleur} faster {{delta}, plus rapide que le meilleur} other {{delta}, plus lent que le meilleur}}",
       "faster": "Plus rapide",
@@ -644,8 +644,8 @@
     "lowerHint": "{hint} (croix directionnelle bas ou -)",
     "raise": "Augmenter {dial}",
     "raiseHint": "{hint} (croix directionnelle haut ou =)",
-    "openTuner": "Ouvrir le tuner",
-    "foldTuner": "Replier le tuner"
+    "openTuner": "Ouvrir les réglages électroniques",
+    "foldTuner": "Replier les réglages électroniques"
   },
   "f12026ChannelsPanel": {
     "region": "Canaux d’ingénierie",
@@ -683,7 +683,7 @@
   },
   "touchControls": {
     "steering": "Direction",
-    "drive": "Conduire",
+    "drive": "Marche avant",
     "reverse": "Marche arrière",
     "shiftDown": "Rétrograder",
     "shiftUp": "Monter le rapport",
@@ -732,7 +732,7 @@
     "hints": {
       "freeCam": "Caméra libre · Glisser pour regarder · WASD voler · Q/E hauteur · Molette vitesse · R réinitialiser",
       "playPause": "Lecture / pause",
-      "seek": "Avancer de {seconds} s",
+      "seek": "Avancer / reculer ({seconds} s)",
       "step": "Image par image",
       "switchCar": "Changer de voiture",
       "freeCamKey": "Caméra libre",
@@ -752,8 +752,8 @@
       "fastestLap": "Tour le plus rapide",
       "fastestLapShort": "MT",
       "finished": "Arrivé",
-      "damagedTitle": "Endommagée ({percent}%)",
-      "damagedLabel": "Endommagée, {percent}%",
+      "damagedTitle": "Endommagée ({percent} %)",
+      "damagedLabel": "Endommagée, {percent} %",
       "out": "Abandon",
       "leader": "Leader",
       "lead": "Tête",
@@ -791,9 +791,9 @@
     },
     "vsc": {
       "tag": "VSC",
-      "ending": "Fin du VSC",
+      "ending": "Fin de la VSC",
       "slowDown": "Ralentissez",
-      "slowToTarget": "Ralentir vers la cible",
+      "slowToTarget": "Ralentissez au rythme cible",
       "prepareForGreen": "Préparez-vous au vert",
       "noOvertaking": "Dépassement interdit"
     },
@@ -820,9 +820,9 @@
     "warningsMeter": "{count} avertissements sur {total}",
     "pointsMeter": "{points} points de limites de piste sur {allowed}",
     "giveBack": {
-      "toCar": "Rendre la place à {code}",
-      "dropTo": "Retomber en P{position}",
-      "time": "Rendre {seconds} s",
+      "toCar": "Rendez la place à {code}",
+      "dropTo": "Revenez en P{position}",
+      "time": "Rendez {seconds} s",
       "slowDown": "Ralentissez",
       "underYellow": "Dépassement sous jaune",
       "illegalOvertake": "Dépassement illégal",
@@ -860,13 +860,13 @@
     "shiftLights": "Témoins de changement de rapport : {lit} sur {total}",
     "gearLabel": "Rapport {gear}",
     "gear": "Rapport",
-    "shift": "Changez",
+    "shift": "Montez",
     "aeroToggle": "{label} : basculer",
     "drsTitle": "DRS ({key}) : volet arrière, dans une zone DRS ; en course, seulement à moins de 1 s de la voiture devant au point de détection, à partir du tour 3",
     "straightModeTitle": "Straight Mode ({key}) : les deux volets s’ouvrent dans les lignes droites ; un appui juste avant une ligne droite les ouvre dès son début",
     "overtakeLockedTitle": "Mode dépassement ({keys}) : obtenu à moins de 1 s de la voiture devant au point de détection, pour le tour suivant",
     "overtakeTitle": "Mode dépassement ({keys})",
-    "boostTitle": "Boost de dépassement manuel ({keys})",
+    "boostTitle": "Boost manuel ({keys})",
     "overtake": "Dépassement",
     "boost": "Boost",
     "harvest": "Récupération",
@@ -875,9 +875,9 @@
     "lonG": "G long.",
     "inputs": "Frein, accélérateur, force",
     "brakeLetter": "F",
-    "brakeTitle": "Entrée de frein",
+    "brakeTitle": "Commande de frein",
     "throttleLetter": "A",
-    "throttleTitle": "Entrée d’accélérateur",
+    "throttleTitle": "Commande d’accélérateur",
     "forceLetter": "F",
     "clip": "Clip",
     "forceTitle": "Couple de direction / Force Feedback (rouge = saturation)",
@@ -956,10 +956,10 @@
       "flat": "Plat",
       "flatTitle": "Méplat dû à un blocage : vibrations et moins d’adhérence",
       "dirt": "Saleté",
-      "dirtTitle": "Saleté / gommes ramassées hors trajectoire : disparaît en quelques virages"
+      "dirtTitle": "Saleté / débris de gomme ramassés hors trajectoire : se nettoie en quelques virages"
     },
-    "conditionTitle": "{title} ({level}%)",
-    "brakeTitle": "Disque de frein {disc}{hasCore, select, yes { · cœur {core}} other {}}{hasBite, select, yes { · mordant des plaquettes {bite}%} other {}}",
+    "conditionTitle": "{title} ({level} %)",
+    "brakeTitle": "Disque de frein {disc}{hasCore, select, yes { · cœur {core}} other {}}{hasBite, select, yes { · mordant des plaquettes {bite} %} other {}}",
     "cardTitle": "{corner} bande {temps} (vue de l’arrière)",
     "treadLife": "Gomme restante",
     "pressureTitle": "Pression ({unit})",
@@ -1033,8 +1033,8 @@
     "title": "Force Feedback",
     "clipping": "Saturation",
     "inRange": "Dans la plage",
-    "peak": "Pic <v>{value}%</v>",
-    "setCar": "Régler cette voiture à {value}%"
+    "peak": "Pic <v>{value} %</v>",
+    "setCar": "Régler cette voiture à {value} %"
   },
   "proximityRadar": {
     "carsClose": "{count, plural, one {# voiture à proximité} other {# voitures à proximité}}{side, select, left {, une à côté sur la gauche} right {, une à côté sur la droite} both {, une à côté sur la gauche, une à côté sur la droite} other {}}",

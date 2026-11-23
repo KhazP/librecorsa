@@ -40,7 +40,7 @@
     "clutch": "Embray."
   },
   "steeringFeel": {
-    "title": "Toucher et vibrations",
+    "title": "Ressenti et vibrations",
     "feel": "Comportement de la direction",
     "testVibration": "Tester la vibration",
     "testVibrationHint": "Une courte vibration dans chaque manette connectée",
@@ -70,7 +70,7 @@
     "pressButton": "Appuyez sur un bouton",
     "add": "Ajouter",
     "clutch": "Embrayage",
-    "clutchHintSet": "Maintenu, il ouvre l’embrayage : montez les tours sur place, faites patiner au départ",
+    "clutchHintSet": "Maintenu, il débraye : montez dans les tours sur place, faites-le patiner au départ",
     "clutchHintUnset": "Facultatif. La voiture gère son embrayage seule tant que vous ne l’actionnez pas",
     "pressForClutch": "Appuyez sur un bouton pour l’embrayage",
     "clutchAria": "Embrayage : {source}. Modifier",
@@ -91,12 +91,12 @@
     "stickResponseCurve": "Courbe de réponse du stick",
     "pedalTrigger": "{pedal}, gâchette",
     "pedalSource": "{pedal}, {source}",
-    "pedalReadout": "{raw}% en entrée, {shaped}% en sortie"
+    "pedalReadout": "{raw} % en entrée, {shaped} % en sortie"
   },
   "assistCurve": {
     "title": "Courbe d’auto-braquage",
-    "summaryFullLock": "{grip}% d’adhérence · braquage maximal",
-    "summaryCap": "{grip}% d’adhérence · limite {cap}°",
+    "summaryFullLock": "{grip} % d’adhérence · braquage maximal",
+    "summaryCap": "{grip} % d’adhérence · limite {cap}°",
     "curve": "Courbe de réponse de l’auto-braquage",
     "slide": "Glissement {deg}°"
   },
@@ -138,7 +138,7 @@
   },
   "keyboard": {
     "mouse": "Souris",
-    "feel": "Toucher du clavier"
+    "feel": "Ressenti du clavier"
   },
   "dualSense": {
     "feel": {
@@ -171,8 +171,8 @@
     "connect": "Connecter la DualSense",
     "connected": "Connectée",
     "padLine": "{name}, {transport}",
-    "padLineBattery": "{name}, {transport}, {battery}%",
-    "padLineCharging": "{name}, {transport}, {battery}% en charge",
+    "padLineBattery": "{name}, {transport}, {battery} %",
+    "padLineCharging": "{name}, {transport}, {battery} % en charge",
     "hdHaptics": "Retours haptiques HD",
     "hdHapticsHint": "Haptique audio USB pour les vibreurs, le glissement et le moteur",
     "needsUsb": "Nécessite un câble USB",
@@ -195,7 +195,7 @@
     "sensitivityHint": "Intensité des petits mouvements. Plus bas = plus calme autour du centre ; le braquage maximal reste atteint à l’inclinaison complète",
     "linear": "Linéaire",
     "calmer": "Plus calme {value}",
-    "sharper": "Plus vif {value}",
+    "sharper": "Plus vive {value}",
     "needsChrome": "Nécessite Chrome ou Edge (WebHID)",
     "connectFirst": "Connectez d’abord une DualSense ou une DualShock 4",
     "connected": "Connectée",
@@ -254,7 +254,7 @@
     "customRotation": "Rotation personnalisée",
     "steeringFilters": "Filtres de direction",
     "steerLock": "Angle de braquage : {cars}",
-    "steerLockHint": "Jusqu’où tourner la jante pour le braquage maximal. Le braquage de la vraie voiture est le plus réaliste",
+    "steerLockHint": "Jusqu’où tourner le volant pour le braquage maximal. Le braquage de la vraie voiture est le plus réaliste",
     "steerLockReal": "{deg}°, réel",
     "lockClass": {
       "formula": "Monoplaces",
@@ -286,7 +286,7 @@
     "bound": "Btn {button}",
     "add": "Ajouter",
     "capturing": "Appuyez sur un bouton de n’importe quel périphérique. Esc annule ; arrêt après {seconds} s",
-    "moved": "Bt {button} retiré de {action}"
+    "moved": "Btn {button} retiré de {action}"
   },
   "bridge": {
     "takenOver": "Repris",
@@ -335,7 +335,7 @@
     "needsFfb": "Nécessite le Force Feedback activé",
     "needsWheel": "Nécessite un volant connecté",
     "invert": "Inverser",
-    "invertHint": "Tenez la jante et appuyez sur Tester : le volant doit tirer à droite, puis à gauche. S’il tire d’abord à gauche, activez ceci",
+    "invertHint": "Tenez le volant et appuyez sur Tester : il doit tirer à droite, puis à gauche. S’il tire d’abord à gauche, activez ceci",
     "testDirection": "Tester le sens",
     "testDirectionHint": "Tire à droite, puis à gauche",
     "test": "Tester",

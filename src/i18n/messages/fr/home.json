@@ -73,7 +73,7 @@
       },
       "country": {
         "label": "Pays",
-        "all": "Tous les lieux"
+        "all": "Tous les pays"
       },
       "modder": {
         "label": "Moddeur",
@@ -110,7 +110,7 @@
     "about": {
       "lead": "Simulateur de course gratuit et open source dans le navigateur.",
       "addMod": "Ajoutez votre mod",
-      "addModText": "Vous avez créé un mod de voiture ou de circuit et vous voulez le voir dans LibreCorsa ? Écrivez-moi à <mail>{email}</mail> avec un lien. Chaque moddeur est crédité par son nom dans le jeu.",
+      "addModText": "Vous avez créé un mod de voiture ou de circuit et vous voulez le voir dans LibreCorsa ? Écrivez-moi à <mail>{email}</mail> avec un lien. Chaque moddeur est crédité par son nom dans le jeu.",
       "modders": "Les moddeurs",
       "moddersText": "Les circuits et les voitures sont leur travail, utilisés avec leur autorisation. Si l’un d’eux vous plaît, vous pouvez remercier directement son auteur.",
       "links": {
@@ -132,10 +132,10 @@
       },
       "controls": {
         "label": "Commandes",
-        "text": "Clavier, manette, écran tactile ou volant à retour de force"
+        "text": "Clavier, manette, écran tactile ou volant Force Feedback"
       },
       "platforms": {
-        "label": "Joue sur",
+        "label": "Disponible sur",
         "text": "Tout navigateur récent : ordinateur, téléphone ou tablette"
       },
       "conditions": {

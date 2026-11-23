@@ -121,11 +121,11 @@
         "keyboard": "Assignez l’embrayage dans Commandes > Clavier"
       },
       "overridden": {
-        "gearbox": "Désactivé temporairement (nécessite la boîte manuelle) ; activez pour restaurer la valeur par défaut",
-        "wheel": "Désactivé temporairement (assignez l’embrayage dans commandes > volant) ; activez pour restaurer la valeur par défaut",
-        "controller": "Désactivé temporairement (assignez l’embrayage dans commandes > manette) ; activez pour restaurer la valeur par défaut",
-        "touch": "Désactivé temporairement (indisponible avec les commandes tactiles) ; activez pour restaurer la valeur par défaut",
-        "keyboard": "Désactivé temporairement (assignez l’embrayage dans commandes > clavier) ; activez pour restaurer la valeur par défaut"
+        "gearbox": "Forcé temporairement (nécessite la boîte manuelle) ; activez pour restaurer la valeur par défaut",
+        "wheel": "Forcé temporairement (assignez l’embrayage dans commandes > volant) ; activez pour restaurer la valeur par défaut",
+        "controller": "Forcé temporairement (assignez l’embrayage dans commandes > manette) ; activez pour restaurer la valeur par défaut",
+        "touch": "Forcé temporairement (indisponible avec les commandes tactiles) ; activez pour restaurer la valeur par défaut",
+        "keyboard": "Forcé temporairement (assignez l’embrayage dans commandes > clavier) ; activez pour restaurer la valeur par défaut"
       }
     },
     "gamepadAssist": {
@@ -213,7 +213,7 @@
     },
     "triggerRumble": {
       "label": "Vibration des gâchettes",
-      "hint": "Retour du patinage, de l’ABS et du patinage des roues dans les gâchettes"
+      "hint": "Retour du glissement, de l’ABS et du patinage des roues dans les gâchettes"
     },
     "triggerSlipAlwaysOn": {
       "label": "Patinage aux gâchettes avec ABS/TC actifs",
@@ -258,7 +258,7 @@
     },
     "ffbGain": {
       "label": "Force",
-      "hintPerCar": "Remplacé par le gain par voiture ({gain}) ci-dessous"
+      "hintPerCar": "Remplacée par la force par voiture ({gain}) ci-dessous"
     },
     "ffbDamping": {
       "label": "Amortissement"
@@ -284,7 +284,7 @@
     "ffbMinForce": {
       "label": "Force minimale",
       "hint": "Supprime la zone morte centrale",
-      "hintPerCar": "Remplacé par la force minimale par voiture"
+      "hintPerCar": "Remplacée par la force minimale par voiture"
     },
     "ffbFilterS": {
       "label": "Lissage"
@@ -326,7 +326,7 @@
     "sharpLow": {
       "label": "Basse nette",
       "hint": "Affiche Basse en résolution Moyenne",
-      "hintAuto": "Affiche Basse en résolution Moyenne ; la qualité auto peut le désactiver",
+      "hintAuto": "Affiche Basse en résolution Moyenne ; la qualité auto peut la désactiver",
       "off": "Nécessite la qualité Basse"
     },
     "renderScale": {
@@ -351,7 +351,7 @@
     },
     "autoQualityMinScale": {
       "label": "Résolution minimale",
-      "hint": "La qualité automatique ne descend jamais sous cette Résolution de rendu",
+      "hint": "La qualité automatique ne baisse jamais la Résolution de rendu sous ce seuil",
       "hintLow": "La résolution reste fixe ; Basse n’a aucun effet à retirer",
       "hintEffects": "La résolution reste fixe ; seuls les effets diminuent",
       "off": "Nécessite la Qualité automatique"

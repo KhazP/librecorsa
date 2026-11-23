@@ -47,7 +47,7 @@
     "casual": "Décontracté",
     "casualDetail": "Pas d’usure des pneus, températures des pneus indulgentes, pluie plus douce",
     "standard": "Standard",
-    "standardDetail": "Usure des pneus activée, températures des pneus adoucies, presque toute la pluie",
+    "standardDetail": "Usure des pneus activée, températures des pneus adoucies, pluie quasi complète",
     "full": "Complet",
     "fullDetail": "Modèle complet des pneus et de la pluie, pneus et freins froids à la sortie du garage"
   },
@@ -58,8 +58,8 @@
     "autoHint": "Règles monoplace pour les monoplaces, règles d’endurance pour le reste",
     "openWheelHint": "Limites de piste par avertissements : 4 = +5 s, 8 = +10 s, 12 = disqualification",
     "enduranceHint": "Limites de piste par points pondérés : 5 = +5 s, 10 = +10 s, 15 = disqualification",
-    "trackLimitsOn": "Activé",
-    "trackLimitsOff": "Désactivé"
+    "trackLimitsOn": "Activées",
+    "trackLimitsOff": "Désactivées"
   },
   "damage": {
     "off": "Aucun",
@@ -115,7 +115,7 @@
     "placeNoTime": "Pas encore de temps",
     "placeFirst": "P1 · le plus rapide cette semaine",
     "place": "P{place}",
-    "placeGap": "P{place} · {gap} de P{above}"
+    "placeGap": "P{place} · à {gap} de P{above}"
   },
   "board": {
     "conditions": "{assists} · {realism} · {surface}",
@@ -155,7 +155,7 @@
     "chase": "Poursuite",
     "chaseDetail": "Derrière la voiture",
     "chaseFar": "Poursuite éloignée",
-    "chaseFarDetail": "Large derrière la voiture",
+    "chaseFarDetail": "Plan large derrière la voiture",
     "chaseLow": "Poursuite basse",
     "chaseLowDetail": "Bas derrière l’aileron arrière",
     "tvPod": "T-cam",
@@ -304,28 +304,28 @@
     "bumper": "Passage aux gâchettes"
   },
   "wheelSupport": {
-    "moza": "Se connecte, dirige et joue le Force Feedback via WebHID",
+    "moza": "Se connecte, dirige et restitue le Force Feedback via WebHID",
     "hidPid": "Non testé ; utilise les mêmes rapports de Force Feedback standard",
-    "directDrive": "Non testé ; sans Force Feedback HID PID, la page bascule sur le bridge",
+    "directDrive": "Non testé ; sans Force Feedback HID PID, la page bascule sur le pont",
     "pxn": "Non testé ; HID PID avec ses propres valeurs Set Effect, qu’aucun volant PXN n’a confirmées",
     "logitechClassic": "Non testé ; démarre sur WebHID avec les commandes Logitech classiques envoyées par hid-lg4ff sous Linux, y compris les LED de régime des G27 et G29",
     "logitechHidpp": "Non testé ; démarre sur WebHID avec le Force Feedback HID++ tel que l’envoie hid-logitech-hidpp sous Linux, une fois que Logitech G HUB a basculé le volant en mode PC",
-    "logitechBridgeOnly": "Non testé ; bridge uniquement : aucun pilote Linux principal ne gère le G923 pour PlayStation ni le G PRO, et le navigateur ne peut pas remettre à l’échelle l’axe de direction du DFP",
-    "thrustmaster": "Non testé ; les commandes de hid-tmff2 sous Linux, une fois qu’un pilote a sorti le volant de son mode de démarrage. Sinon, ou si Windows refuse les commandes, le bridge prend le relais",
-    "thrustmasterBridgeOnly": "Non testé ; bridge uniquement : les T150 et TMX utilisent un autre jeu de commandes, et hid-tmff2 ne couvre pas le T500RS",
-    "fanatecCslElite": "Non testé ; sans Force Feedback HID PID, la page bascule sur le bridge",
+    "logitechBridgeOnly": "Non testé ; pont uniquement : aucun pilote Linux principal ne gère le G923 pour PlayStation ni le G PRO, et le navigateur ne peut pas remettre à l’échelle l’axe de direction du DFP",
+    "thrustmaster": "Non testé ; les commandes de hid-tmff2 sous Linux, une fois qu’un pilote a sorti le volant de son mode de démarrage. Sinon, ou si Windows refuse les commandes, le pont prend le relais",
+    "thrustmasterBridgeOnly": "Non testé ; pont uniquement : les T150 et TMX utilisent un autre jeu de commandes, et hid-tmff2 ne couvre pas le T500RS",
+    "fanatecCslElite": "Non testé ; sans Force Feedback HID PID, la page bascule sur le pont",
     "tested": "Testé",
     "expected": "Prévu",
     "unknown": "Inconnu",
     "no": "Non"
   },
   "hudLayouts": {
-    "broadcast": "Broadcast",
-    "broadcastDetail": "Graphismes TV : tour, carte, bandeau de télémétrie",
-    "dash": "Wheel dash",
+    "broadcast": "Diffusion TV",
+    "broadcastDetail": "Graphismes TV : tableau des temps, carte, bandeau de télémétrie",
+    "dash": "Écran de volant",
     "dashDetail": "Un écran de volant, bas et centré",
     "telemetry": "Télémétrie",
-    "telemetryDetail": "Le dash plus pneus, G, puissance et commandes",
+    "telemetryDetail": "L’écran de volant plus pneus, G, puissance et commandes",
     "classic": "Classique",
     "classicDetail": "Les panneaux d’angle d’origine",
     "minimal": "Minimal",
@@ -335,7 +335,7 @@
     "h2hDetail": "Les voitures devant et derrière, écarts et deltas au tour",
     "retroDetail": "Instruments chaleureux : cadran rond, barre de delta, tours",
     "blocksDetail": "Blocs sombres carrés : chronos, secteurs, pneus, carburant",
-    "grandPrixDetail": "Tour de course, compteur rond, rapport et commandes"
+    "grandPrixDetail": "Tableau des temps, compteur rond, rapport et commandes"
   },
   "steeringAssist": {
     "selfSteerStrength": "Auto-braquage et contre-braquage",
@@ -343,18 +343,18 @@
     "dampingStrength": "Amortissement du lacet",
     "dampingStrengthHint": "Calme les retours brusques et les balancements quand la glissade se rattrape",
     "speedSensitivity": "Calme à haute vitesse",
-    "speedSensitivityHint": "Ralentit plus ou moins la direction en vitesse, pour que les petits mouvements restent doux",
+    "speedSensitivityHint": "Ralentit plus ou moins la direction à haute vitesse, pour que les petits mouvements restent doux",
     "slipLimitMargin": "Marge de glissement des pneus",
     "slipLimitMarginHint": "Négatif : coussin de sous-virage plus sûr · Positif : laisse l’avant dépasser son pic de glissement",
     "maxSelfSteerAngleDeg": "Contre-braquage max",
     "maxSelfSteerAngleDegHint": "Angle de roue maximal que l’aide applique seule pour rattraper une glissade",
     "presetBalanced": "Équilibré",
     "presetStable": "Stable",
-    "presetLoose": "Lâche",
+    "presetLoose": "Libre",
     "presetDrift": "Drift",
-    "presetCalm": "Calme en vitesse",
+    "presetCalm": "Calme à haute vitesse",
     "fullLock": "braquage maximal",
-    "presetDetail": "auto-braquage {selfSteer}, amortissement du lacet {damping}, calme à haute vitesse {calm}, avant à {grip} % de leur pic de glissement, contre-braquage jusqu’à {cap}"
+    "presetDetail": "auto-braquage {selfSteer}, amortissement du lacet {damping}, calme à haute vitesse {calm}, pneus avant à {grip} % de leur pic de glissement, contre-braquage jusqu’à {cap}"
   },
   "support": {
     "donatePayPal": "Faire un don via PayPal",
@@ -398,8 +398,8 @@
     "rearBumpStopRange": "Course des butées arrière",
     "diffPreload": "Précharge du diff.",
     "gearSet": "Jeu de rapports",
-    "frontThirdPacker": "Tiers-ressort avant (cale)",
-    "rearThirdPacker": "Tiers-ressort arrière (cale)",
+    "frontThirdPacker": "Cale du 3e ressort avant",
+    "rearThirdPacker": "Cale du 3e ressort arrière",
     "frontBrakeDucts": "Conduits de frein avant",
     "rearBrakeDucts": "Conduits de frein arrière",
     "radiatorOpening": "Ouverture du radiateur",
@@ -411,18 +411,18 @@
     "rearRebound": "Détente arrière",
     "frontFastRebound": "Détente rapide avant",
     "rearFastRebound": "Détente rapide arrière",
-    "frontThirdSpring": "Tiers-ressort avant",
-    "rearThirdSpring": "Tiers-ressort arrière",
-    "frontThirdBump": "Compression tiers avant",
-    "rearThirdBump": "Compression tiers arrière",
-    "frontThirdFastBump": "Compression rapide tiers avant",
-    "rearThirdFastBump": "Compression rapide tiers arrière",
-    "frontThirdRebound": "Détente tiers avant",
-    "rearThirdRebound": "Détente tiers arrière",
-    "frontThirdFastRebound": "Détente rapide tiers avant",
-    "rearThirdFastRebound": "Détente rapide tiers arrière",
-    "frontCornerPackers": "Cales d’angle avant",
-    "rearCornerPackers": "Cales d’angle arrière",
+    "frontThirdSpring": "3e ressort avant",
+    "rearThirdSpring": "3e ressort arrière",
+    "frontThirdBump": "Compression 3e élément avant",
+    "rearThirdBump": "Compression 3e élément arrière",
+    "frontThirdFastBump": "Compression rapide 3e élément avant",
+    "rearThirdFastBump": "Compression rapide 3e élément arrière",
+    "frontThirdRebound": "Détente 3e élément avant",
+    "rearThirdRebound": "Détente 3e élément arrière",
+    "frontThirdFastRebound": "Détente rapide 3e élément avant",
+    "rearThirdFastRebound": "Détente rapide 3e élément arrière",
+    "frontCornerPackers": "Cales de suspension avant",
+    "rearCornerPackers": "Cales de suspension arrière",
     "frontWheelRate": "Raideur à la roue avant",
     "rearWheelRate": "Raideur à la roue arrière",
     "frontBumpStopRate": "Raideur des butées avant",
@@ -463,7 +463,7 @@
     "electronicsShort": "Électr.",
     "mechanicalGrip": "Adhérence mécanique",
     "mechanicalGripShort": "Méca.",
-    "thirdElements": "Éléments tiers",
+    "thirdElements": "Troisièmes éléments",
     "thirdElementsShort": "3e",
     "aero": "Aéro",
     "fuelShort": "Carb.",
@@ -474,7 +474,7 @@
   },
   "setupFx": {
     "frontWing": {
-      "more": "Plus d’adhérence avant en vitesse, arrière plus lâche",
+      "more": "Plus d’adhérence avant à haute vitesse, arrière plus mobile",
       "less": "Arrière plus stable, plus de sous-virage à haute vitesse"
     },
     "rearWing": {
@@ -482,12 +482,12 @@
       "less": "Plus rapide en ligne droite, arrière nerveux"
     },
     "diffOn": {
-      "more": "Plus de motricité, survirage en puissance",
+      "more": "Plus de motricité, survirage à l’accélération",
       "less": "Ménage les roues arrière, la roue intérieure patine"
     },
     "diffOff": {
       "more": "Stable hors accélération, résiste à l’inscription",
-      "less": "Pivote à l’entrée, peut sembler lâche"
+      "less": "Pivote à l’entrée, peut sembler instable"
     },
     "engineBraking": {
       "more": "Plus de freinage arrière au lever de pied, pivote",
@@ -503,7 +503,7 @@
     },
     "toeFront": {
       "more": "Plus stable en ligne droite, inscription plus molle",
-      "less": "Inscription plus vive, nerveux en vitesse"
+      "less": "Inscription plus vive, nerveux à haute vitesse"
     },
     "toeRear": {
       "more": "Arrière stable, un peu plus de traînée",
@@ -527,10 +527,10 @@
     },
     "rideFront": {
       "more": "Plus sûr sur les vibreurs, moins d’appui",
-      "less": "Plus d’appui, le fond peut décrocher"
+      "less": "Plus d’appui, le fond plat peut décrocher"
     },
     "rideRear": {
-      "more": "Plus d’assiette piquée : plus vif, arrière plus lâche",
+      "more": "Plus d’assiette piquée : plus vif, arrière plus mobile",
       "less": "Arrière plus calme, plus de sous-virage"
     },
     "brakePressure": {
@@ -590,8 +590,8 @@
       "less": "Touche les butées plus tôt, assiette plus plate"
     },
     "preload": {
-      "more": "Stable dans les virages rapides, pousse dans les lents",
-      "less": "Pivote à l’entrée, sorties plus lâches"
+      "more": "Stable dans les virages rapides, sous-vire dans les lents",
+      "less": "Pivote à l’entrée, sorties moins stables"
     },
     "bump": {
       "more": "La caisse bouge moins, plus dur sur les bosses",
@@ -626,12 +626,12 @@
       "less": "Rapports courts : plus rapide en sortie de virage lent"
     },
     "heaveSpring": {
-      "more": "Assiette plus plate en vitesse, plus dur sur les bosses",
-      "less": "Absorbe les bosses, le fond bouge davantage"
+      "more": "Assiette plus plate à haute vitesse, plus dur sur les bosses",
+      "less": "Absorbe les bosses, le fond plat bouge davantage"
     },
     "heavePacker": {
       "more": "Plus de course avant la cale",
-      "less": "La cale soutient le fond plus tôt"
+      "less": "La cale soutient le fond plat plus tôt"
     },
     "cornerPacker": {
       "more": "Les butées arrivent plus tôt, plus plat en virage",
@@ -659,7 +659,7 @@
     "smoothDetail": "Direction plus lente et plus calme",
     "default": "Par défaut",
     "defaultDetail": "Réponse équilibrée",
-    "sharp": "Vive",
+    "sharp": "Vif",
     "sharpDetail": "Inscription rapide"
   },
   "tyres": {
@@ -675,7 +675,7 @@
     "intermediate": "Inter",
     "wet": "Pluie",
     "chassisChanges": "{count, plural, one {# modification du châssis} other {# modifications du châssis}}",
-    "brakeBias": "RF {bias} %",
+    "brakeBias": "RF {bias} %",
     "baseline": "Réglages de base",
     "factoryLowDrag": "Faible traînée"
   },
@@ -707,16 +707,16 @@
     "limitsGained": "Limites de piste · {seconds} s gagnées",
     "limitsCutMetres": "Limites de piste · {metres} m coupés",
     "limitsMajorCut": "Limites de piste · coupure importante",
-    "why": "{reason, select, illegal_overtake {Dépassement illégal · position non rendue} corner_cut {Virage coupé} not_lifted {Pas de levé de pied} other {Temps gagné}}",
-    "limitsWhy": "Limites de piste · {reason, select, illegal_overtake {dépassement illégal · position non rendue} corner_cut {virage coupé} not_lifted {pas de levé de pied} other {temps gagné}}",
+    "why": "{reason, select, illegal_overtake {Dépassement illégal · position non rendue} corner_cut {Virage coupé} not_lifted {Pas de lever de pied} other {Temps gagné}}",
+    "limitsWhy": "Limites de piste · {reason, select, illegal_overtake {dépassement illégal · position non rendue} corner_cut {virage coupé} not_lifted {pas de lever de pied} other {temps gagné}}",
     "warningCount": "Limites de piste · avertissement {count}/{max}",
     "points": "{points} pts",
     "strikes": "{count, plural, one {# avertissement} other {# avertissements}}",
     "disqualified": "Disqualifié · limites de piste",
     "limitsPoints": "Limites de piste · {points}",
     "blackWhiteFlag": "Drapeau noir et blanc",
-    "nextPenalty": "{why} · le prochain sera de +{seconds} s",
-    "nextDisqualification": "{why} · le prochain sera une disqualification",
+    "nextPenalty": "{why} · ensuite : +{seconds} s",
+    "nextDisqualification": "{why} · ensuite : disqualification",
     "warning": "Limites de piste · avertissement",
     "warningDetail": "{why} · {points}"
   },
@@ -784,7 +784,7 @@
     "linuxX64Label": "Télécharger l’.AppImage",
     "linuxX64Detail": "Linux x64",
     "androidSummary": "Trusted Web Activity en plein écran avec commandes immersives persistantes, Android Game Mode et raccourcis du lanceur. Nécessite Android 7+ et Chrome.",
-    "androidInstallNote": "APK de version signé. Autorisez l’installation depuis votre navigateur quand on vous le demande ; il se vérifie auprès de librecorsa.org et s’ouvre sans barre d’adresse.",
+    "androidInstallNote": "APK officiel signé. Autorisez l’installation depuis votre navigateur quand on vous le demande ; il se vérifie auprès de librecorsa.org et s’ouvre sans barre d’adresse.",
     "androidStatusLabel": "APK signé",
     "androidApkLabel": "Télécharger l’.apk",
     "androidApkDetail": "Android 7+ (universel)"
@@ -807,7 +807,7 @@
     "blocked": "Ce navigateur bloque l’enregistrement"
   },
   "simulator": {
-    "formulaTeamCars": "Voitures d’équipe de Formule",
+    "formulaTeamCars": "Voitures d’écuries de Formule",
     "lapNoLongerSaved": "Ce tour n’est plus enregistré ici",
     "nameNotChanged": "Le nom n’a pas pu être modifié",
     "setupLoadFailed": "Impossible de charger les réglages de {driver}, réessayez",
@@ -818,7 +818,7 @@
     "keyImportedFor": "Clé importée pour {name}. Les envois depuis cet appareil l’utilisent.",
     "keyImported": "Clé importée. Les envois depuis cet appareil l’utilisent.",
     "launchWheel": "Accélérez pour partir",
-    "launchWheelSeat": "Accélérez pour partir · maintenez la caméra pour le siège",
+    "launchWheelSeat": "Accélérez pour partir · maintenez Caméra pour le siège",
     "launchPad": "{press} pour partir",
     "launchPadSeat": "{press} pour partir · maintenez {button} pour le siège",
     "launchTouch": "Maintenez l’accélérateur pour partir",
@@ -833,7 +833,7 @@
     "mouseSteering": "Direction à la souris · {key} pour quitter",
     "keyMenu": "Menu",
     "keyCamera": "Caméra",
-    "keyLine": "Ligne",
+    "keyLine": "Trajectoire",
     "keyRestart": "Recommencer",
     "keyBoard": "Classement",
     "keyLights": "Phares",
@@ -841,7 +841,7 @@
   },
   "trackGate": {
     "safeStart": "Démarrage sécurisé actif après une réinitialisation du GPU.",
-    "graphicsLow": "Graphismes réglés sur Basse après une réinitialisation du GPU.",
+    "graphicsLow": "Qualité graphique réglée sur Basse après une réinitialisation du GPU.",
     "loadFailedStaying": "Échec du chargement du circuit. Reste sur {circuit}.",
     "loadFailedDefault": "Échec du chargement du circuit. {circuit} chargé."
   },
@@ -852,7 +852,7 @@
     "sector": "Secteur {sector}",
     "elevation": "Dénivelé",
     "altitude": "Alt. {height}",
-    "grade": "PENTE {grade} %",
+    "grade": "PENTE {grade} %",
     "profileStart": "Départ {height}",
     "profileStartFinish": "D/A {height}"
   },
