@@ -79,6 +79,8 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serveIdentity(w)
 	case p == modsPrefix+"_index.json":
 		s.mods.serveIndex(w, r)
+	case strings.HasPrefix(p, cataloguePrefix):
+		s.mods.serveCatalogue(w, r, strings.TrimPrefix(p, cataloguePrefix))
 	case strings.HasPrefix(p, modsPrefix):
 		s.mods.serveFile(w, r, strings.TrimPrefix(p, modsPrefix))
 	default:
