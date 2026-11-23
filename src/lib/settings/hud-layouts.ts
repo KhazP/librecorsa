@@ -42,6 +42,9 @@ export const BUILT_IN_HUD_LAYOUTS = [
   { id: "telemetry", get label() { return t("game.hudLayouts.telemetry"); }, get detail() { return t("game.hudLayouts.telemetryDetail"); } },
   { id: "classic", get label() { return t("game.hudLayouts.classic"); }, get detail() { return t("game.hudLayouts.classicDetail"); } },
   { id: "minimal", get label() { return t("game.hudLayouts.minimal"); }, get detail() { return t("game.hudLayouts.minimalDetail"); } },
+  // Laid out the way a road-racing game and a Formula game lay out their race screens, drawn in the game's own look
+  { id: "touring", get label() { return t("game.hudLayouts.touring"); }, get detail() { return t("game.hudLayouts.touringDetail"); } },
+  { id: "formula", get label() { return t("game.hudLayouts.formula"); }, get detail() { return t("game.hudLayouts.formulaDetail"); } },
 ] as const satisfies readonly HudLayoutInfo[];
 
 /** Layouts recreated from other open-source HUD projects, credited to their authors */
