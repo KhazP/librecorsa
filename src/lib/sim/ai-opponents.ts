@@ -283,10 +283,10 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   playerMarginM: 0.4,
   roomPlayerOnly: 1,
   pathSidePlayerOnly: 1,
-  sandwichMiddle: 0,
-  yawMargin: 0,
-  predictAiLat: 0,
-  followStop: 0,
+  sandwichMiddle: 1,
+  yawMargin: 1,
+  predictAiLat: 1,
+  followStop: 1,
   earlyHazard: 0,
   passCooldownS: 0,
 };
@@ -1942,7 +1942,7 @@ export class AiOpponentField implements AiRace {
         if (lo > hi) {
           const dsL = wrapHalf(leftBy.sim.sMeters - me.sMeters, L);
           const dsR = wrapHalf(rightBy.sim.sMeters - me.sMeters, L);
-          // Behind the one further back of the two: drop in behind it
+          // Not clearly ahead of the one further up the road of the two: drop in behind it
           const front = dsL >= dsR ? leftBy : rightBy;
           const dsF = Math.max(dsL, dsR);
           if (dsF > -0.5 * CAR_LEN_M) {
