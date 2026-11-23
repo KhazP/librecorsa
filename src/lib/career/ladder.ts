@@ -272,13 +272,15 @@ export function roundsFor(length: SeasonLength, circuits: number): number {
 /** Laps of a race of this length on a circuit of `lapM` metres */
 export function lapsFor(series: CareerSeries, length: RaceLength, lapM: number): number {
   const share = { short: 0.25, medium: 0.5, long: 0.75, full: 1 }[length];
-  return Math.max(2, Math.min(60, Math.round((series.raceKm * 1000 * share) / Math.max(800, lapM))));
+  // Never under three laps: a start, a race and a last lap
+  return Math.max(3, Math.min(60, Math.round((series.raceKm * 1000 * share) / Math.max(800, lapM))));
 }
 
 /** Stops a race requires: by the series and length, and never in a race too short to make one */
 export function stopsFor(series: CareerSeries, length: RaceLength, laps: number): number {
+  // A stop needs a race long enough to spread the field's over several laps: one from five laps, two from eight
   const n = series.stops?.[length] ?? 0;
-  return laps >= 4 ? Math.min(n, Math.floor((laps - 1) / 2)) : 0;
+  return Math.min(n, laps >= 8 ? 2 : laps >= 5 ? 1 : 0);
 }
 
 /** AI skill for the field: the series' own at High, less at Low and Medium, more at Expert */

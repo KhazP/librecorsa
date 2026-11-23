@@ -32,6 +32,8 @@ import {
   updateRaceSettings,
   updateSeasonSettings,
   spendMulligan,
+  retireFromRound,
+  withoutRun,
   withRun,
   EMPTY_SAVE,
   type CareerRun,
@@ -173,6 +175,69 @@ function raceRound(run: CareerRun, playerPlace: number, playerCode = "ZZZ"): Car
   const older = withRun(EMPTY_SAVE, { ...run, updatedAt: run.updatedAt - 1000, score: -1 });
   const merged = JSON.parse(combineCareers(JSON.stringify(older), JSON.stringify(withRun(other, run)))) as typeof save;
   check("two devices' careers combine, the newer copy of one winning", merged.runs.length === 2 && merged.runs.find((r) => r.id === run.id)?.score === run.score);
+}
+
+{
+  // The grid grows with the ladder; a player's smaller grid stays as many short
+  let run = newCareer("road", "clubCup_europe", allContent, 11)!;
+  const grids: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    if (!run.season) run = chooseSeries(run, run.choices[0], allContent);
+    run = startSeason(updateSeasonSettings(run, { length: "short" }, allContent));
+    grids.push(`${run.season!.seriesId}:${run.season!.race.gridSize}`);
+    while (run.season!.rounds.some((r) => r === null)) run = raceRound(run, 1);
+    run = endSeason(run, allContent)!.run;
+  }
+  const sizes = grids.map((g) => Number(g.split(":")[1]));
+  check("each series races its own grid (it grows up the ladder)", sizes[2] > sizes[0], grids.join(" > "));
+}
+{
+  // Objectives: never a grid objective without qualifying, never two of one kind
+  const kinds = { q: ["poleThreat", "qualifyPro"], f: ["podiumThreat", "consistent"], p: ["fastestLap", "leadTheCharge"], c: ["cleanRacer", "putInTheWork"] };
+  let ok = true;
+  let noQual = true;
+  for (let seed = 1; seed < 60; seed++) {
+    let run = newCareer("road", "clubCup_europe", allContent, seed)!;
+    run = updateRaceSettings(run, { qualifying: seed % 2 ? 0 : 5 });
+    run = startSeason(run);
+    const objs = run.season!.objectives.map((o) => o.kind);
+    for (const list of Object.values(kinds)) if (objs.filter((k) => list.includes(k)).length > 1) ok = false;
+    if (seed % 2 && objs.some((k) => kinds.q.includes(k))) noQual = false;
+  }
+  check("a season's objectives are each of another kind", ok);
+  check("no grid objective in a season without qualifying", noQual);
+}
+{
+  // The series of a level can be swapped until the season starts
+  let run = newCareer("road", "clubCup_europe", allContent, 21)!;
+  run = chooseSeries(run, "clubCup_americas", allContent);
+  check("before the first season starts, the other regions can be chosen", run.season?.seriesId === "clubCup_americas" && run.choices.length === 3);
+  run = startSeason(run);
+  check("once it starts, the choice is made", run.choices.length === 0 && chooseSeries(run, "clubCup_europe", allContent) === run);
+}
+{
+  // A season missed has nobody "promoted alongside"; a retirement is not always a win for the same rival
+  let run = startSeason(updateSeasonSettings(newCareer("historic", "procar", allContent, 31)!, { length: "short" }, allContent));
+  while (run.season!.rounds.some((r) => r === null)) run = raceRound(run, 99);
+  const end = endSeason(run, allContent)!;
+  check("nobody moves up alongside a player who did not", end.outcome === "retry" && end.alongside.length === 0);
+  check("a season's record keeps its rounds and standings for the history", Boolean(end.record.archive?.rounds.length && end.record.archive.standings.length));
+  const winners = new Set<string>();
+  for (let seed = 1; seed < 12; seed++) {
+    const r = startSeason(newCareer("road", "clubCup_europe", allContent, seed * 7)!);
+    const plan = racePlan(r, lapLen, "ZZZ")!;
+    const after = retireFromRound(r, plan);
+    winners.add(after.season!.rounds[0]!.lines.find((l) => l.position === 1)!.who === plan.drivers[0].id ? "first" : "other");
+  }
+  check("a retirement credits the field by pace and luck, not always the first on the grid", winners.has("other"));
+}
+{
+  const codes = makeRivals(99).flatMap((r) => [r.code, r.altCode]);
+  check("every first and second code is a different one", new Set(codes).size === codes.length);
+  const a = withRun(EMPTY_SAVE, newCareer("road", "clubCup_europe", allContent, 1)!);
+  const deleted = withoutRun(a, a.runs[0].id);
+  const merged = JSON.parse(combineCareers(JSON.stringify(a), JSON.stringify(deleted))) as typeof a;
+  check("a career deleted on one device stays deleted when the saves combine", merged.runs.length === 0);
 }
 
 if (failures) {

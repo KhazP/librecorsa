@@ -70,7 +70,10 @@ const codeOf = (last: string, taken: Set<string>): { code: string; alt: string }
   const free = cands.filter((c) => c.length === 3 && !REAL_CODES.has(c) && !taken.has(c));
   const code = free[0] ?? `${up[0]}${up[1] ?? "X"}${taken.size % 10}`;
   taken.add(code);
-  const alt = free.find((c) => c !== code) ?? `${code.slice(0, 2)}${(taken.size + 3) % 10}`;
+  // The second code is reserved too, so no other rival's first code can be it
+  let alt = free.find((c) => c !== code && !taken.has(c)) ?? `${code.slice(0, 2)}${taken.size % 10}`;
+  for (let k = 0; taken.has(alt); k++) alt = `${code.slice(0, 2)}${k % 10}`;
+  taken.add(alt);
   return { code, alt };
 };
 

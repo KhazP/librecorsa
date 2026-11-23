@@ -21,6 +21,7 @@ import type { CarId } from "@/lib/cars/car-registry";
 import type { DamageLevel } from "@/lib/sim/car-damage";
 import type { QualifyingMinutes } from "@/lib/sim/qualifying";
 import {
+  CAREER_SERIES,
   aiSkillFor,
   lapsFor,
   pointsFor,
@@ -108,6 +109,11 @@ export interface SeasonState {
   objectives: BonusObjective[];
   /** Rivals carried over from the season before (promoted alongside) */
   carried: string[];
+  /**
+   * The round under way (its index), saved at its start: a round left without a result (the tab closed, a crash) is
+   * settled the next time the career opens, a mulligan or a retirement, never a free run again
+   */
+  racing?: number;
 }
 
 export interface SeasonRecord {
@@ -125,6 +131,16 @@ export interface SeasonRecord {
   podiums: number;
   score: number;
   endedAt: number;
+  /** The season kept for its page in the history (absent in saves from before it was kept) */
+  archive?: {
+    circuits: string[];
+    rounds: (RoundResult | null)[];
+    standings: StandingRow[];
+    objectives: { kind: ObjectiveKind; target: number; done: boolean }[];
+    parts: SeasonScoreParts;
+    alongside: string[];
+    race: RaceSettings;
+  };
 }
 
 export type CareerStatus = "active" | "complete" | "over";
@@ -154,6 +170,8 @@ export interface CareerSave {
   runs: CareerRun[];
   /** The career shown when the career screen opens */
   activeId: string | null;
+  /** Careers deleted (their ids): another device's copy does not bring them back when the saves combine */
+  removed?: string[];
 }
 
 export const EMPTY_SAVE: CareerSave = { v: 1, runs: [], activeId: null };
@@ -214,19 +232,37 @@ export function promotionPlaces(series: CareerSeries, gridSize: number): number 
 
 const POOL: readonly ObjectiveKind[] = ["poleThreat", "qualifyPro", "podiumThreat", "consistent", "cleanRacer", "leadTheCharge", "putInTheWork", "fastestLap"];
 
-/** Three objectives for a season, drawn by its seed, their targets fitted to the grid and the rounds */
-export function drawObjectives(seed: number, gridSize: number, rounds: number, final: boolean): BonusObjective[] {
+/** Objectives of one kind of skill: a season draws one from each of three kinds, never two of the same */
+const CATEGORIES: readonly (readonly ObjectiveKind[])[] = [
+  ["poleThreat", "qualifyPro"],
+  ["podiumThreat", "consistent"],
+  ["fastestLap", "leadTheCharge"],
+  ["cleanRacer", "putInTheWork"],
+];
+
+/**
+ * Three objectives for a season, drawn by its seed from three kinds of skill, their targets fitted to the grid, the
+ * rounds and the laps. Without qualifying the grid is the back of the field, so no grid objective is drawn
+ */
+export function drawObjectives(
+  seed: number,
+  gridSize: number,
+  rounds: number,
+  final: boolean,
+  opts: { qualifying?: boolean; seasonLaps?: number } = {}
+): BonusObjective[] {
   const rng = careerRng(seed);
-  const pool = [...POOL];
+  const kinds = CATEGORIES.map((c) => c.filter((k) => opts.qualifying !== false || (k !== "poleThreat" && k !== "qualifyPro"))).filter((c) => c.length);
   const out: BonusObjective[] = [];
-  while (out.length < 3 && pool.length) {
-    const kind = pool.splice(Math.floor(rng() * pool.length), 1)[0];
-    out.push({ kind, target: objectiveTarget(kind, gridSize, rounds, final) });
+  while (out.length < 3 && kinds.length) {
+    const cat = kinds.splice(Math.floor(rng() * kinds.length), 1)[0];
+    const kind = cat[Math.floor(rng() * cat.length)];
+    out.push({ kind, target: objectiveTarget(kind, gridSize, rounds, final, opts.seasonLaps ?? rounds * 5) });
   }
   return out;
 }
 
-function objectiveTarget(kind: ObjectiveKind, grid: number, rounds: number, final: boolean): number {
+function objectiveTarget(kind: ObjectiveKind, grid: number, rounds: number, final: boolean, seasonLaps: number): number {
   switch (kind) {
     case "poleThreat":
       return grid >= 10 ? 3 : 2;
@@ -239,7 +275,7 @@ function objectiveTarget(kind: ObjectiveKind, grid: number, rounds: number, fina
     case "cleanRacer":
       return Math.max(1, Math.ceil(rounds * 0.6));
     case "leadTheCharge":
-      return Math.max(2, rounds * 2);
+      return Math.max(2, Math.round(seasonLaps * 0.2));
     case "putInTheWork":
       return 90;
     case "fastestLap":
@@ -251,6 +287,8 @@ export interface ObjectiveProgress {
   done: boolean;
   /** Can no longer be done this season */
   failed: boolean;
+  /** Not done yet, but where it stands would do it by the season's end */
+  onPace: boolean;
   /** Where it stands (a place, an average, a count), null before any round */
   value: number | null;
 }
@@ -258,45 +296,50 @@ export interface ObjectiveProgress {
 /** Where an objective stands after the rounds raced */
 export function objectiveProgress(o: BonusObjective, season: SeasonState): ObjectiveProgress {
   const raced = season.rounds.filter((r): r is RoundResult => r !== null);
-  const left = season.rounds.length - raced.length;
+  const n = raced.length;
+  const left = season.rounds.length - n;
+  const total = season.rounds.length || 1;
   const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
+  /** An average still within reach: even P1 in every round left would not bring it to the target */
+  const averageOut = (xs: number[]) => n > 0 && (xs.reduce((a, b) => a + b, 0) + left) / total > o.target;
+  const once = (best: number | null) => {
+    const done = best !== null && best <= o.target;
+    return { value: best, done, failed: left === 0 && !done, onPace: false };
+  };
   switch (o.kind) {
-    case "poleThreat": {
-      const best = raced.length ? Math.min(...raced.map((r) => r.grid)) : null;
-      return { value: best, done: best !== null && best <= o.target, failed: left === 0 && !(best !== null && best <= o.target) };
-    }
-    case "podiumThreat": {
-      const best = raced.length ? Math.min(...raced.map((r) => (r.dnf ? 99 : r.position))) : null;
-      return { value: best, done: best !== null && best <= o.target, failed: left === 0 && !(best !== null && best <= o.target) };
-    }
-    case "qualifyPro": {
-      const v = avg(raced.map((r) => r.grid));
-      const done = left === 0 && v !== null && v <= o.target;
-      return { value: v, done, failed: left === 0 && !done };
-    }
+    case "poleThreat":
+      return once(n ? Math.min(...raced.map((r) => r.grid)) : null);
+    case "podiumThreat":
+      return once(n ? Math.min(...raced.map((r) => (r.dnf ? 99 : r.position))) : null);
+    case "qualifyPro":
     case "consistent": {
-      const v = avg(raced.map((r) => (r.dnf ? season.race.gridSize : r.position)));
+      const xs = raced.map((r) => (o.kind === "qualifyPro" ? r.grid : r.dnf ? season.race.gridSize : r.position));
+      const v = avg(xs);
       const done = left === 0 && v !== null && v <= o.target;
-      return { value: v, done, failed: left === 0 && !done };
+      const failed = (left === 0 && !done) || averageOut(xs);
+      return { value: v, done, failed, onPace: !done && !failed && v !== null && v <= o.target };
     }
     case "cleanRacer": {
-      const n = raced.filter((r) => !r.dnf && r.penaltyS <= 0).length;
-      return { value: n, done: n >= o.target, failed: n + left < o.target };
+      const c = raced.filter((r) => !r.dnf && r.penaltyS <= 0).length;
+      const done = c >= o.target;
+      return { value: c, done, failed: c + left < o.target, onPace: !done && n > 0 && (c / n) * total >= o.target };
     }
     case "leadTheCharge": {
-      const n = raced.reduce((a, r) => a + r.lapsLed, 0);
-      return { value: n, done: n >= o.target, failed: left === 0 && n < o.target };
+      const c = raced.reduce((a, r) => a + r.lapsLed, 0);
+      const done = c >= o.target;
+      return { value: c, done, failed: left === 0 && !done, onPace: !done && n > 0 && (c / n) * total >= o.target };
     }
     case "putInTheWork": {
-      const total = raced.reduce((a, r) => a + r.laps, 0);
-      const done = raced.reduce((a, r) => a + r.lapsCompleted, 0);
-      const pct = total ? Math.round((done / total) * 100) : null;
-      const ok = left === 0 && pct !== null && pct >= o.target;
-      return { value: pct, done: ok, failed: left === 0 && !ok };
+      const laps = raced.reduce((a, r) => a + r.laps, 0);
+      const ran = raced.reduce((a, r) => a + r.lapsCompleted, 0);
+      const pct = laps ? Math.round((ran / laps) * 100) : null;
+      const done = left === 0 && pct !== null && pct >= o.target;
+      return { value: pct, done, failed: left === 0 && !done, onPace: !done && left > 0 && pct !== null && pct >= o.target };
     }
     case "fastestLap": {
-      const n = raced.filter((r) => r.fastestLap).length;
-      return { value: n, done: n >= o.target, failed: left === 0 && n < o.target };
+      const c = raced.filter((r) => r.fastestLap).length;
+      const done = c >= o.target;
+      return { value: c, done, failed: left === 0 && !done, onPace: false };
     }
   }
 }
@@ -307,10 +350,20 @@ const AI_MULT: Record<AiLevel, number> = { low: 8, medium: 14, high: 20, expert:
 const DAMAGE_MULT: Record<DamageLevel, number> = { off: 0, reduced: 1, full: 3 };
 const LENGTH_MULT: Record<RaceLength, number> = { short: 0, medium: 2, long: 4, full: 6 };
 
-/** A race's multiplier: the challenge the player took on */
-export function raceMultiplier(race: RaceSettings): number {
-  return AI_MULT[race.aiLevel] + DAMAGE_MULT[race.damage] + LENGTH_MULT[race.raceLength];
+/** A race's multiplier and what makes it up: the challenge the player took on */
+export function raceMultiplierParts(race: RaceSettings): { ai: number; damage: number; length: number; total: number } {
+  const ai = AI_MULT[race.aiLevel];
+  const damage = DAMAGE_MULT[race.damage];
+  const length = LENGTH_MULT[race.raceLength];
+  return { ai, damage, length, total: ai + damage + length };
 }
+
+export function raceMultiplier(race: RaceSettings): number {
+  return raceMultiplierParts(race).total;
+}
+
+/** The season's bonus for allowing fewer mulligans than the most */
+export const mulliganBonus = (mulligans: number): number => Math.max(0, MAX_MULLIGANS - mulligans) * 300;
 
 export interface RaceScoreParts {
   finish: number;
@@ -334,7 +387,8 @@ export function raceScore(
   const grid = Math.max(0, gridSize + 1 - r.grid) * 4;
   const led = r.lapsLed * 5;
   const completed = Math.round((100 * r.lapsCompleted) / Math.max(1, r.laps));
-  const clean = !r.dnf && r.penaltyS <= 0 ? 40 : 0;
+  // A clean race in full; one with a small penalty (up to 3 s) in part
+  const clean = r.dnf ? 0 : r.penaltyS <= 0 ? 40 : r.penaltyS <= 3 ? 15 : 0;
   const podium = r.dnf ? 0 : r.position === 1 ? 60 : r.position <= 3 ? 25 : 0;
   const total = finish + grid + led + completed + clean + podium;
   const mult = raceMultiplier(race);
@@ -362,7 +416,7 @@ export function seasonScore(season: SeasonState, series: CareerSeries, promoted:
   const points = (me?.points ?? 0) * 20;
   const objectives = season.objectives.filter((o) => objectiveProgress(o, season).done).length * 2000;
   const firstClear = promoted && season.attempt === 1 ? 10000 : 0;
-  const mulligans = Math.max(0, MAX_MULLIGANS - season.settings.mulligans) * 300;
+  const mulligans = mulliganBonus(season.settings.mulligans);
   const mult = Math.max(3, 7 - season.attempt);
   return { races, championship, points, objectives, firstClear, mulligans, mult, score: (races + championship + points + objectives + firstClear + mulligans) * mult };
 }
@@ -372,12 +426,12 @@ export function seasonScore(season: SeasonState, series: CareerSeries, promoted:
 const now = () => Date.now();
 
 /** What a season's race settings start from: the series' grid within what this game can run */
-function raceSettingsFor(series: CareerSeries, prev?: RaceSettings): RaceSettings {
-  return {
-    ...DEFAULT_RACE_SETTINGS,
-    ...(prev ?? {}),
-    gridSize: Math.min(series.grid, prev?.gridSize ?? series.grid, 12),
-  };
+function raceSettingsFor(series: CareerSeries, prev?: RaceSettings, prevSeries?: CareerSeries): RaceSettings {
+  // The series' own grid; the same series again keeps the player's; a player who ran the last series with fewer cars than
+  // its own (for the frame rate) runs this one as many short
+  const short = prev && prevSeries ? Math.max(0, prevSeries.grid - prev.gridSize) : 0;
+  const grid = prev && prevSeries?.id === series.id ? prev.gridSize : series.grid - short;
+  return { ...DEFAULT_RACE_SETTINGS, ...(prev ?? {}), gridSize: Math.max(4, Math.min(series.grid, grid, 12)) };
 }
 
 /** A new season in a series: pre-season, the calendar's first circuits, the series' first car */
@@ -388,7 +442,7 @@ export function newSeason(run: CareerRun, seriesId: string, content: CareerConte
   if (!cars.length || calendar.length < 3) return null;
   const length: SeasonLength = prev?.settings.length ?? "medium";
   const n = roundsFor(length, calendar.length);
-  const race = raceSettingsFor(series, prev?.race);
+  const race = raceSettingsFor(series, prev?.race, prev ? seriesById(prev.seriesId) : undefined);
   const used = new Set(run.raced ?? []);
   const carried = attempt > 1 && prev ? prev.grid : (prev?.carried ?? []);
   const gridSeed = run.seed ^ (run.history.length * 7919) ^ (attempt * 104729);
@@ -432,6 +486,8 @@ export function newCareer(discipline: CareerDisciplineId, seriesId: string, cont
   const season = newSeason(run, seriesId, content);
   if (!season) return null;
   run.season = season;
+  // The other starting series (regions) stay open until the first season starts
+  run.choices = CAREER_SERIES.filter((s) => s.discipline === discipline && s.tier === 0 && seriesContent(s, content).cars.length && seriesContent(s, content).calendar.length >= 3).map((s) => s.id);
   return run;
 }
 
@@ -465,7 +521,7 @@ export function updateRaceSettings(run: CareerRun, patch: Partial<RaceSettings>)
   race.gridSize = season.started ? season.race.gridSize : Math.max(4, Math.min(12, series.grid, Math.round(race.gridSize)));
   let grid = season.grid;
   if (!season.started && race.gridSize !== season.race.gridSize) {
-    grid = drawGrid(run.rivals, race.gridSize - 1, season.carried, new Set(), run.seed ^ (run.history.length * 7919) ^ (season.attempt * 104729));
+    grid = drawGrid(run.rivals, race.gridSize - 1, season.carried, new Set(run.raced ?? []), run.seed ^ (run.history.length * 7919) ^ (season.attempt * 104729));
   }
   return touch({ ...run, season: { ...season, race, grid } });
 }
@@ -475,20 +531,35 @@ export function startSeason(run: CareerRun): CareerRun {
   const season = run.season;
   if (!season || season.started) return run;
   const series = seriesById(season.seriesId)!;
-  const objectives = drawObjectives(run.seed ^ (run.history.length * 31) ^ season.attempt, season.race.gridSize, season.settings.circuits.length, Boolean(series.final));
+  // The season's laps, near enough for the objectives' targets: each round at a mid-length lap
+  const seasonLaps = season.settings.circuits.length * lapsFor(series, season.race.raceLength, 4000);
+  const objectives = drawObjectives(
+    run.seed ^ (run.history.length * 31) ^ season.attempt,
+    season.race.gridSize,
+    season.settings.circuits.length,
+    Boolean(series.final),
+    { qualifying: season.race.qualifying > 0, seasonLaps }
+  );
   return touch({
     ...run,
+    // The choice of series is made now
+    choices: [],
     raced: [...new Set([...(run.raced ?? []), ...season.grid])],
     season: { ...season, started: true, rounds: season.settings.circuits.map(() => null), objectives, mulligansUsed: 0 },
   });
 }
 
-/** Pick the next series after a promotion */
+/**
+ * Pick the series to race next: after a promotion, or at the start of a career, among the series open to the player.
+ * Until the season starts the player can still change their mind (iRacing: try another path open at this level before
+ * the first race), so the choices stay open until `startSeason`
+ */
 export function chooseSeries(run: CareerRun, seriesId: string, content: CareerContent): CareerRun {
-  if (run.season || !run.choices.includes(seriesId)) return run;
-  const season = newSeason(run, seriesId, content, 1, run.history.length ? lastSeasonAsPrev(run) : undefined);
+  if (run.season?.started || !run.choices.includes(seriesId) || run.season?.seriesId === seriesId) return run;
+  const attempt = 1;
+  const season = newSeason(run, seriesId, content, attempt, run.history.length ? lastSeasonAsPrev(run) : undefined);
   if (!season) return run;
-  return touch({ ...run, season, choices: [] });
+  return touch({ ...run, season });
 }
 
 /** The season just finished, as far as the next one keeps from it: race settings and who moves up */
@@ -586,27 +657,39 @@ export function recordRound(run: CareerRun, plan: CareerRacePlan, outcome: RaceO
   };
   const rounds = season.rounds.slice();
   rounds[plan.roundIndex] = result;
-  return touch({ ...run, season: { ...season, rounds } });
+  return touch({ ...run, season: { ...season, rounds, racing: undefined } });
 }
 
-/** A mulligan: the round raced again (none recorded); false when none are left */
+/** A mulligan: the round raced again (none recorded); null when none are left */
 export function spendMulligan(run: CareerRun): CareerRun | null {
   const season = run.season;
   if (!season || season.mulligansUsed >= season.settings.mulligans) return null;
-  return touch({ ...run, season: { ...season, mulligansUsed: season.mulligansUsed + 1 } });
+  return touch({ ...run, season: { ...season, mulligansUsed: season.mulligansUsed + 1, racing: undefined } });
+}
+
+/** The next round has started: kept in the save until it has a result or a mulligan */
+export function markRoundStarted(run: CareerRun, roundIndex: number): CareerRun {
+  const season = run.season;
+  if (!season || nextRound(season) !== roundIndex) return run;
+  return touch({ ...run, season: { ...season, racing: roundIndex } });
 }
 
 /** A round given up without a mulligan: the player out of it (last, no points), the field as it was not raced */
 export function retireFromRound(run: CareerRun, plan: CareerRacePlan): CareerRun {
   const season = run.season;
   if (!season || nextRound(season) !== plan.roundIndex) return run;
-  const lines: RoundLine[] = [
-    ...plan.drivers.map((d, i) => ({ who: d.id, position: i + 1, points: pointsFor(i + 1) })),
-    { who: "me", position: plan.drivers.length + 1, points: 0, dnf: true },
-  ];
+  // The field's finish the round would likely have had: the quicker drivers first, with some luck in it
+  const rng = careerRng(run.seed ^ (plan.roundIndex * 2654435761) ^ (run.history.length * 97));
+  const order = plan.drivers
+    .map((d) => ({ d, k: (run.rivals.find((r) => r.id === d.id)?.rating ?? 0.5) + (rng() - 0.5) * 0.5 }))
+    .sort((a, b) => b.k - a.k)
+    .map((x) => x.d);
   return recordRound(run, plan, {
-    results: lines.map((l) => ({ code: l.who === "me" ? "" : plan.drivers.find((d) => d.id === l.who)!.code, isPlayer: l.who === "me", position: l.position, dnf: l.dnf })),
-    laps: 0,
+    results: [
+      ...order.map((d, i) => ({ code: d.code, isPlayer: false, position: i + 1, lapsCompleted: plan.laps })),
+      { code: "", isPlayer: true, position: order.length + 1, dnf: true, lapsCompleted: 0 },
+    ],
+    laps: plan.laps,
     lapsLed: 0,
   });
 }
@@ -647,9 +730,19 @@ export function endSeason(run: CareerRun, content: CareerContent): SeasonEnd | n
     podiums: me?.podiums ?? 0,
     score: parts.score,
     endedAt: now(),
+    archive: {
+      circuits: season.settings.circuits,
+      rounds: season.rounds,
+      standings: rows,
+      objectives: season.objectives.map((o) => ({ kind: o.kind, target: o.target, done: objectiveProgress(o, season).done })),
+      parts,
+      alongside: [],
+      race: season.race,
+    },
   };
-  // The best of the rest move up too (at most three)
-  const alongside = rows.filter((r) => r.who !== "me").slice(0, Math.min(3, places)).map((r) => r.who);
+  // The best of the rest move up too (at most three), when the player does and there is a step up
+  const alongside = promoted && !series.final ? rows.filter((r) => r.who !== "me").slice(0, Math.min(3, places)).map((r) => r.who) : [];
+  record.archive!.alongside = alongside;
   const history = [...run.history, record];
   const score = run.score + parts.score;
   let next: CareerRun;
@@ -720,7 +813,13 @@ export function parseCareerSave(raw: unknown): CareerSave {
       Array.isArray(c.history) &&
       (c.season === null || (typeof c.season === "object" && Boolean(seriesById(c.season.seriesId))))
   );
-  return { v: 1, runs, activeId: typeof r.activeId === "string" && runs.some((c) => c.id === r.activeId) ? r.activeId : (runs[0]?.id ?? null) };
+  const removed = Array.isArray(r.removed) ? r.removed.filter((id): id is string => typeof id === "string") : [];
+  return {
+    v: 1,
+    runs: runs.filter((c) => !removed.includes(c.id)),
+    activeId: typeof r.activeId === "string" && runs.some((c) => c.id === r.activeId) ? r.activeId : (runs[0]?.id ?? null),
+    ...(removed.length ? { removed } : {}),
+  };
 }
 
 /** Replace one career in the save (or add it), and make it the one shown */
@@ -731,5 +830,6 @@ export function withRun(save: CareerSave, run: CareerRun): CareerSave {
 
 export function withoutRun(save: CareerSave, id: string): CareerSave {
   const runs = save.runs.filter((c) => c.id !== id);
-  return { ...save, runs, activeId: save.activeId === id ? (runs[0]?.id ?? null) : save.activeId };
+  const removed = [...new Set([...(save.removed ?? []), id])];
+  return { ...save, runs, removed, activeId: save.activeId === id ? (runs[0]?.id ?? null) : save.activeId };
 }

@@ -949,7 +949,7 @@ const CAREER_KEY = "librecorsa.career";
  * career shown is the one changed last. Text the game cannot read keeps the other side's
  */
 export function combineCareers(cloud: string, local: string): string {
-  const read = (t: string): { v: number; runs: { id: string; updatedAt: number }[]; activeId: string | null } | null => {
+  const read = (t: string): { v: number; runs: { id: string; updatedAt: number }[]; activeId: string | null; removed?: string[] } | null => {
     try {
       const v: unknown = JSON.parse(t);
       return isObj(v) && Array.isArray(v.runs) ? (v as never) : null;
@@ -960,15 +960,17 @@ export function combineCareers(cloud: string, local: string): string {
   const c = read(cloud);
   const l = read(local);
   if (!c || !l) return c ? cloud : local;
+  // A career deleted on either device stays deleted
+  const removed = [...new Set([...(Array.isArray(c.removed) ? c.removed : []), ...(Array.isArray(l.removed) ? l.removed : [])])];
   const byId = new Map<string, { id: string; updatedAt: number }>();
   for (const r of [...c.runs, ...l.runs]) {
-    if (!r || typeof r.id !== "string") continue;
+    if (!r || typeof r.id !== "string" || removed.includes(r.id)) continue;
     const had = byId.get(r.id);
     if (!had || (r.updatedAt ?? 0) > (had.updatedAt ?? 0)) byId.set(r.id, r);
   }
   const runs = [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
   const latest = runs.reduce<{ id: string; updatedAt: number } | null>((m, r) => (!m || r.updatedAt > m.updatedAt ? r : m), null);
-  return JSON.stringify({ v: 1, runs, activeId: latest?.id ?? null });
+  return JSON.stringify({ v: 1, runs, activeId: latest?.id ?? null, ...(removed.length ? { removed } : {}) });
 }
 
 /**
