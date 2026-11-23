@@ -978,8 +978,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const mp = getMultiplayerManager();
       const lobbyNow = mp.lobby;
       if (lobbyNow) {
+        // The race's rules hold in qualifying too: the class's car, and no mod car with physics of its own
         const switchTo = roomCarSwitch(lobbyNow.settings, vehicleModelRef.current);
+        const modSwap = switchTo ? null : modCarSwap(carIdRef.current, mp.inScheduledRace);
         if (switchTo) changeCar(raceCarFor(switchTo, mp.inScheduledRace).id);
+        else if (modSwap) changeCar(modSwap);
       }
       startSession({ kind: "practice" });
       session.car.resetToStartGrid(true);
@@ -1654,7 +1657,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     mp.weatherProvider = () => trackEnvRef.current?.weather.snapshot() ?? null;
     mp.onQualifyingStart = (quali) => {
       const targetTrack = mp.lobby?.settings.trackId ?? trackId;
-      if (targetTrack !== trackId && onSelectTrack && roomTrackStatus(targetTrack, mp.lobby?.settings.trackMod) === "ok") {
+      // A mod circuit this copy hasn't got, or has in another version (another road): it sits this one out
+      if (roomTrackStatus(targetTrack, mp.lobby?.settings.trackMod) !== "ok") return;
+      if (targetTrack !== trackId && onSelectTrack) {
         pendingQualifying = { id: quali.id, trackId: targetTrack };
         onSelectTrack(targetTrack);
         return;
@@ -1673,6 +1678,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         soloRaceRef.current();
         return;
       }
+      // A mod circuit this copy hasn't got, or has in another version (another road): it sits this race out
+      const lobbyTrack = mp.lobby?.settings;
+      if (start.trackId && roomTrackStatus(start.trackId, lobbyTrack?.trackId === start.trackId ? lobbyTrack.trackMod : undefined) !== "ok") return;
       // A race on another circuit: switch to it, and pick the race up once that scene has loaded
       if (start.trackId && start.trackId !== trackId && onSelectTrack) {
         pendingRaceStart = start;

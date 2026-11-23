@@ -423,8 +423,10 @@ export function sanitizeLobbySettings(v: unknown, roomKind?: RoomKind): LobbySet
   if (gridOrder !== undefined) out.gridOrder = gridOrder;
   if (rules !== undefined) out.rules = rules;
   if (qualifyingMinutes !== undefined) out.qualifyingMinutes = qualifyingMinutes;
+  // Only the package the circuit comes from: a reference left from the room's last mod circuit (settings are merged
+  // over the old ones) or one naming another package says nothing about this circuit
   const trackMod = asModRef(st.trackMod);
-  if (trackMod && out.trackId.startsWith('mod:')) out.trackMod = trackMod;
+  if (trackMod && out.trackId.startsWith(`mod:${trackMod.packageId}/`)) out.trackMod = trackMod;
   return out;
 }
 

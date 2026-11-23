@@ -344,6 +344,8 @@ function registryChecks(): void {
   check("no such package: the guest is told", roomTrackStatus("mod:jdoe.other/x", undefined) === "missing");
   const settings = sanitizeLobbySettings({ trackId: id, trackMod: ref, laps: 3 });
   check("the lobby settings carry the package through the room server", settings.trackMod?.hash === ref?.hash);
+  const stale = sanitizeLobbySettings({ trackId: "mod:jdoe.other/oval", trackMod: ref });
+  check("a reference to another package than the circuit's is dropped (left from the last circuit)", stale.trackMod === undefined);
   const forged = sanitizeLobbySettings({ trackId: id, trackMod: { ...ref, hash: "not-a-hash", packageId: "../x" } });
   const offMod = sanitizeLobbySettings({ trackId: TRACKS[0].id, trackMod: ref });
   check("a malformed package reference, or one on a game circuit, is dropped", forged.trackMod === undefined && offMod.trackMod === undefined);

@@ -64,7 +64,7 @@ import {
 } from '@/lib/net/wire';
 import { loadDriverKey } from '@/lib/net/driver-key';
 import { carPhysicsVersion } from '@/lib/sim/lap-types';
-import { roomModRefOf } from '@/lib/mods/room-content';
+import { roomModRefOf, roomTrackStatus } from '@/lib/mods/room-content';
 import type { FinishMessage, ResultMessage } from '@/lib/net/official-result';
 
 // What goes over the wire, and the checks on it, live in a module of their own (the race server reads them too)
@@ -1971,6 +1971,8 @@ export class MultiplayerSyncManager {
           if (driverKey) this.sendControl({ type: 'identify', driverKey });
         }
         this.setLobby(msg.lobby);
+        // The host moved to a mod circuit this copy hasn't got (or has in another version): not ready for that one
+        if (this.localReady && roomTrackStatus(msg.lobby.settings.trackId, msg.lobby.settings.trackMod) !== 'ok') this.setReady(false);
         if (dropped) this.onRaceAbort?.(dropped.id);
         this.reconcileRace(true);
         break;

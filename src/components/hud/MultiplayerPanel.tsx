@@ -891,8 +891,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               {roomTrack === "ok"
                 ? tx("drivers.hostOn", { circuit: trackName(settings.trackId) })
                 : tx(roomTrack === "missing" ? "drivers.modMissing" : "drivers.modDifferent", {
-                    mod: settings.trackMod?.name ?? settings.trackId,
-                    version: settings.trackMod?.version ?? "",
+                    // The package and its version, as far as the host said
+                    mod: settings.trackMod ? [settings.trackMod.name, settings.trackMod.version].filter(Boolean).join(" ") : settings.trackId,
                   })}
             </span>
             {onSwitchTrack && roomTrack === "ok" ? (
