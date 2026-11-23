@@ -233,5 +233,10 @@
   "hudPicker.descriptionSite": "As above, with {site}: the name of the author's website.",
   "hudPicker.sourceLink": "Screen-reader name of a link to a layout's source code. {layout}: the layout's name, {author}: a person's name.",
   "hudPicker.siteLink": "Screen-reader name of a link to the author's website. {site}: the site's name, {author}: a person's name.",
-  "rows.practiceDamage.label": "Setting: whether the car takes damage in practice and time trials."
+  "rows.practiceDamage.label": "Setting: whether the car takes damage in practice and time trials.",
+  "display.placement.title": "Card title in Settings > Display > HUD: the HUD's size and where its panels sit on screen.",
+  "display.placement.resetWhat": "Fills {what} in 'Resets {what} to defaults.'",
+  "display.placement.edit": "Row label: where the panels of the HUD design in use sit on screen.",
+  "display.placement.editHint": "Hint under the row: the button opens an editor over the live HUD.",
+  "display.placement.editButton": "Button that opens the live HUD layout editor."
 }

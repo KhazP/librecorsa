@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useTranslations } from "use-intl/react";
-import { Button, ConfirmDialog, SettingRow, Toggle } from "@/components/ui";
+import { Button, ConfirmDialog, SettingRow } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { KeyCap } from "@/components/ui/prompts";
 import { isTouchDevice } from "@/lib/input/touch-input";
@@ -35,13 +35,7 @@ import {
   temperatureUnit,
   uiScale,
 } from "../defs";
-import {
-  DEFAULT_HUD_PART,
-  HUD_PART_OFFSET_MAX,
-  HUD_PART_SCALE_MAX,
-  HUD_PART_SCALE_MIN,
-  type HudPart,
-} from "@/lib/settings/player-settings";
+import { layoutMoved, withLayoutParts } from "@/lib/settings/hud-parts";
 import { useSettingsEnv } from "../env";
 import { SettingsCard } from "../fields";
 import { HUD_TOUCH_NOTE, HudLayoutPicker } from "../HudLayoutPicker";
@@ -86,38 +80,29 @@ export function GraphicsTab() {
   );
 }
 
-/** Button that opens the live in-game HUD layout editor: drag each part to move it, drag the corner or scroll to scale it. */
-function HudEditModeRow() {
+/** The HUD's size, and where the layout in use puts its panels: the live layout editor moves and resizes them */
+function HudPlacementCard() {
   const env = useSettingsEnv();
+  const tx = useTranslations("settings.display.placement");
+  const moved = layoutMoved(env.settings.hud.parts, env.settings.hud.preset);
   return (
-    <SettingRow label="Edit HUD layout" hint="Shows the live in-game HUD so you can drag and rescale every panel.">
-      <Button
-        size="sm"
-        variant="secondary"
-        onClick={() => env. update((s) => ({ ...s, hud: { ...s.hud, editMode: true } }))}
-      >
-        Edit layout
-      </Button>
-    </SettingRow>
-  );
-}
-
-/** Reset every saved HUD part offset and scale back to its default spot. */
-function HudResetRow() {
-  const env = useSettingsEnv();
-  const changed = Object.values(env.settings.hud.parts).some(
-    (p) => p.x !== 0 || p.y !== 0 || p.scale !== 1,
-  );
-  return (
-    <SettingRow
-      label="Reset HUD positions"
-      disabled={!changed}
-      disabledReason="Already at default"
+    <SettingsCard
+      title={tx("title")}
+      rows={[hudSize]}
+      extraReset={{
+        changed: moved,
+        reset: () => env.update((s) => ({ ...s, hud: { ...s.hud, parts: withLayoutParts(s.hud.parts, s.hud.preset, {}) } })),
+      }}
+      resetWhat={tx("resetWhat")}
     >
-      <Button size="sm" variant="danger" disabled={!changed} onClick={() => env.update((s) => ({ ...s, hud: { ...s.hud, parts: {} } }))}>
-        Reset
-      </Button>
-    </SettingRow>
+      {env.onEditHudLayout ? (
+        <SettingRow label={tx("edit")} hint={tx("editHint")}>
+          <Button size="sm" variant="secondary" onClick={env.onEditHudLayout}>
+            {tx("editButton")}
+          </Button>
+        </SettingRow>
+      ) : null}
+    </SettingsCard>
   );
 }
 
@@ -126,16 +111,11 @@ export function HudTab() {
   return (
     <>
       <HudLayoutCard />
-      <SettingsCard title="HUD layout" rows={[hudSize]}>
-        <HudEditModeRow />
-        <HudResetRow />
-      </SettingsCard>
+      <HudPlacementCard />
       <SettingsCard title={tx("title")} rows={[deltaBar, lapSummary, mirror, radar, playerNames, boardWidget, ...hudAdvanced]} />
     </>
   );
 }
-
-
 
 export function CameraTab() {
   const env = useSettingsEnv();

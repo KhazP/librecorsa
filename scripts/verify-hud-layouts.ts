@@ -1,7 +1,8 @@
 /**
  * Headless checks of the HUD layout list (src/lib/settings/hud-layouts.ts): a saved layout survives a reload, an old or
  * unknown one falls back to Broadcast, the renamed "engineer" still lands on Telemetry, and every third-party layout
- * carries a credit (author, source repository, licence) with player-facing text free of other games' names.
+ * carries a credit (author, source repository, licence) with player-facing text free of other games' names. Moved
+ * and resized panels (hud-parts.ts) are kept per layout, clamped, and dropped where malformed or unmoved.
  *
  *   npx tsx scripts/verify-hud-layouts.ts
  */
@@ -17,6 +18,7 @@ import {
   showsPhoneHud,
 } from '../src/lib/settings/hud-layouts';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
+import { HUD_PART_IDS, hudPartOfOrigin, layoutMoved, parseHudParts, withLayoutParts } from '../src/lib/settings/hud-parts';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -89,6 +91,28 @@ for (const l of HUD_LAYOUTS) {
 }
 
 console.log(`\n${HUD_LAYOUTS.length} layouts (${THIRD_PARTY_HUD_LAYOUTS.length} third-party)`);
+// ---- Moved and resized panels, per layout
+
+{
+  const parts = parseHudParts({
+    classic: { 'top-left': { x: 12.5, y: -3, scale: 1.2 }, 'bottom-right': { x: 0, y: 0, scale: 1 }, nonsense: { x: 1, y: 1, scale: 1 } },
+    broadcast: { 'top-right': { x: 500, y: -500, scale: 9 } },
+    notALayout: { 'top-left': { x: 1, y: 1, scale: 1 } },
+    telemetry: { 'top-left': 'junk' },
+  });
+  check('a moved panel is kept for its layout', parts.classic?.['top-left']?.x === 12.5 && parts.classic?.['top-left']?.scale === 1.2);
+  check('an unmoved panel and an unknown part are dropped', parts.classic?.['bottom-right'] === undefined && Object.keys(parts.classic ?? {}).length === 1);
+  check('offsets and sizes are clamped', parts.broadcast?.['top-right']?.x === 100 && parts.broadcast?.['top-right']?.y === -100 && parts.broadcast?.['top-right']?.scale === 2);
+  check('an unknown layout and a malformed part are dropped', !('notALayout' in parts) && !('telemetry' in parts));
+  check('a layout is moved only with a part off its spot', layoutMoved(parts, 'classic') && !layoutMoved(parts, 'minimal'));
+  const reset = withLayoutParts(parts, 'classic', {});
+  check('resetting one layout leaves the others', !('classic' in reset) && reset.broadcast !== undefined);
+  check('every anchor origin names a part', ['top left', 'top center', 'top right', 'center right', 'center', 'bottom left', 'bottom center', 'bottom right'].every((o) => hudPartOfOrigin(o) !== null) && HUD_PART_IDS.length === 8);
+  const saved = parsePlayerSettings(JSON.parse(JSON.stringify({ ...DEFAULT_PLAYER_SETTINGS, hud: { ...DEFAULT_PLAYER_SETTINGS.hud, parts: { classic: { center: { x: -4, y: 2, scale: 0.8 } } } } })));
+  check('moved panels survive a save and reload', saved.hud.parts.classic?.center?.scale === 0.8);
+  check('a save without them has none', Object.keys(parsePlayerSettings({}).hud.parts).length === 0);
+}
+
 if (failures.length) {
   console.error(`\n${failures.length} check(s) failed:\n  ${failures.join('\n  ')}`);
   process.exit(1);

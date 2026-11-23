@@ -1353,6 +1353,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** The Settings screen, over the title menu or the pause menu, and where it opens */
   const [settingsOpen, setSettingsOpen] = useState<{ from: "title" | "pause"; category?: SettingsCategory; tab?: string } | null>(null);
+  // Settings > Display > HUD > Edit layout: the live HUD's layout editor stands in for Settings until Done or Cancel
+  const [hudEditing, setHudEditing] = useState(false);
+  useEffect(() => {
+    if (phase !== "title" && phase !== "driving") setHudEditing(false);
+  }, [phase]);
   const openSettings = useCallback(
     (from: "title" | "pause", category?: SettingsCategory, tab?: string) => {
       // Opened from the car (the HUD's "pedals not set up"): the session pauses under it, as from the pause menu
@@ -2197,6 +2202,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             session?.openSeatPanel();
           }
         : undefined,
+    // The live HUD's layout editor, over the title scene or the paused race: Settings comes back on its HUD tab after
+    onEditHudLayout:
+      phase === "title" || phase === "driving"
+        ? () => {
+            setSettingsOpen((open) => (open ? { ...open, category: "display", tab: "hud" } : open));
+            setHudEditing(true);
+          }
+        : undefined,
     onRunSetup: runSetupAgain,
     driverKey: {
       onExport: handleExportDriverKey,
@@ -2235,10 +2248,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         />
       ) : null}
 
-      {phase === "driving" || settings.hud.editMode ? (
+      {phase === "driving" || hudEditing ? (
         <F1TelemetryHud
           {...menuProps}
           telemetrySource={telemetrySource}
+          hudEditor={hudEditing ? { onClose: () => setHudEditing(false) } : null}
           seatPanel={seatPanel}
           track={track}
           weather={weatherHud}
@@ -2376,7 +2390,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         />
       ) : null}
 
-      {phase === "title" && !settings.hud.editMode ? (
+      {phase === "title" && !hudEditing ? (
         <TitleMenu
           {...menuProps}
           // The note after a drive: on the main menu only, never over a room or a race entry
@@ -2459,7 +2473,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         />
       ) : null}
 
-      {settingsOpen && !settings.hud.editMode ? (
+      {settingsOpen && !hudEditing ? (
         <SettingsScreen
           env={settingsEnv}
           initialCategory={settingsOpen.category}

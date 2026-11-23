@@ -35,7 +35,6 @@ import { QualifyingClock, QualifyingGrid } from "./hud/QualifyingHud";
 import { LaunchCue } from "./hud/LaunchCue";
 import { PauseMenu } from "./hud/PauseMenu";
 import { HudEditor } from "./hud/HudEditor";
-import { setActiveHudParts } from "./hud/styles/hud-style-parts";
 import { CameraToast } from "./hud/CameraToast";
 import { F12026ChannelsPanel } from "./hud/F12026ChannelsPanel";
 import { MultiPageMfd } from "./hud/MultiPageMfd";
@@ -90,7 +89,8 @@ import {
   thirdPartySkinOf,
 } from "./hud/styles/third-party-skin";
 import { useUiZoom } from "@/lib/ui-zoom";
-import { buildHudMap, revRangeOf, useLapInvalid, type HudDesignProps } from "./hud/styles/hud-style-parts";
+import { anchor, buildHudMap, revRangeOf, setActiveHudParts, useLapInvalid, type HudDesignProps } from "./hud/styles/hud-style-parts";
+import { withLayoutParts, type HudLayoutParts } from "@/lib/settings/hud-parts";
 import type { BoardWidgetMode, HudPreset } from "@/lib/settings/player-settings";
 import { showsPhoneHud } from "@/lib/settings/hud-layouts";
 import { BoardWidget, useLargeScreen } from "./hud/BoardWidget";
@@ -259,6 +259,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** On-screen pedals and steering (touch screens) */
   touchControls?: TouchControlsProps | null;
   displayPanel?: DisplayPanelProps;
+  /** Settings > Display > HUD > Edit layout is open over this HUD: the layout's parts are moved here, then it closes */
+  hudEditor?: { onClose: () => void } | null;
   leaderboardPanel?: LeaderboardPanelProps;
   /** Air / track temperature and the track's wetness (weather.ts) */
   weather?: WeatherHudState | null;
@@ -425,16 +427,26 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const podiumStage = props.raceEnd?.podium.stage;
   const podiumUp = podiumStage === "playing";
   const showResults = raceState(race).classified && !props.resultsClosed && podiumStage !== "waiting" && !podiumUp;
-  const editMode = Boolean(hud?.editMode);
+  // The layout editor: the HUD stays on screen but takes no input, and draws the editor's copy of the layout's parts
+  // until Done saves it
+  const editMode = Boolean(props.hudEditor);
   const hudRootRef = useRef<HTMLDivElement | null>(null);
-  setActiveHudParts(hud?.parts);
+  const [draftParts, setDraftParts] = useState<HudLayoutParts | null>(null);
+  const savedParts = hud?.parts?.[preset];
+  const layoutParts = editMode ? (draftParts ?? savedParts) : savedParts;
+  setActiveHudParts(layoutParts);
   // Paused or in a replay, the HUD stays mounted (folds, lap history and timers carry on) but hides and takes no input;
-  // the results card owns the D-pad and keys while it is up. In HUD edit mode, keep the HUD live on screen.
-  const hudMode: HudMode = editMode ? "live" : paused || props.seatPanel || props.replay || podiumUp ? "hidden" : showResults ? "results" : "live";
+  // the results card owns the D-pad and keys while it is up
+  const hudMode: HudMode = editMode || paused || props.seatPanel || props.replay || podiumUp ? "hidden" : showResults ? "results" : "live";
   const hudModeRef = useRef(hudMode);
   hudModeRef.current = hudMode;
   // The HUD pad button (R3 by default) clears every panel off the screen; start lights and alerts stay
   const [hudHidden, setHudHidden] = useState(false);
+  // The editor opens on the HUD with every panel up, from the layout as saved
+  useEffect(() => {
+    if (editMode) setHudHidden(false);
+    else setDraftParts(null);
+  }, [editMode]);
   const [hiddenNote, setHiddenNote] = useState(false);
   useEffect(() => {
     const toggle = () => {
@@ -576,21 +588,6 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       )}
     </span>
   );
-  /** Scales a corner group of the HUD about that corner, plus any saved per-part offset (px) and scale. */
-  const partCorner = (origin: string, partId: string): React.CSSProperties => {
-    const part = hud?.parts?.[partId];
-    const x = part?.x ?? 0;
-    const y = part?.y ?? 0;
-    const partScale = part?.scale ?? 1;
-    const totalScale = scale * (Number.isFinite(partScale) && partScale > 0 ? partScale : 1);
-    const hasOffset = x !== 0 || y !== 0;
-    const hasScale = totalScale !== 1;
-    return {
-      transformOrigin: origin,
-      ...({ "--lc-hud-part": partId } as React.CSSProperties),
-      ...(hasOffset || hasScale ? { transform: `translate(${x}px, ${y}px) scale(${totalScale})` } : null),
-    };
-  };
   // Classic and Telemetry fill both right-hand corners, and on a laptop Broadcast's sits over the pod, so the MFD starts as its status pill there
   // The lap summary toast lifts itself above anything marked data-hud-avoid
   const mfdNode = (
@@ -608,7 +605,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     </div>
   );
 
-  const hidden = hudMode === "hidden";
+  // Inert as well as invisible, except under the layout editor, which shows it
+  const hidden = hudMode === "hidden" && !editMode;
   // The off-track edge glow is drawn into the frame (the last render pass), not as a page layer over the canvas; it
   // hides with the HUD and during the start lights
   const offTrackGlow = telemetry.offTrack && !lightsPhase && !hidden;
@@ -634,7 +632,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         a centred frame instead of the far edges. What belongs to the whole window is fixed to it instead. */}
     <div
       ref={hudRootRef}
-      inert={hidden}
+      inert={hudMode === "hidden"}
       dir="ltr"
       className={`lc-safe-frame pointer-events-none fixed z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4 ${hidden ? "invisible" : ""} ${skinRootClass(thirdPartySkin) ?? ""}`}
     >
@@ -642,7 +640,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       {hud?.radar !== false && !style?.ownRadar && !hudHidden && !lightsPhase && !phone ? (
         <div
           className="absolute top-[58%] left-1/2 -translate-x-1/2 -translate-y-1/2"
-          style={partCorner("center", "proximity-radar")}
+          style={anchor(undefined, "center")}
         >
           <ProximityRadar
             blips={
@@ -681,7 +679,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         />
       ) : (
         /* Classic / Minimal top-left: timing tower (race) and lap timing */
-        <div className="absolute top-3 start-3 flex flex-col gap-2 sm:top-4 sm:start-4" style={partCorner("top left", "timing-tower")}>
+        <div className="absolute top-3 start-3 flex flex-col gap-2 sm:top-4 sm:start-4" style={anchor(scale, "top left")}>
           {race ? <TimingTower race={race} trackCode={trackInfo.country.slice(0, 3).toUpperCase()} gaps={hud?.towerGaps} /> : null}
           <LapPanel telemetry={telemetry} deltaS={deltaS} variant={minimal ? "minimal" : "full"} lapInvalid={lapInvalid} />
           {leftNode}
@@ -713,7 +711,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               : undefined
         }
       >
-      <div className="flex flex-col items-center gap-2" style={partCorner("top center", "start-lights")}>
+      <div className="flex flex-col items-center gap-2" style={anchor(scale, "top center")}>
         {/* The touch controls carry their own pause button */}
         {style && !touch ? menuButton : null}
         <StartLights race={race} reactionMs={telemetry.startReactionMs} />
@@ -858,7 +856,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       {/* A manual start's checklist on the right edge, between the right-hand corners, as the F1 games place it: the
           centre stays the lights' own */}
       <div className="pointer-events-none absolute top-1/2 end-3 -translate-y-1/2 sm:end-4">
-        <div style={partCorner("center right", "launch-cue")}>
+        <div style={anchor(scale, "center right")}>
           <LaunchCue telemetry={telemetry} hudHidden={hudHidden} />
         </div>
       </div>
@@ -867,7 +865,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       <>
       {/* Classic / Minimal top-right: circuit map, and on touch screens (no Esc key) a button for the pause menu */}
       {!style ? (
-        <div className="pointer-events-auto absolute top-3 end-3 flex flex-col items-end gap-2 sm:top-4 sm:end-4" style={partCorner("top right", "minimap")}>
+        <div className="pointer-events-auto absolute top-3 end-3 flex flex-col items-end gap-2 sm:top-4 sm:end-4" style={anchor(scale, "top right")}>
           {menuButton}
           <div className={showMap ? "hidden md:block" : "hidden"}>
             <TrackMinimap track={track} telemetry={telemetry} onSelectTurn={props.onSelectTurn} />
@@ -877,7 +875,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
       {/* Bottom-left: 4-corner tyre matrix, LibreCorsa badge, and key hints */}
       {/* data-hud-floor: the lap board above this corner keeps clear of it */}
-      <div data-hud-floor className="absolute bottom-3 start-3 flex flex-col items-start gap-2 sm:bottom-4 sm:start-4" style={partCorner("bottom left", "tyre-panel")}>
+      <div data-hud-floor className="absolute bottom-3 start-3 flex flex-col items-start gap-2 sm:bottom-4 sm:start-4" style={anchor(scale, "bottom left")}>
         {showFfb && props.ffbMeter ? <FfbMeter {...props.ffbMeter} /> : null}
         {/* Classic's centred speed cluster spans a phone's width, so the tyre matrix waits for tablet width */}
         {showTyres ? (
@@ -924,7 +922,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       {/* Classic / Minimal bottom-right: Live Tuner MFD, engineering channels (when active); Minimal's speed pills sit here too */}
       {/* Only without a full-screen style: a style draws its own MFD, and a second (hidden) one would still take the D-pad */}
       {!style ? (
-      <div className="absolute end-3 bottom-3 flex flex-col items-end gap-2 sm:end-4 sm:bottom-4" style={partCorner("bottom right", "mfd")}>
+      <div className="absolute end-3 bottom-3 flex flex-col items-end gap-2 sm:end-4 sm:bottom-4" style={anchor(scale, "bottom right")}>
         <div className="hidden sm:block">
           {mfdNode}
         </div>
@@ -952,7 +950,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         className="absolute bottom-3 left-1/2 -translate-x-1/2 sm:bottom-4"
         style={style ? { bottom: Math.round(style.bottomClearance * scale) } : undefined}
       >
-        <div className="flex flex-col items-center gap-2" style={partCorner("bottom center", "speed-cluster")}>
+        <div className="flex flex-col items-center gap-2" style={anchor(scale, "bottom center")}>
           {showTrace ? (() => {
             const p = pedalLayers(telemetry);
             return (
@@ -1064,33 +1062,15 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
     {editMode ? (
       <HudEditor
-        parts={hud?.parts ?? {}}
-        baseScale={scale}
+        parts={layoutParts ?? {}}
         hudRootRef={hudRootRef}
-        onChange={(id, patch) => {
-          props.displayPanel?.onChangeSettings((s) => {
-            const prev = s.hud.parts[id] ?? { x: 0, y: 0, scale: 1 };
-            return {
-              ...s,
-              hud: {
-                ...s.hud,
-                parts: { ...s.hud.parts, [id]: { ...prev, ...patch } },
-              },
-            };
-          });
+        onChange={setDraftParts}
+        onDone={() => {
+          const next = draftParts;
+          if (next) props.displayPanel?.onChangeSettings((st) => ({ ...st, hud: { ...st.hud, parts: withLayoutParts(st.hud.parts, preset, next) } }));
+          props.hudEditor?.onClose();
         }}
-        onResetAll={() => {
-          props.displayPanel?.onChangeSettings((s) => ({
-            ...s,
-            hud: { ...s.hud, parts: {} },
-          }));
-        }}
-        onClose={() => {
-          props.displayPanel?.onChangeSettings((s) => ({
-            ...s,
-            hud: { ...s.hud, editMode: false },
-          }));
-        }}
+        onCancel={() => props.hudEditor?.onClose()}
       />
     ) : null}
 

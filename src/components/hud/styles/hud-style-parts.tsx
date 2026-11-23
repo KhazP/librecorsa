@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl/react";
 import type { CameraMode, CarTelemetry, TireCompound } from "@/types/f1";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 import { inDeadZone, type BuiltTrackData, type PointToPointDef } from "@/lib/track-data";
+import { hudPartOfOrigin, type HudLayoutParts } from "@/lib/settings/hud-parts";
 import { Badge, type BadgeSize } from "@/components/ui/Badge";
 import { CHOSEN_PILL, cx, DISABLED, HOVER_PILL, MOTION, PRESSED_PILL } from "@/components/ui/styles";
 import { Trend } from "@/components/ui/icons/Trend";
@@ -147,39 +148,26 @@ export function revRangeOf(t: CarTelemetry): [number, number] {
   return revRangeFor(t.f12026?.carId);
 }
 
-const ORIGIN_TO_PART_ID: Record<string, string> = {
-  "top left": "timing-tower",
-  "top center": "start-lights",
-  "top right": "minimap",
-  "center right": "launch-cue",
-  center: "proximity-radar",
-  "bottom left": "tyre-panel",
-  "bottom right": "mfd",
-  "bottom center": "speed-cluster",
-};
+/** The layout's moved and resized parts, set by F1TelemetryHud on each render (the save, or the layout editor's copy) */
+let activeHudParts: HudLayoutParts = {};
 
-let activeHudParts: Record<string, { x: number; y: number; scale: number }> | undefined;
-
-/** Syncs the active saved per-part HUD offsets & scales so every layout's `anchor()` applies them */
-export function setActiveHudParts(parts: Record<string, { x: number; y: number; scale: number }> | undefined): void {
-  activeHudParts = parts;
+export function setActiveHudParts(parts: HudLayoutParts | undefined): void {
+  activeHudParts = parts ?? {};
 }
 
-/** Scales and translates a corner group of the HUD about that corner */
+/**
+ * A corner group of the HUD, scaled about its corner by the HUD size, and moved (% of the window) and resized where
+ * the player has put it (hud-parts.ts). `--lc-hud-part` marks it for the layout editor.
+ */
 export const anchor = (scale: number | undefined, origin: string): React.CSSProperties => {
-  const partId = ORIGIN_TO_PART_ID[origin];
-  const part = partId ? activeHudParts?.[partId] : undefined;
-  const x = part?.x ?? 0;
-  const y = part?.y ?? 0;
-  const partScale = part?.scale ?? 1;
-  const base = scale ?? 1;
-  const totalScale = base * (Number.isFinite(partScale) && partScale > 0 ? partScale : 1);
-  const hasOffset = x !== 0 || y !== 0;
-  const hasScale = totalScale !== 1;
+  const id = hudPartOfOrigin(origin);
+  const part = id ? activeHudParts[id] : undefined;
+  const s = (scale ?? 1) * (part?.scale ?? 1);
+  const move = part && (part.x !== 0 || part.y !== 0) ? `translate(${part.x}vw, ${part.y}vh) ` : "";
   return {
     transformOrigin: origin,
-    ...(partId ? ({ "--lc-hud-part": partId } as React.CSSProperties) : null),
-    ...(hasOffset || hasScale ? { transform: `translate(${x}px, ${y}px) scale(${totalScale})` } : null),
+    ...(id ? ({ "--lc-hud-part": id } as React.CSSProperties) : null),
+    ...(move || s !== 1 ? { transform: `${move}scale(${s})` } : null),
   };
 };
 
