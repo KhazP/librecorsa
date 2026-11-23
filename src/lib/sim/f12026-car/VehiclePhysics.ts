@@ -148,7 +148,8 @@ import {
   writeOutlineEdges,
 } from './TrackColliderQuery';
 import { queryContactPatch } from './ContactPatch';
-import { Ers2026Control, ersValueSPerMJ } from './ers-2026';
+import { Ers2026Control, ersValueSPerMJ, F1_2026_ERS } from './ers-2026';
+import { type EnergySession, type F1EnergyCircuit, inStretch } from '../f1-energy-circuits';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
 import {
   contactHalfLengthM,
@@ -1402,6 +1403,13 @@ export class VehiclePhysics {
   public extraRechargeJ = 0;
   /** The ERS-K's power runs to Overtake's curve (under `ERSData.regulations` 'f1-2026'): the adapter's call */
   public ersOvertake = false;
+  /** The driver's Boost held (under the 2026 rules): the adapter's */
+  public ersBoost = false;
+  /** The share of Overtake's power over the normal curve used (1; less for the game's Automatic Overtake) */
+  public ersOvertakeShare = 1;
+  /** The circuit's 2026 energy rules (`f1-energy-circuits.ts`) and the session driven; null: the rules' defaults */
+  public ersCircuit: F1EnergyCircuit | null = null;
+  public ersSession: EnergySession = 'practice';
   /**
    * Distance on from lap distance s (m) to the next braking zone on the circuit (m; Infinity: none), which the 2026
    * energy management plans its cuts and superclipping by: the adapter's, from the car's braking guide. Read at each
@@ -1978,6 +1986,23 @@ export class VehiclePhysics {
     this.ers2026?.armStandingStart();
   }
 
+  /**
+   * The recharge this lap may have (J): the circuit's for the session (the rules' 8.5 MJ without a circuit), and a race
+   * lap begun with Overtake activated 0.5 MJ more (`extraRechargeJ`)
+   */
+  private ersRechargeLimitJ(): number {
+    const c = this.ersCircuit;
+    const base = c && this.ers2026 ? c.recharge[this.ersSession] : this.config.ers.harvestPerLapJ;
+    return base + this.extraRechargeJ;
+  }
+
+  /** How much a power-limited period may cut at its start here (W, C5.12.4): more in the sectors the circuit names */
+  private ersCutStepW(c: F1EnergyCircuit, lapS: number): number {
+    let step: number = F1_2026_ERS.limitStepW;
+    for (const w of c.bigCut) if ((!w.timeTrialOnly || this.ersSession === 'timeTrial') && inStretch(lapS, w)) step = Math.max(step, w.maxW);
+    return step;
+  }
+
   /** Distance to the next braking zone from where the car is on the lap (m; Infinity: none known) */
   private ersBrakeAheadM(): number {
     const at = this.ersBrakeAheadAt;
@@ -1995,7 +2020,7 @@ export class VehiclePhysics {
    * limit spread over the lap)
    */
   private superclipRoomJ(): number {
-    const limit = this.config.ers.harvestPerLapJ + this.extraRechargeJ;
+    const limit = this.ersRechargeLimitJ();
     const p = Number.isFinite(this.trackProgress) ? clamp(this.trackProgress, 0, 1) : 0.5;
     let reserve: number;
     if (this.lastLapBrakeKnown) {
@@ -4096,6 +4121,8 @@ export class VehiclePhysics {
         // the rules' rates, and superclipping. The traction maps (the mode's low-speed delivery, the gear's) under it
         const em = this.luts.management[this.performanceMode];
         const socN = clamp(soc, 0, 1);
+        const circuit = this.ersCircuit;
+        const lapS = Number.isFinite(this.trackProgress) && this.lapLengthM > 0 ? this.trackProgress * this.lapLengthM : -1;
         const dc = this.ers2026.step({
           h,
           speedKmh,
@@ -4103,7 +4130,14 @@ export class VehiclePhysics {
           shifting: shiftCut || this.shiftTimer > 0,
           soc,
           overtake: this.ersOvertake,
-          boost: this.performanceMode === 'PSH',
+          overtakeShare: this.ersOvertakeShare,
+          boost: this.ersBoost,
+          boostCapped: this.ersSession === 'race',
+          curves: circuit?.curves ?? 'base',
+          alt1Sector: !!circuit && this.ersSession === 'race' && lapS >= 0 && circuit.alt1.some((w) => inStretch(lapS, w)),
+          cutStepW: circuit && lapS >= 0 ? this.ersCutStepW(circuit, lapS) : F1_2026_ERS.limitStepW,
+          cutRateWps: circuit?.cutRateWps ?? F1_2026_ERS.limitRateWps,
+          resetSector: !!circuit && lapS >= 0 && circuit.reset.some((w) => (!w.timeTrialOnly || this.ersSession === 'timeTrial') && inStretch(lapS, w)),
           share: mode.deployFraction * this.luts.deployVsSpeed[this.performanceMode].evaluate(speedKmh) * this.luts.deployVsGear.evaluate(this.gear),
           fillShare: mode.deployFraction * this.luts.deployVsGear.evaluate(this.gear),
           valueSPerMJ: ersValueSPerMJ(speedKmh / 3.6, this.ersBrakeAheadM(), this.totalMassKg),
@@ -4136,7 +4170,7 @@ export class VehiclePhysics {
         pK *= wetClip;
         liftW *= wetClip;
       }
-      if (pK < 0 && (soc >= 1 || this.lapHarvestJ >= ers.harvestPerLapJ + this.extraRechargeJ)) pK = liftW = 0;
+      if (pK < 0 && (soc >= 1 || this.lapHarvestJ >= this.ersRechargeLimitJ())) pK = liftW = 0;
     }
     if (this.ers2026 && !ersStepped) this.ers2026.release();
     // ---- brake bias (brake-by-wire + live-tunable dynamic brake migration)
@@ -4460,7 +4494,7 @@ export class VehiclePhysics {
       let e = -pMech * ers.harvestEfficiency * h;
       if (this.ers2026) {
         // The lap's recharge limit is never overrun inside a sub-step (C5.2.10)
-        const room = Math.max(0, ers.harvestPerLapJ + this.extraRechargeJ - this.lapHarvestJ);
+        const room = Math.max(0, this.ersRechargeLimitJ() - this.lapHarvestJ);
         if (e > room) {
           const scale = room / e;
           pMech *= scale;

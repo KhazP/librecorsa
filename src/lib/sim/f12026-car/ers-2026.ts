@@ -33,6 +33,7 @@
  * speed flattening and then falling at full throttle at the end of the long straights.
  */
 import type { LutPoints } from '../lut';
+import type { ErsCurveSet } from '../f1-energy-circuits';
 
 /** The rules' numbers (Section C) */
 export const F1_2026_ERS = {
@@ -61,6 +62,17 @@ export const F1_2026_ERS = {
 /** Harvest at full throttle (superclipping): 350 kW since the Miami 2026 changes, 250 before (DC, W) */
 export const SUPERCLIP_DC_W = 350_000;
 
+/**
+ * The driver's Boost in a race since the Miami 2026 changes: the power when pressed, or this much if that is less; it
+ * gives no more ("capped at +150 kW, or the car's current power level at activation if higher": the FIA, 20 Apr 2026).
+ * Uncapped outside races (DC, W)
+ */
+export const BOOST_RACE_FLOOR_W = 150_000;
+
+/** The pedal travel that, held for `PENDING_S`, puts the car in a power-limited period (the 250 kW curve's) */
+const PENDING_THROTTLE = 0.98;
+const PENDING_S = 1;
+
 /** The pedal travel the control unit reads as flat out (0..1) */
 const FLAT_OUT = 0.95;
 
@@ -68,18 +80,28 @@ const FLAT_OUT = 0.95;
  * The energy a cut from `fromW` of deployment takes at the rules' rates (J): 150 kW at once, then 100 kW a second down
  * to 100 kW, under which it may go at once; with 20 kJ to spare
  */
-export function cutEnergyJ(fromW: number): number {
+export function cutEnergyJ(fromW: number, rateWps: number = F1_2026_ERS.limitRateWps): number {
   const R = F1_2026_ERS;
   const after = fromW - R.limitStepW;
   if (after <= R.limitFreeBelowW) return 20_000;
-  return 20_000 + (0.5 * (after + R.limitFreeBelowW) * (after - R.limitFreeBelowW)) / R.limitRateWps;
+  return 20_000 + (0.5 * (after + R.limitFreeBelowW) * (after - R.limitFreeBelowW)) / rateWps;
 }
 
-/** C5.2.8: the ERS-K's DC power that may propel the car at a road speed (W), with Overtake active or not */
-export function ersKDeployLimitW(speedKmh: number, overtake: boolean): number {
+/**
+ * C5.2.8: the ERS-K's DC power that may propel the car at a road speed (W), with Overtake active or not, on the event's
+ * curves: the base pair (i, ii), Monaco's lower "Rev 1" pair (350 kW to 200 km/h, nothing from 300 km/h, or 310 with
+ * Overtake: the FIA's Power Unit Information for Monaco 2026), or, in a race's 250 kW sector in a power-limited
+ * period, the "Alt 1" curve (iii)
+ */
+export function ersKDeployLimitW(speedKmh: number, overtake: boolean, curves: ErsCurveSet = 'base', alt1 = false): number {
   const v = Math.max(0, speedKmh);
   let kw: number;
-  if (overtake) kw = v >= 355 ? 0 : 7100 - 20 * v;
+  if (curves === 'rev1') {
+    if (overtake) kw = v >= 310 ? 0 : v >= 300 ? 4650 - 15 * v : 750 - 2 * v;
+    else kw = v >= 300 ? 0 : 1050 - 3.5 * v;
+  } else if (alt1) {
+    kw = v >= 345 ? 0 : v >= 340 ? 6900 - 20 * v : v >= 310 ? 1800 - 5 * v : 250;
+  } else if (overtake) kw = v >= 355 ? 0 : 7100 - 20 * v;
   else if (v >= 345) kw = 0;
   else if (v >= 340) kw = 6900 - 20 * v;
   else kw = 1800 - 5 * v;
@@ -121,8 +143,24 @@ export interface ErsStepInput {
   soc: number;
   /** Overtake's power curve (C5.2.8 ii) */
   overtake: boolean;
-  /** The driver's Boost: deploys to the limit whatever the charge, and may give back a cut */
+  /** The share of Overtake's power over the normal curve that is used (1; less for the game's Automatic Overtake) */
+  overtakeShare: number;
+  /** The event's speed curves */
+  curves: ErsCurveSet;
+  /** In a race, in a sector of the 250 kW curve (C5.2.8 iii): it applies once a power-limited period is under way */
+  alt1Sector: boolean;
+  /** How much a power-limited period may cut at its start (W; C5.12.4: 150 kW, more in the sectors the FIA names) */
+  cutStepW: number;
+  /** The cuts' rate (W/s, C5.12.6) */
+  cutRateWps: number;
+  /** In a sector where a cut may be reset (C5.12.5) */
+  resetSector: boolean;
+  /**
+   * The driver's Boost, held: maintains or raises the motor's power whatever the management wants, and gives back a cut
+   * (C5.12.5). `boostCapped` (a race): no more than the power when pressed, or 150 kW if that was less
+   */
   boost: boolean;
+  boostCapped: boolean;
   /** The mode's and gear's share of the limit: the team's traction maps (0..1) */
   share: number;
   /**
@@ -157,6 +195,11 @@ export class Ers2026Control {
   private standingStart = false;
   /** The DC power the store gave the motor last step (W, + deploy): a cut runs from it */
   public lastDcW = 0;
+  /** The driver's Boost held since this press, and the power it was pressed at (DC W) */
+  private boostHeld = false;
+  private boostFromW = 0;
+  /** Time flat out (s), towards a power-limited period */
+  private flatS = 0;
   /** The deployment ceiling this step, the rules' and the control unit's (DC W) */
   public deployCeilingW = 0;
   /** What the motor may fill the turbo's lag with this step (DC W): the rules' limit where the management deploys */
@@ -169,14 +212,19 @@ export class Ers2026Control {
 
   reset(): void {
     this.levelW = 0;
-    this.limited = this.superclipping = this.standingStart = false;
-    this.lastDcW = this.deployCeilingW = this.fillCeilingW = 0;
+    this.limited = this.superclipping = this.standingStart = this.boostHeld = false;
+    this.lastDcW = this.deployCeilingW = this.fillCeilingW = this.boostFromW = this.flatS = 0;
   }
 
   /** A step the control did not run: the driver lifting or braking, or the drive out. Any power-limited period ends */
   release(): void {
     this.limited = this.superclipping = false;
-    this.deployCeilingW = this.fillCeilingW = 0;
+    this.deployCeilingW = this.fillCeilingW = this.flatS = 0;
+  }
+
+  /** The driver's Boost under way */
+  get boosting(): boolean {
+    return this.boostHeld;
   }
 
   /** A power-limited period under way: the deployment cut or the car harvesting flat out */
@@ -189,29 +237,39 @@ export class Ers2026Control {
     const R = F1_2026_ERS;
     if (this.standingStart && i.speedKmh >= R.standingStartKmh) this.standingStart = false;
     const share = Math.max(0, i.share);
-    // What the management wants of the motor: all of it up to its speed for the charge left, none above
+    this.flatS = i.throttle >= PENDING_THROTTLE ? this.flatS + i.h : 0;
+    // The Boost: from the press, the power then (in a race no more than that, or 150 kW if it was less)
+    if (i.boost && !this.boostHeld) this.boostFromW = Math.max(0, this.lastDcW);
+    this.boostHeld = i.boost;
+    const alt1 = i.alt1Sector && this.flatS >= PENDING_S;
+    let capW = ersKDeployLimitW(i.speedKmh, i.overtake, i.curves, alt1);
+    if (i.overtake && i.overtakeShare < 1) {
+      const normalW = ersKDeployLimitW(i.speedKmh, false, i.curves, alt1);
+      capW = normalW + Math.max(0, i.overtakeShare) * (capW - normalW);
+    }
+    // What the management wants of the motor: all of it where a joule buys enough time, none where it does not
     let wantW = R.maxDcW * share;
-    const managed = !i.boost && !Number.isNaN(i.deployAboveSPerMJ);
+    const managed = !this.boostHeld && !Number.isNaN(i.deployAboveSPerMJ);
     const managedCut = managed && !(i.valueSPerMJ > i.deployAboveSPerMJ);
+    if (this.boostHeld && i.boostCapped) wantW = Math.min(wantW, Math.max(this.boostFromW, BOOST_RACE_FLOOR_W));
     // The store is never run empty under power: a cut from the most the motor may deploy here, at the rules' rates,
     // needs this much (an empty store would drop the motor at once, faster than they allow)
-    const capW = ersKDeployLimitW(i.speedKmh, i.overtake);
     const mostW = Math.max(this.lastDcW, capW * Math.max(share, i.fillShare));
-    const allowed = !managedCut && i.soc * R.storeJ > cutEnergyJ(mostW) && !this.standingStart;
+    const allowed = !managedCut && i.soc * R.storeJ > cutEnergyJ(mostW, i.cutRateWps) && !this.standingStart;
     if (!allowed) wantW = 0;
 
     const flatOut = i.throttle >= FLAT_OUT;
     const free = !flatOut || i.shifting || i.speedKmh < R.limitFreeBelowKmh;
-    if (free || i.boost) {
+    if (free || this.boostHeld || i.resetSector) {
       // Off the throttle, in a shift or slow, no power-limited period: the ceiling follows the management at once. The
-      // Boost ends one, and gives back what it cut (C5.12.5)
+      // Boost, or a sector the FIA names, gives back what a period cut (C5.12.5)
       this.limited = this.superclipping = false;
       this.levelW = wantW;
     } else if (wantW < this.levelW - 1) {
-      // A cut with the driver flat out: from the power being deployed 150 kW at once, then 100 kW a second while over
-      // 100 kW, under which the rest may go at once
+      // A cut with the driver flat out: from the power being deployed, as much as the sector allows at once (150 kW,
+      // C5.12.4), then at the circuit's rate while over 100 kW, under which the rest may go at once
       const from = this.limited ? this.levelW : Math.min(this.levelW, Math.max(0, this.lastDcW));
-      this.levelW = Math.max(wantW, this.limited ? from - R.limitRateWps * i.h : from - R.limitStepW);
+      this.levelW = Math.max(wantW, this.limited ? from - i.cutRateWps * i.h : from - i.cutStepW);
       if (this.levelW < R.limitFreeBelowW) this.levelW = wantW;
       this.limited = true;
     } else if (!this.limited) {
