@@ -4,6 +4,7 @@ import { connectedPads, isLikelyWheel } from "@/lib/input/device-input";
 import type { NowPlaying } from "@/lib/audio/bgm-controller";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "use-intl/react";
+import { useI18nState } from "@/i18n/runtime";
 import type {
   AeroSetupPreset,
   CameraMode,
@@ -343,6 +344,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     onCycleCamera,
   } = props;
   const tx = useTranslations("game");
+  // The race HUD keeps its layout in every language; panels that read like a page (results) follow the language
+  const pageDir = useI18nState().dir;
   // Read once per language: the HUD renders at the telemetry's rate
   const words = useMemo(
     () => ({
@@ -617,6 +620,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         a centred frame instead of the far edges. What belongs to the whole window is fixed to it instead. */}
     <div
       inert={hidden}
+      dir="ltr"
       className={`lc-safe-frame pointer-events-none fixed z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4 ${hidden ? "invisible" : ""} ${skinRootClass(thirdPartySkin) ?? ""}`}
     >
       {/* Proximity radar: centred just under the horizon, invisible until a car is within 25 m */}
@@ -991,7 +995,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
       {/* Mounted only while it can take input: under the pause menu or a replay it would be a second focus owner */}
       {showResults && race && !hidden ? (
-        <div className="pointer-events-auto">
+        <div dir={pageDir} className="pointer-events-auto">
           <RaceResults
             race={race}
             trackName={trackInfo.name}
@@ -1020,7 +1024,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
     {/* Instant replay: only the badge and the transport bar show (under the pause menu, neither) */}
     {props.replay && !paused ? (
-      <div className="lc-safe-frame pointer-events-none fixed z-20 select-none">
+      <div dir="ltr" className="lc-safe-frame pointer-events-none fixed z-20 select-none">
         <div
           role="status"
           className={`lc-ui-zoom absolute top-13 left-1/2 inline-flex h-9.5 -translate-x-1/2 items-center gap-2.5 rounded-full pe-4.5 ps-3.5 text-lc-chalk sm:top-17 short:top-8 ${HUD_GLASS}`}

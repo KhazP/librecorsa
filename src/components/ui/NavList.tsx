@@ -93,7 +93,8 @@ export function NavList<T extends string>({
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "ArrowRight") {
+    // The pane sits beside the list on the reading side: right, or left in a right-to-left language
+    if (e.key === (getComputedStyle(e.currentTarget).direction === "rtl" ? "ArrowLeft" : "ArrowRight")) {
       if (enterPane()) e.preventDefault();
       return;
     }
