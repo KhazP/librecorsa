@@ -198,6 +198,12 @@ const AUTO_LUG_SHARE = 0.65;
 /** Auto box: brake pedal that counts as braking into a corner, and the least time between its downshifts (s) */
 const AUTO_BRAKE_DOWNSHIFT_PEDAL = 0.3;
 const AUTO_BRAKE_DOWNSHIFT_GAP_S = 0.25;
+/**
+ * Near a standstill (m/s): only under it does a downshift take first gear out into neutral, or put reverse in, so a
+ * downshift mashed into a hairpin stays in first and reverse never goes in on the move. Over it out of neutral, either
+ * paddle puts in the gear that fits the road speed
+ */
+const STANDSTILL_MS = 2;
 /** Probe start above the suspension hardpoint (m) */
 const GROUND_PROBE_UP_M = 0.6;
 /**
@@ -2744,13 +2750,14 @@ export class VehiclePhysics {
     // first and down is reverse
     if (this.gear === 0) this.updateBasis();
     const forwardMs = this.gear === 0 ? this.velocity.dot(_ez) : 0;
-    const fromNeutralMoving = forwardMs > 2;
+    const fromNeutralMoving = forwardMs > STANDSTILL_MS;
     if (fromNeutralMoving) target = this.gearForSpeed(forwardMs);
-    let g = clamp(target, -1, gb.ratios.length);
-    // A sequential box has no neutral between first and reverse: down from first is reverse (only near standstill,
-    // below), up from reverse is first
-    if (g === 0) g = target < this.gear ? -1 : 1;
+    const g = clamp(target, -1, gb.ratios.length);
     if (g === this.gear) return false;
+    // R, N, 1, 2…: neutral sits between first and reverse, as on a race car's sequential box (and in the sims). Down
+    // from first is neutral and down again reverse, up from reverse neutral and up again first. First comes out only
+    // near a standstill: on the move the N key, or both paddles at once, is the way to neutral
+    if (g === 0 && this.gear > 0 && this.velocity.length() > STANDSTILL_MS) return false;
     // Over-rev protection on downshifts (seamless boxes refuse the shift)
     if (g > 0 && g < this.gear) {
       this.updateBasis();
@@ -2758,7 +2765,7 @@ export class VehiclePhysics {
       if (this.roadRpm(g) > gb.gears.redline_rpm + margin) return false;
     }
     // Reverse only near standstill
-    if (g < 0 && this.velocity.length() > 2) return false;
+    if (g < 0 && this.velocity.length() > STANDSTILL_MS) return false;
     const down = g > 0 && g < this.gear;
     if (g > this.gear) this.sinceUpshiftS = 0;
     if (down) this.sinceDownshiftS = 0;

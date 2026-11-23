@@ -11,8 +11,10 @@
  *    (on the VehiclePhysics cars only once past their normal upshift point).
  * 5. Placement: a manual shift made just before a teleport does not hold the box afterwards.
  * 6. A paddle press during a shift is made once that shift is done: not dropped, and not before it.
- * 7. No neutral in the sequence: down from first stays in first while rolling and is reverse at a standstill, and up
- *    from reverse is first.
+ * 7. The sequence R, N, 1, as on a race car's sequential box and in the sims: down from first stays in first while
+ *    rolling (a downshift mashed into a hairpin never drops out of gear); at a standstill down is neutral and down
+ *    again reverse, up is neutral and up again first, and two quick presses down land in reverse. The LC26's classic
+ *    engine has no neutral: first and reverse sit side by side.
  *
  * Usage: npx tsx scripts/verify-gearbox.ts
  */
@@ -142,6 +144,8 @@ interface Model {
   placement: { dir: 1 | -1; fromKmh: number; toKmh: number };
   /** How long an upshift takes (s): a second paddle press inside it waits for it */
   upshiftS: number;
+  /** Neutral sits between first and reverse (R, N, 1); without it they sit side by side */
+  neutral: boolean;
 }
 
 const MODELS: Model[] = [
@@ -154,6 +158,7 @@ const MODELS: Model[] = [
     limiterKmh: 190,
     placement: { dir: 1, fromKmh: 110, toKmh: 150 },
     upshiftS: LC26_DRIVETRAIN.upshiftTimeS,
+    neutral: false,
   },
   {
     name: 'F1 2026 Rigid-Body (VehiclePhysics)',
@@ -164,6 +169,7 @@ const MODELS: Model[] = [
     limiterKmh: 180,
     placement: { dir: -1, fromKmh: 180, toKmh: 175 },
     upshiftS: F12026_CAR_CONFIG.gearbox.shiftTimeS,
+    neutral: true,
   },
   {
     name: 'AMG GT3 (VehiclePhysics)',
@@ -174,6 +180,7 @@ const MODELS: Model[] = [
     limiterKmh: 190,
     placement: { dir: -1, fromKmh: 190, toKmh: 185 },
     upshiftS: AMG_GT3_CONFIG.gearbox.shiftTimeS,
+    neutral: true,
   },
 ];
 
@@ -323,7 +330,7 @@ for (const m of MODELS) {
     );
   }
 
-  // 7. No neutral: down from first while rolling stays in first; at a standstill it is reverse, and up again is first
+  // 7. R, N, 1: down from first while rolling stays in first; at a standstill, down, down, up, up walks N, R, N, 1
   {
     const c = m.make();
     c.autoGearbox = false;
@@ -339,20 +346,35 @@ for (const m of MODELS) {
     }
     const rolling = c.telemetry.gear;
     const rollingKmh = c.telemetry.speedKmh;
-    const s = m.make();
-    s.autoGearbox = false;
-    s.teleportToDistance(1000, 0);
-    for (let i = 0; i < 30; i++) step(s, {});
-    paddle(s, -1, {});
-    for (let i = 0; i < 12; i++) step(s, {});
-    const stopped = s.telemetry.gear;
-    paddle(s, 1, {});
-    for (let i = 0; i < 12; i++) step(s, {});
-    const backUp = s.telemetry.gear;
+    const standing = (): SimulatorCar => {
+      const s = m.make();
+      s.autoGearbox = false;
+      s.teleportToDistance(1000, 0);
+      for (let i = 0; i < 30; i++) step(s, {});
+      return s;
+    };
+    const s = standing();
+    const walk: [1 | -1, number][] = m.neutral
+      ? [[-1, 0], [-1, -1], [1, 0], [1, 1]]
+      : [[-1, -1], [1, 1]];
+    const landed = walk.map(([dir]) => {
+      paddle(s, dir, {});
+      for (let i = 0; i < 12; i++) step(s, {});
+      return s.telemetry.gear;
+    });
+    const walkOk = walk.every(([, gear], i) => landed[i] === gear);
+    // Two presses down two frames apart: the second waits for the first shift, and the car lands in reverse
+    const d = standing();
+    step(d, { shiftDown: true });
+    step(d, {});
+    step(d, { shiftDown: true });
+    for (let i = 0; i < 30; i++) step(d, {});
+    const doubleTap = d.telemetry.gear;
+    const label = (dir: 1 | -1) => (dir < 0 ? 'down' : 'up');
     check(
-      rolling === 1 && lowest === 1 && stopped === -1 && backUp === 1,
+      rolling === 1 && lowest === 1 && walkOk && doubleTap === -1,
       `${name} manual box, down from first at ${Math.round(rollingKmh)} km/h: gear ${rolling} (lowest ${lowest}); ` +
-        `at a standstill down → ${stopped}, then up → ${backUp}`
+        `at a standstill ${walk.map(([dir], i) => `${label(dir)} → ${landed[i]}`).join(', ')}; two quick downs → ${doubleTap}`
     );
   }
 }
