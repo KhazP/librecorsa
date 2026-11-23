@@ -8,8 +8,9 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { resolveLocale } from "../src/i18n/catalogs";
+import { formatLocale, resolveLocale } from "../src/i18n/catalogs";
 import en from "../src/i18n/messages/en";
+import { isolateMessage } from "../src/i18n/isolate";
 import { pseudoMessage } from "../src/i18n/pseudo";
 import { areas, CATALOGS_FILE, flatten, MESSAGES, readLocale, readNotes, signature, SOURCE, translatedLocales, type Tree } from "./i18n/catalog";
 
@@ -103,9 +104,21 @@ check('a choice without a catalogue falls back to the browser, then English', re
 check('English picked by name stays English', resolveLocale('en', ['tr']) === 'en');
 check('the pseudo-language is never picked for a browser', resolveLocale('auto', ['en-XA']) === 'en');
 for (const locale of translatedLocales()) {
-  const base = locale.split('-')[0];
-  check(`${locale}: a browser asking for ${base}-ZZ gets it`, resolveLocale('auto', [`${base}-ZZ`]) === locale);
+  // A catalogue named with a script ("zh-Hant") is matched by script, so its stand-in browser carries the script too
+  const scripted = locale.split('-').some((part) => /^[A-Z][a-z]{3}$/.test(part));
+  const asked = scripted ? `${locale}-ZZ` : `${locale.split('-')[0]}-ZZ`;
+  check(`${locale}: a browser asking for ${asked} gets it`, resolveLocale('auto', [asked]) === locale);
 }
+if (translatedLocales().includes('zh-Hant')) {
+  check('zh-TW, zh-HK and zh-MO get Traditional Chinese', ['zh-TW', 'zh-HK', 'zh-MO'].every((b) => resolveLocale('auto', [b]) === 'zh-Hant'));
+  check('zh-CN, zh-SG and plain zh do not get Traditional Chinese', ['zh-CN', 'zh-SG', 'zh', 'zh-Hans'].every((b) => resolveLocale('auto', [b]) === 'en'));
+}
+// Right to left, the values in every message are isolated (isolate.ts): that must keep each message's placeholders
+for (const locale of ['ar'].filter((l) => translatedLocales().includes(l))) {
+  const bad = [...flatten(readLocale(locale))].filter(([, m]) => { try { return signature(isolateMessage(m)) !== signature(m); } catch { return true; } }).map(([k]) => k);
+  check(`${locale}: isolating the filled-in values keeps every message whole`, bad.length === 0, bad.slice(0, 5).join(', '));
+}
+check('numbers are formatted with Latin digits in every language', new Intl.NumberFormat(formatLocale('ar')).format(1234) === '1,234');
 
 if (failures.length) {
   console.error(`\n${failures.length} check(s) failed`);

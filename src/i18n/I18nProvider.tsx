@@ -3,6 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import { IntlProvider } from "use-intl/react";
 import { parseInterface, SETTINGS_STORAGE_KEY } from "@/lib/settings/player-settings";
 import { bindText } from "@/lib/text";
+import { formatLocale } from "./catalogs";
 import { applyLanguage, currentLocale, getMessageFallback, onError, t, useI18nState } from "./runtime";
 
 // The game's own code reads its words through src/lib/text.ts: on any page with this provider, in the page's language
@@ -27,7 +28,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     void applyLanguage(choice);
   }, []);
   return (
-    <IntlProvider locale={locale} messages={messages} onError={onError} getMessageFallback={getMessageFallback} timeZone="UTC">
+    <IntlProvider locale={formatLocale(locale)} messages={messages} onError={onError} getMessageFallback={getMessageFallback} timeZone="UTC">
       {children}
     </IntlProvider>
   );

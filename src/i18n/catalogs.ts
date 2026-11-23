@@ -48,9 +48,29 @@ export function languageChoices(): { code: string; name: string }[] {
 export const hasCatalog = (code: string) => code === SOURCE_LOCALE || code in CATALOGS;
 
 /**
+ * The locale numbers and dates are formatted in: the language with Latin digits, so a plural's count reads like the
+ * lap times and speeds beside it (Arabic would otherwise get Arabic-Indic digits in some browsers)
+ */
+export const formatLocale = (code: string) => `${code}-u-nu-latn`;
+
+/** The script a language tag is written in ("zh-TW" → "Hant", "zh-CN" → "Hans"), when the browser can tell */
+function scriptOf(tag: string): string | undefined {
+  try {
+    return new Intl.Locale(tag).maximize().script;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A catalogue named with a script ("zh-Hant") only serves browsers that write that script: zh-HK yes, zh-CN no */
+const sameScript = (code: string, wanted: string) =>
+  !code.split("-").some((part) => /^[A-Z][a-z]{3}$/.test(part)) || scriptOf(code) === scriptOf(wanted);
+
+/**
  * The language to show for a saved choice: the choice itself when there is a catalogue for it, else (and for "auto")
  * the first of the browser's languages there is one for, matched exactly, then by its base ("pt-BR" → "pt", "de" →
- * "de-CH"), else English. The pseudo-language is never picked automatically.
+ * "de-CH") in the same script (Traditional Chinese for zh-TW and zh-HK, not zh-CN), else English. The pseudo-language
+ * is never picked automatically.
  */
 export function resolveLocale(choice: string, browser: readonly string[]): string {
   if (choice !== "auto" && hasCatalog(choice)) return choice;
@@ -59,7 +79,7 @@ export function resolveLocale(choice: string, browser: readonly string[]): strin
     const exact = codes.find((c) => c.toLowerCase() === wanted.toLowerCase());
     if (exact) return exact;
     const base = wanted.split("-")[0].toLowerCase();
-    const near = codes.find((c) => c.split("-")[0].toLowerCase() === base);
+    const near = codes.find((c) => c.split("-")[0].toLowerCase() === base && sameScript(c, wanted));
     if (near) return near;
   }
   return SOURCE_LOCALE;

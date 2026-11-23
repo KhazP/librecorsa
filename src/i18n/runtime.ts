@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { createTranslator, IntlErrorCode, type IntlError } from "use-intl/core";
-import { CATALOGS, PSEUDO_LOCALE, resolveLocale, SOURCE_LOCALE } from "./catalogs";
+import { CATALOGS, formatLocale, PSEUDO_LOCALE, resolveLocale, SOURCE_LOCALE } from "./catalogs";
 import en from "./messages/en";
 import type { MessageKey, Messages, PartialMessages } from "./types";
 
@@ -26,7 +26,7 @@ let wanted = "";
 const listeners = new Set<() => void>();
 
 function makeTranslator(s: I18nState) {
-  return createTranslator({ locale: s.locale, messages: s.messages, onError, getMessageFallback });
+  return createTranslator({ locale: formatLocale(s.locale), messages: s.messages, onError, getMessageFallback });
 }
 
 /** A message that fails to format shows its key in development and its English in production */
@@ -90,7 +90,9 @@ export async function applyLanguage(choice: string): Promise<void> {
   }
   const catalog = CATALOGS[target];
   try {
-    const loaded: PartialMessages = (await catalog.load()).default;
+    let loaded: PartialMessages = (await catalog.load()).default;
+    // Right to left, the values filled into a message are isolated so numbers and Latin codes keep their order
+    if (catalog.dir === "rtl") loaded = (await import("./isolate")).isolateMessages(loaded);
     if (wanted !== target) return; // another choice came in while this one loaded
     set({ locale: target, dir: catalog.dir ?? "ltr", messages: merge(en, loaded) as Messages });
   } catch (err) {
