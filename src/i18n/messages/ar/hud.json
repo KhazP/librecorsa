@@ -1,0 +1,1062 @@
+{
+  "racesCard": {
+    "region": "السباقات",
+    "description": "{car} · {laps, plural, zero {0 لفات} one {لفة واحدة} two {لفتان} few {# لفات} many {# لفة} other {# لفة}} · كل {interval}",
+    "racing": "<big>انطلق</big> <small>جارٍ الآن</small>",
+    "toStart": "<big>{time}</big> <small>حتى البداية</small>",
+    "toNextRace": "<big>{time}</big> <small>حتى السباق التالي</small>",
+    "entrants": "المشاركون في هذا السباق",
+    "entered": "مسجّل. يبدأ تلقائيًا.",
+    "enteredAlone": "مسجّل. يبدأ تلقائيًا (مع الذكاء الاصطناعي إن لم ينضم آخرون).",
+    "leave": "مغادرة السباق",
+    "join": "انضمام إلى السباق التالي",
+    "rules": "سيارة موحّدة. تُحدد شبكة الانطلاق وفق أفضل لفة في التحدي الأسبوعي.",
+    "nobodyWaiting": "0 في الانتظار",
+    "waiting": "<b>{count, plural, zero {لا سائقين} one {سائق واحد} two {سائقان} few {# سائقين} many {# سائقًا} other {# سائق}} في الانتظار</b>",
+    "waitingNames": "<b>{count, plural, zero {لا سائقين} one {سائق واحد} two {سائقان} few {# سائقين} many {# سائقًا} other {# سائق}} في الانتظار</b>: {names}",
+    "waitingNamesMore": "<b>{count, plural, zero {لا سائقين} one {سائق واحد} two {سائقان} few {# سائقين} many {# سائقًا} other {# سائق}} في الانتظار</b>: {names} و{more} غيرهم",
+    "topDrivers": "أبرز سائقي هذا الأسبوع",
+    "winsPodiums": "{wins, plural, zero {0 انتصارات} one {فوز واحد} two {فوزان} few {{wins} انتصارات} many {{wins} فوزًا} other {{wins} فوز}} · {podiums, plural, zero {0 منصات} one {منصة واحدة} two {منصتان} few {{podiums} منصات} many {{podiums} منصة} other {{podiums} منصة}}",
+    "record": "أنت: {starts, plural, zero {0 سباقات} one {سباق واحد} two {سباقان} few {{starts} سباقات} many {{starts} سباقًا} other {{starts} سباق}} · {wins, plural, zero {0 انتصارات} one {فوز واحد} two {فوزان} few {{wins} انتصارات} many {{wins} فوزًا} other {{wins} فوز}} · {podiums, plural, zero {0 منصات} one {منصة واحدة} two {منصتان} few {{podiums} منصات} many {{podiums} منصة} other {{podiums} منصة}}",
+    "recordBest": "أنت: {starts, plural, zero {0 سباقات} one {سباق واحد} two {سباقان} few {{starts} سباقات} many {{starts} سباقًا} other {{starts} سباق}} · {wins, plural, zero {0 انتصارات} one {فوز واحد} two {فوزان} few {{wins} انتصارات} many {{wins} فوزًا} other {{wins} فوز}} · {podiums, plural, zero {0 منصات} one {منصة واحدة} two {منصتان} few {{podiums} منصات} many {{podiums} منصة} other {{podiums} منصة}} · الأفضل P{best}"
+  },
+  "seatPanel": {
+    "dialog": "المقعد والكاميرا، {car}",
+    "title": "المقعد والكاميرا",
+    "rows": {
+      "view": "المنظور",
+      "viewLess": "منظور قمرة القيادة",
+      "viewMore": "منظور لوحة العدادات",
+      "fwd": "الأمام",
+      "fwdLess": "تحريك للخلف",
+      "fwdMore": "تحريك للأمام",
+      "up": "الارتفاع",
+      "upLess": "تحريك للأسفل",
+      "upMore": "تحريك للأعلى",
+      "right": "الجانب",
+      "rightLess": "تحريك لليسار",
+      "rightMore": "تحريك لليمين",
+      "tilt": "الميل",
+      "tiltLess": "إمالة للأسفل",
+      "tiltMore": "إمالة للأعلى",
+      "fov": "FOV",
+      "fovLess": "أضيق",
+      "fovMore": "أوسع"
+    },
+    "viewGroup": "المنظور",
+    "resetView": "إعادة تعيين المنظور",
+    "done": "تم",
+    "prompts": {
+      "row": "صف",
+      "change": "تغيير",
+      "resetRow": "إعادة تعيين الصف",
+      "resetView": "إعادة تعيين المنظور",
+      "done": "تم"
+    },
+    "savedPerCar": "يُحفظ لكل سيارة"
+  },
+  "leaderboardPanel": {
+    "raceGhost": "سباق ضد شبح لفتك بسيارة {car}",
+    "raceGhostTitle": "سباق ضد الشبح",
+    "postUnreachable": "تعذر الوصول إلى لوحة الأزمنة",
+    "applySetup": "تطبيق الإعداد من لفتك بسيارة {car}",
+    "applySetupTitle": "تطبيق الإعداد",
+    "retry": "إعادة المحاولة",
+    "post": "نشر",
+    "retryAria": "إعادة محاولة نشر هذه اللفة عبر الإنترنت",
+    "postAria": "نشر هذه اللفة عبر الإنترنت",
+    "retryTitle": "إعادة المحاولة",
+    "postTitle": "نشر عبر الإنترنت",
+    "notPosted": "غير منشورة على اللوحة: {error}",
+    "notPostedYet": "لم تُنشر على اللوحة عبر الإنترنت بعد",
+    "driverKey": "مفتاح السائق",
+    "driverKeyIntro": "يثبت ملكيتك لاسم السائق على لوحة الأزمنة. صدّره لاستخدام الاسم نفسه على جهاز آخر؛ وحافظ على سرية الملف.",
+    "exportKey": "تصدير المفتاح",
+    "importKey": "استيراد المفتاح",
+    "importGhost": "استيراد ملف شبح",
+    "exportBest": "تصدير أفضل لفة",
+    "undo": "تراجع",
+    "dismiss": "إغلاق",
+    "onlineTimes": "الأزمنة عبر الإنترنت",
+    "circuit": "الحلبة",
+    "circuitLaps": "{count, plural, zero {0 لفات} one {لفة واحدة} two {لفتان} few {{count} لفات} many {{count} لفة} other {{count} لفة}}",
+    "allCars": "كل السيارات",
+    "yourBestLaps": "أفضل لفاتك",
+    "physicsVersion": "إصدار الفيزياء",
+    "car": "السيارة",
+    "carLaps": "{count, plural, zero {0 لفات} one {لفة واحدة} two {لفتان} few {{count} لفات} many {{count} لفة} other {{count} لفة}}",
+    "noLapsOlder": "لا توجد لفات على {circuit} ({board}).",
+    "noLaps": "لا توجد لفات محفوظة على {circuit}.",
+    "tableLabel": "أفضل اللفات على {circuit}",
+    "carColumn": "السيارة",
+    "theoreticalBest": "الأفضل النظري",
+    "potential": "إمكانية تحسين {delta} s",
+    "allBestSectors": "جميع أفضل القطاعات في لفة واحدة",
+    "offline": "لوحة الأزمنة غير متصلة. تُعرض الأزمنة المحلية.",
+    "disabled": "لوحة الأزمنة عبر الإنترنت معطّلة. تُعرض الأزمنة المحلية."
+  },
+  "boardWidget": {
+    "modes": {
+      "lapEnd": "فتح عند نهاية اللفة",
+      "open": "مفتوحة دائمًا",
+      "closed": "مغلقة دائمًا"
+    },
+    "gear": "توقيت فتح لوحة الأزمنة",
+    "modeMenu": "توقيت فتح لوحة الأزمنة",
+    "region": "لوحة الأزمنة",
+    "fold": "طيّ لوحة الأزمنة",
+    "foldKey": "طيّ لوحة الأزمنة ({key})",
+    "open": "فتح لوحة الأزمنة: {circuit}، {place}",
+    "openNoTime": "فتح لوحة الأزمنة: {circuit}، لا يوجد زمن بعد",
+    "openKey": "فتح لوحة الأزمنة ({key}): {circuit}، {place}",
+    "openKeyNoTime": "فتح لوحة الأزمنة ({key}): {circuit}، لا يوجد زمن بعد",
+    "drivers": "{total, plural, zero {لا سائقين} one {سائق واحد} two {سائقان} few {{count} سائقين} many {{count} سائقًا} other {{count} سائق}}",
+    "noTimes": "لا توجد أزمنة بعد.",
+    "placesBetween": "المراكز الفاصلة",
+    "lapsDriven": "اللفات المقطوعة",
+    "noTime": "لا يوجد زمن بعد",
+    "place": "P{rank}/{total}"
+  },
+  "multiplayerPanel": {
+    "collision": {
+      "on": "مفعّل",
+      "ghostLap1": "شبح في اللفة 1",
+      "off": "معطّل",
+      "protected": "محمي"
+    },
+    "collisionHint": {
+      "on": "تلامس كامل",
+      "ghostLap1": "دون تلامس في اللفة الافتتاحية",
+      "off": "تمر السيارات عبر بعضها",
+      "protected": "شبح في اللفة 1، ثم تُمنع السيارة الخطرة من ملامسة الآخرين"
+    },
+    "anyCar": "أي سيارة",
+    "startType": {
+      "standing": "من الثبات",
+      "rolling": "انطلاق متحرك"
+    },
+    "gridOrder": {
+      "qualifying": "تصفيات",
+      "reverse": "معكوس",
+      "random": "عشوائي"
+    },
+    "gridOrderHint": {
+      "qualifying": "أسرع لفة أولًا؛ ومن دون زمن حسب ترتيب الانضمام",
+      "reverse": "عكس ترتيب التصفيات (أو ترتيب الانضمام)",
+      "random": "يُسحب بالقرعة عند البداية"
+    },
+    "presetClassic": "كلاسيكي",
+    "presetClassicHint": "حدود الحلبة بالمخالفات: كل مخالفة ثالثة تضيف +3 s، ثم +5 s",
+    "timeScaleFixed": "ثابت",
+    "qualifyingOff": "معطّل",
+    "settings": {
+      "event": "الحدث",
+      "race": "السباق",
+      "rules": "القوانين",
+      "circuit": "الحلبة",
+      "changeCircuit": "تغيير الحلبة: {circuit}",
+      "change": "تغيير",
+      "circuitHint": "يمكن تغييرها من القائمة الرئيسية",
+      "cars": "السيارات",
+      "oneCar": "سيارة واحدة للجميع",
+      "classesMixed": "جميع السيارات، فئات مختلطة",
+      "weather": "الطقس",
+      "timeOfDay": "وقت اليوم",
+      "timeSpeed": "سرعة الوقت",
+      "laps": "اللفات",
+      "qualifying": "التصفيات",
+      "qualifyingHint": "أفضل لفة نظيفة تحدد شبكة الانطلاق",
+      "gridOrder": "ترتيب الشبكة",
+      "setByQualifying": "تُحدد بالتصفيات",
+      "start": "الانطلاق",
+      "launch": "أسلوب الانطلاق",
+      "rulePreset": "القوانين",
+      "trackLimits": "حدود الحلبة",
+      "penalties": "العقوبات",
+      "penaltiesOn": "مفعّلة",
+      "penaltiesOff": "معطّلة",
+      "penaltiesHint": "يُضاف وقت لحدود الحلبة والانطلاق المبكر",
+      "damage": "الأضرار",
+      "collisions": "التصادمات",
+      "lockedQualifying": "مقفلة أثناء التصفيات",
+      "lockedRace": "مقفلة أثناء السباق"
+    },
+    "net": {
+      "relayedTitle": "تصل البيانات إليك عبر المضيف",
+      "relayed": "مرحّل",
+      "measuring": "جارٍ القياس",
+      "pingLoss": "{ping} ms · فقد {loss}%"
+    },
+    "drivers": {
+      "title": "السائقون",
+      "host": "المضيف: {name}",
+      "qualifying": "التصفيات",
+      "noCar": "لا توجد سيارة بعد",
+      "noTime": "لا يوجد زمن",
+      "wrongClassTitle": "ليست ضمن فئة هذه الغرفة ({class})",
+      "wrongClass": "فئة غير مطابقة",
+      "ready": "جاهز",
+      "notReady": "غير جاهز",
+      "hostOn": "المضيف على حلبة {circuit}",
+      "switchCircuit": "تبديل الحلبة",
+      "wrongCar": "سيارتك ليست ضمن فئة هذه الغرفة ({class}).",
+      "wrongCarSwitch": "سيارتك ليست ضمن فئة هذه الغرفة ({class}). بدّل السيارة:",
+      "raceInProgress": "السباق جارٍ",
+      "startRaceNow": "ابدأ السباق الآن",
+      "startQualifying": "ابدأ التصفيات ({minutes} د)",
+      "startRace": "ابدأ السباق",
+      "endQualifying": "إنهاء التصفيات",
+      "endRaceForEveryone": "إنهاء السباق للجميع",
+      "readyButton": "جاهز",
+      "readyUp": "استعداد",
+      "raceRunning": "السباق جارٍ الآن.",
+      "qualifyingRunning": "التصفيات جارية الآن.",
+      "waitingForHost": "بانتظار المضيف لبدء الجلسة.",
+      "confirmEndQualifying": "إنهاء التصفيات؟",
+      "confirmEndRace": "إنهاء السباق للجميع؟",
+      "confirmEndQualifyingButton": "إنهاء التصفيات",
+      "confirmEndRaceButton": "إنهاء السباق",
+      "keepQualifying": "متابعة التصفيات",
+      "keepRacing": "متابعة السباق",
+      "confirmBody": "يعيد جميع السائقين إلى الغرفة."
+    },
+    "room": {
+      "connected": "{count} متصل",
+      "connecting": "جارٍ الاتصال",
+      "notConnected": "غير متصل",
+      "title": "غرفة خاصة",
+      "codeAria": "رمز الغرفة {code}",
+      "codeCaption": "رمز الغرفة",
+      "linkCopied": "تم نسخ الرابط",
+      "copyLink": "نسخ رابط الدعوة",
+      "share": "مشاركة",
+      "host": "استضافة غرفة",
+      "joinAnother": "انضمام إلى غرفة أخرى",
+      "joinFriend": "انضمام إلى غرفة صديق",
+      "codePlaceholder": "رمز الغرفة",
+      "join": "انضمام",
+      "newRoom": "غرفة جديدة",
+      "codeTooShort": "أدخل 3 أحرف على الأقل.",
+      "joinFailed": "تعذر الانضمام إلى تلك الغرفة. تحقق من الرمز.",
+      "shareTitle": "سباق LibreCorsa",
+      "shareText": "انضم إلى سباقي",
+      "racingAs": "تتسابق باسم {name}",
+      "edit": "تعديل"
+    },
+    "connect": {
+      "more": "طرق اتصال إضافية",
+      "hide": "إخفاء",
+      "localTitle": "علامات تبويب محلية",
+      "localIntro": "تسابق مع علامة تبويب أخرى في هذا المتصفح.",
+      "localConnect": "اتصال بعلامة تبويب محلية",
+      "manualTitle": "WebRTC يدوي",
+      "manualIntro": "اتصال مباشر ندّ لندّ عبر تبادل رموز العرض والرد.",
+      "createOffer": "1. إنشاء عرض (المضيف)",
+      "acceptOffer": "2. قبول العرض",
+      "acceptAnswer": "3. قبول الرد (المضيف)",
+      "offerFailed": "فشل إنشاء العرض.",
+      "badOffer": "رمز العرض غير صالح.",
+      "badAnswer": "رمز الرد غير صالح.",
+      "remoteToken": "الرمز البعيد",
+      "pasteToken": "لصق الرمز",
+      "answerAccepted": "تم قبول الرد. جارٍ الاتصال…",
+      "yourToken": "رمزك",
+      "copied": "تم النسخ",
+      "copy": "نسخ",
+      "reset": "إعادة تعيين",
+      "turnTitle": "خادم ترحيل TURN مخصص",
+      "turnIntro": "خادم ترحيل اختياري للشبكات المقيدة.",
+      "relayAddress": "عنوان الترحيل",
+      "username": "اسم المستخدم",
+      "password": "كلمة المرور",
+      "saved": "تم الحفظ",
+      "save": "حفظ",
+      "clear": "مسح",
+      "turnPrefix": "يجب أن يبدأ العنوان بـ turn: أو turns:",
+      "ownRelay": "يُستخدم خادم الترحيل الخاص بك"
+    }
+  },
+  "pauseMenu": {
+    "tabs": {
+      "label": "الأقسام",
+      "session": "الجلسة",
+      "hud": "HUD",
+      "conditions": "الظروف",
+      "garage": "المرآب",
+      "corners": "المنعطفات",
+      "multiplayer": "اللعب الجماعي",
+      "lapTimes": "أزمنة اللفات",
+      "feedback": "الملاحظات"
+    },
+    "actions": {
+      "label": "قائمة الإيقاف المؤقت",
+      "resume": "استئناف",
+      "restartRace": "إعادة السباق",
+      "gridStart": "انطلاق من الشبكة",
+      "rollingStart": "انطلاق متحرك",
+      "flyingLap": "لفة طائرة",
+      "watchReplay": "مشاهدة الإعادة",
+      "skipTrack": "تخطي المقطع",
+      "nowPlaying": "{title}، {composer}",
+      "settings": "الإعدادات",
+      "mainMenu": "القائمة الرئيسية"
+    },
+    "prompts": {
+      "move": "تنقّل",
+      "select": "اختيار",
+      "jumpThere": "الانتقال إلى المنعطف",
+      "tabs": "التبويبات",
+      "page": "صفحة",
+      "back": "رجوع",
+      "resume": "استئناف"
+    },
+    "header": {
+      "lap": "اللفة {lap}",
+      "lapOf": "اللفة {lap}/{total}",
+      "run": "المحاولة {lap}",
+      "position": "P{position}/{field}",
+      "online": "عبر الإنترنت",
+      "leavesRace": "يغادر السباق الحالي.",
+      "leavesRoom": "يغادر الغرفة الحالية.",
+      "endsSession": "ينهي الجلسة الحالية."
+    },
+    "session": {
+      "title": "الجلسة",
+      "autopilot": "القيادة الآلية",
+      "key": "المفتاح {key}",
+      "camera": "الكاميرا",
+      "cameraView": "منظور الكاميرا",
+      "cycle": "تبديل: {key}",
+      "freeCamera": "كاميرا حرة",
+      "freeCameraHint": "المفتاح {key} · اسحب للنظر، WASD للطيران، Q/E للارتفاع",
+      "freeCameraButton": "كاميرا حرة",
+      "exitFreeCamera": "إنهاء الكاميرا",
+      "tv": "البث التلفزيوني",
+      "tvHint": "المفتاح {key} · كاميرات بث بجانب الحلبة",
+      "tvButton": "البث التلفزيوني",
+      "exitTv": "إنهاء البث"
+    },
+    "hud": {
+      "title": "تخطيط HUD",
+      "settings": "إعدادات HUD"
+    },
+    "corners": {
+      "title": "المنعطفات",
+      "mapLabel": "خريطة الحلبة مع {count, plural, zero {لا منعطفات مرقّمة} one {منعطف مرقّم واحد} two {منعطفين مرقّمين} few {# منعطفات مرقّمة} many {# منعطفًا مرقّمًا} other {# منعطف مرقّم}}",
+      "turn": "T{turn}",
+      "detail": "{complex} · القطاع {sector}",
+      "pick": "اختر منعطفًا",
+      "rowLabel": "T{turn}، المنعطف {turn}: {name}، {complex}. قمة المنعطف {apex} {unit}، الترس {gear}",
+      "gear": "الترس <n>{gear}</n>"
+    }
+  },
+  "lapSummary": {
+    "title": "{kind, select, run {المحاولة {lap}} other {اللفة {lap}}}",
+    "open": "{kind, select, run {المحاولة {lap}: عرض بيانات القطاعات} other {اللفة {lap}: عرض بيانات القطاعات}}",
+    "dismiss": "إغلاق ملخص اللفة",
+    "collapse": "طيّ ملخص اللفة",
+    "cardLabel": "ملخص اللفة {lap}",
+    "invalid": "ملغاة",
+    "pb": "PB",
+    "invalidWall": "ملغاة: ملامسة الجدار",
+    "invalidLimits": "ملغاة: حدود الحلبة",
+    "autopilot": "قيادة آلية: غير مصنّفة",
+    "personalBest": "أفضل زمن شخصي",
+    "online": "عبر الإنترنت",
+    "onlineRank": "عبر الإنترنت: P{rank}",
+    "onlineRankOf": "عبر الإنترنت: P{rank} من {total}",
+    "onlineRankWeek": "عبر الإنترنت: P{rank}، P{week} هذا الأسبوع",
+    "onlineRankOfWeek": "عبر الإنترنت: P{rank} من {total}، P{week} هذا الأسبوع",
+    "invalidUnranked": "ملغاة · غير مصنّفة",
+    "autopilotUnranked": "قيادة آلية · غير مصنّفة",
+    "topSpeed": "القصوى {unit}",
+    "avgSpeed": "المتوسطة {unit}",
+    "fullThrottle": "تسارع كامل",
+    "braking": "كبح",
+    "sector": "{mark, select, best {القطاع {n}: الأفضل} pb {القطاع {n}: أفضل شخصي} slower {القطاع {n}: أبطأ} other {القطاع {n}}}",
+    "theoreticalBest": "الأفضل النظري",
+    "posting": "جارٍ النشر",
+    "postingNow": "جارٍ النشر…",
+    "retry": "إعادة النشر",
+    "post": "نشر عبر الإنترنت",
+    "queued": "في الانتظار",
+    "close": "إغلاق",
+    "saveGhost": "حفظ ملف الشبح",
+    "driver": "السائق <b>{name}</b>",
+    "rename": "تغيير الاسم",
+    "driverName": "اسم السائق",
+    "cancel": "إلغاء",
+    "saving": "جارٍ الحفظ…",
+    "saveName": "حفظ الاسم",
+    "chart": {
+      "title": "أبطأ سرعة في كل منعطف",
+      "turn": "T{turn}",
+      "empty": "لا توجد بيانات منعطفات لهذه اللفة.",
+      "bar": "T{turn} {name}: {speed} {unit}، {state, select, none {لا مرجع بعد} same {{delta}، مطابقة للأفضل} faster {{delta}، أسرع من الأفضل} other {{delta}، أبطأ من الأفضل}}",
+      "faster": "أسرع",
+      "slower": "أبطأ",
+      "same": "مطابقة"
+    }
+  },
+  "raceResults": {
+    "dialog": "نتيجة السباق",
+    "dsq": "DSQ",
+    "dnf": "DNF",
+    "running": "جارٍ",
+    "lapsDown": "{count, plural, zero {+# لفات} one {+لفة واحدة} two {+لفتان} few {+# لفات} many {+# لفة} other {+# لفة}}",
+    "laps": "{count, plural, zero {0 لفات} one {لفة واحدة} two {لفتان} few {# لفات} many {# لفة} other {# لفة}}",
+    "trackLimits": "حدود الحلبة {count}",
+    "final": "نهائية",
+    "provisional": "مؤقتة",
+    "table": "الترتيب الكامل",
+    "colPos": "المركز",
+    "colGainedTitle": "المراكز المكتسبة أو المفقودة من الشبكة",
+    "colGained": "المراكز المكتسبة",
+    "colDriver": "السائق",
+    "colLaps": "اللفات",
+    "colTime": "الزمن / الفارق",
+    "colBest": "أفضل لفة",
+    "penaltyTitle": "عقوبات زمنية بقيمة {seconds} s، مشمولة في الزمن",
+    "promptSelect": "اختيار",
+    "promptClose": "إغلاق",
+    "backToLobby": "العودة إلى الغرفة",
+    "watchReplay": "مشاهدة الإعادة",
+    "restart": "إعادة السباق",
+    "close": "إغلاق",
+    "fastestLapIcon": "أسرع لفة",
+    "noChange": "دون تغيير",
+    "notKnown": "غير معروف",
+    "placesGained": "{count, plural, zero {0 مراكز مكتسبة} one {تقدّم مركزًا واحدًا} two {تقدّم مركزين} few {تقدّم # مراكز} many {تقدّم # مركزًا} other {تقدّم # مركز}}",
+    "placesLost": "{count, plural, zero {0 مراكز مفقودة} one {تراجع مركزًا واحدًا} two {تراجع مركزين} few {تراجع # مراكز} many {تراجع # مركزًا} other {تراجع # مركز}}",
+    "yourRace": "سباقك",
+    "position": "P{position}",
+    "disqualified": "مستبعد",
+    "retired": "انسحب",
+    "ofField": "من {count}",
+    "gridUnknown": "الشبكة غير معروفة",
+    "started": "انطلق من P{position}",
+    "fastestLap": "أسرع لفة",
+    "bestLap": "أفضل لفة",
+    "lastRaces": {
+      "title": "آخر سباقاتك",
+      "date": "التاريخ",
+      "circuit": "الحلبة",
+      "finish": "المركز النهائي",
+      "gained": "المراكز المكتسبة",
+      "best": "أفضل لفة",
+      "dnf": "DNF",
+      "position": "P{position}"
+    },
+    "joinNext": "انضم إلى السباق التالي <time>{countdown}</time>"
+  },
+  "podiumOverlay": {
+    "label": "منصة التتويج",
+    "first": "الأول",
+    "second": "الثاني",
+    "third": "الثالث",
+    "skip": "تخطي"
+  },
+  "qualifyingHud": {
+    "clock": "التصفيات",
+    "lastLap": "اللفة الأخيرة",
+    "badge": "التصفيات",
+    "finishIt": "أكملها",
+    "lapDeleted": "أُلغيت اللفة",
+    "best": "الأفضل",
+    "grid": "نتيجة التصفيات",
+    "noTime": "لا يوجد زمن"
+  },
+  "perfReportCard": {
+    "title": "تقرير الأداء",
+    "description": "سجل أزمنة إطارات الجلسة.",
+    "failed": "الحافظة غير متاحة. احفظ الملف بدلًا من ذلك.",
+    "copy": "نسخ",
+    "copied": "تم النسخ",
+    "saveFile": "حفظ الملف",
+    "saved": "تم الحفظ"
+  },
+  "qualityNotice": {
+    "lowered": "تم خفض جودة الرسوميات",
+    "floor": "معدل إطارات منخفض · يتوفر حد 30 fps في الإعدادات"
+  },
+  "multiPageMfd": {
+    "pages": {
+      "elecTag": "ELEC",
+      "elecTitle": "الإلكترونيات",
+      "relTag": "نسبي",
+      "relTitle": "النسبي",
+      "tyreTag": "إطارات",
+      "tyreTitle": "الإطارات والمكابح",
+      "fuelTag": "وقود",
+      "fuelTitle": "الوقود والطاقة",
+      "stndTag": "ترتيب",
+      "stndTitle": "الترتيب"
+    },
+    "panel": "MFD · {page}",
+    "pagesLabel": "صفحات MFD",
+    "pagesHint": "أزرار الاتجاهات يمينًا أو يسارًا، أو Ins: الصفحة التالية",
+    "open": "فتح MFD",
+    "fold": "طيّ MFD",
+    "relative": {
+      "label": "النسبي",
+      "noCars": "لا توجد سيارات على الحلبة",
+      "lapsUp": "+{count}L",
+      "lapsDown": "−{count}L",
+      "ahead": "أمامك",
+      "behind": "خلفك",
+      "clear": "خالٍ",
+      "you": "أنت"
+    },
+    "fuel": {
+      "battery": "البطارية",
+      "ersPerLap": "ERS / لفة",
+      "treadPerLap": "تآكل / لفة",
+      "fuel": "الوقود",
+      "lapsOfFuel": "{laps} لفة",
+      "perLap": "لكل لفة",
+      "target": "الهدف {kg}",
+      "lift": "ارفع القدم · وفّر {kg} kg",
+      "fuelOk": "الوقود كافٍ"
+    },
+    "tyres": {
+      "label": "الإطارات والمكابح"
+    },
+    "standings": {
+      "label": "الترتيب",
+      "fastestLap": "أسرع لفة",
+      "fastestLapShort": "FL",
+      "lead": "المتصدر",
+      "noLaps": "لا توجد لفات بعد",
+      "lapTimes": "أزمنة اللفات"
+    },
+    "pill": {
+      "position": "P{position}/{fieldSize}",
+      "laps": "{count, plural, zero {0 لفات} one {لفة واحدة} two {لفتان} few {# لفات} many {# لفة} other {# لفة}}"
+    }
+  },
+  "tunerMfdPanel": {
+    "categories": {
+      "bias": "BIAS",
+      "diff": "DIFF",
+      "pwr": "PWR"
+    },
+    "dials": {
+      "tc1": {
+        "title": "التحكم بالجر",
+        "low": "انزلاق أكبر",
+        "high": "أكثر أمانًا"
+      },
+      "tc2": {
+        "title": "قطع TC",
+        "low": "قطع أنعم",
+        "high": "قطع أقوى"
+      },
+      "abs": {
+        "title": "ABS",
+        "low": "متأخر",
+        "high": "مبكر"
+      },
+      "bias": {
+        "label": "توزيع",
+        "title": "توزيع المكابح",
+        "low": "للخلف",
+        "high": "للأمام"
+      },
+      "diffEntry": {
+        "label": "دخول",
+        "title": "التفاضلي عند الدخول",
+        "low": "رشيق",
+        "high": "مستقر"
+      },
+      "diffMid": {
+        "label": "وسط",
+        "title": "التفاضلي في المنتصف",
+        "low": "يلتف أكثر",
+        "high": "مقفل"
+      },
+      "diffExit": {
+        "label": "خروج",
+        "title": "التفاضلي عند الخروج",
+        "low": "انزلاق مفاجئ أقل",
+        "high": "دفع أقوى"
+      },
+      "engineMap": {
+        "label": "خريطة",
+        "title": "خريطة المحرك",
+        "low": "أحدّ",
+        "high": "أنعم"
+      },
+      "ersMode": {
+        "title": "إطلاق ERS",
+        "low": "استعادة",
+        "high": "هجوم"
+      }
+    },
+    "engineMaps": {
+      "quali": "تصفيات",
+      "race": "سباق",
+      "smooth": "سلس",
+      "lean": "اقتصادي",
+      "wet": "مبلل"
+    },
+    "ersModes": {
+      "charge": "شحن",
+      "lowSpeed": "سرعة منخفضة",
+      "balanced": "متوازن",
+      "race": "سباق",
+      "attack": "هجوم"
+    },
+    "phases": {
+      "entry": "دخول",
+      "mid": "منتصف",
+      "exit": "خروج"
+    },
+    "chips": {
+      "tc": "TC {level}/{cut}",
+      "tcOff": "TC معطّل",
+      "abs": "ABS {level}",
+      "absOff": "ABS معطّل",
+      "bias": "BB {bias}"
+    },
+    "hero": {
+      "off": "OFF",
+      "ofMax": "من {max}",
+      "lock": "قفل {pct}%",
+      "front": "% أمامي",
+      "map": "M{map}"
+    },
+    "live": {
+      "cut": "قطع",
+      "wheelFl": "FL",
+      "wheelFr": "FR",
+      "wheelRl": "RL",
+      "wheelRr": "RR",
+      "front": "F {bias}",
+      "rear": "R {bias}",
+      "torque": "العزم",
+      "battery": "البطارية"
+    },
+    "previousDial": "القرص السابق",
+    "previousDialHint": "القرص السابق (أزرار الاتجاهات يسارًا أو ,)",
+    "nextDial": "القرص التالي",
+    "nextDialHint": "القرص التالي (أزرار الاتجاهات يمينًا أو .)",
+    "lower": "خفض {dial}",
+    "lowerHint": "{hint} (أزرار الاتجاهات للأسفل أو -)",
+    "raise": "رفع {dial}",
+    "raiseHint": "{hint} (أزرار الاتجاهات للأعلى أو =)",
+    "openTuner": "فتح أداة الضبط",
+    "foldTuner": "طيّ أداة الضبط"
+  },
+  "f12026ChannelsPanel": {
+    "region": "القنوات الهندسية",
+    "wheels": {
+      "lf": "LF",
+      "rf": "RF",
+      "lr": "LR",
+      "rr": "RR"
+    },
+    "wheelTitle": "{wheel}: نسبة الانزلاق، المسافة المتبقية للمصد المطاطي، التماسك المستخدم",
+    "slipRatio": "%SR",
+    "aeroHeightTitle": "ارتفاع الهيكل الهوائي",
+    "aeroHeight": "ارتفاع",
+    "aeroBalanceTitle": "التوازن الهوائي (حصة القوة السفلية الأمامية)",
+    "aeroBalance": "توازن",
+    "lsdTitle": "عزم قفل الترس التفاضلي",
+    "lsd": "قفل LSD",
+    "straightModeTitle": "حالة Straight Mode وعدد مرات الفتح في هذه الجلسة",
+    "drsTitle": "حالة DRS وعدد مرات الفتح في هذه الجلسة",
+    "xMode": "X-mode",
+    "drsState": {
+      "open": "مفتوح",
+      "armed": "جاهز",
+      "zone": "منطقة",
+      "off": "معطّل"
+    },
+    "overtakeEarned": "وضع التجاوز متاح",
+    "overtakeLocked": "وضع التجاوز مقفل",
+    "noVerdict": "لا يوجد قرار",
+    "zoneEarned": "{zone} متاح",
+    "zoneLocked": "{zone} مقفل",
+    "noDetection": "لا يوجد رصد",
+    "wall": "جدار",
+    "aidIntervening": "{aid}، يتدخل الآن"
+  },
+  "touchControls": {
+    "steering": "التوجيه",
+    "drive": "القيادة للأمام",
+    "reverse": "الرجوع للخلف",
+    "shiftDown": "خفض الترس",
+    "shiftUp": "رفع الترس",
+    "boost": "تعزيز الطاقة",
+    "activeAero": "الانسيابية النشطة",
+    "headlights": "المصابيح الأمامية",
+    "brake": "المكابح",
+    "throttle": "التسارع",
+    "steerLeft": "التوجيه يسارًا",
+    "steerRight": "التوجيه يمينًا",
+    "pause": "إيقاف مؤقت",
+    "camera": "الكاميرا",
+    "recentreTilt": "إعادة توسيط الإمالة",
+    "allowMotion": "اسمح بالحركة",
+    "tapForTilt": "اضغط للإمالة",
+    "tiltBlocked": "الإمالة محظورة · أعد المحاولة",
+    "noTiltSensor": "لا يوجد مستشعر إمالة"
+  },
+  "replayBar": {
+    "region": "عناصر تحكم إعادة العرض",
+    "transport": "التشغيل",
+    "previousFrame": "الإطار السابق",
+    "previousFrameTitle": "الإطار السابق ({key})",
+    "pause": "إيقاف الإعادة مؤقتًا",
+    "play": "تشغيل الإعادة",
+    "playPauseTitle": "تشغيل / إيقاف مؤقت",
+    "playPauseTitleKey": "تشغيل / إيقاف مؤقت ({key})",
+    "nextFrame": "الإطار التالي",
+    "nextFrameTitle": "الإطار التالي ({key})",
+    "jumpToLap": "انتقل إلى اللفة {lap}",
+    "lapMarker": "L{lap}",
+    "timeline": "الخط الزمني للإعادة",
+    "timelineValue": "{elapsed} من {duration}",
+    "playbackSpeed": "سرعة التشغيل",
+    "focusedCar": "السيارة المتابَعة",
+    "previousCar": "السيارة السابقة",
+    "previousCarTitle": "السيارة السابقة ({key})",
+    "switchCarTitle": "تبديل السيارة المتابَعة ({key})",
+    "nextCar": "السيارة التالية",
+    "nextCarTitle": "السيارة التالية ({key})",
+    "cameraAngle": "زاوية كاميرا الإعادة",
+    "cycleCamera": "تبديل كاميرا الإعادة",
+    "flashbackTitle": "Flashback — استأنف القيادة من هذه اللحظة ({key}، يُلغي اللفة الحالية)",
+    "flashback": "Flashback",
+    "exit": "خروج",
+    "hints": {
+      "freeCam": "كاميرا حرة · اسحب للنظر · WASD للطيران · Q/E للارتفاع · التمرير للسرعة · R إعادة تعيين",
+      "playPause": "تشغيل / إيقاف",
+      "seek": "تقديم/ترجيع {seconds} s",
+      "step": "خطوة",
+      "switchCar": "تبديل السيارة",
+      "freeCamKey": "كاميرا حرة",
+      "flashback": "Flashback"
+    }
+  },
+  "timingPanels": {
+    "tower": {
+      "region": "برج التوقيت",
+      "lap": "اللفة {lap}",
+      "lapOf": "اللفة {lap}<dim>/{total}</dim>",
+      "driver": "السائق",
+      "gap": "الفارق",
+      "interval": "الفاصل",
+      "lastVsYouTitle": "آخر لفة لهم مقارنة بلفتك؛ وفي صفك مقارنة بأفضل لفة لك",
+      "lastVsYou": "الأخيرة<br></br>مقابلك",
+      "fastestLap": "أسرع لفة",
+      "fastestLapShort": "FL",
+      "finished": "أنهى السباق",
+      "damagedTitle": "متضررة ({percent}%)",
+      "damagedLabel": "متضررة، {percent}%",
+      "out": "خارج",
+      "leader": "المتصدر",
+      "lead": "الأول",
+      "lastVsBestTitle": "اللفة الأخيرة مقارنة بأفضل لفة لك",
+      "lastVsTheirsTitle": "آخر لفة لهم مقارنة بلفتك",
+      "personalBest": "PB"
+    },
+    "lap": {
+      "region": "اللفة",
+      "outLap": "لفة الخروج",
+      "counter": "{kind, select, run {المحاولة {lap}} other {اللفة {lap}}}",
+      "sector": "S{sector}",
+      "last": "الأخيرة",
+      "best": "الأفضل",
+      "noRefLap": "لا لفة مرجعية",
+      "lastLap": "اللفة الأخيرة",
+      "bestLap": "أفضل لفة"
+    },
+    "challenge": {
+      "region": "تحدي هذا الأسبوع",
+      "yourBest": "أفضل زمن لك",
+      "weekFastest": "الأسرع هذا الأسبوع"
+    }
+  },
+  "raceIncidentFeed": {
+    "calls": {
+      "investigation": "تحقيق",
+      "penalty": "عقوبة",
+      "noAction": "لا إجراء",
+      "out": "انسحاب",
+      "raceControl": "إدارة السباق",
+      "yellow": "أصفر",
+      "green": "أخضر",
+      "warning": "تحذير"
+    },
+    "vsc": {
+      "tag": "VSC",
+      "ending": "انتهاء VSC",
+      "slowDown": "خفّف السرعة",
+      "slowToTarget": "أبطئ إلى الوتيرة المستهدفة",
+      "prepareForGreen": "استعد للعلم الأخضر",
+      "noOvertaking": "ممنوع التجاوز"
+    },
+    "flag": {
+      "yieldNow": "أفسح الطريق فورًا · دع {code} يمر",
+      "letThrough": "دع {code} يمر",
+      "doubleYellowCue": "خفّف السرعة · ممنوع التجاوز",
+      "yellowCue": "ممنوع التجاوز",
+      "blue": "أزرق",
+      "doubleYellow": "أصفر مزدوج",
+      "yellow": "أصفر"
+    }
+  },
+  "raceControlBanner": {
+    "decisions": {
+      "warning": "تحذير",
+      "finalWarning": "تحذير أخير",
+      "penalty": "عقوبة",
+      "disqualified": "مستبعد",
+      "lapInvalid": "أُلغيت اللفة",
+      "cleared": "تمت التسوية",
+      "noAdvantage": "لا إجراء"
+    },
+    "warningsMeter": "{count} من {total} تحذيرات",
+    "pointsMeter": "{points} من {allowed} نقاط لحدود الحلبة",
+    "giveBack": {
+      "toCar": "أعد المركز إلى {code}",
+      "dropTo": "تراجع إلى P{position}",
+      "time": "أعد {seconds} s",
+      "slowDown": "خفّف السرعة",
+      "underYellow": "تجاوز تحت العلم الأصفر",
+      "illegalOvertake": "تجاوز غير قانوني",
+      "trackLimits": "حدود الحلبة"
+    },
+    "offTrack": {
+      "trackLimits": "حدود الحلبة",
+      "offTrack": "خارج الحلبة",
+      "underReview": "قيد المراجعة"
+    }
+  },
+  "startLights": {
+    "startsIn": "يبدأ السباق خلال <n>{seconds}</n>",
+    "lightsLabel": "أضواء الانطلاق: {lit} من {total} مضاءة",
+    "rollingStart": "انطلاق متحرك",
+    "holdPaceSkin": "حافظ على الوتيرة · <n>{pace}</n> {unit} حتى خط البداية",
+    "holdPace": "حافظ على <n>{pace}</n> {unit} حتى الخط",
+    "greenFlag": "علم أخضر",
+    "lightsOut": "انطفاء الأضواء",
+    "chequeredFlag": "علم الشطرنج"
+  },
+  "launchCue": {
+    "stalledLabel": "توقف المحرك: اضغط مطوّلًا على {control} أو انتقل إلى الوضع المحايد لإعادة التشغيل",
+    "clutch": "القابض",
+    "stalled": "توقف المحرك · اضغط <control></control> أو N",
+    "jumpStart": "انطلاق مبكر · +{seconds} s",
+    "manualStart": "انطلاق يدوي: {clutch, select, held {القابض مضغوط} other {اضغط القابض}}، {revs, select, up {الدورات جاهزة} other {ارفع دورات المحرك}}",
+    "holdNamed": "اضغط مطوّلًا على {control}",
+    "holdClutch": "اضغط القابض",
+    "revsUp": "ارفع الدورات"
+  },
+  "speedCluster": {
+    "region": "لوحة السرعة",
+    "minimalRegion": "السرعة والترس",
+    "shiftLights": "أضواء تبديل التروس: {lit} من {total}",
+    "gearLabel": "الترس {gear}",
+    "gear": "الترس",
+    "shift": "بدّل",
+    "aeroToggle": "{label}: تبديل",
+    "drsTitle": "DRS ({key}): الجناح الخلفي في منطقة DRS؛ وفي السباق فقط ضمن ثانية واحدة من السيارة الأمامية عند نقطة الرصد بدءًا من اللفة 3",
+    "straightModeTitle": "Straight Mode ({key}): يُفتح الجناحان على المستقيمات؛ الضغط قبلها مباشرة يفتحهما فور البدء",
+    "overtakeLockedTitle": "وضع التجاوز ({keys}): يُكتسب ضمن ثانية واحدة من السيارة الأمامية عند نقطة الرصد، للفة التالية",
+    "overtakeTitle": "وضع التجاوز ({keys})",
+    "boostTitle": "تعزيز الطاقة اليدوي ({keys})",
+    "overtake": "تجاوز",
+    "boost": "تعزيز",
+    "harvest": "استعادة",
+    "deploy": "إطلاق",
+    "ersSoc": "شحن ERS",
+    "lonG": "طولي G",
+    "inputs": "المكابح، التسارع، القوة",
+    "brakeLetter": "B",
+    "brakeTitle": "مدخل المكابح",
+    "throttleLetter": "T",
+    "throttleTitle": "مدخل التسارع",
+    "forceLetter": "F",
+    "clip": "تشبع",
+    "forceTitle": "عزم التوجيه / رد الفعل القسري (الأحمر = تشبّع)",
+    "latG": "{g} g جانبي",
+    "ersBattery": "شحن بطارية ERS",
+    "rpmBand": "نطاق دورات المحرك RPM"
+  },
+  "hudFormat": {
+    "session": {
+      "qualifying": "تصفيات",
+      "timeTrial": "تجربة الزمن",
+      "practice": "تدريب"
+    },
+    "cornerShort": "T{turn}",
+    "lapMark": {
+      "best": "الأفضل",
+      "pb": "أفضل زمن شخصي",
+      "slower": "أبطأ"
+    }
+  },
+  "thirdPartyData": {
+    "you": "أنت",
+    "headlight": {
+      "flash": "وميض",
+      "on": "مفعّل",
+      "off": "معطّل"
+    },
+    "surface": {
+      "dry": "جاف",
+      "damp": "رطب",
+      "wet": "مبلل",
+      "flooded": "مغمور"
+    }
+  },
+  "aeroLabel": {
+    "readout": {
+      "noDrs": "بلا DRS",
+      "drsOpen": "DRS مفتوح",
+      "drsQueued": "DRS منتظر",
+      "drsArmed": "DRS جاهز",
+      "xMode": "X-MODE",
+      "xQueued": "X منتظر",
+      "xArmed": "X جاهز",
+      "zMode": "Z-MODE"
+    },
+    "notice": {
+      "drsEnabled": "DRS متاح",
+      "drsNotEnabled": "DRS غير متاح",
+      "drsQueued": "في الانتظار",
+      "xModeBadge": "X-MODE",
+      "straightMode": "Straight Mode",
+      "xModeQueued": "في الانتظار",
+      "overtakeBadge": "التجاوز",
+      "overtakeEnabled": "مفعّل",
+      "overtakeLocked": "مقفل"
+    }
+  },
+  "tyreBrakeWidget": {
+    "corner": {
+      "fl": "FL",
+      "fr": "FR",
+      "rl": "RL",
+      "rr": "RR"
+    },
+    "tread": {
+      "inner": "I",
+      "middle": "M",
+      "outer": "O",
+      "title": "السطح الخارجي والأوسط والداخلي"
+    },
+    "condition": {
+      "grain": "تحبّب",
+      "grainTitle": "التحبّب: تمزّق سطح الإطار (برودة مفرطة بالداخل أثناء الانزلاق)",
+      "blister": "تفقّع",
+      "blisterTitle": "التفقّع: ارتفاع مفرط في حرارة قلب الإطار",
+      "flat": "تسطّح",
+      "flatTitle": "بقعة تسطّح من انغلاق العجلة: اهتزاز وتماسك أقل",
+      "dirt": "أوساخ",
+      "dirtTitle": "أوساخ وبقايا مطاط خارج خط السباق: تزول بعد بضعة منعطفات"
+    },
+    "conditionTitle": "{title} ({level}%)",
+    "brakeTitle": "قرص المكابح {disc}{hasCore, select, yes { · القلب {core}} other {}}{hasBite, select, yes { · تماسك الفحمات {bite}%} other {}}",
+    "cardTitle": "{corner} سطح الإطار {temps} (منظور خلفي)",
+    "treadLife": "عمر سطح الإطار",
+    "pressureTitle": "الضغط ({unit})",
+    "windowTitle": "نطاق العمل المثالي للإطار",
+    "window": "النطاق",
+    "miniTitle": "{corner}: السطح {temps} · {pressure} · المكابح {brake}{hasCondition, select, yes { · {condition}} other {}}"
+  },
+  "tyrePanel": {
+    "region": "الإطارات"
+  },
+  "weatherBadge": {
+    "region": "الطقس",
+    "air": "الهواء",
+    "track": "المسار",
+    "rain": "مطر",
+    "heavyRain": "مطر غزير",
+    "wind": "الرياح",
+    "headlightsForcedOn": "المصابيح الأمامية قيد التشغيل يدويًا",
+    "headlightsForcedOff": "المصابيح الأمامية مطفأة يدويًا",
+    "headlightsOn": "المصابيح الأمامية قيد التشغيل",
+    "headlightsTitleManualOn": "المصابيح الأمامية مفعّلة (يدوي)",
+    "headlightsTitleManualOff": "المصابيح الأمامية مطفأة (يدوي)",
+    "headlightsTitleAuto": "المصابيح الأمامية مفعّلة (تلقائي)",
+    "chipFlash": "وميض",
+    "chipOn": "مفعّل",
+    "chipOff": "معطّل"
+  },
+  "damageWidget": {
+    "label": "الأضرار",
+    "out": "انسحاب",
+    "puncture": "ثقب",
+    "title": "الأمام {front} · الخلف {rear} · اليسار {left} · اليمين {right}",
+    "titlePunctured": "الأمام {front} · الخلف {rear} · اليسار {left} · اليمين {right} · ثقب",
+    "part": {
+      "frontWing": "الجناح الأمامي",
+      "rearWing": "الجناح الخلفي",
+      "floor": "الأرضية",
+      "suspension": "نظام التعليق"
+    }
+  },
+  "inputTrace": {
+    "throttle": "تسارع",
+    "brake": "مكبح",
+    "steering": "توجيه",
+    "steeringTitle": "الخط المتصل لزاوية العجلات، والمتقطع لمدخلاتك",
+    "trace": "منحنى التسارع والمكابح والتوجيه: المتقطع لمدخلاتك والمتصل لزاوية العجلات",
+    "region": "المدخلات"
+  },
+  "pedalBars": {
+    "region": "الدواسات والإلكترونيات",
+    "clutch": "قابض",
+    "clip": "تشبع",
+    "steering": "التوجيه"
+  },
+  "splitGaps": {
+    "region": "الفوارق الزمنية",
+    "ahead": "أمامك",
+    "behind": "خلفك",
+    "carAhead": "السيارة أمامك {driver}: {gap} ثانية",
+    "carBehind": "السيارة خلفك {driver}: {gap} ثانية",
+    "goingYourWay": "لصالحك",
+    "goingAgainstYou": "ضدك",
+    "steady": "ثابت"
+  },
+  "deltaBar": {
+    "label": "الفارق مع اللفة المرجعية",
+    "valueText": "{delta} ثانية، {trend, select, gaining {تكسب وقتًا} losing {تخسر وقتًا} other {ثابت}}",
+    "noReference": "لا توجد لفة مرجعية"
+  },
+  "ffbMeter": {
+    "title": "رد الفعل القسري",
+    "clipping": "تشبّع",
+    "inRange": "ضمن النطاق",
+    "peak": "الذروة <v>{value}%</v>",
+    "setCar": "اضبط هذه السيارة على {value}%"
+  },
+  "proximityRadar": {
+    "carsClose": "{count, plural, zero {لا سيارات قريبة} one {سيارة واحدة قريبة} two {سيارتان قريبتان} few {# سيارات قريبة} many {# سيارة قريبة} other {# سيارة قريبة}}{side, select, left {، واحدة بموازاتك يسارًا} right {، واحدة بموازاتك يمينًا} both {، واحدة بموازاتك يسارًا وأخرى يمينًا} other {}}",
+    "clear": "الرادار خالٍ"
+  },
+  "cameraToast": {
+    "freeHintTouch": "اسحب للنظر حولك · استخدم قائمة الإيقاف المؤقت أو كاميرا الإعادة للخروج",
+    "freeHintKeys": "اسحب للنظر · WASD للطيران · Q/E للارتفاع · التمرير للسرعة · R إعادة تعيين · {key} خروج"
+  },
+  "ffbPairPrompt": {
+    "region": "رد الفعل القسري",
+    "text": "اقرن المقود لرد الفعل القسري",
+    "connect": "اتصال",
+    "dismiss": "إغلاق"
+  },
+  "dualSensePairPrompt": {
+    "text": "<b>تم رصد DualSense</b> · اقرنه للزنادات والاهتزازات",
+    "pair": "اقتران",
+    "dismiss": "إغلاق"
+  },
+  "overheadNameplates": {
+    "fastestLap": "FL",
+    "rank": "P{rank}"
+  }
+}
