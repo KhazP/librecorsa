@@ -26,7 +26,7 @@
     "wake": "Press any button on a controller or wheel to wake it.",
     "wheel": "Wheel",
     "controller": "Controller",
-    "axesButtons": "{axes, plural, other {# axes}}, {buttons, plural, other {# buttons}}",
+    "axesButtons": "{axes, plural, one {# axis} other {# axes}}, {buttons, plural, one {# button} other {# buttons}}",
     "buttonMap": "Button map",
     "hideMap": "Hide map"
   },

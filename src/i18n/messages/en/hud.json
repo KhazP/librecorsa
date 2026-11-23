@@ -1,7 +1,7 @@
 {
   "racesCard": {
     "region": "Races",
-    "description": "{car} · {laps, plural, other {# laps}} · every {interval}",
+    "description": "{car} · {laps, plural, one {# lap} other {# laps}} · every {interval}",
     "racing": "<big>Go</big> <small>in progress</small>",
     "toStart": "<big>{time}</big> <small>to start</small>",
     "toNextRace": "<big>{time}</big> <small>to next race</small>",
@@ -531,7 +531,7 @@
     },
     "pill": {
       "position": "P{position}/{fieldSize}",
-      "laps": "{count, plural, other {# laps}}"
+      "laps": "{count, plural, one {# lap} other {# laps}}"
     }
   },
   "tunerMfdPanel": {

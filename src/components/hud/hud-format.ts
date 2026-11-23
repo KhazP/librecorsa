@@ -3,7 +3,8 @@ import { COMPOUNDS } from "@/components/ui/badges/compounds";
 import { formatDelta as kitFormatDelta } from "@/components/ui/badges/DeltaBadge";
 import { tokenColor, type ColorToken } from "@/components/ui/token-color";
 import { currentUnits } from "@/lib/settings/ui-prefs";
-import { currentLocale, t as tr } from "@/i18n/runtime";
+import { t as tr } from "@/i18n/runtime";
+import { perLanguage } from "@/lib/per-language";
 import type { UnitSettings } from "@/lib/settings/player-settings";
 import {
   PRESSURE_LABEL,
@@ -80,19 +81,8 @@ export const HUD_WELL = "border border-lc-titanium bg-lc-well";
 /** The HUD's field label (`lc-hud-lbl`: mono 700, 9 px, 0.18em, caps, slate) */
 export const HUD_LBL = "lc-hud-lbl";
 
-/**
- * Text built from the messages once per language, for code the HUD runs every frame outside a component's render (a
- * label helper other panels call, a pooled DOM layer): `const words = perLanguage(() => ({ best: tr("hud.x.best") }))`,
- * then `words().best`. It builds again when the language changes.
- */
-export function perLanguage<T>(build: () => T): () => T {
-  let cached: { locale: string; value: T } | null = null;
-  return () => {
-    const locale = currentLocale();
-    if (cached?.locale !== locale) cached = { locale, value: build() };
-    return cached.value;
-  };
-}
+/** Text built from the messages once per language, for code the HUD runs every frame (src/lib/per-language.ts) */
+export { perLanguage };
 
 /** m:ss.mmm (h:mm:ss.mmm from an hour on), or dashes when there is no time yet (or it is not a finite number) */
 export function formatLapTime(ms: number | null | undefined): string {

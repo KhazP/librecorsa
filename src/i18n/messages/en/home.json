@@ -33,7 +33,7 @@
       "page": "Lap times page",
       "drive": "Drive"
     },
-    "length": "{distance} {unit}, {turns, plural, other {# turns}}",
+    "length": "{distance} {unit}, {turns, plural, one {# turn} other {# turns}}",
     "classYear": "{class}, {year}",
     "footer": "{venue}, {car}",
     "driveTile": {

@@ -107,7 +107,7 @@
     "classFastestLap": "{count, plural, =1 {{class} Fastest Lap} other {{class} Fastest Lap ×#}}",
     "carFastestLap": "{count, plural, =1 {{car} Fastest Lap} other {{car} Fastest Lap ×#}}",
     "classFl": "{count, plural, =1 {{class} FL} other {{class} FL ×#}}",
-    "moreRecords": "{count, plural, other {# more Fastest Lap records}}",
+    "moreRecords": "{count, plural, one {# more Fastest Lap record} other {# more Fastest Lap records}}",
     "shortTimes": "{count, plural, =1 {{short}} other {{short}×#}}",
     "named": "{count, plural, =1 {{name}} other {{name} ×#}}",
     "tooltip": "{label} — {detail}",

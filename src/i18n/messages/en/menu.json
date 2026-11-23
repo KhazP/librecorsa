@@ -106,7 +106,7 @@
     "filtersActive": "Filters<n>{count}</n><sr> on</sr>",
     "sort": "Sort",
     "count": "{kind, select, cars {{count, plural, one {# car} other {# cars}}} other {{count, plural, one {# venue} other {# venues}}}}",
-    "shownOf": "{kind, select, cars {{shown} of {total, plural, other {# cars}}} other {{shown} of {total, plural, other {# venues}}}}",
+    "shownOf": "{kind, select, cars {{shown} of {total, plural, one {# car} other {# cars}}} other {{shown} of {total, plural, one {# venue} other {# venues}}}}",
     "gridLabel": "{label}: {shownOf}",
     "noMatches": "No matches for \"{query}\".",
     "noMatchesIn": "No matches for \"{query}\" in {filters}.",

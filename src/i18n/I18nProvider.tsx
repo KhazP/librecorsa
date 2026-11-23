@@ -2,7 +2,11 @@
 import { useEffect, type ReactNode } from "react";
 import { IntlProvider } from "use-intl/react";
 import { parseInterface, SETTINGS_STORAGE_KEY } from "@/lib/settings/player-settings";
-import { applyLanguage, getMessageFallback, onError, useI18nState } from "./runtime";
+import { bindText } from "@/lib/text";
+import { applyLanguage, currentLocale, getMessageFallback, onError, t, useI18nState } from "./runtime";
+
+// The game's own code reads its words through src/lib/text.ts: on any page with this provider, in the page's language
+bindText(t, currentLocale);
 
 /**
  * The game's messages for every component under it (useTranslations), in the language runtime.ts holds. After the

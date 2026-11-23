@@ -6,9 +6,9 @@ Players pick a language under Settings > Display > Interface > Language. **Autom
 
 ## What's translated
 
-Only part of the game reads its text from the message files so far. `npm run i18n:status` counts the messages. To see what still shows in English, open the game with `?lang=en-XA` (for example `https://librecorsa.org/play?lang=en-XA`): that pseudo-language accents every message it knows and puts it in brackets, so plain English on screen is text that isn't in the files yet.
+The menus, Settings, first-run setup, the HUD and its layouts, the lap boards, the home page and the game's own messages read their text from the message files: about 3,400 messages. `npm run i18n:status` counts them. To see what still shows in English, open the game with `?lang=en-XA` (for example `https://librecorsa.org/play?lang=en-XA`): that pseudo-language accents every message it knows and puts it in brackets, so plain English on screen is text that isn't in the files yet.
 
-These stay in English on purpose: the privacy and press pages, the admin page, credit and licence lines, and the names of cars, circuits and drivers.
+These stay in English on purpose: the privacy and press pages, the admin page, credit and licence lines, the names of cars, circuits and drivers, the car and circuit descriptions, text that goes into a bug report or wheel diagnostics, and the race-control messages the simulation worker builds.
 
 ## Adding a language
 
@@ -53,7 +53,8 @@ The code is the one browsers report for the language (`tr`, `pt-BR`, `zh-Hant`),
 ## For developers: adding text
 
 - **In a component**: `const t = useTranslations("menu.title")`, then `t("drive")`, or `t("lapTimesBest", { time })` with values. Add the English to `src/i18n/messages/en/menu.json` under the same key. Keys are typed, so a missing one fails `npx tsc --noEmit`.
-- **Outside React** (a toast the simulation raises, text drawn on a canvas): `t("game.trackLimits.cut")` from `@/i18n/runtime`, called when the text is shown, so a change of language reaches it. `upper(text)` capitalises the way the current language does.
+- **Outside React, in page code** (text drawn on a canvas, a toast): `t("hud.x.y")` from `@/i18n/runtime`, called when the text is shown, so a change of language reaches it. `upper(text)` capitalises the way the current language does.
+- **In `src/lib`**: `text("game.weather.clear")` from `@/lib/text`. It has no React and no runtime, because the race server, the simulation worker and the server-rendered pages import those tables; on the page it reads the current language, elsewhere English. A table other files read keeps its shape, with getters for the words. Code that runs every frame builds its words once per language with `perLanguage` (`@/lib/per-language`).
 - **Whole sentences**: one message per sentence, with placeholders for what changes. Don't build a sentence from pieces: word order differs between languages.
 - **One key per meaning**: "Off" on a switch and "Off" for a track-limits rule are two keys. Translators can't see the screen.
 - **Labels, not values**: translate what the player reads. Ids, saved values, anything sent to the server, compared in code or written into a ghost file, a bug report or diagnostics stay as they are.
