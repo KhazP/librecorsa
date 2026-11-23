@@ -1,5 +1,5 @@
 /**
- * Guard rails for the multiplayer netcode: a short run of the netcode bench (scripts/bench-netcode.ts) with loose
+ * Guard rails for the multiplayer netcode: a short run of the netcode bench (scripts/online/bench-netcode.ts) with loose
  * limits, so a change that makes other cars drawn far from where they are, jumpy, or the packets fat fails here.
  *
  *   npx tsx scripts/verify/verify-netcode.ts

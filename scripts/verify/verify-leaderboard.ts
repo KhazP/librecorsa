@@ -51,7 +51,7 @@ import { nameProblem } from '../../src/lib/net/name-filter';
 import { randomDriverProfile } from '../../src/lib/settings/player-settings';
 import type { Env } from '../../cloudflare/api/types';
 import { fakeD1, fakeR2 } from '../lib/fake-cloudflare';
-import { planImport, type SupabaseDriver, type SupabaseLap } from '../migrate-supabase-board';
+import { planImport, type SupabaseDriver, type SupabaseLap } from '../online/migrate-supabase-board';
 import { carById, type CarId } from '../../src/lib/cars/car-registry';
 import { CHALLENGE_ROTATION, challengeAt, challengeCompound, challengeConditionsLabel, challengeProblem, challengesSoFar, fitsChallenge, isoWeekId, timeLeftLabel } from '../../src/lib/net/weekly-challenge';
 
@@ -645,7 +645,7 @@ async function main(): Promise<void> {
   }
 
   {
-    // Carrying the old Supabase board over (scripts/migrate-supabase-board.ts), onto an empty board
+    // Carrying the old Supabase board over (scripts/online/migrate-supabase-board.ts), onto an empty board
     const db = fakeD1(schema);
     const run = async (sql: string[]) => {
       for (const statement of sql) await db.prepare(statement).run();

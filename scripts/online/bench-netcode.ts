@@ -1,11 +1,11 @@
 /**
  * The multiplayer netcode bench (scripts/lib/netcode-bench.ts): one table row per network scenario.
  *
- *   npx tsx scripts/bench-netcode.ts              the full table (three minutes of racing per scenario)
- *   npx tsx scripts/bench-netcode.ts --quick      a shorter run of the main rows
- *   npx tsx scripts/bench-netcode.ts --json out.json
- *   npx tsx scripts/bench-netcode.ts --hz 30      every client sends at this rate (default: the game's)
- *   npx tsx scripts/bench-netcode.ts --seeds 5    runs each scenario with this many seeds (default 3, quick 1)
+ *   npx tsx scripts/online/bench-netcode.ts              the full table (three minutes of racing per scenario)
+ *   npx tsx scripts/online/bench-netcode.ts --quick      a shorter run of the main rows
+ *   npx tsx scripts/online/bench-netcode.ts --json out.json
+ *   npx tsx scripts/online/bench-netcode.ts --hz 30      every client sends at this rate (default: the game's)
+ *   npx tsx scripts/online/bench-netcode.ts --seeds 5    runs each scenario with this many seeds (default 3, quick 1)
  *
  * Two (or three) clients race recorded F1Physics2026 drives on the default circuit through their own
  * `MultiplayerSyncManager`, on simulated links, with their own clocks and frame rates. Each row: where each client
@@ -18,8 +18,8 @@
  * (no estimators): the difference to its row is what the timing estimates cost.
  */
 import { writeFileSync } from 'node:fs';
-import { getActiveTrackData } from '../src/lib/track-data';
-import { recordDrives, runScenario, tableOf, type BenchSetup, type Scenario, type ScenarioResult } from './lib/netcode-bench';
+import { getActiveTrackData } from '../../src/lib/track-data';
+import { recordDrives, runScenario, tableOf, type BenchSetup, type Scenario, type ScenarioResult } from '../lib/netcode-bench';
 
 const args = process.argv.slice(2);
 const quick = args.includes('--quick');

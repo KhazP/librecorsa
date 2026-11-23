@@ -3,7 +3,7 @@
  * (cloudflare/api/board.ts): every lap with its ghost, and every claimed driver name with the hash of its key, so
  * nobody loses a time or a name.
  *
- *   SUPABASE_URL=https://<project>.supabase.co SUPABASE_SERVICE_ROLE_KEY=<key> npx tsx scripts/migrate-supabase-board.ts [--dry-run] [--local]
+ *   SUPABASE_URL=https://<project>.supabase.co SUPABASE_SERVICE_ROLE_KEY=<key> npx tsx scripts/online/migrate-supabase-board.ts [--dry-run] [--local]
  *
  * (The two variables may also sit in .env.migrate.local, which git ignores.) The service-role key is needed because
  * the tables are closed to the public key; it is only sent to that Supabase project.
@@ -18,8 +18,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { driverNameKey } from '../cloudflare/api/board';
-import { checkLap, type CheckedLap } from '../cloudflare/api/lap-check';
+import { driverNameKey } from '../../cloudflare/api/board';
+import { checkLap, type CheckedLap } from '../../cloudflare/api/lap-check';
 
 const DATABASE = 'librecorsa-board';
 const BUCKET = 'librecorsa-ghosts';
@@ -118,7 +118,7 @@ export function planImport(laps: readonly SupabaseLap[], drivers: readonly Supab
 // ---- Running it ------------------------------------------------------------------------------------------------------
 
 function readEnvFile(): void {
-  const file = join(__dirname, '..', '.env.migrate.local');
+  const file = join(__dirname, '..', '..', '.env.migrate.local');
   if (!existsSync(file)) return;
   for (const line of readFileSync(file, 'utf8').split('\n')) {
     const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line);
@@ -144,13 +144,13 @@ async function readTable<T>(base: string, key: string, table: string, order: str
 
 /** The Cloudflare account the site is on (wrangler.jsonc): a login with several accounts has to be told which */
 function accountId(): string | undefined {
-  const config = readFileSync(join(__dirname, '..', 'wrangler.jsonc'), 'utf8');
+  const config = readFileSync(join(__dirname, '..', '..', 'wrangler.jsonc'), 'utf8');
   return /"account_id"\s*:\s*"([0-9a-f]{32})"/.exec(config)?.[1];
 }
 
 function wrangler(args: string[]): string {
   const env = { ...process.env, CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID ?? accountId() ?? '' };
-  const res = spawnSync('npx', ['wrangler', ...args], { cwd: join(__dirname, '..'), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env });
+  const res = spawnSync('npx', ['wrangler', ...args], { cwd: join(__dirname, '..', '..'), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env });
   if (res.status !== 0) throw new Error(`wrangler ${args.slice(0, 3).join(' ')} failed:\n${res.stderr || res.stdout}`);
   return res.stdout;
 }
