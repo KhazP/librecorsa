@@ -121,11 +121,11 @@
         "keyboard": "Atribua a embreagem em Controles > Teclado"
       },
       "overridden": {
-        "gearbox": "Desativada temporariamente (exige câmbio manual); ative para restaurar o padrão",
-        "wheel": "Desativada temporariamente (atribua a embreagem em controles > volante); ative para restaurar o padrão",
-        "controller": "Desativada temporariamente (atribua a embreagem em controles > controle); ative para restaurar o padrão",
-        "touch": "Desativada temporariamente (indisponível com controles por toque); ative para restaurar o padrão",
-        "keyboard": "Desativada temporariamente (atribua a embreagem em controles > teclado); ative para restaurar o padrão"
+        "gearbox": "Mantida ativa temporariamente (exige câmbio manual); ative para restaurar o padrão",
+        "wheel": "Mantida ativa temporariamente (atribua a embreagem em controles > volante); ative para restaurar o padrão",
+        "controller": "Mantida ativa temporariamente (atribua a embreagem em controles > controle); ative para restaurar o padrão",
+        "touch": "Mantida ativa temporariamente (indisponível com controles por toque); ative para restaurar o padrão",
+        "keyboard": "Mantida ativa temporariamente (atribua a embreagem em controles > teclado); ative para restaurar o padrão"
       }
     },
     "gamepadAssist": {
@@ -213,7 +213,7 @@
     },
     "triggerRumble": {
       "label": "Vibração dos gatilhos",
-      "hint": "Deslizamento, ABS e patinagem sentidos nos gatilhos"
+      "hint": "Deslizamento, ABS e patinação sentidos nos gatilhos"
     },
     "triggerSlipAlwaysOn": {
       "label": "Deslizamento nos gatilhos com ABS/TC ligados",
@@ -239,10 +239,10 @@
     },
     "touchLayout": {
       "label": "Estilo de toque",
-      "hint": "Sliders analógicos de arrastar ou botões digitais",
+      "hint": "Controles deslizantes analógicos ou botões digitais",
       "off": "Os controles por toque estão desligados",
       "options": {
-        "sliders": "Sliders",
+        "sliders": "Deslizantes",
         "buttons": "Botões"
       }
     },
@@ -338,7 +338,7 @@
     },
     "fpsCap": {
       "label": "Taxa de quadros",
-      "hint": "30 fps reduz o calor em celulares",
+      "hint": "30 fps reduz o aquecimento em celulares",
       "options": {
         "full": "Total",
         "fps30": "30 fps"
@@ -383,11 +383,11 @@
       "label": "Nomes dos jogadores"
     },
     "boardWidget": {
-      "label": "Classificação",
+      "label": "Ranking de tempos",
       "options": {
         "lapEnd": "No fim da volta",
-        "open": "Aberta",
-        "closed": "Fechada"
+        "open": "Aberto",
+        "closed": "Fechado"
       }
     },
     "inputTrace": {
@@ -427,7 +427,7 @@
       "label": "Movimento da cabeça",
       "options": {
         "natural": "Natural",
-        "static": "Fixa"
+        "static": "Fixo"
       }
     },
     "language": {
@@ -455,9 +455,9 @@
       "label": "Paleta para daltonismo",
       "options": {
         "standard": "Padrão",
-        "protan": "Fraco p/ vermelho",
-        "deutan": "Fraco p/ verde",
-        "tritan": "Fraco p/ azul"
+        "protan": "Deficiência de vermelho",
+        "deutan": "Deficiência de verde",
+        "tritan": "Deficiência de azul"
       },
       "details": {
         "protan": "Protanopia e protanomalia",
@@ -503,7 +503,7 @@
     },
     "telemetryOut": {
       "label": "Telemetria UDP",
-      "hint": "Envia telemetria ao vivo a uma ponte local (dashboards, bass shakers)"
+      "hint": "Envia telemetria ao vivo a um bridge local (dashboards, bass shakers)"
     }
   },
   "driving": {
@@ -515,7 +515,7 @@
   },
   "controls": {
     "activeDevice": "Dispositivo ativo",
-    "quickSetup": "Setup rápido",
+    "quickSetup": "Configuração rápida",
     "runSetupWizard": "Executar assistente de configuração",
     "runSetup": "Executar",
     "touch": "Toque"

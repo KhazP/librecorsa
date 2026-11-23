@@ -33,7 +33,7 @@
     "morning": "Manhã",
     "noon": "Meio-dia",
     "afternoon": "Tarde",
-    "goldenHour": "Golden hour",
+    "goldenHour": "Hora dourada",
     "dusk": "Entardecer",
     "night": "Noite"
   },
@@ -55,7 +55,7 @@
     "auto": "Auto",
     "openWheel": "Monopostos",
     "endurance": "Endurance",
-    "autoHint": "Regras de monopostos para monopostos, regras de endurance para os demais",
+    "autoHint": "Regras de fórmula para monopostos, regras de endurance para os demais",
     "openWheelHint": "Limites de pista por infrações: 4 é +5 s, 8 é +10 s, 12 é desqualificação",
     "enduranceHint": "Limites de pista por pontos ponderados: 5 é +5 s, 10 é +10 s, 15 é desqualificação",
     "trackLimitsOn": "Ligado",
@@ -75,7 +75,7 @@
     "aiGridQualifying": "Classificação",
     "aiGridReversed": "Invertido",
     "startAuto": "Auto",
-    "startStanding": "Parado",
+    "startStanding": "Parada",
     "startRolling": "Lançada",
     "standingStart": "largada parada",
     "rollingStart": "largada lançada",
@@ -182,7 +182,7 @@
     "ownDetail": "Usa uma física feita para este carro.",
     "sharedBadge": "FÍSICA COMPARTILHADA",
     "shared": "Física compartilhada",
-    "sharedDetail": "Usa a física de outro carro da mesma classe e época, então se comporta como aquele carro e não como o seu próprio.",
+    "sharedDetail": "Usa a física de outro carro da mesma classe e época, então se comporta como aquele carro, e não com física própria.",
     "eraBadge": "FÍSICA 2026",
     "era": "Carros antigos",
     "eraDetail": "Usa a física de 2026, então se comporta como um carro de 2026 e não como na sua própria temporada."
@@ -220,7 +220,7 @@
     "retro": "Retrô",
     "colourChalk": "Giz",
     "colourCarbon": "Carbono",
-    "colourAlloy": "Liga",
+    "colourAlloy": "Alumínio",
     "colourVermilion": "Vermelhão",
     "colourPapaya": "Papaya",
     "colourGold": "Ouro",
@@ -301,7 +301,7 @@
     "gtClassic": "GT clássico",
     "f1": "Estilo Fórmula",
     "forza": "Estilo Forza",
-    "bumper": "Troca por gatilhos"
+    "bumper": "Troca nos botões superiores"
   },
   "wheelSupport": {
     "moza": "Conecta, esterça e reproduz force feedback via WebHID",
@@ -335,7 +335,7 @@
     "h2hDetail": "Os carros à frente e atrás, diferenças e deltas de volta",
     "retroDetail": "Instrumentos quentes: mostrador redondo, barra de delta, voltas",
     "blocksDetail": "Blocos quadrados escuros: tempos, setores, pneus, combustível",
-    "grandPrixDetail": "Torre da corrida, conta-giros redondo, marcha e comandos"
+    "grandPrixDetail": "Torre da corrida, mostrador redondo de velocidade, marcha e comandos"
   },
   "steeringAssist": {
     "selfSteerStrength": "Autoesterço e contraesterço",
@@ -542,7 +542,7 @@
       "less": "Gira na entrada, traseira trava primeiro"
     },
     "migration": {
-      "more": "Gira ao frear soltando o pedal",
+      "more": "Gira ao aliviar o freio na curva",
       "less": "O balanço se mantém ao soltar o freio"
     },
     "coldPsi": {
@@ -590,7 +590,7 @@
       "less": "Bate nos batentes mais cedo, base mais plana"
     },
     "preload": {
-      "more": "Estável em curvas rápidas, empurra nas lentas",
+      "more": "Estável em curvas rápidas, subesterça nas lentas",
       "less": "Gira na entrada, saídas mais soltas"
     },
     "bump": {
@@ -691,16 +691,16 @@
     "secondsGained": "{seconds} s ganhos",
     "lapDeleted": "Volta anulada",
     "wallDeleted": "Contato com o muro · volta anulada",
-    "rodeWallBeforeLine": "Rodou no muro antes da linha",
+    "rodeWallBeforeLine": "Raspou no muro antes da linha",
     "limitsDeleted": "Limites de pista · volta anulada",
     "offBeforeLine": "Fora antes da linha",
     "nextLapToo": "Próxima volta também",
     "offTrack": "Fora da pista",
     "touchedBarrier": "Tocou na barreira",
-    "rodeWall": "Rodou no muro",
+    "rodeWall": "Raspou no muro",
     "positionHandedBack": "Posição devolvida",
     "advantageGivenBack": "Vantagem devolvida",
-    "noFurtherAction": "Sem outras ações",
+    "noFurtherAction": "Nenhuma ação adicional",
     "trackLimits": "Limites de pista",
     "noAdvantage": "Sem vantagem · sem ação",
     "timePenalty": "Punição de +{seconds}s",
@@ -751,7 +751,7 @@
     "connectedPlayers": "{count, plural, one {Conectado a # jogador} other {Conectado a # jogadores}}",
     "peerFailed": "Não foi possível conectar ao outro jogador. Tente de novo ou use o mesmo Wi-Fi.",
     "peerBlocked": "Não foi possível conectar: uma das suas redes bloqueia conexões diretas. Use o mesmo Wi-Fi ou tente outra rede.",
-    "lostHost": "Perdeu o anfitrião. Entre de novo.",
+    "lostHost": "Conexão com o anfitrião perdida. Entre de novo.",
     "hostingTabs": "Hospedando uma corrida para as abas deste navegador",
     "playerLeft": "O jogador saiu. Faça uma nova oferta para conectar de novo.",
     "connected": "Conectado",
@@ -796,11 +796,11 @@
     "shaders": "Shaders"
   },
   "session": {
-    "wheelDisconnected": "Volante desconectado. Reconecte-o ou continue para dirigir com o que sobrou.",
+    "wheelDisconnected": "Volante desconectado. Reconecte-o ou continue para dirigir com os controles restantes.",
     "bigJumpStart": "Queima de largada · bem fora da posição do grid",
     "jumpStart": "Queima de largada",
     "clutchGearUp": "Subir marcha",
-    "clutchPaddle": "aleta de troca para cima"
+    "clutchPaddle": "aleta de subir marcha"
   },
   "driverKey": {
     "notAKeyFile": "Este não é um arquivo de chave de piloto",
@@ -829,7 +829,7 @@
   "telemetryHud": {
     "menu": "Menu",
     "calibratePedals": "Calibrar pedais",
-    "holdForLightsOut": "Segure o acelerador para apagar as luzes",
+    "holdForLightsOut": "Segure o acelerador até as luzes apagarem",
     "mouseSteering": "Direção com mouse · {key} para sair",
     "keyMenu": "Menu",
     "keyCamera": "Câmera",
@@ -841,7 +841,7 @@
   },
   "trackGate": {
     "safeStart": "Início seguro ativo após reinício da GPU.",
-    "graphicsLow": "Gráficos definidos como Baixa após reinício da GPU.",
+    "graphicsLow": "Qualidade gráfica definida como Baixa após reinício da GPU.",
     "loadFailedStaying": "Falha ao carregar a pista. Continuando em {circuit}.",
     "loadFailedDefault": "Falha ao carregar a pista. {circuit} carregado."
   },

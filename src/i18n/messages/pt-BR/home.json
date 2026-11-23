@@ -118,7 +118,7 @@
         "press": "Toda a cobertura e o kit de imprensa",
         "docs": "Documentação",
         "privacy": "Privacidade",
-        "support": "Me pague um café"
+        "support": "Pagar um café"
       }
     },
     "facts": {
@@ -128,7 +128,7 @@
       },
       "racing": {
         "label": "Corridas",
-        "text": "Voltas rápidas, corridas contra a IA, salas multijogador e tempos de volta online"
+        "text": "Voltas rápidas, corridas contra a IA, salas multiplayer e tempos de volta online"
       },
       "controls": {
         "label": "Controles",
@@ -163,7 +163,7 @@
     "week": "Semana",
     "thisWeek": "Esta semana · {circuit}",
     "pastWeek": "{dates} · {circuit}",
-    "timeLeft": "Faltam {timeLeft}",
+    "timeLeft": "Termina em {timeLeft}",
     "ran": "Realizado em {dates}",
     "rules": "Regras",
     "emptyThisWeek": "Ainda não há tempos nesta semana.",
@@ -206,7 +206,7 @@
       },
       "current": {
         "label": "Sempre atual",
-        "text": "Todo app abre o librecorsa.org diretamente em vez de embutir pistas ou carros, então física, circuitos e multijogador são atualizados na hora."
+        "text": "Todo app abre o librecorsa.org diretamente em vez de embutir pistas ou carros, então física, circuitos e multiplayer são atualizados na hora."
       },
       "browser": {
         "label": "Navegador e iOS",

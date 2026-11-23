@@ -38,7 +38,7 @@
     "faceButton": "{position, select, bottom {Botão frontal inferior} right {Botão frontal direito} left {Botão frontal esquerdo} other {Botão frontal superior}}",
     "dpad": "D-pad",
     "dpadDirection": "{direction, select, up {D-pad para cima} down {D-pad para baixo} left {D-pad para a esquerda} right {D-pad para a direita} horizontal {D-pad para a esquerda e a direita} other {D-pad para cima e para baixo}}",
-    "shoulder": "{button, select, lb {Gatilho superior esquerdo} rb {Gatilho superior direito} lt {Gatilho esquerdo} other {Gatilho direito}} ({name})",
+    "shoulder": "{button, select, lb {Botão superior esquerdo} rb {Botão superior direito} lt {Gatilho esquerdo} other {Gatilho direito}} ({name})",
     "touchpad": "Touchpad",
     "stick": "{side, select, left {Analógico esquerdo} other {Analógico direito}}",
     "stickPress": "{side, select, left {Clique do analógico esquerdo} other {Clique do analógico direito}} ({name})",

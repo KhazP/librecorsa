@@ -8,14 +8,14 @@
     "fastestHere": "Mais rápido aqui",
     "fastest": "(mais rápido)",
     "tryAgain": "Tentar de novo",
-    "myPlace": "Você é P{rank} de {total}"
+    "myPlace": "Você está em P{rank} de {total}"
   },
   "input": {
     "drivenWith": "Dirigido com: {input, select, keyboard {Teclado} controller {Controle} wheel {Volante} other {Tela de toque}}"
   },
   "conditions": {
     "full": "Total",
-    "fullTitle": "Realismo total — modelo completo de desgaste, aderência térmica e chuva",
+    "fullTitle": "Realismo total — modelo completo de desgaste dos pneus, aderência térmica e chuva",
     "standard": "Padrão",
     "standardTitle": "Realismo padrão — desgaste de pneus ligado, temperatura dos pneus suavizada",
     "casual": "Casual",
@@ -48,7 +48,7 @@
     "refresh": "Atualizar",
     "refreshLabel": "Atualizar tempos online",
     "filters": "Filtros",
-    "filtersOn": "Filtros · {count} ativos",
+    "filtersOn": "Filtros · {count} em uso",
     "noAssists": "Sem assistências",
     "fullRealism": "Realismo total",
     "wetLaps": "Voltas na chuva",
@@ -56,8 +56,8 @@
     "loading": "Carregando tempos online…",
     "loadFailed": "Não foi possível carregar os tempos online.",
     "clearFilters": "Limpar filtros",
-    "emptyOlderFiltered": "Nenhuma volta correspondente em {version}.",
-    "emptyOlder": "Nenhuma volta em {version}.",
+    "emptyOlderFiltered": "Nenhuma volta correspondente na {version}.",
+    "emptyOlder": "Nenhuma volta na {version}.",
     "emptyFiltered": "Nenhuma volta corresponde a estes filtros.",
     "emptyCircuit": "Ainda não há tempos online em {circuit}.",
     "emptyCar": "Ainda não há tempos online para este circuito e carro.",
@@ -118,7 +118,7 @@
     "close": "Fechar voltas mais rápidas",
     "scopeCount": "{scope} ({count})",
     "allClasses": "Todas as classes ({count})",
-    "boardDrivers": "{count, plural, other {{drivers} pilotos neste ranking}}",
+    "boardDrivers": "{count, plural, one {{drivers} piloto neste ranking} other {{drivers} pilotos neste ranking}}",
     "driversShort": "{drivers} pil.",
     "manual": "+{count} concedidos manualmente",
     "manualNote": "+{count} concedidos manualmente — {note}",

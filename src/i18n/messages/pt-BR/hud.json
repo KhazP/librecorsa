@@ -70,7 +70,7 @@
     "notPosted": "Fora do ranking online: {error}",
     "notPostedYet": "Ainda fora do ranking online",
     "driverKey": "Chave do piloto",
-    "driverKeyIntro": "Reivindica seu nome de piloto no ranking. Exporte para usar o mesmo nome em outro dispositivo; mantenha o arquivo em sigilo.",
+    "driverKeyIntro": "Vincula seu nome de piloto ao ranking. Exporte para usar o mesmo nome em outro dispositivo; mantenha o arquivo em sigilo.",
     "exportKey": "Exportar chave",
     "importKey": "Importar chave",
     "importGhost": "Importar arquivo de ghost",
@@ -103,7 +103,7 @@
     },
     "gear": "Quando o ranking abre",
     "modeMenu": "Quando o ranking abre",
-    "region": "Classificação",
+    "region": "Ranking de tempos",
     "fold": "Recolher o ranking",
     "foldKey": "Recolher o ranking ({key})",
     "open": "Abrir o ranking: {circuit}, {place}",
@@ -113,7 +113,7 @@
     "drivers": "{total, plural, one {{count} piloto} other {{count} pilotos}}",
     "noTimes": "Ainda sem tempos.",
     "placesBetween": "Posições intermediárias",
-    "lapsDriven": "Voltas dadas",
+    "lapsDriven": "Voltas completadas",
     "noTime": "Ainda sem tempo",
     "place": "P{rank}/{total}"
   },
@@ -221,7 +221,7 @@
       "confirmBody": "Leva todos os pilotos de volta ao lobby."
     },
     "room": {
-      "connected": "{count} conectados",
+      "connected": "Conectados: {count}",
       "connecting": "Conectando",
       "notConnected": "Desconectado",
       "title": "Sala privada",
@@ -238,7 +238,7 @@
       "newRoom": "Nova sala",
       "codeTooShort": "Digite pelo menos 3 caracteres.",
       "joinFailed": "Não foi possível entrar nessa sala. Confira o código.",
-      "shareTitle": "Corrida do LibreCorsa",
+      "shareTitle": "Corrida no LibreCorsa",
       "shareText": "Entre na minha corrida",
       "racingAs": "Correndo como {name}",
       "edit": "Editar"
@@ -330,7 +330,7 @@
       "freeCamera": "Câmera livre",
       "freeCameraHint": "Tecla {key} · Arraste para olhar, WASD para voar, Q/E para altura",
       "freeCameraButton": "Câmera livre",
-      "exitFreeCamera": "Sair da câmera",
+      "exitFreeCamera": "Sair da câm. livre",
       "tv": "TV de pista",
       "tvHint": "Tecla {key} · Câmeras de transmissão ao lado da pista",
       "tvButton": "TV de pista",
@@ -343,10 +343,10 @@
     "corners": {
       "title": "Curvas",
       "mapLabel": "{count, plural, one {Mapa do circuito com # curva numerada} other {Mapa do circuito com # curvas numeradas}}",
-      "turn": "T{turn}",
+      "turn": "C{turn}",
       "detail": "{complex} · Setor {sector}",
       "pick": "Selecione uma curva",
-      "rowLabel": "T{turn}, curva {turn}: {name}, {complex}. Ápice {apex} {unit}, marcha {gear}",
+      "rowLabel": "C{turn}, curva {turn}: {name}, {complex}. Ápice {apex} {unit}, marcha {gear}",
       "gear": "Marcha <n>{gear}</n>"
     }
   },
@@ -390,7 +390,7 @@
     "saveName": "Salvar nome",
     "chart": {
       "title": "Menor velocidade por curva",
-      "turn": "T{turn}",
+      "turn": "C{turn}",
       "empty": "Sem dados de curvas para esta volta.",
       "bar": "C{turn} {name}: {speed} {unit}, {state, select, none {sem referência ainda} same {{delta}, igual à melhor} faster {{delta}, mais rápido que a melhor} other {{delta}, mais lento que a melhor}}",
       "faster": "Mais rápido",
@@ -644,8 +644,8 @@
     "lowerHint": "{hint} (D-pad para baixo ou -)",
     "raise": "Aumentar {dial}",
     "raiseHint": "{hint} (D-pad para cima ou =)",
-    "openTuner": "Abrir o ajuste",
-    "foldTuner": "Recolher o ajuste"
+    "openTuner": "Abrir os ajustes",
+    "foldTuner": "Recolher os ajustes"
   },
   "f12026ChannelsPanel": {
     "region": "Canais de engenharia",
@@ -820,9 +820,9 @@
     "warningsMeter": "{count} de {total} avisos",
     "pointsMeter": "{points} de {allowed} pontos de limites de pista",
     "giveBack": {
-      "toCar": "Devolver posição a {code}",
-      "dropTo": "Cair para P{position}",
-      "time": "Devolver {seconds} s",
+      "toCar": "Devolva a posição a {code}",
+      "dropTo": "Caia para P{position}",
+      "time": "Devolva {seconds} s",
       "slowDown": "Reduza",
       "underYellow": "Ultrapassagem sob amarela",
       "illegalOvertake": "Ultrapassagem ilegal",
@@ -838,14 +838,14 @@
     "startsIn": "Largada em <n>{seconds}</n>",
     "lightsLabel": "Luzes de largada: {lit} de {total} acesas",
     "rollingStart": "Largada lançada",
-    "holdPaceSkin": "Mantenha <n>{pace}</n> {unit} até a linha de chegada",
+    "holdPaceSkin": "Mantenha <n>{pace}</n> {unit} até a linha de largada",
     "holdPace": "Mantenha <n>{pace}</n> {unit} até a linha",
     "greenFlag": "Bandeira verde",
     "lightsOut": "Luzes apagadas",
     "chequeredFlag": "Bandeira quadriculada"
   },
   "launchCue": {
-    "stalledLabel": "Motor apagou: segure {control} ou engate neutro para religar",
+    "stalledLabel": "Motor apagou: segure {control} ou coloque em ponto morto para religar",
     "clutch": "embreagem",
     "stalled": "Apagou · segure <control></control> ou N",
     "jumpStart": "Queima de largada · +{seconds} s",
@@ -864,8 +864,8 @@
     "aeroToggle": "{label}: alternar",
     "drsTitle": "DRS ({key}): flap traseiro, em zona de DRS; em corrida só a menos de 1 s do carro à frente no ponto de detecção, a partir da volta 3",
     "straightModeTitle": "Straight Mode ({key}): os dois flaps abrem nas retas; um toque pouco antes abre assim que ela começa",
-    "overtakeLockedTitle": "Overtake Mode ({keys}): conquistado a menos de 1 s do carro à frente no ponto de detecção, para a próxima volta",
-    "overtakeTitle": "Overtake Mode ({keys})",
+    "overtakeLockedTitle": "Modo de ultrapassagem ({keys}): conquistado a menos de 1 s do carro à frente no ponto de detecção, para a próxima volta",
+    "overtakeTitle": "Modo de ultrapassagem ({keys})",
     "boostTitle": "Boost de ultrapassagem manual ({keys})",
     "overtake": "Overtake",
     "boost": "Boost",
@@ -901,7 +901,7 @@
   "thirdPartyData": {
     "you": "Você",
     "headlight": {
-      "flash": "Rajada",
+      "flash": "Piscando",
       "on": "Ligados",
       "off": "Desligados"
     },
@@ -983,7 +983,7 @@
     "headlightsTitleManualOn": "Faróis ligados (manual)",
     "headlightsTitleManualOff": "Faróis desligados (manual)",
     "headlightsTitleAuto": "Faróis ligados (auto)",
-    "chipFlash": "RAJADA",
+    "chipFlash": "PISCAR",
     "chipOn": "LIG.",
     "chipOff": "DESL."
   },
@@ -1002,14 +1002,14 @@
   },
   "inputTrace": {
     "throttle": "Ace",
-    "brake": "Frn",
+    "brake": "Fre",
     "steering": "Dir",
     "steeringTitle": "Rodas contínuas, sua entrada tracejada",
     "trace": "Gráfico de acelerador, freio e direção: a direção tracejada é a sua entrada, a contínua é o ângulo das rodas",
     "region": "Entradas"
   },
   "pedalBars": {
-    "region": "Pedais e eletrônicos",
+    "region": "Pedais e eletrônica",
     "clutch": "EMB",
     "clip": "Clip",
     "steering": "Direção"
@@ -1051,7 +1051,7 @@
     "dismiss": "Dispensar"
   },
   "dualSensePairPrompt": {
-    "text": "<b>DualSense detectado</b> · pareie para gatilhos e haptics",
+    "text": "<b>DualSense detectado</b> · pareie para gatilhos e resposta tátil",
     "pair": "Parear",
     "dismiss": "Dispensar"
   },
