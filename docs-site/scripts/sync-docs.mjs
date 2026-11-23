@@ -5,6 +5,9 @@
 // Each page's first `# Heading` becomes its title, links to another published page go to that page on the site,
 // files a page shows or links next to it (charts, CSVs) are copied beside it, and any other repository path goes to
 // GitHub. Everything written here is generated and git-ignored.
+//
+// `--check` reads every page and resolves every link without writing anything: scripts/verify-docs-site.ts runs it
+// with the game's checks, so a push that moves a file a page links to fails there, not at the next docs deploy.
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,6 +88,20 @@ function splitTitle(text, source) {
   return { title, body, description };
 }
 
+const BRANDING = ["librecorsa-logo.svg", "librecorsa-logo-on-light.svg", "librecorsa-mark.svg"];
+
+function check() {
+  const copied = new Set();
+  for (const { source } of PAGES) {
+    const { body } = splitTitle(readFileSync(join(REPO, source), "utf8"), source);
+    rewriteLinks(body, source, copied);
+  }
+  for (const name of BRANDING) {
+    if (!existsSync(join(REPO, "public/branding", name))) throw new Error(`public/branding/${name} is missing`);
+  }
+  console.log(`docs: ${PAGES.length} pages, ${copied.size} files, every link resolves`);
+}
+
 function main() {
   rmSync(CONTENT, { recursive: true, force: true });
   rmSync(PUBLIC_FILES, { recursive: true, force: true });
@@ -119,4 +136,5 @@ function main() {
   console.log(`docs: ${PAGES.length} pages, ${copied.size} files (${relative(REPO, CONTENT)})`);
 }
 
-main();
+if (process.argv.includes("--check")) check();
+else main();
