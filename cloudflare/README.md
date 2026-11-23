@@ -70,13 +70,14 @@ boards on an in-memory database (`scripts/verify-room-server.ts`, `verify-race-s
 ## Rules worth knowing
 
 - Under `/api` only the answers that are the same for everyone are cached (Workers caching is on for the large
-  files): a board's page read without a driver's name (`public, max-age=30`), and the totals, `GET /api/stats`
-  (30 s) and `GET /api/stats/circuit` (60 s). Everything else, errors included, says `no-store`, so a driver's own
+  files): a board's page read without a driver's name (`public, max-age=30`), the totals, `GET /api/stats`
+  (30 s) and `GET /api/stats/circuit` (60 s), and the Hall of Fame and badges, `GET /api/hall-of-fame` and
+  `GET /api/badges` (60 s). Everything else, errors included, says `no-store`, so a driver's own
   place shows their new lap at once.
 - The boards' pages: `GET /api/laps` takes `offset` (places skipped) with `limit` (1 to 100), and `near=1..5` adds the
   places either side of the driver's own. `vehicle=all` is the circuit's board over every car: each driver once,
   with their fastest lap in any car, each car on the physics revision this build ships it on (worked out in the Worker
-  from `lapPhysicsVersion`, and sent back as `current`, so a browser on the LC26's older engine still reads it).
+  from `revisionOnBoard`, and sent back as `current`, so a browser on the LC26's older engine still reads it).
 - The totals (`api/stats.ts`): a circuit's laps are the laps the usage reports counted (migration
   `0006_lap_counts.sql`), or the laps stored on its boards when that is more, so the number is an honest lower bound
   from day one; its drivers are its current board's. Drivers to date are the names with a lap on a board or in an open
