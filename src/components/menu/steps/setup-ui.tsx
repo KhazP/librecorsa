@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "use-intl/react";
 import { deviceAssistTuning, selfSteerDeg, type DeviceAssistTuning, type SteeringDevice } from "@/lib/sim/steering-assist";
 import { StatusDot } from "@/components/ui/Badge";
 
@@ -85,6 +86,7 @@ export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; device: Steerin
   device,
   lockDeg,
 }) => {
+  const tx = useTranslations("setup.assistCurve");
   const maxRearDeg = 45;
   const x0 = 12;
   const x1 = 148;
@@ -102,17 +104,16 @@ export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; device: Steerin
 
   const capDeg = Math.min(lockDeg, resolved.maxSelfSteerAngleDeg);
   const capY = toY(capDeg);
-  const capLabel = capDeg >= lockDeg - 0.5 ? "full lock" : `${Math.round(capDeg)}° cap`;
+  const grip = Math.round(resolved.targetSlip * 100);
+  const summary = capDeg >= lockDeg - 0.5 ? tx("summaryFullLock", { grip }) : tx("summaryCap", { grip, cap: Math.round(capDeg) });
 
   return (
     <div className="flex flex-col gap-2 rounded-lc-tile border border-lc-line bg-lc-void p-3.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="lc-field-label">Self-steer curve</span>
-        <span className="lc-mono text-[11px] font-bold text-lc-fog">
-          {Math.round(resolved.targetSlip * 100)}% grip · {capLabel}
-        </span>
+        <span className="lc-field-label">{tx("title")}</span>
+        <span className="lc-mono text-[11px] font-bold text-lc-fog">{summary}</span>
       </div>
-      <svg viewBox="0 0 160 100" className="block h-auto w-full" role="img" aria-label="Self-steer response curve">
+      <svg viewBox="0 0 160 100" className="block h-auto w-full" role="img" aria-label={tx("curve")}>
         <rect x="6" y="6" width="148" height="88" rx="10" fill="none" stroke="var(--color-lc-line)" strokeWidth="1" />
         {/* Steering that matches the rear's slide one to one, up to full lock */}
         <line
@@ -143,10 +144,10 @@ export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; device: Steerin
           strokeLinejoin="round"
         />
         <text x="14" y="91" fill="var(--color-lc-slate)" fontSize="8" fontFamily="monospace">
-          0° slide
+          {tx("slide", { deg: 0 })}
         </text>
         <text x="146" y="91" fill="var(--color-lc-slate)" fontSize="8" fontFamily="monospace" textAnchor="end">
-          45° slide
+          {tx("slide", { deg: maxRearDeg })}
         </text>
       </svg>
     </div>

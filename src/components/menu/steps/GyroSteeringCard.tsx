@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button, SettingRow } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { lens, SettingsCard, slider, toggle, type RowDef } from "@/components/settings/fields";
@@ -25,21 +26,23 @@ const ds = <K extends keyof DualSenseSettings>(key: K) =>
     (s, value) => ({ ...s, dualSense: { ...s.dualSense, [key]: value } }),
   );
 
+type GyroText = ReturnType<typeof useTranslations<"setup.gyro">>;
+
 /** The rows, for why gyro steering cannot be used right now (null when a pad with a gyro is connected over WebHID) */
-function gyroRows(blocked: string | null): { on: RowDef; lock: RowDef; sensitivity: RowDef } {
-  const needsGyro = (env: SettingsEnv) => blocked ?? (env.settings.dualSense.gyroSteer ? null : "Needs Gyro steering on");
+function gyroRows(blocked: string | null, tx: GyroText): { on: RowDef; lock: RowDef; sensitivity: RowDef } {
+  const needsGyro = (env: SettingsEnv) => blocked ?? (env.settings.dualSense.gyroSteer ? null : tx("needsGyro"));
   return {
     on: toggle({
       id: "dualSenseGyro",
-      label: "Gyro steering",
-      hint: "Turn the controller like a steering wheel. The stick still steers too",
+      label: tx("toggle"),
+      hint: tx("toggleHint"),
       off: () => blocked,
       ...ds("gyroSteer"),
     }),
     lock: slider({
       id: "dualSenseGyroLock",
-      label: "Tilt for full lock",
-      hint: "How far to turn the controller each way for full steering",
+      label: tx("lock"),
+      hint: tx("lockHint"),
       off: needsGyro,
       min: GYRO_LOCK_MIN_DEG,
       max: GYRO_LOCK_MAX_DEG,
@@ -49,13 +52,14 @@ function gyroRows(blocked: string | null): { on: RowDef; lock: RowDef; sensitivi
     }),
     sensitivity: slider({
       id: "dualSenseGyroSensitivity",
-      label: "Sensitivity",
-      hint: "How much small turns steer. Lower is calmer around the centre; full lock still comes at the full tilt",
+      label: tx("sensitivity"),
+      hint: tx("sensitivityHint"),
       off: needsGyro,
       min: GYRO_SENSITIVITY_MIN,
       max: GYRO_SENSITIVITY_MAX,
       step: 0.05,
-      format: (v) => (Math.abs(v - 1) < 0.025 ? "Linear" : v < 1 ? `Calmer ${v.toFixed(2)}` : `Sharper ${v.toFixed(2)}`),
+      format: (v) =>
+        Math.abs(v - 1) < 0.025 ? tx("linear") : v < 1 ? tx("calmer", { value: v.toFixed(2) }) : tx("sharper", { value: v.toFixed(2) }),
       ...ds("gyroSensitivity"),
     }),
   };
@@ -102,6 +106,7 @@ export function useGyroLive(active: boolean, lockDeg: number, sensitivity: numbe
  */
 export function GyroSteeringCard() {
   const { settings } = useSettingsEnv();
+  const tx = useTranslations("setup.gyro");
   const d = settings.dualSense;
   const sense = useSyncExternalStore(dualSenseHid.subscribe, dualSenseHid.getStatus, dualSenseHid.getStatus);
   const shock = useSyncExternalStore(dualShock4Hid.subscribe, dualShock4Hid.getStatus, dualShock4Hid.getStatus);
@@ -114,28 +119,26 @@ export function GyroSteeringCard() {
   const live = useGyroLive(connected && d.gyroSteer, d.gyroLockDeg, d.gyroSensitivity);
 
   const blocked = !supported
-    ? "Requires Chrome or Edge (WebHID)"
+    ? tx("needsChrome")
     : connected
       ? null
-      : "Connect a DualSense or DualShock 4 first";
-  const r = gyroRows(blocked);
+      : tx("connectFirst");
+  const r = gyroRows(blocked, tx);
   const rows: RowDef[] = [r.on, ...(d.gyroSteer ? [r.lock, r.sensitivity] : [])];
   const padName = senseOn ? (sense.name ?? "DualSense") : "DualShock 4";
   const transport = (senseOn ? sense.transport : shock.transport) === "usb" ? "USB" : "Bluetooth";
   return (
     <SettingsCard
-      title="Gyro steering"
-      description="DualSense or DualShock 4 motion steering (WebHID)."
+      title={tx("title")}
+      description={tx("description")}
       rows={rows}
       before={
         connected ? (
           <span className="flex items-center gap-2 pb-1">
             <Badge tone="good" dot>
-              Connected
+              {tx("connected")}
             </Badge>
-            <span className="lc-body truncate">
-              {padName}, {transport}
-            </span>
+            <span className="lc-body truncate">{tx("padLine", { name: padName, transport })}</span>
           </span>
         ) : undefined
       }
@@ -143,7 +146,7 @@ export function GyroSteeringCard() {
       {supported && !connected ? (
         <SettingRow label="DualShock 4" hint={shock.message ?? undefined}>
           <Button size="sm" variant="secondary" onClick={() => void dualShock4Hid.connect()}>
-            Connect DualShock 4
+            {tx("connectDualShock")}
           </Button>
         </SettingRow>
       ) : null}
@@ -151,16 +154,16 @@ export function GyroSteeringCard() {
         <>
           <div className="py-1">
             <TrackMeter
-              label="Tilt"
+              label={tx("tilt")}
               value={live?.steer ?? 0}
-              detail={live ? `${live.deg > 0 ? "+" : ""}${live.deg.toFixed(0)}°` : "No motion"}
+              detail={live ? `${live.deg > 0 ? "+" : ""}${live.deg.toFixed(0)}°` : tx("noMotion")}
               color="var(--color-lc-info)"
               centered
             />
           </div>
-          <SettingRow label="Re-centre" hint="Touchpad button while driving (hold to pause steering)">
+          <SettingRow label={tx("recentre")} hint={tx("recentreHint")}>
             <Button size="sm" variant="secondary" onClick={() => gyroSource.recentre()}>
-              Re-centre
+              {tx("recentreButton")}
             </Button>
           </SettingRow>
         </>
