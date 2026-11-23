@@ -27,6 +27,8 @@ import { ControllerTab, DeviceTab, KeyboardTab, TouchTab, WheelTab } from "./pan
 import { CameraTab, GraphicsTab, HudTab, InterfaceTab } from "./panes/DisplayPane";
 import { AudioPane } from "./panes/AudioPane";
 import { DataTab, DriverTab } from "./panes/ProfilePane";
+import { AccountPanel } from "@/components/account/AccountPanel";
+import { useAccountState } from "@/lib/account/account-store";
 import { ForceFeedbackSetup } from "@/components/menu/steps/WheelStep";
 
 export type SettingsCategory = "driving" | "controls" | "ffb" | "display" | "audio" | "profile";
@@ -36,6 +38,8 @@ interface TabDef {
   label: string;
   /** Every row on it is advanced: Simple shows one line and the switch instead */
   advancedOnly?: string;
+  /** Shown only while accounts are on (src/lib/account): with them off, nothing about accounts appears */
+  accounts?: boolean;
   render: () => React.ReactNode;
 }
 
@@ -88,6 +92,7 @@ const CATEGORIES: readonly CategoryDef[] = [
     icon: "profile",
     tabs: [
       { id: "driver", label: "Driver", render: () => <DriverTab /> },
+      { id: "account", label: "Account", accounts: true, render: () => <AccountPanel where="settings" /> },
       { id: "data", label: "Data", render: () => <DataTab /> },
     ],
   },
@@ -123,7 +128,9 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
   const [tabFor, setTabFor] = useState<Partial<Record<SettingsCategory, string>>>(() =>
     initialTab ? { [initialCategory]: initialTab } : {},
   );
-  const cat = CATEGORIES.find((c) => c.id === category) ?? CATEGORIES[0];
+  const accountsOn = useAccountState().phase !== "off";
+  const found = CATEGORIES.find((c) => c.id === category) ?? CATEGORIES[0];
+  const cat = { ...found, tabs: found.tabs.filter((t) => !t.accounts || accountsOn) };
   const tab = cat.tabs.find((t) => t.id === tabFor[category]) ?? cat.tabs[0];
   const hasTabs = cat.tabs.length > 1;
   const detail = env.settings.ui.detail;
