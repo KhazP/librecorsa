@@ -14,6 +14,10 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { BoardTable } from "../src/components/board/board-table";
+import { DriverProfileBody } from "../src/components/board/DriverProfileModal";
 import { handleApi, SHARED_ANSWER_S } from "../cloudflare/api/index";
 import { driverNameKey } from "../cloudflare/api/board";
 import {
@@ -467,6 +471,117 @@ async function main(): Promise<void> {
       "client: fetchDriverProfile canonicalizes name query and returns null on failure or blank name",
       seenUrl.endsWith("?name=max+pace") && fetched?.name === "Max Pace" && failed === null && blank === null,
       seenUrl,
+    );
+  }
+
+  // 6. UI rendering checks: clickable names & loading/error/empty/populated profile states ----------------------------
+  {
+    const clickableHtml = renderToStaticMarkup(
+      React.createElement(BoardTable, {
+        label: "Online times",
+        showBadges: false,
+        onSelectDriver: () => {},
+        rows: [{ key: "r1", rank: 1, code: "ALC", title: "Alice", lapMs: 70_000, fastest: true }],
+      }),
+    );
+    const plainCarHtml = renderToStaticMarkup(
+      React.createElement(BoardTable, {
+        label: "Best laps",
+        nameHeader: "Car",
+        showBadges: false,
+        rows: [{ key: "r1", rank: 1, title: "Proto 26", lapMs: 70_000 }],
+      }),
+    );
+    check(
+      "ui: BoardTable renders driver name as dialog button when onSelectDriver is set, plain span otherwise",
+      clickableHtml.includes("<button") &&
+        clickableHtml.includes('aria-haspopup="dialog"') &&
+        clickableHtml.includes("Alice") &&
+        !plainCarHtml.includes("<button"),
+    );
+
+    const common = {
+      circuitName: (id: string) => (id === "spielberg" ? "Red Bull Ring" : "Sachsenring"),
+      carTag: (v: VehicleModelId) =>
+        v === "lc26" ? { label: "Proto 26", color: "pink" as const } : { label: "GT3", color: "cyan" as const },
+      onRetry: () => {},
+    };
+    const loadingHtml = renderToStaticMarkup(
+      React.createElement(DriverProfileBody, { ...common, profile: null, record: null, loading: true, error: false }),
+    );
+    const errorHtml = renderToStaticMarkup(
+      React.createElement(DriverProfileBody, { ...common, profile: null, record: null, loading: false, error: true }),
+    );
+    const emptyHtml = renderToStaticMarkup(
+      React.createElement(DriverProfileBody, {
+        ...common,
+        profile: { ok: true, name: "New Driver", nameKey: "new driver", code: null, rating: null, circuitsDriven: 0, boardsEntered: 0, laps: [] },
+        record: { name: "New Driver", starts: 0, wins: 0, podiums: 0, bestFinish: null },
+        loading: false,
+        error: false,
+      }),
+    );
+    const loadedHtml = renderToStaticMarkup(
+      React.createElement(DriverProfileBody, {
+        ...common,
+        profile: {
+          ok: true,
+          name: "Alice",
+          nameKey: "alice",
+          code: "ALC",
+          rating: 78.4,
+          circuitsDriven: 2,
+          boardsEntered: 2,
+          laps: [
+            {
+              id: "lap-1",
+              trackId: "spielberg",
+              vehicle: "lc26",
+              lapTimeMs: 71_234,
+              sectorTimesMs: [23_000, 24_000, 24_234],
+              recordedAt: NOW,
+              position: 1,
+              boardSize: 42,
+              conditions: { assists: "pro", realism: "full", surface: "dry", compound: "soft", physicsVersion: 528, input: "wheel" },
+            },
+            {
+              id: "lap-2",
+              trackId: "sachsenring",
+              vehicle: "amg-gt3",
+              lapTimeMs: 85_500,
+              sectorTimesMs: [28_000, 29_000, 28_500],
+              recordedAt: NOW - 1000,
+              position: 4,
+              boardSize: 20,
+              conditions: { assists: "semi_pro", realism: "standard", surface: "wet", compound: "wet", physicsVersion: 8 },
+            },
+          ],
+        },
+        record: { name: "Alice", starts: 6, wins: 2, podiums: 4, bestFinish: 1 },
+        loading: false,
+        error: false,
+      }),
+    );
+    check(
+      "ui: DriverProfileBody renders loading, error and empty states cleanly",
+      loadingHtml.includes('aria-busy="true"') &&
+        errorHtml.includes('role="alert"') &&
+        errorHtml.includes("Try again") &&
+        emptyHtml.includes("No laps on the current boards yet.") &&
+        emptyHtml.includes("No finished open races yet."),
+    );
+    check(
+      "ui: DriverProfileBody renders rating, circuit/board counts, race record and per-circuit laps",
+      loadedHtml.includes("78.4") &&
+        loadedHtml.includes("Red Bull Ring") &&
+        loadedHtml.includes("Proto 26") &&
+        loadedHtml.includes("of 42") &&
+        loadedHtml.includes("Sachsenring") &&
+        loadedHtml.includes("GT3") &&
+        loadedHtml.includes("of 20") &&
+        loadedHtml.includes("Open races") &&
+        loadedHtml.includes("P1") &&
+        loadedHtml.includes("Best finish"),
     );
   }
 
