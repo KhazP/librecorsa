@@ -1,0 +1,17 @@
+// A ready-to-run copy of LibreCorsa for GitHub Codespaces or VS Code's Dev Containers: Node.js 24 (what CI uses) and the
+// packages installed. Then `npm run dev` and open the forwarded port 3000. Like any clone, it has RISE Motordrome and
+// the 2026 car; the other cars and circuits are only on librecorsa.org (README, "What's in the repository").
+{
+  "name": "LibreCorsa",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "24" }
+  },
+  // The dev server and the verify suites want a few cores
+  "hostRequirements": { "cpus": 4, "memory": "8gb" },
+  "postCreateCommand": "npm ci",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "LibreCorsa", "onAutoForward": "openBrowser" }
+  }
+}
