@@ -11,6 +11,10 @@ You can read them at [docs.librecorsa.org](https://docs.librecorsa.org/) or here
 - [Performance and troubleshooting](PERFORMANCE.md): graphics settings, phones, and what to try when something goes wrong.
 - [Checking a download](DOWNLOADS.md): where the desktop and Android apps come from, their app IDs and how to check that a file is mine.
 
+## Modding
+
+- [Making mods](modding.md): mod packages that add circuits, cars and liveries, which players import in the game or drop into the launcher's mods folder.
+
 ## Porting
 
 - [Porting cars](PORTING-CARS.md): a car mod from another game, or a Sketchfab-style model, into the game.
