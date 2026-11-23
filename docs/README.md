@@ -18,6 +18,10 @@ You can read them at [docs.librecorsa.org](https://docs.librecorsa.org/) or here
 - [Porting a circuit from an F1 25 mod](PORTING-F1-MODS.md): extracting a track mod's `.erp` archive, for your own use.
 - [Porting wheels](PORTING-WHEELS.md): getting a wheel's force feedback working over WebHID.
 
+## Contributing
+
+- [Translating](TRANSLATING.md): adding a language, translating it with an AI model, and adding text to the game.
+
 ## How it works
 
 - [Physics validation](physics/README.md): the tyre model and the cars measured against real telemetry and reference data.

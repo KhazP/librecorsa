@@ -1,0 +1,61 @@
+# Translating
+
+The game's text lives in message files, one per area of the game, under `src/i18n/messages/<language>/`. English (`en`) is the source. Every other language is a folder of the same files, and any message it doesn't have yet shows in English, so a language can go in half done and fill up over time.
+
+Players pick a language under Settings > Display > Interface > Language. **Automatic**, the default, follows the browser's language when the game has it.
+
+## What's translated
+
+Only part of the game reads its text from the message files so far. `npm run i18n:status` counts the messages. To see what still shows in English, open the game with `?lang=en-XA` (for example `https://librecorsa.org/play?lang=en-XA`): that pseudo-language accents every message it knows and puts it in brackets, so plain English on screen is text that isn't in the files yet.
+
+These stay in English on purpose: the privacy and press pages, the admin page, credit and licence lines, and the names of cars, circuits and drivers.
+
+## Adding a language
+
+```bash
+npm run i18n:add -- tr "Türkçe"
+```
+
+The code is the one browsers report for the language (`tr`, `pt-BR`, `zh-Hant`), and the name is the language's own name for itself, as the Language setting lists it. Add `--rtl` for a language written right to left. This makes `src/i18n/messages/tr/` with an empty file per area and adds the language to `src/i18n/catalogs.ts`.
+
+## Translating with an AI model
+
+1. Write out what the language is missing:
+
+   ```bash
+   npm run i18n:missing -- tr --out tr.json
+   ```
+
+   Each entry has the English text, a note on where it shows when there is one, and an empty `translation`. `--area settings` limits it to one area, which keeps a request small.
+
+2. Give the file to the model with the rules below, and ask it to fill in every `translation` and return the same JSON. A prompt that works:
+
+   > Translate the "en" text of every entry in this JSON into Turkish for the "translation" field, for the interface of a racing simulator. Keep the JSON keys and structure exactly. Use the "note" to see where the text appears. Keep every `{placeholder}` and `<tag>` exactly as written, untranslated. In `{count, plural, ...}` and `{x, select, ...}` blocks keep the keyword and the argument name, translate only the text inside the braces, and use your language's plural categories. Keep it as short as the English: most of it is buttons and labels. Leave car names, circuit names, LibreCorsa and the abbreviations DRS, ERS, ABS, TC, MFD, HUD, FFB and km/h as they are. Use sim racing terms the way that language's sim racers do.
+
+3. Put the answers back:
+
+   ```bash
+   npm run i18n:merge -- tr tr-translated.json
+   ```
+
+   It checks each translation against its English: it must parse, and keep the same placeholders, plurals and tags. Any that don't are listed and left out, so you can fix them and merge again.
+
+4. Check it: `npm run i18n:status`, `npx tsx scripts/verify-i18n.ts`, then play with `?lang=tr` (or pick it in Settings) and look for text that's cut off or too long.
+
+## Rules for the messages
+
+- **Placeholders**: `{name}` is filled in by the game. Keep it, untranslated, anywhere in the sentence your grammar needs it.
+- **Plurals**: `{count, plural, one {# lap} other {# laps}}`. `#` is the number. Use the categories your language has (`one`, `few`, `many`, `other`…).
+- **Tags**: `<n>#</n> turns`. The tag styles what's inside it. Keep the tags around the same words.
+- **Notes**: `src/i18n/notes/<area>.json` says where a message shows, for the ones where the English alone is ambiguous.
+- **Upper case**: some labels are drawn in capitals by the design. Write them in normal case; the game sets the language on the page, so the browser capitalises your letters correctly (Turkish i to İ).
+
+## For developers: adding text
+
+- **In a component**: `const t = useTranslations("menu.title")`, then `t("drive")`, or `t("lapTimesBest", { time })` with values. Add the English to `src/i18n/messages/en/menu.json` under the same key. Keys are typed, so a missing one fails `npx tsc --noEmit`.
+- **Outside React** (a toast the simulation raises, text drawn on a canvas): `t("game.trackLimits.cut")` from `@/i18n/runtime`, called when the text is shown, so a change of language reaches it. `upper(text)` capitalises the way the current language does.
+- **Whole sentences**: one message per sentence, with placeholders for what changes. Don't build a sentence from pieces: word order differs between languages.
+- **One key per meaning**: "Off" on a switch and "Off" for a track-limits rule are two keys. Translators can't see the screen.
+- **Labels, not values**: translate what the player reads. Ids, saved values, anything sent to the server, compared in code or written into a ghost file, a bug report or diagnostics stay as they are.
+- **A note** in `src/i18n/notes/<area>.json` for any message that's ambiguous on its own.
+- **Checks**: `scripts/verify-i18n.ts` runs with `npm run verify`. It checks every English message parses and every language keeps its placeholders.
