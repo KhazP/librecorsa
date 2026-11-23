@@ -4,8 +4,9 @@
  * - Before 2011 (`none`): no DRS; the car keeps its flaps shut.
  * - 2026 on (`straight-mode-2026`): both wings' flaps open (Straight Mode) in every DRS zone for every car, with no gap
  *   rule. The 1 s gap instead earns Overtake Mode: a car within 1 s of the car ahead at the detection point (nominally
- *   the last corner) gets the override deployment and 0.5 MJ of extra electrical energy for the following lap. Not on
- *   the first lap until the leader has passed the detection point.
+ *   the last corner) gets the override deployment (the ERS-K's power held to a higher speed) for the following lap,
+ *   and may recharge 0.5 MJ more on it (FIA 2026 Section C5.2.10 iii, Section B7.2.1 b v). Not on the first lap until
+ *   the leader has passed the detection point. In practice and qualifying Overtake is on all the time.
  * - 2011 to 2025 (`drs-rear`): only the rear flap opens (DRS), only in a zone, and in a race only for a car within 1 s of
  *   the car ahead (lapped cars included) at that zone's detection point, from the moment the leader has completed two
  *   laps. Free use in practice.
@@ -22,8 +23,8 @@ export type OvertakingRules = 'straight-mode-2026' | 'drs-rear' | 'none';
 export const DETECTION_GAP_S = 1;
 /** Race laps the leader completes before DRS is enabled */
 export const DRS_ENABLED_AFTER_LEADER_LAPS = 2;
-/** Overtake Mode's extra electrical energy for the lap it is earned for (J) */
-export const OVERTAKE_EXTRA_DEPLOY_J = 500_000;
+/** Overtake Mode's extra recharge allowed on the lap it is earned for (J) */
+export const OVERTAKE_EXTRA_RECHARGE_J = 500_000;
 
 /** DRS arrived in 2011 */
 export const DRS_FIRST_SEASON = 2011;
@@ -137,8 +138,8 @@ export class OvertakeGrant {
     return !control?.racing || this.earned;
   }
 
-  /** Extra deploy allowance this lap (J): only an Overtake earned in a race */
-  extraDeployJ(control: OvertakingRaceControl | null | undefined): number {
-    return control?.racing && this.earned && !control.aidsLocked ? OVERTAKE_EXTRA_DEPLOY_J : 0;
+  /** Extra recharge allowed this lap (J): only an Overtake earned in a race */
+  extraRechargeJ(control: OvertakingRaceControl | null | undefined): number {
+    return control?.racing && this.earned && !control.aidsLocked ? OVERTAKE_EXTRA_RECHARGE_J : 0;
   }
 }

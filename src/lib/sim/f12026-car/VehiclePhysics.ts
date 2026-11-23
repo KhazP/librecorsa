@@ -116,6 +116,7 @@ import {
   type DamperSettingsUnits,
   type ExponentialPlankData,
   F12026_CAR_CONFIG,
+  type PerformanceModeData,
   type PerformanceModeName,
   type PhysicsTyreCompound,
   type PowerSteeringData,
@@ -147,6 +148,7 @@ import {
   writeOutlineEdges,
 } from './TrackColliderQuery';
 import { queryContactPatch } from './ContactPatch';
+import { Ers2026Control, ersValueSPerMJ } from './ers-2026';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
 import {
   contactHalfLengthM,
@@ -1192,6 +1194,19 @@ const _air = new THREE.Vector3();
 const _outlineCorners = new Float64Array(64);
 const _outlineEdges = new Float64Array(32 * OUTLINE_EDGE_STRIDE);
 
+/** Stretches of the lap the 2026 energy management keeps its record of the braking harvest in */
+const ERS_LAP_BINS = 64;
+
+/** A mode's energy management against charge (`EnergyManagementData`) */
+interface ManagementLuts {
+  deployAbove: Lut;
+  superclipBelow: Lut;
+}
+const managementLuts = (m: PerformanceModeData): ManagementLuts | null => {
+  const em = m.energyManagement;
+  return em ? { deployAbove: new Lut(em.deployAboveSPerMJ), superclipBelow: new Lut(em.superclipBelowSPerMJ) } : null;
+};
+
 export class VehiclePhysics {
   public static readonly FIXED_DT = 0.002;
   public static readonly SUBSTEPS = 4;
@@ -1311,6 +1326,17 @@ export class VehiclePhysics {
   public ersEnergyJ: number;
   public lapDeployJ = 0;
   public lapHarvestJ = 0;
+  /**
+   * Of `lapHarvestJ`, what the brake pedal recovered, by stretch of the lap (`ERS_LAP_BINS` of them); and that on the
+   * last whole lap, which the 2026 energy management keeps the recharge limit's room for
+   */
+  private readonly lapBrakeHarvestJ = new Float64Array(ERS_LAP_BINS);
+  private readonly lastLapBrakeHarvestJ = new Float64Array(ERS_LAP_BINS);
+  private lastLapBrakeKnown = false;
+  /** The 2026 F1 rules' ERS-K control (`ERSData.regulations` 'f1-2026'), else null */
+  private readonly ers2026: Ers2026Control | null;
+  /** How much the engine sped up over the last step (rad/s), for the 2026 motor's torque */
+  private ersOmegaStep = 0;
   public performanceMode: PerformanceModeName;
   /** Driver EBB offset in steps (+ = forward), on top of the performance mode's */
   public ebbUser = 0;
@@ -1368,8 +1394,16 @@ export class VehiclePhysics {
   public drsGatedByDetection = true;
   /** The car has a DRS flap at all (off: a car from before 2011, whose flaps never open) */
   public drsFitted = true;
-  /** Extra MGU-K deploy allowance this lap on top of `deployPerLapJ` (J): 2026 Overtake Mode */
-  public extraDeployJ = 0;
+  /** Extra recharge allowed this lap on top of `harvestPerLapJ` (J): a 2026 race lap begun with Overtake activated */
+  public extraRechargeJ = 0;
+  /** The ERS-K's power runs to Overtake's curve (under `ERSData.regulations` 'f1-2026'): the adapter's call */
+  public ersOvertake = false;
+  /**
+   * Distance on from lap distance s (m) to the next braking zone on the circuit (m; Infinity: none), which the 2026
+   * energy management plans its cuts and superclipping by: the adapter's, from the car's braking guide. Read at each
+   * tick from the lap progress, so the car is the same whatever the frame rate. Null: no braking zone known
+   */
+  public ersBrakeAheadAt: ((s: number) => number) | null = null;
   /** Lap progress from `locateProgress` (NaN without it) */
   public trackProgress = Number.NaN;
   public aeroWake: AeroWakeState = { ...DEFAULT_AERO_WAKE };
@@ -1410,6 +1444,8 @@ export class VehiclePhysics {
     mgukDeploy: Lut;
     mgukHarvest: Lut;
     deployVsSpeed: Record<PerformanceModeName, Lut>;
+    /** Each mode's `energyManagement` (against charge), null for a mode without */
+    management: Record<PerformanceModeName, ManagementLuts | null>;
     deployVsGear: Lut;
     /** `EngineData.outputPowerCap`: the limit at the driven shafts (rpm → kW) and its change with road speed */
     powerCap: Lut | null;
@@ -1646,6 +1682,13 @@ export class VehiclePhysics {
         LIC: new Lut(modes.LIC.deployVsSpeed),
         CHR: new Lut(modes.CHR.deployVsSpeed),
       },
+      management: {
+        PSH: managementLuts(modes.PSH),
+        RAC: managementLuts(modes.RAC),
+        BAL: managementLuts(modes.BAL),
+        LIC: managementLuts(modes.LIC),
+        CHR: managementLuts(modes.CHR),
+      },
     };
     const rh = cfg.aero.rhMap;
     this.mapLuts = rh
@@ -1823,6 +1866,7 @@ export class VehiclePhysics {
     this.engineOmega = cfg.engine.idleRpm * RPM2RADS;
     this.turbocharged = cfg.engine.turbo !== undefined;
     this.ersEnergyJ = cfg.ers.ERS_MAX_CHARGE;
+    this.ers2026 = cfg.ers.regulations === 'f1-2026' ? new Ers2026Control() : null;
     this.dynamicBrakeBias = this.brakeBias;
     this.telemetry = this.createTelemetry();
   }
@@ -1907,8 +1951,53 @@ export class VehiclePhysics {
 
   /** Reset the ERS per-lap deploy / harvest allowances (called automatically on a lap wrap) */
   public resetLapEnergy(): void {
+    // A lap's braking harvest, for the next lap's superclipping to leave room for; not a part lap's (a reset, a grid)
+    if (this.ers2026 && this.lapDeployJ + this.lapHarvestJ > 0 && Number.isFinite(this.trackProgress)) {
+      this.lastLapBrakeHarvestJ.set(this.lapBrakeHarvestJ);
+      this.lastLapBrakeKnown = true;
+    }
     this.lapDeployJ = 0;
     this.lapHarvestJ = 0;
+    this.lapBrakeHarvestJ.fill(0);
+  }
+
+  /**
+   * A standing start from the grid: under the 2026 F1 rules the MGU-K deploys only from 50 km/h (C5.2.12). No-op on
+   * other cars
+   */
+  public armStandingStart(): void {
+    this.ers2026?.armStandingStart();
+  }
+
+  /** Distance to the next braking zone from where the car is on the lap (m; Infinity: none known) */
+  private ersBrakeAheadM(): number {
+    const at = this.ersBrakeAheadAt;
+    return at && Number.isFinite(this.trackProgress) && this.lapLengthM > 0 ? at(this.trackProgress * this.lapLengthM) : Number.POSITIVE_INFINITY;
+  }
+
+  /** Under the 2026 F1 rules: a power-limited period under way (deployment cut, or harvesting flat out) */
+  public get ersClipping(): boolean {
+    return this.ers2026?.clipping ?? false;
+  }
+
+  /**
+   * What the lap's recharge limit leaves for superclipping (J): the limit (with Overtake's extra) less this lap's
+   * recharge and less what the braking zones still to come recovered on the last lap (before a whole lap, 60 % of the
+   * limit spread over the lap)
+   */
+  private superclipRoomJ(): number {
+    const limit = this.config.ers.harvestPerLapJ + this.extraRechargeJ;
+    const p = Number.isFinite(this.trackProgress) ? clamp(this.trackProgress, 0, 1) : 0.5;
+    let reserve: number;
+    if (this.lastLapBrakeKnown) {
+      const x = p * ERS_LAP_BINS;
+      const b = Math.min(ERS_LAP_BINS - 1, Math.floor(x));
+      reserve = this.lastLapBrakeHarvestJ[b] * (1 - (x - b));
+      for (let k = b + 1; k < ERS_LAP_BINS; k++) reserve += this.lastLapBrakeHarvestJ[k];
+    } else {
+      reserve = 0.6 * limit * (1 - p);
+    }
+    return Math.max(0, limit - this.lapHarvestJ - reserve);
   }
 
   /** Front brake bias including the performance mode's and the driver's EBB offsets */
@@ -1970,6 +2059,7 @@ export class VehiclePhysics {
     this.sinceUpshiftS = Infinity;
     this.sinceDownshiftS = Infinity;
     this.limiterTimer = 0;
+    this.ers2026?.reset();
     this.engineOmega = this.config.engine.idleRpm * RPM2RADS;
     this.turboBoostBar = 1.0;
     this.turboBoost = 0;
@@ -3736,6 +3826,7 @@ export class VehiclePhysics {
    * clamped to each element's torque capacity).
    */
   private solveDrivetrain(h: number, inp: VehicleInputs, tyreTorque: Float64Array): void {
+    const omegaAtStart = this.engineOmega;
     const cfg = this.config;
     const eng = cfg.engine;
     const gb = cfg.gearbox;
@@ -3951,6 +4042,10 @@ export class VehiclePhysics {
      * the throttle comes back to the lift threshold. The brake pedal keeps it, as it keeps the engine's overrun
      */
     let liftW = 0;
+    /** The 2026 rules' control ran this step (else the driver is off the throttle or the drive is out: no limited period) */
+    let ersStepped = false;
+    /** What the brake pedal asks the MGU-K to recover, before the lap's recharge limit (W) */
+    let brakeWantW = 0;
     const everyGear = ers.liftHarvestEveryGear;
     const coupled = engage > 0.9 && this.gear > 0 && !this.stall.stalled;
     if (coupled) {
@@ -3961,6 +4056,7 @@ export class VehiclePhysics {
       if (inp.brake > 0.05) {
         const harvestCapW = this.regenKw !== null ? Math.min(ers.maxHarvestW, this.regenKw * 1000) : ers.maxHarvestW * mode.brakeHarvestScale;
         pK = -harvestCapW * Math.min(1, inp.brake * 3);
+        brakeWantW = -pK;
       } else if (dials && this.motorDeployKw !== null) {
         // The deploy dial: up to its cap on the throttle, above the class's minimum speed, while the store has charge
         if (inp.throttle > 0.05 && speedKmh >= dials.minDeploySpeedKmh && this.ersEnergyJ > 0 && this.motorDeployKw > 0) {
@@ -3975,7 +4071,35 @@ export class VehiclePhysics {
         pK = -mode.topGearClipHarvestW;
       } else if (inp.throttle > 0.05 && inp.throttle < 0.9 && mode.partThrottleHarvestW > 0) {
         pK = -mode.partThrottleHarvestW;
-      } else if (inp.throttle > 0.05 && soc > mode.socFloor && this.lapDeployJ < ers.deployPerLapJ + this.extraDeployJ) {
+      } else if (this.ers2026 && inp.throttle > 0.05) {
+        // The 2026 F1 rules (ers-2026.ts): the ERS-K's power against road speed, the control unit's cuts flat out at
+        // the rules' rates, and superclipping. The traction maps (the mode's low-speed delivery, the gear's) under it
+        const em = this.luts.management[this.performanceMode];
+        const socN = clamp(soc, 0, 1);
+        const dc = this.ers2026.step({
+          h,
+          speedKmh,
+          throttle: inp.throttle,
+          shifting: shiftCut || this.shiftTimer > 0,
+          soc,
+          overtake: this.ersOvertake,
+          boost: this.performanceMode === 'PSH',
+          share: mode.deployFraction * this.luts.deployVsSpeed[this.performanceMode].evaluate(speedKmh) * this.luts.deployVsGear.evaluate(this.gear),
+          fillShare: mode.deployFraction * this.luts.deployVsGear.evaluate(this.gear),
+          valueSPerMJ: ersValueSPerMJ(speedKmh / 3.6, this.ersBrakeAheadM(), this.totalMassKg),
+          deployAboveSPerMJ: em ? em.deployAbove.evaluate(socN) : Number.NaN,
+          superclipBelowSPerMJ: em ? em.superclipBelow.evaluate(socN) : 0,
+          superclipRoomJ: this.superclipRoomJ(),
+        });
+        ersStepped = true;
+        // The motor may fill the turbo's lag wherever the management deploys, the low-speed map aside
+        deployAllowed = this.ers2026.fillCeilingW > 0;
+        if (dc > 0) {
+          pK = dc * ers.deployEfficiency;
+        } else if (dc < 0) {
+          pK = dc / ers.harvestEfficiency;
+        }
+      } else if (inp.throttle > 0.05 && soc > mode.socFloor && this.lapDeployJ < ers.deployPerLapJ) {
         deployAllowed = mode.deployFraction > 0;
         pK =
           ers.ERS_MAX_DEPLOY *
@@ -3992,8 +4116,9 @@ export class VehiclePhysics {
         pK *= wetClip;
         liftW *= wetClip;
       }
-      if (pK < 0 && (soc >= 1 || this.lapHarvestJ >= ers.harvestPerLapJ)) pK = liftW = 0;
+      if (pK < 0 && (soc >= 1 || this.lapHarvestJ >= ers.harvestPerLapJ + this.extraRechargeJ)) pK = liftW = 0;
     }
+    if (this.ers2026 && !ersStepped) this.ers2026.release();
     // ---- brake bias (brake-by-wire + live-tunable dynamic brake migration)
     const br = cfg.brakes;
     const mig = br.migration ?? DEFAULT_BRAKE_MIGRATION;
@@ -4005,7 +4130,11 @@ export class VehiclePhysics {
     const bias = this.dynamicBrakeBias;
 
     let tK = 0;
-    if (pK > 0) tK = Math.min(pK / omegaE, this.luts.mgukDeploy.evaluate(rpm)) * motorShare;
+    // Under the 2026 rules a power limit binds the motor (C5.2.8): its torque is sized on the engine speed this step ends
+    // at, as the last step's change carries on (out of a shift the engine speeds up 2 % in a step), so the power the
+    // store gives it never runs over the limit
+    const kOmega = this.ers2026 ? omegaE + Math.max(0, this.ersOmegaStep) : omegaE;
+    if (pK > 0) tK = Math.min(pK / kOmega, this.luts.mgukDeploy.evaluate(rpm)) * motorShare;
     else if (pK < 0) {
       let cap = this.luts.mgukHarvest.evaluate(rpm);
       // On the pedal the brake-by-wire never lets the drivetrain brake the rear axle past its share of the demand:
@@ -4025,7 +4154,9 @@ export class VehiclePhysics {
     // curve and the gear's power clip, from the same store and lap allowance as the deploy
     if (deployAllowed && turboDeficit > 0) {
       const deployCapW = this.motorDeployKw !== null ? Math.min(ers.ERS_MAX_DEPLOY, this.motorDeployKw * 1000) : ers.ERS_MAX_DEPLOY;
-      const fillCap = Math.min(this.luts.mgukDeploy.evaluate(rpm), (deployCapW * this.luts.deployVsGear.evaluate(this.gear)) / omegaE);
+      // Under the 2026 rules the ceiling this step, the speed's limit and the control unit's cut (the gear's map in it)
+      const fillW = this.ers2026 ? this.ers2026.fillCeilingW * ers.deployEfficiency : deployCapW * this.luts.deployVsGear.evaluate(this.gear);
+      const fillCap = Math.min(this.luts.mgukDeploy.evaluate(rpm), fillW / kOmega);
       tK = Math.max(tK, Math.min(fillCap * motorShare, tK + turboDeficit));
     }
     if (this.limiterTimer > 0 && tK > 0) tK = 0;
@@ -4293,8 +4424,8 @@ export class VehiclePhysics {
     // ---- energy store
     let pMech = tK * this.engineOmega;
     if (pMech > 0) {
-      // Never overrun the per-lap allowance or the store inside a sub-step
-      const room = Math.min(ers.deployPerLapJ + this.extraDeployJ - this.lapDeployJ, this.ersEnergyJ);
+      // Never overrun the per-lap allowance or the store inside a sub-step (the 2026 rules have no deploy limit a lap)
+      const room = this.ers2026 ? this.ersEnergyJ : Math.min(ers.deployPerLapJ - this.lapDeployJ, this.ersEnergyJ);
       const want = (pMech / ers.deployEfficiency) * h;
       if (want > room) {
         const scale = Math.max(0, room) / want;
@@ -4306,10 +4437,29 @@ export class VehiclePhysics {
       this.ersEnergyJ = Math.max(0, this.ersEnergyJ - e);
       this.lapDeployJ += e;
     } else if (pMech < 0) {
-      const e = -pMech * ers.harvestEfficiency * h;
+      let e = -pMech * ers.harvestEfficiency * h;
+      if (this.ers2026) {
+        // The lap's recharge limit is never overrun inside a sub-step (C5.2.10)
+        const room = Math.max(0, ers.harvestPerLapJ + this.extraRechargeJ - this.lapHarvestJ);
+        if (e > room) {
+          const scale = room / e;
+          pMech *= scale;
+          this.mgukTorque *= scale;
+          e = room;
+        }
+      }
       this.ersEnergyJ = Math.min(ers.ERS_MAX_CHARGE, this.ersEnergyJ + e);
       // Counted on the store's side of the MGU-K, as deploy is, so both per-lap limits measure the same thing
       this.lapHarvestJ += e;
+    }
+    if (this.ers2026) {
+      this.ers2026.lastDcW = pMech > 0 ? pMech / ers.deployEfficiency : 0;
+      this.ersOmegaStep = this.engineOmega - omegaAtStart;
+      // What the brakes could have recovered here, the recharge limit aside: the room the next lap keeps for them
+      if (brakeWantW > 0 && Number.isFinite(this.trackProgress)) {
+        const w = Math.min(brakeWantW, this.luts.mgukHarvest.evaluate(this.rpm) * Math.max(0, this.engineOmega));
+        this.lapBrakeHarvestJ[Math.min(ERS_LAP_BINS - 1, Math.max(0, Math.floor(this.trackProgress * ERS_LAP_BINS)))] += w * ers.harvestEfficiency * h;
+      }
     }
   }
 

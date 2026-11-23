@@ -861,6 +861,60 @@ const MAX_CATCH_UP_S = 0.25;
  * (its driver's reaction, under half a second) keeps them; a takeover after a real stint off resets them.
  */
 const AUTOPILOT_STALE_S = 1;
+/**
+ * The braking zones of a circuit as the 2026 energy management maps them, from the speed profile baked into its samples
+ * (the same on the page and in the simulation worker, as the autopilot's is): where the profile asks for over half of a
+ * car's braking (as the braking guide's red does: 1.6 g slow, rising with downforce to 5.1 g) and falls by at least
+ * 36 km/h in all. Per sample, the distance on to the next such zone (m; 0 inside one, Infinity on a lap without)
+ */
+const brakeAheadCache = new WeakMap<ReadonlyArray<TrackSamplePoint>, Float32Array>();
+const BRAKE_ZONE_LOOK_M = 13.5;
+const BRAKE_ZONE_MIN_DROP_MS = 10;
+
+function brakeAheadTable(samples: ReadonlyArray<TrackSamplePoint>, lapM: number): Float32Array {
+  let ahead = brakeAheadCache.get(samples);
+  if (ahead) return ahead;
+  const n = samples.length;
+  const ds = lapM / n;
+  const v = Float64Array.from(samples, (p) => (p.brakeLimitKmh ?? p.optimalSpeedKmh) / 3.6);
+  const k = Math.max(1, Math.round(BRAKE_ZONE_LOOK_M / ds));
+  const hard = (i: number): boolean => {
+    const a = v[i];
+    const b = v[(i + k) % n];
+    return (a * a - b * b) / (2 * k * ds) > 0.52 * 9.81 * (1.6 + 3.5 * Math.min(1, (a / 83) ** 2));
+  };
+  const zone = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (!hard(i) || hard((i - 1 + n) % n)) continue;
+    let j = i;
+    let vMin = v[i];
+    while (hard(j % n) && j - i < n) vMin = Math.min(vMin, v[(++j + k - 1) % n]);
+    if (v[i] - vMin >= BRAKE_ZONE_MIN_DROP_MS) for (let m = i; m < j; m++) zone[m % n] = 1;
+  }
+  ahead = new Float32Array(n).fill(Number.POSITIVE_INFINITY);
+  const first = zone.indexOf(1);
+  // Back round the lap from a braking sample: each sample's distance on to the nearest braking sample ahead of it
+  if (first >= 0) {
+    let d = 0;
+    for (let m = 0; m < n; m++) {
+      const i = (first - m + n) % n;
+      d = zone[i] ? 0 : d + ds;
+      ahead[i] = d;
+    }
+  }
+  brakeAheadCache.set(samples, ahead);
+  return ahead;
+}
+
+/** Distance from lap distance `s` on to the next braking zone (`brakeAheadTable`) (m) */
+function brakeAheadM(ahead: Float32Array, s: number, lapM: number): number {
+  const n = ahead.length;
+  if (n === 0 || !(lapM > 0)) return Number.POSITIVE_INFINITY;
+  const x = ((((s % lapM) + lapM) % lapM) / lapM) * n;
+  const i = Math.min(n - 1, Math.floor(x));
+  return Math.max(0, ahead[i] - (x - i) * (lapM / n));
+}
+
 const BOOST_S = 8;
 const BOOST_COOLDOWN_S = 4;
 const AMBIENT_C = 27;
@@ -1341,6 +1395,13 @@ export class F12026CarSim implements SimulatorCar {
     });
     const v = this.vehicle;
     if (opts?.aiLite) v.aiLitePhysics = true;
+    // The circuit as the 2026 energy management knows it: how far the next braking zone is, from the circuit's own
+    // speed profile (one table for the car's life, the same in the simulation worker, so its choices never hang on
+    // when a frame fell or which thread drives it)
+    if (profile.hasErs && track.samples.length > 0) {
+      const ahead = brakeAheadTable(track.samples, L);
+      v.ersBrakeAheadAt = (s) => brakeAheadM(ahead, s, L);
+    }
     v.turbocharged = profile.turbo;
     this.wheelbaseM = v.wheelbaseM;
     this.cgToFrontAxleM = v.cgToFrontM;
@@ -2004,6 +2065,7 @@ export class F12026CarSim implements SimulatorCar {
     this.vehicle.coldGarageStart = false;
     this.vehicle.ersEnergyJ = this.config.ers.ERS_MAX_CHARGE;
     this.vehicle.resetLapEnergy();
+    if (!flyingStart) this.vehicle.armStandingStart();
     this.simTimeMs = 0;
     this.lapStartMs = 0;
     this.sectorStartMs = 0;
@@ -2126,7 +2188,10 @@ export class F12026CarSim implements SimulatorCar {
     const push = this.profile.hasErs && overtakeOk && (inputs.manualOverride || this.boostRemainingS > 0 || aiOvertake) && v.ersEnergyJ > 0;
     this.pushActive = push;
     v.setPerformanceMode(push ? 'PSH' : this.userErsMode);
-    v.extraDeployJ = this.rules === 'straight-mode-2026' ? this.overtake.extraDeployJ(this.raceControl) : 0;
+    v.extraRechargeJ = this.rules === 'straight-mode-2026' ? this.overtake.extraRechargeJ(this.raceControl) : 0;
+    // Overtake's power curve (2026): all the time in practice and qualifying (Section B7.2.3 b), in a race while the
+    // driver uses the override earned at the detection line
+    v.ersOvertake = push || (this.rules === 'straight-mode-2026' && !this.raceControl?.racing);
     const progressBefore = v.trackProgress;
 
     // The paddles and the DRS button go to every tick of the frame: VehiclePhysics compares each tick with the one

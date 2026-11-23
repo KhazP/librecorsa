@@ -12,6 +12,7 @@
  */
 
 import type { LutPoints } from '../lut';
+import type { EnergyManagementData } from './ers-2026';
 import { F1_RAIN_TYRE_PACK, f1RainTraits, WET_TYRE_TRAITS, type WetTyreTraits } from '../wet-tyres';
 
 // ---------------------------------------------------------------------------
@@ -268,6 +269,14 @@ export interface ERSData {
   liftHarvestEveryGear?: { maxAxleTorqueNm: number };
   /** Deploy multiplier by gear (gear number → 0..1, the source's per-gear table); default 1 in every gear */
   deployVsGear?: LutPoints;
+  /**
+   * The rules the energy runs under (`ers-2026.ts`). 'f1-2026': the 2026 F1 car's, by the FIA's numbers: the ERS-K's
+   * power against road speed, with Overtake or not, in place of `ERS_MAX_DEPLOY`; no deploy limit a lap
+   * (`deployPerLapJ` is not read), the lap's recharge limit `harvestPerLapJ` plus Overtake's extra; the cuts with the
+   * driver flat out at the rules' rates; and each mode's `energyManagement` in place of its `socFloor`. Absent: the
+   * mode tables as they stand
+   */
+  regulations?: 'f1-2026';
 }
 
 /** `PerformanceModeData`: one ERS / engine map selectable from the wheel */
@@ -287,6 +296,8 @@ export interface PerformanceModeData {
   topGearClipHarvestW: number;
   /** ICE power diverted to the MGU-K at part throttle (W) */
   partThrottleHarvestW: number;
+  /** Under `ERSData.regulations` 'f1-2026': where the control unit deploys and superclips; absent, it deploys to the limit */
+  energyManagement?: EnergyManagementData;
   /** Closed-throttle engine-braking multiplier */
   coastTorqueScale: number;
   /** Electronic brake balance offset in EBB steps (+ = forward) */
