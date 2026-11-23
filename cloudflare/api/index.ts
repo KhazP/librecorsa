@@ -23,7 +23,8 @@
  * for everyone who asks and are read on every view of the home page or the title screen: a board's page without a
  * driver's name, and the totals. Those are kept for half a minute or a minute (SHARED_ANSWER_S), at the edge and in
  * the browser, so a crowd on the home page reads the database about once a minute, not once a visit. The usage
- * totals' public side scans the daily totals, so it is kept a quarter of an hour (totals) or an hour (popular).
+ * totals' public side scans the daily totals, so it is kept an hour (totals) or six hours (popular), and takes no
+ * query string: every reader shares the one copy at the edge.
  */
 import { DEFAULT_RACE_SLOT_S, nextRaceSlot, raceSlot } from "../../src/lib/net/race-schedule";
 import { challengeProblem } from "../../src/lib/net/weekly-challenge";
@@ -91,7 +92,7 @@ function allowedOrigin(request: Request, url: URL, env: Env): string | null {
  * How long the answers anyone may share are kept, in the browser and in Workers caching at the edge (seconds): the
  * home page and the title screen read them on every view, and none of them is about the one asking
  */
-export const SHARED_ANSWER_S = { board: 30, circuit: 60, stats: 30, hallOfFame: 60, badges: 60, profile: 60, popular: 3600, totals: 900 } as const;
+export const SHARED_ANSWER_S = { board: 30, circuit: 60, stats: 30, hallOfFame: 60, badges: 60, profile: 60, popular: 21_600, totals: 3600 } as const;
 
 function headersFor(origin: string | null, sharedForS = 0): Record<string, string> {
   const headers: Record<string, string> = { "Cache-Control": sharedForS > 0 ? `public, max-age=${sharedForS}` : "no-store", Vary: "Origin" };
@@ -273,9 +274,11 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
   }
 
   // The usage totals' public side (stats.ts): one field at a time over a whole range, kept for a while because a
-  // month's ranks and the totals to date barely move from one minute to the next, and each read scans the totals
+  // month's ranks and the totals to date barely move from one hour to the next, and each read scans the totals. A
+  // query string would make a copy of its own at the edge, and a read of the database each: none is taken
   if ((path === "/api/stats/popular" || path === "/api/stats/totals") && request.method === "GET") {
     if (!config.usage || !env.BOARD_DB) return json({ ok: false, error: "The usage totals are off" }, 404, origin);
+    if (url.search) return json({ ok: false, error: "No query string here" }, 400, origin);
     try {
       if (path === "/api/stats/popular") return json({ ok: true, ...(await popularRanks(env.BOARD_DB, Date.now())) }, 200, origin, SHARED_ANSWER_S.popular);
       return json({ ok: true, ...(await siteTotals(env.BOARD_DB, config.board)) }, 200, origin, SHARED_ANSWER_S.totals);

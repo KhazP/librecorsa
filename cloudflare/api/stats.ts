@@ -24,6 +24,7 @@
  *        since:   the first day the usage totals counted, "2026-11-11"; hours, laps and countries are since then
  *        hours:   whole hours driven; laps: laps driven, or the laps on the boards when that is more (as above)
  *        countries: countries the driving came from; drivers: drivers to date, null with the boards off
+ * Neither takes a query string (index.ts): one copy of each is kept at the edge for everyone.
  */
 import { CIRCUIT_IDS } from "./admin";
 import { currentBoardBase, lapPhysicsVersion, MAX_LAP_REVISION } from "../../src/lib/sim/lap-types";
