@@ -114,7 +114,13 @@ export class TrackEnvironment {
   }
 
   /**
-   * An AI car's tyres (an instant change, standing in for a pit stop): on a dry track it keeps its own slick; rain tyres
+   * A race with a pit lane brings AI cars in for the tyres the weather calls for (the field's stop, pit/ai-pit.ts): true
+   * when the field takes the change on; unset or false, the change is made at once
+   */
+  public aiTyrePit: ((sim: SimulatorCar, compound: TireCompound) => boolean) | null = null;
+
+  /**
+   * An AI car's tyres (an instant change, standing in for a pit stop where there is no pit lane): on a dry track it keeps its own slick; rain tyres
    * go on, or come off again, once the weather has called for them for `AI_TYRE_CHANGE_S`. A new session, or a car
    * new to the track, starts on the right tyre at once.
    */
@@ -143,8 +149,10 @@ export class TrackEnvironment {
     }
     call.waitedS += dt;
     if (fresh || call.waitedS >= AI_TYRE_CHANGE_S) {
-      sim.tireCompound = target;
       call.waitedS = 0;
+      // Through a stop when the race has a pit lane (not at a session's start: those go on in the garage)
+      if (!fresh && this.aiTyrePit?.(sim, target)) return;
+      sim.tireCompound = target;
     }
   }
 

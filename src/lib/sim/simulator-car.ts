@@ -166,6 +166,10 @@ export interface SimulatorCar {
    * on the ground and rolling at `speedMs`, keeping the tyres' heat and wear. `s` is a hint for the track projection.
    */
   restorePose?(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean }): void;
+  /** The AI field drives the car down the pit lane on its own path, no forces (pit/pit-lane.ts) */
+  driveInPitLane?(x: number, z: number, yawRad: number, speedMs: number, laneM: number, offsetM: number): void;
+  /** Out of the pit lane, back on the road rolling at `speedMs`: the physics drive the car again */
+  leavePitLane?(x: number, z: number, yawRad: number, speedMs: number): void;
   getTyreSetup(): TyreSetup;
   setTyreSetup(setup: TyreSetup): void;
   activateBoostOverride(): boolean;

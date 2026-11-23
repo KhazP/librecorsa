@@ -289,6 +289,10 @@ export interface RaceStandingEntry {
   dq?: boolean;
   /** Damage 0..1 (absent: none) */
   damage?: number;
+  /** In the pit lane now */
+  inPit?: boolean;
+  /** Pit stops made this race (an AI car's) */
+  pitStops?: number;
 }
 
 /** One line of the final classification */

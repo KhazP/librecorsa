@@ -3252,21 +3252,25 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /**
-   * The AI field drives this car down the pit lane: it is placed at `laneM` along it (its pose already set by the
-   * field), or released back to the road with `laneM` null
+   * The AI field drives this car down the pit lane on its own path (no forces): placed at `x`/`z` facing `yawRad`,
+   * rolling at `speedMs`, `laneM` along the lane and `offsetM` off its centreline (its lap position is the lane's)
    */
-  public setPitLaneSpot(laneM: number | null, offsetM = 0): void {
+  public driveInPitLane(x: number, z: number, yawRad: number, speedMs: number, laneM: number, offsetM: number): void {
     const lane = this.track.pitLane;
     if (!lane) return;
     const tr = this.pitTracker ?? (this.pitTracker = new PitLaneTracker(lane));
-    if (laneM === null) {
-      this.pitDriven = false;
-      tr.reset();
-      return;
-    }
     this.pitDriven = true;
     tr.place(laneM, offsetM);
-    this.s = tr.spot!.trackS;
+    this.vehicle.driveKinematic(x, z, yawRad, speedMs);
+    this.syncPose();
+  }
+
+  /** Out of the pit lane and back on the road at `x`/`z`, rolling at `speedMs`: the physics drive the car again */
+  public leavePitLane(x: number, z: number, yawRad: number, speedMs: number): void {
+    this.pitDriven = false;
+    this.pitTracker?.reset();
+    this.vehicle.endKinematic();
+    this.restorePose({ x, z, yawRad, speedMs, s: this.s });
   }
 
   /** Race control deleted the running lap (judged track limits) */

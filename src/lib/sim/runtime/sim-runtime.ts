@@ -203,6 +203,7 @@ export class SimRuntime {
         env.applyWeatherSync(command.weather);
         const setup = command.setup;
         field.raceLaps = setup.laps;
+        field.pitStopsRequired = setup.pitStops ?? 0;
         field.gridOrder = setup.gridOrder;
         field.playerGrid = setup.playerGrid;
         field.damageLevel = setup.damage;

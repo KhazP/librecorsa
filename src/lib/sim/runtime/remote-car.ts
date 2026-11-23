@@ -110,6 +110,9 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   teleportToDistance: "place",
   teleportToTurn: "place",
   restorePose: "place",
+  // AI cars only (the field drives them in the worker or on the page): never the player's remote twin
+  driveInPitLane: "localCall",
+  leavePitLane: "localCall",
 
   getTyreSetup: "localCall",
   getChassisSetup: "localCall",

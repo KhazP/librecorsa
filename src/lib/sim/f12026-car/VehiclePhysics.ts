@@ -1151,6 +1151,7 @@ const SCRUB_FULL_SPIN_RADS = 20;
 const _roadSlope = { dhdx: 0, dhdz: 0 };
 
 // Scratch (single-threaded, never escapes a call)
+const _kinEuler = new THREE.Euler();
 const _m = new THREE.Matrix4();
 const _tyreTorque = new Float64Array(4);
 const _wheelInertia = new Float64Array(4);
@@ -1519,6 +1520,9 @@ export class VehiclePhysics {
    * or blew up; let go, the barrier pushes it out as ever (capped per step)
    */
   private pinnedForSettle = false;
+  /** Kinematic drive (`driveKinematic`): the body's height over the ground it keeps, and its ground probe */
+  private kinLift: number | null = null;
+  private readonly kinHit = createGroundHit();
   private wallContactStep = false;
   private wallImpactStep = 0;
   /** Hardest hit of the contact going on now (m/s); 0 once off the barrier */
@@ -2097,6 +2101,44 @@ export class VehiclePhysics {
    * then let the suspension settle. `speedMs` > 0 gives a rolling start.
    */
   /** Places the car at rest (or rolling at `speedMs`) on the ground at x, z; `keepTyres` keeps tyre and brake heat and wear (a car put back at a pose) */
+  /**
+   * A pose set from outside, with no forces and no settle: the AI field driving a car down the pit lane on its own path
+   * (pit/pit-lane.ts, ai-opponents.ts). The body keeps the height over the ground it had when this began, seated on the
+   * road's grade and camber; the wheels roll at the speed. `endKinematic` before the car is placed back on the road
+   */
+  public driveKinematic(x: number, z: number, yawRad: number, speedMs: number): void {
+    const hit = this.kinHit;
+    if (this.kinLift === null) {
+      const hereY = this.ground.query(this.position.x, this.position.z, this.position.y + 3, hit) ? hit.height : this.position.y - this.config.chassis.cgHeight;
+      this.kinLift = this.position.y - hereY;
+    }
+    const groundY = this.ground.query(x, z, this.position.y + 3, hit) ? hit.height : this.position.y - this.kinLift;
+    const road = this.roadAttitude(x, z, yawRad, groundY, hit);
+    const pitch = Math.asin(this.staticPitchSin());
+    this.quaternion.setFromEuler(_kinEuler.set(pitch - road.gradeRad, yawRad, road.bankRad, 'YXZ'));
+    const dy = groundY + this.kinLift - this.position.y;
+    this.position.set(x, groundY + this.kinLift, z);
+    const v = Math.max(0, speedMs);
+    this.velocity.set(Math.sin(yawRad) * v, 0, Math.cos(yawRad) * v);
+    this.prevVelocity.copy(this.velocity);
+    this.angularVelocity.set(0, 0, 0);
+    for (const w of this.wheels) {
+      w.omega = v / Math.max(0.2, w.rollingRadius || 0.35);
+      w.hubY += dy;
+      w.contactY += dy;
+      w.hubVy = 0;
+      w.hardpointWorld.copy(w.hardpoint).applyQuaternion(this.quaternion).add(this.position);
+    }
+    this.gear = this.gearForSpeed(Math.max(1, v));
+    this.engineOmega = Math.max(this.config.engine.idleRpm * RPM2RADS, this.drivenOmega() * this.totalRatio());
+    this.updateBasis();
+  }
+
+  /** The kinematic drive is over (the car goes back to the road through a placement) */
+  public endKinematic(): void {
+    this.kinLift = null;
+  }
+
   public reset(x: number, z: number, yawRad: number, speedMs = 0, keepTyres = false): void {
     const ch = this.config.chassis;
     const aero = this.config.aero;

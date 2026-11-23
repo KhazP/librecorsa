@@ -83,6 +83,8 @@ export interface RaceStartSetup {
   lockAidsInYellow?: boolean;
   /** The grid from qualifying (`AiRace.qualifying`); absent: none */
   qualifying?: QualifyingGridInput;
+  /** Pit stops every car has to make (`AiRace.pitStopsRequired`) */
+  pitStops?: number;
 }
 
 /**

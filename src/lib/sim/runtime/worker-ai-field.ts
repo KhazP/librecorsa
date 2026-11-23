@@ -34,6 +34,7 @@ let raceNumber = 0;
 
 export class WorkerAiField implements AiRace, WorkerRaceView {
   raceLaps = 5;
+  pitStopsRequired = 0;
   gridOrder: AiGridOrder = "pace";
   playerGrid: PlayerGridSlot = "back";
   damageLevel: DamageLevel = "reduced";
@@ -141,6 +142,7 @@ export class WorkerAiField implements AiRace, WorkerRaceView {
       skill: this.skillLevel,
       setup: {
         laps: this.raceLaps,
+        pitStops: this.pitStopsRequired,
         gridOrder: this.gridOrder,
         playerGrid: this.playerGrid,
         damage: this.damageLevel,

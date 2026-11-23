@@ -379,6 +379,12 @@ export class PitLaneModel {
     };
   }
 
+  /** The nearest point of the lane, up to `maxM` along it, to `x`/`z`: along it and sideways from it (m, + right) */
+  nearestLaneM(x: number, z: number, maxM = this.lengthM): { laneM: number; offsetM: number } {
+    const pr = projectPolyline(this, x, z, 0, Math.min(this.n - 1, indexAt(this.cum, maxM) + 1));
+    return { laneM: pr.laneM, offsetM: pr.offsetM };
+  }
+
   /** Whether the lap position `s` is in the stretch of the lap the lane runs beside (with a margin, m) */
   besideLap(s: number, marginM = 60): boolean {
     const span = wrapPos(this.rejoinTrackS - this.leaveTrackS, this.trackLen);

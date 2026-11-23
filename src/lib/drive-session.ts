@@ -160,6 +160,7 @@ import { sharedMusic, type NowPlaying } from "@/lib/audio/bgm-controller";
 import { MusicDirector } from "@/lib/audio/music-director";
 import { noteDrivingFrame, noteDrivingInput, noteFrameGraphics } from "@/lib/render/frame-stats";
 import { PitStopManager } from "@/lib/sim/pit/pit-stop";
+import { pitBoxIndex } from "@/lib/sim/pit/ai-pit";
 import { createPitBoxVisual } from "@/lib/render/pit-box-visual";
 import type {
   AeroSetupPreset,
@@ -3407,6 +3408,8 @@ export class DriveSession {
         if (pitStop.lane) {
           pitStop.enabled = !mpRace;
           pitStop.stopsRequired = aiField?.pitStopsRequired ?? 0;
+          // The player's box: the one the field leaves the player (ai-pit.ts), or the middle one outside a race
+          pitStop.boxIndex = pitBoxIndex(pitStop.lane, 0, physics.telemetry.race?.fieldSize ?? 1);
           const dmg = physics.telemetry.race?.damage;
           const step = pitStop.update({
             dtS: dtSeconds,
