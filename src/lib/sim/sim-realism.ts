@@ -7,6 +7,8 @@
  *
  * The races are sprints: every car carries a fixed fuel load as ballast and burns none, at every level.
  */
+import { text as t } from "@/lib/text";
+
 export type SimRealism = 'casual' | 'standard' | 'full';
 export const SIM_REALISM_LEVELS: readonly SimRealism[] = ['casual', 'standard', 'full'];
 
@@ -35,9 +37,9 @@ export const SIM_REALISM_FLAGS: Readonly<Record<SimRealism, Readonly<SimRealismF
 export const FULL_REALISM: Readonly<SimRealismFlags> = SIM_REALISM_FLAGS.full;
 
 export const SIM_REALISM_LABELS: Record<SimRealism, { label: string; detail: string }> = {
-  casual: { label: "Casual", detail: "No tyre wear, forgiving tyre temperatures, milder rain" },
-  standard: { label: "Standard", detail: "Tyre wear on, softened tyre temperatures, most of the rain" },
-  full: { label: "Full", detail: "Complete tyre and wet-weather model, cold tyres and brakes out of the garage" },
+  casual: { get label() { return t("game.realism.casual"); }, get detail() { return t("game.realism.casualDetail"); } },
+  standard: { get label() { return t("game.realism.standard"); }, get detail() { return t("game.realism.standardDetail"); } },
+  full: { get label() { return t("game.realism.full"); }, get detail() { return t("game.realism.fullDetail"); } },
 };
 
 /** Tyre-temperature grip with the realism level's share of the loss applied */

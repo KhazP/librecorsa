@@ -2,6 +2,11 @@ import * as THREE from "three";
 import type { CarTelemetry } from "@/types/f1";
 import { planarUvGeometry } from "./planar-uv";
 import type { GlassPatch } from "./wing-mirrors";
+import { perLanguage } from "@/lib/per-language";
+import { text as tx, upperText } from "@/lib/text";
+
+/** The dash's yellow-flag banner, once per language (the dash is drawn every frame) */
+const yellowFlag = perLanguage(() => tx("game.dash.yellowFlag"));
 
 /**
  * Live dash screens for the GT3 bodies, whose models only carry a still photo of a page.
@@ -241,11 +246,11 @@ class Painter {
   /** Race control's message across `box`: a penalty in red, anything else in yellow; false when there is none */
   banner(box: Box, t: CarTelemetry): boolean {
     const message = t.trackLimits?.message;
-    const text = message ? message.text : t.race?.yellow ? "YELLOW FLAG" : null;
+    const text = message ? message.text : t.race?.yellow ? yellowFlag() : null;
     if (!text) return false;
     const penalty = message?.kind === "penalty";
     this.rect(box, penalty ? RED : ABS_LIT);
-    this.text(box.x + box.w / 2, box.y + box.h / 2, text.toUpperCase(), Math.min(50, box.h * 0.55), penalty ? WHITE : "#000", box.w - 24);
+    this.text(box.x + box.w / 2, box.y + box.h / 2, upperText(text), Math.min(50, box.h * 0.55), penalty ? WHITE : "#000", box.w - 24);
     return true;
   }
 

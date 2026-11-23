@@ -1,1 +1,873 @@
-{}
+{
+  "sky": {
+    "clear": "Clear",
+    "lightClouds": "Light Clouds",
+    "partiallyCloudy": "Partially Cloudy",
+    "mostlyCloudy": "Mostly Cloudy",
+    "overcast": "Overcast",
+    "cloudyDrizzle": "Cloudy & Drizzle",
+    "cloudyLightRain": "Cloudy & Light Rain",
+    "overcastLightRain": "Overcast & Light Rain",
+    "overcastRain": "Overcast & Rain",
+    "overcastHeavyRain": "Overcast & Heavy Rain",
+    "overcastStorm": "Overcast & Storm"
+  },
+  "weather": {
+    "nodeStart": "Start",
+    "nodeFinish": "Finish",
+    "clear": "Clear",
+    "clearDetail": "Dry, sunny",
+    "overcast": "Overcast",
+    "overcastDetail": "Dry, grey sky, cooler track",
+    "lightRain": "Light rain",
+    "lightRainDetail": "Wet track, intermediates",
+    "heavyRain": "Heavy rain",
+    "heavyRainDetail": "Standing water, full wets",
+    "drying": "Drying",
+    "dryingDetail": "Rain has stopped, a dry line appears",
+    "dynamic": "Dynamic",
+    "dynamicDetail": "Changes during the session"
+  },
+  "timeOfDay": {
+    "dawn": "Dawn",
+    "morning": "Morning",
+    "noon": "Noon",
+    "afternoon": "Afternoon",
+    "goldenHour": "Golden hour",
+    "dusk": "Dusk",
+    "night": "Night"
+  },
+  "raceStart": {
+    "assisted": "Assisted",
+    "manual": "Manual",
+    "assistedHint": "Held on the grid until lights out",
+    "manualHint": "Hold clutch and revs, release at lights out (+5 s / +10 s jump penalty)"
+  },
+  "realism": {
+    "casual": "Casual",
+    "casualDetail": "No tyre wear, forgiving tyre temperatures, milder rain",
+    "standard": "Standard",
+    "standardDetail": "Tyre wear on, softened tyre temperatures, most of the rain",
+    "full": "Full",
+    "fullDetail": "Complete tyre and wet-weather model, cold tyres and brakes out of the garage"
+  },
+  "raceRules": {
+    "auto": "Auto",
+    "openWheel": "Open-wheel",
+    "endurance": "Endurance",
+    "autoHint": "Open-wheel rules for single-seaters, endurance rules for the rest",
+    "openWheelHint": "Track limits by strikes: 4 is +5 s, 8 is +10 s, 12 is a disqualification",
+    "enduranceHint": "Track limits by weighted points: 5 is +5 s, 10 is +10 s, 15 is a disqualification",
+    "trackLimitsOn": "On",
+    "trackLimitsOff": "Off"
+  },
+  "damage": {
+    "off": "Off",
+    "reduced": "Reduced",
+    "full": "Full"
+  },
+  "raceSetup": {
+    "gridBack": "Back",
+    "gridMiddle": "Middle",
+    "gridPole": "Pole",
+    "gridRandom": "Random",
+    "aiGridPace": "By pace",
+    "aiGridQualifying": "Qualifying",
+    "aiGridReversed": "Reversed",
+    "startAuto": "Auto",
+    "startStanding": "Standing",
+    "startRolling": "Rolling",
+    "standingStart": "standing start",
+    "rollingStart": "rolling start",
+    "aggressionClean": "Clean",
+    "aggressionNormal": "Normal",
+    "aggressionHard": "Hard"
+  },
+  "grip": {
+    "green": "Green",
+    "greenDetail": "Freshly washed tarmac, minimal rubber",
+    "light": "Light",
+    "lightDetail": "Early weekend rubber buildup",
+    "medium": "Medium",
+    "mediumDetail": "Moderate rubbered-in groove",
+    "natural": "Natural",
+    "naturalDetail": "Standard race-ready rubber groove",
+    "heavy": "Heavy",
+    "heavyDetail": "Well-rubbered endurance racing line",
+    "saturated": "Saturated",
+    "saturatedDetail": "Fully saturated dark rubber groove"
+  },
+  "aiSkill": {
+    "rookie": "Rookie",
+    "amateur": "Amateur",
+    "pro": "Pro",
+    "alien": "Alien"
+  },
+  "challenge": {
+    "conditions": "Dry track · {tyres} · Low fuel",
+    "tyresSoft": "Soft tyres",
+    "tyresStreet": "Street tyres",
+    "tyresVintageSlicks": "Vintage slicks",
+    "tyresSlicks": "Slicks",
+    "timeLeftDays": "{days} d {hours} h",
+    "timeLeftHours": "{hours} h {minutes} min",
+    "timeLeftMinutes": "{minutes} min",
+    "placeNoTime": "No time yet",
+    "placeFirst": "P1 · fastest this week",
+    "place": "P{place}",
+    "placeGap": "P{place} · {gap} to P{above}"
+  },
+  "board": {
+    "conditions": "{assists} · {realism} · {surface}",
+    "assistsPro": "No assists",
+    "assistsSemiPro": "Some assists",
+    "assistsAssisted": "Assisted",
+    "realismCasual": "Casual",
+    "realismStandard": "Standard",
+    "realismFull": "Full",
+    "surfaceDry": "Dry",
+    "surfaceWet": "Wet",
+    "renameUnreachable": "Couldn't reach the online board. Try again in a moment",
+    "renameFailed": "The name could not be changed (HTTP {status})"
+  },
+  "badges": {
+    "weeklyGold": "Weekly Gold",
+    "weeklySilver": "Weekly Silver",
+    "weeklyBronze": "Weekly Bronze",
+    "fastestLap": "Fastest Lap",
+    "og": "OG Driver",
+    "bulb": "Idea Contributor",
+    "times": "{badge} ×{count}",
+    "withNote": "{badge} — {note}",
+    "medalDetail": "{place, select, first {First} second {Second} other {Third}} in a weekly challenge",
+    "medalDetailWeeks": "{place, select, first {First} second {Second} other {Third}} in a weekly challenge: {weeks}",
+    "recordDetailCount": "Holds the fastest lap on {count, plural, one {an open board} other {# open boards}}",
+    "recordCar": "{car} ×{count}",
+    "recordManual": "+{count} manual",
+    "recordDetail": "{boards} — tap to view tracks",
+    "ogDetail": "Drove LibreCorsa on Physics V1",
+    "bulbDetailNote": "Idea Contributor: {note}",
+    "bulbDetail": "Idea or community contribution"
+  },
+  "camera": {
+    "chaseClose": "Chase close",
+    "chaseCloseDetail": "Tight behind the car",
+    "chase": "Chase",
+    "chaseDetail": "Behind the car",
+    "chaseFar": "Chase far",
+    "chaseFarDetail": "Wide behind the car",
+    "chaseLow": "Chase low",
+    "chaseLowDetail": "Low behind the rear wing",
+    "tvPod": "T-cam",
+    "tvPodDetail": "Over the helmet",
+    "cockpitShoulder": "Shoulder",
+    "cockpit": "Cockpit",
+    "cockpitDetail": "Driver's eye",
+    "dash": "Dash",
+    "dashDetail": "Ahead of the wheel, the dash in shot",
+    "nose": "Nose",
+    "helicopter": "Helicopter",
+    "tvSide": "Trackside TV",
+    "free": "Free camera",
+    "freeDetail": "Fly anywhere around the circuit"
+  },
+  "music": {
+    "poolMenu": "Menu",
+    "poolRace": "Race",
+    "poolResults": "Results and replay"
+  },
+  "carQuality": {
+    "ownBadge": "OWN PHYSICS",
+    "own": "Own physics",
+    "ownDetail": "Drives on physics built for this car.",
+    "sharedBadge": "SHARED PHYSICS",
+    "shared": "Shared physics",
+    "sharedDetail": "Drives on the physics of another car from the same class and era, so it handles like that car rather than its own.",
+    "eraBadge": "2026 PHYSICS",
+    "era": "Older cars",
+    "eraDetail": "Drives on 2026 physics, so it handles like a 2026 car rather than the way it did in its own season."
+  },
+  "carClass": {
+    "f1": "Formula Open-Wheel",
+    "f1Detail": "Single-seaters · DRS / active aero",
+    "gt3Detail": "Closed-wheel · ABS / TC",
+    "proto": "Prototypes",
+    "protoDetail": "Closed-wheel · high downforce · TC",
+    "classic": "Classic GT & Touring",
+    "classicDetail": "Sports prototypes, Group 4, Group A and JGTC · 1966–1998",
+    "road": "Road cars",
+    "roadDetail": "Road-legal · street tyres"
+  },
+  "circuitQuality": {
+    "originalBadge": "ORIGINAL",
+    "original": "LibreCorsa originals",
+    "originalDetail": "Built for LibreCorsa with its own surfaces, kerbs, elevation and trackside scenery.",
+    "simBadge": "SIM GRADE",
+    "sim": "Sim-grade circuits",
+    "simDetail": "A hand-built sim circuit, with its own road, kerb and barrier meshes and surface physics.",
+    "scanBadge": "SCAN",
+    "scan": "Converted scans",
+    "scanDetail": "Converted automatically from a community 3D model: the road, kerbs, run-off and barriers are traced from the mesh, so details can differ from the real venue."
+  },
+  "circuitType": {
+    "permanent": "Permanent",
+    "street": "Street",
+    "oval": "Oval",
+    "hillclimb": "Hill climb"
+  },
+  "livery": {
+    "grid2026": "2026 Grid",
+    "retro": "Retro",
+    "colourChalk": "Chalk",
+    "colourCarbon": "Carbon",
+    "colourAlloy": "Alloy",
+    "colourVermilion": "Vermilion",
+    "colourPapaya": "Papaya",
+    "colourGold": "Gold",
+    "colourVolt": "Volt",
+    "colourEmerald": "Emerald",
+    "colourCyan": "Cyan",
+    "colourCobalt": "Cobalt",
+    "colourIndigo": "Indigo",
+    "colourMagenta": "Magenta"
+  },
+  "keyActions": {
+    "throttle": "Throttle",
+    "brake": "Brake",
+    "steerLeft": "Steer left",
+    "steerRight": "Steer right",
+    "boostHold": "Boost (hold)",
+    "boostLatch": "Boost (latch)",
+    "aero": "Active aero X / Z",
+    "shiftUp": "Gear up",
+    "shiftDown": "Gear down",
+    "neutral": "Neutral",
+    "camera": "Camera (hold: seat & camera)",
+    "freeCamera": "Free camera",
+    "tvCamera": "Trackside TV camera",
+    "racingLine": "Racing line",
+    "mute": "Mute",
+    "nextTrack": "Next music track",
+    "autopilot": "Autopilot",
+    "mouseSteer": "Mouse steering",
+    "restart": "Restart",
+    "flyingLap": "Restart lap (flying start)",
+    "throttleHalf": "Half throttle (hold)",
+    "brakeHalf": "Half brake (hold)",
+    "clutch": "Clutch (hold)",
+    "replay": "Instant replay",
+    "mfdPage": "Next MFD page",
+    "mfd": "Open / close MFD",
+    "hud": "Show / hide HUD",
+    "board": "Open / close lap board",
+    "headlights": "Headlights on / off",
+    "headlightFlash": "Flash headlights (hold)"
+  },
+  "padActions": {
+    "shiftUp": "Gear up",
+    "shiftDown": "Gear down",
+    "neutral": "Neutral",
+    "boost": "Boost",
+    "aero": "Active aero X / Z",
+    "camera": "Camera (hold: seat & camera)",
+    "freeCamera": "Free camera",
+    "tvCamera": "Trackside TV camera",
+    "racingLine": "Racing line",
+    "restart": "Restart",
+    "flyingLap": "Restart lap (flying start)",
+    "pause": "Pause menu",
+    "mfd": "Open / close MFD",
+    "mfdPage": "Next MFD page",
+    "hud": "Show / hide HUD",
+    "board": "Open / close lap board",
+    "headlights": "Headlights (tap: flash, hold: on / off)",
+    "headlightFlash": "Flash headlights (hold)"
+  },
+  "pedals": {
+    "throttle": "Throttle",
+    "brake": "Brake",
+    "clutch": "Clutch",
+    "notSet": "not set",
+    "trigger": "trigger",
+    "stick": "{side, select, left {left} other {right}} stick {way, select, up {up} down {down} left {left} other {right}}",
+    "pressThrottle": "Press the throttle",
+    "holdButton": "Hold {button}",
+    "pushStick": "Push the {side, select, left {left} other {right}} stick {way, select, up {up} down {down} left {left} other {right}}",
+    "clutchPedal": "clutch pedal",
+    "button": "Button {number}"
+  },
+  "padLayouts": {
+    "gt": "GT style",
+    "gtClassic": "GT classic",
+    "f1": "Formula style",
+    "forza": "Forza style",
+    "bumper": "Bumper shift"
+  },
+  "wheelSupport": {
+    "moza": "Connects, steers and plays force feedback over WebHID",
+    "hidPid": "Untested; uses the same standard force-feedback reports",
+    "directDrive": "Untested; without HID PID force feedback the page switches to the bridge",
+    "pxn": "Untested; HID PID with Set Effect values of its own, which no PXN wheel has confirmed",
+    "logitechClassic": "Untested; starts on WebHID with the classic Logitech commands as Linux hid-lg4ff sends them, rev LEDs on the G27 and G29 included",
+    "logitechHidpp": "Untested; starts on WebHID with HID++ force feedback as Linux hid-logitech-hidpp sends it, once Logitech G HUB has switched the wheel to PC mode",
+    "logitechBridgeOnly": "Untested; bridge only: no mainline Linux driver drives the G923 for PlayStation or the G PRO, and the browser cannot rescale the DFP's steering axis",
+    "thrustmaster": "Untested; the commands of Linux hid-tmff2, once a driver has switched the wheel out of its start-up mode. If it has not, or Windows refuses the commands, the bridge takes over",
+    "thrustmasterBridgeOnly": "Untested; bridge only: the T150 and TMX take a different command set, and hid-tmff2 does not cover the T500RS",
+    "fanatecCslElite": "Untested; without HID PID force feedback the page switches to the bridge",
+    "tested": "Tested",
+    "expected": "Expected",
+    "unknown": "Unknown",
+    "no": "No"
+  },
+  "hudLayouts": {
+    "broadcast": "Broadcast",
+    "broadcastDetail": "TV graphics: tower, map, telemetry strip",
+    "dash": "Wheel dash",
+    "dashDetail": "A steering-wheel screen, low and centred",
+    "telemetry": "Telemetry",
+    "telemetryDetail": "The dash plus tyres, G, power and inputs",
+    "classic": "Classic",
+    "classicDetail": "The original corner panels",
+    "minimal": "Minimal",
+    "minimalDetail": "Speed, gear and lap only",
+    "irdashiesDetail": "Standings, lap timer, inputs and shift lights",
+    "racevisionDetail": "Standings, relative, input pill and graph",
+    "h2hDetail": "The cars ahead and behind, gaps and lap deltas",
+    "retroDetail": "Warm instruments: round dial, delta bar, laps",
+    "blocksDetail": "Square dark blocks: timing, sectors, tyres, fuel",
+    "grandPrixDetail": "Race tower, round speed cluster, gear and inputs"
+  },
+  "steeringAssist": {
+    "selfSteerStrength": "Self-steer & countersteer",
+    "selfSteerStrengthHint": "How strongly the wheels follow the car's travel direction and catch rear slides",
+    "dampingStrength": "Yaw damping",
+    "dampingStrengthHint": "Calms snap-back and pendulum swings as a slide recovers",
+    "speedSensitivity": "High-speed calm",
+    "speedSensitivityHint": "How much the steering slows down at speed, so small inputs stay gentle",
+    "slipLimitMargin": "Tyre slip margin",
+    "slipLimitMarginHint": "Negative: a safer understeer cushion · Positive: lets the fronts past their peak slip",
+    "maxSelfSteerAngleDeg": "Max countersteer lock",
+    "maxSelfSteerAngleDegHint": "Most road-wheel angle the assist turns to by itself to catch a slide",
+    "presetBalanced": "Balanced",
+    "presetStable": "Stable",
+    "presetLoose": "Loose",
+    "presetDrift": "Drift",
+    "presetCalm": "Calm at speed",
+    "fullLock": "full lock",
+    "presetDetail": "self-steer {selfSteer}, yaw damping {damping}, high-speed calm {calm}, fronts at {grip} % of their peak slip, countersteer up to {cap}"
+  },
+  "support": {
+    "donatePayPal": "Donate via PayPal",
+    "supportOn": "Support on {site}",
+    "donateToVia": "Donate to {maker} via {site}",
+    "supportOnSite": "Support {maker} on {site}",
+    "donateTo": "Donate to {maker}",
+    "supportMaker": "Support {maker}"
+  },
+  "setupSheet": {
+    "tcSlip": "TC slip",
+    "tc1": "TC 1",
+    "tcCut": "TC cut",
+    "tc2": "TC 2",
+    "tcSlipAngle": "TC slip angle",
+    "abs": "ABS",
+    "engineMap": "Engine map",
+    "motorDeployment": "Motor deployment",
+    "regeneration": "Regeneration",
+    "startingFuel": "Starting fuel",
+    "frontWing": "Front wing",
+    "rearWing": "Rear wing",
+    "diffOnThrottle": "Diff on throttle",
+    "diffOffThrottle": "Diff off throttle",
+    "engineBraking": "Engine braking",
+    "frontToe": "Front toe",
+    "rearToe": "Rear toe",
+    "frontSuspension": "Front suspension",
+    "rearSuspension": "Rear suspension",
+    "frontAntiRollBar": "Front anti-roll bar",
+    "rearAntiRollBar": "Rear anti-roll bar",
+    "frontRideHeight": "Front ride height",
+    "rearRideHeight": "Rear ride height",
+    "brakePressure": "Brake pressure",
+    "frontBrakeBias": "Front brake bias",
+    "brakeMigration": "Brake migration",
+    "brakePower": "Brake power",
+    "brakeBias": "Brake bias",
+    "steeringRatio": "Steering ratio",
+    "frontBumpStopRange": "Front bump stop range",
+    "rearBumpStopRange": "Rear bump stop range",
+    "diffPreload": "Diff preload",
+    "gearSet": "Gear set",
+    "frontThirdPacker": "Front third packer",
+    "rearThirdPacker": "Rear third packer",
+    "frontBrakeDucts": "Front brake ducts",
+    "rearBrakeDucts": "Rear brake ducts",
+    "radiatorOpening": "Radiator opening",
+    "frontBump": "Front bump",
+    "rearBump": "Rear bump",
+    "frontFastBump": "Front fast bump",
+    "rearFastBump": "Rear fast bump",
+    "frontRebound": "Front rebound",
+    "rearRebound": "Rear rebound",
+    "frontFastRebound": "Front fast rebound",
+    "rearFastRebound": "Rear fast rebound",
+    "frontThirdSpring": "Front third spring",
+    "rearThirdSpring": "Rear third spring",
+    "frontThirdBump": "Front third bump",
+    "rearThirdBump": "Rear third bump",
+    "frontThirdFastBump": "Front third fast bump",
+    "rearThirdFastBump": "Rear third fast bump",
+    "frontThirdRebound": "Front third rebound",
+    "rearThirdRebound": "Rear third rebound",
+    "frontThirdFastRebound": "Front third fast rebound",
+    "rearThirdFastRebound": "Rear third fast rebound",
+    "frontCornerPackers": "Front corner packers",
+    "rearCornerPackers": "Rear corner packers",
+    "frontWheelRate": "Front wheel rate",
+    "rearWheelRate": "Rear wheel rate",
+    "frontBumpStopRate": "Front bump stop rate",
+    "rearBumpStopRate": "Rear bump stop rate",
+    "frontCamber": "Front camber",
+    "rearCamber": "Rear camber",
+    "frontLeftPressure": "Front-left pressure",
+    "frontRightPressure": "Front-right pressure",
+    "rearLeftPressure": "Rear-left pressure",
+    "rearRightPressure": "Rear-right pressure",
+    "tyreBlankets": "Tyre blankets",
+    "detached": "Detached",
+    "toeIn": "{angle} in",
+    "toeOut": "{angle} out",
+    "dialOff": "OFF",
+    "blanketsOn": "On",
+    "blanketsOff": "Off",
+    "engineMapMax": "1 · Max",
+    "engineMapRace": "2 · Race",
+    "engineMapSmooth": "3 · Smooth",
+    "engineMapLean": "4 · Lean",
+    "engineMapSave": "5 · Save"
+  },
+  "setupGroups": {
+    "fuel": "Fuel",
+    "aerodynamics": "Aerodynamics",
+    "aerodynamicsShort": "Aero",
+    "transmission": "Transmission",
+    "transmissionShort": "Trans.",
+    "suspensionGeometry": "Suspension geometry",
+    "suspensionGeometryShort": "Geometry",
+    "suspension": "Suspension",
+    "suspensionShort": "Susp.",
+    "dampers": "Dampers",
+    "brakes": "Brakes",
+    "tyres": "Tyres",
+    "electronics": "Electronics",
+    "electronicsShort": "Electr.",
+    "mechanicalGrip": "Mechanical grip",
+    "mechanicalGripShort": "Mech.",
+    "thirdElements": "Third elements",
+    "thirdElementsShort": "3rd",
+    "aero": "Aero",
+    "fuelShort": "Fuel",
+    "dampersShort": "Dampers",
+    "brakesShort": "Brakes",
+    "tyresShort": "Tyres",
+    "aeroShort": "Aero"
+  },
+  "setupFx": {
+    "frontWing": {
+      "more": "More front grip at speed, looser rear",
+      "less": "Steadier rear, more high-speed understeer"
+    },
+    "rearWing": {
+      "more": "More stability and traction, more drag",
+      "less": "Faster on straights, nervous rear"
+    },
+    "diffOn": {
+      "more": "More drive, power oversteer",
+      "less": "Easier on the rears, inside wheel spins"
+    },
+    "diffOff": {
+      "more": "Stable off throttle, resists turn-in",
+      "less": "Rotates on entry, can feel loose"
+    },
+    "engineBraking": {
+      "more": "More rear braking on lift, rotates",
+      "less": "Calmer on lift, longer stops"
+    },
+    "camberFront": {
+      "more": "More front grip mid-corner",
+      "less": "Better braking, even wear"
+    },
+    "camberRear": {
+      "more": "More rear lateral grip",
+      "less": "Better traction out of slow corners"
+    },
+    "toeFront": {
+      "more": "Steadier on the straights, lazier turn-in",
+      "less": "Sharper turn-in, twitchy at speed"
+    },
+    "toeRear": {
+      "more": "Stable rear, a little more drag",
+      "less": "Rotates more, less stable"
+    },
+    "springFront": {
+      "more": "Sharper response, less bump grip",
+      "less": "More front grip over bumps"
+    },
+    "springRear": {
+      "more": "Rotates more, less traction",
+      "less": "More traction, lazier rotation"
+    },
+    "arbFront": {
+      "more": "Quick direction changes, understeer",
+      "less": "More front grip mid-corner"
+    },
+    "arbRear": {
+      "more": "More rotation, less exit traction",
+      "less": "More rear grip, more understeer"
+    },
+    "rideFront": {
+      "more": "Safer over kerbs, less downforce",
+      "less": "More downforce, floor can stall"
+    },
+    "rideRear": {
+      "more": "More rake: sharper, looser rear",
+      "less": "Calmer rear, more understeer"
+    },
+    "brakePressure": {
+      "more": "Shorter stops, locks sooner",
+      "less": "Easier to modulate, longer stops"
+    },
+    "bias": {
+      "more": "Stable braking, fronts lock first",
+      "less": "Rotates on entry, rears lock first"
+    },
+    "migration": {
+      "more": "Rotates on trail braking",
+      "less": "Balance stays put through release"
+    },
+    "coldPsi": {
+      "more": "Warms up faster, less peak grip",
+      "less": "More grip, slower to warm up"
+    },
+    "blankets": {
+      "more": "Warm tyres from the first corner",
+      "less": "Cold out of the garage, warm them on the out-lap"
+    },
+    "tc": {
+      "more": "Less wheelspin, slower exits",
+      "less": "Faster exits, rear can step out"
+    },
+    "tc2": {
+      "more": "Hard cut: catches slides firmly",
+      "less": "Soft cut: keeps more drive"
+    },
+    "abs": {
+      "more": "No lock-ups, longer stops",
+      "less": "Shorter stops if you are precise"
+    },
+    "map": {
+      "more": "Softer throttle, less power",
+      "less": "Full power, sharper throttle"
+    },
+    "steerRatio": {
+      "more": "Slower steering, less lock",
+      "less": "Quicker steering, more lock"
+    },
+    "wheelRateFront": {
+      "more": "Sharper front, less bump grip",
+      "less": "More front grip over bumps"
+    },
+    "wheelRateRear": {
+      "more": "Rotates more, less traction",
+      "less": "More traction, lazier rotation"
+    },
+    "bumpStopRate": {
+      "more": "Firmer when it hits the stops",
+      "less": "Softer landing on the stops"
+    },
+    "bumpStopRange": {
+      "more": "More travel before the stops",
+      "less": "Hits the stops sooner, flatter platform"
+    },
+    "preload": {
+      "more": "Stable in fast corners, pushes slow",
+      "less": "Rotates on entry, looser exits"
+    },
+    "bump": {
+      "more": "Body moves less, harsher on bumps",
+      "less": "Rides bumps, platform moves more"
+    },
+    "fastBump": {
+      "more": "Firm over kerbs",
+      "less": "Soaks up kerbs"
+    },
+    "rebound": {
+      "more": "Weight returns slowly, steady exits",
+      "less": "Tyres follow the road better"
+    },
+    "fastRebound": {
+      "more": "Wheel stays down slower after kerbs",
+      "less": "Wheel drops back quickly"
+    },
+    "ductFront": {
+      "more": "Cooler front brakes, more drag",
+      "less": "Hotter front brakes, less drag"
+    },
+    "ductRear": {
+      "more": "Cooler rear brakes, more drag",
+      "less": "Hotter rear brakes, less drag"
+    },
+    "radiator": {
+      "more": "Cooler engine, more drag",
+      "less": "Less drag, the engine runs hot"
+    },
+    "gearSet": {
+      "more": "Long gears: top speed on long straights",
+      "less": "Short gears: quicker out of slow corners"
+    },
+    "heaveSpring": {
+      "more": "Flatter platform at speed, harsher on bumps",
+      "less": "Rides bumps, the floor moves more"
+    },
+    "heavePacker": {
+      "more": "More travel before the packer",
+      "less": "The packer holds the floor up sooner"
+    },
+    "cornerPacker": {
+      "more": "The stops come sooner, flatter in the corners",
+      "less": "More free travel, more roll"
+    },
+    "tcSlipAngle": {
+      "more": "Cuts sooner as the rear slides",
+      "less": "Lets the rear slide further on power"
+    },
+    "motorDeploy": {
+      "more": "More electric push, drains the battery",
+      "less": "Saves charge, less push"
+    },
+    "regen": {
+      "more": "More charge back, more rear braking",
+      "less": "Calmer rear on the brakes, less charge"
+    },
+    "fuel": {
+      "more": "Longer stint, heavier and slower",
+      "less": "Lighter and quicker, shorter stint"
+    }
+  },
+  "padFeel": {
+    "smooth": "Smooth",
+    "smoothDetail": "Slower, calmer steering",
+    "default": "Default",
+    "defaultDetail": "Balanced response",
+    "sharp": "Sharp",
+    "sharpDetail": "Quick turn-in"
+  },
+  "tyres": {
+    "street": "Street tyres"
+  },
+  "setupShare": {
+    "aeroLow": "Low drag",
+    "aeroBalanced": "Balanced aero",
+    "aeroHigh": "High downforce",
+    "soft": "Soft",
+    "medium": "Medium",
+    "hard": "Hard",
+    "intermediate": "Inter",
+    "wet": "Wet",
+    "chassisChanges": "{count, plural, one {# chassis change} other {# chassis changes}}",
+    "brakeBias": "BB {bias}%",
+    "baseline": "Baseline setup",
+    "factoryLowDrag": "Low drag"
+  },
+  "trackLimits": {
+    "flashbackDeleted": "Flashback · lap deleted",
+    "currentAndNextInvalid": "Current & next lap invalidated",
+    "currentInvalid": "Current lap invalidated",
+    "courseCutDeleted": "Course cut · lap deleted",
+    "penaltyOnceBack": "Time penalty once back on the track",
+    "leftLapRoad": "Left the lap's road",
+    "noTimeGained": "No time gained",
+    "courseCutPenalty": "Course cut · +{seconds}s time penalty",
+    "secondsGained": "{seconds} s gained",
+    "lapDeleted": "Lap deleted",
+    "wallDeleted": "Wall contact · lap deleted",
+    "rodeWallBeforeLine": "Rode the wall before the line",
+    "limitsDeleted": "Track limits · lap deleted",
+    "offBeforeLine": "Off before the line",
+    "nextLapToo": "Next lap too",
+    "offTrack": "Off the track",
+    "touchedBarrier": "Touched the barrier",
+    "rodeWall": "Rode the wall",
+    "positionHandedBack": "Position handed back",
+    "advantageGivenBack": "Advantage given back",
+    "noFurtherAction": "No further action",
+    "trackLimits": "Track limits",
+    "noAdvantage": "No advantage · no action",
+    "timePenalty": "+{seconds}s time penalty",
+    "limitsGained": "Track limits · {seconds} s gained",
+    "limitsCutMetres": "Track limits · {metres} m cut",
+    "limitsMajorCut": "Track limits · major cut",
+    "why": "{reason, select, illegal_overtake {Illegal overtake · position not returned} corner_cut {Corner cut} not_lifted {Did not lift} other {Time gained}}",
+    "limitsWhy": "Track limits · {reason, select, illegal_overtake {illegal overtake · position not returned} corner_cut {corner cut} not_lifted {did not lift} other {time gained}}",
+    "warningCount": "Track limits · warning {count}/{max}",
+    "points": "{points} pts",
+    "strikes": "{count, plural, one {# strike} other {# strikes}}",
+    "disqualified": "Disqualified · track limits",
+    "limitsPoints": "Track limits · {points}",
+    "blackWhiteFlag": "Black and white flag",
+    "nextPenalty": "{why} · next is +{seconds} s",
+    "nextDisqualification": "{why} · next is a disqualification",
+    "warning": "Track limits · warning",
+    "warningDetail": "{why} · {points}"
+  },
+  "flags": {
+    "yellow": "Yellow flag",
+    "trackClear": "Track clear",
+    "carStopped": "Car stopped ahead",
+    "slowCar": "Slow car ahead",
+    "wrongWay": "Car going the wrong way",
+    "carOffTrack": "Car off the track ahead",
+    "incident": "Incident ahead"
+  },
+  "connection": {
+    "raceClosed": "That race is about to start. You are in time for the next one.",
+    "raceFull": "That race is full. Join the next one.",
+    "raceStarted": "That race has started without you. Join the next one.",
+    "raceTaken": "You are already in this race in another window.",
+    "raceBad": "Couldn't join the race. Reload the game and try again.",
+    "raceUpdate": "LibreCorsa has been updated. Reload the page to join the race.",
+    "versionMismatch": "This room runs another version of LibreCorsa. Everyone in it needs to reload the page.",
+    "roomServerUnreachable": "Couldn't reach the room server. Check your connection and try again, or use a manual connection under Advanced.",
+    "idle": "Host a room and send the link, or join with a friend's code.",
+    "openingRoom": "Opening room {code}…",
+    "reconnectingRoom": "Reconnecting room {code}…",
+    "roomOpen": "Room {code} is open • waiting for players",
+    "sessionActive": "This session ID is already active in the room. Wait a moment and try hosting again.",
+    "roomOpenElsewhere": "Room {code} is already open on another device. Press Join to race in it, or host a new room.",
+    "joiningRoom": "Joining room {code}…",
+    "roomNotFound": "Couldn't find room {code}. Check the code, and ask the host to keep the game open on screen.",
+    "playerIdTaken": "This player ID is already in the room. Wait a moment and try joining again.",
+    "roomFull": "Room {code} is full.",
+    "connectedPlayers": "{count, plural, one {Connected to # player} other {Connected to # players}}",
+    "peerFailed": "Couldn't connect to the other player. Try again, or use the same Wi-Fi.",
+    "peerBlocked": "Couldn't connect: one of your networks blocks direct links. Use the same Wi-Fi, or try another network.",
+    "lostHost": "Lost the host. Join again.",
+    "hostingTabs": "Hosting a race for the tabs of this browser",
+    "playerLeft": "Player left. Make a new offer to connect again.",
+    "connected": "Connected",
+    "joiningRace": "Joining the next race…",
+    "inNextRace": "In the next race",
+    "makingOffer": "Making an offer…",
+    "offerReady": "Offer ready. Send it to the other player, then paste their answer.",
+    "answerReady": "Answer ready. Send it back to the host.",
+    "answerAccepted": "Answer accepted • connecting…",
+    "raceServerUnreachable": "Couldn't reach the race server. Check your connection and try again.",
+    "racesOff": "Scheduled races are not running right now.",
+    "raceLost": "Lost the connection to the race.",
+    "ready": "Ready. Tabs in this browser find each other; other devices join with a room code."
+  },
+  "downloads": {
+    "windowsSummary": "Desktop app with discrete GPU preference, silent WebHID for racing wheels and DualSense, and no background throttling.",
+    "windowsInstallNote": "Unsigned for now while SignPath Foundation setup finishes. If SmartScreen stops it, click More info, then Run anyway.",
+    "windowsStatusLabel": "Unsigned",
+    "windowsX64Label": "Download .exe",
+    "windowsX64Detail": "Windows x64 installer",
+    "macosSummary": "Desktop app with discrete GPU preference, silent WebHID for wheels and DualSense, and no background throttling.",
+    "macosInstallNote": "Unsigned build. Allow it in System Settings > Privacy & Security, or clear quarantine after copying to Applications:",
+    "macosStatusLabel": "Unsigned",
+    "macosArm64Label": "Apple Silicon (.dmg)",
+    "macosArm64Detail": "M1–M4 Macs",
+    "macosX64Label": "Intel (.dmg)",
+    "macosX64Detail": "Intel x64 Macs",
+    "linuxSummary": "Portable AppImage with silent WebHID for racing wheels and DualSense, and no background throttling.",
+    "linuxInstallNote": "Mark the AppImage executable and run it (requires FUSE2 / libfuse2 on older distributions):",
+    "linuxX64Label": "Download .AppImage",
+    "linuxX64Detail": "Linux x64",
+    "androidSummary": "Fullscreen Trusted Web Activity with sticky-immersive controls, Android Game Mode, and launcher shortcuts. Requires Android 7+ and Chrome.",
+    "androidInstallNote": "Signed release APK. Allow installing from your browser when prompted; it verifies against librecorsa.org and opens without a URL bar.",
+    "androidStatusLabel": "Signed APK",
+    "androidApkLabel": "Download .apk",
+    "androidApkDetail": "Android 7+ (universal)"
+  },
+  "loading": {
+    "circuit": "Circuit",
+    "car": "Car",
+    "opponents": "Opponents",
+    "shaders": "Shaders"
+  },
+  "session": {
+    "wheelDisconnected": "Steering wheel disconnected. Reconnect it, or resume to drive with what's left.",
+    "bigJumpStart": "Jump start · well off the grid spot",
+    "jumpStart": "Jump start",
+    "clutchGearUp": "Gear up",
+    "clutchPaddle": "upshift paddle"
+  },
+  "driverKey": {
+    "notAKeyFile": "That is not a driver key file",
+    "blocked": "This browser blocks saving it"
+  },
+  "simulator": {
+    "formulaTeamCars": "Formula team cars",
+    "lapNoLongerSaved": "This lap is no longer saved here",
+    "nameNotChanged": "The name could not be changed",
+    "setupLoadFailed": "Couldn't load {driver}'s setup, try again",
+    "setupMissing": "No setup saved with {driver}'s lap",
+    "setupApplied": "Applied {driver}'s setup ({summary})",
+    "keySaved": "Key saved. Anyone with the file can post as you.",
+    "noKeyYet": "No key yet: your first upload creates it.",
+    "keyImportedFor": "Key imported for {name}. Uploads from here use it.",
+    "keyImported": "Key imported. Uploads from here use it.",
+    "launchWheel": "Throttle to launch",
+    "launchWheelSeat": "Throttle to launch · hold camera for seat",
+    "launchPad": "{press} to launch",
+    "launchPadSeat": "{press} to launch · hold {button} for seat",
+    "launchTouch": "Hold throttle to launch",
+    "launchKey": "Hold {key} to launch · Esc Menu",
+    "noRacesOnHillClimb": "No races on a hill climb",
+    "backToRaces": "Back to the races"
+  },
+  "telemetryHud": {
+    "menu": "Menu",
+    "calibratePedals": "Calibrate pedals",
+    "holdForLightsOut": "Hold throttle for lights out",
+    "mouseSteering": "Mouse steering · {key} to exit",
+    "keyMenu": "Menu",
+    "keyCamera": "Camera",
+    "keyLine": "Line",
+    "keyRestart": "Restart",
+    "keyBoard": "Board",
+    "keyLights": "Lights",
+    "replay": "Replay"
+  },
+  "trackGate": {
+    "safeStart": "Safe start active after GPU reset.",
+    "graphicsLow": "Graphics set to Low after GPU reset.",
+    "loadFailedStaying": "Track load failed. Staying on {circuit}.",
+    "loadFailedDefault": "Track load failed. Loaded {circuit}."
+  },
+  "minimap": {
+    "map": "Circuit map",
+    "mapAtTurn": "Circuit map; you are at turn {turn}",
+    "facts": "{country} · {length} {unit} · {turns, plural, one {# turn} other {# turns}}",
+    "sector": "Sector {sector}",
+    "elevation": "Elevation",
+    "altitude": "Alt {height}",
+    "grade": "GRADE {grade}%",
+    "profileStart": "Start {height}",
+    "profileStartFinish": "S/F {height}"
+  },
+  "source": {
+    "sourceOf": "Source of {title}",
+    "source": "Source",
+    "reportIssue": "Report issue"
+  },
+  "playError": {
+    "title": "The simulator stopped",
+    "body": "WebGL or the physics failed to start. Updating your browser or graphics driver, or turning on hardware acceleration, usually fixes it.",
+    "detail": "Error detail",
+    "restart": "Restart simulator"
+  },
+  "dash": {
+    "yellowFlag": "Yellow flag"
+  }
+}

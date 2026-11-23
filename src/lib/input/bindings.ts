@@ -3,6 +3,8 @@
  * The defaults reproduce the original hard-coded layout exactly.
  */
 
+import { text as t } from "@/lib/text";
+import { perLanguage } from "@/lib/per-language";
 import type { StartClutchControl } from "@/types/f1";
 import { printedKey } from "./key-layout";
 
@@ -65,59 +67,59 @@ export type KeyBindings = Record<KeyAction, string[]>;
 export const KEY_SLOTS = 2;
 
 export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
-  { id: "throttle", label: "Throttle" },
-  { id: "brake", label: "Brake" },
-  { id: "steerLeft", label: "Steer left" },
-  { id: "steerRight", label: "Steer right" },
-  { id: "boostHold", label: "Boost (hold)" },
-  { id: "boostLatch", label: "Boost (latch)" },
-  { id: "aero", label: "Active aero X / Z" },
-  { id: "shiftUp", label: "Gear up" },
-  { id: "shiftDown", label: "Gear down" },
-  { id: "neutral", label: "Neutral" },
-  { id: "camera", label: "Camera (hold: seat & camera)" },
-  { id: "freeCamera", label: "Free camera" },
-  { id: "tvCamera", label: "Trackside TV camera" },
-  { id: "racingLine", label: "Racing line" },
-  { id: "mute", label: "Mute" },
-  { id: "nextTrack", label: "Next music track" },
-  { id: "autopilot", label: "Autopilot" },
-  { id: "mouseSteer", label: "Mouse steering" },
-  { id: "restart", label: "Restart" },
-  { id: "flyingLap", label: "Restart lap (flying start)" },
-  { id: "throttleHalf", label: "Half throttle (hold)" },
-  { id: "brakeHalf", label: "Half brake (hold)" },
-  { id: "clutch", label: "Clutch (hold)" },
-  { id: "replay", label: "Instant replay" },
-  { id: "mfdPage", label: "Next MFD page" },
-  { id: "mfd", label: "Open / close MFD" },
-  { id: "hud", label: "Show / hide HUD" },
-  { id: "board", label: "Open / close lap board" },
-  { id: "headlights", label: "Headlights on / off" },
-  { id: "headlightFlash", label: "Flash headlights (hold)" },
+  { id: "throttle", get label() { return t("game.keyActions.throttle"); } },
+  { id: "brake", get label() { return t("game.keyActions.brake"); } },
+  { id: "steerLeft", get label() { return t("game.keyActions.steerLeft"); } },
+  { id: "steerRight", get label() { return t("game.keyActions.steerRight"); } },
+  { id: "boostHold", get label() { return t("game.keyActions.boostHold"); } },
+  { id: "boostLatch", get label() { return t("game.keyActions.boostLatch"); } },
+  { id: "aero", get label() { return t("game.keyActions.aero"); } },
+  { id: "shiftUp", get label() { return t("game.keyActions.shiftUp"); } },
+  { id: "shiftDown", get label() { return t("game.keyActions.shiftDown"); } },
+  { id: "neutral", get label() { return t("game.keyActions.neutral"); } },
+  { id: "camera", get label() { return t("game.keyActions.camera"); } },
+  { id: "freeCamera", get label() { return t("game.keyActions.freeCamera"); } },
+  { id: "tvCamera", get label() { return t("game.keyActions.tvCamera"); } },
+  { id: "racingLine", get label() { return t("game.keyActions.racingLine"); } },
+  { id: "mute", get label() { return t("game.keyActions.mute"); } },
+  { id: "nextTrack", get label() { return t("game.keyActions.nextTrack"); } },
+  { id: "autopilot", get label() { return t("game.keyActions.autopilot"); } },
+  { id: "mouseSteer", get label() { return t("game.keyActions.mouseSteer"); } },
+  { id: "restart", get label() { return t("game.keyActions.restart"); } },
+  { id: "flyingLap", get label() { return t("game.keyActions.flyingLap"); } },
+  { id: "throttleHalf", get label() { return t("game.keyActions.throttleHalf"); } },
+  { id: "brakeHalf", get label() { return t("game.keyActions.brakeHalf"); } },
+  { id: "clutch", get label() { return t("game.keyActions.clutch"); } },
+  { id: "replay", get label() { return t("game.keyActions.replay"); } },
+  { id: "mfdPage", get label() { return t("game.keyActions.mfdPage"); } },
+  { id: "mfd", get label() { return t("game.keyActions.mfd"); } },
+  { id: "hud", get label() { return t("game.keyActions.hud"); } },
+  { id: "board", get label() { return t("game.keyActions.board"); } },
+  { id: "headlights", get label() { return t("game.keyActions.headlights"); } },
+  { id: "headlightFlash", get label() { return t("game.keyActions.headlightFlash"); } },
 ];
 
 export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
-  { id: "shiftUp", label: "Gear up" },
-  { id: "shiftDown", label: "Gear down" },
-  { id: "neutral", label: "Neutral" },
-  { id: "boost", label: "Boost" },
-  { id: "aero", label: "Active aero X / Z" },
-  { id: "camera", label: "Camera (hold: seat & camera)" },
-  { id: "freeCamera", label: "Free camera" },
-  { id: "tvCamera", label: "Trackside TV camera" },
-  { id: "racingLine", label: "Racing line" },
-  { id: "restart", label: "Restart" },
-  { id: "flyingLap", label: "Restart lap (flying start)" },
-  { id: "pause", label: "Pause menu" },
-  { id: "mfd", label: "Open / close MFD" },
-  { id: "mfdPage", label: "Next MFD page" },
-  { id: "hud", label: "Show / hide HUD" },
-  { id: "board", label: "Open / close lap board" },
+  { id: "shiftUp", get label() { return t("game.padActions.shiftUp"); } },
+  { id: "shiftDown", get label() { return t("game.padActions.shiftDown"); } },
+  { id: "neutral", get label() { return t("game.padActions.neutral"); } },
+  { id: "boost", get label() { return t("game.padActions.boost"); } },
+  { id: "aero", get label() { return t("game.padActions.aero"); } },
+  { id: "camera", get label() { return t("game.padActions.camera"); } },
+  { id: "freeCamera", get label() { return t("game.padActions.freeCamera"); } },
+  { id: "tvCamera", get label() { return t("game.padActions.tvCamera"); } },
+  { id: "racingLine", get label() { return t("game.padActions.racingLine"); } },
+  { id: "restart", get label() { return t("game.padActions.restart"); } },
+  { id: "flyingLap", get label() { return t("game.padActions.flyingLap"); } },
+  { id: "pause", get label() { return t("game.padActions.pause"); } },
+  { id: "mfd", get label() { return t("game.padActions.mfd"); } },
+  { id: "mfdPage", get label() { return t("game.padActions.mfdPage"); } },
+  { id: "hud", get label() { return t("game.padActions.hud"); } },
+  { id: "board", get label() { return t("game.padActions.board"); } },
   // One button for both, as GT7's L3 carries the switch and the flash: a tap flashes, a hold switches them on or off
   // (headlight-button.ts)
-  { id: "headlights", label: "Headlights (tap: flash, hold: on / off)" },
-  { id: "headlightFlash", label: "Flash headlights (hold)" },
+  { id: "headlights", get label() { return t("game.padActions.headlights"); } },
+  { id: "headlightFlash", get label() { return t("game.padActions.headlightFlash"); } },
 ];
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
@@ -245,7 +247,11 @@ export const PAD_RIGHT_STICK_BUTTON = 11; // RS (R3)
  */
 export type PadPedal = "throttle" | "brake" | "clutch";
 export const PAD_PEDALS = ["throttle", "brake", "clutch"] as const satisfies readonly PadPedal[];
-export const PAD_PEDAL_LABELS: Record<PadPedal, string> = { throttle: "Throttle", brake: "Brake", clutch: "Clutch" };
+export const PAD_PEDAL_LABELS: Record<PadPedal, string> = {
+  get throttle() { return t("game.pedals.throttle"); },
+  get brake() { return t("game.pedals.brake"); },
+  get clutch() { return t("game.pedals.clutch"); },
+};
 
 /**
  * Where one pedal is read on a standard-mapping controller: an analogue button's travel (a trigger), or one half of a
@@ -310,18 +316,41 @@ export const pedalsOnTriggers = (sources: PadPedalSources): boolean =>
 
 /** Where a pedal is read, in words: "trigger" (RT / LT), "right stick up", another button's name, or "not set" */
 export function pedalSourceText(source: PadPedalSource | null): string {
-  if (!source) return "not set";
+  const words = sourceWords();
+  if (!source) return words.notSet;
   if (source.kind === "button") {
-    return source.button === PAD_THROTTLE_BUTTON || source.button === PAD_BRAKE_BUTTON ? "trigger" : padButtonLabel(source.button);
+    return source.button === PAD_THROTTLE_BUTTON || source.button === PAD_BRAKE_BUTTON ? words.trigger : padButtonLabel(source.button);
   }
+  const { side, way } = stickWay(source);
+  return words.stick[side][way];
+}
+
+const STICK_WAYS = ["up", "down", "left", "right"] as const;
+const stickWords = (side: "left" | "right") =>
+  Object.fromEntries(STICK_WAYS.map((way) => [way, t("game.pedals.stick", { side, way })])) as Record<(typeof STICK_WAYS)[number], string>;
+
+/** The words for where a pedal is read, once per language: the start cue asks for the clutch's every frame */
+const sourceWords = perLanguage(() => ({
+  notSet: t("game.pedals.notSet"),
+  trigger: t("game.pedals.trigger"),
+  stick: { left: stickWords("left"), right: stickWords("right") },
+  clutchPedal: t("game.pedals.clutchPedal"),
+}));
+
+/** Which stick and which way a stick pedal is pushed, for the messages that say it */
+function stickWay(source: Extract<PadPedalSource, { kind: "axis" }>): { side: "left" | "right"; way: "up" | "down" | "left" | "right" } {
   const vertical = source.axis % 2 === 1;
   const way = vertical ? (source.sign < 0 ? "up" : "down") : source.sign < 0 ? "left" : "right";
-  return `${source.axis < 2 ? "left" : "right"} stick ${way}`;
+  return { side: source.axis < 2 ? "left" : "right", way };
 }
 
 /** How to press a pedal, for a prompt: "Hold RT", "Push the right stick up" */
 export const pressPedalText = (source: PadPedalSource | null): string =>
-  !source ? "Press the throttle" : source.kind === "button" ? `Hold ${padButtonLabel(source.button)}` : `Push the ${pedalSourceText(source)}`;
+  !source
+    ? t("game.pedals.pressThrottle")
+    : source.kind === "button"
+      ? t("game.pedals.holdButton", { button: padButtonLabel(source.button) })
+      : t("game.pedals.pushStick", stickWay(source));
 
 /** `bindings` with every action on a pedal's button unbound (the same object when there is none) */
 export function freePedalButtons(bindings: PadButtonBindings, sources: PadPedalSources): PadButtonBindings {
@@ -344,12 +373,12 @@ export type PadLayout = "gt" | "gtClassic" | "f1" | "forza" | "bumper";
  */
 export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet; buttons: PadButtonBindings }> = {
   // The default
-  gt: { label: "GT style", pedals: "triggers", buttons: GT_STYLE_BUTTONS },
+  gt: { get label() { return t("game.padLayouts.gt"); }, pedals: "triggers", buttons: GT_STYLE_BUTTONS },
   // Classic Gran Turismo on a pad: right stick up throttle, down brake, R2 up, L2 down; the rest as GT style, with
   // the boost off R3 (now under the pedal thumb) onto ✕ and the HUD onto □, so L1 and the left stick's up / down
   // stay free (a clutch or a starter can go there). No headlight button found in GT4 to GT6, so none here
   gtClassic: {
-    label: "GT classic",
+    get label() { return t("game.padLayouts.gtClassic"); },
     pedals: "stick",
     buttons: {
       shiftUp: 7, // RT (R2)
@@ -374,7 +403,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
   },
   // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause. No headlight control found in the F1 games
   f1: {
-    label: "Formula style",
+    get label() { return t("game.padLayouts.f1"); },
     pedals: "triggers",
     buttons: {
       shiftUp: 0, // A (✕)
@@ -400,7 +429,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
   // Forza: B up, X down (manual layout), RB switch camera, LS toggle convertible, Menu pause. No headlight control
   // found in Forza Motorsport (its players say the lights follow the time of day)
   forza: {
-    label: "Forza style",
+    get label() { return t("game.padLayouts.forza"); },
     pedals: "triggers",
     buttons: {
       shiftUp: 1, // B (○)
@@ -424,7 +453,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; pedals: PadPedalSet
     },
   },
   // Gears on the bumpers: the default until 17 Nov 2026, so the layout most saved settings still have
-  bumper: { label: "Bumper shift", pedals: "triggers", buttons: BUMPER_SHIFT_BUTTONS },
+  bumper: { get label() { return t("game.padLayouts.bumper"); }, pedals: "triggers", buttons: BUMPER_SHIFT_BUTTONS },
 };
 
 export const PAD_LAYOUT_IDS = Object.keys(PAD_LAYOUTS) as PadLayout[];
@@ -465,7 +494,7 @@ export const STANDARD_BUTTON_NAMES: Record<number, string> = {
 };
 
 export const padButtonLabel = (button: number | null | undefined) =>
-  button === null || button === undefined ? "—" : (STANDARD_BUTTON_NAMES[button] ?? `Button ${button}`);
+  button === null || button === undefined ? "—" : (STANDARD_BUTTON_NAMES[button] ?? t("game.pedals.button", { number: String(button) }));
 
 /** Dead keys' combining accents, as the spacing characters printed on the key */
 const DEAD_KEY_CAPS: Record<string, string> = {
@@ -642,7 +671,7 @@ export function resolveActiveClutchBinding(params: {
   }
   if (activeDevice === "wheel") {
     return params.wheelClutchBound
-      ? { bound: true, control: { name: "clutch pedal" }, activeDevice }
+      ? { bound: true, control: { name: sourceWords().clutchPedal }, activeDevice }
       : { bound: false, control: undefined, activeDevice };
   }
   const firstKey = params.keyClutchCodes[0];

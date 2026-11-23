@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "use-intl/react";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icons";
@@ -32,7 +33,9 @@ export function SupportButton({
   named?: boolean;
 }) {
   const store = useStoreBuild();
+  const t = useTranslations("game.support");
   if (!support || store) return null;
+  const payPal = support.via === "PayPal";
   return (
     <Button
       href={support.url}
@@ -42,12 +45,12 @@ export function SupportButton({
       variant={variant}
       size={size}
       icon={<Icon name="support" />}
-      aria-label={`${support.via === "PayPal" ? "Donate to" : "Support"} ${maker} ${support.via === "PayPal" ? "via" : "on"} ${support.via}`}
+      aria-label={payPal ? t("donateToVia", { maker, site: support.via }) : t("supportOnSite", { maker, site: support.via })}
       onPointerEnter={focusOnHover}
       onClick={onOpen}
       className={className}
     >
-      {named ? `${support.via === "PayPal" ? "Donate to" : "Support"} ${maker}` : supportLabel(support)}
+      {named ? (payPal ? t("donateTo", { maker }) : t("supportMaker", { maker })) : supportLabel(support)}
     </Button>
   );
 }

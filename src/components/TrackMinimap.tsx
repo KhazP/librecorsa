@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CarTelemetry } from "@/types/f1";
 import { type BuiltTrackData, DEFAULT_TRACK_ID, inDeadZone, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
@@ -21,9 +22,9 @@ const MAP_FONT = 12;
 const ELEV_LBL = `${HUD_LBL} tracking-[0.06em]`;
 
 const SECTOR_LEGEND = [
-  ["Sector 1", HUD_CYAN],
-  ["Sector 2", HUD_VOLT],
-  ["Sector 3", HUD_PINK],
+  [1, HUD_CYAN],
+  [2, HUD_VOLT],
+  [3, HUD_PINK],
 ] as const;
 
 interface TrackMinimapProps {
@@ -39,6 +40,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
 }) => {
   const trackInfo = getTrackInfo(track.id ?? DEFAULT_TRACK_ID);
   const units = useUnits();
+  const tx = useTranslations("game.minimap");
 
   const {
     svgData,
@@ -154,7 +156,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
         toY: toElevY,
         span: Math.round(ySpan),
         // Heights in metres here; written in the player's unit where they are shown
-        sf: { word: p2p ? "Start" : "S/F", m: track.getSampleAtDistance(0).position.y - yMin },
+        sf: { start: Boolean(p2p), m: track.getSampleAtDistance(0).position.y - yMin },
         low: { x: toElevX(low.s), turn: turnAt(low) },
         high: { x: toElevX(high.s), turn: turnAt(high), m: ySpan },
       },
@@ -172,25 +174,50 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
   // Heights and altitude in metres, or feet with the mph units
   const hUnit = HEIGHT_LABEL[units.speed];
   const height = (m: number, digits = 0) => `${heightIn(m, units.speed).toFixed(digits)} ${hUnit}`;
+  const lengthText = distanceIn((track.pointToPoint?.finishS ?? track.totalLengthM) / 1000, units.speed).toFixed(2);
+  const turnNow = telemetry.currentTurnNumber;
+  const altitudeText = height(telemetry.altitudeM);
+  const gradeText = `${telemetry.slopePercent >= 0 ? "+" : ""}${telemetry.slopePercent.toFixed(1)}`;
+  const sfText = height(elevation.sf.m);
+  // The words, read again only when what they say changes: the map renders at the telemetry's rate
+  const words = useMemo(
+    () => ({
+      map: tx("map"),
+      sectors: SECTOR_LEGEND.map(([sector]) => tx("sector", { sector })),
+      elevation: tx("elevation"),
+    }),
+    [tx]
+  );
+  const facts = useMemo(
+    () => tx("facts", { country: trackInfo.country, length: lengthText, unit: DISTANCE_LABEL[units.speed], turns: TURN_METADATA.length }),
+    // TURN_METADATA is the active circuit's: `track` stands for it
+    [tx, trackInfo.country, lengthText, units.speed, track]
+  );
+  const mapLabel = useMemo(() => (turnNow ? tx("mapAtTurn", { turn: turnNow }) : words.map), [tx, turnNow, words]);
+  const altitudeLabel = useMemo(() => tx("altitude", { height: altitudeText }), [tx, altitudeText]);
+  const gradeLabel = useMemo(() => tx("grade", { grade: gradeText }), [tx, gradeText]);
+  const sfLabel = useMemo(
+    () => tx(elevation.sf.start ? "profileStart" : "profileStartFinish", { height: sfText }),
+    [tx, elevation.sf.start, sfText]
+  );
   const lowMark = <span className={ELEV_LBL}>{`${elevation.low.turn}+0 ${hUnit}`}</span>;
   const highMark = <span className={`${ELEV_LBL} text-lc-chalk`}>{`${elevation.high.turn}+${height(elevation.high.m)}`}</span>;
 
   return (
     <section
-      aria-label="Circuit map"
+      aria-label={words.map}
       className={`flex w-72.5 flex-col rounded-lc-card p-3.5 text-lc-chalk select-none ${HUD_GLASS}`}
     >
       {/* Circuit name, country, length and turns */}
       <div className="min-w-0">
         <div className="lc-title line-clamp-2 text-[14px] leading-tight">{trackInfo.name}</div>
         <p className={`${HUD_LBL} mt-0.5`}>
-          {trackInfo.country} · {distanceIn((track.pointToPoint?.finishS ?? track.totalLengthM) / 1000, units.speed).toFixed(2)}{" "}
-          {DISTANCE_LABEL[units.speed]} · {TURN_METADATA.length} turns
+          {facts}
         </p>
       </div>
 
       {/* Circuit map: sector 1 cyan, sector 2 volt, sector 3 pink */}
-      <svg viewBox="0 0 280 200" className="mt-2 block h-[150px] w-full" role="img" aria-label={`Circuit map${telemetry.currentTurnNumber ? `; you are at turn ${telemetry.currentTurnNumber}` : ""}`}>
+      <svg viewBox="0 0 280 200" className="mt-2 block h-[150px] w-full" role="img" aria-label={mapLabel}>
         {/* Track ribbon */}
         <path
           d={`${svgData.s1} ${svgData.s2} ${svgData.s3}`}
@@ -276,10 +303,10 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
 
       {/* Sector legend */}
       <div className="mt-1.5 flex gap-3">
-        {SECTOR_LEGEND.map(([label, color]) => (
-          <span key={label} className={`${HUD_LBL} inline-flex items-center gap-1.25`}>
+        {SECTOR_LEGEND.map(([sector, color], i) => (
+          <span key={sector} className={`${HUD_LBL} inline-flex items-center gap-1.25`}>
             <span className="size-2 rounded-xs" style={{ backgroundColor: color }} />
-            {label}
+            {words.sectors[i]}
           </span>
         ))}
       </div>
@@ -287,7 +314,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
       {/* Elevation profile */}
       <div className={`mt-2.5 rounded-lc-row p-2.5 ${HUD_WELL}`}>
         <div className="flex items-center justify-between gap-2">
-          <span className={HUD_LBL}>Elevation</span>
+          <span className={HUD_LBL}>{words.elevation}</span>
           <span className="lc-data text-[12px] text-lc-chalk">
             {telemetry.trackElevationM >= 0 ? "+" : ""}
             {height(telemetry.trackElevationM, 1)}
@@ -295,10 +322,9 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
           </span>
         </div>
         <div className="mt-0.5 flex items-center justify-between">
-          <span className={ELEV_LBL}>Alt {height(telemetry.altitudeM)}</span>
+          <span className={ELEV_LBL}>{altitudeLabel}</span>
           <span className={ELEV_LBL}>
-            GRADE {telemetry.slopePercent >= 0 ? "+" : ""}
-            {telemetry.slopePercent.toFixed(1)}%
+            {gradeLabel}
           </span>
         </div>
         <svg viewBox={`0 0 ${ELEV_W} ${ELEV_H}`} className="mt-1.5 block h-11 w-full overflow-visible" aria-hidden="true">
@@ -313,7 +339,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
           <circle cx={elevProgressX} cy={elevProgressY} r="4" fill={HUD_VOLT} />
         </svg>
         <div className="mt-0.5 flex items-center justify-between">
-          <span className={ELEV_LBL}>{`${elevation.sf.word} ${height(elevation.sf.m)}`}</span>
+          <span className={ELEV_LBL}>{sfLabel}</span>
           {lowFirst ? lowMark : highMark}
           {lowFirst ? highMark : lowMark}
         </div>

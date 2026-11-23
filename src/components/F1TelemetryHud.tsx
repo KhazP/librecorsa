@@ -3,6 +3,7 @@
 import { connectedPads, isLikelyWheel } from "@/lib/input/device-input";
 import type { NowPlaying } from "@/lib/audio/bgm-controller";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl/react";
 import type {
   AeroSetupPreset,
   CameraMode,
@@ -335,12 +336,31 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     cameraMode,
     boostLatch,
     showLaunchHint = false,
-    launchHintText = "Hold W to launch · Esc Menu",
+    launchHintText: launchHintProp,
     mouseSteerEnabled = false,
     gamepadAssist = true,
     paused,
     onCycleCamera,
   } = props;
+  const tx = useTranslations("game");
+  // Read once per language: the HUD renders at the telemetry's rate
+  const words = useMemo(
+    () => ({
+      launchDefault: tx("simulator.launchKey", { key: "W" }),
+      menu: tx("telemetryHud.menu"),
+      calibratePedals: tx("telemetryHud.calibratePedals"),
+      holdForLightsOut: tx("telemetryHud.holdForLightsOut"),
+      keyMenu: tx("telemetryHud.keyMenu"),
+      keyCamera: tx("telemetryHud.keyCamera"),
+      keyLine: tx("telemetryHud.keyLine"),
+      keyRestart: tx("telemetryHud.keyRestart"),
+      keyBoard: tx("telemetryHud.keyBoard"),
+      keyLights: tx("telemetryHud.keyLights"),
+      replay: tx("telemetryHud.replay"),
+    }),
+    [tx]
+  );
+  const launchHintText = launchHintProp ?? words.launchDefault;
 
   const fallbackTelemetry = useCallback(() => props.telemetry, [props.telemetry]);
   const liveTelemetry = useSyncExternalStore(
@@ -389,6 +409,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   // The mouse-steer key as bound, named as printed on this keyboard
   useKeyLayout();
   const mouseSteerKey = keyLabel(props.displayPanel?.settings.keys.mouseSteer[0] ?? "KeyV");
+  const mouseSteerLabel = useMemo(() => tx("telemetryHud.mouseSteering", { key: mouseSteerKey }), [tx, mouseSteerKey]);
   // Under the virtual mirror's strip (its rect is shared with the renderer), with a little air
   // The renderer draws the mirror into this rect; the HUD frames it and starts the top-centre column under it
   const mirrorRect = props.virtualMirror && !phone && typeof window !== "undefined" ? virtualMirrorRect(window.innerWidth, window.innerHeight) : null;
@@ -541,11 +562,11 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           className="h-9 gap-2 px-3.5 text-[12px] font-bold uppercase"
         >
           <Icon name="menu" size="sm" />
-          Menu
+          {words.menu}
         </SkinButton>
       ) : (
         <Button variant="secondary" size="md" icon={<Icon name="menu" />} onClick={props.onTogglePause} onPointerEnter={keepFocusOffHover}>
-          Menu
+          {words.menu}
         </Button>
       )}
     </span>
@@ -744,7 +765,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
                 className="h-9 gap-2 px-3.5 text-[12px] font-semibold"
               >
                 <Icon name="warning" size="xs" className={skinCss.inkCaution} />
-                Calibrate pedals
+                {words.calibratePedals}
               </SkinButton>
             ) : (
               <Button
@@ -754,7 +775,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
                 onClick={() => props.onOpenControls?.()}
                 onPointerEnter={keepFocusOffHover}
               >
-                Calibrate pedals
+                {words.calibratePedals}
               </Button>
             )}
           </span>
@@ -764,14 +785,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             <SkinBanner cut="sm" className="inline-flex h-10 items-center gap-2.5 pr-4 pl-3">
               <Icon name="play" size="xs" />
               <span className="text-[13px] font-semibold sm:text-[14px]">
-                Hold throttle for lights out
+                {words.holdForLightsOut}
               </span>
             </SkinBanner>
           ) : (
             <div className={`inline-flex h-10 items-center gap-2.5 rounded-lc-row pr-4 pl-3 ${HUD_GLASS}`}>
               <Icon name="play" size="xs" className="text-lc-volt" />
               <span className="lc-title text-[13px] text-lc-chalk sm:text-[14px]">
-                Hold throttle for lights out
+                {words.holdForLightsOut}
               </span>
             </div>
           )
@@ -779,7 +800,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         {mouseSteerEnabled ? (
           isThirdParty ? (
             <SkinPanel cut="sm" innerClassName="flex flex-col items-center gap-1.5 px-4 py-2">
-              <span className={`text-[10px] font-bold uppercase ${skinCss.inkInfo}`}>Mouse steering · {mouseSteerKey} to exit</span>
+              <span className={`text-[10px] font-bold uppercase ${skinCss.inkInfo}`}>{mouseSteerLabel}</span>
               <span className={`relative h-2 w-44 overflow-hidden ${skinCss.bgDeep} ${skinCss.radiusSm}`}>
                 <span className={`absolute inset-y-0 left-1/2 w-px ${skinCss.fillDim}`} />
                 <span
@@ -791,7 +812,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           ) : (
             <div className={`flex flex-col items-center gap-1.5 rounded-lc-tile px-4 py-2 ${HUD_GLASS}`}>
               <span className={HUD_LBL} style={{ color: HUD_INFO }}>
-                Mouse steering · {mouseSteerKey} to exit
+                {mouseSteerLabel}
               </span>
               <span className="relative h-2 w-44 overflow-hidden rounded-full bg-lc-titanium">
                 <span className="absolute inset-y-0 left-1/2 w-px bg-lc-chalk/40" />
@@ -844,26 +865,26 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             {inputMode === "pad" ? (
               <span className="inline-flex items-center gap-1.5">
                 <PadGlyph button="menu" family={padFamily} />
-                Menu
+                {words.keyMenu}
               </span>
             ) : null}
             {(inputMode === "pad" ? [] : [
-              ["ESC", "Menu"],
-              [props.keyNames?.camera ?? "C", "Camera"],
-              [props.keyNames?.racingLine ?? "R", "Line"],
-              [props.keyNames?.restart ?? "Bksp", "Restart"],
+              ["menu", "ESC", words.keyMenu],
+              ["camera", props.keyNames?.camera ?? "C", words.keyCamera],
+              ["line", props.keyNames?.racingLine ?? "R", words.keyLine],
+              ["restart", props.keyNames?.restart ?? "Bksp", words.keyRestart],
               // The lap board's key, while there is one on screen
-              ...(boardNode && boardKeyName && boardKeyName !== "—" ? [[boardKeyName, "Board"]] : []),
+              ...(boardNode && boardKeyName && boardKeyName !== "—" ? [["board", boardKeyName, words.keyBoard]] : []),
               // Headlights toggle key while dark, lit, or manually overridden
               ...(props.keyNames?.headlights &&
               props.keyNames.headlights !== "—" &&
               (props.weather?.headlightsAutoOn ||
                 props.weather?.headlightsOn ||
                 (props.weather?.headlightMode && props.weather.headlightMode !== "auto"))
-                ? [[props.keyNames.headlights, "Lights"]]
+                ? [["lights", props.keyNames.headlights, words.keyLights]]
                 : []),
-            ]).map(([k, label]) => (
-              <span key={label} className="inline-flex items-center gap-1.5">
+            ]).map(([id, k, label]) => (
+              <span key={id} className="inline-flex items-center gap-1.5">
                 <KeyCap>{k}</KeyCap>
                 {label}
               </span>
@@ -1005,7 +1026,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           className={`lc-ui-zoom absolute top-13 left-1/2 inline-flex h-9.5 -translate-x-1/2 items-center gap-2.5 rounded-full pr-4.5 pl-3.5 text-lc-chalk sm:top-17 short:top-8 ${HUD_GLASS}`}
         >
           <Icon name="replay" size="sm" />
-          <span className="lc-disp text-[18px]">Replay</span>
+          <span className="lc-disp text-[18px]">{words.replay}</span>
         </div>
         <div className="pointer-events-auto">
           <ReplayBar {...props.replay} freeCameraKeyLabel={props.keyNames?.freeCamera} />

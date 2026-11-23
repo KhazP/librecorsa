@@ -41,6 +41,7 @@
  * ("Wall contact"), and on a circuit, as an excursion does, one in the last sector or still going at the line deletes
  * the next lap too; in a race it is judged as time off the track, like any excursion.
  */
+import { text as t } from "@/lib/text";
 import type { TrackLimitsReason, TrackLimitsStatus } from "@/types/f1";
 import { CourseCutWatch } from "./course-limits";
 import type { TrackLimitsScoring } from "./race-rules";
@@ -415,8 +416,8 @@ export class TrackLimitsMonitor {
     this.wallNow = false;
     this.message = {
       kind: "lap_invalid",
-      text: "Flashback · lap deleted",
-      detail: forfeitNext ? "Current & next lap invalidated" : "Current lap invalidated",
+      text: t("game.trackLimits.flashbackDeleted"),
+      detail: forfeitNext ? t("game.trackLimits.currentAndNextInvalid") : t("game.trackLimits.currentInvalid"),
       atMs: nowMs,
     };
   }
@@ -481,8 +482,8 @@ export class TrackLimitsMonitor {
       this.exc = null;
       this.message = {
         kind: "lap_invalid",
-        text: "Course cut · lap deleted",
-        detail: race ? "Time penalty once back on the track" : "Left the lap's road",
+        text: t("game.trackLimits.courseCutDeleted"),
+        detail: race ? t("game.trackLimits.penaltyOnceBack") : t("game.trackLimits.leftLapRoad"),
         atMs: f.nowMs,
       };
       if (race) {
@@ -607,7 +608,7 @@ export class TrackLimitsMonitor {
     this.lastCutSavedS = savedS;
     if (savedS !== null && savedS + COURSE_CUT_MARGIN_S <= 0) {
       // A longer way round: nothing gained to take back
-      this.message = { kind: "lap_invalid", text: "Course cut · lap deleted", detail: "No time gained", atMs: f.nowMs };
+      this.message = { kind: "lap_invalid", text: t("game.trackLimits.courseCutDeleted"), detail: t("game.trackLimits.noTimeGained"), atMs: f.nowMs };
       return { kind: "lap_invalid", lap: f.lapCount };
     }
     const seconds = Math.max(COURSE_CUT_MIN_PENALTY_S, Math.ceil((savedS ?? 0) + COURSE_CUT_MARGIN_S));
@@ -615,8 +616,8 @@ export class TrackLimitsMonitor {
     this.penaltyS += seconds;
     this.message = {
       kind: "penalty",
-      text: `Course cut · +${seconds.toFixed(1)}s time penalty`,
-      detail: savedS !== null && savedS > 0 ? `${savedS.toFixed(1)} s gained` : "Lap deleted",
+      text: t("game.trackLimits.courseCutPenalty", { seconds: seconds.toFixed(1) }),
+      detail: savedS !== null && savedS > 0 ? t("game.trackLimits.secondsGained", { seconds: savedS.toFixed(1) }) : t("game.trackLimits.lapDeleted"),
       atMs: f.nowMs,
     };
     return { kind: "penalty", reason: "course_cut", penaltyS: seconds, lap: f.lapCount };
@@ -702,8 +703,8 @@ export class TrackLimitsMonitor {
       this.nextLapDeletedAtClockS = null;
       deleted = true;
       this.message = wallDeleted
-        ? { kind: "lap_invalid", text: "Wall contact · lap deleted", detail: "Rode the wall before the line", atMs: f.nowMs }
-        : { kind: "lap_invalid", text: "Track limits · lap deleted", detail: "Off before the line", atMs: f.nowMs };
+        ? { kind: "lap_invalid", text: t("game.trackLimits.wallDeleted"), detail: t("game.trackLimits.rodeWallBeforeLine"), atMs: f.nowMs }
+        : { kind: "lap_invalid", text: t("game.trackLimits.limitsDeleted"), detail: t("game.trackLimits.offBeforeLine"), atMs: f.nowMs };
     }
     if (f.offTrack) {
       const lastSector = f.sector === 3;
@@ -712,8 +713,8 @@ export class TrackLimitsMonitor {
         wallDeleted = false;
         this.message = {
           kind: "lap_invalid",
-          text: "Track limits · lap deleted",
-          detail: lastSector ? "Next lap too" : "Off the track",
+          text: t("game.trackLimits.limitsDeleted"),
+          detail: lastSector ? t("game.trackLimits.nextLapToo") : t("game.trackLimits.offTrack"),
           atMs: f.nowMs,
         };
       }
@@ -732,8 +733,8 @@ export class TrackLimitsMonitor {
       this.totalStrikes++;
       this.message = {
         kind: "lap_invalid",
-        text: "Wall contact · lap deleted",
-        detail: wallNext ? "Next lap too" : f.wallRule === "touch" ? "Touched the barrier" : "Rode the wall",
+        text: t("game.trackLimits.wallDeleted"),
+        detail: wallNext ? t("game.trackLimits.nextLapToo") : f.wallRule === "touch" ? t("game.trackLimits.touchedBarrier") : t("game.trackLimits.rodeWall"),
         atMs: f.nowMs,
       };
       return { kind: "lap_invalid", reason: "wall_contact", lap: f.lapCount };
@@ -929,11 +930,11 @@ export class TrackLimitsMonitor {
       kind === "cleared"
         ? {
             kind,
-            text: wasOvertake ? "Position handed back" : "Advantage given back",
-            detail: "No further action",
+            text: wasOvertake ? t("game.trackLimits.positionHandedBack") : t("game.trackLimits.advantageGivenBack"),
+            detail: t("game.trackLimits.noFurtherAction"),
             atMs: f.nowMs,
           }
-        : { kind, text: "Track limits", detail: "No advantage · no action", atMs: f.nowMs };
+        : { kind, text: t("game.trackLimits.trackLimits"), detail: t("game.trackLimits.noAdvantage"), atMs: f.nowMs };
     return { kind, lap };
   }
 
@@ -947,13 +948,13 @@ export class TrackLimitsMonitor {
     this.penaltyS += seconds;
     this.message = {
       kind: "penalty",
-      text: `+${seconds.toFixed(1)}s time penalty`,
+      text: t("game.trackLimits.timePenalty", { seconds: seconds.toFixed(1) }),
       detail:
         gain !== null && gain >= 0.5
-          ? `Track limits · ${gain.toFixed(1)} s gained`
+          ? t("game.trackLimits.limitsGained", { seconds: gain.toFixed(1) })
           : shortcutM >= 1.5
-            ? `Track limits · ${Math.round(shortcutM)} m cut`
-            : "Track limits · major cut",
+            ? t("game.trackLimits.limitsCutMetres", { metres: String(Math.round(shortcutM)) })
+            : t("game.trackLimits.limitsMajorCut"),
       atMs: f.nowMs,
     };
     return { kind: "penalty", reason, penaltyS: seconds, lap };
@@ -965,16 +966,9 @@ export class TrackLimitsMonitor {
     const placesGained = this.exc?.placesGained ?? 0;
     this.exc = null;
     this.totalStrikes++;
-    const why =
-      reason === "illegal_overtake"
-        ? "Illegal overtake · position not returned"
-        : reason === "corner_cut"
-          ? "Corner cut"
-          : reason === "not_lifted"
-            ? "Did not lift"
-            : "Time gained";
+    const why = t("game.trackLimits.why", { reason });
     if (this.session === "practice") {
-      this.message = { kind: "lap_invalid", text: "Track limits · lap deleted", detail: why, atMs: f.nowMs };
+      this.message = { kind: "lap_invalid", text: t("game.trackLimits.limitsDeleted"), detail: why, atMs: f.nowMs };
       return { kind: "lap_invalid", reason, lap };
     }
     if (reason === "illegal_overtake") {
@@ -983,7 +977,7 @@ export class TrackLimitsMonitor {
       this.penaltyS += seconds;
       this.message = {
         kind: "penalty",
-        text: `+${seconds.toFixed(1)}s time penalty`,
+        text: t("game.trackLimits.timePenalty", { seconds: seconds.toFixed(1) }),
         detail: why,
         atMs: f.nowMs,
       };
@@ -1001,15 +995,15 @@ export class TrackLimitsMonitor {
       this.warnings = 0;
       this.message = {
         kind: "penalty",
-        text: `+${seconds.toFixed(1)}s time penalty`,
-        detail: `Track limits · ${why.toLowerCase()}`,
+        text: t("game.trackLimits.timePenalty", { seconds: seconds.toFixed(1) }),
+        detail: t("game.trackLimits.limitsWhy", { reason }),
         atMs: f.nowMs,
       };
       return { kind: "penalty", reason, penaltyS: seconds, lap };
     }
     this.message = {
       kind: "warning",
-      text: `Track limits · warning ${this.warnings}/${STRIKES_PER_PENALTY}`,
+      text: t("game.trackLimits.warningCount", { count: this.warnings, max: STRIKES_PER_PENALTY }),
       detail: why,
       atMs: f.nowMs,
     };
@@ -1018,9 +1012,8 @@ export class TrackLimitsMonitor {
 
   /** "2.75 pts", "3 strikes" */
   private pointsText(): string {
-    if (this.rules.scoring !== "four_strike") return `${this.points.toFixed(2)} pts`;
-    const n = Math.round(this.points);
-    return `${n} ${n === 1 ? "strike" : "strikes"}`;
+    if (this.rules.scoring !== "four_strike") return t("game.trackLimits.points", { points: this.points.toFixed(2) });
+    return t("game.trackLimits.strikes", { count: Math.round(this.points) });
   }
 
   /** The points ladder: a strike's points, and the step they reach (black-and-white flag, +5 s, +10 s, disqualified) */
@@ -1035,7 +1028,7 @@ export class TrackLimitsMonitor {
     if (this.steps >= 3) {
       this.dq = true;
       this.penaltyS += seconds;
-      this.message = { kind: "disqualified", text: "Disqualified · track limits", detail: this.pointsText(), atMs: f.nowMs };
+      this.message = { kind: "disqualified", text: t("game.trackLimits.disqualified"), detail: this.pointsText(), atMs: f.nowMs };
       return { kind: "disqualified", reason, penaltyS: seconds || undefined, lap };
     }
     if (seconds > 0) {
@@ -1044,24 +1037,31 @@ export class TrackLimitsMonitor {
       this.penaltyS += seconds;
       this.message = {
         kind: "penalty",
-        text: `+${seconds.toFixed(1)}s time penalty`,
-        detail: `Track limits · ${this.pointsText()}`,
+        text: t("game.trackLimits.timePenalty", { seconds: seconds.toFixed(1) }),
+        detail: t("game.trackLimits.limitsPoints", { points: this.pointsText() }),
         atMs: f.nowMs,
       };
       return { kind: "penalty", reason, penaltyS: seconds, lap };
     }
     if (this.points >= (this.steps + 1) * A - 1 - 1e-9 && this.flaggedStep !== this.steps) {
       this.flaggedStep = this.steps;
-      const next = this.steps < LADDER_PENALTIES_S.length ? `+${LADDER_PENALTIES_S[this.steps]} s` : "a disqualification";
       this.message = {
         kind: "final_warning",
-        text: "Black and white flag",
-        detail: `${why} · next is ${next}`,
+        text: t("game.trackLimits.blackWhiteFlag"),
+        detail:
+          this.steps < LADDER_PENALTIES_S.length
+            ? t("game.trackLimits.nextPenalty", { why, seconds: String(LADDER_PENALTIES_S[this.steps]) })
+            : t("game.trackLimits.nextDisqualification", { why }),
         atMs: f.nowMs,
       };
       return { kind: "warning", reason, lap };
     }
-    this.message = { kind: "warning", text: "Track limits · warning", detail: `${why} · ${this.pointsText()}`, atMs: f.nowMs };
+    this.message = {
+      kind: "warning",
+      text: t("game.trackLimits.warning"),
+      detail: t("game.trackLimits.warningDetail", { why, points: this.pointsText() }),
+      atMs: f.nowMs,
+    };
     return { kind: "warning", reason, lap };
   }
 }

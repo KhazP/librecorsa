@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { t as tr } from "@/i18n/runtime";
 import { LibreCorsaSimulator } from "@/components/LibreCorsaSimulator";
 import { RenderProfiler } from "@/components/dev/RenderProfiler";
 import { activateTrack, getTrackInfo, loadStoredTrackId, DEFAULT_TRACK_ID } from "@/lib/track-registry";
@@ -23,9 +24,9 @@ const SAFE_START_NOTICE_MS = 9000;
 function applySafeStart(): string | null {
   if (!takeSafeStart(browserStore(), Date.now()).switchToLow) return null;
   const saved = loadPlayerSettings();
-  if (saved.graphics.quality === "low") return "Safe start active after GPU reset.";
+  if (saved.graphics.quality === "low") return tr("game.trackGate.safeStart");
   savePlayerSettings({ ...saved, graphics: { ...saved.graphics, quality: "low" } });
-  return "Graphics set to Low after GPU reset.";
+  return tr("game.trackGate.graphicsLow");
 }
 
 /**
@@ -61,7 +62,7 @@ export const TrackGate: React.FC = () => {
       if (current !== null) {
         // A failed load never replaces the active circuit: the one in use stays, as it is
         console.warn(`Track switch failed, staying on ${current}:`, err);
-        setError(`Track load failed. Staying on ${getTrackInfo(current).name}.`);
+        setError(tr("game.trackGate.loadFailedStaying", { circuit: getTrackInfo(current).name }));
         return;
       }
       // The first load has nothing to stay on: the default circuit ships with the bundle
@@ -75,7 +76,7 @@ export const TrackGate: React.FC = () => {
       if (req !== requestRef.current) return;
       trackIdRef.current = DEFAULT_TRACK_ID;
       setTrackId(DEFAULT_TRACK_ID);
-      setError(`Track load failed. Loaded ${getTrackInfo(DEFAULT_TRACK_ID).name}.`);
+      setError(tr("game.trackGate.loadFailedDefault", { circuit: getTrackInfo(DEFAULT_TRACK_ID).name }));
     }
   }, []);
 

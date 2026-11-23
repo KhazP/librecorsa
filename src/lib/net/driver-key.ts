@@ -3,6 +3,7 @@
  * (cloudflare/api/board.ts stores only its SHA-256). It is sent with uploads and nowhere else,
  * never written into lap or ghost files, and can be exported to a file to move to another browser or device.
  */
+import { text as t } from "@/lib/text";
 
 const STORAGE_KEY = "bugesera.driverKey";
 const KEY_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
@@ -71,16 +72,16 @@ export function exportDriverKeyFile(driverName: string): boolean {
 /** Reads an exported key file and makes it this browser's key; resolves the name it was saved with */
 export async function importDriverKeyFile(file: File): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
   try {
-    if (file.size > MAX_FILE_BYTES) return { ok: false, error: "That is not a driver key file" };
+    if (file.size > MAX_FILE_BYTES) return { ok: false, error: t("game.driverKey.notAKeyFile") };
     const raw: unknown = JSON.parse(await file.text());
-    if (typeof raw !== "object" || raw === null) return { ok: false, error: "That is not a driver key file" };
+    if (typeof raw !== "object" || raw === null) return { ok: false, error: t("game.driverKey.notAKeyFile") };
     const { type, key, name } = raw as Record<string, unknown>;
     if (type !== FILE_TYPE || typeof key !== "string" || !KEY_PATTERN.test(key)) {
-      return { ok: false, error: "That is not a driver key file" };
+      return { ok: false, error: t("game.driverKey.notAKeyFile") };
     }
-    if (!saveDriverKey(key)) return { ok: false, error: "This browser blocks saving it" };
+    if (!saveDriverKey(key)) return { ok: false, error: t("game.driverKey.blocked") };
     return { ok: true, name: typeof name === "string" ? name.slice(0, 64) : "" };
   } catch {
-    return { ok: false, error: "That is not a driver key file" };
+    return { ok: false, error: t("game.driverKey.notAKeyFile") };
   }
 }

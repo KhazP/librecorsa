@@ -7,6 +7,7 @@
  *   fetchCircuitTotals a circuit's laps and drivers ("1,204 laps · 312 drivers")
  *   fetchSiteStats     tabs in view now and drivers to date (the title screen's line)
  */
+import { text as t } from "@/lib/text";
 import { isVehicleModelId, type AssistPreset, type VehicleModelId } from "@/types/f1";
 import { currentBoardBase, lapPhysicsVersion, MAX_LAP_REVISION, parseLapConditions, revisionOnBoard, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import type { SimRealism } from "@/lib/sim/sim-realism";
@@ -288,12 +289,16 @@ export async function fetchSiteStats(): Promise<SiteStats | null> {
   return stats.live === null && stats.drivers === null ? null : stats;
 }
 
-const ASSIST_LABEL: Record<AssistPreset, string> = { pro: "No assists", semi_pro: "Some assists", assisted: "Assisted" };
-const REALISM_LABEL: Record<SimRealism, string> = { casual: "Casual", standard: "Standard", full: "Full" };
+const ASSIST_LABEL = { pro: "game.board.assistsPro", semi_pro: "game.board.assistsSemiPro", assisted: "game.board.assistsAssisted" } as const satisfies Record<AssistPreset, string>;
+const REALISM_LABEL = { casual: "game.board.realismCasual", standard: "game.board.realismStandard", full: "game.board.realismFull" } as const satisfies Record<SimRealism, string>;
 
 /** "No assists · Full · Dry": what a lap was driven with */
 export function boardLabel(c: { assists: AssistPreset; realism: SimRealism; surface: "dry" | "wet" }): string {
-  return `${ASSIST_LABEL[c.assists]} · ${REALISM_LABEL[c.realism]} · ${c.surface === "wet" ? "Wet" : "Dry"}`;
+  return t("game.board.conditions", {
+    assists: t(ASSIST_LABEL[c.assists]),
+    realism: t(REALISM_LABEL[c.realism]),
+    surface: t(c.surface === "wet" ? "game.board.surfaceWet" : "game.board.surfaceDry"),
+  });
 }
 
 /** "1,204": a count as the panels say it, grouped by thousands */

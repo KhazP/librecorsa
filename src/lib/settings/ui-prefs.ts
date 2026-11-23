@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { applyLanguage } from "@/i18n/runtime";
+import { applyLanguage, currentLocale, t } from "@/i18n/runtime";
+import { bindText } from "@/lib/text";
 import {
   DEFAULT_INTERFACE_SETTINGS,
   parseInterface,
@@ -8,6 +9,9 @@ import {
   type InterfaceSettings,
   type UnitSettings,
 } from "./player-settings";
+
+// The game code's own words (lib/text.ts) read the language the runtime holds from here on
+bindText(t, currentLocale);
 
 /**
  * The interface preferences as the page applies them (Settings > Display > Interface): the colour palette and the

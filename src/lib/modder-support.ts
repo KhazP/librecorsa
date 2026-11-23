@@ -5,6 +5,7 @@
  *
  * Add one only from the modder's own page or their word, never a guess from a name that looks alike.
  */
+import { text as t } from "@/lib/text";
 
 export interface SupportLink {
   url: string;
@@ -29,7 +30,8 @@ export const MODDER_SUPPORT: Readonly<Record<string, SupportLink>> = {
 };
 
 /** The support button's words: a donation on PayPal, support on a membership site */
-export const supportLabel = (s: SupportLink): string => (s.via === "PayPal" ? "Donate via PayPal" : `Support on ${s.via}`);
+export const supportLabel = (s: SupportLink): string =>
+  s.via === "PayPal" ? t("game.support.donatePayPal") : t("game.support.supportOn", { site: s.via });
 
 /** A modder's support page, if they have one on file */
 export const supportOf = (author: string | undefined): SupportLink | undefined => (author ? MODDER_SUPPORT[author] : undefined);

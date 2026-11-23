@@ -1,3 +1,4 @@
+import { text as t } from "@/lib/text";
 import type { VehicleModelId } from "@/types/f1";
 import type { CarClassRule } from "@/lib/net/wire";
 import { BMW_M4_GT3_SOUND, F1_2026_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
@@ -80,25 +81,25 @@ export interface CarQualityMeta {
 
 export const CAR_QUALITY_META: Record<CarQuality, CarQualityMeta> = {
   own: {
-    badge: "OWN PHYSICS",
-    filterLabel: "Own physics",
+    get badge() { return t("game.carQuality.ownBadge"); },
+    get filterLabel() { return t("game.carQuality.own"); },
     color: "#00E676",
     variant: "soft",
-    description: "Drives on physics built for this car.",
+    get description() { return t("game.carQuality.ownDetail"); },
   },
   shared: {
-    badge: "SHARED PHYSICS",
-    filterLabel: "Shared physics",
+    get badge() { return t("game.carQuality.sharedBadge"); },
+    get filterLabel() { return t("game.carQuality.shared"); },
     color: "#FFB300",
     variant: "soft",
-    description: "Drives on the physics of another car from the same class and era, so it handles like that car rather than its own.",
+    get description() { return t("game.carQuality.sharedDetail"); },
   },
   era: {
-    badge: "2026 PHYSICS",
-    filterLabel: "Older cars",
+    get badge() { return t("game.carQuality.eraBadge"); },
+    get filterLabel() { return t("game.carQuality.era"); },
     color: "#FF6B8A",
     variant: "soft",
-    description: "Drives on 2026 physics, so it handles like a 2026 car rather than the way it did in its own season.",
+    get description() { return t("game.carQuality.eraDetail"); },
   },
 };
 
@@ -277,11 +278,11 @@ export interface CarDefinition {
 }
 
 export const CAR_CLASSES: readonly CarClass[] = [
-  { id: "f1", title: "Formula Open-Wheel", sub: "Single-seaters · DRS / active aero", color: "#CCFF00" },
-  { id: "gt3", title: "GT3", sub: "Closed-wheel · ABS / TC", color: "#00E5FF" },
-  { id: "proto", title: "Prototypes", sub: "Closed-wheel · high downforce · TC", color: "#B388FF" },
-  { id: "classic", title: "Classic GT & Touring", sub: "Sports prototypes, Group 4, Group A and JGTC · 1966–1998", color: "#FFD23F" },
-  { id: "road", title: "Road cars", sub: "Road-legal · street tyres", color: "#FF8A3D" },
+  { id: "f1", get title() { return t("game.carClass.f1"); }, get sub() { return t("game.carClass.f1Detail"); }, color: "#CCFF00" },
+  { id: "gt3", title: "GT3", get sub() { return t("game.carClass.gt3Detail"); }, color: "#00E5FF" },
+  { id: "proto", get title() { return t("game.carClass.proto"); }, get sub() { return t("game.carClass.protoDetail"); }, color: "#B388FF" },
+  { id: "classic", get title() { return t("game.carClass.classic"); }, get sub() { return t("game.carClass.classicDetail"); }, color: "#FFD23F" },
+  { id: "road", get title() { return t("game.carClass.road"); }, get sub() { return t("game.carClass.roadDetail"); }, color: "#FF8A3D" },
 ];
 
 /** GT, prototype and classic racing tyre sidewall packs (gt-tyre-sidewall.ts, CREDITS.md) */
