@@ -9,6 +9,7 @@ import { AUTHOR_LINKS, DOCS_URL, REPO_URL, SITE_DESCRIPTION, SITE_NAME, SITE_TIT
 
 /*
  * The UI fonts ship with the app (Latin subsets, as Google Fonts serves them; SIL OFL 1.1, licences in ./fonts).
+ * Their Latin Extended subsets (Turkish, Polish, Czech…) are @font-face rules in globals.css, by unicode-range.
  * next/font/google fetched them at build time, and its Turbopack loader cannot take Google's newer
  * `/l/font?kit=…&skey=…` file URLs, so a build depended on what Google happened to return that day.
  */
