@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useLocale, useTranslations } from "use-intl/react";
 import {
   Button,
   Card,
@@ -16,12 +17,16 @@ import {
   useSettingsDetail,
 } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
+import { t } from "@/i18n/runtime";
 import { defaultPlayerSettings, type PlayerSettings } from "@/lib/settings/player-settings";
 import { useSettingsEnv, type SettingsEnv } from "./env";
 
 /**
  * One definition per setting: its label, hint, control, how to read and write it and its default. The Settings
  * screen and first-run setup draw the same definition, so a setting has one label and one control everywhere.
+ *
+ * Text is read in the current language each time a row is drawn: a label may be a getter (`get label() { return
+ * t(...) }`); a hint, the options and an off reason may be functions. The row makers below keep getters as getters.
  */
 
 type Text = string | ((env: SettingsEnv) => string | undefined);
@@ -110,12 +115,16 @@ export const audio = inGroup("audio");
 export const profile = inGroup("profile");
 export const top = <K extends keyof S>(key: K) => lens<S[K]>((s) => s[key], (s, value) => ({ ...s, [key]: value }));
 
-export const toggle = (d: Omit<ToggleDef, "kind">): ToggleDef => ({ kind: "toggle", ...d });
-export const slider = (d: Omit<SliderDef, "kind">): SliderDef => ({ kind: "slider", ...d });
-export const choice = (kind: ChoiceDef["kind"], d: Omit<ChoiceDef, "kind">): ChoiceDef => ({ kind, ...d });
+/** A row of `kind` from its definition, copied property by property so a getter (a label in the current language) stays one */
+const makeRow = <K extends RowDef["kind"], D extends object>(kind: K, d: D) =>
+  Object.defineProperties({ kind } as { kind: K } & D, Object.getOwnPropertyDescriptors(d));
+
+export const toggle = (d: Omit<ToggleDef, "kind">): ToggleDef => makeRow("toggle", d);
+export const slider = (d: Omit<SliderDef, "kind">): SliderDef => makeRow("slider", d);
+export const choice = (kind: ChoiceDef["kind"], d: Omit<ChoiceDef, "kind">): ChoiceDef => makeRow(kind, d);
 
 export const pct = (v: number) => `${Math.round(v * 100)}%`;
-export const pctOrOff = (v: number) => (v <= 0 ? "Off" : pct(v));
+export const pctOrOff = (v: number) => (v <= 0 ? t("settings.values.off") : pct(v));
 
 const same = (a: unknown, b: unknown) =>
   typeof a === "number" && typeof b === "number" ? Math.abs(a - b) < 1e-6 : a === b;
@@ -136,6 +145,9 @@ export function rowState(def: RowDef, env: SettingsEnv) {
 /** A setting, drawn from its definition: a `SettingRow` with the control its kind asks for */
 export function SettingField({ def, first }: { def: RowDef; first?: boolean }) {
   const env = useSettingsEnv();
+  // Also what draws the row again in a new language: its label, hint and options are read below
+  const tx = useTranslations("settings.field");
+  const locale = useLocale();
   const { value, changed, reset } = rowState(def, env);
   const off = def.off?.(env) ?? null;
   const row = {
@@ -146,7 +158,7 @@ export function SettingField({ def, first }: { def: RowDef; first?: boolean }) {
     disabledReason: off ?? undefined,
     changed,
     onReset: reset,
-    resetLabel: `Reset ${def.label.toLowerCase()} to the default`,
+    resetLabel: tx("resetRow", { setting: def.label.toLocaleLowerCase(locale) }),
     navDefault: first,
   };
   switch (def.kind) {
@@ -249,7 +261,7 @@ export interface SettingsCardProps {
   children?: React.ReactNode;
   /** More the card's Reset puts back, beyond its rows: whether any of it differs, and how */
   extraReset?: { changed: boolean; reset: () => void };
-  /** What the confirm says goes back (default: "the settings in this card") */
+  /** What the confirm says goes back, in the current language (default: "these settings") */
   resetWhat?: string;
   className?: string;
 }
@@ -272,6 +284,8 @@ export function SettingsCard({
 }: SettingsCardProps) {
   const env = useSettingsEnv();
   const detail = useSettingsDetail();
+  const tx = useTranslations("settings.field");
+  const locale = useLocale();
   const [asking, setAsking] = useState(false);
   const advancedCard = Boolean(advanced) || (rows.length > 0 && rows.every((r) => r.advanced));
   // Hidden in Simple with its rows unmounted, so the card itself says that Advanced has more here
@@ -289,7 +303,7 @@ export function SettingsCard({
       action={
         changed ? (
           <Button variant="ghost" size="sm" icon={<Icon name="reset" />} onClick={() => setAsking(true)} data-card-reset="">
-            Reset
+            {tx("reset")}
           </Button>
         ) : undefined
       }
@@ -299,8 +313,8 @@ export function SettingsCard({
       {children}
       <ConfirmDialog
         open={asking}
-        title={`Reset ${title.toLowerCase()}?`}
-        confirmLabel="Reset"
+        title={tx("resetTitle", { card: title.toLocaleLowerCase(locale) })}
+        confirmLabel={tx("resetConfirm")}
         onCancel={() => setAsking(false)}
         onConfirm={() => {
           for (const s of states) if (s.changed) s.reset();
@@ -308,7 +322,7 @@ export function SettingsCard({
           setAsking(false);
         }}
       >
-        {`Resets ${resetWhat ?? "these settings"} to defaults.`}
+        {resetWhat !== undefined ? tx("resetBody", { what: resetWhat }) : tx("resetBodyDefault")}
       </ConfirmDialog>
     </Card>
   );
@@ -319,11 +333,12 @@ export function SettingsCard({
  * (the cursor lands on it), or as the last card of a tab that has more in Advanced (`more`).
  */
 export function AdvancedOnly({ onShowAdvanced, what, more }: { onShowAdvanced: () => void; what: string; more?: boolean }) {
+  const tx = useTranslations("settings.field");
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lc-row border border-lc-line bg-lc-carbon/60 px-4 py-2.5">
       <span className="lc-hint">{what}</span>
       <Button variant="secondary" size="sm" onClick={onShowAdvanced} data-nav-default={more ? undefined : ""}>
-        Show advanced
+        {tx("showAdvanced")}
       </Button>
     </div>
   );
