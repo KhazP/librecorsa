@@ -1077,9 +1077,17 @@ def optimise_lines(track_id, edge_m=None):
     centre's margin to the road's edge, when not the optimiser's own (a narrow road lined with barriers)"""
     import subprocess
     env = {**os.environ, **({'EDGE_M': str(edge_m)} if edge_m is not None else {})}
+    # In the offline launcher's converter only the optimiser's bundle is there (launcher/converter/build.mjs), run by
+    # the Node on PATH
+    bundled = os.path.join(ROOT, 'scripts', 'optimize-racing-line.mjs')
+    in_converter = not os.path.exists(os.path.join(ROOT, 'scripts', 'optimize-racing-line.ts')) and os.path.exists(bundled)
     for car in ('f1', 'gt3'):
-        r = subprocess.run(f'npx tsx scripts/optimize-racing-line.ts --track {track_id} --car {car}', cwd=ROOT,
-                           shell=True, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
+        if in_converter:
+            cmd, shell = ['node', bundled, '--track', track_id, '--car', car], False
+        else:
+            cmd, shell = f'npx tsx scripts/optimize-racing-line.ts --track {track_id} --car {car}', True
+        r = subprocess.run(cmd, cwd=ROOT, shell=shell, capture_output=True, text=True, encoding='utf-8', errors='replace',
+                           env=env)
         tail = [l for l in r.stdout.splitlines() if 'model lap' in l or 'flying lap' in l or 'Using the' in l]
         log(f'{car} racing line:', *(tail[-3:] or [r.stderr[-400:]]))
 
