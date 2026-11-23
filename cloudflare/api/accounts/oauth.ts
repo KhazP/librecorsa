@@ -43,6 +43,22 @@ function returnOrigin(ctx: Ctx): string {
   }
 }
 
+/**
+ * The navigation came from one of this site's pages (or, in development, from a DEV_ORIGINS page): the browser's
+ * Sec-Fetch-Site says same-origin, or failing that the Referer names one of them
+ */
+function startedOnThisSite(ctx: Ctx): boolean {
+  const site = ctx.request.headers.get("Sec-Fetch-Site");
+  if (site === "same-origin") return true;
+  if (site !== null && site !== "same-site") return false;
+  try {
+    const origin = new URL(ctx.request.headers.get("Referer") ?? "").origin;
+    return origin === ctx.url.origin || ctx.deps.devOrigins.includes(origin);
+  } catch {
+    return false;
+  }
+}
+
 const landing = (returnTo: string, result: AuthResult): string => `${returnTo}#${AUTH_RESULT_PARAM}=${result}`;
 
 export const callbackUrl = (ctx: Ctx, provider: SignInProvider): string => `${ctx.url.origin}/api/auth/callback/${provider}`;
@@ -56,6 +72,9 @@ export async function startSignIn(ctx: Ctx, provider: SignInProvider): Promise<R
   if (await overLimit(deps.authLimit, ctx.request)) return back("failed");
   let accountId: string | null = null;
   if (intent === "link") {
+    // Adding a sign-in can fold another account into this one: only this site's own pages may start it, never a link
+    // on another site that rides on the session cookie
+    if (!startedOnThisSite(ctx)) return back("failed");
     const session = await readSession(ctx);
     if (!session) return back("failed");
     accountId = session.accountId;
