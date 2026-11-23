@@ -592,6 +592,11 @@ export interface CarTelemetry {
   qualifying?: { remainingS: number; lastLap: boolean; lapCounts: boolean; bestMs: number | null };
   /** The weekly challenge's time trial is being driven (its car, rules and board), set by the session */
   timeTrial?: boolean;
+  /**
+   * The player's car damage in practice or a time trial with Practice damage on, set by the session; absent while
+   * nothing is broken, and in a race (its damage is `race.damage`)
+   */
+  practiceDamage?: PlayerDamageStatus;
   /** What the car was last driven with (keyboard, controller, wheel, touch), set by the session; absent until it moves */
   drivingInput?: "keyboard" | "controller" | "wheel" | "touch";
   /**

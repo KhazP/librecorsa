@@ -73,6 +73,8 @@ import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { getMultiplayerManager, type InterpolatedPeerState, type P2PConnectionStatus } from "@/lib/sim/multiplayer-sync";
 import { flagMultiplayerRace } from "@/lib/sim/mp-flags"; // polish:D
 import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
+import { CarDamage } from "@/lib/sim/car-damage";
+import { damageStatusOf, PlayerDamageFeed, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M } from "@/lib/sim/player-damage";
 import { CoolDown } from "@/lib/sim/cool-down";
 import { PodiumDirector } from "@/lib/render/podium-shot";
 import { NameplateBadgeCache, OverheadNameplateProjector, type OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
@@ -211,6 +213,9 @@ const DRIVER_KEYS: ReadonlySet<HeldKeyAction> = new Set(["throttle", "brake", "s
 
 /** One-shot driving actions: the same whether they come from a key, a pad button or a touch pad */
 export type DriveAction = Exclude<KeyAction, HeldKeyAction> | "mfd" | "hud";
+
+/** How long a car put out by damage in practice stays put before it starts a flying lap, repaired (s of driving) */
+const PRACTICE_WRECK_HOLD_S = 1.5;
 
 /** Telemetry-out rate (Hz) */
 const TELEMETRY_OUT_HZ = 60;
@@ -981,7 +986,15 @@ export class DriveSession {
     let mpQualiSeenLap: number | null = null;
     let mpPracticeBestMs: number | null = null;
     let mpPracticeSeenLap: number | null = null;
-    let mpLastWallImpactMs = 0;
+    /**
+     * The player's car damage judged on the page: barrier hits from the car's telemetry into an online race's damage
+     * (the room's rules) or practice's (the Practice damage setting), each change handed to the car once
+     */
+    const damageFeed = new PlayerDamageFeed();
+    /** Practice and time-trial damage, driven alone; repaired with every new run (resetRun) */
+    const practiceDamage = new CarDamage(settings.practiceDamage, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M);
+    /** Driving time since a hit put the car out in practice (s): the car starts a flying lap, repaired, after a moment */
+    let practiceWreckS = 0;
     this.setRace = (next) => {
       endQualifying();
       endTimeTrial();
@@ -1723,6 +1736,8 @@ export class DriveSession {
       const prev = settings;
       if (disposed || next === prev) return;
       settings = next;
+      // From the next hit (switched off, the frame loop repairs the car)
+      practiceDamage.level = next.practiceDamage;
       if (next.audio !== prev.audio) {
         if (next.audio.muted !== this.snapshot.muted) this.publish({ muted: next.audio.muted });
         audio?.setMuted(next.audio.muted);
@@ -2508,6 +2523,8 @@ export class DriveSession {
         }
         field.restoreField(poses, rewindS);
       }
+      // Practice damage goes back to what it was then (an AI race's field keeps the player's own)
+      if (raceNow().kind === "practice") damageFeed.rewind(practiceDamage, rp.timeS);
       // Truncate the replay buffer from the flashback point forward so future replays stay coherent
       rp.buffer.truncateAfter(rp.timeS);
       replayClockS = rp.timeS;
@@ -2553,8 +2570,11 @@ export class DriveSession {
         mpPracticeBestMs = null;
         mpPracticeSeenLap = null;
       }
-      mpLastWallImpactMs = physics.telemetry.f12026?.wallImpact?.atMs ?? 0;
+      // The car is repaired: practice's damage starts over, an online race's is handed to the car again next frame
+      damageFeed.restart(physics.telemetry);
       physics.setDamageEffects?.(null);
+      practiceDamage.reset();
+      practiceWreckS = 0;
       trackLimits.reset(limitsSessionOf(raceNow()), limitsRulesOf(raceNow()));
       wallDeletedLaps.clear();
       cameraRig.reset();
@@ -3681,14 +3701,7 @@ export class DriveSession {
           }
         }
         // Multiplayer car damage from walls and car contact when enabled by the room rules
-        if (mpRace.damage && driving && mpFrame.phase === "racing") {
-          const wall = physics.telemetry.f12026?.wallImpact;
-          if (wall && wall.atMs > mpLastWallImpactMs) {
-            mpLastWallImpactMs = wall.atMs;
-            mpRace.damage.registerImpact({ localX: wall.localX ?? 0, localZ: wall.localZ ?? 2.75, speedMs: wall.speedMs, source: "wall" });
-          }
-          if (!mpRace.damage.pristine) physics.setDamageEffects?.(mpRace.damage.effects());
-        }
+        if (mpRace.damage && driving && mpFrame.phase === "racing") damageFeed.update(mpRace.damage, physics);
         // polish:D yellow flags: a car stopped, off or going the wrong way on the road ahead (mp-flags.ts)
         if (physics.telemetry.race && mpFrame.phase === "racing") {
           flagMultiplayerRace(mpRace, physics.telemetry.race, track, samePeers, dtSeconds, mpFrame.raceTimeS, physics.sMeters);
@@ -3696,6 +3709,39 @@ export class DriveSession {
       } else {
         for (const p of samePeers) p.passThrough = false;
       }
+      // Practice damage (the player's setting): practice and time trials driven alone, not qualifying for an AI race nor
+      // anything in an online room, where restarts are not the player's alone (as for Flashback)
+      const soloDamage =
+        raceNow().kind === "practice" &&
+        !quali &&
+        !mpQuali &&
+        !isInOnlineRoom(multiplayerSync.status, peersOnTrack) &&
+        settingsNow.practiceDamage !== "off"
+          ? practiceDamage
+          : null;
+      if (soloDamage) {
+        if (driving) {
+          damageFeed.update(soloDamage, physics);
+          damageFeed.record(soloDamage, replayClockS);
+          // Put out (a big hit, a wheel torn off): a moment to see it, then a flying lap with the car repaired, as the
+          // restart key gives in practice
+          practiceWreckS = soloDamage.terminal ? practiceWreckS + dtSeconds : 0;
+          if (practiceWreckS >= PRACTICE_WRECK_HOLD_S) {
+            practiceWreckS = 0;
+            queueMicrotask(() => this.restartFlyingLap());
+          }
+        }
+      } else {
+        // No damage judged here (an online race's is fed above): a hit now is never counted once damage is on
+        if (!(mpRace?.damage && mpFrame?.phase === "racing")) damageFeed.skip(physics.telemetry);
+        // Practice damage switched off, or the session turned into one it does not apply to: the car is repaired
+        if (!practiceDamage.pristine && raceNow().kind === "practice") {
+          practiceDamage.reset();
+          practiceWreckS = 0;
+          damageFeed.apply(practiceDamage, physics);
+        }
+      }
+      physics.telemetry.practiceDamage = damageStatusOf(soloDamage);
       let renderPeers = aiField ? [...samePeers, ...aiField.peers()] : samePeers;
       // polish:B the podium shot once the top three are known (this frame's race status, before the HUD sees it)
       podium.update({
