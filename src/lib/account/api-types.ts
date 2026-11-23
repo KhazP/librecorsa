@@ -189,7 +189,8 @@ export interface AccountInfo {
 }
 
 /**
- * GET /api/account -> AccountAnswer (401 signedOut when not signed in).
+ * GET /api/account -> AccountAnswer. Not signed in: `{ ok: false, signedOut: true }` with status 200 (every page load
+ * asks, and a signed-out visitor's console shouldn't show it as an error); every other signed-in route answers 401.
  * `thisDevice.joined`: this session has registered its driver key (POST /api/account/device). Until it has, the game
  * asks "Join the account of <driverName>?" before anything of this device's goes up.
  */

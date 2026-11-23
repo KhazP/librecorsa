@@ -514,13 +514,13 @@ async function main() {
     check('session: its last use is written at most once an hour, with the cookie set again', quiet && touched && b.setCookies.some((c) => c.startsWith('__Host-lc_session=')));
     clock += 366 * DAY;
     const idle = await b.account();
-    check('session: a year unused ends it (401 signedOut, cookie cleared)', idle.status === 401 && idle.body.signedOut === true && !b.jar.has('__Host-lc_session'));
+    check('session: a year unused ends it (signedOut, cookie cleared)', idle.status === 200 && idle.body.signedOut === true && !b.jar.has('__Host-lc_session'));
     const nobody = await new Browser(w).account();
-    check('GET /api/account signed out: 401 signedOut', nobody.status === 401 && nobody.body.signedOut === true);
+    check('GET /api/account signed out: 200 with signedOut (a signed-out page load logs no error)', nobody.status === 200 && nobody.body.ok === false && nobody.body.signedOut === true);
     const out = new Browser(w);
     await viaSteam(w, out, '76561197960280004');
     const signOut = await out.post('/api/auth/signout');
-    check('sign out: ok, the cookie cleared, the session gone', signOut.status === 200 && !out.jar.has('__Host-lc_session') && (await out.account()).status === 401);
+    check('sign out: ok, the cookie cleared, the session gone', signOut.status === 200 && !out.jar.has('__Host-lc_session') && (await out.account()).body.signedOut === true);
   }
 
   // 6. Devices, names and the four widened checks --------------------------------------------------------------------------
@@ -873,11 +873,11 @@ async function main() {
     const listed = (await solo.account()).body.account.sessions as { id: string; current: boolean }[];
     const theirs = listed.find((s) => !s.current)!;
     check('sessions: listed by public id, this one marked', listed.length === 2 && listed.filter((s) => s.current).length === 1 && !/^[0-9a-f]{64}$/.test(theirs.id));
-    check('sessions: remove signs that device out', (await solo.post('/api/account/sessions/remove', { id: theirs.id })).status === 200 && (await other.account()).status === 401);
+    check('sessions: remove signs that device out', (await solo.post('/api/account/sessions/remove', { id: theirs.id })).status === 200 && (await other.account()).body.signedOut === true);
     check('sessions: one of another account is 404', (await solo.post('/api/account/sessions/remove', { id: ((await a.account()).body.account.sessions[0] as { id: string }).id })).status === 404);
     const mine = listed.find((s) => s.current)!;
     await solo.post('/api/account/sessions/remove', { id: mine.id });
-    check('sessions: removing this one signs it out', !solo.jar.has('__Host-lc_session') && (await solo.account()).status === 401);
+    check('sessions: removing this one signs it out', !solo.jar.has('__Host-lc_session') && (await solo.account()).body.signedOut === true);
   }
 
   // 12. Deleting an account -----------------------------------------------------------------------------------------------
@@ -911,7 +911,7 @@ async function main() {
     const leftovers = await Promise.all(['accounts', 'identities', 'sessions', 'passkeys', 'saves', 'pending_saves', 'cloud_ghosts', 'link_codes', 'auth_states', 'merges_log'].map(async (t) => [t, (await rows(d.accounts, `SELECT * FROM ${t}`)).length] as const));
     check('delete: nothing of the account is left in its database', leftovers.every(([, n]) => n === 0), leftovers.map(([t, n]) => `${t}=${n}`).join(' '));
     check('delete: its cloud ghost files are gone', !d.ghosts.objects.has(gdKey));
-    check('delete: this browser is signed out, the other device too', !dev.jar.has('__Host-lc_session') && (await dev.account()).status === 401 && (await second.account()).status === 401);
+    check('delete: this browser is signed out, the other device too', !dev.jar.has('__Host-lc_session') && (await dev.account()).body.signedOut === true && (await second.account()).body.signedOut === true);
 
     // Without a device key: a name only the account held keeps the account's hash and lapses in time
     const e = makeWorld();

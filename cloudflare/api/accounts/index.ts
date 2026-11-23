@@ -115,7 +115,11 @@ async function route(ctx: Ctx, path: string): Promise<Response | null> {
   const handler = routes[`${method} ${path}`];
   if (handler) {
     const session = await readSession(ctx);
-    return session ? handler(ctx, session) : signedOut(ctx);
+    if (session) return handler(ctx, session);
+    // Every page load of the game asks who is signed in, and most visitors are nobody: that answer is a plain 200,
+    // so it isn't an error in their browser's console. Every other route answers 401
+    if (method === "GET" && path === "/api/account") return answer(ctx, { ok: false, error: "Sign in first", signedOut: true });
+    return signedOut(ctx);
   }
 
   // The cloud save: its own limit per address, and another of the same size for the ghosts, so a first sync's many
@@ -140,6 +144,6 @@ async function route(ctx: Ctx, path: string): Promise<Response | null> {
 
 async function accountAnswer(ctx: Ctx, session: Session): Promise<Response> {
   const account = await accountInfo(ctx.deps, session);
-  if (!account) return signedOut(ctx);
+  if (!account) return answer(ctx, { ok: false, error: "Sign in first", signedOut: true });
   return answer(ctx, { ok: true, account, thisDevice: { joined: session.keyHash !== null } });
 }
