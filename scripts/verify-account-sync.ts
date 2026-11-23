@@ -473,6 +473,9 @@ function fakeServer() {
     alwaysConflict: false,
     /** Runs once, just before the next save PUT is looked at: another device writing first */
     beforePut: null as null | (() => void),
+    /** A status to refuse the nth ghost upload / download with (the rate limit, too big), or null */
+    ghostPutFail: null as null | ((n: number) => number | null),
+    ghostGetFail: null as null | ((n: number) => number | null),
     account(): AccountInfo {
       return {
         id: "acc1",
@@ -523,6 +526,8 @@ function fakeServer() {
       const ghost = path.match(/^\/account\/ghosts\/([0-9a-f]{64})$/);
       if (ghost && method === "PUT") {
         s.ghostPuts++;
+        const refused = s.ghostPutFail?.(s.ghostPuts);
+        if (refused) return json(refused, { ok: false, error: "Refused" });
         const text = init.body as string;
         if ((await sha256Hex(text)) !== ghost[1]) return json(400, { ok: false, error: "Hash" });
         s.ghosts.set(ghost[1], text);
@@ -530,6 +535,8 @@ function fakeServer() {
       }
       if (ghost && method === "GET") {
         s.ghostGets++;
+        const refused = s.ghostGetFail?.(s.ghostGets);
+        if (refused) return json(refused, { ok: false, error: "Refused" });
         const text = s.ghosts.get(ghost[1]);
         return text ? new Response(text, { status: 200 }) : json(404, { ok: false, error: "Not found" });
       }
@@ -540,8 +547,10 @@ function fakeServer() {
 }
 
 /** Best laps in memory, keyed like ghost-store (the lap's own key), kept when new or faster */
-function memoryGhosts(init: Record<string, unknown>[] = []): LocalGhosts & { laps: Map<string, string> } {
+function memoryGhosts(init: Record<string, unknown>[] = []): LocalGhosts & { laps: Map<string, string>; store: { refuse: boolean } } {
   const laps = new Map<string, string>();
+  /** `refuse`: the store is full or blocked, nothing is kept */
+  const store = { refuse: false };
   const keyOf = (lap: { trackId: string; vehicle: string; board: string }) => `${lap.trackId}|${lap.vehicle}|${lap.board}`;
   const put = (text: string): boolean => {
     const lap = JSON.parse(text);
@@ -564,8 +573,10 @@ function memoryGhosts(init: Record<string, unknown>[] = []): LocalGhosts & { lap
       return laps.get(key) ?? null;
     },
     async save(text) {
-      return put(text);
+      if (store.refuse) return "failed";
+      return put(text) ? "kept" : "skipped";
     },
+    store,
   };
 }
 
@@ -907,6 +918,43 @@ async function main2(): Promise<void> {
     );
     const idle = await older.sync({ accountId: "acc1", apply: false });
     check("nothing changed: an older build doesn't rewrite the newer save", idle.kind === "synced" && !idle.pushed);
+  }
+
+  {
+    // A ghost upload refused by the rate limit: the lap waits, and the sync isn't done with it
+    const server = fakeServer();
+    const clock = { t: 1_000 };
+    const laps = memoryGhosts([lap("t0", 90_000), lap("t1", 90_001), lap("t2", 90_002)]);
+    const pc = device(server, "PC", memoryStorage({ "bugesera.track": "spa" }), laps, clock);
+    server.ghostPutFail = (n) => (n === 3 ? 429 : null);
+    const first = await pc.sync({ accountId: "acc1", apply: true });
+    check("a ghost refused by the rate limit leaves its lap out for now", first.kind === "synced" && Object.keys(cloudDoc(server).bestLaps).length === 2);
+    check("the sync isn't recorded as done with it: the next check syncs again", await pc.changedSince("acc1"));
+    server.ghostPutFail = null;
+    const again = await pc.sync({ accountId: "acc1", apply: false });
+    check("the next sync sends it", again.kind === "synced" && again.pushed && Object.keys(cloudDoc(server).bestLaps).length === 3 && !(await pc.changedSince("acc1")));
+
+    // Refused for good (too big): left out, and not tried again and again
+    const s2 = fakeServer();
+    const big = device(s2, "PC", memoryStorage(), memoryGhosts([lap("t9", 80_000)]), clock);
+    s2.ghostPutFail = () => 413;
+    await big.sync({ accountId: "acc1", apply: true });
+    check("a ghost refused for good is left out without a retry", Object.keys((s2.doc as SaveDoc).bestLaps).length === 0 && !(await big.changedSince("acc1")));
+
+    // A download refused by the rate limit, and one the store couldn't keep: both are fetched again
+    const phoneLaps = memoryGhosts();
+    const phone = device(server, "Phone", memoryStorage(), phoneLaps, clock);
+    server.ghostGetFail = (n) => (n === 1 ? 429 : null);
+    await phone.sync({ accountId: "acc1", apply: true });
+    check("a download refused by the rate limit: the sync isn't done, the next one fetches", (await phone.changedSince("acc1")) && phoneLaps.laps.size === 0);
+    server.ghostGetFail = null;
+    phoneLaps.store.refuse = true;
+    const gets = server.ghostGets;
+    await phone.sync({ accountId: "acc1", apply: true });
+    check("a ghost the store couldn't keep isn't counted as fetched, and the rest wait", phoneLaps.laps.size === 0 && server.ghostGets === gets + 1 && (await phone.changedSince("acc1")));
+    phoneLaps.store.refuse = false;
+    await phone.sync({ accountId: "acc1", apply: true });
+    check("once the store takes them, they all come down", phoneLaps.laps.size === 3 && !(await phone.changedSince("acc1")));
   }
 }
 
