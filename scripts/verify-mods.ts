@@ -26,6 +26,11 @@ import { modDefinitions, registerModContent } from "../src/lib/mods/mod-content"
 import { CARS, carById, portedSkinFor, carSkinThumbUrl, carThumbUrl, type CarId } from "../src/lib/cars/car-registry";
 import { CIRCUIT_VENUES, LISTED_TRACKS, registerModTracks, TRACKS, getTrackInfo } from "../src/lib/track-registry";
 import { roomModRefOf, roomTrackStatus } from "../src/lib/mods/room-content";
+import { modSimProfile } from "../src/lib/mods/mod-physics";
+import { AMG_GT3_SIM_PROFILE } from "../src/lib/sim/gt3/AmgGt3Sim";
+import { createVehicleSim } from "../src/lib/cars/vehicle-models";
+import { createSimHost, loopbackTransport } from "../src/lib/sim/runtime/sim-host";
+import { getActiveTrackData } from "../src/lib/track-data";
 import { sanitizeLobbySettings } from "../src/lib/net/wire";
 
 let failed = 0;
@@ -301,10 +306,57 @@ function registryChecks(): void {
   registerModTracks([]);
 }
 
+// --- A mod car's own physics ---
+function physicsChecks(): void {
+  const base = AMG_GT3_SIM_PROFILE;
+  const heavy = modSimProfile(base, { format: 1, profile: { config: { chassis: { totalMassKg: base.config.chassis.totalMassKg * 1.6 } }, turbo: true, steerRatio: 14 } }, "mod:jdoe.test-pack/gt-x@abc");
+  check("a physics patch changes only what it names", heavy.ok && heavy.profile.config.chassis.totalMassKg === base.config.chassis.totalMassKg * 1.6 && heavy.profile.config.chassis.wheelbase === base.config.chassis.wheelbase && heavy.profile.turbo === true);
+  check("it takes the optional values a base leaves out", heavy.ok && heavy.profile.steerRatio === 14);
+  check("it is named by the car (plans are kept per profile id), and the base is untouched", heavy.ok && heavy.profile.id === "mod:jdoe.test-pack/gt-x@abc" && base.id !== heavy.profile.id && base.turbo === AMG_GT3_SIM_PROFILE.turbo);
+  const refused = (patch: unknown, expect: RegExp, name: string) => {
+    const r = modSimProfile(base, { format: 1, profile: patch }, "x");
+    check(name, !r.ok && r.errors.some((e) => expect.test(e)), r.ok ? "accepted" : r.errors.join("; "));
+  };
+  refused({ config: { chassis: { totalMasKg: 900 } } }, /totalMasKg: the base model has no such value/, "a misspelt value is refused, by its path");
+  refused({ config: { chassis: { totalMassKg: "heavy" } } }, /is a number in the base model, not a string/, "a value of another kind is refused");
+  refused({ config: { chassis: { totalMassKg: null } } }, /not a value a profile holds/, "null is refused");
+  refused({ id: "amg-gt3" }, /set by the game/, "the profile's id can't be set");
+  refused({ bodyPlan: [[0, 1]] }, /set by the game/, "nor its body plan (mod.json has it)");
+  refused({ warpFactor: 9 }, /no such value/, "an unknown top-level value is refused");
+  check("a file of another format is refused", !modSimProfile(base, { format: 2, profile: {} }, "x").ok);
+
+  // Through the simulation worker's messages, as the game runs it: the worker builds the car on the mod's profile
+  if (!heavy.ok) return;
+  const loop = loopbackTransport();
+  const host = createSimHost(loop.transport, loop.wallNowMs);
+  const track = getActiveTrackData(1200);
+  const twin = createVehicleSim("amg-gt3", track, null, undefined, heavy.profile);
+  const car = host.adopt(twin, "amg-gt3", null, undefined, heavy.profile);
+  host.endFrame(true);
+  const sim = loop.runtime.simulatedCar as unknown as { profile?: { id: string } } | null;
+  check("the simulation worker builds the car on the mod's own profile", sim?.profile?.id === heavy.profile.id, sim?.profile?.id);
+
+  // The heavier car accelerates slower than its base, from the same grid slot, on the same throttle
+  const run = (profile?: typeof base): number => {
+    const c = createVehicleSim("amg-gt3", track, null, undefined, profile);
+    c.aiAutopilot = false;
+    c.autoGearbox = true;
+    c.tireCompound = "medium";
+    c.resetToStartGrid(false);
+    for (let i = 0; i < 60 * 6; i++) c.step(1 / 60, { throttle: 1, brake: 0 });
+    return c.telemetry.speedKmh;
+  };
+  const baseSpeed = run();
+  const heavySpeed = run(heavy.profile);
+  check("a car on a heavier patch is slower off the line than its base", heavySpeed < baseSpeed - 5, `${heavySpeed.toFixed(1)} vs ${baseSpeed.toFixed(1)} km/h after 6 s`);
+  void car;
+}
+
 void (async () => {
   await zipChecks();
   await rootAndHash();
   registryChecks();
+  physicsChecks();
   if (failed) {
     console.log(`\n${failed} check(s) failed`);
     process.exit(1);

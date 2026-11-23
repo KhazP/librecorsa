@@ -3,17 +3,35 @@ import { VEHICLE_MODELS } from "@/lib/cars/vehicle-models";
 import type { ModOrigin } from "@/lib/track-registry";
 import { VEHICLE_MODEL_IDS, type VehicleModelId } from "@/types/f1";
 import { modContentId, modDirUrl, modFileUrl, type ModCar, type ModCredit, type ModManifest, type ModSkin } from "./mod-manifest";
+import { modSimProfile, type ModPhysicsResult } from "./mod-physics";
+import type { CarSimProfile } from "@/lib/sim/f12026-car/F12026CarSim";
 
 /**
  * Turns a package's cars and liveries into the car registry's entries. Circuits go through mod-loader.ts
  * (`modTrackInfos`); everything the car registry needs is here, so the loader stays free of car code.
  */
 
-/** What a package may name: the game's own cars (for liveries and sounds) and vehicle models (for cars) */
-export const modDefinitions = (): { cars: ReadonlySet<string>; vehicles: ReadonlySet<string> } => ({
+/**
+ * What a package may name: the game's own cars (for liveries and sounds), vehicle models (for cars), and the models a
+ * physics file can change (those the game's car simulation runs on a profile)
+ */
+export const modDefinitions = (): { cars: ReadonlySet<string>; vehicles: ReadonlySet<string>; physicsBases: ReadonlySet<string> } => ({
   cars: BUILT_IN_CAR_IDS,
   vehicles: new Set(VEHICLE_MODEL_IDS),
+  physicsBases: new Set(VEHICLE_MODEL_IDS.filter((v) => VEHICLE_MODELS[v].simProfile)),
 });
+
+/** A mod car's own physics: the base model's profile with its physics file's changes (mod-physics.ts) */
+export function modCarProfile(m: ModManifest, c: ModCar, file: unknown, hash: string | undefined): ModPhysicsResult {
+  const physics = c.physics;
+  if (typeof physics === "string") return { ok: false, errors: [`${c.id}: has no physics file`] };
+  const base = VEHICLE_MODELS[physics.base as VehicleModelId]?.simProfile;
+  if (!base) return { ok: false, errors: [`${c.id}: ${physics.base} can't take a physics file`] };
+  // Plans and guides are kept per profile id: each car and each version of the package gets its own
+  const id = `${modContentId(m.id, c.id)}@${(hash ?? m.version).slice(0, 12)}`;
+  const result = modSimProfile(base, file, id, c.bodyPlan);
+  return result.ok ? result : { ok: false, errors: result.errors.map((e) => `${physics.file}: ${e}`) };
+}
 
 const carCredit = (c: ModCredit, title: string) => ({
   title,
@@ -38,10 +56,13 @@ export function modSkin(packageId: string, s: ModSkin, origin: ModOrigin, dirBas
   };
 }
 
-/** A package car as the registry lists it, or null when its physics are a file (mod physics need the sim's own path) */
-export function modCarDefinition(m: ModManifest, c: ModCar, origin: ModOrigin): CarDefinition | null {
-  if (typeof c.physics !== "string") return null;
-  const physics = c.physics as VehicleModelId;
+/**
+ * A package car as the registry lists it. A car with its own physics needs its profile (`modCarProfile`); without one
+ * (its file missing or refused) it is left out: null
+ */
+export function modCarDefinition(m: ModManifest, c: ModCar, origin: ModOrigin, simProfile?: CarSimProfile): CarDefinition | null {
+  if (typeof c.physics !== "string" && !simProfile) return null;
+  const physics = (typeof c.physics === "string" ? c.physics : c.physics.base) as VehicleModelId;
   const id = modContentId(m.id, c.id) as CarDefinition["id"];
   const model = VEHICLE_MODELS[physics];
   const sound =
@@ -71,16 +92,22 @@ export function modCarDefinition(m: ModManifest, c: ModCar, origin: ModOrigin): 
     skins: skins?.length ? skins : undefined,
     sound,
     mod: origin,
+    ...(simProfile ? { simProfile } : {}),
   };
 }
 
-/** Adds the enabled packages' cars and liveries to the car registry, in place of those added before */
-export function registerModContent(packages: readonly { manifest: ModManifest; origin: ModOrigin }[]): void {
+/**
+ * Adds the enabled packages' cars and liveries to the car registry, in place of those added before. `profiles`: the
+ * own physics of the cars that have them, by car id within the package
+ */
+export function registerModContent(
+  packages: readonly { manifest: ModManifest; origin: ModOrigin; profiles?: ReadonlyMap<string, CarSimProfile> }[],
+): void {
   const cars: CarDefinition[] = [];
   const skins = new Map<string, CarSkin[]>();
-  for (const { manifest, origin } of packages) {
+  for (const { manifest, origin, profiles } of packages) {
     for (const c of manifest.cars ?? []) {
-      const def = modCarDefinition(manifest, c, origin);
+      const def = modCarDefinition(manifest, c, origin, profiles?.get(c.id));
       if (def) cars.push(def);
     }
     for (const s of manifest.skins ?? []) {

@@ -101,10 +101,10 @@ export interface ModCar {
   classId: ModCarClass;
   year: number;
   /**
-   * What drives it: one of the game's vehicle models (`VehicleModelId`), whose setups, tyres and AI it takes, or a
-   * physics file in the package (mod-physics.ts), for a car with physics of its own
+   * What drives it: one of the game's vehicle models (`VehicleModelId`), whose physics, setups, tyres and AI it takes;
+   * or its own physics, a file in the package that changes a base model's (mod-physics.ts), the rest the base's
    */
-  physics: string | { file: string };
+  physics: string | { base: string; file: string };
   /** Its body: a GLB in the package, built as scripts/cars/port_ac_car.py builds the game's own */
   model: string;
   /** Its outline at barrier height (`[x, z]` points, half the car, nose first), when the body differs from the model's own */
@@ -295,7 +295,7 @@ function list<T>(p: Problems, where: string, v: unknown, max: number, item: (v: 
  */
 export function validateModManifest(
   raw: unknown,
-  known: { cars: ReadonlySet<string>; vehicles: ReadonlySet<string> },
+  known: { cars: ReadonlySet<string>; vehicles: ReadonlySet<string>; physicsBases?: ReadonlySet<string> },
 ): ManifestResult {
   const p = new Problems();
   if (!isRecord(raw)) return { ok: false, errors: ["mod.json: must be a JSON object"] };
@@ -349,10 +349,13 @@ export function validateModManifest(
     let physics: ModCar["physics"] = "";
     if (typeof v.physics === "string") {
       if (known.vehicles.has(v.physics)) physics = v.physics;
-      else p.add(`${where}.physics`, `must be one of the game's vehicle models (${[...known.vehicles].join(", ")}) or { "file": "<physics.json>" }`);
+      else p.add(`${where}.physics`, `must be one of the game's vehicle models (${[...known.vehicles].join(", ")}) or { "base": "<model>", "file": "<physics.json>" }`);
     } else if (isRecord(v.physics)) {
-      physics = { file: path(p, `${where}.physics.file`, v.physics.file, /\.json$/i) ?? "" };
-    } else p.add(`${where}.physics`, "must name a vehicle model or a physics file");
+      const bases = known.physicsBases ?? known.vehicles;
+      const base = typeof v.physics.base === "string" && bases.has(v.physics.base) ? v.physics.base : "";
+      if (!base) p.add(`${where}.physics.base`, `must be the vehicle model the physics file changes (${[...bases].join(", ")})`);
+      physics = { base, file: path(p, `${where}.physics.file`, v.physics.file, /\.json$/i) ?? "" };
+    } else p.add(`${where}.physics`, 'must name a vehicle model, or { "base": "<model>", "file": "<physics.json>" }');
     let sound: ModCarSound = { car: "" };
     if (isRecord(v.sound) && v.sound.dir !== undefined) {
       sound = { dir: path(p, `${where}.sound.dir`, v.sound.dir) ?? "", limiterRpm: num(p, `${where}.sound.limiterRpm`, v.sound.limiterRpm, 1000, 25_000) ?? 0 };

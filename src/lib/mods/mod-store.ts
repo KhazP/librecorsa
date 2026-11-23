@@ -88,10 +88,10 @@ async function writeInstalled(cache: Cache, list: InstalledPackage[]): Promise<v
   await cache.put(absolute(INSTALLED_PATH), new Response(JSON.stringify(list), { headers: { "Content-Type": "application/json" } }));
 }
 
-/** A package's `mod.json` as stored here, unchecked; null when it isn't installed */
-export async function readInstalledManifest(id: string): Promise<unknown> {
+/** A JSON file of an installed package (its `mod.json`, a car's physics), parsed but unchecked; null when absent */
+export async function readInstalledJson(id: string, path = "mod.json"): Promise<unknown> {
   const cache = await caches.open(MODS_CACHE);
-  const res = await cache.match(absolute(modFileUrl(id, "mod.json")));
+  const res = await cache.match(absolute(modFileUrl(id, path)));
   return res ? res.json() : null;
 }
 

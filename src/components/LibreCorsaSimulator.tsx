@@ -1030,6 +1030,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const ghostReq = ghostReqRef.current;
       // The upload this lap's card may show the result of (a later card, or a manual upload, takes over)
       const submitReq = submitReqRef.current;
+      // A car with physics of its own (a mod car's) shares its vehicle model's id: its laps would stand in that model's
+      // bests and ghosts, so they stay this session's only
+      if (carById(carIdRef.current).simProfile) return;
       void saveBestLapIfFaster(recording)
         .then((saved) => {
           if (saved) {

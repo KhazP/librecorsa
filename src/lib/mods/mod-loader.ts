@@ -1,8 +1,9 @@
 import { withBasePath } from "@/lib/base-path";
 import { registerModTracks, type ModOrigin, type TrackInfo } from "@/lib/track-registry";
-import { modDefinitions, registerModContent } from "@/lib/mods/mod-content";
+import { modCarProfile, modDefinitions, registerModContent } from "@/lib/mods/mod-content";
+import type { CarSimProfile } from "@/lib/sim/f12026-car/F12026CarSim";
 import { isModPackageId, isSha256Hex, modContentId, modFileUrl, validateModManifest, type ModManifest } from "./mod-manifest";
-import { disabledPackages, FOLDER_INDEX_PATH, modsStorageAvailable, readInstalled, readInstalledManifest } from "./mod-store";
+import { disabledPackages, FOLDER_INDEX_PATH, modsStorageAvailable, readInstalled, readInstalledJson } from "./mod-store";
 
 /**
  * Reads the installed mod packages once per page and adds their content to the game's lists before the menus mount
@@ -59,10 +60,36 @@ async function readFolderIndex(): Promise<FolderEntry[]> {
   }
 }
 
-async function readFolderManifest(id: string): Promise<unknown> {
-  const res = await fetch(withBasePath(modFileUrl(id, "mod.json")), { cache: "no-cache" });
-  if (!res.ok) throw new Error(`mod.json: HTTP ${res.status}`);
+async function readFolderJson(id: string, path = "mod.json"): Promise<unknown> {
+  const res = await fetch(withBasePath(modFileUrl(id, path)), { cache: "no-cache" });
+  if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
   return res.json();
+}
+
+/** A JSON file of a package, from wherever it is installed */
+const readPackageJson = (p: Pick<LoadedPackage, "id" | "source">, path?: string): Promise<unknown> =>
+  p.source === "browser" ? readInstalledJson(p.id, path) : readFolderJson(p.id, path);
+
+/**
+ * The own physics of a package's cars that have a physics file, by car id. A file that can't be read or is refused
+ * leaves its car out, and says why in the package's problems
+ */
+async function readCarProfiles(p: LoadedPackage & { manifest: ModManifest }): Promise<Map<string, CarSimProfile>> {
+  const out = new Map<string, CarSimProfile>();
+  for (const c of p.manifest.cars ?? []) {
+    if (typeof c.physics === "string") continue;
+    let file: unknown;
+    try {
+      file = await readPackageJson(p, c.physics.file);
+    } catch (err) {
+      p.errors = [...(p.errors ?? []), `${c.physics.file}: ${err instanceof Error ? err.message : String(err)}`];
+      continue;
+    }
+    const result = modCarProfile(p.manifest, c, file, p.hash);
+    if (result.ok) out.set(c.id, result.profile);
+    else p.errors = [...(p.errors ?? []), ...result.errors];
+  }
+  return out;
 }
 
 /** The circuits a package adds, as the track registry lists them */
@@ -109,7 +136,7 @@ export async function readPackages(): Promise<LoadedPackage[]> {
     seen.add(e.id);
     const pkg: LoadedPackage = { id: e.id, name: e.name, version: e.version, source: e.source, enabled: !off.has(e.id), hash: e.hash, bytes: e.bytes };
     try {
-      const raw = e.source === "browser" ? await readInstalledManifest(e.id) : await readFolderManifest(e.id);
+      const raw = await readPackageJson(e);
       const checked = validateModManifest(raw, known);
       if (!checked.ok) pkg.errors = checked.errors;
       else if (checked.manifest.id !== e.id) pkg.errors = [`mod.json names the package "${checked.manifest.id}", but it is installed as "${e.id}"`];
@@ -130,12 +157,14 @@ async function load(): Promise<ModsState> {
   const packages = await readPackages();
   const tracks: TrackInfo[] = [];
   const active = packages.filter((p): p is LoadedPackage & { manifest: ModManifest } => p.enabled && !!p.manifest);
+  const content = [];
   for (const p of active) {
     const origin: ModOrigin = { packageId: p.id, packageName: p.name, version: p.version, hash: p.hash };
     tracks.push(...modTrackInfos(p.manifest, origin));
+    content.push({ manifest: p.manifest, origin, profiles: await readCarProfiles(p) });
   }
   registerModTracks(tracks);
-  registerModContent(active.map((p) => ({ manifest: p.manifest, origin: { packageId: p.id, packageName: p.name, version: p.version, hash: p.hash } })));
+  registerModContent(content);
   state = { packages };
   return state;
 }

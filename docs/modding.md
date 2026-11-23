@@ -102,6 +102,29 @@ A car is a new body and sound on one of the game's vehicle models (`physics`): `
 - **`skins`**: the first is the paint the model was made in. The others are file liveries as above, in `<model folder>/skins/<id>/` by default.
 - **`classId`**: `f1`, `gt3`, `proto`, `classic` or `road`. Along with `year`, it decides where the car sits in the menus.
 
+### A car with its own physics
+
+Instead of driving exactly like a vehicle model, a car can change one: `"physics": { "base": "amg-gt3", "file": "cars/gt-x/physics.json" }`. The file lists only what differs from the base model's profile:
+
+```json
+{
+  "format": 1,
+  "profile": {
+    "config": {
+      "chassis": { "totalMassKg": 1180, "frontWeightFraction": 0.46 },
+      "gearbox": { "gears": { "redline_rpm": 8200 } }
+    },
+    "turbo": true
+  }
+}
+```
+
+The game's car simulation runs the result in the browser and in its simulation worker, just as it runs the game's own cars. Its profile has the same shape as the profiles in `src/lib/sim/*/` (`*_SIM_PROFILE`, with `config` from `*Config.ts`). The patch can only change values the base has, and each must stay the same kind: a number for a number, a list for a list, objects merged key by key. A misspelt key or a value of the wrong kind stops the car loading, and the Mods panel names its path. The car's garage ranges, AI and HUD are the base model's.
+
+`npm run physics:report` and the `scripts/verify-*.ts` checks show how the game's own cars were measured, which is a good start for checking yours. Its laps are kept for the session only, so they never stand in the base model's bests or ghosts.
+
+Any base works except `lc26`, which runs a simulation of its own.
+
 ## Checking and packing
 
 ```
@@ -123,6 +146,7 @@ This writes `public/mods/_index.json`, which lists the packages for the game. Ru
 
 ## What a package can't do (yet)
 
-- Its own physics. A car drives on one of the game's vehicle models. `"physics": { "file": "physics.json" }` is reserved for a later version and refused for now.
+- Physics outside what the game's car simulation models. A physics file changes a base model's values, not the simulation itself.
+- Garage ranges, AI or a HUD of its own. A car with its own physics takes these from its base model.
 - Replace any of the game's own circuits, cars or liveries. Packages only add to them.
 - Run code of any kind.
