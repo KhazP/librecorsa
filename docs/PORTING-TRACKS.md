@@ -15,7 +15,16 @@ The converter was written circuit by circuit, so expect to read it and adjust it
 
 ### 1. Add the circuit
 
-Every circuit has an entry in `AC_TRACKS` at the top of `scripts/tracks/port_ac_track.py`. Copy the closest existing one:
+A mod converts without an entry: give it an id of its own and its track folder, and the converter reads its settings from the mod itself (`scripts/tracks/ac_mod_entry.py`): the layouts, the models in `models_<layout>.ini`, the name, place, pitboxes, author and tags in `ui_track.json`, and the mod's own surface keys in `data/surfaces.ini`. It prints every value with where it came from and marks the ones it guessed (the altitude, a layout name, a description). A JSON file of the keys below, passed with `--settings`, is merged over them:
+
+```bash
+uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirements.txt \
+  python -P scripts/tracks/port_ac_track.py my_circuit --src path/to/<track folder> [--layout <name>] [--settings my_circuit.json]
+```
+
+A mod with several layouts needs `--layout` (the layout's folder, or its name in the game); without it the converter lists them. `npm run mod -- import ac-track` does the same and packages the result ([docs/importing-mods.md](importing-mods.md)).
+
+The circuits the game hosts have hand-written entries in `AC_TRACKS` at the top of `scripts/tracks/port_ac_track.py`, with the fixes each mod needed and the licence it is hosted under. To add one, copy the closest existing entry:
 
 - a circuit with one layout: `oschersleben`
 - several layouts in one folder: `okayama` and `okayama_piper`, or the `vir_*` entries
