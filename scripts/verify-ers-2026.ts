@@ -9,6 +9,8 @@
  * - no deployment from a standing start below 50 km/h (C5.2.12);
  * - on the car: 500 Nm at the crank (C5.2.11), the fixed 0.97 between the DC bus and the shaft (C5.2.21), the curve
  *   held on a straight, Overtake's curve in practice and in a race only with it earned, and no deploy limit a lap;
+ * - the race's Boost (its power when pressed, or 150 kW), Overtake's lines and the Automatic Overtake's share;
+ * - each circuit's rules: the FIA's 2026 Power Unit Information for Monaco and the Red Bull Ring, derived elsewhere;
  * - issue #180: on Qiddiya the car deploys again out of the last corner (skipped without the circuit's files).
  *
  *   npx tsx scripts/verify-ers-2026.ts
@@ -18,7 +20,10 @@ import { cutEnergyJ, Ers2026Control, ersKDeployLimitW, ersValueSPerMJ, F1_2026_E
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { LC26_SIM_PROFILE } from '../src/lib/sim/f12026-car/Lc26Sim';
 import { LC26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Lc26Tune';
-import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
+import { getActiveTrackData, RWANDA_DRS_ZONES, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
+import { f1EnergyCircuit, inStretch } from '../src/lib/sim/f1-energy-circuits';
+import { straightModeWindows } from '../src/lib/sim/straight-mode-zones';
+import { OvertakeGrant } from '../src/lib/sim/overtaking-rules';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
 import { overtakingRulesForSeason } from '../src/lib/sim/overtaking-rules';
 import { createFlatTestTrack } from './lib/flat-track';
@@ -57,7 +62,14 @@ const base = (over: Partial<ErsStepInput> = {}): ErsStepInput => ({
   shifting: false,
   soc: 0.6,
   overtake: false,
+  overtakeShare: 1,
+  curves: 'base',
+  alt1Sector: false,
+  cutStepW: 150_000,
+  cutRateWps: 100_000,
+  resetSector: false,
   boost: false,
+  boostCapped: false,
   share: 1,
   fillShare: 1,
   valueSPerMJ: 10,
@@ -147,6 +159,84 @@ console.log('\n== Superclipping, the store, the start');
 }
 
 // ---------------------------------------------------------------------------
+console.log('\n== The other curves: Monaco\'s Rev 1, the race\'s 250 kW (C5.2.8 iii)');
+{
+  const r = (v: number, ot = false) => ersKDeployLimitW(v, ot, 'rev1');
+  check('Rev 1: 350 kW to 200 km/h, 1050 − 3.5v, nothing from 300', r(200) === 350_000 && Math.abs(r(250) - 175_000) < 1e-6 && r(300) === 0);
+  check('Rev 1 with Overtake: 750 − 2v to 150 kW at 300, nothing from 310', Math.abs(r(250, true) - 250_000) < 1e-6 && Math.abs(r(300, true) - 150_000) < 1e-6 && Math.abs(r(305, true) - 75_000) < 1e-6 && r(310, true) === 0);
+  const a = (v: number) => ersKDeployLimitW(v, false, 'base', true);
+  check('Alt 1: 250 kW to 310 km/h, then the normal curve', a(100) === 250_000 && a(309) === 250_000 && Math.abs(a(320) - 200_000) < 1e-6 && a(345) === 0);
+}
+
+console.log('\n== The Boost, Overtake\'s lines, the Automatic Overtake');
+{
+  const raceBoost = (fromW: number) => {
+    const c = new Ers2026Control();
+    // deploying fromW, then cut by the management: the Boost pressed mid-cut
+    run(c, 5, { share: fromW / 350_000 });
+    const held = run(c, 5, { share: 1, valueSPerMJ: 0.1, boost: true, boostCapped: true });
+    return held[4];
+  };
+  check('Race Boost from 100 kW: 150 kW, no more', Math.abs(raceBoost(100_000) - 150_000) < 1, kW(raceBoost(100_000)));
+  check('Race Boost from 280 kW: holds 280 kW', Math.abs(raceBoost(280_000) - 280_000) < 1, kW(raceBoost(280_000)));
+  const c = new Ers2026Control();
+  run(c, 5, { share: 0.2 });
+  const free = run(c, 5, { boost: true, boostCapped: false, valueSPerMJ: 0.1 });
+  check('Boost outside a race: the whole curve', Math.abs(free[4] - 350_000) < 1e-6, kW(free[4]));
+  const auto = new Ers2026Control();
+  const at320 = run(auto, 5, { speedKmh: 320, overtake: true, overtakeShare: 0.75 })[4];
+  const full320 = ersKDeployLimitW(320, true);
+  const normal320 = ersKDeployLimitW(320, false);
+  check('Automatic Overtake: 75 % of Overtake\'s extra power over the normal curve', Math.abs(at320 - (normal320 + 0.75 * (full320 - normal320))) < 1, `${kW(at320)} at 320 km/h (${kW(normal320)} normal, ${kW(full320)} pressed)`);
+  // Earned at the Detection Line, active from the Activation Line to the next
+  const g = new OvertakeGrant();
+  const race = { racing: true, earnedAtDetection: () => true };
+  const lines = { detection: 0.9, activation: 0.95 };
+  g.observeLines(0.89, 0.91, lines, race);
+  const before = g.available(race);
+  g.observeLines(0.94, 0.96, lines, race);
+  check('Overtake: earned at the Detection Line, usable from the Activation Line', !before && g.available(race) && g.extraRechargeJ(race) === 500_000 && g.activations === 1);
+  const lost = { racing: true, earnedAtDetection: () => false };
+  g.observeLines(0.89, 0.91, lines, lost);
+  const stillOn = g.available(lost);
+  g.observeLines(0.94, 0.96, lines, lost);
+  check('... kept to the next Activation Line, then judged afresh', stillOn && !g.available(lost));
+}
+
+console.log('\n== Each circuit\'s rules (the FIA\'s 2026 Power Unit Information, derived elsewhere)');
+{
+  const load = (id: string) => {
+    const path = `public/tracks/${id}/track_data.json`;
+    if (!existsSync(path)) return null;
+    setActiveTrack(id, JSON.parse(readFileSync(path, 'utf8')) as RawTrackJson);
+    const track = getActiveTrackData(1200);
+    return { track, rules: f1EnergyCircuit(id, track.samples, track.totalLengthM, straightModeWindows(track), RWANDA_DRS_ZONES) };
+  };
+  const rb = load('spielberg');
+  if (!rb) console.log('SKIP  the Red Bull Ring (not in this checkout)');
+  else {
+    const c = rb.rules;
+    check('Red Bull Ring: the FIA\'s figures (race 8.0 MJ, qualifying 6.0, practice 8.5)', c.source === 'fia-2026' && c.recharge.race === 8e6 && c.recharge.timeTrial === 6e6 && c.recharge.practice === 8.5e6 && c.curves === 'base');
+    // T4-T7 and T9-T10 on this lap: from the braking zones the real laps brake in
+    const [a, b] = c.alt1;
+    check('... its 250 kW sectors T4–T7 and T9–T10 on this lap', c.alt1.length === 2 && Math.abs(a.fromM - 2018) < 40 && Math.abs(a.toM - 2747) < 40 && Math.abs(b.fromM - 3512) < 40 && Math.abs(b.toM - 3750) < 40, JSON.stringify(c.alt1));
+    check('... Overtake judged in the braking for T10, active after it', c.detectionM !== null && c.activationM !== null && Math.abs(c.detectionM - 3766) < 40 && Math.abs(c.activationM - 3922) < 40, `${c.detectionM} / ${c.activationM} m`);
+    // The derived rule, on the same circuit: within a braking zone of the FIA's own sectors
+    const d = f1EnergyCircuit('spielberg:derived', rb.track.samples, rb.track.totalLengthM, straightModeWindows(rb.track), RWANDA_DRS_ZONES);
+    const near = d.alt1.length === 2 && d.alt1.every((w, i) => Math.abs(w.fromM - c.alt1[i].fromM) < 80 && Math.abs(w.toM - c.alt1[i].toM) < 80);
+    check('The rule for other circuits puts the Red Bull Ring\'s 250 kW sectors where the FIA did', near, JSON.stringify(d.alt1));
+    check('... and its recharge in the same class (qualifying 6.0–6.5)', d.recharge.race === 8e6 && d.recharge.timeTrial >= 6e6 && d.recharge.timeTrial <= 6.5e6 && d.recharge.practice === 8.5e6);
+  }
+  const mc = load('monaco');
+  if (!mc) console.log('SKIP  Monaco (not in this checkout)');
+  else {
+    const c = mc.rules;
+    check('Monaco: Rev 1 curves, no 250 kW sectors, 8.5 / 9.0 / 9.0 MJ', c.curves === 'rev1' && c.alt1.length === 0 && c.recharge.race === 8.5e6 && c.recharge.timeTrial === 9e6 && c.recharge.practice === 9e6);
+    check('... Overtake judged after the Swimming Pool, active before Anthony Noghès', c.detectionM !== null && c.activationM !== null && c.detectionM > 2700 && c.detectionM < 2850 && c.activationM > 2850 && c.activationM < 2950, `${c.detectionM} / ${c.activationM} m`);
+    check('... the qualifying lap\'s launch out of the last corner (C5.12.4, C5.12.5)', c.bigCut.length === 1 && c.bigCut[0].timeTrialOnly && c.reset.length === 1 && inStretch(3100, c.reset[0]));
+  }
+}
+
 console.log('\n== On the 2026 Prototype');
 const ers = LC26_TUNED_CONFIG.ers;
 {
@@ -257,7 +347,8 @@ console.log('\n== Issue #180: Qiddiya, out of the last corner');
         Number.isNaN(o.limitAtM) ? 'not reached' : `reached at ${f(o.limitAtM, 0)} m`);
       check(`... superclipping a few seconds, not whole straights, ${name}`, o.superclipS > 1 && o.superclipS < 10, `${f(o.superclipS)} s`);
     });
-    check('The lap\'s recharge never over 8.5 MJ (C5.2.10)', lapHarvestPeak <= 8.5e6 + 1, `${f(lapHarvestPeak / 1e6, 3)} MJ at most`);
+    const limit = (car.vehicle as unknown as { ersCircuit: { recharge: { practice: number } } }).ersCircuit.recharge.practice;
+    check(`The lap's recharge never over the circuit's ${f(limit / 1e6, 1)} MJ in practice (C5.2.10)`, lapHarvestPeak <= limit + 1, `${f(lapHarvestPeak / 1e6, 3)} MJ at most`);
     check('The store never runs empty under power', emptyFlatS < 0.05, `${f(emptyFlatS, 2)} s`);
   }
 }
