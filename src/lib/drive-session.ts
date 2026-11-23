@@ -89,6 +89,7 @@ import { ScreenWakeLock } from "@/lib/screen-wake-lock";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
+import { HELD_KEYS, heldActionsOf, isHeldKeyAction, PhysicalKeys, type HeldKeyAction } from "@/lib/input/held-keys";
 import { shapeStick } from "@/lib/input/stick-shape";
 import { combineStickAndGyro, gyroSteerValue } from "@/lib/input/gyro-steer";
 import { gyroSource } from "@/lib/input/gyro-source";
@@ -205,20 +206,6 @@ export type RunResetReason = "session" | "restart" | "teleport" | "car" | "race"
 /** The VR headset: off, being asked for a session, or presenting */
 export type VrState = "off" | "requesting" | "on";
 
-/** Key actions that act while held, and the held-key flag each sets (the rest are one-shot actions) */
-const HELD_KEYS = {
-  throttle: "up",
-  brake: "down",
-  steerLeft: "left",
-  steerRight: "right",
-  throttleHalf: "half",
-  brakeHalf: "halfBrake",
-  clutch: "clutch",
-  boostHold: "boostHold",
-  headlightFlash: "headlightFlash",
-} as const satisfies Partial<Record<KeyAction, string>>;
-type HeldKeyAction = keyof typeof HELD_KEYS;
-const isHeldKeyAction = (action: KeyAction): action is HeldKeyAction => Object.hasOwn(HELD_KEYS, action);
 /** Held keys that take the car back from the autopilot (holding boost does not) */
 const DRIVER_KEYS: ReadonlySet<HeldKeyAction> = new Set(["throttle", "brake", "steerLeft", "steerRight", "throttleHalf", "brakeHalf"]);
 
@@ -744,6 +731,8 @@ export class DriveSession {
       freeCamKeys.clear();
       freeCamDrag = null;
     };
+    /** The keys physically down, kept through the pause menu and the seat panel: the drive holds them again after */
+    const physicalKeys = new PhysicalKeys();
     this.togglePause = () => {
       if (disposed) return;
       const paused = !this.snapshot.paused;
@@ -1998,6 +1987,11 @@ export class DriveSession {
       ) {
         return;
       }
+      // Every key down is noted, the ones the screens below take too: a driving key held as they close drives at once
+      physicalKeys.keyDown(
+        e,
+        this.snapshot.seatPanel ? "seatPanel" : appPhaseNow !== "driving" || this.snapshot.paused || gpuLost ? "menu" : "drive"
+      );
       // The loading screen, title menu and setup own the keyboard outside the car
       if (appPhaseNow !== "driving") return;
       this.unlockAudio();
@@ -2126,18 +2120,36 @@ export class DriveSession {
         }
         return;
       }
-      // During replay, driving keys (e.g. arrow keys used for timeline seek) must not steer or cancel autopilot
-      if (replay.active && isHeldKeyAction(action)) return;
       // Held controls ignore auto-repeat anyway; toggles must not flicker while a key is held
-      if (isHeldKeyAction(action)) {
-        heldKeys[HELD_KEYS[action]] = true;
-        if (DRIVER_KEYS.has(action) && physics.aiAutopilot && !coolDown.active) physics.aiAutopilot = false;
-        return;
-      }
+      if (isHeldKeyAction(action)) return holdKey(action);
       if (action === "shiftUp") heldKeys.gearUpHeld = true;
       // Held controls ignore auto-repeat anyway; one-shot actions must not flicker while a key is held
       if (e.repeat) return;
       runAction(action);
+    };
+    /** A held control's key is down */
+    const holdKey = (action: HeldKeyAction) => {
+      // During replay, driving keys (e.g. arrow keys used for timeline seek) must not steer or cancel autopilot
+      if (replay.active) return;
+      heldKeys[HELD_KEYS[action]] = true;
+      if (DRIVER_KEYS.has(action) && physics.aiAutopilot && !coolDown.active) physics.aiAutopilot = false;
+    };
+    /**
+     * The pause menu or the seat panel hands the car back: the keys still down hold again now, as their keydowns were
+     * dropped while it was open and the browser repeats a held key only after the system's repeat delay (#171). Held
+     * controls only, sorted as a keydown would: Free camera flies on its keys, Alt combos stay view nudges
+     */
+    const restoreHeldKeys = () => {
+      const freeCam = isFreeCamInteractive();
+      const driveCodes: string[] = [];
+      for (const code of physicalKeys.restorable(keyLookup)) {
+        if (cameraNudgeCodes.has(code)) continue;
+        if (freeCam && FREE_CAM_MOVE_CODES.has(code)) freeCamKeys.add(code);
+        else driveCodes.push(code);
+      }
+      const { actions, gearUpHeld } = heldActionsOf(driveCodes, keyLookup);
+      for (const action of actions) holdKey(action);
+      if (gearUpHeld) heldKeys.gearUpHeld = true;
     };
 
     this.runAction = (action) => {
@@ -2221,6 +2233,7 @@ export class DriveSession {
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
+      physicalKeys.keyUp(e.code);
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -2262,6 +2275,7 @@ export class DriveSession {
       }
       wheelFfb.stop();
       releaseHeldKeys();
+      physicalKeys.clear();
       // The first frames back are no measure of the frame rate
       governor.interrupt();
     };
@@ -2277,6 +2291,7 @@ export class DriveSession {
     // Keys held while focus leaves the window (Cmd-Tab, a system dialog) never get their keyup
     const onWindowBlur = () => {
       releaseHeldKeys();
+      physicalKeys.clear();
       // Their keyups go to another window: the keys would stay swallowed, and a held camera key would open the panel
       cameraNudgeCodes.clear();
       boundAltsHeld.clear();
@@ -2632,6 +2647,8 @@ export class DriveSession {
     let wheelLostPending = false;
     /** The player drove last frame: gyro steering takes its centre again when the car is handed back */
     let gyroWasDriving = false;
+    /** The pause menu, the seat panel or a lost GPU context held the car last frame */
+    let frozenLastFrame = false;
     const displayExtra: { deltaMs: number | null } = { deltaMs: null };
     // The view camera: every view's placement, the menus' orbit and the driver's neck; told to start over when the
     // run does and when the replay moves the drawn car
@@ -2944,6 +2961,9 @@ export class DriveSession {
       // The pause menu, the seat panel or a lost GPU context: the car waits
       const frozen = this.snapshot.paused || this.snapshot.seatPanel || gpuLost;
       const driving = !inMenu && !frozen && !replaying && !device.wheelLost;
+      // Handed back: the driving keys still down hold from this frame, not from the browser's first key repeat
+      if (frozenLastFrame && !frozen && driving && !podium.playing) restoreHeldKeys();
+      frozenLastFrame = frozen;
       const freeCamControl = !inMenu && !frozen && !podium.playing && !renderer.xr.isPresenting && cameraOverride === "free";
       wakeLock.setDesired(driving);
       const padTuning = settingsNow.padTuning;

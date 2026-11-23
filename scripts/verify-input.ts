@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { ScreenWakeLock, shouldHoldWakeLock, type WakeLockSentinelLike } from '../src/lib/screen-wake-lock';
 import { FlashTimer, HeadlightButton, LIGHTS_HOLD_MS, MIN_FLASH_MS } from '../src/lib/input/headlight-button';
+import { HELD_KEYS, heldActionsOf, PhysicalKeys } from '../src/lib/input/held-keys';
 import {
   buildKeyLookup,
   clearKey,
@@ -220,6 +221,84 @@ check('flash headlights: Y on the keyboard by default, beside the headlights key
   // An older save without it gets Y unless the player put Y on something else
   assert.deepEqual(parsePlayerSettings({ keys: { ...DEFAULT_KEY_BINDINGS, headlightFlash: undefined } }).keys.headlightFlash, ['KeyY']);
   assert.deepEqual(parsePlayerSettings({ keys: { ...DEFAULT_KEY_BINDINGS, headlightFlash: undefined, racingLine: ['KeyY'] } }).keys.headlightFlash, []);
+});
+check('#171 keys held as the pause menu closes: held controls hold again, menu presses and one-shots do not', () => {
+  const lookup = buildKeyLookup(DEFAULT_KEY_BINDINGS);
+  const press = (code: string, mods: { repeat?: boolean; altKey?: boolean; metaKey?: boolean } = {}) => ({
+    code,
+    repeat: mods.repeat ?? false,
+    altKey: mods.altKey ?? false,
+    metaKey: mods.metaKey ?? false,
+  });
+  const resume = (keys: PhysicalKeys, l = lookup) => heldActionsOf(keys.restorable(l), l);
+
+  // Throttle and steering pressed in the pause menu, before Flying lap was clicked: they drive at once
+  const keys = new PhysicalKeys();
+  keys.keyDown(press('KeyW'), 'menu');
+  keys.keyDown(press('ArrowLeft'), 'menu');
+  keys.keyDown(press('KeyW', { repeat: true }), 'menu');
+  assert.deepEqual(resume(keys), { actions: ['throttle', 'steerLeft'], gearUpHeld: false });
+  // One let go while the menu was open does not
+  keys.keyUp('ArrowLeft');
+  assert.deepEqual(resume(keys).actions, ['throttle']);
+  // Held from before the pause, through it: still held
+  const through = new PhysicalKeys();
+  through.keyDown(press('KeyS'), 'drive');
+  through.keyDown(press('Space'), 'drive');
+  assert.deepEqual(resume(through).actions, ['brake', 'boostHold']);
+
+  // One-shot keys never fire: the camera, a gear, a restart need a new press. Gear up held keeps only its hold (the
+  // clutch at a manual start)
+  const oneShots = new PhysicalKeys();
+  for (const code of ['KeyC', 'KeyQ', 'KeyL', 'KeyR', 'KeyE']) oneShots.keyDown(press(code), 'drive');
+  assert.deepEqual(resume(oneShots), { actions: [], gearUpHeld: true });
+
+  // Enter / Space / Backspace pressed in the menu picked the item that resumed: not a driving input, even bound to
+  // one, until the drive takes its repeat or it is pressed again
+  const rebound = buildKeyLookup({ ...DEFAULT_KEY_BINDINGS, throttle: ['Enter'], boostHold: ['Space'], clutch: ['Backspace'] });
+  const confirm = new PhysicalKeys();
+  for (const code of ['Enter', 'Space', 'Backspace']) confirm.keyDown(press(code), 'menu');
+  confirm.keyDown(press('Enter', { repeat: true }), 'menu');
+  assert.deepEqual(resume(confirm, rebound).actions, []);
+  confirm.keyDown(press('Enter', { repeat: true }), 'drive');
+  assert.deepEqual(resume(confirm, rebound).actions, ['throttle']);
+  confirm.keyUp('Space');
+  confirm.keyDown(press('Space'), 'drive');
+  assert.deepEqual(resume(confirm, rebound).actions, ['throttle', 'boostHold']);
+  // ...but held from before the pause they still drive
+  const heldEnter = new PhysicalKeys();
+  heldEnter.keyDown(press('Enter'), 'drive');
+  assert.deepEqual(resume(heldEnter, rebound).actions, ['throttle']);
+
+  // The seat panel's own keys (arrows, Enter, R) stay the panel's; W held through it drives
+  const seat = new PhysicalKeys();
+  seat.keyDown(press('KeyW'), 'drive');
+  seat.keyDown(press('ArrowRight'), 'seatPanel');
+  assert.deepEqual(resume(seat).actions, ['throttle']);
+
+  // A rebound key follows the bindings
+  const moved = new PhysicalKeys();
+  moved.keyDown(press('KeyK'), 'menu');
+  assert.deepEqual(resume(moved, buildKeyLookup({ ...DEFAULT_KEY_BINDINGS, throttle: ['KeyK'], nextTrack: [] })).actions, ['throttle']);
+
+  // Focus lost or the tab hidden: nothing is down any more
+  keys.clear();
+  assert.deepEqual(resume(keys).actions, []);
+  // A Cmd shortcut is never noted (macOS sends no keyup for it), and letting go of Cmd forgets every key
+  const cmd = new PhysicalKeys();
+  cmd.keyDown(press('KeyD'), 'drive');
+  cmd.keyDown(press('KeyW', { metaKey: true }), 'menu');
+  assert.deepEqual(resume(cmd).actions, ['steerRight']);
+  cmd.keyUp('MetaLeft');
+  assert.deepEqual(resume(cmd).actions, []);
+  // A key pressed with Alt is a view nudge, unless an Alt key bound to a control is down
+  const alt = new PhysicalKeys();
+  alt.keyDown(press('AltLeft', { altKey: true }), 'drive');
+  alt.keyDown(press('ArrowUp', { altKey: true }), 'drive');
+  assert.deepEqual(resume(alt).actions, []);
+  assert.deepEqual(resume(alt, buildKeyLookup({ ...DEFAULT_KEY_BINDINGS, clutch: ['AltLeft'] })).actions, ['clutch', 'throttle']);
+  // Every held control is one HELD_KEYS knows, and every one of them is a key action
+  for (const action of Object.keys(HELD_KEYS)) assert.ok(KEY_ACTIONS.some(({ id }) => id === action), action);
 });
 check('the headlight button: a tap flashes, a hold switches the lights once, nothing in the menus', () => {
   // Frames 16 ms apart; `pressed` is the rising edge the device reader gives
