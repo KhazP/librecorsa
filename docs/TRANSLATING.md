@@ -28,7 +28,7 @@ The code is the one browsers report for the language (`tr`, `pt-BR`, `zh-Hant`),
 
    Each entry has the English text, a note on where it shows when there is one, and an empty `translation`. The whole game is about 3,400 messages, more than a model returns in one reply, so split it: `--area hud` writes one area, and `--max 300` cuts the output into files of at most 300 messages (`tr.1.json`, `tr.2.json`…). Translate each file in its own request.
 
-2. Give the file to the model with the rules below, and ask it to fill in every `translation` and return the same JSON. A prompt that works:
+2. Give the file to the model with the rules below, and ask it to fill in every `translation` and return the same JSON. If the language has a glossary in `src/i18n/glossary/<language>.md` (the terms and the way of addressing the player that the rest of the game uses), give the model that too, so new text matches what's there. A prompt that works:
 
    > Translate the "en" text of every entry in this JSON into Turkish for the "translation" field, for the interface of a racing simulator. Keep the JSON keys and structure exactly. Use the "note" to see where the text appears. Keep every `{placeholder}` and `<tag>` exactly as written, untranslated. In `{count, plural, ...}` and `{x, select, ...}` blocks keep the keyword and the argument name, translate only the text inside the braces, and use your language's plural categories. Keep it as short as the English: most of it is buttons and labels. Leave car names, circuit names, LibreCorsa and the abbreviations DRS, ERS, ABS, TC, MFD, HUD, FFB and km/h as they are. Use sim racing terms the way that language's sim racers do.
 
@@ -40,7 +40,9 @@ The code is the one browsers report for the language (`tr`, `pt-BR`, `zh-Hant`),
 
    It checks each translation against its English: it must parse, and keep the same placeholders, plurals and tags. Any that don't are listed and left out, so you can fix them and merge again.
 
-4. Check it: `npm run i18n:status`, `npx tsx scripts/verify-i18n.ts`, then play with `?lang=tr` (or pick it in Settings) and look for text that's cut off or too long.
+4. When a new term comes up that the game will use again, add it to the language's glossary.
+
+5. Check it: `npm run i18n:status`, `npx tsx scripts/verify-i18n.ts`, then play with `?lang=tr` (or pick it in Settings) and look for text that's cut off or too long.
 
 ## Rules for the messages
 
