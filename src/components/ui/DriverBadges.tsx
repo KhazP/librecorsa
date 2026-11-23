@@ -40,6 +40,7 @@ const STYLE: Record<BadgeType, BadgeStyle> = {
   track_record: { icon: "lapTimes", tone: "best", variant: "soft", short: "FL" },
   og: { icon: "favouriteOn", tone: { color: "cyan" }, variant: "soft", short: "OG" },
   bulb: { icon: "idea", tone: { color: "lemon" }, variant: "soft", short: "" },
+  creator: { icon: "creator", tone: { color: "pink" }, variant: "soft", short: "" },
 };
 
 /** Cap inline class-tagged FL pills on multi-class drivers so phone rows never wrap into clutter */
@@ -427,7 +428,7 @@ function buildFlPills(b: DriverBadge, compact: boolean, context?: BadgeContext):
   return pills;
 }
 
-/** A driver's earned badges (weekly podiums, class-colored fastest laps with tap popover, OG, Bulb) */
+/** A driver's badges (the Creator, weekly podiums, class-colored fastest laps with tap popover, OG, Bulb) */
 export const DriverBadges: React.FC<DriverBadgesProps> = ({
   badges,
   compact = false,
@@ -576,6 +577,7 @@ const MEANING: Record<Exclude<BadgeType, WeeklyMedalType>, string> = {
   track_record: "Fastest lap",
   og: "Physics V1",
   bulb: "Game idea",
+  creator: "Made the game",
 };
 
 function flLegendMeta(context?: BadgeContext): { tone: BadgeToneProp; short: string } {

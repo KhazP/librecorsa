@@ -30,7 +30,7 @@ import { driverRecord, listRaceResults } from "./results";
 import { driverProfile } from "./profile";
 import { ROOM_CODE_RE } from "./room";
 import { adminClearDriverLaps, adminDeleteLap, adminGrantAward, adminKeyMatches, adminListAwards, adminRevokeAward, adminStats } from "./admin";
-import { hallOfFame, listBadges } from "./awards";
+import { hallOfFame, listBadges, parseCreatorKeyHashes } from "./awards";
 import { analyticsConfigured, cloudflareStats } from "./analytics";
 import { turnConfigured } from "./turn";
 import { recordUsage } from "./usage";
@@ -234,7 +234,7 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
       return json({ ok: false, error: "Too many badge requests, try again shortly" }, 429, origin);
     }
     try {
-      const answer = await listBadges(env.BOARD_DB, url, Date.now());
+      const answer = await listBadges(env.BOARD_DB, url, Date.now(), parseCreatorKeyHashes(env.CREATOR_KEY_HASH));
       return json(answer.body, answer.status, origin, SHARED_ANSWER_S.badges);
     } catch (err) {
       console.error("badges", err);

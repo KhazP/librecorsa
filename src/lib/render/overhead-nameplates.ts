@@ -19,6 +19,7 @@ const NAMEPLATE_BADGE_SHORT: Record<BadgeType, string> = {
   track_record: "FL",
   og: "OG",
   bulb: "IDEA",
+  creator: "DEV",
 };
 
 function sameBadgeContext(a: BadgeContext, b: BadgeContext): boolean {
