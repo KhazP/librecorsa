@@ -20,7 +20,7 @@ common questions.
 
 ## Running it
 
-You need Node.js 24 (what CI uses).
+You need Node.js 24 (what CI uses). [How the code fits together](docs/ARCHITECTURE.md) is a map of the code.
 
 ```bash
 npm install

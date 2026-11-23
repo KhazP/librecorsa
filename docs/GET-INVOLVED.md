@@ -29,7 +29,7 @@ The game's text lives in `src/i18n/messages/`, one folder per language. A new la
 - [CONTRIBUTING.md](../CONTRIBUTING.md) has the setup: Node.js 24, `npm install`, `npm run dev`. Run `npm run typecheck` and `npm run verify` before you open a pull request.
 - Keep a pull request to one change, and say what a player would notice.
 - Issues marked [good first issue](https://github.com/librecorsa/librecorsa/issues?q=is%3Aopen+label%3A%22good+first+issue%22) or [help wanted](https://github.com/librecorsa/librecorsa/issues?q=is%3Aopen+label%3A%22help+wanted%22) are good places to start.
-- How the physics and the AI work: [Physics validation](physics/README.md) and [Race AI](race-ai.md).
+- Where things are in the code: [How the code fits together](ARCHITECTURE.md). How the physics and the AI work: [Physics validation](physics/README.md) and [Race AI](race-ai.md).
 
 ## Fix the docs
 
