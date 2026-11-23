@@ -28,7 +28,7 @@ import { CameraTab, GraphicsTab, HudTab, InterfaceTab } from "./panes/DisplayPan
 import { AudioPane } from "./panes/AudioPane";
 import { DataTab, DriverTab } from "./panes/ProfilePane";
 import { AccountPanel } from "@/components/account/AccountPanel";
-import { useAccountState } from "@/lib/account/account-store";
+import { accountActions, useAccountState } from "@/lib/account/account-store";
 import { ForceFeedbackSetup } from "@/components/menu/steps/WheelStep";
 
 export type SettingsCategory = "driving" | "controls" | "ffb" | "display" | "audio" | "profile";
@@ -123,6 +123,8 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
   // The Q / E and Y caps name physical keys as printed on this keyboard
   useKeyLayout();
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // Closing Settings is a save point: what changed here goes to the account's cloud save shortly after
+  useEffect(() => () => accountActions.pushSoon(), []);
   const paneId = useId();
   const [category, setCategory] = useState<SettingsCategory>(initialCategory);
   const [tabFor, setTabFor] = useState<Partial<Record<SettingsCategory, string>>>(() =>
