@@ -304,7 +304,14 @@
     "standingsOut": "OUT",
     "lastLap": "LAST LAP",
     "delta": "DELTA",
-    "brakeBias": "BRAKE BIAS"
+    "brakeBias": "BRAKE BIAS",
+    "rpmScale": "RPM ×1000",
+    "vsc": "VSC",
+    "slowDown": "SLOW DOWN",
+    "giveBack": "GIVE THE POSITION BACK",
+    "straightCall": "Straight mode",
+    "overtakeCall": "Overtake ready",
+    "fastestCall": "Fastest lap"
   },
   "gtLike": {
     "positionOf": "Position {position} of {total}",
