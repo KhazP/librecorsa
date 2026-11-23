@@ -2618,6 +2618,18 @@ def index_entry(tid, cfg, data):
     }
 
 
+def write_circuit_entry(tid, cfg, data):
+    """`--no-register`: the circuit's index entry beside its files (public/tracks/<id>/circuit.json), for
+    `npm run mod -- from-circuit` to package, instead of adding the circuit to the game's own lists"""
+    path = os.path.join(ROOT, 'public', 'tracks', tid, 'circuit.json')
+    entry = index_entry(tid, cfg, data)
+    if cfg.get('defaultTimeOfDay'):
+        entry['defaultTimeOfDay'] = cfg['defaultTimeOfDay']
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(entry, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+
 def sync_track_configs(built_tracks):
     """Update scripts/tracks/tracks.json and public/tracks/index.json with the ported AC tracks."""
     tjson_path = os.path.join(HERE, 'tracks.json')
@@ -4210,6 +4222,8 @@ def main():
     ap.add_argument('--no-compress', action='store_true')
     ap.add_argument('--extras-only', action='store_true',
                     help="graft just the circuit's extraModels and driftingObjects into its existing GLB")
+    ap.add_argument('--no-register', action='store_true',
+                    help="leave the game's circuit lists alone: write public/tracks/<id>/circuit.json for a mod package")
     args = ap.parse_args()
 
     ids = list(AC_TRACKS.keys()) if args.id == 'all' else [x.strip() for x in args.id.split(',')]
@@ -4227,7 +4241,11 @@ def main():
         data = build_ac_track(tid, cfg, args)
         built[tid] = (cfg, data)
 
-    sync_track_configs(built)
+    if args.no_register:
+        for tid, (cfg, data) in built.items():
+            write_circuit_entry(tid, cfg, data)
+    else:
+        sync_track_configs(built)
 
     if not args.no_glb and not args.no_line_opt:
         for tid in ids:

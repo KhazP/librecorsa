@@ -284,6 +284,8 @@ def main():
     ap.add_argument('--no-glb', action='store_true')
     ap.add_argument('--no-line-opt', action='store_true')
     ap.add_argument('--no-compress', action='store_true')
+    ap.add_argument('--no-register', action='store_true',
+                    help="leave the game's circuit list alone: write public/tracks/<id>/circuit.json for a mod package")
     args = ap.parse_args()
     if not re.fullmatch(r'[a-z0-9_]+', args.id):
         raise SystemExit('the id is lower case letters, digits and _ (it names the folder and the URL)')
@@ -295,7 +297,10 @@ def main():
     log(f"\n=== Building {args.id} ({cfg['name']}) from {args.glb} ===")
     src = model_sources(cfg, args.glb)
     data = pat.build_from_sources(args.id, cfg, args, src)
-    update_index(args.id, cfg, data)
+    if args.no_register:
+        pat.write_circuit_entry(args.id, cfg, data)
+    else:
+        update_index(args.id, cfg, data)
     if not args.no_glb and not args.no_line_opt:
         log(f'  optimising F1 and GT3 racing lines for {args.id}...')
         bt.optimise_lines(args.id, cfg.get('lineMarginM'))
