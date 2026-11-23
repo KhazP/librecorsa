@@ -6,7 +6,7 @@ import { CONTACT_EMAIL, REPO_URL, SITE_NAME } from "@/lib/site";
 // storage, cloudflare/api (boards, races, rooms, usage) and the connection servers in multiplayer-sync.ts. Change this
 // page in the same commit as anything that changes what is stored or sent.
 const DESCRIPTION = "What LibreCorsa keeps in your browser, what it sends online and when, and how to have it removed.";
-const UPDATED = "14 November 2026";
+const UPDATED = "23 November 2026";
 
 export const metadata: Metadata = {
   title: "Privacy",
@@ -44,10 +44,10 @@ export default function PrivacyPage() {
           <li>
             <span className={B}>Lap boards.</span> When a lap is posted, the board stores your driver name and
             three-letter code, the lap (times, circuit, car, assists, realism, tyre, and whether it was driven on a keyboard, controller, wheel
-            or touch screen) and a recording of it that others
-            can race as a ghost. It also stores a scrambled form of your driver key, which can’t be turned back
-            into the key. Names and laps on a board are public. Laps are posted only once you have chosen a name of
-            your own, and you can switch off “Post my best laps online” in the settings.
+            or touch screen), the car setup it was driven with (without its fuel load) and a recording of it that
+            others can race as a ghost. It also stores a scrambled form of your driver key, which can’t be turned back
+            into the key. Names, laps and setups on a board are public. Laps go up under your driver name, including
+            the one the game gives you at first, and you can switch off “Auto-upload best laps” in the settings.
           </li>
           <li>
             <span className={B}>Open races.</span> The race server passes each car’s position to the others while

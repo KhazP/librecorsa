@@ -1,6 +1,6 @@
 # Porting circuits
 
-The repository includes one circuit, RISE Motordrome. Every other circuit is hosted on librecorsa.org and is gitignored. This guide is how I convert an Assetto Corsa circuit mod for a local clone, and how to build a circuit of your own in Blender.
+The repository includes one circuit, RISE Motordrome. Every other circuit is hosted on librecorsa.org and is gitignored. This guide is how I convert an Assetto Corsa circuit mod for a local clone, and how to build a circuit of your own in Blender. An F1 25 track mod has its own page: [Porting a circuit from an F1 25 mod](PORTING-F1-MODS.md).
 
 The converter was written circuit by circuit, so expect to read it and adjust it for a new one.
 
@@ -62,7 +62,7 @@ From the mod it reads:
 - the `.kn5` models: visual meshes, and the physics meshes by their surface names
 - `ai/fast_lane.ai`: required, since the centreline and the road width are taken from it
 - `ai/pit_lane.ai`: optional, the pit lane
-- `data/`: `surfaces.ini`, `sections.ini`, `drs_zones.ini`, `cameras*.ini`, `groove.ini`, `crew.ini` and `lighting.ini`, each optional
+- `data/`: `surfaces.ini`, `sections.ini`, `drs_zones.ini`, `cameras.ini` and `groove.ini`, each optional
 
 ## Building a circuit in Blender
 
@@ -132,6 +132,20 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
 ```
 
 It writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`, adds the circuit to `public/tracks/index.json`, runs the racing-line optimiser and compresses the GLB, with the same `--no-line-opt`, `--no-glb` and `--no-compress` options. A DRS zone goes on each of the three longest straights that is at least 450 m long, the TV cameras are spread round the lap, and the corners are numbered in order. Then list it and check it as below.
+
+## Problems you're likely to hit
+
+I ran into these porting Qiddiya Speed Park, a modelled circuit with a sharp crest, tight banked corners and a night race. The settings go in the circuit's settings JSON and work with both converters, except `gridBoxes`, `defaultTimeOfDay` and `nightLighting`, which only `build_blender_track.py` reads.
+
+- **A crest comes out lower than the model.** The road's height profile is smoothed along the lap (`profileSmoothSamples`, 1.5 samples by default, about 7.5 m) and crests are eased to a 400 m radius (`crestMinRadiusM`), so scan ripple doesn't launch the cars. On a clean model with a real sharp crest that cuts the crest down, and the car drives under the drawn road. Lower both: Qiddiya uses `"crestMinRadiusM": 20` and `"profileSmoothSamples": 0.6`.
+- **The car bounces through a tight banked corner.** The physics surface is built from rows 5 m apart joined by straight lines. Round a tight banked corner those lines sag a few centimetres off the curve the wheels read the road height from, and the car bounces every 5 m. `"colliderRowsPerSample": 2` puts the rows on that curve, two per 5 m. Four smooths it more but makes the GLB a few MB bigger. If the road also twists quickly, `"roadTwistM"` (Qiddiya: 0.005) cuts the road surface finer where it twists.
+- **Kerbs and lines break up in the distance.** Paint lying a millimetre over the road fights it for depth. Give those materials a `depthOffset` in their glTF extras (Qiddiya's paint uses -2) and the game draws them in front. In Blender that's a custom property on the material, exported with Include > Data > Custom Properties on. Paint with a `depthOffset` also moves with the road under it when the game fits the drawn road to the physics one, so long road triangles don't bury the kerbs.
+- **The model is too heavy.** Simplify meshes with their UVs kept, or the textures smear. Leave painted lines out of any simplification: they're thin enough to turn into wedges.
+- **Sponsor logos.** Real brands hide in textures with generic names. Before you publish, look at every texture the circuit uses (a contact sheet makes it quick) and paint over logos, photos of real people and photos of real places.
+- **The grid doesn't sit on the painted boxes.** `gridBoxes` takes the corner points of each painted box in the model's coordinates and stands the grid on the paint (`scripts/tracks/painted_grid.py`).
+- **A night race.** `"defaultTimeOfDay": "night"` starts sessions at night until the player picks a time. `nightLighting` places floodlight masts and lights tunnels (its settings are at the top of `scripts/tracks/night_lighting.py`). A material that should glow at night gets `nightEmissive` extras with its `day` and `night` strength.
+- **Corner names.** `turns_override` names corners by distance round the lap in metres: `[[740, "The Blade"]]`.
+- **Testing a hosted circuit before it's listed.** `"unlisted": true` keeps it out of the game's lists. It still opens by link (`?track=<id>`).
 
 ## Listing it in the game
 

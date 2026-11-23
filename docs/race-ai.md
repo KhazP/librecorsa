@@ -18,8 +18,9 @@ in this file are tuning values checked against headless races. They are not meas
 ## Racecraft rules
 
 - **Following.** A car never closes on the car in its path faster than it could still stop behind it:
-  `v ≤ v_ahead + √(2·7·(gap − 1.5))`. Without this, the pack ran into each other going into braking zones.
-- **Passing.** The car stays in the tow until it is close (nose to tail `3 + 0.9·closing` m), then pulls out. Once
+  `v ≤ v_ahead + √(2·6·(gap − 2.5))`. Without this, the pack ran into each other going into braking zones.
+- **Passing.** The car stays in the tow until it is close (nose to tail `3 + (0.9 + t)·closing` m, where `t` is the
+  time the move across takes, and 6 m more with a corner ahead), then pulls out. Once
   started, the pass is held even after the car leaves the other car's wake. It commits to a side when the braking
   zone is near, and pushes a little harder once alongside. A pass is only started if the car can draw alongside
   before the turn-in plus part of the braking zone (`passFeasible`). That rules out lunges.
@@ -53,8 +54,8 @@ Damage is judged by the closing speed along the contact normal. Barrier hits cou
 | Puncture chance on a wheel (from 4 m/s) | yes | yes |
 | One hit that retires the car | 34 m/s | 24 m/s |
 
-On the f12026-car physics, damage reaches the car through the wake multipliers (downforce, drag), per-wheel grip
-and toe, and engine torque. On the LC26 model it only takes the aero loss.
+On the f12026-car physics, which the LC26 ships on too, damage reaches the car through the wake multipliers
+(downforce, drag), per-wheel grip and toe, and engine torque. On the LC26's older engine it only takes the aero loss.
 
 ## Race control
 
@@ -73,5 +74,5 @@ warning. An AI driver at fault races with more caution for 20 s.
 ```
 npx tsx scripts/verify-race-contact.ts     # rear-end, taps, spins, rejoin, a stopped car, barriers, damage off
 npx tsx scripts/verify-race-craft.ts       # judgements, race control, grid, a duel, a stopped car on the line
-npm run race:headless -- --track monza --car f12026-car --laps 3 --cars 8 --grid qualifying --damage full
+npm run race:headless -- --track rwanda_official_short --car f12026-car --laps 3 --cars 8 --grid qualifying --damage full
 ```

@@ -5,15 +5,17 @@ Thanks for helping. Bug reports, handling feedback from sim racers, new content 
 ## Where things go
 
 - **Bugs**: open a [bug report](https://github.com/KhazP/librecorsa/issues/new?template=bug-report.yml).
-- **A car or track you'd like**: use **Request a car or track** in the game's title menu, or the
+- **A car or track you'd like**: use **Feedback** in the game's title menu and pick Car or Track, or the
   [request form](https://github.com/KhazP/librecorsa/issues/new?template=content-request.yml).
 - **Questions, setups, lap times, ideas**: [Discussions](https://github.com/KhazP/librecorsa/discussions).
+- **Guides** (porting cars, circuits and wheels, how the physics and the AI work): [docs.librecorsa.org](https://docs.librecorsa.org/).
+  The pages are the Markdown in `docs/`, so a fix to a guide is a pull request on that file.
 - **Security problems**: report them privately, as described in [SECURITY.md](SECURITY.md).
 - **You own an asset we use**: open a [rights / takedown request](https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml).
 
 ## Running it
 
-You need Node.js 22 (what CI uses).
+You need Node.js 24 (what CI uses).
 
 ```bash
 npm install
@@ -27,13 +29,13 @@ npm run typecheck
 npm run verify
 ```
 
-`npm run verify` runs every `scripts/verify-*.ts` suite (physics, both car models, GT3, input, lap tools, race
-session, realism, telemetry out, WebHID force feedback). It takes a few minutes, several suites at once, longest
-first (`scripts/verify-timings.json`; `npm run verify -- --record` updates the times, and `VERIFY_JOBS=1` runs the
+`npm run verify` runs every `scripts/verify-*.ts` suite (physics, every car model, input, lap tools, race session,
+realism, telemetry out, WebHID force feedback) but the slow lap check. It takes a few minutes, several suites at once,
+longest first (`scripts/verify-timings.json`; `npm run verify -- --record` updates the times, and `VERIFY_JOBS=1` runs the
 suites one after another). A failing suite doesn't stop the others: the run ends with every suite that failed and
 the command that reruns it, such as `node scripts/run-verify.mjs tyre-thermal`. Physics changes must keep it
 passing. If a change is meant to move a number, update the check and say why in the pull request.
-`npm run verify:laps` is the slow full-pace lap check; run it when you touch tyres, aero, the drivetrain or the
+`npm run verify:laps` is that slow full-pace lap check; run it when you touch tyres, aero, the drivetrain or the
 racing-line optimiser.
 
 ## Pull requests

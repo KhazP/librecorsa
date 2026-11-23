@@ -1,0 +1,33 @@
+/*
+ * The game's colours and type (docs/DESIGN.md §2-§3) on Starlight's theme variables. Dark is the game's own look:
+ * volt for links and the current page, the carbon and void surfaces. Volt can't be read on white, so light mode keeps
+ * Starlight's greys and takes a deep olive from the same hue.
+ *
+ * This file isn't in Starlight's cascade layer, so it wins over Starlight's own :root[data-theme="light"] rules: the
+ * dark values must stay out of light mode by their selector.
+ */
+:root {
+  --sl-font: "Geist Variable", var(--sl-font-system);
+  --sl-font-mono: "Geist Mono Variable", var(--sl-font-system-mono);
+}
+
+:root:not([data-theme="light"]) {
+  --sl-color-white: #f5f7fa; /* lc-chalk */
+  --sl-color-gray-1: #e3e7ef;
+  --sl-color-gray-2: #c5cbd8; /* lc-fog */
+  --sl-color-gray-3: #8e96aa; /* lc-slate */
+  --sl-color-gray-4: #5b6275; /* lc-dim */
+  --sl-color-gray-5: #262b3d; /* lc-line */
+  --sl-color-gray-6: #11131a; /* lc-carbon */
+  --sl-color-black: #08090d; /* lc-void */
+
+  --sl-color-accent-low: #1c2400;
+  --sl-color-accent: #99bf00; /* lc-volt-dim */
+  --sl-color-accent-high: #ccff00; /* lc-volt */
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #eef8cc;
+  --sl-color-accent: #4a6300;
+  --sl-color-accent-high: #2f4000;
+}
