@@ -2,15 +2,15 @@
 // in the `@theme` block of src/app/globals.css (UI standard §0, §1, §2).
 //
 //   node scripts/site/codemod-ui-tokens.mjs                    dry run: what would change, per rule and per file,
-//                                                         and every value it refuses
+//                                                              and every value it refuses
 //   node scripts/site/codemod-ui-tokens.mjs --write            apply
 //   node scripts/site/codemod-ui-tokens.mjs <path> [...]       only these files or folders
-//   --root <dir>                                          run against another checkout or a copy of `src`
-//   --report <file.md>                                    also write the report to a file
-//   --json <file.json>                                    also write every replacement and refusal as JSON
-//   --spacing=all                                         rule 6 for every even px value (default: only 6 10 14 18 22 26 30)
-//   --near-miss                                           the second pass: only the owner-approved near misses below,
-//                                                         which are not value-identical (run it after the first pass)
+//   --root <dir>                                               run against another checkout or a copy of `src`
+//   --report <file.md>                                         also write the report to a file
+//   --json <file.json>                                         also write every replacement and refusal as JSON
+//   --spacing=all                                              rule 6 for every even px value (default: only 6 10 14 18 22 26 30)
+//   --near-miss                                                the second pass: only the owner-approved near misses below,
+//                                                              which are not value-identical (run it after the first pass)
 //
 // Plain Node, no dependencies. It works on text patterns, never on line numbers, so it can run again after other
 // branches are merged; a second run changes nothing. Token values are read from globals.css at run time.

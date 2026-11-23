@@ -20,7 +20,7 @@
  *   npx tsx scripts/tracks/optimize-racing-line.ts                       # the default circuit, F1 line: optimise + validate + write
  *   npx tsx scripts/tracks/optimize-racing-line.ts --track suzuka --car gt3
  *   npx tsx scripts/tracks/optimize-racing-line.ts --all                 # every circuit, both lines
- *   ... --dry-run                                                 # optimise + validate only
+ *   ... --dry-run                                                        # optimise + validate only
  *
  * On a point-to-point course (a hill climb, `metadata.pointToPoint`) the time is the run's, from rest at the start line
  * to the finish line, the line keeps to the centre on the stretch with no road, and the physics check is one run from
