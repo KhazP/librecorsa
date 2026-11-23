@@ -25,7 +25,7 @@ import { boardStateOf, watchOnlineConfig, type BoardState } from "@/lib/net/onli
 import { DEFAULT_RACE_SLOT_S } from "@/lib/net/race-schedule";
 import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer } from "@/lib/sim/lap-recorder";
-import { currentBoardBase, lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { currentBoardBase, lapBoardClass, lapConditionsNow, lapGoesOnBoards, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, listBestLaps, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
 import {
   boardKeyOf,
@@ -1045,6 +1045,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           // not the local personal best: a best set before the board began never went up, and a returning driver's
           // slower laps still belong on it. A failure offers a retry on the lap card; a board out of reach is asked
           // again now, and if it still doesn't answer the lap waits and goes up once it does
+          // A lap with mod content is the player's own: nothing goes up, and the card doesn't offer it
+          if (!lapGoesOnBoards(recording)) return;
           const week = challengeOf(recording);
           const weekBest = week ? loadChallengeBest(week) : null;
           const board = boardKeyOf(recording);

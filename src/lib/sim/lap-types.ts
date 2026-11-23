@@ -364,7 +364,15 @@ export interface LapRecording {
   trackLengthM?: number;
   /** Optional car setup used to drive this lap (stored in local IDB and R2 ghost JSON for "Apply setup") */
   setup?: SharedCarSetup;
+  /**
+   * Driven with a mod package's car or on its circuit (src/lib/mods): kept as a local best and ghost like any lap, never
+   * sent to a board (`lapGoesOnBoards`). The wire form leaves it out
+   */
+  mod?: true;
 }
+
+/** Whether a lap may go on the online boards and the weekly challenge: never one with mod content in it */
+export const lapGoesOnBoards = (rec: Pick<LapRecording, "trackId" | "mod">): boolean => !rec.mod && !rec.trackId.startsWith("mod:");
 
 /** A corner of the lap: the lowest speed through it, and the best seen on earlier laps */
 export interface CornerStat {

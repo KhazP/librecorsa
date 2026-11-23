@@ -50,6 +50,8 @@ export interface LapRecorderOptions {
   driverCode: string;
   sampleHz?: number;
   personalBestMs?: number | null;
+  /** The car is a mod package's (its laps are marked `mod` and stay off the boards); the circuit's id says so itself */
+  mod?: boolean;
 }
 
 export interface QuatLike {
@@ -148,6 +150,8 @@ export class LapRecorder {
   /** Turns in track order, with the half-width of each corner window */
   private readonly corners: CornerWindow[];
   private vehicle: VehicleModelId;
+  /** Driving a mod package's car */
+  private mod: boolean;
   /** The revision this car's laps on this circuit are ranked under, read once when the car is set */
   private physicsVersion: number;
   private driverName: string;
@@ -180,6 +184,7 @@ export class LapRecorder {
     this.sampleHz = opts.sampleHz ?? DEFAULT_SAMPLE_HZ;
     this.period = 1 / this.sampleHz;
     this.vehicle = opts.vehicle;
+    this.mod = opts.mod ?? false;
     this.physicsVersion = lapPhysicsVersion(opts.vehicle, opts.trackId);
     this.driverName = cleanDriverName(opts.driverName);
     this.driverCode = opts.driverCode;
@@ -201,7 +206,8 @@ export class LapRecorder {
   }
 
   /** Change car / driver / known personal best (a car change also clears session bests) */
-  setContext(ctx: Partial<Pick<LapRecorderOptions, "vehicle" | "driverName" | "driverCode" | "personalBestMs">>): void {
+  setContext(ctx: Partial<Pick<LapRecorderOptions, "vehicle" | "driverName" | "driverCode" | "personalBestMs" | "mod">>): void {
+    if (ctx.mod !== undefined) this.mod = ctx.mod;
     if (ctx.vehicle !== undefined && ctx.vehicle !== this.vehicle) {
       this.vehicle = ctx.vehicle;
       this.physicsVersion = lapPhysicsVersion(ctx.vehicle, this.trackId);
@@ -432,6 +438,7 @@ export class LapRecorder {
         return acc;
       }, []),
     };
+    if (this.mod || this.trackId.startsWith("mod:")) recording.mod = true;
     if (this.lapConditions) {
       recording.conditions = { ...this.lapConditions };
       const used = this.mostUsedInput();
@@ -625,6 +632,7 @@ export function validateLapRecording(raw: unknown): LapRecording | null {
     data,
   };
   if (conditions) out.conditions = conditions;
+  if (r.mod === true) out.mod = true;
   // The circuit version the lap was driven on (optional: older laps and downloaded ghosts lack it)
   if (typeof r.trackGeometry === "string" && /^[0-9a-f]{8}$/.test(r.trackGeometry)) out.trackGeometry = r.trackGeometry;
   if (finite(r.trackLengthM) && r.trackLengthM > 100 && r.trackLengthM < 100_000) out.trackLengthM = r.trackLengthM;
