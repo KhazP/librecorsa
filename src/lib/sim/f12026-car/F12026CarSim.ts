@@ -1190,6 +1190,8 @@ export class F12026CarSim implements SimulatorCar {
   private overtakeLap = 0;
   /** The player's Automatic Overtake (2026 F1) */
   public autoOvertake = true;
+  /** Race control's Low Grip Conditions (`WeatherContactSample.lowGrip`): the 2026 rules' wet-weather limits */
+  private lowGrip = false;
   /** Seconds the autopilot has been off: `step` decides from it whether a takeover starts it afresh */
   private autopilotIdleS = 0;
   public gamepadAssistEnabled = true;
@@ -1957,6 +1959,7 @@ export class F12026CarSim implements SimulatorCar {
   public setWeatherSample(sample: WeatherContactSample): void {
     if (![sample.waterMm, sample.wetness, sample.ambientC].every(Number.isFinite)) return;
     const v = this.vehicle;
+    this.lowGrip = sample.lowGrip === true;
     v.waterMm = Math.max(0, sample.waterMm);
     if (sample.wheelWaterMm) {
       // sample.wheelWaterMm is [FR, FL, RR, RL]; v.wheelWaterMm is [LF, RF, LR, RR]
@@ -2229,8 +2232,13 @@ export class F12026CarSim implements SimulatorCar {
       v.ersCircuit && Number.isFinite(v.trackProgress)
         ? v.ersCircuit.overtakeZones.some((w) => inStretch(v.trackProgress * this.track.totalLengthM, w))
         : inOvertakingZone(v.trackProgress);
-    const aiOvertake = this.aiAutopilot && straight2026 && racing && overtakeOk && zoneNow;
-    v.extraRechargeJ = straight2026 ? this.overtake.extraRechargeJ(this.raceControl) : 0;
+    // Low Grip Conditions (2026): Overtake disabled in every session (Section B7.2.2 d), the Boost only holding the power
+    // (B7.2.1 g), only the front flaps (B7.1.2 b)
+    const lowGrip = straight2026 && this.lowGrip;
+    v.flapsLowGrip = straight2026 ? this.lowGrip : null;
+    v.ersLowGrip = lowGrip;
+    const aiOvertake = this.aiAutopilot && straight2026 && racing && overtakeOk && !lowGrip && zoneNow;
+    v.extraRechargeJ = straight2026 && !lowGrip ? this.overtake.extraRechargeJ(this.raceControl) : 0;
     v.ersSession = racing ? 'race' : this.energyTimeTrial ? 'timeTrial' : 'practice';
     if (this.config.ers.regulations === 'f1-2026') {
       // The 2026 rules: the Boost and Overtake are two things (FIA 2026 Section C5.12.5, B7.2.3). The Boost: the driver's,
@@ -2241,15 +2249,15 @@ export class F12026CarSim implements SimulatorCar {
         this.overtakeLap = this.overtake.activations;
         this.overtakeInUse = false;
       }
-      if (inputs.overtake && racing && overtakeOk) this.overtakeInUse = !this.overtakeInUse;
-      if (!overtakeOk) this.overtakeInUse = false;
+      if (inputs.overtake && racing && overtakeOk && !lowGrip) this.overtakeInUse = !this.overtakeInUse;
+      if (!overtakeOk || lowGrip) this.overtakeInUse = false;
       const autoOt =
-        straight2026 && racing && overtakeOk && !this.overtakeInUse && !this.aiAutopilot && this.autoOvertake &&
+        straight2026 && racing && overtakeOk && !lowGrip && !this.overtakeInUse && !this.aiAutopilot && this.autoOvertake &&
         zoneNow && inputs.throttle >= 0.98;
       const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake) && v.ersEnergyJ > 0;
       v.setPerformanceMode(this.userErsMode);
       v.ersBoost = boost;
-      v.ersOvertake = straight2026 && (!racing || this.overtakeInUse || aiOvertake || autoOt);
+      v.ersOvertake = straight2026 && !lowGrip && (!racing || this.overtakeInUse || aiOvertake || autoOt);
       v.ersOvertakeShare = autoOt ? AUTO_OVERTAKE_SHARE : 1;
       this.ersBoostNow = boost;
       this.overtakeAutoNow = autoOt;
@@ -3311,7 +3319,8 @@ export class F12026CarSim implements SimulatorCar {
     t.overtakeAuto = t.overtakeRace && this.overtakeAutoNow;
     t.boostRemainingS = this.boostRemainingS;
     t.overtakingRules = this.profile.hasDrs ? this.rules : undefined;
-    t.overtakeAvailable = this.profile.hasErs && this.overtakeAvailable;
+    t.overtakeAvailable = this.profile.hasErs && this.overtakeAvailable && !(this.rules === 'straight-mode-2026' && this.lowGrip);
+    t.lowGrip = this.rules === 'straight-mode-2026' && this.lowGrip ? true : undefined;
     t.turboBoostBar = this.profile.turbo ? Math.round(v.turboBoostBar * 100) / 100 : 1;
     t.fuelKg = Math.round(this.fuelKg * 100) / 100;
 

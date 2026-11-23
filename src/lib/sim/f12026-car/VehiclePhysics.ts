@@ -175,8 +175,10 @@ import { roadTextureHeightM } from '../road-texture';
 import {
   FLAP_PRESS_MAX_WAIT_S,
   FLAP_PRESS_REACH_M,
+  inDelayedLapWindow,
   type LapWindow,
   lapWindowFor,
+  LOW_GRIP_ZONE_DELAY_M,
   mergeLapWindows,
   STRAIGHT_NOTICE_M,
 } from '../straight-mode-zones';
@@ -1393,6 +1395,12 @@ export class VehiclePhysics {
    */
   public drsFlaps: 'front-rear' | 'rear' = 'front-rear';
   /**
+   * Race control's grip call for the flaps (2026 Straight Mode): null, none (the flaps shut once the road under the car
+   * is too wet, `isRearFlapAllowedInWet`); false, Normal Grip Conditions (both open); true, Low Grip Conditions: only
+   * the front flaps open (partial activation, FIA Section B7.1.2 b), each stretch from `LOW_GRIP_ZONE_DELAY_M` later
+   */
+  public flapsLowGrip: boolean | null = null;
+  /**
    * A zone opens only after its detection point was crossed eligibly (`drsEligibleAtDetection`, DRS up to 2025).
    * Off: every zone opens for every car (2026 Straight Mode); the detection points are still reported.
    */
@@ -1410,6 +1418,11 @@ export class VehiclePhysics {
   /** The circuit's 2026 energy rules (`f1-energy-circuits.ts`) and the session driven; null: the rules' defaults */
   public ersCircuit: F1EnergyCircuit | null = null;
   public ersSession: EnergySession = 'practice';
+  /**
+   * Low Grip Conditions under the 2026 rules: the Boost only holds the power (Section B7.2.1 g i), and a cut may be
+   * reset only in the last sector before the line, never in a race (g ii). The adapter's
+   */
+  public ersLowGrip = false;
   /**
    * Distance on from lap distance s (m) to the next braking zone on the circuit (m; Infinity: none), which the 2026
    * energy management plans its cuts and superclipping by: the adapter's, from the car's braking guide. Read at each
@@ -1996,11 +2009,26 @@ export class VehiclePhysics {
     return base + this.extraRechargeJ;
   }
 
-  /** How much a power-limited period may cut at its start here (W, C5.12.4): more in the sectors the circuit names */
-  private ersCutStepW(c: F1EnergyCircuit, lapS: number): number {
-    let step: number = F1_2026_ERS.limitStepW;
+  /** The bigger cut a power-limited period may start with here (W, C5.12.4), in a sector the circuit names; else 0 */
+  private ersBigCutW(c: F1EnergyCircuit, lapS: number): number {
+    let step = 0;
     for (const w of c.bigCut) if ((!w.timeTrialOnly || this.ersSession === 'timeTrial') && inStretch(lapS, w)) step = Math.max(step, w.maxW);
     return step;
+  }
+
+  /**
+   * Whether a cut may be reset here (C5.12.5): in the sectors the circuit names for the session; in Low Grip
+   * Conditions only the last before the line, and never in a race (Section B7.2.1 g ii)
+   */
+  private ersResetSector(c: F1EnergyCircuit, lapS: number): boolean {
+    if (this.ersLowGrip && this.ersSession === 'race') return false;
+    let last: F1EnergyCircuit['reset'][number] | null = null;
+    for (const w of c.reset) {
+      if (w.timeTrialOnly && this.ersSession !== 'timeTrial') continue;
+      if (!this.ersLowGrip && inStretch(lapS, w)) return true;
+      if (!last || w.fromM > last.fromM) last = w;
+    }
+    return this.ersLowGrip && last !== null && inStretch(lapS, last);
   }
 
   /** Distance to the next braking zone from where the car is on the lap (m; Infinity: none known) */
@@ -2785,6 +2813,11 @@ export class VehiclePhysics {
    * Where the flaps may open, as one list of stretches: the circuit's zones, and for a car whose zones need no
    * detection (2026 Straight Mode) its straights too, joined where they meet
    */
+  /** The flaps that open now: `drsFlaps`, but only the front ones in 2026 Low Grip Conditions (`flapsLowGrip`) */
+  private get openFlaps(): 'front-rear' | 'rear' | 'front' {
+    return this.flapsLowGrip === true && this.drsFlaps === 'front-rear' ? 'front' : this.drsFlaps;
+  }
+
   private flapStretches(): readonly LapWindow[] {
     return this.flapStretchInfo().list;
   }
@@ -2843,7 +2876,9 @@ export class VehiclePhysics {
         }
       }
       this.trackProgress = p;
-      const zone = Number.isFinite(p) ? this.drsZones.find((z) => inLapWindow(p, z.start, z.end)) : undefined;
+      // Low Grip Conditions: each stretch from `LOW_GRIP_ZONE_DELAY_M` later (the FIA's Low Grip Activation Zones)
+      const delay = this.flapsLowGrip === true && this.lapLengthM > 0 ? LOW_GRIP_ZONE_DELAY_M / this.lapLengthM : 0;
+      const zone = Number.isFinite(p) ? this.drsZones.find((z) => inDelayedLapWindow(p, z.start, z.end, delay)) : undefined;
       // Leaving the zone spends its eligibility
       if (!zone && this.lastDrsZoneId !== null && this.drsArmedZone === this.lastDrsZoneId) this.drsArmedZone = null;
       this.lastDrsZoneId = zone?.id ?? null;
@@ -2852,13 +2887,14 @@ export class VehiclePhysics {
         zone === undefined &&
         !this.drsGatedByDetection &&
         Number.isFinite(p) &&
-        this.straightZones.some((z) => inLapWindow(p, z.start, z.end));
+        this.straightZones.some((z) => inDelayedLapWindow(p, z.start, z.end, delay));
       inZone = zone !== undefined || straight;
       armed = straight || (zone !== undefined && (!this.drsGatedByDetection || this.drsArmedZone === zone.id));
     }
     if (!this.drsFitted) inZone = armed = false;
-    // Too wet, or race control's yellow flag: the flaps stay shut (and an open one closes)
-    const dryEnoughForDrs = isRearFlapAllowedInWet(this.wetness) && !this.flapsBarred?.();
+    // Too wet, or race control's yellow flag: the flaps stay shut (and an open one closes). Under race control's grip
+    // call (2026) the call decides: Low Grip Conditions leave the front flaps (`openFlaps`)
+    const dryEnoughForDrs = (this.flapsLowGrip !== null || isRearFlapAllowedInWet(this.wetness)) && !this.flapsBarred?.();
     this.telemetry.drsZone = inZone;
     this.telemetry.drsAvailable = inZone && armed && dryEnoughForDrs;
     // Closes on the brake, a lift, or when track wetness exceeds the rear flap threshold
@@ -4123,6 +4159,7 @@ export class VehiclePhysics {
         const socN = clamp(soc, 0, 1);
         const circuit = this.ersCircuit;
         const lapS = Number.isFinite(this.trackProgress) && this.lapLengthM > 0 ? this.trackProgress * this.lapLengthM : -1;
+        const bigCutW = circuit && lapS >= 0 ? this.ersBigCutW(circuit, lapS) : 0;
         const dc = this.ers2026.step({
           h,
           speedKmh,
@@ -4133,11 +4170,12 @@ export class VehiclePhysics {
           overtakeShare: this.ersOvertakeShare,
           boost: this.ersBoost,
           boostCapped: this.ersSession === 'race',
+          boostHoldOnly: this.ersLowGrip,
           curves: circuit?.curves ?? 'base',
           alt1Sector: !!circuit && this.ersSession === 'race' && lapS >= 0 && circuit.alt1.some((w) => inStretch(lapS, w)),
-          cutStepW: circuit && lapS >= 0 ? this.ersCutStepW(circuit, lapS) : F1_2026_ERS.limitStepW,
+          cutStepW: Math.max(F1_2026_ERS.limitStepW, bigCutW),
           cutRateWps: circuit?.cutRateWps ?? F1_2026_ERS.limitRateWps,
-          resetSector: !!circuit && lapS >= 0 && circuit.reset.some((w) => (!w.timeTrialOnly || this.ersSession === 'timeTrial') && inStretch(lapS, w)),
+          resetSector: !!circuit && lapS >= 0 && this.ersResetSector(circuit, lapS),
           share: mode.deployFraction * this.luts.deployVsSpeed[this.performanceMode].evaluate(speedKmh) * this.luts.deployVsGear.evaluate(this.gear),
           fillShare: mode.deployFraction * this.luts.deployVsGear.evaluate(this.gear),
           valueSPerMJ: ersValueSPerMJ(speedKmh / 3.6, this.ersBrakeAheadM(), this.totalMassKg),
@@ -4581,6 +4619,7 @@ export class VehiclePhysics {
     const bodyY = aero.dragCentreY ?? 0;
     let dragMoment = perElement ? drag * bodyY : 0;
 
+    const flaps = this.openFlaps;
     for (const wing of this.wings) {
       const s = wing.spec;
       const h = s.heightRef === 'front' ? this.rideFront : s.heightRef === 'rear' ? this.rideRear : hMean;
@@ -4589,7 +4628,7 @@ export class VehiclePhysics {
       let cd = wing.aoaCd.evaluate(aoa) * wing.ghCd.evaluate(h);
       if (wing.yawCl) cl *= wing.yawCl.evaluate(yawDeg);
       if (wing.yawCd) cd *= wing.yawCd.evaluate(yawDeg);
-      if (s.drs && !(this.drsFlaps === 'rear' && s.name === 'FRONT_WING')) {
+      if (s.drs && !(flaps === 'rear' && s.name === 'FRONT_WING') && !(flaps === 'front' && s.name === 'REAR_WING')) {
         cl *= 1 + (s.drs.clMult - 1) * this.drsBlend;
         cd *= 1 + (s.drs.cdMult - 1) * this.drsBlend;
       }
@@ -4669,14 +4708,16 @@ export class VehiclePhysics {
     const balance = clamp(_rhOut.balance + ml.rollBalance.evaluate(rollDeg) + ml.yawBalance.evaluate(yawDeg), 0, 1);
     const act = map.activeAero;
     const open = this.drsBlend;
-    // Rear flap alone: no front downforce change, and the rear's share (by downforce change) of the drag reduction
-    const rearOnly = this.drsFlaps === 'rear';
-    const dClAFront = rearOnly ? 0 : act.dClAFront;
+    // One flap alone (the rear's for DRS, the front's in 2026 Low Grip Conditions): the other's downforce change goes,
+    // and the drag reduction is the open one's share of it, by downforce change
+    const flaps = this.openFlaps;
+    const dClAFront = flaps === 'rear' ? 0 : act.dClAFront;
+    const dClARear = flaps === 'front' ? 0 : act.dClARear;
     const dFlaps = Math.abs(act.dClAFront) + Math.abs(act.dClARear);
-    const dCdA = rearOnly && dFlaps > 0 ? (act.dCdA * Math.abs(act.dClARear)) / dFlaps : act.dCdA;
+    const dCdA = flaps !== 'front-rear' && dFlaps > 0 ? (act.dCdA * (Math.abs(dClAFront) + Math.abs(dClARear))) / dFlaps : act.dCdA;
     const clA = map.clA * clMult;
     let front = q * (clA * balance + dClAFront * open + cool.clAFront);
-    let rear = q * (clA * (1 - balance) + act.dClARear * open + cool.clARear);
+    let rear = q * (clA * (1 - balance) + dClARear * open + cool.clARear);
     let cdA = map.cdA * cdMult + dCdA * open + cool.cdA;
     // The wings' angle-of-attack offsets (body pitch included), split to the axles by their position
     for (const wing of this.wings) {

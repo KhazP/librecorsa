@@ -498,6 +498,11 @@ export interface CarTelemetry {
   overtakingRules?: import('@/lib/sim/overtaking-rules').OvertakingRules;
   /** The override (Overtake Mode on a 2026 car) may be used now: in a race only once earned within 1 s */
   overtakeAvailable?: boolean;
+  /**
+   * Race control's Low Grip Conditions for a 2026 F1 car: Overtake off, the Boost only holding the power, the front
+   * flaps alone in Straight Mode
+   */
+  lowGrip?: boolean;
   turboBoostBar: number;
   fuelKg: number;
   // 4-Corner Tires, Suspension & Brakes (Ordered FL, FR, RL, RR for HUD display)
