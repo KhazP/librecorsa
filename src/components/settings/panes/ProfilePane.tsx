@@ -297,7 +297,8 @@ export function DataTab() {
           void clearSavedData();
         }}
       >
-        Permanently removes all settings, driver key, laps, ghosts and setups from this browser, then reloads.
+        Permanently removes all settings, driver key, laps, ghosts and setups from this browser, then reloads. A signed-in
+        device is signed out of its account first; the account and its cloud save stay.
       </ConfirmDialog>
     </>
   );

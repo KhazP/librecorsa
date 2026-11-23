@@ -172,9 +172,7 @@ async function keyIsCurrent(driverKey: string, account: AccountInfo): Promise<bo
   const current = account.keys.find((k) => k.current);
   if (!current) return false;
   try {
-    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(driverKey)));
-    const hex = Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
-    return hex.slice(0, 12) === current.id;
+    return (await sha256Hex(driverKey)).slice(0, 12) === current.id;
   } catch {
     // No WebCrypto (an insecure page): keep the session as it is
     return true;
