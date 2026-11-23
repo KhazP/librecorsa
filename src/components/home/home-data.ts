@@ -3,8 +3,8 @@ import type { ModelSource } from "@/lib/model-source";
 import type { VehicleModelId } from "@/types/f1";
 import type { BadgeTone, PaletteColor } from "@/components/ui/Badge";
 // Types only: the registries' values stay out of the home page's bundle (page.tsx reads them on the server)
-import type { CarQuality } from "@/lib/cars/car-registry";
-import type { CircuitQuality } from "@/lib/track-registry";
+import type { CarClassId, CarQuality } from "@/lib/cars/car-registry";
+import type { CircuitQuality, CircuitType } from "@/lib/track-registry";
 
 /**
  * A circuit's or car's grade in the game's words (`CIRCUIT_QUALITY_META` / `CAR_QUALITY_META`), which page.tsx reads
@@ -52,6 +52,8 @@ export interface HomeVenue {
   country: string;
   /** The kinds of course its layouts are ("Permanent", "Hill climb"), for the Circuits filters */
   types: string[];
+  /** The same kinds as ids, so the page can name them in the player's language (useLocalizedHome) */
+  typeIds: CircuitType[];
   /** Who made its model (its credited author, or LibreCorsa), for the Circuits filters */
   modders: string[];
   layouts: HomeLayout[];
@@ -80,6 +82,8 @@ export interface HomeCar {
   vehicle: VehicleModelId;
   title: string;
   classTitle: string;
+  /** Its class as an id, so the page can name it in the player's language (useLocalizedHome) */
+  classId: CarClassId;
   year: number;
   /** Whether its physics are its own, as the game grades it (car-registry `quality`) */
   quality: CarQuality;

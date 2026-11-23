@@ -22,6 +22,7 @@ import { useStoreBuild } from "@/lib/use-store-build";
 import { FeaturedBadges } from "./FeaturedBadges";
 import { SupportButton } from "@/components/SupportButton";
 import { day, GAME_FACTS, type HomeCar, type HomeData, type HomeLayout, type HomeQualityTexts, type HomeVenue, type WhatsNewDay } from "./home-data";
+import { useLocalizedHome } from "./home-labels";
 import { CarQualityTag, carQualityText, CarThumb, CircuitQualityTag, OutlineThumb } from "./home-ui";
 import { groupCoverage } from "@/lib/home/coverage";
 import { preloadVenueHero, VenueHero } from "./VenueHero";
@@ -137,9 +138,10 @@ const CAR_FILTERS: readonly { key: CarFilterKey; of: (c: HomeCar, text: HomeQual
 ];
 const NO_CAR_FILTERS: Record<CarFilterKey, string> = { class: "", physics: "", modder: "" };
 
-export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
+export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
   // The Q / E caps name physical keys as printed on this keyboard
   useKeyLayout();
+  const data = useLocalizedHome(built);
   const tx = useTranslations("home.hub");
   const tc = useTranslations("common");
   const [tab, setTab] = useState<Tab>("home");
