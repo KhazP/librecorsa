@@ -20,7 +20,11 @@ common questions.
 
 ## Running it
 
-You need Node.js 24 (what CI uses).
+You need Node.js 24 (what CI uses). [How the code fits together](docs/ARCHITECTURE.md) is a map of the code.
+
+No setup on your machine? [Open it in GitHub Codespaces](https://codespaces.new/librecorsa/librecorsa): the dev container
+in `.devcontainer/` installs Node.js 24 and the packages, so you only run `npm run dev`. VS Code's Dev Containers
+extension uses the same file.
 
 ```bash
 npm install

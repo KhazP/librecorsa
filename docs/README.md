@@ -29,6 +29,7 @@ You can read them at [docs.librecorsa.org](https://docs.librecorsa.org/) or here
 
 ## How it works
 
+- [How the code fits together](ARCHITECTURE.md): a map of the repository, the threads, and the rules that keep players' data working.
 - [Physics validation](physics/README.md): the tyre model and the cars measured against real telemetry and reference data.
 - [Race AI, contact and damage](race-ai.md): how the AI drivers race, and what happens when cars touch.
 

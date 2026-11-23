@@ -113,6 +113,8 @@
       "addModText": "Kamu sudah membuat mod mobil atau sirkuit dan ingin melihatnya di LibreCorsa? Kirimi aku email di <mail>{email}</mail> beserta tautannya. Setiap modder akan dicantumkan namanya di dalam game.",
       "modders": "Para modder",
       "moddersText": "Sirkuit dan mobil adalah karya mereka, digunakan atas izin mereka. Jika kamu menyukai salah satunya, kamu bisa berterima kasih langsung kepada pembuatnya.",
+      "contributors": "Kontributor kode",
+      "contributorsText": "Kode mereka menjadi bagian dari game ini. Terima kasih.",
       "links": {
         "download": "Unduh aplikasi",
         "press": "Semua liputan dan press kit",
