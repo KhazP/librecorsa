@@ -7,10 +7,11 @@
  *
  * Nothing happens until `start()` (the play shell calls it on mount), and nothing at all without an online side,
  * while /api/config says accounts are off, or on the server. When the cloud save brings values the running game holds
- * in memory (settings, setups, liveries), the page reloads once to use them: right after the first-sync choice, or
- * when a sync on start comes back within RELOAD_WINDOW_MS (still on the loading screen or the title) or while the
- * loading screen is still up (a slow device can take longer than that to load a circuit). Later syncs only send: what
- * they bring waits for the next start, so a drive is never cut short.
+ * in memory (settings, setups, liveries), the page reloads once to use them, and only where nothing is running that a
+ * reload would cut short: the loading screen, or the title menu (never the pause menu or a session, Settings open over
+ * them or not). A first sync (a join, the first-sync choice) reloads there; a sync on start does so within
+ * RELOAD_WINDOW_MS of start, or any time while the loading screen is still up (a slow device can take longer than
+ * that to load a circuit). Anywhere else, and for every later sync, what comes in waits for the next start.
  */
 import { useSyncExternalStore } from "react";
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
@@ -79,6 +80,11 @@ export interface AccountState {
   sync: SyncStatus;
   /** What the last sign-in redirect or action said, for a toast; cleared by dismissNotice */
   notice: { kind: "ok" | "error"; text: string } | null;
+  /**
+   * This device is joining: the join and the first sync after it are under way. `join` stays set until they finish,
+   * so the question stays up (busy) and the player isn't left driving into the reload that may follow
+   */
+  joining: boolean;
 }
 
 const INITIAL: AccountState = {
@@ -90,6 +96,7 @@ const INITIAL: AccountState = {
   elsewhere: [],
   sync: { status: "idle", lastSyncedAt: null, error: null },
   notice: null,
+  joining: false,
 };
 
 const NOT_READY = "Accounts are not available yet";
@@ -139,6 +146,7 @@ const PASSKEY_NOT_USED = "The passkey was not used.";
 const PASSKEY_KNOWN = "This passkey is already on an account.";
 const PASSKEY_FAILED = "The passkey did not work. Try again.";
 const DEFERRED = "Synced. Changes from your other devices load the next time the game starts.";
+const FIRST_DEFERRED = "Synced. The account's save loads the next time the game starts.";
 const CHOOSE_FIRST = "Choose what to keep first.";
 
 export interface AccountStoreEnv {
@@ -168,18 +176,26 @@ export interface AccountStoreEnv {
   onLeave(cb: (leaving: boolean) => void): () => void;
   /** The game's loading screen is up: nothing is running that a reload would cut short */
   loadingScreen?(): boolean;
+  /** The title menu is up (Settings open over it or not): no session is running that a reload would cut short */
+  titleMenu?(): boolean;
 }
 
-/** This driver key is the one the account says the session joined with (AccountKey.id: its SHA-256's first 12 hex) */
+/** A driver key's AccountKey id (its SHA-256's first 12 hex); null without WebCrypto (an insecure page) */
+async function keyIdOf(driverKey: string): Promise<string | null> {
+  try {
+    return (await sha256Hex(driverKey)).slice(0, 12);
+  } catch {
+    return null;
+  }
+}
+
+/** This driver key is the one the account says the session joined with */
 async function keyIsCurrent(driverKey: string, account: AccountInfo): Promise<boolean> {
   const current = account.keys.find((k) => k.current);
   if (!current) return false;
-  try {
-    return (await sha256Hex(driverKey)).slice(0, 12) === current.id;
-  } catch {
-    // No WebCrypto (an insecure page): keep the session as it is
-    return true;
-  }
+  const id = await keyIdOf(driverKey);
+  // No WebCrypto: keep the session as it is
+  return id === null || id === current.id;
 }
 
 /** A return path the server takes ("/play", "/account"); anything else goes back to /play */
@@ -228,6 +244,8 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
   let pushTimer: unknown = null;
   let periodicTimer: unknown = null;
   let stopLeave: (() => void) | null = null;
+  /** confirmJoin is under way (with its first sync) */
+  let joinInFlight = false;
   /** A push on the way out, under way: hidden and gone come one after the other, and one request is all there is time for */
   let leavingPush: Promise<void> | null = null;
   /** Syncs run one at a time */
@@ -269,7 +287,8 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
       set({
         phase: "signed-in",
         account: ans.account,
-        join: joined || joinWithoutAsking ? null : { driverName: ans.account.driverName, providers: providersOf(ans.account) },
+        // A join under way keeps its question up until its first sync is done
+        join: joinInFlight ? state.join : joined || joinWithoutAsking ? null : { driverName: ans.account.driverName, providers: providersOf(ans.account) },
         sync: { ...state.sync, lastSyncedAt: state.sync.lastSyncedAt ?? rec?.lastSyncedAt ?? null },
       });
     } else if (ans.signedOut) toSignedOut();
@@ -301,11 +320,14 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
     }, PERIODIC_MS);
   }
 
+  /** Nothing is running that a reload would cut short: the loading screen or the title menu is up */
+  const canReload = (): boolean => env?.loadingScreen?.() === true || env?.titleMenu?.() === true;
+
   /**
    * One sync, after any running one. `apply`: write what it brings into storage (and reload for it); a function is
-   * asked at that moment. `tellDeferred`: say so when what it brought waits for the next start
+   * asked at that moment. `tellDeferred`: what to say when what it brought waits for the next start
    */
-  function runSync(opts: { apply: boolean | (() => boolean); choice?: FirstSyncChoice; leaving?: boolean; tellDeferred?: boolean }): Promise<string | null> {
+  function runSync(opts: { apply: boolean | (() => boolean); choice?: FirstSyncChoice; leaving?: boolean; tellDeferred?: string }): Promise<string | null> {
     const job = queue.then(async (): Promise<string | null> => {
       const e = env;
       const account = state.account;
@@ -328,7 +350,7 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
       set({ firstSync: null, sync: { status: "idle", lastSyncedAt: out.at, error: null } });
       schedulePeriodic();
       if (out.changedLocal) reloadFor(account.id, out.rev);
-      else if (out.deferred && opts.tellDeferred) notice({ kind: "ok", text: DEFERRED });
+      else if (out.deferred && opts.tellDeferred) notice({ kind: "ok", text: opts.tellDeferred });
       return null;
     });
     queue = job.catch(() => null);
@@ -364,19 +386,28 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
     if (!joined) {
       if (joinWithoutAsking) {
         joinWithoutAsking = false;
-        await actions.confirmJoin();
+        const failed = await actions.confirmJoin();
+        // It didn't join: the question comes back, with what went wrong
+        const account = state.account;
+        if (failed && !joined && state.phase === "signed-in" && account) {
+          notice({ kind: "error", text: failed });
+          set({ join: { driverName: account.driverName, providers: providersOf(account) } });
+        }
       }
       return;
     }
     let account = ans.account;
     // The session's driver key is no longer this device's (saved data cleared, a key file imported): the session
-    // was confirmed on this device already, so its key now joins without asking again
-    if (!(await keyIsCurrent(e.driverKey(), account))) {
+    // was confirmed on this device already, so its key now joins without asking again. A key that the server said is
+    // on another account stays there: the session never gets a current key here, and it isn't sent again each start
+    const keyId = await keyIdOf(e.driverKey());
+    if (!(await keyIsCurrent(e.driverKey(), account)) && (keyId === null || e.sync.keyElsewhere(account.id) !== keyId)) {
       const again = await e.api.joinDevice({ driverKey: e.driverKey(), label: e.deviceLabel() });
       if (!again.ok) {
         if (again.signedOut) toSignedOut();
         return;
       }
+      if (keyId !== null) e.sync.noteJoin(account.id, keyId, again.keyElsewhere);
       const reread = await refresh();
       if (!reread.ok || !joined) return;
       account = reread.account;
@@ -384,12 +415,12 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
     const rec = e.sync.record(account.id);
     // This device's first sync with the account (or its record was cleared): the first-sync rules decide
     if (!rec) {
-      await runSync({ apply: true });
+      await runSync({ apply: canReload, tellDeferred: FIRST_DEFERRED });
       return;
     }
     // A slow device can still be loading the circuit long after the window: a reload there cuts nothing short, and
     // without it such a device would leave the cloud's changes for a next start that is just as slow, every time
-    const withinWindow = () => e.now() - startedAt < RELOAD_WINDOW_MS || e.loadingScreen?.() === true;
+    const withinWindow = () => e.loadingScreen?.() === true || (e.now() - startedAt < RELOAD_WINDOW_MS && e.titleMenu?.() === true);
     if ((account.save?.rev ?? 0) > rec.appliedRev || account.pendingMerges > 0) await runSync({ apply: withinWindow });
     else if (await e.sync.changedSince(account.id)) await runSync({ apply: false });
     else {
@@ -487,19 +518,31 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
 
     async confirmJoin() {
       const e = env;
-      if (!e || state.phase !== "signed-in" || !state.account) return NOT_READY;
-      const ans = await e.api.joinDevice({ driverKey: e.driverKey(), label: e.deviceLabel() });
-      if (!ans.ok) {
-        if (ans.signedOut) toSignedOut();
-        return ans.error;
+      const account = state.account;
+      if (!e || state.phase !== "signed-in" || !account) return NOT_READY;
+      if (joinInFlight) return null;
+      joinInFlight = true;
+      set({ joining: true });
+      try {
+        const ans = await e.api.joinDevice({ driverKey: e.driverKey(), label: e.deviceLabel() });
+        if (!ans.ok) {
+          if (ans.signedOut) toSignedOut();
+          return ans.error;
+        }
+        joined = true;
+        set({ elsewhere: ans.elsewhere });
+        const keyId = await keyIdOf(e.driverKey());
+        if (keyId !== null) e.sync.noteJoin(account.id, keyId, ans.keyElsewhere);
+        if (ans.keyElsewhere) notice({ kind: "error", text: KEY_ELSEWHERE });
+        // The names this key brought, then the first sync: its values come in now only where a reload cuts nothing
+        // short (the title menu, the loading screen), else at the next start
+        await refresh();
+        if (state.phase !== "signed-in") return null;
+        return await runSync({ apply: canReload, tellDeferred: FIRST_DEFERRED });
+      } finally {
+        joinInFlight = false;
+        set({ joining: false, join: joined ? null : state.join });
       }
-      joined = true;
-      set({ join: null, elsewhere: ans.elsewhere });
-      if (ans.keyElsewhere) notice({ kind: "error", text: KEY_ELSEWHERE });
-      // The names this key brought, then the first sync
-      await refresh();
-      if (state.phase !== "signed-in") return null;
-      return runSync({ apply: true });
     },
 
     async declineJoin() {
@@ -508,7 +551,7 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
 
     async chooseFirstSync(choice) {
       if (!state.firstSync) return NOT_READY;
-      return runSync({ apply: true, choice });
+      return runSync({ apply: canReload, choice, tellDeferred: FIRST_DEFERRED });
     },
 
     async syncNow() {
@@ -517,7 +560,7 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
       if (!e || !accountsOn || state.phase !== "signed-in" || !account || !joined) return NOT_READY;
       if (state.firstSync) return CHOOSE_FIRST;
       // Without a record this is the first sync, which may load what it brings; otherwise that waits for the next start
-      return runSync(e.sync.record(account.id) ? { apply: false, tellDeferred: true } : { apply: true });
+      return runSync(e.sync.record(account.id) ? { apply: false, tellDeferred: DEFERRED } : { apply: canReload, tellDeferred: FIRST_DEFERRED });
     },
 
     async createLinkCode() {
@@ -664,8 +707,9 @@ function browserEnv(): AccountStoreEnv | null {
         ? webauthn.startRegistration({ optionsJSON: options as PublicKeyCredentialCreationOptionsJSON })
         : webauthn.startAuthentication({ optionsJSON: options as PublicKeyCredentialRequestOptionsJSON });
     },
-    // LoadingScreen.tsx marks its root
+    // LoadingScreen.tsx and TitleMenu.tsx mark their roots; the pause menu and a session have neither
     loadingScreen: () => document.querySelector("[data-loading-screen]") !== null,
+    titleMenu: () => document.querySelector("[data-title-menu]") !== null,
     onLeave(cb) {
       const onVisibility = () => {
         if (document.visibilityState === "hidden") cb(false);

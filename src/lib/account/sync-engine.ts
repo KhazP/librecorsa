@@ -25,6 +25,7 @@ import {
   combineSaves,
   contentHash,
   differsLocally,
+  dropsOf,
   emptySyncState,
   firstSyncDecision,
   localHash,
@@ -53,9 +54,15 @@ export interface LocalGhosts {
   list(): Promise<LocalBestLap[]>;
   /** The JSON text of the recording under `key`, as it goes up; null when there is none */
   text(key: string): Promise<string | null>;
-  /** Keeps a downloaded recording through the game's own save path; true when it was kept (new or faster) */
-  save(text: string): Promise<boolean>;
+  /**
+   * Keeps a downloaded recording through the game's own save path: "kept" (new or faster), "skipped" (slower than the
+   * one here, or not a recording the game takes: fetching it again wouldn't change that), "failed" (the store
+   * refused it: full or blocked, worth another try)
+   */
+  save(text: string): Promise<GhostSaved>;
 }
+
+export type GhostSaved = "kept" | "skipped" | "failed";
 
 export interface SyncEnv {
   api: AccountApi;
@@ -106,6 +113,11 @@ export type SyncOutcome =
 export const MAX_TRIES = 3;
 /** Ghosts fetched in one sync at most; the rest come with the next */
 const MAX_DOWNLOADS = 60;
+/**
+ * A ghost's upload refused for good: too big (413), the account's limit (409), not a recording the server takes (400).
+ * Anything else (429 from the rate limit, a timeout, a server problem) is worth trying again
+ */
+const FOR_GOOD = new Set([400, 409, 413]);
 /** Hashes asked about in one ghosts/missing call */
 const MISSING_BATCH = 100;
 
@@ -132,6 +144,10 @@ export interface SyncEngine {
   changedSince(accountId: string): Promise<boolean>;
   /** Drops the record of an account (deleted): a sign-in to it again would be a first sync */
   forget(accountId: string): void;
+  /** The key (AccountKey id) whose last join with this account was answered `keyElsewhere`; null when none */
+  keyElsewhere(accountId: string): string | null;
+  /** Notes how a join of the key `keyId` with this account was answered */
+  noteJoin(accountId: string, keyId: string, keyElsewhere: boolean): void;
   /**
    * Reads the cloud's save without syncing, so a sync on leaving can start from it: for a page that had nothing to
    * sync on start (it is kept only when it is the save this device last synced with)
@@ -194,13 +210,15 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
   }
 
   /**
-   * Sends the ghosts of this device's laps in `doc` that the cloud lacks. A ghost that can't go up (too big, the
-   * account's limit, its recording gone) leaves its lap out of the save, or the cloud's lap for that key in.
+   * Sends the ghosts of this device's laps in `doc` that the cloud lacks. A ghost that can't go up leaves its lap out
+   * of the save (or the cloud's lap for that key in). `behind`: one of them is worth another try (the rate limit, a
+   * timeout, a recording that changed under its cached hash), so the sync isn't recorded as done with this device's
+   * laps; one refused for good (too big, the account's limit) is not.
    */
-  async function sendGhosts(doc: SaveDoc, local: SaveDoc, cloud: SaveDoc | null, state: SyncState): Promise<SaveDoc | Fail> {
+  async function sendGhosts(doc: SaveDoc, local: SaveDoc, cloud: SaveDoc | null, state: SyncState): Promise<{ doc: SaveDoc; behind: boolean } | Fail> {
     const keyOf = new Map<string, string>();
     for (const [key, lap] of Object.entries(doc.bestLaps)) if (local.bestLaps[key]?.ghost === lap.ghost) keyOf.set(lap.ghost, key);
-    if (!keyOf.size) return doc;
+    if (!keyOf.size) return { doc, behind: false };
     const shas = [...keyOf.keys()];
     const missing: string[] = [];
     for (let i = 0; i < shas.length; i += MISSING_BATCH) {
@@ -209,22 +227,38 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
       missing.push(...ans.missing.filter((s) => keyOf.has(s)));
     }
     const dropped = new Set<string>();
+    let behind = false;
     for (const sha of missing) {
+      // Rate limited: the rest would be refused the same way, so they wait for the next sync
+      if (behind) {
+        dropped.add(sha);
+        continue;
+      }
       const key = keyOf.get(sha) as string;
       const text = env.ghosts ? await env.ghosts.text(key).catch(() => null) : null;
-      const same = text !== null && env.sha256 !== null && (await env.sha256(text).catch(() => null)) === sha;
-      if (!same || byteLength(text) > MAX_GHOST_BYTES) {
-        // The recording changed under its cached hash: hashed again next time
+      // Its recording is gone: the lap went with it
+      if (text === null) {
+        dropped.add(sha);
+        continue;
+      }
+      if (byteLength(text) > MAX_GHOST_BYTES) {
+        dropped.add(sha);
+        continue;
+      }
+      if (env.sha256 === null || (await env.sha256(text).catch(() => null)) !== sha) {
+        // The recording changed under its cached hash: hashed again, and sent, next time
         delete state.ghosts[key];
         dropped.add(sha);
+        behind = true;
         continue;
       }
       const put = await env.api.putGhost(sha, text);
       if (put.ok) continue;
       if (put.signedOut) return put;
       dropped.add(sha);
+      if (!FOR_GOOD.has(put.status)) behind = true;
     }
-    if (!dropped.size) return doc;
+    if (!dropped.size) return { doc, behind };
     const bestLaps = { ...doc.bestLaps };
     for (const [key, lap] of Object.entries(bestLaps)) {
       if (!dropped.has(lap.ghost)) continue;
@@ -232,7 +266,7 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
       if (theirs) bestLaps[key] = theirs;
       else delete bestLaps[key];
     }
-    return { ...doc, bestLaps };
+    return { doc: { ...doc, bestLaps }, behind };
   }
 
   /**
@@ -253,23 +287,40 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
     return { doc: behind ? { ...doc, bestLaps } : doc, behind };
   }
 
-  /** Fetches the cloud's ghosts this device lacks or has a slower lap for, and keeps them through the game's save path */
-  async function fetchGhosts(result: SaveDoc, local: SaveDoc, fetched: string[]): Promise<string[]> {
-    if (!env.ghosts || !env.sha256) return fetched;
+  /**
+   * Fetches the cloud's ghosts this device lacks or has a slower lap for, and keeps them through the game's save path.
+   * A ghost counts as fetched once kept, or settled (slower than the one here, not what was asked for, not a recording
+   * the game takes); one the store refused, or that didn't come (the rate limit, a timeout), is asked for again, and
+   * `behind` says so. One the cloud doesn't have (404) is asked for again without that: another device may send it.
+   */
+  async function fetchGhosts(result: SaveDoc, local: SaveDoc, fetched: string[]): Promise<{ fetched: string[]; behind: boolean }> {
+    if (!env.ghosts || !env.sha256) return { fetched, behind: false };
     const got: string[] = [];
+    let behind = false;
     for (const [key, lap] of Object.entries(result.bestLaps)) {
       const mine = local.bestLaps[key];
       if (mine && (mine.ghost === lap.ghost || mine.lapTimeMs <= lap.lapTimeMs)) continue;
       if (fetched.includes(lap.ghost) || got.includes(lap.ghost)) continue;
-      if (got.length >= MAX_DOWNLOADS) break;
-      const text = await env.api.getGhost(lap.ghost);
-      // Not there (yet): asked for again next time
-      if (text === null) continue;
-      if ((await env.sha256(text).catch(() => null)) === lap.ghost) await env.ghosts.save(text).catch(() => false);
-      // Kept, slower than what is here, or not what was asked for: either way not fetched again
+      if (got.length >= MAX_DOWNLOADS) {
+        behind = true;
+        break;
+      }
+      const ans = await env.api.getGhost(lap.ghost);
+      if (!ans.ok) {
+        if (ans.status === 404) continue;
+        // Rate limited or out of reach: the rest wait for the next sync
+        behind = true;
+        break;
+      }
+      const saved: GhostSaved = (await env.sha256(ans.text).catch(() => null)) === lap.ghost ? await env.ghosts.save(ans.text).catch((): GhostSaved => "failed") : "skipped";
+      if (saved === "failed") {
+        // The store refuses it (full or blocked): the next ones would fare no better
+        behind = true;
+        break;
+      }
       got.push(lap.ghost);
     }
-    return rememberFetched(fetched, got);
+    return { fetched: rememberFetched(fetched, got), behind };
   }
 
   async function sync(req: SyncRequest): Promise<SyncOutcome> {
@@ -313,8 +364,8 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
     let behind = false;
     for (let tries = 1; ; tries++) {
       let next = cloud ? combineSaves(local, cloud, choice, { base }) : local;
-      // A folded account's save joins without a question; the account's own save wins its ties
-      for (const p of pending) next = combineSaves(p.doc, next, "cloud");
+      // A folded account's save joins without a question, combined value by value; the account's own save wins its ties
+      for (const p of pending) next = combineSaves(p.doc, next, "combine");
       next = { ...next, savedAt: env.now(), savedBy: env.label() };
       if (quick && tries === 1) {
         const held = withCloudGhosts(next, cloud);
@@ -323,8 +374,8 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
       } else {
         const sent = await sendGhosts(next, local, cloud, state);
         if ("ok" in sent) return failed(sent);
-        behind = false;
-        result = sent;
+        behind = sent.behind;
+        result = sent.doc;
       }
       if (cloud && !pending.length && contentHash(result) === contentHash(cloud)) break;
       if (byteLength(JSON.stringify(result)) > MAX_SAVE_BYTES) return failed({ error: TOO_BIG });
@@ -344,27 +395,33 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
     lastCloud = { accountId: req.accountId, rev, doc: pushed || !cloud ? result : cloud };
     // Ghosts first: they go in through ghost-store, which the running game follows, so they need no reload (none on
     // the way out: the next sync fetches them)
-    const fetched = quick ? (rec?.fetched ?? []) : await fetchGhosts(result, local, rec?.fetched ?? []);
+    const down = quick ? { fetched: rec?.fetched ?? [], behind: false } : await fetchGhosts(result, local, rec?.fetched ?? []);
+    const fetched = down.fetched;
+    if (down.behind) behind = true;
     // The values last, so a reload for them can follow at once
     const applied = typeof req.apply === "function" ? req.apply() : req.apply;
     let changedLocal = false;
     if (applied) {
-      const done = apply(storage, result, state);
+      // Keys the result leaves out go too (Use the cloud save, or another device's Keep this device's save)
+      const done = apply(storage, result, state, dropsOf(local, result));
       state = done.state;
       changedLocal = done.changed;
     }
-    const deferred = !applied && differsLocally(local, result);
     // The laps just fetched and the values just written are this device's now: what later changes are measured from
     const after = await readLocal(storage, state, false);
     state = after.state;
+    // Read back, not assumed: a value storage couldn't take (full) waits like one not written yet, and the base stays
+    // where this device is, so the next sync takes the cloud's value again instead of sending the old one over it
+    const deferred = differsLocally(after.doc, result);
     const at = env.now();
     state.account = {
       id: req.accountId,
       rev,
-      appliedRev: applied || !deferred ? rev : (rec?.appliedRev ?? 0),
-      base: nextBase(result, local, applied, base),
+      appliedRev: deferred ? (rec?.appliedRev ?? 0) : rev,
+      base: nextBase(result, local, after.doc, base),
       lastSyncedAt: at,
-      // A lap held back reads as a change, so the next save point or check sends it
+      // A lap held back, or a ghost that didn't go up or come down, reads as a change: the next save point or the
+      // periodic check syncs again
       localHash: behind ? "" : after.hash,
       fetched,
     };
@@ -398,6 +455,14 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
       const doc = readSaveDoc(got.doc);
       if (doc && lastCloud === null) lastCloud = { accountId, rev: got.rev, doc };
     },
+    keyElsewhere: (accountId) => loadState().keyElsewhere[accountId] ?? null,
+    noteJoin(accountId, keyId, keyElsewhere) {
+      const state = loadState();
+      const notes = { ...state.keyElsewhere };
+      if (keyElsewhere) notes[accountId] = keyId;
+      else delete notes[accountId];
+      saveState({ ...state, keyElsewhere: notes });
+    },
     forget(accountId) {
       if (lastCloud?.accountId === accountId) lastCloud = null;
       const state = loadState();
@@ -426,10 +491,22 @@ export function browserGhosts(): LocalGhosts {
       return lap ? JSON.stringify(lap) : null;
     },
     async save(text) {
+      let raw: unknown;
       try {
-        return await (await store()).saveBestLapIfFaster(JSON.parse(text));
+        raw = JSON.parse(text);
       } catch {
-        return false;
+        return "skipped";
+      }
+      try {
+        const [ghostStore, { validateLapRecording }, { lapBoardClass }] = await Promise.all([store(), import("@/lib/sim/lap-recorder"), import("@/lib/sim/lap-types")]);
+        const lap = validateLapRecording(raw);
+        if (!lap) return "skipped";
+        if (await ghostStore.saveBestLapIfFaster(lap)) return "kept";
+        // Not kept: slower than the one here, or the store refused it
+        const here = await ghostStore.loadBestLap(lap.trackId, lap.vehicle, lap.conditions ? lapBoardClass(lap.conditions) : null);
+        return here && here.lapTimeMs <= lap.lapTimeMs ? "skipped" : "failed";
+      } catch {
+        return "failed";
       }
     },
   };

@@ -66,10 +66,17 @@ export interface AccountApi {
   /** `keepalive`: the page is going away, the request should outlive it (best effort) */
   putSave(req: PutSaveRequest, opts?: { keepalive?: boolean }): Promise<PutSaveAnswer>;
   missingGhosts(shas: string[]): Promise<MissingGhostsAnswer>;
-  putGhost(sha: string, text: string): Promise<OkAnswer>;
-  /** The ghost's JSON text; null when the cloud doesn't have it or it couldn't be read */
-  getGhost(sha: string): Promise<string | null>;
+  putGhost(sha: string, text: string): Promise<GhostPutAnswer>;
+  /** The ghost's JSON text, or the status it couldn't be read with (404: the cloud doesn't have it) */
+  getGhost(sha: string): Promise<GhostGetAnswer>;
 }
+
+/**
+ * A ghost's transfer, with the HTTP status of a failure (0: no answer, a timeout), so the sync can tell one worth
+ * trying again (429, a timeout, a server problem) from one that never will be (too big, the account's limit)
+ */
+export type GhostPutAnswer = { ok: true } | (Fail & { status: number });
+export type GhostGetAnswer = { ok: true; text: string } | { ok: false; status: number };
 
 const isAnswer = (v: unknown): v is { ok: boolean } =>
   typeof v === "object" && v !== null && !Array.isArray(v) && typeof (v as { ok?: unknown }).ok === "boolean";
@@ -157,8 +164,13 @@ export function createAccountApi(env: AccountApiEnv): AccountApi {
     missingGhosts: (shas) => post<MissingGhostsAnswer>("/account/ghosts/missing", { shas }),
     async putGhost(sha, text) {
       const init: RequestInit = { method: "PUT", body: text, headers: { "content-type": "application/json" } };
-      return answerOf<{ ok: true }>(await send(`/account/ghosts/${sha}`, init, readJson, GHOST_TIMEOUT_MS));
+      const got = await send(`/account/ghosts/${sha}`, init, readJson, GHOST_TIMEOUT_MS);
+      const ans = answerOf<{ ok: true }>(got);
+      return ans.ok ? ans : { ...ans, status: got?.status ?? 0 };
     },
-    getGhost: (sha) => send(`/account/ghosts/${sha}`, { method: "GET" }, (res) => (res.ok ? res.text() : Promise.resolve(null)), GHOST_TIMEOUT_MS),
+    async getGhost(sha) {
+      const got = await send(`/account/ghosts/${sha}`, { method: "GET" }, async (res) => ({ status: res.status, text: res.ok ? await res.text() : null }), GHOST_TIMEOUT_MS);
+      return got && got.text !== null ? { ok: true, text: got.text } : { ok: false, status: got?.status ?? 0 };
+    },
   };
 }

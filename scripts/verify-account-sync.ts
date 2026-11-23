@@ -35,6 +35,7 @@ import {
   combinePresets,
   combineRaceHistory,
   combineSaves,
+  dropsOf,
   emptySave,
   emptySyncState,
   firstSyncDecision,
@@ -285,10 +286,11 @@ function main1(): void {
     const many = JSON.parse(combinePresets(JSON.stringify(Array.from({ length: 20 }, (_, i) => preset(`a${i}`, `A${i}`, i))), JSON.stringify(Array.from({ length: 20 }, (_, i) => preset(`b${i}`, `B${i}`, 100 + i)))));
     check("presets: the garage's cap holds, the oldest go", many.length === PRESETS_MAX && many.every((p: { savedAt: number }) => p.savedAt >= 4));
     const presetsKey = "lc.garage.presets.lc26";
-    const sides = combineSaves(doc({ keys: { [presetsKey]: { value: JSON.stringify(pa), t: 5 } } }), doc({ keys: { [presetsKey]: { value: JSON.stringify(pb), t: 9 } } }), "local");
-    check("presets in a save combine per car, the chosen side keeping its names", JSON.parse(sides.keys[presetsKey].value).find((p: { id: string }) => p.id === "1")?.name === "Quali");
+    const sides = combineSaves(doc({ keys: { [presetsKey]: { value: JSON.stringify(pa), t: 5 } } }), doc({ keys: { [presetsKey]: { value: JSON.stringify(pb), t: 9 } } }), "combine");
+    const sideNames = JSON.parse(sides.keys[presetsKey].value);
+    check("presets in a save combine per car on Combine, the cloud's keeping their names", sideNames.find((p: { id: string }) => p.id === "3")?.name === "Quali" && sideNames.find((p: { id: string }) => p.id === "1")?.name === "Quali (2)");
 
-    // Single values: the newer change; ties and unknown times by the choice
+    // Combine, single values: the newer change; a known time over an unknown one; the cloud's on a tie
     const one = (t: number, value: string) => doc({ keys: { "bugesera.vehicle": { value, t } }, settings: { realism: { value, t } } });
     const winner = (lt: number, ct: number, choice: FirstSyncChoice) => {
       const out = combineSaves(one(lt, "local"), one(ct, "cloud"), choice);
@@ -296,24 +298,68 @@ function main1(): void {
       const s = out.settings.realism.value;
       return k === s ? k : "split";
     };
-    check("newest wins by stamp, whatever the choice", (["combine", "cloud", "local"] as const).every((c) => winner(9, 5, c) === "local" && winner(5, 9, c) === "cloud"));
-    const table: [number, number, FirstSyncChoice, string][] = [
-      [0, 0, "combine", "cloud"],
-      [7, 0, "combine", "local"],
-      [0, 7, "combine", "cloud"],
-      [7, 7, "combine", "cloud"],
-      [0, 0, "cloud", "cloud"],
-      [7, 0, "cloud", "cloud"],
-      [0, 7, "cloud", "cloud"],
-      [7, 7, "cloud", "cloud"],
-      [0, 0, "local", "local"],
-      [7, 0, "local", "local"],
-      [0, 7, "local", "local"],
-      [7, 7, "local", "local"],
+    const table: [number, number, string][] = [
+      [9, 5, "local"],
+      [5, 9, "cloud"],
+      [0, 0, "cloud"],
+      [7, 0, "local"],
+      [0, 7, "cloud"],
+      [7, 7, "cloud"],
     ];
-    const wrong = table.filter(([lt, ct, c, want]) => winner(lt, ct, c) !== want);
-    check("ties and unknown times go by the choice (12 cases)", wrong.length === 0, JSON.stringify(wrong));
-    check("pickSide matches the table", table.every(([lt, ct, c, want]) => pickSide(lt, ct, c) === want));
+    const wrong = table.filter(([lt, ct, want]) => winner(lt, ct, "combine") !== want);
+    check("Combine: the newer change, a known time over an unknown one, the cloud's on a tie (6 cases)", wrong.length === 0, JSON.stringify(wrong));
+    check("pickSide matches the table", table.every(([lt, ct, want]) => pickSide(lt, ct) === want));
+    check(
+      "Use the cloud save and Keep this device's save take their side whatever the times",
+      [9, 5, 0].every((lt) => [9, 5, 0].every((ct) => winner(lt, ct, "cloud") === "cloud" && winner(lt, ct, "local") === "local"))
+    );
+
+    // Use the cloud save / Keep this device's save replace the other side's save; best laps stay combined
+    {
+      const mineDoc = doc({
+        keys: {
+          [presetsKey]: { value: JSON.stringify([preset("p1", "Sibling setup", 5)]), t: 9 },
+          "librecorsa.raceHistory": { value: JSON.stringify([race("r-local", 5)]), t: 9 },
+          "bugesera.tyreSetup.amg-gt3": { value: '{"local":1}', t: 9 },
+        },
+        settings: { assistPreset: { value: "assisted", t: 9 }, ghost: { value: false, t: 9 } },
+        bestLaps: { monza: lapRef(80_000, sha("a")), spa: lapRef(91_000, sha("c")) },
+      });
+      const theirsDoc = doc({
+        keys: {
+          [presetsKey]: { value: JSON.stringify([preset("p2", "Mine", 4)]), t: 1 },
+          "librecorsa.raceHistory": { value: JSON.stringify([race("r-cloud", 4)]), t: 1 },
+          "lc.garage.chassis.lc26": { value: '{"cloud":1}', t: 1 },
+        },
+        removed: { "bugesera.track": 3 },
+        settings: { assistPreset: { value: "pro", t: 1 } },
+        bestLaps: { spa: lapRef(90_000, sha("b")) },
+      });
+      const cloudWins = combineSaves(mineDoc, theirsDoc, "cloud");
+      check(
+        "Use the cloud save: the account's setups, races and settings as they are, newer local changes or not",
+        cloudWins.keys[presetsKey].value === theirsDoc.keys[presetsKey].value &&
+          cloudWins.keys["librecorsa.raceHistory"].value === theirsDoc.keys["librecorsa.raceHistory"].value &&
+          cloudWins.settings.assistPreset.value === "pro" &&
+          cloudWins.removed["bugesera.track"] === 3
+      );
+      check("Use the cloud save: a key only this device has is left out, and taken off it", !cloudWins.keys["bugesera.tyreSetup.amg-gt3"] && same(Object.keys(dropsOf(mineDoc, cloudWins)), ["bugesera.tyreSetup.amg-gt3"]));
+      check("Use the cloud save: a settings field the account lacks stays", cloudWins.settings.ghost?.value === false);
+      const localWins = combineSaves(mineDoc, theirsDoc, "local");
+      check(
+        "Keep this device's save: this device's setups, races and settings as they are, and the account's other keys go",
+        localWins.keys[presetsKey].value === mineDoc.keys[presetsKey].value &&
+          localWins.keys["librecorsa.raceHistory"].value === mineDoc.keys["librecorsa.raceHistory"].value &&
+          localWins.settings.assistPreset.value === "assisted" &&
+          !localWins.keys["lc.garage.chassis.lc26"] &&
+          localWins.removed["bugesera.track"] === undefined
+      );
+      check(
+        "both choices keep both sides' best laps, the faster one where both have one",
+        [cloudWins, localWins].every((d) => d.bestLaps.monza?.ghost === sha("a") && d.bestLaps.spa?.ghost === sha("b"))
+      );
+    }
+
     const kept = combineSaves(doc({ keys: { "bugesera.track": { value: "a", t: 3 } } }), doc({ keys: { "librecorsa.carSkins": { value: "{}", t: 3 } } }), "combine");
     check("a value on one side only is kept", kept.keys["bugesera.track"]?.value === "a" && kept.keys["librecorsa.carSkins"]?.value === "{}");
 
@@ -427,6 +473,14 @@ function fakeServer() {
     alwaysConflict: false,
     /** Runs once, just before the next save PUT is looked at: another device writing first */
     beforePut: null as null | (() => void),
+    /** A status to refuse the nth ghost upload / download with (the rate limit, too big), or null */
+    ghostPutFail: null as null | ((n: number) => number | null),
+    ghostGetFail: null as null | ((n: number) => number | null),
+    /** /account/device refuses with this sentence, or answers that the key is on another account */
+    deviceFail: null as string | null,
+    keyElsewhere: false,
+    /** Holds ghost downloads until it settles (a slow connection) */
+    ghostGate: null as Promise<void> | null,
     account(): AccountInfo {
       return {
         id: "acc1",
@@ -450,9 +504,11 @@ function fakeServer() {
       const body = typeof init.body === "string" && method !== "PUT" ? JSON.parse(init.body) : null;
       if (path === "/account" && method === "GET") return json(200, { ok: true, account: s.account(), thisDevice: { joined: s.joined } });
       if (path === "/account/device") {
+        if (s.deviceFail) return json(400, { ok: false, error: s.deviceFail });
         s.joined = true;
-        s.keyId = createHash("sha256").update(String(body?.driverKey)).digest("hex").slice(0, 12);
-        return json(200, { ok: true, attached: ["alp"], elsewhere: ["other"], keyElsewhere: false });
+        // A key on another account stays there: the session has no current key on this one
+        s.keyId = s.keyElsewhere ? null : createHash("sha256").update(String(body?.driverKey)).digest("hex").slice(0, 12);
+        return json(200, { ok: true, attached: s.keyElsewhere ? [] : ["alp"], elsewhere: ["other"], keyElsewhere: s.keyElsewhere });
       }
       if (path === "/auth/signout") {
         s.signedIn = false;
@@ -477,13 +533,18 @@ function fakeServer() {
       const ghost = path.match(/^\/account\/ghosts\/([0-9a-f]{64})$/);
       if (ghost && method === "PUT") {
         s.ghostPuts++;
+        const refused = s.ghostPutFail?.(s.ghostPuts);
+        if (refused) return json(refused, { ok: false, error: "Refused" });
         const text = init.body as string;
         if ((await sha256Hex(text)) !== ghost[1]) return json(400, { ok: false, error: "Hash" });
         s.ghosts.set(ghost[1], text);
         return json(200, { ok: true });
       }
       if (ghost && method === "GET") {
+        if (s.ghostGate) await s.ghostGate;
         s.ghostGets++;
+        const refused = s.ghostGetFail?.(s.ghostGets);
+        if (refused) return json(refused, { ok: false, error: "Refused" });
         const text = s.ghosts.get(ghost[1]);
         return text ? new Response(text, { status: 200 }) : json(404, { ok: false, error: "Not found" });
       }
@@ -494,8 +555,10 @@ function fakeServer() {
 }
 
 /** Best laps in memory, keyed like ghost-store (the lap's own key), kept when new or faster */
-function memoryGhosts(init: Record<string, unknown>[] = []): LocalGhosts & { laps: Map<string, string> } {
+function memoryGhosts(init: Record<string, unknown>[] = []): LocalGhosts & { laps: Map<string, string>; store: { refuse: boolean } } {
   const laps = new Map<string, string>();
+  /** `refuse`: the store is full or blocked, nothing is kept */
+  const store = { refuse: false };
   const keyOf = (lap: { trackId: string; vehicle: string; board: string }) => `${lap.trackId}|${lap.vehicle}|${lap.board}`;
   const put = (text: string): boolean => {
     const lap = JSON.parse(text);
@@ -518,8 +581,10 @@ function memoryGhosts(init: Record<string, unknown>[] = []): LocalGhosts & { lap
       return laps.get(key) ?? null;
     },
     async save(text) {
-      return put(text);
+      if (store.refuse) return "failed";
+      return put(text) ? "kept" : "skipped";
     },
+    store,
   };
 }
 
@@ -718,6 +783,187 @@ async function main2(): Promise<void> {
       server.calls.slice(at).join(),
     );
   }
+
+  {
+    // A fresh device downloads the account's save as it is: settings it changed while setting up (stamped later than
+    // the account's) don't win over the account's
+    const server = fakeServer();
+    const clock = { t: 1_000 };
+    const favorites = { favorites: { cars: ["lc26", "amg-gt3"], circuits: ["spa"] }, recent: { cars: ["lc26"], circuits: ["spa"] } };
+    server.doc = doc({ savedBy: "PC", settings: { assistPreset: { value: "pro", t: 500 }, library: { value: favorites, t: 500 } } });
+    server.rev = 1;
+    const fresh = memoryStorage({ [SETTINGS_KEY]: settingsWith({}) });
+    const phone = device(server, "Phone", fresh, memoryGhosts(), clock);
+    phone.track();
+    clock.t = 2_000;
+    fresh.setItem(SETTINGS_KEY, settingsWith({ assistPreset: "assisted", library: { favorites: { cars: [], circuits: [] }, recent: { cars: ["amg-gt3"], circuits: ["monza"] } } }));
+    const got = await phone.sync({ accountId: "acc1", apply: true });
+    const after = JSON.parse(fresh.getItem(SETTINGS_KEY) as string);
+    check("an empty device downloads the account's settings as they are", got.kind === "synced" && after.assistPreset === "pro" && same(after.library, favorites), JSON.stringify(after.library));
+
+    // Use the cloud save: this device's own setups go, its keys the account lacks too; nothing of them goes up
+    const cloudSave = () =>
+      doc({ savedBy: "PC", keys: { "lc.garage.presets.lc26": { value: JSON.stringify([preset("p2", "Mine", 4)]), t: 1 }, "librecorsa.raceHistory": { value: JSON.stringify([race("r-cloud", 4)]), t: 1 } } });
+    const own = () =>
+      memoryStorage({
+        "lc.garage.presets.lc26": JSON.stringify([preset("p1", "Sibling setup", 5)]),
+        "bugesera.tyreSetup.amg-gt3": '{"local":1}',
+        "librecorsa.raceHistory": JSON.stringify([race("r-local", 5)]),
+      });
+    const s1 = fakeServer();
+    s1.doc = cloudSave();
+    s1.rev = 1;
+    const st1 = own();
+    const d1 = device(s1, "Phone", st1, memoryGhosts(), clock);
+    const asked = await d1.sync({ accountId: "acc1", apply: true });
+    const took = await d1.sync({ accountId: "acc1", apply: true, choice: "cloud" });
+    check(
+      "Use the cloud save: this device's setups and races are replaced, its own tyre setup goes",
+      asked.kind === "ask" && took.kind === "synced" && took.changedLocal && st1.getItem("lc.garage.presets.lc26") === cloudSave().keys["lc.garage.presets.lc26"].value && st1.getItem("bugesera.tyreSetup.amg-gt3") === null && st1.getItem("librecorsa.raceHistory") === cloudSave().keys["librecorsa.raceHistory"].value
+    );
+    check("Use the cloud save: nothing of this device's went up", s1.savePuts === 0 && s1.rev === 1);
+
+    // The same, chosen where the game can't reload (the values wait): later syncs send none of it, the next start takes it
+    const s2 = fakeServer();
+    s2.doc = cloudSave();
+    s2.rev = 1;
+    const st2 = own();
+    const d2 = device(s2, "Phone", st2, memoryGhosts(), clock);
+    const waited = await d2.sync({ accountId: "acc1", apply: false, choice: "cloud" });
+    check("Use the cloud save, not applied yet: this device is untouched and the values wait", waited.kind === "synced" && waited.deferred && st2.getItem("bugesera.tyreSetup.amg-gt3") !== null);
+    clock.t = 3_000;
+    const between = await d2.sync({ accountId: "acc1", apply: false });
+    check("in between, this device's replaced save doesn't go up", between.kind === "synced" && !between.pushed && !(s2.doc as SaveDoc).keys["bugesera.tyreSetup.amg-gt3"]);
+    const next = await d2.sync({ accountId: "acc1", apply: () => true });
+    check(
+      "the next start takes the account's save as it is",
+      next.kind === "synced" && next.changedLocal && st2.getItem("bugesera.tyreSetup.amg-gt3") === null && st2.getItem("lc.garage.presets.lc26") === cloudSave().keys["lc.garage.presets.lc26"].value
+    );
+
+    // Keep this device's save on another device: the account's keys that device lacks leave this one at its next start
+    const s3 = fakeServer();
+    const st3 = memoryStorage({ "lc.garage.chassis.lc26": '{"a":1}', "librecorsa.raceHistory": JSON.stringify([race("r1", 1)]) });
+    const pc = device(s3, "PC", st3, memoryGhosts(), clock);
+    await pc.sync({ accountId: "acc1", apply: true });
+    const phoneStore = memoryStorage({ "librecorsa.raceHistory": JSON.stringify([race("r2", 2)]) });
+    const keeper = device(s3, "Phone", phoneStore, memoryGhosts(), clock);
+    clock.t = 4_000;
+    const kept = await keeper.sync({ accountId: "acc1", apply: true, choice: "local" });
+    check("Keep this device's save: the account holds this device's save as it is", kept.kind === "synced" && kept.pushed && !(s3.doc as SaveDoc).keys["lc.garage.chassis.lc26"] && (s3.doc as SaveDoc).keys["librecorsa.raceHistory"].value === phoneStore.getItem("librecorsa.raceHistory"));
+    clock.t = 5_000;
+    const pcLater = await pc.sync({ accountId: "acc1", apply: false });
+    check("the other device doesn't send back what the account let go", pcLater.kind === "synced" && !pcLater.pushed && !(s3.doc as SaveDoc).keys["lc.garage.chassis.lc26"] && pcLater.deferred);
+    const pcStart = await pc.sync({ accountId: "acc1", apply: () => true });
+    check("the other device takes the account's save at its next start", pcStart.kind === "synced" && st3.getItem("lc.garage.chassis.lc26") === null && st3.getItem("librecorsa.raceHistory") === phoneStore.getItem("librecorsa.raceHistory"));
+  }
+
+  {
+    // Storage full for the cloud's newer value of one key: it waits, and the next sync doesn't send the old one over it
+    const server = fakeServer();
+    const clock = { t: 1_000 };
+    const st = memoryStorage({ "lc.garage.chassis.amg-gt3": '{"wing":1}' });
+    let full = false;
+    const setItem = st.setItem;
+    st.setItem = (k, v) => {
+      if (full && k === "lc.garage.chassis.amg-gt3") throw new Error("QuotaExceededError");
+      setItem(k, v);
+    };
+    const engine = device(server, "This", st, memoryGhosts(), clock);
+    await engine.sync({ accountId: "acc1", apply: true });
+    const newer = structuredClone(cloudDoc(server));
+    newer.keys["lc.garage.chassis.amg-gt3"] = { value: '{"wing":9}', t: 50_000 };
+    server.doc = newer;
+    server.rev++;
+    clock.t = 60_000;
+    full = true;
+    const blocked = await engine.sync({ accountId: "acc1", apply: true });
+    full = false;
+    check(
+      "storage full: the value that couldn't be written waits, and the sync says so",
+      blocked.kind === "synced" && blocked.deferred && st.getItem("lc.garage.chassis.amg-gt3") === '{"wing":1}' && (engine.record("acc1")?.appliedRev ?? 0) < server.rev
+    );
+    clock.t = 70_000;
+    const later = await engine.sync({ accountId: "acc1", apply: false });
+    check("storage full: the next sync doesn't send this device's old value over the newer one", later.kind === "synced" && !later.pushed && cloudDoc(server).keys["lc.garage.chassis.amg-gt3"].value === '{"wing":9}');
+    const retried = await engine.sync({ accountId: "acc1", apply: () => true });
+    check("storage full: the next start writes it", retried.kind === "synced" && st.getItem("lc.garage.chassis.amg-gt3") === '{"wing":9}');
+  }
+
+  {
+    // A save from a newer build: a synced key, a settings field and an audio member this build doesn't know
+    const newerBuild = () =>
+      doc({
+        savedBy: "Newer build",
+        keys: { "lc.garage.wheels.gt3": { value: '{"rim":18}', t: 5 }, "bugesera.track": { value: "spa", t: 5 } },
+        settings: { pitStrategy: { value: { stops: 2 }, t: 5 }, audio: { value: { musicOff: [], spatial: true }, t: 5 } },
+      });
+    const mineNow = doc({ keys: { "bugesera.track": { value: "monza", t: 9 } }, settings: { audio: { value: { musicOff: ["t1"] }, t: 9 } } });
+    const kept = (["combine", "cloud", "local"] as const).every((choice) => {
+      const out = combineSaves(mineNow, readSaveDoc(newerBuild()) as SaveDoc, choice);
+      const audio = out.settings.audio?.value as Record<string, unknown>;
+      return out.keys["lc.garage.wheels.gt3"]?.value === '{"rim":18}' && same(out.settings.pitStrategy?.value, { stops: 2 }) && audio?.spatial === true;
+    });
+    check("a newer build's keys, fields and audio members are kept under every choice", kept);
+    const won = combineSaves(mineNow, readSaveDoc(newerBuild()) as SaveDoc, "combine").settings.audio.value as Record<string, unknown>;
+    check("this device's newer audio choice wins and the unknown member stays with it", same(won.musicOff, ["t1"]) && won.spatial === true);
+
+    const server = fakeServer();
+    server.doc = newerBuild();
+    server.rev = 1;
+    const clock = { t: 1_000 };
+    const st = memoryStorage({ [SETTINGS_KEY]: settingsWith({}) });
+    const older = device(server, "Older build", st, memoryGhosts(), clock);
+    await older.sync({ accountId: "acc1", apply: true });
+    const stored = JSON.parse(st.getItem(SETTINGS_KEY) as string);
+    check("they are never written into this device's storage", st.getItem("lc.garage.wheels.gt3") === null && stored.pitStrategy === undefined && stored.audio.spatial === undefined);
+    clock.t = 2_000;
+    st.setItem("bugesera.track", "imola");
+    const pushed = await older.sync({ accountId: "acc1", apply: false });
+    const up = cloudDoc(server);
+    check(
+      "an older build's write keeps them",
+      pushed.kind === "synced" && pushed.pushed && up.keys["bugesera.track"].value === "imola" && up.keys["lc.garage.wheels.gt3"]?.value === '{"rim":18}' && same(up.settings.pitStrategy?.value, { stops: 2 }) && (up.settings.audio?.value as Record<string, unknown>).spatial === true
+    );
+    const idle = await older.sync({ accountId: "acc1", apply: false });
+    check("nothing changed: an older build doesn't rewrite the newer save", idle.kind === "synced" && !idle.pushed);
+  }
+
+  {
+    // A ghost upload refused by the rate limit: the lap waits, and the sync isn't done with it
+    const server = fakeServer();
+    const clock = { t: 1_000 };
+    const laps = memoryGhosts([lap("t0", 90_000), lap("t1", 90_001), lap("t2", 90_002)]);
+    const pc = device(server, "PC", memoryStorage({ "bugesera.track": "spa" }), laps, clock);
+    server.ghostPutFail = (n) => (n === 3 ? 429 : null);
+    const first = await pc.sync({ accountId: "acc1", apply: true });
+    check("a ghost refused by the rate limit leaves its lap out for now", first.kind === "synced" && Object.keys(cloudDoc(server).bestLaps).length === 2);
+    check("the sync isn't recorded as done with it: the next check syncs again", await pc.changedSince("acc1"));
+    server.ghostPutFail = null;
+    const again = await pc.sync({ accountId: "acc1", apply: false });
+    check("the next sync sends it", again.kind === "synced" && again.pushed && Object.keys(cloudDoc(server).bestLaps).length === 3 && !(await pc.changedSince("acc1")));
+
+    // Refused for good (too big): left out, and not tried again and again
+    const s2 = fakeServer();
+    const big = device(s2, "PC", memoryStorage(), memoryGhosts([lap("t9", 80_000)]), clock);
+    s2.ghostPutFail = () => 413;
+    await big.sync({ accountId: "acc1", apply: true });
+    check("a ghost refused for good is left out without a retry", Object.keys((s2.doc as SaveDoc).bestLaps).length === 0 && !(await big.changedSince("acc1")));
+
+    // A download refused by the rate limit, and one the store couldn't keep: both are fetched again
+    const phoneLaps = memoryGhosts();
+    const phone = device(server, "Phone", memoryStorage(), phoneLaps, clock);
+    server.ghostGetFail = (n) => (n === 1 ? 429 : null);
+    await phone.sync({ accountId: "acc1", apply: true });
+    check("a download refused by the rate limit: the sync isn't done, the next one fetches", (await phone.changedSince("acc1")) && phoneLaps.laps.size === 0);
+    server.ghostGetFail = null;
+    phoneLaps.store.refuse = true;
+    const gets = server.ghostGets;
+    await phone.sync({ accountId: "acc1", apply: true });
+    check("a ghost the store couldn't keep isn't counted as fetched, and the rest wait", phoneLaps.laps.size === 0 && server.ghostGets === gets + 1 && (await phone.changedSince("acc1")));
+    phoneLaps.store.refuse = false;
+    await phone.sync({ accountId: "acc1", apply: true });
+    check("once the store takes them, they all come down", phoneLaps.laps.size === 3 && !(await phone.changedSince("acc1")));
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -731,6 +977,8 @@ function fakeEnv(server: ReturnType<typeof fakeServer>, opts: { accounts: boolea
   const clock = { t: 100_000 };
   const timers: { fn: () => void; ms: number }[] = [];
   const log = { hashes: [] as string[], reloads: 0, navigations: [] as string[], configWatch: 0 };
+  /** What is on screen: the title menu (the default), the loading screen, or neither (the pause menu, a session) */
+  const screen = { title: true, loading: false };
   /** What the store does when the page is hidden (false) or goes away (true) */
   const leave = { cb: null as ((leaving: boolean) => void) | null };
   const storage = opts.storage ?? memoryStorage();
@@ -764,6 +1012,8 @@ function fakeEnv(server: ReturnType<typeof fakeServer>, opts: { accounts: boolea
     driverName: () => "Alp",
     returnPath: () => "/play",
     passkey: async () => ({}),
+    loadingScreen: () => screen.loading,
+    titleMenu: () => screen.title,
     onLeave(cb) {
       leave.cb = cb;
       return () => {
@@ -775,7 +1025,7 @@ function fakeEnv(server: ReturnType<typeof fakeServer>, opts: { accounts: boolea
   const runTimers = (ms: number) => {
     for (const t of timers.splice(0).filter((x) => x.ms <= ms)) t.fn();
   };
-  return { env, clock, timers, log, storage, runTimers, leave };
+  return { env, clock, timers, log, storage, runTimers, leave, screen };
 }
 
 async function main3(): Promise<void> {
@@ -799,6 +1049,71 @@ async function main3(): Promise<void> {
     check("no online side: off", none.getState().phase === "off");
   }
   {
+    // Joining where the game can't reload (Settings over the pause menu): the account's save waits for the next start
+    const cloudWithLap = async (server: ReturnType<typeof fakeServer>) => {
+      const text = JSON.stringify(lap("spa", 90_000));
+      const ghostSha = await sha256Hex(text);
+      server.ghosts.set(ghostSha, text);
+      server.doc = doc({
+        savedBy: "PC",
+        keys: { "bugesera.vehicle": { value: "chaparral-2d", t: 5 } },
+        bestLaps: { "spa|lc26|p1-pro-full-dry": { trackId: "spa", vehicle: "lc26", lapTimeMs: 90_000, recordedAt: 90_000, ghost: ghostSha } },
+      });
+      server.rev = 1;
+    };
+    const server = fakeServer();
+    server.joined = false;
+    await cloudWithLap(server);
+    const f = fakeEnv(server, { accounts: true });
+    f.screen.title = false;
+    const store = createAccountStore(() => f.env);
+    store.actions.start();
+    await settle(() => store.getState().join !== null);
+    const err = await store.actions.confirmJoin();
+    check(
+      "a join over the pause menu doesn't reload: the account's save waits, and the player is told",
+      err === null && f.log.reloads === 0 && f.storage.getItem("bugesera.vehicle") === null && /next time the game starts/.test(store.getState().notice?.text ?? ""),
+      `${err} ${store.getState().notice?.text}`
+    );
+    const next = fakeEnv(server, { accounts: true, storage: f.storage });
+    const restarted = createAccountStore(() => next.env);
+    restarted.actions.start();
+    await settle(() => next.log.reloads > 0);
+    check("the next start on the title menu takes it", f.storage.getItem("bugesera.vehicle") === "chaparral-2d" && next.log.reloads === 1);
+
+    // The join question stays up, busy, until its first sync is done (a slow ghost download here)
+    const s2 = fakeServer();
+    s2.joined = false;
+    await cloudWithLap(s2);
+    let release: () => void = () => {};
+    s2.ghostGate = new Promise<void>((r) => (release = r));
+    const g = fakeEnv(s2, { accounts: true });
+    const st2 = createAccountStore(() => g.env);
+    st2.actions.start();
+    await settle(() => st2.getState().join !== null);
+    const joining = st2.actions.confirmJoin();
+    await settle(() => s2.calls.some((c) => c.startsWith("GET /account/ghosts/")));
+    await settle();
+    const during = st2.getState();
+    check("while the first sync runs the join question stays up, busy", during.join !== null && during.joining && g.log.reloads === 0);
+    release();
+    await joining;
+    const done = st2.getState();
+    check("once it's done the question goes, and on the title menu the save is used at once", done.join === null && !done.joining && g.log.reloads === 1 && g.storage.getItem("bugesera.vehicle") === "chaparral-2d");
+
+    // The first-sync choice made over the pause menu waits too
+    const s3 = fakeServer();
+    s3.doc = doc({ savedBy: "PC", keys: { "librecorsa.raceHistory": { value: JSON.stringify([race("r1", 1)]), t: 1 } } });
+    s3.rev = 1;
+    const h = fakeEnv(s3, { accounts: true, storage: memoryStorage({ "librecorsa.raceHistory": JSON.stringify([race("r2", 2)]) }) });
+    h.screen.title = false;
+    const st3 = createAccountStore(() => h.env);
+    st3.actions.start();
+    await settle(() => st3.getState().firstSync !== null);
+    await st3.actions.chooseFirstSync("cloud");
+    check("a first-sync choice over the pause menu doesn't reload; the choice waits for the next start", h.log.reloads === 0 && JSON.parse(h.storage.getItem("librecorsa.raceHistory") as string)[0].id === "r2" && st3.getState().firstSync === null);
+  }
+  {
     // The device's key changed under a joined session (saved data cleared, a key file imported)
     const keyIdOf = (key: string) => createHash("sha256").update(key).digest("hex").slice(0, 12);
     const server = fakeServer();
@@ -813,6 +1128,38 @@ async function main3(): Promise<void> {
       server.calls.filter((c) => c === "POST /account/device").length === 1 && store.getState().join === null && server.keyId === keyIdOf("test-driver-key"),
       server.calls.join(),
     );
+  }
+  {
+    // A new account's join without the question fails: the question comes back with what went wrong
+    const server = fakeServer();
+    server.joined = false;
+    server.deviceFail = "The server had a problem. Try again in a moment.";
+    const f = fakeEnv(server, { accounts: true, hash: "#lc-account=created" });
+    const store = createAccountStore(() => f.env);
+    store.actions.start();
+    await settle(() => server.calls.includes("POST /account/device"));
+    await settle();
+    const st = store.getState();
+    check("a failed join without the question brings the question back, with the error", st.join?.driverName === "Alp" && st.notice?.kind === "error" && st.notice.text === server.deviceFail && !st.joining, JSON.stringify(st.notice));
+    server.deviceFail = null;
+    check("answering it then joins", (await store.actions.confirmJoin()) === null && server.joined && store.getState().join === null);
+  }
+  {
+    // A device whose key is on another account: joined, but no key of this account is current. Settled once, it
+    // isn't sent again on every start
+    const server = fakeServer();
+    server.keyId = null;
+    server.keyElsewhere = true;
+    const storage = memoryStorage();
+    const posts = () => server.calls.filter((c) => c === "POST /account/device").length;
+    for (let start = 0; start < 3; start++) {
+      const f = fakeEnv(server, { accounts: true, storage });
+      const store = createAccountStore(() => f.env);
+      store.actions.start();
+      await settle(() => store.getState().sync.lastSyncedAt !== null || store.getState().firstSync !== null);
+      await settle();
+    }
+    check("a key on another account is sent once, not on every start", posts() === 1, `${posts()} joins`);
   }
   {
     // An account made just now on this device joins it without the question
