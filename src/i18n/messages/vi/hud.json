@@ -1,0 +1,1062 @@
+{
+  "racesCard": {
+    "region": "Các cuộc đua",
+    "description": "{car} · {laps, plural, other {# vòng}} · mỗi {interval}",
+    "racing": "<big>Đua</big> <small>đang diễn ra</small>",
+    "toStart": "<big>{time}</big> <small>đến giờ xuất phát</small>",
+    "toNextRace": "<big>{time}</big> <small>đến cuộc đua tiếp</small>",
+    "entrants": "Trong cuộc đua này",
+    "entered": "Đã đăng ký. Cuộc đua sẽ tự động bắt đầu.",
+    "enteredAlone": "Đã đăng ký. Tự động bắt đầu (thêm xe AI nếu không có người chơi khác).",
+    "leave": "Rời cuộc đua",
+    "join": "Tham gia cuộc đua tiếp theo",
+    "rules": "Xe cố định. Hàng xuất phát xếp theo vòng tốt nhất ở thử thách tuần.",
+    "nobodyWaiting": "0 người chờ",
+    "waiting": "<b>{count, plural, other {# tay đua}} đang chờ</b>",
+    "waitingNames": "<b>{count, plural, other {# tay đua}} đang chờ</b>: {names}",
+    "waitingNamesMore": "<b>{count, plural, other {# tay đua}} đang chờ</b>: {names} và {more} người nữa",
+    "topDrivers": "Tay đua dẫn đầu tuần này",
+    "winsPodiums": "{wins, plural, other {{wins} chiến thắng}} · {podiums, plural, other {{podiums} lần lên bục}}",
+    "record": "Bạn: {starts, plural, other {{starts} cuộc đua}} · {wins, plural, other {{wins} chiến thắng}} · {podiums, plural, other {{podiums} lần lên bục}}",
+    "recordBest": "Bạn: {starts, plural, other {{starts} cuộc đua}} · {wins, plural, other {{wins} chiến thắng}} · {podiums, plural, other {{podiums} lần lên bục}} · tốt nhất P{best}"
+  },
+  "seatPanel": {
+    "dialog": "Ghế ngồi và camera, {car}",
+    "title": "Ghế ngồi và camera",
+    "rows": {
+      "view": "Góc nhìn",
+      "viewLess": "Góc nhìn buồng lái",
+      "viewMore": "Góc nhìn bảng đồng hồ",
+      "fwd": "Tiến / lùi",
+      "fwdLess": "Lùi lại",
+      "fwdMore": "Tiến lên",
+      "up": "Độ cao",
+      "upLess": "Hạ xuống",
+      "upMore": "Nâng lên",
+      "right": "Ngang",
+      "rightLess": "Sang trái",
+      "rightMore": "Sang phải",
+      "tilt": "Độ nghiêng",
+      "tiltLess": "Cúi xuống",
+      "tiltMore": "Ngẩng lên",
+      "fov": "FOV",
+      "fovLess": "Hẹp hơn",
+      "fovMore": "Rộng hơn"
+    },
+    "viewGroup": "Góc nhìn",
+    "resetView": "Đặt lại góc nhìn",
+    "done": "Xong",
+    "prompts": {
+      "row": "Hàng",
+      "change": "Thay đổi",
+      "resetRow": "Đặt lại hàng",
+      "resetView": "Đặt lại góc nhìn",
+      "done": "Xong"
+    },
+    "savedPerCar": "Lưu riêng theo từng xe"
+  },
+  "leaderboardPanel": {
+    "raceGhost": "Đua với xe bóng ma vòng {car} của bạn",
+    "raceGhostTitle": "Đua với xe bóng ma",
+    "postUnreachable": "Không thể kết nối tới bảng xếp hạng",
+    "applySetup": "Áp dụng thiết lập từ vòng {car} của bạn",
+    "applySetupTitle": "Áp dụng thiết lập",
+    "retry": "Thử lại",
+    "post": "Đăng",
+    "retryAria": "Thử đăng lại vòng này trực tuyến",
+    "postAria": "Đăng vòng này trực tuyến",
+    "retryTitle": "Thử lại",
+    "postTitle": "Đăng trực tuyến",
+    "notPosted": "Chưa có trên bảng trực tuyến: {error}",
+    "notPostedYet": "Chưa đăng lên bảng trực tuyến",
+    "driverKey": "Khóa tay đua",
+    "driverKeyIntro": "Xác nhận quyền sở hữu tên tay đua của bạn trên bảng xếp hạng. Xuất khóa để dùng cùng tên trên thiết bị khác; hãy giữ kín tệp này.",
+    "exportKey": "Xuất khóa",
+    "importKey": "Nhập khóa",
+    "importGhost": "Nhập tệp xe bóng ma",
+    "exportBest": "Xuất vòng tốt nhất",
+    "undo": "Hoàn tác",
+    "dismiss": "Đóng",
+    "onlineTimes": "Thành tích trực tuyến",
+    "circuit": "Đường đua",
+    "circuitLaps": "{count, plural, other {{count} vòng}}",
+    "allCars": "Tất cả xe",
+    "yourBestLaps": "Vòng tốt nhất của bạn",
+    "physicsVersion": "Phiên bản vật lý",
+    "car": "Xe",
+    "carLaps": "{count, plural, other {{count} vòng}}",
+    "noLapsOlder": "Chưa có vòng nào trên {circuit} ({board}).",
+    "noLaps": "Chưa có vòng nào được lưu trên {circuit}.",
+    "tableLabel": "Các vòng tốt nhất trên {circuit}",
+    "carColumn": "Xe",
+    "theoreticalBest": "Vòng tốt nhất lý thuyết",
+    "potential": "Tiềm năng {delta} s",
+    "allBestSectors": "Tất cả sector tốt nhất đều trong cùng một vòng",
+    "offline": "Bảng xếp hạng ngoại tuyến. Đang hiển thị thành tích cục bộ.",
+    "disabled": "Bảng xếp hạng trực tuyến đã tắt. Đang hiển thị thành tích cục bộ."
+  },
+  "boardWidget": {
+    "modes": {
+      "lapEnd": "Mở khi hết vòng",
+      "open": "Luôn mở",
+      "closed": "Luôn đóng"
+    },
+    "gear": "Thời điểm mở bảng xếp hạng vòng",
+    "modeMenu": "Thời điểm mở bảng xếp hạng vòng",
+    "region": "Bảng xếp hạng vòng",
+    "fold": "Thu gọn bảng xếp hạng vòng",
+    "foldKey": "Thu gọn bảng xếp hạng vòng ({key})",
+    "open": "Mở bảng xếp hạng vòng: {circuit}, {place}",
+    "openNoTime": "Mở bảng xếp hạng vòng: {circuit}, chưa có thành tích",
+    "openKey": "Mở bảng xếp hạng vòng ({key}): {circuit}, {place}",
+    "openKeyNoTime": "Mở bảng xếp hạng vòng ({key}): {circuit}, chưa có thành tích",
+    "drivers": "{total, plural, other {{count} tay đua}}",
+    "noTimes": "Chưa có thành tích.",
+    "placesBetween": "Các vị trí ở giữa",
+    "lapsDriven": "Số vòng đã chạy",
+    "noTime": "Chưa có thành tích",
+    "place": "P{rank}/{total}"
+  },
+  "multiplayerPanel": {
+    "collision": {
+      "on": "Bật",
+      "ghostLap1": "Xuyên xe vòng 1",
+      "off": "Tắt",
+      "protected": "Bảo vệ"
+    },
+    "collisionHint": {
+      "on": "Va chạm đầy đủ",
+      "ghostLap1": "Không va chạm ở vòng đầu tiên",
+      "off": "Các xe đi xuyên qua nhau",
+      "protected": "Xuyên xe vòng 1, sau đó xe chạy nguy hiểm không thể chạm vào xe khác"
+    },
+    "anyCar": "Mọi loại xe",
+    "startType": {
+      "standing": "Xuất phát đứng",
+      "rolling": "Xuất phát lăn bánh"
+    },
+    "gridOrder": {
+      "qualifying": "Phân hạng",
+      "reverse": "Đảo ngược",
+      "random": "Ngẫu nhiên"
+    },
+    "gridOrderHint": {
+      "qualifying": "Vòng nhanh nhất xếp trước; nếu chưa có thành tích, xếp theo thứ tự vào phòng",
+      "reverse": "Đảo ngược thứ tự phân hạng (hoặc thứ tự vào phòng)",
+      "random": "Bốc thăm lúc xuất phát"
+    },
+    "presetClassic": "Cổ điển",
+    "presetClassicHint": "Giới hạn đường đua theo lần vi phạm: cứ lần thứ ba bị +3 s, về sau +5 s",
+    "timeScaleFixed": "Cố định",
+    "qualifyingOff": "Tắt",
+    "settings": {
+      "event": "Sự kiện",
+      "race": "Cuộc đua",
+      "rules": "Luật đua",
+      "circuit": "Đường đua",
+      "changeCircuit": "Đổi đường đua: {circuit}",
+      "change": "Đổi",
+      "circuitHint": "Thay đổi từ menu chính",
+      "cars": "Xe",
+      "oneCar": "Cùng một mẫu xe cho tất cả",
+      "classesMixed": "Mọi loại xe, trộn hạng",
+      "weather": "Thời tiết",
+      "timeOfDay": "Thời gian trong ngày",
+      "timeSpeed": "Tốc độ thời gian",
+      "laps": "Số vòng",
+      "qualifying": "Phân hạng",
+      "qualifyingHint": "Vòng hợp lệ tốt nhất quyết định hàng xuất phát",
+      "gridOrder": "Thứ tự xuất phát",
+      "setByQualifying": "Theo kết quả phân hạng",
+      "start": "Kiểu xuất phát",
+      "launch": "Đề-pa",
+      "rulePreset": "Luật đua",
+      "trackLimits": "Giới hạn đường đua",
+      "penalties": "Án phạt",
+      "penaltiesOn": "Bật",
+      "penaltiesOff": "Tắt",
+      "penaltiesHint": "Cộng thời gian phạt cho lỗi giới hạn đường đua và xuất phát sớm",
+      "damage": "Hư hại",
+      "collisions": "Va chạm",
+      "lockedQualifying": "Bị khóa trong lúc phân hạng",
+      "lockedRace": "Bị khóa trong lúc đua chính"
+    },
+    "net": {
+      "relayedTitle": "Dữ liệu mạng đi qua chủ phòng",
+      "relayed": "Chuyển tiếp",
+      "measuring": "Đang đo",
+      "pingLoss": "{ping} ms · mất {loss}%"
+    },
+    "drivers": {
+      "title": "Tay đua",
+      "host": "Chủ phòng: {name}",
+      "qualifying": "Phân hạng",
+      "noCar": "Chưa chọn xe",
+      "noTime": "Chưa có thành tích",
+      "wrongClassTitle": "Không thuộc hạng xe của phòng này ({class})",
+      "wrongClass": "Sai hạng xe",
+      "ready": "Sẵn sàng",
+      "notReady": "Chưa sẵn sàng",
+      "hostOn": "Chủ phòng đang ở {circuit}",
+      "switchCircuit": "Đổi đường đua",
+      "wrongCar": "Xe của bạn không thuộc hạng xe của phòng này ({class}).",
+      "wrongCarSwitch": "Xe của bạn không thuộc hạng xe của phòng này ({class}). Đổi sang xe:",
+      "raceInProgress": "Cuộc đua đang diễn ra",
+      "startRaceNow": "Bắt đầu đua ngay",
+      "startQualifying": "Bắt đầu phân hạng {minutes} phút",
+      "startRace": "Bắt đầu cuộc đua",
+      "endQualifying": "Kết thúc phân hạng",
+      "endRaceForEveryone": "Kết thúc cuộc đua cho tất cả",
+      "readyButton": "Đã sẵn sàng",
+      "readyUp": "Sẵn sàng",
+      "raceRunning": "Cuộc đua đang diễn ra.",
+      "qualifyingRunning": "Phiên phân hạng đang diễn ra.",
+      "waitingForHost": "Đang chờ chủ phòng bắt đầu.",
+      "confirmEndQualifying": "Kết thúc phân hạng?",
+      "confirmEndRace": "Kết thúc cuộc đua cho tất cả?",
+      "confirmEndQualifyingButton": "Kết thúc phân hạng",
+      "confirmEndRaceButton": "Kết thúc cuộc đua",
+      "keepQualifying": "Tiếp tục phân hạng",
+      "keepRacing": "Tiếp tục đua",
+      "confirmBody": "Đưa tất cả tay đua trở lại sảnh chờ."
+    },
+    "room": {
+      "connected": "{count} đã kết nối",
+      "connecting": "Đang kết nối",
+      "notConnected": "Chưa kết nối",
+      "title": "Phòng riêng",
+      "codeAria": "Mã phòng {code}",
+      "codeCaption": "Mã phòng",
+      "linkCopied": "Đã sao chép liên kết",
+      "copyLink": "Sao chép liên kết mời",
+      "share": "Chia sẻ",
+      "host": "Tạo phòng",
+      "joinAnother": "Tham gia phòng khác",
+      "joinFriend": "Tham gia phòng của bạn bè",
+      "codePlaceholder": "Mã phòng",
+      "join": "Tham gia",
+      "newRoom": "Phòng mới",
+      "codeTooShort": "Nhập ít nhất 3 ký tự.",
+      "joinFailed": "Không thể tham gia phòng đó. Hãy kiểm tra lại mã.",
+      "shareTitle": "Cuộc đua LibreCorsa",
+      "shareText": "Tham gia cuộc đua cùng tôi",
+      "racingAs": "Đang đua với tên {name}",
+      "edit": "Sửa"
+    },
+    "connect": {
+      "more": "Cách kết nối khác",
+      "hide": "Ẩn",
+      "localTitle": "Thẻ cục bộ",
+      "localIntro": "Đua với một thẻ khác trong trình duyệt này.",
+      "localConnect": "Kết nối thẻ cục bộ",
+      "manualTitle": "WebRTC thủ công",
+      "manualIntro": "Kết nối ngang hàng trực tiếp bằng cách trao đổi mã mời/phản hồi.",
+      "createOffer": "1. Tạo mã mời (chủ phòng)",
+      "acceptOffer": "2. Chấp nhận mã mời",
+      "acceptAnswer": "3. Chấp nhận phản hồi (chủ phòng)",
+      "offerFailed": "Tạo mã mời thất bại.",
+      "badOffer": "Mã mời không hợp lệ.",
+      "badAnswer": "Mã phản hồi không hợp lệ.",
+      "remoteToken": "Mã từ người chơi kia",
+      "pasteToken": "Dán mã",
+      "answerAccepted": "Đã chấp nhận phản hồi. Đang kết nối…",
+      "yourToken": "Mã của bạn",
+      "copied": "Đã sao chép",
+      "copy": "Sao chép",
+      "reset": "Đặt lại",
+      "turnTitle": "Máy chủ chuyển tiếp TURN tùy chỉnh",
+      "turnIntro": "Máy chủ chuyển tiếp tùy chọn cho mạng bị hạn chế.",
+      "relayAddress": "Địa chỉ máy chủ chuyển tiếp",
+      "username": "Tên đăng nhập",
+      "password": "Mật khẩu",
+      "saved": "Đã lưu",
+      "save": "Lưu",
+      "clear": "Xóa",
+      "turnPrefix": "Địa chỉ phải bắt đầu bằng turn: hoặc turns:",
+      "ownRelay": "Đang dùng máy chủ chuyển tiếp riêng của bạn"
+    }
+  },
+  "pauseMenu": {
+    "tabs": {
+      "label": "Các mục",
+      "session": "Phiên chạy",
+      "hud": "HUD",
+      "conditions": "Điều kiện",
+      "garage": "Garage",
+      "corners": "Khúc cua",
+      "multiplayer": "Chơi mạng",
+      "lapTimes": "Thành tích vòng",
+      "feedback": "Góp ý"
+    },
+    "actions": {
+      "label": "Menu tạm dừng",
+      "resume": "Tiếp tục",
+      "restartRace": "Đua lại từ đầu",
+      "gridStart": "Xuất phát từ vạch",
+      "rollingStart": "Xuất phát lăn bánh",
+      "flyingLap": "Vòng chạy đà",
+      "watchReplay": "Xem phát lại",
+      "skipTrack": "Qua bài nhạc",
+      "nowPlaying": "{title}, {composer}",
+      "settings": "Cài đặt",
+      "mainMenu": "Menu chính"
+    },
+    "prompts": {
+      "move": "Di chuyển",
+      "select": "Chọn",
+      "jumpThere": "Chuyển tới đó",
+      "tabs": "Thẻ",
+      "page": "Trang",
+      "back": "Quay lại",
+      "resume": "Tiếp tục"
+    },
+    "header": {
+      "lap": "Vòng {lap}",
+      "lapOf": "Vòng {lap}/{total}",
+      "run": "Lượt {lap}",
+      "position": "P{position}/{field}",
+      "online": "Trực tuyến",
+      "leavesRace": "Sẽ rời khỏi cuộc đua hiện tại.",
+      "leavesRoom": "Sẽ rời khỏi phòng hiện tại.",
+      "endsSession": "Sẽ kết thúc phiên lái hiện tại."
+    },
+    "session": {
+      "title": "Phiên chạy",
+      "autopilot": "Tự lái",
+      "key": "Phím {key}",
+      "camera": "Camera",
+      "cameraView": "Góc camera",
+      "cycle": "Đổi góc: {key}",
+      "freeCamera": "Camera tự do",
+      "freeCameraHint": "Phím {key} · Kéo để nhìn, WASD để bay, Q/E chỉnh độ cao",
+      "freeCameraButton": "Camera tự do",
+      "exitFreeCamera": "Thoát camera tự do",
+      "tv": "TV ven đường đua",
+      "tvHint": "Phím {key} · Camera truyền hình ven đường đua",
+      "tvButton": "TV ven đường đua",
+      "exitTv": "Thoát TV"
+    },
+    "hud": {
+      "title": "Bố cục HUD",
+      "settings": "Cài đặt HUD"
+    },
+    "corners": {
+      "title": "Khúc cua",
+      "mapLabel": "{count, plural, other {Bản đồ đường đua có # khúc cua được đánh số}}",
+      "turn": "T{turn}",
+      "detail": "{complex} · Sector {sector}",
+      "pick": "Chọn một khúc cua",
+      "rowLabel": "T{turn}, khúc cua {turn}: {name}, {complex}. Đỉnh cua {apex} {unit}, số {gear}",
+      "gear": "Số <n>{gear}</n>"
+    }
+  },
+  "lapSummary": {
+    "title": "{kind, select, run {Lượt {lap}} other {Vòng {lap}}}",
+    "open": "{kind, select, run {Lượt {lap}: xem dữ liệu sector} other {Vòng {lap}: xem dữ liệu sector}}",
+    "dismiss": "Đóng tóm tắt vòng",
+    "collapse": "Thu gọn tóm tắt vòng",
+    "cardLabel": "Tóm tắt vòng {lap}",
+    "invalid": "Không hợp lệ",
+    "pb": "PB",
+    "invalidWall": "Không hợp lệ: chạm tường",
+    "invalidLimits": "Không hợp lệ: giới hạn đường đua",
+    "autopilot": "Tự lái: không xếp hạng",
+    "personalBest": "Kỷ lục cá nhân",
+    "online": "Trực tuyến",
+    "onlineRank": "Trực tuyến: P{rank}",
+    "onlineRankOf": "Trực tuyến: P{rank} trên {total}",
+    "onlineRankWeek": "Trực tuyến: P{rank}, P{week} tuần này",
+    "onlineRankOfWeek": "Trực tuyến: P{rank} trên {total}, P{week} tuần này",
+    "invalidUnranked": "Không hợp lệ · không xếp hạng",
+    "autopilotUnranked": "Tự lái · không xếp hạng",
+    "topSpeed": "Tối đa {unit}",
+    "avgSpeed": "TB {unit}",
+    "fullThrottle": "Hết ga",
+    "braking": "Đạp phanh",
+    "sector": "{mark, select, best {Sector {n}: tốt nhất} pb {Sector {n}: kỷ lục cá nhân} slower {Sector {n}: chậm hơn} other {Sector {n}}}",
+    "theoreticalBest": "Vòng tốt nhất lý thuyết",
+    "posting": "Đang đăng",
+    "postingNow": "Đang đăng…",
+    "retry": "Thử tải lên lại",
+    "post": "Đăng trực tuyến",
+    "queued": "Đang chờ gửi",
+    "close": "Đóng",
+    "saveGhost": "Lưu tệp xe bóng ma",
+    "driver": "Tay đua <b>{name}</b>",
+    "rename": "Đổi tên",
+    "driverName": "Tên tay đua",
+    "cancel": "Hủy",
+    "saving": "Đang lưu…",
+    "saveName": "Lưu tên",
+    "chart": {
+      "title": "Tốc độ thấp nhất mỗi khúc cua",
+      "turn": "T{turn}",
+      "empty": "Không có dữ liệu khúc cua cho vòng này.",
+      "bar": "T{turn} {name}: {speed} {unit}, {state, select, none {chưa có mốc so sánh} same {{delta}, ngang vòng tốt nhất} faster {{delta}, nhanh hơn vòng tốt nhất} other {{delta}, chậm hơn vòng tốt nhất}}",
+      "faster": "Nhanh hơn",
+      "slower": "Chậm hơn",
+      "same": "Bằng nhau"
+    }
+  },
+  "raceResults": {
+    "dialog": "Kết quả cuộc đua",
+    "dsq": "DSQ",
+    "dnf": "DNF",
+    "running": "Đang chạy",
+    "lapsDown": "{count, plural, other {+# vòng}}",
+    "laps": "{count, plural, other {# vòng}}",
+    "trackLimits": "Giới hạn đường đua {count}",
+    "final": "Chính thức",
+    "provisional": "Tạm thời",
+    "table": "Bảng xếp hạng đầy đủ",
+    "colPos": "Hạng",
+    "colGainedTitle": "Số bậc tăng hoặc tụt so với hàng xuất phát",
+    "colGained": "Số bậc thay đổi",
+    "colDriver": "Tay đua",
+    "colLaps": "Số vòng",
+    "colTime": "Thời gian / khoảng cách",
+    "colBest": "Vòng tốt nhất",
+    "penaltyTitle": "Phạt thời gian {seconds} s, đã cộng vào tổng thời gian",
+    "promptSelect": "Chọn",
+    "promptClose": "Đóng",
+    "backToLobby": "Về sảnh chờ",
+    "watchReplay": "Xem phát lại",
+    "restart": "Đua lại từ đầu",
+    "close": "Đóng",
+    "fastestLapIcon": "Vòng nhanh nhất",
+    "noChange": "Không đổi",
+    "notKnown": "Không rõ",
+    "placesGained": "{count, plural, other {Tăng # bậc}}",
+    "placesLost": "{count, plural, other {Tụt # bậc}}",
+    "yourRace": "Cuộc đua của bạn",
+    "position": "P{position}",
+    "disqualified": "Bị truất quyền thi đấu",
+    "retired": "Bỏ cuộc",
+    "ofField": "trên {count}",
+    "gridUnknown": "Chưa rõ vị trí xuất phát",
+    "started": "Xuất phát P{position}",
+    "fastestLap": "Vòng nhanh nhất",
+    "bestLap": "Vòng tốt nhất",
+    "lastRaces": {
+      "title": "Các cuộc đua gần đây của bạn",
+      "date": "Ngày",
+      "circuit": "Đường đua",
+      "finish": "Về đích",
+      "gained": "Số bậc thay đổi",
+      "best": "Vòng tốt nhất",
+      "dnf": "DNF",
+      "position": "P{position}"
+    },
+    "joinNext": "Tham gia cuộc đua tiếp theo <time>{countdown}</time>"
+  },
+  "podiumOverlay": {
+    "label": "Bục vinh quang",
+    "first": "Hạng 1",
+    "second": "Hạng 2",
+    "third": "Hạng 3",
+    "skip": "Bỏ qua"
+  },
+  "qualifyingHud": {
+    "clock": "Phân hạng",
+    "lastLap": "Vòng cuối",
+    "badge": "Phân hạng",
+    "finishIt": "Hoàn thành vòng",
+    "lapDeleted": "Vòng bị hủy",
+    "best": "Tốt nhất",
+    "grid": "Kết quả phân hạng",
+    "noTime": "Chưa có thành tích"
+  },
+  "perfReportCard": {
+    "title": "Báo cáo hiệu năng",
+    "description": "Nhật ký thời gian khung hình phiên chạy.",
+    "failed": "Không truy cập được bộ nhớ tạm. Hãy lưu thành tệp.",
+    "copy": "Sao chép",
+    "copied": "Đã sao chép",
+    "saveFile": "Lưu tệp",
+    "saved": "Đã lưu"
+  },
+  "qualityNotice": {
+    "lowered": "Đã tự động hạ đồ họa",
+    "floor": "FPS thấp · Có thể giới hạn 30 fps trong Cài đặt"
+  },
+  "multiPageMfd": {
+    "pages": {
+      "elecTag": "ELEC",
+      "elecTitle": "Điện tử",
+      "relTag": "REL",
+      "relTitle": "Xe lân cận",
+      "tyreTag": "TYRE",
+      "tyreTitle": "Lốp & phanh",
+      "fuelTag": "FUEL",
+      "fuelTitle": "Nhiên liệu & năng lượng",
+      "stndTag": "STND",
+      "stndTitle": "Bảng xếp hạng"
+    },
+    "panel": "MFD · {page}",
+    "pagesLabel": "Các trang MFD",
+    "pagesHint": "D-pad trái hoặc phải, hay phím Ins: trang tiếp theo",
+    "open": "Mở MFD",
+    "fold": "Thu gọn MFD",
+    "relative": {
+      "label": "Xe lân cận",
+      "noCars": "Không có xe trên đường đua",
+      "lapsUp": "+{count}L",
+      "lapsDown": "−{count}L",
+      "ahead": "Phía trước",
+      "behind": "Phía sau",
+      "clear": "Trống",
+      "you": "BẠN"
+    },
+    "fuel": {
+      "battery": "Pin",
+      "ersPerLap": "ERS / vòng",
+      "treadPerLap": "Mòn lốp / vòng",
+      "fuel": "Nhiên liệu",
+      "lapsOfFuel": "{laps} vòng",
+      "perLap": "Mỗi vòng",
+      "target": "mục tiêu {kg}",
+      "lift": "Nhả ga · tiết kiệm {kg} kg",
+      "fuelOk": "Đủ nhiên liệu"
+    },
+    "tyres": {
+      "label": "Lốp và phanh"
+    },
+    "standings": {
+      "label": "Bảng xếp hạng",
+      "fastestLap": "Vòng nhanh nhất",
+      "fastestLapShort": "FL",
+      "lead": "Dẫn đầu",
+      "noLaps": "Chưa có vòng nào",
+      "lapTimes": "Thành tích vòng"
+    },
+    "pill": {
+      "position": "P{position}/{fieldSize}",
+      "laps": "{count, plural, other {# vòng}}"
+    }
+  },
+  "tunerMfdPanel": {
+    "categories": {
+      "bias": "BIAS",
+      "diff": "DIFF",
+      "pwr": "PWR"
+    },
+    "dials": {
+      "tc1": {
+        "title": "Kiểm soát lực kéo",
+        "low": "Trượt nhiều hơn",
+        "high": "An toàn hơn"
+      },
+      "tc2": {
+        "title": "TC cắt lực",
+        "low": "Cắt êm hơn",
+        "high": "Cắt gắt hơn"
+      },
+      "abs": {
+        "title": "ABS",
+        "low": "Can thiệp muộn hơn",
+        "high": "Can thiệp sớm hơn"
+      },
+      "bias": {
+        "label": "BIAS",
+        "title": "Phân bổ lực phanh",
+        "low": "Dồn về sau",
+        "high": "Dồn lên trước"
+      },
+      "diffEntry": {
+        "label": "Vào",
+        "title": "Vi sai vào cua",
+        "low": "Linh hoạt",
+        "high": "Ổn định"
+      },
+      "diffMid": {
+        "label": "Giữa",
+        "title": "Vi sai giữa cua",
+        "low": "Xoay tốt hơn",
+        "high": "Khóa chặt"
+      },
+      "diffExit": {
+        "label": "Ra",
+        "title": "Vi sai thoát cua",
+        "low": "Ít văng đuôi",
+        "high": "Tăng sức kéo"
+      },
+      "engineMap": {
+        "label": "MAP",
+        "title": "Bản đồ động cơ",
+        "low": "Nhạy hơn",
+        "high": "Êm hơn"
+      },
+      "ersMode": {
+        "title": "Xả ERS",
+        "low": "Thu hồi",
+        "high": "Tấn công"
+      }
+    },
+    "engineMaps": {
+      "quali": "Phân hạng",
+      "race": "Đua",
+      "smooth": "Êm",
+      "lean": "Tiết kiệm",
+      "wet": "Ướt"
+    },
+    "ersModes": {
+      "charge": "Sạc",
+      "lowSpeed": "Tốc thấp",
+      "balanced": "Cân bằng",
+      "race": "Đua",
+      "attack": "Tấn công"
+    },
+    "phases": {
+      "entry": "Vào cua",
+      "mid": "Giữa cua",
+      "exit": "Thoát cua"
+    },
+    "chips": {
+      "tc": "TC {level}/{cut}",
+      "tcOff": "TC Tắt",
+      "abs": "ABS {level}",
+      "absOff": "ABS Tắt",
+      "bias": "BB {bias}"
+    },
+    "hero": {
+      "off": "Tắt",
+      "ofMax": "trên {max}",
+      "lock": "Khóa {pct}%",
+      "front": "% trước",
+      "map": "M{map}"
+    },
+    "live": {
+      "cut": "Cắt",
+      "wheelFl": "FL",
+      "wheelFr": "FR",
+      "wheelRl": "RL",
+      "wheelRr": "RR",
+      "front": "F {bias}",
+      "rear": "R {bias}",
+      "torque": "Mô-men",
+      "battery": "Pin"
+    },
+    "previousDial": "Núm xoay trước",
+    "previousDialHint": "Núm xoay trước (D-pad trái hoặc ,)",
+    "nextDial": "Núm xoay tiếp theo",
+    "nextDialHint": "Núm xoay tiếp theo (D-pad phải hoặc .)",
+    "lower": "Giảm {dial}",
+    "lowerHint": "{hint} (D-pad xuống hoặc -)",
+    "raise": "Tăng {dial}",
+    "raiseHint": "{hint} (D-pad lên hoặc =)",
+    "openTuner": "Mở bộ chỉnh",
+    "foldTuner": "Thu gọn bộ chỉnh"
+  },
+  "f12026ChannelsPanel": {
+    "region": "Kênh kỹ thuật",
+    "wheels": {
+      "lf": "LF",
+      "rf": "RF",
+      "lr": "LR",
+      "rr": "RR"
+    },
+    "wheelTitle": "{wheel}: tỉ lệ trượt, hành trình còn tới đệm chặn, độ bám đang dùng",
+    "slipRatio": "%SR",
+    "aeroHeightTitle": "Độ cao gầm khí động",
+    "aeroHeight": "Cao gầm",
+    "aeroBalanceTitle": "Cân bằng khí động (tỉ lệ lực ép cầu trước)",
+    "aeroBalance": "Cân bằng",
+    "lsdTitle": "Mô-men khóa vi sai",
+    "lsd": "Khóa LSD",
+    "straightModeTitle": "Trạng thái Straight Mode và số lần mở trong phiên này",
+    "drsTitle": "Trạng thái DRS và số lần mở trong phiên này",
+    "xMode": "X-mode",
+    "drsState": {
+      "open": "Mở",
+      "armed": "Sẵn sàng",
+      "zone": "Vùng",
+      "off": "Tắt"
+    },
+    "overtakeEarned": "Mở chế độ vượt",
+    "overtakeLocked": "Khóa chế độ vượt",
+    "noVerdict": "Chưa xét",
+    "zoneEarned": "{zone} đã mở",
+    "zoneLocked": "{zone} bị khóa",
+    "noDetection": "Chưa qua điểm đo",
+    "wall": "Tường",
+    "aidIntervening": "{aid}, đang can thiệp"
+  },
+  "touchControls": {
+    "steering": "Đánh lái",
+    "drive": "Tiến",
+    "reverse": "Lùi",
+    "shiftDown": "Về số",
+    "shiftUp": "Lên số",
+    "boost": "Tăng lực",
+    "activeAero": "Khí động học chủ động",
+    "headlights": "Đèn pha",
+    "brake": "Phanh",
+    "throttle": "Chân ga",
+    "steerLeft": "Đánh lái trái",
+    "steerRight": "Đánh lái phải",
+    "pause": "Tạm dừng",
+    "camera": "Camera",
+    "recentreTilt": "Căn giữa độ nghiêng",
+    "allowMotion": "Cho phép cảm biến",
+    "tapForTilt": "Chạm để lái nghiêng",
+    "tiltBlocked": "Nghiêng bị chặn · Thử lại",
+    "noTiltSensor": "Không có cảm biến nghiêng"
+  },
+  "replayBar": {
+    "region": "Điều khiển phát lại",
+    "transport": "Điều khiển phát",
+    "previousFrame": "Khung hình trước",
+    "previousFrameTitle": "Khung hình trước ({key})",
+    "pause": "Tạm dừng phát lại",
+    "play": "Phát lại",
+    "playPauseTitle": "Phát / tạm dừng",
+    "playPauseTitleKey": "Phát / tạm dừng ({key})",
+    "nextFrame": "Khung hình sau",
+    "nextFrameTitle": "Khung hình sau ({key})",
+    "jumpToLap": "Chuyển đến vòng {lap}",
+    "lapMarker": "L{lap}",
+    "timeline": "Thanh thời gian phát lại",
+    "timelineValue": "{elapsed} trên {duration}",
+    "playbackSpeed": "Tốc độ phát",
+    "focusedCar": "Xe đang theo dõi",
+    "previousCar": "Xe trước",
+    "previousCarTitle": "Xe trước ({key})",
+    "switchCarTitle": "Đổi xe theo dõi ({key})",
+    "nextCar": "Xe sau",
+    "nextCarTitle": "Xe sau ({key})",
+    "cameraAngle": "Góc camera phát lại",
+    "cycleCamera": "Đổi góc camera phát lại",
+    "flashbackTitle": "Flashback — tiếp tục lái từ thời điểm này ({key}, hủy thành tích vòng hiện tại)",
+    "flashback": "Flashback",
+    "exit": "Thoát",
+    "hints": {
+      "freeCam": "Camera tự do · Kéo để nhìn · WASD bay · Q/E cao độ · Cuộn đổi tốc độ · R đặt lại",
+      "playPause": "Phát / tạm dừng",
+      "seek": "Tua {seconds} s",
+      "step": "Từng khung",
+      "switchCar": "Đổi xe",
+      "freeCamKey": "Camera tự do",
+      "flashback": "Flashback"
+    }
+  },
+  "timingPanels": {
+    "tower": {
+      "region": "Bảng thứ hạng",
+      "lap": "Vòng {lap}",
+      "lapOf": "Vòng {lap}<dim>/{total}</dim>",
+      "driver": "Tay đua",
+      "gap": "Khoảng cách",
+      "interval": "Cách xe trước",
+      "lastVsYouTitle": "Vòng trước của họ so với bạn; ở hàng của bạn là so với vòng tốt nhất",
+      "lastVsYou": "Trước<br></br>vs bạn",
+      "fastestLap": "Vòng nhanh nhất",
+      "fastestLapShort": "FL",
+      "finished": "Đã về đích",
+      "damagedTitle": "Hư hại ({percent}%)",
+      "damagedLabel": "Hư hại, {percent}%",
+      "out": "OUT",
+      "leader": "Dẫn đầu",
+      "lead": "Dẫn đầu",
+      "lastVsBestTitle": "Vòng trước so với vòng tốt nhất của bạn",
+      "lastVsTheirsTitle": "Vòng trước của họ so với bạn",
+      "personalBest": "PB"
+    },
+    "lap": {
+      "region": "Vòng đua",
+      "outLap": "Vòng xuất pit",
+      "counter": "{kind, select, run {Lượt {lap}} other {Vòng {lap}}}",
+      "sector": "S{sector}",
+      "last": "Trước",
+      "best": "Tốt nhất",
+      "noRefLap": "Chưa có vòng mẫu",
+      "lastLap": "Vòng trước",
+      "bestLap": "Vòng tốt nhất"
+    },
+    "challenge": {
+      "region": "Thử thách tuần này",
+      "yourBest": "Tốt nhất của bạn",
+      "weekFastest": "Nhanh nhất tuần này"
+    }
+  },
+  "raceIncidentFeed": {
+    "calls": {
+      "investigation": "Đang điều tra",
+      "penalty": "Án phạt",
+      "noAction": "Không xử phạt",
+      "out": "Bỏ cuộc",
+      "raceControl": "Ban điều hành",
+      "yellow": "Cờ vàng",
+      "green": "Cờ xanh lá",
+      "warning": "Cảnh cáo"
+    },
+    "vsc": {
+      "tag": "VSC",
+      "ending": "VSC sắp kết thúc",
+      "slowDown": "Giảm tốc ngay",
+      "slowToTarget": "Giảm về tốc độ mục tiêu",
+      "prepareForGreen": "Chuẩn bị cờ xanh lá",
+      "noOvertaking": "Cấm vượt"
+    },
+    "flag": {
+      "yieldNow": "Nhường đường ngay · Cho {code} vượt qua",
+      "letThrough": "Cho {code} vượt qua",
+      "doubleYellowCue": "Giảm tốc · cấm vượt",
+      "yellowCue": "Cấm vượt",
+      "blue": "Cờ xanh dương",
+      "doubleYellow": "Cờ vàng kép",
+      "yellow": "Cờ vàng"
+    }
+  },
+  "raceControlBanner": {
+    "decisions": {
+      "warning": "Cảnh cáo",
+      "finalWarning": "Cảnh cáo cuối",
+      "penalty": "Án phạt",
+      "disqualified": "Bị truất quyền thi đấu",
+      "lapInvalid": "Vòng bị hủy",
+      "cleared": "Đã xóa lỗi",
+      "noAdvantage": "Không xử phạt"
+    },
+    "warningsMeter": "{count} trên {total} cảnh cáo",
+    "pointsMeter": "{points} trên {allowed} điểm giới hạn đường đua",
+    "giveBack": {
+      "toCar": "Trả lại vị trí cho {code}",
+      "dropTo": "Lùi về P{position}",
+      "time": "Trả lại {seconds} s",
+      "slowDown": "Giảm tốc",
+      "underYellow": "Vượt dưới cờ vàng",
+      "illegalOvertake": "Vượt trái luật",
+      "trackLimits": "Giới hạn đường đua"
+    },
+    "offTrack": {
+      "trackLimits": "Giới hạn đường đua",
+      "offTrack": "Ra ngoài đường đua",
+      "underReview": "Đang xem xét"
+    }
+  },
+  "startLights": {
+    "startsIn": "Cuộc đua bắt đầu sau <n>{seconds}</n>",
+    "lightsLabel": "Đèn xuất phát: {lit} trên {total} đèn sáng",
+    "rollingStart": "Xuất phát lăn bánh",
+    "holdPaceSkin": "Giữ tốc độ · <n>{pace}</n> {unit} tới vạch xuất phát/đích",
+    "holdPace": "Giữ <n>{pace}</n> {unit} tới vạch",
+    "greenFlag": "Cờ xanh lá",
+    "lightsOut": "Tắt đèn xuất phát",
+    "chequeredFlag": "Cờ ca-rô"
+  },
+  "launchCue": {
+    "stalledLabel": "Chết máy: giữ {control} hoặc về số N để khởi động lại",
+    "clutch": "côn",
+    "stalled": "Chết máy · giữ <control></control> hoặc N",
+    "jumpStart": "Xuất phát sớm · +{seconds} s",
+    "manualStart": "Xuất phát thủ công: {clutch, select, held {đã giữ côn} other {giữ côn}}, {revs, select, up {đủ vòng tua} other {tăng vòng tua lên}}",
+    "holdNamed": "Giữ {control}",
+    "holdClutch": "Giữ côn",
+    "revsUp": "Tăng vòng tua"
+  },
+  "speedCluster": {
+    "region": "Cụm tốc độ",
+    "minimalRegion": "Tốc độ và cấp số",
+    "shiftLights": "Đèn chuyển số: {lit} trên {total}",
+    "gearLabel": "Số {gear}",
+    "gear": "Số",
+    "shift": "Lên số",
+    "aeroToggle": "{label}: bật/tắt",
+    "drsTitle": "DRS ({key}): cánh gió sau, trong vùng DRS; khi đua chính chỉ mở được nếu cách xe trước dưới 1 s tại điểm đo, từ vòng 3",
+    "straightModeTitle": "Straight Mode ({key}): mở cả hai cánh gió trên đường thẳng; nhấn ngay trước đoạn thẳng sẽ tự mở khi vào đoạn",
+    "overtakeLockedTitle": "Chế độ vượt ({keys}): nhận được khi cách xe trước dưới 1 s tại điểm đo, dùng cho vòng tiếp theo",
+    "overtakeTitle": "Chế độ vượt ({keys})",
+    "boostTitle": "Tăng lực điện thủ công ({keys})",
+    "overtake": "Vượt",
+    "boost": "Tăng lực",
+    "harvest": "Thu hồi",
+    "deploy": "Xả",
+    "ersSoc": "Pin ERS",
+    "lonG": "G dọc",
+    "inputs": "Phanh, ga, lực lái",
+    "brakeLetter": "B",
+    "brakeTitle": "Lực phanh",
+    "throttleLetter": "T",
+    "throttleTitle": "Chân ga",
+    "forceLetter": "F",
+    "clip": "Clip",
+    "forceTitle": "Mô-men lái / Phản hồi lực (Đỏ = Quá ngưỡng)",
+    "latG": "{g} g ngang",
+    "ersBattery": "Mức pin ERS",
+    "rpmBand": "Dải vòng tua động cơ (RPM)"
+  },
+  "hudFormat": {
+    "session": {
+      "qualifying": "Phân hạng",
+      "timeTrial": "Đua tính giờ",
+      "practice": "Luyện tập"
+    },
+    "cornerShort": "T{turn}",
+    "lapMark": {
+      "best": "Tốt nhất",
+      "pb": "Kỷ lục cá nhân",
+      "slower": "Chậm hơn"
+    }
+  },
+  "thirdPartyData": {
+    "you": "Bạn",
+    "headlight": {
+      "flash": "Nháy đèn",
+      "on": "Bật",
+      "off": "Tắt"
+    },
+    "surface": {
+      "dry": "Khô",
+      "damp": "Ẩm",
+      "wet": "Ướt",
+      "flooded": "Ngập nước"
+    }
+  },
+  "aeroLabel": {
+    "readout": {
+      "noDrs": "Không DRS",
+      "drsOpen": "DRS mở",
+      "drsQueued": "DRS chờ",
+      "drsArmed": "DRS sẵn sàng",
+      "xMode": "X-mode",
+      "xQueued": "X chờ",
+      "xArmed": "X sẵn sàng",
+      "zMode": "Z-mode"
+    },
+    "notice": {
+      "drsEnabled": "DRS đã kích hoạt",
+      "drsNotEnabled": "Chưa kích hoạt DRS",
+      "drsQueued": "Đang chờ",
+      "xModeBadge": "X-mode",
+      "straightMode": "Straight Mode",
+      "xModeQueued": "Đang chờ",
+      "overtakeBadge": "Vượt",
+      "overtakeEnabled": "Đã mở",
+      "overtakeLocked": "Đã khóa"
+    }
+  },
+  "tyreBrakeWidget": {
+    "corner": {
+      "fl": "FL",
+      "fr": "FR",
+      "rl": "RL",
+      "rr": "RR"
+    },
+    "tread": {
+      "inner": "I",
+      "middle": "M",
+      "outer": "O",
+      "title": "Mặt lốp ngoài, giữa, trong"
+    },
+    "condition": {
+      "grain": "Xù lốp",
+      "grainTitle": "Xù bề mặt lốp: cao su mặt lốp bị xé thành cuộn (lõi còn nguội khi bị trượt)",
+      "blister": "Phồng lốp",
+      "blisterTitle": "Phồng rộp lốp: lõi lốp bị quá nhiệt",
+      "flat": "Mòn phẳng",
+      "flatTitle": "Mòn phẳng do bó cứng bánh: gây rung và giảm độ bám",
+      "dirt": "Bẩn",
+      "dirtTitle": "Bụi bẩn / vụn cao su bám khi chạy lệch đường chạy: sẽ sạch sau vài khúc cua"
+    },
+    "conditionTitle": "{title} ({level}%)",
+    "brakeTitle": "Đĩa phanh {disc}{hasCore, select, yes { · lõi {core}} other {}}{hasBite, select, yes { · độ bám má phanh {bite}%} other {}}",
+    "cardTitle": "Mặt lốp {corner} {temps} (nhìn từ phía sau)",
+    "treadLife": "Tuổi thọ gai lốp",
+    "pressureTitle": "Áp suất ({unit})",
+    "windowTitle": "Khoảng nhiệt hoạt động của gai lốp",
+    "window": "Ngưỡng",
+    "miniTitle": "{corner}: gai lốp {temps} · {pressure} · phanh {brake}{hasCondition, select, yes { · {condition}} other {}}"
+  },
+  "tyrePanel": {
+    "region": "Lốp"
+  },
+  "weatherBadge": {
+    "region": "Thời tiết",
+    "air": "Không khí",
+    "track": "Mặt đường",
+    "rain": "Mưa",
+    "heavyRain": "Mưa lớn",
+    "wind": "Gió",
+    "headlightsForcedOn": "Đèn pha bật thủ công",
+    "headlightsForcedOff": "Đèn pha tắt thủ công",
+    "headlightsOn": "Đèn pha đang bật",
+    "headlightsTitleManualOn": "Đèn pha bật (thủ công)",
+    "headlightsTitleManualOff": "Đèn pha tắt (thủ công)",
+    "headlightsTitleAuto": "Đèn pha bật (tự động)",
+    "chipFlash": "Nháy",
+    "chipOn": "Bật",
+    "chipOff": "Tắt"
+  },
+  "damageWidget": {
+    "label": "Hư hại",
+    "out": "Hỏng hẳn",
+    "puncture": "Thủng lốp",
+    "title": "Trước {front} · sau {rear} · trái {left} · phải {right}",
+    "titlePunctured": "Trước {front} · sau {rear} · trái {left} · phải {right} · thủng lốp",
+    "part": {
+      "frontWing": "Cánh gió trước",
+      "rearWing": "Cánh gió sau",
+      "floor": "Gầm xe",
+      "suspension": "Hệ thống treo"
+    }
+  },
+  "inputTrace": {
+    "throttle": "Ga",
+    "brake": "Phanh",
+    "steering": "Lái",
+    "steeringTitle": "Nét liền là góc bánh xe, nét đứt là thao tác của bạn",
+    "trace": "Biểu đồ ga, phanh và lái: nét đứt là thao tác lái của bạn, nét liền là góc bánh xe",
+    "region": "Thao tác lái"
+  },
+  "pedalBars": {
+    "region": "Bàn đạp và điện tử",
+    "clutch": "Côn",
+    "clip": "Clip",
+    "steering": "Đánh lái"
+  },
+  "splitGaps": {
+    "region": "Khoảng cách xe trước và sau",
+    "ahead": "Phía trước",
+    "behind": "Phía sau",
+    "carAhead": "Xe phía trước {driver}: {gap} giây",
+    "carBehind": "Xe phía sau {driver}: {gap} giây",
+    "goingYourWay": "Đang có lợi cho bạn",
+    "goingAgainstYou": "Đang bất lợi cho bạn",
+    "steady": "Ổn định"
+  },
+  "deltaBar": {
+    "label": "Delta so với vòng mẫu",
+    "valueText": "{delta} giây, {trend, select, gaining {đang rút ngắn} losing {đang chậm lại} other {ổn định}}",
+    "noReference": "Chưa có vòng mẫu"
+  },
+  "ffbMeter": {
+    "title": "Phản hồi lực",
+    "clipping": "Quá ngưỡng",
+    "inRange": "Trong ngưỡng",
+    "peak": "Đỉnh <v>{value}%</v>",
+    "setCar": "Đặt xe này ở {value}%"
+  },
+  "proximityRadar": {
+    "carsClose": "{count, plural, other {# xe ở gần}}{side, select, left {, một xe song song bên trái} right {, một xe song song bên phải} both {, một xe song song bên trái, một xe song song bên phải} other {}}",
+    "clear": "Radar trống"
+  },
+  "cameraToast": {
+    "freeHintTouch": "Kéo để xoay góc nhìn · Dùng menu Tạm dừng hoặc Camera phát lại để thoát",
+    "freeHintKeys": "Kéo nhìn · WASD bay · Q/E cao độ · Cuộn đổi tốc độ · R đặt lại · {key} thoát"
+  },
+  "ffbPairPrompt": {
+    "region": "Phản hồi lực",
+    "text": "Ghép nối vô lăng để dùng phản hồi lực",
+    "connect": "Kết nối",
+    "dismiss": "Đóng"
+  },
+  "dualSensePairPrompt": {
+    "text": "<b>Phát hiện DualSense</b> · ghép nối để bật cò bấm và phản hồi rung",
+    "pair": "Ghép nối",
+    "dismiss": "Đóng"
+  },
+  "overheadNameplates": {
+    "fastestLap": "FL",
+    "rank": "P{rank}"
+  }
+}
