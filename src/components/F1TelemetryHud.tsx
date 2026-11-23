@@ -1,5 +1,6 @@
 "use client";
 
+import { ersButtons } from "./hud/ers-buttons";
 import { connectedPads, isLikelyWheel } from "@/lib/input/device-input";
 import type { NowPlaying } from "@/lib/audio/bgm-controller";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -207,6 +208,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onToggleAiAutopilot: () => void;
   onToggleXMode: () => void;
   onToggleBoostLatch: () => void;
+  /** Use the Overtake earned in a race, or stop using it (a 2026 F1 car) */
+  onOvertake?: () => void;
   onChangeLiveTuner?: (patch: LiveTunerPatch) => void;
   onToggleMouseSteer?: () => void;
   onResetCar: (flyingStart: boolean) => void;
@@ -303,7 +306,7 @@ function useAeroNotice(t: CarTelemetry): AeroNotice | null {
 function touchCarState(t: CarTelemetry, lights: boolean): TouchCarState {
   const channels = t.f12026;
   const aero = aeroReadout(t);
-  const overtakeLocked = t.overtakingRules === "straight-mode-2026" && t.overtakeAvailable === false;
+  const ersCtl = ersButtons(t);
   // TouchControls only branches on |speed| < 5 (offer reverse) and |speed| > 15 (driven off) and gear < 0: bucket them
   // so TouchControls memoization holds across every frame of normal driving instead of re-rendering at 20 Hz.
   const absSpeed = Math.abs(t.speedKmh);
@@ -314,8 +317,9 @@ function touchCarState(t: CarTelemetry, lights: boolean): TouchCarState {
     aeroOpen: aero.open,
     // A car without the DRS channel cannot say where the flaps may open: its button never looks unusable
     aeroArmed: aero.armed || !channels,
-    boostOn: !overtakeLocked && t.manualOverrideActive,
-    boostLocked: overtakeLocked,
+    boostOn: ersCtl.boostOn,
+    boostLocked: ersCtl.boostLocked,
+    overtake: ersCtl.overtake,
     gear: t.gear < 0 ? -1 : 1,
     speedKmh: speedBand,
     runId: t.runId ?? 0,
@@ -886,6 +890,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             telemetry={telemetry}
             boostLatch={boostLatch}
             onToggleBoostLatch={props.onToggleBoostLatch}
+            onOvertake={props.onOvertake}
             onToggleXMode={props.onToggleXMode}
             variant="minimal"
           />
@@ -926,6 +931,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               telemetry={telemetry}
               boostLatch={boostLatch}
               onToggleBoostLatch={props.onToggleBoostLatch}
+              onOvertake={props.onOvertake}
               onToggleXMode={props.onToggleXMode}
               variant="full"
             />

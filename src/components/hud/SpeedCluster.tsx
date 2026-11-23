@@ -31,6 +31,7 @@ import { AidLamp } from "./F12026ChannelsPanel";
 import { aeroReadout } from "./aero-label";
 import { revLedBand, type RevLedBand } from "@/lib/sim/rev-range";
 import { AeroBadge } from "./styles/hud-style-parts";
+import { ersButtons } from "./ers-buttons";
 
 /** Rev lights: 15 LEDs over the top end of the rev range (green, amber, red; all in the shift colour at the shift point) */
 const REV_LEDS = 15;
@@ -45,6 +46,8 @@ interface SpeedClusterProps {
   /** The player's boost latch. The button shows what the physics reports (`manualOverrideActive`), not the request */
   boostLatch: boolean;
   onToggleBoostLatch: () => void;
+  /** Use the Overtake earned in a race, or stop using it (a 2026 F1 car) */
+  onOvertake?: () => void;
   onToggleXMode: () => void;
   /** Minimal HUD: a speed and gear pill under a slim status strip */
   variant?: "full" | "minimal";
@@ -73,6 +76,7 @@ const InputBar: React.FC<{ label: string; pct: number; color: string; labelColor
 export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   telemetry,
   onToggleBoostLatch,
+  onOvertake,
   onToggleXMode,
   variant = "full",
 }) => {
@@ -94,10 +98,12 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   const hasAero = !channels || channels.hasDrs;
   const aids = aidsActive(telemetry);
 
-  /** In a race a 2026 car's override (Overtake Mode) is only there once earned within 1 s at the detection point */
-  const overtakeLocked = straightMode && telemetry.overtakeAvailable === false;
-  // What the physics reports, with locked first: a latch the physics refuses never lights the button
-  const boost = !overtakeLocked && telemetry.manualOverrideActive;
+  // What the physics reports, with locked first: a latch the physics refuses never lights the button. Under the 2026
+  // rules the Boost and Overtake are two controls (`ers-buttons.ts`)
+  const ersCtl = ersButtons(telemetry);
+  const overtakeLocked = ersCtl.boostLocked;
+  const boost = ersCtl.boostOn;
+  const rules2026 = telemetry.ersBoostActive !== undefined;
   const ers = Math.max(0, Math.min(100, telemetry.ersBatteryPercent));
   const deploying = telemetry.mgukPowerKw > 5;
   const harvesting = telemetry.mgukPowerKw < -5;
@@ -154,15 +160,43 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
           }`}
           aria-pressed={boost}
           title={
-            straightMode
-              ? overtakeLocked
-                ? "Overtake Mode (Space / B): earned within 1 s of the car ahead at the detection point, for the next lap"
-                : "Overtake Mode (Space / B)"
-              : "Manual override boost (Space / B)"
+            rules2026
+              ? "Boost (Space / B): keeps the motor's power or raises it; in a race to its power when pressed, or 150 kW"
+              : straightMode
+                ? overtakeLocked
+                  ? "Overtake Mode (Space / B): earned within 1 s of the car ahead at the detection point, for the next lap"
+                  : "Overtake Mode (Space / B)"
+                : "Manual override boost (Space / B)"
           }
         >
           <Badge tone={boost ? "info" : "neutral"} variant={boost ? "solid" : "soft"} size="md" icon="overtake">
-            {straightMode ? "Overtake" : "Boost"}
+            {straightMode && !rules2026 ? "Overtake" : "Boost"}
+          </Badge>
+        </button>
+      ) : null}
+      {hasErs && ersCtl.overtake !== null ? (
+        <button
+          type="button"
+          onClick={onOvertake}
+          disabled={ersCtl.overtake === "locked"}
+          className={`pointer-events-auto cursor-pointer rounded-full outline-none focus-visible:shadow-lc-focus disabled:cursor-default pointer-coarse:py-2.5 ${
+            ersCtl.overtake === "locked" ? "opacity-40" : ""
+          }`}
+          aria-pressed={ersCtl.overtake === "on" || ersCtl.overtake === "auto"}
+          title={
+            ersCtl.overtake === "locked"
+              ? "Overtake (Z): earned within 1 s of the car ahead at the detection line, for the lap from the activation line"
+              : ersCtl.overtake === "auto"
+                ? "Overtake: the Automatic Overtake is using it; press Z for all of it"
+                : "Overtake (Z): the motor's full power held to 337 km/h for the rest of the lap"
+          }
+        >
+          <Badge
+            tone={ersCtl.overtake === "locked" ? "neutral" : "info"}
+            variant={ersCtl.overtake === "on" ? "solid" : "soft"}
+            size="md"
+          >
+            {ersCtl.overtake === "auto" ? "Overtake auto" : "Overtake"}
           </Badge>
         </button>
       ) : null}

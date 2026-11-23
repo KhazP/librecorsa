@@ -604,8 +604,10 @@ export interface TouchCarState {
   aeroArmed: boolean;
   /** Boost / Overtake latched on */
   boostOn: boolean;
-  /** Overtake not earned this lap (2026 rules in a race) */
+  /** Overtake not earned this lap (an older car's override under the 2026 rules in a race) */
   boostLocked: boolean;
+  /** A 2026 F1 car's Overtake in a race (`ers-buttons.ts`): null outside one */
+  overtake: "on" | "auto" | "available" | "locked" | null;
   gear: number;
   speedKmh: number;
   /** Changes on every restart */
@@ -869,6 +871,19 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
       <Icon name="overtake" size="md" />
     </GhostButton>
   ) : null;
+  // A 2026 F1 car's Overtake in a race: a press uses it for the rest of the lap once earned
+  const overtake =
+    car.hasErs && car.overtake !== null ? (
+      <GhostButton
+        key="overtake"
+        label="Overtake"
+        on={car.overtake === "on" || car.overtake === "auto"}
+        dim={car.overtake === "locked"}
+        onTap={() => { touchInput.overtake = true; }}
+      >
+        <span className="text-[11px] font-semibold leading-none">OT</span>
+      </GhostButton>
+    ) : null;
   const aero = car.hasAero ? (
     <GhostButton
       key="aero"
@@ -1012,7 +1027,7 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
             className="absolute flex flex-col items-end gap-3 phone:gap-2"
             style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
           >
-            {buttonRow([aero, boost, shiftUp, headlights], "end")}
+            {buttonRow([aero, boost, overtake, shiftUp, headlights], "end")}
             {throttlePedal}
           </div>
         </>
@@ -1037,7 +1052,7 @@ const TouchControlsView: React.FC<TouchControlsProps & { car: TouchCarState }> =
             className="absolute flex flex-col items-end gap-3 phone:gap-2"
             style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
           >
-            {buttonRow([shiftUp, shiftDown, aero, boost, gearButton, headlights], "end")}
+            {buttonRow([shiftUp, shiftDown, aero, boost, overtake, gearButton, headlights], "end")}
             {pedalPair}
           </div>
         </>
