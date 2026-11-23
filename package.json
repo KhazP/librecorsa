@@ -15,6 +15,7 @@
     "race:headless": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/race-headless.ts",
     "physics:report": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/physics-report.ts",
     "ffb": "tsx scripts/ffb-bridge.ts",
+    "launcher:build": "node launcher/build.mjs",
     "compress-tracks": "node scripts/compress-track-glb.mjs --all",
     "upload-hosted": "node scripts/upload-hosted.mjs",
     "car-thumbs": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/render-car-thumbs.ts",
