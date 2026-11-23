@@ -19,7 +19,9 @@
  * Dropped: iRating, licence and safety rating, strength of field, the FPS meter, the track map, the app logo.
  */
 
-import React, { useEffect, useRef, useSyncExternalStore } from "react";
+import React, { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl/react";
+import { upper } from "@/i18n/runtime";
 import type { CarTelemetry, RaceStandingEntry } from "@/types/f1";
 import { Icon } from "@/components/ui/icons/Icon";
 import { tokenColor } from "@/components/ui/token-color";
@@ -46,7 +48,7 @@ import {
   trackSurfaceState,
 } from "../third-party-data";
 import { revLights, useFuelPerLap, useLapHistory, useSessionClock } from "./third-party-parts";
-import { anchor, gearLabel, type HudDesignProps } from "./hud-style-parts";
+import { anchor, formatOnce, gearLabel, type HudDesignProps } from "./hud-style-parts";
 import palette from "./racevision.module.css";
 
 /** A lap time as the source prints it: minutes padded to two digits ("01:23.312"), dashes without one */
@@ -56,14 +58,66 @@ const lapTime = (ms: number | null | undefined) => {
 };
 
 /** The car's class for the standings' class pill, from the car profile the channels report */
-function classLabel(carId: string | undefined): string {
-  if (!carId) return "Field";
-  if (carId.includes("gt3")) return "GT3";
-  if (ROAD_CAR_IDS.has(carId)) return "Road";
-  if (PROTO_CAR_IDS.has(carId)) return "Proto";
-  if (CLASSIC_CAR_IDS.has(carId)) return "Classic";
-  return "Formula";
+function carClass(carId: string | undefined): "field" | "gt3" | "road" | "proto" | "classic" | "formula" {
+  if (!carId) return "field";
+  if (carId.includes("gt3")) return "gt3";
+  if (ROAD_CAR_IDS.has(carId)) return "road";
+  if (PROTO_CAR_IDS.has(carId)) return "proto";
+  if (CLASSIC_CAR_IDS.has(carId)) return "classic";
+  return "formula";
 }
+
+/** The RaceVision layout's words in the current language, resolved once per language */
+function useRaceVisionWords() {
+  const tx = useTranslations("hudStyles.raceVision");
+  return useMemo(
+    () => ({
+      /** The class pill: GT3 is the class's own name */
+      carClass: {
+        field: tx("classField"),
+        gt3: "GT3",
+        road: tx("classRoad"),
+        proto: tx("classProto"),
+        classic: tx("classClassic"),
+        formula: tx("classFormula"),
+      },
+      standings: tx("standings"),
+      laps: tx("laps"),
+      race: tx("race"),
+      sessionTime: formatOnce((time: string) => tx("sessionTime", { time })),
+      cars: tx("cars"),
+      out: tx("out"),
+      finished: tx("finished"),
+      invalid: tx("invalid"),
+      invalidShort: tx("invalidShort"),
+      relative: tx("relative"),
+      strikes: tx("strikes"),
+      fuelLaps: formatOnce((laps: string) => tx("fuelLaps", { laps })),
+      raceLaps: formatOnce((lap: number, total: number) =>
+        total ? tx("raceLapsOfTotal", { lap: String(lap), total: String(total) }) : tx("raceLaps", { lap: String(lap) }),
+      ),
+      aidWorking: formatOnce((aid: string) => tx("aidWorking", { aid })),
+      inputs: tx("inputs"),
+      shiftLights: formatOnce((lit: number, total: number) => tx("shiftLights", { lit: String(lit), total: String(total) })),
+      delta: tx("delta"),
+      aero: tx("aero"),
+      open: tx("open"),
+      queued: tx("queued"),
+      armed: tx("armed"),
+      shut: tx("shut"),
+      inputGraph: tx("inputGraph"),
+      weather: tx("weather"),
+      air: tx("air"),
+      track: tx("track"),
+      surface: tx("surface"),
+      rain: tx("rain"),
+      lights: tx("lights"),
+      radar: tx("radar"),
+    }),
+    [tx],
+  );
+}
+type RaceVisionWords = ReturnType<typeof useRaceVisionWords>;
 
 /** A media query as live state (read on the client; false while prerendered) */
 function useMedia(query: string): boolean {
@@ -106,15 +160,16 @@ const lastColor = (ms: number | null | undefined, own: number | null | undefined
   !ms ? undefined : sessionBest && Math.abs(ms - sessionBest) < 0.5 ? HUD_BEST : own && Math.abs(ms - own) < 0.5 ? HUD_GAIN : undefined;
 
 /** One standings row: position, stripe, name, gap, best and last */
-const StandingRow: React.FC<{ e: RaceStandingEntry; pos: number; gaps: "interval" | "leader"; sessionBest: number | null; narrow: boolean }> = ({
-  e,
-  pos,
-  gaps,
-  sessionBest,
-  narrow,
-}) => {
+const StandingRow: React.FC<{
+  e: RaceStandingEntry;
+  pos: number;
+  gaps: "interval" | "leader";
+  sessionBest: number | null;
+  narrow: boolean;
+  w: RaceVisionWords;
+}> = ({ e, pos, gaps, sessionBest, narrow, w }) => {
   const gapS = gaps === "leader" ? e.gapToLeaderS : e.intervalS;
-  const gap = e.retired ? "OUT" : e.finished ? "FIN" : pos === 1 || gapS === undefined ? "-" : formatGap(gapS);
+  const gap = e.retired ? w.out : e.finished ? w.finished : pos === 1 || gapS === undefined ? "-" : formatGap(gapS);
   return (
     <div className="flex h-6 items-stretch">
       <PosBox user={e.isPlayer}>{pos}</PosBox>
@@ -150,19 +205,20 @@ const Standings: React.FC<{
   const laps = useLapHistory(10);
   const clock = useSessionClock();
   const sessionBest = sessionBestLapMs(t);
-  const cls = classLabel(t.f12026?.carId);
+  const w = useRaceVisionWords();
+  const cls = w.carClass[carClass(t.f12026?.carId)];
   const field = race ? race.standings.length : 1 + (t.peers?.length ?? 0);
   const rows = race ? leaderboardWindow(race.standings, short ? 7 : 12) : [];
   const bestMs = t.bestLapTimeMs;
   return (
-    <section aria-label={race ? "Standings" : "Laps"} className={`${PANEL} flex flex-col gap-1.5 p-2`}>
+    <section aria-label={race ? w.standings : w.laps} className={`${PANEL} flex flex-col gap-1.5 p-2`}>
       <div className="flex items-center justify-between gap-3 px-0.5 font-black">
         <span className="truncate">
-          {race ? "RACE" : sessionWord(t).toUpperCase()}
+          {race ? w.race : upper(sessionWord(t))}
           <span className="pl-2">{race ? `L${race.lap}${race.totalLaps ? `/${race.totalLaps}` : ""}` : `L${Math.max(1, t.lapCount)}`}</span>
         </span>
         {/* The session's running time, where the source shows its clock */}
-        <span className="inline-flex shrink-0 items-center gap-1" aria-label={`Session time ${formatClock(clock)}`}>
+        <span className="inline-flex shrink-0 items-center gap-1" aria-label={w.sessionTime(formatClock(clock))}>
           <Icon name="time" size="xs" />
           {formatClock(clock)}
         </span>
@@ -170,14 +226,14 @@ const Standings: React.FC<{
       <div className="flex items-center justify-between">
         <ClassPill side="left">{cls}</ClassPill>
         <ClassPill side="right">
-          <Icon name="helmet" size="xs" label="Cars" />
+          <Icon name="helmet" size="xs" label={w.cars} />
           {field}
         </ClassPill>
       </div>
       {race ? (
         <div className="flex flex-col gap-0.5">
           {rows.map((e) => (
-            <StandingRow key={e.driverCode + (e.name ?? "")} e={e} pos={race.standings.indexOf(e) + 1} gaps={gaps} sessionBest={sessionBest} narrow={narrow} />
+            <StandingRow key={e.driverCode + (e.name ?? "")} e={e} pos={race.standings.indexOf(e) + 1} gaps={gaps} sessionBest={sessionBest} narrow={narrow} w={w} />
           ))}
         </div>
       ) : (
@@ -188,7 +244,7 @@ const Standings: React.FC<{
             <span aria-hidden className="w-1.5 shrink-0 bg-(--tp-user)" />
             <span className="flex-1 self-center px-2 text-center" style={{ color: lapInvalid ? HUD_LOSS : "var(--tp-user)" }}>
               {/* Held at zero on the out-lap, where no lap is timed yet */}
-              {lapInvalid ? "INVALID" : t.outLap ? "00:00.000" : lapTime(t.currentLapTimeMs)}
+              {lapInvalid ? w.invalid : t.outLap ? "00:00.000" : lapTime(t.currentLapTimeMs)}
             </span>
             <span className="w-20 shrink-0 self-center text-right" style={{ color: deltaS === null ? HUD_SLATE : deltaS <= 0 ? HUD_GAIN : HUD_LOSS }}>
               {deltaS === null ? NO_TIME : formatDeltaFit(deltaS)}
@@ -204,7 +260,7 @@ const Standings: React.FC<{
                   {lapTime(l.ms)}
                 </span>
                 <span className="w-20 shrink-0 self-center text-right">
-                  {!l.valid ? "INV" : best || bestMs === null ? "-" : `+${((l.ms - bestMs) / 1000).toFixed(3)}`}
+                  {!l.valid ? w.invalidShort : best || bestMs === null ? "-" : `+${((l.ms - bestMs) / 1000).toFixed(3)}`}
                 </span>
               </div>
             );
@@ -219,12 +275,13 @@ const Standings: React.FC<{
 const Relative: React.FC<{ t: CarTelemetry; lengthM: number }> = ({ t, lengthM }) => {
   const race = t.race;
   const perLap = useFuelPerLap();
+  const w = useRaceVisionWords();
   if (!race) return null;
   const cars = relativeCars(t, lengthM, 3);
   const fuelLaps = fuelLapsLeft(t.fuelKg, perLap);
   const strikes = t.trackLimits?.totalStrikes ?? 0;
   return (
-    <section aria-label="Relative" className={`${PANEL} flex w-[340px] flex-col gap-1.5 py-2`}>
+    <section aria-label={w.relative} className={`${PANEL} flex w-[340px] flex-col gap-1.5 py-2`}>
       <div className="flex items-center justify-between px-2.5 font-black">
         <span>
           L{race.lap}
@@ -233,7 +290,7 @@ const Relative: React.FC<{ t: CarTelemetry; lengthM: number }> = ({ t, lengthM }
         <span>
           P{race.position}/{race.standings.length}
         </span>
-        <span title="Track limit strikes">{strikes}x</span>
+        <span title={w.strikes}>{strikes}x</span>
       </div>
       <div className="flex flex-col gap-0.5 px-2">
         {cars.map((c, i) => {
@@ -255,7 +312,7 @@ const Relative: React.FC<{ t: CarTelemetry; lengthM: number }> = ({ t, lengthM }
       </div>
       {t.fuelKg > 0 ? (
         <div className="flex items-center justify-between px-2.5">
-          <span>{fuelLaps !== null ? `Laps ~${fuelLaps.toFixed(1)}` : `Laps ${race.lap}${race.totalLaps ? `/${race.totalLaps}` : ""}`}</span>
+          <span>{fuelLaps !== null ? w.fuelLaps(fuelLaps.toFixed(1)) : w.raceLaps(race.lap, race.totalLaps ?? 0)}</span>
           <span className="inline-flex items-center gap-1.5">
             <Icon name="fuel" size="xs" />
             {t.fuelKg.toFixed(1)} kg
@@ -267,8 +324,8 @@ const Relative: React.FC<{ t: CarTelemetry; lengthM: number }> = ({ t, lengthM }
 };
 
 /** The source's ABS light, redrawn: a ring with the letters and a bracket either side; lit while the aid works */
-const AidRing: React.FC<{ label: string; active: boolean }> = ({ label, active }) => (
-  <svg viewBox="0 0 40 28" className="h-7 w-10 shrink-0" role="img" aria-label={`${label}${active ? " working" : ""}`}>
+const AidRing: React.FC<{ label: string; active: boolean; w: RaceVisionWords }> = ({ label, active, w }) => (
+  <svg viewBox="0 0 40 28" className="h-7 w-10 shrink-0" role="img" aria-label={active ? w.aidWorking(label) : label}>
     <g fill="none" stroke={active ? HUD_CAUTION : "var(--tp-text)"} strokeWidth={2.4} strokeLinecap="round">
       <circle cx={20} cy={14} r={9.5} />
       <path d="M6.5 5.5 A12.5 12.5 0 0 0 6.5 22.5 M33.5 5.5 A12.5 12.5 0 0 1 33.5 22.5" />
@@ -310,8 +367,9 @@ const InputsPill: React.FC<{ t: CarTelemetry; deltaS: number | null; revRange: [
   const hasAero = t.overtakingRules !== undefined && t.overtakingRules !== "none" && (!t.f12026 || t.f12026.hasDrs);
   const hasAbs = (tuner?.absLevel ?? 0) > 0;
   const hasTc = (tuner?.tcLevel ?? 0) > 0;
+  const w = useRaceVisionWords();
   return (
-    <section aria-label="Inputs" className={`${PANEL} flex h-16 items-center gap-3 rounded-full p-1 pr-4`}>
+    <section aria-label={w.inputs} className={`${PANEL} flex h-16 items-center gap-3 rounded-full p-1 pr-4`}>
       <span
         className="flex size-14 shrink-0 items-center justify-center rounded-full border-[5px] border-(--tp-gear-ring) bg-(--tp-gear) text-[30px] leading-none"
         style={{ color: lights.atShift ? HUD_SHIFT : undefined }}
@@ -319,7 +377,7 @@ const InputsPill: React.FC<{ t: CarTelemetry; deltaS: number | null; revRange: [
         {gearLabel(t.gear)}
       </span>
       <span className="flex flex-col gap-1">
-        <span className="flex items-center gap-1" aria-label={`Shift lights: ${lights.atShift ? LIGHTS : lights.lit} of ${LIGHTS}`}>
+        <span className="flex items-center gap-1" aria-label={w.shiftLights(lights.atShift ? LIGHTS : lights.lit, LIGHTS)}>
           {Array.from({ length: LIGHTS }, (_, i) => (
             <span key={i} className="size-3 rounded-full" style={{ backgroundColor: lights.on(i) ? lights.color(i) : "var(--tp-light-off)" }} />
           ))}
@@ -328,7 +386,7 @@ const InputsPill: React.FC<{ t: CarTelemetry; deltaS: number | null; revRange: [
           <Cell label={speedUnit(units).toUpperCase()}>{formatSpeed(t.speedKmh, units)}</Cell>
           {narrow ? null : <Cell label="RPM">{Math.round(t.rpm)}</Cell>}
           {showDeltaBar ? (
-            <Cell label="DELTA" color={deltaS === null ? HUD_SLATE : deltaS <= 0 ? HUD_GAIN : HUD_LOSS}>
+            <Cell label={w.delta} color={deltaS === null ? HUD_SLATE : deltaS <= 0 ? HUD_GAIN : HUD_LOSS}>
               {deltaS === null ? NO_TIME : formatDeltaFit(deltaS)}
             </Cell>
           ) : null}
@@ -340,12 +398,12 @@ const InputsPill: React.FC<{ t: CarTelemetry; deltaS: number | null; revRange: [
         </span>
       </span>
       {hasAero ? (
-        <Cell label={aero.straightMode ? "AERO" : "DRS"} color={aero.open ? HUD_INFO : aero.armed || aero.queued ? undefined : HUD_SLATE}>
-          {aero.open ? "OPEN" : aero.queued ? "QUEUED" : aero.armed ? "ARMED" : "SHUT"}
+        <Cell label={aero.straightMode ? w.aero : "DRS"} color={aero.open ? HUD_INFO : aero.armed || aero.queued ? undefined : HUD_SLATE}>
+          {aero.open ? w.open : aero.queued ? w.queued : aero.armed ? w.armed : w.shut}
         </Cell>
       ) : null}
-      {hasTc ? <AidRing label="TC" active={aids.tc} /> : null}
-      {hasAbs ? <AidRing label="ABS" active={aids.abs} /> : null}
+      {hasTc ? <AidRing label="TC" active={aids.tc} w={w} /> : null}
+      {hasAbs ? <AidRing label="ABS" active={aids.abs} w={w} /> : null}
     </section>
   );
 };
@@ -361,6 +419,7 @@ const InputGraph: React.FC<{ throttle: number; brake: number }> = ({ throttle, b
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ring = useRef({ t: new Float64Array(RING), th: new Float32Array(RING), br: new Float32Array(RING), head: 0, count: 0 });
   const mode = useHudModeRef();
+  const w = useRaceVisionWords();
 
   // A point whenever an input changes; between changes the graph holds the last value
   useEffect(() => {
@@ -443,7 +502,7 @@ const InputGraph: React.FC<{ throttle: number; brake: number }> = ({ throttle, b
   }, [mode]);
 
   return (
-    <section aria-label="Input graph" className={`${PANEL} p-1`}>
+    <section aria-label={w.inputGraph} className={`${PANEL} p-1`}>
       <canvas ref={canvasRef} aria-hidden className="block" style={{ width: GRAPH_W, height: GRAPH_H }} />
     </section>
   );
@@ -455,23 +514,24 @@ const WeatherStrip: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
   const surface = trackSurfaceState(weather.waterMm);
   const surfaceColor = surface === "dry" ? undefined : surface === "damp" ? "var(--tp-user)" : HUD_INFO;
   const lights = headlightState(weather);
+  const w = useRaceVisionWords();
   return (
-    <section aria-label="Weather" className={`${PANEL} flex items-center gap-3 border border-white/15 px-3 py-1.5 uppercase`}>
+    <section aria-label={w.weather} className={`${PANEL} flex items-center gap-3 border border-white/15 px-3 py-1.5 uppercase`}>
       {weather.timeMoving ? (
         <span className="text-[12px] text-(--tp-user) tabular-nums">{dayClock(weather.clockH)}</span>
       ) : null}
-      <Cell label="AIR">{formatTemp(weather.airC, units)}</Cell>
-      <Cell label="TRK">{formatTemp(weather.trackC, units)}</Cell>
-      <Cell label="SURF" color={surfaceColor}>
+      <Cell label={w.air}>{formatTemp(weather.airC, units)}</Cell>
+      <Cell label={w.track}>{formatTemp(weather.trackC, units)}</Cell>
+      <Cell label={w.surface} color={surfaceColor}>
         {SURFACE_WORD[surface]}
       </Cell>
       {weather.rain > 0.05 ? (
-        <Cell label="RAIN" color={HUD_INFO}>
+        <Cell label={w.rain} color={HUD_INFO}>
           {`${Math.round(weather.rain * 100)}%`}
         </Cell>
       ) : null}
       {lights ? (
-        <Cell label="LTS" color={lights === "flash" ? "var(--tp-user)" : lights === "off" ? "rgba(255,255,255,0.45)" : undefined}>
+        <Cell label={w.lights} color={lights === "flash" ? "var(--tp-user)" : lights === "off" ? "rgba(255,255,255,0.45)" : undefined}>
           {HEADLIGHT_WORD[lights]}
         </Cell>
       ) : null}
@@ -481,6 +541,7 @@ const WeatherStrip: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
 
 /** Crisp black square proximity radar matching RaceVision's telemetry aesthetic */
 const RaceVisionRadar: React.FC<{ t: CarTelemetry }> = ({ t }) => {
+  const w = useRaceVisionWords();
   const { blips, leftCar, rightCar, opacity } = evaluateRadar(t.radar ?? []);
   if (opacity <= 0.01) return null;
   const range = RADAR_VIEW_RANGE_M;
@@ -504,7 +565,7 @@ const RaceVisionRadar: React.FC<{ t: CarTelemetry }> = ({ t }) => {
             style={{ backgroundColor: rightCar.overlapLevel === 2 ? HUD_LOSS : "var(--tp-user)", opacity: Math.max(0.6, rightCar.opacity) }}
           />
         ) : null}
-        <svg viewBox={`${-range} ${-range} ${range * 2} ${range * 2}`} className="block size-full" role="img" aria-label="Proximity radar">
+        <svg viewBox={`${-range} ${-range} ${range * 2} ${range * 2}`} className="block size-full" role="img" aria-label={w.radar}>
           <circle r={8} fill="none" stroke="var(--tp-dim)" strokeOpacity={0.35} strokeWidth={0.3} />
           <circle r={16} fill="none" stroke="var(--tp-dim)" strokeOpacity={0.2} strokeWidth={0.3} />
           <line x1={0} y1={-range} x2={0} y2={range} stroke="var(--tp-dim)" strokeOpacity={0.18} strokeWidth={0.25} />

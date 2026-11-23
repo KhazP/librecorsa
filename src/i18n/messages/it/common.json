@@ -1,0 +1,139 @@
+{
+  "newTab": "(si apre in una nuova scheda)",
+  "confirm": {
+    "cancel": "Annulla",
+    "busy": "Attendi il termine"
+  },
+  "toggle": {
+    "on": "On",
+    "off": "Off"
+  },
+  "disclosure": {
+    "more": "Altro",
+    "less": "Meno"
+  },
+  "select": {
+    "placeholder": "Scegli",
+    "labelValue": "{label}: {value}"
+  },
+  "settingRow": {
+    "changed": "Modificato rispetto al predefinito",
+    "resetNamed": "Ripristina {setting} al valore predefinito",
+    "resetThis": "Ripristina questa impostazione al predefinito",
+    "reset": "Ripristina il predefinito"
+  },
+  "mediaTile": {
+    "chosen": "Selezionato"
+  },
+  "keys": {
+    "up": "Su",
+    "down": "Giù",
+    "left": "Sinistra",
+    "right": "Destra",
+    "wheelButton": "Tasto {button}"
+  },
+  "pad": {
+    "namedButton": "Tasto {name}",
+    "shapeButton": "{shape, select, cross {Tasto Croce} circle {Tasto Cerchio} square {Tasto Quadrato} other {Tasto Triangolo}}",
+    "faceButton": "{position, select, bottom {Tasto inferiore} right {Tasto destro} left {Tasto sinistro} other {Tasto superiore}}",
+    "dpad": "D-pad",
+    "dpadDirection": "{direction, select, up {D-pad su} down {D-pad giù} left {D-pad sinistra} right {D-pad destra} horizontal {D-pad sinistra e destra} other {D-pad su e giù}}",
+    "shoulder": "{button, select, lb {Dorsale sinistro} rb {Dorsale destro} lt {Trigger sinistro} other {Trigger destro}} ({name})",
+    "touchpad": "Touchpad",
+    "stick": "{side, select, left {Stick sinistro} other {Stick destro}}",
+    "stickPress": "{side, select, left {Pressione stick sinistro} other {Pressione stick destro}} ({name})",
+    "stickDirection": "{side, select, left {Stick sinistro} other {Stick destro}} {direction, select, up {su} down {giù} left {a sinistra} right {a destra} horizontal {a sinistra e a destra} other {su e giù}}"
+  },
+  "badges": {
+    "you": "Tu",
+    "position": "Posizione {position}",
+    "qualityDescription": ": {description}"
+  },
+  "delta": {
+    "spoken": "{trend, select, level {Pari} faster {{seconds} secondi in meno} other {{seconds} secondi in più}}{best, select, yes {, migliore} other {}}",
+    "best": "Migliore"
+  },
+  "penalty": {
+    "time": "+{seconds} s",
+    "driveThrough": "Drive-through",
+    "warning": "Avviso",
+    "trackLimits": "Limiti della pista {strikes}/{of}",
+    "disqualified": "Squalificato"
+  },
+  "flags": {
+    "green": "Bandiera verde",
+    "yellow": "Bandiera gialla",
+    "doubleYellow": "Doppia gialla",
+    "blue": "Bandiera blu",
+    "red": "Bandiera rossa",
+    "white": "Bandiera bianca",
+    "black": "Bandiera nera",
+    "blackWhite": "Bianca e nera",
+    "chequered": "Bandiera a scacchi"
+  },
+  "compounds": {
+    "name": {
+      "soft": "Morbida",
+      "medium": "Media",
+      "hard": "Dura",
+      "intermediate": "Intermedia",
+      "wet": "Bagnato"
+    },
+    "short": {
+      "soft": "Morb.",
+      "medium": "Med",
+      "hard": "Dura",
+      "intermediate": "Inter",
+      "wet": "Bagnato"
+    },
+    "long": {
+      "soft": "Gomme morbide",
+      "medium": "Gomme medie",
+      "hard": "Gomme dure",
+      "intermediate": "Gomme intermedie (pista umida)",
+      "wet": "Gomme da bagnato (acqua sulla pista)"
+    },
+    "tyres": {
+      "soft": "Gomme morbide",
+      "medium": "Gomme medie",
+      "hard": "Gomme dure",
+      "intermediate": "Gomme intermedie",
+      "wet": "Gomme da bagnato"
+    }
+  },
+  "carClass": {
+    "openWheel": "Monoposto",
+    "gt3": "GT3",
+    "proto": "Proto",
+    "classic": "Classiche",
+    "road": "Stradali"
+  },
+  "session": {
+    "practice": "Prove libere",
+    "race": "Gara",
+    "timeAttack": "Prova a tempo",
+    "hillClimb": "Cronoscalata",
+    "online": "Online",
+    "offline": "Offline",
+    "host": "Host"
+  },
+  "state": {
+    "new": "Nuovo",
+    "beta": "Beta",
+    "wip": "WIP",
+    "experimental": "Sperimentale",
+    "downloaded": "Scaricato",
+    "downloading": "Download in corso",
+    "updateAvailable": "Aggiornamento disponibile",
+    "inUse": "In uso"
+  },
+  "surface": {
+    "dry": "Asciutta",
+    "damp": "Umida",
+    "wet": "Bagnata",
+    "flooded": "Allagata"
+  },
+  "dialog": {
+    "close": "Chiudi"
+  }
+}

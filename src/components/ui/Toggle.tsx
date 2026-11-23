@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "use-intl/react";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 import { useRowControl, type ControlA11yProps } from "./SettingRow";
 import { cx, DISABLED, MOTION } from "./styles";
@@ -26,19 +27,20 @@ export interface ToggleProps extends ControlA11yProps {
 export function Toggle({
   checked,
   onChange,
-  onLabel = "On",
-  offLabel = "Off",
+  onLabel,
+  offLabel,
   hideState,
   forceCursor,
   className,
   ...a11yProps
 }: ToggleProps) {
   const { row, disabled, navDefault, a11y } = useRowControl(a11yProps);
+  const tx = useTranslations("common.toggle");
   return (
     <span className={cx("inline-flex shrink-0 items-center gap-2.5", className)}>
       {hideState ? null : (
         <span aria-hidden className="lc-chip-text min-w-6 text-right text-lc-slate">
-          {checked ? onLabel : offLabel}
+          {checked ? (onLabel ?? tx("on")) : (offLabel ?? tx("off"))}
         </span>
       )}
       <button

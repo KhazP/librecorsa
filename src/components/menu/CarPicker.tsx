@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { OptionTile, OptionTileGroup, Segmented, SettingRow } from "@/components/ui";
 import { carById, carClassesInUse, carsByYear, type CarClassId, type CarId } from "@/lib/cars/car-registry";
 import { carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS, setF1ModPhysics, useF1ModPhysics, type F1ModPhysics } from "@/lib/cars/f1-mod-physics";
@@ -25,12 +26,13 @@ export const CarPicker: React.FC<{ carId: CarId; onChangeCar: (car: CarId) => vo
   const modPhysics = useF1ModPhysics();
   const physicsTitle = F1_MOD_PHYSICS_OPTIONS.find((o) => o.id === modPhysics)?.title ?? "";
   const classes = carClassesInUse();
+  const tx = useTranslations("menu.carPicker");
 
   return (
     <div className="flex flex-col gap-3">
       {classes.length > 1 ? (
         <Segmented<CarClassId>
-          aria-label="Car class"
+          aria-label={tx("classes")}
           fill
           options={classes.map((k) => ({ id: k.id, label: k.title }))}
           value={classId}
@@ -40,7 +42,7 @@ export const CarPicker: React.FC<{ carId: CarId; onChangeCar: (car: CarId) => vo
       {carsByYear(classId).map(({ year, cars }) => (
         <div key={year} className="flex flex-col gap-2">
           <p className="lc-mono m-0 text-[12px] text-lc-fog">{year}</p>
-          <OptionTileGroup aria-label={`${year} cars`} columns={compact ? 3 : 2}>
+          <OptionTileGroup aria-label={tx("yearCars", { year: String(year) })} columns={compact ? 3 : 2}>
             {cars.map((car) => (
               <OptionTile
                 key={car.id}
@@ -52,7 +54,7 @@ export const CarPicker: React.FC<{ carId: CarId; onChangeCar: (car: CarId) => vo
                   compact ? (
                     <CarQualityBadge car={car} size="xs" />
                   ) : carTakesPhysicsSwitch(car.id) ? (
-                    `${car.sub}, ${physicsTitle} physics`
+                    tx("withPhysics", { sub: car.sub, physics: physicsTitle })
                   ) : (
                     car.sub
                   )
@@ -73,8 +75,9 @@ export const CarPhysicsSwitch: React.FC<{
   color?: string;
 }> = () => {
   const modPhysics = useF1ModPhysics();
+  const tx = useTranslations("menu.carPicker");
   return (
-    <SettingRow label="Physics" hint="Applies to every ported open-wheeler" stacked>
+    <SettingRow label={tx("physics")} hint={tx("physicsHint")} stacked>
       <Segmented<F1ModPhysics>
         fill
         options={F1_MOD_PHYSICS_OPTIONS.map((o) => ({ id: o.id, label: o.title }))}

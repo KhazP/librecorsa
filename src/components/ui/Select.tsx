@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import { Icon } from "./icons/Icon";
 import { focusOnHover, useFocusNav } from "@/components/menu/useFocusNav";
 import { useRowControl, type ControlA11yProps } from "./SettingRow";
@@ -47,12 +48,13 @@ export function Select<T extends string>({
   options,
   value,
   onChange,
-  placeholder = "Choose",
+  placeholder,
   forceCursor,
   className,
   ...a11yProps
 }: SelectProps<T>) {
   const { disabled, navDefault, a11y, id } = useRowControl(a11yProps);
+  const tx = useTranslations("common.select");
   const [open, setOpen] = useState(false);
   const [place, setPlace] = useState<Place | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -60,7 +62,7 @@ export function Select<T extends string>({
   const listId = useId();
   const valueId = useId();
   const current = options.find((o) => o.id === value);
-  const valueText = current?.label ?? placeholder;
+  const valueText = current?.label ?? placeholder ?? tx("placeholder");
 
   const close = useCallback((refocus = true) => {
     setOpen(false);
@@ -136,7 +138,7 @@ export function Select<T extends string>({
         type="button"
         {...a11y}
         // The name says the value too: the row's label (or the given name) and then what it is set to
-        aria-label={a11y["aria-label"] ? `${a11y["aria-label"]}: ${valueText}` : undefined}
+        aria-label={a11y["aria-label"] ? tx("labelValue", { label: a11y["aria-label"], value: valueText }) : undefined}
         aria-labelledby={a11y["aria-labelledby"] ? `${a11y["aria-labelledby"]} ${valueId}` : undefined}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -154,7 +156,7 @@ export function Select<T extends string>({
           }
         }}
         className={cx(
-          "group inline-flex h-10 w-48 max-w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-full pr-3 pl-4 text-left",
+          "group inline-flex h-10 w-48 max-w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-full pe-3 ps-4 text-start",
           "bg-lc-titanium text-lc-chalk inset-ring inset-ring-lc-line hover:bg-lc-line hover:inset-ring-lc-keyline",
           "pointer-coarse:h-11 phone:w-full",
           open ? "bg-lc-line inset-ring-lc-keyline" : undefined,
@@ -214,7 +216,7 @@ export function Select<T extends string>({
                     onPointerEnter={focusOnHover}
                     onClick={() => choose(o)}
                     className={cx(
-                      "group flex min-h-10 w-full shrink-0 cursor-pointer items-center gap-3 rounded-lc-nub px-3 py-2 text-left pointer-coarse:min-h-11",
+                      "group flex min-h-10 w-full shrink-0 cursor-pointer items-center gap-3 rounded-lc-nub px-3 py-2 text-start pointer-coarse:min-h-11",
                       MOTION,
                       DISABLED,
                       chosen ? CHOSEN_PILL : cx("text-lc-fog", HOVER_PILL),

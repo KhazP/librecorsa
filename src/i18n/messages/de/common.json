@@ -1,0 +1,139 @@
+{
+  "newTab": "(öffnet in neuem Tab)",
+  "confirm": {
+    "cancel": "Abbrechen",
+    "busy": "Warte, bis es fertig ist"
+  },
+  "toggle": {
+    "on": "An",
+    "off": "Aus"
+  },
+  "disclosure": {
+    "more": "Mehr",
+    "less": "Weniger"
+  },
+  "select": {
+    "placeholder": "Wählen",
+    "labelValue": "{label}: {value}"
+  },
+  "settingRow": {
+    "changed": "Vom Standard abweichend",
+    "resetNamed": "{setting} auf Standard zurücksetzen",
+    "resetThis": "Diese Einstellung auf Standard zurücksetzen",
+    "reset": "Auf Standard zurücksetzen"
+  },
+  "mediaTile": {
+    "chosen": "Gewählt"
+  },
+  "keys": {
+    "up": "Hoch",
+    "down": "Runter",
+    "left": "Links",
+    "right": "Rechts",
+    "wheelButton": "Taste {button}"
+  },
+  "pad": {
+    "namedButton": "Taste {name}",
+    "shapeButton": "{shape, select, cross {Kreuz-Taste} circle {Kreis-Taste} square {Quadrat-Taste} other {Dreieck-Taste}}",
+    "faceButton": "{position, select, bottom {Untere Aktionstaste} right {Rechte Aktionstaste} left {Linke Aktionstaste} other {Obere Aktionstaste}}",
+    "dpad": "D-Pad",
+    "dpadDirection": "{direction, select, up {D-Pad hoch} down {D-Pad runter} left {D-Pad links} right {D-Pad rechts} horizontal {D-Pad links und rechts} other {D-Pad hoch und runter}}",
+    "shoulder": "{button, select, lb {Linke Schultertaste} rb {Rechte Schultertaste} lt {Linker Trigger} other {Rechter Trigger}} ({name})",
+    "touchpad": "Touchpad",
+    "stick": "{side, select, left {Linker Stick} other {Rechter Stick}}",
+    "stickPress": "{side, select, left {Linker Stick gedrückt} other {Rechter Stick gedrückt}} ({name})",
+    "stickDirection": "{side, select, left {Linker Stick} other {Rechter Stick}} {direction, select, up {hoch} down {runter} left {links} right {rechts} horizontal {links und rechts} other {hoch und runter}}"
+  },
+  "badges": {
+    "you": "Du",
+    "position": "Position {position}",
+    "qualityDescription": ": {description}"
+  },
+  "delta": {
+    "spoken": "{trend, select, level {Gleichauf} faster {{seconds} Sekunden schneller} other {{seconds} Sekunden langsamer}}{best, select, yes {, Bestzeit} other {}}",
+    "best": "Beste"
+  },
+  "penalty": {
+    "time": "+{seconds} s",
+    "driveThrough": "Durchfahrtsstrafe",
+    "warning": "Verwarnung",
+    "trackLimits": "Streckenlimits {strikes}/{of}",
+    "disqualified": "Disqualifiziert"
+  },
+  "flags": {
+    "green": "Grüne Flagge",
+    "yellow": "Gelbe Flagge",
+    "doubleYellow": "Doppelgelb",
+    "blue": "Blaue Flagge",
+    "red": "Rote Flagge",
+    "white": "Weiße Flagge",
+    "black": "Schwarze Flagge",
+    "blackWhite": "Schwarz-Weiß",
+    "chequered": "Zielflagge"
+  },
+  "compounds": {
+    "name": {
+      "soft": "Soft",
+      "medium": "Medium",
+      "hard": "Hart",
+      "intermediate": "Intermediate",
+      "wet": "Regen"
+    },
+    "short": {
+      "soft": "Soft",
+      "medium": "Med",
+      "hard": "Hart",
+      "intermediate": "Inter",
+      "wet": "Regen"
+    },
+    "long": {
+      "soft": "Soft-Reifen",
+      "medium": "Medium-Reifen",
+      "hard": "Harte Reifen",
+      "intermediate": "Intermediate-Reifen (nasse Strecke)",
+      "wet": "Regenreifen (stehendes Wasser)"
+    },
+    "tyres": {
+      "soft": "Soft-Reifen",
+      "medium": "Medium-Reifen",
+      "hard": "Harte Reifen",
+      "intermediate": "Intermediate-Reifen",
+      "wet": "Regenreifen"
+    }
+  },
+  "carClass": {
+    "openWheel": "Formel",
+    "gt3": "GT3",
+    "proto": "Proto",
+    "classic": "Klassiker",
+    "road": "Straße"
+  },
+  "session": {
+    "practice": "Training",
+    "race": "Rennen",
+    "timeAttack": "Zeitfahren",
+    "hillClimb": "Bergrennen",
+    "online": "Online",
+    "offline": "Offline",
+    "host": "Host"
+  },
+  "state": {
+    "new": "Neu",
+    "beta": "Beta",
+    "wip": "WIP",
+    "experimental": "Experimentell",
+    "downloaded": "Heruntergeladen",
+    "downloading": "Wird heruntergeladen",
+    "updateAvailable": "Update verfügbar",
+    "inUse": "In Benutzung"
+  },
+  "surface": {
+    "dry": "Trocken",
+    "damp": "Feucht",
+    "wet": "Nass",
+    "flooded": "Überflutet"
+  },
+  "dialog": {
+    "close": "Schließen"
+  }
+}

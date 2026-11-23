@@ -1,0 +1,1066 @@
+{
+  "racesCard": {
+    "region": "排程賽事",
+    "description": "{car} · {laps, plural, other {# 圈}} · 每 {interval} 一場",
+    "racing": "<big>開跑</big> <small>進行中</small>",
+    "toStart": "<big>{time}</big> <small>後起跑</small>",
+    "toNextRace": "<big>{time}</big> <small>後開賽</small>",
+    "entrants": "本場參賽車手",
+    "entered": "已報名，時間到自動開賽。",
+    "enteredAlone": "已報名，時間到自動開賽（若無人加入將由 AI 補位）。",
+    "leave": "退出賽事",
+    "join": "加入下一場賽事",
+    "rules": "統一車款，起跑排位依每週挑戰最佳單圈決定。",
+    "nobodyWaiting": "0 人等待中",
+    "waiting": "<b>{count, plural, other {# 位車手}}等待中</b>",
+    "waitingNames": "<b>{count, plural, other {# 位車手}}等待中</b>：{names}",
+    "waitingNamesMore": "<b>{count, plural, other {# 位車手}}等待中</b>：{names} 與另外 {more} 位",
+    "topDrivers": "本週頂尖車手",
+    "winsPodiums": "{wins, plural, other {{wins} 勝}} · {podiums, plural, other {{podiums} 次頒獎台}}",
+    "record": "你的戰績：{starts, plural, other {{starts} 場}} · {wins, plural, other {{wins} 勝}} · {podiums, plural, other {{podiums} 次頒獎台}}",
+    "recordBest": "你的戰績：{starts, plural, other {{starts} 場}} · {wins, plural, other {{wins} 勝}} · {podiums, plural, other {{podiums} 次頒獎台}} · 最佳 P{best}"
+  },
+  "seatPanel": {
+    "dialog": "座椅與視角，{car}",
+    "title": "座椅與視角",
+    "rows": {
+      "view": "視角",
+      "viewLess": "駕駛艙視角",
+      "viewMore": "儀錶板視角",
+      "fwd": "前後",
+      "fwdLess": "向後移",
+      "fwdMore": "向前移",
+      "up": "高度",
+      "upLess": "向下移",
+      "upMore": "向上移",
+      "right": "左右",
+      "rightLess": "向左移",
+      "rightMore": "向右移",
+      "tilt": "俯仰",
+      "tiltLess": "向下俯視",
+      "tiltMore": "向上仰視",
+      "fov": "FOV",
+      "fovLess": "縮小視野",
+      "fovMore": "擴大視野"
+    },
+    "viewGroup": "視角",
+    "resetView": "重設視角",
+    "done": "完成",
+    "prompts": {
+      "row": "項目",
+      "change": "調整",
+      "resetRow": "重設此項",
+      "resetView": "重設視角",
+      "done": "完成"
+    },
+    "savedPerCar": "依各車款個別儲存"
+  },
+  "leaderboardPanel": {
+    "raceGhost": "挑戰你駕駛 {car} 的單圈幽靈車",
+    "raceGhostTitle": "挑戰幽靈車",
+    "postUnreachable": "無法連線至圈速榜",
+    "applySetup": "套用你駕駛 {car} 單圈的車輛調校",
+    "applySetupTitle": "套用調校",
+    "retry": "重試",
+    "post": "發佈",
+    "retryAria": "重新嘗試將此單圈發佈至線上",
+    "postAria": "將此單圈發佈至線上",
+    "retryTitle": "重試",
+    "postTitle": "發佈至線上",
+    "notPosted": "尚未發佈至線上圈速榜：{error}",
+    "notPostedYet": "尚未發佈至線上圈速榜",
+    "driverKey": "車手金鑰",
+    "driverKeyIntro": "用於在圈速榜上認證你的車手名稱。匯出後即可在其他裝置沿用同一個名稱；請妥善保管此檔案。",
+    "exportKey": "匯出金鑰",
+    "importKey": "匯入金鑰",
+    "importGhost": "匯入幽靈車檔案",
+    "exportBest": "匯出我的最佳單圈",
+    "undo": "復原",
+    "dismiss": "關閉",
+    "onlineTimes": "線上圈速",
+    "circuit": "賽道",
+    "circuitLaps": "{count, plural, other {{count} 圈}}",
+    "allCars": "所有車輛",
+    "yourBestLaps": "你的最佳單圈",
+    "physicsVersion": "物理版本",
+    "car": "車輛",
+    "carLaps": "{count, plural, other {{count} 圈}}",
+    "noLapsOlder": "在 {circuit}（{board}）尚無單圈紀錄。",
+    "noLaps": "在 {circuit} 尚無已儲存的單圈。",
+    "tableLabel": "{circuit} 的最佳單圈",
+    "carColumn": "車輛",
+    "theoreticalBest": "理論最佳",
+    "potential": "潛力 {delta} s",
+    "allBestSectors": "單圈已囊括全部最佳賽段",
+    "offline": "圈速榜目前離線，改為顯示本機圈速。",
+    "disabled": "線上圈速榜已停用，改為顯示本機圈速。"
+  },
+  "boardWidget": {
+    "modes": {
+      "lapEnd": "完成單圈時自動展開",
+      "open": "永遠展開",
+      "closed": "永遠收合"
+    },
+    "gear": "圈速榜展開時機",
+    "modeMenu": "圈速榜展開時機",
+    "region": "圈速榜",
+    "fold": "收合圈速榜",
+    "foldKey": "收合圈速榜（{key}）",
+    "open": "展開圈速榜：{circuit}，{place}",
+    "openNoTime": "展開圈速榜：{circuit}，尚無成績",
+    "openKey": "展開圈速榜（{key}）：{circuit}，{place}",
+    "openKeyNoTime": "展開圈速榜（{key}）：{circuit}，尚無成績",
+    "drivers": "{total, plural, other {{count} 位車手}}",
+    "noTimes": "尚無成績。",
+    "placesBetween": "中間名次省略",
+    "lapsDriven": "累計行駛圈數",
+    "noTime": "尚無成績",
+    "place": "P{rank}/{total}"
+  },
+  "multiplayerPanel": {
+    "collision": {
+      "on": "開啟",
+      "ghostLap1": "第 1 圈幽靈化",
+      "off": "關閉",
+      "protected": "保護模式"
+    },
+    "collisionHint": {
+      "on": "完整碰撞",
+      "ghostLap1": "起跑第一圈無碰撞",
+      "off": "車輛可互相穿透",
+      "protected": "第 1 圈幽靈化，其後危險駕駛車輛無法碰撞他人"
+    },
+    "anyCar": "不限車款",
+    "startType": {
+      "standing": "靜態起跑",
+      "rolling": "動態起跑"
+    },
+    "gridOrder": {
+      "qualifying": "排位賽",
+      "reverse": "倒序排位",
+      "random": "隨機"
+    },
+    "gridOrderHint": {
+      "qualifying": "最快單圈優先；無成績者依加入順序排列",
+      "reverse": "排位賽名次倒序（或依加入順序倒序）",
+      "random": "開賽時隨機決定"
+    },
+    "presetClassic": "經典",
+    "presetClassicHint": "依違規次數計算賽道邊界：每 3 次先加罰 +3 s，之後 +5 s",
+    "timeScaleFixed": "固定",
+    "qualifyingOff": "關閉",
+    "settings": {
+      "event": "賽事",
+      "race": "正賽",
+      "rules": "規則",
+      "circuit": "賽道",
+      "changeCircuit": "更換賽道：{circuit}",
+      "change": "更換",
+      "circuitHint": "請從主選單更換",
+      "cars": "車輛",
+      "oneCar": "全員統一車款",
+      "classesMixed": "開放所有車輛，混合組別同場競速",
+      "weather": "天氣",
+      "timeOfDay": "時段",
+      "timeSpeed": "時間流速",
+      "laps": "圈數",
+      "qualifying": "排位賽",
+      "qualifyingHint": "以最佳有效單圈決定起跑排位",
+      "gridOrder": "起跑順序",
+      "setByQualifying": "由排位賽決定",
+      "start": "起跑方式",
+      "launch": "起步控制",
+      "rulePreset": "規則",
+      "trackLimits": "賽道邊界",
+      "penalties": "處罰",
+      "penaltiesOn": "開啟",
+      "penaltiesOff": "關閉",
+      "penaltiesHint": "超出賽道邊界與搶跑將判處加時",
+      "damage": "車損",
+      "collisions": "碰撞",
+      "lockedQualifying": "排位賽進行中已鎖定",
+      "lockedRace": "正賽進行中已鎖定"
+    },
+    "net": {
+      "relayedTitle": "你的連線流量正透過房主轉發",
+      "relayed": "中繼連線",
+      "measuring": "量測中",
+      "pingLoss": "{ping} ms · {loss}% 封包遺失"
+    },
+    "drivers": {
+      "title": "車手",
+      "host": "房主：{name}",
+      "qualifying": "排位賽",
+      "noCar": "尚未選車",
+      "noTime": "無成績",
+      "wrongClassTitle": "不符合此房間組別（{class}）",
+      "wrongClass": "組別不符",
+      "ready": "已就緒",
+      "notReady": "未就緒",
+      "hostOn": "房主目前位於 {circuit}",
+      "switchCircuit": "切換賽道",
+      "wrongCar": "你的車輛不符合此房間組別（{class}）。",
+      "wrongCarSwitch": "你的車輛不符合此房間組別（{class}）。請更換車輛：",
+      "raceInProgress": "賽事進行中",
+      "startRaceNow": "立即開始正賽",
+      "startQualifying": "開始 {minutes} 分鐘排位賽",
+      "startRace": "開始賽事",
+      "endQualifying": "結束排位賽",
+      "endRaceForEveryone": "為所有人結束賽事",
+      "readyButton": "已就緒",
+      "readyUp": "準備就緒",
+      "raceRunning": "賽事進行中。",
+      "qualifyingRunning": "排位賽進行中。",
+      "waitingForHost": "等待房主開始。",
+      "confirmEndQualifying": "要結束排位賽嗎？",
+      "confirmEndRace": "要為所有人結束賽事嗎？",
+      "confirmEndQualifyingButton": "結束排位賽",
+      "confirmEndRaceButton": "結束賽事",
+      "keepQualifying": "繼續排位賽",
+      "keepRacing": "繼續比賽",
+      "confirmBody": "這會讓所有車手返回房間大廳。"
+    },
+    "room": {
+      "connected": "已連線 {count} 人",
+      "connecting": "連線中",
+      "notConnected": "未連線",
+      "title": "私人房間",
+      "codeAria": "房間代碼 {code}",
+      "codeCaption": "房間代碼",
+      "linkCopied": "已複製連結",
+      "copyLink": "複製邀請連結",
+      "share": "分享",
+      "host": "建立房間",
+      "joinAnother": "加入其他房間",
+      "joinFriend": "加入好友的房間",
+      "codePlaceholder": "房間代碼",
+      "join": "加入",
+      "newRoom": "建立新房間",
+      "codeTooShort": "請輸入至少 3 個字元。",
+      "joinFailed": "無法加入該房間，請確認代碼無誤。",
+      "shareTitle": "LibreCorsa 賽事",
+      "shareText": "一起來加入我的比賽",
+      "racingAs": "目前參賽身分：{name}",
+      "edit": "編輯"
+    },
+    "connect": {
+      "more": "更多連線方式",
+      "hide": "隱藏",
+      "localTitle": "本機分頁",
+      "localIntro": "與此瀏覽器的另一個分頁連線對戰。",
+      "localConnect": "連線本機分頁",
+      "manualTitle": "手動 WebRTC",
+      "manualIntro": "透過交換邀請碼／回應碼建立直接點對點連線。",
+      "createOffer": "1. 建立邀請碼（房主）",
+      "acceptOffer": "2. 接受邀請碼",
+      "acceptAnswer": "3. 接受回應碼（房主）",
+      "offerFailed": "建立邀請碼失敗。",
+      "badOffer": "無效的邀請碼。",
+      "badAnswer": "無效的回應碼。",
+      "remoteToken": "對方代碼",
+      "pasteToken": "貼上代碼",
+      "answerAccepted": "已接受回應碼，連線中……",
+      "yourToken": "你的代碼",
+      "copied": "已複製",
+      "copy": "複製",
+      "reset": "重設",
+      "turnTitle": "自訂 TURN 中繼伺服器",
+      "turnIntro": "適用於受限網路環境的選用中繼伺服器。",
+      "relayAddress": "中繼位址",
+      "username": "使用者名稱",
+      "password": "密碼",
+      "saved": "已儲存",
+      "save": "儲存",
+      "clear": "清除",
+      "turnPrefix": "位址必須以 turn: 或 turns: 開頭",
+      "ownRelay": "正在使用你的自訂中繼伺服器"
+    }
+  },
+  "pauseMenu": {
+    "tabs": {
+      "label": "選單分頁",
+      "session": "賽程",
+      "hud": "HUD",
+      "conditions": "賽道條件",
+      "garage": "車庫",
+      "corners": "彎道",
+      "multiplayer": "多人連線",
+      "lapTimes": "圈速紀錄",
+      "feedback": "意見回饋"
+    },
+    "actions": {
+      "label": "暫停選單",
+      "resume": "繼續駕駛",
+      "restartRace": "重新開始賽事",
+      "gridStart": "起跑格起步",
+      "rollingStart": "動態起跑",
+      "flyingLap": "飛行單圈",
+      "watchReplay": "觀看重播",
+      "skipTrack": "跳至下一首",
+      "nowPlaying": "{title}，{composer}",
+      "settings": "設定",
+      "mainMenu": "主選單"
+    },
+    "prompts": {
+      "move": "移動",
+      "select": "選擇",
+      "jumpThere": "跳至此處",
+      "tabs": "切換分頁",
+      "page": "翻頁",
+      "back": "返回",
+      "resume": "繼續"
+    },
+    "header": {
+      "lap": "第 {lap} 圈",
+      "lapOf": "第 {lap}/{total} 圈",
+      "run": "第 {lap} 趟",
+      "position": "P{position}/{field}",
+      "online": "線上",
+      "leavesRace": "這會離開目前的賽事。",
+      "leavesRoom": "這會離開目前的房間。",
+      "endsSession": "這會結束目前的駕駛賽程。"
+    },
+    "session": {
+      "title": "賽程",
+      "autopilot": "自動駕駛",
+      "key": "按鍵 {key}",
+      "camera": "視角",
+      "cameraView": "視角切換",
+      "cycle": "循環切換：{key}",
+      "freeCamera": "自由視角",
+      "freeCameraHint": "按鍵 {key} · 拖曳轉向、WASD 移動、Q/E 升降",
+      "freeCameraButton": "自由視角",
+      "exitFreeCamera": "離開自由視角",
+      "tv": "場邊轉播視角",
+      "tvHint": "按鍵 {key} · 賽道旁的轉播鏡頭",
+      "tvButton": "場邊轉播視角",
+      "exitTv": "離開轉播視角"
+    },
+    "hud": {
+      "title": "HUD 配置",
+      "settings": "HUD 設定"
+    },
+    "corners": {
+      "title": "彎道",
+      "mapLabel": "{count, plural, other {含 # 個編號彎道的賽道地圖}}",
+      "turn": "T{turn}",
+      "detail": "{complex} · 第 {sector} 賽段",
+      "pick": "選擇一個彎道",
+      "rowLabel": "T{turn}，第 {turn} 彎：{name}，{complex}。彎心速度 {apex} {unit}，{gear} 檔",
+      "gear": "<n>{gear}</n> 檔"
+    }
+  },
+  "lapSummary": {
+    "title": "{kind, select, run {第 {lap} 趟} other {第 {lap} 圈}}",
+    "open": "{kind, select, run {第 {lap} 趟：顯示賽段數據} other {第 {lap} 圈：顯示賽段數據}}",
+    "dismiss": "關閉單圈摘要",
+    "collapse": "收合單圈摘要",
+    "cardLabel": "第 {lap} 圈摘要",
+    "invalid": "無效",
+    "pb": "PB",
+    "invalidWall": "無效：碰撞護牆",
+    "invalidLimits": "無效：超出賽道邊界",
+    "autopilot": "自動駕駛：不計排名",
+    "personalBest": "個人最佳",
+    "online": "線上",
+    "onlineRank": "線上：P{rank}",
+    "onlineRankOf": "線上：P{rank}／共 {total} 位",
+    "onlineRankWeek": "線上：P{rank}，本週 P{week}",
+    "onlineRankOfWeek": "線上：P{rank}／共 {total} 位，本週 P{week}",
+    "invalidUnranked": "無效 · 不計排名",
+    "autopilotUnranked": "自動駕駛 · 不計排名",
+    "topSpeed": "極速 {unit}",
+    "avgSpeed": "均速 {unit}",
+    "fullThrottle": "全油門",
+    "braking": "煞車比例",
+    "sector": "{mark, select, best {第 {n} 賽段：最佳} pb {第 {n} 賽段：個人最佳} slower {第 {n} 賽段：較慢} other {第 {n} 賽段}}",
+    "theoreticalBest": "理論最佳",
+    "posting": "發佈中",
+    "postingNow": "發佈中……",
+    "retry": "重試上傳",
+    "post": "發佈至線上",
+    "queued": "已排入佇列",
+    "close": "關閉",
+    "saveGhost": "儲存幽靈車檔案",
+    "driver": "車手 <b>{name}</b>",
+    "rename": "重新命名",
+    "driverName": "車手名稱",
+    "cancel": "取消",
+    "saving": "儲存中……",
+    "saveName": "儲存名稱",
+    "chart": {
+      "title": "各彎道最低車速",
+      "turn": "T{turn}",
+      "empty": "此單圈尚無彎道數據。",
+      "bar": "T{turn} {name}：{speed} {unit}，{state, select, none {尚無基準} same {{delta}，與最佳相同} faster {{delta}，比最佳快} other {{delta}，比最佳慢}}",
+      "faster": "較快",
+      "slower": "較慢",
+      "same": "相同"
+    }
+  },
+  "raceResults": {
+    "dialog": "賽事結果",
+    "dsq": "DSQ",
+    "dnf": "DNF",
+    "running": "進行中",
+    "lapsDown": "{count, plural, other {+# 圈}}",
+    "laps": "{count, plural, other {# 圈}}",
+    "trackLimits": "賽道邊界 {count}",
+    "final": "最終成績",
+    "provisional": "暫定成績",
+    "table": "完整排名",
+    "colPos": "名次",
+    "colGainedTitle": "相較起跑排位前進或落後的名次",
+    "colGained": "名次變化",
+    "colDriver": "車手",
+    "colLaps": "圈數",
+    "colTime": "時間／差距",
+    "colBest": "最佳單圈",
+    "penaltyTitle": "含 {seconds} s 加時處罰",
+    "promptSelect": "選擇",
+    "promptClose": "關閉",
+    "backToLobby": "返回大廳",
+    "watchReplay": "觀看重播",
+    "restart": "重新開始賽事",
+    "close": "關閉",
+    "fastestLapIcon": "最快單圈",
+    "noChange": "無變化",
+    "notKnown": "未知",
+    "placesGained": "{count, plural, other {上升 # 名}}",
+    "placesLost": "{count, plural, other {下降 # 名}}",
+    "yourRace": "你的賽事表現",
+    "position": "P{position}",
+    "disqualified": "已取消資格",
+    "retired": "退賽",
+    "ofField": "共 {count} 位",
+    "gridUnknown": "起跑排位未知",
+    "started": "自 P{position} 起跑",
+    "fastestLap": "最快單圈",
+    "bestLap": "最佳單圈",
+    "lastRaces": {
+      "title": "你近期的賽事",
+      "date": "日期",
+      "circuit": "賽道",
+      "finish": "完賽名次",
+      "gained": "名次變化",
+      "best": "最佳單圈",
+      "dnf": "DNF",
+      "position": "P{position}"
+    },
+    "joinNext": "加入下一場賽事 <time>{countdown}</time>"
+  },
+  "podiumOverlay": {
+    "label": "頒獎台",
+    "first": "第 1 名",
+    "second": "第 2 名",
+    "third": "第 3 名",
+    "skip": "略過"
+  },
+  "qualifyingHud": {
+    "clock": "排位賽",
+    "lastLap": "上一圈",
+    "badge": "排位賽",
+    "finishIt": "可完成本圈",
+    "lapDeleted": "單圈已取消",
+    "best": "最佳",
+    "grid": "排位賽結果",
+    "noTime": "無成績"
+  },
+  "perfReportCard": {
+    "title": "效能報告",
+    "description": "本次賽程的幀時間紀錄。",
+    "failed": "無法存取剪貼簿，請改為儲存檔案。",
+    "copy": "複製",
+    "copied": "已複製",
+    "saveFile": "儲存檔案",
+    "saved": "已儲存"
+  },
+  "qualityNotice": {
+    "lowered": "已自動調降畫質",
+    "floor": "低 FPS · 可至「設定」啟用 30 fps 上限"
+  },
+  "multiPageMfd": {
+    "pages": {
+      "elecTag": "電控",
+      "elecTitle": "電控系統",
+      "relTag": "相對",
+      "relTitle": "前後車距",
+      "tyreTag": "輪胎",
+      "tyreTitle": "輪胎與煞車",
+      "fuelTag": "燃油",
+      "fuelTitle": "燃油與電量",
+      "stndTag": "排名",
+      "stndTitle": "場上排名"
+    },
+    "panel": "MFD · {page}",
+    "pagesLabel": "MFD 頁面",
+    "pagesHint": "方向鍵左／右或 Ins：切換頁面",
+    "open": "展開 MFD",
+    "fold": "收合 MFD",
+    "relative": {
+      "label": "前後車距",
+      "noCars": "賽道上無其他車輛",
+      "lapsUp": "+{count}圈",
+      "lapsDown": "−{count}圈",
+      "ahead": "前方",
+      "behind": "後方",
+      "clear": "淨空",
+      "you": "你"
+    },
+    "fuel": {
+      "battery": "電池",
+      "ersPerLap": "ERS／圈",
+      "treadPerLap": "胎耗／圈",
+      "fuel": "燃油",
+      "lapsOfFuel": "{laps} 圈",
+      "perLap": "每圈油耗",
+      "target": "目標 {kg}",
+      "lift": "提早收油 · 省 {kg} kg",
+      "fuelOk": "油量充足"
+    },
+    "tyres": {
+      "label": "輪胎與煞車"
+    },
+    "standings": {
+      "label": "場上排名",
+      "fastestLap": "最快單圈",
+      "fastestLapShort": "FL",
+      "lead": "領先",
+      "noLaps": "尚無單圈紀錄",
+      "lapTimes": "圈速紀錄"
+    },
+    "pill": {
+      "position": "P{position}/{fieldSize}",
+      "laps": "{count, plural, other {# 圈}}"
+    }
+  },
+  "tunerMfdPanel": {
+    "categories": {
+      "bias": "平衡",
+      "diff": "差速",
+      "pwr": "動力"
+    },
+    "dials": {
+      "tc1": {
+        "title": "循跡控制",
+        "low": "允許更多滑移",
+        "high": "較安全"
+      },
+      "tc2": {
+        "title": "TC 切斷",
+        "low": "切斷較柔和",
+        "high": "切斷較強硬"
+      },
+      "abs": {
+        "title": "ABS",
+        "low": "較晚介入",
+        "high": "較早介入"
+      },
+      "bias": {
+        "label": "平衡",
+        "title": "煞車平衡",
+        "low": "向後移",
+        "high": "向前移"
+      },
+      "diffEntry": {
+        "label": "入彎",
+        "title": "入彎差速",
+        "low": "靈活",
+        "high": "穩定"
+      },
+      "diffMid": {
+        "label": "彎中",
+        "title": "彎中差速",
+        "low": "利於轉向",
+        "high": "鎖定較高"
+      },
+      "diffExit": {
+        "label": "出彎",
+        "title": "出彎差速",
+        "low": "不易甩尾",
+        "high": "驅動力更強"
+      },
+      "engineMap": {
+        "label": "模式",
+        "title": "引擎模式",
+        "low": "反應更敏銳",
+        "high": "輸出更平順"
+      },
+      "ersMode": {
+        "title": "ERS 釋放",
+        "low": "回收",
+        "high": "進攻"
+      }
+    },
+    "engineMaps": {
+      "quali": "排位",
+      "race": "正賽",
+      "smooth": "平順",
+      "lean": "省油",
+      "wet": "濕地"
+    },
+    "ersModes": {
+      "charge": "充電",
+      "lowSpeed": "低速",
+      "balanced": "平衡",
+      "race": "正賽",
+      "attack": "進攻"
+    },
+    "phases": {
+      "entry": "入彎",
+      "mid": "彎中",
+      "exit": "出彎"
+    },
+    "chips": {
+      "tc": "TC {level}/{cut}",
+      "tcOff": "TC 關閉",
+      "abs": "ABS {level}",
+      "absOff": "ABS 關閉",
+      "bias": "BB {bias}"
+    },
+    "hero": {
+      "off": "關閉",
+      "ofMax": "／{max}",
+      "lock": "{pct}% 鎖定",
+      "front": "% 前輪",
+      "map": "M{map}"
+    },
+    "live": {
+      "cut": "切斷",
+      "wheelFl": "左前",
+      "wheelFr": "右前",
+      "wheelRl": "左後",
+      "wheelRr": "右後",
+      "front": "前 {bias}",
+      "rear": "後 {bias}",
+      "torque": "扭力",
+      "battery": "電池"
+    },
+    "previousDial": "上一個旋鈕",
+    "previousDialHint": "上一個旋鈕（方向鍵左或 ,）",
+    "nextDial": "下一個旋鈕",
+    "nextDialHint": "下一個旋鈕（方向鍵右或 .）",
+    "lower": "調低{dial}",
+    "lowerHint": "{hint}（方向鍵下或 -）",
+    "raise": "調高{dial}",
+    "raiseHint": "{hint}（方向鍵上或 =）",
+    "openTuner": "展開電控微調",
+    "foldTuner": "收合電控微調"
+  },
+  "f12026ChannelsPanel": {
+    "region": "工程遙測頻道",
+    "wheels": {
+      "lf": "左前",
+      "rf": "右前",
+      "lr": "左後",
+      "rr": "右後"
+    },
+    "wheelTitle": "{wheel}：滑移率、距緩衝塊剩餘行程、抓地力使用率",
+    "slipRatio": "%SR",
+    "aeroHeightTitle": "空力車身高度",
+    "aeroHeight": "空力車高",
+    "aeroBalanceTitle": "空力平衡（前軸下壓力佔比）",
+    "aeroBalance": "空力平衡",
+    "lsdTitle": "差速器鎖定扭力",
+    "lsd": "LSD 鎖定",
+    "straightModeTitle": "直線模式狀態與本次賽程開啟次數",
+    "drsTitle": "DRS 狀態與本次賽程開啟次數",
+    "xMode": "X-mode",
+    "drsState": {
+      "open": "開啟",
+      "armed": "待命",
+      "zone": "區域內",
+      "off": "關閉"
+    },
+    "overtakeEarned": "已獲超車模式",
+    "overtakeLocked": "超車模式鎖定",
+    "noVerdict": "尚無判定",
+    "zoneEarned": "{zone} 已啟用",
+    "zoneLocked": "{zone} 未啟用",
+    "noDetection": "尚未偵測",
+    "wall": "護牆",
+    "aidIntervening": "{aid}，介入中"
+  },
+  "touchControls": {
+    "steering": "轉向",
+    "drive": "前進檔",
+    "reverse": "倒車檔",
+    "shiftDown": "降檔",
+    "shiftUp": "升檔",
+    "boost": "加速助推",
+    "activeAero": "主動空力",
+    "headlights": "頭燈",
+    "brake": "煞車",
+    "throttle": "油門",
+    "steerLeft": "向左轉向",
+    "steerRight": "向右轉向",
+    "pause": "暫停",
+    "camera": "視角",
+    "recentreTilt": "重新置中傾斜角度",
+    "allowMotion": "允許動態感測",
+    "tapForTilt": "點擊啟用傾斜轉向",
+    "tiltBlocked": "傾斜感測已封鎖 · 重試",
+    "noTiltSensor": "無傾斜感測器"
+  },
+  "replayBar": {
+    "region": "重播控制",
+    "transport": "播放控制",
+    "previousFrame": "上一幀",
+    "previousFrameTitle": "上一幀（{key}）",
+    "pause": "暫停重播",
+    "play": "播放重播",
+    "playPauseTitle": "播放／暫停",
+    "playPauseTitleKey": "播放／暫停（{key}）",
+    "nextFrame": "下一幀",
+    "nextFrameTitle": "下一幀（{key}）",
+    "jumpToLap": "跳至第 {lap} 圈",
+    "lapMarker": "L{lap}",
+    "timeline": "重播時間軸",
+    "timelineValue": "{elapsed}／{duration}",
+    "playbackSpeed": "播放速度",
+    "focusedCar": "鏡頭跟隨車輛",
+    "previousCar": "上一輛車",
+    "previousCarTitle": "上一輛車（{key}）",
+    "switchCarTitle": "切換跟隨車輛（{key}）",
+    "nextCar": "下一輛車",
+    "nextCarTitle": "下一輛車（{key}）",
+    "cameraAngle": "重播視角",
+    "cycleCamera": "循環切換重播視角",
+    "flashbackTitle": "回溯——從此刻繼續駕駛（{key}，本圈成績將無效）",
+    "flashback": "回溯",
+    "exit": "離開",
+    "hints": {
+      "freeCam": "自由視角 · 拖曳轉向 · WASD 移動 · Q/E 升降 · 滾輪調速 · R 重設",
+      "playPause": "播放／暫停",
+      "seek": "快轉／倒轉 {seconds} s",
+      "step": "逐幀",
+      "switchCar": "切換車輛",
+      "freeCamKey": "自由視角",
+      "flashback": "回溯"
+    }
+  },
+  "timingPanels": {
+    "tower": {
+      "region": "即時排名欄",
+      "lap": "第 {lap} 圈",
+      "lapOf": "第 {lap}<dim>/{total}</dim> 圈",
+      "driver": "車手",
+      "gap": "差距",
+      "interval": "間隔",
+      "lastVsYouTitle": "對方上一圈與你相比；自己該列則為上一圈與個人最佳相比",
+      "lastVsYou": "上圈<br></br>對比",
+      "fastestLap": "最快單圈",
+      "fastestLapShort": "FL",
+      "finished": "已完賽",
+      "damagedTitle": "受損（{percent}%）",
+      "damagedLabel": "受損，{percent}%",
+      "out": "退賽",
+      "leader": "領先",
+      "lead": "領先",
+      "lastVsBestTitle": "上一圈與個人最佳相比",
+      "lastVsTheirsTitle": "對方上一圈與你相比",
+      "personalBest": "PB"
+    },
+    "lap": {
+      "region": "單圈計時",
+      "outLap": "出場圈",
+      "counter": "{kind, select, run {第 {lap} 趟} other {第 {lap} 圈}}",
+      "sector": "S{sector}",
+      "last": "上圈",
+      "best": "最佳",
+      "noRefLap": "尚無基準圈",
+      "lastLap": "上一圈",
+      "bestLap": "最佳單圈"
+    },
+    "challenge": {
+      "region": "本週挑戰",
+      "yourBest": "你的最佳",
+      "weekFastest": "本週最快"
+    }
+  },
+  "raceIncidentFeed": {
+    "calls": {
+      "investigation": "調查中",
+      "penalty": "處罰",
+      "noAction": "不予處分",
+      "out": "退賽",
+      "raceControl": "賽事管制",
+      "yellow": "黃旗",
+      "green": "綠旗",
+      "warning": "警告"
+    },
+    "vsc": {
+      "tag": "VSC",
+      "ending": "VSC 即將結束",
+      "slowDown": "請減速",
+      "slowToTarget": "減速至目標配速",
+      "prepareForGreen": "準備恢復綠旗",
+      "noOvertaking": "禁止超車"
+    },
+    "flag": {
+      "yieldNow": "立即讓道 · 讓 {code} 通過",
+      "letThrough": "讓 {code} 通過",
+      "doubleYellowCue": "減速 · 禁止超車",
+      "yellowCue": "禁止超車",
+      "blue": "藍旗",
+      "doubleYellow": "雙黃旗",
+      "yellow": "黃旗"
+    }
+  },
+  "raceControlBanner": {
+    "decisions": {
+      "warning": "警告",
+      "finalWarning": "最終警告",
+      "penalty": "處罰",
+      "disqualified": "取消資格",
+      "lapInvalid": "單圈已取消",
+      "cleared": "已解除",
+      "noAdvantage": "不予處分"
+    },
+    "warningsMeter": "第 {count}／{total} 次警告",
+    "pointsMeter": "賽道邊界計分 {points}／{allowed}",
+    "giveBack": {
+      "toCar": "向 {code} 歸還名次",
+      "dropTo": "退回至 P{position}",
+      "time": "歸還 {seconds} s",
+      "slowDown": "請減速",
+      "underYellow": "黃旗違規超車",
+      "illegalOvertake": "違規超車",
+      "trackLimits": "賽道邊界"
+    },
+    "offTrack": {
+      "trackLimits": "賽道邊界",
+      "offTrack": "駛離賽道",
+      "underReview": "審查中"
+    }
+  },
+  "startLights": {
+    "startsIn": "距離起跑 <n>{seconds}</n> 秒",
+    "lightsLabel": "起跑燈：已亮起 {lit}／{total} 盞",
+    "rollingStart": "動態起跑",
+    "holdPaceSkin": "維持配速 · <n>{pace}</n> {unit} 至起終點線",
+    "holdPace": "維持 <n>{pace}</n> {unit} 至起跑線",
+    "greenFlag": "綠旗",
+    "lightsOut": "燈滅起跑",
+    "chequeredFlag": "方格旗"
+  },
+  "launchCue": {
+    "stalledLabel": "引擎熄火：按住 {control} 或排入空檔重新發動",
+    "clutch": "離合器",
+    "stalled": "熄火 · 按住 <control></control> 或切 N 檔",
+    "jumpStart": "搶跑 · +{seconds} s",
+    "manualStart": "手動起跑：{clutch, select, held {已踩住離合器} other {請踩住離合器}}，{revs, select, up {轉速已就緒} other {請拉高轉速}}",
+    "holdNamed": "按住{control}",
+    "holdClutch": "踩住離合器",
+    "revsUp": "拉高轉速"
+  },
+  "speedCluster": {
+    "region": "車速錶組",
+    "minimalRegion": "車速與檔位",
+    "shiftLights": "換檔指示燈：{lit}／{total}",
+    "gearLabel": "{gear} 檔",
+    "gear": "檔位",
+    "shift": "升檔",
+    "aeroToggle": "{label}：切換",
+    "drsTitle": "DRS（{key}）：於 DRS 區開啟尾翼；正賽自第 3 圈起須於偵測點落後前車 1 秒內方可使用",
+    "straightModeTitle": "直線模式（{key}）：於直線同時開啟前後翼片；進直線前預按會在進入時自動開啟",
+    "overtakeLockedTitle": "超車模式（{keys}）：於偵測點落後前車 1 秒內即可於下一圈獲得",
+    "overtakeTitle": "超車模式（{keys}）",
+    "boostTitle": "手動超控加速（{keys}）",
+    "overtake": "超車",
+    "boost": "助推",
+    "harvest": "回收",
+    "deploy": "釋放",
+    "ersSoc": "ERS 電量",
+    "lonG": "縱向 G",
+    "inputs": "煞車、油門、力回饋",
+    "brakeLetter": "B",
+    "brakeTitle": "煞車輸入",
+    "throttleLetter": "T",
+    "throttleTitle": "油門輸入",
+    "forceLetter": "F",
+    "clip": "過載",
+    "forceTitle": "轉向扭力／力回饋（紅色表示過載截頂）",
+    "latG": "{g} g 橫向",
+    "ersBattery": "ERS 電池電量",
+    "rpmBand": "引擎 RPM 轉速區間"
+  },
+  "hudFormat": {
+    "session": {
+      "qualifying": "排位賽",
+      "timeTrial": "計時賽",
+      "practice": "練習賽"
+    },
+    "cornerShort": "T{turn}",
+    "lapMark": {
+      "best": "最佳",
+      "pb": "個人最佳",
+      "slower": "較慢"
+    }
+  },
+  "thirdPartyData": {
+    "you": "你",
+    "headlight": {
+      "flash": "閃燈",
+      "on": "開啟",
+      "off": "關閉"
+    },
+    "surface": {
+      "dry": "乾地",
+      "damp": "微濕",
+      "wet": "濕地",
+      "flooded": "積水"
+    }
+  },
+  "aeroLabel": {
+    "readout": {
+      "noDrs": "無 DRS",
+      "drsOpen": "DRS 開啟",
+      "drsQueued": "DRS 排程",
+      "drsArmed": "DRS 待命",
+      "xMode": "X-MODE",
+      "xQueued": "X 排程",
+      "xArmed": "X 待命",
+      "zMode": "Z-MODE"
+    },
+    "notice": {
+      "drsEnabled": "DRS 已啟用",
+      "drsNotEnabled": "DRS 未啟用",
+      "drsQueued": "已排程",
+      "xModeBadge": "X-MODE",
+      "straightMode": "直線模式",
+      "xModeQueued": "已排程",
+      "overtakeBadge": "超車模式",
+      "overtakeEnabled": "已啟用",
+      "overtakeLocked": "未解鎖"
+    }
+  },
+  "tyreBrakeWidget": {
+    "corner": {
+      "fl": "左前",
+      "fr": "右前",
+      "rl": "左後",
+      "rr": "右後"
+    },
+    "tread": {
+      "inner": "內",
+      "middle": "中",
+      "outer": "外",
+      "title": "外側、中央、內側胎面"
+    },
+    "condition": {
+      "grain": "顆粒化",
+      "grainTitle": "顆粒化：胎面撕裂成膠粒（胎體偏冷，卻持續劇烈滑動）",
+      "blister": "起泡",
+      "blisterTitle": "起泡：胎體內部過熱",
+      "flat": "平斑",
+      "flatTitle": "煞車鎖死造成平斑：產生震動並降低抓地力",
+      "dirt": "髒污",
+      "dirtTitle": "偏離行車線沾附砂石與膠屑：過幾個彎後會逐漸清除"
+    },
+    "conditionTitle": "{title}（{level}%）",
+    "brakeTitle": "煞車碟盤 {disc}{hasCore, select, yes { · 核心 {core}} other {}}{hasBite, select, yes { · 來令片制動力 {bite}%} other {}}",
+    "cardTitle": "{corner} 胎面 {temps}（由車尾方向檢視）",
+    "treadLife": "胎面壽命",
+    "pressureTitle": "胎壓（{unit}）",
+    "windowTitle": "胎面最佳工作溫域",
+    "window": "溫域",
+    "miniTitle": "{corner}：胎面 {temps} · {pressure} · 煞車 {brake}{hasCondition, select, yes { · {condition}} other {}}"
+  },
+  "tyrePanel": {
+    "region": "輪胎"
+  },
+  "weatherBadge": {
+    "region": "天氣",
+    "air": "氣溫",
+    "track": "賽道",
+    "rain": "降雨",
+    "heavyRain": "大雨",
+    "wind": "風速",
+    "headlightsForcedOn": "頭燈強制開啟",
+    "headlightsForcedOff": "頭燈強制關閉",
+    "headlightsOn": "頭燈開啟",
+    "headlightsTitleManualOn": "頭燈開啟（手動）",
+    "headlightsTitleManualOff": "頭燈關閉（手動）",
+    "headlightsTitleAuto": "頭燈開啟（自動）",
+    "chipFlash": "閃燈",
+    "chipOn": "開啟",
+    "chipOff": "關閉"
+  },
+  "damageWidget": {
+    "label": "車損",
+    "out": "退賽",
+    "puncture": "爆胎",
+    "title": "車頭 {front} · 車尾 {rear} · 左側 {left} · 右側 {right}",
+    "titlePunctured": "車頭 {front} · 車尾 {rear} · 左側 {left} · 右側 {right} · 爆胎",
+    "part": {
+      "frontWing": "前翼",
+      "rearWing": "尾翼",
+      "floor": "底板",
+      "suspension": "懸吊"
+    }
+  },
+  "inputTrace": {
+    "throttle": "油門",
+    "brake": "煞車",
+    "steering": "轉向",
+    "steeringTitle": "實線為車輪轉角，虛線為你的轉向輸入",
+    "trace": "油門、煞車與轉向曲線：虛線為你的轉向輸入，實線為實際車輪轉角",
+    "region": "操作輸入"
+  },
+  "pedalBars": {
+    "region": "踏板與電控系統",
+    "clutch": "離合",
+    "clip": "過載",
+    "steering": "轉向"
+  },
+  "splitGaps": {
+    "region": "前後車距",
+    "ahead": "前車",
+    "behind": "後車",
+    "carAhead": "前車 {driver}：{gap} 秒",
+    "carBehind": "後車 {driver}：{gap} 秒",
+    "goingYourWay": "對你有利",
+    "goingAgainstYou": "對你不利",
+    "steady": "持平"
+  },
+  "deltaBar": {
+    "label": "與基準圈的時間差",
+    "valueText": "{delta} 秒，{trend, select, gaining {加快中} losing {變慢中} other {持平}}",
+    "noReference": "尚無基準圈"
+  },
+  "ffbMeter": {
+    "title": "力回饋",
+    "clipping": "過載",
+    "inRange": "正常範圍",
+    "peak": "峰值 <v>{value}%</v>",
+    "setCar": "將此車輛設為 {value}%"
+  },
+  "proximityRadar": {
+    "carsClose": "{count, plural, other {附近有 # 輛車}}{side, select, left {，左側有並排車輛} right {，右側有並排車輛} both {，左右兩側皆有並排車輛} other {}}",
+    "clear": "雷達淨空"
+  },
+  "cameraToast": {
+    "freeHintTouch": "拖曳環顧四周 · 從暫停或重播視角選單離開",
+    "freeHintKeys": "拖曳轉向 · WASD 移動 · Q/E 升降 · 滾輪調速 · R 重設 · {key} 離開"
+  },
+  "ffbPairPrompt": {
+    "region": "力回饋",
+    "text": "配對方向盤以啟用力回饋",
+    "connect": "連線",
+    "dismiss": "關閉"
+  },
+  "dualSensePairPrompt": {
+    "text": "<b>偵測到 DualSense</b> · 配對以啟用自適應扳機與觸覺回饋",
+    "pair": "配對",
+    "dismiss": "關閉"
+  },
+  "overheadNameplates": {
+    "fastestLap": "FL",
+    "rank": "P{rank}"
+  },
+  "hiddenNote": {
+    "off": "HUD 已隱藏",
+    "offKey": "HUD 已隱藏 · 按 {key} 顯示"
+  }
+}

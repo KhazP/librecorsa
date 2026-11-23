@@ -45,7 +45,7 @@ export function NowPlayingToast({ nowPlaying }: { nowPlaying: NowPlaying | null 
       {shown ? (
         <div
           key={shown.seq}
-          className={`${leaving ? "lc-np-out" : "lc-np-in"} flex min-w-0 items-center gap-3 rounded-lc-tile border border-white/10 bg-lc-carbon/95 py-2 pr-4 pl-3 shadow-lc-pop`}
+          className={`${leaving ? "lc-np-out" : "lc-np-in"} flex min-w-0 items-center gap-3 rounded-lc-tile border border-white/10 bg-lc-carbon/95 py-2 pe-4 ps-3 shadow-lc-pop`}
         >
           <span aria-hidden className="inline-flex shrink-0 text-lc-fog">
             <Icon name="music" size="md" />

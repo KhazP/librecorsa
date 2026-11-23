@@ -15,7 +15,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup as renderBare } from "react-dom/server";
 import { BoardTable } from "../src/components/board/board-table";
 import { DriverProfileBody } from "../src/components/board/DriverProfileModal";
 import { handleApi, SHARED_ANSWER_S } from "../cloudflare/api/index";
@@ -34,6 +34,10 @@ import { fetchDriverProfile, lapBoardPercentile, parseDriverProfile } from "../s
 import { boardPhysicsVersion, lapPhysicsVersion, PHYSICS_VERSION, PHYSICS_VERSIONS, shippingLapPhysicsVersion } from "../src/lib/sim/lap-types";
 import type { VehicleModelId } from "../src/types/f1";
 import { fakeD1, fakeR2 } from "./lib/fake-cloudflare";
+import { withEnglish } from "./lib/intl";
+
+// Board components read their words through useTranslations: rendered here with the English messages
+const renderToStaticMarkup = (element: React.ReactElement) => renderBare(withEnglish(element));
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = "") => {

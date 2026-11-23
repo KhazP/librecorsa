@@ -6,6 +6,7 @@
  * Everything here follows from the clock alone, so the game and the server (cloudflare/api) agree on the week
  * without asking each other. No three.js, no DOM: the Worker imports this file.
  */
+import { text as t } from "@/lib/text";
 import type { AssistPreset, TireCompound, VehicleModelId } from "@/types/f1";
 import { lapPhysicsVersion, type LapConditions } from "@/lib/sim/lap-types";
 import type { SimRealism } from "@/lib/sim/sim-realism";
@@ -197,28 +198,36 @@ export function challengesSoFar(nowMs: number, max = 104): WeeklyChallenge[] {
   return weeks;
 }
 
+/** The words for a challenge's tyres, in the conditions line */
+const CHALLENGE_TYRE_LABEL = {
+  soft: "game.challenge.tyresSoft",
+  street: "game.challenge.tyresStreet",
+  vintageSlicks: "game.challenge.tyresVintageSlicks",
+  slicks: "game.challenge.tyresSlicks",
+} as const;
+
 /**
  * The one tyre a car runs in the challenge: the softest dry compound it has. Every car's softest dry slot is its
  * "soft" (the Liana's street tyre fills every slot, so "soft" is that tyre). Listed here, not read from the car
  * configs, because the Worker imports this file.
  */
-const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound; label: string }>> = {
-  lc26: { compound: "soft", label: "Soft tyres" },
-  "f12026-car": { compound: "soft", label: "Soft tyres" },
-  "amg-gt3": { compound: "soft", label: "Soft tyres" },
-  "mtr-496r": { compound: "soft", label: "Soft tyres" },
-  "lc-lmdh": { compound: "soft", label: "Soft tyres" },
-  liana: { compound: "soft", label: "Street tyres" },
-  "nissan-r33-jgtc": { compound: "soft", label: "Soft tyres" },
-  "nissan-r32-jtcc": { compound: "soft", label: "Soft tyres" },
+const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound; tyres: keyof typeof CHALLENGE_TYRE_LABEL }>> = {
+  lc26: { compound: "soft", tyres: "soft" },
+  "f12026-car": { compound: "soft", tyres: "soft" },
+  "amg-gt3": { compound: "soft", tyres: "soft" },
+  "mtr-496r": { compound: "soft", tyres: "soft" },
+  "lc-lmdh": { compound: "soft", tyres: "soft" },
+  liana: { compound: "soft", tyres: "street" },
+  "nissan-r33-jgtc": { compound: "soft", tyres: "soft" },
+  "nissan-r32-jtcc": { compound: "soft", tyres: "soft" },
   // Its one dry compound fills the soft, medium and hard slots
-  "bmw-m1-procar": { compound: "soft", label: "Vintage slicks" },
-  "vw-scirocco-gtx": { compound: "soft", label: "Street tyres" },
+  "bmw-m1-procar": { compound: "soft", tyres: "vintageSlicks" },
+  "vw-scirocco-gtx": { compound: "soft", tyres: "street" },
   // Their one dry compound fills the soft, medium and hard slots
-  "chaparral-2d": { compound: "soft", label: "Slicks" },
-  "chaparral-2d-67": { compound: "soft", label: "Slicks" },
+  "chaparral-2d": { compound: "soft", tyres: "slicks" },
+  "chaparral-2d-67": { compound: "soft", tyres: "slicks" },
   // The slicks, the mod's default set (the Group 4 tyres are its hard)
-  "porsche-934-rsr": { compound: "soft", label: "Slicks" },
+  "porsche-934-rsr": { compound: "soft", tyres: "slicks" },
 };
 
 /** The compound every lap of a challenge in this car is driven on */
@@ -228,7 +237,7 @@ export function challengeCompound(vehicle: VehicleModelId): TireCompound {
 
 /** The challenge's rules in a few words: "Dry track · Soft tyres · Low fuel" */
 export function challengeConditionsLabel(vehicle: VehicleModelId): string {
-  return `Dry track · ${CHALLENGE_TYRES[vehicle].label} · Low fuel`;
+  return t("game.challenge.conditions", { tyres: t(CHALLENGE_TYRE_LABEL[CHALLENGE_TYRES[vehicle].tyres]) });
 }
 
 /** True when a lap driven on this circuit and car under these conditions is a lap of the challenge */
@@ -259,7 +268,7 @@ export function timeLeftLabel(endsMs: number, nowMs: number): string {
   const d = Math.floor(minutes / 1440);
   const h = Math.floor((minutes % 1440) / 60);
   const m = minutes % 60;
-  if (d > 0) return `${d} d ${h} h`;
-  if (h > 0) return `${h} h ${m} min`;
-  return `${m} min`;
+  if (d > 0) return t("game.challenge.timeLeftDays", { days: d, hours: h });
+  if (h > 0) return t("game.challenge.timeLeftHours", { hours: h, minutes: m });
+  return t("game.challenge.timeLeftMinutes", { minutes: m });
 }

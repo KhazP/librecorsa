@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import { focusOnHover, useFocusNav } from "@/components/menu/useFocusNav";
 import { Icon } from "@/components/ui/icons/Icon";
 import { CHOSEN_PILL, CURSOR_PILL, cx, HOVER_PILL, MOTION, PRESSED_PILL, uiZoomOf } from "@/components/ui/styles";
@@ -83,6 +84,7 @@ export const CarLiveryPicker: React.FC<CarLiveryPickerProps> = ({
   onOpenChange,
   onSelect,
 }) => {
+  const tx = useTranslations("home.liveryPicker");
   const [place, setPlace] = useState<Place | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -174,7 +176,7 @@ export const CarLiveryPicker: React.FC<CarLiveryPickerProps> = ({
     close();
   };
 
-  const activeName = isCustom ? "Custom Paint" : current.name;
+  const activeName = isCustom ? tx("custom") : current.name;
   const activeSwatch = isCustom && customSwatch ? customSwatch : current.swatch;
 
   return (
@@ -188,9 +190,9 @@ export const CarLiveryPicker: React.FC<CarLiveryPickerProps> = ({
         aria-label={
           chosen
             ? isCustom
-              ? `${carTitle} livery: Custom Paint (${liveries.length} presets)`
-              : `${carTitle} livery: ${current.name} (${currentIndex + 1} of ${liveries.length})`
-            : `${carTitle}: ${liveries.length} liveries`
+              ? tx("chosenCustom", { car: carTitle, count: liveries.length })
+              : tx("chosen", { car: carTitle, livery: current.name, index: String(currentIndex + 1), count: String(liveries.length) })
+            : tx("closed", { car: carTitle, count: liveries.length })
         }
         // Spatial arrows/D-pad skip unselected cars' pills so browsing stays one press per card; Tab, click and tap always work
         data-nav-skip={chosen ? undefined : ""}
@@ -203,7 +205,7 @@ export const CarLiveryPicker: React.FC<CarLiveryPickerProps> = ({
           }
         }}
         className={cx(
-          "pointer-events-auto group inline-flex h-7 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-lc-nub px-2.5 text-left text-[12px] leading-none font-semibold select-none pointer-coarse:h-9",
+          "pointer-events-auto group inline-flex h-7 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-lc-nub px-2.5 text-start text-[12px] leading-none font-semibold select-none pointer-coarse:h-9",
           chosen || open
             ? "bg-lc-titanium text-lc-chalk inset-ring inset-ring-lc-keyline hover:bg-lc-line"
             : "bg-lc-carbon/90 text-lc-fog inset-ring inset-ring-lc-line backdrop-blur-xs hover:bg-lc-titanium hover:text-lc-chalk hover:inset-ring-lc-keyline",
@@ -236,7 +238,7 @@ export const CarLiveryPicker: React.FC<CarLiveryPickerProps> = ({
                 open ? "text-lc-chalk group-focus:text-lc-void" : "text-lc-slate group-hover:text-lc-chalk group-focus:text-lc-void",
               )}
             />
-            <span className="min-w-0 truncate">{liveries.length} liveries</span>
+            <span className="min-w-0 truncate">{tx("count", { count: liveries.length })}</span>
           </>
         )}
         <Icon
@@ -255,7 +257,7 @@ export const CarLiveryPicker: React.FC<CarLiveryPickerProps> = ({
               ref={listRef}
               id={listId}
               role="listbox"
-              aria-label={`${carTitle} liveries`}
+              aria-label={tx("list", { car: carTitle })}
               className={cx(
                 "lc-pop-in fixed z-(--z-lc-notice) flex flex-col overflow-hidden rounded-lc-tile border border-white/10 bg-lc-carbon shadow-lc-pop",
                 place.up ? "origin-bottom-left" : "origin-top-left",
@@ -274,7 +276,7 @@ export const CarLiveryPicker: React.FC<CarLiveryPickerProps> = ({
                 className="lc-lbl flex shrink-0 items-center justify-between gap-2 border-b border-lc-line/70 px-3 py-2"
               >
                 <span className="min-w-0 truncate">{carTitle}</span>
-                <span className="shrink-0 text-lc-fog">{liveries.length} liveries</span>
+                <span className="shrink-0 text-lc-fog">{tx("count", { count: liveries.length })}</span>
               </span>
               <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain p-1.5">
                 {liveries.map((liv, idx) => {
@@ -302,7 +304,7 @@ export const CarLiveryPicker: React.FC<CarLiveryPickerProps> = ({
                         onPointerEnter={focusOnHover}
                         onClick={() => choose(liv.id)}
                         className={cx(
-                          "group flex w-full shrink-0 cursor-pointer items-center gap-2.5 rounded-lc-nub px-2 py-1.5 text-left pointer-coarse:min-h-12",
+                          "group flex w-full shrink-0 cursor-pointer items-center gap-2.5 rounded-lc-nub px-2 py-1.5 text-start pointer-coarse:min-h-12",
                           MOTION,
                           isSelected ? CHOSEN_PILL : cx("text-lc-fog", HOVER_PILL),
                           PRESSED_PILL,

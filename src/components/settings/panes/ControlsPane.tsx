@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "use-intl/react";
 import { Button, SettingRow } from "@/components/ui";
 import { ConnectedDevicesCard, detectedDevice, DeviceTiles, DEVICES } from "@/components/menu/steps/DeviceStep";
 import { KeyboardSetup } from "@/components/menu/steps/KeyboardStep";
@@ -18,10 +19,11 @@ import { SettingsCard } from "../fields";
  */
 export function DeviceTab() {
   const env = useSettingsEnv();
+  const tx = useTranslations("settings.controls");
   const pads = useGamepads();
   return (
     <>
-      <SettingsCard title="Active device">
+      <SettingsCard title={tx("activeDevice")}>
         <DeviceTiles
           choices={DEVICES}
           value={env.settings.device}
@@ -32,10 +34,10 @@ export function DeviceTab() {
       </SettingsCard>
       <ConnectedDevicesCard />
       {env.onRunSetup ? (
-        <SettingsCard title="Quick setup">
-          <SettingRow label="Run setup wizard">
+        <SettingsCard title={tx("quickSetup")}>
+          <SettingRow label={tx("runSetupWizard")}>
             <Button size="sm" variant="secondary" onClick={env.onRunSetup}>
-              Run setup
+              {tx("runSetup")}
             </Button>
           </SettingRow>
         </SettingsCard>
@@ -49,5 +51,6 @@ export const ControllerTab = ControllerSetup;
 export const WheelTab = () => <WheelSetup first />;
 
 export function TouchTab() {
-  return <SettingsCard title="Touch" rows={[touchMode, touchLayout, tiltSteer, tiltRange]} first />;
+  const tx = useTranslations("settings.controls");
+  return <SettingsCard title={tx("touch")} rows={[touchMode, touchLayout, tiltSteer, tiltRange]} first />;
 }

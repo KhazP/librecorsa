@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
+import { t as tr } from "@/i18n/runtime";
 import { CAMERA_MODES } from "@/lib/render/camera-modes";
 import {
   NUDGE_FOV_STEP_DEG,
@@ -47,13 +49,28 @@ interface Row {
   step: number;
 }
 
+/** A row whose words are read from the messages when it is drawn (`name`: its message keys) */
+const seatRow = (key: RowKey, name: "view" | "fwd" | "up" | "right" | "tilt" | "fov", step: number): Row => ({
+  key,
+  step,
+  get label() {
+    return tr(`hud.seatPanel.rows.${name}`);
+  },
+  get less() {
+    return tr(`hud.seatPanel.rows.${name}Less`);
+  },
+  get more() {
+    return tr(`hud.seatPanel.rows.${name}More`);
+  },
+});
+
 const ROWS: readonly Row[] = [
-  { key: "view", label: "View", less: "Cockpit view", more: "Dash view", step: 1 },
-  { key: "fwd", label: "Forward", less: "Move back", more: "Move forward", step: NUDGE_STEP_M },
-  { key: "up", label: "Height", less: "Move down", more: "Move up", step: NUDGE_STEP_M },
-  { key: "right", label: "Side", less: "Move left", more: "Move right", step: NUDGE_STEP_M },
-  { key: "tiltDeg", label: "Tilt", less: "Tilt down", more: "Tilt up", step: NUDGE_TILT_STEP_DEG },
-  { key: "fovDeg", label: "FOV", less: "Narrower", more: "Wider", step: NUDGE_FOV_STEP_DEG },
+  seatRow("view", "view", 1),
+  seatRow("fwd", "fwd", NUDGE_STEP_M),
+  seatRow("up", "up", NUDGE_STEP_M),
+  seatRow("right", "right", NUDGE_STEP_M),
+  seatRow("tiltDeg", "tilt", NUDGE_TILT_STEP_DEG),
+  seatRow("fovDeg", "fov", NUDGE_FOV_STEP_DEG),
 ];
 
 const REPEAT_DELAY_MS = 300;
@@ -119,6 +136,7 @@ function formatValue(row: Row, nudge: CameraNudge, fovDeg: number, units: UnitSe
  * stays see-through so the view it changes shows behind it.
  */
 export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
+  const tx = useTranslations("hud.seatPanel");
   const [row, setRow] = useState(0);
   const units = useUnits();
   // The camera key's name in the prompts is as printed here: named again when the layout is read
@@ -219,17 +237,17 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
 
   return (
     <div
-      className="pointer-events-none fixed inset-y-0 left-0 z-(--z-lc-overlay) flex items-center p-3 sm:p-5"
+      className="pointer-events-none fixed inset-y-0 start-0 z-(--z-lc-overlay) flex items-center p-3 sm:p-5"
       role="dialog"
       aria-modal="false"
-      aria-label={`Seat and camera, ${p.carTitle}`}
+      aria-label={tx("dialog", { car: p.carTitle })}
     >
       {/* The HUD's own glass (74 % void, blurred), as on every panel over the scene */}
       <div
         className={`pointer-events-auto flex max-h-full w-[340px] max-w-[calc(100vw-24px)] flex-col gap-2.5 overflow-y-auto overscroll-contain rounded-lc-card p-3.5 text-lc-chalk [text-shadow:0_1px_2px_rgba(0,0,0,0.6)] ${HUD_GLASS}`}
       >
         <div className="flex flex-col gap-0.5 px-1">
-          <h2 className="lc-h3">Seat and camera</h2>
+          <h2 className="lc-h3">{tx("title")}</h2>
           <span className="lc-hint truncate text-lc-fog" title={p.carTitle}>
             {p.carTitle}
           </span>
@@ -252,7 +270,7 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
               >
                 <span className={`w-16 shrink-0 text-[13px] font-semibold ${active ? "text-lc-chalk" : "text-lc-fog"}`}>{r.label}</span>
                 {r.key === "view" ? (
-                  <div className="flex flex-1 gap-1 rounded-lc-row bg-lc-void/80 p-1 inset-ring inset-ring-lc-line" role="radiogroup" aria-label="View">
+                  <div className="flex flex-1 gap-1 rounded-lc-row bg-lc-void/80 p-1 inset-ring inset-ring-lc-line" role="radiogroup" aria-label={tx("viewGroup")}>
                     {NUDGE_VIEWS.map((v) => (
                       <button
                         key={v}
@@ -287,24 +305,24 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
 
         <div className="flex gap-2 [text-shadow:none]">
           <Button size="sm" variant="ghost" className="flex-1" tabIndex={-1} disabled={!moved} onClick={() => p.onStep(null)}>
-            Reset view
+            {tx("resetView")}
           </Button>
           <Button size="sm" variant="primary" className="flex-1" tabIndex={-1} onClick={p.onClose}>
-            Done
+            {tx("done")}
           </Button>
         </div>
 
         <PromptBar
           className="px-1 [text-shadow:none]"
           prompts={[
-            { action: "move", label: "Row", key: "\u2191 \u2193", pad: "dpad-vertical" },
-            { action: "adjust", label: "Change" },
-            { action: "select", label: "Reset row" },
-            { action: "start", label: "Reset view", key: "R", pad: "x" },
-            { action: "back", label: "Done", key: `Esc / ${cameraKey}`, keyPrinted: true },
+            { action: "move", label: tx("prompts.row"), key: "\u2191 \u2193", pad: "dpad-vertical" },
+            { action: "adjust", label: tx("prompts.change") },
+            { action: "select", label: tx("prompts.resetRow") },
+            { action: "start", label: tx("prompts.resetView"), key: "R", pad: "x" },
+            { action: "back", label: tx("prompts.done"), key: `Esc / ${cameraKey}`, keyPrinted: true },
           ]}
         />
-        <p className="lc-hint m-0 px-1 text-lc-fog short:hidden">Saved per car</p>
+        <p className="lc-hint m-0 px-1 text-lc-fog short:hidden">{tx("savedPerCar")}</p>
       </div>
     </div>
   );

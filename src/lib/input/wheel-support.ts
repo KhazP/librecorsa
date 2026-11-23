@@ -7,6 +7,7 @@
  * Only what the maintainer has driven is marked tested. Reports from other wheels move rows up (README:
  * "Wheels and force feedback", issue template "Wheel report").
  */
+import { text as t } from "@/lib/text";
 
 export const LOGITECH_VENDOR_ID = 0x046d;
 
@@ -158,63 +159,61 @@ export const WHEEL_SUPPORT: readonly WheelSupportRow[] = [
     wheel: "MOZA R9 V2 + KS",
     webHid: "tested",
     bridge: "expected",
-    note: "Connects, steers and plays force feedback over WebHID",
+    get note() { return t("game.wheelSupport.moza"); },
   },
   {
     wheel: "Other MOZA, Simucube 2, VRS, OpenFFBoard and other HID PID bases",
     webHid: "expected",
     bridge: "expected",
-    note: "Untested; uses the same standard force-feedback reports",
+    get note() { return t("game.wheelSupport.hidPid"); },
   },
   {
     wheel: "Simagic, Cammus, Asetek, Fanatec DD (PC mode), Thrustmaster DD",
     webHid: "unknown",
     bridge: "expected",
-    note: "Untested; without HID PID force feedback the page switches to the bridge",
+    get note() { return t("game.wheelSupport.directDrive"); },
   },
   {
     wheel: "PXN V99",
     webHid: "unknown",
     bridge: "expected",
-    note: "Untested; HID PID with Set Effect values of its own, which no PXN wheel has confirmed",
+    get note() { return t("game.wheelSupport.pxn"); },
   },
   {
     wheel: `Logitech ${LOGITECH_CLASSIC_NAMES}`,
     webHid: "expected",
     bridge: "expected",
-    note: "Untested; starts on WebHID with the classic Logitech commands as Linux hid-lg4ff sends them, rev LEDs on the G27 and G29 included",
+    get note() { return t("game.wheelSupport.logitechClassic"); },
   },
   {
     wheel: `Logitech ${LOGITECH_HIDPP_NAMES}`,
     webHid: "expected",
     bridge: "expected",
-    note: "Untested; starts on WebHID with HID++ force feedback as Linux hid-logitech-hidpp sends it, once Logitech G HUB has switched the wheel to PC mode",
+    get note() { return t("game.wheelSupport.logitechHidpp"); },
   },
   {
     wheel: "Logitech G923 for PlayStation, G PRO, Driving Force Pro",
     webHid: "no",
     bridge: "expected",
-    note: "Untested; bridge only: no mainline Linux driver drives the G923 for PlayStation or the G PRO, and the browser cannot rescale the DFP's steering axis",
+    get note() { return t("game.wheelSupport.logitechBridgeOnly"); },
   },
   {
     wheel: `Thrustmaster ${THRUSTMASTER_NAMES}`,
     webHid: "unknown",
     bridge: "expected",
-    note:
-      "Untested; the commands of Linux hid-tmff2, once a driver has switched the wheel out of its start-up mode. If " +
-      "it has not, or Windows refuses the commands, the bridge takes over",
+    get note() { return t("game.wheelSupport.thrustmaster"); },
   },
   {
     wheel: "Thrustmaster T150, TMX, T500RS",
     webHid: "no",
     bridge: "expected",
-    note: "Untested; bridge only: the T150 and TMX take a different command set, and hid-tmff2 does not cover the T500RS",
+    get note() { return t("game.wheelSupport.thrustmasterBridgeOnly"); },
   },
   {
     wheel: "Fanatec CSL Elite",
     webHid: "unknown",
     bridge: "expected",
-    note: "Untested; without HID PID force feedback the page switches to the bridge",
+    get note() { return t("game.wheelSupport.fanatecCslElite"); },
   },
 ];
 
@@ -226,8 +225,8 @@ export const WHEEL_SUPPORT_SUMMARY = (() => {
 })();
 
 export const SUPPORT_LABEL: Record<SupportLevel, string> = {
-  tested: "Tested",
-  expected: "Expected",
-  unknown: "Unknown",
-  no: "No",
+  get tested() { return t("game.wheelSupport.tested"); },
+  get expected() { return t("game.wheelSupport.expected"); },
+  get unknown() { return t("game.wheelSupport.unknown"); },
+  get no() { return t("game.wheelSupport.no"); },
 };

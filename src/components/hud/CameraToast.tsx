@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CameraMode } from "@/types/f1";
 import { CAMERA_MODES } from "@/lib/render/camera-modes";
 import { Icon } from "@/components/ui/icons/Icon";
@@ -28,6 +29,7 @@ export function CameraToast({ cameraMode, active, freeCameraKey = "F7" }: Camera
   const [leaving, setLeaving] = useState(false);
   const prevMode = useRef<CameraMode>(cameraMode);
   const seqRef = useRef(0);
+  const tx = useTranslations("hud.cameraToast");
 
   useEffect(() => {
     const prev = prevMode.current;
@@ -61,8 +63,8 @@ export function CameraToast({ cameraMode, active, freeCameraKey = "F7" }: Camera
   const freeHint =
     shown?.mode === "free"
       ? coarsePointer
-        ? "Drag to look around · Use Pause or Replay camera menu to exit"
-        : `Drag look · WASD fly · Q/E height · Scroll speed · R reset · ${freeCameraKey} exit`
+        ? tx("freeHintTouch")
+        : tx("freeHintKeys", { key: freeCameraKey })
       : null;
 
   return (

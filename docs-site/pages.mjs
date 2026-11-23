@@ -10,6 +10,7 @@ export const PAGES = [
   { source: "docs/PORTING-TRACKS.md", slug: "porting/circuits", group: "Porting" },
   { source: "docs/PORTING-F1-MODS.md", slug: "porting/f1-mods", group: "Porting" },
   { source: "docs/PORTING-WHEELS.md", slug: "porting/wheels", group: "Porting" },
+  { source: "docs/TRANSLATING.md", slug: "contributing/translating", group: "Contributing" },
   { source: "docs/physics/README.md", slug: "how-it-works/physics", group: "How it works" },
   { source: "docs/race-ai.md", slug: "how-it-works/race-ai", group: "How it works" },
 ];

@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useTranslations } from "use-intl/react";
+import { t } from "@/i18n/runtime";
 import type { InputDevice } from "@/lib/input/device-input";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
 import { requestTiltPermission } from "@/lib/input/touch-input";
@@ -23,15 +25,40 @@ interface DeviceChoice {
 }
 
 export const DEVICES: readonly DeviceChoice[] = [
-  { id: "keyboard", title: "Keyboard", detail: "WASD or arrows, remappable", icon: "keyboard" },
-  { id: "controller", title: "Controller", detail: "Standard gamepad with steering assist", icon: "controller" },
-  { id: "wheel", title: "Wheel", detail: "1:1 calibrated wheel and pedals", icon: "wheel" },
+  {
+    id: "keyboard",
+    get title() { return t("setup.device.keyboard"); },
+    get detail() { return t("setup.device.keyboardDetail"); },
+    icon: "keyboard",
+  },
+  {
+    id: "controller",
+    get title() { return t("setup.device.controller"); },
+    get detail() { return t("setup.device.controllerDetail"); },
+    icon: "controller",
+  },
+  {
+    id: "wheel",
+    get title() { return t("setup.device.wheel"); },
+    get detail() { return t("setup.device.wheelDetail"); },
+    icon: "wheel",
+  },
 ];
 
 /** On a touch screen, ahead of the rest: the on-screen controls, steered with the slider or by tilting the device */
 const TOUCH_CHOICES: readonly DeviceChoice[] = [
-  { id: "touch", title: "Touch", detail: "On-screen steering and pedals", icon: "touch" },
-  { id: "tilt", title: "Tilt", detail: "Tilt to steer, on-screen pedals", icon: "tilt" },
+  {
+    id: "touch",
+    get title() { return t("setup.device.touch"); },
+    get detail() { return t("setup.device.touchDetail"); },
+    icon: "touch",
+  },
+  {
+    id: "tilt",
+    get title() { return t("setup.device.tilt"); },
+    get detail() { return t("setup.device.tiltDetail"); },
+    icon: "tilt",
+  },
 ];
 
 /** The device a connected pad or wheel suggests */
@@ -52,8 +79,10 @@ export function DeviceTiles({
   onPick: (choice: Choice) => void;
   first?: boolean;
 }) {
+  // The tiles' titles are getters: this also draws them again when the language changes
+  const tx = useTranslations("setup.device");
   return (
-    <OptionTileGroup aria-label="Input device" columns={3}>
+    <OptionTileGroup aria-label={tx("tiles")} columns={3}>
       {choices.map((d) => (
         <OptionTile
           key={d.id}
@@ -70,7 +99,7 @@ export function DeviceTiles({
               {d.title}
               {detected === d.id ? (
                 <Badge tone="good" size="sm" dot>
-                  Connected
+                  {tx("connected")}
                 </Badge>
               ) : null}
             </span>
@@ -85,14 +114,12 @@ export function DeviceTiles({
 /** Every controller and wheel the browser can see, with the button map of a standard controller */
 export function ConnectedDevicesCard() {
   const { settings } = useSettingsEnv();
+  const tx = useTranslations("setup.connectedDevices");
   const pads = useGamepads();
   // The controller whose button map is open (by pad id), if any
   const [mapFor, setMapFor] = useState<string | null>(null);
   return (
-    <SettingsCard
-      title="Connected devices"
-      description={pads.length === 0 ? "Press any button on a controller or wheel to wake it." : undefined}
-    >
+    <SettingsCard title={tx("title")} description={pads.length === 0 ? tx("wake") : undefined}>
       {pads.length > 0 ? (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {pads.map((p) => {
@@ -104,17 +131,17 @@ export function ConnectedDevicesCard() {
                 <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                   <span className="flex min-w-0 items-center gap-2.5">
                     <Badge tone="good" dot size="sm">
-                      {isLikelyWheel(p) ? "Wheel" : "Controller"}
+                      {isLikelyWheel(p) ? tx("wheel") : tx("controller")}
                     </Badge>
                     <span className="lc-row-label truncate" title={padDisplayName(p.id)}>{padDisplayName(p.id)}</span>
                   </span>
                   <span className="flex shrink-0 items-center gap-3">
                     <span className="lc-mono text-[12px] text-lc-slate">
-                      {p.axes.length} axes, {p.buttons.length} buttons
+                      {tx("axesButtons", { axes: p.axes.length, buttons: p.buttons.length })}
                     </span>
                     {mappable ? (
                       <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setMapFor(open ? null : p.id)}>
-                        {open ? "Hide map" : "Button map"}
+                        {open ? tx("hideMap") : tx("buttonMap")}
                       </Button>
                     ) : null}
                   </span>

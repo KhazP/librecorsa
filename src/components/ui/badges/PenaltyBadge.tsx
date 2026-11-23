@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import { Badge, type BadgeSize, type BadgeVariant } from "../Badge";
 import { FlagIcon } from "./FlagIcon";
 
@@ -18,36 +19,51 @@ export const PenaltyBadge: React.FC<{
   variant?: BadgeVariant;
   className?: string;
 }> = ({ penalty, size = "md", variant = "soft", className = "" }) => {
+  const tx = useTranslations("common.penalty");
+  const seconds = penalty.kind === "time" ? penalty.seconds : 0;
+  const strikes = penalty.kind === "trackLimits" ? penalty.strikes : 0;
+  const of = penalty.kind === "trackLimits" ? penalty.of : 0;
+  // The timing tower redraws it many times a second: the words are resolved when the penalty or the language changes
+  const words = useMemo(() => {
+    switch (penalty.kind) {
+      case "time":
+        return tx("time", { seconds: String(seconds) });
+      case "trackLimits":
+        return tx("trackLimits", { strikes: String(strikes), of: String(of) });
+      default:
+        return tx(penalty.kind);
+    }
+  }, [tx, penalty.kind, seconds, strikes, of]);
   const common = { size, variant, className };
   switch (penalty.kind) {
     case "time":
       return (
         <Badge tone="bad" icon="penalty" {...common}>
-          +{penalty.seconds} s
+          {words}
         </Badge>
       );
     case "driveThrough":
       return (
         <Badge tone="bad" icon="pitLane" {...common}>
-          Drive-through
+          {words}
         </Badge>
       );
     case "warning":
       return (
         <Badge tone="warn" leading={<FlagIcon flag="blackWhite" size={FLAG_PX[size]} />} {...common}>
-          Warning
+          {words}
         </Badge>
       );
     case "trackLimits":
       return (
         <Badge tone="warn" icon="trackLimits" {...common}>
-          Track limits {penalty.strikes}/{penalty.of}
+          {words}
         </Badge>
       );
     case "disqualified":
       return (
         <Badge tone="bad" leading={<FlagIcon flag="black" size={FLAG_PX[size]} />} {...common}>
-          Disqualified
+          {words}
         </Badge>
       );
   }

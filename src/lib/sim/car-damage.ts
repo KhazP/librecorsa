@@ -14,6 +14,7 @@
  *
  * Wheel arrays are in the simulator's wheel order: FR, FL, RR, RL. Car frame: +X left, +Z forward (model axes).
  */
+import { text as t } from '@/lib/text';
 import { CLEAN_AIR_WAKE_STATE, type AeroWakeState } from './aero-wake';
 
 export type DamageLevel = 'off' | 'reduced' | 'full';
@@ -21,9 +22,9 @@ export type DamageLevel = 'off' | 'reduced' | 'full';
 export const DAMAGE_LEVELS: readonly DamageLevel[] = ['off', 'reduced', 'full'];
 
 export const DAMAGE_LEVEL_LABELS: Record<DamageLevel, string> = {
-  off: 'Off',
-  reduced: 'Reduced',
-  full: 'Full',
+  get off() { return t('game.damage.off'); },
+  get reduced() { return t('game.damage.reduced'); },
+  get full() { return t('game.damage.full'); },
 };
 
 /** What the damage costs the car; all 1 / 0 on an undamaged car */

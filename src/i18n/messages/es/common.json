@@ -1,0 +1,139 @@
+{
+  "newTab": "(se abre en una pestaña nueva)",
+  "confirm": {
+    "cancel": "Cancelar",
+    "busy": "Espera a que termine"
+  },
+  "toggle": {
+    "on": "Sí",
+    "off": "No"
+  },
+  "disclosure": {
+    "more": "Más",
+    "less": "Menos"
+  },
+  "select": {
+    "placeholder": "Elegir",
+    "labelValue": "{label}: {value}"
+  },
+  "settingRow": {
+    "changed": "Distinto del valor predeterminado",
+    "resetNamed": "Restablecer {setting} al valor predeterminado",
+    "resetThis": "Restablecer este ajuste al valor predeterminado",
+    "reset": "Restablecer al valor predeterminado"
+  },
+  "mediaTile": {
+    "chosen": "Elegido"
+  },
+  "keys": {
+    "up": "Arriba",
+    "down": "Abajo",
+    "left": "Izquierda",
+    "right": "Derecha",
+    "wheelButton": "Bot. {button}"
+  },
+  "pad": {
+    "namedButton": "Botón {name}",
+    "shapeButton": "{shape, select, cross {Botón X} circle {Botón círculo} square {Botón cuadrado} other {Botón triángulo}}",
+    "faceButton": "{position, select, bottom {Botón frontal inferior} right {Botón frontal derecho} left {Botón frontal izquierdo} other {Botón frontal superior}}",
+    "dpad": "D-pad",
+    "dpadDirection": "{direction, select, up {D-pad arriba} down {D-pad abajo} left {D-pad izquierda} right {D-pad derecha} horizontal {D-pad izquierda y derecha} other {D-pad arriba y abajo}}",
+    "shoulder": "{button, select, lb {Bumper izquierdo} rb {Bumper derecho} lt {Gatillo izquierdo} other {Gatillo derecho}} ({name})",
+    "touchpad": "Touchpad",
+    "stick": "{side, select, left {Stick izquierdo} other {Stick derecho}}",
+    "stickPress": "{side, select, left {Presión del stick izquierdo} other {Presión del stick derecho}} ({name})",
+    "stickDirection": "{side, select, left {Stick izquierdo} other {Stick derecho}} {direction, select, up {arriba} down {abajo} left {izquierda} right {derecha} horizontal {izquierda y derecha} other {arriba y abajo}}"
+  },
+  "badges": {
+    "you": "Tú",
+    "position": "Posición {position}",
+    "qualityDescription": ": {description}"
+  },
+  "delta": {
+    "spoken": "{trend, select, level {Igual} faster {{seconds} segundos más rápido} other {{seconds} segundos más lento}}{best, select, yes {, mejor} other {}}",
+    "best": "Mejor"
+  },
+  "penalty": {
+    "time": "+{seconds} s",
+    "driveThrough": "Paso por boxes",
+    "warning": "Aviso",
+    "trackLimits": "Límites de pista {strikes}/{of}",
+    "disqualified": "Descalificado"
+  },
+  "flags": {
+    "green": "Bandera verde",
+    "yellow": "Bandera amarilla",
+    "doubleYellow": "Doble amarilla",
+    "blue": "Bandera azul",
+    "red": "Bandera roja",
+    "white": "Bandera blanca",
+    "black": "Bandera negra",
+    "blackWhite": "Blanca y negra",
+    "chequered": "Bandera a cuadros"
+  },
+  "compounds": {
+    "name": {
+      "soft": "Blando",
+      "medium": "Medio",
+      "hard": "Duro",
+      "intermediate": "Intermedio",
+      "wet": "Lluvia"
+    },
+    "short": {
+      "soft": "Blando",
+      "medium": "Med",
+      "hard": "Duro",
+      "intermediate": "Inter",
+      "wet": "Lluvia"
+    },
+    "long": {
+      "soft": "Neumáticos blandos",
+      "medium": "Neumáticos medios",
+      "hard": "Neumáticos duros",
+      "intermediate": "Neumáticos intermedios (pista mojada)",
+      "wet": "Neumáticos de lluvia (agua acumulada)"
+    },
+    "tyres": {
+      "soft": "Neumáticos blandos",
+      "medium": "Neumáticos medios",
+      "hard": "Neumáticos duros",
+      "intermediate": "Neumáticos intermedios",
+      "wet": "Neumáticos de lluvia"
+    }
+  },
+  "carClass": {
+    "openWheel": "Monoplaza",
+    "gt3": "GT3",
+    "proto": "Proto",
+    "classic": "Clásico",
+    "road": "De calle"
+  },
+  "session": {
+    "practice": "Práctica libre",
+    "race": "Carrera",
+    "timeAttack": "Contrarreloj",
+    "hillClimb": "Subida de montaña",
+    "online": "En línea",
+    "offline": "Sin conexión",
+    "host": "Anfitrión"
+  },
+  "state": {
+    "new": "Nuevo",
+    "beta": "Beta",
+    "wip": "En desarrollo",
+    "experimental": "Experimental",
+    "downloaded": "Descargado",
+    "downloading": "Descargando",
+    "updateAvailable": "Actualización disponible",
+    "inUse": "En uso"
+  },
+  "surface": {
+    "dry": "Seca",
+    "damp": "Húmeda",
+    "wet": "Mojada",
+    "flooded": "Inundada"
+  },
+  "dialog": {
+    "close": "Cerrar"
+  }
+}

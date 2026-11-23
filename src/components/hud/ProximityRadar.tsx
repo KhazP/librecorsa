@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import type { RadarBlip } from "@/types/f1";
 import {
   evaluateRadar,
@@ -18,6 +19,11 @@ import {
  */
 export const ProximityRadar: React.FC<{ blips: RadarBlip[] | undefined; size?: number }> = ({ blips, size = 168 }) => {
   const { blips: evaluated, leftCar, rightCar, opacity: maxOpacity } = evaluateRadar(blips ?? []);
+  const tx = useTranslations("hud.proximityRadar");
+  // The radar draws every frame; its spoken name changes only with the count and the sides
+  const count = evaluated.length;
+  const side = leftCar && rightCar ? "both" : leftCar ? "left" : rightCar ? "right" : "none";
+  const label = useMemo(() => (count ? tx("carsClose", { count, side }) : tx("clear")), [tx, count, side]);
 
   const renderSideArc = (s: 1 | -1, target: EvaluatedRadarBlip) => {
     // Alongside: caution when overlapping a little, loss when the cars overlap fully (the arc also thickens)
@@ -40,11 +46,7 @@ export const ProximityRadar: React.FC<{ blips: RadarBlip[] | undefined; size?: n
       style={{ width: size, height: size, opacity: maxOpacity }}
       aria-hidden={evaluated.length === 0}
       role="img"
-      aria-label={
-        evaluated.length
-          ? `${evaluated.length} car${evaluated.length > 1 ? "s" : ""} close by${leftCar ? ", one alongside on the left" : ""}${rightCar ? ", one alongside on the right" : ""}`
-          : "Radar clear"
-      }
+      aria-label={label}
     >
       <svg viewBox={`${-VIEW_RANGE_M} ${-VIEW_RANGE_M} ${VIEW_RANGE_M * 2} ${VIEW_RANGE_M * 2}`} className="h-full w-full">
         <defs>

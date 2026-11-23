@@ -1,14 +1,15 @@
 "use client";
 
-import { activeLapWord } from "@/lib/track-data";
-import React, { useSyncExternalStore } from "react";
+import { getActivePointToPoint } from "@/lib/track-data";
+import React, { useMemo, useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl/react";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
 import { DeltaBadge } from "@/components/ui/badges/DeltaBadge";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { atShiftPoint, deltaDigits, formatLapClock, formatLapTime, formatSpeed, HUD_BEST, HUD_GAIN, HUD_GREEN, HUD_RED, HUD_SHIFT, speedUnit } from "../hud-format";
 import { aeroReadout } from "../aero-label";
-import { anchor, gearLabel, HUD_LBL, InvalidTag, MiniMap, type HudDesignProps } from "./hud-style-parts";
+import { anchor, formatOnce, gearLabel, HUD_LBL, InvalidTag, MiniMap, type HudDesignProps } from "./hud-style-parts";
 
 /** A phone in either orientation: narrow, or a landscape screen this short */
 const PHONE_QUERY = "(max-width: 639px), (max-height: 479px)";
@@ -25,6 +26,24 @@ export function usePhoneLayout(): boolean {
     subscribePhone,
     () => window.matchMedia(PHONE_QUERY).matches,
     () => false,
+  );
+}
+
+/** The Phone HUD's words in the current language, resolved once per language */
+function usePhoneWords() {
+  const tx = useTranslations("hudStyles.phone");
+  return useMemo(
+    () => ({
+      timing: tx("timing"),
+      outLap: tx("outLap"),
+      best: tx("best"),
+      /** "Lap 3" on a circuit, "Run 3" on a hill climb */
+      lapOrRun: formatOnce((kind: "lap" | "run", lap: number) => tx("lapOrRun", { kind, lap: String(lap) })),
+      raceLap: formatOnce((lap: number, total: number) =>
+        total ? tx("raceLapOfTotal", { lap: String(lap), total: String(total) }) : tx("raceLap", { lap: String(lap) }),
+      ),
+    }),
+    [tx],
   );
 }
 
@@ -54,6 +73,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
   const hasErs = t.f12026?.hasErs ?? true;
   const units = useUnits();
   const aero = aeroReadout(t);
+  const w = usePhoneWords();
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
@@ -111,7 +131,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
         className="absolute w-[176px] landscape:w-[196px] phone:w-[160px]"
         style={{ top: 12, right: 12, ...anchor(scale, "top right") }}
       >
-        <section aria-label="Timing" className={`flex flex-col gap-1.5 rounded-lc-tile px-3 pt-2 pb-2.5 phone:gap-1 phone:rounded-lc-row phone:px-2.5 phone:pt-1.5 phone:pb-2 ${PHONE_GLASS}`}>
+        <section aria-label={w.timing} className={`flex flex-col gap-1.5 rounded-lc-tile px-3 pt-2 pb-2.5 phone:gap-1 phone:rounded-lc-row phone:px-2.5 phone:pt-1.5 phone:pb-2 ${PHONE_GLASS}`}>
           <div className="flex items-baseline justify-between gap-2">
             {race ? (
               <span className="lc-disp text-[26px] leading-none text-lc-chalk phone:text-[21px]">
@@ -120,14 +140,11 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
               </span>
             ) : (
               <span className="lc-disp text-[22px] leading-none text-lc-chalk phone:text-[18px]">
-                {t.outLap ? "Out lap" : `${activeLapWord()} ${Math.max(1, t.lapCount)}`}
+                {t.outLap ? w.outLap : w.lapOrRun(getActivePointToPoint() ? "run" : "lap", Math.max(1, t.lapCount))}
               </span>
             )}
             {race ? (
-              <span className={HUD_LBL}>
-                Lap {race.lap}
-                {race.totalLaps ? `/${race.totalLaps}` : ""}
-              </span>
+              <span className={HUD_LBL}>{w.raceLap(race.lap, race.totalLaps ?? 0)}</span>
             ) : null}
           </div>
           <div className="flex items-center justify-between gap-2">
@@ -148,7 +165,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
           {/* The best lap once there is one; an invalid lap says so either way */}
           {t.bestLapTimeMs || lapInvalid ? (
             <span className="flex items-center justify-between">
-              {lapInvalid ? <InvalidTag /> : <span className={HUD_LBL}>Best</span>}
+              {lapInvalid ? <InvalidTag /> : <span className={HUD_LBL}>{w.best}</span>}
               {t.bestLapTimeMs ? (
                 <span className="lc-data text-[11px]" style={{ color: race ? HUD_GAIN : HUD_BEST }}>
                   {formatLapTime(t.bestLapTimeMs)}

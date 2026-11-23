@@ -1,4 +1,5 @@
 import type * as THREE from "three";
+import { text as t } from "@/lib/text";
 import type { VehicleModelId } from "@/types/f1";
 import type { BuiltTrackData } from "@/lib/track-data";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
@@ -120,7 +121,9 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     // Its only body is the ported GLB, which brings its own cameras
     gt3Cockpit: false,
     floorSparks: false,
-    onlyTyre: "Street tyres",
+    get onlyTyre() {
+      return t("game.tyres.street");
+    },
   },
   "mtr-496r": {
     id: "mtr-496r",
@@ -191,7 +194,9 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     rigConfig: VW_SCIROCCO_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
-    onlyTyre: "Street tyres",
+    get onlyTyre() {
+      return t("game.tyres.street");
+    },
   },
   // NPanic's Chaparrals: each one's only body is its ported GLB, which brings its own cameras
   "chaparral-2d": {

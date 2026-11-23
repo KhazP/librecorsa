@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import { Button, Sheet } from "@/components/ui";
 import { Icon } from "@/components/ui/icons/Icon";
 import { useFocusNav } from "./useFocusNav";
@@ -25,28 +26,6 @@ export interface GpuLostNoticeProps {
   onReloadPage: () => void;
 }
 
-const COPY: Record<GpuNoticeKind, { title: string; body: (canLower: boolean) => string }> = {
-  lost: {
-    title: "Your graphics driver stopped responding",
-    body: (canLower) =>
-      canLower
-        ? "The game is paused. Switching to Low graphics usually fixes it."
-        : "The game is paused. If it keeps happening, check that hardware acceleration is on in your browser settings.",
-  },
-  background: {
-    title: "The graphics were reset",
-    body: () => "That can happen while the game is in the background. The game is paused.",
-  },
-  blocked: {
-    title: "Your browser turned off 3D graphics for this page",
-    body: () => "Reload the page. If it stays blank, restart your browser.",
-  },
-  unavailable: {
-    title: "3D graphics are off in your browser",
-    body: () => "Turn on hardware acceleration in your browser settings, then reload the page.",
-  },
-};
-
 /**
  * Over everything when the picture is gone: what happened in a line, and the way back. Every way back loads the
  * circuit on a new context and lands on the title menu, so there is no separate menu button. Nothing dismisses it
@@ -56,7 +35,13 @@ export function GpuLostNotice({ kind, canLower, onLower, onRetry, onReloadPage }
   const sheetRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const bodyId = useId();
-  const copy = COPY[kind];
+  const tx = useTranslations("menu.gpuLost");
+  const copy = {
+    lost: { title: tx("lostTitle"), body: canLower ? tx("lostBodyLower") : tx("lostBody") },
+    background: { title: tx("backgroundTitle"), body: tx("backgroundBody") },
+    blocked: { title: tx("blockedTitle"), body: tx("blockedBody") },
+    unavailable: { title: tx("unavailableTitle"), body: tx("unavailableBody") },
+  }[kind];
   const lower = kind === "lost" && canLower;
 
   useFocusNav(sheetRef, { enabled: true, keyboardBack: false, autoFocus: false });
@@ -97,14 +82,14 @@ export function GpuLostNotice({ kind, canLower, onLower, onRetry, onReloadPage }
                 {copy.title}
               </h2>
               <p id={bodyId} className="lc-body m-0">
-                {copy.body(canLower)}
+                {copy.body}
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2.5">
             {kind === "blocked" || kind === "unavailable" ? (
               <Button variant="primary" size="md" icon={<Icon name="refresh" />} onClick={onReloadPage} data-nav-default="">
-                Reload page
+                {tx("reloadPage")}
               </Button>
             ) : (
               <>
@@ -115,11 +100,11 @@ export function GpuLostNotice({ kind, canLower, onLower, onRetry, onReloadPage }
                   onClick={onRetry}
                   data-nav-default={lower ? undefined : ""}
                 >
-                  Try again
+                  {tx("retry")}
                 </Button>
                 {lower ? (
                   <Button variant="primary" size="md" icon={<Icon name="graphics" />} onClick={onLower} data-nav-default="">
-                    Switch to Low and reload
+                    {tx("lower")}
                   </Button>
                 ) : null}
               </>

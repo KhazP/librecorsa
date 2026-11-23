@@ -8,5 +8,5 @@ export default function SiteError({ error }: { error: Error & { digest?: string 
   useEffect(() => {
     console.error(error);
   }, [error]);
-  return <SiteNotice title="Something went wrong">This page stopped with an error.</SiteNotice>;
+  return <SiteNotice notice="error" />;
 }

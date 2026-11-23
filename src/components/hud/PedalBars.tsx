@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CarTelemetry } from "@/types/f1";
 import { HUD_BRAKE, HUD_CAUTION, HUD_INFO, HUD_LBL, HUD_LOSS, HUD_THROTTLE, aidsActive } from "./hud-format";
 
@@ -40,6 +41,8 @@ export function pedalLayers(t: CarTelemetry) {
  */
 const Bar: React.FC<{
   label: string;
+  /** The word under the bar while the force feedback clips */
+  clipLabel?: string;
   demand: number;
   output?: number;
   color: string;
@@ -49,7 +52,7 @@ const Bar: React.FC<{
   h: number;
   w: number;
   showLabel: boolean;
-}> = ({ label, demand, output = demand, color, cutColor, active = false, clip = false, h, w, showLabel }) => {
+}> = ({ label, clipLabel, demand, output = demand, color, cutColor, active = false, clip = false, h, w, showLabel }) => {
   const cut = Math.max(0, demand - output);
   return (
     <span className="flex flex-col items-center gap-1">
@@ -77,7 +80,7 @@ const Bar: React.FC<{
       </span>
       {showLabel ? (
         <span className={`${HUD_LBL} tracking-[0.06em]`} style={active ? { color: cutColor } : clip ? { color: HUD_LOSS } : undefined}>
-          {clip ? "Clip" : label}
+          {clip ? clipLabel : label}
         </span>
       ) : null}
     </span>
@@ -101,18 +104,20 @@ export const PedalBars: React.FC<{
   const h = full ? 64 : 34;
   const w = full ? 12 : 7;
   const hasFfb = showFfb && t.ffbTorqueNorm !== undefined;
+  const tx = useTranslations("hud.pedalBars");
+  const L = useMemo(() => ({ clutch: tx("clutch"), clip: tx("clip"), region: tx("region"), steering: tx("steering") }), [tx]);
   return (
-    <div className={`flex flex-col gap-1.5 ${className}`} aria-label="Pedals and electronics">
+    <div className={`flex flex-col gap-1.5 ${className}`} aria-label={L.region}>
       <div className={`flex items-end ${full ? "gap-2" : "gap-1.25"}`}>
-        {showClutch ? <Bar label="CLU" demand={p.clutch} color={CLUTCH_COLOR} h={h} w={w} showLabel={full} /> : null}
+        {showClutch ? <Bar label={L.clutch} demand={p.clutch} color={CLUTCH_COLOR} h={h} w={w} showLabel={full} /> : null}
         <Bar label="ABS" demand={p.brake} output={p.brakeOut} color={HUD_BRAKE} cutColor={ABS_COLOR} active={p.absActive} h={h} w={w} showLabel={full} />
         <Bar label="TC" demand={p.throttle} output={p.throttleOut} color={HUD_THROTTLE} cutColor={TC_COLOR} active={p.tcActive} h={h} w={w} showLabel={full} />
         {hasFfb ? (
-          <Bar label="FFB" demand={p.ffb} color={p.ffbClip ? HUD_LOSS : "var(--color-lc-fog)"} clip={p.ffbClip} h={h} w={w} showLabel={full} />
+          <Bar label="FFB" clipLabel={L.clip} demand={p.ffb} color={p.ffbClip ? HUD_LOSS : "var(--color-lc-fog)"} clip={p.ffbClip} h={h} w={w} showLabel={full} />
         ) : null}
       </div>
       {full ? (
-        <span className="relative h-1.25 w-full overflow-hidden rounded-full bg-white/7" aria-label="Steering">
+        <span className="relative h-1.25 w-full overflow-hidden rounded-full bg-white/7" aria-label={L.steering}>
           <span className="absolute inset-y-0 left-1/2 w-px bg-lc-chalk/40" />
           <span
             className="absolute inset-y-0 rounded-full"

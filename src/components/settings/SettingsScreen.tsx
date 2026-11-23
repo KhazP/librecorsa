@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import {
   adjacentTab,
   AdvancedPresenceProvider,
@@ -20,6 +21,7 @@ import { useKeyLayout } from "@/lib/input/use-key-layout";
 import { focusables, scrollPast, tabStops, useFocusNav, useMoveHandler } from "@/components/menu/useFocusNav";
 import { isMenuNavSuspended } from "@/components/menu/useMenuNav";
 import { useInputMode } from "@/components/menu/input-mode";
+import { t } from "@/i18n/runtime";
 import { SettingsEnvProvider, type SettingsEnv } from "./env";
 import { AdvancedOnly } from "./fields";
 import { AssistsTab, SteeringHelpTab } from "./panes/DrivingPane";
@@ -46,49 +48,67 @@ interface CategoryDef {
   tabs: readonly TabDef[];
 }
 
-/** The six categories of settings-tree.md (Tree A), each with its tabs; a category of one page has one tab, not shown */
+/**
+ * The six categories of settings-tree.md (Tree A), each with its tabs; a category of one page has one tab, not shown.
+ * Names are getters, read in the current language each time the screen draws.
+ */
 const CATEGORIES: readonly CategoryDef[] = [
   {
     id: "driving",
-    label: "Driving",
+    get label() { return t("settings.screen.categories.driving"); },
     icon: "assists",
     tabs: [
-      { id: "assists", label: "Assists", render: () => <AssistsTab /> },
-      { id: "steering", label: "Steering help", advancedOnly: "Steering help is in Advanced", render: () => <SteeringHelpTab /> },
+      { id: "assists", get label() { return t("settings.screen.tabs.driving.assists"); }, render: () => <AssistsTab /> },
+      {
+        id: "steering",
+        get label() { return t("settings.screen.tabs.driving.steering"); },
+        get advancedOnly() { return t("settings.screen.steeringInAdvanced"); },
+        render: () => <SteeringHelpTab />,
+      },
     ],
   },
   {
     id: "controls",
-    label: "Controls",
+    get label() { return t("settings.screen.categories.controls"); },
     icon: "controls",
     tabs: [
-      { id: "device", label: "Device", render: () => <DeviceTab /> },
-      { id: "keyboard", label: "Keyboard", render: () => <KeyboardTab /> },
-      { id: "controller", label: "Controller", render: () => <ControllerTab /> },
-      { id: "wheel", label: "Wheel", render: () => <WheelTab /> },
-      { id: "touch", label: "Touch", render: () => <TouchTab /> },
+      { id: "device", get label() { return t("settings.screen.tabs.controls.device"); }, render: () => <DeviceTab /> },
+      { id: "keyboard", get label() { return t("settings.screen.tabs.controls.keyboard"); }, render: () => <KeyboardTab /> },
+      { id: "controller", get label() { return t("settings.screen.tabs.controls.controller"); }, render: () => <ControllerTab /> },
+      { id: "wheel", get label() { return t("settings.screen.tabs.controls.wheel"); }, render: () => <WheelTab /> },
+      { id: "touch", get label() { return t("settings.screen.tabs.controls.touch"); }, render: () => <TouchTab /> },
     ],
   },
-  { id: "ffb", label: "Force feedback", icon: "forceFeedback", tabs: [{ id: "main", label: "Force feedback", render: () => <ForceFeedbackSetup first /> }] },
+  {
+    id: "ffb",
+    get label() { return t("settings.screen.categories.ffb"); },
+    icon: "forceFeedback",
+    tabs: [{ id: "main", get label() { return t("settings.screen.tabs.ffb.main"); }, render: () => <ForceFeedbackSetup first /> }],
+  },
   {
     id: "display",
-    label: "Display",
+    get label() { return t("settings.screen.categories.display"); },
     icon: "display",
     tabs: [
-      { id: "graphics", label: "Graphics", render: () => <GraphicsTab /> },
-      { id: "hud", label: "HUD", render: () => <HudTab /> },
-      { id: "camera", label: "Camera", render: () => <CameraTab /> },
-      { id: "interface", label: "Interface", render: () => <InterfaceTab /> },
+      { id: "graphics", get label() { return t("settings.screen.tabs.display.graphics"); }, render: () => <GraphicsTab /> },
+      { id: "hud", get label() { return t("settings.screen.tabs.display.hud"); }, render: () => <HudTab /> },
+      { id: "camera", get label() { return t("settings.screen.tabs.display.camera"); }, render: () => <CameraTab /> },
+      { id: "interface", get label() { return t("settings.screen.tabs.display.interface"); }, render: () => <InterfaceTab /> },
     ],
   },
-  { id: "audio", label: "Audio", icon: "audio", tabs: [{ id: "main", label: "Audio", render: () => <AudioPane /> }] },
+  {
+    id: "audio",
+    get label() { return t("settings.screen.categories.audio"); },
+    icon: "audio",
+    tabs: [{ id: "main", get label() { return t("settings.screen.tabs.audio.main"); }, render: () => <AudioPane /> }],
+  },
   {
     id: "profile",
-    label: "Profile and data",
+    get label() { return t("settings.screen.categories.profile"); },
     icon: "profile",
     tabs: [
-      { id: "driver", label: "Driver", render: () => <DriverTab /> },
-      { id: "data", label: "Data", render: () => <DataTab /> },
+      { id: "driver", get label() { return t("settings.screen.tabs.profile.driver"); }, render: () => <DriverTab /> },
+      { id: "data", get label() { return t("settings.screen.tabs.profile.data"); }, render: () => <DataTab /> },
     ],
   },
 ];
@@ -117,6 +137,8 @@ export interface SettingsScreenProps {
 export function SettingsScreen({ env, initialCategory = "driving", initialTab, onClose }: SettingsScreenProps) {
   // The Q / E and Y caps name physical keys as printed on this keyboard
   useKeyLayout();
+  // Also what draws the screen again in a new language (the category and tab names are read from the messages)
+  const tx = useTranslations("settings.screen");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const paneId = useId();
   const [category, setCategory] = useState<SettingsCategory>(initialCategory);
@@ -151,7 +173,7 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
       env.update((s) => (s.ui.detail === next ? s : { ...s, ui: { ...s.ui, detail: next } }));
       // Nothing on this page changes with the switch: say so, or it looks broken
       if (noticeRef.current !== null) dismissToast(noticeRef.current);
-      noticeRef.current = hasAdvancedRef.current ? null : showToast("No advanced settings on this page");
+      noticeRef.current = hasAdvancedRef.current ? null : showToast(tx("noAdvancedHere"));
       requestAnimationFrame(() => {
         // A row that Simple hides took the cursor with it: back onto the pane's first row
         if (!rootRef.current?.contains(document.activeElement)) enterPaneRef.current();
@@ -165,7 +187,7 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
         row.scrollIntoView({ block: "center", behavior: calm ? "auto" : "smooth" });
       });
     },
-    [env, showToast, dismissToast],
+    [env, showToast, dismissToast, tx],
   );
   const toggleDetail = () => setDetail(detail === "simple" ? "advanced" : "simple");
 
@@ -345,12 +367,12 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
   }, [env.settings]);
 
   const prompts: Prompt[] = [
-    { action: "move", label: "Move" },
-    { action: "adjust", label: "Change" },
-    ...(hasTabs ? [{ action: "tabs" as const, label: "Tabs" }] : []),
-    ...(rowResettable ? [{ action: "select" as const, label: "Reset row", key: "Delete", pad: "x" as const }] : []),
-    { action: "select", label: detail === "simple" ? "Show advanced" : "Show simple", key: "Y", pad: "y" },
-    { action: "back", label: "Back" },
+    { action: "move", label: tx("prompts.move") },
+    { action: "adjust", label: tx("prompts.change") },
+    ...(hasTabs ? [{ action: "tabs" as const, label: tx("prompts.tabs") }] : []),
+    ...(rowResettable ? [{ action: "select" as const, label: tx("prompts.resetRow"), key: "Delete", pad: "x" as const }] : []),
+    { action: "select", label: detail === "simple" ? tx("prompts.showAdvanced") : tx("prompts.showSimple"), key: "Y", pad: "y" },
+    { action: "back", label: tx("prompts.back") },
   ];
 
   const advancedOnly = detail === "simple" && tab.advancedOnly;
@@ -360,7 +382,7 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
       ref={rootRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Settings"
+      aria-label={tx("dialogLabel")}
       className="lc-menu-screen lc-ui-zoom pointer-events-auto fixed inset-0 z-(--z-lc-menu) flex flex-col overflow-y-auto [scrollbar-gutter:stable_both-edges] bg-lc-void/90 pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] backdrop-blur-md sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] short:pt-[max(0.75rem,env(safe-area-inset-top))]"
     >
       <SettingsEnvProvider value={env}>
@@ -368,7 +390,7 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
           <AdvancedPresenceProvider value={reportAdvanced}>
           <div className="mx-auto flex w-full max-w-[1240px] flex-1 flex-col gap-5 short:gap-3">
             <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-lc-line pb-4 short:pb-2.5">
-              <h2 className="lc-h1 m-0">Settings</h2>
+              <h2 className="lc-h1 m-0">{tx("title")}</h2>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="flex items-center gap-2.5">
                   <span aria-hidden className="inline-flex pointer-coarse:hidden">
@@ -376,10 +398,10 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
                   </span>
                   <Segmented
                     size="sm"
-                    aria-label="How many settings to show"
+                    aria-label={tx("detailLabel")}
                     options={[
-                      { id: "simple", label: "Simple" },
-                      { id: "advanced", label: "Advanced" },
+                      { id: "simple", label: tx("simple") },
+                      { id: "advanced", label: tx("advanced") },
                     ]}
                     value={detail}
                     onChange={setDetail}
@@ -392,7 +414,7 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
                   prompt={pad ? <PadGlyph button="b" family={family} /> : <KeyCap>Esc</KeyCap>}
                   onClick={onClose}
                 >
-                  Close
+                  {tx("close")}
                 </Button>
               </div>
             </header>
@@ -406,7 +428,7 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
                 }}
               >
                 <NavList
-                  aria-label="Settings categories"
+                  aria-label={tx("categoriesLabel")}
                   navZone={NAV}
                   panelId={paneId}
                   value={category}
@@ -418,7 +440,7 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
               <div className="flex min-w-0 flex-col gap-3.5">
                 {hasTabs ? (
                   <Tabs
-                    aria-label={`${cat.label} sections`}
+                    aria-label={tx("sectionsLabel", { category: cat.label })}
                     navZone={TABS}
                     panelId={paneId}
                     tabs={cat.tabs.map((t) => ({ id: t.id, label: t.label }))}
@@ -431,14 +453,14 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
                 <section
                   id={paneId}
                   role="tabpanel"
-                  aria-label={hasTabs ? `${cat.label}: ${tab.label}` : cat.label}
+                  aria-label={hasTabs ? tx("paneLabel", { category: cat.label, tab: tab.label }) : cat.label}
                   data-nav-zone={PANE}
                   className="flex min-w-0 flex-col gap-3"
                 >
                   <div key={`${category}/${tab.id}`} className="flex min-w-0 flex-col gap-3">
                     {advancedOnly ? <AdvancedOnly what={tab.advancedOnly!} onShowAdvanced={() => setDetail("advanced")} /> : tab.render()}
                     {detail === "simple" && !advancedOnly && advancedHere > 0 ? (
-                      <AdvancedOnly more what="More settings in Advanced" onShowAdvanced={() => setDetail("advanced")} />
+                      <AdvancedOnly more what={tx("moreInAdvanced")} onShowAdvanced={() => setDetail("advanced")} />
                     ) : null}
                   </div>
                 </section>

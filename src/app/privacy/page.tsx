@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary", title: `Privacy | ${SITE_NAME}`, description: DESCRIPTION },
 };
 
-const LIST = "lc-body m-0 flex max-w-[68ch] list-disc flex-col gap-3 pl-5 text-[16px] leading-[1.6] marker:text-lc-dim";
+const LIST = "lc-body m-0 flex max-w-[68ch] list-disc flex-col gap-3 ps-5 text-[16px] leading-[1.6] marker:text-lc-dim";
 const B = "font-semibold text-lc-chalk";
 
 export default function PrivacyPage() {

@@ -1,0 +1,221 @@
+{
+  "notice": {
+    "back": "Voltar ao início",
+    "notFound": {
+      "title": "Página não encontrada",
+      "body": "Não há nada neste endereço. O link pode ser antigo ou ter sido digitado errado."
+    },
+    "error": {
+      "title": "Algo deu errado",
+      "body": "Esta página parou com um erro."
+    }
+  },
+  "hub": {
+    "tabs": {
+      "home": "Início",
+      "circuits": "Circuitos",
+      "cars": "Carros",
+      "laps": "Tempos de volta",
+      "whatsNew": "Novidades",
+      "download": "Baixar",
+      "about": "Sobre"
+    },
+    "unread": "(atualizações não lidas)",
+    "sections": "Seções",
+    "skip": "Pular para o conteúdo",
+    "heading": "LibreCorsa: simulador de corrida gratuito e de código aberto no seu navegador",
+    "drive": "Dirigir",
+    "prompts": {
+      "move": "Mover",
+      "select": "Selecionar",
+      "back": "Voltar",
+      "switchSection": "Trocar de seção",
+      "page": "Página de tempos",
+      "drive": "Dirigir"
+    },
+    "length": "{distance} {unit}, {turns, plural, one {# curva} other {# curvas}}",
+    "classYear": "{class}, {year}",
+    "footer": "{venue}, {car}",
+    "driveTile": {
+      "label": "Dirigir: {venue}, {layout}, com o {car}",
+      "title": "Dirigir",
+      "detail": "{venue}, {layout}. {car}."
+    },
+    "circuitTile": {
+      "label": "Trocar circuito: {venue}, {layout}",
+      "more": "Trocar circuito",
+      "map": "Mapa de {venue}, {layout}",
+      "onLine": "na linha ideal"
+    },
+    "carTile": {
+      "label": "Trocar carro: {car}",
+      "more": "Trocar carro"
+    },
+    "press": {
+      "title": "Imprensa e mídia",
+      "label": "Imprensa e mídia: {count, plural, other {{n} artigos e vídeos}} e o kit de imprensa",
+      "count": "{count, plural, other {{n} artigos e vídeos}}",
+      "onPlatform": "{outlet} no {platform}",
+      "more": "Cobertura e kit de imprensa"
+    },
+    "whatsNew": {
+      "intro": "Notas de atualização e mudanças recentes.",
+      "commitLog": "Histórico de commits no GitHub",
+      "empty": "Ainda não há notas de atualização.",
+      "commits": "{count, plural, one {# commit} other {# commits}}"
+    },
+    "filterOption": "{option} ({count})",
+    "clearFilters": "Limpar filtros",
+    "venueFilters": {
+      "type": {
+        "label": "Tipo",
+        "all": "Todos os tipos"
+      },
+      "country": {
+        "label": "Local",
+        "all": "Todos os locais"
+      },
+      "modder": {
+        "label": "Modder",
+        "all": "Todos os modders"
+      }
+    },
+    "carFilters": {
+      "class": {
+        "label": "Classe",
+        "all": "Todas as classes"
+      },
+      "physics": {
+        "label": "Física",
+        "all": "Qualquer física"
+      },
+      "modder": {
+        "label": "Modder",
+        "all": "Todos os modders"
+      }
+    },
+    "circuits": {
+      "filter": "Filtrar circuitos",
+      "shown": "{shown} de {total} circuitos",
+      "empty": "Nenhum circuito corresponde a estes filtros.",
+      "personalBest": "Recorde pessoal",
+      "oldPhysics": "Física antiga",
+      "carOldPhysics": "{car} · Antiga"
+    },
+    "cars": {
+      "filter": "Filtrar carros",
+      "shown": "{shown} de {total} carros",
+      "empty": "Nenhum carro corresponde a estes filtros."
+    },
+    "about": {
+      "lead": "Simulador de corrida gratuito e de código aberto no navegador.",
+      "addMod": "Adicione seu mod",
+      "addModText": "Fez um mod de carro ou pista e quer vê-lo no LibreCorsa? Escreva para mim em <mail>{email}</mail> com um link. Todo modder é creditado pelo nome no jogo.",
+      "modders": "Os modders",
+      "moddersText": "Os circuitos e carros são trabalho deles, usados com a permissão de cada um. Se gostar de algum, você pode agradecer direto ao autor.",
+      "links": {
+        "download": "Baixar apps",
+        "press": "Toda a cobertura e o kit de imprensa",
+        "docs": "Documentação",
+        "privacy": "Privacidade",
+        "support": "Pagar um café"
+      }
+    },
+    "facts": {
+      "physics": {
+        "label": "Física",
+        "text": "Simulada 500 vezes por segundo, com temperatura dos pneus, aerodinâmica ativa e potência híbrida"
+      },
+      "racing": {
+        "label": "Corridas",
+        "text": "Voltas rápidas, corridas contra a IA, salas multiplayer e tempos de volta online"
+      },
+      "controls": {
+        "label": "Controles",
+        "text": "Teclado, controle, toque ou volante com force feedback"
+      },
+      "platforms": {
+        "label": "Roda em",
+        "text": "Qualquer navegador moderno: computador, celular ou tablet"
+      },
+      "conditions": {
+        "label": "Condições",
+        "text": "Clima e hora do dia à sua escolha"
+      },
+      "price": {
+        "label": "Preço",
+        "text": "Grátis. Sem conta e sem anúncios; gorjetas são opcionais e não liberam nada"
+      }
+    }
+  },
+  "lapTimes": {
+    "loading": "Carregando tempos de volta…",
+    "offline": "Os tempos de volta estão offline no momento.",
+    "unreachable": "Ranking inacessível. Tentando de novo…"
+  },
+  "boards": {
+    "board": "Ranking",
+    "allLaps": "Todas as voltas",
+    "challenge": "Desafio semanal",
+    "hallOfFame": "Hall da Fama",
+    "lapTimesTitle": "Tempos de volta",
+    "challengeTitle": "Desafio semanal",
+    "week": "Semana",
+    "thisWeek": "Esta semana · {circuit}",
+    "pastWeek": "{dates} · {circuit}",
+    "timeLeft": "Termina em {timeLeft}",
+    "ran": "Realizado em {dates}",
+    "rules": "Regras",
+    "emptyThisWeek": "Ainda não há tempos nesta semana.",
+    "emptyPastWeek": "Nenhum tempo registrado nesta semana."
+  },
+  "layoutPicker": {
+    "chosen": "Layout de {venue}: {layout} ({index} de {count})",
+    "closed": "{venue}: {count, plural, one {# layout} other {# layouts}}",
+    "count": "{count, plural, one {# layout} other {# layouts}}",
+    "list": "Layouts de {venue}"
+  },
+  "liveryPicker": {
+    "custom": "Pintura personalizada",
+    "chosen": "Pintura do {car}: {livery} ({index} de {count})",
+    "chosenCustom": "Pintura do {car}: Pintura personalizada ({count, plural, one {# predefinição} other {# predefinições}})",
+    "closed": "{car}: {count, plural, one {# pintura} other {# pinturas}}",
+    "count": "{count, plural, one {# pintura} other {# pinturas}}",
+    "list": "Pinturas do {car}"
+  },
+  "downloads": {
+    "intro": "Apps nativos opcionais para Windows, macOS, Linux e Android. Eles abrem o librecorsa.org diretamente, então as atualizações do jogo chegam sem reinstalar.",
+    "directLink": "Link direto",
+    "platforms": "Plataformas",
+    "thisDevice": "Este dispositivo",
+    "installed": "Instalado",
+    "artifact": "{label} — {platform} ({detail})",
+    "artifactSized": "{label} — {platform} ({detail}, {size})",
+    "detailSized": "{detail}, {size}",
+    "detailPending": "{detail} (publicado na próxima tag de versão)",
+    "installCommand": "Comando de instalação para {platform}",
+    "whyInstall": "Por que instalar o app",
+    "highlights": {
+      "desktop": {
+        "label": "Desktop",
+        "text": "Pede a GPU dedicada em notebooks com várias GPUs, concede o WebHID silenciosamente para volantes e DualSense, desativa a limitação em segundo plano e verifica atualizações no GitHub Releases."
+      },
+      "android": {
+        "label": "Android",
+        "text": "Trusted Web Activity em tela cheia sem barra de endereço, gestos de borda imersivos fixos, Android Game Mode e atalhos Dirigir / Rankings na tela inicial."
+      },
+      "current": {
+        "label": "Sempre atual",
+        "text": "Todo app abre o librecorsa.org diretamente em vez de embutir pistas ou carros, então física, circuitos e multiplayer são atualizados na hora."
+      },
+      "browser": {
+        "label": "Navegador e iOS",
+        "text": "Nada para instalar se você prefere jogar direto em uma aba. No iPhone e no iPad, use Compartilhar > Adicionar à Tela de Início no Safari."
+      }
+    },
+    "buildsTitle": "Builds e assinatura",
+    "builds": "Todos os instaladores e APKs são compilados a partir do código-fonte deste repositório pelo GitHub Actions e publicados no GitHub Releases com digests SHA-256. A assinatura de código gratuita para Windows pela SignPath Foundation está sendo configurada; os builds do macOS estão sem assinatura por enquanto; o APK do Android é assinado com a chave de envio verificada por <code>{file}</code>.",
+    "allReleases": "Todas as versões no GitHub",
+    "signingPolicy": "Política de assinatura de código"
+  }
+}

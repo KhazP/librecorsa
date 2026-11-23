@@ -1,0 +1,1066 @@
+{
+  "racesCard": {
+    "region": "Carreras",
+    "description": "{car} · {laps, plural, one {# vuelta} other {# vueltas}} · cada {interval}",
+    "racing": "<big>¡Ya!</big> <small>en curso</small>",
+    "toStart": "<big>{time}</big> <small>para empezar</small>",
+    "toNextRace": "<big>{time}</big> <small>para la próxima carrera</small>",
+    "entrants": "En esta carrera",
+    "entered": "Inscrito. Empieza automáticamente.",
+    "enteredAlone": "Inscrito. Empieza automáticamente (con IA si nadie más se une).",
+    "leave": "Salir de la carrera",
+    "join": "Unirse a la próxima carrera",
+    "rules": "Auto fijo. Parrilla según la mejor vuelta del desafío semanal.",
+    "nobodyWaiting": "0 en espera",
+    "waiting": "<b>{count, plural, one {# piloto} other {# pilotos}} en espera</b>",
+    "waitingNames": "<b>{count, plural, one {# piloto} other {# pilotos}} en espera</b>: {names}",
+    "waitingNamesMore": "<b>{count, plural, one {# piloto} other {# pilotos}} en espera</b>: {names} y {more} más",
+    "topDrivers": "Mejores pilotos de la semana",
+    "winsPodiums": "{wins, plural, one {{wins} victoria} other {{wins} victorias}} · {podiums, plural, one {{podiums} podio} other {{podiums} podios}}",
+    "record": "Tú: {starts, plural, one {{starts} carrera} other {{starts} carreras}} · {wins, plural, one {{wins} victoria} other {{wins} victorias}} · {podiums, plural, one {{podiums} podio} other {{podiums} podios}}",
+    "recordBest": "Tú: {starts, plural, one {{starts} carrera} other {{starts} carreras}} · {wins, plural, one {{wins} victoria} other {{wins} victorias}} · {podiums, plural, one {{podiums} podio} other {{podiums} podios}} · mejor P{best}"
+  },
+  "seatPanel": {
+    "dialog": "Asiento y cámara, {car}",
+    "title": "Asiento y cámara",
+    "rows": {
+      "view": "Vista",
+      "viewLess": "Vista de cabina",
+      "viewMore": "Vista de tablero",
+      "fwd": "Adelante",
+      "fwdLess": "Mover atrás",
+      "fwdMore": "Mover adelante",
+      "up": "Altura",
+      "upLess": "Mover abajo",
+      "upMore": "Mover arriba",
+      "right": "Lateral",
+      "rightLess": "Mover a la izquierda",
+      "rightMore": "Mover a la derecha",
+      "tilt": "Inclinación",
+      "tiltLess": "Inclinar hacia abajo",
+      "tiltMore": "Inclinar hacia arriba",
+      "fov": "FOV",
+      "fovLess": "Más estrecho",
+      "fovMore": "Más amplio"
+    },
+    "viewGroup": "Vista",
+    "resetView": "Restablecer vista",
+    "done": "Listo",
+    "prompts": {
+      "row": "Fila",
+      "change": "Cambiar",
+      "resetRow": "Restablecer fila",
+      "resetView": "Restablecer vista",
+      "done": "Listo"
+    },
+    "savedPerCar": "Se guarda por auto"
+  },
+  "leaderboardPanel": {
+    "raceGhost": "Correr contra el fantasma de tu vuelta con {car}",
+    "raceGhostTitle": "Correr contra el fantasma",
+    "postUnreachable": "No se pudo conectar con la clasificación",
+    "applySetup": "Aplicar el setup de tu vuelta con {car}",
+    "applySetupTitle": "Aplicar setup",
+    "retry": "Reintentar",
+    "post": "Publicar",
+    "retryAria": "Reintentar publicar esta vuelta en línea",
+    "postAria": "Publicar esta vuelta en línea",
+    "retryTitle": "Reintentar",
+    "postTitle": "Publicar en línea",
+    "notPosted": "No está en la clasificación en línea: {error}",
+    "notPostedYet": "Aún no está en la clasificación en línea",
+    "driverKey": "Clave de piloto",
+    "driverKeyIntro": "Reclama tu nombre de piloto en la clasificación. Expórtala para usar el mismo nombre en otro dispositivo; mantén el archivo en privado.",
+    "exportKey": "Exportar clave",
+    "importKey": "Importar clave",
+    "importGhost": "Importar archivo de fantasma",
+    "exportBest": "Exportar mi mejor vuelta",
+    "undo": "Deshacer",
+    "dismiss": "Descartar",
+    "onlineTimes": "Tiempos en línea",
+    "circuit": "Circuito",
+    "circuitLaps": "{count, plural, one {{count} vuelta} other {{count} vueltas}}",
+    "allCars": "Todos los autos",
+    "yourBestLaps": "Tus mejores vueltas",
+    "physicsVersion": "Versión de la física",
+    "car": "Auto",
+    "carLaps": "{count, plural, one {{count} vuelta} other {{count} vueltas}}",
+    "noLapsOlder": "No hay vueltas en {circuit} ({board}).",
+    "noLaps": "No hay vueltas guardadas en {circuit}.",
+    "tableLabel": "Mejores vueltas en {circuit}",
+    "carColumn": "Auto",
+    "theoreticalBest": "Mejor teórica",
+    "potential": "{delta} s de potencial",
+    "allBestSectors": "Todos los mejores sectores en una vuelta",
+    "offline": "Clasificación sin conexión. Se muestran los tiempos locales.",
+    "disabled": "Clasificación en línea desactivada. Se muestran los tiempos locales."
+  },
+  "boardWidget": {
+    "modes": {
+      "lapEnd": "Abrir al final de la vuelta",
+      "open": "Siempre abierta",
+      "closed": "Siempre cerrada"
+    },
+    "gear": "Cuándo se abre la clasificación",
+    "modeMenu": "Cuándo se abre la clasificación",
+    "region": "Clasificación",
+    "fold": "Plegar la clasificación",
+    "foldKey": "Plegar la clasificación ({key})",
+    "open": "Abrir la clasificación: {circuit}, {place}",
+    "openNoTime": "Abrir la clasificación: {circuit}, aún sin tiempo",
+    "openKey": "Abrir la clasificación ({key}): {circuit}, {place}",
+    "openKeyNoTime": "Abrir la clasificación ({key}): {circuit}, aún sin tiempo",
+    "drivers": "{total, plural, one {{count} piloto} other {{count} pilotos}}",
+    "noTimes": "Aún no hay tiempos.",
+    "placesBetween": "Posiciones intermedias",
+    "lapsDriven": "Vueltas recorridas",
+    "noTime": "Aún sin tiempo",
+    "place": "P{rank}/{total}"
+  },
+  "multiplayerPanel": {
+    "collision": {
+      "on": "Sí",
+      "ghostLap1": "Vuelta 1 fantasma",
+      "off": "No",
+      "protected": "Protegido"
+    },
+    "collisionHint": {
+      "on": "Contacto total",
+      "ghostLap1": "Sin contacto en la vuelta inicial",
+      "off": "Los autos se atraviesan",
+      "protected": "Vuelta 1 fantasma; después un auto peligroso no puede tocar a los demás"
+    },
+    "anyCar": "Cualquier auto",
+    "startType": {
+      "standing": "Parada",
+      "rolling": "Lanzada"
+    },
+    "gridOrder": {
+      "qualifying": "Clasificación",
+      "reverse": "Invertido",
+      "random": "Aleatorio"
+    },
+    "gridOrderHint": {
+      "qualifying": "La vuelta más rápida sale primero; sin tiempos, orden de llegada",
+      "reverse": "Inverso de la clasificación (u orden de llegada)",
+      "random": "Se sortea al empezar"
+    },
+    "presetClassic": "Clásico",
+    "presetClassicHint": "Límites de pista por infracciones: cada tercera es +3 s, luego +5 s",
+    "timeScaleFixed": "Fija",
+    "qualifyingOff": "No",
+    "settings": {
+      "event": "Evento",
+      "race": "Carrera",
+      "rules": "Reglas",
+      "circuit": "Circuito",
+      "changeCircuit": "Cambiar circuito: {circuit}",
+      "change": "Cambiar",
+      "circuitHint": "Cámbialo desde el menú principal",
+      "cars": "Autos",
+      "oneCar": "Un auto para todos",
+      "classesMixed": "Todos los autos, clases mezcladas",
+      "weather": "Clima",
+      "timeOfDay": "Hora del día",
+      "timeSpeed": "Velocidad del tiempo",
+      "laps": "Vueltas",
+      "qualifying": "Clasificación",
+      "qualifyingHint": "La mejor vuelta limpia define la parrilla",
+      "gridOrder": "Orden de parrilla",
+      "setByQualifying": "Según la clasificación",
+      "start": "Salida",
+      "launch": "Arranque",
+      "rulePreset": "Reglas",
+      "trackLimits": "Límites de pista",
+      "penalties": "Sanciones",
+      "penaltiesOn": "Sí",
+      "penaltiesOff": "No",
+      "penaltiesHint": "Tiempo añadido por límites de pista y salidas en falso",
+      "damage": "Daños",
+      "collisions": "Colisiones",
+      "lockedQualifying": "Bloqueado mientras corre la clasificación",
+      "lockedRace": "Bloqueado mientras corre la carrera"
+    },
+    "net": {
+      "relayedTitle": "El tráfico te llega a través del anfitrión",
+      "relayed": "Retransmitido",
+      "measuring": "Midiendo",
+      "pingLoss": "{ping} ms · {loss}% de pérdida"
+    },
+    "drivers": {
+      "title": "Pilotos",
+      "host": "Anfitrión: {name}",
+      "qualifying": "Clasificación",
+      "noCar": "Aún sin auto",
+      "noTime": "Sin tiempo",
+      "wrongClassTitle": "No es de la clase de esta sala ({class})",
+      "wrongClass": "Clase incorrecta",
+      "ready": "Listo",
+      "notReady": "No listo",
+      "hostOn": "El anfitrión está en {circuit}",
+      "switchCircuit": "Cambiar de circuito",
+      "wrongCar": "Tu auto no es de la clase de esta sala ({class}).",
+      "wrongCarSwitch": "Tu auto no es de la clase de esta sala ({class}). Cambia de auto:",
+      "raceInProgress": "Carrera en curso",
+      "startRaceNow": "Empezar la carrera ya",
+      "startQualifying": "Iniciar clasificación de {minutes} min",
+      "startRace": "Iniciar carrera",
+      "endQualifying": "Terminar clasificación",
+      "endRaceForEveryone": "Terminar la carrera para todos",
+      "readyButton": "Listo",
+      "readyUp": "Marcarme listo",
+      "raceRunning": "Carrera en curso.",
+      "qualifyingRunning": "Clasificación en curso.",
+      "waitingForHost": "Esperando a que el anfitrión inicie.",
+      "confirmEndQualifying": "¿Terminar la clasificación?",
+      "confirmEndRace": "¿Terminar la carrera para todos?",
+      "confirmEndQualifyingButton": "Terminar clasificación",
+      "confirmEndRaceButton": "Terminar carrera",
+      "keepQualifying": "Seguir clasificando",
+      "keepRacing": "Seguir corriendo",
+      "confirmBody": "Devuelve a todos los pilotos a la sala."
+    },
+    "room": {
+      "connected": "Conectados: {count}",
+      "connecting": "Conectando",
+      "notConnected": "Sin conexión",
+      "title": "Sala privada",
+      "codeAria": "Código de sala {code}",
+      "codeCaption": "Código de sala",
+      "linkCopied": "Enlace copiado",
+      "copyLink": "Copiar enlace de invitación",
+      "share": "Compartir",
+      "host": "Crear una sala",
+      "joinAnother": "Unirse a otra sala",
+      "joinFriend": "Unirse a la sala de un amigo",
+      "codePlaceholder": "Código de sala",
+      "join": "Unirse",
+      "newRoom": "Sala nueva",
+      "codeTooShort": "Escribe al menos 3 caracteres.",
+      "joinFailed": "No se pudo unir a esa sala. Revisa el código.",
+      "shareTitle": "Carrera de LibreCorsa",
+      "shareText": "Únete a mi carrera",
+      "racingAs": "Corriendo como {name}",
+      "edit": "Editar"
+    },
+    "connect": {
+      "more": "Más formas de conectar",
+      "hide": "Ocultar",
+      "localTitle": "Pestañas locales",
+      "localIntro": "Corre contra otra pestaña de este navegador.",
+      "localConnect": "Conectar pestaña local",
+      "manualTitle": "WebRTC manual",
+      "manualIntro": "Conexión directa entre pares mediante intercambio de tokens de oferta y respuesta.",
+      "createOffer": "1. Crear oferta (anfitrión)",
+      "acceptOffer": "2. Aceptar oferta",
+      "acceptAnswer": "3. Aceptar respuesta (anfitrión)",
+      "offerFailed": "Falló la creación de la oferta.",
+      "badOffer": "Token de oferta no válido.",
+      "badAnswer": "Token de respuesta no válido.",
+      "remoteToken": "Token remoto",
+      "pasteToken": "Pegar token",
+      "answerAccepted": "Respuesta aceptada. Conectando…",
+      "yourToken": "Tu token",
+      "copied": "Copiado",
+      "copy": "Copiar",
+      "reset": "Restablecer",
+      "turnTitle": "Relay TURN propio",
+      "turnIntro": "Servidor relay opcional para redes restringidas.",
+      "relayAddress": "Dirección del relay",
+      "username": "Usuario",
+      "password": "Contraseña",
+      "saved": "Guardado",
+      "save": "Guardar",
+      "clear": "Borrar",
+      "turnPrefix": "La dirección debe empezar con turn: o turns:",
+      "ownRelay": "Usando tu propio servidor relay"
+    }
+  },
+  "pauseMenu": {
+    "tabs": {
+      "label": "Secciones",
+      "session": "Sesión",
+      "hud": "HUD",
+      "conditions": "Condiciones",
+      "garage": "Garaje",
+      "corners": "Curvas",
+      "multiplayer": "Multijugador",
+      "lapTimes": "Tiempos de vuelta",
+      "feedback": "Comentarios"
+    },
+    "actions": {
+      "label": "Menú de pausa",
+      "resume": "Reanudar",
+      "restartRace": "Reiniciar carrera",
+      "gridStart": "Salida de parrilla",
+      "rollingStart": "Salida lanzada",
+      "flyingLap": "Vuelta lanzada",
+      "watchReplay": "Ver repetición",
+      "skipTrack": "Saltar tema",
+      "nowPlaying": "{title}, {composer}",
+      "settings": "Ajustes",
+      "mainMenu": "Menú principal"
+    },
+    "prompts": {
+      "move": "Mover",
+      "select": "Seleccionar",
+      "jumpThere": "Ir ahí",
+      "tabs": "Pestañas",
+      "page": "Página",
+      "back": "Atrás",
+      "resume": "Reanudar"
+    },
+    "header": {
+      "lap": "Vuelta {lap}",
+      "lapOf": "Vuelta {lap}/{total}",
+      "run": "Intento {lap}",
+      "position": "P{position}/{field}",
+      "online": "En línea",
+      "leavesRace": "Abandona la carrera actual.",
+      "leavesRoom": "Abandona la sala actual.",
+      "endsSession": "Termina la sesión actual."
+    },
+    "session": {
+      "title": "Sesión",
+      "autopilot": "Piloto automático",
+      "key": "Tecla {key}",
+      "camera": "Cámara",
+      "cameraView": "Vista de cámara",
+      "cycle": "Alternar: {key}",
+      "freeCamera": "Cámara libre",
+      "freeCameraHint": "Tecla {key} · Arrastra para mirar, WASD para volar, Q/E para la altura",
+      "freeCameraButton": "Cámara libre",
+      "exitFreeCamera": "Salir de cámara libre",
+      "tv": "TV de pista",
+      "tvHint": "Tecla {key} · Cámaras de transmisión junto a la pista",
+      "tvButton": "TV de pista",
+      "exitTv": "Salir de TV"
+    },
+    "hud": {
+      "title": "Diseño del HUD",
+      "settings": "Ajustes del HUD"
+    },
+    "corners": {
+      "title": "Curvas",
+      "mapLabel": "{count, plural, one {Mapa del circuito con # curva numerada} other {Mapa del circuito con # curvas numeradas}}",
+      "turn": "T{turn}",
+      "detail": "{complex} · Sector {sector}",
+      "pick": "Selecciona una curva",
+      "rowLabel": "T{turn}, curva {turn}: {name}, {complex}. Vértice {apex} {unit}, marcha {gear}",
+      "gear": "Marcha <n>{gear}</n>"
+    }
+  },
+  "lapSummary": {
+    "title": "{kind, select, run {Intento {lap}} other {Vuelta {lap}}}",
+    "open": "{kind, select, run {Intento {lap}: ver datos de sectores} other {Vuelta {lap}: ver datos de sectores}}",
+    "dismiss": "Descartar resumen de la vuelta",
+    "collapse": "Contraer resumen de la vuelta",
+    "cardLabel": "Resumen de la vuelta {lap}",
+    "invalid": "Anulada",
+    "pb": "MP",
+    "invalidWall": "Anulada: contacto con el muro",
+    "invalidLimits": "Anulada: límites de pista",
+    "autopilot": "Piloto automático: sin clasificar",
+    "personalBest": "Mejor marca personal",
+    "online": "En línea",
+    "onlineRank": "En línea: P{rank}",
+    "onlineRankOf": "En línea: P{rank} de {total}",
+    "onlineRankWeek": "En línea: P{rank}, P{week} esta semana",
+    "onlineRankOfWeek": "En línea: P{rank} de {total}, P{week} esta semana",
+    "invalidUnranked": "Anulada · sin clasificar",
+    "autopilotUnranked": "Piloto automático · sin clasificar",
+    "topSpeed": "Máx {unit}",
+    "avgSpeed": "Prom {unit}",
+    "fullThrottle": "Acelerador a fondo",
+    "braking": "Frenado",
+    "sector": "{mark, select, best {Sector {n}: mejor} pb {Sector {n}: mejor marca personal} slower {Sector {n}: más lento} other {Sector {n}}}",
+    "theoreticalBest": "Mejor teórica",
+    "posting": "Publicando",
+    "postingNow": "Publicando…",
+    "retry": "Reintentar subida",
+    "post": "Publicar en línea",
+    "queued": "En cola",
+    "close": "Cerrar",
+    "saveGhost": "Guardar archivo de fantasma",
+    "driver": "Piloto <b>{name}</b>",
+    "rename": "Renombrar",
+    "driverName": "Nombre de piloto",
+    "cancel": "Cancelar",
+    "saving": "Guardando…",
+    "saveName": "Guardar nombre",
+    "chart": {
+      "title": "Velocidad mínima por curva",
+      "turn": "T{turn}",
+      "empty": "No hay datos de curvas para esta vuelta.",
+      "bar": "T{turn} {name}: {speed} {unit}, {state, select, none {aún sin referencia} same {{delta}, igual que la mejor} faster {{delta}, más rápido que la mejor} other {{delta}, más lento que la mejor}}",
+      "faster": "Más rápido",
+      "slower": "Más lento",
+      "same": "Igual"
+    }
+  },
+  "raceResults": {
+    "dialog": "Resultado de la carrera",
+    "dsq": "DSQ",
+    "dnf": "DNF",
+    "running": "En pista",
+    "lapsDown": "{count, plural, one {+# vuelta} other {+# vueltas}}",
+    "laps": "{count, plural, one {# vuelta} other {# vueltas}}",
+    "trackLimits": "Límites de pista {count}",
+    "final": "Final",
+    "provisional": "Provisional",
+    "table": "Clasificación completa",
+    "colPos": "Pos",
+    "colGainedTitle": "Posiciones ganadas o perdidas desde la parrilla",
+    "colGained": "Posiciones ganadas",
+    "colDriver": "Piloto",
+    "colLaps": "Vueltas",
+    "colTime": "Tiempo / diferencia",
+    "colBest": "Mejor vuelta",
+    "penaltyTitle": "{seconds} s de sanciones de tiempo, incluidos en el tiempo",
+    "promptSelect": "Seleccionar",
+    "promptClose": "Cerrar",
+    "backToLobby": "Volver a la sala",
+    "watchReplay": "Ver repetición",
+    "restart": "Reiniciar carrera",
+    "close": "Cerrar",
+    "fastestLapIcon": "Vuelta más rápida",
+    "noChange": "Sin cambios",
+    "notKnown": "Desconocido",
+    "placesGained": "{count, plural, one {# posición ganada} other {# posiciones ganadas}}",
+    "placesLost": "{count, plural, one {# posición perdida} other {# posiciones perdidas}}",
+    "yourRace": "Tu carrera",
+    "position": "P{position}",
+    "disqualified": "Descalificado",
+    "retired": "Retirado",
+    "ofField": "de {count}",
+    "gridUnknown": "Parrilla desconocida",
+    "started": "Salida P{position}",
+    "fastestLap": "Vuelta más rápida",
+    "bestLap": "Mejor vuelta",
+    "lastRaces": {
+      "title": "Tus últimas carreras",
+      "date": "Fecha",
+      "circuit": "Circuito",
+      "finish": "Llegada",
+      "gained": "Posiciones ganadas",
+      "best": "Mejor vuelta",
+      "dnf": "DNF",
+      "position": "P{position}"
+    },
+    "joinNext": "Unirse a la próxima carrera <time>{countdown}</time>"
+  },
+  "podiumOverlay": {
+    "label": "Podio",
+    "first": "1.º",
+    "second": "2.º",
+    "third": "3.º",
+    "skip": "Saltar"
+  },
+  "qualifyingHud": {
+    "clock": "Clasificación",
+    "lastLap": "Última vuelta",
+    "badge": "Clasificación",
+    "finishIt": "Termínala",
+    "lapDeleted": "Vuelta anulada",
+    "best": "Mejor",
+    "grid": "Resultado de la clasificación",
+    "noTime": "Sin tiempo"
+  },
+  "perfReportCard": {
+    "title": "Informe de rendimiento",
+    "description": "Registro de tiempos de fotograma de la sesión.",
+    "failed": "Portapapeles no disponible. Guarda el archivo.",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "saveFile": "Guardar archivo",
+    "saved": "Guardado"
+  },
+  "qualityNotice": {
+    "lowered": "Gráficos reducidos",
+    "floor": "FPS bajos · límite de 30 fps disponible en Ajustes"
+  },
+  "multiPageMfd": {
+    "pages": {
+      "elecTag": "ELEC",
+      "elecTitle": "Electrónica",
+      "relTag": "REL",
+      "relTitle": "Relativo",
+      "tyreTag": "NEUM",
+      "tyreTitle": "Neumáticos y frenos",
+      "fuelTag": "COMB",
+      "fuelTitle": "Combustible y energía",
+      "stndTag": "POS",
+      "stndTitle": "Posiciones"
+    },
+    "panel": "MFD · {page}",
+    "pagesLabel": "Páginas del MFD",
+    "pagesHint": "D-pad izquierda o derecha, o Ins: página siguiente",
+    "open": "Abrir el MFD",
+    "fold": "Plegar el MFD",
+    "relative": {
+      "label": "Relativo",
+      "noCars": "No hay autos en pista",
+      "lapsUp": "+{count}V",
+      "lapsDown": "−{count}V",
+      "ahead": "Delante",
+      "behind": "Detrás",
+      "clear": "Libre",
+      "you": "TÚ"
+    },
+    "fuel": {
+      "battery": "Batería",
+      "ersPerLap": "ERS / vuelta",
+      "treadPerLap": "Banda / vuelta",
+      "fuel": "Combustible",
+      "lapsOfFuel": "{laps} vueltas",
+      "perLap": "Por vuelta",
+      "target": "objetivo {kg}",
+      "lift": "Levantar · ahorrar {kg} kg",
+      "fuelOk": "Combustible OK"
+    },
+    "tyres": {
+      "label": "Neumáticos y frenos"
+    },
+    "standings": {
+      "label": "Posiciones",
+      "fastestLap": "Vuelta más rápida",
+      "fastestLapShort": "VR",
+      "lead": "Líder",
+      "noLaps": "Aún sin vueltas",
+      "lapTimes": "Tiempos de vuelta"
+    },
+    "pill": {
+      "position": "P{position}/{fieldSize}",
+      "laps": "{count, plural, one {# vuelta} other {# vueltas}}"
+    }
+  },
+  "tunerMfdPanel": {
+    "categories": {
+      "bias": "BAL",
+      "diff": "DIFF",
+      "pwr": "POT"
+    },
+    "dials": {
+      "tc1": {
+        "title": "Control de tracción",
+        "low": "Más deslizamiento",
+        "high": "Más seguro"
+      },
+      "tc2": {
+        "title": "Corte TC",
+        "low": "Corte más suave",
+        "high": "Corte más fuerte"
+      },
+      "abs": {
+        "title": "ABS",
+        "low": "Más tarde",
+        "high": "Más temprano"
+      },
+      "bias": {
+        "label": "BAL",
+        "title": "Balance de frenos",
+        "low": "Hacia atrás",
+        "high": "Hacia delante"
+      },
+      "diffEntry": {
+        "label": "ENTR",
+        "title": "Diff entrada",
+        "low": "Ágil",
+        "high": "Estable"
+      },
+      "diffMid": {
+        "label": "MED",
+        "title": "Diff media",
+        "low": "Rota",
+        "high": "Bloqueado"
+      },
+      "diffExit": {
+        "label": "SAL",
+        "title": "Diff salida",
+        "low": "Menos latigazo",
+        "high": "Más empuje"
+      },
+      "engineMap": {
+        "label": "MAP",
+        "title": "Mapa del motor",
+        "low": "Más directo",
+        "high": "Más suave"
+      },
+      "ersMode": {
+        "title": "Despliegue ERS",
+        "low": "Recuperar",
+        "high": "Ataque"
+      }
+    },
+    "engineMaps": {
+      "quali": "QUALI",
+      "race": "CARRERA",
+      "smooth": "SUAVE",
+      "lean": "POBRE",
+      "wet": "LLUVIA"
+    },
+    "ersModes": {
+      "charge": "CARGA",
+      "lowSpeed": "BAJA VEL.",
+      "balanced": "EQUILIBRADO",
+      "race": "CARRERA",
+      "attack": "ATAQUE"
+    },
+    "phases": {
+      "entry": "Entrada",
+      "mid": "Medio",
+      "exit": "Salida"
+    },
+    "chips": {
+      "tc": "TC {level}/{cut}",
+      "tcOff": "TC Off",
+      "abs": "ABS {level}",
+      "absOff": "ABS Off",
+      "bias": "BF {bias}"
+    },
+    "hero": {
+      "off": "OFF",
+      "ofMax": "DE {max}",
+      "lock": "{pct}% BLOQUEO",
+      "front": "% DELANTE",
+      "map": "M{map}"
+    },
+    "live": {
+      "cut": "Corte",
+      "wheelFl": "DI",
+      "wheelFr": "DD",
+      "wheelRl": "TI",
+      "wheelRr": "TD",
+      "front": "D {bias}",
+      "rear": "T {bias}",
+      "torque": "Par",
+      "battery": "Batería"
+    },
+    "previousDial": "Dial anterior",
+    "previousDialHint": "Dial anterior (D-pad izquierda o ,)",
+    "nextDial": "Dial siguiente",
+    "nextDialHint": "Dial siguiente (D-pad derecha o .)",
+    "lower": "Bajar {dial}",
+    "lowerHint": "{hint} (D-pad abajo o -)",
+    "raise": "Subir {dial}",
+    "raiseHint": "{hint} (D-pad arriba o =)",
+    "openTuner": "Abrir el panel electrónico",
+    "foldTuner": "Plegar el panel electrónico"
+  },
+  "f12026ChannelsPanel": {
+    "region": "Canales de ingeniería",
+    "wheels": {
+      "lf": "DI",
+      "rf": "DD",
+      "lr": "TI",
+      "rr": "TD"
+    },
+    "wheelTitle": "{wheel}: relación de deslizamiento, recorrido restante hasta el tope, agarre usado",
+    "slipRatio": "%RD",
+    "aeroHeightTitle": "Altura de marcha aerodinámica",
+    "aeroHeight": "Alt aero",
+    "aeroBalanceTitle": "Balance aerodinámico (parte delantera de la carga)",
+    "aeroBalance": "Bal aero",
+    "lsdTitle": "Par de bloqueo del diferencial",
+    "lsd": "Bloq LSD",
+    "straightModeTitle": "Estado de Straight Mode y aperturas en esta sesión",
+    "drsTitle": "Estado del DRS y aperturas en esta sesión",
+    "xMode": "Modo X",
+    "drsState": {
+      "open": "Abierto",
+      "armed": "Listo",
+      "zone": "Zona",
+      "off": "Off"
+    },
+    "overtakeEarned": "ADELANT. OBTENIDO",
+    "overtakeLocked": "ADELANT. BLOQUEADO",
+    "noVerdict": "SIN VEREDICTO",
+    "zoneEarned": "{zone} OBTENIDA",
+    "zoneLocked": "{zone} BLOQUEADA",
+    "noDetection": "SIN DETECCIÓN",
+    "wall": "Muro",
+    "aidIntervening": "{aid}, interviniendo"
+  },
+  "touchControls": {
+    "steering": "Dirección",
+    "drive": "Drive",
+    "reverse": "Marcha atrás",
+    "shiftDown": "Bajar marcha",
+    "shiftUp": "Subir marcha",
+    "boost": "Boost",
+    "activeAero": "Aerodinámica activa",
+    "headlights": "Faros",
+    "brake": "Freno",
+    "throttle": "Acelerador",
+    "steerLeft": "Girar a la izquierda",
+    "steerRight": "Girar a la derecha",
+    "pause": "Pausa",
+    "camera": "Cámara",
+    "recentreTilt": "Recentrar inclinación",
+    "allowMotion": "Permitir movimiento",
+    "tapForTilt": "Toca para inclinar",
+    "tiltBlocked": "Inclinación bloqueada · Reintentar",
+    "noTiltSensor": "Sin sensor de inclinación"
+  },
+  "replayBar": {
+    "region": "Controles de repetición",
+    "transport": "Reproducción",
+    "previousFrame": "Fotograma anterior",
+    "previousFrameTitle": "Fotograma anterior ({key})",
+    "pause": "Pausar repetición",
+    "play": "Reproducir repetición",
+    "playPauseTitle": "Reproducir / pausar",
+    "playPauseTitleKey": "Reproducir / pausar ({key})",
+    "nextFrame": "Fotograma siguiente",
+    "nextFrameTitle": "Fotograma siguiente ({key})",
+    "jumpToLap": "Ir a la vuelta {lap}",
+    "lapMarker": "V{lap}",
+    "timeline": "Línea de tiempo de la repetición",
+    "timelineValue": "{elapsed} de {duration}",
+    "playbackSpeed": "Velocidad de reproducción",
+    "focusedCar": "Auto seguido",
+    "previousCar": "Auto anterior",
+    "previousCarTitle": "Auto anterior ({key})",
+    "switchCarTitle": "Cambiar auto seguido ({key})",
+    "nextCar": "Auto siguiente",
+    "nextCarTitle": "Auto siguiente ({key})",
+    "cameraAngle": "Ángulo de cámara de la repetición",
+    "cycleCamera": "Cambiar cámara de la repetición",
+    "flashbackTitle": "Flashback: seguir conduciendo desde este momento ({key}, invalida la vuelta actual)",
+    "flashback": "Flashback",
+    "exit": "Salir",
+    "hints": {
+      "freeCam": "Cámara libre · Arrastrar: mirar · WASD: volar · Q/E: altura · Rueda: velocidad · R: restablecer",
+      "playPause": "Reproducir / pausar",
+      "seek": "Saltar {seconds} s",
+      "step": "Fotograma",
+      "switchCar": "Cambiar auto",
+      "freeCamKey": "Cámara libre",
+      "flashback": "Flashback"
+    }
+  },
+  "timingPanels": {
+    "tower": {
+      "region": "Torre de tiempos",
+      "lap": "Vuelta {lap}",
+      "lapOf": "Vuelta {lap}<dim>/{total}</dim>",
+      "driver": "Piloto",
+      "gap": "Dif.",
+      "interval": "Int.",
+      "lastVsYouTitle": "Su última vuelta frente a la tuya; en tu fila, frente a tu mejor",
+      "lastVsYou": "Últ.<br></br>vs tú",
+      "fastestLap": "Vuelta más rápida",
+      "fastestLapShort": "VR",
+      "finished": "Terminó",
+      "damagedTitle": "Dañado ({percent}%)",
+      "damagedLabel": "Dañado, {percent}%",
+      "out": "Fuera",
+      "leader": "Líder",
+      "lead": "Líder",
+      "lastVsBestTitle": "Última vuelta frente a tu mejor",
+      "lastVsTheirsTitle": "Su última vuelta frente a la tuya",
+      "personalBest": "MP"
+    },
+    "lap": {
+      "region": "Vuelta",
+      "outLap": "Vuelta de salida",
+      "counter": "{kind, select, run {Intento {lap}} other {Vuelta {lap}}}",
+      "sector": "S{sector}",
+      "last": "Última",
+      "best": "Mejor",
+      "noRefLap": "Sin vuelta ref.",
+      "lastLap": "Última vuelta",
+      "bestLap": "Mejor vuelta"
+    },
+    "challenge": {
+      "region": "Desafío de esta semana",
+      "yourBest": "Tu mejor",
+      "weekFastest": "Más rápida de la semana"
+    }
+  },
+  "raceIncidentFeed": {
+    "calls": {
+      "investigation": "Investigación",
+      "penalty": "Sanción",
+      "noAction": "Sin acción",
+      "out": "Abandono",
+      "raceControl": "Dirección de carrera",
+      "yellow": "Amarilla",
+      "green": "Verde",
+      "warning": "Aviso"
+    },
+    "vsc": {
+      "tag": "VSC",
+      "ending": "Fin del VSC",
+      "slowDown": "Reduce la velocidad",
+      "slowToTarget": "Reduce al ritmo objetivo",
+      "prepareForGreen": "Prepárate para verde",
+      "noOvertaking": "No adelantar"
+    },
+    "flag": {
+      "yieldNow": "Cede el paso · Deja pasar a {code}",
+      "letThrough": "Deja pasar a {code}",
+      "doubleYellowCue": "Reduce la velocidad · no adelantar",
+      "yellowCue": "No adelantar",
+      "blue": "Azul",
+      "doubleYellow": "Doble amarilla",
+      "yellow": "Amarilla"
+    }
+  },
+  "raceControlBanner": {
+    "decisions": {
+      "warning": "Aviso",
+      "finalWarning": "Último aviso",
+      "penalty": "Sanción",
+      "disqualified": "Descalificado",
+      "lapInvalid": "Vuelta anulada",
+      "cleared": "Resuelto",
+      "noAdvantage": "Sin acción"
+    },
+    "warningsMeter": "{count} de {total} avisos",
+    "pointsMeter": "{points} de {allowed} puntos de límites de pista",
+    "giveBack": {
+      "toCar": "Devuelve la posición a {code}",
+      "dropTo": "Baja a P{position}",
+      "time": "Devuelve {seconds} s",
+      "slowDown": "Reduce la velocidad",
+      "underYellow": "Adelantamiento en amarilla",
+      "illegalOvertake": "Adelantamiento ilegal",
+      "trackLimits": "Límites de pista"
+    },
+    "offTrack": {
+      "trackLimits": "Límites de pista",
+      "offTrack": "Fuera de pista",
+      "underReview": "En revisión"
+    }
+  },
+  "startLights": {
+    "startsIn": "La carrera empieza en <n>{seconds}</n>",
+    "lightsLabel": "Luces de salida: {lit} de {total} encendidas",
+    "rollingStart": "Salida lanzada",
+    "holdPaceSkin": "Mantén el ritmo · <n>{pace}</n> {unit} hasta la meta",
+    "holdPace": "Mantén <n>{pace}</n> {unit} hasta la línea",
+    "greenFlag": "Bandera verde",
+    "lightsOut": "Semáforo apagado",
+    "chequeredFlag": "Bandera a cuadros"
+  },
+  "launchCue": {
+    "stalledLabel": "Motor apagado: mantén {control} o pon punto muerto para volver a arrancar",
+    "clutch": "embrague",
+    "stalled": "Motor apagado · mantén <control></control> o N",
+    "jumpStart": "Salida en falso · +{seconds} s",
+    "manualStart": "Salida manual: {clutch, select, held {embrague pisado} other {pisa el embrague}}, {revs, select, up {revoluciones altas} other {sube las revoluciones}}",
+    "holdNamed": "Mantén {control}",
+    "holdClutch": "Mantén el embrague",
+    "revsUp": "Sube revoluciones"
+  },
+  "speedCluster": {
+    "region": "Panel de velocidad",
+    "minimalRegion": "Velocidad y marcha",
+    "shiftLights": "Luces de cambio: {lit} de {total}",
+    "gearLabel": "Marcha {gear}",
+    "gear": "Marcha",
+    "shift": "Cambia",
+    "aeroToggle": "{label}: alternar",
+    "drsTitle": "DRS ({key}): alerón trasero, en zona DRS; en carrera solo a menos de 1 s del auto de delante en el punto de detección, desde la vuelta 3",
+    "straightModeTitle": "Straight Mode ({key}): ambos alerones abiertos en las rectas; si lo pulsas justo antes de una, se abren al empezar",
+    "overtakeLockedTitle": "Modo de adelantamiento ({keys}): se obtiene a menos de 1 s del auto de delante en el punto de detección, para la vuelta siguiente",
+    "overtakeTitle": "Modo de adelantamiento ({keys})",
+    "boostTitle": "Boost de anulación manual ({keys})",
+    "overtake": "Adelantar",
+    "boost": "Boost",
+    "harvest": "Recuperación",
+    "deploy": "Despliegue",
+    "ersSoc": "ERS SOC",
+    "lonG": "G long.",
+    "inputs": "Freno, acelerador, fuerza",
+    "brakeLetter": "F",
+    "brakeTitle": "Entrada de freno",
+    "throttleLetter": "A",
+    "throttleTitle": "Entrada de acelerador",
+    "forceLetter": "FF",
+    "clip": "Clip",
+    "forceTitle": "Par de dirección / force feedback (rojo = saturación)",
+    "latG": "{g} g lat",
+    "ersBattery": "Carga de la batería del ERS",
+    "rpmBand": "Banda de rpm del motor"
+  },
+  "hudFormat": {
+    "session": {
+      "qualifying": "Clasificación",
+      "timeTrial": "Contrarreloj",
+      "practice": "Práctica"
+    },
+    "cornerShort": "T{turn}",
+    "lapMark": {
+      "best": "Mejor",
+      "pb": "Mejor marca personal",
+      "slower": "Más lenta"
+    }
+  },
+  "thirdPartyData": {
+    "you": "Tú",
+    "headlight": {
+      "flash": "Ráfaga",
+      "on": "Encendidas",
+      "off": "Apagadas"
+    },
+    "surface": {
+      "dry": "Seca",
+      "damp": "Húmeda",
+      "wet": "Mojada",
+      "flooded": "Inundada"
+    }
+  },
+  "aeroLabel": {
+    "readout": {
+      "noDrs": "SIN DRS",
+      "drsOpen": "DRS ABIERTO",
+      "drsQueued": "DRS EN ESPERA",
+      "drsArmed": "DRS LISTO",
+      "xMode": "MODO X",
+      "xQueued": "X EN ESPERA",
+      "xArmed": "X LISTO",
+      "zMode": "MODO Z"
+    },
+    "notice": {
+      "drsEnabled": "DRS habilitado",
+      "drsNotEnabled": "DRS no habilitado",
+      "drsQueued": "En espera",
+      "xModeBadge": "MODO X",
+      "straightMode": "Straight Mode",
+      "xModeQueued": "En espera",
+      "overtakeBadge": "ADELANTAR",
+      "overtakeEnabled": "Habilitado",
+      "overtakeLocked": "Bloqueado"
+    }
+  },
+  "tyreBrakeWidget": {
+    "corner": {
+      "fl": "DI",
+      "fr": "DD",
+      "rl": "TI",
+      "rr": "TD"
+    },
+    "tread": {
+      "inner": "I",
+      "middle": "C",
+      "outer": "E",
+      "title": "Exterior, centro, interior"
+    },
+    "condition": {
+      "grain": "Graining",
+      "grainTitle": "Graining: la superficie de la banda se desgarra (demasiado fría por dentro al deslizar)",
+      "blister": "Ampollas",
+      "blisterTitle": "Ampollas: el núcleo se sobrecalentó",
+      "flat": "Plano",
+      "flatTitle": "Plano por bloqueo: vibración y menos agarre",
+      "dirt": "Suciedad",
+      "dirtTitle": "Suciedad / restos de goma fuera de la línea: se limpia en unas curvas"
+    },
+    "conditionTitle": "{title} ({level}%)",
+    "brakeTitle": "Disco de freno {disc}{hasCore, select, yes { · núcleo {core}} other {}}{hasBite, select, yes { · mordida de pastillas {bite}%} other {}}",
+    "cardTitle": "{corner} banda {temps} (vista desde atrás)",
+    "treadLife": "Vida de la banda",
+    "pressureTitle": "Presión ({unit})",
+    "windowTitle": "Ventana de trabajo de la banda",
+    "window": "Ventana",
+    "miniTitle": "{corner}: banda {temps} · {pressure} · freno {brake}{hasCondition, select, yes { · {condition}} other {}}"
+  },
+  "tyrePanel": {
+    "region": "Neumáticos"
+  },
+  "weatherBadge": {
+    "region": "Clima",
+    "air": "Aire",
+    "track": "Pista",
+    "rain": "Lluvia",
+    "heavyRain": "Lluvia fuerte",
+    "wind": "Viento",
+    "headlightsForcedOn": "Luces forzadas: encendidas",
+    "headlightsForcedOff": "Luces forzadas: apagadas",
+    "headlightsOn": "Luces encendidas",
+    "headlightsTitleManualOn": "Luces encendidas (manual)",
+    "headlightsTitleManualOff": "Luces apagadas (manual)",
+    "headlightsTitleAuto": "Luces encendidas (automático)",
+    "chipFlash": "RÁFAGA",
+    "chipOn": "ENC.",
+    "chipOff": "APAG."
+  },
+  "damageWidget": {
+    "label": "Daños",
+    "out": "Fuera",
+    "puncture": "Pinchazo",
+    "title": "Delante {front} · detrás {rear} · izquierda {left} · derecha {right}",
+    "titlePunctured": "Delante {front} · detrás {rear} · izquierda {left} · derecha {right} · pinchazo",
+    "part": {
+      "frontWing": "Alerón delantero",
+      "rearWing": "Alerón trasero",
+      "floor": "Fondo plano",
+      "suspension": "Suspensión"
+    }
+  },
+  "inputTrace": {
+    "throttle": "Ace",
+    "brake": "Fre",
+    "steering": "Dir",
+    "steeringTitle": "Ruedas en trazo continuo, tu entrada discontinua",
+    "trace": "Traza de acelerador, freno y dirección: la dirección discontinua es tu entrada, la continua el ángulo de las ruedas",
+    "region": "Entradas"
+  },
+  "pedalBars": {
+    "region": "Pedales y ayudas electrónicas",
+    "clutch": "EMB",
+    "clip": "Clip",
+    "steering": "Dirección"
+  },
+  "splitGaps": {
+    "region": "Diferencias parciales",
+    "ahead": "Delante",
+    "behind": "Detrás",
+    "carAhead": "Auto de delante {driver}: {gap} segundos",
+    "carBehind": "Auto de detrás {driver}: {gap} segundos",
+    "goingYourWay": "Va a tu favor",
+    "goingAgainstYou": "Va en tu contra",
+    "steady": "Estable"
+  },
+  "deltaBar": {
+    "label": "Delta a la vuelta de referencia",
+    "valueText": "{delta} segundos, {trend, select, gaining {ganando} losing {perdiendo} other {estable}}",
+    "noReference": "Sin vuelta de referencia"
+  },
+  "ffbMeter": {
+    "title": "Force feedback",
+    "clipping": "Saturación",
+    "inRange": "En rango",
+    "peak": "Máx. <v>{value}%</v>",
+    "setCar": "Fijar este auto en {value}%"
+  },
+  "proximityRadar": {
+    "carsClose": "{count, plural, one {# auto cerca} other {# autos cerca}}{side, select, left {, uno al lado a la izquierda} right {, uno al lado a la derecha} both {, uno a cada lado} other {}}",
+    "clear": "Radar despejado"
+  },
+  "cameraToast": {
+    "freeHintTouch": "Arrastra para mirar · Usa el menú de pausa o de cámara de repetición para salir",
+    "freeHintKeys": "Arrastrar: mirar · WASD: volar · Q/E: altura · Rueda: velocidad · R: restablecer · {key}: salir"
+  },
+  "ffbPairPrompt": {
+    "region": "Force feedback",
+    "text": "Vincular volante para force feedback",
+    "connect": "Conectar",
+    "dismiss": "Descartar"
+  },
+  "dualSensePairPrompt": {
+    "text": "<b>DualSense detectado</b> · vincúlalo para gatillos y háptica",
+    "pair": "Vincular",
+    "dismiss": "Descartar"
+  },
+  "overheadNameplates": {
+    "fastestLap": "VR",
+    "rank": "P{rank}"
+  },
+  "hiddenNote": {
+    "off": "HUD oculto",
+    "offKey": "HUD oculto · {key} para mostrar"
+  }
+}

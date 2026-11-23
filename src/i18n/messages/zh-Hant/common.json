@@ -1,0 +1,139 @@
+{
+  "newTab": "（於新分頁開啟）",
+  "confirm": {
+    "cancel": "取消",
+    "busy": "請等待操作完成"
+  },
+  "toggle": {
+    "on": "開啟",
+    "off": "關閉"
+  },
+  "disclosure": {
+    "more": "更多",
+    "less": "收起"
+  },
+  "select": {
+    "placeholder": "請選擇",
+    "labelValue": "{label}：{value}"
+  },
+  "settingRow": {
+    "changed": "已變更自預設值",
+    "resetNamed": "將「{setting}」重設為預設值",
+    "resetThis": "將此設定重設為預設值",
+    "reset": "重設為預設值"
+  },
+  "mediaTile": {
+    "chosen": "已選擇"
+  },
+  "keys": {
+    "up": "上方向鍵",
+    "down": "下方向鍵",
+    "left": "左方向鍵",
+    "right": "右方向鍵",
+    "wheelButton": "按鍵 {button}"
+  },
+  "pad": {
+    "namedButton": "{name} 按鈕",
+    "shapeButton": "{shape, select, cross {交叉按鈕} circle {圓圈按鈕} square {方塊按鈕} other {三角按鈕}}",
+    "faceButton": "{position, select, bottom {下方動作按鈕} right {右側動作按鈕} left {左側動作按鈕} other {上方動作按鈕}}",
+    "dpad": "方向鍵（D-pad）",
+    "dpadDirection": "{direction, select, up {方向鍵上} down {方向鍵下} left {方向鍵左} right {方向鍵右} horizontal {方向鍵左右} other {方向鍵上下}}",
+    "shoulder": "{button, select, lb {左肩鍵} rb {右肩鍵} lt {左扳機鍵} other {右扳機鍵}}（{name}）",
+    "touchpad": "觸控板",
+    "stick": "{side, select, left {左類比搖桿} other {右類比搖桿}}",
+    "stickPress": "{side, select, left {按下左類比搖桿} other {按下右類比搖桿}}（{name}）",
+    "stickDirection": "{side, select, left {左類比搖桿} other {右類比搖桿}}{direction, select, up {向上} down {向下} left {向左} right {向右} horizontal {左右} other {上下}}"
+  },
+  "badges": {
+    "you": "你",
+    "position": "第 {position} 名",
+    "qualityDescription": "：{description}"
+  },
+  "delta": {
+    "spoken": "{trend, select, level {持平} faster {快 {seconds} 秒} other {慢 {seconds} 秒}}{best, select, yes {，最佳} other {}}",
+    "best": "最佳"
+  },
+  "penalty": {
+    "time": "+{seconds} s",
+    "driveThrough": "通過維修區處罰",
+    "warning": "警告",
+    "trackLimits": "賽道邊界 {strikes}/{of}",
+    "disqualified": "取消資格"
+  },
+  "flags": {
+    "green": "綠旗",
+    "yellow": "黃旗",
+    "doubleYellow": "雙黃旗",
+    "blue": "藍旗",
+    "red": "紅旗",
+    "white": "白旗",
+    "black": "黑旗",
+    "blackWhite": "黑白旗",
+    "chequered": "方格旗"
+  },
+  "compounds": {
+    "name": {
+      "soft": "軟胎",
+      "medium": "中性胎",
+      "hard": "硬胎",
+      "intermediate": "半雨胎",
+      "wet": "全雨胎"
+    },
+    "short": {
+      "soft": "軟胎",
+      "medium": "中性",
+      "hard": "硬胎",
+      "intermediate": "半雨",
+      "wet": "全雨"
+    },
+    "long": {
+      "soft": "軟胎",
+      "medium": "中性胎",
+      "hard": "硬胎",
+      "intermediate": "半雨胎（濕地賽道）",
+      "wet": "全雨胎（積水路面）"
+    },
+    "tyres": {
+      "soft": "軟胎",
+      "medium": "中性胎",
+      "hard": "硬胎",
+      "intermediate": "半雨胎",
+      "wet": "全雨胎"
+    }
+  },
+  "carClass": {
+    "openWheel": "方程式",
+    "gt3": "GT3",
+    "proto": "原型車",
+    "classic": "經典",
+    "road": "市售車"
+  },
+  "session": {
+    "practice": "練習賽",
+    "race": "正賽",
+    "timeAttack": "計時賽",
+    "hillClimb": "爬山賽",
+    "online": "線上",
+    "offline": "離線",
+    "host": "房主"
+  },
+  "state": {
+    "new": "新增",
+    "beta": "測試版",
+    "wip": "開發中",
+    "experimental": "實驗性",
+    "downloaded": "已下載",
+    "downloading": "下載中",
+    "updateAvailable": "有可用更新",
+    "inUse": "使用中"
+  },
+  "surface": {
+    "dry": "乾地",
+    "damp": "微濕",
+    "wet": "濕地",
+    "flooded": "積水"
+  },
+  "dialog": {
+    "close": "關閉"
+  }
+}

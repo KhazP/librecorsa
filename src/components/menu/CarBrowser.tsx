@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import type { LiveryConfig } from "@/types/f1";
 import { LIVERIES } from "@/lib/track-data";
 import {
@@ -166,6 +167,7 @@ export const CarBrowser: React.FC<{
   lockedReason?: string;
 }> = ({ carId, onChangeCar, selectedLivery, onChangeLivery, library, onClose, toolbar, lockedReason }) => {
   const storeBuild = useStoreBuild();
+  const tx = useTranslations("menu.carBrowser");
   const classes = carClassesInUse();
   const [hoveredLivery, setHoveredLivery] = useState<{ carId: CarId; id: string } | null>(null);
   const [hoveredSkin, setHoveredSkin] = useState<{ carId: CarId; id: string } | null>(null);
@@ -182,16 +184,24 @@ export const CarBrowser: React.FC<{
 
   const filterGroups: BrowserFilterGroup<CarDefinition>[] = [
     {
-      label: "Show",
+      id: "show",
+      label: tx("show"),
       filters: [
-        { id: "all", label: "All cars", test: () => true },
-        { id: "fav", label: "Favourites", test: (c) => favs.includes(c.id) },
-        { id: "recent", label: "Recently driven", test: (c) => recent.includes(c.id) },
+        { id: "all", label: tx("showAll"), test: () => true },
+        { id: "fav", label: tx("showFavourites"), test: (c) => favs.includes(c.id) },
+        { id: "recent", label: tx("showRecent"), test: (c) => recent.includes(c.id) },
       ],
     },
-    { label: "Class", filters: classes.map((k) => ({ id: `class:${k.id}`, label: k.title, test: (c: CarDefinition) => c.classId === k.id })) },
     {
-      label: "Physics",
+      id: "class",
+      label: tx("classFilter"),
+      anyLabel: tx("anyClass"),
+      filters: classes.map((k) => ({ id: `class:${k.id}`, label: k.title, test: (c: CarDefinition) => c.classId === k.id })),
+    },
+    {
+      id: "physics",
+      label: tx("physicsFilter"),
+      anyLabel: tx("anyPhysics"),
       filters: qualities.map((q) => ({ id: `quality:${q}`, label: CAR_QUALITY_META[q].filterLabel, test: (c: CarDefinition) => c.quality === q })),
     },
   ];
@@ -199,29 +209,30 @@ export const CarBrowser: React.FC<{
   const sorts: BrowserSort<CarDefinition>[] = [
     {
       id: "class",
-      label: "Class",
+      label: tx("sortClass"),
       groupBy: (c) => carClass(c.classId).title,
       groupOrder: classes.map((k) => k.title),
       compare: compareCarsByClassAndYear,
     },
     {
       id: "quality",
-      label: "Physics",
+      label: tx("sortPhysics"),
       groupBy: (c) => carQualityMeta(c).filterLabel,
       groupOrder: qualities.map((q) => CAR_QUALITY_META[q].filterLabel),
       compare: compareCarsByClassAndYear,
     },
-    { id: "name", label: "A to Z", heading: "A to Z", compare: byName },
+    { id: "name", label: tx("sortName"), heading: tx("headingName"), compare: byName },
+    // Offered once the ranks are read: with the online side off there is nothing to sort by
     ...(popular
-      ? [{ id: "popular", label: "Most driven", heading: `Most driven, last ${popular.days} days`, compare: (a: CarDefinition, b: CarDefinition) => popularOf(a) - popularOf(b) || compareCarsByClassAndYear(a, b) }]
+      ? [{ id: "popular", label: tx("sortPopular"), heading: tx("headingPopular", { days: popular.days }), compare: (a: CarDefinition, b: CarDefinition) => popularOf(a) - popularOf(b) || compareCarsByClassAndYear(a, b) }]
       : []),
-    { id: "recent", label: "Recently driven", heading: "Recently driven first", compare: (a, b) => recentRank(a) - recentRank(b) || compareCarsByClassAndYear(a, b) },
+    { id: "recent", label: tx("sortRecent"), heading: tx("headingRecent"), compare: (a, b) => recentRank(a) - recentRank(b) || compareCarsByClassAndYear(a, b) },
   ];
 
   return (
     <ContentBrowser<CarDefinition>
-      label="Cars"
-      noun="cars"
+      label={tx("label")}
+      kind="cars"
       items={CARS}
       idOf={(c) => c.id}
       searchText={(c) => {
@@ -229,7 +240,7 @@ export const CarBrowser: React.FC<{
         const q = carQualityMeta(c);
         return `${c.title} ${c.sub} ${c.badge} ${c.year} ${k.title} ${k.sub} ${q.badge} ${q.filterLabel} ${c.credit.author}`;
       }}
-      searchPlaceholder="Cars, classes, years"
+      searchPlaceholder={tx("searchPlaceholder")}
       filterGroups={filterGroups}
       sorts={sorts}
       initialSelectedId={carId}
@@ -251,7 +262,8 @@ export const CarBrowser: React.FC<{
       })}
       renderDetail={(c) => {
         const own = carTakesPhysicsSwitch(c.id) ? undefined : physicsLabel(c);
-        const facts = [detailFacts(c), own ? `${own} physics` : ""].filter(Boolean).join(", ");
+        const carFacts = detailFacts(c);
+        const facts = own ? (carFacts ? tx("withPhysics", { facts: carFacts, physics: own }) : tx("physicsOnly", { physics: own })) : carFacts;
         const previewLiveryId = carTakesLivery(c.id)
           ? hoveredLivery?.carId === c.id
             ? hoveredLivery.id
@@ -300,32 +312,40 @@ export const CarBrowser: React.FC<{
             {/* The credit and its source sit at the pane's foot, against the main action, when the pane has room */}
             <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
               <span className="lc-hint">
-                {c.credit.label ?? "Model by"}{" "}
-                <a
-                  href={c.credit.authorUrl ?? c.credit.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-lc-fog underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
-                >
-                  {c.credit.author}
-                </a>
-                {c.tyreCredit ? (
-                  <>
-                    , tyres by{" "}
-                    {storeBuild ? (
-                      <span className="text-lc-fog">{c.tyreCredit.author}</span>
-                    ) : (
+                {(() => {
+                  const tyreCredit = c.tyreCredit;
+                  const values = {
+                    author: c.credit.author,
+                    tyreAuthor: tyreCredit?.author ?? "",
+                    label: c.credit.label ?? "",
+                    link: (chunks: React.ReactNode) => (
                       <a
-                        href={c.tyreCredit.url}
+                        href={c.credit.authorUrl ?? c.credit.url}
                         target="_blank"
                         rel="noreferrer"
                         className="text-lc-fog underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
                       >
-                        {c.tyreCredit.author}
+                        {chunks}
                       </a>
-                    )}
-                  </>
-                ) : null}
+                    ),
+                    tyres: (chunks: React.ReactNode) =>
+                      storeBuild || !tyreCredit ? (
+                        <span className="text-lc-fog">{chunks}</span>
+                      ) : (
+                        <a
+                          href={tyreCredit.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-lc-fog underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
+                        >
+                          {chunks}
+                        </a>
+                      ),
+                  };
+                  // The credit's own words: the model's maker, or (the Liana) whoever made the physics
+                  const role = c.credit.label === undefined ? "Model" : c.credit.label === "Physics by" ? "Physics" : "Other";
+                  return tx.rich(`credit${role}${tyreCredit ? "Tyres" : ""}` as const, values);
+                })()}
               </span>
               <SourceChip source={carModelSource(c)} />
             </div>
@@ -334,11 +354,11 @@ export const CarBrowser: React.FC<{
       }}
       primaryAction={(c) =>
         c.id === carId
-          ? { label: "Current car", disabled: true, current: true, run: () => {} }
+          ? { label: tx("current"), disabled: true, current: true, run: () => {} }
           : lockedReason
             ? { label: lockedReason, disabled: true, run: () => {} }
             : {
-              label: "Choose car",
+              label: tx("choose"),
               run: () => {
                 onChangeCar(c.id);
                 onClose?.();

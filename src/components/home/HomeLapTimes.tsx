@@ -9,6 +9,7 @@
  * card; with the boards off, out of reach or no online side at all, it says the lap times are offline.
  */
 import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { t, useI18nState } from "@/i18n/runtime";
 import type { VehicleModelId } from "@/types/f1";
 import type { BoardCarTag } from "@/components/board/OnlineBoard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -54,7 +55,7 @@ function afterLoad(run: () => void): () => void {
 }
 
 const LoadingCard: React.FC = () => (
-  <div role="status" aria-label="Loading lap times…" className="flex flex-col gap-3 rounded-lc-card border border-white/7 bg-lc-carbon/80 p-4.5">
+  <div role="status" aria-label={t("home.lapTimes.loading")} className="flex flex-col gap-3 rounded-lc-card border border-white/7 bg-lc-carbon/80 p-4.5">
     <Skeleton shape="line" className="h-5 w-40" />
     <Skeleton shape="line" className="h-3 w-56" />
     <Skeleton className="mt-2 h-48 w-full rounded-lc-row" />
@@ -62,6 +63,9 @@ const LoadingCard: React.FC = () => (
 );
 
 export const HomeLapTimes: React.FC<HomeLapTimesProps> = ({ circuits, circuit, carTags, carChoices, carTitles, scrollRoot, onShown }) => {
+  // The words from the language runtime rather than the provider: the section also draws on its own
+  // (scripts/verify-home-lap-times.ts)
+  useI18nState();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [state, setState] = useState<"waiting" | "on" | "off" | "unreachable">("waiting");
   const [picked, setPicked] = useState<{ from: string; id: string } | null>(null);
@@ -115,9 +119,9 @@ export const HomeLapTimes: React.FC<HomeLapTimesProps> = ({ circuits, circuit, c
     // A timing list reads best at a list's width, not a wall's: centred under the tiles on a wide screen
     <div ref={sentinelRef} className="mx-auto min-h-px w-full max-w-[1200px]">
       {!HAS_API || state === "off" ? (
-        <EmptyState icon={<Icon name="offline" size="lg" />}>Lap times are offline right now.</EmptyState>
+        <EmptyState icon={<Icon name="offline" size="lg" />}>{t("home.lapTimes.offline")}</EmptyState>
       ) : state === "unreachable" ? (
-        <EmptyState icon={<Icon name="offline" size="lg" />}>Leaderboard unreachable. Retrying…</EmptyState>
+        <EmptyState icon={<Icon name="offline" size="lg" />}>{t("home.lapTimes.unreachable")}</EmptyState>
       ) : state === "on" ? (
         <Suspense fallback={<LoadingCard />}>
           <HomeBoards

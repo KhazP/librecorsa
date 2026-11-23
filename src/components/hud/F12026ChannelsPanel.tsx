@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import type { F12026Channels } from "@/types/f1";
 import { Badge } from "@/components/ui/Badge";
 import { ClassTag } from "@/components/ui/badges/ClassTag";
@@ -16,17 +17,20 @@ const bumpColor = (m: number) => (m < 0 ? HUD_LOSS : m < 0.002 ? HUD_CAUTION : H
 const circleColor = (f: number) => (f >= 1 ? HUD_LOSS : f >= 0.85 ? HUD_CAUTION : "var(--color-lc-fog)");
 
 /** Driver-aid lamp, lit solid caution while the aid is intervening */
-export const AidLamp: React.FC<{ label: string; active: boolean }> = ({ label, active }) => (
-  <Badge
-    tone={active ? "warn" : "neutral"}
-    variant={active ? "solid" : "soft"}
-    size="md"
-    icon={label === "ABS" ? "abs" : "tractionControl"}
-    aria-label={`${label}${active ? ", intervening" : ""}`}
-  >
-    {label}
-  </Badge>
-);
+export const AidLamp: React.FC<{ label: string; active: boolean }> = ({ label, active }) => {
+  const tx = useTranslations("hud.f12026ChannelsPanel");
+  return (
+    <Badge
+      tone={active ? "warn" : "neutral"}
+      variant={active ? "solid" : "soft"}
+      size="md"
+      icon={label === "ABS" ? "abs" : "tractionControl"}
+      aria-label={active ? tx("aidIntervening", { aid: label }) : label}
+    >
+      {label}
+    </Badge>
+  );
+};
 
 /**
  * Live 6-DOF engineering telemetry channels: per-wheel slip ratio, travel left to the bump rubber and
@@ -38,12 +42,46 @@ export const F12026ChannelsPanel: React.FC<{
   aero: AeroReadout;
   aids: { tc: boolean; abs: boolean };
 }> = ({ channels: c, aero, aids }) => {
+  const tx = useTranslations("hud.f12026ChannelsPanel");
+  // The panel redraws with every telemetry tick: its fixed words are resolved once per language
+  const lbl = useMemo(
+    () => ({
+      region: tx("region"),
+      wheels: [tx("wheels.lf"), tx("wheels.rf"), tx("wheels.lr"), tx("wheels.rr")],
+      wheelTitles: [
+        tx("wheelTitle", { wheel: tx("wheels.lf") }),
+        tx("wheelTitle", { wheel: tx("wheels.rf") }),
+        tx("wheelTitle", { wheel: tx("wheels.lr") }),
+        tx("wheelTitle", { wheel: tx("wheels.rr") }),
+      ],
+      slipRatio: tx("slipRatio"),
+      aeroHeightTitle: tx("aeroHeightTitle"),
+      aeroHeight: tx("aeroHeight"),
+      aeroBalanceTitle: tx("aeroBalanceTitle"),
+      aeroBalance: tx("aeroBalance"),
+      lsdTitle: tx("lsdTitle"),
+      lsd: tx("lsd"),
+      straightModeTitle: tx("straightModeTitle"),
+      drsTitle: tx("drsTitle"),
+      xMode: tx("xMode"),
+      open: tx("drsState.open"),
+      armed: tx("drsState.armed"),
+      zone: tx("drsState.zone"),
+      off: tx("drsState.off"),
+      overtakeEarned: tx("overtakeEarned"),
+      overtakeLocked: tx("overtakeLocked"),
+      noVerdict: tx("noVerdict"),
+      noDetection: tx("noDetection"),
+      wall: tx("wall"),
+    }),
+    [tx],
+  );
   const sr = [c.WHEEL_SR_LF, c.WHEEL_SR_RF, c.WHEEL_SR_LR, c.WHEEL_SR_RR];
   const bump = [c.BUMPSTOPUP_TRAVEL_LF, c.BUMPSTOPUP_TRAVEL_RF, c.BUMPSTOPUP_TRAVEL_LR, c.BUMPSTOPUP_TRAVEL_RR];
-  const drsState = aero.open ? "Open" : aero.armed ? "Armed" : c.drsZone ? "Zone" : "Off";
+  const drsState = aero.open ? lbl.open : aero.armed ? lbl.armed : c.drsZone ? lbl.zone : lbl.off;
 
   return (
-    <section aria-label="Engineering channels" className={`w-[320px] rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`} data-testid="f12026-channels">
+    <section aria-label={lbl.region} className={`w-[320px] rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`} data-testid="f12026-channels">
       <div className="flex items-center justify-between gap-2">
         <ClassTag
           carClass={
@@ -69,13 +107,13 @@ export const F12026ChannelsPanel: React.FC<{
             <div
               key={name}
               className={`flex flex-col gap-1 rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`}
-              title={`${name}: slip ratio, travel left to the bump rubber, grip used`}
+              title={lbl.wheelTitles[i]}
             >
               <div className="flex items-baseline justify-between">
-                <span className={HUD_LBL}>{name}</span>
+                <span className={HUD_LBL}>{lbl.wheels[i]}</span>
                 <span className="lc-data text-[11px] text-lc-chalk">
                   {(sr[i] * 100).toFixed(1)}
-                  <span className="text-[9px] text-lc-slate"> %SR</span>
+                  <span className="text-[9px] text-lc-slate"> {lbl.slipRatio}</span>
                 </span>
                 <span className="lc-data text-[10px]" style={{ color: bumpColor(bump[i]) }}>
                   {(bump[i] * 1000).toFixed(1)}
@@ -98,19 +136,19 @@ export const F12026ChannelsPanel: React.FC<{
       </div>
 
       <div className="mt-2 grid grid-cols-3 gap-1.5">
-        <div className={`flex flex-col rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`} title="Aero ride height">
-          <span className={`${HUD_LBL} tracking-[0.1em]`}>Aero hgt</span>
+        <div className={`flex flex-col rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`} title={lbl.aeroHeightTitle}>
+          <span className={`${HUD_LBL} tracking-[0.1em]`}>{lbl.aeroHeight}</span>
           <span className="lc-data mt-0.5 text-[12px] text-lc-chalk">{(c.AERO_HEIGHT * 1000).toFixed(0)} mm</span>
         </div>
         <div
           className={`flex flex-col rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`}
-          title="Aero balance (front share of downforce)"
+          title={lbl.aeroBalanceTitle}
         >
-          <span className={`${HUD_LBL} tracking-[0.1em]`}>Aero bal</span>
+          <span className={`${HUD_LBL} tracking-[0.1em]`}>{lbl.aeroBalance}</span>
           <span className="lc-data mt-0.5 text-[12px] text-lc-info">{c.AERO_BALANCE.toFixed(1)}%</span>
         </div>
-        <div className={`flex flex-col rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`} title="Differential locking torque">
-          <span className={`${HUD_LBL} tracking-[0.1em]`}>LSD lock</span>
+        <div className={`flex flex-col rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`} title={lbl.lsdTitle}>
+          <span className={`${HUD_LBL} tracking-[0.1em]`}>{lbl.lsd}</span>
           <span className="lc-data mt-0.5 text-[12px] text-lc-chalk">{Math.round(c.LSD_LOCKING_TORQUE)} Nm</span>
         </div>
       </div>
@@ -118,8 +156,8 @@ export const F12026ChannelsPanel: React.FC<{
       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-lc-line pt-2">
         {c.hasDrs ? (
           <>
-            <span className="flex items-center gap-1.5" title={`${aero.straightMode ? "Straight Mode" : "DRS"} state and openings this session`}>
-              <span className={HUD_LBL}>{aero.straightMode ? "X-mode" : "DRS"}</span>
+            <span className="flex items-center gap-1.5" title={aero.straightMode ? lbl.straightModeTitle : lbl.drsTitle}>
+              <span className={HUD_LBL}>{aero.straightMode ? lbl.xMode : "DRS"}</span>
               <Badge
                 tone={aero.open || aero.armed ? "info" : "neutral"}
                 variant={aero.open ? "solid" : aero.armed ? "outline" : "soft"}
@@ -134,11 +172,13 @@ export const F12026ChannelsPanel: React.FC<{
               {/* A 2026 car's flaps need no detection: the 1 s verdict there is Overtake Mode's (races only) */}
               {aero.straightMode
                 ? c.overtakeDetection
-                  ? `OVERTAKE ${c.overtakeDetection.earned ? "EARNED" : "LOCKED"}`
-                  : "NO VERDICT"
+                  ? c.overtakeDetection.earned
+                    ? lbl.overtakeEarned
+                    : lbl.overtakeLocked
+                  : lbl.noVerdict
                 : c.drsDetection
-                  ? `${c.drsDetection.zone} ${c.drsDetection.eligible ? "EARNED" : "LOCKED"}`
-                  : "NO DETECTION"}
+                  ? tx(c.drsDetection.eligible ? "zoneEarned" : "zoneLocked", { zone: c.drsDetection.zone })
+                  : lbl.noDetection}
             </span>
           </>
         ) : (
@@ -149,7 +189,7 @@ export const F12026ChannelsPanel: React.FC<{
         )}
         {c.wallContact ? (
           <Badge tone="bad" variant="solid" size="hud" icon="warning">
-            Wall
+            {lbl.wall}
           </Badge>
         ) : null}
       </div>

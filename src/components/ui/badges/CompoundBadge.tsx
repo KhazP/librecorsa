@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import { Badge, type BadgeSize, type BadgeVariant } from "../Badge";
 import { COMPOUND_LETTER, COMPOUNDS, type Compound } from "./compounds";
 
@@ -14,6 +15,9 @@ export const CompoundGlyph: React.FC<{
   decorative?: boolean;
   className?: string;
 }> = ({ compound, size = 16, decorative = false, className = "" }) => {
+  const tx = useTranslations("common.compounds.tyres");
+  // The tower and the tyre widget redraw it many times a second: the name is resolved when the compound or the language changes
+  const spoken = useMemo(() => tx(compound), [tx, compound]);
   const c = COMPOUNDS[compound];
   return (
     <svg
@@ -24,7 +28,7 @@ export const CompoundGlyph: React.FC<{
       strokeLinecap="round"
       strokeLinejoin="round"
       focusable="false"
-      {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": `${c.name} tyres` })}
+      {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": spoken })}
       className={`shrink-0 ${className}`}
     >
       <circle cx={12} cy={12} r={11.5} className="fill-lc-void" />
@@ -45,6 +49,8 @@ export const CompoundBadge: React.FC<{
   short?: boolean;
   className?: string;
 }> = ({ compound, size = "md", variant = "soft", short = false, className = "" }) => {
+  // Read here, so the word follows the language as the component re-renders
+  const tx = useTranslations("common.compounds.name");
   const c = COMPOUNDS[compound];
   if (short) return <CompoundGlyph compound={compound} size={GLYPH_PX[size]} className={className} />;
   return (
@@ -52,10 +58,10 @@ export const CompoundBadge: React.FC<{
       tone={{ color: c.color }}
       variant={variant}
       size={size}
-      leading={<CompoundGlyph compound={compound} size={GLYPH_PX[size]} decorative className="-ml-1.5" />}
+      leading={<CompoundGlyph compound={compound} size={GLYPH_PX[size]} decorative className="-ms-1.5" />}
       className={className}
     >
-      {c.name}
+      {tx(compound)}
     </Badge>
   );
 };

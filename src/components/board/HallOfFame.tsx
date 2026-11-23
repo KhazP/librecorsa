@@ -7,6 +7,7 @@
  * ChallengePanel (in-game) and HomeBoards (home page) render it.
  */
 import React, { useEffect, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import {
   fetchHallOfFame,
   physicsName,
@@ -51,13 +52,15 @@ export interface HallOfFameProps {
 
 const humanize = (id: string): string => id.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
-const MEDAL_STYLE: Record<1 | 2 | 3, { label: string; short: string; icon: IconName; tone: BadgeToneProp; variant: BadgeVariant }> = {
-  1: { label: "Gold", short: "1st", icon: "challenge", tone: { color: "amber" }, variant: "soft" },
-  2: { label: "Silver", short: "2nd", icon: "medal", tone: { color: "chalk" }, variant: "soft" },
-  3: { label: "Bronze", short: "3rd", icon: "medal", tone: { color: "amber" }, variant: "outline" },
+/** Each place's medal; `place` is its select value in the messages (board.hallOfFame.medal) */
+const MEDAL_STYLE: Record<1 | 2 | 3, { place: string; icon: IconName; tone: BadgeToneProp; variant: BadgeVariant }> = {
+  1: { place: "first", icon: "challenge", tone: { color: "amber" }, variant: "soft" },
+  2: { place: "second", icon: "medal", tone: { color: "chalk" }, variant: "soft" },
+  3: { place: "third", icon: "medal", tone: { color: "amber" }, variant: "outline" },
 };
 
 const PodiumRow: React.FC<{ place: PodiumPlace; mine: boolean }> = ({ place, mine }) => {
+  const tx = useTranslations("board.hallOfFame");
   const m = MEDAL_STYLE[place.place];
   return (
     <li
@@ -66,8 +69,8 @@ const PodiumRow: React.FC<{ place: PodiumPlace; mine: boolean }> = ({ place, min
       }`}
     >
       <span className="flex min-w-0 items-center gap-2">
-        <Badge size="sm" tone={m.tone} variant={m.variant} icon={m.icon} aria-label={`${m.label} (${m.short})`}>
-          {m.short}
+        <Badge size="sm" tone={m.tone} variant={m.variant} icon={m.icon} aria-label={tx("medal", { place: m.place })}>
+          {tx("medalShort", { place: m.place })}
         </Badge>
         <span dir="auto" className={`truncate text-[14px] font-semibold ${mine ? "text-lc-volt" : "text-lc-chalk"}`} title={place.name}>
           {place.name}
@@ -85,32 +88,35 @@ const EventBlock: React.FC<{
   circuitLabel: string;
   carLabel: string;
   myKey: string;
-}> = ({ event, circuitLabel, carLabel, myKey }) => (
-  <div className="flex flex-col gap-2 rounded-lc-tile border border-white/7 bg-lc-void/40 p-3">
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="lc-mono text-[13px] font-bold text-lc-chalk">{event.event}</span>
-        {circuitLabel ? <span className="text-[14px] font-semibold text-lc-chalk">{circuitLabel}</span> : null}
-        {carLabel ? <span className="text-[13px] text-lc-fog">{carLabel}</span> : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        <Badge size="sm" tone={event.physics === "v2" ? "info" : "neutral"} variant="outline">
-          Physics {physicsName(event.physics)}
-        </Badge>
-        {event.current ? (
-          <Badge size="sm" tone="good" variant="soft">
-            In progress
+}> = ({ event, circuitLabel, carLabel, myKey }) => {
+  const tx = useTranslations("board.hallOfFame");
+  return (
+    <div className="flex flex-col gap-2 rounded-lc-tile border border-white/7 bg-lc-void/40 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="lc-mono text-[13px] font-bold text-lc-chalk">{event.event}</span>
+          {circuitLabel ? <span className="text-[14px] font-semibold text-lc-chalk">{circuitLabel}</span> : null}
+          {carLabel ? <span className="text-[13px] text-lc-fog">{carLabel}</span> : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Badge size="sm" tone={event.physics === "v2" ? "info" : "neutral"} variant="outline">
+            {tx("physics", { version: physicsName(event.physics) })}
           </Badge>
-        ) : null}
+          {event.current ? (
+            <Badge size="sm" tone="good" variant="soft">
+              {tx("inProgress")}
+            </Badge>
+          ) : null}
+        </div>
       </div>
+      <ol className="m-0 flex list-none flex-col gap-1 p-0" aria-label={tx("podium", { event: event.event, version: physicsName(event.physics) })}>
+        {event.podium.map((p) => (
+          <PodiumRow key={`${p.place}-${p.nameKey}`} place={p} mine={myKey !== "" && p.nameKey === myKey} />
+        ))}
+      </ol>
     </div>
-    <ol className="m-0 flex list-none flex-col gap-1 p-0" aria-label={`${event.event} Physics ${physicsName(event.physics)} podium`}>
-      {event.podium.map((p) => (
-        <PodiumRow key={`${p.place}-${p.nameKey}`} place={p} mine={myKey !== "" && p.nameKey === myKey} />
-      ))}
-    </ol>
-  </div>
-);
+  );
+};
 
 function holderSummary(h: RecordHolder): string {
   return h.byVehicle
@@ -125,6 +131,7 @@ const RecordHoldersCard: React.FC<{
   formatCircuit: (id: string) => string;
   onOpenBoard?: (trackId: string, vehicle: VehicleModelId) => void;
 }> = ({ recordHolders, myKey, formatCircuit, onOpenBoard }) => {
+  const tx = useTranslations("board.hallOfFame");
   const [selectedClass, setSelectedClass] = useState<"all" | VehicleClassId>("all");
   const availableClasses = VEHICLE_CLASS_IDS.filter((c) => (recordHolders.byClass[c]?.length ?? 0) > 0);
   const activeClass: "all" | VehicleClassId =
@@ -134,12 +141,12 @@ const RecordHoldersCard: React.FC<{
 
   return (
     <Card
-      title="Fastest Lap record holders"
-      description={`Current P1 on contested boards (${recordHolders.minDrivers}+ drivers). Tap a badge to inspect or challenge.`}
+      title={tx("recordHolders")}
+      description={tx("recordHoldersHint", { min: String(recordHolders.minDrivers) })}
       bodyClassName="gap-3"
     >
       {availableClasses.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter record holders by car class">
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={tx("filterByClass")}>
           <button
             type="button"
             aria-pressed={activeClass === "all"}
@@ -151,7 +158,7 @@ const RecordHoldersCard: React.FC<{
                 : "border-white/7 bg-lc-void/40 text-lc-fog hover:border-white/12 hover:text-lc-chalk",
             )}
           >
-            All classes
+            {tx("allClasses")}
           </button>
           {availableClasses.map((classId) => {
             const meta = VEHICLE_CLASS_META[classId];
@@ -180,7 +187,7 @@ const RecordHoldersCard: React.FC<{
 
       <ol
         className="m-0 flex list-none flex-col divide-y divide-white/5 p-0"
-        aria-label={activeClass === "all" ? "Fastest Lap record holders" : `${VEHICLE_CLASS_META[activeClass].label} Fastest Lap record holders`}
+        aria-label={activeClass === "all" ? tx("recordHolders") : tx("classRecordHolders", { class: VEHICLE_CLASS_META[activeClass].label })}
       >
         {holders.map((h, i) => {
           const mine = myKey !== "" && h.nameKey === myKey;
@@ -223,6 +230,7 @@ const RecordHoldersCard: React.FC<{
 };
 
 export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, driverName = "", refreshKey = 0, onOpenBoard }) => {
+  const tx = useTranslations("board.hallOfFame");
   const [reload, setReload] = useState(0);
   const [state, setState] = useState<{ data: HallOfFameAnswer | null; loading: boolean; error: boolean }>({
     data: null,
@@ -249,16 +257,16 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
 
   if (state.loading && !state.data) {
     return (
-      <Card title="Hall of Fame" bodyClassName="gap-3">
-        <BoardSkeleton rows={4} label="Loading Hall of Fame" />
+      <Card title={tx("title")} bodyClassName="gap-3">
+        <BoardSkeleton rows={4} label={tx("loading")} />
       </Card>
     );
   }
 
   if (state.error && !state.data) {
     return (
-      <Card title="Hall of Fame" bodyClassName="gap-3">
-        <BoardError onRetry={() => setReload((n) => n + 1)}>Couldn&apos;t load the Hall of Fame. Check your connection.</BoardError>
+      <Card title={tx("title")} bodyClassName="gap-3">
+        <BoardError onRetry={() => setReload((n) => n + 1)}>{tx("loadFailed")}</BoardError>
       </Card>
     );
   }
@@ -268,10 +276,8 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
   const hasEvents = Boolean(data && data.events.length > 0);
   if (!data || (!hasEvents && !hasRecords)) {
     return (
-      <Card title="Hall of Fame" bodyClassName="gap-3">
-        <EmptyState icon={<Icon name="challenge" size="lg" />}>
-          No records or weekly podiums yet.
-        </EmptyState>
+      <Card title={tx("title")} bodyClassName="gap-3">
+        <EmptyState icon={<Icon name="challenge" size="lg" />}>{tx("empty")}</EmptyState>
       </Card>
     );
   }
@@ -292,8 +298,8 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
       ) : null}
 
       {data.mostDecorated.length > 0 ? (
-        <Card title="Most decorated" bodyClassName="gap-2">
-          <ol className="m-0 flex list-none flex-col divide-y divide-white/5 p-0" aria-label="Most decorated drivers">
+        <Card title={tx("mostDecorated")} bodyClassName="gap-2">
+          <ol className="m-0 flex list-none flex-col divide-y divide-white/5 p-0" aria-label={tx("mostDecoratedDrivers")}>
             {data.mostDecorated.map((d, i) => {
               const mine = myKey !== "" && d.nameKey === myKey;
               return (
@@ -311,17 +317,17 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5">
                     {d.gold > 0 ? (
-                      <Badge size="sm" tone={{ color: "amber" }} variant="soft" icon="challenge" aria-label={`${d.gold} Gold`}>
+                      <Badge size="sm" tone={{ color: "amber" }} variant="soft" icon="challenge" aria-label={tx("goldCount", { count: d.gold })}>
                         {d.gold}
                       </Badge>
                     ) : null}
                     {d.silver > 0 ? (
-                      <Badge size="sm" tone={{ color: "chalk" }} variant="soft" icon="medal" aria-label={`${d.silver} Silver`}>
+                      <Badge size="sm" tone={{ color: "chalk" }} variant="soft" icon="medal" aria-label={tx("silverCount", { count: d.silver })}>
                         {d.silver}
                       </Badge>
                     ) : null}
                     {d.bronze > 0 ? (
-                      <Badge size="sm" tone={{ color: "amber" }} variant="outline" icon="medal" aria-label={`${d.bronze} Bronze`}>
+                      <Badge size="sm" tone={{ color: "amber" }} variant="outline" icon="medal" aria-label={tx("bronzeCount", { count: d.bronze })}>
                         {d.bronze}
                       </Badge>
                     ) : null}
@@ -335,17 +341,17 @@ export const HallOfFame: React.FC<HallOfFameProps> = ({ circuitName, carName, dr
 
       {hasEvents ? (
         <Card
-          title="Weekly podiums"
+          title={tx("weeklyPodiums")}
           action={
             versions.length > 1 ? (
               <Segmented
-                aria-label="Physics version filter"
+                aria-label={tx("physicsFilter")}
                 size="sm"
                 value={activeFilter}
                 onChange={setPhysicsFilter}
                 options={[
-                  { id: "all", label: "All" },
-                  ...versions.map((v) => ({ id: v, label: `Physics ${physicsName(v)}` })),
+                  { id: "all", label: tx("allVersions") },
+                  ...versions.map((v) => ({ id: v, label: tx("physics", { version: physicsName(v) }) })),
                 ]}
               />
             ) : null

@@ -1,0 +1,221 @@
+{
+  "notice": {
+    "back": "Retour à l’accueil",
+    "notFound": {
+      "title": "Page introuvable",
+      "body": "Il n’y a rien à cette adresse. Le lien est peut-être ancien ou mal saisi."
+    },
+    "error": {
+      "title": "Une erreur s’est produite",
+      "body": "Cette page s’est arrêtée sur une erreur."
+    }
+  },
+  "hub": {
+    "tabs": {
+      "home": "Accueil",
+      "circuits": "Circuits",
+      "cars": "Voitures",
+      "laps": "Temps au tour",
+      "whatsNew": "Nouveautés",
+      "download": "Télécharger",
+      "about": "À propos"
+    },
+    "unread": "(mises à jour non lues)",
+    "sections": "Sections",
+    "skip": "Passer au contenu",
+    "heading": "LibreCorsa : simulateur de course gratuit et open source dans votre navigateur",
+    "drive": "Conduire",
+    "prompts": {
+      "move": "Déplacer",
+      "select": "Valider",
+      "back": "Retour",
+      "switchSection": "Changer de section",
+      "page": "Page des temps",
+      "drive": "Conduire"
+    },
+    "length": "{distance} {unit}, {turns, plural, one {# virage} other {# virages}}",
+    "classYear": "{class}, {year}",
+    "footer": "{venue}, {car}",
+    "driveTile": {
+      "label": "Conduire : {venue}, {layout}, en {car}",
+      "title": "Conduire",
+      "detail": "{venue}, {layout}. {car}."
+    },
+    "circuitTile": {
+      "label": "Changer de circuit : {venue}, {layout}",
+      "more": "Changer de circuit",
+      "map": "Carte de {venue}, {layout}",
+      "onLine": "sur la trajectoire idéale"
+    },
+    "carTile": {
+      "label": "Changer de voiture : {car}",
+      "more": "Changer de voiture"
+    },
+    "press": {
+      "title": "Presse et médias",
+      "label": "Presse et médias : {count, plural, one {{n} article et vidéo} other {{n} articles et vidéos}}, et le kit presse",
+      "count": "{count, plural, one {{n} article et vidéo} other {{n} articles et vidéos}}",
+      "onPlatform": "{outlet} sur {platform}",
+      "more": "Couverture et kit presse"
+    },
+    "whatsNew": {
+      "intro": "Notes de version et mises à jour récentes.",
+      "commitLog": "Journal des commits sur GitHub",
+      "empty": "Pas encore de notes de version.",
+      "commits": "{count, plural, one {# commit} other {# commits}}"
+    },
+    "filterOption": "{option} ({count})",
+    "clearFilters": "Effacer les filtres",
+    "venueFilters": {
+      "type": {
+        "label": "Type",
+        "all": "Tous les types"
+      },
+      "country": {
+        "label": "Pays",
+        "all": "Tous les pays"
+      },
+      "modder": {
+        "label": "Moddeur",
+        "all": "Tous les moddeurs"
+      }
+    },
+    "carFilters": {
+      "class": {
+        "label": "Catégorie",
+        "all": "Toutes les catégories"
+      },
+      "physics": {
+        "label": "Physique",
+        "all": "Toute physique"
+      },
+      "modder": {
+        "label": "Moddeur",
+        "all": "Tous les moddeurs"
+      }
+    },
+    "circuits": {
+      "filter": "Filtrer les circuits",
+      "shown": "{shown} circuits sur {total}",
+      "empty": "Aucun circuit ne correspond à ces filtres.",
+      "personalBest": "Record personnel",
+      "oldPhysics": "Ancienne physique",
+      "carOldPhysics": "{car} · Ancienne"
+    },
+    "cars": {
+      "filter": "Filtrer les voitures",
+      "shown": "{shown} voitures sur {total}",
+      "empty": "Aucune voiture ne correspond à ces filtres."
+    },
+    "about": {
+      "lead": "Simulateur de course gratuit et open source dans le navigateur.",
+      "addMod": "Ajoutez votre mod",
+      "addModText": "Vous avez créé un mod de voiture ou de circuit et vous voulez le voir dans LibreCorsa ? Écrivez-moi à <mail>{email}</mail> avec un lien. Chaque moddeur est crédité par son nom dans le jeu.",
+      "modders": "Les moddeurs",
+      "moddersText": "Les circuits et les voitures sont leur travail, utilisés avec leur autorisation. Si l’un d’eux vous plaît, vous pouvez remercier directement son auteur.",
+      "links": {
+        "download": "Télécharger les apps",
+        "press": "Toute la couverture et le kit presse",
+        "docs": "Docs",
+        "privacy": "Confidentialité",
+        "support": "Offrez-moi un café"
+      }
+    },
+    "facts": {
+      "physics": {
+        "label": "Physique",
+        "text": "Simulée 500 fois par seconde, avec températures des pneus, aéro active et puissance hybride"
+      },
+      "racing": {
+        "label": "Courses",
+        "text": "Tours chronométrés, courses contre l’IA, salons multijoueurs et temps au tour en ligne"
+      },
+      "controls": {
+        "label": "Commandes",
+        "text": "Clavier, manette, écran tactile ou volant Force Feedback"
+      },
+      "platforms": {
+        "label": "Disponible sur",
+        "text": "Tout navigateur récent : ordinateur, téléphone ou tablette"
+      },
+      "conditions": {
+        "label": "Conditions",
+        "text": "Météo et heure de la journée au choix"
+      },
+      "price": {
+        "label": "Prix",
+        "text": "Gratuit. Sans compte ni publicité ; les dons sont facultatifs et ne débloquent rien"
+      }
+    }
+  },
+  "lapTimes": {
+    "loading": "Chargement des temps au tour…",
+    "offline": "Les temps au tour sont hors ligne pour le moment.",
+    "unreachable": "Classement injoignable. Nouvelle tentative…"
+  },
+  "boards": {
+    "board": "Classement",
+    "allLaps": "Tous les tours",
+    "challenge": "Défi hebdomadaire",
+    "hallOfFame": "Hall of Fame",
+    "lapTimesTitle": "Temps au tour",
+    "challengeTitle": "Défi hebdomadaire",
+    "week": "Semaine",
+    "thisWeek": "Cette semaine · {circuit}",
+    "pastWeek": "{dates} · {circuit}",
+    "timeLeft": "Reste {timeLeft}",
+    "ran": "Disputé {dates}",
+    "rules": "Règles",
+    "emptyThisWeek": "Aucun temps établi cette semaine.",
+    "emptyPastWeek": "Aucun temps enregistré cette semaine."
+  },
+  "layoutPicker": {
+    "chosen": "Tracé de {venue} : {layout} ({index} sur {count})",
+    "closed": "{venue} : {count, plural, one {# tracé} other {# tracés}}",
+    "count": "{count, plural, one {# tracé} other {# tracés}}",
+    "list": "Tracés de {venue}"
+  },
+  "liveryPicker": {
+    "custom": "Peinture perso",
+    "chosen": "Livrée {car} : {livery} ({index} sur {count})",
+    "chosenCustom": "Livrée {car} : peinture perso ({count, plural, one {# livrée prédéfinie} other {# livrées prédéfinies}})",
+    "closed": "{car} : {count, plural, one {# livrée} other {# livrées}}",
+    "count": "{count, plural, one {# livrée} other {# livrées}}",
+    "list": "Livrées {car}"
+  },
+  "downloads": {
+    "intro": "Applications natives facultatives pour Windows, macOS, Linux et Android. Elles ouvrent directement librecorsa.org, donc les mises à jour du jeu arrivent sans réinstallation.",
+    "directLink": "Lien direct",
+    "platforms": "Plateformes",
+    "thisDevice": "Cet appareil",
+    "installed": "Installée",
+    "artifact": "{label} — {platform} ({detail})",
+    "artifactSized": "{label} — {platform} ({detail}, {size})",
+    "detailSized": "{detail}, {size}",
+    "detailPending": "{detail} (publié avec la prochaine version)",
+    "installCommand": "Commande d’installation {platform}",
+    "whyInstall": "Pourquoi installer l’app",
+    "highlights": {
+      "desktop": {
+        "label": "Bureau",
+        "text": "Demande le GPU dédié sur les portables multi-GPU, accorde WebHID silencieusement pour les volants et la DualSense, désactive la limitation en arrière-plan et vérifie les mises à jour sur GitHub Releases."
+      },
+      "android": {
+        "label": "Android",
+        "text": "Trusted Web Activity en plein écran sans barre d’adresse, balayages de bord immersifs persistants, Android Game Mode et raccourcis du lanceur Conduire / Classements."
+      },
+      "current": {
+        "label": "Toujours à jour",
+        "text": "Chaque application ouvre directement librecorsa.org au lieu d’embarquer circuits ou voitures, donc la physique, les circuits et le multijoueur se mettent à jour immédiatement."
+      },
+      "browser": {
+        "label": "Navigateur et iOS",
+        "text": "Rien à installer si vous préférez jouer directement dans un onglet. Sur iPhone et iPad, utilisez Partager > Sur l’écran d’accueil dans Safari."
+      }
+    },
+    "buildsTitle": "Builds et signature",
+    "builds": "Tous les installeurs et APK sont compilés depuis le code source de ce dépôt par GitHub Actions et publiés sur GitHub Releases avec des empreintes SHA-256. La signature de code Windows gratuite via la SignPath Foundation est en cours de mise en place ; les builds macOS ne sont pas signés pour l’instant ; l’APK Android est signé avec la clé d’envoi vérifiée par <code>{file}</code>.",
+    "allReleases": "Toutes les versions sur GitHub",
+    "signingPolicy": "Politique de signature de code"
+  }
+}

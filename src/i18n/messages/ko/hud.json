@@ -1,0 +1,1066 @@
+{
+  "racesCard": {
+    "region": "레이스",
+    "description": "{car} · {laps, plural, other {#랩}} · {interval}마다",
+    "racing": "<big>출발</big> <small>진행 중</small>",
+    "toStart": "<big>{time}</big> <small>후 시작</small>",
+    "toNextRace": "<big>{time}</big> <small>후 다음 레이스</small>",
+    "entrants": "이 레이스 참가자",
+    "entered": "참가 완료. 자동으로 시작됩니다.",
+    "enteredAlone": "참가 완료. 자동으로 시작됩니다(다른 참가자가 없으면 AI와 진행).",
+    "leave": "레이스 나가기",
+    "join": "다음 레이스 참가",
+    "rules": "고정 차량. 주간 챌린지 베스트 랩으로 그리드가 결정됩니다.",
+    "nobodyWaiting": "대기 0명",
+    "waiting": "<b>{count, plural, other {드라이버 #명 대기 중}}</b>",
+    "waitingNames": "<b>{count, plural, other {드라이버 #명 대기 중}}</b>: {names}",
+    "waitingNamesMore": "<b>{count, plural, other {드라이버 #명 대기 중}}</b>: {names} 외 {more}명",
+    "topDrivers": "이번 주 상위 드라이버",
+    "winsPodiums": "{wins, plural, other {{wins}승}} · {podiums, plural, other {포디움 {podiums}회}}",
+    "record": "나: {starts, plural, other {{starts}경기}} · {wins, plural, other {{wins}승}} · {podiums, plural, other {포디움 {podiums}회}}",
+    "recordBest": "나: {starts, plural, other {{starts}경기}} · {wins, plural, other {{wins}승}} · {podiums, plural, other {포디움 {podiums}회}} · 최고 P{best}"
+  },
+  "seatPanel": {
+    "dialog": "시트 및 카메라, {car}",
+    "title": "시트 및 카메라",
+    "rows": {
+      "view": "시점",
+      "viewLess": "콕핏 시점",
+      "viewMore": "대시보드 시점",
+      "fwd": "전후",
+      "fwdLess": "뒤로 이동",
+      "fwdMore": "앞으로 이동",
+      "up": "높이",
+      "upLess": "아래로 이동",
+      "upMore": "위로 이동",
+      "right": "좌우",
+      "rightLess": "왼쪽으로 이동",
+      "rightMore": "오른쪽으로 이동",
+      "tilt": "기울기",
+      "tiltLess": "아래로 기울이기",
+      "tiltMore": "위로 기울이기",
+      "fov": "FOV",
+      "fovLess": "좁게",
+      "fovMore": "넓게"
+    },
+    "viewGroup": "시점",
+    "resetView": "시점 초기화",
+    "done": "완료",
+    "prompts": {
+      "row": "항목",
+      "change": "조정",
+      "resetRow": "항목 초기화",
+      "resetView": "시점 초기화",
+      "done": "완료"
+    },
+    "savedPerCar": "차량별로 저장됨"
+  },
+  "leaderboardPanel": {
+    "raceGhost": "내 {car} 랩 고스트와 주행",
+    "raceGhostTitle": "고스트와 주행",
+    "postUnreachable": "리더보드에 연결할 수 없습니다",
+    "applySetup": "내 {car} 랩 셋업 적용",
+    "applySetupTitle": "셋업 적용",
+    "retry": "다시 시도",
+    "post": "등록",
+    "retryAria": "이 랩 온라인 등록 다시 시도",
+    "postAria": "이 랩 온라인 등록",
+    "retryTitle": "다시 시도",
+    "postTitle": "온라인 등록",
+    "notPosted": "온라인 보드에 미등록: {error}",
+    "notPostedYet": "아직 온라인 보드에 등록되지 않음",
+    "driverKey": "드라이버 키",
+    "driverKeyIntro": "리더보드에서 드라이버 이름 소유권을 증명합니다. 다른 기기에서 같은 이름을 쓰려면 내보내십시오. 파일은 비공개로 보관해야 합니다.",
+    "exportKey": "키 내보내기",
+    "importKey": "키 가져오기",
+    "importGhost": "고스트 파일 가져오기",
+    "exportBest": "내 최고 기록 내보내기",
+    "undo": "실행 취소",
+    "dismiss": "닫기",
+    "onlineTimes": "온라인 기록",
+    "circuit": "서킷",
+    "circuitLaps": "{count, plural, other {{count}랩}}",
+    "allCars": "모든 차량",
+    "yourBestLaps": "내 베스트 랩",
+    "physicsVersion": "물리 버전",
+    "car": "차량",
+    "carLaps": "{count, plural, other {{count}랩}}",
+    "noLapsOlder": "{circuit}({board})에 랩이 없습니다.",
+    "noLaps": "{circuit}에 저장된 랩이 없습니다.",
+    "tableLabel": "{circuit} 베스트 랩",
+    "carColumn": "차량",
+    "theoreticalBest": "이론 최고 기록",
+    "potential": "단축 가능 {delta}초",
+    "allBestSectors": "모든 최고 섹터를 한 랩에 달성",
+    "offline": "리더보드가 오프라인입니다. 로컬 기록을 표시합니다.",
+    "disabled": "온라인 리더보드가 비활성화되어 있습니다. 로컬 기록을 표시합니다."
+  },
+  "boardWidget": {
+    "modes": {
+      "lapEnd": "랩 종료 시 열기",
+      "open": "항상 열기",
+      "closed": "항상 닫기"
+    },
+    "gear": "랩 보드 열림 조건",
+    "modeMenu": "랩 보드 열림 조건",
+    "region": "랩 보드",
+    "fold": "랩 보드 접기",
+    "foldKey": "랩 보드 접기({key})",
+    "open": "랩 보드 열기: {circuit}, {place}",
+    "openNoTime": "랩 보드 열기: {circuit}, 아직 기록 없음",
+    "openKey": "랩 보드 열기({key}): {circuit}, {place}",
+    "openKeyNoTime": "랩 보드 열기({key}): {circuit}, 아직 기록 없음",
+    "drivers": "{total, plural, other {드라이버 {count}명}}",
+    "noTimes": "아직 기록이 없습니다.",
+    "placesBetween": "생략된 순위",
+    "lapsDriven": "주행 랩 수",
+    "noTime": "아직 기록 없음",
+    "place": "P{rank}/{total}"
+  },
+  "multiplayerPanel": {
+    "collision": {
+      "on": "켜짐",
+      "ghostLap1": "1랩 고스트",
+      "off": "꺼짐",
+      "protected": "보호"
+    },
+    "collisionHint": {
+      "on": "충돌 적용",
+      "ghostLap1": "첫 랩 충돌 없음",
+      "off": "차량끼리 통과",
+      "protected": "1랩 고스트, 이후 위험 주행 차량은 충돌 차단"
+    },
+    "anyCar": "모든 차량",
+    "startType": {
+      "standing": "스탠딩",
+      "rolling": "롤링"
+    },
+    "gridOrder": {
+      "qualifying": "예선",
+      "reverse": "역순",
+      "random": "무작위"
+    },
+    "gridOrderHint": {
+      "qualifying": "가장 빠른 랩 우선, 기록이 없으면 참가 순",
+      "reverse": "예선 순위 역순(또는 참가 순)",
+      "random": "시작 시 무작위 추첨"
+    },
+    "presetClassic": "클래식",
+    "presetClassicHint": "경고 누적식 트랙 리밋: 3회마다 +3초, 이후 +5초",
+    "timeScaleFixed": "고정",
+    "qualifyingOff": "꺼짐",
+    "settings": {
+      "event": "이벤트",
+      "race": "레이스",
+      "rules": "규정",
+      "circuit": "서킷",
+      "changeCircuit": "서킷 변경: {circuit}",
+      "change": "변경",
+      "circuitHint": "메인 메뉴에서 변경할 수 있습니다",
+      "cars": "차량",
+      "oneCar": "전원 동일 차량",
+      "classesMixed": "모든 차량, 클래스 혼합",
+      "weather": "날씨",
+      "timeOfDay": "시간대",
+      "timeSpeed": "시간 속도",
+      "laps": "랩 수",
+      "qualifying": "예선",
+      "qualifyingHint": "클린 베스트 랩으로 그리드 결정",
+      "gridOrder": "그리드 순서",
+      "setByQualifying": "예선 결과로 결정",
+      "start": "스타트",
+      "launch": "출발 방식",
+      "rulePreset": "규정",
+      "trackLimits": "트랙 리밋",
+      "penalties": "페널티",
+      "penaltiesOn": "켜짐",
+      "penaltiesOff": "꺼짐",
+      "penaltiesHint": "트랙 리밋 위반 및 부정 출발 시 시간 추가",
+      "damage": "손상",
+      "collisions": "충돌",
+      "lockedQualifying": "예선 진행 중에는 잠겨 있습니다",
+      "lockedRace": "레이스 진행 중에는 잠겨 있습니다"
+    },
+    "net": {
+      "relayedTitle": "트래픽이 호스트를 거쳐 전달됩니다",
+      "relayed": "릴레이",
+      "measuring": "측정 중",
+      "pingLoss": "{ping} ms · 손실 {loss}%"
+    },
+    "drivers": {
+      "title": "드라이버",
+      "host": "호스트: {name}",
+      "qualifying": "예선",
+      "noCar": "아직 차량 없음",
+      "noTime": "기록 없음",
+      "wrongClassTitle": "이 방의 허용 클래스({class})가 아닙니다",
+      "wrongClass": "클래스 불일치",
+      "ready": "준비 완료",
+      "notReady": "준비 안 됨",
+      "hostOn": "호스트가 {circuit}에 있습니다",
+      "switchCircuit": "서킷 전환",
+      "wrongCar": "선택한 차량이 이 방의 허용 클래스({class})가 아닙니다.",
+      "wrongCarSwitch": "선택한 차량이 이 방의 허용 클래스({class})가 아닙니다. 차량 변경:",
+      "raceInProgress": "레이스 진행 중",
+      "startRaceNow": "지금 레이스 시작",
+      "startQualifying": "{minutes}분 예선 시작",
+      "startRace": "레이스 시작",
+      "endQualifying": "예선 종료",
+      "endRaceForEveryone": "전원 레이스 종료",
+      "readyButton": "준비 완료",
+      "readyUp": "준비",
+      "raceRunning": "레이스 진행 중입니다.",
+      "qualifyingRunning": "예선 진행 중입니다.",
+      "waitingForHost": "호스트의 시작을 기다리는 중입니다.",
+      "confirmEndQualifying": "예선을 종료하시겠습니까?",
+      "confirmEndRace": "전원 레이스를 종료하시겠습니까?",
+      "confirmEndQualifyingButton": "예선 종료",
+      "confirmEndRaceButton": "레이스 종료",
+      "keepQualifying": "예선 계속",
+      "keepRacing": "레이스 계속",
+      "confirmBody": "모든 드라이버가 로비로 돌아갑니다."
+    },
+    "room": {
+      "connected": "{count}명 연결됨",
+      "connecting": "연결 중",
+      "notConnected": "연결 안 됨",
+      "title": "비공개 방",
+      "codeAria": "방 코드 {code}",
+      "codeCaption": "방 코드",
+      "linkCopied": "링크 복사됨",
+      "copyLink": "초대 링크 복사",
+      "share": "공유",
+      "host": "방 호스팅",
+      "joinAnother": "다른 방 참가",
+      "joinFriend": "친구 방 참가",
+      "codePlaceholder": "방 코드",
+      "join": "참가",
+      "newRoom": "새 방",
+      "codeTooShort": "최소 3자 이상 입력해 주십시오.",
+      "joinFailed": "해당 방에 참가할 수 없습니다. 코드를 확인해 주십시오.",
+      "shareTitle": "LibreCorsa 레이스",
+      "shareText": "내 레이스에 참가하세요",
+      "racingAs": "{name}(으)로 참가 중",
+      "edit": "편집"
+    },
+    "connect": {
+      "more": "추가 연결 방법",
+      "hide": "숨기기",
+      "localTitle": "로컬 탭",
+      "localIntro": "이 브라우저의 다른 탭과 레이스합니다.",
+      "localConnect": "로컬 탭 연결",
+      "manualTitle": "수동 WebRTC",
+      "manualIntro": "제안/응답 토큰 교환을 통한 직접 P2P 연결입니다.",
+      "createOffer": "1. 제안 생성(호스트)",
+      "acceptOffer": "2. 제안 수락",
+      "acceptAnswer": "3. 응답 수락(호스트)",
+      "offerFailed": "제안 생성에 실패했습니다.",
+      "badOffer": "유효하지 않은 제안 토큰입니다.",
+      "badAnswer": "유효하지 않은 응답 토큰입니다.",
+      "remoteToken": "상대 토큰",
+      "pasteToken": "토큰 붙여넣기",
+      "answerAccepted": "응답이 수락되었습니다. 연결 중…",
+      "yourToken": "내 토큰",
+      "copied": "복사됨",
+      "copy": "복사",
+      "reset": "초기화",
+      "turnTitle": "사용자 지정 TURN 릴레이",
+      "turnIntro": "제한된 네트워크용 선택형 릴레이 서버입니다.",
+      "relayAddress": "릴레이 주소",
+      "username": "사용자 이름",
+      "password": "비밀번호",
+      "saved": "저장됨",
+      "save": "저장",
+      "clear": "지우기",
+      "turnPrefix": "주소는 turn: 또는 turns:로 시작해야 합니다",
+      "ownRelay": "사용자 지정 릴레이 서버 사용 중"
+    }
+  },
+  "pauseMenu": {
+    "tabs": {
+      "label": "섹션",
+      "session": "세션",
+      "hud": "HUD",
+      "conditions": "주행 조건",
+      "garage": "차고",
+      "corners": "코너",
+      "multiplayer": "멀티플레이어",
+      "lapTimes": "랩 타임",
+      "feedback": "피드백"
+    },
+    "actions": {
+      "label": "일시 정지 메뉴",
+      "resume": "계속",
+      "restartRace": "레이스 재시작",
+      "gridStart": "그리드 스타트",
+      "rollingStart": "롤링 스타트",
+      "flyingLap": "플라잉 랩",
+      "watchReplay": "리플레이 보기",
+      "skipTrack": "트랙 건너뛰기",
+      "nowPlaying": "{title}, {composer}",
+      "settings": "설정",
+      "mainMenu": "메인 메뉴"
+    },
+    "prompts": {
+      "move": "이동",
+      "select": "선택",
+      "jumpThere": "이동하기",
+      "tabs": "탭",
+      "page": "페이지",
+      "back": "뒤로",
+      "resume": "계속"
+    },
+    "header": {
+      "lap": "랩 {lap}",
+      "lapOf": "랩 {lap}/{total}",
+      "run": "런 {lap}",
+      "position": "P{position}/{field}",
+      "online": "온라인",
+      "leavesRace": "현재 레이스에서 나가게 됩니다.",
+      "leavesRoom": "현재 방에서 나가게 됩니다.",
+      "endsSession": "현재 세션이 종료됩니다."
+    },
+    "session": {
+      "title": "세션",
+      "autopilot": "오토파일럿",
+      "key": "{key} 키",
+      "camera": "카메라",
+      "cameraView": "카메라 시점",
+      "cycle": "전환: {key}",
+      "freeCamera": "자유 카메라",
+      "freeCameraHint": "{key} 키 · 드래그: 시점, WASD: 이동, Q/E: 고도",
+      "freeCameraButton": "자유 카메라",
+      "exitFreeCamera": "자유 캠 종료",
+      "tv": "트랙사이드 TV",
+      "tvHint": "{key} 키 · 트랙 주변 중계 카메라",
+      "tvButton": "트랙사이드 TV",
+      "exitTv": "TV 종료"
+    },
+    "hud": {
+      "title": "HUD 레이아웃",
+      "settings": "HUD 설정"
+    },
+    "corners": {
+      "title": "코너",
+      "mapLabel": "{count, plural, other {번호가 매겨진 코너 #개가 표시된 서킷 맵}}",
+      "turn": "T{turn}",
+      "detail": "{complex} · 섹터 {sector}",
+      "pick": "코너 선택",
+      "rowLabel": "T{turn}, {turn}번 코너: {name}, {complex}. 에이펙스 {apex} {unit}, {gear}단",
+      "gear": "기어 <n>{gear}</n>"
+    }
+  },
+  "lapSummary": {
+    "title": "{kind, select, run {런 {lap}} other {랩 {lap}}}",
+    "open": "{kind, select, run {런 {lap}: 섹터 데이터 보기} other {랩 {lap}: 섹터 데이터 보기}}",
+    "dismiss": "랩 요약 닫기",
+    "collapse": "랩 요약 접기",
+    "cardLabel": "랩 {lap} 요약",
+    "invalid": "무효",
+    "pb": "PB",
+    "invalidWall": "무효: 벽면 접촉",
+    "invalidLimits": "무효: 트랙 리밋",
+    "autopilot": "오토파일럿: 순위 미반영",
+    "personalBest": "개인 최고 기록",
+    "online": "온라인",
+    "onlineRank": "온라인: P{rank}",
+    "onlineRankOf": "온라인: {total}명 중 P{rank}",
+    "onlineRankWeek": "온라인: P{rank}, 이번 주 P{week}",
+    "onlineRankOfWeek": "온라인: {total}명 중 P{rank}, 이번 주 P{week}",
+    "invalidUnranked": "무효 · 순위 미반영",
+    "autopilotUnranked": "오토파일럿 · 순위 미반영",
+    "topSpeed": "최고 {unit}",
+    "avgSpeed": "평균 {unit}",
+    "fullThrottle": "풀 스로틀",
+    "braking": "제동",
+    "sector": "{mark, select, best {섹터 {n}: 최고} pb {섹터 {n}: 개인 최고} slower {섹터 {n}: 느림} other {섹터 {n}}}",
+    "theoreticalBest": "이론 최고 기록",
+    "posting": "등록 중",
+    "postingNow": "등록 중…",
+    "retry": "업로드 재시도",
+    "post": "온라인 등록",
+    "queued": "대기 중",
+    "close": "닫기",
+    "saveGhost": "고스트 파일 저장",
+    "driver": "드라이버 <b>{name}</b>",
+    "rename": "이름 변경",
+    "driverName": "드라이버 이름",
+    "cancel": "취소",
+    "saving": "저장 중…",
+    "saveName": "이름 저장",
+    "chart": {
+      "title": "코너별 최저 속도",
+      "turn": "T{turn}",
+      "empty": "이 랩의 코너 데이터가 없습니다.",
+      "bar": "T{turn} {name}: {speed} {unit}, {state, select, none {아직 기준 기록 없음} same {{delta}, 최고 기록과 동일} faster {{delta}, 최고 기록보다 빠름} other {{delta}, 최고 기록보다 느림}}",
+      "faster": "빠름",
+      "slower": "느림",
+      "same": "동일"
+    }
+  },
+  "raceResults": {
+    "dialog": "레이스 결과",
+    "dsq": "DSQ",
+    "dnf": "DNF",
+    "running": "주행 중",
+    "lapsDown": "{count, plural, other {+#랩}}",
+    "laps": "{count, plural, other {#랩}}",
+    "trackLimits": "트랙 리밋 {count}",
+    "final": "확정",
+    "provisional": "잠정",
+    "table": "전체 순위표",
+    "colPos": "순위",
+    "colGainedTitle": "그리드 대비 순위 변동",
+    "colGained": "순위 변동",
+    "colDriver": "드라이버",
+    "colLaps": "랩",
+    "colTime": "시간 / 격차",
+    "colBest": "베스트 랩",
+    "penaltyTitle": "기록에 포함된 시간 페널티 {seconds}초",
+    "promptSelect": "선택",
+    "promptClose": "닫기",
+    "backToLobby": "로비로 돌아가기",
+    "watchReplay": "리플레이 보기",
+    "restart": "레이스 재시작",
+    "close": "닫기",
+    "fastestLapIcon": "패스티스트 랩",
+    "noChange": "변동 없음",
+    "notKnown": "알 수 없음",
+    "placesGained": "{count, plural, other {#계단 상승}}",
+    "placesLost": "{count, plural, other {#계단 하락}}",
+    "yourRace": "내 레이스",
+    "position": "P{position}",
+    "disqualified": "실격",
+    "retired": "리타이어",
+    "ofField": "/ {count}",
+    "gridUnknown": "그리드 정보 없음",
+    "started": "P{position} 출발",
+    "fastestLap": "패스티스트 랩",
+    "bestLap": "베스트 랩",
+    "lastRaces": {
+      "title": "최근 레이스",
+      "date": "날짜",
+      "circuit": "서킷",
+      "finish": "완주 순위",
+      "gained": "순위 변동",
+      "best": "베스트 랩",
+      "dnf": "DNF",
+      "position": "P{position}"
+    },
+    "joinNext": "다음 레이스 참가 <time>{countdown}</time>"
+  },
+  "podiumOverlay": {
+    "label": "포디움",
+    "first": "1위",
+    "second": "2위",
+    "third": "3위",
+    "skip": "건너뛰기"
+  },
+  "qualifyingHud": {
+    "clock": "예선",
+    "lastLap": "마지막 랩",
+    "badge": "예선",
+    "finishIt": "랩 완주 가능",
+    "lapDeleted": "랩 무효",
+    "best": "최고",
+    "grid": "예선 결과",
+    "noTime": "기록 없음"
+  },
+  "perfReportCard": {
+    "title": "성능 리포트",
+    "description": "세션 프레임 시간 로그입니다.",
+    "failed": "클립보드를 사용할 수 없습니다. 대신 파일로 저장하십시오.",
+    "copy": "복사",
+    "copied": "복사됨",
+    "saveFile": "파일 저장",
+    "saved": "저장됨"
+  },
+  "qualityNotice": {
+    "lowered": "그래픽 품질이 자동 하향되었습니다",
+    "floor": "낮은 FPS · 설정에서 30 fps 제한 사용 가능"
+  },
+  "multiPageMfd": {
+    "pages": {
+      "elecTag": "전자",
+      "elecTitle": "전자 장비",
+      "relTag": "상대",
+      "relTitle": "상대 거리",
+      "tyreTag": "타이어",
+      "tyreTitle": "타이어 및 브레이크",
+      "fuelTag": "연료",
+      "fuelTitle": "연료 및 에너지",
+      "stndTag": "순위",
+      "stndTitle": "순위표"
+    },
+    "panel": "MFD · {page}",
+    "pagesLabel": "MFD 페이지",
+    "pagesHint": "D-pad 좌우 또는 Ins: 다음 페이지",
+    "open": "MFD 열기",
+    "fold": "MFD 접기",
+    "relative": {
+      "label": "상대 거리",
+      "noCars": "트랙에 다른 차량 없음",
+      "lapsUp": "+{count}L",
+      "lapsDown": "−{count}L",
+      "ahead": "전방",
+      "behind": "후방",
+      "clear": "주변 없음",
+      "you": "YOU"
+    },
+    "fuel": {
+      "battery": "배터리",
+      "ersPerLap": "ERS / 랩",
+      "treadPerLap": "마모 / 랩",
+      "fuel": "연료",
+      "lapsOfFuel": "{laps}랩",
+      "perLap": "랩당 소비",
+      "target": "목표 {kg}",
+      "lift": "리프트 · {kg} kg 절약",
+      "fuelOk": "연료 충분"
+    },
+    "tyres": {
+      "label": "타이어 및 브레이크"
+    },
+    "standings": {
+      "label": "순위표",
+      "fastestLap": "패스티스트 랩",
+      "fastestLapShort": "FL",
+      "lead": "선두",
+      "noLaps": "아직 랩 없음",
+      "lapTimes": "랩 타임"
+    },
+    "pill": {
+      "position": "P{position}/{fieldSize}",
+      "laps": "{count, plural, other {#랩}}"
+    }
+  },
+  "tunerMfdPanel": {
+    "categories": {
+      "bias": "BB",
+      "diff": "디프",
+      "pwr": "출력"
+    },
+    "dials": {
+      "tc1": {
+        "title": "트랙션 컨트롤",
+        "low": "슬립 증가",
+        "high": "안정적"
+      },
+      "tc2": {
+        "title": "TC 컷",
+        "low": "부드러운 개입",
+        "high": "강한 개입"
+      },
+      "abs": {
+        "title": "ABS",
+        "low": "늦게 개입",
+        "high": "일찍 개입"
+      },
+      "bias": {
+        "label": "BB",
+        "title": "브레이크 바이어스",
+        "low": "후륜 쪽",
+        "high": "전륜 쪽"
+      },
+      "diffEntry": {
+        "label": "진입",
+        "title": "진입 디퍼렌셜",
+        "low": "민첩함",
+        "high": "안정적"
+      },
+      "diffMid": {
+        "label": "중간",
+        "title": "중간 디퍼렌셜",
+        "low": "회두성 증가",
+        "high": "잠금 증가"
+      },
+      "diffExit": {
+        "label": "탈출",
+        "title": "탈출 디퍼렌셜",
+        "low": "스냅 감소",
+        "high": "구동력 증가"
+      },
+      "engineMap": {
+        "label": "맵",
+        "title": "엔진 맵",
+        "low": "날카로움",
+        "high": "부드러움"
+      },
+      "ersMode": {
+        "title": "ERS 방출",
+        "low": "회생",
+        "high": "어택"
+      }
+    },
+    "engineMaps": {
+      "quali": "예선",
+      "race": "레이스",
+      "smooth": "부드러움",
+      "lean": "희박",
+      "wet": "웻"
+    },
+    "ersModes": {
+      "charge": "충전",
+      "lowSpeed": "저속",
+      "balanced": "밸런스",
+      "race": "레이스",
+      "attack": "어택"
+    },
+    "phases": {
+      "entry": "진입",
+      "mid": "중간",
+      "exit": "탈출"
+    },
+    "chips": {
+      "tc": "TC {level}/{cut}",
+      "tcOff": "TC 꺼짐",
+      "abs": "ABS {level}",
+      "absOff": "ABS 꺼짐",
+      "bias": "BB {bias}"
+    },
+    "hero": {
+      "off": "꺼짐",
+      "ofMax": "/ {max}",
+      "lock": "{pct}% 잠금",
+      "front": "% 프런트",
+      "map": "M{map}"
+    },
+    "live": {
+      "cut": "개입",
+      "wheelFl": "FL",
+      "wheelFr": "FR",
+      "wheelRl": "RL",
+      "wheelRr": "RR",
+      "front": "F {bias}",
+      "rear": "R {bias}",
+      "torque": "토크",
+      "battery": "배터리"
+    },
+    "previousDial": "이전 다이얼",
+    "previousDialHint": "이전 다이얼(D-pad 왼쪽 또는 ,)",
+    "nextDial": "다음 다이얼",
+    "nextDialHint": "다음 다이얼(D-pad 오른쪽 또는 .)",
+    "lower": "{dial} 낮추기",
+    "lowerHint": "{hint}(D-pad 아래 또는 -)",
+    "raise": "{dial} 높이기",
+    "raiseHint": "{hint}(D-pad 위 또는 =)",
+    "openTuner": "튜너 열기",
+    "foldTuner": "튜너 접기"
+  },
+  "f12026ChannelsPanel": {
+    "region": "엔지니어링 채널",
+    "wheels": {
+      "lf": "LF",
+      "rf": "RF",
+      "lr": "LR",
+      "rr": "RR"
+    },
+    "wheelTitle": "{wheel}: 슬립률, 범프 러버까지 남은 스트로크, 그립 사용량",
+    "slipRatio": "%SR",
+    "aeroHeightTitle": "에어로 차고",
+    "aeroHeight": "에어로 차고",
+    "aeroBalanceTitle": "에어로 밸런스(전륜 다운포스 비율)",
+    "aeroBalance": "에어로 밸런스",
+    "lsdTitle": "디퍼렌셜 잠금 토크",
+    "lsd": "LSD 잠금",
+    "straightModeTitle": "스트레이트 모드 상태 및 이번 세션 개방 횟수",
+    "drsTitle": "DRS 상태 및 이번 세션 개방 횟수",
+    "xMode": "X-mode",
+    "drsState": {
+      "open": "열림",
+      "armed": "대기",
+      "zone": "구역",
+      "off": "꺼짐"
+    },
+    "overtakeEarned": "오버테이크 획득",
+    "overtakeLocked": "오버테이크 잠김",
+    "noVerdict": "판정 없음",
+    "zoneEarned": "{zone} 획득",
+    "zoneLocked": "{zone} 잠김",
+    "noDetection": "감지 없음",
+    "wall": "벽면",
+    "aidIntervening": "{aid}, 개입 중"
+  },
+  "touchControls": {
+    "steering": "조향",
+    "drive": "전진",
+    "reverse": "후진",
+    "shiftDown": "기어 다운",
+    "shiftUp": "기어 업",
+    "boost": "부스트",
+    "activeAero": "액티브 에어로",
+    "headlights": "헤드라이트",
+    "brake": "브레이크",
+    "throttle": "스로틀",
+    "steerLeft": "좌회전 조향",
+    "steerRight": "우회전 조향",
+    "pause": "일시 정지",
+    "camera": "카메라",
+    "recentreTilt": "기울기 중심 재설정",
+    "allowMotion": "모션 허용",
+    "tapForTilt": "탭하여 기울기 사용",
+    "tiltBlocked": "기울기 차단됨 · 재시도",
+    "noTiltSensor": "기울기 센서 없음"
+  },
+  "replayBar": {
+    "region": "리플레이 조작",
+    "transport": "재생 제어",
+    "previousFrame": "이전 프레임",
+    "previousFrameTitle": "이전 프레임({key})",
+    "pause": "리플레이 일시 정지",
+    "play": "리플레이 재생",
+    "playPauseTitle": "재생 / 일시 정지",
+    "playPauseTitleKey": "재생 / 일시 정지({key})",
+    "nextFrame": "다음 프레임",
+    "nextFrameTitle": "다음 프레임({key})",
+    "jumpToLap": "{lap}랩으로 이동",
+    "lapMarker": "L{lap}",
+    "timeline": "리플레이 타임라인",
+    "timelineValue": "{duration} 중 {elapsed}",
+    "playbackSpeed": "재생 속도",
+    "focusedCar": "추적 차량",
+    "previousCar": "이전 차량",
+    "previousCarTitle": "이전 차량({key})",
+    "switchCarTitle": "추적 차량 전환({key})",
+    "nextCar": "다음 차량",
+    "nextCarTitle": "다음 차량({key})",
+    "cameraAngle": "리플레이 카메라 각도",
+    "cycleCamera": "리플레이 카메라 전환",
+    "flashbackTitle": "플래시백 — 이 시점부터 주행 재개({key}, 현재 랩 무효화)",
+    "flashback": "플래시백",
+    "exit": "나가기",
+    "hints": {
+      "freeCam": "자유 캠 · 드래그: 시점 · WASD: 이동 · Q/E: 고도 · 스크롤: 속도 · R: 초기화",
+      "playPause": "재생 / 일시 정지",
+      "seek": "{seconds}초 탐색",
+      "step": "프레임 이동",
+      "switchCar": "차량 전환",
+      "freeCamKey": "자유 캠",
+      "flashback": "플래시백"
+    }
+  },
+  "timingPanels": {
+    "tower": {
+      "region": "타이밍 타워",
+      "lap": "랩 {lap}",
+      "lapOf": "랩 {lap}<dim>/{total}</dim>",
+      "driver": "드라이버",
+      "gap": "격차",
+      "interval": "간격",
+      "lastVsYouTitle": "상대 이전 랩과 내 랩 비교, 내 행에서는 내 베스트 랩과 비교",
+      "lastVsYou": "이전 랩<br></br>비교",
+      "fastestLap": "패스티스트 랩",
+      "fastestLapShort": "FL",
+      "finished": "완주",
+      "damagedTitle": "손상됨({percent}%)",
+      "damagedLabel": "손상됨, {percent}%",
+      "out": "아웃",
+      "leader": "선두",
+      "lead": "선두",
+      "lastVsBestTitle": "내 베스트 대비 이전 랩",
+      "lastVsTheirsTitle": "내 랩 대비 상대 이전 랩",
+      "personalBest": "PB"
+    },
+    "lap": {
+      "region": "랩",
+      "outLap": "아웃 랩",
+      "counter": "{kind, select, run {런 {lap}} other {랩 {lap}}}",
+      "sector": "S{sector}",
+      "last": "이전",
+      "best": "최고",
+      "noRefLap": "기준 랩 없음",
+      "lastLap": "이전 랩",
+      "bestLap": "베스트 랩"
+    },
+    "challenge": {
+      "region": "이번 주 챌린지",
+      "yourBest": "내 최고 기록",
+      "weekFastest": "이번 주 최고 기록"
+    }
+  },
+  "raceIncidentFeed": {
+    "calls": {
+      "investigation": "조사 중",
+      "penalty": "페널티",
+      "noAction": "조치 없음",
+      "out": "아웃",
+      "raceControl": "레이스 컨트롤",
+      "yellow": "황기",
+      "green": "녹기",
+      "warning": "경고"
+    },
+    "vsc": {
+      "tag": "VSC",
+      "ending": "VSC 종료 임박",
+      "slowDown": "감속하십시오",
+      "slowToTarget": "목표 속도로 감속",
+      "prepareForGreen": "녹기 준비",
+      "noOvertaking": "추월 금지"
+    },
+    "flag": {
+      "yieldNow": "즉시 양보 · {code} 통과 허용",
+      "letThrough": "{code} 통과 허용",
+      "doubleYellowCue": "감속 · 추월 금지",
+      "yellowCue": "추월 금지",
+      "blue": "청기",
+      "doubleYellow": "이중 황기",
+      "yellow": "황기"
+    }
+  },
+  "raceControlBanner": {
+    "decisions": {
+      "warning": "경고",
+      "finalWarning": "최종 경고",
+      "penalty": "페널티",
+      "disqualified": "실격",
+      "lapInvalid": "랩 무효",
+      "cleared": "해제됨",
+      "noAdvantage": "조치 없음"
+    },
+    "warningsMeter": "경고 {total}회 중 {count}회",
+    "pointsMeter": "트랙 리밋 점수 {allowed}점 중 {points}점",
+    "giveBack": {
+      "toCar": "{code}에게 순위 반환",
+      "dropTo": "P{position}(으)로 양보",
+      "time": "{seconds}초 반환",
+      "slowDown": "감속하십시오",
+      "underYellow": "황기 중 추월",
+      "illegalOvertake": "부정 추월",
+      "trackLimits": "트랙 리밋"
+    },
+    "offTrack": {
+      "trackLimits": "트랙 리밋",
+      "offTrack": "트랙 이탈",
+      "underReview": "심의 중"
+    }
+  },
+  "startLights": {
+    "startsIn": "레이스 시작까지 <n>{seconds}</n>",
+    "lightsLabel": "스타트 라이트: {total}개 중 {lit}개 점등",
+    "rollingStart": "롤링 스타트",
+    "holdPaceSkin": "속도 유지 · 출발/결승선까지 <n>{pace}</n> {unit}",
+    "holdPace": "출발선까지 <n>{pace}</n> {unit} 유지",
+    "greenFlag": "녹기",
+    "lightsOut": "라이트 아웃",
+    "chequeredFlag": "체커기"
+  },
+  "launchCue": {
+    "stalledLabel": "엔진 시동 꺼짐: 재시동하려면 {control}을(를) 길게 누르거나 중립으로 변속하십시오",
+    "clutch": "클러치",
+    "stalled": "시동 꺼짐 · <control></control> 길게 누르기 또는 N",
+    "jumpStart": "부정 출발 · +{seconds}초",
+    "manualStart": "수동 스타트: {clutch, select, held {클러치 유지 중} other {클러치를 유지하십시오}}, {revs, select, up {RPM 도달} other {RPM을 높이십시오}}",
+    "holdNamed": "{control} 유지",
+    "holdClutch": "클러치 유지",
+    "revsUp": "RPM 올리기"
+  },
+  "speedCluster": {
+    "region": "속도 클러스터",
+    "minimalRegion": "속도 및 기어",
+    "shiftLights": "시프트 라이트: {total}개 중 {lit}개",
+    "gearLabel": "기어 {gear}",
+    "gear": "기어",
+    "shift": "변속",
+    "aeroToggle": "{label}: 전환",
+    "drsTitle": "DRS({key}): DRS 구역에서 리어 플랩 개방, 레이스에서는 3랩부터 감지 지점에서 앞차와 1초 이내일 때만 허용",
+    "straightModeTitle": "스트레이트 모드({key}): 직선에서 양쪽 플랩 개방, 진입 직전 누르면 시작과 동시에 개방",
+    "overtakeLockedTitle": "오버테이크 모드({keys}): 감지 지점에서 앞차와 1초 이내일 때 다음 랩에 획득",
+    "overtakeTitle": "오버테이크 모드({keys})",
+    "boostTitle": "수동 오버라이드 부스트({keys})",
+    "overtake": "오버테이크",
+    "boost": "부스트",
+    "harvest": "회생",
+    "deploy": "방출",
+    "ersSoc": "ERS 충전량",
+    "lonG": "종방향 G",
+    "inputs": "브레이크, 스로틀, 포스",
+    "brakeLetter": "B",
+    "brakeTitle": "브레이크 입력",
+    "throttleLetter": "T",
+    "throttleTitle": "스로틀 입력",
+    "forceLetter": "F",
+    "clip": "클립",
+    "forceTitle": "조향 토크 / 포스 피드백(빨간색 = 클리핑)",
+    "latG": "횡 {g} g",
+    "ersBattery": "ERS 배터리 잔량",
+    "rpmBand": "엔진 RPM 대역"
+  },
+  "hudFormat": {
+    "session": {
+      "qualifying": "예선",
+      "timeTrial": "타임 트라이얼",
+      "practice": "연습"
+    },
+    "cornerShort": "T{turn}",
+    "lapMark": {
+      "best": "최고",
+      "pb": "개인 최고 기록",
+      "slower": "느림"
+    }
+  },
+  "thirdPartyData": {
+    "you": "나",
+    "headlight": {
+      "flash": "점멸",
+      "on": "켜짐",
+      "off": "꺼짐"
+    },
+    "surface": {
+      "dry": "건조",
+      "damp": "축축함",
+      "wet": "젖음",
+      "flooded": "침수"
+    }
+  },
+  "aeroLabel": {
+    "readout": {
+      "noDrs": "DRS 없음",
+      "drsOpen": "DRS 열림",
+      "drsQueued": "DRS 예약",
+      "drsArmed": "DRS 대기",
+      "xMode": "X-MODE",
+      "xQueued": "X 예약",
+      "xArmed": "X 대기",
+      "zMode": "Z-MODE"
+    },
+    "notice": {
+      "drsEnabled": "DRS 활성화",
+      "drsNotEnabled": "DRS 비활성화",
+      "drsQueued": "예약됨",
+      "xModeBadge": "X-MODE",
+      "straightMode": "스트레이트 모드",
+      "xModeQueued": "예약됨",
+      "overtakeBadge": "오버테이크",
+      "overtakeEnabled": "활성화",
+      "overtakeLocked": "잠김"
+    }
+  },
+  "tyreBrakeWidget": {
+    "corner": {
+      "fl": "FL",
+      "fr": "FR",
+      "rl": "RL",
+      "rr": "RR"
+    },
+    "tread": {
+      "inner": "I",
+      "middle": "M",
+      "outer": "O",
+      "title": "외측, 중앙, 내측 트레드"
+    },
+    "condition": {
+      "grain": "그레이닝",
+      "grainTitle": "그레이닝: 트레드 표면이 찢어지는 현상(내부가 차가운 상태에서 슬립 발생)",
+      "blister": "블리스터",
+      "blisterTitle": "블리스터링: 타이어 내부 코어 과열",
+      "flat": "플랫스폿",
+      "flatTitle": "록업으로 인한 플랫스폿: 진동 발생 및 그립 저하",
+      "dirt": "이물질",
+      "dirtTitle": "라인 이탈로 인한 먼지 / 마블 부착: 몇 개 코너 주행 시 제거됨"
+    },
+    "conditionTitle": "{title} ({level}%)",
+    "brakeTitle": "브레이크 디스크 {disc}{hasCore, select, yes { · 코어 {core}} other {}}{hasBite, select, yes { · 패드 제동력 {bite}%} other {}}",
+    "cardTitle": "{corner} 트레드 {temps} (후방 기준)",
+    "treadLife": "트레드 수명",
+    "pressureTitle": "공기압({unit})",
+    "windowTitle": "트레드 적정 온도 범위",
+    "window": "적정 범위",
+    "miniTitle": "{corner}: 트레드 {temps} · {pressure} · 브레이크 {brake}{hasCondition, select, yes { · {condition}} other {}}"
+  },
+  "tyrePanel": {
+    "region": "타이어"
+  },
+  "weatherBadge": {
+    "region": "날씨",
+    "air": "기온",
+    "track": "노면",
+    "rain": "비",
+    "heavyRain": "폭우",
+    "wind": "바람",
+    "headlightsForcedOn": "헤드라이트 수동 켜짐",
+    "headlightsForcedOff": "헤드라이트 수동 꺼짐",
+    "headlightsOn": "헤드라이트 켜짐",
+    "headlightsTitleManualOn": "헤드라이트 켜짐(수동)",
+    "headlightsTitleManualOff": "헤드라이트 꺼짐(수동)",
+    "headlightsTitleAuto": "헤드라이트 켜짐(자동)",
+    "chipFlash": "점멸",
+    "chipOn": "켜짐",
+    "chipOff": "꺼짐"
+  },
+  "damageWidget": {
+    "label": "손상",
+    "out": "아웃",
+    "puncture": "펑크",
+    "title": "전면 {front} · 후면 {rear} · 좌측 {left} · 우측 {right}",
+    "titlePunctured": "전면 {front} · 후면 {rear} · 좌측 {left} · 우측 {right} · 펑크",
+    "part": {
+      "frontWing": "프런트 윙",
+      "rearWing": "리어 윙",
+      "floor": "플로어",
+      "suspension": "서스펜션"
+    }
+  },
+  "inputTrace": {
+    "throttle": "스로틀",
+    "brake": "브레이크",
+    "steering": "조향",
+    "steeringTitle": "실선: 실제 바퀴 각도, 점선: 플레이어 입력",
+    "trace": "스로틀, 브레이크 및 조향 그래프: 점선은 플레이어 입력, 실선은 실제 바퀴 각도",
+    "region": "입력"
+  },
+  "pedalBars": {
+    "region": "페달 및 전자 장비",
+    "clutch": "CLU",
+    "clip": "클립",
+    "steering": "조향"
+  },
+  "splitGaps": {
+    "region": "섹터 격차",
+    "ahead": "전방",
+    "behind": "후방",
+    "carAhead": "앞차 {driver}: {gap}초",
+    "carBehind": "뒷차 {driver}: {gap}초",
+    "goingYourWay": "유리하게 변화",
+    "goingAgainstYou": "불리하게 변화",
+    "steady": "유지"
+  },
+  "deltaBar": {
+    "label": "기준 랩 대비 델타",
+    "valueText": "{delta}초, {trend, select, gaining {단축 중} losing {손실 중} other {유지}}",
+    "noReference": "기준 랩 없음"
+  },
+  "ffbMeter": {
+    "title": "포스 피드백",
+    "clipping": "클리핑",
+    "inRange": "적정 범위",
+    "peak": "최대 <v>{value}%</v>",
+    "setCar": "이 차량을 {value}%로 설정"
+  },
+  "proximityRadar": {
+    "carsClose": "{count, plural, other {근접 차량 #대}}{side, select, left {, 왼쪽 나란히 1대} right {, 오른쪽 나란히 1대} both {, 좌우 나란히 각 1대} other {}}",
+    "clear": "주변 차량 없음"
+  },
+  "cameraToast": {
+    "freeHintTouch": "드래그하여 둘러보기 · 종료하려면 일시 정지 또는 리플레이 카메라 메뉴 사용",
+    "freeHintKeys": "드래그: 시점 · WASD: 이동 · Q/E: 고도 · 스크롤: 속도 · R: 초기화 · {key}: 종료"
+  },
+  "ffbPairPrompt": {
+    "region": "포스 피드백",
+    "text": "포스 피드백용 휠 페어링",
+    "connect": "연결",
+    "dismiss": "닫기"
+  },
+  "dualSensePairPrompt": {
+    "text": "<b>DualSense 감지됨</b> · 트리거 및 햅틱 사용을 위해 페어링",
+    "pair": "페어링",
+    "dismiss": "닫기"
+  },
+  "overheadNameplates": {
+    "fastestLap": "FL",
+    "rank": "P{rank}"
+  },
+  "hiddenNote": {
+    "off": "HUD 꺼짐",
+    "offKey": "HUD 꺼짐 · 표시: {key}"
+  }
+}

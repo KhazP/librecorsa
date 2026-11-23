@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { useTranslations } from "use-intl/react";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 import { Icon } from "./icons/Icon";
 import { CHOSEN_TILE, CURSOR_TILE, cx, DISABLED, IDLE_TILE, MOTION } from "./styles";
@@ -77,8 +78,9 @@ export function MediaTile(props: MediaTileProps) {
     controlProps,
     className,
   } = props;
+  const tx = useTranslations("common.mediaTile");
   const classes = cx(
-    "group relative flex h-full w-full min-w-0 cursor-pointer overflow-hidden rounded-lc-tile border-[1.5px] text-left",
+    "group relative flex h-full w-full min-w-0 cursor-pointer overflow-hidden rounded-lc-tile border-[1.5px] text-start",
     horizontal ? "flex-col sm:flex-row" : "flex-col",
     "active:bg-white/2",
     MOTION,
@@ -96,7 +98,7 @@ export function MediaTile(props: MediaTileProps) {
         )}
       >
         {media}
-        {overlay ? <span className="absolute top-2 left-2 flex flex-wrap gap-1">{overlay}</span> : null}
+        {overlay ? <span className="absolute top-2 start-2 flex flex-wrap gap-1">{overlay}</span> : null}
       </span>
       {/* Side by side, the action sits on its own row under the text; stacked, it sits on the picture */}
       <span className={cx("flex min-w-0 flex-1 flex-col gap-1 p-3", action && horizontal ? "pb-12" : undefined)}>
@@ -108,7 +110,7 @@ export function MediaTile(props: MediaTileProps) {
           >
             {title}
           </span>
-          {chosen ? <Icon name="success" label="Chosen" className="mt-px shrink-0 text-lc-chalk" /> : null}
+          {chosen ? <Icon name="success" label={tx("chosen")} className="mt-px shrink-0 text-lc-chalk" /> : null}
         </span>
         {meta ? <span className="lc-hint line-clamp-2">{meta}</span> : null}
         {badges ? <span className="mt-1 flex flex-wrap items-center gap-1">{badges}</span> : null}
@@ -152,10 +154,10 @@ export function MediaTile(props: MediaTileProps) {
           {inner}
         </button>
       )}
-      {action ? <span className={cx("absolute right-2 flex", horizontal ? "bottom-2" : "top-2")}>{action}</span> : null}
+      {action ? <span className={cx("absolute end-2 flex", horizontal ? "bottom-2" : "top-2")}>{action}</span> : null}
       {mediaFooter && !horizontal ? (
         <span className={cx("pointer-events-none absolute inset-x-[1.5px] top-[1.5px]", ASPECT[aspect])}>
-          <span className="pointer-events-none absolute right-2 bottom-2 left-2 flex items-end justify-start">
+          <span className="pointer-events-none absolute end-2 bottom-2 start-2 flex items-end justify-start">
             {mediaFooter}
           </span>
         </span>

@@ -11,6 +11,7 @@
  * On top of the resolved parameters sits the player's AI skill level (0–100) and a per-driver personality; at the
  * default skill and the shipped defaults the field drives exactly as it did before this module existed.
  */
+import { text as tx } from '@/lib/text';
 import type { BuiltTrackData } from '@/lib/track-data';
 
 export type AiClassId = 'f1-2026' | 'gt3';
@@ -200,10 +201,10 @@ export function resolveAiTuning(key: AiTuningKey, library: AiTuningLibrary): Res
 // -------------------------------------------------------------------------------------------------
 
 export const AI_SKILL_LEVELS = [
-  { id: 'rookie', label: 'Rookie', value: 0 },
-  { id: 'amateur', label: 'Amateur', value: 35 },
-  { id: 'pro', label: 'Pro', value: 70 },
-  { id: 'alien', label: 'Alien', value: 100 },
+  { id: 'rookie', get label() { return tx('game.aiSkill.rookie'); }, value: 0 },
+  { id: 'amateur', get label() { return tx('game.aiSkill.amateur'); }, value: 35 },
+  { id: 'pro', get label() { return tx('game.aiSkill.pro'); }, value: 70 },
+  { id: 'alien', get label() { return tx('game.aiSkill.alien'); }, value: 100 },
 ] as const;
 
 /** Pro: the field as it drove before skill levels existed */

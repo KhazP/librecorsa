@@ -6,6 +6,7 @@
  * boards in the same timing-table style as OnlineBoard. Free of the simulator so the home page can load it too.
  */
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import type { VehicleModelId } from "@/types/f1";
 import { fetchBadges, type DriverBadge } from "@/lib/net/awards";
 import { driverNameKey, formatCount } from "@/lib/net/board-client";
@@ -50,8 +51,8 @@ export interface DriverProfileModalProps {
 
 type SortMode = "rank" | "circuit" | "recent";
 
-const TH = "lc-lbl px-2 pb-2 text-left font-semibold whitespace-nowrap";
-const SECTOR = "hidden text-right @2xl:table-cell";
+const TH = "lc-lbl px-2 pb-2 text-start font-semibold whitespace-nowrap";
+const SECTOR = "hidden text-end @2xl:table-cell";
 
 export interface DriverProfileBodyProps {
   profile: DriverProfile | null;
@@ -78,6 +79,8 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
   onRetry,
   onOpenBoard,
 }) => {
+  const tx = useTranslations("board.profile");
+  const tt = useTranslations("board.table");
   const [sort, setSort] = useState<SortMode>("rank");
 
   const sortedLaps = useMemo<DriverProfileLap[]>(() => {
@@ -107,7 +110,7 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
   if (loading && !profile) {
     return (
       <>
-        <div role="status" aria-busy="true" aria-label="Loading driver stats" className="grid grid-cols-3 gap-2.5 phone:gap-2">
+        <div role="status" aria-busy="true" aria-label={tx("loadingStats")} className="grid grid-cols-3 gap-2.5 phone:gap-2">
           {[0, 1, 2].map((i) => (
             <Well key={i} className="flex flex-col gap-2 px-4 py-3 phone:px-3 phone:py-2.5">
               <Skeleton shape="line" className="h-7 w-16" />
@@ -115,8 +118,8 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
             </Well>
           ))}
         </div>
-        <Card title="Best laps" bodyClassName="gap-2">
-          <BoardSkeleton rows={5} label="Loading best laps" />
+        <Card title={tx("bestLaps")} bodyClassName="gap-2">
+          <BoardSkeleton rows={5} label={tx("loadingBestLaps")} />
         </Card>
       </>
     );
@@ -124,8 +127,8 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
 
   if (error && !profile) {
     return (
-      <Card title="Driver stats">
-        <BoardError onRetry={onRetry}>Couldn&apos;t load this driver&apos;s profile.</BoardError>
+      <Card title={tx("driverStats")}>
+        <BoardError onRetry={onRetry}>{tx("loadFailed")}</BoardError>
       </Card>
     );
   }
@@ -137,7 +140,7 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
       {error ? (
         <p role="alert" className="m-0 flex items-center gap-2 text-[13px] font-medium text-lc-caution">
           <Icon name="warning" />
-          Refresh failed. Showing cached stats.
+          {tx("refreshFailed")}
         </p>
       ) : null}
 
@@ -145,52 +148,52 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
       <div className="grid grid-cols-3 gap-2.5 phone:gap-2">
         <Well
           className="flex min-w-0 flex-col gap-1 px-4 py-3 phone:px-3 phone:py-2.5"
-          title="Average percentile across circuits, weighted toward 50 when few circuits are driven"
+          title={tx("ratingTitle")}
         >
           <span className="lc-data text-[28px] leading-none text-lc-chalk phone:text-[22px]">
             {profile.rating !== null ? profile.rating.toFixed(1) : "—"}
-            {profile.rating !== null ? <span className="sr-only"> out of 100</span> : null}
+            {profile.rating !== null ? <span className="sr-only"> {tx("outOf100")}</span> : null}
           </span>
-          <span className="lc-hint truncate">Rating</span>
+          <span className="lc-hint truncate">{tx("rating")}</span>
         </Well>
         <Well className="flex min-w-0 flex-col gap-1 px-4 py-3 phone:px-3 phone:py-2.5">
           <span className="lc-data text-[28px] leading-none text-lc-chalk phone:text-[22px]">
             {formatCount(profile.circuitsDriven)}
           </span>
-          <span className="lc-hint truncate">{profile.circuitsDriven === 1 ? "Circuit" : "Circuits"}</span>
+          <span className="lc-hint truncate">{tx("circuits", { count: profile.circuitsDriven })}</span>
         </Well>
         <Well className="flex min-w-0 flex-col gap-1 px-4 py-3 phone:px-3 phone:py-2.5">
           <span className="lc-data text-[28px] leading-none text-lc-chalk phone:text-[22px]">
             {formatCount(profile.boardsEntered)}
           </span>
-          <span className="lc-hint truncate">{profile.boardsEntered === 1 ? "Board" : "Boards"}</span>
+          <span className="lc-hint truncate">{tx("boards", { count: profile.boardsEntered })}</span>
         </Well>
       </div>
 
       {/* Open races record from /api/drivers/record */}
       {record !== null ? (
-        <Card title="Open races" bodyClassName="gap-2.5">
+        <Card title={tx("openRaces")} bodyClassName="gap-2.5">
           {record.starts === 0 ? (
-            <p className="lc-hint m-0">No finished open races yet.</p>
+            <p className="lc-hint m-0">{tx("noOpenRaces")}</p>
           ) : (
             <div className="grid grid-cols-4 gap-2.5 phone:grid-cols-2 phone:gap-2">
               <Well className="flex min-w-0 flex-col gap-1 px-3.5 py-2.5 phone:px-3">
                 <span className="lc-data text-[20px] leading-none text-lc-chalk">{formatCount(record.starts)}</span>
-                <span className="lc-hint truncate">{record.starts === 1 ? "Race" : "Races"}</span>
+                <span className="lc-hint truncate">{tx("races", { count: record.starts })}</span>
               </Well>
               <Well className="flex min-w-0 flex-col gap-1 px-3.5 py-2.5 phone:px-3">
                 <span className="lc-data text-[20px] leading-none text-lc-chalk">{formatCount(record.wins)}</span>
-                <span className="lc-hint truncate">{record.wins === 1 ? "Win" : "Wins"}</span>
+                <span className="lc-hint truncate">{tx("wins", { count: record.wins })}</span>
               </Well>
               <Well className="flex min-w-0 flex-col gap-1 px-3.5 py-2.5 phone:px-3">
                 <span className="lc-data text-[20px] leading-none text-lc-chalk">{formatCount(record.podiums)}</span>
-                <span className="lc-hint truncate">{record.podiums === 1 ? "Podium" : "Podiums"}</span>
+                <span className="lc-hint truncate">{tx("podiums", { count: record.podiums })}</span>
               </Well>
               <Well className="flex min-w-0 flex-col gap-1 px-3.5 py-2.5 phone:px-3">
                 <span className="lc-data text-[20px] leading-none text-lc-chalk">
                   {record.bestFinish !== null ? `P${formatCount(record.bestFinish)}` : "—"}
                 </span>
-                <span className="lc-hint truncate">Best finish</span>
+                <span className="lc-hint truncate">{tx("bestFinish")}</span>
               </Well>
             </div>
           )}
@@ -199,23 +202,23 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
 
       {/* Per-circuit best laps */}
       <Card
-        title="Best laps"
+        title={tx("bestLaps")}
         description={
           profile.laps.length > 0
-            ? "Current physics boards, all assists and conditions. Rating weights few circuits toward 50."
+            ? tx("bestLapsNote")
             : undefined
         }
         action={
           profile.laps.length > 1 ? (
             <Segmented
-              aria-label="Sort best laps"
+              aria-label={tx("sortLabel")}
               size="sm"
               value={sort}
               onChange={setSort}
               options={[
-                { id: "rank", label: "Best rank" },
-                { id: "circuit", label: "Circuit" },
-                { id: "recent", label: "Recent" },
+                { id: "rank", label: tx("sortRank") },
+                { id: "circuit", label: tx("sortCircuit") },
+                { id: "recent", label: tx("sortRecent") },
               ]}
             />
           ) : undefined
@@ -223,29 +226,29 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
         bodyClassName="gap-2"
       >
         {sortedLaps.length === 0 ? (
-          <EmptyState icon={<Icon name="lapTimes" />}>No laps on the current boards yet.</EmptyState>
+          <EmptyState icon={<Icon name="lapTimes" />}>{tx("noLaps")}</EmptyState>
         ) : (
           <div className="@container min-w-0">
-            <table className="w-full border-collapse" aria-label={`${profile.name}'s best laps`}>
+            <table className="w-full border-collapse" aria-label={tx("tableLabel", { name: profile.name })}>
               <thead>
                 <tr className="border-b border-lc-line">
                   <th scope="col" className={`${TH} w-24 phone:w-16`}>
-                    Pos
+                    {tt("pos")}
                   </th>
                   <th scope="col" className={`${TH} w-full`}>
-                    Circuit
+                    {tx("colCircuit")}
                   </th>
-                  <th scope="col" className={`${TH} text-right`}>
-                    Lap
-                  </th>
-                  <th scope="col" className={`${TH} ${SECTOR}`}>
-                    S1
+                  <th scope="col" className={`${TH} text-end`}>
+                    {tt("lap")}
                   </th>
                   <th scope="col" className={`${TH} ${SECTOR}`}>
-                    S2
+                    {tt("sector", { n: 1 })}
                   </th>
                   <th scope="col" className={`${TH} ${SECTOR}`}>
-                    S3
+                    {tt("sector", { n: 2 })}
+                  </th>
+                  <th scope="col" className={`${TH} ${SECTOR}`}>
+                    {tt("sector", { n: 3 })}
                   </th>
                 </tr>
               </thead>
@@ -260,7 +263,7 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
                         <span className="flex flex-col items-start gap-0.5 @sm:flex-row @sm:items-center @sm:gap-1.5">
                           <PositionBadge position={lap.position} size="sm" className="min-w-10" />
                           <span className="lc-mono text-[11px] text-lc-slate whitespace-nowrap">
-                            of {formatCount(lap.boardSize)}
+                            {tx("ofBoard", { total: formatCount(lap.boardSize) })}
                           </span>
                         </span>
                       </td>
@@ -270,8 +273,8 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
                             <button
                               type="button"
                               onClick={() => onOpenBoard(lap.trackId, lap.vehicle)}
-                              title={`Open ${trackLabel} (${tag.label}) board`}
-                              className="min-w-0 cursor-pointer truncate rounded-lc-nub border-0 bg-transparent px-1 -mx-1 py-0.5 text-left text-[14px] font-semibold text-lc-chalk decoration-lc-slate/70 underline-offset-4 transition-colors duration-150 ease-lc hover:underline"
+                              title={tx("openBoard", { circuit: trackLabel, car: tag.label })}
+                              className="min-w-0 cursor-pointer truncate rounded-lc-nub border-0 bg-transparent px-1 -mx-1 py-0.5 text-start text-[14px] font-semibold text-lc-chalk decoration-lc-slate/70 underline-offset-4 transition-colors duration-150 ease-lc hover:underline"
                             >
                               {trackLabel}
                             </button>
@@ -296,15 +299,15 @@ export const DriverProfileBody: React.FC<DriverProfileBodyProps> = ({
                           </span>
                         </span>
                       </td>
-                      <td className="px-2 text-right">
+                      <td className="px-2 text-end">
                         <span
                           className={`lc-mono text-[15px] font-bold whitespace-nowrap phone:text-[14px] ${
                             fastest ? "text-lc-best underline decoration-2 underline-offset-4" : "text-lc-chalk"
                           }`}
-                          title={fastest ? "Fastest on this board" : undefined}
+                          title={fastest ? tt("fastestHere") : undefined}
                         >
                           {formatLapTime(lap.lapTimeMs)}
-                          {fastest ? <span className="sr-only"> (fastest)</span> : null}
+                          {fastest ? <span className="sr-only"> {tt("fastest")}</span> : null}
                         </span>
                       </td>
                       {[0, 1, 2].map((k) => (
@@ -337,6 +340,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
   initialBadges,
   onOpenBoard,
 }) => {
+  const tx = useTranslations("board.profile");
   const open = Boolean(driverName && driverName.trim());
   const targetKey = driverName ? driverNameKey(driverName) : "";
   const [refresh, setRefresh] = useState<{ key: string; seq: number }>({ key: "", seq: 0 });
@@ -401,7 +405,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
       open={open}
       onClose={onClose}
       size="lg"
-      ariaLabel={displayName ? `${displayName} driver profile` : "Driver profile"}
+      ariaLabel={displayName ? tx("ariaNamed", { name: displayName }) : tx("aria")}
       titleClassName="text-[24px] leading-tight font-bold text-lc-chalk phone:text-[20px]"
       title={
         <span className="flex min-w-0 items-center gap-2.5">
@@ -430,8 +434,8 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
           size="sm"
           variant="ghost"
           icon={<Icon name="refresh" />}
-          aria-label="Refresh driver profile"
-          title="Refresh"
+          aria-label={tx("refreshLabel")}
+          title={tx("refresh")}
           disabled={loading}
           aria-busy={loading || undefined}
           onClick={triggerRefresh}

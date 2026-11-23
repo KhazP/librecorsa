@@ -2,6 +2,7 @@
  * How an AI race is set up: length, field, grid, racecraft, damage and the start. Saved with the player's settings and read when
  * a race is started (changes apply from the next start).
  */
+import { text as t } from '@/lib/text';
 import type { DamageLevel } from './car-damage';
 import type { AiRace, RaceDriverLabel } from './ai-race';
 import { RACE_START_MODES, type RaceStartMode } from './race-start';
@@ -56,13 +57,30 @@ export const RACE_LAP_OPTIONS = [3, 5, 10, 20] as const;
 export const RACE_OPPONENT_OPTIONS = [3, 5, 7, 9] as const;
 export const MAX_RACE_OPPONENTS = 11;
 
-export const PLAYER_GRID_LABELS: Record<PlayerGridSlot, string> = { back: 'Back', middle: 'Middle', front: 'Pole', random: 'Random' };
-export const AI_GRID_LABELS: Record<AiGridOrder, string> = { pace: 'By pace', qualifying: 'Qualifying', reversed: 'Reversed' };
-export const RACE_START_LABELS: Record<RaceStartChoice, string> = { auto: 'Auto', standing: 'Standing', rolling: 'Rolling' };
+export const PLAYER_GRID_LABELS: Record<PlayerGridSlot, string> = {
+  get back() { return t('game.raceSetup.gridBack'); },
+  get middle() { return t('game.raceSetup.gridMiddle'); },
+  get front() { return t('game.raceSetup.gridPole'); },
+  get random() { return t('game.raceSetup.gridRandom'); },
+};
+export const AI_GRID_LABELS: Record<AiGridOrder, string> = {
+  get pace() { return t('game.raceSetup.aiGridPace'); },
+  get qualifying() { return t('game.raceSetup.aiGridQualifying'); },
+  get reversed() { return t('game.raceSetup.aiGridReversed'); },
+};
+export const RACE_START_LABELS: Record<RaceStartChoice, string> = {
+  get auto() { return t('game.raceSetup.startAuto'); },
+  get standing() { return t('game.raceSetup.startStanding'); },
+  get rolling() { return t('game.raceSetup.startRolling'); },
+};
 /** ", standing start" for a summary line; nothing when the start follows the car's class */
 export const raceStartSuffix = (choice: RaceStartChoice, sep: string): string =>
-  choice === 'auto' ? '' : `${sep}${RACE_START_LABELS[choice].toLowerCase()} start`;
-export const RACE_AGGRESSION_LABELS: Record<RaceAggression, string> = { clean: 'Clean', normal: 'Normal', hard: 'Hard' };
+  choice === 'auto' ? '' : `${sep}${choice === 'standing' ? t('game.raceSetup.standingStart') : t('game.raceSetup.rollingStart')}`;
+export const RACE_AGGRESSION_LABELS: Record<RaceAggression, string> = {
+  get clean() { return t('game.raceSetup.aggressionClean'); },
+  get normal() { return t('game.raceSetup.aggressionNormal'); },
+  get hard() { return t('game.raceSetup.aggressionHard'); },
+};
 /**
  * Added to each driver's temperament (−1 waits for a clear gap and rarely defends … +1 late lunges, covers every
  * inside): clean racing gives more room and passes less, hard racing dives later and defends more

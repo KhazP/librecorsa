@@ -1,0 +1,139 @@
+{
+  "newTab": "(새 탭에서 열림)",
+  "confirm": {
+    "cancel": "취소",
+    "busy": "완료될 때까지 기다려 주십시오"
+  },
+  "toggle": {
+    "on": "켜짐",
+    "off": "꺼짐"
+  },
+  "disclosure": {
+    "more": "더 보기",
+    "less": "접기"
+  },
+  "select": {
+    "placeholder": "선택",
+    "labelValue": "{label}: {value}"
+  },
+  "settingRow": {
+    "changed": "기본값에서 변경됨",
+    "resetNamed": "{setting} 기본값으로 초기화",
+    "resetThis": "이 설정을 기본값으로 초기화",
+    "reset": "기본값으로 초기화"
+  },
+  "mediaTile": {
+    "chosen": "선택됨"
+  },
+  "keys": {
+    "up": "위",
+    "down": "아래",
+    "left": "왼쪽",
+    "right": "오른쪽",
+    "wheelButton": "버튼 {button}"
+  },
+  "pad": {
+    "namedButton": "{name} 버튼",
+    "shapeButton": "{shape, select, cross {엑스 버튼} circle {동그라미 버튼} square {네모 버튼} other {세모 버튼}}",
+    "faceButton": "{position, select, bottom {하단 버튼} right {오른쪽 버튼} left {왼쪽 버튼} other {상단 버튼}}",
+    "dpad": "D-pad",
+    "dpadDirection": "{direction, select, up {D-pad 위} down {D-pad 아래} left {D-pad 왼쪽} right {D-pad 오른쪽} horizontal {D-pad 좌우} other {D-pad 상하}}",
+    "shoulder": "{button, select, lb {왼쪽 범퍼} rb {오른쪽 범퍼} lt {왼쪽 트리거} other {오른쪽 트리거}} ({name})",
+    "touchpad": "터치패드",
+    "stick": "{side, select, left {왼쪽 스틱} other {오른쪽 스틱}}",
+    "stickPress": "{side, select, left {왼쪽 스틱 누르기} other {오른쪽 스틱 누르기}} ({name})",
+    "stickDirection": "{side, select, left {왼쪽 스틱} other {오른쪽 스틱}} {direction, select, up {위} down {아래} left {왼쪽} right {오른쪽} horizontal {좌우} other {상하}}"
+  },
+  "badges": {
+    "you": "나",
+    "position": "{position}위",
+    "qualityDescription": ": {description}"
+  },
+  "delta": {
+    "spoken": "{trend, select, level {동일} faster {{seconds}초 빠름} other {{seconds}초 느림}}{best, select, yes {, 최고 기록} other {}}",
+    "best": "최고"
+  },
+  "penalty": {
+    "time": "+{seconds}초",
+    "driveThrough": "드라이브 스루",
+    "warning": "경고",
+    "trackLimits": "트랙 리밋 {strikes}/{of}",
+    "disqualified": "실격"
+  },
+  "flags": {
+    "green": "녹기",
+    "yellow": "황기",
+    "doubleYellow": "이중 황기",
+    "blue": "청기",
+    "red": "적기",
+    "white": "백기",
+    "black": "흑기",
+    "blackWhite": "흑백기",
+    "chequered": "체커기"
+  },
+  "compounds": {
+    "name": {
+      "soft": "소프트",
+      "medium": "미디엄",
+      "hard": "하드",
+      "intermediate": "인터미디어트",
+      "wet": "웻"
+    },
+    "short": {
+      "soft": "소프트",
+      "medium": "미디엄",
+      "hard": "하드",
+      "intermediate": "인터",
+      "wet": "웻"
+    },
+    "long": {
+      "soft": "소프트 타이어",
+      "medium": "미디엄 타이어",
+      "hard": "하드 타이어",
+      "intermediate": "인터미디어트 타이어(젖은 노면)",
+      "wet": "풀 웻 타이어(고인 물)"
+    },
+    "tyres": {
+      "soft": "소프트 타이어",
+      "medium": "미디엄 타이어",
+      "hard": "하드 타이어",
+      "intermediate": "인터미디어트 타이어",
+      "wet": "웻 타이어"
+    }
+  },
+  "carClass": {
+    "openWheel": "오픈 휠",
+    "gt3": "GT3",
+    "proto": "프로토",
+    "classic": "클래식",
+    "road": "로드"
+  },
+  "session": {
+    "practice": "연습",
+    "race": "레이스",
+    "timeAttack": "타임 트라이얼",
+    "hillClimb": "힐 클라임",
+    "online": "온라인",
+    "offline": "오프라인",
+    "host": "호스트"
+  },
+  "state": {
+    "new": "신규",
+    "beta": "베타",
+    "wip": "개발 중",
+    "experimental": "실험적",
+    "downloaded": "다운로드됨",
+    "downloading": "다운로드 중",
+    "updateAvailable": "업데이트 가능",
+    "inUse": "사용 중"
+  },
+  "surface": {
+    "dry": "건조",
+    "damp": "축축함",
+    "wet": "젖음",
+    "flooded": "침수"
+  },
+  "dialog": {
+    "close": "닫기"
+  }
+}

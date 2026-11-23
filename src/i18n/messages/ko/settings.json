@@ -1,0 +1,634 @@
+{
+  "screen": {
+    "title": "설정",
+    "dialogLabel": "설정",
+    "detailLabel": "표시할 설정 범위",
+    "simple": "간단",
+    "advanced": "고급",
+    "close": "닫기",
+    "categoriesLabel": "설정 카테고리",
+    "sectionsLabel": "{category} 섹션",
+    "paneLabel": "{category}: {tab}",
+    "noAdvancedHere": "이 페이지에는 고급 설정이 없습니다",
+    "moreInAdvanced": "고급 모드에 더 많은 설정이 있습니다",
+    "steeringInAdvanced": "조향 보조는 고급 모드에 있습니다",
+    "categories": {
+      "driving": "주행",
+      "controls": "조작",
+      "ffb": "포스 피드백",
+      "display": "디스플레이",
+      "audio": "오디오",
+      "profile": "프로필 및 데이터"
+    },
+    "tabs": {
+      "driving": {
+        "assists": "주행 보조",
+        "steering": "조향 보조"
+      },
+      "controls": {
+        "device": "장치",
+        "keyboard": "키보드",
+        "controller": "컨트롤러",
+        "wheel": "휠",
+        "touch": "터치"
+      },
+      "ffb": {
+        "main": "포스 피드백"
+      },
+      "display": {
+        "graphics": "그래픽",
+        "hud": "HUD",
+        "camera": "카메라",
+        "interface": "인터페이스"
+      },
+      "audio": {
+        "main": "오디오"
+      },
+      "profile": {
+        "driver": "드라이버",
+        "data": "데이터"
+      }
+    },
+    "prompts": {
+      "move": "이동",
+      "change": "변경",
+      "tabs": "탭",
+      "resetRow": "항목 초기화",
+      "showAdvanced": "고급 표시",
+      "showSimple": "간단 표시",
+      "back": "뒤로"
+    }
+  },
+  "field": {
+    "resetRow": "{setting} 기본값으로 초기화",
+    "reset": "초기화",
+    "resetTitle": "{card}을(를) 초기화하시겠습니까?",
+    "resetConfirm": "초기화",
+    "resetBody": "{what}을(를) 기본값으로 초기화합니다.",
+    "resetBodyDefault": "이 설정들을 기본값으로 초기화합니다.",
+    "showAdvanced": "고급 표시"
+  },
+  "values": {
+    "off": "꺼짐",
+    "linear": "선형",
+    "progressive": "점진 {value}",
+    "aggressive": "공격적 {value}",
+    "raw": "원본",
+    "fullLock": "{value}, 풀 록"
+  },
+  "off": {
+    "triggerPedals": "트리거 페달 필요",
+    "touchScreen": "터치스크린 필요"
+  },
+  "rows": {
+    "assistLevel": {
+      "label": "주행 보조 수준",
+      "options": {
+        "beginner": "입문",
+        "intermediate": "중급",
+        "sim": "시뮬레이션"
+      },
+      "details": {
+        "beginner": "전체 TC 및 ABS, 레이싱 라인, 조향 보조",
+        "intermediate": "TC 및 ABS, 레이싱 라인",
+        "sim": "TC 없음, ABS 없음, 레이싱 라인 없음"
+      }
+    },
+    "assistPreset": {
+      "label": "트랙션 컨트롤 및 ABS",
+      "options": {
+        "pro": "꺼짐",
+        "semi_pro": "TC + ABS",
+        "assisted": "전체"
+      }
+    },
+    "racingLine": {
+      "label": "레이싱 라인",
+      "hint": "{key} 키"
+    },
+    "autoGearbox": {
+      "label": "자동 변속기",
+      "hint": "수동 키: {up} / {down}"
+    },
+    "autoClutch": {
+      "label": "자동 클러치",
+      "hint": "시동 꺼짐 방지, 수동 클러치 출발을 사용하려면 끄십시오",
+      "off": {
+        "gearbox": "수동 변속기 필요",
+        "wheel": "조작 > 휠에서 클러치를 할당하십시오",
+        "controller": "조작 > 컨트롤러에서 클러치를 할당하십시오",
+        "touch": "터치 조작에서는 사용할 수 없습니다",
+        "keyboard": "조작 > 키보드에서 클러치를 할당하십시오"
+      },
+      "overridden": {
+        "gearbox": "일시적으로 꺼져 있습니다(수동 변속기 필요). 기본값을 복원하려면 켜십시오",
+        "wheel": "일시적으로 꺼져 있습니다(조작 > 휠에서 클러치 할당 필요). 기본값을 복원하려면 켜십시오",
+        "controller": "일시적으로 꺼져 있습니다(조작 > 컨트롤러에서 클러치 할당 필요). 기본값을 복원하려면 켜십시오",
+        "touch": "일시적으로 꺼져 있습니다(터치 조작에서는 사용 불가). 기본값을 복원하려면 켜십시오",
+        "keyboard": "일시적으로 꺼져 있습니다(조작 > 키보드에서 클러치 할당 필요). 기본값을 복원하려면 켜십시오"
+      }
+    },
+    "gamepadAssist": {
+      "label": "컨트롤러 조향 보조",
+      "hint": "조향각을 프런트 타이어 그립 한계 내로 제한하고 슬라이드를 제어합니다"
+    },
+    "exitAssist": {
+      "label": "스로틀 보조",
+      "hint": "리어 슬립 시 스로틀을 조절합니다(키보드, TC 꺼짐)"
+    },
+    "brakeAssist": {
+      "label": "브레이크 보조",
+      "hint": "록업 시 브레이크를 조절합니다(키보드, ABS 꺼짐)"
+    },
+    "realism": {
+      "label": "시뮬레이션 리얼리즘"
+    },
+    "launch": {
+      "label": "출발 방식"
+    },
+    "ghost": {
+      "label": "베스트 랩 고스트"
+    },
+    "steeringPreset": {
+      "label": "프리셋",
+      "custom": "사용자 지정",
+      "options": {
+        "custom": "사용자 지정"
+      }
+    },
+    "pedalAssistStrength": {
+      "label": "페달 보조 강도",
+      "hint": "스로틀 보조와 브레이크 보조가 입력을 얼마나 일찍, 얼마나 강하게 완화할지 설정합니다"
+    },
+    "mouseSteer": {
+      "label": "마우스 조향",
+      "hint": "{key} 키"
+    },
+    "throttleRiseS": {
+      "label": "스로틀 상승 시간"
+    },
+    "brakeRiseS": {
+      "label": "브레이크 상승 시간"
+    },
+    "steerRiseS": {
+      "label": "조향 부드러움",
+      "hint": "낮을수록 반응이 빠릅니다"
+    },
+    "steerReturnS": {
+      "label": "조향 복귀 속도"
+    },
+    "halfThrottle": {
+      "label": "하프 스로틀"
+    },
+    "halfBrake": {
+      "label": "하프 브레이크"
+    },
+    "rumble": {
+      "label": "진동"
+    },
+    "steeringRate": {
+      "label": "조향 속도"
+    },
+    "deadzone": {
+      "label": "내부 데드존"
+    },
+    "outerDeadzone": {
+      "label": "외부 데드존"
+    },
+    "linearity": {
+      "label": "스틱 선형성",
+      "hint": "1보다 높으면 중앙 부근이 부드러워집니다"
+    },
+    "throttleGamma": {
+      "label": "스로틀 곡선",
+      "hint": "1보다 높으면 약한 입력이 부드러워집니다"
+    },
+    "brakeGamma": {
+      "label": "브레이크 곡선",
+      "hint": "1보다 높으면 약한 제동이 부드러워집니다"
+    },
+    "stickPedalDeadzone": {
+      "label": "페달 스틱 데드존",
+      "off": "스틱 페달 필요"
+    },
+    "triggerRumble": {
+      "label": "트리거 진동",
+      "hint": "트리거로 슬립, ABS 및 휠스핀 피드백 전달"
+    },
+    "triggerSlipAlwaysOn": {
+      "label": "ABS/TC 켜짐 시 트리거 슬립 유지",
+      "off": "트리거 진동 필요"
+    },
+    "steerDeadzone": {
+      "label": "중앙 데드존"
+    },
+    "steerSmoothingS": {
+      "label": "입력 필터"
+    },
+    "wheelBrakeGamma": {
+      "label": "브레이크 곡선",
+      "hint": "로드셀은 1.0 · 포텐셔미터는 1.3~1.6 권장"
+    },
+    "touchMode": {
+      "label": "터치 조작",
+      "options": {
+        "auto": "자동",
+        "on": "켜짐",
+        "off": "꺼짐"
+      }
+    },
+    "touchLayout": {
+      "label": "터치 방식",
+      "hint": "아날로그 드래그 슬라이더 또는 디지털 버튼",
+      "off": "터치 조작이 꺼져 있습니다",
+      "options": {
+        "sliders": "슬라이더",
+        "buttons": "버튼"
+      }
+    },
+    "tiltSteer": {
+      "label": "기울여 조향"
+    },
+    "tiltRangeDeg": {
+      "label": "기울기 범위",
+      "off": "기울여 조향 필요"
+    },
+    "ffbEnabled": {
+      "label": "포스 피드백"
+    },
+    "ffbGain": {
+      "label": "강도",
+      "hintPerCar": "아래의 차량별 게인({gain})이 우선 적용됩니다"
+    },
+    "ffbDamping": {
+      "label": "댐핑"
+    },
+    "ffbKerb": {
+      "label": "연석 진동"
+    },
+    "ffbAbs": {
+      "label": "ABS 진동"
+    },
+    "ffbSlip": {
+      "label": "슬립 진동",
+      "hint": "WebHID 전용"
+    },
+    "ffbShift": {
+      "label": "변속 경고",
+      "hint": "WebHID 전용"
+    },
+    "ffbCurve": {
+      "label": "포스 곡선",
+      "hint": "음수는 약한 힘을 증폭 · 양수는 최대 출력 여유 확보"
+    },
+    "ffbMinForce": {
+      "label": "최소 힘",
+      "hint": "중앙 데드존을 제거합니다",
+      "hintPerCar": "차량별 최소 힘이 우선 적용됩니다"
+    },
+    "ffbFilterS": {
+      "label": "부드러움"
+    },
+    "ffbDownforceComp": {
+      "label": "다운포스 보정",
+      "hint": "고속 에어로 클리핑을 줄입니다"
+    },
+    "ffbFriction": {
+      "label": "마찰",
+      "hint": "휠 하드웨어 효과"
+    },
+    "ffbInertia": {
+      "label": "관성",
+      "hint": "휠 하드웨어 효과"
+    },
+    "ffbCollisionGuard": {
+      "label": "충돌 보호",
+      "hint": "충격 시 급격한 힘 증가를 제한합니다"
+    },
+    "revLeds": {
+      "label": "RPM 라이트"
+    },
+    "quality": {
+      "label": "품질",
+      "options": {
+        "low": "낮음",
+        "medium": "보통",
+        "high": "높음"
+      },
+      "details": {
+        "low": "그림자·블룸 없음, 낮은 해상도",
+        "medium": "그림자 켜짐, 블룸 없음",
+        "mediumTouch": "그림자 켜짐, 블룸·MSAA 없음",
+        "high": "모든 효과 적용",
+        "highTouch": "MSAA 제외 모든 효과 적용"
+      }
+    },
+    "sharpLow": {
+      "label": "선명한 낮음",
+      "hint": "낮음 품질을 보통 해상도로 렌더링",
+      "hintAuto": "낮음 품질을 보통 해상도로 렌더링하며 자동 품질이 이를 끌 수 있습니다",
+      "off": "품질을 낮음으로 설정해야 합니다"
+    },
+    "renderScale": {
+      "label": "렌더 해상도"
+    },
+    "sharpen": {
+      "label": "선명하게",
+      "hint": "스케일링 후 윤곽선과 아스팔트를 선명하게 만듭니다"
+    },
+    "fpsCap": {
+      "label": "프레임 레이트",
+      "hint": "30 fps는 모바일 발열을 줄입니다",
+      "options": {
+        "full": "제한 없음",
+        "fps30": "30 fps"
+      }
+    },
+    "autoQuality": {
+      "label": "자동 품질",
+      "hint": "프레임 저하가 지속되면 품질을 자동으로 낮춥니다",
+      "hintLowered": "하향 조정됨: {what}"
+    },
+    "autoQualityMinScale": {
+      "label": "최소 해상도",
+      "hint": "자동 품질이 렌더 해상도를 이 값 아래로 낮추지 않습니다",
+      "hintLow": "해상도가 유지됩니다. 낮음에는 끌 수 있는 효과가 없습니다",
+      "hintEffects": "해상도가 유지되며 효과만 단계적으로 낮아집니다",
+      "off": "자동 품질을 켜야 합니다"
+    },
+    "driverBody": {
+      "label": "드라이버 신체 표시"
+    },
+    "hudScale": {
+      "label": "크기"
+    },
+    "deltaBar": {
+      "label": "델타 바"
+    },
+    "lapSummary": {
+      "label": "랩 요약"
+    },
+    "virtualMirror": {
+      "label": "미러",
+      "options": {
+        "auto": "자동",
+        "always": "항상",
+        "off": "꺼짐"
+      }
+    },
+    "radar": {
+      "label": "근접 레이더"
+    },
+    "showPlayerNames": {
+      "label": "플레이어 이름표"
+    },
+    "boardWidget": {
+      "label": "랩 보드",
+      "options": {
+        "lapEnd": "랩 종료 시",
+        "open": "열림",
+        "closed": "닫힘"
+      }
+    },
+    "inputTrace": {
+      "label": "입력 그래프"
+    },
+    "towerGaps": {
+      "label": "타이밍 타워 격차",
+      "options": {
+        "interval": "앞차 간격",
+        "leader": "선두 격차"
+      }
+    },
+    "mapMode": {
+      "label": "맵 모드",
+      "options": {
+        "full": "전체 랩",
+        "local": "확대"
+      }
+    },
+    "splitGaps": {
+      "label": "섹터 격차"
+    },
+    "mfdAutoCollapse": {
+      "label": "MFD 자동 접기"
+    },
+    "camera": {
+      "label": "기본 시점",
+      "hint": "{key} 키"
+    },
+    "cockpitFovDeg": {
+      "label": "시야각(FOV)",
+      "hintCarOwn": "각 차량의 기본값 사용",
+      "hintCarDefault": "차량 기본값: {degrees}°",
+      "valueCar": "{value}°(차량)"
+    },
+    "headMovement": {
+      "label": "시선 흔들림",
+      "options": {
+        "natural": "자연스럽게",
+        "static": "고정"
+      }
+    },
+    "language": {
+      "label": "언어",
+      "options": {
+        "auto": "자동"
+      },
+      "details": {
+        "auto": "브라우저 언어 따름"
+      }
+    },
+    "speedUnit": {
+      "label": "속도"
+    },
+    "temperatureUnit": {
+      "label": "온도"
+    },
+    "pressureUnit": {
+      "label": "타이어 공기압"
+    },
+    "uiScale": {
+      "label": "인터페이스 크기"
+    },
+    "palette": {
+      "label": "색약 팔레트",
+      "options": {
+        "standard": "표준",
+        "protan": "적색약",
+        "deutan": "녹색약",
+        "tritan": "청색약"
+      },
+      "details": {
+        "protan": "제1색맹 및 제1색약",
+        "deutan": "제2색맹 및 제2색약",
+        "tritan": "제3색맹 및 제3색약"
+      }
+    },
+    "volume": {
+      "label": "마스터 볼륨"
+    },
+    "kerbs": {
+      "label": "연석"
+    },
+    "muted": {
+      "label": "음소거",
+      "hint": "{key} 키"
+    },
+    "drsBeep": {
+      "label": "DRS 알림음"
+    },
+    "shiftBeep": {
+      "label": "변속 알림음"
+    },
+    "musicOn": {
+      "label": "음악"
+    },
+    "menuMusic": {
+      "label": "메뉴 음악"
+    },
+    "raceMusicOn": {
+      "label": "주행 중 음악"
+    },
+    "raceMusic": {
+      "label": "레이스 음악",
+      "hint": "곡 건너뛰기: {key}",
+      "off": "주행 중 음악이 꺼져 있습니다"
+    },
+    "replayMusic": {
+      "label": "결과 및 리플레이 음악"
+    },
+    "autoUpload": {
+      "label": "베스트 랩 자동 업로드"
+    },
+    "telemetryOut": {
+      "label": "UDP 텔레메트리",
+      "hint": "로컬 브리지(대시보드, 베이스 셰이커)로 실시간 텔레메트리를 전송합니다"
+    },
+    "practiceDamage": {
+      "label": "연습 손상",
+      "hints": {
+        "off": "연습 및 타임 트라이얼에서 손상 없음",
+        "reduced": "손상 절반 적용; 차량이 파손되면 수리된 상태로 플라잉 랩을 재시작합니다",
+        "full": "레이스 손상 적용; 차량이 파손되면 수리된 상태로 플라잉 랩을 재시작합니다"
+      }
+    }
+  },
+  "driving": {
+    "drivingAids": "주행 보조",
+    "pedalHelp": "페달 보조",
+    "onTrack": "주행 환경",
+    "keyboardSteering": "키보드 조향",
+    "controllerSteering": "컨트롤러 조향"
+  },
+  "controls": {
+    "activeDevice": "활성 장치",
+    "quickSetup": "빠른 설정",
+    "runSetupWizard": "설정 마법사 실행",
+    "runSetup": "설정 실행",
+    "touch": "터치"
+  },
+  "display": {
+    "layout": {
+      "title": "레이아웃",
+      "resetWhat": "HUD 레이아웃"
+    },
+    "graphics": {
+      "title": "그래픽",
+      "vr": "VR",
+      "vrOff": "WebXR 헤드셋 필요",
+      "experimental": "실험적",
+      "inVr": "VR 사용 중",
+      "enterVr": "VR 입장"
+    },
+    "hud": {
+      "title": "HUD 표시 항목"
+    },
+    "camera": {
+      "title": "카메라",
+      "freeCamera": "자유 카메라",
+      "freeCameraHint": "드래그 시점 · WASD 이동 · Q/E 고도 · 스크롤 속도 · R 초기화",
+      "freeCameraUnbound": "미지정",
+      "tvCamera": "트랙사이드 TV",
+      "tvCameraUnbound": "미지정",
+      "adjustSeat": "시트 조정",
+      "adjustSeatHint": "트랙에서 {key} 또는 {button} 길게 누르기",
+      "adjustSeatOff": "주행 중 사용 가능({key} 또는 {button} 길게 누르기)",
+      "adjust": "조정",
+      "resetSeats": "시트 위치 초기화",
+      "resetSeatsOff": "이미 기본값입니다",
+      "resetSeatsButton": "초기화",
+      "resetSeatsTitle": "시트 위치를 초기화하시겠습니까?",
+      "resetSeatsConfirm": "모두 초기화",
+      "resetSeatsBody": "모든 차량의 콕핏 및 대시보드 시트 오프셋을 초기화합니다."
+    },
+    "interface": {
+      "language": "언어",
+      "units": "단위",
+      "sizeColour": "크기 및 색상"
+    }
+  },
+  "audio": {
+    "sound": "사운드",
+    "music": "음악",
+    "menuTracks": "메뉴 곡",
+    "raceTracks": "레이스 곡",
+    "resultsTracks": "결과 및 리플레이 곡",
+    "cockpitCues": "콕핏 알림음"
+  },
+  "profile": {
+    "driver": {
+      "title": "드라이버",
+      "name": "이름",
+      "code": "코드",
+      "colour": "색상",
+      "colourGroup": "색상",
+      "otherColour": "기타 색상",
+      "colours": {
+        "red": "빨간색",
+        "teal": "청록색",
+        "orange": "주황색",
+        "blue": "파란색",
+        "racingGreen": "레이싱 그린",
+        "navy": "네이비",
+        "silver": "실버",
+        "lime": "라임"
+      }
+    },
+    "data": {
+      "driverKey": "드라이버 키",
+      "identityKey": "신원 키",
+      "identityKeyHint": "온라인 랩에 서명합니다. 다른 브라우저에서 쓰려면 백업하십시오",
+      "save": "저장",
+      "load": "불러오기",
+      "telemetry": "텔레메트리",
+      "udpPort": "UDP 포트",
+      "udpPortField": "UDP 포트",
+      "portConflict": "포트 {port}이(가) {app}(기본값 {defaultPort})과(와) 충돌합니다",
+      "portOff": "UDP 텔레메트리 필요",
+      "reset": "초기화",
+      "resetAll": "모든 설정 초기화",
+      "resetAllHint": "조작, 주행 보조, 디스플레이 및 오디오 기본값을 복원합니다",
+      "resetAllButton": "초기화",
+      "resetAllTitle": "모든 설정을 초기화하시겠습니까?",
+      "resetAllConfirm": "모두 초기화",
+      "resetAllBody": "모든 설정, 키 할당 및 보정이 기본값으로 초기화됩니다. 프로필, 셋업, 랩 타임은 유지됩니다.",
+      "clear": "저장된 데이터 지우기",
+      "clearHint": "로컬 설정, 드라이버 키, 랩, 고스트 및 셋업을 삭제합니다",
+      "clearButton": "지우기",
+      "clearTitle": "저장된 데이터를 지우시겠습니까?",
+      "clearConfirm": "모두 지우기",
+      "clearBody": "이 브라우저에서 모든 설정, 드라이버 키, 랩, 고스트, 셋업을 영구적으로 삭제한 뒤 새로고침합니다."
+    }
+  },
+  "hudPicker": {
+    "label": "HUD 레이아웃",
+    "thirdParty": "서드파티",
+    "thirdPartyNote": "다른 오픈 소스 HUD 프로젝트를 바탕으로 재현했으며 원제작자를 명시했습니다.",
+    "touchNote": "스마트폰에서는 항상 터치 HUD를 사용합니다.",
+    "description": "{detail}. 제작: {author}",
+    "descriptionSite": "{detail}. 제작: {author} · {site}",
+    "sourceLink": "{author} 제작 {layout} 소스(새 탭에서 열림)",
+    "siteLink": "{site}, {author}의 사이트(새 탭에서 열림)"
+  }
+}

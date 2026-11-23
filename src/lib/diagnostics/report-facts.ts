@@ -21,6 +21,7 @@ import {
   type DriveFacts,
   type ReportFacts,
 } from "./report-details";
+import { inEnglish } from "@/lib/text";
 
 /*
  * The game's side of a bug report: what it knows at the moment the report opens, read once. The wording is
@@ -128,7 +129,8 @@ export function collectReportFacts(i: ReportFactsInput): ReportFacts {
     input,
     devices: devicesLine(i.settings),
     frames: drivingFrameSummary(),
-    settings: settingsLine(i.settings),
+    // The HUD's name comes from the layouts' labels, which follow the language: the report keeps them English
+    settings: inEnglish(() => settingsLine(i.settings)),
     board: boardLine(i.boardState, waiting),
     drive,
     driver: i.settings.profile.name ? `${i.settings.profile.name} (${i.settings.profile.code})` : null,
