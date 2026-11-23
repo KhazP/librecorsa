@@ -1,5 +1,5 @@
-// Command librecorsa serves LibreCorsa's static export and the player's mod packages on 127.0.0.1, so the game runs
-// with no network. See README.md.
+// Command librecorsa serves LibreCorsa's static export and the player's mod packages on 127.0.0.1 and opens the game
+// in a Chromium browser as an app window, so the game runs with no network. See README.md.
 package main
 
 import (
@@ -32,6 +32,7 @@ func run() int {
 	gameFlag := flag.String("game", "", "folder of the game's static export (default: game/ beside the launcher, else ../out)")
 	modsFlag := flag.String("mods", "", "folder of mod packages (default: mods/ beside the launcher)")
 	port := flag.Int("port", defaultPort, "port on 127.0.0.1 (keep it fixed: the browser keeps saves per port)")
+	noBrowser := flag.Bool("no-browser", false, "only serve; don't open a browser")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 
@@ -66,6 +67,9 @@ func run() int {
 	if err != nil {
 		if isLauncher(origin) {
 			fmt.Printf("LibreCorsa is already running at %s\n", playURL)
+			if !*noBrowser {
+				openGame(playURL)
+			}
 			return 0
 		}
 		fmt.Fprintf(os.Stderr, "Port %d on 127.0.0.1 is in use by another program, so LibreCorsa can't start.\n", *port)
@@ -86,6 +90,9 @@ func run() int {
 	go func() { served <- srv.Serve(ln) }()
 
 	fmt.Printf("LibreCorsa %s\n  game: %s\n  mods: %s\n  open: %s\n", version, gameDir, modsDir, playURL)
+	if !*noBrowser {
+		openGame(playURL)
+	}
 	fmt.Println("Press Ctrl+C to stop.")
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
