@@ -1,5 +1,5 @@
 /**
- * Browser half of `npm run venue-heroes` (scripts/render-venue-heroes.ts bundles and serves it).
+ * Browser half of `npm run venue-heroes` (scripts/tracks/render-venue-heroes.ts bundles and serves it).
  *
  * Loads one circuit with LibreCorsa's real desktop-High pipeline (`buildCircuitScene`, `createGoldenHourEnvironment`
  * with physical sky + volumetric clouds, `createPostFx` with 4x MSAA + bloom + AgX + display grade, and

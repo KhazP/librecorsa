@@ -65,7 +65,7 @@ function glbJson(file) {
   }
 }
 
-// A venue layout file names its shared file (scripts/split-venue-model.mjs): bring it along, once
+// A venue layout file names its shared file (scripts/tracks/split-venue-model.mjs): bring it along, once
 const VENUE_LAYOUT = /\.layout\.[0-9a-f]{8}\.glb$/;
 /** Each venue layout file's shared file */
 const sharedOf = new Map();

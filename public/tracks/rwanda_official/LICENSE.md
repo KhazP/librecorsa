@@ -15,7 +15,7 @@ You may copy, share and adapt it (port it to another simulator, rebuild it, chan
 
 - The circuit in this folder and in `../rwanda_official_short/` (the short lap's data over the same model):
   `rwanda_official.glb`, both `track_data.json` files, and the scenery's layout.
-- The circuit's source in `scripts/rwanda-official/`: its design data, its textures and whatever the scripts build.
+- The circuit's source in `scripts/tracks/rwanda-official/`: its design data, its textures and whatever the scripts build.
 - The scenery of its [Assetto Corsa release](https://www.overtake.gg/downloads/rise-motordrome-bugesera-rwanda.88890/)
   that the model carries (lakeside, village, facades, dressing, lights and more): the release is under this same
   licence.

@@ -4,7 +4,7 @@
 // drive on the visible road, kerbs and run-off, and the lines lie 6 mm over the asphalt, so nothing is rounded to a
 // grid. Only normals and vertex colours are stored in 8 bits.
 //
-//   node scripts/rwanda-official/post.mjs [--report] [--raw]      (--raw: leave the mesh data unpacked)
+//   node scripts/tracks/rwanda-official/post.mjs [--report] [--raw]      (--raw: leave the mesh data unpacked)
 import { mkdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +16,7 @@ import sharp from 'sharp';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, 'data/rwanda_official_raw.glb');
-const OUT = join(HERE, '../../public/tracks/rwanda_official/rwanda_official.glb');
+const OUT = join(HERE, '../../../public/tracks/rwanda_official/rwanda_official.glb');
 const REPORT = process.argv.includes('--report');
 const RAW = process.argv.includes('--raw');
 
@@ -57,7 +57,7 @@ if (!RAW) {
   doc.createExtension(KHRMeshQuantization).setRequired(true);
   doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });
 }
-root.getAsset().generator = 'LibreCorsa scripts/rwanda-official (Blender)';
+root.getAsset().generator = 'LibreCorsa scripts/tracks/rwanda-official (Blender)';
 
 mkdirSync(dirname(OUT), { recursive: true });
 await io.write(OUT, doc);

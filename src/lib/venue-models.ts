@@ -1,6 +1,6 @@
 /**
  * Venues whose layouts share one visual model. Each layout's own GLB (`metadata.mesh.url`) holds the whole venue's
- * scenery again, though most of it is the same in every layout. scripts/split-venue-model.mjs splits a venue's GLBs
+ * scenery again, though most of it is the same in every layout. scripts/tracks/split-venue-model.mjs splits a venue's GLBs
  * into one shared file and one small file per layout. The game loads the pair and puts the shared scenery under the
  * layout's own `Track_Model` (render/venue-model.ts), so after the first layout of a venue, a player downloads only
  * the next layout's file.
@@ -18,14 +18,14 @@
  * files, then change `build` here.
  *
  * Phones also have a KTX2 build of the same pair (`ktx2Build`): the live files with their textures converted to KTX2
- * (scripts/ktx2-track-textures.mjs --venue), geometry and physics byte for byte the same. render/ktx2.ts decides who
+ * (scripts/tracks/ktx2-track-textures.mjs --venue), geometry and physics byte for byte the same. render/ktx2.ts decides who
  * loads it; anyone else, and a phone whose KTX2 pair can't load, loads the WebP pair as before.
  */
 
 export interface VenueModel {
   /** The venue's folder under public/tracks (its first layout's id); the shared file lives there */
   venue: string;
-  /** The split build (scripts/split-venue-model.mjs prints it): the first 8 hex digits of the sha256 of the shared file and its layouts' inputs */
+  /** The split build (scripts/tracks/split-venue-model.mjs prints it): the first 8 hex digits of the sha256 of the shared file and its layouts' inputs */
   build: string;
   /** The KTX2 build of the same pair, for phones: the first 8 hex digits of the sha256 of its shared file and its layout inputs */
   ktx2Build?: string;

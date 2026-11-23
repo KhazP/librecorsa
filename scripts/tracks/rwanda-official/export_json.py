@@ -6,9 +6,9 @@ Writes the game's track data of the official Rwanda circuit, one file per lap of
 
 Each is the built lap (data/design.npz) with the road sections of ro_addon.py spliced in: centreline samples every
 5 m with the surface heights across, corners, sectors, grid, cameras, pit lane, boundaries. The racing lines are
-filled in afterwards by scripts/optimize-racing-line.ts.
+filled in afterwards by scripts/tracks/optimize-racing-line.ts.
 
-    ~/.venvs/librecorsa-tracks/bin/python scripts/rwanda-official/export_json.py [long|short]
+    ~/.venvs/librecorsa-tracks/bin/python scripts/tracks/rwanda-official/export_json.py [long|short]
 """
 import json
 import os
@@ -26,7 +26,7 @@ import ro_site as site  # noqa: E402
 from prep import CORNERS, PIT_LEN, PIT_S0  # noqa: E402
 from ro_foot import Foot  # noqa: E402
 
-TRACKS = os.path.abspath(os.path.join(HERE, '..', '..', 'public', 'tracks'))
+TRACKS = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'public', 'tracks'))
 GLB = '/tracks/rwanda_official/rwanda_official.glb'
 FOLIAGE = '/tracks/rwanda_official/scenery/foliage.glb'
 LAT = [-12, -8, -5, -2.5, 0, 2.5, 5, 8, 12]
@@ -386,7 +386,7 @@ def export(name):
             f'lake. {zmax - zmin:.0f} m elevation range, {climb:.0f} m climbed per lap.'),
         'country': 'Rwanda', 'city': 'Bugesera', 'lengthMeters': float(n), 'widthMeters': '12m-15m', 'pitboxes': 20,
         'direction': 'anticlockwise', 'geotags': ['lat -2.1712', 'lon 30.2210'],
-        'author': 'built in Blender from the official renders (scripts/rwanda-official)',
+        'author': 'built in Blender from the official renders (scripts/tracks/rwanda-official)',
         'originOffset': [0, 0, 0], 'latProfileOffsets': LAT, 'sampleSpacingM': STEP,
         'elevationRangeM': [round(zmin, 1), round(zmax, 1)], 'baseAltitudeM': BASE_ALTITUDE_M,
         'surfaces': {'roadGrip': 1.0, 'tarmacGrip': 0.75, 'kerbGrip': 0.96},

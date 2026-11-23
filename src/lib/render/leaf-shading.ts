@@ -9,7 +9,7 @@ import { patchShader } from "./shader-patch";
  *    keeps the leaf coverage at a distance (the canopy reads as a canopy from the helicopter camera); close up it is
  *    unchanged.
  *  - A card seen from behind keeps its own normal rather than having it flipped to face the camera, so the crown
- *    shades as one volume. Rwanda's cards are baked towards the crown's outward normal (scripts/rwanda-official/
+ *    shades as one volume. Rwanda's cards are baked towards the crown's outward normal (scripts/tracks/rwanda-official/
  *    foliage.mjs); the converted circuits' trees carry upward normals on upright crossed cards, and many draw each
  *    card twice, back to back. Flipped, every card was lit on one side and dark on the other, and the two copies of a
  *    card fought over the depth buffer in light and dark blocks that changed with the smallest camera move.

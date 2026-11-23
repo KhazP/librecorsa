@@ -13,7 +13,7 @@
 // Every surface the cars drive on is the Blender build's, untouched. Materials of the release that the game already
 // has (by name) are the game's, so a building of the village is shaded like the paddock's.
 //
-//   node scripts/rwanda-official/ac_merge.mjs [--base <glb>] [--report]
+//   node scripts/tracks/rwanda-official/ac_merge.mjs [--base <glb>] [--report]
 import { readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,7 +30,7 @@ const arg = (name, dflt) => {
 };
 const BASE = arg('--base', join(HERE, 'data/rwanda_official_blender.glb'));
 const AC = join(HERE, 'data/ac');
-const OUT = join(HERE, '../../public/tracks/rwanda_official/rwanda_official.glb');
+const OUT = join(HERE, '../../../public/tracks/rwanda_official/rwanda_official.glb');
 const REPORT = process.argv.includes('--report');
 /** ext_config's multilayer tints act on the release's colours as drawn (sRGB); the game's vertex colours are linear */
 const GAMMA = 2.2;

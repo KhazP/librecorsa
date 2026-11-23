@@ -63,7 +63,7 @@ PHYS_COLOURS = {
 
 # Red Bull Ring props drawn with Assetto Corsa's own textures, left out (`hideTextures`): the pit wall panels with the
 # Assetto Corsa logo, the marshals, the pit crew and pit props, and three prop atlases from Kunos's Monza, Magione and
-# Silverstone. scripts/strip-track-props.mjs takes the same props out of built GLBs.
+# Silverstone. scripts/tracks/strip-track-props.mjs takes the same props out of built GLBs.
 SPIELBERG_AC_TEXTURES = r'^(ac_crew|misc|misc1|misc_silver_2|commissario_NEW|DRIVER_Suit2|driver_face|props_pitlane)\.dds$'
 
 AC_TRACKS = {
@@ -2654,7 +2654,7 @@ def sync_track_configs(built_tracks):
     for tid, (cfg, data) in built_tracks.items():
         idx = [e for e in idx if e['id'] != tid] + [index_entry(tid, cfg, data)]
     order = list(cfgs.keys())
-    # Circuits this script does not know (RISE Motordrome, built by scripts/rwanda-official) keep their place on top
+    # Circuits this script does not know (RISE Motordrome, built by scripts/tracks/rwanda-official) keep their place on top
     idx.sort(key=lambda e: order.index(e['id']) if e['id'] in order else -1)
     with open(idx_path, 'w', encoding='utf-8') as f:
         json.dump(idx, f, indent=2, ensure_ascii=False)
@@ -4044,7 +4044,7 @@ def build_from_sources(tid, cfg, args, src):
         src['write_glb'](off, extra, glb_out)
         if not args.no_compress:
             r = subprocess.run(
-                ['node', 'scripts/compress-track-glb.mjs', glb_out],
+                ['node', 'scripts/tracks/compress-track-glb.mjs', glb_out],
                 cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace',
             )
             log('  compress:', (r.stdout.strip() or r.stderr.strip()))
@@ -4157,7 +4157,7 @@ def apply_street_hairpin_margin(tid, cfg):
 
 def graft_extras(tid, cfg):
     """--extras-only: builds just the circuit's `extraModels` and `driftingObjects` meshes and grafts them into its
-    existing GLB with scripts/graft-track-extras.mjs, which keeps every other byte of it. For a circuit whose full
+    existing GLB with scripts/tracks/graft-track-extras.mjs, which keeps every other byte of it. For a circuit whose full
     rebuild would also change what it ships (converter changes since it was built). The track data and index.json are
     left alone"""
     out_dir = os.path.join(ROOT, 'public', 'tracks', tid)
@@ -4180,7 +4180,7 @@ def graft_extras(tid, cfg):
     addon = os.path.join(out_dir, f'{tid}.extras.glb')
     write_ac_glb(items, tex_pool, materials, {}, scale, off, [], addon, cfg=cfg)
     try:
-        for cmd in (['node', 'scripts/compress-track-glb.mjs', addon], ['node', 'scripts/graft-track-extras.mjs', glb, addon]):
+        for cmd in (['node', 'scripts/tracks/compress-track-glb.mjs', addon], ['node', 'scripts/tracks/graft-track-extras.mjs', glb, addon]):
             r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace')
             log(f'  {os.path.basename(cmd[1])}:', r.stdout.strip() or r.stderr.strip())
             if r.returncode != 0:

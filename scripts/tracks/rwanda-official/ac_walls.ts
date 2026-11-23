@@ -5,18 +5,18 @@
  * sample's wall distance (`wL` / `wR`) and the boundary's wall point by the difference, wherever it is over 5 cm.
  * Nothing else in the track data changes: not the lap, its length, its kerbs or its racing lines.
  *
- *   npx tsx scripts/rwanda-official/ac_walls.ts [--base <glb>] [--check]
+ *   npx tsx scripts/tracks/rwanda-official/ac_walls.ts [--base <glb>] [--check]
  *
  * --check only prints what would change. The base defaults to ac_merge.mjs's base, data/rwanda_official_blender.glb.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TrackWallQuery, WALL_SEGMENT_STRIDE } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
-import { loadGlbGeometry } from '../lib/glb-geometry';
+import { TrackWallQuery, WALL_SEGMENT_STRIDE } from '../../../src/lib/sim/f12026-car/TrackColliderQuery';
+import { loadGlbGeometry } from '../../lib/glb-geometry';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, '../..');
+const ROOT = join(HERE, '../../..');
 const arg = (name: string, dflt: string) => {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : dflt;

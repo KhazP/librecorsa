@@ -69,7 +69,7 @@ jobs:
 
       # The repository keeps the default car's raw GLB the authoring scripts edit; the site ships it
       # meshopt-compressed (16 → 6 MB). RISE Motordrome's model is compressed when it is built
-      # (scripts/rwanda-official/post.mjs); its foliage stays raw: it is instance transforms and textures,
+      # (scripts/tracks/rwanda-official/post.mjs); its foliage stays raw: it is instance transforms and textures,
       # which meshopt makes bigger, not smaller.
       - name: Compress models for the download
         run: |

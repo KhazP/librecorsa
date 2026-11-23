@@ -104,7 +104,7 @@ The road, the pit lane and the gravel wear scanned surfaces: Poly Haven's Asphal
 Floor 02 (CC0), each a 2 m tile with its normal map. `prep_scans.py` keeps a scan's grain and gives it the colour of
 the drawn texture it stands in for, so the circuit's tones stay, and takes the slow tilt out of its normal map (the
 asphalt's lit the road in a band every 2 m driving into a low sun; the game's model got the new maps through
-`node scripts/replace-glb-images.mjs`); the materials repeat the tile (`bl_common.mat`'s
+`node scripts/tracks/replace-glb-images.mjs`); the materials repeat the tile (`bl_common.mat`'s
 `tile`), and no mesh's texture coordinates change, as the game reads the gravel's and the kerbs' bumps from them.
 Grass, concrete and paint stay drawn.
 
@@ -113,9 +113,9 @@ Grass, concrete and paint stay drawn.
 ```bash
 PY=~/.venvs/librecorsa-tracks/bin/python   # numpy, scipy, opencv, pillow, scikit-image
 
-$PY -I scripts/rwanda-official/prep.py all          # data/design.npz, data/addons.npz, data/terrain.npz: the design, the extra roads, the ground
-$PY -I scripts/rwanda-official/prep_textures.py     # data/tex/*.png: every texture, drawn
-$PY -I scripts/rwanda-official/prep_scans.py <dir>  # only for new scans: assets/textures/scan-*.webp from Poly Haven's 2k jpgs in <dir>
+$PY -I scripts/tracks/rwanda-official/prep.py all          # data/design.npz, data/addons.npz, data/terrain.npz: the design, the extra roads, the ground
+$PY -I scripts/tracks/rwanda-official/prep_textures.py     # data/tex/*.png: every texture, drawn
+$PY -I scripts/tracks/rwanda-official/prep_scans.py <dir>  # only for new scans: assets/textures/scan-*.webp from Poly Haven's 2k jpgs in <dir>
 ```
 
 In Blender (5.x), with this folder on `sys.path`:
@@ -133,18 +133,18 @@ bl_export.export()    # data/rwanda_official_raw.glb, data/walls.npz (the barrie
 Then:
 
 ```bash
-node scripts/rwanda-official/post.mjs                # rwanda_official.glb: alpha modes, WebP textures
+node scripts/tracks/rwanda-official/post.mjs                # rwanda_official.glb: alpha modes, WebP textures
 
 # only when the design changed (it resets the racing lines):
-$PY scripts/rwanda-official/export_json.py           # both laps' track_data.json
-npx tsx scripts/rwanda-official/layout-limits.ts     # each lap's otherLayoutRoads: where the other lap's road leaves it
+$PY scripts/tracks/rwanda-official/export_json.py           # both laps' track_data.json
+npx tsx scripts/tracks/rwanda-official/layout-limits.ts     # each lap's otherLayoutRoads: where the other lap's road leaves it
 for id in rwanda_official rwanda_official_short; do
-  npx tsx scripts/optimize-racing-line.ts --track $id --car f1
-  npx tsx scripts/optimize-racing-line.ts --track $id --car gt3
+  npx tsx scripts/tracks/optimize-racing-line.ts --track $id --car f1
+  npx tsx scripts/tracks/optimize-racing-line.ts --track $id --car gt3
   npx tsx scripts/ai/check-lines.ts --track $id --ceiling 1,1.04,1.08 --write
 done
 
-node scripts/rwanda-official/foliage.mjs             # scenery/foliage.glb: the trees, instanced (reads the track data)
+node scripts/tracks/rwanda-official/foliage.mjs             # scenery/foliage.glb: the trees, instanced (reads the track data)
 npx tsx scripts/verify/verify-rwanda-official.ts
 npx tsx scripts/verify/verify-rwanda-official.ts short
 ```
@@ -158,7 +158,7 @@ The same build as an FBX for Kunos' ksEditor, with the track folder around it. N
 Corsa yet: the folder's README lists the steps left on a PC.
 
 ```bash
-node scripts/rwanda-official/ac_trees.mjs            # data/ac_trees.glb: the instanced trees baked into plain meshes
+node scripts/tracks/rwanda-official/ac_trees.mjs            # data/ac_trees.glb: the instanced trees baked into plain meshes
 ```
 
 ```python
@@ -167,7 +167,7 @@ bl_ac.export('~/Desktop/rwanda_official')            # the FBX, one small timing
 ```
 
 ```bash
-$PY -I scripts/rwanda-official/ac_data.py ~/Desktop/rwanda_official [preview.jpg]   # track/rwanda_official: surfaces, lighting, maps, interface files, extension/ext_config.ini, README
+$PY -I scripts/tracks/rwanda-official/ac_data.py ~/Desktop/rwanda_official [preview.jpg]   # track/rwanda_official: surfaces, lighting, maps, interface files, extension/ext_config.ini, README
 ```
 
 Physics meshes carry AC's names (`ROAD`, `PIT`, `KERB`, `RUNOFF`, `SAND`, `GRASS`, `WALL`); grid, pit boxes and hotlap
@@ -185,11 +185,11 @@ release's work back: its coordinates are the game's to the millimetre, and its r
 and verges lie within 2 cm of the game's, so both laps, their lengths and their racing lines stay as they are.
 
 ```bash
-cp public/tracks/rwanda_official/rwanda_official.glb scripts/rwanda-official/data/rwanda_official_blender.glb   # after post.mjs
-$PY -I scripts/rwanda-official/ac_import.py <release>/content/tracks/rwanda_official   # data/ac/: layers.glb, look.json, tex/
-node scripts/rwanda-official/ac_merge.mjs            # rwanda_official.glb: the Blender build with the release on it
-npx tsx scripts/rwanda-official/ac_walls.ts          # both track data's barrier distances where the release moved them
-node scripts/ktx2-track-textures.mjs public/tracks/rwanda_official/rwanda_official.glb <out>.glb --track-data public/tracks/rwanda_official/track_data.json
+cp public/tracks/rwanda_official/rwanda_official.glb scripts/tracks/rwanda-official/data/rwanda_official_blender.glb   # after post.mjs
+$PY -I scripts/tracks/rwanda-official/ac_import.py <release>/content/tracks/rwanda_official   # data/ac/: layers.glb, look.json, tex/
+node scripts/tracks/rwanda-official/ac_merge.mjs            # rwanda_official.glb: the Blender build with the release on it
+npx tsx scripts/tracks/rwanda-official/ac_walls.ts          # both track data's barrier distances where the release moved them
+node scripts/tracks/ktx2-track-textures.mjs public/tracks/rwanda_official/rwanda_official.glb <out>.glb --track-data public/tracks/rwanda_official/track_data.json
 ```
 
 What comes over:

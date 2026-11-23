@@ -3,15 +3,15 @@
  * builds (props from another of a mod's models, the objects drifting over the circuit) join a model whose full rebuild
  * would also change what it ships. Every byte the circuit had stays (scripts/lib/graft-glb.mjs says how).
  *
- *   node scripts/graft-track-extras.mjs <circuit.glb> <add-on.glb>
+ *   node scripts/tracks/graft-track-extras.mjs <circuit.glb> <add-on.glb>
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { graftGlb } from "./lib/graft-glb.mjs";
+import { graftGlb } from "../lib/graft-glb.mjs";
 
 const [circuitPath, addonPath] = process.argv.slice(2);
 if (!circuitPath || !addonPath) {
-  console.error("usage: node scripts/graft-track-extras.mjs <circuit.glb> <add-on.glb>");
+  console.error("usage: node scripts/tracks/graft-track-extras.mjs <circuit.glb> <add-on.glb>");
   process.exit(1);
 }
 const label = path.basename(circuitPath);

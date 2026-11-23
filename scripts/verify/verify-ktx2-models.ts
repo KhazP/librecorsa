@@ -1,5 +1,5 @@
 /**
- * GPU-compressed circuit models (src/lib/ktx2-models.ts, scripts/ktx2-track-textures.mjs):
+ * GPU-compressed circuit models (src/lib/ktx2-models.ts, scripts/tracks/ktx2-track-textures.mjs):
  *
  * 1. the Basis transcoder the site serves (public/basis/) is the one three ships, so the two never drift apart;
  * 2. the GLB rewrite keeps every buffer view that isn't an image byte for byte, moves meshopt views with their data,

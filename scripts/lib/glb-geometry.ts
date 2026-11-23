@@ -34,7 +34,7 @@ const sharedMaterialOf = new WeakMap<THREE.Object3D, number>();
 
 const parseJson = (buf: Buffer): GltfJson => JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as GltfJson;
 
-/** The GLB's bytes; a meshopt-compressed file is decoded once (scripts/compress-track-glb.mjs) and cached by mtime */
+/** The GLB's bytes; a meshopt-compressed file is decoded once (scripts/tracks/compress-track-glb.mjs) and cached by mtime */
 function readGlb(path: string): Buffer {
   const buf = readFileSync(path);
   if (!parseJson(buf).extensionsUsed?.includes('EXT_meshopt_compression')) return buf;

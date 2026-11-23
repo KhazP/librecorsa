@@ -50,12 +50,12 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
   python -P scripts/tracks/port_ac_track.py <id> --src path/to/<track folder>
 ```
 
-`<id>` can be one circuit, several separated by commas, or `all`. It writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`, adds the circuit to `public/tracks/index.json` and `scripts/tracks/tracks.json`, then runs the lap-time racing-line optimiser for the F1 and GT3 cars (`scripts/optimize-racing-line.ts`, a few minutes per circuit) and meshopt-compresses the GLB.
+`<id>` can be one circuit, several separated by commas, or `all`. It writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`, adds the circuit to `public/tracks/index.json` and `scripts/tracks/tracks.json`, then runs the lap-time racing-line optimiser for the F1 and GT3 cars (`scripts/tracks/optimize-racing-line.ts`, a few minutes per circuit) and meshopt-compresses the GLB.
 
 - `--no-line-opt` skips the optimiser. The circuit keeps the racing lines of its last build when the new centreline has as many samples; otherwise it gets the minimum-curvature line.
 - `--no-glb` writes only the track data. The optimiser needs the GLB, so it is skipped too and the lines are kept the same way.
 - `--no-compress` keeps the raw GLB.
-- `--extras-only` grafts just the circuit's `extraModels` and `driftingObjects` into its existing GLB (`scripts/graft-track-extras.mjs`), leaving every other byte of it and the track data as they are. For a circuit whose full rebuild would also change what it ships.
+- `--extras-only` grafts just the circuit's `extraModels` and `driftingObjects` into its existing GLB (`scripts/tracks/graft-track-extras.mjs`), leaving every other byte of it and the track data as they are. For a circuit whose full rebuild would also change what it ships.
 
 From the mod it reads:
 
@@ -172,7 +172,7 @@ A GLB and a `track_data.json` in `public/tracks/<id>/`:
 - **The GLB** needs `Track_Collider_Road`, a low-resolution drivable surface covering the road plus 1.6 m each side, and `Track_Collider_Wall` for the barriers. Drivable and off-road surfaces are meshes tagged with `userData.surface` (`road`, `kerb`, `sausage`, `runoff`, `pitlane`, `gravel` or `grass`) and optionally `userData.grip`. The converters name them `Track_Surface_Road`, `Track_Surface_Kerb`, `Track_Surface_Runoff`, `Track_Surface_Gravel` and `Track_Surface_Grass`. The full contract is the comment at the top of `src/lib/sim/f12026-car/TrackColliderQuery.ts`.
 - **`track_data.json`** holds the circuit's metadata, DRS zones, cameras, turns, sectors, spawn grid, pit lane and a sample every few metres along the lap (position, width, banking, racing lines, kerbs, run-off and walls each side). `public/tracks/rwanda_official/track_data.json` is the reference schema, and `src/lib/track-data.ts` reads it.
 
-`scripts/rwanda-official/` builds RISE Motordrome in Blender and writes both files itself, with its own terrain, kerbs and scenery. It is written for that one site, so read it as a worked example of a more detailed build. Its README explains the steps.
+`scripts/tracks/rwanda-official/` builds RISE Motordrome in Blender and writes both files itself, with its own terrain, kerbs and scenery. It is written for that one site, so read it as a worked example of a more detailed build. Its README explains the steps.
 
 ## Licences
 

@@ -1,6 +1,6 @@
 /**
  * Circuits the simulator offers, as listed in public/tracks/index.json: RISE Motordrome (built for LibreCorsa,
- * scripts/rwanda-official), hand-built sim circuits (scripts/tracks/port_ac_track.py) and community scans
+ * scripts/tracks/rwanda-official), hand-built sim circuits (scripts/tracks/port_ac_track.py) and community scans
  * (scripts/tracks/build_track.py), each written to public/tracks/<id>/. The default circuit ships inside the bundle
  * (track-data.ts imports its JSON); the others' track data is fetched when the player picks one.
  */

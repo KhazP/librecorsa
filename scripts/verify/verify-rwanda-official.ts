@@ -1,5 +1,5 @@
 /**
- * The official Rwanda layout (public/tracks/rwanda_official/, built by scripts/rwanda-official/): it is listed as a
+ * The official Rwanda layout (public/tracks/rwanda_official/, built by scripts/tracks/rwanda-official/): it is listed as a
  * second layout of the Rwanda venue, its track data is a closed anticlockwise 5.86 km lap with 17 corners, and the model
  * the physics drives on agrees with that data: the road is where the samples say, to the centimetre, the barriers
  * stand where the data puts them all the way round, kerbs, run-off and pit lane carry their surfaces, the start
@@ -280,7 +280,7 @@ if (SHORT) {
     kerb.bumpLengthM === 0.8 && kerb.bumpHeightM === 0.016 && kerb.bumpRise === 0.8125 && tallest > 0.014 && tallest <= 0.0161 &&
       climbing / (climbing + falling) > 0.72 && climbing / (climbing + falling) < 0.9,
     `tallest ${(tallest * 1000).toFixed(1)} mm, climbing on ${((100 * climbing) / (climbing + falling)).toFixed(0)} % of the way`);
-  // The blocks one sees (scripts/rwanda-official/bl_kerbs.py) carry no surface: they are the ones under the wheels,
+  // The blocks one sees (scripts/tracks/rwanda-official/bl_kerbs.py) carry no surface: they are the ones under the wheels,
   // drawn 5 mm higher, block for block
   const blocks = byName.get('Track_Kerb_Blocks');
   let onKerb = 0;

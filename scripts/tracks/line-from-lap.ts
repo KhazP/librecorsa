@@ -1,9 +1,9 @@
 /**
  * A racing line from a lap you drove: turns a lap file saved from the game (`ghost-<track>-<car>-<time>.json`, the
- * lap summary's "Save ghost") into the seed line scripts/optimize-racing-line.ts takes with `--seed`.
+ * lap summary's "Save ghost") into the seed line scripts/tracks/optimize-racing-line.ts takes with `--seed`.
  *
- *   npx tsx scripts/line-from-lap.ts --track rwanda_official --lap ~/Downloads/ghost-rwanda_official-f12026-car-1.38.412.json
- *   npx tsx scripts/optimize-racing-line.ts --track rwanda_official --seed line-seed-rwanda_official.json --lock 0:99999
+ *   npx tsx scripts/tracks/line-from-lap.ts --track rwanda_official --lap ~/Downloads/ghost-rwanda_official-f12026-car-1.38.412.json
+ *   npx tsx scripts/tracks/optimize-racing-line.ts --track rwanda_official --seed line-seed-rwanda_official.json --lock 0:99999
  *
  * `--lock 0:99999` keeps the whole lap as driven (smoothed by the optimiser's spline, checked by a physics lap, then
  * written to the circuit's track_data.json); lock only some stretches (`--lock 650:900,2100:2400`, metres along the
@@ -13,15 +13,15 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
-import { aiLineOffsetM } from '../src/lib/sim/speed-profile';
-import { LAP_SAMPLE_FIELDS, LAP_SAMPLE_STRIDE, type LapRecording } from '../src/lib/sim/lap-types';
+import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
+import { aiLineOffsetM } from '../../src/lib/sim/speed-profile';
+import { LAP_SAMPLE_FIELDS, LAP_SAMPLE_STRIDE, type LapRecording } from '../../src/lib/sim/lap-types';
 
 const arg = (name: string) => {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.join(__dirname, '..', '..');
 const lapPath = arg('--lap');
 if (!lapPath) throw new Error('--lap <file saved from the game> is required');
 const rec = JSON.parse(fs.readFileSync(lapPath.replace(/^~/, process.env.HOME ?? '~'), 'utf8')) as LapRecording;
@@ -80,4 +80,4 @@ fs.writeFileSync(outPath, JSON.stringify(offsets));
 console.log(`${trackId}: ${points.length} recorded points over ${L.toFixed(0)} m -> ${n} offsets in ${outPath}`);
 console.log(`Widest ${widest.toFixed(2)} m from the centreline; ${outside} of ${n} samples beyond the road's edge (the optimiser pulls those back in).`);
 console.log(`Furthest from the circuit's current line: ${moved.toFixed(2)} m at ${movedAt.toFixed(0)} m into the lap.`);
-console.log(`Next: npx tsx scripts/optimize-racing-line.ts --track ${trackId} --seed ${outPath} --lock 0:99999`);
+console.log(`Next: npx tsx scripts/tracks/optimize-racing-line.ts --track ${trackId} --seed ${outPath} --lock 0:99999`);

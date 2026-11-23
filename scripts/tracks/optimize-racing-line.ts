@@ -17,9 +17,9 @@
  *      (`metadata.racingLine`).
  *    - GT3: `roGt3` and `metadata.racingLineGt3`.
  *
- *   npx tsx scripts/optimize-racing-line.ts                       # the default circuit, F1 line: optimise + validate + write
- *   npx tsx scripts/optimize-racing-line.ts --track suzuka --car gt3
- *   npx tsx scripts/optimize-racing-line.ts --all                 # every circuit, both lines
+ *   npx tsx scripts/tracks/optimize-racing-line.ts                       # the default circuit, F1 line: optimise + validate + write
+ *   npx tsx scripts/tracks/optimize-racing-line.ts --track suzuka --car gt3
+ *   npx tsx scripts/tracks/optimize-racing-line.ts --all                 # every circuit, both lines
  *   ... --dry-run                                                 # optimise + validate only
  *
  * On a point-to-point course (a hill climb, `metadata.pointToPoint`) the time is the run's, from rest at the start line
@@ -29,25 +29,25 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
-import { DEFAULT_TRACK_ID, getActiveTrackData, inDeadZone, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
-import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { AMG_GT3_PROFILE_CAR, AMG_GT3_SIM_PROFILE } from '../src/lib/sim/gt3/AmgGt3Sim';
-import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { loadGlbGeometry } from './lib/glb-geometry';
+import { DEFAULT_TRACK_ID, getActiveTrackData, inDeadZone, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
+import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
+import { AMG_GT3_PROFILE_CAR, AMG_GT3_SIM_PROFILE } from '../../src/lib/sim/gt3/AmgGt3Sim';
+import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
+import { loadGlbGeometry } from '../lib/glb-geometry';
 import {
   aiLineOffsetM,
   AI_LINE_WIDTH_SCALE,
   computeSpeedProfile,
   createLc26ProfileCarModel,
   type SpeedProfile,
-} from '../src/lib/sim/speed-profile';
+} from '../../src/lib/sim/speed-profile';
 
 const arg = (name: string) => {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
 const DRY_RUN = process.argv.includes('--dry-run');
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.join(__dirname, '..', '..');
 const TRACK_INDEX: { id: string; dataUrl: string }[] = JSON.parse(
   fs.readFileSync(path.join(ROOT, 'public', 'tracks', 'index.json'), 'utf8')
 );

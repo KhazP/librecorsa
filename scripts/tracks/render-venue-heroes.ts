@@ -2,7 +2,7 @@
  * Renders scenic golden-hour (or floodlit night) Drive-tile hero stills for every venue:
  *   `npm run venue-heroes [-- <venueId> ...]`
  *
- * Mirrors `scripts/render-car-thumbs.ts`: bundles `scripts/venue-heroes/render.ts`, serves it next to `public/`,
+ * Mirrors `scripts/render-car-thumbs.ts`: bundles `scripts/tracks/venue-heroes/render.ts`, serves it next to `public/`,
  * renders each venue's primary layout once in headless Chrome with LibreCorsa's desktop-High renderer (no cars on
  * track), and writes responsive WebPs beside each venue's track folder:
  * - `public/tracks/<venueId>/hero-1600.webp` (1600 x 900)
@@ -79,7 +79,7 @@ async function main(): Promise<void> {
 
   const work = mkdtempSync(join(tmpdir(), "venue-heroes-"));
   await build({
-    entryPoints: [join(ROOT, "scripts/venue-heroes/render.ts")],
+    entryPoints: [join(ROOT, "scripts/tracks/venue-heroes/render.ts")],
     bundle: true,
     format: "esm",
     outfile: join(work, "render.js"),

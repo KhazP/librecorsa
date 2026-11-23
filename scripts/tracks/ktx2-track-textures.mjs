@@ -3,8 +3,8 @@
  * texel instead of the 4 a WebP texture takes once decoded, and the download stays close to the WebP file's. The game
  * loads the result on phones through src/lib/ktx2-models.ts and src/lib/venue-models.ts.
  *
- *   node scripts/ktx2-track-textures.mjs <in.glb> <out.glb> [--track-data <json>] [options]
- *   node scripts/ktx2-track-textures.mjs --venue <id> --out <dir> <shared.glb> <layout.glb>... [--track-data <json>]...
+ *   node scripts/tracks/ktx2-track-textures.mjs <in.glb> <out.glb> [--track-data <json>] [options]
+ *   node scripts/tracks/ktx2-track-textures.mjs --venue <id> --out <dir> <shared.glb> <layout.glb>... [--track-data <json>]...
  *     options: --file-budget 1.1 (output bytes as a share of the input files') --close-up-floor min|low|high
  *              --cache <dir> --jobs 4 --report <json>
  *
@@ -42,7 +42,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
-import { alphaKindOf, compareRgba, imageUsage, ktx2Info, parseGlb, replaceImagesWithKtx2, textureImage, viewBytes, writeGlb } from "./lib/ktx2-textures.mjs";
+import { alphaKindOf, compareRgba, imageUsage, ktx2Info, parseGlb, replaceImagesWithKtx2, textureImage, viewBytes, writeGlb } from "../lib/ktx2-textures.mjs";
 
 const TOOL_VERSION = 3;
 /** Part of the encode cache key: bump it only when the encodes themselves change */
@@ -86,8 +86,8 @@ if (!["min", "low", "high"].includes(closeUpFloor)) throw new Error(`--close-up-
 const venueId = take("--venue");
 const outDir = take("--out");
 if (venueId ? !outDir || args.length < 2 : args.length !== 2) {
-  console.error("Usage: node scripts/ktx2-track-textures.mjs <in.glb> <out.glb> [--track-data <json>] [--file-budget 1.1] [--cache <dir>] [--jobs N] [--report <json>]");
-  console.error("       node scripts/ktx2-track-textures.mjs --venue <id> --out <dir> <shared.glb> <layout.glb>... [--track-data <json>]...");
+  console.error("Usage: node scripts/tracks/ktx2-track-textures.mjs <in.glb> <out.glb> [--track-data <json>] [--file-budget 1.1] [--cache <dir>] [--jobs N] [--report <json>]");
+  console.error("       node scripts/tracks/ktx2-track-textures.mjs --venue <id> --out <dir> <shared.glb> <layout.glb>... [--track-data <json>]...");
   process.exit(1);
 }
 
@@ -340,7 +340,7 @@ for (const [group, to, why] of passes) {
 
 // ---------- writing
 
-const tool = `scripts/ktx2-track-textures.mjs v${TOOL_VERSION}`;
+const tool = `scripts/tracks/ktx2-track-textures.mjs v${TOOL_VERSION}`;
 const outputs = [];
 const writeFile = (file, extraJson) => {
   const input = inputs[file];

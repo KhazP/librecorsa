@@ -4,20 +4,20 @@
  * Everything that stays keeps its bytes: compressed buffer views and images are copied as they are, so the geometry,
  * physics and textures left are byte for byte the input's.
  *
- *   node scripts/strip-track-props.mjs <in.glb> <out.glb> --texture '<regex>' [--texture '<regex>'] [--report <json>]
- *   node scripts/strip-track-props.mjs <in.glb> <out.glb> --replace '<image name>=<file>' [--texture ...]
+ *   node scripts/tracks/strip-track-props.mjs <in.glb> <out.glb> --texture '<regex>' [--texture '<regex>'] [--report <json>]
+ *   node scripts/tracks/strip-track-props.mjs <in.glb> <out.glb> --replace '<image name>=<file>' [--texture ...]
  *
  * `--texture` matches an image's name (the mod's file name, e.g. `ac_crew.dds`), case-insensitively. A node only goes
  * when every primitive of its mesh uses such a texture as its base colour; a mesh that mixes them is an error, as is a
  * matching node with children of its own. `--replace` swaps one image's bytes for a file of the same format (a
  * texture with a logo painted out, where the mesh itself stays). Run it on a layout's full GLB, then re-split the venue
- * (scripts/split-venue-model.mjs) and rebuild the KTX2 pair (scripts/ktx2-track-textures.mjs --venue): a stripped
+ * (scripts/tracks/split-venue-model.mjs) and rebuild the KTX2 pair (scripts/tracks/ktx2-track-textures.mjs --venue): a stripped
  * shared file is a new build. Before writing, the output is read back and every kept accessor is decoded and compared
  * with the input's.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { BinWriter, MESHOPT, accessorBytes, isFallbackBuffer, md5, meshoptOf, parseGlb, readGlb, ready, writeGlbBytes } from "./lib/glb-raw.mjs";
+import { BinWriter, MESHOPT, accessorBytes, isFallbackBuffer, md5, meshoptOf, parseGlb, readGlb, ready, writeGlbBytes } from "../lib/glb-raw.mjs";
 
 function parseArgs(argv) {
   const opts = { textures: [], replace: new Map(), report: undefined, files: [] };
@@ -34,7 +34,7 @@ function parseArgs(argv) {
     else opts.files.push(a);
   }
   if (opts.files.length !== 2 || (!opts.textures.length && !opts.replace.size)) {
-    throw new Error("usage: node scripts/strip-track-props.mjs <in.glb> <out.glb> [--texture '<regex>' ...] [--replace '<image>=<file>' ...] [--report <json>]");
+    throw new Error("usage: node scripts/tracks/strip-track-props.mjs <in.glb> <out.glb> [--texture '<regex>' ...] [--replace '<image>=<file>' ...] [--report <json>]");
   }
   return opts;
 }

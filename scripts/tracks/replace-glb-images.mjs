@@ -2,21 +2,21 @@
  * Replaces images inside a GLB with new files of the same format, picked by the image's name; geometry, physics and
  * every other buffer view keep their bytes, and images, textures and materials keep their indices.
  *
- *   node scripts/replace-glb-images.mjs <in.glb> <out.glb> <image name>=<file> [<image name>=<file> ...]
+ *   node scripts/tracks/replace-glb-images.mjs <in.glb> <out.glb> <image name>=<file> [<image name>=<file> ...]
  *
  * For a fix to a texture that doesn't need the whole model rebuilt (RISE's scanned normal maps: its GLB is the Blender
- * build with the Assetto Corsa release merged on, scripts/rwanda-official/README.md). A KTX2 conversion of the model
- * (scripts/ktx2-track-textures.mjs) must be made again from the result.
+ * build with the Assetto Corsa release merged on, scripts/tracks/rwanda-official/README.md). A KTX2 conversion of the model
+ * (scripts/tracks/ktx2-track-textures.mjs) must be made again from the result.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { parseGlb, replaceImages, writeGlb } from "./lib/ktx2-textures.mjs";
+import { parseGlb, replaceImages, writeGlb } from "../lib/ktx2-textures.mjs";
 
 const MIME = { ".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".ktx2": "image/ktx2" };
 
 const [input, output, ...pairs] = process.argv.slice(2);
 if (!input || !output || !pairs.length) {
-  console.error("Usage: node scripts/replace-glb-images.mjs <in.glb> <out.glb> <image name>=<file> ...");
+  console.error("Usage: node scripts/tracks/replace-glb-images.mjs <in.glb> <out.glb> <image name>=<file> ...");
   process.exit(1);
 }
 

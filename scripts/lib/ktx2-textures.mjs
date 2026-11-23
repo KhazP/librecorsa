@@ -1,11 +1,11 @@
 /**
- * The byte-level part of the KTX2 texture converter (scripts/ktx2-track-textures.mjs) and its check
+ * The byte-level part of the KTX2 texture converter (scripts/tracks/ktx2-track-textures.mjs) and its check
  * (scripts/verify/verify-ktx2-models.ts): no basisu, no image decoding, so CI can run it.
  *
  * A circuit GLB is rewritten without a glTF library: its JSON is edited and its binary chunk rebuilt from the original
  * buffer views, so every view that is not an image (meshopt-compressed geometry, physics, animation) keeps its bytes
  * exactly. A gltf-transform read and write would decode and re-encode the meshopt views, which re-rounds some normals.
- * Images, textures and materials keep their indices: the venue split (scripts/split-venue-model.mjs on
+ * Images, textures and materials keep their indices: the venue split (scripts/tracks/split-venue-model.mjs on
  * feat/shared-venue-models) refers to them by index.
  */
 

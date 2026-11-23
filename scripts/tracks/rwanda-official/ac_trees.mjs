@@ -3,7 +3,7 @@
 // under 60,000 vertices. Beside the track the acacias take their third level and the shrubs their second, the rest
 // of the site the lightest one.
 //
-//   node scripts/rwanda-official/ac_trees.mjs          ->  scripts/rwanda-official/data/ac_trees.glb
+//   node scripts/tracks/rwanda-official/ac_trees.mjs          ->  scripts/tracks/rwanda-official/data/ac_trees.glb
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Document, NodeIO } from '@gltf-transform/core';
@@ -11,7 +11,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { MeshoptDecoder } from 'meshoptimizer';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = join(HERE, '../../public/tracks/rwanda_official/scenery/foliage.glb');
+const SRC = join(HERE, '../../../public/tracks/rwanda_official/scenery/foliage.glb');
 const OUT = join(HERE, 'data/ac_trees.glb');
 const MAX_VERTS = 60000;
 /** The level each kind of tile is baked at (a tile without that level is left out) */

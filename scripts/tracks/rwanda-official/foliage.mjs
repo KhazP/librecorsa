@@ -2,7 +2,7 @@
 // in assets/credits.json and CREDITS.md) instanced at this layout's own tree spots (data/trees.json, written by
 // bl_terrain.export_trees). One EXT_mesh_gpu_instancing node per tile, model and level of detail, in hash order.
 //
-//   node scripts/rwanda-official/foliage.mjs
+//   node scripts/tracks/rwanda-official/foliage.mjs
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +18,7 @@ function hash(x, z, salt = 0) {
 }
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, '../..');
+const ROOT = join(HERE, '../../..');
 const SRC = join(HERE, 'assets/foliage_src.glb');
 const OUT = join(ROOT, 'public/tracks/rwanda_official/scenery/foliage.glb');
 const TREES = join(HERE, 'data/trees.json');
@@ -217,7 +217,7 @@ for (const [key, list] of [...tiles.entries()].sort(([a], [b]) => (a < b ? -1 : 
   });
 }
 
-root.getAsset().generator = 'LibreCorsa scripts/rwanda-official/foliage.mjs';
+root.getAsset().generator = 'LibreCorsa scripts/tracks/rwanda-official/foliage.mjs';
 await doc.transform(prune({ keepAttributes: true, keepIndices: true }), dedup());
 mkdirSync(dirname(OUT), { recursive: true });
 await io.write(OUT, doc);

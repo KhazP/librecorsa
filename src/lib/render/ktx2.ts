@@ -5,7 +5,7 @@ import { withBasePath } from "@/lib/base-path";
 import { isTouchDevice } from "@/lib/input/touch-input";
 
 /**
- * GPU-compressed circuit textures for phones: KTX2 files with Basis Universal data (scripts/ktx2-track-textures.mjs),
+ * GPU-compressed circuit textures for phones: KTX2 files with Basis Universal data (scripts/tracks/ktx2-track-textures.mjs),
  * which the GPU keeps compressed. A WebP texture takes 4 bytes per texel on the GPU; ETC1S transcodes to ETC2 at half a
  * byte (one with alpha) and UASTC to ASTC at one, which is most of a circuit's memory on a phone.
  *

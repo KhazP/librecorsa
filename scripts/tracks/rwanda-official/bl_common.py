@@ -9,7 +9,7 @@ import bpy
 import ro_design as rd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..', '..'))
+REPO = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 TEX = os.path.join(HERE, 'data', 'tex')
 REPO_TEX = os.path.join(HERE, 'assets', 'textures')            # barrier, fence and gantry textures of the project's own
 COLL = 'RO'

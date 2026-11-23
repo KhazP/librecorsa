@@ -16,7 +16,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..', '..'))
+REPO = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 LAYOUTS = (('gp', 'rwanda_official'), ('short', 'rwanda_official_short'))
 KN5 = 'rwanda_official.kn5'
 

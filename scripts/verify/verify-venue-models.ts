@@ -1,5 +1,5 @@
 /**
- * Venue models (src/lib/venue-models.ts, scripts/split-venue-model.mjs): every layout of a venue with a split model
+ * Venue models (src/lib/venue-models.ts, scripts/tracks/split-venue-model.mjs): every layout of a venue with a split model
  * must load into the same scene from its pair (the layout file and the venue's shared file) as from its own full GLB.
  *
  * 1. The pair names this build: the layout file's `extras.lcVenueLayout` and the shared file's `extras.lcVenueShared`.

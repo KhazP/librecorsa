@@ -2,8 +2,8 @@
  * Splits the circuit GLBs of one venue's layouts (VIR's seven, the Red Bull Ring's three, ...) into one shared visual
  * model and one small file per layout, so a player who has driven one layout downloads only a few MB for the next.
  *
- *   node scripts/split-venue-model.mjs --venue vir --out <dir> vir=<vir.glb> vir_north=<vir_north.glb> ...
- *   node scripts/split-venue-model.mjs --venue vir --out <dir> vir vir_north ...   (inputs: public/tracks/<id>/<id>.glb)
+ *   node scripts/tracks/split-venue-model.mjs --venue vir --out <dir> vir=<vir.glb> vir_north=<vir_north.glb> ...
+ *   node scripts/tracks/split-venue-model.mjs --venue vir --out <dir> vir vir_north ...   (inputs: public/tracks/<id>/<id>.glb)
  *   add --install public/tracks to also copy the outputs into each layout's folder there
  *
  * Writes to <dir>:
@@ -46,7 +46,7 @@ import {
   sha256,
   viewBytes,
   writeGlbBytes,
-} from "./lib/glb-raw.mjs";
+} from "../lib/glb-raw.mjs";
 import { MeshoptDecoder } from "meshoptimizer";
 
 export const VENUE_EXTENSION = "LC_venue_shared";
@@ -73,7 +73,7 @@ function parseArgs(argv) {
     }
   }
   if (!opts.venue || !opts.out || opts.layouts.length < 2) {
-    throw new Error("usage: node scripts/split-venue-model.mjs --venue <id> --out <dir> [--install public/tracks] <layout>[=<glb>] <layout>[=<glb>] ...");
+    throw new Error("usage: node scripts/tracks/split-venue-model.mjs --venue <id> --out <dir> [--install public/tracks] <layout>[=<glb>] <layout>[=<glb>] ...");
   }
   return opts;
 }

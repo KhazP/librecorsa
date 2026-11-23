@@ -11,14 +11,14 @@
  * lane (a tyre wall at the inner course's skid pad exit, s 738-752, stands 1 m inside the cones); the track limits
  * stay on the cones.
  *
- *   npx tsx scripts/generate-cone-lanes.ts
+ *   npx tsx scripts/tracks/generate-cone-lanes.ts
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import * as THREE from 'three';
-import { getActiveTrackData, getActiveTrackMetadata, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
-import { TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
-import { roadFacing } from '../src/lib/sim/track-colliders';
-import { loadGlbGeometry, trackModelFiles } from './lib/glb-geometry';
+import { getActiveTrackData, getActiveTrackMetadata, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
+import { TrackWallQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
+import { roadFacing } from '../../src/lib/sim/track-colliders';
+import { loadGlbGeometry, trackModelFiles } from '../lib/glb-geometry';
 
 interface ConeLayout {
   id: string;
@@ -219,7 +219,7 @@ writeFileSync(
     '/**',
     ' * The lanes of circuits laid out in cones: the lane between the cones on either side of the lap, out to the',
     " * cones' outer edges, as world outlines (x, z pairs, m), a strip per 40 m of the lap. drawn-surfaces.ts makes the",
-    ' * lane the track and the ground round it off it. Made by scripts/generate-cone-lanes.ts; not edited by hand.',
+    ' * lane the track and the ground round it off it. Made by scripts/tracks/generate-cone-lanes.ts; not edited by hand.',
     ' */',
     '',
     ...blocks,

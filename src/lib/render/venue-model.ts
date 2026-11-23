@@ -3,7 +3,7 @@ import type { GLTF, GLTFLoaderPlugin, GLTFParser } from "three/examples/jsm/load
 import { createGltfLoader } from "@/lib/render/gltf-loader";
 
 /**
- * Loads a circuit layout from its venue's split model (venue-models.ts, scripts/split-venue-model.mjs): the layout's
+ * Loads a circuit layout from its venue's split model (venue-models.ts, scripts/tracks/split-venue-model.mjs): the layout's
  * own file and the venue's shared file, fetched in parallel. The result is the scene graph the layout's full GLB
  * gives, node for node: the shared scenery goes under the layout file's own `Track_Model` (which carries the layout's
  * offset), in the original order, with the names GLTFLoader would have given in one file. Materials and textures

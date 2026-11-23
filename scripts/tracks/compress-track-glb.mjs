@@ -1,8 +1,8 @@
 /**
  * Meshopt-compresses circuit GLBs in place (EXT_meshopt_compression + KHR_mesh_quantization).
  *
- *   node scripts/compress-track-glb.mjs public/tracks/monaco/monaco.glb [more.glb ...]
- *   node scripts/compress-track-glb.mjs --all          # every circuit in public/tracks/index.json
+ *   node scripts/tracks/compress-track-glb.mjs public/tracks/monaco/monaco.glb [more.glb ...]
+ *   node scripts/tracks/compress-track-glb.mjs --all          # every circuit in public/tracks/index.json
  *
  * The visual scan is quantized (16-bit positions, 8-bit normals, 14-bit UVs). The hidden physics meshes
  * (Track_Collider_* / Track_Surface_*, or nodes with a `collider` / `hidden` extra) and the drawn meshes laid on them
@@ -12,7 +12,7 @@
  * Already compressed files are skipped. The browser decodes with three's MeshoptDecoder (src/lib/gltf-loader.ts),
  * the Node scripts with scripts/lib/glb-geometry.ts. scripts/tracks/port_ac_track.py runs it on every GLB it writes;
  * run it yourself on one built with --no-compress or by scripts/tracks/build_track.py.
- * RISE Motordrome's GLB is compressed by its own build (scripts/rwanda-official/post.mjs) and skipped here as
+ * RISE Motordrome's GLB is compressed by its own build (scripts/tracks/rwanda-official/post.mjs) and skipped here as
  * already compressed. Its scenery/foliage.glb is left raw: it is mostly EXT_mesh_gpu_instancing transforms and
  * textures, and comes out bigger.
  */
@@ -24,7 +24,7 @@ import { ALL_EXTENSIONS, EXTMeshoptCompression } from "@gltf-transform/extension
 import { prune, quantize, reorder } from "@gltf-transform/functions";
 import { MeshoptDecoder, MeshoptEncoder } from "meshoptimizer";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const RAW_POSITION = "_PHYSICS_POSITION";
 
 function trackFiles(args) {
@@ -101,7 +101,7 @@ function maxPhysicsError(before, after) {
 
 const files = trackFiles(process.argv.slice(2));
 if (files.length === 0) {
-  console.error("usage: node scripts/compress-track-glb.mjs <file.glb ...> | --all");
+  console.error("usage: node scripts/tracks/compress-track-glb.mjs <file.glb ...> | --all");
   process.exit(1);
 }
 

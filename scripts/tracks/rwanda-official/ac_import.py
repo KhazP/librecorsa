@@ -2,7 +2,7 @@
 RISE Motordrome's Assetto Corsa release, read back for the game: the .kn5 models and extension/ext_config.ini of the
 released track folder, turned into what the game's model takes from them (ac_merge.mjs puts the two together).
 
-    $PY -I scripts/rwanda-official/ac_import.py <release>/tracks/rwanda_official
+    $PY -I scripts/tracks/rwanda-official/ac_import.py <release>/tracks/rwanda_official
 
 Writes data/ac/:
   layers.glb   the meshes, in the game's frame (the release's coordinates are the game's, to the millimetre):
@@ -37,7 +37,7 @@ import numpy as np
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, '..', 'tracks'))
+sys.path.insert(0, os.path.join(HERE, '..'))
 import port_ac_track as act  # noqa: E402  (its KN5 reader)
 
 OUT = os.path.join(HERE, 'data', 'ac')
@@ -179,7 +179,7 @@ class Glb:
     """A plain glTF 2.0 binary: float positions, normals and UVs, uint32 indices, PNG textures"""
 
     def __init__(self):
-        self.j = {'asset': {'version': '2.0', 'generator': 'scripts/rwanda-official/ac_import.py'},
+        self.j = {'asset': {'version': '2.0', 'generator': 'scripts/tracks/rwanda-official/ac_import.py'},
                   'scene': 0, 'scenes': [{'nodes': []}], 'nodes': [], 'meshes': [], 'materials': [],
                   'accessors': [], 'bufferViews': [], 'buffers': [], 'images': [], 'textures': [],
                   'samplers': [{'magFilter': 9729, 'minFilter': 9987, 'wrapS': 10497, 'wrapT': 10497}]}
