@@ -63,7 +63,7 @@ import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { LEGACY_TRACK_LIMITS, TrackLimitsMonitor, type TrackLimitsRules } from "@/lib/sim/track-limits";
 import { stretchTimeS } from "@/lib/sim/course-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
-import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
+import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar, type AiDriverDef } from "@/lib/sim/ai-opponents";
 import { resolveRaceRules } from "@/lib/sim/race-rules";
 import { rulesForSetup, startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 import { JumpStartWatch, ReactionWatch } from "@/lib/sim/race-start";
@@ -203,6 +203,16 @@ const SEAT_PANEL_HOLD_MS = 450;
 export type AppPhase = "loading" | "title" | "wizard" | "driving";
 
 /** The race on track with the player: none (practice), the AI field, or a multiplayer race; never two at once */
+/**
+ * A race run on its own terms rather than the player's saved race setup (a career round, career-session.ts): its setup,
+ * the field's skill and its drivers. Restarts, qualifying's race and a car change use it while it is set
+ */
+export interface RaceOverride {
+  setup: RaceSetup;
+  skill: number;
+  drivers: AiDriverDef[];
+}
+
 export type SessionRace =
   | { kind: "practice" }
   /** `rules`: sporting rules fixed for this race (the weekly challenge's), over the player's race setup */
@@ -571,6 +581,10 @@ export class DriveSession {
   readonly applySettings: (settings: PlayerSettings) => void;
   /** Puts the tyre compound on the car and its model */
   readonly setTireCompound: (compound: TireCompound) => void;
+  /** A career round's own race setup, skill and drivers (null: the player's own again) */
+  readonly setRaceOverride: (override: RaceOverride | null) => void;
+  /** The race setup the next start uses: the override's, else the player's */
+  readonly raceSetup: () => RaceSetup;
   /** What the crew does at the next stop, and the call to box (pit/pit-stop.ts) */
   readonly setPitStrategy: (patch: Partial<PitStrategyState>) => void;
   /** The Pit limiter key (outside the speed-limit zone, where it is on by itself) */
@@ -847,6 +861,17 @@ export class DriveSession {
     };
     /** The player's preferences (applySettings), and what the frame loop derives from them: the saved ones at first */
     let settings: PlayerSettings = initialSettings;
+    let raceOverride: RaceOverride | null = null;
+    const raceSetupNow = (): RaceSetup => raceOverride?.setup ?? settings.race;
+    const aiSkillNow = (): number => raceOverride?.skill ?? settings.aiSkill;
+    const driversNow = (opponents: number): AiDriverDef[] => raceOverride?.drivers ?? aiDriversFor(opponents);
+    this.setRaceOverride = (override) => {
+      raceOverride = override;
+      // The spare field was built for the player's own race
+      aiFieldSpare = null;
+      workerPrepared = null;
+    };
+    this.raceSetup = raceSetupNow;
     let keyLookup = buildKeyLookup(settings.keys);
     let assistSettings = steeringAssistSettings(settings.padTuning, settings.keyboardTuning);
     let livery = resolveLivery(settings.liveryId, settings.customLivery);
@@ -962,7 +987,7 @@ export class DriveSession {
       };
       this.resetRun("race");
       this.setRace({ kind: "ai", field: q.field });
-      startAiRace(q.field, settings.race, settings.profile);
+      startAiRace(q.field, raceSetupNow(), settings.profile);
     };
     this.startQualifying = (field, minutes) => {
       if (disposed) return;
@@ -1000,7 +1025,7 @@ export class DriveSession {
         return { scoring: resolved.trackLimits, pointsAllowed: resolved.pointsAllowed };
       }
       if (race.kind !== "ai") return LEGACY_TRACK_LIMITS;
-      const rules = rulesForSetup(vehicleModelSpec(vehicleNow).classId, { ...settings.race, ...race.rules });
+      const rules = rulesForSetup(vehicleModelSpec(vehicleNow).classId, { ...raceSetupNow(), ...race.rules });
       aidsLockInYellow = rules.lockAidsInYellow;
       return { scoring: rules.trackLimits, pointsAllowed: rules.pointsAllowed };
     };
@@ -1181,8 +1206,8 @@ export class DriveSession {
     };
     /** A new AI field round the player's car, of the race setup's size, at the player's chosen skill */
     const buildAiField = (car: SimulatorCar) =>
-      new AiOpponentField(track, car, aiDriversFor(settings.race.opponents), getTrackEnv(), {
-        skill: settings.aiSkill,
+      new AiOpponentField(track, car, driversNow(raceSetupNow().opponents), getTrackEnv(), {
+        skill: aiSkillNow(),
         peers: takeSparePeers(car),
       });
     /**
@@ -1205,8 +1230,8 @@ export class DriveSession {
       aiPrepQueued = true;
       const run = () => {
         aiPrepQueued = false;
-        // Never while driving: the build would be a hitch on track instead
-        if (disposed || appPhaseNow === "driving" || appPhaseNow === "loading") return;
+        // Never while driving: the build would be a hitch on track instead; and not for a career round (built at its start)
+        if (disposed || raceOverride || appPhaseNow === "driving" || appPhaseNow === "loading") return;
         const opponents = settings.race.opponents;
         // A race in the worker is built there, off this thread: only the request goes from here
         const link = workerRaceLink();
@@ -1252,12 +1277,13 @@ export class DriveSession {
         workerPrepared = null;
         aiFieldSpare = null;
         const car = physics;
-        return new WorkerAiField(link, getTrackEnv(), car, aiDriversFor(settings.race.opponents).length, settings.aiSkill, () => car.groundQuery ?? null);
+        const drivers = driversNow(raceSetupNow().opponents);
+        return new WorkerAiField(link, getTrackEnv(), car, drivers.length, aiSkillNow(), () => car.groundQuery ?? null, raceOverride?.drivers);
       }
       const spare = aiFieldSpare;
       aiFieldSpare = null;
-      const skill = settings.aiSkill;
-      if (spare && spare.physics === physics && spare.opponents === settings.race.opponents) {
+      const skill = aiSkillNow();
+      if (!raceOverride && spare && spare.physics === physics && spare.opponents === settings.race.opponents) {
         if (spare.field.skill !== skill) spare.field.setSkill(skill);
         return spare.field;
       }
@@ -1287,7 +1313,7 @@ export class DriveSession {
         const field = this.takeAiField();
         if (trackRoot) field.attachTrackRoot(trackRoot);
         this.setRace({ kind: "ai", field });
-        startAiRace(field, settings.race, settings.profile);
+        startAiRace(field, raceSetupNow(), settings.profile);
       }
       setTelemetry({ ...physics.telemetry });
       // In the menus, the next race's field is built for the new car
@@ -1832,7 +1858,7 @@ export class DriveSession {
       }
       if (g.driverBody !== pg.driverBody) setDriverBodyShown(g.driverBody);
       // Another field size needs another field: a race running restarts from the lights with it
-      if (next.race.opponents !== prev.race.opponents) {
+      if (next.race.opponents !== prev.race.opponents && !raceOverride) {
         aiFieldSpare = null;
         if (raceNow().kind === "ai") {
           this.resetRun("race");
@@ -2307,7 +2333,7 @@ export class DriveSession {
       if (race.kind === "practice") return this.restartFlyingLap();
       // Out of a replay first (the reset does that), then the car moves
       this.resetRun("restart");
-      startAiRace(race.field, settings.race, settings.profile);
+      startAiRace(race.field, raceSetupNow(), settings.profile);
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -3326,7 +3352,7 @@ export class DriveSession {
         const field = this.takeAiField();
         if (trackRoot) field.attachTrackRoot(trackRoot);
         this.setRace({ kind: "ai", field });
-        startAiRace(field, settings.race, settings.profile);
+        startAiRace(field, raceSetupNow(), settings.profile);
       }
       const aiField = aiFieldOf(raceNow());
       /** The race runs in the worker, the player's car with it: this page only sends the controls and draws it */

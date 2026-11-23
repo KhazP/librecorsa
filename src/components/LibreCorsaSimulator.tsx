@@ -156,7 +156,8 @@ export interface LibreCorsaSimulatorProps {
   trackId?: string;
   /** Title menu circuit picker */
   /** Switches circuit: settles once the load lands (the scene remounts) or fails (the old circuit stays) */
-  onSelectTrack?: (id: string) => void | Promise<void>;
+  /** `remember: false`: the circuit is for this drive only (a career round), not the one the game opens on next */
+  onSelectTrack?: (id: string, opts?: { remember?: boolean }) => void | Promise<void>;
   /** Mounts the circuit again from scratch (a new canvas and WebGL context), after the GPU context was lost */
   onRestart?: () => void;
 }
@@ -517,7 +518,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** Swaps the player's car (the run starts over with it); the player's own pick goes through handleChangeCar */
   const changeCar = useCallback(
-    (next: CarId) => {
+    (next: CarId, opts?: { remember?: boolean }) => {
       session?.unlockAudio();
       if (next === carIdRef.current) return;
       carIdRef.current = next;
@@ -525,7 +526,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       vehicleModelRef.current = carPhysics(next);
       setVehicleModel(vehicleModelRef.current);
       setSetupBoardNotice(null);
-      saveCarChoice(next);
+      // A career round's car is the round's: the player's own choice stays saved
+      if (opts?.remember !== false) saveCarChoice(next);
       session?.setCar(next);
     },
     [session]
@@ -628,7 +630,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const physics = session.car;
       session.resetRun("restart");
       // A restart from the menu uses the race's own start; the flying-lap key always gives a rolling one
-      if (race.kind === "ai") startAiRace(race.field, settingsRef.current.race, settingsRef.current.profile, flyingStart ? false : undefined);
+      if (race.kind === "ai") startAiRace(race.field, session.raceSetup(), settingsRef.current.profile, flyingStart ? false : undefined);
       else physics.resetToStartGrid(flyingStart);
     },
     [session]
