@@ -51,6 +51,7 @@ import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import { applyConditionsChoice, effectiveConditions, resolveTimeOfDay, type RoomConditionsOverride, type SessionConditions } from "@/lib/sim/weather";
 import { getTrackInfo, LISTED_TRACKS, trackDefaultTimeOfDay, TRACKS } from "@/lib/track-registry";
+import { roomTrackStatus } from "@/lib/mods/room-content";
 import { F1TelemetryHud } from "@/components/F1TelemetryHud";
 import { roomFromUrl } from "@/lib/net/invite-room";
 import { CAMERA_MODES, nextCameraMode } from "@/lib/render/camera-modes";
@@ -1596,7 +1597,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const follow = (l: LobbyState | null) => {
       if (!l || l.hostId === mp.localPeerId || (phaseRef.current !== "title" && phaseRef.current !== "loading")) return;
       if (l.settings.trackId !== trackId) {
-        if (onSelectTrack && TRACKS.some((t) => t.id === l.settings.trackId)) onSelectTrack(l.settings.trackId);
+        if (onSelectTrack && roomTrackStatus(l.settings.trackId, l.settings.trackMod) === "ok") onSelectTrack(l.settings.trackId);
         return;
       }
       const switchTo = roomCarSwitch(l.settings, vehicleModelRef.current);
@@ -1629,7 +1630,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     mp.weatherProvider = () => trackEnvRef.current?.weather.snapshot() ?? null;
     mp.onQualifyingStart = (quali) => {
       const targetTrack = mp.lobby?.settings.trackId ?? trackId;
-      if (targetTrack !== trackId && onSelectTrack && TRACKS.some((t) => t.id === targetTrack)) {
+      if (targetTrack !== trackId && onSelectTrack && roomTrackStatus(targetTrack, mp.lobby?.settings.trackMod) === "ok") {
         pendingQualifying = { id: quali.id, trackId: targetTrack };
         onSelectTrack(targetTrack);
         return;

@@ -35,6 +35,7 @@ import { RULE_PRESET_HINTS, RULE_PRESET_LABELS, TRACK_LIMITS_CHOICE_LABELS, type
 import { RACE_START_MODE_HINTS, RACE_START_MODE_LABELS, RACE_START_MODES, type RaceStartMode } from "@/lib/sim/race-start";
 import { carClass, carClassesInUse } from "@/lib/cars/car-registry";
 import { getTrackInfo, TRACKS } from "@/lib/track-registry";
+import { roomTrackStatus } from "@/lib/mods/room-content";
 import { Button, Card, ConfirmDialog, Disclosure, Segmented, Select, SettingRow, Stepper, TextField, Toggle, Well } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { BadgeLegend, DriverBadges } from "@/components/ui/DriverBadges";
@@ -791,6 +792,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
 
     // Warnings for this player, compared with the host's race settings
     const trackMismatch = currentTrackId !== undefined && currentTrackId !== settings.trackId;
+    // A mod circuit this copy hasn't got, or has in another version: no switching to it
+    const roomTrack = roomTrackStatus(settings.trackId, settings.trackMod);
     const vehicleBlocked = outOfClass(currentVehicle);
     const switchCars = carsForClass?.(settings.carClass) ?? [];
 
@@ -884,9 +887,14 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           <Well className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-2.5">
             <span className="flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-caution">
               <Icon name="warning" className="mt-px" />
-              {tx("drivers.hostOn", { circuit: trackName(settings.trackId) })}
+              {roomTrack === "ok"
+                ? tx("drivers.hostOn", { circuit: trackName(settings.trackId) })
+                : tx(roomTrack === "missing" ? "drivers.modMissing" : "drivers.modDifferent", {
+                    mod: settings.trackMod?.name ?? settings.trackId,
+                    version: settings.trackMod?.version ?? "",
+                  })}
             </span>
-            {onSwitchTrack ? (
+            {onSwitchTrack && roomTrack === "ok" ? (
               <Button size="sm" variant="secondary" onClick={() => onSwitchTrack(settings.trackId)}>
                 {tx("drivers.switchCircuit")}
               </Button>

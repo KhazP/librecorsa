@@ -25,6 +25,8 @@ import { modTrackInfos } from "../src/lib/mods/mod-loader";
 import { modDefinitions, registerModContent } from "../src/lib/mods/mod-content";
 import { CARS, carById, portedSkinFor, carSkinThumbUrl, carThumbUrl, type CarId } from "../src/lib/cars/car-registry";
 import { CIRCUIT_VENUES, LISTED_TRACKS, registerModTracks, TRACKS, getTrackInfo } from "../src/lib/track-registry";
+import { roomModRefOf, roomTrackStatus } from "../src/lib/mods/room-content";
+import { sanitizeLobbySettings } from "../src/lib/net/wire";
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -282,6 +284,21 @@ function registryChecks(): void {
   check("it loads from the package and shows its picture from there", portedSkinFor("amg-gt3", added)?.baseUrl === "/mods/jdoe.test-pack/skins/blue" && carSkinThumbUrl("amg-gt3", added!.id) === "/mods/jdoe.test-pack/skins/blue/thumb.webp");
   registerModContent([]);
   check("registering none removes the cars and liveries again", CARS.length === before && (carById("amg-gt3").skins?.length ?? 0) === gt3SkinsBefore);
+
+  // --- Online rooms: the same package or none ---
+  registerModTracks(tracks);
+  const ref = roomModRefOf(id);
+  check("a room names a mod circuit's package and hash", ref?.packageId === "jdoe.test-pack" && ref.hash === "f".repeat(64) && ref.version === "1.0.0");
+  check("a game circuit names none", roomModRefOf(TRACKS[0].id) === undefined);
+  check("the same package: the guest can race", roomTrackStatus(id, ref) === "ok");
+  check("another version: the guest is told", roomTrackStatus(id, { ...ref!, hash: "e".repeat(64) }) === "different");
+  check("no such package: the guest is told", roomTrackStatus("mod:jdoe.other/x", undefined) === "missing");
+  const settings = sanitizeLobbySettings({ trackId: id, trackMod: ref, laps: 3 });
+  check("the lobby settings carry the package through the room server", settings.trackMod?.hash === ref?.hash);
+  const forged = sanitizeLobbySettings({ trackId: id, trackMod: { ...ref, hash: "not-a-hash", packageId: "../x" } });
+  const offMod = sanitizeLobbySettings({ trackId: TRACKS[0].id, trackMod: ref });
+  check("a malformed package reference, or one on a game circuit, is dropped", forged.trackMod === undefined && offMod.trackMod === undefined);
+  registerModTracks([]);
 }
 
 void (async () => {

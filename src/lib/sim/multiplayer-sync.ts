@@ -64,6 +64,7 @@ import {
 } from '@/lib/net/wire';
 import { loadDriverKey } from '@/lib/net/driver-key';
 import { carPhysicsVersion } from '@/lib/sim/lap-types';
+import { roomModRefOf } from '@/lib/mods/room-content';
 import type { FinishMessage, ResultMessage } from '@/lib/net/official-result';
 
 // What goes over the wire, and the checks on it, live in a module of their own (the race server reads them too)
@@ -1418,7 +1419,7 @@ export class MultiplayerSyncManager {
     if (this.isHost) {
       if (trackId) {
         if (this.activeQualifying && trackId !== this.lobbySettings.trackId) this.abortQualifying();
-        this.lobbySettings = { ...this.lobbySettings, trackId };
+        this.lobbySettings = { ...this.lobbySettings, trackId, trackMod: roomModRefOf(trackId) };
       }
       this.broadcastLobby();
     } else if (this.hostId) {
@@ -1442,7 +1443,7 @@ export class MultiplayerSyncManager {
     this.hostId = this.localPeerId;
     this.clockOffsetMs = 0;
     this.bestClockRttMs = 0;
-    if (this.localTrackId) this.lobbySettings = { ...this.lobbySettings, trackId: this.localTrackId };
+    if (this.localTrackId) this.lobbySettings = { ...this.lobbySettings, trackId: this.localTrackId, trackMod: roomModRefOf(this.localTrackId) };
     this.broadcastLobby();
     if (droppedQuali) this.onQualifyingEnd?.(droppedQuali.id);
     if (dropped) this.onRaceAbort?.(dropped.id);
@@ -1497,7 +1498,9 @@ export class MultiplayerSyncManager {
       this.abortQualifying();
     }
     const kind: RoomKind = this.inScheduledRace ? 'public' : 'private';
-    this.lobbySettings = sanitizeLobbySettings({ ...this.lobbySettings, ...patch }, kind);
+    // A new circuit names its mod package (or none), so guests can tell whether they have it
+    const mod = patch.trackId !== undefined ? { trackMod: roomModRefOf(patch.trackId) } : {};
+    this.lobbySettings = sanitizeLobbySettings({ ...this.lobbySettings, ...patch, ...mod }, kind);
     this.sendRoomServer({ t: 'settings', settings: this.lobbySettings });
     this.broadcastLobby();
   }
