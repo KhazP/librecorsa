@@ -74,13 +74,41 @@ async function idOf(ctx: Ctx, field: string, max: number): Promise<string | Resp
   return value;
 }
 
+/**
+ * A driver key leaves the account: the names it held stay on the account, for the account's other keys only, and a
+ * device signed in with it is no longer joined (the game asks again before anything of it goes up)
+ */
+async function dropKey(ctx: Ctx, accountId: string, keyHash: string): Promise<void> {
+  const { board, db } = ctx.deps;
+  await board.batch([
+    board.prepare("UPDATE drivers SET key_hash = ? WHERE account_id = ? AND key_hash = ?").bind(accountSentinel(accountId), accountId, keyHash),
+    board.prepare("DELETE FROM account_keys WHERE key_hash = ? AND account_id = ?").bind(keyHash, accountId),
+  ]);
+  await db.prepare("UPDATE sessions SET key_hash = NULL WHERE account_id = ? AND key_hash = ?").bind(accountId, keyHash).run();
+}
+
+/**
+ * Ends a session (signing out, or signing a device out from another) and takes its driver key off the account with
+ * it, unless another session of the account still holds that key: a player who signs in on someone else's computer
+ * and signs out again leaves no way for the next person there to race under their names
+ */
+export async function signOutSession(ctx: Ctx, accountId: string, target: { id: string; keyHash: string | null }, current: Session | null): Promise<void> {
+  if (current && current.id === target.id) await endSession(ctx, current);
+  else await ctx.deps.db.prepare("DELETE FROM sessions WHERE id = ? AND account_id = ?").bind(target.id, accountId).run();
+  if (!target.keyHash) return;
+  const still = await ctx.deps.db.prepare("SELECT 1 AS one FROM sessions WHERE account_id = ? AND key_hash = ? LIMIT 1").bind(accountId, target.keyHash).first();
+  if (!still) await dropKey(ctx, accountId, target.keyHash);
+}
+
 export async function removeSession(ctx: Ctx, session: Session): Promise<Response> {
   const id = await idOf(ctx, "id", 64);
   if (typeof id !== "string") return id;
-  const target = await ctx.deps.db.prepare("SELECT id FROM sessions WHERE public_id = ? AND account_id = ?").bind(id, session.accountId).first<{ id: string }>();
+  const target = await ctx.deps.db
+    .prepare("SELECT id, key_hash FROM sessions WHERE public_id = ? AND account_id = ?")
+    .bind(id, session.accountId)
+    .first<{ id: string; key_hash: string | null }>();
   if (!target) return failWith(ctx, "That device is signed out already", 404);
-  if (target.id === session.id) await endSession(ctx, session);
-  else await ctx.deps.db.prepare("DELETE FROM sessions WHERE id = ? AND account_id = ?").bind(target.id, session.accountId).run();
+  await signOutSession(ctx, session.accountId, { id: target.id, keyHash: target.key_hash }, session);
   return answer(ctx, { ok: true });
 }
 
@@ -88,17 +116,11 @@ export async function removeKey(ctx: Ctx, session: Session): Promise<Response> {
   const id = await idOf(ctx, "id", 12);
   if (typeof id !== "string") return id;
   if (!KEY_ID_RE.test(id)) return failWith(ctx, "That driver key isn't on this account", 404);
-  const { board, db } = ctx.deps;
+  const { board } = ctx.deps;
   const keys = await board.prepare("SELECT key_hash FROM account_keys WHERE account_id = ? AND substr(key_hash, 1, 12) = ?").bind(session.accountId, id).all<{ key_hash: string }>();
   if (keys.results.length !== 1) return failWith(ctx, "That driver key isn't on this account", 404);
   const keyHash = keys.results[0].key_hash;
-  // The names it held stay on the account, for the account's other keys only
-  await board.batch([
-    board.prepare("UPDATE drivers SET key_hash = ? WHERE account_id = ? AND key_hash = ?").bind(accountSentinel(session.accountId), session.accountId, keyHash),
-    board.prepare("DELETE FROM account_keys WHERE key_hash = ? AND account_id = ?").bind(keyHash, session.accountId),
-  ]);
-  // A device signed in with it is no longer joined: the game asks again before anything of it goes up
-  await db.prepare("UPDATE sessions SET key_hash = NULL WHERE account_id = ? AND key_hash = ?").bind(session.accountId, keyHash).run();
+  await dropKey(ctx, session.accountId, keyHash);
   if (session.keyHash === keyHash) session.keyHash = null;
   return answer(ctx, { ok: true });
 }

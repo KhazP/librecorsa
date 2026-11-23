@@ -18,13 +18,13 @@ import { ACCOUNT_PROVIDERS, SHA256_HEX_RE, type AccountProvider, type SignInProv
 import type { Env } from "../types";
 import { accountsDeps, type AccountsDeps } from "./deps";
 import { deleteAccount } from "./delete";
-import { joinDevice, removeIdentity, removeKey, removePasskey, removeSession } from "./devices";
+import { joinDevice, removeIdentity, removeKey, removePasskey, removeSession, signOutSession } from "./devices";
 import { answer, contextOf, failWith, overLimit, preflightHeaders, redirect, signedOut, type Ctx } from "./http";
 import { createLinkCode, previewLinkCode, redeemLinkCode } from "./link-codes";
 import { finishSignIn, providerOffered, startSignIn } from "./oauth";
 import { passkeyOptions, passkeyVerify } from "./passkeys";
 import { getGhost, getSave, missingGhosts, putGhost, putSave } from "./saves";
-import { endSession, readSession, type Session } from "./sessions";
+import { readSession, type Session } from "./sessions";
 import { accountInfo } from "./store";
 
 export type { AccountsDeps } from "./deps";
@@ -97,7 +97,7 @@ async function route(ctx: Ctx, path: string): Promise<Response | null> {
   if (path === "/api/auth/link-code/redeem" && post) return redeemLinkCode(ctx);
   if (path === "/api/auth/signout" && post) {
     const session = await readSession(ctx);
-    if (session) await endSession(ctx, session);
+    if (session) await signOutSession(ctx, session.accountId, { id: session.id, keyHash: session.keyHash }, session);
     return answer(ctx, { ok: true });
   }
 
