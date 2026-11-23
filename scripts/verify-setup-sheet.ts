@@ -3,8 +3,8 @@
  * holds its baseline on a whole step, round-trips through the setup state, and never asks for more than the cars
  * take. Then the new setup channels move the cars: engine braking, brake power, brake ducts, toe, steering ratio,
  * diff preload and the dampers. Last the fuel load: the default is the load each car always started on, old saves
- * without it still load, more fuel is more mass and a slower lap, the car lightens as it burns, and Casual keeps the
- * mass without the burn.
+ * without it still load, more fuel is more mass, the car lightens as it burns, and Casual keeps the mass without the
+ * burn. That more fuel is a slower lap is verify-fuel-lap-time.ts.
  * Run: npx tsx scripts/verify-setup-sheet.ts
  */
 import {
@@ -24,20 +24,7 @@ import { SETUP_CLASS, setupSheet, type SetupState } from "../src/lib/sim/setup-s
 import { TYRE_SETUP_LIMITS } from "../src/lib/sim/tyre-setup";
 import type { SimulatorCar } from "../src/lib/sim/simulator-car";
 import type { TyreSetup, VehicleModelId } from "../src/types/f1";
-import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
-import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
-import { createSuzukiLianaSim } from "../src/lib/sim/road/SuzukiLianaSim";
-import { createMtr496rSim } from "../src/lib/sim/proto/Mtr496rSim";
-import { createLcLmdhSim } from "../src/lib/sim/proto/LcLmdhSim";
-import { createNissanR33Sim } from "../src/lib/sim/classic/NissanR33Sim";
-import { createNissanR32Sim } from "../src/lib/sim/classic/NissanR32Sim";
-import { createBmwM1ProcarSim } from "../src/lib/sim/classic/BmwM1ProcarSim";
-import { createChaparral2d67Sim, createChaparral2dSim } from "../src/lib/sim/classic/Chaparral2dSim";
-import { createPorsche934RsrSim } from "../src/lib/sim/classic/Porsche934RsrSim";
-import { createVwSciroccoSim } from "../src/lib/sim/road/VwSciroccoSim";
-import { F1Physics2026 } from "../src/lib/f1-physics-2026";
-import { getActiveTrackData } from "../src/lib/track-data";
-import { createFlatTestTrack } from "./lib/flat-track";
+import { DT, flat, makers, track, vehicles, withSetup } from "./lib/setup-cars";
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ""): void {
@@ -48,26 +35,6 @@ function check(name: string, cond: boolean, detail = ""): void {
   passed++;
   console.log(`  ok  ${name}${detail ? `  (${detail})` : ""}`);
 }
-
-const flat = createFlatTestTrack();
-const track = getActiveTrackData();
-const makers: Record<VehicleModelId, (t: typeof track) => SimulatorCar> = {
-  lc26: (t) => new F1Physics2026(t),
-  "f12026-car": (t) => new F12026CarSim(t),
-  "amg-gt3": (t) => createAmgGt3Sim(t),
-  liana: (t) => createSuzukiLianaSim(t),
-  "mtr-496r": (t) => createMtr496rSim(t),
-  "lc-lmdh": (t) => createLcLmdhSim(t),
-  "nissan-r33-jgtc": (t) => createNissanR33Sim(t),
-  "nissan-r32-jtcc": (t) => createNissanR32Sim(t),
-  "bmw-m1-procar": (t) => createBmwM1ProcarSim(t),
-  "vw-scirocco-gtx": (t) => createVwSciroccoSim(t),
-  "chaparral-2d": (t) => createChaparral2dSim(t),
-  "chaparral-2d-67": (t) => createChaparral2d67Sim(t),
-  "porsche-934-rsr": (t) => createPorsche934RsrSim(t),
-};
-const vehicles = Object.keys(makers) as VehicleModelId[];
-const DT = 1 / 60;
 
 // ---- The sheets ----
 console.log("Sheets");
@@ -122,11 +89,6 @@ for (const v of vehicles) {
 }
 
 // ---- The cars ----
-const withSetup = (v: VehicleModelId, patch: Partial<ChassisSetup>, t = flat) => {
-  const car = makers[v](t);
-  car.applyChassisSetup?.({ ...DEFAULT_CHASSIS_SETUP, ...patch });
-  return car;
-};
 
 console.log("Engine braking");
 for (const v of vehicles) {
@@ -350,31 +312,8 @@ console.log("Fuel load");
     check(`${v}: Full and Casual keep the load and its mass (sprint ballast)`, full.fuel === start && full.dm === 0 && casual.fuel === start && casual.dm === 0);
   }
 
-  // A flying lap of Kigali on the autopilot, light and full: the extra mass costs time
-  console.log("Fuel load: lap time");
-  const lapS = (v: VehicleModelId, fuelKg: number) => {
-    const car = withSetup(v, { fuelDeltaKg: fuelKg - FUEL_LOAD[v].defaultKg }, track);
-    (car as Massy).setSimRealism?.(SIM_REALISM_FLAGS.casual);
-    car.resetToStartGrid(true);
-    car.aiAutopilot = true;
-    const lap0 = car.telemetry.lapCount;
-    for (let t = 0; t < 240 && car.telemetry.lapCount < lap0 + 1; t += DT) car.step(DT, {});
-    return car.telemetry.lapCount === lap0 + 1 && car.telemetry.lastLapTimeMs !== null ? car.telemetry.lastLapTimeMs / 1000 : Number.NaN;
-  };
-  for (const v of vehicles) {
-    const f = FUEL_LOAD[v];
-    const light = lapS(v, f.minKg);
-    const base = lapS(v, f.defaultKg);
-    const heavy = lapS(v, f.maxKg);
-    const per10 = ((heavy - light) / (f.maxKg - f.minKg)) * 10;
-    check(
-      `${v}: more fuel, slower lap`,
-      // The LC26's autopilot drives the track's fixed speed profile, so a light car can't corner faster on it and
-      // only gains on the exits: there it has to be no slower than the default, not strictly quicker
-      (v === "lc26" ? light <= base + 0.1 : light < base) && base < heavy && per10 > 0.05 && per10 < 1,
-      `${light.toFixed(3)} / ${base.toFixed(3)} / ${heavy.toFixed(3)} s at ${f.minKg} / ${f.defaultKg} / ${f.maxKg} kg, ${per10.toFixed(3)} s per 10 kg`
-    );
-  }
+  // The lap time each load costs (three flying laps a car) is verify-fuel-lap-time.ts: run on its own, it runs
+  // beside the rest of the suites
   check("startingFuelKg keeps to each car's range", startingFuelKg("amg-gt3", { fuelDeltaKg: 80 }) === FUEL_LOAD["amg-gt3"].maxKg && startingFuelKg("lc26", { fuelDeltaKg: -50 }) === FUEL_LOAD.lc26.minKg);
 }
 
