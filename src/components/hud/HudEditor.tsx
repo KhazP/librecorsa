@@ -298,7 +298,8 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
       <div
         className={`pointer-events-none absolute inset-x-0 top-[34%] flex -translate-y-1/2 justify-center px-4 transition-opacity duration-150 short:top-1/2 ${active ? "opacity-0" : ""}`}
       >
-      <div className={`flex w-full max-w-[560px] flex-col gap-3 rounded-lc-tile border border-lc-line bg-lc-void/90 p-4 shadow-lc-pop sm:flex-row sm:items-center short:p-3 ${active ? "" : "pointer-events-auto"}`}>
+      {/* The menus' big-screen zoom (the frames stay in window pixels) */}
+      <div className={`lc-ui-zoom flex w-full max-w-[560px] flex-col gap-3 rounded-lc-tile border border-lc-line bg-lc-void/90 p-4 shadow-lc-pop sm:flex-row sm:items-center short:p-3 ${active ? "" : "pointer-events-auto"}`}>
         <div className="min-w-0 flex-1">
           <h2 className="lc-title text-[15px] text-lc-chalk">{tx("title")}</h2>
           <p className="mt-1 text-[12px] leading-snug text-lc-fog short:hidden">{tx("hint")}</p>
