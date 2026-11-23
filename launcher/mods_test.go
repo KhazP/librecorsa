@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -148,5 +149,30 @@ func TestIsArchiveJunk(t *testing.T) {
 		if isArchiveJunk(p) {
 			t.Errorf("isArchiveJunk(%q) = true", p)
 		}
+	}
+}
+
+// A package's files are served only as the types a package may carry, never as something that runs on the game's
+// origin, and sandboxed even then
+func TestModsServeOnlyPackageFileTypes(t *testing.T) {
+	s, base := fixture(t)
+	writeFiles(t, filepath.Join(base, "mods", "acme.ring"), map[string]string{
+		"page.html":   "<script>alert(1)</script>",
+		"image.svg":   "<svg onload=alert(1)></svg>",
+		"noextension": "<script>alert(1)</script>",
+		"code.js":     "alert(1)",
+		"notes.md":    "# notes",
+	})
+	for _, p := range []string{"/mods/acme.ring/page.html", "/mods/acme.ring/image.svg", "/mods/acme.ring/noextension", "/mods/acme.ring/code.js"} {
+		if w := get(s, p); w.Code != http.StatusNotFound {
+			t.Errorf("%s: got %d, want 404", p, w.Code)
+		}
+	}
+	w := get(s, "/mods/acme.ring/ring/track.glb")
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "model/gltf-binary" || !strings.Contains(w.Header().Get("Content-Security-Policy"), "sandbox") {
+		t.Errorf("track.glb: %d, type %q, CSP %q", w.Code, w.Header().Get("Content-Type"), w.Header().Get("Content-Security-Policy"))
+	}
+	if w := get(s, "/mods/acme.ring/notes.md"); w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/markdown") {
+		t.Errorf("notes.md: %d %q", w.Code, w.Header().Get("Content-Type"))
 	}
 }

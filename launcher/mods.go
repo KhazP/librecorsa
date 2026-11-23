@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -133,9 +134,40 @@ func (m *modsFolder) serveFile(w http.ResponseWriter, r *http.Request, rest stri
 		http.NotFound(w, r)
 		return
 	}
+	ct, allowed := modContentTypes[strings.ToLower(path.Ext(rel))]
+	if !allowed {
+		// Only what a package may carry (src/lib/mods/mod-store.ts): never a page, script or SVG, which would run on
+		// the game's origin, next to the player's driver key and saves
+		http.NotFound(w, r)
+		return
+	}
+	h := w.Header()
 	// A modder edits files in place, so the browser asks again each time
-	w.Header().Set("Cache-Control", "no-cache")
-	serveFile(w, r, f, info, rel)
+	h.Set("Cache-Control", "no-cache")
+	// Even a file a browser would render on its own (an image opened as a page) runs nothing
+	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	h.Set("Content-Type", ct)
+	h.Set("ETag", fmt.Sprintf(`"%x-%x"`, info.Size(), info.ModTime().UnixNano()))
+	http.ServeContent(w, r, rel, info.ModTime(), f)
+}
+
+// modContentTypes is every file type a mod package may carry, with the type it is served as: the browser importer's
+// list (src/lib/mods/mod-store.ts CONTENT_TYPES), so a package behaves the same imported or in the folder
+var modContentTypes = map[string]string{
+	".glb":  "model/gltf-binary",
+	".gltf": "model/gltf+json",
+	".bin":  "application/octet-stream",
+	".json": "application/json",
+	".webp": "image/webp",
+	".png":  "image/png",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".ktx2": "image/ktx2",
+	".ogg":  "audio/ogg",
+	".wav":  "audio/wav",
+	".mp3":  "audio/mpeg",
+	".txt":  "text/plain; charset=utf-8",
+	".md":   "text/markdown; charset=utf-8",
 }
 
 // isSafeModPath is src/lib/mods/mod-manifest.ts isSafeModPath: relative, forward slashes, no `.`/`..` or empty
