@@ -292,7 +292,23 @@ check("formatNameplateBadges orders badges canonically with concise codes and co
     { type: "weekly_gold", count: 2 },
     { type: "weekly_silver", count: 1 },
   ];
-  assert.deepEqual(formatNameplateBadges(badges), ["G×2", "S", "B", "TR×3", "OG", "IDEA"]);
+  assert.deepEqual(formatNameplateBadges(badges), ["G×2", "S", "B", "FL×3", "OG", "IDEA"]);
+
+  // Context-aware & class-tagged Fastest Lap formatting on nameplates
+  const classBadges: DriverBadge[] = [
+    {
+      type: "track_record",
+      count: 2,
+      boards: [
+        { trackId: "norisring", vehicle: "lc26", lapTimeMs: 44_800, drivers: 65 },
+        { trackId: "okayama", vehicle: "lc26", lapTimeMs: 70_100, drivers: 39 },
+      ],
+    },
+    { type: "og", count: 1 },
+  ];
+  assert.deepEqual(formatNameplateBadges(classBadges, { scope: "all" }), ["FL·F1×2", "OG"]);
+  assert.deepEqual(formatNameplateBadges(classBadges, { scope: "vehicle", vehicle: "lc26" }), ["FL×2", "OG"]);
+  assert.deepEqual(formatNameplateBadges(classBadges, { scope: "class", classId: "gt3" }), ["OG"]);
 });
 
 async function runAsyncChecks() {
@@ -302,7 +318,13 @@ async function runAsyncChecks() {
     calls.push([...names]);
     return {
       alice: [{ type: "weekly_gold", count: 2 }, { type: "og", count: 1 }],
-      "alice v2": [{ type: "track_record", count: 1 }],
+      "alice v2": [
+        {
+          type: "track_record",
+          count: 1,
+          boards: [{ trackId: "norisring", vehicle: "lc26", lapTimeMs: 44_800, drivers: 65 }],
+        },
+      ],
     };
   });
 
@@ -334,7 +356,13 @@ async function runAsyncChecks() {
   await batchRenamed;
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[1], ["Alice V2"]);
-  assert.deepEqual(cache.get("Alice V2"), ["TR"]);
+  assert.deepEqual(cache.get("Alice V2"), ["FL·F1"]);
+  cache.setContext({ scope: "class", classId: "gt3" });
+  assert.equal(cache.get("Alice V2"), undefined);
+  cache.setContext({ scope: "vehicle", vehicle: "lc26" });
+  assert.deepEqual(cache.get("Alice V2"), ["FL"]);
+  cache.setContext({ scope: "all" });
+  assert.deepEqual(cache.get("Alice V2"), ["FL·F1"]);
 
   // Projector attaches cached badges to remote human peers and skips AI peers even with matching names
   const cam = makeCamera();

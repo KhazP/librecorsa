@@ -20,10 +20,11 @@ import { carMaker, circuitMaker, GAME_MAKER } from "@/lib/modders";
 import { useStoreBuild } from "@/lib/use-store-build";
 
 /** The tips, naming the player's own camera and racing-line keys as printed on their keyboard */
-const tipsFor = (camera: string, line: string) => [
+const tipsFor = (camera: string, line: string, freeCamera: string, tvCamera: string) => [
   "Esc opens Garage, corner jump, AI races and multiplayer.",
   "Brake straight, then trail off into the apex.",
   `Press ${camera} to switch camera views.`,
+  `Press ${freeCamera} for free camera, ${tvCamera} for trackside TV.`,
   `Press ${line} to toggle the braking line.`,
   "Deploy boost on straights; battery recharges under braking.",
 ];
@@ -129,20 +130,27 @@ export const LoadingScreen: React.FC<{
   ready: boolean;
   /** The camera and racing-line keys (KeyboardEvent.code) the tips name, as printed on this keyboard */
   cameraKey?: string;
+  freeCameraKey?: string;
+  tvCameraKey?: string;
   lineKey?: string;
   /** Called synchronously inside the user gesture (audio unlock) */
   onStart: () => void;
   /** Called once the fade-out has finished */
   onDone: () => void;
-}> = ({ track, carId, ready, cameraKey, lineKey, onStart, onDone }) => {
+}> = ({ track, carId, ready, cameraKey, freeCameraKey, tvCameraKey, lineKey, onStart, onDone }) => {
   const progress = useAssetProgress();
   const units = useUnits();
   const layout = useKeyLayout();
   const tips = useMemo(() => {
-    const base = tipsFor(keyLabel(cameraKey ?? "KeyC"), keyLabel(lineKey ?? "KeyR"));
+    const base = tipsFor(
+      keyLabel(cameraKey ?? "KeyC"),
+      keyLabel(lineKey ?? "KeyR"),
+      keyLabel(freeCameraKey ?? "F7"),
+      keyLabel(tvCameraKey ?? "F8"),
+    );
     return BASE_ALTITUDE_M >= 1000 ? [altitudeTip(BASE_ALTITUDE_M), ...base] : base;
     // Re-run when the layout is read (its identity changes): the key names follow it
-  }, [layout, cameraKey, lineKey]);
+  }, [layout, cameraKey, freeCameraKey, tvCameraKey, lineKey]);
   const [tip, setTip] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const leavingRef = useRef(false);

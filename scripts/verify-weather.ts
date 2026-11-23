@@ -109,7 +109,7 @@ console.log('\n== Weather & time of day');
   check('Golden hour keeps the 14° / 127° sun', Math.abs(sun.elevationDeg - 14) < 1e-6 && Math.abs(sun.azimuthDeg - 127) < 1e-6, `${fmt(sun.elevationDeg, 3)}° / ${fmt(sun.azimuthDeg, 3)}°`);
   for (let i = 0; i < 600; i++) w.step(1);
   check('Default stays 27 °C air / 41 °C track, dry', Math.abs(w.ambientC - 27) < 1e-6 && Math.abs(w.trackTempC - 41) < 1e-6 && w.waterMm === 0, `${fmt(w.ambientC, 3)} / ${fmt(w.trackTempC, 3)} °C, ${w.waterMm} mm`);
-  check('Noon sun is high', sunPosition(12.2).elevationDeg > 70, `${fmt(sunPosition(12.2).elevationDeg, 1)}°`);
+  check('Noon sun is high', sunPosition(TIME_OF_DAY_HOURS.noon).elevationDeg > 70, `${fmt(sunPosition(TIME_OF_DAY_HOURS.noon).elevationDeg, 1)}°`);
 
   const rain = new WeatherState(5300, { ...DEFAULT_SESSION_CONDITIONS, weather: 'heavy_rain' });
   check('Heavy rain: standing water, cool track', rain.waterMm > 1.5 && rain.trackTempC < rain.ambientC + 2, `${fmt(rain.waterMm)} mm, ${fmt(rain.ambientC, 1)} / ${fmt(rain.trackTempC, 1)} °C`);

@@ -743,14 +743,23 @@ export class MultiplayerSyncManager {
           if (this.openPeerCount() === 0) {
             this.emitStatus({ state: 'signaling', statusText: `Room ${roomCode} is open • waiting for players` });
           }
-        } else if (msg.t === 'error' && msg.code === 'peer_id_taken' && !joinRetried) {
-          // A replaced host socket can briefly remain listed while closing; retry join once
-          joinRetried = true;
-          window.setTimeout(() => {
-            if (this.signalingWs === ws && ws.readyState === WebSocket.OPEN) {
-              this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
-            }
-          }, 50);
+        } else if (msg.t === 'error' && msg.code === 'peer_id_taken') {
+          if (!joinRetried) {
+            // A replaced host socket can briefly remain listed while closing; retry join once
+            joinRetried = true;
+            setTimeout(() => {
+              if (this.signalingWs === ws && ws.readyState === WebSocket.OPEN) {
+                this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
+              }
+            }, 50);
+          } else {
+            this.closeSignaling();
+            this.emitStatus({
+              state: 'error',
+              roomCode: '',
+              statusText: 'This session ID is already active in the room. Wait a moment and try hosting again.',
+            });
+          }
         } else if (msg.t === 'taken') {
           this.closeSignaling();
           this.emitStatus({
@@ -947,13 +956,18 @@ export class MultiplayerSyncManager {
             this.joinTimer = null;
             if (!answered) notFound();
           }, JOIN_TIMEOUT_MS);
-        } else if (msg.t === 'error' && msg.code === 'peer_id_taken' && !joinRetried) {
-          joinRetried = true;
-          window.setTimeout(() => {
-            if (this.signalingWs === ws && ws.readyState === WebSocket.OPEN) {
-              this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
-            }
-          }, 50);
+        } else if (msg.t === 'error' && msg.code === 'peer_id_taken') {
+          if (!joinRetried) {
+            // Room server relays signal by socket id regardless of join, so only the peerId binding needs retrying
+            joinRetried = true;
+            setTimeout(() => {
+              if (this.signalingWs === ws && ws.readyState === WebSocket.OPEN) {
+                this.sendRoomServer({ t: 'join', peerId: this.localPeerId });
+              }
+            }, 50);
+          } else {
+            fail('This player ID is already in the room. Wait a moment and try joining again.');
+          }
         } else if (msg.t === 'nohost') {
           notFound();
         } else if (msg.t === 'full') {

@@ -75,7 +75,7 @@ export const RULE_PRESET_LABELS: Record<RulePresetId, string> = {
 };
 /** What each preset judges, for the rows that pick one (the AI race and a private room) */
 export const RULE_PRESET_HINTS: Record<RulePresetId, string> = {
-  auto: "Open-wheel rules for F1 cars, endurance rules for the rest",
+  auto: "Open-wheel rules for single-seaters, endurance rules for the rest",
   open_wheel: "Track limits by strikes: 4 is +5 s, 8 is +10 s, 12 is a disqualification",
   endurance_sprint: "Track limits by weighted points: 5 is +5 s, 10 is +10 s, 15 is a disqualification",
 };

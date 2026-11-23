@@ -158,7 +158,7 @@ export const WHEEL_SUPPORT: readonly WheelSupportRow[] = [
     wheel: "MOZA R9 V2 + KS",
     webHid: "tested",
     bridge: "expected",
-    note: "Connects and steers over WebHID; force feedback not yet confirmed",
+    note: "Connects, steers and plays force feedback over WebHID",
   },
   {
     wheel: "Other MOZA, Simucube 2, VRS, OpenFFBoard and other HID PID bases",

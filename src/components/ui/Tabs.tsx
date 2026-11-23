@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useId, useRef } from "react";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { CHOSEN_PILL, CURSOR_PILL, cx, HOVER_PILL, MOTION, PRESSED_PILL } from "./styles";
 
 export interface TabItem<T extends string> {
@@ -41,6 +41,11 @@ export interface TabsProps<T extends string> {
    * stay on one row. If they still do not fit, the strip scrolls sideways as usual.
    */
   fill?: boolean;
+  /**
+   * A long strip that should stay on one row (the pause menu's sections): the tabs share the pane's width on the
+   * least padding, and their icons drop while the labels would not fit beside them. Past that it scrolls, as usual.
+   */
+  squeeze?: boolean;
   /** A click on the current tab calls `onChange` again (a screen that brings its panel into view on a click) */
   reselect?: boolean;
   className?: string;
@@ -52,10 +57,18 @@ export function adjacentTab<T extends string>(tabs: readonly { id: T }[], value:
   return tabs[(i + dir + tabs.length) % tabs.length].id;
 }
 
+/** How far the faded ends of a scrolling strip reach */
+const EDGE_FADE = "1.75rem";
+
+/** A mask that fades whichever ends of the strip have tabs scrolled past them */
+const edgeMask = (start: boolean, end: boolean) =>
+  `linear-gradient(to right, transparent, black ${start ? EDGE_FADE : "0px"}, black calc(100% - ${end ? EDGE_FADE : "0px"}), transparent)`;
+
 /**
  * The tab strip: a pill track, the current tab chosen (white), the cursor volt. A tab is chosen as the cursor lands on
  * it (keys, D-pad), or by a click; the screen's shoulder buttons switch tabs through `adjacentTab`. Hovering does not
- * move the cursor here, since that would switch the page under the pointer.
+ * move the cursor here, since that would switch the page under the pointer. A strip too long for its pane scrolls
+ * sideways, its cut ends fading out so it shows there is more.
  */
 export function Tabs<T extends string>({
   tabs,
@@ -69,6 +82,7 @@ export function Tabs<T extends string>({
   forceCursorOn,
   wrap,
   fill,
+  squeeze,
   reselect,
   className,
   ...aria
@@ -76,6 +90,55 @@ export function Tabs<T extends string>({
   const listRef = useRef<HTMLDivElement>(null);
   const pointing = useRef(false);
   const base = useId();
+  const shared = fill || squeeze;
+
+  // Squeezed: the icons go while the labels alone would not fit beside them. A new set of tabs is measured afresh, with
+  // its icons; `iconsNeed` is the strip's width with them, taken when they went
+  const tabsKey = tabs.map((t) => `${t.id}:${t.label}`).join("|");
+  const [iconsOff, setIconsOff] = useState(false);
+  const [measured, setMeasured] = useState(tabsKey);
+  if (measured !== tabsKey) {
+    setMeasured(tabsKey);
+    setIconsOff(false);
+  }
+  const iconsNeed = useRef(0);
+  const [edges, setEdges] = useState({ start: false, end: false });
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const check = () => {
+      const over = list.scrollWidth > list.clientWidth + 1;
+      if (squeeze && !iconsOff && over && tabs.some((t) => t.icon)) {
+        iconsNeed.current = list.scrollWidth;
+        setIconsOff(true);
+        return;
+      }
+      if (squeeze && iconsOff && list.clientWidth >= iconsNeed.current) {
+        setIconsOff(false);
+        return;
+      }
+      // The ends that have tabs past them fade (a strip that wraps never scrolls)
+      const start = !wrap && over && list.scrollLeft > 1;
+      const end = !wrap && over && list.scrollLeft < list.scrollWidth - list.clientWidth - 1;
+      setEdges((e) => (e.start === start && e.end === end ? e : { start, end }));
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(list);
+    list.addEventListener("scroll", check, { passive: true });
+    // Measured before the display font arrived, the widths are the fallback's
+    let live = true;
+    document.fonts?.ready.then(() => {
+      if (live) check();
+    });
+    return () => {
+      live = false;
+      ro.disconnect();
+      list.removeEventListener("scroll", check);
+    };
+    // `tabs` itself is a new array on most renders: its key says when the strip changed
+  }, [squeeze, iconsOff, wrap, tabsKey]);
 
   // Switched from outside (shoulder buttons) while the cursor is in the strip: the cursor follows the choice
   useEffect(() => {
@@ -132,13 +195,15 @@ export function Tabs<T extends string>({
           pointing.current = false;
         }}
         className={cx(
-          "flex min-w-0 gap-1 rounded-lc-tile bg-lc-void/85 p-1 inset-ring inset-ring-lc-line",
-          wrap ? "flex-wrap" : "overflow-x-auto [scrollbar-width:none]",
-          fill ? "w-full" : undefined,
+          "flex min-w-0 gap-1 bg-lc-void/85 p-1 inset-ring inset-ring-lc-line",
+          wrap ? "flex-wrap rounded-lc-card" : "overflow-x-auto rounded-full [scrollbar-width:none]",
+          shared ? "w-full" : undefined,
         )}
+        style={edges.start || edges.end ? { maskImage: edgeMask(edges.start, edges.end), WebkitMaskImage: edgeMask(edges.start, edges.end) } : undefined}
       >
         {tabs.map((t) => {
           const chosen = t.id === value;
+          const icon = t.icon && !iconsOff ? t.icon : null;
           return (
             <button
               key={t.id}
@@ -157,8 +222,10 @@ export function Tabs<T extends string>({
                 if (reselect || !chosen) onChange(t.id);
               }}
               className={cx(
-                "group lc-title inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-lc-row whitespace-nowrap",
-                fill ? "flex-1 justify-center px-3" : "px-4",
+                "group lc-title inline-flex shrink-0 cursor-pointer items-center rounded-full whitespace-nowrap",
+                squeeze ? "flex-1 justify-center gap-1.5 px-2" : fill ? "flex-1 justify-center gap-2 px-3" : "gap-2 px-4",
+                // A tab the cursor scrolls to stops clear of the strip's faded end
+                wrap ? undefined : "scroll-mx-7",
                 "pointer-coarse:min-h-11 [&_svg]:size-4 [&_svg]:shrink-0",
                 size === "md" ? "min-h-10 text-[15px]" : "min-h-9 text-[14px]",
                 MOTION,
@@ -167,9 +234,9 @@ export function Tabs<T extends string>({
                 CURSOR_PILL,
               )}
             >
-              {t.icon ? (
+              {icon ? (
                 <span aria-hidden className={cx("inline-flex", chosen ? undefined : "opacity-70 group-focus:opacity-100")}>
-                  {t.icon}
+                  {icon}
                 </span>
               ) : null}
               {t.label}

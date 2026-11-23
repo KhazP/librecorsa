@@ -19,6 +19,11 @@ export interface SliderProps extends ControlA11yProps {
   unit?: string;
   /** Draws a tick at the default value */
   defaultValue?: number;
+  /**
+   * A named point on the track, labelled under it and readable with the thumb on it: 100 % on a slider whose range
+   * goes past 100 % (kerbs, force feedback, sizes), so it never reads as the end of the range
+   */
+  mark?: { value: number; label: string };
   /** Hide the read-out (only where the row shows the value another way) */
   hideValue?: boolean;
   className?: string;
@@ -43,6 +48,7 @@ export function Slider({
   format,
   unit = "",
   defaultValue,
+  mark,
   hideValue,
   className,
   ...a11yProps
@@ -51,6 +57,9 @@ export function Slider({
   const repeats = useRef(0);
   const span = max - min || 1;
   const pct = ((Math.min(max, Math.max(min, value)) - min) / span) * 100;
+  // The thumb's centre travels from 10 px to the width less 10 px
+  const at = (v: number) => `calc(10px + (100% - 20px) * ${(Math.min(max, Math.max(min, v)) - min) / span})`;
+  const marked = mark !== undefined && mark.value > min && mark.value < max ? mark : undefined;
   const big = bigStep ?? Math.max(step, Math.round(span / 10 / step) * step);
   const decimals = Math.max(decimalsOf(step), decimalsOf(min));
   const text = format ? format(value) : `${value.toFixed(decimals)}${unit}`;
@@ -78,8 +87,14 @@ export function Slider({
           <span
             aria-hidden
             className="pointer-events-none absolute top-1/2 h-3.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-lc-fog/70"
-            // The thumb's centre travels from 10 px to the width less 10 px
-            style={{ left: `calc(10px + (100% - 20px) * ${(Math.min(max, Math.max(min, defaultValue)) - min) / span})` }}
+            style={{ left: at(defaultValue) }}
+          />
+        ) : null}
+        {marked && marked.value !== defaultValue ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 h-3.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-lc-fog/70"
+            style={{ left: at(marked.value) }}
           />
         ) : null}
         <input
@@ -104,6 +119,20 @@ export function Slider({
           )}
           style={{ "--lc-fill": `${pct}%` } as React.CSSProperties}
         />
+        {marked ? (
+          // Under the thumb, clear of it (the tick on the track hides under a thumb that sits on it), and drawn after the
+          // input so its halo does not tint it: the point stays named wherever the thumb is
+          <span
+            aria-hidden
+            className={cx(
+              "lc-mono pointer-events-none absolute bottom-0 -translate-x-1/2 text-[11px] leading-none font-semibold whitespace-nowrap text-lc-slate",
+              disabled ? "opacity-40" : undefined,
+            )}
+            style={{ left: at(marked.value) }}
+          >
+            {marked.label}
+          </span>
+        ) : null}
       </span>
       {hideValue ? null : (
         <span aria-hidden className="lc-data min-w-16 shrink-0 text-right text-[14px] whitespace-nowrap text-lc-chalk">

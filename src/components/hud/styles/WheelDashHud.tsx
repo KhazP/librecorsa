@@ -6,6 +6,7 @@ import { useUnits } from "@/lib/settings/ui-prefs";
 import {
   atShiftPoint,
   formatGap,
+  formatLapClock,
   formatLapTime,
   formatSectorTime,
   formatSpeed,
@@ -160,7 +161,7 @@ export const WheelDash: React.FC<Pick<HudDesignProps, "t" | "deltaS" | "revRange
                 className="lc-data flex items-center gap-1 text-[12px] whitespace-nowrap @max-[600px]:text-[11px]"
                 style={{ color: flash?.color ?? (lapInvalid ? HUD_LOSS : "var(--color-lc-chalk)") }}
               >
-                {flash ? (flash.sector ? formatSectorTime(flash.ms) : formatLapTime(flash.ms)) : formatLapTime(t.currentLapTimeMs)}
+                {flash ? (flash.sector ? formatSectorTime(flash.ms) : formatLapTime(flash.ms)) : formatLapClock(t)}
                 {flash ? <LapMarkGlyph mark={flash.mark} /> : null}
               </span>
             </Cell>
@@ -211,7 +212,7 @@ export const PositionTag: React.FC<{ t: HudDesignProps["t"] }> = ({ t }) => {
       {race ? (
         <span className="lc-data flex h-9 items-center rounded-full bg-lc-volt px-3 text-[18px] text-lc-void">P{race.position}</span>
       ) : (
-        <SessionBadge session="practice" size="lg" />
+        <SessionBadge session={t.timeTrial ? "timeAttack" : "practice"} size="lg" />
       )}
       <span className="flex flex-col leading-[1.05]">
         <span className={HUD_LBL}>Lap</span>

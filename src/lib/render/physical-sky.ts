@@ -229,10 +229,16 @@ export const AERIAL_PERSPECTIVE_REVERSED_DEPTH_PATCHES: readonly ShaderPatch[] =
 ];
 
 /**
- * Radiance scaling and drifting cloud ground shadows for `AerialPerspectiveEffect`:
- * scales Bruneton inscatter by `SKY_RADIANCE_SCALE` (dimmed/greyed in rain to match sky & clouds),
- * blends transmittance & inscatter by `aerialStrength`, and attenuates lit terrain/track radiance
- * under volumetric clouds via `sunTransmittance` when `CloudsEffect.atmosphereShadow` is bound.
+ * Radiance scaling, near-camera NaN guards and drifting cloud ground shadows for `AerialPerspectiveEffect`:
+ * - Guards `RaySphereIntersections` against negative float32 discriminants and `getShadowRadius` against
+ *   near/behind-camera shadow-texel projections (`w <= 0`).
+ * - Skips `GetSkyRadianceToPoint` within 10 m of the camera (and fades smoothly over 10..40 m): `positionECEF` sits at
+ *   ~6360 km (float32 ULP ~0.5 m), so close car geometry (hood, halo, roof, cockpit in T-cam / onboard views) can
+ *   quantize onto `vCameraPosition`, making `point - camera == 0` -> `normalize(0) = NaN`, which bloom spreads into
+ *   flashing black squares on and around the car (issue #161). Also rejects any non-finite LUT outputs.
+ * - Scales Bruneton inscatter by `SKY_RADIANCE_SCALE` (dimmed/greyed in rain to match sky & clouds), blends
+ *   transmittance & inscatter by `aerialStrength`, and attenuates lit terrain/track radiance under volumetric clouds
+ *   via `sunTransmittance` when `CloudsEffect.atmosphereShadow` is bound.
  */
 export const AERIAL_PERSPECTIVE_PATCHES: readonly ShaderPatch[] = [
   [
@@ -240,18 +246,49 @@ export const AERIAL_PERSPECTIVE_PATCHES: readonly ShaderPatch[] = [
     "uniform vec3 sunDirection;\nuniform float aerialRadianceScale;\nuniform float aerialStrength;\nuniform float cloudShadowStrength;\nuniform float aerialGrey;\nuniform vec3 aerialGreyTint;",
   ],
   [
-    "radiance = radiance * transmittance;",
-    "radiance = mix(radiance, radiance * transmittance, aerialStrength);",
+    "float discriminant = b * b - 4.0 * c;\n  float Q = sqrt(discriminant);\n  return vec2(-b - Q, -b + Q) * 0.5;",
+    "float discriminant = b * b - 4.0 * c;\n  float Q = sqrt(max(discriminant, 0.0));\n  return vec2(-b - Q, -b + Q) * 0.5;",
+  ],
+  [
+    "projected /= projected.w;\n  projectedX /= projectedX.w;\n  projectedY /= projectedY.w;",
+    /* glsl */ `if (!(projected.w > 1e-4 && projectedX.w > 1e-4 && projectedY.w > 1e-4)) {
+    return shadowRadius;
+  }
+  projected /= projected.w;
+  projectedX /= projectedX.w;
+  projectedY /= projectedY.w;`,
+  ],
+  [
+    "void applyTransmittanceInscatter(const vec3 positionECEF, float shadowLength, inout vec3 radiance) {",
+    /* glsl */ `void applyTransmittanceInscatter(const vec3 positionECEF, float shadowLength, inout vec3 radiance) {
+  vec3 aerialDelta = positionECEF - vCameraPosition;
+  float aerialDistSq = dot(aerialDelta, aerialDelta);
+  if (aerialStrength <= 0.0 || !(aerialDistSq >= 1e-4)) {
+    return;
+  }
+  float aerialWeight = aerialStrength * smoothstep(0.01, 0.04, sqrt(aerialDistSq));`,
+  ],
+  [
+    "#ifdef TRANSMITTANCE\n  radiance = radiance * transmittance;",
+    /* glsl */ `if (any(isnan(transmittance)) || any(isinf(transmittance)) || any(isnan(inscatter)) || any(isinf(inscatter))) {
+    return;
+  }
+  transmittance = clamp(transmittance, vec3(0.0), vec3(1.0));
+  inscatter = max(inscatter, vec3(0.0));
+  #ifdef TRANSMITTANCE
+  radiance = mix(radiance, radiance * transmittance, aerialWeight);`,
   ],
   [
     "radiance = radiance + inscatter;",
     /* glsl */ `vec3 aerialInscatter = inscatter * aerialRadianceScale;
   aerialInscatter = mix(aerialInscatter, vec3(dot(aerialInscatter, vec3(0.2126, 0.7152, 0.0722))) * aerialGreyTint, aerialGrey);
-  radiance = radiance + aerialInscatter * aerialStrength;`,
+  radiance = radiance + aerialInscatter * aerialWeight;`,
   ],
   [
     "#else // defined(SUN_LIGHT) || defined(SKY_LIGHT)\n  radiance = inputColor.rgb;",
-    "#else // defined(SUN_LIGHT) || defined(SKY_LIGHT)\n  radiance = inputColor.rgb * mix(1.0, sunTransmittance, cloudShadowStrength);",
+    /* glsl */ `#else // defined(SUN_LIGHT) || defined(SKY_LIGHT)
+  float aerialSunT = (isnan(sunTransmittance) || isinf(sunTransmittance)) ? 1.0 : clamp(sunTransmittance, 0.0, 1.0);
+  radiance = inputColor.rgb * mix(1.0, aerialSunT, cloudShadowStrength);`,
   ],
 ];
 

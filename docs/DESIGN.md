@@ -96,12 +96,12 @@ capitals. The wordmark's letters are outlined paths (`src/components/ui/logo/geo
 
 | Token | Radius | Use |
 |---|---|---|
-| `rounded-lc-sheet` | 12 px | A sheet over the scene |
-| `rounded-lc-card` | 10 px | A card inside a sheet |
-| `rounded-lc-tile` | 8 px | Choice tiles, picture tiles, HUD panels, tab tracks |
-| `rounded-lc-row` | 6 px | Setting rows, buttons, selects, tabs, segments, wells, text fields |
-| `rounded-lc-nub` | 4 px | Badges, small tiles and thumbnails inside a panel |
-| `rounded-full` | pill | Circular LEDs, switches, knobs, key caps |
+| `rounded-lc-sheet` | 26 px | A sheet over the scene |
+| `rounded-lc-card` | 20 px | A card inside a sheet |
+| `rounded-lc-tile` | 16 px | Choice tiles, picture tiles, HUD panels |
+| `rounded-lc-row` | 12 px | Setting rows, wells, text fields |
+| `rounded-lc-nub` | 8 px | Badges, small tiles and thumbnails inside a panel |
+| `rounded-full` | pill | Buttons, segmented controls, tabs, selects, steppers, toasts, switches, key caps |
 
 Heights: button 52 / 44 / 36 (`lg` / `md` / `sm`), setting row 52, tab and segment 40 (36 small), badge 28 / 24 /
 20 (16 in the HUD), key cap 22, switch 30. Anything a finger presses is at least 44 px, whatever its drawing.
@@ -110,13 +110,13 @@ Layers, lowest first (`--z-lc-*`): HUD, touch pads, toasts, overlays, menus, res
 
 ## 5. Surfaces
 
-- **Sheet** (`Sheet`, `.lc-glass`): `rgba(10,12,17,0.84)`, 1 px `white/10` border, `blur(12px)`, `shadow-lc-sheet`.
+- **Sheet** (`Sheet`, `.lc-glass`): `rgba(12,14,20,0.76)`, 1 px `white/9` border, `blur(20px)`, `shadow-lc-sheet`.
   One per screen region, over the live scene.
-- **Card** (`Card`): carbon at 85 %, `white/10` border, no blur, no shadow. Content inside a sheet. Named by a plain
+- **Card** (`Card`): carbon at 82 %, `white/9` border, no blur, no shadow. Content inside a sheet. Named by a plain
   heading (`title=`), never a dot plus tracked caps. Never a card inside a card: a group inside a card is a well.
 - **Well** (`Well`): `lc-well` with an `lc-line` hairline. Inputs, stat tiles, read-outs.
 - **HUD plate**: void at 84 %, `white/10` border, `blur(8px)`, `shadow-lc-pop`. One plate for every HUD panel.
-- Over the scene use the `white/10` hairline; inside a sheet use `lc-line`.
+- Over the scene use the `white/9`–`white/10` hairline; inside a sheet use `lc-line`.
 
 ## 6. Components (`src/components/ui/`)
 
@@ -164,7 +164,7 @@ One part per job; a screen does not draw its own button, chip, toggle, tab, slid
 - Leaving a screen that replaces the menu (Controls, a circuit reload) comes back to the panel and entry it was opened from.
 - Up / down moves between rows; left / right changes the focused row's value, at once. In Settings and the Garage, Delete / X puts the focused row back to its default (elsewhere they do nothing; Tab reaches a row's reset button everywhere). Y (key and pad) is a screen's one extra action (Settings: Simple / Advanced). A switch must always show what it did: a Simple page that hides settings ends with a line saying so and a Show advanced button, and a page with nothing more says that in a notice. Tab stays the browser's focus key.
 - LB / RB (Q / E) switch tabs or categories. B / Esc goes back exactly one level, never more.
-- Rows that hold an input ring the whole row: 2 px volt outline, 14 px radius, volt 6% tint.
+- Rows that hold an input ring the whole row: 2 px volt outline, 12 px radius, volt 6% tint.
 - With a controller, the focused element also gets a 5 px volt halo and a soft glow (`html[data-input="pad"]`).
 - The prompt bar always shows the glyphs of the input in use.
 
@@ -185,7 +185,7 @@ One part per job; a screen does not draw its own button, chip, toggle, tab, slid
 - Short screens (`short:`, under 512 px tall, i.e. landscape phones) drop secondary chrome before the primary action leaves the screen. Touch screens hide key prompts until a controller is used.
 - Phones (`phone:`, under 640 px wide or 512 px tall, either way up) are as dense as a mobile racer: menu rows 46 px (the main action 52–58), row labels 16–18 px display, details 11–12 px, headings 22–24 px, primary buttons 44 px. Setup cards become rows (icon beside the title), and a landscape phone puts the title screen's setup beside its actions, so it fits one screen. The Phone HUD shrinks its numbers and panels and the steer pad narrows, but no label goes under 9 px and no touch target under 44 px.
 - Below `lg` an open panel takes the screen: the rail hides (it would stack thirteen rows above the panel), Close and Ⓑ / Esc go straight back to the title screen.
-- On phones a segmented row tightens (13 px, 6 px padding) and wraps a long label rather than clipping it; the browsers' sort scrolls sideways in its own row; content cards are picture tiles in two or three columns and long names wrap anywhere. Nothing may widen the page past the screen.
+- On phones a segmented row tightens (13 px, 8 px padding) and wraps a long label rather than clipping it; the browsers keep Search in view and fold their filters and sort behind one Filters button, which counts the filters that are on; content cards are picture tiles in two or three columns and long names wrap in full (two lines elsewhere, the full name on hover). Nothing may widen the page past the screen.
 - Safe area: the page draws under the notch, Dynamic Island and home indicator (`viewportFit: "cover"`), so no text or control may sit in `env(safe-area-inset-*)`. The scene, glows and letterbox bars run to the true edge.
   - The HUD layer is a `.lc-safe-frame` (`globals.css`): groups anchored inside it clear the insets with plain offsets. Never add `env()` inside it.
   - Every other fixed root adds the inset itself. Menu roots pad with `max(<padding>, env(safe-area-inset-<side>))` on every side and at every breakpoint; touch pads, toasts and portalled panels offset with `calc(env(safe-area-inset-<side>, 0px) + <gap>)`.

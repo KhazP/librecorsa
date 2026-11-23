@@ -7,7 +7,7 @@
  * The badges:
  *   weekly_gold / weekly_silver / weekly_bronze   first, second or third on a finished week's board, under a physics
  *                                                 version (a week driven on V1 and V2 has a podium on each)
- *   track_record                                  holds the fastest lap on an open board laps go on now (a circuit in
+ *   track_record (Fastest Lap, FL)                holds the fastest lap on an open board laps go on now (a circuit in
  *                                                 the game, a car on its current physics)
  *   og                                            has a lap on a Physics V1 board: drove LibreCorsa before Physics V2
  *   bulb                                          given by hand, for an idea or a contribution, with a note
@@ -16,6 +16,14 @@
  */
 import { getOnlineConfig, onlineUrl } from "./online-config";
 import { driverNameKey, requestJson } from "./board-client";
+import type { VehicleModelId } from "@/types/f1";
+import {
+  isVehicleClassId,
+  VEHICLE_CLASS_IDS,
+  vehicleClassOf,
+  vehicleDisplayName,
+  type VehicleClassId,
+} from "@/lib/cars/vehicle-class";
 
 export const BADGE_TYPES = ["weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"] as const;
 export type BadgeType = (typeof BADGE_TYPES)[number];
@@ -28,11 +36,24 @@ export type ManualBadgeType = (typeof MANUAL_BADGE_TYPES)[number];
 /** The most names one badge read asks for */
 export const MAX_BADGE_NAMES = 64;
 
+/** Minimum distinct drivers on an open board before its P1 grants a Fastest Lap badge (matches cloudflare/api/awards.ts) */
+export const MIN_RECORD_DRIVERS = 5;
+
 /** One week and physics version a medal was won in */
 export interface BadgeEvent {
   event: string;
   /** "v1", "v2" */
   physics: string;
+}
+
+/** One contested open board where a driver holds P1 */
+export interface RecordBoard {
+  trackId: string;
+  vehicle: string;
+  /** Fastest lap time on this board (ms), when returned by the server */
+  lapTimeMs?: number;
+  /** Unique drivers on this board, when returned by the server */
+  drivers?: number;
 }
 
 /** One kind of badge a driver holds, with how many times */
@@ -41,10 +62,29 @@ export interface DriverBadge {
   count: number;
   /** The weeks of a weekly medal, newest first */
   events?: BadgeEvent[];
-  /** The boards of a track record: circuit and car */
-  boards?: { trackId: string; vehicle: string }[];
+  /** The boards of a fastest lap: circuit, car, lap time and competition count */
+  boards?: RecordBoard[];
   /** What a badge given by hand was given for (the Bulb's idea) */
   note?: string;
+}
+
+/** Where a badge pill is being shown, so Fastest Lap badges stay relevant to the car or class in view */
+export type BadgeContext =
+  | { scope: "all" }
+  | { scope: "vehicle"; vehicle: VehicleModelId }
+  | { scope: "class"; classId: VehicleClassId };
+
+export interface ClassRecordGroup {
+  classId: VehicleClassId;
+  boards: RecordBoard[];
+  count: number;
+}
+
+export interface VehicleRecordGroup {
+  vehicle: string;
+  classId: VehicleClassId | null;
+  boards: RecordBoard[];
+  count: number;
 }
 
 /** GET /api/badges?names=a,b: each asked name's badges, by its name key (board.ts driverNameKey) */
@@ -82,6 +122,25 @@ export interface DecoratedDriver {
   total: number;
 }
 
+/** One driver in the Fastest Lap Record Holders table (overall or within one car class) */
+export interface RecordHolder {
+  name: string;
+  nameKey: string;
+  /** Number of contested Fastest Lap records held in this slice */
+  count: number;
+  /** Per-vehicle breakdown in this slice, most records first */
+  byVehicle: { vehicle: string; count: number }[];
+  /** Contested boards held in this slice, most competitive first */
+  boards: RecordBoard[];
+}
+
+/** Live Fastest Lap leaders overall and per car class, from contested open boards */
+export interface HallOfFameRecordHolders {
+  minDrivers: number;
+  overall: RecordHolder[];
+  byClass: Partial<Record<VehicleClassId, RecordHolder[]>>;
+}
+
 /** GET /api/hall-of-fame */
 export interface HallOfFameAnswer {
   ok: true;
@@ -91,6 +150,8 @@ export interface HallOfFameAnswer {
   events: HallOfFameEvent[];
   /** Finished weeks only: most golds, then silvers, then bronzes */
   mostDecorated: DecoratedDriver[];
+  /** Live Fastest Lap leaders on contested boards, overall and per car class */
+  recordHolders: HallOfFameRecordHolders;
 }
 
 /** The badge order everywhere: medals first, best first */
@@ -101,7 +162,7 @@ const BADGE_NAME: Record<BadgeType, string> = {
   weekly_gold: "Weekly Gold",
   weekly_silver: "Weekly Silver",
   weekly_bronze: "Weekly Bronze",
-  track_record: "Track Record",
+  track_record: "Fastest Lap",
   og: "OG Driver",
   bulb: "Idea Contributor",
 };
@@ -113,13 +174,75 @@ export const badgeName = (type: BadgeType): string => BADGE_NAME[type];
 export const physicsName = (physics: string): string => physics.toUpperCase();
 
 /**
- * The words of a badge's tooltip and spoken name: "Weekly Gold ×2", "Track Record ×3", "OG Driver",
+ * The words of a badge's tooltip and spoken name: "Weekly Gold ×2", "Fastest Lap ×3", "OG Driver",
  * "Idea Contributor — Wet weather tyres"
  */
 export function badgeLabel(b: DriverBadge): string {
   const times = b.count > 1 ? ` ×${b.count}` : "";
   const note = b.type === "bulb" && b.note ? ` — ${b.note}` : "";
   return `${BADGE_NAME[b.type]}${times}${note}`;
+}
+
+const CLASS_RANK = new Map<VehicleClassId, number>(VEHICLE_CLASS_IDS.map((c, i) => [c, i]));
+
+/** Groups a driver's Fastest Lap boards by car class, ordered by most records then class menu order */
+export function groupBoardsByClass(boards: readonly RecordBoard[] | undefined): ClassRecordGroup[] {
+  if (!boards || boards.length === 0) return [];
+  const map = new Map<VehicleClassId, RecordBoard[]>();
+  for (const b of boards) {
+    const c = vehicleClassOf(b.vehicle);
+    if (!c) continue;
+    const list = map.get(c);
+    if (list) list.push(b);
+    else map.set(c, [b]);
+  }
+  return [...map.entries()]
+    .map(([classId, list]) => ({ classId, boards: list, count: list.length }))
+    .sort((a, b) => b.count - a.count || (CLASS_RANK.get(a.classId) ?? 99) - (CLASS_RANK.get(b.classId) ?? 99));
+}
+
+/** Groups a driver's Fastest Lap boards by vehicle model, ordered by most records then class order */
+export function groupBoardsByVehicle(boards: readonly RecordBoard[] | undefined): VehicleRecordGroup[] {
+  if (!boards || boards.length === 0) return [];
+  const map = new Map<string, RecordBoard[]>();
+  for (const b of boards) {
+    const list = map.get(b.vehicle);
+    if (list) list.push(b);
+    else map.set(b.vehicle, [b]);
+  }
+  return [...map.entries()]
+    .map(([vehicle, list]) => ({ vehicle, classId: vehicleClassOf(vehicle), boards: list, count: list.length }))
+    .sort(
+      (a, b) =>
+        b.count - a.count ||
+        (a.classId ? (CLASS_RANK.get(a.classId) ?? 99) : 99) - (b.classId ? (CLASS_RANK.get(b.classId) ?? 99) : 99) ||
+        (a.vehicle < b.vehicle ? -1 : a.vehicle > b.vehicle ? 1 : 0),
+    );
+}
+
+/**
+ * Narrows a driver's badges to the board or multiplayer room in view:
+ *   - `scope: "all"` keeps every Fastest Lap record
+ *   - `scope: "vehicle"` keeps only Fastest Lap records in that vehicle model
+ *   - `scope: "class"` keeps only Fastest Lap records in that car class
+ * Non-FL badges (weekly medals, OG, Bulb) are never filtered out.
+ */
+export function filterBadgesForContext(badges: readonly DriverBadge[], context?: BadgeContext): DriverBadge[] {
+  if (!context || context.scope === "all") return [...badges];
+  const out: DriverBadge[] = [];
+  for (const b of badges) {
+    if (b.type !== "track_record") {
+      out.push(b);
+      continue;
+    }
+    const matching = (b.boards ?? []).filter((board) =>
+      context.scope === "vehicle" ? board.vehicle === context.vehicle : vehicleClassOf(board.vehicle) === context.classId,
+    );
+    if (matching.length > 0) {
+      out.push({ ...b, count: matching.length, boards: matching });
+    }
+  }
+  return out;
 }
 
 /** A longer line for a tooltip: what the badge means and where it was won */
@@ -132,8 +255,17 @@ export function badgeDetail(b: DriverBadge): string {
       const weeks = (b.events ?? []).slice(0, 4).map((e) => `${e.event} ${physicsName(e.physics)}`);
       return `${place} in a weekly challenge${weeks.length ? `: ${weeks.join(", ")}${(b.events?.length ?? 0) > weeks.length ? "…" : ""}` : ""}`;
     }
-    case "track_record":
-      return `Fastest lap on ${b.count === 1 ? "an open board" : `${b.count} open boards`}`;
+    case "track_record": {
+      const groups = groupBoardsByVehicle(b.boards);
+      if (groups.length === 0) {
+        return `Holds the fastest lap on ${b.count === 1 ? "an open board" : `${b.count} open boards`}`;
+      }
+      const parts = groups.slice(0, 4).map((g) => `${vehicleDisplayName(g.vehicle)} ×${g.count}`);
+      const extra = groups.length > 4 ? "…" : "";
+      const manual = Math.max(0, b.count - (b.boards?.length ?? 0));
+      if (manual > 0) parts.push(`+${manual} manual`);
+      return `${parts.join(" · ")}${extra} — tap to view tracks`;
+    }
     case "og":
       return "Drove LibreCorsa on Physics V1";
     case "bulb":
@@ -145,6 +277,21 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 const str = (v: unknown, max: number): string | null => (typeof v === "string" && v.length <= max ? v : null);
 const PHYSICS_RE = /^[a-z0-9]{1,12}$/;
 const EVENT_RE = /^\d{4}-W\d{2}$/;
+
+function parseRecordBoard(raw: unknown): RecordBoard | null {
+  if (!isRecord(raw)) return null;
+  const trackId = str(raw.trackId, 64);
+  const vehicle = str(raw.vehicle, 32);
+  if (!trackId || !vehicle) return null;
+  const out: RecordBoard = { trackId, vehicle };
+  if (typeof raw.lapTimeMs === "number" && Number.isFinite(raw.lapTimeMs) && raw.lapTimeMs > 0) {
+    out.lapTimeMs = raw.lapTimeMs;
+  }
+  if (typeof raw.drivers === "number" && Number.isInteger(raw.drivers) && raw.drivers >= 1 && raw.drivers <= 1_000_000) {
+    out.drivers = raw.drivers;
+  }
+  return out;
+}
 
 /** One badge as read from the server, or null when it doesn't hold together */
 export function parseBadge(raw: unknown): DriverBadge | null {
@@ -158,10 +305,7 @@ export function parseBadge(raw: unknown): DriverBadge | null {
       .map((e) => ({ event: e.event, physics: e.physics }));
   }
   if (Array.isArray(raw.boards)) {
-    badge.boards = raw.boards
-      .slice(0, 200)
-      .filter((b): b is { trackId: string; vehicle: string } => isRecord(b) && str(b.trackId, 64) !== null && str(b.vehicle, 32) !== null)
-      .map((b) => ({ trackId: b.trackId, vehicle: b.vehicle }));
+    badge.boards = raw.boards.slice(0, 200).map(parseRecordBoard).filter((b): b is RecordBoard => b !== null);
   }
   const note = str(raw.note, 200);
   if (note) badge.note = note;
@@ -188,6 +332,54 @@ function parsePlace(raw: unknown): PodiumPlace | null {
   return { place: raw.place, name, nameKey, lapTimeMs };
 }
 
+function parseRecordHolder(raw: unknown): RecordHolder | null {
+  if (!isRecord(raw)) return null;
+  const name = str(raw.name, 64);
+  const nameKey = str(raw.nameKey, 64);
+  const count = typeof raw.count === "number" && Number.isInteger(raw.count) && raw.count >= 1 && raw.count <= 10_000 ? raw.count : null;
+  if (!name || !nameKey || count === null) return null;
+  const boards = Array.isArray(raw.boards)
+    ? raw.boards.slice(0, 80).map(parseRecordBoard).filter((b): b is RecordBoard => b !== null)
+    : [];
+  const byVehicle = Array.isArray(raw.byVehicle)
+    ? raw.byVehicle
+        .slice(0, 32)
+        .filter(
+          (v): v is { vehicle: string; count: number } =>
+            isRecord(v) &&
+            str(v.vehicle, 32) !== null &&
+            typeof v.count === "number" &&
+            Number.isInteger(v.count) &&
+            v.count >= 1 &&
+            v.count <= 10_000,
+        )
+        .map((v) => ({ vehicle: v.vehicle, count: v.count }))
+    : groupBoardsByVehicle(boards).map((g) => ({ vehicle: g.vehicle, count: g.count }));
+  return { name, nameKey, count, byVehicle, boards };
+}
+
+function parseRecordHolders(raw: unknown): HallOfFameRecordHolders {
+  const empty: HallOfFameRecordHolders = { minDrivers: MIN_RECORD_DRIVERS, overall: [], byClass: {} };
+  if (!isRecord(raw)) return empty;
+  const minDrivers =
+    typeof raw.minDrivers === "number" && Number.isInteger(raw.minDrivers) && raw.minDrivers >= 1 && raw.minDrivers <= 1000
+      ? raw.minDrivers
+      : MIN_RECORD_DRIVERS;
+  const overall = Array.isArray(raw.overall)
+    ? raw.overall.slice(0, 50).map(parseRecordHolder).filter((h): h is RecordHolder => h !== null)
+    : [];
+  const byClass: Partial<Record<VehicleClassId, RecordHolder[]>> = {};
+  if (isRecord(raw.byClass)) {
+    for (const classId of VEHICLE_CLASS_IDS) {
+      const list = raw.byClass[classId];
+      if (!Array.isArray(list)) continue;
+      const parsed = list.slice(0, 50).map(parseRecordHolder).filter((h): h is RecordHolder => h !== null);
+      if (parsed.length > 0) byClass[classId] = parsed;
+    }
+  }
+  return { minDrivers, overall, byClass };
+}
+
 /** The Hall of Fame as read from the server; null for an answer that isn't one */
 export function parseHallOfFame(body: unknown): HallOfFameAnswer | null {
   if (!isRecord(body) || body.ok !== true || !Array.isArray(body.events)) return null;
@@ -205,7 +397,14 @@ export function parseHallOfFame(body: unknown): HallOfFameAnswer | null {
         .filter((d): d is Record<string, unknown> => isRecord(d) && str(d.name, 64) !== null && str(d.nameKey, 64) !== null)
         .map((d) => ({ name: d.name as string, nameKey: d.nameKey as string, gold: n(d.gold), silver: n(d.silver), bronze: n(d.bronze), total: n(d.total) }))
     : [];
-  return { ok: true, current: typeof body.current === "string" && EVENT_RE.test(body.current) ? body.current : "", events, mostDecorated };
+  const recordHolders = parseRecordHolders(body.recordHolders);
+  return {
+    ok: true,
+    current: typeof body.current === "string" && EVENT_RE.test(body.current) ? body.current : "",
+    events,
+    mostDecorated,
+    recordHolders,
+  };
 }
 
 /** The Hall of Fame; null without an online board, or when it can't be read */

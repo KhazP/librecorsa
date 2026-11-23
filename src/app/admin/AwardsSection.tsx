@@ -2,7 +2,7 @@
 
 /**
  * Manual driver badge management in the owner's dashboard (/admin): search claimed drivers, grant the Bulb
- * (Idea Contributor) or manual OG / Track Record badges with an optional note, and revoke existing manual awards.
+ * (Idea Contributor) or manual OG / Fastest Lap badges with an optional note, and revoke existing manual awards.
  */
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Button, Segmented, TextField } from "@/components/ui";
@@ -17,7 +17,7 @@ import { Card, Caution, NOTE, Section } from "./admin-ui";
 const BADGE_OPTIONS: readonly { id: ManualBadgeType; label: string }[] = [
   { id: "bulb", label: "Bulb (Idea)" },
   { id: "og", label: "OG Driver" },
-  { id: "track_record", label: "Track Record" },
+  { id: "track_record", label: "Fastest Lap" },
 ];
 
 const formatDate = (ms: number): string =>
@@ -118,7 +118,7 @@ export function AwardsSection({ adminKey }: { adminKey: string }) {
     <Section
       id="awards"
       title="Badges"
-      intro="Grant or revoke manual driver badges — the Bulb for community ideas and contributions, or an OG / Track Record override."
+      intro="Grant or revoke manual driver badges — the Bulb for community ideas and contributions, or an OG / Fastest Lap override."
     >
       {!ready ? (
         <Card>

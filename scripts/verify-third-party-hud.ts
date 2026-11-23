@@ -26,6 +26,7 @@ import {
   wrapLap,
 } from '../src/components/hud/third-party-data';
 import { revLights } from '../src/components/hud/styles/third-party-parts';
+import { sessionWord } from '../src/components/hud/hud-format';
 import { revLedBand, revLeds } from '../src/lib/sim/rev-range';
 
 const failures: string[] = [];
@@ -170,6 +171,11 @@ check('radar: front-cone & out-of-range blips filtered', radarTraffic.blips.leng
 check('radar: closer side overlap level 2 on left', radarTraffic.leftCar?.overlapLevel === 2 && radarTraffic.leftCar.side === -1);
 check('radar: outer overlap level 1 on right', radarTraffic.rightCar?.overlapLevel === 1 && radarTraffic.rightCar.side === 1);
 check('radar: active traffic raises opacity to 1', near(radarTraffic.opacity, 1));
+
+// Every layout names the session alike: the weekly challenge's time trial is not practice
+check('session word: practice', sessionWord({}) === 'Practice');
+check('session word: the weekly challenge reads Time trial', sessionWord({ timeTrial: true }) === 'Time trial');
+check('session word: qualifying wins', sessionWord({ qualifying: { remainingS: 60, lastLap: false, lapCounts: true, bestMs: null }, timeTrial: true }) === 'Qualifying');
 
 if (failures.length) {
   console.error(`\n${failures.length} check(s) failed:\n  ${failures.join('\n  ')}`);

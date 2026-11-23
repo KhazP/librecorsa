@@ -3,8 +3,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { PauseMenuProps } from "@/components/hud/PauseMenu";
+import type { VehicleModelId } from "@/types/f1";
 import { carById, carClass, carSkinSwatchBackground } from "@/lib/cars/car-registry";
 import { carSkinFor } from "@/lib/cars/car-skins";
+import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
+import { COMPOUNDS } from "@/components/ui/badges/compounds";
+import { formatLapTime } from "@/components/hud/hud-format";
 import { EngineersGarage } from "./EngineersGarage";
 import { MultiplayerPanel } from "@/components/hud/MultiplayerPanel";
 import { ChallengePanel, type ChallengePanelProps } from "@/components/menu/ChallengePanel";
@@ -17,7 +21,7 @@ import { SCENERY_CREDITS } from "@/lib/render/scenery-credits";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import type { SpeedUnit } from "@/lib/settings/player-settings";
-import { HUD_LICENSE_URL, THIRD_PARTY_HUD_LAYOUTS, hudLayout } from "@/lib/settings/hud-layouts";
+import { HUD_LICENSE_URL, THIRD_PARTY_HUD_LAYOUTS, hudLayout, type HudLayoutCredit } from "@/lib/settings/hud-layouts";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn } from "@/lib/settings/units";
 import { useGamepads, type PadState } from "./useMenuNav";
@@ -72,6 +76,12 @@ const PANEL_COLUMNS: Partial<Record<TitlePanel, string>> = {
   request: "lg:grid-cols-[240px_minmax(0,1080px)]",
   garage: "lg:grid-cols-[240px_minmax(0,1000px)]",
 };
+/**
+ * Multiplayer before there is a room or an open race: the one column of the room card (MultiplayerPanel's `max-w-xl`,
+ * 576 px, plus the sheet's padding), not a sheet twice its width with nothing on the right. A lobby or the open races
+ * take the full width again, in columns.
+ */
+const MULTIPLAYER_ALONE = "lg:grid-cols-[240px_minmax(0,640px)]";
 
 /**
  * Where the title menu picks up when it comes back: Controls is a screen of its own, and loading a circuit reloads the
@@ -103,6 +113,8 @@ export interface TitleMenuProps extends PauseMenuProps {
 }
 
 const linkClass = "text-lc-chalk underline decoration-lc-keyline underline-offset-2 hover:decoration-lc-chalk";
+/** A licence's name never breaks at its hyphen or space ("CC BY-NC-" / "SA 4.0") */
+const licenceClass = cx(linkClass, "whitespace-nowrap");
 
 const ASSIST_LABELS: Record<PauseMenuProps["assistPreset"], string> = {
   pro: "No assists",
@@ -154,10 +166,16 @@ const ModderSupport: React.FC = () => {
         The circuits and cars are their work, used with their permission. If you enjoy one, you can thank its maker
         directly.
       </p>
-      <ul className="m-0 mt-2 grid list-none grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] gap-x-6 p-0">
+      {/* The buttons share one width from sm up, so their left edges line up down each column (the labels differ:
+          "Donate via PayPal", "Support on Streamlabs"); a column is wide enough for a name beside the widest. On a
+          narrow phone each button goes under its name, at the left */}
+      <ul className="m-0 mt-2 grid list-none grid-cols-[repeat(auto-fill,minmax(min(380px,100%),1fr))] gap-x-6 p-0">
         {modders.map((m) => (
-          <li key={m.name} className="flex min-w-0 items-center justify-between gap-3 border-t border-white/5 py-2.5">
-            <span className="flex min-w-0 flex-col">
+          <li
+            key={m.name}
+            className="flex min-w-0 flex-col items-start gap-2 border-t border-white/5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+          >
+            <span className="flex max-w-full min-w-0 flex-col">
               <a href={m.url} target="_blank" rel="noreferrer" className={cx(linkClass, "self-start font-semibold")}>
                 {m.name}
               </a>
@@ -165,7 +183,7 @@ const ModderSupport: React.FC = () => {
                 {worksLine(m.works)}
               </span>
             </span>
-            <SupportButton support={m.support} maker={m.name} variant="secondary" className="shrink-0" />
+            <SupportButton support={m.support} maker={m.name} variant="secondary" className="shrink-0 sm:min-w-60" />
           </li>
         ))}
       </ul>
@@ -222,8 +240,9 @@ const SupportNote: React.FC<{ items: PromptItem[]; onClose?: () => void; onThank
 const Credits: React.FC = () => (
   <div className="flex flex-col gap-4.5">
     <p className="m-0 max-w-[760px] text-[18px] leading-snug font-semibold text-lc-chalk sm:text-[20px]">
-      LibreCorsa is an open-source browser racing sim with open-wheel prototypes, GT3 cars, road cars and an open
-      circuit pipeline.
+      LibreCorsa is an open-source racing sim that runs in the browser. Drive open-wheelers, GT3 cars, LMDh and other
+      prototypes, road cars, and classics like the Chaparral 2D, Porsche 934 and BMW M1 Procar, on circuits and hill
+      climbs.
     </p>
 
     <ModderSupport />
@@ -235,25 +254,37 @@ const Credits: React.FC = () => (
           dynamics, active aerodynamics, and hybrid ERS.
         </CreditRow>
         <CreditRow title="Graphics & audio">
-          WebGL2 PBR rendering with GPU tyre deformation, golden-hour lighting and multi-layer Web Audio synthesis.
+          WebGL2 PBR rendering with GPU tyre deformation, times of day from dawn to night, rain with wet and drying
+          tracks, headlights and circuit lamps for night races, and multi-layer Web Audio synthesis.
         </CreditRow>
         <CreditRow title="HUD layouts">
           The third-party HUD layouts are recreated from other open-source HUD projects, with LibreCorsa&apos;s own
           telemetry:
           <br />
-          {THIRD_PARTY_HUD_LAYOUTS.map((l) => (
-            <React.Fragment key={l.id}>
-              &ldquo;{l.label}&rdquo; (
-              <a href={l.credit.repoUrl} target="_blank" rel="noreferrer" className={linkClass}>
-                github.com
-              </a>
-              ) by {l.credit.author} ·{" "}
-              <a href={HUD_LICENSE_URL[l.credit.license]} target="_blank" rel="noreferrer" className={linkClass}>
-                {l.credit.license === "MIT" ? "MIT" : "GPL v3"}
-              </a>
-              <br />
-            </React.Fragment>
-          ))}
+          {THIRD_PARTY_HUD_LAYOUTS.map((l) => {
+            const credit: HudLayoutCredit = l.credit;
+            return (
+              <React.Fragment key={l.id}>
+                &ldquo;{l.label}&rdquo; (
+                <a href={credit.repoUrl} target="_blank" rel="noreferrer" className={linkClass}>
+                  github.com
+                </a>
+                ) by {credit.author} ·{" "}
+                {credit.site ? (
+                  <>
+                    <a href={credit.site.url} target="_blank" rel="noreferrer" className={linkClass}>
+                      {credit.site.name}
+                    </a>{" "}
+                    ·{" "}
+                  </>
+                ) : null}
+                <a href={HUD_LICENSE_URL[credit.license]} target="_blank" rel="noreferrer" className={licenceClass}>
+                  {credit.license === "MIT" ? "MIT" : "GPL v3"}
+                </a>
+                <br />
+              </React.Fragment>
+            );
+          })}
           Their licence texts are in{" "}
           <a href={`${REPO_URL}/blob/main/THIRD_PARTY_NOTICES.md`} target="_blank" rel="noreferrer" className={linkClass}>
             THIRD_PARTY_NOTICES.md
@@ -272,7 +303,7 @@ const Credits: React.FC = () => (
             skfb.ly/pKNCK
           </a>
           ) ·{" "}
-          <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
+          <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
             CC BY 4.0
           </a>
           <br />
@@ -290,7 +321,7 @@ const Credits: React.FC = () => (
             Vecarz
           </a>
           , Red Bull Racing livery from toddeppe&apos;s and VTX&apos;s versions ·{" "}
-          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
+          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
             CC BY-NC-SA 4.0
           </a>
           <br />
@@ -304,7 +335,7 @@ const Credits: React.FC = () => (
             sketchfab.com
           </a>
           ) by Ddiaz Design ·{" "}
-          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
+          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
             CC BY-NC-SA 4.0
           </a>
         </CreditRow>
@@ -333,7 +364,7 @@ const Credits: React.FC = () => (
             Cxjovich
           </a>{" "}
           ·{" "}
-          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
+          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={licenceClass}>
             CC BY-NC-SA 4.0
           </a>{" "}
           · used with permission
@@ -414,7 +445,7 @@ const Credits: React.FC = () => (
                   t.credit!.author
                 )}{" "}
                 ·{" "}
-                <a href={t.credit!.licenseUrl} target="_blank" rel="noreferrer" className={linkClass}>
+                <a href={t.credit!.licenseUrl} target="_blank" rel="noreferrer" className={licenceClass}>
                   {t.credit!.license}
                 </a>
                 <br />
@@ -431,7 +462,7 @@ const Credits: React.FC = () => (
                 sketchfab.com
               </a>
               ) by {c.author} ·{" "}
-              <a href={c.licenseUrl} target="_blank" rel="noreferrer" className={linkClass}>
+              <a href={c.licenseUrl} target="_blank" rel="noreferrer" className={licenceClass}>
                 {c.license}
               </a>
               <br />
@@ -478,9 +509,13 @@ const PanelFrame: React.FC<{
   return (
     <div className="lc-title-frame lc-glass flex min-w-0 flex-col gap-4.5 rounded-lc-sheet p-5 text-lc-chalk sm:px-7 sm:pt-6 sm:pb-6.5 phone:gap-3.5 phone:p-3.5">
       {title ? (
-        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="flex items-start justify-between gap-x-4">
           <div className="flex min-w-0 flex-col gap-1.5">
-            <h2 className="lc-h2 text-lc-chalk">{title}</h2>
+            {/* As tall as Close beside it (36 px, 44 on touch screens), the heading centred in it: Close sits on the
+                heading's line, not under it, where the button is taller than the heading (phones) */}
+            <div className="flex min-h-9 items-center pointer-coarse:min-h-11">
+              <h2 className="lc-h2 text-lc-chalk">{title}</h2>
+            </div>
             {subtitle ? <p className="lc-body m-0 text-pretty">{subtitle}</p> : null}
           </div>
           {/* A pointer / touch affordance: a controller steps back with B, so the cursor skips it */}
@@ -545,6 +580,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const [resume] = useState(() => (props.initialPanel ? null : peekResume(trackId)));
   // The panel asked for; `panel` below is the one shown, which must still be on offer
   const [chosenPanel, setPanel] = useState<TitlePanel | null>(props.initialPanel ?? resume?.panel ?? null);
+  const [leaderboardJump, setLeaderboardJump] = useState<{ trackId: string; vehicle: VehicleModelId; seq: number } | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const { mode } = useInputMode();
@@ -609,6 +645,16 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const carLocked = props.telemetry.race?.multiplayer === true || props.raceRunning === true;
   // A hill climb is driven one car at a time, from the start line to the finish: no races against the AI
   const hillClimb = activeTrackId === trackId && getActivePointToPoint() !== null;
+  const localLaps = props.leaderboardPanel?.local;
+  // This car's best on this circuit: the list is loaded for them, and filtered too so a list from before a swap never
+  // shows another car's or circuit's time
+  const bestLapMs = useMemo(() => {
+    const times = (localLaps ?? [])
+      .filter((e) => e.trackId === trackId && e.vehicle === props.vehicleModel)
+      .map((e) => e.lapTimeMs)
+      .filter((ms) => Number.isFinite(ms) && ms > 0);
+    return times.length ? Math.min(...times) : null;
+  }, [localLaps, trackId, props.vehicleModel]);
   const items: MenuItem[] = [
     {
       id: "drive",
@@ -675,9 +721,27 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           },
         ]
       : []),
-    { id: "garage", label: "Garage", icon: "garage" as const, panel: "garage", run: () => openPanel("garage") },
+    {
+      id: "garage",
+      label: "Garage",
+      // The tyres the car goes out on (a road car's street tyres can't be changed)
+      detail: vehicleModelSpec(vehicle.physics).onlyTyre ?? `${COMPOUNDS[props.tireCompound].name} tyres`,
+      icon: "garage" as const,
+      panel: "garage",
+      run: () => openPanel("garage"),
+    },
     ...(props.leaderboardPanel
-      ? [{ id: "leaderboard", label: "Lap times", icon: "lapTimes" as const, panel: "leaderboard" as const, run: () => openPanel("leaderboard") }]
+      ? [
+          {
+            id: "leaderboard",
+            label: "Lap times",
+            // This car's best on this circuit, when there is one
+            detail: bestLapMs ? `Best ${formatLapTime(bestLapMs)}` : undefined,
+            icon: "lapTimes" as const,
+            panel: "leaderboard" as const,
+            run: () => openPanel("leaderboard"),
+          },
+        ]
       : []),
     {
       id: "settings",
@@ -773,6 +837,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       detail={slim || size === "sm" ? undefined : item.detail}
       icon={item.icon}
       size={size}
+      // The title screen mixes rows with and without a detail line, side by side and one under another: their labels
+      // stay on one line
+      align={slim || size === "sm" ? "center" : "top"}
       tone={slim ? "slate" : "chalk"}
       chosen={slim && item.panel === panel}
       expanded={item.panel ? item.panel === panel : undefined}
@@ -811,7 +878,13 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           : "bg-linear-to-r from-lc-void/97 via-lc-void/80 via-35% to-transparent to-70% pt-[max(clamp(1.5rem,3.6vh,2.5rem),env(safe-area-inset-top))] max-lg:bg-lc-void/80 max-lg:bg-none short:pt-[max(1rem,env(safe-area-inset-top))]"
       } ${raceOpen ? "scroll-pb-24" : ""}`}
     >
-      <div className={`flex w-full flex-1 flex-col ${panel ? "gap-5.5" : "gap-[clamp(20px,3vh,32px)]"} short:gap-4`}>
+      {/* The menu is not drawn while Settings is open over it (SettingsScreen marks <html data-settings-open>): its
+          frosted panel and volt buttons glowed through Settings' scrim and cards. Its own scrim (the root's gradient)
+          stays, so the scene behind Settings is as dim as before. Hidden, not removed, it keeps its panel, scroll and
+          the entry Settings hands the focus back to */}
+      <div
+        className={`flex w-full flex-1 flex-col in-data-[settings-open]:invisible ${panel ? "gap-5.5" : "gap-[clamp(20px,3vh,32px)]"} short:gap-4`}
+      >
         <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3">
             <LibreCorsaLogo variant="compact" size={panel ? "sm" : "md"} />
@@ -834,8 +907,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
             <InputHint pad={pad} />
             {panel || !props.profile ? null : props.displayPanel ? (
+              // A raised button, chalk on titanium: a ghost's slate label read as greyed out beside the input hint
               <Button
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 // The name shown comes first, so saying it presses the button
                 aria-label={`${props.profile.name}, edit driver profile`}
@@ -866,7 +940,11 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
 
         {panel ? (
           /* Panel view: slim rail + the panel's sheet */
-          <div className={`grid flex-1 grid-cols-1 items-start gap-5 lg:gap-7 ${PANEL_COLUMNS[panel] ?? PANEL_WIDTH}`}>
+          <div
+            className={`grid flex-1 grid-cols-1 items-start gap-5 lg:gap-7 ${
+              panel === "multiplayer" && !props.lobby && !props.races ? MULTIPLAYER_ALONE : (PANEL_COLUMNS[panel] ?? PANEL_WIDTH)
+            }`}
+          >
             {/* Below lg the rail would stack 13 rows above the panel: the panel takes the screen, Close goes back */}
             <nav className="flex flex-col gap-0.5 max-lg:hidden" data-nav-zone="rail" aria-label="Main menu">
               <HeroAction id={drive.id} label={drive.label} onClick={drive.run!} size="slim" />
@@ -879,11 +957,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
 
             <section ref={panelRef} className="min-h-0 min-w-0 scroll-mt-4" data-nav-zone="panel" aria-label={panelTitle}>
               <div key={panel}>
-                <PanelFrame
-                  subtitle={panelSubtitle[panel]}
-                  title={panel === "request" ? undefined : panelTitle}
-                  onClose={closePanel}
-                >
+                <PanelFrame subtitle={panelSubtitle[panel]} title={panelTitle} onClose={closePanel}>
                   {panel === "race" && props.onChangeRaceSetup ? (
                     <RaceSetupPanel
                       setup={raceSetup}
@@ -948,11 +1022,30 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       onPickCircuit={onSelectTrack ? () => openPanel("circuit", { returnTo: "multiplayer" }) : undefined}
                     />
                   ) : null}
-                  {panel === "challenge" && props.challengePanel ? <ChallengePanel {...props.challengePanel} /> : null}
-                  {panel === "leaderboard" && props.leaderboardPanel ? <LeaderboardPanel {...props.leaderboardPanel} /> : null}
+                  {panel === "challenge" && props.challengePanel ? (
+                    <ChallengePanel
+                      {...props.challengePanel}
+                      onOpenBoard={
+                        props.leaderboardPanel
+                          ? (jumpTrackId, jumpVehicle) => {
+                              setLeaderboardJump((prev) => ({ trackId: jumpTrackId, vehicle: jumpVehicle, seq: (prev?.seq ?? 0) + 1 }));
+                              openPanel("leaderboard");
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : null}
+                  {panel === "leaderboard" && props.leaderboardPanel ? (
+                    <LeaderboardPanel {...props.leaderboardPanel} jumpTarget={leaderboardJump} />
+                  ) : null}
                   {panel === "credits" ? <Credits /> : null}
                   {panel === "request" ? (
-                    <RequestPanel context={feedbackContext} facts={props.reportFacts ? () => props.reportFacts!(false) : undefined} />
+                    // The frame above names it, with Close beside the name: the panel leaves out its own heading
+                    <RequestPanel
+                      context={feedbackContext}
+                      facts={props.reportFacts ? () => props.reportFacts!(false) : undefined}
+                      heading={false}
+                    />
                   ) : null}
                 </PanelFrame>
               </div>

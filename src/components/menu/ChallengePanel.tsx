@@ -3,12 +3,13 @@
 import React, { useEffect, useState } from "react";
 import { anyCarById, anyCarForVehicle, type CarId } from "@/lib/cars/car-registry";
 import { carBoardTag } from "@/lib/cars/board-tag";
-import { isVehicleModelId } from "@/types/f1";
+import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
 import { TRACKS, venueOf } from "@/lib/track-registry";
-import { boardLabel, driverNameKey, type RemoteBoard } from "@/lib/net/leaderboard";
-import { boardChoiceOf, boardChoices, PHYSICS_VERSION } from "@/lib/sim/lap-types";
+import { driverNameKey, type RemoteBoard } from "@/lib/net/leaderboard";
+import { boardChoiceOf, boardChoices } from "@/lib/sim/lap-types";
 import { challengeById, challengeConditionsLabel, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
 import { HallOfFame } from "@/components/board/HallOfFame";
+import { LapConditionBadges } from "@/components/board/LapConditionBadges";
 import { BoardError, BoardSkeleton, BoardTable, MyPlace } from "@/components/hud/LeaderboardPanel";
 import { Button, Card, EmptyState, Select } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
@@ -34,6 +35,8 @@ export interface ChallengePanelProps {
   onDrive: () => void;
   /** Races on the week's circuit and car run on this site (they are entered from Multiplayer) */
   hasRaces?: boolean;
+  /** Jumps to a record's board in the Lap Times panel when tapped in the FL popover / Hall of Fame */
+  onOpenBoard?: (trackId: string, vehicle: VehicleModelId) => void;
 }
 
 const formatCircuitName = (id: string): string => {
@@ -71,6 +74,7 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   driverName,
   onDrive,
   hasRaces = false,
+  onOpenBoard,
 }) => {
   const [tab, setTab] = useState<ChallengeTab>("week");
   const [now, setNow] = useState(() => Date.now());
@@ -107,11 +111,6 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   const ahead = me && me.rank >= 2 ? (board?.entries[me.rank - 2] ?? null) : null;
   // The time of the place above, when the board lists only the places further up
   const aboveMs = me && me.rank >= 2 ? (me.aboveMs ?? ahead?.lapTimeMs ?? null) : null;
-  // Assists and realism, then the fixed conditions: "Dry track · Soft tyres · Low fuel"
-  const rules = [
-    ...boardLabel({ assists: challenge.assists, realism: challenge.realism, surface: "dry" }).split(" · ").slice(0, 2),
-    ...challengeConditionsLabel(challenge.vehicle).split(" · "),
-  ];
 
   return (
     <div className="flex flex-col gap-3">
@@ -127,7 +126,13 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
         className="self-start"
       />
       {tab === "hof" ? (
-        <HallOfFame circuitName={formatCircuitName} carName={formatCarName} driverName={driverName} refreshKey={boardVersion} />
+        <HallOfFame
+          circuitName={formatCircuitName}
+          carName={formatCarName}
+          driverName={driverName}
+          refreshKey={boardVersion}
+          onOpenBoard={onOpenBoard}
+        />
       ) : (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))] items-start gap-3">
           <Card
@@ -140,9 +145,10 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
             }
             bodyClassName="gap-3.5"
           >
-            <p className="lc-mono m-0 text-[12px] text-lc-fog" aria-label="Rules">
-              {rules.map((r) => (r === "Full" || r === "Standard" || r === "Casual" ? `${r} realism` : r)).join(" · ")}
-            </p>
+            <div className="flex flex-wrap items-center gap-1.5" aria-label="Rules">
+              <LapConditionBadges assists={challenge.assists} realism={challenge.realism} />
+              <span className="lc-mono text-[12px] text-lc-fog">{challengeConditionsLabel(challenge.vehicle)}</span>
+            </div>
             <p className="lc-hint m-0">
               Fixed car and setup. Flying laps, strict track limits.
               {hasRaces && available ? " Weekly races available in Multiplayer." : ""}
@@ -169,11 +175,6 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
             ) : (
               <Select aria-label="Physics version" className="w-64 max-w-full self-start" value={choice.id} onChange={setBoardPick} options={choices} />
             )}
-            {older ? (
-              <p className="lc-hint m-0">
-                {choice.physics !== PHYSICS_VERSION ? "Archived physics version." : "Previous circuit revision."}
-              </p>
-            ) : null}
             {me ? (
               <MyPlace
                 rank={me.rank}
@@ -199,6 +200,9 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
             ) : (
               <BoardTable
                 label={older ? `This week's times, ${versionName}` : "This week's times"}
+                badgeContext={{ scope: "vehicle", vehicle: challenge.vehicle }}
+                circuitName={formatCircuitName}
+                onOpenRecordBoard={onOpenBoard}
                 rows={board.entries.map((e, i) => ({
                   key: e.id ?? `${e.code}-${i}`,
                   rank: i + 1,

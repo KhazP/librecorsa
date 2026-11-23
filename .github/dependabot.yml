@@ -22,6 +22,15 @@ updates:
         dependency-type: production
         update-types: ["minor", "patch"]
         patterns: ["*"]
+  # docs.librecorsa.org (docs-site/), one grouped PR a week
+  - package-ecosystem: npm
+    directory: /docs-site
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      docs-site:
+        patterns: ["*"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

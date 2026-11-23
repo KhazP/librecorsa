@@ -49,6 +49,8 @@ export interface ReplayBarProps {
   onFlashback?: () => void;
   /** Label of the key that leaves the replay */
   exitKeyLabel?: string;
+  /** Label of the key that toggles Free camera (e.g. "F7") */
+  freeCameraKeyLabel?: string;
 }
 
 /**
@@ -77,6 +79,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
   onExit,
   onFlashback,
   exitKeyLabel = "T",
+  freeCameraKeyLabel = "F7",
 }) => {
   const shown = Math.min(endS, Math.max(startS, timeS));
   const durationS = Math.max(0, endS - startS);
@@ -373,6 +376,12 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
               <span className="inline-flex items-center gap-2">
                 <KeyCap>Tab</KeyCap>
                 Switch car
+              </span>
+            ) : null}
+            {freeCameraKeyLabel && freeCameraKeyLabel !== "—" ? (
+              <span className="inline-flex items-center gap-2">
+                <KeyCap>{freeCameraKeyLabel}</KeyCap>
+                Free cam
               </span>
             ) : null}
             {onFlashback ? (

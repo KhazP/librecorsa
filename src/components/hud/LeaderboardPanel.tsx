@@ -7,6 +7,7 @@ import { boardLabel } from "@/lib/net/leaderboard";
 import { Button, Card, IconButton, EmptyState, Segmented, Select, SettingRow, Toast } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { OnlineBoard, type BoardCarTag } from "@/components/board/OnlineBoard";
+import { LapConditionBadges } from "@/components/board/LapConditionBadges";
 import { BoardTable, type BoardRow } from "@/components/board/board-table";
 import { formatDelta, formatLapTime } from "./hud-format";
 
@@ -62,6 +63,8 @@ export interface LeaderboardPanelProps {
   onExportDriverKey?: () => void;
   onImportDriverKey?: (file: File) => void;
   driverKeyNotice?: string | null;
+  /** External jump request (e.g. clicking a Fastest Lap record in Hall of Fame) */
+  jumpTarget?: { trackId: string; vehicle: VehicleModelId; seq: number } | null;
 }
 
 const ALL_CARS = "all";
@@ -107,6 +110,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   onExportDriverKey,
   onImportDriverKey,
   driverKeyNotice = null,
+  jumpTarget = null,
 }) => {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const keyFileRef = useRef<HTMLInputElement | null>(null);
@@ -152,8 +156,16 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   }, [loadAllLocal, local]);
 
   const here = trackId ?? local[0]?.trackId ?? "";
-  const [circuit, setCircuit] = useState(here);
+  const [circuit, setCircuit] = useState(jumpTarget?.trackId ?? here);
   const [car, setCar] = useState<string>(ALL_CARS);
+  const [scopeOverride, setScopeOverride] = useState<{ scope: "mine" | "all"; seq: number } | null>(() =>
+    jumpTarget ? { scope: jumpTarget.vehicle === vehicle ? "mine" : "all", seq: jumpTarget.seq } : null,
+  );
+  useEffect(() => {
+    if (!jumpTarget) return;
+    setCircuit(jumpTarget.trackId);
+    setScopeOverride({ scope: jumpTarget.vehicle === vehicle ? "mine" : "all", seq: jumpTarget.seq });
+  }, [jumpTarget, vehicle]);
   /**
    * The board the online board and the best laps show (lap-types.ts `BoardChoice`): a physics version, or a circuit's
    * board from before it started again. Picked by id, and found again on each circuit
@@ -266,8 +278,11 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       key: `${e.trackId}-${e.vehicle}-${e.recordedAt}-${i}`,
       rank: i + 1,
       title: vehicleLabel(e.vehicle),
-      detail: `${new Date(e.recordedAt).toLocaleDateString()}${board ? ` · ${board}` : ""}`,
-      detailTitle: new Date(e.recordedAt).toLocaleString(),
+      meta: e.conditions ? (
+        <LapConditionBadges assists={e.conditions.assists} realism={e.conditions.realism} surface={e.conditions.surface} />
+      ) : undefined,
+      detail: new Date(e.recordedAt).toLocaleDateString(),
+      detailTitle: `${board ? `${board} · ` : ""}${new Date(e.recordedAt).toLocaleString()}`,
       lapMs: e.lapTimeMs,
       fastest: i === 0 && rows.length > 1,
       sectorsMs: e.sectorTimesMs,
@@ -389,6 +404,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
           footer={driverKey}
           boardChoice={choice.id}
           onBoardChoiceChange={setBoardPick}
+          scopeOverride={scopeOverride}
         />
       ) : localCircuits.length > 1 ? (
         <SettingRow label="Circuit">

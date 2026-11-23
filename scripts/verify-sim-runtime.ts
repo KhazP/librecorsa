@@ -15,6 +15,7 @@ import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createGroundHit } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { simMode } from '../src/lib/sim/runtime/sim-mode';
+import { FIELD_POSE_STRIDE, FieldPeers } from '../src/lib/sim/runtime/field-frame';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { SIM_TICK_S } from '../src/lib/sim/runtime/sim-protocol';
 import { TrackLimitsMonitor } from '../src/lib/sim/track-limits';
@@ -395,6 +396,42 @@ console.log("\n== The driver's clutch pedal through the messages");
   frame(r, { throttle: 0, shiftUp: true });
   for (let f = 0; f < 10; f++) frame(r, { throttle: 0 });
   check('a paddle out of neutral on the move: a gear for the speed', r.car.telemetry.gear >= 1, `gear ${r.car.telemetry.gear}, ${r.car.telemetry.speedKmh.toFixed(0)} km/h`);
+}
+
+console.log("\n== The cars drawn at the frame's time, when the frame's code runs late (#160)");
+{
+  // The game hands the host its frames' timestamps. A frame whose code starts late finds a state the simulation made
+  // after the time the frame is drawn for: the car is carried back to that time, not left where the state had it
+  setLc26OnRigidBody(false);
+  const loop = loopbackTransport();
+  let frameMs = 0;
+  const host = createSimHost(loop.transport, () => frameMs);
+  const car = host.adopt(vehicleModelSpec('lc26').createSim(track, null), 'lc26');
+  setUp(car);
+  host.endFrame(true);
+  for (let f = 0; f < 240; f++) {
+    frameMs = loop.wallNowMs();
+    car.step(FRAME_S, controls(f));
+    loop.advance(FRAME_S);
+    host.endFrame(true);
+  }
+  const v = loop.runtime.simulatedCar!.worldVelocity!.clone();
+  const drawnAt = (behindMs: number) => {
+    frameMs = loop.wallNowMs() - behindMs;
+    car.step(FRAME_S, controls(240));
+    return car.worldPosition.clone();
+  };
+  const onTime = drawnAt(0);
+  const worst = Math.max(...[2, 6, 12].map((ms) => onTime.clone().addScaledVector(v, -ms / 1000).distanceTo(drawnAt(ms))));
+  check('the player\'s car: a frame drawn for a time before the newest state shows the car that much further back', worst < 1e-9, `${(v.length() * 3.6).toFixed(0)} km/h, off by ${worst.toExponential(1)} m`);
+
+  // The AI cars of a worker race, from their packed poses
+  const peers = new FieldPeers([{ peerId: 'ai-1', driverCode: 'AAA', teamColorHex: '#ffffff', vehicle: 'lc26' }], null);
+  const packed = new Float64Array(FIELD_POSE_STRIDE);
+  packed.set([100, 0, 200, 0, 0, 0, 1, 0, 0, 70], 0);
+  peers.apply(packed);
+  const shownZ = (leadS: number) => peers.shownAt(leadS)[0].position.z;
+  check('the AI cars: carried back as well as forward to the frame\'s time', Math.abs(shownZ(0.004) - 200.28) < 1e-9 && Math.abs(shownZ(-0.006) - 199.58) < 1e-9, `${shownZ(0.004).toFixed(2)} m, ${shownZ(-0.006).toFixed(2)} m`);
 }
 
 if (failures.length) {

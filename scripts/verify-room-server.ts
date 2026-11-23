@@ -560,24 +560,50 @@ async function main() {
         startWithShort.qualifying[1].ms === 85_000,
     );
 
-    // Same-token guest reconnect replaces its stale socket without triggering peer_id_taken
+    // Same-token guest reconnect replaces its stale socket without triggering peer_id_taken, cleans up room state, and notifies host
     const gState = fakeState();
     const gRoom = new RoomServer(gState, env, async () => ICE, () => clockMs);
     const gh = new FakeSocket();
     const gOld = new FakeSocket();
     const gNew = new FakeSocket();
+    const gThird = new FakeSocket();
     const GUEST_TOK = 'guesttok0123456789abcdef';
     await gRoom.connect('host', TOKEN_A, gh, 'private');
     await gRoom.connect('guest', GUEST_TOK, gOld);
+    const gOldId = gOld.last()?.id as string;
     await gRoom.webSocketMessage(gOld, JSON.stringify({ t: 'join', peerId: 'peer_guest1' }));
-    // Reconnect before gOld closes
+    // Reconnect before gOld closes: host gets `left` for gOld, and gNew can rejoin with the same peerId cleanly
     await gRoom.connect('guest', GUEST_TOK, gNew);
+    const gNewId = gNew.last()?.id as string;
+    const afterReconnectBeforeJoin = await gRoom.getRoomState();
+    const leftAfterFirstReplace = gh.sent.some((m) => m.t === 'left' && m.id === gOldId);
     await gRoom.webSocketMessage(gNew, JSON.stringify({ t: 'join', peerId: 'peer_guest1' }));
+    const afterRejoinSamePeer = await gRoom.getRoomState();
+    // Reconnect again and bind a different peerId: old peer_guest1 is gone and host receives `left` for gNewId
+    await gRoom.connect('guest', GUEST_TOK, gThird);
+    await gRoom.webSocketMessage(gThird, JSON.stringify({ t: 'join', peerId: 'peer_guest2' }));
+    const afterRejoinDifferentPeer = await gRoom.getRoomState();
+    const leftAfterSecondReplace = gh.sent.some((m) => m.t === 'left' && m.id === gNewId);
     check(
-      'guest reconnecting with same token replaces stale socket without peer_id_taken',
+      'guest reconnecting with same token replaces stale socket, cleans participants, and notifies host',
       gOld.closed === 4001 &&
-        gNew.last()?.t === 'welcome' &&
+        gNew.closed === 4001 &&
+        leftAfterFirstReplace &&
+        leftAfterSecondReplace &&
+        !afterReconnectBeforeJoin.participants.includes('peer_guest1') &&
+        !afterReconnectBeforeJoin.participants.includes(gOldId) &&
+        afterReconnectBeforeJoin.participants.includes(gNewId) &&
+        afterRejoinSamePeer.participants.filter((p) => p === 'peer_guest1').length === 1 &&
+        !afterRejoinDifferentPeer.participants.includes('peer_guest1') &&
+        afterRejoinDifferentPeer.participants.includes('peer_guest2') &&
         !gNew.sent.some((m) => m.t === 'error' && m.code === 'peer_id_taken'),
+      JSON.stringify({
+        beforeJoin: afterReconnectBeforeJoin.participants,
+        samePeer: afterRejoinSamePeer.participants,
+        diffPeer: afterRejoinDifferentPeer.participants,
+        leftFirst: leftAfterFirstReplace,
+        leftSecond: leftAfterSecondReplace,
+      }),
     );
 
     // buildRaceGrid reverse order reverses timed cars and keeps untimed cars at the back

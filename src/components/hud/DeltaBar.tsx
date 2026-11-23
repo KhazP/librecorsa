@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { Trend as TrendArrow } from "@/components/ui/icons/Trend";
-import { HUD_GAIN, HUD_LOSS, HUD_SLATE, NO_TIME, formatDelta } from "./hud-format";
+import { HUD_GAIN, HUD_LOSS, HUD_SLATE, NO_TIME, formatDelta, formatDeltaFit } from "./hud-format";
 
 /** Trend window: the slope is taken across about this much history */
 const TREND_WINDOW_MS = 500;
@@ -124,7 +124,7 @@ export const DeltaBar: React.FC<{ deltaS: number | null; width?: number; /** The
           className="lc-data rounded-full border border-white/7 bg-lc-void px-2.5 py-1.25 text-[12px] leading-none"
           style={{ color: textColor }}
         >
-          {has ? formatDelta(d) : NO_TIME}
+          {has ? formatDeltaFit(d) : NO_TIME}
         </span>
         <Chevron trend={trend} rate={rate} side="right" />
       </span>

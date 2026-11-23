@@ -737,7 +737,6 @@
       "note": "Circuit by Maxim555, scenery by Zhenix (Quaresma) from his F1 25 version. Both used with permission."
     },
     "quality": "sim",
-    "defaultTimeOfDay": "night",
-    "unlisted": true
+    "defaultTimeOfDay": "night"
   }
 ]

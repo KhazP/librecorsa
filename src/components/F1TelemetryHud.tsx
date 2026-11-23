@@ -1,5 +1,6 @@
 "use client";
 
+import { connectedPads, isLikelyWheel } from "@/lib/input/device-input";
 import type { NowPlaying } from "@/lib/audio/bgm-controller";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type {
@@ -73,6 +74,7 @@ import { RaceVisionHud } from "./hud/styles/RaceVisionHud";
 import { HeadToHeadHud } from "./hud/styles/HeadToHeadHud";
 import { RetroHud } from "./hud/styles/RetroHud";
 import { BlocksHud } from "./hud/styles/BlocksHud";
+import { GrandPrixHud } from "./hud/styles/GrandPrixHud";
 import { HudRunProvider } from "./hud/styles/third-party-parts";
 import {
   HudSkinProvider,
@@ -127,6 +129,7 @@ const HUD_STYLES: Partial<Record<HudPreset, HudStyleDef>> = {
   h2h: { component: HeadToHeadHud, bottomClearance: 200, ownsBottomLeft: true, mfdFolded: true, ownDeltaBar: true, ownRadar: true },
   retro: { component: RetroHud, bottomClearance: 292, ownsBottomLeft: true, mfdFolded: true, topClearance: 120, ownDeltaBar: true, ownRadar: true, ownDamage: true },
   blocks: { component: BlocksHud, bottomClearance: 200, ownsBottomLeft: true, mfdFolded: true, topClearance: 124, ownDeltaBar: true, ownRadar: true },
+  "grand-prix": { component: GrandPrixHud, bottomClearance: 120, ownsBottomLeft: true, ownTrace: true, mfdFolded: true, ownDeltaBar: true, ownRadar: true },
 };
 /** Every preset gives way to the Phone HUD on a phone-sized screen, and the game's own wherever the touch controls are up (`showsPhoneHud`) */
 const PHONE_STYLE: HudStyleDef = { component: PhoneHud, bottomClearance: 16 };
@@ -348,6 +351,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     fallbackTelemetry
   );
   const telemetry = telemetrySource ? liveTelemetry : props.telemetry;
+  /**
+   * "Calibrate pedals" only while a wheel is what drives: the setting can say Wheel while the car is driven on a pad or
+   * the keyboard (the input in use is picked live), and before the car first moves only when a wheel is plugged in
+   */
+  const pedalsNotice =
+    Boolean(props.wheelUncalibrated) &&
+    !telemetry.race &&
+    (telemetry.drivingInput === "wheel" || (telemetry.drivingInput === undefined && connectedPads().some(isLikelyWheel)));
 
   const inviteRoom = props.inviteRoom ?? null;
   // An invite link opens the multiplayer panel on the first pause only
@@ -644,6 +655,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           weather={!lightsPhase ? (props.weather ?? null) : null}
           showDeltaBar={showDelta}
           showRadar={showRadar}
+          cameraMode={cameraMode}
         />
       ) : (
         /* Classic / Minimal top-left: timing tower (race) and lap timing */
@@ -750,7 +762,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             </div>
           )
         ) : null}
-        {props.wheelUncalibrated && !race ? (
+        {pedalsNotice ? (
           <span className="pointer-events-auto">
             {isThirdParty ? (
               <SkinButton
@@ -1023,7 +1035,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           <span className="lc-disp text-[18px]">Replay</span>
         </div>
         <div className="pointer-events-auto">
-          <ReplayBar {...props.replay} />
+          <ReplayBar {...props.replay} freeCameraKeyLabel={props.keyNames?.freeCamera} />
         </div>
       </div>
     ) : null}

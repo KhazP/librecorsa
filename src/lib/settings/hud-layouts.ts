@@ -1,5 +1,5 @@
 /**
- * Every in-race HUD layout the player can pick: the game's own, and the third-party ones recreated from other
+ * Every in-race HUD layout the player can pick: the game's own and the third-party ones recreated from other
  * open-source HUD projects (THIRD_PARTY_NOTICES.md). The one list the settings parser, the pickers, the title menu,
  * the About page's credits and the verify suite read, so a layout has one id, one name and one credit everywhere.
  *
@@ -14,6 +14,8 @@ export interface HudLayoutCredit {
   repoUrl: string;
   /** SPDX id of the project's licence */
   license: "MIT" | "GPL-3.0";
+  /** The author's own site, shown after their name as "<author> · <name>" */
+  site?: { name: string; url: string };
 }
 
 /** Where each licence a credited layout comes under can be read */
@@ -28,7 +30,7 @@ export interface HudLayoutInfo<Id extends string = string> {
   label: string;
   /** One line under the name */
   detail: string;
-  /** A third-party layout's source; absent on the game's own */
+  /** A third-party layout's source; absent on the game's own layouts */
   credit?: HudLayoutCredit;
 }
 
@@ -73,11 +75,22 @@ export const THIRD_PARTY_HUD_LAYOUTS = [
     detail: "Square dark blocks: timing, sectors, tyres, fuel",
     credit: { author: "C1XTZ", repoUrl: "https://github.com/C1XTZ/ac-rennsporthud", license: "GPL-3.0" },
   },
+  {
+    id: "grand-prix",
+    label: "Grand Prix",
+    detail: "Race tower, round speed cluster, gear and inputs",
+    credit: {
+      author: "adamikoo",
+      repoUrl: "https://github.com/adamikoo",
+      license: "MIT",
+      site: { name: "AvgSpots", url: "https://avgspots.com" },
+    },
+  },
 ] as const satisfies readonly HudLayoutInfo[];
 
 export type HudPreset = (typeof BUILT_IN_HUD_LAYOUTS)[number]["id"] | (typeof THIRD_PARTY_HUD_LAYOUTS)[number]["id"];
 
-/** Every layout, built-in first */
+/** Every layout: the game's own first, then the credited third-party ones */
 export const HUD_LAYOUTS: readonly HudLayoutInfo<HudPreset>[] = [...BUILT_IN_HUD_LAYOUTS, ...THIRD_PARTY_HUD_LAYOUTS];
 
 export const HUD_PRESETS: readonly HudPreset[] = HUD_LAYOUTS.map((l) => l.id);

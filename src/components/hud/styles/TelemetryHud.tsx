@@ -3,7 +3,7 @@
 import React from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import { useUnits } from "@/lib/settings/ui-prefs";
-import { aidsActive, formatLapTime, formatSectorTime, formatSpeed, HUD_BEST, HUD_GAIN, HUD_INFO, LAP_MARK_COLOR, lapMark, NO_TIME, speedUnit } from "../hud-format";
+import { aidsActive, formatLapTime, formatSectorTime, formatSpeed, HUD_BEST, HUD_GAIN, HUD_INFO, LAP_MARK_COLOR, lapMark, NO_TIME, sectorDone, speedUnit } from "../hud-format";
 import { aeroReadout } from "../aero-label";
 import { TyreBrakeGrid } from "../TyreBrakeWidget";
 import { InputTrace } from "../InputTrace";
@@ -30,7 +30,8 @@ const LapAnalysis: React.FC<{ t: CarTelemetry }> = ({ t }) => {
         <span className={`${LABEL} text-right`}>This lap</span>
         <span className={`${LABEL} text-right`}>Best</span>
         {[0, 1, 2].map((i) => {
-          const done = i + 1 < t.currentSector;
+          // Done only with a time of this lap (none on the out-lap, which starts in sector 3)
+          const done = sectorDone(t, i);
           const ms = t.sectorTimesMs[i];
           const mark = done ? lapMark(ms, bests[i], !t.race) : null;
           return (

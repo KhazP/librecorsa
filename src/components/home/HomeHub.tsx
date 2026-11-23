@@ -16,12 +16,13 @@ import { CURSOR_TILE, cx, MOTION } from "@/components/ui/styles";
 import { withBasePath } from "@/lib/base-path";
 import { useSavedInterfaceSettings, useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn, SPEED_LABEL, speedIn } from "@/lib/settings/units";
-import { SITE_DESCRIPTION } from "@/lib/site";
+import { AUTHOR_LINKS, DOCS_URL, SITE_DESCRIPTION } from "@/lib/site";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { FeaturedBadges } from "./FeaturedBadges";
 import { SupportButton } from "@/components/SupportButton";
-import { day, GAME_FACTS, GRADE_BADGES, GRADE_NOTES, type HomeCar, type HomeData, type HomeLayout, type HomeVenue, type WhatsNewDay } from "./home-data";
-import { CarThumb, GradeBadge, OutlineThumb } from "./home-ui";
+import { day, GAME_FACTS, type HomeCar, type HomeData, type HomeLayout, type HomeQualityTexts, type HomeVenue, type WhatsNewDay } from "./home-data";
+import { CarQualityTag, carQualityText, CarThumb, CircuitQualityTag, OutlineThumb } from "./home-ui";
+import { groupCoverage } from "@/lib/home/coverage";
 import { preloadVenueHero, VenueHero } from "./VenueHero";
 import { LapMap } from "./LapMap";
 import { HomeDownloads } from "./HomeDownloads";
@@ -36,8 +37,9 @@ import { TEXT_LINK } from "./SitePage";
 /*
  * The home page, laid out like a console racer's home hub. Sections across the top (Q / E, or a controller's
  * bumpers), big picture tiles underneath: Drive takes most of the screen, the circuit's lap runs in its own tile, the
- * car and the press sit beside it. Circuits and Cars are walls of picture tiles to pick from, each marked sim grade or
- * 3D model; Drive stays in the corner of every section and opens the game (/play) on the picks.
+ * car and the press sit beside it. Circuits and Cars are walls of picture tiles to pick from, each with the game's own
+ * badge (Original, Sim grade or Scan; Own or Shared physics); Drive stays in the corner of every section and opens the
+ * game (/play) on the picks.
  *
  * A controller or the keyboard drives it like the game's own menus (useFocusNav): the D-pad, stick or arrows move a
  * volt cursor between tiles and cards, A / Enter picks, B / Esc goes back to Home, LB / RB or Q / E switch sections
@@ -97,6 +99,13 @@ const MORE = "inline-flex items-center gap-1 text-[13px] font-semibold text-lc-f
 /** The titles of the smaller Home tiles */
 const TILE_TITLE = "lc-disp text-[22px] leading-[1.05]";
 /**
+ * A tile that holds more than one link (Press & media): the cursor's edge and halo, and the lit way on, follow its
+ * stretched main link (`data-card-link`) instead of the tile itself
+ */
+const LINK_CARD_CURSOR =
+  "has-[[data-card-link]:focus]:border-lc-volt has-[[data-card-link]:focus]:inset-ring has-[[data-card-link]:focus]:inset-ring-lc-volt has-[[data-card-link]:focus]:shadow-lc-focus";
+const LINK_CARD_MORE = "group-has-[[data-card-link]:focus]:text-lc-chalk";
+/**
  * The Circuits and Cars walls: tiles at least 280 px or 17 % of the screen wide, so they grow with a wide screen
  * (four across at 1280 to 1440 px, five at 1920 px and up) instead of turning into more, smaller tiles; one across on
  * a phone
@@ -114,14 +123,14 @@ const VENUE_FILTERS: readonly { key: VenueFilterKey; all: string; label: string;
 ];
 const NO_VENUE_FILTERS: Record<VenueFilterKey, string> = { type: "", country: "", modder: "" };
 
-/** The Cars filters: one pick each, narrowing the wall together */
-type CarFilterKey = "class" | "grade" | "modder";
-const CAR_FILTERS: readonly { key: CarFilterKey; all: string; label: string; of: (c: HomeCar) => string }[] = [
+/** The Cars filters: one pick each, narrowing the wall together. Physics is the game's car browser filter, in its words */
+type CarFilterKey = "class" | "physics" | "modder";
+const CAR_FILTERS: readonly { key: CarFilterKey; all: string; label: string; of: (c: HomeCar, text: HomeQualityTexts) => string }[] = [
   { key: "class", all: "All classes", label: "Class", of: (c) => c.classTitle },
-  { key: "grade", all: "All grades", label: "Grade", of: (c) => GRADE_BADGES[c.grade].label },
+  { key: "physics", all: "Any physics", label: "Physics", of: (c, text) => carQualityText(c, text).filterLabel },
   { key: "modder", all: "All modders", label: "Modder", of: (c) => c.source.author },
 ];
-const NO_CAR_FILTERS: Record<CarFilterKey, string> = { class: "", grade: "", modder: "" };
+const NO_CAR_FILTERS: Record<CarFilterKey, string> = { class: "", physics: "", modder: "" };
 
 export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   // The Q / E caps name physical keys as printed on this keyboard
@@ -151,6 +160,8 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
         .sort((a, b) => a.label.localeCompare(b.label)),
     [data.venues],
   );
+  /** The Press & media card's three rows, one per piece (its platforms folded into one row) */
+  const pressRows = useMemo(() => groupCoverage(data.coverage).slice(0, 3), [data.coverage]);
 
   /** What's new holds notes this visitor has not opened yet */
   const [unseenUpdates, setUnseenUpdates] = useState(false);
@@ -203,7 +214,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   const venuesFiltered = VENUE_FILTERS.some((f) => venueFilters[f.key]);
   /** The cars the filters leave, `except` one of them (for that filter's own options and their counts) */
   const carsWith = (except?: CarFilterKey) =>
-    data.cars.filter((c) => CAR_FILTERS.every((f) => f.key === except || !carFilters[f.key] || f.of(c) === carFilters[f.key]));
+    data.cars.filter((c) => CAR_FILTERS.every((f) => f.key === except || !carFilters[f.key] || f.of(c, data.qualityText) === carFilters[f.key]));
   const shownCars = carsWith();
   const carsFiltered = CAR_FILTERS.some((f) => carFilters[f.key]);
 
@@ -354,7 +365,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
               size="sm"
               prevPrompt={pad ? <PadGlyph button="lb" family={family} /> : <KeyCap>{keyLabel("KeyQ")}</KeyCap>}
               nextPrompt={pad ? <PadGlyph button="rb" family={family} /> : <KeyCap>{keyLabel("KeyE")}</KeyCap>}
-              className="max-lg:order-last max-lg:w-full max-md:[mask-image:linear-gradient(to_right,#000_calc(100%-2rem),transparent)]"
+              className="max-lg:order-last max-lg:w-full"
             />
           </div>
           {/* Beside the logo on a phone too: the tabs take the row under them */}
@@ -419,29 +430,37 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     {/* The badge shares the distance's line, so a two-line name still leaves room on a short screen */}
                     <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                       <span className="lc-mono text-[13px] text-lc-slate">{lengthOf(layout)}</span>
-                      <GradeBadge grade={layout.grade} size="sm" title={GRADE_NOTES.circuits[layout.grade]} />
+                      <CircuitQualityTag layout={layout} text={data.qualityText} size="sm" />
                     </span>
-                    {layout.outline?.kmh.length ? (
-                      <span className="mt-1 flex items-baseline gap-1.5">
-                        <span ref={speedRef} className="lc-data inline-block min-w-[3ch] text-right text-[34px] leading-none">
-                          {Math.round(speedIn(layout.outline.kmh[0], units.speed))}
-                        </span>
-                        <span className="text-[12px] font-semibold text-lc-slate">{SPEED_LABEL[units.speed]}</span>
-                      </span>
-                    ) : null}
                     <span className={`${MORE} mt-auto pt-3`}>
                       Change circuit
                       <Icon name="next" />
                     </span>
                   </span>
                   {layout.outline ? (
-                    <LapMap
-                      key={layout.id}
-                      outline={layout.outline}
-                      speedRef={speedRef}
-                      label={`Map of ${venue.name}, ${layout.layout}`}
-                      className="absolute inset-y-3 right-3 h-[calc(100%-1.5rem)] w-[50%]"
-                    />
+                    // The map hugs its drawing (its viewBox's shape), so the speed sits right under the lap it follows
+                    <span className="absolute inset-y-3 right-3 flex w-[50%] flex-col items-center justify-center gap-2">
+                      <LapMap
+                        key={layout.id}
+                        outline={layout.outline}
+                        speedRef={speedRef}
+                        label={`Map of ${venue.name}, ${layout.layout}`}
+                        className="block h-auto min-h-0 w-full shrink"
+                      />
+                      {/* The racing line's speed where the dot is (the dot laps at 4x, so not its speed on screen);
+                          parked on the start line under reduced motion. Only the number changes: LapMap writes it */}
+                      {layout.outline.kmh.length ? (
+                        <span className="flex shrink-0 flex-wrap items-baseline justify-center gap-x-1.5 text-center text-[12px] font-medium text-lc-slate">
+                          <span className="flex items-baseline gap-1">
+                            <span ref={speedRef} className="lc-data inline-block min-w-[3ch] text-right text-[20px] leading-none text-lc-chalk">
+                              {Math.round(speedIn(layout.outline.kmh[0], units.speed))}
+                            </span>
+                            {SPEED_LABEL[units.speed]}
+                          </span>
+                          <span>on the racing line</span>
+                        </span>
+                      ) : null}
+                    </span>
                   ) : null}
                 </button>
 
@@ -460,7 +479,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     <span className="lc-body text-lc-slate">
                       {car.classTitle}, {car.year}
                     </span>
-                    <GradeBadge grade={car.grade} size="sm" title={GRADE_NOTES.cars[car.grade]} className="mt-0.5" />
+                    <CarQualityTag car={car} text={data.qualityText} size="sm" className="mt-0.5" />
                     <span className={`${MORE} pt-2`}>
                       Change car
                       <Icon name="next" />
@@ -468,29 +487,53 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                   </span>
                 </button>
 
-                <a
-                  href={withBasePath("/press")}
-                  onPointerEnter={focusOnHover}
-                  aria-label={`Press & media: ${data.coverageCount} articles and videos, and the press kit`}
-                  className={`${TILE} flex min-h-[230px] flex-col gap-3 p-5 lg:col-span-2`}
-                >
-                  <span className="flex flex-col gap-1">
+                {/* The whole card opens /press: a link stretched under the words is the cursor's one stop, and the card
+                    wears its cursor. A piece posted on several platforms is one row with a link to each, which Tab
+                    reaches and the arrows and the pad pass over (as a tile's source chip) */}
+                <div className={cx(TILE, LINK_CARD_CURSOR, "flex min-h-[230px] flex-col gap-3 p-5 lg:col-span-2")}>
+                  <a
+                    href={withBasePath("/press")}
+                    onPointerEnter={focusOnHover}
+                    data-card-link=""
+                    aria-label={`Press & media: ${data.coverageCount} articles and videos, and the press kit`}
+                    className="absolute inset-0 rounded-[inherit] outline-none focus:shadow-none"
+                  />
+                  <span aria-hidden className="pointer-events-none flex flex-col gap-1">
                     <span className={TILE_TITLE}>Press & media</span>
                     <span className="lc-hint text-[13px]">{data.coverageCount} articles &amp; videos</span>
                   </span>
-                  <span aria-hidden className="flex min-h-0 flex-1 flex-col overflow-hidden [mask-image:linear-gradient(to_bottom,#000_calc(100%-1rem),transparent)]">
-                    {data.coverage.slice(0, 3).map((a) => (
-                      <span key={a.url} className="flex min-w-0 flex-col gap-0.5 border-t border-lc-line py-2.5">
-                        <span className="truncate text-[13px] font-semibold text-lc-chalk">{a.outlet}</span>
-                        <span className="lc-hint line-clamp-2">{a.title}</span>
+                  <span className="pointer-events-none flex min-h-0 flex-1 flex-col overflow-hidden [mask-image:linear-gradient(to_bottom,#000_calc(100%-1rem),transparent)]">
+                    {pressRows.map((row) => (
+                      <span key={row.key} className="flex min-w-0 flex-col gap-0.5 border-t border-lc-line py-2.5">
+                        <span className="truncate text-[13px] font-semibold text-lc-chalk">{row.outlet}</span>
+                        <span className="lc-hint line-clamp-2">{row.title}</span>
+                        {row.platforms.length ? (
+                          <span data-nav-skip="" className="flex flex-wrap gap-x-3 pt-0.5">
+                            {row.platforms.map((p) => (
+                              <a
+                                key={p.url}
+                                href={p.url}
+                                target="_blank"
+                                rel="noopener"
+                                aria-label={`${row.outlet} on ${p.name}`}
+                                className={cx(
+                                  "pointer-events-auto inline-flex items-center rounded-lc-nub text-[12px] focus-visible:outline-offset-[-2px] pointer-coarse:min-h-11 pointer-coarse:min-w-11",
+                                  TEXT_LINK,
+                                )}
+                              >
+                                {p.name}
+                              </a>
+                            ))}
+                          </span>
+                        ) : null}
                       </span>
                     ))}
                   </span>
-                  <span aria-hidden className={`${MORE} mt-auto shrink-0`}>
+                  <span aria-hidden className={cx(MORE, LINK_CARD_MORE, "pointer-events-none mt-auto shrink-0")}>
                     Coverage and press kit
                     <Icon name="next" />
                   </span>
-                </a>
+                </div>
               </div>
             ) : null}
 
@@ -635,7 +678,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                               className={cx("p-4 pt-10", multi ? "pb-10" : undefined, on ? "text-lc-chalk" : "text-lc-slate")}
                             />
                           }
-                          overlay={<GradeBadge grade={shown.grade} size="sm" title={GRADE_NOTES.circuits[shown.grade]} />}
+                          overlay={<CircuitQualityTag layout={shown} text={data.qualityText} size="sm" />}
                           title={v.name}
                           meta={
                             <>
@@ -710,12 +753,12 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                 <div role="group" aria-label="Filter cars" className="flex flex-wrap items-center gap-2">
                   {CAR_FILTERS.map((f) => {
                     const pool = carsWith(f.key);
-                    const all = [...new Set(data.cars.map((c) => f.of(c)).filter(Boolean))];
+                    const all = [...new Set(data.cars.map((c) => f.of(c, data.qualityText)).filter(Boolean))];
                     if (f.key === "modder") all.sort((a, b) => a.localeCompare(b));
                     // A filter with one option narrows nothing
                     if (all.length < 2) return null;
                     const picked = carFilters[f.key];
-                    const countOf = (o: string) => pool.filter((c) => f.of(c) === o).length;
+                    const countOf = (o: string) => pool.filter((c) => f.of(c, data.qualityText) === o).length;
                     const options = all.filter((o) => o === picked || countOf(o) > 0);
                     return (
                       <Select
@@ -791,7 +834,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                               className={cx("object-contain p-2.5 pt-8", multi ? "pb-9" : undefined)}
                             />
                           }
-                          overlay={<GradeBadge grade={c.grade} size="sm" title={GRADE_NOTES.cars[c.grade]} />}
+                          overlay={<CarQualityTag car={c} text={data.qualityText} size="sm" />}
                           title={c.title}
                           meta={`${c.classTitle}, ${c.year}`}
                           action={<SourceChip source={c.source} />}
@@ -908,10 +951,12 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     {[
                       ["Download apps", withBasePath("/download")],
                       ["All coverage and the press kit", withBasePath("/press")],
+                      ["Docs", DOCS_URL],
                       ["Privacy", withBasePath("/privacy")],
                       ["GitHub", data.repoUrl],
                       // Not in the Android app (store-mode.ts)
                       ...(storeBuild ? [] : [["Buy me a coffee", data.supportUrl]]),
+                      ...AUTHOR_LINKS.map(({ label, href }) => [label, href]),
                     ].map(([label, href]) => (
                       <a key={label} href={href} onPointerEnter={focusOnHover} className={`inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
                         {label}

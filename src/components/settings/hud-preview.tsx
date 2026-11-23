@@ -7,6 +7,7 @@ import { draw as racevisionDraw } from "./hud-previews/racevision";
 import { draw as h2hDraw } from "./hud-previews/h2h";
 import { draw as retroDraw } from "./hud-previews/retro";
 import { draw as blocksDraw } from "./hud-previews/blocks";
+import { draw as grandPrixDraw } from "./hud-previews/grand-prix";
 
 /**
  * A HUD layout's picture for the pickers: the driving view in miniature (sky, ground, the road running to the horizon)
@@ -178,6 +179,11 @@ const BUILT_IN: Record<string, HudPreviewDraw> = {
   ),
 };
 
+/** The community layouts' drawings (hud-previews/*.tsx) */
+const COMMUNITY: Record<string, HudPreviewDraw> = {
+  "grand-prix": grandPrixDraw,
+};
+
 /** The third-party layouts' drawings (hud-previews/*.tsx) */
 const THIRD_PARTY: Record<string, HudPreviewDraw> = {
   irdashies: irdashiesDraw,
@@ -189,7 +195,7 @@ const THIRD_PARTY: Record<string, HudPreviewDraw> = {
 
 /** A layout's picture: the driving view with the layout's panels on it */
 export const HudPreview: React.FC<{ preset: HudPreset; className?: string }> = ({ preset, className = "" }) => {
-  const draw = BUILT_IN[preset] ?? THIRD_PARTY[preset] ?? BUILT_IN.broadcast;
+  const draw = BUILT_IN[preset] ?? COMMUNITY[preset] ?? THIRD_PARTY[preset] ?? BUILT_IN.broadcast;
   return (
     <svg viewBox="0 0 160 90" aria-hidden className={`block aspect-video h-auto w-full ${className}`} preserveAspectRatio="xMidYMid slice">
       {/* Sky, ground and the road to the horizon: dim, so the panels read */}

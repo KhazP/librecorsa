@@ -58,13 +58,16 @@ export interface SimRaceLink {
   placeTwin(place: (twin: SimulatorCar) => void): number;
   /** The simulation failed, or the car has been replaced: the race cannot go on there */
   readonly failed: boolean;
-  /** The clock the simulation stamps its states with */
+  /** The time the frame is drawn for, on the clock the simulation stamps its states with */
   wallNowMs(): number;
 }
 
 const pageWallNowMs = () => performance.timeOrigin + performance.now();
 
-/** `wallNowMs`: the clock the transport's simulation stamps its states with (the worker's and the page's agree) */
+/**
+ * `wallNowMs`: the time the frame is drawn for, on the clock the transport's simulation stamps its states with (the
+ * worker's and the page's agree). The game passes its frames' timestamps; the default reads the clock
+ */
 export function createSimHost(transport: SimTransport, wallNowMs: () => number = pageWallNowMs): SimHost {
   let carNumber = 0;
   let current: RemoteCar | null = null;

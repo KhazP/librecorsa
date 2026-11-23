@@ -17,8 +17,9 @@
  *
  * The badges (src/lib/net/awards.ts lists them for the game):
  *   weekly_gold/silver/bronze  the podiums above, finished weeks only, every week and version counted
- *   track_record               holds P1 on an open board laps go on now: a circuit in this build's list
- *                              (public/tracks/index.json), a car on its current revision there (either LC26 engine)
+ *   track_record               holds P1 on a contested open board (at least MIN_RECORD_DRIVERS unique drivers): a
+ *                              circuit in this build's list (public/tracks/index.json) and a car on its shipping
+ *                              physics revision there (excluding the hidden legacy LC26 classic engine)
  *   og                         has a lap on a Physics V1 board (any circuit, car or week): drove before Physics V2.
  *                              V1 boards are read only, so the rule never takes the badge from anyone who has it
  *   bulb                       given by hand, for an idea or a contribution, with a note
@@ -29,8 +30,9 @@
  * and there are no badges given by hand.
  */
 import trackIndex from "../../public/tracks/index.json";
-import { CIRCUIT_REVISION_STEP, isCurrentLapPhysics, PHYSICS_VERSIONS } from "../../src/lib/sim/lap-types";
-import { isVehicleModelId } from "../../src/types/f1";
+import { CIRCUIT_REVISION_STEP, PHYSICS_VERSIONS, shippingLapPhysicsVersion } from "../../src/lib/sim/lap-types";
+import { isVehicleModelId, type VehicleModelId } from "../../src/types/f1";
+import { VEHICLE_CLASS_IDS, vehicleClassOf, type VehicleClassId } from "../../src/lib/cars/vehicle-class";
 import { challengeAt } from "../../src/lib/net/weekly-challenge";
 import type {
   BadgeType,
@@ -38,8 +40,11 @@ import type {
   DriverBadge,
   HallOfFameAnswer,
   HallOfFameEvent,
+  HallOfFameRecordHolders,
   ManualBadgeType,
   PodiumPlace,
+  RecordBoard,
+  RecordHolder,
 } from "../../src/lib/net/awards";
 import { driverNameKey, EVENT_ID_RE } from "./board";
 import type { D1Database } from "./types";
@@ -51,17 +56,122 @@ const fail = (error: string, status = 400): Answer => ({ status, body: { ok: fal
 export const BADGE_TYPES: readonly BadgeType[] = ["weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"];
 export const MANUAL_BADGE_TYPES: readonly ManualBadgeType[] = ["bulb", "og", "track_record"];
 export const MAX_BADGE_NAMES = 64;
+/** Minimum distinct drivers on an open board before its P1 earns a Fastest Lap badge / Hall of Fame record */
+export const MIN_RECORD_DRIVERS = 5;
 export const MAX_NOTE_LENGTH = 140;
 const MAX_NAME_LENGTH = 64;
 const MEDALS = ["weekly_gold", "weekly_silver", "weekly_bronze"] as const;
 type Medal = (typeof MEDALS)[number];
 const MEDAL_OF_PLACE: Record<1 | 2 | 3, Medal> = { 1: "weekly_gold", 2: "weekly_silver", 3: "weekly_bronze" };
 const PLACE_OF_MEDAL: Record<Medal, 1 | 2 | 3> = { weekly_gold: 1, weekly_silver: 2, weekly_bronze: 3 };
-/** Drivers listed as the most decorated */
+/** Drivers listed as the most decorated and as top Fastest Lap record holders */
 const MOST_DECORATED = 10;
+const TOP_RECORD_HOLDERS = 10;
 
 /** The circuits of this build (the list the game reads), whose open boards hold a track record */
 const OFFICIAL_CIRCUITS: ReadonlySet<string> = new Set((trackIndex as { id: string }[]).map((t) => t.id));
+
+/** True when a board belongs to a live official circuit and the car's shipping physics revision */
+export function isOfficialRecordBoard(trackId: string, vehicle: string, physics: number): vehicle is VehicleModelId {
+  return OFFICIAL_CIRCUITS.has(trackId) && isVehicleModelId(vehicle) && physics === shippingLapPhysicsVersion(vehicle, trackId);
+}
+
+/** One contested open board's P1 row from SQL (deduplicated per driver before counting drivers) */
+export interface ContestedRecordRow {
+  track_id: string;
+  vehicle: string;
+  physics: number;
+  name_key: string;
+  driver_name: string;
+  lap_time_ms: number;
+  drivers: number;
+}
+
+const CONTESTED_RECORDS_CTE = `WITH best AS (
+  SELECT track_id, vehicle, physics, name_key, driver_name, lap_time_ms, created_at, id,
+    ROW_NUMBER() OVER (PARTITION BY track_id, vehicle, physics, name_key ORDER BY lap_time_ms, created_at, id) AS rn
+  FROM laps WHERE event = ''
+), ranked AS (
+  SELECT track_id, vehicle, physics, name_key, driver_name, lap_time_ms,
+    ROW_NUMBER() OVER (PARTITION BY track_id, vehicle, physics ORDER BY lap_time_ms, created_at, id) AS place,
+    COUNT(*) OVER (PARTITION BY track_id, vehicle, physics) AS drivers
+  FROM best WHERE rn = 1
+)`;
+
+const compareRecordBoards = (a: RecordBoard, b: RecordBoard): number =>
+  (b.drivers ?? 0) - (a.drivers ?? 0) ||
+  (a.trackId < b.trackId ? -1 : a.trackId > b.trackId ? 1 : 0) ||
+  (a.vehicle < b.vehicle ? -1 : a.vehicle > b.vehicle ? 1 : 0);
+
+/** Tallies live Fastest Lap record holders overall and per car class from contested open boards */
+export function tallyRecordHolders(
+  rows: readonly ContestedRecordRow[],
+  minDrivers = MIN_RECORD_DRIVERS,
+  limit = TOP_RECORD_HOLDERS,
+): HallOfFameRecordHolders {
+  interface Acc {
+    name: string;
+    nameKey: string;
+    boards: RecordBoard[];
+    byVehicle: Map<string, number>;
+    competitionScore: number;
+    bestDrivers: number;
+  }
+
+  const buildList = (subset: readonly ContestedRecordRow[]): RecordHolder[] => {
+    const map = new Map<string, Acc>();
+    for (const r of subset) {
+      let acc = map.get(r.name_key);
+      if (!acc) {
+        acc = { name: r.driver_name || r.name_key, nameKey: r.name_key, boards: [], byVehicle: new Map(), competitionScore: 0, bestDrivers: -1 };
+        map.set(r.name_key, acc);
+      }
+      if (r.drivers > acc.bestDrivers && r.driver_name) {
+        acc.name = r.driver_name;
+        acc.bestDrivers = r.drivers;
+      }
+      acc.boards.push({
+        trackId: r.track_id,
+        vehicle: r.vehicle,
+        lapTimeMs: r.lap_time_ms,
+        drivers: r.drivers,
+      });
+      acc.byVehicle.set(r.vehicle, (acc.byVehicle.get(r.vehicle) ?? 0) + 1);
+      acc.competitionScore += r.drivers;
+    }
+    return [...map.values()]
+      .sort(
+        (a, b) =>
+          b.boards.length - a.boards.length ||
+          b.competitionScore - a.competitionScore ||
+          (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+      )
+      .slice(0, limit)
+      .map((acc) => ({
+        name: acc.name,
+        nameKey: acc.nameKey,
+        count: acc.boards.length,
+        byVehicle: [...acc.byVehicle.entries()]
+          .map(([vehicle, count]) => ({ vehicle, count }))
+          .sort((a, b) => b.count - a.count || (a.vehicle < b.vehicle ? -1 : a.vehicle > b.vehicle ? 1 : 0)),
+        boards: acc.boards.sort(compareRecordBoards),
+      }));
+  };
+
+  const valid = rows.filter((r) => r.drivers >= minDrivers && isOfficialRecordBoard(r.track_id, r.vehicle, r.physics));
+  const byClass: Partial<Record<VehicleClassId, RecordHolder[]>> = {};
+  for (const classId of VEHICLE_CLASS_IDS) {
+    const inClass = valid.filter((r) => vehicleClassOf(r.vehicle) === classId);
+    if (inClass.length > 0) {
+      byClass[classId] = buildList(inClass);
+    }
+  }
+  return {
+    minDrivers,
+    overall: buildList(valid),
+    byClass,
+  };
+}
 
 /**
  * The named physics version of a lap revision: "v1", "v2" (the circuit's restarts and the LC26's rigid-body offset
@@ -280,8 +390,20 @@ export async function hallOfFameEvents(db: D1Database, nowMs: number): Promise<H
 }
 
 export async function hallOfFame(db: D1Database, nowMs: number): Promise<Answer> {
-  const events = await hallOfFameEvents(db, nowMs);
-  const body: HallOfFameAnswer = { ok: true, current: challengeAt(nowMs).id, events, mostDecorated: tallyMostDecorated(events) };
+  const [events, records] = await Promise.all([
+    hallOfFameEvents(db, nowMs),
+    db
+      .prepare(`${CONTESTED_RECORDS_CTE} SELECT track_id, vehicle, physics, name_key, driver_name, lap_time_ms, drivers FROM ranked WHERE place = 1 AND drivers >= ?`)
+      .bind(MIN_RECORD_DRIVERS)
+      .all<ContestedRecordRow>(),
+  ]);
+  const body: HallOfFameAnswer = {
+    ok: true,
+    current: challengeAt(nowMs).id,
+    events,
+    mostDecorated: tallyMostDecorated(events),
+    recordHolders: tallyRecordHolders(records.results),
+  };
   return { status: 200, body };
 }
 
@@ -312,10 +434,10 @@ export async function badgesOf(db: D1Database, keys: readonly string[], nowMs: n
     events ? Promise.resolve(events) : hallOfFameEvents(db, nowMs),
     db
       .prepare(
-        `SELECT track_id, vehicle, physics, name_key FROM (SELECT track_id, vehicle, physics, name_key, ROW_NUMBER() OVER (PARTITION BY track_id, vehicle, physics ORDER BY lap_time_ms, created_at, id) AS place FROM laps WHERE event = '') WHERE place = 1 AND name_key IN (${marks})`,
+        `${CONTESTED_RECORDS_CTE} SELECT track_id, vehicle, physics, name_key, driver_name, lap_time_ms, drivers FROM ranked WHERE place = 1 AND drivers >= ? AND name_key IN (${marks})`,
       )
-      .bind(...keys)
-      .all<{ track_id: string; vehicle: string; physics: number; name_key: string }>(),
+      .bind(MIN_RECORD_DRIVERS, ...keys)
+      .all<ContestedRecordRow>(),
     db
       .prepare(`SELECT DISTINCT name_key FROM laps WHERE name_key IN (${marks}) AND (physics % ${CIRCUIT_REVISION_STEP}) IN (${OG_REVISIONS.join(", ")})`)
       .bind(...keys)
@@ -346,10 +468,15 @@ export async function badgesOf(db: D1Database, keys: readonly string[], nowMs: n
     }
   }
   for (const r of records.results) {
-    if (!OFFICIAL_CIRCUITS.has(r.track_id) || !isVehicleModelId(r.vehicle) || !isCurrentLapPhysics(r.vehicle, r.physics, r.track_id)) continue;
+    if (!isOfficialRecordBoard(r.track_id, r.vehicle, r.physics)) continue;
     const b = add(r.name_key, "track_record");
     b.count++;
-    (b.boards ??= []).push({ trackId: r.track_id, vehicle: r.vehicle });
+    (b.boards ??= []).push({
+      trackId: r.track_id,
+      vehicle: r.vehicle,
+      lapTimeMs: r.lap_time_ms,
+      drivers: r.drivers,
+    });
   }
   for (const r of og.results) add(r.name_key, "og").count = 1;
   for (const r of manual ?? []) {
@@ -363,6 +490,9 @@ export async function badgesOf(db: D1Database, keys: readonly string[], nowMs: n
   const order = (t: BadgeType) => BADGE_TYPES.indexOf(t);
   const canonical: Record<string, DriverBadge[]> = Object.create(null);
   for (const k of [...Object.keys(out)].sort()) {
+    for (const b of out[k]) {
+      if (b.boards && b.boards.length > 1) b.boards.sort(compareRecordBoards);
+    }
     canonical[k] = out[k].sort((a, b) => order(a.type) - order(b.type));
   }
   return canonical;
@@ -457,12 +587,15 @@ export async function revokeAward(db: D1Database, id: number): Promise<number> {
 }
 
 /**
- * Deletes archived `auto` weekly podium rows for the given (event, physics) boards so the next Hall of Fame / badges
- * read recomputes and re-archives cleanly from valid laps. Leaves manual (`awarded_by != 'auto'`) awards untouched.
+ * Rebuilds archived `auto` weekly podiums in place for the given (event, physics) boards, preserving other drivers'
+ * archived medals (even if their laps were later purged) and filling freed spots from remaining laps. When
+ * `excludeRemovedFromLaps` is set, removed drivers are never re-added from `laps` even if rows remain in the table.
+ * Leaves manual (`awarded_by != 'auto'`) awards untouched.
  */
 export async function invalidateAutoWeeklyAwards(
   db: D1Database,
   targets: readonly { event: string; physics: number | string; nameKey?: string }[],
+  opts: { excludeRemovedFromLaps?: boolean } = {},
 ): Promise<number> {
   const buckets = new Map<string, { event: string; physics: string; removed: Set<string> | null }>();
   for (const t of targets) {
@@ -539,6 +672,9 @@ export async function invalidateAutoWeeklyAwards(
         id: "",
       }));
       const seen = new Set(kept.map((r) => r.name_key));
+      if (opts.excludeRemovedFromLaps && removed !== null) {
+        for (const key of removed) seen.add(key);
+      }
       for (const l of revLaps) {
         if (seen.has(l.name_key)) continue;
         seen.add(l.name_key);
@@ -554,13 +690,29 @@ export async function invalidateAutoWeeklyAwards(
           id: l.id,
         });
       }
-      candidates.sort(
-        (a, b) =>
-          (a.lapTimeMs ?? Infinity) - (b.lapTimeMs ?? Infinity) ||
-          a.placeOrder - b.placeOrder ||
-          a.createdAt - b.createdAt ||
-          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-      );
+      // If any kept archived medal has no stored lap time, preserve kept podium order ahead of lap-table backfill
+      const anyKeptMissingTime = kept.some((r) => r.lap_time_ms === null || !Number.isFinite(r.lap_time_ms));
+      if (anyKeptMissingTime) {
+        candidates.sort((a, b) => {
+          const aKept = a.placeOrder <= 3 ? 0 : 1;
+          const bKept = b.placeOrder <= 3 ? 0 : 1;
+          if (aKept !== bKept) return aKept - bKept;
+          if (aKept === 0) return a.placeOrder - b.placeOrder;
+          return (
+            (a.lapTimeMs ?? Infinity) - (b.lapTimeMs ?? Infinity) ||
+            a.createdAt - b.createdAt ||
+            (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+          );
+        });
+      } else {
+        candidates.sort(
+          (a, b) =>
+            (a.lapTimeMs ?? Infinity) - (b.lapTimeMs ?? Infinity) ||
+            a.placeOrder - b.placeOrder ||
+            a.createdAt - b.createdAt ||
+            (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+        );
+      }
       const next = candidates.slice(0, 3);
       await db.batch([
         db.prepare("DELETE FROM driver_awards WHERE awarded_by = 'auto' AND event_id = ? AND physics = ?").bind(event, physics),
@@ -608,6 +760,7 @@ export async function invalidateAutoWeeklyAwardsForDriver(db: D1Database, nameKe
   return invalidateAutoWeeklyAwards(
     db,
     rows.map((r) => ({ event: r.event_id, physics: r.physics, nameKey: key })),
+    { excludeRemovedFromLaps: true },
   );
 }
 

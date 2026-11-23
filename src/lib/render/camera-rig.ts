@@ -5,7 +5,7 @@ import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG, isChaseCameraMode } from "./cam
 import { FreeCameraController, type FreeCameraInput } from "./free-camera";
 import { clampFov } from "@/lib/settings/player-settings";
 import type { CameraMode, CarTelemetry, TrackSamplePoint } from "@/types/f1";
-import type { BuiltTrackData } from "@/lib/track-data";
+import { type BuiltTrackData, createTrackSampleBuffer, type TrackProjectionResult } from "@/lib/track-data";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import type { Lc26CameraAnchor } from "@/lib/lc26-car-model";
 import { type AerialPose, MenuAerial } from "./menu-aerial";
@@ -290,6 +290,8 @@ export class TracksideBroadcastDirector {
   };
   private readonly lookVel = new THREE.Vector3();
   private readonly lead = new THREE.Vector3();
+  /** The look-at target of the last update, which followDamped3 takes the target to have moved on from */
+  private readonly prevLead = new THREE.Vector3();
   /** Station on air; -1 until the next update primes the director (after construction, reset() or a jump) */
   private current = -1;
   /** occlusionSteps moved the dolly of the station on air: the next update cuts to it instead of gliding */
@@ -467,8 +469,10 @@ export class TracksideBroadcastDirector {
       out.lookAt.copy(this.lead);
       this.lookVel.set(0, 0, 0);
     } else {
-      smoothDamp3(out.lookAt, this.lead, this.lookVel, LOOK_SMOOTH_S, h);
+      // Over the whole frame time, however long: the step is exact, and the target moved over all of it
+      followDamped3(out.lookAt, this.lookVel, this.prevLead, this.lead, LOOK_SMOOTH_S, dt);
     }
+    this.prevLead.copy(this.lead);
 
     // Telephoto FOV: keep the car at roughly constant screen size, clamped; tighten on kerbs
     const dist = out.position.distanceTo(carPos);
@@ -526,26 +530,30 @@ function clampRange(x: number, lo: number, hi: number): number {
   return x < lo ? lo : x > hi ? hi : x;
 }
 
-/** Unity-style critically damped smoothing of a vector toward `target`, in place, no allocation */
-function smoothDamp3(cur: THREE.Vector3, target: THREE.Vector3, vel: THREE.Vector3, smoothTime: number, h: number): void {
+/**
+ * Critically damped smoothing (the spring of Unity's SmoothDamp, ω = 2 / smoothTime) of `cur` and its velocity `vel`
+ * after a target that went in a straight line from `prev` to `target` over the last `h` seconds: the exact step for
+ * that motion, in place, no allocation. Behind a target moving at speed v it settles v × smoothTime back at any frame
+ * time. SmoothDamp holds the target still over the step and settled about v × h / 2 closer, a framing that moved with
+ * every uneven frame.
+ */
+function followDamped3(cur: THREE.Vector3, vel: THREE.Vector3, prev: THREE.Vector3, target: THREE.Vector3, smoothTime: number, h: number): void {
+  if (!(h > 0)) return;
   const omega = 2 / smoothTime;
-  const x = omega * h;
-  const expo = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
-  // Per-axis, unrolled to keep it allocation-free
-  let change = cur.x - target.x;
-  let temp = (vel.x + omega * change) * h;
-  vel.x = (vel.x - omega * temp) * expo;
-  cur.x = target.x + (change + temp) * expo;
-
-  change = cur.y - target.y;
-  temp = (vel.y + omega * change) * h;
-  vel.y = (vel.y - omega * temp) * expo;
-  cur.y = target.y + (change + temp) * expo;
-
-  change = cur.z - target.z;
-  temp = (vel.z + omega * change) * h;
-  vel.z = (vel.z - omega * temp) * expo;
-  cur.z = target.z + (change + temp) * expo;
+  const decay = Math.exp(-omega * h);
+  const behind = 2 / omega;
+  // Per axis: w is the distance from where the spring settles behind the target moving at u, and it decays as
+  // (w0 + (w0' + ω w0) t) e^(−ωt)
+  for (let i = 0; i < 3; i++) {
+    const p = prev.getComponent(i);
+    const t = target.getComponent(i);
+    const u = (t - p) / h;
+    const w0 = cur.getComponent(i) - p + u * behind;
+    const b = vel.getComponent(i) - u + omega * w0;
+    const w = w0 + b * h;
+    cur.setComponent(i, t - u * behind + w * decay);
+    vel.setComponent(i, u + (b - omega * w) * decay);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -615,6 +623,31 @@ export interface CameraRigMenu {
   fogDensity?: number;
 }
 
+/**
+ * The helicopter's follow rates for its position and its aim (1/s). It trails a moving car by the car's speed over the
+ * rate, set so the framing is the one it always had at 60 Hz (where it lerped 6 and 12 per second of the way each frame)
+ */
+const HELI_POS_RATE = 6 / (1 - 6 / 60);
+const HELI_LOOK_RATE = 12 / (1 - 12 / 60);
+
+/**
+ * Moves `cur` after a target that went in a straight line from `prev` to `target` over the last `h` seconds, as a
+ * first-order lag with `rate` (1/s) does over that time: the exact step, so the lag behind a target moving at speed v
+ * is v / rate at any frame time. A lerp by rate × h each frame trails it by v × (1 / rate − h) instead, a distance that
+ * changes with every uneven frame and shook the car in the shot
+ */
+function followMovingTarget(cur: THREE.Vector3, prev: THREE.Vector3, target: THREE.Vector3, rate: number, h: number): void {
+  if (!(h > 0)) return;
+  const decay = Math.exp(-rate * h);
+  // The target's travel this frame, the part of it the lag still trails, and what was left of the gap from before
+  const trail = (1 - decay) / (rate * h);
+  cur.set(
+    target.x - (target.x - prev.x) * trail - (prev.x - cur.x) * decay,
+    target.y - (target.y - prev.y) * trail - (prev.y - cur.y) * decay,
+    target.z - (target.z - prev.z) * trail - (prev.z - cur.z) * decay
+  );
+}
+
 /** How long the camera takes to rise from the car's orbit into the aerial tour (s) */
 const AERIAL_RISE_S = 8;
 /** The fastest the camera tilts or pans while it climbs (rad/s) */
@@ -653,8 +686,13 @@ export class CameraRig {
   };
   /** Automatic trackside broadcast cameras on dolly splines (telephoto, zooming in over kerbs) */
   private readonly tvDirector: TracksideBroadcastDirector;
+  /** Where the car as drawn is on the lap, for the TV cameras' dollies */
+  private readonly drawnOnLap: TrackProjectionResult = { sample: createTrackSampleBuffer(), s: 0, lateralOffset: 0, distSq: 0 };
   private readonly smoothedHeliPos = new THREE.Vector3();
   private readonly smoothedHeliLook = new THREE.Vector3();
+  /** The spots the helicopter flew to and looked at last frame (followMovingTarget) */
+  private readonly heliPrevTarget = new THREE.Vector3();
+  private readonly heliPrevLook = new THREE.Vector3();
   /** Where the helicopter last saw the car, and whether it starts over on its next frame (first use, reset()) */
   private readonly heliLastCarPos = new THREE.Vector3();
   private heliSnap = true;
@@ -870,17 +908,19 @@ export class CameraRig {
       heliTarget.z += 14;
       // Updated only while this view is on, like the chase and TV cameras: a car further than one frame allows from where
       // it last saw it (another view was on, a replay scrub) puts the helicopter straight over it rather than flying across
+      const lookTarget = this.lookTarget.copy(renderCarPos).addScaledVector(carForward, 14);
       if (this.heliSnap || carJumped(this.heliLastCarPos, renderCarPos, f.carVelocity, dtSeconds)) {
         this.heliSnap = false;
         this.smoothedHeliPos.copy(heliTarget);
         this.smoothedHeliLook.copy(renderCarPos);
+        this.heliPrevTarget.copy(heliTarget);
+        this.heliPrevLook.copy(lookTarget);
       } else {
-        this.smoothedHeliPos.lerp(heliTarget, Math.min(1, dtSeconds * 6));
+        followMovingTarget(this.smoothedHeliPos, this.heliPrevTarget, heliTarget, HELI_POS_RATE, dtSeconds);
       }
-      this.smoothedHeliLook.lerp(
-        this.lookTarget.copy(renderCarPos).addScaledVector(carForward, 14),
-        Math.min(1, dtSeconds * 12)
-      );
+      followMovingTarget(this.smoothedHeliLook, this.heliPrevLook, lookTarget, HELI_LOOK_RATE, dtSeconds);
+      this.heliPrevTarget.copy(heliTarget);
+      this.heliPrevLook.copy(lookTarget);
       this.heliLastCarPos.copy(renderCarPos);
       camera.position.copy(this.smoothedHeliPos);
       camera.up.set(0, 1, 0);
@@ -888,11 +928,18 @@ export class CameraRig {
       camera.fov = 52;
       camera.updateProjectionMatrix();
     } else if (mode === "tv_side") {
-      // Trackside broadcast: telephoto spline cameras that pan with the car and zoom in over kerbs
+      // Trackside broadcast: telephoto spline cameras that pan with the car and zoom in over kerbs. The dolly follows the
+      // car where it is drawn this frame. The physics' lap distance is from its last state, which in a worker race is up
+      // to ~15 ms off the drawn car and by a different amount each frame: a dolly placed from it stepped back and forth
+      // under the car, and the long lens turned that into the whole shot shaking (#160)
+      const track = this.track;
+      const drawnS = track.projectWorldToTrackInto
+        ? track.projectWorldToTrackInto(renderCarPos.x, renderCarPos.z, this.drawnOnLap, physics.sMeters).s
+        : track.projectWorldToTrack(renderCarPos.x, renderCarPos.z, physics.sMeters).s;
       const tv = this.tvDirector.update(
         dtSeconds,
         renderCarPos,
-        physics.sMeters,
+        drawnS,
         f.carVelocity,
         physics.telemetry.onKerbLeft || physics.telemetry.onKerbRight
       );

@@ -27,6 +27,7 @@ import {
   aidsActive,
   brakeGlowColor,
   formatDelta,
+  formatDeltaFit,
   formatPressurePsi,
   formatSectorTime,
   formatSpeed,
@@ -39,8 +40,10 @@ import {
   lapMark,
   NO_TIME,
   pressureUnit,
+  sectorDone,
   speedUnit,
   tyreHeatColor,
+  sessionWord,
 } from "../hud-format";
 import { aeroReadout } from "../aero-label";
 import { pedalLayers } from "../PedalBars";
@@ -171,7 +174,8 @@ const SectorBar: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, laps }
   return (
     <div className="flex" role="group" aria-label="Sectors">
       {[0, 1, 2].map((i) => {
-        const ms = lastLap ? lastLap.sectorsMs[i] : i + 1 < t.currentSector ? t.sectorTimesMs[i] : null;
+        // This lap's done sectors only: the out-lap from the grid starts in sector 3 with no S1 or S2 of its own
+        const ms = lastLap ? lastLap.sectorsMs[i] : sectorDone(t, i) ? t.sectorTimesMs[i] : null;
         const fill = ms ? sectorFill(ms, t.bestSectorTimesMs[i], previous?.sectorsMs[i], solo) : null;
         const current = !lastLap && i + 1 === t.currentSector;
         return (
@@ -241,7 +245,7 @@ const DeltaBlock: React.FC<{ t: CarTelemetry; deltaS: number | null }> = ({ t, d
     <section aria-label="Delta to your best lap" className="w-[190px] text-[14px] leading-none font-black lg:w-[250px]">
       <div className="flex h-6 items-center justify-between bg-(--blk-soft) px-3.5">
         <span>Delta Best</span>
-        <span style={{ color }}>{has ? formatDelta(Math.max(-99.999, Math.min(99.999, deltaS))) : NO_TIME}</span>
+        <span style={{ color }}>{has ? formatDeltaFit(deltaS) : NO_TIME}</span>
       </div>
       <div className="flex h-5.5 items-center justify-between bg-(--blk-soft) px-3.5">
         <span>Predicted</span>
@@ -284,7 +288,7 @@ const SessionBlocks: React.FC<{ t: CarTelemetry }> = ({ t }) => {
         {pad2(race ? race.lap : Math.max(1, t.lapCount))}
         {race?.totalLaps ? <span className="text-[18px]">/{pad2(race.totalLaps)}</span> : null}
       </SessionBlock>
-      <SessionBlock label={race ? "Race" : t.qualifying ? "Qualifying" : "Practice"} className="hidden min-w-[164px] xl:flex">
+      <SessionBlock label={race ? "Race" : sessionWord(t)} className="hidden min-w-[164px] xl:flex">
         {hms(clock)}
       </SessionBlock>
     </div>
@@ -307,7 +311,8 @@ const Timing: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapInva
           {lapInvalid ? <span style={{ color: HUD_LOSS }}>Invalid</span> : null}
         </span>
         <span className="text-[40px] leading-none font-bold" style={lapInvalid ? { color: HUD_LOSS } : undefined}>
-          {lapClock(t.currentLapTimeMs)}
+          {/* Held at zero on the out-lap, where no lap is timed yet */}
+          {t.outLap ? "00:00.000" : lapClock(t.currentLapTimeMs)}
         </span>
       </div>
       <div className="w-[150px] text-[13px] leading-none font-bold">

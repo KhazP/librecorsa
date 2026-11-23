@@ -177,10 +177,10 @@ export class RoomServer {
       return {
         ...saved,
         settings: sanitizeLobbySettings(saved.settings, saved.kind),
-        qualifyingLaps: saved.qualifyingLaps ?? {},
-        qualifying: Array.isArray(saved.qualifying) ? saved.qualifying : [],
-        grid: Array.isArray(saved.grid) ? saved.grid : [],
-        participants: Array.isArray(saved.participants) ? saved.participants : [],
+        qualifyingLaps: saved.qualifyingLaps ? { ...saved.qualifyingLaps } : {},
+        qualifying: Array.isArray(saved.qualifying) ? [...saved.qualifying] : [],
+        grid: Array.isArray(saved.grid) ? [...saved.grid] : [],
+        participants: Array.isArray(saved.participants) ? [...saved.participants] : [],
       };
     }
     return defaultRoomState(defaultKind);
@@ -284,25 +284,55 @@ export class RoomServer {
     const activeHostCount = this.state.getWebSockets(HOST_TAG).filter((ws) => attachmentOf(ws)?.role === "host").length;
     if (activeHostCount === 0) return refuse({ t: "nohost" });
     const guestToken = TOKEN_RE.test(token) ? token : undefined;
-    if (guestToken) {
-      // The same guest back on a new socket: demote before closing so a half-open socket never triggers full or peer_id_taken
-      for (const old of this.state.getWebSockets()) {
-        const oa = attachmentOf(old);
-        if (oa?.role === "guest" && oa.token === guestToken) {
-          old.serializeAttachment({ role: "refused" } satisfies Attachment);
-          close(old, 4001, "replaced");
-        }
-      }
+    const activeGuests = this.state.getWebSockets().filter((ws) => attachmentOf(ws)?.role === "guest");
+    const replacedGuests = guestToken
+      ? activeGuests.filter((ws) => {
+          const oa = attachmentOf(ws);
+          return oa?.role === "guest" && oa.token === guestToken;
+        })
+      : [];
+    if (activeGuests.length - replacedGuests.length >= MAX_GUESTS) return refuse({ t: "full" });
+    const replacedIds: string[] = [];
+    const replacedKeys = new Set<string>();
+    // The same guest back on a new socket: demote before closing so a half-open socket never triggers full or
+    // peer_id_taken, and run leave cleanup below because webSocketClose skips refused sockets
+    for (const old of replacedGuests) {
+      const oa = attachmentOf(old);
+      if (oa?.role !== "guest") continue;
+      replacedIds.push(oa.id);
+      replacedKeys.add(senderPeerId(oa));
+      replacedKeys.add(oa.id);
+      old.serializeAttachment({ role: "refused" } satisfies Attachment);
+      close(old, 4001, "replaced");
     }
-    const guests = this.state.getWebSockets().filter((ws) => attachmentOf(ws)?.role === "guest").length;
-    if (guests >= MAX_GUESTS) return refuse({ t: "full" });
     const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
     this.state.acceptWebSocket(server, [guestTag(id)]);
     server.serializeAttachment({ role: "guest", id, ...(guestToken ? { token: guestToken } : {}) } satisfies Attachment);
     const roomState = await this.loadRoomState();
+    let participantsChanged = false;
+    for (const staleKey of replacedKeys) {
+      const stillOwned = this.state.getWebSockets().some((other) => {
+        const a = attachmentOf(other);
+        return a !== null && a.role !== "refused" && (senderPeerId(a) === staleKey || (a.role === "guest" && a.id === staleKey));
+      });
+      if (!stillOwned) {
+        const idx = roomState.participants.indexOf(staleKey);
+        if (idx >= 0) {
+          roomState.participants.splice(idx, 1);
+          participantsChanged = true;
+        }
+      }
+    }
     if (!roomState.participants.includes(id)) {
       roomState.participants.push(id);
-      await this.saveRoomState(roomState);
+      participantsChanged = true;
+    }
+    if (participantsChanged) await this.saveRoomState(roomState);
+    if (replacedIds.length > 0) {
+      for (const host of this.state.getWebSockets(HOST_TAG)) {
+        if (attachmentOf(host)?.role !== "host") continue;
+        for (const oldId of replacedIds) send(host, { t: "left", id: oldId });
+      }
     }
     send(server, { t: "welcome", id, iceServers: await this.iceServers(this.env) });
   }
@@ -421,7 +451,10 @@ export class RoomServer {
       case "signal": {
         if (typeof msg.data !== "object" || msg.data === null) return;
         if (who.role === "guest") {
-          for (const host of this.state.getWebSockets(HOST_TAG)) send(host, { t: "signal", from: who.id, data: msg.data });
+          for (const host of this.state.getWebSockets(HOST_TAG)) {
+            if (attachmentOf(host)?.role !== "host") continue;
+            send(host, { t: "signal", from: who.id, data: msg.data });
+          }
         } else if (typeof msg.to === "string" && /^[a-f0-9]{12}$/.test(msg.to)) {
           for (const guest of this.state.getWebSockets(guestTag(msg.to))) send(guest, { t: "signal", data: msg.data });
         }
@@ -440,6 +473,7 @@ export class RoomServer {
         }
         // Prevent hijacking any currently connected socket's peerId/id or claiming the host default id as a guest
         let taken = who.role === "guest" && nextPeerId === "host";
+        const replaceable: { socket: ServerSocket; id: string; peerId: string }[] = [];
         if (!taken) {
           for (const other of this.state.getWebSockets()) {
             if (other === ws) continue;
@@ -448,8 +482,7 @@ export class RoomServer {
             const conflict = senderPeerId(oa) === nextPeerId || (oa.role === "guest" && oa.id === nextPeerId);
             if (!conflict) continue;
             if (who.role === "guest" && who.token && oa.role === "guest" && oa.token === who.token) {
-              other.serializeAttachment({ role: "refused" } satisfies Attachment);
-              close(other, 4001, "replaced");
+              replaceable.push({ socket: other, id: oa.id, peerId: senderPeerId(oa) });
               continue;
             }
             taken = true;
@@ -460,6 +493,10 @@ export class RoomServer {
           send(ws, { t: "error", code: "peer_id_taken", message: "Peer ID is already owned by another connection" });
           return;
         }
+        for (const r of replaceable) {
+          r.socket.serializeAttachment({ role: "refused" } satisfies Attachment);
+          close(r.socket, 4001, "replaced");
+        }
         const oldPeerId = senderPeerId(who);
         const updated: Attachment =
           who.role === "host"
@@ -467,6 +504,19 @@ export class RoomServer {
             : { role: "guest", id: who.id, peerId: nextPeerId, ...(who.token ? { token: who.token } : {}) };
         ws.serializeAttachment(updated);
         const roomState = await this.loadRoomState();
+        for (const r of replaceable) {
+          for (const staleKey of new Set([r.peerId, r.id])) {
+            if (staleKey === nextPeerId || staleKey === oldPeerId) continue;
+            const stillOwned = this.state.getWebSockets().some((other) => {
+              const a = attachmentOf(other);
+              return a !== null && a.role !== "refused" && (senderPeerId(a) === staleKey || (a.role === "guest" && a.id === staleKey));
+            });
+            if (!stillOwned) {
+              const staleIdx = roomState.participants.indexOf(staleKey);
+              if (staleIdx >= 0) roomState.participants.splice(staleIdx, 1);
+            }
+          }
+        }
         const idx = roomState.participants.indexOf(oldPeerId);
         if (idx >= 0) {
           if (roomState.participants.includes(nextPeerId) && oldPeerId !== nextPeerId) {
@@ -484,6 +534,12 @@ export class RoomServer {
           delete roomState.qualifyingLaps[oldPeerId];
         }
         await this.saveRoomState(roomState);
+        if (replaceable.length > 0) {
+          for (const host of this.state.getWebSockets(HOST_TAG)) {
+            if (attachmentOf(host)?.role !== "host") continue;
+            for (const r of replaceable) send(host, { t: "left", id: r.id });
+          }
+        }
         return;
       }
 
@@ -599,7 +655,10 @@ export class RoomServer {
         }
       }
       if (who.role === "guest") {
-        for (const host of this.state.getWebSockets(HOST_TAG)) send(host, { t: "left", id: who.id });
+        for (const host of this.state.getWebSockets(HOST_TAG)) {
+          if (attachmentOf(host)?.role !== "host") continue;
+          send(host, { t: "left", id: who.id });
+        }
       }
     }
     close(ws, code === 1005 || code === 1006 ? 1000 : code, "closed");

@@ -1,5 +1,14 @@
 import * as THREE from "three";
-import { fetchBadges, sortBadges, type BadgeType, type DriverBadge } from "@/lib/net/awards";
+import {
+  fetchBadges,
+  filterBadgesForContext,
+  groupBoardsByClass,
+  sortBadges,
+  type BadgeContext,
+  type BadgeType,
+  type DriverBadge,
+} from "@/lib/net/awards";
+import { VEHICLE_CLASS_META } from "@/lib/cars/vehicle-class";
 import { driverNameKey } from "@/lib/net/board-client";
 import type { RaceStandingEntry, RaceStatus } from "@/types/f1";
 
@@ -7,16 +16,34 @@ const NAMEPLATE_BADGE_SHORT: Record<BadgeType, string> = {
   weekly_gold: "G",
   weekly_silver: "S",
   weekly_bronze: "B",
-  track_record: "TR",
+  track_record: "FL",
   og: "OG",
   bulb: "IDEA",
 };
 
-/** Concise uppercase chip codes for overhead nameplates ("G", "G×2", "S", "B", "TR", "OG", "IDEA") */
-export function formatNameplateBadges(badges: readonly DriverBadge[]): string[] {
-  if (badges.length === 0) return [];
-  return sortBadges(badges).map((b) => {
+function sameBadgeContext(a: BadgeContext, b: BadgeContext): boolean {
+  if (a.scope !== b.scope) return false;
+  if (a.scope === "vehicle" && b.scope === "vehicle") return a.vehicle === b.vehicle;
+  if (a.scope === "class" && b.scope === "class") return a.classId === b.classId;
+  return true;
+}
+
+/**
+ * Concise uppercase chip codes for overhead nameplates ("G", "G×2", "S", "B", "FL·F1×3", "FL×2", "OG", "IDEA").
+ * When `context` narrows to a vehicle or car class, Fastest Lap counts follow that room's car/class.
+ */
+export function formatNameplateBadges(badges: readonly DriverBadge[], context?: BadgeContext): string[] {
+  const visible = filterBadgesForContext(badges, context);
+  if (visible.length === 0) return [];
+  return sortBadges(visible).map((b) => {
     const short = NAMEPLATE_BADGE_SHORT[b.type];
+    if (b.type === "track_record" && (!context || context.scope === "all")) {
+      const classes = groupBoardsByClass(b.boards);
+      if (classes.length === 1) {
+        const tag = `${short}·${VEHICLE_CLASS_META[classes[0].classId].short.toUpperCase()}`;
+        return b.count > 1 ? `${tag}×${b.count}` : tag;
+      }
+    }
     return b.count > 1 ? `${short}×${b.count}` : short;
   });
 }
@@ -26,11 +53,14 @@ export type NameplateBadgeFetcher = (names: readonly string[]) => Promise<Record
 /**
  * In-memory cache of formatted overhead nameplate badge codes keyed by `driverNameKey`.
  * Batch-fetches unseen remote player names once per name change (never called inside the render loop)
- * and skips AI peers, ghosts, and offline/empty responses.
+ * and skips AI peers, ghosts, and offline/empty responses. Re-formats cached badges synchronously when
+ * the multiplayer room's vehicle/class context changes.
  */
 export class NameplateBadgeCache {
+  private readonly rawByNameKey = new Map<string, readonly DriverBadge[]>();
   private readonly byNameKey = new Map<string, readonly string[]>();
   private readonly requestedKeys = new Set<string>();
+  private context: BadgeContext = { scope: "all" };
   private disposed = false;
 
   constructor(private readonly fetcher: NameplateBadgeFetcher = fetchBadges) {}
@@ -38,6 +68,17 @@ export class NameplateBadgeCache {
   /** Read-only view of resolved badge codes by normalized driver name key */
   get map(): ReadonlyMap<string, readonly string[]> {
     return this.byNameKey;
+  }
+
+  /** Updates the car/class scope used to format Fastest Lap badges on overhead nameplates */
+  setContext(next: BadgeContext): void {
+    if (this.disposed || sameBadgeContext(this.context, next)) return;
+    this.context = next;
+    this.byNameKey.clear();
+    for (const [key, list] of this.rawByNameKey) {
+      const codes = formatNameplateBadges(list, this.context);
+      if (codes.length > 0) this.byNameKey.set(key, codes);
+    }
   }
 
   /** Synchronously returns cached badge codes for a driver name, or undefined if none/unloaded */
@@ -85,8 +126,10 @@ export class NameplateBadgeCache {
       .then((res) => {
         if (this.disposed || !res) return;
         for (const [key, list] of Object.entries(res)) {
-          const codes = formatNameplateBadges(list);
+          this.rawByNameKey.set(key, list);
+          const codes = formatNameplateBadges(list, this.context);
           if (codes.length > 0) this.byNameKey.set(key, codes);
+          else this.byNameKey.delete(key);
         }
       })
       .catch(() => {
@@ -96,6 +139,7 @@ export class NameplateBadgeCache {
 
   dispose(): void {
     this.disposed = true;
+    this.rawByNameKey.clear();
     this.byNameKey.clear();
     this.requestedKeys.clear();
   }

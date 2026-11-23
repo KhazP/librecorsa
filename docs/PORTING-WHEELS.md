@@ -20,8 +20,8 @@ The wheel is usually on a Windows PC and the dev server on another machine. WebH
 
 1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, add `http://<LAN address>:3000`, set it to Enabled and relaunch Chrome.
 2. Turn off the wheel's own centring spring in its software (Pit House, Fanatec control panel, …).
-3. In the game: Controls → Wheel & pedals → Force feedback on → **Connect wheel**, pick the wheel, hold the rim and press **Test direction**. It should pull right, then left.
-4. Set Damping to 100 % and turn the rim by hand: it should feel heavier. If it does but Test direction does nothing, the wheel runs condition effects and the problem is specific to the constant force.
+3. In the game: Settings → Force feedback → Force feedback on → **Connect wheel**, pick the wheel, hold the rim and press **Test** in the Test direction row. It should pull right, then left.
+4. Switch the settings to Advanced, set Damping to 100 % and turn the rim by hand: it should feel heavier. If it does but Test direction does nothing, the wheel runs condition effects and the problem is specific to the constant force.
 5. **Copy diagnostics** and keep the text: it is the starting point for everything below.
 
 ## Reading the diagnostics

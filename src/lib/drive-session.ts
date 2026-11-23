@@ -76,6 +76,8 @@ import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from
 import { CoolDown } from "@/lib/sim/cool-down";
 import { PodiumDirector } from "@/lib/render/podium-shot";
 import { NameplateBadgeCache, OverheadNameplateProjector, type OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
+import type { BadgeContext } from "@/lib/net/awards";
+import { isVehicleModelId } from "@/types/f1";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { canFlashback, isInOnlineRoom, poseFromReplayCar, ReplayBuffer, type ReplayLapMarker } from "@/lib/sim/replay-buffer";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
@@ -1038,7 +1040,12 @@ export class DriveSession {
         console.warn("[sim] worker unavailable, simulating on the page:", reason);
       }
     }
-    const simHost = simWorker ? createSimHost(simWorker) : null;
+    // The time on the simulation's clock that the frame being made is drawn for: its animation-frame timestamp, not the
+    // moment the frame's code reads the clock. The worker's cars are carried to it, so a frame whose callback starts a
+    // few milliseconds late (other work on the page) draws them where they are at the frame's time, as the page's own
+    // physics does (#160)
+    let frameWallMs = performance.timeOrigin + performance.now();
+    const simHost = simWorker ? createSimHost(simWorker, () => frameWallMs) : null;
     simWorker?.ping().then(
       (ms) => console.info(`[sim] worker round trip ${ms.toFixed(1)} ms`),
       (reason) => console.warn("[sim] worker unavailable, simulating on the page:", reason)
@@ -1422,7 +1429,14 @@ export class DriveSession {
 
     const builtCircuit = buildCircuitScene(track);
     scene.add(builtCircuit.sceneGroup);
-    builtCircuit.racingLineMesh.visible = settings.racingLine;
+    /**
+     * The racing line is a driving aid: never drawn behind the title menu, the setup screens or Settings over them
+     * (paused and in a replay the car is still being driven). Behind the opaque loading screen nothing is drawn, and it
+     * stays on there so the shader warm-up compiles it (three's compile skips hidden meshes). The player's setting is
+     * left as it is; each frame sets the line from it and the phase
+     */
+    const racingLineShown = (on: boolean) => on && (appPhaseNow === "driving" || appPhaseNow === "loading");
+    builtCircuit.racingLineMesh.visible = racingLineShown(settings.racingLine);
     // A circuit raced under lights: its floodlit night (masts, lit tunnels, the model's glowing light sources),
     // or one whose own model has lamps (street lamps, light poles): they glow and light the ground round them
     let venueNight: VenueNightLighting | null = null;
@@ -1597,6 +1611,14 @@ export class DriveSession {
     const multiplayerSync = getMultiplayerManager();
     const syncNameplateBadges = () => {
       if (disposed) return;
+      const lobbySettings = multiplayerSync.lobby?.settings;
+      const badgeCtx: BadgeContext =
+        lobbySettings?.vehicle && isVehicleModelId(lobbySettings.vehicle)
+          ? { scope: "vehicle", vehicle: lobbySettings.vehicle }
+          : lobbySettings?.carClass && lobbySettings.carClass !== "any"
+            ? { scope: "class", classId: lobbySettings.carClass }
+            : { scope: "all" };
+      nameplateBadges.setContext(badgeCtx);
       if (latestRemotePeers.length > 0) void nameplateBadges.syncPeers(latestRemotePeers);
       const lobbyPlayers = multiplayerSync.lobby?.players;
       if (lobbyPlayers && lobbyPlayers.length > 0) {
@@ -1633,7 +1655,11 @@ export class DriveSession {
       touch: touchGraphics,
       sharpLow: g.sharpLow,
       sharpen: g.sharpen,
+      // The player's Lowest resolution: the resolution rungs stop there (the effects rungs still run)
+      minScale: g.autoQualityMinScale,
     });
+    const autoQualityText = (g: PlayerSettings["graphics"]) =>
+      g.autoQuality ? `auto quality on (lowest ${Math.round(g.autoQualityMinScale * 100)}%)` : "auto quality off";
     const ladderLength = (g: PlayerSettings["graphics"]) => ladderFor(g.quality, g.renderScale, planOpts(g)).length;
     const startLevel = settings.graphics.autoQuality
       ? carriedLevel(settings.graphics.quality, settings.graphics.renderScale, performance.now(), planOpts(settings.graphics))
@@ -1654,7 +1680,7 @@ export class DriveSession {
         touchGraphics ? "phone profile" : "desktop profile",
         ...(g.quality === "low" && g.sharpLow ? ["Sharp Low"] : []),
         `sharpen ${g.sharpen ? "on" : "off"}`,
-        `auto quality ${g.autoQuality ? "on" : "off"}`,
+        autoQualityText(g),
         g.fpsCap ? `${g.fpsCap} fps cap` : "no fps cap",
         `lowered: ${lowered ?? "nothing"}`,
         `pixel ratio ${renderer.getPixelRatio().toFixed(2)}`,
@@ -1724,7 +1750,7 @@ export class DriveSession {
       if (next.gamepadAssist !== prev.gamepadAssist) physics.gamepadAssistEnabled = next.gamepadAssist;
       if (next.autoGearbox !== prev.autoGearbox) physics.autoGearbox = next.autoGearbox;
       if (next.autoClutch !== prev.autoClutch) physics.autoClutch = next.autoClutch;
-      builtCircuit.racingLineMesh.visible = next.racingLine;
+      builtCircuit.racingLineMesh.visible = racingLineShown(next.racingLine);
       if (prev.mouseSteer && !next.mouseSteer) mouseSteerValue = 0;
       const customChanged =
         next.customLivery.primary !== prev.customLivery.primary ||
@@ -1736,13 +1762,19 @@ export class DriveSession {
       }
       const g = next.graphics;
       const pg = prev.graphics;
-      if (g.quality !== pg.quality || g.renderScale !== pg.renderScale || g.autoQuality !== pg.autoQuality || g.sharpLow !== pg.sharpLow) {
+      if (
+        g.quality !== pg.quality ||
+        g.renderScale !== pg.renderScale ||
+        g.autoQuality !== pg.autoQuality ||
+        g.sharpLow !== pg.sharpLow ||
+        g.autoQualityMinScale !== pg.autoQualityMinScale
+      ) {
         // The player's own choice: the automatic steps start over from it
         governor.reset(ladderLength(g), 0);
         rememberLevel(g.quality, g.renderScale, 0, performance.now(), planOpts(g));
         this.applyGraphics();
         if (g.quality !== pg.quality) syncHeadlightSpots();
-        sessionPerf?.note(performance.now(), `graphics set to ${g.quality}, render ${Math.round(g.renderScale * 100)}%, auto quality ${g.autoQuality ? "on" : "off"}`);
+        sessionPerf?.note(performance.now(), `graphics set to ${g.quality}, render ${Math.round(g.renderScale * 100)}%, ${autoQualityText(g)}`);
       } else if (g.sharpen !== pg.sharpen) {
         this.applyGraphics();
       }
@@ -2847,6 +2879,7 @@ export class DriveSession {
       const dtSeconds = Math.min((nowMs - lastTimeMs) / 1000, MAX_FRAME_CATCH_UP_S);
       displayRate.add(nowMs - lastTimeMs);
       lastTimeMs = nowMs;
+      frameWallMs = performance.timeOrigin + nowMs;
       // The frame-rate cap: this frame draws, or only runs input, the simulation, the network and the laps. The
       // drawing catches up with the time since the last drawn frame. Never in a headset, which sets its own rate. With
       // the GPU context lost nothing is drawn at all.
@@ -2888,6 +2921,8 @@ export class DriveSession {
       if (rp.active && inMenu) exitReplay();
       const replaying = rp.active;
       const settingsNow = settings;
+      // Off behind the title menu and the setup screens (racingLineShown); the player's setting is left as it is
+      builtCircuit.racingLineMesh.visible = racingLineShown(settingsNow.racingLine);
       // The wheel unplugged: pause rather than hand the car to whatever pad is left (no input this frame). In a replay
       // the replay pauses with it; in the menus it waits for the car, unless by then the wheel is back (or unbound) or
       // the player has picked another device to drive with.
@@ -3374,6 +3409,8 @@ export class DriveSession {
           mpPracticeSeenLap = t.lapCount;
         }
       }
+      physics.telemetry.timeTrial = timeTrialOn() || undefined;
+      physics.telemetry.drivingInput = lastDrivingInput ?? undefined;
       physics.telemetry.qualifying = quali
         ? {
             remainingS: quali.session.remainingS,

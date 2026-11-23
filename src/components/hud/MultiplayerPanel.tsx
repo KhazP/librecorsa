@@ -35,13 +35,14 @@ import { carClass, carClassesInUse } from "@/lib/cars/car-registry";
 import { getTrackInfo, TRACKS } from "@/lib/track-registry";
 import { Button, Card, ConfirmDialog, Disclosure, Segmented, Select, SettingRow, Stepper, TextField, Toggle, Well } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
-import { DriverBadges } from "@/components/ui/DriverBadges";
+import { BadgeLegend, DriverBadges } from "@/components/ui/DriverBadges";
 import { PlayerTag, SessionBadge } from "@/components/ui/badges";
 import { Icon } from "@/components/ui/icons";
 import { TrackQualityBadge } from "@/components/menu/menu-content-ui";
 import { useRaceDistance } from "@/components/menu/RaceRules";
-import { fetchBadges, type DriverBadge } from "@/lib/net/awards";
+import { fetchBadges, type BadgeContext, type DriverBadge } from "@/lib/net/awards";
 import { driverNameKey } from "@/lib/net/board-client";
+import { isVehicleModelId } from "@/types/f1";
 import { formatLapTime } from "./hud-format";
 import { RacesCard, type RacesCardProps } from "./RacesCard";
 
@@ -757,6 +758,12 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     const isHostPlayer = (p: LobbyPlayer) => p.peerId === state.hostId;
     const hostPlayer = state.players.find(isHostPlayer);
     const outOfClass = (vehicle: string | undefined) => !!allowedVehicles && !!vehicle && !allowedVehicles.includes(vehicle);
+    const lobbyBadgeContext: BadgeContext =
+      settings.vehicle && isVehicleModelId(settings.vehicle)
+        ? { scope: "vehicle", vehicle: settings.vehicle }
+        : settings.carClass !== "any"
+          ? { scope: "class", classId: settings.carClass }
+          : { scope: "all" };
 
     // Warnings for this player, compared with the host's race settings
     const trackMismatch = currentTrackId !== undefined && currentTrackId !== settings.trackId;
@@ -801,7 +808,13 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                     <span className="truncate text-[14px] font-semibold text-lc-chalk" title={p.name}>
                       {p.name}
                     </span>
-                    <DriverBadges badges={Object.hasOwn(driverBadges, driverNameKey(p.name)) ? driverBadges[driverNameKey(p.name)] : []} compact />
+                    <DriverBadges
+                      badges={Object.hasOwn(driverBadges, driverNameKey(p.name)) ? driverBadges[driverNameKey(p.name)] : []}
+                      compact
+                      context={lobbyBadgeContext}
+                      driverName={p.name}
+                      circuitName={trackName}
+                    />
                     {isMe ? <PlayerTag size="sm" /> : null}
                   </span>
                   <span className="lc-hint truncate" title={carName}>
@@ -837,6 +850,11 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             );
           })}
         </ul>
+        {/* What the badges beside the names mean: their tooltips need a mouse */}
+        <BadgeLegend
+          badges={orderedPlayers.flatMap((p) => (Object.hasOwn(driverBadges, driverNameKey(p.name)) ? driverBadges[driverNameKey(p.name)] : []))}
+          context={lobbyBadgeContext}
+        />
 
         {trackMismatch ? (
           <Well className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-2.5">

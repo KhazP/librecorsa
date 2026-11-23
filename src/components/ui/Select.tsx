@@ -154,7 +154,7 @@ export function Select<T extends string>({
           }
         }}
         className={cx(
-          "group inline-flex h-10 w-48 max-w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-lc-row pr-3 pl-3.5 text-left",
+          "group inline-flex h-10 w-48 max-w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-full pr-3 pl-4 text-left",
           "bg-lc-titanium text-lc-chalk inset-ring inset-ring-lc-line hover:bg-lc-line hover:inset-ring-lc-keyline",
           "pointer-coarse:h-11 phone:w-full",
           open ? "bg-lc-line inset-ring-lc-keyline" : undefined,

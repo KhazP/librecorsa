@@ -232,14 +232,15 @@ export class FieldPeers {
   }
 
   /**
-   * The cars on the track, carried `leadS` on from the poses as packed: the position with the car's velocity, the
-   * heading with its yaw rate, plus exponentially-decayed jitter damping so late worker packets never snap backwards.
+   * The cars on the track, carried `leadS` on from the poses as packed (back, when it is negative: poses from after the
+   * frame's time): the position with the car's velocity, the heading with its yaw rate, plus exponentially-decayed
+   * jitter damping so late worker packets never snap backwards.
    */
   shownAt(leadS: number, dtS = 0): InterpolatedPeerState[] {
     const out = this.shown;
     out.length = 0;
     if (!this.received) return out;
-    const lead = leadS > 0 ? leadS : 0;
+    const lead = Number.isFinite(leadS) ? leadS : 0;
     const dt = dtS > 0 ? Math.min(dtS, 0.1) : 0;
     const decay = dt > 0 ? Math.exp(-dt / SMOOTH_ERR_TAU_S) : 0;
     for (const s of this.slots) {

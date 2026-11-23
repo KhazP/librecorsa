@@ -151,7 +151,7 @@ export function NavList<T extends string>({
             }}
             className={cx(
               "group flex min-h-12 w-full min-w-0 cursor-pointer items-center gap-3 rounded-lc-row px-3.5 text-left",
-              "phone:min-h-11 phone:w-auto phone:shrink-0 phone:rounded-lc-row phone:px-3.5",
+              "phone:min-h-11 phone:w-auto phone:shrink-0 phone:rounded-full phone:px-4",
               "[&_svg]:size-5 [&_svg]:shrink-0",
               MOTION,
               chosen ? CHOSEN_PILL : cx("text-lc-slate", HOVER_PILL),
@@ -175,7 +175,7 @@ export function NavList<T extends string>({
             ) : it.count ? (
               <span
                 className={cx(
-                  "lc-chip-text inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-lc-nub px-1.5 tabular-nums",
+                  "lc-chip-text inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 tabular-nums",
                   "bg-lc-titanium text-lc-fog group-focus:bg-lc-void/15 group-focus:text-lc-void group-data-cursor:bg-lc-void/15 group-data-cursor:text-lc-void",
                 )}
               >

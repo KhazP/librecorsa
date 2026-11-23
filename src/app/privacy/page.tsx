@@ -3,10 +3,10 @@ import { LEAD, READ, SiteIntro, SitePage, SiteSection, TEXT_LINK } from "@/compo
 import { CONTACT_EMAIL, REPO_URL, SITE_NAME } from "@/lib/site";
 
 // What the site keeps about the people who play it. Every statement here follows from the code: the browser's own
-// storage, cloudflare/api (boards, races, rooms, usage) and the connection servers in multiplayer-sync.ts. Change this
-// page in the same commit as anything that changes what is stored or sent.
+// storage, cloudflare/api (boards, races, rooms, usage, accounts) and the connection servers in multiplayer-sync.ts.
+// Change this page in the same commit as anything that changes what is stored or sent.
 const DESCRIPTION = "What LibreCorsa keeps in your browser, what it sends online and when, and how to have it removed.";
-const UPDATED = "14 November 2026";
+const UPDATED = "23 November 2026";
 
 export const metadata: Metadata = {
   title: "Privacy",
@@ -24,8 +24,9 @@ export default function PrivacyPage() {
     <SitePage>
       <SiteIntro title="Privacy">
         <p className={LEAD}>
-          LibreCorsa has no accounts, no ads and no third-party trackers, and it sets no cookies. You can play without
-          giving a name. This page says what the game keeps, what it sends online and when.
+          LibreCorsa has no ads and no third-party trackers. Accounts are optional, and the only cookies are the ones
+          that sign you in to one. You can play without an account and without giving a name. This page says what the
+          game keeps, what it sends online and when.
         </p>
         <p className="lc-hint m-0">Last changed {UPDATED}</p>
       </SiteIntro>
@@ -44,10 +45,10 @@ export default function PrivacyPage() {
           <li>
             <span className={B}>Lap boards.</span> When a lap is posted, the board stores your driver name and
             three-letter code, the lap (times, circuit, car, assists, realism, tyre, and whether it was driven on a keyboard, controller, wheel
-            or touch screen) and a recording of it that others
-            can race as a ghost. It also stores a scrambled form of your driver key, which can’t be turned back
-            into the key. Names and laps on a board are public. Laps are posted only once you have chosen a name of
-            your own, and you can switch off “Post my best laps online” in the settings.
+            or touch screen), the car setup it was driven with (without its fuel load) and a recording of it that
+            others can race as a ghost. It also stores a scrambled form of your driver key, which can’t be turned back
+            into the key. Names, laps and setups on a board are public. Laps go up under your driver name, including
+            the one the game gives you at first, and you can switch off “Auto-upload best laps” in the settings.
           </li>
           <li>
             <span className={B}>Open races.</span> The race server passes each car’s position to the others while
@@ -81,10 +82,61 @@ export default function PrivacyPage() {
         </ul>
       </SiteSection>
 
+      <SiteSection id="accounts" title="Accounts">
+        <p className={READ}>
+          An account is optional. It keeps your driver names and save the same on every device you sign in on. You
+          sign in with Discord, Google, Steam or a passkey. An account stores:
+        </p>
+        <ul className={LIST}>
+          <li>
+            <span className={B}>Sign-ins.</span> For each sign-in, the account id that Discord, Google or Steam gives
+            the site, and when it was added and last used.
+          </li>
+          <li>
+            <span className={B}>Passkeys.</span> For each passkey, its public key and when it was added and last used.
+            The passkey itself never leaves your device or password manager.
+          </li>
+          <li>
+            <span className={B}>Devices.</span> For each signed-in browser or app, a label such as “Chrome on macOS”
+            and when it signed in and was last seen. For each device that joined, a scrambled form of its driver key,
+            so that it can post laps under the account’s driver names until it signs out.
+          </li>
+          <li>
+            <span className={B}>The synced save.</span> Your settings (not controls, graphics or volumes), car setups,
+            liveries, race history, and best laps with their ghosts.
+          </li>
+        </ul>
+        <p className={READ}>
+          An account stores no email address, no user name and no avatar. Of what Discord, Google or Steam send back
+          when you sign in, the site keeps the account id and nothing else. Signing in sets a cookie that keeps that browser signed in. It holds a random code
+          and nothing else. While a sign-in page is open, a second cookie checks that the sign-in comes back to the
+          same browser, and it ends after ten minutes.
+        </p>
+        <p className={READ}>
+          Signing in with Google uses Google’s basic sign-in (the “openid” scope) and nothing more. The site receives your
+          Google account’s unique id, which it stores only to sign you in. It isn’t used for anything else, shared with
+          anyone, sold, or used for advertising or AI, and it is deleted with the account. You can also end the site’s
+          access at any time in your Google Account, under Security, then Your connections to third-party apps and
+          services. Signing in with Discord or Steam works the same way: the site keeps only the account id they give it.
+        </p>
+        <p className={READ}>
+          LibreCorsa’s use and transfer of information received from Google APIs adheres to the{" "}
+          <a href="https://developers.google.com/terms/api-services-user-data-policy" className={TEXT_LINK}>
+            Google API Services User Data Policy
+          </a>
+          , including the Limited Use requirements.
+        </p>
+        <p className={READ}>
+          To delete an account, open Settings, then Profile and data, then Account, and choose Delete. The account, its sign-ins, passkeys, devices and synced save are deleted at once. Its
+          driver names and laps stay on the boards, unless you tick “Also remove my laps and race results from the
+          boards”, which removes them as well.
+        </p>
+      </SiteSection>
+
       <SiteSection id="addresses" title="IP addresses and logs">
         <p className={READ}>
           The site is served by Cloudflare, which handles your IP address to deliver the pages, to work out the country
-          for the usage totals, and to limit how often one address can post or send the live count’s message. Cloudflare keeps request logs for a few
+          for the usage totals, and to limit how often one address can post, sign in or send the live count’s message. Cloudflare keeps request logs for a few
           days. The site’s own database stores no IP address. To limit lap uploads it keeps a scrambled form of
           the address for up to two hours and then deletes it.
         </p>
@@ -93,7 +145,14 @@ export default function PrivacyPage() {
       <SiteSection id="kept" title="How long it is kept">
         <ul className={LIST}>
           <li>Laps and race results stay for as long as the boards exist, or until you ask for them to be removed.</li>
-          <li>A driver name stays yours while you use it. After six months without a lap it can be claimed by someone else.</li>
+          <li>
+            A driver name on an account stays the account’s for as long as the account exists. Any other driver name
+            stays yours while you use it, and after six months without a lap it can be claimed by someone else.
+          </li>
+          <li>
+            An account and its synced save stay until the account is deleted. A browser or app that hasn’t been used for
+            a year is signed out.
+          </li>
           <li>The usage totals are kept as daily totals. They hold nothing about any one player.</li>
           <li>The live count keeps nothing: each message is forgotten a minute after it arrives.</li>
         </ul>
@@ -101,7 +160,8 @@ export default function PrivacyPage() {
 
       <SiteSection id="choices" title="Your choices">
         <p className={READ}>
-          You can play without a name, switch off posting laps, and clear the browser’s storage at any time. To see
+          You can play without a name or an account, switch off posting laps, delete your account, and clear the
+          browser’s storage at any time. To see
           what is stored under your driver name, or to have your name, laps and race results deleted, email me at{" "}
           <a href={`mailto:${CONTACT_EMAIL}`} className={TEXT_LINK}>
             {CONTACT_EMAIL}

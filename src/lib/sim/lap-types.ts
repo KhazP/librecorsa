@@ -215,6 +215,16 @@ export function boardChoiceOfLap(trackId: string, vehicle: VehicleModelId, revis
 }
 
 /**
+ * The primary shipping physics revision for a car on a circuit: always uses the LC26's shipping rigid-body engine
+ * regardless of browser URL flags (`?lc26engine=classic`). Used by Fastest Lap awards and record holders so the
+ * hidden legacy LC26 engine never double-counts records on the same circuit.
+ */
+export function shippingLapPhysicsVersion(vehicle: VehicleModelId, trackId: string): number {
+  const base = currentBoardBase(trackId);
+  return vehicle === "lc26" ? base + LC26_RIGID_BODY_OFFSET : base;
+}
+
+/**
  * True when a lap of this revision on this circuit may go on a board now: the current physics version and the
  * circuit's current revision only, the LC26's on either engine
  */

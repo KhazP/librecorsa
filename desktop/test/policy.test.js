@@ -40,6 +40,11 @@ describe("nav-policy", () => {
       allowInApp: false,
       openExternal: true,
     });
+    // The docs site is its own origin: the home page's Docs link opens it in the browser, not over the game
+    assert.deepEqual(decideNavigation("https://docs.librecorsa.org/porting/cars/"), {
+      allowInApp: false,
+      openExternal: true,
+    });
     assert.deepEqual(decideNavigation("http://librecorsa.org/play"), {
       allowInApp: false,
       openExternal: true,

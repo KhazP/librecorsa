@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
   adjacentTab,
@@ -319,11 +319,16 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
     return () => document.removeEventListener("keydown", onKey, true);
   }, []);
 
-  // Opens on the category list; closing hands the focus back to where the player was
-  useEffect(() => {
+  // Opens on the category list; closing hands the focus back to where the player was. While open, <html> carries
+  // data-settings-open: the title menu under it is not drawn, as its bright parts glowed through the scrim. Set before
+  // the first paint, and cleared before the focus goes back, so the menu is drawn again when its entry takes it
+  useLayoutEffect(() => {
     const before = document.activeElement as HTMLElement | null;
+    const root = document.documentElement;
+    root.setAttribute("data-settings-open", "");
     requestAnimationFrame(() => focusNav());
     return () => {
+      root.removeAttribute("data-settings-open");
       if (before?.isConnected) before.focus({ preventScroll: true });
     };
     // Mount only

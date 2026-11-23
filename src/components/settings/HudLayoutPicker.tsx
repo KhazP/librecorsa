@@ -22,6 +22,14 @@ const TILE_CURSOR = cx(
  */
 const GRID = "grid grid-cols-2 gap-2 @min-[480px]:grid-cols-3 @min-[620px]:grid-cols-5";
 
+/** A credited layout's author and site links, under its name */
+const CREDIT_LINK = cx(
+  "pointer-events-auto inline-flex items-center gap-1 rounded-sm",
+  "underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk hover:decoration-lc-chalk",
+  "focus-visible:text-lc-chalk focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lc-volt",
+  "pointer-coarse:min-h-11",
+);
+
 /**
  * One layout: its picture and name, the whole tile one tap to choose. A third-party layout adds "by <author>", a link
  * to its source that sits over the tile (a link can't live inside the radio button); the D-pad skips the link, Tab and
@@ -52,7 +60,7 @@ function LayoutTile({
         type="button"
         role="radio"
         aria-checked={checked}
-        aria-description={credit ? `${layout.detail}. By ${credit.author}` : layout.detail}
+        aria-description={credit ? `${layout.detail}. By ${credit.author}${credit.site ? ` · ${credit.site.name}` : ""}` : layout.detail}
         data-own-ring=""
         data-nav-default={navDefault ? "" : undefined}
         onPointerEnter={focusOnHover}
@@ -76,22 +84,36 @@ function LayoutTile({
         </span>
       </button>
       {credit ? (
-        <a
-          href={credit.repoUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-nav-skip=""
-          aria-label={`${layout.label} source, by ${credit.author} (opens in a new tab)`}
-          className={cx(
-            "relative z-10 -mt-1 mr-auto ml-1 inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm text-[12px] leading-tight text-lc-slate",
-            "underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk hover:decoration-lc-chalk",
-            "focus-visible:text-lc-chalk focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lc-volt",
-            "pointer-coarse:min-h-11",
-          )}
-        >
-          <span className="truncate">by {credit.author}</span>
-          <Icon name="externalLink" size="xs" className="size-3 shrink-0" />
-        </a>
+        // Above the tile's hit area; only the links take clicks, the gap between them selects the tile
+        <span className="pointer-events-none relative z-10 -mt-1 mr-auto ml-1 inline-flex max-w-full min-w-0 items-center gap-1.5 text-[12px] leading-tight text-lc-slate">
+          <a
+            href={credit.repoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-nav-skip=""
+            aria-label={`${layout.label} source, by ${credit.author} (opens in a new tab)`}
+            className={cx(CREDIT_LINK, "min-w-0")}
+          >
+            <span className="truncate">by {credit.author}</span>
+            <Icon name="externalLink" size="xs" className="size-3 shrink-0" />
+          </a>
+          {credit.site ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <a
+                href={credit.site.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-nav-skip=""
+                aria-label={`${credit.site.name}, ${credit.author}'s site (opens in a new tab)`}
+                className={cx(CREDIT_LINK, "shrink-0")}
+              >
+                {credit.site.name}
+                <Icon name="externalLink" size="xs" className="size-3 shrink-0" />
+              </a>
+            </>
+          ) : null}
+        </span>
       ) : null}
     </div>
   );

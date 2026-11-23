@@ -274,6 +274,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Build provenance: id-token gets the Sigstore signing certificate, attestations stores the result
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout release notes
         uses: actions/checkout@v7
@@ -295,6 +298,21 @@ jobs:
           path: artifacts
           pattern: android-apk
           merge-multiple: true
+
+      # A signed SLSA build provenance attestation for each file people download (the Windows installer after
+      # SignPath signed it), so anyone can check a file came from this workflow at this tag:
+      #   gh attestation verify <file> -R KhazP/librecorsa
+      # A failure here leaves the release to go out without it rather than stopping the release.
+      - name: Attest build provenance
+        continue-on-error: true
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            artifacts/*.exe
+            artifacts/*.dmg
+            artifacts/*.zip
+            artifacts/*.AppImage
+            artifacts/*.apk
 
       # The gh CLI on the runner, not a third-party action: the repository allows GitHub's own actions plus the
       # SignPath one only, and any other action stops the whole run before it starts. The notes file comes first,

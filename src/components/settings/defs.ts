@@ -2,7 +2,9 @@ import { keyLabel, PAD_PEDALS, pedalsOnTriggers } from "@/lib/input/bindings";
 import { PAD_SENSITIVITY } from "@/lib/input/device-input";
 import { isTouchDevice, requestTiltPermission } from "@/lib/input/touch-input";
 import { CAMERA_MODES, DRIVING_CAMERA_MODES } from "@/lib/render/camera-modes";
+import { RENDER_SCALE_FLOOR, sharpLowStepAllowed } from "@/lib/render/adaptive-quality";
 import {
+  AUTO_QUALITY_MIN_SCALES,
   COCKPIT_FOV_MAX_DEG,
   COCKPIT_FOV_MIN_DEG,
   DEFAULT_PLAYER_SETTINGS,
@@ -440,6 +442,7 @@ export const ffbStrength = slider({
   max: 2,
   step: 0.05,
   format: pct,
+  mark: 1,
   ...wheel("ffbGain"),
 });
 
@@ -515,18 +518,26 @@ export const revLights = toggle({
 export const quality = choice("tiles", {
   id: "quality",
   label: "Quality",
-  options: [
-    { id: "low", label: "Low", detail: "No shadows or bloom, lower res" },
-    { id: "medium", label: "Medium", detail: "Shadows, no bloom (no MSAA on mobile)" },
-    { id: "high", label: "High", detail: "Full effects (no MSAA on mobile)" },
-  ],
+  // Phones and tablets draw without MSAA at every level (drive-session.ts): only they are told so
+  options: () => {
+    const touch = isTouchDevice();
+    return [
+      { id: "low", label: "Low", detail: "No shadows or bloom, lower res" },
+      { id: "medium", label: "Medium", detail: touch ? "Shadows, no bloom or MSAA" : "Shadows, no bloom" },
+      { id: "high", label: "High", detail: touch ? "Full effects except MSAA" : "Full effects" },
+    ];
+  },
   ...graphics("quality"),
 });
 
 export const sharpLow = toggle({
   id: "sharpLow",
   label: "Sharp Low",
-  hint: "Draws Low at Medium resolution; auto quality can turn it off",
+  // From a Lowest resolution of 70% up, automatic quality keeps it on (adaptive-quality.ts, SHARP_LOW_OFF_SCALE)
+  hint: (env) =>
+    sharpLowStepAllowed(env.settings.graphics.autoQualityMinScale)
+      ? "Draws Low at Medium resolution; auto quality can turn it off"
+      : "Draws Low at Medium resolution",
   off: (env) => (env.settings.graphics.quality === "low" ? null : "Needs Quality set to Low"),
   ...graphics("sharpLow"),
 });
@@ -569,6 +580,31 @@ export const autoQuality = toggle({
   ...graphics("autoQuality"),
 });
 
+/**
+ * The lowest Render resolution automatic quality may step down to (adaptive-quality.ts): the same units as Render
+ * resolution, so at 100% (with Render resolution at 100% or less) only the effects step down
+ */
+export const autoQualityMinScale = choice("select", {
+  id: "autoQualityMinScale",
+  label: "Lowest resolution",
+  advanced: true,
+  hint: (env) => {
+    const g = env.settings.graphics;
+    if (g.autoQualityMinScale < 1 || g.renderScale > 1) return "Automatic quality never drops Render resolution below this";
+    // Low has no effects on its ladder: at 100% nothing is left to step down
+    return g.quality === "low" ? "Resolution stays put; Low has no effects to drop" : "Resolution stays put; only effects step down";
+  },
+  off: (env) => (env.settings.graphics.autoQuality ? null : "Needs Automatic quality on"),
+  options: AUTO_QUALITY_MIN_SCALES.map((v) => ({ id: v.toFixed(1), label: pct(v) })),
+  read: (env) => env.settings.graphics.autoQualityMinScale.toFixed(1),
+  write: (env, id) =>
+    env.update((s) => ({
+      ...s,
+      graphics: { ...s.graphics, autoQualityMinScale: AUTO_QUALITY_MIN_SCALES.find((v) => v.toFixed(1) === id) ?? RENDER_SCALE_FLOOR },
+    })),
+  initial: () => defaultPlayerSettings().graphics.autoQualityMinScale.toFixed(1),
+});
+
 export const driverBody = toggle({
   id: "driverBody",
   label: "Driver body",
@@ -579,7 +615,7 @@ export const driverBody = toggle({
 
 /* The layout itself is chosen in its own picker (HudLayoutPicker, the list in hud-layouts.ts) */
 
-export const hudSize = slider({ id: "hudScale", label: "Size", min: 0.75, max: 1.5, step: 0.05, format: pct, ...hud("scale") });
+export const hudSize = slider({ id: "hudScale", label: "Size", min: 0.75, max: 1.5, step: 0.05, format: pct, mark: 1, ...hud("scale") });
 
 export const deltaBar = toggle({ id: "deltaBar", label: "Delta bar", ...hud("deltaBar") });
 export const lapSummary = toggle({ id: "lapSummary", label: "Lap summary", ...hud("lapSummary") });
@@ -699,6 +735,7 @@ export const uiScale = slider({
   max: UI_SCALE_MAX,
   step: 0.05,
   format: pct,
+  mark: 1,
   ...ui("scale"),
 });
 
@@ -717,7 +754,8 @@ export const palette = choice("select", {
 // ---- Audio
 
 export const masterVolume = slider({ id: "volume", label: "Master volume", min: 0, max: 1, step: 0.05, format: pct, ...audio("volume") });
-export const kerbVolume = slider({ id: "kerbs", label: "Kerbs", min: 0, max: 1.5, step: 0.05, format: pct, ...audio("kerbs") });
+// The kerbs go up to 150 %: the named 100 % keeps it from reading like Master volume, whose 100 % is the end
+export const kerbVolume = slider({ id: "kerbs", label: "Kerbs", min: 0, max: 1.5, step: 0.05, format: pct, mark: 1, ...audio("kerbs") });
 export const mute = toggle({
   id: "muted",
   label: "Mute",

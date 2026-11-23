@@ -13,7 +13,15 @@ import type {
   TyreSetup,
   VehicleModelId,
 } from "@/types/f1";
-import { ACTIVE_TRACK_ID, TURN_METADATA, activeLapWord, getActiveTimedLengthM, getTrackData, inDeadZone } from "@/lib/track-data";
+import {
+  ACTIVE_TRACK_ID,
+  TURN_METADATA,
+  activeLapWord,
+  getActivePointToPoint,
+  getActiveTimedLengthM,
+  getTrackData,
+  inDeadZone,
+} from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 import type { ChassisSetup } from "@/lib/sim/car-setup";
 import type { RaceSetup } from "@/lib/sim/race-setup";
@@ -248,8 +256,9 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         ...(mpRace ? [] : [{ id: "corners" as const, label: "Corners", icon: "corners" as const }]),
         { id: "multiplayer" as const, label: "Multiplayer", icon: "multiplayer" as const },
         ...(leaderboardPanel ? [{ id: "leaderboard" as const, label: "Lap times", icon: "lapTimes" as const }] : []),
-        // A bug report from where it happened: the car's place on the circuit and a picture of the scene go with it
-        ...(props.reportFacts ? [{ id: "report" as const, label: "Report a bug", icon: "feedback" as const }] : []),
+        // A bug report from where it happened: the car's place on the circuit and a picture of the scene go with it. The
+        // title menu's name for the same form
+        ...(props.reportFacts ? [{ id: "report" as const, label: "Feedback", icon: "feedback" as const }] : []),
       ] satisfies { id: Panel; label: string; icon: IconName }[],
     [leaderboardPanel, mpRace, conditionsPanel, displayPanel, phoneScreen, props.reportFacts]
   );
@@ -426,6 +435,8 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
           </nav>
 
           <div className="flex min-h-0 min-w-0 flex-col gap-3.5">
+            {/* Up to eight sections on one row: the tabs share the width, their icons go in a window where only the
+                labels fit, and a strip narrower still scrolls with its cut ends faded */}
             <Tabs
               aria-label="Sections"
               tabs={tabs.map((t) => ({ id: t.id, label: t.label, icon: <Icon name={t.icon} /> }))}
@@ -434,6 +445,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
               prevPrompt={shoulder("lb", "Q")}
               nextPrompt={shoulder("rb", "E")}
               reselect
+              squeeze
               panelId={panelId}
               className="scroll-mt-4 [&>[role=tablist]]:flex-1"
             />
@@ -488,8 +500,9 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
 };
 
 /**
- * The session tab: the race's rules (the same rows as the title's Race panel), with Autopilot in the field card. Rows
- * that restart the race say so; the rest apply from the next start.
+ * The session tab: the race's rules (the same rows as the title's Race panel), with Autopilot in the field card. One
+ * AI opponents row says whether there is a field and how big; in practice the race and its rules wait behind a fold.
+ * Rows that restart the race say so; the rest apply from the next start.
  */
 export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
   const mpRace = p.telemetry.race?.multiplayer === true || p.raceRunning === true;
@@ -561,8 +574,9 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
       aiSkill={p.aiSkill}
       onChangeAiSkill={p.onChangeAiSkill}
       aiOpponents={p.aiOpponents}
-      // An online race has no AI cars to add
-      onToggleAiOpponents={mpRace ? undefined : p.onToggleAiOpponents}
+      // An online race has no AI cars to add, nor a hill climb (one car on the road at a time: the shell ignores the
+      // switch there)
+      onToggleAiOpponents={mpRace || getActivePointToPoint() ? undefined : p.onToggleAiOpponents}
       trackLengthM={getActiveTimedLengthM()}
       extraFieldRows={autopilot}
     />

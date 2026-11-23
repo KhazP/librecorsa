@@ -158,6 +158,21 @@ check("Compound/brand switches and dispose run cleanly", transitionsOk);
       bodyMesh.material === bodySlot.mat &&
       bodyMesh.material !== bodyMat
   );
+  // Regression (issue #161): tyre deformation shader uses downward outward contact normal, safe normalize, and single-return profile
+  const deformShader = {
+    uniforms: {},
+    vertexShader: "#include <common>\nvoid main() {\n#include <beginnormal_vertex>\n#include <begin_vertex>\n}",
+    fragmentShader: "#include <common>\nvoid main() {\n#include <color_fragment>\n}",
+  } as unknown as THREE.WebGLProgramParametersWithUniforms;
+  deformedMat.onBeforeCompile(deformShader, null as unknown as THREE.WebGLRenderer);
+  const deformVert = deformShader.vertexShader;
+  check(
+    "tyre deformation vertex shader uses safe normalize, downward contact normal, and single-return road profile",
+    deformVert.includes("vec3 tyreSafeNormalize(") &&
+      deformVert.includes("vec3(across.y, 0.0, along.y) - roadN") &&
+      !deformVert.includes("normalize(mix(n, surfN") &&
+      deformVert.includes("vec2 res = vec2(0.0);")
+  );
   handle.dispose();
   for (const s of slots) if (s.ownedBySkin) s.mat.dispose();
   baseMat.dispose();
