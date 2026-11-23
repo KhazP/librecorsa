@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import { Badge, type BadgeSize, type BadgeVariant } from "../Badge";
 
 /**
@@ -12,14 +13,19 @@ export const PositionBadge: React.FC<{
   size?: BadgeSize;
   variant?: BadgeVariant;
   className?: string;
-}> = ({ position, player = false, size = "md", variant, className = "" }) => (
-  <Badge
-    tone={player ? "player" : position === 1 ? "best" : "neutral"}
-    variant={variant ?? (player ? "solid" : "soft")}
-    size={size}
-    aria-label={`Position ${position}`}
-    className={`lc-mono justify-center tabular-nums ${className}`}
-  >
-    P{position}
-  </Badge>
-);
+}> = ({ position, player = false, size = "md", variant, className = "" }) => {
+  const tx = useTranslations("common.badges");
+  // The HUD redraws it many times a second: the words are resolved when the place or the language changes
+  const spoken = useMemo(() => tx("position", { position: String(position) }), [tx, position]);
+  return (
+    <Badge
+      tone={player ? "player" : position === 1 ? "best" : "neutral"}
+      variant={variant ?? (player ? "solid" : "soft")}
+      size={size}
+      aria-label={spoken}
+      className={`lc-mono justify-center tabular-nums ${className}`}
+    >
+      P{position}
+    </Badge>
+  );
+};

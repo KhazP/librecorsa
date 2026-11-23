@@ -1,15 +1,18 @@
 "use client";
 
 import React, { useRef } from "react";
+import { useTranslations } from "use-intl/react";
 import { focusables, useFocusNav } from "@/components/menu/useFocusNav";
 import { Button } from "@/components/ui/Button";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 
 /**
  * A page that only has something to say (not found, an error): the logo, a title, one line, and the way home. A
- * controller or the keys reach the button as in the game's menus; Start presses it.
+ * controller or the keys reach the button as in the game's menus; Start presses it. Its words come from the messages,
+ * so a server page (not found) can show it too.
  */
-export function SiteNotice({ title, children }: { title: string; children: React.ReactNode }) {
+export function SiteNotice({ notice }: { notice: "notFound" | "error" }) {
+  const tx = useTranslations("home.notice");
   const rootRef = useRef<HTMLElement | null>(null);
   useFocusNav(rootRef, {
     onStart: () => {
@@ -26,11 +29,11 @@ export function SiteNotice({ title, children }: { title: string; children: React
     >
       <LibreCorsaLogo variant="compact" size="md" />
       <div className="flex max-w-[36rem] flex-col items-center gap-4">
-        <h1 className="lc-h1 text-balance">{title}</h1>
-        <p className="lc-body m-0 text-[16px] leading-[1.55] text-balance">{children}</p>
+        <h1 className="lc-h1 text-balance">{tx(`${notice}.title`)}</h1>
+        <p className="lc-body m-0 text-[16px] leading-[1.55] text-balance">{tx(`${notice}.body`)}</p>
       </div>
       <Button href="/" variant="primary" size="lg" data-nav-default>
-        Back to home
+        {tx("back")}
       </Button>
     </main>
   );

@@ -152,12 +152,5 @@ export const day = (iso: string): string => {
   return `${d} ${MONTHS[m - 1]} ${y}`;
 };
 
-/** What is in the game, in the press page's words */
-export const GAME_FACTS: readonly [label: string, text: string][] = [
-  ["Physics", "Simulated 500 times a second, with tyre temperatures, active aero and hybrid power"],
-  ["Racing", "Hot laps, races against AI, multiplayer rooms and online lap times"],
-  ["Controls", "Keyboard, gamepad, touch or a force-feedback wheel"],
-  ["Plays on", "Any modern browser: computer, phone or tablet"],
-  ["Conditions", "Your choice of weather and time of day"],
-  ["Price", "Free. No account and no ads; tips are optional and unlock nothing"],
-];
+/** What is in the game, in the press page's words: each a label and a line (home.hub.facts in the messages) */
+export const GAME_FACTS = ["physics", "racing", "controls", "platforms", "conditions", "price"] as const;

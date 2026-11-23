@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import { Badge, type BadgeSize, type BadgeVariant } from "../Badge";
 import { Trend } from "../icons/Trend";
 
@@ -23,9 +24,13 @@ export const DeltaBadge: React.FC<{
   variant?: BadgeVariant;
   className?: string;
 }> = ({ seconds, best = false, digits = 3, size = "md", variant = "soft", className = "" }) => {
+  const tx = useTranslations("common.delta");
   const text = formatDelta(seconds, digits);
   const level = text.startsWith("\u00b1");
   const gaining = seconds < 0;
+  const trend = level ? "level" : gaining ? "faster" : "slower";
+  // The HUD redraws it many times a second: the words are resolved when the gap shown or the language changes
+  const spoken = useMemo(() => tx("spoken", { trend, seconds: text.slice(1), best: best ? "yes" : "no" }), [tx, trend, text, best]);
   return (
     <Badge
       tone={best ? "best" : level ? "neutral" : gaining ? "good" : "bad"}
@@ -33,11 +38,11 @@ export const DeltaBadge: React.FC<{
       size={size}
       className={`lc-mono tabular-nums ${className}`}
       leading={<Trend direction={level ? "level" : gaining ? "up" : "down"} size="0.9em" />}
-      aria-label={`${level ? "Level" : gaining ? `${text.slice(1)} seconds faster` : `${text.slice(1)} seconds slower`}${best ? ", best" : ""}`}
+      aria-label={spoken}
     >
       {text}
       {/* Colour is never the only sign: an overall best says so */}
-      {best ? <span>Best</span> : null}
+      {best ? <span>{tx("best")}</span> : null}
     </Badge>
   );
 };

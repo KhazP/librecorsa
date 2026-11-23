@@ -2,6 +2,8 @@
 
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { t, useI18nState } from "@/i18n/runtime";
+import type { MessageKey } from "@/i18n/types";
 import {
   BADGE_TYPES,
   MIN_RECORD_DRIVERS,
@@ -25,22 +27,46 @@ import { Icon } from "./icons/Icon";
 import type { IconName } from "./icons/registry";
 import { cx, uiZoomOf } from "./styles";
 
+/*
+ * The words come from the language runtime (`t`, re-rendered by useI18nState) rather than the provider, so the badges
+ * also draw on their own (scripts/verify-awards.ts renders them bare).
+ */
+
 interface BadgeStyle {
   icon: IconName;
   tone: BadgeToneProp;
   variant: BadgeVariant;
-  /** Short tag for compact board rows so every badge is told apart without relying on colour alone */
-  short: string;
 }
 
 const STYLE: Record<BadgeType, BadgeStyle> = {
-  weekly_gold: { icon: "challenge", tone: { color: "amber" }, variant: "soft", short: "G" },
-  weekly_silver: { icon: "medal", tone: { color: "chalk" }, variant: "soft", short: "S" },
-  weekly_bronze: { icon: "medal", tone: { color: "amber" }, variant: "outline", short: "B" },
-  track_record: { icon: "lapTimes", tone: "best", variant: "soft", short: "FL" },
-  og: { icon: "favouriteOn", tone: { color: "cyan" }, variant: "soft", short: "OG" },
-  bulb: { icon: "idea", tone: { color: "lemon" }, variant: "soft", short: "" },
+  weekly_gold: { icon: "challenge", tone: { color: "amber" }, variant: "soft" },
+  weekly_silver: { icon: "medal", tone: { color: "chalk" }, variant: "soft" },
+  weekly_bronze: { icon: "medal", tone: { color: "amber" }, variant: "outline" },
+  track_record: { icon: "lapTimes", tone: "best", variant: "soft" },
+  og: { icon: "favouriteOn", tone: { color: "cyan" }, variant: "soft" },
+  bulb: { icon: "idea", tone: { color: "lemon" }, variant: "soft" },
 };
+
+/** Short tag for compact board rows so every badge is told apart without relying on colour alone (none for the bulb) */
+function shortOf(type: BadgeType): string {
+  switch (type) {
+    case "weekly_gold":
+      return t("board.driverBadges.short.gold");
+    case "weekly_silver":
+      return t("board.driverBadges.short.silver");
+    case "weekly_bronze":
+      return t("board.driverBadges.short.bronze");
+    case "track_record":
+      return t("board.driverBadges.flCompact", { count: 1 });
+    case "og":
+      return t("board.driverBadges.short.og");
+    case "bulb":
+      return "";
+  }
+}
+
+/** A count shown only past one ("×2"): the plural messages' `=1` arm drops it */
+const timesOf = (count: number) => Math.max(1, count);
 
 /** Cap inline class-tagged FL pills on multi-class drivers so phone rows never wrap into clutter */
 const MAX_INLINE_FL_CLASSES = 2;
@@ -79,7 +105,7 @@ function tooltipOf(b: DriverBadge): string {
   const label = badgeLabel(b);
   if (b.type === "bulb") return label;
   const detail = badgeDetail(b);
-  return detail ? `${label} — ${detail}` : label;
+  return detail ? t("board.driverBadges.tooltip", { label, detail }) : label;
 }
 
 interface PopoverPlace {
@@ -119,6 +145,7 @@ const RecordPopover: React.FC<RecordPopoverProps> = ({
   onOpenBoard,
   onClose,
 }) => {
+  useI18nState();
   const popRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const hasOtherRecords = Boolean(context && context.scope !== "all" && allBoards.length > scopedBoards.length);
@@ -212,21 +239,21 @@ const RecordPopover: React.FC<RecordPopoverProps> = ({
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex min-w-0 items-center gap-2">
             <h4 id={titleId} className="m-0 truncate text-[14px] font-bold text-lc-chalk">
-              {driverName ? `${driverName} · Fastest Laps` : "Fastest Laps"}
+              {driverName ? t("board.driverBadges.popoverTitleNamed", { driver: driverName }) : t("board.driverBadges.popoverTitle")}
             </h4>
             <Badge size="sm" tone="best" variant="soft" icon="lapTimes" className="px-1.5">
               ×{shownCount}
             </Badge>
           </div>
           <p className="m-0 text-[11px] text-lc-slate">
-            Current P1 on contested boards ({MIN_RECORD_DRIVERS}+ drivers)
+            {t("board.driverBadges.contested", { min: String(MIN_RECORD_DRIVERS) })}
           </p>
         </div>
         <IconButton
           size="sm"
           variant="ghost"
           icon={<Icon name="close" />}
-          aria-label="Close fastest laps"
+          aria-label={t("board.driverBadges.close")}
           onClick={() => onClose(true)}
           className="-mt-1 -mr-1 shrink-0"
         />
@@ -243,7 +270,7 @@ const RecordPopover: React.FC<RecordPopoverProps> = ({
               !showAll ? "bg-white/12 text-lc-chalk" : "text-lc-fog hover:text-lc-chalk",
             )}
           >
-            {scopeLabel} ({scopedBoards.length})
+            {t("board.driverBadges.scopeCount", { scope: scopeLabel, count: String(scopedBoards.length) })}
           </button>
           <button
             type="button"
@@ -253,7 +280,7 @@ const RecordPopover: React.FC<RecordPopoverProps> = ({
               showAll ? "bg-white/12 text-lc-chalk" : "text-lc-fog hover:text-lc-chalk",
             )}
           >
-            All classes ({allBoards.length + manualCount})
+            {t("board.driverBadges.allClasses", { count: String(allBoards.length + manualCount) })}
           </button>
         </div>
       ) : null}
@@ -289,8 +316,11 @@ const RecordPopover: React.FC<RecordPopoverProps> = ({
                           <span className="lc-mono text-[12px] font-bold text-lc-best-ink">{formatLapTime(b.lapTimeMs)}</span>
                         ) : null}
                         {b.drivers !== undefined ? (
-                          <span className="lc-mono text-[11px] text-lc-slate" title={`${b.drivers} drivers on this board`}>
-                            {b.drivers} drv
+                          <span
+                            className="lc-mono text-[11px] text-lc-slate"
+                            title={t("board.driverBadges.boardDrivers", { count: b.drivers, drivers: String(b.drivers) })}
+                          >
+                            {t("board.driverBadges.driversShort", { drivers: String(b.drivers) })}
                           </span>
                         ) : null}
                         {canJump ? (
@@ -324,14 +354,16 @@ const RecordPopover: React.FC<RecordPopoverProps> = ({
         })}
         {manualCount > 0 && (showAll || !context || context.scope === "all") ? (
           <p className="m-0 text-[11px] text-lc-slate">
-            +{manualCount} awarded manually{note ? ` — ${note}` : ""}
+            {note
+              ? t("board.driverBadges.manualNote", { count: String(manualCount), note })
+              : t("board.driverBadges.manual", { count: String(manualCount) })}
           </p>
         ) : null}
       </div>
 
       {onOpenBoard && groups.length > 0 ? (
         <p className="m-0 border-t border-white/6 pt-2 text-[11px] text-lc-slate">
-          Tap any circuit to open its board and challenge the record.
+          {t("board.driverBadges.tapCircuit")}
         </p>
       ) : null}
     </div>,
@@ -354,13 +386,13 @@ function buildFlPills(b: DriverBadge, compact: boolean, context?: BadgeContext):
 
   // Manual-only FL (no board metadata)
   if (classGroups.length === 0) {
-    const countText = b.count > 1 ? `×${b.count}` : "";
+    const count = timesOf(b.count);
     return [
       {
         key: "track_record",
         tone: "best",
         icon: "lapTimes",
-        text: compact ? `FL${countText}` : `Fastest Lap${countText ? ` ${countText}` : ""}`,
+        text: compact ? t("board.driverBadges.flCompact", { count }) : t("board.driverBadges.fastestLap", { count }),
         ariaLabel: badgeLabel(b),
         title: fullTooltip,
       },
@@ -371,14 +403,16 @@ function buildFlPills(b: DriverBadge, compact: boolean, context?: BadgeContext):
   if (context?.scope === "vehicle") {
     const classId = vehicleClassOf(context.vehicle) ?? classGroups[0].classId;
     const meta = VEHICLE_CLASS_META[classId];
-    const countText = b.count > 1 ? `×${b.count}` : "";
+    const count = timesOf(b.count);
     return [
       {
         key: `track_record:${context.vehicle}`,
         tone: { color: meta.color },
         icon: "lapTimes",
-        text: compact ? `FL${countText}` : `${meta.short} Fastest Lap${countText ? ` ${countText}` : ""}`,
-        ariaLabel: `${vehicleDisplayName(context.vehicle)} Fastest Lap${countText ? ` ${countText}` : ""}`,
+        text: compact
+          ? t("board.driverBadges.flCompact", { count })
+          : t("board.driverBadges.classFastestLap", { class: meta.short, count }),
+        ariaLabel: t("board.driverBadges.carFastestLap", { car: vehicleDisplayName(context.vehicle), count }),
         title: fullTooltip,
       },
     ];
@@ -387,14 +421,16 @@ function buildFlPills(b: DriverBadge, compact: boolean, context?: BadgeContext):
   // Single-class room/filter: class-colored & class-tagged pill
   if (context?.scope === "class") {
     const meta = VEHICLE_CLASS_META[context.classId];
-    const countText = b.count > 1 ? `×${b.count}` : "";
+    const count = timesOf(b.count);
     return [
       {
         key: `track_record:${context.classId}`,
         tone: { color: meta.color },
         icon: "lapTimes",
-        text: compact ? `FL·${meta.short}${countText}` : `${meta.short} Fastest Lap${countText ? ` ${countText}` : ""}`,
-        ariaLabel: `${meta.label} Fastest Lap${countText ? ` ${countText}` : ""}`,
+        text: compact
+          ? t("board.driverBadges.flClassCompact", { class: meta.short, count })
+          : t("board.driverBadges.classFastestLap", { class: meta.short, count }),
+        ariaLabel: t("board.driverBadges.classFastestLap", { class: meta.label, count }),
         title: fullTooltip,
       },
     ];
@@ -403,13 +439,15 @@ function buildFlPills(b: DriverBadge, compact: boolean, context?: BadgeContext):
   // All cars / open lobby / Hall of Fame: up to 2 class-colored & class-tagged pills + optional +N overflow
   const pills: FlPillSpec[] = classGroups.slice(0, MAX_INLINE_FL_CLASSES).map((g) => {
     const meta = VEHICLE_CLASS_META[g.classId];
-    const countText = g.count > 1 ? `×${g.count}` : "";
+    const count = timesOf(g.count);
     return {
       key: `track_record:${g.classId}`,
       tone: { color: meta.color },
       icon: "lapTimes",
-      text: compact ? `FL·${meta.short}${countText}` : `${meta.short} FL${countText ? ` ${countText}` : ""}`,
-      ariaLabel: `${meta.label} Fastest Lap${countText ? ` ${countText}` : ""}`,
+      text: compact
+        ? t("board.driverBadges.flClassCompact", { class: meta.short, count })
+        : t("board.driverBadges.classFl", { class: meta.short, count }),
+      ariaLabel: t("board.driverBadges.classFastestLap", { class: meta.label, count }),
       title: fullTooltip,
     };
   });
@@ -420,7 +458,7 @@ function buildFlPills(b: DriverBadge, compact: boolean, context?: BadgeContext):
       key: "track_record:more",
       tone: "best",
       text: `+${remaining}`,
-      ariaLabel: `${remaining} more Fastest Lap records`,
+      ariaLabel: t("board.driverBadges.moreRecords", { count: remaining }),
       title: fullTooltip,
     });
   }
@@ -438,6 +476,7 @@ export const DriverBadges: React.FC<DriverBadgesProps> = ({
   interactive = true,
   className = "",
 }) => {
+  useI18nState();
   const [openAnchor, setOpenAnchor] = useState<HTMLElement | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
 
@@ -494,7 +533,7 @@ export const DriverBadges: React.FC<DriverBadgesProps> = ({
                 key={p.key}
                 type="button"
                 title={p.title}
-                aria-label={`${p.ariaLabel} — inspect fastest laps`}
+                aria-label={t("board.driverBadges.inspect", { badge: p.ariaLabel })}
                 aria-haspopup="dialog"
                 aria-expanded={isOpen}
                 onClick={(e) => {
@@ -515,12 +554,14 @@ export const DriverBadges: React.FC<DriverBadgesProps> = ({
           });
         }
         const s = STYLE[b.type];
-        const countText = b.count > 1 ? `×${b.count}` : "";
+        const short = shortOf(b.type);
         const text = compact
-          ? s.short
-            ? `${s.short}${countText}`
-            : countText || null
-          : `${badgeName(b.type)}${b.count > 1 ? ` ${countText}` : ""}`;
+          ? short
+            ? t("board.driverBadges.shortTimes", { short, count: timesOf(b.count) })
+            : b.count > 1
+              ? `×${b.count}`
+              : null
+          : t("board.driverBadges.named", { name: badgeName(b.type), count: timesOf(b.count) });
         return (
           <Badge
             key={b.type}
@@ -556,26 +597,21 @@ export const DriverBadges: React.FC<DriverBadgesProps> = ({
 
 const WEEKLY_MEDALS = ["weekly_gold", "weekly_silver", "weekly_bronze"] as const;
 type WeeklyMedalType = (typeof WEEKLY_MEDALS)[number];
-const isWeeklyMedal = (t: BadgeType): t is WeeklyMedalType => (WEEKLY_MEDALS as readonly BadgeType[]).includes(t);
+const isWeeklyMedal = (type: BadgeType): type is WeeklyMedalType => (WEEKLY_MEDALS as readonly BadgeType[]).includes(type);
 
-const WEEKLY_PLACE: Record<WeeklyMedalType, string> = {
-  weekly_gold: "1st",
-  weekly_silver: "2nd",
-  weekly_bronze: "3rd",
-};
-
-function weeklyGroupLabel(medals: readonly WeeklyMedalType[]): string {
-  if (medals.length === 1) return `Weekly ${WEEKLY_PLACE[medals[0]]}`;
-  if (medals.length === 3) return "Weekly 1st–3rd";
-  if (medals[0] === "weekly_gold" && medals[1] === "weekly_silver") return "Weekly 1st–2nd";
-  if (medals[0] === "weekly_silver" && medals[1] === "weekly_bronze") return "Weekly 2nd–3rd";
-  return `Weekly ${medals.map((m) => WEEKLY_PLACE[m]).join(", ")}`;
+/** The weekly medals in the key, as the message's select value: one place, or the run of places held */
+function weeklyGroup(medals: readonly WeeklyMedalType[]): string {
+  if (medals.length === 3) return "all";
+  if (medals.length === 1) return medals[0] === "weekly_gold" ? "gold" : medals[0] === "weekly_silver" ? "silver" : "bronze";
+  if (medals[0] === "weekly_gold" && medals[1] === "weekly_silver") return "goldSilver";
+  if (medals[0] === "weekly_silver" && medals[1] === "weekly_bronze") return "silverBronze";
+  return "goldBronze";
 }
 
-const MEANING: Record<Exclude<BadgeType, WeeklyMedalType>, string> = {
-  track_record: "Fastest lap",
-  og: "Physics V1",
-  bulb: "Game idea",
+const MEANING: Record<Exclude<BadgeType, WeeklyMedalType>, MessageKey> = {
+  track_record: "board.driverBadges.legend.trackRecord",
+  og: "board.driverBadges.legend.og",
+  bulb: "board.driverBadges.legend.bulb",
 };
 
 function flLegendMeta(context?: BadgeContext): { tone: BadgeToneProp; short: string } {
@@ -584,19 +620,19 @@ function flLegendMeta(context?: BadgeContext): { tone: BadgeToneProp; short: str
     const meta = classId ? VEHICLE_CLASS_META[classId] : null;
     return {
       tone: meta ? { color: meta.color } : "best",
-      short: "FL",
+      short: t("board.driverBadges.flCompact", { count: 1 }),
     };
   }
   if (context?.scope === "class") {
     const meta = VEHICLE_CLASS_META[context.classId];
     return {
       tone: { color: meta.color },
-      short: `FL·${meta.short}`,
+      short: t("board.driverBadges.flClassCompact", { class: meta.short, count: 1 }),
     };
   }
   return {
     tone: "best",
-    short: "FL",
+    short: t("board.driverBadges.flCompact", { count: 1 }),
   };
 }
 
@@ -610,42 +646,43 @@ export interface BadgeLegendProps {
 
 /** Compact key for the badge pills visible on a board or lobby */
 export const BadgeLegend: React.FC<BadgeLegendProps> = ({ badges, context, className = "" }) => {
+  useI18nState();
   const visible = filterBadgesForContext(badges, context);
   const present = new Set(visible.map((b) => b.type));
-  const weekly = WEEKLY_MEDALS.filter((t) => present.has(t));
-  const others = BADGE_TYPES.filter((t): t is Exclude<BadgeType, WeeklyMedalType> => !isWeeklyMedal(t) && present.has(t));
+  const weekly = WEEKLY_MEDALS.filter((type) => present.has(type));
+  const others = BADGE_TYPES.filter((type): type is Exclude<BadgeType, WeeklyMedalType> => !isWeeklyMedal(type) && present.has(type));
   if (weekly.length === 0 && others.length === 0) return null;
   const flMeta = flLegendMeta(context);
 
   return (
-    <ul className={cx("m-0 flex list-none flex-wrap items-center gap-x-4 gap-y-1.5 p-0", className)} aria-label="Badge key">
+    <ul className={cx("m-0 flex list-none flex-wrap items-center gap-x-4 gap-y-1.5 p-0", className)} aria-label={t("board.driverBadges.legend.key")}>
       {weekly.length > 0 ? (
         <li className="inline-flex items-center gap-1.5 whitespace-nowrap">
           <span aria-hidden="true" className="inline-flex items-center gap-1">
-            {weekly.map((t) => {
-              const s = STYLE[t];
+            {weekly.map((type) => {
+              const s = STYLE[type];
               return (
-                <Badge key={t} tone={s.tone} variant={s.variant} size="sm" icon={s.icon} className="px-1.5">
-                  {s.short}
+                <Badge key={type} tone={s.tone} variant={s.variant} size="sm" icon={s.icon} className="px-1.5">
+                  {shortOf(type)}
                 </Badge>
               );
             })}
           </span>
-          <span className="text-[12px] leading-none text-lc-fog">{weeklyGroupLabel(weekly)}</span>
+          <span className="text-[12px] leading-none text-lc-fog">{t("board.driverBadges.legend.weekly", { medals: weeklyGroup(weekly) })}</span>
         </li>
       ) : null}
-      {others.map((t) => {
-        const s = STYLE[t];
-        const tone = t === "track_record" ? flMeta.tone : s.tone;
-        const short = t === "track_record" ? flMeta.short : s.short;
+      {others.map((type) => {
+        const s = STYLE[type];
+        const tone = type === "track_record" ? flMeta.tone : s.tone;
+        const short = type === "track_record" ? flMeta.short : shortOf(type);
         return (
-          <li key={t} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          <li key={type} className="inline-flex items-center gap-1.5 whitespace-nowrap">
             <span aria-hidden="true" className="inline-flex">
               <Badge tone={tone} variant={s.variant} size="sm" icon={s.icon} className="px-1.5">
                 {short || null}
               </Badge>
             </span>
-            <span className="text-[12px] leading-none text-lc-fog">{MEANING[t]}</span>
+            <span className="text-[12px] leading-none text-lc-fog">{t(MEANING[type])}</span>
           </li>
         );
       })}

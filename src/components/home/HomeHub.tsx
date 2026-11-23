@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { currentInputMode, useInputMode } from "@/components/menu/input-mode";
 import { focusables, focusOnHover, useFocusNav } from "@/components/menu/useFocusNav";
 import { SourceChip } from "@/components/SourceChip";
@@ -47,15 +48,16 @@ import { TEXT_LINK } from "./SitePage";
  */
 
 type Tab = "home" | "circuits" | "cars" | "laps" | "whats-new" | "download" | "about";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "home", label: "Home" },
-  { id: "circuits", label: "Circuits" },
-  { id: "cars", label: "Cars" },
-  { id: "laps", label: "Lap times" },
-  { id: "whats-new", label: "What's new" },
-  { id: "download", label: "Download" },
-  { id: "about", label: "About" },
-];
+/** The sections, each with its label's key (home.hub.tabs in the messages) */
+const TABS = [
+  { id: "home", key: "home" },
+  { id: "circuits", key: "circuits" },
+  { id: "cars", key: "cars" },
+  { id: "laps", key: "laps" },
+  { id: "whats-new", key: "whatsNew" },
+  { id: "download", key: "download" },
+  { id: "about", key: "about" },
+] as const satisfies readonly { id: Tab; key: string }[];
 
 /** The What's new feed the visitor last opened (its fingerprint), so a new or updated day lights the tab again */
 const WHATS_NEW_SEEN_KEY = "librecorsa.whatsNewSeen";
@@ -73,10 +75,10 @@ function whatsNewFingerprint(days: readonly WhatsNewDay[]): string {
 }
 
 /** The cyan dot after "What's new" while it holds notes the visitor has not opened (colour is not alone: it is named) */
-const UNREAD_DOT = (
+const UNREAD_DOT = (name: string) => (
   <>
     <span aria-hidden className="inline-flex size-1.5 shrink-0 rounded-full bg-lc-cyan" />
-    <span className="sr-only"> (unread updates)</span>
+    <span className="sr-only"> {name}</span>
   </>
 );
 
@@ -114,27 +116,32 @@ const WALL = "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%
 /** The page's panel id, which the tabs control and the skip link lands on */
 const PANEL_ID = "home-panel";
 
-/** The Circuits filters: one pick each, narrowing the wall together */
+/** The Circuits filters: one pick each, narrowing the wall together (named in home.hub.venueFilters) */
 type VenueFilterKey = "type" | "country" | "modder";
-const VENUE_FILTERS: readonly { key: VenueFilterKey; all: string; label: string; of: (v: HomeVenue) => readonly string[] }[] = [
-  { key: "type", all: "All types", label: "Type", of: (v) => v.types },
-  { key: "country", all: "All locations", label: "Location", of: (v) => [v.country] },
-  { key: "modder", all: "All modders", label: "Modder", of: (v) => v.modders },
+const VENUE_FILTERS: readonly { key: VenueFilterKey; of: (v: HomeVenue) => readonly string[] }[] = [
+  { key: "type", of: (v) => v.types },
+  { key: "country", of: (v) => [v.country] },
+  { key: "modder", of: (v) => v.modders },
 ];
 const NO_VENUE_FILTERS: Record<VenueFilterKey, string> = { type: "", country: "", modder: "" };
 
-/** The Cars filters: one pick each, narrowing the wall together. Physics is the game's car browser filter, in its words */
+/**
+ * The Cars filters: one pick each, narrowing the wall together (named in home.hub.carFilters). Physics is the game's
+ * car browser filter, in its words
+ */
 type CarFilterKey = "class" | "physics" | "modder";
-const CAR_FILTERS: readonly { key: CarFilterKey; all: string; label: string; of: (c: HomeCar, text: HomeQualityTexts) => string }[] = [
-  { key: "class", all: "All classes", label: "Class", of: (c) => c.classTitle },
-  { key: "physics", all: "Any physics", label: "Physics", of: (c, text) => carQualityText(c, text).filterLabel },
-  { key: "modder", all: "All modders", label: "Modder", of: (c) => c.source.author },
+const CAR_FILTERS: readonly { key: CarFilterKey; of: (c: HomeCar, text: HomeQualityTexts) => string }[] = [
+  { key: "class", of: (c) => c.classTitle },
+  { key: "physics", of: (c, text) => carQualityText(c, text).filterLabel },
+  { key: "modder", of: (c) => c.source.author },
 ];
 const NO_CAR_FILTERS: Record<CarFilterKey, string> = { class: "", physics: "", modder: "" };
 
 export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   // The Q / E caps name physical keys as printed on this keyboard
   useKeyLayout();
+  const tx = useTranslations("home.hub");
+  const tc = useTranslations("common");
   const [tab, setTab] = useState<Tab>("home");
   const [layoutId, setLayoutId] = useState(data.defaultTrackId);
   const [carId, setCarId] = useState(data.defaultCarId);
@@ -184,7 +191,15 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
       // Storage unavailable: the dot stays off for this visit
     }
   }, [tab, whatsNewToken]);
-  const tabs = useMemo(() => TABS.map((t) => (t.id === "whats-new" && unseenUpdates ? { ...t, badge: UNREAD_DOT } : t)), [unseenUpdates]);
+  const tabs = useMemo(
+    () =>
+      TABS.map(({ id, key }) => ({
+        id: id as Tab,
+        label: tx(`tabs.${key}`),
+        ...(id === "whats-new" && unseenUpdates ? { badge: UNREAD_DOT(tx("unread")) } : {}),
+      })),
+    [unseenUpdates, tx],
+  );
 
   // A returning player's last circuit, car and liveries (the page is built with the defaults)
   const [f1LiveryId, setF1LiveryId] = useState<string | null>(null);
@@ -234,7 +249,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   }, [tab, venue.hero]);
   /** A layout's length and corners, in the player's units */
   const lengthOf = (l: HomeLayout) =>
-    `${distanceIn(l.lengthM / 1000, units.speed).toFixed(2)} ${DISTANCE_LABEL[units.speed]}, ${l.turns} turns`;
+    tx("length", { distance: distanceIn(l.lengthM / 1000, units.speed).toFixed(2), unit: DISTANCE_LABEL[units.speed], turns: l.turns });
 
   const activeLiveryIdOf = (c: HomeCar): string => {
     if (c.liveryStore === "settings") {
@@ -318,32 +333,32 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
 
   /** The prompts along the bottom: the controller's buttons once one is used, else the keys */
   // The lap times' pages turn with the triggers (Z / C) while the board is on the Lap times section
-  const pagePrompt: Prompt[] = tab === "laps" && boardShown ? [{ action: "pages", label: "Lap times page" }] : [];
+  const pagePrompt: Prompt[] = tab === "laps" && boardShown ? [{ action: "pages", label: tx("prompts.page") }] : [];
   const prompts: Prompt[] = pad
     ? [
-        { action: "move", label: "Move" },
-        { action: "select", label: "Select" },
-        ...(tab !== "home" ? [{ action: "back", label: "Back" } as const] : []),
-        { action: "tabs", label: "Switch section" },
+        { action: "move", label: tx("prompts.move") },
+        { action: "select", label: tx("prompts.select") },
+        ...(tab !== "home" ? [{ action: "back", label: tx("prompts.back") } as const] : []),
+        { action: "tabs", label: tx("prompts.switchSection") },
         ...pagePrompt,
-        { action: "start", label: "Drive" },
+        { action: "start", label: tx("prompts.drive") },
       ]
     : [
-        { action: "tabs", label: "Switch section" },
+        { action: "tabs", label: tx("prompts.switchSection") },
         ...pagePrompt,
-        { action: "start", label: "Drive", key: "Enter" },
+        { action: "start", label: tx("prompts.drive"), key: "Enter" },
       ];
 
   return (
     <>
       <div className="sr-only focus-within:not-sr-only focus-within:fixed focus-within:top-3 focus-within:left-3 focus-within:z-(--z-lc-notice)">
         <Button href={`#${PANEL_ID}`} native variant="secondary" size="sm">
-          Skip to content
+          {tx("skip")}
         </Button>
       </div>
       <div ref={rootRef} className="flex h-dvh flex-col bg-lc-void text-lc-chalk">
         {/* Read by screen readers and search engines */}
-        <h1 className="sr-only">LibreCorsa: free open-source racing simulator in your browser</h1>
+        <h1 className="sr-only">{tx("heading")}</h1>
         <p className="sr-only">{SITE_DESCRIPTION}</p>
 
         <header className={`flex shrink-0 flex-wrap items-center gap-x-3 gap-y-3 pt-[max(1rem,env(safe-area-inset-top))] pb-4 sm:gap-x-6 ${GUTTER}`}>
@@ -360,7 +375,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
               tabs={tabs}
               value={tab}
               onChange={(id) => go(id)}
-              aria-label="Sections"
+              aria-label={tx("sections")}
               panelId={PANEL_ID}
               size="sm"
               prevPrompt={pad ? <PadGlyph button="lb" family={family} /> : <KeyCap>{keyLabel("KeyQ")}</KeyCap>}
@@ -379,7 +394,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
             onClick={() => rememberPicks(picks)}
             className="ml-auto"
           >
-            Drive
+            {tx("drive")}
           </Button>
         </header>
 
@@ -389,7 +404,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
             ref={panelRef}
             id={PANEL_ID}
             role="tabpanel"
-            aria-label={TABS.find((t) => t.id === tab)?.label}
+            aria-label={tabs.find((t) => t.id === tab)?.label}
             tabIndex={-1}
             data-nav-scroll
             className={`min-h-0 flex-1 overflow-y-auto overscroll-contain pt-2 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none max-lg:pb-24 ${GUTTER}`}
@@ -401,17 +416,17 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                   onClick={() => rememberPicks(picks)}
                   onPointerEnter={focusOnHover}
                   data-nav-default
-                  aria-label={`Drive: ${venue.name}, ${layout.layout}, in the ${car.title}`}
+                  aria-label={tx("driveTile.label", { venue: venue.name, layout: layout.layout, car: car.title })}
                   className={`${TILE} flex min-h-[300px] lg:col-span-7 lg:row-span-2`}
                 >
                   <VenueHero venueId={venue.id} hero={venue.hero} />
                   {/* A scrim under the words, so they read over any frame of the picture */}
                   <span aria-hidden className="absolute inset-0 bg-linear-to-t from-lc-void/95 via-lc-void/40 via-45% to-transparent to-70%" />
                   <span className="relative mt-auto flex w-full flex-col gap-3 p-6 sm:p-8">
-                    <span className="lc-disp text-[clamp(52px,7.4vw,112px)]">Drive</span>
+                    <span className="lc-disp text-[clamp(52px,7.4vw,112px)]">{tx("driveTile.title")}</span>
                     <span className="flex items-center gap-2 text-[15px] font-semibold text-lc-fog">
                       <Icon name="drive" className="text-lc-chalk" />
-                      {venue.name}, {layout.layout}. {car.title}.
+                      {tx("driveTile.detail", { venue: venue.name, layout: layout.layout, car: car.title })}
                     </span>
                   </span>
                 </a>
@@ -420,7 +435,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                   type="button"
                   onClick={() => go("circuits")}
                   onPointerEnter={focusOnHover}
-                  aria-label={`Change circuit: ${venue.name}, ${layout.layout}`}
+                  aria-label={tx("circuitTile.label", { venue: venue.name, layout: layout.layout })}
                   className={`${TILE} flex min-h-[230px] cursor-pointer p-6 lg:col-span-5`}
                 >
                   <span className="relative z-10 flex max-w-[52%] flex-col items-start gap-2">
@@ -433,7 +448,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                       <CircuitQualityTag layout={layout} text={data.qualityText} size="sm" />
                     </span>
                     <span className={`${MORE} mt-auto pt-3`}>
-                      Change circuit
+                      {tx("circuitTile.more")}
                       <Icon name="next" />
                     </span>
                   </span>
@@ -444,7 +459,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                         key={layout.id}
                         outline={layout.outline}
                         speedRef={speedRef}
-                        label={`Map of ${venue.name}, ${layout.layout}`}
+                        label={tx("circuitTile.map", { venue: venue.name, layout: layout.layout })}
                         className="block h-auto min-h-0 w-full shrink"
                       />
                       {/* The racing line's speed where the dot is (the dot laps at 4x, so not its speed on screen);
@@ -457,7 +472,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                             </span>
                             {SPEED_LABEL[units.speed]}
                           </span>
-                          <span>on the racing line</span>
+                          <span>{tx("circuitTile.onLine")}</span>
                         </span>
                       ) : null}
                     </span>
@@ -468,7 +483,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                   type="button"
                   onClick={() => go("cars")}
                   onPointerEnter={focusOnHover}
-                  aria-label={`Change car: ${car.title}`}
+                  aria-label={tx("carTile.label", { car: car.title })}
                   className={`${TILE} flex min-h-[230px] cursor-pointer flex-col gap-3 p-5 lg:col-span-3`}
                 >
                   <span className="flex min-h-0 flex-1 items-center justify-center">
@@ -476,12 +491,10 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                   </span>
                   <span className="flex flex-col items-start gap-1.5">
                     <span className={TILE_TITLE}>{car.title}</span>
-                    <span className="lc-body text-lc-slate">
-                      {car.classTitle}, {car.year}
-                    </span>
+                    <span className="lc-body text-lc-slate">{tx("classYear", { class: car.classTitle, year: String(car.year) })}</span>
                     <CarQualityTag car={car} text={data.qualityText} size="sm" className="mt-0.5" />
                     <span className={`${MORE} pt-2`}>
-                      Change car
+                      {tx("carTile.more")}
                       <Icon name="next" />
                     </span>
                   </span>
@@ -495,12 +508,12 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     href={withBasePath("/press")}
                     onPointerEnter={focusOnHover}
                     data-card-link=""
-                    aria-label={`Press & media: ${data.coverageCount} articles and videos, and the press kit`}
+                    aria-label={tx("press.label", { count: data.coverageCount, n: String(data.coverageCount) })}
                     className="absolute inset-0 rounded-[inherit] outline-none focus:shadow-none"
                   />
                   <span aria-hidden className="pointer-events-none flex flex-col gap-1">
-                    <span className={TILE_TITLE}>Press & media</span>
-                    <span className="lc-hint text-[13px]">{data.coverageCount} articles &amp; videos</span>
+                    <span className={TILE_TITLE}>{tx("press.title")}</span>
+                    <span className="lc-hint text-[13px]">{tx("press.count", { count: data.coverageCount, n: String(data.coverageCount) })}</span>
                   </span>
                   <span className="pointer-events-none flex min-h-0 flex-1 flex-col overflow-hidden [mask-image:linear-gradient(to_bottom,#000_calc(100%-1rem),transparent)]">
                     {pressRows.map((row) => (
@@ -515,7 +528,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                                 href={p.url}
                                 target="_blank"
                                 rel="noopener"
-                                aria-label={`${row.outlet} on ${p.name}`}
+                                aria-label={tx("press.onPlatform", { outlet: row.outlet, platform: p.name })}
                                 className={cx(
                                   "pointer-events-auto inline-flex items-center rounded-lc-nub text-[12px] focus-visible:outline-offset-[-2px] pointer-coarse:min-h-11 pointer-coarse:min-w-11",
                                   TEXT_LINK,
@@ -530,7 +543,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     ))}
                   </span>
                   <span aria-hidden className={cx(MORE, LINK_CARD_MORE, "pointer-events-none mt-auto shrink-0")}>
-                    Coverage and press kit
+                    {tx("press.more")}
                     <Icon name="next" />
                   </span>
                 </div>
@@ -555,14 +568,14 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
             {tab === "whats-new" ? (
               <div className="flex max-w-[880px] flex-col xl:max-w-[1800px]">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 pb-4">
-                  <p className="lc-body m-0 text-lc-slate">Patch notes and recent updates.</p>
+                  <p className="lc-body m-0 text-lc-slate">{tx("whatsNew.intro")}</p>
                   <a href={`${data.repoUrl}/commits/main`} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`inline-flex items-center gap-1 ${TEXT_LINK}`}>
-                    Commit log on GitHub
+                    {tx("whatsNew.commitLog")}
                     <Icon name="externalLink" />
                   </a>
                 </div>
                 {data.whatsNew.length === 0 ? (
-                  <EmptyState icon={<Icon name="info" size="lg" />}>No patch notes yet.</EmptyState>
+                  <EmptyState icon={<Icon name="info" size="lg" />}>{tx("whatsNew.empty")}</EmptyState>
                 ) : (
                   <ol className="m-0 flex list-none flex-col p-0">
                     {data.whatsNew.map((entry, index) => (
@@ -581,9 +594,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                             data-nav-default={index === 0 ? "" : undefined}
                             className="inline-flex items-center gap-1 rounded-lc-nub text-[12px] text-lc-slate no-underline transition-colors duration-200 hover:text-lc-chalk focus-visible:text-lc-chalk pointer-coarse:min-h-11"
                           >
-                            <span className="lc-data">
-                              {entry.commits} {entry.commits === 1 ? "commit" : "commits"}
-                            </span>
+                            <span className="lc-data">{tx("whatsNew.commits", { count: entry.commits })}</span>
                             <Icon name="externalLink" size="sm" />
                           </a>
                         </div>
@@ -607,7 +618,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
 
             {tab === "circuits" ? (
               <div className="flex flex-col gap-5">
-                <div role="group" aria-label="Filter circuits" className="flex flex-wrap items-center gap-2">
+                <div role="group" aria-label={tx("circuits.filter")} className="flex flex-wrap items-center gap-2">
                   {VENUE_FILTERS.map((f) => {
                     const pool = venuesWith(f.key);
                     const all = [...new Set(data.venues.flatMap((v) => f.of(v)))].sort((a, b) => a.localeCompare(b));
@@ -620,21 +631,24 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     return (
                       <Select
                         key={f.key}
-                        aria-label={f.label}
+                        aria-label={tx(`venueFilters.${f.key}.label`)}
                         value={picked}
                         onChange={(v) => setVenueFilters((cur) => ({ ...cur, [f.key]: v }))}
-                        options={[{ id: "", label: f.all }, ...options.map((o) => ({ id: o, label: `${o} (${countOf(o)})` }))]}
+                        options={[
+                          { id: "", label: tx(`venueFilters.${f.key}.all`) },
+                          ...options.map((o) => ({ id: o, label: tx("filterOption", { option: o, count: String(countOf(o)) }) })),
+                        ]}
                       />
                     );
                   })}
                   {venuesFiltered ? (
                     <Button variant="ghost" size="sm" icon={<Icon name="reset" />} onClick={() => setVenueFilters(NO_VENUE_FILTERS)}>
-                      Clear filters
+                      {tx("clearFilters")}
                     </Button>
                   ) : null}
                   {/* Mounted from the start, so the first change of filter is announced */}
                   <p role="status" className="lc-data m-0 ml-auto text-[12px] font-medium text-lc-slate">
-                    {venuesFiltered ? `${shownVenues.length} of ${data.venues.length} circuits` : ""}
+                    {venuesFiltered ? tx("circuits.shown", { shown: String(shownVenues.length), total: String(data.venues.length) }) : ""}
                   </p>
                 </div>
                 {shownVenues.length ? null : (
@@ -642,11 +656,11 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     icon={<Icon name="filter" />}
                     action={
                       <Button size="sm" onClick={() => setVenueFilters(NO_VENUE_FILTERS)}>
-                        Clear filters
+                        {tx("clearFilters")}
                       </Button>
                     }
                   >
-                    No circuit matches these filters.
+                    {tx("circuits.empty")}
                   </EmptyState>
                 )}
                 <div className={WALL}>
@@ -689,7 +703,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                                 <span className="mt-0.5 flex items-center gap-1.5 text-[12px]">
                                   <Icon
                                     name="lapTimes"
-                                    label="Personal best"
+                                    label={tx("circuits.personalBest")}
                                     size="xs"
                                     className={pb.forCurrentCar && !pb.legacyPhysics ? "text-lc-best" : "text-lc-slate"}
                                   />
@@ -703,7 +717,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                                   </span>
                                   {pb.legacyPhysics ? (
                                     <span className="truncate text-[11px] text-lc-slate">
-                                      {pb.forCurrentCar ? "Old physics" : `${pbCarLabel} · Old`}
+                                      {pb.forCurrentCar ? tx("circuits.oldPhysics") : tx("circuits.carOldPhysics", { car: pbCarLabel })}
                                     </span>
                                   ) : !pb.forCurrentCar ? (
                                     <span className="truncate text-[11px] text-lc-slate">{pbCarLabel}</span>
@@ -750,7 +764,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
 
             {tab === "cars" ? (
               <div className="flex flex-col gap-5">
-                <div role="group" aria-label="Filter cars" className="flex flex-wrap items-center gap-2">
+                <div role="group" aria-label={tx("cars.filter")} className="flex flex-wrap items-center gap-2">
                   {CAR_FILTERS.map((f) => {
                     const pool = carsWith(f.key);
                     const all = [...new Set(data.cars.map((c) => f.of(c, data.qualityText)).filter(Boolean))];
@@ -763,13 +777,16 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     return (
                       <Select
                         key={f.key}
-                        aria-label={f.label}
+                        aria-label={tx(`carFilters.${f.key}.label`)}
                         value={picked}
                         onChange={(v) => {
                           setOpenLiveriesFor(null);
                           setCarFilters((cur) => ({ ...cur, [f.key]: v }));
                         }}
-                        options={[{ id: "", label: f.all }, ...options.map((o) => ({ id: o, label: `${o} (${countOf(o)})` }))]}
+                        options={[
+                          { id: "", label: tx(`carFilters.${f.key}.all`) },
+                          ...options.map((o) => ({ id: o, label: tx("filterOption", { option: o, count: String(countOf(o)) }) })),
+                        ]}
                       />
                     );
                   })}
@@ -783,12 +800,12 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                         setCarFilters(NO_CAR_FILTERS);
                       }}
                     >
-                      Clear filters
+                      {tx("clearFilters")}
                     </Button>
                   ) : null}
                   {/* Mounted from the start, so the first change of filter is announced */}
                   <p role="status" className="lc-data m-0 ml-auto text-[12px] font-medium text-lc-slate">
-                    {carsFiltered ? `${shownCars.length} of ${data.cars.length} cars` : ""}
+                    {carsFiltered ? tx("cars.shown", { shown: String(shownCars.length), total: String(data.cars.length) }) : ""}
                   </p>
                 </div>
                 {shownCars.length ? null : (
@@ -796,11 +813,11 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     icon={<Icon name="filter" />}
                     action={
                       <Button size="sm" onClick={() => setCarFilters(NO_CAR_FILTERS)}>
-                        Clear filters
+                        {tx("clearFilters")}
                       </Button>
                     }
                   >
-                    No car matches these filters.
+                    {tx("cars.empty")}
                   </EmptyState>
                 )}
                 <div className={WALL}>
@@ -836,7 +853,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                           }
                           overlay={<CarQualityTag car={c} text={data.qualityText} size="sm" />}
                           title={c.title}
-                          meta={`${c.classTitle}, ${c.year}`}
+                          meta={tx("classYear", { class: c.classTitle, year: String(c.year) })}
                           action={<SourceChip source={c.source} />}
                           mediaFooter={
                             multi ? (
@@ -867,38 +884,38 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
               <div className="grid gap-x-16 gap-y-12 pt-4 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
                 <div className="flex min-w-0 flex-col gap-8">
                   <p className="m-0 max-w-[34ch] text-[clamp(22px,1.5vw,30px)] leading-[1.4] font-medium text-lc-chalk">
-                    Free, open-source browser racing simulator.
+                    {tx("about.lead")}
                   </p>
                   <dl className="m-0 flex flex-col">
-                    {GAME_FACTS.map(([label, text]) => (
-                      <div key={label} className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-5 border-t border-lc-line py-3.5 max-sm:grid-cols-1 max-sm:gap-y-1">
-                        <dt className="lc-lbl pt-0.5">{label}</dt>
-                        <dd className="lc-body m-0 text-[15px] text-lc-chalk">{text}</dd>
+                    {GAME_FACTS.map((fact) => (
+                      <div key={fact} className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-5 border-t border-lc-line py-3.5 max-sm:grid-cols-1 max-sm:gap-y-1">
+                        <dt className="lc-lbl pt-0.5">{tx(`facts.${fact}.label`)}</dt>
+                        <dd className="lc-body m-0 text-[15px] text-lc-chalk">{tx(`facts.${fact}.text`)}</dd>
                       </div>
                     ))}
                   </dl>
                   <section aria-labelledby="add-your-mod" className="flex flex-col gap-4 pt-2">
                     <h2 id="add-your-mod" className="lc-h2">
-                      Add your mod
+                      {tx("about.addMod")}
                     </h2>
                     <p className="lc-body m-0 max-w-[60ch] text-[16px] leading-[1.6]">
-                      Made a car or track mod and want to see it in LibreCorsa? Email me at{" "}
-                      <a href={`mailto:${data.contactEmail}`} translate="no" className={TEXT_LINK}>
-                        {data.contactEmail}
-                      </a>{" "}
-                      with a link to it. Every modder gets credited by name in the game.
+                      {tx.rich("about.addModText", {
+                        email: data.contactEmail,
+                        mail: (chunks) => (
+                          <a href={`mailto:${data.contactEmail}`} translate="no" className={TEXT_LINK}>
+                            {chunks}
+                          </a>
+                        ),
+                      })}
                     </p>
                   </section>
                   {/* Who made the circuits and cars, those who take donations first, each with their link */}
                   {data.modders.length ? (
                     <section aria-labelledby="the-modders" className="flex flex-col gap-4 pt-2">
                       <h2 id="the-modders" className="lc-h2">
-                        The modders
+                        {tx("about.modders")}
                       </h2>
-                      <p className="lc-body m-0 max-w-[60ch] text-[16px] leading-[1.6]">
-                        The circuits and cars are their work, used with their permission. If you enjoy one, you can thank
-                        its maker directly.
-                      </p>
+                      <p className="lc-body m-0 max-w-[60ch] text-[16px] leading-[1.6]">{tx("about.moddersText")}</p>
                       <ul className="m-0 flex list-none flex-col p-0">
                         {data.modders.map((m) => (
                           <li key={m.name} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-lc-line py-3 last:border-b">
@@ -921,7 +938,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                 </div>
                 <section aria-labelledby="press-and-media" className="flex min-w-0 flex-col gap-5">
                   <h2 id="press-and-media" className="lc-h2">
-                    Press & media
+                    {tx("press.title")}
                   </h2>
                   <ul className="m-0 flex list-none flex-col p-0">
                     {data.coverage.map((a) => (
@@ -942,23 +959,23 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                             </span>
                           </span>
                           <Icon name="externalLink" className="mt-0.5 text-lc-slate transition-colors duration-200 group-hover:text-lc-chalk" />
-                          <span className="sr-only">(opens in a new tab)</span>
+                          <span className="sr-only">{tc("newTab")}</span>
                         </a>
                       </li>
                     ))}
                   </ul>
                   <div className="flex flex-wrap gap-x-6 gap-y-3 text-[14px]">
                     {[
-                      ["Download apps", withBasePath("/download")],
-                      ["All coverage and the press kit", withBasePath("/press")],
-                      ["Docs", DOCS_URL],
-                      ["Privacy", withBasePath("/privacy")],
+                      [tx("about.links.download"), withBasePath("/download")],
+                      [tx("about.links.press"), withBasePath("/press")],
+                      [tx("about.links.docs"), DOCS_URL],
+                      [tx("about.links.privacy"), withBasePath("/privacy")],
                       ["GitHub", data.repoUrl],
                       // Not in the Android app (store-mode.ts)
-                      ...(storeBuild ? [] : [["Buy me a coffee", data.supportUrl]]),
+                      ...(storeBuild ? [] : [[tx("about.links.support"), data.supportUrl]]),
                       ...AUTHOR_LINKS.map(({ label, href }) => [label, href]),
                     ].map(([label, href]) => (
-                      <a key={label} href={href} onPointerEnter={focusOnHover} className={`inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
+                      <a key={href} href={href} onPointerEnter={focusOnHover} className={`inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
                         {label}
                       </a>
                     ))}
@@ -975,8 +992,8 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
           className={`flex shrink-0 items-center justify-between gap-4 border-t border-lc-line pt-3 pb-[max(0.875rem,env(safe-area-inset-bottom))] ${pad ? "" : "max-lg:hidden pointer-coarse:hidden"} ${GUTTER}`}
         >
           <PromptBar prompts={prompts} rule={false} />
-          <span title={`${venue.name}, ${car.title}`} className="max-w-[34%] truncate text-[13px] font-semibold text-lc-slate max-md:hidden">
-            {venue.name}, {car.title}
+          <span title={tx("footer", { venue: venue.name, car: car.title })} className="max-w-[34%] truncate text-[13px] font-semibold text-lc-slate max-md:hidden">
+            {tx("footer", { venue: venue.name, car: car.title })}
           </span>
         </footer>
       </div>

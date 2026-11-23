@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslations } from "use-intl/react";
 import type { PadFamily } from "@/components/menu/input-mode";
 import { Icon } from "../icons/Icon";
 import type { IconName } from "../icons/registry";
@@ -40,8 +41,9 @@ const PILL =
 
 type Face = "a" | "b" | "x" | "y";
 const XBOX_FACE: Record<Face, string> = { a: "A", b: "B", x: "X", y: "Y" };
-const PS_FACE_NAME: Record<Face, string> = { a: "Cross", b: "Circle", x: "Square", y: "Triangle" };
-const GENERIC_FACE_NAME: Record<Face, string> = { a: "Bottom", b: "Right", x: "Left", y: "Top" };
+/** The spoken names' select values (common.pad in the messages) */
+const PS_FACE_KEY: Record<Face, string> = { a: "cross", b: "circle", x: "square", y: "triangle" };
+const GENERIC_FACE_KEY: Record<Face, string> = { a: "bottom", b: "right", x: "left", y: "top" };
 
 /** PlayStation face shapes as plain strokes on the 22 px cap */
 const PS_SHAPE: Record<Face, React.ReactNode> = {
@@ -88,14 +90,6 @@ const ARMS: Record<PadDirection, ("up" | "down" | "left" | "right")[]> = {
   horizontal: ["left", "right"],
   vertical: ["up", "down"],
 };
-const DIR_WORD: Record<PadDirection, string> = {
-  up: "up",
-  down: "down",
-  left: "left",
-  right: "right",
-  horizontal: "left and right",
-  vertical: "up and down",
-};
 const DIR_ICONS: Record<PadDirection, IconName[]> = {
   up: ["keyUp"],
   down: ["keyDown"],
@@ -105,11 +99,11 @@ const DIR_ICONS: Record<PadDirection, IconName[]> = {
   vertical: ["moveVertical"],
 };
 
-const SHOULDER: Record<"lb" | "rb" | "lt" | "rt", { xbox: string; playstation: string; name: string }> = {
-  lb: { xbox: "LB", playstation: "L1", name: "Left bumper" },
-  rb: { xbox: "RB", playstation: "R1", name: "Right bumper" },
-  lt: { xbox: "LT", playstation: "L2", name: "Left trigger" },
-  rt: { xbox: "RT", playstation: "R2", name: "Right trigger" },
+const SHOULDER: Record<"lb" | "rb" | "lt" | "rt", { xbox: string; playstation: string }> = {
+  lb: { xbox: "LB", playstation: "L1" },
+  rb: { xbox: "RB", playstation: "R1" },
+  lt: { xbox: "LT", playstation: "L2" },
+  rt: { xbox: "RT", playstation: "R2" },
 };
 
 /** System buttons by family, one spelling each */
@@ -138,10 +132,11 @@ export const PadGlyph: React.FC<{ button: PadButtonName; family?: PadGlyphFamily
   family = "xbox",
   className = "",
 }) => {
+  const tx = useTranslations("common.pad");
   if (button === "a" || button === "b" || button === "x" || button === "y") {
     if (family === "xbox") {
       return (
-        <span role="img" aria-label={`${XBOX_FACE[button]} button`} className={`${ROUND} ${className}`}>
+        <span role="img" aria-label={tx("namedButton", { name: XBOX_FACE[button] })} className={`${ROUND} ${className}`}>
           <span aria-hidden className="lc-chip-text text-[11px] leading-none tracking-normal">
             {XBOX_FACE[button]}
           </span>
@@ -150,13 +145,13 @@ export const PadGlyph: React.FC<{ button: PadButtonName; family?: PadGlyphFamily
     }
     if (family === "playstation") {
       return (
-        <span role="img" aria-label={`${PS_FACE_NAME[button]} button`} className={`${ROUND} ${className}`}>
+        <span role="img" aria-label={tx("shapeButton", { shape: PS_FACE_KEY[button] })} className={`${ROUND} ${className}`}>
           <Svg22>{PS_SHAPE[button]}</Svg22>
         </span>
       );
     }
     return (
-      <span role="img" aria-label={`${GENERIC_FACE_NAME[button]} face button`} className={`${ROUND} ${className}`}>
+      <span role="img" aria-label={tx("faceButton", { position: GENERIC_FACE_KEY[button] })} className={`${ROUND} ${className}`}>
         <Svg22>
           {(Object.keys(DIAMOND) as Face[]).map((f) => (
             <circle
@@ -176,7 +171,7 @@ export const PadGlyph: React.FC<{ button: PadButtonName; family?: PadGlyphFamily
   if (button === "dpad" || button.startsWith("dpad-")) {
     const dir = button === "dpad" ? null : (button.slice(5) as PadDirection);
     return (
-      <span role="img" aria-label={dir ? `D-pad ${DIR_WORD[dir]}` : "D-pad"} className={`${ROUND} ${className}`}>
+      <span role="img" aria-label={dir ? tx("dpadDirection", { direction: dir }) : tx("dpad")} className={`${ROUND} ${className}`}>
         <Svg22 className="[stroke-width:1.25]">
           {dir ? ARMS[dir].map((a) => <path key={a} d={ARM[a]} fill="currentColor" stroke="none" />) : null}
           <path d={CROSS} />
@@ -189,7 +184,7 @@ export const PadGlyph: React.FC<{ button: PadButtonName; family?: PadGlyphFamily
     const s = SHOULDER[button];
     const text = family === "playstation" ? s.playstation : s.xbox;
     return (
-      <span role="img" aria-label={`${s.name} (${text})`} className={`${PILL} ${className}`}>
+      <span role="img" aria-label={tx("shoulder", { button, name: text })} className={`${PILL} ${className}`}>
         <span aria-hidden>{text}</span>
       </span>
     );
@@ -198,7 +193,7 @@ export const PadGlyph: React.FC<{ button: PadButtonName; family?: PadGlyphFamily
   if (button === "menu" || button === "view") {
     const text = SYSTEM[button][family];
     return (
-      <span role="img" aria-label={`${text} button`} className={`${PILL} ${className}`}>
+      <span role="img" aria-label={tx("namedButton", { name: text })} className={`${PILL} ${className}`}>
         <span aria-hidden>{text}</span>
       </span>
     );
@@ -206,7 +201,7 @@ export const PadGlyph: React.FC<{ button: PadButtonName; family?: PadGlyphFamily
 
   if (button === "touchpad") {
     return (
-      <span role="img" aria-label="Touchpad" className={`${PILL} w-9 ${className}`}>
+      <span role="img" aria-label={tx("touchpad")} className={`${PILL} w-9 ${className}`}>
         <svg viewBox="0 0 16 10" width={16} height={10} fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden className="h-2.5! w-4!">
           <rect x={1} y={1} width={14} height={8} rx={2} />
         </svg>
@@ -216,12 +211,12 @@ export const PadGlyph: React.FC<{ button: PadButtonName; family?: PadGlyphFamily
 
   // Sticks: the stick on its own, its click, or a direction on it
   const side = button.startsWith("l") ? "L" : "R";
-  const sideWord = side === "L" ? "Left" : "Right";
+  const sideKey = side === "L" ? "left" : "right";
   if (button === "l3" || button === "r3") {
     // The click: a pressed stick (ring with its centre filled) and the button's printed name
     const text = family === "xbox" ? `${side}S` : `${side}3`;
     return (
-      <span role="img" aria-label={`${sideWord} stick press (${text})`} className={`${PILL} gap-1 pl-1 ${className}`}>
+      <span role="img" aria-label={tx("stickPress", { side: sideKey, name: text })} className={`${PILL} gap-1 pl-1 ${className}`}>
         <svg viewBox="0 0 14 14" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={1.25} aria-hidden className="size-3.5!">
           <circle cx={7} cy={7} r={5.75} strokeOpacity={0.55} />
           <circle cx={7} cy={7} r={2.75} fill="currentColor" stroke="none" />
@@ -230,12 +225,12 @@ export const PadGlyph: React.FC<{ button: PadButtonName; family?: PadGlyphFamily
       </span>
     );
   }
-  if (button === "ls" || button === "rs") return <Stick text={side} label={`${sideWord} stick`} className={className} />;
+  if (button === "ls" || button === "rs") return <Stick text={side} label={tx("stick", { side: sideKey })} className={className} />;
   const dir = button.slice(3) as PadDirection;
   return (
     <span
       role="img"
-      aria-label={`${sideWord} stick ${DIR_WORD[dir]}`}
+      aria-label={tx("stickDirection", { side: sideKey, direction: dir })}
       className={`inline-flex h-5.5 shrink-0 items-center gap-0.5 rounded-full border border-lc-keyline bg-lc-void pr-1.5 text-lc-chalk ${className}`}
     >
       <span aria-hidden className="relative -my-px -ml-px inline-flex size-5.5 items-center justify-center">

@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { useTranslations } from "use-intl/react";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 import { Icon } from "./icons/Icon";
 import { CHOSEN_TILE, CURSOR_TILE, cx, DISABLED, IDLE_TILE, MOTION } from "./styles";
@@ -77,6 +78,7 @@ export function MediaTile(props: MediaTileProps) {
     controlProps,
     className,
   } = props;
+  const tx = useTranslations("common.mediaTile");
   const classes = cx(
     "group relative flex h-full w-full min-w-0 cursor-pointer overflow-hidden rounded-lc-tile border-[1.5px] text-left",
     horizontal ? "flex-col sm:flex-row" : "flex-col",
@@ -108,7 +110,7 @@ export function MediaTile(props: MediaTileProps) {
           >
             {title}
           </span>
-          {chosen ? <Icon name="success" label="Chosen" className="mt-px shrink-0 text-lc-chalk" /> : null}
+          {chosen ? <Icon name="success" label={tx("chosen")} className="mt-px shrink-0 text-lc-chalk" /> : null}
         </span>
         {meta ? <span className="lc-hint line-clamp-2">{meta}</span> : null}
         {badges ? <span className="mt-1 flex flex-wrap items-center gap-1">{badges}</span> : null}

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useId } from "react";
+import { useTranslations } from "use-intl/react";
 import { IconButton } from "./Button";
 import { Icon } from "./icons/Icon";
 import { cx } from "./styles";
@@ -132,6 +133,7 @@ export function SettingRow({
   className,
 }: SettingRowProps) {
   const detail = useSettingsDetail();
+  const tx = useTranslations("common.settingRow");
   const autoId = useId();
   const controlId = id ?? `${autoId}-control`;
   const labelId = `${autoId}-label`;
@@ -139,7 +141,6 @@ export function SettingRow({
   const hintId = shownHint ? `${autoId}-hint` : undefined;
   useReportAdvanced(Boolean(advanced));
   if (advanced && detail === "simple") return null;
-  const labelText = typeof label === "string" ? label : "this setting";
   return (
     <RowContext.Provider value={{ controlId, labelId, hintId, disabled, navDefault }}>
       <div
@@ -162,9 +163,9 @@ export function SettingRow({
               {label}
             </label>
             {changed ? (
-              <span className="inline-flex shrink-0 items-center" title="Changed from the default">
+              <span className="inline-flex shrink-0 items-center" title={tx("changed")}>
                 <span aria-hidden className="size-1.5 rounded-full bg-lc-cyan" />
-                <span className="sr-only">Changed from the default</span>
+                <span className="sr-only">{tx("changed")}</span>
               </span>
             ) : null}
           </span>
@@ -179,8 +180,8 @@ export function SettingRow({
             <IconButton
               size="sm"
               variant="ghost"
-              aria-label={resetLabel ?? `Reset ${labelText} to the default`}
-              title={resetLabel ?? "Reset to the default"}
+              aria-label={resetLabel ?? (typeof label === "string" ? tx("resetNamed", { setting: label }) : tx("resetThis"))}
+              title={resetLabel ?? tx("reset")}
               icon={<Icon name="reset" />}
               onClick={onReset}
               // Out of the arrows' and the D-pad's path: left / right on a row change its value. Tab still stops on

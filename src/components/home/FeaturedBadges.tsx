@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslations } from "use-intl/react";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 import { cx } from "@/components/ui/styles";
 import { withBasePath } from "@/lib/base-path";
@@ -18,39 +19,43 @@ const ThreeJsResourcesMark = () => (
   </svg>
 );
 
-export const FeaturedBadges: React.FC<{ className?: string }> = ({ className }) => (
-  <div className={cx("flex flex-wrap gap-3", className)}>
-    <a
-      href="https://threejsresources.com/tool/librecorsa?ref=badge"
-      target="_blank"
-      rel="noopener noreferrer"
-      onPointerEnter={focusOnHover}
-      // ui-allow: hex-in-class third-party Three.js Resources badge border colour
-      className={cx(BADGE, "items-center gap-3 border border-[#333] bg-black px-4 text-white")}
-    >
-      <ThreeJsResourcesMark />
-      <span className="flex flex-col gap-0.5 leading-none">
-        <span className="text-[11px] font-medium text-white/70">Featured on</span>
-        <span className="text-[18px] font-bold">Three.js Resources</span>
-      </span>
-      <span className="sr-only">(opens in a new tab)</span>
-    </a>
-    <a
-      href="https://www.producthunt.com/products/librecorsa?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-librecorsa"
-      target="_blank"
-      rel="noopener noreferrer"
-      onPointerEnter={focusOnHover}
-      className={BADGE}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={withBasePath("/press/featured/product-hunt-dark.svg")}
-        alt="LibreCorsa - Free, open-source 500 Hz racing sim in a browser tab | Product Hunt"
-        width={250}
-        height={54}
-        loading="lazy"
-      />
-      <span className="sr-only">(opens in a new tab)</span>
-    </a>
-  </div>
-);
+// The badges' own words stay as their sites hand them out; only what a screen reader adds is translated
+export const FeaturedBadges: React.FC<{ className?: string }> = ({ className }) => {
+  const tc = useTranslations("common");
+  return (
+    <div className={cx("flex flex-wrap gap-3", className)}>
+      <a
+        href="https://threejsresources.com/tool/librecorsa?ref=badge"
+        target="_blank"
+        rel="noopener noreferrer"
+        onPointerEnter={focusOnHover}
+        // ui-allow: hex-in-class third-party Three.js Resources badge border colour
+        className={cx(BADGE, "items-center gap-3 border border-[#333] bg-black px-4 text-white")}
+      >
+        <ThreeJsResourcesMark />
+        <span className="flex flex-col gap-0.5 leading-none">
+          <span className="text-[11px] font-medium text-white/70">Featured on</span>
+          <span className="text-[18px] font-bold">Three.js Resources</span>
+        </span>
+        <span className="sr-only">{tc("newTab")}</span>
+      </a>
+      <a
+        href="https://www.producthunt.com/products/librecorsa?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-librecorsa"
+        target="_blank"
+        rel="noopener noreferrer"
+        onPointerEnter={focusOnHover}
+        className={BADGE}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={withBasePath("/press/featured/product-hunt-dark.svg")}
+          alt="LibreCorsa - Free, open-source 500 Hz racing sim in a browser tab | Product Hunt"
+          width={250}
+          height={54}
+          loading="lazy"
+        />
+        <span className="sr-only">{tc("newTab")}</span>
+      </a>
+    </div>
+  );
+};

@@ -1,3 +1,5 @@
+import { t } from "@/i18n/runtime";
+import type { MessageKey } from "@/i18n/types";
 import type { PaletteColor } from "../Badge";
 
 /** Tyre compounds (the same five strings as the sim's own `TireCompound`) */
@@ -5,17 +7,18 @@ export type Compound = "soft" | "medium" | "hard" | "intermediate" | "wet";
 
 /**
  * The one compound table: soft red, medium yellow, hard white, intermediate green, wet blue, the plain convention
- * drawn in the project's own tokens. Class strings are written out so Tailwind finds them.
+ * drawn in the project's own tokens. Class strings are written out so Tailwind finds them. The name is read in the
+ * current language each time it is shown.
  */
 export const COMPOUNDS: Record<
   Compound,
-  { name: string; letter: "S" | "M" | "H" | "I" | "W"; color: PaletteColor; ring: string }
+  { readonly name: string; letter: "S" | "M" | "H" | "I" | "W"; color: PaletteColor; ring: string }
 > = {
-  soft: { name: "Soft", letter: "S", color: "crimson", ring: "stroke-lc-crimson" },
-  medium: { name: "Medium", letter: "M", color: "amber", ring: "stroke-lc-amber" },
-  hard: { name: "Hard", letter: "H", color: "chalk", ring: "stroke-lc-chalk" },
-  intermediate: { name: "Intermediate", letter: "I", color: "green", ring: "stroke-lc-green" },
-  wet: { name: "Wet", letter: "W", color: "cyan", ring: "stroke-lc-cyan" },
+  soft: { get name() { return t("common.compounds.name.soft"); }, letter: "S", color: "crimson", ring: "stroke-lc-crimson" },
+  medium: { get name() { return t("common.compounds.name.medium"); }, letter: "M", color: "amber", ring: "stroke-lc-amber" },
+  hard: { get name() { return t("common.compounds.name.hard"); }, letter: "H", color: "chalk", ring: "stroke-lc-chalk" },
+  intermediate: { get name() { return t("common.compounds.name.intermediate"); }, letter: "I", color: "green", ring: "stroke-lc-green" },
+  wet: { get name() { return t("common.compounds.name.wet"); }, letter: "W", color: "cyan", ring: "stroke-lc-cyan" },
 };
 
 /** Compound letters drawn as strokes on the 24 grid, inside the ring, so they never depend on a font */
@@ -30,19 +33,34 @@ export const COMPOUND_LETTER: Record<Compound, string> = {
 /** The compounds in the order a picker lists them */
 export const COMPOUND_ORDER: readonly Compound[] = ["soft", "medium", "hard", "intermediate", "wet"];
 
-const SHORT_LABEL: Record<Compound, string> = { soft: "Soft", medium: "Med", hard: "Hard", intermediate: "Inter", wet: "Wet" };
-const LONG_NAME: Record<Compound, string> = {
-  soft: "Soft tyres",
-  medium: "Medium tyres",
-  hard: "Hard tyres",
-  intermediate: "Intermediate tyres (wet track)",
-  wet: "Full wet tyres (standing water)",
+const SHORT_LABEL: Record<Compound, MessageKey> = {
+  soft: "common.compounds.short.soft",
+  medium: "common.compounds.short.medium",
+  hard: "common.compounds.short.hard",
+  intermediate: "common.compounds.short.intermediate",
+  wet: "common.compounds.short.wet",
+};
+const LONG_NAME: Record<Compound, MessageKey> = {
+  soft: "common.compounds.long.soft",
+  medium: "common.compounds.long.medium",
+  hard: "common.compounds.long.hard",
+  intermediate: "common.compounds.long.intermediate",
+  wet: "common.compounds.long.wet",
 };
 
 /**
- * The compounds as a picker's options: a short label, the spoken name, and the sidewall ring's colour as a CSS
- * colour (from the table above, so there is one colour per compound)
+ * The compounds as a picker's options: a short label, the spoken name (both read in the current language when shown),
+ * and the sidewall ring's colour as a CSS colour (from the table above, so there is one colour per compound)
  */
-export const COMPOUND_CHOICES: readonly { id: Compound; label: string; name: string; ring: string }[] = COMPOUND_ORDER.map(
-  (id) => ({ id, label: SHORT_LABEL[id], name: LONG_NAME[id], ring: `var(--color-lc-${COMPOUNDS[id].color})` }),
+export const COMPOUND_CHOICES: readonly { id: Compound; readonly label: string; readonly name: string; ring: string }[] = COMPOUND_ORDER.map(
+  (id) => ({
+    id,
+    get label() {
+      return t(SHORT_LABEL[id]);
+    },
+    get name() {
+      return t(LONG_NAME[id]);
+    },
+    ring: `var(--color-lc-${COMPOUNDS[id].color})`,
+  }),
 );

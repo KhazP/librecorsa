@@ -5,6 +5,7 @@
  * the simulator, so the home page's board can use it too.
  */
 import React, { useEffect, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button } from "@/components/ui/Button";
 import { BadgeLegend, DriverBadges } from "@/components/ui/DriverBadges";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -52,17 +53,20 @@ export interface BoardRow {
 }
 
 /** A time, the best of its column in the best colour with an underline, and said so to a screen reader */
-const Timed: React.FC<{ ms: number; best: boolean; lap?: boolean }> = ({ ms, best, lap }) => (
-  <span
-    className={`lc-mono font-bold whitespace-nowrap ${lap ? "text-[15px]" : "text-[13px]"} ${
-      best ? "text-lc-best underline decoration-2 underline-offset-4" : lap ? "text-lc-chalk" : "text-lc-fog"
-    }`}
-    title={best ? "Fastest here" : undefined}
-  >
-    {lap ? formatLapTime(ms) : formatSectorTime(ms)}
-    {best ? <span className="sr-only"> (fastest)</span> : null}
-  </span>
-);
+const Timed: React.FC<{ ms: number; best: boolean; lap?: boolean }> = ({ ms, best, lap }) => {
+  const tx = useTranslations("board.table");
+  return (
+    <span
+      className={`lc-mono font-bold whitespace-nowrap ${lap ? "text-[15px]" : "text-[13px]"} ${
+        best ? "text-lc-best underline decoration-2 underline-offset-4" : lap ? "text-lc-chalk" : "text-lc-fog"
+      }`}
+      title={best ? tx("fastestHere") : undefined}
+    >
+      {lap ? formatLapTime(ms) : formatSectorTime(ms)}
+      {best ? <span className="sr-only"> {tx("fastest")}</span> : null}
+    </span>
+  );
+};
 
 const TH = "lc-lbl px-2 pb-2 text-left font-semibold whitespace-nowrap";
 /** Sector columns show only where the list has room for them */
@@ -95,6 +99,7 @@ export const badgesFor = (fetched: Record<string, DriverBadge[]>, name: string):
 export const BoardTable: React.FC<{
   label: string;
   rows: readonly BoardRow[];
+  /** The name column's heading (default "Driver", a board of drivers, which shows their badges) */
   nameHeader?: string;
   footer?: React.ReactNode;
   /** A newer page is on its way: the rows shown stay, dimmed, and say so */
@@ -112,15 +117,16 @@ export const BoardTable: React.FC<{
 }> = ({
   label,
   rows,
-  nameHeader = "Driver",
+  nameHeader,
   footer,
   stale = false,
-  showBadges = nameHeader === "Driver",
+  showBadges = nameHeader === undefined,
   badgeContext,
   circuitName,
   onOpenRecordBoard,
   legend = true,
 }) => {
+  const tx = useTranslations("board.table");
   const sectors = rows.some((r) => r.sectorsMs?.length);
   const actions = rows.some((r) => r.action);
   const fetchedBadges = useDriverBadges(showBadges ? rows.filter((r) => r.badges === undefined).map((r) => r.title) : []);
@@ -136,24 +142,24 @@ export const BoardTable: React.FC<{
         <thead>
           <tr className="border-b border-lc-line">
             <th scope="col" className={`${TH} w-14`}>
-              Pos
+              {tx("pos")}
             </th>
             <th scope="col" className={`${TH} w-full`}>
-              {nameHeader}
+              {nameHeader ?? tx("driver")}
             </th>
             <th scope="col" className={`${TH} text-right`}>
-              Lap
+              {tx("lap")}
             </th>
             {sectors
-              ? ["S1", "S2", "S3"].map((s) => (
+              ? [1, 2, 3].map((s) => (
                   <th key={s} scope="col" className={`${TH} ${SECTOR}`}>
-                    {s}
+                    {tx("sector", { n: String(s) })}
                   </th>
                 ))
               : null}
             {actions ? (
               <th scope="col" className="p-0">
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{tx("actions")}</span>
               </th>
             ) : null}
           </tr>
@@ -245,19 +251,22 @@ export const BoardSkeleton: React.FC<{ rows?: number; label: string }> = ({ rows
 );
 
 /** A list that could not be read: what went wrong, in the loss colour on the card itself, and a way to try again */
-export const BoardError: React.FC<{ children: React.ReactNode; onRetry?: () => void }> = ({ children, onRetry }) => (
-  <div role="alert" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 py-2">
-    <p className="m-0 flex items-start gap-2 text-[14px] leading-snug font-medium text-lc-loss">
-      <Icon name="error" className="mt-0.5" />
-      {children}
-    </p>
-    {onRetry ? (
-      <Button size="sm" variant="secondary" icon={<Icon name="refresh" />} onClick={onRetry}>
-        Try again
-      </Button>
-    ) : null}
-  </div>
-);
+export const BoardError: React.FC<{ children: React.ReactNode; onRetry?: () => void }> = ({ children, onRetry }) => {
+  const tx = useTranslations("board.table");
+  return (
+    <div role="alert" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 py-2">
+      <p className="m-0 flex items-start gap-2 text-[14px] leading-snug font-medium text-lc-loss">
+        <Icon name="error" className="mt-0.5" />
+        {children}
+      </p>
+      {onRetry ? (
+        <Button size="sm" variant="secondary" icon={<Icon name="refresh" />} onClick={onRetry}>
+          {tx("tryAgain")}
+        </Button>
+      ) : null}
+    </div>
+  );
+};
 
 /** The player's own place on a board, in their colour */
 export const MyPlace: React.FC<{ rank: number; total: number; lapMs: number; detail: string; action?: React.ReactNode }> = ({
@@ -266,18 +275,21 @@ export const MyPlace: React.FC<{ rank: number; total: number; lapMs: number; det
   lapMs,
   detail,
   action,
-}) => (
-  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lc-row border border-lc-volt/35 bg-lc-volt/5 px-3.5 py-2.5">
-    <span className="flex min-w-0 items-center gap-3">
-      <PositionBadge position={rank} player />
-      <span className="flex min-w-0 flex-col">
-        <span className="text-[14px] font-semibold text-lc-chalk">
-          You are P{formatCount(rank)} of {formatCount(total)}
-          <span className="lc-mono ml-2 font-bold text-lc-fog">{formatLapTime(lapMs)}</span>
+}) => {
+  const tx = useTranslations("board.table");
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lc-row border border-lc-volt/35 bg-lc-volt/5 px-3.5 py-2.5">
+      <span className="flex min-w-0 items-center gap-3">
+        <PositionBadge position={rank} player />
+        <span className="flex min-w-0 flex-col">
+          <span className="text-[14px] font-semibold text-lc-chalk">
+            {tx("myPlace", { rank: formatCount(rank), total: formatCount(total) })}
+            <span className="lc-mono ml-2 font-bold text-lc-fog">{formatLapTime(lapMs)}</span>
+          </span>
+          {detail ? <span className="lc-hint truncate">{detail}</span> : null}
         </span>
-        {detail ? <span className="lc-hint truncate">{detail}</span> : null}
       </span>
-    </span>
-    {action}
-  </div>
-);
+      {action}
+    </div>
+  );
+};
