@@ -391,7 +391,7 @@ function SignedIn({
             key={s.id}
             label={
               <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="min-w-0">{s.label}</span>
+                <span className="min-w-0">{s.label || (s.current ? "This browser" : "A device that hasn't joined yet")}</span>
                 {s.current ? <Badge size="sm" tone="info">This device</Badge> : null}
               </span>
             }
