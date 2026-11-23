@@ -455,21 +455,15 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     hud?.splitGaps !== false && !isThirdParty && !phone && !lightsPhase && race?.phase === "racing" ? (
       <SplitGaps splits={race.splits} variant="panel" />
     ) : null;
-  // The split gaps, and the car's damage once something is broken (AI race)
+  // The split gaps, and the car's damage once something is broken (a race's, or practice's with Practice damage on)
+  const damage = race?.damage ?? telemetry.practiceDamage;
   const damageNode =
-    race?.damage && (!style?.ownDamage || touch) ? (
-      <DamageWidget damage={race.damage} />
-    ) : race?.damage && style?.ownDamage ? (
+    damage && (!style?.ownDamage || touch) ? (
+      <DamageWidget damage={damage} />
+    ) : damage && style?.ownDamage ? (
       <div className="hidden compact:block">
-        <DamageWidget damage={race.damage} />
+        <DamageWidget damage={damage} />
       </div>
-    ) : null;
-  const gapsNode =
-    splitsNode || damageNode ? (
-      <>
-        {splitsNode}
-        {damageNode}
-      </>
     ) : null;
   const weatherNode = props.weather && !phone && !minimal && !lightsPhase ? <WeatherBadge weather={props.weather} variant="panel" /> : null;
   const trackInfo = getTrackInfo(ACTIVE_TRACK_ID);
@@ -492,14 +486,16 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     ) : null;
   // polish:A — the time trial's target sits where a race's split gaps would, the lap board under it
   const targetNode = props.challengeTarget && !race && !phone ? <ChallengeTargetPanel target={props.challengeTarget} /> : null;
+  // Outside a race the damage sits above the target and the board, which keep their place
   const leftNode =
-    gapsNode ??
-    (targetNode || boardNode ? (
+    splitsNode || damageNode || targetNode || boardNode ? (
       <>
+        {splitsNode}
+        {damageNode}
         {targetNode}
         {boardNode}
       </>
-    ) : null);
+    ) : null;
 
   const showTyres = classic;
   const showMap = classic;
