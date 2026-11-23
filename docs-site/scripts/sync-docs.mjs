@@ -95,6 +95,8 @@ function main() {
       "---",
       `title: ${JSON.stringify(title)}`,
       ...(description ? [`description: ${JSON.stringify(description)}`] : []),
+      // Starlight titles a page "<page> | <site>", which reads "LibreCorsa docs | LibreCorsa docs" on the front page
+      ...(slug ? [] : ["head:", "  - tag: title", `    content: ${JSON.stringify(title)}`]),
       `editUrl: ${JSON.stringify(`${REPO_URL}/edit/main/${source}`)}`,
       "---",
       "",
