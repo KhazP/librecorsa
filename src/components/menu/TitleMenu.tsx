@@ -647,18 +647,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const carLocked = props.telemetry.race?.multiplayer === true || props.raceRunning === true;
   // A hill climb is driven one car at a time, from the start line to the finish: no races against the AI
   const hillClimb = activeTrackId === trackId && getActivePointToPoint() !== null;
-  const localLaps = props.leaderboardPanel?.local;
-  // This car's best on this circuit: the list is loaded for them, and filtered too so a list from before a swap never
-  // shows another car's or circuit's time
-  const bestLapMs = useMemo(() => {
-    const times = (localLaps ?? [])
-      .filter((e) => e.trackId === trackId && e.vehicle === props.vehicleModel)
-      .map((e) => e.lapTimeMs)
-      .filter((ms) => Number.isFinite(ms) && ms > 0);
-    return times.length ? Math.min(...times) : null;
-  }, [localLaps, trackId, props.vehicleModel]);
-  // The Up next sheet's personal best: this car's own laps only (another car's never stands in), a lap on the current
-  // physics before an older one. Live: a best saved or deleted, here or in another tab, shows at once
+  // This car's personal best on this circuit, for the Lap times entry and the Up next sheet alike: this car's own laps
+  // only (another car's never stands in), a lap on the current physics before an older one. Live: a best saved or
+  // deleted, here or in another tab, shows at once
   const bestLaps = useBestLapSummaries();
   const pb = useMemo(
     () => bestLapForCircuit(bestLaps.filter((s) => s.vehicle === props.vehicleModel), trackId, props.vehicleModel),
@@ -745,7 +736,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             id: "leaderboard",
             label: "Lap times",
             // This car's best on this circuit, when there is one
-            detail: bestLapMs ? `Best ${formatLapTime(bestLapMs)}` : undefined,
+            detail: pb ? `Best ${formatLapTime(pb.lapTimeMs)}` : undefined,
             icon: "lapTimes" as const,
             panel: "leaderboard" as const,
             run: () => openPanel("leaderboard"),
