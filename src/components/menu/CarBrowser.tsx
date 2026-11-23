@@ -31,6 +31,7 @@ import { CarClassTag, CarQualityBadge, CarSkinPicker, LiveryPicker } from "./men
 import { SourceChip } from "@/components/SourceChip";
 import { carModelSource } from "@/lib/model-source";
 import { useStoreBuild } from "@/lib/use-store-build";
+import { popularRank, usePopularRanks } from "@/lib/net/use-popular";
 
 const byName = (a: CarDefinition, b: CarDefinition) => a.title.localeCompare(b.title);
 const QUALITIES: readonly CarQuality[] = ["own", "shared", "era"];
@@ -177,6 +178,9 @@ export const CarBrowser: React.FC<{
     const i = recent.indexOf(c.id);
     return i < 0 ? Infinity : i;
   };
+  const popular = usePopularRanks();
+  // The usage totals count the vehicle model, not the body: only the first car on a model (the one with its id) is ranked
+  const popularOf = (c: CarDefinition) => (popular && c.id === c.physics ? popularRank(popular.cars, c.physics) : Infinity);
 
   const filterGroups: BrowserFilterGroup<CarDefinition>[] = [
     {
@@ -218,6 +222,10 @@ export const CarBrowser: React.FC<{
       compare: compareCarsByClassAndYear,
     },
     { id: "name", label: tx("sortName"), heading: tx("headingName"), compare: byName },
+    // Offered once the ranks are read: with the online side off there is nothing to sort by
+    ...(popular
+      ? [{ id: "popular", label: tx("sortPopular"), heading: tx("headingPopular", { days: popular.days }), compare: (a: CarDefinition, b: CarDefinition) => popularOf(a) - popularOf(b) || compareCarsByClassAndYear(a, b) }]
+      : []),
     { id: "recent", label: tx("sortRecent"), heading: tx("headingRecent"), compare: (a, b) => recentRank(a) - recentRank(b) || compareCarsByClassAndYear(a, b) },
   ];
 

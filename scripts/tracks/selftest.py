@@ -346,8 +346,55 @@ def test_upsample_rows():
     assert len(out[10]) == 4 * n and out[10].dtype == bool
 
 
+def test_recentre_wide_road():
+    """A 12 m stadium whose bottom straight widens asymmetrically to 24 m (bowing +12 m right): default `recentre`
+    rejects the wide stretch as a merge apron, while `max_width_ratio=2.2, max_local_ratio=2.2` centres it between
+    the wide edges; `refine_ac_width` with `max_w=26.0` tracks the 24 m width instead of clipping at 22 m"""
+    import port_ac_track as pat
+    from surface import TriSoup
+
+    P, Rt, s = stadium(120.0, 200.0, n=600)
+    # Widen the first straight smoothly from 12 m (-6..+6) to 24 m (-6..+18) over s in [100, 300]
+    t = np.clip(np.minimum((s - 100.0) / 30.0, (300.0 - s) / 30.0), 0.0, 1.0)
+    ramp = t * t * (3.0 - 2.0 * t)
+    oL = np.full(len(P), -6.0)
+    oR = 6.0 + 12.0 * ramp
+    n = len(P)
+    V = np.empty((2 * n, 3))
+    V[0::2] = np.column_stack([P[:, 0] + Rt[:, 0] * oL, np.zeros(n), P[:, 1] + Rt[:, 1] * oL])
+    V[1::2] = np.column_stack([P[:, 0] + Rt[:, 0] * oR, np.zeros(n), P[:, 1] + Rt[:, 1] * oR])
+    i = np.arange(n)
+    j = (i + 1) % n
+    F = np.stack([2 * i, 2 * j, 2 * i + 1, 2 * i + 1, 2 * j, 2 * j + 1], 1).reshape(-1, 3)
+    T = V[F]
+
+    R, _, road = cl.build_masks(T, np.zeros(len(T), np.int32), [0], [])
+    xz, L = cl.resample_closed(P, 5.0)
+    ds = L / len(xz)
+    # Default ratios reject the 24 m wide stretch (keeps line near the original spine, z ≈ -120)
+    xz_def = cl.recentre(R, road, xz, ds, iters=2, max_shift=3.0, keep_radius=True)
+    # Raised ratios accept the 24 m stretch and move the centreline +6 m right (z ≈ -126 on the bottom straight)
+    xz_wide = cl.recentre(R, road, xz, ds, iters=3, max_shift=3.0, keep_radius=True,
+                          max_width_ratio=2.2, max_local_ratio=2.2)
+    mid_def = xz_def[(np.abs(xz_def[:, 0]) < 30.0) & (xz_def[:, 1] < 0)]
+    mid_wide = xz_wide[(np.abs(xz_wide[:, 0]) < 30.0) & (xz_wide[:, 1] < 0)]
+    # Default ratios reject everything past ~15.4 m so the centreline stalls 3+ m short of the wide stretch's centre
+    assert mid_def[:, 1].mean() > -123.0, mid_def[:, 1].mean()
+    assert abs(mid_wide[:, 1].mean() - (-126.0)) < 0.6, mid_wide[:, 1].mean()
+
+    # refine_ac_width tracks the 24 m width when max_w=26.0 (instead of clipping at 22.0)
+    soup = TriSoup(T, np.ones(len(T), np.int32), np.zeros((len(T), 3), np.uint8))
+    rgt_w = cl.rights(cl.tangents(xz_wide))
+    w_init = np.where((np.abs(xz_wide[:, 0]) < 80.0) & (xz_wide[:, 1] < 0), 23.0, 12.0)
+    w_ref, _ = pat.refine_ac_width(soup, {1}, {2}, xz_wide, rgt_w, np.zeros(len(xz_wide)), np.zeros(len(xz_wide)),
+                                   w_init, 8.5, 26.0, med_samples=3, smooth_sigma=0.8)
+    wide_sel = (np.abs(xz_wide[:, 0]) < 30.0) & (xz_wide[:, 1] < 0)
+    assert abs(w_ref[wide_sel].mean() - 24.0) < 0.6, w_ref[wide_sel].mean()
+
+
 TESTS = [test_route_start_cut, test_wall_lane_oval, test_glb_sparse_accessors, test_turn_names_over_the_start_line,
-         test_carry_previous_lines, test_road_profile_height, test_subdivide_twisted_road, test_upsample_rows]
+         test_carry_previous_lines, test_road_profile_height, test_subdivide_twisted_road, test_upsample_rows,
+         test_recentre_wide_road]
 
 if __name__ == '__main__':
     failed = 0

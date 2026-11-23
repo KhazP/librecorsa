@@ -57,7 +57,10 @@
     "hud": "HUD",
     "assistsPro": "No assists",
     "assistsSemiPro": "TC + ABS",
-    "assistsAssisted": "Full assists"
+    "assistsAssisted": "Full assists",
+    "personalBest": "Personal best",
+    "oldPhysics": "Old physics",
+    "noTimeYet": "No time yet"
   },
   "panel": {
     "close": "Close"
@@ -155,7 +158,9 @@
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, tyres by <tyres>{tyreAuthor}</tyres>",
     "current": "Current car",
-    "choose": "Choose car"
+    "choose": "Choose car",
+    "sortPopular": "Most driven",
+    "headingPopular": "Most driven, last {days, plural, one {day} other {# days}}"
   },
   "circuitBrowser": {
     "label": "Circuits",
@@ -198,7 +203,11 @@
     "circuitBy": "Circuit by <name>{author}</name>",
     "active": "Active circuit",
     "loading": "Loading {circuit}",
-    "load": "Load circuit"
+    "load": "Load circuit",
+    "sortPopular": "Most driven",
+    "headingPopular": "Most driven, last {days, plural, one {day} other {# days}}",
+    "boardRank": "<b>P{pos}</b> of {total}",
+    "boardRankTitle": "Online board position"
   },
   "challenge": {
     "view": "Challenge view",

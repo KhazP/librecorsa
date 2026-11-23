@@ -23,6 +23,9 @@
  *   og                         has a lap on a Physics V1 board (any circuit, car or week): drove before Physics V2.
  *                              V1 boards are read only, so the rule never takes the badge from anyone who has it
  *   bulb                       given by hand, for an idea or a contribution, with a note
+ *   creator                    the game's maker: a name claimed (board.ts) with a driver key whose SHA-256 is in the
+ *                              Worker's CREATOR_KEY_HASH. Bound to the key, not the name, so it follows a rename and
+ *                              never passes to whoever claims the name after it lapses. No stored row, never by hand
  * The owner may also give an OG or a track record by hand (set somewhere the boards don't see); the weekly medals come
  * from the boards alone.
  *
@@ -53,12 +56,19 @@ type Answer = { status: number; body: unknown };
 const fail = (error: string, status = 400): Answer => ({ status, body: { ok: false, error } });
 
 /** The same lists as src/lib/net/awards.ts (imported there as types only, so the Worker carries no client code) */
-export const BADGE_TYPES: readonly BadgeType[] = ["weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"];
+export const BADGE_TYPES: readonly BadgeType[] = ["creator", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"];
 export const MANUAL_BADGE_TYPES: readonly ManualBadgeType[] = ["bulb", "og", "track_record"];
 export const MAX_BADGE_NAMES = 64;
 /** Minimum distinct drivers on an open board before its P1 earns a Fastest Lap badge / Hall of Fame record */
 export const MIN_RECORD_DRIVERS = 5;
 export const MAX_NOTE_LENGTH = 140;
+const KEY_HASH_RE = /^[0-9a-f]{64}$/;
+
+/** The driver-key hashes of CREATOR_KEY_HASH (comma separated SHA-256 hex): anything else in the list is ignored */
+export function parseCreatorKeyHashes(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return [...new Set(raw.split(",").map((h) => h.trim().toLowerCase()))].filter((h) => KEY_HASH_RE.test(h));
+}
 const MAX_NAME_LENGTH = 64;
 const MEDALS = ["weekly_gold", "weekly_silver", "weekly_bronze"] as const;
 type Medal = (typeof MEDALS)[number];
@@ -423,14 +433,20 @@ export function parseBadgeNames(raw: string | null): string[] | null {
 }
 
 /**
- * The badges of these drivers (name keys): what their podiums, records and V1 laps say, and what was given by hand.
- * `events` is the Hall of Fame, when already read.
+ * The badges of these drivers (name keys): what their podiums, records and V1 laps say, what was given by hand, and
+ * the Creator for a name held by one of `creatorKeyHashes`. `events` is the Hall of Fame, when already read.
  */
-export async function badgesOf(db: D1Database, keys: readonly string[], nowMs: number, events?: readonly HallOfFameEvent[]): Promise<Record<string, DriverBadge[]>> {
+export async function badgesOf(
+  db: D1Database,
+  keys: readonly string[],
+  nowMs: number,
+  events?: readonly HallOfFameEvent[],
+  creatorKeyHashes: readonly string[] = [],
+): Promise<Record<string, DriverBadge[]>> {
   const out: Record<string, DriverBadge[]> = Object.create(null);
   if (keys.length === 0) return out;
   const marks = keys.map(() => "?").join(", ");
-  const [weeks, records, og, manual] = await Promise.all([
+  const [weeks, records, og, manual, creators] = await Promise.all([
     events ? Promise.resolve(events) : hallOfFameEvents(db, nowMs),
     db
       .prepare(
@@ -445,6 +461,12 @@ export async function badgesOf(db: D1Database, keys: readonly string[], nowMs: n
     orNull(async () =>
       (await db.prepare(`SELECT * FROM driver_awards WHERE awarded_by != 'auto' AND name_key IN (${marks}) ORDER BY awarded_at DESC, id DESC`).bind(...keys).all<AwardRow>()).results,
     ),
+    creatorKeyHashes.length === 0
+      ? Promise.resolve({ results: [] as { name_key: string }[] })
+      : db
+          .prepare(`SELECT name_key FROM drivers WHERE name_key IN (${marks}) AND key_hash IN (${creatorKeyHashes.map(() => "?").join(", ")})`)
+          .bind(...keys, ...creatorKeyHashes)
+          .all<{ name_key: string }>(),
   ]);
 
   const wanted = new Set(keys);
@@ -479,6 +501,7 @@ export async function badgesOf(db: D1Database, keys: readonly string[], nowMs: n
     });
   }
   for (const r of og.results) add(r.name_key, "og").count = 1;
+  for (const r of creators.results) add(r.name_key, "creator").count = 1;
   for (const r of manual ?? []) {
     if (!wanted.has(r.name_key) || !(MANUAL_BADGE_TYPES as readonly string[]).includes(r.badge_type)) continue;
     const b = add(r.name_key, r.badge_type);
@@ -498,10 +521,10 @@ export async function badgesOf(db: D1Database, keys: readonly string[], nowMs: n
   return canonical;
 }
 
-export async function listBadges(db: D1Database, url: URL, nowMs: number): Promise<Answer> {
+export async function listBadges(db: D1Database, url: URL, nowMs: number, creatorKeyHashes: readonly string[] = []): Promise<Answer> {
   const keys = parseBadgeNames(url.searchParams.get("names"));
   if (keys === null) return fail(`At most ${MAX_BADGE_NAMES} names of up to ${MAX_NAME_LENGTH} characters`);
-  return { status: 200, body: { ok: true, badges: await badgesOf(db, keys, nowMs) } };
+  return { status: 200, body: { ok: true, badges: await badgesOf(db, keys, nowMs, undefined, creatorKeyHashes) } };
 }
 
 /* The owner's side (admin.ts serves it behind the admin key) ------------------------------------------------------- */

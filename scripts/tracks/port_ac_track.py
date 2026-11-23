@@ -77,6 +77,24 @@ AC_TRACKS = {
         'city': 'Buriram',
         'baseAltitudeM': 165,
         'pitboxes': 40,
+        # physical.kn5's 01ROAD is the GP circuit itself; 02ROAD (shortcut loops and pit-exit blend lane),
+        # 03ROAD/04ROAD (service roads and paddock) and 05ROAD (off-circuit) are paved ground off the lap,
+        # and 01CARPET (FRICTION 0.6, IS_VALID_TRACK=0) is the astroturf behind the kerbs
+        'physicsNodeOverrides': [
+            (r'^0[2345]ROAD', 'runoff'),
+            (r'^\d+_?CARPET', 'runoff'),
+        ],
+        'physicsOverridesFirst': True,
+        # Chang's drawn asphalt uses Material #31 and Material #924 (tarmac2.dds); 04ROAD's concrete.dds is paddock
+        'roadMaterialsByTexture': True,
+        # Turn 1 exit (~19.5 m) and Turn 3 entry (~25 m) widen to roughly twice the 12.8 m median width
+        'maxWidthM': 26.0,
+        'maxWidthRatio': 2.2,
+        # Follow rapid tapers (T3/T5) and tight hairpins (T12) without smearing the road edges past the white lines
+        'refinePasses': 3,
+        'refineMedianSamples': 3,
+        'refineSmoothSamples': 0.8,
+        'refineShiftSmoothSamples': 0.8,
         'description': 'Chang International Circuit in Buriram, Thailand — 4.55 km FIA Grade 1 Grand Prix layout with long straights, technical stadium turns, 40 pitboxes, and full trackside detail.',
         'credit': {
             'title': 'Chang International Circuit',
@@ -3208,7 +3226,8 @@ def sample_profile_and_bank(soup, road_set, xz, rgt2, width, y_ai_mapped, ds, fa
     return yc, yprof, bank
 
 
-def refine_ac_width(soup, road_set, kerb_mats, xz, rgt, yc, bank, width, min_w, max_w, w3d=None):
+def refine_ac_width(soup, road_set, kerb_mats, xz, rgt, yc, bank, width, min_w, max_w, w3d=None,
+                    med_samples=7, smooth_sigma=1.8):
     """Find the true asphalt-to-kerb/verge boundary on each side of `xz` and return `(new_width, edge_shift)`."""
     n = len(xz)
     half = width / 2
@@ -3244,7 +3263,9 @@ def refine_ac_width(soup, road_set, kerb_mats, xz, rgt, yc, bank, width, min_w, 
             if best is not None:
                 eshift[i, si] = best[1]
     for si in range(2):
-        eshift[:, si] = ndimage.gaussian_filter1d(ndimage.median_filter(eshift[:, si], 7, mode='wrap'), 1.8, mode='wrap')
+        eshift[:, si] = ndimage.gaussian_filter1d(
+            ndimage.median_filter(eshift[:, si], med_samples, mode='wrap'), smooth_sigma, mode='wrap'
+        )
         eshift[:, si] = np.clip(eshift[:, si], -3.0, 3.0)
     hwL = np.clip(half + eshift[:, 0], 0.5 * min_w, 0.5 * max_w)
     hwR = np.clip(half + eshift[:, 1], 0.5 * min_w, 0.5 * max_w)
@@ -3470,10 +3491,14 @@ def build_ac_track(tid, cfg, args):
         w_raw = sl + sr
         # `laneMinWidthM`: the narrowest believable lane width (a hill climb's road is 5-6 m)
         lane_min = float(cfg.get('laneMinWidthM', 6.0))
+        # `maxWidthM` / `maxWidthRatio`: widen the road-width cap for circuits whose real track widens well past its
+        # median (Chang's Turn 1 exit is ~19.5 m and Turn 3 entry ~25 m against a 12.8 m median)
+        max_w = float(cfg.get('maxWidthM', 22.0))
+        max_w_ratio = float(cfg.get('maxWidthRatio', 1.45))
         # A point-to-point course's lane is open: its ends do not wrap round to each other
         fmode, period = ('nearest', None) if cfg.get('pointToPoint') else ('wrap', n_ai)
-        w_med = float(np.median(w_raw[(w_raw >= lane_min) & (w_raw <= 22.0)]))
-        valid = (sl >= 0.2) & (sr >= 0.2) & (w_raw >= lane_min) & (w_raw <= min(22.0, 1.45 * w_med))
+        w_med = float(np.median(w_raw[(w_raw >= lane_min) & (w_raw <= max_w)]))
+        valid = (sl >= 0.2) & (sr >= 0.2) & (w_raw >= lane_min) & (w_raw <= min(max_w, max_w_ratio * w_med))
         sh_ai = np.where(valid, 0.5 * (sr - sl), np.nan)
         w_ai = np.where(valid, w_raw, np.nan)
         idx_a = np.arange(n_ai)
@@ -3522,6 +3547,7 @@ def build_from_sources(tid, cfg, args, src):
     base, layout_path, data_dir = src['base'], src['layout_path'], src['data_dir']
     from_mod = src['kind'] == 'ac'
     min_w = float(cfg.get('minWidthM', 8.5))
+    max_w = float(cfg.get('maxWidthM', 22.0))
 
     # Build 2D road raster from physics road triangles and cut along 1WALL* barrier faces
     T_road = np.concatenate(phys_tris['road'], 0)
@@ -3537,7 +3563,11 @@ def build_from_sources(tid, cfg, args, src):
     xz = cl.smooth_closed_keep_radius(xz, 4.0)
     xz, L = cl.resample_closed(xz, bt.DS)
     if cfg.get('recentre', True):
-        xz = cl.recentre(R, road, xz, bt.DS, iters=2, max_shift=1.5, keep_radius=True)
+        rc_kw = {}
+        if 'maxWidthRatio' in cfg:
+            r = float(cfg['maxWidthRatio'])
+            rc_kw = {'max_width_ratio': r, 'max_local_ratio': r}
+        xz = cl.recentre(R, road, xz, bt.DS, iters=2, max_shift=1.5, keep_radius=True, **rc_kw)
     xz = bt.roll_to_start(xz, start_pt, ahead_pt)
     xz, L = cl.resample_closed(xz, bt.DS)
     xz = bt.roll_to_start(xz, start_pt, ahead_pt)
@@ -3558,15 +3588,17 @@ def build_from_sources(tid, cfg, args, src):
         hwL, hwR = ed[:, 0].copy(), ed[:, 1].copy()
         # `minHalfWidthM`: the narrowest believable half width (a hill climb's road is 5-6 m)
         min_hw = float(cfg.get('minHalfWidthM', 2.5))
+        hw_loc_r = float(cfg['maxWidthRatio']) if 'maxWidthRatio' in cfg else 1.25
+        hw_med_r = float(cfg['maxWidthRatio']) if 'maxWidthRatio' in cfg else 1.35
         for a in (hwL, hwR):
             typ = ndimage.median_filter(a, max(9, int(250 / ds) | 1), mode='wrap')
-            bad = (a >= 19) | (a < min_hw) | (a > 1.25 * typ + 1.0) | (a > 1.35 * np.median(a) + 0.5)
+            bad = (a >= 19) | (a < min_hw) | (a > hw_loc_r * typ + 1.0) | (a > hw_med_r * np.median(a) + 0.5)
             a[bad] = np.nan
         w_rast = bt.periodic_interp_nan(hwL) + bt.periodic_interp_nan(hwR)
         w_rast = ndimage.median_filter(w_rast, 9, mode='wrap')
         # Use raster width where valid, blended with fast_lane.ai width where the mesh is narrow
         width = np.where(np.abs(w_rast - width_ai) < 3.0, w_rast, width_ai)
-        width = np.clip(ndimage.gaussian_filter1d(width, 2.0, mode='wrap'), min_w, 22.0)
+        width = np.clip(ndimage.gaussian_filter1d(width, 2.0, mode='wrap'), min_w, max_w)
 
     log(f'  centreline: {L:.1f} m ({n} samples, ds={ds:.3f} m), width median={np.median(width):.1f} m ({width.min():.1f}..{width.max():.1f} m)')
 
@@ -3602,14 +3634,21 @@ def build_from_sources(tid, cfg, args, src):
                                                 crest_r=float(cfg.get('crestMinRadiusM', 400.0)),
                                                 sigma=float(cfg.get('profileSmoothSamples', 1.5)))
     wall_cap = float(cfg.get('wallCapM', bt.WALL_CAP_M))
-    refine_wall_cap = min(wall_cap, 11.5)
+    refine_wall_cap = min(wall_cap, max(11.5, 0.5 * max_w + 0.5))
 
     if cfg.get('refineEdges', True):
-        for _ in range(2):
+        r_passes = int(cfg.get('refinePasses', 2))
+        r_med = int(cfg.get('refineMedianSamples', 7))
+        r_sig = float(cfg.get('refineSmoothSamples', 1.8))
+        r_sh_sig = float(cfg.get('refineShiftSmoothSamples', 1.5))
+        for _ in range(r_passes):
             w3d_pass = raycast_walls_3d(T_wall, xz, rgt2, yc, bank, refine_wall_cap, min_d=1.8)
-            width, eshift = refine_ac_width(soup, road_set, kerb_mats, xz, rgt2, yc, bank, width, min_w, 22.0, w3d_pass)
+            width, eshift = refine_ac_width(
+                soup, road_set, kerb_mats, xz, rgt2, yc, bank, width, min_w, max_w, w3d_pass,
+                med_samples=r_med, smooth_sigma=r_sig,
+            )
             if cfg.get('recentre', True):
-                sh = ndimage.gaussian_filter1d(0.5 * (eshift[:, 1] - eshift[:, 0]), 1.5, mode='wrap')
+                sh = ndimage.gaussian_filter1d(0.5 * (eshift[:, 1] - eshift[:, 0]), r_sh_sig, mode='wrap')
                 if p2p:
                     sh[p2p_marks(p2p, xz, L)[4]] = 0.0
                 xz = xz + rgt2 * sh[:, None]

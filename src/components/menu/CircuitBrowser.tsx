@@ -30,8 +30,11 @@ import type { VehicleModelId } from "@/types/f1";
 import { bestLapForCircuit, bestLapsByVehicleForCircuit } from "@/lib/sim/ghost-store";
 import { useBestLapSummaries } from "@/lib/sim/use-best-laps";
 import { formatLapTime } from "@/components/hud/hud-format";
+import { formatCount } from "@/lib/net/board-client";
+import { popularRank, usePopularRanks } from "@/lib/net/use-popular";
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { TrackOutline, useCircuitOutline, useNearView } from "./circuit-outline";
+import { selectDetailPbs, useCircuitBoardRanks, type DetailPbEntry } from "./circuit-board-rank";
 import { carBoardTag, TrackQualityBadge } from "./menu-content-ui";
 import { LayoutChoice } from "@/components/LayoutChoice";
 import { SourceChip } from "@/components/SourceChip";
@@ -79,6 +82,55 @@ const DetailOutline: React.FC<{ track: TrackInfo }> = ({ track }) => {
   );
 };
 
+const DetailPersonalBests: React.FC<{
+  trackId: string;
+  entries: readonly DetailPbEntry[];
+  vehicleModel?: VehicleModelId;
+  driverName?: string;
+  boardVersion?: number;
+}> = ({ trackId, entries, vehicleModel, driverName, boardVersion }) => {
+  const tx = useTranslations("menu.circuitBrowser");
+  const ranks = useCircuitBoardRanks(trackId, entries, driverName, boardVersion);
+  return (
+    <SettingRow label={tx("personalBest")} stacked>
+      <div className="flex w-full flex-col gap-1">
+        {entries.map((entry) => {
+          const isCur = vehicleModel != null && entry.vehicle === vehicleModel;
+          const rank = entry.legacyPhysics ? undefined : ranks[entry.vehicle];
+          return (
+            <div key={entry.vehicle} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[13px]">
+              <span className={cx("min-w-0 truncate", isCur ? "font-semibold text-lc-chalk" : "text-lc-fog")}>
+                {carBoardTag(entry.vehicle).label}
+                {entry.legacyPhysics ? <span className="ms-1.5 text-[11px] font-normal text-lc-slate">{tx("oldPhysicsTag")}</span> : null}
+              </span>
+              <span className="ms-auto inline-flex flex-wrap items-baseline justify-end gap-x-2 gap-y-0.5">
+                <span
+                  className={cx(
+                    "lc-mono inline-flex items-center gap-1.5 font-semibold whitespace-nowrap",
+                    entry.legacyPhysics ? "text-lc-fog" : isCur ? "text-lc-best" : "text-lc-chalk",
+                  )}
+                >
+                  {isCur && !entry.legacyPhysics ? <Icon name="lapTimes" label={tx("pbIcon")} size="xs" /> : null}
+                  {formatLapTime(entry.lapTimeMs)}
+                </span>
+                {rank ? (
+                  <span className="lc-mono whitespace-nowrap text-[12px] text-lc-slate" title={tx("boardRankTitle")}>
+                    {tx.rich("boardRank", {
+                      pos: formatCount(rank.pos),
+                      total: formatCount(rank.total),
+                      b: (chunks) => <span className="font-semibold text-lc-fog">{chunks}</span>,
+                    })}
+                  </span>
+                ) : null}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </SettingRow>
+  );
+};
+
 /**
  * The circuit browser of the title menu's Circuit panel: venues by region, type and the player's favourites and
  * recents, with every layout of a venue on one card (a switch in the detail pane picks the layout to load).
@@ -88,12 +140,16 @@ export const CircuitBrowser: React.FC<{
   trackId: string;
   /** Currently chosen car physics model (its personal best is preferred on every circuit card) */
   vehicleModel?: VehicleModelId;
+  /** The player's driver name, to look up their online board position beside each detail-panel PB */
+  driverName?: string;
+  /** Bumps when a lap upload or rename settles, so newly posted PBs can refresh their board rank */
+  boardVersion?: number;
   /** Switches circuit (reloads the scene); settles when the load fails (on success the menu is replaced) */
   onSelect?: (id: string) => void | Promise<void>;
   library?: LibraryProps;
   /** The venues to list (default every venue in the registry) */
   venues?: readonly CircuitVenue[];
-}> = ({ trackId, vehicleModel, onSelect, library, venues = CIRCUIT_VENUES }) => {
+}> = ({ trackId, vehicleModel, driverName, boardVersion, onSelect, library, venues = CIRCUIT_VENUES }) => {
   const units = useUnits();
   const tx = useTranslations("menu.circuitBrowser");
   const bestLaps = useBestLapSummaries();
@@ -117,6 +173,9 @@ export const CircuitBrowser: React.FC<{
     return ranks.length ? Math.min(...ranks) : Infinity;
   };
   const byName = (a: CircuitVenue, b: CircuitVenue) => a.name.localeCompare(b.name);
+  const popular = usePopularRanks();
+  /** A venue stands where its most-driven layout does */
+  const popularOf = (v: CircuitVenue) => (popular ? Math.min(...v.layouts.map((l) => popularRank(popular.circuits, l.id))) : Infinity);
   const typesOf = (v: CircuitVenue): Set<CircuitType> => new Set(v.layouts.map(circuitType));
   const moddersOf = (v: CircuitVenue) => new Set(v.layouts.map(circuitModder));
 
@@ -200,6 +259,10 @@ export const CircuitBrowser: React.FC<{
       heading: tx("headingLength"),
       compare: (a, b) => Math.max(...b.layouts.map((l) => l.lengthM)) - Math.max(...a.layouts.map((l) => l.lengthM)),
     },
+    // Offered once the ranks are read: with the online side off there is nothing to sort by
+    ...(popular
+      ? [{ id: "popular", label: tx("sortPopular"), heading: tx("headingPopular", { days: popular.days }), compare: (a: CircuitVenue, b: CircuitVenue) => popularOf(a) - popularOf(b) || byName(a, b) }]
+      : []),
     { id: "recent", label: tx("sortRecent"), heading: tx("headingRecent"), compare: (a, b) => recentRank(a) - recentRank(b) || byName(a, b) },
   ];
 
@@ -294,7 +357,7 @@ export const CircuitBrowser: React.FC<{
         const source = trackModelSource(t);
         const hill = circuitType(t) === "hillclimb";
         const layoutOptions = v.layouts.map((l) => ({ id: l.id, label: l.layout }));
-        const circuitPbs = bestLapsByVehicleForCircuit(bestLaps, t.id);
+        const circuitPbs = selectDetailPbs(bestLapsByVehicleForCircuit(bestLaps, t.id), vehicleModel);
         return (
           <>
             <DetailOutline track={t} />
@@ -322,37 +385,13 @@ export const CircuitBrowser: React.FC<{
               </span>
             </div>
             {circuitPbs.length > 0 ? (
-              <SettingRow label={tx("personalBest")} stacked>
-                <div className="flex flex-col gap-1">
-                  {(() => {
-                    const top = circuitPbs.slice(0, 4);
-                    if (vehicleModel && !top.some((e) => e.vehicle === vehicleModel)) {
-                      const mine = circuitPbs.find((e) => e.vehicle === vehicleModel);
-                      if (mine) top.splice(3, 1, mine);
-                    }
-                    return top;
-                  })().map((entry) => {
-                    const isCur = vehicleModel != null && entry.vehicle === vehicleModel;
-                    return (
-                      <div key={entry.vehicle} className="flex items-center justify-between gap-2 text-[13px]">
-                        <span className={cx("truncate", isCur ? "font-semibold text-lc-chalk" : "text-lc-fog")}>
-                          {carBoardTag(entry.vehicle).label}
-                          {entry.legacyPhysics ? <span className="ms-1.5 text-[11px] font-normal text-lc-slate">{tx("oldPhysicsTag")}</span> : null}
-                        </span>
-                        <span
-                          className={cx(
-                            "lc-mono inline-flex items-center gap-1.5 font-semibold",
-                            entry.legacyPhysics ? "text-lc-fog" : isCur ? "text-lc-best" : "text-lc-chalk",
-                          )}
-                        >
-                          {isCur && !entry.legacyPhysics ? <Icon name="lapTimes" label={tx("pbIcon")} size="xs" /> : null}
-                          {formatLapTime(entry.lapTimeMs)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </SettingRow>
+              <DetailPersonalBests
+                trackId={t.id}
+                entries={circuitPbs}
+                vehicleModel={vehicleModel}
+                driverName={driverName}
+                boardVersion={boardVersion}
+              />
             ) : null}
             {v.layouts.length > 1 ? (
               <SettingRow label={tx("layout")} stacked>

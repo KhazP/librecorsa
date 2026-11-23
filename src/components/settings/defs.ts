@@ -15,6 +15,7 @@ import {
 } from "@/lib/settings/player-settings";
 import { RACE_START_MODE_HINTS, RACE_START_MODE_LABELS, RACE_START_MODES, type RaceStartMode } from "@/lib/sim/race-start";
 import { SIM_REALISM_LABELS, SIM_REALISM_LEVELS } from "@/lib/sim/sim-realism";
+import { DAMAGE_LEVEL_LABELS, DAMAGE_LEVELS, type DamageLevel } from "@/lib/sim/car-damage";
 import { ASSIST_SLIDERS, type AssistSliderSpec } from "@/lib/sim/steering-assist";
 import type { AssistPreset } from "@/types/f1";
 import { MUSIC_TRACKS, type MusicPool } from "@/lib/audio/music-catalog";
@@ -185,6 +186,21 @@ export const realism = choice("segmented", {
   hint: (env) => SIM_REALISM_LABELS[env.settings.realism].detail,
   options: () => SIM_REALISM_LEVELS.map((id) => ({ id, label: SIM_REALISM_LABELS[id].label })),
   ...top("realism"),
+});
+
+/** What each practice damage level does (an AI race sets its own in the race rules, an online race the room's) */
+const PRACTICE_DAMAGE_HINTS: Record<DamageLevel, string> = {
+  get off() { return rt("practiceDamage.hints.off"); },
+  get reduced() { return rt("practiceDamage.hints.reduced"); },
+  get full() { return rt("practiceDamage.hints.full"); },
+};
+
+export const practiceDamage = choice("segmented", {
+  id: "practiceDamage",
+  get label() { return rt("practiceDamage.label"); },
+  hint: (env) => PRACTICE_DAMAGE_HINTS[env.settings.practiceDamage],
+  options: () => DAMAGE_LEVELS.map((id) => ({ id, label: DAMAGE_LEVEL_LABELS[id] })),
+  ...top("practiceDamage"),
 });
 
 /** A standing start's launch, kept with the race setup: the pre-race rules show the same choice */

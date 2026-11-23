@@ -43,6 +43,8 @@ npx wrangler d1 migrations apply librecorsa-board --remote
 npx wrangler secret put TURN_KEY_ID                # optional: a TURN key from the Cloudflare dashboard (Realtime > TURN)
 npx wrangler secret put TURN_KEY_API_TOKEN
 npx wrangler secret put ADMIN_KEY                  # optional: the key of the private /admin page (a long random string)
+npx wrangler secret put CREATOR_KEY_HASH           # optional: SHA-256 (hex) of the game maker's driver key; the names it
+                                                   # holds wear the Creator badge (printf %s '<key>' | shasum -a 256 | cut -d' ' -f1)
 npx wrangler secret put CF_ANALYTICS_TOKEN         # optional: Cloudflare's own numbers on /admin (a token with Account Analytics: Read,
                                                    # and Zone Analytics: Read for visitors); set ANALYTICS_* in wrangler.jsonc
 ```

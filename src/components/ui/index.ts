@@ -29,6 +29,7 @@ export { NavList, type NavListItem, type NavListProps } from "./NavList";
 export { Card, CardTitle, Sheet, Well, type CardProps } from "./Surface";
 export { Disclosure, type DisclosureProps } from "./Disclosure";
 export { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
+export { Modal, type ModalProps } from "./Modal";
 export { Toast, ToastRegion, useToasts, type ToastItem, type ToastProps, type ToastTone } from "./Toast";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { Skeleton, SkeletonText, type SkeletonProps } from "./Skeleton";

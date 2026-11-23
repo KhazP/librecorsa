@@ -8,6 +8,7 @@ import type { InterpolatedPeerState, PeerRaceProgress, RaceStartInfo } from "@/l
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { carAheadOnRoad, earnedAtDetection } from "@/lib/sim/overtaking-rules";
 import { CarDamage } from "@/lib/sim/car-damage";
+import { damageStatusOf, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M } from "@/lib/sim/player-damage";
 import { ContactGuard } from "@/lib/sim/contact-guard";
 import { classifiedTimeS, raceOrder, type RacerProgress } from "@/lib/sim/race-order";
 import {
@@ -462,7 +463,7 @@ export class MultiplayerRace {
         : start.lightsStartHostMs + 5 * LIGHT_INTERVAL_MS + start.holdMs;
     this.guard = start.collisions === "protected" ? new ContactGuard() : null;
     const damageLevel = start.rules?.damage ?? "off";
-    this.damage = damageLevel !== "off" ? new CarDamage(damageLevel, 2.75, 1.0) : null;
+    this.damage = damageLevel !== "off" ? new CarDamage(damageLevel, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M) : null;
     this.present = new Set(roster.map((p) => p.peerId));
     const codeById = new Map<string, string>([[localPeerId, identity.code]]);
     for (const p of roster) codeById.set(p.peerId, p.code);
@@ -826,20 +827,7 @@ export class MultiplayerRace {
     const official = this.official;
     const officialResults = official && (playerFinished || official.final) ? this.officialResults(field, official) : null;
     const officialPlace = officialResults?.findIndex((r) => r.isPlayer) ?? -1;
-    const d = this.damage;
-    const damageStatus: RaceStatus["damage"] =
-      d && !d.pristine && (d.overall >= 0.03 || d.terminal || d.punctured.some(Boolean))
-        ? {
-            front: d.front,
-            rear: d.rear,
-            left: d.left,
-            right: d.right,
-            suspension: [...d.suspension],
-            punctured: [...d.punctured],
-            overall: d.overall,
-            terminal: d.terminal,
-          }
-        : undefined;
+    const damageStatus = damageStatusOf(this.damage);
     return {
       phase: frame.phase === "racing" ? (playerFinished ? "finished" : "racing") : "lights",
       lightsOn: frame.lightsOn,

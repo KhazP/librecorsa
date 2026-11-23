@@ -70,5 +70,6 @@
   "surface.flooded": "State of the track surface: standing water.",
   "session.race": "Session type badge: a race.",
   "session.online": "Badge: connected to an online race.",
-  "session.offline": "Badge: playing without a connection."
+  "session.offline": "Badge: playing without a connection.",
+  "dialog.close": "Screen-reader name of the X button that closes a window."
 }

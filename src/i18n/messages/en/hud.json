@@ -1058,5 +1058,9 @@
   "overheadNameplates": {
     "fastestLap": "FL",
     "rank": "P{rank}"
+  },
+  "hiddenNote": {
+    "off": "HUD off",
+    "offKey": "HUD off · {key} to show"
   }
 }

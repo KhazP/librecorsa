@@ -740,5 +740,7 @@
   "dualSensePairPrompt.pair": "Button: pair the DualSense controller.",
   "dualSensePairPrompt.dismiss": "Button: close the prompt for good.",
   "overheadNameplates.fastestLap": "Tiny chip on the name floating above a car: this driver set the fastest lap. Abbreviation of Fastest lap.",
-  "overheadNameplates.rank": "Place in the order on the name floating above a car, e.g. P3 = third. {rank}: the place number."
+  "overheadNameplates.rank": "Place in the order on the name floating above a car, e.g. P3 = third. {rank}: the place number.",
+  "hiddenNote.off": "Banner while the player has hidden the HUD.",
+  "hiddenNote.offKey": "The same banner with the key or button that shows the HUD again. {key}: a key or button name, untranslated."
 }

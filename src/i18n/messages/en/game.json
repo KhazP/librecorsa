@@ -147,7 +147,9 @@
     "recordDetail": "{boards} — tap to view tracks",
     "ogDetail": "Drove LibreCorsa on Physics V1",
     "bulbDetailNote": "Idea Contributor: {note}",
-    "bulbDetail": "Idea or community contribution"
+    "bulbDetail": "Idea or community contribution",
+    "creator": "Creator",
+    "creatorDetail": "Made LibreCorsa"
   },
   "camera": {
     "chaseClose": "Chase close",

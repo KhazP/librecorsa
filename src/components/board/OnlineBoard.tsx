@@ -43,6 +43,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Toggle } from "@/components/ui/Toggle";
 import { Icon } from "@/components/ui/icons/Icon";
 import { filterBadgesForContext, type BadgeContext } from "@/lib/net/awards";
+import { DriverProfileModal } from "./DriverProfileModal";
 import { LapConditionBadges } from "./LapConditionBadges";
 import { badgesFor, BoardError, BoardSkeleton, BoardTable, MyPlace, useDriverBadges, type BoardRow } from "./board-table";
 
@@ -179,6 +180,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
   const rootRef = useRef<HTMLElement | null>(null);
   const headingId = React.useId();
   const [applyingKey, setApplyingKey] = useState<string | null>(null);
+  const [profileDriver, setProfileDriver] = useState<string | null>(null);
   const [scopeChosen, setScope] = useState<Scope>("mine");
   useEffect(() => {
     if (scopeOverride) setScope(scopeOverride.scope);
@@ -594,6 +596,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
             badgeContext={badgeContext}
             circuitName={circuitNameOf}
             onOpenRecordBoard={handleOpenRecordBoard}
+            onSelectDriver={setProfileDriver}
             legend={false}
           />
         </>
@@ -642,6 +645,15 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
       ) : null}
 
       {footer}
+      <DriverProfileModal
+        driverName={profileDriver}
+        onClose={() => setProfileDriver(null)}
+        isMe={Boolean(profileDriver && myKey !== "" && driverNameKey(profileDriver) === myKey)}
+        circuitName={circuitNameOf}
+        carTag={carTag}
+        initialBadges={profileDriver ? badgesFor(fetchedBadges, profileDriver) : undefined}
+        onOpenBoard={handleOpenRecordBoard}
+      />
     </section>
   );
 };

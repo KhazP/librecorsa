@@ -112,6 +112,11 @@ export interface Env {
   BOARD_LIMIT?: RateLimit;
   /** Dedicated read rate limit for /api/badges (separate from BOARD_LIMIT so badge reads never block lap uploads) */
   BADGES_LIMIT?: RateLimit;
+  /** SHA-256 (hex) of the game maker's driver key, comma separated for more than one: the names it holds wear the
+   * Creator badge (awards.ts). Not a secret by need (a hash of a random key), set as one to keep it out of the repo */
+  CREATOR_KEY_HASH?: string;
+  /** Dedicated read rate limit for /api/drivers/profile */
+  PROFILE_LIMIT?: RateLimit;
   /** Cloudflare's own numbers on the admin page (analytics.ts): a read-only analytics token (a secret), the account,
    * and optionally the boards' database and the site's zone */
   CF_ANALYTICS_TOKEN?: string;

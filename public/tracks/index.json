@@ -29,7 +29,7 @@
     "layout": "Grand Prix layout",
     "country": "Thailand",
     "city": "Buriram",
-    "lengthM": 4571.07,
+    "lengthM": 4569.28,
     "turns": 10,
     "direction": "clockwise",
     "dataUrl": "/tracks/chang/track_data.json",

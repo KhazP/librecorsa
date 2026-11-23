@@ -573,7 +573,7 @@ const TyreLife: React.FC<{ t: CarTelemetry; i: number; mirror: boolean }> = ({ t
 
 /** The car condition panel: four tyres round the car's outline, plus chassis damage bands when damaged */
 const ConditionPanel: React.FC<{ t: CarTelemetry }> = ({ t }) => {
-  const dmg = t.race?.damage;
+  const dmg = t.race?.damage ?? t.practiceDamage;
   const wheels = dmg
     ? [
         { x: 4, y: 26, i: 1 },

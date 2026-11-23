@@ -176,7 +176,7 @@ def edge_distances(R, road, xz, rgt, max_m=20.0, step=0.25, gap_m=1.0):
     return out
 
 
-def recentre(R, road, xz, ds, iters=3, max_shift=3.0, keep_radius=False):
+def recentre(R, road, xz, ds, iters=3, max_shift=3.0, keep_radius=False, max_width_ratio=1.35, max_local_ratio=1.2):
     """Centre the line between the raster road edges. `keep_radius`: smooth without pulling bends inward (a
     gaussian moves a bend of radius R toward its centre by about sigma^2 / 2R: over 2 m per pass in a 12 m hairpin)"""
     for _ in range(iters):
@@ -188,7 +188,7 @@ def recentre(R, road, xz, ds, iters=3, max_shift=3.0, keep_radius=False):
         # pit-lane merges, junctions and paved run-off widen the mask locally; re-centring there would
         # drag the centre sideways, so only trust samples close to the local (~250 m) typical width
         wtyp = ndimage.median_filter(w, max(9, int(250 / ds) | 1), mode='wrap')
-        valid = (L < 19) & (Rr < 19) & (w > 5) & (w < 1.2 * wtyp + 1.0) & (w < 1.35 * np.median(w) + 1.0)
+        valid = (L < 19) & (Rr < 19) & (w > 5) & (w < max_local_ratio * wtyp + 1.0) & (w < max_width_ratio * np.median(w) + 1.0)
         off = np.where(valid, (Rr - L) / 2.0, np.nan)
         # fill gaps (junctions, run-off merges) by periodic interpolation
         idx = np.arange(len(off))

@@ -12,7 +12,9 @@
  *   GET/POST /api/admin/awards, DELETE /api/admin/awards/<id>  driver badges given by hand (awards.ts, admin.ts)
  *   GET /api/hall-of-fame, GET /api/badges                     weekly challenge podiums (V1 & V2) and driver badges (awards.ts)
  *   GET /api/races/results, GET /api/drivers/record     the open races' results (results.ts)
+ *   GET /api/drivers/profile                            a driver's best laps, ranks and rating across circuits (profile.ts)
  *   GET /api/stats, GET /api/stats/circuit              tabs in view and drivers to date; a circuit's laps and drivers (stats.ts)
+ *   GET /api/stats/popular, GET /api/stats/totals      the most-driven circuits and cars; hours, laps and countries to date (stats.ts)
  *   POST /api/live                a heartbeat from a tab with the game in view, for the live count (presence.ts)
  * Every feature is optional: with its binding missing or its switch off (wrangler.jsonc `vars`), the config says
  * so and the game falls back to what works without a server.
@@ -20,19 +22,22 @@
  * Workers caching is on (for the site's large files), so every answer says no-store, except a few that are the same
  * for everyone who asks and are read on every view of the home page or the title screen: a board's page without a
  * driver's name, and the totals. Those are kept for half a minute or a minute (SHARED_ANSWER_S), at the edge and in
- * the browser, so a crowd on the home page reads the database about once a minute, not once a visit.
+ * the browser, so a crowd on the home page reads the database about once a minute, not once a visit. The usage
+ * totals' public side scans the daily totals, so it is kept an hour (totals) or six hours (popular), and takes no
+ * query string: every reader shares the one copy at the edge.
  */
 import { DEFAULT_RACE_SLOT_S, nextRaceSlot, raceSlot } from "../../src/lib/net/race-schedule";
 import { challengeProblem } from "../../src/lib/net/weekly-challenge";
 import { boardDeps, ghostOf, listLaps, renameDriver, submitLap } from "./board";
 import { driverRecord, listRaceResults } from "./results";
+import { driverProfile } from "./profile";
 import { ROOM_CODE_RE } from "./room";
 import { adminClearDriverLaps, adminDeleteLap, adminGrantAward, adminKeyMatches, adminListAwards, adminRevokeAward, adminStats } from "./admin";
-import { hallOfFame, listBadges } from "./awards";
+import { hallOfFame, listBadges, parseCreatorKeyHashes } from "./awards";
 import { analyticsConfigured, cloudflareStats } from "./analytics";
 import { turnConfigured } from "./turn";
 import { recordUsage } from "./usage";
-import { circuitStats, driversToDate } from "./stats";
+import { circuitStats, driversToDate, popularRanks, siteTotals } from "./stats";
 import type { DurableObjectNamespace, Env, RateLimit } from "./types";
 
 export { RaceServer } from "./race";
@@ -87,7 +92,7 @@ function allowedOrigin(request: Request, url: URL, env: Env): string | null {
  * How long the answers anyone may share are kept, in the browser and in Workers caching at the edge (seconds): the
  * home page and the title screen read them on every view, and none of them is about the one asking
  */
-export const SHARED_ANSWER_S = { board: 30, circuit: 60, stats: 30, hallOfFame: 60, badges: 60 } as const;
+export const SHARED_ANSWER_S = { board: 30, circuit: 60, stats: 30, hallOfFame: 60, badges: 60, profile: 60, popular: 21_600, totals: 3600 } as const;
 
 function headersFor(origin: string | null, sharedForS = 0): Record<string, string> {
   const headers: Record<string, string> = { "Cache-Control": sharedForS > 0 ? `public, max-age=${sharedForS}` : "no-store", Vary: "Origin" };
@@ -200,6 +205,21 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
     }
   }
 
+  // A driver's cross-circuit lap profile and rating (profile.ts), on the lap boards' database
+  if (path === "/api/drivers/profile" && request.method === "GET") {
+    if (!config.board || !env.BOARD_DB) return json({ ok: false, error: "The lap boards are off" }, 404, origin);
+    if (await overLimit(env.PROFILE_LIMIT, request)) {
+      return json({ ok: false, error: "Too many profile requests, try again shortly" }, 429, origin);
+    }
+    try {
+      const answer = await driverProfile(env.BOARD_DB, url);
+      return json(answer.body, answer.status, origin, SHARED_ANSWER_S.profile);
+    } catch (err) {
+      console.error("driver profile", err);
+      return json({ ok: false, error: "The driver profile could not be read" }, 500, origin);
+    }
+  }
+
   // The weekly challenge's Hall of Fame and driver badges (awards.ts), on the lap boards' database
   if (path === "/api/hall-of-fame" && request.method === "GET") {
     if (!config.board || !env.BOARD_DB) return json({ ok: false, error: "The lap boards are off" }, 404, origin);
@@ -217,7 +237,7 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
       return json({ ok: false, error: "Too many badge requests, try again shortly" }, 429, origin);
     }
     try {
-      const answer = await listBadges(env.BOARD_DB, url, Date.now());
+      const answer = await listBadges(env.BOARD_DB, url, Date.now(), parseCreatorKeyHashes(env.CREATOR_KEY_HASH));
       return json(answer.body, answer.status, origin, SHARED_ANSWER_S.badges);
     } catch (err) {
       console.error("badges", err);
@@ -249,6 +269,21 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
       return json({ ok: true, drivers, live }, 200, origin, SHARED_ANSWER_S.stats);
     } catch (err) {
       console.error("stats", err);
+      return json({ ok: false, error: "The totals could not be read" }, 500, origin);
+    }
+  }
+
+  // The usage totals' public side (stats.ts): one field at a time over a whole range, kept for a while because a
+  // month's ranks and the totals to date barely move from one hour to the next, and each read scans the totals. A
+  // query string would make a copy of its own at the edge, and a read of the database each: none is taken
+  if ((path === "/api/stats/popular" || path === "/api/stats/totals") && request.method === "GET") {
+    if (!config.usage || !env.BOARD_DB) return json({ ok: false, error: "The usage totals are off" }, 404, origin);
+    if (url.search) return json({ ok: false, error: "No query string here" }, 400, origin);
+    try {
+      if (path === "/api/stats/popular") return json({ ok: true, ...(await popularRanks(env.BOARD_DB, Date.now())) }, 200, origin, SHARED_ANSWER_S.popular);
+      return json({ ok: true, ...(await siteTotals(env.BOARD_DB, config.board)) }, 200, origin, SHARED_ANSWER_S.totals);
+    } catch (err) {
+      console.error("usage totals", err);
       return json({ ok: false, error: "The totals could not be read" }, 500, origin);
     }
   }

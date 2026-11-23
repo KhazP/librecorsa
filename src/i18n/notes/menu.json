@@ -439,5 +439,14 @@
   "feedback.writeAnother": "Button after sending: start a new report.",
   "feedback.license": "Field label: the 3D model's licence.",
   "feedback.notes": "Field label: anything else the player wants to add.",
-  "feedback.screenshot": "Card heading: a picture of the game taken when the report opened."
+  "feedback.screenshot": "Card heading: a picture of the game taken when the report opened.",
+  "circuitBrowser.sortPopular": "Sort option: circuits driven most by all players first. Short.",
+  "circuitBrowser.headingPopular": "Heading over the list sorted by Most driven. {days}: how many days are counted (30).",
+  "circuitBrowser.boardRank": "The player's place on the online lap board, e.g. 'P12 of 340'. P = position; {pos} and {total} are already formatted. Keep the tags.",
+  "circuitBrowser.boardRankTitle": "Tooltip on that place.",
+  "carBrowser.sortPopular": "Sort option: cars driven most by all players first. Short.",
+  "carBrowser.headingPopular": "Heading over the list sorted by Most driven. {days}: how many days are counted (30).",
+  "upNext.personalBest": "Row on the title screen's Up next sheet: the player's best lap for this circuit and car.",
+  "upNext.oldPhysics": "Tag beside a best lap set before the current physics. Short.",
+  "upNext.noTimeYet": "Shown when the player has no lap for this circuit and car."
 }

@@ -42,7 +42,7 @@ import { PlayerTag, SessionBadge } from "@/components/ui/badges";
 import { Icon } from "@/components/ui/icons";
 import { TrackQualityBadge } from "@/components/menu/menu-content-ui";
 import { useRaceDistance } from "@/components/menu/RaceRules";
-import { fetchBadges, type BadgeContext, type DriverBadge } from "@/lib/net/awards";
+import { fetchBadges, roomNameBadges, type BadgeContext, type DriverBadge } from "@/lib/net/awards";
 import { driverNameKey } from "@/lib/net/board-client";
 import { isVehicleModelId } from "@/types/f1";
 import { formatLapTime } from "./hud-format";
@@ -626,7 +626,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     if (!lobbyPlayerNamesKey) return;
     let live = true;
     void fetchBadges(lobbyPlayerNamesKey.split("\n")).then((map) => {
-      if (live) setDriverBadges(map);
+      if (live) setDriverBadges(Object.fromEntries(Object.entries(map).map(([key, list]) => [key, roomNameBadges(list)])));
     });
     return () => {
       live = false;

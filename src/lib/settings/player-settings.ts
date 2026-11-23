@@ -45,6 +45,7 @@ import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
 import { DEFAULT_DEVICE_ASSIST_TUNING, sanitizeAssistTuning, type DeviceAssistTuning } from "@/lib/sim/steering-assist";
 import { DEFAULT_HUD_PRESET, parseHudPreset, type HudPreset } from "@/lib/settings/hud-layouts";
 import { SIM_REALISM_LEVELS, type SimRealism } from "@/lib/sim/sim-realism";
+import { DAMAGE_LEVELS, type DamageLevel } from "@/lib/sim/car-damage";
 import { DEFAULT_SESSION_CONDITIONS, sanitizeConditions, type SessionConditions } from "@/lib/sim/weather";
 
 export interface PlayerSettings {
@@ -90,6 +91,11 @@ export interface PlayerSettings {
   race: RaceSetup;
   /** Simulation realism: tyre wear, temperature grip, fuel use and how hard rain bites (Full = the whole model) */
   realism: SimRealism;
+  /**
+   * Car damage in practice and the hotlap, driven alone (an AI race has its own in `race`, an online race the room's).
+   * Off by default; a hit that puts the car out starts a flying lap with the car repaired
+   */
+  practiceDamage: DamageLevel;
   /** Weather, time of day and time multiplier for offline sessions (the host's apply online) */
   conditions: SessionConditions;
   /**
@@ -593,6 +599,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   aiSkill: AI_SKILL_DEFAULT,
   race: DEFAULT_RACE_SETUP,
   realism: "full",
+  practiceDamage: "off",
   conditions: DEFAULT_SESSION_CONDITIONS,
   timeOfDayChosen: false,
   library: DEFAULT_CONTENT_LIBRARY,
@@ -1017,6 +1024,8 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     aiSkill: Math.round(num(raw.aiSkill, 0, 100, d.aiSkill)),
     race: parseRaceSetup(raw.race),
     realism: oneOf(raw.realism, SIM_REALISM_LEVELS, d.realism),
+    // A save from before this setting has none: off, as practice always was
+    practiceDamage: oneOf(raw.practiceDamage, DAMAGE_LEVELS, d.practiceDamage),
     conditions: sanitizeConditions(raw.conditions),
     // A save from before this flag: a time of day other than the default was the player's pick
     timeOfDayChosen: bool(raw.timeOfDayChosen, sanitizeConditions(raw.conditions).timeOfDay !== d.conditions.timeOfDay),

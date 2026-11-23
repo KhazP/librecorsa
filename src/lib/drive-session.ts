@@ -75,6 +75,8 @@ import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { getMultiplayerManager, type InterpolatedPeerState, type P2PConnectionStatus } from "@/lib/sim/multiplayer-sync";
 import { flagMultiplayerRace } from "@/lib/sim/mp-flags"; // polish:D
 import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
+import { CarDamage } from "@/lib/sim/car-damage";
+import { damageStatusOf, PlayerDamageFeed, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M } from "@/lib/sim/player-damage";
 import { CoolDown } from "@/lib/sim/cool-down";
 import { PodiumDirector } from "@/lib/render/podium-shot";
 import { NameplateBadgeCache, OverheadNameplateProjector, type OverheadNameplatesSink } from "@/lib/render/overhead-nameplates";
@@ -91,6 +93,7 @@ import { ScreenWakeLock } from "@/lib/screen-wake-lock";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
+import { HELD_KEYS, heldActionsOf, isHeldKeyAction, PhysicalKeys, type HeldKeyAction } from "@/lib/input/held-keys";
 import { shapeStick } from "@/lib/input/stick-shape";
 import { combineStickAndGyro, gyroSteerValue } from "@/lib/input/gyro-steer";
 import { gyroSource } from "@/lib/input/gyro-source";
@@ -210,25 +213,14 @@ export type RunResetReason = "session" | "restart" | "teleport" | "car" | "race"
 /** The VR headset: off, being asked for a session, or presenting */
 export type VrState = "off" | "requesting" | "on";
 
-/** Key actions that act while held, and the held-key flag each sets (the rest are one-shot actions) */
-const HELD_KEYS = {
-  throttle: "up",
-  brake: "down",
-  steerLeft: "left",
-  steerRight: "right",
-  throttleHalf: "half",
-  brakeHalf: "halfBrake",
-  clutch: "clutch",
-  boostHold: "boostHold",
-  headlightFlash: "headlightFlash",
-} as const satisfies Partial<Record<KeyAction, string>>;
-type HeldKeyAction = keyof typeof HELD_KEYS;
-const isHeldKeyAction = (action: KeyAction): action is HeldKeyAction => Object.hasOwn(HELD_KEYS, action);
 /** Held keys that take the car back from the autopilot (holding boost does not) */
 const DRIVER_KEYS: ReadonlySet<HeldKeyAction> = new Set(["throttle", "brake", "steerLeft", "steerRight", "throttleHalf", "brakeHalf"]);
 
 /** One-shot driving actions: the same whether they come from a key, a pad button or a touch pad */
 export type DriveAction = Exclude<KeyAction, HeldKeyAction> | "mfd" | "hud";
+
+/** How long a car put out by damage in practice stays put before it starts a flying lap, repaired (s of driving) */
+const PRACTICE_WRECK_HOLD_S = 1.5;
 
 /** Telemetry-out rate (Hz) */
 const TELEMETRY_OUT_HZ = 60;
@@ -751,6 +743,8 @@ export class DriveSession {
       freeCamKeys.clear();
       freeCamDrag = null;
     };
+    /** The keys physically down, kept through the pause menu and the seat panel: the drive holds them again after */
+    const physicalKeys = new PhysicalKeys();
     this.togglePause = () => {
       if (disposed) return;
       const paused = !this.snapshot.paused;
@@ -999,7 +993,15 @@ export class DriveSession {
     let mpQualiSeenLap: number | null = null;
     let mpPracticeBestMs: number | null = null;
     let mpPracticeSeenLap: number | null = null;
-    let mpLastWallImpactMs = 0;
+    /**
+     * The player's car damage judged on the page: barrier hits from the car's telemetry into an online race's damage
+     * (the room's rules) or practice's (the Practice damage setting), each change handed to the car once
+     */
+    const damageFeed = new PlayerDamageFeed();
+    /** Practice and time-trial damage, driven alone; repaired with every new run (resetRun) */
+    const practiceDamage = new CarDamage(settings.practiceDamage, PLAYER_HALF_LENGTH_M, PLAYER_HALF_WIDTH_M);
+    /** Driving time since a hit put the car out in practice (s): the car starts a flying lap, repaired, after a moment */
+    let practiceWreckS = 0;
     this.setRace = (next) => {
       endQualifying();
       endTimeTrial();
@@ -1741,6 +1743,8 @@ export class DriveSession {
       const prev = settings;
       if (disposed || next === prev) return;
       settings = next;
+      // From the next hit (switched off, the frame loop repairs the car)
+      practiceDamage.level = next.practiceDamage;
       if (next.audio !== prev.audio) {
         if (next.audio.muted !== this.snapshot.muted) this.publish({ muted: next.audio.muted });
         audio?.setMuted(next.audio.muted);
@@ -2005,6 +2009,11 @@ export class DriveSession {
       ) {
         return;
       }
+      // Every key down is noted, the ones the screens below take too: a driving key held as they close drives at once
+      physicalKeys.keyDown(
+        e,
+        this.snapshot.seatPanel ? "seatPanel" : appPhaseNow !== "driving" || this.snapshot.paused || gpuLost ? "menu" : "drive"
+      );
       // The loading screen, title menu and setup own the keyboard outside the car
       if (appPhaseNow !== "driving") return;
       this.unlockAudio();
@@ -2133,18 +2142,36 @@ export class DriveSession {
         }
         return;
       }
-      // During replay, driving keys (e.g. arrow keys used for timeline seek) must not steer or cancel autopilot
-      if (replay.active && isHeldKeyAction(action)) return;
       // Held controls ignore auto-repeat anyway; toggles must not flicker while a key is held
-      if (isHeldKeyAction(action)) {
-        heldKeys[HELD_KEYS[action]] = true;
-        if (DRIVER_KEYS.has(action) && physics.aiAutopilot && !coolDown.active) physics.aiAutopilot = false;
-        return;
-      }
+      if (isHeldKeyAction(action)) return holdKey(action);
       if (action === "shiftUp") heldKeys.gearUpHeld = true;
       // Held controls ignore auto-repeat anyway; one-shot actions must not flicker while a key is held
       if (e.repeat) return;
       runAction(action);
+    };
+    /** A held control's key is down */
+    const holdKey = (action: HeldKeyAction) => {
+      // During replay, driving keys (e.g. arrow keys used for timeline seek) must not steer or cancel autopilot
+      if (replay.active) return;
+      heldKeys[HELD_KEYS[action]] = true;
+      if (DRIVER_KEYS.has(action) && physics.aiAutopilot && !coolDown.active) physics.aiAutopilot = false;
+    };
+    /**
+     * The pause menu or the seat panel hands the car back: the keys still down hold again now, as their keydowns were
+     * dropped while it was open and the browser repeats a held key only after the system's repeat delay (#171). Held
+     * controls only, sorted as a keydown would: Free camera flies on its keys, Alt combos stay view nudges
+     */
+    const restoreHeldKeys = () => {
+      const freeCam = isFreeCamInteractive();
+      const driveCodes: string[] = [];
+      for (const code of physicalKeys.restorable(keyLookup)) {
+        if (cameraNudgeCodes.has(code)) continue;
+        if (freeCam && FREE_CAM_MOVE_CODES.has(code)) freeCamKeys.add(code);
+        else driveCodes.push(code);
+      }
+      const { actions, gearUpHeld } = heldActionsOf(driveCodes, keyLookup);
+      for (const action of actions) holdKey(action);
+      if (gearUpHeld) heldKeys.gearUpHeld = true;
     };
 
     this.runAction = (action) => {
@@ -2228,6 +2255,7 @@ export class DriveSession {
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
+      physicalKeys.keyUp(e.code);
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -2269,6 +2297,7 @@ export class DriveSession {
       }
       wheelFfb.stop();
       releaseHeldKeys();
+      physicalKeys.clear();
       // The first frames back are no measure of the frame rate
       governor.interrupt();
     };
@@ -2284,6 +2313,7 @@ export class DriveSession {
     // Keys held while focus leaves the window (Cmd-Tab, a system dialog) never get their keyup
     const onWindowBlur = () => {
       releaseHeldKeys();
+      physicalKeys.clear();
       // Their keyups go to another window: the keys would stay swallowed, and a held camera key would open the panel
       cameraNudgeCodes.clear();
       boundAltsHeld.clear();
@@ -2500,6 +2530,8 @@ export class DriveSession {
         }
         field.restoreField(poses, rewindS);
       }
+      // Practice damage goes back to what it was then (an AI race's field keeps the player's own)
+      if (raceNow().kind === "practice") damageFeed.rewind(practiceDamage, rp.timeS);
       // Truncate the replay buffer from the flashback point forward so future replays stay coherent
       rp.buffer.truncateAfter(rp.timeS);
       replayClockS = rp.timeS;
@@ -2545,8 +2577,11 @@ export class DriveSession {
         mpPracticeBestMs = null;
         mpPracticeSeenLap = null;
       }
-      mpLastWallImpactMs = physics.telemetry.f12026?.wallImpact?.atMs ?? 0;
+      // The car is repaired: practice's damage starts over, an online race's is handed to the car again next frame
+      damageFeed.restart(physics.telemetry);
       physics.setDamageEffects?.(null);
+      practiceDamage.reset();
+      practiceWreckS = 0;
       trackLimits.reset(limitsSessionOf(raceNow()), limitsRulesOf(raceNow()));
       wallDeletedLaps.clear();
       cameraRig.reset();
@@ -2639,6 +2674,8 @@ export class DriveSession {
     let wheelLostPending = false;
     /** The player drove last frame: gyro steering takes its centre again when the car is handed back */
     let gyroWasDriving = false;
+    /** The pause menu, the seat panel or a lost GPU context held the car last frame */
+    let frozenLastFrame = false;
     const displayExtra: { deltaMs: number | null } = { deltaMs: null };
     // The view camera: every view's placement, the menus' orbit and the driver's neck; told to start over when the
     // run does and when the replay moves the drawn car
@@ -2951,6 +2988,9 @@ export class DriveSession {
       // The pause menu, the seat panel or a lost GPU context: the car waits
       const frozen = this.snapshot.paused || this.snapshot.seatPanel || gpuLost;
       const driving = !inMenu && !frozen && !replaying && !device.wheelLost;
+      // Handed back: the driving keys still down hold from this frame, not from the browser's first key repeat
+      if (frozenLastFrame && !frozen && driving && !podium.playing) restoreHeldKeys();
+      frozenLastFrame = frozen;
       const freeCamControl = !inMenu && !frozen && !podium.playing && !renderer.xr.isPresenting && cameraOverride === "free";
       wakeLock.setDesired(driving);
       const padTuning = settingsNow.padTuning;
@@ -3668,14 +3708,7 @@ export class DriveSession {
           }
         }
         // Multiplayer car damage from walls and car contact when enabled by the room rules
-        if (mpRace.damage && driving && mpFrame.phase === "racing") {
-          const wall = physics.telemetry.f12026?.wallImpact;
-          if (wall && wall.atMs > mpLastWallImpactMs) {
-            mpLastWallImpactMs = wall.atMs;
-            mpRace.damage.registerImpact({ localX: wall.localX ?? 0, localZ: wall.localZ ?? 2.75, speedMs: wall.speedMs, source: "wall" });
-          }
-          if (!mpRace.damage.pristine) physics.setDamageEffects?.(mpRace.damage.effects());
-        }
+        if (mpRace.damage && driving && mpFrame.phase === "racing") damageFeed.update(mpRace.damage, physics);
         // polish:D yellow flags: a car stopped, off or going the wrong way on the road ahead (mp-flags.ts)
         if (physics.telemetry.race && mpFrame.phase === "racing") {
           flagMultiplayerRace(mpRace, physics.telemetry.race, track, samePeers, dtSeconds, mpFrame.raceTimeS, physics.sMeters);
@@ -3683,6 +3716,39 @@ export class DriveSession {
       } else {
         for (const p of samePeers) p.passThrough = false;
       }
+      // Practice damage (the player's setting): practice and time trials driven alone, not qualifying for an AI race nor
+      // anything in an online room, where restarts are not the player's alone (as for Flashback)
+      const soloDamage =
+        raceNow().kind === "practice" &&
+        !quali &&
+        !mpQuali &&
+        !isInOnlineRoom(multiplayerSync.status, peersOnTrack) &&
+        settingsNow.practiceDamage !== "off"
+          ? practiceDamage
+          : null;
+      if (soloDamage) {
+        if (driving) {
+          damageFeed.update(soloDamage, physics);
+          damageFeed.record(soloDamage, replayClockS);
+          // Put out (a big hit, a wheel torn off): a moment to see it, then a flying lap with the car repaired, as the
+          // restart key gives in practice
+          practiceWreckS = soloDamage.terminal ? practiceWreckS + dtSeconds : 0;
+          if (practiceWreckS >= PRACTICE_WRECK_HOLD_S) {
+            practiceWreckS = 0;
+            queueMicrotask(() => this.restartFlyingLap());
+          }
+        }
+      } else {
+        // No damage judged here (an online race's is fed above): a hit now is never counted once damage is on
+        if (!(mpRace?.damage && mpFrame?.phase === "racing")) damageFeed.skip(physics.telemetry);
+        // Practice damage switched off, or the session turned into one it does not apply to: the car is repaired
+        if (!practiceDamage.pristine && raceNow().kind === "practice") {
+          practiceDamage.reset();
+          practiceWreckS = 0;
+          damageFeed.apply(practiceDamage, physics);
+        }
+      }
+      physics.telemetry.practiceDamage = damageStatusOf(soloDamage);
       let renderPeers = aiField ? [...samePeers, ...aiField.peers()] : samePeers;
       // polish:B the podium shot once the top three are known (this frame's race status, before the HUD sees it)
       podium.update({

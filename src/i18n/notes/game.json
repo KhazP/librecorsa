@@ -427,5 +427,7 @@
   "playError.body": "WebGL = the browser's 3D graphics; keep the word. Hardware acceleration = the browser setting that lets it use the graphics card.",
   "playError.detail": "Screen-reader name of the box with the technical error message (in English).",
   "playError.restart": "Button: start the simulator again.",
-  "dash.yellowFlag": "Banner on the GT3 car's dashboard screen (drawn in capitals) while a yellow flag is out."
+  "dash.yellowFlag": "Banner on the GT3 car's dashboard screen (drawn in capitals) while a yellow flag is out.",
+  "badges.creator": "Badge name for the person who made LibreCorsa.",
+  "badges.creatorDetail": "What the Creator badge means."
 }

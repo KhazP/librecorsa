@@ -504,6 +504,14 @@
     "telemetryOut": {
       "label": "UDP telemetry",
       "hint": "Sends live telemetry to local bridge (dashboards, bass shakers)"
+    },
+    "practiceDamage": {
+      "label": "Practice damage",
+      "hints": {
+        "off": "No damage in practice or a time trial",
+        "reduced": "Half the damage; a wrecked car restarts a flying lap, repaired",
+        "full": "Race damage; a wrecked car restarts a flying lap, repaired"
+      }
     }
   },
   "driving": {

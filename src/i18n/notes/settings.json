@@ -232,5 +232,6 @@
   "hudPicker.description": "Screen-reader description of a layout. {detail}: the layout's description, already translated. {author}: a person's name.",
   "hudPicker.descriptionSite": "As above, with {site}: the name of the author's website.",
   "hudPicker.sourceLink": "Screen-reader name of a link to a layout's source code. {layout}: the layout's name, {author}: a person's name.",
-  "hudPicker.siteLink": "Screen-reader name of a link to the author's website. {site}: the site's name, {author}: a person's name."
+  "hudPicker.siteLink": "Screen-reader name of a link to the author's website. {site}: the site's name, {author}: a person's name.",
+  "rows.practiceDamage.label": "Setting: whether the car takes damage in practice and time trials."
 }

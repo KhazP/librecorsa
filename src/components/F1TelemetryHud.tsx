@@ -344,6 +344,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     onCycleCamera,
   } = props;
   const tx = useTranslations("game");
+  const th = useTranslations("hud.hiddenNote");
   // The race HUD keeps its layout in every language; panels that read like a page (results) follow the language
   const pageDir = useI18nState().dir;
   // Read once per language: the HUD renders at the telemetry's rate
@@ -479,21 +480,15 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     hud?.splitGaps !== false && !isThirdParty && !phone && !lightsPhase && race?.phase === "racing" ? (
       <SplitGaps splits={race.splits} variant="panel" />
     ) : null;
-  // The split gaps, and the car's damage once something is broken (AI race)
+  // The split gaps, and the car's damage once something is broken (a race's, or practice's with Practice damage on)
+  const damage = race?.damage ?? telemetry.practiceDamage;
   const damageNode =
-    race?.damage && (!style?.ownDamage || touch) ? (
-      <DamageWidget damage={race.damage} />
-    ) : race?.damage && style?.ownDamage ? (
+    damage && (!style?.ownDamage || touch) ? (
+      <DamageWidget damage={damage} />
+    ) : damage && style?.ownDamage ? (
       <div className="hidden compact:block">
-        <DamageWidget damage={race.damage} />
+        <DamageWidget damage={damage} />
       </div>
-    ) : null;
-  const gapsNode =
-    splitsNode || damageNode ? (
-      <>
-        {splitsNode}
-        {damageNode}
-      </>
     ) : null;
   const weatherNode = props.weather && !phone && !minimal && !lightsPhase ? <WeatherBadge weather={props.weather} variant="panel" /> : null;
   const trackInfo = getTrackInfo(ACTIVE_TRACK_ID);
@@ -516,14 +511,16 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     ) : null;
   // polish:A — the time trial's target sits where a race's split gaps would, the lap board under it
   const targetNode = props.challengeTarget && !race && !phone ? <ChallengeTargetPanel target={props.challengeTarget} /> : null;
+  // Outside a race the damage sits above the target and the board, which keep their place
   const leftNode =
-    gapsNode ??
-    (targetNode || boardNode ? (
+    splitsNode || damageNode || targetNode || boardNode ? (
       <>
+        {splitsNode}
+        {damageNode}
         {targetNode}
         {boardNode}
       </>
-    ) : null);
+    ) : null;
 
   const showTyres = classic;
   const showMap = classic;
@@ -972,14 +969,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             cut="sm"
             className="absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center px-4 text-[13px] font-semibold"
           >
-            HUD off{props.hudToggleButton ? ` · ${props.hudToggleButton} to show` : ""}
+            {props.hudToggleButton ? th("offKey", { key: props.hudToggleButton }) : th("off")}
           </SkinBanner>
         ) : (
           <div
             role="status"
             className={`absolute bottom-6 left-1/2 inline-flex h-9 -translate-x-1/2 items-center rounded-lc-row px-4 lc-title text-[13px] text-lc-chalk ${HUD_GLASS}`}
           >
-            HUD off{props.hudToggleButton ? ` · ${props.hudToggleButton} to show` : ""}
+            {props.hudToggleButton ? th("offKey", { key: props.hudToggleButton }) : th("off")}
           </div>
         )
       ) : null}
