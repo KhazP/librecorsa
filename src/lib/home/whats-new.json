@@ -1,5 +1,14 @@
 [
   {
+    "date": "2026-11-24",
+    "title": "Sign in from Lap times and from your first lap on a board",
+    "items": [
+      "Lap times now has a Sign in button next to Export key, and the first lap you post to an online board while signed out says once that signing in keeps your best laps and driver names on every device, with a button that takes you to Settings > Profile and data > Account."
+    ],
+    "commits": 3,
+    "lastSha": "a660090d71c23c4a9846d7f0e60fe2214ca2110d"
+  },
+  {
     "date": "2026-11-23",
     "title": "Player accounts, 11 languages, the 2026 F1 hybrid rules and driver profiles",
     "items": [
