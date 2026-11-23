@@ -25,7 +25,7 @@ export const KTX2_MODELS: readonly Ktx2Model[] = [
   { model: "/tracks/barbagallo/barbagallo.glb", build: "44de8787" },
   { model: "/tracks/borgloh/borgloh.glb", build: "7f4a63bd" },
   { model: "/tracks/bridgehampton/bridgehampton.glb", build: "d8cfe1d0" },
-  { model: "/tracks/chang/chang.glb", build: "450cab73" },
+  { model: "/tracks/chang/chang.glb", build: "563a4258" },
   { model: "/tracks/dunsfold/dunsfold.glb", build: "801d33ca" },
   { model: "/tracks/goodwood/goodwood.glb", build: "11024313" },
   { model: "/tracks/grobnik/grobnik.glb", build: "86923d13" },
