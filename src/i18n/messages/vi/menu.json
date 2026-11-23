@@ -932,7 +932,7 @@
     "raceSummaryFinish": "Về đích",
     "raceSummaryChampionship": "Xếp hạng giải",
     "raceSummaryPoints": "Điểm",
-    "raceSummaryCareerTotal": "Sự nghiệp {score}",
+    "raceSummarySeasonTotal": "{score} mùa giải này",
     "raceSummaryPodiumTitle": "Bục trao giải",
     "raceSummaryYourFinish": "Vị trí của bạn",
     "raceSummaryMultiplierBreakdown": "AI {ai} +{aiPts} · Hư hại {damage} +{damagePts} · {length} +{lengthPts} = {total}×",

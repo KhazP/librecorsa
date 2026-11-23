@@ -932,7 +932,7 @@
     "raceSummaryFinish": "Finis",
     "raceSummaryChampionship": "Kejuaraan",
     "raceSummaryPoints": "Poin",
-    "raceSummaryCareerTotal": "Karier {score}",
+    "raceSummarySeasonTotal": "{score} musim ini",
     "raceSummaryPodiumTitle": "Podium balapan",
     "raceSummaryYourFinish": "Posisi finismu",
     "raceSummaryMultiplierBreakdown": "AI {ai} +{aiPts} · Kerusakan {damage} +{damagePts} · {length} +{lengthPts} = {total}×",

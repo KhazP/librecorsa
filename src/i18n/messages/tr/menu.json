@@ -932,7 +932,7 @@
     "raceSummaryFinish": "Bitiriş",
     "raceSummaryChampionship": "Şampiyona",
     "raceSummaryPoints": "Puan",
-    "raceSummaryCareerTotal": "Kariyer {score}",
+    "raceSummarySeasonTotal": "Bu sezon {score}",
     "raceSummaryPodiumTitle": "Yarış podyumu",
     "raceSummaryYourFinish": "Bitiriş sıran",
     "raceSummaryMultiplierBreakdown": "YZ {ai} +{aiPts} · Hasar {damage} +{damagePts} · {length} +{lengthPts} = {total}×",

@@ -487,7 +487,7 @@
   "career.raceSummaryFinish": "KPI tile label on Race Summary: finishing position.",
   "career.raceSummaryChampionship": "KPI tile label on Race Summary: updated championship position.",
   "career.raceSummaryPoints": "KPI tile label on Race Summary: championship points earned this round.",
-  "career.raceSummaryCareerTotal": "Subtitle under Race Score showing the player's overall career score total.",
+  "career.raceSummarySeasonTotal": "Subtitle under Race Score: the race scores of the season so far ({score} is a number, not a season number).",
   "career.raceSummaryPodiumTitle": "Section heading in Race Summary for the race's top three finishers.",
   "career.raceSummaryYourFinish": "Label beside the player's own finishing line when they finished outside the podium.",
   "career.raceSummaryMultiplierBreakdown": "Itemised breakdown of the race score multiplier: AI level, damage, and race length contributions summing to total.",

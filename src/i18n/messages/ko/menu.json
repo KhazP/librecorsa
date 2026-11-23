@@ -932,7 +932,7 @@
     "raceSummaryFinish": "완주 순위",
     "raceSummaryChampionship": "챔피언십",
     "raceSummaryPoints": "획득 점수",
-    "raceSummaryCareerTotal": "커리어 {score}",
+    "raceSummarySeasonTotal": "이번 시즌 {score}",
     "raceSummaryPodiumTitle": "레이스 포디움",
     "raceSummaryYourFinish": "내 순위",
     "raceSummaryMultiplierBreakdown": "AI {ai} +{aiPts} · 손상 {damage} +{damagePts} · {length} +{lengthPts} = {total}×",

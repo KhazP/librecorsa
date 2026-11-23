@@ -932,7 +932,7 @@
     "raceSummaryFinish": "完賽名次",
     "raceSummaryChampionship": "錦標賽",
     "raceSummaryPoints": "積分",
-    "raceSummaryCareerTotal": "生涯 {score}",
+    "raceSummarySeasonTotal": "本賽季 {score}",
     "raceSummaryPodiumTitle": "本站頒獎台",
     "raceSummaryYourFinish": "你的名次",
     "raceSummaryMultiplierBreakdown": "AI {ai} +{aiPts} · 車損 {damage} +{damagePts} · {length} +{lengthPts} = {total}×",

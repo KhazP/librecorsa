@@ -932,7 +932,7 @@
     "raceSummaryFinish": "مركز النهاية",
     "raceSummaryChampionship": "البطولة",
     "raceSummaryPoints": "النقاط",
-    "raceSummaryCareerTotal": "رصيد المسيرة {score}",
+    "raceSummarySeasonTotal": "{score} هذا الموسم",
     "raceSummaryPodiumTitle": "منصة السباق",
     "raceSummaryYourFinish": "مركزك",
     "raceSummaryMultiplierBreakdown": "AI {ai} +{aiPts} · الأضرار {damage} +{damagePts} · {length} +{lengthPts} = {total}×",

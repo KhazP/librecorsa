@@ -233,7 +233,8 @@ export const RaceSummaryModal: React.FC<{
         <StatTile
           label={tx("scoreTotal")}
           value={`+${format.number(parts.score)}`}
-          sub={run ? tx("raceSummaryCareerTotal", { score: format.number(run.score) }) : undefined}
+          // The season's race scores so far: the career total only grows when a season ends
+          sub={currSeason ? tx("raceSummarySeasonTotal", { score: format.number(currSeason.rounds.reduce((a, r) => a + (r?.score ?? 0), 0)) }) : undefined}
         />
       </div>
 

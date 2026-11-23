@@ -932,7 +932,7 @@
     "raceSummaryFinish": "Zielposition",
     "raceSummaryChampionship": "Meisterschaft",
     "raceSummaryPoints": "Punkte",
-    "raceSummaryCareerTotal": "Karriere {score}",
+    "raceSummarySeasonTotal": "{score} in dieser Saison",
     "raceSummaryPodiumTitle": "Rennpodium",
     "raceSummaryYourFinish": "Dein Platz",
     "raceSummaryMultiplierBreakdown": "KI {ai} +{aiPts} · Schaden {damage} +{damagePts} · {length} +{lengthPts} = {total}×",
