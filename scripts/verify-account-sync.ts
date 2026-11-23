@@ -815,12 +815,24 @@ async function main3(): Promise<void> {
     );
   }
   {
+    // An account made just now on this device joins it without the question
+    const server = fakeServer();
+    server.joined = false;
+    const f = fakeEnv(server, { accounts: true, hash: "#lc-account=created" });
+    const store = createAccountStore(() => f.env);
+    store.actions.start();
+    await settle(() => server.calls.includes("POST /account/device"));
+    await settle();
+    const st = store.getState();
+    check("a new account: no join question, this device joins it and syncs", st.join === null && server.joined && server.calls.includes("POST /account/device") && st.notice?.text === AUTH_NOTICES.created.text, server.calls.join());
+  }
+  {
     // A sign-in return, then the join question, then the first sync (cloud empty: upload)
     const server = fakeServer();
     server.joined = false;
     const f = fakeEnv(server, {
       accounts: true,
-      hash: "#lc-account=created",
+      hash: "#lc-account=signed-in",
       storage: memoryStorage({ "lc.garage.presets.lc26": JSON.stringify([preset("1", "Quali", 1)]) }),
     });
     const store = createAccountStore(() => f.env);
@@ -828,7 +840,7 @@ async function main3(): Promise<void> {
     store.actions.start();
     await settle(() => store.getState().phase === "signed-in");
     const st = store.getState();
-    check("the return's notice is shown", st.notice?.text === AUTH_NOTICES.created.text && st.notice?.kind === "ok");
+    check("the return's notice is shown", st.notice?.text === AUTH_NOTICES["signed-in"].text && st.notice?.kind === "ok");
     check("the return is stripped once", same(f.log.hashes, [""]) && f.log.configWatch === 1);
     check("signed in, not joined: the join question with whose account it is", st.phase === "signed-in" && st.join?.driverName === "Alp" && same(st.join?.providers, ["discord", "passkey"]));
     check("nothing went up before joining", !server.calls.some((c) => c.startsWith("PUT")));

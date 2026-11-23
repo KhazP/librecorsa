@@ -216,6 +216,11 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
   let accountsOn = false;
   /** This session has registered its driver key with the account */
   let joined = false;
+  /**
+   * The account was made just now, on this device: it has no other device and nobody else's save, so this device
+   * joins it without the question
+   */
+  let joinWithoutAsking = false;
   /** The sign-in return found on start, handled once accounts turn out to be on */
   let authReturn: ReturnType<typeof readAuthReturn> = null;
   let retryMs = RETRY_FIRST_MS;
@@ -264,7 +269,7 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
       set({
         phase: "signed-in",
         account: ans.account,
-        join: joined ? null : { driverName: ans.account.driverName, providers: providersOf(ans.account) },
+        join: joined || joinWithoutAsking ? null : { driverName: ans.account.driverName, providers: providersOf(ans.account) },
         sync: { ...state.sync, lastSyncedAt: state.sync.lastSyncedAt ?? rec?.lastSyncedAt ?? null },
       });
     } else if (ans.signedOut) toSignedOut();
@@ -355,8 +360,14 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
       return;
     }
     retryMs = RETRY_FIRST_MS;
-    // Not joined: the UI asks first
-    if (!joined) return;
+    // Not joined: the UI asks first, unless this device made the account
+    if (!joined) {
+      if (joinWithoutAsking) {
+        joinWithoutAsking = false;
+        await actions.confirmJoin();
+      }
+      return;
+    }
     let account = ans.account;
     // The session's driver key is no longer this device's (saved data cleared, a key file imported): the session
     // was confirmed on this device already, so its key now joins without asking again
@@ -406,6 +417,7 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
     if (authReturn) {
       e.setHash(authReturn.rest);
       if (authReturn.result) notice(AUTH_NOTICES[authReturn.result]);
+      if (authReturn.result === "created") joinWithoutAsking = true;
       authReturn = null;
     }
     if (was) return;
@@ -422,6 +434,7 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
   /** A sign-in that happened without a redirect: say so, then go on as after any sign-in */
   async function signedIn(result: AuthResult): Promise<null> {
     notice(AUTH_NOTICES[result]);
+    if (result === "created") joinWithoutAsking = true;
     await enter();
     return null;
   }
