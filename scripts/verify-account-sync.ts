@@ -6,6 +6,7 @@
  * accounts off.
  * Run: node scripts/run-verify.mjs account-sync
  */
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { STORAGE_KEYS, STORAGE_PREFIXES } from "../src/components/settings/storage";
@@ -418,6 +419,8 @@ function fakeServer() {
     ghostGets: 0,
     signedIn: true,
     joined: true,
+    /** AccountKey.id of the key the session joined with */
+    keyId: createHash("sha256").update("test-driver-key").digest("hex").slice(0, 12) as string | null,
     alwaysConflict: false,
     /** Runs once, just before the next save PUT is looked at: another device writing first */
     beforePut: null as null | (() => void),
@@ -430,7 +433,8 @@ function fakeServer() {
         identities: [{ provider: "discord", linkedAt: 1, lastUsedAt: 1 }],
         passkeys: [{ id: "pk", label: "Passkey", createdAt: 1, lastUsedAt: null }],
         sessions: [],
-        keys: [],
+        // The key the session joined with, as the server marks it (the first 12 hex of its SHA-256)
+        keys: s.joined && s.keyId ? [{ id: s.keyId, label: "Test", addedAt: 1, lastUsedAt: null, current: true }] : [],
         save: s.rev ? { rev: s.rev, updatedAt: 1, bytes: 1 } : null,
         pendingMerges: s.pending.length,
       };
@@ -444,6 +448,7 @@ function fakeServer() {
       if (path === "/account" && method === "GET") return json(200, { ok: true, account: s.account(), thisDevice: { joined: s.joined } });
       if (path === "/account/device") {
         s.joined = true;
+        s.keyId = createHash("sha256").update(String(body?.driverKey)).digest("hex").slice(0, 12);
         return json(200, { ok: true, attached: ["alp"], elsewhere: ["other"], keyElsewhere: false });
       }
       if (path === "/auth/signout") {
@@ -732,6 +737,22 @@ async function main3(): Promise<void> {
     const none = createAccountStore(() => null);
     none.actions.start();
     check("no online side: off", none.getState().phase === "off");
+  }
+  {
+    // The device's key changed under a joined session (saved data cleared, a key file imported)
+    const keyIdOf = (key: string) => createHash("sha256").update(key).digest("hex").slice(0, 12);
+    const server = fakeServer();
+    server.keyId = keyIdOf("an-old-key");
+    const f = fakeEnv(server, { accounts: true });
+    const store = createAccountStore(() => f.env);
+    store.actions.start();
+    await settle(() => store.getState().phase === "signed-in" && server.calls.includes("POST /account/device"));
+    await settle();
+    check(
+      "a joined session with another key: this device's key joins in its place, without the question",
+      server.calls.filter((c) => c === "POST /account/device").length === 1 && store.getState().join === null && server.keyId === keyIdOf("test-driver-key"),
+      server.calls.join(),
+    );
   }
   {
     // A sign-in return, then the join question, then the first sync (cloud empty: upload)

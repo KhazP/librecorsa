@@ -167,6 +167,20 @@ export interface AccountStoreEnv {
   onLeave(cb: (leaving: boolean) => void): () => void;
 }
 
+/** This driver key is the one the account says the session joined with (AccountKey.id: its SHA-256's first 12 hex) */
+async function keyIsCurrent(driverKey: string, account: AccountInfo): Promise<boolean> {
+  const current = account.keys.find((k) => k.current);
+  if (!current) return false;
+  try {
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(driverKey)));
+    const hex = Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+    return hex.slice(0, 12) === current.id;
+  } catch {
+    // No WebCrypto (an insecure page): keep the session as it is
+    return true;
+  }
+}
+
 /** A return path the server takes ("/play", "/account"); anything else goes back to /play */
 export const safeReturnPath = (path: string): string => (/^\/[A-Za-z0-9/_-]*$/.test(path) && !path.startsWith("//") ? path : "/play");
 
@@ -340,7 +354,19 @@ export function createAccountStore(makeEnv: () => AccountStoreEnv | null): Accou
     retryMs = RETRY_FIRST_MS;
     // Not joined: the UI asks first
     if (!joined) return;
-    const account = ans.account;
+    let account = ans.account;
+    // The session's driver key is no longer this device's (saved data cleared, a key file imported): the session
+    // was confirmed on this device already, so its key now joins without asking again
+    if (!(await keyIsCurrent(e.driverKey(), account))) {
+      const again = await e.api.joinDevice({ driverKey: e.driverKey(), label: e.deviceLabel() });
+      if (!again.ok) {
+        if (again.signedOut) toSignedOut();
+        return;
+      }
+      const reread = await refresh();
+      if (!reread.ok || !joined) return;
+      account = reread.account;
+    }
     const rec = e.sync.record(account.id);
     // This device's first sync with the account (or its record was cleared): the first-sync rules decide
     if (!rec) {
