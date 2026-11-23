@@ -8,6 +8,8 @@
  *   - Driver rename moving awards cleanly
  *   - Admin awards endpoints (auth parity with /api/admin/*, grant/update/revoke, driver search, validation)
  *   - Client parsers, formatters and badge cache (src/lib/net/awards.ts)
+ *   - The Creator badge: bound to CREATOR_KEY_HASH's driver key (follows a rename, not a lapsed name), never on a
+ *     room's typed-in names
  *
  *   npx tsx scripts/verify-awards.ts
  */
@@ -25,6 +27,7 @@ import {
   invalidateAutoWeeklyAwardsForDriver,
   MIN_RECORD_DRIVERS,
   parseBadgeNames,
+  parseCreatorKeyHashes,
   physicsIdOf,
   rankPodiums,
   tallyMostDecorated,
@@ -44,6 +47,8 @@ import {
   MAX_BADGE_NAMES,
   parseBadges,
   parseHallOfFame,
+  roomNameBadges,
+  sortBadges,
   type DriverBadge,
   type HallOfFameAnswer,
 } from "../src/lib/net/awards";
@@ -52,6 +57,7 @@ import { boardPhysicsVersion, CIRCUIT_REVISION_STEP, currentBoardBase, lapPhysic
 import type { D1Database, Env, RateLimit } from "../cloudflare/api/types";
 import type { VehicleModelId } from "../src/types/f1";
 import { fakeD1, fakeR2 } from "./lib/fake-cloudflare";
+import { NameplateBadgeCache } from "../src/lib/render/overhead-nameplates";
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = "") => {
@@ -823,6 +829,86 @@ async function main(): Promise<void> {
           condStdAssisted.includes("Assisted"),
       );
     }
+  }
+
+  // 8. The Creator badge: the maker's driver key, never the bare name ------------------------------------------------
+  {
+    const sha = async (text: string) =>
+      Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))), (b) => b.toString(16).padStart(2, "0")).join("");
+    const makerKey = "m".repeat(40);
+    const makerHash = await sha(makerKey);
+    const otherHash = await sha("x".repeat(40));
+    const db = fakeD1(FULL);
+    const base = { ONLINE_BOARD: "on", BOARD_DB: db, GHOSTS: fakeR2() };
+    // Upper case, spaces and a stray entry in the setting are forgiven
+    const env = { ...base, CREATOR_KEY_HASH: ` ${makerHash.toUpperCase()} , not-a-hash` } as unknown as Env;
+    const unset = base as unknown as Env;
+    const read = async (e: Env, names: string) =>
+      ((await (await apiCall(e, `/api/badges?names=${names}`)).json()) as { ok: boolean; badges: Record<string, DriverBadge[]> }).badges;
+    const types = (list: DriverBadge[] | undefined) => (list ?? []).map((b) => `${b.type}:${b.count}`).join(",");
+
+    check(
+      "creator: parseCreatorKeyHashes keeps 64-hex hashes once, lower case",
+      parseCreatorKeyHashes(`${makerHash.toUpperCase()}, ${makerHash},abc,`).join(",") === makerHash &&
+        parseCreatorKeyHashes(undefined).length === 0 &&
+        parseCreatorKeyHashes("").length === 0,
+    );
+
+    await addDriver(db, "KhazP", makerHash);
+    await addDriver(db, "Impostor", otherHash);
+    await addLap(db, { name: "KhazP", track: "sachsenring", vehicle: "lc26", physics: boardPhysicsVersion(7, "lc26"), ms: 61_000 });
+    const held = await read(env, "KhazP,Impostor");
+    check("creator: the maker's claimed name wears Creator, ahead of its other badges", types(held.khazp) === "creator:1,og:1", types(held.khazp));
+    check("creator: a name another key holds has none", (held.impostor ?? []).length === 0, types(held.impostor));
+    check("creator: nothing without CREATOR_KEY_HASH", !(await read(unset, "KhazP")).khazp?.some((b) => b.type === "creator"));
+
+    // A lapsed claim taken by someone else: same name, another key
+    await db.prepare("UPDATE drivers SET key_hash = ? WHERE name_key = 'khazp'").bind(otherHash).run();
+    check("creator: the name under another key (a lapsed claim) loses it", types((await read(env, "KhazP")).khazp) === "og:1");
+    await db.prepare("UPDATE drivers SET key_hash = ? WHERE name_key = 'khazp'").bind(makerHash).run();
+
+    // A rename takes the claim, and with it the badge
+    const ren = await renameDriver(
+      { db, ghosts: fakeR2(), eventRule: () => null, now: () => NOW },
+      new Request("https://librecorsa.org/api/drivers/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: "KhazP", to: "Alp", driverKey: makerKey }),
+      }),
+    );
+    const renamed = await read(env, "KhazP,Alp");
+    check(
+      "creator: follows the maker's rename and leaves the old name",
+      ren.status === 200 && renamed.alp?.[0]?.type === "creator" && !(renamed.khazp ?? []).some((b) => b.type === "creator"),
+      `${ren.status} ${JSON.stringify(renamed)}`,
+    );
+
+    // The game's side
+    const parsed = parseBadges({ ok: true, badges: { alp: [{ type: "og", count: 1 }, { type: "creator", count: 1 }] } });
+    const mixed: DriverBadge[] = [{ type: "og", count: 1 }, { type: "weekly_gold", count: 1 }, { type: "creator", count: 1 }];
+    check(
+      "creator: parsed, named and sorted first by the game",
+      parsed?.alp.map((b) => b.type).join(",") === "creator,og" &&
+        badgeLabel({ type: "creator", count: 1 }) === "Creator" &&
+        badgeDetail({ type: "creator", count: 1 }) === "Made LibreCorsa" &&
+        sortBadges(mixed).map((b) => b.type).join(",") === "creator,weekly_gold,og",
+    );
+    check("creator: roomNameBadges drops it and keeps the rest", roomNameBadges(mixed).map((b) => b.type).join(",") === "og,weekly_gold");
+
+    const pills = renderToStaticMarkup(React.createElement(DriverBadges, { badges: [{ type: "creator", count: 1 }] }));
+    const compactPills = renderToStaticMarkup(React.createElement(DriverBadges, { badges: [{ type: "creator", count: 1 }], compact: true }));
+    const legend = renderToStaticMarkup(React.createElement(BadgeLegend, { badges: [{ type: "creator", count: 1 }] }));
+    check(
+      "creator: full pill says Creator, compact pill is named for screen readers, legend explains it",
+      pills.includes(">Creator<") && compactPills.includes('aria-label="Creator"') && legend.includes("Made the game"),
+      compactPills.slice(0, 200),
+    );
+
+    // Overhead nameplates read a room's typed-in names too
+    const plates = new NameplateBadgeCache(async () => ({ khazp: [{ type: "creator", count: 1 }, { type: "og", count: 1 }] }));
+    await plates.syncNames(["KhazP"]);
+    check("creator: overhead nameplates leave it off", plates.get("KhazP")?.join(",") === "OG", JSON.stringify(plates.get("KhazP")));
+    plates.dispose();
   }
 
   if (failures.length > 0) {
