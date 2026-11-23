@@ -3316,10 +3316,10 @@ export class AiOpponentField implements AiRace {
         car.sim.setDamageEffects?.(car.damage.effects());
       }
       const p = byId.get(key);
-      // A car rewound out of a stop goes back to the road where the recording has it, and means to stop again: its
-      // stop was not made (the stop's order is its want again)
+      // A car rewound out of a stop goes back to where the recording has it. Before its service it means to stop again
+      // (the stop's order is its want again); on the way out the stop was made and counted, so it is not made twice
       if (car.pitRun) {
-        car.pitWant = car.pitRun.order;
+        if (car.pitRun.phase !== "out") car.pitWant = car.pitRun.order;
         car.pitRun = null;
         car.ai?.endPitDrive?.();
       }
