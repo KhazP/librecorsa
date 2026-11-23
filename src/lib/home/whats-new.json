@@ -1,5 +1,14 @@
 [
   {
+    "date": "2026-11-23",
+    "title": "Most driven circuits and cars, and player numbers on the press page",
+    "items": [
+      "Added a Most driven sort to the circuit and car pickers, ranking them by hours driven over the last 30 days, and a Players section on the press page with the hours, laps, drivers and countries counted so far."
+    ],
+    "commits": 56,
+    "lastSha": "ee9a432279a96a1ac2452e77056e8a1b5fa838d8"
+  },
+  {
     "date": "2026-11-22",
     "title": "Night driving, full-race replays, new liveries, Virtual Safety Car, and setup sharing",
     "items": [
