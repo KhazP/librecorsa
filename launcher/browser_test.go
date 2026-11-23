@@ -1,6 +1,8 @@
 package main
 
 import (
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -12,7 +14,7 @@ func TestBrowserCandidates(t *testing.T) {
 	cases := map[string][]string{
 		"darwin":  {"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/Users/p/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"},
 		"windows": {`C:\Program Files\Google\Chrome\Application\chrome.exe`, `C:\Users\p\AppData\Local\Microsoft\Edge\Application\msedge.exe`},
-		"linux":   {"/opt/google/chrome/chrome", "/snap/bin/chromium"},
+		"linux":   {"/opt/google/chrome/chrome", "/snap/bin/chromium", "/Users/p/.local/share/flatpak/exports/bin/com.google.Chrome"},
 	}
 	for goos, want := range cases {
 		got := browserCandidates(goos, getenv, "/Users/p")
@@ -40,5 +42,33 @@ func TestDefaultBrowserCommand(t *testing.T) {
 		if name, args := defaultBrowserCommand(goos, "u"); name != want || args[len(args)-1] != "u" {
 			t.Errorf("%s: %s %v", goos, name, args)
 		}
+	}
+}
+
+func TestBrowserProfileDir(t *testing.T) {
+	root := "/home/p/.config"
+	cases := map[string]string{
+		"/opt/google/chrome/chrome":                                      "/home/p/.config/LibreCorsa/browser",
+		"/var/lib/snapd/snap/bin/chromium":                               "/home/p/snap/chromium/common/LibreCorsa",
+		"/snap/bin/chromium":                                             "/home/p/snap/chromium/common/LibreCorsa",
+		"/var/lib/flatpak/exports/bin/com.google.Chrome":                 "/home/p/.var/app/com.google.Chrome/config/LibreCorsa",
+		"/home/p/.local/share/flatpak/exports/bin/org.chromium.Chromium": "/home/p/.var/app/org.chromium.Chromium/config/LibreCorsa",
+	}
+	for browser, want := range cases {
+		if got := filepath.ToSlash(browserProfileDir(browser, "/home/p", root)); got != want {
+			t.Errorf("browserProfileDir(%q) = %q, want %q", browser, got, want)
+		}
+	}
+}
+
+func TestStartReportsAQuickFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	if err := start("sh", "-c", "exit 3"); err == nil {
+		t.Error("a program that quits with an error at once counts as started")
+	}
+	if err := start("sh", "-c", "exit 0"); err != nil {
+		t.Errorf("a program that hands over and quits cleanly counts as failed: %v", err)
 	}
 }

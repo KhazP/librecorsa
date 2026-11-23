@@ -46,7 +46,7 @@ jobs:
 
       - name: Launcher tests
         working-directory: launcher
-        run: go vet ./... && go test ./...
+        run: go vet ./... && go test -race ./...
 
   cloudflare:
     runs-on: ubuntu-latest

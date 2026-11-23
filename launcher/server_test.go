@@ -199,6 +199,33 @@ func TestHostCheck(t *testing.T) {
 	}
 }
 
+// On port 80 a browser sends the host without the port
+func TestHostCheckPort80(t *testing.T) {
+	s, _ := fixture(t)
+	s.port = 80
+	for _, host := range []string{"127.0.0.1", "localhost", "127.0.0.1:80"} {
+		if w := get(s, "/", "Host", host); w.Code != http.StatusOK {
+			t.Errorf("port 80, Host %q: got %d, want 200", host, w.Code)
+		}
+	}
+	if w := get(s, "/", "Host", "evil.example"); w.Code != http.StatusForbidden {
+		t.Errorf("port 80, Host evil.example: got %d, want 403", w.Code)
+	}
+}
+
+// Every answer is for the game's own pages: no other site may embed it, and the mods list runs nothing either
+func TestIsolationHeaders(t *testing.T) {
+	s, _ := fixture(t)
+	for _, p := range []string{"/", "/mods/_index.json", "/mods/acme.ring/ring/track.glb", "/__launcher"} {
+		if got := get(s, p).Header().Get("Cross-Origin-Resource-Policy"); got != "same-origin" {
+			t.Errorf("%s: Cross-Origin-Resource-Policy %q", p, got)
+		}
+	}
+	if csp := get(s, "/mods/_index.json").Header().Get("Content-Security-Policy"); !strings.Contains(csp, "sandbox") {
+		t.Errorf("_index.json: CSP %q", csp)
+	}
+}
+
 func TestContentTypes(t *testing.T) {
 	s, _ := fixture(t)
 	cases := map[string]string{

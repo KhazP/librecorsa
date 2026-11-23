@@ -27,11 +27,13 @@ const bundle = args.includes("--bundle");
 const onlyAt = args.findIndex((a) => a === "--only" || a.startsWith("--only="));
 const only =
   onlyAt < 0 ? null : (args[onlyAt].includes("=") ? args[onlyAt].slice("--only=".length) : (args[onlyAt + 1] ?? "")).split(",").filter(Boolean);
-const targets = only ? TARGETS.filter((t) => only.includes(`${t.os}-${t.arch}`)) : TARGETS;
-if (targets.length === 0) {
-  console.error(`--only names no target; the targets are ${TARGETS.map((t) => `${t.os}-${t.arch}`).join(", ")}`);
+const names = TARGETS.map((t) => `${t.os}-${t.arch}`);
+const unknown = (only ?? []).filter((n) => !names.includes(n));
+if (unknown.length || only?.length === 0) {
+  console.error(`--only ${unknown.join(",") || "(nothing)"}: the targets are ${names.join(", ")}`);
   process.exit(1);
 }
+const targets = only ? TARGETS.filter((t) => only.includes(`${t.os}-${t.arch}`)) : TARGETS;
 
 if (bundle && !existsSync(join(outDir, "index.html"))) {
   console.error("out/index.html not found: run npm run build first (--bundle copies the game's export)");
@@ -39,6 +41,16 @@ if (bundle && !existsSync(join(outDir, "index.html"))) {
 }
 
 const { version } = JSON.parse(readFileSync(join(repoDir, "package.json"), "utf8"));
+
+/**
+ * What of out/ a release leaves behind: Cloudflare's `_headers` (the launcher sets its own), a clone's test packages
+ * (`mods/`, which the launcher's own mods/ folder stands in for), source maps, and what a file manager leaves
+ */
+const leftOut = (rel) => {
+  const parts = rel.split(/[\\/]/);
+  const base = parts[parts.length - 1];
+  return rel === "_headers" || parts[0] === "mods" || base.endsWith(".map") || base === ".DS_Store" || base.toLowerCase() === "thumbs.db";
+};
 
 const MODS_README = `Mod packages for LibreCorsa
 ============================
@@ -61,14 +73,14 @@ for (const { os, arch } of targets) {
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   const binary = join(dir, os === "windows" ? "librecorsa.exe" : "librecorsa");
-  execFileSync("go", ["build", "-trimpath", "-ldflags", `-s -w -X main.version=${version}`, "-o", binary, "."], {
+  // -trimpath and -buildvcs=false: the same source builds the same binary, whichever folder or checkout it is in
+  execFileSync("go", ["build", "-trimpath", "-buildvcs=false", "-ldflags", `-s -w -X main.version=${version}`, "-o", binary, "."], {
     cwd: launcherDir,
     stdio: "inherit",
     env: { ...process.env, GOOS: os, GOARCH: arch, CGO_ENABLED: "0" },
   });
   if (bundle) {
-    // `_headers` is Cloudflare's; the launcher sets its own
-    cpSync(outDir, join(dir, "game"), { recursive: true, filter: (src) => relative(outDir, src) !== "_headers" });
+    cpSync(outDir, join(dir, "game"), { recursive: true, filter: (src) => !leftOut(relative(outDir, src)) });
     mkdirSync(join(dir, "mods"), { recursive: true });
     writeFileSync(join(dir, "mods", "README.txt"), os === "windows" ? MODS_README.replace(/\n/g, "\r\n") : MODS_README);
   }

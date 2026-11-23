@@ -52,7 +52,11 @@ func (s *server) Close() error {
 func (s *server) allowedHost(host string) bool {
 	host = strings.ToLower(host)
 	port := fmt.Sprint(s.port)
-	return host == "127.0.0.1:"+port || host == "localhost:"+port
+	if host == "127.0.0.1:"+port || host == "localhost:"+port {
+		return true
+	}
+	// On port 80 a browser leaves the port out
+	return s.port == 80 && (host == "127.0.0.1" || host == "localhost")
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +70,8 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Nothing here is for another site's page to embed (an image, a sound, a probe of what is installed)
+	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 
 	p := r.URL.Path
 	switch {

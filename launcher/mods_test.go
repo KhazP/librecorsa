@@ -124,6 +124,37 @@ func TestModsHashCache(t *testing.T) {
 	if h, _ := s.mods.packageHash("acme.ring"); h == vectorPackage {
 		t.Error("hash unchanged after a file was added")
 	}
+	if err := os.Remove(filepath.Join(filepath.Dir(track), "extra.json")); err != nil {
+		t.Fatal(err)
+	}
+
+	// The same size and an older time (a zip unpacked over it keeps the archive's times): hashed again
+	modJSON := filepath.Join(base, "mods", "acme.ring", "mod.json")
+	before, _ := s.mods.packageHash("acme.ring")
+	writeFiles(t, filepath.Dir(modJSON), map[string]string{"mod.json": `{"b":2}`})
+	earlier := info.ModTime().Add(-time.Hour)
+	if err := os.Chtimes(modJSON, earlier, earlier); err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := s.mods.packageHash("acme.ring"); h == before {
+		t.Error("hash unchanged after a same-size edit with an older time")
+	}
+}
+
+// A folder is a package only by a mod.json of its own: one linked from another package lists nothing serveFile serves
+func TestModsLinkedManifestIgnored(t *testing.T) {
+	s, base := fixture(t)
+	mods := filepath.Join(base, "mods")
+	if err := os.MkdirAll(filepath.Join(mods, "evil.link"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(mods, "acme.ring", "mod.json"), filepath.Join(mods, "evil.link", "mod.json")); err != nil {
+		t.Skip("no symbolic links here:", err)
+	}
+	idx := readIndex(t, s)
+	if len(idx.Packages) != 1 || idx.Packages[0].ID != "acme.ring" {
+		t.Errorf("index = %+v, want only acme.ring", idx)
+	}
 }
 
 func TestIsSafeModPath(t *testing.T) {
@@ -140,12 +171,12 @@ func TestIsSafeModPath(t *testing.T) {
 }
 
 func TestIsArchiveJunk(t *testing.T) {
-	for _, p := range []string{".DS_Store", "a/.DS_Store", "Thumbs.db", "a/thumbs.DB", "__MACOSX/._x"} {
+	for _, p := range []string{".DS_Store", "a/.DS_Store", "Thumbs.db", "a/thumbs.DB", "__MACOSX/._x", "a/__MACOSX/x"} {
 		if !isArchiveJunk(p) {
 			t.Errorf("isArchiveJunk(%q) = false", p)
 		}
 	}
-	for _, p := range []string{"mod.json", "a/__MACOSX/x", "a.DS_Store", "Thumbs.dbx"} {
+	for _, p := range []string{"mod.json", "a/__MACOSXy/x", "a.DS_Store", "Thumbs.dbx"} {
 		if isArchiveJunk(p) {
 			t.Errorf("isArchiveJunk(%q) = true", p)
 		}

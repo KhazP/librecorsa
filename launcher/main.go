@@ -8,11 +8,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -30,7 +32,7 @@ func main() {
 
 func run() int {
 	gameFlag := flag.String("game", "", "folder of the game's static export (default: game/ beside the launcher, else ../out)")
-	modsFlag := flag.String("mods", "", "folder of mod packages (default: mods/ beside the launcher)")
+	modsFlag := flag.String("mods", "", "folder of mod packages (default: mods/ beside the launcher, else ../public/mods)")
 	port := flag.Int("port", defaultPort, "port on 127.0.0.1 (keep it fixed: the browser keeps saves per port)")
 	noBrowser := flag.Bool("no-browser", false, "only serve; don't open a browser")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -46,18 +48,23 @@ func run() int {
 	}
 
 	exeDir := executableDir()
-	gameDir, err := resolveGameDir(*gameFlag, exeDir)
+	gameDir, inClone, err := resolveGameDir(*gameFlag, exeDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	modsDir := *modsFlag
 	if modsDir == "" {
-		modsDir = filepath.Join(exeDir, "mods")
-	}
-	if err := os.MkdirAll(modsDir, 0o755); err != nil {
-		fmt.Fprintf(os.Stderr, "can't create the mods folder %s: %v\n", modsDir, err)
-		return 1
+		// Beside the launcher; in a clone (serving ../out, or `go run .`, whose binary sits in a temporary folder) in
+		// public/mods, where `npm run mod -- index` lists them for the dev server too
+		if inClone || exeDir == "" || isGoRunDir(exeDir) {
+			if modsDir, err = filepath.Abs(filepath.Join("..", "public", "mods")); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return 1
+			}
+		} else {
+			modsDir = filepath.Join(exeDir, "mods")
+		}
 	}
 
 	origin := fmt.Sprintf("http://127.0.0.1:%d", *port)
@@ -77,6 +84,12 @@ func run() int {
 		fmt.Fprintf(os.Stderr, "(%v)\n", err)
 		return 1
 	}
+	// After the port: a second start hands over to the first without needing to write anywhere
+	if err := os.MkdirAll(modsDir, 0o755); err != nil {
+		ln.Close()
+		fmt.Fprintf(os.Stderr, "can't create the mods folder %s: %v\n", modsDir, err)
+		return 1
+	}
 
 	s, err := newServer(gameDir, modsDir, *port)
 	if err != nil {
@@ -89,14 +102,14 @@ func run() int {
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
 
+	// Ctrl+C stops the server cleanly from here on, while a browser starts too
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	fmt.Printf("LibreCorsa %s\n  game: %s\n  mods: %s\n  open: %s\n", version, gameDir, modsDir, playURL)
 	if !*noBrowser {
 		openGame(playURL)
 	}
 	fmt.Println("Press Ctrl+C to stop.")
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	select {
 	case err := <-served:
 		fmt.Fprintln(os.Stderr, err)
@@ -105,7 +118,10 @@ func run() int {
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	srv.Shutdown(shutdown)
+	// Downloads still running after that are cut, before the folders close under them
+	if srv.Shutdown(shutdown) != nil {
+		srv.Close()
+	}
 	return 0
 }
 
@@ -122,24 +138,28 @@ func executableDir() string {
 }
 
 // resolveGameDir picks the export to serve: --game, else game/ beside the launcher (a release), else ../out from the
-// working directory (running from launcher/ in a clone after `npm run build`)
-func resolveGameDir(flagValue, exeDir string) (string, error) {
+// working directory (running from launcher/ in a clone after `npm run build`: `inClone`)
+func resolveGameDir(flagValue, exeDir string) (dir string, inClone bool, err error) {
 	if flagValue != "" {
 		if !isExport(flagValue) {
-			return "", fmt.Errorf("--game %s: no index.html there (expected the game's static export, `out/` after npm run build)", flagValue)
+			return "", false, fmt.Errorf("--game %s: no index.html there (expected the game's static export, `out/` after npm run build)", flagValue)
 		}
-		return filepath.Abs(flagValue)
+		dir, err = filepath.Abs(flagValue)
+		return dir, false, err
 	}
-	candidates := []string{filepath.Join("..", "out")}
-	if exeDir != "" {
-		candidates = append([]string{filepath.Join(exeDir, "game")}, candidates...)
+	if exeDir != "" && isExport(filepath.Join(exeDir, "game")) {
+		return filepath.Join(exeDir, "game"), false, nil
 	}
-	for _, dir := range candidates {
-		if isExport(dir) {
-			return filepath.Abs(dir)
-		}
+	if clone := filepath.Join("..", "out"); isExport(clone) {
+		dir, err = filepath.Abs(clone)
+		return dir, true, err
 	}
-	return "", errors.New("can't find the game: put its static export in game/ beside the launcher, or pass --game <dir>")
+	return "", false, errors.New("can't find the game: put its static export in game/ beside the launcher, or pass --game <dir>")
+}
+
+// isGoRunDir reports whether dir is where `go run` builds its binary (a temporary folder that goes when it stops)
+func isGoRunDir(dir string) bool {
+	return strings.Contains(filepath.ToSlash(dir), "/go-build")
 }
 
 func isExport(dir string) bool {
@@ -147,9 +167,13 @@ func isExport(dir string) bool {
 	return err == nil && info.Mode().IsRegular()
 }
 
-// isLauncher reports whether a LibreCorsa launcher answers at origin
+// isLauncher reports whether a LibreCorsa launcher answers at origin. Whatever else holds the port is asked no more
+// than that: its redirects aren't followed, and only a few KB of its answer are read
 func isLauncher(origin string) bool {
-	client := &http.Client{Timeout: 2 * time.Second}
+	client := &http.Client{
+		Timeout:       2 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	res, err := client.Get(origin + identityPath)
 	if err != nil {
 		return false
@@ -161,5 +185,5 @@ func isLauncher(origin string) bool {
 	var id struct {
 		App string `json:"app"`
 	}
-	return json.NewDecoder(res.Body).Decode(&id) == nil && id.App == identityApp
+	return json.NewDecoder(io.LimitReader(res.Body, 4096)).Decode(&id) == nil && id.App == identityApp
 }

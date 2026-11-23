@@ -32,12 +32,9 @@ type modsFolder struct {
 	hashes map[string]cachedHash
 }
 
-// treeStamp sums up a package's files cheaply (no reads): when it is unchanged, so is the package's hash
-type treeStamp struct {
-	newest int64
-	files  int
-	bytes  int64
-}
+// treeStamp sums up a package's files cheaply (no reads): every file's path, size and time, and every folder's time.
+// When it is unchanged, so is the package's hash: an edit, a rename or a removal changes it, whatever times it keeps
+type treeStamp [sha256.Size]byte
 
 type cachedHash struct {
 	stamp treeStamp
@@ -71,12 +68,23 @@ func (m *modsFolder) packageIDs() ([]string, error) {
 		if !packageIDPattern.MatchString(e.Name()) {
 			continue
 		}
-		if info, err := m.root.Stat(e.Name() + "/mod.json"); err == nil && info.Mode().IsRegular() {
+		// As serveFile finds it: inside the package's own folder (a mod.json linked from another package doesn't count)
+		if m.hasManifest(e.Name()) {
 			ids = append(ids, e.Name())
 		}
 	}
 	slices.Sort(ids)
 	return ids, nil
+}
+
+func (m *modsFolder) hasManifest(id string) bool {
+	pkg, err := m.root.OpenRoot(id)
+	if err != nil {
+		return false
+	}
+	defer pkg.Close()
+	info, err := pkg.Stat("mod.json")
+	return err == nil && info.Mode().IsRegular()
 }
 
 type indexEntry struct {
@@ -91,6 +99,14 @@ func (m *modsFolder) serveIndex(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("mods: %v", err)
 	}
+	// A package taken out of the folder takes its remembered hash with it
+	m.mu.Lock()
+	for id := range m.hashes {
+		if !slices.Contains(ids, id) {
+			delete(m.hashes, id)
+		}
+	}
+	m.mu.Unlock()
 	packages := make([]indexEntry, 0, len(ids))
 	for _, id := range ids {
 		hash, err := m.packageHash(id)
@@ -103,6 +119,7 @@ func (m *modsFolder) serveIndex(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("Content-Type", "application/json")
 	h.Set("Cache-Control", "no-cache")
+	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
 	w.Write(body)
 }
 
@@ -191,11 +208,11 @@ func isSafeModPath(p string) bool {
 // means to carry, left out of a package's hash
 func isArchiveJunk(p string) bool {
 	base := path.Base(p)
-	return strings.HasPrefix(p, "__MACOSX/") || base == ".DS_Store" || strings.EqualFold(base, "Thumbs.db")
+	return strings.HasPrefix(p, "__MACOSX/") || strings.Contains(p, "/__MACOSX/") || base == ".DS_Store" || strings.EqualFold(base, "Thumbs.db")
 }
 
 // packageHash is a package's content hash, computed like src/lib/mods/mod-manifest.ts packageHash, and kept while the
-// folder's files keep their count, sizes and times
+// folder's files keep their names, sizes and times
 func (m *modsFolder) packageHash(id string) (string, error) {
 	pkg, err := m.root.OpenRoot(id)
 	if err != nil {
@@ -228,25 +245,25 @@ func (m *modsFolder) packageHash(id string) (string, error) {
 }
 
 // listPackage lists a package's files (forward-slash paths relative to its folder, junk left out) and stamps the tree
-// with its newest time (folders' too, so a rename or a removal shows), file count and size. A symbolic link counts
-// when it leads to a file inside the package.
+// with every file's path, size and time and every folder's time. A symbolic link counts when it leads to a file inside
+// the package.
 func listPackage(pkg *os.Root) ([]string, treeStamp, error) {
 	var files []string
-	var stamp treeStamp
+	sum := sha256.New()
 	fsys := pkg.FS()
-	note := func(info fs.FileInfo) {
-		stamp.newest = max(stamp.newest, info.ModTime().UnixNano())
+	note := func(p string, info fs.FileInfo) {
+		fmt.Fprintf(sum, "%s\t%d\t%d\n", p, info.Size(), info.ModTime().UnixNano())
 	}
 	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
-			if p == "__MACOSX" {
+			if d.Name() == "__MACOSX" {
 				return fs.SkipDir
 			}
 			if info, err := d.Info(); err == nil {
-				note(info)
+				note(p+"/", info)
 			}
 			return nil
 		}
@@ -266,15 +283,15 @@ func listPackage(pkg *os.Root) ([]string, treeStamp, error) {
 		}
 		if d.Type()&fs.ModeSymlink != 0 {
 			if linkInfo, err := d.Info(); err == nil {
-				note(linkInfo)
+				note(p+"@", linkInfo)
 			}
 		}
-		note(info)
-		stamp.files++
-		stamp.bytes += info.Size()
+		note(p, info)
 		files = append(files, p)
 		return nil
 	})
+	var stamp treeStamp
+	copy(stamp[:], sum.Sum(nil))
 	return files, stamp, err
 }
 
