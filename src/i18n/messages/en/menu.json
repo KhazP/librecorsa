@@ -1,1 +1,51 @@
-{}
+{
+  "title": {
+    "drive": "Drive",
+    "driveQuickSetup": "Quick setup",
+    "driveTimedRun": "Timed run",
+    "raceAi": "Race AI",
+    "raceAiDetail": "{opponents} AI · {laps, plural, one {# lap} other {# laps}} · {skill}{start}",
+    "multiplayer": "Multiplayer",
+    "multiplayerEntered": "Entered",
+    "multiplayerInLobby": "{count} in lobby",
+    "challenge": "Weekly challenge",
+    "challengeShort": "Challenge",
+    "challengeDetail": "{timeLeft} left · {circuit}",
+    "circuit": "Circuit",
+    "car": "Car",
+    "carLocked": "{car} · locked",
+    "conditions": "Conditions",
+    "garage": "Garage",
+    "garageTyres": "{compound} tyres",
+    "lapTimes": "Lap times",
+    "lapTimesBest": "Best {time}",
+    "settings": "Settings",
+    "credits": "Credits",
+    "feedback": "Feedback",
+    "press": "Press",
+    "privacy": "Privacy",
+    "support": "Buy me a coffee",
+    "mainMenu": "Main menu"
+  },
+  "prompts": {
+    "move": "Move",
+    "select": "Select",
+    "back": "Back",
+    "closePanel": "Close {panel}",
+    "switchPanel": "Switch panel",
+    "page": "Page",
+    "startRace": "Start race",
+    "drive": "Drive"
+  },
+  "upNext": {
+    "region": "Up next",
+    "turns": "{count, plural, one {<n>#</n> turn} other {<n>#</n> turns}}",
+    "car": "Car",
+    "livery": "Livery",
+    "factory": "Factory",
+    "assists": "Assists",
+    "assistsTcOnly": "TC",
+    "withRacingLine": "{assists}, racing line",
+    "hud": "HUD"
+  }
+}

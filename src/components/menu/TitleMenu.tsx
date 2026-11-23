@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations } from "use-intl/react";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -587,6 +588,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   // The music's footer control: once a track has played, or while the music is switched off
   const musicShown = Boolean(props.onToggleMusicMute) && (Boolean(props.nowPlaying) || props.musicMuted === true);
   const units = useUnits();
+  const t = useTranslations("menu.title");
+  const tp = useTranslations("menu.prompts");
+  const tn = useTranslations("menu.upNext");
   const storeBuild = useStoreBuild();
   // The panel the circuit, car or conditions panel was opened from (the race setup's Event card, the room's Circuit
   // row): picking there returns to it
@@ -658,35 +662,43 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const items: MenuItem[] = [
     {
       id: "drive",
-      label: "Drive",
-      detail: firstRun ? "Quick setup" : hillClimb ? "Timed run" : undefined,
+      label: t("drive"),
+      detail: firstRun ? t("driveQuickSetup") : hillClimb ? t("driveTimedRun") : undefined,
       icon: "drive" as const,
       run: onDrive,
       primary: true,
     },
     ...(hillClimb ? [] : [{
       id: "race",
-      label: "Race AI",
-      detail: `${raceSetup.opponents} AI · ${raceSetup.laps} ${raceSetup.laps === 1 ? "lap" : "laps"} · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)}${raceStartSuffix(raceSetup.startMode, " · ")}`,
+      label: t("raceAi"),
+      detail: t("raceAiDetail", {
+        opponents: raceSetup.opponents,
+        laps: raceSetup.laps,
+        skill: aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT),
+        start: raceStartSuffix(raceSetup.startMode, " · "),
+      }),
       icon: "race" as const,
       // The race is set up first; its panel has the start (without a setter there is nothing to set: straight to the lights)
       ...(props.onChangeRaceSetup ? { panel: "race" as const, run: () => openPanel("race") } : { run: onRaceAi }),
     } satisfies MenuItem]),
     {
       id: "multiplayer",
-      label: "Multiplayer",
+      label: t("multiplayer"),
       icon: "multiplayer" as const,
       panel: "multiplayer",
       run: () => openPanel("multiplayer"),
-      badge: props.races?.entry.state === "joined" ? "Entered" : lobbyPlayers > 1 ? `${lobbyPlayers} in lobby` : undefined,
+      badge: props.races?.entry.state === "joined" ? t("multiplayerEntered") : lobbyPlayers > 1 ? t("multiplayerInLobby", { count: lobbyPlayers }) : undefined,
     },
     ...(props.challengePanel
       ? [
           {
             id: "challenge",
-            label: "Weekly challenge",
-            short: "Challenge",
-            detail: `${timeLeftLabel(props.challengePanel.challenge.endsMs, Date.now())} left · ${props.challengePanel.trackName}`,
+            label: t("challenge"),
+            short: t("challengeShort"),
+            detail: t("challengeDetail", {
+              timeLeft: timeLeftLabel(props.challengePanel.challenge.endsMs, Date.now()),
+              circuit: props.challengePanel.trackName,
+            }),
             icon: "challenge" as const,
             panel: "challenge" as const,
             run: () => openPanel("challenge"),
@@ -695,7 +707,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       : []),
     {
       id: "circuit",
-      label: "Circuit",
+      label: t("circuit"),
       detail: `${track.name} · ${lengthOf(track, units.speed)}`,
       icon: "circuit" as const,
       panel: "circuit",
@@ -703,8 +715,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     },
     {
       id: "car",
-      label: "Car",
-      detail: carLocked ? `${vehicle.title} · locked` : vehicle.title,
+      label: t("car"),
+      detail: carLocked ? t("carLocked", { car: vehicle.title }) : vehicle.title,
       icon: "car" as const,
       panel: "car",
       run: () => openPanel("car"),
@@ -713,7 +725,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       ? [
           {
             id: "conditions",
-            label: "Conditions",
+            label: t("conditions"),
             detail: `${WEATHER_LABELS[props.conditionsPanel.conditions.weather].label} · ${TIME_OF_DAY_LABELS[props.conditionsPanel.conditions.timeOfDay]}`,
             icon: "conditions" as const,
             panel: "conditions" as const,
@@ -723,9 +735,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       : []),
     {
       id: "garage",
-      label: "Garage",
+      label: t("garage"),
       // The tyres the car goes out on (a road car's street tyres can't be changed)
-      detail: vehicleModelSpec(vehicle.physics).onlyTyre ?? `${COMPOUNDS[props.tireCompound].name} tyres`,
+      detail: vehicleModelSpec(vehicle.physics).onlyTyre ?? t("garageTyres", { compound: COMPOUNDS[props.tireCompound].name }),
       icon: "garage" as const,
       panel: "garage",
       run: () => openPanel("garage"),
@@ -734,9 +746,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       ? [
           {
             id: "leaderboard",
-            label: "Lap times",
+            label: t("lapTimes"),
             // This car's best on this circuit, when there is one
-            detail: bestLapMs ? `Best ${formatLapTime(bestLapMs)}` : undefined,
+            detail: bestLapMs ? t("lapTimesBest", { time: formatLapTime(bestLapMs) }) : undefined,
             icon: "lapTimes" as const,
             panel: "leaderboard" as const,
             run: () => openPanel("leaderboard"),
@@ -745,26 +757,26 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       : []),
     {
       id: "settings",
-      label: "Settings",
+      label: t("settings"),
       icon: "settings" as const,
       // A screen over this one: closing it lands back on this entry, with the panel that was open still open
       run: () => (props.onOpenSettings ? props.onOpenSettings() : onControls()),
     },
-    { id: "credits", label: "Credits", icon: "credits" as const, panel: "credits", run: () => openPanel("credits") },
+    { id: "credits", label: t("credits"), icon: "credits" as const, panel: "credits", run: () => openPanel("credits") },
     {
       id: "request",
-      label: "Feedback",
-      short: "Feedback",
+      label: t("feedback"),
+      short: t("feedback"),
       icon: "feedback" as const,
       panel: "request",
       run: () => openPanel("request"),
     },
-    { id: "press", label: "Press", icon: "press" as const, href: withBasePath("/press") },
-    { id: "privacy", label: "Privacy", icon: "privacy" as const, href: withBasePath("/privacy") },
+    { id: "press", label: t("press"), icon: "press" as const, href: withBasePath("/press") },
+    { id: "privacy", label: t("privacy"), icon: "privacy" as const, href: withBasePath("/privacy") },
     // Not in the Android app (store-mode.ts)
     ...(storeBuild
       ? []
-      : [{ id: "support", label: "Buy me a coffee", icon: "support" as const, href: SUPPORT_URL }]),
+      : [{ id: "support", label: t("support"), icon: "support" as const, href: SUPPORT_URL }]),
     { id: "github", label: "GitHub", icon: "source" as const, href: REPO_URL },
   ];
   const panelItems = items.filter((i) => i.panel);
@@ -857,15 +869,15 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const drive = items.find((i) => i.id === "drive")!;
 
   const prompts: Prompt[] = [
-    { action: "move", label: "Move" },
-    { action: "select", label: "Select" },
+    { action: "move", label: tp("move") },
+    { action: "select", label: tp("select") },
     ...(rowResettable ? [RESET_ROW_PROMPT] : []),
-    ...(panel ? [{ action: "back" as const, label: panelTitle ? `Close ${panelTitle}` : "Back" }] : []),
-    { action: "tabs", label: "Switch panel" },
+    ...(panel ? [{ action: "back" as const, label: panelTitle ? tp("closePanel", { panel: panelTitle }) : tp("back") }] : []),
+    { action: "tabs", label: tp("switchPanel") },
     // The online board turns its pages with the triggers (Z / C), the shoulders stay the panels
-    ...(panel === "leaderboard" && props.leaderboardPanel?.remoteEnabled ? [{ action: "pages" as const, label: "Page" }] : []),
+    ...(panel === "leaderboard" && props.leaderboardPanel?.remoteEnabled ? [{ action: "pages" as const, label: tp("page") }] : []),
     // A controller's Menu button has no key: shown with a pad only
-    ...(mode === "pad" && (raceOpen || !panel) ? [{ action: "start" as const, label: raceOpen ? "Start race" : "Drive" }] : []),
+    ...(mode === "pad" && (raceOpen || !panel) ? [{ action: "start" as const, label: raceOpen ? tp("startRace") : tp("drive") }] : []),
   ];
   const phonePrompts = prompts.filter((p) => p.action !== "move" && p.action !== "tabs");
 
@@ -946,7 +958,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             }`}
           >
             {/* Below lg the rail would stack 13 rows above the panel: the panel takes the screen, Close goes back */}
-            <nav className="flex flex-col gap-0.5 max-lg:hidden" data-nav-zone="rail" aria-label="Main menu">
+            <nav className="flex flex-col gap-0.5 max-lg:hidden" data-nav-zone="rail" aria-label={t("mainMenu")}>
               <HeroAction id={drive.id} label={drive.label} onClick={drive.run!} size="slim" />
               {byId(["race", "multiplayer", "challenge"]).map((item) => row(item, "md", true))}
               <div aria-hidden className="h-3" />
@@ -1058,7 +1070,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             <nav
               className="flex w-full max-w-[460px] flex-col gap-1 xl:max-w-[500px] short:grid short:max-w-none short:grid-cols-2 short:items-start short:gap-x-5"
               data-nav-zone="rail"
-              aria-label="Main menu"
+              aria-label={t("mainMenu")}
             >
               <div className="flex flex-col gap-1 phone:gap-0.5">
                 <HeroAction id={drive.id} label={drive.label} detail={drive.detail} onClick={drive.run!} />
@@ -1078,7 +1090,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             {props.supportNote?.length ? (
               <SupportNote items={props.supportNote} onClose={props.onCloseSupportNote} onThanked={props.onSupportThanked} />
             ) : null}
-            <Sheet role="region" aria-label="Up next" className="flex w-full flex-col gap-4 short:hidden">
+            <Sheet role="region" aria-label={tn("region")} className="flex w-full flex-col gap-4 short:hidden">
               <div className="flex items-center gap-4">
                 {map ? <TrackOutline map={map} thin className="h-[84px] w-[104px] shrink-0" /> : null}
                 <div className="flex min-w-0 flex-col gap-1">
@@ -1087,7 +1099,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   <p className="lc-hint m-0">
                     <span className="lc-mono text-lc-fog">{lengthOf(track, units.speed)}</span>
                     {" · "}
-                    <span className="lc-mono text-lc-fog">{track.turns}</span> turns
+                    {tn.rich("turns", { count: track.turns, n: (chunks) => <span className="lc-mono text-lc-fog">{chunks}</span> })}
                   </p>
                   <div className="pt-1">
                     <TrackQualityBadge track={track} size="sm" />
@@ -1095,14 +1107,14 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 </div>
               </div>
               <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2.5 border-t border-lc-line pt-3.5">
-                <dt className="lc-hint">Car</dt>
+                <dt className="lc-hint">{tn("car")}</dt>
                 <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
                   <CarClassTag car={vehicle} size="sm" />
                   <span className="line-clamp-2 text-right">{vehicle.title}</span>
                 </dd>
                 {livery ? (
                   <>
-                    <dt className="lc-hint">Livery</dt>
+                    <dt className="lc-hint">{tn("livery")}</dt>
                     <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
                       {skin ? (
                         <>
@@ -1115,7 +1127,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                           <span className="line-clamp-2 text-right">{skin.name}</span>
                         </>
                       ) : vehicle.modelUrl ? (
-                        <span className="truncate">Factory</span>
+                        <span className="truncate">{tn("factory")}</span>
                       ) : (
                         <>
                           <span
@@ -1132,17 +1144,20 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     </dd>
                   </>
                 ) : null}
-                <dt className="lc-hint">Assists</dt>
+                <dt className="lc-hint">{tn("assists")}</dt>
                 <dd className="m-0 line-clamp-2 text-right text-[14px] font-semibold">
-                  {/* A class without ABS runs the middle preset on TC alone */}
-                  {props.assistPreset === "semi_pro" && props.telemetry.liveTuner?.absAllowed === false
-                    ? "TC"
-                    : (ASSIST_LABELS[props.assistPreset] ?? props.assistPreset)}
-                  {props.showRacingLine ? ", racing line" : ""}
+                  {(() => {
+                    // A class without ABS runs the middle preset on TC alone
+                    const assists =
+                      props.assistPreset === "semi_pro" && props.telemetry.liveTuner?.absAllowed === false
+                        ? tn("assistsTcOnly")
+                        : (ASSIST_LABELS[props.assistPreset] ?? props.assistPreset);
+                    return props.showRacingLine ? tn("withRacingLine", { assists }) : assists;
+                  })()}
                 </dd>
                 {hudPreset ? (
                   <>
-                    <dt className="lc-hint">HUD</dt>
+                    <dt className="lc-hint">{tn("hud")}</dt>
                     <dd className="m-0 line-clamp-2 text-right text-[14px] font-semibold">{hudLayout(hudPreset).label}</dd>
                   </>
                 ) : null}
