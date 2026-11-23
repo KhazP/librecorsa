@@ -157,22 +157,25 @@ export class JumpStartWatch {
 
 /** Throttle travel that counts as the foot going down (0..1): the keyboard's ramp crosses it on the press's first frame */
 const REACT_THROTTLE = 0.05;
+/** Clutch travel off where it was held through the lights that counts as letting it out (0..1): the key's clutch,
+ * which eases out over 0.4 s, crosses it on its second frame, long before the bite */
+const REACT_CLUTCH = 0.1;
 /** Past this the launch did not answer the lights (s): the driver looked away, or waited on purpose */
 const REACTION_WINDOW_S = 3;
 
-/** The control a start launches with: in a manual start the clutch let out past its bite, else the throttle going down */
-export const launching = (manual: boolean, throttle: number, clutch: number): boolean =>
-  manual ? clutch < BITE : throttle > REACT_THROTTLE;
-
 /**
  * The driver's reaction to the lights going out, as the F1 games show it: from the frame the lights go out to the
- * first frame the launch control moves (`launching`). There is none when it had already moved as the lights went
- * out (the throttle held through them, as the assisted start's cue asks; a clutch let out early, a jump start), and
- * none past `REACTION_WINDOW_S`. The reading stands until the next start's lights.
+ * first frame the driver acts, in an assisted start the throttle going down, in a manual one the clutch starting to
+ * come out (from where it was held through the lights; the bite comes later, by the clutch's own travel). There is
+ * none when the driver had already acted as the lights went out (the throttle held through them, as the assisted
+ * start's cue asks; the clutch not held in), and none past `REACTION_WINDOW_S`. The reading stands until the next
+ * start's lights.
  */
 export class ReactionWatch {
   private lit = false;
   private manual = false;
+  /** The clutch as held on the last frame of the lights */
+  private heldClutch = 0;
   /** The launch control was where it should be on the last frame of the lights */
   private ready = false;
   private sinceS: number | null = null;
@@ -186,9 +189,14 @@ export class ReactionWatch {
   reset(): void {
     this.lit = false;
     this.manual = false;
+    this.heldClutch = 0;
     this.ready = false;
     this.sinceS = null;
     this.reading = null;
+  }
+
+  private acting(throttle: number, clutch: number): boolean {
+    return this.manual ? clutch < this.heldClutch - REACT_CLUTCH : throttle > REACT_THROTTLE;
   }
 
   /**
@@ -199,15 +207,16 @@ export class ReactionWatch {
     if (lightsLit) {
       this.lit = true;
       this.manual = manual;
-      this.ready = !launching(manual, throttle, clutch);
+      this.heldClutch = clutch;
+      this.ready = manual ? clutch >= BITE : throttle <= REACT_THROTTLE;
       this.sinceS = null;
       this.reading = null;
       return;
     }
     if (this.lit) {
-      // The lights went out this frame: a launch on it went before them
+      // The lights went out this frame: acting on it went before them
       this.lit = false;
-      this.sinceS = this.ready && !launching(this.manual, throttle, clutch) ? 0 : null;
+      this.sinceS = this.ready && !this.acting(throttle, clutch) ? 0 : null;
       return;
     }
     if (this.sinceS === null) return;
@@ -216,7 +225,7 @@ export class ReactionWatch {
       this.sinceS = null;
       return;
     }
-    if (launching(this.manual, throttle, clutch)) {
+    if (this.acting(throttle, clutch)) {
       this.reading = Math.round(this.sinceS * 1000);
       this.sinceS = null;
     }

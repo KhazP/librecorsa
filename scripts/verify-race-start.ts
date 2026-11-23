@@ -175,6 +175,12 @@ console.log('\n== Reaction to the lights');
   check('manual: the clutch out 12 frames after lights out reads 200 ms', manual === 200, `${manual} ms`);
   check('manual: the clutch let out before the lights reads nothing', run([...lights(true, 0.8, 0), ...many(60, [false, false, 0.8, 0])]) === null);
   check('manual: the revs alone after lights out read nothing', run([...lights(true, 0.8, 1), ...many(60, [false, false, 1, 1])]) === null);
+  // The key's clutch eases out over 0.4 s: timed from the first frame it is 10 % out, not from the bite
+  const ramp = (n: number): Frame[] => Array.from({ length: n }, (_, i) => [false, false, 0.8, Math.max(0, 1 - (i + 1) / 24)] as Frame);
+  const keyed = run([...lights(true, 0.8, 1), [false, false, 0.8, 1], ...many(11, [false, false, 0.8, 1]), ...ramp(30)]);
+  check('manual: a key clutch easing out is timed as it starts (233 ms)', keyed === 233, `${keyed} ms`);
+  const partial = run([...lights(true, 0.8, 0.7), [false, false, 0.8, 0.7], ...many(11, [false, false, 0.8, 0.7]), ...many(10, [false, false, 0.8, 0.55])]);
+  check('manual: a pedal held part-way in is timed off where it was held', partial === 200, `${partial} ms`);
   const w = new ReactionWatch();
   for (const [lit, m, th, cl] of [...lights(false, 0, 0), ...many(20, [false, false, 0, 0] as Frame), ...many(5, [false, false, 1, 0] as Frame)]) w.update(1 / 60, lit, m, th, cl);
   const first = w.ms;
