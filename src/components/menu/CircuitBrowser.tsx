@@ -30,6 +30,7 @@ import { bestLapForCircuit, bestLapsByVehicleForCircuit } from "@/lib/sim/ghost-
 import { useBestLapSummaries } from "@/lib/sim/use-best-laps";
 import { formatLapTime } from "@/components/hud/hud-format";
 import { formatCount } from "@/lib/net/board-client";
+import { popularRank, usePopularRanks } from "@/lib/net/use-popular";
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { TrackOutline, useCircuitOutline, useNearView } from "./circuit-outline";
 import { selectDetailPbs, useCircuitBoardRanks, type DetailPbEntry } from "./circuit-board-rank";
@@ -162,6 +163,9 @@ export const CircuitBrowser: React.FC<{
     return ranks.length ? Math.min(...ranks) : Infinity;
   };
   const byName = (a: CircuitVenue, b: CircuitVenue) => a.name.localeCompare(b.name);
+  const popular = usePopularRanks();
+  /** A venue stands where its most-driven layout does */
+  const popularOf = (v: CircuitVenue) => (popular ? Math.min(...v.layouts.map((l) => popularRank(popular.circuits, l.id))) : Infinity);
   const typesOf = (v: CircuitVenue): Set<CircuitType> => new Set(v.layouts.map(circuitType));
   const moddersOf = (v: CircuitVenue) => new Set(v.layouts.map(circuitModder));
 
@@ -236,6 +240,10 @@ export const CircuitBrowser: React.FC<{
       heading: "Longest first",
       compare: (a, b) => Math.max(...b.layouts.map((l) => l.lengthM)) - Math.max(...a.layouts.map((l) => l.lengthM)),
     },
+    // Offered once the ranks are read: with the online side off there is nothing to sort by
+    ...(popular
+      ? [{ id: "popular", label: "Most driven", heading: `Most driven, last ${popular.days} days`, compare: (a: CircuitVenue, b: CircuitVenue) => popularOf(a) - popularOf(b) || byName(a, b) }]
+      : []),
     { id: "recent", label: "Recently driven", heading: "Recently driven first", compare: (a, b) => recentRank(a) - recentRank(b) || byName(a, b) },
   ];
 

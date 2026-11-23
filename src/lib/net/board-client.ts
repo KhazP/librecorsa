@@ -6,6 +6,8 @@
  *   fetchBoardPage     one page of a circuit's board, for one car or every car, and where a driver stands on it
  *   fetchCircuitTotals a circuit's laps and drivers ("1,204 laps · 312 drivers")
  *   fetchSiteStats     tabs in view now and drivers to date (the title screen's line)
+ *   fetchPopular       the circuits and cars driven most this past month, as ranks (the browsers' Most driven sort)
+ *   fetchSiteTotals    hours, laps, countries and drivers to date (the press page)
  */
 import { isVehicleModelId, type AssistPreset, type VehicleModelId } from "@/types/f1";
 import { currentBoardBase, lapPhysicsVersion, MAX_LAP_REVISION, parseLapConditions, revisionOnBoard, type LeaderboardEntry } from "@/lib/sim/lap-types";
@@ -286,6 +288,65 @@ export async function fetchSiteStats(): Promise<SiteStats | null> {
   if (!res || res.status !== 200 || !isRecord(res.body) || res.body.ok !== true) return null;
   const stats = { live: config.live ? count(res.body.live) : null, drivers: config.board ? count(res.body.drivers) : null };
   return stats.live === null && stats.drivers === null ? null : stats;
+}
+
+/** The circuits and cars driven most over the last `days` days, most first; ids below the server's floor are left out */
+export interface PopularRanks {
+  days: number;
+  circuits: string[];
+  cars: VehicleModelId[];
+}
+
+const MAX_RANKED = 500;
+const TRACK_ID = /^[a-z0-9_-]+$/;
+
+/** Null when there is no online side, the usage totals are off, or it could not be read */
+export async function fetchPopular(): Promise<PopularRanks | null> {
+  const url = onlineUrl("/stats/popular");
+  if (!url || !(await getOnlineConfig()).usage) return null;
+  const res = await requestJson(url, { method: "GET" }, true);
+  return res && res.status === 200 ? parsePopular(res.body) : null;
+}
+
+/** The server's ranks, checked: null when malformed, and any id that isn't one dropped */
+export function parsePopular(body: unknown): PopularRanks | null {
+  if (!isRecord(body) || body.ok !== true) return null;
+  const { days, circuits, cars } = body;
+  const n = count(days);
+  if (n === null || n < 1 || !Array.isArray(circuits) || !Array.isArray(cars) || circuits.length > MAX_RANKED || cars.length > MAX_RANKED) return null;
+  return {
+    days: n,
+    circuits: circuits.filter((id): id is string => cappedString(id, MAX_TRACK_ID_LENGTH) !== null && TRACK_ID.test(id)),
+    cars: cars.filter(isVehicleModelId),
+  };
+}
+
+/** Everything the usage totals have counted since `since` ("2026-11-11"), and drivers to date (null with the boards off) */
+export interface SiteTotals {
+  since: string;
+  hours: number;
+  laps: number;
+  countries: number;
+  drivers: number | null;
+}
+
+/** Null when there is no online side, the usage totals are off, nothing is counted yet, or it could not be read */
+export async function fetchSiteTotals(): Promise<SiteTotals | null> {
+  const url = onlineUrl("/stats/totals");
+  if (!url || !(await getOnlineConfig()).usage) return null;
+  const res = await requestJson(url, { method: "GET" }, true);
+  return res && res.status === 200 ? parseSiteTotals(res.body) : null;
+}
+
+/** The server's totals, checked: null when malformed or before anything was counted */
+export function parseSiteTotals(b: unknown): SiteTotals | null {
+  if (!isRecord(b) || b.ok !== true) return null;
+  const since = typeof b.since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.since) ? b.since : null;
+  const hours = count(b.hours);
+  const laps = count(b.laps);
+  const countries = count(b.countries);
+  if (since === null || hours === null || laps === null || countries === null) return null;
+  return { since, hours, laps, countries, drivers: count(b.drivers) };
 }
 
 const ASSIST_LABEL: Record<AssistPreset, string> = { pro: "No assists", semi_pro: "Some assists", assisted: "Assisted" };
