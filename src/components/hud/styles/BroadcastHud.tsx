@@ -1,7 +1,8 @@
 "use client";
 
-import { activeLapWord } from "@/lib/track-data";
-import React from "react";
+import { getActivePointToPoint } from "@/lib/track-data";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import { Icon } from "@/components/ui/icons/Icon";
 import { Trend } from "@/components/ui/icons/Trend";
@@ -34,6 +35,7 @@ import {
   AeroBadge,
   anchor,
   DeltaReadout,
+  formatOnce,
   gearLabel,
   HUD_GLASS,
   HUD_LBL,
@@ -48,6 +50,40 @@ import { PedalBars } from "../PedalBars";
 import { TowerHeader, TowerRows } from "../TimingPanels";
 import { aeroReadout } from "../aero-label";
 
+/** The Broadcast layout's words in the current language, resolved once per language (the Telemetry layout shares its tower and map) */
+function useBroadcastWords() {
+  const tx = useTranslations("hudStyles.broadcast");
+  return useMemo(
+    () => ({
+      timingTower: tx("timingTower"),
+      session: tx("session"),
+      outLap: tx("outLap"),
+      best: tx("best"),
+      last: tx("last"),
+      circuitMap: tx("circuitMap"),
+      straight: tx("straight"),
+      chasing: tx("chasing"),
+      tyreTemps: tx("tyreTemps"),
+      fuel: tx("fuel"),
+      delta: tx("delta"),
+      predicted: tx("predicted"),
+      quicker: tx("quicker"),
+      slower: tx("slower"),
+      raceLap: formatOnce((lap: number, total: number) =>
+        total
+          ? tx.rich("raceLapOfTotal", { lap: String(lap), total: String(total), dim: (c) => <span className="opacity-40">{c}</span> })
+          : tx("raceLap", { lap: String(lap) }),
+      ),
+      sessionLap: formatOnce((session: string, kind: "lap" | "run", lap: number) =>
+        tx.rich("sessionLap", { session, kind, lap: String(lap), dim: (c) => <span className="opacity-45">{c}</span> }),
+      ),
+      sector: formatOnce((sector: number) => tx("sector", { sector: String(sector) })),
+      sectorTitle: formatOnce((sector: number, corner: string) => tx("sectorTitle", { sector: String(sector), corner })),
+    }),
+    [tx],
+  );
+}
+
 /** Timing tower in a race, the session card (lap time, sectors, best / last) in practice. Fills its parent's width. */
 export const BroadcastTower: React.FC<{
   t: CarTelemetry;
@@ -58,28 +94,21 @@ export const BroadcastTower: React.FC<{
   gaps?: "interval" | "leader";
 }> = ({ t, trackCode = "LC", className = "", lapInvalid, gaps }) => {
   const race = t.race;
+  const w = useBroadcastWords();
   return (
-    <section aria-label={race ? "Timing tower" : "Session"} className={`w-full overflow-hidden rounded-lc-tile ${HUD_GLASS} ${className}`}>
+    <section aria-label={race ? w.timingTower : w.session} className={`w-full overflow-hidden rounded-lc-tile ${HUD_GLASS} ${className}`}>
       <div className="flex h-11 items-center gap-2.5 rounded-[20px_20px_14px_14px] bg-lc-chalk pr-3 pl-2 text-lc-void">
         <LibreCorsaMark className="h-7 w-7 shrink-0" />
         <div className="lc-disp flex-1 truncate text-[18px]">
           {race ? (
-            <>
-              Lap {race.lap}
-              {race.totalLaps ? <span className="opacity-40">/{race.totalLaps}</span> : null}
-            </>
+            w.raceLap(race.lap, race.totalLaps ?? 0)
           ) : (
             <>
               {/* On the out-lap no lap is timed yet: the header says so on its own (the session word would not fit
                   beside it), as the clock holds at zero */}
-              {t.outLap ? (
-                "Out lap"
-              ) : (
-                <>
-                  {sessionWord(t)}{" "}
-                  <span className="opacity-45">· {`${activeLapWord()} ${Math.max(1, t.lapCount)}`}</span>
-                </>
-              )}
+              {t.outLap
+                ? w.outLap
+                : w.sessionLap(sessionWord(t), getActivePointToPoint() ? "run" : "lap", Math.max(1, t.lapCount))}
             </>
           )}
         </div>
@@ -127,13 +156,13 @@ export const BroadcastTower: React.FC<{
           </div>
           <div className="mt-2 flex justify-between gap-2">
             <span className="flex items-baseline gap-1.5">
-              <span className={HUD_LBL}>Best</span>
+              <span className={HUD_LBL}>{w.best}</span>
               <span className="lc-data text-[11px]" style={{ color: t.bestLapTimeMs ? HUD_BEST : undefined }}>
                 {formatLapTime(t.bestLapTimeMs)}
               </span>
             </span>
             <span className="flex items-baseline gap-1.5">
-              <span className={HUD_LBL}>Last</span>
+              <span className={HUD_LBL}>{w.last}</span>
               <span className="lc-data text-[11px] text-lc-chalk">{formatLapTime(t.lastLapTimeMs)}</span>
             </span>
           </div>
@@ -146,15 +175,16 @@ export const BroadcastTower: React.FC<{
 /** Circuit map card with the sector and the corner you are in. Fills its parent's width. */
 export const BroadcastMap: React.FC<Pick<HudDesignProps, "t" | "map" | "mapMode">> = ({ t, map, mapMode = "full" }) => {
   const corner = cornerLabel(t.currentTurnNumber, t.currentTurnName);
+  const w = useBroadcastWords();
   return (
-    <section aria-label="Circuit map" className={`w-full rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`}>
+    <section aria-label={w.circuitMap} className={`w-full rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`}>
       <MiniMap map={map} t={t} sectors local={mapMode === "local"} className={`block w-full ${mapMode === "local" ? "h-[180px]" : "h-[140px]"}`} stroke={22} />
       {/* The sector and the corner's number on one line, the corner's own name in full under them. Two lines are kept
           either way, so the panel under the map does not move at every corner */}
-      <div className={`mt-1.5 min-h-[2lh] ${HUD_LBL}`} title={`Sector ${t.currentSector} · ${corner ? corner.full : "Straight"}`}>
+      <div className={`mt-1.5 min-h-[2lh] ${HUD_LBL}`} title={w.sectorTitle(t.currentSector, corner ? corner.full : w.straight)}>
         <div className="flex items-center justify-between gap-2">
-          <span>Sector {t.currentSector}</span>
-          <span className="text-lc-chalk">{corner ? corner.short : "Straight"}</span>
+          <span>{w.sector(t.currentSector)}</span>
+          <span className="text-lc-chalk">{corner ? corner.short : w.straight}</span>
         </div>
         {corner?.name ? <div className="text-lc-chalk">{corner.name}</div> : null}
       </div>
@@ -203,6 +233,7 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({
   // The car ahead found by the player's row, as the tower, the MFD and the other styles find it
   const ahead = race ? raceNeighbours(t)?.ahead ?? null : null;
   const units = useUnits();
+  const w = useBroadcastWords();
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
@@ -234,7 +265,7 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({
         {race && ahead ? (
           <div className={`inline-flex h-7.5 items-center gap-2.5 rounded-lc-row pr-3.5 pl-1.5 ${HUD_GLASS}`}>
             <PositionBadge position={race.position} player size="sm" />
-            <span className={HUD_LBL}>Chasing</span>
+            <span className={HUD_LBL}>{w.chasing}</span>
             <span className="lc-data text-[11px] tracking-[0.1em]" style={{ color: ahead.color }}>
               {ahead.code}
             </span>
@@ -258,7 +289,7 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({
             {/* Tyres */}
             <div className="hidden items-center gap-2.5 pr-3 pl-3 lg:flex">
               <CompoundGlyph compound={compound as TireCompound} size={34} />
-              <span className="grid grid-cols-[repeat(2,15px)] gap-0.75" role="img" aria-label="Tyre temperatures, inner / middle / outer; a dashed edge marks a tyre condition">
+              <span className="grid grid-cols-[repeat(2,15px)] gap-0.75" role="img" aria-label={w.tyreTemps}>
                 {t.tireTempsC.map((c, i) => {
                   const bands = t.tireBandTempsC?.[i] ?? [c, c, c];
                   const flagged =
@@ -319,7 +350,7 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({
               ) : t.fuelKg > 0 ? (
                 <>
                   <span className={`flex items-center gap-1.5 ${HUD_LBL}`}>
-                    <Icon name="fuel" size="xs" className="size-3" /> Fuel
+                    <Icon name="fuel" size="xs" className="size-3" /> {w.fuel}
                   </span>
                   <span className="lc-data text-[18px] leading-none whitespace-nowrap text-lc-chalk">{t.fuelKg.toFixed(1)} kg</span>
                 </>
@@ -340,15 +371,15 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({
             >
               {podDelta ? (
                 <>
-                  <span className={`${HUD_LBL} text-current opacity-70`}>Delta</span>
+                  <span className={`${HUD_LBL} text-current opacity-70`}>{w.delta}</span>
                   <DeltaReadout deltaS={deltaS} className="text-[24px]" />
                 </>
               ) : (
                 <>
                   <span className={`inline-flex items-center gap-1 ${HUD_LBL} text-current`}>
-                    <span className="opacity-70">Predicted</span>
+                    <span className="opacity-70">{w.predicted}</span>
                     {podTone !== null ? (
-                      <Trend direction={podTone <= 0 ? "up" : "down"} size={9} label={podTone <= 0 ? "Quicker than your best" : "Slower than your best"} />
+                      <Trend direction={podTone <= 0 ? "up" : "down"} size={9} label={podTone <= 0 ? w.quicker : w.slower} />
                     ) : null}
                   </span>
                   <span className={`lc-data leading-none whitespace-nowrap ${predictedText.length > 8 ? "text-[17px]" : "text-[20px]"}`}>

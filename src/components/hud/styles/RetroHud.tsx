@@ -20,6 +20,7 @@
  */
 
 import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CarTelemetry } from "@/types/f1";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import {
@@ -49,7 +50,7 @@ import { aeroReadout } from "../aero-label";
 import { damageColor, worstPart } from "../DamageWidget";
 import { pedalLayers } from "../PedalBars";
 import { type WeatherHudState } from "../WeatherBadge";
-import { anchor, deltaColor, gearLabel, MiniMap, type HudDesignProps, type HudMap } from "./hud-style-parts";
+import { anchor, deltaColor, formatOnce, gearLabel, liveMessage, MiniMap, type HudDesignProps, type HudMap } from "./hud-style-parts";
 import {
   dayClock,
   driverLabel,
@@ -69,6 +70,52 @@ import { revLights, useLapHistory } from "./third-party-parts";
 import css from "./retro.module.css";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
+
+/** The Retro UI layout's words in the current language, resolved once per language */
+function useRetroWords() {
+  const tx = useTranslations("hudStyles.retro");
+  return useMemo(
+    () => ({
+      aidOff: tx("aidOff"),
+      fuel: tx("fuel"),
+      aero: tx("aero"),
+      open: tx("open"),
+      armed: tx("armed"),
+      shut: tx("shut"),
+      brakeBias: tx("brakeBias"),
+      dial: liveMessage(["speed", "unit", "gear", "rpm"], (marks) => tx("dial", marks)),
+      liveDelta: tx("liveDelta"),
+      current: tx("current"),
+      invalid: tx("invalid"),
+      lapNumber: formatOnce((lap: string) => tx("lapNumber", { lap })),
+      personalBest: tx("personalBest"),
+      sessionBestShort: tx("sessionBestShort"),
+      sessionBest: tx("sessionBest"),
+      yourBest: tx("yourBest"),
+      headPos: tx("headPos"),
+      headDriver: tx("headDriver"),
+      headGap: tx("headGap"),
+      lapsInvalid: tx("lapsInvalid"),
+      noLaps: tx("noLaps"),
+      lapBest: tx("lapBest"),
+      lapCut: tx("lapCut"),
+      puncture: tx("puncture"),
+      terminal: tx("terminal"),
+      sectorTitle: formatOnce((sector: number, corner: string) => tx("sectorTitle", { sector: String(sector), corner })),
+      straight: tx("straight"),
+      air: tx("air"),
+      track: tx("track"),
+      surface: tx("surface"),
+      rain: tx("rain"),
+      clock: tx("clock"),
+      clockFixed: tx("clockFixed"),
+      lights: tx("lights"),
+      radar: tx("radar"),
+    }),
+    [tx],
+  );
+}
+type RetroWords = ReturnType<typeof useRetroWords>;
 
 /** The corner groups' distance from the screen's edges, as the game's own layouts */
 const EDGE = "clamp(14px,2.2vw,24px)";
@@ -147,6 +194,7 @@ const BAR_CELLS = Array.from({ length: BAR_STEPS }, (_, i) => 165 - i * 6.2);
 
 /** A cell under the dial's screen: a label and a short value */
 interface DialCell {
+  id: string;
   label: string;
   value: string;
   /** Lit: an aid acting, the flaps open, the battery deploying */
@@ -154,27 +202,27 @@ interface DialCell {
 }
 
 /** The cells the car has: TC and ABS with the live tuner, ERS or fuel, the flaps or the brake balance */
-function dialCells(t: CarTelemetry): DialCell[] {
+function dialCells(t: CarTelemetry, w: RetroWords): DialCell[] {
   const cells: DialCell[] = [];
   const tuner = t.liveTuner;
   const aids = aidsActive(t);
   if (tuner) {
-    cells.push({ label: "TC", value: tuner.tcLevel > 0 ? String(tuner.tcLevel) : "OFF", tone: aids.tc ? HUD_CAUTION : undefined });
-    cells.push({ label: "ABS", value: tuner.absLevel > 0 ? String(tuner.absLevel) : "OFF", tone: aids.abs ? HUD_CAUTION : undefined });
+    cells.push({ id: "tc", label: "TC", value: tuner.tcLevel > 0 ? String(tuner.tcLevel) : w.aidOff, tone: aids.tc ? HUD_CAUTION : undefined });
+    cells.push({ id: "abs", label: "ABS", value: tuner.absLevel > 0 ? String(tuner.absLevel) : w.aidOff, tone: aids.abs ? HUD_CAUTION : undefined });
   }
   const hasErs = t.f12026?.hasErs ?? t.liveTuner?.hasErs ?? false;
   if (hasErs) {
-    cells.push({ label: "ERS", value: String(Math.round(t.ersBatteryPercent)), tone: t.mgukPowerKw > 0 ? HUD_INFO : undefined });
+    cells.push({ id: "ers", label: "ERS", value: String(Math.round(t.ersBatteryPercent)), tone: t.mgukPowerKw > 0 ? HUD_INFO : undefined });
   } else if (t.fuelKg > 0) {
-    cells.push({ label: "FUEL", value: t.fuelKg >= 10 ? t.fuelKg.toFixed(0) : t.fuelKg.toFixed(1) });
+    cells.push({ id: "fuel", label: w.fuel, value: t.fuelKg >= 10 ? t.fuelKg.toFixed(0) : t.fuelKg.toFixed(1) });
   }
   const aero = aeroReadout(t);
   if (hasErs && t.overtakingRules !== "none") {
     // 2026: X (both flaps open) or Z; older cars: the rear flap
-    const value = aero.straightMode ? (aero.open ? "X" : "Z") : aero.open ? "OPEN" : aero.armed ? "ARM" : "SHUT";
-    cells.push({ label: aero.straightMode ? "AERO" : "DRS", value, tone: aero.open || aero.armed ? HUD_INFO : undefined });
+    const value = aero.straightMode ? (aero.open ? "X" : "Z") : aero.open ? w.open : aero.armed ? w.armed : w.shut;
+    cells.push({ id: "aero", label: aero.straightMode ? w.aero : "DRS", value, tone: aero.open || aero.armed ? HUD_INFO : undefined });
   } else if (tuner && tuner.brakeBiasPct > 0) {
-    cells.push({ label: "BB", value: tuner.brakeBiasPct.toFixed(1) });
+    cells.push({ id: "bb", label: w.brakeBias, value: tuner.brakeBiasPct.toFixed(1) });
   }
   return cells.slice(0, 4);
 }
@@ -205,12 +253,13 @@ const RetroDial: React.FC<{ t: CarTelemetry; revRange: [number, number]; classNa
   const brakeLit = Math.round(p.brakeOut * BAR_STEPS);
   const throttleLit = Math.round(p.throttleOut * BAR_STEPS);
   const steer = Math.max(-1, Math.min(1, t.steering));
-  const cells = dialCells(t);
+  const w = useRetroWords();
+  const cells = dialCells(t, w);
   const cellW = 30;
   const cellX0 = C - (cells.length * cellW + (cells.length - 1) * 2.5) / 2;
 
   return (
-    <svg viewBox={`0 0 ${DIAL} ${DIAL}`} className={className} role="img" aria-label={`${formatSpeed(t.speedKmh, units)} ${speedUnit(units)}, gear ${gearLabel(t.gear)}, ${Math.round(t.rpm)} rpm`}>
+    <svg viewBox={`0 0 ${DIAL} ${DIAL}`} className={className} role="img" aria-label={w.dial({ speed: formatSpeed(t.speedKmh, units), unit: speedUnit(units), gear: gearLabel(t.gear), rpm: String(Math.round(t.rpm)) })}>
       {DIAL_STATIC}
       {SEGMENT_PATHS.map((d, i) => {
         const red = i >= redFrom;
@@ -255,7 +304,7 @@ const RetroDial: React.FC<{ t: CarTelemetry; revRange: [number, number]; classNa
       {cells.map((c, i) => {
         const x = cellX0 + i * (cellW + 2.5);
         return (
-          <g key={c.label}>
+          <g key={c.id}>
             <path d={cutRect(x, 193, cellW, 33, 5)} fill="var(--tp-void)" stroke={c.tone ?? "var(--tp-outline-soft)"} strokeWidth={1} />
             <text x={x + cellW / 2} y={205} textAnchor="middle" fontSize={LABEL} fill={c.tone ?? "var(--tp-secondary)"}>
               {c.label}
@@ -287,6 +336,7 @@ const RetroDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInval
   const tone = deltaColor(deltaS);
   const lap = t.race ? t.race.lap : Math.max(1, t.lapCount);
   const sessionBest = sessionBestLapMs(t);
+  const w = useRetroWords();
   return (
     <Frame size="large" className="w-[460px] max-xl:w-[224px]" faceClassName="flex flex-col gap-1.5 p-1.5">
       <Frame edge="soft" face="void" size="small" className="h-5.5" faceClassName="relative overflow-hidden">
@@ -316,23 +366,23 @@ const RetroDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInval
             {/* The kit's delta spelling at the source's two decimals, one fewer past 10 s so it keeps its width */}
             {deltaS === null ? NO_TIME : formatDeltaFit(deltaS, 2)}
           </span>
-          <span className={LBL}>Live delta</span>
+          <span className={LBL}>{w.liveDelta}</span>
         </Frame>
         <Frame edge="dim" face="panel" className="min-w-0 flex-1 max-xl:hidden" faceClassName="grid grid-cols-[0.8fr_1.1fr_1.1fr] content-center gap-x-2 gap-y-2 px-2.5 text-[11px] leading-none whitespace-nowrap">
           <span className="text-(--tp-amber)">
             S{String(t.currentSector).padStart(2, "0")} / 03
           </span>
           <span>
-            <span className="text-(--tp-primary)">CUR</span>{" "}
+            <span className="text-(--tp-primary)">{w.current}</span>{" "}
             <span style={{ color: lapInvalid ? HUD_LOSS : undefined }}>{formatLapClock(t)}</span>
           </span>
-          <span style={{ color: HUD_LOSS }}>{lapInvalid ? "INVALID" : ""}</span>
-          <span className="text-(--tp-cyan)">LAP {String(lap).padStart(2, "0")}</span>
+          <span style={{ color: HUD_LOSS }}>{lapInvalid ? w.invalid : ""}</span>
+          <span className="text-(--tp-cyan)">{w.lapNumber(String(lap).padStart(2, "0"))}</span>
           <span>
-            <span className="text-(--tp-cyan)">PB</span> <span className="text-(--tp-cyan)">{formatLapTime(t.bestLapTimeMs)}</span>
+            <span className="text-(--tp-cyan)">{w.personalBest}</span> <span className="text-(--tp-cyan)">{formatLapTime(t.bestLapTimeMs)}</span>
           </span>
           <span>
-            <span className="text-(--tp-green)">SES</span> <span style={{ color: sessionBest ? HUD_BEST : undefined }}>{formatLapTime(sessionBest)}</span>
+            <span className="text-(--tp-green)">{w.sessionBestShort}</span> <span style={{ color: sessionBest ? HUD_BEST : undefined }}>{formatLapTime(sessionBest)}</span>
           </span>
         </Frame>
       </div>
@@ -384,17 +434,18 @@ const RelativePanel: React.FC<{ t: CarTelemetry; map: HudMap }> = ({ t, map }) =
   const standings = t.race?.standings ?? [];
   const rows = relativeCars(t, map.lengthM, 3);
   const me = rows.findIndex((r) => r.entry.isPlayer);
+  const w = useRetroWords();
   return (
     <Frame size="large" edge="metal" face="panel" faceClassName="flex flex-col gap-2 p-2">
       <div className="flex gap-1.5 max-md:hidden">
-        <RecordCell label="Session best" ms={sessionBestLapMs(t)} color={HUD_BEST} />
-        <RecordCell label="Your best" ms={t.bestLapTimeMs} color={HUD_GAIN} />
+        <RecordCell label={w.sessionBest} ms={sessionBestLapMs(t)} color={HUD_BEST} />
+        <RecordCell label={w.yourBest} ms={t.bestLapTimeMs} color={HUD_GAIN} />
       </div>
       <div className="flex flex-col">
         <div className="grid grid-cols-[34px_1fr_auto] px-2 pb-1 text-[11px] text-(--tp-secondary)">
-          <span>POS</span>
-          <span>DRIVER</span>
-          <span className="text-right">GAP</span>
+          <span>{w.headPos}</span>
+          <span>{w.headDriver}</span>
+          <span className="text-right">{w.headGap}</span>
         </div>
         {rows.map((r, i) => {
           const k = Math.abs(i - me);
@@ -441,6 +492,7 @@ const LapsPanel: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapI
   const bestMs = t.bestLapTimeMs;
   const done = Math.floor(Math.max(0, Math.min(1, t.trackProgress)) * LAP_PROGRESS_STEPS);
   const box = "flex h-full w-10 items-center justify-center text-[15px]";
+  const w = useRetroWords();
   return (
     <div className="flex flex-col gap-1.5">
       <Frame edge="outline" face="raised" size="large" className="h-15" faceClassName="flex items-center justify-center gap-3">
@@ -449,7 +501,7 @@ const LapsPanel: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapI
         </span>
         {lapInvalid ? (
           <span className="text-[11px] leading-none" style={{ color: HUD_LOSS }}>
-            INVALID
+            {w.lapsInvalid}
           </span>
         ) : null}
       </Frame>
@@ -465,7 +517,7 @@ const LapsPanel: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapI
       </div>
       {laps.length === 0 ? (
         <Frame edge="dim" face="row" size="small" className="h-8" faceClassName="flex items-center px-3 text-[12px] text-(--tp-secondary)">
-          No laps yet
+          {w.noLaps}
         </Frame>
       ) : (
         laps.map((l, i) => {
@@ -479,7 +531,7 @@ const LapsPanel: React.FC<{ t: CarTelemetry; lapInvalid: boolean }> = ({ t, lapI
                 <span aria-hidden className="h-4 w-0.75" style={{ backgroundColor: best ? HUD_BEST : "var(--tp-amber)" }} />
                 <span className={cx("text-[16px] leading-none", !l.valid && "text-(--tp-secondary) line-through")}>{formatLapTime(l.ms)}</span>
                 <span className="ml-auto text-[10px] leading-none" style={{ color: best ? HUD_BEST : l.valid ? undefined : HUD_LOSS }}>
-                  {best ? "BEST" : l.valid ? "" : "CUT"}
+                  {best ? w.lapBest : l.valid ? "" : w.lapCut}
                 </span>
               </Frame>
             </div>
@@ -531,6 +583,7 @@ const ConditionPanel: React.FC<{ t: CarTelemetry }> = ({ t }) => {
       ]
     : [];
   const hasDamage = Boolean(dmg && (dmg.overall >= 0.01 || dmg.terminal || dmg.punctured.some(Boolean)));
+  const w = useRetroWords();
   return (
     <Frame size="large" faceClassName="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-3 px-3 py-2.5">
       <TyreLife t={t} i={0} mirror={false} />
@@ -563,9 +616,9 @@ const ConditionPanel: React.FC<{ t: CarTelemetry }> = ({ t }) => {
       <TyreLife t={t} i={3} mirror />
       {hasDamage && dmg ? (
         <div className="col-span-3 flex items-center justify-between gap-2 border-t border-(--tp-outline-dim) pt-1.5 text-[10px] leading-none uppercase">
-          <span className="text-(--tp-secondary)">{dmg.punctured.some(Boolean) ? "PUNCTURE" : worstPart(dmg)}</span>
+          <span className="text-(--tp-secondary)">{dmg.punctured.some(Boolean) ? w.puncture : worstPart(dmg)}</span>
           <span style={{ color: dmg.terminal ? HUD_LOSS : damageColor(Math.max(0.05, dmg.overall)) }}>
-            {dmg.terminal ? "OUT" : `${Math.round(dmg.overall * 100)}%`}
+            {dmg.terminal ? w.terminal : `${Math.round(dmg.overall * 100)}%`}
           </span>
         </div>
       ) : null}
@@ -577,6 +630,7 @@ const ConditionPanel: React.FC<{ t: CarTelemetry }> = ({ t }) => {
 
 const MapPanel: React.FC<Pick<HudDesignProps, "t" | "map" | "mapMode">> = ({ t, map, mapMode = "full" }) => {
   const corner = cornerLabel(t.currentTurnNumber, t.currentTurnName);
+  const w = useRetroWords();
   return (
     <Frame size="large" faceClassName="flex flex-col gap-1.5 px-2.5 pt-2 pb-2">
       <MiniMap
@@ -589,10 +643,10 @@ const MapPanel: React.FC<Pick<HudDesignProps, "t" | "map" | "mapMode">> = ({ t, 
       />
       {/* The sector and the corner's number, the corner's own name in full under them; two lines kept either way, so
           the panel does not grow and shrink at every corner */}
-      <div className="flex min-h-6 flex-col gap-1 text-[10px] leading-none" title={`Sector ${t.currentSector} · ${corner ? corner.full : "Straight"}`}>
+      <div className="flex min-h-6 flex-col gap-1 text-[10px] leading-none" title={w.sectorTitle(t.currentSector, corner ? corner.full : w.straight)}>
         <div className="flex items-center justify-between gap-2">
           <span className="text-(--tp-amber)">S{String(t.currentSector).padStart(2, "0")}</span>
-          <span className="text-(--tp-secondary)">{corner ? corner.short : "Straight"}</span>
+          <span className="text-(--tp-secondary)">{corner ? corner.short : w.straight}</span>
         </div>
         {corner?.name ? <span className="text-(--tp-secondary)">{corner.name}</span> : null}
       </div>
@@ -606,18 +660,19 @@ const WeatherPanel: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
   const units = useUnits();
   const surface = trackSurfaceState(weather.waterMm);
   const lights = headlightState(weather);
+  const w = useRetroWords();
   return (
     <Frame size="medium" faceClassName="grid grid-cols-2 gap-x-2 gap-y-1.5 px-2.5 py-2">
       <div className="flex flex-col gap-0.5">
-        <span className={LBL}>Air</span>
+        <span className={LBL}>{w.air}</span>
         <span className="text-[13px] leading-none">{formatTemp(weather.airC, units)}</span>
       </div>
       <div className="flex flex-col gap-0.5">
-        <span className={LBL}>Track</span>
+        <span className={LBL}>{w.track}</span>
         <span className="text-[13px] leading-none">{formatTemp(weather.trackC, units)}</span>
       </div>
       <div className="flex flex-col gap-0.5">
-        <span className={LBL}>Surface</span>
+        <span className={LBL}>{w.surface}</span>
         <span
           className="text-[11px] leading-none uppercase"
           style={{ color: surface === "dry" ? undefined : surface === "damp" ? "var(--tp-amber)" : HUD_INFO }}
@@ -626,14 +681,14 @@ const WeatherPanel: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
         </span>
       </div>
       <div className="flex flex-col gap-0.5">
-        <span className={LBL}>{weather.rain > 0.05 ? "Rain" : "Clock"}</span>
+        <span className={LBL}>{weather.rain > 0.05 ? w.rain : w.clock}</span>
         <span className="text-[11px] leading-none">
-          {weather.rain > 0.05 ? `${Math.round(weather.rain * 100)}%` : weather.timeMoving ? dayClock(weather.clockH) : "FIXED"}
+          {weather.rain > 0.05 ? `${Math.round(weather.rain * 100)}%` : weather.timeMoving ? dayClock(weather.clockH) : w.clockFixed}
         </span>
       </div>
       {lights ? (
         <div className="flex flex-col gap-0.5">
-          <span className={LBL}>Lights</span>
+          <span className={LBL}>{w.lights}</span>
           <span
             className="text-[11px] leading-none uppercase"
             style={{ color: lights === "flash" ? "var(--tp-amber)" : lights === "off" ? "rgba(255,255,255,0.45)" : undefined }}
@@ -647,6 +702,7 @@ const WeatherPanel: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
 };
 
 const RetroRadar: React.FC<{ t: CarTelemetry }> = ({ t }) => {
+  const w = useRetroWords();
   const { blips, leftCar, rightCar, opacity } = evaluateRadar(t.radar ?? []);
   if (opacity <= 0.01) return null;
   const range = RADAR_VIEW_RANGE_M;
@@ -658,7 +714,7 @@ const RetroRadar: React.FC<{ t: CarTelemetry }> = ({ t }) => {
       style={{ width: 152, height: 152, opacity }}
     >
       <Frame size="large" face="void" className="size-full" style={edgeStyle} faceClassName="size-full">
-        <svg viewBox={`${-range} ${-range} ${range * 2} ${range * 2}`} className="block size-full" role="img" aria-label="Proximity radar">
+        <svg viewBox={`${-range} ${-range} ${range * 2} ${range * 2}`} className="block size-full" role="img" aria-label={w.radar}>
           <circle r={8} fill="none" stroke="var(--tp-outline-dim)" strokeWidth={0.35} />
           <circle r={16} fill="none" stroke="var(--tp-outline-dim)" strokeWidth={0.35} />
           <line x1={0} y1={-range} x2={0} y2={range} stroke="var(--tp-outline-dim)" strokeWidth={0.25} />
