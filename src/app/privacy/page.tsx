@@ -114,6 +114,13 @@ export default function PrivacyPage() {
           same browser, and it ends after ten minutes.
         </p>
         <p className={READ}>
+          Signing in with Google uses Google’s basic sign-in (the “openid” scope) and nothing more. The site receives your
+          Google account’s unique id, which it stores only to sign you in. It isn’t used for anything else, shared with
+          anyone, sold, or used for advertising or AI, and it is deleted with the account. You can also end the site’s
+          access at any time in your Google Account, under Security, then Your connections to third-party apps and
+          services. Signing in with Discord or Steam works the same way: the site keeps only the account id they give it.
+        </p>
+        <p className={READ}>
           To delete an account, open Settings, then Profile and data, then Account, or sign in at{" "}
           <Link href="/account" className={TEXT_LINK}>
             librecorsa.org/account
