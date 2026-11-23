@@ -345,7 +345,8 @@ export const StandingsTable: React.FC<{
   const tx = useTranslations("menu.career");
   const format = useFormatter();
   const beforePos = React.useMemo(() => {
-    if (!before) return null;
+    // Before the season's first round nobody has a place to move from
+    if (!before || before.every((r) => r.starts === 0)) return null;
     return new Map(before.map((r, i) => [r.who, i + 1]));
   }, [before]);
 
