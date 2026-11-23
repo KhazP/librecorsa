@@ -89,6 +89,9 @@ export const PIT_LIMIT_KMH_DEFAULT = 60;
 /** Boxes laid out along the lane when the data has none: spacing and offset to the garage side (m) */
 const BOX_SPACING_M = 9;
 const BOX_OFFSET_M = 3.2;
+/** Lap metres per lane metre the projection may run at and still be the lane's lap position (else it is evened out) */
+const MIN_RATE = 0.2;
+const MAX_RATE = 3;
 /** Clear lane kept between the zone ends and the first and last boxes (m) */
 const BOX_MARGIN_M = 30;
 
@@ -259,13 +262,31 @@ export class PitLaneModel {
       lapS[i] = s;
       prev = s;
     }
-    // Across the off-road stretch the lap position runs evenly from leave to rejoin (it is the lane that is driven, not
-    // the road beside it: a lane that bends away from the road would otherwise stall or rush the lap clock)
-    const sLeave = lapS[iLeave];
-    const sRejoin = lapS[iRejoin];
+    // Where the lane runs beside the road its lap position is the road's (the same a car's own projection gives, so
+    // joining the lane moves no lap clock). Where the projection stalls or leaps (a lane that bends away from the road, or
+    // passes another part of the lap as Monaco's does behind the Swimming Pool) it runs evenly between the good points
+    // either side. A point is good when the projection there neither stalls behind the points before it nor runs more
+    // than `MAX_RATE` lap metres per lane metre to the next one
+    const good = new Uint8Array(n);
     for (let i = iLeave; i <= iRejoin; i++) {
-      const t = (cum[i] - cum[iLeave]) / Math.max(1e-6, cum[iRejoin] - cum[iLeave]);
-      lapS[i] = sLeave + (sRejoin - sLeave) * t;
+      const j = Math.min(n - 1, i + 1);
+      const dl = cum[j] - cum[i];
+      const ds = lapS[j] - lapS[i];
+      const own = Math.abs(wrapHalf(projS[i] - lapS[i], L)) < 0.5;
+      good[i] = own && (j === i || (ds >= MIN_RATE * dl && ds <= MAX_RATE * dl)) ? 1 : 0;
+    }
+    good[iLeave] = 1;
+    good[iRejoin] = 1;
+    let last = iLeave;
+    for (let i = iLeave + 1; i <= iRejoin; i++) {
+      if (!good[i]) continue;
+      if (i - last > 1) {
+        for (let k = last + 1; k < i; k++) {
+          const t = (cum[k] - cum[last]) / Math.max(1e-6, cum[i] - cum[last]);
+          lapS[k] = lapS[last] + (lapS[i] - lapS[last]) * t;
+        }
+      }
+      last = i;
     }
     // The side the lane lies (and its garages): where most of its off-road points are
     let sideSum = 0;
@@ -521,4 +542,9 @@ function indexAt(cum: Float64Array, m: number): number {
 
 function wrapPos(s: number, L: number): number {
   return L > 0 ? ((s % L) + L) % L : s;
+}
+
+function wrapHalf(d: number, L: number): number {
+  const w = wrapPos(d, L);
+  return w > L / 2 ? w - L : w;
 }

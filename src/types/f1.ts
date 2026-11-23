@@ -630,6 +630,8 @@ export interface CarTelemetry {
   lapInvalid?: boolean;
   /** True while on the out-lap before the first start/finish crossing starts lap timing */
   outLap?: boolean;
+  /** In the pit lane (pit/pit-lane.ts): where along it, how far off its centreline, and inside the speed-limit zone */
+  pitLane?: { laneM: number; offsetM: number; inLimitZone: boolean } | null;
   /** Verdict on the lap that was just completed (set together with `lapCount` / `lastLapTimeMs`) */
   lastLapValid?: boolean;
   /** Reference hot pressure at which each tyre grips best (psi gauge) */

@@ -3550,7 +3550,10 @@ export class DriveSession {
             speedMs: physics.vxMs,
             posX: physics.worldPosition.x,
             posZ: physics.worldPosition.z,
-            active: !physics.aiAutopilot && !mpFrozen && raceNow?.phase !== "lights" && raceNow?.phase !== "finished",
+            // In the pit lane nothing is judged: off the racing surface by design, along its walls (the lap through it
+            // does not count for a best lap: the car's own verdict, pit-lane.ts)
+            active:
+              !physics.aiAutopilot && !mpFrozen && !t.pitLane && raceNow?.phase !== "lights" && raceNow?.phase !== "finished",
             // Barriers: a hill climb's run is done on any touch (judged up to its finish line), a circuit's lap only by
             // riding the wall
             wallContactS: t.f12026?.wallContactS,

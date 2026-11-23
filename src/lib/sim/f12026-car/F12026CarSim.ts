@@ -11,6 +11,7 @@
  * detection point; an older car opens the rear flap alone, in a race only once race control (`raceControl`) says it
  * was within 1 s at that zone's detection point.
  */
+import { PitLaneTracker } from '../pit/pit-lane';
 import {
   BRAKE_DUCT_STEP,
   type ChassisSetup,
@@ -1287,6 +1288,13 @@ export class F12026CarSim implements SimulatorCar {
   private collider: GroundQuery | null = null;
   private progressHintS: number | undefined;
   private poseHintS: number | undefined;
+  /** This car against the circuit's pit lane (pit/pit-lane.ts); null on a circuit without one */
+  private pitTracker: PitLaneTracker | null | undefined;
+  /**
+   * Set while the AI field drives this car down the pit lane itself (`placeInPitLane`): its lane spot is the field's,
+   * not found from its position
+   */
+  private pitDriven = false;
   private s = 0;
   private lateral = 0;
   private prevS = 0;
@@ -3019,8 +3027,10 @@ export class F12026CarSim implements SimulatorCar {
     this.lastAxMs2 = this.lastAyMs2 = 0;
     this.chassisG = 1;
     this.stuckS = 0;
-    // The off-track verdict belongs to where the car was: the new spot is judged afresh
+    // The off-track verdict belongs to where the car was: the new spot is judged afresh (so does the pit lane, unless
+    // the field is driving the car down it)
     this.wasOffTrack = false;
+    if (!this.pitDriven) this.pitTracker?.reset();
     // So does the barrier contact: zeroed, on the page's car and the sim worker's alike (race control reads a drop as none)
     this.wallContactS = 0;
     const c = this.channels;
@@ -3070,6 +3080,7 @@ export class F12026CarSim implements SimulatorCar {
     this.poseHintS = p.s;
     this.s = p.s;
     this.lateral = p.lateralOffset;
+    this.followPitLane(p.s, p.lateralOffset, p.sample.width);
     this.vyMs = this.bodyVy();
     this.yawRateRadS = this.bodyYawRate();
     this.steerAngleNorm = this.steerCmd;
@@ -3212,6 +3223,52 @@ export class F12026CarSim implements SimulatorCar {
     return Math.min(45_000, ((this.track.pointToPoint?.finishS ?? this.track.totalLengthM) / 90) * 1000);
   }
 
+  /**
+   * The car against the pit lane, after each pose: in the lane its lap position is the lane's (pit-lane.ts), so a lane
+   * that skips a corner neither jumps the lap clock nor reads as a cut, and a lap that went through it does not count
+   * for a best lap (a lane can be the shorter way round)
+   */
+  private followPitLane(projS: number, lateralM: number, roadWidthM: number): void {
+    const lane = this.track.pitLane;
+    if (!lane) {
+      this.pitTracker = null;
+      return;
+    }
+    const tr = this.pitTracker ?? (this.pitTracker = new PitLaneTracker(lane));
+    if (this.pitDriven) {
+      if (tr.spot) this.s = tr.spot.trackS;
+    } else {
+      const offRoadM = Math.abs(lateralM) - roadWidthM / 2;
+      if (tr.spot || (offRoadM > 0.5 && lane.nearEntry(projS))) {
+        const spot = tr.update(this.worldPosition.x, this.worldPosition.z, offRoadM, projS);
+        if (spot) this.s = spot.trackS;
+      }
+    }
+    const spot = tr.spot;
+    if (spot && this.lapValid) this.invalidateLap();
+    const t = this.telemetry;
+    if (spot) t.pitLane = { laneM: spot.laneM, offsetM: spot.offsetM, inLimitZone: spot.inLimitZone };
+    else if (t.pitLane) t.pitLane = null;
+  }
+
+  /**
+   * The AI field drives this car down the pit lane: it is placed at `laneM` along it (its pose already set by the
+   * field), or released back to the road with `laneM` null
+   */
+  public setPitLaneSpot(laneM: number | null, offsetM = 0): void {
+    const lane = this.track.pitLane;
+    if (!lane) return;
+    const tr = this.pitTracker ?? (this.pitTracker = new PitLaneTracker(lane));
+    if (laneM === null) {
+      this.pitDriven = false;
+      tr.reset();
+      return;
+    }
+    this.pitDriven = true;
+    tr.place(laneM, offsetM);
+    this.s = tr.spot!.trackS;
+  }
+
   /** Race control deleted the running lap (judged track limits) */
   public invalidateLap(): void {
     this.lapValid = false;
@@ -3253,7 +3310,9 @@ export class F12026CarSim implements SimulatorCar {
       if (fenced && (kind === 'road' || kind === 'kerb') && beyondLayoutEdge(sample, w.hardpointWorld.x, w.hardpointWorld.z)) continue;
       allOff = false;
     }
-    const offTrack = anyGrounded ? allOff : this.wasOffTrack;
+    // In the pit lane the car is off the racing surface but not off the track
+    const inPitLane = Boolean(this.pitTracker?.spot);
+    const offTrack = !inPitLane && (anyGrounded ? allOff : this.wasOffTrack);
     this.wasOffTrack = offTrack;
     if (offTrack && this.trackLimitsMode === 'strict') this.lapValid = false;
     t.lapInvalid = !this.lapValid;
