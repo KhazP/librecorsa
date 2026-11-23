@@ -159,11 +159,12 @@
 
 /* ---- Mode A: Halo-Mounted Center Cluster ---- */
 
+/* The band's hoop line sits on the halo's own hoop in the TV pod camera */
 .haloAnchor {
   position: absolute;
-  left: 56.8%;
-  bottom: 13.5%;
-  width: clamp(580px, 63vw, 880px);
+  left: 56.6%;
+  bottom: 15%;
+  width: clamp(600px, 54vw, 1040px);
   transform: translateX(-50%);
   transform-origin: center center;
   pointer-events: none;
@@ -171,15 +172,15 @@
 
 @media (min-aspect-ratio: 2/1) {
   .haloAnchor {
-    bottom: 12%;
-    width: clamp(540px, 46vw, 860px);
+    bottom: 14%;
+    width: clamp(560px, 40vw, 1000px);
   }
 }
 
 @media (max-aspect-ratio: 4/3) {
   .haloAnchor {
-    bottom: 15%;
-    width: clamp(460px, 72vw, 760px);
+    bottom: 18%;
+    width: clamp(480px, 70vw, 860px);
   }
 }
 
@@ -493,4 +494,121 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+}
+
+/* The halo's ready states blink as the car's wheel does (2.5 times a second); a yellow flag blinks slower */
+.haloBlink {
+  animation: gp-halo-blink 0.4s step-end infinite;
+}
+
+.haloBlinkSlow {
+  animation: gp-halo-blink 0.67s step-end infinite;
+}
+
+@keyframes gp-halo-blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* A call's tag rises from its part, holds, and fades */
+.haloCall {
+  animation-name: gp-halo-call;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation-fill-mode: both;
+  pointer-events: none;
+}
+
+@keyframes gp-halo-call {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% + 12px));
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+  82% {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -100%);
+  }
+}
+
+/* A light running once along a path (pathLength 1, a short dash) */
+.haloRun,
+.haloRunLong {
+  animation: gp-halo-run 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.haloRunLong {
+  animation-duration: 1.2s;
+}
+
+@keyframes gp-halo-run {
+  0% {
+    stroke-dashoffset: 0.24;
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -1;
+    opacity: 0;
+  }
+}
+
+/* The dial's ring drawn round once, then let go */
+.haloDraw {
+  animation: gp-halo-draw 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes gp-halo-draw {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  45% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .haloBlink,
+  .haloBlinkSlow {
+    animation: none;
+  }
+  .haloRun,
+  .haloRunLong,
+  .haloDraw {
+    display: none;
+  }
+  .haloCall {
+    animation-name: gp-halo-fade;
+  }
+}
+
+@keyframes gp-halo-fade {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -100%);
+  }
+  8%,
+  85% {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
 }

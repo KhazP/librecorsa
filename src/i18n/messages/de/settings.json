@@ -46,6 +46,7 @@
       },
       "profile": {
         "driver": "Fahrer",
+        "account": "Konto",
         "data": "Daten"
       }
     },
@@ -109,6 +110,10 @@
     "autoGearbox": {
       "label": "Automatikgetriebe",
       "hint": "Manuelle Tasten: {up} / {down}"
+    },
+    "autoOvertake": {
+      "label": "Automatisches Überholen",
+      "hint": "F1 2026: nutzt ein freigeschaltetes Überholen auf den Geraden, mit weniger Leistung als ein Druck auf {key}"
     },
     "autoClutch": {
       "label": "Auto-Kupplung",
@@ -625,7 +630,7 @@
       "clearButton": "Löschen",
       "clearTitle": "Gespeicherte Daten löschen?",
       "clearConfirm": "Alles löschen",
-      "clearBody": "Entfernt alle Einstellungen, den Fahrerschlüssel, Runden, Ghosts und Setups dauerhaft aus diesem Browser und lädt dann neu."
+      "clearBody": "Entfernt alle Einstellungen, den Fahrerschlüssel, Runden, Ghosts und Setups dauerhaft aus diesem Browser und lädt dann neu. Ein angemeldetes Gerät wird zuerst vom Konto abgemeldet; das Konto und sein Cloud-Spielstand bleiben bestehen."
     }
   },
   "hudPicker": {
@@ -637,5 +642,156 @@
     "descriptionSite": "{detail}. Von {author} · {site}",
     "sourceLink": "{layout}-Quelle, von {author} (öffnet in neuem Tab)",
     "siteLink": "{site}, Seite von {author} (öffnet in neuem Tab)"
+  },
+  "account": {
+    "checking": "Dein Konto wird geprüft",
+    "unavailable": "Konten sind gerade nicht verfügbar. Versuch es später noch einmal.",
+    "deleted": "Das Konto wurde gelöscht.",
+    "deletedLaps": "Das Konto und seine Runden wurden gelöscht.",
+    "page": {
+      "intro": "Konten sind optional. Ein Konto bewahrt deine Fahrernamen und deinen Spielstand auf jedem Gerät auf, und es wird keine E-Mail-Adresse erfasst. Melde dich hier an, um zu sehen, was dein Konto enthält, oder um es zu löschen.",
+      "privacy": "Was ein Konto speichert, steht auf der <link>Datenschutzseite</link>."
+    },
+    "signedOut": {
+      "titlePage": "Anmelden",
+      "title": "Konto",
+      "description": "Melde dich an, um deine Fahrernamen und deinen Spielstand auf jedem Gerät zu behalten. Es wird keine E-Mail-Adresse erfasst.",
+      "codeLabel": "Code von einem anderen Gerät verwenden",
+      "codeHint": "Wähle auf einem angemeldeten Gerät „Code anzeigen“ und gib ihn hier ein",
+      "enterCode": "Code eingeben",
+      "signInWith": "Anmelden mit",
+      "oauthHint": "Öffnet die Anmeldeseite des Anbieters und kehrt dann hierher zurück",
+      "passkeyHint": "Ein Passkey auf diesem Gerät, einem Smartphone oder einem Sicherheitsschlüssel",
+      "passkey": "Passkey",
+      "createLabel": "Konto mit einem Passkey erstellen",
+      "createHint": "Keine andere Anmeldung nötig",
+      "create": "Erstellen",
+      "needsBrowserCode": "Die Anmeldung mit {providers} braucht einen Browser. Melde dich auf librecorsa.org/account an, wähle „Code anzeigen“ und gib ihn hier ein.",
+      "needsBrowser": "Die Anmeldung mit {providers} braucht einen Browser."
+    },
+    "signedIn": {
+      "yourAccount": "Dein Konto",
+      "signedInWith": "Angemeldet mit {ways}",
+      "combineLabel": "Spielstände zusammenführen",
+      "combineHint": "Dieses Gerät und das Konto haben beide einen Spielstand",
+      "choose": "Wählen",
+      "save": "Spielstand",
+      "syncing": "Synchronisierung läuft",
+      "synced": "Synchronisiert {ago}",
+      "cloudWritten": "Der Cloud-Spielstand wurde {ago} geschrieben",
+      "notSynced": "Noch nicht synchronisiert",
+      "syncNow": "Jetzt synchronisieren",
+      "signOut": "Abmelden",
+      "signOutHint": "Dieses Gerät behält seinen Spielstand. Es sendet Runden wieder unter deinen Namen, sobald du dich anmeldest",
+      "lastWay": "Die letzte Anmeldemöglichkeit kann nicht entfernt werden. Lösche stattdessen das Konto."
+    },
+    "names": {
+      "title": "Fahrernamen",
+      "description": "Jedes Gerät dieses Kontos kann Runden unter diesen Namen einreichen. Sie gehören dir, solange das Konto besteht.",
+      "lastLap": "Letzte Runde {ago}",
+      "noLaps": "Noch keine Runden",
+      "none": "Noch keine Fahrernamen. Der Name, unter dem du deine erste Runde einreichst, wird dem Konto zugeordnet.",
+      "elsewhere": "{count, plural, one {{names} gehört zu einem anderen Konto.} other {{names} gehören zu einem anderen Konto.}} Um die beiden zusammenzuführen, füge unten die Anmeldung dieses Kontos hinzu."
+    },
+    "ways": {
+      "title": "Anmeldemöglichkeiten",
+      "description": "Gespeichert wird nur die Konto-ID beim jeweiligen Anbieter: keine E-Mail-Adresse, kein Benutzername, kein Bild.",
+      "added": "Hinzugefügt am {date}",
+      "addedUsed": "Hinzugefügt am {date}, verwendet {ago}",
+      "notAdded": "Nicht hinzugefügt",
+      "remove": "Entfernen",
+      "add": "Hinzufügen",
+      "passkeyName": "Passkey vom {date}",
+      "used": "Verwendet {ago}",
+      "addPasskey": "Passkey hinzufügen",
+      "addPasskeyHint": "Anmeldung mit der Bildschirmsperre dieses Geräts, einem Smartphone oder einem Sicherheitsschlüssel",
+      "combinePasskey": "Mit einem Konto mit Passkey zusammenführen",
+      "combinePasskeyHint": "Dessen Namen, Geräte und Spielstand kommen zu diesem Konto",
+      "usePasskey": "Passkey nutzen",
+      "desktopOthers": "Weitere Anmeldungen kannst du auf librecorsa.org/account im Browser hinzufügen."
+    },
+    "devices": {
+      "title": "Geräte",
+      "description": "Die Browser und Apps, die bei diesem Konto angemeldet sind.",
+      "thisBrowser": "Dieser Browser",
+      "notJoined": "Ein Gerät, das noch nicht beigetreten ist",
+      "thisDevice": "Dieses Gerät",
+      "seen": "Angemeldet am {date}, zuletzt gesehen {ago}",
+      "signOut": "Abmelden"
+    },
+    "keys": {
+      "title": "Fahrerschlüssel",
+      "description": "Jedes Gerät signiert seine Runden mit einem eigenen Fahrerschlüssel. Jeder Schlüssel hier darf unter den Namen des Kontos einreichen.",
+      "fallback": "Fahrerschlüssel {id}",
+      "added": "Hinzugefügt am {date}",
+      "addedLap": "Hinzugefügt am {date}, letzte Runde {ago}",
+      "none": "Noch keine Fahrerschlüssel. Ein Gerät fügt seinen Schlüssel hinzu, wenn es dem Konto beitritt."
+    },
+    "remove": {
+      "identityTitle": "Anmeldung mit {provider} entfernen?",
+      "identityBody": "Mit {provider} kann man sich nicht mehr bei diesem Konto anmelden. Du kannst es später wieder hinzufügen.",
+      "passkeyTitle": "Diesen Passkey entfernen?",
+      "passkeyBody": "Er kann nicht mehr zur Anmeldung bei diesem Konto genutzt werden. Du kannst ihn auch auf dem Gerät oder im Passwortmanager löschen, der ihn speichert.",
+      "keyTitle": "Diesen Fahrerschlüssel entfernen?",
+      "keyBody": "Runden von {label} werden nicht mehr unter den Namen des Kontos eingereicht. Seine Runden, die schon in den Bestenlisten stehen, bleiben.",
+      "confirm": "Entfernen"
+    },
+    "delete": {
+      "title": "Konto löschen",
+      "label": "Dieses Konto löschen",
+      "hint": "Löscht Anmeldungen und Cloud-Spielstand. Du entscheidest, ob deine Runden bleiben",
+      "button": "Löschen",
+      "question": "Dieses Konto löschen?",
+      "confirm": "Konto löschen",
+      "body": "Das löscht das Konto, seine Anmeldungen und seinen Cloud-Spielstand. Was auf diesem Gerät gespeichert ist, bleibt.",
+      "lapsGo": "Deine Fahrernamen verschwinden mit ihren Runden, Rennergebnissen und Abzeichen aus den Bestenlisten und können von jedem übernommen werden.",
+      "lapsStay": "Deine Fahrernamen und Runden bleiben in den Bestenlisten. Ohne Konto verfällt ein Name nach sechs Monaten ohne Runde.",
+      "tick": "Auch meine Runden und Rennergebnisse aus den Bestenlisten entfernen"
+    },
+    "join": {
+      "notNow": "Nicht jetzt",
+      "join": "Beitreten",
+      "joining": "Beitritt läuft… Der Spielstand dieses Geräts wird mit dem Konto synchronisiert. Das kann einen Moment dauern.",
+      "body": "Die Fahrernamen und der Spielstand dieses Geräts werden Teil dieses Kontos. „Nicht jetzt“ meldet dieses Gerät ab.",
+      "codeBody": "Die Fahrernamen und der Spielstand dieses Geräts werden Teil dieses Kontos."
+    },
+    "firstSync": {
+      "title": "Beide Spielstände zusammenführen?",
+      "combine": "Zusammenführen",
+      "useCloud": "Cloud-Spielstand verwenden",
+      "keepLocal": "Spielstand dieses Geräts behalten",
+      "notNow": "Nicht jetzt",
+      "intro": "Dieses Gerät und das Konto haben beide einen Spielstand.",
+      "thisDevice": "Dieses Gerät",
+      "cloud": "Cloud-Spielstand",
+      "bestLaps": "{count, plural, one {<n>#</n> beste Runde} other {<n>#</n> beste Runden}}",
+      "setups": "{count, plural, one {<n>#</n> gespeichertes Setup} other {<n>#</n> gespeicherte Setups}}",
+      "races": "{count, plural, one {<n>#</n> Rennen} other {<n>#</n> Rennen}}",
+      "savedAgoOn": "Gespeichert {ago} auf {device}",
+      "savedAgo": "Gespeichert {ago}",
+      "savedOn": "Gespeichert auf {device}",
+      "combineExplain": "<b>Zusammenführen.</b> Behält beide. Wo beide dasselbe geändert haben, gewinnt die neuere Änderung.",
+      "cloudExplain": "<b>Cloud-Spielstand verwenden.</b> Dieses Gerät übernimmt Einstellungen, Setups und Rennverlauf des Kontos. Die eigenen werden ersetzt.",
+      "localExplain": "<b>Spielstand dieses Geräts behalten.</b> Das Konto übernimmt Einstellungen, Setups und Rennverlauf dieses Geräts. Andere Geräte erhalten sie beim nächsten Start.",
+      "bestLapsKept": "Die besten Runden aus beiden bleiben immer erhalten."
+    },
+    "code": {
+      "title": "Code von einem anderen Gerät verwenden",
+      "how": "Öffne auf einem angemeldeten Gerät Einstellungen, dann Profil und Daten, dann Konto und wähle „Code anzeigen“.",
+      "label": "Code",
+      "continue": "Weiter",
+      "format": "Ein Code besteht aus 8 Buchstaben und Ziffern, zum Beispiel ABCD-EFGH"
+    },
+    "showCode": {
+      "label": "Code für ein anderes Gerät anzeigen",
+      "hint": "Meldet ein anderes Gerät bei diesem Konto an, zum Beispiel die Desktop-App",
+      "hide": "Ausblenden",
+      "new": "Neuer Code",
+      "show": "Code anzeigen",
+      "aria": "Code {code}",
+      "left": "{minutes, plural, =0 {Weniger als eine Minute übrig. Er funktioniert einmal.} one {# Minute übrig. Er funktioniert einmal.} other {# Minuten übrig. Er funktioniert einmal.}}",
+      "expired": "Dieser Code ist abgelaufen. Wähle „Neuer Code“ für einen weiteren.",
+      "how": "Öffne auf dem anderen Gerät Einstellungen, dann Profil und Daten, dann Konto. Wähle „Code von einem anderen Gerät verwenden“ und gib diesen Code ein."
+    }
   }
 }

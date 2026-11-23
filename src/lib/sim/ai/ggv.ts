@@ -41,12 +41,13 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [0.805, 0.718, 0.551, 0.403, 0.272, 0.157, 0.046, -0.397],
     lockKappa: Math.tan((320 / 12.6) * (Math.PI / 180)) / 2.65,
   },
-  // Measured 2026-11-12 on the rigid-body engine the LC26 ships on (`lc26-engine.ts`)
+  // Measured 2026-11-12 on the rigid-body engine the LC26 ships on (`lc26-engine.ts`); traction again 2026-11-23 under
+  // the 2026 F1 rules' energy (`ers-2026.ts`: the FIA's power curve, Overtake's in practice)
   lc26: {
     speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
     latG: [1.789, 2.072, 2.412, 2.913, 3.455, 4.036, 4.499, 4.655],
     brakeG: [1.977, 2.133, 2.447, 2.898, 3.481, 3.946, 4.397, 4.819],
-    accelG: [1.122, 1.207, 1.305, 1.146, 0.842, 0.555, 0.27, -0.078],
+    accelG: [1.12, 1.22, 1.35, 1.16, 0.86, 0.58, 0.3, 0.03],
     // Rwanda's banked dip at s ≈ 640 m (g̃ ≈ 2.1 g at 262 km/h): front tyres saturated at ~4.5 g, barely above the
     // flat-road limit; the ride height lost to the load costs the floor most of what the load adds
     compressionGain: 0.15,

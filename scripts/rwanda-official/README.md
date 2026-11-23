@@ -102,7 +102,9 @@ step with the ones one sees, and laps within 0.02 s of what it did without them.
 
 The road, the pit lane and the gravel wear scanned surfaces: Poly Haven's Asphalt Track, Asphalt Pit Lane and Gravel
 Floor 02 (CC0), each a 2 m tile with its normal map. `prep_scans.py` keeps a scan's grain and gives it the colour of
-the drawn texture it stands in for, so the circuit's tones stay; the materials repeat the tile (`bl_common.mat`'s
+the drawn texture it stands in for, so the circuit's tones stay, and takes the slow tilt out of its normal map (the
+asphalt's lit the road in a band every 2 m driving into a low sun; the game's model got the new maps through
+`node scripts/replace-glb-images.mjs`); the materials repeat the tile (`bl_common.mat`'s
 `tile`), and no mesh's texture coordinates change, as the game reads the gravel's and the kerbs' bumps from them.
 Grass, concrete and paint stay drawn.
 

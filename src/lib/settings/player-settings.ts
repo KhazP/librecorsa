@@ -10,6 +10,8 @@ import {
   DEFAULT_KEY_BINDINGS,
   BUMPER_SHIFT_BUTTONS,
   GT_STYLE_BUTTONS,
+  PAD_LAYOUTS,
+  RETIRED_FORMULA_STYLE_BUTTONS,
   RETIRED_GT_STYLE_BUTTONS,
   DEFAULT_PAD_BUTTONS,
   KEY_ACTIONS,
@@ -60,6 +62,11 @@ export interface PlayerSettings {
   gamepadAssist: boolean;
   /** Automatic gearbox; off = shift with Gear up / Gear down */
   autoGearbox: boolean;
+  /**
+   * A 2026 F1 car uses the Overtake earned in a race on the overtaking straights by itself, with a little less of it than
+   * the driver's own press of Overtake gives
+   */
+  autoOvertake: boolean;
   /** Automatic clutch and anti-stall; off with manual gears = bite point, clutch slip and stalls */
   autoClutch: boolean;
   mouseSteer: boolean;
@@ -585,6 +592,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   racingLine: true,
   gamepadAssist: true,
   autoGearbox: true,
+  autoOvertake: true,
   autoClutch: true,
   mouseSteer: false,
   liveryId: null,
@@ -671,6 +679,8 @@ function parsePadButtons(v: unknown): PadButtonBindings {
   }
   // GT style as it was before the headlights took L3 (22 Nov 2026): such a player gets GT style as it is now
   if (PAD_ACTIONS.every(({ id }) => out[id] === RETIRED_GT_STYLE_BUTTONS[id])) return { ...GT_STYLE_BUTTONS };
+  // Formula style as it was before Overtake took LB (23 Nov 2026): such a player gets Formula style as it is now
+  if (PAD_ACTIONS.every(({ id }) => out[id] === RETIRED_FORMULA_STYLE_BUTTONS[id])) return { ...PAD_LAYOUTS.f1.buttons };
   return out;
 }
 
@@ -1001,6 +1011,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     racingLine: bool(raw.racingLine, d.racingLine),
     gamepadAssist: bool(raw.gamepadAssist, d.gamepadAssist),
     autoGearbox: bool(raw.autoGearbox, d.autoGearbox),
+    autoOvertake: bool(raw.autoOvertake, d.autoOvertake),
     autoClutch: bool(raw.autoClutch, d.autoClutch),
     mouseSteer: bool(raw.mouseSteer, d.mouseSteer),
     liveryId: isStr(raw.liveryId) ? raw.liveryId : null,

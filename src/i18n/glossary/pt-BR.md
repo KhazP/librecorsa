@@ -187,3 +187,18 @@
 | post | publicar | Lap to the online board |
 | upload | enviar | |
 | Lap times | Tempos de volta | |
+
+## Accounts
+| English | Portuguese (BR) | Note |
+|---|---|---|
+| account | conta | |
+| sign in | entrar | "login" for the noun (a Discord login) |
+| sign out | sair | |
+| passkey | chave de acesso | as Google, Apple and Microsoft say it |
+| code / one-time code | código | "funciona uma vez" |
+| cloud save | save na nuvem | |
+| sync | sincronizar | |
+| device | dispositivo | |
+| join an account | entrar na conta | |
+| combine saves | combinar saves | |
+| driver key | chave do piloto | unchanged |

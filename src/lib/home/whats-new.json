@@ -1,14 +1,23 @@
 [
   {
     "date": "2026-11-23",
-    "title": "11 languages, docs.librecorsa.org, and Most driven circuits and cars",
+    "title": "Player accounts, 11 languages, the 2026 F1 hybrid rules and driver profiles",
     "items": [
       "Added 11 languages: Italian, German, Spanish, French, Brazilian Portuguese, Indonesian, Traditional Chinese, Korean, Vietnamese, Arabic and Turkish. The game and the home page follow your browser's language, or you can pick one under Settings > Display > Interface > Language. In Arabic the menus and Settings lay out right to left, while the race HUD keeps its usual layout.",
-      "Opened docs.librecorsa.org, with guides to controls and wheels, online play, performance, the desktop and Android apps, and porting cars and circuits, and added a security.txt with a private way to report security issues.",
-      "Added a Most driven sort to the circuit and car pickers, ranking them by hours driven over the last 30 days, and a Players section on the press page with the hours, laps, drivers and countries counted so far."
+      "Added optional accounts. Sign in with Discord, Google, Steam or a passkey under Settings > Profile and data > Account, and your driver names and save (settings, setups, race history and best laps) follow you to every device. No email is asked for. The desktop app signs in with a one-time code from a signed-in device, and librecorsa.org/account shows what an account holds or deletes it.",
+      "Rebuilt the 2026 Prototype's hybrid on the FIA's 2026 rules: the motor's power falls with speed as the regulations set it, its cuts and superclipping follow the FIA's limits and rates, and each circuit has its own recharge per lap. Spielberg and Monaco use the FIA's published figures, and the other circuits are matched to the real F1 track they drive most like. It deploys out of Qiddiya's last corner again (#180).",
+      "Split Boost and Overtake on the 2026 Prototype, as in real F1. Boost works anywhere, in a race up to the power you had when you pressed it or 150 kW. Overtake is earned within 1 s of the car ahead at the detection line and has its own control (Z, LB on the Formula style pad, or the OT touch button). A new Automatic Overtake setting, on by default, uses an earned Overtake on the straights for you, with less power than pressing it.",
+      "Added the FIA's wet-weather rules for the 2026 Prototype. Once the track needs intermediates, race control declares Low Grip Conditions: Overtake is turned off, Boost only holds the power you have, and Straight Mode opens the front flaps alone, a little later into each straight.",
+      "Fixed the LMDh prototype holding its hybrid back below 120 km/h (that limit is for the four-wheel-drive LMH cars), and smoothed its motor's torque at low speed as its rules require. Keys you hold as the pause menu closes now drive at once, and Chang's road edges now sit on its painted white lines.",
+      "Opened docs.librecorsa.org, with guides to controls and wheels, online play, performance, the desktop and Android apps, and porting cars and circuits, plus an FAQ and a Get involved page. There's also a new About page, a security.txt with a private way to report security issues, and the source code now lives at github.com/librecorsa/librecorsa.",
+      "Added a Most driven sort to the circuit and car pickers, ranking them by hours driven over the last 30 days, and a Players section on the press page with the hours, laps, drivers and countries counted so far.",
+      "Click a driver on a lap board to open their profile, with their best laps, board positions and rating across every circuit. The title screen's Up next sheet shows your personal best, the circuit browser shows your board position next to each personal best, and my own driver names now carry a Creator badge.",
+      "Added optional car damage in practice and time trials, under Settings > Driving > Practice damage: Off (the default), Reduced or Full, shown on the HUD. A wrecked car restarts its flying lap, repaired.",
+      "Added two HUD layouts, GT-Like and F1-Like, and redrew the Grand Prix layout's halo as one glass band.",
+      "The kerb roar now rises in pitch and volume with your speed, the sun's glare on dry asphalt is softer, and RISE Motordrome's road no longer shows stripes when you drive into a low sun."
     ],
-    "commits": 97,
-    "lastSha": "43d9f6e77b8ec4813d3652878e177355e74da5fb"
+    "commits": 198,
+    "lastSha": "cd7dbbdbe88d10d957d13c217cb1cfc40572da9e"
   },
   {
     "date": "2026-11-22",

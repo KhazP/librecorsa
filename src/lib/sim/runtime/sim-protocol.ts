@@ -32,6 +32,7 @@ export const CAR_SETTABLE = [
   "autoGearbox",
   "autoClutch",
   "autoXMode",
+  "autoOvertake",
   "activeAeroMode",
   "tireCompound",
   "trackLimitsMode",
@@ -60,6 +61,7 @@ export const CAR_CALLABLE = [
   "setTrackEvolutionSample",
   "setWeatherSample",
   "setSimRealism",
+  "setEnergySession",
   "activateBoostOverride",
   "applyRigidBodyCollision",
 ] as const;

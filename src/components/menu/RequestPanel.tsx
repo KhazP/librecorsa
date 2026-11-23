@@ -24,7 +24,7 @@ import { gpuReportLine, liveSessionRenderer, probeRenderer } from "@/lib/render/
  * idea.yml and content-request.yml. The query keys below are those forms' field ids. GitHub only pre-fills text
  * fields from the URL, so every value is sent as plain text.
  */
-const REPO_URL = "https://github.com/KhazP/librecorsa";
+const REPO_URL = "https://github.com/librecorsa/librecorsa";
 
 const KINDS = ["Bug", "Wheel", "Idea", "Car", "Track"] as const;
 export type FeedbackKind = (typeof KINDS)[number];

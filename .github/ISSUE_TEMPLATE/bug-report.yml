@@ -10,7 +10,7 @@ body:
     attributes:
       value: |
         Thanks for reporting! The more exact the steps, the faster it gets fixed. For handling that feels off
-        (rather than broken), [Discussions](https://github.com/KhazP/librecorsa/discussions) is a good place too.
+        (rather than broken), [Discussions](https://github.com/librecorsa/librecorsa/discussions) is a good place too.
   - type: textarea
     id: what
     attributes:

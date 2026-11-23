@@ -84,6 +84,7 @@ import { useRaceHistory } from "@/components/hud/useRaceHistory";
 import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type CameraNudge, type NudgeView } from "@/lib/settings/camera-nudges";
 import { dashViewFovDeg } from "@/lib/render/onboard-views";
 import { SeatPanel } from "@/components/hud/SeatPanel";
+import { accountActions } from "@/lib/account/account-store";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
@@ -479,6 +480,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     clearSessionState();
     session?.car.resetToStartGrid(false);
     setPhase("title");
+    accountActions.pushSoon();
   }, [session, endMpRace, clearSessionState, setPhase]);
 
 
@@ -593,6 +595,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const handleToggleBoostLatch = useCallback(() => {
     session?.unlockAudio();
     session?.runAction("boostLatch");
+  }, [session]);
+
+  const handleOvertake = useCallback(() => {
+    session?.unlockAudio();
+    session?.runAction("overtake");
   }, [session]);
 
   const handleChangeLiveTuner = useCallback((patch: LiveTunerPatch) => session?.setLiveTuner(patch), [session]);
@@ -1033,6 +1040,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
               session?.setGhost(new GhostPlayer(recording));
             }
             void refreshLeaderboard();
+            accountActions.pushSoon();
           }
           // A lap faster than this browser's lap on its online board goes up by itself, and so does the best lap of
           // this week's challenge (which an older, faster lap of the same kind doesn't stand in for), under the
@@ -2272,6 +2280,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onChangeCockpitFov={handleCockpitFovChange}
           onToggleXMode={handleToggleXMode}
           onToggleBoostLatch={handleToggleBoostLatch}
+          onOvertake={handleOvertake}
           onChangeLiveTuner={handleChangeLiveTuner}
           paused={paused}
           pauseMenuCovered={settingsOpen?.from === "pause"}

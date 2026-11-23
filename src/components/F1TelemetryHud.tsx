@@ -1,5 +1,6 @@
 "use client";
 
+import { ersButtons } from "./hud/ers-buttons";
 import { connectedPads, isLikelyWheel } from "@/lib/input/device-input";
 import type { NowPlaying } from "@/lib/audio/bgm-controller";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -76,6 +77,8 @@ import { HeadToHeadHud } from "./hud/styles/HeadToHeadHud";
 import { RetroHud } from "./hud/styles/RetroHud";
 import { BlocksHud } from "./hud/styles/BlocksHud";
 import { GrandPrixHud } from "./hud/styles/GrandPrixHud";
+import { GtLikeHud } from "./hud/styles/GtLikeHud";
+import { F1LikeHud } from "./hud/styles/F1LikeHud";
 import { HudRunProvider } from "./hud/styles/third-party-parts";
 import {
   HudSkinProvider,
@@ -132,6 +135,9 @@ const HUD_STYLES: Partial<Record<HudPreset, HudStyleDef>> = {
   retro: { component: RetroHud, bottomClearance: 292, ownsBottomLeft: true, mfdFolded: true, topClearance: 120, ownDeltaBar: true, ownRadar: true, ownDamage: true },
   blocks: { component: BlocksHud, bottomClearance: 200, ownsBottomLeft: true, mfdFolded: true, topClearance: 124, ownDeltaBar: true, ownRadar: true },
   "grand-prix": { component: GrandPrixHud, bottomClearance: 120, ownsBottomLeft: true, ownTrace: true, mfdFolded: true, ownDeltaBar: true, ownRadar: true },
+  // The game's own layouts after a road-racing game's and a Formula game's race screens
+  touring: { component: GtLikeHud, bottomClearance: 228, ownsBottomLeft: true, mfdFolded: true, topClearance: 58, ownDeltaBar: true },
+  formula: { component: F1LikeHud, bottomClearance: 160, ownsBottomLeft: true, mfdFolded: true, ownDeltaBar: true, ownDamage: true },
 };
 /** Every preset gives way to the Phone HUD on a phone-sized screen, and the game's own wherever the touch controls are up (`showsPhoneHud`) */
 const PHONE_STYLE: HudStyleDef = { component: PhoneHud, bottomClearance: 16 };
@@ -211,6 +217,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onToggleAiAutopilot: () => void;
   onToggleXMode: () => void;
   onToggleBoostLatch: () => void;
+  /** Use the Overtake earned in a race, or stop using it (a 2026 F1 car) */
+  onOvertake?: () => void;
   onChangeLiveTuner?: (patch: LiveTunerPatch) => void;
   onToggleMouseSteer?: () => void;
   onResetCar: (flyingStart: boolean) => void;
@@ -309,7 +317,7 @@ function useAeroNotice(t: CarTelemetry): AeroNotice | null {
 function touchCarState(t: CarTelemetry, lights: boolean): TouchCarState {
   const channels = t.f12026;
   const aero = aeroReadout(t);
-  const overtakeLocked = t.overtakingRules === "straight-mode-2026" && t.overtakeAvailable === false;
+  const ersCtl = ersButtons(t);
   // TouchControls only branches on |speed| < 5 (offer reverse) and |speed| > 15 (driven off) and gear < 0: bucket them
   // so TouchControls memoization holds across every frame of normal driving instead of re-rendering at 20 Hz.
   const absSpeed = Math.abs(t.speedKmh);
@@ -320,8 +328,9 @@ function touchCarState(t: CarTelemetry, lights: boolean): TouchCarState {
     aeroOpen: aero.open,
     // A car without the DRS channel cannot say where the flaps may open: its button never looks unusable
     aeroArmed: aero.armed || !channels,
-    boostOn: !overtakeLocked && t.manualOverrideActive,
-    boostLocked: overtakeLocked,
+    boostOn: ersCtl.boostOn,
+    boostLocked: ersCtl.boostLocked,
+    overtake: ersCtl.overtake,
     gear: t.gear < 0 ? -1 : 1,
     speedKmh: speedBand,
     runId: t.runId ?? 0,
@@ -570,7 +579,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               : showDelta
                 ? 124
                 : 52
-            : (style?.topClearance ?? 0);
+            : preset === "touring" && lightsPhase
+              ? 0
+              : (style?.topClearance ?? 0);
   // Touch screens have no Esc key: a Menu button opens the pause menu
   const menuButton = (
     <span className="pointer-events-auto hidden pointer-coarse:block">
@@ -678,6 +689,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           showDeltaBar={showDelta}
           showRadar={showRadar}
           cameraMode={cameraMode}
+          carId={props.carId}
         />
       ) : (
         /* Classic / Minimal top-left: timing tower (race) and lap timing */
@@ -939,6 +951,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             telemetry={telemetry}
             boostLatch={boostLatch}
             onToggleBoostLatch={props.onToggleBoostLatch}
+            onOvertake={props.onOvertake}
             onToggleXMode={props.onToggleXMode}
             variant="minimal"
           />
@@ -979,6 +992,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               telemetry={telemetry}
               boostLatch={boostLatch}
               onToggleBoostLatch={props.onToggleBoostLatch}
+              onOvertake={props.onOvertake}
               onToggleXMode={props.onToggleXMode}
               variant="full"
             />

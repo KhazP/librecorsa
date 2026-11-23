@@ -19,6 +19,8 @@ export const MODDER_SUPPORT: Readonly<Record<string, SupportLink>> = {
   LilSki: { url: "https://www.paypal.com/donate/?cmd=_s-xclick&hosted_button_id=4CU3LGABY58L8", via: "PayPal" },
   "Ddiaz Design": { url: "https://paypal.me/sergiodd", via: "PayPal" },
   gregsediting: { url: "https://www.patreon.com/cw/gregsediting", via: "Patreon" },
+  // From their own post on OverTake
+  munyuturbo: { url: "https://www.patreon.com/cw/MTRacing651", via: "Patreon" },
   // The tip page his own car descriptions ask for ("feel free to buy me a beer")
   Pfalzdriver: { url: "https://streamlabs.com/pfalzdriver", via: "Streamlabs" },
   "Purple Sector": { url: "https://www.patreon.com/cw/PurpleSector", via: "Patreon" },

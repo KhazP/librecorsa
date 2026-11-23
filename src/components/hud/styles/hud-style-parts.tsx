@@ -3,6 +3,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "use-intl/react";
 import type { CameraMode, CarTelemetry, TireCompound } from "@/types/f1";
+import type { CarId } from "@/lib/cars/car-registry";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 import { inDeadZone, type BuiltTrackData, type PointToPointDef } from "@/lib/track-data";
 import { hudPartOfOrigin, type HudLayoutParts } from "@/lib/settings/hud-parts";
@@ -141,6 +142,8 @@ export interface HudDesignProps {
   showRadar?: boolean;
   /** Active camera mode (e.g. "tv_pod", "cockpit", "chase") */
   cameraMode?: CameraMode;
+  /** The car being driven, for the layouts that name it */
+  carId?: CarId;
 }
 
 /** Rev light range of the car (the same as the classic speed cluster's) */

@@ -133,6 +133,13 @@ export const autoGearbox = toggle({
   ...top("autoGearbox"),
 });
 
+export const autoOvertake = toggle({
+  id: "autoOvertake",
+  get label() { return rt("autoOvertake.label"); },
+  hint: (env) => rt("autoOvertake.hint", { key: key(env, "overtake") }),
+  ...top("autoOvertake"),
+});
+
 /** Why no manual clutch is usable right now, or null when one is */
 function autoClutchBlockReason(s: PlayerSettings): "gearbox" | "wheel" | "controller" | "touch" | "keyboard" | null {
   if (s.autoGearbox) return "gearbox";

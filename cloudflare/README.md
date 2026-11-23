@@ -10,10 +10,12 @@ game's online side (`cloudflare/api`). Every part of it is optional and has its 
 | Race server (`api/race.ts`) | Scheduled races | A Durable Object per race, which passes every car's state on while it runs | `ONLINE_RACES` |
 | Usage counter (`api/usage.ts`) | Nothing they see: minutes driven per day, circuit, car, mode and country, and on their own input, screen, weather, assists and build, for the owner | D1 (`librecorsa-board`, tables `usage_daily` and `usage_extra`) | `ONLINE_USAGE` |
 | Live count (`api/presence.ts`) | "LIVE · 23 driving now" on the title screen | One Durable Object that counts the last minute's heartbeats in memory | `ONLINE_LIVE` |
+| Player accounts (`api/accounts/`) | Optional sign-in with Discord, Google, Steam or a passkey: names kept on the account (they never lapse), a save the account's devices share, link codes for the desktop app | D1 (`librecorsa-accounts`, plus `drivers.account_id` and `account_keys` on `librecorsa-board`) and R2 (`librecorsa-ghosts`, under `accounts/ghosts/`) | `ONLINE_ACCOUNTS` |
 
 The game asks `GET /api/config` at run time, so a switch set to `"off"` (then `npx wrangler deploy`, or a push to
 main) takes effect without a new build of the game, which falls back by itself: room codes go through the public
-PeerJS broker, lap times stay in the browser, the Races card goes away.
+PeerJS broker, lap times stay in the browser, the Races card goes away, the game keeps a driver key per device and
+no account.
 
 ## What it costs
 
@@ -29,6 +31,15 @@ PeerJS broker, lap times stay in the browser, the Races card goes away.
   Each further tab adds requests, not memory time: 100 tabs around the clock are about 4.3 million object requests a
   month, roughly $0.50 past the allowance, and as many Worker requests against the plan's 10 million a month ($0.30
   per million past them).
+- **Player accounts**: sign-in costs nothing (Discord, Google, Steam and passkeys are free, and no email is sent).
+  A session check is a D1 read per call and a sync a few rows, far inside the Workers Paid plan's 25 billion reads and
+  50 million writes a month. Saves are JSON in D1: assuming up to 100 KB an account, 20,000 accounts are 2 GB, inside
+  the 5 GB the plan includes ($0.75 a GB past it). Cloud ghosts are the one part that grows: a ghost is about 122 KB
+  (measured on the boards), and assuming 40 best laps an account, 3,000 accounts hold about 15 GB in R2 (about $0.22 a
+  month at $0.015 a GB, once the bucket is past its free 10 GB) and 20,000 about 98 GB (about $1.47). The server holds
+  an account to 400 ghosts and a save to 1 MB, and a ghost no save points at goes an hour later. One R2 write per new
+  best lap, against a million free a month. Set `ONLINE_ACCOUNTS` to `"off"` to stop it: every account route answers
+  404, and the game keeps a driver key per device as before.
 - **Race server**: the one part that works the whole time a race runs (about a cent per 8-car race hour). Set
   `ONLINE_RACES` to `"off"` to stop it: the Open races card leaves the Multiplayer panel, and rooms, the boards and
   the weekly challenge carry on. (The Weekly challenge panel needs `ONLINE_BOARD`; the races run without it, with the
@@ -52,6 +63,38 @@ npx wrangler secret put CF_ANALYTICS_TOKEN         # optional: Cloudflare's own 
 Build the game with `NEXT_PUBLIC_ONLINE_API=/api` (the deploy workflow does) and deploy. Without that variable the
 game never asks for an online side.
 
+### Player accounts
+
+```sh
+npx wrangler d1 create librecorsa-accounts                    # put the id it prints in wrangler.jsonc (ACCOUNTS_DB)
+npx wrangler d1 migrations apply librecorsa-accounts --remote
+npx wrangler d1 migrations apply librecorsa-board --remote    # migration 0011: drivers.account_id and account_keys
+npx wrangler secret put DISCORD_CLIENT_ID                     # optional: Discord sign-in shows once both are set
+npx wrangler secret put DISCORD_CLIENT_SECRET
+npx wrangler secret put GOOGLE_CLIENT_ID                      # optional: Google sign-in shows once both are set
+npx wrangler secret put GOOGLE_CLIENT_SECRET
+```
+
+Steam and passkeys need nothing: Steam's OpenID 2.0 sign-in has no key, and a passkey belongs to the site's host name.
+The redirect each provider must allow, exactly:
+
+| Provider | Redirect URI |
+| :-- | :-- |
+| Discord | `https://librecorsa.org/api/auth/callback/discord` |
+| Google | `https://librecorsa.org/api/auth/callback/google` |
+| Steam | `https://librecorsa.org/api/auth/callback/steam` (sent with each sign-in; nothing to register) |
+
+- **Discord** ([developer portal](https://discord.com/developers/applications)): **New Application** (call it
+  LibreCorsa). Under **OAuth2**, copy the **Client ID**, press **Reset Secret** and copy the **Client Secret**, and add
+  the redirect above under **Redirects**. Leave **Public Client** off. No bot is needed. The game asks for the scope
+  `identify` only, which gives the user id; the server keeps that id and nothing else.
+- **Google** ([Cloud console](https://console.cloud.google.com/)): make a project. Under **Google Auth Platform**, set
+  up the consent screen: the app name LibreCorsa, a support email, `librecorsa.org` as an authorised domain, the privacy
+  policy `https://librecorsa.org/privacy`, the audience **External**, and publish it to production. Add no scopes: the
+  game asks for `openid` only, which needs no review, and Google then sends the account's `sub` and no email or name.
+  Under **Clients**, make an OAuth client of type **Web application** with the redirect above under **Authorized
+  redirect URIs** (no JavaScript origins are needed), and copy its client ID and secret.
+
 ## Working on it locally
 
 ```sh
@@ -64,10 +107,22 @@ and in `.env.local` for `npm run dev`: `NEXT_PUBLIC_ONLINE_API=http://127.0.0.1:
 committed): `DEV_ORIGINS=http://127.0.0.1:3000,http://localhost:3000`, `ADMIN_KEY=<any local key>` for `/admin`, and `RACE_SLOT_S=120` for a race every two
 minutes instead of twenty.
 
+Accounts locally: `npx wrangler d1 migrations apply librecorsa-accounts --local` as well, and start the Worker with
+`npx wrangler dev --port 8787 --infer-origin-from-routes=false`: without the flag it sees every request as one to
+librecorsa.org (the route in `wrangler.jsonc`), and passkeys and sign-in redirects then name the wrong site. On plain
+http the session cookie is `lc_session` (not `__Host-lc_session`, which needs https). Cookies and passkeys go by host
+name, so use
+`localhost` for both the game and the Worker (`NEXT_PUBLIC_ONLINE_API=http://localhost:8787/api`, and
+`http://localhost:3000` in `DEV_ORIGINS`): `127.0.0.1` and `localhost` are different sites to a browser. A sign-in
+started from a `DEV_ORIGINS` page comes back to it. Discord and Google sign-in locally need
+`http://localhost:8787/api/auth/callback/<provider>` added as a redirect on their side; Steam, passkeys and link codes
+work as they are.
+
 The checks run without Cloudflare: `npm run verify` covers the room server, the race server (both sides) and the
 boards on an in-memory database (`scripts/verify-room-server.ts`, `verify-race-server.ts`, `verify-race-client.ts`,
 `verify-leaderboard.ts`), the boards' pages and totals (`verify-board-stats.ts`), the usage counter
-(`verify-usage.ts`), and the admin numbers with the limits that guard them (`verify-admin.ts`).
+(`verify-usage.ts`), the admin numbers with the limits that guard them (`verify-admin.ts`), and player accounts with
+Discord, Google and Steam played by a stand-in and a software passkey (`verify-accounts.ts`).
 
 ## Rules worth knowing
 
@@ -140,5 +195,26 @@ boards on an in-memory database (`scripts/verify-room-server.ts`, `verify-race-s
   can be put to sleep after about ten seconds, and its memory with it); with nobody left it may sleep. `GET /api/stats`
   reads it, with the drivers to date. Set `ONLINE_LIVE` to `"off"` to stop it: no heartbeats are sent, and the title
   screen shows the drivers to date alone.
+- Player accounts (`api/accounts/`, wire format `src/lib/account/api-types.ts`): sign-in through Discord (OAuth with
+  PKCE, scope `identify`), Google (OpenID Connect with PKCE and a nonce, scope `openid`) or Steam (OpenID 2.0, checked
+  back with Steam), by hand with no framework, or with a passkey (`@simplewebauthn/server`, which bundles for Workers
+  without `nodejs_compat`). The server keeps the provider's id of the player and nothing else. A sign-in under way lives
+  10 minutes, once, in `auth_states`, and its `state` also sits in a short `__Host-lc_auth` cookie: the callback needs
+  both, so a provider's answer that reaches another browser goes nowhere. A session is a random token in an HttpOnly
+  `__Host-lc_session` cookie (SameSite=Lax, 400 days); the database keeps its SHA-256, writes its last use at most once
+  an hour, and ends it after a year unused. Every POST and PUT under `/api/auth` and `/api/account` needs an Origin
+  the API allows (the site's own or `DEV_ORIGINS`), and one with none is refused. Starting a sign-in, a passkey
+  ceremony, and typing a link code count against `AUTH_LIMIT` (20 a minute per address); the cloud save against
+  `SAVE_LIMIT` (60 a minute), with its ghosts on a budget of their own.
+- Names on accounts: a device joins with its driver key (`POST /api/account/device`), and every name the key holds
+  joins the account. From then on any key on the account proves any of its names, in the four places a name is proven
+  (uploads, renames, race results, the Creator badge; `api/name-proof.ts`), and a name on an account never lapses. A
+  key taken off the account leaves its names to the account's other keys (their key hash becomes `account:<id>`).
+  Proving another account's sign-in or passkey while signed in folds that account into this one: its sign-ins,
+  passkeys, sessions, names, keys and ghosts move over, and its save waits in `pending_saves` for the next device to
+  combine it. Deleting an account takes its sign-ins, sessions, save and ghosts; its names go back to their keys and
+  lapse as any other, or with "remove my laps" their laps, ghosts and badges go too and their race results stay as an
+  anonymous "Driver". The boards' side of a merge or a deletion runs first, so a failure halfway leaves the account to
+  try again. The deploy workflow applies `migrations-accounts` with the boards' migrations.
 - The weekly challenge and the race times follow from the clock (`src/lib/net/weekly-challenge.ts`,
   `race-schedule.ts`): change the rotation there.

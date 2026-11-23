@@ -12,6 +12,7 @@
  * Provenance, copyright & licenses: see CREDITS.md in repository root.
  */
 
+import { ersKDeployLimitW } from './f12026-car/ers-2026';
 import type { TireCompound } from '@/types/f1';
 import type { LutPoints } from './lut';
 import { F1_RAIN_TYRE_PACK, f1RainTraits, type WetTyreTraits } from './wet-tyres';
@@ -650,21 +651,13 @@ export const LC26_ERS = {
   },
 } as const;
 
-/** Speed (km/h) at which MGU-K deploy starts to taper, and the speed at which it reaches zero */
-const MGUK_TAPER_START_KMH = 290;
-const MGUK_OVERRIDE_TAPER_START_KMH = 337;
-const MGUK_ZERO_KMH = 355;
-
 /**
- * Super-clipping: the MGU-K deploy power ceiling (W) at a road speed. Full 350 kW up to 290 km/h, then a
- * linear taper to zero at 355 km/h. With Manual Override the full power is held to 337 km/h before the same
- * taper. The harvest path is not limited by this.
+ * The MGU-K deploy power ceiling (W) at a road speed, the FIA's 2026 curve (Section C5.2.8): 350 kW to 290 km/h, then
+ * 1800 − 5v kW to 100 kW at 340 and nothing from 345; with Manual Override (Overtake) 7100 − 20v kW, 350 kW to 337.5
+ * km/h and nothing from 355. The harvest path is not limited by this.
  */
 export function mgukDeployCapW(speedKmh: number, overrideActive: boolean): number {
-  const start = overrideActive ? MGUK_OVERRIDE_TAPER_START_KMH : MGUK_TAPER_START_KMH;
-  if (speedKmh <= start) return LC26_ERS.maxPowerW;
-  if (speedKmh >= MGUK_ZERO_KMH) return 0;
-  return (LC26_ERS.maxPowerW * (MGUK_ZERO_KMH - speedKmh)) / (MGUK_ZERO_KMH - start);
+  return ersKDeployLimitW(speedKmh, overrideActive);
 }
 
 // ---------------------------------------------------------------------------

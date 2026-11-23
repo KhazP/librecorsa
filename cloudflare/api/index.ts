@@ -16,6 +16,7 @@
  *   GET /api/stats, GET /api/stats/circuit              tabs in view and drivers to date; a circuit's laps and drivers (stats.ts)
  *   GET /api/stats/popular, GET /api/stats/totals      the most-driven circuits and cars; hours, laps and countries to date (stats.ts)
  *   POST /api/live                a heartbeat from a tab with the game in view, for the live count (presence.ts)
+ *   /api/auth/*, /api/account/*   optional player accounts: sign-in, devices, the cloud save (accounts/)
  * Every feature is optional: with its binding missing or its switch off (wrangler.jsonc `vars`), the config says
  * so and the game falls back to what works without a server.
  *
@@ -38,6 +39,8 @@ import { analyticsConfigured, cloudflareStats } from "./analytics";
 import { turnConfigured } from "./turn";
 import { recordUsage } from "./usage";
 import { circuitStats, driversToDate, popularRanks, siteTotals } from "./stats";
+import { accountProviders, accountsOn, handleAccounts, isAccountsPath, type AccountsDeps } from "./accounts";
+import type { AccountProvider } from "../../src/lib/account/api-types";
 import type { DurableObjectNamespace, Env, RateLimit } from "./types";
 
 export { RaceServer } from "./race";
@@ -53,7 +56,18 @@ export function raceSlotSeconds(env: Env): number {
 }
 
 /** What the game may use online, as the Worker is configured right now */
-export function onlineConfig(env: Env): { rooms: boolean; relay: boolean; races: boolean; board: boolean; raceSlotS: number; usage: boolean; live: boolean } {
+export function onlineConfig(env: Env): {
+  rooms: boolean;
+  relay: boolean;
+  races: boolean;
+  board: boolean;
+  raceSlotS: number;
+  usage: boolean;
+  live: boolean;
+  /** Player accounts, and the ways in offered (src/lib/account/api-types.ts AccountsConfig) */
+  accounts: boolean;
+  accountProviders: AccountProvider[];
+} {
   return {
     rooms: on(env.ONLINE_ROOMS) && Boolean(env.ROOMS),
     relay: on(env.ONLINE_ROOMS) && Boolean(env.ROOMS) && turnConfigured(env),
@@ -62,6 +76,8 @@ export function onlineConfig(env: Env): { rooms: boolean; relay: boolean; races:
     raceSlotS: raceSlotSeconds(env),
     usage: on(env.ONLINE_USAGE) && Boolean(env.BOARD_DB),
     live: on(env.ONLINE_LIVE) && Boolean(env.PRESENCE),
+    accounts: accountsOn(env),
+    accountProviders: accountProviders(env),
   };
 }
 
@@ -144,14 +160,24 @@ async function raceWaiting(races: DurableObjectNamespace, slotS: number, url: UR
   return { startsMs: slot.startsMs, waiting, names };
 }
 
-export async function handleApi(request: Request, env: Env, url: URL): Promise<Response> {
+/** Stand-ins for the checks (scripts/verify-accounts.ts): the accounts' outbound fetch, clock and randomness */
+export interface ApiInjections {
+  accounts?: Partial<AccountsDeps>;
+}
+
+export async function handleApi(request: Request, env: Env, url: URL, inject: ApiInjections = {}): Promise<Response> {
   const origin = allowedOrigin(request, url, env);
   // A browser on another site gets no answer it can read, and no socket
   const foreign = request.headers.has("Origin") && origin === null;
+  const path = url.pathname.replace(/\/+$/, "");
+  // Player accounts (accounts/): their own answers, preflights included (a development origin sends its cookies)
+  if (!foreign && isAccountsPath(path)) {
+    const answer = await handleAccounts(request, env, url, path, origin, inject.accounts);
+    if (answer) return answer;
+  }
   if (request.method === "OPTIONS") return new Response(null, { status: foreign ? 403 : 204, headers: headersFor(origin) });
   if (foreign) return json({ ok: false, error: "Origin not allowed" }, 403, null);
 
-  const path = url.pathname.replace(/\/+$/, "");
   const config = onlineConfig(env);
 
   if (path === "/api/config" && request.method === "GET") return json(config, 200, origin);
@@ -375,7 +401,7 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
       const races = config.races ? env.RACES : undefined;
       try {
         const nextRace = races ? async () => (({ startsMs, waiting }) => ({ startsMs, waiting }))(await raceWaiting(races, config.raceSlotS, url)) : undefined;
-        const answer = await adminStats({ db: env.BOARD_DB, now: Date.now, nextRace }, url);
+        const answer = await adminStats({ db: env.BOARD_DB, now: Date.now, nextRace, accountsDb: config.accounts ? env.ACCOUNTS_DB : undefined }, url);
         return json(answer.body, answer.status, origin);
       } catch (err) {
         // The message only: the request (and so the key) stays out of the logs

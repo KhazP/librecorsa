@@ -15,7 +15,7 @@ import { PAGES } from "../pages.mjs";
 
 const SITE = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO = resolve(SITE, "..");
-const REPO_URL = "https://github.com/KhazP/librecorsa";
+const REPO_URL = "https://github.com/librecorsa/librecorsa";
 
 const CONTENT = join(SITE, "src/content/docs");
 const PUBLIC_FILES = join(SITE, "public/files");

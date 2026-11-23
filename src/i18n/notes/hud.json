@@ -758,5 +758,9 @@
   "hudEditor.resize": "Tooltip on the corner handle that resizes a panel.",
   "hudEditor.resetAll": "Button in the editor's bar: puts every panel of this HUD design back.",
   "hudEditor.cancel": "Button in the editor's bar: closes it and drops the changes made in it.",
-  "hudEditor.done": "Button in the editor's bar: closes it and keeps the changes."
+  "hudEditor.done": "Button in the editor's bar: closes it and keeps the changes.",
+  "speedCluster.lowGrip": "Badge where the Overtake button sits once race control declares Low Grip Conditions (a wet track) under F1's 2026 rules. Short.",
+  "speedCluster.overtakeAuto": "Badge while the game's Automatic Overtake setting is using the car's Overtake. Short.",
+  "speedCluster.overtake2026LockedTitle": "Tooltip. The detection line and activation line are painted lines on the track in F1's 2026 rules.",
+  "touchControls.overtakeShort": "Two-letter abbreviation of Overtake on a small round touch button; keep it two or three letters."
 }

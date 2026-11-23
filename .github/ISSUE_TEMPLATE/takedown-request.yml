@@ -8,7 +8,7 @@ body:
       value: |
         LibreCorsa is a non-commercial fan project and only wants to use assets with their owner's blessing.
         Each asset's author, source and license is listed in
-        [CREDITS.md](https://github.com/KhazP/librecorsa/blob/main/CREDITS.md). If something of yours is
+        [CREDITS.md](https://github.com/librecorsa/librecorsa/blob/main/CREDITS.md). If something of yours is
         uncredited, wrongly licensed or not meant to be here, tell us and it will be fixed or removed,
         usually within 7 days. Removal takes it off the live site; git history may still hold old copies.
   - type: input

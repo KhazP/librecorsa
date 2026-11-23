@@ -7,11 +7,13 @@
  *       -> { name, starts, wins, podiums, bestFinish }
  *
  * The race server stores a race when its result turns final (storeRaceResult). A car's result counts for a driver
- * only when the name it raced under was proven with that name's driver key (the `identify` message, checked against
- * the board's claims in `drivers`); other cars are stored under their name without a claim key and count for nobody.
+ * only when the name it raced under was proven with that name's driver key, or a key on the name's player account (the
+ * `identify` message, checked against the board's claims in `drivers`); other cars are stored under their name without
+ * a claim key and count for nobody.
  */
 import type { OfficialResultRow } from "../../src/lib/net/wire";
 import { driverNameKey, EVENT_ID_RE } from "./board";
+import { accountsOfKeys, keyProvesName, type NameOwner } from "./name-proof";
 import type { D1Database, D1PreparedStatement } from "./types";
 
 type Answer = { status: number; body: unknown };
@@ -38,20 +40,24 @@ export interface RaceEntrant {
   keyHash?: string;
 }
 
-/** The claim key of each entrant whose driver key owns the name it raced under */
+/**
+ * The claim key of each entrant whose driver key owns the name it raced under: the key that claimed it, or a key on
+ * the name's player account (name-proof.ts)
+ */
 export async function provenNameKeys(db: D1Database, entrants: Record<string, RaceEntrant>): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  const claimed = Object.entries(entrants).filter(([, e]) => e.keyHash !== undefined);
+  const claimed = Object.entries(entrants).filter((entry): entry is [string, RaceEntrant & { keyHash: string }] => entry[1].keyHash !== undefined);
   if (claimed.length === 0) return out;
   const keys = [...new Set(claimed.map(([, e]) => driverNameKey(e.name)))];
+  const keyAccounts = await accountsOfKeys(db, claimed.map(([, e]) => e.keyHash));
   const owners = await db
-    .prepare(`SELECT name_key, key_hash FROM drivers WHERE name_key IN (${keys.map(() => "?").join(",")})`)
+    .prepare(`SELECT name_key, key_hash${keyAccounts ? ", account_id" : ""} FROM drivers WHERE name_key IN (${keys.map(() => "?").join(",")})`)
     .bind(...keys)
-    .all<{ name_key: string; key_hash: string }>();
-  const ownerOf = new Map(owners.results.map((r) => [r.name_key, r.key_hash]));
+    .all<NameOwner & { name_key: string }>();
+  const ownerOf = new Map(owners.results.map((r) => [r.name_key, r]));
   for (const [peer, e] of claimed) {
     const key = driverNameKey(e.name);
-    if (ownerOf.get(key) === e.keyHash) out.set(peer, key);
+    if (keyProvesName(ownerOf.get(key), e.keyHash, keyAccounts?.get(e.keyHash))) out.set(peer, key);
   }
   return out;
 }

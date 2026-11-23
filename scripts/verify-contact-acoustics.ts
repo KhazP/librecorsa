@@ -368,6 +368,36 @@ console.log("\n1b. Kerb roar: swelling at the ridge rate, on the side the kerb i
   const at144 = roar(steady({ surface: "kerb", wheelSurfaces: LEFT }), 144, 2);
   check("The same level at 60 and 144 frames a second", Math.abs(at60.l - at144.l) < 1e-9, `${at60.l} / ${at144.l}`);
   check("The roar level peaks at 1 or less, the edge strike included", both.lPeak > 0 && both.lPeak <= 1, `peak ${both.lPeak.toFixed(3)}`);
+
+  // Tone and level by speed: the roar's low-pass and rattle band, and its level, held on the left kerb at `kmh`
+  const atSpeed = (kmh: number) => {
+    const run = start();
+    drive(run, 1, 60, steady({ speedKmh: kmh, speedMs: kmh / 3.6, surface: "kerb", wheelSurfaces: LEFT }));
+    const [l] = roarLevels(run);
+    const filters = run.ctx.nodes.filter((n): n is MockFilter => n instanceof MockFilter && feeds(n, l));
+    const low = filters.find((f) => f.type === "lowpass")?.frequency.last ?? NaN;
+    const rattle = filters.find((f) => f.type === "bandpass")?.frequency.last ?? NaN;
+    return { low, rattle, level: l.gain.last };
+  };
+  const [k60, k120, k144, k250] = [atSpeed(60), atSpeed(120), atSpeed(144), atSpeed(250)];
+  const show = (k: ReturnType<typeof atSpeed>) => `${k.low.toFixed(0)}/${k.rattle.toFixed(0)} Hz`;
+  check(
+    "The roar's tone rises with speed: its low-pass and rattle at 60 < 120 < 250 km/h",
+    k60.low < k120.low && k120.low < k250.low && k60.rattle < k120.rattle && k120.rattle < k250.rattle,
+    `${show(k60)}, ${show(k120)}, ${show(k250)}`
+  );
+  check(
+    "At 120 km/h the roar keeps the tone it was voiced with, 700 / 1600 Hz, whatever the ridge spacing",
+    Math.abs(k120.low - 700) < 1 && Math.abs(k120.rattle - 1600) < 1,
+    `${show(k120)} over ${getActiveSurfaceTable().kerb.bumpLengthM} m ridges`
+  );
+  check(
+    "The roar grows louder with speed, still rising past 144 km/h",
+    k60.level < k120.level && k120.level < k144.level && k144.level < k250.level,
+    [k60, k120, k144, k250].map((k) => k.level.toFixed(3)).join(" < ")
+  );
+  const fastTouch = roar((t) => telemetry(t < 1.5 / 60 ? { speedKmh: 250, speedMs: 250 / 3.6, surface: "kerb", wheelSurfaces: LEFT } : { speedKmh: 250, speedMs: 250 / 3.6 }), 60, 0.25);
+  check("At 250 km/h the edge strike still peaks at 1 or less", fastTouch.lPeak > 0 && fastTouch.lPeak <= 1, `peak ${fastTouch.lPeak.toFixed(3)}`);
 }
 
 console.log("\n2. Each of the rig's four sounds follows its own input");

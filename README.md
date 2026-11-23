@@ -9,6 +9,8 @@
   &nbsp;·&nbsp;
   <a href="https://docs.librecorsa.org/">Docs</a>
   &nbsp;·&nbsp;
+  <a href="https://docs.librecorsa.org/faq/">FAQ</a>
+  &nbsp;·&nbsp;
   <a href="#features">Features</a>
   &nbsp;·&nbsp;
   <a href="#controls">Controls</a>
@@ -19,7 +21,7 @@
 </p>
 
 <p>
-  <a href="https://github.com/KhazP/librecorsa/actions/workflows/deploy-pages.yml"><img alt="Build and deploy" src="https://github.com/KhazP/librecorsa/actions/workflows/deploy-pages.yml/badge.svg" /></a>
+  <a href="https://github.com/librecorsa/librecorsa/actions/workflows/deploy-pages.yml"><img alt="Build and deploy" src="https://github.com/librecorsa/librecorsa/actions/workflows/deploy-pages.yml/badge.svg" /></a>
   <a href="LICENSE"><img alt="AGPL-3.0 license" src="https://img.shields.io/badge/code-AGPL--3.0-CCFF00?labelColor=08090D" /></a>
   <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-F5F7FA?labelColor=08090D&logo=nextdotjs&logoColor=white" />
   <img alt="Three.js" src="https://img.shields.io/badge/Three.js-WebGL2-00E5FF?labelColor=08090D&logo=threedotjs&logoColor=white" />
@@ -58,7 +60,7 @@
 
 ## Download apps
 
-You can play straight in any modern browser at **[librecorsa.org](https://librecorsa.org/)**, or install the optional native wrapper from **[librecorsa.org/download](https://librecorsa.org/download)** / **[GitHub Releases](https://github.com/KhazP/librecorsa/releases/latest)**. Every wrapper opens the live site, so game updates arrive without reinstalling.
+You can play straight in any modern browser at **[librecorsa.org](https://librecorsa.org/)**, or install the optional native wrapper from **[librecorsa.org/download](https://librecorsa.org/download)** / **[GitHub Releases](https://github.com/librecorsa/librecorsa/releases/latest)**. Every wrapper opens the live site, so game updates arrive without reinstalling.
 
 | Platform | Package | Notes |
 | :-- | :-- | :-- |
@@ -179,7 +181,7 @@ Only what the maintainer has driven is marked tested. Everything else is what th
 | Thrustmaster T150, TMX, T500RS | No: a different command set (T150, TMX), or not covered by hid-tmff2 (T500RS) | Expected | Untested |
 | Fanatec CSL Elite | Unknown: without HID PID force feedback the page switches to the bridge | Expected | Untested |
 
-Drove one of these, or a wheel that isn't listed? A [wheel report](https://github.com/KhazP/librecorsa/issues/new?template=wheel-report.yml) moves it into the table.
+Drove one of these, or a wheel that isn't listed? A [wheel report](https://github.com/librecorsa/librecorsa/issues/new?template=wheel-report.yml) moves it into the table.
 
 ---
 
@@ -261,7 +263,7 @@ Every push to `main` runs typecheck and the verify suites, then builds `./out` a
 
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
-The desktop app's Windows installer is built by GitHub Actions from this repository's source (`.github/workflows/release-desktop.yml`) when I push a `desktop-v*` tag, and it's published on the [Releases](https://github.com/KhazP/librecorsa/releases) page. Signing through SignPath Foundation is being set up; until it's in place, the installer is unsigned.
+The desktop app's Windows installer is built by GitHub Actions from this repository's source (`.github/workflows/release-desktop.yml`) when I push a `desktop-v*` tag, and it's published on the [Releases](https://github.com/librecorsa/librecorsa/releases) page. Signing through SignPath Foundation is being set up; until it's in place, the installer is unsigned.
 
 - **Committers and reviewers:** [KhazP](https://github.com/KhazP) (Alp Yalay). I review every pull request from anyone else before it's merged.
 - **Approvers:** [KhazP](https://github.com/KhazP). I approve every signing request by hand.
@@ -272,10 +274,10 @@ The desktop app's Windows installer is built by GitHub Actions from this reposit
 
 - **Code** is under the [GNU Affero General Public License v3.0](LICENSE) or any later version (AGPL-3.0-or-later). You can use it, change it and host it, and if you run a changed version for other people, you share its source under the same licence. Code released before 15 November 2026 stays under the MIT License it came with.
 - **3D models and audio** are for non-commercial, personal and educational use. Each one keeps its own license. This repository carries only RISE Motordrome and the 2026 prototype's model and sound; the rest are served on librecorsa.org for playing there.
-- **Cars**: the 2026 Prototype's body is by **[Qvist Designs](https://qvistdesigns.framer.website/)** (CC BY 4.0), with the steering wheel from **DeX**'s AM26 model ([CC BY 4.0](https://skfb.ly/pKNCK)) and 2025 Pirelli tyres by **Purple Sector**. The Mercedes-AMG GT3 Evo is by **Vecarz** ([CC BY-NC-SA 4.0](https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07)), the BMW M4 GT3 Evo by **Ddiaz Design** ([CC BY-NC-SA 4.0](https://sketchfab.com/3d-models/2025-bmw-m4-gt3-evo-g82-113f83dd87064697a5ec2511d280b9d5)), and the LC-LMDH's body by **kilianhoffmann13** ([CC BY 4.0](https://sketchfab.com/models/d786aa263a804254aa92543dda11dba0)). The MTRacing 496R is by **munyuturbo**, the two Skyline GT-Rs by **[gregsediting](https://www.patreon.com/cw/gregsediting)**, the Suzuki Liana's physics by **alekabul**, the BMW M1 Procar, Volkswagen Scirocco and Porsche 934 by **Pfalzdriver**, the Chaparral 2Ds by **NPanic**, and the GT, prototype and classic racing tyre sidewalls by **sagatron918**, all used with permission.
+- **Cars**: the 2026 Prototype's body is by **[Qvist Designs](https://qvistdesigns.framer.website/)** (CC BY 4.0), with the steering wheel from **DeX**'s AM26 model ([CC BY 4.0](https://skfb.ly/pKNCK)) and 2025 Pirelli tyres by **Purple Sector**. The Mercedes-AMG GT3 Evo is by **Vecarz** ([CC BY-NC-SA 4.0](https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07)), the BMW M4 GT3 Evo by **Ddiaz Design** ([CC BY-NC-SA 4.0](https://sketchfab.com/3d-models/2025-bmw-m4-gt3-evo-g82-113f83dd87064697a5ec2511d280b9d5)), and the LC-LMDH's body by **kilianhoffmann13** ([CC BY 4.0](https://sketchfab.com/models/d786aa263a804254aa92543dda11dba0)). The MTRacing 496R is by **[munyuturbo](https://www.patreon.com/cw/MTRacing651)**, the two Skyline GT-Rs by **[gregsediting](https://www.patreon.com/cw/gregsediting)**, the Suzuki Liana's physics by **alekabul**, the BMW M1 Procar, Volkswagen Scirocco and Porsche 934 by **Pfalzdriver**, the Chaparral 2Ds by **NPanic**, and the GT, prototype and classic racing tyre sidewalls by **sagatron918**, all used with permission.
 - **Circuits**: Chang International Circuit, Okayama International Circuit, Spielberg (Red Bull Ring), Automotodrom Grobnik, Oschersleben and Circuit de Monaco are by **Mitja Bonca**, Barbagallo and VIR by **dazzyb2k3**, Sachsenring, Norisring, Le Mans 1982, Goodwood and Borgloh by **gunnar333**, Watkins Glen, Bridgehampton and Riverside by **LilSki**, SpeedVegas by **Gogol**, Willow Springs by **Nukedrop**, Istanbul Park by **Enver Bozkaya** (SRTR), and Qiddiya Speed Park by **Maxim555** (circuit) and **Zhenix** (scenery), all used with permission. Dunsfold Aerodrome is by **ACU**.
 - **RISE Motordrome**: the circuit, its buildings, stands and props are the project's own, built by `scripts/rwanda-official/` and licensed under [CC BY-NC-SA 4.0](public/tracks/rwanda_official/LICENSE.md): port it or build on it with credit, non-commercially, under the same licence. Its trees are the acacia by **evolveduk** and the shrub by **Natural_Disbuster (lemedesign)**, both CC BY 4.0.
-- **Rights holders**: if you made a model, texture, sound or other asset used here and want it credited, corrected or removed, open a [**rights / takedown request**](https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml). It will be fixed or removed from the live site, usually within 7 days.
+- **Rights holders**: if you made a model, texture, sound or other asset used here and want it credited, corrected or removed, open a [**rights / takedown request**](https://github.com/librecorsa/librecorsa/issues/new?template=takedown-request.yml). It will be fixed or removed from the live site, usually within 7 days.
 
 > [!CAUTION]
 > **No Official Cryptocurrency:** LibreCorsa has no official token or cryptocurrency, and is not related to any third-party actors trying to profit off of this repo. Any coin on crypto sites using the LibreCorsa name, logo, or repository link is unauthorized and unaffiliated with the developer.
