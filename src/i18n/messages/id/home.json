@@ -1,0 +1,221 @@
+{
+  "notice": {
+    "back": "Kembali ke beranda",
+    "notFound": {
+      "title": "Halaman tidak ditemukan",
+      "body": "Tidak ada apa pun di alamat ini. Tautan mungkin sudah kedaluwarsa atau salah ketik."
+    },
+    "error": {
+      "title": "Terjadi kesalahan",
+      "body": "Halaman ini berhenti karena terjadi kesalahan."
+    }
+  },
+  "hub": {
+    "tabs": {
+      "home": "Beranda",
+      "circuits": "Sirkuit",
+      "cars": "Mobil",
+      "laps": "Waktu Lap",
+      "whatsNew": "Yang baru",
+      "download": "Unduh",
+      "about": "Tentang"
+    },
+    "unread": "(pembaruan belum dibaca)",
+    "sections": "Bagian",
+    "skip": "Lewati ke konten",
+    "heading": "LibreCorsa: simulator balap sumber terbuka gratis di browser",
+    "drive": "Mengemudi",
+    "prompts": {
+      "move": "Pindah",
+      "select": "Pilih",
+      "back": "Kembali",
+      "switchSection": "Ganti bagian",
+      "page": "Halaman waktu lap",
+      "drive": "Mengemudi"
+    },
+    "length": "{distance} {unit}, {turns, plural, other {# tikungan}}",
+    "classYear": "{class}, {year}",
+    "footer": "{venue}, {car}",
+    "driveTile": {
+      "label": "Mengemudi: {venue}, {layout}, dengan {car}",
+      "title": "Mengemudi",
+      "detail": "{venue}, {layout}. {car}."
+    },
+    "circuitTile": {
+      "label": "Ganti sirkuit: {venue}, {layout}",
+      "more": "Ganti sirkuit",
+      "map": "Peta {venue}, {layout}",
+      "onLine": "di racing line"
+    },
+    "carTile": {
+      "label": "Ganti mobil: {car}",
+      "more": "Ganti mobil"
+    },
+    "press": {
+      "title": "Pers & media",
+      "label": "Pers & media: {count, plural, other {{n} artikel dan video}}, beserta press kit",
+      "count": "{count, plural, other {{n} artikel & video}}",
+      "onPlatform": "{outlet} di {platform}",
+      "more": "Liputan dan press kit"
+    },
+    "whatsNew": {
+      "intro": "Catatan patch dan pembaruan terbaru.",
+      "commitLog": "Log commit di GitHub",
+      "empty": "Belum ada catatan patch.",
+      "commits": "{count, plural, other {# commit}}"
+    },
+    "filterOption": "{option} ({count})",
+    "clearFilters": "Hapus filter",
+    "venueFilters": {
+      "type": {
+        "label": "Jenis",
+        "all": "Semua jenis"
+      },
+      "country": {
+        "label": "Lokasi",
+        "all": "Semua lokasi"
+      },
+      "modder": {
+        "label": "Modder",
+        "all": "Semua modder"
+      }
+    },
+    "carFilters": {
+      "class": {
+        "label": "Kelas",
+        "all": "Semua kelas"
+      },
+      "physics": {
+        "label": "Fisika",
+        "all": "Semua fisika"
+      },
+      "modder": {
+        "label": "Modder",
+        "all": "Semua modder"
+      }
+    },
+    "circuits": {
+      "filter": "Filter sirkuit",
+      "shown": "{shown} dari {total} sirkuit",
+      "empty": "Tidak ada sirkuit yang cocok dengan filter ini.",
+      "personalBest": "Rekor pribadi",
+      "oldPhysics": "Fisika lama",
+      "carOldPhysics": "{car} · Lama"
+    },
+    "cars": {
+      "filter": "Filter mobil",
+      "shown": "{shown} dari {total} mobil",
+      "empty": "Tidak ada mobil yang cocok dengan filter ini."
+    },
+    "about": {
+      "lead": "Simulator balap browser gratis dan sumber terbuka.",
+      "addMod": "Tambahkan mod milikmu",
+      "addModText": "Kamu sudah membuat mod mobil atau sirkuit dan ingin melihatnya di LibreCorsa? Kirimi aku email di <mail>{email}</mail> beserta tautannya. Setiap modder akan dicantumkan namanya di dalam game.",
+      "modders": "Para modder",
+      "moddersText": "Sirkuit dan mobil adalah karya mereka, digunakan atas izin mereka. Jika kamu menyukai salah satunya, kamu bisa berterima kasih langsung kepada pembuatnya.",
+      "links": {
+        "download": "Unduh aplikasi",
+        "press": "Semua liputan dan press kit",
+        "docs": "Dokumentasi",
+        "privacy": "Privasi",
+        "support": "Traktir aku kopi"
+      }
+    },
+    "facts": {
+      "physics": {
+        "label": "Fisika",
+        "text": "Disimulasikan 500 kali per detik, dengan suhu ban, aero aktif, dan tenaga hibrida"
+      },
+      "racing": {
+        "label": "Balapan",
+        "text": "Hot lap, balapan lawan AI, ruang multipemain, dan papan waktu lap daring"
+      },
+      "controls": {
+        "label": "Kontrol",
+        "text": "Keyboard, kontroler, sentuh, atau setir force feedback"
+      },
+      "platforms": {
+        "label": "Berjalan di",
+        "text": "Browser modern mana saja: komputer, ponsel, atau tablet"
+      },
+      "conditions": {
+        "label": "Kondisi",
+        "text": "Cuaca dan waktu hari sesuai pilihanmu"
+      },
+      "price": {
+        "label": "Harga",
+        "text": "Gratis. Tanpa akun dan tanpa iklan; donasi bersifat opsional dan tidak membuka konten apa pun"
+      }
+    }
+  },
+  "lapTimes": {
+    "loading": "Memuat waktu lap…",
+    "offline": "Waktu lap sedang offline saat ini.",
+    "unreachable": "Papan peringkat tidak terjangkau. Mencoba lagi…"
+  },
+  "boards": {
+    "board": "Papan",
+    "allLaps": "Semua lap",
+    "challenge": "Tantangan mingguan",
+    "hallOfFame": "Hall of Fame",
+    "lapTimesTitle": "Waktu lap",
+    "challengeTitle": "Tantangan mingguan",
+    "week": "Minggu",
+    "thisWeek": "Minggu ini · {circuit}",
+    "pastWeek": "{dates} · {circuit}",
+    "timeLeft": "Tersisa {timeLeft}",
+    "ran": "Berlangsung {dates}",
+    "rules": "Aturan",
+    "emptyThisWeek": "Belum ada waktu yang dicatatkan minggu ini.",
+    "emptyPastWeek": "Tidak ada waktu yang tercatat untuk minggu ini."
+  },
+  "layoutPicker": {
+    "chosen": "Tata letak {venue}: {layout} ({index} dari {count})",
+    "closed": "{venue}: {count, plural, other {# tata letak}}",
+    "count": "{count, plural, other {# tata letak}}",
+    "list": "Tata letak {venue}"
+  },
+  "liveryPicker": {
+    "custom": "Cat Kustom",
+    "chosen": "Livery {car}: {livery} ({index} dari {count})",
+    "chosenCustom": "Livery {car}: Cat Kustom ({count, plural, other {# preset}})",
+    "closed": "{car}: {count, plural, other {# livery}}",
+    "count": "{count, plural, other {# livery}}",
+    "list": "Livery {car}"
+  },
+  "downloads": {
+    "intro": "Pembungkus aplikasi opsional untuk Windows, macOS, Linux, dan Android. Membuka librecorsa.org secara langsung, sehingga pembaruan game langsung tersedia tanpa perlu memasang ulang.",
+    "directLink": "Tautan langsung",
+    "platforms": "Platform",
+    "thisDevice": "Perangkat ini",
+    "installed": "Terpasang",
+    "artifact": "{label} — {platform} ({detail})",
+    "artifactSized": "{label} — {platform} ({detail}, {size})",
+    "detailSized": "{detail}, {size}",
+    "detailPending": "{detail} (diterbitkan pada rilis berikutnya)",
+    "installCommand": "Perintah pemasangan {platform}",
+    "whyInstall": "Mengapa memasang aplikasi",
+    "highlights": {
+      "desktop": {
+        "label": "Desktop",
+        "text": "Meminta GPU diskrit pada laptop multi-GPU, memberi akses WebHID senyap untuk setir balap dan DualSense, menonaktifkan pembatasan latar belakang, dan memeriksa pembaruan di GitHub Releases."
+      },
+      "android": {
+        "label": "Android",
+        "text": "Trusted Web Activity layar penuh tanpa bilah URL browser, gestur tepi imersif, Android Game Mode, serta pintasan peluncur Mengemudi / Papan."
+      },
+      "current": {
+        "label": "Selalu terbaru",
+        "text": "Setiap pembungkus membuka librecorsa.org langsung alih-alih menyertakan sirkuit atau mobil, sehingga pembaruan fisika, sirkuit, dan multipemain langsung tersedia."
+      },
+      "browser": {
+        "label": "Browser & iOS",
+        "text": "Tidak perlu memasang apa pun jika kamu lebih suka bermain langsung di tab. Di iPhone dan iPad, gunakan Bagikan > Tambahkan ke Layar Utama di Safari."
+      }
+    },
+    "buildsTitle": "Build & penandatanganan",
+    "builds": "Semua installer dan APK dibangun dari kode sumber repositori ini oleh GitHub Actions dan diterbitkan di GitHub Releases dengan digest SHA-256. Penandatanganan kode Windows gratis melalui SignPath Foundation sedang disiapkan; build macOS saat ini belum ditandatangani; APK Android ditandatangani dengan kunci unggahan yang diverifikasi oleh <code>{file}</code>.",
+    "allReleases": "Semua rilis di GitHub",
+    "signingPolicy": "Kebijakan penandatanganan kode"
+  }
+}

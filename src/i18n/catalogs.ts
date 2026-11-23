@@ -28,6 +28,7 @@ export const CATALOGS: Record<string, Catalog> = {
   "es": { name: "Español", load: () => import("./messages/es") },
   "fr": { name: "Français", load: () => import("./messages/fr") },
   "pt-BR": { name: "Português (Brasil)", load: () => import("./messages/pt-BR") },
+  "id": { name: "Bahasa Indonesia", load: () => import("./messages/id") },
   // i18n:catalogs (npm run i18n:add writes new languages above this line)
   [PSEUDO_LOCALE]: {
     name: "Pseudo (testing)",

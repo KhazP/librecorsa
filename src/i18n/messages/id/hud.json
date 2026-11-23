@@ -1,0 +1,1062 @@
+{
+  "racesCard": {
+    "region": "Balapan",
+    "description": "{car} · {laps, plural, other {# lap}} · setiap {interval}",
+    "racing": "<big>Go</big> <small>sedang berlangsung</small>",
+    "toStart": "<big>{time}</big> <small>menuju start</small>",
+    "toNextRace": "<big>{time}</big> <small>balapan berikutnya</small>",
+    "entrants": "Di balapan ini",
+    "entered": "Terdaftar. Dimulai otomatis.",
+    "enteredAlone": "Terdaftar. Dimulai otomatis (dengan AI jika belum ada pemain lain).",
+    "leave": "Keluar balapan",
+    "join": "Gabung balapan berikutnya",
+    "rules": "Mobil seragam. Grid ditentukan dari lap terbaik tantangan mingguan.",
+    "nobodyWaiting": "0 menunggu",
+    "waiting": "<b>{count, plural, other {# pembalap}} menunggu</b>",
+    "waitingNames": "<b>{count, plural, other {# pembalap}} menunggu</b>: {names}",
+    "waitingNamesMore": "<b>{count, plural, other {# pembalap}} menunggu</b>: {names} dan {more} lainnya",
+    "topDrivers": "Pembalap terbaik minggu ini",
+    "winsPodiums": "{wins, plural, other {{wins} kemenangan}} · {podiums, plural, other {{podiums} podium}}",
+    "record": "Kamu: {starts, plural, other {{starts} balapan}} · {wins, plural, other {{wins} kemenangan}} · {podiums, plural, other {{podiums} podium}}",
+    "recordBest": "Kamu: {starts, plural, other {{starts} balapan}} · {wins, plural, other {{wins} kemenangan}} · {podiums, plural, other {{podiums} podium}} · terbaik P{best}"
+  },
+  "seatPanel": {
+    "dialog": "Kursi dan kamera, {car}",
+    "title": "Kursi dan kamera",
+    "rows": {
+      "view": "Tampilan",
+      "viewLess": "Tampilan kokpit",
+      "viewMore": "Tampilan dasbor",
+      "fwd": "Maju",
+      "fwdLess": "Mundur",
+      "fwdMore": "Maju",
+      "up": "Tinggi",
+      "upLess": "Turunkan",
+      "upMore": "Naikkan",
+      "right": "Samping",
+      "rightLess": "Geser kiri",
+      "rightMore": "Geser kanan",
+      "tilt": "Kemiringan",
+      "tiltLess": "Miring ke bawah",
+      "tiltMore": "Miring ke atas",
+      "fov": "FOV",
+      "fovLess": "Lebih sempit",
+      "fovMore": "Lebih lebar"
+    },
+    "viewGroup": "Tampilan",
+    "resetView": "Reset tampilan",
+    "done": "Selesai",
+    "prompts": {
+      "row": "Baris",
+      "change": "Ubah",
+      "resetRow": "Reset baris",
+      "resetView": "Reset tampilan",
+      "done": "Selesai"
+    },
+    "savedPerCar": "Disimpan per mobil"
+  },
+  "leaderboardPanel": {
+    "raceGhost": "Balap lawan ghost lap {car} milikmu",
+    "raceGhostTitle": "Balap lawan ghost",
+    "postUnreachable": "Tidak dapat menghubungi papan peringkat",
+    "applySetup": "Terapkan setup dari lap {car} milikmu",
+    "applySetupTitle": "Terapkan setup",
+    "retry": "Coba lagi",
+    "post": "Kirim",
+    "retryAria": "Coba kirim lagi lap ini secara daring",
+    "postAria": "Kirim lap ini secara daring",
+    "retryTitle": "Coba lagi",
+    "postTitle": "Kirim daring",
+    "notPosted": "Belum di papan daring: {error}",
+    "notPostedYet": "Belum ada di papan daring",
+    "driverKey": "Kunci pembalap",
+    "driverKeyIntro": "Mengklaim nama pembalapmu di papan peringkat. Ekspor untuk memakai nama yang sama di perangkat lain; jaga kerahasiaan file ini.",
+    "exportKey": "Ekspor kunci",
+    "importKey": "Impor kunci",
+    "importGhost": "Impor file ghost",
+    "exportBest": "Ekspor terbaikku",
+    "undo": "Urungkan",
+    "dismiss": "Tutup",
+    "onlineTimes": "Waktu daring",
+    "circuit": "Sirkuit",
+    "circuitLaps": "{count, plural, other {{count} lap}}",
+    "allCars": "Semua mobil",
+    "yourBestLaps": "Lap terbaikmu",
+    "physicsVersion": "Versi fisika",
+    "car": "Mobil",
+    "carLaps": "{count, plural, other {{count} lap}}",
+    "noLapsOlder": "Belum ada lap di {circuit} ({board}).",
+    "noLaps": "Belum ada lap tersimpan di {circuit}.",
+    "tableLabel": "Lap terbaik di {circuit}",
+    "carColumn": "Mobil",
+    "theoreticalBest": "Terbaik teoretis",
+    "potential": "Potensi {delta} s",
+    "allBestSectors": "Semua sektor terbaik dalam satu lap",
+    "offline": "Papan peringkat offline. Menampilkan waktu lokal.",
+    "disabled": "Papan peringkat daring nonaktif. Menampilkan waktu lokal."
+  },
+  "boardWidget": {
+    "modes": {
+      "lapEnd": "Buka di akhir lap",
+      "open": "Selalu terbuka",
+      "closed": "Selalu tertutup"
+    },
+    "gear": "Kapan papan waktu lap terbuka",
+    "modeMenu": "Kapan papan waktu lap terbuka",
+    "region": "Papan waktu lap",
+    "fold": "Lipat papan waktu lap",
+    "foldKey": "Lipat papan waktu lap ({key})",
+    "open": "Buka papan waktu lap: {circuit}, {place}",
+    "openNoTime": "Buka papan waktu lap: {circuit}, belum ada waktu",
+    "openKey": "Buka papan waktu lap ({key}): {circuit}, {place}",
+    "openKeyNoTime": "Buka papan waktu lap ({key}): {circuit}, belum ada waktu",
+    "drivers": "{total, plural, other {{count} pembalap}}",
+    "noTimes": "Belum ada waktu.",
+    "placesBetween": "Posisi di antaranya",
+    "lapsDriven": "Lap ditempuh",
+    "noTime": "Belum ada waktu",
+    "place": "P{rank}/{total}"
+  },
+  "multiplayerPanel": {
+    "collision": {
+      "on": "Aktif",
+      "ghostLap1": "Ghost di lap 1",
+      "off": "Mati",
+      "protected": "Terlindung"
+    },
+    "collisionHint": {
+      "on": "Kontak penuh",
+      "ghostLap1": "Tanpa kontak pada lap pembuka",
+      "off": "Mobil saling menembus",
+      "protected": "Ghost di lap 1, lalu mobil yang berbahaya tidak bisa menyentuh mobil lain"
+    },
+    "anyCar": "Mobil apa saja",
+    "startType": {
+      "standing": "Start diam",
+      "rolling": "Start bergulir"
+    },
+    "gridOrder": {
+      "qualifying": "Kualifikasi",
+      "reverse": "Terbalik",
+      "random": "Acak"
+    },
+    "gridOrderHint": {
+      "qualifying": "Lap tercepat di depan; tanpa waktu, sesuai urutan gabung",
+      "reverse": "Kebalikan urutan kualifikasi (atau urutan gabung)",
+      "random": "Diundi saat start"
+    },
+    "presetClassic": "Klasik",
+    "presetClassicHint": "Batas trek berdasarkan pelanggaran: tiap pelanggaran ke-3 +3 s, lalu +5 s",
+    "timeScaleFixed": "Tetap",
+    "qualifyingOff": "Mati",
+    "settings": {
+      "event": "Acara",
+      "race": "Balapan",
+      "rules": "Aturan",
+      "circuit": "Sirkuit",
+      "changeCircuit": "Ganti sirkuit: {circuit}",
+      "change": "Ganti",
+      "circuitHint": "Ubah dari menu utama",
+      "cars": "Mobil",
+      "oneCar": "Satu mobil untuk semua",
+      "classesMixed": "Semua mobil, kelas campuran",
+      "weather": "Cuaca",
+      "timeOfDay": "Waktu hari",
+      "timeSpeed": "Kecepatan waktu",
+      "laps": "Lap",
+      "qualifying": "Kualifikasi",
+      "qualifyingHint": "Lap bersih terbaik menentukan grid",
+      "gridOrder": "Urutan grid",
+      "setByQualifying": "Ditentukan kualifikasi",
+      "start": "Start",
+      "launch": "Peluncuran",
+      "rulePreset": "Aturan",
+      "trackLimits": "Batas trek",
+      "penalties": "Penalti",
+      "penaltiesOn": "Aktif",
+      "penaltiesOff": "Mati",
+      "penaltiesHint": "Tambahan waktu untuk batas trek dan jump start",
+      "damage": "Kerusakan",
+      "collisions": "Tabrakan",
+      "lockedQualifying": "Terkunci selama kualifikasi berlangsung",
+      "lockedRace": "Terkunci selama balapan berlangsung"
+    },
+    "net": {
+      "relayedTitle": "Lalu lintas jaringan melewati host",
+      "relayed": "Diteruskan",
+      "measuring": "Mengukur",
+      "pingLoss": "{ping} ms · {loss}% hilang"
+    },
+    "drivers": {
+      "title": "Pembalap",
+      "host": "Host: {name}",
+      "qualifying": "Kualifikasi",
+      "noCar": "Belum pilih mobil",
+      "noTime": "Belum ada waktu",
+      "wrongClassTitle": "Tidak termasuk kelas ruang ini ({class})",
+      "wrongClass": "Kelas salah",
+      "ready": "Siap",
+      "notReady": "Belum siap",
+      "hostOn": "Host berada di {circuit}",
+      "switchCircuit": "Ganti sirkuit",
+      "wrongCar": "Mobilmu tidak termasuk kelas ruang ini ({class}).",
+      "wrongCarSwitch": "Mobilmu tidak termasuk kelas ruang ini ({class}). Ganti mobil:",
+      "raceInProgress": "Balapan berlangsung",
+      "startRaceNow": "Mulai balapan sekarang",
+      "startQualifying": "Mulai kualifikasi {minutes} mnt",
+      "startRace": "Mulai balapan",
+      "endQualifying": "Akhiri kualifikasi",
+      "endRaceForEveryone": "Akhiri balapan untuk semua",
+      "readyButton": "Siap",
+      "readyUp": "Siap balap",
+      "raceRunning": "Balapan sedang berlangsung.",
+      "qualifyingRunning": "Kualifikasi sedang berlangsung.",
+      "waitingForHost": "Menunggu host memulai.",
+      "confirmEndQualifying": "Akhiri kualifikasi?",
+      "confirmEndRace": "Akhiri balapan untuk semua?",
+      "confirmEndQualifyingButton": "Akhiri kualifikasi",
+      "confirmEndRaceButton": "Akhiri balapan",
+      "keepQualifying": "Lanjutkan kualifikasi",
+      "keepRacing": "Lanjutkan balapan",
+      "confirmBody": "Mengembalikan semua pembalap ke lobi."
+    },
+    "room": {
+      "connected": "{count} terhubung",
+      "connecting": "Menghubungkan",
+      "notConnected": "Tidak terhubung",
+      "title": "Ruang pribadi",
+      "codeAria": "Kode ruang {code}",
+      "codeCaption": "Kode ruang",
+      "linkCopied": "Tautan disalin",
+      "copyLink": "Salin tautan undangan",
+      "share": "Bagikan",
+      "host": "Buat ruang",
+      "joinAnother": "Gabung ruang lain",
+      "joinFriend": "Gabung ruang teman",
+      "codePlaceholder": "Kode ruang",
+      "join": "Gabung",
+      "newRoom": "Ruang baru",
+      "codeTooShort": "Masukkan minimal 3 karakter.",
+      "joinFailed": "Gagal bergabung ke ruang itu. Periksa kodenya.",
+      "shareTitle": "Balapan LibreCorsa",
+      "shareText": "Gabung ke balapanku",
+      "racingAs": "Membalap sebagai {name}",
+      "edit": "Ubah"
+    },
+    "connect": {
+      "more": "Cara terhubung lainnya",
+      "hide": "Sembunyikan",
+      "localTitle": "Tab lokal",
+      "localIntro": "Balapan dengan tab lain di browser ini.",
+      "localConnect": "Hubungkan tab lokal",
+      "manualTitle": "WebRTC manual",
+      "manualIntro": "Peer-to-peer langsung melalui pertukaran token tawaran/jawaban.",
+      "createOffer": "1. Buat tawaran (host)",
+      "acceptOffer": "2. Terima tawaran",
+      "acceptAnswer": "3. Terima jawaban (host)",
+      "offerFailed": "Gagal membuat tawaran.",
+      "badOffer": "Token tawaran tidak valid.",
+      "badAnswer": "Token jawaban tidak valid.",
+      "remoteToken": "Token dari pemain lain",
+      "pasteToken": "Tempel token",
+      "answerAccepted": "Jawaban diterima. Menghubungkan…",
+      "yourToken": "Tokenmu",
+      "copied": "Disalin",
+      "copy": "Salin",
+      "reset": "Reset",
+      "turnTitle": "Relay TURN kustom",
+      "turnIntro": "Server relay opsional untuk jaringan terbatas.",
+      "relayAddress": "Alamat relay",
+      "username": "Nama pengguna",
+      "password": "Kata sandi",
+      "saved": "Tersimpan",
+      "save": "Simpan",
+      "clear": "Hapus",
+      "turnPrefix": "Alamat harus diawali dengan turn: atau turns:",
+      "ownRelay": "Menggunakan server relay milikmu sendiri"
+    }
+  },
+  "pauseMenu": {
+    "tabs": {
+      "label": "Bagian",
+      "session": "Sesi",
+      "hud": "HUD",
+      "conditions": "Kondisi",
+      "garage": "Garasi",
+      "corners": "Tikungan",
+      "multiplayer": "Multipemain",
+      "lapTimes": "Waktu Lap",
+      "feedback": "Masukan"
+    },
+    "actions": {
+      "label": "Menu jeda",
+      "resume": "Lanjutkan",
+      "restartRace": "Mulai ulang balapan",
+      "gridStart": "Start grid",
+      "rollingStart": "Start bergulir",
+      "flyingLap": "Flying lap",
+      "watchReplay": "Tonton tayangan ulang",
+      "skipTrack": "Lewati lagu",
+      "nowPlaying": "{title}, {composer}",
+      "settings": "Pengaturan",
+      "mainMenu": "Menu utama"
+    },
+    "prompts": {
+      "move": "Pindah",
+      "select": "Pilih",
+      "jumpThere": "Lompat ke sini",
+      "tabs": "Tab",
+      "page": "Halaman",
+      "back": "Kembali",
+      "resume": "Lanjutkan"
+    },
+    "header": {
+      "lap": "Lap {lap}",
+      "lapOf": "Lap {lap}/{total}",
+      "run": "Run {lap}",
+      "position": "P{position}/{field}",
+      "online": "Online",
+      "leavesRace": "Keluar dari balapan saat ini.",
+      "leavesRoom": "Keluar dari ruang saat ini.",
+      "endsSession": "Mengakhiri sesi mengemudi saat ini."
+    },
+    "session": {
+      "title": "Sesi",
+      "autopilot": "Autopilot",
+      "key": "Tombol {key}",
+      "camera": "Kamera",
+      "cameraView": "Tampilan kamera",
+      "cycle": "Ganti: {key}",
+      "freeCamera": "Kamera bebas",
+      "freeCameraHint": "Tombol {key} · Seret untuk melihat, WASD terbang, Q/E ketinggian",
+      "freeCameraButton": "Kamera bebas",
+      "exitFreeCamera": "Keluar kam. bebas",
+      "tv": "TV Sisi Trek",
+      "tvHint": "Tombol {key} · Kamera siaran di sisi trek",
+      "tvButton": "TV Sisi Trek",
+      "exitTv": "Keluar TV"
+    },
+    "hud": {
+      "title": "Tata letak HUD",
+      "settings": "Pengaturan HUD"
+    },
+    "corners": {
+      "title": "Tikungan",
+      "mapLabel": "{count, plural, other {Peta sirkuit dengan # tikungan bernomor}}",
+      "turn": "T{turn}",
+      "detail": "{complex} · Sektor {sector}",
+      "pick": "Pilih tikungan",
+      "rowLabel": "T{turn}, tikungan {turn}: {name}, {complex}. Apex {apex} {unit}, gigi {gear}",
+      "gear": "Gigi <n>{gear}</n>"
+    }
+  },
+  "lapSummary": {
+    "title": "{kind, select, run {Run {lap}} other {Lap {lap}}}",
+    "open": "{kind, select, run {Run {lap}: tampilkan data sektor} other {Lap {lap}: tampilkan data sektor}}",
+    "dismiss": "Tutup ringkasan lap",
+    "collapse": "Ciutkan ringkasan lap",
+    "cardLabel": "Ringkasan lap {lap}",
+    "invalid": "Tidak sah",
+    "pb": "PB",
+    "invalidWall": "Tidak sah: menyentuh dinding",
+    "invalidLimits": "Tidak sah: batas trek",
+    "autopilot": "Autopilot: tidak masuk peringkat",
+    "personalBest": "Rekor pribadi",
+    "online": "Online",
+    "onlineRank": "Online: P{rank}",
+    "onlineRankOf": "Online: P{rank} dari {total}",
+    "onlineRankWeek": "Online: P{rank}, P{week} minggu ini",
+    "onlineRankOfWeek": "Online: P{rank} dari {total}, P{week} minggu ini",
+    "invalidUnranked": "Tidak sah · tanpa peringkat",
+    "autopilotUnranked": "Autopilot · tanpa peringkat",
+    "topSpeed": "Maks {unit}",
+    "avgSpeed": "Rata-rata {unit}",
+    "fullThrottle": "Gas penuh",
+    "braking": "Pengereman",
+    "sector": "{mark, select, best {Sektor {n}: terbaik} pb {Sektor {n}: rekor pribadi} slower {Sektor {n}: lebih lambat} other {Sektor {n}}}",
+    "theoreticalBest": "Terbaik teoretis",
+    "posting": "Mengirim",
+    "postingNow": "Mengirim…",
+    "retry": "Unggah ulang",
+    "post": "Kirim daring",
+    "queued": "Dalam antrean",
+    "close": "Tutup",
+    "saveGhost": "Simpan file ghost",
+    "driver": "Pembalap <b>{name}</b>",
+    "rename": "Ubah nama",
+    "driverName": "Nama pembalap",
+    "cancel": "Batal",
+    "saving": "Menyimpan…",
+    "saveName": "Simpan nama",
+    "chart": {
+      "title": "Kecepatan terendah per tikungan",
+      "turn": "T{turn}",
+      "empty": "Tidak ada data tikungan untuk lap ini.",
+      "bar": "T{turn} {name}: {speed} {unit}, {state, select, none {belum ada referensi} same {{delta}, sama dengan terbaik} faster {{delta}, lebih cepat dari terbaik} other {{delta}, lebih lambat dari terbaik}}",
+      "faster": "Lebih cepat",
+      "slower": "Lebih lambat",
+      "same": "Sama"
+    }
+  },
+  "raceResults": {
+    "dialog": "Hasil balapan",
+    "dsq": "DSQ",
+    "dnf": "DNF",
+    "running": "Masih balap",
+    "lapsDown": "{count, plural, other {+# lap}}",
+    "laps": "{count, plural, other {# lap}}",
+    "trackLimits": "Batas trek {count}",
+    "final": "Final",
+    "provisional": "Sementara",
+    "table": "Klasifikasi lengkap",
+    "colPos": "Pos",
+    "colGainedTitle": "Posisi naik atau turun dari grid",
+    "colGained": "Posisi naik",
+    "colDriver": "Pembalap",
+    "colLaps": "Lap",
+    "colTime": "Waktu / gap",
+    "colBest": "Lap terbaik",
+    "penaltyTitle": "Penalti waktu {seconds} s, sudah termasuk dalam total waktu",
+    "promptSelect": "Pilih",
+    "promptClose": "Tutup",
+    "backToLobby": "Kembali ke lobi",
+    "watchReplay": "Tonton tayangan ulang",
+    "restart": "Mulai ulang balapan",
+    "close": "Tutup",
+    "fastestLapIcon": "Lap tercepat",
+    "noChange": "Tidak berubah",
+    "notKnown": "Tidak diketahui",
+    "placesGained": "{count, plural, other {Naik # posisi}}",
+    "placesLost": "{count, plural, other {Turun # posisi}}",
+    "yourRace": "Balapanmu",
+    "position": "P{position}",
+    "disqualified": "Didiskualifikasi",
+    "retired": "Gagal finis",
+    "ofField": "dari {count}",
+    "gridUnknown": "Grid tidak diketahui",
+    "started": "Start P{position}",
+    "fastestLap": "Lap tercepat",
+    "bestLap": "Lap terbaik",
+    "lastRaces": {
+      "title": "Balapan terakhirmu",
+      "date": "Tanggal",
+      "circuit": "Sirkuit",
+      "finish": "Finis",
+      "gained": "Posisi naik",
+      "best": "Lap terbaik",
+      "dnf": "DNF",
+      "position": "P{position}"
+    },
+    "joinNext": "Gabung balapan berikutnya <time>{countdown}</time>"
+  },
+  "podiumOverlay": {
+    "label": "Podium",
+    "first": "Ke-1",
+    "second": "Ke-2",
+    "third": "Ke-3",
+    "skip": "Lewati"
+  },
+  "qualifyingHud": {
+    "clock": "Kualifikasi",
+    "lastLap": "Lap terakhir",
+    "badge": "Kualifikasi",
+    "finishIt": "Selesaikan",
+    "lapDeleted": "Lap dibatalkan",
+    "best": "Terbaik",
+    "grid": "Hasil kualifikasi",
+    "noTime": "Tanpa waktu"
+  },
+  "perfReportCard": {
+    "title": "Laporan performa",
+    "description": "Log waktu frame sesi.",
+    "failed": "Papan klip tidak tersedia. Simpan sebagai file saja.",
+    "copy": "Salin",
+    "copied": "Disalin",
+    "saveFile": "Simpan file",
+    "saved": "Tersimpan"
+  },
+  "qualityNotice": {
+    "lowered": "Grafis diturunkan",
+    "floor": "FPS rendah · batas 30 fps tersedia di Pengaturan"
+  },
+  "multiPageMfd": {
+    "pages": {
+      "elecTag": "ELEC",
+      "elecTitle": "Elektronik",
+      "relTag": "REL",
+      "relTitle": "Relatif",
+      "tyreTag": "BAN",
+      "tyreTitle": "Ban & rem",
+      "fuelTag": "BBM",
+      "fuelTitle": "Bahan bakar & energi",
+      "stndTag": "POS",
+      "stndTitle": "Klasemen"
+    },
+    "panel": "MFD · {page}",
+    "pagesLabel": "Halaman MFD",
+    "pagesHint": "D-pad kiri/kanan, atau Ins: halaman berikutnya",
+    "open": "Buka MFD",
+    "fold": "Lipat MFD",
+    "relative": {
+      "label": "Relatif",
+      "noCars": "Tidak ada mobil di trek",
+      "lapsUp": "+{count}L",
+      "lapsDown": "−{count}L",
+      "ahead": "Di depan",
+      "behind": "Di belakang",
+      "clear": "Kosong",
+      "you": "KAMU"
+    },
+    "fuel": {
+      "battery": "Baterai",
+      "ersPerLap": "ERS / lap",
+      "treadPerLap": "Tapak / lap",
+      "fuel": "Bahan bakar",
+      "lapsOfFuel": "{laps} lap",
+      "perLap": "Per lap",
+      "target": "target {kg}",
+      "lift": "Lepas gas · hemat {kg} kg",
+      "fuelOk": "Bahan bakar cukup"
+    },
+    "tyres": {
+      "label": "Ban dan rem"
+    },
+    "standings": {
+      "label": "Klasemen",
+      "fastestLap": "Lap tercepat",
+      "fastestLapShort": "FL",
+      "lead": "Pimpin",
+      "noLaps": "Belum ada lap",
+      "lapTimes": "Waktu lap"
+    },
+    "pill": {
+      "position": "P{position}/{fieldSize}",
+      "laps": "{count, plural, other {# lap}}"
+    }
+  },
+  "tunerMfdPanel": {
+    "categories": {
+      "bias": "Bias",
+      "diff": "Diff",
+      "pwr": "Daya"
+    },
+    "dials": {
+      "tc1": {
+        "title": "Kontrol traksi",
+        "low": "Lebih selip",
+        "high": "Lebih aman"
+      },
+      "tc2": {
+        "title": "TC cut",
+        "low": "Potongan halus",
+        "high": "Potongan keras"
+      },
+      "abs": {
+        "title": "ABS",
+        "low": "Lebih lambat",
+        "high": "Lebih awal"
+      },
+      "bias": {
+        "label": "Bias",
+        "title": "Brake bias",
+        "low": "Ke belakang",
+        "high": "Ke depan"
+      },
+      "diffEntry": {
+        "label": "Masuk",
+        "title": "Diff masuk",
+        "low": "Lincah",
+        "high": "Stabil"
+      },
+      "diffMid": {
+        "label": "Tengah",
+        "title": "Diff tengah",
+        "low": "Berputar",
+        "high": "Terkunci"
+      },
+      "diffExit": {
+        "label": "Keluar",
+        "title": "Diff keluar",
+        "low": "Lebih jinak",
+        "high": "Lebih traksi"
+      },
+      "engineMap": {
+        "label": "Peta",
+        "title": "Peta mesin",
+        "low": "Lebih tajam",
+        "high": "Lebih halus"
+      },
+      "ersMode": {
+        "title": "Penyaluran ERS",
+        "low": "Pulihkan",
+        "high": "Serang"
+      }
+    },
+    "engineMaps": {
+      "quali": "Kuali",
+      "race": "Balap",
+      "smooth": "Halus",
+      "lean": "Irit",
+      "wet": "Basah"
+    },
+    "ersModes": {
+      "charge": "Isi",
+      "lowSpeed": "Lambat",
+      "balanced": "Seimbang",
+      "race": "Balap",
+      "attack": "Serang"
+    },
+    "phases": {
+      "entry": "Masuk",
+      "mid": "Tengah",
+      "exit": "Keluar"
+    },
+    "chips": {
+      "tc": "TC {level}/{cut}",
+      "tcOff": "TC Mati",
+      "abs": "ABS {level}",
+      "absOff": "ABS Mati",
+      "bias": "BB {bias}"
+    },
+    "hero": {
+      "off": "Mati",
+      "ofMax": "dari {max}",
+      "lock": "{pct}% kunci",
+      "front": "% depan",
+      "map": "M{map}"
+    },
+    "live": {
+      "cut": "Potong",
+      "wheelFl": "FL",
+      "wheelFr": "FR",
+      "wheelRl": "RL",
+      "wheelRr": "RR",
+      "front": "F {bias}",
+      "rear": "R {bias}",
+      "torque": "Torsi",
+      "battery": "Baterai"
+    },
+    "previousDial": "Dial sebelumnya",
+    "previousDialHint": "Dial sebelumnya (D-pad kiri atau ,)",
+    "nextDial": "Dial berikutnya",
+    "nextDialHint": "Dial berikutnya (D-pad kanan atau .)",
+    "lower": "Turunkan {dial}",
+    "lowerHint": "{hint} (D-pad bawah atau -)",
+    "raise": "Naikkan {dial}",
+    "raiseHint": "{hint} (D-pad atas atau =)",
+    "openTuner": "Buka tuner",
+    "foldTuner": "Lipat tuner"
+  },
+  "f12026ChannelsPanel": {
+    "region": "Saluran rekayasa",
+    "wheels": {
+      "lf": "LF",
+      "rf": "RF",
+      "lr": "LR",
+      "rr": "RR"
+    },
+    "wheelTitle": "{wheel}: rasio slip, jarak ke bump rubber, cengkeraman terpakai",
+    "slipRatio": "%SR",
+    "aeroHeightTitle": "Tinggi suspensi aero",
+    "aeroHeight": "Tgi aero",
+    "aeroBalanceTitle": "Keseimbangan aero (porsi downforce depan)",
+    "aeroBalance": "Bal aero",
+    "lsdTitle": "Torsi penguncian diferensial",
+    "lsd": "Kunci LSD",
+    "straightModeTitle": "Status Straight Mode dan pembukaan sesi ini",
+    "drsTitle": "Status DRS dan pembukaan sesi ini",
+    "xMode": "X-mode",
+    "drsState": {
+      "open": "Buka",
+      "armed": "Siaga",
+      "zone": "Zona",
+      "off": "Mati"
+    },
+    "overtakeEarned": "Overtake diperoleh",
+    "overtakeLocked": "Overtake terkunci",
+    "noVerdict": "Belum diputuskan",
+    "zoneEarned": "{zone} diperoleh",
+    "zoneLocked": "{zone} terkunci",
+    "noDetection": "Belum terdeteksi",
+    "wall": "Dinding",
+    "aidIntervening": "{aid}, bekerja"
+  },
+  "touchControls": {
+    "steering": "Kemudi",
+    "drive": "Maju",
+    "reverse": "Mundur",
+    "shiftDown": "Turun gigi",
+    "shiftUp": "Naik gigi",
+    "boost": "Boost",
+    "activeAero": "Aero aktif",
+    "headlights": "Lampu depan",
+    "brake": "Rem",
+    "throttle": "Gas",
+    "steerLeft": "Belok kiri",
+    "steerRight": "Belok kanan",
+    "pause": "Jeda",
+    "camera": "Kamera",
+    "recentreTilt": "Pusatkan kemiringan",
+    "allowMotion": "Izinkan gerak",
+    "tapForTilt": "Ketuk untuk miring",
+    "tiltBlocked": "Miring diblokir · Coba lagi",
+    "noTiltSensor": "Tanpa sensor miring"
+  },
+  "replayBar": {
+    "region": "Kontrol tayangan ulang",
+    "transport": "Pemutaran",
+    "previousFrame": "Frame sebelumnya",
+    "previousFrameTitle": "Frame sebelumnya ({key})",
+    "pause": "Jeda tayangan ulang",
+    "play": "Putar tayangan ulang",
+    "playPauseTitle": "Putar / jeda",
+    "playPauseTitleKey": "Putar / jeda ({key})",
+    "nextFrame": "Frame berikutnya",
+    "nextFrameTitle": "Frame berikutnya ({key})",
+    "jumpToLap": "Lompat ke Lap {lap}",
+    "lapMarker": "L{lap}",
+    "timeline": "Linimasa tayangan ulang",
+    "timelineValue": "{elapsed} dari {duration}",
+    "playbackSpeed": "Kecepatan putar",
+    "focusedCar": "Mobil fokus",
+    "previousCar": "Mobil sebelumnya",
+    "previousCarTitle": "Mobil sebelumnya ({key})",
+    "switchCarTitle": "Ganti mobil fokus ({key})",
+    "nextCar": "Mobil berikutnya",
+    "nextCarTitle": "Mobil berikutnya ({key})",
+    "cameraAngle": "Sudut kamera tayangan ulang",
+    "cycleCamera": "Ganti kamera tayangan ulang",
+    "flashbackTitle": "Flashback — lanjutkan mengemudi dari momen ini ({key}, membatalkan lap saat ini)",
+    "flashback": "Flashback",
+    "exit": "Keluar",
+    "hints": {
+      "freeCam": "Kamera bebas · Seret: lihat · WASD: terbang · Q/E: tinggi · Gulir: kecepatan · R: reset",
+      "playPause": "Putar / jeda",
+      "seek": "Lompat {seconds} s",
+      "step": "Langkah",
+      "switchCar": "Ganti mobil",
+      "freeCamKey": "Kamera bebas",
+      "flashback": "Flashback"
+    }
+  },
+  "timingPanels": {
+    "tower": {
+      "region": "Menara waktu",
+      "lap": "Lap {lap}",
+      "lapOf": "Lap {lap}<dim>/{total}</dim>",
+      "driver": "Pembalap",
+      "gap": "Gap",
+      "interval": "Interval",
+      "lastVsYouTitle": "Lap sebelumnya mereka dibanding milikmu; di barismu, dibanding lap terbaikmu",
+      "lastVsYou": "Lap<br></br>vs kamu",
+      "fastestLap": "Lap tercepat",
+      "fastestLapShort": "FL",
+      "finished": "Finis",
+      "damagedTitle": "Rusak ({percent}%)",
+      "damagedLabel": "Rusak, {percent}%",
+      "out": "Out",
+      "leader": "Pemimpin",
+      "lead": "Pimpin",
+      "lastVsBestTitle": "Lap sebelumnya dibanding terbaikmu",
+      "lastVsTheirsTitle": "Lap sebelumnya mereka dibanding milikmu",
+      "personalBest": "PB"
+    },
+    "lap": {
+      "region": "Lap",
+      "outLap": "Out lap",
+      "counter": "{kind, select, run {Run {lap}} other {Lap {lap}}}",
+      "sector": "S{sector}",
+      "last": "Lalu",
+      "best": "Terbaik",
+      "noRefLap": "Belum ada lap ref",
+      "lastLap": "Lap lalu",
+      "bestLap": "Lap terbaik"
+    },
+    "challenge": {
+      "region": "Tantangan minggu ini",
+      "yourBest": "Terbaikmu",
+      "weekFastest": "Tercepat minggu ini"
+    }
+  },
+  "raceIncidentFeed": {
+    "calls": {
+      "investigation": "Investigasi",
+      "penalty": "Penalti",
+      "noAction": "Tanpa sanksi",
+      "out": "Out",
+      "raceControl": "Pengawas balap",
+      "yellow": "Kuning",
+      "green": "Hijau",
+      "warning": "Peringatan"
+    },
+    "vsc": {
+      "tag": "VSC",
+      "ending": "VSC berakhir",
+      "slowDown": "Pelankan laju",
+      "slowToTarget": "Pelankan ke target",
+      "prepareForGreen": "Bersiap bendera hijau",
+      "noOvertaking": "Dilarang menyalip"
+    },
+    "flag": {
+      "yieldNow": "Beri jalan sekarang · Biarkan {code} lewat",
+      "letThrough": "Biarkan {code} lewat",
+      "doubleYellowCue": "Pelankan laju · dilarang menyalip",
+      "yellowCue": "Dilarang menyalip",
+      "blue": "Biru",
+      "doubleYellow": "Kuning ganda",
+      "yellow": "Kuning"
+    }
+  },
+  "raceControlBanner": {
+    "decisions": {
+      "warning": "Peringatan",
+      "finalWarning": "Peringatan akhir",
+      "penalty": "Penalti",
+      "disqualified": "Didiskualifikasi",
+      "lapInvalid": "Lap dibatalkan",
+      "cleared": "Selesai",
+      "noAdvantage": "Tanpa sanksi"
+    },
+    "warningsMeter": "{count} dari {total} peringatan",
+    "pointsMeter": "{points} dari {allowed} poin batas trek",
+    "giveBack": {
+      "toCar": "Kembalikan posisi ke {code}",
+      "dropTo": "Mundur ke P{position}",
+      "time": "Kembalikan {seconds} s",
+      "slowDown": "Pelankan laju",
+      "underYellow": "Menyalip saat kuning",
+      "illegalOvertake": "Salipan ilegal",
+      "trackLimits": "Batas trek"
+    },
+    "offTrack": {
+      "trackLimits": "Batas trek",
+      "offTrack": "Di luar trek",
+      "underReview": "Sedang ditinjau"
+    }
+  },
+  "startLights": {
+    "startsIn": "Balapan dimulai dalam <n>{seconds}</n>",
+    "lightsLabel": "Lampu start: {lit} dari {total} menyala",
+    "rollingStart": "Start bergulir",
+    "holdPaceSkin": "Tahan kecepatan · <n>{pace}</n> {unit} sampai garis start/finis",
+    "holdPace": "Tahan <n>{pace}</n> {unit} sampai garis",
+    "greenFlag": "Bendera hijau",
+    "lightsOut": "Lampu padam",
+    "chequeredFlag": "Bendera finis"
+  },
+  "launchCue": {
+    "stalledLabel": "Mesin mati: tahan {control} atau pindahkan ke netral untuk menyalakan ulang",
+    "clutch": "kopling",
+    "stalled": "Mesin mati · tahan <control></control> atau N",
+    "jumpStart": "Jump start · +{seconds} s",
+    "manualStart": "Start manual: {clutch, select, held {kopling ditahan} other {tahan kopling}}, {revs, select, up {RPM cukup} other {naikkan RPM}}",
+    "holdNamed": "Tahan {control}",
+    "holdClutch": "Tahan kopling",
+    "revsUp": "Naikkan RPM"
+  },
+  "speedCluster": {
+    "region": "Kluster kecepatan",
+    "minimalRegion": "Kecepatan dan gigi",
+    "shiftLights": "Lampu gigi: {lit} dari {total}",
+    "gearLabel": "Gigi {gear}",
+    "gear": "Gigi",
+    "shift": "Naik gigi",
+    "aeroToggle": "{label}: alihkan",
+    "drsTitle": "DRS ({key}): sayap belakang, di zona DRS; saat balapan hanya jika dalam 1 s di belakang mobil depan di titik deteksi, mulai lap 3",
+    "straightModeTitle": "Straight Mode ({key}): kedua flap terbuka di lintasan lurus; menekan tombol sesaat sebelum lintasan lurus membukanya begitu lintasan lurus dimulai",
+    "overtakeLockedTitle": "Mode Overtake ({keys}): diperoleh jika dalam 1 s di belakang mobil depan di titik deteksi, untuk lap berikutnya",
+    "overtakeTitle": "Mode Overtake ({keys})",
+    "boostTitle": "Boost override manual ({keys})",
+    "overtake": "Overtake",
+    "boost": "Boost",
+    "harvest": "Pulihkan",
+    "deploy": "Salurkan",
+    "ersSoc": "ERS SOC",
+    "lonG": "Lon G",
+    "inputs": "Rem, gas, gaya",
+    "brakeLetter": "B",
+    "brakeTitle": "Input rem",
+    "throttleLetter": "T",
+    "throttleTitle": "Input gas",
+    "forceLetter": "F",
+    "clip": "Clip",
+    "forceTitle": "Torsi kemudi / Force Feedback (Merah = Clipping)",
+    "latG": "{g} g lat",
+    "ersBattery": "Muatan baterai ERS",
+    "rpmBand": "Rentang RPM mesin"
+  },
+  "hudFormat": {
+    "session": {
+      "qualifying": "Kualifikasi",
+      "timeTrial": "Time Trial",
+      "practice": "Latihan"
+    },
+    "cornerShort": "T{turn}",
+    "lapMark": {
+      "best": "Terbaik",
+      "pb": "Rekor pribadi",
+      "slower": "Lebih lambat"
+    }
+  },
+  "thirdPartyData": {
+    "you": "Kamu",
+    "headlight": {
+      "flash": "Kedip",
+      "on": "Aktif",
+      "off": "Mati"
+    },
+    "surface": {
+      "dry": "Kering",
+      "damp": "Lembap",
+      "wet": "Basah",
+      "flooded": "Tergenang"
+    }
+  },
+  "aeroLabel": {
+    "readout": {
+      "noDrs": "Tanpa DRS",
+      "drsOpen": "DRS buka",
+      "drsQueued": "DRS antre",
+      "drsArmed": "DRS siaga",
+      "xMode": "X-MODE",
+      "xQueued": "X antre",
+      "xArmed": "X siaga",
+      "zMode": "Z-MODE"
+    },
+    "notice": {
+      "drsEnabled": "DRS aktif",
+      "drsNotEnabled": "DRS tidak aktif",
+      "drsQueued": "Antre",
+      "xModeBadge": "X-MODE",
+      "straightMode": "Straight Mode",
+      "xModeQueued": "Antre",
+      "overtakeBadge": "Overtake",
+      "overtakeEnabled": "Aktif",
+      "overtakeLocked": "Terkunci"
+    }
+  },
+  "tyreBrakeWidget": {
+    "corner": {
+      "fl": "FL",
+      "fr": "FR",
+      "rl": "RL",
+      "rr": "RR"
+    },
+    "tread": {
+      "inner": "I",
+      "middle": "M",
+      "outer": "O",
+      "title": "Tapak luar, tengah, dalam"
+    },
+    "condition": {
+      "grain": "Grain",
+      "grainTitle": "Graining: permukaan tapak terkoyak (bagian dalam terlalu dingin saat selip)",
+      "blister": "Blister",
+      "blisterTitle": "Blistering: inti ban terlalu panas",
+      "flat": "Flat",
+      "flatTitle": "Flat spot akibat roda mengunci: getaran dan cengkeraman berkurang",
+      "dirt": "Kotor",
+      "dirtTitle": "Kotoran / serpihan karet di luar jalur: bersih kembali setelah beberapa tikungan"
+    },
+    "conditionTitle": "{title} ({level}%)",
+    "brakeTitle": "Cakram rem {disc}{hasCore, select, yes { · inti {core}} other {}}{hasBite, select, yes { · gigitan kampas {bite}%} other {}}",
+    "cardTitle": "Tapak {corner} {temps} (dilihat dari belakang)",
+    "treadLife": "Sisa tapak",
+    "pressureTitle": "Tekanan ({unit})",
+    "windowTitle": "Rentang suhu kerja tapak",
+    "window": "Rentang",
+    "miniTitle": "{corner}: tapak {temps} · {pressure} · rem {brake}{hasCondition, select, yes { · {condition}} other {}}"
+  },
+  "tyrePanel": {
+    "region": "Ban"
+  },
+  "weatherBadge": {
+    "region": "Cuaca",
+    "air": "Udara",
+    "track": "Trek",
+    "rain": "Hujan",
+    "heavyRain": "Hujan deras",
+    "wind": "Angin",
+    "headlightsForcedOn": "Lampu depan dipaksa nyala",
+    "headlightsForcedOff": "Lampu depan dipaksa mati",
+    "headlightsOn": "Lampu depan menyala",
+    "headlightsTitleManualOn": "Lampu depan menyala (manual)",
+    "headlightsTitleManualOff": "Lampu depan mati (manual)",
+    "headlightsTitleAuto": "Lampu depan menyala (otomatis)",
+    "chipFlash": "Kedip",
+    "chipOn": "Aktif",
+    "chipOff": "Mati"
+  },
+  "damageWidget": {
+    "label": "Kerusakan",
+    "out": "Out",
+    "puncture": "Bocor",
+    "title": "Depan {front} · belakang {rear} · kiri {left} · kanan {right}",
+    "titlePunctured": "Depan {front} · belakang {rear} · kiri {left} · kanan {right} · ban bocor",
+    "part": {
+      "frontWing": "Sayap depan",
+      "rearWing": "Sayap belakang",
+      "floor": "Lantai",
+      "suspension": "Suspensi"
+    }
+  },
+  "inputTrace": {
+    "throttle": "Gas",
+    "brake": "Rem",
+    "steering": "Stir",
+    "steeringTitle": "Sudut roda: garis penuh; inputmu: garis putus-putus",
+    "trace": "Grafik gas, rem, dan kemudi: garis putus-putus adalah inputmu, garis utuh sudut roda",
+    "region": "Input"
+  },
+  "pedalBars": {
+    "region": "Pedal dan elektronik",
+    "clutch": "CLU",
+    "clip": "Clip",
+    "steering": "Kemudi"
+  },
+  "splitGaps": {
+    "region": "Selisih waktu",
+    "ahead": "Depan",
+    "behind": "Belakang",
+    "carAhead": "Mobil di depan {driver}: {gap} detik",
+    "carBehind": "Mobil di belakang {driver}: {gap} detik",
+    "goingYourWay": "Menguntungkanmu",
+    "goingAgainstYou": "Merugikanmu",
+    "steady": "Stabil"
+  },
+  "deltaBar": {
+    "label": "Delta terhadap lap referensi",
+    "valueText": "{delta} detik, {trend, select, gaining {makin cepat} losing {makin lambat} other {stabil}}",
+    "noReference": "Belum ada lap referensi"
+  },
+  "ffbMeter": {
+    "title": "Force feedback",
+    "clipping": "Clipping",
+    "inRange": "Normal",
+    "peak": "Puncak <v>{value}%</v>",
+    "setCar": "Atur mobil ini ke {value}%"
+  },
+  "proximityRadar": {
+    "carsClose": "{count, plural, other {# mobil di dekatmu}}{side, select, left {, satu sejajar di kiri} right {, satu sejajar di kanan} both {, satu sejajar di kiri, satu sejajar di kanan} other {}}",
+    "clear": "Radar aman"
+  },
+  "cameraToast": {
+    "freeHintTouch": "Seret untuk melihat sekitar · Gunakan menu Jeda atau kamera Tayangan Ulang untuk keluar",
+    "freeHintKeys": "Seret: lihat · WASD: terbang · Q/E: tinggi · Gulir: kecepatan · R: reset · {key}: keluar"
+  },
+  "ffbPairPrompt": {
+    "region": "Force feedback",
+    "text": "Pasangkan setir untuk force feedback",
+    "connect": "Hubungkan",
+    "dismiss": "Tutup"
+  },
+  "dualSensePairPrompt": {
+    "text": "<b>DualSense terdeteksi</b> · pasangkan untuk pemicu adaptif dan haptik",
+    "pair": "Pasangkan",
+    "dismiss": "Tutup"
+  },
+  "overheadNameplates": {
+    "fastestLap": "FL",
+    "rank": "P{rank}"
+  }
+}

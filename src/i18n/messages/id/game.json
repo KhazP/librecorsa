@@ -1,0 +1,873 @@
+{
+  "sky": {
+    "clear": "Cerah",
+    "lightClouds": "Sedikit Berawan",
+    "partiallyCloudy": "Berawan Sebagian",
+    "mostlyCloudy": "Sebagian Besar Berawan",
+    "overcast": "Mendung",
+    "cloudyDrizzle": "Berawan & Gerimis",
+    "cloudyLightRain": "Berawan & Hujan Ringan",
+    "overcastLightRain": "Mendung & Hujan Ringan",
+    "overcastRain": "Mendung & Hujan",
+    "overcastHeavyRain": "Mendung & Hujan Deras",
+    "overcastStorm": "Mendung & Badai"
+  },
+  "weather": {
+    "nodeStart": "Start",
+    "nodeFinish": "Finis",
+    "clear": "Cerah",
+    "clearDetail": "Kering, cerah",
+    "overcast": "Mendung",
+    "overcastDetail": "Kering, langit kelabu, trek lebih dingin",
+    "lightRain": "Hujan ringan",
+    "lightRainDetail": "Trek basah, ban Intermediate",
+    "heavyRain": "Hujan deras",
+    "heavyRainDetail": "Genangan air, ban Full Wet",
+    "drying": "Mengering",
+    "dryingDetail": "Hujan reda, jalur kering mulai muncul",
+    "dynamic": "Dinamis",
+    "dynamicDetail": "Berubah sepanjang sesi"
+  },
+  "timeOfDay": {
+    "dawn": "Fajar",
+    "morning": "Pagi",
+    "noon": "Siang",
+    "afternoon": "Sore",
+    "goldenHour": "Jam keemasan",
+    "dusk": "Senja",
+    "night": "Malam"
+  },
+  "raceStart": {
+    "assisted": "Dibantu",
+    "manual": "Manual",
+    "assistedHint": "Ditahan di grid sampai lampu padam",
+    "manualHint": "Tahan kopling dan RPM, lepas saat lampu padam (penalti jump start +5 s / +10 s)"
+  },
+  "realism": {
+    "casual": "Kasual",
+    "casualDetail": "Tanpa keausan ban, suhu ban lebih toleran, hujan lebih ringan",
+    "standard": "Standar",
+    "standardDetail": "Keausan ban aktif, suhu ban lebih ringan, sebagian besar efek hujan aktif",
+    "full": "Penuh",
+    "fullDetail": "Model ban dan cuaca basah lengkap, ban dan rem dingin saat keluar garasi"
+  },
+  "raceRules": {
+    "auto": "Otomatis",
+    "openWheel": "Open-wheel",
+    "endurance": "Ketahanan",
+    "autoHint": "Aturan open-wheel untuk mobil formula, aturan ketahanan untuk lainnya",
+    "openWheelHint": "Batas trek berdasarkan pelanggaran: 4 = +5 s, 8 = +10 s, 12 = diskualifikasi",
+    "enduranceHint": "Batas trek berdasarkan poin berbobot: 5 = +5 s, 10 = +10 s, 15 = diskualifikasi",
+    "trackLimitsOn": "Aktif",
+    "trackLimitsOff": "Mati"
+  },
+  "damage": {
+    "off": "Mati",
+    "reduced": "Ringan",
+    "full": "Penuh"
+  },
+  "raceSetup": {
+    "gridBack": "Belakang",
+    "gridMiddle": "Tengah",
+    "gridPole": "Pole",
+    "gridRandom": "Acak",
+    "aiGridPace": "Sesuai kecepatan",
+    "aiGridQualifying": "Kualifikasi",
+    "aiGridReversed": "Terbalik",
+    "startAuto": "Otomatis",
+    "startStanding": "Start diam",
+    "startRolling": "Start bergulir",
+    "standingStart": "start diam",
+    "rollingStart": "start bergulir",
+    "aggressionClean": "Bersih",
+    "aggressionNormal": "Normal",
+    "aggressionHard": "Agresif"
+  },
+  "grip": {
+    "green": "Hijau",
+    "greenDetail": "Aspal baru dicuci, karet ban sangat minim",
+    "light": "Ringan",
+    "lightDetail": "Lapisan karet awal pekan balap",
+    "medium": "Sedang",
+    "mediumDetail": "Alur karet ban sedang",
+    "natural": "Alami",
+    "naturalDetail": "Alur karet standar siap balap",
+    "heavy": "Tebal",
+    "heavyDetail": "Racing line dengan lapisan karet tebal",
+    "saturated": "Jenuh",
+    "saturatedDetail": "Alur karet gelap jenuh penuh"
+  },
+  "aiSkill": {
+    "rookie": "Pemula",
+    "amateur": "Amatir",
+    "pro": "Pro",
+    "alien": "Alien"
+  },
+  "challenge": {
+    "conditions": "Trek kering · {tyres} · Bahan bakar sedikit",
+    "tyresSoft": "Ban Soft",
+    "tyresStreet": "Ban jalan raya",
+    "tyresVintageSlicks": "Ban slick klasik",
+    "tyresSlicks": "Ban slick",
+    "timeLeftDays": "{days} hr {hours} jam",
+    "timeLeftHours": "{hours} jam {minutes} mnt",
+    "timeLeftMinutes": "{minutes} mnt",
+    "placeNoTime": "Belum ada waktu",
+    "placeFirst": "P1 · tercepat minggu ini",
+    "place": "P{place}",
+    "placeGap": "P{place} · {gap} ke P{above}"
+  },
+  "board": {
+    "conditions": "{assists} · {realism} · {surface}",
+    "assistsPro": "Tanpa bantuan",
+    "assistsSemiPro": "Sebagian bantuan",
+    "assistsAssisted": "Dibantu",
+    "realismCasual": "Kasual",
+    "realismStandard": "Standar",
+    "realismFull": "Penuh",
+    "surfaceDry": "Kering",
+    "surfaceWet": "Basah",
+    "renameUnreachable": "Tidak dapat menghubungi papan waktu daring. Coba lagi nanti",
+    "renameFailed": "Nama tidak dapat diubah (HTTP {status})"
+  },
+  "badges": {
+    "weeklyGold": "Emas Mingguan",
+    "weeklySilver": "Perak Mingguan",
+    "weeklyBronze": "Perunggu Mingguan",
+    "fastestLap": "Lap Tercepat",
+    "og": "Pembalap OG",
+    "bulb": "Kontributor Ide",
+    "times": "{badge} ×{count}",
+    "withNote": "{badge} — {note}",
+    "medalDetail": "{place, select, first {Juara 1} second {Juara 2} other {Juara 3}} tantangan mingguan",
+    "medalDetailWeeks": "{place, select, first {Juara 1} second {Juara 2} other {Juara 3}} tantangan mingguan: {weeks}",
+    "recordDetailCount": "Memegang lap tercepat di {count, plural, other {# papan waktu aktif}}",
+    "recordCar": "{car} ×{count}",
+    "recordManual": "+{count} manual",
+    "recordDetail": "{boards} — ketuk untuk melihat sirkuit",
+    "ogDetail": "Mengemudikan LibreCorsa di Fisika V1",
+    "bulbDetailNote": "Kontributor Ide: {note}",
+    "bulbDetail": "Ide atau kontribusi komunitas"
+  },
+  "camera": {
+    "chaseClose": "Chase dekat",
+    "chaseCloseDetail": "Dekat di belakang mobil",
+    "chase": "Chase",
+    "chaseDetail": "Di belakang mobil",
+    "chaseFar": "Chase jauh",
+    "chaseFarDetail": "Jauh di belakang mobil",
+    "chaseLow": "Chase rendah",
+    "chaseLowDetail": "Rendah di belakang sayap belakang",
+    "tvPod": "T-cam",
+    "tvPodDetail": "Di atas helm",
+    "cockpitShoulder": "Bahu",
+    "cockpit": "Kokpit",
+    "cockpitDetail": "Sudut pandang pembalap",
+    "dash": "Dasbor",
+    "dashDetail": "Di depan setir, dasbor terlihat",
+    "nose": "Moncong",
+    "helicopter": "Helikopter",
+    "tvSide": "TV Sisi Trek",
+    "free": "Kamera bebas",
+    "freeDetail": "Terbang bebas mengelilingi sirkuit"
+  },
+  "music": {
+    "poolMenu": "Menu",
+    "poolRace": "Balapan",
+    "poolResults": "Hasil dan tayangan ulang"
+  },
+  "carQuality": {
+    "ownBadge": "Fisika khusus",
+    "own": "Fisika khusus",
+    "ownDetail": "Menggunakan fisika yang dibuat khusus untuk mobil ini.",
+    "sharedBadge": "Fisika bersama",
+    "shared": "Fisika bersama",
+    "sharedDetail": "Menggunakan fisika dari mobil lain di kelas dan era yang sama, sehingga pengendaliannya mengikuti mobil tersebut, bukan mobil ini sendiri.",
+    "eraBadge": "Fisika 2026",
+    "era": "Mobil lama",
+    "eraDetail": "Menggunakan fisika 2026, sehingga pengendaliannya seperti mobil 2026, bukan seperti pada musim aslinya."
+  },
+  "carClass": {
+    "f1": "Formula Open-Wheel",
+    "f1Detail": "Single-seater · DRS / aero aktif",
+    "gt3Detail": "Roda tertutup · ABS / TC",
+    "proto": "Prototipe",
+    "protoDetail": "Roda tertutup · downforce tinggi · TC",
+    "classic": "GT & Touring Klasik",
+    "classicDetail": "Prototipe sport, Group 4, Group A, dan JGTC · 1966–1998",
+    "road": "Mobil jalan raya",
+    "roadDetail": "Legal di jalan raya · ban jalan raya"
+  },
+  "circuitQuality": {
+    "originalBadge": "Orisinal",
+    "original": "Orisinal LibreCorsa",
+    "originalDetail": "Dibuat khusus untuk LibreCorsa dengan permukaan, kerb, elevasi, dan lanskap sisi trek tersendiri.",
+    "simBadge": "Kelas sim",
+    "sim": "Sirkuit kelas sim",
+    "simDetail": "Sirkuit sim buatan tangan, dengan mesh jalan, kerb, pembatas, dan fisika permukaan tersendiri.",
+    "scanBadge": "Pindaian",
+    "scan": "Hasil pindaian",
+    "scanDetail": "Dikonversi otomatis dari model 3D komunitas: jalan, kerb, area run-off, dan pembatas ditelusuri dari mesh, sehingga detailnya bisa berbeda dari sirkuit aslinya."
+  },
+  "circuitType": {
+    "permanent": "Permanen",
+    "street": "Jalan raya",
+    "oval": "Oval",
+    "hillclimb": "Hill climb"
+  },
+  "livery": {
+    "grid2026": "Grid 2026",
+    "retro": "Retro",
+    "colourChalk": "Kapur",
+    "colourCarbon": "Karbon",
+    "colourAlloy": "Aloi",
+    "colourVermilion": "Vermilion",
+    "colourPapaya": "Pepaya",
+    "colourGold": "Emas",
+    "colourVolt": "Volt",
+    "colourEmerald": "Zamrud",
+    "colourCyan": "Sian",
+    "colourCobalt": "Kobalt",
+    "colourIndigo": "Nila",
+    "colourMagenta": "Magenta"
+  },
+  "keyActions": {
+    "throttle": "Gas",
+    "brake": "Rem",
+    "steerLeft": "Belok kiri",
+    "steerRight": "Belok kanan",
+    "boostHold": "Boost (tahan)",
+    "boostLatch": "Boost (toggle)",
+    "aero": "Aero aktif X / Z",
+    "shiftUp": "Naik gigi",
+    "shiftDown": "Turun gigi",
+    "neutral": "Netral",
+    "camera": "Kamera (tahan: kursi & kamera)",
+    "freeCamera": "Kamera bebas",
+    "tvCamera": "Kamera TV Sisi Trek",
+    "racingLine": "Racing line",
+    "mute": "Bisukan",
+    "nextTrack": "Lagu berikutnya",
+    "autopilot": "Autopilot",
+    "mouseSteer": "Kemudi mouse",
+    "restart": "Mulai ulang",
+    "flyingLap": "Ulangi lap (flying start)",
+    "throttleHalf": "Setengah gas (tahan)",
+    "brakeHalf": "Setengah rem (tahan)",
+    "clutch": "Kopling (tahan)",
+    "replay": "Tayangan ulang instan",
+    "mfdPage": "Halaman MFD berikutnya",
+    "mfd": "Buka / tutup MFD",
+    "hud": "Tampilkan / sembunyikan HUD",
+    "board": "Buka / tutup papan waktu lap",
+    "headlights": "Lampu depan nyala / mati",
+    "headlightFlash": "Kedipkan lampu depan (tahan)"
+  },
+  "padActions": {
+    "shiftUp": "Naik gigi",
+    "shiftDown": "Turun gigi",
+    "neutral": "Netral",
+    "boost": "Boost",
+    "aero": "Aero aktif X / Z",
+    "camera": "Kamera (tahan: kursi & kamera)",
+    "freeCamera": "Kamera bebas",
+    "tvCamera": "Kamera TV Sisi Trek",
+    "racingLine": "Racing line",
+    "restart": "Mulai ulang",
+    "flyingLap": "Ulangi lap (flying start)",
+    "pause": "Menu jeda",
+    "mfd": "Buka / tutup MFD",
+    "mfdPage": "Halaman MFD berikutnya",
+    "hud": "Tampilkan / sembunyikan HUD",
+    "board": "Buka / tutup papan waktu lap",
+    "headlights": "Lampu depan (ketuk: kedip, tahan: nyala / mati)",
+    "headlightFlash": "Kedipkan lampu depan (tahan)"
+  },
+  "pedals": {
+    "throttle": "Gas",
+    "brake": "Rem",
+    "clutch": "Kopling",
+    "notSet": "belum diatur",
+    "trigger": "trigger",
+    "stick": "stik {side, select, left {kiri} other {kanan}} ke {way, select, up {atas} down {bawah} left {kiri} other {kanan}}",
+    "pressThrottle": "Tekan gas",
+    "holdButton": "Tahan {button}",
+    "pushStick": "Dorong stik {side, select, left {kiri} other {kanan}} ke {way, select, up {atas} down {bawah} left {kiri} other {kanan}}",
+    "clutchPedal": "pedal kopling",
+    "button": "Tombol {number}"
+  },
+  "padLayouts": {
+    "gt": "Gaya GT",
+    "gtClassic": "GT klasik",
+    "f1": "Gaya Formula",
+    "forza": "Gaya Forza",
+    "bumper": "Gigi di bumper"
+  },
+  "wheelSupport": {
+    "moza": "Terhubung, mengemudi, dan menjalankan force feedback melalui WebHID",
+    "hidPid": "Belum diuji; menggunakan laporan force feedback standar yang sama",
+    "directDrive": "Belum diuji; tanpa force feedback HID PID, halaman akan beralih ke bridge",
+    "pxn": "Belum diuji; HID PID dengan nilai Set Effect tersendiri yang belum terkonfirmasi pada setir PXN",
+    "logitechClassic": "Belum diuji; dimulai di WebHID dengan perintah Logitech klasik seperti yang dikirim hid-lg4ff di Linux, termasuk LED RPM pada G27 dan G29",
+    "logitechHidpp": "Belum diuji; dimulai di WebHID dengan force feedback HID++ seperti yang dikirim hid-logitech-hidpp di Linux, setelah Logitech G HUB mengalihkan setir ke mode PC",
+    "logitechBridgeOnly": "Belum diuji; hanya lewat bridge: belum ada driver Linux mainline yang mendukung G923 untuk PlayStation atau G PRO, dan browser tidak dapat menskalakan ulang sumbu kemudi DFP",
+    "thrustmaster": "Belum diuji; menggunakan perintah hid-tmff2 Linux setelah driver mengeluarkan setir dari mode awal. Jika belum atau Windows menolak perintahnya, bridge akan mengambil alih",
+    "thrustmasterBridgeOnly": "Belum diuji; hanya lewat bridge: T150 dan TMX memakai rangkaian perintah berbeda, dan hid-tmff2 tidak mencakup T500RS",
+    "fanatecCslElite": "Belum diuji; tanpa force feedback HID PID, halaman akan beralih ke bridge",
+    "tested": "Teruji",
+    "expected": "Diperkirakan",
+    "unknown": "Tidak diketahui",
+    "no": "Tidak"
+  },
+  "hudLayouts": {
+    "broadcast": "Siaran TV",
+    "broadcastDetail": "Grafis TV: menara posisi, peta, strip telemetri",
+    "dash": "Dasbor setir",
+    "dashDetail": "Layar setir balap, rendah dan di tengah",
+    "telemetry": "Telemetri",
+    "telemetryDetail": "Dasbor ditambah ban, G, tenaga, dan input",
+    "classic": "Klasik",
+    "classicDetail": "Panel sudut orisinal",
+    "minimal": "Minimalis",
+    "minimalDetail": "Hanya kecepatan, gigi, dan lap",
+    "irdashiesDetail": "Klasemen, penghitung lap, input, dan lampu gigi",
+    "racevisionDetail": "Klasemen, relatif, kapsul input, dan grafik",
+    "h2hDetail": "Mobil di depan dan belakang, gap, dan delta lap",
+    "retroDetail": "Instrumen bernuansa hangat: dial bulat, bilah delta, lap",
+    "blocksDetail": "Blok gelap persegi: catatan waktu, sektor, ban, bahan bakar",
+    "grandPrixDetail": "Menara balapan, kluster kecepatan bulat, gigi, dan input"
+  },
+  "steeringAssist": {
+    "selfSteerStrength": "Self-steer & countersteer",
+    "selfSteerStrengthHint": "Seberapa kuat roda mengikuti arah laju mobil dan menahan selip bagian belakang",
+    "dampingStrength": "Peredaman yaw",
+    "dampingStrengthHint": "Meredam hentakan balik dan ayunan pendulum saat pulih dari selip",
+    "speedSensitivity": "Tenang di kecepatan tinggi",
+    "speedSensitivityHint": "Seberapa banyak kemudi melambat di kecepatan tinggi agar input kecil tetap halus",
+    "slipLimitMargin": "Margin slip ban",
+    "slipLimitMarginHint": "Negatif: bantalan understeer lebih aman · Positif: membiarkan ban depan melewati puncak slipnya",
+    "maxSelfSteerAngleDeg": "Batas countersteer maks.",
+    "maxSelfSteerAngleDegHint": "Sudut belok roda maksimal yang diambil bantuan secara otomatis untuk menangkap selip",
+    "presetBalanced": "Seimbang",
+    "presetStable": "Stabil",
+    "presetLoose": "Longgar",
+    "presetDrift": "Drift",
+    "presetCalm": "Tenang di kecepatan tinggi",
+    "fullLock": "belok penuh",
+    "presetDetail": "self-steer {selfSteer}, peredaman yaw {damping}, tenang di kecepatan tinggi {calm}, ban depan di {grip} % puncak slip, countersteer hingga {cap}"
+  },
+  "support": {
+    "donatePayPal": "Donasi via PayPal",
+    "supportOn": "Dukung di {site}",
+    "donateToVia": "Donasi ke {maker} via {site}",
+    "supportOnSite": "Dukung {maker} di {site}",
+    "donateTo": "Donasi ke {maker}",
+    "supportMaker": "Dukung {maker}"
+  },
+  "setupSheet": {
+    "tcSlip": "TC slip",
+    "tc1": "TC 1",
+    "tcCut": "TC cut",
+    "tc2": "TC 2",
+    "tcSlipAngle": "Sudut slip TC",
+    "abs": "ABS",
+    "engineMap": "Peta mesin",
+    "motorDeployment": "Penyaluran motor",
+    "regeneration": "Regenerasi",
+    "startingFuel": "Bahan bakar awal",
+    "frontWing": "Sayap depan",
+    "rearWing": "Sayap belakang",
+    "diffOnThrottle": "Diferensial saat gas",
+    "diffOffThrottle": "Diferensial lepas gas",
+    "engineBraking": "Engine braking",
+    "frontToe": "Toe depan",
+    "rearToe": "Toe belakang",
+    "frontSuspension": "Suspensi depan",
+    "rearSuspension": "Suspensi belakang",
+    "frontAntiRollBar": "Anti-roll bar depan",
+    "rearAntiRollBar": "Anti-roll bar belakang",
+    "frontRideHeight": "Tinggi suspensi depan",
+    "rearRideHeight": "Tinggi suspensi belakang",
+    "brakePressure": "Tekanan rem",
+    "frontBrakeBias": "Brake bias depan",
+    "brakeMigration": "Migrasi rem",
+    "brakePower": "Daya rem",
+    "brakeBias": "Brake bias",
+    "steeringRatio": "Rasio kemudi",
+    "frontBumpStopRange": "Rentang bump stop depan",
+    "rearBumpStopRange": "Rentang bump stop belakang",
+    "diffPreload": "Preload diferensial",
+    "gearSet": "Set rasio gigi",
+    "frontThirdPacker": "Packer pegas ketiga depan",
+    "rearThirdPacker": "Packer pegas ketiga belakang",
+    "frontBrakeDucts": "Saluran rem depan",
+    "rearBrakeDucts": "Saluran rem belakang",
+    "radiatorOpening": "Bukaan radiator",
+    "frontBump": "Bump depan",
+    "rearBump": "Bump belakang",
+    "frontFastBump": "Bump cepat depan",
+    "rearFastBump": "Bump cepat belakang",
+    "frontRebound": "Rebound depan",
+    "rearRebound": "Rebound belakang",
+    "frontFastRebound": "Rebound cepat depan",
+    "rearFastRebound": "Rebound cepat belakang",
+    "frontThirdSpring": "Pegas ketiga depan",
+    "rearThirdSpring": "Pegas ketiga belakang",
+    "frontThirdBump": "Bump ketiga depan",
+    "rearThirdBump": "Bump ketiga belakang",
+    "frontThirdFastBump": "Bump cepat ketiga depan",
+    "rearThirdFastBump": "Bump cepat ketiga belakang",
+    "frontThirdRebound": "Rebound ketiga depan",
+    "rearThirdRebound": "Rebound ketiga belakang",
+    "frontThirdFastRebound": "Rebound cepat ketiga depan",
+    "rearThirdFastRebound": "Rebound cepat ketiga belakang",
+    "frontCornerPackers": "Packer sudut depan",
+    "rearCornerPackers": "Packer sudut belakang",
+    "frontWheelRate": "Kekakuan pegas depan",
+    "rearWheelRate": "Kekakuan pegas belakang",
+    "frontBumpStopRate": "Kekakuan bump stop depan",
+    "rearBumpStopRate": "Kekakuan bump stop belakang",
+    "frontCamber": "Camber depan",
+    "rearCamber": "Camber belakang",
+    "frontLeftPressure": "Tekanan depan kiri",
+    "frontRightPressure": "Tekanan depan kanan",
+    "rearLeftPressure": "Tekanan belakang kiri",
+    "rearRightPressure": "Tekanan belakang kanan",
+    "tyreBlankets": "Selimut ban",
+    "detached": "Terlepas",
+    "toeIn": "{angle} in",
+    "toeOut": "{angle} out",
+    "dialOff": "Mati",
+    "blanketsOn": "Aktif",
+    "blanketsOff": "Mati",
+    "engineMapMax": "1 · Maks",
+    "engineMapRace": "2 · Balap",
+    "engineMapSmooth": "3 · Halus",
+    "engineMapLean": "4 · Irit",
+    "engineMapSave": "5 · Hemat"
+  },
+  "setupGroups": {
+    "fuel": "Bahan bakar",
+    "aerodynamics": "Aerodinamika",
+    "aerodynamicsShort": "Aero",
+    "transmission": "Transmisi",
+    "transmissionShort": "Trans.",
+    "suspensionGeometry": "Geometri suspensi",
+    "suspensionGeometryShort": "Geometri",
+    "suspension": "Suspensi",
+    "suspensionShort": "Susp.",
+    "dampers": "Damper",
+    "brakes": "Rem",
+    "tyres": "Ban",
+    "electronics": "Elektronik",
+    "electronicsShort": "Elektr.",
+    "mechanicalGrip": "Cengkeraman mekanis",
+    "mechanicalGripShort": "Mek.",
+    "thirdElements": "Elemen ketiga",
+    "thirdElementsShort": "Ke-3",
+    "aero": "Aero",
+    "fuelShort": "B. bakar",
+    "dampersShort": "Damper",
+    "brakesShort": "Rem",
+    "tyresShort": "Ban",
+    "aeroShort": "Aero"
+  },
+  "setupFx": {
+    "frontWing": {
+      "more": "Cengkeraman depan lebih kuat saat kencang, belakang lebih liar",
+      "less": "Belakang lebih tenang, understeer lebih besar di kecepatan tinggi"
+    },
+    "rearWing": {
+      "more": "Lebih stabil dan traksi lebih baik, hambatan udara bertambah",
+      "less": "Lebih kencang di lintasan lurus, belakang lebih gugup"
+    },
+    "diffOn": {
+      "more": "Dorongan lebih kuat, rentan power oversteer",
+      "less": "Lebih lembut pada ban belakang, roda dalam mudah selip"
+    },
+    "diffOff": {
+      "more": "Stabil saat lepas gas, agak menahan saat masuk tikungan",
+      "less": "Lebih mudah berputar saat masuk tikungan, bisa terasa longgar"
+    },
+    "engineBraking": {
+      "more": "Pengereman belakang lebih kuat saat lepas gas, membantu berputar",
+      "less": "Lebih tenang saat lepas gas, jarak pengereman lebih panjang"
+    },
+    "camberFront": {
+      "more": "Cengkeraman depan lebih baik di tengah tikungan",
+      "less": "Pengereman lebih baik, keausan lebih merata"
+    },
+    "camberRear": {
+      "more": "Cengkeraman samping belakang lebih baik",
+      "less": "Traksi lebih baik keluar dari tikungan lambat"
+    },
+    "toeFront": {
+      "more": "Lebih tenang di lintasan lurus, masuk tikungan agak lamban",
+      "less": "Masuk tikungan lebih tajam, mudah goyah di kecepatan tinggi"
+    },
+    "toeRear": {
+      "more": "Belakang lebih stabil, sedikit tambah hambatan udara",
+      "less": "Lebih mudah berputar, kurang stabil"
+    },
+    "springFront": {
+      "more": "Respons lebih tajam, cengkeraman di permukaan bergelombang berkurang",
+      "less": "Cengkeraman depan lebih baik di permukaan bergelombang"
+    },
+    "springRear": {
+      "more": "Lebih mudah berputar, traksi berkurang",
+      "less": "Traksi lebih baik, rotasi agak lamban"
+    },
+    "arbFront": {
+      "more": "Perubahan arah lebih cepat, lebih understeer",
+      "less": "Cengkeraman depan lebih baik di tengah tikungan"
+    },
+    "arbRear": {
+      "more": "Rotasi lebih tajam, traksi keluar tikungan berkurang",
+      "less": "Cengkeraman belakang lebih baik, lebih understeer"
+    },
+    "rideFront": {
+      "more": "Lebih aman melibas kerb, downforce berkurang",
+      "less": "Downforce lebih besar, lantai mobil bisa kehilangan efek hisap"
+    },
+    "rideRear": {
+      "more": "Rake lebih tinggi: lebih tajam, belakang lebih liar",
+      "less": "Belakang lebih tenang, lebih understeer"
+    },
+    "brakePressure": {
+      "more": "Pengereman lebih singkat, roda lebih cepat mengunci",
+      "less": "Lebih mudah diatur, jarak pengereman lebih panjang"
+    },
+    "bias": {
+      "more": "Pengereman stabil, roda depan mengunci lebih dulu",
+      "less": "Berputar saat masuk tikungan, roda belakang mengunci lebih dulu"
+    },
+    "migration": {
+      "more": "Berputar saat trail braking",
+      "less": "Keseimbangan tetap terjaga saat pedal rem dilepas"
+    },
+    "coldPsi": {
+      "more": "Lebih cepat panas, cengkeraman puncak berkurang",
+      "less": "Cengkeraman lebih tinggi, lebih lambat memanas"
+    },
+    "blankets": {
+      "more": "Ban sudah hangat sejak tikungan pertama",
+      "less": "Dingin saat keluar garasi, panaskan di out lap"
+    },
+    "tc": {
+      "more": "Roda jarang selip, keluar tikungan lebih lambat",
+      "less": "Keluar tikungan lebih cepat, bagian belakang bisa bergeser"
+    },
+    "tc2": {
+      "more": "Pemotongan keras: menahan selip dengan tegas",
+      "less": "Pemotongan halus: mempertahankan lebih banyak dorongan"
+    },
+    "abs": {
+      "more": "Tidak mengunci, jarak pengereman lebih panjang",
+      "less": "Pengereman lebih singkat jika kamu presisi"
+    },
+    "map": {
+      "more": "Gas lebih lembut, tenaga lebih kecil",
+      "less": "Tenaga penuh, respons gas lebih tajam"
+    },
+    "steerRatio": {
+      "more": "Kemudi lebih lambat, sudut belok lebih kecil",
+      "less": "Kemudi lebih cepat, sudut belok lebih besar"
+    },
+    "wheelRateFront": {
+      "more": "Bagian depan lebih tajam, cengkeraman di gundukan berkurang",
+      "less": "Cengkeraman depan lebih baik di permukaan bergelombang"
+    },
+    "wheelRateRear": {
+      "more": "Lebih mudah berputar, traksi berkurang",
+      "less": "Traksi lebih baik, rotasi agak lamban"
+    },
+    "bumpStopRate": {
+      "more": "Lebih keras saat menyentuh bump stop",
+      "less": "Pendaratan lebih lembut pada bump stop"
+    },
+    "bumpStopRange": {
+      "more": "Jarak main suspensi lebih panjang sebelum bump stop",
+      "less": "Lebih cepat menyentuh bump stop, bodi lebih rata"
+    },
+    "preload": {
+      "more": "Stabil di tikungan cepat, sedikit understeer di tikungan lambat",
+      "less": "Berputar saat masuk tikungan, keluar tikungan lebih liar"
+    },
+    "bump": {
+      "more": "Gerakan bodi berkurang, lebih keras di gundukan",
+      "less": "Meredam gundukan, bodi bergerak lebih banyak"
+    },
+    "fastBump": {
+      "more": "Keras saat melibas kerb",
+      "less": "Menyerap kerb dengan baik"
+    },
+    "rebound": {
+      "more": "Beban kembali perlahan, keluar tikungan stabil",
+      "less": "Ban mengikuti permukaan jalan lebih baik"
+    },
+    "fastRebound": {
+      "more": "Roda turun lebih lambat setelah kerb",
+      "less": "Roda cepat kembali menapak"
+    },
+    "ductFront": {
+      "more": "Rem depan lebih dingin, hambatan udara bertambah",
+      "less": "Rem depan lebih panas, hambatan udara berkurang"
+    },
+    "ductRear": {
+      "more": "Rem belakang lebih dingin, hambatan udara bertambah",
+      "less": "Rem belakang lebih panas, hambatan udara berkurang"
+    },
+    "radiator": {
+      "more": "Mesin lebih dingin, hambatan udara bertambah",
+      "less": "Hambatan udara berkurang, mesin lebih panas"
+    },
+    "gearSet": {
+      "more": "Gigi panjang: kecepatan puncak di lintasan lurus panjang",
+      "less": "Gigi pendek: akselerasi lebih cepat dari tikungan lambat"
+    },
+    "heaveSpring": {
+      "more": "Bodi lebih rata di kecepatan tinggi, lebih keras di gundukan",
+      "less": "Meredam gundukan, lantai mobil bergerak lebih banyak"
+    },
+    "heavePacker": {
+      "more": "Jarak main lebih panjang sebelum packer",
+      "less": "Packer menahan lantai mobil lebih cepat"
+    },
+    "cornerPacker": {
+      "more": "Bump stop bekerja lebih cepat, lebih rata di tikungan",
+      "less": "Jarak main bebas lebih panjang, bodi lebih miring"
+    },
+    "tcSlipAngle": {
+      "more": "Memotong tenaga lebih cepat saat belakang selip",
+      "less": "Membiarkan belakang meluncur lebih jauh saat digas"
+    },
+    "motorDeploy": {
+      "more": "Dorongan listrik lebih kuat, menguras baterai",
+      "less": "Menghemat daya, dorongan lebih kecil"
+    },
+    "regen": {
+      "more": "Pemulihan daya lebih besar, pengereman belakang lebih kuat",
+      "less": "Belakang lebih tenang saat mengerem, pemulihan daya lebih kecil"
+    },
+    "fuel": {
+      "more": "Stint lebih panjang, lebih berat dan lambat",
+      "less": "Lebih ringan dan cepat, stint lebih pendek"
+    }
+  },
+  "padFeel": {
+    "smooth": "Halus",
+    "smoothDetail": "Kemudi lebih lambat dan tenang",
+    "default": "Bawaan",
+    "defaultDetail": "Respons seimbang",
+    "sharp": "Tajam",
+    "sharpDetail": "Masuk tikungan cepat"
+  },
+  "tyres": {
+    "street": "Ban jalan raya"
+  },
+  "setupShare": {
+    "aeroLow": "Hambatan rendah",
+    "aeroBalanced": "Aero seimbang",
+    "aeroHigh": "Downforce tinggi",
+    "soft": "Soft",
+    "medium": "Medium",
+    "hard": "Hard",
+    "intermediate": "Inter",
+    "wet": "Wet",
+    "chassisChanges": "{count, plural, other {# perubahan sasis}}",
+    "brakeBias": "BB {bias}%",
+    "baseline": "Setup dasar",
+    "factoryLowDrag": "Hambatan rendah"
+  },
+  "trackLimits": {
+    "flashbackDeleted": "Flashback · lap dibatalkan",
+    "currentAndNextInvalid": "Lap saat ini & berikutnya dibatalkan",
+    "currentInvalid": "Lap saat ini dibatalkan",
+    "courseCutDeleted": "Memotong jalur · lap dibatalkan",
+    "penaltyOnceBack": "Penalti waktu setelah kembali ke trek",
+    "leftLapRoad": "Keluar dari lintasan lap",
+    "noTimeGained": "Tidak ada keuntungan waktu",
+    "courseCutPenalty": "Memotong jalur · penalti waktu +{seconds}s",
+    "secondsGained": "Keuntungan {seconds} s",
+    "lapDeleted": "Lap dibatalkan",
+    "wallDeleted": "Menyentuh dinding · lap dibatalkan",
+    "rodeWallBeforeLine": "Menempel dinding sebelum garis finis",
+    "limitsDeleted": "Batas trek · lap dibatalkan",
+    "offBeforeLine": "Keluar trek sebelum garis finis",
+    "nextLapToo": "Lap berikutnya juga",
+    "offTrack": "Keluar trek",
+    "touchedBarrier": "Menyentuh pembatas",
+    "rodeWall": "Menempel dinding",
+    "positionHandedBack": "Posisi dikembalikan",
+    "advantageGivenBack": "Keuntungan dikembalikan",
+    "noFurtherAction": "Tidak ada tindakan lanjutan",
+    "trackLimits": "Batas trek",
+    "noAdvantage": "Tidak ada keuntungan · tanpa penalti",
+    "timePenalty": "Penalti waktu +{seconds}s",
+    "limitsGained": "Batas trek · keuntungan {seconds} s",
+    "limitsCutMetres": "Batas trek · memotong {metres} m",
+    "limitsMajorCut": "Batas trek · pemotongan besar",
+    "why": "{reason, select, illegal_overtake {Salipan ilegal · posisi belum dikembalikan} corner_cut {Memotong tikungan} not_lifted {Tidak melepas gas} other {Mendapat keuntungan waktu}}",
+    "limitsWhy": "Batas trek · {reason, select, illegal_overtake {salipan ilegal · posisi belum dikembalikan} corner_cut {memotong tikungan} not_lifted {tidak melepas gas} other {mendapat keuntungan waktu}}",
+    "warningCount": "Batas trek · peringatan {count}/{max}",
+    "points": "{points} poin",
+    "strikes": "{count, plural, other {# pelanggaran}}",
+    "disqualified": "Didiskualifikasi · batas trek",
+    "limitsPoints": "Batas trek · {points}",
+    "blackWhiteFlag": "Bendera hitam-putih",
+    "nextPenalty": "{why} · berikutnya +{seconds} s",
+    "nextDisqualification": "{why} · berikutnya diskualifikasi",
+    "warning": "Batas trek · peringatan",
+    "warningDetail": "{why} · {points}"
+  },
+  "flags": {
+    "yellow": "Bendera kuning",
+    "trackClear": "Trek aman",
+    "carStopped": "Mobil berhenti di depan",
+    "slowCar": "Mobil lambat di depan",
+    "wrongWay": "Mobil melawan arah",
+    "carOffTrack": "Mobil keluar trek di depan",
+    "incident": "Insiden di depan"
+  },
+  "connection": {
+    "raceClosed": "Balapan itu segera dimulai. Kamu tepat waktu untuk balapan berikutnya.",
+    "raceFull": "Balapan itu sudah penuh. Gabung ke balapan berikutnya.",
+    "raceStarted": "Balapan itu sudah dimulai tanpamu. Gabung ke balapan berikutnya.",
+    "raceTaken": "Kamu sudah berada di balapan ini pada jendela lain.",
+    "raceBad": "Gagal bergabung ke balapan. Muat ulang game dan coba lagi.",
+    "raceUpdate": "LibreCorsa telah diperbarui. Muat ulang halaman untuk bergabung ke balapan.",
+    "versionMismatch": "Ruang ini menjalankan versi LibreCorsa yang berbeda. Semua pemain di dalamnya perlu memuat ulang halaman.",
+    "roomServerUnreachable": "Tidak dapat menghubungi server ruang. Periksa koneksimu dan coba lagi, atau gunakan koneksi manual di bawah Lanjutan.",
+    "idle": "Buat ruang dan kirim tautannya, atau gabung dengan kode temanmu.",
+    "openingRoom": "Membuka ruang {code}…",
+    "reconnectingRoom": "Menghubungkan ulang ke ruang {code}…",
+    "roomOpen": "Ruang {code} terbuka • menunggu pemain",
+    "sessionActive": "ID sesi ini sudah aktif di ruang. Tunggu sebentar lalu coba buat ruang lagi.",
+    "roomOpenElsewhere": "Ruang {code} sudah terbuka di perangkat lain. Tekan Gabung untuk ikut balapan, atau buat ruang baru.",
+    "joiningRoom": "Bergabung ke ruang {code}…",
+    "roomNotFound": "Ruang {code} tidak ditemukan. Periksa kodenya, dan minta host tetap membuka game di layar.",
+    "playerIdTaken": "ID pemain ini sudah ada di ruang. Tunggu sebentar lalu coba gabung lagi.",
+    "roomFull": "Ruang {code} penuh.",
+    "connectedPlayers": "{count, plural, other {Terhubung dengan # pemain}}",
+    "peerFailed": "Tidak dapat terhubung ke pemain lain. Coba lagi, atau gunakan Wi-Fi yang sama.",
+    "peerBlocked": "Tidak dapat terhubung: salah satu jaringan memblokir koneksi langsung. Gunakan Wi-Fi yang sama, atau coba jaringan lain.",
+    "lostHost": "Koneksi ke host terputus. Gabung lagi.",
+    "hostingTabs": "Menjadi host balapan untuk tab-tab di browser ini",
+    "playerLeft": "Pemain keluar. Buat kode tawaran baru untuk terhubung lagi.",
+    "connected": "Terhubung",
+    "joiningRace": "Bergabung ke balapan berikutnya…",
+    "inNextRace": "Terdaftar di balapan berikutnya",
+    "makingOffer": "Membuat kode tawaran…",
+    "offerReady": "Kode tawaran siap. Kirim ke pemain lain, lalu tempel kode jawabannya.",
+    "answerReady": "Kode jawaban siap. Kirim kembali ke host.",
+    "answerAccepted": "Jawaban diterima • menghubungkan…",
+    "raceServerUnreachable": "Tidak dapat menghubungi server balapan. Periksa koneksimu dan coba lagi.",
+    "racesOff": "Balapan terjadwal sedang tidak berlangsung saat ini.",
+    "raceLost": "Koneksi ke balapan terputus.",
+    "ready": "Siap. Tab di browser ini saling menemukan otomatis; perangkat lain bergabung dengan kode ruang."
+  },
+  "downloads": {
+    "windowsSummary": "Aplikasi desktop dengan prioritas GPU diskrit, WebHID senyap untuk setir balap dan DualSense, dan tanpa pembatasan latar belakang.",
+    "windowsInstallNote": "Belum ditandatangani sementara penyiapan SignPath Foundation selesai. Jika SmartScreen menahannya, klik Info selengkapnya, lalu Tetap jalankan.",
+    "windowsStatusLabel": "Belum ditandatangani",
+    "windowsX64Label": "Unduh .exe",
+    "windowsX64Detail": "Installer Windows x64",
+    "macosSummary": "Aplikasi desktop dengan prioritas GPU diskrit, WebHID senyap untuk setir balap dan DualSense, dan tanpa pembatasan latar belakang.",
+    "macosInstallNote": "Versi belum ditandatangani. Izinkan di Pengaturan Sistem > Privasi & Keamanan, atau hapus karantina setelah disalin ke Aplikasi:",
+    "macosStatusLabel": "Belum ditandatangani",
+    "macosArm64Label": "Apple Silicon (.dmg)",
+    "macosArm64Detail": "Mac M1–M4",
+    "macosX64Label": "Intel (.dmg)",
+    "macosX64Detail": "Mac Intel x64",
+    "linuxSummary": "AppImage portabel dengan WebHID senyap untuk setir balap dan DualSense, dan tanpa pembatasan latar belakang.",
+    "linuxInstallNote": "Tandai AppImage sebagai dapat dieksekusi lalu jalankan (membutuhkan FUSE2 / libfuse2 di distro lama):",
+    "linuxX64Label": "Unduh .AppImage",
+    "linuxX64Detail": "Linux x64",
+    "androidSummary": "Trusted Web Activity layar penuh dengan kontrol imersif, Android Game Mode, dan pintasan peluncur. Memerlukan Android 7+ dan Chrome.",
+    "androidInstallNote": "APK rilis bertanda tangan. Izinkan pemasangan dari browser saat diminta; aplikasi diverifikasi terhadap librecorsa.org dan terbuka tanpa bilah URL.",
+    "androidStatusLabel": "APK bertanda tangan",
+    "androidApkLabel": "Unduh .apk",
+    "androidApkDetail": "Android 7+ (universal)"
+  },
+  "loading": {
+    "circuit": "Sirkuit",
+    "car": "Mobil",
+    "opponents": "Lawan",
+    "shaders": "Shader"
+  },
+  "session": {
+    "wheelDisconnected": "Setir terputus. Sambungkan kembali, atau lanjutkan mengemudi dengan kontrol yang tersedia.",
+    "bigJumpStart": "Jump start · jauh keluar dari kotak grid",
+    "jumpStart": "Jump start",
+    "clutchGearUp": "Naik gigi",
+    "clutchPaddle": "paddle naik gigi"
+  },
+  "driverKey": {
+    "notAKeyFile": "Itu bukan file kunci pembalap",
+    "blocked": "Browser ini memblokir penyimpanannya"
+  },
+  "simulator": {
+    "formulaTeamCars": "Mobil tim Formula",
+    "lapNoLongerSaved": "Lap ini tidak lagi tersimpan di sini",
+    "nameNotChanged": "Nama tidak dapat diubah",
+    "setupLoadFailed": "Gagal memuat setup milik {driver}, coba lagi",
+    "setupMissing": "Tidak ada setup tersimpan pada lap milik {driver}",
+    "setupApplied": "Setup milik {driver} diterapkan ({summary})",
+    "keySaved": "Kunci tersimpan. Siapa pun yang memiliki file ini dapat mengirim waktu atas namamu.",
+    "noKeyYet": "Belum ada kunci: unggahan pertamamu akan membuatnya.",
+    "keyImportedFor": "Kunci diimpor untuk {name}. Unggahan dari sini akan memakainya.",
+    "keyImported": "Kunci diimpor. Unggahan dari sini akan memakainya.",
+    "launchWheel": "Injak gas untuk meluncur",
+    "launchWheelSeat": "Injak gas untuk meluncur · tahan tombol kamera untuk atur kursi",
+    "launchPad": "{press} untuk meluncur",
+    "launchPadSeat": "{press} untuk meluncur · tahan {button} untuk atur kursi",
+    "launchTouch": "Tahan gas untuk meluncur",
+    "launchKey": "Tahan {key} untuk meluncur · Esc Menu",
+    "noRacesOnHillClimb": "Tidak ada balapan di lintasan hill climb",
+    "backToRaces": "Kembali ke daftar balapan"
+  },
+  "telemetryHud": {
+    "menu": "Menu",
+    "calibratePedals": "Kalibrasi pedal",
+    "holdForLightsOut": "Tahan gas hingga lampu padam",
+    "mouseSteering": "Kemudi mouse · {key} untuk keluar",
+    "keyMenu": "Menu",
+    "keyCamera": "Kamera",
+    "keyLine": "Garis",
+    "keyRestart": "Mulai ulang",
+    "keyBoard": "Papan",
+    "keyLights": "Lampu",
+    "replay": "Tayangan ulang"
+  },
+  "trackGate": {
+    "safeStart": "Mode aman aktif setelah reset GPU.",
+    "graphicsLow": "Grafis diatur ke Rendah setelah reset GPU.",
+    "loadFailedStaying": "Gagal memuat sirkuit. Tetap di {circuit}.",
+    "loadFailedDefault": "Gagal memuat sirkuit. Memuat {circuit}."
+  },
+  "minimap": {
+    "map": "Peta sirkuit",
+    "mapAtTurn": "Peta sirkuit; kamu berada di tikungan {turn}",
+    "facts": "{country} · {length} {unit} · {turns, plural, other {# tikungan}}",
+    "sector": "Sektor {sector}",
+    "elevation": "Elevasi",
+    "altitude": "Ktg {height}",
+    "grade": "Kemiringan {grade}%",
+    "profileStart": "Start {height}",
+    "profileStartFinish": "S/F {height}"
+  },
+  "source": {
+    "sourceOf": "Sumber dari {title}",
+    "source": "Sumber",
+    "reportIssue": "Laporkan masalah"
+  },
+  "playError": {
+    "title": "Simulator berhenti",
+    "body": "WebGL atau mesin fisika gagal dimulai. Memperbarui browser atau driver grafis, atau mengaktifkan akselerasi perangkat keras, biasanya mengatasinya.",
+    "detail": "Detail kesalahan",
+    "restart": "Mulai ulang simulator"
+  },
+  "dash": {
+    "yellowFlag": "Bendera kuning"
+  }
+}

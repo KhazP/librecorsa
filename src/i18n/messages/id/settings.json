@@ -1,0 +1,626 @@
+{
+  "screen": {
+    "title": "Pengaturan",
+    "dialogLabel": "Pengaturan",
+    "detailLabel": "Jumlah pengaturan yang ditampilkan",
+    "simple": "Sederhana",
+    "advanced": "Lanjutan",
+    "close": "Tutup",
+    "categoriesLabel": "Kategori pengaturan",
+    "sectionsLabel": "Bagian {category}",
+    "paneLabel": "{category}: {tab}",
+    "noAdvancedHere": "Tidak ada pengaturan lanjutan di halaman ini",
+    "moreInAdvanced": "Pengaturan lainnya di Lanjutan",
+    "steeringInAdvanced": "Bantuan kemudi ada di Lanjutan",
+    "categories": {
+      "driving": "Mengemudi",
+      "controls": "Kontrol",
+      "ffb": "Force feedback",
+      "display": "Tampilan",
+      "audio": "Audio",
+      "profile": "Profil dan data"
+    },
+    "tabs": {
+      "driving": {
+        "assists": "Bantuan",
+        "steering": "Bantuan kemudi"
+      },
+      "controls": {
+        "device": "Perangkat",
+        "keyboard": "Keyboard",
+        "controller": "Kontroler",
+        "wheel": "Setir",
+        "touch": "Sentuh"
+      },
+      "ffb": {
+        "main": "Force feedback"
+      },
+      "display": {
+        "graphics": "Grafis",
+        "hud": "HUD",
+        "camera": "Kamera",
+        "interface": "Antarmuka"
+      },
+      "audio": {
+        "main": "Audio"
+      },
+      "profile": {
+        "driver": "Pembalap",
+        "data": "Data"
+      }
+    },
+    "prompts": {
+      "move": "Pindah",
+      "change": "Ubah",
+      "tabs": "Tab",
+      "resetRow": "Reset baris",
+      "showAdvanced": "Tampilkan lanjutan",
+      "showSimple": "Tampilkan sederhana",
+      "back": "Kembali"
+    }
+  },
+  "field": {
+    "resetRow": "Reset {setting} ke bawaan",
+    "reset": "Reset",
+    "resetTitle": "Reset {card}?",
+    "resetConfirm": "Reset",
+    "resetBody": "Mengembalikan {what} ke bawaan.",
+    "resetBodyDefault": "Mengembalikan pengaturan ini ke bawaan.",
+    "showAdvanced": "Tampilkan lanjutan"
+  },
+  "values": {
+    "off": "Mati",
+    "linear": "Linear",
+    "progressive": "Progresif {value}",
+    "aggressive": "Agresif {value}",
+    "raw": "Mentah",
+    "fullLock": "{value}, belok penuh"
+  },
+  "off": {
+    "triggerPedals": "Memerlukan pedal di pemicu",
+    "touchScreen": "Memerlukan layar sentuh"
+  },
+  "rows": {
+    "assistLevel": {
+      "label": "Tingkat bantuan",
+      "options": {
+        "beginner": "Pemula",
+        "intermediate": "Menengah",
+        "sim": "Sim"
+      },
+      "details": {
+        "beginner": "TC & ABS penuh, racing line, bantuan kemudi",
+        "intermediate": "TC & ABS, racing line",
+        "sim": "Tanpa TC, tanpa ABS, tanpa racing line"
+      }
+    },
+    "assistPreset": {
+      "label": "Kontrol traksi & ABS",
+      "options": {
+        "pro": "Mati",
+        "semi_pro": "TC + ABS",
+        "assisted": "Penuh"
+      }
+    },
+    "racingLine": {
+      "label": "Racing line",
+      "hint": "Tombol {key}"
+    },
+    "autoGearbox": {
+      "label": "Transmisi otomatis",
+      "hint": "Tombol manual: {up} / {down}"
+    },
+    "autoClutch": {
+      "label": "Kopling otomatis",
+      "hint": "Mencegah mesin mati; nonaktifkan untuk start kopling manual",
+      "off": {
+        "gearbox": "Memerlukan transmisi manual",
+        "wheel": "Tetapkan kopling di Kontrol > Setir",
+        "controller": "Tetapkan kopling di Kontrol > Kontroler",
+        "touch": "Tidak tersedia dengan kontrol sentuh",
+        "keyboard": "Tetapkan Kopling di Kontrol > Keyboard"
+      },
+      "overridden": {
+        "gearbox": "Diabaikan sementara (memerlukan transmisi manual); aktifkan untuk mengembalikan bawaan",
+        "wheel": "Diabaikan sementara (tetapkan kopling di kontrol > setir); aktifkan untuk mengembalikan bawaan",
+        "controller": "Diabaikan sementara (tetapkan kopling di kontrol > kontroler); aktifkan untuk mengembalikan bawaan",
+        "touch": "Diabaikan sementara (tidak tersedia dengan kontrol sentuh); aktifkan untuk mengembalikan bawaan",
+        "keyboard": "Diabaikan sementara (tetapkan kopling di kontrol > keyboard); aktifkan untuk mengembalikan bawaan"
+      }
+    },
+    "gamepadAssist": {
+      "label": "Bantuan kemudi kontroler",
+      "hint": "Membatasi sudut belok sesuai cengkeraman ban depan dan menangkap selip"
+    },
+    "exitAssist": {
+      "label": "Bantuan gas",
+      "hint": "Mengatur gas saat roda belakang selip (keyboard, TC mati)"
+    },
+    "brakeAssist": {
+      "label": "Bantuan rem",
+      "hint": "Mengatur rem saat roda mengunci (keyboard, ABS mati)"
+    },
+    "realism": {
+      "label": "Realisme simulasi"
+    },
+    "launch": {
+      "label": "Peluncuran"
+    },
+    "ghost": {
+      "label": "Ghost lap terbaik"
+    },
+    "steeringPreset": {
+      "label": "Preset",
+      "custom": "Kustom",
+      "options": {
+        "custom": "Kustom"
+      }
+    },
+    "pedalAssistStrength": {
+      "label": "Kekuatan bantuan pedal",
+      "hint": "Seberapa awal dan seberapa jauh Bantuan gas dan Bantuan rem menahan tombol"
+    },
+    "mouseSteer": {
+      "label": "Kemudi mouse",
+      "hint": "Tombol {key}"
+    },
+    "throttleRiseS": {
+      "label": "Naiknya gas"
+    },
+    "brakeRiseS": {
+      "label": "Naiknya rem"
+    },
+    "steerRiseS": {
+      "label": "Penghalusan kemudi",
+      "hint": "Lebih rendah lebih tajam"
+    },
+    "steerReturnS": {
+      "label": "Kembalinya kemudi"
+    },
+    "halfThrottle": {
+      "label": "Setengah gas"
+    },
+    "halfBrake": {
+      "label": "Setengah rem"
+    },
+    "rumble": {
+      "label": "Getaran"
+    },
+    "steeringRate": {
+      "label": "Kecepatan kemudi"
+    },
+    "deadzone": {
+      "label": "Zona mati dalam"
+    },
+    "outerDeadzone": {
+      "label": "Zona mati luar"
+    },
+    "linearity": {
+      "label": "Linearitas stik",
+      "hint": "Di atas 1 melembutkan bagian tengah"
+    },
+    "throttleGamma": {
+      "label": "Kurva gas",
+      "hint": "Di atas 1 melembutkan input rendah"
+    },
+    "brakeGamma": {
+      "label": "Kurva rem",
+      "hint": "Di atas 1 melembutkan pengereman ringan"
+    },
+    "stickPedalDeadzone": {
+      "label": "Zona mati stik pedal",
+      "off": "Memerlukan pedal di stik"
+    },
+    "triggerRumble": {
+      "label": "Getaran pemicu",
+      "hint": "Umpan balik selip, ABS, dan roda selip di pemicu"
+    },
+    "triggerSlipAlwaysOn": {
+      "label": "Selip pemicu saat ABS/TC aktif",
+      "off": "Memerlukan Getaran pemicu"
+    },
+    "steerDeadzone": {
+      "label": "Zona mati tengah"
+    },
+    "steerSmoothingS": {
+      "label": "Filter input"
+    },
+    "wheelBrakeGamma": {
+      "label": "Kurva rem",
+      "hint": "1.0 untuk load cell · 1.3 hingga 1.6 untuk potensiometer"
+    },
+    "touchMode": {
+      "label": "Kontrol sentuh",
+      "options": {
+        "auto": "Otomatis",
+        "on": "Aktif",
+        "off": "Mati"
+      }
+    },
+    "touchLayout": {
+      "label": "Gaya sentuh",
+      "hint": "Penggeser analog atau tombol digital",
+      "off": "Kontrol sentuh mati",
+      "options": {
+        "sliders": "Penggeser",
+        "buttons": "Tombol"
+      }
+    },
+    "tiltSteer": {
+      "label": "Miringkan untuk berbelok"
+    },
+    "tiltRangeDeg": {
+      "label": "Rentang kemiringan",
+      "off": "Memerlukan Miringkan untuk berbelok"
+    },
+    "ffbEnabled": {
+      "label": "Force feedback"
+    },
+    "ffbGain": {
+      "label": "Kekuatan",
+      "hintPerCar": "Digantikan oleh kekuatan per mobil ({gain}) di bawah"
+    },
+    "ffbDamping": {
+      "label": "Peredaman"
+    },
+    "ffbKerb": {
+      "label": "Getaran kerb"
+    },
+    "ffbAbs": {
+      "label": "Getaran ABS"
+    },
+    "ffbSlip": {
+      "label": "Getaran selip",
+      "hint": "Hanya WebHID"
+    },
+    "ffbShift": {
+      "label": "Peringatan pindah gigi",
+      "hint": "Hanya WebHID"
+    },
+    "ffbCurve": {
+      "label": "Kurva gaya",
+      "hint": "Negatif mengangkat gaya rendah · positif menyisakan ruang puncak"
+    },
+    "ffbMinForce": {
+      "label": "Gaya minimum",
+      "hint": "Menghilangkan zona mati tengah",
+      "hintPerCar": "Digantikan oleh gaya minimum per mobil"
+    },
+    "ffbFilterS": {
+      "label": "Penghalusan"
+    },
+    "ffbDownforceComp": {
+      "label": "Kompensasi downforce",
+      "hint": "Mengurangi clipping aero di kecepatan tinggi"
+    },
+    "ffbFriction": {
+      "label": "Gesekan",
+      "hint": "Efek perangkat keras setir"
+    },
+    "ffbInertia": {
+      "label": "Inersia",
+      "hint": "Efek perangkat keras setir"
+    },
+    "ffbCollisionGuard": {
+      "label": "Perlindungan benturan",
+      "hint": "Membatasi lonjakan gaya benturan"
+    },
+    "revLeds": {
+      "label": "Lampu RPM"
+    },
+    "quality": {
+      "label": "Kualitas",
+      "options": {
+        "low": "Rendah",
+        "medium": "Sedang",
+        "high": "Tinggi"
+      },
+      "details": {
+        "low": "Tanpa bayangan atau bloom, resolusi lebih rendah",
+        "medium": "Bayangan, tanpa bloom",
+        "mediumTouch": "Bayangan, tanpa bloom atau MSAA",
+        "high": "Efek penuh",
+        "highTouch": "Efek penuh kecuali MSAA"
+      }
+    },
+    "sharpLow": {
+      "label": "Rendah Tajam",
+      "hint": "Merender Rendah pada resolusi Sedang",
+      "hintAuto": "Merender Rendah pada resolusi Sedang; kualitas otomatis dapat mematikannya",
+      "off": "Memerlukan Kualitas diatur ke Rendah"
+    },
+    "renderScale": {
+      "label": "Resolusi render"
+    },
+    "sharpen": {
+      "label": "Pertajam",
+      "hint": "Memperjelas tepi dan aspal setelah penskalaan"
+    },
+    "fpsCap": {
+      "label": "Frame rate",
+      "hint": "30 fps mengurangi panas di ponsel",
+      "options": {
+        "full": "Penuh",
+        "fps30": "30 fps"
+      }
+    },
+    "autoQuality": {
+      "label": "Kualitas otomatis",
+      "hint": "Turun otomatis saat frame rate terus merosot",
+      "hintLowered": "Diturunkan: {what}"
+    },
+    "autoQualityMinScale": {
+      "label": "Resolusi terendah",
+      "hint": "Kualitas otomatis tidak akan menurunkan Resolusi render di bawah nilai ini",
+      "hintLow": "Resolusi tetap; Rendah tidak memiliki efek untuk dimatikan",
+      "hintEffects": "Resolusi tetap; hanya efek yang diturunkan",
+      "off": "Memerlukan Kualitas otomatis aktif"
+    },
+    "driverBody": {
+      "label": "Tubuh pembalap"
+    },
+    "hudScale": {
+      "label": "Ukuran"
+    },
+    "deltaBar": {
+      "label": "Bilah delta"
+    },
+    "lapSummary": {
+      "label": "Ringkasan lap"
+    },
+    "virtualMirror": {
+      "label": "Spion",
+      "options": {
+        "auto": "Otomatis",
+        "always": "Selalu",
+        "off": "Mati"
+      }
+    },
+    "radar": {
+      "label": "Radar jarak"
+    },
+    "showPlayerNames": {
+      "label": "Nama pemain di atas mobil"
+    },
+    "boardWidget": {
+      "label": "Papan waktu lap",
+      "options": {
+        "lapEnd": "Di akhir lap",
+        "open": "Terbuka",
+        "closed": "Tertutup"
+      }
+    },
+    "inputTrace": {
+      "label": "Grafik input"
+    },
+    "towerGaps": {
+      "label": "Gap menara waktu",
+      "options": {
+        "interval": "Interval",
+        "leader": "Ke pemimpin"
+      }
+    },
+    "mapMode": {
+      "label": "Mode peta",
+      "options": {
+        "full": "Satu lap penuh",
+        "local": "Diperbesar"
+      }
+    },
+    "splitGaps": {
+      "label": "Selisih waktu sektor"
+    },
+    "mfdAutoCollapse": {
+      "label": "Lipat MFD otomatis"
+    },
+    "camera": {
+      "label": "Tampilan bawaan",
+      "hint": "Tombol {key}"
+    },
+    "cockpitFovDeg": {
+      "label": "Bidang pandang",
+      "hintCarOwn": "Menggunakan bawaan masing-masing mobil",
+      "hintCarDefault": "Bawaan mobil: {degrees}°",
+      "valueCar": "{value}° (mobil)"
+    },
+    "headMovement": {
+      "label": "Gerakan kepala",
+      "options": {
+        "natural": "Alami",
+        "static": "Terkunci"
+      }
+    },
+    "language": {
+      "label": "Bahasa",
+      "options": {
+        "auto": "Otomatis"
+      },
+      "details": {
+        "auto": "Bahasa browser kamu"
+      }
+    },
+    "speedUnit": {
+      "label": "Kecepatan"
+    },
+    "temperatureUnit": {
+      "label": "Suhu"
+    },
+    "pressureUnit": {
+      "label": "Tekanan ban"
+    },
+    "uiScale": {
+      "label": "Ukuran antarmuka"
+    },
+    "palette": {
+      "label": "Palet buta warna",
+      "options": {
+        "standard": "Standar",
+        "protan": "Lemah merah",
+        "deutan": "Lemah hijau",
+        "tritan": "Lemah biru"
+      },
+      "details": {
+        "protan": "Protanopia dan protanomali",
+        "deutan": "Deuteranopia dan deuteranomali",
+        "tritan": "Tritanopia dan tritanomali"
+      }
+    },
+    "volume": {
+      "label": "Volume utama"
+    },
+    "kerbs": {
+      "label": "Kerb"
+    },
+    "muted": {
+      "label": "Bisukan",
+      "hint": "Tombol {key}"
+    },
+    "drsBeep": {
+      "label": "Bip DRS"
+    },
+    "shiftBeep": {
+      "label": "Bip pindah gigi"
+    },
+    "musicOn": {
+      "label": "Musik"
+    },
+    "menuMusic": {
+      "label": "Musik menu"
+    },
+    "raceMusicOn": {
+      "label": "Musik saat mengemudi"
+    },
+    "raceMusic": {
+      "label": "Musik balapan",
+      "hint": "Lewati lagu: {key}",
+      "off": "Musik saat mengemudi mati"
+    },
+    "replayMusic": {
+      "label": "Musik hasil & tayangan ulang"
+    },
+    "autoUpload": {
+      "label": "Unggah otomatis lap terbaik"
+    },
+    "telemetryOut": {
+      "label": "Telemetri UDP",
+      "hint": "Mengirim telemetri langsung ke bridge lokal (dasbor, bass shaker)"
+    }
+  },
+  "driving": {
+    "drivingAids": "Bantuan mengemudi",
+    "pedalHelp": "Bantuan pedal",
+    "onTrack": "Di trek",
+    "keyboardSteering": "Kemudi keyboard",
+    "controllerSteering": "Kemudi kontroler"
+  },
+  "controls": {
+    "activeDevice": "Perangkat aktif",
+    "quickSetup": "Penyiapan cepat",
+    "runSetupWizard": "Jalankan panduan penyiapan",
+    "runSetup": "Jalankan penyiapan",
+    "touch": "Sentuh"
+  },
+  "display": {
+    "layout": {
+      "title": "Tata letak",
+      "resetWhat": "tata letak HUD"
+    },
+    "graphics": {
+      "title": "Grafis",
+      "vr": "VR",
+      "vrOff": "Memerlukan headset WebXR",
+      "experimental": "Eksperimental",
+      "inVr": "Dalam VR",
+      "enterVr": "Masuk VR"
+    },
+    "hud": {
+      "title": "Yang ditampilkan HUD"
+    },
+    "camera": {
+      "title": "Kamera",
+      "freeCamera": "Kamera bebas",
+      "freeCameraHint": "Seret lihat · WASD terbang · Q/E tinggi · Gulir kecepatan · R reset",
+      "freeCameraUnbound": "Belum diatur",
+      "tvCamera": "TV Sisi Trek",
+      "tvCameraUnbound": "Belum diatur",
+      "adjustSeat": "Atur kursi",
+      "adjustSeatHint": "Tahan {key} atau {button} di trek",
+      "adjustSeatOff": "Tersedia saat mengemudi (tahan {key} atau {button})",
+      "adjust": "Atur",
+      "resetSeats": "Reset posisi kursi",
+      "resetSeatsOff": "Sudah di bawaan",
+      "resetSeatsButton": "Reset",
+      "resetSeatsTitle": "Reset posisi kursi?",
+      "resetSeatsConfirm": "Reset semua",
+      "resetSeatsBody": "Mengembalikan offset kursi kokpit dan dasbor untuk semua mobil."
+    },
+    "interface": {
+      "language": "Bahasa",
+      "units": "Satuan",
+      "sizeColour": "Ukuran dan warna"
+    }
+  },
+  "audio": {
+    "sound": "Suara",
+    "music": "Musik",
+    "menuTracks": "Lagu menu",
+    "raceTracks": "Lagu balapan",
+    "resultsTracks": "Lagu hasil dan tayangan ulang",
+    "cockpitCues": "Isyarat kokpit"
+  },
+  "profile": {
+    "driver": {
+      "title": "Pembalap",
+      "name": "Nama",
+      "code": "Kode",
+      "colour": "Warna",
+      "colourGroup": "Warna",
+      "otherColour": "Warna lain",
+      "colours": {
+        "red": "Merah",
+        "teal": "Teal",
+        "orange": "Oranye",
+        "blue": "Biru",
+        "racingGreen": "Hijau balap",
+        "navy": "Biru dongker",
+        "silver": "Perak",
+        "lime": "Hijau limau"
+      }
+    },
+    "data": {
+      "driverKey": "Kunci pembalap",
+      "identityKey": "Kunci identitas",
+      "identityKeyHint": "Menandatangani lap daring. Cadangkan untuk dipakai di browser lain",
+      "save": "Simpan",
+      "load": "Muat",
+      "telemetry": "Telemetri",
+      "udpPort": "Port UDP",
+      "udpPortField": "Port UDP",
+      "portConflict": "Port {port} bentrok dengan {app} (bawaan {defaultPort})",
+      "portOff": "Memerlukan Telemetri UDP",
+      "reset": "Reset",
+      "resetAll": "Reset semua pengaturan",
+      "resetAllHint": "Mengembalikan kontrol, bantuan, tampilan, dan audio ke bawaan",
+      "resetAllButton": "Reset",
+      "resetAllTitle": "Reset semua pengaturan?",
+      "resetAllConfirm": "Reset semua",
+      "resetAllBody": "Mengembalikan semua pengaturan, penetapan tombol, dan kalibrasi ke bawaan. Profil, setup, dan waktu lap tetap aman.",
+      "clear": "Hapus data tersimpan",
+      "clearHint": "Menghapus pengaturan lokal, kunci pembalap, lap, ghost, dan setup",
+      "clearButton": "Hapus",
+      "clearTitle": "Hapus data tersimpan?",
+      "clearConfirm": "Hapus semuanya",
+      "clearBody": "Menghapus secara permanen semua pengaturan, kunci pembalap, lap, ghost, dan setup dari browser ini, lalu memuat ulang."
+    }
+  },
+  "hudPicker": {
+    "label": "Tata letak HUD",
+    "thirdParty": "Pihak ketiga",
+    "thirdPartyNote": "Dibuat ulang dari proyek HUD sumber terbuka lainnya, dengan kredit kepada pembuatnya.",
+    "touchNote": "Ponsel selalu menggunakan Touch HUD.",
+    "description": "{detail}. Oleh {author}",
+    "descriptionSite": "{detail}. Oleh {author} · {site}",
+    "sourceLink": "Sumber {layout}, oleh {author} (dibuka di tab baru)",
+    "siteLink": "{site}, situs {author} (dibuka di tab baru)"
+  }
+}
