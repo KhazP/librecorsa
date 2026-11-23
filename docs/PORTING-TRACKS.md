@@ -179,5 +179,5 @@ A GLB and a `track_data.json` in `public/tracks/<id>/`:
 - Only port circuits you have the right to use. A mod's terms come with it, and a game's own assets usually can't be redistributed at all.
 - **Unlicensed or unauthorised mods are for local use only.** If a mod has no licence, or its author hasn't said you can use it, keep it on your own machine: don't commit it, upload it, host it or share it in any form.
 - **Releasing a ported circuit needs permission.** Before you publish one on your fork, your own site or anywhere else, get the author's permission, or check that its licence allows redistribution, and keep a record of it.
-- Keep ported content local by default. `public/tracks/` is gitignored apart from RISE Motordrome and `index.json`. Please don't open pull requests that add third-party circuits.
+- Keep ported content local by default. `public/tracks/` is gitignored apart from RISE Motordrome and `index.json`, so never commit a circuit's files. To get a circuit you have permission for into the game, open a pull request with its entries and a download link to the files, as [Get involved](GET-INVOLVED.md#bring-a-circuit-or-a-car) describes.
 - If you share a ported circuit anywhere, credit its author the way `CREDITS.md` does: title, author, link, licence, and what you changed.

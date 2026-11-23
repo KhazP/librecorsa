@@ -1,12 +1,15 @@
 # Contributing to LibreCorsa
 
 Thanks for helping. Bug reports, handling feedback from sim racers, new content and code are all welcome.
+[Get involved](docs/GET-INVOLVED.md) is the short version for players, and the [FAQ](docs/FAQ.md) answers the
+common questions.
 
 ## Where things go
 
 - **Bugs**: open a [bug report](https://github.com/librecorsa/librecorsa/issues/new?template=bug-report.yml).
-- **A car or track you'd like**: use **Feedback** in the game's title menu and pick Car or Track, or the
-  [request form](https://github.com/librecorsa/librecorsa/issues/new?template=content-request.yml).
+- **A car or track you'd like**: I can only add what I have permission for, so ask the mod's author first and post
+  their answer in the [request form](https://github.com/librecorsa/librecorsa/issues/new?template=content-request.yml),
+  or port it yourself with their permission ([Get involved](docs/GET-INVOLVED.md#bring-a-circuit-or-a-car)).
 - **Questions, setups, lap times, ideas**: [Discussions](https://github.com/librecorsa/librecorsa/discussions).
 - **Guides** (porting cars, circuits and wheels, how the physics and the AI work): [docs.librecorsa.org](https://docs.librecorsa.org/).
   The pages are the Markdown in `docs/`, so a fix to a guide is a pull request on that file.
@@ -53,7 +56,7 @@ racing-line optimiser.
 
 ## Cars, tracks and sounds
 
-LibreCorsa can only ship assets it may redistribute: an open license (CC BY, CC BY-SA, CC0), a
+LibreCorsa can only ship assets it may redistribute: an open license (CC BY, CC BY-SA, CC0, Free Art License), a
 non-commercial one (CC BY-NC, CC BY-NC-SA: LibreCorsa is non-profit, and these assets stay under their own
 terms, see the asset notice in CREDITS.md) or written permission from the creator. Assets taken from other games need the original
 creator's permission. Credit every asset in [CREDITS.md](CREDITS.md) with its author, link and
