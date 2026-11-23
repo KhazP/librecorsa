@@ -533,6 +533,13 @@
       "title": "Layout",
       "resetWhat": "das HUD-Layout"
     },
+    "placement": {
+      "title": "Größe und Position",
+      "resetWhat": "die HUD-Größe und die Positionen der Elemente dieses Layouts",
+      "edit": "Positionen der Elemente",
+      "editHint": "Verschiebe die Elemente dieses Layouts im laufenden HUD und ändere ihre Größe.",
+      "editButton": "Layout bearbeiten"
+    },
     "graphics": {
       "title": "Grafik",
       "vr": "VR",

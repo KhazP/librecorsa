@@ -533,6 +533,13 @@
       "title": "레이아웃",
       "resetWhat": "HUD 레이아웃"
     },
+    "placement": {
+      "title": "크기 및 위치",
+      "resetWhat": "HUD 크기와 이 레이아웃의 패널 위치",
+      "edit": "패널 위치",
+      "editHint": "실제 HUD 위에서 이 레이아웃의 패널을 옮기고 크기를 조절합니다.",
+      "editButton": "레이아웃 편집"
+    },
     "graphics": {
       "title": "그래픽",
       "vr": "VR",

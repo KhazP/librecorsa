@@ -533,6 +533,13 @@
       "title": "配置",
       "resetWhat": "HUD 配置"
     },
+    "placement": {
+      "title": "大小與位置",
+      "resetWhat": "HUD 大小與此配置的面板位置",
+      "edit": "面板位置",
+      "editHint": "直接在 HUD 上移動此配置的面板並調整大小。",
+      "editButton": "編輯配置"
+    },
     "graphics": {
       "title": "畫面",
       "vr": "VR",

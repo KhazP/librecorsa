@@ -842,7 +842,8 @@
     "holdPace": "Mantenha <n>{pace}</n> {unit} até a linha",
     "greenFlag": "Bandeira verde",
     "lightsOut": "Luzes apagadas",
-    "chequeredFlag": "Bandeira quadriculada"
+    "chequeredFlag": "Bandeira quadriculada",
+    "reaction": "Reação <n>{ms}</n> ms"
   },
   "launchCue": {
     "stalledLabel": "Motor apagou: segure {control} ou coloque em ponto morto para religar",
@@ -1062,5 +1063,24 @@
   "hiddenNote": {
     "off": "HUD oculto",
     "offKey": "HUD oculto · {key} para mostrar"
+  },
+  "hudEditor": {
+    "title": "Editar layout do HUD",
+    "hint": "Arraste um painel para movê-lo. Arraste o canto dele, ou role sobre ele, para redimensionar.",
+    "parts": {
+      "top-left": "Superior esquerdo",
+      "top-center": "Superior central",
+      "top-right": "Superior direito",
+      "center-right": "Checklist de largada",
+      "center": "Radar",
+      "bottom-left": "Inferior esquerdo",
+      "bottom-center": "Inferior central",
+      "bottom-right": "Inferior direito"
+    },
+    "resetPart": "Redefinir",
+    "resize": "Arraste para redimensionar",
+    "resetAll": "Redefinir layout",
+    "cancel": "Cancelar",
+    "done": "Concluído"
   }
 }

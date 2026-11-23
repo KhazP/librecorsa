@@ -533,6 +533,13 @@
       "title": "Diseño",
       "resetWhat": "el diseño del HUD"
     },
+    "placement": {
+      "title": "Tamaño y posición",
+      "resetWhat": "el tamaño del HUD y la posición de los paneles de este diseño",
+      "edit": "Posición de los paneles",
+      "editHint": "Mueve los paneles de este diseño y cambia su tamaño sobre el HUD en vivo.",
+      "editButton": "Editar diseño"
+    },
     "graphics": {
       "title": "Gráficos",
       "vr": "VR",

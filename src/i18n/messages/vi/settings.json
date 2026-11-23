@@ -533,6 +533,13 @@
       "title": "Bố cục",
       "resetWhat": "bố cục HUD"
     },
+    "placement": {
+      "title": "Kích thước và vị trí",
+      "resetWhat": "kích thước HUD và vị trí các bảng của bố cục này",
+      "edit": "Vị trí các bảng",
+      "editHint": "Di chuyển và đổi kích thước các bảng của bố cục này ngay trên HUD.",
+      "editButton": "Chỉnh bố cục"
+    },
     "graphics": {
       "title": "Đồ họa",
       "vr": "VR",
