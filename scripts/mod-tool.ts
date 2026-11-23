@@ -14,6 +14,7 @@ import { deflateRawSync } from "node:zlib";
 import { isModPackageId, isSafeModPath, manifestFiles, packageHash, sha256Hex, validateModManifest } from "../src/lib/mods/mod-manifest";
 import { modDefinitions } from "../src/lib/mods/mod-content";
 import { isArchiveJunk } from "../src/lib/mods/zip-reader";
+import { resolveModTrackUrls } from "../src/lib/mods/mod-urls";
 
 const PACKAGE_FILE = /\.(glb|gltf|bin|json|webp|png|jpe?g|ktx2|ogg|wav|mp3|txt|md)$/i;
 
@@ -56,7 +57,14 @@ function check(folder: string): Checked {
       const data = JSON.parse(readFileSync(join(folder, t.data), "utf8")) as { metadata?: { mesh?: { url?: unknown; scenery?: unknown } }; samples?: unknown };
       const url = data.metadata?.mesh?.url;
       if (typeof url !== "string") problems.push(`${t.data}: metadata.mesh.url (the circuit's model) is missing`);
-      else if (isSafeModPath(url) && !present.has(url)) problems.push(`${t.data}: names ${url}, which is not in the package`);
+      try {
+        // As the game reads it: every file it names is a path in the package
+        resolveModTrackUrls(data as { metadata: object }, result.manifest.id);
+      } catch (err) {
+        problems.push(`${t.data}: ${(err as Error).message}`);
+      }
+      const named = [url, ...(Array.isArray(data.metadata?.mesh?.scenery) ? data.metadata.mesh.scenery : [])];
+      for (const f of named) if (typeof f === "string" && isSafeModPath(f) && !present.has(f)) problems.push(`${t.data}: names ${f}, which is not in the package`);
       if (!Array.isArray(data.samples) || data.samples.length < 10) problems.push(`${t.data}: has no samples (scripts/tracks write them)`);
     } catch (err) {
       problems.push(`${t.data}: not valid JSON (${(err as Error).message})`);

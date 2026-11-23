@@ -135,14 +135,22 @@ const baseManifest = (): Record<string, unknown> => ({
 // --- Track data URLs ---
 {
   const raw = {
-    metadata: { name: "x", mesh: { url: "ring/ring.glb", scenery: ["ring/trees.glb", "/tracks/shared/x.glb", "https://cdn.example/x.glb"] } },
+    metadata: { name: "x", mesh: { url: "ring/ring.glb", scenery: ["ring/trees.glb"], road: "Track_Asphalt_Road" } },
     samples: [1, 2, 3],
   };
   const out = resolveModTrackUrls(raw, "jdoe.test-pack");
   check("the model's path becomes its package URL", out.metadata.mesh.url === "/mods/jdoe.test-pack/ring/ring.glb", out.metadata.mesh.url);
-  check("scenery paths become package URLs", out.metadata.mesh.scenery[0] === "/mods/jdoe.test-pack/ring/trees.glb");
-  check("absolute paths and URLs are left as they are", out.metadata.mesh.scenery[1] === "/tracks/shared/x.glb" && out.metadata.mesh.scenery[2] === "https://cdn.example/x.glb");
+  check("scenery paths become package URLs, mesh names stay names", out.metadata.mesh.scenery[0] === "/mods/jdoe.test-pack/ring/trees.glb" && out.metadata.mesh.road === "Track_Asphalt_Road");
   check("the input is not changed, and the samples are not copied", raw.metadata.mesh.url === "ring/ring.glb" && out.samples === raw.samples);
+  for (const outside of ["/tracks/shared/x.glb", "https://cdn.example/x.glb", "../other.pack/x.glb"]) {
+    let refused = false;
+    try {
+      resolveModTrackUrls({ metadata: { mesh: { url: "ring/ring.glb", scenery: [outside] } } }, "jdoe.test-pack");
+    } catch {
+      refused = true;
+    }
+    check(`a file outside the package (${outside}) is refused`, refused);
+  }
 }
 
 // --- Zip reader ---
@@ -321,6 +329,9 @@ function physicsChecks(): void {
   refused({ config: { chassis: { totalMassKg: "heavy" } } }, /is a number in the base model, not a string/, "a value of another kind is refused");
   refused({ config: { chassis: { totalMassKg: null } } }, /not a value a profile holds/, "null is refused");
   refused({ id: "amg-gt3" }, /set by the game/, "the profile's id can't be set");
+  refused({ model: "liana" }, /set by the game/, "nor the model it drives as");
+  refused({ config: { chassis: { totalMassKg: 0 } } }, /must stay above 0/, "a mass (or anything the base has above zero) can't drop to zero or below");
+  check("it drives as its base model (setups, fuel, wing steps, AI), its plans its own", heavy.ok && heavy.profile.model === "amg-gt3" && createVehicleSim("amg-gt3", getActiveTrackData(1200), null, undefined, heavy.profile).vehicleId === "amg-gt3");
   refused({ bodyPlan: [[0, 1]] }, /set by the game/, "nor its body plan (mod.json has it)");
   refused({ warpFactor: 9 }, /no such value/, "an unknown top-level value is refused");
   check("a file of another format is refused", !modSimProfile(base, { format: 2, profile: {} }, "x").ok);
