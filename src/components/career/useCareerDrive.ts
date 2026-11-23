@@ -101,8 +101,24 @@ export function useCareerDrive(d: CareerDriveDeps) {
   useEffect(() => {
     const loaded = loadCareerSave();
     setSave(loaded);
+    // The simulator mounted again with a drive under way (a lost GPU context restarts it, switching circuit from the
+    // Multiplayer tab reloads it): the new mount starts on the title menu, so that drive is over. A round without its
+    // result is settled as one left before the flag, and the next race is not taken for it
+    const cut = careerDrive;
+    if (cut) {
+      careerDrive = null;
+      setDriving(false);
+      setRoundRecorded(false);
+      if (cut.mode === "race" && !cut.recorded && cut.plan && !queuedUnfinished) {
+        queuedUnfinished = { runId: cut.runId, plan: cut.plan };
+        setUnfinished(queuedUnfinished);
+        careerScreenResume = true;
+        setOpen(true);
+      }
+      return;
+    }
     // A round started and never finished (the tab closed mid-race): settled now, a mulligan or a retirement
-    if (!careerDrive && !queuedUnfinished) {
+    if (!queuedUnfinished) {
       const run = loaded.runs.find((r) => r.status === "active" && r.season?.racing !== undefined);
       const plan = run ? racePlan(run, (id) => getTrackInfo(id).lengthM, "") : null;
       if (run && plan && plan.roundIndex === run.season?.racing) {
@@ -357,11 +373,14 @@ export function useCareerDrive(d: CareerDriveDeps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d.session, d.changeCar]);
 
-  /** Out of the car to the career screen: a race after its flag is recorded with the order as it stands */
+  /**
+   * Out of the car to the career screen: the round's race after its flag is recorded with the order as it stands (only
+   * the round's own AI race: anything else finished since is not the round)
+   */
   const backToCareer = useCallback(() => {
     const cur = careerDrive;
     if (cur?.mode === "race" && !cur.recorded && cur.plan) {
-      if (race?.phase === "finished" && race.results?.some((r) => r.isPlayer)) record(race.results);
+      if (raceIsAi && race?.phase === "finished" && race.results?.some((r) => r.isPlayer)) record(race.results);
       else {
         queuedUnfinished = { runId: cur.runId, plan: cur.plan };
         setUnfinished(queuedUnfinished);
@@ -372,7 +391,7 @@ export function useCareerDrive(d: CareerDriveDeps) {
     careerScreenResume = true;
     setOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [race, record, endDrive, d.leaveSession]);
+  }, [race, raceIsAi, record, endDrive, d.leaveSession]);
 
   const resolveUnfinished = useCallback(
     (mulligan: boolean) => {
