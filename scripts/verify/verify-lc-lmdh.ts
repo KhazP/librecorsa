@@ -298,7 +298,7 @@ console.log('\n== Straight line through the adapter (its own TC)');
   // qualifying, on the long gear set and little wing. A trap is short of the car's terminal speed, and the long set's
   // rule puts 340 km/h at Nmax: the car must reach the trap's speeds and stay under the rule's
   const l = sprint(LC_LMDH_LONG_SIM_PROFILE);
-  // At ρ 1.225: ≈ 325 km/h, the ≈ 330 of the trim's sea-level summer air (scripts/endurance-report.ts)
+  // At ρ 1.225: ≈ 325 km/h, the ≈ 330 of the trim's sea-level summer air (scripts/physics/endurance-report.ts)
   check('Long set, 1° wing: terminal speed 320–335 km/h, under Nmax', l.vmax > 320 && l.vmax < 335 && l.rpm <= LC_LMDH_POWER.nMax, `${fmt(l.vmax, 1)} km/h at ${fmt(l.rpm, 0)} rpm`);
   const wing = (cfg: CarPhysicsConfig, deg: number): CarPhysicsConfig => ({ ...cfg, aero: { ...cfg.aero, wings: cfg.aero.wings.map((w) => (w.name === 'REAR_WING' ? { ...w, angleDeg: deg } : w)) } });
   /** Flat out from a corner's exit speed: the speed at each distance (km/h), and where it ends */

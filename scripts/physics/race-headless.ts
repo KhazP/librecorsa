@@ -2,7 +2,7 @@
  * Headless AI race for tuning: the full-physics AI field on a circuit, faster than real time and without rendering,
  * then a results table (laps, gaps, incidents, position changes) and what each car learnt.
  *
- *   npx tsx scripts/race-headless.ts [--track rwanda_official_short] [--car lc26|f12026-car|amg-gt3|liana|mtr-496r|lc-lmdh|
+ *   npx tsx scripts/physics/race-headless.ts [--track rwanda_official_short] [--car lc26|f12026-car|amg-gt3|liana|mtr-496r|lc-lmdh|
  *     nissan-r33-jgtc|nissan-r32-jtcc|bmw-m1-procar|vw-scirocco-gtx|chaparral-2d|chaparral-2d-67|porsche-934-rsr] [--laps 5] [--cars 5]
  *       [--skill 70] [--seed 1] [--no-learn] [--laps-table] [--sweep skill | learn | <param>=v1,v2,...]
  *       [--weather clear|overcast|light_rain|heavy_rain|drying|dynamic] [--lc26-engine rigid|classic]
@@ -13,20 +13,20 @@
  * The same seed replays the same race. `--car lc26` races the engine that car ships on, or the one `--lc26-engine` names.
  */
 import { readFileSync } from 'node:fs';
-import { DEFAULT_TRACK_ID, getActiveTrackData, setActiveTrack, type BuiltTrackData, type RawTrackJson } from '../src/lib/track-data';
-import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
-import { setLc26OnRigidBody, lc26OnRigidBody } from '../src/lib/cars/lc26-engine';
-import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
-import { createSuzukiLianaSim } from '../src/lib/sim/road/SuzukiLianaSim';
-import { createMtr496rSim } from '../src/lib/sim/proto/Mtr496rSim';
-import { AI_DRIVERS, AiOpponentField, type AiDriverDef, type AiFieldReport } from '../src/lib/sim/ai-opponents';
-import { AI_PARAM_RANGES, AI_SKILL_LEVELS, aiSkillLabel, type AiTuningLibrary, type AiTuningParams } from '../src/lib/sim/ai-tuning';
-import { AI_TUNING_LIBRARY } from '../src/lib/sim/ai-tuning-data';
-import type { SimulatorCar } from '../src/lib/sim/simulator-car';
-import { TrackEnvironment } from '../src/lib/sim/track-environment';
-import { DEFAULT_SESSION_CONDITIONS, WEATHER_PRESETS, type WeatherPresetId } from '../src/lib/sim/weather';
-import { loadGlbGeometry } from './lib/glb-geometry';
+import { DEFAULT_TRACK_ID, getActiveTrackData, setActiveTrack, type BuiltTrackData, type RawTrackJson } from '../../src/lib/track-data';
+import { vehicleModelSpec } from '../../src/lib/cars/vehicle-models';
+import { setLc26OnRigidBody, lc26OnRigidBody } from '../../src/lib/cars/lc26-engine';
+import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
+import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
+import { createSuzukiLianaSim } from '../../src/lib/sim/road/SuzukiLianaSim';
+import { createMtr496rSim } from '../../src/lib/sim/proto/Mtr496rSim';
+import { AI_DRIVERS, AiOpponentField, type AiDriverDef, type AiFieldReport } from '../../src/lib/sim/ai-opponents';
+import { AI_PARAM_RANGES, AI_SKILL_LEVELS, aiSkillLabel, type AiTuningLibrary, type AiTuningParams } from '../../src/lib/sim/ai-tuning';
+import { AI_TUNING_LIBRARY } from '../../src/lib/sim/ai-tuning-data';
+import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
+import { TrackEnvironment } from '../../src/lib/sim/track-environment';
+import { DEFAULT_SESSION_CONDITIONS, WEATHER_PRESETS, type WeatherPresetId } from '../../src/lib/sim/weather';
+import { loadGlbGeometry } from '../lib/glb-geometry';
 
 const CAR_KINDS = [
   'lc26',

@@ -1,12 +1,12 @@
 /**
  * Tyre thermal / pressure report: the AI drives a stint and the tyre state is printed every lap.
  *
- *   npx tsx scripts/tyre-stint-report.ts [laps=5] [compound=soft]
+ *   npx tsx scripts/physics/tyre-stint-report.ts [laps=5] [compound=soft]
  */
-import { getActiveTrackData } from '../src/lib/track-data';
-import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { tyreBandSurfaceTempC } from '../src/lib/sim/ac-tyre';
-import type { TireCompound } from '../src/types/f1';
+import { getActiveTrackData } from '../../src/lib/track-data';
+import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
+import { tyreBandSurfaceTempC } from '../../src/lib/sim/ac-tyre';
+import type { TireCompound } from '../../src/types/f1';
 
 const laps = Number(process.argv[2] ?? 5);
 const compound = (process.argv[3] ?? 'soft') as TireCompound;

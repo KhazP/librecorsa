@@ -4,19 +4,19 @@
  * OpenF1 JSON (`car_data` samples with `date` / `speed` km/h / `throttle` / `brake`, and the `lap` entry), as written by
  * a local fetch script.
  *
- *   npx tsx scripts/compare-real-lap.ts --track monaco --ref <path/to/monaco_2026_Q.json>
+ *   npx tsx scripts/physics/compare-real-lap.ts --track monaco --ref <path/to/monaco_2026_Q.json>
  *       [--car lc26|lc26-classic|f12026-car|amg-gt3|...] [--pace 1]
  *
  * `--car` is a vehicle model, built as the game builds it (the engine the game drives it on, its season's overtaking
  * aids free to use as in practice). `lc26-classic` is the 2026 Prototype on its older engine.
  */
 import { readFileSync } from 'node:fs';
-import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
-import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { isVehicleModelId, vehicleModelSpec } from '../src/lib/cars/vehicle-models';
-import { overtakingRulesForSeason } from '../src/lib/sim/overtaking-rules';
-import type { SimulatorCar } from '../src/lib/sim/simulator-car';
-import { loadGlbGeometry } from './lib/glb-geometry';
+import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
+import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
+import { isVehicleModelId, vehicleModelSpec } from '../../src/lib/cars/vehicle-models';
+import { overtakingRulesForSeason } from '../../src/lib/sim/overtaking-rules';
+import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
+import { loadGlbGeometry } from '../lib/glb-geometry';
 
 const argv = process.argv.slice(2);
 const opt = (name: string, fallback?: string) => {

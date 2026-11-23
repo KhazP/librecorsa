@@ -74,7 +74,7 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   padLateralMu: 1.63,
   // The autopilot plans on 85 % of this: ≈1.5 g on the brakes at 100 km/h to ≈1.9 g past 250 km/h, and corners on
   // 1.1 × that (≈1.6 g slow, ≈2.1 g fast, the car's own grip): it laps the circuits' GT3 speed profiles to within
-  // ≈1–5 % at the AI's 0.975 pace (scripts/race-headless.ts --car amg-gt3)
+  // ≈1–5 % at the AI's 0.975 pace (scripts/physics/race-headless.ts --car amg-gt3)
   braking: { lowG: 1.7, aeroG: 0.55, refMs: 70 },
   // The car's understeer, which the autopilot's yaw loop otherwise only caught up with by mid-corner at speed: the front
   // road-wheel angle past the kinematic one (and past the loop's 0.8 × body slip) per m/s², on a flat-pad steer ramp at

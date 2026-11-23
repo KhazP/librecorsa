@@ -10,13 +10,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import * as THREE from 'three';
-import { computeTyreForces, createTyreRuntime as createLc26Tyre } from '../src/lib/sim/ac-tyre';
-import { LC26_AI_REFERENCE, LC26_TYRES } from '../src/lib/sim/lc26-data';
-import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { compoundData, F12026_CAR_CONFIG, type CarPhysicsConfig } from '../src/lib/sim/f12026-car/F12026CarConfig';
-import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
-import { brushForces, brushPeakSlipTan, brushSpeedGrip, type BrushForces } from '../src/lib/sim/f12026-car/brush-tyre';
-import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { computeTyreForces, createTyreRuntime as createLc26Tyre } from '../../src/lib/sim/ac-tyre';
+import { LC26_AI_REFERENCE, LC26_TYRES } from '../../src/lib/sim/lc26-data';
+import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
+import { compoundData, F12026_CAR_CONFIG, type CarPhysicsConfig } from '../../src/lib/sim/f12026-car/F12026CarConfig';
+import { AMG_GT3_CONFIG } from '../../src/lib/sim/gt3/AmgGt3Config';
+import { brushForces, brushPeakSlipTan, brushSpeedGrip, type BrushForces } from '../../src/lib/sim/f12026-car/brush-tyre';
+import { FlatGroundQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
 import {
   combinedSlipForces,
   createTyreRuntime,
@@ -25,14 +25,14 @@ import {
   tyrePressureGrip,
   VehiclePhysics,
   type TyreRuntime,
-} from '../src/lib/sim/f12026-car/VehiclePhysics';
-import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
-import { GT3_REF, measureGt3 } from './lib/gt3-reference';
-import { createFlatTestTrack } from './lib/flat-track';
-import { lineChart, seriesCsv, type ChartBand, type ChartSeries, type SeriesColor } from './lib/svg-chart';
+} from '../../src/lib/sim/f12026-car/VehiclePhysics';
+import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
+import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
+import { GT3_REF, measureGt3 } from '../lib/gt3-reference';
+import { createFlatTestTrack } from '../lib/flat-track';
+import { lineChart, seriesCsv, type ChartBand, type ChartSeries, type SeriesColor } from '../lib/svg-chart';
 
-const OUT = path.join(__dirname, '..', 'docs', 'physics');
+const OUT = path.join(__dirname, '..', '..', 'docs', 'physics');
 fs.mkdirSync(OUT, { recursive: true });
 const write = (name: string, body: string) => fs.writeFileSync(path.join(OUT, name), body);
 const fmt = (v: number, d = 2) => v.toFixed(d);
@@ -386,7 +386,7 @@ const integratorTable = [
 // 5. Where the numbers come from
 // ---------------------------------------------------------------------------
 
-const root = path.join(__dirname, '..');
+const root = path.join(__dirname, '..', '..');
 function tagCounts(file: string): Record<string, number> {
   const text = fs.readFileSync(path.join(root, file), 'utf8');
   const counts: Record<string, number> = {};

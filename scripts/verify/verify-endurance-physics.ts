@@ -6,7 +6,7 @@
  *
  *   npx tsx scripts/verify/verify-endurance-physics.ts
  *
- * `scripts/endurance-report.ts` prints the two endurance cars' numbers against their targets; this holds the
+ * `scripts/physics/endurance-report.ts` prints the two endurance cars' numbers against their targets; this holds the
  * mechanisms themselves.
  */
 import * as THREE from 'three';

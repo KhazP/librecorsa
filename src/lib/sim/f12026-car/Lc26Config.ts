@@ -2,7 +2,7 @@
  * The Grand Prix LC26 for `VehiclePhysics` (same data model as the f12026-car, see `F12026CarConfig`): the car of
  * `lc26-data.ts`, which `F1Physics2026` drives today, laid out for the rigid-body engine. Every number here is read
  * from that file's constants or computed from them, so the two engines run the same car and
- * `scripts/compare-lc26-engines.ts` puts them side by side.
+ * `scripts/physics/compare-lc26-engines.ts` puts them side by side.
  *
  *  - [data]     a constant of `lc26-data.ts` (its own tags say where each comes from)
  *  - [derived]  computed from those

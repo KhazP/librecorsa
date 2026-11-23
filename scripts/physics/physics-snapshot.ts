@@ -3,27 +3,27 @@
  * change leaves a car alone) and the numbers a change to the engine should be held against: top speed, braking,
  * steady cornering at three speeds, hot tyre pressures and the solver's cost per 500 Hz step.
  *
- *   npx tsx scripts/physics-snapshot.ts [--json out.json] [--only id,id] [--no-hash] [--compare before.json]
+ *   npx tsx scripts/physics/physics-snapshot.ts [--json out.json] [--only id,id] [--no-hash] [--compare before.json]
  */
 import * as THREE from 'three';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { VehiclePhysics, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
-import { FlatGroundQuery, type GroundHit, type GroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
-import { DEFAULT_SURFACE_TABLE } from '../src/lib/sim/track-surfaces';
-import type { CarPhysicsConfig } from '../src/lib/sim/f12026-car/F12026CarConfig';
-import { F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
-import { LC26_CAR_CONFIG } from '../src/lib/sim/f12026-car/Lc26Config';
-import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
-import { LC_LMDH_CONFIG } from '../src/lib/sim/proto/LcLmdhConfig';
-import { MTR_496R_CONFIG } from '../src/lib/sim/proto/Mtr496rConfig';
-import { SUZUKI_LIANA_CONFIG } from '../src/lib/sim/road/SuzukiLianaConfig';
-import { NISSAN_R33_CONFIG } from '../src/lib/sim/classic/NissanR33Config';
-import { NISSAN_R32_CONFIG } from '../src/lib/sim/classic/NissanR32Config';
-import { BMW_M1_PROCAR_CONFIG } from '../src/lib/sim/classic/BmwM1ProcarConfig';
-import { VW_SCIROCCO_CONFIG } from '../src/lib/sim/road/VwSciroccoConfig';
-import { CHAPARRAL_2D_CONFIG, CHAPARRAL_2D_67_CONFIG } from '../src/lib/sim/classic/Chaparral2dConfig';
-import { PORSCHE_934_RSR_CONFIG } from '../src/lib/sim/classic/Porsche934RsrConfig';
+import { VehiclePhysics, type VehicleInputs } from '../../src/lib/sim/f12026-car/VehiclePhysics';
+import { FlatGroundQuery, type GroundHit, type GroundQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
+import { DEFAULT_SURFACE_TABLE } from '../../src/lib/sim/track-surfaces';
+import type { CarPhysicsConfig } from '../../src/lib/sim/f12026-car/F12026CarConfig';
+import { F12026_CAR_CONFIG } from '../../src/lib/sim/f12026-car/F12026CarConfig';
+import { LC26_CAR_CONFIG } from '../../src/lib/sim/f12026-car/Lc26Config';
+import { AMG_GT3_CONFIG } from '../../src/lib/sim/gt3/AmgGt3Config';
+import { LC_LMDH_CONFIG } from '../../src/lib/sim/proto/LcLmdhConfig';
+import { MTR_496R_CONFIG } from '../../src/lib/sim/proto/Mtr496rConfig';
+import { SUZUKI_LIANA_CONFIG } from '../../src/lib/sim/road/SuzukiLianaConfig';
+import { NISSAN_R33_CONFIG } from '../../src/lib/sim/classic/NissanR33Config';
+import { NISSAN_R32_CONFIG } from '../../src/lib/sim/classic/NissanR32Config';
+import { BMW_M1_PROCAR_CONFIG } from '../../src/lib/sim/classic/BmwM1ProcarConfig';
+import { VW_SCIROCCO_CONFIG } from '../../src/lib/sim/road/VwSciroccoConfig';
+import { CHAPARRAL_2D_CONFIG, CHAPARRAL_2D_67_CONFIG } from '../../src/lib/sim/classic/Chaparral2dConfig';
+import { PORSCHE_934_RSR_CONFIG } from '../../src/lib/sim/classic/Porsche934RsrConfig';
 
 const CARS: Record<string, CarPhysicsConfig> = {
   'f12026-car': F12026_CAR_CONFIG as unknown as CarPhysicsConfig,

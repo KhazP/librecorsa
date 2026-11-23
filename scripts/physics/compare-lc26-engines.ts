@@ -3,14 +3,14 @@
  * on the same data, then the car a driver gets on the rigid-body engine (that data tuned, `Lc26Tune.ts`), with the
  * reference envelope that came with the car's data (`LC26_AI_REFERENCE`).
  *
- *   npx tsx scripts/compare-lc26-engines.ts
+ *   npx tsx scripts/physics/compare-lc26-engines.ts
  *
  * Flat ground, sea-level air, soft tyres, no driver aids, the same pedal and steering traces for both: straight-line
  * times, top speed, a stop from 300 km/h, sustained lateral g at five speeds, the steering it takes, and what the car
  * does past the limit. Prints a table; `scripts/verify/verify-lc26-fold.ts` asserts the bands.
  */
-import { measureLc26, LC26_ENGINES, LC26_TUNED, type Lc26Measurement } from './lib/lc26-measure';
-import { LC26_AI_REFERENCE } from '../src/lib/sim/lc26-data';
+import { measureLc26, LC26_ENGINES, LC26_TUNED, type Lc26Measurement } from '../lib/lc26-measure';
+import { LC26_AI_REFERENCE } from '../../src/lib/sim/lc26-data';
 
 const results: [string, Lc26Measurement][] = [...LC26_ENGINES, LC26_TUNED].map(({ name, make }) => [name, measureLc26(make)]);
 const pad = (s: string, n: number) => s.padEnd(n);

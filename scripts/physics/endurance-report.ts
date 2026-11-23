@@ -2,7 +2,7 @@
  * Endurance calibration report for the GT3 and the LC-LMDH: the numbers their balance-of-performance trims are held
  * to, measured on the vehicle model.
  *
- *   npx tsx scripts/endurance-report.ts [--car amg-gt3|lc-lmdh] [--laps] [--json]
+ *   npx tsx scripts/physics/endurance-report.ts [--car amg-gt3|lc-lmdh] [--laps] [--json]
  *
  * Flat-pad measures (ρ 1.18, a warm sea-level day): the aero at 200 km/h in the sprint and low-drag trims, top speed
  * alone and 12 m behind a car of the same speed in the low-drag trim on the long gears, steady cornering at 80 and 240
@@ -12,19 +12,19 @@
  */
 import * as THREE from 'three';
 import { existsSync, readFileSync } from 'node:fs';
-import { VehiclePhysics, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
-import { FlatGroundQuery, type GroundHit, type GroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
-import { DEFAULT_SURFACE_TABLE } from '../src/lib/sim/track-surfaces';
-import type { CarPhysicsConfig } from '../src/lib/sim/f12026-car/F12026CarConfig';
-import { evaluateAeroWakeDeficit } from '../src/lib/sim/aero-wake';
-import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
-import { AMG_GT3_SIM_PROFILE } from '../src/lib/sim/gt3/AmgGt3Sim';
-import { LC_LMDH_CONFIG } from '../src/lib/sim/proto/LcLmdhConfig';
-import { LC_LMDH_SIM_PROFILE } from '../src/lib/sim/proto/LcLmdhSim';
-import { F12026CarSim, type CarSimProfile } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
-import { SIM_REALISM_FLAGS } from '../src/lib/sim/sim-realism';
-import { DEFAULT_CHASSIS_SETUP } from '../src/lib/sim/car-setup';
+import { VehiclePhysics, type VehicleInputs } from '../../src/lib/sim/f12026-car/VehiclePhysics';
+import { FlatGroundQuery, type GroundHit, type GroundQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
+import { DEFAULT_SURFACE_TABLE } from '../../src/lib/sim/track-surfaces';
+import type { CarPhysicsConfig } from '../../src/lib/sim/f12026-car/F12026CarConfig';
+import { evaluateAeroWakeDeficit } from '../../src/lib/sim/aero-wake';
+import { AMG_GT3_CONFIG } from '../../src/lib/sim/gt3/AmgGt3Config';
+import { AMG_GT3_SIM_PROFILE } from '../../src/lib/sim/gt3/AmgGt3Sim';
+import { LC_LMDH_CONFIG } from '../../src/lib/sim/proto/LcLmdhConfig';
+import { LC_LMDH_SIM_PROFILE } from '../../src/lib/sim/proto/LcLmdhSim';
+import { F12026CarSim, type CarSimProfile } from '../../src/lib/sim/f12026-car/F12026CarSim';
+import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
+import { SIM_REALISM_FLAGS } from '../../src/lib/sim/sim-realism';
+import { DEFAULT_CHASSIS_SETUP } from '../../src/lib/sim/car-setup';
 
 const RHO = 1.18;
 const DT = 1 / 120;

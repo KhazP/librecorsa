@@ -5,10 +5,10 @@
  *  - [spec]     car / engine / drivetrain / suspensions / tyres / aero / brakes / electronics specification
  *  - [est]      engineering estimate where a runtime value is inferred
  *  - [derived]  computed from other values in this file
- *  - [motec]    fit to reference GT3 Evo MoTeC telemetry logs (Valencia, ~24 min); see scripts/compare-gt3-telemetry.ts
+ *  - [motec]    fit to reference GT3 Evo MoTeC telemetry logs (Valencia, ~24 min); see scripts/physics/compare-gt3-telemetry.ts
  *  - [ref]      a second GT3 reference data set, used where the first left the car's transient behaviour wrong (platform,
  *               dampers, diff, camber, aero ride-height range); checked against the [motec] bands and the handling
- *               scorecard (scripts/handling-report.ts)
+ *               scorecard (scripts/physics/handling-report.ts)
  *
  * No hybrid, DRS or heave spring: the ERS is zeroed, every performance mode is the same map, the heave element
  * has no rate, and the brakes are conventional hydraulics (no brake-by-wire).

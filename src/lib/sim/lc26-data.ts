@@ -103,7 +103,7 @@ function buildLc26LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints
 
 /**
  * Tread wear per joule of contact-patch sliding energy. Calibrated so the soft loses ≈3 % of its tread
- * per lap at Rwanda (`scripts/tyre-stint-report.ts 3 soft`); medium and hard scale down by their rubber
+ * per lap at Rwanda (`scripts/physics/tyre-stint-report.ts 3 soft`); medium and hard scale down by their rubber
  * wear ratio [assumed]
  */
 const WEAR_PER_J_SOFT = 4.1e-8;

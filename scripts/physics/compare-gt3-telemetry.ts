@@ -3,10 +3,10 @@
  * TC 3, ABS 3, race setup). The manoeuvres and reference data live in `lib/gt3-reference.ts`;
  * `verify-gt3-telemetry.ts` asserts the same table.
  *
- *   npx tsx "scripts/compare-gt3-telemetry.ts"
+ *   npx tsx "scripts/physics/compare-gt3-telemetry.ts"
  */
-import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
-import { GT3_REF, measureGt3 } from './lib/gt3-reference';
+import { AMG_GT3_CONFIG } from '../../src/lib/sim/gt3/AmgGt3Config';
+import { GT3_REF, measureGt3 } from '../lib/gt3-reference';
 
 const fmt = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : 'n/a');
 const row = (name: string, ours: number, ref: number, d = 2) =>
