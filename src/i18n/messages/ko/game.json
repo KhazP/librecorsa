@@ -264,7 +264,8 @@
     "hud": "HUD 표시 / 숨기기",
     "board": "랩 보드 열기 / 닫기",
     "headlights": "헤드라이트 켜기 / 끄기",
-    "headlightFlash": "상향등 점멸(누르고 있기)"
+    "headlightFlash": "상향등 점멸(누르고 있기)",
+    "pitLimiter": "피트 리미터"
   },
   "padActions": {
     "shiftUp": "기어 업",
@@ -285,7 +286,8 @@
     "hud": "HUD 표시 / 숨기기",
     "board": "랩 보드 열기 / 닫기",
     "headlights": "헤드라이트(짧게: 점멸, 길게: 켜기 / 끄기)",
-    "headlightFlash": "상향등 점멸(누르고 있기)"
+    "headlightFlash": "상향등 점멸(누르고 있기)",
+    "pitLimiter": "피트 리미터"
   },
   "pedals": {
     "throttle": "스로틀",
@@ -832,7 +834,8 @@
     "launchTouch": "스로틀을 길게 눌러 출발",
     "launchKey": "{key} 길게 눌러 출발 · Esc 메뉴",
     "noRacesOnHillClimb": "힐 클라임에서는 레이스를 진행할 수 없습니다",
-    "backToRaces": "레이스 목록으로 돌아가기"
+    "backToRaces": "레이스 목록으로 돌아가기",
+    "backToCareer": "커리어로 돌아가기"
   },
   "telemetryHud": {
     "menu": "메뉴",
@@ -944,5 +947,9 @@
       "saveChanged": "클라우드 저장 데이터가 다른 기기에서 변경되었습니다",
       "tooManyLaps": "클라우드에는 베스트 랩을 최대 {count}개까지 보관할 수 있습니다"
     }
+  },
+  "pit": {
+    "speeding": "피트 레인 과속({limit} km/h 초과)",
+    "stopMissed": "{count, plural, other {의무 피트 스톱 #회 미이행}}"
   }
 }

@@ -441,5 +441,6 @@
   "keyActions.pitLimiter": "Key binding (Controls): switches the pit lane speed limiter on and off. In the pit lane's speed zone it is on by itself.",
   "padActions.pitLimiter": "Controller button binding: switches the pit lane speed limiter on and off.",
   "pit.speeding": "Race control's call shown in the race feed and penalties: the driver went over the pit lane speed limit. {limit} is the limit in km/h.",
-  "pit.stopMissed": "Race control's penalty at the flag: the race required pit stops and the driver made fewer."
+  "pit.stopMissed": "Race control's penalty at the flag: the race required pit stops and the driver made fewer.",
+  "simulator.backToCareer": "Button on the race results card in a career round: leave the car for the career screen."
 }

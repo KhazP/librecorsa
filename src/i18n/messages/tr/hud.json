@@ -490,7 +490,9 @@
       "fuelTag": "Yakıt",
       "fuelTitle": "Yakıt ve enerji",
       "stndTag": "Sıra",
-      "stndTitle": "Sıralama"
+      "stndTitle": "Sıralama",
+      "pitTag": "PIT",
+      "pitTitle": "Pit stop"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "MFD sayfaları",
@@ -532,6 +534,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, one {# tur} other {# tur}}"
+    },
+    "pit": {
+      "tyres": "Sonraki lastik",
+      "repair": "Hasarı onar",
+      "repairTime": "Hasar %{damage} · +{seconds} s",
+      "noDamage": "Hasar yok",
+      "box": "Bu tur pite gir",
+      "limit": "Sınır {limit} km/h · box {box}",
+      "on": "Açık",
+      "off": "Kapalı",
+      "boxCalled": "Pit çağrıldı",
+      "callBox": "Çağır",
+      "stops": "Pit stop",
+      "stopsOf": "{made} / {required}",
+      "stopsShort": "{made, plural, =0 {Pit stop yok} one {# pit stop} other {# pit stop}}"
     }
   },
   "tunerMfdPanel": {
@@ -761,7 +778,8 @@
       "lead": "Lider",
       "lastVsBestTitle": "Son tur, en iyine göre",
       "lastVsTheirsTitle": "Onun son turu, seninkine göre",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "PIT"
     },
     "lap": {
       "region": "Tur",
@@ -1092,5 +1110,21 @@
     "resetAll": "Düzeni sıfırla",
     "cancel": "İptal",
     "done": "Tamam"
+  },
+  "pit": {
+    "boxBox": "Pite gir",
+    "limiter": "Sınırlayıcı",
+    "stop": "Dur",
+    "go": "Çık",
+    "crew": "Ekip",
+    "fitting": "Takılan: {compound}",
+    "fittingRepairing": "Takılan: {compound} · onarım",
+    "stopTime": "Duruş {seconds} s",
+    "inBox": "Box {box}",
+    "lane": "Pit yolu",
+    "boxIn": "Box {box}: {metres} m kaldı",
+    "boxPassed": "Box {box} geçildi",
+    "approach": "Pit girişi · sınır {limit} km/h",
+    "limiterKey": "Sınırlayıcı: {key}"
   }
 }

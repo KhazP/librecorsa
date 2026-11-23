@@ -490,7 +490,9 @@
       "fuelTag": "COMB",
       "fuelTitle": "Combustível e energia",
       "stndTag": "CLAS",
-      "stndTitle": "Classificação"
+      "stndTitle": "Classificação",
+      "pitTag": "PIT",
+      "pitTitle": "Pit stop"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "Páginas do MFD",
@@ -532,6 +534,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, one {# volta} other {# voltas}}"
+    },
+    "pit": {
+      "tyres": "Próximos pneus",
+      "repair": "Reparar danos",
+      "repairTime": "Dano {damage}% · +{seconds} s",
+      "noDamage": "Sem dano",
+      "box": "Box nesta volta",
+      "limit": "Limite {limit} km/h · box {box}",
+      "on": "Sim",
+      "off": "Não",
+      "boxCalled": "Entrando",
+      "callBox": "Chamar",
+      "stops": "Paradas",
+      "stopsOf": "{made} de {required}",
+      "stopsShort": "{made, plural, =0 {Sem paradas} one {# parada} other {# paradas}}"
     }
   },
   "tunerMfdPanel": {
@@ -761,7 +778,8 @@
       "lead": "Líder",
       "lastVsBestTitle": "Última volta contra a sua melhor",
       "lastVsTheirsTitle": "Última volta deles contra a sua",
-      "personalBest": "RP"
+      "personalBest": "RP",
+      "pit": "PIT"
     },
     "lap": {
       "region": "Volta",
@@ -1092,5 +1110,21 @@
     "resetAll": "Redefinir layout",
     "cancel": "Cancelar",
     "done": "Concluído"
+  },
+  "pit": {
+    "boxBox": "Box",
+    "limiter": "Limitador",
+    "stop": "Pare",
+    "go": "Vai",
+    "crew": "Equipe",
+    "fitting": "Trocando para {compound}",
+    "fittingRepairing": "Trocando para {compound} · reparando",
+    "stopTime": "Parada {seconds} s",
+    "inBox": "Box {box}",
+    "lane": "Pit lane",
+    "boxIn": "Box {box} em {metres} m",
+    "boxPassed": "Passou do box {box}",
+    "approach": "Entrada do pit · limite {limit} km/h",
+    "limiterKey": "Limitador: {key}"
   }
 }

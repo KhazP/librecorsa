@@ -490,7 +490,9 @@
       "fuelTag": "燃油",
       "fuelTitle": "燃油與電量",
       "stndTag": "排名",
-      "stndTitle": "場上排名"
+      "stndTitle": "場上排名",
+      "pitTag": "進站",
+      "pitTitle": "進站維修"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "MFD 頁面",
@@ -532,6 +534,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, other {# 圈}}"
+    },
+    "pit": {
+      "tyres": "下次換胎",
+      "repair": "修復車損",
+      "repairTime": "車損 {damage}% · +{seconds} s",
+      "noDamage": "無車損",
+      "box": "本圈進站",
+      "limit": "限速 {limit} km/h · {box} 號維修位",
+      "on": "開啟",
+      "off": "關閉",
+      "boxCalled": "將進站",
+      "callBox": "呼叫",
+      "stops": "進站次數",
+      "stopsOf": "{made} / {required}",
+      "stopsShort": "{made, plural, =0 {未進站} other {已進站 # 次}}"
     }
   },
   "tunerMfdPanel": {
@@ -761,7 +778,8 @@
       "lead": "領先",
       "lastVsBestTitle": "上一圈與個人最佳相比",
       "lastVsTheirsTitle": "對方上一圈與你相比",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "進站"
     },
     "lap": {
       "region": "單圈計時",
@@ -1092,5 +1110,21 @@
     "resetAll": "重設配置",
     "cancel": "取消",
     "done": "完成"
+  },
+  "pit": {
+    "boxBox": "進站",
+    "limiter": "限速",
+    "stop": "停車",
+    "go": "出發",
+    "crew": "維修組",
+    "fitting": "換上{compound}",
+    "fittingRepairing": "換上{compound} · 修復中",
+    "stopTime": "停站 {seconds} s",
+    "inBox": "{box} 號維修位",
+    "lane": "維修區",
+    "boxIn": "距 {box} 號維修位 {metres} m",
+    "boxPassed": "已駛過 {box} 號維修位",
+    "approach": "維修區入口 · 限速 {limit} km/h",
+    "limiterKey": "限速器：{key}"
   }
 }

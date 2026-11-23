@@ -490,7 +490,9 @@
       "fuelTag": "KRST",
       "fuelTitle": "Kraftstoff & Energie",
       "stndTag": "RANG",
-      "stndTitle": "Wertung"
+      "stndTitle": "Wertung",
+      "pitTag": "BOX",
+      "pitTitle": "Boxenstopp"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "MFD-Seiten",
@@ -532,6 +534,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, one {# Runde} other {# Runden}}"
+    },
+    "pit": {
+      "tyres": "Nächste Reifen",
+      "repair": "Schaden reparieren",
+      "repairTime": "Schaden {damage} % · +{seconds} s",
+      "noDamage": "Kein Schaden",
+      "box": "Diese Runde an die Box",
+      "limit": "Limit {limit} km/h · Box {box}",
+      "on": "An",
+      "off": "Aus",
+      "boxCalled": "An die Box",
+      "callBox": "Rufen",
+      "stops": "Stopps",
+      "stopsOf": "{made} von {required}",
+      "stopsShort": "{made, plural, =0 {Keine Stopps} one {# Stopp} other {# Stopps}}"
     }
   },
   "tunerMfdPanel": {
@@ -761,7 +778,8 @@
       "lead": "Führ.",
       "lastVsBestTitle": "Letzte Runde gegen deine Bestzeit",
       "lastVsTheirsTitle": "Deren letzte Runde gegen deine",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "BOX"
     },
     "lap": {
       "region": "Runde",
@@ -1092,5 +1110,21 @@
     "resetAll": "Layout zurücksetzen",
     "cancel": "Abbrechen",
     "done": "Fertig"
+  },
+  "pit": {
+    "boxBox": "Box",
+    "limiter": "Limiter",
+    "stop": "Stopp",
+    "go": "Los",
+    "crew": "Crew",
+    "fitting": "Reifenwechsel: {compound}",
+    "fittingRepairing": "Reifenwechsel: {compound} · Reparatur",
+    "stopTime": "Stopp {seconds} s",
+    "inBox": "Box {box}",
+    "lane": "Boxengasse",
+    "boxIn": "Box {box} in {metres} m",
+    "boxPassed": "Box {box} vorbei",
+    "approach": "Boxeneinfahrt · Limit {limit} km/h",
+    "limiterKey": "Limiter: {key}"
   }
 }

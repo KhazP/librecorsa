@@ -490,7 +490,9 @@
       "fuelTag": "BBM",
       "fuelTitle": "Bahan bakar & energi",
       "stndTag": "POS",
-      "stndTitle": "Klasemen"
+      "stndTitle": "Klasemen",
+      "pitTag": "PIT",
+      "pitTitle": "Pit stop"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "Halaman MFD",
@@ -532,6 +534,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, other {# lap}}"
+    },
+    "pit": {
+      "tyres": "Ban berikutnya",
+      "repair": "Perbaiki kerusakan",
+      "repairTime": "Kerusakan {damage}% · +{seconds} s",
+      "noDamage": "Tanpa kerusakan",
+      "box": "Box di lap ini",
+      "limit": "Batas {limit} km/h · box {box}",
+      "on": "Ya",
+      "off": "Tidak",
+      "boxCalled": "Masuk pit",
+      "callBox": "Panggil",
+      "stops": "Pit stop",
+      "stopsOf": "{made} dari {required}",
+      "stopsShort": "{made, plural, =0 {Belum pit stop} other {# pit stop}}"
     }
   },
   "tunerMfdPanel": {
@@ -761,7 +778,8 @@
       "lead": "Pimpin",
       "lastVsBestTitle": "Lap sebelumnya dibanding terbaikmu",
       "lastVsTheirsTitle": "Lap sebelumnya mereka dibanding milikmu",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "PIT"
     },
     "lap": {
       "region": "Lap",
@@ -1092,5 +1110,21 @@
     "resetAll": "Reset tata letak",
     "cancel": "Batal",
     "done": "Selesai"
+  },
+  "pit": {
+    "boxBox": "Box",
+    "limiter": "Limiter",
+    "stop": "Berhenti",
+    "go": "Jalan",
+    "crew": "Kru",
+    "fitting": "Memasang ban {compound}",
+    "fittingRepairing": "Memasang ban {compound} · perbaikan",
+    "stopTime": "Pit stop {seconds} s",
+    "inBox": "Box {box}",
+    "lane": "Pit lane",
+    "boxIn": "Box {box} dalam {metres} m",
+    "boxPassed": "Box {box} terlewat",
+    "approach": "Masuk pit · batas {limit} km/h",
+    "limiterKey": "Limiter: {key}"
   }
 }

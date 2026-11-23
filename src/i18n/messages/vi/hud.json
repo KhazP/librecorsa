@@ -490,7 +490,9 @@
       "fuelTag": "FUEL",
       "fuelTitle": "Nhiên liệu & năng lượng",
       "stndTag": "STND",
-      "stndTitle": "Bảng xếp hạng"
+      "stndTitle": "Bảng xếp hạng",
+      "pitTag": "PIT",
+      "pitTitle": "Dừng pit"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "Các trang MFD",
@@ -532,6 +534,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, other {# vòng}}"
+    },
+    "pit": {
+      "tyres": "Lốp kế tiếp",
+      "repair": "Sửa hư hại",
+      "repairTime": "Hư hại {damage}% · +{seconds} s",
+      "noDamage": "Không hư hại",
+      "box": "Vào pit vòng này",
+      "limit": "Giới hạn {limit} km/h · ô pit {box}",
+      "on": "Bật",
+      "off": "Tắt",
+      "boxCalled": "Vào pit",
+      "callBox": "Gọi",
+      "stops": "Lần dừng pit",
+      "stopsOf": "{made} / {required}",
+      "stopsShort": "{made, plural, =0 {Chưa dừng pit} other {# lần dừng}}"
     }
   },
   "tunerMfdPanel": {
@@ -761,7 +778,8 @@
       "lead": "Dẫn đầu",
       "lastVsBestTitle": "Vòng trước so với vòng tốt nhất của bạn",
       "lastVsTheirsTitle": "Vòng trước của họ so với bạn",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "PIT"
     },
     "lap": {
       "region": "Vòng đua",
@@ -1092,5 +1110,21 @@
     "resetAll": "Đặt lại bố cục",
     "cancel": "Hủy",
     "done": "Xong"
+  },
+  "pit": {
+    "boxBox": "Box",
+    "limiter": "Giới hạn pit",
+    "stop": "Dừng",
+    "go": "Đi",
+    "crew": "Đội pit",
+    "fitting": "Thay lốp {compound}",
+    "fittingRepairing": "Thay lốp {compound} · sửa xe",
+    "stopTime": "Dừng {seconds} s",
+    "inBox": "Ô pit {box}",
+    "lane": "Làn pit",
+    "boxIn": "Ô pit {box} còn {metres} m",
+    "boxPassed": "Đã qua ô pit {box}",
+    "approach": "Lối vào pit · giới hạn {limit} km/h",
+    "limiterKey": "Giới hạn pit: {key}"
   }
 }

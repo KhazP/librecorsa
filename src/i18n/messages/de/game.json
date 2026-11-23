@@ -264,7 +264,8 @@
     "hud": "HUD ein- / ausblenden",
     "board": "Bestenliste öffnen / schließen",
     "headlights": "Scheinwerfer an / aus",
-    "headlightFlash": "Lichthupe (halten)"
+    "headlightFlash": "Lichthupe (halten)",
+    "pitLimiter": "Boxenlimiter"
   },
   "padActions": {
     "shiftUp": "Hochschalten",
@@ -285,7 +286,8 @@
     "hud": "HUD ein- / ausblenden",
     "board": "Bestenliste öffnen / schließen",
     "headlights": "Scheinwerfer (tippen: Lichthupe, halten: an / aus)",
-    "headlightFlash": "Lichthupe (halten)"
+    "headlightFlash": "Lichthupe (halten)",
+    "pitLimiter": "Boxenlimiter"
   },
   "pedals": {
     "throttle": "Gas",
@@ -832,7 +834,8 @@
     "launchTouch": "Gas halten zum Losfahren",
     "launchKey": "{key} halten zum Losfahren · Esc Menü",
     "noRacesOnHillClimb": "Keine Rennen bei einem Bergrennen",
-    "backToRaces": "Zurück zu den Rennen"
+    "backToRaces": "Zurück zu den Rennen",
+    "backToCareer": "Zurück zur Karriere"
   },
   "telemetryHud": {
     "menu": "Menü",
@@ -944,5 +947,9 @@
       "saveChanged": "Der Cloud-Spielstand wurde auf einem anderen Gerät geändert",
       "tooManyLaps": "Die Cloud speichert bis zu {count} beste Runden"
     }
+  },
+  "pit": {
+    "speeding": "Zu schnell in der Boxengasse (über {limit} km/h)",
+    "stopMissed": "{count, plural, one {Pflichtstopp nicht absolviert} other {# Pflichtstopps nicht absolviert}}"
   }
 }

@@ -264,7 +264,8 @@
     "hud": "Afficher / masquer le HUD",
     "board": "Ouvrir / fermer le classement",
     "headlights": "Phares allumés / éteints",
-    "headlightFlash": "Appels de phares (maintenir)"
+    "headlightFlash": "Appels de phares (maintenir)",
+    "pitLimiter": "Limiteur de vitesse"
   },
   "padActions": {
     "shiftUp": "Rapport supérieur",
@@ -285,7 +286,8 @@
     "hud": "Afficher / masquer le HUD",
     "board": "Ouvrir / fermer le classement",
     "headlights": "Phares (appui bref : appels de phares, maintenir : allumés / éteints)",
-    "headlightFlash": "Appels de phares (maintenir)"
+    "headlightFlash": "Appels de phares (maintenir)",
+    "pitLimiter": "Limiteur de vitesse"
   },
   "pedals": {
     "throttle": "Accélérateur",
@@ -832,7 +834,8 @@
     "launchTouch": "Maintenez l’accélérateur pour partir",
     "launchKey": "Maintenez {key} pour partir · Esc Menu",
     "noRacesOnHillClimb": "Pas de courses en course de côte",
-    "backToRaces": "Retour aux courses"
+    "backToRaces": "Retour aux courses",
+    "backToCareer": "Retour à la carrière"
   },
   "telemetryHud": {
     "menu": "Menu",
@@ -944,5 +947,9 @@
       "saveChanged": "La sauvegarde cloud a changé sur un autre appareil",
       "tooManyLaps": "Le cloud conserve jusqu’à {count} meilleurs tours"
     }
+  },
+  "pit": {
+    "speeding": "Excès de vitesse dans la voie des stands (plus de {limit} km/h)",
+    "stopMissed": "{count, plural, one {Pit stop obligatoire non effectué} other {# pit stops obligatoires non effectués}}"
   }
 }

@@ -490,7 +490,9 @@
       "fuelTag": "CARB",
       "fuelTitle": "Carburant et énergie",
       "stndTag": "CLAS",
-      "stndTitle": "Classement"
+      "stndTitle": "Classement",
+      "pitTag": "PIT",
+      "pitTitle": "Pit stop"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "Pages du MFD",
@@ -532,6 +534,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, one {# tour} other {# tours}}"
+    },
+    "pit": {
+      "tyres": "Prochains pneus",
+      "repair": "Réparer les dégâts",
+      "repairTime": "Dégâts {damage} % · +{seconds} s",
+      "noDamage": "Aucun dégât",
+      "box": "Box ce tour",
+      "limit": "Limite {limit} km/h · stand {box}",
+      "on": "Oui",
+      "off": "Non",
+      "boxCalled": "Rentre",
+      "callBox": "Appeler",
+      "stops": "Pit stops",
+      "stopsOf": "{made} sur {required}",
+      "stopsShort": "{made, plural, =0 {Aucun pit stop} one {# pit stop} other {# pit stops}}"
     }
   },
   "tunerMfdPanel": {
@@ -761,7 +778,8 @@
       "lead": "Tête",
       "lastVsBestTitle": "Dernier tour comparé à votre meilleur",
       "lastVsTheirsTitle": "Son dernier tour comparé au vôtre",
-      "personalBest": "RP"
+      "personalBest": "RP",
+      "pit": "PIT"
     },
     "lap": {
       "region": "Tour",
@@ -1092,5 +1110,21 @@
     "resetAll": "Réinitialiser la disposition",
     "cancel": "Annuler",
     "done": "Terminé"
+  },
+  "pit": {
+    "boxBox": "Box",
+    "limiter": "Limiteur",
+    "stop": "Stop",
+    "go": "Partez",
+    "crew": "Équipe",
+    "fitting": "Montage {compound}",
+    "fittingRepairing": "Montage {compound} · réparation",
+    "stopTime": "Arrêt {seconds} s",
+    "inBox": "Stand {box}",
+    "lane": "Voie des stands",
+    "boxIn": "Stand {box} dans {metres} m",
+    "boxPassed": "Stand {box} dépassé",
+    "approach": "Entrée des stands · limite {limit} km/h",
+    "limiterKey": "Limiteur : {key}"
   }
 }

@@ -490,7 +490,9 @@
       "fuelTag": "연료",
       "fuelTitle": "연료 및 에너지",
       "stndTag": "순위",
-      "stndTitle": "순위표"
+      "stndTitle": "순위표",
+      "pitTag": "피트",
+      "pitTitle": "피트 스톱"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "MFD 페이지",
@@ -532,6 +534,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, other {#랩}}"
+    },
+    "pit": {
+      "tyres": "다음 타이어",
+      "repair": "손상 수리",
+      "repairTime": "손상 {damage}% · +{seconds}초",
+      "noDamage": "손상 없음",
+      "box": "이번 랩 피트 인",
+      "limit": "제한 {limit} km/h · {box}번 박스",
+      "on": "켜짐",
+      "off": "꺼짐",
+      "boxCalled": "피트 인",
+      "callBox": "요청",
+      "stops": "피트 스톱",
+      "stopsOf": "{made} / {required}",
+      "stopsShort": "{made, plural, =0 {스톱 없음} other {스톱 #회}}"
     }
   },
   "tunerMfdPanel": {
@@ -761,7 +778,8 @@
       "lead": "선두",
       "lastVsBestTitle": "내 베스트 대비 이전 랩",
       "lastVsTheirsTitle": "내 랩 대비 상대 이전 랩",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "피트"
     },
     "lap": {
       "region": "랩",
@@ -1092,5 +1110,21 @@
     "resetAll": "레이아웃 초기화",
     "cancel": "취소",
     "done": "완료"
+  },
+  "pit": {
+    "boxBox": "박스",
+    "limiter": "리미터",
+    "stop": "정지",
+    "go": "출발",
+    "crew": "크루",
+    "fitting": "{compound} 장착 중",
+    "fittingRepairing": "{compound} 장착 · 수리 중",
+    "stopTime": "정차 {seconds}초",
+    "inBox": "{box}번 박스",
+    "lane": "피트 레인",
+    "boxIn": "{box}번 박스까지 {metres} m",
+    "boxPassed": "{box}번 박스 지나침",
+    "approach": "피트 진입 · 제한 {limit} km/h",
+    "limiterKey": "리미터: {key}"
   }
 }

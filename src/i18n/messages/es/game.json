@@ -264,7 +264,8 @@
     "hud": "Mostrar / ocultar HUD",
     "board": "Abrir / cerrar clasificación",
     "headlights": "Faros encendidos / apagados",
-    "headlightFlash": "Ráfagas de faros (mantener)"
+    "headlightFlash": "Ráfagas de faros (mantener)",
+    "pitLimiter": "Limitador de pit lane"
   },
   "padActions": {
     "shiftUp": "Subir marcha",
@@ -285,7 +286,8 @@
     "hud": "Mostrar / ocultar HUD",
     "board": "Abrir / cerrar clasificación",
     "headlights": "Faros (toque: ráfaga, mantener: encender / apagar)",
-    "headlightFlash": "Ráfagas de faros (mantener)"
+    "headlightFlash": "Ráfagas de faros (mantener)",
+    "pitLimiter": "Limitador de pit lane"
   },
   "pedals": {
     "throttle": "Acelerador",
@@ -832,7 +834,8 @@
     "launchTouch": "Mantén el acelerador para salir",
     "launchKey": "Mantén {key} para salir · Esc Menú",
     "noRacesOnHillClimb": "No hay carreras en una subida de montaña",
-    "backToRaces": "Volver a las carreras"
+    "backToRaces": "Volver a las carreras",
+    "backToCareer": "Volver a la trayectoria"
   },
   "telemetryHud": {
     "menu": "Menú",
@@ -944,5 +947,9 @@
       "saveChanged": "Los datos en la nube cambiaron en otro dispositivo",
       "tooManyLaps": "La nube guarda hasta {count} mejores vueltas"
     }
+  },
+  "pit": {
+    "speeding": "Exceso de velocidad en el pit lane (más de {limit} km/h)",
+    "stopMissed": "{count, plural, one {Pit stop obligatorio no realizado} other {# pit stops obligatorios no realizados}}"
   }
 }

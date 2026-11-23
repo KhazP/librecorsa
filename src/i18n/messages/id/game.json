@@ -264,7 +264,8 @@
     "hud": "Tampilkan / sembunyikan HUD",
     "board": "Buka / tutup papan waktu lap",
     "headlights": "Lampu depan nyala / mati",
-    "headlightFlash": "Kedipkan lampu depan (tahan)"
+    "headlightFlash": "Kedipkan lampu depan (tahan)",
+    "pitLimiter": "Pit limiter"
   },
   "padActions": {
     "shiftUp": "Naik gigi",
@@ -285,7 +286,8 @@
     "hud": "Tampilkan / sembunyikan HUD",
     "board": "Buka / tutup papan waktu lap",
     "headlights": "Lampu depan (ketuk: kedip, tahan: nyala / mati)",
-    "headlightFlash": "Kedipkan lampu depan (tahan)"
+    "headlightFlash": "Kedipkan lampu depan (tahan)",
+    "pitLimiter": "Pit limiter"
   },
   "pedals": {
     "throttle": "Gas",
@@ -832,7 +834,8 @@
     "launchTouch": "Tahan gas untuk meluncur",
     "launchKey": "Tahan {key} untuk meluncur · Esc Menu",
     "noRacesOnHillClimb": "Tidak ada balapan di lintasan hill climb",
-    "backToRaces": "Kembali ke daftar balapan"
+    "backToRaces": "Kembali ke daftar balapan",
+    "backToCareer": "Kembali ke karier"
   },
   "telemetryHud": {
     "menu": "Menu",
@@ -944,5 +947,9 @@
       "saveChanged": "Simpanan cloud berubah di perangkat lain",
       "tooManyLaps": "Cloud menampung hingga {count} lap terbaik"
     }
+  },
+  "pit": {
+    "speeding": "Melebihi batas kecepatan pit lane (di atas {limit} km/h)",
+    "stopMissed": "{count, plural, other {# pit stop wajib tidak dilakukan}}"
   }
 }

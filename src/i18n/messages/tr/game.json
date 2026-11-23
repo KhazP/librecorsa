@@ -264,7 +264,8 @@
     "hud": "HUD göster / gizle",
     "board": "Tur tablosunu aç / kapat",
     "headlights": "Farlar açık / kapalı",
-    "headlightFlash": "Selektör (basılı tut)"
+    "headlightFlash": "Selektör (basılı tut)",
+    "pitLimiter": "Pit hız sınırlayıcı"
   },
   "padActions": {
     "shiftUp": "Vites yükselt",
@@ -285,7 +286,8 @@
     "hud": "HUD göster / gizle",
     "board": "Tur tablosunu aç / kapat",
     "headlights": "Farlar (bas: selektör, basılı tut: aç / kapa)",
-    "headlightFlash": "Selektör (basılı tut)"
+    "headlightFlash": "Selektör (basılı tut)",
+    "pitLimiter": "Pit hız sınırlayıcı"
   },
   "pedals": {
     "throttle": "Gaz",
@@ -832,7 +834,8 @@
     "launchTouch": "Kalkış için gaza basılı tut",
     "launchKey": "Kalkış için {key} tuşuna basılı tut · Esc Menü",
     "noRacesOnHillClimb": "Tırmanma etabında yarış yapılamaz",
-    "backToRaces": "Yarışlara dön"
+    "backToRaces": "Yarışlara dön",
+    "backToCareer": "Kariyere dön"
   },
   "telemetryHud": {
     "menu": "Menü",
@@ -944,5 +947,9 @@
       "saveChanged": "Bulut kaydı başka bir cihazda değişti",
       "tooManyLaps": "Bulut en fazla {count} en iyi turu tutar"
     }
+  },
+  "pit": {
+    "speeding": "Pit yolunda hız ihlali ({limit} km/h üstü)",
+    "stopMissed": "{count, plural, one {Zorunlu pit stop yapılmadı} other {# zorunlu pit stop yapılmadı}}"
   }
 }

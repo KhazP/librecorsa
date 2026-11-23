@@ -490,7 +490,9 @@
       "fuelTag": "CARB",
       "fuelTitle": "Carburante ed energia",
       "stndTag": "CLAS",
-      "stndTitle": "Classifica"
+      "stndTitle": "Classifica",
+      "pitTag": "BOX",
+      "pitTitle": "Sosta ai box"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "Pagine MFD",
@@ -532,6 +534,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, one {# giro} other {# giri}}"
+    },
+    "pit": {
+      "tyres": "Prossime gomme",
+      "repair": "Ripara danni",
+      "repairTime": "Danni {damage}% · +{seconds} s",
+      "noDamage": "Nessun danno",
+      "box": "Box in questo giro",
+      "limit": "Limite {limit} km/h · box {box}",
+      "on": "On",
+      "off": "Off",
+      "boxCalled": "Rientro",
+      "callBox": "Chiama",
+      "stops": "Soste",
+      "stopsOf": "{made} su {required}",
+      "stopsShort": "{made, plural, =0 {Nessuna sosta} one {# sosta} other {# soste}}"
     }
   },
   "tunerMfdPanel": {
@@ -761,7 +778,8 @@
       "lead": "Leader",
       "lastVsBestTitle": "Ultimo giro rispetto al tuo migliore",
       "lastVsTheirsTitle": "Il suo ultimo giro rispetto al tuo",
-      "personalBest": "RP"
+      "personalBest": "RP",
+      "pit": "BOX"
     },
     "lap": {
       "region": "Giro",
@@ -1092,5 +1110,21 @@
     "resetAll": "Reimposta layout",
     "cancel": "Annulla",
     "done": "Fatto"
+  },
+  "pit": {
+    "boxBox": "Box",
+    "limiter": "Limitatore",
+    "stop": "Fermati",
+    "go": "Vai",
+    "crew": "Meccanici",
+    "fitting": "Cambio gomme: {compound}",
+    "fittingRepairing": "Cambio gomme: {compound} · riparazione",
+    "stopTime": "Sosta {seconds} s",
+    "inBox": "Box {box}",
+    "lane": "Corsia dei box",
+    "boxIn": "Box {box} tra {metres} m",
+    "boxPassed": "Box {box} superato",
+    "approach": "Ingresso box · limite {limit} km/h",
+    "limiterKey": "Limitatore: {key}"
   }
 }

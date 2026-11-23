@@ -264,7 +264,8 @@
     "hud": "Hiện / ẩn HUD",
     "board": "Mở / đóng bảng xếp hạng vòng",
     "headlights": "Bật / tắt đèn pha",
-    "headlightFlash": "Nháy đèn pha (giữ)"
+    "headlightFlash": "Nháy đèn pha (giữ)",
+    "pitLimiter": "Giới hạn tốc độ pit"
   },
   "padActions": {
     "shiftUp": "Lên số",
@@ -285,7 +286,8 @@
     "hud": "Hiện / ẩn HUD",
     "board": "Mở / đóng bảng xếp hạng vòng",
     "headlights": "Đèn pha (nhấn: nháy, giữ: bật / tắt)",
-    "headlightFlash": "Nháy đèn pha (giữ)"
+    "headlightFlash": "Nháy đèn pha (giữ)",
+    "pitLimiter": "Giới hạn tốc độ pit"
   },
   "pedals": {
     "throttle": "Chân ga",
@@ -832,7 +834,8 @@
     "launchTouch": "Giữ chân ga để xuất phát",
     "launchKey": "Giữ {key} để xuất phát · Esc Menu",
     "noRacesOnHillClimb": "Không hỗ trợ đua chính trên đường đua leo đồi",
-    "backToRaces": "Quay lại danh sách cuộc đua"
+    "backToRaces": "Quay lại danh sách cuộc đua",
+    "backToCareer": "Quay lại sự nghiệp"
   },
   "telemetryHud": {
     "menu": "Menu",
@@ -944,5 +947,9 @@
       "saveChanged": "Bản lưu đám mây đã bị thay đổi trên thiết bị khác",
       "tooManyLaps": "Đám mây lưu tối đa {count} vòng tốt nhất"
     }
+  },
+  "pit": {
+    "speeding": "Chạy quá tốc độ trong làn pit (trên {limit} km/h)",
+    "stopMissed": "{count, plural, other {Không thực hiện # lần dừng pit bắt buộc}}"
   }
 }

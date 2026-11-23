@@ -834,7 +834,8 @@
     "launchTouch": "Hold throttle to launch",
     "launchKey": "Hold {key} to launch · Esc Menu",
     "noRacesOnHillClimb": "No races on a hill climb",
-    "backToRaces": "Back to the races"
+    "backToRaces": "Back to the races",
+    "backToCareer": "Back to career"
   },
   "telemetryHud": {
     "menu": "Menu",

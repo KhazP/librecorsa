@@ -490,7 +490,9 @@
       "fuelTag": "وقود",
       "fuelTitle": "الوقود والطاقة",
       "stndTag": "ترتيب",
-      "stndTitle": "الترتيب"
+      "stndTitle": "الترتيب",
+      "pitTag": "صيانة",
+      "pitTitle": "توقف الصيانة"
     },
     "panel": "MFD · {page}",
     "pagesLabel": "صفحات MFD",
@@ -532,6 +534,21 @@
     "pill": {
       "position": "P{position}/{fieldSize}",
       "laps": "{count, plural, zero {0 لفات} one {لفة واحدة} two {لفتان} few {# لفات} many {# لفة} other {# لفة}}"
+    },
+    "pit": {
+      "tyres": "الإطارات التالية",
+      "repair": "إصلاح الأضرار",
+      "repairTime": "الضرر {damage}% · +{seconds} s",
+      "noDamage": "لا ضرر",
+      "box": "التوقف في هذه اللفة",
+      "limit": "الحد {limit} km/h · المرآب {box}",
+      "on": "مفعّل",
+      "off": "معطّل",
+      "boxCalled": "توقف مطلوب",
+      "callBox": "استدعاء",
+      "stops": "التوقفات",
+      "stopsOf": "{made} من {required}",
+      "stopsShort": "{made, plural, =0 {لا توقفات} one {توقف واحد} two {توقفان} few {# توقفات} many {# توقفًا} other {# توقف}}"
     }
   },
   "tunerMfdPanel": {
@@ -761,7 +778,8 @@
       "lead": "المتصدر",
       "lastVsBestTitle": "اللفة الأخيرة مقارنة بأفضل لفة لك",
       "lastVsTheirsTitle": "آخر لفة لهم مقارنة بلفتك",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "صيانة"
     },
     "lap": {
       "region": "اللفة",
@@ -1092,5 +1110,21 @@
     "resetAll": "إعادة تعيين التخطيط",
     "cancel": "إلغاء",
     "done": "تم"
+  },
+  "pit": {
+    "boxBox": "ادخل",
+    "limiter": "المحدد",
+    "stop": "قف",
+    "go": "انطلق",
+    "crew": "الطاقم",
+    "fitting": "تركيب: {compound}",
+    "fittingRepairing": "تركيب: {compound} · إصلاح",
+    "stopTime": "التوقف {seconds} s",
+    "inBox": "المرآب {box}",
+    "lane": "حارة الصيانة",
+    "boxIn": "المرآب {box} بعد {metres} m",
+    "boxPassed": "تجاوزت المرآب {box}",
+    "approach": "مدخل الصيانة · الحد {limit} km/h",
+    "limiterKey": "المحدد: {key}"
   }
 }
