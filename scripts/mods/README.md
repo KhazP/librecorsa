@@ -6,11 +6,12 @@ into them. Players and modders start at [docs/modding.md](../../docs/modding.md)
 the tools.
 
 ```
-mod-tool.ts          npm run mod -- …: check, pack, index, import, from-circuit, from-car
+mod-tool.ts          npm run mod -- …: check, pack, index, catalogue, import, from-circuit, from-car
 lib/
   package-check.ts   a package folder checked as the game's importer checks it, and its content hash
   zip-writer.ts      the zip `pack` writes (what src/lib/mods/zip-reader.ts reads)
   mods-index.ts      a mods folder's _index.json, for the dev server
+  catalogue.ts       a catalogue of packed packages (src/lib/mods/mod-catalogue.ts), from a folder of zips
   manifest-file.ts   mod.json read, started, added to and written; ids and credits made from a source's
   circuit-package.ts a circuit the converters built (public/tracks/<id>/) → a package
   car-package.ts     a converted car (its GLB, liveries, sound, physics patch) → a package
@@ -22,6 +23,15 @@ importers/
 
 The game's side of packages (the manifest's rules, the zip reader, the store, the loader) is in `src/lib/mods/`; the
 tools import it rather than repeat it, so a package the tools pass is one the game takes.
+
+## A catalogue
+
+`npm run mod -- catalogue <folder> [--base-url <url>] [--out <file>]` reads every `.zip` in the folder with the game's
+zip reader, unpacks each into a temporary folder and runs `checkPackage` on it (what `check` runs), then lists it
+with its size, SHA-256 and content hash. Links are `<base-url><file name>`; without `--base-url` they are the file
+names, so the catalogue must sit beside the zips. A picture with a zip's name (`<name>.webp`, `.png`, `.jpg`) is its
+preview. The catalogue is read back with the game's own `parseCatalogue` before it is written, and nothing is written
+when any zip fails. The format and where the game reads catalogues are in docs/modding.md.
 
 ## How an import runs
 

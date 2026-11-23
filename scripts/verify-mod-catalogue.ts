@@ -2,12 +2,13 @@
  * Mod catalogues (src/lib/mods/mod-catalogue.ts): the format's checks and the links a catalogue may hold, where the
  * game reads catalogues from, reading one (missing, too big, unreachable, slow), a package's status against what is
  * installed, the streamed download and its size and SHA-256 checks, and an install refused when the download isn't
- * the package and content its catalogue lists.
+ * the package and content its catalogue lists. Also `npm run mod -- catalogue`, which writes one from packed zips.
  *
  *   npx tsx scripts/verify-mod-catalogue.ts
  */
-import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -26,6 +27,7 @@ import {
 import { Sha256 } from "../src/lib/mods/sha256-stream";
 import { modDefinitions } from "../src/lib/mods/mod-content";
 import { installPackage, readInstalled, zipSource } from "../src/lib/mods/mod-store";
+import { buildCatalogue, linkBase } from "./mods/lib/catalogue";
 import { checkPackage, hashFolder } from "./mods/lib/package-check";
 import { zipPackage } from "./mods/lib/zip-writer";
 
@@ -59,14 +61,14 @@ const entry = (extra: Record<string, unknown> = {}): Record<string, unknown> => 
 });
 
 /** Builds a small package folder: one livery for one of the game's cars */
-function makePackage(dir: string, version: string, paint: string): string {
+function makePackage(dir: string, version: string, paint: string, id = "jdoe.blue-gt", name = "Blue GT"): string {
   mkdirSync(join(dir, "skins", "blue"), { recursive: true });
   writeFileSync(
     join(dir, "mod.json"),
     JSON.stringify({
       format: 1,
-      id: "jdoe.blue-gt",
-      name: "Blue GT",
+      id,
+      name,
       version,
       credit: { author: "J. Doe", license: "CC BY 4.0", licenseUrl: "https://creativecommons.org/licenses/by/4.0/" },
       skins: [{ car: "amg-gt3", id: "blue", name: "#7 Blue", swatch: ["#1040c0", "#ffffff"] }],
@@ -327,12 +329,106 @@ async function main(): Promise<void> {
   result = await installPackage(await zipSource(blob), known, { id: "jdoe.blue-gt", hash: await hashOf(v1) });
   check("A package's zip downloaded and checked installs from what was read", result.ok && (await readInstalled())[0]?.version === "1.0.0");
 
+  await generatorChecks();
+
   rmSync(tmp, { recursive: true, force: true });
   if (failed) {
     console.log(`\n${failed} check(s) failed`);
     process.exit(1);
   }
   console.log("\nAll mod catalogue checks passed");
+}
+
+/** `npm run mod -- catalogue`: a catalogue written from packed zips, read back by the game */
+async function generatorChecks(): Promise<void> {
+  // --- Where the zips' links start ---
+  check("Links: an https:// base, a path, a folder beside the catalogue, or none", linkBase("https://packs.example.org/v1") === "https://packs.example.org/v1/" && linkBase("/mods/_catalogue/") === "/mods/_catalogue/" && linkBase("packs") === "packs/" && linkBase(undefined) === "");
+  check("http:// only on this machine (the launcher)", linkBase("http://127.0.0.1:47600/mods/_catalogue") === "http://127.0.0.1:47600/mods/_catalogue/");
+  const refused = ["http://packs.example.org/", "ftp://packs.example.org/", "//packs.example.org/", "file:///tmp/", "C:\\packs\\"].filter((b) => {
+    try {
+      linkBase(b);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  check("Any other http://, scheme or protocol-relative base is refused", refused.length === 5, refused.join(" "));
+
+  // --- Two good zips, a picture beside one ---
+  const zips = join(tmp, "zips");
+  mkdirSync(zips);
+  const blue = makePackage(join(tmp, "src", "jdoe.blue-gt"), "1.0.0", "blue-paint");
+  const red = makePackage(join(tmp, "src", "acme.red-gt"), "2.1", "red-paint", "acme.red-gt", "Red GT");
+  const pack = (dir: string, file: string) => writeFileSync(join(zips, file), zipPackage(dir, checkPackage(dir).files));
+  pack(blue, "jdoe.blue-gt.zip");
+  pack(red, "Red GT (v2.1).zip");
+  writeFileSync(join(zips, "jdoe.blue-gt.webp"), "RIFF-webp");
+  writeFileSync(join(zips, "notes.txt"), "not a package");
+  const built = await buildCatalogue(zips, "/mods/_catalogue/");
+  const [b, r] = [built.catalogue.packages.find((p) => p.id === "jdoe.blue-gt"), built.catalogue.packages.find((p) => p.id === "acme.red-gt")];
+  check("Every zip in the folder is listed, nothing else, by name", built.failures.length === 0 && built.catalogue.packages.map((p) => p.name).join() === "Blue GT,Red GT", JSON.stringify(built.failures));
+  const blueZip = join(zips, "jdoe.blue-gt.zip");
+  check(
+    "Its size and SHA-256 are the zip's, its content hash the package's",
+    b?.bytes === statSync(blueZip).size && b.sha256 === createHash("sha256").update(readFileSync(blueZip)).digest("hex") && b.hash === (await hashFolder(blue, checkPackage(blue).files)),
+  );
+  check("Its fields come from mod.json", b?.version === "1.0.0" && b.author === "J. Doe" && b.license === "CC BY 4.0" && b.licenseUrl === "https://creativecommons.org/licenses/by/4.0/" && b.liveries === 1 && b.circuits === undefined);
+  check("Links are the base and the file name, escaped", b?.url === "/mods/_catalogue/jdoe.blue-gt.zip" && r?.url === "/mods/_catalogue/Red%20GT%20(v2.1).zip", r?.url);
+  check("A picture with a zip's name is its preview", b?.preview === "/mods/_catalogue/jdoe.blue-gt.webp" && r?.preview === undefined);
+  const onLauncher = parseCatalogue(built.catalogue, `${LAUNCHER}/mods/_catalogue/catalogue.json`, LAUNCHER);
+  check("The game keeps every entry, its links on its own site", onLauncher.problems.length === 0 && onLauncher.packages[0].url === `${LAUNCHER}/mods/_catalogue/jdoe.blue-gt.zip`);
+  const beside = await buildCatalogue(zips);
+  check("Without a base, links are the file names: the catalogue sits beside the zips", beside.catalogue.packages[0].url === "jdoe.blue-gt.zip");
+
+  // --- The whole way: listed, downloaded, checked, installed ---
+  const listed = onLauncher.packages[0];
+  const zipped = new Uint8Array(readFileSync(blueZip));
+  const fetchZip = (async () => served(zipped).res) as unknown as typeof fetch;
+  const result = await installPackage(await zipSource(await downloadPackage(listed, { fetch: fetchZip })), modDefinitions(), { id: listed.id, hash: listed.hash });
+  check("A listed package downloads, passes its checks and installs", result.ok && catalogueStatus(listed, await readInstalled()).kind === "installed");
+
+  // --- Zips that can't go in ---
+  const bad = join(tmp, "bad");
+  mkdirSync(bad);
+  writeFileSync(join(bad, "broken.zip"), "this is not a zip");
+  pack(red, "../bad/red-copy.zip");
+  writeFileSync(join(bad, "red-again.zip"), readFileSync(join(bad, "red-copy.zip")));
+  const noManifest = join(tmp, "src", "loose");
+  mkdirSync(noManifest, { recursive: true });
+  writeFileSync(join(noManifest, "paint.png"), "png");
+  writeFileSync(join(bad, "loose.zip"), zipPackage(noManifest, ["paint.png"]));
+  // A name that leads out of the folder it is unpacked into
+  const escape = `escape-${randomUUID()}.png`;
+  writeFileSync(join(blue, "..", escape), "outside");
+  writeFileSync(join(bad, "slip.zip"), zipPackage(blue, ["mod.json", `../${escape}`]));
+  // A package the game's checks refuse: a livery for a car the game doesn't have
+  const wrongCar = makePackage(join(tmp, "src", "jdoe.wrong-car"), "1", "paint", "jdoe.wrong-car", "Wrong car");
+  const wrongManifest = JSON.parse(readFileSync(join(wrongCar, "mod.json"), "utf8"));
+  wrongManifest.skins[0].car = "no-such-car";
+  writeFileSync(join(wrongCar, "mod.json"), JSON.stringify(wrongManifest));
+  writeFileSync(join(bad, "wrong-car.zip"), zipPackage(wrongCar, ["mod.json", "skins/blue/paint.png"]));
+  const failing = await buildCatalogue(bad, "https://packs.example.org/");
+  const why = (file: string) => failing.failures.find((f) => f.file === file)?.problems.join("; ") ?? "";
+  check("A file that isn't a zip fails", /not a zip the game reads/.test(why("broken.zip")), why("broken.zip"));
+  check("A zip without mod.json fails", /no mod\.json/.test(why("loose.zip")), why("loose.zip"));
+  check("A zip with a path out of its folder fails, nothing written outside", /not a path a package may use/.test(why("slip.zip")) && !existsSync(join(tmpdir(), escape)), why("slip.zip"));
+  check("A package the game's checks refuse fails, saying why", /skins\[0\]\.car/.test(why("wrong-car.zip")), why("wrong-car.zip"));
+  check("A second zip of one package fails", /holds acme\.red-gt, which red-again\.zip holds too/.test(why("red-copy.zip")), why("red-copy.zip"));
+  check("The good zip among them is still listed", failing.catalogue.packages.length === 1 && failing.catalogue.packages[0].url === "https://packs.example.org/red-again.zip");
+
+  // --- The command ---
+  const tool = join(__dirname, "mods", "mod-tool.ts");
+  const run = (...args: string[]) => spawnSync(process.execPath, ["--disable-warning=THREE_CJS_DEPRECATED", "--import", "tsx", tool, "catalogue", ...args], { encoding: "utf8" });
+  const out = join(tmp, "served", "catalogue.json");
+  mkdirSync(join(tmp, "served"));
+  let cli = run(zips, "--base-url", "/mods/_catalogue/", "--out", out);
+  const written = existsSync(out) ? JSON.parse(readFileSync(out, "utf8")) : null;
+  check("npm run mod -- catalogue writes it, and says what it listed", cli.status === 0 && written?.packages?.length === 2 && /wrote .*catalogue\.json: 2 package/.test(cli.stdout), cli.status === 0 ? "" : cli.stdout + cli.stderr);
+  cli = run(bad, "--out", join(tmp, "served", "bad.json"));
+  check("With a zip that fails: exit 1, each failure named, nothing written", cli.status === 1 && /FAIL  broken\.zip/.test(cli.stdout) && /nothing written/.test(cli.stdout) && !existsSync(join(tmp, "served", "bad.json")), cli.status === 1 ? "" : cli.stdout);
+  cli = run(zips, "--base-url", "http://packs.example.org/");
+  check("An http:// base on another host: refused, saying what to use", cli.status === 1 && /https:\/\/ or from its own site/.test(cli.stdout + cli.stderr));
+  rmSync(join(blue, "..", escape), { force: true });
 }
 
 /** Cache Storage in memory: what mod-store.ts uses of it */
