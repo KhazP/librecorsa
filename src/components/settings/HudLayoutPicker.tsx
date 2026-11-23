@@ -18,10 +18,10 @@ const TILE_CURSOR = cx(
 );
 
 /**
- * Tiles by the picker's own width: two across, three, or a group's five in one row, so a group never ends on a lone
- * tile (each tile stays wide enough for its picture to read)
+ * Tiles by the picker's own width: two across, three, or four, so on a wide picker neither group (seven of the game's
+ * own, six third-party) ends on a lone tile, and each tile stays wide enough for its picture to read
  */
-const GRID = "grid grid-cols-2 gap-2 @min-[480px]:grid-cols-3 @min-[620px]:grid-cols-5";
+const GRID = "grid grid-cols-2 gap-2 @min-[480px]:grid-cols-3 @min-[620px]:grid-cols-4";
 
 /** A credited layout's author and site links, under its name */
 const CREDIT_LINK = cx(

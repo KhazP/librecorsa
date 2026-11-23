@@ -76,6 +76,8 @@ import { HeadToHeadHud } from "./hud/styles/HeadToHeadHud";
 import { RetroHud } from "./hud/styles/RetroHud";
 import { BlocksHud } from "./hud/styles/BlocksHud";
 import { GrandPrixHud } from "./hud/styles/GrandPrixHud";
+import { GtLikeHud } from "./hud/styles/GtLikeHud";
+import { F1LikeHud } from "./hud/styles/F1LikeHud";
 import { HudRunProvider } from "./hud/styles/third-party-parts";
 import {
   HudSkinProvider,
@@ -131,6 +133,9 @@ const HUD_STYLES: Partial<Record<HudPreset, HudStyleDef>> = {
   retro: { component: RetroHud, bottomClearance: 292, ownsBottomLeft: true, mfdFolded: true, topClearance: 120, ownDeltaBar: true, ownRadar: true, ownDamage: true },
   blocks: { component: BlocksHud, bottomClearance: 200, ownsBottomLeft: true, mfdFolded: true, topClearance: 124, ownDeltaBar: true, ownRadar: true },
   "grand-prix": { component: GrandPrixHud, bottomClearance: 120, ownsBottomLeft: true, ownTrace: true, mfdFolded: true, ownDeltaBar: true, ownRadar: true },
+  // The game's own layouts after a road-racing game's and a Formula game's race screens
+  touring: { component: GtLikeHud, bottomClearance: 228, ownsBottomLeft: true, mfdFolded: true, topClearance: 58, ownDeltaBar: true },
+  formula: { component: F1LikeHud, bottomClearance: 160, ownsBottomLeft: true, mfdFolded: true, ownDeltaBar: true, ownDamage: true },
 };
 /** Every preset gives way to the Phone HUD on a phone-sized screen, and the game's own wherever the touch controls are up (`showsPhoneHud`) */
 const PHONE_STYLE: HudStyleDef = { component: PhoneHud, bottomClearance: 16 };
@@ -555,7 +560,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
               : showDelta
                 ? 124
                 : 52
-            : (style?.topClearance ?? 0);
+            : preset === "touring" && lightsPhase
+              ? 0
+              : (style?.topClearance ?? 0);
   // Touch screens have no Esc key: a Menu button opens the pause menu
   const menuButton = (
     <span className="pointer-events-auto hidden pointer-coarse:block">
@@ -655,6 +662,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           showDeltaBar={showDelta}
           showRadar={showRadar}
           cameraMode={cameraMode}
+          carId={props.carId}
         />
       ) : (
         /* Classic / Minimal top-left: timing tower (race) and lap timing */
