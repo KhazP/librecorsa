@@ -4,7 +4,7 @@
  */
 import { useSyncExternalStore } from "react";
 import { LINK_CODE_ALPHABET, PROVIDER_LABELS, type AccountProvider } from "@/lib/account/api-types";
-import { formatLocale } from "@/i18n/catalogs";
+import { CATALOGS, formatLocale } from "@/i18n/catalogs";
 import { text, textLocale } from "@/lib/text";
 
 const DAY_MS = 86_400_000;
@@ -38,10 +38,17 @@ export function minutesLeft(expiresAt: number, now = Date.now()): number | null 
   return left <= 0 ? null : Math.floor(left / 60_000);
 }
 
-/** "Discord, Google and a passkey" in the player's language */
+/**
+ * "Discord, Google and a passkey" in the player's language. In a right-to-left language each name is isolated and the
+ * list as a whole runs right to left, so a list that starts with a Latin name ("Discord وGoogle") keeps its order
+ * where the message puts it.
+ */
 function listOf(names: string[]): string {
-  if (names.length <= 1) return names[0] ?? "";
-  return new Intl.ListFormat(formatLocale(textLocale()), { style: "long", type: "conjunction" }).format(names);
+  const locale = textLocale();
+  const rtl = CATALOGS[locale]?.dir === "rtl";
+  const items = rtl ? names.map((n) => `\u2068${n}\u2069`) : names;
+  const list = items.length <= 1 ? (items[0] ?? "") : new Intl.ListFormat(formatLocale(locale), { style: "long", type: "conjunction" }).format(items);
+  return rtl && list ? `\u2067${list}\u2069` : list;
 }
 
 /**
