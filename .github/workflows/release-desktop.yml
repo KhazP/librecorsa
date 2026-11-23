@@ -301,7 +301,7 @@ jobs:
 
       # A signed SLSA build provenance attestation for each file people download (the Windows installer after
       # SignPath signed it), so anyone can check a file came from this workflow at this tag:
-      #   gh attestation verify <file> -R KhazP/librecorsa
+      #   gh attestation verify <file> -R librecorsa/librecorsa
       # A failure here leaves the release to go out without it rather than stopping the release.
       - name: Attest build provenance
         continue-on-error: true

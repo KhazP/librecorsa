@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useId } from "react";
+import { useTranslations } from "use-intl/react";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 import { Icon } from "@/components/ui/icons/Icon";
 import { CHOSEN_TILE, cx, IDLE_TILE, MOTION } from "@/components/ui/styles";
@@ -17,10 +18,10 @@ const TILE_CURSOR = cx(
 );
 
 /**
- * Tiles by the picker's own width: two across, three, or a group's five in one row, so a group never ends on a lone
- * tile (each tile stays wide enough for its picture to read)
+ * Tiles by the picker's own width: two across, three, or four, so on a wide picker neither group (seven of the game's
+ * own, six third-party) ends on a lone tile, and each tile stays wide enough for its picture to read
  */
-const GRID = "grid grid-cols-2 gap-2 @min-[480px]:grid-cols-3 @min-[620px]:grid-cols-5";
+const GRID = "grid grid-cols-2 gap-2 @min-[480px]:grid-cols-3 @min-[620px]:grid-cols-4";
 
 /** A credited layout's author and site links, under its name */
 const CREDIT_LINK = cx(
@@ -46,7 +47,13 @@ function LayoutTile({
   onSelect: (id: HudPreset) => void;
   navDefault?: boolean;
 }) {
+  const tx = useTranslations("settings.hudPicker");
   const credit = layout.credit;
+  const description = !credit
+    ? layout.detail
+    : credit.site
+      ? tx("descriptionSite", { detail: layout.detail, author: credit.author, site: credit.site.name })
+      : tx("description", { detail: layout.detail, author: credit.author });
   return (
     <div
       className={cx(
@@ -60,7 +67,7 @@ function LayoutTile({
         type="button"
         role="radio"
         aria-checked={checked}
-        aria-description={credit ? `${layout.detail}. By ${credit.author}${credit.site ? ` · ${credit.site.name}` : ""}` : layout.detail}
+        aria-description={description}
         data-own-ring=""
         data-nav-default={navDefault ? "" : undefined}
         onPointerEnter={focusOnHover}
@@ -68,7 +75,7 @@ function LayoutTile({
           if (!checked) onSelect(layout.id);
         }}
         className={cx(
-          "flex min-w-0 cursor-pointer flex-col gap-2 text-left outline-none",
+          "flex min-w-0 cursor-pointer flex-col gap-2 text-start outline-none",
           // The whole tile is the button's hit area
           "after:absolute after:inset-0 after:rounded-lc-tile after:content-['']",
         )}
@@ -85,13 +92,13 @@ function LayoutTile({
       </button>
       {credit ? (
         // Above the tile's hit area; only the links take clicks, the gap between them selects the tile
-        <span className="pointer-events-none relative z-10 -mt-1 mr-auto ml-1 inline-flex max-w-full min-w-0 items-center gap-1.5 text-[12px] leading-tight text-lc-slate">
+        <span className="pointer-events-none relative z-10 -mt-1 me-auto ms-1 inline-flex max-w-full min-w-0 items-center gap-1.5 text-[12px] leading-tight text-lc-slate">
           <a
             href={credit.repoUrl}
             target="_blank"
             rel="noopener noreferrer"
             data-nav-skip=""
-            aria-label={`${layout.label} source, by ${credit.author} (opens in a new tab)`}
+            aria-label={tx("sourceLink", { layout: layout.label, author: credit.author })}
             className={cx(CREDIT_LINK, "min-w-0")}
           >
             <span className="truncate">by {credit.author}</span>
@@ -105,7 +112,7 @@ function LayoutTile({
                 target="_blank"
                 rel="noopener noreferrer"
                 data-nav-skip=""
-                aria-label={`${credit.site.name}, ${credit.author}'s site (opens in a new tab)`}
+                aria-label={tx("siteLink", { site: credit.site.name, author: credit.author })}
                 className={cx(CREDIT_LINK, "shrink-0")}
               >
                 {credit.site.name}
@@ -119,8 +126,13 @@ function LayoutTile({
   );
 }
 
-/** Which layouts a touch screen shows, for the pickers on one */
-export const HUD_TOUCH_NOTE = "Phones always use Touch HUD.";
+function HudTouchNote() {
+  const tx = useTranslations("settings.hudPicker");
+  return <>{tx("touchNote")}</>;
+}
+
+/** Which layouts a touch screen shows, for the pickers on one (an element, so it reads in the current language) */
+export const HUD_TOUCH_NOTE = <HudTouchNote />;
 
 export interface HudLayoutPickerProps {
   value: HudPreset;
@@ -137,8 +149,9 @@ export interface HudLayoutPickerProps {
  */
 export function HudLayoutPicker({ value, onChange, navDefault, className }: HudLayoutPickerProps) {
   const headingId = useId();
+  const tx = useTranslations("settings.hudPicker");
   return (
-    <div role="radiogroup" aria-label="HUD layout" className={cx("@container flex flex-col gap-4", className)}>
+    <div role="radiogroup" aria-label={tx("label")} className={cx("@container flex flex-col gap-4", className)}>
       <div className={GRID}>
         {BUILT_IN_HUD_LAYOUTS.map((l) => (
           <LayoutTile key={l.id} layout={l} checked={value === l.id} onSelect={onChange} navDefault={navDefault && value === l.id} />
@@ -148,9 +161,9 @@ export function HudLayoutPicker({ value, onChange, navDefault, className }: HudL
         <div role="group" aria-labelledby={headingId} className="flex flex-col gap-2.5">
           <div className="flex flex-col gap-1 px-0.5">
             <h3 id={headingId} className="lc-row-label m-0">
-              Third-party
+              {tx("thirdParty")}
             </h3>
-            <p className="lc-hint m-0">Recreated from other open-source HUD projects, credited to their authors.</p>
+            <p className="lc-hint m-0">{tx("thirdPartyNote")}</p>
           </div>
           <div className={GRID}>
             {THIRD_PARTY.map((l) => (

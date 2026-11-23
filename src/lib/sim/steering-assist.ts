@@ -41,6 +41,7 @@
  * MIT License — see CREDITS.md.
  */
 
+import { text as tx } from "@/lib/text";
 import type { ControlInputs } from "@/types/f1";
 import { PAD_SENSITIVITY } from "@/lib/input/device-input";
 import {
@@ -135,8 +136,8 @@ const pct = (v: number) => `${Math.round(v * 100)} %`;
 
 const SLIDERS: { readonly [K in keyof DeviceAssistTuning]: Omit<AssistSliderSpec, "key"> } = {
   selfSteerStrength: {
-    label: "Self-steer & countersteer",
-    hint: "How strongly the wheels follow the car's travel direction and catch rear slides",
+    get label() { return tx("game.steeringAssist.selfSteerStrength"); },
+    get hint() { return tx("game.steeringAssist.selfSteerStrengthHint"); },
     min: 0,
     max: 1,
     step: 0.05,
@@ -144,8 +145,8 @@ const SLIDERS: { readonly [K in keyof DeviceAssistTuning]: Omit<AssistSliderSpec
     format: pct,
   },
   dampingStrength: {
-    label: "Yaw damping",
-    hint: "Calms snap-back and pendulum swings as a slide recovers",
+    get label() { return tx("game.steeringAssist.dampingStrength"); },
+    get hint() { return tx("game.steeringAssist.dampingStrengthHint"); },
     min: 0,
     max: 1,
     step: 0.05,
@@ -153,8 +154,8 @@ const SLIDERS: { readonly [K in keyof DeviceAssistTuning]: Omit<AssistSliderSpec
     format: pct,
   },
   speedSensitivity: {
-    label: "High-speed calm",
-    hint: "How much the steering slows down at speed, so small inputs stay gentle",
+    get label() { return tx("game.steeringAssist.speedSensitivity"); },
+    get hint() { return tx("game.steeringAssist.speedSensitivityHint"); },
     min: 0,
     max: 1,
     step: 0.05,
@@ -162,8 +163,8 @@ const SLIDERS: { readonly [K in keyof DeviceAssistTuning]: Omit<AssistSliderSpec
     format: pct,
   },
   slipLimitMargin: {
-    label: "Tyre slip margin",
-    hint: "Negative: a safer understeer cushion · Positive: lets the fronts past their peak slip",
+    get label() { return tx("game.steeringAssist.slipLimitMargin"); },
+    get hint() { return tx("game.steeringAssist.slipLimitMarginHint"); },
     min: -0.25,
     max: 0.25,
     step: 0.01,
@@ -171,8 +172,8 @@ const SLIDERS: { readonly [K in keyof DeviceAssistTuning]: Omit<AssistSliderSpec
     format: (v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)} %`,
   },
   maxSelfSteerAngleDeg: {
-    label: "Max countersteer lock",
-    hint: "Most road-wheel angle the assist turns to by itself to catch a slide",
+    get label() { return tx("game.steeringAssist.maxSelfSteerAngleDeg"); },
+    get hint() { return tx("game.steeringAssist.maxSelfSteerAngleDegHint"); },
     min: 5,
     max: 30,
     step: 1,
@@ -186,7 +187,8 @@ const SLIDERS: { readonly [K in keyof DeviceAssistTuning]: Omit<AssistSliderSpec
  * draw them, the saved settings are clamped to their ranges and the presets are matched on their steps.
  */
 export const ASSIST_SLIDERS: readonly AssistSliderSpec[] = (Object.keys(SLIDERS) as (keyof DeviceAssistTuning)[]).map(
-  (key) => ({ key, ...SLIDERS[key] })
+  // The descriptors, not a spread: the label and hint stay getters, read in the current language
+  (key) => Object.defineProperties({ key }, Object.getOwnPropertyDescriptors(SLIDERS[key])) as AssistSliderSpec
 );
 
 function fromSliders(value: (s: AssistSliderSpec) => number): DeviceAssistTuning {
@@ -213,25 +215,25 @@ export interface AssistPresetInfo {
 
 /** One-click factory assist presets (adapted from AC-Advanced-Gamepad-Assist's factory presets) */
 export const ASSIST_PRESETS: readonly AssistPresetInfo[] = [
-  { id: "balanced", label: "Balanced", tuning: { ...DEFAULT_DEVICE_ASSIST_TUNING } },
+  { id: "balanced", get label() { return tx("game.steeringAssist.presetBalanced"); }, tuning: { ...DEFAULT_DEVICE_ASSIST_TUNING } },
   {
     id: "stable",
-    label: "Stable",
+    get label() { return tx("game.steeringAssist.presetStable"); },
     tuning: { selfSteerStrength: 0.85, dampingStrength: 0.9, speedSensitivity: 0.65, slipLimitMargin: -0.04, maxSelfSteerAngleDeg: 30 },
   },
   {
     id: "loose",
-    label: "Loose",
+    get label() { return tx("game.steeringAssist.presetLoose"); },
     tuning: { selfSteerStrength: 0.3, dampingStrength: 0.3, speedSensitivity: 0.25, slipLimitMargin: 0.05, maxSelfSteerAngleDeg: 8 },
   },
   {
     id: "drift",
-    label: "Drift",
+    get label() { return tx("game.steeringAssist.presetDrift"); },
     tuning: { selfSteerStrength: 0.45, dampingStrength: 0.65, speedSensitivity: 0.2, slipLimitMargin: 0.05, maxSelfSteerAngleDeg: 30 },
   },
   {
     id: "calm",
-    label: "Calm at speed",
+    get label() { return tx("game.steeringAssist.presetCalm"); },
     tuning: { selfSteerStrength: 0.48, dampingStrength: 0.58, speedSensitivity: 0.85, slipLimitMargin: 0, maxSelfSteerAngleDeg: 25 },
   },
 ];
@@ -246,11 +248,16 @@ export function assistPresetDetail(tuning: DeviceAssistTuning, lockDeg?: number)
   const t = sanitizeAssistTuning(tuning);
   const grip = Math.round(deviceAssistTuning(t, "controller").targetSlip * 100);
   const cap =
-    lockDeg !== undefined && t.maxSelfSteerAngleDeg >= lockDeg ? "full lock" : SLIDERS.maxSelfSteerAngleDeg.format(t.maxSelfSteerAngleDeg);
-  return (
-    `self-steer ${pct(t.selfSteerStrength)}, yaw damping ${pct(t.dampingStrength)}, high-speed calm ` +
-    `${pct(t.speedSensitivity)}, fronts at ${grip} % of their peak slip, countersteer up to ${cap}`
-  );
+    lockDeg !== undefined && t.maxSelfSteerAngleDeg >= lockDeg
+      ? tx("game.steeringAssist.fullLock")
+      : SLIDERS.maxSelfSteerAngleDeg.format(t.maxSelfSteerAngleDeg);
+  return tx("game.steeringAssist.presetDetail", {
+    selfSteer: pct(t.selfSteerStrength),
+    damping: pct(t.dampingStrength),
+    calm: pct(t.speedSensitivity),
+    grip: String(grip),
+    cap,
+  });
 }
 
 /** A device's assist sliders as the assist's coefficients */

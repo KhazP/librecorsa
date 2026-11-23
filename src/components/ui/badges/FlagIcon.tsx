@@ -1,4 +1,5 @@
 import React from "react";
+import { t } from "@/i18n/runtime";
 import {
   CLOTH,
   chequerCells,
@@ -22,17 +23,17 @@ export type FlagKind =
   | "blackWhite"
   | "chequered";
 
-/** Each flag's word and badge tone: one table for the HUD, the incident feed and the results */
-export const FLAGS: Record<FlagKind, { label: string; tone: BadgeTone }> = {
-  green: { label: "Green flag", tone: "good" },
-  yellow: { label: "Yellow flag", tone: "warn" },
-  doubleYellow: { label: "Double yellow", tone: "warn" },
-  blue: { label: "Blue flag", tone: "info" },
-  red: { label: "Red flag", tone: "bad" },
-  white: { label: "White flag", tone: "neutral" },
-  black: { label: "Black flag", tone: "bad" },
-  blackWhite: { label: "Black and white", tone: "warn" },
-  chequered: { label: "Chequered flag", tone: "neutral" },
+/** Each flag's word (in the current language, read when shown) and badge tone: one table for the HUD, the incident feed and the results */
+export const FLAGS: Record<FlagKind, { readonly label: string; tone: BadgeTone }> = {
+  green: { get label() { return t("common.flags.green"); }, tone: "good" },
+  yellow: { get label() { return t("common.flags.yellow"); }, tone: "warn" },
+  doubleYellow: { get label() { return t("common.flags.doubleYellow"); }, tone: "warn" },
+  blue: { get label() { return t("common.flags.blue"); }, tone: "info" },
+  red: { get label() { return t("common.flags.red"); }, tone: "bad" },
+  white: { get label() { return t("common.flags.white"); }, tone: "neutral" },
+  black: { get label() { return t("common.flags.black"); }, tone: "bad" },
+  blackWhite: { get label() { return t("common.flags.blackWhite"); }, tone: "warn" },
+  chequered: { get label() { return t("common.flags.chequered"); }, tone: "neutral" },
 };
 
 /*

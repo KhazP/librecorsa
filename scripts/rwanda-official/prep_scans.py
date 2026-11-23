@@ -5,7 +5,8 @@ Scanned surfaces for the road, the pit lane and the gravel: assets/textures/scan
     python prep_scans.py <folder with the scans' 2k jpgs>        # after prep_textures.py
 
 A scan keeps its grain and loses everything else: what varies slower than a third of its tile is taken out (repeated
-every 2 m it showed as a checker from the air), and its colour becomes the drawn texture's it stands in for
+every 2 m it showed as a checker from the air), its normal map loses its slow tilt the same way (`flatten_tilt`), and
+its colour becomes the drawn texture's it stands in for
 (data/tex/<name>.png), in linear light, so the circuit keeps the tones it was tuned to. The files it reads are named
 as Poly Haven names them: <id>_diff_2k.jpg or <id>_Diffuse.jpg, <id>_nor_gl_2k.jpg or <id>_nor_gl.jpg.
 """
@@ -46,6 +47,23 @@ def blur_wrap(a, sigma):
     return cv2.GaussianBlur(np.pad(a, ((pad, pad), (pad, pad), (0, 0)), mode='wrap'), (0, 0), sigma)[pad:-pad, pad:-pad]
 
 
+def flatten_tilt(nor, k0=3.0):
+    """
+    A unit normal map (OpenGL convention) without the slow tilt across its tile: its x and y lose what varies slower
+    than about `k0` cycles a tile (their mean stays), the grain stays. The asphalt scan leaned about 1° one way at one
+    end of its tile and 1° the other way at the other; repeated every 2 m, that lit the road in bands, one a tile,
+    driving into a low sun. Done on x and y rather than on slopes, which a stony map's near-vertical texels throw.
+    """
+    h, w = nor.shape[:2]
+    k2 = (np.fft.fftfreq(h) * h)[:, None] ** 2 + (np.fft.fftfreq(w) * w)[None, :] ** 2
+    keep = 1 - np.exp(-k2 / k0 ** 2)                     # about 0.1 at one cycle a tile, 1 past twice k0
+    keep[0, 0] = 1
+    xy = np.stack([np.real(np.fft.ifft2(np.fft.fft2(nor[..., c]) * keep)) for c in range(2)], -1)
+    z = np.sqrt(np.clip(1 - (xy ** 2).sum(-1, keepdims=True), 0.01, None))
+    out = np.concatenate([xy, z], -1)
+    return (out / np.linalg.norm(out, axis=-1, keepdims=True)).astype(np.float32)
+
+
 def main(folder):
     os.makedirs(OUT, exist_ok=True)
     for scan, drawn, n, nn in SCANS:
@@ -61,6 +79,7 @@ def main(folder):
         nor = cv2.imread(find(folder, scan, ('nor_gl',)), cv2.IMREAD_COLOR)[..., ::-1].astype(np.float32) / 255 * 2 - 1
         nor = cv2.resize(nor, (nn, nn), interpolation=cv2.INTER_AREA)
         nor /= np.maximum(np.linalg.norm(nor, axis=-1, keepdims=True), 1e-6)
+        nor = flatten_tilt(nor)
         cv2.imwrite(os.path.join(OUT, name + '-nor.webp'), ((nor * 0.5 + 0.5) * 255 + 0.5).astype(np.uint8)[..., ::-1], [cv2.IMWRITE_WEBP_QUALITY, 92])
         slope = np.degrees(np.arccos(np.clip(nor[..., 2], -1, 1)))
         print('%-18s colour %s -> %s (linear), contrast %.3f; normal %d px, mean tilt %.1f deg' % (

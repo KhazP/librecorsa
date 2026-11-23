@@ -10,6 +10,8 @@ import {
   DEFAULT_KEY_BINDINGS,
   BUMPER_SHIFT_BUTTONS,
   GT_STYLE_BUTTONS,
+  PAD_LAYOUTS,
+  RETIRED_FORMULA_STYLE_BUTTONS,
   RETIRED_GT_STYLE_BUTTONS,
   DEFAULT_PAD_BUTTONS,
   KEY_ACTIONS,
@@ -59,6 +61,11 @@ export interface PlayerSettings {
   gamepadAssist: boolean;
   /** Automatic gearbox; off = shift with Gear up / Gear down */
   autoGearbox: boolean;
+  /**
+   * A 2026 F1 car uses the Overtake earned in a race on the overtaking straights by itself, with a little less of it than
+   * the driver's own press of Overtake gives
+   */
+  autoOvertake: boolean;
   /** Automatic clutch and anti-stall; off with manual gears = bite point, clutch slip and stalls */
   autoClutch: boolean;
   mouseSteer: boolean;
@@ -159,6 +166,8 @@ export interface InterfaceSettings {
   scale: number;
   palette: ColorPalette;
   detail: SettingsDetail;
+  /** The language the game shows: "auto" follows the browser, else a language code (src/i18n/catalogs.ts) */
+  language: string;
 }
 
 export type LibraryKind = "cars" | "circuits";
@@ -524,6 +533,7 @@ export const DEFAULT_INTERFACE_SETTINGS: InterfaceSettings = {
   scale: 1,
   palette: "standard",
   detail: "simple",
+  language: "auto",
 };
 
 export const DEFAULT_DRIVER_PROFILE: DriverProfile = { name: "Driver", code: "DRV", color: "#E10600", generated: false, autoUpload: true };
@@ -578,6 +588,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   racingLine: true,
   gamepadAssist: true,
   autoGearbox: true,
+  autoOvertake: true,
   autoClutch: true,
   mouseSteer: false,
   liveryId: null,
@@ -664,6 +675,8 @@ function parsePadButtons(v: unknown): PadButtonBindings {
   }
   // GT style as it was before the headlights took L3 (22 Nov 2026): such a player gets GT style as it is now
   if (PAD_ACTIONS.every(({ id }) => out[id] === RETIRED_GT_STYLE_BUTTONS[id])) return { ...GT_STYLE_BUTTONS };
+  // Formula style as it was before Overtake took LB (23 Nov 2026): such a player gets Formula style as it is now
+  if (PAD_ACTIONS.every(({ id }) => out[id] === RETIRED_FORMULA_STYLE_BUTTONS[id])) return { ...PAD_LAYOUTS.f1.buttons };
   return out;
 }
 
@@ -920,6 +933,8 @@ export function parseInterface(v: unknown): InterfaceSettings {
     scale: num(v.scale, UI_SCALE_MIN, UI_SCALE_MAX, d.scale),
     palette: oneOf(v.palette, COLOR_PALETTES, d.palette),
     detail: oneOf(v.detail, ["simple", "advanced"] as const, d.detail),
+    // Any well-formed code is kept: a language added later, or one a newer build has, still resolves (resolveLocale)
+    language: isStr(v.language) && (v.language === "auto" || /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,4})?$/.test(v.language)) ? v.language : d.language,
   };
 }
 
@@ -991,6 +1006,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     racingLine: bool(raw.racingLine, d.racingLine),
     gamepadAssist: bool(raw.gamepadAssist, d.gamepadAssist),
     autoGearbox: bool(raw.autoGearbox, d.autoGearbox),
+    autoOvertake: bool(raw.autoOvertake, d.autoOvertake),
     autoClutch: bool(raw.autoClutch, d.autoClutch),
     mouseSteer: bool(raw.mouseSteer, d.mouseSteer),
     liveryId: isStr(raw.liveryId) ? raw.liveryId : null,

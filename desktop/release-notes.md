@@ -14,4 +14,4 @@ App versions of LibreCorsa that open the live site at https://librecorsa.org/pla
 - **Android:** signed APK — allow installing from your browser when prompted. It verifies against `librecorsa.org/.well-known/assetlinks.json` and opens fullscreen with no URL bar.
 
 ## Code signing policy
-Free Windows code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org). Windows signing is being set up. Who builds, reviews and approves releases, and what the app sends, is in the [code signing policy](https://github.com/KhazP/librecorsa#code-signing-policy).
+Free Windows code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org). Windows signing is being set up. Who builds, reviews and approves releases, and what the app sends, is in the [code signing policy](https://github.com/librecorsa/librecorsa#code-signing-policy).

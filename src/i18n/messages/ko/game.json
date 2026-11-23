@@ -1,0 +1,877 @@
+{
+  "sky": {
+    "clear": "맑음",
+    "lightClouds": "구름 조금",
+    "partiallyCloudy": "부분적으로 흐림",
+    "mostlyCloudy": "구름 많음",
+    "overcast": "흐림",
+    "cloudyDrizzle": "구름 많음 및 이슬비",
+    "cloudyLightRain": "구름 많음 및 약한 비",
+    "overcastLightRain": "흐림 및 약한 비",
+    "overcastRain": "흐림 및 비",
+    "overcastHeavyRain": "흐림 및 폭우",
+    "overcastStorm": "흐림 및 폭풍"
+  },
+  "weather": {
+    "nodeStart": "시작",
+    "nodeFinish": "종료",
+    "clear": "맑음",
+    "clearDetail": "마른 노면, 화창함",
+    "overcast": "흐림",
+    "overcastDetail": "마른 노면, 회색 하늘, 서늘한 트랙",
+    "lightRain": "약한 비",
+    "lightRainDetail": "젖은 노면, 인터미디어트",
+    "heavyRain": "폭우",
+    "heavyRainDetail": "고인 물, 풀 웻",
+    "drying": "건조 중",
+    "dryingDetail": "비가 그치고 마른 라인이 생깁니다",
+    "dynamic": "동적 날씨",
+    "dynamicDetail": "세션 도중 날씨가 변합니다"
+  },
+  "timeOfDay": {
+    "dawn": "새벽",
+    "morning": "아침",
+    "noon": "정오",
+    "afternoon": "오후",
+    "goldenHour": "골든 아워",
+    "dusk": "황혼",
+    "night": "야간"
+  },
+  "raceStart": {
+    "assisted": "보조",
+    "manual": "수동",
+    "assistedHint": "라이트 아웃까지 그리드에 고정됩니다",
+    "manualHint": "클러치와 RPM을 유지하다 라이트 아웃 시 해제합니다(부정 출발 +5초 / +10초 페널티)"
+  },
+  "realism": {
+    "casual": "캐주얼",
+    "casualDetail": "타이어 마모 없음, 타이어 온도 영향 적음, 약한 우천 효과",
+    "standard": "스탠다드",
+    "standardDetail": "타이어 마모 켜짐, 완화된 타이어 온도, 대부분의 우천 효과 적용",
+    "full": "풀",
+    "fullDetail": "타이어 및 우천 모델 전체 적용, 차고에서 나올 때 차가운 타이어와 브레이크"
+  },
+  "raceRules": {
+    "auto": "자동",
+    "openWheel": "오픈 휠",
+    "endurance": "내구",
+    "autoHint": "싱글 시터에는 오픈 휠 규정, 그 외에는 내구 규정 적용",
+    "openWheelHint": "경고 누적식 트랙 리밋: 4회 +5초, 8회 +10초, 12회 실격",
+    "enduranceHint": "가중 점수식 트랙 리밋: 5점 +5초, 10점 +10초, 15점 실격",
+    "trackLimitsOn": "켜짐",
+    "trackLimitsOff": "꺼짐"
+  },
+  "damage": {
+    "off": "꺼짐",
+    "reduced": "감소",
+    "full": "전체"
+  },
+  "raceSetup": {
+    "gridBack": "후미",
+    "gridMiddle": "중위",
+    "gridPole": "폴",
+    "gridRandom": "무작위",
+    "aiGridPace": "페이스순",
+    "aiGridQualifying": "예선",
+    "aiGridReversed": "역순",
+    "startAuto": "자동",
+    "startStanding": "스탠딩",
+    "startRolling": "롤링",
+    "standingStart": "스탠딩 스타트",
+    "rollingStart": "롤링 스타트",
+    "aggressionClean": "신사적",
+    "aggressionNormal": "보통",
+    "aggressionHard": "공격적"
+  },
+  "grip": {
+    "green": "그린",
+    "greenDetail": "갓 씻긴 아스팔트, 최소한의 고무",
+    "light": "라이트",
+    "lightDetail": "주말 초반의 얇은 고무 누적",
+    "medium": "미디엄",
+    "mediumDetail": "적당히 고무가 깔린 노면",
+    "natural": "내추럴",
+    "naturalDetail": "레이스 준비가 된 표준 고무 노면",
+    "heavy": "헤비",
+    "heavyDetail": "고무가 두텁게 쌓인 내구 레이싱 라인",
+    "saturated": "포화",
+    "saturatedDetail": "고무가 완전히 포화된 짙은 노면"
+  },
+  "aiSkill": {
+    "rookie": "루키",
+    "amateur": "아마추어",
+    "pro": "프로",
+    "alien": "에일리언"
+  },
+  "challenge": {
+    "conditions": "마른 노면 · {tyres} · 저연료",
+    "tyresSoft": "소프트 타이어",
+    "tyresStreet": "스트리트 타이어",
+    "tyresVintageSlicks": "빈티지 슬릭",
+    "tyresSlicks": "슬릭",
+    "timeLeftDays": "{days}일 {hours}시간",
+    "timeLeftHours": "{hours}시간 {minutes}분",
+    "timeLeftMinutes": "{minutes}분",
+    "placeNoTime": "아직 기록 없음",
+    "placeFirst": "P1 · 이번 주 최고 기록",
+    "place": "P{place}",
+    "placeGap": "P{place} · P{above}까지 {gap}"
+  },
+  "board": {
+    "conditions": "{assists} · {realism} · {surface}",
+    "assistsPro": "보조 없음",
+    "assistsSemiPro": "일부 보조",
+    "assistsAssisted": "전체 보조",
+    "realismCasual": "캐주얼",
+    "realismStandard": "스탠다드",
+    "realismFull": "풀",
+    "surfaceDry": "건조",
+    "surfaceWet": "젖음",
+    "renameUnreachable": "온라인 보드에 연결할 수 없습니다. 잠시 후 다시 시도해 주십시오.",
+    "renameFailed": "이름을 변경할 수 없습니다(HTTP {status})."
+  },
+  "badges": {
+    "weeklyGold": "주간 골드",
+    "weeklySilver": "주간 실버",
+    "weeklyBronze": "주간 브론즈",
+    "fastestLap": "패스티스트 랩",
+    "og": "OG 드라이버",
+    "bulb": "아이디어 기여자",
+    "times": "{badge} ×{count}",
+    "withNote": "{badge} — {note}",
+    "medalDetail": "주간 챌린지 {place, select, first {1위} second {2위} other {3위}}",
+    "medalDetailWeeks": "주간 챌린지 {place, select, first {1위} second {2위} other {3위}}: {weeks}",
+    "recordDetailCount": "{count, plural, other {오픈 보드 #곳에서 패스티스트 랩 보유}}",
+    "recordCar": "{car} ×{count}",
+    "recordManual": "수동 +{count}",
+    "recordDetail": "{boards} — 눌러서 서킷 보기",
+    "ogDetail": "물리 V1에서 LibreCorsa를 주행함",
+    "bulbDetailNote": "아이디어 기여자: {note}",
+    "bulbDetail": "아이디어 또는 커뮤니티 기여",
+    "creator": "제작자",
+    "creatorDetail": "LibreCorsa 제작"
+  },
+  "camera": {
+    "chaseClose": "근접 체이스",
+    "chaseCloseDetail": "차량 바로 뒤",
+    "chase": "체이스",
+    "chaseDetail": "차량 뒤",
+    "chaseFar": "원거리 체이스",
+    "chaseFarDetail": "차량 뒤 넓은 시야",
+    "chaseLow": "저각 체이스",
+    "chaseLowDetail": "리어 윙 뒤 낮은 시점",
+    "tvPod": "T-캠",
+    "tvPodDetail": "헬멧 위",
+    "cockpitShoulder": "숄더",
+    "cockpit": "콕핏",
+    "cockpitDetail": "드라이버 시점",
+    "dash": "대시보드",
+    "dashDetail": "휠 앞쪽, 대시보드가 보이는 시점",
+    "nose": "노즈",
+    "helicopter": "헬리콥터",
+    "tvSide": "트랙사이드 TV",
+    "free": "자유 카메라",
+    "freeDetail": "서킷 어디든 자유롭게 이동"
+  },
+  "music": {
+    "poolMenu": "메뉴",
+    "poolRace": "레이스",
+    "poolResults": "결과 및 리플레이"
+  },
+  "carQuality": {
+    "ownBadge": "전용 물리",
+    "own": "전용 물리",
+    "ownDetail": "이 차량 전용으로 제작된 물리로 주행합니다.",
+    "sharedBadge": "공유 물리",
+    "shared": "공유 물리",
+    "sharedDetail": "같은 클래스와 시대의 다른 차량 물리를 공유하므로 고유 특성 대신 해당 차량처럼 거동합니다.",
+    "eraBadge": "2026 물리",
+    "era": "구형 차량",
+    "eraDetail": "2026 물리로 주행하므로 원래 시즌의 특성이 아닌 2026 차량처럼 거동합니다."
+  },
+  "carClass": {
+    "f1": "포뮬러 오픈 휠",
+    "f1Detail": "싱글 시터 · DRS / 액티브 에어로",
+    "gt3Detail": "클로즈드 휠 · ABS / TC",
+    "proto": "프로토타입",
+    "protoDetail": "클로즈드 휠 · 고다운포스 · TC",
+    "classic": "클래식 GT 및 투어링",
+    "classicDetail": "스포츠 프로토타입, Group 4, Group A 및 JGTC · 1966–1998",
+    "road": "로드 카",
+    "roadDetail": "공도 주행 가능 · 스트리트 타이어"
+  },
+  "circuitQuality": {
+    "originalBadge": "오리지널",
+    "original": "LibreCorsa 오리지널",
+    "originalDetail": "고유의 노면, 연석, 고저차 및 트랙 주변 풍경으로 LibreCorsa 전용으로 제작되었습니다.",
+    "simBadge": "심 등급",
+    "sim": "심 등급 서킷",
+    "simDetail": "고유의 도로, 연석, 방호벽 메시와 노면 물리를 갖춘 수작업 시뮬레이터 서킷입니다.",
+    "scanBadge": "스캔",
+    "scan": "변환된 스캔",
+    "scanDetail": "커뮤니티 3D 모델에서 자동 변환되어 도로, 연석, 런오프, 방호벽이 메시를 따라 구성되었으므로 실제 경기장과 세부 사항이 다를 수 있습니다."
+  },
+  "circuitType": {
+    "permanent": "상설",
+    "street": "시가지",
+    "oval": "오벌",
+    "hillclimb": "힐 클라임"
+  },
+  "livery": {
+    "grid2026": "2026 그리드",
+    "retro": "레트로",
+    "colourChalk": "초크",
+    "colourCarbon": "카본",
+    "colourAlloy": "알로이",
+    "colourVermilion": "버밀리온",
+    "colourPapaya": "파파야",
+    "colourGold": "골드",
+    "colourVolt": "볼트",
+    "colourEmerald": "에메랄드",
+    "colourCyan": "시안",
+    "colourCobalt": "코발트",
+    "colourIndigo": "인디고",
+    "colourMagenta": "마젠타"
+  },
+  "keyActions": {
+    "throttle": "스로틀",
+    "brake": "브레이크",
+    "steerLeft": "좌회전 조향",
+    "steerRight": "우회전 조향",
+    "boostHold": "부스트(누르고 있기)",
+    "boostLatch": "부스트(토글)",
+    "overtake": "오버테이크",
+    "aero": "액티브 에어로 X / Z",
+    "shiftUp": "기어 업",
+    "shiftDown": "기어 다운",
+    "neutral": "중립",
+    "camera": "카메라(길게 누르기: 시트 및 카메라)",
+    "freeCamera": "자유 카메라",
+    "tvCamera": "트랙사이드 TV 카메라",
+    "racingLine": "레이싱 라인",
+    "mute": "음소거",
+    "nextTrack": "다음 음악 트랙",
+    "autopilot": "오토파일럿",
+    "mouseSteer": "마우스 조향",
+    "restart": "재시작",
+    "flyingLap": "랩 재시작(플라잉 스타트)",
+    "throttleHalf": "하프 스로틀(누르고 있기)",
+    "brakeHalf": "하프 브레이크(누르고 있기)",
+    "clutch": "클러치(누르고 있기)",
+    "replay": "즉시 리플레이",
+    "mfdPage": "다음 MFD 페이지",
+    "mfd": "MFD 열기 / 닫기",
+    "hud": "HUD 표시 / 숨기기",
+    "board": "랩 보드 열기 / 닫기",
+    "headlights": "헤드라이트 켜기 / 끄기",
+    "headlightFlash": "상향등 점멸(누르고 있기)"
+  },
+  "padActions": {
+    "shiftUp": "기어 업",
+    "shiftDown": "기어 다운",
+    "neutral": "중립",
+    "boost": "부스트",
+    "overtake": "오버테이크",
+    "aero": "액티브 에어로 X / Z",
+    "camera": "카메라(길게 누르기: 시트 및 카메라)",
+    "freeCamera": "자유 카메라",
+    "tvCamera": "트랙사이드 TV 카메라",
+    "racingLine": "레이싱 라인",
+    "restart": "재시작",
+    "flyingLap": "랩 재시작(플라잉 스타트)",
+    "pause": "일시 정지 메뉴",
+    "mfd": "MFD 열기 / 닫기",
+    "mfdPage": "다음 MFD 페이지",
+    "hud": "HUD 표시 / 숨기기",
+    "board": "랩 보드 열기 / 닫기",
+    "headlights": "헤드라이트(짧게: 점멸, 길게: 켜기 / 끄기)",
+    "headlightFlash": "상향등 점멸(누르고 있기)"
+  },
+  "pedals": {
+    "throttle": "스로틀",
+    "brake": "브레이크",
+    "clutch": "클러치",
+    "notSet": "미지정",
+    "trigger": "트리거",
+    "stick": "{side, select, left {왼쪽} other {오른쪽}} 스틱 {way, select, up {위} down {아래} left {왼쪽} other {오른쪽}}",
+    "pressThrottle": "스로틀 밟기",
+    "holdButton": "{button} 길게 누르기",
+    "pushStick": "{side, select, left {왼쪽} other {오른쪽}} 스틱을 {way, select, up {위로} down {아래로} left {왼쪽으로} other {오른쪽으로}} 밀기",
+    "clutchPedal": "클러치 페달",
+    "button": "버튼 {number}"
+  },
+  "padLayouts": {
+    "gt": "GT 스타일",
+    "gtClassic": "GT 클래식",
+    "f1": "포뮬러 스타일",
+    "forza": "Forza 스타일",
+    "bumper": "범퍼 변속"
+  },
+  "wheelSupport": {
+    "moza": "WebHID를 통해 연결, 조향 및 포스 피드백이 작동합니다",
+    "hidPid": "미검증; 동일한 표준 포스 피드백 리포트를 사용합니다",
+    "directDrive": "미검증; HID PID 포스 피드백이 없으면 페이지가 브리지로 전환됩니다",
+    "pxn": "미검증; 고유 Set Effect 값을 사용하는 HID PID 방식이며 PXN 휠에서는 아직 확인되지 않았습니다",
+    "logitechClassic": "미검증; Linux hid-lg4ff와 동일한 구형 Logitech 명령으로 WebHID에서 시작하며 G27 및 G29의 RPM LED를 포함합니다",
+    "logitechHidpp": "미검증; Logitech G HUB에서 휠을 PC 모드로 전환한 후 Linux hid-logitech-hidpp와 동일한 HID++ 포스 피드백으로 WebHID에서 시작합니다",
+    "logitechBridgeOnly": "미검증; 브리지 전용: PlayStation용 G923이나 G PRO를 구동하는 메인라인 Linux 드라이버가 없으며 브라우저가 DFP의 조향 축 스케일을 재조정할 수 없습니다",
+    "thrustmaster": "미검증; 드라이버가 휠을 초기 구동 모드에서 전환한 후 Linux hid-tmff2 명령을 사용합니다. 전환되지 않았거나 Windows가 명령을 거부하면 브리지가 대신 처리합니다",
+    "thrustmasterBridgeOnly": "미검증; 브리지 전용: T150 및 TMX는 다른 명령 세트를 사용하며 hid-tmff2는 T500RS를 지원하지 않습니다",
+    "fanatecCslElite": "미검증; HID PID 포스 피드백이 없으면 페이지가 브리지로 전환됩니다",
+    "tested": "검증됨",
+    "expected": "지원 예상",
+    "unknown": "알 수 없음",
+    "no": "미지원"
+  },
+  "hudLayouts": {
+    "broadcast": "중계",
+    "broadcastDetail": "TV 중계 그래픽: 순위표, 트랙 맵, 텔레메트리 바",
+    "dash": "휠 대시",
+    "dashDetail": "화면 하단 중앙의 레이싱 휠 디스플레이",
+    "telemetry": "텔레메트리",
+    "telemetryDetail": "대시보드 + 타이어, 중력 가속도(G), 출력 및 입력",
+    "classic": "클래식",
+    "classicDetail": "오리지널 모서리 패널 구성",
+    "minimal": "미니멀",
+    "minimalDetail": "속도, 기어, 랩 정보만 표시",
+    "irdashiesDetail": "순위표, 랩 타이머, 입력 및 시프트 라이트",
+    "racevisionDetail": "순위표, 상대 거리, 입력 바 및 그래프",
+    "h2hDetail": "앞뒤 차량, 격차 및 랩 델타",
+    "retroDetail": "따뜻한 감성의 계기판: 원형 다이얼, 델타 바, 랩",
+    "blocksDetail": "어두운 사각 블록: 타이밍, 섹터, 타이어, 연료",
+    "grandPrixDetail": "레이스 순위표, 원형 속도계 클러스터, 기어 및 입력"
+  },
+  "steeringAssist": {
+    "selfSteerStrength": "셀프 스티어 및 카운터스티어",
+    "selfSteerStrengthHint": "바퀴가 차량의 진행 방향을 따라가고 리어 슬라이드를 제어하는 강도",
+    "dampingStrength": "요 댐핑",
+    "dampingStrengthHint": "슬라이드 회복 시 역반동과 좌우 흔들림을 진정시킵니다",
+    "speedSensitivity": "고속 안정화",
+    "speedSensitivityHint": "고속 주행 시 조향 반응을 둔화시켜 미세 조작을 부드럽게 유지합니다",
+    "slipLimitMargin": "타이어 슬립 마진",
+    "slipLimitMarginHint": "음수: 안전한 언더스티어 여유 확보 · 양수: 프런트가 최대 슬립을 넘도록 허용",
+    "maxSelfSteerAngleDeg": "최대 카운터스티어 록",
+    "maxSelfSteerAngleDegHint": "슬라이드를 잡기 위해 보조 기능이 자동으로 꺾는 최대 바퀴 각도",
+    "presetBalanced": "밸런스",
+    "presetStable": "안정적",
+    "presetLoose": "루즈",
+    "presetDrift": "드리프트",
+    "presetCalm": "고속 안정",
+    "fullLock": "풀 록",
+    "presetDetail": "셀프 스티어 {selfSteer}, 요 댐핑 {damping}, 고속 안정화 {calm}, 프런트 최대 슬립 대비 {grip} %, 카운터스티어 최대 {cap}"
+  },
+  "support": {
+    "donatePayPal": "PayPal로 후원하기",
+    "supportOn": "{site}에서 후원하기",
+    "donateToVia": "{site}로 {maker} 후원하기",
+    "supportOnSite": "{site}에서 {maker} 후원하기",
+    "donateTo": "{maker} 후원하기",
+    "supportMaker": "{maker} 지원하기"
+  },
+  "setupSheet": {
+    "tcSlip": "TC 슬립",
+    "tc1": "TC 1",
+    "tcCut": "TC 컷",
+    "tc2": "TC 2",
+    "tcSlipAngle": "TC 슬립 각도",
+    "abs": "ABS",
+    "engineMap": "엔진 맵",
+    "motorDeployment": "모터 방출",
+    "regeneration": "회생 제동",
+    "startingFuel": "시작 연료",
+    "frontWing": "프런트 윙",
+    "rearWing": "리어 윙",
+    "diffOnThrottle": "가속 시 디퍼렌셜",
+    "diffOffThrottle": "감속 시 디퍼렌셜",
+    "engineBraking": "엔진 브레이크",
+    "frontToe": "프런트 토",
+    "rearToe": "리어 토",
+    "frontSuspension": "프런트 서스펜션",
+    "rearSuspension": "리어 서스펜션",
+    "frontAntiRollBar": "프런트 안티롤 바",
+    "rearAntiRollBar": "리어 안티롤 바",
+    "frontRideHeight": "프런트 차고",
+    "rearRideHeight": "리어 차고",
+    "brakePressure": "브레이크 압력",
+    "frontBrakeBias": "프런트 브레이크 바이어스",
+    "brakeMigration": "브레이크 마이그레이션",
+    "brakePower": "브레이크 파워",
+    "brakeBias": "브레이크 바이어스",
+    "steeringRatio": "스티어링 기어비",
+    "frontBumpStopRange": "프런트 범프 스톱 범위",
+    "rearBumpStopRange": "리어 범프 스톱 범위",
+    "diffPreload": "디퍼렌셜 프리로드",
+    "gearSet": "기어 세트",
+    "frontThirdPacker": "프런트 서드 패커",
+    "rearThirdPacker": "리어 서드 패커",
+    "frontBrakeDucts": "프런트 브레이크 덕트",
+    "rearBrakeDucts": "리어 브레이크 덕트",
+    "radiatorOpening": "라디에이터 개방도",
+    "frontBump": "프런트 범프",
+    "rearBump": "리어 범프",
+    "frontFastBump": "프런트 고속 범프",
+    "rearFastBump": "리어 고속 범프",
+    "frontRebound": "프런트 리바운드",
+    "rearRebound": "리어 리바운드",
+    "frontFastRebound": "프런트 고속 리바운드",
+    "rearFastRebound": "리어 고속 리바운드",
+    "frontThirdSpring": "프런트 서드 스프링",
+    "rearThirdSpring": "리어 서드 스프링",
+    "frontThirdBump": "프런트 서드 범프",
+    "rearThirdBump": "리어 서드 범프",
+    "frontThirdFastBump": "프런트 서드 고속 범프",
+    "rearThirdFastBump": "리어 서드 고속 범프",
+    "frontThirdRebound": "프런트 서드 리바운드",
+    "rearThirdRebound": "리어 서드 리바운드",
+    "frontThirdFastRebound": "프런트 서드 고속 리바운드",
+    "rearThirdFastRebound": "리어 서드 고속 리바운드",
+    "frontCornerPackers": "프런트 코너 패커",
+    "rearCornerPackers": "리어 코너 패커",
+    "frontWheelRate": "프런트 휠 레이트",
+    "rearWheelRate": "리어 휠 레이트",
+    "frontBumpStopRate": "프런트 범프 스톱 레이트",
+    "rearBumpStopRate": "리어 범프 스톱 레이트",
+    "frontCamber": "프런트 캠버",
+    "rearCamber": "리어 캠버",
+    "frontLeftPressure": "좌측 앞 공기압",
+    "frontRightPressure": "우측 앞 공기압",
+    "rearLeftPressure": "좌측 뒤 공기압",
+    "rearRightPressure": "우측 뒤 공기압",
+    "tyreBlankets": "타이어 워머",
+    "detached": "분리됨",
+    "toeIn": "{angle} 토인",
+    "toeOut": "{angle} 토아웃",
+    "dialOff": "OFF",
+    "blanketsOn": "켜짐",
+    "blanketsOff": "꺼짐",
+    "engineMapMax": "1 · 최대",
+    "engineMapRace": "2 · 레이스",
+    "engineMapSmooth": "3 · 부드러움",
+    "engineMapLean": "4 · 희박",
+    "engineMapSave": "5 · 절약"
+  },
+  "setupGroups": {
+    "fuel": "연료",
+    "aerodynamics": "공기역학",
+    "aerodynamicsShort": "에어로",
+    "transmission": "변속기",
+    "transmissionShort": "변속",
+    "suspensionGeometry": "서스펜션 지오메트리",
+    "suspensionGeometryShort": "지오메트리",
+    "suspension": "서스펜션",
+    "suspensionShort": "서스펜션",
+    "dampers": "댐퍼",
+    "brakes": "브레이크",
+    "tyres": "타이어",
+    "electronics": "전자 장비",
+    "electronicsShort": "전자",
+    "mechanicalGrip": "기계적 그립",
+    "mechanicalGripShort": "그립",
+    "thirdElements": "서드 엘리먼트",
+    "thirdElementsShort": "서드",
+    "aero": "에어로",
+    "fuelShort": "연료",
+    "dampersShort": "댐퍼",
+    "brakesShort": "브레이크",
+    "tyresShort": "타이어",
+    "aeroShort": "에어로"
+  },
+  "setupFx": {
+    "frontWing": {
+      "more": "고속 프런트 그립 증가, 리어 불안정",
+      "less": "리어 안정, 고속 언더스티어 증가"
+    },
+    "rearWing": {
+      "more": "안정성 및 트랙션 증가, 항력 증가",
+      "less": "직선 최고 속도 증가, 리어 민감"
+    },
+    "diffOn": {
+      "more": "구동력 증가, 파워 오버스티어",
+      "less": "리어 타이어 부담 감소, 안쪽 바퀴 헛돔"
+    },
+    "diffOff": {
+      "more": "감속 시 안정, 턴인 저항 증가",
+      "less": "진입 시 회두성 증가, 불안정할 수 있음"
+    },
+    "engineBraking": {
+      "more": "가속 해제 시 리어 제동 증가, 회두성 향상",
+      "less": "가속 해제 시 안정, 제동 거리 증가"
+    },
+    "camberFront": {
+      "more": "코너 중반 프런트 그립 증가",
+      "less": "제동력 향상, 균일한 마모"
+    },
+    "camberRear": {
+      "more": "리어 횡그립 증가",
+      "less": "저속 코너 탈출 트랙션 향상"
+    },
+    "toeFront": {
+      "more": "직선 안정성 증가, 턴인 반응 둔화",
+      "less": "날카로운 턴인, 고속에서 민감"
+    },
+    "toeRear": {
+      "more": "리어 안정, 항력 소폭 증가",
+      "less": "회두성 증가, 안정성 감소"
+    },
+    "springFront": {
+      "more": "날카로운 반응, 요철 그립 감소",
+      "less": "요철 구간 프런트 그립 증가"
+    },
+    "springRear": {
+      "more": "회두성 증가, 트랙션 감소",
+      "less": "트랙션 증가, 회두성 둔화"
+    },
+    "arbFront": {
+      "more": "빠른 방향 전환, 언더스티어",
+      "less": "코너 중반 프런트 그립 증가"
+    },
+    "arbRear": {
+      "more": "회두성 증가, 탈출 트랙션 감소",
+      "less": "리어 그립 증가, 언더스티어 증가"
+    },
+    "rideFront": {
+      "more": "연석 통과 시 안전, 다운포스 감소",
+      "less": "다운포스 증가, 플로어 실속 위험"
+    },
+    "rideRear": {
+      "more": "레이크 증가: 날카롭고 민감한 리어",
+      "less": "리어 안정, 언더스티어 증가"
+    },
+    "brakePressure": {
+      "more": "제동 거리 단축, 조기 록업",
+      "less": "조절 용이, 제동 거리 증가"
+    },
+    "bias": {
+      "more": "안정적 제동, 프런트 먼저 록업",
+      "less": "진입 시 회두성 증가, 리어 먼저 록업"
+    },
+    "migration": {
+      "more": "트레일 브레이킹 시 회두성 증가",
+      "less": "브레이크 해제 중 밸런스 유지"
+    },
+    "coldPsi": {
+      "more": "빠른 예열, 최대 그립 감소",
+      "less": "그립 증가, 느린 예열"
+    },
+    "blankets": {
+      "more": "첫 코너부터 예열된 타이어",
+      "less": "차고 출고 시 차가움, 아웃 랩에서 예열 필요"
+    },
+    "tc": {
+      "more": "휠스핀 감소, 탈출 가속 둔화",
+      "less": "빠른 탈출, 리어 미끄러짐 위험"
+    },
+    "tc2": {
+      "more": "강한 개입: 슬라이드를 단단히 제어",
+      "less": "부드러운 개입: 구동력 유지"
+    },
+    "abs": {
+      "more": "록업 방지, 제동 거리 증가",
+      "less": "정밀 조작 시 제동 거리 단축"
+    },
+    "map": {
+      "more": "부드러운 스로틀, 출력 감소",
+      "less": "최대 출력, 날카로운 스로틀"
+    },
+    "steerRatio": {
+      "more": "느린 조향, 조향각 감소",
+      "less": "빠른 조향, 조향각 증가"
+    },
+    "wheelRateFront": {
+      "more": "날카로운 프런트, 요철 그립 감소",
+      "less": "요철 구간 프런트 그립 증가"
+    },
+    "wheelRateRear": {
+      "more": "회두성 증가, 트랙션 감소",
+      "less": "트랙션 증가, 회두성 둔화"
+    },
+    "bumpStopRate": {
+      "more": "범프 스톱 접촉 시 단단함",
+      "less": "범프 스톱 접촉 시 부드러움"
+    },
+    "bumpStopRange": {
+      "more": "범프 스톱 도달 전 스트로크 증가",
+      "less": "범프 스톱 조기 도달, 평탄한 차체 자세"
+    },
+    "preload": {
+      "more": "고속 코너 안정, 저속 언더스티어",
+      "less": "진입 시 회두성 증가, 탈출 불안정"
+    },
+    "bump": {
+      "more": "차체 움직임 감소, 요철 충격 증가",
+      "less": "요철 흡수, 차체 움직임 증가"
+    },
+    "fastBump": {
+      "more": "연석 통과 시 단단함",
+      "less": "연석 충격 흡수"
+    },
+    "rebound": {
+      "more": "하중 복귀 느림, 안정적 탈출",
+      "less": "타이어의 노면 추종성 향상"
+    },
+    "fastRebound": {
+      "more": "연석 후 바퀴 복귀 느림",
+      "less": "바퀴가 빠르게 복귀"
+    },
+    "ductFront": {
+      "more": "프런트 브레이크 냉각 증가, 항력 증가",
+      "less": "프런트 브레이크 온도 상승, 항력 감소"
+    },
+    "ductRear": {
+      "more": "리어 브레이크 냉각 증가, 항력 증가",
+      "less": "리어 브레이크 온도 상승, 항력 감소"
+    },
+    "radiator": {
+      "more": "엔진 냉각 증가, 항력 증가",
+      "less": "항력 감소, 엔진 온도 상승"
+    },
+    "gearSet": {
+      "more": "롱 기어: 긴 직선 최고 속도 중시",
+      "less": "숏 기어: 저속 코너 탈출 가속 중시"
+    },
+    "heaveSpring": {
+      "more": "고속 시 평탄한 차체, 요철 충격 증가",
+      "less": "요철 흡수, 플로어 움직임 증가"
+    },
+    "heavePacker": {
+      "more": "패커 도달 전 스트로크 증가",
+      "less": "패커가 플로어를 더 빨리 지지"
+    },
+    "cornerPacker": {
+      "more": "스톱 조기 도달, 코너에서 평탄함",
+      "less": "여유 스트로크 증가, 롤 증가"
+    },
+    "tcSlipAngle": {
+      "more": "리어 슬라이드 시 더 빨리 개입",
+      "less": "가속 시 더 큰 리어 슬라이드 허용"
+    },
+    "motorDeploy": {
+      "more": "전기 추력 증가, 배터리 소모 빠름",
+      "less": "충전량 절약, 추력 감소"
+    },
+    "regen": {
+      "more": "충전량 증가, 리어 제동력 증가",
+      "less": "제동 시 리어 안정, 충전량 감소"
+    },
+    "fuel": {
+      "more": "긴 스틴트, 무겁고 느림",
+      "less": "가볍고 빠름, 짧은 스틴트"
+    }
+  },
+  "padFeel": {
+    "smooth": "부드러움",
+    "smoothDetail": "느리고 차분한 조향",
+    "default": "기본",
+    "defaultDetail": "균형 잡힌 반응",
+    "sharp": "날카로움",
+    "sharpDetail": "빠른 턴인"
+  },
+  "tyres": {
+    "street": "스트리트 타이어"
+  },
+  "setupShare": {
+    "aeroLow": "낮은 항력",
+    "aeroBalanced": "균형 에어로",
+    "aeroHigh": "고다운포스",
+    "soft": "소프트",
+    "medium": "미디엄",
+    "hard": "하드",
+    "intermediate": "인터",
+    "wet": "웻",
+    "chassisChanges": "{count, plural, other {섀시 변경 #건}}",
+    "brakeBias": "BB {bias}%",
+    "baseline": "기본 셋업",
+    "factoryLowDrag": "낮은 항력"
+  },
+  "trackLimits": {
+    "flashbackDeleted": "플래시백 · 랩 무효",
+    "currentAndNextInvalid": "현재 및 다음 랩 무효화",
+    "currentInvalid": "현재 랩 무효화",
+    "courseCutDeleted": "코스 단축 · 랩 무효",
+    "penaltyOnceBack": "트랙 복귀 시 시간 페널티 부과",
+    "leftLapRoad": "랩 주행 경로 이탈",
+    "noTimeGained": "시간 이득 없음",
+    "courseCutPenalty": "코스 단축 · +{seconds}초 시간 페널티",
+    "secondsGained": "{seconds}초 이득",
+    "lapDeleted": "랩 무효",
+    "wallDeleted": "벽면 접촉 · 랩 무효",
+    "rodeWallBeforeLine": "결승선 직전 벽면 주행",
+    "limitsDeleted": "트랙 리밋 · 랩 무효",
+    "offBeforeLine": "결승선 직전 트랙 이탈",
+    "nextLapToo": "다음 랩도 무효",
+    "offTrack": "트랙 이탈",
+    "touchedBarrier": "방호벽 접촉",
+    "rodeWall": "벽면 주행",
+    "positionHandedBack": "순위 반환 완료",
+    "advantageGivenBack": "이득 반환 완료",
+    "noFurtherAction": "추가 조치 없음",
+    "trackLimits": "트랙 리밋",
+    "noAdvantage": "이득 없음 · 조치 없음",
+    "timePenalty": "+{seconds}초 시간 페널티",
+    "limitsGained": "트랙 리밋 · {seconds}초 이득",
+    "limitsCutMetres": "트랙 리밋 · {metres} m 단축",
+    "limitsMajorCut": "트랙 리밋 · 대폭 단축",
+    "why": "{reason, select, illegal_overtake {부정 추월 · 순위 미반환} corner_cut {코너 단축} not_lifted {감속 미실시} other {시간 이득}}",
+    "limitsWhy": "트랙 리밋 · {reason, select, illegal_overtake {부정 추월 · 순위 미반환} corner_cut {코너 단축} not_lifted {감속 미실시} other {시간 이득}}",
+    "warningCount": "트랙 리밋 · 경고 {count}/{max}",
+    "points": "{points}점",
+    "strikes": "{count, plural, other {경고 #회}}",
+    "disqualified": "실격 · 트랙 리밋",
+    "limitsPoints": "트랙 리밋 · {points}",
+    "blackWhiteFlag": "흑백기",
+    "nextPenalty": "{why} · 다음 위반 시 +{seconds}초",
+    "nextDisqualification": "{why} · 다음 위반 시 실격",
+    "warning": "트랙 리밋 · 경고",
+    "warningDetail": "{why} · {points}"
+  },
+  "flags": {
+    "yellow": "황기",
+    "trackClear": "트랙 정상",
+    "carStopped": "전방 차량 정차",
+    "slowCar": "전방 저속 차량",
+    "wrongWay": "역주행 차량",
+    "carOffTrack": "전방 트랙 이탈 차량",
+    "incident": "전방 사고 발생"
+  },
+  "connection": {
+    "raceClosed": "해당 레이스가 곧 시작됩니다. 다음 레이스에 참가할 수 있습니다.",
+    "raceFull": "해당 레이스는 정원이 가득 찼습니다. 다음 레이스에 참가해 주십시오.",
+    "raceStarted": "해당 레이스가 이미 시작되었습니다. 다음 레이스에 참가해 주십시오.",
+    "raceTaken": "다른 창에서 이미 이 레이스에 참가 중입니다.",
+    "raceBad": "레이스에 참가할 수 없습니다. 게임을 새로고침한 후 다시 시도해 주십시오.",
+    "raceUpdate": "LibreCorsa가 업데이트되었습니다. 레이스에 참가하려면 페이지를 새로고침해 주십시오.",
+    "versionMismatch": "이 방은 다른 버전의 LibreCorsa를 실행 중입니다. 참가자 모두 페이지를 새로고침해야 합니다.",
+    "roomServerUnreachable": "방 서버에 연결할 수 없습니다. 네트워크를 확인하고 다시 시도하거나 고급 메뉴의 수동 연결을 사용해 주십시오.",
+    "idle": "방을 호스팅하고 링크를 보내거나 친구의 방 코드로 참가하십시오.",
+    "openingRoom": "{code} 방을 여는 중…",
+    "reconnectingRoom": "{code} 방에 재연결하는 중…",
+    "roomOpen": "{code} 방 열림 • 플레이어 대기 중",
+    "sessionActive": "이 세션 ID가 이미 방에서 활성 상태입니다. 잠시 후 다시 호스팅해 주십시오.",
+    "roomOpenElsewhere": "{code} 방이 이미 다른 기기에서 열려 있습니다. 참가를 눌러 함께 주행하거나 새 방을 호스팅하십시오.",
+    "joiningRoom": "{code} 방에 참가하는 중…",
+    "roomNotFound": "{code} 방을 찾을 수 없습니다. 코드를 확인하고 호스트에게 게임 화면을 열어 두도록 요청하십시오.",
+    "playerIdTaken": "이 플레이어 ID는 이미 방에 있습니다. 잠시 후 다시 참가해 주십시오.",
+    "roomFull": "{code} 방은 정원이 가득 찼습니다.",
+    "connectedPlayers": "{count, plural, other {플레이어 #명과 연결됨}}",
+    "peerFailed": "상대 플레이어와 연결할 수 없습니다. 다시 시도하거나 같은 Wi-Fi를 사용해 주십시오.",
+    "peerBlocked": "연결할 수 없습니다. 네트워크 중 하나가 직접 연결을 차단하고 있습니다. 같은 Wi-Fi를 사용하거나 다른 네트워크를 시도해 주십시오.",
+    "lostHost": "호스트와 연결이 끊겼습니다. 다시 참가해 주십시오.",
+    "hostingTabs": "이 브라우저의 탭 간 레이스를 호스팅하는 중입니다",
+    "playerLeft": "플레이어가 나갔습니다. 다시 연결하려면 새 연결 코드를 생성해 주십시오.",
+    "connected": "연결됨",
+    "joiningRace": "다음 레이스에 참가하는 중…",
+    "inNextRace": "다음 레이스 참가 완료",
+    "makingOffer": "연결 제안 생성 중…",
+    "offerReady": "연결 제안이 준비되었습니다. 상대 플레이어에게 보낸 뒤 상대의 응답을 붙여넣으십시오.",
+    "answerReady": "응답이 준비되었습니다. 호스트에게 다시 보내 주십시오.",
+    "answerAccepted": "응답 수락됨 • 연결 중…",
+    "raceServerUnreachable": "레이스 서버에 연결할 수 없습니다. 네트워크를 확인하고 다시 시도해 주십시오.",
+    "racesOff": "현재 예정된 레이스가 운영되고 있지 않습니다.",
+    "raceLost": "레이스 연결이 끊겼습니다.",
+    "ready": "준비되었습니다. 이 브라우저의 탭들은 자동으로 서로를 찾으며, 다른 기기는 방 코드로 참가합니다."
+  },
+  "downloads": {
+    "windowsSummary": "외장 GPU 우선 사용, 레이싱 휠 및 DualSense용 권한 요청 없는 WebHID, 백그라운드 속도 제한 해제를 지원하는 데스크톱 앱입니다.",
+    "windowsInstallNote": "SignPath Foundation 설정이 완료될 때까지 현재는 서명되지 않았습니다. SmartScreen이 차단하면 추가 정보를 클릭한 뒤 실행을 누르십시오.",
+    "windowsStatusLabel": "미서명",
+    "windowsX64Label": ".exe 다운로드",
+    "windowsX64Detail": "Windows x64 설치 파일",
+    "macosSummary": "외장 GPU 우선 사용, 휠 및 DualSense용 권한 요청 없는 WebHID, 백그라운드 속도 제한 해제를 지원하는 데스크톱 앱입니다.",
+    "macosInstallNote": "미서명 빌드입니다. 시스템 설정 > 개인정보 보호 및 보안에서 허용하거나, 응용 프로그램 폴더로 복사한 뒤 격리 속성을 해제하십시오:",
+    "macosStatusLabel": "미서명",
+    "macosArm64Label": "Apple Silicon (.dmg)",
+    "macosArm64Detail": "M1–M4 Mac",
+    "macosX64Label": "Intel (.dmg)",
+    "macosX64Detail": "Intel x64 Mac",
+    "linuxSummary": "레이싱 휠 및 DualSense용 권한 요청 없는 WebHID와 백그라운드 속도 제한 해제를 지원하는 포터블 AppImage입니다.",
+    "linuxInstallNote": "AppImage에 실행 권한을 부여하고 실행하십시오(구형 배포판에서는 FUSE2 / libfuse2 필요):",
+    "linuxX64Label": ".AppImage 다운로드",
+    "linuxX64Detail": "Linux x64",
+    "androidSummary": "몰입형 조작, Android Game Mode 및 런처 바로가기를 지원하는 전체 화면 Trusted Web Activity입니다. Android 7 이상과 Chrome이 필요합니다.",
+    "androidInstallNote": "서명된 정식 APK입니다. 안내가 표시되면 브라우저에서의 설치를 허용하십시오. librecorsa.org에 대해 검증되며 주소창 없이 열립니다.",
+    "androidStatusLabel": "서명된 APK",
+    "androidApkLabel": ".apk 다운로드",
+    "androidApkDetail": "Android 7+ (범용)"
+  },
+  "loading": {
+    "circuit": "서킷",
+    "car": "차량",
+    "opponents": "상대 차량",
+    "shaders": "셰이더"
+  },
+  "session": {
+    "wheelDisconnected": "레이싱 휠 연결이 해제되었습니다. 다시 연결하거나 계속 진행하여 남은 입력 장치로 주행하십시오.",
+    "bigJumpStart": "부정 출발 · 그리드 위치 크게 이탈",
+    "jumpStart": "부정 출발",
+    "clutchGearUp": "기어 업",
+    "clutchPaddle": "업시프트 패들"
+  },
+  "driverKey": {
+    "notAKeyFile": "드라이버 키 파일이 아닙니다",
+    "blocked": "이 브라우저에서 저장이 차단되었습니다"
+  },
+  "simulator": {
+    "formulaTeamCars": "포뮬러 팀 차량",
+    "lapNoLongerSaved": "이 랩은 더 이상 여기에 저장되어 있지 않습니다",
+    "nameNotChanged": "이름을 변경할 수 없습니다",
+    "setupLoadFailed": "{driver}의 셋업을 불러오지 못했습니다. 다시 시도해 주십시오",
+    "setupMissing": "{driver}의 랩에 저장된 셋업이 없습니다",
+    "setupApplied": "{driver}의 셋업을 적용했습니다({summary})",
+    "keySaved": "키가 저장되었습니다. 이 파일을 가진 사람은 누구나 내 이름으로 기록을 등록할 수 있습니다.",
+    "noKeyYet": "아직 키가 없습니다. 첫 업로드 시 자동으로 생성됩니다.",
+    "keyImportedFor": "{name}의 키를 가져왔습니다. 이제 이 기기의 업로드에 사용됩니다.",
+    "keyImported": "키를 가져왔습니다. 이제 이 기기의 업로드에 사용됩니다.",
+    "launchWheel": "스로틀을 밟아 출발",
+    "launchWheelSeat": "스로틀을 밟아 출발 · 카메라 길게 눌러 시트 조정",
+    "launchPad": "출발: {press}",
+    "launchPadSeat": "출발: {press} · 시트 조정: {button} 길게 누르기",
+    "launchTouch": "스로틀을 길게 눌러 출발",
+    "launchKey": "{key} 길게 눌러 출발 · Esc 메뉴",
+    "noRacesOnHillClimb": "힐 클라임에서는 레이스를 진행할 수 없습니다",
+    "backToRaces": "레이스 목록으로 돌아가기"
+  },
+  "telemetryHud": {
+    "menu": "메뉴",
+    "calibratePedals": "페달 보정",
+    "holdForLightsOut": "라이트 아웃에 맞춰 스로틀 유지",
+    "mouseSteering": "마우스 조향 · {key}로 종료",
+    "keyMenu": "메뉴",
+    "keyCamera": "카메라",
+    "keyLine": "라인",
+    "keyRestart": "재시작",
+    "keyBoard": "보드",
+    "keyLights": "라이트",
+    "replay": "리플레이"
+  },
+  "trackGate": {
+    "safeStart": "GPU 재설정 후 안전 시작 모드가 활성화되었습니다.",
+    "graphicsLow": "GPU 재설정 후 그래픽 품질이 낮음으로 설정되었습니다.",
+    "loadFailedStaying": "서킷을 불러오지 못했습니다. 현재 서킷({circuit})을 유지합니다.",
+    "loadFailedDefault": "서킷을 불러오지 못했습니다. 대신 {circuit}을 불러왔습니다."
+  },
+  "minimap": {
+    "map": "서킷 맵",
+    "mapAtTurn": "서킷 맵; 현재 {turn}번 코너에 있습니다",
+    "facts": "{country} · {length} {unit} · {turns, plural, other {코너 #개}}",
+    "sector": "섹터 {sector}",
+    "elevation": "고도",
+    "altitude": "고도 {height}",
+    "grade": "경사 {grade}%",
+    "profileStart": "출발 {height}",
+    "profileStartFinish": "S/F {height}"
+  },
+  "source": {
+    "sourceOf": "{title}의 출처",
+    "source": "출처",
+    "reportIssue": "문제 신고"
+  },
+  "playError": {
+    "title": "시뮬레이터가 중지되었습니다",
+    "body": "WebGL 또는 물리 엔진을 시작하지 못했습니다. 브라우저나 그래픽 드라이버를 업데이트하거나 하드웨어 가속을 켜면 대부분 해결됩니다.",
+    "detail": "오류 상세 정보",
+    "restart": "시뮬레이터 재시작"
+  },
+  "dash": {
+    "yellowFlag": "황기"
+  }
+}

@@ -81,7 +81,7 @@ export function CoverageList({ items }: { items: CoverageItem[] }) {
             />
           )
         ) : null}
-        <p className="lc-data m-0 text-[13px] font-medium text-lc-slate sm:ml-auto" aria-live="polite">
+        <p className="lc-data m-0 text-[13px] font-medium text-lc-slate sm:ms-auto" aria-live="polite">
           {shown.length === items.length ? `${items.length} pieces` : `${shown.length} of ${items.length}`}
         </p>
       </div>

@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslations } from "use-intl/react";
 import { Badge, type BadgeSize, type BadgeTone, type BadgeVariant } from "../Badge";
 
 /**
@@ -14,17 +15,20 @@ export const QualityBadge: React.FC<{
   size?: BadgeSize;
   variant?: BadgeVariant;
   className?: string;
-}> = ({ label, tone, description, size = "md", variant = "soft", className = "" }) => (
-  <Badge
-    tone={tone}
-    variant={variant}
-    size={size}
-    dot
-    title={description}
-    className={`max-w-full min-w-0 overflow-hidden ${className}`}
-  >
-    <span className="truncate py-0.5 leading-none">{label}</span>
-    {/* The description in the badge's text for assistive tech (on screen it sits in the detail pane or a legend) */}
-    {description ? <span className="sr-only">: {description}</span> : null}
-  </Badge>
-);
+}> = ({ label, tone, description, size = "md", variant = "soft", className = "" }) => {
+  const tx = useTranslations("common.badges");
+  return (
+    <Badge
+      tone={tone}
+      variant={variant}
+      size={size}
+      dot
+      title={description}
+      className={`max-w-full min-w-0 overflow-hidden ${className}`}
+    >
+      <span className="truncate py-0.5 leading-none">{label}</span>
+      {/* The description in the badge's text for assistive tech (on screen it sits in the detail pane or a legend) */}
+      {description ? <span className="sr-only">{tx("qualityDescription", { description })}</span> : null}
+    </Badge>
+  );
+};

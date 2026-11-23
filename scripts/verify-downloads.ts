@@ -31,7 +31,7 @@ check(
       p.artifacts.length > 0 &&
       p.artifacts.every((a) => {
         const href = artifactHref(a);
-        return href.startsWith("https://github.com/KhazP/librecorsa/releases/") && !href.includes("undefined");
+        return href.startsWith("https://github.com/librecorsa/librecorsa/releases/") && !href.includes("undefined");
       }),
   ),
 );
@@ -39,7 +39,7 @@ check(
   "Direct artifacts point to the current release tag",
   PLATFORM_DOWNLOADS.flatMap((p) => p.artifacts)
     .filter((a) => a.file !== null)
-    .every((a) => artifactHref(a) === `https://github.com/KhazP/librecorsa/releases/download/${APP_RELEASE.tag}/${a.file}`),
+    .every((a) => artifactHref(a) === `https://github.com/librecorsa/librecorsa/releases/download/${APP_RELEASE.tag}/${a.file}`),
 );
 check(
   "Unpublished artifacts fall back to the latest release page (no 404)",

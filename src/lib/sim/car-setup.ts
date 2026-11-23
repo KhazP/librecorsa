@@ -4,6 +4,7 @@
  * electronics' starting dials).
  */
 
+import { text as t } from "@/lib/text";
 import type { AeroSetupPreset, LiveTunerPatch, TireCompound, TyreSetup, VehicleModelId, WheelPressures } from "@/types/f1";
 import { axlePressures } from "@/types/f1";
 import { LC26_CHASSIS } from "./lc26-data";
@@ -225,9 +226,9 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   liana: { defaultKg: 22, minKg: 4, maxKg: 37 },
   // 30 l of a 90 l tank [spec car.ini FUEL / MAX_FUEL]
   "mtr-496r": { defaultKg: 22, minKg: 4, maxKg: 67 },
-  // A sprint's fixed 28 kg (≈ 38 l) [est]: the regulations ask for a cell of at least 110 l (Art. 13.14) [spec], and hold
-  // the class to an energy per stint
-  "lc-lmdh": { defaultKg: 28, minKg: 5, maxKg: 81 },
+  // A sprint's fixed 28 kg (≈ 38 l) [est]: the regulations ask for a cell of at least 110 l (Art. 13.14) [spec], 81.4 kg
+  // of race fuel, and hold the class to an energy per stint
+  "lc-lmdh": { defaultKg: 28, minKg: 5, maxKg: 82 },
   // 40 l of a 100 l tank [spec car.ini FUEL / MAX_FUEL]
   "nissan-r33-jgtc": { defaultKg: 30, minKg: 4, maxKg: 74 },
   // 30 l of a 120 l tank [spec car.ini FUEL / MAX_FUEL]
@@ -365,12 +366,19 @@ export interface FactoryPreset {
 
 /** The endurance cars' low-drag trims for long-straight circuits: low-downforce aero on the long gear set */
 export const FACTORY_PRESETS: Partial<Record<VehicleModelId, readonly FactoryPreset[]>> = {
-  "amg-gt3": [{ id: "low_drag_gt3", name: "Low drag", aero: "low_downforce", chassis: { gearRatioSet: 1 } }],
+  "amg-gt3": [
+    {
+      id: "low_drag_gt3",
+      get name() { return t("game.setupShare.factoryLowDrag"); },
+      aero: "low_downforce",
+      chassis: { gearRatioSet: 1 },
+    },
+  ],
   // The prototype also runs its rear bar detached and less camber for the straights
   "lc-lmdh": [
     {
       id: "low_drag_proto",
-      name: "Low drag",
+      get name() { return t("game.setupShare.factoryLowDrag"); },
       aero: "low_downforce",
       chassis: { gearRatioSet: 1, arbRearPct: ARB_DETACHED_PCT },
       camberDeg: { front: -1.2, rear: -1.0 },

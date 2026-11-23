@@ -8,6 +8,7 @@
  * trigger, or half a stick axis), any other device steers the rack from axis 0 with buttons 7 / 6 as
  * throttle / brake.
  */
+import { text as t } from "@/lib/text";
 import {
   BUMPER_SHIFT_BUTTONS,
   DEFAULT_PAD_PEDAL_SOURCES,
@@ -219,9 +220,9 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
 /** Stick feel presets for the controller steering assist */
 export type PadSensitivity = "smooth" | "default" | "sharp";
 export const PAD_SENSITIVITY: Record<PadSensitivity, { steeringRate: number; deadzone: number; label: string; detail: string }> = {
-  smooth: { steeringRate: 0.35, deadzone: 0.07, label: "Smooth", detail: "Slower, calmer steering" },
-  default: { steeringRate: 0.5, deadzone: 0.05, label: "Default", detail: "Balanced response" },
-  sharp: { steeringRate: 0.75, deadzone: 0.04, label: "Sharp", detail: "Quick turn-in" },
+  smooth: { steeringRate: 0.35, deadzone: 0.07, get label() { return t("game.padFeel.smooth"); }, get detail() { return t("game.padFeel.smoothDetail"); } },
+  default: { steeringRate: 0.5, deadzone: 0.05, get label() { return t("game.padFeel.default"); }, get detail() { return t("game.padFeel.defaultDetail"); } },
+  sharp: { steeringRate: 0.75, deadzone: 0.04, get label() { return t("game.padFeel.sharp"); }, get detail() { return t("game.padFeel.sharpDetail"); } },
 };
 
 /** A controller's pedals: each one's source (a trigger, or half a stick axis), and the dead zone of the stick ones */

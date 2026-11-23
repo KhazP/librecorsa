@@ -420,6 +420,43 @@ console.log('\n== Hybrid: deployment, regeneration and the store');
     });
     check('Deploys 50 kW flat out, never more', peak > 49_000 && peak <= 50_000 * 1.005, `${fmt(peak / 1000, 1)} kW`);
   }
+  // No deployment speed: the LMDh regulations have none (the 120 km/h was the LMH cars' front axle)
+  {
+    const car = makeCar();
+    car.reset(0, 0, 0, 70 / 3.6);
+    car.motorDeployKw = 50;
+    car.ersEnergyJ = 0.8 * C.ers.ERS_MAX_CHARGE;
+    let below = 0;
+    run(car, 1.5, () => ({ throttle: 0.6, brake: 0, steer: 0 }), (c) => {
+      if (c.telemetry.speedKmh < 110) below = Math.max(below, c.telemetry.MGUK_POWER);
+      return false;
+    });
+    check('Deploys under 120 km/h (no deployment speed for an LMDh)', below > 20_000, `${fmt(below / 1000, 1)} kW under 110 km/h`);
+  }
+  // Art. 5.5.2: below 160 km/h on the throttle the motor's torque demand varies no faster than 50 Hz, so a traction
+  // control chattering at every tick reaches it smoothed; the same car without the rule passes the chatter on
+  {
+    const chatter = (cfg: CarPhysicsConfig) => {
+      const car = makeCar(cfg);
+      car.reset(0, 0, 0, 120 / 3.6);
+      car.motorDeployKw = 50;
+      car.ersEnergyJ = 0.8 * C.ers.ERS_MAX_CHARGE;
+      let k = 0;
+      let last = Number.NaN;
+      let worst = 0;
+      run(car, 0.6, () => ({ throttle: 1, brake: 0, steer: 0, ignitionCut: k++ % 2 ? 0.02 : 1 }), (c, t) => {
+        const tq = c.telemetry.MGUK_POWER / Math.max(1, c.engineOmega);
+        if (t > 0.2 && Number.isFinite(last)) worst = Math.max(worst, Math.abs(tq - last));
+        last = tq;
+        return false;
+      }, 0.002);
+      return worst;
+    };
+    const filtered = chatter(C);
+    const raw = chatter({ ...C, ers: { ...C.ers, mguDemandFilter: undefined } });
+    check('Under 160 km/h a chattering traction control reaches the motor smoothed (Art. 5.5.2)', filtered < 0.5 * raw && raw > 1,
+      `motor torque steps of ${fmt(filtered, 1)} Nm a tick, ${fmt(raw, 1)} Nm without the rule`);
+  }
   // An empty store deploys nothing; a full one takes no more
   {
     const car = makeCar();
@@ -467,8 +504,8 @@ console.log('\n== Hybrid: deployment, regeneration and the store');
   // Brake-by-wire: the rear axle brakes what the pedal asks with the motor or without it
   check('Brake-by-wire: the same stop with regeneration as on the calipers alone', Math.abs(regen.dist / friction.dist - 1) < 0.02 && regen.rearLock < 0.12,
     `${fmt(regen.dist, 1)} m regenerating, ${fmt(friction.dist, 1)} m on a full store, rear slip at most ${fmt(regen.rearLock * 100, 1)} %`);
-  // The hybrid fills the turbos' lag: off a closed throttle in fourth, past the 120 km/h it may deploy from, the car
-  // pulls harder in the first 0.3 s
+  // The hybrid fills the turbos' lag: off a closed throttle in fourth (it may deploy at any speed), the car pulls harder
+  // in the first 0.3 s
   const step = (deployKw: number) => {
     const car = makeCar();
     car.reset(0, 0, 0, 140 / 3.6);

@@ -1,17 +1,18 @@
 import React from "react";
+import { useTranslations } from "use-intl/react";
 import { Badge, type BadgeSize, type BadgeTone, type BadgeVariant } from "../Badge";
 import type { IconName } from "../icons/registry";
 
 export type SessionKind = "practice" | "race" | "timeAttack" | "hillClimb" | "online" | "offline" | "host";
 
-const SESSION: Record<SessionKind, { label: string; icon: IconName; tone: BadgeTone }> = {
-  practice: { label: "Practice", icon: "drive", tone: "neutral" },
-  race: { label: "Race", icon: "race", tone: "neutral" },
-  timeAttack: { label: "Time trial", icon: "lapTimes", tone: "neutral" },
-  hillClimb: { label: "Hill climb", icon: "trackHillClimb", tone: "neutral" },
-  online: { label: "Online", icon: "online", tone: "info" },
-  offline: { label: "Offline", icon: "offline", tone: "neutral" },
-  host: { label: "Host", icon: "host", tone: "info" },
+const SESSION: Record<SessionKind, { icon: IconName; tone: BadgeTone }> = {
+  practice: { icon: "drive", tone: "neutral" },
+  race: { icon: "race", tone: "neutral" },
+  timeAttack: { icon: "lapTimes", tone: "neutral" },
+  hillClimb: { icon: "trackHillClimb", tone: "neutral" },
+  online: { icon: "online", tone: "info" },
+  offline: { icon: "offline", tone: "neutral" },
+  host: { icon: "host", tone: "info" },
 };
 
 /** What kind of session this is, and how it is connected */
@@ -23,10 +24,11 @@ export const SessionBadge: React.FC<{
   children?: React.ReactNode;
   className?: string;
 }> = ({ session, size = "md", variant = "soft", children, className = "" }) => {
+  const tx = useTranslations("common.session");
   const s = SESSION[session];
   return (
     <Badge tone={s.tone} icon={s.icon} variant={variant} size={size} className={className}>
-      {children ?? s.label}
+      {children ?? tx(session)}
     </Badge>
   );
 };

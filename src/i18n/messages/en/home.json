@@ -1,0 +1,221 @@
+{
+  "notice": {
+    "back": "Back to home",
+    "notFound": {
+      "title": "Page not found",
+      "body": "Nothing is at this address. The link may be old or mistyped."
+    },
+    "error": {
+      "title": "Something went wrong",
+      "body": "This page stopped with an error."
+    }
+  },
+  "hub": {
+    "tabs": {
+      "home": "Home",
+      "circuits": "Circuits",
+      "cars": "Cars",
+      "laps": "Lap times",
+      "whatsNew": "What''s new",
+      "download": "Download",
+      "about": "About"
+    },
+    "unread": "(unread updates)",
+    "sections": "Sections",
+    "skip": "Skip to content",
+    "heading": "LibreCorsa: free open-source racing simulator in your browser",
+    "drive": "Drive",
+    "prompts": {
+      "move": "Move",
+      "select": "Select",
+      "back": "Back",
+      "switchSection": "Switch section",
+      "page": "Lap times page",
+      "drive": "Drive"
+    },
+    "length": "{distance} {unit}, {turns, plural, one {# turn} other {# turns}}",
+    "classYear": "{class}, {year}",
+    "footer": "{venue}, {car}",
+    "driveTile": {
+      "label": "Drive: {venue}, {layout}, in the {car}",
+      "title": "Drive",
+      "detail": "{venue}, {layout}. {car}."
+    },
+    "circuitTile": {
+      "label": "Change circuit: {venue}, {layout}",
+      "more": "Change circuit",
+      "map": "Map of {venue}, {layout}",
+      "onLine": "on the racing line"
+    },
+    "carTile": {
+      "label": "Change car: {car}",
+      "more": "Change car"
+    },
+    "press": {
+      "title": "Press & media",
+      "label": "Press & media: {count, plural, other {{n} articles and videos}}, and the press kit",
+      "count": "{count, plural, other {{n} articles & videos}}",
+      "onPlatform": "{outlet} on {platform}",
+      "more": "Coverage and press kit"
+    },
+    "whatsNew": {
+      "intro": "Patch notes and recent updates.",
+      "commitLog": "Commit log on GitHub",
+      "empty": "No patch notes yet.",
+      "commits": "{count, plural, one {# commit} other {# commits}}"
+    },
+    "filterOption": "{option} ({count})",
+    "clearFilters": "Clear filters",
+    "venueFilters": {
+      "type": {
+        "label": "Type",
+        "all": "All types"
+      },
+      "country": {
+        "label": "Location",
+        "all": "All locations"
+      },
+      "modder": {
+        "label": "Modder",
+        "all": "All modders"
+      }
+    },
+    "carFilters": {
+      "class": {
+        "label": "Class",
+        "all": "All classes"
+      },
+      "physics": {
+        "label": "Physics",
+        "all": "Any physics"
+      },
+      "modder": {
+        "label": "Modder",
+        "all": "All modders"
+      }
+    },
+    "circuits": {
+      "filter": "Filter circuits",
+      "shown": "{shown} of {total} circuits",
+      "empty": "No circuit matches these filters.",
+      "personalBest": "Personal best",
+      "oldPhysics": "Old physics",
+      "carOldPhysics": "{car} · Old"
+    },
+    "cars": {
+      "filter": "Filter cars",
+      "shown": "{shown} of {total} cars",
+      "empty": "No car matches these filters."
+    },
+    "about": {
+      "lead": "Free, open-source browser racing simulator.",
+      "addMod": "Add your mod",
+      "addModText": "Made a car or track mod and want to see it in LibreCorsa? Email me at <mail>{email}</mail> with a link to it. Every modder gets credited by name in the game.",
+      "modders": "The modders",
+      "moddersText": "The circuits and cars are their work, used with their permission. If you enjoy one, you can thank its maker directly.",
+      "links": {
+        "download": "Download apps",
+        "press": "All coverage and the press kit",
+        "docs": "Docs",
+        "privacy": "Privacy",
+        "support": "Buy me a coffee"
+      }
+    },
+    "facts": {
+      "physics": {
+        "label": "Physics",
+        "text": "Simulated 500 times a second, with tyre temperatures, active aero and hybrid power"
+      },
+      "racing": {
+        "label": "Racing",
+        "text": "Hot laps, races against AI, multiplayer rooms and online lap times"
+      },
+      "controls": {
+        "label": "Controls",
+        "text": "Keyboard, gamepad, touch or a force-feedback wheel"
+      },
+      "platforms": {
+        "label": "Plays on",
+        "text": "Any modern browser: computer, phone or tablet"
+      },
+      "conditions": {
+        "label": "Conditions",
+        "text": "Your choice of weather and time of day"
+      },
+      "price": {
+        "label": "Price",
+        "text": "Free. No account needed and no ads; tips are optional and unlock nothing"
+      }
+    }
+  },
+  "lapTimes": {
+    "loading": "Loading lap times…",
+    "offline": "Lap times are offline right now.",
+    "unreachable": "Leaderboard unreachable. Retrying…"
+  },
+  "boards": {
+    "board": "Board",
+    "allLaps": "All laps",
+    "challenge": "Weekly challenge",
+    "hallOfFame": "Hall of Fame",
+    "lapTimesTitle": "Lap times",
+    "challengeTitle": "Weekly challenge",
+    "week": "Week",
+    "thisWeek": "This week · {circuit}",
+    "pastWeek": "{dates} · {circuit}",
+    "timeLeft": "{timeLeft} left",
+    "ran": "Ran {dates}",
+    "rules": "Rules",
+    "emptyThisWeek": "No times set yet this week.",
+    "emptyPastWeek": "No times recorded for this week."
+  },
+  "layoutPicker": {
+    "chosen": "{venue} layout: {layout} ({index} of {count})",
+    "closed": "{venue}: {count, plural, one {# layout} other {# layouts}}",
+    "count": "{count, plural, one {# layout} other {# layouts}}",
+    "list": "{venue} layouts"
+  },
+  "liveryPicker": {
+    "custom": "Custom Paint",
+    "chosen": "{car} livery: {livery} ({index} of {count})",
+    "chosenCustom": "{car} livery: Custom Paint ({count, plural, one {# preset} other {# presets}})",
+    "closed": "{car}: {count, plural, one {# livery} other {# liveries}}",
+    "count": "{count, plural, one {# livery} other {# liveries}}",
+    "list": "{car} liveries"
+  },
+  "downloads": {
+    "intro": "Optional native wrappers for Windows, macOS, Linux and Android. They open librecorsa.org directly, so game updates arrive without reinstalling.",
+    "directLink": "Direct link",
+    "platforms": "Platforms",
+    "thisDevice": "This device",
+    "installed": "Installed",
+    "artifact": "{label} — {platform} ({detail})",
+    "artifactSized": "{label} — {platform} ({detail}, {size})",
+    "detailSized": "{detail}, {size}",
+    "detailPending": "{detail} (published on the next release tag)",
+    "installCommand": "{platform} install command",
+    "whyInstall": "Why install the app",
+    "highlights": {
+      "desktop": {
+        "label": "Desktop",
+        "text": "Requests the discrete GPU on multi-GPU laptops, grants WebHID silently for racing wheels and DualSense, disables background throttling, and checks GitHub Releases for updates."
+      },
+      "android": {
+        "label": "Android",
+        "text": "Fullscreen Trusted Web Activity with no browser URL bar, sticky-immersive edge swipes, Android Game Mode, and Drive / Boards launcher shortcuts."
+      },
+      "current": {
+        "label": "Always current",
+        "text": "Every wrapper opens librecorsa.org directly instead of bundling tracks or cars, so physics, circuits and multiplayer updates arrive immediately."
+      },
+      "browser": {
+        "label": "Browser & iOS",
+        "text": "Nothing to install if you prefer playing straight in a tab. On iPhone and iPad, use Safari''s Share > Add to Home Screen."
+      }
+    },
+    "buildsTitle": "Builds & signing",
+    "builds": "All installers and APKs are built from this repository’s source by GitHub Actions and published on GitHub Releases with SHA-256 digests. Free Windows code signing through SignPath Foundation is being set up; macOS builds are currently unsigned; the Android APK is signed with the upload key verified by <code>{file}</code>.",
+    "allReleases": "All releases on GitHub",
+    "signingPolicy": "Code signing policy"
+  }
+}

@@ -147,6 +147,8 @@ export interface SimulatorCar {
   /** Keyboard and controller steering assist (its settings follow the player's tuning) and what steered last */
   readonly steeringAssist: { settings: SteeringAssistSettings; readonly source: SteeringSource | null };
   autoXMode: boolean;
+  /** A 2026 F1 car uses the Overtake earned in a race by itself (the player's Automatic Overtake) */
+  autoOvertake?: boolean;
   activeAeroMode: ActiveAeroMode;
   tireCompound: TireCompound;
 
@@ -204,6 +206,8 @@ export interface SimulatorCar {
   setWeatherSample?(sample: import('./weather').WeatherContactSample): void;
   /** Simulation realism level's switches (tyre wear, temperature grip, fuel use, wet severity) */
   setSimRealism?(flags: import('./sim-realism').SimRealismFlags): void;
+  /** A time trial is driven (true) or practice (false): a 2026 F1 car's energy allowances (qualifying's or practice's) */
+  setEnergySession?(timeTrial: boolean): void;
   /** An AI car that fits the tyres the weather calls for (`TrackEnvironment` swaps them) */
   aiAutoTyres?: boolean;
   /**

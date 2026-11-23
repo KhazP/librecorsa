@@ -11,6 +11,7 @@
  * boards from before it started again on its own). Free of the simulator, so the home page loads it on its own.
  */
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import type { VehicleModelId } from "@/types/f1";
 import { boardChoiceOf, boardChoices, revisionOnBoard, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import {
@@ -106,38 +107,41 @@ export interface OnlineBoardProps {
 
 type Scope = "mine" | "all";
 
-/** "312 drivers" */
-const driversLine = (n: number) => `${formatCount(n)} ${n === 1 ? "driver" : "drivers"}`;
-
-/** "1,204 laps · 312 drivers" */
-const totalsLine = (t: CircuitTotals) => `${formatCount(t.laps)} ${t.laps === 1 ? "lap" : "laps"} · ${driversLine(t.drivers)}`;
-
-/** "0.214 s behind Ana" */
-const behind = (ms: number, aheadMs: number, who: string) => `${((ms - aheadMs) / 1000).toFixed(3)} s behind \u2068${who}\u2069`;
-
-/** The button that races a lap's ghost: a round icon button in a row, a worded one on its own */
-const RaceGhost: React.FC<{ onClick: () => void; label?: string; of?: string }> = ({ onClick, label, of }) =>
-  label ? (
+/** The button that races a lap's ghost: a round icon button in a row (`driver`'s lap), a worded one on its own */
+const RaceGhost: React.FC<{ onClick: () => void; label?: string; driver?: string }> = ({ onClick, label, driver }) => {
+  const tx = useTranslations("board.online");
+  return label ? (
     <Button size="sm" variant="secondary" icon={<Icon name="ghost" />} onClick={onClick}>
       {label}
     </Button>
   ) : (
-    <IconButton size="sm" variant="secondary" icon={<Icon name="ghost" />} aria-label={`Race the ghost of ${of}`} title="Race ghost" onClick={onClick} />
+    <IconButton
+      size="sm"
+      variant="secondary"
+      icon={<Icon name="ghost" />}
+      aria-label={tx("raceGhostOf", { driver: driver ?? "" })}
+      title={tx("raceGhost")}
+      onClick={onClick}
+    />
   );
+};
 
-/** The button that applies the car setup saved with a lap */
-const ApplySetup: React.FC<{ onClick: () => void; of: string; loading?: boolean }> = ({ onClick, of, loading }) => (
-  <IconButton
-    size="sm"
-    variant="secondary"
-    icon={<Icon name="garage" />}
-    aria-label={`Apply setup from ${of}`}
-    title="Apply setup"
-    disabled={loading}
-    aria-busy={loading || undefined}
-    onClick={onClick}
-  />
-);
+/** The button that applies the car setup saved with `driver`'s lap */
+const ApplySetup: React.FC<{ onClick: () => void; driver: string; loading?: boolean }> = ({ onClick, driver, loading }) => {
+  const tx = useTranslations("board.online");
+  return (
+    <IconButton
+      size="sm"
+      variant="secondary"
+      icon={<Icon name="garage" />}
+      aria-label={tx("applySetupFrom", { driver })}
+      title={tx("applySetup")}
+      disabled={loading}
+      aria-busy={loading || undefined}
+      onClick={onClick}
+    />
+  );
+};
 
 export const OnlineBoard: React.FC<OnlineBoardProps> = ({
   title,
@@ -164,6 +168,15 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
   scopeOverride,
   className = "",
 }) => {
+  const tx = useTranslations("board.online");
+  /** "312 drivers" */
+  const driversLine = (n: number) => tx("drivers", { count: n, drivers: formatCount(n) });
+  /** "1,204 laps · 312 drivers" */
+  const totalsLine = (c: CircuitTotals) =>
+    tx("totals", { lapCount: c.laps, laps: formatCount(c.laps), driverCount: c.drivers, drivers: formatCount(c.drivers) });
+  /** "0.214 s behind Ana" (the name isolated, so a right-to-left name keeps its place) */
+  const behind = (ms: number, aheadMs: number, who: string) =>
+    tx("behind", { gap: ((ms - aheadMs) / 1000).toFixed(3), driver: `\u2068${who}\u2069` });
   const rootRef = useRef<HTMLElement | null>(null);
   const headingId = React.useId();
   const [applyingKey, setApplyingKey] = useState<string | null>(null);
@@ -364,9 +377,9 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
     const rowKey = e.id ?? `${e.code}-${e.recordedAt}-${pos}`;
     const canApply = Boolean(onApplySetup && e.hasSetup && (!myCar || e.vehicle === myCar.vehicle));
     const setupBtn = canApply ? (
-      <ApplySetup of={`${e.name}'s lap`} loading={applyingKey === rowKey} onClick={() => applySetup(e, rowKey)} />
+      <ApplySetup driver={e.name} loading={applyingKey === rowKey} onClick={() => applySetup(e, rowKey)} />
     ) : null;
-    const ghostBtn = ghostsHere ? <RaceGhost of={`${e.name}'s lap`} onClick={() => onRaceGhost?.(e)} /> : null;
+    const ghostBtn = ghostsHere ? <RaceGhost driver={e.name} onClick={() => onRaceGhost?.(e)} /> : null;
     return {
       key: rowKey,
       rank: pos,
@@ -409,7 +422,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
   const carName = event
     ? event.carLabel
     : car === ALL_CARS
-      ? "All cars"
+      ? tx("allCars")
       : (myCar?.label ?? carPicker?.cars.find((c) => c.id === car)?.label ?? car);
   const boardName = `${carName} · ${circuitName}${event ? ` · ${event.id}` : ""}${older ? ` · ${versionName}` : ""}`;
   const badgeContext: BadgeContext = car === ALL_CARS ? { scope: "all" } : { scope: "vehicle", vehicle: car };
@@ -441,7 +454,7 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
             {totalsText ?? (totalsLoading ? <Skeleton shape="line" className="h-3 w-40" /> : null)}
           </p>
         </div>
-        {picker ?? <Select aria-label="Circuit" className="w-80 max-w-full" value={circuit} onChange={onCircuitChange} options={circuits} />}
+        {picker ?? <Select aria-label={tx("circuit")} className="w-80 max-w-full" value={circuit} onChange={onCircuitChange} options={circuits} />}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5">
@@ -449,41 +462,41 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
           intro
         ) : myCar ? (
           <Segmented
-            aria-label="Board"
+            aria-label={tx("board")}
             size="sm"
             value={scope}
             onChange={(next) => setScope(next)}
             options={[
-              { id: "mine", label: "My car", "aria-label": `My car: ${myCar.label}` },
-              { id: "all", label: "All cars" },
+              { id: "mine", label: tx("myCar"), "aria-label": tx("myCarNamed", { car: myCar.label }) },
+              { id: "all", label: tx("allCars") },
             ]}
           />
         ) : carPicker ? (
           <Select
-            aria-label="Car"
+            aria-label={tx("car")}
             className="w-72 max-w-full"
             value={car}
             onChange={carPicker.onChange}
-            options={[{ id: ALL_CARS, label: "All cars" }, ...carPicker.cars]}
+            options={[{ id: ALL_CARS, label: tx("allCars") }, ...carPicker.cars]}
           />
         ) : (
           <span />
         )}
         <div className="flex flex-wrap items-center gap-2">
           {choices.length <= 2 ? (
-            <Segmented aria-label="Physics version" size="sm" value={choice.id} onChange={pickBoard} options={choices} />
+            <Segmented aria-label={tx("physicsVersion")} size="sm" value={choice.id} onChange={pickBoard} options={choices} />
           ) : (
-            <Select aria-label="Physics version" className="w-64 max-w-full" value={choice.id} onChange={pickBoard} options={choices} />
+            <Select aria-label={tx("physicsVersion")} className="w-64 max-w-full" value={choice.id} onChange={pickBoard} options={choices} />
           )}
           <Button
             size="sm"
             variant="ghost"
             icon={<Icon name="refresh" />}
             loading={loading && Boolean(shown)}
-            aria-label="Refresh online times"
+            aria-label={tx("refreshLabel")}
             onClick={() => setReload((n) => n + 1)}
           >
-            Refresh
+            {tx("refresh")}
           </Button>
         </div>
       </div>
@@ -503,14 +516,14 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
               }
               aria-expanded={filtersOpen}
               aria-controls={filtersOpen ? filtersId : undefined}
-              className="-ml-2"
+              className="-ms-2"
               onClick={(e) => {
                 // A click from Enter or a pad's A has no pointer behind it (detail 0)
                 filtersMoveIn.current = !filtersOpen && e.detail === 0;
                 setFiltersOpen(!filtersOpen);
               }}
             >
-              {filtersOn ? `Filters · ${filtersOn} on` : "Filters"}
+              {filtersOn ? tx("filtersOn", { count: String(filtersOn) }) : tx("filters")}
             </Button>
           )}
           <BadgeLegend badges={pageBadges} context={badgeContext} />
@@ -518,13 +531,13 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
       )}
       {filtersOpen && !event ? (
         <div ref={filtersRef} id={filtersId} className="flex min-w-0 flex-col gap-1">
-          <SettingRow label="No assists">
+          <SettingRow label={tx("noAssists")}>
             <Toggle checked={noAssists} onChange={(v) => updateFilterPref({ noAssists: v })} />
           </SettingRow>
-          <SettingRow label="Full realism">
+          <SettingRow label={tx("fullRealism")}>
             <Toggle checked={fullRealism} onChange={(v) => updateFilterPref({ fullRealism: v })} />
           </SettingRow>
-          <SettingRow label="Wet laps">
+          <SettingRow label={tx("wetLaps")}>
             <Toggle checked={wetOnly} onChange={(v) => updateFilterPref({ wetOnly: v })} />
           </SettingRow>
         </div>
@@ -536,48 +549,48 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
           rank={me.pos}
           total={total}
           lapMs={me.entry.lapTimeMs}
-          detail={me.pos === 1 ? "Fastest on this board" : ahead ? behind(me.entry.lapTimeMs, ahead.lapTimeMs, ahead.name) : ""}
-          action={ahead && ghostsHere ? <RaceGhost onClick={() => onRaceGhost?.(ahead)} label="Race the ghost ahead" /> : undefined}
+          detail={me.pos === 1 ? tx("fastestOnBoard") : ahead ? behind(me.entry.lapTimeMs, ahead.lapTimeMs, ahead.name) : ""}
+          action={ahead && ghostsHere ? <RaceGhost onClick={() => onRaceGhost?.(ahead)} label={tx("raceGhostAhead")} /> : undefined}
         />
       ) : null}
 
       {!shown && !failed ? (
-        <BoardSkeleton rows={6} label="Loading online times…" />
+        <BoardSkeleton rows={6} label={tx("loading")} />
       ) : !shown ? (
-        <BoardError onRetry={() => setReload((n) => n + 1)}>Couldn&apos;t load online times.</BoardError>
+        <BoardError onRetry={() => setReload((n) => n + 1)}>{tx("loadFailed")}</BoardError>
       ) : shown.entries.length === 0 && total === 0 ? (
         <EmptyState
           icon={<Icon name={filtersOn ? "filter" : event ? "challenge" : "online"} />}
           action={
             filtersOn ? (
               <Button size="sm" variant="secondary" onClick={clearFilters}>
-                Clear filters
+                {tx("clearFilters")}
               </Button>
             ) : undefined
           }
         >
           {older
             ? filtersOn
-              ? `No matching laps on ${versionName}.`
-              : `No laps on ${versionName}.`
+              ? tx("emptyOlderFiltered", { version: versionName })
+              : tx("emptyOlder", { version: versionName })
             : filtersOn
-              ? "No laps match these filters."
+              ? tx("emptyFiltered")
               : emptyText
                 ? emptyText
                 : car === ALL_CARS
-                  ? `No online times on ${circuitName} yet.`
-                  : "No online times for this circuit and car yet."}
+                  ? tx("emptyCircuit", { circuit: circuitName })
+                  : tx("emptyCar")}
         </EmptyState>
       ) : (
         <>
           {failed ? (
             <p role="alert" className="m-0 flex items-center gap-2 text-[13px] font-medium text-lc-caution">
               <Icon name="warning" />
-              Refresh failed. Showing cached times.
+              {tx("refreshFailed")}
             </p>
           ) : null}
           <BoardTable
-            label={`Online times, ${boardName}, page ${page} of ${pages}`}
+            label={tx("tableLabel", { board: boardName, page: String(page), pages: String(pages) })}
             rows={rows}
             stale={stale}
             badgeContext={badgeContext}
@@ -591,24 +604,28 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
 
       {/* The pager: the page before and after, where it is, and the page with the player's row */}
       {shown && pages > 1 ? (
-        <nav aria-label="Pages" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 border-t border-lc-line pt-3">
+        <nav aria-label={tx("pages")} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 border-t border-lc-line pt-3">
           <div className="flex items-center gap-2">
             <IconButton
               size="sm"
               variant="secondary"
               icon={<Icon name="previous" />}
-              aria-label="Previous page"
+              aria-label={tx("previousPage")}
               aria-disabled={page <= 1 || undefined}
               onClick={() => goTo(page - 1)}
             />
             <span className="lc-mono min-w-[9.5rem] text-center text-[13px] text-lc-fog" aria-live="polite">
-              Page <span className="font-bold text-lc-chalk">{formatCount(page)}</span> of {formatCount(pages)}
+              {tx.rich("pageOf", {
+                page: formatCount(page),
+                pages: formatCount(pages),
+                b: (chunks) => <span className="font-bold text-lc-chalk">{chunks}</span>,
+              })}
             </span>
             <IconButton
               size="sm"
               variant="secondary"
               icon={<Icon name="next" />}
-              aria-label="Next page"
+              aria-label={tx("nextPage")}
               aria-disabled={page >= pages || undefined}
               onClick={() => goTo(page + 1)}
             />
@@ -618,10 +635,10 @@ export const OnlineBoard: React.FC<OnlineBoardProps> = ({
               size="sm"
               variant="secondary"
               icon={<Icon name="profile" />}
-              disabledReason={myPage === page ? "Your row is on this page" : undefined}
+              disabledReason={myPage === page ? tx("yourRowHere") : undefined}
               onClick={() => goTo(myPage)}
             >
-              Jump to me
+              {tx("jumpToMe")}
             </Button>
           ) : null}
         </nav>

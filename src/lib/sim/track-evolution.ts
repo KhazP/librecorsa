@@ -12,6 +12,7 @@
  *    collision detector and rigid-body linear + angular impulse (r × J) solver.
  */
 
+import { text as t } from '@/lib/text';
 import { wetGrooveGripEffect } from './wet-tyres';
 
 export const TRACK_EVOLUTION_SECTORS = 64;
@@ -38,12 +39,12 @@ export const SURFACE_GRIP_PRESET_RUBBER: Record<SurfaceGripPresetId, number> = {
 };
 
 export const SURFACE_GRIP_PRESET_LABELS: Record<SurfaceGripPresetId, { label: string; detail: string }> = {
-  green: { label: 'Green', detail: 'Freshly washed tarmac, minimal rubber' },
-  light: { label: 'Light', detail: 'Early weekend rubber buildup' },
-  medium: { label: 'Medium', detail: 'Moderate rubbered-in groove' },
-  natural: { label: 'Natural', detail: 'Standard race-ready rubber groove' },
-  heavy: { label: 'Heavy', detail: 'Well-rubbered endurance racing line' },
-  saturated: { label: 'Saturated', detail: 'Fully saturated dark rubber groove' },
+  green: { get label() { return t('game.grip.green'); }, get detail() { return t('game.grip.greenDetail'); } },
+  light: { get label() { return t('game.grip.light'); }, get detail() { return t('game.grip.lightDetail'); } },
+  medium: { get label() { return t('game.grip.medium'); }, get detail() { return t('game.grip.mediumDetail'); } },
+  natural: { get label() { return t('game.grip.natural'); }, get detail() { return t('game.grip.naturalDetail'); } },
+  heavy: { get label() { return t('game.grip.heavy'); }, get detail() { return t('game.grip.heavyDetail'); } },
+  saturated: { get label() { return t('game.grip.saturated'); }, get detail() { return t('game.grip.saturatedDetail'); } },
 };
 
 /** Time-scale multipliers for dynamic road evolution (0 = static) */

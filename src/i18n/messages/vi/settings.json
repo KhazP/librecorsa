@@ -1,0 +1,638 @@
+{
+  "screen": {
+    "title": "Cài đặt",
+    "dialogLabel": "Cài đặt",
+    "detailLabel": "Mức độ hiển thị cài đặt",
+    "simple": "Đơn giản",
+    "advanced": "Nâng cao",
+    "close": "Đóng",
+    "categoriesLabel": "Danh mục cài đặt",
+    "sectionsLabel": "Các mục {category}",
+    "paneLabel": "{category}: {tab}",
+    "noAdvancedHere": "Không có cài đặt nâng cao trên trang này",
+    "moreInAdvanced": "Có thêm cài đặt ở chế độ Nâng cao",
+    "steeringInAdvanced": "Hỗ trợ đánh lái nằm ở chế độ Nâng cao",
+    "categories": {
+      "driving": "Lái xe",
+      "controls": "Điều khiển",
+      "ffb": "Phản hồi lực",
+      "display": "Hiển thị",
+      "audio": "Âm thanh",
+      "profile": "Hồ sơ và dữ liệu"
+    },
+    "tabs": {
+      "driving": {
+        "assists": "Hỗ trợ lái",
+        "steering": "Hỗ trợ đánh lái"
+      },
+      "controls": {
+        "device": "Thiết bị",
+        "keyboard": "Bàn phím",
+        "controller": "Tay cầm",
+        "wheel": "Vô lăng",
+        "touch": "Cảm ứng"
+      },
+      "ffb": {
+        "main": "Phản hồi lực"
+      },
+      "display": {
+        "graphics": "Đồ họa",
+        "hud": "HUD",
+        "camera": "Camera",
+        "interface": "Giao diện"
+      },
+      "audio": {
+        "main": "Âm thanh"
+      },
+      "profile": {
+        "driver": "Tay đua",
+        "data": "Dữ liệu"
+      }
+    },
+    "prompts": {
+      "move": "Di chuyển",
+      "change": "Đổi",
+      "tabs": "Chuyển thẻ",
+      "resetRow": "Đặt lại mục",
+      "showAdvanced": "Hiện nâng cao",
+      "showSimple": "Hiện đơn giản",
+      "back": "Quay lại"
+    }
+  },
+  "field": {
+    "resetRow": "Đặt lại {setting} về mặc định",
+    "reset": "Đặt lại",
+    "resetTitle": "Đặt lại {card}?",
+    "resetConfirm": "Đặt lại",
+    "resetBody": "Đặt lại {what} về mặc định.",
+    "resetBodyDefault": "Đặt lại các cài đặt này về mặc định.",
+    "showAdvanced": "Hiện nâng cao"
+  },
+  "values": {
+    "off": "Tắt",
+    "linear": "Tuyến tính",
+    "progressive": "Lũy tiến {value}",
+    "aggressive": "Nhạy gắt {value}",
+    "raw": "Nguyên bản",
+    "fullLock": "{value}, đánh hết lái"
+  },
+  "off": {
+    "triggerPedals": "Cần dùng cò bấm làm bàn đạp",
+    "touchScreen": "Cần có màn hình cảm ứng"
+  },
+  "rows": {
+    "assistLevel": {
+      "label": "Mức hỗ trợ lái",
+      "options": {
+        "beginner": "Người mới",
+        "intermediate": "Trung cấp",
+        "sim": "Mô phỏng"
+      },
+      "details": {
+        "beginner": "TC & ABS tối đa, đường chạy lý tưởng, hỗ trợ đánh lái",
+        "intermediate": "TC & ABS, đường chạy lý tưởng",
+        "sim": "Không TC, không ABS, không đường chạy lý tưởng"
+      }
+    },
+    "assistPreset": {
+      "label": "Kiểm soát lực kéo & ABS",
+      "options": {
+        "pro": "Tắt",
+        "semi_pro": "TC + ABS",
+        "assisted": "Đầy đủ"
+      }
+    },
+    "racingLine": {
+      "label": "Đường chạy lý tưởng",
+      "hint": "Phím {key}"
+    },
+    "autoGearbox": {
+      "label": "Hộp số tự động",
+      "hint": "Phím số sàn: {up} / {down}"
+    },
+    "autoOvertake": {
+      "label": "Vượt tự động",
+      "hint": "F1 2026: dùng chế độ Vượt đã nhận trên đường thẳng, với công suất thấp hơn khi nhấn {key}"
+    },
+    "autoClutch": {
+      "label": "Côn tự động",
+      "hint": "Chống chết máy; tắt để đề-pa bằng côn thủ công",
+      "off": {
+        "gearbox": "Cần dùng hộp số sàn",
+        "wheel": "Gán côn trong Điều khiển > Vô lăng",
+        "controller": "Gán côn trong Điều khiển > Tay cầm",
+        "touch": "Không khả dụng với điều khiển cảm ứng",
+        "keyboard": "Gán Côn trong Điều khiển > Bàn phím"
+      },
+      "overridden": {
+        "gearbox": "Tạm thời bị ghi đè (cần dùng hộp số sàn); bật lại để khôi phục mặc định",
+        "wheel": "Tạm thời bị ghi đè (gán côn trong điều khiển > vô lăng); bật lại để khôi phục mặc định",
+        "controller": "Tạm thời bị ghi đè (gán côn trong điều khiển > tay cầm); bật lại để khôi phục mặc định",
+        "touch": "Tạm thời bị ghi đè (không khả dụng với điều khiển cảm ứng); bật lại để khôi phục mặc định",
+        "keyboard": "Tạm thời bị ghi đè (gán côn trong điều khiển > bàn phím); bật lại để khôi phục mặc định"
+      }
+    },
+    "gamepadAssist": {
+      "label": "Hỗ trợ đánh lái tay cầm",
+      "hint": "Giới hạn góc lái theo độ bám bánh trước và tự sửa khi xe trượt"
+    },
+    "exitAssist": {
+      "label": "Hỗ trợ chân ga",
+      "hint": "Điều tiết chân ga khi trượt bánh sau (bàn phím, tắt TC)"
+    },
+    "brakeAssist": {
+      "label": "Hỗ trợ phanh",
+      "hint": "Điều tiết phanh khi bó cứng bánh (bàn phím, tắt ABS)"
+    },
+    "realism": {
+      "label": "Độ chân thực mô phỏng"
+    },
+    "launch": {
+      "label": "Đề-pa"
+    },
+    "ghost": {
+      "label": "Xe bóng ma vòng tốt nhất"
+    },
+    "steeringPreset": {
+      "label": "Cấu hình sẵn",
+      "custom": "Tùy chỉnh",
+      "options": {
+        "custom": "Tùy chỉnh"
+      }
+    },
+    "pedalAssistStrength": {
+      "label": "Mức hỗ trợ bàn đạp",
+      "hint": "Độ sớm và mức độ Hỗ trợ chân ga cùng Hỗ trợ phanh tự nhả phím"
+    },
+    "mouseSteer": {
+      "label": "Lái bằng chuột",
+      "hint": "Phím {key}"
+    },
+    "throttleRiseS": {
+      "label": "Tốc độ lên ga"
+    },
+    "brakeRiseS": {
+      "label": "Tốc độ đạp phanh"
+    },
+    "steerRiseS": {
+      "label": "Làm mượt đánh lái",
+      "hint": "Càng thấp càng nhạy"
+    },
+    "steerReturnS": {
+      "label": "Tốc độ trả lái"
+    },
+    "halfThrottle": {
+      "label": "Nửa ga"
+    },
+    "halfBrake": {
+      "label": "Nửa phanh"
+    },
+    "rumble": {
+      "label": "Rung tay cầm"
+    },
+    "steeringRate": {
+      "label": "Tốc độ đánh lái"
+    },
+    "deadzone": {
+      "label": "Vùng chết trong"
+    },
+    "outerDeadzone": {
+      "label": "Vùng chết ngoài"
+    },
+    "linearity": {
+      "label": "Độ tuyến tính cần gạt",
+      "hint": "Trên 1 sẽ êm hơn quanh tâm"
+    },
+    "throttleGamma": {
+      "label": "Đường cong chân ga",
+      "hint": "Trên 1 sẽ dịu hơn khi nhấp ga nhẹ"
+    },
+    "brakeGamma": {
+      "label": "Đường cong phanh",
+      "hint": "Trên 1 sẽ dịu hơn khi rà phanh nhẹ"
+    },
+    "stickPedalDeadzone": {
+      "label": "Vùng chết cần bàn đạp",
+      "off": "Cần dùng cần gạt làm bàn đạp"
+    },
+    "triggerRumble": {
+      "label": "Rung cò bấm",
+      "hint": "Phản hồi trượt bánh, ABS và quay trơn bánh ngay trên cò bấm"
+    },
+    "triggerSlipAlwaysOn": {
+      "label": "Rung trượt cò bấm khi bật ABS/TC",
+      "off": "Cần bật Rung cò bấm"
+    },
+    "steerDeadzone": {
+      "label": "Vùng chết tâm lái"
+    },
+    "steerSmoothingS": {
+      "label": "Bộ lọc tín hiệu lái"
+    },
+    "wheelBrakeGamma": {
+      "label": "Đường cong phanh",
+      "hint": "1.0 cho phanh cảm biến lực · 1.3 đến 1.6 cho bàn đạp biến trở"
+    },
+    "touchMode": {
+      "label": "Điều khiển cảm ứng",
+      "options": {
+        "auto": "Tự động",
+        "on": "Bật",
+        "off": "Tắt"
+      }
+    },
+    "touchLayout": {
+      "label": "Kiểu cảm ứng",
+      "hint": "Thanh kéo tương tự hoặc nút bấm số",
+      "off": "Điều khiển cảm ứng đang tắt",
+      "options": {
+        "sliders": "Thanh trượt",
+        "buttons": "Nút bấm"
+      }
+    },
+    "tiltSteer": {
+      "label": "Nghiêng máy để lái"
+    },
+    "tiltRangeDeg": {
+      "label": "Góc nghiêng tối đa",
+      "off": "Cần bật Nghiêng máy để lái"
+    },
+    "ffbEnabled": {
+      "label": "Phản hồi lực"
+    },
+    "ffbGain": {
+      "label": "Cường độ",
+      "hintPerCar": "Đang bị ghi đè bởi cường độ riêng của xe ({gain}) bên dưới"
+    },
+    "ffbDamping": {
+      "label": "Giảm chấn"
+    },
+    "ffbKerb": {
+      "label": "Rung gờ lề"
+    },
+    "ffbAbs": {
+      "label": "Rung ABS"
+    },
+    "ffbSlip": {
+      "label": "Rung trượt lốp",
+      "hint": "Chỉ hỗ trợ WebHID"
+    },
+    "ffbShift": {
+      "label": "Cảnh báo chuyển số",
+      "hint": "Chỉ hỗ trợ WebHID"
+    },
+    "ffbCurve": {
+      "label": "Đường cong lực",
+      "hint": "Âm: tăng cảm nhận lực nhẹ · Dương: giữ khoảng dư cho lực đỉnh"
+    },
+    "ffbMinForce": {
+      "label": "Lực tối thiểu",
+      "hint": "Khử vùng chết ở tâm vô lăng",
+      "hintPerCar": "Đang bị ghi đè bởi lực tối thiểu riêng của xe"
+    },
+    "ffbFilterS": {
+      "label": "Làm mượt"
+    },
+    "ffbDownforceComp": {
+      "label": "Bù lực ép khí động",
+      "hint": "Giảm quá ngưỡng lực ở tốc độ cao do lực ép"
+    },
+    "ffbFriction": {
+      "label": "Ma sát",
+      "hint": "Hiệu ứng phần cứng vô lăng"
+    },
+    "ffbInertia": {
+      "label": "Quán tính",
+      "hint": "Hiệu ứng phần cứng vô lăng"
+    },
+    "ffbCollisionGuard": {
+      "label": "Bảo vệ va chạm",
+      "hint": "Giới hạn xung lực đột ngột khi va chạm"
+    },
+    "revLeds": {
+      "label": "Đèn vòng tua"
+    },
+    "quality": {
+      "label": "Chất lượng",
+      "options": {
+        "low": "Thấp",
+        "medium": "Trung bình",
+        "high": "Cao"
+      },
+      "details": {
+        "low": "Không đổ bóng hoặc tỏa sáng, độ phân giải thấp hơn",
+        "medium": "Có đổ bóng, không hiệu ứng tỏa sáng",
+        "mediumTouch": "Có đổ bóng, không tỏa sáng hay MSAA",
+        "high": "Đầy đủ hiệu ứng",
+        "highTouch": "Đầy đủ hiệu ứng trừ MSAA"
+      }
+    },
+    "sharpLow": {
+      "label": "Thấp sắc nét",
+      "hint": "Vẽ mức Thấp ở độ phân giải Trung bình",
+      "hintAuto": "Vẽ mức Thấp ở độ phân giải Trung bình; Chất lượng tự động có thể tắt mục này",
+      "off": "Cần đặt Chất lượng ở mức Thấp"
+    },
+    "renderScale": {
+      "label": "Độ phân giải kết xuất"
+    },
+    "sharpen": {
+      "label": "Làm nét",
+      "hint": "Làm sắc cạnh và mặt đường nhựa sau khi phóng tỉ lệ"
+    },
+    "fpsCap": {
+      "label": "Tốc độ khung hình",
+      "hint": "30 fps giúp giảm nóng máy trên di động",
+      "options": {
+        "full": "Tối đa",
+        "fps30": "30 fps"
+      }
+    },
+    "autoQuality": {
+      "label": "Chất lượng tự động",
+      "hint": "Tự hạ cấu hình khi tụt khung hình kéo dài",
+      "hintLowered": "Đã tự động hạ: {what}"
+    },
+    "autoQualityMinScale": {
+      "label": "Độ phân giải thấp nhất",
+      "hint": "Chất lượng tự động không hạ Độ phân giải kết xuất thấp hơn mức này",
+      "hintLow": "Giữ nguyên độ phân giải; mức Thấp không còn hiệu ứng để tắt",
+      "hintEffects": "Giữ nguyên độ phân giải; chỉ giảm hiệu ứng",
+      "off": "Cần bật Chất lượng tự động"
+    },
+    "driverBody": {
+      "label": "Thân tay đua"
+    },
+    "hudScale": {
+      "label": "Kích thước"
+    },
+    "deltaBar": {
+      "label": "Thanh delta"
+    },
+    "lapSummary": {
+      "label": "Tóm tắt vòng"
+    },
+    "virtualMirror": {
+      "label": "Gương chiếu hậu",
+      "options": {
+        "auto": "Tự động",
+        "always": "Luôn bật",
+        "off": "Tắt"
+      }
+    },
+    "radar": {
+      "label": "Radar khoảng cách"
+    },
+    "showPlayerNames": {
+      "label": "Bảng tên người chơi"
+    },
+    "boardWidget": {
+      "label": "Bảng xếp hạng vòng",
+      "options": {
+        "lapEnd": "Khi hết vòng",
+        "open": "Mở",
+        "closed": "Đóng"
+      }
+    },
+    "inputTrace": {
+      "label": "Biểu đồ thao tác"
+    },
+    "towerGaps": {
+      "label": "Khoảng cách bảng thứ hạng",
+      "options": {
+        "interval": "Cách xe trước",
+        "leader": "Cách xe dẫn đầu"
+      }
+    },
+    "mapMode": {
+      "label": "Chế độ bản đồ",
+      "options": {
+        "full": "Cả vòng",
+        "local": "Phóng cận"
+      }
+    },
+    "splitGaps": {
+      "label": "Khoảng cách theo sector"
+    },
+    "mfdAutoCollapse": {
+      "label": "Tự thu gọn MFD"
+    },
+    "camera": {
+      "label": "Camera mặc định",
+      "hint": "Phím {key}"
+    },
+    "cockpitFovDeg": {
+      "label": "Góc nhìn (FOV)",
+      "hintCarOwn": "Đang dùng mặc định của từng xe",
+      "hintCarDefault": "Mặc định của xe: {degrees}°",
+      "valueCar": "{value}° (theo xe)"
+    },
+    "headMovement": {
+      "label": "Chuyển động đầu",
+      "options": {
+        "natural": "Tự nhiên",
+        "static": "Khóa cố định"
+      }
+    },
+    "language": {
+      "label": "Ngôn ngữ",
+      "options": {
+        "auto": "Tự động"
+      },
+      "details": {
+        "auto": "Theo ngôn ngữ trình duyệt của bạn"
+      }
+    },
+    "speedUnit": {
+      "label": "Tốc độ"
+    },
+    "temperatureUnit": {
+      "label": "Nhiệt độ"
+    },
+    "pressureUnit": {
+      "label": "Áp suất lốp"
+    },
+    "uiScale": {
+      "label": "Kích thước giao diện"
+    },
+    "palette": {
+      "label": "Bảng màu hỗ trợ mù màu",
+      "options": {
+        "standard": "Tiêu chuẩn",
+        "protan": "Yếu màu đỏ",
+        "deutan": "Yếu màu xanh lá",
+        "tritan": "Yếu màu xanh dương"
+      },
+      "details": {
+        "protan": "Mù màu đỏ và suy giảm sắc đỏ",
+        "deutan": "Mù màu xanh lá và suy giảm sắc xanh lá",
+        "tritan": "Mù màu xanh dương và suy giảm sắc xanh dương"
+      }
+    },
+    "volume": {
+      "label": "Âm lượng chính"
+    },
+    "kerbs": {
+      "label": "Gờ lề"
+    },
+    "muted": {
+      "label": "Tắt tiếng",
+      "hint": "Phím {key}"
+    },
+    "drsBeep": {
+      "label": "Tiếng bíp DRS"
+    },
+    "shiftBeep": {
+      "label": "Tiếng bíp chuyển số"
+    },
+    "musicOn": {
+      "label": "Âm nhạc"
+    },
+    "menuMusic": {
+      "label": "Nhạc menu"
+    },
+    "raceMusicOn": {
+      "label": "Nhạc khi đang lái"
+    },
+    "raceMusic": {
+      "label": "Nhạc đua",
+      "hint": "Qua bài: {key}",
+      "off": "Nhạc khi đang lái đang tắt"
+    },
+    "replayMusic": {
+      "label": "Nhạc kết quả & phát lại"
+    },
+    "autoUpload": {
+      "label": "Tự tải lên vòng tốt nhất"
+    },
+    "telemetryOut": {
+      "label": "Dữ liệu đo từ xa UDP",
+      "hint": "Gửi dữ liệu đo từ xa trực tiếp tới bridge cục bộ (màn hình phụ, bộ rung ghế)"
+    },
+    "practiceDamage": {
+      "label": "Hư hại khi luyện tập",
+      "hints": {
+        "off": "Không hư hại trong luyện tập hoặc đua tính giờ",
+        "reduced": "Giảm một nửa hư hại; xe hỏng nặng sẽ được sửa và bắt đầu lại vòng chạy đà",
+        "full": "Hư hại như đua chính; xe hỏng nặng sẽ được sửa và bắt đầu lại vòng chạy đà"
+      }
+    }
+  },
+  "driving": {
+    "drivingAids": "Hỗ trợ lái",
+    "pedalHelp": "Hỗ trợ bàn đạp",
+    "onTrack": "Trên đường đua",
+    "keyboardSteering": "Đánh lái bàn phím",
+    "controllerSteering": "Đánh lái tay cầm"
+  },
+  "controls": {
+    "activeDevice": "Thiết bị đang dùng",
+    "quickSetup": "Thiết lập nhanh",
+    "runSetupWizard": "Chạy trình hướng dẫn thiết lập",
+    "runSetup": "Chạy thiết lập",
+    "touch": "Cảm ứng"
+  },
+  "display": {
+    "layout": {
+      "title": "Bố cục",
+      "resetWhat": "bố cục HUD"
+    },
+    "graphics": {
+      "title": "Đồ họa",
+      "vr": "VR",
+      "vrOff": "Cần kính thực tế ảo hỗ trợ WebXR",
+      "experimental": "Thử nghiệm",
+      "inVr": "Đang ở chế độ VR",
+      "enterVr": "Vào chế độ VR"
+    },
+    "hud": {
+      "title": "Nội dung hiển thị trên HUD"
+    },
+    "camera": {
+      "title": "Camera",
+      "freeCamera": "Camera tự do",
+      "freeCameraHint": "Kéo nhìn · WASD bay · Q/E cao độ · Cuộn tốc độ · R đặt lại",
+      "freeCameraUnbound": "Chưa gán",
+      "tvCamera": "TV ven đường đua",
+      "tvCameraUnbound": "Chưa gán",
+      "adjustSeat": "Chỉnh ghế ngồi",
+      "adjustSeatHint": "Giữ {key} hoặc {button} trên đường đua",
+      "adjustSeatOff": "Khả dụng khi đang lái (giữ {key} hoặc {button})",
+      "adjust": "Chỉnh",
+      "resetSeats": "Đặt lại vị trí ghế",
+      "resetSeatsOff": "Đang ở mặc định",
+      "resetSeatsButton": "Đặt lại",
+      "resetSeatsTitle": "Đặt lại vị trí ghế?",
+      "resetSeatsConfirm": "Đặt lại tất cả",
+      "resetSeatsBody": "Đặt lại vị trí ghế buồng lái và bảng đồng hồ của mọi xe về mặc định."
+    },
+    "interface": {
+      "language": "Ngôn ngữ",
+      "units": "Đơn vị",
+      "sizeColour": "Kích thước và màu sắc"
+    }
+  },
+  "audio": {
+    "sound": "Âm thanh",
+    "music": "Âm nhạc",
+    "menuTracks": "Nhạc menu",
+    "raceTracks": "Nhạc đua",
+    "resultsTracks": "Nhạc kết quả và phát lại",
+    "cockpitCues": "Âm báo buồng lái"
+  },
+  "profile": {
+    "driver": {
+      "title": "Tay đua",
+      "name": "Tên",
+      "code": "Mã tay đua",
+      "colour": "Màu sắc",
+      "colourGroup": "Màu sắc",
+      "otherColour": "Màu khác",
+      "colours": {
+        "red": "Đỏ",
+        "teal": "Xanh mòng két",
+        "orange": "Cam",
+        "blue": "Xanh dương",
+        "racingGreen": "Xanh lá đua",
+        "navy": "Xanh hải quân",
+        "silver": "Bạc",
+        "lime": "Xanh chanh"
+      }
+    },
+    "data": {
+      "driverKey": "Khóa tay đua",
+      "identityKey": "Khóa định danh",
+      "identityKeyHint": "Xác thực các vòng đua trực tuyến. Hãy sao lưu để dùng trên trình duyệt khác",
+      "save": "Lưu",
+      "load": "Tải",
+      "telemetry": "Dữ liệu đo từ xa",
+      "udpPort": "Cổng UDP",
+      "udpPortField": "Cổng UDP",
+      "portConflict": "Cổng {port} xung đột với {app} (mặc định {defaultPort})",
+      "portOff": "Cần bật Dữ liệu đo từ xa UDP",
+      "reset": "Đặt lại",
+      "resetAll": "Đặt lại toàn bộ cài đặt",
+      "resetAllHint": "Khôi phục mặc định cho điều khiển, hỗ trợ lái, hiển thị và âm thanh",
+      "resetAllButton": "Đặt lại",
+      "resetAllTitle": "Đặt lại toàn bộ cài đặt?",
+      "resetAllConfirm": "Đặt lại tất cả",
+      "resetAllBody": "Đặt lại mọi cài đặt, phím gán và hiệu chỉnh về mặc định. Hồ sơ, thiết lập xe và thành tích vòng vẫn được giữ nguyên.",
+      "clear": "Xóa dữ liệu đã lưu",
+      "clearHint": "Xóa cài đặt cục bộ, khóa tay đua, thành tích vòng, xe bóng ma và thiết lập xe",
+      "clearButton": "Xóa",
+      "clearTitle": "Xóa dữ liệu đã lưu?",
+      "clearConfirm": "Xóa tất cả",
+      "clearBody": "Xóa vĩnh viễn toàn bộ cài đặt, khóa tay đua, thành tích vòng, xe bóng ma và thiết lập xe khỏi trình duyệt này, sau đó tải lại trang."
+    }
+  },
+  "hudPicker": {
+    "label": "Bố cục HUD",
+    "thirdParty": "Bên thứ ba",
+    "thirdPartyNote": "Được tái hiện từ các dự án HUD mã nguồn mở khác, ghi công đầy đủ cho tác giả.",
+    "touchNote": "Điện thoại luôn sử dụng Touch HUD.",
+    "description": "{detail}. Tác giả: {author}",
+    "descriptionSite": "{detail}. Tác giả: {author} · {site}",
+    "sourceLink": "Mã nguồn {layout} của {author} (mở trong thẻ mới)",
+    "siteLink": "{site}, trang web của {author} (mở trong thẻ mới)"
+  }
+}

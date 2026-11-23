@@ -5,14 +5,18 @@
  * Assisted starts keep the car frozen until the lights go out, as before.
  */
 import type { VehicleModelId } from '@/types/f1';
+import { text as t } from '@/lib/text';
 
 export type RaceStartMode = 'assisted' | 'manual';
 export const RACE_START_MODES: readonly RaceStartMode[] = ['assisted', 'manual'];
-export const RACE_START_MODE_LABELS: Record<RaceStartMode, string> = { assisted: 'Assisted', manual: 'Manual' };
+export const RACE_START_MODE_LABELS: Record<RaceStartMode, string> = {
+  get assisted() { return t('game.raceStart.assisted'); },
+  get manual() { return t('game.raceStart.manual'); },
+};
 /** What each launch asks of the player, for the rows that set it */
 export const RACE_START_MODE_HINTS: Record<RaceStartMode, string> = {
-  assisted: 'Held on the grid until lights out',
-  manual: 'Hold clutch and revs, release at lights out (+5 s / +10 s jump penalty)',
+  get assisted() { return t('game.raceStart.assistedHint'); },
+  get manual() { return t('game.raceStart.manualHint'); },
 };
 
 /** Time added at the flag for a jump start (s) */

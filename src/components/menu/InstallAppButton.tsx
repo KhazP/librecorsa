@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/icons";
@@ -9,15 +10,6 @@ import { installStore, isAppleTouch, isInstalledApp, promptInstall } from "@/lib
 import { isFramed } from "./EmbeddedBadge";
 
 const HIDDEN_KEY = "librecorsa.install-hint";
-
-const APPLE_STEPS = {
-  title: "Add to Home Screen",
-  body: "Tap Share, then Add to Home Screen for full-screen play. Home Screen saves are stored separately from Safari.",
-};
-const OTHER_STEPS = {
-  title: "Install app",
-  body: "Open the browser menu and select Install app or Add to Home Screen for full-screen play.",
-};
 
 /**
  * Offers to install the game on a phone or tablet, where a browser tab gives a good part of the screen to the address
@@ -35,6 +27,7 @@ export const InstallAppButton: React.FC = () => {
   const [offered, setOffered] = useState(false);
   const [apple, setApple] = useState(false);
   const [explaining, setExplaining] = useState(false);
+  const tx = useTranslations("menu.install");
   useEffect(() => {
     let hidden = false;
     try {
@@ -64,19 +57,19 @@ export const InstallAppButton: React.FC = () => {
       // Storage unavailable: offered again next visit
     }
   };
-  const steps = apple ? APPLE_STEPS : OTHER_STEPS;
+  const steps = apple ? { title: tx("appleTitle"), body: tx("appleBody") } : { title: tx("otherTitle"), body: tx("otherBody") };
 
   return (
     <>
       <Button size="sm" variant="secondary" icon={<Icon name="download" />} onClick={install}>
-        Install app
+        {tx("button")}
       </Button>
       <ConfirmDialog
         open={explaining}
         tone="info"
         title={steps.title}
-        confirmLabel="Got it"
-        cancelLabel="Don't show again"
+        confirmLabel={tx("gotIt")}
+        cancelLabel={tx("hide")}
         icon={<Icon name="touch" size="lg" />}
         onConfirm={() => setExplaining(false)}
         onCancel={hideForGood}

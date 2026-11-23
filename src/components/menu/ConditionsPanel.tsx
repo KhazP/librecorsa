@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "use-intl/react";
+import { t } from "@/i18n/runtime";
 import { Badge } from "@/components/ui/Badge";
 import { Button, Card, Disclosure, OptionTile, OptionTileGroup, Segmented, Select, SettingRow, Well } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
@@ -80,10 +82,10 @@ const clock = (h: number) => {
 
 /** Track wetness as a word, from the water on the racing line */
 export function trackStateLabel(waterMm: number): string {
-  if (waterMm < 0.03) return "Dry";
-  if (waterMm < 0.14) return "Damp";
-  if (waterMm < 1.1) return "Wet";
-  return "Flooded";
+  if (waterMm < 0.03) return t("menu.conditions.dry");
+  if (waterMm < 0.14) return t("menu.conditions.damp");
+  if (waterMm < 1.1) return t("menu.conditions.wet");
+  return t("menu.conditions.flooded");
 }
 
 /**
@@ -102,6 +104,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
   session = false,
 }) => {
   const units = useUnits();
+  const tx = useTranslations("menu.conditions");
   const set = (patch: Partial<SessionConditions>) => onChangeConditions({ ...conditions, ...patch });
   const locked = Boolean(hostControlled);
   // A row of steps changes value on every left / right. With a session on track each change restarts the weather, so
@@ -111,7 +114,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
   const temp = (c: number) => `${Math.round(temperatureIn(c, units.temperature))} ${TEMPERATURE_LABEL[units.temperature]}`;
   const hostBadge = locked ? (
     <Badge tone="info" icon="host">
-      Set by the host
+      {tx("hostSet")}
     </Badge>
   ) : undefined;
   const forecast = conditions.weatherNodes ?? defaultWeatherNodesForPreset(conditions.weather, conditions.timeOfDay, conditions.seed);
@@ -121,8 +124,8 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
     // data-nav-columns: up / down read down the first column, then the second (menu-shell's reading order)
     <div data-nav-columns="" className="grid grid-cols-[repeat(auto-fit,minmax(min(400px,100%),1fr))] items-start gap-3">
       <div className="flex min-w-0 flex-col gap-3">
-        <Card title="Weather" action={hostBadge}>
-          <OptionTileGroup aria-label="Weather" columns={3}>
+        <Card title={tx("weather")} action={hostBadge}>
+          <OptionTileGroup aria-label={tx("weatherGroup")} columns={3}>
             {WEATHER_PRESETS.map((id) => (
               <OptionTile
                 key={id}
@@ -144,7 +147,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
               />
             ))}
           </OptionTileGroup>
-          <Disclosure moreLabel="Forecast through the session" lessLabel="Hide the forecast">
+          <Disclosure moreLabel={tx("forecastShow")} lessLabel={tx("forecastHide")}>
             <ol className="m-0 grid list-none grid-cols-5 gap-1.5 p-0">
               {forecast.map((node, idx) => (
                 <li key={WEATHER_NODE_LABELS[idx]}>
@@ -152,7 +155,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
                     <span className="lc-hint">{WEATHER_NODE_LABELS[idx]}</span>
                     <span className="text-[12px] leading-tight font-semibold text-lc-chalk">{SKY_COVER_SPECS[node.sky].label}</span>
                     <span className="lc-mono text-[11px] text-lc-fog">
-                      {node.rainChance > 0 ? `${Math.round(node.rainChance)}% rain` : temp(node.temperatureC)}
+                      {node.rainChance > 0 ? tx("rainChance", { chance: String(Math.round(node.rainChance)) }) : temp(node.temperatureC)}
                     </span>
                   </Well>
                 </li>
@@ -162,15 +165,19 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
         </Card>
 
         {readout ? (
-          <Card title="On track now">
+          <Card title={tx("now")}>
             <dl className="m-0 grid grid-cols-[repeat(3,4rem)_minmax(0,1fr)] gap-x-4 py-1">
               {[
-                ["Clock", clock(readout.clockH)],
-                ["Air", temp(readout.airC)],
-                ["Track", temp(readout.trackC)],
-                ["Surface", `${trackStateLabel(readout.waterMm)}${readout.rain > 0.05 ? ", raining" : ""}`],
-              ].map(([k, v]) => (
-                <div key={k} className="flex min-w-0 flex-col gap-0.5">
+                ["clock", tx("clock"), clock(readout.clockH)],
+                ["air", tx("air"), temp(readout.airC)],
+                ["track", tx("track"), temp(readout.trackC)],
+                [
+                  "surface",
+                  tx("surface"),
+                  readout.rain > 0.05 ? tx("raining", { state: trackStateLabel(readout.waterMm) }) : trackStateLabel(readout.waterMm),
+                ],
+              ].map(([id, k, v]) => (
+                <div key={id} className="flex min-w-0 flex-col gap-0.5">
                   <dt className="lc-hint">{k}</dt>
                   <dd title={v} className="lc-data m-0 truncate text-[15px] text-lc-chalk">{v}</dd>
                 </div>
@@ -181,8 +188,8 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
       </div>
 
       <div className="flex min-w-0 flex-col gap-3">
-        <Card title="Time of day" action={hostBadge}>
-          <OptionTileGroup aria-label="Time of day" columns={3}>
+        <Card title={tx("timeOfDay")} action={hostBadge}>
+          <OptionTileGroup aria-label={tx("timeOfDayGroup")} columns={3}>
             {TIME_OF_DAY_PRESETS.map((id) => (
               <OptionTile
                 key={id}
@@ -192,25 +199,26 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
                 onSelect={() => set({ timeOfDay: id })}
                 title={TIME_OF_DAY_LABELS[id]}
                 description={
-                  <>
+                  id === trackTimeOfDay ? (
+                    tx.rich("trackOwnTime", { clock: clock(TIME_OF_DAY_HOURS[id]), time: (chunks) => <span className="lc-mono">{chunks}</span> })
+                  ) : (
                     <span className="lc-mono">{clock(TIME_OF_DAY_HOURS[id])}</span>
-                    {id === trackTimeOfDay ? " · this circuit's own" : null}
-                  </>
+                  )
                 }
               />
             ))}
           </OptionTileGroup>
-          <SettingRow label="Time progression" disabled={locked}>
+          <SettingRow label={tx("timeProgression")} disabled={locked}>
             {steps({
               value: String(conditions.timeScale),
               onChange: (v) => set({ timeScale: Number(v) }),
-              options: TIME_SCALES.map((s) => ({ id: String(s), label: s === 0 ? "Fixed" : `${s}x` })),
+              options: TIME_SCALES.map((s) => ({ id: String(s), label: s === 0 ? tx("timeFixed") : `${s}x` })),
             })}
           </SettingRow>
         </Card>
 
-        <Card title="Track">
-          <SettingRow label="Grip" hint={SURFACE_GRIP_PRESET_LABELS[grip].detail} disabled={locked}>
+        <Card title={tx("trackCard")}>
+          <SettingRow label={tx("grip")} hint={SURFACE_GRIP_PRESET_LABELS[grip].detail} disabled={locked}>
             <Select<SurfaceGripPresetId>
               value={grip}
               onChange={(v) => set({ surfacePreset: v })}
@@ -221,21 +229,24 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
               }))}
             />
           </SettingRow>
-          <SettingRow label="Grip evolution" disabled={locked}>
+          <SettingRow label={tx("gripEvolution")} disabled={locked}>
             {steps({
               value: String(conditions.surfaceTimeScale ?? 1),
               onChange: (v) => set({ surfaceTimeScale: Number(v) }),
-              options: SURFACE_TIME_SCALES.map((s) => ({ id: String(s), label: s === 0 ? "Static" : `${s}x` })),
+              options: SURFACE_TIME_SCALES.map((s) => ({ id: String(s), label: s === 0 ? tx("gripStatic") : `${s}x` })),
             })}
           </SettingRow>
           {onOpenSettings ? (
-            <SettingRow label="Simulation realism" hint={`${SIM_REALISM_LABELS[realism].label}: ${SIM_REALISM_LABELS[realism].detail}`}>
+            <SettingRow
+              label={tx("realism")}
+              hint={tx("realismHint", { level: SIM_REALISM_LABELS[realism].label, detail: SIM_REALISM_LABELS[realism].detail })}
+            >
               <Button size="sm" variant="secondary" onClick={() => onOpenSettings("driving")} icon={<Icon name="settings" />}>
-                Settings
+                {tx("settings")}
               </Button>
             </SettingRow>
           ) : (
-            <SettingRow label="Simulation realism" hint={SIM_REALISM_LABELS[realism].detail}>
+            <SettingRow label={tx("realism")} hint={SIM_REALISM_LABELS[realism].detail}>
               <Segmented<SimRealism>
                 value={realism}
                 onChange={onChangeRealism}
@@ -246,7 +257,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
         </Card>
 
         {session ? (
-          <p className="lc-hint m-0 px-1">Changes reset current weather and track grip.</p>
+          <p className="lc-hint m-0 px-1">{tx("sessionReset")}</p>
         ) : null}
       </div>
     </div>

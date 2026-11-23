@@ -1,0 +1,638 @@
+{
+  "screen": {
+    "title": "الإعدادات",
+    "dialogLabel": "الإعدادات",
+    "detailLabel": "عدد الإعدادات المعروضة",
+    "simple": "مبسط",
+    "advanced": "متقدم",
+    "close": "إغلاق",
+    "categoriesLabel": "فئات الإعدادات",
+    "sectionsLabel": "أقسام {category}",
+    "paneLabel": "{category}: {tab}",
+    "noAdvancedHere": "لا توجد إعدادات متقدمة في هذه الصفحة",
+    "moreInAdvanced": "المزيد من الإعدادات في «متقدم»",
+    "steeringInAdvanced": "مساعدة التوجيه متوفرة في «متقدم»",
+    "categories": {
+      "driving": "القيادة",
+      "controls": "التحكم",
+      "ffb": "رد الفعل القسري",
+      "display": "العرض",
+      "audio": "الصوت",
+      "profile": "الملف الشخصي والبيانات"
+    },
+    "tabs": {
+      "driving": {
+        "assists": "المساعدات",
+        "steering": "مساعدة التوجيه"
+      },
+      "controls": {
+        "device": "الجهاز",
+        "keyboard": "لوحة المفاتيح",
+        "controller": "وحدة التحكم",
+        "wheel": "المقود",
+        "touch": "اللمس"
+      },
+      "ffb": {
+        "main": "رد الفعل القسري"
+      },
+      "display": {
+        "graphics": "الرسوميات",
+        "hud": "HUD",
+        "camera": "الكاميرا",
+        "interface": "الواجهة"
+      },
+      "audio": {
+        "main": "الصوت"
+      },
+      "profile": {
+        "driver": "السائق",
+        "data": "البيانات"
+      }
+    },
+    "prompts": {
+      "move": "تنقّل",
+      "change": "تغيير",
+      "tabs": "التبويبات",
+      "resetRow": "إعادة تعيين الصف",
+      "showAdvanced": "إظهار المتقدمة",
+      "showSimple": "إظهار المبسطة",
+      "back": "رجوع"
+    }
+  },
+  "field": {
+    "resetRow": "إعادة تعيين {setting} إلى الافتراضي",
+    "reset": "إعادة تعيين",
+    "resetTitle": "إعادة تعيين {card}؟",
+    "resetConfirm": "إعادة تعيين",
+    "resetBody": "يعيد ذلك {what} إلى القيم الافتراضية.",
+    "resetBodyDefault": "يعيد هذه الإعدادات إلى القيم الافتراضية.",
+    "showAdvanced": "إظهار المتقدمة"
+  },
+  "values": {
+    "off": "معطّل",
+    "linear": "خطي",
+    "progressive": "تدريجي {value}",
+    "aggressive": "حاد {value}",
+    "raw": "خام",
+    "fullLock": "{value}، توجيه كامل"
+  },
+  "off": {
+    "triggerPedals": "يتطلب دواسات على الزنادات",
+    "touchScreen": "يتطلب شاشة لمس"
+  },
+  "rows": {
+    "assistLevel": {
+      "label": "مستوى المساعدة",
+      "options": {
+        "beginner": "مبتدئ",
+        "intermediate": "متوسط",
+        "sim": "محاكاة"
+      },
+      "details": {
+        "beginner": "TC وABS كاملان، خط السباق، مساعدة التوجيه",
+        "intermediate": "TC وABS، خط السباق",
+        "sim": "دون TC أو ABS أو خط سباق"
+      }
+    },
+    "assistPreset": {
+      "label": "التحكم بالجر وABS",
+      "options": {
+        "pro": "معطّلة",
+        "semi_pro": "TC + ABS",
+        "assisted": "كاملة"
+      }
+    },
+    "racingLine": {
+      "label": "خط السباق",
+      "hint": "المفتاح {key}"
+    },
+    "autoGearbox": {
+      "label": "ناقل حركة أوتوماتيكي",
+      "hint": "مفاتيح التبديل اليدوي: {up} / {down}"
+    },
+    "autoOvertake": {
+      "label": "التجاوز التلقائي",
+      "hint": "F1 2026: يستخدم التجاوز المكتسب على المستقيمات بقدرة أقل من الضغط على {key}"
+    },
+    "autoClutch": {
+      "label": "قابض تلقائي",
+      "hint": "يمنع توقف المحرك؛ عطّله للانطلاق اليدوي بالقابض",
+      "off": {
+        "gearbox": "يتطلب ناقل حركة يدويًا",
+        "wheel": "عيّن القابض ضمن التحكم > المقود",
+        "controller": "عيّن القابض ضمن التحكم > وحدة التحكم",
+        "touch": "غير متاح مع التحكم باللمس",
+        "keyboard": "عيّن القابض ضمن التحكم > لوحة المفاتيح"
+      },
+      "overridden": {
+        "gearbox": "مُتجاوَز مؤقتًا (يتطلب ناقل حركة يدويًا)؛ فعّله لاستعادة الافتراضي",
+        "wheel": "مُتجاوَز مؤقتًا (عيّن القابض ضمن التحكم > المقود)؛ فعّله لاستعادة الافتراضي",
+        "controller": "مُتجاوَز مؤقتًا (عيّن القابض ضمن التحكم > وحدة التحكم)؛ فعّله لاستعادة الافتراضي",
+        "touch": "مُتجاوَز مؤقتًا (غير متاح مع التحكم باللمس)؛ فعّله لاستعادة الافتراضي",
+        "keyboard": "مُتجاوَز مؤقتًا (عيّن القابض ضمن التحكم > لوحة المفاتيح)؛ فعّله لاستعادة الافتراضي"
+      }
+    },
+    "gamepadAssist": {
+      "label": "مساعدة التوجيه لوحدة التحكم",
+      "hint": "تقيّد زاوية التوجيه بتماسك الإطارات الأمامية وتتدارك الانزلاق"
+    },
+    "exitAssist": {
+      "label": "مساعدة التسارع",
+      "hint": "تعدّل التسارع عند انزلاق المؤخرة (لوحة المفاتيح، TC معطّل)"
+    },
+    "brakeAssist": {
+      "label": "مساعدة المكابح",
+      "hint": "تعدّل الكبح عند انغلاق العجلات (لوحة المفاتيح، ABS معطّل)"
+    },
+    "realism": {
+      "label": "واقعية المحاكاة"
+    },
+    "launch": {
+      "label": "أسلوب الانطلاق"
+    },
+    "ghost": {
+      "label": "شبح أفضل لفة"
+    },
+    "steeringPreset": {
+      "label": "الإعداد الجاهز",
+      "custom": "مخصص",
+      "options": {
+        "custom": "مخصص"
+      }
+    },
+    "pedalAssistStrength": {
+      "label": "قوة مساعدة الدواسات",
+      "hint": "مدى سرعة ودرجة تخفيف مساعدة التسارع والمكابح لضغط المفاتيح"
+    },
+    "mouseSteer": {
+      "label": "التوجيه بالفأرة",
+      "hint": "المفتاح {key}"
+    },
+    "throttleRiseS": {
+      "label": "استجابة التسارع"
+    },
+    "brakeRiseS": {
+      "label": "استجابة المكابح"
+    },
+    "steerRiseS": {
+      "label": "تنعيم التوجيه",
+      "hint": "القيمة الأقل تعطي استجابة أحدّ"
+    },
+    "steerReturnS": {
+      "label": "عودة التوجيه"
+    },
+    "halfThrottle": {
+      "label": "نصف التسارع"
+    },
+    "halfBrake": {
+      "label": "نصف الكبح"
+    },
+    "rumble": {
+      "label": "الاهتزاز"
+    },
+    "steeringRate": {
+      "label": "سرعة التوجيه"
+    },
+    "deadzone": {
+      "label": "المنطقة الميتة الداخلية"
+    },
+    "outerDeadzone": {
+      "label": "المنطقة الميتة الخارجية"
+    },
+    "linearity": {
+      "label": "خطية العصا",
+      "hint": "أعلى من 1 ينعّم المنتصف"
+    },
+    "throttleGamma": {
+      "label": "منحنى التسارع",
+      "hint": "أعلى من 1 ينعّم الضغط الخفيف"
+    },
+    "brakeGamma": {
+      "label": "منحنى المكابح",
+      "hint": "أعلى من 1 ينعّم الكبح الخفيف"
+    },
+    "stickPedalDeadzone": {
+      "label": "المنطقة الميتة لعصا الدواسات",
+      "off": "يتطلب دواسات على العصا"
+    },
+    "triggerRumble": {
+      "label": "اهتزاز الزنادات",
+      "hint": "إحساس الانزلاق وABS ودوران العجلات في الزنادات"
+    },
+    "triggerSlipAlwaysOn": {
+      "label": "انزلاق الزنادات مع تفعيل ABS/TC",
+      "off": "يتطلب «اهتزاز الزنادات»"
+    },
+    "steerDeadzone": {
+      "label": "المنطقة الميتة بالمنتصف"
+    },
+    "steerSmoothingS": {
+      "label": "مرشّح الإدخال"
+    },
+    "wheelBrakeGamma": {
+      "label": "منحنى المكابح",
+      "hint": "1.0 لخلية الحمل · 1.3 إلى 1.6 لمقاييس الجهد"
+    },
+    "touchMode": {
+      "label": "التحكم باللمس",
+      "options": {
+        "auto": "تلقائي",
+        "on": "مفعّل",
+        "off": "معطّل"
+      }
+    },
+    "touchLayout": {
+      "label": "نمط اللمس",
+      "hint": "أشرطة تمرير تماثلية أو أزرار رقمية",
+      "off": "التحكم باللمس معطّل",
+      "options": {
+        "sliders": "أشرطة تمرير",
+        "buttons": "أزرار"
+      }
+    },
+    "tiltSteer": {
+      "label": "الإمالة للتوجيه"
+    },
+    "tiltRangeDeg": {
+      "label": "نطاق الإمالة",
+      "off": "يتطلب «الإمالة للتوجيه»"
+    },
+    "ffbEnabled": {
+      "label": "رد الفعل القسري"
+    },
+    "ffbGain": {
+      "label": "القوة",
+      "hintPerCar": "تتجاوزه قوة كل سيارة ({gain}) أدناه"
+    },
+    "ffbDamping": {
+      "label": "التخميد"
+    },
+    "ffbKerb": {
+      "label": "اهتزاز الأرصفة"
+    },
+    "ffbAbs": {
+      "label": "اهتزاز ABS"
+    },
+    "ffbSlip": {
+      "label": "اهتزاز الانزلاق",
+      "hint": "WebHID فقط"
+    },
+    "ffbShift": {
+      "label": "تنبيه تبديل الترس",
+      "hint": "WebHID فقط"
+    },
+    "ffbCurve": {
+      "label": "منحنى القوة",
+      "hint": "السالب يرفع القوى الخفيفة · الموجب يحفظ هامش الذروة"
+    },
+    "ffbMinForce": {
+      "label": "الحد الأدنى للقوة",
+      "hint": "يزيل المنطقة الميتة في المنتصف",
+      "hintPerCar": "يتجاوزه الحد الأدنى للقوة لكل سيارة"
+    },
+    "ffbFilterS": {
+      "label": "التنعيم"
+    },
+    "ffbDownforceComp": {
+      "label": "تعويض القوة السفلية",
+      "hint": "يقلل تشبّع القوة الهوائية عند السرعات العالية"
+    },
+    "ffbFriction": {
+      "label": "الاحتكاك",
+      "hint": "تأثير عتادي من المقود"
+    },
+    "ffbInertia": {
+      "label": "القصور الذاتي",
+      "hint": "تأثير عتادي من المقود"
+    },
+    "ffbCollisionGuard": {
+      "label": "حماية التصادم",
+      "hint": "يحدّ من قفزات القوة الحادة عند الاصطدام"
+    },
+    "revLeds": {
+      "label": "أضواء الدورات"
+    },
+    "quality": {
+      "label": "الجودة",
+      "options": {
+        "low": "منخفضة",
+        "medium": "متوسطة",
+        "high": "عالية"
+      },
+      "details": {
+        "low": "دون ظلال أو توهج، دقة أقل",
+        "medium": "ظلال، دون توهج",
+        "mediumTouch": "ظلال، دون توهج أو MSAA",
+        "high": "تأثيرات كاملة",
+        "highTouch": "تأثيرات كاملة باستثناء MSAA"
+      }
+    },
+    "sharpLow": {
+      "label": "منخفضة حادة",
+      "hint": "تعرض جودة منخفضة بدقة متوسطة",
+      "hintAuto": "تعرض جودة منخفضة بدقة متوسطة؛ يمكن للجودة التلقائية إيقافها",
+      "off": "يتطلب ضبط الجودة على منخفضة"
+    },
+    "renderScale": {
+      "label": "دقة التصيير"
+    },
+    "sharpen": {
+      "label": "زيادة الحدة",
+      "hint": "توضح الحواف والأسفلت بعد تغيير الحجم"
+    },
+    "fpsCap": {
+      "label": "معدل الإطارات",
+      "hint": "30 fps يقلل الحرارة على الهاتف",
+      "options": {
+        "full": "كامل",
+        "fps30": "30 fps"
+      }
+    },
+    "autoQuality": {
+      "label": "الجودة التلقائية",
+      "hint": "تخفض الجودة عند الهبوط المستمر في معدل الإطارات",
+      "hintLowered": "تم الخفض: {what}"
+    },
+    "autoQualityMinScale": {
+      "label": "أدنى دقة",
+      "hint": "لا تخفض الجودة التلقائية «دقة التصيير» دون هذا الحد",
+      "hintLow": "تبقى الدقة ثابتة؛ الجودة المنخفضة لا تملك تأثيرات لإيقافها",
+      "hintEffects": "تبقى الدقة ثابتة؛ تنخفض التأثيرات فقط",
+      "off": "يتطلب تفعيل «الجودة التلقائية»"
+    },
+    "driverBody": {
+      "label": "جسم السائق"
+    },
+    "hudScale": {
+      "label": "الحجم"
+    },
+    "deltaBar": {
+      "label": "شريط الفارق"
+    },
+    "lapSummary": {
+      "label": "ملخص اللفة"
+    },
+    "virtualMirror": {
+      "label": "المرآة",
+      "options": {
+        "auto": "تلقائي",
+        "always": "دائمًا",
+        "off": "معطّل"
+      }
+    },
+    "radar": {
+      "label": "رادار القرب"
+    },
+    "showPlayerNames": {
+      "label": "أسماء اللاعبين"
+    },
+    "boardWidget": {
+      "label": "لوحة الأزمنة",
+      "options": {
+        "lapEnd": "عند نهاية اللفة",
+        "open": "مفتوحة",
+        "closed": "مغلقة"
+      }
+    },
+    "inputTrace": {
+      "label": "منحنى المدخلات"
+    },
+    "towerGaps": {
+      "label": "فوارق برج التوقيت",
+      "options": {
+        "interval": "الفاصل",
+        "leader": "عن المتصدر"
+      }
+    },
+    "mapMode": {
+      "label": "وضع الخريطة",
+      "options": {
+        "full": "اللفة كاملة",
+        "local": "مقرّبة"
+      }
+    },
+    "splitGaps": {
+      "label": "فوارق القطاعات"
+    },
+    "mfdAutoCollapse": {
+      "label": "طيّ MFD تلقائيًا"
+    },
+    "camera": {
+      "label": "المنظور الافتراضي",
+      "hint": "المفتاح {key}"
+    },
+    "cockpitFovDeg": {
+      "label": "مجال الرؤية",
+      "hintCarOwn": "يستخدم الافتراضي الخاص بكل سيارة",
+      "hintCarDefault": "افتراضي السيارة: {degrees}°",
+      "valueCar": "{value}° (السيارة)"
+    },
+    "headMovement": {
+      "label": "حركة الرأس",
+      "options": {
+        "natural": "طبيعية",
+        "static": "ثابتة"
+      }
+    },
+    "language": {
+      "label": "اللغة",
+      "options": {
+        "auto": "تلقائي"
+      },
+      "details": {
+        "auto": "لغة متصفحك"
+      }
+    },
+    "speedUnit": {
+      "label": "السرعة"
+    },
+    "temperatureUnit": {
+      "label": "الحرارة"
+    },
+    "pressureUnit": {
+      "label": "ضغط الإطارات"
+    },
+    "uiScale": {
+      "label": "حجم الواجهة"
+    },
+    "palette": {
+      "label": "لوحة ألوان لعمى الألوان",
+      "options": {
+        "standard": "قياسية",
+        "protan": "ضعف الأحمر",
+        "deutan": "ضعف الأخضر",
+        "tritan": "ضعف الأزرق"
+      },
+      "details": {
+        "protan": "عمى وضعف اللون الأحمر (Protanopia)",
+        "deutan": "عمى وضعف اللون الأخضر (Deuteranopia)",
+        "tritan": "عمى وضعف اللون الأزرق (Tritanopia)"
+      }
+    },
+    "volume": {
+      "label": "مستوى الصوت العام"
+    },
+    "kerbs": {
+      "label": "الأرصفة"
+    },
+    "muted": {
+      "label": "كتم الصوت",
+      "hint": "المفتاح {key}"
+    },
+    "drsBeep": {
+      "label": "تنبيهات DRS"
+    },
+    "shiftBeep": {
+      "label": "تنبيه تبديل الترس"
+    },
+    "musicOn": {
+      "label": "الموسيقى"
+    },
+    "menuMusic": {
+      "label": "موسيقى القائمة"
+    },
+    "raceMusicOn": {
+      "label": "الموسيقى أثناء القيادة"
+    },
+    "raceMusic": {
+      "label": "موسيقى السباق",
+      "hint": "تخطي المقطع: {key}",
+      "off": "«الموسيقى أثناء القيادة» معطّلة"
+    },
+    "replayMusic": {
+      "label": "موسيقى النتائج والإعادة"
+    },
+    "autoUpload": {
+      "label": "رفع أفضل اللفات تلقائيًا"
+    },
+    "telemetryOut": {
+      "label": "القياس عن بُعد عبر UDP",
+      "hint": "يرسل بيانات القياس المباشرة إلى برنامج الربط المحلي (لوحات المعلومات، هزازات المقاعد)"
+    },
+    "practiceDamage": {
+      "label": "أضرار التدريب",
+      "hints": {
+        "off": "لا أضرار في التدريب أو تجربة الزمن",
+        "reduced": "نصف الأضرار؛ عند تحطم السيارة تُصلَح وتعيد بدء لفة طائرة",
+        "full": "أضرار السباق؛ عند تحطم السيارة تُصلَح وتعيد بدء لفة طائرة"
+      }
+    }
+  },
+  "driving": {
+    "drivingAids": "مساعدات القيادة",
+    "pedalHelp": "مساعدة الدواسات",
+    "onTrack": "على الحلبة",
+    "keyboardSteering": "التوجيه بلوحة المفاتيح",
+    "controllerSteering": "التوجيه بوحدة التحكم"
+  },
+  "controls": {
+    "activeDevice": "الجهاز النشط",
+    "quickSetup": "الإعداد السريع",
+    "runSetupWizard": "تشغيل معالج الإعداد",
+    "runSetup": "تشغيل الإعداد",
+    "touch": "اللمس"
+  },
+  "display": {
+    "layout": {
+      "title": "التخطيط",
+      "resetWhat": "تخطيط HUD"
+    },
+    "graphics": {
+      "title": "الرسوميات",
+      "vr": "الواقع الافتراضي VR",
+      "vrOff": "يتطلب نظارة WebXR",
+      "experimental": "اختباري",
+      "inVr": "في وضع VR",
+      "enterVr": "دخول VR"
+    },
+    "hud": {
+      "title": "عناصر HUD المعروضة"
+    },
+    "camera": {
+      "title": "الكاميرا",
+      "freeCamera": "كاميرا حرة",
+      "freeCameraHint": "اسحب للنظر · WASD للطيران · Q/E للارتفاع · التمرير للسرعة · R إعادة تعيين",
+      "freeCameraUnbound": "غير معيّن",
+      "tvCamera": "البث التلفزيوني",
+      "tvCameraUnbound": "غير معيّن",
+      "adjustSeat": "ضبط المقعد",
+      "adjustSeatHint": "اضغط مطوّلًا على {key} أو {button} على الحلبة",
+      "adjustSeatOff": "متاح أثناء القيادة (اضغط مطوّلًا على {key} أو {button})",
+      "adjust": "ضبط",
+      "resetSeats": "إعادة تعيين مواضع المقاعد",
+      "resetSeatsOff": "على الوضع الافتراضي بالفعل",
+      "resetSeatsButton": "إعادة تعيين",
+      "resetSeatsTitle": "إعادة تعيين مواضع المقاعد؟",
+      "resetSeatsConfirm": "إعادة تعيين الكل",
+      "resetSeatsBody": "يعيد إزاحات مقعد قمرة القيادة ولوحة العدادات لجميع السيارات."
+    },
+    "interface": {
+      "language": "اللغة",
+      "units": "الوحدات",
+      "sizeColour": "الحجم والألوان"
+    }
+  },
+  "audio": {
+    "sound": "الصوت",
+    "music": "الموسيقى",
+    "menuTracks": "مقاطع القائمة",
+    "raceTracks": "مقاطع السباق",
+    "resultsTracks": "مقاطع النتائج والإعادة",
+    "cockpitCues": "تنبيهات قمرة القيادة"
+  },
+  "profile": {
+    "driver": {
+      "title": "السائق",
+      "name": "الاسم",
+      "code": "الرمز",
+      "colour": "اللون",
+      "colourGroup": "اللون",
+      "otherColour": "لون آخر",
+      "colours": {
+        "red": "أحمر",
+        "teal": "فيروزي",
+        "orange": "برتقالي",
+        "blue": "أزرق",
+        "racingGreen": "أخضر سباقات",
+        "navy": "كحلي",
+        "silver": "فضي",
+        "lime": "ليموني"
+      }
+    },
+    "data": {
+      "driverKey": "مفتاح السائق",
+      "identityKey": "مفتاح الهوية",
+      "identityKeyHint": "يوقّع اللفات عبر الإنترنت. احتفظ بنسخة احتياطية لاستخدامه في متصفح آخر",
+      "save": "حفظ",
+      "load": "تحميل",
+      "telemetry": "القياس عن بُعد",
+      "udpPort": "منفذ UDP",
+      "udpPortField": "منفذ UDP",
+      "portConflict": "المنفذ {port} يتعارض مع {app} (الافتراضي {defaultPort})",
+      "portOff": "يتطلب «القياس عن بُعد عبر UDP»",
+      "reset": "إعادة تعيين",
+      "resetAll": "إعادة تعيين جميع الإعدادات",
+      "resetAllHint": "يستعيد إعدادات التحكم والمساعدات والعرض والصوت الافتراضية",
+      "resetAllButton": "إعادة تعيين",
+      "resetAllTitle": "إعادة تعيين جميع الإعدادات؟",
+      "resetAllConfirm": "إعادة تعيين الكل",
+      "resetAllBody": "يعيد جميع الإعدادات والتعيينات والمعايرة إلى الافتراضي. يبقى الملف الشخصي وإعدادات السيارات وأزمنة اللفات.",
+      "clear": "مسح البيانات المحفوظة",
+      "clearHint": "يحذف الإعدادات المحلية ومفتاح السائق واللفات والأشباح وإعدادات السيارات",
+      "clearButton": "مسح",
+      "clearTitle": "مسح البيانات المحفوظة؟",
+      "clearConfirm": "مسح كل شيء",
+      "clearBody": "يزيل نهائيًا جميع الإعدادات ومفتاح السائق واللفات والأشباح وإعدادات السيارات من هذا المتصفح، ثم يعيد التحميل."
+    }
+  },
+  "hudPicker": {
+    "label": "تخطيط HUD",
+    "thirdParty": "من أطراف خارجية",
+    "thirdPartyNote": "أُعيد إنشاؤها من مشاريع HUD مفتوحة المصدر أخرى، مع حفظ حقوق مؤلفيها.",
+    "touchNote": "تستخدم الهواتف دائمًا تخطيط Touch HUD.",
+    "description": "{detail}. من إعداد {author}",
+    "descriptionSite": "{detail}. من إعداد {author} · {site}",
+    "sourceLink": "شيفرة {layout} المصدرية، من إعداد {author} (يفتح في علامة تبويب جديدة)",
+    "siteLink": "{site}، موقع {author} (يفتح في علامة تبويب جديدة)"
+  }
+}

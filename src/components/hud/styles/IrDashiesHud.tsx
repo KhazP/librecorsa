@@ -17,7 +17,8 @@
  * and water temperatures (not simulated), Lato (the game's own Geist instead).
  */
 
-import React, { useSyncExternalStore } from "react";
+import React, { useMemo, useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CarTelemetry, RaceStandingEntry } from "@/types/f1";
 import { Icon } from "@/components/ui/icons/Icon";
 import { useUnits } from "@/lib/settings/ui-prefs";
@@ -65,7 +66,7 @@ import {
   SURFACE_WORD,
   trackSurfaceState,
 } from "../third-party-data";
-import { anchor, deltaColor, gearLabel, InvalidTag, MiniMap, type HudDesignProps } from "./hud-style-parts";
+import { anchor, deltaColor, formatOnce, gearLabel, InvalidTag, MiniMap, type HudDesignProps } from "./hud-style-parts";
 import { revLights, useFuelPerLap, useLapHistory, useSessionClock } from "./third-party-parts";
 import palette from "./irdashies.module.css";
 
@@ -78,6 +79,35 @@ function subscribeShort(onChange: () => void) {
 }
 function useShortScreen(): boolean {
   return useSyncExternalStore(subscribeShort, () => window.matchMedia(SHORT_QUERY).matches, () => false);
+}
+
+/** The irDashies layout's words in the current language, resolved once per language */
+function useIrDashiesWords() {
+  const tx = useTranslations("hudStyles.irDashies");
+  return useMemo(
+    () => ({
+      standings: tx("standings"),
+      race: tx("race"),
+      out: tx("out"),
+      finished: tx("finished"),
+      lapTimer: tx("lapTimer"),
+      sessionBest: tx("sessionBest"),
+      lastLap: tx("lastLap"),
+      historyLap: formatOnce((lap: number) => tx("historyLap", { lap: String(lap) })),
+      shiftLights: formatOnce((lit: number, total: number) => tx("shiftLights", { lit: String(lit), total: String(total) })),
+      aidOff: tx("aidOff"),
+      fuel: tx("fuel"),
+      inputs: tx("inputs"),
+      weather: tx("weather"),
+      trackConditions: tx("trackConditions"),
+      air: tx("air"),
+      trackTemp: tx("trackTemp"),
+      lights: tx("lights"),
+      liveDelta: tx("liveDelta"),
+      radar: tx("radar"),
+    }),
+    [tx],
+  );
 }
 
 /** The session bar over and under the standings (slate-900) */
@@ -102,7 +132,10 @@ const StandingsRow: React.FC<{
   lengthM: number;
   gaps: "interval" | "leader";
   sessionBest: number | null;
-}> = ({ e, pos, me, lengthM, gaps, sessionBest }) => {
+  /** The row's words for a retired and a finished car */
+  out: string;
+  finished: string;
+}> = ({ e, pos, me, lengthM, gaps, sessionBest, out, finished }) => {
   // A car a lap or more down on the player reads blue, a lap or more up red (the player's own row is amber)
   const lapsUp =
     !e.isPlayer && me && e.raceDistM !== undefined && me.raceDistM !== undefined && lengthM > 0
@@ -130,7 +163,7 @@ const StandingsRow: React.FC<{
         {e.driverCode}
       </span>
       <span className="truncate text-right">
-        {e.retired ? "Out" : e.finished ? <Icon name="chequered" size="xs" label="Finished" className="inline size-3.5" /> : gap === null ? "-" : formatGap(gap)}
+        {e.retired ? out : e.finished ? <Icon name="chequered" size="xs" label={finished} className="inline size-3.5" /> : gap === null ? "-" : formatGap(gap)}
       </span>
       <span className="hidden text-right lg:inline" style={{ color: lapColor(e.lastLapMs, e.bestLapMs, sessionBest) }}>
         {formatLapTime(e.lastLapMs)}
@@ -158,10 +191,11 @@ const Standings: React.FC<{ t: CarTelemetry; lengthM: number; gaps: "interval" |
   const me = race.standings.find((e) => e.isPlayer);
   const rows = leaderboardWindow(race.standings, short ? 6 : 10);
   const surface = weather ? SURFACE_WORD[trackSurfaceState(weather.waterMm)] : null;
+  const w = useIrDashiesWords();
   return (
-    <section aria-label="Standings" className="w-[244px] lg:w-[330px] rounded-md bg-(--tp-panel) p-1.5 text-(--tp-text)">
+    <section aria-label={w.standings} className="w-[244px] lg:w-[330px] rounded-md bg-(--tp-panel) p-1.5 text-(--tp-text)">
       <div className={BAR}>
-        <span className="font-semibold text-(--tp-text)">Race</span>
+        <span className="font-semibold text-(--tp-text)">{w.race}</span>
         <span>{formatClock(clock)}</span>
         <span>
           L{race.lap}
@@ -181,6 +215,8 @@ const Standings: React.FC<{ t: CarTelemetry; lengthM: number; gaps: "interval" |
             lengthM={lengthM}
             gaps={gaps}
             sessionBest={sessionBest}
+            out={w.out}
+            finished={w.finished}
           />
         ))}
       </div>
@@ -235,8 +271,9 @@ const LapTimer: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid: b
   const best = t.bestLapTimeMs;
   const predicted = predictedLapMs(best, deltaS);
   const lastMark = t.lastLapTimeMs ? lapMark(t.lastLapTimeMs, best) : null;
+  const w = useIrDashiesWords();
   return (
-    <section aria-label="Lap timer" className="w-[244px] lg:w-[300px] rounded-md bg-(--tp-panel) p-2 text-(--tp-text)">
+    <section aria-label={w.lapTimer} className="w-[244px] lg:w-[300px] rounded-md bg-(--tp-panel) p-2 text-(--tp-text)">
       <div className="flex flex-col gap-0.5">
         {/* The running lap */}
         <div className="relative flex min-h-13 items-center justify-center rounded-sm bg-(--tp-bar)">
@@ -275,8 +312,8 @@ const LapTimer: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid: b
           })}
         </div>
         <div className="mt-0.5 flex gap-1">
-          <LapCell label="Session" ms={best} color={best ? HUD_BEST : undefined} />
-          <LapCell label="Last lap" ms={t.lastLapTimeMs} color={lastMark ? LAP_MARK_COLOR[lastMark] : undefined} />
+          <LapCell label={w.sessionBest} ms={best} color={best ? HUD_BEST : undefined} />
+          <LapCell label={w.lastLap} ms={t.lastLapTimeMs} color={lastMark ? LAP_MARK_COLOR[lastMark] : undefined} />
         </div>
         {/* Lap history, newest first: the gap to the best lap and the time */}
         {laps.slice(0, short ? 2 : 5).map((l) => {
@@ -287,7 +324,7 @@ const LapTimer: React.FC<{ t: CarTelemetry; deltaS: number | null; lapInvalid: b
               key={`${l.lap}-${l.ms}`}
               className={`grid h-8 grid-cols-[1fr_1fr_1fr] items-center px-2.5 text-[14px] tabular-nums ${CELL} ${l.valid ? "" : "text-(--tp-text-dim) line-through"}`}
             >
-              <span className="font-semibold">LAP {l.lap}</span>
+              <span className="font-semibold">{w.historyLap(l.lap)}</span>
               <span className="text-center" style={{ color: !l.valid || isBest || d === null ? undefined : d > 0 ? HUD_LOSS : HUD_GAIN }}>
                 {isBest || d === null ? "---" : formatDelta(d).replace(/(\.\d\d)\d$/, "$1")}
               </span>
@@ -308,12 +345,13 @@ const LEDS = 10;
 
 const ShiftLights: React.FC<{ t: CarTelemetry; revRange: [number, number] }> = ({ t, revRange }) => {
   const rev = revLights(t.rpm, revRange, LEDS);
+  const w = useIrDashiesWords();
   return (
     <div className="flex items-center gap-2">
       <div
         className="flex gap-1.5 rounded-full bg-(--tp-panel) px-2.5 py-1.5"
         role="img"
-        aria-label={`Shift lights: ${rev.atShift ? LEDS : rev.lit} of ${LEDS} lit`}
+        aria-label={w.shiftLights(rev.atShift ? LEDS : rev.lit, LEDS)}
       >
         {Array.from({ length: LEDS }, (_, i) => {
           const on = rev.on(i);
@@ -378,6 +416,7 @@ const Inputs: React.FC<{ t: CarTelemetry; deltaS: number | null; trace: boolean 
   const hasErs = t.f12026?.hasErs ?? t.liveTuner?.hasErs ?? false;
   const aero = aeroReadout(t);
   const flaps = aero.open || t.f12026?.hasDrs === true;
+  const w = useIrDashiesWords();
   const chips: React.ReactNode[] = [];
   if (t.race) {
     chips.push(
@@ -385,8 +424,8 @@ const Inputs: React.FC<{ t: CarTelemetry; deltaS: number | null; trace: boolean 
     );
   }
   if (tuner) {
-    chips.push(<Chip key="tc" label="TC" value={tuner.tcLevel > 0 ? tuner.tcLevel : "Off"} active={aids.tc} />);
-    chips.push(<Chip key="abs" label="ABS" value={tuner.absLevel > 0 ? tuner.absLevel : "Off"} active={aids.abs} />);
+    chips.push(<Chip key="tc" label="TC" value={tuner.tcLevel > 0 ? tuner.tcLevel : w.aidOff} active={aids.tc} />);
+    chips.push(<Chip key="abs" label="ABS" value={tuner.absLevel > 0 ? tuner.absLevel : w.aidOff} active={aids.abs} />);
   }
   if (hasErs) chips.push(<Chip key="ers" label="ERS" value={`${Math.round(t.ersBatteryPercent)}%`} color={t.mgukPowerKw > 0 ? HUD_INFO : undefined} />);
   // The flaps as the car's era names them (DRS ARMED, X-MODE), across both columns
@@ -395,10 +434,10 @@ const Inputs: React.FC<{ t: CarTelemetry; deltaS: number | null; trace: boolean 
       <Chip key="aero" wide label={<span style={{ color: aero.open || aero.armed ? HUD_INFO : "var(--tp-text-soft)" }}>{aero.label}</span>} />,
     );
   }
-  if (!hasErs && t.fuelKg > 0) chips.push(<Chip key="fuel" wide label="Fuel" value={`${t.fuelKg.toFixed(1)} kg`} />);
+  if (!hasErs && t.fuelKg > 0) chips.push(<Chip key="fuel" wide label={w.fuel} value={`${t.fuelKg.toFixed(1)} kg`} />);
 
   return (
-    <section aria-label="Inputs" className="flex items-end gap-3 rounded-md bg-(--tp-panel) p-2 text-(--tp-text)">
+    <section aria-label={w.inputs} className="flex items-end gap-3 rounded-md bg-(--tp-panel) p-2 text-(--tp-text)">
       {/* The shared trace, flattened into this panel; the steering pad's tablet layout leaves it out */}
       {trace ? (
         <div className={`${palette.trace} compact:hidden`}>
@@ -444,27 +483,28 @@ const IrDashiesWeatherPanel: React.FC<{ weather: WeatherHudState }> = ({ weather
   const surface = SURFACE_WORD[trackSurfaceState(weather.waterMm)];
   const rainIcon = weather.rain > 0.5 ? "weatherStorm" : weather.rain > 0.05 ? "weatherRain" : "weatherClear";
   const lights = headlightState(weather);
+  const w = useIrDashiesWords();
   return (
-    <section aria-label="Weather" className="rounded-md bg-(--tp-panel) p-1.5 text-(--tp-text)">
+    <section aria-label={w.weather} className="rounded-md bg-(--tp-panel) p-1.5 text-(--tp-text)">
       <div className={BAR}>
         <span className="inline-flex items-center gap-1.5 font-semibold text-(--tp-text)">
           <Icon name={rainIcon} size="xs" className="size-3.5 text-(--tp-text-soft)" />
           {surface}
         </span>
-        <span>{weather.timeMoving ? dayClock(weather.clockH) : "Track"}</span>
+        <span>{weather.timeMoving ? dayClock(weather.clockH) : w.trackConditions}</span>
       </div>
       <div className={`mt-1 grid ${lights ? "grid-cols-3" : "grid-cols-2"} gap-1 text-center`}>
         <div className={`flex flex-col py-1 ${CELL}`}>
-          <span className="text-[9px] font-semibold text-(--tp-text-dim) uppercase">Air</span>
+          <span className="text-[9px] font-semibold text-(--tp-text-dim) uppercase">{w.air}</span>
           <span className="text-[13px] font-semibold tabular-nums">{formatTemp(weather.airC, units)}</span>
         </div>
         <div className={`flex flex-col py-1 ${CELL}`}>
-          <span className="text-[9px] font-semibold text-(--tp-text-dim) uppercase">Track</span>
+          <span className="text-[9px] font-semibold text-(--tp-text-dim) uppercase">{w.trackTemp}</span>
           <span className="text-[13px] font-semibold tabular-nums">{formatTemp(weather.trackC, units)}</span>
         </div>
         {lights ? (
           <div className={`flex flex-col py-1 ${CELL}`}>
-            <span className="text-[9px] font-semibold text-(--tp-text-dim) uppercase">Lights</span>
+            <span className="text-[9px] font-semibold text-(--tp-text-dim) uppercase">{w.lights}</span>
             <span
               className="text-[13px] font-semibold"
               style={{ color: lights === "flash" ? HUD_INFO : lights === "off" ? "var(--tp-text-dim)" : undefined }}
@@ -483,9 +523,10 @@ const IrDashiesDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapI
   const has = deltaS !== null && Number.isFinite(deltaS);
   const gain = has && deltaS <= 0;
   const frac = has ? Math.min(1, Math.abs(deltaS)) * 50 : 0;
+  const w = useIrDashiesWords();
   return (
     <section
-      aria-label="Live delta"
+      aria-label={w.liveDelta}
       className="flex w-[228px] flex-col gap-1.5 rounded-md bg-(--tp-panel) px-2.5 py-1.5 text-(--tp-text)"
     >
       <div className="flex items-baseline justify-between gap-2 text-[13px] leading-none tabular-nums">
@@ -516,6 +557,7 @@ const IrDashiesDeltaBar: React.FC<{ t: CarTelemetry; deltaS: number | null; lapI
 };
 
 const IrDashiesRadar: React.FC<{ t: CarTelemetry }> = ({ t }) => {
+  const w = useIrDashiesWords();
   const { blips, leftCar, rightCar, opacity } = evaluateRadar(t.radar ?? []);
   if (opacity <= 0.01) return null;
   const range = RADAR_VIEW_RANGE_M;
@@ -528,7 +570,7 @@ const IrDashiesRadar: React.FC<{ t: CarTelemetry }> = ({ t }) => {
         viewBox={`${-range} ${-range} ${range * 2} ${range * 2}`}
         className="size-full overflow-hidden rounded-full border border-white/10 bg-(--tp-panel) shadow-lg"
         role="img"
-        aria-label="Proximity radar"
+        aria-label={w.radar}
       >
         <circle r={8} fill="none" stroke="var(--tp-text-dim)" strokeOpacity={0.28} strokeWidth={0.3} />
         <circle r={16} fill="none" stroke="var(--tp-text-dim)" strokeOpacity={0.18} strokeWidth={0.3} />

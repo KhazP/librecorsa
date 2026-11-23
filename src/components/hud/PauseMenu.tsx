@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import type {
   AeroSetupPreset,
   CameraMode,
@@ -16,7 +17,6 @@ import type {
 import {
   ACTIVE_TRACK_ID,
   TURN_METADATA,
-  activeLapWord,
   getActivePointToPoint,
   getActiveTimedLengthM,
   getTrackData,
@@ -242,25 +242,26 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   const panelRef = useRef<HTMLElement | null>(null);
   const panelId = useId();
   const trackInfo = getTrackInfo(ACTIVE_TRACK_ID);
+  const tx = useTranslations("hud.pauseMenu");
 
   const tabs = useMemo(
     () =>
       [
-        { id: "settings" as const, label: "Session", icon: "options" as const },
+        { id: "settings" as const, label: tx("tabs.session"), icon: "options" as const },
         // The HUD layout, one press from the session tab: it changes the moment the race resumes (not on a phone, which
         // always drives with the Phone HUD)
-        ...(displayPanel && !phoneScreen ? [{ id: "hud" as const, label: "HUD", icon: "hud" as const }] : []),
-        ...(conditionsPanel ? [{ id: "conditions" as const, label: "Conditions", icon: "conditions" as const }] : []),
-        { id: "setup" as const, label: "Garage", icon: "garage" as const },
+        ...(displayPanel && !phoneScreen ? [{ id: "hud" as const, label: tx("tabs.hud"), icon: "hud" as const }] : []),
+        ...(conditionsPanel ? [{ id: "conditions" as const, label: tx("tabs.conditions"), icon: "conditions" as const }] : []),
+        { id: "setup" as const, label: tx("tabs.garage"), icon: "garage" as const },
         // No jumping round the circuit in an online race
-        ...(mpRace ? [] : [{ id: "corners" as const, label: "Corners", icon: "corners" as const }]),
-        { id: "multiplayer" as const, label: "Multiplayer", icon: "multiplayer" as const },
-        ...(leaderboardPanel ? [{ id: "leaderboard" as const, label: "Lap times", icon: "lapTimes" as const }] : []),
+        ...(mpRace ? [] : [{ id: "corners" as const, label: tx("tabs.corners"), icon: "corners" as const }]),
+        { id: "multiplayer" as const, label: tx("tabs.multiplayer"), icon: "multiplayer" as const },
+        ...(leaderboardPanel ? [{ id: "leaderboard" as const, label: tx("tabs.lapTimes"), icon: "lapTimes" as const }] : []),
         // A bug report from where it happened: the car's place on the circuit and a picture of the scene go with it. The
         // title menu's name for the same form
-        ...(props.reportFacts ? [{ id: "report" as const, label: "Feedback", icon: "feedback" as const }] : []),
+        ...(props.reportFacts ? [{ id: "report" as const, label: tx("tabs.feedback"), icon: "feedback" as const }] : []),
       ] satisfies { id: Panel; label: string; icon: IconName }[],
-    [leaderboardPanel, mpRace, conditionsPanel, displayPanel, phoneScreen, props.reportFacts]
+    [leaderboardPanel, mpRace, conditionsPanel, displayPanel, phoneScreen, props.reportFacts, tx]
   );
 
   const actions: { id: string; label: string; detail?: string; icon: IconName; run: () => void }[] = useMemo(
@@ -269,7 +270,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         ? [
             {
               id: "grid",
-              label: aiOpponents || mpRace ? "Restart race" : "Grid start",
+              label: aiOpponents || mpRace ? tx("actions.restartRace") : tx("actions.gridStart"),
               icon: "restart" as const,
               run: () => restartAndResume(false),
             },
@@ -279,7 +280,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         ? [
             {
               id: "flying",
-              label: aiOpponents ? "Rolling start" : "Flying lap",
+              label: aiOpponents ? tx("actions.rollingStart") : tx("actions.flyingLap"),
               icon: "flyingLap" as const,
               run: () => restartAndResume(true),
             },
@@ -289,7 +290,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         ? [
             {
               id: "replay",
-              label: "Watch replay",
+              label: tx("actions.watchReplay"),
               icon: "replay" as const,
               run: () => {
                 onTogglePause();
@@ -299,14 +300,22 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
           ]
         : []),
       ...(nowPlaying && onSkipTrack
-        ? [{ id: "music", label: "Skip track", detail: `${nowPlaying.title}, ${nowPlaying.composer}`, icon: "skip" as const, run: onSkipTrack }]
+        ? [
+            {
+              id: "music",
+              label: tx("actions.skipTrack"),
+              detail: tx("actions.nowPlaying", { title: nowPlaying.title, composer: nowPlaying.composer }),
+              icon: "skip" as const,
+              run: onSkipTrack,
+            },
+          ]
         : []),
       ...(onOpenControls
-        ? [{ id: "settings", label: "Settings", icon: "settings" as const, run: onOpenControls }]
+        ? [{ id: "settings", label: tx("actions.settings"), icon: "settings" as const, run: onOpenControls }]
         : []),
-      ...(onExitToTitle ? [{ id: "title", label: "Main menu", icon: "leave" as const, run: onExitToTitle }] : []),
+      ...(onExitToTitle ? [{ id: "title", label: tx("actions.mainMenu"), icon: "leave" as const, run: onExitToTitle }] : []),
     ],
-    [aiOpponents, mpRace, canRestart, canFly, restartAndResume, onOpenReplay, onTogglePause, nowPlaying, onSkipTrack, onOpenControls, onExitToTitle]
+    [aiOpponents, mpRace, canRestart, canFly, restartAndResume, onOpenReplay, onTogglePause, nowPlaying, onSkipTrack, onOpenControls, onExitToTitle, tx]
   );
 
   // A tab that went away while open (Corners when an online race starts) shows the session tab instead
@@ -366,13 +375,13 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   );
 
   const prompts: Prompt[] = [
-    { action: "move", label: "Move" },
-    { action: "select", label: panel === "corners" ? "Jump there" : "Select" },
+    { action: "move", label: tx("prompts.move") },
+    { action: "select", label: panel === "corners" ? tx("prompts.jumpThere") : tx("prompts.select") },
     ...(rowResettable ? [RESET_ROW_PROMPT] : []),
-    { action: "tabs", label: "Tabs" },
-    ...(panel === "leaderboard" && leaderboardPanel?.remoteEnabled ? [{ action: "pages" as const, label: "Page" }] : []),
-    { action: "back", label: "Back", key: "Bksp" },
-    { action: "start", label: "Resume", key: "Esc" },
+    { action: "tabs", label: tx("prompts.tabs") },
+    ...(panel === "leaderboard" && leaderboardPanel?.remoteEnabled ? [{ action: "pages" as const, label: tx("prompts.page") }] : []),
+    { action: "back", label: tx("prompts.back"), key: "Bksp" },
+    { action: "start", label: tx("prompts.resume"), key: "Esc" },
   ];
   const phonePrompts = prompts.filter((p) => p.action !== "move" && p.action !== "tabs");
 
@@ -399,36 +408,33 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
               <span className="lc-mono text-[12px] font-semibold tracking-[0.04em] text-lc-fog">
                 {place}
                 <span aria-hidden className="mx-2 text-lc-dim">·</span>
-                {race ? "Lap" : activeLapWord()} {Math.max(1, race?.lap ?? telemetry.lapCount)}
-                {race?.totalLaps ? `/${race.totalLaps}` : ""}
+                {race?.totalLaps
+                  ? tx("header.lapOf", { lap: Math.max(1, race.lap), total: race.totalLaps })
+                  : !race && getActivePointToPoint()
+                    ? tx("header.run", { lap: Math.max(1, telemetry.lapCount) })
+                    : tx("header.lap", { lap: Math.max(1, race?.lap ?? telemetry.lapCount) })}
                 {race ? (
                   <>
                     <span aria-hidden className="mx-2 text-lc-dim">·</span>
-                    <span className="text-lc-chalk">P{race.position}/{race.fieldSize}</span>
+                    <span className="text-lc-chalk">{tx("header.position", { position: race.position, field: race.fieldSize })}</span>
                   </>
                 ) : null}
               </span>
-              {mpRace ? <SessionBadge session="online" size="sm">Online</SessionBadge> : null}
+              {mpRace ? <SessionBadge session="online" size="sm">{tx("header.online")}</SessionBadge> : null}
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-x-5 gap-y-3">
             {/* A newer build is out: reloading from here ends what is under way, so it asks first */}
             <UpdateReady
-              endsSession={
-                mpRace
-                  ? "Leaves the current race."
-                  : props.lobby
-                    ? "Leaves the current room."
-                    : "Ends the current session."
-              }
+              endsSession={mpRace ? tx("header.leavesRace") : props.lobby ? tx("header.leavesRoom") : tx("header.endsSession")}
             />
             <LibreCorsaLogo variant="compact" size="sm" />
           </div>
         </header>
 
         <div className="mt-5 grid flex-1 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(240px,270px)_minmax(0,1fr)] short:mt-3 short:gap-4">
-          <nav className="flex flex-col gap-0.5" data-nav-zone="rail" aria-label="Pause menu">
-            <HeroAction id="resume" label="Resume" onClick={() => onTogglePause()} size="rail" />
+          <nav className="flex flex-col gap-0.5" data-nav-zone="rail" aria-label={tx("actions.label")}>
+            <HeroAction id="resume" label={tx("actions.resume")} onClick={() => onTogglePause()} size="rail" />
             {actions.map((a) => (
               <RailRow key={a.id} id={a.id} label={a.label} detail={a.detail} icon={a.icon} onClick={a.run} />
             ))}
@@ -438,7 +444,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
             {/* Up to eight sections on one row: the tabs share the width, their icons go in a window where only the
                 labels fit, and a strip narrower still scrolls with its cut ends faded */}
             <Tabs
-              aria-label="Sections"
+              aria-label={tx("tabs.label")}
               tabs={tabs.map((t) => ({ id: t.id, label: t.label, icon: <Icon name={t.icon} /> }))}
               value={panel}
               onChange={selectTab}
@@ -511,18 +517,19 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
     []
   );
   const savedCamera: CameraMode = p.cameraMode === "free" ? (p.settings?.camera ?? "chase") : p.cameraMode;
+  const tx = useTranslations("hud.pauseMenu.session");
   const autopilot = (
-    <SettingRow label="Autopilot" hint={`Key ${p.keyNames?.autopilot ?? "P"}`}>
+    <SettingRow label={tx("autopilot")} hint={tx("key", { key: p.keyNames?.autopilot ?? "P" })}>
       <Toggle checked={p.telemetry.aiAutopilot} onChange={() => p.onToggleAiAutopilot()} />
     </SettingRow>
   );
   const cameraCard =
     p.onSelectCamera || p.onToggleFreeCamera || p.onToggleTvCamera ? (
-      <Card title="Camera">
+      <Card title={tx("camera")}>
         {p.onSelectCamera ? (
-          <SettingRow label="Camera view" hint={`Cycle: ${p.keyNames?.camera ?? "C"}`}>
+          <SettingRow label={tx("cameraView")} hint={tx("cycle", { key: p.keyNames?.camera ?? "C" })}>
             <Select
-              aria-label="Camera view"
+              aria-label={tx("cameraView")}
               options={cameraOptions}
               value={savedCamera}
               onChange={(mode) => p.onSelectCamera?.(mode)}
@@ -531,8 +538,8 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
         ) : null}
         {p.onToggleFreeCamera ? (
           <SettingRow
-            label="Free camera"
-            hint={`Key ${p.keyNames?.freeCamera ?? "F7"} · Drag look, WASD fly, Q/E height`}
+            label={tx("freeCamera")}
+            hint={tx("freeCameraHint", { key: p.keyNames?.freeCamera ?? "F7" })}
           >
             <Button
               size="sm"
@@ -543,12 +550,12 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
                 p.onTogglePause();
               }}
             >
-              {p.cameraMode === "free" ? "Exit free cam" : "Free camera"}
+              {p.cameraMode === "free" ? tx("exitFreeCamera") : tx("freeCameraButton")}
             </Button>
           </SettingRow>
         ) : null}
         {p.onToggleTvCamera ? (
-          <SettingRow label="Trackside TV" hint={`Key ${p.keyNames?.tvCamera ?? "F8"} · Broadcast cameras beside the track`}>
+          <SettingRow label={tx("tv")} hint={tx("tvHint", { key: p.keyNames?.tvCamera ?? "F8" })}>
             <Button
               size="sm"
               variant={p.cameraMode === "tv_side" ? "primary" : "secondary"}
@@ -558,14 +565,14 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
                 p.onTogglePause();
               }}
             >
-              {p.cameraMode === "tv_side" ? "Exit TV" : "Trackside TV"}
+              {p.cameraMode === "tv_side" ? tx("exitTv") : tx("tvButton")}
             </Button>
           </SettingRow>
         ) : null}
       </Card>
     ) : null;
   const rules = !p.onChangeRaceSetup ? (
-    <Card title="Session">{autopilot}</Card>
+    <Card title={tx("title")}>{autopilot}</Card>
   ) : (
     <RaceRules
       context="pause"
@@ -597,25 +604,28 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
 const HudPanel: React.FC<{ display: DisplayPanelProps; onOpenSettings?: (category?: SettingsCategory, tab?: string) => void }> = ({
   display,
   onOpenSettings,
-}) => (
-  <Card
-    title="HUD layout"
-    description={isTouchDevice() ? HUD_TOUCH_NOTE : undefined}
-    action={
-      onOpenSettings ? (
-        <Button variant="ghost" size="sm" icon={<Icon name="settings" />} onClick={() => onOpenSettings("display", "hud")}>
-          HUD settings
-        </Button>
-      ) : undefined
-    }
-  >
-    <HudLayoutPicker
-      value={display.settings.hud.preset}
-      onChange={(id) => display.onChangeSettings((s) => ({ ...s, hud: { ...s.hud, preset: id } }))}
-      navDefault
-    />
-  </Card>
-);
+}) => {
+  const tx = useTranslations("hud.pauseMenu.hud");
+  return (
+    <Card
+      title={tx("title")}
+      description={isTouchDevice() ? HUD_TOUCH_NOTE : undefined}
+      action={
+        onOpenSettings ? (
+          <Button variant="ghost" size="sm" icon={<Icon name="settings" />} onClick={() => onOpenSettings("display", "hud")}>
+            {tx("settings")}
+          </Button>
+        ) : undefined
+      }
+    >
+      <HudLayoutPicker
+        value={display.settings.hud.preset}
+        onChange={(id) => display.onChangeSettings((s) => ({ ...s, hud: { ...s.hud, preset: id } }))}
+        navDefault
+      />
+    </Card>
+  );
+};
 
 const cornerName = (name: string) => name.replace(/^Turn \d+\s*[—-]\s*/, "");
 
@@ -681,15 +691,16 @@ const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect
   const hot = hover ?? focused;
   const hotTurn = hot == null ? undefined : TURN_METADATA.find((t) => t.number === hot);
   const hotPoint = hot == null ? undefined : map.turns.find((t) => t.number === hot);
+  const tx = useTranslations("hud.pauseMenu.corners");
 
   return (
-    <Card title="Corners">
+    <Card title={tx("title")}>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(340px,100%),1fr))] gap-3.5">
         <div className="flex min-w-0 flex-col gap-2.5">
           <svg
             viewBox={map.viewBox}
             role="img"
-            aria-label={`Circuit map with ${TURN_METADATA.length} numbered turns`}
+            aria-label={tx("mapLabel", { count: TURN_METADATA.length })}
             className="hidden h-auto max-h-[400px] w-full sm:block short:max-h-[200px]"
           >
             <path d={map.d} fill="none" stroke="var(--color-lc-carbon)" strokeWidth={46} strokeLinejoin="round" />
@@ -721,16 +732,14 @@ const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect
           <div className="hidden min-h-11 items-center gap-3 sm:flex">
             {hotTurn ? (
               <>
-                <span className="lc-disp shrink-0 text-[24px] text-lc-chalk">T{hotTurn.number}</span>
+                <span className="lc-disp shrink-0 text-[24px] text-lc-chalk">{tx("turn", { turn: hotTurn.number })}</span>
                 <span className="flex min-w-0 flex-col">
                   <span className="lc-row-label truncate">{cornerName(hotTurn.name)}</span>
-                  <span className="lc-hint truncate">
-                    {hotTurn.complexName} · Sector {hotTurn.sector}
-                  </span>
+                  <span className="lc-hint truncate">{tx("detail", { complex: hotTurn.complexName, sector: hotTurn.sector })}</span>
                 </span>
               </>
             ) : (
-              <span className="lc-hint">Select a corner</span>
+              <span className="lc-hint">{tx("pick")}</span>
             )}
           </div>
         </div>
@@ -750,17 +759,17 @@ const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect
                 onPointerLeave={() => setHover((h) => (h === t.number ? null : h))}
                 onFocus={() => setFocused(t.number)}
                 onBlur={() => setFocused((f) => (f === t.number ? null : f))}
-                aria-label={`T${t.number}, turn ${t.number}: ${cornerName(t.name)}, ${t.complexName}. Apex ${apex} ${speedUnit}, gear ${t.gear}`}
+                aria-label={tx("rowLabel", { turn: t.number, name: cornerName(t.name), complex: t.complexName, apex, unit: speedUnit, gear: t.gear })}
                 title={`${cornerName(t.name)} · ${t.complexName}`}
                 className={cx(
-                  "group grid min-h-11 cursor-pointer grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lc-row bg-lc-well px-3 py-1 text-left text-lc-chalk inset-ring inset-ring-lc-line",
+                  "group grid min-h-11 cursor-pointer grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lc-row bg-lc-well px-3 py-1 text-start text-lc-chalk inset-ring inset-ring-lc-line",
                   MOTION,
                   HOVER_PILL,
                   PRESSED_PILL,
                   CURSOR_PILL,
                 )}
               >
-                <span className="lc-disp text-[20px]">T{t.number}</span>
+                <span className="lc-disp text-[20px]">{tx("turn", { turn: t.number })}</span>
                 <span className="flex min-w-0 flex-col">
                   <span className="lc-data text-[13px]">
                     {apex}
@@ -769,7 +778,7 @@ const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect
                   <span className="truncate text-[11px] text-lc-slate group-focus:text-lc-void/70 sm:hidden">{cornerName(t.name)}</span>
                 </span>
                 <span className="lc-hint text-lc-slate group-focus:text-lc-void/70">
-                  Gear <span className="lc-data text-[13px] text-lc-chalk group-focus:text-lc-void">{t.gear}</span>
+                  {tx.rich("gear", { gear: t.gear, n: (chunks) => <span className="lc-data text-[13px] text-lc-chalk group-focus:text-lc-void">{chunks}</span> })}
                 </span>
               </button>
             );

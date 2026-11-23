@@ -19,7 +19,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
   >
   > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-* **Contributed HUD layout**: the Grand Prix HUD layout (`src/components/hud/styles/GrandPrixHud.tsx`) is by **adamikoo · [AvgSpots](https://avgspots.com)** ([GitHub](https://github.com/adamikoo)), who designed it for LibreCorsa and contributed it under the MIT License in pull request [#162](https://github.com/KhazP/librecorsa/pull/162).
+* **Contributed HUD layout**: the Grand Prix HUD layout (`src/components/hud/styles/GrandPrixHud.tsx`) is by **adamikoo · [AvgSpots](https://avgspots.com)** ([GitHub](https://github.com/adamikoo)), who designed it for LibreCorsa and contributed it under the MIT License in pull request [#162](https://github.com/librecorsa/librecorsa/pull/162).
 * **3D Models & Audio Assets (`public/`)**: Each asset keeps its own licence, listed below. Several are **non-commercial only**, so `public/` as a whole may not be used commercially. This repository carries only RISE Motordrome and the 2026 prototype's model and sound (`public/cars/f12026/`), plus the AM26's steering wheel (`scripts/cars/sources/`); every other asset below is served on librecorsa.org for playing there and is not in the repository:
   | Asset | Licence |
   | :--- | :--- |
@@ -39,7 +39,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
   | Suzuki Liana sounds (`public/cars/liana/audio/`) | The 2015 conversion's sound bank, built from Assetto Corsa (Kunos Simulazioni) samples; **not licensed for redistribution** |
   | Dunsfold Aerodrome (`public/tracks/dunsfold/`) | 3D AC conversion v1.01 by **ACU** (2015, via AssettoCorsa.club) of the *Forza Motorsport 4* model (Turn 10 Studios / Microsoft); no licence or permission on record (see *Optional circuits*) |
   | Suzuki Liana physics data (in `src/lib/sim/road/SuzukiLianaConfig.ts`) | By **alekabul** ([https://www.overtake.gg/members/alekabul.294399/](https://www.overtake.gg/members/alekabul.294399/)), used with permission |
-  | MTRacing 496R model, sounds and physics data (`public/cars/mtr-496r/`, `src/lib/sim/proto/Mtr496rConfig.ts`) | By **munyuturbo** ([https://www.overtake.gg/members/munyuturbo.1202939/](https://www.overtake.gg/members/munyuturbo.1202939/)), used with permission |
+  | MTRacing 496R model, sounds and physics data (`public/cars/mtr-496r/`, `src/lib/sim/proto/Mtr496rConfig.ts`) | By **munyuturbo** ([https://www.overtake.gg/members/munyuturbo.1202939/](https://www.overtake.gg/members/munyuturbo.1202939/), [https://www.patreon.com/cw/MTRacing651](https://www.patreon.com/cw/MTRacing651)), used with permission |
   | Nissan Skyline GT-R R33 JGTC and Skyline GT-R R32 JTCC models, liveries, sounds and physics data (`public/cars/nissan-r33-jgtc/`, `public/cars/nissan-r32-jtcc/`, `src/lib/sim/classic/`) | By **gregsediting** ([https://www.patreon.com/cw/gregsediting](https://www.patreon.com/cw/gregsediting)), used with permission |
   | BMW M1 Procar, Volkswagen Scirocco GTX 16V and Porsche 934 Turbo RSR models, liveries, sounds and physics data (`public/cars/bmw-m1-procar/`, `public/cars/vw-scirocco-gtx/`, `public/cars/porsche-934-rsr/`, `src/lib/sim/classic/BmwM1Procar*.ts`, `src/lib/sim/road/VwScirocco*.ts`, `src/lib/sim/classic/Porsche934Rsr*.ts`) | By **Pfalzdriver** ([https://www.gtplanet.net/forum/members/pfalzdriver.315633/](https://www.gtplanet.net/forum/members/pfalzdriver.315633/)), used with permission |
   | Chaparral 2D (1966 and 1967) models, liveries, sounds and physics data (`public/cars/chaparral-2d/`, `public/cars/chaparral-2d-67/`, `src/lib/sim/classic/Chaparral2d*.ts`) | By **NPanic** ([https://www.overtake.gg/members/npanic.761347/](https://www.overtake.gg/members/npanic.761347/)) and the creators named below, used with permission |
@@ -64,7 +64,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
 
 ### MTRacing 496R (`public/cars/mtr-496r/`, `src/lib/sim/proto/`)
 
-* From `"MTRacing 496R"` v0.9 by **munyuturbo** ([https://www.overtake.gg/members/munyuturbo.1202939/](https://www.overtake.gg/members/munyuturbo.1202939/)), an Assetto Corsa car, used in LibreCorsa with the author's permission. The model, textures and sounds stay the author's; they are not covered by the code's licence.
+* From `"MTRacing 496R"` v0.9 by **munyuturbo** ([https://www.overtake.gg/members/munyuturbo.1202939/](https://www.overtake.gg/members/munyuturbo.1202939/); Patreon: [https://www.patreon.com/cw/MTRacing651](https://www.patreon.com/cw/MTRacing651)), an Assetto Corsa car, used in LibreCorsa with the author's permission. The model, textures and sounds stay the author's; they are not covered by the code's licence.
 * **Physics**: its engine, gearing, differential, suspension (with heave springs), tyre, aero, brake and traction-control data are mapped onto LibreCorsa's rigid-body vehicle model in `src/lib/sim/proto/Mtr496rConfig.ts`; each value carries a `[spec]` tag there. Checked by `scripts/verify-mtr-496r.ts`.
 * **3D model**: changes for the simulator (`scripts/cars/port_ac_car.py`): the KN5 meshes converted to glTF 2.0 on the ported-car rig (`WHEEL_*` hubs with rim, brake disc and tyre, `STEER` pivot with the wheel's screen and shift lights as nodes of their own), the "MTR Green 04" skin baked into the paint, textures downscaled and re-encoded. The mod's 20 skins are the car's liveries (`public/cars/mtr-496r/skins/`): each one's paint, door decals and sunstrip, baked the same way.
 
@@ -297,5 +297,5 @@ Made for this project and licensed under [Creative Commons Attribution-NonCommer
 
 If you made a model, texture, sound or other asset used here and it is uncredited, credited wrongly, under the
 wrong license, or simply not meant to be in LibreCorsa, open a
-[rights / takedown request](https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml).
+[rights / takedown request](https://github.com/librecorsa/librecorsa/issues/new?template=takedown-request.yml).
 It will be fixed or removed from the live site, usually within 7 days.

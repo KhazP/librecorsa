@@ -5,6 +5,7 @@
  * (track-data.ts imports its JSON); the others' track data is fetched when the player picks one.
  */
 import trackIndex from "../../public/tracks/index.json";
+import { text as tx } from "@/lib/text";
 import { withBasePath } from "@/lib/base-path";
 import { trackListed } from "@/lib/hosted-content";
 import { DEFAULT_TRACK_ID, setActiveTrack, type RawTrackJson } from "@/lib/track-data";
@@ -46,26 +47,25 @@ export interface CircuitQualityMeta {
 
 export const CIRCUIT_QUALITY_META: Record<CircuitQuality, CircuitQualityMeta> = {
   original: {
-    badge: "ORIGINAL",
-    filterLabel: "LibreCorsa originals",
+    get badge() { return tx("game.circuitQuality.originalBadge"); },
+    get filterLabel() { return tx("game.circuitQuality.original"); },
     color: "#CCFF00",
     variant: "solid",
-    description: "Built for LibreCorsa with its own surfaces, kerbs, elevation and trackside scenery.",
+    get description() { return tx("game.circuitQuality.originalDetail"); },
   },
   sim: {
-    badge: "SIM GRADE",
-    filterLabel: "Sim-grade circuits",
+    get badge() { return tx("game.circuitQuality.simBadge"); },
+    get filterLabel() { return tx("game.circuitQuality.sim"); },
     color: "#00E676",
     variant: "soft",
-    description: "A hand-built sim circuit, with its own road, kerb and barrier meshes and surface physics.",
+    get description() { return tx("game.circuitQuality.simDetail"); },
   },
   sketchfab: {
-    badge: "SCAN",
-    filterLabel: "Converted scans",
+    get badge() { return tx("game.circuitQuality.scanBadge"); },
+    get filterLabel() { return tx("game.circuitQuality.scan"); },
     color: "#FFB300",
     variant: "soft",
-    description:
-      "Converted automatically from a community 3D model: the road, kerbs, run-off and barriers are traced from the mesh, so details can differ from the real venue.",
+    get description() { return tx("game.circuitQuality.scanDetail"); },
   },
 };
 
@@ -103,10 +103,10 @@ export interface TrackInfo {
 export type CircuitType = "permanent" | "street" | "oval" | "hillclimb";
 export const CIRCUIT_TYPES: readonly CircuitType[] = ["permanent", "street", "oval", "hillclimb"];
 export const CIRCUIT_TYPE_LABELS: Record<CircuitType, string> = {
-  permanent: "Permanent",
-  street: "Street",
-  oval: "Oval",
-  hillclimb: "Hill climb",
+  get permanent() { return tx("game.circuitType.permanent"); },
+  get street() { return tx("game.circuitType.street"); },
+  get oval() { return tx("game.circuitType.oval"); },
+  get hillclimb() { return tx("game.circuitType.hillclimb"); },
 };
 
 export const circuitQualityMeta = (t: Pick<TrackInfo, "quality">): CircuitQualityMeta => CIRCUIT_QUALITY_META[t.quality];

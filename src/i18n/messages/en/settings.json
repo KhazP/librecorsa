@@ -1,0 +1,639 @@
+{
+  "screen": {
+    "title": "Settings",
+    "dialogLabel": "Settings",
+    "detailLabel": "How many settings to show",
+    "simple": "Simple",
+    "advanced": "Advanced",
+    "close": "Close",
+    "categoriesLabel": "Settings categories",
+    "sectionsLabel": "{category} sections",
+    "paneLabel": "{category}: {tab}",
+    "noAdvancedHere": "No advanced settings on this page",
+    "moreInAdvanced": "More settings in Advanced",
+    "steeringInAdvanced": "Steering help is in Advanced",
+    "categories": {
+      "driving": "Driving",
+      "controls": "Controls",
+      "ffb": "Force feedback",
+      "display": "Display",
+      "audio": "Audio",
+      "profile": "Profile and data"
+    },
+    "tabs": {
+      "driving": {
+        "assists": "Assists",
+        "steering": "Steering help"
+      },
+      "controls": {
+        "device": "Device",
+        "keyboard": "Keyboard",
+        "controller": "Controller",
+        "wheel": "Wheel",
+        "touch": "Touch"
+      },
+      "ffb": {
+        "main": "Force feedback"
+      },
+      "display": {
+        "graphics": "Graphics",
+        "hud": "HUD",
+        "camera": "Camera",
+        "interface": "Interface"
+      },
+      "audio": {
+        "main": "Audio"
+      },
+      "profile": {
+        "driver": "Driver",
+        "account": "Account",
+        "data": "Data"
+      }
+    },
+    "prompts": {
+      "move": "Move",
+      "change": "Change",
+      "tabs": "Tabs",
+      "resetRow": "Reset row",
+      "showAdvanced": "Show advanced",
+      "showSimple": "Show simple",
+      "back": "Back"
+    }
+  },
+  "field": {
+    "resetRow": "Reset {setting} to the default",
+    "reset": "Reset",
+    "resetTitle": "Reset {card}?",
+    "resetConfirm": "Reset",
+    "resetBody": "Resets {what} to defaults.",
+    "resetBodyDefault": "Resets these settings to defaults.",
+    "showAdvanced": "Show advanced"
+  },
+  "values": {
+    "off": "Off",
+    "linear": "Linear",
+    "progressive": "Progressive {value}",
+    "aggressive": "Aggressive {value}",
+    "raw": "Raw",
+    "fullLock": "{value}, full lock"
+  },
+  "off": {
+    "triggerPedals": "Requires trigger pedals",
+    "touchScreen": "Requires a touch screen"
+  },
+  "rows": {
+    "assistLevel": {
+      "label": "Assist level",
+      "options": {
+        "beginner": "Beginner",
+        "intermediate": "Intermediate",
+        "sim": "Sim"
+      },
+      "details": {
+        "beginner": "Full TC & ABS, racing line, steering assist",
+        "intermediate": "TC & ABS, racing line",
+        "sim": "No TC, no ABS, no racing line"
+      }
+    },
+    "assistPreset": {
+      "label": "Traction control & ABS",
+      "options": {
+        "pro": "Off",
+        "semi_pro": "TC + ABS",
+        "assisted": "Full"
+      }
+    },
+    "racingLine": {
+      "label": "Racing line",
+      "hint": "Key {key}"
+    },
+    "autoGearbox": {
+      "label": "Automatic gearbox",
+      "hint": "Manual keys: {up} / {down}"
+    },
+    "autoOvertake": {
+      "label": "Automatic Overtake",
+      "hint": "2026 F1: uses an earned Overtake on the straights, with less power than pressing {key}"
+    },
+    "autoClutch": {
+      "label": "Auto clutch",
+      "hint": "Prevents stalling; disable for manual clutch launches",
+      "off": {
+        "gearbox": "Requires manual gearbox",
+        "wheel": "Bind clutch under Controls > Wheel",
+        "controller": "Bind clutch under Controls > Controller",
+        "touch": "Unavailable with touch controls",
+        "keyboard": "Bind Clutch under Controls > Keyboard"
+      },
+      "overridden": {
+        "gearbox": "Temporarily overridden (requires manual gearbox); turn on to restore default",
+        "wheel": "Temporarily overridden (bind clutch under controls > wheel); turn on to restore default",
+        "controller": "Temporarily overridden (bind clutch under controls > controller); turn on to restore default",
+        "touch": "Temporarily overridden (unavailable with touch controls); turn on to restore default",
+        "keyboard": "Temporarily overridden (bind clutch under controls > keyboard); turn on to restore default"
+      }
+    },
+    "gamepadAssist": {
+      "label": "Controller steering assist",
+      "hint": "Limits lock to front tyre grip and catches slides"
+    },
+    "exitAssist": {
+      "label": "Throttle help",
+      "hint": "Modulates throttle on rear slip (keyboard, TC off)"
+    },
+    "brakeAssist": {
+      "label": "Brake help",
+      "hint": "Modulates brake on lock-up (keyboard, ABS off)"
+    },
+    "realism": {
+      "label": "Simulation realism"
+    },
+    "launch": {
+      "label": "Launch"
+    },
+    "ghost": {
+      "label": "Best-lap ghost"
+    },
+    "steeringPreset": {
+      "label": "Preset",
+      "custom": "Custom",
+      "options": {
+        "custom": "Custom"
+      }
+    },
+    "pedalAssistStrength": {
+      "label": "Pedal help strength",
+      "hint": "How early and how far Throttle help and Brake help ease the keys back"
+    },
+    "mouseSteer": {
+      "label": "Mouse steering",
+      "hint": "Key {key}"
+    },
+    "throttleRiseS": {
+      "label": "Throttle rise"
+    },
+    "brakeRiseS": {
+      "label": "Brake rise"
+    },
+    "steerRiseS": {
+      "label": "Steering smoothing",
+      "hint": "Lower is sharper"
+    },
+    "steerReturnS": {
+      "label": "Steering return"
+    },
+    "halfThrottle": {
+      "label": "Half throttle"
+    },
+    "halfBrake": {
+      "label": "Half brake"
+    },
+    "rumble": {
+      "label": "Vibration"
+    },
+    "steeringRate": {
+      "label": "Steering speed"
+    },
+    "deadzone": {
+      "label": "Inner dead zone"
+    },
+    "outerDeadzone": {
+      "label": "Outer dead zone"
+    },
+    "linearity": {
+      "label": "Stick linearity",
+      "hint": "Above 1 softens centre"
+    },
+    "throttleGamma": {
+      "label": "Throttle curve",
+      "hint": "Above 1 softens low input"
+    },
+    "brakeGamma": {
+      "label": "Brake curve",
+      "hint": "Above 1 softens light braking"
+    },
+    "stickPedalDeadzone": {
+      "label": "Pedal stick dead zone",
+      "off": "Requires stick pedals"
+    },
+    "triggerRumble": {
+      "label": "Trigger rumble",
+      "hint": "Slip, ABS and wheelspin feedback in triggers"
+    },
+    "triggerSlipAlwaysOn": {
+      "label": "Trigger slip with ABS/TC on",
+      "off": "Requires Trigger rumble"
+    },
+    "steerDeadzone": {
+      "label": "Centre dead zone"
+    },
+    "steerSmoothingS": {
+      "label": "Input filter"
+    },
+    "wheelBrakeGamma": {
+      "label": "Brake curve",
+      "hint": "1.0 for load cell · 1.3 to 1.6 for potentiometers"
+    },
+    "touchMode": {
+      "label": "Touch controls",
+      "options": {
+        "auto": "Auto",
+        "on": "On",
+        "off": "Off"
+      }
+    },
+    "touchLayout": {
+      "label": "Touch style",
+      "hint": "Analogue drag sliders or digital buttons",
+      "off": "Touch controls are off",
+      "options": {
+        "sliders": "Sliders",
+        "buttons": "Buttons"
+      }
+    },
+    "tiltSteer": {
+      "label": "Tilt to steer"
+    },
+    "tiltRangeDeg": {
+      "label": "Tilt range",
+      "off": "Requires Tilt to steer"
+    },
+    "ffbEnabled": {
+      "label": "Force feedback"
+    },
+    "ffbGain": {
+      "label": "Strength",
+      "hintPerCar": "Overridden by per-car gain ({gain}) below"
+    },
+    "ffbDamping": {
+      "label": "Damping"
+    },
+    "ffbKerb": {
+      "label": "Kerb vibration"
+    },
+    "ffbAbs": {
+      "label": "ABS vibration"
+    },
+    "ffbSlip": {
+      "label": "Slip vibration",
+      "hint": "WebHID only"
+    },
+    "ffbShift": {
+      "label": "Shift warning",
+      "hint": "WebHID only"
+    },
+    "ffbCurve": {
+      "label": "Force curve",
+      "hint": "Negative lifts low forces · positive reserves peak headroom"
+    },
+    "ffbMinForce": {
+      "label": "Minimum force",
+      "hint": "Eliminates centre deadzone",
+      "hintPerCar": "Overridden by per-car minimum force"
+    },
+    "ffbFilterS": {
+      "label": "Smoothing"
+    },
+    "ffbDownforceComp": {
+      "label": "Downforce compensation",
+      "hint": "Reduces high-speed aero clipping"
+    },
+    "ffbFriction": {
+      "label": "Friction",
+      "hint": "Hardware wheel effect"
+    },
+    "ffbInertia": {
+      "label": "Inertia",
+      "hint": "Hardware wheel effect"
+    },
+    "ffbCollisionGuard": {
+      "label": "Collision protection",
+      "hint": "Caps impact force spikes"
+    },
+    "revLeds": {
+      "label": "Rev lights"
+    },
+    "quality": {
+      "label": "Quality",
+      "options": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High"
+      },
+      "details": {
+        "low": "No shadows or bloom, lower res",
+        "medium": "Shadows, no bloom",
+        "mediumTouch": "Shadows, no bloom or MSAA",
+        "high": "Full effects",
+        "highTouch": "Full effects except MSAA"
+      }
+    },
+    "sharpLow": {
+      "label": "Sharp Low",
+      "hint": "Draws Low at Medium resolution",
+      "hintAuto": "Draws Low at Medium resolution; auto quality can turn it off",
+      "off": "Needs Quality set to Low"
+    },
+    "renderScale": {
+      "label": "Render resolution"
+    },
+    "sharpen": {
+      "label": "Sharpen",
+      "hint": "Crisps edges and tarmac after scaling"
+    },
+    "fpsCap": {
+      "label": "Frame rate",
+      "hint": "30 fps lowers heat on mobile",
+      "options": {
+        "full": "Full",
+        "fps30": "30 fps"
+      }
+    },
+    "autoQuality": {
+      "label": "Automatic quality",
+      "hint": "Steps down on sustained frame drops",
+      "hintLowered": "Scaled down: {what}"
+    },
+    "autoQualityMinScale": {
+      "label": "Lowest resolution",
+      "hint": "Automatic quality never drops Render resolution below this",
+      "hintLow": "Resolution stays put; Low has no effects to drop",
+      "hintEffects": "Resolution stays put; only effects step down",
+      "off": "Needs Automatic quality on"
+    },
+    "driverBody": {
+      "label": "Driver body"
+    },
+    "hudScale": {
+      "label": "Size"
+    },
+    "deltaBar": {
+      "label": "Delta bar"
+    },
+    "lapSummary": {
+      "label": "Lap summary"
+    },
+    "virtualMirror": {
+      "label": "Mirror",
+      "options": {
+        "auto": "Auto",
+        "always": "Always",
+        "off": "Off"
+      }
+    },
+    "radar": {
+      "label": "Proximity radar"
+    },
+    "showPlayerNames": {
+      "label": "Player nameplates"
+    },
+    "boardWidget": {
+      "label": "Lap board",
+      "options": {
+        "lapEnd": "At lap end",
+        "open": "Open",
+        "closed": "Closed"
+      }
+    },
+    "inputTrace": {
+      "label": "Input trace"
+    },
+    "towerGaps": {
+      "label": "Timing tower gaps",
+      "options": {
+        "interval": "Interval",
+        "leader": "To leader"
+      }
+    },
+    "mapMode": {
+      "label": "Map mode",
+      "options": {
+        "full": "Full lap",
+        "local": "Zoomed"
+      }
+    },
+    "splitGaps": {
+      "label": "Split gaps"
+    },
+    "mfdAutoCollapse": {
+      "label": "MFD auto-fold"
+    },
+    "camera": {
+      "label": "Default view",
+      "hint": "Key {key}"
+    },
+    "cockpitFovDeg": {
+      "label": "Field of view",
+      "hintCarOwn": "Using each car's default",
+      "hintCarDefault": "Car default: {degrees}°",
+      "valueCar": "{value}° (car)"
+    },
+    "headMovement": {
+      "label": "Head movement",
+      "options": {
+        "natural": "Natural",
+        "static": "Locked"
+      }
+    },
+    "language": {
+      "label": "Language",
+      "options": {
+        "auto": "Automatic"
+      },
+      "details": {
+        "auto": "Your browser's language"
+      }
+    },
+    "speedUnit": {
+      "label": "Speed"
+    },
+    "temperatureUnit": {
+      "label": "Temperature"
+    },
+    "pressureUnit": {
+      "label": "Tyre pressure"
+    },
+    "uiScale": {
+      "label": "Interface size"
+    },
+    "palette": {
+      "label": "Colour-blind palette",
+      "options": {
+        "standard": "Standard",
+        "protan": "Red-weak",
+        "deutan": "Green-weak",
+        "tritan": "Blue-weak"
+      },
+      "details": {
+        "protan": "Protanopia and protanomaly",
+        "deutan": "Deuteranopia and deuteranomaly",
+        "tritan": "Tritanopia and tritanomaly"
+      }
+    },
+    "volume": {
+      "label": "Master volume"
+    },
+    "kerbs": {
+      "label": "Kerbs"
+    },
+    "muted": {
+      "label": "Mute",
+      "hint": "Key {key}"
+    },
+    "drsBeep": {
+      "label": "DRS beeps"
+    },
+    "shiftBeep": {
+      "label": "Shift beep"
+    },
+    "musicOn": {
+      "label": "Music"
+    },
+    "menuMusic": {
+      "label": "Menu music"
+    },
+    "raceMusicOn": {
+      "label": "Music while driving"
+    },
+    "raceMusic": {
+      "label": "Race music",
+      "hint": "Skip track: {key}",
+      "off": "Music while driving is off"
+    },
+    "replayMusic": {
+      "label": "Results & replay music"
+    },
+    "autoUpload": {
+      "label": "Auto-upload best laps"
+    },
+    "telemetryOut": {
+      "label": "UDP telemetry",
+      "hint": "Sends live telemetry to local bridge (dashboards, bass shakers)"
+    },
+    "practiceDamage": {
+      "label": "Practice damage",
+      "hints": {
+        "off": "No damage in practice or a time trial",
+        "reduced": "Half the damage; a wrecked car restarts a flying lap, repaired",
+        "full": "Race damage; a wrecked car restarts a flying lap, repaired"
+      }
+    }
+  },
+  "driving": {
+    "drivingAids": "Driving aids",
+    "pedalHelp": "Pedal help",
+    "onTrack": "On track",
+    "keyboardSteering": "Keyboard steering",
+    "controllerSteering": "Controller steering"
+  },
+  "controls": {
+    "activeDevice": "Active device",
+    "quickSetup": "Quick setup",
+    "runSetupWizard": "Run setup wizard",
+    "runSetup": "Run setup",
+    "touch": "Touch"
+  },
+  "display": {
+    "layout": {
+      "title": "Layout",
+      "resetWhat": "the HUD layout"
+    },
+    "graphics": {
+      "title": "Graphics",
+      "vr": "VR",
+      "vrOff": "Requires WebXR headset",
+      "experimental": "Experimental",
+      "inVr": "In VR",
+      "enterVr": "Enter VR"
+    },
+    "hud": {
+      "title": "What the HUD shows"
+    },
+    "camera": {
+      "title": "Camera",
+      "freeCamera": "Free camera",
+      "freeCameraHint": "Drag look · WASD fly · Q/E height · Scroll speed · R reset",
+      "freeCameraUnbound": "Unbound",
+      "tvCamera": "Trackside TV",
+      "tvCameraUnbound": "Unbound",
+      "adjustSeat": "Adjust seat",
+      "adjustSeatHint": "Hold {key} or {button} on track",
+      "adjustSeatOff": "Available while driving (hold {key} or {button})",
+      "adjust": "Adjust",
+      "resetSeats": "Reset seat positions",
+      "resetSeatsOff": "Already at default",
+      "resetSeatsButton": "Reset",
+      "resetSeatsTitle": "Reset seat positions?",
+      "resetSeatsConfirm": "Reset all",
+      "resetSeatsBody": "Resets cockpit and dash seat offsets for all cars."
+    },
+    "interface": {
+      "language": "Language",
+      "units": "Units",
+      "sizeColour": "Size and colour"
+    }
+  },
+  "audio": {
+    "sound": "Sound",
+    "music": "Music",
+    "menuTracks": "Menu tracks",
+    "raceTracks": "Race tracks",
+    "resultsTracks": "Results and replay tracks",
+    "cockpitCues": "Cockpit cues"
+  },
+  "profile": {
+    "driver": {
+      "title": "Driver",
+      "name": "Name",
+      "code": "Code",
+      "colour": "Colour",
+      "colourGroup": "Colour",
+      "otherColour": "Other colour",
+      "colours": {
+        "red": "Red",
+        "teal": "Teal",
+        "orange": "Orange",
+        "blue": "Blue",
+        "racingGreen": "Racing green",
+        "navy": "Navy",
+        "silver": "Silver",
+        "lime": "Lime"
+      }
+    },
+    "data": {
+      "driverKey": "Driver key",
+      "identityKey": "Identity key",
+      "identityKeyHint": "Signs online laps. Back up to use on another browser",
+      "save": "Save",
+      "load": "Load",
+      "telemetry": "Telemetry",
+      "udpPort": "UDP port",
+      "udpPortField": "UDP port",
+      "portConflict": "Port {port} conflicts with {app} (default {defaultPort})",
+      "portOff": "Requires UDP telemetry",
+      "reset": "Reset",
+      "resetAll": "Reset all settings",
+      "resetAllHint": "Restores default controls, assists, display and audio",
+      "resetAllButton": "Reset",
+      "resetAllTitle": "Reset all settings?",
+      "resetAllConfirm": "Reset all",
+      "resetAllBody": "Resets all settings, bindings and calibration to defaults. Profile, setups and lap times stay.",
+      "clear": "Clear saved data",
+      "clearHint": "Deletes local settings, driver key, laps, ghosts and setups",
+      "clearButton": "Clear",
+      "clearTitle": "Clear saved data?",
+      "clearConfirm": "Clear everything",
+      "clearBody": "Permanently removes all settings, driver key, laps, ghosts and setups from this browser, then reloads. A signed-in device is signed out of its account first; the account and its cloud save stay."
+    }
+  },
+  "hudPicker": {
+    "label": "HUD layout",
+    "thirdParty": "Third-party",
+    "thirdPartyNote": "Recreated from other open-source HUD projects, credited to their authors.",
+    "touchNote": "Phones always use Touch HUD.",
+    "description": "{detail}. By {author}",
+    "descriptionSite": "{detail}. By {author} · {site}",
+    "sourceLink": "{layout} source, by {author} (opens in a new tab)",
+    "siteLink": "{site}, {author}'s site (opens in a new tab)"
+  }
+}

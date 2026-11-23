@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import type { ModelSource } from "@/lib/model-source";
 import { SupportButton } from "@/components/SupportButton";
 import { TAKEDOWN_URL } from "@/lib/site";
@@ -36,6 +37,7 @@ export const SourceChip: React.FC<{
   /** The chip's box */
   className?: string;
 }> = ({ source, className = "inline-flex" }) => {
+  const tx = useTranslations("game.source");
   const [open, setOpen] = useState(false);
   const [place, setPlace] = useState<Place | null>(null);
   // Whether the button sits in a zoomed screen (TV distance, the UI scale setting): the panel then takes the same zoom
@@ -126,8 +128,8 @@ export const SourceChip: React.FC<{
         size="sm"
         variant="secondary"
         icon={<Icon name="source" />}
-        aria-label={`Source of ${source.title}`}
-        title="Source"
+        aria-label={tx("sourceOf", { title: source.title })}
+        title={tx("source")}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => {
@@ -142,9 +144,9 @@ export const SourceChip: React.FC<{
               ref={panelRef}
               id={panelId}
               role="group"
-              aria-label={`Source of ${source.title}`}
+              aria-label={tx("sourceOf", { title: source.title })}
               onKeyDown={onPanelKey}
-              className={`pointer-events-auto fixed z-(--z-lc-notice) flex w-[min(320px,calc(100vw-32px))] flex-col gap-1.5 overflow-y-auto overscroll-contain rounded-lc-tile border border-white/7 bg-lc-carbon p-3.5 text-left text-[13px] leading-snug font-normal text-lc-fog shadow-lc-pop ${zoomed ? "lc-ui-zoom" : ""}`}
+              className={`pointer-events-auto fixed z-(--z-lc-notice) flex w-[min(320px,calc(100vw-32px))] flex-col gap-1.5 overflow-y-auto overscroll-contain rounded-lc-tile border border-white/7 bg-lc-carbon p-3.5 text-start text-[13px] leading-snug font-normal text-lc-fog shadow-lc-pop ${zoomed ? "lc-ui-zoom" : ""}`}
               // Laid out unseen at the corner first, measured, then put by the button
               style={
                 place
@@ -199,7 +201,7 @@ export const SourceChip: React.FC<{
                 rel="noreferrer"
                 className="self-start text-lc-slate underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
               >
-                Report issue
+                {tx("reportIssue")}
               </a>
             </span>,
             document.body,

@@ -1,0 +1,877 @@
+{
+  "sky": {
+    "clear": "صافٍ",
+    "lightClouds": "غيوم خفيفة",
+    "partiallyCloudy": "غائم جزئيًا",
+    "mostlyCloudy": "غائم في أغلبه",
+    "overcast": "ملبد بالغيوم",
+    "cloudyDrizzle": "غائم ورذاذ",
+    "cloudyLightRain": "غائم ومطر خفيف",
+    "overcastLightRain": "ملبد ومطر خفيف",
+    "overcastRain": "ملبد ومطر",
+    "overcastHeavyRain": "ملبد ومطر غزير",
+    "overcastStorm": "ملبد وعاصفة"
+  },
+  "weather": {
+    "nodeStart": "البداية",
+    "nodeFinish": "النهاية",
+    "clear": "صافٍ",
+    "clearDetail": "جاف ومشمس",
+    "overcast": "ملبد بالغيوم",
+    "overcastDetail": "جاف، سماء رمادية، مسار أبرد",
+    "lightRain": "مطر خفيف",
+    "lightRainDetail": "مسار مبلل، إطارات وسيطة",
+    "heavyRain": "مطر غزير",
+    "heavyRainDetail": "مياه راكدة، إطارات مبللة بالكامل",
+    "drying": "جفاف تدريجي",
+    "dryingDetail": "توقف المطر وبدأ خط جاف بالظهور",
+    "dynamic": "متغير",
+    "dynamicDetail": "يتغير أثناء الجلسة"
+  },
+  "timeOfDay": {
+    "dawn": "الفجر",
+    "morning": "الصباح",
+    "noon": "الظهر",
+    "afternoon": "بعد الظهر",
+    "goldenHour": "الساعة الذهبية",
+    "dusk": "الغسق",
+    "night": "الليل"
+  },
+  "raceStart": {
+    "assisted": "بمساعدة",
+    "manual": "يدوي",
+    "assistedHint": "تثبيت السيارة على الشبكة حتى انطفاء الأضواء",
+    "manualHint": "اضغط القابض وارفع دورات المحرك، ثم حرّر عند انطفاء الأضواء (عقوبة انطلاق مبكر +5 s / +10 s)"
+  },
+  "realism": {
+    "casual": "مبسطة",
+    "casualDetail": "دون تآكل للإطارات، حرارة إطارات متسامحة، أمطار أخف",
+    "standard": "قياسية",
+    "standardDetail": "تآكل الإطارات مفعّل، حرارة إطارات مخفّفة، معظم تأثيرات المطر",
+    "full": "كاملة",
+    "fullDetail": "نموذج كامل للإطارات والطقس الماطر، إطارات ومكابح باردة عند الخروج من المرآب"
+  },
+  "raceRules": {
+    "auto": "تلقائي",
+    "openWheel": "عجلات مكشوفة",
+    "endurance": "تحمّل",
+    "autoHint": "قوانين العجلات المكشوفة للفورمولا، وقوانين التحمّل لبقية الفئات",
+    "openWheelHint": "حدود الحلبة بالمخالفات: 4 تعني +5 s، و8 تعني +10 s، و12 تعني الاستبعاد",
+    "enduranceHint": "حدود الحلبة بالنقاط الموزونة: 5 تعني +5 s، و10 تعني +10 s، و15 تعني الاستبعاد",
+    "trackLimitsOn": "مفعّل",
+    "trackLimitsOff": "معطّل"
+  },
+  "damage": {
+    "off": "معطّل",
+    "reduced": "مخفّف",
+    "full": "كامل"
+  },
+  "raceSetup": {
+    "gridBack": "المؤخرة",
+    "gridMiddle": "المنتصف",
+    "gridPole": "مركز الانطلاق الأول",
+    "gridRandom": "عشوائي",
+    "aiGridPace": "حسب الوتيرة",
+    "aiGridQualifying": "تصفيات",
+    "aiGridReversed": "معكوسة",
+    "startAuto": "تلقائي",
+    "startStanding": "من الثبات",
+    "startRolling": "انطلاق متحرك",
+    "standingStart": "انطلاق من الثبات",
+    "rollingStart": "انطلاق متحرك",
+    "aggressionClean": "نظيف",
+    "aggressionNormal": "عادي",
+    "aggressionHard": "شرس"
+  },
+  "grip": {
+    "green": "بكر",
+    "greenDetail": "أسفلت مغسول حديثًا بأقل قدر من المطاط",
+    "light": "خفيف",
+    "lightDetail": "تراكم خفيف للمطاط في بداية أسبوع السباق",
+    "medium": "متوسط",
+    "mediumDetail": "مسار مطاطي معتدل",
+    "natural": "طبيعي",
+    "naturalDetail": "مسار مطاطي قياسي جاهز للسباق",
+    "heavy": "كثيف",
+    "heavyDetail": "خط سباق غني بالمطاط على طريقة سباقات التحمّل",
+    "saturated": "مشبّع",
+    "saturatedDetail": "مسار مطاطي داكن مشبّع بالكامل"
+  },
+  "aiSkill": {
+    "rookie": "مبتدئ",
+    "amateur": "هاوٍ",
+    "pro": "محترف",
+    "alien": "خارق"
+  },
+  "challenge": {
+    "conditions": "مسار جاف · {tyres} · وقود منخفض",
+    "tyresSoft": "إطارات ناعمة",
+    "tyresStreet": "إطارات طرقية",
+    "tyresVintageSlicks": "إطارات ملساء كلاسيكية",
+    "tyresSlicks": "إطارات ملساء",
+    "timeLeftDays": "{days} ي {hours} س",
+    "timeLeftHours": "{hours} س {minutes} د",
+    "timeLeftMinutes": "{minutes} د",
+    "placeNoTime": "لا يوجد زمن بعد",
+    "placeFirst": "P1 · الأسرع هذا الأسبوع",
+    "place": "P{place}",
+    "placeGap": "P{place} · {gap} خلف P{above}"
+  },
+  "board": {
+    "conditions": "{assists} · {realism} · {surface}",
+    "assistsPro": "دون مساعدات",
+    "assistsSemiPro": "بعض المساعدات",
+    "assistsAssisted": "بمساعدة",
+    "realismCasual": "مبسطة",
+    "realismStandard": "قياسية",
+    "realismFull": "كاملة",
+    "surfaceDry": "جاف",
+    "surfaceWet": "مبلل",
+    "renameUnreachable": "تعذر الوصول إلى لوحة الأزمنة عبر الإنترنت. أعد المحاولة بعد لحظة",
+    "renameFailed": "تعذر تغيير الاسم (HTTP {status})"
+  },
+  "badges": {
+    "weeklyGold": "ذهبية الأسبوع",
+    "weeklySilver": "فضية الأسبوع",
+    "weeklyBronze": "برونزية الأسبوع",
+    "fastestLap": "أسرع لفة",
+    "og": "سائق OG",
+    "bulb": "مساهم بالأفكار",
+    "times": "{badge} ×{count}",
+    "withNote": "{badge} — {note}",
+    "medalDetail": "{place, select, first {الأول} second {الثاني} other {الثالث}} في تحدٍ أسبوعي",
+    "medalDetailWeeks": "{place, select, first {الأول} second {الثاني} other {الثالث}} في تحدٍ أسبوعي: {weeks}",
+    "recordDetailCount": "يحمل أسرع لفة على {count, plural, zero {لا لوحات مفتوحة} one {لوحة مفتوحة واحدة} two {لوحتين مفتوحتين} few {# لوحات مفتوحة} many {# لوحة مفتوحة} other {# لوحة مفتوحة}}",
+    "recordCar": "{car} ×{count}",
+    "recordManual": "+{count} يدويًا",
+    "recordDetail": "{boards} — اضغط لعرض الحلبات",
+    "ogDetail": "قاد في LibreCorsa على فيزياء V1",
+    "bulbDetailNote": "مساهم بالأفكار: {note}",
+    "bulbDetail": "فكرة أو مساهمة مجتمعية",
+    "creator": "المُنشئ",
+    "creatorDetail": "صنع LibreCorsa"
+  },
+  "camera": {
+    "chaseClose": "ملاحقة قريبة",
+    "chaseCloseDetail": "مباشرة خلف السيارة",
+    "chase": "ملاحقة",
+    "chaseDetail": "خلف السيارة",
+    "chaseFar": "ملاحقة بعيدة",
+    "chaseFarDetail": "زاوية واسعة خلف السيارة",
+    "chaseLow": "ملاحقة منخفضة",
+    "chaseLowDetail": "منخفضة خلف الجناح الخلفي",
+    "tvPod": "كاميرا T-cam",
+    "tvPodDetail": "فوق الخوذة",
+    "cockpitShoulder": "الكتف",
+    "cockpit": "قمرة القيادة",
+    "cockpitDetail": "منظور السائق",
+    "dash": "لوحة العدادات",
+    "dashDetail": "أمام المقود مع ظهور لوحة العدادات",
+    "nose": "المقدمة",
+    "helicopter": "المروحية",
+    "tvSide": "البث التلفزيوني",
+    "free": "كاميرا حرة",
+    "freeDetail": "حلّق بحرية حول الحلبة"
+  },
+  "music": {
+    "poolMenu": "القائمة",
+    "poolRace": "السباق",
+    "poolResults": "النتائج والإعادة"
+  },
+  "carQuality": {
+    "ownBadge": "فيزياء مخصصة",
+    "own": "فيزياء مخصصة",
+    "ownDetail": "تعمل بفيزياء مصممة خصيصًا لهذه السيارة.",
+    "sharedBadge": "فيزياء مشتركة",
+    "shared": "فيزياء مشتركة",
+    "sharedDetail": "تعمل بفيزياء سيارة أخرى من الفئة والحقبة نفسهما، لذا تتصرف مثل تلك السيارة وليس وفق خصائصها الخاصة.",
+    "eraBadge": "فيزياء 2026",
+    "era": "سيارات أقدم",
+    "eraDetail": "تعمل بفيزياء 2026، لذا تتصرف كسيارة 2026 وليس كما كانت في موسمها الأصلي."
+  },
+  "carClass": {
+    "f1": "فورمولا بعجلات مكشوفة",
+    "f1Detail": "سيارات بمقعد واحد · DRS / انسيابية نشطة",
+    "gt3Detail": "عجلات مغطاة · ABS / TC",
+    "proto": "النماذج الأولية",
+    "protoDetail": "عجلات مغطاة · قوة سفلية عالية · TC",
+    "classic": "GT وسيارات سياحة كلاسيكية",
+    "classicDetail": "نماذج أولية رياضية، Group 4، Group A، JGTC · 1966–1998",
+    "road": "سيارات طرقية",
+    "roadDetail": "مرخصة للطرق العامة · إطارات طرقية"
+  },
+  "circuitQuality": {
+    "originalBadge": "أصلية",
+    "original": "حلبات LibreCorsa الأصلية",
+    "originalDetail": "مصممة خصيصًا لـ LibreCorsa بأسطح وأرصفة وارتفاعات ومشاهد محيطة خاصة بها.",
+    "simBadge": "بمعيار المحاكاة",
+    "sim": "حلبات بمعيار المحاكاة",
+    "simDetail": "حلبة محاكاة مبنية يدويًا بأسطح وأرصفة وحواجز وفيزياء طريق مخصصة.",
+    "scanBadge": "مسح ثلاثي الأبعاد",
+    "scan": "حلبات محوّلة من مسح ثلاثي الأبعاد",
+    "scanDetail": "محوّلة تلقائيًا من نموذج ثلاثي الأبعاد أنشأه أفراد من المجتمع: يُستخلص الطريق والأرصفة ومناطق الأمان والحواجز من الشبكة المضلعة، لذا قد تختلف التفاصيل عن الحلبة الواقعية."
+  },
+  "circuitType": {
+    "permanent": "دائمة",
+    "street": "شوارع",
+    "oval": "بيضاوية",
+    "hillclimb": "تسلق الهضاب"
+  },
+  "livery": {
+    "grid2026": "تشكيلة 2026",
+    "retro": "كلاسيكي",
+    "colourChalk": "طباشيري",
+    "colourCarbon": "كربوني",
+    "colourAlloy": "معدني",
+    "colourVermilion": "قرمزي",
+    "colourPapaya": "برتقالي بابايا",
+    "colourGold": "ذهبي",
+    "colourVolt": "أصفر فولت",
+    "colourEmerald": "زمردي",
+    "colourCyan": "سماوي",
+    "colourCobalt": "أزرق كوبالت",
+    "colourIndigo": "نيلي",
+    "colourMagenta": "أرجواني"
+  },
+  "keyActions": {
+    "throttle": "التسارع",
+    "brake": "المكابح",
+    "steerLeft": "التوجيه يسارًا",
+    "steerRight": "التوجيه يمينًا",
+    "boostHold": "تعزيز الطاقة (استمرار الضغط)",
+    "boostLatch": "تعزيز الطاقة (تبديل)",
+    "overtake": "تجاوز",
+    "aero": "الانسيابية النشطة X / Z",
+    "shiftUp": "رفع الترس",
+    "shiftDown": "خفض الترس",
+    "neutral": "الوضع المحايد",
+    "camera": "الكاميرا (ضغط مطوّل: المقعد والكاميرا)",
+    "freeCamera": "كاميرا حرة",
+    "tvCamera": "كاميرا البث التلفزيوني",
+    "racingLine": "خط السباق",
+    "mute": "كتم الصوت",
+    "nextTrack": "المقطع الموسيقي التالي",
+    "autopilot": "القيادة الآلية",
+    "mouseSteer": "التوجيه بالفأرة",
+    "restart": "إعادة التشغيل",
+    "flyingLap": "إعادة اللفة (انطلاق طائر)",
+    "throttleHalf": "نصف التسارع (استمرار الضغط)",
+    "brakeHalf": "نصف الكبح (استمرار الضغط)",
+    "clutch": "القابض (استمرار الضغط)",
+    "replay": "إعادة فورية",
+    "mfdPage": "صفحة MFD التالية",
+    "mfd": "فتح / إغلاق MFD",
+    "hud": "إظهار / إخفاء HUD",
+    "board": "فتح / إغلاق لوحة الأزمنة",
+    "headlights": "تشغيل / إطفاء المصابيح الأمامية",
+    "headlightFlash": "وميض المصابيح الأمامية (استمرار الضغط)"
+  },
+  "padActions": {
+    "shiftUp": "رفع الترس",
+    "shiftDown": "خفض الترس",
+    "neutral": "الوضع المحايد",
+    "boost": "تعزيز الطاقة",
+    "overtake": "تجاوز",
+    "aero": "الانسيابية النشطة X / Z",
+    "camera": "الكاميرا (ضغط مطوّل: المقعد والكاميرا)",
+    "freeCamera": "كاميرا حرة",
+    "tvCamera": "كاميرا البث التلفزيوني",
+    "racingLine": "خط السباق",
+    "restart": "إعادة التشغيل",
+    "flyingLap": "إعادة اللفة (انطلاق طائر)",
+    "pause": "قائمة الإيقاف المؤقت",
+    "mfd": "فتح / إغلاق MFD",
+    "mfdPage": "صفحة MFD التالية",
+    "hud": "إظهار / إخفاء HUD",
+    "board": "فتح / إغلاق لوحة الأزمنة",
+    "headlights": "المصابيح الأمامية (ضغطة: وميض، مطوّلة: تشغيل / إطفاء)",
+    "headlightFlash": "وميض المصابيح الأمامية (استمرار الضغط)"
+  },
+  "pedals": {
+    "throttle": "دواسة التسارع",
+    "brake": "دواسة المكابح",
+    "clutch": "دواسة القابض",
+    "notSet": "غير معيّن",
+    "trigger": "الزناد",
+    "stick": "العصا {side, select, left {اليسرى} other {اليمنى}} {way, select, up {للأعلى} down {للأسفل} left {لليسار} other {لليمين}}",
+    "pressThrottle": "اضغط دواسة التسارع",
+    "holdButton": "اضغط مطوّلًا على {button}",
+    "pushStick": "ادفع العصا {side, select, left {اليسرى} other {اليمنى}} {way, select, up {للأعلى} down {للأسفل} left {لليسار} other {لليمين}}",
+    "clutchPedal": "دواسة القابض",
+    "button": "زر {number}"
+  },
+  "padLayouts": {
+    "gt": "نمط GT",
+    "gtClassic": "نمط GT الكلاسيكي",
+    "f1": "نمط الفورمولا",
+    "forza": "نمط Forza",
+    "bumper": "تبديل بالأزرار العلوية"
+  },
+  "wheelSupport": {
+    "moza": "يتصل ويتحكم بالتوجيه ويشغّل رد الفعل القسري عبر WebHID",
+    "hidPid": "غير مختبر؛ يستخدم تقارير رد الفعل القسري القياسية نفسها",
+    "directDrive": "غير مختبر؛ في غياب رد الفعل القسري عبر HID PID تنتقل الصفحة إلى برنامج الربط",
+    "pxn": "غير مختبر؛ يستخدم HID PID بقيم Set Effect خاصة به لم تُؤكّد على أي مقود PXN بعد",
+    "logitechClassic": "غير مختبر؛ يبدأ عبر WebHID بأوامر Logitech الكلاسيكية كما يرسلها hid-lg4ff في Linux، بما في ذلك مصابيح دورات المحرك على G27 وG29",
+    "logitechHidpp": "غير مختبر؛ يبدأ عبر WebHID برد فعل قسري عبر HID++ كما يرسله hid-logitech-hidpp في Linux، بعد أن يحوّل Logitech G HUB المقود إلى وضع PC",
+    "logitechBridgeOnly": "غير مختبر؛ عبر برنامج الربط فقط: لا يوجد تعريف Linux رئيسي يشغّل G923 لـ PlayStation أو G PRO، ولا يستطيع المتصفح إعادة معايرة محور توجيه DFP",
+    "thrustmaster": "غير مختبر؛ يستخدم أوامر hid-tmff2 في Linux بعد إخراج المقود من وضع بدء التشغيل. وإن لم يحدث ذلك أو رفض Windows الأوامر، يتولى برنامج الربط المهمة",
+    "thrustmasterBridgeOnly": "غير مختبر؛ عبر برنامج الربط فقط: يستخدم T150 وTMX مجموعة أوامر مختلفة، ولا يغطي hid-tmff2 طراز T500RS",
+    "fanatecCslElite": "غير مختبر؛ في غياب رد الفعل القسري عبر HID PID تنتقل الصفحة إلى برنامج الربط",
+    "tested": "مختبر",
+    "expected": "متوقّع",
+    "unknown": "غير معروف",
+    "no": "لا"
+  },
+  "hudLayouts": {
+    "broadcast": "البث التلفزيوني",
+    "broadcastDetail": "رسوميات البث: برج المراكز، الخريطة، شريط القياس عن بُعد",
+    "dash": "شاشة المقود",
+    "dashDetail": "شاشة عجلة القيادة، منخفضة وفي المنتصف",
+    "telemetry": "القياس عن بُعد",
+    "telemetryDetail": "شاشة المقود مع الإطارات وقوة الجاذبية G والطاقة والمدخلات",
+    "classic": "كلاسيكي",
+    "classicDetail": "اللوحات الأصلية في الزوايا",
+    "minimal": "مختصر",
+    "minimalDetail": "السرعة والترس واللفة فقط",
+    "irdashiesDetail": "الترتيب ومؤقت اللفة والمدخلات وأضواء تبديل التروس",
+    "racevisionDetail": "الترتيب والمقارنة النسبية ومؤشر الدواسات والرسم البياني",
+    "h2hDetail": "السيارات أمامك وخلفك والفوارق وفارق اللفة",
+    "retroDetail": "عدادات دافئة: قرص دائري، شريط الفارق، اللفات",
+    "blocksDetail": "مربعات داكنة: التوقيت، القطاعات، الإطارات، الوقود",
+    "grandPrixDetail": "برج السباق، عداد السرعة الدائري، الترس والمدخلات"
+  },
+  "steeringAssist": {
+    "selfSteerStrength": "التوجيه الذاتي والتوجيه المعاكس",
+    "selfSteerStrengthHint": "مدى قوة اتباع العجلات لاتجاه السيارة وضبط انزلاق المؤخرة",
+    "dampingStrength": "تخميد الانعراج",
+    "dampingStrengthHint": "يهدئ الارتداد المفاجئ وتأرجح السيارة عند استعادة التوازن من الانزلاق",
+    "speedSensitivity": "هدوء السرعات العالية",
+    "speedSensitivityHint": "مدى بطء التوجيه عند السرعات العالية لتبقى الحركات الصغيرة سلسة",
+    "slipLimitMargin": "هامش انزلاق الإطارات",
+    "slipLimitMarginHint": "السالب: هامش أمان لقصور التوجيه · الموجب: يسمح للإطارات الأمامية بتجاوز ذروة الانزلاق",
+    "maxSelfSteerAngleDeg": "أقصى زاوية للتوجيه المعاكس",
+    "maxSelfSteerAngleDegHint": "أكبر زاوية توجيه للعجلات يطبقها المساعد تلقائيًا للسيطرة على الانزلاق",
+    "presetBalanced": "متوازن",
+    "presetStable": "مستقر",
+    "presetLoose": "مرن",
+    "presetDrift": "انجراف",
+    "presetCalm": "هادئ عند السرعة",
+    "fullLock": "توجيه كامل",
+    "presetDetail": "توجيه ذاتي {selfSteer}، تخميد انعراج {damping}، هدوء السرعة {calm}، الإطارات الأمامية عند {grip}% من ذروة الانزلاق، توجيه معاكس حتى {cap}"
+  },
+  "support": {
+    "donatePayPal": "تبرّع عبر PayPal",
+    "supportOn": "ادعم عبر {site}",
+    "donateToVia": "تبرّع لصالح {maker} عبر {site}",
+    "supportOnSite": "ادعم {maker} عبر {site}",
+    "donateTo": "تبرّع لصالح {maker}",
+    "supportMaker": "ادعم {maker}"
+  },
+  "setupSheet": {
+    "tcSlip": "انزلاق TC",
+    "tc1": "TC 1",
+    "tcCut": "قطع TC",
+    "tc2": "TC 2",
+    "tcSlipAngle": "زاوية انزلاق TC",
+    "abs": "ABS",
+    "engineMap": "خريطة المحرك",
+    "motorDeployment": "إطلاق الطاقة الكهربائية",
+    "regeneration": "استعادة الطاقة",
+    "startingFuel": "وقود البداية",
+    "frontWing": "الجناح الأمامي",
+    "rearWing": "الجناح الخلفي",
+    "diffOnThrottle": "التفاضلي عند التسارع",
+    "diffOffThrottle": "التفاضلي دون تسارع",
+    "engineBraking": "كبح المحرك",
+    "frontToe": "زاوية التقارب الأمامية",
+    "rearToe": "زاوية التقارب الخلفية",
+    "frontSuspension": "التعليق الأمامي",
+    "rearSuspension": "التعليق الخلفي",
+    "frontAntiRollBar": "قضيب التوازن الأمامي",
+    "rearAntiRollBar": "قضيب التوازن الخلفي",
+    "frontRideHeight": "ارتفاع الهيكل الأمامي",
+    "rearRideHeight": "ارتفاع الهيكل الخلفي",
+    "brakePressure": "ضغط المكابح",
+    "frontBrakeBias": "توزيع المكابح الأمامي",
+    "brakeMigration": "انتقال توازن المكابح",
+    "brakePower": "قوة المكابح",
+    "brakeBias": "توزيع المكابح",
+    "steeringRatio": "نسبة التوجيه",
+    "frontBumpStopRange": "مدى مصدات الانضغاط الأمامية",
+    "rearBumpStopRange": "مدى مصدات الانضغاط الخلفية",
+    "diffPreload": "التحميل المسبق للتفاضلي",
+    "gearSet": "مجموعة نسب التروس",
+    "frontThirdPacker": "حشوة النابض الثالث الأمامي",
+    "rearThirdPacker": "حشوة النابض الثالث الخلفي",
+    "frontBrakeDucts": "قنوات تبريد المكابح الأمامية",
+    "rearBrakeDucts": "قنوات تبريد المكابح الخلفية",
+    "radiatorOpening": "فتحة المبرد",
+    "frontBump": "الانضغاط الأمامي",
+    "rearBump": "الانضغاط الخلفي",
+    "frontFastBump": "الانضغاط السريع الأمامي",
+    "rearFastBump": "الانضغاط السريع الخلفي",
+    "frontRebound": "الارتداد الأمامي",
+    "rearRebound": "الارتداد الخلفي",
+    "frontFastRebound": "الارتداد السريع الأمامي",
+    "rearFastRebound": "الارتداد السريع الخلفي",
+    "frontThirdSpring": "النابض الثالث الأمامي",
+    "rearThirdSpring": "النابض الثالث الخلفي",
+    "frontThirdBump": "انضغاط النابض الثالث الأمامي",
+    "rearThirdBump": "انضغاط النابض الثالث الخلفي",
+    "frontThirdFastBump": "الانضغاط السريع للنابض الثالث الأمامي",
+    "rearThirdFastBump": "الانضغاط السريع للنابض الثالث الخلفي",
+    "frontThirdRebound": "ارتداد النابض الثالث الأمامي",
+    "rearThirdRebound": "ارتداد النابض الثالث الخلفي",
+    "frontThirdFastRebound": "الارتداد السريع للنابض الثالث الأمامي",
+    "rearThirdFastRebound": "الارتداد السريع للنابض الثالث الخلفي",
+    "frontCornerPackers": "حشوات الزوايا الأمامية",
+    "rearCornerPackers": "حشوات الزوايا الخلفية",
+    "frontWheelRate": "صلابة النوابض الأمامية",
+    "rearWheelRate": "صلابة النوابض الخلفية",
+    "frontBumpStopRate": "صلابة مصدات الانضغاط الأمامية",
+    "rearBumpStopRate": "صلابة مصدات الانضغاط الخلفية",
+    "frontCamber": "زاوية الميلان الأمامية",
+    "rearCamber": "زاوية الميلان الخلفية",
+    "frontLeftPressure": "ضغط الإطار الأمامي الأيسر",
+    "frontRightPressure": "ضغط الإطار الأمامي الأيمن",
+    "rearLeftPressure": "ضغط الإطار الخلفي الأيسر",
+    "rearRightPressure": "ضغط الإطار الخلفي الأيمن",
+    "tyreBlankets": "بطانيات الإطارات",
+    "detached": "مفصول",
+    "toeIn": "{angle} للداخل",
+    "toeOut": "{angle} للخارج",
+    "dialOff": "OFF",
+    "blanketsOn": "مفعّل",
+    "blanketsOff": "معطّل",
+    "engineMapMax": "1 · أقصى قوة",
+    "engineMapRace": "2 · سباق",
+    "engineMapSmooth": "3 · سلس",
+    "engineMapLean": "4 · اقتصادي",
+    "engineMapSave": "5 · توفير"
+  },
+  "setupGroups": {
+    "fuel": "الوقود",
+    "aerodynamics": "الديناميكا الهوائية",
+    "aerodynamicsShort": "الهوائية",
+    "transmission": "ناقل الحركة",
+    "transmissionShort": "الناقل",
+    "suspensionGeometry": "هندسة التعليق",
+    "suspensionGeometryShort": "الهندسة",
+    "suspension": "نظام التعليق",
+    "suspensionShort": "التعليق",
+    "dampers": "المخمدات",
+    "brakes": "المكابح",
+    "tyres": "الإطارات",
+    "electronics": "الإلكترونيات",
+    "electronicsShort": "إلكترون.",
+    "mechanicalGrip": "التماسك الميكانيكي",
+    "mechanicalGripShort": "ميكانيكي",
+    "thirdElements": "العناصر الثالثة",
+    "thirdElementsShort": "الثالثة",
+    "aero": "الهوائية",
+    "fuelShort": "الوقود",
+    "dampersShort": "المخمدات",
+    "brakesShort": "المكابح",
+    "tyresShort": "الإطارات",
+    "aeroShort": "الهوائية"
+  },
+  "setupFx": {
+    "frontWing": {
+      "more": "تماسك أمامي أعلى عند السرعة، مؤخرة أخف",
+      "less": "مؤخرة أكثر ثباتًا، قصور توجيه أكبر عند السرعة"
+    },
+    "rearWing": {
+      "more": "ثبات وجر أفضل، سحب هوائي أكبر",
+      "less": "أسرع على المستقيمات، مؤخرة متقلبة"
+    },
+    "diffOn": {
+      "more": "دفع أقوى، فرط توجيه مع التسارع",
+      "less": "أخف على الخلفيتين، انزلاق للعجلة الداخلية"
+    },
+    "diffOff": {
+      "more": "ثبات عند رفع القدم، مقاومة لدخول المنعطف",
+      "less": "التفاف أفضل عند الدخول، قد تبدو السيارة غير مستقرة"
+    },
+    "engineBraking": {
+      "more": "كبح خلفي أقوى عند رفع القدم، التفاف أفضل",
+      "less": "أهدأ عند رفع القدم، مسافة توقف أطول"
+    },
+    "camberFront": {
+      "more": "تماسك أمامي أكبر في منتصف المنعطف",
+      "less": "كبح أفضل وتآكل متوازن"
+    },
+    "camberRear": {
+      "more": "تماسك جانبي خلفي أكبر",
+      "less": "جر أفضل عند الخروج من المنعطفات البطيئة"
+    },
+    "toeFront": {
+      "more": "ثبات أكبر على المستقيمات، استجابة دخول أبطأ",
+      "less": "دخول أحدّ للمنعطفات، حساسية أعلى عند السرعة"
+    },
+    "toeRear": {
+      "more": "مؤخرة أكثر ثباتًا، سحب هوائي أكبر قليلًا",
+      "less": "التفاف أكبر، ثبات أقل"
+    },
+    "springFront": {
+      "more": "استجابة أحدّ، تماسك أقل على المطبات",
+      "less": "تماسك أمامي أكبر فوق المطبات"
+    },
+    "springRear": {
+      "more": "التفاف أكبر، جر أقل",
+      "less": "جر أفضل، التفاف أبطأ"
+    },
+    "arbFront": {
+      "more": "تغيير اتجاه أسرع، قصور توجيه",
+      "less": "تماسك أمامي أكبر في منتصف المنعطف"
+    },
+    "arbRear": {
+      "more": "التفاف أكبر، جر أقل عند الخروج",
+      "less": "تماسك خلفي أكبر، قصور توجيه أكبر"
+    },
+    "rideFront": {
+      "more": "أكثر أمانًا فوق الأرصفة، قوة سفلية أقل",
+      "less": "قوة سفلية أكبر، احتمال فقدان تماسك الأرضية"
+    },
+    "rideRear": {
+      "more": "ميلان أمامي أكبر: مؤخرة أحدّ وأكثر تحررًا",
+      "less": "مؤخرة أهدأ، قصور توجيه أكبر"
+    },
+    "brakePressure": {
+      "more": "توقف أقصر، انغلاق أسرع للعجلات",
+      "less": "تحكم أسهل بالدواسة، توقف أطول"
+    },
+    "bias": {
+      "more": "كبح مستقر، الأماميتان تنغلقان أولًا",
+      "less": "التفاف عند الدخول، الخلفيتان تنغلقان أولًا"
+    },
+    "migration": {
+      "more": "التفاف أفضل أثناء الكبح التدريجي",
+      "less": "ثبات التوازن أثناء تحرير المكابح"
+    },
+    "coldPsi": {
+      "more": "تسخين أسرع، ذروة تماسك أقل",
+      "less": "تماسك أعلى، تسخين أبطأ"
+    },
+    "blankets": {
+      "more": "إطارات دافئة منذ المنعطف الأول",
+      "less": "باردة عند الخروج من المرآب، سخّنها في لفة الخروج"
+    },
+    "tc": {
+      "more": "انزلاق عجلات أقل، خروج أبطأ",
+      "less": "خروج أسرع، احتمال انزلاق المؤخرة"
+    },
+    "tc2": {
+      "more": "قطع حاد: يضبط الانزلاق بقوة",
+      "less": "قطع ناعم: يحافظ على دفع أكبر"
+    },
+    "abs": {
+      "more": "دون انغلاق، مسافة توقف أطول",
+      "less": "توقف أقصر إن كنت دقيقًا"
+    },
+    "map": {
+      "more": "تسارع أنعم، قوة أقل",
+      "less": "قوة كاملة، استجابة تسارع أحدّ"
+    },
+    "steerRatio": {
+      "more": "توجيه أبطأ، زاوية أقل",
+      "less": "توجيه أسرع، زاوية أكبر"
+    },
+    "wheelRateFront": {
+      "more": "مقدمة أحدّ، تماسك أقل على المطبات",
+      "less": "تماسك أمامي أكبر فوق المطبات"
+    },
+    "wheelRateRear": {
+      "more": "التفاف أكبر، جر أقل",
+      "less": "جر أفضل، التفاف أبطأ"
+    },
+    "bumpStopRate": {
+      "more": "أكثر صلابة عند بلوغ المصدات",
+      "less": "ملامسة أنعم للمصدات"
+    },
+    "bumpStopRange": {
+      "more": "مدى حركة أكبر قبل المصدات",
+      "less": "يبلغ المصدات أسرع، هيكل أكثر استواءً"
+    },
+    "preload": {
+      "more": "ثبات في المنعطفات السريعة، قصور في البطيئة",
+      "less": "التفاف عند الدخول، خروج أكثر تحررًا"
+    },
+    "bump": {
+      "more": "حركة هيكل أقل، قسوة أكبر على المطبات",
+      "less": "يمتص المطبات، حركة هيكل أكبر"
+    },
+    "fastBump": {
+      "more": "صلب فوق الأرصفة",
+      "less": "يمتص الأرصفة"
+    },
+    "rebound": {
+      "more": "عودة وزن أبطأ، خروج أكثر ثباتًا",
+      "less": "تتبع أفضل للطريق من الإطارات"
+    },
+    "fastRebound": {
+      "more": "عودة العجلة للأسفل أبطأ بعد الأرصفة",
+      "less": "عودة العجلة سريعًا للأسفل"
+    },
+    "ductFront": {
+      "more": "مكابح أمامية أبرد، سحب هوائي أكبر",
+      "less": "مكابح أمامية أسخن، سحب هوائي أقل"
+    },
+    "ductRear": {
+      "more": "مكابح خلفية أبرد، سحب هوائي أكبر",
+      "less": "مكابح خلفية أسخن، سحب هوائي أقل"
+    },
+    "radiator": {
+      "more": "محرك أبرد، سحب هوائي أكبر",
+      "less": "سحب هوائي أقل، حرارة محرك أعلى"
+    },
+    "gearSet": {
+      "more": "تروس طويلة: سرعة قصوى أعلى على المستقيمات",
+      "less": "تروس قصيرة: تسارع أسرع من المنعطفات البطيئة"
+    },
+    "heaveSpring": {
+      "more": "هيكل أكثر استواءً عند السرعة، أقسى على المطبات",
+      "less": "يمتص المطبات، حركة أكبر للأرضية"
+    },
+    "heavePacker": {
+      "more": "مدى حركة أكبر قبل الحشوة",
+      "less": "الحشوة تسند الأرضية مبكرًا"
+    },
+    "cornerPacker": {
+      "more": "تعمل المصدات مبكرًا، استواء أكبر في المنعطفات",
+      "less": "حركة حرة أكبر، ميلان أكبر للهيكل"
+    },
+    "tcSlipAngle": {
+      "more": "يقطع الطاقة مبكرًا مع انزلاق المؤخرة",
+      "less": "يسمح بانزلاق أكبر للمؤخرة مع التسارع"
+    },
+    "motorDeploy": {
+      "more": "دفع كهربائي أقوى، يستهلك البطارية أسرع",
+      "less": "يوفّر الشحن، دفع أقل"
+    },
+    "regen": {
+      "more": "شحن أكبر، كبح خلفي أقوى",
+      "less": "مؤخرة أهدأ عند الكبح، شحن أقل"
+    },
+    "fuel": {
+      "more": "فترة قيادة أطول، وزن أثقل وأبطأ",
+      "less": "أخف وأسرع، فترة قيادة أقصر"
+    }
+  },
+  "padFeel": {
+    "smooth": "سلس",
+    "smoothDetail": "توجيه أبطأ وأهدأ",
+    "default": "افتراضي",
+    "defaultDetail": "استجابة متوازنة",
+    "sharp": "حاد",
+    "sharpDetail": "دخول سريع للمنعطف"
+  },
+  "tyres": {
+    "street": "إطارات طرقية"
+  },
+  "setupShare": {
+    "aeroLow": "سحب هوائي منخفض",
+    "aeroBalanced": "انسيابية متوازنة",
+    "aeroHigh": "قوة سفلية عالية",
+    "soft": "ناعم",
+    "medium": "متوسط",
+    "hard": "صلب",
+    "intermediate": "وسيط",
+    "wet": "مبلل",
+    "chassisChanges": "{count, plural, zero {لا تعديلات على الهيكل} one {تعديل واحد على الهيكل} two {تعديلان على الهيكل} few {# تعديلات على الهيكل} many {# تعديلًا على الهيكل} other {# تعديل على الهيكل}}",
+    "brakeBias": "BB {bias}%",
+    "baseline": "الإعداد الأساسي",
+    "factoryLowDrag": "سحب هوائي منخفض"
+  },
+  "trackLimits": {
+    "flashbackDeleted": "Flashback · أُلغيت اللفة",
+    "currentAndNextInvalid": "أُلغيت اللفة الحالية والتالية",
+    "currentInvalid": "أُلغيت اللفة الحالية",
+    "courseCutDeleted": "اختصار المسار · أُلغيت اللفة",
+    "penaltyOnceBack": "عقوبة زمنية فور العودة إلى الحلبة",
+    "leftLapRoad": "الخروج عن مسار اللفة",
+    "noTimeGained": "لم يتحقق مكسب زمني",
+    "courseCutPenalty": "اختصار المسار · عقوبة زمنية +{seconds}s",
+    "secondsGained": "مكسب {seconds} s",
+    "lapDeleted": "أُلغيت اللفة",
+    "wallDeleted": "ملامسة الجدار · أُلغيت اللفة",
+    "rodeWallBeforeLine": "الاحتكاك بالجدار قبل خط النهاية",
+    "limitsDeleted": "حدود الحلبة · أُلغيت اللفة",
+    "offBeforeLine": "خروج عن المسار قبل خط النهاية",
+    "nextLapToo": "واللفة التالية أيضًا",
+    "offTrack": "خارج الحلبة",
+    "touchedBarrier": "ملامسة الحاجز",
+    "rodeWall": "الاحتكاك بالجدار",
+    "positionHandedBack": "تمت إعادة المركز",
+    "advantageGivenBack": "تم التنازل عن الأفضلية",
+    "noFurtherAction": "لا إجراء إضافيًا",
+    "trackLimits": "حدود الحلبة",
+    "noAdvantage": "دون أفضلية · لا إجراء",
+    "timePenalty": "عقوبة زمنية +{seconds}s",
+    "limitsGained": "حدود الحلبة · مكسب {seconds} s",
+    "limitsCutMetres": "حدود الحلبة · اختصار {metres} م",
+    "limitsMajorCut": "حدود الحلبة · اختصار كبير",
+    "why": "{reason, select, illegal_overtake {تجاوز غير قانوني · لم يُعَد المركز} corner_cut {اختصار منعطف} not_lifted {عدم رفع القدم عن التسارع} other {مكسب زمني}}",
+    "limitsWhy": "حدود الحلبة · {reason, select, illegal_overtake {تجاوز غير قانوني · لم يُعَد المركز} corner_cut {اختصار منعطف} not_lifted {عدم رفع القدم عن التسارع} other {مكسب زمني}}",
+    "warningCount": "حدود الحلبة · تحذير {count}/{max}",
+    "points": "{points} نقطة",
+    "strikes": "{count, plural, zero {لا مخالفات} one {مخالفة واحدة} two {مخالفتان} few {# مخالفات} many {# مخالفة} other {# مخالفة}}",
+    "disqualified": "مستبعد · حدود الحلبة",
+    "limitsPoints": "حدود الحلبة · {points}",
+    "blackWhiteFlag": "علم أبيض وأسود",
+    "nextPenalty": "{why} · التالية +{seconds} s",
+    "nextDisqualification": "{why} · التالية استبعاد",
+    "warning": "حدود الحلبة · تحذير",
+    "warningDetail": "{why} · {points}"
+  },
+  "flags": {
+    "yellow": "علم أصفر",
+    "trackClear": "المسار خالٍ",
+    "carStopped": "سيارة متوقفة أمامك",
+    "slowCar": "سيارة بطيئة أمامك",
+    "wrongWay": "سيارة تسير بالاتجاه المعاكس",
+    "carOffTrack": "سيارة خارج المسار أمامك",
+    "incident": "حادث أمامك"
+  },
+  "connection": {
+    "raceClosed": "هذا السباق على وشك البدء. ما زال بإمكانك اللحاق بالسباق التالي.",
+    "raceFull": "هذا السباق ممتلئ. انضم إلى السباق التالي.",
+    "raceStarted": "بدأ هذا السباق بدونك. انضم إلى السباق التالي.",
+    "raceTaken": "أنت مشارك بالفعل في هذا السباق في نافذة أخرى.",
+    "raceBad": "تعذر الانضمام إلى السباق. أعد تحميل اللعبة وحاول مجددًا.",
+    "raceUpdate": "تم تحديث LibreCorsa. أعد تحميل الصفحة للانضمام إلى السباق.",
+    "versionMismatch": "تعمل هذه الغرفة بإصدار آخر من LibreCorsa. يحتاج الجميع فيها إلى إعادة تحميل الصفحة.",
+    "roomServerUnreachable": "تعذر الوصول إلى خادم الغرف. تحقق من اتصالك وأعد المحاولة، أو استخدم الاتصال اليدوي ضمن متقدم.",
+    "idle": "استضف غرفة وأرسل الرابط، أو انضم باستخدام رمز صديق.",
+    "openingRoom": "جارٍ فتح الغرفة {code}…",
+    "reconnectingRoom": "جارٍ إعادة الاتصال بالغرفة {code}…",
+    "roomOpen": "الغرفة {code} مفتوحة • بانتظار اللاعبين",
+    "sessionActive": "معرّف الجلسة هذا نشط بالفعل في الغرفة. انتظر لحظة ثم حاول الاستضافة مجددًا.",
+    "roomOpenElsewhere": "الغرفة {code} مفتوحة بالفعل على جهاز آخر. اضغط انضمام للتسابق فيها، أو استضف غرفة جديدة.",
+    "joiningRoom": "جارٍ الانضمام إلى الغرفة {code}…",
+    "roomNotFound": "تعذر العثور على الغرفة {code}. تحقق من الرمز، واطلب من المضيف إبقاء اللعبة مفتوحة على الشاشة.",
+    "playerIdTaken": "معرّف اللاعب هذا موجود بالفعل في الغرفة. انتظر لحظة ثم حاول الانضمام مجددًا.",
+    "roomFull": "الغرفة {code} ممتلئة.",
+    "connectedPlayers": "{count, plural, zero {لا يوجد لاعبون متصلون} one {متصل بلاعب واحد} two {متصل بلاعبين اثنين} few {متصل بـ # لاعبين} many {متصل بـ # لاعبًا} other {متصل بـ # لاعب}}",
+    "peerFailed": "تعذر الاتصال باللاعب الآخر. أعد المحاولة، أو استخدم شبكة Wi-Fi نفسها.",
+    "peerBlocked": "تعذر الاتصال: إحدى شبكتيكما تحظر الروابط المباشرة. استخدم شبكة Wi-Fi نفسها، أو جرّب شبكة أخرى.",
+    "lostHost": "فُقد الاتصال بالمضيف. انضم مجددًا.",
+    "hostingTabs": "استضافة سباق بين علامات تبويب هذا المتصفح",
+    "playerLeft": "غادر اللاعب. أنشئ عرض اتصال جديدًا لإعادة الاتصال.",
+    "connected": "متصل",
+    "joiningRace": "جارٍ الانضمام إلى السباق التالي…",
+    "inNextRace": "مسجّل في السباق التالي",
+    "makingOffer": "جارٍ إنشاء عرض اتصال…",
+    "offerReady": "العرض جاهز. أرسله إلى اللاعب الآخر، ثم الصق رده.",
+    "answerReady": "الرد جاهز. أعد إرساله إلى المضيف.",
+    "answerAccepted": "تم قبول الرد • جارٍ الاتصال…",
+    "raceServerUnreachable": "تعذر الوصول إلى خادم السباقات. تحقق من اتصالك وأعد المحاولة.",
+    "racesOff": "السباقات المجدولة غير متاحة حاليًا.",
+    "raceLost": "فُقد الاتصال بالسباق.",
+    "ready": "جاهز. تتعرف علامات التبويب في هذا المتصفح على بعضها تلقائيًا؛ وتنضم الأجهزة الأخرى برمز الغرفة."
+  },
+  "downloads": {
+    "windowsSummary": "تطبيق سطح مكتب بأولوية للبطاقة الرسومية المنفصلة، ودعم صامت لـ WebHID لمقاود السباق وDualSense، دون تقييد في الخلفية.",
+    "windowsInstallNote": "غير موقّع حاليًا لحين اكتمال إعداد SignPath Foundation. إذا أوقفه SmartScreen، انقر على «مزيد من المعلومات» ثم «التشغيل على أي حال».",
+    "windowsStatusLabel": "غير موقّع",
+    "windowsX64Label": "تنزيل .exe",
+    "windowsX64Detail": "مثبّت Windows x64",
+    "macosSummary": "تطبيق سطح مكتب بأولوية للبطاقة الرسومية المنفصلة، ودعم صامت لـ WebHID للمقاود وDualSense، دون تقييد في الخلفية.",
+    "macosInstallNote": "نسخة غير موقّعة. اسمح بتشغيلها من «إعدادات النظام > الخصوصية والأمن»، أو أزل الحجر الصحي بعد النسخ إلى مجلد «التطبيقات»:",
+    "macosStatusLabel": "غير موقّع",
+    "macosArm64Label": "Apple Silicon (.dmg)",
+    "macosArm64Detail": "أجهزة Mac بشرائح M1–M4",
+    "macosX64Label": "Intel (.dmg)",
+    "macosX64Detail": "أجهزة Mac بمعالجات Intel x64",
+    "linuxSummary": "حزمة AppImage محمولة بدعم صامت لـ WebHID لمقاود السباق وDualSense، دون تقييد في الخلفية.",
+    "linuxInstallNote": "اجعل ملف AppImage قابلًا للتنفيذ ثم شغّله (يتطلب FUSE2 / libfuse2 على التوزيعات الأقدم):",
+    "linuxX64Label": "تنزيل .AppImage",
+    "linuxX64Detail": "Linux x64",
+    "androidSummary": "تطبيق Trusted Web Activity بملء الشاشة مع تحكم غامر ثابت وAndroid Game Mode واختصارات للشاشة الرئيسية. يتطلب Android 7+ وChrome.",
+    "androidInstallNote": "ملف APK موقّع للإصدار. اسمح بالتثبيت من متصفحك عند الطلب؛ يتحقق التطبيق من librecorsa.org ويفتح دون شريط عنوان.",
+    "androidStatusLabel": "APK موقّع",
+    "androidApkLabel": "تنزيل .apk",
+    "androidApkDetail": "Android 7+ (شامل)"
+  },
+  "loading": {
+    "circuit": "الحلبة",
+    "car": "السيارة",
+    "opponents": "المنافسون",
+    "shaders": "المظلّلات"
+  },
+  "session": {
+    "wheelDisconnected": "انقطع اتصال عجلة القيادة. أعد توصيلها، أو استأنف القيادة بوسائل التحكم المتاحة.",
+    "bigJumpStart": "انطلاق مبكر · خروج واضح عن مربع الانطلاق",
+    "jumpStart": "انطلاق مبكر",
+    "clutchGearUp": "رفع الترس",
+    "clutchPaddle": "عتلة رفع الترس"
+  },
+  "driverKey": {
+    "notAKeyFile": "هذا الملف ليس ملف مفتاح سائق",
+    "blocked": "يمنع هذا المتصفح حفظ الملف"
+  },
+  "simulator": {
+    "formulaTeamCars": "سيارات فرق الفورمولا",
+    "lapNoLongerSaved": "لم تعد هذه اللفة محفوظة هنا",
+    "nameNotChanged": "تعذر تغيير الاسم",
+    "setupLoadFailed": "تعذر تحميل إعداد {driver}، أعد المحاولة",
+    "setupMissing": "لا يوجد إعداد سيارة محفوظ مع لفة {driver}",
+    "setupApplied": "تم تطبيق إعداد {driver} ({summary})",
+    "keySaved": "تم حفظ المفتاح. يمكن لأي شخص يمتلك الملف النشر باسمك.",
+    "noKeyYet": "لا يوجد مفتاح بعد: أول عملية رفع تنشئه تلقائيًا.",
+    "keyImportedFor": "تم استيراد المفتاح باسم {name}. ستستخدمه عمليات الرفع من هنا.",
+    "keyImported": "تم استيراد المفتاح. ستستخدمه عمليات الرفع من هنا.",
+    "launchWheel": "اضغط التسارع للانطلاق",
+    "launchWheelSeat": "اضغط التسارع للانطلاق · اضغط مطوّلًا على الكاميرا للمقعد",
+    "launchPad": "{press} للانطلاق",
+    "launchPadSeat": "{press} للانطلاق · اضغط مطوّلًا على {button} للمقعد",
+    "launchTouch": "استمر بالضغط على التسارع للانطلاق",
+    "launchKey": "اضغط مطوّلًا على {key} للانطلاق · Esc القائمة",
+    "noRacesOnHillClimb": "لا توجد سباقات في مسار تسلق الهضاب",
+    "backToRaces": "العودة إلى السباقات"
+  },
+  "telemetryHud": {
+    "menu": "القائمة",
+    "calibratePedals": "معايرة الدواسات",
+    "holdForLightsOut": "اضغط مطوّلًا على التسارع حتى انطفاء الأضواء",
+    "mouseSteering": "التوجيه بالفأرة · {key} للخروج",
+    "keyMenu": "القائمة",
+    "keyCamera": "الكاميرا",
+    "keyLine": "الخط",
+    "keyRestart": "إعادة",
+    "keyBoard": "اللوحة",
+    "keyLights": "الأضواء",
+    "replay": "إعادة العرض"
+  },
+  "trackGate": {
+    "safeStart": "البدء الآمن مفعّل بعد إعادة تعيين البطاقة الرسومية.",
+    "graphicsLow": "ضُبطت الرسوميات على منخفضة بعد إعادة تعيين البطاقة الرسومية.",
+    "loadFailedStaying": "فشل تحميل الحلبة. تبقى {circuit} محددة.",
+    "loadFailedDefault": "فشل تحميل الحلبة. تم تحميل {circuit}."
+  },
+  "minimap": {
+    "map": "خريطة الحلبة",
+    "mapAtTurn": "خريطة الحلبة؛ أنت عند المنعطف {turn}",
+    "facts": "{country} · {length} {unit} · {turns, plural, zero {0 منعطفات} one {منعطف واحد} two {منعطفان} few {# منعطفات} many {# منعطفًا} other {# منعطف}}",
+    "sector": "القطاع {sector}",
+    "elevation": "الارتفاع",
+    "altitude": "ارتفاع {height}",
+    "grade": "الميلان {grade}%",
+    "profileStart": "البداية {height}",
+    "profileStartFinish": "S/F {height}"
+  },
+  "source": {
+    "sourceOf": "مصدر {title}",
+    "source": "المصدر",
+    "reportIssue": "الإبلاغ عن مشكلة"
+  },
+  "playError": {
+    "title": "توقف المحاكي",
+    "body": "تعذر بدء WebGL أو نظام الفيزياء. تحديث المتصفح أو تعريف البطاقة الرسومية أو تفعيل تسريع العتاد يحل المشكلة عادةً.",
+    "detail": "تفاصيل الخطأ",
+    "restart": "إعادة تشغيل المحاكي"
+  },
+  "dash": {
+    "yellowFlag": "علم أصفر"
+  }
+}

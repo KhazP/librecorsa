@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "use-intl/react";
 import { focusOnHover, useFocusNav } from "@/components/menu/useFocusNav";
 import { Icon } from "@/components/ui/icons/Icon";
 import { CHOSEN_PILL, CURSOR_PILL, cx, HOVER_PILL, MOTION, PRESSED_PILL, uiZoomOf } from "@/components/ui/styles";
@@ -62,6 +63,7 @@ export const VenueLayoutPicker: React.FC<VenueLayoutPickerProps> = ({
   bestLapOf,
   onSelect,
 }) => {
+  const tx = useTranslations("home.layoutPicker");
   const [place, setPlace] = useState<Place | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -164,8 +166,8 @@ export const VenueLayoutPicker: React.FC<VenueLayoutPickerProps> = ({
         aria-controls={open ? listId : undefined}
         aria-label={
           chosen
-            ? `${venueName} layout: ${current.layout} (${currentIndex + 1} of ${layouts.length})`
-            : `${venueName}: ${layouts.length} layouts`
+            ? tx("chosen", { venue: venueName, layout: current.layout, index: String(currentIndex + 1), count: String(layouts.length) })
+            : tx("closed", { venue: venueName, count: layouts.length })
         }
         // Spatial arrows/D-pad skip unselected venues' pills so browsing stays one press per card; Tab, click and tap always work
         data-nav-skip={chosen ? undefined : ""}
@@ -178,7 +180,7 @@ export const VenueLayoutPicker: React.FC<VenueLayoutPickerProps> = ({
           }
         }}
         className={cx(
-          "pointer-events-auto group inline-flex h-7 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-lc-nub px-2.5 text-left text-[12px] leading-none font-semibold select-none pointer-coarse:h-9",
+          "pointer-events-auto group inline-flex h-7 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-lc-nub px-2.5 text-start text-[12px] leading-none font-semibold select-none pointer-coarse:h-9",
           chosen || open
             ? "bg-lc-titanium text-lc-chalk inset-ring inset-ring-lc-keyline hover:bg-lc-line"
             : "bg-lc-carbon/90 text-lc-fog inset-ring inset-ring-lc-line backdrop-blur-xs hover:bg-lc-titanium hover:text-lc-chalk hover:inset-ring-lc-keyline",
@@ -203,7 +205,7 @@ export const VenueLayoutPicker: React.FC<VenueLayoutPickerProps> = ({
             </span>
           </>
         ) : (
-          <span className="min-w-0 truncate">{layouts.length} layouts</span>
+          <span className="min-w-0 truncate">{tx("count", { count: layouts.length })}</span>
         )}
         <Icon
           name="expand"
@@ -221,7 +223,7 @@ export const VenueLayoutPicker: React.FC<VenueLayoutPickerProps> = ({
               ref={listRef}
               id={listId}
               role="listbox"
-              aria-label={`${venueName} layouts`}
+              aria-label={tx("list", { venue: venueName })}
               className={cx(
                 "lc-pop-in fixed z-(--z-lc-notice) flex flex-col overflow-hidden rounded-lc-tile border border-white/10 bg-lc-carbon shadow-lc-pop",
                 place.up ? "origin-bottom-left" : "origin-top-left",
@@ -240,7 +242,7 @@ export const VenueLayoutPicker: React.FC<VenueLayoutPickerProps> = ({
                 className="lc-lbl flex shrink-0 items-center justify-between gap-2 border-b border-lc-line/70 px-3 py-2"
               >
                 <span className="min-w-0 truncate">{venueName}</span>
-                <span className="shrink-0 text-lc-fog">{layouts.length} layouts</span>
+                <span className="shrink-0 text-lc-fog">{tx("count", { count: layouts.length })}</span>
               </span>
               <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain p-1.5">
                 {layouts.map((l) => {
@@ -257,7 +259,7 @@ export const VenueLayoutPicker: React.FC<VenueLayoutPickerProps> = ({
                       onPointerEnter={focusOnHover}
                       onClick={() => choose(l.id)}
                       className={cx(
-                        "group flex w-full shrink-0 cursor-pointer items-center gap-2.5 rounded-lc-nub px-2 py-2 text-left pointer-coarse:min-h-12",
+                        "group flex w-full shrink-0 cursor-pointer items-center gap-2.5 rounded-lc-nub px-2 py-2 text-start pointer-coarse:min-h-12",
                         MOTION,
                         isSelected ? CHOSEN_PILL : cx("text-lc-fog", HOVER_PILL),
                         PRESSED_PILL,

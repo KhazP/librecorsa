@@ -7,7 +7,7 @@ The game runs in the browser, so you don't need to download anything. The deskto
 I only publish them in two places:
 
 - [librecorsa.org/download](https://librecorsa.org/download)
-- [GitHub Releases](https://github.com/KhazP/librecorsa/releases), where the download page's links point
+- [GitHub Releases](https://github.com/librecorsa/librecorsa/releases), where the download page's links point
 
 The desktop app checks the same GitHub releases for updates. A copy from anywhere else isn't mine, even if it has the name and the logo.
 

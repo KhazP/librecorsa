@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary", title: `Privacy | ${SITE_NAME}`, description: DESCRIPTION },
 };
 
-const LIST = "lc-body m-0 flex max-w-[68ch] list-disc flex-col gap-3 pl-5 text-[16px] leading-[1.6] marker:text-lc-dim";
+const LIST = "lc-body m-0 flex max-w-[68ch] list-disc flex-col gap-3 ps-5 text-[16px] leading-[1.6] marker:text-lc-dim";
 const B = "font-semibold text-lc-chalk";
 
 export default function PrivacyPage() {
@@ -72,7 +72,11 @@ export default function PrivacyPage() {
             says what you drove with (keyboard, controller, wheel or touch screen), on what (desktop, tablet or phone),
             whether the track was wet, which assists were on and which version of the game you had. Each of these is
             counted on its own, never combined with another or with the circuit or country. The report carries no
-            name, key or id, and it can’t be tied to you or to your other sessions.
+            name, key or id, and it can’t be tied to you or to your other sessions. Besides each circuit’s laps, the
+            site shows two things made from these totals: the hours and laps driven and the number of countries, all
+            added together, on the press page; and the circuits and cars driven most over the last 30 days, as an order
+            with no numbers, in the menus. A circuit or car takes a place in that order only after at least 50
+            sessions.
           </li>
           <li>
             <span className={B}>Live count.</span> While the game is open and its tab is in view, your browser sends an

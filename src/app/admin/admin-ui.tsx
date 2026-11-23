@@ -275,11 +275,11 @@ function TableView({ head, rows }: { head: string[]; rows: { key: string; cells:
     <details className="text-[13px] text-lc-slate">
       <summary className="inline-flex min-h-9 cursor-pointer items-center rounded-lc-nub select-none hover:text-lc-chalk pointer-coarse:min-h-11">Show as a table</summary>
       <div className="mt-2 overflow-x-auto">
-        <table className="w-full min-w-[280px] text-left">
+        <table className="w-full min-w-[280px] text-start">
           <thead>
             <tr>
               {head.map((h, i) => (
-                <th key={h} scope="col" className={cx("lc-lbl py-1.5 pr-3 whitespace-nowrap last:pr-0", i > 0 && "text-right")}>
+                <th key={h} scope="col" className={cx("lc-lbl py-1.5 pe-3 whitespace-nowrap last:pe-0", i > 0 && "text-end")}>
                   {h}
                 </th>
               ))}
@@ -289,7 +289,7 @@ function TableView({ head, rows }: { head: string[]; rows: { key: string; cells:
             {rows.map((r) => (
               <tr key={r.key} className="border-t border-lc-titanium">
                 {r.cells.map((c, i) => (
-                  <td key={i} className={cx("py-1 pr-3 font-normal whitespace-nowrap last:pr-0", i > 0 && "text-right")}>
+                  <td key={i} className={cx("py-1 pe-3 font-normal whitespace-nowrap last:pe-0", i > 0 && "text-end")}>
                     {c}
                   </td>
                 ))}
@@ -394,7 +394,7 @@ export function TrendChart({ days, rows, partialLast, label }: { days: string[];
               </div>
               <div className="relative pt-4">
                 {/* The row's scale: its highest day, on a hairline at the top of the plot */}
-                <span aria-hidden className="lc-mono absolute top-0 right-0 text-[11px] leading-none text-lc-dim">
+                <span aria-hidden className="lc-mono absolute top-0 end-0 text-[11px] leading-none text-lc-dim">
                   {r.format(max)}
                 </span>
                 <Columns values={r.values} max={max} at={cursor.i} partialLast={partialLast} height={44} onAt={(i) => cursor.set(i)} />
@@ -561,7 +561,7 @@ export function AverageList({ rows, scale, overall, empty = "Nothing sent in thi
                 </span>
               </span>
               <span aria-hidden className="relative block h-2 rounded-full bg-lc-titanium">
-                <span className="absolute inset-y-0 left-0 rounded-full bg-lc-fog" style={{ width: at(avg) }} />
+                <span className="absolute inset-y-0 start-0 rounded-full bg-lc-fog" style={{ width: at(avg) }} />
                 <span className="absolute -top-1 -bottom-1 w-0.5 -translate-x-1/2 rounded-full bg-lc-chalk ring-2 ring-lc-carbon" style={{ left: at(overall) }} />
               </span>
             </li>
@@ -628,12 +628,12 @@ export function NumberTable({ head, rows, empty = "Nothing in this range." }: { 
   if (!rows.length) return <p className={NOTE}>{empty}</p>;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[280px] text-left text-[14px]">
+      <table className="w-full min-w-[280px] text-start text-[14px]">
         {head ? (
           <thead>
             <tr>
               {head.map((h, i) => (
-                <th key={h} scope="col" className={cx("lc-lbl pb-2 whitespace-nowrap", i > 0 && "pl-3 text-right")}>
+                <th key={h} scope="col" className={cx("lc-lbl pb-2 whitespace-nowrap", i > 0 && "ps-3 text-end")}>
                   {h}
                 </th>
               ))}
@@ -648,7 +648,7 @@ export function NumberTable({ head, rows, empty = "Nothing in this range." }: { 
                   key={i}
                   title={i === 0 ? (r.title ?? (typeof c === "string" ? c : undefined)) : undefined}
                   // The name takes the room the numbers leave, and is cut short before any number is pushed out
-                  className={cx("py-2", i > 0 ? "lc-data pl-3 text-right whitespace-nowrap text-lc-chalk" : "w-full max-w-0 truncate pr-3 text-lc-fog")}
+                  className={cx("py-2", i > 0 ? "lc-data ps-3 text-end whitespace-nowrap text-lc-chalk" : "w-full max-w-0 truncate pe-3 text-lc-fog")}
                 >
                   {c}
                 </td>

@@ -52,7 +52,7 @@ export function SitePage({
       id={id}
       className={cx("h-dvh overflow-y-auto overscroll-contain bg-lc-void text-lc-chalk", className)}
     >
-      <div className="sr-only focus-within:not-sr-only focus-within:fixed focus-within:top-3 focus-within:left-3 focus-within:z-(--z-lc-notice)">
+      <div className="sr-only focus-within:not-sr-only focus-within:fixed focus-within:top-3 focus-within:start-3 focus-within:z-(--z-lc-notice)">
         <Button href="#content" native variant="secondary" size="sm">
           Skip to content
         </Button>

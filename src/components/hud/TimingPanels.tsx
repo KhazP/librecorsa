@@ -1,7 +1,8 @@
 "use client";
 
-import { activeLapWord } from "@/lib/track-data";
-import React from "react";
+import { getActivePointToPoint } from "@/lib/track-data";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CarTelemetry, RaceStatus, TireCompound } from "@/types/f1";
 import {
   HUD_BEST,
@@ -36,25 +37,36 @@ import { challengePlaceLabel, type ChallengeTarget } from "@/lib/net/challenge-t
 
 
 /** The tower's columns: position, livery bar, driver, gap, last lap against yours (the header and the rows share them) */
-const TOWER_COLS = "grid grid-cols-[22px_4px_1fr_auto_40px] gap-2 pr-2.5 pl-2";
+const TOWER_COLS = "grid grid-cols-[22px_4px_1fr_auto_40px] gap-2 pe-2.5 ps-2";
 
 /**
  * The tower's column names, over `TowerRows`: the gap and last-lap values sit right-aligned under theirs, so the signed
  * last-lap column reads without a tooltip
  */
-export const TowerHeader: React.FC<{ gaps?: "interval" | "leader" }> = ({ gaps = "interval" }) => (
-  <div className={`${TOWER_COLS} items-end pt-2 pb-0.5 leading-[1.2] ${HUD_LBL}`}>
-    <span />
-    <span />
-    <span>Driver</span>
-    <span className="text-right">{gaps === "leader" ? "Gap" : "Interval"}</span>
-    <span className="text-right whitespace-nowrap" title="Their last lap against yours; on your line, against your best">
-      Last
-      <br />
-      vs you
-    </span>
-  </div>
-);
+export const TowerHeader: React.FC<{ gaps?: "interval" | "leader" }> = ({ gaps = "interval" }) => {
+  const tx = useTranslations("hud.timingPanels.tower");
+  const L = useMemo(
+    () => ({
+      driver: tx("driver"),
+      gap: tx("gap"),
+      interval: tx("interval"),
+      lastVsYouTitle: tx("lastVsYouTitle"),
+      lastVsYou: tx.rich("lastVsYou", { br: () => <br /> }),
+    }),
+    [tx]
+  );
+  return (
+    <div className={`${TOWER_COLS} items-end pt-2 pb-0.5 leading-[1.2] ${HUD_LBL}`}>
+      <span />
+      <span />
+      <span>{L.driver}</span>
+      <span className="text-end">{gaps === "leader" ? L.gap : L.interval}</span>
+      <span className="text-end whitespace-nowrap" title={L.lastVsYouTitle}>
+        {L.lastVsYou}
+      </span>
+    </div>
+  );
+};
 
 /**
  * The tower's lines: position, livery bar, driver code with the tyre, fastest-lap and penalty badges, the gap (to the
@@ -67,6 +79,30 @@ export const TowerRows: React.FC<{
   /** Kept for older callers: every tower now sets its rows in `lc-data` */
   mono?: boolean;
 }> = ({ race, gaps = "interval" }) => {
+  // The rows re-render every frame: their words are resolved once per language (the damage ones once per value)
+  const tx = useTranslations("hud.timingPanels.tower");
+  const L = useMemo(() => {
+    const damaged = new Map<number, { title: string; label: string }>();
+    return {
+      fastestLap: tx("fastestLap"),
+      fastestLapShort: tx("fastestLapShort"),
+      finished: tx("finished"),
+      out: tx("out"),
+      leader: tx("leader"),
+      lead: tx("lead"),
+      lastVsBestTitle: tx("lastVsBestTitle"),
+      lastVsTheirsTitle: tx("lastVsTheirsTitle"),
+      personalBest: tx("personalBest"),
+      damaged: (percent: number) => {
+        let d = damaged.get(percent);
+        if (!d) {
+          d = { title: tx("damagedTitle", { percent }), label: tx("damagedLabel", { percent }) };
+          damaged.set(percent, d);
+        }
+        return d;
+      },
+    };
+  }, [tx]);
   const st = race.standings;
   const meIdx = st.findIndex((e) => e.isPlayer);
   const me = meIdx >= 0 ? st[meIdx] : undefined;
@@ -111,8 +147,8 @@ export const TowerRows: React.FC<{
               <span className="truncate">{e.driverCode}</span>
               {e.compound ? <CompoundGlyph compound={e.compound} size={14} /> : null}
               {purple ? (
-                <Badge tone="best" variant="solid" size="hud" title="Fastest lap" aria-label="Fastest lap">
-                  FL
+                <Badge tone="best" variant="solid" size="hud" title={L.fastestLap} aria-label={L.fastestLap}>
+                  {L.fastestLapShort}
                 </Badge>
               ) : null}
               {e.dq ? (
@@ -120,28 +156,28 @@ export const TowerRows: React.FC<{
               ) : e.penaltyS ? (
                 <PenaltyBadge penalty={{ kind: "time", seconds: Math.round(e.penaltyS) }} size="hud" variant="solid" />
               ) : null}
-              {e.finished ? <FlagIcon flag="chequered" size={14} label="Finished" /> : null}
+              {e.finished ? <FlagIcon flag="chequered" size={14} label={L.finished} /> : null}
               {!e.retired && e.damage !== undefined && e.damage >= 0.15 ? (
                 <span
                   className={`inline-flex shrink-0 ${e.isPlayer ? "" : e.damage >= 0.6 ? "text-lc-loss" : "text-lc-caution"}`}
-                  title={`Damaged (${Math.round(e.damage * 100)}%)`}
+                  title={L.damaged(Math.round(e.damage * 100)).title}
                 >
-                  <Icon name="damage" size="xs" className="size-3" label={`Damaged, ${Math.round(e.damage * 100)}%`} />
+                  <Icon name="damage" size="xs" className="size-3" label={L.damaged(Math.round(e.damage * 100)).label} />
                 </span>
               ) : null}
             </span>
             <span className={`text-[12px] ${e.retired ? (e.isPlayer ? "" : "text-lc-loss") : e.isPlayer ? "" : i === 0 ? "text-lc-fog" : "text-lc-slate"}`}>
-              {e.retired ? "Out" : gap === null ? (gaps === "leader" ? "Leader" : "Lead") : `+${formatGap(gap)}`}
+              {e.retired ? L.out : gap === null ? (gaps === "leader" ? L.leader : L.lead) : `+${formatGap(gap)}`}
             </span>
             <span
-              className="text-right text-[10px]"
+              className="text-end text-[10px]"
               style={{ color: e.isPlayer && lastD !== null ? "var(--color-lc-void)" : lastColor, opacity: lastD === null ? 0.5 : 1 }}
-              title={e.isPlayer ? "Last lap against your best" : "Their last lap against yours"}
+              title={e.isPlayer ? L.lastVsBestTitle : L.lastVsTheirsTitle}
             >
               {lastD === null
                 ? ""
                 : e.isPlayer && lastD <= 0.0005
-                  ? "PB"
+                  ? L.personalBest
                   : tie
                     ? "0.00"
                     : `${lastD > 0 ? "+" : "−"}${Math.abs(lastD).toFixed(2)}`}
@@ -154,25 +190,33 @@ export const TowerRows: React.FC<{
 };
 
 /** Race order (LibreCorsa telemetry timing tower): position, class/livery bar, driver code, gaps and last laps */
-export const TimingTower: React.FC<{ race: RaceStatus; trackCode?: string; gaps?: "interval" | "leader" }> = ({ race, trackCode, gaps }) => (
-  <section aria-label="Timing tower" className={`w-[264px] overflow-hidden rounded-lc-tile ${HUD_GLASS}`}>
-    {/* Pitboard header: mark, lap of laps, position and track code */}
-    <div className="flex h-11 items-center gap-2.5 rounded-t-lc-tile rounded-b-lc-row bg-lc-chalk pr-3 pl-2 text-lc-void">
-      <LibreCorsaMark className="h-7 w-7 shrink-0" />
-      <span className="lc-disp flex-1 text-[18px] leading-none">
-        Lap {race.lap}
-        {race.totalLaps ? <span className="opacity-40">/{race.totalLaps}</span> : null}
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <PositionBadge position={race.position} player size="sm" />
-        <span className="lc-data text-[11px] text-lc-void/60">/{race.fieldSize}</span>
-      </span>
-      {trackCode ? <span className={`${HUD_LBL} text-lc-void/60`}>{trackCode}</span> : null}
-    </div>
-    <TowerHeader gaps={gaps} />
-    <TowerRows race={race} gaps={gaps} />
-  </section>
-);
+export const TimingTower: React.FC<{ race: RaceStatus; trackCode?: string; gaps?: "interval" | "leader" }> = ({ race, trackCode, gaps }) => {
+  const tx = useTranslations("hud.timingPanels.tower");
+  const region = useMemo(() => tx("region"), [tx]);
+  const lapText = useMemo(
+    () =>
+      race.totalLaps
+        ? tx.rich("lapOf", { lap: race.lap, total: race.totalLaps, dim: (chunks) => <span className="opacity-40">{chunks}</span> })
+        : tx("lap", { lap: race.lap }),
+    [tx, race.lap, race.totalLaps]
+  );
+  return (
+    <section aria-label={region} className={`w-[264px] overflow-hidden rounded-lc-tile ${HUD_GLASS}`}>
+      {/* Pitboard header: mark, lap of laps, position and track code */}
+      <div className="flex h-11 items-center gap-2.5 rounded-t-lc-tile rounded-b-lc-row bg-lc-chalk pe-3 ps-2 text-lc-void">
+        <LibreCorsaMark className="h-7 w-7 shrink-0" />
+        <span className="lc-disp flex-1 text-[18px] leading-none">{lapText}</span>
+        <span className="inline-flex items-center gap-1">
+          <PositionBadge position={race.position} player size="sm" />
+          <span className="lc-data text-[11px] text-lc-void/60">/{race.fieldSize}</span>
+        </span>
+        {trackCode ? <span className={`${HUD_LBL} text-lc-void/60`}>{trackCode}</span> : null}
+      </div>
+      <TowerHeader gaps={gaps} />
+      <TowerRows race={race} gaps={gaps} />
+    </section>
+  );
+};
 
 interface LapPanelProps {
   telemetry: CarTelemetry;
@@ -201,17 +245,35 @@ function sectorCells(telemetry: CarTelemetry) {
 
 /** Current lap time, live delta bar & badge, 3-sector telemetry cells, and last / best lap comparison */
 export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant = "full", lapInvalid }) => {
+  // The panel re-renders every frame: its words are resolved once per language (the counter once per lap)
+  const tx = useTranslations("hud.timingPanels.lap");
+  const L = useMemo(
+    () => ({
+      region: tx("region"),
+      outLap: tx("outLap"),
+      sectors: [1, 2, 3].map((sector) => tx("sector", { sector })),
+      last: tx("last"),
+      best: tx("best"),
+      noRefLap: tx("noRefLap"),
+      lastLap: tx("lastLap"),
+      bestLap: tx("bestLap"),
+    }),
+    [tx]
+  );
   const sectors = sectorCells(telemetry);
   const lap = Math.max(1, telemetry.lapCount);
+  // A point-to-point course counts runs, a circuit laps
+  const lapKind = getActivePointToPoint() ? "run" : "lap";
+  const lapCounter = useMemo(() => tx("counter", { kind: lapKind, lap }), [tx, lapKind, lap]);
   // On the out-lap no lap is timed yet: the clock holds at zero and the counter says so
-  const lapWord = telemetry.outLap ? "Out lap" : `${activeLapWord()} ${lap}`;
+  const lapWord = telemetry.outLap ? L.outLap : lapCounter;
   // A cut lap is invalid: the clock shows it in the loss colour, with the word, until the next lap starts
   const timeColor = lapInvalid ? HUD_LOSS : "var(--color-lc-chalk)";
 
   if (variant === "minimal") {
     return (
       <div className="flex flex-col items-start gap-1.5">
-        <section aria-label="Lap" className={`flex items-center gap-3 rounded-lc-tile py-1.5 pr-4 pl-1.5 ${HUD_GLASS}`}>
+        <section aria-label={L.region} className={`flex items-center gap-3 rounded-lc-tile py-1.5 pe-4 ps-1.5 ${HUD_GLASS}`}>
           <span className="lc-data inline-flex h-9 items-center rounded-lc-row bg-lc-titanium px-3 text-[12px] tracking-[0.1em] text-lc-chalk uppercase">
             {lapWord}
           </span>
@@ -225,17 +287,17 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
           {sectors.map((s) => (
             <span key={s.sec} className="inline-flex items-center gap-1">
               <span className="h-1.5 w-3 rounded-full" style={{ backgroundColor: s.color }} />
-              <span style={{ color: s.active ? HUD_INFO : undefined }}>S{s.sec}</span>
+              <span style={{ color: s.active ? HUD_INFO : undefined }}>{L.sectors[s.sec - 1]}</span>
               <span className={s.done ? "text-lc-chalk" : ""}>{s.done ? formatSectorTime(s.t) : NO_TIME}</span>
               {s.mark ? <LapMarkGlyph mark={s.mark} /> : null}
             </span>
           ))}
           {deltaS !== null ? <DeltaBadge seconds={deltaS} digits={deltaDigits(deltaS)} size="hud" /> : null}
           <span className="inline-flex items-baseline gap-1">
-            <span className={HUD_LBL}>Last</span> <span className="text-lc-chalk/90">{formatLapTime(telemetry.lastLapTimeMs)}</span>
+            <span className={HUD_LBL}>{L.last}</span> <span className="text-lc-chalk/90">{formatLapTime(telemetry.lastLapTimeMs)}</span>
           </span>
           <span className="inline-flex items-baseline gap-1">
-            <span className={HUD_LBL}>Best</span>
+            <span className={HUD_LBL}>{L.best}</span>
             <span style={{ color: telemetry.bestLapTimeMs ? HUD_BEST : undefined }}>{formatLapTime(telemetry.bestLapTimeMs)}</span>
           </span>
         </div>
@@ -247,7 +309,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
   const deltaNorm = deltaS !== null ? Math.max(-1, Math.min(1, deltaS / 1.0)) : 0;
 
   return (
-    <section aria-label="Lap" className={`w-[256px] rounded-lc-card p-3.5 ${HUD_GLASS}`}>
+    <section aria-label={L.region} className={`w-[256px] rounded-lc-card p-3.5 ${HUD_GLASS}`}>
       {/* Header: lap counter and live delta pill */}
       <div className="flex items-center justify-between gap-2">
         <span className="lc-data inline-flex items-center gap-2 text-[13px] tracking-[0.1em] text-lc-chalk uppercase">
@@ -256,7 +318,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
         {deltaS !== null ? (
           <DeltaBadge seconds={deltaS} digits={deltaDigits(deltaS)} size="sm" variant="solid" />
         ) : (
-          <span className={HUD_LBL}>No ref lap</span>
+          <span className={HUD_LBL}>{L.noRefLap}</span>
         )}
       </div>
 
@@ -288,7 +350,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
           <div key={s.sec} className="rounded-lc-nub bg-white/5 px-2 py-1.5">
             <div className="h-1 rounded-full" style={{ backgroundColor: s.color }} />
             <div className={`${HUD_LBL} mt-1.25`} style={s.active ? { color: HUD_INFO } : undefined}>
-              S{s.sec}
+              {L.sectors[s.sec - 1]}
             </div>
             <div className="lc-data flex items-center gap-1 text-[12px]" style={{ color: s.done ? "var(--color-lc-chalk)" : HUD_SLATE }}>
               {s.done ? formatSectorTime(s.t) : NO_TIME}
@@ -301,11 +363,11 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
       {/* Last and best lap */}
       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-lc-line pt-2.5">
         <div>
-          <div className={HUD_LBL}>Last lap</div>
+          <div className={HUD_LBL}>{L.lastLap}</div>
           <div className="lc-data text-[15px] text-lc-chalk/90">{formatLapTime(telemetry.lastLapTimeMs)}</div>
         </div>
-        <div className="text-right">
-          <div className={HUD_LBL}>Best lap</div>
+        <div className="text-end">
+          <div className={HUD_LBL}>{L.bestLap}</div>
           <div className="lc-data text-[15px]" style={{ color: telemetry.bestLapTimeMs ? HUD_BEST : "var(--color-lc-chalk)" }}>
             {formatLapTime(telemetry.bestLapTimeMs)}
           </div>
@@ -318,15 +380,17 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
 /** The time trial's target while the weekly challenge is driven: the player's best, the week's fastest, the place */
 export const ChallengeTargetPanel: React.FC<{ target: ChallengeTarget }> = ({ target }) => {
   const skin = useHudSkin();
+  const tx = useTranslations("hud.timingPanels.challenge");
+  const L = useMemo(() => ({ region: tx("region"), yourBest: tx("yourBest"), weekFastest: tx("weekFastest") }), [tx]);
   const content = (
     <>
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className={skin ? `text-[9px] font-bold tracking-[0.08em] uppercase ${skinCss.inkDim}` : HUD_LBL}>Your best</div>
+          <div className={skin ? `text-[9px] font-bold tracking-[0.08em] uppercase ${skinCss.inkDim}` : HUD_LBL}>{L.yourBest}</div>
           <div className={`lc-data text-[15px] ${skin ? skinCss.ink : "text-lc-chalk"}`}>{formatLapTime(target.bestMs)}</div>
         </div>
-        <div className="text-right">
-          <div className={skin ? `text-[9px] font-bold tracking-[0.08em] uppercase ${skinCss.inkDim}` : HUD_LBL}>This week&apos;s fastest</div>
+        <div className="text-end">
+          <div className={skin ? `text-[9px] font-bold tracking-[0.08em] uppercase ${skinCss.inkDim}` : HUD_LBL}>{L.weekFastest}</div>
           <div className="lc-data text-[15px]" style={{ color: HUD_BEST }}>
             {formatLapTime(target.leaderMs)}
           </div>
@@ -340,12 +404,12 @@ export const ChallengeTargetPanel: React.FC<{ target: ChallengeTarget }> = ({ ta
   if (skin) {
     return (
       <SkinPanel cut="sm" className="w-[256px]" innerClassName="px-3.5 py-3">
-        <section aria-label="This week's challenge">{content}</section>
+        <section aria-label={L.region}>{content}</section>
       </SkinPanel>
     );
   }
   return (
-    <section aria-label="This week's challenge" className={`w-[256px] rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`}>
+    <section aria-label={L.region} className={`w-[256px] rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`}>
       {content}
     </section>
   );

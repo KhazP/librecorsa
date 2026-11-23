@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
+import { t as tr } from "@/i18n/runtime";
 import { useFocusNav } from "@/components/menu/useFocusNav";
 import { useHudModeRef } from "./hud-mode";
 import { Button, Well } from "@/components/ui";
@@ -19,11 +21,11 @@ const formatRaceTime = (totalS: number): string => formatLapTime(Math.round(tota
 
 /** Time / gap column: winner's total time, "+12.345", "+1 lap" / "+n laps", Running or DNF */
 function timeOrGap(r: RaceResultEntry, resultsFinal: boolean): string {
-  if (r.dq) return "DSQ";
-  if (r.dnf) return "DNF";
-  if (r.finishTimeS === null) return resultsFinal ? "DNF" : "Running";
+  if (r.dq) return tr("hud.raceResults.dsq");
+  if (r.dnf) return tr("hud.raceResults.dnf");
+  if (r.finishTimeS === null) return resultsFinal ? tr("hud.raceResults.dnf") : tr("hud.raceResults.running");
   if (r.position === 1) return formatRaceTime(r.finishTimeS);
-  if (r.lapsDown > 0) return r.lapsDown === 1 ? "+1 lap" : `+${r.lapsDown} laps`;
+  if (r.lapsDown > 0) return tr("hud.raceResults.lapsDown", { count: r.lapsDown });
   if (r.gapS !== null) return `+${r.gapS.toFixed(3)}`;
   return formatRaceTime(r.finishTimeS);
 }
@@ -39,7 +41,7 @@ function timeTone(r: RaceResultEntry, resultsFinal: boolean): string {
 /** Whole seconds when whole, else one decimal (the kit's penalty badge prints the number as given) */
 const penaltySeconds = (s: number) => (s % 1 === 0 ? s : Math.round(s * 10) / 10);
 
-const TH = "lc-lbl px-2 pb-2 text-left font-semibold whitespace-nowrap";
+const TH = "lc-lbl px-2 pb-2 text-start font-semibold whitespace-nowrap";
 
 /** A press this soon after the card opens is the one that skipped the podium shot, not a choice on the card */
 const EARLY_PRESS_MS = 400;
@@ -108,7 +110,8 @@ function sameRaceResults(a: RaceResultsProps, b: RaceResultsProps): boolean {
   return true;
 }
 
-const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose, onRestart, onWatchReplay, onBackToLobby, backLabel = "Back to lobby", trackLimitStrikes = 0, history, nextRace }) => {
+const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose, onRestart, onWatchReplay, onBackToLobby, backLabel, trackLimitStrikes = 0, history, nextRace }) => {
+  const tx = useTranslations("hud.raceResults");
   const results = race.results;
   const rootRef = useRef<HTMLDivElement | null>(null);
   // A controller closes the card with B and reaches its buttons (Esc is handled below)
@@ -188,7 +191,7 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
         ref={rootRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Race result"
+        aria-label={tx("dialog")}
         onClickCapture={swallowEarlyPress}
         className="lc-glass pointer-events-auto flex max-h-full w-full max-w-[760px] flex-col gap-4 overflow-hidden rounded-lc-sheet p-5 text-lc-chalk shadow-lc-sheet sm:px-6 short:gap-3 short:p-3.5"
       >
@@ -199,21 +202,21 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
           <span className="flex flex-wrap items-center gap-1.5">
             {race.totalLaps ? (
               <Badge variant="outline">
-                {race.totalLaps} {race.totalLaps === 1 ? "lap" : "laps"}
+                {tx("laps", { count: race.totalLaps })}
               </Badge>
             ) : null}
             {trackLimitStrikes > 0 ? (
               <Badge tone="warn" icon="trackLimits">
-                Track limits {trackLimitStrikes}
+                {tx("trackLimits", { count: trackLimitStrikes })}
               </Badge>
             ) : null}
             {final ? (
               <Badge variant="outline" icon="check">
-                Final
+                {tx("final")}
               </Badge>
             ) : (
               <Badge tone="warn">
-                Provisional
+                {tx("provisional")}
               </Badge>
             )}
           </span>
@@ -222,30 +225,30 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
         {me ? <PlayerSummary me={me} fieldSize={ordered.length} fastest={isFastest(me)} /> : null}
 
         <div className="-mx-1 flex min-h-0 flex-col gap-5 overflow-y-auto px-1 short:gap-3">
-          <table className="w-full border-collapse" aria-label="Full classification">
+          <table className="w-full border-collapse" aria-label={tx("table")}>
             <thead>
               {/* Under 640 px only Pos, Driver and Time fit: +/- and the best lap are in the player's own summary above */}
               <tr className="border-b border-lc-line">
                 <th scope="col" className={`${TH} w-14`}>
-                  Pos
+                  {tx("colPos")}
                 </th>
                 {showGrid ? (
-                  <th scope="col" className={`${TH} w-12 max-sm:hidden`} title="Places gained or lost from the grid">
+                  <th scope="col" className={`${TH} w-12 max-sm:hidden`} title={tx("colGainedTitle")}>
                     <span aria-hidden>+/-</span>
-                    <span className="sr-only">Places gained</span>
+                    <span className="sr-only">{tx("colGained")}</span>
                   </th>
                 ) : null}
                 <th scope="col" className={`${TH} w-full`}>
-                  Driver
+                  {tx("colDriver")}
                 </th>
-                <th scope="col" className={`${TH} text-right max-sm:hidden`}>
-                  Laps
+                <th scope="col" className={`${TH} text-end max-sm:hidden`}>
+                  {tx("colLaps")}
                 </th>
-                <th scope="col" className={`${TH} text-right`}>
-                  Time / gap
+                <th scope="col" className={`${TH} text-end`}>
+                  {tx("colTime")}
                 </th>
-                <th scope="col" className={`${TH} text-right max-sm:hidden`}>
-                  Best lap
+                <th scope="col" className={`${TH} text-end max-sm:hidden`}>
+                  {tx("colBest")}
                 </th>
               </tr>
             </thead>
@@ -279,19 +282,19 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
                         {r.isPlayer ? <PlayerTag size="sm" /> : null}
                       </span>
                     </td>
-                    <td className="lc-mono px-2 text-right text-[13px] font-bold text-lc-fog max-sm:hidden">{r.lapsCompleted}</td>
-                    <td className="px-2 text-right whitespace-nowrap">
+                    <td className="lc-mono px-2 text-end text-[13px] font-bold text-lc-fog max-sm:hidden">{r.lapsCompleted}</td>
+                    <td className="px-2 text-end whitespace-nowrap">
                       <span className="inline-flex items-center justify-end gap-2">
                         {r.dq ? <PenaltyBadge penalty={{ kind: "disqualified" }} size="sm" /> : null}
                         {r.penaltyS && !r.dq ? (
-                          <span title={`${r.penaltyS.toFixed(1)} s of time penalties, included in the time`}>
+                          <span title={tx("penaltyTitle", { seconds: r.penaltyS.toFixed(1) })}>
                             <PenaltyBadge penalty={{ kind: "time", seconds: penaltySeconds(r.penaltyS) }} size="sm" />
                           </span>
                         ) : null}
                         <span className={`lc-mono text-[13px] font-bold ${timeTone(r, final)}`}>{timeOrGap(r, final)}</span>
                       </span>
                     </td>
-                    <td className="px-2 text-right whitespace-nowrap max-sm:hidden">
+                    <td className="px-2 text-end whitespace-nowrap max-sm:hidden">
                       <BestLap ms={r.bestLapMs} fastest={fastest} />
                     </td>
                   </tr>
@@ -306,31 +309,31 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
         <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2.5 border-t border-lc-line pt-3.5 short:pt-2.5">
           <PromptBar
             rule={false}
-            className="mr-auto max-sm:hidden"
+            className="me-auto max-sm:hidden"
             prompts={[
-              { action: "select", label: "Select" },
-              { action: "back", label: "Close" },
+              { action: "select", label: tx("promptSelect") },
+              { action: "back", label: tx("promptClose") },
             ]}
           />
           <div className="flex flex-wrap justify-end gap-2">
             {nextRace ? <JoinNextRace {...nextRace} primary={primary === "next"} /> : null}
             {onBackToLobby ? (
               <Button variant={primary === "back" ? "primary" : "secondary"} onClick={onBackToLobby} data-nav-default={startHere("back")}>
-                {backLabel}
+                {backLabel ?? tx("backToLobby")}
               </Button>
             ) : null}
             {onWatchReplay ? (
               <Button variant="secondary" icon={<Icon name="replay" />} onClick={onWatchReplay}>
-                Watch replay
+                {tx("watchReplay")}
               </Button>
             ) : null}
             {onRestart ? (
               <Button variant="primary" icon={<Icon name="restart" />} onClick={onRestart} data-nav-default={startHere("restart")}>
-                Restart race
+                {tx("restart")}
               </Button>
             ) : null}
             <Button variant={primary === "close" ? "primary" : "secondary"} onClick={onClose} data-nav-default={startHere("close")}>
-              Close
+              {tx("close")}
             </Button>
           </div>
         </div>
@@ -342,28 +345,32 @@ const RaceResultsView: React.FC<RaceResultsProps> = ({ race, trackName, onClose,
 export const RaceResults = React.memo(RaceResultsView, sameRaceResults);
 
 /** A best lap: the race's fastest in the best colour with the lap-time mark beside it, so colour is not alone */
-const BestLap: React.FC<{ ms: number | null; fastest: boolean; large?: boolean }> = ({ ms, fastest, large = false }) => (
-  <span
-    className={`lc-mono inline-flex items-center gap-1.5 font-bold ${large ? "text-[22px]" : "text-[13px]"} ${
-      fastest ? "text-lc-best" : "text-lc-chalk"
-    }`}
-  >
-    {fastest && !large ? <Icon name="lapTimes" size="xs" label="Fastest lap" /> : null}
-    {formatLapTime(ms)}
-  </span>
-);
+const BestLap: React.FC<{ ms: number | null; fastest: boolean; large?: boolean }> = ({ ms, fastest, large = false }) => {
+  const tx = useTranslations("hud.raceResults");
+  return (
+    <span
+      className={`lc-mono inline-flex items-center gap-1.5 font-bold ${large ? "text-[22px]" : "text-[13px]"} ${
+        fastest ? "text-lc-best" : "text-lc-chalk"
+      }`}
+    >
+      {fastest && !large ? <Icon name="lapTimes" size="xs" label={tx("fastestLapIcon")} /> : null}
+      {formatLapTime(ms)}
+    </span>
+  );
+};
 
 /** Places gained (green, arrow up) or lost (crimson, arrow down) from the grid; "=" unchanged, a dash when not known */
 const PlacesGained: React.FC<{ gained: number | null; large?: boolean }> = ({ gained, large = false }) => {
+  const tx = useTranslations("hud.raceResults");
   const size = large ? "text-[22px]" : "text-[13px]";
   if (gained === null || gained === 0)
     return (
-      <span className={`lc-mono font-bold ${size} text-lc-slate`} aria-label={gained === 0 ? "No change" : "Not known"}>
+      <span className={`lc-mono font-bold ${size} text-lc-slate`} aria-label={gained === 0 ? tx("noChange") : tx("notKnown")}>
         {gained === 0 ? "=" : "-"}
       </span>
     );
   const n = Math.abs(gained);
-  const words = `${n} ${n === 1 ? "place" : "places"} ${gained > 0 ? "gained" : "lost"}`;
+  const words = gained > 0 ? tx("placesGained", { count: n }) : tx("placesLost", { count: n });
   return (
     <span
       className={`lc-mono inline-flex items-center gap-1 font-bold whitespace-nowrap ${size} ${gained > 0 ? "text-lc-gain" : "text-lc-loss"}`}
@@ -378,31 +385,32 @@ const PlacesGained: React.FC<{ gained: number | null; large?: boolean }> = ({ ga
 
 /** The player's own race at a glance: the place, the places gained from the grid, the best lap */
 const PlayerSummary: React.FC<{ me: RaceResultEntry; fieldSize: number; fastest: boolean }> = ({ me, fieldSize, fastest }) => {
+  const tx = useTranslations("hud.raceResults");
   const gained = me.dnf ? null : placesGained(me.gridPosition, me.position);
   // Each value says what it is in the words under it, with no label above
   const cell = "flex min-w-0 flex-col gap-0.5 px-4 py-2.5 short:px-3 short:py-1.5";
   const after = "lc-hint truncate";
   return (
-    <div className="grid grid-cols-3 gap-2.5 short:hidden" aria-label="Your race">
+    <div className="grid grid-cols-3 gap-2.5 short:hidden" aria-label={tx("yourRace")}>
       <Well className={cell}>
         <span className={`lc-mono text-[22px] leading-tight font-bold ${me.dnf ? "text-lc-loss" : "text-lc-volt"}`}>
-          {me.dq ? "DSQ" : me.dnf ? "DNF" : `P${me.position}`}
+          {me.dq ? tx("dsq") : me.dnf ? tx("dnf") : tx("position", { position: me.position })}
         </span>
-        <span className={after}>{me.dq ? "Disqualified" : me.dnf ? "Retired" : `of ${fieldSize}`}</span>
+        <span className={after}>{me.dq ? tx("disqualified") : me.dnf ? tx("retired") : tx("ofField", { count: fieldSize })}</span>
       </Well>
       <Well className={cell}>
         <span className="leading-tight">
           <PlacesGained gained={gained} large />
         </span>
         <span className={after}>
-          {me.gridPosition === undefined ? "Grid unknown" : `Started P${me.gridPosition}`}
+          {me.gridPosition === undefined ? tx("gridUnknown") : tx("started", { position: me.gridPosition })}
         </span>
       </Well>
       <Well className={cell}>
         <span className="leading-tight">
           <BestLap ms={me.bestLapMs} fastest={fastest} large />
         </span>
-        <span className={after}>{fastest ? "Fastest lap" : "Best lap"}</span>
+        <span className={after}>{fastest ? tx("fastestLap") : tx("bestLap")}</span>
       </Well>
     </div>
   );
@@ -412,42 +420,45 @@ const circuitName = (id: string) => TRACKS.find((t) => t.id === id)?.name ?? id;
 const shortDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
 /** The player's last few races, kept in this browser */
-const LastRaces: React.FC<{ history: readonly RaceRecord[] }> = ({ history }) => (
-  <section className="flex flex-col gap-2" aria-labelledby="lc-last-races">
-    <h2 id="lc-last-races" className="lc-h3 px-2">
-      Your last races
-    </h2>
-    <table className="w-full border-collapse">
-      <thead className="sr-only">
-        <tr>
-          <th scope="col">Date</th>
-          <th scope="col">Circuit</th>
-          <th scope="col">Finish</th>
-          <th scope="col">Places gained</th>
-          <th scope="col">Best lap</th>
-        </tr>
-      </thead>
-      <tbody>
-        {history.slice(0, 5).map((r) => (
-          <tr key={r.id} className="h-9 border-b border-white/5 last:border-b-0 short:h-8">
-            <td className="lc-mono w-20 px-2 text-[12px] font-bold whitespace-nowrap text-lc-slate">{shortDate(r.atMs)}</td>
-            <td className="max-w-0 px-2">
-              <span className="block truncate text-[13px] font-semibold text-lc-fog" title={circuitName(r.trackId)}>{circuitName(r.trackId)}</span>
-            </td>
-            <td className="lc-mono w-16 px-2 text-[13px] font-bold whitespace-nowrap">
-              <span className={r.finish === null ? "text-lc-loss" : "text-lc-chalk"}>{r.finish === null ? "DNF" : `P${r.finish}`}</span>
-              <span className="text-lc-slate">/{r.fieldSize}</span>
-            </td>
-            <td className="w-12 px-2">
-              <PlacesGained gained={placesGained(r.grid, r.finish)} />
-            </td>
-            <td className="lc-mono w-24 px-2 text-right text-[13px] font-bold text-lc-fog">{formatLapTime(r.bestLapMs)}</td>
+const LastRaces: React.FC<{ history: readonly RaceRecord[] }> = ({ history }) => {
+  const tx = useTranslations("hud.raceResults.lastRaces");
+  return (
+    <section className="flex flex-col gap-2" aria-labelledby="lc-last-races">
+      <h2 id="lc-last-races" className="lc-h3 px-2">
+        {tx("title")}
+      </h2>
+      <table className="w-full border-collapse">
+        <thead className="sr-only">
+          <tr>
+            <th scope="col">{tx("date")}</th>
+            <th scope="col">{tx("circuit")}</th>
+            <th scope="col">{tx("finish")}</th>
+            <th scope="col">{tx("gained")}</th>
+            <th scope="col">{tx("best")}</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
-  </section>
-);
+        </thead>
+        <tbody>
+          {history.slice(0, 5).map((r) => (
+            <tr key={r.id} className="h-9 border-b border-white/5 last:border-b-0 short:h-8">
+              <td className="lc-mono w-20 px-2 text-[12px] font-bold whitespace-nowrap text-lc-slate">{shortDate(r.atMs)}</td>
+              <td className="max-w-0 px-2">
+                <span className="block truncate text-[13px] font-semibold text-lc-fog" title={circuitName(r.trackId)}>{circuitName(r.trackId)}</span>
+              </td>
+              <td className="lc-mono w-16 px-2 text-[13px] font-bold whitespace-nowrap">
+                <span className={r.finish === null ? "text-lc-loss" : "text-lc-chalk"}>{r.finish === null ? tx("dnf") : tx("position", { position: r.finish })}</span>
+                <span className="text-lc-slate">/{r.fieldSize}</span>
+              </td>
+              <td className="w-12 px-2">
+                <PlacesGained gained={placesGained(r.grid, r.finish)} />
+              </td>
+              <td className="lc-mono w-24 px-2 text-end text-[13px] font-bold text-lc-fog">{formatLapTime(r.bestLapMs)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+};
 
 export interface NextRaceProps {
   /** Seconds between scheduled races */
@@ -457,6 +468,7 @@ export interface NextRaceProps {
 
 /** "Join the next race", with the time until its lights counting down */
 const JoinNextRace: React.FC<NextRaceProps & { primary: boolean }> = ({ slotS, onJoin, primary }) => {
+  const tx = useTranslations("hud.raceResults");
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -466,7 +478,10 @@ const JoinNextRace: React.FC<NextRaceProps & { primary: boolean }> = ({ slotS, o
   const startsMs = nextRaceSlot(now, slotS).startsMs;
   return (
     <Button variant={primary ? "primary" : "secondary"} onClick={onJoin} data-nav-default={primary ? "" : undefined}>
-      Join the next race <span className="lc-mono not-italic tabular-nums opacity-80">{countdownLabel(startsMs, now)}</span>
+      {tx.rich("joinNext", {
+        countdown: countdownLabel(startsMs, now),
+        time: (chunks) => <span className="lc-mono not-italic tabular-nums opacity-80">{chunks}</span>,
+      })}
     </Button>
   );
 };

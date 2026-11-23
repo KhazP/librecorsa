@@ -19,7 +19,7 @@ export default defineConfig({
         replacesTitle: true,
       },
       favicon: "/favicon.svg",
-      social: [{ icon: "github", label: "Source on GitHub", href: "https://github.com/KhazP/librecorsa" }],
+      social: [{ icon: "github", label: "Source on GitHub", href: "https://github.com/librecorsa/librecorsa" }],
       sidebar: [
         { label: "Play LibreCorsa", link: "https://librecorsa.org/play" },
         ...PAGES.filter((p) => p.slug && !p.group).map(page),

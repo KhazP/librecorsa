@@ -12,12 +12,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleApi, onlineConfig, SHARED_ANSWER_S } from '../cloudflare/api/index';
 import { PresenceCounter } from '../cloudflare/api/presence';
-import { formatCount, parseBoardPage } from '../src/lib/net/board-client';
+import { formatCount, parseBoardPage, parsePopular, parseSiteTotals } from '../src/lib/net/board-client';
 import { HEARTBEAT_MS, nextHeartbeatInMs } from '../src/lib/net/live-heartbeat';
 import { towerLines } from '../src/components/hud/board-data';
 import { ALL_CARS, currentPhysicsByCar, driverNameKey, listLaps, renameDriver, sha256Hex, type BoardDeps } from '../cloudflare/api/board';
-import { circuitTotals, driversToDate } from '../cloudflare/api/stats';
-import { recordUsage } from '../cloudflare/api/usage';
+import { circuitTotals, driversToDate, popularRanks, POPULAR_DAYS, POPULAR_MIN_SESSIONS, siteTotals } from '../cloudflare/api/stats';
+import { CIRCUIT_IDS } from '../cloudflare/api/admin';
+import { recordUsage, utcDay } from '../cloudflare/api/usage';
 import { usageLapsOf, MAX_LAPS_PER_MINUTE } from '../src/lib/net/usage-modes';
 import { boardPhysicsVersion, currentBoardBase, lapPhysicsVersion, PHYSICS_VERSION, PHYSICS_VERSIONS } from '../src/lib/sim/lap-types';
 import { CIRCUIT_BOARD_RESETS, type CircuitBoardReset } from '../src/lib/circuit-board-resets';
@@ -252,6 +253,68 @@ async function main(): Promise<void> {
     check('api: with the boards off, no totals', (await api('/api/stats', off)).status === 404 && (await api(`/api/stats/circuit?track=${TRACK}`, off)).status === 404);
     const foreign = await api('/api/stats', env, { headers: { Origin: 'https://elsewhere.example' } });
     check('api: another site gets no totals', foreign.status === 403 && foreign.headers.get('Cache-Control') === 'no-store');
+  }
+
+  // 7b. The usage totals' public side: ranks with no numbers over the last month, and the totals to date ----------------
+  {
+    const pub = fakeD1(FULL);
+    const row = (day: string, track: string, vehicle: string, country: string, sessions: number, minutes: number, laps = 0) =>
+      pub
+        .prepare('INSERT INTO usage_daily (day, track_id, vehicle, mode, country, sessions, minutes, laps) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(day, track, vehicle, 'practice', country, sessions, minutes, laps)
+        .run();
+    const today = utcDay(NOW);
+    const first = utcDay(NOW - (POPULAR_DAYS - 1) * 86_400_000);
+    const before = utcDay(NOW - POPULAR_DAYS * 86_400_000);
+    check('public: the circuits used here are in the game, monza is not', ['spielberg', 'monaco', 'okayama', 'chang', 'grobnik', 'oschersleben'].every((id) => CIRCUIT_IDS.has(id)) && !CIRCUIT_IDS.has('monza'));
+    await row(today, 'spielberg', 'lc26', 'DE', 200, 2000, 300);
+    await row(today, 'spielberg', 'lc26', 'XX', 100, 1000, 100);
+    await row(today, 'monaco', 'amg-gt3', 'IT', 200, 5000, 400);
+    await row(today, 'okayama', 'lc26', 'TR', POPULAR_MIN_SESSIONS - 1, 9000, 50);
+    await row(today, 'monza', 'lc26', 'IT', 500, 20_000, 900);
+    await row(today, 'junk_track', 'bus', 'DE', 100, 1_000_000);
+    await row(first, 'grobnik', 'liana', 'GB', POPULAR_MIN_SESSIONS, 10, 5);
+    await row(before, 'oschersleben', 'liana', 'GB', 500, 50_000, 7);
+    await row('2026-10-01', 'chang', 'amg-gt3', 'BR', 1000, 99_999, 2000);
+    const ranks = await popularRanks(pub, NOW);
+    check('public: circuits by hours over the month, most first', JSON.stringify(ranks.circuits) === JSON.stringify(['monaco', 'spielberg', 'grobnik']), JSON.stringify(ranks.circuits));
+    check('public: a circuit under the session floor, a retired one, junk and one from before the month are left out', !ranks.circuits.includes('junk_track') && !ranks.circuits.includes('okayama') && !ranks.circuits.includes('monza') && !ranks.circuits.includes('oschersleben') && !ranks.circuits.includes('chang'));
+    check('public: cars by hours, only real vehicle models', JSON.stringify(ranks.cars) === JSON.stringify(['lc26', 'amg-gt3', 'liana']) && ranks.days === POPULAR_DAYS, JSON.stringify(ranks.cars));
+    const totals = await siteTotals(pub, true);
+    const minutes = 2000 + 1000 + 5000 + 9000 + 20_000 + 1_000_000 + 10 + 50_000 + 99_999;
+    check('public: totals to date count every day and circuit', totals.since === '2026-10-01' && totals.hours === Math.floor(minutes / 60) && totals.laps === 300 + 100 + 400 + 50 + 900 + 5 + 7 + 2000, JSON.stringify(totals));
+    check('public: countries leave out the unknown one', totals.countries === 5, String(totals.countries));
+    check('public: drivers only when asked, and none here', totals.drivers === 0 && (await siteTotals(pub, false)).drivers === null);
+    const bare = fakeD1(sql('0001_lap_boards.sql', '0002_race_results.sql', '0003_usage.sql'));
+    await bare.prepare("INSERT INTO usage_daily (day, track_id, vehicle, mode, country, sessions, minutes) VALUES ('2026-11-11', 'spielberg', 'lc26', 'practice', 'DE', 3, 120)").run();
+    await lap(bare, { name: 'Solo', vehicle: 'lc26', ms: 91_000 });
+    const old = await siteTotals(bare, true);
+    check('public: before the laps column, the boards\' laps', old.laps === 1 && old.hours === 2 && old.drivers === 1, JSON.stringify(old));
+    const empty = await siteTotals(fakeD1(FULL), true);
+    check('public: nothing counted yet says no first day', empty.since === null && empty.hours === 0);
+
+    // Through the API: kept for a while, off with the usage counter, and the game's reading of the answers
+    const liveDay = utcDay(Date.now());
+    await row(liveDay, 'chang', 'lc26', 'DE', 80, 600, 10);
+    const usageEnv = { ...env, BOARD_DB: pub } as Env;
+    const popular = await api('/api/stats/popular', usageEnv);
+    const popularBody = await popular.json();
+    check('api: GET /api/stats/popular, kept an hour', popular.status === 200 && popular.headers.get('Cache-Control') === `public, max-age=${SHARED_ANSWER_S.popular}` && (popularBody as { circuits: string[] }).circuits.includes('chang'), JSON.stringify(popularBody));
+    const totalsRes = await api('/api/stats/totals', usageEnv);
+    const totalsBody = await totalsRes.json();
+    check('api: GET /api/stats/totals, kept a quarter hour', totalsRes.status === 200 && totalsRes.headers.get('Cache-Control') === `public, max-age=${SHARED_ANSWER_S.totals}` && (totalsBody as { drivers: unknown }).drivers === 0, JSON.stringify(totalsBody));
+    const noBoard = (await (await api('/api/stats/totals', { ...usageEnv, ONLINE_BOARD: 'off' } as Env)).json()) as { drivers: unknown; hours: number };
+    check('api: with the boards off, totals without drivers', noBoard.drivers === null && noBoard.hours > 0);
+    const noUsage = { ...usageEnv, ONLINE_USAGE: 'off' } as Env;
+    check('api: with the usage counter off, neither', (await api('/api/stats/popular', noUsage)).status === 404 && (await api('/api/stats/totals', noUsage)).status === 404);
+    check('api: a query string is refused, so the edge keeps one copy', (await api('/api/stats/popular?x=1', usageEnv)).status === 400 && (await api('/api/stats/totals?x=1', usageEnv)).status === 400);
+    // Read back from the fixed-day ranks: the API's own month moves with the clock
+    const parsed = parsePopular(JSON.parse(JSON.stringify({ ok: true, ...ranks })));
+    check('client: the ranks read back', parsed !== null && JSON.stringify(parsed) === JSON.stringify(ranks) && parsePopular(popularBody) !== null);
+    check('client: junk ids are dropped, a malformed answer is refused', JSON.stringify(parsePopular({ ok: true, days: 30, circuits: ['spielberg', '../x', 7], cars: ['lc26', 'bus'] })) === JSON.stringify({ days: 30, circuits: ['spielberg'], cars: ['lc26'] }) && parsePopular({ ok: true, days: 30, circuits: 'spielberg', cars: [] }) === null);
+    const parsedTotals = parseSiteTotals(totalsBody);
+    check('client: the totals read back', parsedTotals !== null && parsedTotals.since === '2026-10-01' && parsedTotals.drivers === 0);
+    check('client: no first day or a broken number is refused', parseSiteTotals({ ok: true, since: null, hours: 0, laps: 0, countries: 0, drivers: null }) === null && parseSiteTotals({ ok: true, since: '2026-11-11', hours: -1, laps: 0, countries: 0, drivers: null }) === null);
   }
 
   // 8. The database finds these through its indexes -------------------------------------------------------------------

@@ -1,0 +1,877 @@
+{
+  "sky": {
+    "clear": "晴朗",
+    "lightClouds": "少雲",
+    "partiallyCloudy": "局部多雲",
+    "mostlyCloudy": "多雲",
+    "overcast": "陰天",
+    "cloudyDrizzle": "多雲毛毛雨",
+    "cloudyLightRain": "多雲小雨",
+    "overcastLightRain": "陰天小雨",
+    "overcastRain": "陰天降雨",
+    "overcastHeavyRain": "陰天大雨",
+    "overcastStorm": "陰天雷雨"
+  },
+  "weather": {
+    "nodeStart": "開始",
+    "nodeFinish": "結束",
+    "clear": "晴朗",
+    "clearDetail": "乾燥、晴朗",
+    "overcast": "陰天",
+    "overcastDetail": "乾燥、陰灰天空、賽道溫度較低",
+    "lightRain": "小雨",
+    "lightRainDetail": "濕地賽道，適用半雨胎",
+    "heavyRain": "大雨",
+    "heavyRainDetail": "路面有積水，適用全雨胎",
+    "drying": "漸乾",
+    "dryingDetail": "雨勢已停，賽道出現乾燥行車線",
+    "dynamic": "動態天氣",
+    "dynamicDetail": "賽程中天氣會隨時間變化"
+  },
+  "timeOfDay": {
+    "dawn": "黎明",
+    "morning": "早晨",
+    "noon": "正午",
+    "afternoon": "午後",
+    "goldenHour": "黃金時刻",
+    "dusk": "傍晚",
+    "night": "夜晚"
+  },
+  "raceStart": {
+    "assisted": "輔助起跑",
+    "manual": "手動起跑",
+    "assistedHint": "系統會在起跑格鎖定車輛，直到燈滅起跑",
+    "manualHint": "踩住離合器並控制轉速，燈滅時放開（搶跑加罰 +5 s／+10 s）"
+  },
+  "realism": {
+    "casual": "休閒",
+    "casualDetail": "無輪胎磨耗、寬鬆胎溫、較溫和雨勢",
+    "standard": "標準",
+    "standardDetail": "開啟輪胎磨耗、緩和胎溫、多數雨天效果",
+    "full": "完全",
+    "fullDetail": "完整輪胎與雨天模型，出車庫時為冷胎與冷煞車"
+  },
+  "raceRules": {
+    "auto": "自動",
+    "openWheel": "方程式規則",
+    "endurance": "耐力賽規則",
+    "autoHint": "單座方程式賽車採方程式規則，其餘車輛採耐力賽規則",
+    "openWheelHint": "依違規次數計算賽道邊界：4 次加罰 +5 s、8 次 +10 s、12 次取消資格",
+    "enduranceHint": "依加權計分計算賽道邊界：5 分加罰 +5 s、10 分 +10 s、15 分取消資格",
+    "trackLimitsOn": "開啟",
+    "trackLimitsOff": "關閉"
+  },
+  "damage": {
+    "off": "關閉",
+    "reduced": "減輕",
+    "full": "完全"
+  },
+  "raceSetup": {
+    "gridBack": "最後排",
+    "gridMiddle": "中段",
+    "gridPole": "桿位",
+    "gridRandom": "隨機",
+    "aiGridPace": "依速度",
+    "aiGridQualifying": "排位賽",
+    "aiGridReversed": "倒序排位",
+    "startAuto": "自動",
+    "startStanding": "靜態起跑",
+    "startRolling": "動態起跑",
+    "standingStart": "靜態起跑",
+    "rollingStart": "動態起跑",
+    "aggressionClean": "保守",
+    "aggressionNormal": "標準",
+    "aggressionHard": "積極"
+  },
+  "grip": {
+    "green": "無橡膠",
+    "greenDetail": "剛沖洗過的柏油，幾乎沒有橡膠層",
+    "light": "輕度",
+    "lightDetail": "賽事週末初期的橡膠累積",
+    "medium": "中度",
+    "mediumDetail": "適度累積橡膠的行車線",
+    "natural": "自然",
+    "naturalDetail": "標準賽事狀態的橡膠行車線",
+    "heavy": "重度",
+    "heavyDetail": "橡膠層厚實的耐力賽行車線",
+    "saturated": "飽和",
+    "saturatedDetail": "完全飽和的深色橡膠行車線"
+  },
+  "aiSkill": {
+    "rookie": "新手",
+    "amateur": "業餘",
+    "pro": "專業",
+    "alien": "外星人"
+  },
+  "challenge": {
+    "conditions": "乾地賽道 · {tyres} · 低油量",
+    "tyresSoft": "軟胎",
+    "tyresStreet": "街道胎",
+    "tyresVintageSlicks": "復古光頭胎",
+    "tyresSlicks": "光頭胎",
+    "timeLeftDays": "{days} 天 {hours} 小時",
+    "timeLeftHours": "{hours} 小時 {minutes} 分",
+    "timeLeftMinutes": "{minutes} 分鐘",
+    "placeNoTime": "尚無成績",
+    "placeFirst": "P1 · 本週最快",
+    "place": "P{place}",
+    "placeGap": "P{place} · 距 P{above} 差 {gap}"
+  },
+  "board": {
+    "conditions": "{assists} · {realism} · {surface}",
+    "assistsPro": "無輔助",
+    "assistsSemiPro": "部分輔助",
+    "assistsAssisted": "輔助",
+    "realismCasual": "休閒",
+    "realismStandard": "標準",
+    "realismFull": "完全",
+    "surfaceDry": "乾地",
+    "surfaceWet": "濕地",
+    "renameUnreachable": "無法連線至線上圈速榜，請稍後再試",
+    "renameFailed": "無法變更名稱（HTTP {status}）"
+  },
+  "badges": {
+    "weeklyGold": "每週金牌",
+    "weeklySilver": "每週銀牌",
+    "weeklyBronze": "每週銅牌",
+    "fastestLap": "最快單圈",
+    "og": "OG 車手",
+    "bulb": "點子貢獻者",
+    "times": "{badge} ×{count}",
+    "withNote": "{badge}——{note}",
+    "medalDetail": "每週挑戰{place, select, first {第 1 名} second {第 2 名} other {第 3 名}}",
+    "medalDetailWeeks": "每週挑戰{place, select, first {第 1 名} second {第 2 名} other {第 3 名}}：{weeks}",
+    "recordDetailCount": "在 {count, plural, other {# 個開放圈速榜}}保持最快單圈",
+    "recordCar": "{car} ×{count}",
+    "recordManual": "+{count} 項手動頒發",
+    "recordDetail": "{boards}——點擊檢視賽道",
+    "ogDetail": "曾於物理 V1 駕駛 LibreCorsa",
+    "bulbDetailNote": "點子貢獻者：{note}",
+    "bulbDetail": "點子或社群貢獻",
+    "creator": "創作者",
+    "creatorDetail": "打造了 LibreCorsa"
+  },
+  "camera": {
+    "chaseClose": "近距追尾",
+    "chaseCloseDetail": "緊貼車尾後方",
+    "chase": "追尾視角",
+    "chaseDetail": "位於車尾後方",
+    "chaseFar": "遠距追尾",
+    "chaseFarDetail": "車尾後方寬闊視野",
+    "chaseLow": "低角度追尾",
+    "chaseLowDetail": "尾翼後方低角度視野",
+    "tvPod": "T-cam",
+    "tvPodDetail": "安全帽正上方",
+    "cockpitShoulder": "肩側視角",
+    "cockpit": "駕駛艙視角",
+    "cockpitDetail": "車手第一人稱視角",
+    "dash": "儀錶板視角",
+    "dashDetail": "方向盤前方，畫面涵蓋儀錶板",
+    "nose": "車鼻視角",
+    "helicopter": "直升機視角",
+    "tvSide": "場邊轉播視角",
+    "free": "自由視角",
+    "freeDetail": "於賽道四周自由飛行瀏覽"
+  },
+  "music": {
+    "poolMenu": "選單",
+    "poolRace": "正賽",
+    "poolResults": "結算與重播"
+  },
+  "carQuality": {
+    "ownBadge": "專屬物理",
+    "own": "專屬物理",
+    "ownDetail": "採用為此車款專屬打造的物理模型。",
+    "sharedBadge": "共用物理",
+    "shared": "共用物理",
+    "sharedDetail": "沿用同組別、同年代其他車輛的物理模型，因此操控表現與該車相近，而非獨立調校。",
+    "eraBadge": "2026 物理",
+    "era": "早期車款",
+    "eraDetail": "採用 2026 物理模型，因此操控感受近似 2026 賽車，而非該車款當年的實際手感。"
+  },
+  "carClass": {
+    "f1": "方程式開輪賽車",
+    "f1Detail": "單座賽車 · DRS／主動空力",
+    "gt3Detail": "封閉輪賽車 · ABS／TC",
+    "proto": "原型賽車",
+    "protoDetail": "封閉輪賽車 · 高下壓力 · TC",
+    "classic": "經典 GT 與房車",
+    "classicDetail": "運動原型車、Group 4、Group A 與 JGTC · 1966–1998",
+    "road": "市售車",
+    "roadDetail": "合法上路 · 街道胎"
+  },
+  "circuitQuality": {
+    "originalBadge": "原創",
+    "original": "LibreCorsa 原創賽道",
+    "originalDetail": "專為 LibreCorsa 打造，具備專屬路面、路緣石、高低起伏與場邊景觀。",
+    "simBadge": "擬真級",
+    "sim": "擬真級賽道",
+    "simDetail": "手工打造的模擬賽道，擁有專屬道路、路緣石、護欄網格與路面物理。",
+    "scanBadge": "掃描",
+    "scan": "掃描轉換賽道",
+    "scanDetail": "由社群 3D 模型自動轉換：道路、路緣石、緩衝區與護欄皆自網格擷取，細節可能與真實場地略有差異。"
+  },
+  "circuitType": {
+    "permanent": "常設賽道",
+    "street": "街道賽道",
+    "oval": "橢圓賽道",
+    "hillclimb": "爬山賽"
+  },
+  "livery": {
+    "grid2026": "2026 賽季塗裝",
+    "retro": "復古",
+    "colourChalk": "粉筆白",
+    "colourCarbon": "碳纖黑",
+    "colourAlloy": "合金灰",
+    "colourVermilion": "朱紅",
+    "colourPapaya": "木瓜橘",
+    "colourGold": "金色",
+    "colourVolt": "電光黃",
+    "colourEmerald": "翡翠綠",
+    "colourCyan": "青色",
+    "colourCobalt": "鈷藍",
+    "colourIndigo": "靛藍",
+    "colourMagenta": "洋紅"
+  },
+  "keyActions": {
+    "throttle": "油門",
+    "brake": "煞車",
+    "steerLeft": "向左轉向",
+    "steerRight": "向右轉向",
+    "boostHold": "加速助推（按住）",
+    "boostLatch": "加速助推（切換）",
+    "overtake": "超車",
+    "aero": "主動空力 X／Z",
+    "shiftUp": "升檔",
+    "shiftDown": "降檔",
+    "neutral": "空檔",
+    "camera": "切換視角（長按：調整座椅與視角）",
+    "freeCamera": "自由視角",
+    "tvCamera": "場邊轉播視角",
+    "racingLine": "行車線",
+    "mute": "靜音",
+    "nextTrack": "下一首音樂",
+    "autopilot": "自動駕駛",
+    "mouseSteer": "滑鼠轉向",
+    "restart": "重新開始",
+    "flyingLap": "重開單圈（飛行起跑）",
+    "throttleHalf": "半油門（按住）",
+    "brakeHalf": "半煞車（按住）",
+    "clutch": "離合器（按住）",
+    "replay": "即時重播",
+    "mfdPage": "下一個 MFD 頁面",
+    "mfd": "開啟／關閉 MFD",
+    "hud": "顯示／隱藏 HUD",
+    "board": "開啟／關閉圈速榜",
+    "headlights": "開啟／關閉頭燈",
+    "headlightFlash": "閃爍頭燈（按住）"
+  },
+  "padActions": {
+    "shiftUp": "升檔",
+    "shiftDown": "降檔",
+    "neutral": "空檔",
+    "boost": "加速助推",
+    "overtake": "超車",
+    "aero": "主動空力 X／Z",
+    "camera": "切換視角（長按：調整座椅與視角）",
+    "freeCamera": "自由視角",
+    "tvCamera": "場邊轉播視角",
+    "racingLine": "行車線",
+    "restart": "重新開始",
+    "flyingLap": "重開單圈（飛行起跑）",
+    "pause": "暫停選單",
+    "mfd": "開啟／關閉 MFD",
+    "mfdPage": "下一個 MFD 頁面",
+    "hud": "顯示／隱藏 HUD",
+    "board": "開啟／關閉圈速榜",
+    "headlights": "頭燈（輕按：閃燈，長按：開／關）",
+    "headlightFlash": "閃爍頭燈（按住）"
+  },
+  "pedals": {
+    "throttle": "油門",
+    "brake": "煞車",
+    "clutch": "離合器",
+    "notSet": "未設定",
+    "trigger": "扳機鍵",
+    "stick": "{side, select, left {左} other {右}}搖桿{way, select, up {向上} down {向下} left {向左} other {向右}}",
+    "pressThrottle": "踩下油門",
+    "holdButton": "按住 {button}",
+    "pushStick": "將{side, select, left {左} other {右}}搖桿{way, select, up {向上} down {向下} left {向左} other {向右}}推",
+    "clutchPedal": "離合器踏板",
+    "button": "按鈕 {number}"
+  },
+  "padLayouts": {
+    "gt": "GT 風格",
+    "gtClassic": "GT 經典",
+    "f1": "方程式風格",
+    "forza": "Forza 風格",
+    "bumper": "肩鍵換檔"
+  },
+  "wheelSupport": {
+    "moza": "透過 WebHID 連線、轉向並輸出標準力回饋",
+    "hidPid": "尚未測試；使用相同的標準力回饋回報格式",
+    "directDrive": "尚未測試；若無 HID PID 力回饋，頁面會自動切換至 bridge",
+    "pxn": "尚未測試；使用專屬 Set Effect 數值的 HID PID，尚未經 PXN 方向盤實測確認",
+    "logitechClassic": "尚未測試；啟動時透過 WebHID 傳送與 Linux hid-lg4ff 相同的經典 Logitech 指令，包含 G27 與 G29 的轉速 LED 燈",
+    "logitechHidpp": "尚未測試；經 Logitech G HUB 將方向盤切換至 PC 模式後，透過 WebHID 傳送與 Linux hid-logitech-hidpp 相同的 HID++ 力回饋",
+    "logitechBridgeOnly": "尚未測試；僅支援 bridge：主線 Linux 驅動未支援 PlayStation 版 G923 或 G PRO，且瀏覽器無法重新縮放 DFP 的轉向軸",
+    "thrustmaster": "尚未測試；驅動將方向盤切離啟動模式後，使用與 Linux hid-tmff2 相同的指令。若未切換或 Windows 拒絕指令，將改由 bridge 接手",
+    "thrustmasterBridgeOnly": "尚未測試；僅支援 bridge：T150 與 TMX 採用不同指令集，且 hid-tmff2 未涵蓋 T500RS",
+    "fanatecCslElite": "尚未測試；若無 HID PID 力回饋，頁面會自動切換至 bridge",
+    "tested": "已測試",
+    "expected": "預期可用",
+    "unknown": "未知",
+    "no": "不支援"
+  },
+  "hudLayouts": {
+    "broadcast": "轉播風格",
+    "broadcastDetail": "電視轉播畫面：名次欄、賽道圖、遙測條",
+    "dash": "方向盤儀錶",
+    "dashDetail": "置中於底部的方向盤液晶螢幕",
+    "telemetry": "遙測模式",
+    "telemetryDetail": "儀錶板加上輪胎、G 值、動力與操作輸入",
+    "classic": "經典",
+    "classicDetail": "原始的四角面板配置",
+    "minimal": "極簡",
+    "minimalDetail": "僅顯示車速、檔位與圈數",
+    "irdashiesDetail": "排名、單圈計時、操作輸入與換檔指示燈",
+    "racevisionDetail": "排名、前後車距、操作輸入條與曲線圖",
+    "h2hDetail": "前後車輛、車距時間與單圈時間差",
+    "retroDetail": "復古暖色儀錶：圓形錶盤、時間差條、圈數",
+    "blocksDetail": "深色方塊模組：計時、賽段、輪胎、燃油",
+    "grandPrixDetail": "賽事名次欄、圓形時速錶組、檔位與操作輸入"
+  },
+  "steeringAssist": {
+    "selfSteerStrength": "自動回正與反打輔助",
+    "selfSteerStrengthHint": "車輪跟隨行進方向與救回車尾滑動的力道強度",
+    "dampingStrength": "偏航阻尼",
+    "dampingStrengthHint": "抑制打滑救回時的反甩與鐘擺式擺動",
+    "speedSensitivity": "高速穩定",
+    "speedSensitivityHint": "高速行駛時減緩轉向反應的幅度，讓細微操作更平順",
+    "slipLimitMargin": "輪胎滑移餘量",
+    "slipLimitMarginHint": "負值：更保守的轉向不足緩衝 · 正值：允許前輪略為超過峰值滑移角",
+    "maxSelfSteerAngleDeg": "最大反打角度",
+    "maxSelfSteerAngleDegHint": "輔助系統在救車時自動轉動前輪的最大角度",
+    "presetBalanced": "平衡",
+    "presetStable": "穩定",
+    "presetLoose": "靈活",
+    "presetDrift": "甩尾",
+    "presetCalm": "高速沉穩",
+    "fullLock": "轉向打滿",
+    "presetDetail": "自動回正 {selfSteer}、偏航阻尼 {damping}、高速穩定 {calm}、前輪峰值滑移 {grip} %、反打上限 {cap}"
+  },
+  "support": {
+    "donatePayPal": "透過 PayPal 贊助",
+    "supportOn": "在 {site} 支持作者",
+    "donateToVia": "透過 {site} 贊助 {maker}",
+    "supportOnSite": "在 {site} 支持 {maker}",
+    "donateTo": "贊助 {maker}",
+    "supportMaker": "支持 {maker}"
+  },
+  "setupSheet": {
+    "tcSlip": "TC 滑移",
+    "tc1": "TC 1",
+    "tcCut": "TC 切斷",
+    "tc2": "TC 2",
+    "tcSlipAngle": "TC 側滑角",
+    "abs": "ABS",
+    "engineMap": "引擎模式",
+    "motorDeployment": "馬達動力釋放",
+    "regeneration": "動能回收",
+    "startingFuel": "起跑油量",
+    "frontWing": "前翼",
+    "rearWing": "尾翼",
+    "diffOnThrottle": "加速差速鎖定",
+    "diffOffThrottle": "收油差速鎖定",
+    "engineBraking": "引擎煞車",
+    "frontToe": "前輪束角",
+    "rearToe": "後輪束角",
+    "frontSuspension": "前懸吊",
+    "rearSuspension": "後懸吊",
+    "frontAntiRollBar": "前防傾桿",
+    "rearAntiRollBar": "後防傾桿",
+    "frontRideHeight": "前車身高度",
+    "rearRideHeight": "後車身高度",
+    "brakePressure": "煞車壓力",
+    "frontBrakeBias": "前輪煞車平衡",
+    "brakeMigration": "煞車平衡轉移",
+    "brakePower": "煞車力道",
+    "brakeBias": "煞車平衡",
+    "steeringRatio": "轉向比",
+    "frontBumpStopRange": "前緩衝塊行程",
+    "rearBumpStopRange": "後緩衝塊行程",
+    "diffPreload": "差速器預載",
+    "gearSet": "齒比組合",
+    "frontThirdPacker": "前第三彈簧墊片",
+    "rearThirdPacker": "後第三彈簧墊片",
+    "frontBrakeDucts": "前煞車導風口",
+    "rearBrakeDucts": "後煞車導風口",
+    "radiatorOpening": "散熱器開度",
+    "frontBump": "前壓縮阻尼",
+    "rearBump": "後壓縮阻尼",
+    "frontFastBump": "前高速壓縮",
+    "rearFastBump": "後高速壓縮",
+    "frontRebound": "前回彈阻尼",
+    "rearRebound": "後回彈阻尼",
+    "frontFastRebound": "前高速回彈",
+    "rearFastRebound": "後高速回彈",
+    "frontThirdSpring": "前第三彈簧",
+    "rearThirdSpring": "後第三彈簧",
+    "frontThirdBump": "前第三壓縮",
+    "rearThirdBump": "後第三壓縮",
+    "frontThirdFastBump": "前第三高速壓縮",
+    "rearThirdFastBump": "後第三高速壓縮",
+    "frontThirdRebound": "前第三回彈",
+    "rearThirdRebound": "後第三回彈",
+    "frontThirdFastRebound": "前第三高速回彈",
+    "rearThirdFastRebound": "後第三高速回彈",
+    "frontCornerPackers": "前角限位墊片",
+    "rearCornerPackers": "後角限位墊片",
+    "frontWheelRate": "前輪彈簧剛度",
+    "rearWheelRate": "後輪彈簧剛度",
+    "frontBumpStopRate": "前緩衝塊剛度",
+    "rearBumpStopRate": "後緩衝塊剛度",
+    "frontCamber": "前輪外傾角",
+    "rearCamber": "後輪外傾角",
+    "frontLeftPressure": "左前胎壓",
+    "frontRightPressure": "右前胎壓",
+    "rearLeftPressure": "左後胎壓",
+    "rearRightPressure": "右後胎壓",
+    "tyreBlankets": "暖胎毯",
+    "detached": "已斷開",
+    "toeIn": "{angle} 內束",
+    "toeOut": "{angle} 外束",
+    "dialOff": "關閉",
+    "blanketsOn": "開啟",
+    "blanketsOff": "關閉",
+    "engineMapMax": "1 · 最大",
+    "engineMapRace": "2 · 正賽",
+    "engineMapSmooth": "3 · 平順",
+    "engineMapLean": "4 · 稀薄燃燒",
+    "engineMapSave": "5 · 省油"
+  },
+  "setupGroups": {
+    "fuel": "燃油",
+    "aerodynamics": "空氣力學",
+    "aerodynamicsShort": "空力",
+    "transmission": "傳動系統",
+    "transmissionShort": "傳動",
+    "suspensionGeometry": "懸吊幾何",
+    "suspensionGeometryShort": "幾何",
+    "suspension": "懸吊",
+    "suspensionShort": "懸吊",
+    "dampers": "避震器",
+    "brakes": "煞車",
+    "tyres": "輪胎",
+    "electronics": "電控系統",
+    "electronicsShort": "電控",
+    "mechanicalGrip": "機械抓地力",
+    "mechanicalGripShort": "機械",
+    "thirdElements": "第三組件",
+    "thirdElementsShort": "第三組",
+    "aero": "空力",
+    "fuelShort": "燃油",
+    "dampersShort": "避震",
+    "brakesShort": "煞車",
+    "tyresShort": "輪胎",
+    "aeroShort": "空力"
+  },
+  "setupFx": {
+    "frontWing": {
+      "more": "高速前輪抓地力增加，車尾較靈活",
+      "less": "車尾更穩定，高速轉向不足增加"
+    },
+    "rearWing": {
+      "more": "穩定性與出彎循跡更佳，風阻增加",
+      "less": "直線極速更高，車尾較敏感"
+    },
+    "diffOn": {
+      "more": "加速驅動力更強，容易動力轉向過度",
+      "less": "後胎負荷較輕，內側輪易空轉"
+    },
+    "diffOff": {
+      "more": "收油時更穩定，入彎較抗拒轉向",
+      "less": "入彎更易轉動車頭，車尾可能偏鬆"
+    },
+    "engineBraking": {
+      "more": "收油時後輪煞車作用更強，幫助轉向",
+      "less": "收油時更平穩，煞車距離較長"
+    },
+    "camberFront": {
+      "more": "彎中前輪抓地力更佳",
+      "less": "煞車表現更好，磨耗更均勻"
+    },
+    "camberRear": {
+      "more": "後輪橫向抓地力更強",
+      "less": "慢彎出彎循跡更好"
+    },
+    "toeFront": {
+      "more": "直線更穩定，入彎反應較慢",
+      "less": "入彎更銳利，高速時較神經質"
+    },
+    "toeRear": {
+      "more": "車尾更穩定，風阻略增",
+      "less": "車尾更靈活轉向，穩定度降低"
+    },
+    "springFront": {
+      "more": "反應更敏銳，顛簸路面抓地力減少",
+      "less": "顛簸路面上的前輪抓地力更佳"
+    },
+    "springRear": {
+      "more": "車身更容易轉向，出彎循跡減少",
+      "less": "出彎循跡更強，轉向反應較緩"
+    },
+    "arbFront": {
+      "more": "變向更敏捷，較易轉向不足",
+      "less": "彎中前輪抓地力更佳"
+    },
+    "arbRear": {
+      "more": "車尾更易轉動，出彎循跡減少",
+      "less": "後輪抓地力更佳，轉向不足增加"
+    },
+    "rideFront": {
+      "more": "跨壓路緣石更安全，下壓力減少",
+      "less": "下壓力更大，底板可能失速"
+    },
+    "rideRear": {
+      "more": "車身傾角更大：車頭更敏銳，車尾較靈活",
+      "less": "車尾較沉穩，轉向不足增加"
+    },
+    "brakePressure": {
+      "more": "煞車距離更短，較快鎖死",
+      "less": "較易微調踩踏力道，煞車距離較長"
+    },
+    "bias": {
+      "more": "煞車更穩定，前輪先鎖死",
+      "less": "入彎更易轉向，後輪先鎖死"
+    },
+    "migration": {
+      "more": "循跡煞車時車身更容易轉向",
+      "less": "釋放煞車過程中平衡保持不變"
+    },
+    "coldPsi": {
+      "more": "升溫更快，峰值抓地力略低",
+      "less": "抓地力更佳，升溫較慢"
+    },
+    "blankets": {
+      "more": "從第一個彎道就擁有工作胎溫",
+      "less": "出車庫時為冷胎，需於出場圈暖胎"
+    },
+    "tc": {
+      "more": "車輪空轉較少，出彎較保守",
+      "less": "出彎更快，車尾可能外甩"
+    },
+    "tc2": {
+      "more": "強力切斷：果斷抑制打滑",
+      "less": "柔和介入：保留更多加速力道"
+    },
+    "abs": {
+      "more": "不易鎖死，煞車距離較長",
+      "less": "控制精準時可縮短煞車距離"
+    },
+    "map": {
+      "more": "油門較柔和，動力輸出降低",
+      "less": "全動力輸出，油門反應更直接"
+    },
+    "steerRatio": {
+      "more": "轉向較慢，轉向幅度較小",
+      "less": "轉向更快，轉向幅度較大"
+    },
+    "wheelRateFront": {
+      "more": "車頭更銳利，顛簸路面抓地力減少",
+      "less": "顛簸路面上的前輪抓地力更佳"
+    },
+    "wheelRateRear": {
+      "more": "車身更容易轉向，出彎循跡減少",
+      "less": "出彎循跡更強，轉向反應較緩"
+    },
+    "bumpStopRate": {
+      "more": "觸及緩衝塊時支撐更硬朗",
+      "less": "觸及緩衝塊時緩衝較柔和"
+    },
+    "bumpStopRange": {
+      "more": "觸及緩衝塊前的行程較長",
+      "less": "較快觸及緩衝塊，車身姿態更平穩"
+    },
+    "preload": {
+      "more": "高速彎更穩定，慢彎偏推頭",
+      "less": "入彎轉向更靈活，出彎較鬆動"
+    },
+    "bump": {
+      "more": "車身晃動較少，過顛簸路面較生硬",
+      "less": "吸收顛簸較佳，車身起伏較大"
+    },
+    "fastBump": {
+      "more": "過路緣石較硬朗",
+      "less": "充分吸收路緣石衝擊"
+    },
+    "rebound": {
+      "more": "重心回移較慢，出彎平穩",
+      "less": "輪胎更能緊貼路面起伏"
+    },
+    "fastRebound": {
+      "more": "過路緣石後車輪回落較慢",
+      "less": "車輪迅速回落貼地"
+    },
+    "ductFront": {
+      "more": "前煞車溫度較低，風阻增加",
+      "less": "前煞車溫度較高，風阻減少"
+    },
+    "ductRear": {
+      "more": "後煞車溫度較低，風阻增加",
+      "less": "後煞車溫度較高，風阻減少"
+    },
+    "radiator": {
+      "more": "引擎溫度較低，風阻增加",
+      "less": "風阻減少，引擎溫度偏高"
+    },
+    "gearSet": {
+      "more": "長齒比：長直線極速更高",
+      "less": "短齒比：慢彎出彎加速更快"
+    },
+    "heaveSpring": {
+      "more": "高速車身姿態更平穩，過顛簸較硬",
+      "less": "吸收顛簸較佳，底板起伏較大"
+    },
+    "heavePacker": {
+      "more": "觸及墊片前的懸吊行程較長",
+      "less": "墊片更早撐住底板高度"
+    },
+    "cornerPacker": {
+      "more": "較快觸及限位，過彎更平穩",
+      "less": "自由行程較長，側傾幅度較大"
+    },
+    "tcSlipAngle": {
+      "more": "車尾一開始滑動就更早切斷動力",
+      "less": "允許加速時車尾滑動更大角度"
+    },
+    "motorDeploy": {
+      "more": "電能輔助推力更強，耗電更快",
+      "less": "節省電量，推力較少"
+    },
+    "regen": {
+      "more": "回收電量更多，後輪煞車感更強",
+      "less": "煞車時車尾更穩定，回收電量較少"
+    },
+    "fuel": {
+      "more": "單段續航更長，車身較重且較慢",
+      "less": "車身更輕更快，單段續航較短"
+    }
+  },
+  "padFeel": {
+    "smooth": "平順",
+    "smoothDetail": "較慢且沉穩的轉向反應",
+    "default": "預設",
+    "defaultDetail": "平衡的轉向反應",
+    "sharp": "敏銳",
+    "sharpDetail": "快速入彎反應"
+  },
+  "tyres": {
+    "street": "街道胎"
+  },
+  "setupShare": {
+    "aeroLow": "低風阻",
+    "aeroBalanced": "平衡空力",
+    "aeroHigh": "高下壓力",
+    "soft": "軟胎",
+    "medium": "中性胎",
+    "hard": "硬胎",
+    "intermediate": "半雨胎",
+    "wet": "全雨胎",
+    "chassisChanges": "{count, plural, other {# 項底盤調整}}",
+    "brakeBias": "煞車平衡 {bias}%",
+    "baseline": "基準調校",
+    "factoryLowDrag": "低風阻"
+  },
+  "trackLimits": {
+    "flashbackDeleted": "回溯 · 單圈已取消",
+    "currentAndNextInvalid": "本圈與下一圈已無效",
+    "currentInvalid": "本圈已無效",
+    "courseCutDeleted": "切彎抄捷徑 · 單圈已取消",
+    "penaltyOnceBack": "返回賽道後將判處加時處罰",
+    "leftLapRoad": "偏離單圈行駛路線",
+    "noTimeGained": "未獲得時間優勢",
+    "courseCutPenalty": "切彎抄捷徑 · 加罰 +{seconds}s",
+    "secondsGained": "省下 {seconds} s",
+    "lapDeleted": "單圈已取消",
+    "wallDeleted": "擦牆 · 單圈已取消",
+    "rodeWallBeforeLine": "衝線前貼牆行駛",
+    "limitsDeleted": "超出賽道邊界 · 單圈已取消",
+    "offBeforeLine": "衝線前駛離賽道",
+    "nextLapToo": "下一圈亦無效",
+    "offTrack": "駛離賽道",
+    "touchedBarrier": "碰觸護欄",
+    "rodeWall": "貼牆行駛",
+    "positionHandedBack": "已歸還名次",
+    "advantageGivenBack": "已歸還優勢",
+    "noFurtherAction": "不予處分",
+    "trackLimits": "賽道邊界",
+    "noAdvantage": "無優勢 · 不予處分",
+    "timePenalty": "加時處罰 +{seconds}s",
+    "limitsGained": "賽道邊界 · 省下 {seconds} s",
+    "limitsCutMetres": "賽道邊界 · 切彎 {metres} m",
+    "limitsMajorCut": "賽道邊界 · 嚴重切彎",
+    "why": "{reason, select, illegal_overtake {違規超車 · 未歸還名次} corner_cut {切彎抄捷徑} not_lifted {未收油減速} other {獲得時間優勢}}",
+    "limitsWhy": "賽道邊界 · {reason, select, illegal_overtake {違規超車 · 未歸還名次} corner_cut {切彎抄捷徑} not_lifted {未收油減速} other {獲得時間優勢}}",
+    "warningCount": "賽道邊界 · 警告 {count}/{max}",
+    "points": "{points} 分",
+    "strikes": "{count, plural, other {# 次違規}}",
+    "disqualified": "取消資格 · 超出賽道邊界",
+    "limitsPoints": "賽道邊界 · {points}",
+    "blackWhiteFlag": "黑白旗",
+    "nextPenalty": "{why} · 下次將加罰 +{seconds} s",
+    "nextDisqualification": "{why} · 下次將取消資格",
+    "warning": "賽道邊界 · 警告",
+    "warningDetail": "{why} · {points}"
+  },
+  "flags": {
+    "yellow": "黃旗",
+    "trackClear": "賽道清空",
+    "carStopped": "前方有車輛停駛",
+    "slowCar": "前方有慢車",
+    "wrongWay": "有車輛逆向行駛",
+    "carOffTrack": "前方有車輛衝出賽道",
+    "incident": "前方發生事故"
+  },
+  "connection": {
+    "raceClosed": "該場賽事即將開始，你可以參加下一場。",
+    "raceFull": "該場賽事已滿員，請加入下一場。",
+    "raceStarted": "該場賽事已經開始，請加入下一場。",
+    "raceTaken": "你已在另一個視窗中參與這場賽事。",
+    "raceBad": "無法加入賽事，請重新載入遊戲後再試。",
+    "raceUpdate": "LibreCorsa 已更新，請重新整理頁面以加入賽事。",
+    "versionMismatch": "此房間執行不同版本的 LibreCorsa，房內所有人都需要重新整理頁面。",
+    "roomServerUnreachable": "無法連線至房間伺服器。請檢查網路連線後重試，或改用「進階」中的手動連線。",
+    "idle": "建立房間並分享連結，或輸入好友代碼加入。",
+    "openingRoom": "正在建立房間 {code}……",
+    "reconnectingRoom": "正在重新連線房間 {code}……",
+    "roomOpen": "房間 {code} 已開啟 • 等待玩家加入",
+    "sessionActive": "此工作階段 ID 已在房間中運作。請稍候片刻再試著建立房間。",
+    "roomOpenElsewhere": "房間 {code} 已在另一部裝置開啟。請按「加入」進入比賽，或建立新房間。",
+    "joiningRoom": "正在加入房間 {code}……",
+    "roomNotFound": "找不到房間 {code}。請確認代碼無誤，並請房主將遊戲畫面保持在前景。",
+    "playerIdTaken": "此玩家 ID 已在房間中，請稍候片刻再試著加入。",
+    "roomFull": "房間 {code} 已滿員。",
+    "connectedPlayers": "{count, plural, other {已與 # 位玩家連線}}",
+    "peerFailed": "無法連線至另一位玩家。請重試，或使用相同的 Wi-Fi 網路。",
+    "peerBlocked": "無法連線：其中一方的網路封鎖了直接連線。請使用相同的 Wi-Fi，或嘗試其他網路。",
+    "lostHost": "與房主斷線，請重新加入。",
+    "hostingTabs": "正在為此瀏覽器的其他分頁建立賽事",
+    "playerLeft": "玩家已離開，請建立新的連線邀請以重新連線。",
+    "connected": "已連線",
+    "joiningRace": "正在加入下一場賽事……",
+    "inNextRace": "已報名下一場賽事",
+    "makingOffer": "正在產生連線邀請……",
+    "offerReady": "連線邀請已就緒。請傳給另一位玩家，再貼上對方的回應碼。",
+    "answerReady": "回應碼已就緒，請傳回給房主。",
+    "answerAccepted": "已接受回應碼 • 連線中……",
+    "raceServerUnreachable": "無法連線至賽事伺服器，請檢查網路連線後再試。",
+    "racesOff": "排程賽事目前暫停舉辦。",
+    "raceLost": "與賽事的連線已中斷。",
+    "ready": "已就緒。此瀏覽器中的其他分頁會自動配對；其他裝置請以房間代碼加入。"
+  },
+  "downloads": {
+    "windowsSummary": "桌面應用程式，優先使用獨立 GPU、為方向盤與 DualSense 靜默授權 WebHID，且背景執行不降速。",
+    "windowsInstallNote": "在 SignPath Foundation 簽章設定完成前暫為未簽章版本。若 SmartScreen 攔截，請點擊「其他資訊」，再點擊「仍要執行」。",
+    "windowsStatusLabel": "未簽章",
+    "windowsX64Label": "下載 .exe",
+    "windowsX64Detail": "Windows x64 安裝程式",
+    "macosSummary": "桌面應用程式，優先使用獨立 GPU、為方向盤與 DualSense 靜默授權 WebHID，且背景執行不降速。",
+    "macosInstallNote": "未簽章版本。請至「系統設定 > 隱私權與安全性」允許開啟，或複製到「應用程式」後清除隔離屬性：",
+    "macosStatusLabel": "未簽章",
+    "macosArm64Label": "Apple Silicon (.dmg)",
+    "macosArm64Detail": "M1–M4 Mac",
+    "macosX64Label": "Intel (.dmg)",
+    "macosX64Detail": "Intel x64 Mac",
+    "linuxSummary": "免安裝 AppImage，為方向盤與 DualSense 靜默授權 WebHID，且背景執行不降速。",
+    "linuxInstallNote": "將 AppImage 設為可執行後即可啟動（較舊發行版需安裝 FUSE2 / libfuse2）：",
+    "linuxX64Label": "下載 .AppImage",
+    "linuxX64Detail": "Linux x64",
+    "androidSummary": "全螢幕 Trusted Web Activity，支援沉浸式邊緣手勢、Android Game Mode 與桌面捷徑。需要 Android 7 以上版本與 Chrome。",
+    "androidInstallNote": "已簽章的正式版 APK。出現提示時請允許瀏覽器安裝；安裝檔會與 librecorsa.org 驗證並以無網址列模式開啟。",
+    "androidStatusLabel": "已簽章 APK",
+    "androidApkLabel": "下載 .apk",
+    "androidApkDetail": "Android 7+（通用版）"
+  },
+  "loading": {
+    "circuit": "賽道",
+    "car": "車輛",
+    "opponents": "對手車輛",
+    "shaders": "著色器"
+  },
+  "session": {
+    "wheelDisconnected": "方向盤已中斷連線。請重新接上，或繼續使用其他裝置駕駛。",
+    "bigJumpStart": "搶跑 · 明顯越過起跑格",
+    "jumpStart": "搶跑",
+    "clutchGearUp": "升檔",
+    "clutchPaddle": "升檔撥片"
+  },
+  "driverKey": {
+    "notAKeyFile": "這不是有效的車手金鑰檔案",
+    "blocked": "此瀏覽器封鎖了儲存權限"
+  },
+  "simulator": {
+    "formulaTeamCars": "方程式車隊賽車",
+    "lapNoLongerSaved": "此單圈已不再儲存於本機",
+    "nameNotChanged": "無法變更名稱",
+    "setupLoadFailed": "無法載入 {driver} 的車輛調校，請重試",
+    "setupMissing": "{driver} 的單圈未附帶車輛調校",
+    "setupApplied": "已套用 {driver} 的車輛調校（{summary}）",
+    "keySaved": "金鑰已儲存。任何擁有此檔案的人都能以你的名義發佈成績。",
+    "noKeyYet": "尚未建立金鑰：首次上傳單圈時會自動產生。",
+    "keyImportedFor": "已匯入 {name} 的金鑰，今後從此處上傳皆會使用此身分。",
+    "keyImported": "已匯入金鑰，今後從此處上傳皆會使用此身分。",
+    "launchWheel": "踩油門起跑",
+    "launchWheelSeat": "踩油門起跑 · 長按視角鍵調整座椅",
+    "launchPad": "{press}即可起跑",
+    "launchPadSeat": "{press}即可起跑 · 長按 {button} 調整座椅",
+    "launchTouch": "按住油門起跑",
+    "launchKey": "按住 {key} 起跑 · Esc 選單",
+    "noRacesOnHillClimb": "爬山賽不開放競速賽事",
+    "backToRaces": "返回賽事列表"
+  },
+  "telemetryHud": {
+    "menu": "選單",
+    "calibratePedals": "校準踏板",
+    "holdForLightsOut": "按住油門等待燈滅起跑",
+    "mouseSteering": "滑鼠轉向 · 按 {key} 離開",
+    "keyMenu": "選單",
+    "keyCamera": "視角",
+    "keyLine": "行車線",
+    "keyRestart": "重新開始",
+    "keyBoard": "圈速榜",
+    "keyLights": "頭燈",
+    "replay": "重播"
+  },
+  "trackGate": {
+    "safeStart": "偵測到 GPU 重設，已啟用安全啟動模式。",
+    "graphicsLow": "偵測到 GPU 重設，畫質已自動調整為「低」。",
+    "loadFailedStaying": "賽道載入失敗，維持在 {circuit}。",
+    "loadFailedDefault": "賽道載入失敗，已載入預設賽道 {circuit}。"
+  },
+  "minimap": {
+    "map": "賽道地圖",
+    "mapAtTurn": "賽道地圖；你目前位於第 {turn} 彎",
+    "facts": "{country} · {length} {unit} · {turns, plural, other {# 個彎道}}",
+    "sector": "第 {sector} 賽段",
+    "elevation": "海拔高度",
+    "altitude": "海拔 {height}",
+    "grade": "坡度 {grade}%",
+    "profileStart": "起點 {height}",
+    "profileStartFinish": "起終點 {height}"
+  },
+  "source": {
+    "sourceOf": "{title} 的模型來源",
+    "source": "來源",
+    "reportIssue": "回報問題"
+  },
+  "playError": {
+    "title": "模擬器已停止運作",
+    "body": "WebGL 或物理引擎啟動失敗。更新瀏覽器或顯示卡驅動程式，或開啟硬體加速，通常即可解決。",
+    "detail": "錯誤詳情",
+    "restart": "重新啟動模擬器"
+  },
+  "dash": {
+    "yellowFlag": "黃旗"
+  }
+}

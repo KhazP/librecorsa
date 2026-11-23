@@ -1,0 +1,139 @@
+{
+  "newTab": "(yeni sekmede açılır)",
+  "confirm": {
+    "cancel": "İptal",
+    "busy": "Tamamlanmasını bekle"
+  },
+  "toggle": {
+    "on": "Açık",
+    "off": "Kapalı"
+  },
+  "disclosure": {
+    "more": "Daha fazla",
+    "less": "Daha az"
+  },
+  "select": {
+    "placeholder": "Seç",
+    "labelValue": "{label}: {value}"
+  },
+  "settingRow": {
+    "changed": "Varsayılandan değiştirildi",
+    "resetNamed": "{setting} ayarını varsayılana sıfırla",
+    "resetThis": "Bu ayarı varsayılana sıfırla",
+    "reset": "Varsayılana sıfırla"
+  },
+  "mediaTile": {
+    "chosen": "Seçili"
+  },
+  "keys": {
+    "up": "Yukarı",
+    "down": "Aşağı",
+    "left": "Sol",
+    "right": "Sağ",
+    "wheelButton": "Tuş {button}"
+  },
+  "pad": {
+    "namedButton": "{name} tuşu",
+    "shapeButton": "{shape, select, cross {Çarpı tuşu} circle {Daire tuşu} square {Kare tuşu} other {Üçgen tuşu}}",
+    "faceButton": "{position, select, bottom {Alttaki tuş} right {Sağdaki tuş} left {Soldaki tuş} other {Üstteki tuş}}",
+    "dpad": "D-pad",
+    "dpadDirection": "{direction, select, up {D-pad yukarı} down {D-pad aşağı} left {D-pad sol} right {D-pad sağ} horizontal {D-pad sol ve sağ} other {D-pad yukarı ve aşağı}}",
+    "shoulder": "{button, select, lb {Sol omuz tuşu} rb {Sağ omuz tuşu} lt {Sol tetik} other {Sağ tetik}} ({name})",
+    "touchpad": "Dokunmatik yüzey",
+    "stick": "{side, select, left {Sol analog} other {Sağ analog}}",
+    "stickPress": "{side, select, left {Sol analog tıklama} other {Sağ analog tıklama}} ({name})",
+    "stickDirection": "{side, select, left {Sol analog} other {Sağ analog}} {direction, select, up {yukarı} down {aşağı} left {sol} right {sağ} horizontal {sol ve sağ} other {yukarı ve aşağı}}"
+  },
+  "badges": {
+    "you": "Sen",
+    "position": "Pozisyon {position}",
+    "qualityDescription": ": {description}"
+  },
+  "delta": {
+    "spoken": "{trend, select, level {Eşit} faster {{seconds} saniye daha hızlı} other {{seconds} saniye daha yavaş}}{best, select, yes {, en iyi} other {}}",
+    "best": "En iyi"
+  },
+  "penalty": {
+    "time": "+{seconds} s",
+    "driveThrough": "Pitten geçme",
+    "warning": "Uyarı",
+    "trackLimits": "Pist sınırları {strikes}/{of}",
+    "disqualified": "Diskalifiye"
+  },
+  "flags": {
+    "green": "Yeşil bayrak",
+    "yellow": "Sarı bayrak",
+    "doubleYellow": "Çift sarı",
+    "blue": "Mavi bayrak",
+    "red": "Kırmızı bayrak",
+    "white": "Beyaz bayrak",
+    "black": "Siyah bayrak",
+    "blackWhite": "Siyah-beyaz bayrak",
+    "chequered": "Damalı bayrak"
+  },
+  "compounds": {
+    "name": {
+      "soft": "Yumuşak",
+      "medium": "Orta",
+      "hard": "Sert",
+      "intermediate": "Geçiş",
+      "wet": "Yağmur"
+    },
+    "short": {
+      "soft": "Yumuşak",
+      "medium": "Orta",
+      "hard": "Sert",
+      "intermediate": "Geçiş",
+      "wet": "Yağmur"
+    },
+    "long": {
+      "soft": "Yumuşak lastikler",
+      "medium": "Orta lastikler",
+      "hard": "Sert lastikler",
+      "intermediate": "Geçiş lastikleri (ıslak pist)",
+      "wet": "Tam yağmur lastikleri (su birikintisi)"
+    },
+    "tyres": {
+      "soft": "Yumuşak lastikler",
+      "medium": "Orta lastikler",
+      "hard": "Sert lastikler",
+      "intermediate": "Geçiş lastikleri",
+      "wet": "Yağmur lastikleri"
+    }
+  },
+  "carClass": {
+    "openWheel": "Açık tekerlekli",
+    "gt3": "GT3",
+    "proto": "Prototip",
+    "classic": "Klasik",
+    "road": "Yol"
+  },
+  "session": {
+    "practice": "Antrenman",
+    "race": "Yarış",
+    "timeAttack": "Zamana karşı",
+    "hillClimb": "Tırmanma",
+    "online": "Çevrimiçi",
+    "offline": "Çevrimdışı",
+    "host": "Kurucu"
+  },
+  "state": {
+    "new": "Yeni",
+    "beta": "Beta",
+    "wip": "Yapımda",
+    "experimental": "Deneysel",
+    "downloaded": "İndirildi",
+    "downloading": "İndiriliyor",
+    "updateAvailable": "Güncelleme var",
+    "inUse": "Kullanımda"
+  },
+  "surface": {
+    "dry": "Kuru",
+    "damp": "Nemli",
+    "wet": "Islak",
+    "flooded": "Su birikintili"
+  },
+  "dialog": {
+    "close": "Kapat"
+  }
+}

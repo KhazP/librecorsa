@@ -502,7 +502,7 @@ export function SymbolsSection() {
             <ArrowKeys set="all" />
             <ArrowKeys set="horizontal" />
             <WheelButton button={4} />
-            <span className="inline-flex h-11 items-center gap-2.5 rounded-full bg-lc-volt pr-5 pl-2.5 font-lc-display text-[15px] font-bold text-lc-void uppercase italic">
+            <span className="inline-flex h-11 items-center gap-2.5 rounded-full bg-lc-volt pe-5 ps-2.5 font-lc-display text-[15px] font-bold text-lc-void uppercase italic">
               <KeyCap tone="ink">Enter</KeyCap>
               Start race
             </span>

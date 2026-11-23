@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { LIVERIES } from "@/lib/track-data";
 import { FACTORY_LIVERY_NOTE, carById, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
 import { CAMERA_MODES, STARTING_CAMERAS } from "@/lib/render/camera-modes";
@@ -13,15 +14,19 @@ import { CarSkinPicker, LiveryPicker } from "../menu-content-ui";
 import { Hint } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
-/** The starting view, as three tiles: the same setting (and label) as Settings > Display > Camera */
-const startingView = {
+/**
+ * The starting view, as three tiles: the same setting (and label) as Settings > Display > Camera. Built when drawn, so
+ * the label and the views' names are in the current language.
+ */
+const startingView = () => ({
   ...defaultView,
   kind: "tiles" as const,
-  options: STARTING_CAMERAS.map((id) => ({ id, label: CAMERA_MODES[id].label, detail: CAMERA_MODES[id].blurb })),
-};
+  options: () => STARTING_CAMERAS.map((id) => ({ id, label: CAMERA_MODES[id].label, detail: CAMERA_MODES[id].blurb })),
+});
 
 /** First-run setup's last step: car, livery and the starting view, with the car on the turntable beside the panel */
 export const CarStep: React.FC<SetupStepProps> = (p) => {
+  const tx = useTranslations("setup.car");
   const car = carById(p.carId);
   const [hoveredLivery, setHoveredLivery] = useState<{ carId: CarId; id: string } | null>(null);
   const [hoveredSkin, setHoveredSkin] = useState<{ carId: CarId; id: string } | null>(null);
@@ -34,11 +39,11 @@ export const CarStep: React.FC<SetupStepProps> = (p) => {
 
   return (
     <div className="flex flex-col gap-3">
-      <Card title="Car">
+      <Card title={tx("car")}>
         <CarPicker carId={p.carId} onChangeCar={p.onChangeCar} />
       </Card>
 
-      <Card title="Livery" bodyClassName="gap-3">
+      <Card title={tx("livery")} bodyClassName="gap-3">
         <span className="relative block aspect-video max-h-44 w-full overflow-hidden rounded-lc-tile bg-lc-well [&>img]:size-full">
           <CarThumb car={car} liveryId={previewLiveryId} skinId={previewSkinId} className="p-2" />
         </span>
@@ -69,8 +74,8 @@ export const CarStep: React.FC<SetupStepProps> = (p) => {
         )}
       </Card>
 
-      <SettingsCard title="Camera">
-        <SettingField def={startingView} />
+      <SettingsCard title={tx("camera")}>
+        <SettingField def={startingView()} />
       </SettingsCard>
     </div>
   );

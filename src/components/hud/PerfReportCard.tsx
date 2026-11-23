@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { Button, Card } from "@/components/ui";
 import { Icon } from "@/components/ui/icons/Icon";
 
@@ -28,6 +29,7 @@ function copyByCommand(text: string): boolean {
  * no console, so the player copies it or saves it as a file and sends it.
  */
 export function PerfReportCard({ report }: { report: () => string }) {
+  const tx = useTranslations("hud.perfReportCard");
   const [done, setDone] = useState<"copied" | "saved" | "failed" | null>(null);
   useEffect(() => {
     if (!done) return;
@@ -56,15 +58,15 @@ export function PerfReportCard({ report }: { report: () => string }) {
 
   return (
     <Card
-      title="Performance report"
-      description={done === "failed" ? "Clipboard unavailable. Save file instead." : "Session frame-time log."}
+      title={tx("title")}
+      description={done === "failed" ? tx("failed") : tx("description")}
     >
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" size="sm" icon={<Icon name={done === "copied" ? "copied" : "copy"} />} onClick={copy}>
-          {done === "copied" ? "Copied" : "Copy"}
+          {done === "copied" ? tx("copied") : tx("copy")}
         </Button>
         <Button variant="secondary" size="sm" icon={<Icon name="download" />} onClick={save}>
-          {done === "saved" ? "Saved" : "Save file"}
+          {done === "saved" ? tx("saved") : tx("saveFile")}
         </Button>
       </div>
     </Card>

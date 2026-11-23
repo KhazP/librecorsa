@@ -120,6 +120,7 @@ export default function HomePage() {
       name: v.name,
       country: v.country,
       types: [...new Set(v.layouts.map((t) => CIRCUIT_TYPE_LABELS[circuitType(t)]))],
+      typeIds: [...new Set(v.layouts.map(circuitType))],
       modders: [...new Set(v.layouts.map(circuitModder))],
       layouts: v.layouts.map((t) => ({
         id: t.id,
@@ -139,6 +140,7 @@ export default function HomePage() {
         vehicle: c.physics,
         title: c.title,
         classTitle: CAR_CLASSES.find((k) => k.id === c.classId)?.title ?? "",
+        classId: c.classId,
         year: c.year,
         quality: c.quality,
         thumb: thumbOf(c.id),

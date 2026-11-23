@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { Icon } from "./icons/Icon";
 import { focusables, focusOnHover } from "@/components/menu/useFocusNav";
 import { SettingsDetailProvider } from "./SettingRow";
@@ -24,7 +25,8 @@ export interface DisclosureProps {
  * the keys or a pad, the cursor moves onto the first revealed row. It remembers nothing: it starts closed each time
  * the screen opens.
  */
-export function Disclosure({ children, moreLabel = "More", lessLabel = "Less", count, forceCursor, className }: DisclosureProps) {
+export function Disclosure({ children, moreLabel, lessLabel, count, forceCursor, className }: DisclosureProps) {
+  const tx = useTranslations("common.disclosure");
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -57,7 +59,7 @@ export function Disclosure({ children, moreLabel = "More", lessLabel = "Less", c
           setOpen(!open);
         }}
         className={cx(
-          "-mx-2 flex min-h-11 cursor-pointer items-center gap-2 rounded-lc-row px-2 text-left text-lc-slate hover:bg-white/4 hover:text-lc-chalk active:bg-white/2",
+          "-mx-2 flex min-h-11 cursor-pointer items-center gap-2 rounded-lc-row px-2 text-start text-lc-slate hover:bg-white/4 hover:text-lc-chalk active:bg-white/2",
           MOTION,
           CURSOR_ROW,
         )}
@@ -67,8 +69,8 @@ export function Disclosure({ children, moreLabel = "More", lessLabel = "Less", c
           className={cx("transition-transform duration-200 ease-lc motion-reduce:transition-none", open ? "rotate-180" : undefined)}
         />
         <span className="text-[14px] font-semibold">
-          {open ? lessLabel : moreLabel}
-          {!open && count ? <span className="lc-mono ml-1.5 text-lc-slate">({count})</span> : null}
+          {open ? (lessLabel ?? tx("less")) : (moreLabel ?? tx("more"))}
+          {!open && count ? <span className="lc-mono ms-1.5 text-lc-slate">({count})</span> : null}
         </span>
       </button>
     </div>

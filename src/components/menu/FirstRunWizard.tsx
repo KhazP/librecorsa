@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "use-intl/react";
 import { useFocusNav } from "./useFocusNav";
 import { isMenuNavSuspended } from "./useMenuNav";
 import { useInputMode } from "./input-mode";
@@ -30,15 +31,6 @@ export type WizardMode = "first-run" | "again";
  * assists (both shape the drive) and before the car, whose step ends on Lights out with the car on the turntable.
  */
 const STEPS: readonly WizardStepId[] = ["device", "setup", "assists", "hud", "car"];
-
-const SETUP_TITLES = { keyboard: "Keyboard", controller: "Controller", wheel: "Wheel and pedals" } as const;
-
-const STEP_INFO: Record<Exclude<WizardStepId, "setup">, { title: string }> = {
-  device: { title: "Input device" },
-  assists: { title: "Driving assists" },
-  hud: { title: "HUD layout" },
-  car: { title: "Select car" },
-};
 
 export interface FirstRunWizardProps extends SetupStepProps {
   mode: WizardMode;
@@ -76,6 +68,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   const devicePickedRef = useRef(mode === "again");
   const { mode: inputMode, family } = useInputMode();
   const pad = inputMode === "pad";
+  const tx = useTranslations("menu.wizard");
 
   const env: SettingsEnv = useMemo(
     () => ({
@@ -142,9 +135,15 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   });
 
   const device = props.settings.device;
-  const title = step === "setup" ? SETUP_TITLES[device] : STEP_INFO[step].title;
-
-  const stepTitle = (s: WizardStepId) => (s === "setup" ? SETUP_TITLES[device] : STEP_INFO[s].title);
+  const setupTitles = { keyboard: tx("keyboard"), controller: tx("controller"), wheel: tx("wheel") };
+  const stepTitles: Record<Exclude<WizardStepId, "setup">, string> = {
+    device: tx("device"),
+    assists: tx("assists"),
+    hud: tx("hud"),
+    car: tx("car"),
+  };
+  const stepTitle = (s: WizardStepId) => (s === "setup" ? setupTitles[device] : stepTitles[s]);
+  const title = stepTitle(step);
   // The step's width: the wheel's two columns get the most room, the car the least (it turns on the right). The
   // frame around the rail, the step and its actions is as wide as they are (rail 208 + gap 40 on roomy screens), so
   // Next ends where the step does, not in the far corner, and the scene keeps the rest of the screen. Its least is
@@ -177,7 +176,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                 {/* Step rail (roomy screens): motorsport step index */}
                 <aside className="hidden w-52 shrink-0 flex-col gap-8 not-compact:flex">
                   <LibreCorsaLogo variant="compact" size="sm" />
-                  <nav aria-label="Setup steps" className="flex flex-col gap-1">
+                  <nav aria-label={tx("steps")} className="flex flex-col gap-1">
                     {steps.map((s, i) => {
                       const done = i < stepIndex;
                       const current = i === stepIndex;
@@ -186,7 +185,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                           key={s}
                           aria-current={current ? "step" : undefined}
                           className={cx(
-                            "flex min-h-10 items-center gap-3 rounded-lc-row border-l-2 px-3",
+                            "flex min-h-10 items-center gap-3 rounded-lc-row border-s-2 px-3",
                             current ? "border-lc-volt bg-lc-volt/8" : done ? "border-lc-fog/50" : "border-lc-line",
                           )}
                         >
@@ -196,7 +195,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                               current ? "text-lc-volt" : done ? "text-lc-fog" : "text-lc-dim",
                             )}
                           >
-                            {done ? <Icon name="check" size="xs" label="Done" /> : `0${i + 1}`}
+                            {done ? <Icon name="check" size="xs" label={tx("stepDone")} /> : `0${i + 1}`}
                           </span>
                           <span className={cx("lc-title text-[14px] leading-tight", current ? "text-lc-chalk" : done ? "text-lc-fog" : "text-lc-slate")}>
                             {stepTitle(s)}
@@ -221,7 +220,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                         className={cx("h-1 flex-1 rounded-lc-nub", i < stepIndex ? "bg-lc-fog" : i === stepIndex ? "bg-lc-volt" : "bg-lc-line")}
                       />
                     ))}
-                    <span className="lc-mono ml-1.5 shrink-0 text-[11px] text-lc-slate">
+                    <span className="lc-mono ms-1.5 shrink-0 text-[11px] text-lc-slate">
                       {stepIndex + 1}/{steps.length}
                     </span>
                   </div>
@@ -246,27 +245,27 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
               <div className="mt-4 flex shrink-0 flex-wrap items-center justify-between gap-3.5 border-t border-lc-line pt-4 short:mt-2 short:pt-2">
                 <div className="flex items-center gap-3">
                   <Button variant="secondary" onClick={back} prompt={pad ? <PadGlyph button="b" family={family} /> : <KeyCap>Esc</KeyCap>}>
-                    {stepIndex === 0 ? (mode === "first-run" ? "Main menu" : "Close") : "Back"}
+                    {stepIndex === 0 ? (mode === "first-run" ? tx("mainMenu") : tx("close")) : tx("back")}
                   </Button>
                   {onSkip && !last ? (
                     <Button variant="ghost" size="sm" onClick={onSkip}>
-                      Skip
+                      {tx("skip")}
                     </Button>
                   ) : null}
                 </div>
                 {/* Right-aligned even when a narrow frame wraps it under Back */}
-                <div className="ml-auto flex flex-wrap items-center justify-end gap-5.5">
+                <div className="ms-auto flex flex-wrap items-center justify-end gap-5.5">
                   <PromptBar
                     rule={false}
                     className="hidden sm:flex"
                     prompts={[
-                      { action: "move", label: "Move" },
-                      { action: "select", label: "Select" },
-                      { action: "tabs", label: "Step" },
+                      { action: "move", label: tx("promptMove") },
+                      { action: "select", label: tx("promptSelect") },
+                      { action: "tabs", label: tx("promptStep") },
                     ]}
                   />
                   <Button variant="primary" onClick={next} prompt={pad ? <PadGlyph button="menu" family={family} /> : <KeyCap tone="ink">Enter</KeyCap>}>
-                    {last ? (mode === "first-run" ? "Lights out" : "Done") : "Next"}
+                    {last ? (mode === "first-run" ? tx("lightsOut") : tx("done")) : tx("next")}
                   </Button>
                 </div>
               </div>

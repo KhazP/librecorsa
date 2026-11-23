@@ -3,6 +3,7 @@
  * loudness-matched to -16 LUFS (each one's remainder in gainDb). Each track belongs to one pool, and the music director
  * picks the pool from where the player is (music-director.ts): the menus, a race, or the results and replays.
  */
+import { text as tx } from "@/lib/text";
 import { withBasePath } from "@/lib/base-path";
 
 export type MusicPool = "menu" | "race" | "results";
@@ -77,7 +78,7 @@ export const musicTrack = (id: string): MusicTrack | undefined => MUSIC_TRACKS.f
 export const musicUrl = (track: MusicTrack): string => withBasePath(`/music/${track.id}.mp3`);
 
 export const POOL_LABEL: Record<MusicPool, string> = {
-  menu: "Menu",
-  race: "Race",
-  results: "Results and replay",
+  get menu() { return tx("game.music.poolMenu"); },
+  get race() { return tx("game.music.poolRace"); },
+  get results() { return tx("game.music.poolResults"); },
 };

@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
+import { useTranslations } from "use-intl/react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { aidsActive, formatLapTime, formatSectorTime, formatSpeed, HUD_BEST, HUD_GAIN, HUD_INFO, LAP_MARK_COLOR, lapMark, NO_TIME, sectorDone, speedUnit } from "../hud-format";
@@ -11,10 +12,33 @@ import { PedalBars, pedalLayers } from "../PedalBars";
 import { F12026ChannelsPanel } from "../F12026ChannelsPanel";
 import { BroadcastMap, BroadcastTower } from "./BroadcastHud";
 import { WheelDash } from "./WheelDashHud";
-import { anchor, HUD_GLASS, HUD_LBL, LapMarkGlyph, type HudDesignProps } from "./hud-style-parts";
+import { anchor, formatOnce, HUD_GLASS, HUD_LBL, LapMarkGlyph, type HudDesignProps } from "./hud-style-parts";
 
 const CARD = `w-full rounded-lc-tile px-3 py-2.5 ${HUD_GLASS}`;
 const LABEL = HUD_LBL;
+
+/** The Telemetry layout's own words in the current language, resolved once per language */
+function useTelemetryWords() {
+  const tx = useTranslations("hudStyles.telemetry");
+  return useMemo(
+    () => ({
+      lapAnalysis: tx("lapAnalysis"),
+      thisLap: tx("thisLap"),
+      best: tx("best"),
+      idealLap: tx("idealLap"),
+      topSpeed: formatOnce((unit: string) => tx("topSpeed", { unit })),
+      gPower: tx("gPower"),
+      lateral: tx("lateral"),
+      longitudinal: tx("longitudinal"),
+      downforce: tx("downforce"),
+      power: tx("power"),
+      drag: tx("drag"),
+      fuel: tx("fuel"),
+      tyres: tx("tyres"),
+    }),
+    [tx],
+  );
+}
 
 /** Sector table with best sectors, the theoretical best and top speeds */
 const LapAnalysis: React.FC<{ t: CarTelemetry }> = ({ t }) => {
@@ -23,12 +47,13 @@ const LapAnalysis: React.FC<{ t: CarTelemetry }> = ({ t }) => {
   // On your own your bests are the session's (purple); in a race only your own (green)
   const bestColor = t.race ? HUD_GAIN : HUD_BEST;
   const units = useUnits();
+  const w = useTelemetryWords();
   return (
-    <section aria-label="Lap analysis" className={CARD}>
+    <section aria-label={w.lapAnalysis} className={CARD}>
       <div className="grid grid-cols-[24px_1fr_1fr] items-baseline gap-x-2 gap-y-1 lc-mono">
         <span className={LABEL}>S</span>
-        <span className={`${LABEL} text-right`}>This lap</span>
-        <span className={`${LABEL} text-right`}>Best</span>
+        <span className={`${LABEL} text-right`}>{w.thisLap}</span>
+        <span className={`${LABEL} text-right`}>{w.best}</span>
         {[0, 1, 2].map((i) => {
           // Done only with a time of this lap (none on the out-lap, which starts in sector 3)
           const done = sectorDone(t, i);
@@ -53,13 +78,13 @@ const LapAnalysis: React.FC<{ t: CarTelemetry }> = ({ t }) => {
       </div>
       <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-lc-line pt-2">
         <div>
-          <div className={LABEL}>Ideal lap</div>
+          <div className={LABEL}>{w.idealLap}</div>
           <div className="lc-data text-[12px]" style={{ color: ideal ? bestColor : "var(--color-lc-slate)" }}>
             {formatLapTime(ideal)}
           </div>
         </div>
         <div className="text-right">
-          <div className={LABEL}>Top · {speedUnit(units)}</div>
+          <div className={LABEL}>{w.topSpeed(speedUnit(units))}</div>
           <div className="lc-data text-[12px] text-lc-chalk">
             {formatSpeed(t.topSpeedThisLapKmh, units)} <span className="text-lc-slate">/ {formatSpeed(t.allTimeTopSpeedKmh, units)}</span>
           </div>
@@ -84,8 +109,9 @@ const GPowerCard: React.FC<{ t: CarTelemetry }> = ({ t }) => {
   const x = Math.max(-1, Math.min(1, t.lateralG / 5)) * 44;
   const y = Math.max(-1, Math.min(1, -t.longitudinalG / 5)) * 44;
   const hasErs = t.f12026?.hasErs ?? true;
+  const w = useTelemetryWords();
   return (
-    <section aria-label="G-meter and power" className={`flex items-center gap-3 ${CARD}`}>
+    <section aria-label={w.gPower} className={`flex items-center gap-3 ${CARD}`}>
       <svg viewBox="-50 -50 100 100" className="h-[72px] w-[72px] shrink-0" aria-hidden>
         <circle r={48} fill="var(--color-lc-well)" stroke="var(--color-lc-line)" />
         {[16, 32].map((r) => (
@@ -96,10 +122,10 @@ const GPowerCard: React.FC<{ t: CarTelemetry }> = ({ t }) => {
         <circle cx={x} cy={y} r={6} fill="var(--color-lc-volt)" />
       </svg>
       <div className="grid flex-1 gap-0.5">
-        <Row label="Lateral" value={`${Math.abs(t.lateralG).toFixed(1)} g`} />
-        <Row label="Long" value={`${Math.abs(t.longitudinalG).toFixed(1)} g`} />
-        <Row label="DF" value={`${Math.round(t.downforceKgf)} kg`} />
-        <Row label="Power" value={`${Math.round(t.totalPowerKw)} kW`} className="mt-1 border-t border-lc-line pt-1" />
+        <Row label={w.lateral} value={`${Math.abs(t.lateralG).toFixed(1)} g`} />
+        <Row label={w.longitudinal} value={`${Math.abs(t.longitudinalG).toFixed(1)} g`} />
+        <Row label={w.downforce} value={`${Math.round(t.downforceKgf)} kg`} />
+        <Row label={w.power} value={`${Math.round(t.totalPowerKw)} kW`} className="mt-1 border-t border-lc-line pt-1" />
         {hasErs ? (
           <Row
             label="MGU-K"
@@ -107,18 +133,21 @@ const GPowerCard: React.FC<{ t: CarTelemetry }> = ({ t }) => {
             color={t.mgukPowerKw > 0 ? HUD_INFO : undefined}
           />
         ) : null}
-        <Row label="Drag" value={`${(t.dragN / 1000).toFixed(1)} kN`} />
-        {t.fuelKg > 0 ? <Row label="Fuel" value={`${t.fuelKg.toFixed(1)} kg`} /> : null}
+        <Row label={w.drag} value={`${(t.dragN / 1000).toFixed(1)} kN`} />
+        {t.fuelKg > 0 ? <Row label={w.fuel} value={`${t.fuelKg.toFixed(1)} kg`} /> : null}
       </div>
     </section>
   );
 };
 
-const TyreDetail: React.FC<{ t: CarTelemetry; compound: TireCompound }> = ({ t, compound }) => (
-  <section aria-label="Tyres" className={CARD}>
-    <TyreBrakeGrid t={t} compound={compound} dense />
-  </section>
-);
+const TyreDetail: React.FC<{ t: CarTelemetry; compound: TireCompound }> = ({ t, compound }) => {
+  const w = useTelemetryWords();
+  return (
+    <section aria-label={w.tyres} className={CARD}>
+      <TyreBrakeGrid t={t} compound={compound} dense />
+    </section>
+  );
+};
 
 /**
  * Telemetry: the Wheel Dash with the engineer's pit wall around it. Session card and sector

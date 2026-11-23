@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "use-intl/react";
 import type { BadgeSize, BadgeTone } from "@/components/ui/Badge";
 import { QualityBadge } from "@/components/ui/badges/QualityBadge";
 import { circuitQualityMeta, type CircuitQuality, type TrackInfo } from "@/lib/track-registry";
@@ -100,11 +101,12 @@ const CUSTOM_WHEEL_GRADIENT =
  * A focusable preset swatch row sits alongside it so controller and keyboard users can pick colours without a mouse.
  */
 const CustomColorSlot: React.FC<{
-  label: string;
+  slot: keyof CustomLiveryColors;
   value: string;
   onDraft: (hex: string) => void;
   onCommit: (hex: string) => void;
-}> = ({ label, value, onDraft, onCommit }) => {
+}> = ({ slot, value, onDraft, onCommit }) => {
+  const tx = useTranslations("menu.livery");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const commitRef = React.useRef(onCommit);
   commitRef.current = onCommit;
@@ -122,7 +124,7 @@ const CustomColorSlot: React.FC<{
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold text-lc-slate">{label}</span>
+        <span className="text-[11px] font-semibold text-lc-slate">{tx("slot", { slot })}</span>
         <label
           data-nav-skip=""
           className="flex cursor-pointer items-center gap-1.5 rounded-lc-nub border border-lc-line bg-lc-carbon px-1.5 py-0.5 focus-within:border-lc-volt"
@@ -130,7 +132,7 @@ const CustomColorSlot: React.FC<{
           <input
             ref={inputRef}
             type="color"
-            aria-label={`Custom livery ${label.toLowerCase()} colour`}
+            aria-label={tx("slotInput", { slot })}
             value={value}
             onChange={(e) => onDraft(e.target.value)}
             onBlur={(e) => onCommit(e.target.value)}
@@ -139,14 +141,14 @@ const CustomColorSlot: React.FC<{
           <span className="lc-mono text-[11px] text-lc-fog uppercase">{value}</span>
         </label>
       </div>
-      <div role="group" aria-label={`${label} colour presets`} className="flex flex-wrap items-center gap-1.5">
+      <div role="group" aria-label={tx("slotPresets", { slot })} className="flex flex-wrap items-center gap-1.5">
         {CUSTOM_LIVERY_PALETTE.map((preset) => {
           const active = lower === preset.hex.toLowerCase();
           return (
             <button
               key={preset.hex}
               type="button"
-              aria-label={`${label} ${preset.name}`}
+              aria-label={tx("slotPreset", { slot, colour: preset.name })}
               aria-pressed={active}
               onClick={() => onCommit(preset.hex)}
               onPointerEnter={focusOnHover}
@@ -178,6 +180,7 @@ export const LiveryPicker: React.FC<{
   /** The ring's gap matches the surface behind it (a CSS colour) */
   surface?: string;
 }> = ({ liveries, value, onChange, onHover, surface = "var(--color-lc-void)" }) => {
+  const tx = useTranslations("menu.livery");
   const [hover, setHover] = React.useState<LiveryConfig | null>(null);
   const hoverRef = React.useRef<LiveryConfig | null>(null);
   const onHoverRef = React.useRef(onHover);
@@ -265,7 +268,7 @@ export const LiveryPicker: React.FC<{
       <div
         className="flex flex-col gap-2"
         role="radiogroup"
-        aria-label="Livery"
+        aria-label={tx("group")}
         onMouseLeave={() => updateHover(null)}
         onBlur={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) updateHover(null);
@@ -314,7 +317,7 @@ export const LiveryPicker: React.FC<{
                 type="button"
                 role="radio"
                 aria-checked={isCustom}
-                aria-label="Custom Paint · Custom colour picker"
+                aria-label={tx("custom")}
                 onClick={() => onChange(buildCustomLivery(draft))}
                 onPointerEnter={(e) => {
                   focusOnHover(e);
@@ -336,16 +339,10 @@ export const LiveryPicker: React.FC<{
 
       {isCustom ? (
         <div className="flex flex-col gap-2.5 rounded-lc-row border border-lc-line bg-lc-well p-2.5">
-          {(
-            [
-              ["primary", "Primary"],
-              ["secondary", "Secondary"],
-              ["accent", "Accent"],
-            ] as const
-          ).map(([slot, label]) => (
+          {(["primary", "secondary", "accent"] as const).map((slot) => (
             <CustomColorSlot
               key={slot}
-              label={label}
+              slot={slot}
               value={draft[slot]}
               onDraft={(hex) => updateDraft(slot, hex)}
               onCommit={(hex) => commitSlot(slot, hex)}
@@ -367,6 +364,7 @@ export const CarSkinPicker: React.FC<{
   onHover?: (skinId: string | null) => void;
   surface?: string;
 }> = ({ carId, onHover, surface = "var(--color-lc-void)" }) => {
+  const tx = useTranslations("menu.livery");
   const skins = carById(carId).skins ?? [];
   const value = useCarSkinId(carId) ?? skins[0]?.id;
   const [hover, setHover] = React.useState<string | null>(null);
@@ -398,7 +396,7 @@ export const CarSkinPicker: React.FC<{
       <div
         className="flex flex-wrap items-center gap-2"
         role="radiogroup"
-        aria-label="Livery"
+        aria-label={tx("skinGroup")}
         onMouseLeave={() => updateHover(null)}
         onBlur={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) updateHover(null);

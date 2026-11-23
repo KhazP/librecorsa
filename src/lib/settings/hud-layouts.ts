@@ -5,6 +5,7 @@
  *
  * Ids are saved in players' settings for good: never rename one, and keep game and product names out of them.
  */
+import { text as t } from "@/lib/text";
 
 /** Credit for a layout recreated from another project: shown in the pickers and on the About page */
 export interface HudLayoutCredit {
@@ -36,11 +37,14 @@ export interface HudLayoutInfo<Id extends string = string> {
 
 /** The game's own layouts, in picker order (Broadcast first: the default) */
 export const BUILT_IN_HUD_LAYOUTS = [
-  { id: "broadcast", label: "Broadcast", detail: "TV graphics: tower, map, telemetry strip" },
-  { id: "dash", label: "Wheel dash", detail: "A steering-wheel screen, low and centred" },
-  { id: "telemetry", label: "Telemetry", detail: "The dash plus tyres, G, power and inputs" },
-  { id: "classic", label: "Classic", detail: "The original corner panels" },
-  { id: "minimal", label: "Minimal", detail: "Speed, gear and lap only" },
+  { id: "broadcast", get label() { return t("game.hudLayouts.broadcast"); }, get detail() { return t("game.hudLayouts.broadcastDetail"); } },
+  { id: "dash", get label() { return t("game.hudLayouts.dash"); }, get detail() { return t("game.hudLayouts.dashDetail"); } },
+  { id: "telemetry", get label() { return t("game.hudLayouts.telemetry"); }, get detail() { return t("game.hudLayouts.telemetryDetail"); } },
+  { id: "classic", get label() { return t("game.hudLayouts.classic"); }, get detail() { return t("game.hudLayouts.classicDetail"); } },
+  { id: "minimal", get label() { return t("game.hudLayouts.minimal"); }, get detail() { return t("game.hudLayouts.minimalDetail"); } },
+  // Laid out the way a road-racing game and a Formula game lay out their race screens, drawn in the game's own look
+  { id: "touring", get label() { return t("game.hudLayouts.touring"); }, get detail() { return t("game.hudLayouts.touringDetail"); } },
+  { id: "formula", get label() { return t("game.hudLayouts.formula"); }, get detail() { return t("game.hudLayouts.formulaDetail"); } },
 ] as const satisfies readonly HudLayoutInfo[];
 
 /** Layouts recreated from other open-source HUD projects, credited to their authors */
@@ -48,37 +52,37 @@ export const THIRD_PARTY_HUD_LAYOUTS = [
   {
     id: "irdashies",
     label: "irDashies",
-    detail: "Standings, lap timer, inputs and shift lights",
+    get detail() { return t("game.hudLayouts.irdashiesDetail"); },
     credit: { author: "tariknz", repoUrl: "https://github.com/tariknz/irdashies", license: "MIT" },
   },
   {
     id: "racevision",
     label: "RaceVision",
-    detail: "Standings, relative, input pill and graph",
+    get detail() { return t("game.hudLayouts.racevisionDetail"); },
     credit: { author: "mpavich2", repoUrl: "https://github.com/mpavich2/RaceVision", license: "MIT" },
   },
   {
     id: "h2h",
     label: "Head to Head",
-    detail: "The cars ahead and behind, gaps and lap deltas",
+    get detail() { return t("game.hudLayouts.h2hDetail"); },
     credit: { author: "emilioSp", repoUrl: "https://github.com/emilioSp/h2h-iracing", license: "MIT" },
   },
   {
     id: "retro",
     label: "Retro UI",
-    detail: "Warm instruments: round dial, delta bar, laps",
+    get detail() { return t("game.hudLayouts.retroDetail"); },
     credit: { author: "toastbuilds", repoUrl: "https://github.com/toastbuilds/assetto-corsa-retro-engineering-hud", license: "MIT" },
   },
   {
     id: "blocks",
     label: "Blocks",
-    detail: "Square dark blocks: timing, sectors, tyres, fuel",
+    get detail() { return t("game.hudLayouts.blocksDetail"); },
     credit: { author: "C1XTZ", repoUrl: "https://github.com/C1XTZ/ac-rennsporthud", license: "GPL-3.0" },
   },
   {
     id: "grand-prix",
     label: "Grand Prix",
-    detail: "Race tower, round speed cluster, gear and inputs",
+    get detail() { return t("game.hudLayouts.grandPrixDetail"); },
     credit: {
       author: "adamikoo",
       repoUrl: "https://github.com/adamikoo",

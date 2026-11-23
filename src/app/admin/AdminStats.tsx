@@ -80,7 +80,7 @@ function Gate({ onOpen }: { onOpen: (key: string, stats: StatsBody) => void }) {
               aria-label="Open"
               disabled={checking || draft.trim() === ""}
               icon={<Icon name={checking ? "downloading" : "next"} />}
-              className="-mr-2"
+              className="-me-2"
             />
           }
         />

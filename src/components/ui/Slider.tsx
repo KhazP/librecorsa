@@ -82,7 +82,8 @@ export function Slider({
 
   return (
     <span className={cx("flex w-64 max-w-full min-w-0 items-center gap-3 phone:w-full", className)}>
-      <span className="relative flex h-11 min-w-0 flex-1 items-center">
+      {/* The track runs left to right in every language: the native range, its fill and the marks placed on it agree */}
+      <span dir="ltr" className="relative flex h-11 min-w-0 flex-1 items-center">
         {defaultValue !== undefined ? (
           <span
             aria-hidden

@@ -1,0 +1,1076 @@
+{
+  "racesCard": {
+    "region": "Gare",
+    "description": "{car} · {laps, plural, one {# giro} other {# giri}} · ogni {interval}",
+    "racing": "<big>Gara</big> <small>in corso</small>",
+    "toStart": "<big>{time}</big> <small>alla partenza</small>",
+    "toNextRace": "<big>{time}</big> <small>alla prossima gara</small>",
+    "entrants": "In questa gara",
+    "entered": "Iscritto. Parte in automatico.",
+    "enteredAlone": "Iscritto. Parte in automatico (con IA se nessun altro si unisce).",
+    "leave": "Lascia la gara",
+    "join": "Unisciti alla prossima gara",
+    "rules": "Auto fissa. Griglia definita dal giro migliore della sfida settimanale.",
+    "nobodyWaiting": "0 in attesa",
+    "waiting": "<b>{count, plural, one {# pilota} other {# piloti}} in attesa</b>",
+    "waitingNames": "<b>{count, plural, one {# pilota} other {# piloti}} in attesa</b>: {names}",
+    "waitingNamesMore": "<b>{count, plural, one {# pilota} other {# piloti}} in attesa</b>: {names} e altri {more}",
+    "topDrivers": "I migliori piloti della settimana",
+    "winsPodiums": "{wins, plural, one {{wins} vittoria} other {{wins} vittorie}} · {podiums, plural, one {{podiums} podio} other {{podiums} podi}}",
+    "record": "Tu: {starts, plural, one {{starts} gara} other {{starts} gare}} · {wins, plural, one {{wins} vittoria} other {{wins} vittorie}} · {podiums, plural, one {{podiums} podio} other {{podiums} podi}}",
+    "recordBest": "Tu: {starts, plural, one {{starts} gara} other {{starts} gare}} · {wins, plural, one {{wins} vittoria} other {{wins} vittorie}} · {podiums, plural, one {{podiums} podio} other {{podiums} podi}} · miglior piazzamento P{best}"
+  },
+  "seatPanel": {
+    "dialog": "Sedile e camera, {car}",
+    "title": "Sedile e camera",
+    "rows": {
+      "view": "Vista",
+      "viewLess": "Vista abitacolo",
+      "viewMore": "Vista cruscotto",
+      "fwd": "Avanti",
+      "fwdLess": "Sposta indietro",
+      "fwdMore": "Sposta avanti",
+      "up": "Altezza",
+      "upLess": "Sposta giù",
+      "upMore": "Sposta su",
+      "right": "Laterale",
+      "rightLess": "Sposta a sinistra",
+      "rightMore": "Sposta a destra",
+      "tilt": "Inclinazione",
+      "tiltLess": "Inclina giù",
+      "tiltMore": "Inclina su",
+      "fov": "FOV",
+      "fovLess": "Più stretto",
+      "fovMore": "Più ampio"
+    },
+    "viewGroup": "Vista",
+    "resetView": "Reimposta vista",
+    "done": "Fatto",
+    "prompts": {
+      "row": "Riga",
+      "change": "Cambia",
+      "resetRow": "Reimposta riga",
+      "resetView": "Reimposta vista",
+      "done": "Fatto"
+    },
+    "savedPerCar": "Salvato per auto"
+  },
+  "leaderboardPanel": {
+    "raceGhost": "Corri contro il ghost del tuo giro con {car}",
+    "raceGhostTitle": "Corri contro il ghost",
+    "postUnreachable": "Impossibile raggiungere la classifica",
+    "applySetup": "Applica il setup dal tuo giro con {car}",
+    "applySetupTitle": "Applica setup",
+    "retry": "Riprova",
+    "post": "Pubblica",
+    "retryAria": "Riprova a pubblicare questo giro online",
+    "postAria": "Pubblica questo giro online",
+    "retryTitle": "Riprova",
+    "postTitle": "Pubblica online",
+    "notPosted": "Non nella classifica online: {error}",
+    "notPostedYet": "Non ancora nella classifica online",
+    "driverKey": "Chiave del pilota",
+    "driverKeyIntro": "Rivendica il tuo nome pilota in classifica. Esportala per usare lo stesso nome su un altro dispositivo; tieni il file privato.",
+    "exportKey": "Esporta chiave",
+    "importKey": "Importa chiave",
+    "importGhost": "Importa file ghost",
+    "exportBest": "Esporta il mio migliore",
+    "undo": "Annulla",
+    "dismiss": "Chiudi",
+    "onlineTimes": "Tempi online",
+    "circuit": "Circuito",
+    "circuitLaps": "{count, plural, one {{count} giro} other {{count} giri}}",
+    "allCars": "Tutte le auto",
+    "yourBestLaps": "I tuoi giri migliori",
+    "physicsVersion": "Versione della fisica",
+    "car": "Auto",
+    "carLaps": "{count, plural, one {{count} giro} other {{count} giri}}",
+    "noLapsOlder": "Nessun giro su {circuit} ({board}).",
+    "noLaps": "Nessun giro salvato su {circuit}.",
+    "tableLabel": "Giri migliori su {circuit}",
+    "carColumn": "Auto",
+    "theoreticalBest": "Migliore teorico",
+    "potential": "{delta} s di potenziale",
+    "allBestSectors": "Tutti i settori migliori in un solo giro",
+    "offline": "Classifica offline. Visualizzati i tempi locali.",
+    "disabled": "Classifica online disattivata. Visualizzati i tempi locali."
+  },
+  "boardWidget": {
+    "modes": {
+      "lapEnd": "Aperta a fine giro",
+      "open": "Sempre aperta",
+      "closed": "Sempre chiusa"
+    },
+    "gear": "Quando si apre la classifica",
+    "modeMenu": "Quando si apre la classifica",
+    "region": "Classifica",
+    "fold": "Comprimi la classifica",
+    "foldKey": "Comprimi la classifica ({key})",
+    "open": "Apri la classifica: {circuit}, {place}",
+    "openNoTime": "Apri la classifica: {circuit}, ancora nessun tempo",
+    "openKey": "Apri la classifica ({key}): {circuit}, {place}",
+    "openKeyNoTime": "Apri la classifica ({key}): {circuit}, ancora nessun tempo",
+    "drivers": "{total, plural, one {{count} pilota} other {{count} piloti}}",
+    "noTimes": "Ancora nessun tempo.",
+    "placesBetween": "Posizioni intermedie",
+    "lapsDriven": "Giri percorsi",
+    "noTime": "Ancora nessun tempo",
+    "place": "P{rank}/{total}"
+  },
+  "multiplayerPanel": {
+    "collision": {
+      "on": "On",
+      "ghostLap1": "Ghost al giro 1",
+      "off": "Off",
+      "protected": "Protette"
+    },
+    "collisionHint": {
+      "on": "Contatto completo",
+      "ghostLap1": "Nessun contatto al primo giro",
+      "off": "Le auto si attraversano",
+      "protected": "Ghost al giro 1, poi un’auto pericolosa non può toccare le altre"
+    },
+    "anyCar": "Qualsiasi auto",
+    "startType": {
+      "standing": "Da fermo",
+      "rolling": "Lanciata"
+    },
+    "gridOrder": {
+      "qualifying": "Qualifica",
+      "reverse": "Invertita",
+      "random": "Casuale"
+    },
+    "gridOrderHint": {
+      "qualifying": "Prima il giro più veloce; senza tempi, ordine di ingresso",
+      "reverse": "Ordine di qualifica (o di ingresso) invertito",
+      "random": "Sorteggiata al via"
+    },
+    "presetClassic": "Classico",
+    "presetClassicHint": "Limiti della pista a infrazioni: ogni 3 infrazioni +3 s, poi +5 s",
+    "timeScaleFixed": "Fisso",
+    "qualifyingOff": "Off",
+    "settings": {
+      "event": "Evento",
+      "race": "Gara",
+      "rules": "Regolamento",
+      "circuit": "Circuito",
+      "changeCircuit": "Cambia circuito: {circuit}",
+      "change": "Cambia",
+      "circuitHint": "Cambialo dal menu principale",
+      "cars": "Auto",
+      "oneCar": "Un’auto per tutti",
+      "classesMixed": "Tutte le auto, classi miste",
+      "weather": "Meteo",
+      "timeOfDay": "Ora del giorno",
+      "timeSpeed": "Velocità del tempo",
+      "laps": "Giri",
+      "qualifying": "Qualifica",
+      "qualifyingHint": "Il miglior giro pulito decide la griglia",
+      "gridOrder": "Ordine di griglia",
+      "setByQualifying": "Definito dalla qualifica",
+      "start": "Partenza",
+      "launch": "Avvio",
+      "rulePreset": "Regolamento",
+      "trackLimits": "Limiti della pista",
+      "penalties": "Penalità",
+      "penaltiesOn": "On",
+      "penaltiesOff": "Off",
+      "penaltiesHint": "Tempo aggiunto per limiti della pista e false partenze",
+      "damage": "Danni",
+      "collisions": "Collisioni",
+      "lockedQualifying": "Bloccato durante la qualifica",
+      "lockedRace": "Bloccato durante la gara"
+    },
+    "net": {
+      "relayedTitle": "Il traffico ti raggiunge tramite l’host",
+      "relayed": "Inoltrata",
+      "measuring": "Misurazione",
+      "pingLoss": "{ping} ms · {loss}% persi"
+    },
+    "drivers": {
+      "title": "Piloti",
+      "host": "Host: {name}",
+      "qualifying": "Qualifica",
+      "noCar": "Ancora nessuna auto",
+      "noTime": "Nessun tempo",
+      "wrongClassTitle": "Fuori dalla classe di questa stanza ({class})",
+      "wrongClass": "Classe sbagliata",
+      "ready": "Pronto",
+      "notReady": "Non pronto",
+      "hostOn": "L’host è su {circuit}",
+      "switchCircuit": "Cambia circuito",
+      "wrongCar": "La tua auto non rientra nella classe di questa stanza ({class}).",
+      "wrongCarSwitch": "La tua auto non rientra nella classe di questa stanza ({class}). Cambia auto:",
+      "raceInProgress": "Gara in corso",
+      "startRaceNow": "Avvia la gara ora",
+      "startQualifying": "Avvia qualifica di {minutes} min",
+      "startRace": "Avvia gara",
+      "endQualifying": "Termina la qualifica",
+      "endRaceForEveryone": "Termina la gara per tutti",
+      "readyButton": "Pronto",
+      "readyUp": "Sono pronto",
+      "raceRunning": "Gara in corso.",
+      "qualifyingRunning": "Qualifica in corso.",
+      "waitingForHost": "In attesa che l’host avvii.",
+      "confirmEndQualifying": "Terminare la qualifica?",
+      "confirmEndRace": "Terminare la gara per tutti?",
+      "confirmEndQualifyingButton": "Termina la qualifica",
+      "confirmEndRaceButton": "Termina la gara",
+      "keepQualifying": "Continua la qualifica",
+      "keepRacing": "Continua a correre",
+      "confirmBody": "Riporta tutti i piloti nella lobby."
+    },
+    "room": {
+      "connected": "{count} connessi",
+      "connecting": "Connessione",
+      "notConnected": "Non connesso",
+      "title": "Stanza privata",
+      "codeAria": "Codice stanza {code}",
+      "codeCaption": "Codice stanza",
+      "linkCopied": "Link copiato",
+      "copyLink": "Copia il link d’invito",
+      "share": "Condividi",
+      "host": "Crea una stanza",
+      "joinAnother": "Unisciti a un’altra stanza",
+      "joinFriend": "Unisciti alla stanza di un amico",
+      "codePlaceholder": "Codice stanza",
+      "join": "Unisciti",
+      "newRoom": "Nuova stanza",
+      "codeTooShort": "Inserisci almeno 3 caratteri.",
+      "joinFailed": "Impossibile unirsi a quella stanza. Controlla il codice.",
+      "shareTitle": "Gara su LibreCorsa",
+      "shareText": "Unisciti alla mia gara",
+      "racingAs": "In gara come {name}",
+      "edit": "Modifica"
+    },
+    "connect": {
+      "more": "Altri modi per connettersi",
+      "hide": "Nascondi",
+      "localTitle": "Schede locali",
+      "localIntro": "Corri contro un’altra scheda di questo browser.",
+      "localConnect": "Connetti scheda locale",
+      "manualTitle": "WebRTC manuale",
+      "manualIntro": "Peer-to-peer diretto tramite scambio di token di offerta e risposta.",
+      "createOffer": "1. Crea offerta (host)",
+      "acceptOffer": "2. Accetta offerta",
+      "acceptAnswer": "3. Accetta risposta (host)",
+      "offerFailed": "Creazione dell’offerta non riuscita.",
+      "badOffer": "Token dell’offerta non valido.",
+      "badAnswer": "Token della risposta non valido.",
+      "remoteToken": "Token remoto",
+      "pasteToken": "Incolla il token",
+      "answerAccepted": "Risposta accettata. Connessione in corso…",
+      "yourToken": "Il tuo token",
+      "copied": "Copiato",
+      "copy": "Copia",
+      "reset": "Reimposta",
+      "turnTitle": "Relay TURN personalizzato",
+      "turnIntro": "Server relay facoltativo per reti con restrizioni.",
+      "relayAddress": "Indirizzo del relay",
+      "username": "Nome utente",
+      "password": "Password",
+      "saved": "Salvato",
+      "save": "Salva",
+      "clear": "Rimuovi",
+      "turnPrefix": "L’indirizzo deve iniziare con turn: o turns:",
+      "ownRelay": "Stai usando un tuo server relay"
+    }
+  },
+  "pauseMenu": {
+    "tabs": {
+      "label": "Sezioni",
+      "session": "Sessione",
+      "hud": "HUD",
+      "conditions": "Condizioni",
+      "garage": "Garage",
+      "corners": "Curve",
+      "multiplayer": "Multiplayer",
+      "lapTimes": "Tempi sul giro",
+      "feedback": "Feedback"
+    },
+    "actions": {
+      "label": "Menu di pausa",
+      "resume": "Riprendi",
+      "restartRace": "Ricomincia la gara",
+      "gridStart": "Partenza da griglia",
+      "rollingStart": "Partenza lanciata",
+      "flyingLap": "Giro lanciato",
+      "watchReplay": "Guarda il replay",
+      "skipTrack": "Salta brano",
+      "nowPlaying": "{title}, {composer}",
+      "settings": "Impostazioni",
+      "mainMenu": "Menu principale"
+    },
+    "prompts": {
+      "move": "Muovi",
+      "select": "Seleziona",
+      "jumpThere": "Vai lì",
+      "tabs": "Schede",
+      "page": "Pagina",
+      "back": "Indietro",
+      "resume": "Riprendi"
+    },
+    "header": {
+      "lap": "Giro {lap}",
+      "lapOf": "Giro {lap}/{total}",
+      "run": "Salita {lap}",
+      "position": "P{position}/{field}",
+      "online": "Online",
+      "leavesRace": "Abbandona la gara in corso.",
+      "leavesRoom": "Abbandona la stanza in corso.",
+      "endsSession": "Termina la sessione in corso."
+    },
+    "session": {
+      "title": "Sessione",
+      "autopilot": "Pilota automatico",
+      "key": "Tasto {key}",
+      "camera": "Camera",
+      "cameraView": "Vista camera",
+      "cycle": "Cambia: {key}",
+      "freeCamera": "Camera libera",
+      "freeCameraHint": "Tasto {key} · Trascina per guardare, WASD per volare, Q/E per l’altezza",
+      "freeCameraButton": "Camera libera",
+      "exitFreeCamera": "Chiudi camera libera",
+      "tv": "TV a bordo pista",
+      "tvHint": "Tasto {key} · Telecamere TV a bordo pista",
+      "tvButton": "TV a bordo pista",
+      "exitTv": "Chiudi TV"
+    },
+    "hud": {
+      "title": "Layout HUD",
+      "settings": "Impostazioni HUD"
+    },
+    "corners": {
+      "title": "Curve",
+      "mapLabel": "{count, plural, one {Mappa del circuito con # curva numerata} other {Mappa del circuito con # curve numerate}}",
+      "turn": "T{turn}",
+      "detail": "{complex} · Settore {sector}",
+      "pick": "Seleziona una curva",
+      "rowLabel": "T{turn}, curva {turn}: {name}, {complex}. Corda {apex} {unit}, marcia {gear}",
+      "gear": "Marcia <n>{gear}</n>"
+    }
+  },
+  "lapSummary": {
+    "title": "{kind, select, run {Salita {lap}} other {Giro {lap}}}",
+    "open": "{kind, select, run {Salita {lap}: mostra i dati dei settori} other {Giro {lap}: mostra i dati dei settori}}",
+    "dismiss": "Chiudi il riepilogo del giro",
+    "collapse": "Comprimi il riepilogo del giro",
+    "cardLabel": "Riepilogo del giro {lap}",
+    "invalid": "Non valido",
+    "pb": "RP",
+    "invalidWall": "Non valido: contatto con il muro",
+    "invalidLimits": "Non valido: limiti della pista",
+    "autopilot": "Pilota automatico: fuori classifica",
+    "personalBest": "Record personale",
+    "online": "Online",
+    "onlineRank": "Online: P{rank}",
+    "onlineRankOf": "Online: P{rank} su {total}",
+    "onlineRankWeek": "Online: P{rank}, P{week} questa settimana",
+    "onlineRankOfWeek": "Online: P{rank} su {total}, P{week} questa settimana",
+    "invalidUnranked": "Non valido · fuori classifica",
+    "autopilotUnranked": "Pilota automatico · fuori classifica",
+    "topSpeed": "Max {unit}",
+    "avgSpeed": "Media {unit}",
+    "fullThrottle": "Gas a fondo",
+    "braking": "Frenata",
+    "sector": "{mark, select, best {Settore {n}: migliore} pb {Settore {n}: record personale} slower {Settore {n}: più lento} other {Settore {n}}}",
+    "theoreticalBest": "Migliore teorico",
+    "posting": "Pubblicazione",
+    "postingNow": "Pubblicazione…",
+    "retry": "Riprova il caricamento",
+    "post": "Pubblica online",
+    "queued": "In coda",
+    "close": "Chiudi",
+    "saveGhost": "Salva file ghost",
+    "driver": "Pilota <b>{name}</b>",
+    "rename": "Rinomina",
+    "driverName": "Nome pilota",
+    "cancel": "Annulla",
+    "saving": "Salvataggio…",
+    "saveName": "Salva nome",
+    "chart": {
+      "title": "Velocità minima per curva",
+      "turn": "T{turn}",
+      "empty": "Nessun dato di curva per questo giro.",
+      "bar": "T{turn} {name}: {speed} {unit}, {state, select, none {ancora nessun riferimento} same {{delta}, uguale al migliore} faster {{delta}, più veloce del migliore} other {{delta}, più lento del migliore}}",
+      "faster": "Più veloce",
+      "slower": "Più lento",
+      "same": "Uguale"
+    }
+  },
+  "raceResults": {
+    "dialog": "Risultato della gara",
+    "dsq": "DSQ",
+    "dnf": "DNF",
+    "running": "In gara",
+    "lapsDown": "{count, plural, one {+# giro} other {+# giri}}",
+    "laps": "{count, plural, one {# giro} other {# giri}}",
+    "trackLimits": "Limiti della pista {count}",
+    "final": "Finale",
+    "provisional": "Provvisorio",
+    "table": "Classifica completa",
+    "colPos": "Pos",
+    "colGainedTitle": "Posizioni guadagnate o perse rispetto alla griglia",
+    "colGained": "Posizioni guadagnate",
+    "colDriver": "Pilota",
+    "colLaps": "Giri",
+    "colTime": "Tempo / distacco",
+    "colBest": "Giro migliore",
+    "penaltyTitle": "{seconds} s di penalità di tempo, incluse nel tempo",
+    "promptSelect": "Seleziona",
+    "promptClose": "Chiudi",
+    "backToLobby": "Torna alla lobby",
+    "watchReplay": "Guarda il replay",
+    "restart": "Ricomincia la gara",
+    "close": "Chiudi",
+    "fastestLapIcon": "Giro più veloce",
+    "noChange": "Nessuna variazione",
+    "notKnown": "Non noto",
+    "placesGained": "{count, plural, one {# posizione guadagnata} other {# posizioni guadagnate}}",
+    "placesLost": "{count, plural, one {# posizione persa} other {# posizioni perse}}",
+    "yourRace": "La tua gara",
+    "position": "P{position}",
+    "disqualified": "Squalificato",
+    "retired": "Ritirato",
+    "ofField": "su {count}",
+    "gridUnknown": "Griglia sconosciuta",
+    "started": "Partito P{position}",
+    "fastestLap": "Giro più veloce",
+    "bestLap": "Giro migliore",
+    "lastRaces": {
+      "title": "Le tue ultime gare",
+      "date": "Data",
+      "circuit": "Circuito",
+      "finish": "Arrivo",
+      "gained": "Posizioni guadagnate",
+      "best": "Giro migliore",
+      "dnf": "DNF",
+      "position": "P{position}"
+    },
+    "joinNext": "Unisciti alla prossima gara <time>{countdown}</time>"
+  },
+  "podiumOverlay": {
+    "label": "Podio",
+    "first": "1°",
+    "second": "2°",
+    "third": "3°",
+    "skip": "Salta"
+  },
+  "qualifyingHud": {
+    "clock": "Qualifica",
+    "lastLap": "Ultimo giro",
+    "badge": "Qualifica",
+    "finishIt": "Completalo",
+    "lapDeleted": "Giro cancellato",
+    "best": "Migliore",
+    "grid": "Risultato della qualifica",
+    "noTime": "Nessun tempo"
+  },
+  "perfReportCard": {
+    "title": "Report prestazioni",
+    "description": "Registro dei tempi di frame della sessione.",
+    "failed": "Appunti non disponibili. Salva il file.",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "saveFile": "Salva file",
+    "saved": "Salvato"
+  },
+  "qualityNotice": {
+    "lowered": "Grafica ridotta",
+    "floor": "FPS bassi · limite a 30 fps disponibile in Impostazioni"
+  },
+  "multiPageMfd": {
+    "pages": {
+      "elecTag": "ELET",
+      "elecTitle": "Elettronica",
+      "relTag": "REL",
+      "relTitle": "Relativo",
+      "tyreTag": "GOMM",
+      "tyreTitle": "Gomme e freni",
+      "fuelTag": "CARB",
+      "fuelTitle": "Carburante ed energia",
+      "stndTag": "CLAS",
+      "stndTitle": "Classifica"
+    },
+    "panel": "MFD · {page}",
+    "pagesLabel": "Pagine MFD",
+    "pagesHint": "D-pad sinistra o destra, oppure Ins: pagina successiva",
+    "open": "Apri l’MFD",
+    "fold": "Comprimi l’MFD",
+    "relative": {
+      "label": "Relativo",
+      "noCars": "Nessuna auto in pista",
+      "lapsUp": "+{count}G",
+      "lapsDown": "−{count}G",
+      "ahead": "Davanti",
+      "behind": "Dietro",
+      "clear": "Libero",
+      "you": "TU"
+    },
+    "fuel": {
+      "battery": "Batteria",
+      "ersPerLap": "ERS / giro",
+      "treadPerLap": "Battistrada / giro",
+      "fuel": "Carburante",
+      "lapsOfFuel": "{laps} giri",
+      "perLap": "Per giro",
+      "target": "obiettivo {kg}",
+      "lift": "Alza il gas · risparmia {kg} kg",
+      "fuelOk": "Carburante ok"
+    },
+    "tyres": {
+      "label": "Gomme e freni"
+    },
+    "standings": {
+      "label": "Classifica",
+      "fastestLap": "Giro più veloce",
+      "fastestLapShort": "GV",
+      "lead": "Leader",
+      "noLaps": "Ancora nessun giro",
+      "lapTimes": "Tempi sul giro"
+    },
+    "pill": {
+      "position": "P{position}/{fieldSize}",
+      "laps": "{count, plural, one {# giro} other {# giri}}"
+    }
+  },
+  "tunerMfdPanel": {
+    "categories": {
+      "bias": "BIL",
+      "diff": "DIFF",
+      "pwr": "POT"
+    },
+    "dials": {
+      "tc1": {
+        "title": "Controllo di trazione",
+        "low": "Più slittamento",
+        "high": "Più sicuro"
+      },
+      "tc2": {
+        "title": "Taglio TC",
+        "low": "Taglio più dolce",
+        "high": "Taglio più deciso"
+      },
+      "abs": {
+        "title": "ABS",
+        "low": "Più tardi",
+        "high": "Prima"
+      },
+      "bias": {
+        "label": "BIL",
+        "title": "Bilanciamento dei freni",
+        "low": "Al posteriore",
+        "high": "All’anteriore"
+      },
+      "diffEntry": {
+        "label": "INGR",
+        "title": "Diff ingresso",
+        "low": "Agile",
+        "high": "Stabile"
+      },
+      "diffMid": {
+        "label": "CENT",
+        "title": "Diff centro",
+        "low": "Ruota di più",
+        "high": "Bloccato"
+      },
+      "diffExit": {
+        "label": "USC",
+        "title": "Diff uscita",
+        "low": "Più progressivo",
+        "high": "Più spinta"
+      },
+      "engineMap": {
+        "label": "MAP",
+        "title": "Mappa motore",
+        "low": "Più pronta",
+        "high": "Più morbida"
+      },
+      "ersMode": {
+        "title": "Erogazione ERS",
+        "low": "Recupero",
+        "high": "Attacco"
+      }
+    },
+    "engineMaps": {
+      "quali": "QUALI",
+      "race": "GARA",
+      "smooth": "FLUIDA",
+      "lean": "MAGRA",
+      "wet": "BAGNATO"
+    },
+    "ersModes": {
+      "charge": "CARICA",
+      "lowSpeed": "BASSA VEL.",
+      "balanced": "BILANCIATA",
+      "race": "GARA",
+      "attack": "ATTACCO"
+    },
+    "phases": {
+      "entry": "Ingresso",
+      "mid": "Centro",
+      "exit": "Uscita"
+    },
+    "chips": {
+      "tc": "TC {level}/{cut}",
+      "tcOff": "TC Off",
+      "abs": "ABS {level}",
+      "absOff": "ABS Off",
+      "bias": "BB {bias}"
+    },
+    "hero": {
+      "off": "OFF",
+      "ofMax": "SU {max}",
+      "lock": "{pct}% BLOCCO",
+      "front": "% ANT.",
+      "map": "M{map}"
+    },
+    "live": {
+      "cut": "Taglio",
+      "wheelFl": "AS",
+      "wheelFr": "AD",
+      "wheelRl": "PS",
+      "wheelRr": "PD",
+      "front": "A {bias}",
+      "rear": "P {bias}",
+      "torque": "Coppia",
+      "battery": "Batteria"
+    },
+    "previousDial": "Selettore precedente",
+    "previousDialHint": "Selettore precedente (D-pad sinistra o ,)",
+    "nextDial": "Selettore successivo",
+    "nextDialHint": "Selettore successivo (D-pad destra o .)",
+    "lower": "Riduci {dial}",
+    "lowerHint": "{hint} (D-pad giù o -)",
+    "raise": "Aumenta {dial}",
+    "raiseHint": "{hint} (D-pad su o =)",
+    "openTuner": "Apri il tuner",
+    "foldTuner": "Comprimi il tuner"
+  },
+  "f12026ChannelsPanel": {
+    "region": "Canali ingegneristici",
+    "wheels": {
+      "lf": "AS",
+      "rf": "AD",
+      "lr": "PS",
+      "rr": "PD"
+    },
+    "wheelTitle": "{wheel}: slittamento, corsa residua fino al tampone, aderenza usata",
+    "slipRatio": "%SR",
+    "aeroHeightTitle": "Altezza da terra aero",
+    "aeroHeight": "Alt. aero",
+    "aeroBalanceTitle": "Bilanciamento aero (quota di deportanza anteriore)",
+    "aeroBalance": "Bil. aero",
+    "lsdTitle": "Coppia di bloccaggio del differenziale",
+    "lsd": "Blocco LSD",
+    "straightModeTitle": "Stato Straight Mode e aperture in questa sessione",
+    "drsTitle": "Stato DRS e aperture in questa sessione",
+    "xMode": "X-mode",
+    "drsState": {
+      "open": "Aperto",
+      "armed": "Pronto",
+      "zone": "Zona",
+      "off": "Off"
+    },
+    "overtakeEarned": "SORPASSO GUADAGNATO",
+    "overtakeLocked": "SORPASSO BLOCCATO",
+    "noVerdict": "NESSUN VERDETTO",
+    "zoneEarned": "{zone} GUADAGNATA",
+    "zoneLocked": "{zone} BLOCCATA",
+    "noDetection": "NESSUN RILEVAMENTO",
+    "wall": "Muro",
+    "aidIntervening": "{aid}, in intervento"
+  },
+  "touchControls": {
+    "steering": "Sterzo",
+    "drive": "Marcia avanti",
+    "reverse": "Retromarcia",
+    "shiftDown": "Marcia giù",
+    "shiftUp": "Marcia su",
+    "boost": "Boost",
+    "overtake": "Sorpasso",
+    "overtakeShort": "OT",
+    "activeAero": "Aerodinamica attiva",
+    "headlights": "Fari",
+    "brake": "Freno",
+    "throttle": "Acceleratore",
+    "steerLeft": "Sterza a sinistra",
+    "steerRight": "Sterza a destra",
+    "pause": "Pausa",
+    "camera": "Camera",
+    "recentreTilt": "Ricentra inclinazione",
+    "allowMotion": "Consenti movimento",
+    "tapForTilt": "Attiva inclinazione",
+    "tiltBlocked": "Inclinazione bloccata · Riprova",
+    "noTiltSensor": "Nessun sensore di inclinazione"
+  },
+  "replayBar": {
+    "region": "Comandi del replay",
+    "transport": "Controlli di riproduzione",
+    "previousFrame": "Fotogramma precedente",
+    "previousFrameTitle": "Fotogramma precedente ({key})",
+    "pause": "Metti in pausa il replay",
+    "play": "Avvia il replay",
+    "playPauseTitle": "Riproduci / pausa",
+    "playPauseTitleKey": "Riproduci / pausa ({key})",
+    "nextFrame": "Fotogramma successivo",
+    "nextFrameTitle": "Fotogramma successivo ({key})",
+    "jumpToLap": "Vai al giro {lap}",
+    "lapMarker": "G{lap}",
+    "timeline": "Timeline del replay",
+    "timelineValue": "{elapsed} di {duration}",
+    "playbackSpeed": "Velocità di riproduzione",
+    "focusedCar": "Auto seguita",
+    "previousCar": "Auto precedente",
+    "previousCarTitle": "Auto precedente ({key})",
+    "switchCarTitle": "Cambia auto seguita ({key})",
+    "nextCar": "Auto successiva",
+    "nextCarTitle": "Auto successiva ({key})",
+    "cameraAngle": "Angolazione camera replay",
+    "cycleCamera": "Cambia camera del replay",
+    "flashbackTitle": "Flashback: riprendi a guidare da questo momento ({key}, invalida il giro in corso)",
+    "flashback": "Flashback",
+    "exit": "Esci",
+    "hints": {
+      "freeCam": "Camera libera · Trascina per guardare · WASD vola · Q/E altezza · Scorri per la velocità · R reimposta",
+      "playPause": "Riproduci / pausa",
+      "seek": "Salta {seconds} s",
+      "step": "Fotogramma",
+      "switchCar": "Cambia auto",
+      "freeCamKey": "Camera libera",
+      "flashback": "Flashback"
+    }
+  },
+  "timingPanels": {
+    "tower": {
+      "region": "Torre dei tempi",
+      "lap": "Giro {lap}",
+      "lapOf": "Giro {lap}<dim>/{total}</dim>",
+      "driver": "Pilota",
+      "gap": "Distacco",
+      "interval": "Intervallo",
+      "lastVsYouTitle": "Il suo ultimo giro rispetto al tuo; sulla tua riga, rispetto al tuo migliore",
+      "lastVsYou": "Ultimo<br></br>vs te",
+      "fastestLap": "Giro più veloce",
+      "fastestLapShort": "GV",
+      "finished": "Arrivato al traguardo",
+      "damagedTitle": "Danneggiata ({percent}%)",
+      "damagedLabel": "Danneggiata, {percent}%",
+      "out": "Ritirato",
+      "leader": "Leader",
+      "lead": "Leader",
+      "lastVsBestTitle": "Ultimo giro rispetto al tuo migliore",
+      "lastVsTheirsTitle": "Il suo ultimo giro rispetto al tuo",
+      "personalBest": "RP"
+    },
+    "lap": {
+      "region": "Giro",
+      "outLap": "Giro di uscita",
+      "counter": "{kind, select, run {Salita {lap}} other {Giro {lap}}}",
+      "sector": "S{sector}",
+      "last": "Ultimo",
+      "best": "Migliore",
+      "noRefLap": "Nessun riferimento",
+      "lastLap": "Ultimo giro",
+      "bestLap": "Giro migliore"
+    },
+    "challenge": {
+      "region": "Sfida della settimana",
+      "yourBest": "Il tuo migliore",
+      "weekFastest": "Il più veloce della settimana"
+    }
+  },
+  "raceIncidentFeed": {
+    "calls": {
+      "investigation": "Indagine",
+      "penalty": "Penalità",
+      "noAction": "Nessun provvedimento",
+      "out": "Ritirato",
+      "raceControl": "Direzione gara",
+      "yellow": "Gialla",
+      "green": "Verde",
+      "warning": "Avviso"
+    },
+    "vsc": {
+      "tag": "VSC",
+      "ending": "Fine VSC",
+      "slowDown": "Rallenta",
+      "slowToTarget": "Rallenta al passo",
+      "prepareForGreen": "Preparati al verde",
+      "noOvertaking": "Vietato sorpassare"
+    },
+    "flag": {
+      "yieldNow": "Cedi il passo · Fai passare {code}",
+      "letThrough": "Fai passare {code}",
+      "doubleYellowCue": "Rallenta · vietato sorpassare",
+      "yellowCue": "Vietato sorpassare",
+      "blue": "Blu",
+      "doubleYellow": "Doppia gialla",
+      "yellow": "Gialla"
+    }
+  },
+  "raceControlBanner": {
+    "decisions": {
+      "warning": "Avviso",
+      "finalWarning": "Ultimo avviso",
+      "penalty": "Penalità",
+      "disqualified": "Squalificato",
+      "lapInvalid": "Giro cancellato",
+      "cleared": "Risolto",
+      "noAdvantage": "Nessun provvedimento"
+    },
+    "warningsMeter": "{count} avvisi su {total}",
+    "pointsMeter": "{points} punti su {allowed} per i limiti della pista",
+    "giveBack": {
+      "toCar": "Cedi pos. a {code}",
+      "dropTo": "Scendi in P{position}",
+      "time": "Restituisci {seconds} s",
+      "slowDown": "Rallenta",
+      "underYellow": "Sorpasso con gialla",
+      "illegalOvertake": "Sorpasso irregolare",
+      "trackLimits": "Limiti della pista"
+    },
+    "offTrack": {
+      "trackLimits": "Limiti della pista",
+      "offTrack": "Fuori pista",
+      "underReview": "In valutazione"
+    }
+  },
+  "startLights": {
+    "startsIn": "La gara parte tra <n>{seconds}</n>",
+    "lightsLabel": "Semafori di partenza: {lit} accesi su {total}",
+    "rollingStart": "Partenza lanciata",
+    "holdPaceSkin": "Mantieni il ritmo · <n>{pace}</n> {unit} fino al traguardo",
+    "holdPace": "Mantieni <n>{pace}</n> {unit} fino alla linea",
+    "greenFlag": "Bandiera verde",
+    "lightsOut": "Semafori spenti",
+    "chequeredFlag": "Bandiera a scacchi"
+  },
+  "launchCue": {
+    "stalledLabel": "Motore spento: tieni premuto {control} o metti in folle per riavviare",
+    "clutch": "frizione",
+    "stalled": "Spento · tieni <control></control> o N",
+    "jumpStart": "Falsa partenza · +{seconds} s",
+    "manualStart": "Partenza manuale: {clutch, select, held {frizione premuta} other {tieni la frizione}}, {revs, select, up {giri su} other {porta su i giri}}",
+    "holdNamed": "Tieni {control}",
+    "holdClutch": "Tieni la frizione",
+    "revsUp": "Giri su"
+  },
+  "speedCluster": {
+    "region": "Cruscotto velocità",
+    "minimalRegion": "Velocità e marcia",
+    "shiftLights": "Luci di cambiata: {lit} su {total}",
+    "gearLabel": "Marcia {gear}",
+    "gear": "Marcia",
+    "shift": "Cambia",
+    "aeroToggle": "{label}: attiva/disattiva",
+    "drsTitle": "DRS ({key}): flap posteriore, in una zona DRS; in gara solo entro 1 s dall’auto davanti al punto di rilevamento, dal giro 3",
+    "straightModeTitle": "Straight Mode ({key}): entrambi i flap si aprono sui rettilinei; premendo poco prima si aprono all’inizio",
+    "overtakeLockedTitle": "Modalità sorpasso ({keys}): si ottiene entro 1 s dall’auto davanti al punto di rilevamento, per il giro successivo",
+    "overtakeTitle": "Modalità sorpasso ({keys})",
+    "boostTitle": "Boost di override manuale ({keys})",
+    "boost2026Title": "Boost ({keys}): mantiene o aumenta la potenza del motore elettrico; in gara fino alla potenza che aveva quando l’hai premuto, o 150 kW",
+    "boostLowGripTitle": "Boost ({keys}): condizioni di bassa aderenza, quindi impedisce solo che la potenza del motore elettrico cali",
+    "overtake2026Title": "Sorpasso ({key}): tutta la potenza del motore elettrico mantenuta fino a 337 km/h per il resto del giro",
+    "overtake2026LockedTitle": "Sorpasso ({key}): si ottiene entro 1 s dall’auto davanti alla linea di rilevamento, per il giro dalla linea di attivazione",
+    "overtake2026AutoTitle": "Sorpasso: lo sta usando il Sorpasso automatico; premi {key} per averlo tutto",
+    "overtakeLowGripTitle": "Condizioni di bassa aderenza: la direzione gara ha disattivato il Sorpasso e lo Straight Mode apre solo i flap anteriori",
+    "overtake": "Sorpasso",
+    "boost": "Boost",
+    "overtakeAuto": "Sorpasso auto",
+    "lowGrip": "Bassa aderenza",
+    "harvest": "Recupero",
+    "deploy": "Erogazione",
+    "ersSoc": "ERS SOC",
+    "lonG": "G long.",
+    "inputs": "Freno, acceleratore, forza",
+    "brakeLetter": "F",
+    "brakeTitle": "Input del freno",
+    "throttleLetter": "A",
+    "throttleTitle": "Input dell’acceleratore",
+    "forceLetter": "F",
+    "clip": "Clip",
+    "forceTitle": "Coppia sterzo / Force feedback (rosso = saturazione)",
+    "latG": "{g} g lat.",
+    "ersBattery": "Carica della batteria ERS",
+    "rpmBand": "Fascia dei giri motore"
+  },
+  "hudFormat": {
+    "session": {
+      "qualifying": "Qualifica",
+      "timeTrial": "Prova a tempo",
+      "practice": "Prove libere"
+    },
+    "cornerShort": "T{turn}",
+    "lapMark": {
+      "best": "Migliore",
+      "pb": "Record personale",
+      "slower": "Più lento"
+    }
+  },
+  "thirdPartyData": {
+    "you": "Tu",
+    "headlight": {
+      "flash": "Lampeggio",
+      "on": "Accesi",
+      "off": "Spenti"
+    },
+    "surface": {
+      "dry": "Asciutto",
+      "damp": "Umido",
+      "wet": "Bagnato",
+      "flooded": "Allagato"
+    }
+  },
+  "aeroLabel": {
+    "readout": {
+      "noDrs": "NO DRS",
+      "drsOpen": "DRS APERTO",
+      "drsQueued": "DRS IN ATTESA",
+      "drsArmed": "DRS PRONTO",
+      "xMode": "X-MODE",
+      "xQueued": "X IN ATTESA",
+      "xArmed": "X PRONTO",
+      "zMode": "Z-MODE"
+    },
+    "notice": {
+      "drsEnabled": "DRS abilitato",
+      "drsNotEnabled": "DRS non abilitato",
+      "drsQueued": "In attesa",
+      "xModeBadge": "X-MODE",
+      "straightMode": "Straight Mode",
+      "xModeQueued": "In attesa",
+      "overtakeBadge": "SORPASSO",
+      "overtakeEnabled": "Attivo",
+      "overtakeLocked": "Bloccato"
+    }
+  },
+  "tyreBrakeWidget": {
+    "corner": {
+      "fl": "AS",
+      "fr": "AD",
+      "rl": "PS",
+      "rr": "PD"
+    },
+    "tread": {
+      "inner": "I",
+      "middle": "C",
+      "outer": "E",
+      "title": "Battistrada esterno, centrale, interno"
+    },
+    "condition": {
+      "grain": "Grain",
+      "grainTitle": "Graining: la superficie del battistrada si strappa (troppo fredda sotto mentre scivola)",
+      "blister": "Blister",
+      "blisterTitle": "Blistering: il nucleo si è surriscaldato",
+      "flat": "Piatto",
+      "flatTitle": "Piatto da bloccaggio: vibrazioni e meno aderenza",
+      "dirt": "Sporco",
+      "dirtTitle": "Sporco / gommini raccolti fuori traiettoria: si pulisce in poche curve"
+    },
+    "conditionTitle": "{title} ({level}%)",
+    "brakeTitle": "Disco freno {disc}{hasCore, select, yes { · nucleo {core}} other {}}{hasBite, select, yes { · mordente pastiglie {bite}%} other {}}",
+    "cardTitle": "{corner} battistrada {temps} (visto da dietro)",
+    "treadLife": "Vita del battistrada",
+    "pressureTitle": "Pressione ({unit})",
+    "windowTitle": "Finestra di lavoro del battistrada",
+    "window": "Finestra",
+    "miniTitle": "{corner}: battistrada {temps} · {pressure} · freno {brake}{hasCondition, select, yes { · {condition}} other {}}"
+  },
+  "tyrePanel": {
+    "region": "Gomme"
+  },
+  "weatherBadge": {
+    "region": "Meteo",
+    "air": "Aria",
+    "track": "Pista",
+    "rain": "Pioggia",
+    "heavyRain": "Pioggia forte",
+    "wind": "Vento",
+    "headlightsForcedOn": "Fari forzati accesi",
+    "headlightsForcedOff": "Fari forzati spenti",
+    "headlightsOn": "Fari accesi",
+    "headlightsTitleManualOn": "Fari accesi (manuale)",
+    "headlightsTitleManualOff": "Fari spenti (manuale)",
+    "headlightsTitleAuto": "Fari accesi (auto)",
+    "chipFlash": "LAMP.",
+    "chipOn": "ON",
+    "chipOff": "OFF"
+  },
+  "damageWidget": {
+    "label": "Danni",
+    "out": "Fuori",
+    "puncture": "Foratura",
+    "title": "Anteriore {front} · posteriore {rear} · sinistra {left} · destra {right}",
+    "titlePunctured": "Anteriore {front} · posteriore {rear} · sinistra {left} · destra {right} · foratura",
+    "part": {
+      "frontWing": "Ala anteriore",
+      "rearWing": "Ala posteriore",
+      "floor": "Fondo",
+      "suspension": "Sospensioni"
+    }
+  },
+  "inputTrace": {
+    "throttle": "Acc",
+    "brake": "Fre",
+    "steering": "Ste",
+    "steeringTitle": "Ruote a linea continua, il tuo input tratteggiato",
+    "trace": "Tracciato di acceleratore, freno e sterzo: lo sterzo tratteggiato è il tuo input, quello continuo l’angolo delle ruote",
+    "region": "Input"
+  },
+  "pedalBars": {
+    "region": "Pedali ed elettronica",
+    "clutch": "FRI",
+    "clip": "Clip",
+    "steering": "Sterzo"
+  },
+  "splitGaps": {
+    "region": "Distacchi parziali",
+    "ahead": "Davanti",
+    "behind": "Dietro",
+    "carAhead": "Auto davanti {driver}: {gap} secondi",
+    "carBehind": "Auto dietro {driver}: {gap} secondi",
+    "goingYourWay": "A tuo favore",
+    "goingAgainstYou": "A tuo sfavore",
+    "steady": "Stabile"
+  },
+  "deltaBar": {
+    "label": "Delta rispetto al giro di riferimento",
+    "valueText": "{delta} secondi, {trend, select, gaining {in recupero} losing {in perdita} other {stabile}}",
+    "noReference": "Nessun giro di riferimento"
+  },
+  "ffbMeter": {
+    "title": "Force feedback",
+    "clipping": "Saturazione",
+    "inRange": "Nei limiti",
+    "peak": "Picco <v>{value}%</v>",
+    "setCar": "Imposta questa auto al {value}%"
+  },
+  "proximityRadar": {
+    "carsClose": "{count, plural, one {# auto vicina} other {# auto vicine}}{side, select, left {, una affiancata a sinistra} right {, una affiancata a destra} both {, una affiancata a sinistra e una a destra} other {}}",
+    "clear": "Radar libero"
+  },
+  "cameraToast": {
+    "freeHintTouch": "Trascina per guardarti intorno · Usa il menu Pausa o Camera replay per uscire",
+    "freeHintKeys": "Trascina per guardare · WASD vola · Q/E altezza · Scorri per la velocità · R reimposta · {key} esci"
+  },
+  "ffbPairPrompt": {
+    "region": "Force feedback",
+    "text": "Collega il volante per il force feedback",
+    "connect": "Collega",
+    "dismiss": "Chiudi"
+  },
+  "dualSensePairPrompt": {
+    "text": "<b>DualSense rilevato</b> · abbinalo per trigger e aptica",
+    "pair": "Abbina",
+    "dismiss": "Chiudi"
+  },
+  "overheadNameplates": {
+    "fastestLap": "GV",
+    "rank": "P{rank}"
+  },
+  "hiddenNote": {
+    "off": "HUD nascosto",
+    "offKey": "HUD nascosto · {key} per mostrare"
+  }
+}

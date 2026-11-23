@@ -5,6 +5,7 @@
  *
  * Add one only from the modder's own page or their word, never a guess from a name that looks alike.
  */
+import { text as t } from "@/lib/text";
 
 export interface SupportLink {
   url: string;
@@ -18,6 +19,8 @@ export const MODDER_SUPPORT: Readonly<Record<string, SupportLink>> = {
   LilSki: { url: "https://www.paypal.com/donate/?cmd=_s-xclick&hosted_button_id=4CU3LGABY58L8", via: "PayPal" },
   "Ddiaz Design": { url: "https://paypal.me/sergiodd", via: "PayPal" },
   gregsediting: { url: "https://www.patreon.com/cw/gregsediting", via: "Patreon" },
+  // From their own post on OverTake
+  munyuturbo: { url: "https://www.patreon.com/cw/MTRacing651", via: "Patreon" },
   // The tip page his own car descriptions ask for ("feel free to buy me a beer")
   Pfalzdriver: { url: "https://streamlabs.com/pfalzdriver", via: "Streamlabs" },
   "Purple Sector": { url: "https://www.patreon.com/cw/PurpleSector", via: "Patreon" },
@@ -29,7 +32,8 @@ export const MODDER_SUPPORT: Readonly<Record<string, SupportLink>> = {
 };
 
 /** The support button's words: a donation on PayPal, support on a membership site */
-export const supportLabel = (s: SupportLink): string => (s.via === "PayPal" ? "Donate via PayPal" : `Support on ${s.via}`);
+export const supportLabel = (s: SupportLink): string =>
+  s.via === "PayPal" ? t("game.support.donatePayPal") : t("game.support.supportOn", { site: s.via });
 
 /** A modder's support page, if they have one on file */
 export const supportOf = (author: string | undefined): SupportLink | undefined => (author ? MODDER_SUPPORT[author] : undefined);

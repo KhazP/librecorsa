@@ -1,0 +1,638 @@
+{
+  "screen": {
+    "title": "Impostazioni",
+    "dialogLabel": "Impostazioni",
+    "detailLabel": "Quante impostazioni mostrare",
+    "simple": "Semplice",
+    "advanced": "Avanzate",
+    "close": "Chiudi",
+    "categoriesLabel": "Categorie delle impostazioni",
+    "sectionsLabel": "Sezioni di {category}",
+    "paneLabel": "{category}: {tab}",
+    "noAdvancedHere": "Nessuna impostazione avanzata in questa pagina",
+    "moreInAdvanced": "Altre impostazioni in Avanzate",
+    "steeringInAdvanced": "L’assistenza allo sterzo è in Avanzate",
+    "categories": {
+      "driving": "Guida",
+      "controls": "Comandi",
+      "ffb": "Force feedback",
+      "display": "Schermo",
+      "audio": "Audio",
+      "profile": "Profilo e dati"
+    },
+    "tabs": {
+      "driving": {
+        "assists": "Aiuti",
+        "steering": "Assistenza sterzo"
+      },
+      "controls": {
+        "device": "Dispositivo",
+        "keyboard": "Tastiera",
+        "controller": "Controller",
+        "wheel": "Volante",
+        "touch": "Touch"
+      },
+      "ffb": {
+        "main": "Force feedback"
+      },
+      "display": {
+        "graphics": "Grafica",
+        "hud": "HUD",
+        "camera": "Camera",
+        "interface": "Interfaccia"
+      },
+      "audio": {
+        "main": "Audio"
+      },
+      "profile": {
+        "driver": "Pilota",
+        "data": "Dati"
+      }
+    },
+    "prompts": {
+      "move": "Muovi",
+      "change": "Cambia",
+      "tabs": "Schede",
+      "resetRow": "Reimposta riga",
+      "showAdvanced": "Mostra avanzate",
+      "showSimple": "Mostra semplici",
+      "back": "Indietro"
+    }
+  },
+  "field": {
+    "resetRow": "Ripristina {setting} al valore predefinito",
+    "reset": "Reimposta",
+    "resetTitle": "Reimpostare {card}?",
+    "resetConfirm": "Reimposta",
+    "resetBody": "Riporta {what} ai valori predefiniti.",
+    "resetBodyDefault": "Riporta queste impostazioni ai valori predefiniti.",
+    "showAdvanced": "Mostra avanzate"
+  },
+  "values": {
+    "off": "Off",
+    "linear": "Lineare",
+    "progressive": "Progressiva {value}",
+    "aggressive": "Aggressiva {value}",
+    "raw": "Grezzo",
+    "fullLock": "{value}, fondo sterzo"
+  },
+  "off": {
+    "triggerPedals": "Richiede pedali a trigger",
+    "touchScreen": "Richiede un touchscreen"
+  },
+  "rows": {
+    "assistLevel": {
+      "label": "Livello di aiuti",
+      "options": {
+        "beginner": "Principiante",
+        "intermediate": "Intermedio",
+        "sim": "Sim"
+      },
+      "details": {
+        "beginner": "TC e ABS al massimo, traiettoria ideale, assistenza sterzo",
+        "intermediate": "TC e ABS, traiettoria ideale",
+        "sim": "Niente TC, niente ABS, niente traiettoria ideale"
+      }
+    },
+    "assistPreset": {
+      "label": "Controllo di trazione e ABS",
+      "options": {
+        "pro": "Off",
+        "semi_pro": "TC + ABS",
+        "assisted": "Massimi"
+      }
+    },
+    "racingLine": {
+      "label": "Traiettoria ideale",
+      "hint": "Tasto {key}"
+    },
+    "autoGearbox": {
+      "label": "Cambio automatico",
+      "hint": "Tasti manuali: {up} / {down}"
+    },
+    "autoOvertake": {
+      "label": "Sorpasso automatico",
+      "hint": "F1 2026: usa il Sorpasso ottenuto sui rettilinei, con meno potenza che premendo {key}"
+    },
+    "autoClutch": {
+      "label": "Frizione automatica",
+      "hint": "Evita lo spegnimento; disattivala per le partenze con frizione manuale",
+      "off": {
+        "gearbox": "Richiede il cambio manuale",
+        "wheel": "Assegna la frizione in Comandi > Volante",
+        "controller": "Assegna la frizione in Comandi > Controller",
+        "touch": "Non disponibile con i comandi touch",
+        "keyboard": "Assegna la frizione in Comandi > Tastiera"
+      },
+      "overridden": {
+        "gearbox": "Temporaneamente forzata (richiede il cambio manuale); attivala per ripristinare il predefinito",
+        "wheel": "Temporaneamente forzata (assegna la frizione in comandi > volante); attivala per ripristinare il predefinito",
+        "controller": "Temporaneamente forzata (assegna la frizione in comandi > controller); attivala per ripristinare il predefinito",
+        "touch": "Temporaneamente forzata (non disponibile con i comandi touch); attivala per ripristinare il predefinito",
+        "keyboard": "Temporaneamente forzata (assegna la frizione in comandi > tastiera); attivala per ripristinare il predefinito"
+      }
+    },
+    "gamepadAssist": {
+      "label": "Assistenza sterzo del controller",
+      "hint": "Limita lo sterzo all’aderenza delle gomme anteriori e recupera le sbandate"
+    },
+    "exitAssist": {
+      "label": "Aiuto acceleratore",
+      "hint": "Modula l’acceleratore sullo slittamento posteriore (tastiera, TC off)"
+    },
+    "brakeAssist": {
+      "label": "Aiuto freno",
+      "hint": "Modula il freno al bloccaggio (tastiera, ABS off)"
+    },
+    "realism": {
+      "label": "Realismo della simulazione"
+    },
+    "launch": {
+      "label": "Avvio"
+    },
+    "ghost": {
+      "label": "Ghost del giro migliore"
+    },
+    "steeringPreset": {
+      "label": "Preset",
+      "custom": "Personalizzato",
+      "options": {
+        "custom": "Personalizzato"
+      }
+    },
+    "pedalAssistStrength": {
+      "label": "Intensità aiuto pedali",
+      "hint": "Quanto presto e quanto a fondo Aiuto acceleratore e Aiuto freno alleggeriscono i tasti"
+    },
+    "mouseSteer": {
+      "label": "Sterzo con il mouse",
+      "hint": "Tasto {key}"
+    },
+    "throttleRiseS": {
+      "label": "Salita acceleratore"
+    },
+    "brakeRiseS": {
+      "label": "Salita freno"
+    },
+    "steerRiseS": {
+      "label": "Morbidezza dello sterzo",
+      "hint": "Più basso è più reattivo"
+    },
+    "steerReturnS": {
+      "label": "Ritorno dello sterzo"
+    },
+    "halfThrottle": {
+      "label": "Mezzo acceleratore"
+    },
+    "halfBrake": {
+      "label": "Mezzo freno"
+    },
+    "rumble": {
+      "label": "Vibrazione"
+    },
+    "steeringRate": {
+      "label": "Velocità di sterzata"
+    },
+    "deadzone": {
+      "label": "Zona morta interna"
+    },
+    "outerDeadzone": {
+      "label": "Zona morta esterna"
+    },
+    "linearity": {
+      "label": "Linearità dello stick",
+      "hint": "Sopra 1 ammorbidisce il centro"
+    },
+    "throttleGamma": {
+      "label": "Curva acceleratore",
+      "hint": "Sopra 1 ammorbidisce gli input bassi"
+    },
+    "brakeGamma": {
+      "label": "Curva freno",
+      "hint": "Sopra 1 ammorbidisce le frenate leggere"
+    },
+    "stickPedalDeadzone": {
+      "label": "Zona morta stick pedali",
+      "off": "Richiede pedali sullo stick"
+    },
+    "triggerRumble": {
+      "label": "Vibrazione dei trigger",
+      "hint": "Feedback di slittamento, ABS e pattinamento nei trigger"
+    },
+    "triggerSlipAlwaysOn": {
+      "label": "Slittamento sui trigger con ABS/TC attivi",
+      "off": "Richiede Vibrazione dei trigger"
+    },
+    "steerDeadzone": {
+      "label": "Zona morta centrale"
+    },
+    "steerSmoothingS": {
+      "label": "Filtro input"
+    },
+    "wheelBrakeGamma": {
+      "label": "Curva freno",
+      "hint": "1,0 per cella di carico · da 1,3 a 1,6 per potenziometri"
+    },
+    "touchMode": {
+      "label": "Comandi touch",
+      "options": {
+        "auto": "Auto",
+        "on": "On",
+        "off": "Off"
+      }
+    },
+    "touchLayout": {
+      "label": "Stile touch",
+      "hint": "Slider analogici o pulsanti digitali",
+      "off": "I comandi touch sono disattivati",
+      "options": {
+        "sliders": "Slider",
+        "buttons": "Pulsanti"
+      }
+    },
+    "tiltSteer": {
+      "label": "Sterzo a inclinazione"
+    },
+    "tiltRangeDeg": {
+      "label": "Ampiezza di inclinazione",
+      "off": "Richiede Sterzo a inclinazione"
+    },
+    "ffbEnabled": {
+      "label": "Force feedback"
+    },
+    "ffbGain": {
+      "label": "Intensità",
+      "hintPerCar": "Sostituita dall’intensità per auto ({gain}) più sotto"
+    },
+    "ffbDamping": {
+      "label": "Smorzamento"
+    },
+    "ffbKerb": {
+      "label": "Vibrazione dei cordoli"
+    },
+    "ffbAbs": {
+      "label": "Vibrazione ABS"
+    },
+    "ffbSlip": {
+      "label": "Vibrazione di slittamento",
+      "hint": "Solo WebHID"
+    },
+    "ffbShift": {
+      "label": "Avviso di cambiata",
+      "hint": "Solo WebHID"
+    },
+    "ffbCurve": {
+      "label": "Curva della forza",
+      "hint": "Negativa alza le forze basse · positiva riserva margine al picco"
+    },
+    "ffbMinForce": {
+      "label": "Forza minima",
+      "hint": "Elimina la zona morta centrale",
+      "hintPerCar": "Sostituita dalla forza minima per auto"
+    },
+    "ffbFilterS": {
+      "label": "Filtro del segnale"
+    },
+    "ffbDownforceComp": {
+      "label": "Compensazione deportanza",
+      "hint": "Riduce la saturazione aero ad alta velocità"
+    },
+    "ffbFriction": {
+      "label": "Attrito",
+      "hint": "Effetto hardware del volante"
+    },
+    "ffbInertia": {
+      "label": "Inerzia",
+      "hint": "Effetto hardware del volante"
+    },
+    "ffbCollisionGuard": {
+      "label": "Protezione dagli urti",
+      "hint": "Limita i picchi di forza negli impatti"
+    },
+    "revLeds": {
+      "label": "Luci dei giri"
+    },
+    "quality": {
+      "label": "Qualità",
+      "options": {
+        "low": "Bassa",
+        "medium": "Media",
+        "high": "Alta"
+      },
+      "details": {
+        "low": "Niente ombre né bloom, risoluzione inferiore",
+        "medium": "Ombre, niente bloom",
+        "mediumTouch": "Ombre, niente bloom né MSAA",
+        "high": "Effetti completi",
+        "highTouch": "Effetti completi tranne MSAA"
+      }
+    },
+    "sharpLow": {
+      "label": "Bassa nitida",
+      "hint": "Renderizza Bassa a risoluzione Media",
+      "hintAuto": "Renderizza Bassa a risoluzione Media; la qualità automatica può disattivarla",
+      "off": "Richiede Qualità impostata su Bassa"
+    },
+    "renderScale": {
+      "label": "Risoluzione di rendering"
+    },
+    "sharpen": {
+      "label": "Nitidezza",
+      "hint": "Rende più netti bordi e asfalto dopo il ridimensionamento"
+    },
+    "fpsCap": {
+      "label": "Frame rate",
+      "hint": "30 fps riduce il calore sui dispositivi mobili",
+      "options": {
+        "full": "Pieno",
+        "fps30": "30 fps"
+      }
+    },
+    "autoQuality": {
+      "label": "Qualità automatica",
+      "hint": "Scende di livello in caso di cali prolungati di frame rate",
+      "hintLowered": "Ridotta: {what}"
+    },
+    "autoQualityMinScale": {
+      "label": "Risoluzione minima",
+      "hint": "La qualità automatica non scende mai sotto questa Risoluzione di rendering",
+      "hintLow": "La risoluzione resta invariata; Bassa non ha effetti da ridurre",
+      "hintEffects": "La risoluzione resta invariata; scendono solo gli effetti",
+      "off": "Richiede la Qualità automatica attiva"
+    },
+    "driverBody": {
+      "label": "Corpo del pilota"
+    },
+    "hudScale": {
+      "label": "Dimensione"
+    },
+    "deltaBar": {
+      "label": "Barra delta"
+    },
+    "lapSummary": {
+      "label": "Riepilogo giro"
+    },
+    "virtualMirror": {
+      "label": "Specchietto",
+      "options": {
+        "auto": "Auto",
+        "always": "Sempre",
+        "off": "Off"
+      }
+    },
+    "radar": {
+      "label": "Radar di prossimità"
+    },
+    "showPlayerNames": {
+      "label": "Nomi dei piloti"
+    },
+    "boardWidget": {
+      "label": "Classifica",
+      "options": {
+        "lapEnd": "A fine giro",
+        "open": "Aperta",
+        "closed": "Chiusa"
+      }
+    },
+    "inputTrace": {
+      "label": "Traccia degli input"
+    },
+    "towerGaps": {
+      "label": "Distacchi nella torre dei tempi",
+      "options": {
+        "interval": "Intervallo",
+        "leader": "Dal leader"
+      }
+    },
+    "mapMode": {
+      "label": "Modalità mappa",
+      "options": {
+        "full": "Giro intero",
+        "local": "Ingrandita"
+      }
+    },
+    "splitGaps": {
+      "label": "Distacchi parziali"
+    },
+    "mfdAutoCollapse": {
+      "label": "Chiusura auto MFD"
+    },
+    "camera": {
+      "label": "Visuale predefinita",
+      "hint": "Tasto {key}"
+    },
+    "cockpitFovDeg": {
+      "label": "Campo visivo",
+      "hintCarOwn": "Predefinito di ogni auto",
+      "hintCarDefault": "Predefinito dell’auto: {degrees}°",
+      "valueCar": "{value}° (auto)"
+    },
+    "headMovement": {
+      "label": "Movimento della testa",
+      "options": {
+        "natural": "Naturale",
+        "static": "Bloccato"
+      }
+    },
+    "language": {
+      "label": "Lingua",
+      "options": {
+        "auto": "Automatica"
+      },
+      "details": {
+        "auto": "La lingua del tuo browser"
+      }
+    },
+    "speedUnit": {
+      "label": "Velocità"
+    },
+    "temperatureUnit": {
+      "label": "Temperatura"
+    },
+    "pressureUnit": {
+      "label": "Pressione gomme"
+    },
+    "uiScale": {
+      "label": "Dimensione interfaccia"
+    },
+    "palette": {
+      "label": "Palette per daltonici",
+      "options": {
+        "standard": "Standard",
+        "protan": "Debole al rosso",
+        "deutan": "Debole al verde",
+        "tritan": "Debole al blu"
+      },
+      "details": {
+        "protan": "Protanopia e protanomalia",
+        "deutan": "Deuteranopia e deuteranomalia",
+        "tritan": "Tritanopia e tritanomalia"
+      }
+    },
+    "volume": {
+      "label": "Volume generale"
+    },
+    "kerbs": {
+      "label": "Cordoli"
+    },
+    "muted": {
+      "label": "Muto",
+      "hint": "Tasto {key}"
+    },
+    "drsBeep": {
+      "label": "Segnali DRS"
+    },
+    "shiftBeep": {
+      "label": "Segnale di cambiata"
+    },
+    "musicOn": {
+      "label": "Musica"
+    },
+    "menuMusic": {
+      "label": "Musica dei menu"
+    },
+    "raceMusicOn": {
+      "label": "Musica durante la guida"
+    },
+    "raceMusic": {
+      "label": "Musica di gara",
+      "hint": "Salta brano: {key}",
+      "off": "La musica durante la guida è disattivata"
+    },
+    "replayMusic": {
+      "label": "Musica di risultati e replay"
+    },
+    "autoUpload": {
+      "label": "Carica in automatico i giri migliori"
+    },
+    "telemetryOut": {
+      "label": "Telemetria UDP",
+      "hint": "Invia la telemetria live a un bridge locale (dashboard, bass shaker)"
+    },
+    "practiceDamage": {
+      "label": "Danni in prove libere",
+      "hints": {
+        "off": "Nessun danno in prove libere o prova a tempo",
+        "reduced": "Danni dimezzati; un’auto distrutta ricomincia il giro lanciato già riparata",
+        "full": "Danni da gara; un’auto distrutta ricomincia il giro lanciato già riparata"
+      }
+    }
+  },
+  "driving": {
+    "drivingAids": "Aiuti alla guida",
+    "pedalHelp": "Aiuto pedali",
+    "onTrack": "In pista",
+    "keyboardSteering": "Sterzo da tastiera",
+    "controllerSteering": "Sterzo da controller"
+  },
+  "controls": {
+    "activeDevice": "Dispositivo attivo",
+    "quickSetup": "Setup rapido",
+    "runSetupWizard": "Avvia configurazione guidata",
+    "runSetup": "Avvia configurazione",
+    "touch": "Touch"
+  },
+  "display": {
+    "layout": {
+      "title": "Layout",
+      "resetWhat": "il layout HUD"
+    },
+    "graphics": {
+      "title": "Grafica",
+      "vr": "VR",
+      "vrOff": "Richiede un visore WebXR",
+      "experimental": "Sperimentale",
+      "inVr": "In VR",
+      "enterVr": "Entra in VR"
+    },
+    "hud": {
+      "title": "Cosa mostra l’HUD"
+    },
+    "camera": {
+      "title": "Camera",
+      "freeCamera": "Camera libera",
+      "freeCameraHint": "Trascina per guardare · WASD vola · Q/E altezza · Scorri per la velocità · R reimposta",
+      "freeCameraUnbound": "Non assegnato",
+      "tvCamera": "TV a bordo pista",
+      "tvCameraUnbound": "Non assegnato",
+      "adjustSeat": "Regola il sedile",
+      "adjustSeatHint": "Tieni premuto {key} o {button} in pista",
+      "adjustSeatOff": "Disponibile durante la guida (tieni premuto {key} o {button})",
+      "adjust": "Regola",
+      "resetSeats": "Reimposta posizioni dei sedili",
+      "resetSeatsOff": "Già predefinite",
+      "resetSeatsButton": "Reimposta",
+      "resetSeatsTitle": "Reimpostare le posizioni dei sedili?",
+      "resetSeatsConfirm": "Reimposta tutto",
+      "resetSeatsBody": "Reimposta le regolazioni del sedile per vista abitacolo e cruscotto di tutte le auto."
+    },
+    "interface": {
+      "language": "Lingua",
+      "units": "Unità",
+      "sizeColour": "Dimensione e colore"
+    }
+  },
+  "audio": {
+    "sound": "Suono",
+    "music": "Musica",
+    "menuTracks": "Brani dei menu",
+    "raceTracks": "Brani di gara",
+    "resultsTracks": "Brani di risultati e replay",
+    "cockpitCues": "Segnali in abitacolo"
+  },
+  "profile": {
+    "driver": {
+      "title": "Pilota",
+      "name": "Nome",
+      "code": "Codice",
+      "colour": "Colore",
+      "colourGroup": "Colore",
+      "otherColour": "Altro colore",
+      "colours": {
+        "red": "Rosso",
+        "teal": "Verde acqua",
+        "orange": "Arancione",
+        "blue": "Blu",
+        "racingGreen": "Verde racing",
+        "navy": "Blu notte",
+        "silver": "Argento",
+        "lime": "Lime"
+      }
+    },
+    "data": {
+      "driverKey": "Chiave del pilota",
+      "identityKey": "Chiave identità",
+      "identityKeyHint": "Firma i giri online. Salvala per usarla su un altro browser",
+      "save": "Salva",
+      "load": "Carica",
+      "telemetry": "Telemetria",
+      "udpPort": "Porta UDP",
+      "udpPortField": "Porta UDP",
+      "portConflict": "La porta {port} è in conflitto con {app} (predefinita {defaultPort})",
+      "portOff": "Richiede la telemetria UDP",
+      "reset": "Reimposta",
+      "resetAll": "Reimposta tutte le impostazioni",
+      "resetAllHint": "Ripristina comandi, aiuti, schermo e audio predefiniti",
+      "resetAllButton": "Reimposta",
+      "resetAllTitle": "Reimpostare tutte le impostazioni?",
+      "resetAllConfirm": "Reimposta tutto",
+      "resetAllBody": "Riporta tutte le impostazioni, assegnazioni e calibrazioni ai valori predefiniti. Profilo, setup e tempi sul giro restano.",
+      "clear": "Cancella dati salvati",
+      "clearHint": "Elimina impostazioni locali, chiave del pilota, giri, ghost e setup",
+      "clearButton": "Cancella",
+      "clearTitle": "Cancellare i dati salvati?",
+      "clearConfirm": "Cancella tutto",
+      "clearBody": "Rimuove in modo definitivo da questo browser tutte le impostazioni, la chiave del pilota, i giri, i ghost e i setup, poi ricarica."
+    }
+  },
+  "hudPicker": {
+    "label": "Layout HUD",
+    "thirdParty": "Di terze parti",
+    "thirdPartyNote": "Ricreati da altri progetti HUD open source, con i crediti ai loro autori.",
+    "touchNote": "I telefoni usano sempre Touch HUD.",
+    "description": "{detail}. Di {author}",
+    "descriptionSite": "{detail}. Di {author} · {site}",
+    "sourceLink": "Sorgente di {layout}, di {author} (si apre in una nuova scheda)",
+    "siteLink": "{site}, sito di {author} (si apre in una nuova scheda)"
+  }
+}

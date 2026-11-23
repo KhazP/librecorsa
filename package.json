@@ -20,9 +20,14 @@
     "venue-heroes": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/render-venue-heroes.ts",
     "press-kit": "node --import tsx scripts/build-press-kit.ts",
     "home-outlines": "node --import tsx scripts/build-home-outlines.ts",
-    "brand": "node --import tsx scripts/build-brand.ts"
+    "brand": "node --import tsx scripts/build-brand.ts",
+    "i18n:status": "node --import tsx scripts/i18n/status.ts",
+    "i18n:missing": "node --import tsx scripts/i18n/missing.ts",
+    "i18n:merge": "node --import tsx scripts/i18n/merge.ts",
+    "i18n:add": "node --import tsx scripts/i18n/add-locale.ts"
   },
   "dependencies": {
+    "@formatjs/icu-messageformat-parser": "3.5.23",
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.1.0",
     "@takram/three-atmosphere": "^0.19.1",
@@ -34,7 +39,8 @@
     "postprocessing": "^6.39.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "three": "0.187.0"
+    "three": "0.187.0",
+    "use-intl": "4.15.1"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.5.1",
