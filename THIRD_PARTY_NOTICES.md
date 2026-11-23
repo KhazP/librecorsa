@@ -12,7 +12,7 @@ or logos from these projects are included: the layouts use LibreCorsa's own font
 
 One more layout under Third-party, Grand Prix by adamikoo (`src/components/hud/styles/GrandPrixHud.tsx`), is not a
 recreation of another project: adamikoo designed it for LibreCorsa and contributed it in pull request #162
-(https://github.com/KhazP/librecorsa/pull/162).
+(https://github.com/librecorsa/librecorsa/pull/162).
 
 ### irDashies
 

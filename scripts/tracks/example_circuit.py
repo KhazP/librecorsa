@@ -293,8 +293,8 @@ def export():
         'pitboxes': 10,
         'description': 'A 1.86 km test loop built by scripts/tracks/example_circuit.py: a long straight, a hairpin, '
                        'esses and a banked sweeper.',
-        'credit': {'title': 'Example circuit', 'author': 'LibreCorsa', 'url': 'https://github.com/KhazP/librecorsa',
-                   'short': None, 'license': 'AGPL-3.0', 'licenseUrl': 'https://github.com/KhazP/librecorsa/blob/main/LICENSE'},
+        'credit': {'title': 'Example circuit', 'author': 'LibreCorsa', 'url': 'https://github.com/librecorsa/librecorsa',
+                   'short': None, 'license': 'AGPL-3.0', 'licenseUrl': 'https://github.com/librecorsa/librecorsa/blob/main/LICENSE'},
     }
     with open(os.path.join(OUT, 'example_circuit.json'), 'w', encoding='utf-8') as f:
         json.dump(settings, f, indent=2)

@@ -108,7 +108,7 @@ Outside a race the rule is strict:
 
 The lap card says **Invalid: track limits** or **Invalid: wall contact**. The board then checks every upload. The lap must end where it started (except on a hill climb), and its sector times must add up to the lap time. The time must match the recording, and the recorded speeds must match the distance driven. Nothing may go over 420 km/h or jump from place to place, and the lap must be on the current physics.
 
-These checks stop careless fakes, such as a short time pasted onto a real recording. They can't prove a lap was driven, and a lap built with care can pass them. Fake lap times are a known limit of the boards. If you see a cheated entry, open an issue on [GitHub](https://github.com/KhazP/librecorsa/issues).
+These checks stop careless fakes, such as a short time pasted onto a real recording. They can't prove a lap was driven, and a lap built with care can pass them. Fake lap times are a known limit of the boards. If you see a cheated entry, open an issue on [GitHub](https://github.com/librecorsa/librecorsa/issues).
 
 ### Your name and the driver key
 

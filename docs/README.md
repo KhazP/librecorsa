@@ -29,6 +29,6 @@ You can read them at [docs.librecorsa.org](https://docs.librecorsa.org/) or here
 
 ## Elsewhere
 
-- Source code, issues and releases: [github.com/KhazP/librecorsa](https://github.com/KhazP/librecorsa)
+- Source code, issues and releases: [github.com/librecorsa/librecorsa](https://github.com/librecorsa/librecorsa)
 - Contributing: [CONTRIBUTING.md](../CONTRIBUTING.md)
 - Reporting a security problem: [SECURITY.md](../SECURITY.md)

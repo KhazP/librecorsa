@@ -4,16 +4,16 @@ Thanks for helping. Bug reports, handling feedback from sim racers, new content 
 
 ## Where things go
 
-- **Bugs**: open a [bug report](https://github.com/KhazP/librecorsa/issues/new?template=bug-report.yml).
+- **Bugs**: open a [bug report](https://github.com/librecorsa/librecorsa/issues/new?template=bug-report.yml).
 - **A car or track you'd like**: use **Feedback** in the game's title menu and pick Car or Track, or the
-  [request form](https://github.com/KhazP/librecorsa/issues/new?template=content-request.yml).
-- **Questions, setups, lap times, ideas**: [Discussions](https://github.com/KhazP/librecorsa/discussions).
+  [request form](https://github.com/librecorsa/librecorsa/issues/new?template=content-request.yml).
+- **Questions, setups, lap times, ideas**: [Discussions](https://github.com/librecorsa/librecorsa/discussions).
 - **Guides** (porting cars, circuits and wheels, how the physics and the AI work): [docs.librecorsa.org](https://docs.librecorsa.org/).
   The pages are the Markdown in `docs/`, so a fix to a guide is a pull request on that file.
 - **Translations**: see [Translating](docs/TRANSLATING.md). A new language, or a fix to one, is a pull request on its files in
   `src/i18n/messages/`.
 - **Security problems**: report them privately, as described in [SECURITY.md](SECURITY.md).
-- **You own an asset we use**: open a [rights / takedown request](https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml).
+- **You own an asset we use**: open a [rights / takedown request](https://github.com/librecorsa/librecorsa/issues/new?template=takedown-request.yml).
 
 ## Running it
 
