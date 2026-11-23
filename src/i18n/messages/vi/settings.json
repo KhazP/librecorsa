@@ -46,6 +46,7 @@
       },
       "profile": {
         "driver": "Tay đua",
+        "account": "Tài khoản",
         "data": "Dữ liệu"
       }
     },
@@ -622,7 +623,7 @@
       "clearButton": "Xóa",
       "clearTitle": "Xóa dữ liệu đã lưu?",
       "clearConfirm": "Xóa tất cả",
-      "clearBody": "Xóa vĩnh viễn toàn bộ cài đặt, khóa tay đua, thành tích vòng, xe bóng ma và thiết lập xe khỏi trình duyệt này, sau đó tải lại trang."
+      "clearBody": "Xóa vĩnh viễn toàn bộ cài đặt, khóa tay đua, thành tích vòng, xe bóng ma và thiết lập xe khỏi trình duyệt này, sau đó tải lại trang. Thiết bị đã đăng nhập sẽ được đăng xuất khỏi tài khoản trước; tài khoản và bản lưu đám mây vẫn được giữ."
     }
   },
   "hudPicker": {
@@ -634,5 +635,156 @@
     "descriptionSite": "{detail}. Tác giả: {author} · {site}",
     "sourceLink": "Mã nguồn {layout} của {author} (mở trong thẻ mới)",
     "siteLink": "{site}, trang web của {author} (mở trong thẻ mới)"
+  },
+  "account": {
+    "checking": "Đang kiểm tra tài khoản của bạn",
+    "unavailable": "Tài khoản hiện chưa khả dụng. Hãy thử lại sau.",
+    "deleted": "Tài khoản đã bị xóa.",
+    "deletedLaps": "Tài khoản và các vòng của nó đã bị xóa.",
+    "page": {
+      "intro": "Tài khoản là tùy chọn. Tài khoản giữ tên tay đua và bản lưu của bạn trên mọi thiết bị, và không thu thập email. Hãy đăng nhập tại đây để xem tài khoản đang lưu những gì, hoặc để xóa tài khoản.",
+      "privacy": "Nội dung tài khoản lưu trữ có trong <link>trang quyền riêng tư</link>."
+    },
+    "signedOut": {
+      "titlePage": "Đăng nhập",
+      "title": "Tài khoản",
+      "description": "Đăng nhập để giữ tên tay đua và bản lưu của bạn trên mọi thiết bị. Không thu thập email.",
+      "codeLabel": "Dùng mã từ thiết bị khác",
+      "codeHint": "Trên thiết bị đã đăng nhập, chọn Hiện mã rồi nhập mã đó vào đây",
+      "enterCode": "Nhập mã",
+      "signInWith": "Đăng nhập bằng",
+      "oauthHint": "Mở trang đăng nhập của họ, sau đó quay lại đây",
+      "passkeyHint": "Khóa truy cập trên thiết bị này, điện thoại hoặc khóa bảo mật",
+      "passkey": "Khóa truy cập",
+      "createLabel": "Tạo tài khoản bằng khóa truy cập",
+      "createHint": "Không cần cách đăng nhập nào khác",
+      "create": "Tạo",
+      "needsBrowserCode": "Đăng nhập bằng {providers} cần dùng trình duyệt. Hãy đăng nhập tại librecorsa.org/account, chọn Hiện mã rồi nhập mã vào đây.",
+      "needsBrowser": "Đăng nhập bằng {providers} cần dùng trình duyệt."
+    },
+    "signedIn": {
+      "yourAccount": "Tài khoản của bạn",
+      "signedInWith": "Đã đăng nhập bằng {ways}",
+      "combineLabel": "Bản lưu cần gộp",
+      "combineHint": "Thiết bị này và tài khoản đều có bản lưu",
+      "choose": "Chọn",
+      "save": "Bản lưu",
+      "syncing": "Đang đồng bộ",
+      "synced": "Đã đồng bộ {ago}",
+      "cloudWritten": "Bản lưu đám mây được ghi {ago}",
+      "notSynced": "Chưa đồng bộ",
+      "syncNow": "Đồng bộ ngay",
+      "signOut": "Đăng xuất",
+      "signOutHint": "Thiết bị này vẫn giữ bản lưu. Thiết bị sẽ đăng thành tích vòng dưới tên của bạn trở lại khi bạn đăng nhập",
+      "lastWay": "Không thể gỡ cách đăng nhập cuối cùng. Hãy xóa tài khoản thay vào đó."
+    },
+    "names": {
+      "title": "Tên tay đua",
+      "description": "Mọi thiết bị trong tài khoản này đều có thể đăng thành tích vòng dưới các tên này. Các tên này thuộc về bạn chừng nào tài khoản còn tồn tại.",
+      "lastLap": "Vòng gần nhất {ago}",
+      "noLaps": "Chưa có vòng nào",
+      "none": "Chưa có tên tay đua nào. Tên bạn dùng để đăng vòng đầu tiên sẽ được thêm vào tài khoản.",
+      "elsewhere": "{count, plural, other {{names} đang ở trong một tài khoản khác.}} Để gộp hai tài khoản, hãy thêm cách đăng nhập của tài khoản đó bên dưới."
+    },
+    "ways": {
+      "title": "Cách đăng nhập",
+      "description": "Chỉ lưu mã định danh của tài khoản ở mỗi nơi: không lưu email, tên người dùng hay ảnh.",
+      "added": "Thêm {date}",
+      "addedUsed": "Thêm {date}, dùng {ago}",
+      "notAdded": "Chưa thêm",
+      "remove": "Gỡ bỏ",
+      "add": "Thêm",
+      "passkeyName": "Khóa truy cập thêm {date}",
+      "used": "Dùng {ago}",
+      "addPasskey": "Thêm khóa truy cập",
+      "addPasskeyHint": "Đăng nhập bằng khóa màn hình của thiết bị này, điện thoại hoặc khóa bảo mật",
+      "combinePasskey": "Gộp với tài khoản có khóa truy cập",
+      "combinePasskeyHint": "Tên tay đua, thiết bị và bản lưu của tài khoản đó sẽ gia nhập tài khoản này",
+      "usePasskey": "Dùng khóa",
+      "desktopOthers": "Có thể thêm các cách đăng nhập khác tại librecorsa.org/account trong trình duyệt."
+    },
+    "devices": {
+      "title": "Thiết bị",
+      "description": "Các trình duyệt và ứng dụng đã đăng nhập tài khoản này.",
+      "thisBrowser": "Trình duyệt này",
+      "notJoined": "Thiết bị chưa tham gia",
+      "thisDevice": "Thiết bị này",
+      "seen": "Đăng nhập {date}, hoạt động gần nhất {ago}",
+      "signOut": "Đăng xuất"
+    },
+    "keys": {
+      "title": "Khóa tay đua",
+      "description": "Mỗi thiết bị ký thành tích vòng bằng khóa tay đua riêng. Mọi khóa ở đây đều có thể đăng dưới tên của tài khoản.",
+      "fallback": "Khóa tay đua {id}",
+      "added": "Thêm {date}",
+      "addedLap": "Thêm {date}, vòng gần nhất {ago}",
+      "none": "Chưa có khóa tay đua nào. Thiết bị sẽ thêm khóa của mình khi tham gia tài khoản."
+    },
+    "remove": {
+      "identityTitle": "Gỡ cách đăng nhập {provider}?",
+      "identityBody": "{provider} sẽ không còn đăng nhập được vào tài khoản này. Bạn có thể thêm lại sau.",
+      "passkeyTitle": "Gỡ khóa truy cập này?",
+      "passkeyBody": "Khóa này sẽ không còn đăng nhập được vào tài khoản. Bạn cũng có thể xóa nó khỏi thiết bị hoặc trình quản lý mật khẩu đang lưu khóa.",
+      "keyTitle": "Gỡ khóa tay đua này?",
+      "keyBody": "Các vòng từ {label} sẽ không còn được đăng dưới tên của tài khoản. Các vòng của nó đã có trên bảng xếp hạng vẫn được giữ.",
+      "confirm": "Gỡ bỏ"
+    },
+    "delete": {
+      "title": "Xóa tài khoản",
+      "label": "Xóa tài khoản này",
+      "hint": "Xóa các cách đăng nhập và bản lưu đám mây. Bạn chọn có giữ lại các vòng hay không",
+      "button": "Xóa",
+      "question": "Xóa tài khoản này?",
+      "confirm": "Xóa tài khoản",
+      "body": "Thao tác này xóa tài khoản, các cách đăng nhập và bản lưu đám mây. Dữ liệu lưu trên thiết bị này vẫn được giữ.",
+      "lapsGo": "Tên tay đua của bạn sẽ bị gỡ khỏi bảng xếp hạng cùng các vòng, kết quả đua và huy hiệu, và ai cũng có thể dùng lại các tên đó.",
+      "lapsStay": "Tên tay đua và các vòng của bạn vẫn ở trên bảng xếp hạng. Khi không có tài khoản, một tên sẽ hết hạn giữ chỗ sau sáu tháng không có vòng nào.",
+      "tick": "Đồng thời gỡ các vòng và kết quả đua của tôi khỏi bảng xếp hạng"
+    },
+    "join": {
+      "notNow": "Để sau",
+      "join": "Tham gia",
+      "joining": "Đang tham gia… Bản lưu của thiết bị này đang đồng bộ với tài khoản. Việc này có thể mất một lúc.",
+      "body": "Tên tay đua và bản lưu của thiết bị này sẽ trở thành một phần của tài khoản đó. Chọn Để sau sẽ đăng xuất thiết bị này.",
+      "codeBody": "Tên tay đua và bản lưu của thiết bị này sẽ trở thành một phần của tài khoản đó."
+    },
+    "firstSync": {
+      "title": "Gộp hai bản lưu?",
+      "combine": "Gộp",
+      "useCloud": "Dùng bản lưu đám mây",
+      "keepLocal": "Giữ bản lưu của thiết bị này",
+      "notNow": "Để sau",
+      "intro": "Thiết bị này và tài khoản đều có bản lưu.",
+      "thisDevice": "Thiết bị này",
+      "cloud": "Bản lưu đám mây",
+      "bestLaps": "{count, plural, other {<n>#</n> vòng tốt nhất}}",
+      "setups": "{count, plural, other {<n>#</n> thiết lập xe đã lưu}}",
+      "races": "{count, plural, other {<n>#</n> cuộc đua}}",
+      "savedAgoOn": "Lưu {ago} trên {device}",
+      "savedAgo": "Lưu {ago}",
+      "savedOn": "Lưu trên {device}",
+      "combineExplain": "<b>Gộp.</b> Giữ cả hai. Nếu cả hai cùng thay đổi một mục, thay đổi mới hơn sẽ được chọn.",
+      "cloudExplain": "<b>Dùng bản lưu đám mây.</b> Thiết bị này lấy cài đặt, thiết lập xe và lịch sử đua của tài khoản. Dữ liệu hiện có của thiết bị sẽ bị thay thế.",
+      "localExplain": "<b>Giữ bản lưu của thiết bị này.</b> Tài khoản lấy cài đặt, thiết lập xe và lịch sử đua của thiết bị này. Các thiết bị khác nhận chúng ở lần mở tiếp theo.",
+      "bestLapsKept": "Vòng tốt nhất từ cả hai bên luôn được giữ lại."
+    },
+    "code": {
+      "title": "Dùng mã từ thiết bị khác",
+      "how": "Trên thiết bị đã đăng nhập, hãy mở Cài đặt, rồi Hồ sơ và dữ liệu, rồi Tài khoản, và chọn Hiện mã.",
+      "label": "Mã",
+      "continue": "Tiếp tục",
+      "format": "Mã gồm 8 chữ cái và chữ số, ví dụ ABCD-EFGH"
+    },
+    "showCode": {
+      "label": "Hiện mã cho thiết bị khác",
+      "hint": "Đăng nhập thiết bị khác vào tài khoản này, chẳng hạn ứng dụng máy tính",
+      "hide": "Ẩn",
+      "new": "Mã mới",
+      "show": "Hiện mã",
+      "aria": "Mã {code}",
+      "left": "{minutes, plural, =0 {Còn chưa đến một phút. Mã chỉ dùng được một lần.} other {Còn # phút. Mã chỉ dùng được một lần.}}",
+      "expired": "Mã này đã hết hạn. Chọn Mã mới để lấy mã khác.",
+      "how": "Trên thiết bị kia, hãy mở Cài đặt, rồi Hồ sơ và dữ liệu, rồi Tài khoản. Chọn Dùng mã từ thiết bị khác và nhập mã này."
+    }
   }
 }

@@ -46,6 +46,7 @@
       },
       "profile": {
         "driver": "Pilot",
+        "account": "Hesap",
         "data": "Veriler"
       }
     },
@@ -622,7 +623,7 @@
       "clearButton": "Temizle",
       "clearTitle": "Kayıtlı veriler temizlensin mi?",
       "clearConfirm": "Her şeyi temizle",
-      "clearBody": "Bu tarayıcıdaki tüm ayarları, pilot anahtarını, turları, hayaletleri ve araç ayarlarını kalıcı olarak siler ve sayfayı yeniler."
+      "clearBody": "Bu tarayıcıdaki tüm ayarları, pilot anahtarını, turları, hayaletleri ve araç ayarlarını kalıcı olarak siler ve sayfayı yeniler. Giriş yapılmış bir cihazın önce hesabından çıkış yapılır; hesap ve bulut kaydı kalır."
     }
   },
   "hudPicker": {
@@ -634,5 +635,156 @@
     "descriptionSite": "{detail}. Yapımcı: {author} · {site}",
     "sourceLink": "{layout} kaynağı, yapımcı: {author} (yeni sekmede açılır)",
     "siteLink": "{site}, {author} sitesi (yeni sekmede açılır)"
+  },
+  "account": {
+    "checking": "Hesabın kontrol ediliyor",
+    "unavailable": "Hesaplar şu anda kullanılamıyor. Daha sonra tekrar dene.",
+    "deleted": "Hesap silindi.",
+    "deletedLaps": "Hesap ve turları silindi.",
+    "page": {
+      "intro": "Hesap isteğe bağlıdır. Hesap, pilot adlarını ve kaydını her cihazda tutar ve e-posta toplanmaz. Hesabında neler olduğunu görmek ya da hesabı silmek için buradan giriş yap.",
+      "privacy": "Hesabın neleri sakladığı <link>gizlilik sayfasında</link>."
+    },
+    "signedOut": {
+      "titlePage": "Giriş yap",
+      "title": "Hesap",
+      "description": "Pilot adlarını ve kaydını her cihazda tutmak için giriş yap. E-posta toplanmaz.",
+      "codeLabel": "Başka bir cihazdan kod kullan",
+      "codeHint": "Giriş yapılmış bir cihazda Kod göster’i seç, sonra burada yaz",
+      "enterCode": "Kod gir",
+      "signInWith": "Giriş yöntemi",
+      "oauthHint": "Kendi giriş sayfasını açar, sonra buraya döner",
+      "passkeyHint": "Bu cihazdaki, bir telefondaki ya da bir güvenlik anahtarındaki geçiş anahtarı",
+      "passkey": "Geçiş anahtarı",
+      "createLabel": "Geçiş anahtarıyla hesap oluştur",
+      "createHint": "Başka bir giriş yöntemi gerekmez",
+      "create": "Oluştur",
+      "needsBrowserCode": "{providers} girişi için tarayıcı gerekir. librecorsa.org/account adresinde giriş yap, Kod göster’i seç ve kodu buraya yaz.",
+      "needsBrowser": "{providers} girişi için tarayıcı gerekir."
+    },
+    "signedIn": {
+      "yourAccount": "Hesabın",
+      "signedInWith": "Giriş yöntemi: {ways}",
+      "combineLabel": "Birleştirilecek kayıtlar",
+      "combineHint": "Bu cihazda da hesapta da kayıt var",
+      "choose": "Seç",
+      "save": "Kayıt",
+      "syncing": "Şimdi senkronize ediliyor",
+      "synced": "Senkronize edildi: {ago}",
+      "cloudWritten": "Bulut kaydı yazıldı: {ago}",
+      "notSynced": "Henüz senkronize edilmedi",
+      "syncNow": "Şimdi senkronize et",
+      "signOut": "Çıkış yap",
+      "signOutHint": "Bu cihaz kaydını korur. Giriş yapınca turlarını yine pilot adlarınla gönderir",
+      "lastWay": "Son giriş yöntemi kaldırılamaz. Bunun yerine hesabı sil."
+    },
+    "names": {
+      "title": "Pilot adları",
+      "description": "Bu hesaptaki her cihaz bu adlarla tur gönderebilir. Hesap var olduğu sürece adlar senin kalır.",
+      "lastLap": "Son tur: {ago}",
+      "noLaps": "Henüz tur yok",
+      "none": "Henüz pilot adı yok. İlk turunu hangi adla gönderirsen o ad hesaba katılır.",
+      "elsewhere": "{count, plural, one {{names} başka bir hesapta.} other {{names} başka bir hesapta.}} İkisini birleştirmek için aşağıdan o hesabın giriş yöntemini ekle."
+    },
+    "ways": {
+      "title": "Giriş yöntemleri",
+      "description": "Her birinde yalnızca hesabın kimliği tutulur: e-posta, kullanıcı adı ya da fotoğraf tutulmaz.",
+      "added": "Eklendi: {date}",
+      "addedUsed": "Eklendi: {date}, kullanıldı: {ago}",
+      "notAdded": "Eklenmedi",
+      "remove": "Kaldır",
+      "add": "Ekle",
+      "passkeyName": "Geçiş anahtarı, eklendi: {date}",
+      "used": "Kullanıldı: {ago}",
+      "addPasskey": "Geçiş anahtarı ekle",
+      "addPasskeyHint": "Bu cihazın ekran kilidiyle, bir telefonla ya da bir güvenlik anahtarıyla giriş yapar",
+      "combinePasskey": "Geçiş anahtarı olan bir hesapla birleştir",
+      "combinePasskeyHint": "Adları, cihazları ve kaydı bu hesaba katılır",
+      "usePasskey": "Anahtarı kullan",
+      "desktopOthers": "Diğer giriş yöntemleri bir tarayıcıda librecorsa.org/account adresinden eklenebilir."
+    },
+    "devices": {
+      "title": "Cihazlar",
+      "description": "Bu hesapta giriş yapılmış tarayıcılar ve uygulamalar.",
+      "thisBrowser": "Bu tarayıcı",
+      "notJoined": "Henüz katılmamış bir cihaz",
+      "thisDevice": "Bu cihaz",
+      "seen": "Giriş: {date}, son görülme: {ago}",
+      "signOut": "Çıkış yap"
+    },
+    "keys": {
+      "title": "Pilot anahtarları",
+      "description": "Her cihaz turlarını kendi pilot anahtarıyla imzalar. Buradaki her anahtar hesabın adlarıyla tur gönderebilir.",
+      "fallback": "Pilot anahtarı {id}",
+      "added": "Eklendi: {date}",
+      "addedLap": "Eklendi: {date}, son tur: {ago}",
+      "none": "Henüz pilot anahtarı yok. Cihaz hesaba katılınca anahtarını ekler."
+    },
+    "remove": {
+      "identityTitle": "{provider} girişi kaldırılsın mı?",
+      "identityBody": "{provider} artık bu hesaba giriş yapmaz. Daha sonra tekrar ekleyebilirsin.",
+      "passkeyTitle": "Bu geçiş anahtarı kaldırılsın mı?",
+      "passkeyBody": "Artık bu hesaba giriş yapmaz. Onu tutan cihazdan ya da parola yöneticisinden de silebilirsin.",
+      "keyTitle": "Bu pilot anahtarı kaldırılsın mı?",
+      "keyBody": "{label} cihazındaki turlar artık hesabın adlarıyla gönderilmez. Tablolardaki turları kalır.",
+      "confirm": "Kaldır"
+    },
+    "delete": {
+      "title": "Hesabı sil",
+      "label": "Bu hesabı sil",
+      "hint": "Giriş yöntemlerini ve bulut kaydını siler. Turlarının kalıp kalmayacağına sen karar verirsin",
+      "button": "Sil",
+      "question": "Bu hesap silinsin mi?",
+      "confirm": "Hesabı sil",
+      "body": "Hesap, giriş yöntemleri ve bulut kaydı silinir. Bu cihazda kayıtlı olanlar kalır.",
+      "lapsGo": "Pilot adların turları, yarış sonuçları ve rozetlerle birlikte tablolardan kalkar ve herkesin alabileceği hale gelir.",
+      "lapsStay": "Pilot adların ve turların tablolarda kalır. Hesap olmadan bir ad, son turundan altı ay sonra düşer.",
+      "tick": "Turlarımı ve yarış sonuçlarımı da tablolardan kaldır"
+    },
+    "join": {
+      "notNow": "Şimdi değil",
+      "join": "Katıl",
+      "joining": "Katılınıyor… Bu cihazın kaydı hesapla senkronize ediliyor. Biraz sürebilir.",
+      "body": "Bu cihazın pilot adları ve kaydı o hesabın parçası olur. Şimdi değil’i seçersen bu cihazdan çıkış yapılır.",
+      "codeBody": "Bu cihazın pilot adları ve kaydı o hesabın parçası olur."
+    },
+    "firstSync": {
+      "title": "İki kayıt birleştirilsin mi?",
+      "combine": "Birleştir",
+      "useCloud": "Bulut kaydını kullan",
+      "keepLocal": "Bu cihazın kaydını koru",
+      "notNow": "Şimdi değil",
+      "intro": "Bu cihazda da hesapta da kayıt var.",
+      "thisDevice": "Bu cihaz",
+      "cloud": "Bulut kaydı",
+      "bestLaps": "{count, plural, one {<n>#</n> en iyi tur} other {<n>#</n> en iyi tur}}",
+      "setups": "{count, plural, one {<n>#</n> kayıtlı araç ayarı} other {<n>#</n> kayıtlı araç ayarı}}",
+      "races": "{count, plural, one {<n>#</n> yarış} other {<n>#</n> yarış}}",
+      "savedAgoOn": "{device} cihazında kaydedildi: {ago}",
+      "savedAgo": "Kaydedildi: {ago}",
+      "savedOn": "{device} cihazında kaydedildi",
+      "combineExplain": "<b>Birleştir.</b> İkisini de korur. İkisinde de aynı şey değiştiyse yeni olan kazanır.",
+      "cloudExplain": "<b>Bulut kaydını kullan.</b> Bu cihaz hesabın ayarlarını, araç ayarlarını ve yarış geçmişini alır. Kendi olanlar değiştirilir.",
+      "localExplain": "<b>Bu cihazın kaydını koru.</b> Hesap bu cihazın ayarlarını, araç ayarlarını ve yarış geçmişini alır. Diğer cihazlar bunları bir sonraki açılışta alır.",
+      "bestLapsKept": "İkisindeki en iyi turlar her zaman korunur."
+    },
+    "code": {
+      "title": "Başka bir cihazdan kod kullan",
+      "how": "Giriş yapılmış bir cihazda Ayarlar, sonra Profil ve veriler, sonra Hesap’ı aç ve Kod göster’i seç.",
+      "label": "Kod",
+      "continue": "Devam",
+      "format": "Kod 8 harf ve rakamdan oluşur, ABCD-EFGH gibi"
+    },
+    "showCode": {
+      "label": "Başka bir cihaz için kod göster",
+      "hint": "Masaüstü uygulaması gibi başka bir cihazı bu hesaba giriş yaptırır",
+      "hide": "Gizle",
+      "new": "Yeni kod",
+      "show": "Kod göster",
+      "aria": "Kod {code}",
+      "left": "{minutes, plural, =0 {Bir dakikadan az kaldı. Bir kez çalışır.} one {# dakika kaldı. Bir kez çalışır.} other {# dakika kaldı. Bir kez çalışır.}}",
+      "expired": "Bu kodun süresi doldu. Yenisi için Yeni kod’u seç.",
+      "how": "Diğer cihazda Ayarlar, sonra Profil ve veriler, sonra Hesap’ı aç. Başka bir cihazdan kod kullan’ı seç ve bu kodu yaz."
+    }
   }
 }

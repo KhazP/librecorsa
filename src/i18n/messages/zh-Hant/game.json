@@ -334,6 +334,10 @@
     "classicDetail": "原始的四角面板配置",
     "minimal": "極簡",
     "minimalDetail": "僅顯示車速、檔位與圈數",
+    "touring": "GT-Like",
+    "touringDetail": "置中單圈計時、雙錶盤、單圈列表、輪胎",
+    "formula": "F1-Like",
+    "formulaDetail": "賽事名次欄、計時標籤、能量錶盤、車況",
     "irdashiesDetail": "排名、單圈計時、操作輸入與換檔指示燈",
     "racevisionDetail": "排名、前後車距、操作輸入條與曲線圖",
     "h2hDetail": "前後車輛、車距時間與單圈時間差",
@@ -873,5 +877,72 @@
   },
   "dash": {
     "yellowFlag": "黃旗"
+  },
+  "account": {
+    "checking": "正在檢查你的帳號",
+    "passkey": "通行密鑰",
+    "aPasskey": "通行密鑰",
+    "justNow": "剛剛",
+    "join": {
+      "named": "要加入 {name} 的帳號（{ways}）嗎？",
+      "namedOnly": "要加入 {name} 的帳號嗎？",
+      "this": "要加入這個帳號（{ways}）嗎？",
+      "thisOnly": "要加入這個帳號嗎？"
+    },
+    "notices": {
+      "signedIn": "你已登入。",
+      "created": "帳號已建立，你也已登入。",
+      "linked": "該登入方式已加入你的帳號。",
+      "merged": "兩個帳號已合併為一個，其存檔會在下次同步時合併。",
+      "alreadyLinked": "該登入方式早已在你的帳號中。",
+      "cancelled": "已取消登入，未做任何變更。",
+      "failed": "登入失敗，請稍後再試。",
+      "deleted": "你的帳號已刪除。",
+      "deletedLaps": "你的帳號已刪除，{count, plural, other {# 筆單圈}}已從圈速榜移除。"
+    },
+    "errors": {
+      "notReady": "帳號功能尚未開放",
+      "keyElsewhere": "此裝置的車手金鑰屬於另一個帳號。請也在此登入該帳號，即可將兩者合併。",
+      "noPasskeys": "此瀏覽器不支援通行密鑰。",
+      "passkeyNotUsed": "未使用通行密鑰。",
+      "passkeyKnown": "此通行密鑰已屬於某個帳號。",
+      "passkeyFailed": "通行密鑰驗證失敗，請再試一次。",
+      "deferred": "已同步。其他裝置的變更會在下次啟動遊戲時載入。",
+      "firstDeferred": "已同步。帳號的存檔會在下次啟動遊戲時載入。",
+      "chooseFirst": "請先選擇要保留的內容。",
+      "noStorage": "此瀏覽器不允許遊戲儲存存檔，因此無法同步。",
+      "newerSave": "你的雲端存檔由較新版本的遊戲建立。請重新載入頁面以更新。",
+      "tooBig": "你的存檔過大，無法同步。",
+      "busy": "另一部裝置正在同時儲存，遊戲稍後會自動重試。",
+      "unreachable": "無法連線至伺服器，請檢查網路連線後再試。",
+      "signedOut": "你已在此裝置登出。",
+      "serverProblem": "伺服器發生問題，請稍後再試。",
+      "tooMany": "嘗試次數過多，請等一分鐘後再試。",
+      "unavailable": "帳號功能目前無法使用。",
+      "badCode": "代碼由 8 個字母和數字組成，例如 ABCD-EFGH。"
+    },
+    "server": {
+      "signInFirst": "請先登入",
+      "missingKey": "找不到車手金鑰。請重新載入遊戲後再試",
+      "deviceSignedOut": "該裝置已經登出",
+      "keyNotHere": "該車手金鑰不在此帳號中",
+      "passkeyNotHere": "該通行密鑰不在此帳號中",
+      "signInNotHere": "該登入方式不在此帳號中",
+      "lastWayIn": "這是進入你帳號的最後一種方式。請先新增其他登入方式，或刪除帳號",
+      "noCode": "無法產生代碼，請再試一次",
+      "wrongCode": "代碼錯誤或已失效。請在另一部裝置上重新顯示新代碼",
+      "codeFormat": "代碼由 8 個字母和數字組成，例如 ABCD-EFGH",
+      "tooManyTries": "嘗試次數過多，請等一分鐘",
+      "tooManySyncs": "同步次數過多，請等一分鐘",
+      "serverProblem": "帳號伺服器發生問題，請稍後再試",
+      "signOutFirst": "建立新帳號前請先登出",
+      "tookTooLong": "操作逾時，請再試一次",
+      "passkeyTaken": "此通行密鑰已屬於某個帳號",
+      "passkeyUnknown": "此通行密鑰不屬於這裡的任何帳號。請改用其他方式登入，或用它建立帳號",
+      "passkeyUnchecked": "無法驗證通行密鑰，請再試一次",
+      "saveTooLarge": "存檔超過 1 MB",
+      "saveChanged": "雲端存檔已在另一部裝置上變更",
+      "tooManyLaps": "雲端最多可存放 {count} 筆最佳單圈"
+    }
   }
 }

@@ -334,6 +334,10 @@
     "classicDetail": "Los paneles originales en las esquinas",
     "minimal": "Mínimo",
     "minimalDetail": "Solo velocidad, marcha y vuelta",
+    "touring": "GT-Like",
+    "touringDetail": "Cronómetro central, dos diales, lista de vueltas, neumáticos",
+    "formula": "F1-Like",
+    "formulaDetail": "Torre de carrera, píldoras de tiempos, dial de energía, estado del auto",
     "irdashiesDetail": "Clasificación, cronómetro de vuelta, entradas y luces de cambio",
     "racevisionDetail": "Clasificación, relativo, píldora de entradas y gráfico",
     "h2hDetail": "Los autos de delante y de detrás, diferencias y deltas de vuelta",
@@ -873,5 +877,72 @@
   },
   "dash": {
     "yellowFlag": "Bandera amarilla"
+  },
+  "account": {
+    "checking": "Comprobando tu cuenta",
+    "passkey": "Passkey",
+    "aPasskey": "una passkey",
+    "justNow": "hace un momento",
+    "join": {
+      "named": "¿Unirte a la cuenta de {name} ({ways})?",
+      "namedOnly": "¿Unirte a la cuenta de {name}?",
+      "this": "¿Unirte a esta cuenta ({ways})?",
+      "thisOnly": "¿Unirte a esta cuenta?"
+    },
+    "notices": {
+      "signedIn": "Has iniciado sesión.",
+      "created": "Tu cuenta está lista y has iniciado sesión.",
+      "linked": "Ese método de inicio de sesión ya está en tu cuenta.",
+      "merged": "Las dos cuentas ahora son una. Sus datos guardados se combinan en la próxima sincronización.",
+      "alreadyLinked": "Ese método de inicio de sesión ya estaba en tu cuenta.",
+      "cancelled": "Inicio de sesión cancelado. No cambió nada.",
+      "failed": "No se pudo iniciar sesión. Inténtalo de nuevo en un momento.",
+      "deleted": "Tu cuenta se eliminó.",
+      "deletedLaps": "Tu cuenta se eliminó. {count, plural, one {Salió # vuelta} other {Salieron # vueltas}} de las clasificaciones."
+    },
+    "errors": {
+      "notReady": "Las cuentas aún no están disponibles",
+      "keyElsewhere": "La clave de piloto de este dispositivo está en otra cuenta. Inicia sesión también en esa cuenta aquí para combinar las dos.",
+      "noPasskeys": "Este navegador no admite passkeys.",
+      "passkeyNotUsed": "No se usó la passkey.",
+      "passkeyKnown": "Esta passkey ya está en una cuenta.",
+      "passkeyFailed": "La passkey no funcionó. Inténtalo de nuevo.",
+      "deferred": "Sincronizado. Los cambios de tus otros dispositivos se cargan la próxima vez que se inicie el juego.",
+      "firstDeferred": "Sincronizado. Los datos guardados de la cuenta se cargan la próxima vez que se inicie el juego.",
+      "chooseFirst": "Elige primero qué conservar.",
+      "noStorage": "Este navegador no deja que el juego guarde datos, así que no se puede sincronizar.",
+      "newerSave": "Tus datos en la nube los creó una versión más reciente del juego. Recarga la página para actualizarlo.",
+      "tooBig": "Tus datos guardados son demasiado grandes para sincronizarlos.",
+      "busy": "Otro dispositivo estaba guardando al mismo tiempo. El juego lo reintenta en breve.",
+      "unreachable": "No se pudo conectar con el servidor. Revisa la conexión e inténtalo de nuevo.",
+      "signedOut": "Has cerrado sesión en este dispositivo.",
+      "serverProblem": "El servidor tuvo un problema. Inténtalo de nuevo en un momento.",
+      "tooMany": "Demasiados intentos. Espera un minuto e inténtalo de nuevo.",
+      "unavailable": "Las cuentas no están disponibles en este momento.",
+      "badCode": "Un código tiene 8 letras y dígitos, como ABCD-EFGH."
+    },
+    "server": {
+      "signInFirst": "Inicia sesión primero",
+      "missingKey": "Falta la clave de piloto. Recarga el juego e inténtalo de nuevo",
+      "deviceSignedOut": "Ese dispositivo ya cerró sesión",
+      "keyNotHere": "Esa clave de piloto no está en esta cuenta",
+      "passkeyNotHere": "Esa passkey no está en esta cuenta",
+      "signInNotHere": "Ese método de inicio de sesión no está en esta cuenta",
+      "lastWayIn": "Es la última forma de entrar en tu cuenta. Añade otra primero o elimina la cuenta",
+      "noCode": "No se pudo generar un código. Inténtalo de nuevo",
+      "wrongCode": "Ese código es incorrecto o ha caducado. Muestra uno nuevo en el otro dispositivo",
+      "codeFormat": "Un código tiene 8 letras y dígitos, como ABCD-EFGH",
+      "tooManyTries": "Demasiados intentos, espera un minuto",
+      "tooManySyncs": "Demasiadas sincronizaciones, espera un minuto",
+      "serverProblem": "El servidor de cuentas tuvo un problema. Inténtalo de nuevo en un momento",
+      "signOutFirst": "Cierra sesión antes de crear una cuenta nueva",
+      "tookTooLong": "Tardó demasiado. Inténtalo de nuevo",
+      "passkeyTaken": "Esta passkey ya está en una cuenta",
+      "passkeyUnknown": "Esta passkey no está en ninguna cuenta aquí. Inicia sesión de otra forma o crea una cuenta con ella",
+      "passkeyUnchecked": "No se pudo verificar la passkey. Inténtalo de nuevo",
+      "saveTooLarge": "Los datos guardados superan 1 MB",
+      "saveChanged": "Los datos en la nube cambiaron en otro dispositivo",
+      "tooManyLaps": "La nube guarda hasta {count} mejores vueltas"
+    }
   }
 }

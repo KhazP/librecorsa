@@ -46,6 +46,7 @@
       },
       "profile": {
         "driver": "Pilota",
+        "account": "Account",
         "data": "Dati"
       }
     },
@@ -622,7 +623,7 @@
       "clearButton": "Cancella",
       "clearTitle": "Cancellare i dati salvati?",
       "clearConfirm": "Cancella tutto",
-      "clearBody": "Rimuove in modo definitivo da questo browser tutte le impostazioni, la chiave del pilota, i giri, i ghost e i setup, poi ricarica."
+      "clearBody": "Rimuove in modo definitivo da questo browser tutte le impostazioni, la chiave del pilota, i giri, i ghost e i setup, poi ricarica. Un dispositivo connesso esce prima dal suo account; l’account e il suo salvataggio cloud restano."
     }
   },
   "hudPicker": {
@@ -634,5 +635,156 @@
     "descriptionSite": "{detail}. Di {author} · {site}",
     "sourceLink": "Sorgente di {layout}, di {author} (si apre in una nuova scheda)",
     "siteLink": "{site}, sito di {author} (si apre in una nuova scheda)"
+  },
+  "account": {
+    "checking": "Controllo dell’account",
+    "unavailable": "Gli account non sono disponibili al momento. Riprova più tardi.",
+    "deleted": "L’account è stato eliminato.",
+    "deletedLaps": "L’account e i suoi giri sono stati eliminati.",
+    "page": {
+      "intro": "Gli account sono facoltativi. Un account conserva i tuoi nomi da pilota e il salvataggio su ogni dispositivo, e non viene raccolta nessuna email. Accedi qui per vedere cosa contiene il tuo account o per eliminarlo.",
+      "privacy": "Cosa conserva un account è spiegato nella <link>pagina sulla privacy</link>."
+    },
+    "signedOut": {
+      "titlePage": "Accedi",
+      "title": "Account",
+      "description": "Accedi per conservare i tuoi nomi da pilota e il salvataggio su ogni dispositivo. Non viene raccolta nessuna email.",
+      "codeLabel": "Usa un codice di un altro dispositivo",
+      "codeHint": "Su un dispositivo già connesso scegli Mostra un codice, poi digitalo qui",
+      "enterCode": "Inserisci codice",
+      "signInWith": "Accedi con",
+      "oauthHint": "Apre la loro pagina di accesso, poi torna qui",
+      "passkeyHint": "Una passkey su questo dispositivo, su un telefono o su una chiave di sicurezza",
+      "passkey": "Passkey",
+      "createLabel": "Crea un account con una passkey",
+      "createHint": "Non serve nessun altro accesso",
+      "create": "Crea",
+      "needsBrowserCode": "L’accesso con {providers} richiede un browser. Accedi su librecorsa.org/account, scegli Mostra un codice e digitalo qui.",
+      "needsBrowser": "L’accesso con {providers} richiede un browser."
+    },
+    "signedIn": {
+      "yourAccount": "Il tuo account",
+      "signedInWith": "Accesso effettuato con {ways}",
+      "combineLabel": "Salvataggi da unire",
+      "combineHint": "Sia questo dispositivo sia l’account hanno un salvataggio",
+      "choose": "Scegli",
+      "save": "Salvataggio",
+      "syncing": "Sincronizzazione in corso",
+      "synced": "Sincronizzato {ago}",
+      "cloudWritten": "Il salvataggio cloud è stato scritto {ago}",
+      "notSynced": "Non ancora sincronizzato",
+      "syncNow": "Sincronizza ora",
+      "signOut": "Esci",
+      "signOutHint": "Questo dispositivo conserva il suo salvataggio. Pubblica di nuovo i giri con i tuoi nomi appena accedi",
+      "lastWay": "L’ultimo modo di accesso non può essere rimosso. Elimina invece l’account."
+    },
+    "names": {
+      "title": "Nomi da pilota",
+      "description": "Ogni dispositivo di questo account può pubblicare giri con questi nomi. Restano tuoi finché l’account esiste.",
+      "lastLap": "Ultimo giro {ago}",
+      "noLaps": "Ancora nessun giro",
+      "none": "Ancora nessun nome da pilota. Il nome con cui pubblichi il primo giro entra a far parte dell’account.",
+      "elsewhere": "{count, plural, one {{names} fa parte di un altro account.} other {{names} fanno parte di un altro account.}} Per unire i due, aggiungi qui sotto l’accesso di quell’account."
+    },
+    "ways": {
+      "title": "Modi di accesso",
+      "description": "Di ciascuno viene conservato solo l’id dell’account: nessuna email, nome utente o immagine.",
+      "added": "Aggiunto il {date}",
+      "addedUsed": "Aggiunto il {date}, usato {ago}",
+      "notAdded": "Non aggiunto",
+      "remove": "Rimuovi",
+      "add": "Aggiungi",
+      "passkeyName": "Passkey aggiunta il {date}",
+      "used": "Usato {ago}",
+      "addPasskey": "Aggiungi una passkey",
+      "addPasskeyHint": "Accede con il blocco schermo di questo dispositivo, un telefono o una chiave di sicurezza",
+      "combinePasskey": "Unisci a un account che ha una passkey",
+      "combinePasskeyHint": "I suoi nomi, dispositivi e salvataggio entrano in questo account",
+      "usePasskey": "Usa passkey",
+      "desktopOthers": "Altri accessi si possono aggiungere da un browser su librecorsa.org/account."
+    },
+    "devices": {
+      "title": "Dispositivi",
+      "description": "I browser e le app connessi a questo account.",
+      "thisBrowser": "Questo browser",
+      "notJoined": "Un dispositivo che non si è ancora unito",
+      "thisDevice": "Questo dispositivo",
+      "seen": "Accesso del {date}, visto {ago}",
+      "signOut": "Esci"
+    },
+    "keys": {
+      "title": "Chiavi del pilota",
+      "description": "Ogni dispositivo firma i suoi giri con la propria chiave del pilota. Ogni chiave qui può pubblicare con i nomi dell’account.",
+      "fallback": "Chiave del pilota {id}",
+      "added": "Aggiunta il {date}",
+      "addedLap": "Aggiunta il {date}, ultimo giro {ago}",
+      "none": "Ancora nessuna chiave del pilota. Un dispositivo aggiunge la sua chiave quando si unisce all’account."
+    },
+    "remove": {
+      "identityTitle": "Rimuovere l’accesso con {provider}?",
+      "identityBody": "{provider} non permette più di accedere a questo account. Puoi aggiungerlo di nuovo più tardi.",
+      "passkeyTitle": "Rimuovere questa passkey?",
+      "passkeyBody": "Non permette più di accedere a questo account. Puoi anche eliminarla dal dispositivo o dal gestore di password che la conserva.",
+      "keyTitle": "Rimuovere questa chiave del pilota?",
+      "keyBody": "I giri da {label} non vengono più pubblicati con i nomi dell’account. I suoi giri già in classifica restano.",
+      "confirm": "Rimuovi"
+    },
+    "delete": {
+      "title": "Elimina account",
+      "label": "Elimina questo account",
+      "hint": "Elimina i suoi accessi e il salvataggio cloud. Scegli tu se i tuoi giri restano",
+      "button": "Elimina",
+      "question": "Eliminare questo account?",
+      "confirm": "Elimina account",
+      "body": "Questo elimina l’account, i suoi accessi e il suo salvataggio cloud. Quello che è salvato su questo dispositivo resta.",
+      "lapsGo": "I tuoi nomi da pilota escono dalle classifiche con i loro giri, risultati di gara e badge, e diventano liberi per chiunque.",
+      "lapsStay": "I tuoi nomi da pilota e i tuoi giri restano in classifica. Senza un account, un nome decade dopo sei mesi senza un giro.",
+      "tick": "Rimuovi anche i miei giri e i miei risultati di gara dalle classifiche"
+    },
+    "join": {
+      "notNow": "Non ora",
+      "join": "Unisciti",
+      "joining": "Mi unisco… Il salvataggio di questo dispositivo si sta sincronizzando con l’account. Può volerci un momento.",
+      "body": "I nomi da pilota e il salvataggio di questo dispositivo diventano parte di quell’account. Con Non ora, questo dispositivo esce dall’account.",
+      "codeBody": "I nomi da pilota e il salvataggio di questo dispositivo diventano parte di quell’account."
+    },
+    "firstSync": {
+      "title": "Unire i due salvataggi?",
+      "combine": "Combina",
+      "useCloud": "Usa il salvataggio cloud",
+      "keepLocal": "Tieni quello di questo dispositivo",
+      "notNow": "Non ora",
+      "intro": "Sia questo dispositivo sia l’account hanno un salvataggio.",
+      "thisDevice": "Questo dispositivo",
+      "cloud": "Salvataggio cloud",
+      "bestLaps": "{count, plural, one {<n>#</n> giro migliore} other {<n>#</n> giri migliori}}",
+      "setups": "{count, plural, one {<n>#</n> setup salvato} other {<n>#</n> setup salvati}}",
+      "races": "{count, plural, one {<n>#</n> gara} other {<n>#</n> gare}}",
+      "savedAgoOn": "Salvato {ago} su {device}",
+      "savedAgo": "Salvato {ago}",
+      "savedOn": "Salvato su {device}",
+      "combineExplain": "<b>Combina.</b> Tiene entrambi. Dove entrambi hanno cambiato la stessa cosa, vince la modifica più recente.",
+      "cloudExplain": "<b>Usa il salvataggio cloud.</b> Questo dispositivo prende impostazioni, setup e storico gare dell’account. I suoi vengono sostituiti.",
+      "localExplain": "<b>Tieni quello di questo dispositivo.</b> L’account prende impostazioni, setup e storico gare di questo dispositivo. Gli altri dispositivi li ricevono al prossimo avvio.",
+      "bestLapsKept": "I giri migliori di entrambi vengono sempre conservati."
+    },
+    "code": {
+      "title": "Usa un codice di un altro dispositivo",
+      "how": "Su un dispositivo già connesso, apri Impostazioni, poi Profilo e dati, poi Account, e scegli Mostra un codice.",
+      "label": "Codice",
+      "continue": "Continua",
+      "format": "Un codice ha 8 lettere e numeri, come ABCD-EFGH"
+    },
+    "showCode": {
+      "label": "Mostra un codice per un altro dispositivo",
+      "hint": "Fa accedere un altro dispositivo a questo account, come l’app desktop",
+      "hide": "Nascondi",
+      "new": "Nuovo codice",
+      "show": "Mostra un codice",
+      "aria": "Codice {code}",
+      "left": "{minutes, plural, =0 {Meno di un minuto rimasto. Funziona una sola volta.} one {# minuto rimasto. Funziona una sola volta.} other {# minuti rimasti. Funziona una sola volta.}}",
+      "expired": "Questo codice è scaduto. Scegli Nuovo codice per averne un altro.",
+      "how": "Sull’altro dispositivo, apri Impostazioni, poi Profilo e dati, poi Account. Scegli Usa un codice di un altro dispositivo e digita questo codice."
+    }
   }
 }

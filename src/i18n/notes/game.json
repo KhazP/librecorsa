@@ -429,5 +429,13 @@
   "playError.restart": "Button: start the simulator again.",
   "dash.yellowFlag": "Banner on the GT3 car's dashboard screen (drawn in capitals) while a yellow flag is out.",
   "badges.creator": "Badge name for the person who made LibreCorsa.",
-  "badges.creatorDetail": "What the Creator badge means."
+  "badges.creatorDetail": "What the Creator badge means.",
+  "account.checking": "Quiet line while the game asks the server about the player's account.",
+  "account.passkey": "A passkey on its own, as on its button. A passkey is the standard password-free sign-in (WebAuthn).",
+  "account.aPasskey": "A passkey inside a sentence and a list: “Signed in with Discord and a passkey”.",
+  "account.justNow": "Fills {ago} in sentences like “Synced {ago}”: under a minute ago.",
+  "account.join.named": "Question before this device joins an account. {name} is the account's driver name; {ways} is a list of sign-in names already joined in the player's language: “Discord”, “Discord and Google”, “Discord, Google and a passkey”.",
+  "account.join.namedOnly": "Question before this device joins an account. {name} is the account's driver name.",
+  "account.join.this": "Question before this device joins an account with no driver name yet. {ways} is a list of sign-in names already joined in the player's language: “Discord”, “Discord and Google”, “Discord, Google and a passkey”.",
+  "account.join.thisOnly": "Question before this device joins an account with no driver name yet."
 }
