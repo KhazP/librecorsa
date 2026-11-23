@@ -18,7 +18,7 @@ import {
   showsPhoneHud,
 } from '../src/lib/settings/hud-layouts';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
-import { HUD_PART_IDS, hudPartOfOrigin, layoutMoved, parseHudParts, withLayoutParts } from '../src/lib/settings/hud-parts';
+import { HUD_PART_IDS, hudPartOfOrigin, hudPartsKey, layoutMoved, parseHudParts, withLayoutParts } from '../src/lib/settings/hud-parts';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -111,6 +111,8 @@ console.log(`\n${HUD_LAYOUTS.length} layouts (${THIRD_PARTY_HUD_LAYOUTS.length} 
   const saved = parsePlayerSettings(JSON.parse(JSON.stringify({ ...DEFAULT_PLAYER_SETTINGS, hud: { ...DEFAULT_PLAYER_SETTINGS.hud, parts: { classic: { center: { x: -4, y: 2, scale: 0.8 } } } } })));
   check('moved panels survive a save and reload', saved.hud.parts.classic?.center?.scale === 0.8);
   check('a save without them has none', Object.keys(parsePlayerSettings({}).hud.parts).length === 0);
+  const phone = parseHudParts({ phone: { 'top-left': { x: 3, y: 0, scale: 1 } } });
+  check('the Phone HUD keeps its own parts', phone.phone?.['top-left']?.x === 3 && hudPartsKey('broadcast', true) === 'phone' && hudPartsKey('broadcast', false) === 'broadcast');
 }
 
 if (failures.length) {

@@ -35,7 +35,7 @@ import {
   temperatureUnit,
   uiScale,
 } from "../defs";
-import { layoutMoved, withLayoutParts } from "@/lib/settings/hud-parts";
+import { PHONE_HUD_PARTS, layoutMoved, withLayoutParts } from "@/lib/settings/hud-parts";
 import { useSettingsEnv } from "../env";
 import { SettingsCard } from "../fields";
 import { HUD_TOUCH_NOTE, HudLayoutPicker } from "../HudLayoutPicker";
@@ -84,14 +84,19 @@ export function GraphicsTab() {
 function HudPlacementCard() {
   const env = useSettingsEnv();
   const tx = useTranslations("settings.display.placement");
-  const moved = layoutMoved(env.settings.hud.parts, env.settings.hud.preset);
+  // The layout chosen, and the Phone HUD a phone or the touch pads draw in its place
+  const moved = layoutMoved(env.settings.hud.parts, env.settings.hud.preset) || layoutMoved(env.settings.hud.parts, PHONE_HUD_PARTS);
   return (
     <SettingsCard
       title={tx("title")}
       rows={[hudSize]}
       extraReset={{
         changed: moved,
-        reset: () => env.update((s) => ({ ...s, hud: { ...s.hud, parts: withLayoutParts(s.hud.parts, s.hud.preset, {}) } })),
+        reset: () =>
+          env.update((s) => ({
+            ...s,
+            hud: { ...s.hud, parts: withLayoutParts(withLayoutParts(s.hud.parts, s.hud.preset, {}), PHONE_HUD_PARTS, {}) },
+          })),
       }}
       resetWhat={tx("resetWhat")}
     >

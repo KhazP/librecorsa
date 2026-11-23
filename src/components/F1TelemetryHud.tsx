@@ -90,7 +90,7 @@ import {
 } from "./hud/styles/third-party-skin";
 import { useUiZoom } from "@/lib/ui-zoom";
 import { anchor, buildHudMap, revRangeOf, setActiveHudParts, useLapInvalid, type HudDesignProps } from "./hud/styles/hud-style-parts";
-import { withLayoutParts, type HudLayoutParts } from "@/lib/settings/hud-parts";
+import { hudPartsKey, withLayoutParts, type HudLayoutParts } from "@/lib/settings/hud-parts";
 import type { BoardWidgetMode, HudPreset } from "@/lib/settings/player-settings";
 import { showsPhoneHud } from "@/lib/settings/hud-layouts";
 import { BoardWidget, useLargeScreen } from "./hud/BoardWidget";
@@ -432,7 +432,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const editMode = Boolean(props.hudEditor);
   const hudRootRef = useRef<HTMLDivElement | null>(null);
   const [draftParts, setDraftParts] = useState<HudLayoutParts | null>(null);
-  const savedParts = hud?.parts?.[preset];
+  // Kept per layout drawn: a phone's HUD (or the touch pads') has its own, apart from the layout it stands in for
+  const partsKey = hudPartsKey(preset, phone);
+  const savedParts = hud?.parts?.[partsKey];
   const layoutParts = editMode ? (draftParts ?? savedParts) : savedParts;
   setActiveHudParts(layoutParts);
   // Paused or in a replay, the HUD stays mounted (folds, lap history and timers carry on) but hides and takes no input;
@@ -1067,7 +1069,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         onChange={setDraftParts}
         onDone={() => {
           const next = draftParts;
-          if (next) props.displayPanel?.onChangeSettings((st) => ({ ...st, hud: { ...st.hud, parts: withLayoutParts(st.hud.parts, preset, next) } }));
+          if (next) props.displayPanel?.onChangeSettings((st) => ({ ...st, hud: { ...st.hud, parts: withLayoutParts(st.hud.parts, partsKey, next) } }));
           props.hudEditor?.onClose();
         }}
         onCancel={() => props.hudEditor?.onClose()}

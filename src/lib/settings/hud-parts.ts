@@ -1,6 +1,7 @@
 /**
  * Where the player has moved and resized the HUD's corner groups (Settings > Display > HUD > Edit layout), per
- * layout: each layout fills its corners differently, so moving Classic's map leaves Broadcast's top right alone.
+ * layout drawn: each layout fills its corners differently, so moving Classic's map leaves Broadcast's top right alone,
+ * and the Phone HUD (which a phone or the touch pads draw in place of the chosen layout) keeps its own.
  * Offsets are in percent of the window (vw / vh), so a moved panel keeps its place across window sizes, a
  * fullscreen switch and a phone turned on its side. Saved with the settings; a part without one is where its
  * layout puts it.
@@ -37,7 +38,15 @@ export interface HudPart {
 }
 
 export type HudLayoutParts = Partial<Record<HudPartId, HudPart>>;
-export type HudParts = Partial<Record<HudPreset, HudLayoutParts>>;
+
+/** The Phone HUD's parts are kept under this key: it stands in for whichever layout is chosen */
+export const PHONE_HUD_PARTS = "phone";
+/** What a layout's parts are kept under: the layout chosen, or the Phone HUD where it is drawn instead */
+export type HudPartsKey = HudPreset | typeof PHONE_HUD_PARTS;
+export const hudPartsKey = (preset: HudPreset, phoneHud: boolean): HudPartsKey => (phoneHud ? PHONE_HUD_PARTS : preset);
+const isPartsKey = (v: string): v is HudPartsKey => v === PHONE_HUD_PARTS || isHudPreset(v);
+
+export type HudParts = Partial<Record<HudPartsKey, HudLayoutParts>>;
 
 export const NO_HUD_PART: HudPart = { x: 0, y: 0, scale: 1 };
 /** As far as a part can move: the whole window either way (%) */
@@ -74,12 +83,12 @@ export function cleanHudLayoutParts(raw: unknown): HudLayoutParts {
   return out;
 }
 
-/** A save's parts for the layouts this game has; anything malformed is dropped */
+/** A save's parts for the layouts this game has (and the Phone HUD); anything malformed is dropped */
 export function parseHudParts(raw: unknown): HudParts {
   const out: HudParts = {};
   if (!raw || typeof raw !== "object") return out;
   for (const [layout, parts] of Object.entries(raw as Record<string, unknown>)) {
-    if (!isHudPreset(layout)) continue;
+    if (!isPartsKey(layout)) continue;
     const kept = cleanHudLayoutParts(parts);
     if (Object.keys(kept).length) out[layout] = kept;
   }
@@ -87,7 +96,7 @@ export function parseHudParts(raw: unknown): HudParts {
 }
 
 /** `parts` with one layout's parts replaced (empty: that layout back to how it comes) */
-export function withLayoutParts(parts: HudParts, layout: HudPreset, next: HudLayoutParts): HudParts {
+export function withLayoutParts(parts: HudParts, layout: HudPartsKey, next: HudLayoutParts): HudParts {
   const kept = cleanHudLayoutParts(next);
   const out: HudParts = { ...parts };
   if (Object.keys(kept).length) out[layout] = kept;
@@ -95,4 +104,4 @@ export function withLayoutParts(parts: HudParts, layout: HudPreset, next: HudLay
   return out;
 }
 
-export const layoutMoved = (parts: HudParts | undefined, layout: HudPreset): boolean => Object.keys(parts?.[layout] ?? {}).length > 0;
+export const layoutMoved = (parts: HudParts | undefined, layout: HudPartsKey): boolean => Object.keys(parts?.[layout] ?? {}).length > 0;
