@@ -247,6 +247,12 @@ export function filterBadgesForContext(badges: readonly DriverBadge[], context?:
   return out;
 }
 
+/**
+ * The badges a name typed into a room may wear. A room never checks a player's name against its claim, so the Creator
+ * (which stands for who the driver is) stays off there; the rest only say what a name has done on the boards.
+ */
+export const roomNameBadges = (badges: readonly DriverBadge[]): DriverBadge[] => badges.filter((b) => b.type !== "creator");
+
 /** A longer line for a tooltip: what the badge means and where it was won */
 export function badgeDetail(b: DriverBadge): string {
   switch (b.type) {

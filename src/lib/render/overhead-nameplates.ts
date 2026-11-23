@@ -3,6 +3,7 @@ import {
   fetchBadges,
   filterBadgesForContext,
   groupBoardsByClass,
+  roomNameBadges,
   sortBadges,
   type BadgeContext,
   type BadgeType,
@@ -19,6 +20,7 @@ const NAMEPLATE_BADGE_SHORT: Record<BadgeType, string> = {
   track_record: "FL",
   og: "OG",
   bulb: "IDEA",
+  // Never shown: a room's names are unchecked, so the cache below drops the Creator (awards.ts roomNameBadges)
   creator: "DEV",
 };
 
@@ -126,7 +128,8 @@ export class NameplateBadgeCache {
     return this.fetcher(missing)
       .then((res) => {
         if (this.disposed || !res) return;
-        for (const [key, list] of Object.entries(res)) {
+        for (const [key, fetched] of Object.entries(res)) {
+          const list = roomNameBadges(fetched);
           this.rawByNameKey.set(key, list);
           const codes = formatNameplateBadges(list, this.context);
           if (codes.length > 0) this.byNameKey.set(key, codes);
