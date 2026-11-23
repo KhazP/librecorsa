@@ -243,8 +243,8 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
           const changed = parts[id] !== undefined;
           const h = HANDLE[id];
           const live = active === id;
-          // The name tab goes inside the frame when the panel is against the top of the window
-          const tabInside = box.top < 28;
+          // The name tab goes under the frame when the panel is against the top of the window
+          const tabBelow = box.top < 28;
           return (
             <div
               key={id}
@@ -260,7 +260,7 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
               }`}
             >
               <div
-                className={`pointer-events-none absolute start-0 flex items-center gap-1.5 rounded-lc-nub bg-lc-void/90 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-lc-chalk ${tabInside ? "top-1" : "-top-6"}`}
+                className={`pointer-events-none absolute start-0 flex items-center gap-1.5 rounded-lc-nub bg-lc-void/90 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-lc-chalk ${tabBelow ? "top-full mt-1" : "-top-6"}`}
               >
                 <Icon name="move" size="xs" className="text-lc-volt" />
                 <span>{tx(`parts.${id}`)}</span>
@@ -271,7 +271,7 @@ export function HudEditor({ parts, hudRootRef, onChange, onDone, onCancel }: Hud
                   type="button"
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => setPart(id, NO_HUD_PART)}
-                  className={`absolute end-1 rounded-lc-nub bg-lc-void/90 px-2 py-0.5 text-[11px] font-semibold text-lc-fog hover:bg-lc-crimson hover:text-lc-chalk ${tabInside ? "bottom-1" : "top-1"}`}
+                  className={`absolute end-1 rounded-lc-nub bg-lc-void/90 px-2 py-0.5 text-[11px] font-semibold text-lc-fog hover:bg-lc-crimson hover:text-lc-chalk top-1`}
                 >
                   {tx("resetPart")}
                 </button>
