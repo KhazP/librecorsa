@@ -113,6 +113,8 @@
       "addModText": "Hai creato una mod di un’auto o di una pista e vuoi vederla in LibreCorsa? Scrivimi a <mail>{email}</mail> con un link. Ogni modder è citato per nome nel gioco.",
       "modders": "I modder",
       "moddersText": "I circuiti e le auto sono opera loro, usati con il loro permesso. Se ne apprezzi uno, puoi ringraziare direttamente chi l’ha creato.",
+      "contributors": "Contributori al codice",
+      "contributorsText": "Il loro codice fa parte del gioco. Grazie.",
       "links": {
         "download": "Scarica le app",
         "press": "Tutta la rassegna stampa e il press kit",

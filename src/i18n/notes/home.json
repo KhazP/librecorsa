@@ -46,6 +46,8 @@
   "hub.cars.shown": "{shown} of {total}: numbers of cars after filtering.",
   "hub.about.addModText": "{email}: the developer's email address. Keep the <mail></mail> tags around it; they make it a link.",
   "hub.about.moddersText": "About the people who made the circuits' and cars' 3D models.",
+  "hub.about.contributors": "Heading over the people who sent in code (pull requests) that is now in the game. Not the modders: they made the 3D models.",
+  "hub.about.contributorsText": "One line under that heading, thanking the people listed.",
   "hub.about.links.support": "Link to the developer's tip page (Buy Me a Coffee). Translate the meaning ('support the developer') if the phrase doesn't work in your language.",
   "hub.facts.platforms.label": "Label: what devices the game runs on.",
   "hub.facts.price.text": "Tips are optional payments to the developer; they unlock nothing in the game.",

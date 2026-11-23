@@ -17,7 +17,8 @@ import { CURSOR_TILE, cx, MOTION } from "@/components/ui/styles";
 import { withBasePath } from "@/lib/base-path";
 import { useSavedInterfaceSettings, useUnits } from "@/lib/settings/ui-prefs";
 import { DISTANCE_LABEL, distanceIn, SPEED_LABEL, speedIn } from "@/lib/settings/units";
-import { AUTHOR_LINKS, DOCS_URL, SITE_DESCRIPTION } from "@/lib/site";
+import { AUTHOR_LINKS, DOCS_URL, REPO_URL, SITE_DESCRIPTION } from "@/lib/site";
+import { CODE_CONTRIBUTORS } from "@/lib/contributors";
 import { useStoreBuild } from "@/lib/use-store-build";
 import { FeaturedBadges } from "./FeaturedBadges";
 import { SupportButton } from "@/components/SupportButton";
@@ -948,6 +949,29 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data: built }) => {
                       </ul>
                     </section>
                   ) : null}
+                  {/* The people whose pull requests are in the game, each linking to their GitHub and their pull requests */}
+                  <section aria-labelledby="code-contributors" className="flex flex-col gap-4 pt-2">
+                    <h2 id="code-contributors" className="lc-h2">
+                      {tx("about.contributors")}
+                    </h2>
+                    <p className="lc-body m-0 max-w-[60ch] text-[16px] leading-[1.6]">{tx("about.contributorsText")}</p>
+                    <ul className="m-0 flex list-none flex-col p-0">
+                      {CODE_CONTRIBUTORS.map((c) => (
+                        <li key={c.name} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-lc-line py-3 last:border-b">
+                          <a href={c.url} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
+                            {c.name}
+                          </a>
+                          <span className="lc-hint flex flex-wrap gap-x-3 text-[13px]">
+                            {c.pulls.map((n) => (
+                              <a key={n} href={`${REPO_URL}/pull/${n}`} target="_blank" rel="noopener" onPointerEnter={focusOnHover} className={`inline-flex items-center tabular-nums pointer-coarse:min-h-11 ${TEXT_LINK}`}>
+                                #{n}
+                              </a>
+                            ))}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
                 </div>
                 <section aria-labelledby="press-and-media" className="flex min-w-0 flex-col gap-5">
                   <h2 id="press-and-media" className="lc-h2">

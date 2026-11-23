@@ -113,6 +113,8 @@
       "addModText": "Made a car or track mod and want to see it in LibreCorsa? Email me at <mail>{email}</mail> with a link to it. Every modder gets credited by name in the game.",
       "modders": "The modders",
       "moddersText": "The circuits and cars are their work, used with their permission. If you enjoy one, you can thank its maker directly.",
+      "contributors": "Code contributors",
+      "contributorsText": "Their code is part of the game. Thank you.",
       "links": {
         "download": "Download apps",
         "press": "All coverage and the press kit",
