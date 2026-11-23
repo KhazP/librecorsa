@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { PitLaneModel, type PitLaneData } from "@/lib/sim/pit/pit-lane";
 import { text as tx } from "@/lib/text";
 import {
   CustomLiveryColors,
@@ -121,6 +122,8 @@ export interface BuiltTrackData {
   baseAltitudeM?: number;
   /** Where another layout's road leaves this lap: there its own road edge and kerbs are the limit (course-limits.ts) */
   otherLayoutRoads?: LapStretches;
+  /** The pit lane, placed against this lap (pit/pit-lane.ts); null where the layout has none. Built on first use */
+  readonly pitLane?: PitLaneModel | null;
   spline: THREE.CatmullRomCurve3;
   getSampleAtDistance: (s: number) => TrackSamplePoint;
   /** Allocation-free variant of `getSampleAtDistance` writing into a caller-owned buffer (`createTrackSampleBuffer`). */
@@ -2244,6 +2247,14 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     projectWorldToTrackInto,
     locateWorldPoint: locateWorldPointFn,
   };
+  const built = cachedBuiltTrack;
+  const pitData = (activeRaw as { pitLane?: PitLaneData }).pitLane;
+  const pitboxes = (activeRaw.metadata as { pitboxes?: number }).pitboxes;
+  let pitModel: PitLaneModel | null | undefined;
+  Object.defineProperty(built, "pitLane", {
+    enumerable: false,
+    get: () => (pitModel === undefined ? (pitModel = PitLaneModel.build(pitData, built, pitboxes)) : pitModel),
+  });
 
   return cachedBuiltTrack;
 }
