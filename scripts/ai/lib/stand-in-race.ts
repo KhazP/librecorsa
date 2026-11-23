@@ -93,6 +93,8 @@ export interface StandInRaceResult {
   aiVsAiAt: [number, number][];
   spinsAt: [number, number][];
   offsAt: [number, number][];
+  /** Where and when AI cars hit a barrier ([lap distance m, race time s]) */
+  wallsAt: [number, number][];
 }
 
 const emptyTally = (): ContactTally => ({ events: 0, aiAtFault: 0, standInAtFault: 0, racingIncident: 0, rearEnd: 0, sideswipe: 0, impactSum: 0 });
@@ -215,6 +217,8 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
   const aiVsAiAt: [number, number][] = [];
   const spinsAt: [number, number][] = [];
   const offsAt: [number, number][] = [];
+  const wallsAt: [number, number][] = [];
+  const wallSeen = new Map<string, number>();
   const offSeen = new Map<string, number>();
   let offTimerS = 0;
   const tally = (c: Extract<FieldIncident, { kind: 'contact' }>) => {
@@ -263,6 +267,8 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
         const was = offSeen.get(code) ?? 0;
         if (info.stats.offTracks > was) offsAt.push([Math.round(info.sim.sMeters), Math.round(t * 10) / 10]);
         offSeen.set(code, info.stats.offTracks);
+        if (info.stats.wallHits > (wallSeen.get(code) ?? 0)) wallsAt.push([Math.round(info.sim.sMeters), Math.round(t * 10) / 10]);
+        wallSeen.set(code, info.stats.wallHits);
       }
     }
     if (!driver) continue;
@@ -322,5 +328,6 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
     aiVsAiAt,
     spinsAt,
     offsAt,
+    wallsAt,
   };
 }
