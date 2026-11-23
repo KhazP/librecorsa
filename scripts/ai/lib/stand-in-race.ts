@@ -79,8 +79,11 @@ export interface StandInRaceResult {
   vsStandIn: ContactTally;
   /** AI against AI */
   aiVsAi: ContactTally;
-  /** Where and when ([lap distance m, race s]) each contact with the stand-in happened, and who race control blamed */
-  vsStandInAt: [number, number, 'ai' | 'standIn' | 'none'][];
+  /**
+   * Where and when ([lap distance m, race s]) each contact with the stand-in happened, who race control blamed, its
+   * reason, and whether the stand-in was the car behind
+   */
+  vsStandInAt: [number, number, 'ai' | 'standIn' | 'none', string, boolean][];
   /** Penalty seconds race control gave the stand-in */
   standInPenaltiesS: number;
   /** Seconds the stand-in spent touching an AI car */
@@ -228,7 +231,7 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
   let standInDist = 0;
 
   const aiVsAiAt: [number, number][] = [];
-  const vsStandInAt: [number, number, 'ai' | 'standIn' | 'none'][] = [];
+  const vsStandInAt: StandInRaceResult['vsStandInAt'] = [];
   const spinsAt: [number, number][] = [];
   const offsAt: [number, number][] = [];
   const wallsAt: [number, number][] = [];
@@ -251,7 +254,7 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
     k.impactSum += c.impactMs;
     if (withStandIn) {
       const blame = j.atFault === null ? 'none' : (j.atFault === 'a' ? c.aIsPlayer : c.bIsPlayer) ? 'standIn' : 'ai';
-      vsStandInAt.push([Math.round(player.sMeters), Math.round(t * 10) / 10, blame]);
+      vsStandInAt.push([Math.round(player.sMeters), Math.round(t * 10) / 10, blame, j.reason, c.aIsPlayer]);
     }
     if (j.atFault === null) k.racingIncident++;
     else {
