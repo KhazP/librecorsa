@@ -187,7 +187,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onSetAutoGearbox?: (enabled: boolean) => void;
   gamepadRumble: boolean;
   aiOpponents: boolean;
-  onToggleAiOpponents: () => void;
+  onToggleAiOpponents?: () => void;
   /** AI opponents' skill 0..100 and its setter (pause menu) */
   aiSkill?: number;
   onChangeAiSkill?: (skill: number) => void;

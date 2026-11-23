@@ -835,7 +835,8 @@
     "launchKey": "Hold {key} to launch · Esc Menu",
     "noRacesOnHillClimb": "No races on a hill climb",
     "backToRaces": "Back to the races",
-    "backToCareer": "Back to career"
+    "backToCareer": "Back to career",
+    "restartMulligan": "{count, plural, one {Uses a mulligan: # left} other {Uses a mulligan: # left}}"
   },
   "telemetryHud": {
     "menu": "Menu",

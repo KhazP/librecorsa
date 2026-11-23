@@ -118,7 +118,8 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   openMultiplayer?: boolean;
   /** Why the game paused itself (a wheel unplugged), shown under the heading */
   pauseNotice?: string | null;
-  onToggleAiOpponents: () => void;
+  /** Absent where the field is not the menu's to switch (online, a hill climb, a career round) */
+  onToggleAiOpponents?: () => void;
   onToggleGamepadAssist?: () => void;
   onToggleGamepadRumble: () => void;
   onChangeAeroPreset: (preset: AeroSetupPreset) => void;
@@ -141,6 +142,11 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   onResetCar: (flyingStart: boolean) => void;
   onOpenReplay?: () => void;
   onSelectTurn: (turnNumber: number) => void;
+  /**
+   * A career round (career/useCareerDrive.ts): no rolling restart and no jumping round the circuit; the restart is a
+   * mulligan, `restartNote` says so (null: none left, no restart)
+   */
+  careerRound?: { restartNote: string | null };
   onTogglePause: () => void;
   /** Opens the controls setup (keyboard / controller / wheel) */
   onOpenControls?: () => void;
@@ -215,8 +221,9 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   // (racing or not). The shell guards the same handlers.
   const mpRace = telemetry.race?.multiplayer === true || props.raceRunning === true;
   const guest = (mpRace || Boolean(props.lobby)) && props.isHost !== true;
-  const canRestart = !guest;
-  const canFly = !mpRace && !guest;
+  const career = props.careerRound;
+  const canRestart = !guest && (!career || career.restartNote !== null);
+  const canFly = !mpRace && !guest && !career;
   const [chosenPanel, setPanel] = useState<Panel>(props.openMultiplayer ? "multiplayer" : "settings");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const { mode, family } = useInputMode();
@@ -254,14 +261,14 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         ...(conditionsPanel ? [{ id: "conditions" as const, label: tx("tabs.conditions"), icon: "conditions" as const }] : []),
         { id: "setup" as const, label: tx("tabs.garage"), icon: "garage" as const },
         // No jumping round the circuit in an online race
-        ...(mpRace ? [] : [{ id: "corners" as const, label: tx("tabs.corners"), icon: "corners" as const }]),
+        ...(mpRace || career ? [] : [{ id: "corners" as const, label: tx("tabs.corners"), icon: "corners" as const }]),
         { id: "multiplayer" as const, label: tx("tabs.multiplayer"), icon: "multiplayer" as const },
         ...(leaderboardPanel ? [{ id: "leaderboard" as const, label: tx("tabs.lapTimes"), icon: "lapTimes" as const }] : []),
         // A bug report from where it happened: the car's place on the circuit and a picture of the scene go with it. The
         // title menu's name for the same form
         ...(props.reportFacts ? [{ id: "report" as const, label: tx("tabs.feedback"), icon: "feedback" as const }] : []),
       ] satisfies { id: Panel; label: string; icon: IconName }[],
-    [leaderboardPanel, mpRace, conditionsPanel, displayPanel, phoneScreen, props.reportFacts, tx]
+    [leaderboardPanel, mpRace, career, conditionsPanel, displayPanel, phoneScreen, props.reportFacts, tx]
   );
 
   const actions: { id: string; label: string; detail?: string; icon: IconName; run: () => void }[] = useMemo(
@@ -271,6 +278,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
             {
               id: "grid",
               label: aiOpponents || mpRace ? tx("actions.restartRace") : tx("actions.gridStart"),
+              detail: career?.restartNote ?? undefined,
               icon: "restart" as const,
               run: () => restartAndResume(false),
             },
@@ -315,7 +323,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         : []),
       ...(onExitToTitle ? [{ id: "title", label: tx("actions.mainMenu"), icon: "leave" as const, run: onExitToTitle }] : []),
     ],
-    [aiOpponents, mpRace, canRestart, canFly, restartAndResume, onOpenReplay, onTogglePause, nowPlaying, onSkipTrack, onOpenControls, onExitToTitle, tx]
+    [aiOpponents, mpRace, canRestart, canFly, career, restartAndResume, onOpenReplay, onTogglePause, nowPlaying, onSkipTrack, onOpenControls, onExitToTitle, tx]
   );
 
   // A tab that went away while open (Corners when an online race starts) shows the session tab instead

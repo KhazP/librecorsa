@@ -19,10 +19,12 @@ import {
   EMPTY_SAVE,
   endSeason,
   loadCareerSave,
+  markRoundStarted,
   nextRound,
   promotionPlaces,
   racePlan,
   raceScore,
+  roundConditions,
   recordRound,
   retireFromRound,
   seasonStandings,
@@ -37,16 +39,17 @@ import { seriesById, type CareerContent } from "@/lib/career/ladder";
 import { rivalAsDriver } from "@/lib/career/rivals";
 import type { DriveSession, SessionRace } from "@/lib/drive-session";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
-import { getTrackInfo, LISTED_TRACKS } from "@/lib/track-registry";
+import { getTrackInfo, LISTED_TRACKS, trackDefaultTimeOfDay } from "@/lib/track-registry";
+import type { TimeOfDayId, WeatherPresetId } from "@/lib/sim/weather";
 import { accountActions } from "@/lib/account/account-store";
 import type { PlayerSettings } from "@/lib/settings/player-settings";
-import type { RaceResultEntry, RaceStatus } from "@/types/f1";
+import type { PitTelemetry, RaceResultEntry, RaceStatus } from "@/types/f1";
 import type { CareerSummary } from "./career-screen-types";
 
 type DriveMode = "race" | "test";
 
-/** A round or test day asked for from another circuit: driven once that circuit has loaded */
-let pendingCareer: { runId: string; mode: DriveMode } | null = null;
+/** A round or test day asked for from another circuit: driven once that circuit (`trackId`) has loaded */
+let pendingCareer: { runId: string; mode: DriveMode; trackId: string } | null = null;
 /** The career screen opens again on the title menu after a remount */
 let careerScreenResume = false;
 /** What is being driven for the career, and the player's own car to give back */
@@ -67,6 +70,10 @@ export interface CareerDriveDeps {
   trackId: string;
   assetsReady: boolean;
   race: RaceStatus | undefined;
+  /** The player's pit stop state (its stops made against the race's required ones) */
+  pit: PitTelemetry | undefined;
+  /** The session's race is the career round's AI race (not online, not practice) */
+  raceIsAi: boolean;
   settingsRef: React.RefObject<PlayerSettings>;
   carIdRef: React.RefObject<CarId>;
   changeCar: (car: CarId, opts?: { remember?: boolean }) => void;
@@ -75,6 +82,8 @@ export interface CareerDriveDeps {
   onSelectTrack?: (id: string, opts?: { remember?: boolean }) => void | Promise<void>;
   /** The loading screen leaves for the drive (a round asked for from another circuit) */
   leaveLoading: () => void;
+  /** The round's weather and time of day, for this drive only (the player's own come back on leaving) */
+  applyConditions: (c: { weather: WeatherPresetId; timeOfDay: TimeOfDayId }) => void;
   setLaunchHint: (on: boolean) => void;
 }
 
@@ -86,9 +95,23 @@ export function useCareerDrive(d: CareerDriveDeps) {
   const [summaries, setSummaries] = useState<CareerSummary[]>(queuedSummaries);
   const [unfinished, setUnfinished] = useState(queuedUnfinished);
   const [driving, setDriving] = useState(careerDrive !== null);
+  /** The round being driven has its result: no restart (a mulligan) for it any more */
+  const [roundRecorded, setRoundRecorded] = useState(careerDrive?.recorded ?? false);
 
   useEffect(() => {
-    setSave(loadCareerSave());
+    const loaded = loadCareerSave();
+    setSave(loaded);
+    // A round started and never finished (the tab closed mid-race): settled now, a mulligan or a retirement
+    if (!careerDrive && !queuedUnfinished) {
+      const run = loaded.runs.find((r) => r.status === "active" && r.season?.racing !== undefined);
+      const plan = run ? racePlan(run, (id) => getTrackInfo(id).lengthM, "") : null;
+      if (run && plan && plan.roundIndex === run.season?.racing) {
+        queuedUnfinished = { runId: run.id, plan };
+        setUnfinished(queuedUnfinished);
+        careerScreenResume = true;
+        setOpen(true);
+      }
+    }
   }, []);
 
   const content = useMemo<CareerContent>(
@@ -136,6 +159,7 @@ export function useCareerDrive(d: CareerDriveDeps) {
         lapsLed: drive.lapsLed,
       });
       drive.recorded = true;
+      setRoundRecorded(true);
       const season = next.season;
       const result = season?.rounds[plan.roundIndex];
       if (!season || !result) return;
@@ -184,8 +208,12 @@ export function useCareerDrive(d: CareerDriveDeps) {
       const ownCar = careerDrive?.ownCar ?? d.carIdRef.current;
       d.startSession({ kind: "practice" });
       d.changeCar(season.settings.car, { remember: false });
+      if (plan) d.applyConditions(roundConditions(run, season.seriesId, plan.roundIndex, trackDefaultTimeOfDay(plan.trackId) === "night"));
       careerDrive = { runId, mode, plan, ownCar, lapsLed: 0, lastLap: 0, recorded: false };
       setDriving(true);
+      setRoundRecorded(false);
+      // Saved as under way: leaving it without a result later is settled, not forgotten
+      if (plan) commit(withRun(saveRef.current, markRoundStarted(run, plan.roundIndex)));
       if (mode === "test" || !plan) {
         session.setRaceOverride(null);
         session.car.resetToStartGrid(false);
@@ -214,10 +242,13 @@ export function useCareerDrive(d: CareerDriveDeps) {
         // A restart is a mulligan: none left, no restart
         onRestart: () => {
           const cur = careerDrive;
-          const now = cur ? runOf(cur.runId) : undefined;
+          // A round with its result is over: no mulligan spent on it
+          if (!cur || cur.recorded) return false;
+          const now = runOf(cur.runId);
           const used = now ? spendMulligan(now) : null;
-          if (!used || !cur) return false;
-          commit(withRun(saveRef.current, used));
+          if (!used) return false;
+          // Under way again from the lights
+          commit(withRun(saveRef.current, markRoundStarted(used, plan.roundIndex)));
           cur.lapsLed = 0;
           cur.lastLap = 0;
           return true;
@@ -244,7 +275,7 @@ export function useCareerDrive(d: CareerDriveDeps) {
       if (!plan) return;
       if (plan.trackId !== d.trackId) {
         if (!d.onSelectTrack) return;
-        pendingCareer = { runId, mode: "race" };
+        pendingCareer = { runId, mode: "race", trackId: plan.trackId };
         setOpen(false);
         void d.onSelectTrack(plan.trackId, { remember: false });
         return;
@@ -263,7 +294,7 @@ export function useCareerDrive(d: CareerDriveDeps) {
       if (!circuit) return;
       if (circuit !== d.trackId) {
         if (!d.onSelectTrack) return;
-        pendingCareer = { runId, mode: "test" };
+        pendingCareer = { runId, mode: "test", trackId: circuit };
         setOpen(false);
         void d.onSelectTrack(circuit, { remember: false });
         return;
@@ -279,6 +310,12 @@ export function useCareerDrive(d: CareerDriveDeps) {
     if (!d.assetsReady || !pendingCareer || !d.session) return;
     const asked = pendingCareer;
     pendingCareer = null;
+    // The circuit asked for did not load (the game stayed where it was): the round waits on the career screen
+    if (asked.trackId !== d.trackId) {
+      careerScreenResume = true;
+      setOpen(true);
+      return;
+    }
     d.leaveLoading();
     drive(asked.runId, asked.mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -286,16 +323,29 @@ export function useCareerDrive(d: CareerDriveDeps) {
 
   // On the way: laps led, and the result once the classification closes
   const race = d.race;
+  const pit = d.pit;
+  const raceIsAi = d.raceIsAi;
   useEffect(() => {
     const cur = careerDrive;
-    if (!cur || cur.mode !== "race" || cur.recorded || !race) return;
+    if (!cur || cur.mode !== "race" || cur.recorded || !race || !raceIsAi) return;
+    // A lap is led when the player is in front as it ends: at each new lap, and at the flag for the last one
     if (race.phase === "racing" && race.lap > cur.lastLap) {
-      // The lap just completed was led when the player is in front at its end
       if (cur.lastLap > 0 && race.position === 1) cur.lapsLed++;
       cur.lastLap = race.lap;
     }
-    if (race.phase === "finished" && race.resultsFinal && race.results?.some((r) => r.isPlayer)) record(race.results);
-  }, [race, record]);
+    const total = race.totalLaps ?? cur.plan?.laps ?? 0;
+    if (race.phase === "finished" && cur.lastLap > 0 && cur.lastLap <= total && race.results?.some((r) => r.isPlayer)) {
+      if (race.position === 1) cur.lapsLed++;
+      cur.lastLap = total + 1;
+    }
+    if (!(race.phase === "finished" && race.resultsFinal)) return;
+    const me = race.results?.find((r) => r.isPlayer);
+    if (!me || !race.results) return;
+    // A required stop not made is +30 s at the flag: recorded only once race control has added it
+    const missed = pit ? pit.stopsRequired - pit.stopsMade : 0;
+    if (missed > 0 && (me.penaltyS ?? 0) < 30 * missed) return;
+    record(race.results);
+  }, [race, pit, raceIsAi, record]);
 
   /** The car and the race's terms back to the player's own */
   const endDrive = useCallback(() => {
@@ -385,9 +435,13 @@ export function useCareerDrive(d: CareerDriveDeps) {
     setOpen(false);
   }, []);
 
-  /** A restart now is a mulligan: possible only while the season has one left */
+  /** A restart now is a mulligan: possible only while the season has one left, and the round has no result yet */
   const driveRun = careerDrive ? save.runs.find((r) => r.id === careerDrive?.runId) : undefined;
-  const canRestart = !driving || careerDrive?.mode !== "race" || Boolean(driveRun?.season && driveRun.season.mulligansUsed < driveRun.season.settings.mulligans);
+  const canRestart =
+    !driving ||
+    careerDrive?.mode !== "race" ||
+    (!roundRecorded && Boolean(driveRun?.season && driveRun.season.mulligansUsed < driveRun.season.settings.mulligans));
+  const mulligansLeft = driveRun?.season ? driveRun.season.settings.mulligans - driveRun.season.mulligansUsed : 0;
 
   /** The career shown on the title menu: the active one under way, its series and next round */
   const status = useMemo(() => {
@@ -402,6 +456,8 @@ export function useCareerDrive(d: CareerDriveDeps) {
     save,
     commit,
     canRestart,
+    /** Mulligans the season under way has left (for the restart's label) */
+    mulligansLeft,
     status,
     content,
     open,
@@ -415,6 +471,8 @@ export function useCareerDrive(d: CareerDriveDeps) {
     testDay,
     /** A career round or test day is being driven */
     driving,
+    /** A career round (not a test day) is being raced */
+    racing: driving && careerDrive?.mode === "race",
     /** Leaving the car while driving for the career: back to its screen */
     backToCareer,
   };

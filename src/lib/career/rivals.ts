@@ -119,6 +119,7 @@ export function rivalAsDriver(r: CareerRival, playerCode: string): AiDriverDef {
     pace: Math.round((0.934 + 0.042 * r.rating) * 1000) / 1000,
     aggression: r.aggression,
     consistencyBias: r.consistency,
+    name: `${r.first} ${r.last}`,
   };
 }
 

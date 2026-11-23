@@ -137,6 +137,9 @@ installErrorLog();
 const IDLE_PODIUM: PodiumUi = { stage: "idle", rows: [] };
 const idlePodium = () => IDLE_PODIUM;
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
+/** A career round's car and lap are its own: the pause menu's car picker and corner jumps do nothing in one */
+const noCarChange = () => {};
+const noTurnJump = () => {};
 let pendingRaceStart: RaceStartInfo | null = null;
 /** Private-room qualifying started before this circuit loaded (or while on another circuit) */
 let pendingQualifying: { id: string; trackId: string } | null = null;
@@ -542,6 +545,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     trackId,
     assetsReady,
     race: telemetry.race,
+    pit: telemetry.pit,
+    raceIsAi: raceKind === "ai",
     settingsRef,
     carIdRef,
     changeCar,
@@ -554,6 +559,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setLoadingVisible(false);
     },
     setLaunchHint,
+    // As the week's challenge does: the player's own conditions are kept and come back on leaving (leaveSession)
+    applyConditions: (c) => {
+      const own = settingsRef.current;
+      ownRules ??= { assistPreset: own.assistPreset, realism: own.realism, conditions: own.conditions };
+      setSettings((prev) => ({ ...prev, conditions: { ...prev.conditions, weather: c.weather, timeOfDay: c.timeOfDay, weatherNodes: undefined, timeScale: 0 } }));
+    },
   });
   /** The car picker: the car is fixed for a multiplayer race (its start picks one the class allows) */
   const handleChangeCar = useCallback(
@@ -2102,14 +2113,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onSetAutoGearbox: setAutoGearbox,
     gamepadRumble,
     aiOpponents: raceKind === "ai",
-    onToggleAiOpponents: handleToggleAiOpponents,
+    // A career round is raced on its own terms: its field, skill, setup and car are not the pause menu's to change
+    onToggleAiOpponents: career.driving ? undefined : handleToggleAiOpponents,
     aiSkill: settings.aiSkill,
-    onChangeAiSkill: handleChangeAiSkill,
+    onChangeAiSkill: career.driving ? undefined : handleChangeAiSkill,
     raceSetup: settings.race,
-    onChangeRaceSetup: handleChangeRaceSetup,
+    onChangeRaceSetup: career.driving ? undefined : handleChangeRaceSetup,
     carId,
     vehicleModel,
-    onChangeCar: handleChangeCar,
+    onChangeCar: career.driving ? noCarChange : handleChangeCar,
     onToggleGamepadAssist: handleToggleGamepadAssist,
     onToggleGamepadRumble: handleToggleGamepadRumble,
     p2pStatus,
@@ -2134,7 +2146,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onToggleMouseSteer: handleToggleMouseSteer,
     onResetCar: handleResetCar,
     challengeTarget: targetShown ? challengeTargetNow : null,
-    onSelectTurn: handleSelectTurn,
+    onSelectTurn: career.driving ? noTurnJump : handleSelectTurn,
+    careerRound: career.racing ? { restartNote: career.canRestart ? tx("restartMulligan", { count: career.mulligansLeft }) : null } : undefined,
     onHostP2PRoom: handleHostP2PRoom,
     onJoinP2PRoom: handleJoinP2PRoom,
     onCreateManualOffer: handleCreateManualOffer,

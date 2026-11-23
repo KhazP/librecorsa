@@ -20,6 +20,7 @@
 import type { CarId } from "@/lib/cars/car-registry";
 import type { DamageLevel } from "@/lib/sim/car-damage";
 import type { QualifyingMinutes } from "@/lib/sim/qualifying";
+import type { TimeOfDayId, WeatherPresetId } from "@/lib/sim/weather";
 import {
   CAREER_SERIES,
   aiSkillFor,
@@ -572,6 +573,26 @@ export function nextRound(season: SeasonState): number | null {
   if (!season.started) return null;
   const i = season.rounds.findIndex((r) => r === null);
   return i < 0 ? null : i;
+}
+
+/**
+ * A round's conditions, the same every time it is raced (from the career's seed): mostly dry, by day, with now and then
+ * an overcast or a wet round in the series that race in all weathers; a circuit raced under lights keeps its night
+ */
+export function roundConditions(
+  run: Pick<CareerRun, "seed" | "history">,
+  seriesId: string,
+  roundIndex: number,
+  circuitNight: boolean
+): { weather: WeatherPresetId; timeOfDay: TimeOfDayId } {
+  const rng = careerRng(run.seed ^ (run.history.length * 7349) ^ ((roundIndex + 1) * 1597) ^ seriesId.length * 31);
+  const family = seriesById(seriesId)?.family;
+  const allWeather = family === "gt3" || family === "endurance" || family === "grandPrix" || family === "touringCup";
+  const w = rng();
+  const weather: WeatherPresetId = allWeather && w < 0.12 ? "light_rain" : w < (allWeather ? 0.3 : 0.15) ? "overcast" : "clear";
+  const days: readonly TimeOfDayId[] = ["morning", "noon", "afternoon", "afternoon", "golden_hour"];
+  const timeOfDay: TimeOfDayId = circuitNight ? "night" : days[Math.floor(rng() * days.length)];
+  return { weather, timeOfDay };
 }
 
 /** What the race of the next round is: its circuit, laps, stops, the field's skill and drivers */

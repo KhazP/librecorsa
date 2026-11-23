@@ -442,5 +442,6 @@
   "padActions.pitLimiter": "Controller button binding: switches the pit lane speed limiter on and off.",
   "pit.speeding": "Race control's call shown in the race feed and penalties: the driver went over the pit lane speed limit. {limit} is the limit in km/h.",
   "pit.stopMissed": "Race control's penalty at the flag: the race required pit stops and the driver made fewer.",
-  "simulator.backToCareer": "Button on the race results card in a career round: leave the car for the career screen."
+  "simulator.backToCareer": "Button on the race results card in a career round: leave the car for the career screen.",
+  "simulator.restartMulligan": "Pause menu, under Restart race in a career round: restarting costs one of the season's mulligans; {count} is how many are left before this one is used."
 }

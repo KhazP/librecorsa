@@ -2505,7 +2505,8 @@ export class DriveSession {
       const race = raceNow();
       return canFlashback({
         raceKind: race.kind,
-        weeklyChallengeRace: race.kind === "ai" && race.rules !== undefined,
+        // A career round counts as the week's race does: no rewinding it (its redo is a mulligan)
+        weeklyChallengeRace: race.kind === "ai" && (race.rules !== undefined || raceOverride !== null),
         timeTrialActive: timeTrial !== null,
         qualifyingActive: quali !== null || multiplayerSync.activeQualifying !== null,
         inOnlineRoom: isInOnlineRoom(multiplayerSync.status, peersOnTrack),
