@@ -162,7 +162,7 @@ function main1(): void {
     check("every interface setting is placed", same(sorted(Object.keys(UI_SPLIT)), sorted(Object.keys(DEFAULT_INTERFACE_SETTINGS))));
     check(
       "the account's settings are the plan's",
-      same(sorted(ACCOUNT_SETTINGS_FIELDS), sorted(["assistPreset", "racingLine", "autoGearbox", "autoClutch", "ghost", "profile", "liveryId", "customLivery", "camera", "aiSkill", "race", "realism", "practiceDamage", "conditions", "timeOfDayChosen", "library", "audio", "ui"]))
+      same(sorted(ACCOUNT_SETTINGS_FIELDS), sorted(["assistPreset", "racingLine", "autoGearbox", "autoClutch", "autoOvertake", "ghost", "profile", "liveryId", "customLivery", "camera", "aiSkill", "race", "realism", "practiceDamage", "conditions", "timeOfDayChosen", "library", "audio", "ui"]))
     );
     check(
       "music choices and units follow the account, volumes and scale stay",

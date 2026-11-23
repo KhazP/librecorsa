@@ -147,6 +147,7 @@ export const SETTINGS_SPLIT = {
   racingLine: "account",
   autoGearbox: "account",
   autoClutch: "account",
+  autoOvertake: "account",
   ghost: "account",
   // Profile and look
   profile: "account",
@@ -184,6 +185,8 @@ export const UI_SPLIT = {
   scale: "device",
   palette: "account",
   detail: "device",
+  // Automatic follows each browser's own language, and a phone and a PC may be set up in different ones
+  language: "device",
 } as const satisfies Record<keyof InterfaceSettings, "account" | "device">;
 
 const SUB_SPLITS: Readonly<Record<string, Readonly<Record<string, "account" | "device">>>> = { audio: AUDIO_SPLIT, ui: UI_SPLIT };
