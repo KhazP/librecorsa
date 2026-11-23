@@ -22,6 +22,7 @@ import type { PortedSkin } from "@/lib/car-builder-2026";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
 import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
 import type { ModOrigin } from "@/lib/track-registry";
+import type { CarSimProfile } from "@/lib/sim/f12026-car/F12026CarSim";
 
 /**
  * The cars in the picker, grouped by class and then by year, newest first. A car is a body and a sound on one of the
@@ -297,6 +298,11 @@ export interface CarDefinition {
   mod?: ModOrigin;
   /** Its picture in the car browser, when not where `carThumbUrl` looks (a mod car's, in its package) */
   thumbUrl?: string;
+  /**
+   * Its own physics, when not its vehicle model's (a mod car's physics file, mods/mod-physics.ts): the car simulation
+   * runs this profile, and everything else (garage, AI, HUD) is `physics`'s
+   */
+  simProfile?: CarSimProfile;
 }
 
 export const CAR_CLASSES: readonly CarClass[] = [

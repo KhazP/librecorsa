@@ -10,6 +10,7 @@ import type { VehicleModelId } from "@/types/f1";
 import { lc26OnRigidBody } from "@/lib/cars/lc26-engine";
 import { getActiveTrackSource } from "@/lib/track-data";
 import type { SimulatorCar } from "../simulator-car";
+import type { CarSimProfile } from "../f12026-car/F12026CarSim";
 import { trackColliderData } from "../track-colliders";
 import { createRemoteCar, type RemoteCar } from "./remote-car";
 import type { RaceCommand, SimCommand, SimEvent } from "./sim-protocol";
@@ -26,13 +27,15 @@ export interface SimHost {
   /**
    * The car to hand to the game in place of `twin` (the page's own car of that model). `trackRoot`: the circuit's
    * loaded mesh when the twin was built on it already (a root loaded later reaches the car's `attachTrackRoot`).
-   * `bodyPlan`: the plan of another body the car wears, as the twin was given it
+   * `bodyPlan`: the plan of another body the car wears, as the twin was given it. `profile`: the car's own physics,
+   * when it has them (a mod car's), as the twin was built on
    */
   adopt(
     twin: SimulatorCar,
     vehicle: VehicleModelId,
     trackRoot?: THREE.Object3D | null,
-    bodyPlan?: readonly (readonly [number, number])[]
+    bodyPlan?: readonly (readonly [number, number])[],
+    profile?: CarSimProfile
   ): SimulatorCar;
   /**
    * Once per frame, after the frame's step: the simulation behind the transport drives the adopted car when
@@ -81,7 +84,7 @@ export function createSimHost(transport: SimTransport, wallNowMs: () => number =
     if (event.type === "state" || event.type === "race" || event.type === "error") for (const listener of raceListeners) listener(event);
   });
   return {
-    adopt(twin, vehicle, trackRoot, bodyPlan) {
+    adopt(twin, vehicle, trackRoot, bodyPlan, profile) {
       const mine = ++carNumber;
       const sendColliders = (root: THREE.Object3D) => {
         if (sentRoots.has(root)) return;
@@ -106,6 +109,7 @@ export function createSimHost(transport: SimTransport, wallNowMs: () => number =
         track: trackSent ? undefined : getActiveTrackSource(),
         vehicle,
         ...(bodyPlan ? { bodyPlan: bodyPlan.map(([x, z]) => [x, z] as [number, number]) } : {}),
+        ...(profile ? { profile } : {}),
         lc26Rigid: lc26OnRigidBody(),
       });
       trackSent = true;
