@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl/react";
 import { Button, ConfirmDialog, EmptyState, Toggle, Well, cx } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
+import { LauncherImports } from "@/components/menu/LauncherImports";
 import { REPO_URL } from "@/lib/site";
 import { modDefinitions } from "@/lib/mods/mod-content";
 import { modsState, modsSwitchedOff, readPackages, type LoadedPackage } from "@/lib/mods/mod-loader";
@@ -285,6 +286,14 @@ export const ModsPanel: React.FC = () => {
         </ul>
       )}
       {packages.some((p) => p.source === "folder") ? <p className="lc-hint m-0">{tx("folderNote")}</p> : null}
+
+      <LauncherImports
+        onConverted={() => {
+          setChanged(true);
+          refresh();
+        }}
+        onRestart={restart}
+      />
 
       <ConfirmDialog
         open={removing !== null}
