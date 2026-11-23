@@ -227,6 +227,22 @@ export interface RacecraftParams {
    * beside us keeps the same rules; ahead and behind are checked for every car either way
    */
   pathSidePlayerOnly: number;
+  /**
+   * A car on each side: aim down the middle of the gap between them, past the corner's reach if need be, and, with
+   * less room there than a car needs and not clearly ahead of both, lift to drop in behind (Speed Dreams' shadow and
+   * simplix drivers). 0: off (the last car checked sets the room, and the middle car of three was turned in on)
+   */
+  sandwichMiddle: number;
+  /**
+   * Side by side, the room grows with the angle between the two cars, whose corners swing out: + (length − width) ·
+   * |sin Δheading| × this (simplix / shadow). In a hairpin two cars 3 m apart along the road are 8° apart. 0: off
+   */
+  yawMargin: number;
+  /**
+   * The path check takes another AI car to move toward the offset it just chose, at its own rate, instead of holding
+   * where it is off its line (Speed Dreams extrapolates every car's lateral motion). 0: off
+   */
+  predictAiLat: number;
 }
 
 export const DEFAULT_RACECRAFT: RacecraftParams = {
@@ -254,6 +270,9 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   playerMarginM: 0.4,
   roomPlayerOnly: 1,
   pathSidePlayerOnly: 1,
+  sandwichMiddle: 0,
+  yawMargin: 0,
+  predictAiLat: 0,
 };
 /** The path check's step (s) */
 const PATH_STEP_S = 0.1;
@@ -527,6 +546,9 @@ interface FieldCar {
   readonly distM: number;
   prevS: number;
   biasM: number;
+  /** The offset from the line this car last chose to move to, and how fast (the path check of the cars behind reads it) */
+  biasTargetM: number;
+  biasRateMs: number;
   stuckS: number;
   peer: InterpolatedPeerState;
   /** Race time at the chequered flag (s); null while running */
@@ -1191,6 +1213,8 @@ export class AiOpponentField implements AiRace {
       rollingGreenAtS: 0,
       prevS: 0,
       biasM: 0,
+      biasTargetM: 0,
+      biasRateMs: 0,
       stuckS: 0,
       peer: {
         peerId: id,
@@ -1813,6 +1837,10 @@ export class AiOpponentField implements AiRace {
       // The car beside us the room below is made for, and where that room puts us
       let roomFor: FieldCar | null = null;
       let roomLat = 0;
+      // The nearest car beside us on each side, and the room each asks for (sandwichMiddle)
+      let leftBy: FieldCar | null = null, rightBy: FieldCar | null = null;
+      let leftRoom = 0, rightRoom = 0;
+      const meHeading = this.rc.yawMargin > 0 ? this.worldHeading(me) : 0;
       const hazardLook = 40 + me.vxMs * 3;
       for (const other of this.cars) {
         if (other === car || other.removed) continue;
@@ -1830,10 +1858,17 @@ export class AiOpponentField implements AiRace {
         }
         // Alongside: keep a car's width of room
         // (the player keeps no racecraft rules: a little more room beside it)
-        const extraLat = other.isPlayer ? 0.5 * this.rc.playerMarginM : 0;
+        const extraLat = (other.isPlayer ? 0.5 * this.rc.playerMarginM : 0) + this.yawRoomM(meHeading, other.sim);
         if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(dLat) < this.rc.alongsideSpacingM + extraLat) {
           const away = me.lateralOffsetM >= other.sim.lateralOffsetM ? 1 : -1;
           targetLat = other.sim.lateralOffsetM + away * (this.rc.alongsideSpacingM + extraLat);
+          if (away > 0 && (!leftBy || other.sim.lateralOffsetM > leftBy.sim.lateralOffsetM)) {
+            leftBy = other;
+            leftRoom = this.rc.alongsideSpacingM + extraLat;
+          } else if (away < 0 && (!rightBy || other.sim.lateralOffsetM < rightBy.sim.lateralOffsetM)) {
+            rightBy = other;
+            rightRoom = this.rc.alongsideSpacingM + extraLat;
+          }
           // Squeezed against the edge with no room left on that side and not clearly ahead: back out of it
           if (Math.abs(targetLat) > half && ds > -0.5 * CAR_LEN_M) squeezedBy = other;
           roomFor = other;
@@ -1864,6 +1899,28 @@ export class AiOpponentField implements AiRace {
         // braking zone, each car on its own braking point, otherwise ran into each other's gearboxes)
         if (ds > 0 && ds < 80 && Math.abs(dLat) < CAR_WID_M + 0.35 + extraLat) {
           speedCap = Math.min(speedCap, followCapMs(other.sim, ds - CAR_LEN_M - (other.isPlayer ? this.rc.playerMarginM : 0), this.rc));
+        }
+      }
+
+      // A car on each side: down the middle of the gap, and with no room for us there, the car not clearly ahead of
+      // both lifts to drop in behind (Speed Dreams shadow Avoidance.cpp, Tim Foden; simplix unitcollision.cpp)
+      let sandwiched = false;
+      if (this.rc.sandwichMiddle > 0 && leftBy && rightBy) {
+        sandwiched = true;
+        const lo = leftBy.sim.lateralOffsetM + leftRoom;
+        const hi = rightBy.sim.lateralOffsetM - rightRoom;
+        targetLat = 0.5 * (lo + hi);
+        roomFor = null;
+        if (lo > hi) {
+          const dsL = wrapHalf(leftBy.sim.sMeters - me.sMeters, L);
+          const dsR = wrapHalf(rightBy.sim.sMeters - me.sMeters, L);
+          // Behind the one further back of the two: drop in behind it
+          const front = dsL >= dsR ? leftBy : rightBy;
+          const dsF = Math.max(dsL, dsR);
+          if (dsF > -0.5 * CAR_LEN_M) {
+            const overlapM = Math.max(0, CAR_LEN_M + 0.5 - dsF);
+            speedCap = Math.min(speedCap, Math.min(leftBy.sim.vxMs, rightBy.sim.vxMs, front.sim.vxMs) - clamp(1.5 * overlapM, 1.5, 5));
+          }
         }
       }
 
@@ -2119,6 +2176,9 @@ export class AiOpponentField implements AiRace {
       }
       // (backing off beside a car, the corner's room is no limit: held to it, the car was taken back across into the other)
       if (holdingOut) maxBias = Math.max(maxBias, sample.width / 2);
+      // (between two cars, the middle of the gap is the place, wherever the corner's reach ends: clamped to the reach, the
+      // car was taken across into one of them)
+      if (sandwiched && pos !== null) maxBias = Math.max(maxBias, Math.abs(pos - line));
       // How far off its line the corner lets this car go before the room for a car alongside (the off-line speed below)
       const cornerReach = maxBias;
       // Side by side: the room for the other car may take us past the corner's reach (and costs speed there, below).
@@ -2168,10 +2228,13 @@ export class AiOpponentField implements AiRace {
         // car's own position left it where it was
         const goal = car.local ? car.local.endD : biasTarget;
         car.biasM += clamp(goal - car.biasM, -biasRate * dt, biasRate * dt);
+        car.biasTargetM = goal;
       } else {
         car.local = null;
         car.biasM += clamp(biasTarget - car.biasM, -biasRate * dt, biasRate * dt);
+        car.biasTargetM = biasTarget;
       }
+      car.biasRateMs = biasRate;
       me.aiLineBiasM = car.biasM;
       // Off-line and in dirty air the corner is tighter than planned: give a little speed away for it
       const wakeFrontMult = me.telemetry.aeroWakeDownforceMult ?? 1;
@@ -2358,7 +2421,7 @@ export class AiOpponentField implements AiRace {
       if (dsNow < -30 || dsNow > 60 + meV * this.rc.predictS) continue;
       const human = o.isPlayer;
       const lenGap = CAR_LEN_M + 0.6 + (human ? this.rc.playerMarginM : 0);
-      const widGap = CAR_WID_M + 0.2 + (human ? 0.5 * this.rc.playerMarginM : 0);
+      const widGap = CAR_WID_M + 0.2 + (human ? 0.5 * this.rc.playerMarginM : 0) + (this.rc.yawMargin > 0 ? this.yawRoomM(this.worldHeading(me), os) : 0);
       // Another AI car already beside us keeps the racecraft rules too (room on its side, the corner yielded): those
       // rules deal with it. The player's car is checked all the way: it keeps none of them
       if (!human && Math.abs(dsNow) < lenGap && Math.abs(os.lateralOffsetM - meN) < widGap) continue;
@@ -2382,9 +2445,12 @@ export class AiOpponentField implements AiRace {
           // (where the player's car will be is less sure further ahead: a metre along the road per second. Held to the
           // footprints alone, a player a few metres behind flickered in and out of the check and the room closed again)
           if (Math.abs(dsT) >= lenGap + spreadS * t) continue;
+          // (another AI car: down its own line, and with predictAiLat on its way to the offset it chose, at its rate;
+          // Speed Dreams' drivers extrapolate every car's lateral motion)
+          const oMove = !human && this.rc.predictAiLat > 0 ? this.rc.predictAiLat * clamp(o.biasTargetM - o.biasM, -o.biasRateMs * t, o.biasRateMs * t) : 0;
           const oN = human
             ? os.lateralOffsetM + oLat * Math.min(t, 0.5)
-            : os.lateralOffsetM + aiLineOffsetM(this.track.getSampleAtDistance((os.sMeters + travelM(oV, oA, t)) % L), os.racingLineId) - oLine0;
+            : os.lateralOffsetM + aiLineOffsetM(this.track.getSampleAtDistance((os.sMeters + travelM(oV, oA, t)) % L), os.racingLineId) - oLine0 + oMove;
           // (crossing to its other side is running through it: measured on our side of it)
           const short = widGap + spreadN * t - away * (myN(k, car.biasM, b1) - oN);
           if (short > 0) {
@@ -2545,6 +2611,21 @@ export class AiOpponentField implements AiRace {
   }
 
   /** Heading against the track direction (rad, ±π) */
+  /** A car's heading in the world (rad, about +y) */
+  private worldHeading(sim: SimulatorCar): number {
+    const q = sim.worldQuaternion;
+    return Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y));
+  }
+
+  /**
+   * Extra room beside a car at an angle to ours (m): its corners and ours swing out by (length − width) · |sin Δheading|
+   * (simplix unitopponent.cpp, Wolf-Dieter Beelitz; shadow Opponent.cpp, Tim Foden). 0 with yawMargin off
+   */
+  private yawRoomM(meHeading: number, other: SimulatorCar): number {
+    if (this.rc.yawMargin <= 0) return 0;
+    return this.rc.yawMargin * (CAR_LEN_M - CAR_WID_M) * Math.abs(Math.sin(this.worldHeading(other) - meHeading));
+  }
+
   private headingErr(sim: SimulatorCar): number {
     const sample = this.track.getSampleAtDistance(sim.sMeters);
     const q = sim.worldQuaternion;
