@@ -837,6 +837,38 @@ async function main2(): Promise<void> {
     const pcStart = await pc.sync({ accountId: "acc1", apply: () => true });
     check("the other device takes the account's save at its next start", pcStart.kind === "synced" && st3.getItem("lc.garage.chassis.lc26") === null && st3.getItem("librecorsa.raceHistory") === phoneStore.getItem("librecorsa.raceHistory"));
   }
+
+  {
+    // Storage full for the cloud's newer value of one key: it waits, and the next sync doesn't send the old one over it
+    const server = fakeServer();
+    const clock = { t: 1_000 };
+    const st = memoryStorage({ "lc.garage.chassis.amg-gt3": '{"wing":1}' });
+    let full = false;
+    const setItem = st.setItem;
+    st.setItem = (k, v) => {
+      if (full && k === "lc.garage.chassis.amg-gt3") throw new Error("QuotaExceededError");
+      setItem(k, v);
+    };
+    const engine = device(server, "This", st, memoryGhosts(), clock);
+    await engine.sync({ accountId: "acc1", apply: true });
+    const newer = structuredClone(cloudDoc(server));
+    newer.keys["lc.garage.chassis.amg-gt3"] = { value: '{"wing":9}', t: 50_000 };
+    server.doc = newer;
+    server.rev++;
+    clock.t = 60_000;
+    full = true;
+    const blocked = await engine.sync({ accountId: "acc1", apply: true });
+    full = false;
+    check(
+      "storage full: the value that couldn't be written waits, and the sync says so",
+      blocked.kind === "synced" && blocked.deferred && st.getItem("lc.garage.chassis.amg-gt3") === '{"wing":1}' && (engine.record("acc1")?.appliedRev ?? 0) < server.rev
+    );
+    clock.t = 70_000;
+    const later = await engine.sync({ accountId: "acc1", apply: false });
+    check("storage full: the next sync doesn't send this device's old value over the newer one", later.kind === "synced" && !later.pushed && cloudDoc(server).keys["lc.garage.chassis.amg-gt3"].value === '{"wing":9}');
+    const retried = await engine.sync({ accountId: "acc1", apply: () => true });
+    check("storage full: the next start writes it", retried.kind === "synced" && st.getItem("lc.garage.chassis.amg-gt3") === '{"wing":9}');
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------

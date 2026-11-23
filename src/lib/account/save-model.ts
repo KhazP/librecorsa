@@ -814,31 +814,33 @@ export function localHash(doc: SaveDoc, laps: Record<string, number>): string {
 }
 
 /**
- * The sync base after a sync, value by value: the result's where this device holds it now. Where it doesn't (not
- * written yet, `applied` false), what this device holds: that is what it agreed to replace, so at the next sync a value
- * still at it takes the cloud's.
+ * The sync base after a sync, value by value, from what this device holds now (`after`, read back once the result was
+ * written or left for later): the result's where it holds it. Where it still holds what it had before the sync
+ * (`local`: the value wasn't written yet, or couldn't be, storage being full), that: it agreed to replace it, so at the
+ * next sync a value still at it takes the cloud's. A value changed during the sync keeps the old base.
  */
-export function nextBase(result: SaveDoc, local: SaveDoc, applied: boolean, old: SyncBase | null): SyncBase {
+export function nextBase(result: SaveDoc, local: SaveDoc, after: SaveDoc, old: SyncBase | null): SyncBase {
   const base: SyncBase = { keys: {}, settings: {} };
   const keys = new Set([...Object.keys(result.keys), ...Object.keys(result.removed), ...Object.keys(local.keys), ...Object.keys(local.removed)]);
+  const sideHash = (doc: SaveDoc, key: string) => {
+    const side = keySide(doc, key);
+    return side ? keySideHash(side) : undefined;
+  };
   for (const key of keys) {
     if (!isSyncedKey(key)) continue;
-    const r = keySide(result, key);
-    const l = keySide(local, key);
-    const rh = r ? keySideHash(r) : undefined;
-    const lh = l ? keySideHash(l) : undefined;
-    if (rh !== undefined && (applied || lh === rh)) base.keys[key] = rh;
-    else if (!applied && lh !== undefined) base.keys[key] = lh;
+    const rh = sideHash(result, key);
+    const ah = sideHash(after, key);
+    if (ah !== undefined && ah === rh) base.keys[key] = rh;
+    else if (ah !== undefined && ah === sideHash(local, key)) base.keys[key] = ah;
     else if (old?.keys[key] !== undefined) base.keys[key] = old.keys[key];
   }
+  const fieldHash = (doc: SaveDoc, field: string) => (doc.settings[field] ? hashValue(doc.settings[field].value) : undefined);
   for (const field of new Set([...Object.keys(result.settings), ...Object.keys(local.settings)])) {
     if (!isAccountField(field)) continue;
-    const r = result.settings[field];
-    const l = local.settings[field];
-    const rh = r ? hashValue(r.value) : undefined;
-    const lh = l ? hashValue(l.value) : undefined;
-    if (rh !== undefined && (applied || lh === rh)) base.settings[field] = rh;
-    else if (!applied && lh !== undefined) base.settings[field] = lh;
+    const rh = fieldHash(result, field);
+    const ah = fieldHash(after, field);
+    if (ah !== undefined && ah === rh) base.settings[field] = rh;
+    else if (ah !== undefined && ah === fieldHash(local, field)) base.settings[field] = ah;
     else if (old?.settings[field] !== undefined) base.settings[field] = old.settings[field];
   }
   return base;

@@ -355,16 +355,18 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
       state = done.state;
       changedLocal = done.changed;
     }
-    const deferred = !applied && differsLocally(local, result);
     // The laps just fetched and the values just written are this device's now: what later changes are measured from
     const after = await readLocal(storage, state, false);
     state = after.state;
+    // Read back, not assumed: a value storage couldn't take (full) waits like one not written yet, and the base stays
+    // where this device is, so the next sync takes the cloud's value again instead of sending the old one over it
+    const deferred = differsLocally(after.doc, result);
     const at = env.now();
     state.account = {
       id: req.accountId,
       rev,
-      appliedRev: applied || !deferred ? rev : (rec?.appliedRev ?? 0),
-      base: nextBase(result, local, applied, base),
+      appliedRev: deferred ? (rec?.appliedRev ?? 0) : rev,
+      base: nextBase(result, local, after.doc, base),
       lastSyncedAt: at,
       // A lap held back reads as a change, so the next save point or check sends it
       localHash: behind ? "" : after.hash,
