@@ -2,6 +2,7 @@
 // scripts/sync-docs.mjs builds them; astro.config.mjs lays out the sidebar from the same list.
 export const PAGES = [
   { source: "docs/README.md", slug: "" },
+  { source: "docs/FAQ.md", slug: "faq" },
   { source: "docs/CONTROLS.md", slug: "playing/controls", group: "Playing" },
   { source: "docs/ONLINE.md", slug: "playing/online", group: "Playing" },
   { source: "docs/PERFORMANCE.md", slug: "playing/performance", group: "Playing" },
@@ -10,6 +11,7 @@ export const PAGES = [
   { source: "docs/PORTING-TRACKS.md", slug: "porting/circuits", group: "Porting" },
   { source: "docs/PORTING-F1-MODS.md", slug: "porting/f1-mods", group: "Porting" },
   { source: "docs/PORTING-WHEELS.md", slug: "porting/wheels", group: "Porting" },
+  { source: "docs/GET-INVOLVED.md", slug: "contributing/get-involved", group: "Contributing" },
   { source: "docs/TRANSLATING.md", slug: "contributing/translating", group: "Contributing" },
   { source: "docs/physics/README.md", slug: "how-it-works/physics", group: "How it works" },
   { source: "docs/race-ai.md", slug: "how-it-works/race-ai", group: "How it works" },

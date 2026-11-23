@@ -75,7 +75,7 @@ const willow = TRACKS.find((x) => x.id === "willow_springs");
 check("Nukedrop's Willow Springs has his Patreon first", !willow || trackModelSource(willow)?.support?.via === "Patreon");
 check("The GT3's model source is Vecarz's", !hosted("amg-gt3") || carModelSource(carById("amg-gt3")).author === "Vecarz");
 const dunsfold = TRACKS.find((t) => t.id === "dunsfold");
-check("Dunsfold's source says it is a Forza Motorsport 4 conversion", !dunsfold || /Forza Motorsport 4/.test(trackModelSource(dunsfold)?.note ?? ""));
+check("Dunsfold's source credits ACU", !dunsfold || trackModelSource(dunsfold)?.author === "ACU");
 
 // Every donation link belongs to a credited name: a spelling that differs from the credits just shows no button.
 // Only with the hosted content listed: a copy without it credits only its own car and circuit
