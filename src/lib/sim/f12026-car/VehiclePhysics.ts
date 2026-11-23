@@ -373,6 +373,8 @@ export interface VehicleInputs {
    * (or the auto box on the throttle) puts a gear back in
    */
   neutral?: boolean;
+  /** Edge-triggered: straight into reverse (−1, near a standstill) or first (1), past neutral */
+  selectGear?: -1 | 1;
   /** DRS button (edge-triggered toggle) */
   drs?: boolean;
 }
@@ -1525,7 +1527,13 @@ export class VehiclePhysics {
   private wallContactPeakMs = 0;
 
   private timeAccumulator = 0;
-  private prevInputs = { shiftUp: false, shiftDown: false, neutral: false, drs: false };
+  private prevInputs: { shiftUp: boolean; shiftDown: boolean; neutral: boolean; selectGear: -1 | 0 | 1; drs: boolean } = {
+    shiftUp: false,
+    shiftDown: false,
+    neutral: false,
+    selectGear: 0,
+    drs: false,
+  };
   private drsRequested = false;
   private shiftTimer = 0;
   /** A paddle press that came while a shift was still under way: it is made once that shift is done */
@@ -2675,6 +2683,7 @@ export class VehiclePhysics {
       shiftUp: !!i.shiftUp,
       shiftDown: !!i.shiftDown,
       neutral: !!i.neutral,
+      selectGear: i.selectGear === -1 || i.selectGear === 1 ? i.selectGear : undefined,
       drs: !!i.drs,
     };
   }
@@ -2684,6 +2693,7 @@ export class VehiclePhysics {
     if (inp.shiftDown && !this.prevInputs.shiftDown) this.paddleShift(-1);
     // After the paddles: both pressed at once (the usual way to ask for neutral) end in neutral, whatever they did first
     if (inp.neutral && !this.prevInputs.neutral) this.selectNeutral();
+    if (inp.selectGear && inp.selectGear !== this.prevInputs.selectGear) this.selectGear(inp.selectGear);
     // The flap button: opens the flaps (or keeps the press for the zone ahead, `updateDrs`), shuts them when open, and
     // a second press takes back a kept one
     if (inp.drs && !this.prevInputs.drs) {
@@ -2697,6 +2707,7 @@ export class VehiclePhysics {
     this.prevInputs.shiftUp = !!inp.shiftUp;
     this.prevInputs.shiftDown = !!inp.shiftDown;
     this.prevInputs.neutral = !!inp.neutral;
+    this.prevInputs.selectGear = inp.selectGear ?? 0;
     this.prevInputs.drs = !!inp.drs;
   }
 
@@ -2717,6 +2728,13 @@ export class VehiclePhysics {
     this.gear = 0;
     this.shiftTimer = this.config.gearbox.shiftTimeS;
     this.onEvent?.({ type: 'GEAR', gear: 0 });
+  }
+
+  /** Straight into reverse or first, past neutral (the touch Reverse and Drive buttons): a shift waiting is dropped */
+  private selectGear(gear: -1 | 1): void {
+    this.pendingShift = 0;
+    this.manualShift.clear();
+    this.requestShift(gear);
   }
 
   private requestShift(target: number): boolean {

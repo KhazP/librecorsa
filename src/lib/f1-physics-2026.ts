@@ -1303,8 +1303,9 @@ export class F1Physics2026 {
       clutchBound: rawInputs.clutchBound,
       manualOverride: Boolean(rawInputs.manualOverride),
       toggleXMode: Boolean(rawInputs.toggleXMode),
-      shiftUp: Boolean(rawInputs.shiftUp),
-      shiftDown: Boolean(rawInputs.shiftDown),
+      // Its box has no neutral, first and reverse sit side by side: the touch Drive and Reverse buttons are one shift
+      shiftUp: Boolean(rawInputs.shiftUp) || rawInputs.selectGear === 1,
+      shiftDown: Boolean(rawInputs.shiftDown) || rawInputs.selectGear === -1,
     };
     this.manualClutchBound = rawInputs.clutchBound !== false;
     this.manualClutchPedal = Number.isFinite(rawInputs.clutch) ? THREE.MathUtils.clamp(rawInputs.clutch ?? 0, 0, 1) : 0;

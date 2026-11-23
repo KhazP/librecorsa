@@ -5,7 +5,8 @@
  * A neutral press takes the gear out at any speed and wins over a shift pressed with it. Out of neutral at a
  * standstill, up is first and down is reverse; on the move, either paddle (or the auto box on the throttle) puts in
  * the gear that fits the road speed, the revs matched, so the car neither over-revs nor locks its wheels. The
- * autopilot keeps its gear.
+ * autopilot keeps its gear. The touch Reverse and Drive buttons (`selectGear`) go straight to their gear past neutral,
+ * and only near a standstill into reverse. (The R, N, 1 paddle sequence itself: verify-gearbox.ts.)
  */
 import { createFlatTestTrack } from './lib/flat-track';
 import { createBmwM1ProcarSim } from '../src/lib/sim/classic/BmwM1ProcarSim';
@@ -94,6 +95,26 @@ for (const car of CARS) {
   check('auto box: neutral holds off the throttle', auto.telemetry.gear === 0, `gear ${auto.telemetry.gear}`);
   drive(auto, 0.5, { throttle: 1 });
   check('auto box: the throttle puts a gear for the speed back in', auto.telemetry.gear > 1, `gear ${auto.telemetry.gear}, ${auto.telemetry.speedKmh.toFixed(0)} km/h`);
+
+  // The touch Reverse and Drive buttons: straight from first to reverse and back, past neutral, with the auto box on
+  const touch = standing(car.make, true);
+  drive(touch, 0.3, {});
+  press(touch, { selectGear: -1 });
+  drive(touch, 0.3, {});
+  const touchReverse = touch.telemetry.gear;
+  press(touch, { selectGear: 1 });
+  drive(touch, 0.3, {});
+  check('touch: Reverse from first, Drive from reverse, past neutral', touchReverse === -1 && touch.telemetry.gear === 1, `reverse → ${touchReverse}, drive → ${touch.telemetry.gear}`);
+  press(touch, { neutral: true });
+  drive(touch, 0.3, {});
+  press(touch, { selectGear: -1 });
+  drive(touch, 0.3, {});
+  check('touch: Reverse from neutral', touch.telemetry.gear === -1, `gear ${touch.telemetry.gear}`);
+  const touchRolling = standing(car.make, true);
+  drive(touchRolling, 2, { throttle: 0.5 });
+  const rollingGear = touchRolling.telemetry.gear;
+  press(touchRolling, { selectGear: -1 });
+  check('touch: no reverse on the move', touchRolling.telemetry.gear === rollingGear && rollingGear > 0, `gear ${touchRolling.telemetry.gear} at ${touchRolling.telemetry.speedKmh.toFixed(0)} km/h`);
 
   // The autopilot keeps its gear
   const ap = standing(car.make, true);

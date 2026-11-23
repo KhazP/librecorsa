@@ -3222,6 +3222,8 @@ export class DriveSession {
         !touch.steerLeft &&
         !touch.steerRight &&
         ((gamepadStick === undefined && gamepadSteer === undefined) || Math.abs(touch.steer) > 0.01);
+      // The automatic gearbox's Reverse and Drive buttons go straight to their gear, past neutral
+      let selectGear: -1 | 1 | undefined;
       if (touchInput.active) {
         if (driving) {
           if (touchInput.shiftUp) runAction("shiftUp");
@@ -3229,8 +3231,11 @@ export class DriveSession {
           if (touchInput.aero) runAction("aero");
           if (touchInput.boost) runAction("boostLatch");
           if (touchInput.overtake) runAction("overtake");
+          if (touchInput.reverse) selectGear = -1;
+          else if (touchInput.drive) selectGear = 1;
         }
         touchInput.shiftUp = touchInput.shiftDown = touchInput.aero = touchInput.boost = touchInput.overtake = false;
+        touchInput.reverse = touchInput.drive = false;
       }
       // Wheel, mouse and touch steer the rack directly; the car's steering assist picks between them, the keys and the
       // stick (steering-assist.ts: a pressed key takes over, and hands back once its ramp is at centre)
@@ -3260,6 +3265,7 @@ export class DriveSession {
         shiftUp: heldKeys.shiftUp && !startClutch.active,
         shiftDown: heldKeys.shiftDown,
         neutral: heldKeys.neutral,
+        selectGear,
         clutchBound,
         ...(clutchPedal > 0 ? { clutch: clutchPedal } : {}),
       };

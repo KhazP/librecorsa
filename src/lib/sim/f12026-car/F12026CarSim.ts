@@ -1308,6 +1308,8 @@ export class F12026CarSim implements SimulatorCar {
   private shiftUpPending = false;
   private shiftDownPending = false;
   private neutralPending = false;
+  /** The touch Reverse or Drive button (`ControlInputs.selectGear`), kept like a paddle */
+  private selectGearPending: -1 | 0 | 1 = 0;
   /** The steering rim's position at the last frame (`ControlInputs.steerRim`), its move is spread over this frame's ticks */
   private lastRimSteer: number | null = null;
   private lapStartMs = 0;
@@ -2199,6 +2201,7 @@ export class F12026CarSim implements SimulatorCar {
       shiftUp: raw.shiftUp ?? false,
       shiftDown: raw.shiftDown ?? false,
       neutral: raw.neutral ?? false,
+      selectGear: raw.selectGear === -1 || raw.selectGear === 1 ? raw.selectGear : undefined,
       // The driver's clutch pedal while it is pressed at all; let go, the car works its own clutch
       clutch: Number.isFinite(raw.clutch) && (raw.clutch ?? 0) > 0 ? clamp(raw.clutch ?? 0, 0, 1) : undefined,
       clutchBound: raw.clutchBound,
@@ -2283,11 +2286,16 @@ export class F12026CarSim implements SimulatorCar {
     this.shiftUpPending ||= inputs.shiftUp;
     this.shiftDownPending ||= inputs.shiftDown;
     this.neutralPending ||= inputs.neutral;
+    if (inputs.selectGear) this.selectGearPending = inputs.selectGear;
     const drsPress = this.drsPressPending;
     const shiftUp = this.shiftUpPending;
     const shiftDown = this.shiftDownPending;
     const neutral = this.neutralPending;
-    if (ticks > 0) this.drsPressPending = this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
+    const selectGear = this.selectGearPending;
+    if (ticks > 0) {
+      this.drsPressPending = this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
+      this.selectGearPending = 0;
+    }
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
     // Never soft-lock a car when manual clutch is requested but no clutch control is bound on the active device
     this.vehicle.autoClutch = this.autoClutch || this.autoGearbox || this.aiAutopilot || inputs.clutchBound === false;
@@ -2316,6 +2324,7 @@ export class F12026CarSim implements SimulatorCar {
         shiftDown: !held && shiftDown,
         // The autopilot keeps its gear and drives on the car's own clutch
         neutral: !held && neutral && !this.aiAutopilot,
+        selectGear: held || this.aiAutopilot || selectGear === 0 ? undefined : selectGear,
         clutch: pinned ? 1 : this.aiAutopilot ? undefined : this.vehicle.autoClutch ? inputs.clutch : (inputs.clutch ?? 0),
       };
       // A car whose state has blown up hands back a non-finite command: the rack must not keep it past the rescue
@@ -3012,6 +3021,7 @@ export class F12026CarSim implements SimulatorCar {
     this.steerCmd = 0;
     this.lastRimSteer = null;
     this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
+    this.selectGearPending = 0;
     this.tcCut = this.absCut = 1;
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;
