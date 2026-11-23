@@ -262,13 +262,6 @@ export interface RacecraftParams {
   earlyHazard: number;
   /** After a pass is called off, no new try on the same car for this long (s; Game AI Pro 38.5.2). 0: off */
   passCooldownS: number;
-  /**
-   * On a wet road every move across (to the line, round a car, out to pass, an avoiding move) goes at the dry rate ×
-   * the grip the weather leaves (weather pace²), and an avoiding move that can't be made in time at that rate is a lift
-   * instead. At the dry rates the cars predicting each other's moves (predictAiLat) spun twice as often in light rain.
-   * 0: off
-   */
-  wetMoveScale: number;
 }
 
 export const DEFAULT_RACECRAFT: RacecraftParams = {
@@ -303,7 +296,6 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   followClosingOnly: 0,
   earlyHazard: 0,
   passCooldownS: 0,
-  wetMoveScale: 0,
 };
 /** The path check's step (s) */
 const PATH_STEP_S = 0.1;
@@ -899,8 +891,6 @@ export class AiOpponentField implements AiRace {
   public localPlanner: boolean;
   /** Racecraft knobs */
   public readonly rc: RacecraftParams;
-  /** The share of the dry move-across rates the car being planned has (wetMoveScale; 1 in the dry) */
-  private moveShare = 1;
   /** The braking the class's cars plan on behind traffic (m/s²) */
   private get classDecelMs2(): number {
     return this.classId === 'gt3' ? 16 : 32;
@@ -2257,9 +2247,6 @@ export class AiOpponentField implements AiRace {
       }
       // A car whose path ours will run into, or one beside it that ours will squeeze: checked ahead of time
       // (a car spun or rejoining keeps to its rejoin: steered round the others as well, it was run across the grass)
-      // A wet road: every move across at the grip the weather leaves
-      this.moveShare = this.rc.wetMoveScale > 0 ? clamp(Math.pow(this.environment.weatherPaceScale(me), 2), 0.3, 1) : 1;
-      biasRate *= this.moveShare;
       if (this.rc.predictS > 0 && car.control?.racing !== false) {
         const check = this.pathCheck(car, biasTarget, biasRate, half, line);
         speedCap = Math.min(speedCap, check.capMs);
@@ -2535,11 +2522,11 @@ export class AiOpponentField implements AiRace {
         // tracker runs a little past where it aims, and a car moving across onto its exit line touched the player's)
         const hold = meN - line;
         if (human && away * (meN - os.lateralOffsetM) < widGap + 1.5 && away * (hold - want) > 0) want = hold;
-        const inTime = Math.abs(want - car.biasM) <= AVOID_RATE_MS * this.moveShare * hit.k * PATH_STEP_S + 0.3;
+        const inTime = Math.abs(want - car.biasM) <= AVOID_RATE_MS * hit.k * PATH_STEP_S + 0.3;
         const onRoad = Math.abs(line + want) <= half;
         if (onRoad) {
           biasM = want;
-          rateMs = AVOID_RATE_MS * this.moveShare;
+          rateMs = AVOID_RATE_MS;
         }
         if ((!onRoad || !inTime) && dsNow > (human ? -0.5 * CAR_LEN_M : 0)) {
           capMs = Math.min(capMs, oV - clamp(1.5 * Math.max(0, CAR_LEN_M + 0.5 - dsNow), 1.5, 5));
