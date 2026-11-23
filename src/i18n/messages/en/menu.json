@@ -651,6 +651,33 @@
   "pad": {
     "unbound": "None"
   },
+  "modCatalogue": {
+    "title": "Packages to download",
+    "intro": "Offered for this copy of the game. Each download is checked against this list before it goes in.",
+    "loading": "Looking for packages to download…",
+    "unreachable": "The list of packages to download can't be reached. Check your connection, then try again.",
+    "retry": "Try again",
+    "get": "Get",
+    "getNamed": "Get {name}",
+    "update": "Update",
+    "updateNamed": "Update {name} to {version}",
+    "installed": "Installed",
+    "youHave": "You have {version}.",
+    "licence": "Licence: {licence}",
+    "cancel": "Cancel",
+    "cancelNamed": "Cancel the download of {name}",
+    "downloading": "Downloading {name}…",
+    "installing": "Installing {name}…",
+    "progress": "{done} of {total}",
+    "progressLabel": "Download of {name}",
+    "cancelled": "The download of {name} was cancelled.",
+    "downloadFailed": "{name} couldn't be downloaded.",
+    "errorOffline": "This device is offline. Connect to the internet, then try again.",
+    "errorNetwork": "The connection broke off. Try again.",
+    "errorHttp": "The server answered with error {status}: the package may have moved since the list was made.",
+    "errorSize": "The download isn't the size the list states: the package may have changed since the list was made. Nothing was installed.",
+    "errorChecksum": "The download doesn't match the list (its SHA-256 differs), so nothing was installed."
+  },
   "mods": {
     "intro": "Mod packages add circuits, cars and liveries to the game. A package holds data only, never code, and stays in this browser until you remove it. Laps on a mod circuit or in a mod car are yours alone: they stay off the online boards and the weekly challenge.",
     "importZip": "Import .zip",

@@ -18,6 +18,7 @@ import {
   type PackageSource,
 } from "@/lib/mods/mod-store";
 import { ZipError } from "@/lib/mods/zip-reader";
+import { ModCatalogue } from "./ModCatalogue";
 
 /** What the last import said */
 type ImportNote = { tone: "good" | "bad"; text: string; errors?: string[] };
@@ -67,6 +68,7 @@ export const ModsPanel: React.FC = () => {
   const [changed, setChanged] = useState(false);
   const [removing, setRemoving] = useState<LoadedPackage | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
+  const [catalogueBusy, setCatalogueBusy] = useState(false);
   const zipInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   // One import or removal at a time, held from the click (state alone lets a quick second click through)
@@ -90,6 +92,21 @@ export const ModsPanel: React.FC = () => {
     return () => {
       mounted.current = false;
     };
+  }, [refresh]);
+
+  // A download from a catalogue (ModCatalogue.tsx) takes the same hold as an import
+  const claim = useCallback((): (() => void) | null => {
+    if (working.current) return null;
+    working.current = true;
+    setCatalogueBusy(true);
+    return () => {
+      working.current = false;
+      if (mounted.current) setCatalogueBusy(false);
+    };
+  }, []);
+  const catalogueInstalled = useCallback(() => {
+    setChanged(true);
+    refresh();
   }, [refresh]);
 
   const install = async (next: Busy, source: () => PackageSource | Promise<PackageSource>) => {
@@ -181,7 +198,7 @@ export const ModsPanel: React.FC = () => {
             size="sm"
             icon={<Icon name="mods" />}
             loading={busy?.kind === "zip"}
-            disabled={busy !== null || removeBusy}
+            disabled={busy !== null || removeBusy || catalogueBusy}
             onClick={() => zipInput.current?.click()}
           >
             {tx("importZip")}
@@ -190,7 +207,7 @@ export const ModsPanel: React.FC = () => {
             variant="secondary"
             size="sm"
             loading={busy?.kind === "folder"}
-            disabled={busy !== null || removeBusy}
+            disabled={busy !== null || removeBusy || catalogueBusy}
             onClick={() => folderInput.current?.click()}
           >
             {tx("importFolder")}
@@ -267,7 +284,7 @@ export const ModsPanel: React.FC = () => {
                     variant="ghost"
                     icon={<Icon name="delete" />}
                     aria-label={tx("removeNamed", { name: p.name })}
-                    disabled={busy !== null || removeBusy}
+                    disabled={busy !== null || removeBusy || catalogueBusy}
                     onClick={() => setRemoving(p)}
                   >
                     {tx("remove")}
@@ -285,6 +302,8 @@ export const ModsPanel: React.FC = () => {
         </ul>
       )}
       {packages.some((p) => p.source === "folder") ? <p className="lc-hint m-0">{tx("folderNote")}</p> : null}
+
+      <ModCatalogue installed={packages} claim={claim} blocked={busy !== null || removeBusy} onInstalled={catalogueInstalled} />
 
       <ConfirmDialog
         open={removing !== null}
