@@ -10,6 +10,7 @@
  *  - `early`: full speed on the straights, then brakes early and goes slowly through the corners (GT Sophy's lesson:
  *    an agent trained only against itself rear-ended humans who braked early)
  *  - `weave`: off its line, drifting across the road to a new offset every few seconds
+ *  - `autopilot`: the game's own autopilot (P) as a player gets it, at the car's own autopilot pace (#187)
  *
  * Contacts are judged by race control's own judge (`judgeContact`) at the moment they happen, and counted once per
  * pair per second, as the field counts them.
@@ -30,7 +31,7 @@ import { TrackEnvironment } from '../../../src/lib/sim/track-environment';
 import { DEFAULT_SESSION_CONDITIONS, type WeatherPresetId } from '../../../src/lib/sim/weather';
 import { loadGlbGeometry } from '../../lib/glb-geometry';
 
-export const STAND_IN_PROFILES = ['none', 'line', 'slow', 'early', 'weave'] as const;
+export const STAND_IN_PROFILES = ['none', 'line', 'slow', 'early', 'weave', 'autopilot'] as const;
 export type StandInProfile = (typeof STAND_IN_PROFILES)[number];
 
 export interface StandInRaceOptions {
@@ -77,6 +78,10 @@ export interface StandInRaceResult {
   vsStandIn: ContactTally;
   /** AI against AI */
   aiVsAi: ContactTally;
+  /** Where and when ([lap distance m, race s]) each contact with the stand-in happened, and who race control blamed */
+  vsStandInAt: [number, number, 'ai' | 'standIn' | 'none'][];
+  /** Penalty seconds race control gave the stand-in */
+  standInPenaltiesS: number;
   /** Seconds the stand-in spent touching an AI car */
   standInTouchS: number;
   /** Places the stand-in lost to AI cars on the road, and won back */
@@ -171,6 +176,9 @@ class StandInDriver {
         sim.aiLineBiasM = this.bias;
         break;
       }
+      case 'autopilot':
+        // The car's own autopilot pace, as the game leaves it (the LC26's 0.8)
+        break;
       case 'none':
         break;
     }
@@ -217,6 +225,7 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
   let standInDist = 0;
 
   const aiVsAiAt: [number, number][] = [];
+  const vsStandInAt: [number, number, 'ai' | 'standIn' | 'none'][] = [];
   const spinsAt: [number, number][] = [];
   const offsAt: [number, number][] = [];
   const wallsAt: [number, number][] = [];
@@ -237,6 +246,10 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
     const j = judgeContact(c);
     k.events++;
     k.impactSum += c.impactMs;
+    if (withStandIn) {
+      const blame = j.atFault === null ? 'none' : (j.atFault === 'a' ? c.aIsPlayer : c.bIsPlayer) ? 'standIn' : 'ai';
+      vsStandInAt.push([Math.round(player.sMeters), Math.round(t * 10) / 10, blame]);
+    }
     if (j.atFault === null) k.racingIncident++;
     else {
       const faultIsPlayer = j.atFault === 'a' ? c.aIsPlayer : c.bIsPlayer;
@@ -315,6 +328,8 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
     simS: t,
     vsStandIn,
     aiVsAi,
+    vsStandInAt,
+    standInPenaltiesS: me ? me.penaltyS : 0,
     standInTouchS: touchS,
     standInPlacesLost: lost,
     standInPlacesWon: won,
