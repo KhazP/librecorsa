@@ -50,7 +50,7 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
   python -P scripts/tracks/port_ac_track.py <id> --src path/to/<track folder>
 ```
 
-`<id>` can be one circuit, several separated by commas, or `all`. It writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`, adds the circuit to `public/tracks/index.json` and `scripts/tracks/tracks.json`, then runs the lap-time racing-line optimiser for the F1 and GT3 cars (`scripts/optimize-racing-line.ts`, a few minutes per circuit) and meshopt-compresses the GLB.
+`<id>` can be one circuit, several separated by commas, or `all`. It writes `public/tracks/<id>/track_data.json` and `public/tracks/<id>/<id>.glb`, adds the circuit to `public/tracks/index.json` and `scripts/tracks/tracks.json`, then runs the lap-time racing-line optimiser for the F1 and GT3 cars (`scripts/ai/optimize-lines.ts`, which judges every candidate line on full physics laps: about 10 to 30 minutes per line, by the lap's length) and meshopt-compresses the GLB.
 
 - `--no-line-opt` skips the optimiser. The circuit keeps the racing lines of its last build when the new centreline has as many samples; otherwise it gets the minimum-curvature line.
 - `--no-glb` writes only the track data. The optimiser needs the GLB, so it is skipped too and the lines are kept the same way.
