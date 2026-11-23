@@ -43,6 +43,8 @@ import { TrackOutline } from "./circuit-outline";
 import { ConditionsPanel } from "./ConditionsPanel";
 import { RaceSetupPanel } from "./RaceSetupPanel";
 import { DEFAULT_RACE_SETUP, raceStartSuffix } from "@/lib/sim/race-setup";
+import { bestLapForCircuit } from "@/lib/sim/ghost-store";
+import { useBestLapSummaries } from "@/lib/sim/use-best-laps";
 import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
@@ -645,16 +647,14 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const carLocked = props.telemetry.race?.multiplayer === true || props.raceRunning === true;
   // A hill climb is driven one car at a time, from the start line to the finish: no races against the AI
   const hillClimb = activeTrackId === trackId && getActivePointToPoint() !== null;
-  const localLaps = props.leaderboardPanel?.local;
-  // This car's best on this circuit: the list is loaded for them, and filtered too so a list from before a swap never
-  // shows another car's or circuit's time
-  const bestLapMs = useMemo(() => {
-    const times = (localLaps ?? [])
-      .filter((e) => e.trackId === trackId && e.vehicle === props.vehicleModel)
-      .map((e) => e.lapTimeMs)
-      .filter((ms) => Number.isFinite(ms) && ms > 0);
-    return times.length ? Math.min(...times) : null;
-  }, [localLaps, trackId, props.vehicleModel]);
+  // This car's personal best on this circuit, for the Lap times entry and the Up next sheet alike: this car's own laps
+  // only (another car's never stands in), a lap on the current physics before an older one. Live: a best saved or
+  // deleted, here or in another tab, shows at once
+  const bestLaps = useBestLapSummaries();
+  const pb = useMemo(
+    () => bestLapForCircuit(bestLaps.filter((s) => s.vehicle === props.vehicleModel), trackId, props.vehicleModel),
+    [bestLaps, trackId, props.vehicleModel],
+  );
   const items: MenuItem[] = [
     {
       id: "drive",
@@ -736,7 +736,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             id: "leaderboard",
             label: "Lap times",
             // This car's best on this circuit, when there is one
-            detail: bestLapMs ? `Best ${formatLapTime(bestLapMs)}` : undefined,
+            detail: pb ? `Best ${formatLapTime(pb.lapTimeMs)}` : undefined,
             icon: "lapTimes" as const,
             panel: "leaderboard" as const,
             run: () => openPanel("leaderboard"),
@@ -1146,6 +1146,20 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     <dd className="m-0 line-clamp-2 text-right text-[14px] font-semibold">{hudLayout(hudPreset).label}</dd>
                   </>
                 ) : null}
+                <dt className="lc-hint">Personal best</dt>
+                <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
+                  {pb ? (
+                    <>
+                      {/* Only a lap from before the current physics: it says so, as the Circuits cards do */}
+                      {pb.legacyPhysics ? (
+                        <span className="truncate text-[12px] font-normal text-lc-slate">Old physics</span>
+                      ) : null}
+                      <span className={cx("lc-mono", pb.legacyPhysics && "text-lc-fog")}>{formatLapTime(pb.lapTimeMs)}</span>
+                    </>
+                  ) : (
+                    <span className="text-lc-fog">No time yet</span>
+                  )}
+                </dd>
               </dl>
             </Sheet>
             </div>
