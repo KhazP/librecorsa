@@ -211,6 +211,8 @@ export interface RaceOverride {
   setup: RaceSetup;
   skill: number;
   drivers: AiDriverDef[];
+  /** Asked before a restart: false and the race is not restarted (a career's restart costs a mulligan) */
+  onRestart?: () => boolean;
 }
 
 export type SessionRace =
@@ -585,6 +587,8 @@ export class DriveSession {
   readonly setRaceOverride: (override: RaceOverride | null) => void;
   /** The race setup the next start uses: the override's, else the player's */
   readonly raceSetup: () => RaceSetup;
+  /** Whether the race may be restarted now (asks the override, which may spend something on it) */
+  readonly allowRestart: () => boolean;
   /** What the crew does at the next stop, and the call to box (pit/pit-stop.ts) */
   readonly setPitStrategy: (patch: Partial<PitStrategyState>) => void;
   /** The Pit limiter key (outside the speed-limit zone, where it is on by itself) */
@@ -872,6 +876,7 @@ export class DriveSession {
       workerPrepared = null;
     };
     this.raceSetup = raceSetupNow;
+    this.allowRestart = () => !raceOverride?.onRestart || raceOverride.onRestart();
     let keyLookup = buildKeyLookup(settings.keys);
     let assistSettings = steeringAssistSettings(settings.padTuning, settings.keyboardTuning);
     let livery = resolveLivery(settings.liveryId, settings.customLivery);
@@ -2331,6 +2336,7 @@ export class DriveSession {
       const race = raceNow();
       if (race.kind === "mp") return;
       if (race.kind === "practice") return this.restartFlyingLap();
+      if (!this.allowRestart()) return;
       // Out of a replay first (the reset does that), then the car moves
       this.resetRun("restart");
       startAiRace(race.field, raceSetupNow(), settings.profile);

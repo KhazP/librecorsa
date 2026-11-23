@@ -1,5 +1,7 @@
 "use client";
 
+import { CareerScreen } from "@/components/career/CareerScreen";
+import { useCareerDrive } from "@/components/career/useCareerDrive";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "use-intl/react";
 import { t as tr } from "@/i18n/runtime";
@@ -485,6 +487,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, [session, endMpRace, clearSessionState, setPhase]);
 
 
+
   const handleAeroPresetChange = useCallback((preset: AeroSetupPreset) => {
     setAeroPreset(preset);
     if (session) session.car.aeroPreset = preset;
@@ -532,6 +535,26 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     },
     [session]
   );
+
+  /** The career: its save, its screen and the rounds driven for it (career/useCareerDrive.ts) */
+  const career = useCareerDrive({
+    session,
+    trackId,
+    assetsReady,
+    race: telemetry.race,
+    settingsRef,
+    carIdRef,
+    changeCar,
+    startSession,
+    leaveSession,
+    onSelectTrack,
+    leaveLoading: () => {
+      if (phaseRef.current !== "loading") return;
+      session?.unlockAudio();
+      setLoadingVisible(false);
+    },
+    setLaunchHint,
+  });
   /** The car picker: the car is fixed for a multiplayer race (its start picks one the class allows) */
   const handleChangeCar = useCallback(
     (next: CarId) => {
@@ -628,6 +651,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // polish:A — a flying restart outside a race puts the time trial's conditions on first
       if (race.kind === "practice" && flyingStart) return session.restartFlyingLap();
       const physics = session.car;
+      if (race.kind === "ai" && !session.allowRestart()) return;
       session.resetRun("restart");
       // A restart from the menu uses the race's own start; the flying-lap key always gives a rolling one
       if (race.kind === "ai") startAiRace(race.field, session.raceSetup(), settingsRef.current.profile, flyingStart ? false : undefined);
@@ -2295,7 +2319,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
               ? openSettings("pause", "controls", "wheel")
               : openSettings("pause")
           }
-          onExitToTitle={leaveSession}
+          onExitToTitle={career.driving ? career.backToCareer : leaveSession}
           onOpenSettings={(category?: SettingsCategory, tab?: string) => openSettings("pause", category, tab)}
           hud={settings.hud}
           virtualMirror={virtualMirrorOn}
@@ -2344,10 +2368,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           resultsClosed={resultsClosed}
           onCloseResults={() => setResultsClosed(true)}
           onRestartRace={
-            raceKind === "mp" && !isMpHost ? undefined : () => handleResetCar(false)
+            (raceKind === "mp" && !isMpHost) || !career.canRestart ? undefined : () => handleResetCar(false)
           }
-          onBackToLobby={raceKind === "mp" ? handleBackToLobby : undefined}
-          backToLobbyLabel={inScheduledRace ? tx("backToRaces") : undefined}
+          onBackToLobby={raceKind === "mp" ? handleBackToLobby : career.driving ? career.backToCareer : undefined}
+          backToLobbyLabel={inScheduledRace ? tx("backToRaces") : career.driving ? tx("backToCareer") : undefined}
           raceEnd={{
             podium: podiumUi,
             onSkipPodium: () => session?.podium.skip(),
@@ -2420,6 +2444,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onRaceAi={() => handleTitleStart(true)}
           onControls={() => openSettings("title")}
           onOpenSettings={(category?: SettingsCategory) => openSettings("title", category)}
+          onOpenCareer={career.openScreen}
+          careerStatus={career.status}
           trackId={trackId}
           onSelectTrack={onSelectTrack}
           challengePanel={
@@ -2484,6 +2510,23 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onExit={leaveWizard}
           onSkip={wizardMode === "first-run" ? finishWizard : undefined}
           onStepChange={handleWizardStep}
+        />
+      ) : null}
+
+      {career.open && phase === "title" && !hudEditing ? (
+        <CareerScreen
+          save={career.save}
+          content={career.content}
+          playerCode={settings.profile.code}
+          playerName={settings.profile.name}
+          onSave={career.commit}
+          onClose={career.closeScreen}
+          onRaceNext={career.raceNext}
+          onTestDay={career.testDay}
+          summaries={career.summaries}
+          onCloseSummary={career.closeSummary}
+          unfinished={career.unfinished}
+          onResolveUnfinished={career.resolveUnfinished}
         />
       ) : null}
 

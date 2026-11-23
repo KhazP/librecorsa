@@ -590,7 +590,7 @@ export function recordRound(run: CareerRun, plan: CareerRacePlan, outcome: RaceO
 }
 
 /** A mulligan: the round raced again (none recorded); false when none are left */
-export function useMulligan(run: CareerRun): CareerRun | null {
+export function spendMulligan(run: CareerRun): CareerRun | null {
   const season = run.season;
   if (!season || season.mulligansUsed >= season.settings.mulligans) return null;
   return touch({ ...run, season: { ...season, mulligansUsed: season.mulligansUsed + 1 } });

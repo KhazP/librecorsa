@@ -31,7 +31,7 @@ import {
   startSeason,
   updateRaceSettings,
   updateSeasonSettings,
-  useMulligan,
+  spendMulligan,
   withRun,
   EMPTY_SAVE,
   type CareerRun,
@@ -163,9 +163,9 @@ function raceRound(run: CareerRun, playerPlace: number, playerCode = "ZZZ"): Car
 
 {
   let run = startSeason(updateSeasonSettings(newCareer("road", "clubCup_asiaPacific", allContent, 3)!, { mulligans: 1 }, allContent));
-  const once = useMulligan(run);
+  const once = spendMulligan(run);
   check("a mulligan within the allowance", once !== null && once.season!.mulligansUsed === 1);
-  check("none past it", once !== null && useMulligan(once) === null);
+  check("none past it", once !== null && spendMulligan(once) === null);
   run = once ?? run;
   const save = withRun(EMPTY_SAVE, run);
   check("a save reads back the same", JSON.stringify(parseCareerSave(JSON.parse(JSON.stringify(save)))) === JSON.stringify(save));
