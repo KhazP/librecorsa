@@ -443,14 +443,23 @@ async function servePage(req, url) {
   }
 }
 
+/**
+ * A response made here, with no URL of its own: a worker started from it keeps the URL it was asked for, fragment and
+ * query included. Turbopack's worker bootstrap reads its config from there (`#params=`); a kept or fetched response
+ * carries the URL it was stored or fetched under, without them, and the worker would start without its config.
+ */
+const anonymous = (res) => new Response(res.body, { status: res.status, statusText: res.statusText, headers: res.headers });
+
 async function serveStatic(req) {
+  const worker = req.destination === "worker" || req.destination === "sharedworker";
   const name = await completeShell();
   if (name) {
-    // Next may add a deployment query to its script URLs: the file is the same
+    // Next may add a query to its script URLs (a deployment id): the file is the same
     const hit = await (await caches.open(name)).match(req, { ignoreSearch: true });
-    if (hit) return hit;
+    if (hit) return worker || new URL(req.url).search ? anonymous(hit) : hit;
   }
-  return fetch(req);
+  const res = await fetch(req);
+  return worker && res.ok ? anonymous(res) : res;
 }
 
 let syncing = null;

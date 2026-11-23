@@ -107,16 +107,18 @@ interface Stored {
   headers: [string, string][];
   body: Uint8Array;
 }
-const keyOf = (r: Request | string) => (typeof r === "string" ? r : r.url);
+/** The Cache API matches a URL without its fragment */
+const keyOf = (r: Request | string) => (typeof r === "string" ? r : r.url).replace(/#.*$/, "");
 
 class FakeCache {
   entries = new Map<string, Stored>();
   /** Lookups made, to see how much work the clean-up does */
   matches = 0;
   constructor(private storage: FakeStorage) {}
-  async match(r: Request | string): Promise<Response | undefined> {
+  async match(r: Request | string, opts?: { ignoreSearch?: boolean }): Promise<Response | undefined> {
     this.matches++;
-    const s = this.entries.get(keyOf(r));
+    const url = keyOf(r);
+    const s = this.entries.get(opts?.ignoreSearch ? url.replace(/\?.*$/, "") : url);
     return s ? new Response(s.body.length || s.status === 200 ? s.body.slice() : null, { status: s.status, headers: s.headers }) : undefined;
   }
   async put(r: Request | string, res: Response): Promise<void> {
@@ -171,7 +173,7 @@ const clock = { now: Date.UTC(2026, 10, 15) };
 
 interface Worker {
   fire(type: string, event: object): void;
-  get(p: string, opts?: { client?: string; init?: RequestInit; origin?: string; navigate?: boolean }): Promise<{ intercepted: boolean; res?: Response; body?: Uint8Array }>;
+  get(p: string, opts?: { client?: string; init?: RequestInit; origin?: string; navigate?: boolean; destination?: string }): Promise<{ intercepted: boolean; res?: Response; body?: Uint8Array }>;
   /** A page's message to the worker; resolves when the work it started is done */
   message(data: unknown): Promise<void>;
 }
@@ -197,12 +199,13 @@ function startWorker(site: Site, storage: FakeStorage): Worker {
       fire("message", { data, waitUntil: (w: Promise<unknown>) => work.push(w) });
       await Promise.all(work);
     },
-    async get(p, { client = "page", init, origin = ORIGIN, navigate = false } = {}) {
+    async get(p, { client = "page", init, origin = ORIGIN, navigate = false, destination } = {}) {
       let answer: Promise<Response> | null = null;
       const later: Promise<unknown>[] = [];
       const request = new Request(origin + p, init);
       // A page load: Node won't construct a navigate-mode request
       if (navigate) Object.defineProperty(request, "mode", { value: "navigate" });
+      if (destination) Object.defineProperty(request, "destination", { value: destination });
       fire("fetch", {
         request,
         clientId: client,
@@ -488,6 +491,10 @@ async function shellChecks(): Promise<void> {
   check("Its .html and the home page too", textOf(r) === "<html>play v1</html>" && textOf(root) === "<html>home v1</html>");
   r = await sw.get("/_next/static/chunks/a.js");
   check("And the scripts it names", textOf(r) === "console.log('a')");
+  r = await sw.get("/_next/static/chunks/a.js?dpl=abc");
+  check("A script asked for with a query (a deployment id) is the same file, offline too", textOf(r) === "console.log('a')");
+  r = await sw.get("/_next/static/chunks/a.js#params=%5B%5D", { destination: "worker" });
+  check("A worker's script is served as a new response, so the worker keeps its URL's #params", textOf(r) === "console.log('a')" && !!r.res && r.res.url === "");
   site.mode = "error";
   r = await sw.get("/play", { navigate: true });
   check("A server error serves the shell's page", textOf(r) === "<html>play v1</html>");
