@@ -265,7 +265,11 @@ export function createVehicleSim(
   bodyPlan?: readonly (readonly [number, number])[],
   profile?: CarSimProfile,
 ): SimulatorCar {
-  return profile ? new F12026CarSim(track, trackRoot, profile) : VEHICLE_MODELS[vehicle].createSim(track, trackRoot, bodyPlan);
+  if (profile) return new F12026CarSim(track, trackRoot, profile);
+  // Another body on the model (a mod car, the BMW on the AMG): the model's own profile with that body's outline
+  const own = VEHICLE_MODELS[vehicle].simProfile;
+  if (bodyPlan && own) return new F12026CarSim(track, trackRoot, { ...own, bodyPlan });
+  return VEHICLE_MODELS[vehicle].createSim(track, trackRoot, bodyPlan);
 }
 
 export const isVehicleModelId = (value: unknown): value is VehicleModelId =>

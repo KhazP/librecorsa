@@ -28,7 +28,7 @@ import { CIRCUIT_VENUES, LISTED_TRACKS, registerModTracks, TRACKS, getTrackInfo 
 import { roomModRefOf, roomTrackStatus } from "../src/lib/mods/room-content";
 import { modSimProfile } from "../src/lib/mods/mod-physics";
 import { AMG_GT3_SIM_PROFILE } from "../src/lib/sim/gt3/AmgGt3Sim";
-import { createVehicleSim } from "../src/lib/cars/vehicle-models";
+import { createVehicleSim, VEHICLE_MODELS } from "../src/lib/cars/vehicle-models";
 import { createSimHost, loopbackTransport } from "../src/lib/sim/runtime/sim-host";
 import { getActiveTrackData } from "../src/lib/track-data";
 import { sanitizeLobbySettings } from "../src/lib/net/wire";
@@ -364,6 +364,45 @@ function physicsChecks(): void {
   refused({ config: { chassis: { totalMassKg: 0 } } }, /must stay above 0/, "a mass (or anything the base has above zero) can't drop to zero or below");
   check("it drives as its base model (setups, fuel, wing steps, AI), its plans its own", heavy.ok && heavy.profile.model === "amg-gt3" && createVehicleSim("amg-gt3", getActiveTrackData(1200), null, undefined, heavy.profile).vehicleId === "amg-gt3");
   refused({ bodyPlan: [[0, 1]] }, /set by the game/, "nor its body plan (mod.json has it)");
+  refused({ config: { chassis: { bodyPlan: [[999999, 1]] } } }, /set by the game/, "nor the chassis' copy of it");
+  refused(JSON.parse('{"config":{"__proto__":{"x":1}}}'), /no such value/, "an inherited key (__proto__) is no value of a profile");
+  refused({ config: { engine: { powerCurve: [[1000]] } } }, /must hold 2 numbers/, "a curve's point stays an [x, y] pair");
+  refused({ config: { engine: { powerCurve: [[5000, 300], [1000, 200]] } } }, /x rising/, "a curve's points stay in rising x");
+  refused({ coldPsiRange: [20] }, /must hold 2 numbers/, "a two-value range keeps two values");
+  refused({ config: { chassis: { frontWeightFraction: 1.5 } } }, /between 0 and 1/, "the weight split stays between the axles");
+  refused({ config: { chassis: { unsprungMassFront: 500, unsprungMassRear: 500 } } }, /unsprung/, "the wheels can't outweigh the car");
+  refused({ fuelLPerS1000Rpm: -1 }, /above 0/, "an optional rate the base leaves out must be above zero");
+  const wings = base.config.aero.wings;
+  const rear = wings.findIndex((w) => w.positionZ < 0 && w.name.includes("REAR"));
+  if (rear >= 0) {
+    const patch = wings.map((w, i) => (i === rear ? { positionZ: w.positionZ - 0.1, angleDeg: 0 } : {}));
+    const r = modSimProfile(base, { format: 1, profile: { config: { aero: { wings: patch } } } }, "x");
+    check("each wing is checked against its own (a rear wing behind the axle, at 0°)", r.ok, r.ok ? "" : r.errors.join("; "));
+  }
+  // What other models have, or a modder means: no anti-roll bar, a suspension point below the axle, a power curve from 0
+  const allowed = (patch: unknown, name: string) => {
+    const r = modSimProfile(base, { format: 1, profile: patch }, "x");
+    check(name, r.ok, r.ok ? "" : r.errors.join("; "));
+  };
+  allowed({ config: { suspensions: { rear: { arb: 0 } } } }, "a part switched off (no rear anti-roll bar) is allowed");
+  const hardpoints = (base.config.suspensions.front.hardpoints ?? []).map((p, i) => (i === 0 ? [p[0], -0.02, p[2]] : p));
+  allowed({ config: { suspensions: { front: { hardpoints } } } }, "a position may cross zero (a suspension point below the axle)");
+  allowed({ config: { engine: { powerCurve: [[0, 0], ...base.config.engine.powerCurve.slice(1)] } } }, "a curve may start at zero");
+  refused({ config: { chassis: { wheelbase: -1 } } }, /must stay above 0/, "what the simulation divides by stays above zero (the wheelbase)");
+  const f1 = VEHICLE_MODELS["f12026-car"].simProfile!;
+  const heights = f1.config.aero.rhMap?.frontRh;
+  if (heights) {
+    const r = modSimProfile(f1, { format: 1, profile: { config: { aero: { rhMap: { frontRh: [...heights].reverse() } } } } }, "x");
+    check("a ride-height map's heights must rise", !r.ok && r.errors.some((e) => /must rise/.test(e)));
+  }
+  const liana = VEHICLE_MODELS.liana.simProfile!;
+  if (liana.config.aero.wings.length === 0) {
+    const r = modSimProfile(liana, { format: 1, profile: { config: { aero: { wings: [{ angleDeg: 3 }] } } } }, "x");
+    check("a list the base has empty can't be filled (nothing to check it against)", !r.ok && r.errors.some((e) => /empty in the base/.test(e)));
+  }
+  const plan: [number, number][] = [[0, 2], [0.9, 1.8], [0.9, -2], [0, -2.2]];
+  const planned = createVehicleSim("liana", getActiveTrackData(1200), null, plan) as unknown as { profile?: { bodyPlan?: unknown } };
+  check("another body's outline reaches any vehicle model, not only the GT3", planned.profile?.bodyPlan === plan);
   refused({ warpFactor: 9 }, /no such value/, "an unknown top-level value is refused");
   check("a file of another format is refused", !modSimProfile(base, { format: 2, profile: {} }, "x").ok);
 
