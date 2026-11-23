@@ -387,8 +387,16 @@ async function runSweep(need, keepKey, force, ifDue) {
 
 // --- The shell: the game's pages and scripts, for offline play ---
 
+/** `completeShell`'s answer while this worker runs (a sync resets it): every page and script asks */
+let shellName;
+
 /** The newest whole shell cache's name, or null (none yet: the first visit, or a download cut short) */
 async function completeShell() {
+  if (shellName === undefined) shellName = findCompleteShell();
+  return shellName;
+}
+
+async function findCompleteShell() {
   let best = null;
   for (const name of await caches.keys()) {
     if (!name.startsWith(SHELL_PREFIX)) continue;
@@ -494,11 +502,14 @@ async function runSync() {
       await cache.put(url, reuse);
       continue;
     }
-    const got = await fetch(url, { cache: "no-store", credentials: "same-origin" });
+    // A script may come from the browser's own cache (the page just loaded it); a page is checked with the server
+    const got = await fetch(url, { cache: file.startsWith("/_next/static/") ? "default" : "no-cache", credentials: "same-origin" });
     if (!got.ok || got.type !== "basic") throw new Error(`${file}: HTTP ${got.status}`);
-    await cache.put(url, got);
+    // A page the server redirected to can't answer a navigation as it is: kept as a response of its own
+    await cache.put(url, got.redirected ? anonymous(got) : got);
   }
   await cache.put(`${self.location.origin}/${SHELL_COMPLETE}`, new Response(JSON.stringify({ at: Date.now() }), { headers: { "Content-Type": "application/json" } }));
+  shellName = Promise.resolve(name);
   for (const other of await caches.keys()) {
     if (other.startsWith(SHELL_PREFIX) && other !== name) await caches.delete(other);
   }
