@@ -792,5 +792,7 @@
   "pit.boxPassed": "HUD in the pit lane: the car has gone past its pit box.",
   "pit.approach": "HUD on the way into the pits: the pit entry is ahead and the lane's speed limit.",
   "pit.limiterKey": "HUD: the key that switches the pit speed limiter, e.g. 'Limiter: \\\\'.",
+  "pit.stopsPill": "Quiet HUD reminder pill when a race requires mandatory pit stops not yet made, e.g. 'Pit 0/1'. Keep short.",
+  "pit.stopRequired": "Amber HUD warning shown in the last two laps when mandatory pit stops are still owed. 'Box' is racing radio for pitting.",
   "timingPanels.tower.pit": "Timing tower, in place of the gap: the car is in the pit lane. Short, capitals."
 }

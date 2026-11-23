@@ -125,5 +125,36 @@ export const PitStopOverlay: React.FC<{ telemetry: CarTelemetry; limiterKey?: st
   if (pit.limiterOn) {
     return pill("inset-ring-lc-info/60", <>{limiterBadge}</>);
   }
+  if (pit.stopsRequired > pit.stopsMade) {
+    const remaining = pit.stopsRequired - pit.stopsMade;
+    const totalLaps = telemetry.race?.totalLaps;
+    const lap = telemetry.race?.lap;
+    const urgent = Boolean(totalLaps && lap && totalLaps - lap <= 1);
+    if (urgent) {
+      return (
+        <div
+          role="alert"
+          className={`mt-1 inline-flex items-center gap-2 rounded-lc-row px-2.5 py-1.5 text-lc-chalk inset-ring inset-ring-lc-caution/70 ${HUD_GLASS}`}
+        >
+          <Badge tone="warn" variant="solid" size="sm" icon="pitLane">
+            {tx("stopsPill", { made: pit.stopsMade, required: pit.stopsRequired })}
+          </Badge>
+          <span className="lc-disp text-[13px] leading-none whitespace-nowrap text-lc-caution">
+            {tx("stopRequired", { remaining })}
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div
+        role="status"
+        className={`mt-1 inline-flex items-center gap-1.5 rounded-lc-row px-2 py-1 text-lc-chalk inset-ring inset-ring-white/10 ${HUD_GLASS}`}
+      >
+        <Badge tone="neutral" variant="soft" size="hud" icon="pitLane">
+          {tx("stopsPill", { made: pit.stopsMade, required: pit.stopsRequired })}
+        </Badge>
+      </div>
+    );
+  }
   return null;
 };

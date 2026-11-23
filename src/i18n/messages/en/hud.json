@@ -1125,6 +1125,8 @@
     "boxIn": "Box {box} in {metres} m",
     "boxPassed": "Box {box} passed",
     "approach": "Pit entry · limit {limit} km/h",
-    "limiterKey": "Limiter: {key}"
+    "limiterKey": "Limiter: {key}",
+    "stopsPill": "Pit {made}/{required}",
+    "stopRequired": "{remaining, plural, one {Box · # stop required} other {Box · # stops required}}"
   }
 }

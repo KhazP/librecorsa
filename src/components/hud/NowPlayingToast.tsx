@@ -40,7 +40,7 @@ export function NowPlayingToast({ nowPlaying }: { nowPlaying: NowPlaying | null 
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-(--z-lc-results) flex max-w-[min(360px,calc(100%-2rem))] justify-end"
+      className="pointer-events-none fixed top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-(--z-lc-results) flex max-w-[min(360px,calc(100%-2rem))] justify-end in-data-[career-open]:hidden"
     >
       {shown ? (
         <div
