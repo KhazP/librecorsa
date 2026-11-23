@@ -123,8 +123,9 @@ function SignedOut({ where, state, note }: { where: AccountWhere; state: Account
           {note}
         </p>
       ) : null}
+      {/* On /account the page's own heading already says Account */}
       <Card
-        title="Account"
+        title={where === "page" ? "Sign in" : "Account"}
         description="Sign in to keep your driver names and save on every device. No email is collected."
       >
         {codeFirst ? codeRow : null}
