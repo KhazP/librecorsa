@@ -115,6 +115,44 @@ for (const id of tracks) {
       .join("/")} s, ${t.toFixed(0)} s raced in ${((Date.now() - started) / 1000).toFixed(0)} s`
   );
 }
+// A restart while a car is mid-stop puts it on its grid slot facing down the road (it was left facing world yaw 0)
+{
+  const id = tracks.find((t) => existsSync(`public/tracks/${t}/track_data.json`));
+  if (id) {
+    setActiveTrack(id, JSON.parse(readFileSync(`public/tracks/${id}/track_data.json`, "utf8")) as RawTrackJson);
+    const track = getActiveTrackData(1200);
+    if (track.meshUrl && existsSync(`public${track.meshUrl}`) && track.pitLane) {
+      const root = loadGlbGeometry(`public${track.meshUrl}`);
+      const env = new TrackEnvironment(track, { ...DEFAULT_SESSION_CONDITIONS });
+      const field = new AiOpponentField(track, vehicleModelSpec(carKind).createSim(track, root), aiDriversFor(3), env, { skill: 80, seed: 3, learning: false, spectate: true, trackId: id, damage: "off" });
+      field.raceLaps = 4;
+      field.pitStopsRequired = 1;
+      field.startRace(true);
+      let t = 0;
+      while (t < 600 && !field.status().standings.some((r) => !r.isPlayer && r.inPit)) {
+        env.update(DT, field.sims());
+        field.update(DT);
+        t += DT;
+      }
+      const pitting = field.status().standings.some((r) => !r.isPlayer && r.inPit);
+      field.startRace(true);
+      let worst = 0;
+      for (const sim of field.sims()) {
+        const smp = track.getSampleAtDistance(sim.sMeters);
+        const q = sim.worldQuaternion;
+        // The car's nose (+z) in the world, against the road's direction there
+        const fx = 2 * (q.x * q.z + q.w * q.y);
+        const fz = 1 - 2 * (q.x * q.x + q.y * q.y);
+        const cos = (fx * smp.tangent.x + fz * smp.tangent.z) / (Math.hypot(fx, fz) * Math.hypot(smp.tangent.x, smp.tangent.z) || 1);
+        worst = Math.max(worst, Math.acos(Math.max(-1, Math.min(1, cos))) * (180 / Math.PI));
+      }
+      if (!pitting) console.log(`SKIP  restart mid-stop (no car pitted in ${t.toFixed(0)} s)`);
+      else if (worst > 30) fail(`${id}: after a restart mid-stop a car faces ${worst.toFixed(0)}° off the road`);
+      else console.log(`ok    ${id}: a restart mid-stop lines every car up facing the road (worst ${worst.toFixed(0)}°)`);
+    }
+  }
+}
+
 if (failures) {
   console.log(`\n${failures} failure(s)`);
   process.exit(1);

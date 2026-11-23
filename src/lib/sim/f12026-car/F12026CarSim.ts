@@ -1295,6 +1295,8 @@ export class F12026CarSim implements SimulatorCar {
    * not found from its position
    */
   private pitDriven = false;
+  /** Just placed (a flashback, a reset): the next pose may find the car anywhere in the lane, not only at its entry */
+  private pitRejoin = false;
   private s = 0;
   private lateral = 0;
   private prevS = 0;
@@ -3030,7 +3032,10 @@ export class F12026CarSim implements SimulatorCar {
     // The off-track verdict belongs to where the car was: the new spot is judged afresh (so does the pit lane, unless
     // the field is driving the car down it)
     this.wasOffTrack = false;
-    if (!this.pitDriven) this.pitTracker?.reset();
+    if (!this.pitDriven) {
+      this.pitTracker?.reset();
+      this.pitRejoin = true;
+    }
     // So does the barrier contact: zeroed, on the page's car and the sim worker's alike (race control reads a drop as none)
     this.wallContactS = 0;
     const c = this.channels;
@@ -3239,8 +3244,10 @@ export class F12026CarSim implements SimulatorCar {
       if (tr.spot) this.s = tr.spot.trackS;
     } else {
       const offRoadM = Math.abs(lateralM) - roadWidthM / 2;
-      if (tr.spot || (offRoadM > 0.5 && lane.nearEntry(projS))) {
-        const spot = tr.update(this.worldPosition.x, this.worldPosition.z, offRoadM, projS);
+      const rejoin = this.pitRejoin;
+      this.pitRejoin = false;
+      if (tr.spot || (offRoadM > 0.5 && (rejoin || lane.nearEntry(projS)))) {
+        const spot = tr.update(this.worldPosition.x, this.worldPosition.z, offRoadM, projS, rejoin);
         if (spot) this.s = spot.trackS;
       }
     }
@@ -3267,10 +3274,15 @@ export class F12026CarSim implements SimulatorCar {
 
   /** Out of the pit lane and back on the road at `x`/`z`, rolling at `speedMs`: the physics drive the car again */
   public leavePitLane(x: number, z: number, yawRad: number, speedMs: number): void {
+    this.endPitDrive();
+    this.restorePose({ x, z, yawRad, speedMs, s: this.s });
+  }
+
+  /** The field no longer drives the car down the lane, and places it itself (a restart, a flashback) */
+  public endPitDrive(): void {
     this.pitDriven = false;
     this.pitTracker?.reset();
     this.vehicle.endKinematic();
-    this.restorePose({ x, z, yawRad, speedMs, s: this.s });
   }
 
   /** Race control deleted the running lap (judged track limits) */

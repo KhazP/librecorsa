@@ -108,6 +108,8 @@ export interface AiDriverDef {
   aggression?: number;
   /** Lap-to-lap repeatability against the field's `consistency` (-0.1 ... +0.1) */
   consistencyBias?: number;
+  /** The driver's full name, shown in the results (a career's rivals); absent: the code */
+  name?: string;
 }
 
 /** Field in grid order (pole first); the player lines up behind them */
@@ -549,6 +551,8 @@ interface FieldCar {
   pitStops: number;
   /** Its pit box (index into the lane's boxes) */
   pitBox: number;
+  /** The driver's full name for the results (AiDriverDef.name); absent: the label */
+  displayName?: string;
 }
 
 
@@ -904,6 +908,7 @@ export class AiOpponentField implements AiRace {
       const car = this.makeCar(`ai_${d.code}`, d.code, d.teamColorHex, sim, sim, d.pace);
       car.aggression = clamp(d.aggression ?? 0, -1, 1);
       car.consistencyBias = clamp(d.consistencyBias ?? 0, -0.2, 0.2);
+      car.displayName = d.name;
       car.hooks = driveHooksFor(sim, track);
       this.cars.push(car);
     }
@@ -1286,6 +1291,9 @@ export class AiOpponentField implements AiRace {
     for (const car of this.planQueue) car.planJob = null;
     this.planQueue.length = 0;
     this.cars.forEach((car) => {
+      // A car mid-stop is out of the lane first: the grid places it
+      if (car.pitRun) car.ai?.endPitDrive?.();
+      car.pitRun = null;
       car.sim.resetToStartGrid(!standing, car.gridSlot, standing ? undefined : this.cars.length, true);
       if (car.ai) {
         car.ai.aiLineBiasM = 0;
@@ -1315,8 +1323,6 @@ export class AiOpponentField implements AiRace {
       car.retired = false;
       car.retiredAtS = null;
       car.removed = false;
-      if (car.pitRun) car.ai?.leavePitLane?.(car.sim.worldPosition.x, car.sim.worldPosition.z, 0, 0);
-      car.pitRun = null;
       car.pitWant = null;
       car.pitStops = 0;
       car.pitLaps = car.ai && this.pitLane ? plannedStopLaps(this.raceLaps, this.pitStopsRequired, car.rng) : [];
@@ -2579,7 +2585,8 @@ export class AiOpponentField implements AiRace {
 
   /** A car the others treat as an obstacle: spinning, stopped or crawling, or retired and not yet taken away */
   private isHazard(car: FieldCar): boolean {
-    if (this.offRoad(car)) return false;
+    // A car in the pit lane is slow by rule, behind the pit wall: no hazard (the player's own stop either)
+    if (this.offRoad(car) || car.sim.telemetry.pitLane) return false;
     if (this.rollingFormation) return car.retired;
     if (car.retired || car.control?.incident) return true;
     // Off the start everyone is slow; and a finished car on its in-lap is no obstacle anyone races
@@ -3013,7 +3020,7 @@ export class AiOpponentField implements AiRace {
   /** The weather calls for other tyres (TrackEnvironment): they go on at a stop; false: no stop to be made, change now */
   private tyreStop(sim: SimulatorCar, compound: TireCompound): boolean {
     const car = this.cars.find((c) => c.ai === sim);
-    if (!car || !this.pitLane || this.phase !== 'racing' || car.finishTimeS !== null || this.lapsLeft(car) < 1) return false;
+    if (!car || !this.pitLane || this.phase === 'lights' || car.finishTimeS !== null || this.lapsLeft(car) < 1) return false;
     if (car.pitRun) {
       if (car.pitRun.phase === 'in') car.pitRun.order.compound = compound;
       return true;
@@ -3042,7 +3049,8 @@ export class AiOpponentField implements AiRace {
   private turnIntoPits(car: FieldCar): boolean {
     const lane = this.pitLane;
     const sim = car.ai;
-    if (!lane || !sim || !car.pitWant || car.pitRun || this.phase !== 'racing') return false;
+    // After the player's flag (phase 'finished') the others are still racing to theirs, and still make their stops
+    if (!lane || !sim || !car.pitWant || car.pitRun || this.phase === 'lights') return false;
     if (car.finishTimeS !== null || car.retired || car.control?.mode !== 'racing') return false;
     if (this.lapsLeft(car) < 1) {
       car.pitWant = null;
@@ -3140,7 +3148,7 @@ export class AiOpponentField implements AiRace {
     return {
       id: c.id,
       code: c.label,
-      name: c.label,
+      name: c.displayName ?? c.label,
       color: c.teamColorHex,
       isPlayer: c.isPlayer,
       distM: c.distM,
@@ -3308,10 +3316,12 @@ export class AiOpponentField implements AiRace {
         car.sim.setDamageEffects?.(car.damage.effects());
       }
       const p = byId.get(key);
-      // A car rewound out of a stop goes back to the road where the recording has it (its stop is not made again)
+      // A car rewound out of a stop goes back to the road where the recording has it, and means to stop again: its
+      // stop was not made (the stop's order is its want again)
       if (car.pitRun) {
+        car.pitWant = car.pitRun.order;
         car.pitRun = null;
-        car.ai?.leavePitLane?.(car.sim.worldPosition.x, car.sim.worldPosition.z, 0, 0);
+        car.ai?.endPitDrive?.();
       }
       if (car.ai && !car.removed && p) {
         const target = { x: p.x, z: p.z, yawRad: p.yawRad, speedMs: Math.max(0, p.speedMs), s: p.s };

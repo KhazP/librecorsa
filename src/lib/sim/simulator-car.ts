@@ -170,6 +170,8 @@ export interface SimulatorCar {
   driveInPitLane?(x: number, z: number, yawRad: number, speedMs: number, laneM: number, offsetM: number): void;
   /** Out of the pit lane, back on the road rolling at `speedMs`: the physics drive the car again */
   leavePitLane?(x: number, z: number, yawRad: number, speedMs: number): void;
+  /** The field stops driving the car down the lane and places it itself (a restart, a flashback) */
+  endPitDrive?(): void;
   getTyreSetup(): TyreSetup;
   setTyreSetup(setup: TyreSetup): void;
   activateBoostOverride(): boolean;

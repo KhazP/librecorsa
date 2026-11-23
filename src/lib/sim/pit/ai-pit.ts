@@ -227,7 +227,10 @@ export function pitBoxIndex(lane: PitLaneModel, slot: number, cars: number): num
   const spots: number[] = [];
   for (let j = 0; j < count; j++) spots.push(count > 1 ? Math.round((j * (n - 1)) / (count - 1)) : Math.floor(n / 2));
   const mid = Math.floor(count / 2);
-  if (slot === 0) return spots[mid];
-  const rest = spots.filter((_, j) => j !== mid);
-  return rest[(slot - 1) % Math.max(1, rest.length)] ?? 0;
+  const mine = spots[mid];
+  if (slot === 0) return mine;
+  // Never the player's box: with more cars than boxes the field shares the others
+  const rest = spots.filter((v, j) => j !== mid && v !== mine);
+  if (!rest.length) return n > 1 ? (mine + 1) % n : 0;
+  return rest[(slot - 1) % rest.length];
 }

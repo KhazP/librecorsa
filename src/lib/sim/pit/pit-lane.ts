@@ -419,10 +419,11 @@ export class PitLaneTracker {
    * projection. A car joins only where the lane leaves the road: Monaco's lane runs beside the lap twice more (behind the
    * barriers at the Swimming Pool), and a car off the road there is not in it
    */
-  update(x: number, z: number, offRoadM: number, lapS: number): PitLaneSpot | null {
+  update(x: number, z: number, offRoadM: number, lapS: number, anywhere = false): PitLaneSpot | null {
     const at = this.lane.locate(x, z, offRoadM);
     if (!this.spot) {
-      if (at && at.laneM <= this.lane.leaveM + ENTRY_REGION_M && this.lane.nearEntry(lapS)) this.spot = at;
+      // `anywhere`: a car just put down in the lane (a flashback) is in it wherever it is along it
+      if (at && (anywhere || (at.laneM <= this.lane.leaveM + ENTRY_REGION_M && this.lane.nearEntry(lapS)))) this.spot = at;
       return this.spot;
     }
     this.spot = at;
