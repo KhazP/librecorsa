@@ -159,5 +159,5 @@ export const GAME_FACTS: readonly [label: string, text: string][] = [
   ["Controls", "Keyboard, gamepad, touch or a force-feedback wheel"],
   ["Plays on", "Any modern browser: computer, phone or tablet"],
   ["Conditions", "Your choice of weather and time of day"],
-  ["Price", "Free. No account and no ads; tips are optional and unlock nothing"],
+  ["Price", "Free. No account needed and no ads; tips are optional and unlock nothing"],
 ];

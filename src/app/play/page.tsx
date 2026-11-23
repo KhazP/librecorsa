@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { TrackGate } from "@/components/TrackGate";
+import { AccountDialogs } from "@/components/account/AccountDialogs";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -17,6 +18,8 @@ export default function PlayPage() {
       <h1 className="sr-only">Play LibreCorsa: free open-source racing simulator in your browser</h1>
       <p className="sr-only">{SITE_DESCRIPTION}</p>
       <TrackGate />
+      {/* Once for the whole page, across circuit reloads: starts the account side and asks its questions */}
+      <AccountDialogs />
     </main>
   );
 }
