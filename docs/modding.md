@@ -1,6 +1,6 @@
 # Making mods
 
-A mod package adds circuits, cars and liveries to LibreCorsa without changing the game. Players import a package's `.zip` (or its folder) in the game's **Mods** panel. It then stays in their browser and works offline. The offline launcher also reads packages from its `mods/` folder.
+A mod package adds circuits, cars and liveries to LibreCorsa without changing the game. Players import a package's `.zip` (or its folder) in the game's **Mods** panel, or get one there from a [catalogue](#sharing-packages-through-a-catalogue). It then stays in their browser and works offline. The offline launcher also reads packages from its `mods/` folder.
 
 A package holds **data only, never code**. The game's page holds each player's driver key and saves, so nothing in a package is ever run: no scripts, no shaders, no HTML.
 
@@ -153,6 +153,71 @@ npm run mod -- index
 ```
 
 This writes `public/mods/_index.json`, which lists the packages for the game. Run it again after changing a package, since the content hash changes too. A production build (`npm run build`, served from `out/`) and the live site both run the service worker, so importing in the Mods panel works there.
+
+## Sharing packages through a catalogue
+
+A catalogue is a list of packed packages that the game's **Mods** panel offers to download. Each one shows its name, version, author, licence, size and what it adds, with a **Get** button. Get downloads the zip with a progress bar (Cancel stops it), checks it against the catalogue, and installs it as an import would. A package already installed with the same content shows **Installed**; one installed with other content shows **Update**, with the version the player has. One download runs at a time.
+
+### For modders
+
+Pack your package (`npm run mod -- pack`) and give the zip to whoever hosts the catalogue. A picture of it with the zip's name (`jdoe.monza-66.webp`, `.png` or `.jpg`) is shown beside it. Once a zip is listed, don't change it without writing the catalogue again: the game refuses a download whose size or SHA-256 differs from what the catalogue states.
+
+### For hosts
+
+Put the zips in one folder and run:
+
+```
+npm run mod -- catalogue <folder of zips> [--base-url <url>] [--out <file>]
+```
+
+It reads each zip with the game's own zip reader, unpacks it into a temporary folder, checks it as `npm run mod -- check` does, and lists it with the zip's size and SHA-256 and the package's content hash. It writes `catalogue.json` in the folder (or `--out`), and nothing at all if any zip fails, a second zip holds a package already listed, or the game would drop an entry. Links are `--base-url` followed by the file name. Without `--base-url` they are just the file names, so the catalogue must sit beside the zips.
+
+The game reads catalogues from two places, only when the Mods panel opens, and gives each 6 seconds:
+
+1. **This copy's own**, `/mods/_catalogue/catalogue.json` (under the site's base path). The launcher serves its `mods/_catalogue/` folder there (only `catalogue.json`, zips and preview pictures, no subfolders). A clone's dev server and build serve `public/mods/_catalogue/`. Any other host serves that path.
+2. **The one the build names**: set `NEXT_PUBLIC_MOD_CATALOGUE_URL` at build time to an `https://` address or a path on the site.
+
+If neither answers, or a catalogue lists nothing, the panel shows nothing about catalogues. If the one the build names can't be reached (the player is offline), the panel says so and offers **Try again**. A package listed in both is taken from this copy's own.
+
+```json
+{
+  "format": 1,
+  "packages": [
+    {
+      "id": "jdoe.monza-66",
+      "name": "Monza 1966",
+      "version": "1.0.0",
+      "description": "The 1966 road course with the banking.",
+      "author": "J. Doe",
+      "license": "CC BY-NC-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "url": "jdoe.monza-66.zip",
+      "bytes": 48213775,
+      "sha256": "<the zip's SHA-256, lowercase hex>",
+      "hash": "<the package's content hash, as npm run mod -- check prints it>",
+      "circuits": 1,
+      "preview": "jdoe.monza-66.webp"
+    }
+  ]
+}
+```
+
+- **`format`** must be `1`; the game refuses any other whole. **`packages`** holds at most 500 entries, and the file at most 1 MB.
+- **`id`**, **`name`** (80 characters), **`version`** (32), **`author`** (80), **`license`** (120): as in the package's `mod.json`. **`description`** (1000) and **`licenseUrl`** (`https://`) are optional.
+- **`url`**: the zip. **`preview`** (optional): a picture. A relative link is read against the catalogue's own address. Either must lead to an `https://` address or to the game's own site (the launcher's `http://127.0.0.1`), with no user name or password in it.
+- **`bytes`** and **`sha256`**: the zip's exact size (at most 2 GB) and its SHA-256 in lowercase hex. **`hash`**: the package's content hash, the one online rooms compare. The game installs a download only when all three match, and when the zip holds that package id.
+- **`circuits`**, **`cars`**, **`liveries`** (optional): how many of each it adds, shown in the list.
+
+An entry that breaks a rule is dropped, and the browser's console says why; the rest are listed. So is a second entry for the same id. Keys not listed here are ignored.
+
+Serving it:
+
+- A catalogue on another host than the game's must send `Access-Control-Allow-Origin` (`*`, or the game's origin) with the catalogue and the zips, since the game reads them with `fetch`. Serve them over `https://`.
+- Serve each zip as it is. A compressed transfer is fine, as the size is counted after it is undone.
+- The game's service worker leaves `/mods/_catalogue/` alone and never keeps a zip; the page asks the browser not to keep one either. The catalogue is checked with the server each time the panel opens.
+- To update a package, replace its zip and write the catalogue again. Players who have the old content see **Update**.
+
+A catalogue lists data packages only: as with any package, nothing in one ever runs. Whoever hosts a catalogue chooses what it offers, so list only packages whose licence lets you share them.
 
 ## What a package can't do (yet)
 
