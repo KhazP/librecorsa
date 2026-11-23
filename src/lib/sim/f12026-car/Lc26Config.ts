@@ -27,6 +27,7 @@ import {
   type Lc26TyreSpec,
   type Lc26WingSpec,
 } from '../lc26-data';
+import { F1_2026_ERS } from './ers-2026';
 import {
   deriveRainCompound,
   type AeroData,
@@ -140,31 +141,43 @@ function harvestTorque(maxW: number, maxNm: number): LutPoints {
   return pts;
 }
 
+/**
+ * The 2026 F1 rules' energy (`ers-2026.ts`, FIA 2026 Section C5.2): the ERS-K's power against road speed in place of a
+ * fixed deploy limit, 500 Nm at the crank, 350 kW of DC power either way, a 4 MJ window, 8.5 MJ recharged a lap and no
+ * limit on what is deployed in one, and the FIA's fixed 0.97 between the DC bus and the shaft [regulation]
+ */
 const ERS: ERSData = {
-  torqueLut: LC26_ERS.kineticTorque,
-  coastLut: harvestTorque(LC26_ERS.maxPowerW, 654),
-  ERS_MAX_DEPLOY: LC26_ERS.maxPowerW,
-  maxHarvestW: LC26_ERS.maxPowerW,
-  ERS_MAX_CHARGE: LC26_ERS.batteryJ,
-  // The 2026 lap allowances, as the f12026-car's
-  deployPerLapJ: 9_000_000,
-  harvestPerLapJ: 8_500_000,
-  deployEfficiency: 0.95,
-  harvestEfficiency: LC26_ERS.harvestEfficiency,
+  regulations: 'f1-2026',
+  // The data's torque curve under the rules' 500 Nm (C5.2.11); the data peaks at 654 [mod, regulation]
+  torqueLut: LC26_ERS.kineticTorque.map(([rpm, nm]) => [rpm, Math.min(nm, F1_2026_ERS.maxTorqueNm)] as [number, number]),
+  // Harvest on the same 500 Nm, up to 350 kW of DC power into the store (C5.2.7, C5.2.21) [regulation]
+  coastLut: harvestTorque(F1_2026_ERS.maxDcW / F1_2026_ERS.mechPerDc, F1_2026_ERS.maxTorqueNm),
+  // The motor's peak at the shaft, for the gauges (the deployment itself runs from the speed curve)
+  ERS_MAX_DEPLOY: F1_2026_ERS.maxDcW * F1_2026_ERS.mechPerDc,
+  maxHarvestW: F1_2026_ERS.maxDcW / F1_2026_ERS.mechPerDc,
+  ERS_MAX_CHARGE: F1_2026_ERS.storeJ,
+  // Not read under the 2026 rules, which limit no energy deployed in a lap
+  deployPerLapJ: Number.POSITIVE_INFINITY,
+  harvestPerLapJ: F1_2026_ERS.rechargePerLapJ,
+  deployEfficiency: F1_2026_ERS.mechPerDc,
+  harvestEfficiency: F1_2026_ERS.mechPerDc,
   liftThrottle: 0.15,
   topGearLiftHarvestW: 90_000,
   deployVsGear: LC26_ERS.deployVsGear,
 };
 
 /**
- * A delivery map's share of the 350 kW against road speed: the mode's own speed curve at full throttle
- * [data modes.*.speed × the throttle curve's value at 1], under the super-clipping ceiling (full power to 290 km/h,
- * none from 355; with the override, full to 337) [data mgukDeployCapW]
+ * A delivery map's low-speed part, where the rear tyres and not the motor set the drive: the mode's own speed curve
+ * up to where it reaches full delivery, full from there [data modes.*.speed]. The rules' speed curve takes over above
+ * (`ers-2026.ts`), and the mode's energy management decides how far up each straight it deploys
  */
-function deployVsSpeed(speed: LutPoints, throttleGain: number, taperFromKmh: number): LutPoints {
-  const cap = (kmh: number) => (kmh <= taperFromKmh ? 1 : kmh >= 355 ? 0 : (355 - kmh) / (355 - taperFromKmh));
-  const xs = [...new Set([...speed.map(([kmh]) => kmh), taperFromKmh, 355])].sort((a, b) => a - b);
-  return xs.map((kmh) => [kmh, Number(Math.min(Math.min(1, throttleGain) * at(speed, kmh), cap(kmh)).toFixed(4))]);
+function lowSpeedDelivery(speed: LutPoints): LutPoints {
+  const out: [number, number][] = [];
+  for (const [kmh, f] of speed) {
+    out.push([kmh, Math.min(1, f)]);
+    if (f >= 1) break;
+  }
+  return out;
 }
 
 const mode = (
@@ -187,16 +200,50 @@ const mode = (
 });
 
 const M = LC26_ERS.modes;
+/**
+ * The modes' energy management (`ers-2026.ts`), against the charge left (0..1 of the 4 MJ): the lap time a joule must
+ * buy where the car is for the control unit to deploy it, and under which it harvests flat out (superclipping) once
+ * the cut is done. A team's own and not public [est: shaped on the 2026 cars' speed traces, full power off the
+ * corners and the speed flattening and falling flat out at the end of the long straights; tuned: over laps of Qiddiya,
+ * Spielberg, Monaco, Rwanda and the Sachsenring, quicker than without any management, the charge cycling and never
+ * empty under power, a few seconds' superclipping a lap as the FIA aimed for from Miami]. `socFloor` is not read under
+ * the 2026 rules
+ */
 const PERFORMANCE_MODES: Record<PerformanceModeName, PerformanceModeData> = {
-  // The override: its own map held to 337 km/h, the store used to the bottom
-  PSH: mode('PSH', deployVsSpeed(M.PSH.speed, 1, 337), 0),
-  // Race: 80 % of the power, the store kept above a fifth [data soc curve]
-  RAC: mode('RAC', deployVsSpeed(M.RAC.speed, 0.8, 290), 0.2, { liftHarvestScale: M.RAC.coastHarvest }),
-  BAL: mode('BAL', deployVsSpeed(M.BAL.speed, 1, 290), 0.4, { liftHarvestScale: M.BAL.coastHarvest }),
-  // Lift and coast: race delivery, harvesting on the lift [est: the data has no such mode]
-  LIC: mode('LIC', deployVsSpeed(M.RAC.speed, 0.8, 290), 0.2, { coastTorqueScale: 0.35 }),
-  // Charge: no deploy, harvest at part and full throttle [data: its throttle curve is negative throughout]
-  CHR: mode('CHR', deployVsSpeed(M.CHR.speed, 0, 290), 0, { deployFraction: 0, topGearClipHarvestW: 120_000, partThrottleHarvestW: 80_000, coastTorqueScale: 1.15 }),
+  // Attack: the whole of the rules' curve until the store is empty, no superclipping (the override and the Boost)
+  PSH: mode('PSH', lowSpeedDelivery(M.PSH.speed), 0),
+  // Race: the charge spent on the lap and won back on it
+  RAC: mode('RAC', lowSpeedDelivery(M.RAC.speed), 0, {
+    liftHarvestScale: M.RAC.coastHarvest,
+    energyManagement: {
+      deployAboveSPerMJ: [[0, 4], [0.1, 2], [0.3, 1], [0.6, 0.4], [0.85, 0]],
+      superclipBelowSPerMJ: [[0, 0.25], [0.3, 0.18], [0.6, 0.07], [0.75, 0]],
+    },
+  }),
+  // Balanced: more charge held back for the next straight
+  BAL: mode('BAL', lowSpeedDelivery(M.BAL.speed), 0, {
+    liftHarvestScale: M.BAL.coastHarvest,
+    energyManagement: {
+      deployAboveSPerMJ: [[0, 5], [0.2, 2.5], [0.45, 1.2], [0.75, 0.5], [0.95, 0]],
+      superclipBelowSPerMJ: [[0, 0.35], [0.4, 0.22], [0.7, 0.09], [0.85, 0]],
+    },
+  }),
+  // Low speed: deploys off the slow corners only, and coasts further on a lift [est: the data has no such mode]
+  LIC: mode('LIC', lowSpeedDelivery(M.RAC.speed), 0, {
+    coastTorqueScale: 0.35,
+    energyManagement: {
+      deployAboveSPerMJ: [[0, 6], [0.5, 3], [1, 2]],
+      superclipBelowSPerMJ: [[0, 0.35], [0.8, 0.2], [1, 0]],
+    },
+  }),
+  // Charge: no deployment; harvests at part throttle, and flat out from 210 km/h up to the recharge limit
+  // [data: its throttle curve is negative throughout]
+  CHR: mode('CHR', lowSpeedDelivery(M.CHR.speed), 0, {
+    deployFraction: 0,
+    partThrottleHarvestW: 80_000,
+    coastTorqueScale: 1.15,
+    energyManagement: { deployAboveSPerMJ: [[0, 1e9], [1, 1e9]], superclipBelowSPerMJ: [[0, 1e9], [1, 1e9]] },
+  }),
 };
 
 // ---------------------------------------------------------------------------

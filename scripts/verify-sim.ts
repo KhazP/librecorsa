@@ -930,18 +930,21 @@ async function runVerification() {
     );
   }
 
-  // 10.4 MGU-K deploy ceiling: 350 kW to 290 km/h (350 kW to 337 km/h with Manual Override), linear taper to 0 at 355 km/h
+  // 10.4 MGU-K deploy ceiling, the FIA's 2026 curve (C5.2.8): 350 kW to 290 km/h, 1800 − 5v to 100 kW at 340, 0 from
+  // 345; with Manual Override (Overtake) 7100 − 20v: 350 kW to 337.5 km/h, 0 from 355
   {
-    const capMid = mgukDeployCapW(322.5, false);
     const capOk =
       mgukDeployCapW(280, false) === 350_000 &&
-      Math.abs(capMid - 175_000) <= 0.05 * 175_000 &&
-      mgukDeployCapW(355, false) === 0 &&
-      mgukDeployCapW(330, true) === 350_000 &&
-      mgukDeployCapW(360, true) === 0;
+      mgukDeployCapW(290, false) === 350_000 &&
+      Math.abs(mgukDeployCapW(322.5, false) - 187_500) < 1 &&
+      Math.abs(mgukDeployCapW(342.5, false) - 50_000) < 1 &&
+      mgukDeployCapW(345, false) === 0 &&
+      mgukDeployCapW(337.5, true) === 350_000 &&
+      Math.abs(mgukDeployCapW(346, true) - 180_000) < 1 &&
+      mgukDeployCapW(355, true) === 0;
     assert(
       capOk,
-      `MGU-K deploy ceiling: 350 kW at 280 km/h, ${(capMid / 1000).toFixed(1)} kW at 322.5 km/h, 0 at 355 km/h; with Manual Override 350 kW at 330 km/h and 0 at 360 km/h`
+      `MGU-K deploy ceiling (FIA C5.2.8): 350 kW at 290 km/h, ${(mgukDeployCapW(322.5, false) / 1000).toFixed(1)} kW at 322.5, ${(mgukDeployCapW(342.5, false) / 1000).toFixed(1)} kW at 342.5, 0 at 345; with Overtake 350 kW at 337.5 and 0 at 355`
     );
   }
 
