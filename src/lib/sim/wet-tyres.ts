@@ -117,6 +117,20 @@ export const STANDING_WATER_MM = 1.5;
 /** Wetness threshold above which the polished rubbered-in racing line turns slicker than off-line asphalt */
 export const GROOVE_WET_TRANSITION_FACTOR = 0.18;
 
+/**
+ * Race control's Low Grip Conditions (FIA 2026 F1 Section B1.5.11), standing in for the Race Director's call: declared
+ * once the racing line holds water enough for intermediates (`recommendedCompound`), as at Las Vegas 2026's wet first
+ * practice, where the wet track and Low Grip were declared together; Normal Grip again once the line is back under damp.
+ * The water depths are the game's (mm), the call is the rules' (one for the whole track)
+ */
+export const LOW_GRIP_DECLARED_MM = 0.14;
+export const LOW_GRIP_CLEARED_MM = DAMP_MM;
+
+/** Low Grip Conditions with `lineWaterMm` on the racing line, given whether they are declared now */
+export function lowGripCall(lineWaterMm: number, declared: boolean): boolean {
+  return declared ? !(lineWaterMm < LOW_GRIP_CLEARED_MM) : lineWaterMm > LOW_GRIP_DECLARED_MM;
+}
+
 /** Wetness threshold above which rear flap / active low-drag aero (DRS) is locked out for safety */
 export const REAR_FLAP_WET_THRESHOLD = 0.25;
 
@@ -362,6 +376,6 @@ export function isRainCompound(c: TireCompound): boolean {
 /** The compound to fit for a water film of `waterMm` on the racing line (AI tyre choice) */
 export function recommendedCompound(waterMm: number, dryChoice: TireCompound = 'medium'): TireCompound {
   if (waterMm > 1.1) return 'wet';
-  if (waterMm > 0.14) return 'intermediate';
+  if (waterMm > LOW_GRIP_DECLARED_MM) return 'intermediate';
   return dryChoice;
 }
