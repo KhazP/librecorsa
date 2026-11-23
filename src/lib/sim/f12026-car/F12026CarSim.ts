@@ -52,7 +52,7 @@ import {
 import { SteeringAssist, type SteeringAssistCarState } from '../steering-assist';
 import { OPEN_WHEEL_KEYBOARD_STEER, type KeyboardSteerProfile } from '@/lib/input/keyboard-steer';
 import { type OvertakeLines, type OvertakingRaceControl, type OvertakingRules, OvertakeGrant } from '../overtaking-rules';
-import { f1EnergyCircuit } from '../f1-energy-circuits';
+import { f1EnergyCircuit, inStretch } from '../f1-energy-circuits';
 import { inLapWindow, straightModeWindows } from '../straight-mode-zones';
 import { AxleSlipScratch } from '../tyre-slip';
 import type { AeroWakeState } from '../aero-wake';
@@ -2223,7 +2223,13 @@ export class F12026CarSim implements SimulatorCar {
     const overtakeOk = this.overtakeAvailable;
     const straight2026 = this.rules === 'straight-mode-2026';
     const racing = !!this.raceControl?.racing;
-    const aiOvertake = this.aiAutopilot && straight2026 && racing && overtakeOk && inOvertakingZone(v.trackProgress);
+    // Where an Overtake is spent: under the 2026 rules the circuit's overtaking stretches (Monaco's longest runs too), else
+    // the circuit's DRS zones
+    const zoneNow =
+      v.ersCircuit && Number.isFinite(v.trackProgress)
+        ? v.ersCircuit.overtakeZones.some((w) => inStretch(v.trackProgress * this.track.totalLengthM, w))
+        : inOvertakingZone(v.trackProgress);
+    const aiOvertake = this.aiAutopilot && straight2026 && racing && overtakeOk && zoneNow;
     v.extraRechargeJ = straight2026 ? this.overtake.extraRechargeJ(this.raceControl) : 0;
     v.ersSession = racing ? 'race' : this.energyTimeTrial ? 'timeTrial' : 'practice';
     if (this.config.ers.regulations === 'f1-2026') {
@@ -2239,7 +2245,7 @@ export class F12026CarSim implements SimulatorCar {
       if (!overtakeOk) this.overtakeInUse = false;
       const autoOt =
         straight2026 && racing && overtakeOk && !this.overtakeInUse && !this.aiAutopilot && this.autoOvertake &&
-        inOvertakingZone(v.trackProgress) && inputs.throttle >= 0.98;
+        zoneNow && inputs.throttle >= 0.98;
       const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake) && v.ersEnergyJ > 0;
       v.setPerformanceMode(this.userErsMode);
       v.ersBoost = boost;

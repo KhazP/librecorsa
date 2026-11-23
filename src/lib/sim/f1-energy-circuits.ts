@@ -46,6 +46,11 @@ export interface F1EnergyCircuit {
   /** Overtake: judged at the Detection Line, activated at the Activation Line (lap m; null without) */
   detectionM: number | null;
   activationM: number | null;
+  /**
+   * Where an Overtake is spent in a race (the AI's and the Automatic Overtake's): the DRS zones and straights, or on a
+   * circuit with neither (Monaco) its two longest runs between braking zones
+   */
+  overtakeZones: LapStretch[];
 }
 
 /** Is lap distance s inside a stretch (wrapping) */
@@ -136,7 +141,7 @@ function fiaToLap(e: FiaEvent, lapM: number, fiaM: number): number {
   return ((s % lapM) + lapM) % lapM;
 }
 
-function fromFia(e: FiaEvent, lapM: number): F1EnergyCircuit {
+function fromFia(e: FiaEvent, lapM: number): Omit<F1EnergyCircuit, 'overtakeZones'> {
   const at = (m: number) => Math.round(fiaToLap(e, lapM, m));
   const r = e.recharge;
   return {
@@ -219,8 +224,12 @@ function rechargeFor(flatShare: number, brakingS: number): FiaEvent['recharge'] 
 /**
  * The race's 250 kW sectors: the runs between braking zones that feed no overtaking straight (a straight-mode stretch
  * or a DRS zone), each from the braking zone it starts in to the one it ends at, runs next to each other joined. A
- * circuit with no overtaking straight at all has none (Monaco: the FIA gives it lower curves instead)
+ * circuit with no overtaking straight at all has none (Monaco: the FIA gives it lower curves instead). No more than
+ * `ALT1_MAX_SHARE` of the lap: past it the longest of those runs stay at 350 kW, as a circuit's main acceleration zones
+ * do (the 2026 events: 12 to 40 % of the lap, Madrid's 66 % the one outlier)
  */
+const ALT1_MAX_SHARE = 0.4;
+
 function derivedAlt1(zone: Uint8Array, lapM: number, straights: readonly LapWindow[]): LapStretch[] {
   const n = zone.length;
   const ds = lapM / n;
@@ -249,20 +258,56 @@ function derivedAlt1(zone: Uint8Array, lapM: number, straights: readonly LapWind
   runs.sort((a, b) => a.from - b.from);
   if (!runs.some((r) => r.main)) return [];
   // Join the runs that feed no straight with the braking zones between them, from the first's braking zone on
-  const out: LapStretch[] = [];
-  let open: { from: number; to: number } | null = null;
-  for (const r of runs) {
-    if (r.main) {
-      if (open) out.push({ fromM: open.from % lapM, toM: open.to % lapM });
-      open = null;
-    } else if (open) {
-      open.to = r.to;
-    } else {
-      open = { from: r.from, to: r.to };
+  const join = (): LapStretch[] => {
+    const out: LapStretch[] = [];
+    let open: { from: number; to: number } | null = null;
+    for (const r of runs) {
+      if (r.main) {
+        if (open) out.push({ fromM: open.from, toM: open.to });
+        open = null;
+      } else if (open) {
+        open.to = r.to;
+      } else {
+        open = { from: r.from, to: r.to };
+      }
     }
+    if (open) out.push({ fromM: open.from, toM: open.to });
+    return out;
+  };
+  // The longest runs back on 350 kW until the sectors are no more than the share of the lap
+  const len = (r: { from: number; to: number }) => r.to - r.from;
+  const byLength = runs.filter((r) => !r.main).sort((a, b) => len(b) - len(a));
+  let out = join();
+  for (const r of byLength) {
+    if (out.reduce((a, w) => a + (w.toM - w.fromM), 0) <= ALT1_MAX_SHARE * lapM) break;
+    r.main = true;
+    out = join();
   }
-  if (open) out.push({ fromM: open.from % lapM, toM: open.to % lapM });
-  return out.map((w) => ({ fromM: Math.round(w.fromM), toM: Math.round(w.toM) }));
+  return out.map((w) => ({ fromM: Math.round(w.fromM % lapM), toM: Math.round(w.toM % lapM) }));
+}
+
+/** The runs between braking zones (lap m, the run's start past its end when it wraps), longest first */
+function runsBetweenBraking(zone: Uint8Array, lapM: number): LapStretch[] {
+  const n = zone.length;
+  const ds = lapM / n;
+  const starts: number[] = [];
+  const ends: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (zone[i] && !zone[(i - 1 + n) % n]) starts.push(i);
+    if (zone[i] && !zone[(i + 1) % n]) ends.push(i);
+  }
+  const runs = ends.map((e) => {
+    const next = starts.find((s) => s > e) ?? (starts[0] ?? e) + n;
+    return { fromM: (e + 1) * ds, toM: next * ds };
+  });
+  runs.sort((a, b) => b.toM - b.fromM - (a.toM - a.fromM));
+  return runs.map((r) => ({ fromM: Math.round(r.fromM % lapM), toM: Math.round(r.toM % lapM) }));
+}
+
+/** Where to spend an Overtake: the DRS zones and straights (lap fractions), or the two longest runs on a circuit with neither */
+function overtakeZonesOf(zone: Uint8Array, lapM: number, overtaking: readonly LapWindow[]): LapStretch[] {
+  if (overtaking.length > 0) return overtaking.map((w) => ({ fromM: Math.round(w.start * lapM), toM: Math.round(w.end * lapM) }));
+  return runsBetweenBraking(zone, lapM).slice(0, 2);
 }
 
 const circuitCache = new WeakMap<ReadonlyArray<TrackSamplePoint>, Map<string, F1EnergyCircuit>>();
@@ -283,27 +328,29 @@ export function f1EnergyCircuit(
   const cached = perId.get(trackId);
   if (cached) return cached;
   const event = FIA_EVENTS[trackId];
+  const zones = brakingZones(samples, lapM);
+  const overtaking = [...straights, ...drsZones.map((z) => ({ start: z.start, end: z.end }))];
   let out: F1EnergyCircuit;
   if (event && Math.abs(event.lapM - lapM) <= 1) {
-    out = fromFia(event, lapM);
+    out = { ...fromFia(event, lapM), overtakeZones: overtakeZonesOf(zones, lapM, overtaking) };
   } else {
     const ch = lapCharacter(samples, lapM);
     const r = rechargeFor(ch.flatShare, ch.brakingS);
     // The Overtake lines at the last DRS zone before the line: judged at its detection point, active from its start
     const last = [...drsZones].sort((a, b) => a.detection - b.detection).pop();
-    const overtaking = [...straights, ...drsZones.map((z) => ({ start: z.start, end: z.end }))];
     out = {
       source: 'derived',
       recharge: { race: r.race * MJ, practice: r.practice * MJ, timeTrial: r.qualifying * MJ },
       overtakeExtraJ: 0.5 * MJ,
       curves: 'base',
-      alt1: derivedAlt1(brakingZones(samples, lapM), lapM, overtaking),
+      alt1: derivedAlt1(zones, lapM, overtaking),
       bigCut: [],
       reset: [],
       // The FIA's power-limited distance runs some 16 % under the baked flat-out distance
       cutRateWps: 0.84 * ch.flatM > 3500 ? 50_000 : 100_000,
       detectionM: last ? Math.round(last.detection * lapM) : null,
       activationM: last ? Math.round(last.start * lapM) : null,
+      overtakeZones: overtakeZonesOf(zones, lapM, overtaking),
     };
   }
   perId.set(trackId, out);
