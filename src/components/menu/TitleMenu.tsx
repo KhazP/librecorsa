@@ -365,7 +365,11 @@ const Credits: React.FC = () => {
             <a href="https://www.overtake.gg/members/munyuturbo.1202939/" target="_blank" rel="noreferrer" className={linkClass}>
               munyuturbo
             </a>{" "}
-            · used with permission
+            (
+            <a href="https://www.patreon.com/cw/MTRacing651" target="_blank" rel="noreferrer" className={linkClass}>
+              Patreon
+            </a>
+            ) · used with permission
           </CreditRow>
           <CreditRow title={tx("nissansTitle")}>
             Models, liveries, sound and physics of the Skyline GT-R R33 JGTC and Skyline GT-R R32 JTCC by{" "}
