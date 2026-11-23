@@ -229,10 +229,10 @@ console.log('\n== Issue #180: Qiddiya, out of the last corner');
     const H2 = 1 / 120;
     let lap = 0;
     let prevS = car.sMeters;
-    let deployAfterHairpinJ = 0;
-    let harvestJ = 0;
+    // Per whole lap (the first from the line after the flying start, then the next): what it deploys out of the last
+    // corner, where its recharge reached the limit, its superclipping
+    const out = [1, 2].map(() => ({ hairpinJ: 0, limitAtM: Number.NaN, superclipS: 0 }));
     let lapHarvestPeak = 0;
-    let superclipS = 0;
     let emptyFlatS = 0;
     for (let t = 0; t < 900 && lap < 3; t += H2) {
       car.step(H2, { throttle: 0, brake: 0 });
@@ -240,19 +240,25 @@ console.log('\n== Issue #180: Qiddiya, out of the last corner');
       if (s < prevS - L / 2) lap++;
       prevS = s;
       lapHarvestPeak = Math.max(lapHarvestPeak, v.lapHarvestJ);
-      if (lap < 2) continue;
+      if (lap < 1 || lap > 2) continue;
+      const o = out[lap - 1];
       const p = v.telemetry.MGUK_POWER;
+      const thr = car.telemetry.throttle ?? 0;
       // The final hairpin's exit onto the main straight (≈ 7.5 to 8.1 km)
-      if (s > 7500 && s < 8100 && p > 0) deployAfterHairpinJ += (p / ers.deployEfficiency) * H2;
-      if (p < 0) harvestJ -= p * ers.harvestEfficiency * H2;
-      if (p < 0 && (car.telemetry.throttle ?? 0) > 0.9) superclipS += H2;
-      if (v.ersEnergyJ < 1 && (car.telemetry.throttle ?? 0) > 0.95 && car.vxMs > 60) emptyFlatS += H2;
+      if (s > 7500 && s < 8100 && p > 0) o.hairpinJ += (p / ers.deployEfficiency) * H2;
+      if (Number.isNaN(o.limitAtM) && v.lapHarvestJ >= 8.5e6 - 1000 && s > 200) o.limitAtM = s;
+      if (p < 0 && thr > 0.9) o.superclipS += H2;
+      if (v.ersEnergyJ < 1 && thr > 0.95 && car.vxMs > 60) emptyFlatS += H2;
     }
-    check('The car deploys out of the last corner (#180)', deployAfterHairpinJ > 0.8e6, `${f(deployAfterHairpinJ / 1e6, 2)} MJ from 7.5 to 8.1 km`);
+    out.forEach((o, i) => {
+      const name = i === 0 ? 'the first lap from the line' : 'the lap after';
+      check(`The car deploys out of the last corner (#180), ${name}`, o.hairpinJ > 0.8e6, `${f(o.hairpinJ / 1e6, 2)} MJ from 7.5 to 8.1 km`);
+      check(`... its recharge limit not spent before the last braking zone, ${name}`, Number.isNaN(o.limitAtM) || o.limitAtM > 7400,
+        Number.isNaN(o.limitAtM) ? 'not reached' : `reached at ${f(o.limitAtM, 0)} m`);
+      check(`... superclipping a few seconds, not whole straights, ${name}`, o.superclipS > 1 && o.superclipS < 10, `${f(o.superclipS)} s`);
+    });
     check('The lap\'s recharge never over 8.5 MJ (C5.2.10)', lapHarvestPeak <= 8.5e6 + 1, `${f(lapHarvestPeak / 1e6, 3)} MJ at most`);
-    check('Superclipping a few seconds a lap, not whole straights', superclipS > 1 && superclipS < 10, `${f(superclipS)} s on the third lap`);
     check('The store never runs empty under power', emptyFlatS < 0.05, `${f(emptyFlatS, 2)} s`);
-    void harvestJ;
   }
 }
 

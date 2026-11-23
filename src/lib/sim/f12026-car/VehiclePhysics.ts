@@ -1333,6 +1333,8 @@ export class VehiclePhysics {
   private readonly lapBrakeHarvestJ = new Float64Array(ERS_LAP_BINS);
   private readonly lastLapBrakeHarvestJ = new Float64Array(ERS_LAP_BINS);
   private lastLapBrakeKnown = false;
+  /** This lap began at the line, not at a placement part-way round: only such a lap's braking is a whole lap's */
+  private lapFromLine = false;
   /** The 2026 F1 rules' ERS-K control (`ERSData.regulations` 'f1-2026'), else null */
   private readonly ers2026: Ers2026Control | null;
   /** How much the engine sped up over the last step (rad/s), for the 2026 motor's torque */
@@ -1951,13 +1953,18 @@ export class VehiclePhysics {
     this.onEvent?.({ type: 'CHANGED_PERFORMANCE_MODE', mode });
   }
 
-  /** Reset the ERS per-lap deploy / harvest allowances (called automatically on a lap wrap) */
-  public resetLapEnergy(): void {
-    // A lap's braking harvest, for the next lap's superclipping to leave room for; not a part lap's (a reset, a grid)
-    if (this.ers2026 && this.lapDeployJ + this.lapHarvestJ > 0 && Number.isFinite(this.trackProgress)) {
+  /**
+   * Reset the ERS per-lap deploy / harvest allowances: `atLine` on a lap wrap (called automatically then), else a
+   * placement (a grid, a reset)
+   */
+  public resetLapEnergy(atLine = false): void {
+    // A whole lap's braking harvest, line to line, for the next lap's superclipping to leave room for; not a part lap's
+    // (the run from a flying start or a placement to the line)
+    if (this.ers2026 && atLine && this.lapFromLine) {
       this.lastLapBrakeHarvestJ.set(this.lapBrakeHarvestJ);
       this.lastLapBrakeKnown = true;
     }
+    this.lapFromLine = atLine;
     this.lapDeployJ = 0;
     this.lapHarvestJ = 0;
     this.lapBrakeHarvestJ.fill(0);
@@ -2062,6 +2069,8 @@ export class VehiclePhysics {
     this.sinceDownshiftS = Infinity;
     this.limiterTimer = 0;
     this.ers2026?.reset();
+    // A placement starts a part lap: its braking is no lap's record
+    this.lapFromLine = false;
     this.engineOmega = this.config.engine.idleRpm * RPM2RADS;
     this.turboBoostBar = 1.0;
     this.turboBoost = 0;
@@ -2780,7 +2789,7 @@ export class VehiclePhysics {
       p = this.locateProgress(this.position.x, this.position.z);
       const prev = this.trackProgress;
       if (Number.isFinite(prev) && Number.isFinite(p)) {
-        if (prev > 0.9 && p < 0.1) this.resetLapEnergy();
+        if (prev > 0.9 && p < 0.1) this.resetLapEnergy(true);
         // Detection points crossed going forward this step (a jump of more than 5 % of a lap is a teleport)
         let d = p - prev;
         if (d > 0.5) d -= 1;
