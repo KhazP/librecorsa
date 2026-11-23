@@ -1,7 +1,7 @@
 /**
  * One headless AI race with a stand-in for the player: a car in the player's slot that drives its own line on the
  * autopilot, blind to the AI around it (it never yields, tucks in or leaves room; it only keeps the "never closer than
- * it could stop" follow cap the game gives a player on autopilot). Every other racecraft check races AI against AI,
+ * it could stop" follow cap; `autopilotRacecraft` is pinned off for it, and the AI cars give it a player's room). Every other racecraft check races AI against AI,
  * and every AI car keeps the same rules, so a rule that only works when the other car cooperates never shows there.
  *
  * Stand-in profiles (what a human does that an AI car does not):
@@ -10,7 +10,8 @@
  *  - `early`: full speed on the straights, then brakes early and goes slowly through the corners (GT Sophy's lesson:
  *    an agent trained only against itself rear-ended humans who braked early)
  *  - `weave`: off its line, drifting across the road to a new offset every few seconds
- *  - `autopilot`: the game's own autopilot (P) as a player gets it, at the car's own autopilot pace (#187)
+ *  - `autopilot`: the game's own autopilot (P) as a player gets it, at the car's own autopilot pace, with the field's
+ *    racecraft as the arm's `autopilotRacecraft` says (#187)
  *
  * Contacts are judged by race control's own judge (`judgeContact`) at the moment they happen, and counted once per
  * pair per second, as the field counts them.
@@ -200,7 +201,9 @@ export function runStandInRace(o: StandInRaceOptions): StandInRaceResult {
     trackId: o.trackId,
     gridOrder: 'qualifying',
     playerGrid: o.playerGrid ?? 'middle',
-    racecraft: o.racecraft,
+    // (the other profiles stand in for a human, who keeps none of the field's rules: their autopilot stays blind whatever
+    // the arm says; only `autopilot` races as the game's autopilot does, by the arm's knobs)
+    racecraft: o.standIn === 'autopilot' ? o.racecraft : { ...o.racecraft, autopilotRacecraft: 0 },
     localPlanner: o.localPlanner,
   });
   field.raceLaps = o.laps;
