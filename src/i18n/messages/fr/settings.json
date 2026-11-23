@@ -46,6 +46,7 @@
       },
       "profile": {
         "driver": "Pilote",
+        "account": "Compte",
         "data": "Données"
       }
     },
@@ -622,7 +623,7 @@
       "clearButton": "Effacer",
       "clearTitle": "Effacer les données enregistrées ?",
       "clearConfirm": "Tout effacer",
-      "clearBody": "Supprime définitivement tous les paramètres, la clé de pilote, les tours, les fantômes et les réglages de ce navigateur, puis recharge la page."
+      "clearBody": "Supprime définitivement tous les paramètres, la clé de pilote, les tours, les fantômes et les réglages de ce navigateur, puis recharge la page. Un appareil connecté est d’abord déconnecté de son compte ; le compte et sa sauvegarde cloud restent."
     }
   },
   "hudPicker": {
@@ -634,5 +635,156 @@
     "descriptionSite": "{detail}. Par {author} · {site}",
     "sourceLink": "Source de {layout}, par {author} (s’ouvre dans un nouvel onglet)",
     "siteLink": "{site}, site de {author} (s’ouvre dans un nouvel onglet)"
+  },
+  "account": {
+    "checking": "Vérification de votre compte",
+    "unavailable": "Les comptes ne sont pas disponibles pour le moment. Réessayez plus tard.",
+    "deleted": "Le compte est supprimé.",
+    "deletedLaps": "Le compte et ses tours sont supprimés.",
+    "page": {
+      "intro": "Les comptes sont facultatifs. Un compte conserve vos noms de pilote et votre sauvegarde sur chaque appareil, et aucune adresse e-mail n’est collectée. Connectez-vous ici pour voir ce que contient votre compte ou pour le supprimer.",
+      "privacy": "Ce que stocke un compte figure sur la <link>page de confidentialité</link>."
+    },
+    "signedOut": {
+      "titlePage": "Connexion",
+      "title": "Compte",
+      "description": "Connectez-vous pour conserver vos noms de pilote et votre sauvegarde sur chaque appareil. Aucune adresse e-mail n’est collectée.",
+      "codeLabel": "Utiliser un code d’un autre appareil",
+      "codeHint": "Sur un appareil connecté, choisissez Afficher un code, puis saisissez-le ici",
+      "enterCode": "Saisir un code",
+      "signInWith": "Se connecter avec",
+      "oauthHint": "Ouvre leur page de connexion, puis revient ici",
+      "passkeyHint": "Une clé d’accès sur cet appareil, un téléphone ou une clé de sécurité",
+      "passkey": "Clé d’accès",
+      "createLabel": "Créer un compte avec une clé d’accès",
+      "createHint": "Aucune autre connexion nécessaire",
+      "create": "Créer",
+      "needsBrowserCode": "La connexion avec {providers} nécessite un navigateur. Connectez-vous sur librecorsa.org/account, choisissez Afficher un code et saisissez-le ici.",
+      "needsBrowser": "La connexion avec {providers} nécessite un navigateur."
+    },
+    "signedIn": {
+      "yourAccount": "Votre compte",
+      "signedInWith": "Connecté avec {ways}",
+      "combineLabel": "Sauvegardes à fusionner",
+      "combineHint": "Cet appareil et le compte ont chacun une sauvegarde",
+      "choose": "Choisir",
+      "save": "Sauvegarde",
+      "syncing": "Synchronisation en cours",
+      "synced": "Synchronisé {ago}",
+      "cloudWritten": "La sauvegarde cloud a été écrite {ago}",
+      "notSynced": "Pas encore synchronisé",
+      "syncNow": "Synchroniser",
+      "signOut": "Se déconnecter",
+      "signOutHint": "Cet appareil garde sa sauvegarde. Il publie de nouveau des tours sous vos noms dès que vous vous reconnectez",
+      "lastWay": "La dernière méthode de connexion ne peut pas être retirée. Supprimez plutôt le compte."
+    },
+    "names": {
+      "title": "Noms de pilote",
+      "description": "Tous les appareils de ce compte peuvent publier des tours sous ces noms. Ils restent à vous tant que le compte existe.",
+      "lastLap": "Dernier tour {ago}",
+      "noLaps": "Pas encore de tours",
+      "none": "Aucun nom de pilote pour l’instant. Le nom sous lequel vous publiez votre premier tour rejoint le compte.",
+      "elsewhere": "{count, plural, one {{names} est lié à un autre compte.} other {{names} sont liés à un autre compte.}} Pour fusionner les deux, ajoutez ci-dessous la méthode de connexion de ce compte."
+    },
+    "ways": {
+      "title": "Méthodes de connexion",
+      "description": "Seul l’identifiant du compte chez chacun est conservé : ni e-mail, ni nom d’utilisateur, ni photo.",
+      "added": "Ajouté le {date}",
+      "addedUsed": "Ajouté le {date}, utilisé {ago}",
+      "notAdded": "Non ajouté",
+      "remove": "Retirer",
+      "add": "Ajouter",
+      "passkeyName": "Clé d’accès ajoutée le {date}",
+      "used": "Utilisé {ago}",
+      "addPasskey": "Ajouter une clé d’accès",
+      "addPasskeyHint": "Se connecte avec le verrouillage d’écran de cet appareil, un téléphone ou une clé de sécurité",
+      "combinePasskey": "Fusionner avec un compte qui a une clé d’accès",
+      "combinePasskeyHint": "Ses noms, appareils et sa sauvegarde rejoignent ce compte",
+      "usePasskey": "Utiliser la clé",
+      "desktopOthers": "D’autres méthodes de connexion peuvent être ajoutées sur librecorsa.org/account dans un navigateur."
+    },
+    "devices": {
+      "title": "Appareils",
+      "description": "Les navigateurs et applications connectés à ce compte.",
+      "thisBrowser": "Ce navigateur",
+      "notJoined": "Un appareil qui n’a pas encore rejoint le compte",
+      "thisDevice": "Cet appareil",
+      "seen": "Connecté le {date}, vu {ago}",
+      "signOut": "Se déconnecter"
+    },
+    "keys": {
+      "title": "Clés de pilote",
+      "description": "Chaque appareil signe ses tours avec sa propre clé de pilote. Chaque clé listée ici peut publier sous les noms du compte.",
+      "fallback": "Clé de pilote {id}",
+      "added": "Ajoutée le {date}",
+      "addedLap": "Ajoutée le {date}, dernier tour {ago}",
+      "none": "Aucune clé de pilote pour l’instant. Un appareil ajoute sa clé quand il rejoint le compte."
+    },
+    "remove": {
+      "identityTitle": "Retirer la connexion {provider} ?",
+      "identityBody": "{provider} ne permet plus de se connecter à ce compte. Vous pourrez l’ajouter de nouveau plus tard.",
+      "passkeyTitle": "Retirer cette clé d’accès ?",
+      "passkeyBody": "Elle ne permet plus de se connecter à ce compte. Vous pouvez aussi la supprimer de l’appareil ou du gestionnaire de mots de passe qui la conserve.",
+      "keyTitle": "Retirer cette clé de pilote ?",
+      "keyBody": "Les tours de {label} ne sont plus publiés sous les noms du compte. Ceux déjà dans les classements y restent.",
+      "confirm": "Retirer"
+    },
+    "delete": {
+      "title": "Supprimer le compte",
+      "label": "Supprimer ce compte",
+      "hint": "Supprime ses méthodes de connexion et sa sauvegarde cloud. Vous choisissez si vos tours restent",
+      "button": "Supprimer",
+      "question": "Supprimer ce compte ?",
+      "confirm": "Supprimer le compte",
+      "body": "Cela supprime le compte, ses méthodes de connexion et sa sauvegarde cloud. Ce qui est enregistré sur cet appareil reste.",
+      "lapsGo": "Vos noms de pilote quittent les classements avec leurs tours, résultats de course et badges, et redeviennent libres pour tout le monde.",
+      "lapsStay": "Vos noms de pilote et vos tours restent dans les classements. Sans compte, un nom expire après six mois sans tour.",
+      "tick": "Retirer aussi mes tours et résultats de course des classements"
+    },
+    "join": {
+      "notNow": "Pas maintenant",
+      "join": "Rejoindre",
+      "joining": "Connexion en cours… La sauvegarde de cet appareil se synchronise avec le compte. Cela peut prendre un moment.",
+      "body": "Les noms de pilote et la sauvegarde de cet appareil font partie de ce compte. Plus tard déconnecte cet appareil.",
+      "codeBody": "Les noms de pilote et la sauvegarde de cet appareil font partie de ce compte."
+    },
+    "firstSync": {
+      "title": "Fusionner les deux sauvegardes ?",
+      "combine": "Fusionner",
+      "useCloud": "Utiliser la sauvegarde cloud",
+      "keepLocal": "Garder celle de cet appareil",
+      "notNow": "Pas maintenant",
+      "intro": "Cet appareil et le compte ont chacun une sauvegarde.",
+      "thisDevice": "Cet appareil",
+      "cloud": "Sauvegarde cloud",
+      "bestLaps": "{count, plural, one {<n>#</n> meilleur tour} other {<n>#</n> meilleurs tours}}",
+      "setups": "{count, plural, one {<n>#</n> réglage enregistré} other {<n>#</n> réglages enregistrés}}",
+      "races": "{count, plural, one {<n>#</n> course} other {<n>#</n> courses}}",
+      "savedAgoOn": "Sauvegardé {ago} sur {device}",
+      "savedAgo": "Sauvegardé {ago}",
+      "savedOn": "Sauvegardé sur {device}",
+      "combineExplain": "<b>Fusionner.</b> Garde les deux. Quand les deux ont modifié la même chose, la modification la plus récente l’emporte.",
+      "cloudExplain": "<b>Utiliser la sauvegarde cloud.</b> Cet appareil reprend les paramètres, réglages et l’historique de courses du compte. Les siens sont remplacés.",
+      "localExplain": "<b>Garder celle de cet appareil.</b> Le compte reprend les paramètres, réglages et l’historique de courses de cet appareil. Les autres appareils les récupèrent à leur prochain lancement.",
+      "bestLapsKept": "Les meilleurs tours des deux sont toujours conservés."
+    },
+    "code": {
+      "title": "Utiliser un code d’un autre appareil",
+      "how": "Sur un appareil connecté, ouvrez Paramètres, puis Profil et données, puis Compte, et choisissez Afficher un code.",
+      "label": "Code",
+      "continue": "Continuer",
+      "format": "Un code comporte 8 lettres et chiffres, comme ABCD-EFGH"
+    },
+    "showCode": {
+      "label": "Afficher un code pour un autre appareil",
+      "hint": "Connecte un autre appareil à ce compte, comme l’application de bureau",
+      "hide": "Masquer",
+      "new": "Nouveau code",
+      "show": "Afficher un code",
+      "aria": "Code {code}",
+      "left": "{minutes, plural, =0 {Moins d’une minute restante. Utilisable une seule fois.} one {# minute restante. Utilisable une seule fois.} other {# minutes restantes. Utilisable une seule fois.}}",
+      "expired": "Ce code a expiré. Choisissez Nouveau code pour en obtenir un autre.",
+      "how": "Sur l’autre appareil, ouvrez Paramètres, puis Profil et données, puis Compte. Choisissez Utiliser un code d’un autre appareil et saisissez ce code."
+    }
   }
 }

@@ -29,6 +29,8 @@ import { ControllerTab, DeviceTab, KeyboardTab, TouchTab, WheelTab } from "./pan
 import { CameraTab, GraphicsTab, HudTab, InterfaceTab } from "./panes/DisplayPane";
 import { AudioPane } from "./panes/AudioPane";
 import { DataTab, DriverTab } from "./panes/ProfilePane";
+import { AccountPanel } from "@/components/account/AccountPanel";
+import { accountActions, useAccountState } from "@/lib/account/account-store";
 import { ForceFeedbackSetup } from "@/components/menu/steps/WheelStep";
 
 export type SettingsCategory = "driving" | "controls" | "ffb" | "display" | "audio" | "profile";
@@ -38,6 +40,8 @@ interface TabDef {
   label: string;
   /** Every row on it is advanced: Simple shows one line and the switch instead */
   advancedOnly?: string;
+  /** Shown only while accounts are on (src/lib/account): with them off, nothing about accounts appears */
+  accounts?: boolean;
   render: () => React.ReactNode;
 }
 
@@ -108,6 +112,7 @@ const CATEGORIES: readonly CategoryDef[] = [
     icon: "profile",
     tabs: [
       { id: "driver", get label() { return t("settings.screen.tabs.profile.driver"); }, render: () => <DriverTab /> },
+      { id: "account", get label() { return t("settings.screen.tabs.profile.account"); }, accounts: true, render: () => <AccountPanel where="settings" /> },
       { id: "data", get label() { return t("settings.screen.tabs.profile.data"); }, render: () => <DataTab /> },
     ],
   },
@@ -140,12 +145,16 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
   // Also what draws the screen again in a new language (the category and tab names are read from the messages)
   const tx = useTranslations("settings.screen");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // Closing Settings is a save point: what changed here goes to the account's cloud save shortly after
+  useEffect(() => () => accountActions.pushSoon(), []);
   const paneId = useId();
   const [category, setCategory] = useState<SettingsCategory>(initialCategory);
   const [tabFor, setTabFor] = useState<Partial<Record<SettingsCategory, string>>>(() =>
     initialTab ? { [initialCategory]: initialTab } : {},
   );
-  const cat = CATEGORIES.find((c) => c.id === category) ?? CATEGORIES[0];
+  const accountsOn = useAccountState().phase !== "off";
+  const found = CATEGORIES.find((c) => c.id === category) ?? CATEGORIES[0];
+  const cat = { ...found, tabs: found.tabs.filter((t) => !t.accounts || accountsOn) };
   const tab = cat.tabs.find((t) => t.id === tabFor[category]) ?? cat.tabs[0];
   const hasTabs = cat.tabs.length > 1;
   const detail = env.settings.ui.detail;

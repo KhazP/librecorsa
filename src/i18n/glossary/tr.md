@@ -131,3 +131,20 @@
 | physics / physics version | fizik / fizik sürümü | |
 | post (a lap) / upload | gönder / yükle | Tur tablosuna gönderme: `gönder` |
 | Lap times | Tur zamanları | Tur zamanları ekranı |
+
+## Accounts
+
+| English | Türkçe | note |
+|---|---|---|
+| account | hesap | |
+| sign in / sign out | giriş yap / çıkış yap | Düğmede kısa hali |
+| way to sign in | giriş yöntemi | Discord, Google, Steam, geçiş anahtarı |
+| passkey | geçiş anahtarı | Google ve Apple'ın Türkçe terimi |
+| code (one-time) | kod / tek kullanımlık kod | Başka bir cihazı hesaba bağlayan kod |
+| cloud save | bulut kaydı | |
+| save (the game's) | kayıt | |
+| sync | senkronize et | |
+| device | cihaz | |
+| join an account | hesaba katıl | |
+| combine saves | kayıtları birleştir | |
+| driver key | pilot anahtarı | Mevcut terim |

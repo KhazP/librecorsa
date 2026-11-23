@@ -334,6 +334,10 @@
     "classicDetail": "Các bảng góc màn hình nguyên bản",
     "minimal": "Tối giản",
     "minimalDetail": "Chỉ hiển thị tốc độ, cấp số và vòng đua",
+    "touring": "GT-Like",
+    "touringDetail": "Đồng hồ vòng ở giữa, hai đồng hồ tròn, danh sách vòng, lốp",
+    "formula": "F1-Like",
+    "formulaDetail": "Bảng thứ hạng, thẻ thời gian, đồng hồ năng lượng, tình trạng xe",
     "irdashiesDetail": "Bảng xếp hạng, đồng hồ vòng, thao tác lái và đèn chuyển số",
     "racevisionDetail": "Bảng xếp hạng, xe lân cận, thanh thao tác và biểu đồ",
     "h2hDetail": "Các xe phía trước và phía sau, khoảng cách và delta vòng",
@@ -873,5 +877,72 @@
   },
   "dash": {
     "yellowFlag": "Cờ vàng"
+  },
+  "account": {
+    "checking": "Đang kiểm tra tài khoản của bạn",
+    "passkey": "Khóa truy cập",
+    "aPasskey": "khóa truy cập",
+    "justNow": "vừa xong",
+    "join": {
+      "named": "Tham gia tài khoản của {name} ({ways})?",
+      "namedOnly": "Tham gia tài khoản của {name}?",
+      "this": "Tham gia tài khoản này ({ways})?",
+      "thisOnly": "Tham gia tài khoản này?"
+    },
+    "notices": {
+      "signedIn": "Bạn đã đăng nhập.",
+      "created": "Tài khoản của bạn đã sẵn sàng và bạn đã đăng nhập.",
+      "linked": "Cách đăng nhập đó đã được thêm vào tài khoản của bạn.",
+      "merged": "Hai tài khoản đã được gộp làm một. Các bản lưu sẽ được gộp ở lần đồng bộ tiếp theo.",
+      "alreadyLinked": "Cách đăng nhập đó đã có sẵn trong tài khoản của bạn.",
+      "cancelled": "Đã hủy đăng nhập. Không có gì thay đổi.",
+      "failed": "Đăng nhập không thành công. Hãy thử lại sau giây lát.",
+      "deleted": "Tài khoản của bạn đã bị xóa.",
+      "deletedLaps": "Tài khoản của bạn đã bị xóa. {count, plural, other {# vòng đã bị gỡ}} khỏi bảng xếp hạng."
+    },
+    "errors": {
+      "notReady": "Tài khoản chưa khả dụng",
+      "keyElsewhere": "Khóa tay đua của thiết bị này đang ở trong một tài khoản khác. Hãy đăng nhập tài khoản đó tại đây để gộp hai tài khoản.",
+      "noPasskeys": "Trình duyệt này không dùng được khóa truy cập.",
+      "passkeyNotUsed": "Khóa truy cập chưa được sử dụng.",
+      "passkeyKnown": "Khóa truy cập này đã thuộc về một tài khoản.",
+      "passkeyFailed": "Khóa truy cập không hoạt động. Hãy thử lại.",
+      "deferred": "Đã đồng bộ. Thay đổi từ các thiết bị khác sẽ được tải ở lần mở game tiếp theo.",
+      "firstDeferred": "Đã đồng bộ. Bản lưu của tài khoản sẽ được tải ở lần mở game tiếp theo.",
+      "chooseFirst": "Hãy chọn nội dung giữ lại trước.",
+      "noStorage": "Trình duyệt này không cho game lưu dữ liệu nên không thể đồng bộ.",
+      "newerSave": "Bản lưu đám mây của bạn được tạo bởi phiên bản game mới hơn. Hãy tải lại trang để cập nhật.",
+      "tooBig": "Bản lưu của bạn quá lớn để đồng bộ.",
+      "busy": "Một thiết bị khác đang lưu cùng lúc. Game sẽ thử lại ngay.",
+      "unreachable": "Không kết nối được máy chủ. Hãy kiểm tra kết nối và thử lại.",
+      "signedOut": "Bạn đã đăng xuất trên thiết bị này.",
+      "serverProblem": "Máy chủ gặp sự cố. Hãy thử lại sau giây lát.",
+      "tooMany": "Thử quá nhiều lần. Hãy đợi một phút rồi thử lại.",
+      "unavailable": "Tài khoản hiện chưa khả dụng.",
+      "badCode": "Mã gồm 8 chữ cái và chữ số, ví dụ ABCD-EFGH."
+    },
+    "server": {
+      "signInFirst": "Hãy đăng nhập trước",
+      "missingKey": "Thiếu khóa tay đua. Hãy tải lại game và thử lại",
+      "deviceSignedOut": "Thiết bị đó đã đăng xuất rồi",
+      "keyNotHere": "Khóa tay đua đó không có trong tài khoản này",
+      "passkeyNotHere": "Khóa truy cập đó không có trong tài khoản này",
+      "signInNotHere": "Cách đăng nhập đó không có trong tài khoản này",
+      "lastWayIn": "Đây là cách đăng nhập cuối cùng của tài khoản. Hãy thêm một cách khác trước, hoặc xóa tài khoản",
+      "noCode": "Không tạo được mã. Hãy thử lại",
+      "wrongCode": "Mã sai hoặc đã hết hạn. Hãy hiện mã mới trên thiết bị kia",
+      "codeFormat": "Mã gồm 8 chữ cái và chữ số, ví dụ ABCD-EFGH",
+      "tooManyTries": "Thử quá nhiều lần, hãy đợi một phút",
+      "tooManySyncs": "Đồng bộ quá nhiều lần, hãy đợi một phút",
+      "serverProblem": "Máy chủ tài khoản gặp sự cố. Hãy thử lại sau giây lát",
+      "signOutFirst": "Hãy đăng xuất trước khi tạo tài khoản mới",
+      "tookTooLong": "Quá thời gian chờ. Hãy thử lại",
+      "passkeyTaken": "Khóa truy cập này đã thuộc về một tài khoản",
+      "passkeyUnknown": "Khóa truy cập này không thuộc tài khoản nào ở đây. Hãy đăng nhập bằng cách khác, hoặc tạo tài khoản với khóa này",
+      "passkeyUnchecked": "Không xác minh được khóa truy cập. Hãy thử lại",
+      "saveTooLarge": "Bản lưu lớn hơn 1 MB",
+      "saveChanged": "Bản lưu đám mây đã bị thay đổi trên thiết bị khác",
+      "tooManyLaps": "Đám mây lưu tối đa {count} vòng tốt nhất"
+    }
   }
 }

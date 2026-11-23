@@ -130,3 +130,22 @@
 | physics / physics version | 物理／物理版本 | |
 | post / upload | 發佈／上傳 | 將單圈發佈至圈速榜用「發佈」或「提交」 |
 | Lap times (screen) | 圈速紀錄 | 列表畫面名稱 |
+
+## Accounts
+
+| English | 繁體中文 | 備註 |
+|---|---|---|
+| account | 帳號 | |
+| sign in / sign out | 登入／登出 | |
+| passkey | 通行密鑰 | Apple 台港通用詞；與「車手金鑰」區隔 |
+| driver key | 車手金鑰 | 沿用既有詞 |
+| code / one-time code | 代碼／一次性代碼 | 按鈕用「顯示代碼」「新代碼」 |
+| cloud save | 雲端存檔 | |
+| save | 存檔 | |
+| sync | 同步 | |
+| device | 裝置 | |
+| join an account | 加入帳號 | |
+| combine saves | 合併存檔 | |
+| driver name | 車手名稱 | |
+| ways to sign in | 登入方式 | |
+| Not now | 稍後再說 | |

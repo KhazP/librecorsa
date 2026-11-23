@@ -334,6 +334,10 @@
     "classicDetail": "Die ursprünglichen Eckpanels",
     "minimal": "Minimal",
     "minimalDetail": "Nur Tempo, Gang und Runde",
+    "touring": "GT-Like",
+    "touringDetail": "Zentrale Rundenuhr, zwei Rundinstrumente, Rundenliste, Reifen",
+    "formula": "F1-Like",
+    "formulaDetail": "Rennturm, Zeitenfelder, Energieanzeige, Autostatus",
     "irdashiesDetail": "Wertung, Rundentimer, Eingaben und Schaltlichter",
     "racevisionDetail": "Wertung, Relativ, Eingabeanzeige und Graph",
     "h2hDetail": "Die Autos davor und dahinter, Abstände und Rundendeltas",
@@ -873,5 +877,72 @@
   },
   "dash": {
     "yellowFlag": "Gelbe Flagge"
+  },
+  "account": {
+    "checking": "Dein Konto wird geprüft",
+    "passkey": "Passkey",
+    "aPasskey": "einem Passkey",
+    "justNow": "gerade eben",
+    "join": {
+      "named": "Dem Konto von {name} beitreten ({ways})?",
+      "namedOnly": "Dem Konto von {name} beitreten?",
+      "this": "Diesem Konto beitreten ({ways})?",
+      "thisOnly": "Diesem Konto beitreten?"
+    },
+    "notices": {
+      "signedIn": "Du bist angemeldet.",
+      "created": "Dein Konto ist bereit, und du bist angemeldet.",
+      "linked": "Diese Anmeldung gehört jetzt zu deinem Konto.",
+      "merged": "Die beiden Konten sind jetzt eins. Ihre Spielstände werden bei der nächsten Synchronisierung zusammengeführt.",
+      "alreadyLinked": "Diese Anmeldung gehörte schon zu deinem Konto.",
+      "cancelled": "Anmeldung abgebrochen. Nichts wurde geändert.",
+      "failed": "Die Anmeldung hat nicht geklappt. Versuch es gleich noch einmal.",
+      "deleted": "Dein Konto wurde gelöscht.",
+      "deletedLaps": "Dein Konto wurde gelöscht. {count, plural, one {# Runde wurde} other {# Runden wurden}} aus den Bestenlisten entfernt."
+    },
+    "errors": {
+      "notReady": "Konten sind noch nicht verfügbar",
+      "keyElsewhere": "Der Fahrerschlüssel dieses Geräts gehört zu einem anderen Konto. Melde dich auch hier bei diesem Konto an, um die beiden zusammenzuführen.",
+      "noPasskeys": "Dieser Browser unterstützt keine Passkeys.",
+      "passkeyNotUsed": "Der Passkey wurde nicht verwendet.",
+      "passkeyKnown": "Dieser Passkey gehört schon zu einem Konto.",
+      "passkeyFailed": "Der Passkey hat nicht funktioniert. Versuch es noch einmal.",
+      "deferred": "Synchronisiert. Änderungen deiner anderen Geräte werden beim nächsten Start des Spiels geladen.",
+      "firstDeferred": "Synchronisiert. Der Spielstand des Kontos wird beim nächsten Start des Spiels geladen.",
+      "chooseFirst": "Wähle zuerst, was behalten werden soll.",
+      "noStorage": "Dieser Browser lässt keinen Spielstand zu, daher ist keine Synchronisierung möglich.",
+      "newerSave": "Dein Cloud-Spielstand stammt von einer neueren Version des Spiels. Lade die Seite neu, um zu aktualisieren.",
+      "tooBig": "Dein Spielstand ist zu groß für die Synchronisierung.",
+      "busy": "Ein anderes Gerät hat gleichzeitig gespeichert. Das Spiel versucht es gleich noch einmal.",
+      "unreachable": "Der Server ist nicht erreichbar. Prüfe die Verbindung und versuch es noch einmal.",
+      "signedOut": "Du bist auf diesem Gerät abgemeldet.",
+      "serverProblem": "Auf dem Server ist ein Fehler aufgetreten. Versuch es gleich noch einmal.",
+      "tooMany": "Zu viele Versuche. Warte eine Minute und versuch es noch einmal.",
+      "unavailable": "Konten sind gerade nicht verfügbar.",
+      "badCode": "Ein Code besteht aus 8 Buchstaben und Ziffern, zum Beispiel ABCD-EFGH."
+    },
+    "server": {
+      "signInFirst": "Melde dich zuerst an",
+      "missingKey": "Fahrerschlüssel fehlt. Lade das Spiel neu und versuch es noch einmal",
+      "deviceSignedOut": "Dieses Gerät ist bereits abgemeldet",
+      "keyNotHere": "Dieser Fahrerschlüssel gehört nicht zu diesem Konto",
+      "passkeyNotHere": "Dieser Passkey gehört nicht zu diesem Konto",
+      "signInNotHere": "Diese Anmeldung gehört nicht zu diesem Konto",
+      "lastWayIn": "Das ist die letzte Anmeldemöglichkeit für dein Konto. Füge zuerst eine weitere hinzu oder lösche das Konto",
+      "noCode": "Es konnte kein Code erstellt werden. Versuch es noch einmal",
+      "wrongCode": "Dieser Code ist falsch oder abgelaufen. Lass dir auf dem anderen Gerät einen neuen anzeigen",
+      "codeFormat": "Ein Code besteht aus 8 Buchstaben und Ziffern, zum Beispiel ABCD-EFGH",
+      "tooManyTries": "Zu viele Versuche, warte eine Minute",
+      "tooManySyncs": "Zu viele Synchronisierungen, warte eine Minute",
+      "serverProblem": "Auf dem Kontoserver ist ein Fehler aufgetreten. Versuch es gleich noch einmal",
+      "signOutFirst": "Melde dich ab, bevor du ein neues Konto erstellst",
+      "tookTooLong": "Das hat zu lange gedauert. Versuch es noch einmal",
+      "passkeyTaken": "Dieser Passkey gehört schon zu einem Konto",
+      "passkeyUnknown": "Dieser Passkey gehört hier zu keinem Konto. Melde dich anders an oder erstelle damit ein Konto",
+      "passkeyUnchecked": "Der Passkey konnte nicht überprüft werden. Versuch es noch einmal",
+      "saveTooLarge": "Der Spielstand ist größer als 1 MB",
+      "saveChanged": "Der Cloud-Spielstand wurde auf einem anderen Gerät geändert",
+      "tooManyLaps": "Die Cloud speichert bis zu {count} beste Runden"
+    }
   }
 }

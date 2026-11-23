@@ -131,3 +131,19 @@
 | physics / physics version | الفيزياء / إصدار الفيزياء | |
 | post / upload | نشر / رفع | Post a lap to the board / upload |
 | Lap times | أزمنة اللفات | Screen listing lap times |
+
+## Accounts
+
+| English | Arabic | Note |
+|---|---|---|
+| account | الحساب | |
+| sign in / sign out | تسجيل الدخول / تسجيل الخروج | as in Google, Apple, Microsoft |
+| passkey | مفتاح المرور | as in Google and Apple Arabic |
+| code / one-time code | رمز / رمز يعمل مرة واحدة | Show a code: عرض رمز |
+| cloud save | الحفظ السحابي | |
+| sync | مزامنة | verb form: تمت المزامنة |
+| device | جهاز | |
+| join an account | الانضمام إلى حساب | button: انضمام |
+| combine saves | دمج الحفظين | |
+| driver key | مفتاح السائق | existing term |
+| driver names | أسماء السائق | |

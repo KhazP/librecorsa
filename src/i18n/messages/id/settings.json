@@ -46,6 +46,7 @@
       },
       "profile": {
         "driver": "Pembalap",
+        "account": "Akun",
         "data": "Data"
       }
     },
@@ -622,7 +623,7 @@
       "clearButton": "Hapus",
       "clearTitle": "Hapus data tersimpan?",
       "clearConfirm": "Hapus semuanya",
-      "clearBody": "Menghapus secara permanen semua pengaturan, kunci pembalap, lap, ghost, dan setup dari browser ini, lalu memuat ulang."
+      "clearBody": "Menghapus secara permanen semua pengaturan, kunci pembalap, lap, ghost, dan setup dari browser ini, lalu memuat ulang. Perangkat yang sudah masuk dikeluarkan dari akunnya lebih dulu; akun dan simpanan cloud-nya tetap ada."
     }
   },
   "hudPicker": {
@@ -634,5 +635,156 @@
     "descriptionSite": "{detail}. Oleh {author} · {site}",
     "sourceLink": "Sumber {layout}, oleh {author} (dibuka di tab baru)",
     "siteLink": "{site}, situs {author} (dibuka di tab baru)"
+  },
+  "account": {
+    "checking": "Memeriksa akunmu",
+    "unavailable": "Akun sedang tidak tersedia. Coba lagi nanti.",
+    "deleted": "Akun sudah dihapus.",
+    "deletedLaps": "Akun beserta lap-nya sudah dihapus.",
+    "page": {
+      "intro": "Akun bersifat opsional. Akun menyimpan nama pembalap dan simpananmu di semua perangkat, tanpa mengumpulkan email. Masuk di sini untuk melihat isi akunmu, atau untuk menghapusnya.",
+      "privacy": "Data yang disimpan akun ada di <link>halaman privasi</link>."
+    },
+    "signedOut": {
+      "titlePage": "Masuk",
+      "title": "Akun",
+      "description": "Masuk untuk menyimpan nama pembalap dan simpananmu di semua perangkat. Tanpa mengumpulkan email.",
+      "codeLabel": "Pakai kode dari perangkat lain",
+      "codeHint": "Di perangkat yang sudah masuk, pilih Tampilkan kode, lalu ketik di sini",
+      "enterCode": "Masukkan kode",
+      "signInWith": "Masuk dengan",
+      "oauthHint": "Membuka halaman masuk mereka, lalu kembali ke sini",
+      "passkeyHint": "Passkey di perangkat ini, ponsel, atau kunci keamanan",
+      "passkey": "Passkey",
+      "createLabel": "Buat akun dengan passkey",
+      "createHint": "Tanpa cara masuk lain",
+      "create": "Buat",
+      "needsBrowserCode": "Masuk dengan {providers} membutuhkan browser. Masuk di librecorsa.org/account, pilih Tampilkan kode, lalu ketik di sini.",
+      "needsBrowser": "Masuk dengan {providers} membutuhkan browser."
+    },
+    "signedIn": {
+      "yourAccount": "Akunmu",
+      "signedInWith": "Masuk dengan {ways}",
+      "combineLabel": "Simpanan yang perlu digabungkan",
+      "combineHint": "Perangkat ini dan akun sama-sama punya simpanan",
+      "choose": "Pilih",
+      "save": "Simpanan",
+      "syncing": "Sedang menyinkronkan",
+      "synced": "Tersinkron {ago}",
+      "cloudWritten": "Simpanan cloud ditulis {ago}",
+      "notSynced": "Belum tersinkron",
+      "syncNow": "Sinkronkan",
+      "signOut": "Keluar",
+      "signOutHint": "Perangkat ini tetap menyimpan datanya. Lap dikirim lagi dengan namamu setelah kamu masuk",
+      "lastWay": "Cara masuk terakhir tidak bisa dihapus. Hapus akunnya saja."
+    },
+    "names": {
+      "title": "Nama pembalap",
+      "description": "Setiap perangkat di akun ini bisa mengirim lap dengan nama-nama ini. Nama tetap milikmu selama akun ada.",
+      "lastLap": "Lap terakhir {ago}",
+      "noLaps": "Belum ada lap",
+      "none": "Belum ada nama pembalap. Nama yang kamu pakai untuk mengirim lap pertamamu akan masuk ke akun.",
+      "elsewhere": "{count, plural, other {{names} ada di akun lain.}} Untuk menggabungkan keduanya, tambahkan cara masuk akun itu di bawah."
+    },
+    "ways": {
+      "title": "Cara masuk",
+      "description": "Hanya id akun di masing-masing layanan yang disimpan: tanpa email, nama pengguna, atau foto.",
+      "added": "Ditambahkan {date}",
+      "addedUsed": "Ditambahkan {date}, dipakai {ago}",
+      "notAdded": "Belum ditambahkan",
+      "remove": "Hapus",
+      "add": "Tambah",
+      "passkeyName": "Passkey ditambahkan {date}",
+      "used": "Dipakai {ago}",
+      "addPasskey": "Tambah passkey",
+      "addPasskeyHint": "Masuk dengan kunci layar perangkat ini, ponsel, atau kunci keamanan",
+      "combinePasskey": "Gabungkan dengan akun yang punya passkey",
+      "combinePasskeyHint": "Nama, perangkat, dan simpanannya masuk ke akun ini",
+      "usePasskey": "Pakai passkey",
+      "desktopOthers": "Cara masuk lain bisa ditambahkan di librecorsa.org/account lewat browser."
+    },
+    "devices": {
+      "title": "Perangkat",
+      "description": "Browser dan aplikasi yang masuk ke akun ini.",
+      "thisBrowser": "Browser ini",
+      "notJoined": "Perangkat yang belum bergabung",
+      "thisDevice": "Perangkat ini",
+      "seen": "Masuk {date}, terakhir terlihat {ago}",
+      "signOut": "Keluar"
+    },
+    "keys": {
+      "title": "Kunci pembalap",
+      "description": "Setiap perangkat menandatangani lap-nya dengan kunci pembalapnya sendiri. Semua kunci di sini boleh mengirim dengan nama-nama akun.",
+      "fallback": "Kunci pembalap {id}",
+      "added": "Ditambahkan {date}",
+      "addedLap": "Ditambahkan {date}, lap terakhir {ago}",
+      "none": "Belum ada kunci pembalap. Perangkat menambahkan kuncinya saat bergabung ke akun."
+    },
+    "remove": {
+      "identityTitle": "Hapus cara masuk {provider}?",
+      "identityBody": "{provider} tidak lagi bisa dipakai masuk ke akun ini. Kamu bisa menambahkannya lagi nanti.",
+      "passkeyTitle": "Hapus passkey ini?",
+      "passkeyBody": "Passkey ini tidak lagi bisa dipakai masuk ke akun ini. Kamu juga bisa menghapusnya dari perangkat atau pengelola sandi yang menyimpannya.",
+      "keyTitle": "Hapus kunci pembalap ini?",
+      "keyBody": "Lap dari {label} tidak lagi dikirim dengan nama-nama akun. Lap-nya yang sudah ada di papan tetap di sana.",
+      "confirm": "Hapus"
+    },
+    "delete": {
+      "title": "Hapus akun",
+      "label": "Hapus akun ini",
+      "hint": "Menghapus cara masuk dan simpanan cloud-nya. Kamu yang memilih apakah lap-mu tetap ada",
+      "button": "Hapus",
+      "question": "Hapus akun ini?",
+      "confirm": "Hapus akun",
+      "body": "Ini menghapus akun, cara masuknya, dan simpanan cloud-nya. Data yang tersimpan di perangkat ini tetap ada.",
+      "lapsGo": "Nama pembalapmu dihapus dari papan beserta lap, hasil balapan, dan lencananya, lalu bebas dipakai siapa pun.",
+      "lapsStay": "Nama pembalap dan lap-mu tetap ada di papan. Tanpa akun, sebuah nama kedaluwarsa setelah enam bulan tanpa lap.",
+      "tick": "Hapus juga lap dan hasil balapanku dari papan"
+    },
+    "join": {
+      "notNow": "Nanti saja",
+      "join": "Gabung",
+      "joining": "Bergabung… Simpanan perangkat ini sedang disinkronkan dengan akun. Mungkin perlu waktu sebentar.",
+      "body": "Nama pembalap dan simpanan perangkat ini menjadi bagian dari akun itu. Nanti saja akan mengeluarkan perangkat ini.",
+      "codeBody": "Nama pembalap dan simpanan perangkat ini menjadi bagian dari akun itu."
+    },
+    "firstSync": {
+      "title": "Gabungkan kedua simpanan?",
+      "combine": "Gabungkan",
+      "useCloud": "Pakai simpanan cloud",
+      "keepLocal": "Pertahankan simpanan perangkat ini",
+      "notNow": "Nanti saja",
+      "intro": "Perangkat ini dan akun sama-sama punya simpanan.",
+      "thisDevice": "Perangkat ini",
+      "cloud": "Simpanan cloud",
+      "bestLaps": "{count, plural, other {<n>#</n> lap terbaik}}",
+      "setups": "{count, plural, other {<n>#</n> setup tersimpan}}",
+      "races": "{count, plural, other {<n>#</n> balapan}}",
+      "savedAgoOn": "Disimpan {ago} di {device}",
+      "savedAgo": "Disimpan {ago}",
+      "savedOn": "Disimpan di {device}",
+      "combineExplain": "<b>Gabungkan.</b> Keduanya dipertahankan. Jika keduanya mengubah hal yang sama, perubahan yang lebih baru yang dipakai.",
+      "cloudExplain": "<b>Pakai simpanan cloud.</b> Perangkat ini memakai pengaturan, setup, dan riwayat balapan akun. Milik perangkat ini diganti.",
+      "localExplain": "<b>Pertahankan simpanan perangkat ini.</b> Akun memakai pengaturan, setup, dan riwayat balapan perangkat ini. Perangkat lain mendapatkannya saat dimulai berikutnya.",
+      "bestLapsKept": "Lap terbaik dari keduanya selalu dipertahankan."
+    },
+    "code": {
+      "title": "Pakai kode dari perangkat lain",
+      "how": "Di perangkat yang sudah masuk, buka Pengaturan, lalu Profil dan data, lalu Akun, dan pilih Tampilkan kode.",
+      "label": "Kode",
+      "continue": "Lanjutkan",
+      "format": "Kode terdiri dari 8 huruf dan angka, seperti ABCD-EFGH"
+    },
+    "showCode": {
+      "label": "Tampilkan kode untuk perangkat lain",
+      "hint": "Memasukkan perangkat lain ke akun ini, misalnya aplikasi desktop",
+      "hide": "Sembunyikan",
+      "new": "Kode baru",
+      "show": "Tampilkan kode",
+      "aria": "Kode {code}",
+      "left": "{minutes, plural, =0 {Kurang dari semenit lagi. Hanya bisa dipakai sekali.} other {# menit lagi. Hanya bisa dipakai sekali.}}",
+      "expired": "Kode ini sudah kedaluwarsa. Pilih Kode baru untuk membuat yang lain.",
+      "how": "Di perangkat satunya, buka Pengaturan, lalu Profil dan data, lalu Akun. Pilih Pakai kode dari perangkat lain dan ketik kode ini."
+    }
   }
 }

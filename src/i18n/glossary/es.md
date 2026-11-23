@@ -188,3 +188,19 @@
 | post | publicar | Lap to the online board |
 | upload | subir | |
 | Lap times | Tiempos de vuelta | |
+
+## Accounts
+| English | Spanish | Note |
+|---|---|---|
+| account | cuenta | |
+| sign in | iniciar sesión | "Sesión iniciada con {ways}" for the state |
+| sign out | cerrar sesión | |
+| sign-in method | método de inicio de sesión | Short form "forma de iniciar sesión" in headings |
+| passkey | passkey | Kept in English, as Google/Apple/Microsoft do in Spanish; feminine: "una passkey" |
+| one-time code | código | "Mostrar un código" / "Usar un código de otro dispositivo" |
+| cloud save | datos en la nube | "datos guardados" for the save itself |
+| sync | sincronizar | |
+| device | dispositivo | |
+| join an account | unirse a una cuenta | |
+| combine saves | combinar | |
+| driver key | clave de piloto | Existing term |
