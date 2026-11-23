@@ -147,3 +147,30 @@
 | join an account | tham gia tài khoản | Nút: *Tham gia* |
 | combine saves / accounts | gộp bản lưu / gộp tài khoản | Nút: *Gộp* |
 | driver names | tên tay đua | |
+
+## Career
+
+| English | Tiếng Việt | Ghi chú |
+|---|---|---|
+| career | sự nghiệp | |
+| career mode | chế độ sự nghiệp | |
+| ladder | bậc thang | Thẻ và tiêu đề: *Bậc thang {discipline}* |
+| tier | bậc | *Bậc {tier}* |
+| series | giải đua | Tên giải giữ tiếng Anh, xem bên dưới |
+| discipline | thể loại đua | *Đua đường trường* / *Đua xe cổ điển* |
+| promotion / promoted | thăng hạng | *vùng thăng hạng*, *vạch thăng hạng* |
+| attempt | lần thử | *Lần thử {attempt}/{max}* |
+| mulligan | lượt đua lại | |
+| bonus objective | mục tiêu thưởng | |
+| test day | ngày chạy thử | |
+| pre-season | tiền mùa giải | |
+| season | mùa giải | Nhãn ngắn: *Mùa {season}* |
+| round | chặng | Không dùng *vòng* (đã dành cho lap) |
+| standings | bảng xếp hạng giải đấu | Nhãn ngắn: *Bảng xếp hạng* |
+| calendar | lịch đua | |
+| career score / multiplier | điểm sự nghiệp / hệ số | *{mult}× điểm* |
+| pit stop(s) | dừng pit / dừng pit bắt buộc | |
+| clean race | cuộc đua sạch | |
+| podium (count) | lên bục | *{podiums} lên bục* |
+| series names | Club Cup, Touring Cup, Classic GT, Prototype Cup, GT3, Nguyên mẫu Sức bền, Grand Prix, Procar Series, Group 4 Classic, Can-Am Legends | Chỉ dịch tên mang tính mô tả |
+| regions | Châu Mỹ, Châu Âu, Châu Á-Thái Bình Dương | *{series} {region}* |

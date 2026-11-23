@@ -204,3 +204,25 @@
 | join an account | unirse a una cuenta | |
 | combine saves | combinar | |
 | driver key | clave de piloto | Existing term |
+
+## Career
+| English | Spanish | Note |
+|---|---|---|
+| career | trayectoria | Never "carrera", which is race in these files |
+| career mode | modo trayectoria | |
+| ladder | escalafón | The ladder of series; "peldaño" for one step |
+| series | serie | Series names stay as names: Club Cup, Touring Cup, Classic GT, GT3, Grand Prix, Procar Series, Can-Am Legends; descriptive ones translated: Copa Prototipos, Prototipos de Resistencia, Grupo 4 Classic |
+| discipline | disciplina | Carreras en circuito, Carreras históricas |
+| tier | nivel | "Nivel 2" |
+| promotion / promoted | ascenso / ascendido | Verb "ascender"; never "promoción" |
+| promotion cut | corte de ascenso | "Fuera del corte" for a missed one |
+| attempt | intento | "Intento 1 de 3" |
+| mulligan | mulligan | Plural "mulligans", as in golf: a round raced again |
+| bonus objective | objetivo extra | |
+| test day | día de pruebas | |
+| pre-season | pretemporada | |
+| round | ronda | Not "vuelta" (lap) |
+| standings | clasificación del campeonato | |
+| career score | puntuación de trayectoria | "Puntuación de carrera" is the race score |
+| multiplier | multiplicador | "{mult}× puntuación" |
+| Americas / Europe / Asia-Pacific | Américas / Europa / Asia-Pacífico | |

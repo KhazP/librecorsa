@@ -146,3 +146,29 @@
 | join an account | gabung ke akun | — |
 | combine saves | gabungkan simpanan | — |
 | driver key | kunci pembalap | Istilah lama |
+
+## Career
+
+| English | Bahasa Indonesia | Catatan |
+|---|---|---|
+| career | karier | — |
+| career mode | mode karier | — |
+| ladder | jenjang | Seperti *jenjang karier*; "Jenjang {discipline}" |
+| tier | tingkat | — |
+| discipline | disiplin | Road racing: *Balap sirkuit*; Historic racing: *Balap klasik* |
+| series | seri | Jangan dipakai untuk *round* |
+| season | musim | — |
+| round | ronde | Bukan *lap* dan bukan *seri* |
+| promotion / promoted | promosi | Garis batas promosi: *batas promosi* |
+| attempt | percobaan | "Percobaan 1 dari 3" |
+| mulligan | mulligan | Istilah golf, dipertahankan; ronde yang dibalap ulang |
+| bonus objective | target bonus | *target* untuk objective |
+| test day | hari tes | — |
+| pre-season | pramusim | — |
+| standings | klasemen | *Klasemen kejuaraan*; championship: *kejuaraan* |
+| calendar / schedule | kalender / jadwal | — |
+| career score | skor karier | *Skor* untuk score, *poin* untuk championship points |
+| multiplier | pengali | — |
+| points (pts) | poin | — |
+| regions: Americas, Europe, Asia-Pacific | Amerika, Eropa, Asia-Pasifik | — |
+| series names | Club Cup, Touring Cup, Classic GT, Prototype Cup, GT3, Prototipe Ketahanan, Grand Prix, Procar Series, Group 4 Classic, Can-Am Legends | Nama tetap; hanya nama deskriptif yang diterjemahkan |

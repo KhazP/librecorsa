@@ -148,3 +148,26 @@
 | join an account | hesaba katıl | |
 | combine saves | kayıtları birleştir | |
 | driver key | pilot anahtarı | Mevcut terim |
+
+## Career
+
+| English | Türkçe | Not |
+|---|---|---|
+| career | kariyer | |
+| career mode | kariyer modu | |
+| ladder | basamaklar | Seri basamakları; tek adım için `basamak` |
+| series | seri | Seri adları ad olarak kalır: Club Cup, Touring Cup, Classic GT, GT3, Grand Prix, Procar Series, Can-Am Legends; tanımlayıcı olanlar çevrilir: Prototip Kupası, Dayanıklılık Prototipleri, Grup 4 Classic |
+| discipline | disiplin | Pist yarışları, Tarihi yarışlar |
+| tier | basamak | `{tier}. basamak` |
+| promotion / promoted | yükselme / yükseldi | `üst seriye çıkma` uzun anlatımda |
+| promotion cut | yükselme barajı | Kaçırılan için `Barajı kaçırdı` |
+| attempt | deneme | `Deneme 1/3` |
+| mulligan | tekrar hakkı | Sayıdan sonra tekil: `3 tekrar hakkı` |
+| bonus objective | bonus hedef | |
+| test day | test günü | |
+| pre-season | sezon öncesi | |
+| round | ayak | Sezonun ayağı (`tur` = lap ile karışmasın) |
+| standings | şampiyona sıralaması | |
+| score | skor | Kariyer/yarış/sezon skoru; şampiyona puanı için `puan` |
+| multiplier | çarpan | `{mult}× skor` |
+| Americas / Europe / Asia-Pacific | Amerika / Avrupa / Asya-Pasifik | |
