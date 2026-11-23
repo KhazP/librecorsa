@@ -100,7 +100,7 @@ export default function PrivacyPage() {
           <li>
             <span className={B}>Devices.</span> For each signed-in browser or app, a label such as “Chrome on macOS”
             and when it signed in and was last seen. For each device that joined, a scrambled form of its driver key,
-            so that it can post laps under the account’s driver names.
+            so that it can post laps under the account’s driver names until it signs out.
           </li>
           <li>
             <span className={B}>The synced save.</span> Your settings (not controls, graphics or volumes), car setups,

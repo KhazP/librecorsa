@@ -302,7 +302,7 @@ function SignedIn({
             Sync now
           </Button>
         </SettingRow>
-        <SettingRow label="Sign out" hint="This device keeps its save and its driver names">
+        <SettingRow label="Sign out" hint="This device keeps its save. It posts laps under your names again once you sign in">
           <Button size="sm" variant="secondary" icon={<Icon name="leave" />} loading={top.busy === "signout"} onClick={() => void top.run("signout", () => accountActions.signOut())}>
             Sign out
           </Button>
