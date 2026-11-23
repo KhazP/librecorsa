@@ -11,6 +11,7 @@
  *                                                 the game, a car on its current physics)
  *   og                                            has a lap on a Physics V1 board: drove LibreCorsa before Physics V2
  *   bulb                                          given by hand, for an idea or a contribution, with a note
+ *   creator                                       the game's maker: a name held by the maker's driver key
  *
  * The types are shared with the Worker, which imports them only as types: nothing here runs on the server.
  */
@@ -25,7 +26,7 @@ import {
   type VehicleClassId,
 } from "@/lib/cars/vehicle-class";
 
-export const BADGE_TYPES = ["weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"] as const;
+export const BADGE_TYPES = ["creator", "weekly_gold", "weekly_silver", "weekly_bronze", "track_record", "og", "bulb"] as const;
 export type BadgeType = (typeof BADGE_TYPES)[number];
 export const isBadgeType = (v: unknown): v is BadgeType => (BADGE_TYPES as readonly unknown[]).includes(v);
 
@@ -154,8 +155,8 @@ export interface HallOfFameAnswer {
   recordHolders: HallOfFameRecordHolders;
 }
 
-/** The badge order everywhere: medals first, best first */
-const ORDER: Record<BadgeType, number> = { weekly_gold: 0, weekly_silver: 1, weekly_bronze: 2, track_record: 3, og: 4, bulb: 5 };
+/** The badge order everywhere: the Creator (who the driver is) first, then medals, best first */
+const ORDER: Record<BadgeType, number> = { creator: 0, weekly_gold: 1, weekly_silver: 2, weekly_bronze: 3, track_record: 4, og: 5, bulb: 6 };
 export const sortBadges = (badges: readonly DriverBadge[]): DriverBadge[] => [...badges].sort((a, b) => ORDER[a.type] - ORDER[b.type]);
 
 const BADGE_NAME: Record<BadgeType, string> = {
@@ -165,6 +166,7 @@ const BADGE_NAME: Record<BadgeType, string> = {
   track_record: "Fastest Lap",
   og: "OG Driver",
   bulb: "Idea Contributor",
+  creator: "Creator",
 };
 
 /** "Weekly Gold", "Idea Contributor" */
@@ -225,7 +227,7 @@ export function groupBoardsByVehicle(boards: readonly RecordBoard[] | undefined)
  *   - `scope: "all"` keeps every Fastest Lap record
  *   - `scope: "vehicle"` keeps only Fastest Lap records in that vehicle model
  *   - `scope: "class"` keeps only Fastest Lap records in that car class
- * Non-FL badges (weekly medals, OG, Bulb) are never filtered out.
+ * Non-FL badges (weekly medals, OG, Bulb, Creator) are never filtered out.
  */
 export function filterBadgesForContext(badges: readonly DriverBadge[], context?: BadgeContext): DriverBadge[] {
   if (!context || context.scope === "all") return [...badges];
@@ -244,6 +246,12 @@ export function filterBadgesForContext(badges: readonly DriverBadge[], context?:
   }
   return out;
 }
+
+/**
+ * The badges a name typed into a room may wear. A room never checks a player's name against its claim, so the Creator
+ * (which stands for who the driver is) stays off there; the rest only say what a name has done on the boards.
+ */
+export const roomNameBadges = (badges: readonly DriverBadge[]): DriverBadge[] => badges.filter((b) => b.type !== "creator");
 
 /** A longer line for a tooltip: what the badge means and where it was won */
 export function badgeDetail(b: DriverBadge): string {
@@ -270,6 +278,8 @@ export function badgeDetail(b: DriverBadge): string {
       return "Drove LibreCorsa on Physics V1";
     case "bulb":
       return b.note ? `Idea Contributor: ${b.note}` : "Idea or community contribution";
+    case "creator":
+      return "Made LibreCorsa";
   }
 }
 

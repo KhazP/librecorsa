@@ -301,9 +301,10 @@ export const ICONS = {
   podium: Podium,
   chequered: Chequered,
 
-  // Driver badges (DriverBadges.tsx): a weekly challenge medal, and an idea that went into the game
+  // Driver badges (DriverBadges.tsx): a weekly challenge medal, an idea that went into the game, and the game's maker
   medal: Medal,
   idea: Lightbulb,
+  creator: CodeXml,
 
   // Weather and time of day
   weatherClear: Sun,
