@@ -153,6 +153,71 @@ for (const id of tracks) {
   }
 }
 
+// A flashback while a car pulls away from its box: the stop was made and counted, so the car does not stop again
+{
+  const id = tracks.find((t) => existsSync(`public/tracks/${t}/track_data.json`));
+  if (id) {
+    setActiveTrack(id, JSON.parse(readFileSync(`public/tracks/${id}/track_data.json`, "utf8")) as RawTrackJson);
+    const track = getActiveTrackData(1200);
+    if (track.meshUrl && existsSync(`public${track.meshUrl}`) && track.pitLane) {
+      const root = loadGlbGeometry(`public${track.meshUrl}`);
+      const env = new TrackEnvironment(track, { ...DEFAULT_SESSION_CONDITIONS });
+      const field = new AiOpponentField(track, vehicleModelSpec(carKind).createSim(track, root), aiDriversFor(3), env, { skill: 80, seed: 5, learning: false, spectate: true, trackId: id, damage: "off" });
+      field.raceLaps = 3;
+      field.pitStopsRequired = 1;
+      field.startRace(true);
+      // The field's own cars (private): the one on its way out of a stop
+      type Car = { id: string; isPlayer: boolean; pitRun: { phase: string } | null; sim: { worldPosition: { x: number; y: number; z: number }; worldQuaternion: { x: number; y: number; z: number; w: number }; vxMs: number; sMeters: number } };
+      const cars = (field as unknown as { cars: Car[] }).cars;
+      let t = 0;
+      let leaving: Car | undefined;
+      while (t < 900 && !(leaving = cars.find((c) => !c.isPlayer && c.pitRun?.phase === "out"))) {
+        env.update(DT, field.sims());
+        field.update(DT);
+        t += DT;
+      }
+      if (!leaving) console.log(`SKIP  flashback on the way out (no car left its box in ${t.toFixed(0)} s)`);
+      else {
+        const code = field.status().standings.find((r) => r.inPit && !r.isPlayer)?.driverCode;
+        field.restoreField(
+          cars.map((c) => {
+            const q = c.sim.worldQuaternion;
+            const p = c.sim.worldPosition;
+            return { id: c.isPlayer ? "player" : c.id, x: p.x, y: p.y, z: p.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w, yawRad: Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y)), speedMs: Math.max(0, c.sim.vxMs), s: c.sim.sMeters, pitLane: c.pitRun !== null };
+          }),
+          0.5
+        );
+        const stops = new Map<string, number>();
+        while (field.phase !== "finished" && t < 1800) {
+          env.update(DT, field.sims());
+          field.update(DT);
+          t += DT;
+          for (const r of field.status().standings) if (!r.isPlayer) stops.set(r.driverCode, Math.max(stops.get(r.driverCode) ?? 0, r.pitStops ?? 0));
+        }
+        const most = Math.max(...stops.values());
+        if (most > 1) fail(`${id}: a flashback on the way out of a stop made a car stop again (${[...stops].map(([c, n]) => `${c} ${n}`).join(", ")}; it was ${code})`);
+        else console.log(`ok    ${id}: a flashback on the way out of a stop leaves it made once (stops ${[...stops.values()].join("/")})`);
+      }
+
+      // Put down in the lane: only a car put back in it (a flashback to a moment there) is in it; one put down at the same
+      // spot without that (a car off the road beside the lane) is not
+      const lane = track.pitLane;
+      const sim = vehicleModelSpec(carKind).createSim(track, root);
+      const at = lane.pointAt((lane.leaveM + lane.rejoinM) / 2);
+      const yawRad = Math.atan2(at.tx, at.tz);
+      sim.restorePose?.({ x: at.x, z: at.z, yawRad, speedMs: 0, pitLane: false });
+      sim.step(DT, {});
+      const outside = sim.telemetry.pitLane ?? null;
+      sim.restorePose?.({ x: at.x, z: at.z, yawRad, speedMs: 0, pitLane: true });
+      sim.step(DT, {});
+      const inside = sim.telemetry.pitLane ?? null;
+      if (outside) fail(`${id}: a car put down beside the road in the lane's corridor, not put back in the lane, was taken into it`);
+      else if (!inside) fail(`${id}: a car put back in the pit lane was not found in it`);
+      else console.log(`ok    ${id}: only a car put back in the lane is in it (at ${inside.laneM.toFixed(0)} m)`);
+    }
+  }
+}
+
 if (failures) {
   console.log(`\n${failures} failure(s)`);
   process.exit(1);

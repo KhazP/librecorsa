@@ -3324,7 +3324,7 @@ export class AiOpponentField implements AiRace {
         car.ai?.endPitDrive?.();
       }
       if (car.ai && !car.removed && p) {
-        const target = { x: p.x, z: p.z, yawRad: p.yawRad, speedMs: Math.max(0, p.speedMs), s: p.s };
+        const target = { x: p.x, z: p.z, yawRad: p.yawRad, speedMs: Math.max(0, p.speedMs), s: p.s, pitLane: p.pitLane === true };
         if (car.ai.restorePose) car.ai.restorePose(target);
         else car.ai.teleportToDistance(p.s ?? car.ai.sMeters, target.speedMs);
         if (car.retired) {

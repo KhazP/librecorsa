@@ -443,6 +443,8 @@ export interface ReplayCarState {
   outLap?: boolean;
   /** Cumulative race distance (m) during an AI race, so flashback rewinds lap clocks cleanly */
   distM?: number;
+  /** In the pit lane here: a flashback puts the car back in it (a car beside the lane, off the road, is not) */
+  pit?: boolean;
 }
 
 export interface ReplayFrame {

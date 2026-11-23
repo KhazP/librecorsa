@@ -32,6 +32,8 @@ export interface FieldCarRestorePose {
   speedMs: number;
   s?: number;
   distM?: number;
+  /** In the pit lane then */
+  pitLane?: boolean;
 }
 
 export interface AiRace {

@@ -1295,7 +1295,7 @@ export class F12026CarSim implements SimulatorCar {
    * not found from its position
    */
   private pitDriven = false;
-  /** Just placed (a flashback, a reset): the next pose may find the car anywhere in the lane, not only at its entry */
+  /** Just put back in the pit lane (`restorePose` with `pitLane`): the next pose finds the car anywhere along it, not only at its entry */
   private pitRejoin = false;
   private s = 0;
   private lateral = 0;
@@ -2144,7 +2144,7 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /** Back on the ground at a recorded pose, rolling at its speed, with the tyres as they are now */
-  public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean }): void {
+  public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean; pitLane?: boolean }): void {
     // Put back: the lap under way can't count. Restore recorded outLap state when supplied (so rewinding from lap 1
     // back onto the out-lap does not count the out-lap as a lap), otherwise preserve the current out-lap flag.
     if (pose.outLap !== undefined) this.lineCrossingStartsLap = pose.outLap;
@@ -2158,6 +2158,9 @@ export class F12026CarSim implements SimulatorCar {
     this.progressHintS = this.poseHintS = p.s;
     this.resetVehicle(pose.x, pose.z, pose.yawRad, Math.max(0, pose.speedMs), true);
     this.afterPlacement();
+    // Put back in the pit lane (a flashback to a moment in it, the sim worker's car in it): found anywhere along it.
+    // A car put down off the road beside the lane (at Monaco's Swimming Pool, say) was never in it and is not now
+    this.pitRejoin = pose.pitLane === true && !this.pitDriven;
   }
 
   public teleportToTurn(turnNumber: number): void {
@@ -3032,10 +3035,8 @@ export class F12026CarSim implements SimulatorCar {
     // The off-track verdict belongs to where the car was: the new spot is judged afresh (so does the pit lane, unless
     // the field is driving the car down it)
     this.wasOffTrack = false;
-    if (!this.pitDriven) {
-      this.pitTracker?.reset();
-      this.pitRejoin = true;
-    }
+    if (!this.pitDriven) this.pitTracker?.reset();
+    this.pitRejoin = false;
     // So does the barrier contact: zeroed, on the page's car and the sim worker's alike (race control reads a drop as none)
     this.wallContactS = 0;
     const c = this.channels;

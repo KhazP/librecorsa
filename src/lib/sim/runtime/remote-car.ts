@@ -217,6 +217,7 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
         s: view.sMeters,
         lapCount: view.telemetry.lapCount,
         ...(view.telemetry.outLap !== undefined ? { outLap: view.telemetry.outLap } : {}),
+        pitLane: Boolean(view.telemetry.pitLane),
       });
     } else twin.teleportToDistance(view.sMeters, view.vxMs, view.lateralOffsetM);
     twinFresh = false;

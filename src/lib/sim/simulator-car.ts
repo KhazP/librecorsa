@@ -165,7 +165,8 @@ export interface SimulatorCar {
    * Puts the car back at a recorded pose (world x, z and heading, + yaw = atan2(forward.x, forward.z)),
    * on the ground and rolling at `speedMs`, keeping the tyres' heat and wear. `s` is a hint for the track projection.
    */
-  restorePose?(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean }): void;
+  /** `pitLane`: the car is put back in the pit lane (a flashback to a moment in it, a handover from the sim worker) */
+  restorePose?(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean; pitLane?: boolean }): void;
   /** The AI field drives the car down the pit lane on its own path, no forces (pit/pit-lane.ts) */
   driveInPitLane?(x: number, z: number, yawRad: number, speedMs: number, laneM: number, offsetM: number): void;
   /** Out of the pit lane, back on the road rolling at `speedMs`: the physics drive the car again */

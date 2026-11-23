@@ -2615,6 +2615,7 @@ export class DriveSession {
             speedMs: p.speedMs,
             ...(c.s !== undefined ? { s: c.s } : {}),
             ...(c.distM !== undefined ? { distM: c.distM } : {}),
+            ...(c.pit ? { pitLane: true } : {}),
           });
         }
         field.restoreField(poses, rewindS);
@@ -3988,12 +3989,14 @@ export class DriveSession {
               lap: physics.telemetry.lapCount,
               ...(physics.telemetry.outLap ? { outLap: true } : {}),
               ...(playerDistM !== undefined ? { distM: playerDistM } : {}),
+              ...(physics.telemetry.pitLane ? { pit: true } : {}),
             },
           ];
           for (const p of renderPeers) {
             if (p.ghost) continue;
             replayNames.set(p.peerId, { code: p.driverCode, color: p.teamColorHex, vehicle: p.vehicle });
-            const peerDistM = standings?.find((st) => !st.isPlayer && st.driverCode === p.driverCode)?.raceDistM;
+            const peerRow = standings?.find((st) => !st.isPlayer && st.driverCode === p.driverCode);
+            const peerDistM = peerRow?.raceDistM;
             cars.push({
               id: p.peerId,
               x: p.position.x,
@@ -4011,6 +4014,7 @@ export class DriveSession {
               rpm: p.rpm ?? 0,
               s: p.trackS,
               ...(peerDistM !== undefined ? { distM: peerDistM } : {}),
+              ...(peerRow?.inPit ? { pit: true } : {}),
             });
           }
           rp.buffer.push(replayClockS, cars);

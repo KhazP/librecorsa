@@ -27,8 +27,8 @@ const TIME_EPS_S = 1e-6;
 const CHUNK_SHIFT = 9;
 const CHUNK_SIZE = 1 << CHUNK_SHIFT;
 const CHUNK_MASK = CHUNK_SIZE - 1;
-/** Float32 fields per car: x, y, z, qx, qy, qz, qw, speedKmh, steer, throttle, brake, gear, rpm, s, lap, distM */
-const CAR_STRIDE = 16;
+/** Float32 fields per car: x, y, z, qx, qy, qz, qw, speedKmh, steer, throttle, brake, gear, rpm, s, lap, distM, pit (1: in the pit lane) */
+const CAR_STRIDE = 17;
 
 interface ReplayChunk {
   times: Float64Array;
@@ -66,6 +66,7 @@ function blendCar(a: ReplayCarState, b: ReplayCarState, f: number): ReplayCarSta
           : {}),
     ...(a.lap !== undefined || b.lap !== undefined ? { lap: f < 0.5 ? (a.lap ?? b.lap) : (b.lap ?? a.lap) } : {}),
     ...((f < 0.5 ? a.outLap : b.outLap) ? { outLap: true } : {}),
+    ...((f < 0.5 ? a.pit : b.pit) ? { pit: true } : {}),
     ...(a.distM !== undefined && b.distM !== undefined
       ? { distM: lerp(a.distM, b.distM, f) }
       : a.distM !== undefined
@@ -171,6 +172,7 @@ export class ReplayBuffer {
       data[o + 13] = c.s ?? Number.NaN;
       data[o + 14] = c.outLap ? -1 : (c.lap ?? Number.NaN);
       data[o + 15] = c.distM ?? Number.NaN;
+      data[o + 16] = c.pit ? 1 : 0;
     }
 
     this.tailSeq++;
@@ -416,6 +418,7 @@ export class ReplayBuffer {
       ...(Number.isNaN(s) ? {} : { s }),
       ...(Number.isNaN(lap) ? {} : lap < 0 ? { lap: 0, outLap: true } : { lap: Math.round(lap) }),
       ...(Number.isNaN(distM) ? {} : { distM }),
+      ...(d[o + 16] === 1 ? { pit: true } : {}),
     };
   }
 }
@@ -472,6 +475,7 @@ export function poseFromReplayCar(car: ReplayCarState): {
   s?: number;
   lapCount?: number;
   outLap?: boolean;
+  pitLane?: boolean;
 } {
   const len = Math.hypot(car.qx, car.qy, car.qz, car.qw) || 1;
   const qx = car.qx / len;
@@ -487,5 +491,6 @@ export function poseFromReplayCar(car: ReplayCarState): {
     speedMs: Math.max(0, car.speedKmh / 3.6),
     ...(car.s !== undefined ? { s: car.s } : {}),
     ...(car.lap !== undefined ? { lapCount: car.lap, outLap: Boolean(car.outLap) } : {}),
+    pitLane: car.pit === true,
   };
 }
