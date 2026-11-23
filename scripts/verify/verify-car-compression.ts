@@ -1,5 +1,5 @@
 /**
- * Headless checks that the deploy's car compression (`scripts/compress-car-glb.mjs`) leaves the geometry the car
+ * Headless checks that the deploy's car compression (`scripts/cars/compress-car-glb.mjs`) leaves the geometry the car
  * rigs read in metres: positions stay float, no node's transform changes, and the 2026 Prototype's tyre (the AI cars',
  * ghosts' and online peers' model) still measures its real radius. Quantized positions moved each mesh's scale onto
  * its node, so the 2026 Prototype read its tyre as 1 m in radius and every opponent floated about 0.65 m up on the deployed
@@ -75,7 +75,7 @@ try {
     const raw = path.join(ROOT, rel);
     const out = path.join(work, path.basename(rel));
     copyFileSync(raw, out);
-    const run = spawnSync(process.execPath, [path.join(ROOT, 'scripts/compress-car-glb.mjs'), out], { encoding: 'utf8' });
+    const run = spawnSync(process.execPath, [path.join(ROOT, 'scripts/cars/compress-car-glb.mjs'), out], { encoding: 'utf8' });
     const label = path.basename(rel);
     check(`${label}: compresses`, run.status === 0, (run.stdout || run.stderr).trim().split('\n')[0] ?? '');
     if (run.status !== 0) continue;

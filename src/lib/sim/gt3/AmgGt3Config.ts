@@ -830,7 +830,7 @@ export const AMG_GT3_CONFIG = {
     // Nm of the driver's, ≈ 60 % of the rack load) 15 Nm later, fading out between 20 and 80 km/h so the corners at
     // speed keep their unassisted weight [est]
     powerSteering: { steeringRatio: 12.6, deadbandNm: 2, rampNm: 15, maxRatio: 1.4, speedFadeMs: [20 / 3.6, 80 / 3.6] },
-    // The body's plan at barrier height, measured from amg-gt3-evo.glb (`scripts/measure-car-plans.ts`)
+    // The body's plan at barrier height, measured from amg-gt3-evo.glb (`scripts/cars/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.22], [0.39, 2.21], [0.99, 2.01], [1.02, -1.61], [0.97, -1.99], [0.78, -2.14], [0.46, -2.34], [0.00, -2.34]],
     // Torsional stiffness between the axle structures: an aluminium spaceframe and a steel roll cage [est]
     chassisTorsion: { torsionalStiffnessNmPerDeg: 31_500, torsionalDampingNmsPerDeg: 270, frontRollInertiaShare: 0.48 },

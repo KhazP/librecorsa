@@ -1,7 +1,7 @@
 /**
  * Measures each car body's plan for its vehicle model's `chassis.bodyPlan` (the outline the barriers meet):
  *
- *   npx tsx scripts/measure-car-plans.ts [carsDir]
+ *   npx tsx scripts/cars/measure-car-plans.ts [carsDir]
  *
  * For every registry car's model found under `carsDir` (default public/cars; the models are hosted, so a clone may
  * have none): its BODY node's vertices from 8 cm to 0.8 m above the model's floor, placed as its rig places the model
@@ -11,12 +11,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import * as THREE from 'three';
-import { loadGlbGeometry } from './lib/glb-geometry';
-import { CARS } from '../src/lib/cars/car-registry';
-import { LC26_MODEL_URL } from '../src/lib/lc26-car-model';
-import { VEHICLE_MODELS } from '../src/lib/cars/vehicle-models';
-import { getActiveTrackData } from '../src/lib/track-data';
-import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import { loadGlbGeometry } from '../lib/glb-geometry';
+import { CARS } from '../../src/lib/cars/car-registry';
+import { LC26_MODEL_URL } from '../../src/lib/lc26-car-model';
+import { VEHICLE_MODELS } from '../../src/lib/cars/vehicle-models';
+import { getActiveTrackData } from '../../src/lib/track-data';
+import type { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 
 type Pt = [number, number];
 const carsDir = process.argv[2] ?? path.join('public', 'cars');

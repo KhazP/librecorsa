@@ -283,7 +283,7 @@ export interface CarDefinition {
   modelUrl?: string;
   /**
    * The plan of its body at barrier height when the body is not its vehicle model's own (`ChassisData.bodyPlan`, as
-   * `scripts/measure-car-plans.ts` prints it): the barriers meet this car's outline, not the other's
+   * `scripts/cars/measure-car-plans.ts` prints it): the barriers meet this car's outline, not the other's
    */
   bodyPlan?: readonly (readonly [number, number])[];
   /** The liveries a player can pick for it (the first is the one its GLB is painted in); absent: its factory paint */

@@ -7,7 +7,7 @@
  *   node scripts/upload-hosted.mjs --dry-run public/cars/bmw-m4-gt3
  *
  * Car and cockpit GLBs (any .glb outside public/tracks) go up meshopt-compressed, the copy the site has always served
- * (scripts/compress-car-glb.mjs, run on a temporary copy so the raw file the car tools edit stays as it is). Circuit
+ * (scripts/cars/compress-car-glb.mjs, run on a temporary copy so the raw file the car tools edit stays as it is). Circuit
  * GLBs go up as they are: they are committed compressed (`npm run compress-tracks`).
  *
  * A venue's split model (src/lib/venue-models.ts) is one shared file and one file per layout. Uploading a layout file
@@ -104,7 +104,7 @@ try {
     if (ext === ".glb" && !key.startsWith("tracks/")) {
       source = path.join(work, path.basename(file));
       copyFileSync(file, source);
-      const c = spawnSync(process.execPath, [path.join(ROOT, "scripts/compress-car-glb.mjs"), source], { encoding: "utf8" });
+      const c = spawnSync(process.execPath, [path.join(ROOT, "scripts/cars/compress-car-glb.mjs"), source], { encoding: "utf8" });
       if (c.status !== 0) {
         console.error(`FAIL ${key}: compression failed\n${c.stderr || c.stdout}`);
         failedFiles.add(file);

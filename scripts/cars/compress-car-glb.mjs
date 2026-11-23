@@ -1,8 +1,8 @@
 /**
  * Meshopt-compresses car GLBs in place (EXT_meshopt_compression + KHR_mesh_quantization) for a smaller download.
  *
- *   node scripts/compress-car-glb.mjs public/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb [more.glb ...]
- *   node scripts/compress-car-glb.mjs --all        # every car and cockpit GLB under public/ (tracks excluded)
+ *   node scripts/cars/compress-car-glb.mjs public/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb [more.glb ...]
+ *   node scripts/cars/compress-car-glb.mjs --all        # every car and cockpit GLB under public/ (tracks excluded)
  *
  * Run by the Pages deploy before `next build` (the repository keeps the raw files the car tools edit). Normals, UVs
  * and colours are quantized (8-bit normals, 12-bit UVs); positions stay float, so every mesh keeps its own node
@@ -19,7 +19,7 @@ import { ALL_EXTENSIONS, EXTMeshoptCompression } from "@gltf-transform/extension
 import { quantize, reorder } from "@gltf-transform/functions";
 import { MeshoptDecoder, MeshoptEncoder } from "meshoptimizer";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function carFiles(args) {
   if (!args.includes("--all")) return args;
@@ -88,7 +88,7 @@ function restoreTextureTable(glb, json0) {
 
 const files = carFiles(process.argv.slice(2));
 if (files.length === 0) {
-  console.error("usage: node scripts/compress-car-glb.mjs <file.glb ...> | --all");
+  console.error("usage: node scripts/cars/compress-car-glb.mjs <file.glb ...> | --all");
   process.exit(1);
 }
 

@@ -41,7 +41,7 @@ export interface CarPackageOptions {
      * cars/<id>/physics.json. Absent: it drives exactly as the base
      */
     physicsPatch?: Record<string, unknown>;
-    /** Its body's outline at barrier height, [x, z] metres (scripts/measure-car-plans.ts) */
+    /** Its body's outline at barrier height, [x, z] metres (scripts/cars/measure-car-plans.ts) */
     bodyPlan?: [number, number][];
     credit?: ModCredit;
   };

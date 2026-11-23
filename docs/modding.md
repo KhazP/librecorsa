@@ -99,7 +99,7 @@ A package may carry `.glb .gltf .bin .json .webp .png .jpg .jpeg .ktx2 .ogg .wav
 A car is a new body and sound on one of the game's vehicle models (`physics`): `lc26`, `f12026-car`, `amg-gt3`, `liana`, `mtr-496r`, `lc-lmdh`, `nissan-r33-jgtc`, `nissan-r32-jtcc`, `bmw-m1-procar`, `vw-scirocco-gtx`, `chaparral-2d`, `chaparral-2d-67`, `porsche-934-rsr`. It takes that model's handling, setups, tyres and AI.
 
 - **`model`**: a GLB laid out as the game's rig expects. `scripts/cars/port_ac_car.py` writes one ([Porting cars](PORTING-CARS.md)).
-- **`bodyPlan`**: optional. The body's outline at barrier height, so barriers meet this car's shape rather than the model's own. `scripts/measure-car-plans.ts` prints one.
+- **`bodyPlan`**: optional. The body's outline at barrier height, so barriers meet this car's shape rather than the model's own. `scripts/cars/measure-car-plans.ts` prints one.
 - **`sound`**: a sound bank folder in the package with the bank's own limiter rpm (`{ "dir": …, "limiterRpm": … }`), or one of the game's cars, `lc26` included (`{ "car": "amg-gt3" }`). Either way the bank sweeps its range on the car's own limiter.
 - **`skins`**: the first is the paint the model was made in. The others are file liveries as above, in `<model folder>/skins/<id>/` by default.
 - **`classId`**: `f1`, `gt3`, `proto`, `classic` or `road`. Along with `year`, it decides where the car sits in the menus, and for `f1` which rules (DRS or the 2026 overtake mode) it races under.

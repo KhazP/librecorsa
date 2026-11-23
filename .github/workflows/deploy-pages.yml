@@ -73,7 +73,7 @@ jobs:
       # which meshopt makes bigger, not smaller.
       - name: Compress models for the download
         run: |
-          node scripts/compress-car-glb.mjs --all
+          node scripts/cars/compress-car-glb.mjs --all
 
       - name: Build static export
         env:

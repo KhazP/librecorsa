@@ -142,7 +142,7 @@ Then open `http://localhost:3000/?car=<id>`. For a ported car of class `f1`, add
 
 `verify-ported-gt3.ts` checks the GT3s hosted on librecorsa.org by name (and skips them in a clone), so it doesn't check yours. Read it for what a good port measures: GLB size, one-primitive tyres, mirrored wheel centres, the body's height off the road, all six cameras.
 
-The deploy meshopt-compresses every car GLB before building, and the game reads both kinds. I keep the raw file locally, since the porters and the checks above work on it. `node scripts/compress-car-glb.mjs <file.glb>` shows the compressed size, but it rewrites the file in place, so run it on a copy.
+The deploy meshopt-compresses every car GLB before building, and the game reads both kinds. I keep the raw file locally, since the porters and the checks above work on it. `node scripts/cars/compress-car-glb.mjs <file.glb>` shows the compressed size, but it rewrites the file in place, so run it on a copy.
 
 ## Licences
 

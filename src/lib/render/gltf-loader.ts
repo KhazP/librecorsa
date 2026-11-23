@@ -95,7 +95,7 @@ export const MeshoptDecoder: typeof ThreeMeshoptDecoder = {
 
 /**
  * A GLTFLoader that also reads meshopt-compressed files: the Pages deploy compresses the car models
- * (scripts/compress-car-glb.mjs) while the repository keeps them raw, so the same loader has to take both.
+ * (scripts/cars/compress-car-glb.mjs) while the repository keeps them raw, so the same loader has to take both.
  * While a circuit load holds the KTX2 loader (ktx2.ts) it also reads KTX2 textures, and a KTX2 texture that fails
  * fails the whole load. KTX2 textures let go of their transcoded data once they are on the GPU.
  */

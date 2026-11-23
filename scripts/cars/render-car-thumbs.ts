@@ -2,7 +2,7 @@
  * Renders pictures of every car (and every livery / mod skin) for the car browser:
  *   `npm run car-thumbs [-- --no-variants] [-- <car id> ...]`
  *
- * Bundles scripts/car-thumbs/render.ts, serves it next to `public/` (the cars' models load from their usual paths),
+ * Bundles scripts/cars/car-thumbs/render.ts, serves it next to `public/` (the cars' models load from their usual paths),
  * loads each car's GLB ONCE per batch in headless Chromium with the game's own rig code, switches liveries/skins in
  * place, and writes 480 x 270 transparent WebPs beside each car:
  * - Default car picture: `public/lc26/thumb.webp` or `public/cars/<folder>/thumb.webp`
@@ -18,7 +18,7 @@ import { extname, join, normalize } from "node:path";
 import { build } from "esbuild";
 import { chromium, type Browser, type Page } from "playwright-core";
 import sharp from "sharp";
-import type { CarId } from "../src/lib/cars/car-registry";
+import type { CarId } from "../../src/lib/cars/car-registry";
 import type { ThumbRenderApi } from "./car-thumbs/render";
 
 const ROOT = process.cwd();
@@ -89,8 +89,8 @@ async function main(): Promise<void> {
   // Every car, hosted ones too (a clone lists only its own): the registry reads this flag as it loads
   // (imported only now, after the flag: a static import would load the list before it is set)
   process.env.NEXT_PUBLIC_HOSTED_CONTENT = "1";
-  const { CARS, carLiveryThumbUrl, carSkinThumbUrl, carTakesLivery, carThumbUrl } = await import("../src/lib/cars/car-registry");
-  const { LIVERIES } = await import("../src/lib/track-data");
+  const { CARS, carLiveryThumbUrl, carSkinThumbUrl, carTakesLivery, carThumbUrl } = await import("../../src/lib/cars/car-registry");
+  const { LIVERIES } = await import("../../src/lib/track-data");
 
   /** Where a picture goes under public/ (the same path the car browser loads it from) */
   const toRel = (url: string) => url.replace(/^\//, "");
@@ -102,7 +102,7 @@ async function main(): Promise<void> {
 
   const work = mkdtempSync(join(tmpdir(), "car-thumbs-"));
   await build({
-    entryPoints: [join(ROOT, "scripts/car-thumbs/render.ts")],
+    entryPoints: [join(ROOT, "scripts/cars/car-thumbs/render.ts")],
     bundle: true,
     format: "esm",
     outfile: join(work, "render.js"),

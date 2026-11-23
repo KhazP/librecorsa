@@ -1,5 +1,5 @@
 /**
- * Browser half of `npm run car-thumbs` (scripts/render-car-thumbs.ts bundles and serves it). Builds one car exactly as
+ * Browser half of `npm run car-thumbs` (scripts/cars/render-car-thumbs.ts bundles and serves it). Builds one car exactly as
  * the drive session does (drive-session.ts `createCarRig`: a ported car's GLB, the GT3 rig, or the 2026 prototype),
  * lights it in a neutral studio, frames a front three-quarter view and exposes `window.__thumbApi` so the runner can
  * load each car GLB once and snap its default picture plus every livery or mod skin in place.
