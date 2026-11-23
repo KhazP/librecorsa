@@ -239,7 +239,13 @@ export const F1_ASSIST_DIALS: Readonly<Record<DriverAssistPreset, AidDials>> = {
  * aids and the envelope the autopilot plans with.
  */
 export interface CarSimProfile {
+  /** What the car's plans, guides and lines are kept under: one per profile. The vehicle model's id, unless `model` */
   id: string;
+  /**
+   * The vehicle model this profile drives as, when `id` is not one: a mod car's physics patch on that model
+   * (mods/mod-physics.ts), whose setup limits, fuel, wing steps, AI and HUD it takes. Absent: `id` is the model
+   */
+  model?: VehicleModelId;
   config: CarPhysicsConfig;
   /** MGU-K / push mode */
   hasErs: boolean;
@@ -1136,7 +1142,7 @@ export class F12026CarSim implements SimulatorCar {
   public steerAngleNorm = 0;
 
   public get vehicleId(): import('@/types/f1').VehicleModelId {
-    return this.profile.id as import('@/types/f1').VehicleModelId;
+    return this.profile.model ?? (this.profile.id as import('@/types/f1').VehicleModelId);
   }
   public get racingLineId(): 'f1' | 'gt3' {
     return this.line;
@@ -1449,7 +1455,7 @@ export class F12026CarSim implements SimulatorCar {
     this.applyAssistPresetLevels(this._assistPreset);
     this.telemetry = this.createTelemetry();
     this.telemetry.f12026 = this.channels;
-    this.channels.carId = profile.id;
+    this.channels.carId = profile.model ?? profile.id;
     this.channels.hasErs = profile.hasErs;
     this.channels.hasDrs = profile.hasDrs;
     this.coldPsi = axlePressures(v.wheels[0].coldPressurePsi, v.wheels[2].coldPressurePsi);
@@ -1620,7 +1626,7 @@ export class F12026CarSim implements SimulatorCar {
 
   /** The vehicle model whose setup limits, wing steps and fuel this car takes */
   private get setupCar(): Exclude<VehicleModelId, 'lc26'> {
-    const id = this.profile.id;
+    const id = this.vehicleId;
     return id === 'amg-gt3' ||
       id === 'liana' ||
       id === 'mtr-496r' ||

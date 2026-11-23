@@ -32,7 +32,7 @@ const OPTIONAL_PROFILE_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /** What a patch may never set: the profile's identity and the body outline (mod.json's `bodyPlan`) */
-const LOCKED_PROFILE_KEYS: ReadonlySet<string> = new Set(["id", "bodyPlan"]);
+const LOCKED_PROFILE_KEYS: ReadonlySet<string> = new Set(["id", "model", "bodyPlan"]);
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -43,6 +43,8 @@ function mergeValue(base: unknown, patch: unknown, path: string, problems: strin
   if (typeof patch === "number") {
     if (!Number.isFinite(patch)) problems.push(`${path}: must be a finite number`);
     else if (typeof base !== "number") problems.push(`${path}: is a ${kindOf(base)} in the base model, not a number`);
+    // A mass, a length, a rate or a stiffness stays above zero: the simulation divides by them
+    else if (base > 0 && patch <= 0) problems.push(`${path}: must stay above 0, as the base model's is`);
     else return patch;
     return base;
   }
@@ -112,6 +114,8 @@ export function modSimProfile(base: CarSimProfile, file: unknown, id: string, bo
   }
   if (problems.length) return { ok: false, errors: problems.slice(0, 50) };
   out.id = id;
+  // It drives as the base model everywhere but its own plans: setups, fuel, wing steps, AI, HUD
+  out.model = (base.model ?? base.id) as CarSimProfile["model"];
   if (bodyPlan) out.bodyPlan = bodyPlan;
   return { ok: true, profile: out as unknown as CarSimProfile };
 }
