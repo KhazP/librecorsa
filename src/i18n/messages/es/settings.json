@@ -504,6 +504,14 @@
     "telemetryOut": {
       "label": "Telemetría UDP",
       "hint": "Envía telemetría en vivo a un puente local (paneles, bass shakers)"
+    },
+    "practiceDamage": {
+      "label": "Daños en práctica",
+      "hints": {
+        "off": "Sin daños en práctica libre ni contrarreloj",
+        "reduced": "La mitad de los daños; un auto destrozado reinicia una vuelta lanzada ya reparado",
+        "full": "Daños de carrera; un auto destrozado reinicia una vuelta lanzada ya reparado"
+      }
     }
   },
   "driving": {

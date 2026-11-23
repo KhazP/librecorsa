@@ -57,7 +57,10 @@
     "hud": "HUD",
     "assistsPro": "Tanpa bantuan",
     "assistsSemiPro": "TC + ABS",
-    "assistsAssisted": "Bantuan penuh"
+    "assistsAssisted": "Bantuan penuh",
+    "personalBest": "Rekor pribadi",
+    "oldPhysics": "Fisika lama",
+    "noTimeYet": "Belum ada waktu"
   },
   "panel": {
     "close": "Tutup"
@@ -155,7 +158,9 @@
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, ban oleh <tyres>{tyreAuthor}</tyres>",
     "current": "Mobil saat ini",
-    "choose": "Pilih mobil"
+    "choose": "Pilih mobil",
+    "sortPopular": "Paling sering dikemudikan",
+    "headingPopular": "Paling sering dikemudikan, {days, plural, other {# hari terakhir}}"
   },
   "circuitBrowser": {
     "label": "Sirkuit",
@@ -198,7 +203,11 @@
     "circuitBy": "Sirkuit oleh <name>{author}</name>",
     "active": "Sirkuit aktif",
     "loading": "Memuat {circuit}",
-    "load": "Muat sirkuit"
+    "load": "Muat sirkuit",
+    "sortPopular": "Paling sering dikemudikan",
+    "headingPopular": "Paling sering dikemudikan, {days, plural, other {# hari terakhir}}",
+    "boardRank": "<b>P{pos}</b> dari {total}",
+    "boardRankTitle": "Posisi di papan waktu daring"
   },
   "challenge": {
     "view": "Tampilan tantangan",

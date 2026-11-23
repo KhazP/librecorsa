@@ -132,5 +132,8 @@
     "damp": "Feucht",
     "wet": "Nass",
     "flooded": "Überflutet"
+  },
+  "dialog": {
+    "close": "Schließen"
   }
 }

@@ -147,7 +147,9 @@
     "recordDetail": "{boards} — tocca per vedere le piste",
     "ogDetail": "Ha guidato LibreCorsa con la fisica V1",
     "bulbDetailNote": "Autore di idee: {note}",
-    "bulbDetail": "Idea o contributo della community"
+    "bulbDetail": "Idea o contributo della community",
+    "creator": "Creatore",
+    "creatorDetail": "Ha creato LibreCorsa"
   },
   "camera": {
     "chaseClose": "Esterna ravvicinata",

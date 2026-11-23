@@ -504,6 +504,14 @@
     "telemetryOut": {
       "label": "UDP-Telemetrie",
       "hint": "Sendet Live-Telemetrie an lokale Bridge (Dashboards, Bass Shaker)"
+    },
+    "practiceDamage": {
+      "label": "Schaden im Training",
+      "hints": {
+        "off": "Kein Schaden im Training oder Zeitfahren",
+        "reduced": "Halber Schaden; ein zerstörtes Auto startet repariert in eine fliegende Runde",
+        "full": "Rennschaden; ein zerstörtes Auto startet repariert in eine fliegende Runde"
+      }
     }
   },
   "driving": {

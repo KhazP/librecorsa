@@ -504,6 +504,14 @@
     "telemetryOut": {
       "label": "Dữ liệu đo từ xa UDP",
       "hint": "Gửi dữ liệu đo từ xa trực tiếp tới bridge cục bộ (màn hình phụ, bộ rung ghế)"
+    },
+    "practiceDamage": {
+      "label": "Hư hại khi luyện tập",
+      "hints": {
+        "off": "Không hư hại trong luyện tập hoặc đua tính giờ",
+        "reduced": "Giảm một nửa hư hại; xe hỏng nặng sẽ được sửa và bắt đầu lại vòng chạy đà",
+        "full": "Hư hại như đua chính; xe hỏng nặng sẽ được sửa và bắt đầu lại vòng chạy đà"
+      }
     }
   },
   "driving": {

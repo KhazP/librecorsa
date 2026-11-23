@@ -132,5 +132,8 @@
     "damp": "Úmida",
     "wet": "Molhada",
     "flooded": "Alagada"
+  },
+  "dialog": {
+    "close": "Fechar"
   }
 }

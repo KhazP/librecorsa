@@ -8,7 +8,8 @@
     "fastestHere": "Nhanh nhất tại đây",
     "fastest": "(nhanh nhất)",
     "tryAgain": "Thử lại",
-    "myPlace": "Bạn đang ở P{rank} trên {total}"
+    "myPlace": "Bạn đang ở P{rank} trên {total}",
+    "viewProfile": "Xem hồ sơ của {name}"
   },
   "input": {
     "drivenWith": "Lái bằng: {input, select, keyboard {Bàn phím} controller {Tay cầm} wheel {Vô lăng} other {Màn hình cảm ứng}}"
@@ -128,7 +129,41 @@
       "weekly": "{medals, select, gold {Hạng 1 tuần} silver {Hạng 2 tuần} bronze {Hạng 3 tuần} goldSilver {Hạng 1–2 tuần} silverBronze {Hạng 2–3 tuần} goldBronze {Hạng 1, 3 tuần} other {Hạng 1–3 tuần}}",
       "trackRecord": "Vòng nhanh nhất",
       "og": "Vật lý V1",
-      "bulb": "Ý tưởng cho game"
+      "bulb": "Ý tưởng cho game",
+      "creator": "Đã tạo ra game"
     }
+  },
+  "profile": {
+    "loadingStats": "Đang tải thống kê tay đua",
+    "bestLaps": "Vòng tốt nhất",
+    "loadingBestLaps": "Đang tải các vòng tốt nhất",
+    "driverStats": "Thống kê tay đua",
+    "loadFailed": "Không thể tải hồ sơ của tay đua này.",
+    "refreshFailed": "Làm mới thất bại. Đang hiển thị thống kê đã lưu tạm.",
+    "ratingTitle": "Phân vị trung bình trên các đường đua, được kéo về gần 50 khi mới lái ít đường đua",
+    "outOf100": "trên 100",
+    "rating": "Đánh giá",
+    "circuits": "{count, plural, other {Đường đua}}",
+    "boards": "{count, plural, other {Bảng xếp hạng}}",
+    "openRaces": "Cuộc đua mở",
+    "noOpenRaces": "Chưa hoàn thành cuộc đua mở nào.",
+    "races": "{count, plural, other {Cuộc đua}}",
+    "wins": "{count, plural, other {Chiến thắng}}",
+    "podiums": "{count, plural, other {Bục vinh quang}}",
+    "bestFinish": "Về đích tốt nhất",
+    "bestLapsNote": "Các bảng xếp hạng của vật lý hiện tại, mọi mức hỗ trợ lái và điều kiện. Đánh giá kéo về gần 50 khi mới lái ít đường đua.",
+    "sortLabel": "Sắp xếp vòng tốt nhất",
+    "sortRank": "Hạng cao nhất",
+    "sortCircuit": "Đường đua",
+    "sortRecent": "Gần đây",
+    "noLaps": "Chưa có vòng nào trên các bảng hiện tại.",
+    "tableLabel": "Các vòng tốt nhất của {name}",
+    "colCircuit": "Đường đua",
+    "ofBoard": "trên {total}",
+    "openBoard": "Mở bảng xếp hạng {circuit} ({car})",
+    "ariaNamed": "Hồ sơ tay đua {name}",
+    "aria": "Hồ sơ tay đua",
+    "refreshLabel": "Làm mới hồ sơ tay đua",
+    "refresh": "Làm mới"
   }
 }

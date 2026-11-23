@@ -147,7 +147,9 @@
     "recordDetail": "{boards} — touchez pour voir les circuits",
     "ogDetail": "A conduit LibreCorsa sur la Physique V1",
     "bulbDetailNote": "Contributeur d’idées : {note}",
-    "bulbDetail": "Idée ou contribution de la communauté"
+    "bulbDetail": "Idée ou contribution de la communauté",
+    "creator": "Créateur",
+    "creatorDetail": "A créé LibreCorsa"
   },
   "camera": {
     "chaseClose": "Poursuite proche",

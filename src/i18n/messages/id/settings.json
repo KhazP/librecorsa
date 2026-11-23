@@ -504,6 +504,14 @@
     "telemetryOut": {
       "label": "Telemetri UDP",
       "hint": "Mengirim telemetri langsung ke bridge lokal (dasbor, bass shaker)"
+    },
+    "practiceDamage": {
+      "label": "Kerusakan latihan",
+      "hints": {
+        "off": "Tanpa kerusakan di latihan atau Time Trial",
+        "reduced": "Kerusakan dikurangi setengah; mobil yang hancur memulai ulang flying lap dalam kondisi diperbaiki",
+        "full": "Kerusakan balapan; mobil yang hancur memulai ulang flying lap dalam kondisi diperbaiki"
+      }
     }
   },
   "driving": {

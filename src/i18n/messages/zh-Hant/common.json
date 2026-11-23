@@ -132,5 +132,8 @@
     "damp": "微濕",
     "wet": "濕地",
     "flooded": "積水"
+  },
+  "dialog": {
+    "close": "關閉"
   }
 }

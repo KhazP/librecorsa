@@ -504,6 +504,14 @@
     "telemetryOut": {
       "label": "Telemetria UDP",
       "hint": "Envia telemetria ao vivo a um bridge local (dashboards, bass shakers)"
+    },
+    "practiceDamage": {
+      "label": "Danos no treino",
+      "hints": {
+        "off": "Sem danos no treino livre ou contra o relógio",
+        "reduced": "Metade dos danos; um carro destruído reinicia uma volta lançada, reparado",
+        "full": "Danos de corrida; um carro destruído reinicia uma volta lançada, reparado"
+      }
     }
   },
   "driving": {

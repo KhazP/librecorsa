@@ -132,5 +132,8 @@
     "damp": "Lembap",
     "wet": "Basah",
     "flooded": "Tergenang"
+  },
+  "dialog": {
+    "close": "Tutup"
   }
 }

@@ -504,6 +504,14 @@
     "telemetryOut": {
       "label": "Telemetria UDP",
       "hint": "Invia la telemetria live a un bridge locale (dashboard, bass shaker)"
+    },
+    "practiceDamage": {
+      "label": "Danni in prove libere",
+      "hints": {
+        "off": "Nessun danno in prove libere o prova a tempo",
+        "reduced": "Danni dimezzati; un’auto distrutta ricomincia il giro lanciato già riparata",
+        "full": "Danni da gara; un’auto distrutta ricomincia il giro lanciato già riparata"
+      }
     }
   },
   "driving": {

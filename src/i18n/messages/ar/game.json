@@ -147,7 +147,9 @@
     "recordDetail": "{boards} — اضغط لعرض الحلبات",
     "ogDetail": "قاد في LibreCorsa على فيزياء V1",
     "bulbDetailNote": "مساهم بالأفكار: {note}",
-    "bulbDetail": "فكرة أو مساهمة مجتمعية"
+    "bulbDetail": "فكرة أو مساهمة مجتمعية",
+    "creator": "المُنشئ",
+    "creatorDetail": "صنع LibreCorsa"
   },
   "camera": {
     "chaseClose": "ملاحقة قريبة",

@@ -504,6 +504,14 @@
     "telemetryOut": {
       "label": "Télémétrie UDP",
       "hint": "Envoie la télémétrie en direct à un pont local (tableaux de bord, bass shakers)"
+    },
+    "practiceDamage": {
+      "label": "Dégâts en essais libres",
+      "hints": {
+        "off": "Aucun dégât en essais libres ou en contre-la-montre",
+        "reduced": "Dégâts réduits de moitié ; une voiture détruite repart réparée en tour lancé",
+        "full": "Dégâts de course ; une voiture détruite repart réparée en tour lancé"
+      }
     }
   },
   "driving": {

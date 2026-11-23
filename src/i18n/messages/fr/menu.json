@@ -57,7 +57,10 @@
     "hud": "HUD",
     "assistsPro": "Sans aides",
     "assistsSemiPro": "TC + ABS",
-    "assistsAssisted": "Toutes les aides"
+    "assistsAssisted": "Toutes les aides",
+    "personalBest": "Record personnel",
+    "oldPhysics": "Ancienne physique",
+    "noTimeYet": "Pas encore de temps"
   },
   "panel": {
     "close": "Fermer"
@@ -155,7 +158,9 @@
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, pneus par <tyres>{tyreAuthor}</tyres>",
     "current": "Voiture actuelle",
-    "choose": "Choisir la voiture"
+    "choose": "Choisir la voiture",
+    "sortPopular": "Plus conduites",
+    "headingPopular": "Les plus conduites, {days, plural, one {dernier jour} other {# derniers jours}}"
   },
   "circuitBrowser": {
     "label": "Circuits",
@@ -198,7 +203,11 @@
     "circuitBy": "Circuit de <name>{author}</name>",
     "active": "Circuit actif",
     "loading": "Chargement de {circuit}",
-    "load": "Charger le circuit"
+    "load": "Charger le circuit",
+    "sortPopular": "Plus conduits",
+    "headingPopular": "Les plus conduits, {days, plural, one {dernier jour} other {# derniers jours}}",
+    "boardRank": "<b>P{pos}</b> sur {total}",
+    "boardRankTitle": "Position au classement en ligne"
   },
   "challenge": {
     "view": "Vue du défi",

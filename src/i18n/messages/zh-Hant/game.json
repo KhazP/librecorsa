@@ -147,7 +147,9 @@
     "recordDetail": "{boards}——點擊檢視賽道",
     "ogDetail": "曾於物理 V1 駕駛 LibreCorsa",
     "bulbDetailNote": "點子貢獻者：{note}",
-    "bulbDetail": "點子或社群貢獻"
+    "bulbDetail": "點子或社群貢獻",
+    "creator": "創作者",
+    "creatorDetail": "打造了 LibreCorsa"
   },
   "camera": {
     "chaseClose": "近距追尾",

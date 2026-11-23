@@ -8,7 +8,8 @@
     "fastestHere": "Tercepat di sini",
     "fastest": "(tercepat)",
     "tryAgain": "Coba lagi",
-    "myPlace": "Kamu di P{rank} dari {total}"
+    "myPlace": "Kamu di P{rank} dari {total}",
+    "viewProfile": "Lihat profil {name}"
   },
   "input": {
     "drivenWith": "Dikemudikan dengan: {input, select, keyboard {Keyboard} controller {Kontroler} wheel {Setir} other {Layar sentuh}}"
@@ -128,7 +129,41 @@
       "weekly": "{medals, select, gold {Mingguan ke-1} silver {Mingguan ke-2} bronze {Mingguan ke-3} goldSilver {Mingguan ke-1–2} silverBronze {Mingguan ke-2–3} goldBronze {Mingguan ke-1, 3} other {Mingguan ke-1–3}}",
       "trackRecord": "Lap tercepat",
       "og": "Fisika V1",
-      "bulb": "Ide game"
+      "bulb": "Ide game",
+      "creator": "Membuat game ini"
     }
+  },
+  "profile": {
+    "loadingStats": "Memuat statistik pembalap",
+    "bestLaps": "Lap terbaik",
+    "loadingBestLaps": "Memuat lap terbaik",
+    "driverStats": "Statistik pembalap",
+    "loadFailed": "Gagal memuat profil pembalap ini.",
+    "refreshFailed": "Gagal memuat ulang. Menampilkan statistik tersimpan.",
+    "ratingTitle": "Rata-rata persentil di semua sirkuit, dibobotkan mendekati 50 jika sirkuit yang dikemudikan masih sedikit",
+    "outOf100": "dari 100",
+    "rating": "Skor",
+    "circuits": "{count, plural, other {Sirkuit}}",
+    "boards": "{count, plural, other {Papan waktu}}",
+    "openRaces": "Balapan terbuka",
+    "noOpenRaces": "Belum ada balapan terbuka yang diselesaikan.",
+    "races": "{count, plural, other {Balapan}}",
+    "wins": "{count, plural, other {Kemenangan}}",
+    "podiums": "{count, plural, other {Podium}}",
+    "bestFinish": "Finis terbaik",
+    "bestLapsNote": "Papan waktu fisika saat ini, semua bantuan dan kondisi. Skor dibobotkan mendekati 50 jika sirkuit masih sedikit.",
+    "sortLabel": "Urutkan lap terbaik",
+    "sortRank": "Posisi terbaik",
+    "sortCircuit": "Sirkuit",
+    "sortRecent": "Terbaru",
+    "noLaps": "Belum ada lap di papan waktu saat ini.",
+    "tableLabel": "Lap terbaik milik {name}",
+    "colCircuit": "Sirkuit",
+    "ofBoard": "dari {total}",
+    "openBoard": "Buka papan waktu {circuit} ({car})",
+    "ariaNamed": "Profil pembalap {name}",
+    "aria": "Profil pembalap",
+    "refreshLabel": "Muat ulang profil pembalap",
+    "refresh": "Muat ulang"
   }
 }

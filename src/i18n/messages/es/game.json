@@ -147,7 +147,9 @@
     "recordDetail": "{boards} — toca para ver los circuitos",
     "ogDetail": "Condujo LibreCorsa con la física V1",
     "bulbDetailNote": "Colaborador de ideas: {note}",
-    "bulbDetail": "Idea o aporte a la comunidad"
+    "bulbDetail": "Idea o aporte a la comunidad",
+    "creator": "Creador",
+    "creatorDetail": "Creó LibreCorsa"
   },
   "camera": {
     "chaseClose": "Persecución cercana",

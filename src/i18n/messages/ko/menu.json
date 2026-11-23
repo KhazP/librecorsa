@@ -57,7 +57,10 @@
     "hud": "HUD",
     "assistsPro": "보조 없음",
     "assistsSemiPro": "TC + ABS",
-    "assistsAssisted": "전체 보조"
+    "assistsAssisted": "전체 보조",
+    "personalBest": "개인 최고 기록",
+    "oldPhysics": "구 물리",
+    "noTimeYet": "아직 기록 없음"
   },
   "panel": {
     "close": "닫기"
@@ -155,7 +158,9 @@
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, 타이어 제작: <tyres>{tyreAuthor}</tyres>",
     "current": "현재 차량",
-    "choose": "차량 선택"
+    "choose": "차량 선택",
+    "sortPopular": "최다 주행",
+    "headingPopular": "최다 주행, 최근 {days, plural, other {#일}}"
   },
   "circuitBrowser": {
     "label": "서킷",
@@ -198,7 +203,11 @@
     "circuitBy": "서킷 제작: <name>{author}</name>",
     "active": "현재 서킷",
     "loading": "{circuit} 불러오는 중",
-    "load": "서킷 불러오기"
+    "load": "서킷 불러오기",
+    "sortPopular": "최다 주행",
+    "headingPopular": "최다 주행, 최근 {days, plural, other {#일}}",
+    "boardRank": "{total}명 중 <b>P{pos}</b>",
+    "boardRankTitle": "온라인 보드 순위"
   },
   "challenge": {
     "view": "챌린지 보기",

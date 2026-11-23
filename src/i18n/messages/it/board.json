@@ -8,7 +8,8 @@
     "fastestHere": "Il più veloce qui",
     "fastest": "(più veloce)",
     "tryAgain": "Riprova",
-    "myPlace": "Sei P{rank} su {total}"
+    "myPlace": "Sei P{rank} su {total}",
+    "viewProfile": "Visualizza il profilo di {name}"
   },
   "input": {
     "drivenWith": "Guidato con: {input, select, keyboard {tastiera} controller {controller} wheel {volante} other {touchscreen}}"
@@ -128,7 +129,41 @@
       "weekly": "{medals, select, gold {Settimanale 1°} silver {Settimanale 2°} bronze {Settimanale 3°} goldSilver {Settimanale 1°–2°} silverBronze {Settimanale 2°–3°} goldBronze {Settimanale 1°, 3°} other {Settimanale 1°–3°}}",
       "trackRecord": "Giro più veloce",
       "og": "Fisica V1",
-      "bulb": "Idea per il gioco"
+      "bulb": "Idea per il gioco",
+      "creator": "Ha creato il gioco"
     }
+  },
+  "profile": {
+    "loadingStats": "Caricamento statistiche del pilota",
+    "bestLaps": "Giri migliori",
+    "loadingBestLaps": "Caricamento giri migliori",
+    "driverStats": "Statistiche pilota",
+    "loadFailed": "Impossibile caricare il profilo di questo pilota.",
+    "refreshFailed": "Aggiornamento non riuscito. Visualizzate le statistiche salvate.",
+    "ratingTitle": "Percentile medio sui circuiti, ponderato verso 50 quando si guida su pochi circuiti",
+    "outOf100": "su 100",
+    "rating": "Valutazione",
+    "circuits": "{count, plural, one {Circuito} other {Circuiti}}",
+    "boards": "{count, plural, one {Classifica} other {Classifiche}}",
+    "openRaces": "Gare aperte",
+    "noOpenRaces": "Ancora nessuna gara aperta completata.",
+    "races": "{count, plural, one {Gara} other {Gare}}",
+    "wins": "{count, plural, one {Vittoria} other {Vittorie}}",
+    "podiums": "{count, plural, one {Podio} other {Podi}}",
+    "bestFinish": "Miglior piazzamento",
+    "bestLapsNote": "Classifiche della fisica attuale, tutti gli aiuti e le condizioni. Con pochi circuiti la valutazione è ponderata verso 50.",
+    "sortLabel": "Ordina i giri migliori",
+    "sortRank": "Miglior posizione",
+    "sortCircuit": "Circuito",
+    "sortRecent": "Recenti",
+    "noLaps": "Ancora nessun giro nelle classifiche attuali.",
+    "tableLabel": "Giri migliori di {name}",
+    "colCircuit": "Circuito",
+    "ofBoard": "su {total}",
+    "openBoard": "Apri la classifica di {circuit} ({car})",
+    "ariaNamed": "Profilo pilota di {name}",
+    "aria": "Profilo pilota",
+    "refreshLabel": "Aggiorna il profilo pilota",
+    "refresh": "Aggiorna"
   }
 }

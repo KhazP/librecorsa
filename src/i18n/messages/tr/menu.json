@@ -57,7 +57,10 @@
     "hud": "HUD",
     "assistsPro": "Desteksiz",
     "assistsSemiPro": "TC + ABS",
-    "assistsAssisted": "Tam destek"
+    "assistsAssisted": "Tam destek",
+    "personalBest": "Kişisel en iyi",
+    "oldPhysics": "Eski fizik",
+    "noTimeYet": "Henüz süre yok"
   },
   "panel": {
     "close": "Kapat"
@@ -155,7 +158,9 @@
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, lastikler: <tyres>{tyreAuthor}</tyres>",
     "current": "Mevcut araç",
-    "choose": "Aracı seç"
+    "choose": "Aracı seç",
+    "sortPopular": "En çok sürülenler",
+    "headingPopular": "En çok sürülenler, son {days, plural, one {# gün} other {# gün}}"
   },
   "circuitBrowser": {
     "label": "Pistler",
@@ -198,7 +203,11 @@
     "circuitBy": "Pist: <name>{author}</name>",
     "active": "Etkin pist",
     "loading": "{circuit} yükleniyor",
-    "load": "Pisti yükle"
+    "load": "Pisti yükle",
+    "sortPopular": "En çok sürülenler",
+    "headingPopular": "En çok sürülenler, son {days, plural, one {# gün} other {# gün}}",
+    "boardRank": "<b>P{pos}</b> / {total}",
+    "boardRankTitle": "Çevrimiçi tablo sırası"
   },
   "challenge": {
     "view": "Mücadele görünümü",

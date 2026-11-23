@@ -8,7 +8,8 @@
     "fastestHere": "此欄最快",
     "fastest": "（最快）",
     "tryAgain": "重試",
-    "myPlace": "你排在 P{rank}（共 {total} 位）"
+    "myPlace": "你排在 P{rank}（共 {total} 位）",
+    "viewProfile": "查看 {name} 的個人檔案"
   },
   "input": {
     "drivenWith": "操作裝置：{input, select, keyboard {鍵盤} controller {控制器} wheel {方向盤} other {觸控螢幕}}"
@@ -128,7 +129,41 @@
       "weekly": "{medals, select, gold {每週第 1 名} silver {每週第 2 名} bronze {每週第 3 名} goldSilver {每週第 1–2 名} silverBronze {每週第 2–3 名} goldBronze {每週第 1、3 名} other {每週第 1–3 名}}",
       "trackRecord": "最快單圈",
       "og": "物理 V1",
-      "bulb": "遊戲點子"
+      "bulb": "遊戲點子",
+      "creator": "打造本遊戲"
     }
+  },
+  "profile": {
+    "loadingStats": "正在載入車手統計資料",
+    "bestLaps": "最佳單圈",
+    "loadingBestLaps": "正在載入最佳單圈",
+    "driverStats": "車手統計資料",
+    "loadFailed": "無法載入此車手的個人檔案。",
+    "refreshFailed": "重新整理失敗，目前顯示快取的統計資料。",
+    "ratingTitle": "各賽道平均百分位，已跑賽道較少時會向 50 加權",
+    "outOf100": "分，滿分 100",
+    "rating": "評分",
+    "circuits": "{count, plural, other {賽道}}",
+    "boards": "{count, plural, other {圈速榜}}",
+    "openRaces": "公開賽事",
+    "noOpenRaces": "尚無完賽的公開賽事。",
+    "races": "{count, plural, other {賽事}}",
+    "wins": "{count, plural, other {勝場}}",
+    "podiums": "{count, plural, other {頒獎台}}",
+    "bestFinish": "最佳名次",
+    "bestLapsNote": "現行物理版本的圈速榜，涵蓋所有駕駛輔助與天氣條件。已跑賽道較少時，評分會向 50 加權。",
+    "sortLabel": "排序最佳單圈",
+    "sortRank": "最高排名",
+    "sortCircuit": "賽道",
+    "sortRecent": "最近",
+    "noLaps": "現行圈速榜尚無單圈紀錄。",
+    "tableLabel": "{name} 的最佳單圈",
+    "colCircuit": "賽道",
+    "ofBoard": "共 {total} 位",
+    "openBoard": "開啟 {circuit}（{car}）圈速榜",
+    "ariaNamed": "{name} 的車手檔案",
+    "aria": "車手檔案",
+    "refreshLabel": "重新整理車手檔案",
+    "refresh": "重新整理"
   }
 }

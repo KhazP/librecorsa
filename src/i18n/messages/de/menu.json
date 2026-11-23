@@ -57,7 +57,10 @@
     "hud": "HUD",
     "assistsPro": "Keine Fahrhilfen",
     "assistsSemiPro": "TC + ABS",
-    "assistsAssisted": "Alle Fahrhilfen"
+    "assistsAssisted": "Alle Fahrhilfen",
+    "personalBest": "Persönliche Bestzeit",
+    "oldPhysics": "Alte Physik",
+    "noTimeYet": "Noch keine Zeit"
   },
   "panel": {
     "close": "Schließen"
@@ -155,7 +158,9 @@
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, Reifen von <tyres>{tyreAuthor}</tyres>",
     "current": "Aktuelles Auto",
-    "choose": "Auto wählen"
+    "choose": "Auto wählen",
+    "sortPopular": "Meistgefahren",
+    "headingPopular": "Meistgefahren, {days, plural, one {letzter Tag} other {letzte # Tage}}"
   },
   "circuitBrowser": {
     "label": "Strecken",
@@ -198,7 +203,11 @@
     "circuitBy": "Strecke von <name>{author}</name>",
     "active": "Aktive Strecke",
     "loading": "{circuit} wird geladen",
-    "load": "Strecke laden"
+    "load": "Strecke laden",
+    "sortPopular": "Meistgefahren",
+    "headingPopular": "Meistgefahren, {days, plural, one {letzter Tag} other {letzte # Tage}}",
+    "boardRank": "<b>P{pos}</b> von {total}",
+    "boardRankTitle": "Platz in der Online-Bestenliste"
   },
   "challenge": {
     "view": "Challenge-Ansicht",

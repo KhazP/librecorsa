@@ -57,7 +57,10 @@
     "hud": "HUD",
     "assistsPro": "دون مساعدات",
     "assistsSemiPro": "TC + ABS",
-    "assistsAssisted": "مساعدات كاملة"
+    "assistsAssisted": "مساعدات كاملة",
+    "personalBest": "أفضل زمن شخصي",
+    "oldPhysics": "فيزياء قديمة",
+    "noTimeYet": "لا يوجد زمن بعد"
   },
   "panel": {
     "close": "إغلاق"
@@ -155,7 +158,9 @@
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>، والإطارات من <tyres>{tyreAuthor}</tyres>",
     "current": "السيارة الحالية",
-    "choose": "اختيار السيارة"
+    "choose": "اختيار السيارة",
+    "sortPopular": "الأكثر قيادة",
+    "headingPopular": "الأكثر قيادة، آخر {days, plural, zero {# يوم} one {يوم} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}"
   },
   "circuitBrowser": {
     "label": "الحلبات",
@@ -198,7 +203,11 @@
     "circuitBy": "الحلبة من تصميم <name>{author}</name>",
     "active": "الحلبة النشطة",
     "loading": "جارٍ تحميل {circuit}",
-    "load": "تحميل الحلبة"
+    "load": "تحميل الحلبة",
+    "sortPopular": "الأكثر قيادة",
+    "headingPopular": "الأكثر قيادة، آخر {days, plural, zero {# يوم} one {يوم} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}",
+    "boardRank": "<b>P{pos}</b> من {total}",
+    "boardRankTitle": "المركز في اللوحة عبر الإنترنت"
   },
   "challenge": {
     "view": "عرض التحدي",

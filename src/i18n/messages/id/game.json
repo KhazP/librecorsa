@@ -147,7 +147,9 @@
     "recordDetail": "{boards} — ketuk untuk melihat sirkuit",
     "ogDetail": "Mengemudikan LibreCorsa di Fisika V1",
     "bulbDetailNote": "Kontributor Ide: {note}",
-    "bulbDetail": "Ide atau kontribusi komunitas"
+    "bulbDetail": "Ide atau kontribusi komunitas",
+    "creator": "Pembuat",
+    "creatorDetail": "Membuat LibreCorsa"
   },
   "camera": {
     "chaseClose": "Chase dekat",

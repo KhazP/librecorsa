@@ -147,7 +147,9 @@
     "recordDetail": "{boards} — pistleri görmek için dokun",
     "ogDetail": "LibreCorsa’yı Fizik V1 ile sürdü",
     "bulbDetailNote": "Fikir Veren: {note}",
-    "bulbDetail": "Fikir veya topluluk katkısı"
+    "bulbDetail": "Fikir veya topluluk katkısı",
+    "creator": "Yapımcı",
+    "creatorDetail": "LibreCorsa’yı yaptı"
   },
   "camera": {
     "chaseClose": "Yakın takip",

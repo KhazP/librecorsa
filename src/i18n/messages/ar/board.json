@@ -8,7 +8,8 @@
     "fastestHere": "الأسرع هنا",
     "fastest": "(الأسرع)",
     "tryAgain": "إعادة المحاولة",
-    "myPlace": "أنت في P{rank} من {total}"
+    "myPlace": "أنت في P{rank} من {total}",
+    "viewProfile": "عرض ملف {name} الشخصي"
   },
   "input": {
     "drivenWith": "القيادة باستخدام: {input, select, keyboard {لوحة المفاتيح} controller {وحدة التحكم} wheel {المقود} other {شاشة اللمس}}"
@@ -128,7 +129,41 @@
       "weekly": "{medals, select, gold {الأول أسبوعيًا} silver {الثاني أسبوعيًا} bronze {الثالث أسبوعيًا} goldSilver {الأول–الثاني أسبوعيًا} silverBronze {الثاني–الثالث أسبوعيًا} goldBronze {الأول والثالث أسبوعيًا} other {الأول–الثالث أسبوعيًا}}",
       "trackRecord": "أسرع لفة",
       "og": "فيزياء V1",
-      "bulb": "فكرة للعبة"
+      "bulb": "فكرة للعبة",
+      "creator": "صنع اللعبة"
     }
+  },
+  "profile": {
+    "loadingStats": "جارٍ تحميل إحصاءات السائق",
+    "bestLaps": "أفضل اللفات",
+    "loadingBestLaps": "جارٍ تحميل أفضل اللفات",
+    "driverStats": "إحصاءات السائق",
+    "loadFailed": "تعذر تحميل الملف الشخصي لهذا السائق.",
+    "refreshFailed": "فشل التحديث. تُعرض الإحصاءات المحفوظة مؤقتًا.",
+    "ratingTitle": "متوسط الشريحة المئوية عبر الحلبات، مع ترجيح نحو 50 عند القيادة على عدد قليل من الحلبات",
+    "outOf100": "من 100",
+    "rating": "التقييم",
+    "circuits": "{count, plural, zero {حلبات} one {حلبة} two {حلبتان} few {حلبات} many {حلبة} other {حلبة}}",
+    "boards": "{count, plural, zero {لوحات} one {لوحة} two {لوحتان} few {لوحات} many {لوحة} other {لوحة}}",
+    "openRaces": "السباقات المفتوحة",
+    "noOpenRaces": "لا توجد سباقات مفتوحة مكتملة بعد.",
+    "races": "{count, plural, zero {سباقات} one {سباق} two {سباقان} few {سباقات} many {سباقًا} other {سباق}}",
+    "wins": "{count, plural, zero {انتصارات} one {انتصار} two {انتصاران} few {انتصارات} many {انتصارًا} other {انتصار}}",
+    "podiums": "{count, plural, zero {منصات} one {منصة} two {منصتان} few {منصات} many {منصة} other {منصة}}",
+    "bestFinish": "أفضل مركز",
+    "bestLapsNote": "لوحات الفيزياء الحالية، بجميع المساعدات والظروف. يُرجّح التقييم نحو 50 مع قلة الحلبات.",
+    "sortLabel": "ترتيب أفضل اللفات",
+    "sortRank": "أفضل ترتيب",
+    "sortCircuit": "الحلبة",
+    "sortRecent": "الأحدث",
+    "noLaps": "لا توجد لفات في اللوحات الحالية بعد.",
+    "tableLabel": "أفضل لفات {name}",
+    "colCircuit": "الحلبة",
+    "ofBoard": "من {total}",
+    "openBoard": "فتح لوحة {circuit} ({car})",
+    "ariaNamed": "ملف السائق {name}",
+    "aria": "ملف السائق",
+    "refreshLabel": "تحديث ملف السائق",
+    "refresh": "تحديث"
   }
 }

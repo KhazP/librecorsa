@@ -8,7 +8,8 @@
     "fastestHere": "이 열 최고 기록",
     "fastest": "(최고 기록)",
     "tryAgain": "다시 시도",
-    "myPlace": "전체 {total}명 중 P{rank}"
+    "myPlace": "전체 {total}명 중 P{rank}",
+    "viewProfile": "{name} 프로필 보기"
   },
   "input": {
     "drivenWith": "사용한 입력 장치: {input, select, keyboard {키보드} controller {컨트롤러} wheel {휠} other {터치스크린}}"
@@ -128,7 +129,41 @@
       "weekly": "{medals, select, gold {주간 1위} silver {주간 2위} bronze {주간 3위} goldSilver {주간 1~2위} silverBronze {주간 2~3위} goldBronze {주간 1·3위} other {주간 1~3위}}",
       "trackRecord": "패스티스트 랩",
       "og": "물리 V1",
-      "bulb": "게임 아이디어"
+      "bulb": "게임 아이디어",
+      "creator": "게임 제작"
     }
+  },
+  "profile": {
+    "loadingStats": "드라이버 통계 불러오는 중",
+    "bestLaps": "베스트 랩",
+    "loadingBestLaps": "베스트 랩 불러오는 중",
+    "driverStats": "드라이버 통계",
+    "loadFailed": "이 드라이버의 프로필을 불러오지 못했습니다.",
+    "refreshFailed": "새로고침에 실패했습니다. 캐시된 통계를 표시합니다.",
+    "ratingTitle": "서킷별 평균 백분위이며, 주행한 서킷 수가 적을수록 50에 가깝게 가중됩니다",
+    "outOf100": "100점 만점",
+    "rating": "레이팅",
+    "circuits": "{count, plural, other {서킷}}",
+    "boards": "{count, plural, other {보드}}",
+    "openRaces": "오픈 레이스",
+    "noOpenRaces": "아직 완주한 오픈 레이스가 없습니다.",
+    "races": "{count, plural, other {레이스}}",
+    "wins": "{count, plural, other {우승}}",
+    "podiums": "{count, plural, other {포디움}}",
+    "bestFinish": "최고 순위",
+    "bestLapsNote": "현재 물리 버전의 보드 기준이며 모든 주행 보조와 조건을 포함합니다. 주행한 서킷이 적을수록 레이팅은 50에 가깝게 가중됩니다.",
+    "sortLabel": "베스트 랩 정렬",
+    "sortRank": "최고 순위",
+    "sortCircuit": "서킷",
+    "sortRecent": "최신순",
+    "noLaps": "현재 보드에 아직 등록된 랩이 없습니다.",
+    "tableLabel": "{name}의 베스트 랩",
+    "colCircuit": "서킷",
+    "ofBoard": "/ {total}",
+    "openBoard": "{circuit}({car}) 보드 열기",
+    "ariaNamed": "{name} 드라이버 프로필",
+    "aria": "드라이버 프로필",
+    "refreshLabel": "드라이버 프로필 새로고침",
+    "refresh": "새로고침"
   }
 }

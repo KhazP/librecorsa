@@ -8,7 +8,8 @@
     "fastestHere": "Le plus rapide ici",
     "fastest": "(le plus rapide)",
     "tryAgain": "Réessayer",
-    "myPlace": "Vous êtes P{rank} sur {total}"
+    "myPlace": "Vous êtes P{rank} sur {total}",
+    "viewProfile": "Voir le profil de {name}"
   },
   "input": {
     "drivenWith": "Conduit avec : {input, select, keyboard {clavier} controller {manette} wheel {volant} other {écran tactile}}"
@@ -128,7 +129,41 @@
       "weekly": "{medals, select, gold {Hebdo 1re} silver {Hebdo 2e} bronze {Hebdo 3e} goldSilver {Hebdo 1re–2e} silverBronze {Hebdo 2e–3e} goldBronze {Hebdo 1re, 3e} other {Hebdo 1re–3e}}",
       "trackRecord": "Tour le plus rapide",
       "og": "Physique V1",
-      "bulb": "Idée de jeu"
+      "bulb": "Idée de jeu",
+      "creator": "A créé le jeu"
     }
+  },
+  "profile": {
+    "loadingStats": "Chargement des statistiques du pilote",
+    "bestLaps": "Meilleurs tours",
+    "loadingBestLaps": "Chargement des meilleurs tours",
+    "driverStats": "Statistiques du pilote",
+    "loadFailed": "Impossible de charger le profil de ce pilote.",
+    "refreshFailed": "Échec de l’actualisation. Statistiques en cache affichées.",
+    "ratingTitle": "Percentile moyen sur les circuits, pondéré vers 50 lorsque peu de circuits ont été parcourus",
+    "outOf100": "sur 100",
+    "rating": "Note",
+    "circuits": "{count, plural, one {Circuit} other {Circuits}}",
+    "boards": "{count, plural, one {Classement} other {Classements}}",
+    "openRaces": "Courses ouvertes",
+    "noOpenRaces": "Aucune course ouverte terminée pour l’instant.",
+    "races": "{count, plural, one {Course} other {Courses}}",
+    "wins": "{count, plural, one {Victoire} other {Victoires}}",
+    "podiums": "{count, plural, one {Podium} other {Podiums}}",
+    "bestFinish": "Meilleur résultat",
+    "bestLapsNote": "Classements de la physique actuelle, toutes aides et conditions confondues. La note tend vers 50 avec peu de circuits.",
+    "sortLabel": "Trier les meilleurs tours",
+    "sortRank": "Meilleur rang",
+    "sortCircuit": "Circuit",
+    "sortRecent": "Récents",
+    "noLaps": "Aucun tour sur les classements actuels pour l’instant.",
+    "tableLabel": "Meilleurs tours de {name}",
+    "colCircuit": "Circuit",
+    "ofBoard": "sur {total}",
+    "openBoard": "Ouvrir le classement {circuit} ({car})",
+    "ariaNamed": "Profil de pilote de {name}",
+    "aria": "Profil du pilote",
+    "refreshLabel": "Actualiser le profil du pilote",
+    "refresh": "Actualiser"
   }
 }

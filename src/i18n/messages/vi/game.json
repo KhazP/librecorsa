@@ -147,7 +147,9 @@
     "recordDetail": "{boards} — chạm để xem đường đua",
     "ogDetail": "Đã lái LibreCorsa trên Vật lý V1",
     "bulbDetailNote": "Đóng góp ý tưởng: {note}",
-    "bulbDetail": "Ý tưởng hoặc đóng góp cho cộng đồng"
+    "bulbDetail": "Ý tưởng hoặc đóng góp cho cộng đồng",
+    "creator": "Người tạo",
+    "creatorDetail": "Đã tạo ra LibreCorsa"
   },
   "camera": {
     "chaseClose": "Sau xe gần",

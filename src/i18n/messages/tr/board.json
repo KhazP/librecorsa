@@ -8,7 +8,8 @@
     "fastestHere": "Buradaki en hızlı",
     "fastest": "(en hızlı)",
     "tryAgain": "Tekrar dene",
-    "myPlace": "{total} pilot arasında sıran: P{rank}"
+    "myPlace": "{total} pilot arasında sıran: P{rank}",
+    "viewProfile": "{name} profilini gör"
   },
   "input": {
     "drivenWith": "Kullanılan kontrol: {input, select, keyboard {Klavye} controller {Kontrolcü} wheel {Direksiyon} other {Dokunmatik ekran}}"
@@ -128,7 +129,41 @@
       "weekly": "{medals, select, gold {Haftalık 1.} silver {Haftalık 2.} bronze {Haftalık 3.} goldSilver {Haftalık 1.–2.} silverBronze {Haftalık 2.–3.} goldBronze {Haftalık 1., 3.} other {Haftalık 1.–3.}}",
       "trackRecord": "En hızlı tur",
       "og": "Fizik V1",
-      "bulb": "Oyun fikri"
+      "bulb": "Oyun fikri",
+      "creator": "Oyunu yaptı"
     }
+  },
+  "profile": {
+    "loadingStats": "Pilot istatistikleri yükleniyor",
+    "bestLaps": "En iyi turlar",
+    "loadingBestLaps": "En iyi turlar yükleniyor",
+    "driverStats": "Pilot istatistikleri",
+    "loadFailed": "Bu pilotun profili yüklenemedi.",
+    "refreshFailed": "Yenileme başarısız. Önbellekteki istatistikler gösteriliyor.",
+    "ratingTitle": "Pistler arası ortalama yüzdelik dilim; az pistte sürüldüğünde 50’ye doğru ağırlıklandırılır",
+    "outOf100": "100 üzerinden",
+    "rating": "Puan",
+    "circuits": "{count, plural, one {Pist} other {Pist}}",
+    "boards": "{count, plural, one {Tablo} other {Tablo}}",
+    "openRaces": "Açık yarışlar",
+    "noOpenRaces": "Henüz tamamlanan açık yarış yok.",
+    "races": "{count, plural, one {Yarış} other {Yarış}}",
+    "wins": "{count, plural, one {Galibiyet} other {Galibiyet}}",
+    "podiums": "{count, plural, one {Podyum} other {Podyum}}",
+    "bestFinish": "En iyi bitiş",
+    "bestLapsNote": "Güncel fizik tabloları, tüm destekler ve koşullar. Az pistte puan 50’ye doğru ağırlıklandırılır.",
+    "sortLabel": "En iyi turları sırala",
+    "sortRank": "En iyi sıra",
+    "sortCircuit": "Pist",
+    "sortRecent": "Son turlar",
+    "noLaps": "Güncel tablolarda henüz tur yok.",
+    "tableLabel": "{name} pilotunun en iyi turları",
+    "colCircuit": "Pist",
+    "ofBoard": "/ {total}",
+    "openBoard": "{circuit} ({car}) tablosunu aç",
+    "ariaNamed": "{name} pilot profili",
+    "aria": "Pilot profili",
+    "refreshLabel": "Pilot profilini yenile",
+    "refresh": "Yenile"
   }
 }

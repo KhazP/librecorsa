@@ -57,7 +57,10 @@
     "hud": "HUD",
     "assistsPro": "無輔助",
     "assistsSemiPro": "TC + ABS",
-    "assistsAssisted": "完整輔助"
+    "assistsAssisted": "完整輔助",
+    "personalBest": "個人最佳",
+    "oldPhysics": "舊版物理",
+    "noTimeYet": "尚無成績"
   },
   "panel": {
     "close": "關閉"
@@ -155,7 +158,9 @@
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>，輪胎製作：<tyres>{tyreAuthor}</tyres>",
     "current": "目前車輛",
-    "choose": "選擇車輛"
+    "choose": "選擇車輛",
+    "sortPopular": "最多人駕駛",
+    "headingPopular": "最多人駕駛，近 {days, plural, other {# 天}}"
   },
   "circuitBrowser": {
     "label": "賽道",
@@ -198,7 +203,11 @@
     "circuitBy": "賽道製作：<name>{author}</name>",
     "active": "目前賽道",
     "loading": "正在載入 {circuit}",
-    "load": "載入賽道"
+    "load": "載入賽道",
+    "sortPopular": "最多人駕駛",
+    "headingPopular": "最多人駕駛，近 {days, plural, other {# 天}}",
+    "boardRank": "<b>P{pos}</b>／共 {total} 位",
+    "boardRankTitle": "線上圈速榜名次"
   },
   "challenge": {
     "view": "挑戰檢視",

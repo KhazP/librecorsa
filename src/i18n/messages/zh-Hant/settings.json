@@ -504,6 +504,14 @@
     "telemetryOut": {
       "label": "UDP 遙測",
       "hint": "將即時遙測傳送至本機 bridge（供外部儀錶板、低音震動器使用）"
+    },
+    "practiceDamage": {
+      "label": "練習車損",
+      "hints": {
+        "off": "練習賽與計時賽中無車損",
+        "reduced": "車損減半；車輛全毀後會修復並以飛行單圈重新開始",
+        "full": "正賽車損；車輛全毀後會修復並以飛行單圈重新開始"
+      }
     }
   },
   "driving": {

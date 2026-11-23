@@ -147,7 +147,9 @@
     "recordDetail": "{boards} — 눌러서 서킷 보기",
     "ogDetail": "물리 V1에서 LibreCorsa를 주행함",
     "bulbDetailNote": "아이디어 기여자: {note}",
-    "bulbDetail": "아이디어 또는 커뮤니티 기여"
+    "bulbDetail": "아이디어 또는 커뮤니티 기여",
+    "creator": "제작자",
+    "creatorDetail": "LibreCorsa 제작"
   },
   "camera": {
     "chaseClose": "근접 체이스",

@@ -57,7 +57,10 @@
     "hud": "HUD",
     "assistsPro": "Không hỗ trợ lái",
     "assistsSemiPro": "TC + ABS",
-    "assistsAssisted": "Hỗ trợ đầy đủ"
+    "assistsAssisted": "Hỗ trợ đầy đủ",
+    "personalBest": "Kỷ lục cá nhân",
+    "oldPhysics": "Vật lý cũ",
+    "noTimeYet": "Chưa có thành tích"
   },
   "panel": {
     "close": "Đóng"
@@ -155,7 +158,9 @@
     "creditOther": "{label} <link>{author}</link>",
     "creditOtherTyres": "{label} <link>{author}</link>, lốp của <tyres>{tyreAuthor}</tyres>",
     "current": "Xe hiện tại",
-    "choose": "Chọn xe"
+    "choose": "Chọn xe",
+    "sortPopular": "Lái nhiều nhất",
+    "headingPopular": "Lái nhiều nhất, {days, plural, other {# ngày qua}}"
   },
   "circuitBrowser": {
     "label": "Đường đua",
@@ -198,7 +203,11 @@
     "circuitBy": "Đường đua của <name>{author}</name>",
     "active": "Đường đua hiện tại",
     "loading": "Đang tải {circuit}",
-    "load": "Tải đường đua"
+    "load": "Tải đường đua",
+    "sortPopular": "Lái nhiều nhất",
+    "headingPopular": "Lái nhiều nhất, {days, plural, other {# ngày qua}}",
+    "boardRank": "<b>P{pos}</b> trên {total}",
+    "boardRankTitle": "Vị trí trên bảng xếp hạng trực tuyến"
   },
   "challenge": {
     "view": "Chế độ xem thử thách",

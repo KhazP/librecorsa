@@ -132,5 +132,8 @@
     "damp": "Nemli",
     "wet": "Islak",
     "flooded": "Su birikintili"
+  },
+  "dialog": {
+    "close": "Kapat"
   }
 }

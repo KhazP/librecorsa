@@ -147,7 +147,9 @@
     "recordDetail": "{boards} — toque para ver as pistas",
     "ogDetail": "Dirigiu o LibreCorsa na Física V1",
     "bulbDetailNote": "Colaborador de ideias: {note}",
-    "bulbDetail": "Ideia ou contribuição da comunidade"
+    "bulbDetail": "Ideia ou contribuição da comunidade",
+    "creator": "Criador",
+    "creatorDetail": "Criou o LibreCorsa"
   },
   "camera": {
     "chaseClose": "Perseguição próxima",

@@ -504,6 +504,14 @@
     "telemetryOut": {
       "label": "UDP telemetri",
       "hint": "Yerel bridge’e canlı telemetri gönderir (gösterge ekranları, bass shaker’lar)"
+    },
+    "practiceDamage": {
+      "label": "Antrenman hasarı",
+      "hints": {
+        "off": "Antrenmanda ve zamana karşı modunda hasar yok",
+        "reduced": "Hasar yarıya iner; araç pert olursa onarılıp uçan tur yeniden başlar",
+        "full": "Yarış hasarı; araç pert olursa onarılıp uçan tur yeniden başlar"
+      }
     }
   },
   "driving": {

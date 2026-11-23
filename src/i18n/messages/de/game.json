@@ -147,7 +147,9 @@
     "recordDetail": "{boards} – tippen, um Strecken zu sehen",
     "ogDetail": "Fuhr LibreCorsa auf Physik V1",
     "bulbDetailNote": "Ideengeber: {note}",
-    "bulbDetail": "Idee oder Beitrag der Community"
+    "bulbDetail": "Idee oder Beitrag der Community",
+    "creator": "Entwickler",
+    "creatorDetail": "Hat LibreCorsa entwickelt"
   },
   "camera": {
     "chaseClose": "Verfolger nah",
