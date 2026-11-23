@@ -791,5 +791,6 @@
   "pit.boxIn": "HUD in the pit lane: the player's pit box is this many metres ahead.",
   "pit.boxPassed": "HUD in the pit lane: the car has gone past its pit box.",
   "pit.approach": "HUD on the way into the pits: the pit entry is ahead and the lane's speed limit.",
-  "pit.limiterKey": "HUD: the key that switches the pit speed limiter, e.g. 'Limiter: \\\\'."
+  "pit.limiterKey": "HUD: the key that switches the pit speed limiter, e.g. 'Limiter: \\\\'.",
+  "timingPanels.tower.pit": "Timing tower, in place of the gap: the car is in the pit lane. Short, capitals."
 }

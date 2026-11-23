@@ -88,6 +88,7 @@ export const TowerRows: React.FC<{
       fastestLapShort: tx("fastestLapShort"),
       finished: tx("finished"),
       out: tx("out"),
+      pit: tx("pit"),
       leader: tx("leader"),
       lead: tx("lead"),
       lastVsBestTitle: tx("lastVsBestTitle"),
@@ -167,7 +168,7 @@ export const TowerRows: React.FC<{
               ) : null}
             </span>
             <span className={`text-[12px] ${e.retired ? (e.isPlayer ? "" : "text-lc-loss") : e.isPlayer ? "" : i === 0 ? "text-lc-fog" : "text-lc-slate"}`}>
-              {e.retired ? L.out : gap === null ? (gaps === "leader" ? L.leader : L.lead) : `+${formatGap(gap)}`}
+              {e.retired ? L.out : e.inPit ? L.pit : gap === null ? (gaps === "leader" ? L.leader : L.lead) : `+${formatGap(gap)}`}
             </span>
             <span
               className="text-end text-[10px]"

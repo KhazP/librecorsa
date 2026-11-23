@@ -778,7 +778,8 @@
       "lead": "Lead",
       "lastVsBestTitle": "Last lap against your best",
       "lastVsTheirsTitle": "Their last lap against yours",
-      "personalBest": "PB"
+      "personalBest": "PB",
+      "pit": "PIT"
     },
     "lap": {
       "region": "Lap",
