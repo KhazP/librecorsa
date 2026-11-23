@@ -4270,7 +4270,8 @@ export class DriveSession {
         }
         cueDrsAvail = drsAvail;
         cueDrsOpen = drsOpen;
-        const limiter = vehicleModelSpec(vehicleNow).limiterRpm;
+        // A mod car's physics file may move the limiter
+        const limiter = carById(carIdNow).simProfile?.config.gearbox.gears.redline_rpm ?? vehicleModelSpec(vehicleNow).limiterRpm;
         if (tc.gear !== cueGear || tc.rpm < limiter - 600) {
           cueGear = tc.gear;
           cueShiftArmed = true;

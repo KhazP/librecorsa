@@ -317,6 +317,11 @@ function registryChecks(): void {
   check("a package car joins CARS", CARS.length === before + 1 && !!car);
   check("it drives on the vehicle model it names, graded mod", car?.physics === "amg-gt3" && car.quality === "mod");
   check("its model and sound are in the package", car?.modelUrl === "/mods/jdoe.test-pack/cars/gt-x/gt-x.glb" && car.sound.assetDir === "/mods/jdoe.test-pack/cars/gt-x/audio/", `${car?.modelUrl} ${car?.sound.assetDir}`);
+  check("its bank sweeps its range on its model's limiter", car?.sound.physicsLimiterRpm === VEHICLE_MODELS["amg-gt3"].limiterRpm);
+  const borrowing = { ...m, cars: [{ ...m.cars![0], sound: { car: "amg-gt3" } }] };
+  registerModContent([{ manifest: borrowing, origin }]);
+  check("a car can borrow a game car's sound bank", CARS.find((c) => c.id === carId)?.sound.assetDir === carById("amg-gt3").sound.assetDir);
+  registerModContent([{ manifest: m, origin }]);
   check("its thumbnail sits beside its model", carThumbUrl(carId) === "/mods/jdoe.test-pack/cars/gt-x/thumb.webp", carThumbUrl(carId));
   const skins = car?.skins ?? [];
   check("its first livery keeps the model's paint", skins.length === 2 && portedSkinFor(carId, skins[0]) === null);

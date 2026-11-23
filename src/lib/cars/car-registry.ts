@@ -737,13 +737,16 @@ export const carsByYear = (id: CarClassId): { year: number; cars: CarDefinition[
   return [...groups.entries()].sort(([a], [b]) => b - a).map(([year, cars]) => ({ year, cars }));
 };
 
-/** The car that stands for a vehicle model (its first car), e.g. for a leaderboard entry or a class rule */
 /**
  * The first car of a vehicle model whether or not this copy lists it: an online board holds laps of cars another copy
- * lists (a clone without the hosted files sees the GT3's laps too). Undefined for a model with no car of its own.
+ * lists (a clone without the hosted files sees the GT3's laps too). Never a mod car. Undefined for a model with no car
+ * of its own.
  */
-export const anyCarForVehicle = (vehicle: VehicleModelId): CarDefinition | undefined => ALL_CARS.find((c) => c.physics === vehicle);
+export const anyCarForVehicle = (vehicle: VehicleModelId): CarDefinition | undefined => ALL_CARS.find((c) => c.physics === vehicle && !c.mod);
 
-/** A mod car never stands for its model: a race or a board that names the model gets one of the game's own cars */
+/**
+ * The car that stands for a vehicle model (its first car), e.g. for a leaderboard entry or a class rule. A mod car never
+ * does: a race or a board that names the model gets one of the game's own cars
+ */
 export const carForVehicle = (vehicle: VehicleModelId): CarDefinition =>
   KNOWN_CARS.find((c) => c.physics === vehicle && !c.mod) ?? CARS[0];

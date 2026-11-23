@@ -29,7 +29,7 @@ export function modCarProfile(m: ModManifest, c: ModCar, file: unknown, hash: st
   const base = VEHICLE_MODELS[physics.base as VehicleModelId]?.simProfile;
   if (!base) return { ok: false, errors: [`${c.id}: ${physics.base} can't take a physics file`] };
   // Plans and guides are kept per profile id: each car and each version of the package gets its own
-  const id = `${modContentId(m.id, c.id)}@${(hash ?? m.version).slice(0, 12)}`;
+  const id = `${modContentId(m.id, c.id)}@${hash ? hash.slice(0, 12) : m.version}`;
   const result = modSimProfile(base, file, id, c.bodyPlan);
   return result.ok ? result : { ok: false, errors: result.errors.map((e) => `${physics.file}: ${e}`) };
 }
@@ -66,16 +66,13 @@ export function modCarDefinition(m: ModManifest, c: ModCar, origin: ModOrigin, s
   const physics = (typeof c.physics === "string" ? c.physics : c.physics.base) as VehicleModelId;
   const id = modContentId(m.id, c.id) as CarDefinition["id"];
   const model = VEHICLE_MODELS[physics];
+  // The limiter the car's engine really has: its physics file's, else its vehicle model's
+  const physicsLimiterRpm = simProfile?.config.gearbox.gears.redline_rpm ?? model.limiterRpm;
+  // Either bank sweeps its range on that limiter. A game car's is found in a clone too (where only the prototype is listed)
   const sound =
     "car" in c.sound
-      ? carById(c.sound.car as BuiltInCarId).sound
-      : {
-          id,
-          assetDir: modDirUrl(m.id, c.sound.dir),
-          limiterRpm: c.sound.limiterRpm,
-          // The bank sweeps its range on the vehicle model's own limiter
-          physicsLimiterRpm: model.limiterRpm,
-        };
+      ? { ...(anyCarById(c.sound.car as BuiltInCarId) ?? carById(c.sound.car as BuiltInCarId)).sound, physicsLimiterRpm }
+      : { id, assetDir: modDirUrl(m.id, c.sound.dir), limiterRpm: c.sound.limiterRpm, physicsLimiterRpm };
   const skins = c.skins?.map((s) => modSkin(m.id, s, origin, c));
   return {
     id,
