@@ -2235,7 +2235,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         />
       ) : null}
 
-      {phase === "driving" ? (
+      {phase === "driving" || settings.hud.editMode ? (
         <F1TelemetryHud
           {...menuProps}
           telemetrySource={telemetrySource}
@@ -2376,7 +2376,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         />
       ) : null}
 
-      {phase === "title" ? (
+      {phase === "title" && !settings.hud.editMode ? (
         <TitleMenu
           {...menuProps}
           // The note after a drive: on the main menu only, never over a room or a race entry
@@ -2459,7 +2459,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         />
       ) : null}
 
-      {settingsOpen ? (
+      {settingsOpen && !settings.hud.editMode ? (
         <SettingsScreen
           env={settingsEnv}
           initialCategory={settingsOpen.category}

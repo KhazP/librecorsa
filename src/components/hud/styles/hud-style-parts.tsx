@@ -147,9 +147,41 @@ export function revRangeOf(t: CarTelemetry): [number, number] {
   return revRangeFor(t.f12026?.carId);
 }
 
-/** Scales a corner group of the HUD about that corner */
-export const anchor = (scale: number | undefined, origin: string): React.CSSProperties | undefined =>
-  !scale || scale === 1 ? undefined : { transform: `scale(${scale})`, transformOrigin: origin };
+const ORIGIN_TO_PART_ID: Record<string, string> = {
+  "top left": "timing-tower",
+  "top center": "start-lights",
+  "top right": "minimap",
+  "center right": "launch-cue",
+  center: "proximity-radar",
+  "bottom left": "tyre-panel",
+  "bottom right": "mfd",
+  "bottom center": "speed-cluster",
+};
+
+let activeHudParts: Record<string, { x: number; y: number; scale: number }> | undefined;
+
+/** Syncs the active saved per-part HUD offsets & scales so every layout's `anchor()` applies them */
+export function setActiveHudParts(parts: Record<string, { x: number; y: number; scale: number }> | undefined): void {
+  activeHudParts = parts;
+}
+
+/** Scales and translates a corner group of the HUD about that corner */
+export const anchor = (scale: number | undefined, origin: string): React.CSSProperties => {
+  const partId = ORIGIN_TO_PART_ID[origin];
+  const part = partId ? activeHudParts?.[partId] : undefined;
+  const x = part?.x ?? 0;
+  const y = part?.y ?? 0;
+  const partScale = part?.scale ?? 1;
+  const base = scale ?? 1;
+  const totalScale = base * (Number.isFinite(partScale) && partScale > 0 ? partScale : 1);
+  const hasOffset = x !== 0 || y !== 0;
+  const hasScale = totalScale !== 1;
+  return {
+    transformOrigin: origin,
+    ...(partId ? ({ "--lc-hud-part": partId } as React.CSSProperties) : null),
+    ...(hasOffset || hasScale ? { transform: `translate(${x}px, ${y}px) scale(${totalScale})` } : null),
+  };
+};
 
 /** The one HUD glass and the one HUD label (hud-format), for the styles that import them from here */
 export { HUD_GLASS, HUD_LBL };
