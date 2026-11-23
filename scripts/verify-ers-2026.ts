@@ -24,6 +24,9 @@ import { getActiveTrackData, RWANDA_DRS_ZONES, setActiveTrack, type RawTrackJson
 import { f1EnergyCircuit, inStretch } from '../src/lib/sim/f1-energy-circuits';
 import { straightModeWindows } from '../src/lib/sim/straight-mode-zones';
 import { OvertakeGrant } from '../src/lib/sim/overtaking-rules';
+import { createSimHost, loopbackTransport } from '../src/lib/sim/runtime/sim-host';
+import { parsePlayerSettings } from '../src/lib/settings/player-settings';
+import { DEFAULT_KEY_BINDINGS, PAD_LAYOUTS, RETIRED_FORMULA_STYLE_BUTTONS, GT_STYLE_BUTTONS } from '../src/lib/input/bindings';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
 import { overtakingRulesForSeason } from '../src/lib/sim/overtaking-rules';
 import { createFlatTestTrack } from './lib/flat-track';
@@ -234,6 +237,7 @@ console.log('\n== Each circuit\'s rules (the FIA\'s 2026 Power Unit Information,
     check('Monaco: Rev 1 curves, no 250 kW sectors, 8.5 / 9.0 / 9.0 MJ', c.curves === 'rev1' && c.alt1.length === 0 && c.recharge.race === 8.5e6 && c.recharge.timeTrial === 9e6 && c.recharge.practice === 9e6);
     check('... Overtake judged after the Swimming Pool, active before Anthony Noghès', c.detectionM !== null && c.activationM !== null && c.detectionM > 2700 && c.detectionM < 2850 && c.activationM > 2850 && c.activationM < 2950, `${c.detectionM} / ${c.activationM} m`);
     check('... the qualifying lap\'s launch out of the last corner (C5.12.4, C5.12.5)', c.bigCut.length === 1 && c.bigCut[0].timeTrialOnly && c.reset.length === 1 && inStretch(3100, c.reset[0]));
+    check('... somewhere to spend an Overtake, with no DRS zone or straight: its longest runs', c.overtakeZones.length === 2 && inStretch(3200, c.overtakeZones[0]), JSON.stringify(c.overtakeZones));
   }
 }
 
@@ -301,6 +305,83 @@ function flatOut(opts: { mode: string; racing: boolean; fromKmh: number; toKmh: 
 }
 
 // ---------------------------------------------------------------------------
+console.log('\n== Through the car: the race\'s 250 kW, the Overtake press and its assist, the time trial');
+{
+  // On the flat pad, its whole lap one 250 kW sector: in a race, flat out past the pending second, the motor at 250 kW
+  const flat = (racing: boolean) => {
+    const sim = new F12026CarSim(pad, null, LC26_SIM_PROFILE);
+    sim.assistPreset = 'pro';
+    sim.autoGearbox = true;
+    sim.raceControl = racing ? { racing: true, earnedAtDetection: () => false } : null;
+    sim.teleportToDistance(2000, 180 / 3.6);
+    // A copy: the circuit's rules are one object for every car on it
+    const c = sim.vehicle.ersCircuit;
+    if (c) sim.vehicle.ersCircuit = { ...c, alt1: [{ fromM: 0, toM: 1e9 }] };
+    let peakAfter = 0;
+    for (let t = 0; t < 4; t += 1 / 240) {
+      sim.step(1 / 240, { throttle: 1 });
+      sim.vehicle.ersEnergyJ = 3e6;
+      if (t > 1.5) peakAfter = Math.max(peakAfter, sim.vehicle.telemetry.MGUK_POWER / ers.deployEfficiency);
+    }
+    return peakAfter;
+  };
+  const race = flat(true);
+  const practice = flat(false);
+  check('A race\'s 250 kW sector: the motor held to 250 kW flat out (C5.2.8 iii)', race <= 250_100 && race > 240_000, kW(race));
+  check('... practice keeps the whole 350 kW there', practice > 340_000, kW(practice));
+
+  // One straight in a race, Overtake earned: none, the Automatic Overtake, the driver's press
+  const straight = (mode: 'none' | 'auto' | 'press') => {
+    const sim = new F12026CarSim(pad, null, LC26_SIM_PROFILE);
+    // The grant is the car's own; earned and active for this straight
+    const grant = (sim as unknown as { overtake: OvertakeGrant }).overtake;
+    sim.assistPreset = 'pro';
+    sim.autoGearbox = true;
+    sim.raceControl = { racing: true, earnedAtDetection: () => true };
+    sim.teleportToDistance(2000, 290 / 3.6);
+    sim.autoOvertake = mode === 'auto';
+    const s0 = sim.sMeters;
+    let t = 0;
+    while (sim.sMeters - s0 < 1200 && t < 30) {
+      grant.earned = grant.active = true;
+      sim.vehicle.ersEnergyJ = 3e6;
+      sim.step(1 / 240, { throttle: 1, overtake: mode === 'press' && t === 0 });
+      t += 1 / 240;
+    }
+    return t;
+  };
+  const tNone = straight('none');
+  const tAuto = straight('auto');
+  const tPress = straight('press');
+  check('1200 m flat out from 290 km/h: Overtake pressed beats the Automatic Overtake, which beats none', tPress < tAuto - 0.03 && tAuto < tNone - 0.1,
+    `${f(tNone, 3)} / ${f(tAuto, 3)} / ${f(tPress, 3)} s`);
+
+  // The time trial's allowances, given to the car through the simulation worker's messages
+  const loop = loopbackTransport();
+  const host = createSimHost(loop.transport, loop.wallNowMs);
+  const twin = vehicleModelSpec('lc26').createSim(pad, null);
+  const car = host.adopt(twin, 'lc26');
+  car.setEnergySession?.(true);
+  car.resetToStartGrid(false);
+  host.endFrame(true);
+  car.step(1 / 60, {});
+  loop.advance(1 / 60);
+  host.endFrame(true);
+  const workerCar = loop.runtime.simulatedCar as unknown as { vehicle: { ersSession: string } } | null;
+  check('A time trial gives the car qualifying\'s allowances, through the worker too', workerCar?.vehicle.ersSession === 'timeTrial', workerCar?.vehicle.ersSession ?? 'no worker car');
+}
+
+console.log('\n== Saved controls');
+{
+  // A save from before Overtake, with Z already the player's for something else: Overtake gets no key, never a clash
+  const keys = parsePlayerSettings({ keys: { ...DEFAULT_KEY_BINDINGS, overtake: undefined, mute: ['KeyZ'] } }).keys;
+  check('An older key map: Overtake on Z, unless the player already uses Z', keys.overtake.length === 0 && keys.mute[0] === 'KeyZ' && parsePlayerSettings({ keys: { ...DEFAULT_KEY_BINDINGS, overtake: undefined } }).keys.overtake[0] === 'KeyZ');
+  const oldF1 = parsePlayerSettings({ padButtons: { ...RETIRED_FORMULA_STYLE_BUTTONS, overtake: undefined } }).padButtons;
+  check('An older Formula style pad moves on: Overtake on LB', oldF1.overtake === 4 && oldF1.mfdPage === PAD_LAYOUTS.f1.buttons.mfdPage);
+  const oldGt = parsePlayerSettings({ padButtons: { ...GT_STYLE_BUTTONS, overtake: undefined } }).padButtons;
+  check('GT style keeps every button; Overtake left to the assist (or a binding)', oldGt.overtake === null && oldGt.boost === GT_STYLE_BUTTONS.boost);
+}
+
 console.log('\n== Issue #180: Qiddiya, out of the last corner');
 {
   const dataPath = 'public/tracks/qiddiya/track_data.json';
