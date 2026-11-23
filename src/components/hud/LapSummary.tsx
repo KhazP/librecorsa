@@ -141,8 +141,8 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
   // The first lap on a board while signed out says once that an account keeps it on every device
   const canSignIn = Boolean(props.onSignIn);
   useEffect(() => {
-    if (canSignIn && submitState === "sent" && claimSignInHint()) setSignInHint(true);
-  }, [canSignIn, submitState, s.lapNumber]);
+    if (canSignIn && submitState === "sent" && claimSignInHint(`${s.lapNumber}:${s.lapTimeMs}`)) setSignInHint(true);
+  }, [canSignIn, submitState, s.lapNumber, s.lapTimeMs]);
   // The pause menu or a replay covers the toast: the pointer is no longer on it
   useEffect(() => {
     if (hidden) setHovered(false);
@@ -409,43 +409,45 @@ const SignInNote: React.FC<{ place: "toast" | "card"; onSignIn: () => void }> = 
   const tx = useTranslations("hud.lapSummary");
   // Drawn under the HUD, which re-renders every frame: the words are read once per language
   const words = useMemo(() => ({ hint: tx("signInHint"), signIn: tx("signIn") }), [tx]);
-  const row = "flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] leading-snug";
+  // One row: the words wrap beside the button, which stays in view at the row's end
+  const row = "flex items-center gap-2 text-[12px] leading-snug";
+  const text = <span className="min-w-0 text-balance">{words.hint}</span>;
   if (skin !== null) {
     const button = (
-      <SkinButton onClick={onSignIn} className="h-7 px-2.5 text-[12px] font-semibold">
+      <SkinButton onClick={onSignIn} className="h-7 shrink-0 px-2.5 text-[12px] font-semibold">
         {words.signIn}
       </SkinButton>
     );
     return place === "toast" ? (
-      <SkinBanner role="status" cut="sm" className={`mt-1.5 ms-auto w-fit max-w-full px-3 py-1 font-medium pointer-coarse:mx-auto ${row}`}>
+      <SkinBanner role="status" cut="sm" className={`mt-1.5 ms-auto w-fit max-w-full py-1 ps-3 pe-1.5 font-medium pointer-coarse:mx-auto ${row}`}>
         <Icon name="profile" size="xs" className="shrink-0" />
-        {words.hint}
+        {text}
         {button}
       </SkinBanner>
     ) : (
       <p className={`-mt-1 justify-end text-end ${row} ${skinCss.inkDim}`}>
-        {words.hint}
+        {text}
         {button}
       </p>
     );
   }
   const button = (
-    <Button size="sm" variant={place === "toast" ? "secondary" : "ghost"} onClick={onSignIn}>
+    <Button size="sm" variant={place === "toast" ? "secondary" : "ghost"} className="shrink-0" onClick={onSignIn}>
       {words.signIn}
     </Button>
   );
   return place === "toast" ? (
     <p
       role="status"
-      className={`mt-1.5 ms-auto w-fit max-w-full rounded-lc-row border border-white/10 bg-lc-void/84 px-3 py-1 font-medium text-lc-chalk shadow-lc-pop backdrop-blur-[8px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto ${row}`}
+      className={`mt-1.5 ms-auto w-fit max-w-full rounded-lc-row border border-white/10 bg-lc-void/84 py-1 ps-3 pe-1.5 font-medium text-lc-chalk shadow-lc-pop backdrop-blur-[8px] in-data-[phone-hud]:backdrop-blur-none pointer-coarse:mx-auto ${row}`}
     >
       <Icon name="profile" size="xs" className="shrink-0" />
-      {words.hint}
+      {text}
       {button}
     </p>
   ) : (
     <p className={`-mt-1 justify-end text-end text-lc-slate ${row}`}>
-      {words.hint}
+      {text}
       {button}
     </p>
   );
