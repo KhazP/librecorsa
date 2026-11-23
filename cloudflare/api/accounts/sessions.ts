@@ -64,7 +64,8 @@ export async function readSession(ctx: Ctx): Promise<Session | null> {
   }
   const { db, now } = ctx.deps;
   const id = await sha256Hex(token);
-  const row = await db.prepare("SELECT * FROM sessions WHERE id = ?").bind(id).first<SessionRow>();
+  // Joined to its account, so a session of an account being deleted can't write rows for it any more
+  const row = await db.prepare("SELECT s.* FROM sessions s JOIN accounts a ON a.id = s.account_id WHERE s.id = ?").bind(id).first<SessionRow>();
   const nowMs = now();
   if (!row || nowMs - row.last_seen_at > SESSION_IDLE_MS) {
     if (row) await db.prepare("DELETE FROM sessions WHERE id = ?").bind(id).run();

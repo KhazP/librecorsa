@@ -30,6 +30,7 @@ export async function deleteAccount(ctx: Ctx, session: Session): Promise<Respons
   if (confirm !== "delete" || typeof removeLaps !== "boolean") return failWith(ctx, 'Send confirm: "delete" and removeLaps');
   const { board, db, ghosts } = ctx.deps;
   const accountId = session.accountId;
+  const nowMs = ctx.deps.now();
 
   // The boards
   const names = (await board.prepare("SELECT name_key FROM drivers WHERE account_id = ?").bind(accountId).all<{ name_key: string }>()).results.map((r) => r.name_key);
@@ -54,7 +55,9 @@ export async function deleteAccount(ctx: Ctx, session: Session): Promise<Respons
     const writes: D1PreparedStatement[] = [];
     if (own) writes.push(board.prepare("UPDATE drivers SET key_hash = ? WHERE account_id = ? AND key_hash = ?").bind(own.key_hash, accountId, accountSentinel(accountId)));
     writes.push(
-      board.prepare("UPDATE drivers SET account_id = NULL WHERE account_id = ?").bind(accountId),
+      // Off the account they lapse like any name, counted from now: names on an account never lapsed, so their last
+      // upload may be long past, and the next claim would otherwise take them (and their laps) at once
+      board.prepare("UPDATE drivers SET account_id = NULL, last_seen = MAX(last_seen, ?) WHERE account_id = ?").bind(nowMs, accountId),
       board.prepare("DELETE FROM account_keys WHERE account_id = ?").bind(accountId),
     );
     await board.batch(writes);

@@ -84,7 +84,7 @@ export async function putSave(ctx: Ctx, session: Session): Promise<Response> {
   if (typeof baseRev !== "number" || !Number.isInteger(baseRev) || baseRev < 0) return failWith(ctx, "baseRev is required");
   const problem = saveDocProblem(doc);
   if (problem) return failWith(ctx, problem);
-  const combined = Array.isArray(combinedPending) ? combinedPending.filter((id): id is number => Number.isInteger(id) && id > 0).slice(0, 100) : [];
+  const combined = Array.isArray(combinedPending) ? combinedPending.filter((id): id is number => Number.isInteger(id) && id > 0).slice(0, 99) : [];  // with the account id, D1's 100 bound values
   const docText = JSON.stringify(doc);
   const bytes = new TextEncoder().encode(docText).byteLength;
   if (bytes > MAX_SAVE_BYTES) return failWith(ctx, "The save is larger than 1 MB", 413);
