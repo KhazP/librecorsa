@@ -1,0 +1,873 @@
+{
+  "sky": {
+    "clear": "Céu limpo",
+    "lightClouds": "Poucas nuvens",
+    "partiallyCloudy": "Parcialmente nublado",
+    "mostlyCloudy": "Muito nublado",
+    "overcast": "Encoberto",
+    "cloudyDrizzle": "Nublado e garoa",
+    "cloudyLightRain": "Nublado e chuva fraca",
+    "overcastLightRain": "Encoberto e chuva fraca",
+    "overcastRain": "Encoberto e chuva",
+    "overcastHeavyRain": "Encoberto e chuva forte",
+    "overcastStorm": "Encoberto e tempestade"
+  },
+  "weather": {
+    "nodeStart": "Largada",
+    "nodeFinish": "Chegada",
+    "clear": "Limpo",
+    "clearDetail": "Seco, ensolarado",
+    "overcast": "Encoberto",
+    "overcastDetail": "Seco, céu cinza, pista mais fria",
+    "lightRain": "Chuva fraca",
+    "lightRainDetail": "Pista molhada, intermediários",
+    "heavyRain": "Chuva forte",
+    "heavyRainDetail": "Água acumulada, pneus de chuva",
+    "drying": "Secando",
+    "dryingDetail": "A chuva parou, a linha seca aparece",
+    "dynamic": "Dinâmico",
+    "dynamicDetail": "Muda durante a sessão"
+  },
+  "timeOfDay": {
+    "dawn": "Amanhecer",
+    "morning": "Manhã",
+    "noon": "Meio-dia",
+    "afternoon": "Tarde",
+    "goldenHour": "Golden hour",
+    "dusk": "Entardecer",
+    "night": "Noite"
+  },
+  "raceStart": {
+    "assisted": "Assistida",
+    "manual": "Manual",
+    "assistedHint": "Parado no grid até as luzes apagarem",
+    "manualHint": "Segure embreagem e rotação, solte quando as luzes apagarem (punição por queima de largada de +5 s / +10 s)"
+  },
+  "realism": {
+    "casual": "Casual",
+    "casualDetail": "Sem desgaste de pneus, temperatura dos pneus tolerante, chuva mais branda",
+    "standard": "Padrão",
+    "standardDetail": "Desgaste de pneus ligado, temperatura dos pneus suavizada, maior parte da chuva",
+    "full": "Total",
+    "fullDetail": "Modelo completo de pneus e chuva, pneus e freios frios ao sair do box"
+  },
+  "raceRules": {
+    "auto": "Auto",
+    "openWheel": "Monopostos",
+    "endurance": "Endurance",
+    "autoHint": "Regras de monopostos para monopostos, regras de endurance para os demais",
+    "openWheelHint": "Limites de pista por infrações: 4 é +5 s, 8 é +10 s, 12 é desqualificação",
+    "enduranceHint": "Limites de pista por pontos ponderados: 5 é +5 s, 10 é +10 s, 15 é desqualificação",
+    "trackLimitsOn": "Ligado",
+    "trackLimitsOff": "Desligado"
+  },
+  "damage": {
+    "off": "Desligado",
+    "reduced": "Reduzido",
+    "full": "Total"
+  },
+  "raceSetup": {
+    "gridBack": "Fundo",
+    "gridMiddle": "Meio",
+    "gridPole": "Pole",
+    "gridRandom": "Aleatória",
+    "aiGridPace": "Por ritmo",
+    "aiGridQualifying": "Classificação",
+    "aiGridReversed": "Invertido",
+    "startAuto": "Auto",
+    "startStanding": "Parado",
+    "startRolling": "Lançada",
+    "standingStart": "largada parada",
+    "rollingStart": "largada lançada",
+    "aggressionClean": "Limpa",
+    "aggressionNormal": "Normal",
+    "aggressionHard": "Dura"
+  },
+  "grip": {
+    "green": "Nova",
+    "greenDetail": "Asfalto recém-lavado, borracha mínima",
+    "light": "Leve",
+    "lightDetail": "Pouca borracha no início do fim de semana",
+    "medium": "Média",
+    "mediumDetail": "Trilha moderadamente emborrachada",
+    "natural": "Natural",
+    "naturalDetail": "Trilha de borracha padrão, pronta para corrida",
+    "heavy": "Pesada",
+    "heavyDetail": "Linha de endurance bem emborrachada",
+    "saturated": "Saturada",
+    "saturatedDetail": "Trilha de borracha escura totalmente saturada"
+  },
+  "aiSkill": {
+    "rookie": "Novato",
+    "amateur": "Amador",
+    "pro": "Pro",
+    "alien": "Alien"
+  },
+  "challenge": {
+    "conditions": "Pista seca · {tyres} · Pouco combustível",
+    "tyresSoft": "Pneus macios",
+    "tyresStreet": "Pneus de rua",
+    "tyresVintageSlicks": "Slicks vintage",
+    "tyresSlicks": "Slicks",
+    "timeLeftDays": "{days} d {hours} h",
+    "timeLeftHours": "{hours} h {minutes} min",
+    "timeLeftMinutes": "{minutes} min",
+    "placeNoTime": "Ainda sem tempo",
+    "placeFirst": "P1 · mais rápido da semana",
+    "place": "P{place}",
+    "placeGap": "P{place} · {gap} para P{above}"
+  },
+  "board": {
+    "conditions": "{assists} · {realism} · {surface}",
+    "assistsPro": "Sem assistências",
+    "assistsSemiPro": "Algumas assistências",
+    "assistsAssisted": "Assistido",
+    "realismCasual": "Casual",
+    "realismStandard": "Padrão",
+    "realismFull": "Total",
+    "surfaceDry": "Seca",
+    "surfaceWet": "Molhada",
+    "renameUnreachable": "Não foi possível acessar o ranking online. Tente de novo em instantes",
+    "renameFailed": "Não foi possível alterar o nome (HTTP {status})"
+  },
+  "badges": {
+    "weeklyGold": "Ouro semanal",
+    "weeklySilver": "Prata semanal",
+    "weeklyBronze": "Bronze semanal",
+    "fastestLap": "Volta mais rápida",
+    "og": "Piloto OG",
+    "bulb": "Colaborador de ideias",
+    "times": "{badge} ×{count}",
+    "withNote": "{badge} — {note}",
+    "medalDetail": "{place, select, first {Primeiro} second {Segundo} other {Terceiro}} lugar em um desafio semanal",
+    "medalDetailWeeks": "{place, select, first {Primeiro} second {Segundo} other {Terceiro}} lugar em um desafio semanal: {weeks}",
+    "recordDetailCount": "Tem a volta mais rápida em {count, plural, one {um ranking aberto} other {# rankings abertos}}",
+    "recordCar": "{car} ×{count}",
+    "recordManual": "+{count} manual",
+    "recordDetail": "{boards} — toque para ver as pistas",
+    "ogDetail": "Dirigiu o LibreCorsa na Física V1",
+    "bulbDetailNote": "Colaborador de ideias: {note}",
+    "bulbDetail": "Ideia ou contribuição da comunidade"
+  },
+  "camera": {
+    "chaseClose": "Perseguição próxima",
+    "chaseCloseDetail": "Bem atrás do carro",
+    "chase": "Perseguição",
+    "chaseDetail": "Atrás do carro",
+    "chaseFar": "Perseguição distante",
+    "chaseFarDetail": "Aberta atrás do carro",
+    "chaseLow": "Perseguição baixa",
+    "chaseLowDetail": "Baixa, atrás da asa traseira",
+    "tvPod": "T-cam",
+    "tvPodDetail": "Acima do capacete",
+    "cockpitShoulder": "Ombro",
+    "cockpit": "Cockpit",
+    "cockpitDetail": "Olhos do piloto",
+    "dash": "Painel",
+    "dashDetail": "À frente do volante, com o painel em quadro",
+    "nose": "Nariz",
+    "helicopter": "Helicóptero",
+    "tvSide": "TV de pista",
+    "free": "Câmera livre",
+    "freeDetail": "Voe para qualquer ponto do circuito"
+  },
+  "music": {
+    "poolMenu": "Menu",
+    "poolRace": "Corrida",
+    "poolResults": "Resultados e replay"
+  },
+  "carQuality": {
+    "ownBadge": "FÍSICA PRÓPRIA",
+    "own": "Física própria",
+    "ownDetail": "Usa uma física feita para este carro.",
+    "sharedBadge": "FÍSICA COMPARTILHADA",
+    "shared": "Física compartilhada",
+    "sharedDetail": "Usa a física de outro carro da mesma classe e época, então se comporta como aquele carro e não como o seu próprio.",
+    "eraBadge": "FÍSICA 2026",
+    "era": "Carros antigos",
+    "eraDetail": "Usa a física de 2026, então se comporta como um carro de 2026 e não como na sua própria temporada."
+  },
+  "carClass": {
+    "f1": "Monopostos de fórmula",
+    "f1Detail": "Monopostos · DRS / aerodinâmica ativa",
+    "gt3Detail": "Rodas cobertas · ABS / TC",
+    "proto": "Protótipos",
+    "protoDetail": "Rodas cobertas · alto downforce · TC",
+    "classic": "GT e Turismo clássicos",
+    "classicDetail": "Protótipos esportivos, Group 4, Group A e JGTC · 1966–1998",
+    "road": "Carros de rua",
+    "roadDetail": "Homologados para rua · pneus de rua"
+  },
+  "circuitQuality": {
+    "originalBadge": "ORIGINAL",
+    "original": "Originais do LibreCorsa",
+    "originalDetail": "Feito para o LibreCorsa, com superfícies, zebras, relevo e cenário próprios.",
+    "simBadge": "NÍVEL SIM",
+    "sim": "Circuitos de nível sim",
+    "simDetail": "Um circuito de simulador feito à mão, com malhas próprias de pista, zebras e barreiras e física de superfície.",
+    "scanBadge": "SCAN",
+    "scan": "Scans convertidos",
+    "scanDetail": "Convertido automaticamente de um modelo 3D da comunidade: pista, zebras, áreas de escape e barreiras são traçadas a partir da malha, então os detalhes podem diferir do local real."
+  },
+  "circuitType": {
+    "permanent": "Permanente",
+    "street": "De rua",
+    "oval": "Oval",
+    "hillclimb": "Subida de montanha"
+  },
+  "livery": {
+    "grid2026": "Grid 2026",
+    "retro": "Retrô",
+    "colourChalk": "Giz",
+    "colourCarbon": "Carbono",
+    "colourAlloy": "Liga",
+    "colourVermilion": "Vermelhão",
+    "colourPapaya": "Papaya",
+    "colourGold": "Ouro",
+    "colourVolt": "Volt",
+    "colourEmerald": "Esmeralda",
+    "colourCyan": "Ciano",
+    "colourCobalt": "Cobalto",
+    "colourIndigo": "Índigo",
+    "colourMagenta": "Magenta"
+  },
+  "keyActions": {
+    "throttle": "Acelerador",
+    "brake": "Freio",
+    "steerLeft": "Esterçar à esquerda",
+    "steerRight": "Esterçar à direita",
+    "boostHold": "Boost (segurar)",
+    "boostLatch": "Boost (alternar)",
+    "aero": "Aerodinâmica ativa X / Z",
+    "shiftUp": "Subir marcha",
+    "shiftDown": "Reduzir marcha",
+    "neutral": "Ponto morto",
+    "camera": "Câmera (segurar: banco e câmera)",
+    "freeCamera": "Câmera livre",
+    "tvCamera": "Câmera TV de pista",
+    "racingLine": "Linha ideal",
+    "mute": "Silenciar",
+    "nextTrack": "Próxima faixa de música",
+    "autopilot": "Piloto automático",
+    "mouseSteer": "Direção com mouse",
+    "restart": "Reiniciar",
+    "flyingLap": "Reiniciar volta (largada lançada)",
+    "throttleHalf": "Meio acelerador (segurar)",
+    "brakeHalf": "Meio freio (segurar)",
+    "clutch": "Embreagem (segurar)",
+    "replay": "Replay instantâneo",
+    "mfdPage": "Próxima página do MFD",
+    "mfd": "Abrir / fechar MFD",
+    "hud": "Mostrar / ocultar HUD",
+    "board": "Abrir / fechar ranking de tempos",
+    "headlights": "Faróis ligados / desligados",
+    "headlightFlash": "Piscar faróis (segurar)"
+  },
+  "padActions": {
+    "shiftUp": "Subir marcha",
+    "shiftDown": "Reduzir marcha",
+    "neutral": "Ponto morto",
+    "boost": "Boost",
+    "aero": "Aerodinâmica ativa X / Z",
+    "camera": "Câmera (segurar: banco e câmera)",
+    "freeCamera": "Câmera livre",
+    "tvCamera": "Câmera TV de pista",
+    "racingLine": "Linha ideal",
+    "restart": "Reiniciar",
+    "flyingLap": "Reiniciar volta (largada lançada)",
+    "pause": "Menu de pausa",
+    "mfd": "Abrir / fechar MFD",
+    "mfdPage": "Próxima página do MFD",
+    "hud": "Mostrar / ocultar HUD",
+    "board": "Abrir / fechar ranking de tempos",
+    "headlights": "Faróis (toque: piscar, segurar: ligar / desligar)",
+    "headlightFlash": "Piscar faróis (segurar)"
+  },
+  "pedals": {
+    "throttle": "Acelerador",
+    "brake": "Freio",
+    "clutch": "Embreagem",
+    "notSet": "não definido",
+    "trigger": "gatilho",
+    "stick": "analógico {side, select, left {esquerdo} other {direito}} {way, select, up {para cima} down {para baixo} left {para a esquerda} other {para a direita}}",
+    "pressThrottle": "Pise no acelerador",
+    "holdButton": "Segure {button}",
+    "pushStick": "Empurre o analógico {side, select, left {esquerdo} other {direito}} {way, select, up {para cima} down {para baixo} left {para a esquerda} other {para a direita}}",
+    "clutchPedal": "pedal de embreagem",
+    "button": "Botão {number}"
+  },
+  "padLayouts": {
+    "gt": "Estilo GT",
+    "gtClassic": "GT clássico",
+    "f1": "Estilo Fórmula",
+    "forza": "Estilo Forza",
+    "bumper": "Troca por gatilhos"
+  },
+  "wheelSupport": {
+    "moza": "Conecta, esterça e reproduz force feedback via WebHID",
+    "hidPid": "Não testado; usa os mesmos relatórios padrão de force feedback",
+    "directDrive": "Não testado; sem force feedback HID PID, a página muda para o bridge",
+    "pxn": "Não testado; HID PID com valores de Set Effect próprios, que nenhum volante PXN confirmou",
+    "logitechClassic": "Não testado; inicia no WebHID com os comandos clássicos da Logitech como o hid-lg4ff do Linux os envia, incluindo os LEDs de rotação do G27 e do G29",
+    "logitechHidpp": "Não testado; inicia no WebHID com force feedback HID++ como o hid-logitech-hidpp do Linux o envia, depois que o Logitech G HUB muda o volante para o modo PC",
+    "logitechBridgeOnly": "Não testado; somente bridge: nenhum driver Linux oficial controla o G923 para PlayStation nem o G PRO, e o navegador não consegue reescalar o eixo de direção do DFP",
+    "thrustmaster": "Não testado; os comandos do hid-tmff2 do Linux, depois que um driver tira o volante do modo de inicialização. Se isso não acontecer, ou se o Windows recusar os comandos, o bridge assume",
+    "thrustmasterBridgeOnly": "Não testado; somente bridge: o T150 e o TMX usam outro conjunto de comandos, e o hid-tmff2 não cobre o T500RS",
+    "fanatecCslElite": "Não testado; sem force feedback HID PID, a página muda para o bridge",
+    "tested": "Testado",
+    "expected": "Esperado",
+    "unknown": "Desconhecido",
+    "no": "Não"
+  },
+  "hudLayouts": {
+    "broadcast": "Transmissão",
+    "broadcastDetail": "Gráficos de TV: torre, mapa, faixa de telemetria",
+    "dash": "Painel do volante",
+    "dashDetail": "Uma tela de volante, baixa e centralizada",
+    "telemetry": "Telemetria",
+    "telemetryDetail": "O painel mais pneus, G, potência e comandos",
+    "classic": "Clássico",
+    "classicDetail": "Os painéis originais nos cantos",
+    "minimal": "Mínimo",
+    "minimalDetail": "Só velocidade, marcha e volta",
+    "irdashiesDetail": "Classificação, cronômetro de volta, comandos e luzes de troca de marcha",
+    "racevisionDetail": "Classificação, relativo, indicador de comandos e gráfico",
+    "h2hDetail": "Os carros à frente e atrás, diferenças e deltas de volta",
+    "retroDetail": "Instrumentos quentes: mostrador redondo, barra de delta, voltas",
+    "blocksDetail": "Blocos quadrados escuros: tempos, setores, pneus, combustível",
+    "grandPrixDetail": "Torre da corrida, conta-giros redondo, marcha e comandos"
+  },
+  "steeringAssist": {
+    "selfSteerStrength": "Autoesterço e contraesterço",
+    "selfSteerStrengthHint": "Quanto as rodas seguem a direção do carro e seguram derrapadas traseiras",
+    "dampingStrength": "Amortecimento de guinada",
+    "dampingStrengthHint": "Suaviza o retorno brusco e as oscilações quando a derrapagem se recupera",
+    "speedSensitivity": "Calma em alta velocidade",
+    "speedSensitivityHint": "Quanto a direção fica mais lenta em velocidade, para pequenos comandos ficarem suaves",
+    "slipLimitMargin": "Margem de deslizamento dos pneus",
+    "slipLimitMarginHint": "Negativo: margem mais segura de subesterço · Positivo: deixa a dianteira passar do pico de deslizamento",
+    "maxSelfSteerAngleDeg": "Contraesterço máximo",
+    "maxSelfSteerAngleDegHint": "Maior ângulo das rodas que o assistente aplica sozinho para segurar uma derrapagem",
+    "presetBalanced": "Equilibrado",
+    "presetStable": "Estável",
+    "presetLoose": "Solto",
+    "presetDrift": "Drift",
+    "presetCalm": "Calmo em velocidade",
+    "fullLock": "batente",
+    "presetDetail": "autoesterço {selfSteer}, amortecimento de guinada {damping}, calma em alta velocidade {calm}, dianteira a {grip} % do pico de deslizamento, contraesterço até {cap}"
+  },
+  "support": {
+    "donatePayPal": "Doar via PayPal",
+    "supportOn": "Apoiar no {site}",
+    "donateToVia": "Doar para {maker} via {site}",
+    "supportOnSite": "Apoiar {maker} no {site}",
+    "donateTo": "Doar para {maker}",
+    "supportMaker": "Apoiar {maker}"
+  },
+  "setupSheet": {
+    "tcSlip": "Deslizamento do TC",
+    "tc1": "TC 1",
+    "tcCut": "Corte do TC",
+    "tc2": "TC 2",
+    "tcSlipAngle": "Ângulo de deslizamento do TC",
+    "abs": "ABS",
+    "engineMap": "Mapa do motor",
+    "motorDeployment": "Liberação do motor elétrico",
+    "regeneration": "Regeneração",
+    "startingFuel": "Combustível inicial",
+    "frontWing": "Asa dianteira",
+    "rearWing": "Asa traseira",
+    "diffOnThrottle": "Diferencial com acelerador",
+    "diffOffThrottle": "Diferencial sem acelerador",
+    "engineBraking": "Freio-motor",
+    "frontToe": "Convergência dianteira",
+    "rearToe": "Convergência traseira",
+    "frontSuspension": "Suspensão dianteira",
+    "rearSuspension": "Suspensão traseira",
+    "frontAntiRollBar": "Barra estabilizadora dianteira",
+    "rearAntiRollBar": "Barra estabilizadora traseira",
+    "frontRideHeight": "Altura dianteira",
+    "rearRideHeight": "Altura traseira",
+    "brakePressure": "Pressão do freio",
+    "frontBrakeBias": "Balanço de freio dianteiro",
+    "brakeMigration": "Migração do freio",
+    "brakePower": "Força do freio",
+    "brakeBias": "Balanço de freio",
+    "steeringRatio": "Relação da direção",
+    "frontBumpStopRange": "Curso do batente dianteiro",
+    "rearBumpStopRange": "Curso do batente traseiro",
+    "diffPreload": "Pré-carga do diferencial",
+    "gearSet": "Jogo de marchas",
+    "frontThirdPacker": "Packer do terceiro elemento dianteiro",
+    "rearThirdPacker": "Packer do terceiro elemento traseiro",
+    "frontBrakeDucts": "Dutos de freio dianteiros",
+    "rearBrakeDucts": "Dutos de freio traseiros",
+    "radiatorOpening": "Abertura do radiador",
+    "frontBump": "Compressão dianteira",
+    "rearBump": "Compressão traseira",
+    "frontFastBump": "Compressão rápida dianteira",
+    "rearFastBump": "Compressão rápida traseira",
+    "frontRebound": "Retorno dianteiro",
+    "rearRebound": "Retorno traseiro",
+    "frontFastRebound": "Retorno rápido dianteiro",
+    "rearFastRebound": "Retorno rápido traseiro",
+    "frontThirdSpring": "Terceira mola dianteira",
+    "rearThirdSpring": "Terceira mola traseira",
+    "frontThirdBump": "Compressão do terceiro elemento dianteiro",
+    "rearThirdBump": "Compressão do terceiro elemento traseiro",
+    "frontThirdFastBump": "Compressão rápida do terceiro elemento dianteiro",
+    "rearThirdFastBump": "Compressão rápida do terceiro elemento traseiro",
+    "frontThirdRebound": "Retorno do terceiro elemento dianteiro",
+    "rearThirdRebound": "Retorno do terceiro elemento traseiro",
+    "frontThirdFastRebound": "Retorno rápido do terceiro elemento dianteiro",
+    "rearThirdFastRebound": "Retorno rápido do terceiro elemento traseiro",
+    "frontCornerPackers": "Packers de canto dianteiros",
+    "rearCornerPackers": "Packers de canto traseiros",
+    "frontWheelRate": "Rigidez na roda dianteira",
+    "rearWheelRate": "Rigidez na roda traseira",
+    "frontBumpStopRate": "Rigidez do batente dianteiro",
+    "rearBumpStopRate": "Rigidez do batente traseiro",
+    "frontCamber": "Cambagem dianteira",
+    "rearCamber": "Cambagem traseira",
+    "frontLeftPressure": "Pressão dianteira esquerda",
+    "frontRightPressure": "Pressão dianteira direita",
+    "rearLeftPressure": "Pressão traseira esquerda",
+    "rearRightPressure": "Pressão traseira direita",
+    "tyreBlankets": "Cobertores térmicos",
+    "detached": "Desconectada",
+    "toeIn": "{angle} para dentro",
+    "toeOut": "{angle} para fora",
+    "dialOff": "OFF",
+    "blanketsOn": "Ligados",
+    "blanketsOff": "Desligados",
+    "engineMapMax": "1 · Máx",
+    "engineMapRace": "2 · Corrida",
+    "engineMapSmooth": "3 · Suave",
+    "engineMapLean": "4 · Econômico",
+    "engineMapSave": "5 · Poupar"
+  },
+  "setupGroups": {
+    "fuel": "Combustível",
+    "aerodynamics": "Aerodinâmica",
+    "aerodynamicsShort": "Aero",
+    "transmission": "Transmissão",
+    "transmissionShort": "Transm.",
+    "suspensionGeometry": "Geometria da suspensão",
+    "suspensionGeometryShort": "Geometria",
+    "suspension": "Suspensão",
+    "suspensionShort": "Susp.",
+    "dampers": "Amortecedores",
+    "brakes": "Freios",
+    "tyres": "Pneus",
+    "electronics": "Eletrônica",
+    "electronicsShort": "Eletr.",
+    "mechanicalGrip": "Aderência mecânica",
+    "mechanicalGripShort": "Mec.",
+    "thirdElements": "Terceiros elementos",
+    "thirdElementsShort": "3º",
+    "aero": "Aero",
+    "fuelShort": "Comb.",
+    "dampersShort": "Amort.",
+    "brakesShort": "Freios",
+    "tyresShort": "Pneus",
+    "aeroShort": "Aero"
+  },
+  "setupFx": {
+    "frontWing": {
+      "more": "Mais aderência dianteira em velocidade, traseira mais solta",
+      "less": "Traseira mais estável, mais subesterço em alta velocidade"
+    },
+    "rearWing": {
+      "more": "Mais estabilidade e tração, mais arrasto",
+      "less": "Mais rápido nas retas, traseira nervosa"
+    },
+    "diffOn": {
+      "more": "Mais tração, sobresterço com potência",
+      "less": "Mais suave nas traseiras, roda interna patina"
+    },
+    "diffOff": {
+      "more": "Estável sem acelerar, resiste à entrada de curva",
+      "less": "Gira na entrada, pode ficar solto"
+    },
+    "engineBraking": {
+      "more": "Mais freio traseiro ao aliviar, gira mais",
+      "less": "Mais calmo ao aliviar, frenagens mais longas"
+    },
+    "camberFront": {
+      "more": "Mais aderência dianteira no meio da curva",
+      "less": "Melhor frenagem, desgaste uniforme"
+    },
+    "camberRear": {
+      "more": "Mais aderência lateral traseira",
+      "less": "Melhor tração na saída de curvas lentas"
+    },
+    "toeFront": {
+      "more": "Mais estável nas retas, entrada de curva mais preguiçosa",
+      "less": "Entrada de curva mais precisa, nervoso em velocidade"
+    },
+    "toeRear": {
+      "more": "Traseira estável, um pouco mais de arrasto",
+      "less": "Gira mais, menos estável"
+    },
+    "springFront": {
+      "more": "Resposta mais afiada, menos aderência em ondulações",
+      "less": "Mais aderência dianteira em ondulações"
+    },
+    "springRear": {
+      "more": "Gira mais, menos tração",
+      "less": "Mais tração, giro mais preguiçoso"
+    },
+    "arbFront": {
+      "more": "Trocas de direção rápidas, subesterço",
+      "less": "Mais aderência dianteira no meio da curva"
+    },
+    "arbRear": {
+      "more": "Mais rotação, menos tração na saída",
+      "less": "Mais aderência traseira, mais subesterço"
+    },
+    "rideFront": {
+      "more": "Mais seguro nas zebras, menos downforce",
+      "less": "Mais downforce, o assoalho pode perder carga"
+    },
+    "rideRear": {
+      "more": "Mais rake: mais afiado, traseira mais solta",
+      "less": "Traseira mais calma, mais subesterço"
+    },
+    "brakePressure": {
+      "more": "Frenagens mais curtas, trava mais cedo",
+      "less": "Mais fácil de dosar, frenagens mais longas"
+    },
+    "bias": {
+      "more": "Frenagem estável, dianteira trava primeiro",
+      "less": "Gira na entrada, traseira trava primeiro"
+    },
+    "migration": {
+      "more": "Gira ao frear soltando o pedal",
+      "less": "O balanço se mantém ao soltar o freio"
+    },
+    "coldPsi": {
+      "more": "Aquece mais rápido, menos aderência de pico",
+      "less": "Mais aderência, aquece mais devagar"
+    },
+    "blankets": {
+      "more": "Pneus quentes desde a primeira curva",
+      "less": "Frios ao sair do box, aqueça-os na volta de saída"
+    },
+    "tc": {
+      "more": "Menos patinação, saídas mais lentas",
+      "less": "Saídas mais rápidas, traseira pode escapar"
+    },
+    "tc2": {
+      "more": "Corte forte: segura as derrapadas com firmeza",
+      "less": "Corte suave: mantém mais tração"
+    },
+    "abs": {
+      "more": "Sem travamentos, frenagens mais longas",
+      "less": "Frenagens mais curtas se você for preciso"
+    },
+    "map": {
+      "more": "Acelerador mais suave, menos potência",
+      "less": "Potência total, acelerador mais nervoso"
+    },
+    "steerRatio": {
+      "more": "Direção mais lenta, menos esterço",
+      "less": "Direção mais rápida, mais esterço"
+    },
+    "wheelRateFront": {
+      "more": "Dianteira mais firme, menos aderência em ondulações",
+      "less": "Mais aderência dianteira em ondulações"
+    },
+    "wheelRateRear": {
+      "more": "Gira mais, menos tração",
+      "less": "Mais tração, giro mais preguiçoso"
+    },
+    "bumpStopRate": {
+      "more": "Mais firme ao bater nos batentes",
+      "less": "Pouso mais macio nos batentes"
+    },
+    "bumpStopRange": {
+      "more": "Mais curso antes dos batentes",
+      "less": "Bate nos batentes mais cedo, base mais plana"
+    },
+    "preload": {
+      "more": "Estável em curvas rápidas, empurra nas lentas",
+      "less": "Gira na entrada, saídas mais soltas"
+    },
+    "bump": {
+      "more": "A carroceria se move menos, mais seco em ondulações",
+      "less": "Absorve ondulações, a base se move mais"
+    },
+    "fastBump": {
+      "more": "Firme nas zebras",
+      "less": "Absorve as zebras"
+    },
+    "rebound": {
+      "more": "O peso volta devagar, saídas estáveis",
+      "less": "Os pneus seguem melhor a pista"
+    },
+    "fastRebound": {
+      "more": "A roda demora mais para descer após as zebras",
+      "less": "A roda desce rápido"
+    },
+    "ductFront": {
+      "more": "Freios dianteiros mais frios, mais arrasto",
+      "less": "Freios dianteiros mais quentes, menos arrasto"
+    },
+    "ductRear": {
+      "more": "Freios traseiros mais frios, mais arrasto",
+      "less": "Freios traseiros mais quentes, menos arrasto"
+    },
+    "radiator": {
+      "more": "Motor mais frio, mais arrasto",
+      "less": "Menos arrasto, o motor esquenta"
+    },
+    "gearSet": {
+      "more": "Marchas longas: velocidade final em retas longas",
+      "less": "Marchas curtas: mais rápido na saída de curvas lentas"
+    },
+    "heaveSpring": {
+      "more": "Base mais plana em velocidade, mais seco em ondulações",
+      "less": "Absorve ondulações, o assoalho se move mais"
+    },
+    "heavePacker": {
+      "more": "Mais curso antes do packer",
+      "less": "O packer sustenta o assoalho mais cedo"
+    },
+    "cornerPacker": {
+      "more": "Os batentes chegam antes, mais plano nas curvas",
+      "less": "Mais curso livre, mais rolagem"
+    },
+    "tcSlipAngle": {
+      "more": "Corta mais cedo quando a traseira desliza",
+      "less": "Deixa a traseira deslizar mais com potência"
+    },
+    "motorDeploy": {
+      "more": "Mais força elétrica, esgota a bateria",
+      "less": "Poupa carga, menos força"
+    },
+    "regen": {
+      "more": "Mais carga de volta, mais freio traseiro",
+      "less": "Traseira mais calma na frenagem, menos carga"
+    },
+    "fuel": {
+      "more": "Stint mais longo, mais pesado e lento",
+      "less": "Mais leve e rápido, stint mais curto"
+    }
+  },
+  "padFeel": {
+    "smooth": "Suave",
+    "smoothDetail": "Direção mais lenta e calma",
+    "default": "Padrão",
+    "defaultDetail": "Resposta equilibrada",
+    "sharp": "Afiado",
+    "sharpDetail": "Entrada de curva rápida"
+  },
+  "tyres": {
+    "street": "Pneus de rua"
+  },
+  "setupShare": {
+    "aeroLow": "Baixo arrasto",
+    "aeroBalanced": "Aero equilibrada",
+    "aeroHigh": "Alto downforce",
+    "soft": "Macio",
+    "medium": "Médio",
+    "hard": "Duro",
+    "intermediate": "Inter",
+    "wet": "Chuva",
+    "chassisChanges": "{count, plural, one {# alteração no chassi} other {# alterações no chassi}}",
+    "brakeBias": "BB {bias}%",
+    "baseline": "Setup base",
+    "factoryLowDrag": "Baixo arrasto"
+  },
+  "trackLimits": {
+    "flashbackDeleted": "Flashback · volta anulada",
+    "currentAndNextInvalid": "Volta atual e próxima invalidadas",
+    "currentInvalid": "Volta atual invalidada",
+    "courseCutDeleted": "Atalho na pista · volta anulada",
+    "penaltyOnceBack": "Punição de tempo ao voltar à pista",
+    "leftLapRoad": "Saiu da pista da volta",
+    "noTimeGained": "Nenhum tempo ganho",
+    "courseCutPenalty": "Atalho na pista · punição de +{seconds}s",
+    "secondsGained": "{seconds} s ganhos",
+    "lapDeleted": "Volta anulada",
+    "wallDeleted": "Contato com o muro · volta anulada",
+    "rodeWallBeforeLine": "Rodou no muro antes da linha",
+    "limitsDeleted": "Limites de pista · volta anulada",
+    "offBeforeLine": "Fora antes da linha",
+    "nextLapToo": "Próxima volta também",
+    "offTrack": "Fora da pista",
+    "touchedBarrier": "Tocou na barreira",
+    "rodeWall": "Rodou no muro",
+    "positionHandedBack": "Posição devolvida",
+    "advantageGivenBack": "Vantagem devolvida",
+    "noFurtherAction": "Sem outras ações",
+    "trackLimits": "Limites de pista",
+    "noAdvantage": "Sem vantagem · sem ação",
+    "timePenalty": "Punição de +{seconds}s",
+    "limitsGained": "Limites de pista · {seconds} s ganhos",
+    "limitsCutMetres": "Limites de pista · {metres} m cortados",
+    "limitsMajorCut": "Limites de pista · grande corte",
+    "why": "{reason, select, illegal_overtake {Ultrapassagem ilegal · posição não devolvida} corner_cut {Corte de curva} not_lifted {Não aliviou} other {Tempo ganho}}",
+    "limitsWhy": "Limites de pista · {reason, select, illegal_overtake {ultrapassagem ilegal · posição não devolvida} corner_cut {corte de curva} not_lifted {não aliviou} other {tempo ganho}}",
+    "warningCount": "Limites de pista · aviso {count}/{max}",
+    "points": "{points} pts",
+    "strikes": "{count, plural, one {# infração} other {# infrações}}",
+    "disqualified": "Desqualificado · limites de pista",
+    "limitsPoints": "Limites de pista · {points}",
+    "blackWhiteFlag": "Bandeira preta e branca",
+    "nextPenalty": "{why} · próxima é de +{seconds} s",
+    "nextDisqualification": "{why} · próxima é desqualificação",
+    "warning": "Limites de pista · aviso",
+    "warningDetail": "{why} · {points}"
+  },
+  "flags": {
+    "yellow": "Bandeira amarela",
+    "trackClear": "Pista livre",
+    "carStopped": "Carro parado à frente",
+    "slowCar": "Carro lento à frente",
+    "wrongWay": "Carro na contramão",
+    "carOffTrack": "Carro fora da pista à frente",
+    "incident": "Incidente à frente"
+  },
+  "connection": {
+    "raceClosed": "Essa corrida está prestes a começar. Dá tempo de entrar na próxima.",
+    "raceFull": "Essa corrida está lotada. Entre na próxima.",
+    "raceStarted": "Essa corrida começou sem você. Entre na próxima.",
+    "raceTaken": "Você já está nesta corrida em outra janela.",
+    "raceBad": "Não foi possível entrar na corrida. Recarregue o jogo e tente de novo.",
+    "raceUpdate": "O LibreCorsa foi atualizado. Recarregue a página para entrar na corrida.",
+    "versionMismatch": "Esta sala usa outra versão do LibreCorsa. Todos nela precisam recarregar a página.",
+    "roomServerUnreachable": "Não foi possível acessar o servidor de salas. Verifique sua conexão e tente de novo, ou use uma conexão manual em Avançado.",
+    "idle": "Crie uma sala e envie o link, ou entre com o código de um amigo.",
+    "openingRoom": "Abrindo a sala {code}…",
+    "reconnectingRoom": "Reconectando à sala {code}…",
+    "roomOpen": "Sala {code} aberta • aguardando jogadores",
+    "sessionActive": "Este ID de sessão já está ativo na sala. Aguarde um instante e tente criar a sala de novo.",
+    "roomOpenElsewhere": "A sala {code} já está aberta em outro dispositivo. Toque em Entrar para correr nela, ou crie uma nova sala.",
+    "joiningRoom": "Entrando na sala {code}…",
+    "roomNotFound": "Não foi possível encontrar a sala {code}. Confira o código e peça ao anfitrião para manter o jogo aberto na tela.",
+    "playerIdTaken": "Este ID de jogador já está na sala. Aguarde um instante e tente entrar de novo.",
+    "roomFull": "A sala {code} está lotada.",
+    "connectedPlayers": "{count, plural, one {Conectado a # jogador} other {Conectado a # jogadores}}",
+    "peerFailed": "Não foi possível conectar ao outro jogador. Tente de novo ou use o mesmo Wi-Fi.",
+    "peerBlocked": "Não foi possível conectar: uma das suas redes bloqueia conexões diretas. Use o mesmo Wi-Fi ou tente outra rede.",
+    "lostHost": "Perdeu o anfitrião. Entre de novo.",
+    "hostingTabs": "Hospedando uma corrida para as abas deste navegador",
+    "playerLeft": "O jogador saiu. Faça uma nova oferta para conectar de novo.",
+    "connected": "Conectado",
+    "joiningRace": "Entrando na próxima corrida…",
+    "inNextRace": "Na próxima corrida",
+    "makingOffer": "Criando uma oferta…",
+    "offerReady": "Oferta pronta. Envie ao outro jogador e depois cole a resposta dele.",
+    "answerReady": "Resposta pronta. Envie de volta ao anfitrião.",
+    "answerAccepted": "Resposta aceita • conectando…",
+    "raceServerUnreachable": "Não foi possível acessar o servidor de corridas. Verifique sua conexão e tente de novo.",
+    "racesOff": "As corridas agendadas não estão acontecendo agora.",
+    "raceLost": "A conexão com a corrida foi perdida.",
+    "ready": "Pronto. As abas deste navegador se encontram sozinhas; outros dispositivos entram com um código de sala."
+  },
+  "downloads": {
+    "windowsSummary": "App para computador com preferência pela GPU dedicada, WebHID silencioso para volantes e DualSense e sem limitação em segundo plano.",
+    "windowsInstallNote": "Sem assinatura por enquanto, enquanto a configuração da SignPath Foundation termina. Se o SmartScreen bloquear, clique em Mais informações e depois em Executar assim mesmo.",
+    "windowsStatusLabel": "Sem assinatura",
+    "windowsX64Label": "Baixar .exe",
+    "windowsX64Detail": "Instalador Windows x64",
+    "macosSummary": "App para computador com preferência pela GPU dedicada, WebHID silencioso para volantes e DualSense e sem limitação em segundo plano.",
+    "macosInstallNote": "Build sem assinatura. Permita em Ajustes do Sistema > Privacidade e Segurança, ou remova a quarentena depois de copiar para Aplicativos:",
+    "macosStatusLabel": "Sem assinatura",
+    "macosArm64Label": "Apple Silicon (.dmg)",
+    "macosArm64Detail": "Macs M1–M4",
+    "macosX64Label": "Intel (.dmg)",
+    "macosX64Detail": "Macs Intel x64",
+    "linuxSummary": "AppImage portátil com WebHID silencioso para volantes e DualSense e sem limitação em segundo plano.",
+    "linuxInstallNote": "Torne o AppImage executável e execute-o (requer FUSE2 / libfuse2 em distribuições mais antigas):",
+    "linuxX64Label": "Baixar .AppImage",
+    "linuxX64Detail": "Linux x64",
+    "androidSummary": "Trusted Web Activity em tela cheia com controles imersivos fixos, Android Game Mode e atalhos na tela inicial. Requer Android 7+ e Chrome.",
+    "androidInstallNote": "APK de lançamento assinado. Permita a instalação pelo navegador quando solicitado; ele se verifica em librecorsa.org e abre sem barra de endereço.",
+    "androidStatusLabel": "APK assinado",
+    "androidApkLabel": "Baixar .apk",
+    "androidApkDetail": "Android 7+ (universal)"
+  },
+  "loading": {
+    "circuit": "Circuito",
+    "car": "Carro",
+    "opponents": "Adversários",
+    "shaders": "Shaders"
+  },
+  "session": {
+    "wheelDisconnected": "Volante desconectado. Reconecte-o ou continue para dirigir com o que sobrou.",
+    "bigJumpStart": "Queima de largada · bem fora da posição do grid",
+    "jumpStart": "Queima de largada",
+    "clutchGearUp": "Subir marcha",
+    "clutchPaddle": "aleta de troca para cima"
+  },
+  "driverKey": {
+    "notAKeyFile": "Este não é um arquivo de chave de piloto",
+    "blocked": "Este navegador bloqueia o salvamento"
+  },
+  "simulator": {
+    "formulaTeamCars": "Carros de equipes de Fórmula",
+    "lapNoLongerSaved": "Esta volta não está mais salva aqui",
+    "nameNotChanged": "Não foi possível alterar o nome",
+    "setupLoadFailed": "Não foi possível carregar o setup de {driver}, tente de novo",
+    "setupMissing": "Nenhum setup salvo com a volta de {driver}",
+    "setupApplied": "Setup de {driver} aplicado ({summary})",
+    "keySaved": "Chave salva. Quem tiver o arquivo pode publicar como você.",
+    "noKeyYet": "Ainda sem chave: seu primeiro envio a cria.",
+    "keyImportedFor": "Chave importada para {name}. Os envios daqui a usarão.",
+    "keyImported": "Chave importada. Os envios daqui a usarão.",
+    "launchWheel": "Acelere para largar",
+    "launchWheelSeat": "Acelere para largar · segure a câmera para o banco",
+    "launchPad": "{press} para largar",
+    "launchPadSeat": "{press} para largar · segure {button} para o banco",
+    "launchTouch": "Segure o acelerador para largar",
+    "launchKey": "Segure {key} para largar · Esc Menu",
+    "noRacesOnHillClimb": "Sem corridas em uma subida de montanha",
+    "backToRaces": "Voltar às corridas"
+  },
+  "telemetryHud": {
+    "menu": "Menu",
+    "calibratePedals": "Calibrar pedais",
+    "holdForLightsOut": "Segure o acelerador para apagar as luzes",
+    "mouseSteering": "Direção com mouse · {key} para sair",
+    "keyMenu": "Menu",
+    "keyCamera": "Câmera",
+    "keyLine": "Linha",
+    "keyRestart": "Reiniciar",
+    "keyBoard": "Ranking",
+    "keyLights": "Luzes",
+    "replay": "Replay"
+  },
+  "trackGate": {
+    "safeStart": "Início seguro ativo após reinício da GPU.",
+    "graphicsLow": "Gráficos definidos como Baixa após reinício da GPU.",
+    "loadFailedStaying": "Falha ao carregar a pista. Continuando em {circuit}.",
+    "loadFailedDefault": "Falha ao carregar a pista. {circuit} carregado."
+  },
+  "minimap": {
+    "map": "Mapa do circuito",
+    "mapAtTurn": "Mapa do circuito; você está na curva {turn}",
+    "facts": "{country} · {length} {unit} · {turns, plural, one {# curva} other {# curvas}}",
+    "sector": "Setor {sector}",
+    "elevation": "Elevação",
+    "altitude": "Alt {height}",
+    "grade": "INCLINAÇÃO {grade}%",
+    "profileStart": "Largada {height}",
+    "profileStartFinish": "L/C {height}"
+  },
+  "source": {
+    "sourceOf": "Fonte de {title}",
+    "source": "Fonte",
+    "reportIssue": "Reportar problema"
+  },
+  "playError": {
+    "title": "O simulador parou",
+    "body": "O WebGL ou a física não conseguiu iniciar. Atualizar o navegador ou o driver de vídeo, ou ativar a aceleração por hardware, costuma resolver.",
+    "detail": "Detalhe do erro",
+    "restart": "Reiniciar simulador"
+  },
+  "dash": {
+    "yellowFlag": "Bandeira amarela"
+  }
+}
