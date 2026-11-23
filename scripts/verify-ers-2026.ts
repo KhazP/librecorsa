@@ -10,6 +10,7 @@
  * - on the car: 500 Nm at the crank (C5.2.11), the fixed 0.97 between the DC bus and the shaft (C5.2.21), the curve
  *   held on a straight, Overtake's curve in practice and in a race only with it earned, and no deploy limit a lap;
  * - the race's Boost (its power when pressed, or 150 kW), Overtake's lines and the Automatic Overtake's share;
+ * - Low Grip Conditions (the wet): race control's call, Overtake off, the Boost holding only, reset sectors;
  * - each circuit's rules: the FIA's 2026 Power Unit Information for Monaco and the Red Bull Ring, derived elsewhere;
  * - issue #180: on Qiddiya the car deploys again out of the last corner (skipped without the circuit's files).
  *
@@ -23,6 +24,7 @@ import { LC26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Lc26Tune';
 import { getActiveTrackData, RWANDA_DRS_ZONES, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { f1EnergyCircuit, inStretch } from '../src/lib/sim/f1-energy-circuits';
 import { straightModeWindows } from '../src/lib/sim/straight-mode-zones';
+import { lowGripCall, recommendedCompound } from '../src/lib/sim/wet-tyres';
 import { OvertakeGrant } from '../src/lib/sim/overtaking-rules';
 import { createSimHost, loopbackTransport } from '../src/lib/sim/runtime/sim-host';
 import { parsePlayerSettings } from '../src/lib/settings/player-settings';
@@ -73,6 +75,7 @@ const base = (over: Partial<ErsStepInput> = {}): ErsStepInput => ({
   resetSector: false,
   boost: false,
   boostCapped: false,
+  boostHoldOnly: false,
   share: 1,
   fillShare: 1,
   valueSPerMJ: 10,
@@ -369,6 +372,71 @@ console.log('\n== Through the car: the race\'s 250 kW, the Overtake press and it
   host.endFrame(true);
   const workerCar = loop.runtime.simulatedCar as unknown as { vehicle: { ersSession: string } } | null;
   check('A time trial gives the car qualifying\'s allowances, through the worker too', workerCar?.vehicle.ersSession === 'timeTrial', workerCar?.vehicle.ersSession ?? 'no worker car');
+}
+
+// ---------------------------------------------------------------------------
+console.log('\n== Low Grip Conditions (B1.5.11, B7.1.2 b, B7.2.1 g, B7.2.2 d, C5.12.4)');
+{
+  check('Race control declares Low Grip once the line calls for intermediates, Normal Grip again under damp',
+    !lowGripCall(0.14, false) && lowGripCall(0.15, false) && recommendedCompound(0.15) === 'intermediate' && lowGripCall(0.1, true) && !lowGripCall(0.07, true));
+  // The Boost only holds the power: no 150 kW floor in a race, nothing more in practice, nothing given back mid-cut
+  const holdFrom = (fromW: number, capped: boolean) => {
+    const c = new Ers2026Control();
+    run(c, 5, { share: fromW / 350_000 });
+    return run(c, 5, { share: 1, valueSPerMJ: 0.1, boost: true, boostCapped: capped, boostHoldOnly: true })[4];
+  };
+  check('Boost from 100 kW in a race: holds 100 kW (no 150 kW floor)', Math.abs(holdFrom(100_000, true) - 100_000) < 1, kW(holdFrom(100_000, true)));
+  check('... in practice too: no more than its power when pressed', Math.abs(holdFrom(100_000, false) - 100_000) < 1, kW(holdFrom(100_000, false)));
+  const mid = new Ers2026Control();
+  run(mid, 50, {});
+  const cutting = run(mid, 250, { valueSPerMJ: 0.5 });
+  const held = run(mid, 250, { valueSPerMJ: 0.5, boost: true, boostHoldOnly: true });
+  const at = cutting[cutting.length - 1];
+  check('... mid-cut it stops the cut where it is, and gives nothing back', at > 100_000 && held.every((p) => Math.abs(p - at) < 1), `${kW(at)} held`);
+  // C5.12.4: a race's bigger-cut sector in Low Grip cuts at least 250 kW at once. The management's cut there takes it all
+  const big = new Ers2026Control();
+  run(big, 50, { cutStepW: 350_000 });
+  const first = run(big, 1, { cutStepW: 350_000, valueSPerMJ: 0.5 })[0];
+  check('A bigger-cut sector\'s cut takes at least 250 kW at once (all of it)', 350_000 - first >= 250_000, `${kW(first)} left`);
+
+  // Through the car: race control's call in the weather sample
+  const wet = (lowGrip: boolean) => ({ waterMm: 0, wetness: 0, ambientC: 25, rain: 0, lowGrip });
+  const onPad = (racing: boolean, lowGrip: boolean) => {
+    const sim = new F12026CarSim(pad, null, LC26_SIM_PROFILE);
+    const grant = (sim as unknown as { overtake: OvertakeGrant }).overtake;
+    sim.assistPreset = 'pro';
+    sim.autoGearbox = true;
+    sim.raceControl = racing ? { racing: true, earnedAtDetection: () => true } : null;
+    sim.teleportToDistance(2000, 250 / 3.6);
+    sim.setWeatherSample(wet(lowGrip));
+    for (let k = 0; k < 24; k++) {
+      grant.earned = grant.active = true;
+      sim.step(1 / 240, { throttle: 1, overtake: k === 0 });
+    }
+    return sim;
+  };
+  const dryPractice = onPad(false, false);
+  const wetPractice = onPad(false, true);
+  const wetRace = onPad(true, true);
+  check('Practice: Overtake\'s curve in Normal Grip, none in Low Grip (B7.2.2 d)', dryPractice.vehicle.ersOvertake && !wetPractice.vehicle.ersOvertake);
+  check('A race in Low Grip: an earned Overtake can\'t be pressed, no 0.5 MJ extra, the HUD told',
+    !wetRace.vehicle.ersOvertake && wetRace.vehicle.extraRechargeJ === 0 && wetRace.telemetry.overtakeAvailable === false && wetRace.telemetry.lowGrip === true);
+  check('The Boost and the flaps get the call too', wetRace.vehicle.ersLowGrip && wetRace.vehicle.flapsLowGrip === true && dryPractice.vehicle.flapsLowGrip === false);
+
+  // C5.12.5 / B7.2.1 g ii: a reset only in the last sector before the line, and never in a race
+  const v = dryPractice.vehicle;
+  const resetAt = v as unknown as { ersResetSector: (c: NonNullable<typeof v.ersCircuit>, s: number) => boolean };
+  const c = { ...v.ersCircuit!, reset: [{ fromM: 500, toM: 700, timeTrialOnly: false }, { fromM: 3000, toM: 3200, timeTrialOnly: false }] };
+  const resets = (lowGrip: boolean, session: 'race' | 'practice') => {
+    v.ersLowGrip = lowGrip;
+    v.ersSession = session;
+    return [resetAt.ersResetSector.call(v, c, 600), resetAt.ersResetSector.call(v, c, 3100)];
+  };
+  const normal = resets(false, 'practice');
+  const lowPractice = resets(true, 'practice');
+  const lowRace = resets(true, 'race');
+  check('Reset sectors in Low Grip: only the last before the line, none in a race',
+    normal[0] && normal[1] && !lowPractice[0] && lowPractice[1] && !lowRace[0] && !lowRace[1], JSON.stringify({ normal, lowPractice, lowRace }));
 }
 
 console.log('\n== Saved controls');
