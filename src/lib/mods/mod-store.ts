@@ -1,5 +1,5 @@
 import { withBasePath } from "@/lib/base-path";
-import { isArchiveJunk, readZip, ZipError } from "./zip-reader";
+import { isArchiveJunk, readZip, ZIP_MAX_ENTRIES, ZIP_MAX_TOTAL_BYTES, ZipError } from "./zip-reader";
 import {
   isModPackageId,
   isSafeModPath,
@@ -9,6 +9,7 @@ import {
   packageHash,
   sha256Hex,
   validateModManifest,
+  type ModKnownIds,
   type ModManifest,
 } from "./mod-manifest";
 
@@ -28,6 +29,8 @@ export const MODS_CACHE = "librecorsa-mods-v1";
 export const INSTALLED_PATH = `${MODS_PATH}/_installed.json`;
 /** A folder of packages served as files (`public/mods/`, the launcher's `mods/`) lists them here */
 export const FOLDER_INDEX_PATH = `${MODS_PATH}/_index.json`;
+/** Where an import's files wait until all of them are in (a name no package id can take), so a failed update keeps the last */
+const STAGING_PATH = `${MODS_PATH}/_staging`;
 
 export interface InstalledPackage {
   id: string;
@@ -44,6 +47,8 @@ export type InstallResult = { ok: true; manifest: ModManifest; replaced: boolean
 /** What an import reads files from: a zip's entries or a picked folder's files */
 export interface PackageSource {
   paths: string[];
+  /** A file's size (bytes) before it is read */
+  size(path: string): number;
   read(path: string): Promise<Uint8Array>;
 }
 
@@ -65,7 +70,24 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 /** The files a package may carry: assets the game loads, and its readme and licence */
-const PACKAGE_FILE = new RegExp(`\\.(${Object.keys(CONTENT_TYPES).join("|")})$`, "i");
+export const PACKAGE_FILE = new RegExp(`\\.(${Object.keys(CONTENT_TYPES).join("|")})$`, "i");
+
+/**
+ * What is wrong with a package's file list (paths within the package): an unsafe path, a type it may not carry, or two
+ * names only a letter's case apart, which are one file on Windows and macOS and two in a zip (the hash would differ)
+ */
+export function packageFileProblems(paths: readonly string[]): string[] {
+  const errors: string[] = [];
+  const folded = new Map<string, string>();
+  for (const p of paths) {
+    if (!isSafeModPath(p)) errors.push(`${p}: not a path a package may use`);
+    else if (!PACKAGE_FILE.test(p)) errors.push(`${p}: not a file type a package may carry (${Object.keys(CONTENT_TYPES).join(", ")})`);
+    const other = folded.get(p.toLowerCase());
+    if (other !== undefined && other !== p) errors.push(`${p} and ${other}: names that differ only in case`);
+    folded.set(p.toLowerCase(), p);
+  }
+  return errors;
+}
 
 export const modsStorageAvailable = (): boolean => typeof caches !== "undefined" && typeof window !== "undefined";
 
@@ -95,11 +117,12 @@ export async function readInstalledJson(id: string, path = "mod.json"): Promise<
   return res ? res.json() : null;
 }
 
-/** A zip archive's entries as a package source (junk an archiver adds is left out) */
-export function zipSource(bytes: Uint8Array): PackageSource {
-  const entries = new Map(readZip(bytes).filter((e) => !isArchiveJunk(e.path)).map((e) => [e.path, e]));
+/** A zip archive's entries as a package source (junk an archiver adds is left out), read from the file as needed */
+export async function zipSource(archive: Blob): Promise<PackageSource> {
+  const entries = new Map((await readZip(archive)).filter((e) => !isArchiveJunk(e.path)).map((e) => [e.path, e]));
   return {
     paths: [...entries.keys()],
+    size: (path) => entries.get(path)?.size ?? 0,
     read: (path) => {
       const entry = entries.get(path);
       if (!entry) return Promise.reject(new Error(`${path} is not in the archive`));
@@ -117,6 +140,7 @@ export function filesSource(files: readonly File[]): PackageSource {
   }
   return {
     paths: [...byPath.keys()],
+    size: (path) => byPath.get(path)?.size ?? 0,
     read: async (path) => {
       const f = byPath.get(path);
       if (!f) throw new Error(`${path} is not in the folder`);
@@ -131,20 +155,22 @@ export function filesSource(files: readonly File[]): PackageSource {
  */
 export function packageRoot(paths: readonly string[]): string | null {
   if (paths.includes("mod.json")) return "";
-  const roots = paths.filter((p) => /^[^/]+\/mod\.json$/.test(p)).map((p) => p.slice(0, -"mod.json".length));
+  const roots = paths
+    .filter((p) => /^[^/]+\/mod\.json$/.test(p))
+    .map((p) => p.slice(0, -"mod.json".length))
+    // A folder's name, never `.` or `..`
+    .filter((r) => isSafeModPath(r.slice(0, -1)));
   if (roots.length !== 1) return null;
   return paths.every((p) => p.startsWith(roots[0])) ? roots[0] : null;
 }
 
 /**
  * Checks a package and stores it, in place of an installed package with the same id. Nothing is stored unless every
- * check passes: its `mod.json`, that every file it names is there, and every path being safe to serve. `known` are the
- * game's car and vehicle model ids, which a package's liveries and cars may name.
+ * check passes: its `mod.json`, that every file it names is there, every path being safe to serve, and its size. The
+ * files wait aside until all of them are read and stored, so an update that fails (a damaged file, no space) leaves
+ * the installed version as it was. `known` are the game's ids a package may name (mod-content.ts `modDefinitions`).
  */
-export async function installPackage(
-  source: PackageSource,
-  known: { cars: ReadonlySet<string>; vehicles: ReadonlySet<string> },
-): Promise<InstallResult> {
+export async function installPackage(source: PackageSource, known: ModKnownIds): Promise<InstallResult> {
   if (!modsStorageAvailable()) return { ok: false, errors: ["This browser has no storage for mods here (a private window, or the page is not served over https)"] };
   const root = packageRoot(source.paths);
   if (root === null) return { ok: false, errors: ["No mod.json at the top of the package (or in its one folder)"] };
@@ -160,13 +186,11 @@ export async function installPackage(
   if (!checked.ok) return checked;
   const manifest = checked.manifest;
 
-  const errors: string[] = [];
+  const errors = packageFileProblems(files.map((f) => f.path));
   const present = new Set(files.map((f) => f.path));
-  for (const f of files) {
-    if (!isSafeModPath(f.path)) errors.push(`${f.path}: not a path a package may use`);
-    else if (!PACKAGE_FILE.test(f.path)) errors.push(`${f.path}: not a file type a package may carry (${Object.keys(CONTENT_TYPES).join(", ")})`);
-  }
   for (const needed of manifestFiles(manifest)) if (!present.has(needed)) errors.push(`${needed}: named in mod.json but not in the package`);
+  if (files.length > ZIP_MAX_ENTRIES) errors.push(`the package holds more than ${ZIP_MAX_ENTRIES} files`);
+  if (files.reduce((n, f) => n + source.size(f.from), 0) > ZIP_MAX_TOTAL_BYTES) errors.push("the package is larger than 2 GB");
   if (errors.length) return { ok: false, errors: errors.slice(0, 50) };
 
   // Asking for persistent storage keeps the browser from clearing mods when it runs short of space
@@ -175,9 +199,14 @@ export async function installPackage(
   const cache = await caches.open(MODS_CACHE);
   const installed = await readInstalled();
   const replaced = installed.some((p) => p.id === manifest.id);
-  if (replaced) await deleteFiles(cache, manifest.id);
+  const staging = `${STAGING_PATH}/${manifest.id}/`;
+  // The file's own URL, moved aside: its path encoded as `modFileUrl` encodes it
+  const staged = (path: string) => absolute(modFileUrl(manifest.id, path).replace(`${MODS_PATH}/`, `${STAGING_PATH}/`));
+  await deletePrefix(cache, staging);
   const hashes: Record<string, string> = {};
   let bytes = 0;
+  // Set once the installed version's files start to go: from then on a failure leaves no package rather than half of one
+  let replacing = false;
   try {
     for (const f of files) {
       const data = await source.read(f.from);
@@ -189,37 +218,53 @@ export async function installPackage(
         "Content-Length": String(data.byteLength),
         "X-File-Size": String(data.byteLength),
       };
-      await cache.put(absolute(modFileUrl(manifest.id, f.path)), new Response(data as Uint8Array<ArrayBuffer>, { headers }));
+      await cache.put(staged(f.path), new Response(data as Uint8Array<ArrayBuffer>, { headers }));
     }
-  } catch (err) {
-    // Half a package is worse than none
+    const entry: InstalledPackage = {
+      id: manifest.id,
+      name: manifest.name,
+      version: manifest.version,
+      hash: await packageHash(hashes),
+      bytes,
+      installedAt: Date.now(),
+    };
+    // Every file is in: the new version takes the old one's place
+    replacing = true;
     await deleteFiles(cache, manifest.id);
-    await writeInstalled(cache, installed.filter((p) => p.id !== manifest.id));
-    const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, errors: [/quota/i.test(message) ? "Not enough storage space for this package" : message] };
+    for (const f of files) {
+      const res = await cache.match(staged(f.path));
+      if (!res) throw new Error(`${f.path}: lost while installing`);
+      await cache.put(absolute(modFileUrl(manifest.id, f.path)), res);
+      await cache.delete(staged(f.path));
+    }
+    await writeInstalled(cache, [...installed.filter((p) => p.id !== manifest.id), entry]);
+  } catch (err) {
+    // A clean-up that fails too mustn't hide why the import did
+    await deletePrefix(cache, staging).catch(() => {});
+    if (replacing) {
+      await deleteFiles(cache, manifest.id).catch(() => {});
+      await writeInstalled(cache, installed.filter((p) => p.id !== manifest.id)).catch(() => {});
+    }
+    const quota = (err instanceof DOMException && err.name === "QuotaExceededError") || /quota/i.test(String(err));
+    return { ok: false, errors: [quota ? "Not enough storage space for this package" : err instanceof Error ? err.message : String(err)] };
   }
-  const entry: InstalledPackage = {
-    id: manifest.id,
-    name: manifest.name,
-    version: manifest.version,
-    hash: await packageHash(hashes),
-    bytes,
-    installedAt: Date.now(),
-  };
-  await writeInstalled(cache, [...installed.filter((p) => p.id !== manifest.id), entry]);
   return { ok: true, manifest, replaced };
 }
 
-async function deleteFiles(cache: Cache, id: string): Promise<void> {
-  const prefix = absolute(`${MODS_PATH}/${id}/`);
+async function deletePrefix(cache: Cache, path: string): Promise<void> {
+  const prefix = absolute(path);
   for (const req of await cache.keys()) if (req.url.startsWith(prefix)) await cache.delete(req);
 }
+
+const deleteFiles = (cache: Cache, id: string): Promise<void> => deletePrefix(cache, `${MODS_PATH}/${id}/`);
 
 export async function removePackage(id: string): Promise<void> {
   if (!modsStorageAvailable()) return;
   const cache = await caches.open(MODS_CACHE);
   await deleteFiles(cache, id);
   await writeInstalled(cache, (await readInstalled()).filter((p) => p.id !== id));
+  // Imported again later, it starts switched on, as any new package does
+  setPackageEnabled(id, true);
 }
 
 // --- Which packages are switched on (a per-browser choice, like the other settings) ---

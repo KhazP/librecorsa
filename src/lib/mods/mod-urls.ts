@@ -5,35 +5,35 @@ import { isSafeModPath, modFileUrl } from "./mod-manifest";
  * by URL (`/tracks/<id>/<id>.glb`). These turn the first into the second, so the loaders need nothing of their own.
  */
 
-/** Files a track data file may name in its `metadata.mesh` */
-const ASSET_FILE = /\.(glb|gltf|bin|json|webp|png|jpe?g|ktx2|ogg|wav|mp3)$/i;
+/** Files a track data file may name in its `metadata.mesh`: models, self-contained (a .gltf could name files anywhere) */
+const ASSET_FILE = /\.glb$/i;
 
 /**
- * A path in the package as its URL. A file named any other way (an absolute URL, a path on the site) is refused: a
- * mod circuit loads only its own files, all of them in the content hash online rooms compare, and none from elsewhere
+ * A path in the package as its URL. Anything else (an absolute URL, `data:`, a path on the site, a query or a fragment,
+ * another package's file) is refused: a mod circuit loads only its own files, all of them in the content hash online
+ * rooms compare, and none from elsewhere
  */
-export function resolveModPath(packageId: string, value: string): string {
-  if (!ASSET_FILE.test(value)) return value;
-  if (!isSafeModPath(value)) throw new Error(`"${value}": a mod circuit names its files by their path in the package`);
+export function resolveModPath(packageId: string, value: unknown): string {
+  if (typeof value !== "string" || !isSafeModPath(value) || !ASSET_FILE.test(value)) {
+    throw new Error(`${JSON.stringify(value)}: a mod circuit names its model and scenery by their path in the package (a .glb file)`);
+  }
   return modFileUrl(packageId, value);
 }
 
-function resolveDeep(packageId: string, value: unknown): unknown {
-  if (typeof value === "string") return resolveModPath(packageId, value);
-  if (Array.isArray(value)) return value.map((v) => resolveDeep(packageId, v));
-  if (typeof value === "object" && value !== null) {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolveDeep(packageId, v)]));
-  }
-  return value;
-}
-
 /**
- * A package's track data with the files its `metadata.mesh` names (the model, its scenery) as URLs under the
- * package's folder. Only `metadata.mesh` names files; the rest of the data is left as it is (and not copied). Throws
- * when it names a file outside the package (the circuit doesn't load, and the game stays on the one it had).
+ * A package's track data with the files its `metadata.mesh` names (`url`, the model, and `scenery`) as URLs under the
+ * package's folder; the mesh's other strings are names of parts inside the model, left as they are. Throws when it
+ * names a file outside the package (the circuit doesn't load, and the game stays on the one it had).
  */
-export function resolveModTrackUrls<T extends { metadata: object }>(raw: T, packageId: string): T {
-  const metadata = raw.metadata as { mesh?: unknown };
-  if (!metadata.mesh) return raw;
-  return { ...raw, metadata: { ...raw.metadata, mesh: resolveDeep(packageId, metadata.mesh) } };
+export function resolveModTrackUrls<T extends { metadata?: object }>(raw: T, packageId: string): T {
+  const metadata = raw.metadata as { mesh?: { url?: unknown; scenery?: unknown } } | undefined;
+  const mesh = metadata?.mesh;
+  if (!mesh || typeof mesh !== "object") return raw;
+  const resolved: Record<string, unknown> = { ...mesh };
+  if (mesh.url !== undefined) resolved.url = resolveModPath(packageId, mesh.url);
+  if (mesh.scenery !== undefined) {
+    if (!Array.isArray(mesh.scenery)) throw new Error("metadata.mesh.scenery: must be a list of paths in the package");
+    resolved.scenery = mesh.scenery.map((f) => resolveModPath(packageId, f));
+  }
+  return { ...raw, metadata: { ...metadata, mesh: resolved } };
 }

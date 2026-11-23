@@ -12,14 +12,21 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { join, relative, resolve, sep } from "node:path";
 import { deflateRawSync } from "node:zlib";
 import { isModPackageId, isSafeModPath, manifestFiles, packageHash, sha256Hex, validateModManifest } from "../src/lib/mods/mod-manifest";
-import { modDefinitions } from "../src/lib/mods/mod-content";
-import { isArchiveJunk } from "../src/lib/mods/zip-reader";
+import { modCarProfile, modDefinitions } from "../src/lib/mods/mod-content";
+import { packageFileProblems } from "../src/lib/mods/mod-store";
+import { crc32, isArchiveJunk, ZIP_MAX_ENTRIES, ZIP_MAX_TOTAL_BYTES } from "../src/lib/mods/zip-reader";
 import { resolveModTrackUrls } from "../src/lib/mods/mod-urls";
 
-const PACKAGE_FILE = /\.(glb|gltf|bin|json|webp|png|jpe?g|ktx2|ogg|wav|mp3|txt|md)$/i;
-
-function walk(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
+/** The package's files, and its links: a link isn't packed as one (a zip holds it as the file, or not at all) */
+function walk(dir: string, links: string[] = []): { files: string[]; links: string[] } {
+  const files: string[] = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isSymbolicLink()) links.push(p);
+    else if (e.isDirectory()) files.push(...walk(p, links).files);
+    else if (e.isFile()) files.push(p);
+  }
+  return { files, links };
 }
 
 const relPath = (root: string, file: string) => relative(root, file).split(sep).join("/");
@@ -43,11 +50,12 @@ function check(folder: string): Checked {
   }
   const result = validateModManifest(raw, modDefinitions());
   if (!result.ok) return { ok: false, files: [], problems: result.errors };
-  const files = walk(folder).map((f) => relPath(folder, f)).filter((p) => !isArchiveJunk(p));
-  for (const p of files) {
-    if (!isSafeModPath(p)) problems.push(`${p}: not a path a package may use`);
-    else if (!PACKAGE_FILE.test(p)) problems.push(`${p}: not a file type a package may carry`);
-  }
+  const tree = walk(folder);
+  for (const link of tree.links) problems.push(`${relPath(folder, link)}: a link; put the file itself in the package`);
+  const files = tree.files.map((f) => relPath(folder, f)).filter((p) => !isArchiveJunk(p));
+  problems.push(...packageFileProblems(files));
+  if (files.length > ZIP_MAX_ENTRIES) problems.push(`the package holds more than ${ZIP_MAX_ENTRIES} files`);
+  if (files.reduce((n, p) => n + statSync(join(folder, p)).size, 0) > ZIP_MAX_TOTAL_BYTES) problems.push("the package is larger than 2 GB, more than the game imports");
   const present = new Set(files);
   for (const needed of manifestFiles(result.manifest)) if (!present.has(needed)) problems.push(`${needed}: named in mod.json but missing`);
   // A circuit's track data: parsed, with the model it names in the package
@@ -59,7 +67,7 @@ function check(folder: string): Checked {
       if (typeof url !== "string") problems.push(`${t.data}: metadata.mesh.url (the circuit's model) is missing`);
       try {
         // As the game reads it: every file it names is a path in the package
-        resolveModTrackUrls(data as { metadata: object }, result.manifest.id);
+        resolveModTrackUrls(data, result.manifest.id);
       } catch (err) {
         problems.push(`${t.data}: ${(err as Error).message}`);
       }
@@ -70,8 +78,19 @@ function check(folder: string): Checked {
       problems.push(`${t.data}: not valid JSON (${(err as Error).message})`);
     }
   }
-  const tooBig = files.filter((p) => statSync(join(folder, p)).size > 0xfffffffe);
-  for (const p of tooBig) problems.push(`${p}: over 4 GB, more than a package file may be`);
+  // A car's physics file, read as the game reads it: every value it changes checked against its base model
+  for (const c of result.manifest.cars ?? []) {
+    if (typeof c.physics === "string" || !present.has(c.physics.file)) continue;
+    let file: unknown;
+    try {
+      file = JSON.parse(readFileSync(join(folder, c.physics.file), "utf8"));
+    } catch (err) {
+      problems.push(`${c.physics.file}: not valid JSON (${(err as Error).message})`);
+      continue;
+    }
+    const physics = modCarProfile(result.manifest, c, file, undefined);
+    if (!physics.ok) problems.push(...physics.errors);
+  }
   return { ok: problems.length === 0, id: result.manifest.id, files, problems };
 }
 
@@ -79,15 +98,6 @@ async function hashFolder(folder: string, files: string[]): Promise<string> {
   const hashes: Record<string, string> = {};
   for (const p of files) hashes[p] = await sha256Hex(readFileSync(join(folder, p)));
   return packageHash(hashes);
-}
-
-function crc32(data: Uint8Array): number {
-  let c = 0xffffffff;
-  for (const b of data) {
-    c ^= b;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  }
-  return (c ^ 0xffffffff) >>> 0;
 }
 
 /** A zip of the files as the game's reader takes them: deflated (stored when that is no smaller), UTF-8 names */

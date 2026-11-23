@@ -1,8 +1,8 @@
-import { BUILT_IN_CAR_IDS, carById, registerModCars, type BuiltInCarId, type CarDefinition, type CarSkin } from "@/lib/cars/car-registry";
+import { anyCarById, BUILT_IN_CAR_IDS, carById, registerModCars, type BuiltInCarId, type CarDefinition, type CarSkin } from "@/lib/cars/car-registry";
 import { VEHICLE_MODELS } from "@/lib/cars/vehicle-models";
 import type { ModOrigin } from "@/lib/track-registry";
 import { VEHICLE_MODEL_IDS, type VehicleModelId } from "@/types/f1";
-import { modContentId, modDirUrl, modFileUrl, type ModCar, type ModCredit, type ModManifest, type ModSkin } from "./mod-manifest";
+import { modContentId, modDirUrl, modFileUrl, modSkinDir, type ModCar, type ModCredit, type ModKnownIds, type ModManifest, type ModSkin } from "./mod-manifest";
 import { modSimProfile, type ModPhysicsResult } from "./mod-physics";
 import type { CarSimProfile } from "@/lib/sim/f12026-car/F12026CarSim";
 
@@ -12,11 +12,12 @@ import type { CarSimProfile } from "@/lib/sim/f12026-car/F12026CarSim";
  */
 
 /**
- * What a package may name: the game's own cars (for liveries and sounds), vehicle models (for cars), and the models a
- * physics file can change (those the game's car simulation runs on a profile)
+ * What a package may name: the game's own cars (for sounds), those with liveries (for liveries), vehicle models (for
+ * cars), and the models a physics file can change (those the game's car simulation runs on a profile)
  */
-export const modDefinitions = (): { cars: ReadonlySet<string>; vehicles: ReadonlySet<string>; physicsBases: ReadonlySet<string> } => ({
+export const modDefinitions = (): Required<ModKnownIds> => ({
   cars: BUILT_IN_CAR_IDS,
+  skinCars: new Set([...BUILT_IN_CAR_IDS].filter((id) => anyCarById(id as BuiltInCarId)?.skins?.length)),
   vehicles: new Set(VEHICLE_MODEL_IDS),
   physicsBases: new Set(VEHICLE_MODEL_IDS.filter((v) => VEHICLE_MODELS[v].simProfile)),
 });
@@ -43,15 +44,15 @@ const carCredit = (c: ModCredit, title: string) => ({
   note: c.note,
 });
 
-/** A package livery as the registry lists it: `mod:<package>/<id>`, its files in the package */
-export function modSkin(packageId: string, s: ModSkin, origin: ModOrigin, dirBase = "skins"): CarSkin {
+/** A package livery as the registry lists it: `mod:<package>/<id>`, its files in the package (`car`: the mod car it is for) */
+export function modSkin(packageId: string, s: ModSkin, origin: ModOrigin, car?: ModCar): CarSkin {
   return {
     id: modContentId(packageId, s.id),
     name: s.name,
     swatch: s.swatch,
     files: s.files,
     variant: s.variant,
-    baseUrl: modDirUrl(packageId, s.dir ?? `${dirBase}/${s.id}`).replace(/\/$/, ""),
+    baseUrl: modDirUrl(packageId, modSkinDir(s, car)).replace(/\/$/, ""),
     mod: origin,
   };
 }
@@ -75,7 +76,7 @@ export function modCarDefinition(m: ModManifest, c: ModCar, origin: ModOrigin, s
           // The bank sweeps its range on the vehicle model's own limiter
           physicsLimiterRpm: model.limiterRpm,
         };
-  const skins = c.skins?.map((s) => modSkin(m.id, s, origin, `${c.model.slice(0, c.model.lastIndexOf("/") + 1)}skins`.replace(/^\//, "")));
+  const skins = c.skins?.map((s) => modSkin(m.id, s, origin, c));
   return {
     id,
     classId: c.classId,

@@ -3,7 +3,8 @@
  * tool writes), each checked against its CRC-32. Deflate is undone by the platform's `DecompressionStream`, so this
  * adds no library. Zip64, encrypted and multi-disk archives are refused with a reason.
  *
- * Entries are read one at a time, when asked for, so an archive's files never all sit in memory decompressed at once.
+ * The archive is read from its Blob (the picked File) a piece at a time: the directory first, then each entry when it
+ * is asked for, so a package up to its 2 GB never sits in memory whole, compressed or not.
  */
 
 export interface ZipEntry {
@@ -14,18 +15,23 @@ export interface ZipEntry {
   read(): Promise<Uint8Array>;
 }
 
-/** The most a package may hold, uncompressed */
+/** The most a package may hold, uncompressed (an import from a folder, and `npm run mod`, keep to it as well) */
 export const ZIP_MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024;
-const MAX_ENTRIES = 20_000;
+/** The most files a package may hold */
+export const ZIP_MAX_ENTRIES = 20_000;
 
 const EOCD_SIG = 0x06054b50;
 const CENTRAL_SIG = 0x02014b50;
 const LOCAL_SIG = 0x04034b50;
+const EOCD_SIZE = 22;
+const CENTRAL_SIZE = 46;
+const LOCAL_SIZE = 30;
 
 export class ZipError extends Error {}
 
 let crcTable: Uint32Array | null = null;
-function crc32(data: Uint8Array): number {
+/** CRC-32 (the zip polynomial) of `data`, continued from `crc` when given */
+export function crc32(data: Uint8Array, crc = 0): number {
   if (!crcTable) {
     crcTable = new Uint32Array(256);
     for (let n = 0; n < 256; n++) {
@@ -34,62 +40,96 @@ function crc32(data: Uint8Array): number {
       crcTable[n] = c >>> 0;
     }
   }
-  let crc = 0xffffffff;
-  for (let i = 0; i < data.length; i++) crc = crcTable[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
-  return (crc ^ 0xffffffff) >>> 0;
+  let c = (crc ^ 0xffffffff) >>> 0;
+  for (let i = 0; i < data.length; i++) c = crcTable[(c ^ data[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
 }
 
-async function inflateRaw(data: Uint8Array, expected: number): Promise<Uint8Array> {
-  const stream = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-  const reader = stream.getReader();
-  const out = new Uint8Array(expected);
+/**
+ * Undoes deflate, gathering what comes out until the stated size: memory follows what the entry really holds, so an
+ * archive that states a size it doesn't hold (2 GB in a few bytes) never gets it set aside
+ */
+async function inflateRaw(data: Blob, expected: number): Promise<Uint8Array> {
+  const reader = data.stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+  const chunks: Uint8Array[] = [];
   let at = 0;
   for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    let step: ReadableStreamReadResult<Uint8Array>;
+    try {
+      step = await reader.read();
+    } catch {
+      throw new ZipError("damaged compressed data");
+    }
+    if (step.done) break;
     // More than the archive said: a damaged or hostile entry, stopped before it can fill memory
-    if (at + value.byteLength > expected) {
+    if (at + step.value.byteLength > expected) {
       await reader.cancel().catch(() => {});
       throw new ZipError("an entry inflates past its stated size");
     }
-    out.set(value, at);
-    at += value.byteLength;
+    chunks.push(step.value);
+    at += step.value.byteLength;
   }
   if (at !== expected) throw new ZipError("an entry is shorter than its stated size");
+  if (chunks.length === 1) return chunks[0];
+  const out = new Uint8Array(at);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
   return out;
 }
 
-/** Whether a path is something an archiver adds that no package means to carry (macOS resource forks, Finder files) */
+/**
+ * Whether a path is something an archiver adds that no package means to carry (macOS resource forks, Finder files), at
+ * any depth: a zip of the package's folder has them inside that folder
+ */
 export const isArchiveJunk = (path: string): boolean =>
-  path.startsWith("__MACOSX/") || /(^|\/)\.DS_Store$/.test(path) || /(^|\/)Thumbs\.db$/i.test(path);
+  /(^|\/)__MACOSX\//.test(path) || /(^|\/)\.DS_Store$/.test(path) || /(^|\/)Thumbs\.db$/i.test(path);
+
+const bytesOf = async (blob: Blob, start: number, end: number): Promise<Uint8Array> => new Uint8Array(await blob.slice(start, end).arrayBuffer());
 
 /** The entries of a zip archive (directories left out), in archive order */
-export function readZip(bytes: Uint8Array): ZipEntry[] {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  // The end record sits in the last 22 bytes plus a comment of up to 65 535
+export async function readZip(archive: Blob | Uint8Array): Promise<ZipEntry[]> {
+  const blob = archive instanceof Blob ? archive : new Blob([archive as Uint8Array<ArrayBuffer>]);
+  const length = blob.size;
+  if (length < EOCD_SIZE) throw new ZipError("not a zip archive");
+  // The end record sits in the last 22 bytes plus a comment of up to 65 535. The one whose comment runs to the end
+  // is the archive's (a comment may hold the signature too); an archive with bytes after it is read from the last one
+  const tailStart = Math.max(0, length - EOCD_SIZE - 0xffff);
+  const tail = await bytesOf(blob, tailStart, length);
+  const tailView = new DataView(tail.buffer, tail.byteOffset, tail.byteLength);
   let eocd = -1;
-  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 22 - 0xffff); i--) {
-    if (view.getUint32(i, true) === EOCD_SIG) {
+  for (let i = tail.length - EOCD_SIZE; i >= 0; i--) {
+    if (tailView.getUint32(i, true) !== EOCD_SIG) continue;
+    if (eocd < 0) eocd = i;
+    if (tailView.getUint16(i + 20, true) === tail.length - (i + EOCD_SIZE)) {
       eocd = i;
       break;
     }
   }
   if (eocd < 0) throw new ZipError("not a zip archive");
-  const disk = view.getUint16(eocd + 4, true);
-  const count = view.getUint16(eocd + 10, true);
-  const cdSize = view.getUint32(eocd + 12, true);
-  const cdOffset = view.getUint32(eocd + 16, true);
-  if (disk !== 0) throw new ZipError("multi-part archives are not supported");
-  if (count === 0xffff || cdOffset === 0xffffffff) throw new ZipError("zip64 archives are not supported: zip the package without zip64");
-  if (count > MAX_ENTRIES) throw new ZipError(`the archive holds more than ${MAX_ENTRIES} entries`);
-  if (cdOffset + cdSize > eocd) throw new ZipError("the archive's directory is damaged");
+  const disk = tailView.getUint16(eocd + 4, true);
+  const cdDisk = tailView.getUint16(eocd + 6, true);
+  const diskEntries = tailView.getUint16(eocd + 8, true);
+  const count = tailView.getUint16(eocd + 10, true);
+  const cdSize = tailView.getUint32(eocd + 12, true);
+  const cdOffset = tailView.getUint32(eocd + 16, true);
+  if (disk !== 0 || cdDisk !== 0 || diskEntries !== count) throw new ZipError("multi-part archives are not supported");
+  if (count === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) throw new ZipError("zip64 archives are not supported: zip the package without zip64");
+  if (count > ZIP_MAX_ENTRIES) throw new ZipError(`the archive holds more than ${ZIP_MAX_ENTRIES} entries`);
+  const cdEnd = cdOffset + cdSize;
+  if (cdEnd > tailStart + eocd) throw new ZipError("the archive's directory is damaged");
 
+  const cd = await bytesOf(blob, cdOffset, cdEnd);
+  const view = new DataView(cd.buffer, cd.byteOffset, cd.byteLength);
   const decoder = new TextDecoder();
   const entries: ZipEntry[] = [];
+  const seen = new Set<string>();
   let total = 0;
-  let at = cdOffset;
+  let at = 0;
   for (let n = 0; n < count; n++) {
-    if (at + 46 > bytes.length || view.getUint32(at, true) !== CENTRAL_SIG) throw new ZipError("the archive's directory is damaged");
+    if (at + CENTRAL_SIZE > cd.length || view.getUint32(at, true) !== CENTRAL_SIG) throw new ZipError("the archive's directory is damaged");
     const flags = view.getUint16(at + 8, true);
     const method = view.getUint16(at + 10, true);
     const crc = view.getUint32(at + 16, true);
@@ -99,23 +139,39 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
     const extraLen = view.getUint16(at + 30, true);
     const commentLen = view.getUint16(at + 32, true);
     const localOffset = view.getUint32(at + 42, true);
-    const path = decoder.decode(bytes.subarray(at + 46, at + 46 + nameLen));
-    at += 46 + nameLen + extraLen + commentLen;
+    const next = at + CENTRAL_SIZE + nameLen + extraLen + commentLen;
+    if (next > cd.length) throw new ZipError("the archive's directory is damaged");
+    const path = decoder.decode(cd.subarray(at + CENTRAL_SIZE, at + CENTRAL_SIZE + nameLen));
+    at = next;
     if (path.endsWith("/")) continue;
     if (flags & 1) throw new ZipError(`${path} is encrypted`);
     if (method !== 0 && method !== 8) throw new ZipError(`${path} uses compression method ${method}: only stored and deflated entries are read`);
-    if (compressed === 0xffffffff || size === 0xffffffff) throw new ZipError("zip64 archives are not supported: zip the package without zip64");
+    if (compressed === 0xffffffff || size === 0xffffffff || localOffset === 0xffffffff) {
+      throw new ZipError("zip64 archives are not supported: zip the package without zip64");
+    }
+    if (method === 0 && compressed !== size) throw new ZipError(`${path}: damaged entry (stored, yet its sizes differ)`);
+    // Two entries under one name: which one a tool unpacks differs from tool to tool, so neither is taken
+    if (seen.has(path)) throw new ZipError(`${path} is in the archive twice`);
+    seen.add(path);
     total += size;
     if (total > ZIP_MAX_TOTAL_BYTES) throw new ZipError("the package is larger than 2 GB uncompressed");
     entries.push({
       path,
       size,
       read: async () => {
-        if (localOffset + 30 > bytes.length || view.getUint32(localOffset, true) !== LOCAL_SIG) throw new ZipError(`${path}: damaged entry`);
-        const start = localOffset + 30 + view.getUint16(localOffset + 26, true) + view.getUint16(localOffset + 28, true);
-        if (start + compressed > bytes.length) throw new ZipError(`${path}: the archive is cut short`);
-        const raw = bytes.subarray(start, start + compressed);
-        const data = method === 0 ? raw.slice() : await inflateRaw(raw, size);
+        if (localOffset + LOCAL_SIZE > cdOffset) throw new ZipError(`${path}: damaged entry`);
+        const local = await bytesOf(blob, localOffset, localOffset + LOCAL_SIZE);
+        const localView = new DataView(local.buffer, local.byteOffset, local.byteLength);
+        if (localView.getUint32(0, true) !== LOCAL_SIG) throw new ZipError(`${path}: damaged entry`);
+        const start = localOffset + LOCAL_SIZE + localView.getUint16(26, true) + localView.getUint16(28, true);
+        if (start + compressed > cdOffset) throw new ZipError(`${path}: the archive is cut short`);
+        const raw = blob.slice(start, start + compressed);
+        let data: Uint8Array;
+        try {
+          data = method === 0 ? new Uint8Array(await raw.arrayBuffer()) : await inflateRaw(raw, size);
+        } catch (err) {
+          throw new ZipError(`${path}: ${err instanceof Error ? err.message : String(err)}`);
+        }
         if (data.length !== size) throw new ZipError(`${path}: size does not match the archive's directory`);
         if (crc32(data) !== crc) throw new ZipError(`${path}: checksum mismatch (the archive is damaged)`);
         return data;

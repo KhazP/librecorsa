@@ -19,8 +19,8 @@ import {
   type ModManifest,
 } from "../src/lib/mods/mod-manifest";
 import { resolveModTrackUrls } from "../src/lib/mods/mod-urls";
-import { readZip, ZipError, isArchiveJunk } from "../src/lib/mods/zip-reader";
-import { packageRoot } from "../src/lib/mods/mod-store";
+import { crc32, readZip, ZipError, isArchiveJunk } from "../src/lib/mods/zip-reader";
+import { packageFileProblems, packageRoot } from "../src/lib/mods/mod-store";
 import { modTrackInfos } from "../src/lib/mods/mod-loader";
 import { modDefinitions, registerModContent } from "../src/lib/mods/mod-content";
 import { CARS, carById, portedSkinFor, carSkinThumbUrl, carThumbUrl, type CarId } from "../src/lib/cars/car-registry";
@@ -74,6 +74,12 @@ const baseManifest = (): Record<string, unknown> => ({
   if (ok.ok) {
     const files = manifestFiles(ok.manifest);
     check("manifestFiles names mod.json, the track data and the model", ["mod.json", "ring/track_data.json", "cars/gt-x/gt-x.glb"].every((f) => files.includes(f)), files.join(", "));
+    const listing = baseManifest();
+    (listing.skins as Record<string, unknown>[])[0].files = ["paint.png"];
+    ((listing.cars as Record<string, unknown>[])[0].skins as Record<string, unknown>[])[1].files = ["decals.png"];
+    const listed = validateModManifest(listing, known);
+    const named = listed.ok ? manifestFiles(listed.manifest) : [];
+    check("a livery's listed files are files the package must hold", named.includes("skins/blue/paint.png") && named.includes("cars/gt-x/skins/red/decals.png"), named.join(", "));
   }
 
   const bad = (mutate: (m: Record<string, unknown>) => void, expect: RegExp, name: string) => {
@@ -94,6 +100,8 @@ const baseManifest = (): Record<string, unknown> => ({
   bad((m) => ((m.cars as Record<string, unknown>[])[0].physics = "warp-drive"), /physics/, "a car on a vehicle model the game hasn't got is refused");
   bad((m) => ((m.cars as Record<string, unknown>[])[0].sound = { dir: "x" }), /limiterRpm/, "a sound bank without its limiter is refused");
   bad((m) => (m.credit = { author: "x", license: "y", url: "javascript:alert(1)" }), /credit\.url/, "a credit link that isn't https is refused");
+  bad((m) => (m.credit = { author: "x", license: "y", url: "https://:443/x" }), /credit\.url/, "a link with no host is refused");
+  bad((m) => ((m.skins as Record<string, unknown>[])[0].car = "lc26"), /skins\[0\]\.car/, "a livery for a car without liveries (the prototype) is refused");
   bad((m) => {
     delete m.tracks;
     delete m.cars;
@@ -142,7 +150,17 @@ const baseManifest = (): Record<string, unknown> => ({
   check("the model's path becomes its package URL", out.metadata.mesh.url === "/mods/jdoe.test-pack/ring/ring.glb", out.metadata.mesh.url);
   check("scenery paths become package URLs, mesh names stay names", out.metadata.mesh.scenery[0] === "/mods/jdoe.test-pack/ring/trees.glb" && out.metadata.mesh.road === "Track_Asphalt_Road");
   check("the input is not changed, and the samples are not copied", raw.metadata.mesh.url === "ring/ring.glb" && out.samples === raw.samples);
-  for (const outside of ["/tracks/shared/x.glb", "https://cdn.example/x.glb", "../other.pack/x.glb"]) {
+  check("track data without a mesh is read as it is", resolveModTrackUrls({ samples: [] } as { metadata?: object }, "jdoe.test-pack").metadata === undefined);
+  for (const outside of [
+    "/tracks/shared/x.glb",
+    "https://cdn.example/x.glb",
+    "../other.pack/x.glb",
+    // Past an extension check that looks only at the end
+    "https://cdn.example/x.glb?v=1",
+    "https://cdn.example/serve-track",
+    "data:model/gltf-binary;base64,AAAA",
+    "ring/ring.gltf",
+  ]) {
     let refused = false;
     try {
       resolveModTrackUrls({ metadata: { mesh: { url: "ring/ring.glb", scenery: [outside] } } }, "jdoe.test-pack");
@@ -154,16 +172,10 @@ const baseManifest = (): Record<string, unknown> => ({
 }
 
 // --- Zip reader ---
-function crc32(data: Uint8Array): number {
-  let c = 0xffffffff;
-  for (const b of data) {
-    c ^= b;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  }
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function makeZip(files: { path: string; data: Uint8Array; deflate?: boolean; crcOverride?: number; sizeOverride?: number }[]): Uint8Array {
+function makeZip(
+  files: { path: string; data: Uint8Array; deflate?: boolean; crcOverride?: number; sizeOverride?: number }[],
+  comment = new Uint8Array(),
+): Uint8Array {
   const enc = new TextEncoder();
   const locals: Uint8Array[] = [];
   const centrals: Uint8Array[] = [];
@@ -201,14 +213,16 @@ function makeZip(files: { path: string; data: Uint8Array; deflate?: boolean; crc
     offset += local.length;
   }
   const cdSize = centrals.reduce((n, c) => n + c.length, 0);
-  const eocd = new Uint8Array(22);
+  const eocd = new Uint8Array(22 + comment.length);
   const ev = new DataView(eocd.buffer);
   ev.setUint32(0, 0x06054b50, true);
   ev.setUint16(8, files.length, true);
   ev.setUint16(10, files.length, true);
   ev.setUint32(12, cdSize, true);
   ev.setUint32(16, offset, true);
-  const out = new Uint8Array(offset + cdSize + 22);
+  ev.setUint16(20, comment.length, true);
+  eocd.set(comment, 22);
+  const out = new Uint8Array(offset + cdSize + eocd.length);
   let at = 0;
   for (const part of [...locals, ...centrals, eocd]) {
     out.set(part, at);
@@ -225,7 +239,7 @@ async function zipChecks(): Promise<void> {
     { path: "pack/mod.json", data: small },
     { path: "pack/big.txt", data: text, deflate: true },
   ]);
-  const entries = readZip(zip);
+  const entries = await readZip(zip);
   check("directories are left out of the entries", entries.length === 2 && entries.every((e) => !e.path.endsWith("/")), entries.map((e) => e.path).join(", "));
   const stored = await entries[0].read();
   check("a stored entry reads back byte for byte", new TextDecoder().decode(stored) === '{"a":1}');
@@ -234,7 +248,7 @@ async function zipChecks(): Promise<void> {
 
   const rejects = async (name: string, zipBytes: Uint8Array, expect: RegExp) => {
     try {
-      for (const e of readZip(zipBytes)) await e.read();
+      for (const e of await readZip(zipBytes)) await e.read();
       check(name, false, "read without complaint");
     } catch (err) {
       check(name, err instanceof ZipError && expect.test(err.message), (err as Error).message);
@@ -244,6 +258,20 @@ async function zipChecks(): Promise<void> {
   await rejects("an entry that inflates past its stated size is stopped", makeZip([{ path: "x.txt", data: text, deflate: true, sizeOverride: 100 }]), /past its stated size/);
   await rejects("something that isn't a zip is refused", new TextEncoder().encode("not a zip at all, just some text that goes on for a while"), /not a zip/);
   check("archive junk is recognised", isArchiveJunk("__MACOSX/pack/._mod.json") && isArchiveJunk("pack/.DS_Store") && !isArchiveJunk("pack/mod.json"));
+  check("so is junk inside the package's folder", isArchiveJunk("pack/__MACOSX/._mod.json"));
+  await rejects("two entries under one name are refused", makeZip([{ path: "mod.json", data: small }, { path: "mod.json", data: small }]), /twice/);
+  await rejects(
+    "a stored entry whose sizes differ is refused",
+    makeZip([{ path: "x.json", data: small, sizeOverride: small.length + 5 }]),
+    /stored, yet its sizes differ/,
+  );
+  // A few bytes that say 1.5 GB: refused when it comes up short, with nothing set aside for the size it claimed
+  await rejects("an entry far smaller than it says is refused", makeZip([{ path: "x.txt", data: small, deflate: true, sizeOverride: 1.5 * 1024 ** 3 }]), /shorter/);
+  const commented = makeZip([{ path: "mod.json", data: small }], new Uint8Array([0x50, 0x4b, 0x05, 0x06, 1, 2, 3, 4]));
+  const fromCommented = await readZip(commented).catch((err: Error) => err);
+  check("a comment holding the end record's signature doesn't hide the archive", Array.isArray(fromCommented) && fromCommented.length === 1, Array.isArray(fromCommented) ? "" : String(fromCommented));
+  const fromBlob = await readZip(new Blob([zip as Uint8Array<ArrayBuffer>]));
+  check("the archive reads from a file (Blob) as from bytes", fromBlob.length === 2 && new TextDecoder().decode(await fromBlob[0].read()) === '{"a":1}');
 }
 
 // --- Package root and hash ---
@@ -252,6 +280,9 @@ async function rootAndHash(): Promise<void> {
   check("one folder holding mod.json is the root", packageRoot(["pack/mod.json", "pack/a.glb"]) === "pack/");
   check("files outside that folder mean no single root", packageRoot(["pack/mod.json", "other/a.glb"]) === null);
   check("no mod.json means no root", packageRoot(["a/b.glb"]) === null);
+  check("`..` is no package folder", packageRoot(["../mod.json", "../a.glb"]) === null);
+  check("names a letter's case apart are refused (one file on Windows and macOS)", packageFileProblems(["Track.glb", "track.glb"]).some((e) => /only in case/.test(e)));
+  check("a script is refused", packageFileProblems(["mod.json", "run.js"]).some((e) => /file type/.test(e)));
   const a = await packageHash({ "mod.json": "1".repeat(64), "a.glb": "2".repeat(64) });
   const b = await packageHash({ "a.glb": "2".repeat(64), "mod.json": "1".repeat(64) });
   const c = await packageHash({ "a.glb": "3".repeat(64), "mod.json": "1".repeat(64) });

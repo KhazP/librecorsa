@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons/Icon";
 import { REPO_URL } from "@/lib/site";
 import { modDefinitions } from "@/lib/mods/mod-content";
-import { modsState, readPackages, type LoadedPackage } from "@/lib/mods/mod-loader";
+import { modsState, modsSwitchedOff, readPackages, type LoadedPackage } from "@/lib/mods/mod-loader";
 import {
   filesSource,
   installPackage,
@@ -21,6 +21,33 @@ import { ZipError } from "@/lib/mods/zip-reader";
 
 /** What the last import said */
 type ImportNote = { tone: "good" | "bad"; text: string; errors?: string[] };
+/** An import under way: which button started it, and the package's file or folder name */
+type Busy = { kind: "zip" | "folder"; name: string };
+
+/** How many of a list of problems are shown before "and N more" */
+const SHOWN_ERRORS = 8;
+
+/** The page again, with mods back on when `?mods=off` switched them off for this visit */
+const restart = () => {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("mods") !== "off") {
+    window.location.reload();
+    return;
+  }
+  url.searchParams.delete("mods");
+  window.location.assign(url.href);
+};
+
+const ErrorList: React.FC<{ errors: readonly string[]; more: (count: number) => string }> = ({ errors, more }) => (
+  <ul className="lc-hint m-0 list-disc ps-5">
+    {errors.slice(0, SHOWN_ERRORS).map((e, i) => (
+      <li key={i} className="break-words">
+        {e}
+      </li>
+    ))}
+    {errors.length > SHOWN_ERRORS ? <li>{more(errors.length - SHOWN_ERRORS)}</li> : null}
+  </ul>
+);
 
 const formatSize = (bytes: number | undefined): string | null => {
   if (!bytes) return null;
@@ -35,24 +62,44 @@ const formatSize = (bytes: number | undefined): string | null => {
 export const ModsPanel: React.FC = () => {
   const tx = useTranslations("menu.mods");
   const [packages, setPackages] = useState<LoadedPackage[]>(() => modsState().packages);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<Busy | null>(null);
   const [note, setNote] = useState<ImportNote | null>(null);
   const [changed, setChanged] = useState(false);
   const [removing, setRemoving] = useState<LoadedPackage | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
   const zipInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
+  // One import or removal at a time, held from the click (state alone lets a quick second click through)
+  const working = useRef(false);
+  // Only the latest list read may land, and none after the panel closes
+  const listReq = useRef(0);
+  const mounted = useRef(true);
   const storage = modsStorageAvailable();
 
   const refresh = useCallback(() => {
-    void readPackages().then(setPackages).catch(() => {});
+    const req = ++listReq.current;
+    void readPackages()
+      .then((list) => {
+        if (mounted.current && req === listReq.current) setPackages(list);
+      })
+      .catch(() => {});
   }, []);
-  useEffect(refresh, [refresh]);
+  useEffect(() => {
+    mounted.current = true;
+    refresh();
+    return () => {
+      mounted.current = false;
+    };
+  }, [refresh]);
 
-  const install = async (name: string, source: () => PackageSource) => {
-    setBusy(name);
+  const install = async (next: Busy, source: () => PackageSource | Promise<PackageSource>) => {
+    if (working.current) return;
+    working.current = true;
+    setBusy(next);
     setNote(null);
+    const name = next.name;
     try {
-      const result = await installPackage(source(), modDefinitions());
+      const result = await installPackage(await source(), modDefinitions());
       if (result.ok) {
         const values = { name: result.manifest.name, version: result.manifest.version };
         setNote({ tone: "good", text: tx(result.replaced ? "replaced" : "imported", values) });
@@ -63,25 +110,27 @@ export const ModsPanel: React.FC = () => {
     } catch (err) {
       setNote({ tone: "bad", text: tx("importFailed", { name }), errors: [err instanceof ZipError || err instanceof Error ? err.message : String(err)] });
     } finally {
-      setBusy(null);
+      working.current = false;
+      if (mounted.current) setBusy(null);
       refresh();
     }
   };
 
-  const onZip = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onZip = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Cleared, so the same file can be picked again (after fixing it)
     e.target.value = "";
     if (!file) return;
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    await install(file.name, () => zipSource(bytes));
+    // Read from the file a piece at a time (zip-reader.ts), never whole
+    void install({ kind: "zip", name: file.name }, () => zipSource(file));
   };
 
-  const onFolder = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFolder = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? [...e.target.files] : [];
     e.target.value = "";
     if (!files.length) return;
     const name = files[0].webkitRelativePath.split("/")[0] || files[0].name;
-    await install(name, () => filesSource(files));
+    void install({ kind: "folder", name }, () => filesSource(files));
   };
 
   const toggle = (p: LoadedPackage, on: boolean) => {
@@ -91,10 +140,24 @@ export const ModsPanel: React.FC = () => {
   };
 
   const remove = async (p: LoadedPackage) => {
-    setRemoving(null);
-    await removePackage(p.id);
-    setChanged(true);
-    refresh();
+    if (working.current) return;
+    working.current = true;
+    setRemoveBusy(true);
+    try {
+      await removePackage(p.id);
+      setChanged(true);
+      // Gone from the list before the dialog closes, so the focus it hands back lands on a row that stays
+      if (mounted.current) setPackages((list) => list.filter((x) => x.id !== p.id));
+    } catch (err) {
+      if (mounted.current) setNote({ tone: "bad", text: tx("removeFailed", { name: p.name }), errors: [err instanceof Error ? err.message : String(err)] });
+    } finally {
+      working.current = false;
+      if (mounted.current) {
+        setRemoveBusy(false);
+        setRemoving(null);
+      }
+      refresh();
+    }
   };
 
   const counts = (p: LoadedPackage): string => {
@@ -113,10 +176,23 @@ export const ModsPanel: React.FC = () => {
 
       {storage ? (
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary" size="sm" icon={<Icon name="mods" />} loading={busy !== null} disabled={busy !== null} onClick={() => zipInput.current?.click()}>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Icon name="mods" />}
+            loading={busy?.kind === "zip"}
+            disabled={busy !== null || removeBusy}
+            onClick={() => zipInput.current?.click()}
+          >
             {tx("importZip")}
           </Button>
-          <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => folderInput.current?.click()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={busy?.kind === "folder"}
+            disabled={busy !== null || removeBusy}
+            onClick={() => folderInput.current?.click()}
+          >
             {tx("importFolder")}
           </Button>
           <a href={`${REPO_URL}/blob/main/docs/modding.md`} target="_blank" rel="noreferrer" className="lc-hint ms-auto underline underline-offset-2">
@@ -138,26 +214,27 @@ export const ModsPanel: React.FC = () => {
         </Well>
       )}
 
-      {busy ? <p className="lc-hint m-0" role="status">{tx("importing", { name: busy })}</p> : null}
+      {busy ? <p className="lc-hint m-0" role="status">{tx("importing", { name: busy.name })}</p> : null}
       {note ? (
         <Well className="flex flex-col gap-1.5 px-3.5 py-2.5" role={note.tone === "bad" ? "alert" : "status"}>
           <p className={cx("lc-body m-0 font-medium", note.tone === "bad" ? "text-lc-caution" : "text-lc-chalk")}>{note.text}</p>
-          {note.errors?.length ? (
-            <ul className="lc-hint m-0 list-disc ps-5">
-              {note.errors.map((e) => (
-                <li key={e} className="break-words">
-                  {e}
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          {note.errors?.length ? <ErrorList errors={note.errors} more={(count) => tx("moreProblems", { count })} /> : null}
+        </Well>
+      ) : null}
+
+      {modsSwitchedOff() && !changed ? (
+        <Well className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5">
+          <span className="lc-body m-0 text-lc-caution">{tx("switchedOff")}</span>
+          <Button size="sm" variant="secondary" onClick={restart}>
+            {tx("restart")}
+          </Button>
         </Well>
       ) : null}
 
       {changed ? (
         <Well className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5">
           <span className="lc-body m-0">{tx("restartNeeded")}</span>
-          <Button size="sm" variant="secondary" onClick={() => window.location.reload()}>
+          <Button size="sm" variant="secondary" onClick={restart}>
             {tx("restart")}
           </Button>
         </Well>
@@ -185,7 +262,14 @@ export const ModsPanel: React.FC = () => {
                   <Toggle checked={p.enabled} onChange={(on) => toggle(p, on)} aria-label={tx("use", { name: p.name })} />
                 ) : null}
                 {p.source === "browser" ? (
-                  <Button size="sm" variant="ghost" icon={<Icon name="delete" />} onClick={() => setRemoving(p)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<Icon name="delete" />}
+                    aria-label={tx("removeNamed", { name: p.name })}
+                    disabled={busy !== null || removeBusy}
+                    onClick={() => setRemoving(p)}
+                  >
                     {tx("remove")}
                   </Button>
                 ) : null}
@@ -193,13 +277,7 @@ export const ModsPanel: React.FC = () => {
               {p.errors?.length ? (
                 <div className="flex flex-col gap-1">
                   <span className="lc-hint font-medium text-lc-caution">{tx("broken")}</span>
-                  <ul className="lc-hint m-0 list-disc ps-5">
-                    {p.errors.slice(0, 8).map((e) => (
-                      <li key={e} className="break-words">
-                        {e}
-                      </li>
-                    ))}
-                  </ul>
+                  <ErrorList errors={p.errors} more={(count) => tx("moreProblems", { count })} />
                 </div>
               ) : null}
             </li>
@@ -212,6 +290,7 @@ export const ModsPanel: React.FC = () => {
         open={removing !== null}
         title={tx("removeTitle", { name: removing?.name ?? "" })}
         confirmLabel={tx("remove")}
+        busy={removeBusy}
         onConfirm={() => removing && void remove(removing)}
         onCancel={() => setRemoving(null)}
       >

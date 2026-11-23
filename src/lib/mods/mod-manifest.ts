@@ -246,11 +246,17 @@ function credit(p: Problems, where: string, v: unknown, optional: boolean): ModC
 
 function httpsUrl(p: Problems, where: string, v: unknown): string | undefined {
   if (v === undefined) return undefined;
-  if (typeof v !== "string" || !/^https:\/\/[^\s]+$/.test(v) || v.length > 500) {
+  let url: URL | null = null;
+  try {
+    url = typeof v === "string" && v.length <= 500 && /^https:\/\/[^\s]+$/.test(v) && !/\p{Cc}/u.test(v) ? new URL(v) : null;
+  } catch {
+    url = null;
+  }
+  if (!url || url.protocol !== "https:" || !url.hostname) {
     p.add(where, "must be an https:// address");
     return undefined;
   }
-  return v;
+  return v as string;
 }
 
 function swatch(p: Problems, where: string, v: unknown): ModSkin["swatch"] {
@@ -267,13 +273,12 @@ function skin(p: Problems, where: string, v: unknown, seen: Set<string>): ModSki
     return undefined;
   }
   const id = localId(p, `${where}.id`, v.id, seen);
-  const files = v.files === undefined ? undefined : Array.isArray(v.files) ? v.files : (p.add(`${where}.files`, "must be a list"), undefined);
   const out: ModSkin = {
     id: id ?? "",
     name: str(p, `${where}.name`, v.name, { max: 80 }) ?? "",
     swatch: swatch(p, `${where}.swatch`, v.swatch),
     dir: path(p, `${where}.dir`, v.dir, undefined, true),
-    files: files?.map((f, i) => path(p, `${where}.files[${i}]`, f, /\.(png|jpe?g|webp|ktx2)$/i) ?? ""),
+    files: list(p, `${where}.files`, v.files, 64, (f, w) => path(p, w, f, /\.(png|jpe?g|webp|ktx2)$/i)),
     variant: str(p, `${where}.variant`, v.variant, { max: 64, optional: true }),
   };
   return out;
@@ -289,13 +294,22 @@ function list<T>(p: Problems, where: string, v: unknown, max: number, item: (v: 
   return v.slice(0, max).map((x, i) => item(x, `${where}[${i}]`)).filter((x): x is T => x !== undefined);
 }
 
-/**
- * Checks a parsed `mod.json` and returns it typed, or every problem found (up to 50), each naming where it is.
- * `knownCars` and `knownVehicles` are the game's car and vehicle model ids, which liveries and cars may name.
- */
+/** The game's ids a package may name (mod-content.ts `modDefinitions`) */
+export interface ModKnownIds {
+  /** Cars a mod car's `sound` may borrow */
+  cars: ReadonlySet<string>;
+  /** Cars a livery may be for: those with liveries (the cars less the 2026 prototype); `cars` when left out */
+  skinCars?: ReadonlySet<string>;
+  /** Vehicle models a mod car may drive as */
+  vehicles: ReadonlySet<string>;
+  /** Vehicle models a physics file may change; `vehicles` when left out */
+  physicsBases?: ReadonlySet<string>;
+}
+
+/** Checks a parsed `mod.json` and returns it typed, or every problem found (up to 50), each naming where it is */
 export function validateModManifest(
   raw: unknown,
-  known: { cars: ReadonlySet<string>; vehicles: ReadonlySet<string>; physicsBases?: ReadonlySet<string> },
+  known: ModKnownIds,
 ): ManifestResult {
   const p = new Problems();
   if (!isRecord(raw)) return { ok: false, errors: ["mod.json: must be a JSON object"] };
@@ -336,8 +350,9 @@ export function validateModManifest(
   manifest.skins = list(p, "skins", raw.skins, 256, (v, where) => {
     const s = skin(p, where, v, skinIds);
     if (!s || !isRecord(v)) return undefined;
-    if (typeof v.car !== "string" || !known.cars.has(v.car)) {
-      p.add(`${where}.car`, `must be one of the game's cars (${[...known.cars].join(", ")})`);
+    const skinCars = known.skinCars ?? known.cars;
+    if (typeof v.car !== "string" || !skinCars.has(v.car)) {
+      p.add(`${where}.car`, `must be one of the game's cars with liveries (${[...skinCars].join(", ")})`);
       return undefined;
     }
     return { ...s, car: v.car } satisfies ModCarSkin;
@@ -393,13 +408,25 @@ export function validateModManifest(
   return p.list.length ? { ok: false, errors: p.list } : { ok: true, manifest };
 }
 
+/** The folder a livery's files are in: its `dir`, else `skins/<id>`, beside its car's model for a mod car's own */
+export function modSkinDir(s: ModSkin, car?: ModCar): string {
+  if (s.dir) return s.dir.replace(/\/+$/, "");
+  const base = car ? `${car.model.slice(0, car.model.lastIndexOf("/") + 1)}skins` : "skins";
+  return `${base}/${s.id}`;
+}
+
 /** Every file a manifest names directly (track data files, models, livery files when listed, physics files) */
 export function manifestFiles(m: ModManifest): string[] {
   const files = new Set<string>(["mod.json"]);
+  const skinFiles = (s: ModSkin, car?: ModCar) => {
+    for (const f of s.files ?? []) files.add(`${modSkinDir(s, car)}/${f}`);
+  };
   for (const t of m.tracks ?? []) files.add(t.data);
+  for (const s of m.skins ?? []) skinFiles(s);
   for (const c of m.cars ?? []) {
     files.add(c.model);
     if (typeof c.physics === "object") files.add(c.physics.file);
+    for (const s of c.skins ?? []) skinFiles(s, c);
   }
   return [...files];
 }

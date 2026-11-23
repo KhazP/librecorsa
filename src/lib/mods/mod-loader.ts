@@ -9,7 +9,7 @@ import { disabledPackages, FOLDER_INDEX_PATH, modsStorageAvailable, readInstalle
  * Reads the installed mod packages once per page and adds their content to the game's lists before the menus mount
  * (TrackGate waits for it). Two places hold packages:
  * - "browser": imported in the Mods panel, kept in the browser (mod-store.ts)
- * - "folder": files beside the game, listed in `/mods/_index.json`: `public/mods/` in a clone (`npm run mods:index`
+ * - "folder": files beside the game, listed in `/mods/_index.json`: `public/mods/` in a clone (`npm run mod -- index`
  *   writes the list), the launcher's `mods/` folder
  * A package in both is the browser's copy. A package that fails its checks is listed with its problems and adds nothing.
  */
@@ -143,12 +143,25 @@ export function modTrackInfos(m: ModManifest, origin: ModOrigin): TrackInfo[] {
   }));
 }
 
-/** The installed packages, read and checked afresh, without adding anything to the game (the Mods panel's list) */
+/** A package read and checked, with the own physics of its cars that have a physics file */
+interface ReadPackage {
+  pkg: LoadedPackage;
+  profiles: Map<string, CarSimProfile>;
+}
+
+/**
+ * The installed packages, read and checked afresh (their cars' physics files too), without adding anything to the
+ * game: the Mods panel's list
+ */
 export async function readPackages(): Promise<LoadedPackage[]> {
+  return (await readAll()).map((r) => r.pkg);
+}
+
+async function readAll(): Promise<ReadPackage[]> {
   const [local, folder] = await Promise.all([modsStorageAvailable() ? readInstalled() : Promise.resolve([]), readFolderIndex()]);
   const off = disabledPackages();
   const known = modDefinitions();
-  const packages: LoadedPackage[] = [];
+  const packages: ReadPackage[] = [];
   const seen = new Set<string>();
   const entries = [
     ...local.map((p) => ({ id: p.id, hash: p.hash, bytes: p.bytes, name: p.name, version: p.version, source: "browser" as const })),
@@ -171,25 +184,27 @@ export async function readPackages(): Promise<LoadedPackage[]> {
     } catch (err) {
       pkg.errors = [err instanceof Error ? err.message : String(err)];
     }
-    packages.push(pkg);
+    const profiles = pkg.manifest ? await readCarProfiles(pkg as LoadedPackage & { manifest: ModManifest }) : new Map<string, CarSimProfile>();
+    packages.push({ pkg, profiles });
   }
   return packages;
 }
 
 async function load(): Promise<ModsState> {
-  const packages = await readPackages();
+  const read = await readAll();
+  const packages = read.map((r) => r.pkg);
   if (modsSwitchedOff()) {
     // Listed (the panel can switch one off or remove it), nothing added
     state = { packages };
     return state;
   }
   const tracks: TrackInfo[] = [];
-  const active = packages.filter((p): p is LoadedPackage & { manifest: ModManifest } => p.enabled && !!p.manifest);
   const content = [];
-  for (const p of active) {
+  for (const { pkg: p, profiles } of read) {
+    if (!p.enabled || !p.manifest) continue;
     const origin: ModOrigin = { packageId: p.id, packageName: p.name, version: p.version, hash: p.hash };
     tracks.push(...modTrackInfos(p.manifest, origin));
-    content.push({ manifest: p.manifest, origin, profiles: await readCarProfiles(p) });
+    content.push({ manifest: p.manifest, origin, profiles });
   }
   registerModTracks(tracks);
   registerModContent(content);
