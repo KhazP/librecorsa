@@ -1895,16 +1895,19 @@ export class AiOpponentField implements AiRace {
         }
         // Alongside: keep a car's width of room
         // (the player keeps no racecraft rules: a little more room beside it)
-        const extraLat = (other.isPlayer ? 0.5 * this.rc.playerMarginM : 0) + this.yawRoomM(meHeading, other.sim);
-        if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(dLat) < this.rc.alongsideSpacingM + extraLat) {
+        const extraLat = other.isPlayer ? 0.5 * this.rc.playerMarginM : 0;
+        // (the angle between two cars side by side asks for more room beside: only beside. Counted for the car ahead
+        // too, a car angled out to pass still had it in its path and was held to following it, half out)
+        const sideLat = extraLat + this.yawRoomM(meHeading, other.sim);
+        if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(dLat) < this.rc.alongsideSpacingM + sideLat) {
           const away = me.lateralOffsetM >= other.sim.lateralOffsetM ? 1 : -1;
-          targetLat = other.sim.lateralOffsetM + away * (this.rc.alongsideSpacingM + extraLat);
+          targetLat = other.sim.lateralOffsetM + away * (this.rc.alongsideSpacingM + sideLat);
           if (away > 0 && (!leftBy || other.sim.lateralOffsetM > leftBy.sim.lateralOffsetM)) {
             leftBy = other;
-            leftRoom = this.rc.alongsideSpacingM + extraLat;
+            leftRoom = this.rc.alongsideSpacingM + sideLat;
           } else if (away < 0 && (!rightBy || other.sim.lateralOffsetM < rightBy.sim.lateralOffsetM)) {
             rightBy = other;
-            rightRoom = this.rc.alongsideSpacingM + extraLat;
+            rightRoom = this.rc.alongsideSpacingM + sideLat;
           }
           // Squeezed against the edge with no room left on that side and not clearly ahead: back out of it
           if (Math.abs(targetLat) > half && ds > -0.5 * CAR_LEN_M) squeezedBy = other;
@@ -2464,7 +2467,9 @@ export class AiOpponentField implements AiRace {
       if (dsNow < -30 || dsNow > 60 + meV * this.rc.predictS) continue;
       const human = o.isPlayer;
       const lenGap = CAR_LEN_M + 0.6 + (human ? this.rc.playerMarginM : 0);
-      const widGap = CAR_WID_M + 0.2 + (human ? 0.5 * this.rc.playerMarginM : 0) + (this.rc.yawMargin > 0 ? this.yawRoomM(this.worldHeading(me), os) : 0);
+      // (the room for the angle between the cars only for a car beside us: see the alongside rule)
+      const besideNow = Math.abs(dsNow) < lenGap;
+      const widGap = CAR_WID_M + 0.2 + (human ? 0.5 * this.rc.playerMarginM : 0) + (besideNow && this.rc.yawMargin > 0 ? this.yawRoomM(this.worldHeading(me), os) : 0);
       // Another AI car already beside us keeps the racecraft rules too (room on its side, the corner yielded): those
       // rules deal with it. The player's car is checked all the way: it keeps none of them
       if (!human && Math.abs(dsNow) < lenGap && Math.abs(os.lateralOffsetM - meN) < widGap) continue;
