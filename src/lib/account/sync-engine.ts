@@ -9,9 +9,13 @@
  *      what the cloud has now and send again, up to MAX_TRIES
  *   6. write the result into this device's storage (`apply`), or leave that for the next start when the running game
  *      can't take it now (the store decides), and fetch the ghosts this device lacks through the game's own save path
+ * When the page is hidden or going away (`leaving`) there is no time for steps 2 and 4: a read of the cloud's save
+ * would not come back before the page is gone, so the write after it would never go out. The sync then starts from
+ * the cloud's save as this page last read or wrote it, sends no ghosts, and writes with keepalive in one request; if
+ * another device wrote since, the write is refused (409) and the next sync does it properly.
  * Everything it needs comes in through SyncEnv, so the verify suite runs it against a fake server.
  */
-import { MAX_GHOST_BYTES, MAX_SAVE_BYTES, type CloudBestLap, type Fail, type SaveDoc } from "./api-types";
+import { MAX_GHOST_BYTES, MAX_SAVE_BYTES, ghostsOf, type CloudBestLap, type Fail, type SaveAnswer, type SaveDoc } from "./api-types";
 import type { AccountApi } from "./account-api";
 import type { FirstSyncChoice, SaveSummary } from "./account-store";
 import {
@@ -75,7 +79,10 @@ export interface SyncRequest {
   apply: boolean | (() => boolean);
   /** The first-sync screen's answer */
   choice?: FirstSyncChoice;
-  /** The page is going away: the save goes up with keepalive, best effort */
+  /**
+   * The page is hidden or going away: the save goes up in one keepalive request, from the cloud's save as this page
+   * last saw it (no read first, no ghosts), best effort
+   */
   leaving?: boolean;
 }
 
@@ -125,9 +132,17 @@ export interface SyncEngine {
   changedSince(accountId: string): Promise<boolean>;
   /** Drops the record of an account (deleted): a sign-in to it again would be a first sync */
   forget(accountId: string): void;
+  /**
+   * Reads the cloud's save without syncing, so a sync on leaving can start from it: for a page that had nothing to
+   * sync on start (it is kept only when it is the save this device last synced with)
+   */
+  prime(accountId: string): Promise<void>;
 }
 
 export function createSyncEngine(env: SyncEnv): SyncEngine {
+  /** The cloud's save as this page last read or wrote it, at its rev: where a sync on leaving starts */
+  let lastCloud: { accountId: string; rev: number; doc: SaveDoc } | null = null;
+
   const loadState = (): SyncState => {
     try {
       return parseSyncState(env.storage?.getItem(SYNC_STATE_KEY) ?? null);
@@ -220,6 +235,24 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
     return { ...doc, bestLaps };
   }
 
+  /**
+   * Leaving, with no time to send ghosts: a lap of this device's whose ghost the cloud doesn't hold stays as the cloud
+   * has it (or out of the save). `behind`: one was held back, to go up with the next sync
+   */
+  function withCloudGhosts(doc: SaveDoc, cloud: SaveDoc | null): { doc: SaveDoc; behind: boolean } {
+    const known = new Set(cloud ? ghostsOf(cloud) : []);
+    const bestLaps = { ...doc.bestLaps };
+    let behind = false;
+    for (const [key, lap] of Object.entries(bestLaps)) {
+      if (known.has(lap.ghost)) continue;
+      behind = true;
+      const theirs = cloud?.bestLaps[key];
+      if (theirs) bestLaps[key] = theirs;
+      else delete bestLaps[key];
+    }
+    return { doc: behind ? { ...doc, bestLaps } : doc, behind };
+  }
+
   /** Fetches the cloud's ghosts this device lacks or has a slower lap for, and keeps them through the game's save path */
   async function fetchGhosts(result: SaveDoc, local: SaveDoc, fetched: string[]): Promise<string[]> {
     if (!env.ghosts || !env.sha256) return fetched;
@@ -249,7 +282,9 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
     const local = mine.doc;
     const rec = state.account?.id === req.accountId ? state.account : null;
 
-    const got = await env.api.getSave();
+    // Leaving: the cloud's save as this page last saw it, when no other sync (another tab) has moved on from it since
+    const quick = req.leaving && lastCloud?.accountId === req.accountId && rec?.rev === lastCloud.rev ? lastCloud : null;
+    const got: SaveAnswer = quick ? { ok: true, rev: quick.rev, updatedAt: null, doc: quick.doc, pending: [] } : await env.api.getSave();
     if (!got.ok) return failed(got);
     let cloud = got.doc === null ? null : readSaveDoc(got.doc);
     if (got.doc !== null && !cloud) return failed({ error: NEWER_SAVE });
@@ -274,14 +309,23 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
 
     let result: SaveDoc = local;
     let pushed = false;
+    /** Laps of this device's held back from the save (leaving): the next sync sends them */
+    let behind = false;
     for (let tries = 1; ; tries++) {
       let next = cloud ? combineSaves(local, cloud, choice, { base }) : local;
       // A folded account's save joins without a question; the account's own save wins its ties
       for (const p of pending) next = combineSaves(p.doc, next, "cloud");
       next = { ...next, savedAt: env.now(), savedBy: env.label() };
-      const sent = await sendGhosts(next, local, cloud, state);
-      if ("ok" in sent) return failed(sent);
-      result = sent;
+      if (quick && tries === 1) {
+        const held = withCloudGhosts(next, cloud);
+        behind = held.behind;
+        result = held.doc;
+      } else {
+        const sent = await sendGhosts(next, local, cloud, state);
+        if ("ok" in sent) return failed(sent);
+        behind = false;
+        result = sent;
+      }
       if (cloud && !pending.length && contentHash(result) === contentHash(cloud)) break;
       if (byteLength(JSON.stringify(result)) > MAX_SAVE_BYTES) return failed({ error: TOO_BIG });
       const put = await env.api.putSave({ baseRev: rev, doc: result, combinedPending: pending.map((p) => p.id) }, { keepalive: req.leaving === true });
@@ -297,8 +341,10 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
       rev = put.rev ?? rev;
     }
 
-    // Ghosts first: they go in through ghost-store, which the running game follows, so they need no reload
-    const fetched = await fetchGhosts(result, local, rec?.fetched ?? []);
+    lastCloud = { accountId: req.accountId, rev, doc: pushed || !cloud ? result : cloud };
+    // Ghosts first: they go in through ghost-store, which the running game follows, so they need no reload (none on
+    // the way out: the next sync fetches them)
+    const fetched = quick ? (rec?.fetched ?? []) : await fetchGhosts(result, local, rec?.fetched ?? []);
     // The values last, so a reload for them can follow at once
     const applied = typeof req.apply === "function" ? req.apply() : req.apply;
     let changedLocal = false;
@@ -318,7 +364,8 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
       appliedRev: applied || !deferred ? rev : (rec?.appliedRev ?? 0),
       base: nextBase(result, local, applied, base),
       lastSyncedAt: at,
-      localHash: after.hash,
+      // A lap held back reads as a change, so the next save point or check sends it
+      localHash: behind ? "" : after.hash,
       fetched,
     };
     saveState(state);
@@ -343,7 +390,16 @@ export function createSyncEngine(env: SyncEnv): SyncEngine {
       saveState(now.state);
       return now.hash !== state.account.localHash;
     },
+    async prime(accountId) {
+      if (lastCloud?.accountId === accountId) return;
+      const got = await env.api.getSave();
+      const rec = loadState().account;
+      if (!got.ok || got.doc === null || got.pending?.length || rec?.id !== accountId || rec.rev !== got.rev) return;
+      const doc = readSaveDoc(got.doc);
+      if (doc && lastCloud === null) lastCloud = { accountId, rev: got.rev, doc };
+    },
     forget(accountId) {
+      if (lastCloud?.accountId === accountId) lastCloud = null;
       const state = loadState();
       if (state.account?.id !== accountId) return;
       saveState({ ...state, account: null });
