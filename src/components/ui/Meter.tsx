@@ -16,16 +16,18 @@ export interface MeterProps {
    * (a circuit, a car) or whose read-out is a phrase ("12.3 h · 45 sessions")
    */
   stacked?: boolean;
+  /** `progressbar` for work under way (a download); `meter` (the default) for a reading */
+  role?: "meter" | "progressbar";
   className?: string;
 }
 
 /** A labelled 0..1 bar: the label, an 8 px titanium track, the fill in its tone, the value in `lc-data` */
-export function Meter({ label, value, tone = "good", detail, labelClassName = "w-20", stacked, className }: MeterProps) {
+export function Meter({ label, value, tone = "good", detail, labelClassName = "w-20", stacked, role = "meter", className }: MeterProps) {
   const v = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
   const pct = Math.round(v * 100);
   const text = detail ?? `${pct}%`;
   const aria = {
-    role: "meter",
+    role,
     "aria-label": label,
     "aria-valuemin": 0,
     "aria-valuemax": 100,
@@ -54,7 +56,7 @@ export function Meter({ label, value, tone = "good", detail, labelClassName = "w
   }
   return (
     <div
-      role="meter"
+      role={role}
       aria-label={label}
       aria-valuemin={0}
       aria-valuemax={100}
