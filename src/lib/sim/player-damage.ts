@@ -53,6 +53,14 @@ export class PlayerDamageFeed {
     this.history.length = 0;
   }
 
+  /**
+   * A frame no damage is judged in (Practice damage off, a room, qualifying): the car's impacts so far are passed over,
+   * so damage switched on later does not count a hit from before
+   */
+  skip(telemetry: Pick<CarTelemetry, "f12026">): void {
+    this.lastWallAtMs = telemetry.f12026?.wallImpact?.atMs ?? null;
+  }
+
   /** One frame of driving: the car's newest barrier impact, once, into `damage`; the damage to the car when it changed */
   update(damage: CarDamage, car: DamagedCar): DamageReport | null {
     const wall = car.telemetry.f12026?.wallImpact;

@@ -3690,9 +3690,13 @@ export class DriveSession {
         for (const p of samePeers) p.passThrough = false;
       }
       // Practice damage (the player's setting): practice and time trials driven alone, not qualifying for an AI race nor
-      // anything in an online room, where restarts are not the player's alone
+      // anything in an online room, where restarts are not the player's alone (as for Flashback)
       const soloDamage =
-        raceNow().kind === "practice" && !quali && !mpQuali && !multiplayerSync.lobby && settingsNow.practiceDamage !== "off"
+        raceNow().kind === "practice" &&
+        !quali &&
+        !mpQuali &&
+        !isInOnlineRoom(multiplayerSync.status, peersOnTrack) &&
+        settingsNow.practiceDamage !== "off"
           ? practiceDamage
           : null;
       if (soloDamage) {
@@ -3707,11 +3711,15 @@ export class DriveSession {
             queueMicrotask(() => this.restartFlyingLap());
           }
         }
-      } else if (!practiceDamage.pristine && raceNow().kind === "practice") {
+      } else {
+        // No damage judged here (an online race's is fed above): a hit now is never counted once damage is on
+        if (!(mpRace?.damage && mpFrame?.phase === "racing")) damageFeed.skip(physics.telemetry);
         // Practice damage switched off, or the session turned into one it does not apply to: the car is repaired
-        practiceDamage.reset();
-        practiceWreckS = 0;
-        damageFeed.apply(practiceDamage, physics);
+        if (!practiceDamage.pristine && raceNow().kind === "practice") {
+          practiceDamage.reset();
+          practiceWreckS = 0;
+          damageFeed.apply(practiceDamage, physics);
+        }
       }
       physics.telemetry.practiceDamage = damageStatusOf(soloDamage);
       let renderPeers = aiField ? [...samePeers, ...aiField.peers()] : samePeers;

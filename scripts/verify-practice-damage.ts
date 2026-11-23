@@ -92,6 +92,18 @@ console.log('\n== The damage feed');
   offFeed.update(off, offCar);
   check('Off: the hit breaks nothing', off.pristine && offCar.handed.length === 1 && offCar.handed[0] === null && damageStatusOf(off) === undefined);
 
+  // A hit while no damage is judged (the setting off, a room), then damage switched on: the old hit is not counted
+  const lateCar = fakeCar();
+  const late = newDamage('full');
+  const lateFeed = new PlayerDamageFeed();
+  lateFeed.restart(lateCar.telemetry);
+  lateCar.hit(4000, 25);
+  lateFeed.skip(lateCar.telemetry);
+  lateFeed.update(late, lateCar);
+  lateCar.hit(4500, 12);
+  lateFeed.update(late, lateCar);
+  check('Switched on after a hit: only hits from then on count', !late.terminal && late.front > 0 && late.front < 1, `front ${(late.front * 100).toFixed(0)}%`);
+
   // Put out: a big hit (full damage: ≥ 24 m/s into the barrier)
   const wreckCar = fakeCar();
   const wreck = newDamage('full');
