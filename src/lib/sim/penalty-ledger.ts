@@ -19,7 +19,8 @@ export type PenaltyReason =
   | "jump_start"
   | "collision"
   | "unsafe_rejoin"
-  | "unsportsmanlike";
+  | "unsportsmanlike"
+  | "pit_speeding";
 
 export interface PenaltyEntry {
   id: number;

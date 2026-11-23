@@ -97,7 +97,6 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   setLiveTuner: "call",
   setOvertakingRules: "call",
   setDamageEffects: "call",
-  servicePitStop: "call",
   setSimRealism: "call",
   invalidateLap: "liveCall",
   setAeroWakeState: "liveCall",
@@ -116,6 +115,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   aiPlanGrip: "localCall",
   aiBaseSpeedProfile: "localCall",
   createAiPeerCar: "localCall",
+  servicePitStop: "call",
 
   renderLeadS: "own",
   steeringAssist: "own",
@@ -128,7 +128,7 @@ const callable: ReadonlySet<string> = new Set(CAR_CALLABLE);
 const kindOf = (key: string | symbol): MemberKind | undefined =>
   typeof key === "string" && Object.hasOwn(MEMBERS, key) ? MEMBERS[key as keyof SimulatorCar] : undefined;
 
-/** The state is carried forward no further than this when the worker's latest is older (s) */
+/** The state is carried forward (or back, when it is from after the frame's time) no further than this (s) */
 const MAX_RENDER_LEAD_S = 0.05;
 /** Steering-torque samples kept while the game does not take them (a quarter of a second at 500 Hz) */
 const MAX_PENDING_FFB = 128;
@@ -168,7 +168,10 @@ export interface RemoteCar {
 
 const _forward = new THREE.Vector3();
 
-/** `wallNowMs`: the clock the simulation stamps its states with (`performance.timeOrigin + performance.now()`) */
+/**
+ * `wallNowMs`: the time the frame is drawn for, on the clock the simulation stamps its states with
+ * (`performance.timeOrigin + performance.now()`)
+ */
 export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNowMs: () => number): RemoteCar {
   const view = new CarStateView(structuredClone(twin.telemetry) as CarTelemetry);
   let ready = false;
@@ -226,8 +229,11 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
     view.telemetry.ffbSubframeSamples = pendingFfb;
     pendingFfb = [];
     if (!live()) return twin.telemetry;
-    // The worker's state is a few milliseconds old by the time the frame is drawn: carried forward to now
-    if (wasStepping) view.carryForward(THREE.MathUtils.clamp((wallNowMs() - stateWallMs) / 1000 + stateLeadS, 0, MAX_RENDER_LEAD_S));
+    // The worker's state is from a few milliseconds before the time the frame is drawn for, or from just after it when
+    // the frame's code runs late: carried to the frame's time either way
+    if (wasStepping) {
+      view.carryForward(THREE.MathUtils.clamp((wallNowMs() - stateWallMs) / 1000 + stateLeadS, -MAX_RENDER_LEAD_S, MAX_RENDER_LEAD_S));
+    }
     return view.telemetry;
   };
 

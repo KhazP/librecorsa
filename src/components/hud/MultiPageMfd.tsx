@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CarTelemetry, LiveTunerPatch, TireCompound } from "@/types/f1";
+import type { CarTelemetry, LiveTunerPatch, PitStrategyState, TireCompound } from "@/types/f1";
 import type { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { HUD_TOGGLE_EVENT } from "@/lib/input/bindings";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
@@ -32,7 +32,7 @@ import { HUD_CHOSEN, HUD_CONTROL, HUD_IDLE, LapMarkGlyph } from "./styles/hud-st
 import { SkinButton, skinCss, SkinPanel, SkinTag, type SkinTone, useHudSkin } from "./styles/third-party-skin";
 import { useHudModeRef } from "./hud-mode";
 
-export type MfdPageId = "elec" | "rel" | "tyre" | "fuel" | "stnd";
+export type MfdPageId = "elec" | "rel" | "tyre" | "fuel" | "stnd" | "pit";
 
 const PAGES: { id: MfdPageId; tag: string; title: string }[] = [
   { id: "elec", tag: "ELEC", title: "Electronics" },
@@ -40,6 +40,7 @@ const PAGES: { id: MfdPageId; tag: string; title: string }[] = [
   { id: "tyre", tag: "TYRE", title: "Tyres & brakes" },
   { id: "fuel", tag: "FUEL", title: "Fuel & energy" },
   { id: "stnd", tag: "STND", title: "Standings" },
+  { id: "pit", tag: "PIT", title: "Pit stop & limiter" },
 ];
 
 /** D-pad quiet time after which an MFD opened via D-pad folds back to its compact status pill */
@@ -482,11 +483,177 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
   );
 };
 
+const PIT_COMPOUNDS: readonly { id: TireCompound; letter: string; label: string; color: string }[] = [
+  { id: "soft", letter: "S", label: "Soft", color: "#ef4444" },
+  { id: "medium", letter: "M", label: "Med", color: "#eab308" },
+  { id: "hard", letter: "H", label: "Hard", color: "#f8fafc" },
+  { id: "intermediate", letter: "I", label: "Inter", color: "#22c55e" },
+  { id: "wet", letter: "W", label: "Wet", color: "#38bdf8" },
+];
+
+const PitPage: React.FC<{
+  t: CarTelemetry;
+  compound: TireCompound;
+  onChangePitStrategy?: (patch: Partial<PitStrategyState>) => void;
+  onTogglePitLimiter?: () => void;
+}> = ({ t, compound, onChangePitStrategy, onTogglePitLimiter }) => {
+  const skin = useHudSkin();
+  const pit = t.pit;
+  const strategy = pit?.strategy ?? { nextCompound: compound, repairDamage: true, boxRequested: false };
+  const limitKmh = pit?.speedLimitKmh ?? 60;
+  const maxWear = Math.round(Math.max(...(t.tireWearPct ?? [0, 0, 0, 0])));
+  const damagePct = pit?.damagePct ?? Math.round((t.race?.damage?.overall ?? 0) * 100);
+  const repairEta = pit?.repairDurationS ?? 0;
+
+  if (skin !== null) {
+    return (
+      <div className="flex h-full flex-col justify-between gap-1.5" aria-label="Pit strategy">
+        <div className="grid grid-cols-5 gap-1">
+          {PIT_COMPOUNDS.map((c) => {
+            const active = strategy.nextCompound === c.id;
+            return (
+              <SkinButton
+                key={c.id}
+                active={active}
+                onClick={() => onChangePitStrategy?.({ nextCompound: c.id })}
+                className="flex h-10 flex-col items-center justify-center gap-0.5 text-[10px] font-bold"
+              >
+                <span className="text-[12px] font-black leading-none" style={{ color: c.color }}>
+                  {c.letter}
+                </span>
+                <span className="text-[8px] leading-none">{c.label}</span>
+              </SkinButton>
+            );
+          })}
+        </div>
+        <div className={`flex items-center justify-between px-2 py-1.5 ${skinCss.deepBox}`}>
+          <div className="flex flex-col">
+            <span className={`text-[10px] font-bold uppercase ${skinCss.ink}`}>Repair damage</span>
+            <span className={`lc-data text-[9px] ${skinCss.inkDim}`}>
+              {damagePct >= 3 ? `${damagePct}% dmg · +${repairEta.toFixed(1)}s` : `Clean · Wear ${maxWear}%`}
+            </span>
+          </div>
+          <SkinButton
+            active={strategy.repairDamage}
+            onClick={() => onChangePitStrategy?.({ repairDamage: !strategy.repairDamage })}
+            className="h-6.5 px-2.5 text-[10px] font-bold uppercase"
+          >
+            {strategy.repairDamage ? "ON" : "OFF"}
+          </SkinButton>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <SkinButton
+            active={strategy.boxRequested}
+            onClick={() => onChangePitStrategy?.({ boxRequested: !strategy.boxRequested })}
+            className="h-8 text-[10px] font-bold uppercase"
+          >
+            {strategy.boxRequested ? "Box: Requested" : "Box this lap"}
+          </SkinButton>
+          <SkinButton
+            active={Boolean(pit?.limiterActive)}
+            onClick={() => onTogglePitLimiter?.()}
+            className="h-8 text-[10px] font-bold uppercase"
+          >
+            Lim {limitKmh} {pit?.limiterAuto ? "AUTO" : pit?.limiterActive ? "ON" : "OFF"}
+          </SkinButton>
+        </div>
+        <div className={`flex items-center justify-between px-1 text-[9.5px] ${skinCss.inkDim}`}>
+          <span>Tyres 1.8–5.0s{strategy.repairDamage && repairEta > 0 ? ` + ${repairEta.toFixed(1)}s fix` : ""}</span>
+          <span>Box #{(pit?.assignedBoxIndex ?? 4) + 1}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col justify-between gap-1.5" aria-label="Pit strategy">
+      {/* Compound selector */}
+      <div className="grid grid-cols-5 gap-1">
+        {PIT_COMPOUNDS.map((c) => {
+          const active = strategy.nextCompound === c.id;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onChangePitStrategy?.({ nextCompound: c.id })}
+              className={`flex h-10 flex-col items-center justify-center gap-0.5 rounded-lc-nub border text-[10px] font-bold transition-colors ${
+                active
+                  ? "border-lc-volt bg-lc-volt/15 text-lc-chalk"
+                  : "border-white/10 bg-white/4 text-lc-slate hover:border-white/25 hover:text-lc-chalk"
+              }`}
+            >
+              <span className="text-[12px] font-black leading-none" style={{ color: c.color }}>
+                {c.letter}
+              </span>
+              <span className="text-[8.5px] leading-none">{c.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Repair damage toggle */}
+      <div className="flex items-center justify-between rounded-lc-nub bg-white/4 px-2.5 py-1.5">
+        <div className="flex flex-col">
+          <span className="lc-title text-[11px] font-bold text-lc-chalk">Repair damage</span>
+          <span className="lc-data text-[9.5px] text-lc-slate">
+            {damagePct >= 3 ? `${damagePct}% damage · +${repairEta.toFixed(1)}s` : `Car clean · Tyre wear ${maxWear}%`}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => onChangePitStrategy?.({ repairDamage: !strategy.repairDamage })}
+          className={`lc-chip-text rounded-full px-2.5 py-1 text-[10px] font-black ${
+            strategy.repairDamage ? "bg-lc-volt text-lc-void" : "bg-lc-titanium text-lc-slate hover:text-lc-chalk"
+          }`}
+        >
+          {strategy.repairDamage ? "REPAIR ON" : "SKIP FIX"}
+        </button>
+      </div>
+
+      {/* Box request & Pit Limiter toggles */}
+      <div className="grid grid-cols-2 gap-1.5">
+        <button
+          type="button"
+          onClick={() => onChangePitStrategy?.({ boxRequested: !strategy.boxRequested })}
+          className={`lc-chip-text h-8 rounded-lc-nub border text-[10px] font-bold transition-colors ${
+            strategy.boxRequested
+              ? "border-lc-caution bg-lc-caution/20 text-lc-caution"
+              : "border-white/10 bg-white/4 text-lc-chalk hover:border-white/25"
+          }`}
+        >
+          {strategy.boxRequested ? "BOX THIS LAP" : "REQ PIT BOX"}
+        </button>
+        <button
+          type="button"
+          onClick={() => onTogglePitLimiter?.()}
+          className={`lc-chip-text h-8 rounded-lc-nub border text-[10px] font-bold transition-colors ${
+            pit?.limiterActive
+              ? "border-lc-info bg-lc-info/20 text-lc-info"
+              : "border-white/10 bg-white/4 text-lc-slate hover:border-white/25 hover:text-lc-chalk"
+          }`}
+        >
+          LIM {limitKmh} {pit?.limiterAuto ? "(AUTO)" : pit?.limiterActive ? "(ON)" : "(OFF)"}
+        </button>
+      </div>
+
+      {/* Service estimate footer */}
+      <div className="flex items-center justify-between px-1 text-[9.5px] text-lc-slate">
+        <span className="lc-data">
+          Tyres 1.8–5.0 s{strategy.repairDamage && repairEta > 0 ? ` · Fix ~${repairEta.toFixed(1)} s` : ""}
+        </span>
+        <span className="lc-data font-bold text-lc-chalk">Bay #{(pit?.assignedBoxIndex ?? 4) + 1}</span>
+      </div>
+    </div>
+  );
+};
+
 /* ── Shell ─────────────────────────────────────────────────────────────── */
 
 export interface MultiPageMfdProps {
   telemetry: CarTelemetry;
   onChangeTuner?: (patch: LiveTunerPatch) => void;
+  onChangePitStrategy?: (patch: Partial<PitStrategyState>) => void;
+  onTogglePitLimiter?: () => void;
   tracker: LapDeltaTracker | null;
   trackLengthM: number;
   compound: TireCompound;
@@ -499,13 +666,16 @@ export interface MultiPageMfdProps {
 }
 
 /**
- * The car's multi-function display: one bottom-right panel with five pages (Electronics tuner, Relative, Tyres &
- * brakes, Fuel & energy, Standings). The page button (Insert / pad B) steps through them, the MFD button folds it to
- * a one-line pill, and the D-pad wakes it from folded, cycles pages on non-electronics tabs, or tunes electronics on ELEC.
+ * The car's multi-function display: one bottom-right panel with six pages (Electronics tuner, Relative, Tyres &
+ * brakes, Fuel & energy, Standings, Pit stop & limiter). The page button (Insert / pad B) steps through them, the MFD
+ * button folds it to a one-line pill, and the D-pad wakes it from folded, cycles pages on non-electronics tabs, or
+ * tunes electronics on ELEC.
  */
 export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
   telemetry: t,
   onChangeTuner,
+  onChangePitStrategy,
+  onTogglePitLimiter,
   tracker,
   trackLengthM,
   compound,
@@ -673,6 +843,17 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
         </span>
       );
     }
+    if (page === "pit") {
+      const pit = t.pit;
+      const nextCmp = pit?.strategy.nextCompound ?? compound;
+      const cmpTag = nextCmp.slice(0, 3).toUpperCase();
+      return (
+        <span className={`lc-data text-[10px] ${inkCls}`}>
+          {pit?.strategy.boxRequested ? "BOX · " : ""}
+          {cmpTag} · {pit?.limiterActive ? `LIM ${pit.speedLimitKmh}` : `${pit?.speedLimitKmh ?? 60} km/h`}
+        </span>
+      );
+    }
     return (
       <span className={`lc-data text-[10px] ${inkCls}`}>
         {t.race ? `P${t.race.position}/${t.race.fieldSize}` : `${laps.length} laps`}
@@ -702,6 +883,13 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
             <TyrePage t={t} />
           ) : page === "fuel" ? (
             <FuelPage t={t} laps={laps} L={trackLengthM} />
+          ) : page === "pit" ? (
+            <PitPage
+              t={t}
+              compound={compound}
+              onChangePitStrategy={onChangePitStrategy}
+              onTogglePitLimiter={onTogglePitLimiter}
+            />
           ) : (
             <StandingsPage t={t} laps={laps} />
           )}

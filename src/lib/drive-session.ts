@@ -157,12 +157,16 @@ import type {
   CameraMode,
   CarTelemetry,
   LiveTunerPatch,
+  PitStopServiceOptions,
+  PitStrategyState,
   RadarBlip,
   StartClutchControl,
   TireCompound,
   TyreSetup,
   VehicleModelId,
 } from "@/types/f1";
+import { PitStopManager, type PitUpdateResult } from "@/lib/sim/pit-stop";
+import { createPitBoxVisual } from "@/lib/render/pit-box-visual";
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
 export const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
@@ -553,19 +557,27 @@ export class DriveSession {
    * The AI field for a race: in the simulation worker when it can run one, else on the page (the one built ahead when
    * it was built for this car, or a new one)
    */
-  readonly takeAiField: () => AiRace;
+  readonly takeAiField: (opts?: { opponents?: number; skill?: number }) => AiRace;
   /**
    * Qualifying for an AI race (qualifying.ts): the player drives alone, on a flying lap, for `minutes`; then the field
    * lines up from it and the race starts. Anything else that sets the session (another race, practice, a car change)
    * ends it
    */
-  readonly startQualifying: (field: AiRace, minutes: number) => void;
+  readonly startQualifying: (field: AiRace, minutes: number, raceSetup?: RaceSetup) => void;
+  /** Ends an active AI qualifying session immediately and lines the field up on the race grid */
+  readonly finishQualifyingNow: () => void;
   /** The player's preferences: kept for the frame loop, and the ones that act on the car or the scene applied */
   readonly applySettings: (settings: PlayerSettings) => void;
   /** Puts the tyre compound on the car and its model */
   readonly setTireCompound: (compound: TireCompound) => void;
   /** Pit stop service: fits a fresh set of `compound`, refills fuel and repairs damage */
-  readonly servicePitStop: (compound: TireCompound) => void;
+  readonly servicePitStop: (compound: TireCompound, options?: PitStopServiceOptions) => void;
+  /** Updates MFD pit stop strategy (next compound, damage repair toggle, box-this-lap) */
+  readonly setPitStrategy: (patch: Partial<PitStrategyState>) => void;
+  /** Toggles manual pit speed limiter outside the automatic pit corridor */
+  readonly togglePitLimiter: () => void;
+  /** Applies Career HQ Pit Crew Academy speed bonus (0..0.35) */
+  readonly setCareerPitCrewBonus: (bonusPct: number) => void;
   /** The garage's tyre and chassis setup, and the live tuner, on the car */
   readonly setTyreSetup: (setup: TyreSetup) => void;
   readonly setChassisSetup: (setup: ChassisSetup) => void;
@@ -898,6 +910,7 @@ export class DriveSession {
     let quali: {
       field: AiRace;
       session: QualifyingSession;
+      raceSetup?: RaceSetup;
       ref: { lapMs: number | null; base: number; car: SimulatorCar | null; lap0: number; simS: number };
     } | null = null;
     /** Page time per frame for the reference lap (ms), and the step it is driven at (s) */
@@ -944,9 +957,14 @@ export class DriveSession {
       };
       this.resetRun("race");
       this.setRace({ kind: "ai", field: q.field });
-      startAiRace(q.field, settings.race, settings.profile);
+      startAiRace(q.field, q.raceSetup ?? settings.race, settings.profile);
     };
-    this.startQualifying = (field, minutes) => {
+    this.finishQualifyingNow = () => {
+      if (disposed || !quali) return;
+      this.endPause();
+      finishQualifying();
+    };
+    this.startQualifying = (field, minutes, raceSetup) => {
       if (disposed) return;
       this.setRace({ kind: "practice" });
       const check = getActiveTrackMetadata().aiPlans?.[vehicleNow];
@@ -961,7 +979,7 @@ export class DriveSession {
         if (car.aiPaceScale !== undefined) car.aiPaceScale = 1;
         ref = { lapMs: null, base: AUTOPILOT_REF_BASE, car, lap0: car.telemetry.lapCount, simS: 0 };
       }
-      quali = { field, session: new QualifyingSession(minutes * 60), ref };
+      quali = { field, session: new QualifyingSession(minutes * 60), raceSetup, ref };
       physics.resetToStartGrid(true);
     };
     const limitsSessionOf = (race: SessionRace) => (race.kind === "practice" ? "practice" : "race");
@@ -1148,10 +1166,10 @@ export class DriveSession {
       return peers;
     };
     /** A new AI field round the player's car, of the race setup's size, at the player's chosen skill */
-    const buildAiField = (car: SimulatorCar) =>
-      new AiOpponentField(track, car, aiDriversFor(settings.race.opponents), getTrackEnv(), {
-        skill: settings.aiSkill,
-        peers: takeSparePeers(car),
+    const buildAiField = (car: SimulatorCar, opponents = settings.race.opponents, skill = settings.aiSkill) =>
+      new AiOpponentField(track, car, aiDriversFor(opponents), getTrackEnv(), {
+        skill,
+        peers: opponents === settings.race.opponents ? takeSparePeers(car) : undefined,
       });
     /**
      * The next race's grid slots, settled ahead on a throwaway AI car each, one per idle slice once the spare field is
@@ -1213,23 +1231,24 @@ export class DriveSession {
       };
       scheduleIdle(run, AI_PREP_GAP_MS);
     };
-    this.takeAiField = () => {
+    this.takeAiField = (opts) => {
+      const opponents = opts?.opponents ?? settings.race.opponents;
+      const skill = opts?.skill ?? settings.aiSkill;
       const link = workerRaceLink();
       if (link) {
         // The worker's spare field goes with this race: the menus ask for another after it
         workerPrepared = null;
         aiFieldSpare = null;
         const car = physics;
-        return new WorkerAiField(link, getTrackEnv(), car, aiDriversFor(settings.race.opponents).length, settings.aiSkill, () => car.groundQuery ?? null);
+        return new WorkerAiField(link, getTrackEnv(), car, aiDriversFor(opponents).length, skill, () => car.groundQuery ?? null);
       }
       const spare = aiFieldSpare;
       aiFieldSpare = null;
-      const skill = settings.aiSkill;
-      if (spare && spare.physics === physics && spare.opponents === settings.race.opponents) {
+      if (spare && spare.physics === physics && spare.opponents === opponents) {
         if (spare.field.skill !== skill) spare.field.setSkill(skill);
         return spare.field;
       }
-      return buildAiField(physics);
+      return buildAiField(physics, opponents, skill);
     };
 
     this.setCar = (car) => {
@@ -1425,6 +1444,12 @@ export class DriveSession {
     const builtCircuit = buildCircuitScene(track);
     scene.add(builtCircuit.sceneGroup);
     builtCircuit.racingLineMesh.visible = settings.racingLine;
+    const pitStop = new PitStopManager(track, physics.tireCompound, 4);
+    pitStop.setSpeedLimitKmh(settings.pitSpeedLimitKmh);
+    const pitBoxVisual = createPitBoxVisual(pitStop.boxPose, livery.accent);
+    scene.add(pitBoxVisual.group);
+    const pitGroundHit = createGroundHit();
+    let mpPitPenaltyS = 0;
     // A circuit raced under lights: its floodlit night (masts, lit tunnels, the model's glowing light sources),
     // or one whose own model has lamps (street lamps, light poles): they glow and light the ground round them
     let venueNight: VenueNightLighting | null = null;
@@ -1496,7 +1521,12 @@ export class DriveSession {
       };
       scheduleIdle(occlusionSlice);
       const ground = trackColliders(root).ground;
-      if (ground) builtCircuit.seatRacingLine(ground);
+      if (ground) {
+        builtCircuit.seatRacingLine(ground);
+        pitBoxVisual.seatOnGround((x, z) =>
+          ground.query(x, z, pitStop.boxPose.y + 4, pitGroundHit) ? pitGroundHit.height : null
+        );
+      }
     });
 
     /**
@@ -1756,6 +1786,9 @@ export class DriveSession {
         sessionPerf?.note(performance.now(), g.fpsCap ? `frame rate capped at ${g.fpsCap} fps` : "frame rate cap off");
       }
       if (g.driverBody !== pg.driverBody) setDriverBodyShown(g.driverBody);
+      if (next.pitSpeedLimitKmh !== prev.pitSpeedLimitKmh) {
+        pitStop.setSpeedLimitKmh(next.pitSpeedLimitKmh);
+      }
       // Another field size needs another field: a race running restarts from the lights with it
       if (next.race.opponents !== prev.race.opponents) {
         aiFieldSpare = null;
@@ -1774,12 +1807,26 @@ export class DriveSession {
       carRig.setTireCompound(compound);
       this.publish({ tireCompound: compound });
     };
-    this.servicePitStop = (compound) => {
+    this.servicePitStop = (compound, options) => {
       if (disposed) return;
       this.setTireCompound(compound);
-      physics.servicePitStop?.(compound);
-      aiFieldOf(raceNow())?.repairPlayerDamage?.();
-      mpRaceOf(raceNow())?.damage?.reset();
+      physics.servicePitStop?.(compound, options);
+      if (options?.repairDamage !== false) {
+        aiFieldOf(raceNow())?.repairPlayerDamage?.();
+        mpRaceOf(raceNow())?.damage?.reset();
+      }
+    };
+    this.setPitStrategy = (patch) => {
+      if (disposed) return;
+      pitStop.setStrategy(patch);
+    };
+    this.togglePitLimiter = () => {
+      if (disposed) return;
+      pitStop.toggleLimiter();
+    };
+    this.setCareerPitCrewBonus = (bonusPct) => {
+      if (disposed) return;
+      pitStop.setCrewBonusPct(bonusPct);
     };
     this.setTyreSetup = (setup) => {
       if (disposed) return;
@@ -2171,6 +2218,9 @@ export class DriveSession {
         case "autopilot":
           this.toggleAutopilot();
           break;
+        case "pitLimiter":
+          pitStop.toggleLimiter();
+          break;
         case "headlights": {
           const onNow = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, getTrackEnv().weather.rainIntensity);
           headlightMode = onNow ? "off" : "on";
@@ -2528,6 +2578,8 @@ export class DriveSession {
       kbInput.brake = 0;
       kbInput.clutch = 0;
       kbPedalAssist.reset();
+      pitStop.reset(true, physics.tireCompound);
+      mpPitPenaltyS = 0;
     };
     this.replayTogglePlay = () => {
       if (!replay.playing) {
@@ -3262,6 +3314,32 @@ export class DriveSession {
         }
         gridHeldLastFrame = gridHeld;
         startClutchIn = inputs.clutch ?? 0;
+        const playerSpeedMs = Math.max(0, physics.telemetry.speedMs ?? Math.abs(physics.vxMs));
+        const pitUpdate: PitUpdateResult = pitStop.update(dtSeconds, {
+          worldX: physics.worldPosition.x,
+          worldZ: physics.worldPosition.z,
+          trackS: physics.sMeters,
+          trackLateralOffsetM: physics.lateralOffsetM,
+          speedMs: playerSpeedMs,
+          damage: physics.telemetry.race?.damage,
+          canService: !aiField?.playerFrozen && !mpFrozen && !coolDown.active && !replaying,
+        });
+        if (pitUpdate.speedingPenalty) {
+          const msg = `Pit lane speeding (>${pitStop.getSpeedLimitKmh()} km/h)`;
+          aiField?.penalisePlayer(5, "pit_speeding", msg);
+          if (mpRace) mpPitPenaltyS += 5;
+        }
+        if (pitUpdate.serviceComplete) {
+          this.servicePitStop(pitUpdate.telemetry.strategy.nextCompound, {
+            repairDamage: pitUpdate.telemetry.strategy.repairDamage,
+            refuel: true,
+          });
+        }
+        pitStop.filterInputs(inputs, playerSpeedMs);
+        if (pitStop.isControlsLocked() && !raceInWorker && !simHost?.remote) {
+          physics.vxMs = 0;
+        }
+        physics.telemetry.pit = pitUpdate.telemetry;
         if (raceInWorker || (!aiField?.playerFrozen && !mpFrozen) || gridHeld) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
         aiField?.update(dtSeconds);
         if (sessionPerf) frameSimMs = performance.now() - simStartMs;
@@ -3464,9 +3542,22 @@ export class DriveSession {
         }
         if (mpRace) {
           const penaltiesOn = mpRace.start.rules?.penalties !== false;
-          mpRace.penaltyS = penaltiesOn ? trackLimits.penaltyTotalS + startPenaltyS : 0;
+          mpRace.penaltyS = penaltiesOn ? trackLimits.penaltyTotalS + startPenaltyS + mpPitPenaltyS : 0;
           mpRace.compound = physics.tireCompound;
         }
+        if (!driving || replaying) {
+          const pausedPit = pitStop.update(0, {
+            worldX: physics.worldPosition.x,
+            worldZ: physics.worldPosition.z,
+            trackS: physics.sMeters,
+            trackLateralOffsetM: physics.lateralOffsetM,
+            speedMs: Math.max(0, physics.telemetry.speedMs ?? Math.abs(physics.vxMs)),
+            damage: physics.telemetry.race?.damage,
+            canService: false,
+          });
+          physics.telemetry.pit = pausedPit.telemetry;
+        }
+        pitBoxVisual.update(physics.telemetry.pit, nowMs / 1000);
         t.trackLimits = trackLimits.snapshot(nowMs);
       }
       builtCircuit.setStartLights(
@@ -4475,6 +4566,7 @@ export class DriveSession {
       rainFx.dispose();
       virtualMirror.dispose();
       floorSparks.dispose();
+      pitBoxVisual.dispose();
       setKtx2Renderer(null);
       renderer.dispose();
       window.clearInterval(nameplateBadgeTimer);

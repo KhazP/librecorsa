@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import { HUD_GLASS } from "./hud-format";
 
@@ -12,130 +12,46 @@ const COMPOUNDS: readonly { id: TireCompound; letter: string; label: string; col
   { id: "wet", letter: "W", label: "Wet", color: "#38bdf8" },
 ];
 
-const PIT_DURATION_MS = 2400;
-
 export interface PitStopOverlayProps {
   telemetry: CarTelemetry;
   currentCompound: TireCompound;
-  onServicePitStop?: (compound: TireCompound) => void;
+  pitLimiterKey?: string;
 }
 
+/**
+ * Pure non-interactive pit lane HUD indicator (strategy setup lives in the MFD's PIT page).
+ * Displays:
+ * - Slow-down warning before the pit entry detection line
+ * - Active pit speed limiter status (manual or automatic)
+ * - Distance / alignment cue to the player's 3D pit box
+ * - Servicing countdown while car controls are locked
+ * - Green-light release banner when tyres + repairs finish
+ */
 export const PitStopOverlay: React.FC<PitStopOverlayProps> = ({
   telemetry,
   currentCompound,
-  onServicePitStop,
+  pitLimiterKey,
 }) => {
-  const [nextCompound, setNextCompound] = useState<TireCompound>(currentCompound);
-  const [boxRequested, setBoxRequested] = useState(false);
-  const [servicing, setServicing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [releasedBanner, setReleasedBanner] = useState(false);
-  const hasLeftGrid = useRef(false);
-  const lastStopLap = useRef<number>(-1);
+  const pit = telemetry.pit;
+  if (!pit || telemetry.race?.phase === "finished") return null;
 
-  const racePhase = telemetry.race?.phase;
-  const speedKmh = Math.abs(telemetry.speedKmh || 0);
-  const trackProg = telemetry.trackProgress ?? 0;
-  // Pit lane / start-finish pit box window (final 4% of lap or first 5% of lap)
-  const inPitZone = trackProg >= 0.96 || trackProg <= 0.05;
+  const chosen = COMPOUNDS.find((c) => c.id === (pit.strategy.nextCompound ?? currentCompound)) ?? COMPOUNDS[0];
+  const speedKmh = Math.round(Math.abs(telemetry.speedKmh || 0));
 
-  // Track once the player has driven away from the starting grid so standing on the grid at race start doesn't trigger a pit stop
-  useEffect(() => {
-    if (racePhase === "lights") {
-      hasLeftGrid.current = false;
-      lastStopLap.current = -1;
-      setServicing(false);
-      setReleasedBanner(false);
-    } else if (trackProg > 0.08 && trackProg < 0.92 && speedKmh > 30) {
-      hasLeftGrid.current = true;
-    }
-  }, [racePhase, trackProg, speedKmh]);
-
-  // Keyboard shortcuts: P toggles Pit Request / Box panel, 1..5 selects next tyre compound while pit panel is open
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat) return;
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (e.code === "KeyP") {
-        setBoxRequested((b) => !b);
-      } else if (boxRequested || (hasLeftGrid.current && inPitZone && speedKmh < 95)) {
-        const idx = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5"].indexOf(e.code);
-        if (idx >= 0 && COMPOUNDS[idx]) {
-          setNextCompound(COMPOUNDS[idx].id);
-        }
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [boxRequested, inPitZone, speedKmh]);
-
-  const canEnterPitBox =
-    Boolean(onServicePitStop) &&
-    racePhase !== "lights" &&
-    racePhase !== "finished" &&
-    hasLeftGrid.current &&
-    inPitZone &&
-    lastStopLap.current !== telemetry.lapCount;
-
-  // Automatically start the 2.4 s pit crew service when the car stops (< 6 km/h) inside the pit box window
-  useEffect(() => {
-    if (!servicing && canEnterPitBox && speedKmh < 6) {
-      setServicing(true);
-      setProgress(0);
-    }
-  }, [servicing, canEnterPitBox, speedKmh]);
-
-  const startManualService = () => {
-    if (servicing || !onServicePitStop) return;
-    setServicing(true);
-    setProgress(0);
-  };
-
-  useEffect(() => {
-    if (!servicing) return;
-    const startMs = performance.now();
-    const id = window.setInterval(() => {
-      const elapsed = performance.now() - startMs;
-      const frac = Math.min(1, elapsed / PIT_DURATION_MS);
-      setProgress(frac);
-      if (frac >= 1) {
-        window.clearInterval(id);
-        onServicePitStop?.(nextCompound);
-        lastStopLap.current = telemetry.lapCount;
-        setServicing(false);
-        setBoxRequested(false);
-        setReleasedBanner(true);
-      }
-    }, 40);
-    return () => window.clearInterval(id);
-  }, [servicing, nextCompound, onServicePitStop, telemetry.lapCount]);
-
-  useEffect(() => {
-    if (!releasedBanner) return;
-    const id = window.setTimeout(() => setReleasedBanner(false), 2600);
-    return () => window.clearTimeout(id);
-  }, [releasedBanner]);
-
-  if (!onServicePitStop || racePhase === "lights" || racePhase === "finished") return null;
-
-  const maxWear = Math.round(Math.max(...(telemetry.tireWearPct ?? [0, 0, 0, 0])));
-  const showApproach = canEnterPitBox && speedKmh < 100;
-
-  if (releasedBanner) {
-    const chosen = COMPOUNDS.find((c) => c.id === nextCompound) ?? COMPOUNDS[0];
+  if (pit.phase === "released") {
     return (
       <div className="pointer-events-none fixed top-24 left-1/2 z-40 -translate-x-1/2">
-        <div className={`flex items-center gap-3 rounded-lc-tile border-2 border-lc-gain bg-lc-void/95 px-6 py-3 shadow-lc-pop`}>
-          <span className="inline-flex size-6 items-center justify-center rounded-full bg-lc-gain text-[12px] font-black text-lc-void">
+        <div className="flex items-center gap-3 rounded-lc-tile border-2 border-lc-gain bg-lc-void/95 px-6 py-3 shadow-lc-pop">
+          <span className="inline-flex size-7 items-center justify-center rounded-full bg-lc-gain text-[12px] font-black text-lc-void">
             GO
           </span>
           <div className="flex flex-col">
             <span className="lc-disp text-[20px] leading-none text-lc-gain uppercase">
-              Green light · Pit stop complete (2.4 s)
+              Green light · Pit stop complete ({pit.serviceTotalS.toFixed(2)} s)
             </span>
             <span className="text-[11px] font-bold text-lc-chalk">
-              Fresh <span style={{ color: chosen.color }}>{chosen.label}</span> tyres fitted · Damage repaired · Fuel topped up
+              Fresh <span style={{ color: chosen.color }}>{chosen.label}</span> tyres fitted
+              {pit.strategy.repairDamage && pit.repairDurationS > 0 ? " · Damage repaired" : ""} · Refuelled
             </span>
           </div>
         </div>
@@ -143,115 +59,135 @@ export const PitStopOverlay: React.FC<PitStopOverlayProps> = ({
     );
   }
 
-  if (servicing) {
-    const chosen = COMPOUNDS.find((c) => c.id === nextCompound) ?? COMPOUNDS[0];
-    const remS = Math.max(0, ((1 - progress) * PIT_DURATION_MS) / 1000).toFixed(1);
+  if (pit.phase === "servicing") {
+    const total = Math.max(0.1, pit.serviceTotalS);
+    const doneFrac = Math.max(0, Math.min(1, 1 - pit.serviceRemainingS / total));
     return (
-      <div className="pointer-events-auto fixed top-24 left-1/2 z-40 w-[340px] -translate-x-1/2">
-        <div className={`flex flex-col gap-2.5 rounded-lc-tile border-2 border-lc-volt bg-lc-void/95 p-4 shadow-lc-pop`}>
+      <div className="pointer-events-none fixed top-24 left-1/2 z-40 w-[356px] -translate-x-1/2">
+        <div className="flex flex-col gap-2.5 rounded-lc-tile border-2 border-lc-volt bg-lc-void/95 p-4 shadow-lc-pop">
           <div className="flex items-center justify-between">
             <span className="lc-title text-[14px] font-black tracking-wider text-lc-volt uppercase">
-              Pit Box · Servicing Car
+              Pit Box #{pit.assignedBoxIndex + 1} · Controls Locked
             </span>
-            <span className="lc-data text-[16px] font-black text-lc-chalk">{remS} s</span>
+            <span className="lc-data text-[16px] font-black text-lc-chalk">
+              {pit.serviceRemainingS.toFixed(1)} s
+            </span>
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/10">
             <div
               className="h-full bg-lc-volt transition-[width] duration-75"
-              style={{ width: `${Math.round(progress * 100)}%` }}
+              style={{ width: `${Math.round(doneFrac * 100)}%` }}
             />
           </div>
           <div className="flex items-center justify-between text-[11px] font-semibold text-lc-fog">
             <span>
-              Fitting <strong style={{ color: chosen.color }}>{chosen.label}</strong> (0% wear)
+              Fitting <strong style={{ color: chosen.color }}>{chosen.label}</strong> ({pit.tyreDurationS.toFixed(2)} s)
             </span>
-            <span>Repair &amp; Refuel</span>
+            <span>
+              {pit.repairDurationS > 0
+                ? `Repairing +${pit.repairDurationS.toFixed(1)} s`
+                : "No repairs needed"}
+            </span>
           </div>
         </div>
       </div>
     );
   }
 
-  if (!showApproach && !boxRequested) {
-    // Subtle pit request hint when tyre wear >= 35% or damage exists
-    if (maxWear < 35) return null;
+  if (pit.phase === "entry_warning") {
+    const tooFast = speedKmh > pit.speedLimitKmh;
     return (
-      <div className="pointer-events-auto fixed top-20 left-1/2 z-30 -translate-x-1/2">
-        <button
-          type="button"
-          onClick={() => setBoxRequested(true)}
-          className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-[11px] font-bold text-lc-caution hover:border-lc-volt ${HUD_GLASS}`}
+      <div className="pointer-events-none fixed top-22 left-1/2 z-40 -translate-x-1/2">
+        <div
+          className={`flex items-center gap-3 rounded-lc-tile border-2 px-5 py-2.5 shadow-lc-pop ${
+            tooFast
+              ? "border-lc-loss bg-lc-void/95 text-lc-loss"
+              : "border-lc-caution bg-lc-void/95 text-lc-caution"
+          }`}
         >
-          <span>Tyre wear {maxWear}% · Press P to request Pit Box</span>
-        </button>
+          <span
+            className={`rounded px-2 py-0.5 text-[11px] font-black uppercase ${
+              tooFast ? "bg-lc-loss text-lc-void" : "bg-lc-caution text-lc-void"
+            }`}
+          >
+            {tooFast ? "SLOW DOWN" : "PIT ENTRY"}
+          </span>
+          <div className="flex flex-col">
+            <span className="lc-disp text-[17px] leading-tight uppercase">
+              {tooFast
+                ? `Brake to ${pit.speedLimitKmh} km/h before detection`
+                : `Pit speed limit ${pit.speedLimitKmh} km/h`}
+            </span>
+            <span className="lc-data text-[11px] text-lc-fog">
+              {pit.distToDetectM !== null ? `Detection line in ${Math.round(pit.distToDetectM)} m · ` : ""}
+              Now {speedKmh} km/h
+              {pitLimiterKey && pitLimiterKey !== "—" ? ` · Limiter: ${pitLimiterKey}` : ""}
+            </span>
+          </div>
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="pointer-events-auto fixed top-20 left-1/2 z-40 w-[356px] -translate-x-1/2">
-      <div className={`flex flex-col gap-2.5 rounded-lc-tile p-3.5 ${HUD_GLASS}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="rounded bg-lc-volt px-1.5 py-0.5 text-[10px] font-black text-lc-void uppercase">
-              {showApproach ? "PIT LANE" : "BOX THIS LAP"}
+  if (pit.phase === "lane" || pit.phase === "in_box") {
+    return (
+      <div className="pointer-events-none fixed top-22 left-1/2 z-40 flex flex-col items-center gap-2 -translate-x-1/2">
+        {pit.speedWarning ? (
+          <div className="rounded-lc-row border border-lc-loss bg-lc-loss/90 px-4 py-1 text-[12px] font-black tracking-wide text-lc-void uppercase shadow-lc-pop">
+            +5s Time Penalty · Pit Lane Speeding
+          </div>
+        ) : null}
+        <div
+          className={`flex items-center gap-3 rounded-lc-tile border px-4 py-2.5 ${
+            pit.alignedInBox ? "border-lc-gain bg-lc-void/95" : `border-lc-info/70 ${HUD_GLASS}`
+          }`}
+        >
+          <span className="rounded bg-lc-info px-2 py-0.5 text-[10px] font-black text-lc-void uppercase">
+            LIM {pit.speedLimitKmh} KM/H · AUTO
+          </span>
+          <div className="flex flex-col">
+            <span
+              className={`lc-title text-[13px] font-black uppercase ${
+                pit.alignedInBox ? "text-lc-gain" : "text-lc-chalk"
+              }`}
+            >
+              {pit.alignedInBox
+                ? `In Pit Box #${pit.assignedBoxIndex + 1} · Stop Completely`
+                : pit.distToBoxM !== null && pit.distToBoxM > 0
+                  ? `Pit Box #${pit.assignedBoxIndex + 1} in ${Math.round(pit.distToBoxM)} m`
+                  : pit.distToBoxM !== null
+                    ? `Passed Pit Box #${pit.assignedBoxIndex + 1} (${Math.abs(Math.round(pit.distToBoxM))} m)`
+                    : `Pit Lane Active`}
             </span>
-            <span className="lc-title text-[12px] font-bold text-lc-chalk">
-              {showApproach ? "Stop in Pit Box (< 6 km/h)" : "Pit Stop Strategy (P)"}
+            <span className="lc-data text-[10px] text-lc-fog">
+              Target <strong style={{ color: chosen.color }}>{chosen.label}</strong>
+              {pit.strategy.repairDamage && pit.hasDamage ? ` · Repair ${pit.damagePct}%` : ""}
+              {pit.speedingPenaltyCount > 0 ? ` · Speeding penalties: ${pit.speedingPenaltyCount}` : ""}
             </span>
           </div>
-          {boxRequested && !showApproach ? (
-            <button
-              type="button"
-              onClick={() => setBoxRequested(false)}
-              className="text-[11px] font-bold text-lc-slate hover:text-lc-chalk"
-            >
-              Close
-            </button>
-          ) : null}
-        </div>
-
-        {/* Compound selector (1..5 or click) */}
-        <div className="flex items-center justify-between gap-1.5">
-          {COMPOUNDS.map((c, i) => {
-            const active = nextCompound === c.id;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setNextCompound(c.id)}
-                className={`flex flex-1 flex-col items-center gap-0.5 rounded-md border py-1.5 text-[11px] font-bold transition-colors ${
-                  active
-                    ? "border-lc-volt bg-lc-volt/15 text-lc-chalk"
-                    : "border-white/10 bg-white/5 text-lc-slate hover:border-white/25 hover:text-lc-chalk"
-                }`}
-              >
-                <span className="text-[13px] font-black" style={{ color: c.color }}>
-                  {c.letter}
-                </span>
-                <span className="text-[9px]">{i + 1} · {c.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center justify-between text-[11px] text-lc-fog">
-          <span>
-            Current wear: <strong className="lc-data text-lc-chalk">{maxWear}%</strong>
-          </span>
-          {showApproach || (hasLeftGrid.current && inPitZone) ? (
-            <button
-              type="button"
-              onClick={startManualService}
-              className="rounded bg-lc-volt px-2.5 py-1 text-[11px] font-black text-lc-void hover:brightness-110"
-            >
-              Service Now (2.4 s)
-            </button>
-          ) : (
-            <span className="text-[10px] text-lc-slate">Slow below 80 km/h on start/finish pit lane</span>
-          )}
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // On track with manual pit limiter toggled or Box Requested
+  if (pit.limiterActive || pit.strategy.boxRequested) {
+    return (
+      <div className="pointer-events-none fixed top-20 left-1/2 z-30 flex items-center gap-2 -translate-x-1/2">
+        {pit.limiterActive ? (
+          <div className={`rounded-full border border-lc-info/80 px-3.5 py-1 text-[11px] font-black text-lc-info uppercase ${HUD_GLASS}`}>
+            Pit Limiter · {pit.speedLimitKmh} km/h
+            {pitLimiterKey && pitLimiterKey !== "—" ? ` (${pitLimiterKey})` : ""}
+          </div>
+        ) : null}
+        {pit.strategy.boxRequested ? (
+          <div className={`rounded-full border border-lc-caution/80 px-3.5 py-1 text-[11px] font-black text-lc-caution uppercase ${HUD_GLASS}`}>
+            Box This Lap · Bay #{pit.assignedBoxIndex + 1} · {chosen.label}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return null;
 };

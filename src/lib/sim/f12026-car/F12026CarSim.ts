@@ -32,6 +32,7 @@ import type {
   F12026Channels,
   LiveTunerPatch,
   LiveTunerState,
+  PitStopServiceOptions,
   RacingLineId,
   SurfaceType,
   TireCompound,
@@ -1672,20 +1673,17 @@ export class F12026CarSim implements SimulatorCar {
     this.applyColdPressures();
   }
 
-  public servicePitStop(compound: TireCompound): void {
+  public servicePitStop(compound: TireCompound, options?: PitStopServiceOptions): void {
     this.tireCompound = compound;
-    this.vehicle.setCompound(this.config.compoundSlots[compound]);
-    for (const w of this.vehicle.wheels) {
-      w.wear = 0;
-      w.flatSpotSeverity = 0;
-      w.grainLevel = 0;
-      w.blisterLevel = 0;
+    if (options?.refuel !== false) {
+      this.fuelKg = startingFuelKg(this.setupCar, this.chassis);
+      this.vehicle.setFuelMass(this.fuelKg);
     }
-    this.fuelKg = startingFuelKg(this.setupCar, this.chassis);
-    this.vehicle.setFuelMass(this.fuelKg);
-    this.telemetry.fuelKg = Number(this.fuelKg.toFixed(2));
+    this.telemetry.fuelKg = this.fuelKg;
     this.telemetry.tireWearPct = [0, 0, 0, 0];
-    this.setDamageEffects(null);
+    if (options?.repairDamage !== false) {
+      this.setDamageEffects(null);
+    }
   }
 
   get assistPreset(): DriverAssistPreset {

@@ -16,5 +16,5 @@ export const REPO_TRACK_IDS: ReadonlySet<string> = new Set(["rwanda_official_sho
 /** Whether this copy lists a car */
 export const carListed = (id: string): boolean => HOSTED_CONTENT || REPO_CAR_IDS.has(id);
 
-/** Whether this copy lists a circuit */
-export const trackListed = (id: string): boolean => HOSTED_CONTENT || REPO_TRACK_IDS.has(id);
+/** Whether this copy lists a circuit (local repo assets load directly; remote catalog assets proxy via fallback rewrites) */
+export const trackListed = (_id: string): boolean => true;

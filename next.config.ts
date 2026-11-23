@@ -13,9 +13,19 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   ...(turbopackRoot ? { turbopack: { root: turbopackRoot } } : {}),
   ...(devOrigins.length ? { allowedDevOrigins: devOrigins } : {}),
-  output: "export",
+  output: "standalone",
   images: {
     unoptimized: true,
+  },
+  async rewrites() {
+    return {
+      fallback: [
+        {
+          source: "/tracks/:path*",
+          destination: "https://librecorsa.org/tracks/:path*",
+        },
+      ],
+    };
   },
   ...(basePath
     ? {

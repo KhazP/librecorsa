@@ -250,7 +250,7 @@ export const AZIMUTH_OFFSET_DEG = GOLDEN_HOUR_AZIMUTH_DEG + solarAngles(GOLDEN_H
 export const TIME_OF_DAY_HOURS: Record<TimeOfDayId, number> = {
   dawn: 6.3,
   morning: 9,
-  noon: 12.2,
+  noon: 12,
   afternoon: 15,
   golden_hour: GOLDEN_HOUR_CLOCK_H,
   dusk: 17.95,

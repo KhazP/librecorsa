@@ -131,6 +131,7 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   onToggleAiAutopilot: () => void;
   onToggleMouseSteer?: () => void;
   onResetCar: (flyingStart: boolean) => void;
+  onFinishQualifying?: () => void;
   onOpenReplay?: () => void;
   onSelectTurn: (turnNumber: number) => void;
   onTogglePause: () => void;
@@ -200,7 +201,7 @@ const MadeBy: React.FC<{ trackSource: ReturnType<typeof trackModelSource>; carId
  * from anywhere.
  */
 export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
-  const { telemetry, onTogglePause, onResetCar, onOpenReplay, aiOpponents, onOpenControls, onExitToTitle, leaderboardPanel, conditionsPanel, displayPanel } = props;
+  const { telemetry, onTogglePause, onResetCar, onFinishQualifying, onOpenReplay, aiOpponents, onOpenControls, onExitToTitle, leaderboardPanel, conditionsPanel, displayPanel } = props;
   const { nowPlaying, onSkipTrack } = props;
   const phoneScreen = usePhoneLayout();
   // Online: the host restarts the race for everyone and nobody has a flying lap; a guest in a lobby restarts nothing
@@ -256,6 +257,17 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
 
   const actions: { id: string; label: string; detail?: string; icon: IconName; run: () => void }[] = useMemo(
     () => [
+      ...(telemetry.qualifying && !mpRace && onFinishQualifying
+        ? [
+            {
+              id: "finish-quali",
+              label: "Go to race grid",
+              detail: "End qualifying now with your best clean lap",
+              icon: "chequered" as const,
+              run: onFinishQualifying,
+            },
+          ]
+        : []),
       ...(canRestart
         ? [
             {
@@ -297,7 +309,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         : []),
       ...(onExitToTitle ? [{ id: "title", label: "Main menu", icon: "leave" as const, run: onExitToTitle }] : []),
     ],
-    [aiOpponents, mpRace, canRestart, canFly, restartAndResume, onOpenReplay, onTogglePause, nowPlaying, onSkipTrack, onOpenControls, onExitToTitle]
+    [telemetry.qualifying, aiOpponents, mpRace, canRestart, canFly, onFinishQualifying, restartAndResume, onOpenReplay, onTogglePause, nowPlaying, onSkipTrack, onOpenControls, onExitToTitle]
   );
 
   // A tab that went away while open (Corners when an online race starts) shows the session tab instead

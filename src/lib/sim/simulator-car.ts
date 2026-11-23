@@ -166,6 +166,7 @@ export interface SimulatorCar {
   restorePose?(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number; lapCount?: number; outLap?: boolean }): void;
   getTyreSetup(): TyreSetup;
   setTyreSetup(setup: TyreSetup): void;
+  servicePitStop?(compound: TireCompound, options?: import('@/types/f1').PitStopServiceOptions): void;
   activateBoostOverride(): boolean;
   /** Race control for the overtaking aids (the 1 s and lap rules, `overtaking-rules.ts`); null = practice, free use */
   raceControl?: import('./overtaking-rules').OvertakingRaceControl | null;
@@ -194,8 +195,6 @@ export interface SimulatorCar {
 
   /** Apply the car's damage (`car-damage.ts`): aero, per-wheel grip and toe, engine; null = undamaged */
   setDamageEffects?(effects: Readonly<import('./car-damage').CarDamageEffects> | null): void;
-  /** Pit stop service: fits a fresh set of `compound`, refills fuel and clears damage */
-  servicePitStop?(compound: TireCompound): void;
   /** The car puts itself back on the line when stuck on autopilot (default true; a race field rejoins its own cars) */
   aiSelfRecovery?: boolean;
   /** Apply trailing vortex wake / slipstream deficit from cars ahead */

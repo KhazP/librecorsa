@@ -79,11 +79,19 @@ import { browserStore, lostRecently, probeRenderer, settleLoss } from "@/lib/ren
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 import {
   createInitialCareerState,
-  getCareerTier,
+  getCareerModifiers,
+  getCareerTeam,
   loadCareerState,
   recordCareerRoundResult,
   saveCareerState,
+  setCareerRoundTrack,
+  signCareerSponsor,
+  signCareerTeam,
   syncPlayerIntoCareer,
+  updateCareerSettings,
+  upgradeCareerFacility,
+  type CareerFacilityId,
+  type CareerSettings,
   type CareerState,
   type CareerTierId,
 } from "@/lib/sim/career-mode";
@@ -509,7 +517,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, [gamepadRumble]);
 
   const handleTireCompoundChange = useCallback((compound: TireCompound) => session?.setTireCompound(compound), [session]);
-  const handleServicePitStop = useCallback((compound: TireCompound) => session?.servicePitStop(compound), [session]);
+  const handleChangePitStrategy = useCallback(
+    (patch: Partial<import("@/types/f1").PitStrategyState>) => session?.setPitStrategy(patch),
+    [session]
+  );
+  const handleTogglePitLimiter = useCallback(() => session?.togglePitLimiter(), [session]);
 
   const handleChangeTyreSetup = useCallback((next: TyreSetup) => {
     session?.setTyreSetup(next);
@@ -1383,9 +1395,43 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, [settingsHydrated, settings.profile]);
 
   const handleSelectCareerTier = useCallback((tierId: CareerTierId) => {
-    const fresh = createInitialCareerState(tierId, settingsRef.current.profile, 1);
-    saveCareerState(fresh);
-    setCareerState(fresh);
+    setCareerState((prev) => {
+      const fresh = createInitialCareerState(tierId, settingsRef.current.profile, 1, {
+        credits: prev.credits,
+        reputation: prev.reputation,
+        teamId: prev.teamId,
+        upgrades: prev.upgrades,
+      });
+      saveCareerState(fresh);
+      return fresh;
+    });
+  }, []);
+
+  const handleUpdateCareerSettings = useCallback((patch: Partial<CareerSettings>) => {
+    setCareerState((prev) => updateCareerSettings(prev, patch, settingsRef.current.profile));
+  }, []);
+
+  const handleSetCareerRoundTrack = useCallback((roundIndex: number, nextTrackId: string) => {
+    setCareerState((prev) => setCareerRoundTrack(prev, roundIndex, nextTrackId));
+  }, []);
+
+  const handleSignCareerTeam = useCallback((teamId: string) => {
+    setCareerState((prev) => {
+      const next = signCareerTeam(prev, teamId);
+      if (next !== prev) {
+        const team = getCareerTeam(next.teamId);
+        setSettings((s) => ({ ...s, liveryId: team.liveryId }));
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSignCareerSponsor = useCallback((sponsorId: string) => {
+    setCareerState((prev) => signCareerSponsor(prev, sponsorId));
+  }, []);
+
+  const handleUpgradeCareerFacility = useCallback((facilityId: CareerFacilityId) => {
+    setCareerState((prev) => upgradeCareerFacility(prev, facilityId));
   }, []);
 
   const handleResetCareerSeason = useCallback((nextSeason = false) => {
@@ -1393,7 +1439,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const fresh = createInitialCareerState(
         prev.tierId,
         settingsRef.current.profile,
-        nextSeason ? prev.seasonNumber + 1 : prev.seasonNumber
+        nextSeason ? prev.seasonNumber + 1 : prev.seasonNumber,
+        nextSeason
+          ? {
+              credits: prev.credits,
+              reputation: prev.reputation,
+              teamId: prev.teamId,
+              upgrades: prev.upgrades,
+            }
+          : undefined
       );
       saveCareerState(fresh);
       return fresh;
@@ -1404,27 +1458,36 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (!session) return;
     const currentCareer = loadCareerState(settingsRef.current.profile);
     setCareerState(currentCareer);
-    const tier = getCareerTier(currentCareer.tierId);
     const round = currentCareer.rounds[currentCareer.currentRoundIndex];
     if (!round || currentCareer.seasonCompleted) return;
-    setSettings((prev) => ({
-      ...prev,
-      aiSkill: tier.aiSkill,
-      race: {
-        ...prev.race,
-        laps: round.laps,
-        opponents: tier.opponents,
-      },
-    }));
-    const field = aiFieldOf(session.race) ?? session.takeAiField();
-    field.setSkill(tier.aiSkill);
+    const team = getCareerTeam(currentCareer.teamId);
+    const mods = getCareerModifiers(currentCareer);
     const raceSetup: RaceSetup = {
       ...settingsRef.current.race,
       laps: round.laps,
-      opponents: tier.opponents,
+      opponents: currentCareer.settings.opponents,
+      damage: currentCareer.settings.damage,
+      aggression: currentCareer.settings.aiAggression,
+      qualifying: currentCareer.settings.qualifyingMinutes,
     };
-    startSession({ kind: "ai", field });
-    startAiRace(field, raceSetup, settingsRef.current.profile);
+    setSettings((prev) => ({
+      ...prev,
+      liveryId: team.liveryId,
+      aiSkill: mods.effectiveAiSkill,
+      race: raceSetup,
+    }));
+    session.setCareerPitCrewBonus(mods.pitCrewBonusPct);
+    const field = session.takeAiField({
+      opponents: raceSetup.opponents,
+      skill: mods.effectiveAiSkill,
+    });
+    const qualifyingMin = raceSetup.qualifying;
+    startSession(qualifyingMin > 0 ? { kind: "practice" } : { kind: "ai", field });
+    if (qualifyingMin > 0) {
+      session.startQualifying(field, qualifyingMin, raceSetup);
+    } else {
+      startAiRace(field, raceSetup, settingsRef.current.profile);
+    }
     setCareerRaceActive(true);
     setLaunchHint(true);
   }, [session, startSession]);
@@ -1443,9 +1506,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const handleBackToCareer = useCallback(() => {
     setCareerRaceActive(false);
+    session?.setCareerPitCrewBonus(0);
     setTitleInitialPanel("career");
     leaveSession();
-  }, [leaveSession]);
+  }, [leaveSession, session]);
+
+  const handleFinishQualifying = useCallback(() => {
+    session?.finishQualifyingNow();
+  }, [session]);
 
   // Record Career Championship points as soon as the player finishes a Career round
   useEffect(() => {
@@ -1491,6 +1559,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const handleTitleStart = useCallback(
     (race: boolean) => {
       setCareerRaceActive(false);
+      session?.setCareerPitCrewBonus(0);
       if (onboarded) {
         startDriving(race);
         return;
@@ -1500,7 +1569,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setWizardMode("first-run");
       setPhase("wizard");
     },
-    [onboarded, startDriving, setPhase]
+    [onboarded, startDriving, setPhase, session]
   );
 
   const leaveWizard = useCallback(() => {
@@ -2012,6 +2081,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       shiftDown: first(k.shiftDown),
       board: first(k.board),
       headlights: first(k.headlights),
+      pitLimiter: first(k.pitLimiter),
     };
   }, [settings.keys]);
   /** The lap board's gear sets when it opens: the same HUD setting as in Settings */
@@ -2192,7 +2262,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onChangeAeroPreset: handleAeroPresetChange,
     onChangeAssistPreset: handleAssistPresetChange,
     onChangeTireCompound: handleTireCompoundChange,
-    onServicePitStop: handleServicePitStop,
     tyreSetup,
     defaultTyreSetup,
     onChangeTyreSetup: handleChangeTyreSetup,
@@ -2377,6 +2446,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onToggleXMode={handleToggleXMode}
           onToggleBoostLatch={handleToggleBoostLatch}
           onChangeLiveTuner={handleChangeLiveTuner}
+          onChangePitStrategy={handleChangePitStrategy}
+          onTogglePitLimiter={handleTogglePitLimiter}
+          onFinishQualifying={handleFinishQualifying}
           paused={paused}
           pauseMenuCovered={settingsOpen?.from === "pause"}
           onOpenControls={() =>
@@ -2528,6 +2600,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             career: careerState,
             carTitle: carById(carId).title,
             onSelectTier: handleSelectCareerTier,
+            onUpdateSettings: handleUpdateCareerSettings,
+            onSetRoundTrack: handleSetCareerRoundTrack,
+            onSignTeam: handleSignCareerTeam,
+            onSignSponsor: handleSignCareerSponsor,
+            onUpgradeFacility: handleUpgradeCareerFacility,
             onResetSeason: handleResetCareerSeason,
             onStartRound: handleStartCareerRound,
           }}

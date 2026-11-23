@@ -9,6 +9,7 @@ import type {
   DriverAssistPreset,
   LiveTunerPatch,
   LiveryConfig,
+  PitStrategyState,
   TireCompound,
   TyreSetup,
   VehicleModelId,
@@ -200,8 +201,10 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** Off the track: the crimson edge glow that breathes behind the HUD, which the renderer draws into the frame */
   onOffTrackGlow?: (on: boolean) => void;
   onChangeTireCompound: (compound: TireCompound) => void;
-  /** Completes a pit stop service (fresh tyres of `compound`, full fuel, damage repaired) */
-  onServicePitStop?: (compound: TireCompound) => void;
+  /** Updates pit stop setup (next compound, repair toggle, box request) in the MFD */
+  onChangePitStrategy?: (patch: Partial<PitStrategyState>) => void;
+  /** Toggles manual pit lane speed limiter outside the pit speed zone */
+  onTogglePitLimiter?: () => void;
   onChangeTyreSetup: (setup: TyreSetup) => void;
   onChangeLivery: (livery: LiveryConfig) => void;
   onToggleRacingLine: () => void;
@@ -212,6 +215,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onChangeLiveTuner?: (patch: LiveTunerPatch) => void;
   onToggleMouseSteer?: () => void;
   onResetCar: (flyingStart: boolean) => void;
+  onFinishQualifying?: () => void;
   onSelectTurn: (turnNumber: number) => void;
   onHostP2PRoom?: (customCode?: string) => string;
   onJoinP2PRoom?: (roomCode: string) => void;
@@ -231,7 +235,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** The music playing, and the pause menu's skip */
   nowPlaying?: NowPlaying | null;
   onSkipTrack?: () => void;
-  keyNames?: Partial<Record<"camera" | "freeCamera" | "tvCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board" | "headlights", string>>;
+  keyNames?: Partial<Record<"camera" | "freeCamera" | "tvCamera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown" | "board" | "headlights" | "pitLimiter", string>>;
   /** The lap board's gear: when it opens (the HUD setting), changed from the board itself; without it, no lap board */
   onChangeBoardWidget?: (mode: BoardWidgetMode) => void;
   /** HUD layout preset, size and optional widgets */
@@ -569,6 +573,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       <MultiPageMfd
         telemetry={telemetry}
         onChangeTuner={props.onChangeLiveTuner}
+        onChangePitStrategy={props.onChangePitStrategy}
+        onTogglePitLimiter={props.onTogglePitLimiter}
         tracker={lapTracker}
         trackLengthM={track.totalLengthM}
         compound={tireCompound}
@@ -984,7 +990,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         <PitStopOverlay
           telemetry={telemetry}
           currentCompound={tireCompound}
-          onServicePitStop={props.onServicePitStop}
+          pitLimiterKey={props.keyNames?.pitLimiter}
         />
       ) : null}
 

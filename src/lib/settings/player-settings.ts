@@ -4,6 +4,7 @@
  */
 import { DEFAULT_RACE_SETUP, parseRaceSetup, type RaceSetup } from "@/lib/sim/race-setup";
 import { MUSIC_TRACK_IDS } from "@/lib/audio/music-catalog";
+import { RENDER_SCALE_FLOOR } from "@/lib/render/adaptive-quality";
 import type { AssistPreset, CameraMode, CustomLiveryColors } from "@/types/f1";
 import {
   DEFAULT_KEY_BINDINGS,
@@ -89,6 +90,8 @@ export interface PlayerSettings {
   race: RaceSetup;
   /** Simulation realism: tyre wear, temperature grip, fuel use and how hard rain bites (Full = the whole model) */
   realism: SimRealism;
+  /** Pit lane speed limit in km/h (default 60 km/h; auto pit limiter clamps and brakes to this speed) */
+  pitSpeedLimitKmh: number;
   /** Weather, time of day and time multiplier for offline sessions (the host's apply online) */
   conditions: SessionConditions;
   /**
@@ -258,10 +261,6 @@ export interface HudSettings {
   preset: HudPreset;
   /** Overall HUD size (0.75..1.5) */
   scale: number;
-  /** Per part: offset (px from its default spot) and scale (0.5..2). Keyed by part id. Empty = defaults. */
-  parts: Record<string, HudPart>;
-  /** While true, the in-race HUD shows the visual layout editor (drag parts, scale them). */
-  editMode: boolean;
   /** Rolling throttle / brake / steering trace */
   inputTrace: boolean;
   /** Live delta bar against the best lap */
@@ -296,25 +295,25 @@ export interface HudSettings {
   boardWidget: BoardWidgetMode;
   /** Names over the other players' and AI cars, the top three in podium colours */
   showPlayerNames: boolean;
+  /** Per-panel offset and scale overrides edited in HUD layout editor */
+  parts: Record<string, HudPart>;
+  /** Live in-game HUD layout editor toggle */
+  editMode: boolean;
 }
 
-export type BoardWidgetMode = "lapEnd" | "open" | "closed";
-export const BOARD_WIDGET_MODES: readonly BoardWidgetMode[] = ["lapEnd", "open", "closed"];
-
-/** One HUD part's saved offset (px from its default spot) and scale (0.5 .. 2). Empty parts means defaults. */
 export interface HudPart {
-  /** Horizontal offset from the part's default place, px (positive right) */
   x: number;
-  /** Vertical offset from the part's default place, px (positive down) */
   y: number;
-  /** Scale multiplier, 0.5 .. 2 */
   scale: number;
 }
 
 export const DEFAULT_HUD_PART: HudPart = { x: 0, y: 0, scale: 1 };
+export const HUD_PART_OFFSET_MAX = 600;
 export const HUD_PART_SCALE_MIN = 0.5;
 export const HUD_PART_SCALE_MAX = 2;
-export const HUD_PART_OFFSET_MAX = 2000;
+
+export type BoardWidgetMode = "lapEnd" | "open" | "closed";
+export const BOARD_WIDGET_MODES: readonly BoardWidgetMode[] = ["lapEnd", "open", "closed"];
 
 export type VirtualMirrorMode = "auto" | "always" | "off";
 
@@ -331,6 +330,12 @@ export interface GraphicsSettings {
    * default on touch screens, whose phones slow down as they heat up
    */
   autoQuality: boolean;
+  /**
+   * "Lowest resolution": the lowest Render resolution automatic quality may step down to (one of
+   * AUTO_QUALITY_MIN_SCALES). At 1 it never lowers the resolution under 100% and only turns effects down. The default is
+   * the floor the step-down always had (RENDER_SCALE_FLOOR, 60%)
+   */
+  autoQualityMinScale: AutoQualityMinScale;
   /** Frames drawn per second at most: 0 = as many as the screen shows, 30 = every other frame of a 60 Hz screen */
   fpsCap: FpsCap;
   /** Keep the 1.5x pixel-ratio cap on Low instead of dropping to 1x ("Sharp Low") */
@@ -341,6 +346,15 @@ export interface GraphicsSettings {
 
 export type FpsCap = 0 | 30;
 export const FPS_CAPS: readonly FpsCap[] = [0, 30];
+
+export type AutoQualityMinScale = 0.6 | 0.7 | 0.8 | 0.9 | 1;
+export const AUTO_QUALITY_MIN_SCALES: readonly AutoQualityMinScale[] = [0.6, 0.7, 0.8, 0.9, 1];
+
+/** A saved Lowest resolution: the nearest of the choices (a number), else `fallback` */
+function parseAutoQualityMinScale(v: unknown, fallback: AutoQualityMinScale): AutoQualityMinScale {
+  if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+  return AUTO_QUALITY_MIN_SCALES.reduce((best, c) => (Math.abs(c - v) < Math.abs(best - v) ? c : best));
+}
 
 export type TouchMode = "auto" | "on" | "off";
 export type TouchLayout = "sliders" | "buttons";
@@ -441,8 +455,6 @@ export const resetKeyboardTuning = (tuning: KeyboardTuning, fields: readonly (ke
 export const DEFAULT_HUD_SETTINGS: HudSettings = {
   preset: DEFAULT_HUD_PRESET,
   scale: 1,
-  parts: {},
-  editMode: false,
   inputTrace: false,
   deltaBar: true,
   lapSummary: true,
@@ -458,6 +470,8 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   headMovement: "natural",
   boardWidget: "lapEnd",
   showPlayerNames: true,
+  parts: {},
+  editMode: false,
 };
 
 export const DEFAULT_CONTENT_LIBRARY: ContentLibrary = {
@@ -475,6 +489,7 @@ export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = {
   renderScale: 1,
   driverBody: false,
   autoQuality: false,
+  autoQualityMinScale: RENDER_SCALE_FLOOR,
   fpsCap: 0,
   sharpLow: false,
   sharpen: false,
@@ -594,6 +609,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   aiSkill: AI_SKILL_DEFAULT,
   race: DEFAULT_RACE_SETUP,
   realism: "full",
+  pitSpeedLimitKmh: 60,
   conditions: DEFAULT_SESSION_CONDITIONS,
   timeOfDayChosen: false,
   library: DEFAULT_CONTENT_LIBRARY,
@@ -840,32 +856,25 @@ function parseHud(v: unknown): HudSettings {
     mfdAutoCollapse: bool(v.mfdAutoCollapse, d.mfdAutoCollapse),
     drsBeep: bool(v.drsBeep, d.drsBeep),
     shiftBeep: bool(v.shiftBeep, d.shiftBeep),
-    parts: parseHudParts(v.parts),
-    editMode: bool(v.editMode, d.editMode),
     // Older saves: Neck FX switched off asked for a still camera
     headMovement: oneOf(v.headMovement, ["natural", "static"] as const, v.neckFx === false ? "static" : d.headMovement),
     boardWidget: oneOf(v.boardWidget, BOARD_WIDGET_MODES, d.boardWidget),
     showPlayerNames: bool(v.showPlayerNames, d.showPlayerNames),
+    parts: parseHudParts(v.parts),
+    editMode: false,
   };
 }
 
-function parseHudPart(v: unknown): HudPart | null {
-  if (!isObj(v)) return null;
-  const x = num(v.x, -HUD_PART_OFFSET_MAX, HUD_PART_OFFSET_MAX, 0);
-  const y = num(v.y, -HUD_PART_OFFSET_MAX, HUD_PART_OFFSET_MAX, 0);
-  const scale = num(v.scale, HUD_PART_SCALE_MIN, HUD_PART_SCALE_MAX, 1);
-  return { x, y, scale };
-}
-
 function parseHudParts(v: unknown): Record<string, HudPart> {
+  if (!isObj(v)) return {};
   const out: Record<string, HudPart> = {};
-  if (!isObj(v)) return out;
-  let n = 0;
-  for (const [id, part] of Object.entries(v)) {
-    if (n >= 64) break;
-    const p = parseHudPart(part);
-    if (p) out[id.slice(0, 32)] = p;
-    n++;
+  for (const [k, raw] of Object.entries(v)) {
+    if (!isObj(raw) || k.length > 64) continue;
+    out[k] = {
+      x: num(raw.x, -HUD_PART_OFFSET_MAX, HUD_PART_OFFSET_MAX, 0),
+      y: num(raw.y, -HUD_PART_OFFSET_MAX, HUD_PART_OFFSET_MAX, 0),
+      scale: num(raw.scale, HUD_PART_SCALE_MIN, HUD_PART_SCALE_MAX, 1),
+    };
   }
   return out;
 }
@@ -880,6 +889,7 @@ function parseGraphics(v: unknown): GraphicsSettings {
     driverBody: bool(v.driverBody, d.driverBody),
     // Saves from before these take this device's defaults
     autoQuality: bool(v.autoQuality, d.autoQuality),
+    autoQualityMinScale: parseAutoQualityMinScale(v.autoQualityMinScale, d.autoQualityMinScale),
     fpsCap: FPS_CAPS.includes(v.fpsCap as FpsCap) ? (v.fpsCap as FpsCap) : d.fpsCap,
     sharpLow: bool(v.sharpLow, d.sharpLow),
     sharpen: bool(v.sharpen, d.sharpen),
@@ -1038,6 +1048,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     aiSkill: Math.round(num(raw.aiSkill, 0, 100, d.aiSkill)),
     race: parseRaceSetup(raw.race),
     realism: oneOf(raw.realism, SIM_REALISM_LEVELS, d.realism),
+    pitSpeedLimitKmh: Math.round(num(raw.pitSpeedLimitKmh, 40, 100, d.pitSpeedLimitKmh)),
     conditions: sanitizeConditions(raw.conditions),
     // A save from before this flag: a time of day other than the default was the player's pick
     timeOfDayChosen: bool(raw.timeOfDayChosen, sanitizeConditions(raw.conditions).timeOfDay !== d.conditions.timeOfDay),

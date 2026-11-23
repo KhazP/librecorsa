@@ -590,6 +590,10 @@ export interface CarTelemetry {
    * the last one (the clock has run out) and still counts, and the best clean lap so far (ms)
    */
   qualifying?: { remainingS: number; lastLap: boolean; lapCounts: boolean; bestMs: number | null };
+  /** The weekly challenge's time trial is being driven (its car, rules and board), set by the session */
+  timeTrial?: boolean;
+  /** What the car was last driven with (keyboard, controller, wheel, touch), set by the session; absent until it moves */
+  drivingInput?: "keyboard" | "controller" | "wheel" | "touch";
   /**
    * Run counter, set by the app shell: it goes up whenever the run restarts (a new session, a restart, a
    * teleport, a car change). Anything that keeps lap- or run-scoped state resets when it changes,
@@ -612,6 +616,50 @@ export interface CarTelemetry {
   tireOptimalTempC?: [number, number];
   /** Track-limits judging: warnings, penalties and the excursion being judged */
   trackLimits?: TrackLimitsStatus;
+  /** Pit lane, pit limiter, pit box guidance and service timer state */
+  pit?: PitTelemetry;
+}
+
+export type PitPhase =
+  | "track"
+  | "entry_warning"
+  | "lane"
+  | "in_box"
+  | "servicing"
+  | "released";
+
+export interface PitStrategyState {
+  nextCompound: TireCompound;
+  repairDamage: boolean;
+  boxRequested: boolean;
+}
+
+export interface PitStopServiceOptions {
+  repairDamage?: boolean;
+  refuel?: boolean;
+}
+
+export interface PitTelemetry {
+  phase: PitPhase;
+  limiterActive: boolean;
+  limiterAuto: boolean;
+  speedLimitKmh: number;
+  overLimit: boolean;
+  speedWarning: boolean;
+  speedingPenaltyCount: number;
+  distToDetectM: number | null;
+  distToBoxM: number | null;
+  lateralErrM: number | null;
+  alignedInBox: boolean;
+  controlsLocked: boolean;
+  serviceRemainingS: number;
+  serviceTotalS: number;
+  tyreDurationS: number;
+  repairDurationS: number;
+  hasDamage: boolean;
+  damagePct: number;
+  strategy: PitStrategyState;
+  assignedBoxIndex: number;
 }
 
 /** Why an excursion counted against the driver */
