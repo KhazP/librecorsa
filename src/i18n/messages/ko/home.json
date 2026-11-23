@@ -100,7 +100,7 @@
       "empty": "이 필터와 일치하는 서킷이 없습니다.",
       "personalBest": "개인 최고 기록",
       "oldPhysics": "구 물리",
-      "carOldPhysics": "{car} · 구형"
+      "carOldPhysics": "{car} · 구 물리"
     },
     "cars": {
       "filter": "차량 필터",

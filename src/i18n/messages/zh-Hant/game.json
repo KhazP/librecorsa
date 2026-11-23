@@ -519,7 +519,7 @@
     },
     "arbFront": {
       "more": "變向更敏捷，較易轉向不足",
-      "less": "彎中前輪抓地力更好"
+      "less": "彎中前輪抓地力更佳"
     },
     "arbRear": {
       "more": "車尾更易轉動，出彎循跡減少",
@@ -578,8 +578,8 @@
       "less": "顛簸路面上的前輪抓地力更佳"
     },
     "wheelRateRear": {
-      "more": "車身更易轉向，出彎循跡減少",
-      "less": "出彎循跡更佳，轉向較緩"
+      "more": "車身更容易轉向，出彎循跡減少",
+      "less": "出彎循跡更強，轉向反應較緩"
     },
     "bumpStopRate": {
       "more": "觸及緩衝塊時支撐更硬朗",
@@ -834,7 +834,7 @@
     "keyMenu": "選單",
     "keyCamera": "視角",
     "keyLine": "行車線",
-    "keyRestart": "重來",
+    "keyRestart": "重新開始",
     "keyBoard": "圈速榜",
     "keyLights": "頭燈",
     "replay": "重播"

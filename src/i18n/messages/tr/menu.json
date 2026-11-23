@@ -194,7 +194,7 @@
     "personalBest": "Kişisel en iyi",
     "oldPhysicsTag": "Eski fizik",
     "layout": "Düzen",
-    "pointToPoint": "Noktadan noktaya zamanlı sürüş. Yalnızca tek başına.",
+    "pointToPoint": "Noktadan noktaya zamanlı tırmanış. Yalnızca tek başına.",
     "circuitBy": "Pist: <name>{author}</name>",
     "active": "Etkin pist",
     "loading": "{circuit} yükleniyor",

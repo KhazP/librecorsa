@@ -306,14 +306,14 @@
   "wheelSupport": {
     "moza": "يتصل ويتحكم بالتوجيه ويشغّل رد الفعل القسري عبر WebHID",
     "hidPid": "غير مختبر؛ يستخدم تقارير رد الفعل القسري القياسية نفسها",
-    "directDrive": "غير مختبر؛ في غياب رد الفعل القسري عبر HID PID تنتقل الصفحة إلى برنامج bridge",
+    "directDrive": "غير مختبر؛ في غياب رد الفعل القسري عبر HID PID تنتقل الصفحة إلى برنامج الربط",
     "pxn": "غير مختبر؛ يستخدم HID PID بقيم Set Effect خاصة به لم تُؤكّد على أي مقود PXN بعد",
     "logitechClassic": "غير مختبر؛ يبدأ عبر WebHID بأوامر Logitech الكلاسيكية كما يرسلها hid-lg4ff في Linux، بما في ذلك مصابيح دورات المحرك على G27 وG29",
     "logitechHidpp": "غير مختبر؛ يبدأ عبر WebHID برد فعل قسري عبر HID++ كما يرسله hid-logitech-hidpp في Linux، بعد أن يحوّل Logitech G HUB المقود إلى وضع PC",
-    "logitechBridgeOnly": "غير مختبر؛ عبر برنامج bridge فقط: لا يوجد تعريف Linux رئيسي يشغّل G923 لـ PlayStation أو G PRO، ولا يستطيع المتصفح إعادة معايرة محور توجيه DFP",
-    "thrustmaster": "غير مختبر؛ يستخدم أوامر hid-tmff2 في Linux بعد إخراج المقود من وضع بدء التشغيل. وإن لم يحدث ذلك أو رفض Windows الأوامر، يتولى برنامج bridge المهمة",
-    "thrustmasterBridgeOnly": "غير مختبر؛ عبر برنامج bridge فقط: يستخدم T150 وTMX مجموعة أوامر مختلفة، ولا يغطي hid-tmff2 طراز T500RS",
-    "fanatecCslElite": "غير مختبر؛ في غياب رد الفعل القسري عبر HID PID تنتقل الصفحة إلى برنامج bridge",
+    "logitechBridgeOnly": "غير مختبر؛ عبر برنامج الربط فقط: لا يوجد تعريف Linux رئيسي يشغّل G923 لـ PlayStation أو G PRO، ولا يستطيع المتصفح إعادة معايرة محور توجيه DFP",
+    "thrustmaster": "غير مختبر؛ يستخدم أوامر hid-tmff2 في Linux بعد إخراج المقود من وضع بدء التشغيل. وإن لم يحدث ذلك أو رفض Windows الأوامر، يتولى برنامج الربط المهمة",
+    "thrustmasterBridgeOnly": "غير مختبر؛ عبر برنامج الربط فقط: يستخدم T150 وTMX مجموعة أوامر مختلفة، ولا يغطي hid-tmff2 طراز T500RS",
+    "fanatecCslElite": "غير مختبر؛ في غياب رد الفعل القسري عبر HID PID تنتقل الصفحة إلى برنامج الربط",
     "tested": "مختبر",
     "expected": "متوقّع",
     "unknown": "غير معروف",
@@ -836,7 +836,7 @@
     "keyLine": "الخط",
     "keyRestart": "إعادة",
     "keyBoard": "اللوحة",
-    "keyLights": "المصابيح",
+    "keyLights": "الأضواء",
     "replay": "إعادة العرض"
   },
   "trackGate": {

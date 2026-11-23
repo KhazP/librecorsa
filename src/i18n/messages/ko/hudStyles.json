@@ -5,7 +5,7 @@
   "phone": {
     "timing": "타이밍",
     "outLap": "아웃 랩",
-    "lapOrRun": "{kind, select, run {주행 {lap}} other {랩 {lap}}}",
+    "lapOrRun": "{kind, select, run {런 {lap}} other {랩 {lap}}}",
     "raceLap": "랩 {lap}",
     "raceLapOfTotal": "랩 {lap}/{total}",
     "best": "최고"
@@ -16,7 +16,7 @@
     "outLap": "아웃 랩",
     "raceLap": "랩 {lap}",
     "raceLapOfTotal": "랩 {lap}<dim>/{total}</dim>",
-    "sessionLap": "{session} <dim>· {kind, select, run {주행 {lap}} other {랩 {lap}}}</dim>",
+    "sessionLap": "{session} <dim>· {kind, select, run {런 {lap}} other {랩 {lap}}}</dim>",
     "best": "최고",
     "last": "이전",
     "circuitMap": "서킷 맵",

@@ -204,7 +204,7 @@
       "raceInProgress": "賽事進行中",
       "startRaceNow": "立即開始正賽",
       "startQualifying": "開始 {minutes} 分鐘排位賽",
-      "startRace": "開始正賽",
+      "startRace": "開始賽事",
       "endQualifying": "結束排位賽",
       "endRaceForEveryone": "為所有人結束賽事",
       "readyButton": "已就緒",
@@ -458,7 +458,7 @@
   },
   "qualifyingHud": {
     "clock": "排位賽",
-    "lastLap": "最後一圈",
+    "lastLap": "上一圈",
     "badge": "排位賽",
     "finishIt": "可完成本圈",
     "lapDeleted": "單圈已取消",

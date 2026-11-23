@@ -60,7 +60,7 @@
     }
   },
   "field": {
-    "resetRow": "Varsayılana sıfırla: {setting}",
+    "resetRow": "{setting} ayarını varsayılana sıfırla",
     "reset": "Sıfırla",
     "resetTitle": "Sıfırlansın mı: {card}?",
     "resetConfirm": "Sıfırla",
@@ -503,7 +503,7 @@
     },
     "telemetryOut": {
       "label": "UDP telemetri",
-      "hint": "Yerel köprüye canlı telemetri gönderir (gösterge ekranları, bass shaker’lar)"
+      "hint": "Yerel bridge’e canlı telemetri gönderir (gösterge ekranları, bass shaker’lar)"
     }
   },
   "driving": {

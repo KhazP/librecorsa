@@ -48,8 +48,8 @@
     "done": "Xong",
     "prompts": {
       "row": "Hàng",
-      "change": "Thay đổi",
-      "resetRow": "Đặt lại hàng",
+      "change": "Đổi",
+      "resetRow": "Đặt lại mục",
       "resetView": "Đặt lại góc nhìn",
       "done": "Xong"
     },
@@ -204,7 +204,7 @@
       "raceInProgress": "Cuộc đua đang diễn ra",
       "startRaceNow": "Bắt đầu đua ngay",
       "startQualifying": "Bắt đầu phân hạng {minutes} phút",
-      "startRace": "Bắt đầu cuộc đua",
+      "startRace": "Bắt đầu đua",
       "endQualifying": "Kết thúc phân hạng",
       "endRaceForEveryone": "Kết thúc cuộc đua cho tất cả",
       "readyButton": "Đã sẵn sàng",
@@ -305,7 +305,7 @@
       "move": "Di chuyển",
       "select": "Chọn",
       "jumpThere": "Chuyển tới đó",
-      "tabs": "Thẻ",
+      "tabs": "Chuyển thẻ",
       "page": "Trang",
       "back": "Quay lại",
       "resume": "Tiếp tục"
@@ -356,7 +356,7 @@
     "dismiss": "Đóng tóm tắt vòng",
     "collapse": "Thu gọn tóm tắt vòng",
     "cardLabel": "Tóm tắt vòng {lap}",
-    "invalid": "Không hợp lệ",
+    "invalid": "Bị hủy",
     "pb": "PB",
     "invalidWall": "Không hợp lệ: chạm tường",
     "invalidLimits": "Không hợp lệ: giới hạn đường đua",
@@ -547,7 +547,7 @@
         "high": "An toàn hơn"
       },
       "tc2": {
-        "title": "TC cắt lực",
+        "title": "Cắt lực TC",
         "low": "Cắt êm hơn",
         "high": "Cắt gắt hơn"
       },
@@ -754,7 +754,7 @@
       "finished": "Đã về đích",
       "damagedTitle": "Hư hại ({percent}%)",
       "damagedLabel": "Hư hại, {percent}%",
-      "out": "OUT",
+      "out": "Bỏ cuộc",
       "leader": "Dẫn đầu",
       "lead": "Dẫn đầu",
       "lastVsBestTitle": "Vòng trước so với vòng tốt nhất của bạn",
@@ -774,7 +774,7 @@
     },
     "challenge": {
       "region": "Thử thách tuần này",
-      "yourBest": "Tốt nhất của bạn",
+      "yourBest": "Kỷ lục của bạn",
       "weekFastest": "Nhanh nhất tuần này"
     }
   },
@@ -857,7 +857,7 @@
   "speedCluster": {
     "region": "Cụm tốc độ",
     "minimalRegion": "Tốc độ và cấp số",
-    "shiftLights": "Đèn chuyển số: {lit} trên {total}",
+    "shiftLights": "Đèn chuyển số: {lit} trên {total} đèn sáng",
     "gearLabel": "Số {gear}",
     "gear": "Số",
     "shift": "Lên số",

@@ -505,7 +505,7 @@
       "ahead": "Di depan",
       "behind": "Di belakang",
       "clear": "Kosong",
-      "you": "KAMU"
+      "you": "Kamu"
     },
     "fuel": {
       "battery": "Baterai",
@@ -527,7 +527,7 @@
       "fastestLapShort": "FL",
       "lead": "Pimpin",
       "noLaps": "Belum ada lap",
-      "lapTimes": "Waktu lap"
+      "lapTimes": "Waktu Lap"
     },
     "pill": {
       "position": "P{position}/{fieldSize}",
@@ -1015,7 +1015,7 @@
     "steering": "Kemudi"
   },
   "splitGaps": {
-    "region": "Selisih waktu",
+    "region": "Selisih waktu sektor",
     "ahead": "Depan",
     "behind": "Belakang",
     "carAhead": "Mobil di depan {driver}: {gap} detik",

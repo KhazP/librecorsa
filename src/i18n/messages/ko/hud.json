@@ -313,7 +313,7 @@
     "header": {
       "lap": "랩 {lap}",
       "lapOf": "랩 {lap}/{total}",
-      "run": "주행 {lap}",
+      "run": "런 {lap}",
       "position": "P{position}/{field}",
       "online": "온라인",
       "leavesRace": "현재 레이스에서 나가게 됩니다.",
@@ -351,8 +351,8 @@
     }
   },
   "lapSummary": {
-    "title": "{kind, select, run {주행 {lap}} other {랩 {lap}}}",
-    "open": "{kind, select, run {주행 {lap}: 섹터 데이터 보기} other {랩 {lap}: 섹터 데이터 보기}}",
+    "title": "{kind, select, run {런 {lap}} other {랩 {lap}}}",
+    "open": "{kind, select, run {런 {lap}: 섹터 데이터 보기} other {랩 {lap}: 섹터 데이터 보기}}",
     "dismiss": "랩 요약 닫기",
     "collapse": "랩 요약 접기",
     "cardLabel": "랩 {lap} 요약",
@@ -411,7 +411,7 @@
     "table": "전체 순위표",
     "colPos": "순위",
     "colGainedTitle": "그리드 대비 순위 변동",
-    "colGained": "순위 상승",
+    "colGained": "순위 변동",
     "colDriver": "드라이버",
     "colLaps": "랩",
     "colTime": "시간 / 격차",
@@ -764,7 +764,7 @@
     "lap": {
       "region": "랩",
       "outLap": "아웃 랩",
-      "counter": "{kind, select, run {주행 {lap}} other {랩 {lap}}}",
+      "counter": "{kind, select, run {런 {lap}} other {랩 {lap}}}",
       "sector": "S{sector}",
       "last": "이전",
       "best": "최고",
@@ -1015,7 +1015,7 @@
     "steering": "조향"
   },
   "splitGaps": {
-    "region": "앞뒤 차량 격차",
+    "region": "섹터 격차",
     "ahead": "전방",
     "behind": "후방",
     "carAhead": "앞차 {driver}: {gap}초",

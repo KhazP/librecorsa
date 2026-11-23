@@ -2,7 +2,7 @@
   "title": {
     "drive": "開始駕駛",
     "driveQuickSetup": "快速設定",
-    "driveTimedRun": "計時衝刺",
+    "driveTimedRun": "單趟計時",
     "raceAi": "AI 賽事",
     "raceAiDetail": "{opponents} 輛 AI · {laps, plural, other {# 圈}} · {skill}{start}",
     "multiplayer": "多人連線",
@@ -194,7 +194,7 @@
     "personalBest": "個人最佳",
     "oldPhysicsTag": "舊版物理",
     "layout": "賽道佈局",
-    "pointToPoint": "點對點計時衝刺，僅限單人。",
+    "pointToPoint": "點對點單趟計時，僅限單人。",
     "circuitBy": "賽道製作：<name>{author}</name>",
     "active": "目前賽道",
     "loading": "正在載入 {circuit}",

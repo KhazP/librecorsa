@@ -756,7 +756,7 @@
       "damagedLabel": "متضررة، {percent}%",
       "out": "خارج",
       "leader": "المتصدر",
-      "lead": "الأول",
+      "lead": "المتصدر",
       "lastVsBestTitle": "اللفة الأخيرة مقارنة بأفضل لفة لك",
       "lastVsTheirsTitle": "آخر لفة لهم مقارنة بلفتك",
       "personalBest": "PB"
@@ -1015,7 +1015,7 @@
     "steering": "التوجيه"
   },
   "splitGaps": {
-    "region": "الفوارق الزمنية",
+    "region": "فوارق القطاعات",
     "ahead": "أمامك",
     "behind": "خلفك",
     "carAhead": "السيارة أمامك {driver}: {gap} ثانية",

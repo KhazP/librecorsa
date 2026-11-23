@@ -301,7 +301,7 @@
     "back": "차고",
     "carFacts": "{carClass}, {year}",
     "carFixedReason": "이 레이스에서는 차량이 고정되어 있습니다",
-    "carFixed": "이 레이스 고정 차량",
+    "carFixed": "이 레이스에서 고정됨",
     "changeCar": "차량 변경",
     "livery": "리버리",
     "savedSetups": "저장된 셋업",
