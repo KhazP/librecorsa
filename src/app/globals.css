@@ -1034,6 +1034,210 @@ body {
   }
 }
 
+/*
+ * The career's pre-race show (hud/pre-race/): F1-broadcast motion grammar in LibreCorsa's colours — razor-sharp wipes,
+ * angled speed-blade cuts, corner-bracket reveals, carbon speedline backdrops, and the wheel-hub dive blackout.
+ */
+.lc-show-stripes {
+  background-image: repeating-linear-gradient(
+    -52deg,
+    color-mix(in srgb, var(--color-lc-chalk) 3.5%, transparent) 0 1px,
+    transparent 1px 11px
+  );
+}
+.lc-show-chamfer {
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+}
+.lc-show-chamfer-sm {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+}
+.lc-show-blade {
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+@keyframes lc-show-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+.lc-show-in {
+  animation: lc-show-in 440ms var(--ease-lc) backwards;
+}
+@keyframes lc-show-title-wipe {
+  from {
+    opacity: 0.2;
+    transform: translateX(-24px);
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+.lc-show-title-wipe {
+  animation: lc-show-title-wipe 560ms var(--ease-lc) backwards;
+}
+@keyframes lc-show-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.lc-show-wipe {
+  animation: lc-show-wipe 520ms var(--ease-lc) backwards;
+}
+@keyframes lc-show-rule {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.lc-show-rule {
+  transform-origin: left;
+  animation: lc-show-rule 480ms var(--ease-lc) backwards;
+}
+.lc-show-rule-center {
+  transform-origin: center;
+  animation: lc-show-rule 480ms var(--ease-lc) backwards;
+}
+@keyframes lc-show-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-84px);
+  }
+}
+.lc-show-from-left {
+  animation: lc-show-from-left 480ms var(--ease-lc) backwards;
+}
+@keyframes lc-show-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(84px);
+  }
+}
+.lc-show-from-right {
+  animation: lc-show-from-right 480ms var(--ease-lc) backwards;
+}
+@keyframes lc-show-rise {
+  from {
+    transform: scaleY(0) skewX(-14deg);
+  }
+  to {
+    transform: scaleY(1) skewX(-14deg);
+  }
+}
+.lc-show-rise {
+  transform-origin: bottom;
+  animation: lc-show-rise 540ms var(--ease-lc) backwards;
+}
+/* F1-style multi-blade high-speed wipe between broadcast scenes */
+@keyframes lc-show-cut {
+  0% {
+    opacity: 0;
+    transform: translateX(-118%) skewX(-16deg);
+  }
+  14% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 0.98;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(118%) skewX(-16deg);
+  }
+}
+.lc-show-cut {
+  opacity: 0;
+  animation: lc-show-cut 400ms cubic-bezier(0.32, 0, 0.18, 1) forwards;
+}
+@keyframes lc-show-cut-light {
+  0% {
+    opacity: 0;
+    transform: translateX(-115%) skewX(-16deg);
+  }
+  20% {
+    opacity: 0.92;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(115%) skewX(-16deg);
+  }
+}
+.lc-show-cut-light {
+  opacity: 0;
+  animation: lc-show-cut-light 320ms cubic-bezier(0.32, 0, 0.18, 1) forwards;
+}
+/* Emerge cleanly out of black right after the wheel-hub dive */
+@keyframes lc-show-from-black {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.lc-show-from-black {
+  opacity: 0;
+  animation: lc-show-from-black 420ms ease-out forwards;
+}
+/* Dive into the front wheel hub: tyre dock drops away as darkness accelerates to solid void */
+@keyframes lc-show-tyres-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+.lc-show-tyres-out {
+  animation: lc-show-tyres-out 380ms ease-in forwards;
+}
+@keyframes lc-show-dive {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.22;
+  }
+  75% {
+    opacity: 0.88;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+.lc-show-dive {
+  opacity: 0;
+  animation: lc-show-dive 1100ms cubic-bezier(0.55, 0.05, 0.9, 0.35) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lc-show-in,
+  .lc-show-title-wipe,
+  .lc-show-wipe,
+  .lc-show-rule,
+  .lc-show-rule-center,
+  .lc-show-from-left,
+  .lc-show-from-right,
+  .lc-show-rise,
+  .lc-show-tyres-out {
+    animation: none;
+  }
+  .lc-show-dive,
+  .lc-show-cut,
+  .lc-show-cut-light,
+  .lc-show-from-black {
+    display: none;
+  }
+}
+
 /* Overhead player nameplates: DOM-pooled in OverheadNameplates.tsx, driven directly from the render loop */
 .lc-nameplate {
   position: absolute;

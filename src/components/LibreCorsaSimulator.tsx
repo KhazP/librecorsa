@@ -82,6 +82,7 @@ import { NowPlayingToast } from "@/components/hud/NowPlayingToast";
 import { browserStore, lostRecently, probeRenderer, settleLoss } from "@/lib/render/gpu-health";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 import type { PodiumUi } from "@/lib/render/podium-shot";
+import { idleShowUi } from "@/lib/render/pre-race-show";
 import { useRaceHistory } from "@/components/hud/useRaceHistory";
 import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type CameraNudge, type NudgeView } from "@/lib/settings/camera-nudges";
 import { dashViewFovDeg } from "@/lib/render/onboard-views";
@@ -136,6 +137,8 @@ installErrorLog();
 // polish:B the podium shot's view before the drive exists
 const IDLE_PODIUM: PodiumUi = { stage: "idle", rows: [] };
 const idlePodium = () => IDLE_PODIUM;
+const idleShow = () => idleShowUi;
+const noShowTime = () => 0;
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
 /** A career round's car and lap are its own: the pause menu's car picker and corner jumps do nothing in one */
 const noCarChange = () => {};
@@ -2026,6 +2029,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   // polish:B after the flag: the podium shot, the race kept in this browser, the next open race
   const podiumUi = useSyncExternalStore(session?.podium.subscribe ?? noSubscribe, session?.podium.getSnapshot ?? idlePodium, idlePodium);
+  // The career's pre-race show: its scenes as the drive plays them, and its two buttons
+  const showUi = useSyncExternalStore(session?.preRaceShow.subscribe ?? noSubscribe, session?.preRaceShow.getSnapshot ?? idleShow, idleShow);
+  const preRaceShow = useMemo(
+    () => ({
+      ui: showUi,
+      timeS: session?.preRaceShow.timeS ?? noShowTime,
+      onSkip: () => session?.preRaceShow.skip(),
+      onStart: () => session?.preRaceShow.startNow(),
+    }),
+    [showUi, session]
+  );
   const raceHistory = useRaceHistory(telemetry.race, telemetry.runId, {
     trackId,
     carId,
@@ -2423,6 +2437,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           }
           onBackToLobby={raceKind === "mp" ? handleBackToLobby : career.driving ? career.backToCareer : undefined}
           backToLobbyLabel={inScheduledRace ? tx("backToRaces") : career.driving ? tx("backToCareer") : undefined}
+          preRaceShow={preRaceShow}
           raceEnd={{
             podium: podiumUi,
             onSkipPodium: () => session?.podium.skip(),
