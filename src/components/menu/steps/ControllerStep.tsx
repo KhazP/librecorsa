@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { useTranslations } from "use-intl/react";
 import {
+  clearPadButton,
   freePedalButtons,
   matchPadLayout,
   matchPedalSet,
@@ -22,7 +23,8 @@ import {
   type PadPedalSet,
 } from "@/lib/input/bindings";
 import { connectedPads, PAD_SENSITIVITY, padDisplayName, padPedals, type PadSensitivity } from "@/lib/input/device-input";
-import { Button, SettingRow } from "@/components/ui";
+import { Button, IconButton, SettingRow } from "@/components/ui";
+import { Icon } from "@/components/ui/icons";
 import { Badge } from "@/components/ui/Badge";
 import type { PadButtonName } from "@/components/ui/prompts";
 import { useSettingsEnv } from "@/components/settings/env";
@@ -260,6 +262,7 @@ export function ControllerButtonsCard() {
         const listening = capturing === id;
         const button = settings.padButtons[id];
         const bound = button !== null && button !== undefined;
+        const buttonText = bound ? (button < GLYPH.length ? name(button) : padButtonLabel(button)) : null;
         return (
           <SettingRow key={id} label={label} className={listening ? "bg-lc-volt/6" : undefined}>
             <Button
@@ -275,8 +278,17 @@ export function ControllerButtonsCard() {
               }
               onClick={() => capture(listening ? null : id)}
             >
-              {listening ? tx("pressButton") : bound ? (button < GLYPH.length ? name(button) : padButtonLabel(button)) : tx("add")}
+              {listening ? tx("pressButton") : buttonText ?? tx("add")}
             </Button>
+            {bound && !listening ? (
+              <IconButton
+                size="sm"
+                variant="ghost"
+                aria-label={tx("unbind", { button: buttonText ?? name(button), action: label })}
+                icon={<Icon name="close" />}
+                onClick={() => update((s) => ({ ...s, padButtons: clearPadButton(s.padButtons, id) }))}
+              />
+            ) : null}
           </SettingRow>
         );
       })}

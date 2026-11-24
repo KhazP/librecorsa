@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { VehicleModelId } from "@/types/f1";
 import { SHADOW_PROXY_LAYER } from "./layers";
+import { bodyKindOf, type BodyKind } from "@/lib/cars/body-kind";
 
 /**
  * One-draw shadow stand-ins for opponent cars (`SHADOW_PROXY_LAYER`, already enabled on `sunLight.shadow.camera.layers`).
@@ -15,28 +16,12 @@ import { SHADOW_PROXY_LAYER } from "./layers";
  * visual bodywork while casting full shadows onto the track and neighbouring cars.
  */
 
-type ProxyKind = "f1" | "gt3" | "road" | "proto" | "lmdh" | "classic";
+type ProxyKind = BodyKind;
 
 const geometries = new Map<ProxyKind, THREE.BufferGeometry>();
 let material: THREE.MeshBasicMaterial | null = null;
 
-function proxyKindFor(vehicle: VehicleModelId | undefined): ProxyKind {
-  if (vehicle === "amg-gt3") return "gt3";
-  if (vehicle === "liana" || vehicle === "vw-scirocco-gtx") return "road";
-  if (vehicle === "mtr-496r") return "proto";
-  if (vehicle === "lc-lmdh") return "lmdh";
-  if (
-    vehicle === "nissan-r33-jgtc" ||
-    vehicle === "nissan-r32-jtcc" ||
-    vehicle === "bmw-m1-procar" ||
-    vehicle === "chaparral-2d" ||
-    vehicle === "chaparral-2d-67" ||
-    vehicle === "porsche-934-rsr"
-  ) {
-    return "classic";
-  }
-  return "f1";
-}
+const proxyKindFor = (vehicle: VehicleModelId | undefined): ProxyKind => bodyKindOf(vehicle);
 
 /** Closed box centred at (x, y, z) with full dimensions (w, h, l) in car rig axes (+X left, +Y up, +Z nose) */
 function boxPart(w: number, h: number, l: number, x: number, y: number, z: number): THREE.BufferGeometry {

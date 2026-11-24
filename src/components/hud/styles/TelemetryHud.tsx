@@ -4,12 +4,10 @@ import React, { useMemo } from "react";
 import { useTranslations } from "use-intl/react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import { useUnits } from "@/lib/settings/ui-prefs";
-import { aidsActive, formatLapTime, formatSectorTime, formatSpeed, HUD_BEST, HUD_GAIN, HUD_INFO, LAP_MARK_COLOR, lapMark, NO_TIME, sectorDone, speedUnit } from "../hud-format";
-import { aeroReadout } from "../aero-label";
+import { formatLapTime, formatSectorTime, formatSpeed, HUD_BEST, HUD_GAIN, HUD_INFO, LAP_MARK_COLOR, lapMark, NO_TIME, sectorDone, speedUnit } from "../hud-format";
 import { TyreBrakeGrid } from "../TyreBrakeWidget";
 import { InputTrace } from "../InputTrace";
 import { PedalBars, pedalLayers } from "../PedalBars";
-import { F12026ChannelsPanel } from "../F12026ChannelsPanel";
 import { BroadcastMap, BroadcastTower } from "./BroadcastHud";
 import { WheelDash } from "./WheelDashHud";
 import { anchor, formatOnce, HUD_GLASS, HUD_LBL, LapMarkGlyph, type HudDesignProps } from "./hud-style-parts";
@@ -155,7 +153,7 @@ const TyreDetail: React.FC<{ t: CarTelemetry; compound: TireCompound }> = ({ t, 
  * the car's channels, wheel force and the tuner bottom-right. The side panels give way on small
  * screens, leaving the dash.
  */
-export const TelemetryHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compound = "soft", revRange, scale, trackCode, ffb, mfd, lapInvalid, towerGaps, mapMode, leftExtra, rightExtra }) => (
+export const TelemetryHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compound = "soft", revRange, scale, trackCode, ffb, mfd, channels, lapInvalid, towerGaps, mapMode, leftExtra, rightExtra }) => (
   <div className="pointer-events-none absolute inset-0 select-none">
     <div className="absolute top-5 left-5 flex w-[252px] flex-col gap-2" style={anchor(scale, "top left")}>
       <BroadcastTower t={t} trackCode={trackCode} lapInvalid={lapInvalid} gaps={towerGaps} />
@@ -199,7 +197,7 @@ export const TelemetryHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
     <div data-hud-avoid className="absolute right-5 bottom-5 flex flex-col items-end gap-2 compact:hidden" style={anchor(scale, "bottom right")}>
       {/* The MFD on top: folding it moves nothing else in the corner */}
       {mfd}
-      {t.f12026 ? <F12026ChannelsPanel channels={t.f12026} aero={aeroReadout(t)} aids={aidsActive(t)} /> : null}
+      {channels}
       {ffb}
     </div>
 

@@ -335,7 +335,7 @@ float scnDetail = uSceneryDetail * ( 1.0 - smoothstep( 60.0, 220.0, scnDist ) );
 			+ 0.03 * scnOct.y * lc26ValueNoise( scnL / 3.2 + uSceneryTime * vec2( -0.05, 0.06 ) )
 			+ 0.01 * scnOct.z * lc26ValueNoise( scnL / 0.8 - uSceneryTime * vec2( 0.05, 0.08 ) );
 		scnH *= scnGust * uSceneryDetail;
-		if ( uRainIntensity > 0.02 ) {
+		if ( scnDist < 45.0 && uRainIntensity > 0.02 ) {
 			scnH += 0.004 * lc26RainSplash( scnL, uWetTime, uRainIntensity ) * uSceneryDetail * ( 1.0 - smoothstep( 15.0, 45.0, scnDist ) );
 		}
 	#endif

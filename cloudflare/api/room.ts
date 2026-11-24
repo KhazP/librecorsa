@@ -32,6 +32,7 @@
 import {
   buildRaceGrid,
   FALLBACK_TRACK_ID,
+  isVehicleAllowed,
   MIN_QUALIFYING_LAP_MS,
   PEER_ID_RE,
   sanitizeLobbySettings,
@@ -43,6 +44,7 @@ import {
   type RoomKind,
   type RoomPhase,
 } from "../../src/lib/net/wire";
+import { foldVehicleModelId, isVehicleModelId, type VehicleModelId } from "../../src/types/f1";
 import { generateIceServers, type IceServer } from "./turn";
 import { workers, type DurableObjectState, type Env, type ServerSocket } from "./types";
 
@@ -58,9 +60,25 @@ const MIN_LAP_MS = MIN_QUALIFYING_LAP_MS;
 const MAX_LAP_MS = 10_000_000;
 
 type Attachment =
-  | { role: "host"; peerId?: string }
-  | { role: "guest"; id: string; peerId?: string; token?: string }
+  | { role: "host"; peerId?: string; vehicle?: VehicleModelId }
+  | { role: "guest"; id: string; peerId?: string; token?: string; vehicle?: VehicleModelId }
   | { role: "refused" };
+
+function asRoomVehicle(raw: unknown): VehicleModelId | undefined {
+  const v = foldVehicleModelId(raw);
+  return isVehicleModelId(v) ? v : undefined;
+}
+
+function classMismatchPayload(settings: LobbySettings, received: VehicleModelId) {
+  return {
+    t: "error",
+    code: "car_class_mismatch",
+    carClass: settings.carClass,
+    ...(settings.vehicle ? { vehicle: settings.vehicle } : {}),
+    received,
+    message: `Vehicle "${received}" is not allowed in this room (${settings.vehicle ?? settings.carClass})`,
+  };
+}
 
 export interface RoomSessionState {
   kind: RoomKind;
@@ -86,7 +104,7 @@ function defaultRoomState(kind: RoomKind): RoomSessionState {
       withLobbyDefaults({
         trackId: FALLBACK_TRACK_ID,
         laps: 5,
-        collisions: "ghost_lap1",
+        collisions: "on",
         carClass: "any",
       }),
       kind,
@@ -203,7 +221,7 @@ export class RoomServer {
     const connected = new Set<string>();
     for (const ws of this.state.getWebSockets(HOST_TAG)) {
       const a = attachmentOf(ws);
-      if (a && a.role === "host") {
+      if (a && a.role === "host" && isVehicleAllowed(a.vehicle, roomState.settings, { allowUnspecified: true })) {
         const pid = senderPeerId(a);
         if (!connected.has(pid)) {
           connected.add(pid);
@@ -213,7 +231,7 @@ export class RoomServer {
     }
     for (const ws of this.state.getWebSockets()) {
       const a = attachmentOf(ws);
-      if (a && a.role === "guest") {
+      if (a && a.role === "guest" && isVehicleAllowed(a.vehicle, roomState.settings, { allowUnspecified: true })) {
         const pid = senderPeerId(a);
         if (!connected.has(pid)) {
           connected.add(pid);
@@ -334,7 +352,7 @@ export class RoomServer {
         for (const oldId of replacedIds) send(host, { t: "left", id: oldId });
       }
     }
-    send(server, { t: "welcome", id, iceServers: await this.iceServers(this.env) });
+    send(server, { t: "welcome", id, iceServers: await this.iceServers(this.env), settings: roomState.settings });
   }
 
   /** Transitions from qualifying (or lobby) to racing, sorting the grid by qualifying best laps if qualifying ran */
@@ -464,10 +482,30 @@ export class RoomServer {
       case "join": {
         if (typeof msg.peerId !== "string" || !PEER_ID_RE.test(msg.peerId)) return;
         const nextPeerId = msg.peerId;
-        // Once a socket binds a peerId, prevent switching it mid-connection (idempotent re-send is a no-op)
+        const reportedVehicle = asRoomVehicle(msg.vehicle) ?? who.vehicle;
+        // Once a socket binds a peerId, prevent switching it mid-connection (idempotent re-send is a no-op, or updates vehicle)
         if (who.peerId !== undefined) {
           if (who.peerId !== nextPeerId) {
             send(ws, { t: "error", code: "peer_id_locked", message: "Peer ID is already bound for this connection" });
+            return;
+          }
+          if (reportedVehicle !== who.vehicle) {
+            const updated: Attachment =
+              who.role === "host"
+                ? { role: "host", peerId: who.peerId, ...(reportedVehicle ? { vehicle: reportedVehicle } : {}) }
+                : { role: "guest", id: who.id, peerId: who.peerId, ...(who.token ? { token: who.token } : {}), ...(reportedVehicle ? { vehicle: reportedVehicle } : {}) };
+            ws.serializeAttachment(updated);
+            const roomState = await this.loadRoomState();
+            const allowed = isVehicleAllowed(reportedVehicle, roomState.settings, { allowUnspecified: true });
+            const pIdx = roomState.participants.indexOf(who.peerId);
+            if (!allowed && reportedVehicle) {
+              if (pIdx >= 0) roomState.participants.splice(pIdx, 1);
+              await this.saveRoomState(roomState);
+              send(ws, classMismatchPayload(roomState.settings, reportedVehicle));
+            } else if (allowed && pIdx < 0) {
+              roomState.participants.push(who.peerId);
+              await this.saveRoomState(roomState);
+            }
           }
           return;
         }
@@ -500,8 +538,8 @@ export class RoomServer {
         const oldPeerId = senderPeerId(who);
         const updated: Attachment =
           who.role === "host"
-            ? { role: "host", peerId: nextPeerId }
-            : { role: "guest", id: who.id, peerId: nextPeerId, ...(who.token ? { token: who.token } : {}) };
+            ? { role: "host", peerId: nextPeerId, ...(reportedVehicle ? { vehicle: reportedVehicle } : {}) }
+            : { role: "guest", id: who.id, peerId: nextPeerId, ...(who.token ? { token: who.token } : {}), ...(reportedVehicle ? { vehicle: reportedVehicle } : {}) };
         ws.serializeAttachment(updated);
         const roomState = await this.loadRoomState();
         for (const r of replaceable) {
@@ -517,8 +555,13 @@ export class RoomServer {
             }
           }
         }
+        const vehicleAllowed = isVehicleAllowed(reportedVehicle, roomState.settings, { allowUnspecified: true });
         const idx = roomState.participants.indexOf(oldPeerId);
-        if (idx >= 0) {
+        if (!vehicleAllowed && reportedVehicle) {
+          if (idx >= 0) roomState.participants.splice(idx, 1);
+          const nextIdx = roomState.participants.indexOf(nextPeerId);
+          if (nextIdx >= 0) roomState.participants.splice(nextIdx, 1);
+        } else if (idx >= 0) {
           if (roomState.participants.includes(nextPeerId) && oldPeerId !== nextPeerId) {
             roomState.participants.splice(idx, 1);
           } else {
@@ -534,11 +577,39 @@ export class RoomServer {
           delete roomState.qualifyingLaps[oldPeerId];
         }
         await this.saveRoomState(roomState);
+        if (!vehicleAllowed && reportedVehicle) {
+          send(ws, classMismatchPayload(roomState.settings, reportedVehicle));
+        }
         if (replaceable.length > 0) {
           for (const host of this.state.getWebSockets(HOST_TAG)) {
             if (attachmentOf(host)?.role !== "host") continue;
             for (const r of replaceable) send(host, { t: "left", id: r.id });
           }
+        }
+        return;
+      }
+
+      case "vehicle": {
+        const nextVehicle = asRoomVehicle(msg.vehicle);
+        if (!nextVehicle) return;
+        const updated: Attachment =
+          who.role === "host"
+            ? { ...who, vehicle: nextVehicle }
+            : { ...who, vehicle: nextVehicle };
+        ws.serializeAttachment(updated);
+        const roomState = await this.loadRoomState();
+        const pid = senderPeerId(who);
+        const allowed = isVehicleAllowed(nextVehicle, roomState.settings);
+        const pIdx = roomState.participants.indexOf(pid);
+        if (!allowed) {
+          if (pIdx >= 0) {
+            roomState.participants.splice(pIdx, 1);
+            await this.saveRoomState(roomState);
+          }
+          send(ws, classMismatchPayload(roomState.settings, nextVehicle));
+        } else if (pIdx < 0) {
+          roomState.participants.push(pid);
+          await this.saveRoomState(roomState);
         }
         return;
       }
@@ -549,6 +620,19 @@ export class RoomServer {
         const rawSettings = msg.settings as Record<string, unknown>;
         const requestedQuali = typeof rawSettings.qualifyingMinutes === "number" ? rawSettings.qualifyingMinutes : 0;
         roomState.settings = sanitizeLobbySettings({ ...roomState.settings, ...rawSettings }, roomState.kind);
+        // Re-validate connected sockets against the updated carClass/vehicle rule
+        for (const sock of this.state.getWebSockets()) {
+          const a = attachmentOf(sock);
+          if (!a || a.role === "refused" || a.vehicle === undefined) continue;
+          const pid = senderPeerId(a);
+          const idx = roomState.participants.indexOf(pid);
+          if (!isVehicleAllowed(a.vehicle, roomState.settings)) {
+            if (idx >= 0) roomState.participants.splice(idx, 1);
+            send(sock, classMismatchPayload(roomState.settings, a.vehicle));
+          } else if (idx < 0) {
+            roomState.participants.push(pid);
+          }
+        }
         await this.saveRoomState(roomState);
         if (roomState.kind === "public" && requestedQuali > 0) {
           send(ws, { t: "error", code: "qualifying_private_only", message: "Qualifying is only available in private rooms" });
@@ -590,6 +674,10 @@ export class RoomServer {
       case "lap": {
         const roomState = await this.loadRoomState();
         if (roomState.phase !== "qualifying" || !roomState.sessionId) return;
+        if (who.vehicle !== undefined && !isVehicleAllowed(who.vehicle, roomState.settings)) {
+          send(ws, classMismatchPayload(roomState.settings, who.vehicle));
+          return;
+        }
         let bestLapMs: number | null = null;
         if (msg.t === "progress") {
           const race = sanitizeRace(msg.race);

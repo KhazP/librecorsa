@@ -1963,7 +1963,7 @@ function f1Compound(
       optimalTempC: window,
       // The mod's thermal model is not this one: these are ours [est]. The carcass heats by most of the tyre's rolling
       // loss (0.012 of the load): on a race stint all four settle near 100 °C, in the compounds' windows, with the
-      // pressures within a psi of their optimum (scripts/verify-tyre-thermal.ts)
+      // pressures within a psi of their optimum (scripts/verify/verify-tyre-thermal.ts)
       surfaceHeatCapacity: 1500,
       coreHeatCapacity: 9500,
       slipHeatShare: 0.35,

@@ -17,10 +17,10 @@ import { chainShaderPatch } from "./venue-night-lighting";
 /** Beams the circuit's shaders loop over, by graphics quality */
 export const MAX_BEAMS = { low: 2, medium: 4, high: 8 } as const;
 /** Cars further from the camera than this light nothing worth the slot (m) */
-const BEAM_CULL_M = 220;
-/** The merged beam's cone (as car-headlights' single SpotLight: about 31 deg half angle, a wide soft edge) */
-const CONE_OUTER_RAD = 0.548;
-const CONE_PENUMBRA = 0.86;
+const BEAM_CULL_M = 260;
+/** The merged beam's cone (matching car-headlights' single SpotLight) */
+const CONE_OUTER_RAD = 0.58;
+const CONE_PENUMBRA = 0.72;
 
 const vertexPatches: readonly ShaderPatch[] = [
   ["#include <common>", "#include <common>\nvarying vec3 vLcBeamWorld;"],
@@ -66,10 +66,10 @@ varying vec3 vLcBeamWorld;`,
 			vec3 lcDir = lcL / max( lcD, 1e-3 );
 			float lcSpot = smoothstep( uLcBeamCone.x, uLcBeamCone.y, dot( -lcDir, uLcBeamDir[ i ].xyz ) );
 			float lcNdl = max( dot( lcBeamN, lcDir ), 0.0 );
-			// as a SpotLight with decay 1: intensity over distance, faded out toward its reach
+			// as a SpotLight with decay 0.8: softer falloff offsets grazing N·L collapse on flat road
 			float lcR = lcD / uLcBeamDir[ i ].w;
 			float lcWin = clamp( 1.0 - lcR * lcR * lcR * lcR, 0.0, 1.0 );
-			irradiance += uLcBeamColor * ( lcI * lcSpot * lcNdl * lcWin * lcWin / max( lcD, 0.1 ) );
+			irradiance += uLcBeamColor * ( lcI * lcSpot * lcNdl * lcWin * lcWin / pow( max( lcD, 0.1 ), 0.8 ) );
 		}
 	}
 	#endif

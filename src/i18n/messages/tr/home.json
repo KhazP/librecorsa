@@ -186,7 +186,6 @@
     "list": "{car} kaplamaları"
   },
   "downloads": {
-    "intro": "Windows, macOS, Linux ve Android için isteğe bağlı yerel sarmalayıcılar. Doğrudan librecorsa.org’u açtıkları için oyun güncellemeleri yeniden kurulum gerekmeden gelir.",
     "directLink": "Doğrudan bağlantı",
     "platforms": "Platformlar",
     "thisDevice": "Bu cihaz",
@@ -198,17 +197,15 @@
     "installCommand": "{platform} kurulum komutu",
     "whyInstall": "Neden uygulamayı kurmalısın",
     "highlights": {
-      "desktop": {
-        "label": "Masaüstü",
-        "text": "Çoklu GPU’lu dizüstülerde harici GPU’yu ister, yarış direksiyonları ve DualSense için sessiz WebHID izni verir, arka plan kısıtlamasını kapatır ve GitHub Releases üzerinden güncellemeleri denetler."
+      "desktopApp": {
+        "label": "Masaüstü"
       },
       "android": {
         "label": "Android",
         "text": "Adres çubuğu olmayan tam ekran Trusted Web Activity, kenar kaydırma koruması, Android Game Mode ve Sür / Tablolar başlatıcı kısayolları."
       },
-      "current": {
-        "label": "Her zaman güncel",
-        "text": "Her sarmalayıcı pist veya araç paketlemek yerine doğrudan librecorsa.org’u açar; böylece fizik, pist ve çok oyunculu güncellemeleri anında gelir."
+      "live": {
+        "label": "Her zaman güncel"
       },
       "browser": {
         "label": "Tarayıcı ve iOS",
@@ -216,7 +213,6 @@
       }
     },
     "buildsTitle": "Derlemeler ve imzalama",
-    "builds": "Tüm yükleyiciler ve APK’lar bu deponun kaynak kodundan GitHub Actions ile derlenir ve SHA-256 özetleriyle GitHub Releases üzerinde yayımlanır. SignPath Foundation üzerinden ücretsiz Windows kod imzalama kurulumu sürüyor; macOS derlemeleri şimdilik imzasız; Android APK’sı <code>{file}</code> ile doğrulanan yükleme anahtarıyla imzalanmıştır.",
     "allReleases": "GitHub’daki tüm sürümler",
     "signingPolicy": "Kod imzalama politikası"
   }

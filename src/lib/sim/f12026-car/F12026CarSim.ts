@@ -63,8 +63,9 @@ import { SLICK_TRAITS, wetGripFactor } from '../wet-tyres';
 import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import { FULL_REALISM, type SimRealismFlags } from '../sim-realism';
 import {
+  boardFlyingStartPoint,
+  boardFlyingStartSpeedMs,
   FLYING_SLOT_SPACING_M,
-  flyingExitSpeedMs,
   flyingStartPoint,
   rollingStartSlots,
   rollingStartSpeedMs,
@@ -86,7 +87,7 @@ import {
   type PerformanceModeName,
   type TyresCompoundData,
 } from './F12026CarConfig';
-import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind } from './TrackColliderQuery';
+import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind, type WallQuery } from './TrackColliderQuery';
 import { trackColliders } from '../track-colliders';
 import { defaultColdPressurePsi, type VehicleEvent, type VehicleInputs, VehiclePhysics } from './VehiclePhysics';
 import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
@@ -96,7 +97,7 @@ import { lockShareOf } from '../tyre-slide-fx';
 import { filterChassisG } from '../chassis-g';
 import { beyondLayoutEdge, CourseCutWatch, inLapStretch, isCourseHop } from '../course-limits';
 import { coneLaneRangeAt } from '../cone-lanes';
-import { keptOnGrid } from '../race-start';
+import { applySpeedLimiter, keptOnGrid } from '../race-start';
 import { Lut, type LutPoints } from '../lut';
 
 const G = 9.81;
@@ -240,7 +241,13 @@ export const F1_ASSIST_DIALS: Readonly<Record<DriverAssistPreset, AidDials>> = {
  * aids and the envelope the autopilot plans with.
  */
 export interface CarSimProfile {
+  /** What the car's plans, guides and lines are kept under: one per profile. The vehicle model's id, unless `model` */
   id: string;
+  /**
+   * The vehicle model this profile drives as, when `id` is not one: a mod car's physics patch on that model
+   * (mods/mod-physics.ts), whose setup limits, fuel, wing steps, AI and HUD it takes. Absent: `id` is the model
+   */
+  model?: VehicleModelId;
   config: CarPhysicsConfig;
   /** MGU-K / push mode */
   hasErs: boolean;
@@ -1141,7 +1148,7 @@ export class F12026CarSim implements SimulatorCar {
   public steerAngleNorm = 0;
 
   public get vehicleId(): import('@/types/f1').VehicleModelId {
-    return this.profile.id as import('@/types/f1').VehicleModelId;
+    return this.profile.model ?? (this.profile.id as import('@/types/f1').VehicleModelId);
   }
   public get racingLineId(): 'f1' | 'gt3' {
     return this.line;
@@ -1166,6 +1173,10 @@ export class F12026CarSim implements SimulatorCar {
   public aiTargetSpeedMs: Float64Array | null = null;
   /** AI tuning: multiplier on the autopilot's steering (shorter pursuit look-ahead when higher) */
   public aiSteerGain = 1;
+  /** AI driver skill level (0..100, default 70 = Pro) */
+  public aiSkill = 70;
+  /** Strategic FIA-2026 Boost latch for high-skill AI on long acceleration zones */
+  private aiBoostLatched = false;
   /**
    * A plan to track: lateral offset and speed along the lap (`ai/drive-plan.ts`). Set, the autopilot follows it as
    * given, with `aiLineBiasM`, `aiSpeedCapMs`, `aiPaceScale` and the tuning target's errors on top; null keeps the
@@ -1210,6 +1221,8 @@ export class F12026CarSim implements SimulatorCar {
    * gear with the throttle up, the car goes: moving before the lights go out is the jump start
    */
   public gridHold = false;
+  /** Rolling-start formation speed limiter (m/s); undefined when inactive */
+  public speedLimiterMs: number | undefined = undefined;
   /** Keyboard and controller steering assist */
   public readonly steeringAssist = new SteeringAssist();
   /** DRS is driver-operated on the f12026-car (and absent on a GT3): there is no automatic mode, so writes are ignored */
@@ -1291,6 +1304,8 @@ export class F12026CarSim implements SimulatorCar {
   private onColliders = false;
   /** The track's road collider once the car is on it (`attachTrackRoot`) */
   private collider: GroundQuery | null = null;
+  /** The track's barrier colliders once attached (`attachTrackRoot`) */
+  private walls: WallQuery | null = null;
   private progressHintS: number | undefined;
   private poseHintS: number | undefined;
   private s = 0;
@@ -1308,6 +1323,8 @@ export class F12026CarSim implements SimulatorCar {
   private shiftUpPending = false;
   private shiftDownPending = false;
   private neutralPending = false;
+  /** The touch Reverse or Drive button (`ControlInputs.selectGear`), kept like a paddle */
+  private selectGearPending: -1 | 0 | 1 = 0;
   /** The steering rim's position at the last frame (`ControlInputs.steerRim`), its move is spread over this frame's ticks */
   private lastRimSteer: number | null = null;
   private lapStartMs = 0;
@@ -1456,7 +1473,7 @@ export class F12026CarSim implements SimulatorCar {
     this.applyAssistPresetLevels(this._assistPreset);
     this.telemetry = this.createTelemetry();
     this.telemetry.f12026 = this.channels;
-    this.channels.carId = profile.id;
+    this.channels.carId = profile.model ?? profile.id;
     this.channels.hasErs = profile.hasErs;
     this.channels.hasDrs = profile.hasDrs;
     if (profile.defaultOvertakingRules) this.setOvertakingRules(profile.defaultOvertakingRules);
@@ -1532,6 +1549,7 @@ export class F12026CarSim implements SimulatorCar {
     this.vehicle.setWalls(walls);
     this.onColliders = true;
     this.collider = ground;
+    this.walls = walls.segments.length > 0 ? walls : null;
     return true;
   }
 
@@ -1628,7 +1646,7 @@ export class F12026CarSim implements SimulatorCar {
 
   /** The vehicle model whose setup limits, wing steps and fuel this car takes */
   private get setupCar(): Exclude<VehicleModelId, 'lc26'> {
-    const id = this.profile.id;
+    const id = this.vehicleId;
     return id === 'lc25' ||
       id === 'amg-gt3' ||
       id === 'liana' ||
@@ -1992,7 +2010,8 @@ export class F12026CarSim implements SimulatorCar {
   private refreshBrakingGuide(waterMm: number = this.lastGuideWaterMm, force = false): void {
     const v = this.vehicle;
     const traits = this.compoundData.wetTraits ?? SLICK_TRAITS;
-    const wetGrip = waterMm > 0.02 ? wetGripFactor(traits, waterMm, 50, v.realism.wetSeverity, 0) / (traits.dryGrip ?? 1) : 1;
+    const dryScale = traits.dryGrip ?? 1;
+    const wetGrip = waterMm > 0.02 ? dryScale * wetGripFactor(traits, waterMm, 50, v.realism.wetSeverity, 0) : dryScale;
     const scaled = Math.max(8, Math.min(20, wetGrip * 20));
     // Hysteresis prevents rapid guide swapping when crossing a drying racing line near a bucket boundary
     if (!force && Math.abs(scaled - this.brakingGuideGripBucket) < 0.75) return;
@@ -2060,13 +2079,16 @@ export class F12026CarSim implements SimulatorCar {
     this.vehicle.coldGarageStart = this.realism.coldGarageStart && !flyingStart && !raceStart && !pointToPoint && !this.aiAutopilot;
     this.runActive = false;
     this.atRestOnLine = false;
+    this.speedLimiterMs = undefined;
     // Fuelled before it is seated, so it settles at the ride height of that load
     this.fillFuel();
     const L = this.track.totalLengthM;
     if (flyingStart) {
-      // From the final straight (`flyingStartPoint`), on this car's line, kept on the asphalt, and no faster than
-      // 90 % of the speed this car's autopilot plans there, nor than it can carry out of the last corner
-      const start = flyingStartPoint(this.track);
+      // From the final straight, on this car's line, kept on the asphalt, and no faster than 90 % of the speed this
+      // car's autopilot plans there, nor than it can carry out of the last corner. A solo flying lap starts where and
+      // as fast as the boards' laps did (`boardFlyingStartPoint`); a race's rolling start from `flyingStartPoint`
+      const rolling = fieldSize !== undefined;
+      const start = rolling ? flyingStartPoint(this.track) : boardFlyingStartPoint(this.track);
       const s =
         fieldSize !== undefined
           ? rollingStartSlots(this.track, start, gridSlot + 1)[gridSlot]
@@ -2081,19 +2103,37 @@ export class F12026CarSim implements SimulatorCar {
       const [lo, hi] = rangeAt(s);
       const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
       const ownAt = (at: number) => prof[Math.floor(wrap(at, L) / (L / prof.length)) % prof.length];
+      // The car's top speed caps a rolling start; a solo flying lap keeps the boards' 75 m/s cap
+      const maxStartMs = rolling ? Math.min(75, this.profile.speedProfile?.vMaxMs ?? 75) : 75;
       const spotSpeed = (at: number) => {
         const sample = this.track.getSampleAtDistance(at);
-        return Math.min(75, 0.9 * Math.min(ownAt(at), (sample.brakeLimitKmh ?? sample.optimalSpeedKmh) / 3.6));
+        return Math.min(maxStartMs, 0.9 * Math.min(ownAt(at), (sample.brakeLimitKmh ?? sample.optimalSpeedKmh) / 3.6));
       };
       const cornerExit =
-        start.cornerS === null ? 0 : 0.9 * Math.min(ownAt(start.cornerS), this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh / 3.6);
-      let speed = spotSpeed(s);
-      if (fieldSize !== undefined) speed = rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit);
-      else if (start.cornerS !== null) speed = Math.min(speed, flyingExitSpeedMs(cornerExit, wrap(s - start.cornerS, L)));
+        start.cornerS === null
+          ? 0
+          : Math.min(maxStartMs, 0.9 * Math.min(ownAt(start.cornerS), this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh / 3.6));
+      const speed =
+        fieldSize !== undefined
+          ? rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit)
+          : boardFlyingStartSpeedMs(L, start, s, spotSpeed, cornerExit);
       if (fieldSize === undefined) {
         // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt for its
-        // first second (`startPose`)
-        const pose = startPose(this.track, this.collider, s, lineAt(s), lineAt, lo, hi, this.startFootprint(), speed * START_HANDS_OFF_S);
+        // first second (`startPose`), checked as the boards' laps were (`boardFlyingStartPoint`): the barrier
+        // clearance and the longer `startHandsOffRunM` go with the reworked start, and alone they turn the car on 15
+        // layouts whose start was clean
+        const pose = startPose(
+          this.track,
+          this.collider,
+          s,
+          lineAt(s),
+          lineAt,
+          lo,
+          hi,
+          this.startFootprint(),
+          speed * START_HANDS_OFF_S,
+          null
+        );
         this.progressHintS = this.poseHintS = s;
         this.resetVehicle(pose.x, pose.z, pose.yawRad, speed);
       } else {
@@ -2206,6 +2246,7 @@ export class F12026CarSim implements SimulatorCar {
       shiftUp: raw.shiftUp ?? false,
       shiftDown: raw.shiftDown ?? false,
       neutral: raw.neutral ?? false,
+      selectGear: raw.selectGear === -1 || raw.selectGear === 1 ? raw.selectGear : undefined,
       // The driver's clutch pedal while it is pressed at all; let go, the car works its own clutch
       clutch: Number.isFinite(raw.clutch) && (raw.clutch ?? 0) > 0 ? clamp(raw.clutch ?? 0, 0, 1) : undefined,
       clutchBound: raw.clutchBound,
@@ -2251,6 +2292,19 @@ export class F12026CarSim implements SimulatorCar {
     v.flapsLowGrip = straight2026 ? this.lowGrip : null;
     v.ersLowGrip = lowGrip;
     const aiOvertake = this.aiAutopilot && straight2026 && racing && overtakeOk && !lowGrip && zoneNow;
+    // High-skill AI (above Pro) also deploys FIA-legal Boost strategically on straights/exits when battery SoC has
+    // surplus, using the exact same `ersCanBoost`, 4 MJ store, and 8.5 MJ/lap recharge cap as a human driver
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+    const ersCapJ = Math.max(1, this.config.ers.ERS_MAX_CHARGE);
+    const soc = v.ersEnergyJ / ersCapJ;
+    const straightExit = this.apThrottle > 0.92 && Math.abs(this.steerCmd) < 0.14 && v.speedMs > 30 && v.speedMs < 95;
+    if (this.aiAutopilot && straight2026 && racing && !lowGrip && alienShare > 0.15 && v.ersCanBoost) {
+      if (!this.aiBoostLatched && straightExit && soc >= 0.58 - 0.14 * alienShare) this.aiBoostLatched = true;
+      else if (this.aiBoostLatched && (!straightExit || soc < 0.22)) this.aiBoostLatched = false;
+    } else {
+      this.aiBoostLatched = false;
+    }
+    const aiStrategicBoost = this.aiBoostLatched;
     v.extraRechargeJ = straight2026 && !lowGrip ? this.overtake.extraRechargeJ(this.raceControl) : 0;
     v.ersSession = racing ? 'race' : this.energyTimeTrial ? 'timeTrial' : 'practice';
     if (this.config.ers.regulations === 'f1-2026') {
@@ -2267,7 +2321,7 @@ export class F12026CarSim implements SimulatorCar {
       const autoOt =
         straight2026 && racing && overtakeOk && !lowGrip && !this.overtakeInUse && !this.aiAutopilot && this.autoOvertake &&
         zoneNow && inputs.throttle >= 0.98;
-      const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake) && v.ersCanBoost;
+      const boost = this.profile.hasErs && (inputs.manualOverride || aiOvertake || aiStrategicBoost) && v.ersCanBoost;
       v.setPerformanceMode(this.userErsMode);
       v.ersBoost = boost;
       v.ersOvertake = straight2026 && !lowGrip && (!racing || this.overtakeInUse || aiOvertake || autoOt);
@@ -2291,11 +2345,16 @@ export class F12026CarSim implements SimulatorCar {
     this.shiftUpPending ||= inputs.shiftUp;
     this.shiftDownPending ||= inputs.shiftDown;
     this.neutralPending ||= inputs.neutral;
+    if (inputs.selectGear) this.selectGearPending = inputs.selectGear;
     const drsPress = this.drsPressPending;
     const shiftUp = this.shiftUpPending;
     const shiftDown = this.shiftDownPending;
     const neutral = this.neutralPending;
-    if (ticks > 0) this.drsPressPending = this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
+    const selectGear = this.selectGearPending;
+    if (ticks > 0) {
+      this.drsPressPending = this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
+      this.selectGearPending = 0;
+    }
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
     // Never soft-lock a car when manual clutch is requested but no clutch control is bound on the active device
     this.vehicle.autoClutch = this.autoClutch || this.autoGearbox || this.aiAutopilot || inputs.clutchBound === false;
@@ -2311,19 +2370,23 @@ export class F12026CarSim implements SimulatorCar {
       if (rim !== null && rimFrom !== null) inputs.analogSteer = rimFrom + ((rim - rimFrom) * (k + 1)) / ticks;
       const cmd: { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
         this.aiAutopilot ? this.autopilot(CONTROL_DT_S) : this.driverCommand(inputs, CONTROL_DT_S);
+      const lim = !this.aiAutopilot && !held ? applySpeedLimiter(v.speedMs, this.speedLimiterMs, cmd.throttle, cmd.brake) : null;
+      const limited = lim?.active === true;
+      const baseCut = this.fuelKg > 0 || !this.realism.fuelUse || (this.aiAutopilot && !this.aiSelfRecovery) ? cmd.ignitionCut : 0;
       const vin: VehicleInputs = {
-        throttle: pinned && this.aiAutopilot ? 0 : cmd.throttle,
+        throttle: pinned && this.aiAutopilot ? 0 : lim ? lim.throttle : cmd.throttle,
         // An empty tank (fuel is only burnt with fuel use on): the engine no longer fires. A race field's own car is
         // spared: it starts on a load nobody chose and has no pit stop to take
-        ignitionCut: this.fuelKg > 0 || !this.realism.fuelUse || (this.aiAutopilot && !this.aiSelfRecovery) ? cmd.ignitionCut : 0,
-        brake: pinned ? 1 : cmd.brake,
+        ignitionCut: limited && lim ? Math.min(baseCut, lim.ignitionCut) : baseCut,
+        brake: pinned ? 1 : lim ? lim.brake : cmd.brake,
         brakeWheelScale: pinned ? undefined : cmd.brakeWheelScale,
         steer: pinned && this.aiAutopilot ? 0 : cmd.steer,
-        drs: !held && (drsPress || cmd.drs),
+        drs: !held && !limited && (drsPress || cmd.drs),
         shiftUp: !held && shiftUp,
         shiftDown: !held && shiftDown,
         // The autopilot keeps its gear and drives on the car's own clutch
         neutral: !held && neutral && !this.aiAutopilot,
+        selectGear: held || this.aiAutopilot || selectGear === 0 ? undefined : selectGear,
         clutch: pinned ? 1 : this.aiAutopilot ? undefined : this.vehicle.autoClutch ? inputs.clutch : (inputs.clutch ?? 0),
       };
       // A car whose state has blown up hands back a non-finite command: the rack must not keep it past the rescue
@@ -2416,16 +2479,12 @@ export class F12026CarSim implements SimulatorCar {
       o.slipRatio = w.slipRatio;
       o.onRoad = w.ground.surface === 'road' || w.ground.surface === 'pitlane';
     }
+    const traits = this.compoundData.wetTraits ?? SLICK_TRAITS;
     const wetMuScale =
-      v.waterMm > 0
-        ? wetGripFactor(
-            this.compoundData.wetTraits ?? SLICK_TRAITS,
-            v.waterMm,
-            v.speedMs,
-            v.realism.wetSeverity,
-            0.5 * (v.wheels[0].wear + v.wheels[1].wear)
-          ) / (this.compoundData.wetTraits?.dryGrip ?? 1)
-        : 1;
+      (traits.dryGrip ?? 1) *
+      (v.waterMm > 0
+        ? wetGripFactor(traits, v.waterMm, v.speedMs, v.realism.wetSeverity, 0.5 * (v.wheels[0].wear + v.wheels[1].wear))
+        : 1);
     return {
       vxMs: this.vxMs,
       vyMs: this.bodyVy(),
@@ -2449,7 +2508,36 @@ export class F12026CarSim implements SimulatorCar {
    */
   private autopilotDials(): AidDials {
     const d = this.profile.assistDials.semi_pro;
-    return d.absLevel > 0 || this.profile.absAllowed !== false ? d : { ...d, absLevel: this.profile.assistDials.assisted.absLevel };
+    const assisted = this.profile.assistDials.assisted;
+    const baseAbs = d.absLevel > 0 || this.profile.absAllowed !== false ? d.absLevel : assisted.absLevel;
+    const wet = clamp(this.vehicle.wetness, 0, 1);
+    if (wet <= 0.15) {
+      const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+      if (alienShare <= 0) return baseAbs === d.absLevel ? d : { ...d, absLevel: baseAbs };
+      // Above Pro on a dry road, ease TC/ABS intervention slightly toward the tyres' true peak slip for stronger exits & braking
+      return {
+        ...d,
+        tcLevel: d.tcLevel,
+        tc2Level: d.tc2Level,
+        absLevel: baseAbs > 0 ? Math.max(3, Math.round(baseAbs - 1 * alienShare)) : 0,
+      };
+    }
+    if (wet <= 0.2) {
+      return baseAbs === d.absLevel ? d : { ...d, absLevel: baseAbs };
+    }
+    // On wet / flooded roads step AI TC and ABS smoothly toward the wet-safe assisted calibration
+    const u = clamp((wet - 0.2) / 0.6, 0, 1);
+    const lerpInt = (a: number, b: number) => Math.round(a + (Math.max(a, b) - a) * u);
+    return {
+      ...d,
+      tcLevel: lerpInt(d.tcLevel, assisted.tcLevel),
+      tc2Level: lerpInt(d.tc2Level, assisted.tc2Level),
+      absLevel: lerpInt(baseAbs, assisted.absLevel),
+      tcSlipAngleLevel:
+        d.tcSlipAngleLevel !== undefined && assisted.tcSlipAngleLevel !== undefined
+          ? lerpInt(d.tcSlipAngleLevel, assisted.tcSlipAngleLevel)
+          : d.tcSlipAngleLevel,
+    };
   }
 
   /**
@@ -2656,7 +2744,9 @@ export class F12026CarSim implements SimulatorCar {
         : kF > 0
           ? clamp((v.totalMassKg * speed * speed * kappa * this.cgToRearAxleM) / (v.wheelbaseM * kF), -peak, peak)
           : 0;
-    const raw = Math.atan(v.wheelbaseM * kappa) + understeer + 0.8 * beta + kYawP * kYaw * yawErr + this.apYawI;
+    const wet = clamp(v.wetness, 0, 1);
+    const betaGain = 0.8 + 0.45 * wet;
+    const raw = Math.atan(v.wheelbaseM * kappa) + understeer + betaGain * beta + kYawP * kYaw * yawErr + this.apYawI;
     const delta = clamp(raw, betaF - peak, betaF + peak);
     const frontsSaturated = delta !== raw;
     if (!frontsSaturated) this.apYawI = clamp(this.apYawI + yawErr * kYaw * 2 * h, -0.05, 0.05);
@@ -2666,6 +2756,15 @@ export class F12026CarSim implements SimulatorCar {
     const lead = Math.max(5, speed * 0.2);
     const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
     const b = envelopeAt(this.profile.braking, this.circuitAirDensity());
+    const wetBrakeScale =
+      v.waterMm > 0
+        ? clamp(
+            wetGripFactor(this.compoundData.wetTraits ?? SLICK_TRAITS, v.waterMm, Math.max(30, speed), v.realism.wetSeverity, 0) *
+              (this.compoundData.wetTraits?.dryGrip ?? 1),
+            0.35,
+            1
+          )
+        : 1;
     let vTarget = this.aiSpeedCapMs;
     let pedalFF = 0;
     if (plan) {
@@ -2682,7 +2781,10 @@ export class F12026CarSim implements SimulatorCar {
       const own = tab[Math.floor(((p.s + lead + d) % L) / (L / tab.length)) % tab.length];
       const vC = Math.min((smp.brakeLimitKmh ?? smp.optimalSpeedKmh) / 3.6, own) * this.aiPaceScale;
       if (vC >= vTarget) continue;
-      const a = 0.5 * (autopilotDecel(b, vC) + autopilotDecel(b, Math.min(speed, Math.sqrt(vC * vC + 2 * autopilotDecel(b, vC) * d))));
+      const a =
+        0.5 *
+        (autopilotDecel(b, vC) + autopilotDecel(b, Math.min(speed, Math.sqrt(vC * vC + 2 * autopilotDecel(b, vC) * wetBrakeScale * d)))) *
+        wetBrakeScale;
       vTarget = Math.min(vTarget, Math.sqrt(vC * vC + 2 * a * d));
     }
     // Off the line the corner is tighter than planned: give speed away for it
@@ -2700,16 +2802,26 @@ export class F12026CarSim implements SimulatorCar {
     const pedal = clamp(this.apPedal + pedalP + pedalFF, -1, 1);
     const W = v.wheels;
     // The rear stepping out (on a trail-braked entry, or on the power): ease both pedals as the rears' slip angle
-    // passes AP_REAR_GUARD of their peak, so they regain grip to hold the car with rather than spinning it
+    // passes the rear guard of their peak, so they regain grip to hold the car with rather than spinning it
     const rearSlip = Math.max(Math.abs(W[2].slipAngleRad), Math.abs(W[3].slipAngleRad)) / peak;
-    const rearCut = clamp(1 - AP_REAR_GUARD_GAIN * (rearSlip - AP_REAR_GUARD), 0.15, 1);
+    const rearGuard = AP_REAR_GUARD - 0.22 * wet;
+    const rearCut = clamp(1 - AP_REAR_GUARD_GAIN * (rearSlip - rearGuard), 0.15, 1);
     // squeezed on rather than stabbed: at most full throttle in 0.4 s. Off the line (from rest until 72 km/h) it goes
-    // down at once, the traction control metering the wheelspin as on a player's launch (the squeeze cost the AI a car
-    // length to 100 km/h). Only from rest: a quick pedal out of a slow corner put the car in the barrier at Sepang
+    // down at once in the dry, the traction control metering the wheelspin; in wet conditions, feed power progressively
+    // and trim low-speed rear wheelspin even below the car's TC min speed so GT3/F1 never spin up on a flooded grid
     if (speed < 1) this.apLaunch = true;
     else if (speed > 20) this.apLaunch = false;
-    const squeeze = this.apLaunch ? 12 : 2.5;
-    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + squeeze * h) * rearCut;
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
+    const dryExitSqueeze = 2.5 + 0.8 * alienShare;
+    const squeeze = this.apLaunch ? Math.max(2.2, 12 - 9.5 * wet) : Math.max(1.2, dryExitSqueeze * (1 - 0.55 * wet));
+    let wetLaunchTrim = 1;
+    if (wet > 0.15 && speed < 25) {
+      const [dl, dr] = v.drivenWheels;
+      const driveSpin = Math.max(0, W[dl].slipRatio, W[dr].slipRatio);
+      const spinLimit = 0.22 - 0.08 * wet;
+      if (driveSpin > spinLimit) wetLaunchTrim = clamp(1 - (driveSpin - spinLimit) * 3.5, 0.2, 1);
+    }
+    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + squeeze * h) * rearCut * wetLaunchTrim;
     this.apThrottle = throttle;
     // The car's own TC and per-wheel ABS: a lock-up of the unloaded inside front no longer takes the brakes off all
     // four wheels (the car then ran into the corner 20-25 km/h hot), nor inside-rear wheelspin the whole throttle
@@ -2832,9 +2944,14 @@ export class F12026CarSim implements SimulatorCar {
     // TRACK_REJOIN_MS2: pursuit asks ≈ 2v²e/L², and 4 m off at 190 km/h a short look-ahead asked for several g and spun
     // the car. Within a metre it stays short: tracking errors there are the pursuit's own, and stretching for them
     // only cut the corners further
+    const wet = clamp(v.wetness, 0, 1);
     const nNow = this.planTargetAt(plan, p.s, p.sample, p.lateralOffset);
     const eFar = Math.max(0, Math.abs(nNow - p.lateralOffset) - 1);
-    const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S, Math.sqrt((2 * speed * speed * eFar) / TRACK_REJOIN_MS2)) / this.aiSteerGain;
+    // On wet roads lengthen the look-ahead and soften rejoin lateral acceleration so lane shifts never excite a tank-slapper
+    const lookMin = TRACK_LOOK_MIN_M * (1 + 0.55 * wet);
+    const lookS = TRACK_LOOK_S * (1 + 0.55 * wet);
+    const rejoinMs2 = TRACK_REJOIN_MS2 * (1 - 0.35 * wet);
+    const ld = Math.max(lookMin, speed * lookS, Math.sqrt((2 * speed * speed * eFar) / rejoinMs2)) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
     // centreline, the outside more)
     const kc = sampleGrid(t.kappa, p.s + 0.5 * ld, t.ds);
@@ -2858,6 +2975,19 @@ export class F12026CarSim implements SimulatorCar {
       this.trackI = clamp(this.trackI + TRACK_KI * errLeft * CONTROL_DT_S, -TRACK_I_MAX_MS2, TRACK_I_MAX_MS2);
       kappa += this.trackI / Math.max(100, speed * speed);
     }
+    if (wet > 0.15) {
+      // Cap curvature to the tyres' true physical wet lateral capability (plus banking), not the conservative
+      // weatherPace² plan grip — otherwise an off-line car in a fast bend cannot even match road curvature
+      const traits = this.compoundData.wetTraits ?? SLICK_TRAITS;
+      const liveWetGrip =
+        (traits.dryGrip ?? 1) *
+        (v.waterMm > 0 ? wetGripFactor(traits, v.waterMm, Math.max(20, speed), v.realism.wetSeverity, 0) : 1);
+      const ayDry = plan.limits.lateral(speed) / Math.max(0.15, plan.limits.gripScale);
+      const ayRealWet = ayDry * liveWetGrip + G * Math.abs(Math.sin(p.sample.bankingRad));
+      const ayWetCap = Math.max(plan.limits.lateral(speed) * 1.25, ayRealWet * (1.18 - 0.08 * wet));
+      const kappaCap = ayWetCap / Math.max(25, speed * speed);
+      kappa = clamp(kappa, -kappaCap, kappaCap);
+    }
     return kappa;
   }
 
@@ -2869,6 +2999,7 @@ export class F12026CarSim implements SimulatorCar {
   private planSpeedTarget(plan: AiDrivePlan, s: number, speed: number, prof: Float32Array): { v: number; pedalFF: number } {
     const t = plan.track;
     const L = this.track.totalLengthM;
+    const alienShare = clamp((this.aiSkill - 70) / 30, 0, 1);
     const lead = Math.max(3, speed * 0.15);
     // Racing, the plan's top speed is no limit: a car in a tow runs past it, held by its own drag, and brakes from there
     // on the open envelope. Held at the plan's top speed, the tow was worth nothing and a quicker car sat behind a slower
@@ -2893,9 +3024,11 @@ export class F12026CarSim implements SimulatorCar {
     const aFF = (v1 * v1 - v0 * v0) / 12;
     if (aFF >= -0.5 && speed < v0) {
       // Still cornering hard (a corner exit): the full plan's acceleration, which shares the tyres between the corner
-      // and the throttle; flooring it there ran the car wide on the power. Near straight: as hard as it can
+      // and the throttle; flooring it there ran the car wide on the power. Above Pro on a dry road, delay this cap
+      // until higher lateral utilisation so Alien drivers stay flat out through gentle sweeps and open throttle earlier.
       const ayShare = (Math.abs(sampleGrid(plan.kappa, s + lead, t.ds)) * speed * speed) / plan.limits.lateral(speed);
-      if (ayShare > 0.3) {
+      const ayThreshold = this.vehicle.wetness < 0.15 ? 0.3 + 0.07 * alienShare : 0.3;
+      if (ayShare > ayThreshold) {
         const vExp = sampleGrid(plan.vExpected, s + lead, t.ds) * pace;
         const vExp1 = sampleGrid(plan.vExpected, s + lead + 6, t.ds) * pace;
         const aExp = (vExp1 * vExp1 - vExp * vExp) / 12;
@@ -3026,6 +3159,7 @@ export class F12026CarSim implements SimulatorCar {
     this.steerCmd = 0;
     this.lastRimSteer = null;
     this.shiftUpPending = this.shiftDownPending = this.neutralPending = false;
+    this.selectGearPending = 0;
     this.tcCut = this.absCut = 1;
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;

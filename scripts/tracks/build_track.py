@@ -1071,15 +1071,29 @@ def carry_lines(old_path, data):
     log(f'keep-lines: carried the previous lines ({clamped} offsets clamped into the new width)')
 
 
-def optimise_lines(track_id, edge_m=None):
+def optimise_lines(track_id, edge_m=None, light=False):
     """Replace the geometric (minimum-curvature) line with each car class's lap-time line: the F1 line (`ro`) and
     the GT3's (`roGt3`), each judged on full physics laps (scripts/ai/optimize-lines.ts). `edge_m`: the car centre's
-    margin to the road's edge, when not the optimiser's own (a narrow road lined with barriers)"""
+    margin to the road's edge, when not the optimiser's own (a narrow road lined with barriers). `light`: one sweep and
+    no optimal-control start, for a mod's import (about a third of the time; the AI a second or two a lap slower)"""
     import subprocess
-    edge = f' --edge {edge_m}' if edge_m is not None else ''
+    edge = ['--edge', str(edge_m)] if edge_m is not None else []
+    # In the offline launcher's converter only the optimiser's bundle is there (launcher/converter/build.mjs), run by
+    # the Node on PATH
+    bundled = os.path.join(ROOT, 'scripts', 'ai', 'optimize-lines.mjs')
+    in_converter = not os.path.exists(os.path.join(ROOT, 'scripts', 'ai', 'optimize-lines.ts')) and os.path.exists(bundled)
     for car in ('f1', 'gt3'):
-        r = subprocess.run(f'npx tsx scripts/ai/optimize-lines.ts --track {track_id} --car {car} --write{edge}', cwd=ROOT,
-                           shell=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        args = ['--track', track_id, '--car', car, '--write', *edge]
+        # The converter carries no optimal-control solver (its Python and packages aren't in the launcher's download)
+        if light or in_converter:
+            args.append('--no-mintime')
+        if light:
+            args += ['--iters', '1']
+        if in_converter:
+            cmd, shell = ['node', bundled, *args], False
+        else:
+            cmd, shell = 'npx tsx scripts/ai/optimize-lines.ts ' + ' '.join(args), True
+        r = subprocess.run(cmd, cwd=ROOT, shell=shell, capture_output=True, text=True, encoding='utf-8', errors='replace')
         tail = [l for l in r.stdout.splitlines() if l.startswith(('current line:', 'Using:', 'Keeping', 'Wrote'))]
         log(f'{car} racing line:', *(tail[-4:] or [r.stderr[-400:]]))
 

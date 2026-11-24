@@ -12,7 +12,7 @@ Runs inside Blender, headless (bpy and numpy only):
 
 Writes `artifacts/lmdh_mesh_report.json` (the source as imported) and `artifacts/lmdh_hardpoints.json` (wheel
 centres, track widths, tyre radii and the body's measured box against the regulation limits). `--compress` then runs
-`scripts/compress-car-glb.mjs` on the output (meshopt, which the game's loader decodes); without it the file stays
+`scripts/cars/compress-car-glb.mjs` on the output (meshopt, which the game's loader decodes); without it the file stays
 raw, as the other car tools leave theirs.
 
 Output node layout (read by src/lib/ported-car-model.ts):
@@ -1231,7 +1231,7 @@ def main():
     ap.add_argument("--steer-tris", type=int, default=7000)
     ap.add_argument("--cabin-tris", type=int, default=9000, help="cap for the body's cabin trim, metal and small parts")
     ap.add_argument("--max-tex", type=int, default=2048)
-    ap.add_argument("--compress", action="store_true", help="run scripts/compress-car-glb.mjs on the output")
+    ap.add_argument("--compress", action="store_true", help="run scripts/cars/compress-car-glb.mjs on the output")
     opts = ap.parse_args(argv)
     opts.paint_rgb = tuple(float(v) for v in opts.paint.split(","))
     opts.accent_rgb = tuple(float(v) for v in opts.accent.split(","))
@@ -1346,7 +1346,7 @@ def main():
     missing = [n for n in ["CAR", "BODY"] + [f"WHEEL_{c}{s}" for c in CORNERS for s in ("", "_RIM", "_TYRE")] if n not in written["nodes"]]
     raw_bytes = written["bytes"]
     if opts.compress:
-        subprocess.run(["node", os.path.join(repo, "scripts", "compress-car-glb.mjs"), os.path.abspath(opts.out)], check=True, cwd=repo)
+        subprocess.run(["node", os.path.join(repo, "scripts", "cars", "compress-car-glb.mjs"), os.path.abspath(opts.out)], check=True, cwd=repo)
 
     hard = {
         "source": os.path.basename(opts.source),

@@ -1,11 +1,11 @@
 /**
- * Grafts a small add-on GLB into a circuit's GLB (scripts/graft-track-extras.mjs). The circuit's own JSON objects and
+ * Grafts a small add-on GLB into a circuit's GLB (scripts/tracks/graft-track-extras.mjs). The circuit's own JSON objects and
  * binary bytes stay as they are, so its physics and drawn meshes are exactly the ones it had. The add-on's buffer
  * views, accessors, images, samplers, textures, materials, meshes and nodes are appended with their indices moved, its
  * binary chunk goes after the circuit's, its meshopt fallback buffer joins the circuit's, and the children of its
  * Track_Model join the circuit's Track_Model, which must sit at the same place. An add-on image with the same bytes as
  * one of the circuit's is mapped to it (the GPU holds it once). Both files must be meshopt-compressed
- * (scripts/compress-track-glb.mjs).
+ * (scripts/tracks/compress-track-glb.mjs).
  *
  * A circuit that already has grafted nodes (a `fromModel` or `drift` extra) is refused: graft onto the file as built.
  */

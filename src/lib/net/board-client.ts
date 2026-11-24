@@ -225,6 +225,8 @@ export async function fetchBoardPage(
   const base = onlineUrl("/laps");
   if (!base || !(await getOnlineConfig()).board) return null;
   const filter = opts.filter ?? {};
+  // A mod circuit has no board (its laps never go up): empty, without asking
+  if (trackId.startsWith("mod:")) return { entries: [], offset: 0, total: 0, me: null, near: null, physics: [] };
   const version = opts.version ?? currentBoardBase(trackId);
   const physics = car === ALL_CARS ? 0 : (opts.physics ?? (opts.version !== undefined ? revisionOnBoard(version, car) : lapPhysicsVersion(car, trackId)));
   const limit = clampLimit(opts.limit ?? BOARD_PAGE_SIZE);
@@ -263,6 +265,7 @@ export interface CircuitTotals {
 export async function fetchCircuitTotals(trackId: string, car: BoardCar, physics?: number, version: number = currentBoardBase(trackId)): Promise<CircuitTotals | null> {
   const base = onlineUrl("/stats/circuit");
   if (!base || !(await getOnlineConfig()).board) return null;
+  if (trackId.startsWith("mod:")) return { laps: 0, drivers: 0 };
   const query = new URLSearchParams({ track: trackId, vehicle: car });
   if (car !== ALL_CARS && physics !== undefined) query.set("physics", String(physics));
   else if (car === ALL_CARS && version !== currentBoardBase(trackId)) query.set("version", String(version));

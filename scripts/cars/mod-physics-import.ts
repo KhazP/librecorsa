@@ -8,7 +8,7 @@
  * What it prints is the part of a config the data states. What a config also needs and the data does not have (this
  * sim's tyre heat capacities, the kinematic camber gain and roll-centre heights the solver reports, rain tyres, the
  * autopilot's profile) is left to the author, marked TODO. Once the config exists, add the car to
- * `scripts/verify-mod-parity.ts`, which checks every value against the same files and lists the keys left uncarried.
+ * `scripts/verify/verify-mod-parity.ts`, which checks every value against the same files and lists the keys left uncarried.
  *
  * The conversions (all in one place, here and in `src/lib/sim/mod-suspension.ts`):
  *  - power.lut is torque after the driveline: crank power = torque ÷ efficiency × rpm
@@ -123,7 +123,7 @@ p(`  coastCurve: [[0, 0], [${n(eng('COAST_REF', 'RPM'))}, ${n(eng('COAST_REF', '
 if (mod.has('throttle.lut')) p(`  throttleResponseCurve: ${lut(mod.lut('throttle.lut').map(([x, y]) => [x / 100, y / 100]))}, // [spec throttle.lut]`);
 p(`  idleRpm: ${n(eng('ENGINE_DATA', 'MINIMUM'))}, // [spec MINIMUM]`);
 p(`  inertia: ${n(eng('ENGINE_DATA', 'INERTIA') + (drv('GEARBOX', 'INERTIA') || 0))}, // engine + gearbox [spec INERTIA]`);
-p(`  limiterCutS: ${n(0.5 / eng('ENGINE_DATA', 'LIMITER_HZ'))}, // half a cycle of the limiter [spec LIMITER_HZ]`);
+p(`  limiterCutS: ${n(1 / eng('ENGINE_DATA', 'LIMITER_HZ'))}, // one cycle of the limiter, as verify-mod-parity checks it [spec LIMITER_HZ]`);
 p('};');
 const gears = Array.from({ length: drv('GEARS', 'COUNT') }, (_, i) => drv('GEARS', `GEAR_${i + 1}`));
 const cutS = Math.max(drv('GEARBOX', 'CHANGE_UP_TIME') || 0, drv('GEARBOX', 'AUTO_CUTOFF_TIME') || 0) / 1000;

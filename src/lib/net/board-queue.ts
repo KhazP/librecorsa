@@ -7,15 +7,16 @@
  * a reload, from its board's saved best when it is that very lap. A lap the board turns down is not sent again by
  * itself, and neither is one that has had its tries: Your best laps keeps it with Retry.
  *
- * Kept free of React and the scene, so scripts/verify-board-retry.ts drives the same code the game does.
+ * Kept free of React and the scene, so scripts/verify/verify-board-retry.ts drives the same code the game does.
  */
 import type { VehicleModelId } from "@/types/f1";
-import type { LapRecording } from "@/lib/sim/lap-types";
+import { lapGoesOnBoards, type LapRecording } from "@/lib/sim/lap-types";
 import { challengeAt, fitsChallenge } from "./weekly-challenge";
 import {
   BOARD_UNREACHABLE_GAVE_UP,
   boardKeyOf,
   clearBoardMiss,
+  MOD_LAP,
   queuedBoardMisses,
   saveBoardBest,
   saveBoardMiss,
@@ -60,6 +61,8 @@ export function challengeOf(rec: LapRecording, nowMs = Date.now()): string | und
  * couldn't reach the board is kept to send again; one turned down is remembered with the reason (Your best laps).
  */
 export async function postLap(rec: LapRecording, driver: { name: string; code: string }, by: PostedBy): Promise<SubmitResult> {
+  // A lap with mod content never goes up, and isn't kept as a miss either: a mod car's would sit on its model's board
+  if (!lapGoesOnBoards(rec)) return { ok: false, error: MOD_LAP };
   // Under the name the driver has now: a lap recorded before a rename must not claim the old name back
   const named: LapRecording = { ...rec, driverName: driver.name, driverCode: driver.code };
   const event = challengeOf(named);

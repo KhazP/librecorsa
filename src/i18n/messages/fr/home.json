@@ -186,7 +186,6 @@
     "list": "Livrées {car}"
   },
   "downloads": {
-    "intro": "Applications natives facultatives pour Windows, macOS, Linux et Android. Elles ouvrent directement librecorsa.org, donc les mises à jour du jeu arrivent sans réinstallation.",
     "directLink": "Lien direct",
     "platforms": "Plateformes",
     "thisDevice": "Cet appareil",
@@ -198,17 +197,15 @@
     "installCommand": "Commande d’installation {platform}",
     "whyInstall": "Pourquoi installer l’app",
     "highlights": {
-      "desktop": {
-        "label": "Bureau",
-        "text": "Demande le GPU dédié sur les portables multi-GPU, accorde WebHID silencieusement pour les volants et la DualSense, désactive la limitation en arrière-plan et vérifie les mises à jour sur GitHub Releases."
+      "desktopApp": {
+        "label": "Bureau"
       },
       "android": {
         "label": "Android",
         "text": "Trusted Web Activity en plein écran sans barre d’adresse, balayages de bord immersifs persistants, Android Game Mode et raccourcis du lanceur Conduire / Classements."
       },
-      "current": {
-        "label": "Toujours à jour",
-        "text": "Chaque application ouvre directement librecorsa.org au lieu d’embarquer circuits ou voitures, donc la physique, les circuits et le multijoueur se mettent à jour immédiatement."
+      "live": {
+        "label": "Toujours à jour"
       },
       "browser": {
         "label": "Navigateur et iOS",
@@ -216,7 +213,6 @@
       }
     },
     "buildsTitle": "Builds et signature",
-    "builds": "Tous les installeurs et APK sont compilés depuis le code source de ce dépôt par GitHub Actions et publiés sur GitHub Releases avec des empreintes SHA-256. La signature de code Windows gratuite via la SignPath Foundation est en cours de mise en place ; les builds macOS ne sont pas signés pour l’instant ; l’APK Android est signé avec la clé d’envoi vérifiée par <code>{file}</code>.",
     "allReleases": "Toutes les versions sur GitHub",
     "signingPolicy": "Politique de signature de code"
   }

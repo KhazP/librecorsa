@@ -84,4 +84,4 @@ Recipe skeleton (paths relative to the recipe file for `sourceDir`, to the repos
 }
 ```
 
-`manifest` passes sections through to `manifest.json` as they are, including the player's optional ones: `shift.cutS`, `driveline` (transmission loops pitched by driveshaft speed and levelled by driveshaft torque), `loadFilter`, `viewTone` (`src/lib/sim/lc26-audio.ts`; `scripts/verify-bank-layers.ts` checks them). Recordings and recipes stay out of the repository (`/reference_data/` is ignored).
+`manifest` passes sections through to `manifest.json` as they are, including the player's optional ones: `shift.cutS`, `driveline` (transmission loops pitched by driveshaft speed and levelled by driveshaft torque), `loadFilter`, `viewTone` (`src/lib/sim/lc26-audio.ts`; `scripts/verify/verify-bank-layers.ts` checks them). Recordings and recipes stay out of the repository (`/reference_data/` is ignored).

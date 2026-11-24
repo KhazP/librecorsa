@@ -22,6 +22,8 @@ import { LIANA_SKINS } from "./liana-skins";
 import type { PortedSkin } from "@/lib/car-builder-2026";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
 import { carListed, HOSTED_CONTENT, REPO_CAR_IDS } from "@/lib/hosted-content";
+import type { ModOrigin } from "@/lib/track-registry";
+import type { CarSimProfile } from "@/lib/sim/f12026-car/F12026CarSim";
 
 /**
  * The cars in the picker, grouped by class and then by year, newest first. A car is a body and a sound on one of the
@@ -30,7 +32,12 @@ import { carListed, HOSTED_CONTENT, REPO_CAR_IDS } from "@/lib/hosted-content";
  * here with its class and year.
  * The first car of each vehicle model keeps the model's id, so saved choices and `?car=` links still resolve.
  */
-export type CarId =
+export type CarId = BuiltInCarId | ModCarId;
+
+/** A car from a mod package (src/lib/mods): `mod:<package>/<id>` */
+export type ModCarId = `mod:${string}`;
+
+export type BuiltInCarId =
   | "lc26"
   | "lc25"
   | "amg-gt3"
@@ -66,9 +73,10 @@ export interface CarClass {
  *   Chaparral 2Ds)
  * - "shared": a ported body on another car's model of the same class and era (the BMW)
  * - "era": a ported body from an earlier season on the 2026 model
+ * - "mod": from a mod package the player installed, a body on one of the game's vehicle models
  * The F1 physics switch doesn't change it: a ported F1 car borrows its physics under either model.
  */
-export type CarQuality = "own" | "shared" | "era";
+export type CarQuality = "own" | "shared" | "era" | "mod";
 
 export interface CarQualityMeta {
   /** Badge on cards and next to car names */
@@ -102,6 +110,13 @@ export const CAR_QUALITY_META: Record<CarQuality, CarQualityMeta> = {
     color: "#FF6B8A",
     variant: "soft",
     get description() { return t("game.carQuality.eraDetail"); },
+  },
+  mod: {
+    get badge() { return t("game.carQuality.modBadge"); },
+    get filterLabel() { return t("game.carQuality.mod"); },
+    color: "#B388FF",
+    variant: "outline",
+    get description() { return t("game.carQuality.modDetail"); },
   },
 };
 
@@ -166,6 +181,10 @@ export interface CarSkin {
   procedural?: string;
   /** Explicitly keeps the GLB's built-in factory paint (even when this skin is not `skins[0]`) */
   useModelPaint?: boolean;
+  /** Where its files are, when not beside the car's model (a mod package's livery: `/mods/<package>/…`) */
+  baseUrl?: string;
+  /** The mod package it comes from; absent for the game's own liveries */
+  mod?: ModOrigin;
 }
 
 const CC_BY = { license: "CC BY 4.0", licenseUrl: "https://creativecommons.org/licenses/by/4.0/" } as const;
@@ -278,7 +297,7 @@ export interface CarDefinition {
   modelUrl?: string;
   /**
    * The plan of its body at barrier height when the body is not its vehicle model's own (`ChassisData.bodyPlan`, as
-   * `scripts/measure-car-plans.ts` prints it): the barriers meet this car's outline, not the other's
+   * `scripts/cars/measure-car-plans.ts` prints it): the barriers meet this car's outline, not the other's
    */
   bodyPlan?: readonly (readonly [number, number])[];
   /** The liveries a player can pick for it (the first is the one its GLB is painted in); absent: its factory paint */
@@ -289,6 +308,15 @@ export interface CarDefinition {
    * link (`?car=<id>`) in a copy that has its files. Absent: listed
    */
   preview?: boolean;
+  /** The mod package it comes from; absent for the game's own cars */
+  mod?: ModOrigin;
+  /** Its picture in the car browser, when not where `carThumbUrl` looks (a mod car's, in its package) */
+  thumbUrl?: string;
+  /**
+   * Its own physics, when not its vehicle model's (a mod car's physics file, mods/mod-physics.ts): the car simulation
+   * runs this profile, and everything else (garage, AI, HUD) is `physics`'s
+   */
+  simProfile?: CarSimProfile;
 }
 
 export const CAR_CLASSES: readonly CarClass[] = [
@@ -303,7 +331,7 @@ export const CAR_CLASSES: readonly CarClass[] = [
 const SAGATRON_GT_TYRES = { author: "sagatron918", url: "https://www.paypal.me/SagarNaikB" };
 
 /** Every car the game knows, whether or not this copy has its files (`hosted-content.ts`) */
-const ALL_CARS: readonly CarDefinition[] = [
+const BUILT_IN_CARS: readonly CarDefinition[] = [
   {
     id: "lc26",
     classId: "f1",
@@ -553,13 +581,46 @@ const ALL_CARS: readonly CarDefinition[] = [
   },
 ];
 
-/** The cars this copy can drive: all of them on librecorsa.org, the 2026 prototype in a clone of the repository */
-const KNOWN_CARS: readonly CarDefinition[] = ALL_CARS.filter((c) => carListed(c.id));
+/** The game's own car ids, whether or not this copy lists them: what a mod package's liveries and cars may name */
+export const BUILT_IN_CAR_IDS: ReadonlySet<string> = new Set(BUILT_IN_CARS.map((c) => c.id));
+
+/** Every car the game knows: its own, then those of the installed mod packages (refilled by `registerModCars`) */
+const ALL_CARS: CarDefinition[] = [...BUILT_IN_CARS];
+
+/** The cars this copy can drive: all of them on librecorsa.org, the 2026 prototype in a clone of the repository, and mod cars */
+const KNOWN_CARS: CarDefinition[] = ALL_CARS.filter((c) => c.mod || carListed(c.id));
 
 /** The cars this copy lists: the ones it can drive, less the previews (`CarDefinition.preview`) */
 export const CARS: readonly CarDefinition[] = KNOWN_CARS.filter((c) => !c.preview);
 
 const BY_ID = new Map<string, CarDefinition>(KNOWN_CARS.map((c) => [c.id, c]));
+
+function refill<T>(target: T[], items: readonly T[]): void {
+  target.length = 0;
+  target.push(...items);
+}
+
+/**
+ * Makes `modCars` the mod cars every list and lookup offers, after the game's own, and adds `modSkins` (by car id) to
+ * the liveries of the game's cars they are for, in place of any registered before. The exported arrays are refilled,
+ * so modules that imported them see the change. Call before the menus mount (mods/mod-loader.ts does). A mod car
+ * whose id the game already has is skipped: a package never stands in for one of the game's own cars.
+ */
+export function registerModCars(modCars: readonly CarDefinition[], modSkins: ReadonlyMap<string, readonly CarSkin[]> = new Map()): void {
+  const withSkins = BUILT_IN_CARS.map((c) => {
+    const extra = modSkins.get(c.id);
+    // A car with no liveries of its own wears its factory paint: a mod livery joins after it, never in its place
+    return extra?.length && c.skins?.length ? { ...c, skins: [...c.skins, ...extra] } : c;
+  });
+  const added = modCars.filter((c) => c.mod && !BUILT_IN_CAR_IDS.has(c.id));
+  refill(ALL_CARS, [...withSkins, ...added]);
+  refill(KNOWN_CARS, ALL_CARS.filter((c) => c.mod || carListed(c.id)));
+  refill(CARS as CarDefinition[], KNOWN_CARS.filter((c) => !c.preview));
+  BY_ID.clear();
+  for (const c of KNOWN_CARS) BY_ID.set(c.id, c);
+  REGISTRY_ORDER.clear();
+  KNOWN_CARS.forEach((c, i) => REGISTRY_ORDER.set(c.id, i));
+}
 
 export const isCarId = (value: unknown): value is CarId => typeof value === "string" && BY_ID.has(value);
 
@@ -605,6 +666,7 @@ export const carOvertakingRules = (car: Pick<CarDefinition, "classId" | "year">)
 const CLASS_ORDER = new Map<CarClassId, number>(CAR_CLASSES.map((k, i) => [k.id, i]));
 const REGISTRY_ORDER = new Map<CarId, number>(KNOWN_CARS.map((c, i) => [c.id, i]));
 
+
 /** The menus' order: by class, then newest first, then as listed here */
 export const compareCarsByClassAndYear = (a: CarDefinition, b: CarDefinition): number =>
   (CLASS_ORDER.get(a.classId) ?? 0) - (CLASS_ORDER.get(b.classId) ?? 0) ||
@@ -619,6 +681,9 @@ export const carTakesLivery = (id: CarId): boolean => !carById(id).modelUrl;
 
 const carThumbDir = (id: CarId): string => {
   if (id === "lc26") return "/lc26";
+  // A mod car's pictures sit beside its model in its package
+  const car = carById(id);
+  if (car.mod && car.modelUrl) return car.modelUrl.slice(0, car.modelUrl.lastIndexOf("/"));
   // Beside the car's model, so a car that took over another's body shows that body's picture
   const modelDir = carById(id).modelUrl?.match(/^(\/cars\/[^/]+)\/model\//)?.[1];
   return modelDir ?? `/cars/${id}`;
@@ -629,13 +694,22 @@ const carThumbDir = (id: CarId): string => {
  * R2 with them (`npm run upload-hosted`), in the folder of the car's model; the repository car drives the 2026
  * prototype's body, whose pictures are in the repository. A copy without the file shows the card without a picture.
  */
-export const carThumbUrl = (id: CarId): string => `${carThumbDir(id)}/thumb.webp`;
+export const carThumbUrl = (id: CarId): string => carById(id).thumbUrl ?? `${carThumbDir(id)}/thumb.webp`;
 
 /** Picture of a car wearing a specific procedural livery (`npm run car-thumbs`), beside its default thumb */
 export const carLiveryThumbUrl = (id: CarId, liveryId: string): string => `${carThumbDir(id)}/thumbs/${liveryId}.webp`;
 
-/** Picture of a ported car wearing a specific mod skin (`npm run car-thumbs`), beside its default thumb */
-export const carSkinThumbUrl = (id: CarId, skinId: string): string => `${carThumbDir(id)}/thumbs/${skinId}.webp`;
+/**
+ * Picture of a ported car wearing a specific mod skin (`npm run car-thumbs`), beside its default thumb; a mod
+ * package's livery has its picture in its own folder (`thumb.webp`)
+ */
+export const carSkinThumbUrl = (id: CarId, skinId: string): string => {
+  const car = carById(id);
+  // A mod car's first livery is the paint its model is made in, with no folder: its picture is the car's own
+  if (car.mod && car.skins?.[0]?.id === skinId) return carThumbUrl(id);
+  const own = car.skins?.find((s) => s.id === skinId)?.baseUrl;
+  return own ? `${own}/thumb.webp` : `${carThumbDir(id)}/thumbs/${skinId}.webp`;
+};
 
 /** A car's skin by id, its first (the GLB's own paint) when the id is unknown or absent; null for a car without skins */
 export const carSkin = (id: CarId, skinId: string | null | undefined): CarSkin | null => {
@@ -659,7 +733,7 @@ export function portedSkinFor(id: CarId, skin: CarSkin | null | undefined): Port
   if (skin.useModelPaint) return null;
   const skins = anyCarById(id)?.skins;
   if (!skins?.length || skin.id === skins[0].id) return null;
-  return { baseUrl: carSkinBaseUrl(id, skin.id), files: skin.files, variant: skin.variant };
+  return { baseUrl: skin.baseUrl ?? carSkinBaseUrl(id, skin.id), files: skin.files, variant: skin.variant };
 }
 
 /** Rich CSS gradient swatch background for a car's skin picker (supports 2-colour mod skins and 3-colour GT3 skins) */
@@ -695,12 +769,16 @@ export const carsByYear = (id: CarClassId): { year: number; cars: CarDefinition[
   return [...groups.entries()].sort(([a], [b]) => b - a).map(([year, cars]) => ({ year, cars }));
 };
 
-/** The car that stands for a vehicle model (its first car), e.g. for a leaderboard entry or a class rule */
 /**
  * The first car of a vehicle model whether or not this copy lists it: an online board holds laps of cars another copy
- * lists (a clone without the hosted files sees the GT3's laps too). Undefined for a model with no car of its own.
+ * lists (a clone without the hosted files sees the GT3's laps too). Never a mod car. Undefined for a model with no car
+ * of its own.
  */
-export const anyCarForVehicle = (vehicle: VehicleModelId): CarDefinition | undefined => ALL_CARS.find((c) => c.physics === vehicle);
+export const anyCarForVehicle = (vehicle: VehicleModelId): CarDefinition | undefined => ALL_CARS.find((c) => c.physics === vehicle && !c.mod);
 
+/**
+ * The car that stands for a vehicle model (its first car), e.g. for a leaderboard entry or a class rule. A mod car never
+ * does: a race or a board that names the model gets one of the game's own cars
+ */
 export const carForVehicle = (vehicle: VehicleModelId): CarDefinition =>
-  KNOWN_CARS.find((c) => c.physics === vehicle) ?? CARS[0];
+  KNOWN_CARS.find((c) => c.physics === vehicle && !c.mod) ?? CARS[0];

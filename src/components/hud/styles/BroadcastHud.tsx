@@ -210,6 +210,7 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({
   scale,
   trackCode,
   mfd,
+  channels,
   lapInvalid,
   towerGaps,
   mapMode,
@@ -247,13 +248,14 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({
         {rightExtra ? <div className="mt-2">{rightExtra}</div> : null}
       </div>
 
-      {mfd ? (
+      {mfd || channels ? (
         // Beside the pod on a wide screen, above it on a laptop
         <div
-          className="absolute right-[clamp(14px,2.2vw,24px)] bottom-[136px] hidden lg:block xl:bottom-[clamp(14px,2.2vw,24px)]"
+          className="absolute right-[clamp(14px,2.2vw,24px)] bottom-[136px] hidden flex-col items-end gap-2 lg:flex xl:bottom-[clamp(14px,2.2vw,24px)]"
           style={anchor(scale, "bottom right")}
         >
           {mfd}
+          {channels}
         </div>
       ) : null}
 

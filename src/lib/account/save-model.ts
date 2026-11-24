@@ -68,6 +68,8 @@ export const KEY_CLASSES: Readonly<Record<string, KeyClass>> = {
   "librecorsa.supportPrompt": "device",
   "librecorsa.whatsNewSeen": "device",
   "librecorsa.signInHintShown": "device",
+  // Mod packages are on this device only (the launcher's folder, its browser's storage), and so is which are off
+  "librecorsa.mods.disabled": "device",
   // UI state
   "lc.mfdPage": "device",
   "lc.seatHintCars": "device",

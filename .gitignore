@@ -38,6 +38,10 @@ __pycache__/
 # Force-feedback helper, compiled on first `npm run ffb`
 /scripts/ffb-bridge/bin/
 
+# Offline launcher builds (npm run launcher:build), and the Windows resources a build makes for a moment
+/launcher/dist/
+/launcher/rsrc_*.syso
+
 # Local notes & scratch dumps
 HANDOFF.md
 HANDOFF-*.md
@@ -71,8 +75,15 @@ UI-RESEARCH-*.md
 /public/gt3/
 # The soundtrack (src/lib/audio/music-catalog.ts): hosted like the circuits, never committed
 /public/music/
+# Mod packages a developer tries in a clone (docs/modding.md, npm run mod -- index)
+/public/mods/
+# Sources the mod importers download (npm run mod -- import <name> --fetch …)
+/scripts/mods/.cache/
 
 # F1 2026 local reference datasets & headless Blender audit outputs
 /reference_data/
 /artifacts/
 *.blend1
+
+# The launcher's import folder when it runs in a clone (go run . in launcher/)
+/launcher/import/

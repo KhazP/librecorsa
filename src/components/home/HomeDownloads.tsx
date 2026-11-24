@@ -8,11 +8,12 @@ import { Button } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icons";
 import {
-  APP_RELEASE,
   PLATFORM_DOWNLOADS,
+  RELEASE_LINKS,
   artifactHref,
   detectVisitorPlatform,
   formatDownloadSize,
+  isDirectDownload,
   orderPlatformsForVisitor,
   platformIdOf,
   type DetectedPlatform,
@@ -29,7 +30,7 @@ interface NavigatorUAData {
 }
 
 /** Why install the app, one line each (home.downloads.highlights in the messages) */
-const APP_HIGHLIGHTS = ["desktop", "android", "current", "browser"] as const;
+const APP_HIGHLIGHTS = ["desktopApp", "android", "live", "browser"] as const;
 
 function orderedArtifacts(platform: PlatformDownload, detected: DetectedPlatform): readonly DownloadArtifact[] {
   if (platform.id !== "macos" || detected !== "macos-x64") return platform.artifacts;
@@ -74,16 +75,13 @@ export const HomeDownloads: React.FC<{ variant: "hub" | "page" }> = ({ variant }
     <div className="flex flex-col gap-10">
       {variant === "hub" ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 pt-1">
-          <p className="lc-body m-0 max-w-[66ch] text-[15px] text-lc-fog">{tx("intro")}</p>
+          <p className="lc-body m-0 max-w-[66ch] text-[15px] text-lc-fog">{tx("introApps")}</p>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]">
-            <span className="lc-mono text-lc-slate">
-              v{APP_RELEASE.version} <span aria-hidden>·</span> {day(APP_RELEASE.date)}
-            </span>
             <Link href="/download" onPointerEnter={focusOnHover} className={`inline-flex items-center pointer-coarse:min-h-11 ${TEXT_LINK}`}>
               {tx("directLink")}
             </Link>
             <a
-              href={APP_RELEASE.allReleasesUrl}
+              href={RELEASE_LINKS.allReleasesUrl}
               target="_blank"
               rel="noopener"
               onPointerEnter={focusOnHover}
@@ -136,9 +134,9 @@ export const HomeDownloads: React.FC<{ variant: "hub" | "page" }> = ({ variant }
                 <footer className="mt-auto flex flex-col gap-3 pt-1">
                   <div className="flex flex-wrap items-center gap-2.5">
                     {artifacts.map((artifact, artifactIdx) => {
-                      const href = artifactHref(artifact);
+                      const href = artifactHref(artifact, platform.release);
                       const size = formatDownloadSize(artifact.sizeBytes);
-                      const isDirect = artifact.file !== null;
+                      const isDirect = isDirectDownload(artifact, platform.release);
                       const isNavDefault = variant === "hub" && platformIdx === 0 && artifactIdx === 0;
                       const buttonLabel = isDirect ? artifact.label : "GitHub Releases";
                       const ariaLabel =
@@ -166,12 +164,23 @@ export const HomeDownloads: React.FC<{ variant: "hub" | "page" }> = ({ variant }
                   </div>
 
                   <p className="lc-mono m-0 text-[12px] text-lc-slate">
-                    {artifacts.map((artifact, i) => {
+                    v{platform.release.version}
+                    {platform.release.published && platform.release.date ? (
+                      <>
+                        {" "}
+                        <span aria-hidden>·</span> {day(platform.release.date)}
+                      </>
+                    ) : null}
+                    {artifacts.map((artifact) => {
                       const size = formatDownloadSize(artifact.sizeBytes);
-                      const part = size ? tx("detailSized", { detail: artifact.detail, size }) : tx("detailPending", { detail: artifact.detail });
+                      const part = !isDirectDownload(artifact, platform.release)
+                        ? tx("detailPending", { detail: artifact.detail })
+                        : size
+                          ? tx("detailSized", { detail: artifact.detail, size })
+                          : artifact.detail;
                       return (
                         <React.Fragment key={artifact.id}>
-                          {i > 0 ? <span aria-hidden> · </span> : null}
+                          <span aria-hidden> · </span>
                           {part}
                         </React.Fragment>
                       );
@@ -220,15 +229,15 @@ export const HomeDownloads: React.FC<{ variant: "hub" | "page" }> = ({ variant }
             {tx("buildsTitle")}
           </h2>
           <p className="lc-body m-0 max-w-[60ch] text-[15px] leading-[1.6]">
-            {tx.rich("builds", {
+            {tx.rich("buildsSigned", {
               file: ".well-known/assetlinks.json",
               code: (chunks) => <code className="lc-mono text-[13px] text-lc-chalk">{chunks}</code>,
             })}
           </p>
           <div className="flex flex-wrap gap-x-6 gap-y-3 pt-1 text-[14px]">
             {[
-              [tx("allReleases"), APP_RELEASE.allReleasesUrl],
-              [tx("signingPolicy"), APP_RELEASE.codeSigningPolicyUrl],
+              [tx("allReleases"), RELEASE_LINKS.allReleasesUrl],
+              [tx("signingPolicy"), RELEASE_LINKS.codeSigningPolicyUrl],
             ].map(([label, href]) => (
               <a
                 key={href}

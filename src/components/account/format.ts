@@ -85,15 +85,27 @@ export function typedLinkCode(raw: string): string {
 }
 
 /**
- * The desktop app (Electron): it stays on librecorsa.org and sends every other site to the system browser
- * (desktop/src/nav-policy.js), so a sign-in page of Discord, Google or Steam would never come back to it. Electron
- * names itself in the user agent.
+ * The desktop app, which a sign-in page of Discord, Google or Steam never comes back to:
+ * - the launcher (launcher/), which serves the game on this computer and opens it at http://127.0.0.1 (a clone's dev
+ *   server is at localhost): the provider's page returns to librecorsa.org, not to it
+ * - the Electron app, retired, whose installed copies still open librecorsa.org: it stays on librecorsa.org and sends
+ *   every other site to the system browser; Electron names itself in the user agent
  */
 export function inDesktopApp(): boolean {
-  return typeof navigator !== "undefined" && /\bElectron\//.test(navigator.userAgent);
+  return inLauncher() || (typeof navigator !== "undefined" && /\bElectron\//.test(navigator.userAgent));
+}
+
+/** The launcher's window, where passkeys can't work either: a passkey belongs to librecorsa.org, not 127.0.0.1 */
+export function inLauncher(): boolean {
+  return typeof window !== "undefined" && window.location.hostname === "127.0.0.1";
 }
 
 const noSubscribe = () => () => {};
+
+/** `inLauncher()` for a component: false in the static page, the real answer once it runs in the browser */
+export function useInLauncher(): boolean {
+  return useSyncExternalStore(noSubscribe, inLauncher, () => false);
+}
 
 /** `inDesktopApp()` for a component: false in the static page, the real answer once it runs in the browser */
 export function useInDesktopApp(): boolean {

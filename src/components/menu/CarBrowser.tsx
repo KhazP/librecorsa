@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslations } from "use-intl/react";
-import type { LiveryConfig } from "@/types/f1";
+import type { LiveryConfig, VehicleModelId } from "@/types/f1";
 import { LIVERIES } from "@/lib/track-data";
 import {
   CAR_QUALITY_META,
@@ -165,7 +165,9 @@ export const CarBrowser: React.FC<{
   toolbar?: React.ReactNode;
   /** The car cannot change now (an online race): the detail pane says why instead of offering Choose car */
   lockedReason?: string;
-}> = ({ carId, onChangeCar, selectedLivery, onChangeLivery, library, onClose, toolbar, lockedReason }) => {
+  /** Active multiplayer lobby class/spec lock: disallowed cars cannot be chosen */
+  lobbyRestriction?: { label: string; allowedVehicles: readonly VehicleModelId[] } | null;
+}> = ({ carId, onChangeCar, selectedLivery, onChangeLivery, library, onClose, toolbar, lockedReason, lobbyRestriction }) => {
   const storeBuild = useStoreBuild();
   const tx = useTranslations("menu.carBrowser");
   const classes = carClassesInUse();
@@ -357,13 +359,15 @@ export const CarBrowser: React.FC<{
           ? { label: tx("current"), disabled: true, current: true, run: () => {} }
           : lockedReason
             ? { label: lockedReason, disabled: true, run: () => {} }
-            : {
-              label: tx("choose"),
-              run: () => {
-                onChangeCar(c.id);
-                onClose?.();
-              },
-            }
+            : lobbyRestriction && !lobbyRestriction.allowedVehicles.includes(c.physics)
+              ? { label: tx("lobbyLockedTo", { rule: lobbyRestriction.label }), disabled: true, run: () => {} }
+              : {
+                label: tx("choose"),
+                run: () => {
+                  onChangeCar(c.id);
+                  onClose?.();
+                },
+              }
       }
     />
   );

@@ -49,9 +49,9 @@ export const WET_TYRE_TRAITS: Record<TireCompound, WetTyreTraits> = {
   hard: SLICK_TRAITS,
   // Intermediate: shallow grooves, high-silica compound for a damp or lightly wet track
   intermediate: {
-    dryGrip: 0.91,
-    wetGrip: 0.89,
-    clearMm: 1.3,
+    dryGrip: 0.9,
+    wetGrip: 0.78,
+    clearMm: 1.25,
     treadDepthMm: 2.5,
     tempShiftC: -30,
     dryWearScale: 3,
@@ -60,9 +60,9 @@ export const WET_TYRE_TRAITS: Record<TireCompound, WetTyreTraits> = {
   },
   // Full wet (extreme wet): deep grooves and soft silica tread that clear standing water
   wet: {
-    dryGrip: 0.84,
-    wetGrip: 0.93,
-    clearMm: 3.1,
+    dryGrip: 0.82,
+    wetGrip: 0.79,
+    clearMm: 2.65,
     treadDepthMm: 5.5,
     tempShiftC: -42,
     dryWearScale: 4,
@@ -245,7 +245,10 @@ export function wetGripFactor(traits: WetTyreTraits, waterMm: number, speedMs: n
   const film = 1 - (1 - traits.wetGrip) * wet;
   // Un-grooved slicks suffer an extra micro-asperity boundary lubrication loss once water exceeds a damp film
   const slickBoundaryLoss = (traits.treadDepthMm ?? 0) === 0 ? 1 - 0.14 * smoothstep(DAMP_MM, WET_MM, waterMm) : 1;
-  const full = film * slickBoundaryLoss * aquaplaneFactor(traits, waterMm, speedMs, wear);
+  // Deep standing water (> 0.5 mm) maintains a thicker squeeze-film under even full-wet blocks, demanding genuinely
+  // earlier braking and gentler throttle in heavy rain
+  const deepWaterLoss = waterMm > WET_MM ? 1 - 0.14 * smoothstep(WET_MM, 2.6, waterMm) : 1;
+  const full = film * slickBoundaryLoss * deepWaterLoss * aquaplaneFactor(traits, waterMm, speedMs, wear);
   return 1 - (1 - full) * Math.min(1, severity);
 }
 

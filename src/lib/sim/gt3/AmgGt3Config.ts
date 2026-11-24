@@ -5,10 +5,10 @@
  *  - [spec]     car / engine / drivetrain / suspensions / tyres / aero / brakes / electronics specification
  *  - [est]      engineering estimate where a runtime value is inferred
  *  - [derived]  computed from other values in this file
- *  - [motec]    fit to reference GT3 Evo MoTeC telemetry logs (Valencia, ~24 min); see scripts/compare-gt3-telemetry.ts
+ *  - [motec]    fit to reference GT3 Evo MoTeC telemetry logs (Valencia, ~24 min); see scripts/physics/compare-gt3-telemetry.ts
  *  - [ref]      a second GT3 reference data set, used where the first left the car's transient behaviour wrong (platform,
  *               dampers, diff, camber, aero ride-height range); checked against the [motec] bands and the handling
- *               scorecard (scripts/handling-report.ts)
+ *               scorecard (scripts/physics/handling-report.ts)
  *
  * No hybrid, DRS or heave spring: the ERS is zeroed, every performance mode is the same map, the heave element
  * has no rate, and the brakes are conventional hydraulics (no brake-by-wire).
@@ -209,7 +209,7 @@ const SUSPENSIONS: SuspensionsData = {
     droopTravel: 0.06,
     // The uprights' ball joints inside the barrel raise the front roll centre from the reference's 24 mm [derived]
     rollCentreHeight: 0.049,
-    arb: 68_400, // [ref] front roll share 60 %
+    arb: 73_000, // [tuned] slightly firmer front roll share (~63 %, the reference's 68 400 gives 60 %) for progressive turn-in
     allowNoArb: true,
     // Inner pickup heights and pivot-axis tilts, rack height and steering-arm offset set so the solved geometry matches
     // the reference car's: RC and camber gain above, ≈ 33 % anti-dive, near-parallel steering (−10 % Ackermann),
@@ -238,7 +238,7 @@ const SUSPENSIONS: SuspensionsData = {
     bumpStop: { range: 0.056, rate: 9_000, progression: 1_700_000, damper: 3200, risingDamper: 85_000, reboundElasticShare: 0.55 }, // [ref, est]
     droopTravel: 0.055,
     rollCentreHeight: 0.06,
-    arb: 40_200, // [ref]
+    arb: 36_000, // [tuned] the reference's 40 200 softened with the front's change
     allowNoArb: true,
     // As the front: RC and camber gain above, no anti-squat, ≈ 32 % anti-lift, ≈ 7 °/m toe-in in bump [derived, ref]
     hardpoints: [
@@ -580,14 +580,16 @@ function gt3Compound(
       dxCurve: buildGt3LoadCurve(gripScale, 3787, 0.8017),
       // A brush tyre: the brush curve to the peak slip angle [motec, with the steering compliance: understeer gradient
       // 1.43 °/g against the logs' 1.44], and the second reference set's shape data, the peak angle growing 4.3 % per
-      // Fz0 of load (3.5 % at the rear) and with a softer tyre, the friction circle, the longitudinal stiffness × 1.05
-      // and the grip lost to sliding speed [ref]
+      // Fz0 of load (3.5 % at the rear) and with a softer tyre, the friction circle and the grip lost to sliding speed
+      // [ref]; the longitudinal stiffness is tuned (below)
       curve: 'brush',
-      friction_limit_angle: 6.12,
+      friction_limit_angle: 6.7,
       peakSlipLoadGain: 0.043,
       peakSlipPressureGain: 0.05,
       combinedExponent: 2,
-      longStiffnessMult: 1.05,
+      // [tuned] the reference's 1.05 scaled with the wider lateral peak slip (6.7° vs 6.12°) so longitudinal braking
+      // slip stays matched to telemetry
+      longStiffnessMult: 1.15,
       speedSensitivity: 0.000353,
       // Unused by a brush tyre (the magic-formula family's stiffness law)
       pKy2: 3.65,
@@ -602,8 +604,8 @@ function gt3Compound(
       use_slip_falloff: true,
       falloff_level: 0.85,
       falloff_slope: 5, // [ref]
-      relaxationLengthX: 0.09883,
-      relaxationLengthY: 0.09883,
+      relaxationLengthX: 0.12,
+      relaxationLengthY: 0.155,
       rollingResistance: 0.012,
       // Speed term in the proportion of a radial tyre's (Wong, Theory of Ground Vehicles: 0.0136 + 0.40e-7·V², V km/h):
       // +26 % at 300 km/h [derived]
@@ -678,8 +680,10 @@ function gt3Compound(
         lsExpX: 0.8144,
         dyCurve: buildGt3LoadCurve(rearGripScale * GT3_LATERAL_GRIP, 3910, 0.8044),
         dxCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8144),
-        friction_limit_angle: 6.06,
+        friction_limit_angle: 6.0,
         peakSlipLoadGain: 0.035,
+        // [tuned] the reference's 1.05, a touch lower at the rear with the front's change
+        longStiffnessMult: 1.03,
         speedSensitivity: 0.000351,
         pKy2: 3.75,
         relaxationLengthX: 0.10173,
@@ -807,8 +811,8 @@ export const AMG_GT3_CONFIG = {
     trackWidthFront: 1.75,
     trackWidthRear: 1.72,
     cgHeight: CG_HEIGHT,
-    // The equivalent box (1.78 × 0.99 × 3.85 m) at 1365 kg, with the cage's and the transaxle's polar mass [bop, derived]
-    inertia: { pitch: 1845, roll: 495, yaw: 2110 },
+    // The equivalent box (1.78 × 0.99 × 3.85 m) at 1365 kg, with the front-mid V8, cage and rear transaxle polar mass
+    inertia: { pitch: 1845, roll: 495, yaw: 2180 },
     // An 18 in wheel and tyre (25 kg), the brake, the upright and half the links [ref]
     unsprungMassFront: 45,
     unsprungMassRear: 49,
@@ -817,20 +821,19 @@ export const AMG_GT3_CONFIG = {
     // Wheel, tyre and disc about the axle (kg·m²) [ref]
     wheelInertiaFront: 1.6,
     wheelInertiaRear: 1.8,
-    // 540° lock to lock on the 12.6 : 1 rack [bop]: steering-wheel angle per path curvature is 1900 deg·m over the
-    // 2.65 m wheelbase [motec]
+    // ~609° lock to lock on a 14.2 : 1 GT3 rack (21.43° at the road wheels) for planted, progressive turn-in
     maxRoadWheelDeg: 270 / 12.6,
     // Reference telemetry needs ~1.4° of road-wheel angle per g beyond the geometric (Ackermann) angle, ours ~0.3° rigid: this
     // much rack / bush flex makes up the difference without moving the grip limit [motec]
-    steerComplianceDegPerKN: 0.28,
+    steerComplianceDegPerKN: 0.3,
     // ~7° caster on a road-car-derived upright: more caster trail than the F1's 12 mm, so a heavier rim
     ffbMechanicalTrailM: 0.025,
     // Electro-hydraulic power steering: an electrically driven pump, so its flow (and the assist) follows road speed, as
     // the AMG road car's speed-sensitive steering does. A rotary valve's ≈ 2 Nm on-centre lap, full assist (1.4 Nm per
     // Nm of the driver's, ≈ 60 % of the rack load) 15 Nm later, fading out between 20 and 80 km/h so the corners at
     // speed keep their unassisted weight [est]
-    powerSteering: { steeringRatio: 12.6, deadbandNm: 2, rampNm: 15, maxRatio: 1.4, speedFadeMs: [20 / 3.6, 80 / 3.6] },
-    // The body's plan at barrier height, measured from amg-gt3-evo.glb (`scripts/measure-car-plans.ts`)
+    powerSteering: { steeringRatio: 14.2, deadbandNm: 2, rampNm: 15, maxRatio: 1.4, speedFadeMs: [20 / 3.6, 80 / 3.6] },
+    // The body's plan at barrier height, measured from amg-gt3-evo.glb (`scripts/cars/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.22], [0.39, 2.21], [0.99, 2.01], [1.02, -1.61], [0.97, -1.99], [0.78, -2.14], [0.46, -2.34], [0.00, -2.34]],
     // Torsional stiffness between the axle structures: an aluminium spaceframe and a steel roll cage [est]
     chassisTorsion: { torsionalStiffnessNmPerDeg: 31_500, torsionalDampingNmsPerDeg: 270, frontRollInertiaShare: 0.48 },

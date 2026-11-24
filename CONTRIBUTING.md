@@ -38,11 +38,11 @@ npm run typecheck
 npm run verify
 ```
 
-`npm run verify` runs every `scripts/verify-*.ts` suite (physics, every car model, input, lap tools, race session,
+`npm run verify` runs every `scripts/verify/verify-*.ts` suite (physics, every car model, input, lap tools, race session,
 realism, telemetry out, WebHID force feedback) but the slow lap check. It takes a few minutes, several suites at once,
-longest first (`scripts/verify-timings.json`; `npm run verify -- --record` updates the times, and `VERIFY_JOBS=1` runs the
+longest first (`scripts/verify/verify-timings.json`; `npm run verify -- --record` updates the times, and `VERIFY_JOBS=1` runs the
 suites one after another). A failing suite doesn't stop the others: the run ends with every suite that failed and
-the command that reruns it, such as `node scripts/run-verify.mjs tyre-thermal`. Physics changes must keep it
+the command that reruns it, such as `node scripts/verify/run-verify.mjs tyre-thermal`. Physics changes must keep it
 passing. If a change is meant to move a number, update the check and say why in the pull request.
 `npm run verify:laps` is that slow full-pace lap check; run it when you touch tyres, aero, the drivetrain or the
 racing-line optimiser.

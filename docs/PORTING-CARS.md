@@ -1,40 +1,42 @@
 # Porting cars
 
-The repository includes one circuit (RISE Motordrome) and one car, the 2026 prototype (body in `public/cars/f12026/model/`, sound in `public/cars/f12026/audio/`). This guide is how I add a car to a local clone from two kinds of source:
+A fresh clone of LibreCorsa ships with one circuit (RISE Motordrome) and one car—the 2026 prototype (`public/cars/f12026/model/` and `public/cars/f12026/audio/`). This guide walks through porting additional cars into a local clone from two common sources:
 
-- **A car mod from another racing game**: a car folder with its KN5 model, skins and an FMOD `.bank` sound file.
-- **A Sketchfab-style model**: a glTF/GLB download.
+- **Car mods from other racing sims:** Folders containing `.kn5` geometry, skins, and FMOD `.bank` audio.
+- **Sketchfab-style 3D models:** Standalone `.glb` / `.gltf` downloads.
 
-Each porting script was written for particular cars, so expect to read it and adjust it.
+Because each porting script was built around specific source cars, treat them as adaptable templates—you will usually need to inspect the source hierarchy and add or tweak a preset.
 
-## What you need
+## Prerequisites
 
-- Node.js, then `npm install` once (the game, the checks and the compressor).
-- [uv](https://docs.astral.sh/uv/) for the Python scripts. Each command below pulls its own packages with `--with`, so there is no virtualenv to set up. No Blender: the scripts read and write GLB files directly.
-- For sound: `ffmpeg` built with libvorbis, plus the libvorbis and libogg libraries (python-fsb5 loads them to decode Vorbis banks). The script expects `/opt/homebrew/bin/ffmpeg`; pass `--ffmpeg <path>` if yours is elsewhere.
+- **Node.js:** Run `npm install` once to enable the simulator, verification scripts, and GLB compressor.
+- **[uv](https://docs.astral.sh/uv/):** Runs the Python converters with isolated `--with` dependencies—no manual virtualenv or Blender installation required (the scripts read and write GLB binaries directly).
+- **Audio tools (for FMOD banks):** `ffmpeg` compiled with `libvorbis`, plus system `libvorbis` and `libogg` libraries (loaded by `python-fsb5` to decode Vorbis banks). By default the script looks for `/opt/homebrew/bin/ffmpeg`; override it with `--ffmpeg <path>` if installed elsewhere.
 
-## The rig
+## Expected GLB rig
 
-The game loads a ported car with `src/lib/ported-car-model.ts`, which expects one GLB laid out like this:
+`src/lib/ported-car-model.ts` expects every ported car in a single `.glb` structured as follows:
 
+```text
+CAR                 root node storing vehicle measurements in glTF extras
+  BODY              non-rotating meshes: chassis, cockpit, glass, lights, brake callipers
+  STEER             steering wheel pivot, local +Z along the steering column into the dash (optional)
+  WHEEL_RF          hub pivot centred on the tyre (same pattern for WHEEL_LF, WHEEL_RR, WHEEL_LR)
+    WHEEL_RF_RIM    wheel rim, hub, and brake disc
+    WHEEL_RF_TYRE   tyre mesh as a single primitive (required by the tyre deformation shader)
 ```
-CAR                 root node, measurements in its extras
-  BODY              everything that doesn't turn: body, cockpit, glass, lights, callipers
-  STEER             steering wheel pivot, local +Z along the column into the dash (optional)
-  WHEEL_RF          hub pivot at the tyre's centre (likewise WHEEL_LF, WHEEL_RR, WHEEL_LR)
-    WHEEL_RF_RIM    rim, hub, brake disc
-    WHEEL_RF_TYRE   the tyre as one primitive (the tyre deformation shader needs that)
-```
 
-- Metres, +X to the car's left, +Y up, +Z forward, lowest tyre point at y = 0, X centred on the four wheels.
-- `CAR` extras: `wheelCentres` (keys `WHEEL_RF`, `WHEEL_LF`, `WHEEL_RR`, `WHEEL_LR`), `tyreRadius` and `tyreHalfWidth` (keys `RF`, `LF`, `RR`, `LR`), `wheelbaseM`, and `cameras` with `cockpit`, `tcam`, `dash`, `bumper`, `nearChase` and `farChase`, each `{ pos, pitchDeg, fov }`.
-- The game finds the root by its `wheelCentres`, not by its name. All the porters below write this layout; it matters when you change one.
+Coordinate system and metadata contract:
 
-## Route A: a car mod from another game
+- **Units and orientation:** Metres, `+X` to the car's left, `+Y` up, `+Z` forward, lowest tyre point resting at `y = 0`, and `X` centred across the four wheels.
+- **Root `extras`:** Must include `wheelCentres` (`WHEEL_RF`, `WHEEL_LF`, `WHEEL_RR`, `WHEEL_LR`), `tyreRadius` and `tyreHalfWidth` (`RF`, `LF`, `RR`, `LR`), `wheelbaseM`, and `cameras` (`cockpit`, `tcam`, `dash`, `bumper`, `nearChase`, `farChase`—each `{ pos, pitchDeg, fov }`).
+- **Root discovery:** LibreCorsa locates the root node by the presence of `wheelCentres` in its extras rather than by node name. All porting scripts below produce this structure automatically.
 
-### Body
+## Route A: Porting a car mod from another sim
 
-`scripts/cars/port_ac_car.py` reads the folder's main `.kn5` and one skin. It splits the model by the mod's node names: meshes under `WHEEL_RF`/`LF`/`RR`/`LR` become that wheel, meshes under `STEER_HR` the steering wheel, the rest `BODY`. The cockpit camera comes from `DRIVEREYES` in `car.ini`, read from `data/` or `data.acd`.
+### Converting the 3D body
+
+`scripts/cars/port_ac_car.py` reads the mod's main `.kn5` model and a chosen skin. It splits geometry by node hierarchy—meshes under `WHEEL_RF`/`LF`/`RR`/`LR` become wheels, `STEER_HR` becomes the steering wheel, and everything else goes into `BODY`. The cockpit eye position is read from `DRIVEREYES` in `car.ini` (inside `data/` or `data.acd`).
 
 ```bash
 uv run --python 3.14 --no-project --with numpy --with pillow \
@@ -42,47 +44,68 @@ uv run --python 3.14 --no-project --with numpy --with pillow \
   path/to/<car folder> public/cars/<id>/model/<id>.glb --skin <skin folder>
 ```
 
-Options: `--car <preset>` (default: the preset for the folder's name, from `PRESET_BY_FOLDER`), `--kn5 <file>` (default `<folder name>.kn5`), `--max-tex`, `--small-tex` and `--normal-tex` (texture caps in px, defaults 2048, 1024 and 512), `--jpeg-quality` (default 88), `--skins-out <folder>` (also writes every skin's livery files there). Keep the folder's original name: `data.acd` is decoded with a key made from it.
+Useful options:
 
-Each car I wrote it for has a preset in `PRESETS`, and the script stops without one, so another mod needs a preset of its own. Copy the closest:
+- `--car <preset>`: Override the preset (defaults to matching the folder name in `PRESET_BY_FOLDER`; `auto` builds an automatic one).
+- `--kn5 <file>`: Specify the `.kn5` filename (defaults to `<folder name>.kn5`).
+- `--max-tex`, `--small-tex`, `--normal-tex`: Texture resolution caps in pixels (defaults: `2048`, `1024`, `512`).
+- `--jpeg-quality`: Texture compression quality (default: `88`).
+- `--skins-out <folder>`: Export texture overrides for every skin in the mod folder.
+- `--skins-only <a,b>`: Export only the skins named.
+- `--report <file.json>`: Write what the porter made and what it found.
 
-- `materials` maps that car's materials to glTF names and PBR values. A material missing from it falls back to its diffuse texture on a plain surface. A preset with `auto=True` leaves `materials` empty and makes every material from its shader values, naming only the paint in `paint`. The names matter: `src/lib/render/ported-car-materials.ts` picks the paint, rubber, metal, glass and mirror treatments by material name.
-- `tyre_prefix` (the tyre nodes' name prefix, `object__90` on the Liana) or `tyre_materials` finds each tyre under its wheel. Set one for your car, or the script stops with "expected one tyre under each WHEEL_xx". With `tyre_prefix`, each tyre must use a single material.
-- `skin_files` and the `bake:` entries in `materials` bake the skin's detail map into the paint (an `auto` preset takes the skin folder's textures by name instead); `--skin` defaults to the preset's `default_skin`.
-- `windscreen` names the glass material the dash camera is fitted to, and `title` goes into `source.title` in the extras.
+A car with no preset gets an automatic one, and the porter prints what it found:
 
-### Sound
+- **Model:** `<folder name>.kn5`, else the file `lods.ini` names for LOD_0, else the largest `.kn5` that is neither a lower LOD nor the collider.
+- **Tyres** under each `WHEEL_xx`: the meshes AC's tyre shader (`ksTyres`) draws, else those named as tyres (`tyre`, `tire`, `gomma`, `rubber`… on the material, then the node), else by shape (the outermost ring round the hub).
+- **Paint:** the body material named as paint that covers the most of the body and is repainted by the most skins.
+- **Windscreen:** the glass most of the driver's sight lines pass through (from `DRIVEREYES`), an outer layer before an inner one or a gauge's glass.
+- **Discs** beside the wheels (`DISC_xx` at all four corners) spin with them. Broken glass, blurred rims, the low-detail cockpit and fastened belts are left out.
+- **Materials** come from their shader values (as with `auto=True`), every texture a skin replaces becomes a livery file, and the name comes from `ui/ui_car.json`.
 
-`scripts/audio/port_ac_bank.py` turns an FMOD `.bank` into the game's format: Ogg Vorbis loops anchored at engine RPMs, one-shots and a `manifest.json`. `public/cars/f12026/audio/` is a finished example.
+> Keep the mod's original folder name intact—`data.acd` decryption derives its key from the folder name.
+
+The automatic choices are guesses. When one is wrong, a preset of the car's own in `PRESETS` fixes it; copy the closest and configure:
+
+- **`materials`:** Maps source material names to glTF names and PBR properties. Unlisted materials fall back to a plain diffuse surface. Setting `auto=True` leaves `materials` empty and derives PBR parameters automatically from the mod's shader values, requiring only `paint` to be named. Material names matter: `src/lib/render/ported-car-materials.ts` assigns paint, rubber, metal, glass, and mirror shaders based on them.
+- **`tyre_prefix` or `tyre_materials`:** Identifies the tyre mesh under each `WHEEL_xx` node (for example, `object__90` on the Liana). One of the two is required, or the script aborts with `"expected one tyre under each WHEEL_xx"`. When using `tyre_prefix`, each tyre must use a single material.
+- **`skin_files` and `bake:` entries:** Bakes skin detail maps into paint textures (`auto=True` presets pick skin textures by filename instead). `--skin` falls back to the preset's `default_skin`.
+- **`windscreen` and `title`:** `windscreen` names the glass material used to frame the dash camera; `title` populates `source.title` in glTF extras.
+
+### Converting the FMOD sound bank
+
+`scripts/audio/port_ac_bank.py` unpacks an FMOD `.bank` into RPM-anchored Ogg Vorbis loops, one-shots, and a `manifest.json` (see `public/cars/f12026/audio/` for a reference output).
 
 ```bash
-# The bank's samples: names, rate, channels, length
+# 1. List all samples in the bank (name, sample rate, channels, duration)
 uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
   python -P scripts/audio/port_ac_bank.py --list "/path/to/car.bank"
-# Its RPM intervals and the RPM each sample plays at natural pitch
+
+# 2. Inspect RPM bands and natural pitch RPM for each sample
 uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
   python -P scripts/audio/port_ac_bank.py --inspect "/path/to/car.bank"
-# Write public/cars/<id>/audio/ from your entry in car_configs.json
+
+# 3. Export public/cars/<id>/audio/ using your entry in car_configs.json
 uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
   python -P scripts/audio/port_ac_bank.py --car <id>
 ```
 
-The mapping is `scripts/audio/car_configs.json`, one entry per car id. Add your own entry (copying `f12026` is a good start):
+Add an entry for your car in `scripts/audio/car_configs.json` (copying `f12026` as a template). For a quick start, `--auto <bank> --out <folder> --limiter <rpm> --idle <rpm>` makes one from the bank's sample names instead (interior or exterior, on or off the throttle, and an rpm or a word such as `onlow`, `offmedhigh` or `idle`, spread over the car's own idle-to-limiter range); check it by ear. An entry holds:
 
-- `outDir`: `public/cars/<id>/audio`
-- `intBank`, plus `extBank` if the mod has separate interior and exterior banks (an absolute path, or relative to `$AC_BANKS_DIR` / `~/Downloads`)
-- `sourceDescription`: where the sound came from, copied into the manifest
-- `engine.int` and `engine.ext`, each with `on` and `off` lists of `{ "rpm", "rootRpm", "sample" }`: the anchor RPM, the RPM the sample plays at natural pitch (from `--inspect`; defaults to `rpm`) and the sample name (from `--list`)
-- `throttleCurve` and `lift`, copied from an entry for a similar engine
-- optional: `turbo`, `transmission`, `skid`, `tractionControl`, `oneshots` (sample lists by role, as in the existing entries), `shiftFallbackSample`, `limiterFallbackSample`
+- `outDir`: Target directory, e.g., `public/cars/<id>/audio`.
+- `intBank` (and optional `extBank` when interior/exterior banks are separate): Absolute path or path relative to `$AC_BANKS_DIR` / `~/Downloads`.
+- `sourceDescription`: Attribution metadata copied into `manifest.json`.
+- `engine.int` and `engine.ext`: Each defines `on` (load) and `off` (coast) arrays of `{ "rpm", "rootRpm", "sample" }`, pairing anchor RPMs with natural pitch RPMs from `--inspect` (defaults to `rpm`) and sample names from `--list`.
+- `throttleCurve` and `lift`: Copy from an entry with a similar engine architecture.
+- Optional channels: `turbo`, `transmission`, `skid`, `tractionControl`, `oneshots`, `shiftFallbackSample`, and `limiterFallbackSample`.
 
-`--car` deletes any `.ogg` in `outDir` that the new manifest doesn't use.
+Running `--car` automatically deletes any stale `.ogg` files in `outDir` not referenced by the generated manifest.
 
-## Route B: a Sketchfab-style model
+## Route B: Porting a Sketchfab-style GLB
 
-### Open-wheelers
+### Open-wheel cars
 
-`scripts/cars/port_sketchfab_f1.py` bakes the model's node transforms, finds the tyres, rims and steering wheel by material name, and writes the rig.
+`scripts/cars/port_sketchfab_f1.py` bakes node transforms, detects tyres, rims, and steering wheels by material name, and writes a compliant rig:
 
 ```bash
 uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python-headless --with pillow \
@@ -90,59 +113,62 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python
   path/to/model.glb public/cars/<id>/model/<id>.glb
 ```
 
-- It takes a preset from `CAR_PRESETS` by the output or input file name, or by `--car <preset>`. For any other model it guesses: materials named like `tyre`, `tread` or `sidewall` that sit more than 0.45 m off the centre line are tyres; `rim`, `wheel_hub`, `disc` or `brake` are rims; `steer`, `_sw` or `lcd` belong to the steering wheel.
-- When the guess is wrong, say which materials are which: `--tyre-mats`, `--rim-mats` and `--steer-mats` take lists of material names, `--steer-box XMIN XMAX YMIN YMAX ZMIN ZMAX` is the box (in metres) that holds the steering wheel, and `--no-steer` leaves the wheel in `BODY`. The "Could not find any tyre primitives" error lists the names it tried.
-- `--scale <factor>` or `--wheelbase <metres>` resize the model. `--max-tex`, `--small-tex` and `--jpeg-quality` (defaults 2048, 1024, 92) set the textures.
-- It doesn't rotate anything. The model must follow the glTF convention (front towards +Z, Y up) and be in metres, since the guess measures before any `--scale`.
+- **Auto-detection and presets:** Matches `CAR_PRESETS` by input/output filename or `--car <preset>`. For unknown models, it classifies materials automatically: names matching `tyre`, `tread`, or `sidewall` sitting more than `0.45 m` from the centreline become tyres; `rim`, `wheel_hub`, `disc`, or `brake` become rims; `steer`, `_sw`, or `lcd` attach to the steering wheel.
+- **Manual overrides:** If heuristics miss, pass `--tyre-mats`, `--rim-mats`, or `--steer-mats` with explicit material lists, constrain the steering wheel with `--steer-box XMIN XMAX YMIN YMAX ZMIN ZMAX` (in metres), or pass `--no-steer` to keep the wheel inside `BODY`. If tyre detection fails (`"Could not find any tyre primitives"`), the error prints every material name it checked.
+- **Scaling and textures:** Resize via `--scale <factor>` or `--wheelbase <metres>`, and adjust textures with `--max-tex`, `--small-tex`, and `--jpeg-quality` (defaults: `2048`, `1024`, `92`).
+- **Orientation prerequisite:** The script does not rotate the model—ensure the source GLB already follows standard glTF orientation (`+Z` forward, `+Y` up) and uses metric scale before running, because detection heuristics measure prior to `--scale`.
 
-### GT3-type cars
+### GT3 and closed-wheel cars
 
-`scripts/cars/port_sketchfab_gt3.py` is two converters for two specific models, not a general tool. It takes `<source.glb> <out.glb>` and no options, runs `port_ddiaz_bmw` when the file has a node named `3DWheel Front L` and `port_vtx_amg` otherwise, and the second relies on that model's tyre material name and a measured steering pivot.
+`scripts/cars/port_sketchfab_gt3.py` contains two dedicated converters (`port_ddiaz_bmw` if the GLB has a `3DWheel Front L` node, otherwise `port_vtx_amg`) rather than a generic converter:
 
 ```bash
 uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python-headless --with pillow \
   python -P scripts/cars/port_sketchfab_gt3.py path/to/model.glb public/cars/<id>/model/<id>.glb
 ```
 
-For another closed-wheel car, add a `port_<model>` function beside those two, modelled on the closer one, and pick it in `main()`. `GlbWriter`, `make_steer_frame` and `copy_and_downscale_materials` in the same file do the writing.
+To port another closed-wheel Sketchfab car, add a new `port_<model>` function modelled on the closer existing converter and dispatch to it in `main()`, reusing `GlbWriter`, `make_steer_frame`, and `copy_and_downscale_materials` from the same script.
 
 ## Registering the car
 
-1. In `src/lib/cars/car-registry.ts`, add the id to the `CarId` union and an entry to `ALL_CARS`:
-   - `id`, `classId` (`"f1"`, `"gt3"`, `"proto"`, `"classic"` or `"road"`), `title`, `sub`, `badge`, `year`
-   - `quality`: `"own"`, `"shared"` or `"era"`, i.e. whether the physics were built for this car
-   - `physics`: the vehicle model under it, a `VehicleModelId` from `src/types/f1.ts` such as `"lc26"`, `"f12026-car"`, `"amg-gt3"` or `"liana"`
-   - `modelUrl: "/cars/<id>/model/<id>.glb"`
-   - `credit: { title, author, url, license, licenseUrl }` for the model's author
-   - `sound`: a `CarSoundSource` (next section)
-2. In `src/lib/hosted-content.ts`, add the id to `REPO_CAR_IDS`. A clone lists only those cars, so yours stays hidden without it. Setting `NEXT_PUBLIC_HOSTED_CONTENT=1` instead lists every car, including hosted ones whose files you don't have.
-3. In `scripts/verify-car-sounds.ts`, add the id to `EXPECTED_SOUNDS` with its sound and `maxIdleRpm`, and in `src/lib/render/onboard-views.ts` add the car's dash view to `OVER_WHEEL`. Both are typed `Record<CarId, ...>`, so `npx tsc --noEmit` fails until you do.
+Once the model (and optional audio) are in `public/cars/<id>/`:
 
-A ported car of class `f1` follows the open-wheel physics switch in the menu; its `physics` sets the chassis the body is fitted to. A car on `amg-gt3` uses the AMG GT3's cameras, framed on its own steering wheel.
+1. **`src/lib/cars/car-registry.ts`:** Add your ID to the `CarId` union and append an entry to `ALL_CARS`:
+   - Metadata: `id`, `classId` (`"f1"`, `"gt3"`, `"proto"`, `"classic"`, or `"road"`), `title`, `sub`, `badge`, `year`.
+   - Physics: `quality` (`"own"`, `"shared"`, or `"era"`) and `physics` (a `VehicleModelId` from `src/types/f1.ts`, such as `"lc26"`, `"f12026-car"`, `"amg-gt3"`, or `"liana"`).
+   - Assets and attribution: `modelUrl: "/cars/<id>/model/<id>.glb"`, `sound` (a `CarSoundSource`), and `credit: { title, author, url, license, licenseUrl }`.
+2. **`src/lib/hosted-content.ts`:** Add your ID to `REPO_CAR_IDS` so local clones display it in the car selector. (Setting `NEXT_PUBLIC_HOSTED_CONTENT=1` instead exposes all hosted cars, even those whose files you don't have locally.)
+3. **Exhaustive maps:** Add an entry to `EXPECTED_SOUNDS` (including `maxIdleRpm`) in `scripts/verify/verify-car-sounds.ts` and a dash camera entry to `OVER_WHEEL` in `src/lib/render/onboard-views.ts`. Both use `Record<CarId, ...>`, so TypeScript will flag missing entries.
 
-## Sound
+Cars with `classId: "f1"` automatically respect the menu's open-wheel physics toggle (`physics` determines which chassis the body fits). Cars using `amg-gt3` physics inherit the AMG GT3's camera rig framed around their own steering wheel.
 
-Add a `CarSoundSource` to `src/lib/sim/CarAudio.ts` and use it as the entry's `sound`:
+## Wiring up sound
+
+Declare a `CarSoundSource` in `src/lib/sim/CarAudio.ts` and reference it in your `ALL_CARS` entry:
 
 ```ts
-export const MY_CAR_SOUND: CarSoundSource = { id: "<id>", assetDir: "/cars/<id>/audio/", limiterRpm: 12500 };
+export const MY_CAR_SOUND: CarSoundSource = {
+  id: "<id>",
+  assetDir: "/cars/<id>/audio/",
+  limiterRpm: 12500,
+};
 ```
 
-`limiterRpm` is the recording's rev limiter. If the vehicle model's limiter differs, add `physicsLimiterRpm` with the model's, and the sound is rescaled to reach its own limiter. Without a bank of your own, use `F1_2026_SOUND`, the bank the repository ships.
+Set `limiterRpm` to the recording's rev limiter. If the underlying physics model revs to a different limit, also provide `physicsLimiterRpm` so LibreCorsa rescales pitch to hit the limiter cleanly. If you haven't ported a dedicated audio bank yet, reuse `F1_2026_SOUND` (included in the repository).
 
-## Checking it
+## Verification and compression
 
 ```bash
 npx tsc --noEmit
-npx tsx scripts/verify-ported-roots.ts   # loads every listed ported GLB the way the browser does
+npx tsx scripts/verify/verify-ported-roots.ts   # verifies every listed car GLB loads as the browser expects
 npm run dev
 ```
 
-Then open `http://localhost:3000/?car=<id>`. For a ported car of class `f1`, add `&f1physics=lc26` or `&f1physics=f12026-car` to try each physics model.
+Open `http://localhost:3000/?car=<id>` to inspect your port in-game. For `f1`-class cars, append `&f1physics=lc26` or `&f1physics=f12026-car` to test both open-wheel physics engines.
 
-`verify-ported-gt3.ts` checks the GT3s hosted on librecorsa.org by name (and skips them in a clone), so it doesn't check yours. Read it for what a good port measures: GLB size, one-primitive tyres, mirrored wheel centres, the body's height off the road, all six cameras.
+Although `scripts/verify/verify-ported-gt3.ts` targets the hosted GT3 models by name (and skips them in a local clone), it is a great checklist for verifying your own port: GLB file size, single-primitive tyres, symmetrical wheel centres, ground clearance, and all six camera viewpoints.
 
-The deploy meshopt-compresses every car GLB before building, and the game reads both kinds. I keep the raw file locally, since the porters and the checks above work on it. `node scripts/compress-car-glb.mjs <file.glb>` shows the compressed size, but it rewrites the file in place, so run it on a copy.
+During deployment, car GLBs are meshopt-compressed (LibreCorsa loads both raw and compressed files). Keep raw GLBs locally while iterating, as the porters and verification tools operate on uncompressed meshes. To test compressed file size, run `node scripts/cars/compress-car-glb.mjs <file.glb>` on a copy—it overwrites the input file in place.
 
 ## Licences
 

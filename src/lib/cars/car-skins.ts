@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { carById, carSkin, type CarId, type CarSkin } from "@/lib/cars/car-registry";
+import { parseModContentId } from "@/lib/mods/mod-manifest";
 
 /**
  * The livery picked for each car that has its own (`CarDefinition.skins`, the ported mods' skins), kept in the
@@ -8,14 +9,16 @@ import { carById, carSkin, type CarId, type CarSkin } from "@/lib/cars/car-regis
  */
 const STORAGE_KEY = "librecorsa.carSkins";
 
-const isId = (v: unknown, max: number): v is string => typeof v === "string" && new RegExp(`^[\\w-]{1,${max}}$`).test(v);
+const BUILT_IN_ID = /^[\w-]{1,60}$/;
+/** A car or livery id: the game's own, or a mod package's (`mod:<package>/<id>`) */
+const isId = (v: unknown): v is string => typeof v === "string" && (BUILT_IN_ID.test(v) || parseModContentId(v) !== null);
 
 function load(): Record<string, string> {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as unknown;
     const out: Record<string, string> = {};
     if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-      for (const [car, skin] of Object.entries(raw)) if (isId(car, 40) && isId(skin, 60)) out[car] = skin;
+      for (const [car, skin] of Object.entries(raw)) if (isId(car) && isId(skin)) out[car] = skin;
     }
     return out;
   } catch {

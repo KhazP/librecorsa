@@ -4,7 +4,7 @@ import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 
 export const dynamic = "force-static";
 
-/** The icons come from `npm run brand` (scripts/build-brand.ts) */
+/** The icons come from `npm run brand` (scripts/site/build-brand.ts) */
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: withBasePath("/play"),

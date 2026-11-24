@@ -312,7 +312,7 @@ float lc26WetRaw = mix( uWetness, uLineWetness, lc26Rubber );
 float lc26PuddleMask = 0.0;
 if ( lc26WetRaw > 0.0 ) {
 	float lc26PatchNoise = lc26ValueNoise( vLc26WorldPos.xz / 2.2 ) * 0.5 + 0.5;
-	float lc26FinePatch = lc26ValueNoise( vLc26WorldPos.xz / 0.65 ) * 0.5 + 0.5;
+	float lc26FinePatch = uAsphaltDetail > 0.5 ? ( lc26ValueNoise( vLc26WorldPos.xz / 0.65 ) * 0.5 + 0.5 ) : lc26PatchNoise;
 	float lc26Wet = lc26WetRaw * mix( 0.72, 1.08, 0.7 * lc26PatchNoise + 0.3 * lc26FinePatch );
 	lc26Wet = clamp( lc26Wet, 0.0, 1.0 );
 	// Standing water puddles pool in low-frequency depressions off the crowned racing line
@@ -334,18 +334,21 @@ if ( lc26WetRaw > 0.0 ) {
 		/* glsl */ `
 #include <normal_fragment_maps>
 if ( uAsphaltDetail > 0.5 ) {
-	vec2 lc26AggP = vLc26WorldPos.xz;
-	// Amplitude 8 mm: about 3 to 4 degrees of tilt once the 0.3 gradient scale is applied; submerged in puddles
-	float lc26AggH = 0.008 * ( 0.6 * lc26ValueNoise( lc26AggP / 0.03 ) + 0.4 * lc26ValueNoise( lc26AggP / 0.12 ) );
-	lc26AggH *= mix( 1.0, 0.12, lc26PuddleMask );
-	if ( uRainIntensity > 0.02 && lc26WetRaw > 0.15 ) {
-		float lc26SplashFade = ( 1.0 - smoothstep( 12.0, 42.0, length( vViewPosition ) ) ) * clamp( lc26WetRaw, 0.0, 1.0 );
-		lc26AggH += 0.0035 * lc26RainSplash( lc26AggP, uWetTime, uRainIntensity ) * lc26SplashFade;
+	float lc26Dist = length( vViewPosition );
+	if ( lc26Dist < 90.0 ) {
+		vec2 lc26AggP = vLc26WorldPos.xz;
+		// Amplitude 8 mm: about 3 to 4 degrees of tilt once the 0.3 gradient scale is applied; submerged in puddles
+		float lc26AggH = 0.008 * ( 0.6 * lc26ValueNoise( lc26AggP / 0.03 ) + 0.4 * lc26ValueNoise( lc26AggP / 0.12 ) );
+		lc26AggH *= mix( 1.0, 0.12, lc26PuddleMask );
+		if ( lc26Dist < 42.0 && uRainIntensity > 0.02 && lc26WetRaw > 0.15 ) {
+			float lc26SplashFade = ( 1.0 - smoothstep( 12.0, 42.0, lc26Dist ) ) * clamp( lc26WetRaw, 0.0, 1.0 );
+			lc26AggH += 0.0035 * lc26RainSplash( lc26AggP, uWetTime, uRainIntensity ) * lc26SplashFade;
+		}
+		float lc26AggAa = 1.0 - smoothstep( 0.25, 0.5, max( fwidth( lc26AggP.x ), fwidth( lc26AggP.y ) ) / 0.03 );
+		float lc26AggFade = lc26AggAa * ( 1.0 - smoothstep( 30.0, 90.0, lc26Dist ) );
+		vec2 lc26AggGrad = vec2( dFdx( lc26AggH ), dFdy( lc26AggH ) ) * uAggregateNormalScale * lc26AggFade;
+		normal = lc26PerturbNormal( -vViewPosition, normal, lc26AggGrad, faceDirection );
 	}
-	float lc26AggAa = 1.0 - smoothstep( 0.25, 0.5, max( fwidth( lc26AggP.x ), fwidth( lc26AggP.y ) ) / 0.03 );
-	float lc26AggFade = lc26AggAa * ( 1.0 - smoothstep( 30.0, 90.0, length( vViewPosition ) ) );
-	vec2 lc26AggGrad = vec2( dFdx( lc26AggH ), dFdy( lc26AggH ) ) * uAggregateNormalScale * lc26AggFade;
-	normal = lc26PerturbNormal( -vViewPosition, normal, lc26AggGrad, faceDirection );
 }
 `,
 	],

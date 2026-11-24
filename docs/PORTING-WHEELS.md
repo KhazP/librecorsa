@@ -1,59 +1,61 @@
 # Porting wheels
 
-Steering, pedals and buttons reach the game through the browser's Gamepad API, so nearly any wheel can drive. Force feedback is different: the page has to speak the wheel's own protocol over WebHID (Chrome and Edge, on https or localhost). This guide is how I add force feedback for a wheel the browser can't drive yet, and how I found out why a MOZA R9 that the page set up without a single error still never moved.
+Steering, pedals, and buttons reach LibreCorsa through the browser's standard Gamepad API, so almost any wheel recognized by your OS can drive. Force feedback is different: the browser has to speak the wheel base's own HID protocol over WebHID (Chrome and Edge on HTTPS or `localhost`).
 
-## Where the code is
+This guide covers how LibreCorsa's WebHID force-feedback stack works, how to diagnose a wheel that pairs without moving, and how to implement and test a new protocol driver.
 
-Everything lives in `src/lib/input/`:
+## Code architecture
 
-- `webhid-ffb.ts`: the WebHID driver. `pickFfbDevice` chooses how to drive a device the player picked or granted, in this order:
-  1. **HID PID**: any interface whose report descriptor has a Set Constant Force and an Effect Operation report. Report ids, field offsets and ranges come from the parsed descriptor (`parsePidLayout`), never hard-coded. Damper, friction and inertia run on the wheel itself where Set Effect offers them. MOZA, Simucube, VRS, Simagic, Asetek, Cammus, OpenFFBoard and PXN bases go this way.
-  2. **Classic Logitech**: the G25, G27, G29 and Driving Force GT, sent the commands Linux `hid-lg4ff` sends (`setupLogitechClassicDevice`), rev LEDs on the G27 and G29 included.
-  3. **Logitech HID++**: the G920 and the G923 for Xbox, once Logitech G HUB has put them in PC mode (`webhid-logitech-hidpp.ts`, from Linux `hid-logitech-hidpp`).
-  4. **Thrustmaster**: the T300RS, T-GT II, T248, TX, TS-XW and TS-PC (`webhid-thrustmaster.ts`, from the out-of-tree driver `hid-tmff2`).
-- `wheel-support.ts`: the model tables (`LOGITECH_CLASSIC_WHEELS`, `LOGITECH_HIDPP_WHEELS`, `THRUSTMASTER_WHEELS`: USB ids, names, ranges) and `WHEEL_SUPPORT`, the support table the wheel setup shows. The README's "Wheels and force feedback" table mirrors it.
-- `wheel-ffb.ts`: turns the physics' steering torque into the rim force (gain, curve, minimum force, soft lock, damping, vibrations) and plays it to the WebHID driver every 2 ms. A driver only receives a force from -1 to 1; nothing here changes per wheel.
+All wheel input and force-feedback code lives under `src/lib/input/`:
 
-## Testing on a real wheel
+- **`webhid-ffb.ts`:** Core WebHID driver. When a player grants a device, `pickFfbDevice` selects a backend in strict priority order:
+  1. **HID PID:** Any interface whose report descriptor exposes `Set Constant Force` and `Effect Operation`. Report IDs, bit offsets, and ranges are parsed dynamically from the descriptor (`parsePidLayout`) rather than hardcoded. Hardware damper, friction, and inertia run on-device whenever `Set Effect` advertises them. Handles MOZA, Simucube, VRS, Simagic, Asetek, Cammus, OpenFFBoard, and PXN bases.
+  2. **Classic Logitech (`setupLogitechClassicDevice`):** Drives the G25, G27, G29, and Driving Force GT using the command protocol documented by Linux `hid-lg4ff`, including rev LEDs on the G27 and G29.
+  3. **Logitech HID++ (`webhid-logitech-hidpp.ts`):** Drives the G920 and G923 (Xbox edition) once Logitech G HUB has switched them into PC mode, following Linux `hid-logitech-hidpp`.
+  4. **Thrustmaster (`webhid-thrustmaster.ts`):** Drives the T300RS, T-GT II, T248, TX, TS-XW, and TS-PC following the out-of-tree `hid-tmff2` driver.
+- **`wheel-support.ts`:** Hardware tables (`LOGITECH_CLASSIC_WHEELS`, `LOGITECH_HIDPP_WHEELS`, `THRUSTMASTER_WHEELS`) containing USB VID/PIDs, names, and rotation ranges, plus `WHEEL_SUPPORT` which powers the in-game support table and mirrors the README table.
+- **`wheel-ffb.ts`:** Converts steering rack torque from the physics engine into a normalized rim force in `[-1, 1]` (applying gain, response curve, minimum force, soft lock, damping, and vibration effects) and dispatches updates every `2 ms`. Nothing in this layer is vendor-specific.
 
-The wheel is usually on a Windows PC and the dev server on another machine. WebHID only exists in a secure context, and `http://<LAN address>:3000` is not one, so on the PC:
+## Testing on physical hardware
 
-1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, add `http://<LAN address>:3000`, set it to Enabled and relaunch Chrome.
-2. Turn off the wheel's own centring spring in its software (Pit House, Fanatec control panel, …).
-3. In the game: Settings → Force feedback → Force feedback on → **Connect wheel**, pick the wheel, hold the rim and press **Test** in the Test direction row. It should pull right, then left.
-4. Switch the settings to Advanced, set Damping to 100 % and turn the rim by hand: it should feel heavier. If it does but Test direction does nothing, the wheel runs condition effects and the problem is specific to the constant force.
-5. **Copy diagnostics** and keep the text: it is the starting point for everything below.
+Wheel bases are commonly plugged into a Windows PC while your dev server runs on another machine on your LAN. Because WebHID requires a secure context and plain `http://<LAN IP>:3000` is not considered secure:
 
-## Reading the diagnostics
+1. On the Windows PC, open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, add `http://<LAN IP>:3000`, set the flag to **Enabled**, and relaunch Chrome.
+2. Disable the desktop centring spring in your wheel base's vendor software (MOZA Pit House, Fanatec Control Panel, etc.).
+3. In LibreCorsa, open **Settings > Force feedback**, enable **Force feedback**, click **Connect wheel**, select your wheel, hold the rim firmly, and click **Test** in the **Test direction** row. The wheel should pull right, then left.
+4. Switch Settings to **Advanced**, set **Damping** to `100%`, and turn the wheel by hand. If resistance increases noticeably while **Test direction** does nothing, the base is running condition effects properly and the bug is isolated to constant force.
+5. Click **Copy diagnostics** and save the output—it is your baseline for debugging.
 
-**Copy diagnostics** (`WebHidFfb.diagnose`) gives:
+## Reading diagnostics
 
-- **Report descriptor**: every granted interface with every item, as the browser reports it.
-- **HID PID reports**: what the parser found (Set Effect, Set Constant Force, Effect Operation, Device Control, Block Load, PID Pool, …) with each field's bit offset and range, and the effect types Set Effect offers. A line reading `MISSING` means the parser could not recognise that report, and its commands never go out.
-- **Selector order**: whether the array lists are taken as the browser gives them or put back into the PID spec's order (see the Windows trap below).
-- **Setup and teardown traffic**: every report the setup sent, in order, with its bytes, and every feature report it read back.
-- **Stream writes**: how many force, condition and LED writes went out after setup, how many failed and why, and the last 24 values that changed.
-- **PID State input report**: what the wheel says about itself (effect playing, actuators enabled, safety switch, actuator power), if it sends one. Many wheels never do, the MOZA R9 included, so silence here proves nothing.
+**Copy diagnostics** (`WebHidFfb.diagnose`) captures a complete snapshot of the WebHID session:
 
-## A HID PID wheel that does not play
+- **Report descriptor:** Every granted HID interface and item exactly as the browser reports it.
+- **HID PID reports:** Parsed report map (`Set Effect`, `Set Constant Force`, `Effect Operation`, `Device Control`, `Block Load`, `PID Pool`, etc.) with bit offsets, value ranges, and advertised effect types. Any entry marked `MISSING` was not recognized by the parser and will never be transmitted.
+- **Selector order:** Indicates whether array usages were read verbatim or re-sorted to the USB HID PID specification order (see the Windows Chromium bug below).
+- **Setup and teardown traffic:** Ordered hex dump of every output and feature report sent or read during initialization and shutdown.
+- **Stream writes:** Counts of force, condition, and LED reports sent after setup, failure counts and error messages, and the last 24 changed values.
+- **PID State input report:** Live device status flags (effect playing, actuators enabled, safety switch, actuator power) if the base sends them. Many wheels—including the MOZA R9—never transmit PID State reports, so silence here is normal.
 
-Most bases speak HID PID, so most problems are here. Three traps are already handled in `webhid-ffb.ts`; check the diagnostics for a fourth of the same kind.
+## Debugging HID PID wheels
 
-- **Chrome on Windows shuffles array lists.** Chrome has no raw descriptor on Windows. It rebuilds each report from Windows' preparsed data, one item per usage, and sorts them by bit position with an unstable sort (`CreateReportDescriptions` in Chromium's `services/device/hid/hid_service_win.cc`). The usages of one array item share a position, so they come out in no fixed order. On the R9 the effect types arrived reversed: the page asked for Friction where it meant Constant Force and for Square where it meant Damper, the wheel accepted both, and nothing moved. On Windows the parser now puts Effect Type, Effect Operation, Block Load and Device Control back into the PID spec's order (`UsageOrder`, `SPEC_SELECTOR_ORDER`). That is the order the spec's sample descriptor uses and that PID firmwares copy. A wheel whose descriptor lists them in another order would still be wrong on Windows: its true order is in the raw descriptor (read it on Linux or macOS, or with hidapi on Windows).
-- **Flags declared as 0..0.** The R9 declares its 1-bit X, Y, Direction Enable and Device Control flags with a logical range of 0..0. The parser reads 0..0 as the field's full width, so a 1 can be written.
-- **Device Control as bit flags.** Some wheels list Reset, Stop All, Enable Actuators and so on as one 1-bit flag each, instead of an array that selects one. Both forms are recognised.
+Most modern direct-drive bases speak USB HID PID. `webhid-ffb.ts` already handles three subtle firmware and OS traps—check diagnostics carefully for similar quirks:
 
-The generic profile sends what Linux `hid-pidff` sends every PID wheel, the values that moved the R9: Trigger Button 0, Direction Enable set with no axis flag, Reset then Stop All then Enable Actuators, and a read of the PID Pool feature report before any effect is created. A wheel that needs other values gets an entry in `PID_QUIRKS` (`PidProfile`: trigger button, direction enable, axis flags, loop count, pauses). The PXN V99 entry is the example.
+- **Chrome on Windows shuffles HID array usages:** Chrome does not have access to raw HID descriptors on Windows. Instead, Chromium reconstructs reports from Windows preparsed data—one item per usage—and orders them by bit offset using an unstable sort (`CreateReportDescriptions` in Chromium's `services/device/hid/hid_service_win.cc`). Because usages inside a single array share the same bit position, their order comes out scrambled. On the MOZA R9, effect types arrived reversed: requesting Constant Force sent Friction and requesting Damper sent Square, both silently accepted with zero motor output. On Windows, LibreCorsa now restores `Effect Type`, `Effect Operation`, `Block Load`, and `Device Control` to the canonical USB PID spec order (`UsageOrder`, `SPEC_SELECTOR_ORDER`), matching the spec's reference descriptor used by most firmware. If a base defines a non-standard usage order in firmware, inspect its raw descriptor on Linux, macOS, or via `hidapi` on Windows.
+- **1-bit flags declared as `0..0`:** The MOZA R9 declares its 1-bit `X`, `Y`, `Direction Enable`, and `Device Control` flags with a logical range of `0..0`. The parser treats `0..0` as full bit-width so `1` can still be encoded.
+- **Device Control exposed as bit flags:** Some wheel descriptors declare `Reset`, `Stop All`, `Enable Actuators`, etc. as individual 1-bit flags rather than a selector array. The parser supports both layouts.
 
-### When the trace looks right and the wheel still doesn't move
+By default, the generic PID profile mirrors Linux `hid-pidff`: Trigger Button `0`, Direction Enable set without axis flags, `Reset` → `Stop All` → `Enable Actuators`, and a `PID Pool` feature read before creating effects. Bases requiring different fields get an entry in `PID_QUIRKS` (`PidProfile`: trigger button, direction enable, axis flags, loop count, and inter-command delays—see the PXN V99 entry for an example).
 
-This is the order that found the R9's bug, from cheapest to most decisive:
+### When diagnostics look clean but the wheel still doesn't move
 
-1. **Compare with Linux.** `drivers/hid/usbhid/hid-pidff.c` and `drivers/hid/hid-universal-pidff.c` in the mainline kernel drive most PID bases, with a short list of per-vendor quirks. Check each Set Effect field and the init order against `pidff_set_effect_report`, `pidff_set_effect_direction` and `pidff_reset`.
-2. **Replay the page's bytes outside the browser.** On the PC, copy the setup sequence from the diagnostics into a short Python script (`pip install hidapi`), open the interface that holds the PID reports and send it with `write()`. On Windows `write()` goes through `WriteFile`, the same path Chrome's `sendReport` takes, so this removes the browser from the question while keeping everything else. Then change one value at a time. For the R9 the only change needed was the effect type: once it was `01`, the rim moved.
-3. **Capture what a working game sends.** Wireshark with USBPcap, capturing only the wheel (so the keyboard stays out of the file), during a game that has working force feedback. The capture shows the game's init, the effect types it creates and whether its reports go as interrupt OUT or control `SET_REPORT`. If Wireshark lists only network adapters, USBPcap isn't loaded: reboot after installing, copy `USBPcapCMD.exe` from `C:\Program Files\USBPcap\` into `C:\Program Files\Wireshark\extcap\`, or run Wireshark as administrator.
+Work through these three steps in order, from fastest to most conclusive:
 
-A replay script for the R9, with its report ids (another wheel's are in its diagnostics):
+1. **Cross-check Linux kernel drivers:** Inspect `drivers/hid/usbhid/hid-pidff.c` and `drivers/hid/hid-universal-pidff.c` in mainline Linux for vendor quirks and compare every `Set Effect` byte and init step against `pidff_set_effect_report`, `pidff_set_effect_direction`, and `pidff_reset`.
+2. **Replay the exact bytes outside the browser:** On the Windows PC, copy the initialization bytes from diagnostics into a minimal Python script using `pip install hidapi` and send them via `write()`. Because `hidapi`'s `write()` uses `WriteFile` on Windows—the exact same OS path Chrome's `sendReport` calls—this isolates firmware behavior from the browser while letting you tweak one byte at a time. (On the MOZA R9, changing the effect type byte to `0x01` immediately moved the rim.)
+3. **Capture a working game over USB:** Run Wireshark with USBPcap filtered strictly to the wheel's USB address (keeping keyboards out of the capture) while running a game with working FFB. Compare initialization sequence, created effect types, and whether reports travel over interrupt OUT or control `SET_REPORT`. If Wireshark lists only network interfaces, USBPcap isn't registered—reboot after installing, copy `USBPcapCMD.exe` from `C:\Program Files\USBPcap\` into `C:\Program Files\Wireshark\extcap\`, or run Wireshark as administrator.
+
+Reference Python replay script using the MOZA R9's report IDs (swap in report IDs from your wheel's diagnostics):
 
 ```python
 import time, hid
@@ -62,7 +64,7 @@ info = next(d for d in hid.enumerate(0x346E, 0x0002) if d["usage_page"] == 0x01 
 dev = hid.device()
 dev.open_path(info["path"])
 
-def out(*b):  # output report: id first, hidapi pads it to the report's length
+def out(*b):  # output report: report id first; hidapi pads to full report length
     dev.write(bytes(b))
 
 out(0x0C, 0x08); out(0x0C, 0x04); out(0x0C, 0x01)        # Device Control: Reset, Stop All, Enable Actuators
@@ -80,45 +82,45 @@ out(0x0A, 0x01, 0x03, 0x00); out(0x0B, 0x01)              # Stop, free the block
 out(0x0C, 0x04); out(0x0C, 0x02)                          # Stop All, Disable Actuators
 ```
 
-## A wheel with its own protocol
+## Adding a custom wheel protocol
 
-Find an outside source for every byte: a Linux driver (mainline or out of tree) or USB captures of the vendor's software. Write each command from it and name the source's function in a comment, the way the `lg4ff*` helpers cite `hid-lg4ff.c` and the Thrustmaster module cites `hid-tmff2`. Don't copy GPL code; write the bytes from what the driver does.
+Every protocol byte must be backed by a verifiable source: a mainline or out-of-tree Linux driver or USB captures from vendor software. Cite the reference function in comments (as the `lg4ff*` helpers cite `hid-lg4ff.c` and the Thrustmaster driver cites `hid-tmff2`). Do **not** copy GPL source code directly—implement the packet encoding cleanly from the documented protocol behavior.
 
-Put the driver in its own module next to `webhid-ffb.ts`, as `webhid-logitech-hidpp.ts` and `webhid-thrustmaster.ts` do. In `webhid-ffb.ts` it needs:
+Place the protocol implementation in a dedicated module beside `webhid-ffb.ts` (following `webhid-logitech-hidpp.ts` and `webhid-thrustmaster.ts`), then wire it into `webhid-ffb.ts`:
 
-- a session kind in the `FfbSession` union and a case in `FfbPick`;
-- a match in `pickFfbDevice`, after the HID PID check, so a firmware that adds PID later takes that path;
-- its setup in `setUp`, and its release in `teardownSession` and `emergencyStopSession`;
-- `setRotationDeg`, if the protocol sets the rotation range;
-- a line in `unsupportedMessage` for interfaces it can't drive, and its session in `describeSession` / `describeNonPid` for the diagnostics.
+- Add a session variant to the `FfbSession` union and a matching case in `FfbPick`.
+- Add device matching in `pickFfbDevice` **after** the HID PID check so newer firmware that adds standard PID takes the generic path automatically.
+- Wire initialization in `setUp`, clean shutdown in `teardownSession`, and synchronous halt in `emergencyStopSession`.
+- Implement `setRotationDeg` if the protocol supports setting steering lock.
+- Add clear messaging in `unsupportedMessage` for non-FFB interfaces, and diagnostic output in `describeSession` / `describeNonPid`.
 
-### The safety contract
+### Safety contract
 
-These hold for every driver, because nobody may be holding the rim when the page lets go:
+Force-feedback motors can deliver dangerous torque if left holding a force after a tab closes or stalls. Every driver must satisfy four invariants:
 
-- **One force stream.** Every write goes through a `ForceWriter` (at most one write in flight, 2 ms apart, only the latest value kept). Extra streams such as a range or LEDs are `addChannel` streams on the same writer, never writes of their own.
-- **Zero on stop and on idle.** `stop()` zeroes the force at once, and the driver zeroes it itself when no call arrives for `IDLE_ZERO_MS`.
-- **Release the wheel as it powers up.** Teardown and the page-hide emergency stop put the force at zero and hand back what the wheel starts with (its centring spring, its range). The emergency stop sends everything without awaiting anything: the page may not get another turn.
-- **Undo a failed setup.** A setup that fails part-way takes back what it sent, then reports the error. Three failed writes in a row are fatal, and the wheel goes back to the bridge.
+- **Single serialized writer:** All output reports flow through a `ForceWriter` (at most one write in flight, `2 ms` pacing, latest-value coalescing). Secondary channels such as rotation range or rev LEDs must register via `addChannel` on the same writer rather than issuing independent writes.
+- **Zero on stop and idle:** `stop()` zeroes motor torque immediately, and the driver automatically zeroes output if no update arrives within `IDLE_ZERO_MS`.
+- **Restore power-on state on exit:** Both normal teardown and `pagehide` emergency stop must zero torque and restore the base's power-on defaults (centring spring and default range). The emergency stop path must fire every command synchronously without `await`, as the browser may terminate the page immediately.
+- **Clean rollback on failure:** If initialization fails mid-sequence, undo any partial state already sent before surfacing the error. Three consecutive write failures trigger a fatal disconnect and hand off to the local bridge.
 
-## Tests
+## Writing tests
 
-`scripts/verify-webhid-ffb.ts` drives every path through `FakeHidDevice`, which logs each report and each feature read. Write the reference bytes by hand from the protocol source, not from the driver's own output, then check:
+`scripts/verify/verify-webhid-ffb.ts` exercises every protocol driver against `FakeHidDevice`, which records every output report and feature read. Derive expected reference bytes independently from the protocol documentation (never by copying the driver's own output) and verify:
 
-- the setup order and bytes;
-- the force bytes and their sign (+1 must push the way the PID convention says, see the header of `webhid-ffb.ts`);
-- the range, if there is one;
-- teardown and emergency stop;
-- that an unknown product id from the same vendor is refused, never opened, and has nothing written to it.
+- Exact setup report sequence and payload bytes.
+- Force report encoding and sign convention (`+1` must push in the PID-defined direction; see the header comment in `webhid-ffb.ts`).
+- Rotation-range commands, if supported.
+- Normal teardown and synchronous emergency stop sequences.
+- Strict rejection of unrecognized product IDs from the same vendor (device never opened, zero bytes written).
 
-For a PID wheel, build the fixture from its real diagnostics, quirks included: the R9 checks use its 0..0 flags, its Device Control flags and the shuffled lists Chrome on Windows gave for it. Run `npx tsc --noEmit` and `npm run verify` before committing.
+For HID PID additions, construct test fixtures straight from real hardware diagnostics including any quirks (for example, the R9 tests reproduce its `0..0` flags, bit-flag Device Control, and Chrome-on-Windows shuffled usage arrays). Run `npx tsc --noEmit` and `npm run verify` before committing.
 
-## The support table
+## Updating the support table
 
-Add the wheel to `WHEEL_SUPPORT` in `wheel-support.ts` and to the README table as untested, with a note on where its commands came from. It moves to tested only after someone has driven it. I keep a new wheel's commits local until then.
+Add new hardware to `WHEEL_SUPPORT` in `src/lib/input/wheel-support.ts` and the README support table marked as untested, noting the protocol reference used. A wheel only moves to **Tested** after someone physically drives it and confirms force feedback works end-to-end.
 
-## What WebHID can't do
+## WebHID platform limitations
 
-- **USB control requests.** WebHID sends and reads HID reports only, and on Windows Chrome sends output reports with `WriteFile`, never `HidD_SetOutputReport`. A wheel that needs a vendor control request first (Thrustmaster's start-up mode switch, for example) can't be set up from the page. The Logitech Driving Force Pro is left out for a related reason: its range change needs the driver to rescale the steering axis, which the Gamepad API can't do.
-- **Report ids the descriptor doesn't list.** Windows' HID stack can refuse a report whose id the wheel's own descriptor doesn't declare. A protocol whose Linux driver rewrites the descriptor first, as `hid-tmff2` does for the T300RS, may not work from the page on Windows.
-- **A device with no output report.** A wheel that shows up in the Gamepad API but has no usable HID output report can't take force feedback from the browser. The local bridge (`npm run ffb`, DirectInput on Windows) stays the fallback for these.
+- **No USB control transfers:** WebHID only exposes HID reports, and on Windows Chrome sends output reports exclusively via `WriteFile` rather than `HidD_SetOutputReport`. Wheels requiring vendor USB control transfers (such as Thrustmaster's start-up mode switch) cannot be initialized from the browser alone. The Logitech Driving Force Pro is also excluded because changing its range requires the OS driver to rescale the steering axis, which the Gamepad API cannot perform.
+- **Undeclared report IDs:** Windows' HID stack can reject reports whose IDs do not appear in the hardware's own descriptor. Protocols whose Linux driver patches the HID descriptor in-kernel (such as `hid-tmff2` for the T300RS) may be blocked by Windows over WebHID.
+- **Devices without HID output reports:** Wheels that appear in the Gamepad API but expose no usable HID output report cannot receive WebHID force feedback. The local Windows bridge (`npm run ffb`, backed by DirectInput) remains the fallback for all unsupported bases.

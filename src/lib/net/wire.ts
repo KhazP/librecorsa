@@ -164,6 +164,28 @@ export interface LobbySettings {
   rules?: MpRaceRules;
   /** Qualifying before the race (min): private rooms only, always 0 in a public one */
   qualifyingMinutes?: MpQualifyingMinutes;
+  /** The mod package the circuit comes from (src/lib/mods), so a guest can tell whether theirs is the same */
+  trackMod?: RoomModRef;
+}
+
+/** A mod package as a room names it: enough to tell a guest what to install, and whether theirs is the same */
+export interface RoomModRef {
+  packageId: string;
+  name: string;
+  version: string;
+  /** Its content hash (mod-manifest.ts `packageHash`) */
+  hash: string;
+}
+
+const MOD_PACKAGE_ID = /^[a-z0-9][a-z0-9_-]{0,15}\.[a-z0-9][a-z0-9_-]{0,23}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
+
+function asModRef(v: unknown): RoomModRef | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const m = v as Record<string, unknown>;
+  if (typeof m.packageId !== 'string' || !MOD_PACKAGE_ID.test(m.packageId)) return undefined;
+  if (typeof m.hash !== 'string' || !SHA256.test(m.hash)) return undefined;
+  return { packageId: m.packageId, name: clampStr(m.name, 80, m.packageId), version: clampStr(m.version, 32, ''), hash: m.hash };
 }
 
 /** The settings an older host's lobby (or race) leaves out, as those races always ran */
@@ -286,8 +308,9 @@ export interface OfficialResultRow {
 export type ControlMessage =
   /** `proto`, `sim`: the sender's protocol version and physics revision (absent from older clients) */
   | { type: 'hello'; name: string; code: string; color: string; vehicle?: VehicleModelId; trackId?: string; proto?: number; sim?: number }
-  /** A room's host to a guest on another version of the game: not let in */
+  /** A room's host to a guest on another version of the game, or in a disallowed car class */
   | { type: 'refuse'; reason: 'version' }
+  | { type: 'refuse'; reason: 'car_class'; carClass?: CarClassRule; vehicle?: VehicleModelId }
   | { type: 'ping'; t0: number }
   | { type: 'pong'; t0: number; now: number }
   | { type: 'lobby'; lobby: LobbyState }
@@ -329,6 +352,61 @@ const version = (v: unknown): number | undefined => (typeof v === 'number' && Nu
 // the Worker loads this file without the car registry)
 const CAR_CLASS_RULE_IDS: Record<CarClassRule, true> = { any: true, f1: true, gt3: true, proto: true, classic: true, road: true };
 const CAR_CLASSES = Object.keys(CAR_CLASS_RULE_IDS) as readonly CarClassRule[];
+
+/**
+ * Vehicle model -> car class, kept by the compiler (every `VehicleModelId` must be listed here; mirrors
+ * `VEHICLE_MODELS[id].classId` without importing three.js so the Cloudflare Worker can enforce class locks).
+ */
+export const VEHICLE_CLASS_BY_MODEL: Readonly<Record<VehicleModelId, CarClassId>> = {
+  lc26: 'f1',
+  lc25: 'f1',
+  'f12026-car': 'f1',
+  'amg-gt3': 'gt3',
+  liana: 'road',
+  'mtr-496r': 'proto',
+  'lc-lmdh': 'proto',
+  'nissan-r33-jgtc': 'classic',
+  'nissan-r32-jtcc': 'classic',
+  'bmw-m1-procar': 'classic',
+  'vw-scirocco-gtx': 'road',
+  'chaparral-2d': 'classic',
+  'chaparral-2d-67': 'classic',
+  'porsche-934-rsr': 'classic',
+};
+
+/** The car class a vehicle model belongs to */
+export function vehicleClassOf(vehicle: VehicleModelId): CarClassId {
+  return VEHICLE_CLASS_BY_MODEL[vehicle];
+}
+
+/** A room or race's car restriction: either a single spec vehicle, a car class, or unrestricted (`any`) */
+export interface VehicleRule {
+  carClass: CarClassRule;
+  vehicle?: VehicleModelId;
+}
+
+/** True when the lobby/race restricts which car or class players may drive */
+export function isVehicleRestricted(rule: VehicleRule | null | undefined): boolean {
+  return Boolean(rule && (rule.vehicle !== undefined || rule.carClass !== 'any'));
+}
+
+/**
+ * True when `vehicle` is permitted under `rule`.
+ * - If `rule.vehicle` is set (spec/one-make lobby such as an open `lc-lmdh` race), only that exact vehicle is allowed.
+ * - Else if `rule.carClass !== 'any'`, only vehicles belonging to that class are allowed.
+ * - When `rule` is unrestricted (`carClass === 'any'` and no `vehicle`), every vehicle is allowed.
+ * - `allowUnspecified`: when true, an omitted `vehicle` (undefined) is treated as allowed (for legacy callers/tests).
+ */
+export function isVehicleAllowed(
+  vehicle: VehicleModelId | undefined,
+  rule: VehicleRule | null | undefined,
+  options?: { allowUnspecified?: boolean },
+): boolean {
+  if (!rule || !isVehicleRestricted(rule)) return true;
+  if (vehicle === undefined) return options?.allowUnspecified === true;
+  if (rule.vehicle !== undefined) return vehicle === rule.vehicle;
+  return VEHICLE_CLASS_BY_MODEL[vehicle] === rule.carClass;
+}
 
 export function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
   if (!v || typeof v !== 'object') return undefined;
@@ -401,6 +479,10 @@ export function sanitizeLobbySettings(v: unknown, roomKind?: RoomKind): LobbySet
   if (gridOrder !== undefined) out.gridOrder = gridOrder;
   if (rules !== undefined) out.rules = rules;
   if (qualifyingMinutes !== undefined) out.qualifyingMinutes = qualifyingMinutes;
+  // Only the package the circuit comes from: a reference left from the room's last mod circuit (settings are merged
+  // over the old ones) or one naming another package says nothing about this circuit
+  const trackMod = asModRef(st.trackMod);
+  if (trackMod && out.trackId.startsWith(`mod:${trackMod.packageId}/`)) out.trackMod = trackMod;
   return out;
 }
 
@@ -702,7 +784,13 @@ export function sanitizeControl(v: unknown): ControlMessage | null {
         sim: version(m.sim),
       };
     case 'refuse':
-      return m.reason === 'version' ? { type: 'refuse', reason: 'version' } : null;
+      if (m.reason === 'version') return { type: 'refuse', reason: 'version' };
+      if (m.reason === 'car_class') {
+        const carClass = CAR_CLASSES.includes(m.carClass as CarClassRule) ? (m.carClass as CarClassRule) : undefined;
+        const vehicle = asPeerVehicle(m.vehicle);
+        return { type: 'refuse', reason: 'car_class', ...(carClass ? { carClass } : {}), ...(vehicle ? { vehicle } : {}) };
+      }
+      return null;
     case 'ping': {
       const t0 = finite(m.t0, -1e15, 1e15);
       return t0 === null ? null : { type: 'ping', t0 };

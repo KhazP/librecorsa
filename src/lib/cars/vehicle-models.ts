@@ -5,7 +5,7 @@ import type { BuiltTrackData } from "@/lib/track-data";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import type { CarClassRule } from "@/lib/sim/multiplayer-sync";
 import { F1Physics2026 } from "@/lib/f1-physics-2026";
-import { F12026CarSim, F12026_SIM_PROFILE } from "@/lib/sim/f12026-car/F12026CarSim";
+import { F12026CarSim, F12026_SIM_PROFILE, type CarSimProfile } from "@/lib/sim/f12026-car/F12026CarSim";
 import { F12026_CAR_CONFIG, type CarPhysicsConfig } from "@/lib/sim/f12026-car/F12026CarConfig";
 import { createLc26Sim } from "@/lib/sim/f12026-car/Lc26Sim";
 import { LC25_SIM_PROFILE, createLc25Sim } from "@/lib/sim/f12025-car/Lc25Sim";
@@ -69,6 +69,11 @@ export interface VehicleModel {
    * offering slicks and rain tyres. Absent: the soft / medium / hard / intermediate / wet choice
    */
   onlyTyre?: string;
+  /**
+   * The profile the game's car simulation (F12026CarSim) runs this model on: what a mod car's physics file patches
+   * (mods/mod-physics.ts). Absent for the LC26, whose own simulation is another
+   */
+  simProfile?: CarSimProfile;
 }
 
 export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
@@ -108,6 +113,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: F12026_CAR_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 15000,
     tyreSetupRanges: F12026_SIM_PROFILE,
+    simProfile: F12026_SIM_PROFILE,
     rigConfig: F12026_CAR_CONFIG,
     gt3Cockpit: false,
     floorSparks: true,
@@ -119,6 +125,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: AMG_GT3_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 8250,
     tyreSetupRanges: AMG_GT3_SIM_PROFILE,
+    simProfile: AMG_GT3_SIM_PROFILE,
     rigConfig: AMG_GT3_CONFIG,
     gt3Cockpit: true,
     floorSparks: false,
@@ -130,6 +137,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: SUZUKI_LIANA_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 7500,
     tyreSetupRanges: SUZUKI_LIANA_SIM_PROFILE,
+    simProfile: SUZUKI_LIANA_SIM_PROFILE,
     rigConfig: SUZUKI_LIANA_CONFIG,
     // Its only body is the ported GLB, which brings its own cameras
     gt3Cockpit: false,
@@ -145,6 +153,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: MTR_496R_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 10_500,
     tyreSetupRanges: MTR_496R_SIM_PROFILE,
+    simProfile: MTR_496R_SIM_PROFILE,
     rigConfig: MTR_496R_CONFIG,
     // Its only body is the ported GLB, which brings its own cameras
     gt3Cockpit: false,
@@ -157,6 +166,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: LC_LMDH_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 9000,
     tyreSetupRanges: LC_LMDH_SIM_PROFILE,
+    simProfile: LC_LMDH_SIM_PROFILE,
     rigConfig: LC_LMDH_CONFIG,
     // Its only body is a ported GLB, which brings its own cameras
     gt3Cockpit: false,
@@ -170,6 +180,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: NISSAN_R33_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 8000,
     tyreSetupRanges: NISSAN_R33_SIM_PROFILE,
+    simProfile: NISSAN_R33_SIM_PROFILE,
     rigConfig: NISSAN_R33_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
@@ -181,6 +192,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: NISSAN_R32_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 9000,
     tyreSetupRanges: NISSAN_R32_SIM_PROFILE,
+    simProfile: NISSAN_R32_SIM_PROFILE,
     rigConfig: NISSAN_R32_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
@@ -193,6 +205,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: BMW_M1_PROCAR_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 10_000,
     tyreSetupRanges: BMW_M1_PROCAR_SIM_PROFILE,
+    simProfile: BMW_M1_PROCAR_SIM_PROFILE,
     rigConfig: BMW_M1_PROCAR_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
@@ -204,6 +217,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: VW_SCIROCCO_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 8000,
     tyreSetupRanges: VW_SCIROCCO_SIM_PROFILE,
+    simProfile: VW_SCIROCCO_SIM_PROFILE,
     rigConfig: VW_SCIROCCO_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
@@ -219,6 +233,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: CHAPARRAL_2D_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 8000,
     tyreSetupRanges: CHAPARRAL_2D_SIM_PROFILE,
+    simProfile: CHAPARRAL_2D_SIM_PROFILE,
     rigConfig: CHAPARRAL_2D_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
@@ -230,6 +245,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: CHAPARRAL_2D_67_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 8000,
     tyreSetupRanges: CHAPARRAL_2D_67_SIM_PROFILE,
+    simProfile: CHAPARRAL_2D_67_SIM_PROFILE,
     rigConfig: CHAPARRAL_2D_67_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
@@ -242,6 +258,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     limiterRpm: PORSCHE_934_RSR_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 9000,
     tyreSetupRanges: PORSCHE_934_RSR_SIM_PROFILE,
+    simProfile: PORSCHE_934_RSR_SIM_PROFILE,
     rigConfig: PORSCHE_934_RSR_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
@@ -249,6 +266,24 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
 };
 
 export const vehicleModelSpec = (id: VehicleModelId): VehicleModel => VEHICLE_MODELS[id];
+
+/**
+ * A new car of a model on a circuit, on `profile` when the car has physics of its own (a mod car's physics file, run
+ * by the game's car simulation), else the model's own
+ */
+export function createVehicleSim(
+  vehicle: VehicleModelId,
+  track: BuiltTrackData,
+  trackRoot: THREE.Object3D | null,
+  bodyPlan?: readonly (readonly [number, number])[],
+  profile?: CarSimProfile,
+): SimulatorCar {
+  if (profile) return new F12026CarSim(track, trackRoot, profile);
+  // Another body on the model (a mod car, the BMW on the AMG): the model's own profile with that body's outline
+  const own = VEHICLE_MODELS[vehicle].simProfile;
+  if (bodyPlan && own) return new F12026CarSim(track, trackRoot, { ...own, bodyPlan });
+  return VEHICLE_MODELS[vehicle].createSim(track, trackRoot, bodyPlan);
+}
 
 export const isVehicleModelId = (value: unknown): value is VehicleModelId =>
   typeof value === "string" && Object.hasOwn(VEHICLE_MODELS, value);

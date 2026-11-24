@@ -165,10 +165,11 @@ export function chooseAttackSide(opts: {
 }
 
 /**
- * Computes the target lateral offset (m, + right) for a single defensive move on a straight:
- *  - Into a corner (`insideSign !== 0`), always prioritise covering the INSIDE line (ignores outside fakes).
- *  - On a pure straight or off a standing start (`insideSign === 0`), cover toward the side the attacker is stepping to.
- *  - Clamps inside `±halfRoadM` so the car stays cleanly on the asphalt.
+ * Computes the target lateral offset (m, + right) for a single FIA-style defensive move on a straight:
+ *  - Into a corner (`insideSign !== 0`), decisively covers the INSIDE line (moving across from the outside racing
+ *    line toward the inside door, scaled by `defendStrength`, and ignoring outside dummies).
+ *  - On a pure straight or off a standing start (`insideSign === 0`), covers toward the side the attacker is stepping to.
+ *  - Clamps inside `±(halfRoadM - 0.35)` so the car stays cleanly on the asphalt.
  */
 export function chooseDefenseTarget(opts: {
   lineLatM: number;
@@ -181,24 +182,52 @@ export function chooseDefenseTarget(opts: {
   onStartLane: boolean;
 }): number {
   const { lineLatM, myLatM, attackerLatM, halfRoadM, insideSign, defendReachM, defendStrength, onStartLane } = opts;
-  const dLatAtt = attackerLatM - myLatM;
-  const maxReach = defendReachM * Math.max(0, Math.min(1, defendStrength));
-  const from = onStartLane ? myLatM : lineLatM;
-  let side: number;
-  let reach = maxReach;
-  if (insideSign !== 0 && !onStartLane) {
-    // Cover the inside of the upcoming corner decisively (don't get baited to the outside by a dummy)
-    side = Math.sign(insideSign);
-    // If attacker is already moving inside, cover far enough to shut the inside door cleanly
-    if (Math.sign(dLatAtt) === side && Math.abs(dLatAtt) > 0.8) {
-      reach = Math.min(maxReach, Math.max(1.6, Math.abs(dLatAtt) + 0.4));
-    }
-  } else {
-    side = Math.abs(dLatAtt) > 0.8 ? Math.sign(dLatAtt) : insideSign || 1;
-    if (Math.abs(dLatAtt) > 0.8) reach = Math.min(Math.abs(dLatAtt), maxReach);
-  }
+  const strength = Math.max(0, Math.min(1, defendStrength));
   const edge = Math.max(0.5, halfRoadM - 0.35);
+  if (strength <= 0) return Math.max(-edge, Math.min(edge, onStartLane ? myLatM : lineLatM));
+
+  const dLatAtt = attackerLatM - myLatM;
+  const maxReach = defendReachM * strength;
+  const from = onStartLane ? myLatM : lineLatM;
+  if (insideSign !== 0 && !onStartLane) {
+    // Cover the inside of the upcoming corner decisively (don't get baited to the outside by a dummy):
+    // aim for the inside door (~1.1 m inboard of the usable edge so < 1 car width remains on the inside)
+    const side = Math.sign(insideSign);
+    const insideDoor = side * Math.max(0, edge - 1.1);
+    const distToInside = Math.max(0, side * (insideDoor - from));
+    const coverShare = 0.65 + 0.35 * strength;
+    let reach = Math.min(distToInside, Math.max(maxReach, distToInside * coverShare));
+    // If attacker is already moving inside, shut the inside door completely
+    if (Math.sign(dLatAtt) === side && Math.abs(dLatAtt) > 0.6) {
+      reach = Math.min(distToInside, Math.max(reach, Math.abs(dLatAtt) + 0.6));
+    }
+    return Math.max(-edge, Math.min(edge, from + side * reach));
+  }
+  const side = Math.abs(dLatAtt) > 0.8 ? Math.sign(dLatAtt) : insideSign || 1;
+  const reach = Math.abs(dLatAtt) > 0.8 ? Math.min(Math.abs(dLatAtt), maxReach) : maxReach;
   return Math.max(-edge, Math.min(edge, from + side * reach));
+}
+
+/**
+ * FIA-style single-move defensive initiation check:
+ *  - At most one move per straight (`defendMoves < 1`)
+ *  - Never initiated under braking (`brake < 0.05`)
+ *  - Never initiated when another car is already alongside (`!anyAlongside`)
+ *  - Requires safe longitudinal clearance ahead of the closing attacker (no late chop / brake test)
+ */
+export function canStartDefenseMove(opts: {
+  alreadyDefending: boolean;
+  defendMoves: number;
+  brake: number;
+  anyAlongside: boolean;
+  attackerGapM: number;
+  attackerClosingMs: number;
+  carLenM: number;
+  defendRoomS: number;
+}): boolean {
+  if (opts.alreadyDefending || opts.defendMoves >= 1 || opts.brake >= 0.05 || opts.anyAlongside) return false;
+  const minClearM = 0.6 * opts.carLenM + opts.defendRoomS * Math.max(0, opts.attackerClosingMs);
+  return opts.attackerGapM > minClearM;
 }
 
 /** Per AI car: what it remembers between frames for its racecraft */
@@ -208,10 +237,12 @@ export class RacecraftMemory {
   /** Defensive moves made on this straight */
   public defendMoves = 0;
   /**
-   * Where the defensive move under way goes, fixed when it starts so it never mirrors the attacker: an offset from the
-   * racing line (m), or from the road's centre for a move off the grid (`defendOffLine`)
+   * Where the defensive move under way goes, fixed when it starts so it never mirrors the attacker or weaves under
+   * braking: an absolute lateral offset from the road centre (`defendTargetLatM`) plus legacy relative fields
    */
   public defendLatM = 0;
+  public defendTargetLatM = 0;
+  public defendSide = 0;
   public defendOffLine = false;
   /** Committed to a side for a pass into the corner ahead (+1 right, −1 left, 0 none), and until where (lap m) */
   public commitSide = 0;
@@ -232,6 +263,8 @@ export class RacecraftMemory {
     this.alongside.clear();
     this.defendMoves = 0;
     this.defendLatM = 0;
+    this.defendTargetLatM = 0;
+    this.defendSide = 0;
     this.defendOffLine = false;
     this.commitSide = 0;
     this.commitUntilS = 0;

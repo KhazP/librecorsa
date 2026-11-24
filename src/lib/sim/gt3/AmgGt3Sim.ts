@@ -22,7 +22,7 @@ const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.s
 
 /**
  * The GT3's planning model for its lap-time line, braking zones, braking urgency and HUD target speed: what this
- * car's vehicle model does on warm tyres at ρ 1.06 on the flat (scripts/verify-gt3.ts checks it). Held corners
+ * car's vehicle model does on warm tyres at ρ 1.06 on the flat (scripts/verify/verify-gt3.ts checks it). Held corners
  * pull μ ≈1.62 up to 190 km/h, easing to 1.5 at 250 km/h as the load rises; a threshold stop from 250 to 80 km/h
  * takes ≈117–120 m on the fixed 71 % balance-bar bias (the tyres' hot pressure moves it by a few metres), μ ≈1.42–1.45
  * on the full brake force. The plan corners on μ 1.6 and brakes on 1.42 (≈121 m, never shorter than the car), so its
@@ -59,8 +59,8 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   frontCamberRange: [-4.0, -1.5],
   rearCamberRange: [-3.2, -1.0],
   setupPressureRefC: 25,
-  // 540° lock to lock on the 12.6 : 1 rack
-  steerRatio: 12.6,
+  // ~609° lock to lock on the 14.2 : 1 GT3 rack
+  steerRatio: 14.2,
   // An endurance GT3's electronics: twelve ABS maps, three traction dials
   enduranceAbsMaps: true,
   tcSlipAngleDial: true,
@@ -74,7 +74,7 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   padLateralMu: 1.63,
   // The autopilot plans on 85 % of this: ≈1.5 g on the brakes at 100 km/h to ≈1.9 g past 250 km/h, and corners on
   // 1.1 × that (≈1.6 g slow, ≈2.1 g fast, the car's own grip): it laps the circuits' GT3 speed profiles to within
-  // ≈1–5 % at the AI's 0.975 pace (scripts/race-headless.ts --car amg-gt3)
+  // ≈1–5 % at the AI's 0.975 pace (scripts/physics/race-headless.ts --car amg-gt3)
   braking: { lowG: 1.7, aeroG: 0.55, refMs: 70 },
   // The car's understeer, which the autopilot's yaw loop otherwise only caught up with by mid-corner at speed: the front
   // road-wheel angle past the kinematic one (and past the loop's 0.8 × body slip) per m/s², on a flat-pad steer ramp at
@@ -93,10 +93,8 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
     semi_pro: { tcLevel: 10, tc2Level: 6, absLevel: 9, tcSlipAngleLevel: 10 },
     assisted: { tcLevel: 12, tc2Level: 9, absLevel: 11, tcSlipAngleLevel: 12 },
   },
-  // A heavy car on a slow rack: quicker keys in slow and medium corners (half the grip limit ≈210 ms after the key at
-  // 70–120 km/h instead of ≈300, the yaw ≈130 ms sooner at 70) and at speed as the base, where the car is calm; a
-  // touch quicker back to centre
-  keyboardSteer: { lowSpeedRate: 1.6, highSpeedRate: 1.05, returnRate: 1.1 },
+  // Planted GT3 keyboard steer-in: progressive rather than open-wheeler twitchy at both low and high speeds
+  keyboardSteer: { lowSpeedRate: 1.18, highSpeedRate: 0.78, returnRate: 1.0 },
 };
 
 /** An AMG GT3; `bodyPlan`, the plan of another GT3 body it wears (`CarDefinition.bodyPlan`) */

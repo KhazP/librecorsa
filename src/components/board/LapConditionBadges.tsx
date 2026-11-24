@@ -60,7 +60,7 @@ const ASSIST_PILL: Record<AssistPreset, { label: MessageKey; tone: BadgeToneProp
 /**
  * Prominent condition pills for a leaderboard row or challenge header:
  * Realism (Full / Standard / Casual), Assists (Pro / Semi / Assisted), and Wet when driven on a wet line.
- * Its words come from the language runtime rather than the provider, so it also draws on its own (scripts/verify-awards.ts).
+ * Its words come from the language runtime rather than the provider, so it also draws on its own (scripts/verify/verify-awards.ts).
  */
 export const LapConditionBadges: React.FC<LapConditionBadgesProps> = ({ assists, realism, surface, className = "" }) => {
   useI18nState();

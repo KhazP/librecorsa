@@ -34,10 +34,10 @@ import { focusOnHover } from "./useFocusNav";
 const BADGE_SIZE: Record<ChipSize, BadgeSize> = { md: "md", sm: "sm", xs: "sm" };
 
 /** Where a circuit's model comes from, by meaning (signed off: an original circuit is information, not volt) */
-const CIRCUIT_TONE: Record<CircuitQuality, Exclude<BadgeTone, "player">> = { original: "info", sim: "good", sketchfab: "warn" };
+const CIRCUIT_TONE: Record<CircuitQuality, Exclude<BadgeTone, "player">> = { original: "info", sim: "good", sketchfab: "warn", mod: "neutral" };
 
 /** How a car's physics are graded */
-const CAR_TONE: Record<CarQuality, Exclude<BadgeTone, "player">> = { own: "good", shared: "warn", era: "neutral" };
+const CAR_TONE: Record<CarQuality, Exclude<BadgeTone, "player">> = { own: "good", shared: "warn", era: "neutral", mod: "neutral" };
 
 /** Where a circuit's model comes from (track-registry `CircuitQuality`), with its description on hover */
 export const TrackQualityBadge: React.FC<{

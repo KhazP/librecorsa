@@ -192,6 +192,8 @@
   "display.graphics.experimental": "Badge beside the VR row.",
   "display.graphics.inVr": "Disabled button while the game is already shown in the VR headset.",
   "display.hud.title": "Card title: which HUD widgets are shown.",
+  "rows.engineeringTelemetry.label": "HUD toggle: shows the advanced bottom-right suspension, grip and aero telemetry widget (off by default).",
+  "rows.engineeringTelemetry.hint": "Short explanation under the Suspension & aero telemetry toggle.",
   "display.camera.freeCamera": "A camera the player flies around freely.",
   "display.camera.freeCameraHint": "Keys and mouse for the free camera. WASD, Q/E and R are key names; keep them.",
   "display.camera.freeCameraUnbound": "No key is set for the free camera.",

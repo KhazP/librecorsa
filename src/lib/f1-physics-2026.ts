@@ -140,8 +140,9 @@ import {
 import { surfaceRippleM, type TrackSurfaceKind } from './sim/track-surfaces';
 import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_SETUP, pctScale, startingFuelKg, WING_CLICK_DEG } from './sim/car-setup';
 import {
+  boardFlyingStartPoint,
+  boardFlyingStartSpeedMs,
   FLYING_SLOT_SPACING_M,
-  flyingExitSpeedMs,
   flyingStartPoint,
   rollingStartSlots,
   rollingStartSpeedMs,
@@ -149,6 +150,7 @@ import {
   startPose,
   type TyreVisualState,
 } from './sim/simulator-car';
+import { applySpeedLimiter } from './sim/race-start';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
 import { lockShareOf } from './sim/tyre-slide-fx';
 import { CourseCutWatch, isCourseHop } from './sim/course-limits';
@@ -588,6 +590,8 @@ export class F1Physics2026 {
   public aiAutopilot = false;
   /** Held on a manual-start grid through the lights (`SimulatorCar.gridHold`) */
   public gridHold = false;
+  /** Rolling-start formation speed limiter (m/s); undefined when inactive */
+  public speedLimiterMs: number | undefined = undefined;
   /** AI driver pace (fraction of the car's limit), line shift (m, + right) and speed ceiling (m/s) */
   public aiPaceScale = 1;
   public aiLineBiasM = 0;
@@ -1054,13 +1058,16 @@ export class F1Physics2026 {
     if (pointToPoint) flyingStart = false;
     this.runActive = false;
     this.atRestOnLine = false;
+    this.speedLimiterMs = undefined;
     const lapLen = this.track.totalLengthM;
     let flyingGear = 7;
     if (flyingStart) {
       // Run-up from the final straight (`flyingStartPoint`) on the racing line; timing starts at the line. It starts
       // no faster than 90 % of the speed the circuit's braking profile allows there, nor than it carries out of the
       // last corner, in the gear for that speed
-      const start = flyingStartPoint(this.track);
+      // A solo flying lap starts where and as fast as the boards' laps did (`boardFlyingStartPoint`); a race's
+      // rolling start from `flyingStartPoint`
+      const start = fieldSize !== undefined ? flyingStartPoint(this.track) : boardFlyingStartPoint(this.track);
       const s =
         fieldSize !== undefined
           ? rollingStartSlots(this.track, start, gridSlot + 1)[gridSlot]
@@ -1077,18 +1084,31 @@ export class F1Physics2026 {
         return Math.min(75, (0.9 * (sample.brakeLimitKmh ?? sample.optimalSpeedKmh)) / 3.6);
       };
       const cornerExit = start.cornerS === null ? 0 : (0.9 * this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh) / 3.6;
-      let speed = spotSpeed(s);
-      if (fieldSize !== undefined) speed = rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit);
-      else if (start.cornerS !== null) speed = Math.min(speed, flyingExitSpeedMs(cornerExit, (s - start.cornerS + lapLen) % lapLen));
+      const speed =
+        fieldSize !== undefined
+          ? rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit)
+          : boardFlyingStartSpeedMs(lapLen, start, s, spotSpeed, cornerExit);
       if (fieldSize === undefined) {
         // A flying lap hands the car over at speed: pointed so that, hands-off, its tyres stay on the asphalt for its
-        // first second (`startPose`; a race's rolling start is left on its line along the road, as `F12026CarSim` does)
+        // first second (`startPose`, checked as the boards' laps were: `F12026CarSim`); a race's rolling start is left
+        // on its line along the road, as `F12026CarSim` does
         const footprint = {
           halfWidthM: Math.max(...this.wheels.map((w) => Math.abs(w.staticPos.y) + 0.5 * w.tyre.spec.width)),
           frontM: this.cgToFrontAxleM,
           rearM: this.cgToRearAxleM,
         };
-        const pose = startPose(this.track, this.ground ?? null, s, lineAt(s), lineAt, -edge, edge, footprint, speed * START_HANDS_OFF_S);
+        const pose = startPose(
+          this.track,
+          this.ground ?? null,
+          s,
+          lineAt(s),
+          lineAt,
+          -edge,
+          edge,
+          footprint,
+          speed * START_HANDS_OFF_S,
+          null
+        );
         this.placeCar(s, speed, pose.lateral);
         // + = nose right of the road's tangent
         const tangent = this.track.getSampleAtDistance(s).tangent;
@@ -1306,8 +1326,9 @@ export class F1Physics2026 {
       clutchBound: rawInputs.clutchBound,
       manualOverride: Boolean(rawInputs.manualOverride),
       toggleXMode: Boolean(rawInputs.toggleXMode),
-      shiftUp: Boolean(rawInputs.shiftUp),
-      shiftDown: Boolean(rawInputs.shiftDown),
+      // Its box has no neutral, first and reverse sit side by side: the touch Drive and Reverse buttons are one shift
+      shiftUp: Boolean(rawInputs.shiftUp) || rawInputs.selectGear === 1,
+      shiftDown: Boolean(rawInputs.shiftDown) || rawInputs.selectGear === -1,
     };
     this.manualClutchBound = rawInputs.clutchBound !== false;
     this.manualClutchPedal = Number.isFinite(rawInputs.clutch) ? THREE.MathUtils.clamp(rawInputs.clutch ?? 0, 0, 1) : 0;
@@ -1803,14 +1824,22 @@ export class F1Physics2026 {
       if (drv.boostRemainingS <= 0) drv.ersMode = aiOvertake ? 'OVERRIDE' : ai.ersMode;
     } else {
       steerNorm = this.steeringAssist.steer(inputs, this.gamepadAssistEnabled, this.steeringAssistState, dt);
+      const lim = !this.gridHold ? applySpeedLimiter(this.vxMs, this.speedLimiterMs, throttle, brake) : null;
+      const limited = lim?.active === true;
+      if (limited && lim) {
+        throttle = lim.throttle;
+        brake = lim.brake;
+      }
 
-      if (inputs.manualOverride && drv.ersEnergyJ > 0) {
+      if (!limited && inputs.manualOverride && drv.ersEnergyJ > 0) {
         drv.ersMode = 'OVERRIDE';
       } else if (drv.boostRemainingS <= 0 && drv.ersMode === 'OVERRIDE') {
         drv.ersMode = this.userErsMode;
       }
 
-      if (this.autoXMode) {
+      if (limited) {
+        this.activeAeroMode = 'Z_MODE';
+      } else if (this.autoXMode) {
         const canXMode =
           sample.drsZone &&
           isRearFlapAllowedInWet(this.weatherSample.wetness) &&

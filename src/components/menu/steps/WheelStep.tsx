@@ -7,12 +7,14 @@ import { PAD_ACTIONS, type PadAction } from "@/lib/input/bindings";
 import {
   autoConfigureWheel,
   CAR_WHEEL_LOCKS_DEG,
+  clearWheelButton,
   connectedPads,
   emptyWheelButtons,
   findPad,
   isLikelyWheel,
   padDisplayName,
   pedalValue,
+  rebindWheelButton,
   snapshotAxes,
   STEER_LOCK_MIN_DEG,
   strongestAxisChange,
@@ -31,7 +33,8 @@ import { isFatalHidStatus, type WebHidFfbStatus } from "@/lib/input/webhid-ffb";
 import { SUPPORT_LABEL, type SupportLevel, WHEEL_SUPPORT, WHEEL_SUPPORT_SUMMARY } from "@/lib/input/wheel-support";
 import { DEFAULT_PLAYER_SETTINGS } from "@/lib/settings/player-settings";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
-import { Button, Segmented, SettingRow, Slider, useSettingsDetail } from "@/components/ui";
+import { Button, IconButton, Segmented, SettingRow, Slider, useSettingsDetail } from "@/components/ui";
+import { Icon } from "@/components/ui/icons";
 import { useSettingsEnv, type SettingsEnv } from "@/components/settings/env";
 import { choice, pct, SettingField, SettingsCard, slider, toggle, wheel, type RowDef } from "@/components/settings/fields";
 import {
@@ -558,15 +561,7 @@ export function WheelSetup({ first }: { first?: boolean }) {
         ({ id }) => id !== m.action && w.buttons[id]?.button === b.button && w.buttons[id]?.padId === b.padId,
       );
       setButtonNotice(taken ? { button: b.button, from: taken.id } : null);
-      update((s) => {
-        const buttons = { ...s.wheel.buttons };
-        for (const k of Object.keys(buttons) as PadAction[]) {
-          const cur = buttons[k];
-          if (cur && cur.padId === b.padId && cur.button === b.button) buttons[k] = null;
-        }
-        buttons[m.action] = b;
-        return { ...s, wheel: { ...s.wheel, buttons } };
-      });
+      update((s) => ({ ...s, wheel: { ...s.wheel, buttons: rebindWheelButton(s.wheel.buttons, m.action, b) } }));
       setMode(IDLE);
     },
     [update, setMode, w.buttons],
@@ -734,8 +729,8 @@ export function WheelSetup({ first }: { first?: boolean }) {
               key={id}
               label={label}
               className={listening ? "bg-lc-volt/6" : undefined}
-              disabled={noWheel !== null}
-              disabledReason={noWheel ?? undefined}
+              disabled={noWheel !== null && !b}
+              disabledReason={noWheel !== null && !b ? noWheel : undefined}
             >
               <Button
                 size="sm"
@@ -753,6 +748,19 @@ export function WheelSetup({ first }: { first?: boolean }) {
               >
                 {listening ? tb("pressButton") : b ? tb("bound", { button: b.button }) : tb("add")}
               </Button>
+              {b && !listening ? (
+                <IconButton
+                  size="sm"
+                  variant="ghost"
+                  disabled={calibrating !== null}
+                  aria-label={tb("unbind", { button: b.button, action: label })}
+                  icon={<Icon name="close" />}
+                  onClick={() => {
+                    setButtonNotice(null);
+                    update((s) => ({ ...s, wheel: { ...s.wheel, buttons: clearWheelButton(s.wheel.buttons, id) } }));
+                  }}
+                />
+              ) : null}
             </SettingRow>
           );
         })}

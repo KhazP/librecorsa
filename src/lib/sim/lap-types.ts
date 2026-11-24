@@ -83,7 +83,7 @@ export function lapPhysicsVersion(vehicle: VehicleModelId | undefined, trackId: 
  * stay under `PHYSICS_VERSION`, an older board of that car. Raise the offset by ten when that car alone changes: the
  * other cars keep their boards. A version and its offset stay under CIRCUIT_REVISION_STEP.
  */
-const LC26_RIGID_BODY_OFFSET = 520;
+const LC26_RIGID_BODY_OFFSET = 530;
 export function carPhysicsVersion(vehicle?: VehicleModelId): number {
   return revisionIn(PHYSICS_VERSION, LC26_RIGID_BODY_OFFSET, vehicle);
 }
@@ -115,12 +115,12 @@ function revisionIn(physics: number, lc26Offset: number, vehicle?: VehicleModelI
  * The physics versions the boards are named by, oldest first: the PHYSICS_VERSION each one's laps were driven under,
  * and the LC26's rigid-body offset then. The last is the one driven now, the only one a lap goes up to; the boards of
  * the ones before it stay readable as they were. A new version is one more line here, with PHYSICS_VERSION raised to
- * its number (scripts/verify-leaderboard.ts holds the two together).
+ * its number (scripts/verify/verify-leaderboard.ts holds the two together).
  */
 export const PHYSICS_VERSIONS = [
   { name: "V1", physics: 7, lc26Offset: 520 },
-  { name: "V2", physics: 8, lc26Offset: 520 },
-] as const satisfies readonly { name: string; physics: number; lc26Offset: number }[];
+  { name: "V2", physics: 8, lc26Offset: 530, priorLc26Offsets: [520] },
+] as const satisfies readonly { name: string; physics: number; lc26Offset: number; priorLc26Offsets?: readonly number[] }[];
 export type NamedPhysicsVersion = (typeof PHYSICS_VERSIONS)[number];
 
 /** The named version whose PHYSICS_VERSION is `physics`; null for one the boards don't name */
@@ -364,7 +364,15 @@ export interface LapRecording {
   trackLengthM?: number;
   /** Optional car setup used to drive this lap (stored in local IDB and R2 ghost JSON for "Apply setup") */
   setup?: SharedCarSetup;
+  /**
+   * Driven with a mod package's car or on its circuit (src/lib/mods): kept as a local best and ghost like any lap, never
+   * sent to a board (`lapGoesOnBoards`). The wire form leaves it out
+   */
+  mod?: true;
 }
+
+/** Whether a lap may go on the online boards and the weekly challenge: never one with mod content in it */
+export const lapGoesOnBoards = (rec: Pick<LapRecording, "trackId" | "mod">): boolean => !rec.mod && !rec.trackId.startsWith("mod:");
 
 /** A corner of the lap: the lowest speed through it, and the best seen on earlier laps */
 export interface CornerStat {

@@ -1,32 +1,33 @@
 # Porting a circuit from an F1 25 mod
 
-Qiddiya Speed Park in the game comes from a track mod for F1 25: circuit by Maxim555, scenery by Zhenix, used with their permission. F1 25 mods ship as an `.erp` archive. `scripts/tracks/extract_erp_track.py` reads one and writes a GLB and a settings file, which `scripts/tracks/build_blender_track.py` turns into the game's circuit, the same way it builds a circuit modelled in Blender ([Porting circuits](PORTING-TRACKS.md)).
+Qiddiya Speed Park in LibreCorsa originates from an F1 25 track mod (circuit by Maxim555, scenery by Zhenix, hosted with their permission). F1 25 track mods are distributed as `.erp` archives. `scripts/tracks/extract_erp_track.py` unpacks an `.erp` archive into a raw `.glb` and settings `.json`, which `scripts/tracks/build_blender_track.py` then builds into a playable circuit using the standard pipeline (see [Porting circuits](PORTING-TRACKS.md)).
 
-I wrote the extractor for that one mod. Another mod will need its tables edited (see the end of this page), so expect to read the script.
+Because the extractor was written specifically for Qiddiya, porting a different F1 25 mod requires editing the material and texture classification tables at the top of the script.
 
 ## Personal use only
 
-- A circuit you port this way is for your own machine. Don't host it anywhere its files can be reached: not in a repository or a fork, not on a file host, not on your own server.
-- The Qiddiya files the game loads are hosted with Maxim555's and Zhenix's permission. That permission is for the game. It doesn't cover anyone else's copy.
-- Only port a mod that is its authors' own work, and only with their permission. An `.erp` also carries files from the base game. The extractor reads only the mod's own folder (`tracks/<id>/`) and the mod's own materials; keep it that way.
-- The [licence rules for circuits](PORTING-TRACKS.md#licences) apply as well.
+> Any circuit you extract with this tool is strictly for local, personal use on your own machine. Do not commit it to a repository or fork, upload it to a file host, or serve it publicly.
 
-## What you need
+- Permission granted by Maxim555 and Zhenix covers the official Qiddiya files hosted by LibreCorsa only—it does not extend to third-party copies.
+- Only extract mods that are their authors' original creations, and only with their permission. Because `.erp` archives can also bundle base-game assets, the extractor intentionally reads only the mod's own `tracks/<id>/` directory and prefixed materials; preserve that boundary.
+- All [circuit licensing rules](PORTING-TRACKS.md#licences) apply equally here.
 
-- What the circuits guide lists: Node.js with `npm install` done once (the GLB simplifier and compressor come from it) and [uv](https://docs.astral.sh/uv/) for the Python scripts.
-- Python 3.14, which uv fetches. Its standard library reads the zstd compression the archive uses.
-- The mod's `.erp` file.
+## Prerequisites
+
+- Everything listed in [Porting circuits](PORTING-TRACKS.md): **Node.js** with `npm install` completed (for mesh simplification and GLB compression) and **[uv](https://docs.astral.sh/uv/)**.
+- **Python 3.14** (fetched automatically by `uv`), whose standard library handles the archive's `zstd` compression.
+- The mod's `.erp` archive.
 
 ## What the extractor reads
 
-- **The lap and the pit lane**: the mod's AI spline, `ai/<id>_ai_track.trackspacespline`. Its main track becomes `Track_Centreline` and `Track_Start`, and its pit spline `Track_PitLane`.
-- **Meshes**: those bound to materials whose names start with the mod's prefix (`--mat-prefix`), with their positions, normals and UVs. The positions are already in world space, Y up.
-- **Textures**: diffuse maps only, decoded from BC1, BC3, BC5 or BC7, and only from the mod's own folder.
-- **Surfaces by texture name**: road, run-off, kerbs, grass, gravel and walls, from the tables at the top of the script. Meshes that can be wall or run-off are split by the way their faces point, so a tunnel's ceiling isn't driven on.
+- **Track and pit splines:** Reads `ai/<id>_ai_track.trackspacespline`, converting the main path into `Track_Centreline` and `Track_Start` and the pit path into `Track_PitLane`.
+- **Geometry:** Extracts meshes bound to materials matching `--mat-prefix`, preserving world-space (`Y`-up) positions, normals, and UVs.
+- **Textures:** Decodes diffuse maps only (`BC1`, `BC3`, `BC5`, or `BC7`) restricted strictly to the mod's own folder.
+- **Surface classification:** Maps textures to road, run-off, kerb, grass, gravel, and wall surfaces using the lookup tables at the top of the script. Dual-purpose wall/run-off meshes are split by face normal so tunnel ceilings are never treated as drivable ground.
 
-It leaves out the mod's cameras and its own physics. The shared builder makes the colliders, kerbs, road widths and racing lines, as for every other circuit.
+The mod's own cameras and physics definitions are ignored; `build_blender_track.py` generates colliders, kerbs, track widths, and racing lines using LibreCorsa's shared builder.
 
-## Extracting
+## Extracting the archive
 
 ```bash
 uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirements.txt --with texture2ddecoder \
@@ -35,40 +36,42 @@ uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirement
   --out-glb /tmp/<id>_raw.glb --out-settings /tmp/<id>_raw.json
 ```
 
-`--track` and `--mat-prefix` default to Qiddiya's (`qiddiya`, `qdy_mat_`). The other options:
+`--track` and `--mat-prefix` default to Qiddiya's values (`qiddiya` and `qdy_mat_`). Available options:
 
-| Option | Default | What it does |
-|---|---|---|
-| `--max-road-tex` | 1024 | Largest texture size for the road, kerbs and other key surfaces |
-| `--max-scenery-tex` | 512 | Largest texture size for scenery |
-| `--foliage-dist` | 18 | Palm meshes further than this from the track (m) are left out |
-| `--scenery-max-dist` | 200 | Small scenery further than this (m) is left out |
-| `--tiny-scenery-min-tris` | 120 | Small, flat-coloured scenery under this many triangles is merged into vertex colours |
-| `--skip-fence02` | on | Leaves out one very heavy Qiddiya fence |
-| `--simplify` | on | Simplifies the meshes with their UVs and normals kept; the road, kerbs, pit lane and painted lines stay exact |
+| Option | Default | Description |
+| :-- | :-- | :-- |
+| `--max-road-tex` | `1024` | Max texture dimension (px) for road, kerbs, and key driving surfaces |
+| `--max-scenery-tex` | `512` | Max texture dimension (px) for scenery textures |
+| `--foliage-dist` | `18` | Excludes palm/foliage meshes farther than this distance (m) from the track |
+| `--scenery-max-dist` | `200` | Excludes small scenery props farther than this distance (m) from the track |
+| `--tiny-scenery-min-tris` | `120` | Merges small, flat-coloured props under this triangle count into vertex colours |
+| `--skip-fence02` | On | Drops one exceptionally dense Qiddiya fence mesh |
+| `--simplify` | On | Simplifies scenery with UV and normal preservation while keeping road, kerbs, pit lane, and painted lines untouched |
 
-The GLB comes out uncompressed and the settings JSON next to it. If the circuit is already in `public/tracks/index.json`, the extractor takes the credit from there, so change a credit in `index.json` before you rebuild.
+The extractor outputs an uncompressed `.glb` and matching settings `.json`. If the circuit ID already exists in `public/tracks/index.json`, the script copies its existing `credit` block—so update credits in `index.json` before re-running if needed.
 
-## Building
+## Building the circuit
+
+Feed the extracted files directly into the Blender circuit builder:
 
 ```bash
 uv run --python 3.14 --no-project --with-requirements scripts/tracks/requirements.txt \
   python -P scripts/tracks/build_blender_track.py <id> --glb /tmp/<id>_raw.glb --settings /tmp/<id>_raw.json
 ```
 
-Then list it and check it as the circuits guide says. `npm run venue-heroes -- <id>` renders its menu pictures.
+Register and verify the circuit as described in [Porting circuits](PORTING-TRACKS.md). To render menu preview images for the venue, run `npm run venue-heroes -- <id>`.
 
-Every problem in [Problems you're likely to hit](PORTING-TRACKS.md#problems-youre-likely-to-hit) came up on this port. Qiddiya's settings are in `main()` near the end of the script, with a comment on why each one is there.
+Every geometry and lighting issue documented under [Common issues and fixes](PORTING-TRACKS.md#common-issues-and-fixes) originally surfaced during the Qiddiya port—see the commented settings block inside `main()` near the bottom of `extract_erp_track.py` for concrete reference values.
 
-## Adapting it to another mod
+## Adapting the extractor to another mod
 
-What is Qiddiya's own sits at the top of the script:
+All Qiddiya-specific rules live in configuration tables at the top of `scripts/tracks/extract_erp_track.py`:
 
-- **Surface tables** (`ROAD_KEYS`, `RUNOFF_KEYS`, `KERB_KEYS`, `GRASS_KEYS`, `GRAVEL_KEYS`, `WALL_OR_RUNOFF_KEYS`): parts of texture names. The road's texture should run the whole lap. If a run-off texture counts as road, the cars get a road as wide as the run-off.
-- **Painted lines and kerbs** (`LINE_KEYS`): lines keep their own meshes, unsimplified, or they turn into wedges. Kerbs and lines get the `depthOffset` that keeps them drawn over the road.
-- **Night** (`EMISSIVE_RULES`): which textures glow, and how strongly by day and at night.
-- **Towers** (`TOWER_SKIN_KEYS`): facades the mod draws with see-through gaps are baked solid, with lit windows at night.
-- **The grid** (`GRID_BOX_KEYS`): the painted grid boxes the start grid stands on.
-- **Branding** (`BRAND_REPLACE_COLORS`): textures with real sponsors, photos of real people or real places, replaced with a flat colour. Make your own list by looking at every texture the mod uses: logos hide in textures with generic names.
-- **Weight** (`HEAVY_FOLIAGE_KEYS`, `HEAVY_FENCE_KEYS`, `MICRO_DETAIL_SCENERY_KEYS`): dense meshes left out or thinned for phones.
-- **Settings**: name, country, credit and the build settings, written near the end of `main()`.
+- **Surface classification** (`ROAD_KEYS`, `RUNOFF_KEYS`, `KERB_KEYS`, `GRASS_KEYS`, `GRAVEL_KEYS`, `WALL_OR_RUNOFF_KEYS`): Substrings matched against texture names. Ensure road textures span the entire lap and exclude run-off textures from `ROAD_KEYS` so track widths remain accurate.
+- **Painted lines and kerbs** (`LINE_KEYS`): Preserves lines as dedicated, unsimplified meshes (preventing wedge artifacts) and applies `depthOffset` so paint and kerbs render cleanly over asphalt.
+- **Night illumination** (`EMISSIVE_RULES`): Controls which textures emit light and their daytime vs. nighttime intensity.
+- **Buildings and towers** (`TOWER_SKIN_KEYS`): Bakes translucent architectural facades solid with illuminated nighttime windows.
+- **Starting grid** (`GRID_BOX_KEYS`): Identifies painted grid-box geometry used to align spawn positions.
+- **Branding removal** (`BRAND_REPLACE_COLORS`): Replaces textures containing real sponsors, people, or recognizable locations with flat colours. Inspect every extracted texture manually, as logos frequently use generic filenames.
+- **Performance pruning** (`HEAVY_FOLIAGE_KEYS`, `HEAVY_FENCE_KEYS`, `MICRO_DETAIL_SCENERY_KEYS`): Identifies ultra-dense scenery meshes to drop or thin out for mobile GPUs.
+- **Circuit metadata and build settings:** Name, country, credits, and builder flags configured near the end of `main()`.

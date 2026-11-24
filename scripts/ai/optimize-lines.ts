@@ -7,7 +7,7 @@
  *       [--prefer-ac 2 (% the AC author's line may lose)] [--verbose]
  *       [--replace (write the quickest clean line even if it is not quicker: the current one breaks a new limit)]
  *       [--edge 1.4 (m the car's centre keeps from the road's edges: a narrow road lined with barriers)]
- *       [--seed line-seed.json [--lock 650:900,2100:2400]] (scripts/line-from-lap.ts: a lap you drove as a start)
+ *       [--seed line-seed.json [--lock 650:900,2100:2400]] (scripts/tracks/line-from-lap.ts: a lap you drove as a start)
  *       [--no-mintime (skip the optimal-control start, scripts/ai/mintime/solve.py)]
  *   npx tsx scripts/ai/optimize-lines.ts --all [--write] (every circuit, both lines, one process each)
  *
@@ -30,7 +30,7 @@
  * (`metadata.racingLine[Gt3].brakingZones`), the physics laps, and for the F1 line each turn's apex speed and gear and
  * the samples' plan speed / pedal reference (`v`, `gas`, `brk`).
  *
- * `--seed FILE`: a line to start from, one lateral offset per track sample (m, + = right; scripts/line-from-lap.ts
+ * `--seed FILE`: a line to start from, one lateral offset per track sample (m, + = right; scripts/tracks/line-from-lap.ts
  * makes one from a lap saved in the game), driven as it is and refined. With `--lock s0:s1[,…]` (m along the lap) the
  * refinement leaves those stretches as seeded, and the seeded line is written whenever it is clean, quicker or not:
  * the planner's optimum can be a line no driver takes (a hairpin hugged from turn-in), so lock the driven shape there.

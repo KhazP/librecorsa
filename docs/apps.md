@@ -1,6 +1,6 @@
-# LibreCorsa native app wrappers
+# LibreCorsa apps
 
-I wrap the live site (`https://librecorsa.org/play`) instead of bundling game assets into the apps. That keeps site updates instant while letting players install LibreCorsa from app stores or run it on desktop with hardware access that browsers restrict.
+Two apps besides the website: the desktop app for Windows, macOS and Linux, and the Android app. The Android app wraps the live site (`https://librecorsa.org/play`) instead of bundling game assets, which keeps site updates instant while letting players install LibreCorsa from an app store. The desktop app serves the live site on the player's computer and keeps what it loads, so it also plays offline, and it takes mods.
 
 ## Android (Trusted Web Activity)
 
@@ -30,8 +30,8 @@ export LIBRECORSA_ANDROID_KEY_ALIAS="upload"
 export LIBRECORSA_ANDROID_KEYSTORE_PASSWORD=...
 export LIBRECORSA_ANDROID_KEY_PASSWORD=...
 # Optional tag/release version overrides (defaults: 0.2.0 / versionCode 2):
-# export LIBRECORSA_ANDROID_VERSION_NAME=0.2.2
-# export LIBRECORSA_ANDROID_VERSION_CODE=202
+# export LIBRECORSA_ANDROID_VERSION_NAME=0.2.4
+# export LIBRECORSA_ANDROID_VERSION_CODE=204
 
 ./gradlew assembleRelease --no-daemon   # signed APK -> android/app/build/outputs/apk/release/app-release.apk
 ./gradlew bundleRelease --no-daemon     # signed AAB -> android/app/build/outputs/bundle/release/app-release.aab
@@ -44,74 +44,40 @@ With any of the four signing variables unset, Gradle still builds an unsigned re
   verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
 ```
 
+### Tag-based CI release
+
+`.github/workflows/release-android.yml` builds the signed APK and publishes it on its own GitHub Release when I push an `android-v*` tag:
+
+```bash
+git tag android-v0.2.4
+git push origin android-v0.2.4
+```
+
+- It derives `versionName` and a monotonic `versionCode` (`MAJOR*10000 + MINOR*100 + PATCH`) from the tag. A new tag must be newer than the last APK released, or phones refuse it as an update: the APKs that came with the old desktop releases count too, up to `desktop-v0.2.3`'s 0.2.3 (versionCode 203).
+- It signs `LibreCorsa-<version>-android.apk` when the four Android signing secrets are set (`LIBRECORSA_ANDROID_KEYSTORE_BASE64`, `LIBRECORSA_ANDROID_KEYSTORE_PASSWORD`, `LIBRECORSA_ANDROID_KEY_ALIAS`, `LIBRECORSA_ANDROID_KEY_PASSWORD`) and verifies the signature with `apksigner`. Without them it still checks the build compiles, warns, and a tag run fails rather than publish a release with no APK.
+- The release is created with `--latest=false`: the repository's latest release is always the desktop app's, which installed desktop apps update from (`launcher/update.go`).
+- A manual run (Actions tab, or `gh workflow run release-android.yml --ref <branch> -f version=0.2.4`) builds and signs but never publishes; the APK is in the run's `android-apk` artifact.
+- After publishing, update `ANDROID_RELEASE` and the Android entry of `PLATFORM_DOWNLOADS` in `src/lib/downloads.ts` (tag, version, date, the APK's name and size) so `librecorsa.org/download` and the home hub's Download tab point at it.
+
 ### Play Store release notes (optional / later)
 
 - Google Play registration costs $25 once.
 - New personal developer accounts must complete a closed test with opted-in testers (12 testers for 14 days) before Google enables production release access.
 
-## Desktop (Electron)
+## Desktop
 
-The desktop wrapper lives in `desktop/` with its own `package.json` and exact pinned `electron` version. Keeping Chromium up to date by bumping that pinned Electron version is important because the app loads a live remote website.
+The desktop app is the launcher in `launcher/`: a Go program that serves the live site on `127.0.0.1`, keeping what it fetches for offline play, with the game's static export bundled beside it, opens the game in Chrome, Edge, Brave or Chromium as an app window, takes mods, converts other games' circuits and cars, and updates itself from Ed25519-signed releases. [launcher/README.md](../launcher/README.md) covers running it, its folders, packaging (`npm run launcher:build -- --bundle`), and `.github/workflows/release-launcher.yml`, which makes a release from a `launcher-v*` tag and signs `LibreCorsa.exe` through SignPath Foundation (the artifact configuration `launcher`; `SIGNPATH_SIGN_RELEASES` turns release signing on).
 
-What the wrapper adds over a browser:
-
-- Requests the discrete GPU on multi-GPU laptops (`force_high_performance_gpu`).
-- Disables `backgroundThrottling` so telemetry and timers do not stall if unfocused.
-- Grants WebHID silently for DualSense controllers and racing wheels on `https://librecorsa.org` without a device picker prompt, while keeping keyboards, mice, security keys, and other origins blocked.
-- Enforces `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, no preload API, in-app navigation restricted to `https://librecorsa.org`, and external links routed to the system browser.
-- Opens in a 90% work-area window with `F11` to toggle fullscreen.
-- Checks GitHub Releases via `electron-updater` on startup when packaged.
-
-### Local run, test, and build
-
-```bash
-cd desktop
-npm ci
-npm run check   # syntax checks and unit tests for navigation + WebHID policy
-npm start       # launch against https://librecorsa.org/play
-```
-
-To build unsigned installers locally:
-
-```bash
-cd desktop
-CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac    # arm64 + x64 .dmg and .zip
-CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:win    # x64 NSIS .exe
-CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:linux  # x64 AppImage
-```
-
-Outputs land in `desktop/dist/` (git-ignored). I still need to test `.exe` on Windows and `.AppImage` on Linux because cross-building from macOS packages those binaries without running them on the target OSes.
-
-### Tag-based CI release (Windows, macOS, Linux and Android together)
-
-`.github/workflows/release-desktop.yml` builds macOS, Windows, Linux installers **and** the signed Android APK into a single GitHub Release when I push a `desktop-v*` tag (keeping all platforms on one Latest release so desktop `electron-updater` always finds `latest*.yml`):
-
-```bash
-# Update desktop/package.json version if desired, commit on main, then tag:
-git tag desktop-v0.2.2
-git push origin desktop-v0.2.2
-```
-
-- The desktop jobs attach `.exe`, `.dmg`, `.zip`, `.AppImage`, `.blockmap` and `latest*.yml` files.
-- The `build-android` job derives `versionName` and a monotonic `versionCode` (`MAJOR*10000 + MINOR*100 + PATCH`) from the tag, signs `LibreCorsa-<version>-android.apk` when the four Android signing secrets are set (`LIBRECORSA_ANDROID_KEYSTORE_BASE64`, `LIBRECORSA_ANDROID_KEYSTORE_PASSWORD`, `LIBRECORSA_ANDROID_KEY_ALIAS`, `LIBRECORSA_ANDROID_KEY_PASSWORD`), and verifies the signature with `apksigner` before attaching it. If those secrets are unset, the job still verifies compilation and skips uploading an un-installable unsigned APK.
-- After publishing a tag, update `APP_RELEASE` and `PLATFORM_DOWNLOADS` in `src/lib/downloads.ts` so `librecorsa.org/download` and the home hub's Download tab point directly at the new release's assets.
-
-### Code signing and OS warnings
-
-The builds are configured for signing and notarization via environment variables, but currently ship unsigned:
-
-- **Windows**: Without Authenticode signing, Microsoft Defender SmartScreen shows "Windows protected your PC" on first run until reputation builds or the binary is signed. Signing options include Azure Trusted Signing (around $9.99/month for eligible entities), a commercial OV/EV code-signing certificate, or free open-source signing through SignPath Foundation.
-- **macOS**: Without an Apple Developer ID Application certificate and notarization ($99/year Apple Developer Program), macOS Gatekeeper blocks downloaded `.dmg`/`.app` files until the user overrides it in System Settings -> Privacy & Security (or strips quarantine). In-app auto-update via `MacUpdater` (Squirrel.Mac) also requires macOS builds to be signed.
-- **Linux**: AppImage works without code signing (`chmod +x` and run, with FUSE2 / `libfuse2` installed on older distros).
-
-To enable CI signing later, add repository secrets `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` (macOS), and `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` (Windows).
+After publishing a launcher release, update `DESKTOP_RELEASE` in `src/lib/downloads.ts` (`published`, `date`, and each desktop file's `sizeBytes`; for a later release the tag and version too) so the download page links the files.
 
 ### Windows signing through SignPath
 
-SignPath Foundation signs the Windows installer for free (organization LibreCorsa [OSS], project `librecorsa`). The Windows job uploads the unsigned `*-Setup.exe` as the `signpath-unsigned-win` artifact, SignPath signs it, and `desktop/scripts/refresh-update-info.js` rebuilds the installer's `.blockmap` and its `latest.yml` entry from the signed file, because signing changes the bytes the auto-updater checks.
+SignPath Foundation signs `LibreCorsa.exe` for free (organization LibreCorsa [OSS], project `librecorsa`). The Windows job builds the launcher's folder unpacked, uploads `LibreCorsa.exe` as the `signpath-unsigned-launcher` artifact, puts the signed one back, and only then packs the zip, so the update manifest's SHA-256 is the signed archive's.
 
-- **Setup**: the repository secret `SIGNPATH_API_TOKEN` holds the API token of SignPath's "CI builds" user, and the Actions settings allow `signpath/github-action-submit-signing-request`. The artifact configuration in SignPath is a `<zip-file>` holding one `<pe-file path="LibreCorsa-*-win-x64-Setup.exe" product-name="LibreCorsa" product-version="${version}">` with `<authenticode-sign/>`. SignPath Foundation requires those product name and version restrictions, and the workflow passes `version` (from `desktop/package.json`, synced from the tag) as a parameter.
-- **Test signing**: run "Release Apps" by hand (Actions tab, or `gh workflow run release-desktop.yml --ref <branch> -f signing_policy=test-signing`). A manual run builds and signs with SignPath's self-signed test certificate and never publishes a release. The signed installer is in the run's `desktop-win` artifact.
-- **Release signing**: once SignPath has imported the production certificate, set the repository variable `SIGNPATH_SIGN_RELEASES` to `true`. From then on every `desktop-v*` tag waits for me to approve the signing request in SignPath (up to an hour) before the release is published. While the variable is unset, tag builds ship unsigned as before.
+- **Setup**: the repository secret `SIGNPATH_API_TOKEN` holds the API token of SignPath's "CI builds" user, and the Actions settings allow `signpath/github-action-submit-signing-request`. The artifact configuration `launcher` in SignPath is a `<zip-file>` holding one `<pe-file path="LibreCorsa.exe" product-name="LibreCorsa" product-version="${version}">` with `<authenticode-sign/>`. SignPath Foundation requires those product name and version restrictions; the workflow passes `version` as the launcher's version resource has it (`MAJOR.MINOR.PATCH.0`).
+- **Test signing**: run "Release Launcher" by hand (Actions tab, or `gh workflow run release-launcher.yml --ref <branch> -f signing_policy=test-signing`). A manual run builds and signs with SignPath's self-signed test certificate and never publishes a release. The signed app is in the run's `launcher-win` artifact.
+- **Release signing**: once SignPath has imported the production certificate, set the repository variable `SIGNPATH_SIGN_RELEASES` to `true`. From then on every `launcher-v*` tag waits for me to approve the signing request in SignPath (up to an hour) before the release is published. While the variable is unset, tag builds ship unsigned.
 
-Only the installer is signed. `LibreCorsa.exe` inside it is Electron's prebuilt binary, and SignPath Foundation's terms only allow signing binaries built from the project's own source, and they explicitly allow unsigned upstream binaries inside a signed installer. The uninstaller stays unsigned too.
+### The retired Electron app
+
+Until November 2026 the desktop app was an Electron wrapper in `desktop/` (app id `org.librecorsa.desktop`) that opened `https://librecorsa.org/play` and updated itself with `electron-updater` from `desktop-v*` releases. Its last version, `desktop-v0.2.3`, stops checking for updates and points players to the new app; the folder and its workflow (`release-desktop.yml`) were removed after it. The game still recognises Electron in the user agent, since installed copies keep opening the site and sign in to accounts with a code.

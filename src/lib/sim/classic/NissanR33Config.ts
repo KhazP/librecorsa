@@ -975,7 +975,7 @@ export const NISSAN_R33_CONFIG = {
     maxRoadWheelDeg: 250 / 15,
     // The kingpin (WBTYRE_BOTTOM → WBTYRE_TOP) stands upright in side view, 14 mm ahead of the axle: 14 mm of trail [derived]
     ffbMechanicalTrailM: 0.0144,
-    // The body's plan at barrier height, measured from nissan-r33-jgtc.glb (`scripts/measure-car-plans.ts`)
+    // The body's plan at barrier height, measured from nissan-r33-jgtc.glb (`scripts/cars/measure-car-plans.ts`)
     bodyPlan: [[0.00, 2.41], [0.36, 2.41], [0.84, 2.11], [0.94, 1.76], [0.95, 0.31], [0.93, -2.10], [0.58, -2.27], [0.00, -2.32]],
     // Torsional stiffness between the axle structures: a steel unibody stiffened by a welded cage [est]
     chassisTorsion: { torsionalStiffnessNmPerDeg: 24_000, torsionalDampingNmsPerDeg: 220, frontRollInertiaShare: 0.5 },

@@ -36,12 +36,14 @@ import { AI_TUNING_LIBRARY } from '@/lib/sim/ai-tuning-data';
 import { AiSectionLearner, loadLearnedCorners, saveLearnedCorners, type LearnedCorner } from '@/lib/sim/ai-learning';
 import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
 import { ROLLING_START_PACE_MS, type SimulatorCar } from '@/lib/sim/simulator-car';
+import { rollingFormationStep } from '@/lib/sim/race-start';
 import { carAheadOnRoad, earnedAtDetection, type OvertakingRaceControl } from '@/lib/sim/overtaking-rules';
-import type { RaceStatus, RacingLineId, VehicleModelId } from '@/types/f1';
+import type { DnfReason, RaceStatus, RacingLineId, VehicleModelId } from '@/types/f1';
 import { AiCarControl, aiControlTraits, KNOCK_LATERAL_MS, KNOCK_WALL_MS, KNOCK_YAW_RADS, type AiControlCarState } from '@/lib/sim/ai-car-control';
 import { CarDamage, worldToCarLocal, type CarDamageSnapshot, type DamageLevel, type DamageReport } from '@/lib/sim/car-damage';
 import {
   brakingDistanceM,
+  canStartDefenseMove,
   chooseAttackSide,
   chooseDefenseTarget,
   hazardHalfWidthM,
@@ -313,8 +315,8 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   plannerLine: 0.15,
   plannerProximity: 25,
   plannerConsistency: 0.4,
-  defendLookM: 45,
-  defendClosingMs: 1,
+  defendLookM: 55,
+  defendClosingMs: 0.6,
   defendReachM: 2.9,
   defendRoomS: 0.8,
   startLaneMaxM: 900,
@@ -363,19 +365,29 @@ const MISTAKE_APEX_SCALE = 1.06;
  * once our brakes bite (~0.2 s on at its own deceleration), plus what we can take out braking a little harder than it,
  * with 2.5 m to spare. Without the lead for its braking, the car behind in a braking zone was always a step late
  */
-function followCapMs(ahead: SimulatorCar, gapM: number, rc: RacecraftParams = DEFAULT_RACECRAFT, classDecelMs2 = 32): number {
+function followCapMs(
+  ahead: SimulatorCar,
+  gapM: number,
+  rc: RacecraftParams = DEFAULT_RACECRAFT,
+  classDecelMs2 = 32,
+  dryDecelMs2 = classDecelMs2
+): number {
   const decelAhead = Math.max(0, -(ahead.telemetry.longitudinalG ?? 0) * 9.81);
   const vAhead = Math.max(0, ahead.vxMs);
+  const wetGripRatio = clamp(classDecelMs2 / Math.max(1, dryDecelMs2), 0.3, 1);
+  const wetFactor = clamp((1 - wetGripRatio) / 0.55, 0, 1);
   // The lead for the car ahead's braking and the extra gap into a braking zone matter close up; 25 m back they held a
   // quicker car off a slower one that braked early, and it never got close enough to try a pass
   const close = Math.max(0, Math.min(1, (rc.followFadeM - gapM) / Math.max(5, rc.followFadeM - 5)));
-  const margin = 2.5 + (decelAhead > 5 ? 0.12 * vAhead * close : 0);
-  const lead = Math.max(0, vAhead - 0.2 * decelAhead * close) + Math.sqrt(2 * rc.followRelAccel * Math.max(0, gapM - margin));
-  if (rc.followStop <= 0 || decelAhead <= 5) return lead;
+  const brakeThresh = 5 * wetGripRatio;
+  const margin = 2.5 + 2.5 * wetFactor + (decelAhead > brakeThresh ? (0.12 + 0.12 * wetFactor) * vAhead * close : 0);
+  const relAccel = rc.followRelAccel * wetGripRatio;
+  const lead = Math.max(0, vAhead - (0.2 + 0.15 * wetFactor) * decelAhead * close) + Math.sqrt(2 * relAccel * Math.max(0, gapM - margin));
+  if (rc.followStop <= 0 || decelAhead <= brakeThresh) return lead;
   // Both on the class's brakes: our stopping distance (with its margin) within the gap plus the other car's
   // (TUM calc_vel_profile_follow.py, LGPL-3.0; Speed Dreams usr driver.cpp, Daniel Schellhammer, GPL-2.0+)
   const room = 2 * classDecelMs2 * Math.max(0, gapM - margin);
-  const k = 1 + 0.3 * rc.followStop;
+  const k = 1 + (0.3 + 0.2 * wetFactor) * rc.followStop;
   const stop = rc.followClosingOnly > 0 ? Math.sqrt(vAhead * vAhead + room / k) : Math.sqrt(Math.max(0, (room + vAhead * vAhead) / k));
   return Math.min(lead, stop);
 }
@@ -581,10 +593,12 @@ interface FieldCar {
   /** The driver's hands off the autopilot: reaction to a knock, spin, stop and rejoin (AI cars only) */
   control: AiCarControl | null;
   damage: CarDamage;
-  /** Out of the race (terminal damage) */
+  /** Out of the race (terminal damage or disqualification) */
   retired: boolean;
   /** Race time the car retired (s) */
   retiredAtS: number | null;
+  /** Specific cause when retired or disqualified */
+  retiredReason: DnfReason | null;
   /** Retired and stopped long enough ago that the marshals have taken it away: no longer on the track */
   removed: boolean;
   /** Barrier impact last counted for damage (the car's own event clock) */
@@ -898,6 +912,10 @@ export class AiOpponentField implements AiRace {
   private rollingLeaderStallS = 0;
   /** Maximum race time (s) for a rolling formation before safety green-flag release */
   private rollingMaxWaitS = 0;
+  /** Monotonic stage order of the Nuzzi-style rolling start (0=formation, 1=ready, 2=3, 3=2, 4=1) */
+  private rollingStageOrder = 0;
+  /** Approximate distance remaining for P1 to reach Start/Finish during rolling formation (m) */
+  private rollingDistanceToLineM = 0;
   /** Race time at which the first car reached each distance bucket (gap timing) */
   /** Time gaps to the leader at the same point of the track (finer buckets than a multiplayer race's) */
   private readonly gapTimer = new GapTimer(GAP_BUCKET_M);
@@ -1023,7 +1041,8 @@ export class AiOpponentField implements AiRace {
   private applySkill(): void {
     for (const car of this.cars) {
       if (!car.ai) continue;
-      car.basePace = Math.min(0.999, (1 - (1 - car.defPace) * this.mods.spread) * this.mods.paceMult * this.tuning.params.pace);
+      car.ai.aiSkill = this.skillLevel;
+      car.basePace = Math.min(1.035, (1 - (1 - car.defPace) * this.mods.spread) * this.mods.paceMult * this.tuning.params.pace);
       car.pace = car.basePace;
     }
   }
@@ -1136,12 +1155,18 @@ export class AiOpponentField implements AiRace {
     // (0.04) under it: the check is a flying lap alone, and a race adds traffic, dirty air and a pack on lap 1 (at
     // the full step the LC26 hit Okayama's barriers four times as often)
     const checked = (getActiveTrackMetadata().aiPlans?.[sim.vehicleId ?? ''] as AiPlanCheck | undefined)?.maxGrip;
-    const ceiling = Math.max(PLAN_GRIP, (checked ?? PLAN_GRIP) - RACE_GRIP_MARGIN);
-    // On a race's first lap the pack brakes into the corners together: the extra grip waits for the second lap (with
-    // it, Alien GT3 fields went off at Spielberg's Turn 1 on lap 1 two races in six)
-    const reach = this.started && car.clock.lapsDone === 0 ? 0 : this.mods.gripReach;
-    const planGrip = PLAN_GRIP + (ceiling - PLAN_GRIP) * reach;
-    const grip = Math.round(planGrip * car.pace * car.pace * weather * weather * damaged * 200) / 200;
+    const baseCeiling = checked !== undefined ? checked - RACE_GRIP_MARGIN : PLAN_GRIP + 0.03;
+    const ceiling = Math.max(PLAN_GRIP, baseCeiling);
+    // On a race's first lap the pack brakes into the corners together: hold back half of the extra grip in the dry
+    // (and all of it in heavy rain) until lap 2 so the opening corners stay clean while Alien remains brisk off the start
+    const reach =
+      this.started && car.clock.lapsDone === 0 ? (weather < 0.92 ? 0 : 0.45 * this.mods.gripReach) : this.mods.gripReach;
+    const wetLap1Margin = this.started && car.clock.lapsDone === 0 && weather < 0.88 ? 0.94 : 1;
+    const planGrip = (PLAN_GRIP + (ceiling - PLAN_GRIP) * reach) * wetLap1Margin;
+    const rawGrip = planGrip * car.pace * car.pace * weather * weather * damaged;
+    // Never plan past a circuit's checked clean grip ceiling in dry conditions (keeps Alien fast without overshooting kerbs)
+    const maxSafeGrip = checked !== undefined && weather >= 0.999 ? Math.max(0.85, checked - 0.01) : Infinity;
+    const grip = Math.round(Math.min(rawGrip, maxSafeGrip) * 200) / 200;
     if (sim.aiPlan && grip === car.planGrip) {
       // Back on the grip it has: a plan still being built for another is dropped
       this.dropPlanJob(car);
@@ -1298,6 +1323,7 @@ export class AiOpponentField implements AiRace {
       damage: new CarDamage(this.damageLevel, CAR_LEN_M / 2, CAR_WID_M / 2, seededRng(hashString(code) ^ 0x5bd1e995)),
       retired: false,
       retiredAtS: null,
+      retiredReason: null,
       removed: false,
       lastWallDamageMs: 0,
       craft: new RacecraftMemory(),
@@ -1370,6 +1396,11 @@ export class AiOpponentField implements AiRace {
     return this.rollingFormation;
   }
 
+  /** Compact key of the active rolling-start stage/countdown for immediate worker-to-page status push */
+  get rollingCueKey(): string {
+    return this.rollingFormation ? String(this.rollingStageOrder) : '';
+  }
+
   /**
    * Lines the field up: AI cars in grid order, the player behind them. A standing start runs the
    * light sequence (five reds one second apart, then a random 0.2–3 s hold); a rolling start
@@ -1414,6 +1445,7 @@ export class AiOpponentField implements AiRace {
       car.sim.setDamageEffects?.(null);
       car.retired = false;
       car.retiredAtS = null;
+      car.retiredReason = null;
       car.removed = false;
       car.lastWallDamageMs = car.sim.telemetry.f12026?.wallImpact?.atMs ?? 0;
       car.craft.reset();
@@ -1434,10 +1466,15 @@ export class AiOpponentField implements AiRace {
       car.stuckS = 0;
       car.prevS = car.sim.sMeters;
       car.clock.reset(car.sim.sMeters);
-      // After the per-race state above is cleared (newLap reads finishTimeS)
+    });
+    // Push the starting weather sample to every car and fit AI rain tyres BEFORE building Lap 1 drive plans,
+    // so wet starts never build their initial plan on dry slicks or launch with stale waterMm = 0
+    this.environment.update(0, this.allSims);
+    for (const car of this.cars) {
+      // After the per-race state above is cleared (newLap reads finishTimeS) and rain tyres are fitted
       if (car.ai) this.newLap(car);
       this.syncPeer(car);
-    });
+    }
     this.player.aiAutopilot = false;
     this.playerPenaltyS = 0;
     this.playerDq = false;
@@ -1466,18 +1503,24 @@ export class AiOpponentField implements AiRace {
     // After qualifying the grid stands a few seconds before the lights, for its order to be read
     this.preStartS = standing && this.qualiResults ? QUALIFYING_GRID_SHOW_S : 0;
     this.holdS = 0.2 + this.rng() * 2.8;
-    // Rolling start: hold the whole field at its spawn formation speed until the leader crosses Start/Finish
+    // Rolling start: hold the whole field at ~65 km/h formation pace with player speed limiter until P1 crosses Start/Finish
     const leader = this.cars.find((c) => c.gridSlot === 0) ?? this.cars[0];
     const spawnSpeeds = this.cars.map((c) => c.sim.vxMs).filter((v) => v > 5);
-    const paceMs = spawnSpeeds.length > 0 ? Math.min(ROLLING_START_PACE_MS, Math.min(...spawnSpeeds)) : 0;
+    const wetRollingScale = leader ? clamp(this.environment.weatherPaceScale(leader.sim), 0.72, 1) : 1;
+    const paceMs = spawnSpeeds.length > 0 ? Math.min(ROLLING_START_PACE_MS * wetRollingScale, Math.min(...spawnSpeeds)) : 0;
     this.rollingFormation =
       !standing && !this.track.pointToPoint && paceMs > 5 && leader !== undefined && leader.clock.distM < -5;
     this.rollingPaceMs = this.rollingFormation ? paceMs : 0;
     this.rollingGreenAtS = 0;
     this.rollingLeaderStallS = 0;
-    this.rollingMaxWaitS = this.rollingFormation
-      ? Math.max(12, Math.max(0, -(leader?.clock.distM ?? 0)) / Math.max(5, paceMs) + 8)
+    this.rollingDistanceToLineM = this.rollingFormation ? Math.max(0, -(leader?.clock.distM ?? 0)) : 0;
+    this.rollingStageOrder = this.rollingFormation
+      ? rollingFormationStep(this.rollingDistanceToLineM, leader?.sim.vxMs ?? paceMs, this.rollingPaceMs, 0).stageOrder
       : 0;
+    this.rollingMaxWaitS = this.rollingFormation
+      ? Math.max(12, this.rollingDistanceToLineM / Math.max(5, paceMs) + 8)
+      : 0;
+    this.player.speedLimiterMs = this.rollingFormation ? this.rollingPaceMs : undefined;
     if (this.rollingFormation) {
       for (const car of this.cars) {
         if (car.ai) {
@@ -1610,14 +1653,18 @@ export class AiOpponentField implements AiRace {
   }
 
   /**
-   * Monitors a rolling-start formation approach and drops the green flag when:
+   * Monitors a rolling-start formation approach (Nuzzi AC style), advances the monotonic 3-2-1 countdown as P1
+   * approaches Start/Finish, keeps the player's formation speed limiter engaged, and drops the green flag when:
    *  1. The P1 leader (AI or player) crosses Start/Finish (`distM >= 0`),
-   *  2. A human player on pole deliberately accelerates well above formation pace in the final ~55 m acceleration zone,
-   *  3. Safety fallback: P1 stalls for > 6 s or the overall formation exceeds `rollingMaxWaitS`.
+   *  2. Safety fallback: P1 stalls for > 6 s or the overall formation exceeds `rollingMaxWaitS`.
    * Also silently releases if a car was teleported mid-lap (headless test setups).
    */
   private updateRollingFormation(dt: number): void {
-    if (!this.rollingFormation) return;
+    if (!this.rollingFormation) {
+      if (this.player.speedLimiterMs !== undefined) this.player.speedLimiterMs = undefined;
+      return;
+    }
+    this.player.speedLimiterMs = this.rollingPaceMs;
     const L = this.track.totalLengthM;
     for (const car of this.cars) {
       if (!car.removed && Math.abs(wrapHalf(car.sim.sMeters - car.prevS, L)) > 40) {
@@ -1631,20 +1678,17 @@ export class AiOpponentField implements AiRace {
       return;
     }
     const leaderDistNow = leader.distM + wrapHalf(leader.sim.sMeters - leader.prevS, L);
+    this.rollingDistanceToLineM = Math.max(0, -leaderDistNow);
     if (leaderDistNow >= 0) {
       this.releaseRollingStart();
       return;
     }
-    if (
-      leader.isPlayer &&
-      !leader.sim.aiAutopilot &&
-      leaderDistNow >= -55 &&
-      leader.sim.vxMs > this.rollingPaceMs + 5 &&
-      leader.sim.telemetry.throttle > 0.65
-    ) {
-      this.releaseRollingStart();
-      return;
-    }
+    this.rollingStageOrder = rollingFormationStep(
+      this.rollingDistanceToLineM,
+      leader.sim.vxMs,
+      this.rollingPaceMs,
+      this.rollingStageOrder
+    ).stageOrder;
     if (dt > 0) {
       if (leader.sim.vxMs < Math.max(4, 0.35 * this.rollingPaceMs)) {
         this.rollingLeaderStallS += dt;
@@ -1662,6 +1706,9 @@ export class AiOpponentField implements AiRace {
     this.rollingFormation = false;
     this.rollingGreenAtS = this.raceTimeS;
     this.rollingLeaderStallS = 0;
+    this.rollingStageOrder = 0;
+    this.rollingDistanceToLineM = 0;
+    this.player.speedLimiterMs = undefined;
     for (const car of this.cars) {
       if (!car.ai) continue;
       car.startLaneM = silent ? null : car.sim.lateralOffsetM;
@@ -1788,6 +1835,7 @@ export class AiOpponentField implements AiRace {
     if ((car.damage.terminal || wrecked) && !car.retired) {
       car.retired = true;
       car.retiredAtS = this.raceTimeS;
+      car.retiredReason = car.damage.terminalReason ?? 'damage';
       car.control?.retire();
       this.incidents.push({ kind: 'retired', code: car.code, isPlayer: car.isPlayer, s: car.sim.sMeters });
       if (car.isPlayer) this.phase = 'finished';
@@ -1858,7 +1906,10 @@ export class AiOpponentField implements AiRace {
       const pilot = car.ai === null && this.pilotRacing(car);
       const me = car.ai ?? (pilot ? car.sim : null);
       if (!me || car.removed) continue;
-      this.followDecelMs2 = this.classDecelMs2 * (this.rc.followWet > 0 ? clamp(Math.pow(this.environment.weatherPaceScale(me), 2), 0.3, 1) : 1);
+      const weatherPace = this.environment.weatherPaceScale(me);
+      const wetLevel = clamp((1 - weatherPace) / 0.25, 0, 1);
+      this.followDecelMs2 = this.classDecelMs2 * (this.rc.followWet > 0 ? clamp(Math.pow(weatherPace, 2), 0.3, 1) : 1);
+      const effDecel = this.followDecelMs2;
       const craft = car.craft;
       const sample = this.track.getSampleAtDistanceInto
         ? this.track.getSampleAtDistanceInto(me.sMeters, _aiSampleBuf)
@@ -1880,7 +1931,7 @@ export class AiOpponentField implements AiRace {
             targetLat = clamp(other.sim.lateralOffsetM + away * (this.rc.alongsideSpacingM + extraLat), -half, half);
           }
           if (ds > 0 && ds < 80 && Math.abs(dLat) < CAR_WID_M + 0.35 + extraLat) {
-            formationCap = Math.min(formationCap, followCapMs(other.sim, ds - CAR_LEN_M - (other.isPlayer ? this.rc.playerMarginM : 0), this.rc, this.followDecelMs2));
+            formationCap = Math.min(formationCap, followCapMs(other.sim, ds - CAR_LEN_M - (other.isPlayer ? this.rc.playerMarginM : 0), this.rc, this.followDecelMs2, this.classDecelMs2));
           }
           // Never jump a rolling car that started ahead in grid order before the green flag drops
           if (other.gridSlot < car.gridSlot && !other.retired && other.sim.vxMs > 5 && ds > -15 && ds < 35) {
@@ -1897,10 +1948,10 @@ export class AiOpponentField implements AiRace {
         car.craft.backOffId = null;
         car.craft.commitSide = 0;
         const biasTarget = clamp(targetLat - line, -6, 6);
-        car.biasM += clamp(biasTarget - car.biasM, -BIAS_RATE_MS * dt, BIAS_RATE_MS * dt);
+        const formRate = BIAS_RATE_MS * (1 - 0.45 * wetLevel);
+        car.biasM += clamp(biasTarget - car.biasM, -formRate * dt, formRate * dt);
         me.aiLineBiasM = car.biasM;
         this.refreshPlan(car);
-        const weatherPace = this.environment.weatherPaceScale(me);
         const planned = me.aiPlan ? 1 : car.pace * weatherPace;
         me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 0.999, planned);
         me.aiSpeedCapMs = formationCap;
@@ -1911,22 +1962,25 @@ export class AiOpponentField implements AiRace {
       }
       let targetLat: number | null = null;
       let speedCap = Infinity;
-      let biasRate = BIAS_RATE_MS;
+      const wetBiasScale = 1 - 0.45 * wetLevel;
+      let biasRate = BIAS_RATE_MS * wetBiasScale;
       // Racecraft here: the tuning (with its section overrides), the skill level and the driver's temperament.
       // At the shipped caution the passing rules are exactly the ones this field always raced with.
       const T = this.tuning;
       const vscActive = this.vsc.active;
       const yellowFlag = this.yellowLevelAt(me.sMeters);
       const yellow = yellowFlag > 0 || vscActive;
+      const wetLap1Caution = car.clock.lapsDone === 0 && wetLevel > 0.5 ? 0.25 * wetLevel : 0;
       const caution = clamp(
-        T.at('overtakeCaution', me.sMeters) + this.mods.cautionAdd - 0.25 * this.aggressionOf(car) + this.raceControl.cautionOf(car.code, this.raceTimeS),
+        T.at('overtakeCaution', me.sMeters) + this.mods.cautionAdd - 0.25 * this.aggressionOf(car) + this.raceControl.cautionOf(car.code, this.raceTimeS) + wetLap1Caution,
         0,
         1
       );
       const dc = caution - BASE_CAUTION;
       let passSpacing = this.rc.passSpacingM * (1 + 0.5 * dc);
       let minClosing = -1 + 3 * dc;
-      const followGap = 12 + 10 * dc;
+      const followGap = 12 + 10 * dc + 4 * wetLevel;
+      const alongsideSpace = this.rc.alongsideSpacingM + 0.35 * wetLevel;
       // (the autopilot with a player's caution toward every car: room and margins as for a player's car)
       const wary = pilot && this.rc.autopilotRacecraft >= 2;
       // (the autopilot covers no inside line)
@@ -1936,6 +1990,7 @@ export class AiOpponentField implements AiRace {
       let aheadGap = Infinity;
       let attacker: FieldCar | null = null;
       let attackerGap = Infinity;
+      let anyAlongside = false;
       let alongsideAhead: FieldCar | null = null;
       let squeezedBy: FieldCar | null = null;
       let hazard: FieldCar | null = null;
@@ -1956,6 +2011,7 @@ export class AiOpponentField implements AiRace {
         const dLat = other.sim.lateralOffsetM - me.lateralOffsetM;
         const along = overlapNow(craft.alongside.get(other.id) ?? false, ds, dLat, CAR_LEN_M, CAR_WID_M);
         craft.alongside.set(other.id, along);
+        if (along) anyAlongside = true;
         // A car spun, stopped or crawling: an obstacle to pass, not a car to race (and never one to follow in)
         if (this.isHazard(other)) {
           if (ds > -CAR_LEN_M && ds < hazardLook && ds < hazardGap) {
@@ -1970,15 +2026,15 @@ export class AiOpponentField implements AiRace {
         // (the angle between two cars side by side asks for more room beside: only beside. Counted for the car ahead
         // too, a car angled out to pass still had it in its path and was held to following it, half out)
         const sideLat = extraLat + this.yawRoomM(meHeading, other.sim);
-        if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(dLat) < this.rc.alongsideSpacingM + sideLat) {
+        if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(dLat) < alongsideSpace + sideLat) {
           const away = me.lateralOffsetM >= other.sim.lateralOffsetM ? 1 : -1;
-          targetLat = other.sim.lateralOffsetM + away * (this.rc.alongsideSpacingM + sideLat);
+          targetLat = other.sim.lateralOffsetM + away * (alongsideSpace + sideLat);
           if (away > 0 && (!leftBy || other.sim.lateralOffsetM > leftBy.sim.lateralOffsetM)) {
             leftBy = other;
-            leftRoom = this.rc.alongsideSpacingM + sideLat;
+            leftRoom = alongsideSpace + sideLat;
           } else if (away < 0 && (!rightBy || other.sim.lateralOffsetM < rightBy.sim.lateralOffsetM)) {
             rightBy = other;
-            rightRoom = this.rc.alongsideSpacingM + sideLat;
+            rightRoom = alongsideSpace + sideLat;
           }
           // Squeezed against the edge with no room left on that side and not clearly ahead: back out of it
           if (Math.abs(targetLat) > half && ds > -0.5 * CAR_LEN_M) squeezedBy = other;
@@ -1986,7 +2042,7 @@ export class AiOpponentField implements AiRace {
           roomLat = targetLat;
         }
         // Side by side with its nose behind the other car's: the one that yields if a corner comes and it doesn't own it
-        if (ds > 0.5 && along && Math.abs(dLat) < this.rc.alongsideSpacingM + 0.6) alongsideAhead = other;
+        if (ds > 0.5 && along && Math.abs(dLat) < alongsideSpace + 0.6) alongsideAhead = other;
         if (ds > 0 && ds < 90 && Math.abs(dLat) < CAR_WID_M + 0.4 + extraLat && ds < aheadGap) {
           ahead = other;
           aheadGap = ds;
@@ -1996,8 +2052,12 @@ export class AiOpponentField implements AiRace {
           ahead = other;
           aheadGap = ds;
         }
-        // Closing in from behind, not yet alongside
-        if (ds < -CAR_LEN_M && ds > -this.rc.defendLookM && other.sim.vxMs - me.vxMs > this.rc.defendClosingMs && -ds < attackerGap) {
+        // Closing in from behind (or sitting right in divebomb striking range behind us), not yet alongside
+        const closingOnMe = other.sim.vxMs - me.vxMs;
+        const striking =
+          ds < -CAR_LEN_M &&
+          ((ds > -this.rc.defendLookM && closingOnMe > this.rc.defendClosingMs) || (ds > -26 && closingOnMe > -2.5));
+        if (striking && -ds < attackerGap) {
           attacker = other;
           attackerGap = -ds;
         }
@@ -2009,7 +2069,7 @@ export class AiOpponentField implements AiRace {
         // A car in our path: never closer than we could still stop behind it if it braked now (the pack into a
         // braking zone, each car on its own braking point, otherwise ran into each other's gearboxes)
         if (ds > 0 && ds < 80 && Math.abs(dLat) < CAR_WID_M + 0.35 + extraLat) {
-          speedCap = Math.min(speedCap, followCapMs(other.sim, ds - CAR_LEN_M - (wary || this.humanDriven(other) ? this.rc.playerMarginM : 0), this.rc, this.followDecelMs2));
+          speedCap = Math.min(speedCap, followCapMs(other.sim, ds - CAR_LEN_M - (wary || this.humanDriven(other) ? this.rc.playerMarginM : 0), this.rc, this.followDecelMs2, this.classDecelMs2));
         }
       }
 
@@ -2036,26 +2096,40 @@ export class AiOpponentField implements AiRace {
       }
 
       // Tight corners leave little room to run off-line, so look as far ahead as the car needs to
-      // brake: a pass started on the straight must not reach the hairpin off-line
+      // brake: a pass started on the straight must not reach the hairpin off-line. Look a little further
+      // for defensive positioning so the defender protects the inside BEFORE the braking zone starts.
       let kAbs = Math.abs(sample.curvature);
       let kNext = sample.curvature;
       let distToCorner = Math.abs(sample.curvature) > 0.006 ? 0 : Infinity;
+      let defKAbs = kAbs;
+      let defKNext = kNext;
+      let distToDefCorner = distToCorner;
       const lookM = 30 + (me.vxMs * me.vxMs) / 60;
+      const defLookM = lookM + 130;
       const sampleK = this.track.sampleCurvatureAtDistance;
-      for (let d = 10; d <= lookM; d += 10) {
+      for (let d = 10; d <= defLookM; d += 10) {
         const sAhead = (me.sMeters + d) % L;
         const k = sampleK ? sampleK(sAhead) : this.track.getSampleAtDistance(sAhead).curvature;
-        if (Math.abs(k) > 0.006 && !Number.isFinite(distToCorner)) distToCorner = d;
-        if (Math.abs(k) > kAbs) {
-          kAbs = Math.abs(k);
-          kNext = k;
+        if (d <= lookM) {
+          if (Math.abs(k) > 0.006 && !Number.isFinite(distToCorner)) distToCorner = d;
+          if (Math.abs(k) > kAbs) {
+            kAbs = Math.abs(k);
+            kNext = k;
+          }
+        }
+        if (Math.abs(k) > 0.006 && !Number.isFinite(distToDefCorner)) distToDefCorner = d;
+        if (Math.abs(k) > defKAbs) {
+          defKAbs = Math.abs(k);
+          defKNext = k;
         }
       }
       let maxBias = kAbs > 0.012 ? 1.2 : kAbs > 0.006 ? 2.5 : 6;
       const insideSign = Math.sign(kNext);
+      const defInsideSign = Math.sign(defKNext);
       const inCorner = Math.abs(sample.curvature) > 0.004;
-      // A new straight: the defence count starts again, and a pass commitment ends with the corner it was for
-      if (inCorner) craft.defendMoves = 0;
+      // A new straight after exiting a corner: the single-move defence count resets cleanly
+      if (craft.wasInCorner && !inCorner) craft.defendMoves = 0;
+      craft.wasInCorner = inCorner;
       if (craft.commitSide !== 0 && wrapHalf(me.sMeters - craft.commitUntilS, L) > 0) craft.commitSide = 0;
 
       if (ahead && targetLat === null) {
@@ -2080,7 +2154,7 @@ export class AiOpponentField implements AiRace {
           const cornerV = Number.isFinite(distToCorner)
             ? (this.track.getSampleAtDistance((me.sMeters + distToCorner) % L).optimalSpeedKmh / 3.6) * car.pace
             : me.vxMs;
-          const brakingZone = brakingDistanceM(me.vxMs, cornerV, decel);
+          const brakingZone = brakingDistanceM(me.vxMs, cornerV, effDecel);
           let side: number = chooseAttackSide({
             roomLeftM: roomLeft,
             roomRightM: roomRight,
@@ -2097,7 +2171,7 @@ export class AiOpponentField implements AiRace {
           // The car ahead on less grip brakes earlier for a slower corner (its speeds go with its pace, its braking with
           // pace²): the metres that buys a later braker
           const paceRatio = clamp(ahead.pace / Math.max(0.5, car.pace), 0.8, 1.25);
-          const itsZone = brakingDistanceM(ahead.sim.vxMs, cornerV * paceRatio, decel * paceRatio * paceRatio);
+          const itsZone = brakingDistanceM(ahead.sim.vxMs, cornerV * paceRatio, effDecel * paceRatio * paceRatio);
           // Holding a pass already under way needs less than starting one: the tow is gone once out of it
           const holding = craft.passTargetId === ahead.id;
           // A committed pass not alongside by the turn-in is over: the corner is the other car's. Held on into it, the
@@ -2134,7 +2208,7 @@ export class AiOpponentField implements AiRace {
               targetLat = aLat + side * passSpacing;
               craft.passTargetId = ahead.id;
               craft.passSide = side;
-              if (!out) biasRate = PULL_OUT_RATE_MS;
+              if (!out) biasRate = PULL_OUT_RATE_MS * wetBiasScale;
             }
             // Committed once the braking zone for the corner is near: no switching sides on the brakes
             if (craft.commitSide === 0 && Number.isFinite(distToCorner) && distToCorner < brakingZone + 80) {
@@ -2180,7 +2254,7 @@ export class AiOpponentField implements AiRace {
           }
           // ... and never closer than it could stop behind the other car if that braked now: held beside it, the corner's
           // room took the car back across onto its line while the other braked for the turn-in
-          speedCap = Math.min(speedCap, Math.max(0, o.sim.vxMs - 1), followCapMs(o.sim, behindBy, this.rc, this.followDecelMs2));
+          speedCap = Math.min(speedCap, Math.max(0, o.sim.vxMs - 1), followCapMs(o.sim, behindBy, this.rc, this.followDecelMs2, this.classDecelMs2));
         }
       }
 
@@ -2200,42 +2274,70 @@ export class AiOpponentField implements AiRace {
         if (!owns) speedCap = Math.min(speedCap, alongsideAhead.sim.vxMs - clamp(1.5 * overlapM, 1.5, 5));
       }
       if (squeezedBy) speedCap = Math.min(speedCap, squeezedBy.sim.vxMs - 2);
-      // Defending: a quicker car closing from behind and a real corner coming: cover the inside, the move made while
-      // still on the throttle (never started under braking, never while a pass of our own is on), held through the
-      // braking zone and given up once the car is in the corner itself, where it rejoins its own line to make the turn.
-      // One move per straight; none against a car lapping us, none under a yellow
-      // Off the start the grid lane gives way to it: the run to the first corner is where places go, and a car that
-      // only held its lane was driven past by anything quicker off the line
+      // FIA-style single-move defence: when an attacker is within striking distance approaching a braking zone,
+      // protect the inside line early (before braking, never while passing or with a car already alongside, never
+      // in heavy rain on Lap 1). Once committed, hold the locked defensive line straight through the braking zone
+      // (no weaving under braking!) until turn-in, always yielding a car's width if the attacker gets alongside.
       const onStartLane = car.startLaneM !== null && targetLat === car.startLaneM;
-      const mayDefend =
-        (targetLat === null || onStartLane) && attacker !== null && defend > 0 && (kAbs > 0.006 || onStartLane) && !inCorner && !lapper && !yellow;
-      // ... and only with room to make it: the move must be made before the attacker gets there (a move across the
-      // nose of a car already right behind is a brake test). Half a car length plus 0.8 s of the closing speed (defaults)
+      const brakingNow = me.telemetry.brake >= 0.05;
+      const wetLap1 = car.clock.lapsDone === 0 && wetLevel > 0.5;
+      const cornerAheadForDef = defKAbs > 0.006 && defInsideSign !== 0 && distToDefCorner <= defLookM;
+      const canDefendEnv = (targetLat === null || onStartLane) && craft.passTargetId === null && defend > 0 && !inCorner && !lapper && !yellow && !wetLap1 && roomFor === null && !anyAlongside;
       const attackerClosing = attacker ? Math.max(0, attacker.sim.vxMs - me.vxMs) : 0;
       const startsDefence =
-        !car.defending && craft.defendMoves < 1 && me.telemetry.brake < 0.05 && attackerGap > 0.5 * CAR_LEN_M + this.rc.defendRoomS * attackerClosing;
+        canDefendEnv &&
+        attacker !== null &&
+        (cornerAheadForDef || onStartLane) &&
+        canStartDefenseMove({
+          alreadyDefending: car.defending,
+          defendMoves: craft.defendMoves,
+          brake: me.telemetry.brake,
+          anyAlongside: anyAlongside || roomFor !== null || alongsideAhead !== null,
+          attackerGapM: attackerGap,
+          attackerClosingMs: attackerClosing,
+          carLenM: CAR_LEN_M,
+          defendRoomS: this.rc.defendRoomS,
+        });
+      // Hold an active defence straight through braking (no weaving back onto the racing line under braking!)
+      // and on the run-in while the attacker remains nearby or the corner is imminent; yield immediately if a car
+      // gets alongside (`roomFor !== null`) or at corner turn-in (`inCorner`).
+      const holdDefence =
+        car.defending &&
+        !inCorner &&
+        !lapper &&
+        !yellow &&
+        roomFor === null &&
+        (targetLat === null || onStartLane) &&
+        (brakingNow || attacker !== null || (cornerAheadForDef && distToDefCorner < lookM + 40));
       const wasDefending = car.defending;
-      car.defending = mayDefend && (car.defending || startsDefence);
+      car.defending = holdDefence || startsDefence;
       if (car.defending && !wasDefending && attacker) {
         craft.defendMoves++;
+        const chosenInside = cornerAheadForDef ? defInsideSign : insideSign;
         const to = chooseDefenseTarget({
           lineLatM: line,
           myLatM: me.lateralOffsetM,
           attackerLatM: attacker.sim.lateralOffsetM,
           halfRoadM: half,
-          insideSign,
+          insideSign: chosenInside,
           defendReachM: this.rc.defendReachM,
           defendStrength: defend,
           onStartLane,
         });
-        craft.defendOffLine = onStartLane;
-        craft.defendLatM = onStartLane ? to : to - line;
+        craft.defendOffLine = true;
+        craft.defendTargetLatM = to;
+        craft.defendLatM = to;
+        craft.defendSide = chosenInside || Math.sign(to - me.lateralOffsetM);
         // The new lane is the one held to the first corner: going back to the grid slot's would be a second move
         if (onStartLane) car.startLaneM = to;
       }
       if (car.defending) {
-        targetLat = clamp(craft.defendOffLine ? craft.defendLatM : line + craft.defendLatM, -half, half);
-        biasRate = Math.max(biasRate, 3.0);
+        // FIA no-moving-under-braking: once heavy braking begins, hold the current line straight until turn-in
+        if (me.telemetry.brake > 0.25 && Math.abs(craft.defendTargetLatM - me.lateralOffsetM) > 0.35) {
+          craft.defendTargetLatM = clamp(me.lateralOffsetM, -half, half);
+        }
+        targetLat = clamp(craft.defendTargetLatM, -half, half);
+        biasRate = Math.max(biasRate, 3.2 * wetBiasScale);
       }
       // Blue flag: pull decisively off the racing line (outside of next corner, or clear side on a straight) and lift
       let blueLift = 1;
@@ -2269,9 +2371,9 @@ export class AiOpponentField implements AiRace {
           biasRate = 5;
           // Not on the clear line yet, or little room beside it: slow enough to stop short if it goes wrong
           const offLine = Math.abs(me.lateralOffsetM - hl.latM) > 1;
-          if (offLine || hl.roomM < CAR_WID_M + 1.5) speedCap = Math.min(speedCap, Math.max(hs.vxMs + 6, Math.sqrt(2 * 0.6 * decel * Math.max(0, gap - 4))));
+          if (offLine || hl.roomM < CAR_WID_M + 1.5) speedCap = Math.min(speedCap, Math.max(hs.vxMs + 6, Math.sqrt(2 * 0.6 * effDecel * Math.max(0, gap - 4))));
         } else {
-          speedCap = Math.min(speedCap, Math.max(0, Math.sqrt(2 * 0.6 * decel * Math.max(0, gap - 6))));
+          speedCap = Math.min(speedCap, Math.max(0, Math.sqrt(2 * 0.6 * effDecel * Math.max(0, gap - 6))));
         }
       }
       let pos = targetLat === null ? null : clamp(targetLat, -half, half);
@@ -2341,12 +2443,16 @@ export class AiOpponentField implements AiRace {
       // (between two cars, the middle of the gap is the place, wherever the corner's reach ends: clamped to the reach, the
       // car was taken across into one of them)
       if (sandwiched && pos !== null) maxBias = Math.max(maxBias, Math.abs(pos - line));
-      // How far off its line the corner lets this car go before the room for a car alongside (the off-line speed below)
+      // How far off its line the corner lets this car go before the room for a car alongside or an active inside defence
+      // (keeping `cornerReach` at the natural reach ensures a defending car slows appropriately for the tighter inside apex)
       const cornerReach = maxBias;
+      if (car.defending && pos !== null) {
+        maxBias = Math.max(maxBias, Math.min(half * 2, Math.abs(pos - line)));
+      }
       // Side by side: the room for the other car may take us past the corner's reach (and costs speed there, below).
       // Held to the reach, a car alongside that stays where it is was turned in on: another AI car moves over too, so
       // between them they made the room, but a player doesn't
-      const roomRules = roomFor !== null && (wary || this.humanDriven(roomFor) || !this.rc.roomPlayerOnly);
+      const roomRules = roomFor !== null && (wary || this.humanDriven(roomFor) || !this.rc.roomPlayerOnly || wetLevel > 0.5);
       if (roomFor && roomRules && targetLat === roomLat && this.rc.alongsideReachM > 0) {
         maxBias = Math.max(maxBias, Math.min(Math.abs((pos ?? line) - line), maxBias + this.rc.alongsideReachM));
       }
@@ -2379,7 +2485,7 @@ export class AiOpponentField implements AiRace {
         const aheadOff = ahead.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(ahead.sim.sMeters), me.racingLineId);
         if (Math.abs(biasTarget - aheadOff) < CAR_WID_M + 0.35) {
           passBlocked = true;
-          speedCap = Math.min(speedCap, followCapMs(ahead.sim, aheadGap - CAR_LEN_M, this.rc, this.followDecelMs2));
+          speedCap = Math.min(speedCap, followCapMs(ahead.sim, aheadGap - CAR_LEN_M, this.rc, this.followDecelMs2, this.classDecelMs2));
         }
       }
       if (!pilot && this.localPlanner && me.aiPlan && car.control?.racing !== false && this.trafficNear(car)) {
@@ -2416,8 +2522,7 @@ export class AiOpponentField implements AiRace {
       // straights it scaled the whole plan, and the car in the tow ran 2 % under its own top speed and never got by
       const dirtyAirShare = me.aiPlan ? this.rc.dirtyAirMargin * cornerLimitedShare(me.aiPlan, me.sMeters, me.vxMs, lookM) : 0.05;
       const dirtyAirPenalty = 1 - dirtyAirShare * Math.max(0, 1 - wakeFrontMult);
-      // Rain: the pace the tyres' grip on this much water allows (weather.ts / track-environment.ts)
-      const weatherPace = this.environment.weatherPaceScale(me);
+      // Rain: the pace the tyres' grip on this much water allows (already computed above)
       // Yellow flag / VSC: lift through the zone (VSC holds the whole field at ~65 % reference pace)
       const vscPace = vscActive ? VSC_PACE_SHARE : 1;
       const yellowLift = Math.min(vscPace, yellowFlag === 2 ? DOUBLE_YELLOW_PACE : yellowFlag > 0 ? YELLOW_PACE : 1);
@@ -2432,7 +2537,7 @@ export class AiOpponentField implements AiRace {
       // Past the corner's reach for a car alongside: that line is tighter than the plan's, so a little slower
       const pastReach = this.rc.alongsideReachM > 0 ? Math.max(0, Math.abs(car.biasM) - cornerReach) : 0;
       const offLine = (me.aiPlan ? 1 : 1 - 0.012 * Math.abs(car.biasM)) * (1 - 0.015 * pastReach);
-      me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 0.999, planned * attackPush) * offLine * dirtyAirPenalty * yellowLift * blueLift;
+      me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 1.035, planned * attackPush) * offLine * dirtyAirPenalty * yellowLift * blueLift;
       me.aiSpeedCapMs = speedCap;
       me.aiTopSpeedOpen = yellowLift === 1 && blueLift === 1;
       car.hooks?.setSteerGain(T.at('steerGain', me.sMeters));
@@ -2537,7 +2642,7 @@ export class AiOpponentField implements AiRace {
         Math.abs(targetLat - sim.lateralOffsetM) > 0.25;
       if (inCurrentLane || inTargetLane || crossingPath) {
         const gapM = ds - CAR_LEN_M;
-        const follow = gapM <= 2.0 ? Math.max(0, other.sim.vxMs - 1) : followCapMs(other.sim, gapM, this.rc, this.followDecelMs2);
+        const follow = gapM <= 2.0 ? Math.max(0, other.sim.vxMs - 1) : followCapMs(other.sim, gapM, this.rc, this.followDecelMs2, this.classDecelMs2);
         cap = Math.min(cap, follow);
       }
     }
@@ -2679,7 +2784,7 @@ export class AiOpponentField implements AiRace {
       if (!hit) continue;
       if (dsNow >= lenGap) {
         // Ahead: slot in behind it
-        capMs = Math.min(capMs, followCapMs(os, dsNow - CAR_LEN_M - (human ? this.rc.playerMarginM : 0), this.rc, this.followDecelMs2));
+        capMs = Math.min(capMs, followCapMs(os, dsNow - CAR_LEN_M - (human ? this.rc.playerMarginM : 0), this.rc, this.followDecelMs2, this.classDecelMs2));
       } else if (dsNow > -lenGap) {
         if (!human && !wary && this.rc.pathSidePlayerOnly) continue;
         // Beside: room on our side of it, made quickly, if the road has it; and, not clearly ahead, a lift to drop in
@@ -3277,6 +3382,7 @@ export class AiOpponentField implements AiRace {
       compound: c.sim.tireCompound,
       dnf: c.retired || undefined,
       dq: (c.isPlayer && this.playerDq) || undefined,
+      dnfReason: c.retiredReason ?? undefined,
     };
   }
 
@@ -3348,7 +3454,7 @@ export class AiOpponentField implements AiRace {
     timeS: number;
     cars: ReadonlyMap<
       string,
-      { damage: CarDamageSnapshot; version: number; retired: boolean; retiredAtS: number | null; removed: boolean }
+      { damage: CarDamageSnapshot; version: number; retired: boolean; retiredAtS: number | null; retiredReason: DnfReason | null; removed: boolean }
     >;
   }> = [];
   private lastDamageHistoryS = -Infinity;
@@ -3364,6 +3470,7 @@ export class AiOpponentField implements AiRace {
           !p ||
           p.version !== car.damage.version ||
           p.retired !== car.retired ||
+          p.retiredReason !== car.retiredReason ||
           p.removed !== car.removed ||
           p.damage.terminal !== car.damage.terminal
         ) {
@@ -3376,7 +3483,7 @@ export class AiOpponentField implements AiRace {
     this.lastDamageHistoryS = this.raceTimeS;
     const cars = new Map<
       string,
-      { damage: CarDamageSnapshot; version: number; retired: boolean; retiredAtS: number | null; removed: boolean }
+      { damage: CarDamageSnapshot; version: number; retired: boolean; retiredAtS: number | null; retiredReason: DnfReason | null; removed: boolean }
     >();
     for (const car of this.cars) {
       cars.set(car.isPlayer ? 'player' : car.id, {
@@ -3384,6 +3491,7 @@ export class AiOpponentField implements AiRace {
         version: car.damage.version,
         retired: car.retired,
         retiredAtS: car.retiredAtS,
+        retiredReason: car.retiredReason,
         removed: car.removed,
       });
     }
@@ -3427,6 +3535,7 @@ export class AiOpponentField implements AiRace {
         car.damage.restore(snap.damage);
         car.retired = snap.retired;
         car.retiredAtS = snap.retiredAtS;
+        car.retiredReason = snap.retiredReason;
         car.removed = snap.removed;
         car.sim.setDamageEffects?.(car.damage.effects());
       }
@@ -3464,6 +3573,11 @@ export class AiOpponentField implements AiRace {
       const rewoundBeforeGreen = this.rollingFormation || (this.rollingGreenAtS > 0 && this.raceTimeS < this.rollingGreenAtS);
       this.rollingFormation = Boolean(rewoundBeforeGreen && leader && leader.distM < -5);
       this.rollingLeaderStallS = 0;
+      this.rollingDistanceToLineM = this.rollingFormation ? Math.max(0, -(leader?.distM ?? 0)) : 0;
+      this.rollingStageOrder = this.rollingFormation
+        ? rollingFormationStep(this.rollingDistanceToLineM, leader?.sim.vxMs ?? this.rollingPaceMs, this.rollingPaceMs, 0).stageOrder
+        : 0;
+      this.player.speedLimiterMs = this.rollingFormation ? this.rollingPaceMs : undefined;
     }
   }
 
@@ -3632,8 +3746,21 @@ export class AiOpponentField implements AiRace {
     if (!car || car.retired || car.finishTimeS !== null) return;
     car.retired = true;
     car.retiredAtS = this.raceTimeS;
+    car.retiredReason = 'track_limits';
     this.phase = 'finished';
     this.raceControl.announce(this.raceTimeS, 'penalty', `${car.label} disqualified`, 'Track limits');
+  }
+
+  private rollingFormationStatus(): RaceStatus['rollingFormation'] {
+    if (!this.rollingFormation) return undefined;
+    const step = rollingFormationStep(this.rollingDistanceToLineM, this.rollingPaceMs, this.rollingPaceMs, this.rollingStageOrder);
+    return {
+      paceMs: this.rollingPaceMs,
+      stage: step.stage,
+      countdown: step.countdown,
+      limiterActive: !this.player.aiAutopilot && (this.player.speedLimiterMs ?? 0) > 0,
+      distanceToLineM: Math.round(this.rollingDistanceToLineM),
+    };
   }
 
   public status(): RaceStatus {
@@ -3658,7 +3785,7 @@ export class AiOpponentField implements AiRace {
       phase: this.phase,
       lightsOn: this.lightsOn,
       countdownS: this.phase === 'lights' && this.preStartS > 0 ? this.preStartS : undefined,
-      rollingFormation: this.rollingFormation ? { paceMs: this.rollingPaceMs } : undefined,
+      rollingFormation: this.rollingFormationStatus(),
       qualifying: this.qualiResults ?? undefined,
       position: playerIdx + 1,
       fieldSize: order.length,
@@ -3685,6 +3812,7 @@ export class AiOpponentField implements AiRace {
           finished: c.finishTimeS !== null,
           retired: c.retired || undefined,
           dq: (c.isPlayer && this.playerDq) || undefined,
+          dnfReason: c.retiredReason ?? undefined,
           damage: c.damage.pristine ? undefined : Math.round(c.damage.overall * 100) / 100,
           bestLapMs: c.bestLapMs,
           lastLapMs: c.lastLapMs,

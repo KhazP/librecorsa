@@ -60,10 +60,13 @@ export function useF1ModPhysics(): F1ModPhysics {
   return useSyncExternalStore(subscribeF1ModPhysics, getF1ModPhysics, () => DEFAULT);
 }
 
-/** Whether the physics switch applies to this car: a ported F1 car (its own GLB on the generic rig) */
+/**
+ * Whether the physics switch applies to this car: a ported F1 car (its own GLB on the generic rig). Never a mod car,
+ * which drives on the physics its package names
+ */
 export const carTakesPhysicsSwitch = (id: CarId): boolean => {
   const def = carById(id);
-  return def.classId === "f1" && !!def.modelUrl;
+  return def.classId === "f1" && !!def.modelUrl && !def.mod;
 };
 
 /** The vehicle model a car drives on, with the physics switch applied to the ported F1 cars */

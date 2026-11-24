@@ -1114,6 +1114,7 @@ export const GtLikeHud: React.FC<HudDesignProps> = ({
   revRange,
   scale,
   mfd,
+  channels,
   ffb,
   lapInvalid,
   mapMode,
@@ -1190,6 +1191,7 @@ export const GtLikeHud: React.FC<HudDesignProps> = ({
       {/* Bottom right: MFD over car identity plate */}
       <div className="absolute hidden flex-col items-end gap-2 lg:flex" style={{ bottom: EDGE, right: EDGE, ...anchor(scale, "bottom right") }}>
         {mfd}
+        {channels}
         {carId ? (
           <div className="hidden xl:block">
             <CarCard t={t} carId={carId} w={w} />

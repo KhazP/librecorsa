@@ -329,13 +329,13 @@ const SUSPENSIONS: SuspensionsData = {
     actuation: 'push_rod',
     staticCamber: -1.6,
     camberGainKinematic: -25,
-    springs: { wheel_rate: 165_000, helper_rate: 0, helper_range: 0 },
-    heave: { rate: 200_000, gap: 0, packerGap: 0.012, packerRate: 700_000 },
+    springs: { wheel_rate: 140_000, helper_rate: 0, helper_range: 0 },
+    heave: { rate: 250_000, gap: 0, packerGap: 0.012, packerRate: 700_000 },
     // 8 mm of packers on the rear dampers [bop]
     bumpStop: { range: 0.04, rate: 150_000, progression: 4_000_000, packerGap: 0.008 },
     droopTravel: 0.045,
     rollCentreHeight: 0.0594,
-    arb: 22_000,
+    arb: 14_000,
     allowNoArb: true,
     hardpoints: [
       [0.44, 0.0838, 0.251],
@@ -378,7 +378,7 @@ const perArea = (lut: LutPoints): LutPoints => lut.map(([x, v]) => [x, Number((v
  * and the figures for it are in an appendix that was not retrieved. The numbers here make a car of CL·A ≈ 4.25 m² and
  * CD·A ≈ 0.99 m² (4.3 : 1) with 44.5 % of the downforce on the front axle from 100 to 300 km/h held steady, running
  * 30 mm front and 42 mm rear at speed on a 5.5° rear wing. The drag is held by the class's speed-trap figures
- * (scripts/verify-lc-lmdh.ts); the downforce was raised from 3.96 m² after the corner speeds read off a race lap's
+ * (scripts/verify/verify-lc-lmdh.ts); the downforce was raised from 3.96 m² after the corner speeds read off a race lap's
  * onboard footage of one of the class's cars came out about a tenth above what the car could hold between 110 and
  * 145 km/h (each ± 15 %: the radii are an ideal line's), all of the gain under the floor, where it costs the least drag.
  * The balance stays behind the 46 % of the weight on the front axle as the car settles, so the car keeps its understeer
@@ -441,7 +441,7 @@ const AERO: AeroData = {
         [0.03, 1],
         [0.12, 0.97],
       ],
-      lutYaw_CL_mult: [[0, 1], [5, 0.99], [10, 0.96], [20, 0.86], [30, 0.75]],
+      lutYaw_CL_mult: [[0, 1], [5, 0.985], [10, 0.945], [20, 0.83], [30, 0.72]],
       dragY: -0.2,
     },
     {
@@ -514,7 +514,7 @@ const AERO: AeroData = {
         [0, 1],
         [0.3, 1],
       ],
-      lutYaw_CL_mult: [[0, 1], [5, 0.975], [10, 0.92], [20, 0.78], [30, 0.62]],
+      lutYaw_CL_mult: [[0, 1], [5, 0.985], [10, 0.945], [20, 0.82], [30, 0.68]],
       dragY: 0.5,
     },
   ],
@@ -701,9 +701,20 @@ function lmdhCompound(
       dcamber0_x: 0,
       dcamber1_x: -6,
     },
-    // The 34 cm rear: its own grip at the same reference load, and a stiffer carcass
+    // The 34 cm rear: its own grip at the same reference load, wider slip peak and gentler post-peak falloff for
+    // progressive breakaway on low-downforce trims, and a stiffer carcass
     rearOverride: {
-      modelData: { Dy0: rearLat, Dx0: rear, Fz0: FZ0, dyCurve: loadCurve(rearLat, 0.8), dxCurve: loadCurve(rear, 0.82), friction_limit_angle: 6.3 },
+      modelData: {
+        Dy0: rearLat,
+        Dx0: rear,
+        Fz0: FZ0,
+        dyCurve: loadCurve(rearLat, 0.8),
+        dxCurve: loadCurve(rear, 0.82),
+        friction_limit_angle: 6.8,
+        longStiffnessMult: 1.19,
+        falloff_level: 0.9,
+        falloff_slope: 3,
+      },
       pressureData: { pressureSpringCurve: pressureSpring(320_000), setPsi: 19.58 },
     },
   };
@@ -778,7 +789,7 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
       ffbMechanicalTrailM: 0.02,
       // Power steering, engine-driven: the same assist at any speed [est]
       powerSteering: { steeringRatio: 13.175, deadbandNm: 2, rampNm: 15, maxRatio: 1.2 },
-      // The body's plan at barrier height, measured from lc-lmdh.glb (`scripts/measure-car-plans.ts`)
+      // The body's plan at barrier height, measured from lc-lmdh.glb (`scripts/cars/measure-car-plans.ts`)
       bodyPlan: [[0.00, 2.69], [0.55, 2.61], [0.92, 2.45], [1.00, 2.00], [1.00, 0.72], [0.96, -2.40], [0.00, -2.41]],
       // Torsional stiffness between the axle structures: a carbon tub with the V8 as a stressed member [est]
       chassisTorsion: { torsionalStiffnessNmPerDeg: 46_000, torsionalDampingNmsPerDeg: 340, frontRollInertiaShare: 0.45 },
@@ -801,11 +812,12 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
     },
     // [est]: the launch slips the clutch at 4500 rpm
     clutch: { maxTorqueNm: 1300, biteRpm: 1800, lockRpm: 1900, launchRpm: 4500 },
-    // The spec mechanical plate differential (Art. 9.9) [spec]: six friction faces of μ 0.075 on a 56.3° drive ramp and a
-    // 32.7° coast ramp, so it locks 30 % of the drive torque and 70 % on the overrun, with 140 Nm of preload [bop]
+    // The spec mechanical plate differential (Art. 9.9) [spec]: six friction faces of μ 0.075 on a 50° drive ramp and a
+    // 36° coast ramp (~38 % drive lock, ~62 % coast lock) with 140 Nm of preload so power-on and lift-off stay
+    // progressive on low-downforce setups [bop]
     differential: {
       type: 'LSD_Ramp',
-      settings: { power: 0.075, coast: 0.075, preload: 140, friction_faces: 6, power_ramp_deg: 56.31, coast_ramp_deg: 32.74 },
+      settings: { power: 0.075, coast: 0.075, preload: 140, friction_faces: 6, power_ramp_deg: 50, coast_ramp_deg: 36 },
       // Steel halfshafts from the transaxle, with their joints [est]
       halfshaft: { stiffnessNmPerRad: 13_500, dampingNmsPerRad: 34 },
     },
@@ -849,10 +861,10 @@ const config = (set: GearSet, rearWingDeg: number, frontWingDeg = 0) =>
 export const LC_LMDH_CONFIG = config(LMDH_GEAR_SETS.short, 5.5);
 
 /**
- * The same car in its low-drag trim: the long gear set, the rear wing at its 1° minimum and the front trimmed 5° off,
- * as the garage's gear set and low-drag package make it: `scripts/verify-lc-lmdh.ts` checks its top speed
+ * The same car in its low-drag trim: the long gear set, the rear wing at its 1° minimum and the front trimmed 5.8° off,
+ * as the garage's gear set and low-drag package make it: `scripts/verify/verify-lc-lmdh.ts` checks its top speed
  */
-export const LC_LMDH_LONG_CONFIG = config(LMDH_GEAR_SETS.long, 1, -5);
+export const LC_LMDH_LONG_CONFIG = config(LMDH_GEAR_SETS.long, 1, -5.8);
 
 /** What the regulations and the bulletin fix, for the checks: Nmax, the 500 kW line and the car's scale on it */
 export const LC_LMDH_POWER = { nMax: N_MAX, curve500Kw: POWER_CURVE_500, scaleVsKmh: POWER_SCALE_VS_KMH };

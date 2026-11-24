@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import { HomeDownloads } from "@/components/home/HomeDownloads";
 import { LEAD, SiteIntro, SitePage, TEXT_LINK } from "@/components/home/SitePage";
 import { day } from "@/components/home/home-data";
-import { APP_RELEASE } from "@/lib/downloads";
+import { ANDROID_RELEASE, DESKTOP_RELEASE, releasePageUrl, type AppRelease } from "@/lib/downloads";
 import { SITE_NAME } from "@/lib/site";
 
 const DESCRIPTION =
-  "Download LibreCorsa apps for Windows, macOS, Linux and Android. Free, open-source 500 Hz racing simulator with silent WebHID for wheels and fullscreen Android TWA.";
+  "Download LibreCorsa for Windows, macOS, Linux and Android. The free, open-source 500 Hz racing simulator as a desktop app that plays offline and takes mods, and a fullscreen Android app.";
 
 const SHARE_IMAGE = {
   url: "/opengraph-image.jpg",
@@ -36,20 +36,30 @@ export const metadata: Metadata = {
   },
 };
 
+/** "Desktop app v0.3.0 · 1 Dec 2026", the version linking to the release; "coming soon" while it isn't out */
+function ReleaseLine({ app, release }: { app: string; release: AppRelease }) {
+  return (
+    <span>
+      {app}{" "}
+      <a href={releasePageUrl(release)} target="_blank" rel="noopener" className={TEXT_LINK}>
+        v{release.version}
+      </a>{" "}
+      <span aria-hidden>·</span> {release.published && release.date ? day(release.date) : "coming soon"}
+    </span>
+  );
+}
+
 export default function DownloadPage() {
   return (
     <SitePage wide>
       <SiteIntro title="Download LibreCorsa">
         <p className={LEAD}>
-          Optional native apps for Windows, macOS, Linux and Android. They open librecorsa.org directly, so new tracks, cars
-          and physics updates arrive without reinstalling.
+          A desktop app for Windows, macOS and Linux that plays offline too and takes mods, and an app for Android. Online,
+          both play the live game, so new tracks, cars and physics updates arrive without reinstalling.
         </p>
-        <p className="lc-mono m-0 text-[13px] text-lc-slate">
-          Latest release{" "}
-          <a href={APP_RELEASE.releaseUrl} target="_blank" rel="noopener" className={TEXT_LINK}>
-            v{APP_RELEASE.version}
-          </a>{" "}
-          <span aria-hidden>·</span> {day(APP_RELEASE.date)}
+        <p className="lc-mono m-0 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-lc-slate">
+          <ReleaseLine app="Desktop app" release={DESKTOP_RELEASE} />
+          <ReleaseLine app="Android app" release={ANDROID_RELEASE} />
         </p>
       </SiteIntro>
 

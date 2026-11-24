@@ -1,7 +1,7 @@
 /**
  * Ground queries against a circuit's glTF track colliders for `VehiclePhysics`.
  *
- * Node contract (see scripts/rwanda-official/bl_track.py):
+ * Node contract (see scripts/tracks/rwanda-official/bl_track.py):
  *  - `Track_Collider_Road` (`userData.collider = 'road'`): low-res drivable surface, road ± (half width + 1.6 m).
  *    It carries no grip/surface tags, so it reads as `surface: 'road'`, `grip: 1` unless tagged.
  *  - Visual surfaces tagged with `userData.surface` and optionally `userData.grip`:
@@ -890,7 +890,7 @@ export class TrackColliderQuery implements GroundQuery {
   constructor(
     sources: ColliderLayerSource[] | TrackColliderBuffers,
     table: SurfaceTable = DEFAULT_SURFACE_TABLE,
-    /** `splitDenseCells: false` keeps every grid cell whole (scripts/verify-collider-split.ts compares the two) */
+    /** `splitDenseCells: false` keeps every grid cell whole (scripts/verify/verify-collider-split.ts compares the two) */
     options: { conformSurfaces?: boolean; splitDenseCells?: boolean } = {}
   ) {
     if (!Array.isArray(sources)) {

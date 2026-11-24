@@ -186,7 +186,6 @@
     "list": "Các màu sơn {car}"
   },
   "downloads": {
-    "intro": "Ứng dụng gói gọn tùy chọn cho Windows, macOS, Linux và Android. Mở trực tiếp librecorsa.org nên mọi bản cập nhật sẽ có ngay mà không cần cài lại.",
     "directLink": "Liên kết trực tiếp",
     "platforms": "Nền tảng",
     "thisDevice": "Thiết bị này",
@@ -198,17 +197,15 @@
     "installCommand": "Lệnh cài đặt trên {platform}",
     "whyInstall": "Vì sao nên cài ứng dụng",
     "highlights": {
-      "desktop": {
-        "label": "Máy tính",
-        "text": "Ưu tiên dùng GPU rời trên laptop đa GPU, tự động cấp quyền WebHID cho vô lăng đua và DualSense, tắt giới hạn khi chạy nền và kiểm tra bản cập nhật từ GitHub Releases."
+      "desktopApp": {
+        "label": "Máy tính"
       },
       "android": {
         "label": "Android",
         "text": "Toàn màn hình Trusted Web Activity không thanh địa chỉ, vuốt cạnh ẩn thanh điều hướng, Android Game Mode và lối tắt Lái xe / Bảng xếp hạng."
       },
-      "current": {
-        "label": "Luôn mới nhất",
-        "text": "Mọi ứng dụng đều mở trực tiếp librecorsa.org thay vì đóng gói đường đua hay xe, nên bản cập nhật vật lý, đường đua và chơi mạng có ngay lập tức."
+      "live": {
+        "label": "Luôn mới nhất"
       },
       "browser": {
         "label": "Trình duyệt & iOS",
@@ -216,7 +213,6 @@
       }
     },
     "buildsTitle": "Bản dựng & chữ ký số",
-    "builds": "Mọi trình cài đặt và tệp APK đều được dựng từ mã nguồn kho lưu trữ này qua GitHub Actions và phát hành trên GitHub Releases kèm mã băm SHA-256. Chữ ký số Windows miễn phí qua SignPath Foundation đang được thiết lập; bản dựng macOS hiện chưa ký số; tệp APK Android được ký bằng khóa tải lên xác thực qua <code>{file}</code>.",
     "allReleases": "Tất cả bản phát hành trên GitHub",
     "signingPolicy": "Chính sách ký mã số"
   }

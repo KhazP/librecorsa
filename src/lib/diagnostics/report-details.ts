@@ -3,7 +3,7 @@ import type { FrameSummary } from "@/lib/render/frame-stats";
 /**
  * What a bug report adds by itself, as rows the player sees (and can leave out) before it goes to GitHub, and the
  * text of the issue's "Game details" field. The facts are read once, when the report opens (the telemetry keeps
- * moving under the pause menu), by the game; this module only words them, so scripts/verify-report-details.ts can
+ * moving under the pause menu), by the game; this module only words them, so scripts/verify/verify-report-details.ts can
  * check it without a browser.
  *
  * Each row answers a question a report had to be asked back: which build (#111), the frame rate (#111, #116), the
@@ -41,6 +41,26 @@ export interface DriveFacts {
   replay: boolean;
 }
 
+/**
+ * The wheel as it is set up, for a wheel report: #206 showed force feedback connected and nothing else, so whether
+ * the forces were on, how strong, and whether the wheel was even the input set up had to be asked back
+ */
+export interface WheelSetupFacts {
+  /** The input set up ("Wheel", "Controller", "Keyboard"): the wheel's forces only play in the car with "Wheel" */
+  input: string;
+  /** The device steering is bound to, by its short name; null when unbound */
+  steer: string | null;
+  rotationDeg: number;
+  directDrive: boolean;
+  /** Where the force feedback goes, or "off" */
+  ffb: "off" | "WebHID" | "bridge";
+  /** The strength (1 = 100 %) */
+  gain: number;
+  inverted: boolean;
+  /** Cars given their own strength */
+  ownStrengthCars: number;
+}
+
 /** What the game knows when a report opens, beside the circuit, car and system the form already had */
 export interface ReportFacts {
   /** The deployed build ("" in a local build) */
@@ -54,6 +74,8 @@ export interface ReportFacts {
   input: string;
   /** Controllers and wheels the browser sees, with the force-feedback device */
   devices: string | null;
+  /** The wheel's setup (wheel reports) */
+  wheel: WheelSetupFacts;
   frames: FrameSummary | null;
   /** Assists, realism, frame cap… */
   settings: string;
@@ -188,6 +210,25 @@ export function bugReportRows(
   return rows;
 }
 
+/**
+ * The wheel setup line: "input Wheel, steering on R3 Racing Wheel and Pedals, 1080° direct drive, force feedback
+ * WebHID at 100%"
+ */
+export function wheelSetupLine(w: WheelSetupFacts): string {
+  const parts = [
+    `input ${w.input}`,
+    w.steer ? `steering on ${w.steer}` : "steering not bound",
+    `${Math.round(w.rotationDeg)}° ${w.directDrive ? "direct drive" : "belt / gear"}`,
+  ];
+  if (w.ffb === "off") parts.push("force feedback off");
+  else {
+    parts.push(`force feedback ${w.ffb} at ${Math.round(w.gain * 100)}%`);
+    if (w.inverted) parts.push("inverted");
+    if (w.ownStrengthCars > 0) parts.push(`own strength on ${w.ownStrengthCars} ${w.ownStrengthCars === 1 ? "car" : "cars"}`);
+  }
+  return parts.join(", ");
+}
+
 /** The rows a wheel report adds: all on its one "Browser and system" line */
 export function wheelReportRows(base: { browser: string; screen: string; gpu: string }, facts: ReportFacts | null): ReportRow[] {
   const rows: ReportRow[] = [
@@ -197,6 +238,7 @@ export function wheelReportRows(base: { browser: string; screen: string; gpu: st
   ];
   if (!facts) return rows;
   if (facts.devices) rows.push({ id: "devices", label: "Devices", value: facts.devices, field: "system" });
+  rows.push({ id: "wheel", label: "Wheel setup", value: wheelSetupLine(facts.wheel), field: "system" });
   rows.push(
     { id: "build", label: "Build", value: `${facts.build || "local"} · physics ${facts.physicsVersion}`, field: "system" },
     { id: "app", label: "App", value: facts.app, field: "system" }

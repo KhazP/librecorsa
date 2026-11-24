@@ -5,6 +5,7 @@ import { withBasePath } from "@/lib/base-path";
 import { buildIdFromEnv } from "@/lib/build-id";
 import { FORWARD_TO_GAME } from "@/lib/home/forward-to-game";
 import { I18nProvider } from "@/i18n/I18nProvider";
+import { LauncherHeartbeat } from "@/components/launcher/LauncherHeartbeat";
 import { AUTHOR_LINKS, DOCS_URL, REPO_URL, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 /*
@@ -149,6 +150,8 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
         />
         <I18nProvider>{children}</I18nProvider>
+        {/* Under the offline launcher, it quits once no page of the game is open */}
+        <LauncherHeartbeat />
       </body>
     </html>
   );

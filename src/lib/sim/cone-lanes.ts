@@ -1,7 +1,7 @@
 /**
  * The lanes of circuits laid out in cones: the lane between the cones on either side of the lap, out to the
  * cones' outer edges, as world outlines (x, z pairs, m), a strip per 40 m of the lap. drawn-surfaces.ts makes the
- * lane the track and the ground round it off it. Made by scripts/generate-cone-lanes.ts; not edited by hand.
+ * lane the track and the ground round it off it. Made by scripts/tracks/generate-cone-lanes.ts; not edited by hand.
  */
 
 /** spielberg_inner: 434 cones, the lane 3.6-9.3 m wide */

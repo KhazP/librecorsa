@@ -3,7 +3,7 @@
  * English (the verify suites compare those sentences, and the server answers `{ ok: false, error }` with one), so the
  * screens pass each sentence through `accountWords` when they show it: a sentence that is the English of a message
  * under game.account.notices, .errors or .server comes back in the current language; anything else (a technical
- * answer a player shouldn't meet) stays as it came. scripts/verify-account-words.ts checks that every sentence the
+ * answer a player shouldn't meet) stays as it came. scripts/verify/verify-account-words.ts checks that every sentence the
  * store, the sync and the server can send is one of those messages.
  */
 import game from "@/i18n/messages/en/game.json";

@@ -186,7 +186,6 @@
     "list": "طلاءات {car}"
   },
   "downloads": {
-    "intro": "تطبيقات أصلية اختيارية لأنظمة Windows وmacOS وLinux وAndroid. تفتح librecorsa.org مباشرة، فتصل تحديثات اللعبة دون إعادة تثبيت.",
     "directLink": "رابط مباشر",
     "platforms": "المنصات",
     "thisDevice": "هذا الجهاز",
@@ -198,17 +197,15 @@
     "installCommand": "أمر تثبيت {platform}",
     "whyInstall": "لماذا تثبّت التطبيق",
     "highlights": {
-      "desktop": {
-        "label": "سطح المكتب",
-        "text": "يطلب البطاقة الرسومية المنفصلة على الحواسيب المحمولة متعددة البطاقات، ويمنح WebHID صامتًا لمقاود السباق وDualSense، ويعطّل التقييد في الخلفية، ويتحقق من GitHub Releases للتحديثات."
+      "desktopApp": {
+        "label": "سطح المكتب"
       },
       "android": {
         "label": "Android",
         "text": "Trusted Web Activity بملء الشاشة دون شريط عنوان المتصفح، وسحب حواف غامر ثابت، وAndroid Game Mode، واختصارات القيادة ولوحات الأزمنة."
       },
-      "current": {
-        "label": "محدّث دائمًا",
-        "text": "يفتح كل تطبيق librecorsa.org مباشرة بدلًا من تضمين الحلبات أو السيارات، فتصل تحديثات الفيزياء والحلبات واللعب الجماعي فورًا."
+      "live": {
+        "label": "محدّث دائمًا"
       },
       "browser": {
         "label": "المتصفح وiOS",
@@ -216,7 +213,6 @@
       }
     },
     "buildsTitle": "البناء والتوقيع",
-    "builds": "تُبنى جميع المثبّتات وملفات APK من الشيفرة المصدرية لهذا المستودع عبر GitHub Actions وتُنشر على GitHub Releases مع بصمات SHA-256. جارٍ إعداد التوقيع المجاني لنظام Windows عبر SignPath Foundation؛ نسخ macOS غير موقّعة حاليًا؛ وملف Android APK موقّع بمفتاح الرفع المتحقق منه عبر <code>{file}</code>.",
     "allReleases": "جميع الإصدارات على GitHub",
     "signingPolicy": "سياسة توقيع الشيفرة"
   }

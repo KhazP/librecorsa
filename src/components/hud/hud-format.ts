@@ -1,4 +1,4 @@
-import type { CarTelemetry, RaceStatus, TireCompound } from "@/types/f1";
+import type { CarTelemetry, DnfReason, RaceStatus, TireCompound } from "@/types/f1";
 import { COMPOUNDS } from "@/components/ui/badges/compounds";
 import { formatDelta as kitFormatDelta } from "@/components/ui/badges/DeltaBadge";
 import { tokenColor, type ColorToken } from "@/components/ui/token-color";
@@ -300,6 +300,12 @@ export function aidsActive(t: Pick<CarTelemetry, "liveTuner" | "f12026">): { tc:
  */
 export function raceState(race: RaceStatus | undefined): { finished: boolean; classified: boolean } {
   return { finished: race?.phase === "finished", classified: Boolean(race?.results) };
+}
+
+/** Human-readable cause of a DNF or disqualification, or null when the car finished (or no specific cause is known) */
+export function dnfReasonLabel(reason: DnfReason | undefined, dq?: boolean): string | null {
+  const key = reason ?? (dq ? "track_limits" : undefined);
+  return key ? tr(`hud.raceResults.dnfReasons.${key}`) : null;
 }
 
 /** A tyre condition (graining, blistering, flat spot, dirt) is flagged on the HUD from this level (0..1) */

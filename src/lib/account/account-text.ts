@@ -64,8 +64,8 @@ function browserOf(ua: string): string {
 
 /**
  * What this device is called in the account's device list: "Chrome on macOS", "Safari on iOS", and "LibreCorsa app on
- * Windows" for the desktop app (Electron names itself in its user agent) or "LibreCorsa app on Android" for the store
- * app (store-mode.ts). Nothing else from the user agent is kept.
+ * Windows" for the retired Electron app (its installed copies name Electron in the user agent) or "LibreCorsa app on
+ * Android" for the store app (store-mode.ts). Nothing else from the user agent is kept.
  */
 export function deviceLabelFor(userAgent: string, opts: { maxTouchPoints?: number; storeBuild?: boolean } = {}): string {
   const system = systemOf(userAgent, opts.maxTouchPoints ?? 0);

@@ -4,11 +4,11 @@
  * the race too: its field round the same car, the track environment every car shares, and the race's standing.
  *
  * It knows nothing of threads or timers: `sim-worker.ts` feeds it messages and wall-clock time, and the headless
- * checks drive it directly (`scripts/verify-sim-runtime.ts`). Nothing here may touch the page (window, storage, DOM).
+ * checks drive it directly (`scripts/verify/verify-sim-runtime.ts`). Nothing here may touch the page (window, storage, DOM).
  */
 import type { ControlInputs } from "@/types/f1";
 import { setLc26OnRigidBody } from "@/lib/cars/lc26-engine";
-import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
+import { createVehicleSim } from "@/lib/cars/vehicle-models";
 import { getActiveTrackData, setActiveTrack, type BuiltTrackData } from "@/lib/track-data";
 import type * as THREE from "three";
 import type { SimulatorCar } from "../simulator-car";
@@ -51,6 +51,7 @@ interface WorkerRace {
   sentPhase: string;
   sentLights: number;
   sentRolling: boolean;
+  sentRollingCue: string;
   rosterSent: boolean;
   /** The car's race control before the race wired its own */
   ownRaceControl: OvertakingRaceControl | null | undefined;
@@ -111,7 +112,7 @@ export class SimRuntime {
         // Another car: a race round the last one ends with it
         this.endRace();
         this.spare = null;
-        this.car = vehicleModelSpec(command.vehicle).createSim(this.track, this.trackRoot, command.bodyPlan);
+        this.car = createVehicleSim(command.vehicle, this.track, this.trackRoot, command.bodyPlan, command.profile);
         this.carNumber = command.car;
         this.epoch = 0;
         this.inputs = {};
@@ -226,7 +227,7 @@ export class SimRuntime {
             earnedAtDetection: () => field.detectionEarnedFor(car),
           };
         }
-        this.race = { id: command.race, epoch: 0, opponents: command.opponents, field, env, tick: 0, steps: 0, fresh: true, poses: null, sentPhase: "", sentLights: -1, sentRolling: false, rosterSent: false, ownRaceControl };
+        this.race = { id: command.race, epoch: 0, opponents: command.opponents, field, env, tick: 0, steps: 0, fresh: true, poses: null, sentPhase: "", sentLights: -1, sentRolling: false, sentRollingCue: "", rosterSent: false, ownRaceControl };
         this.epoch = command.epoch;
         this.accumulatorS = 0;
         this.reportRace(true);
@@ -287,6 +288,7 @@ export class SimRuntime {
     if (this.car) {
       this.car.raceControl = race.ownRaceControl;
       this.car.gridHold = false;
+      this.car.speedLimiterMs = undefined;
       this.car.aiSpeedCapMs = Infinity;
       this.car.aiLineBiasM = 0;
     }
@@ -363,12 +365,14 @@ export class SimRuntime {
     const lightsChanged =
       field.phase !== race.sentPhase ||
       field.lightsOn !== race.sentLights ||
-      field.isRollingFormation !== race.sentRolling;
+      field.isRollingFormation !== race.sentRolling ||
+      field.rollingCueKey !== race.sentRollingCue;
     const weatherDue = force || race.steps % WEATHER_EVERY === 0;
     if (!force && !lightsChanged && !weatherDue && race.steps % STATUS_EVERY !== 0) return;
     race.sentPhase = field.phase;
     race.sentLights = field.lightsOn;
     race.sentRolling = field.isRollingFormation;
+    race.sentRollingCue = field.rollingCueKey;
     const sample = race.env.weatherSampleFor(car);
     const event: Extract<SimEvent, { type: "race" }> = {
       type: "race",

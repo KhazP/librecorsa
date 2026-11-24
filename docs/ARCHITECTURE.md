@@ -27,7 +27,7 @@ A map of the repository for anyone who wants to change the code: where each part
 | `cloudflare/` | The Worker: `worker.js` serves the site, `api/` the online side; `migrations/` for D1 |
 | `scripts/` | The `verify-*.ts` suites, circuit and car converters, reports, the force-feedback bridge |
 | `docs/`, `docs-site/` | These pages, and the Astro site that publishes them |
-| `desktop/`, `android/` | The Electron app and the Android app, both opening librecorsa.org/play |
+| `launcher/`, `android/` | The desktop app (a Go program that serves the game on the player's computer, online and offline, with their mods) and the Android app (opening librecorsa.org/play) |
 
 ## From /play to the first frame
 
@@ -41,7 +41,7 @@ The active circuit is a module-level global (`src/lib/track-data.ts`). That's wh
 ## Threads and the frame loop
 
 - **Which path runs** is decided in `src/lib/sim/runtime/sim-mode.ts`. The worker drives the player's car in practice and runs AI races on keyboard, controller or touch. Online races and a wheel's car run on the page, and so does everything when the worker can't start. `?sim=main` or `?sim=worker` forces one.
-- **The worker** (`runtime/sim-worker.ts`) wakes every 4 ms (`SIM_TICK_S`), catches up by the clock and stops when the page has gone quiet for 250 ms. `runtime/sim-runtime.ts` is the thread-free core it runs, which `scripts/verify-sim-runtime.ts` drives directly.
+- **The worker** (`runtime/sim-worker.ts`) wakes every 4 ms (`SIM_TICK_S`), catches up by the clock and stops when the page has gone quiet for 250 ms. `runtime/sim-runtime.ts` is the thread-free core it runs, which `scripts/verify/verify-sim-runtime.ts` drives directly.
 - **Messages** are plain data, listed in `runtime/sim-protocol.ts`. The page sends inputs, settings and race commands. The worker sends the car's state (with the steering-torque samples for force feedback) and the AI field's poses (`field-frame.ts`).
 - **The page keeps a twin of the car** (`runtime/sim-host.ts`, `remote-car.ts`). Settings changed on it are mirrored to the worker's car, and the page can take the car back at any time.
 - **Smoothing**: the page carries the last state forward by velocity and yaw rate to the moment it draws (`car-state.ts`), up to 50 ms.
@@ -67,7 +67,7 @@ The active circuit is a module-level global (`src/lib/track-data.ts`). That's wh
 - **`public/tracks/index.json`** lists every circuit: id, layout, length, credit, kind and where its data is.
 - **`public/tracks/<id>/track_data.json`** holds the circuit's metadata, DRS zones, cameras, turns, sectors, grid, pit lane, limits and a sample every few metres along the lap, with the racing lines. RISE Motordrome's short layout is the reference schema, read by `src/lib/track-data.ts`.
 - **`src/lib/track-registry.ts`** lists the circuits and loads one. `src/lib/hosted-content.ts` decides which a build shows: everything with `NEXT_PUBLIC_HOSTED_CONTENT=1`, only what's in the repository without it.
-- **Converters** in `scripts/tracks/`: `port_ac_track.py` for Assetto Corsa mods and `build_blender_track.py` for a circuit modelled in Blender. Both write the GLB and `track_data.json` and optimise the racing lines. `scripts/rwanda-official/` builds RISE Motordrome itself. See [Porting circuits](PORTING-TRACKS.md).
+- **Converters** in `scripts/tracks/`: `port_ac_track.py` for Assetto Corsa mods and `build_blender_track.py` for a circuit modelled in Blender. Both write the GLB and `track_data.json` and optimise the racing lines. `scripts/tracks/rwanda-official/` builds RISE Motordrome itself. See [Porting circuits](PORTING-TRACKS.md).
 
 ## Rendering
 
@@ -87,7 +87,7 @@ The active circuit is a module-level global (`src/lib/track-data.ts`). That's wh
 ## Input, wheels and telemetry
 
 - **`src/lib/input/bindings.ts`** holds the rebindable controls. `device-input.ts` reads the Gamepad API, and keyboard, touch and gyro steering each have a file.
-- **Force feedback**: `wheel-ffb.ts` either talks to the local bridge (`npm run ffb`, `scripts/ffb-bridge.ts`) or plays the 500 Hz torque samples over WebHID. `webhid-ffb.ts` speaks HID PID and the classic Logitech commands, with separate files for Logitech HID++ and Thrustmaster. See [Porting wheels](PORTING-WHEELS.md).
+- **Force feedback**: `wheel-ffb.ts` either talks to the local bridge (`npm run ffb`, `scripts/ffb-bridge/ffb-bridge.ts`) or plays the 500 Hz torque samples over WebHID. `webhid-ffb.ts` speaks HID PID and the classic Logitech commands, with separate files for Logitech HID++ and Thrustmaster. See [Porting wheels](PORTING-WHEELS.md).
 - **Controllers**: rumble in `sim/gamepad-haptics.ts`, and DualSense triggers, haptics and lights over WebHID.
 - **Telemetry out** (`input/telemetry-out.ts`): about 60 packets a second through the bridge, as UDP JSON with stable field names.
 
@@ -97,7 +97,7 @@ The active circuit is a module-level global (`src/lib/track-data.ts`). That's wh
 - **Driving**: `ai-mpc.ts` follows the racing line, `ai-racecraft.ts` makes the judgements about the cars around (overlap, who owns a corner), and `ai-learning.ts` lets each car adjust itself corner by corner during a session.
 - **Planning**: `speed-profile.ts` and `sim/ai/` (the grip limits, the speed plan and a local planner).
 - **Tuning** is data: `public/ai/<class>.json`, with per-circuit and per-section overrides.
-- **`npm run race:headless`** (`scripts/race-headless.ts`) runs a full-physics race without drawing.
+- **`npm run race:headless`** (`scripts/physics/race-headless.ts`) runs a full-physics race without drawing.
 
 [Race AI](race-ai.md) explains how the layers work together.
 
@@ -131,16 +131,16 @@ The active circuit is a module-level global (`src/lib/track-data.ts`). That's wh
 
 - **Menus** are in `src/components/menu/`: the title menu, first-run wizard, circuit and car browsers, Engineer's Garage, race setup and loading screen. `useMenuNav` and `useFocusNav` make them work with a controller.
 - **Settings**: `src/components/settings/SettingsScreen.tsx` and its panes. `src/lib/settings/player-settings.ts` validates the saved settings field by field. `src/components/settings/storage.ts` lists every storage key, and `src/lib/account/save-model.ts` says which of them follow an account.
-- **The UI kit** is `src/components/ui/`, with the rules in `docs/DESIGN.md`. `scripts/check-ui.mjs` checks them.
+- **The UI kit** is `src/components/ui/`, with the rules in `docs/DESIGN.md`. `scripts/site/check-ui.mjs` checks them.
 - **Languages**: `src/i18n/runtime.ts` starts in English and switches after the page loads. The messages are `src/i18n/messages/<language>/<area>.json`. Code outside React reads text through `src/lib/text.ts`, which stays free of React because the workers import it. See [Translating](TRANSLATING.md).
 - **The service worker** (`public/sw.js`) keeps downloaded circuits, cars and sounds across deploys and checks each against the server by ETag.
 
 ## Tools and checks
 
-- **`npm run verify`** (`scripts/run-verify.mjs`) runs every `scripts/verify-*.ts` suite, several at once, longest first. Suites skip what needs the hosted cars and circuits. `npm run verify:laps` is the slow full-pace lap check.
+- **`npm run verify`** (`scripts/verify/run-verify.mjs`) runs every `scripts/verify/verify-*.ts` suite, several at once, longest first. Suites skip what needs the hosted cars and circuits. `npm run verify:laps` is the slow full-pace lap check.
 - **`npm run physics:report`** regenerates the physics validation page. `npm run race:headless` runs AI races.
 - **Assets**: `npm run compress-tracks` compresses circuits and checks the physics meshes stay bit-exact. `npm run upload-hosted` sends hosted files to R2.
-- **CI**: `checks.yml` runs the typecheck, the suites and the build on every pull request. `deploy-pages.yml` runs them again on `main`, then builds with the hosted content and deploys. `deploy-docs.yml` publishes these pages, and `release-desktop.yml` builds the apps from a `desktop-v*` tag.
+- **CI**: `checks.yml` runs the typecheck, the suites and the build on every pull request. `deploy-pages.yml` runs them again on `main`, then builds with the hosted content and deploys. `deploy-docs.yml` publishes these pages. `release-launcher.yml` builds the desktop app from a `launcher-v*` tag, and `release-android.yml` the Android app from an `android-v*` tag.
 
 ## Rules that keep players' data and races working
 

@@ -29,13 +29,16 @@ import {
   type HeadlightBeam,
   type HeadlightMode,
 } from "@/lib/render/car-headlights";
-import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
+import { createVehicleSim, vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
 import { carById, carForVehicle, carOvertakingRules, portedSkinFor, type CarId } from "@/lib/cars/car-registry";
 import { carSkinFor, subscribeCarSkins } from "@/lib/cars/car-skins";
 import { trackGeometryKey } from "@/lib/sim/ghost-align";
 import type { GuardBody } from "@/lib/sim/contact-guard";
+import { evaluatePeerContact, LocalContactSafety } from "@/lib/sim/mp-contact";
+import type { GroundHit } from "@/lib/sim/f12026-car/TrackColliderQuery";
+import { DEFAULT_SURFACE_TABLE } from "@/lib/sim/track-surfaces";
 import { carPhysics } from "@/lib/cars/f1-mod-physics";
 import { buildCircuitScene } from "@/lib/scene-builder";
 import {
@@ -92,7 +95,7 @@ import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { isTouchDevice, touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
-import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
+import { cockpitRainVolumeFor, createRainFx, RAIN_VISOR_LAYER, type CockpitRainVolume } from "@/lib/render/rain-fx";
 import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { HELD_KEYS, heldActionsOf, isHeldKeyAction, PhysicalKeys, type HeldKeyAction } from "@/lib/input/held-keys";
@@ -147,6 +150,7 @@ import {
 } from "@/lib/input/bindings";
 import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad, isLikelyWheel } from "@/lib/input/device-input";
 import { MenuIdleWatch } from "@/lib/input/menu-idle";
+import { isMfdDialAction, MfdRepeatController } from "@/lib/input/mfd-input";
 import { AERIAL_IDLE_MS } from "@/lib/render/menu-aerial";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { simMode } from "@/lib/sim/runtime/sim-mode";
@@ -255,6 +259,11 @@ const approach = (value: number, target: number, maxStep: number) =>
 
 /** The sound bank each car plays (the F1 cars share one bank) */
 const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
+/** A car's own physics (a mod car's physics file) while it drives on the model they were made for; else none */
+const ownProfile = (car: CarId, vehicle: VehicleModelId) => {
+  const def = carById(car);
+  return def.physics === vehicle ? def.simProfile : undefined;
+};
 /**
  * Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a timer instead, `fallbackDelayMs` from now,
  * a frame by default)
@@ -273,7 +282,7 @@ function telemetryStructKeyOf(t: CarTelemetry): string {
   const me = results?.find((row) => row.isPlayer);
   const resKey =
     me && results
-      ? `${r?.resultsFinal ? 1 : 0}:${results.length}:${me.position}:${me.finishTimeS ?? ""}:${me.dnf ? 1 : 0}:${me.gridPosition ?? ""}:${me.bestLapMs ?? ""}:${me.penaltyS ?? ""}`
+      ? `${r?.resultsFinal ? 1 : 0}:${results.length}:${me.position}:${me.finishTimeS ?? ""}:${me.dnf ? 1 : 0}:${me.dq ? 1 : 0}:${me.dnfReason ?? ""}:${me.gridPosition ?? ""}:${me.bestLapMs ?? ""}:${me.penaltyS ?? ""}`
       : "";
   return `${t.runId ?? ""}|${r?.phase ?? ""}|${r?.multiplayer ? 1 : 0}|${t.liveTuner?.absAllowed === false ? 0 : 1}|${resKey}`;
 }
@@ -967,7 +976,7 @@ export class DriveSession {
         ref = { lapMs: Math.round(check.physicsLapS * 1000), base: LINE_CHECK_REF_BASE, car: null, lap0: 0, simS: 0 };
       } else {
         // A copy of the car on the page, on its autopilot at full pace, alone on a flying lap
-        const car = vehicleModelSpec(vehicleNow).createSim(track, trackRoot, carById(carIdNow).bodyPlan);
+        const car = createVehicleSim(vehicleNow, track, trackRoot, carById(carIdNow).bodyPlan, ownProfile(carIdNow, vehicleNow));
         car.resetToStartGrid(true);
         car.aiAutopilot = true;
         if (car.aiPaceScale !== undefined) car.aiPaceScale = 1;
@@ -1073,8 +1082,9 @@ export class DriveSession {
     const createCar = (vehicle: VehicleModelId, prev: SimulatorCar | null, carId: CarId = carIdNow): SimulatorCar => {
       // A body that is not its vehicle model's own brings its own outline for the barriers
       const bodyPlan = carById(carId).bodyPlan;
-      const built = vehicleModelSpec(vehicle).createSim(track, trackRoot, bodyPlan);
-      const car = simHost ? simHost.adopt(built, vehicle, trackRoot, bodyPlan) : built;
+      const profile = ownProfile(carId, vehicle);
+      const built = createVehicleSim(vehicle, track, trackRoot, bodyPlan, profile);
+      const car = simHost ? simHost.adopt(built, vehicle, trackRoot, bodyPlan, profile) : built;
       // An F1 car's overtaking aids by its year, and race control for them while a race is on (free in practice);
       // other classes have none
       const rules = carOvertakingRules(carById(carId));
@@ -1274,7 +1284,7 @@ export class DriveSession {
       this.publish(carSetup);
       swapCarRig(car);
       prefetchSoundBank(soundFor(car).assetDir);
-      lapRecorder.setContext({ vehicle });
+      lapRecorder.setContext({ vehicle, modCar: carById(car).mod ? car : null });
       lapDelta.reset();
       // A running race restarts from the lights with the new car
       if (raceNow().kind === "ai") {
@@ -1582,14 +1592,16 @@ export class DriveSession {
     const initialHeadlightConditions = canSessionGetDark(getTrackEnv().weather.conditions)
       ? getTrackEnv().weather.conditions
       : settings.conditions;
+    let headlightMode: HeadlightMode = "auto";
     // (a car without headlights, an F1 car, has no beam to build)
     const desiredHeadlightSpots = () =>
-      carHasHeadlights(carRigCar) ? headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality) : 0;
+      carHasHeadlights(carRigCar)
+        ? headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality, headlightMode === "on")
+        : 0;
     let carHeadlights = new CarHeadlights(carIdNow, {
       spotCount: headlightSpotCountFor(initialHeadlightConditions, settings.graphics.quality),
     });
     carHeadlights.attach(carRig.chassisGroup);
-    let headlightMode: HeadlightMode = "auto";
     const syncHeadlightSpots = () => {
       const wanted = desiredHeadlightSpots();
       if (wanted === carHeadlights.spotCount) return;
@@ -1669,6 +1681,7 @@ export class DriveSession {
       vehicle: vehicleNow,
       driverName: settings.profile.name,
       driverCode: settings.profile.code,
+      modCar: carById(carIdNow).mod ? carIdNow : null,
     });
     this.lapRecorder = lapRecorder;
 
@@ -1726,6 +1739,7 @@ export class DriveSession {
       applyGraphicsQuality(renderer, postFx, env, plan);
       venueNight?.setQuality(g.quality);
       visualFx.setGraphicsQuality(g.quality);
+      rainFx.setQuality(g.quality, plan.renderScale);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
       postFx.setSize(container.clientWidth, container.clientHeight);
       const lowered = level > 0 ? loweredSummary(g.quality, g.renderScale, level, opts) : null;
@@ -1926,6 +1940,7 @@ export class DriveSession {
     /** The controller's headlight button (a tap flashes, a hold switches the lights) and the flash's least length */
     const headlightButton = new HeadlightButton();
     const flashTimer = new FlashTimer();
+    const mfdRepeat = new MfdRepeatController();
     let playerFlashing = false;
     const clearCameraOverride = () => {
       if (cameraOverride === null) return;
@@ -2263,6 +2278,7 @@ export class DriveSession {
         case "headlights": {
           const onNow = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, getTrackEnv().weather.rainIntensity);
           headlightMode = onNow ? "off" : "on";
+          syncHeadlightSpots();
           lastWeatherHudMs = -Infinity;
           break;
         }
@@ -2599,6 +2615,8 @@ export class DriveSession {
       replayNames.clear();
       if (this.snapshot.replayAvailable) this.publish({ replayAvailable: false });
       onRunReset(reason);
+      if (reason === "race") localContactSafety.clearSpawnProtection();
+      else localContactSafety.armSpawnProtection(performance.now());
       jumpWatch.reset();
       reactionWatch.reset();
       startClutch.active = false;
@@ -2752,6 +2770,15 @@ export class DriveSession {
     const rainCamPos = new THREE.Vector3();
     const rainCamPrev = new THREE.Vector3();
     const rainCamVel = new THREE.Vector3();
+    let rainCockpitCarId: CarId = carIdNow;
+    let rainCockpitChassis: THREE.Object3D = carRig.chassisGroup;
+    let rainCockpitEye: THREE.Vector3 | null = null;
+    let cachedCockpitCarId: CarId | null = null;
+    let cachedCockpitEyeX = NaN;
+    let cachedCockpitEyeY = NaN;
+    let cachedCockpitEyeZ = NaN;
+    let cachedCockpitHasEye = false;
+    let cachedCockpitVol: CockpitRainVolume | null = null;
     const soloCars: SimulatorCar[] = [];
     const remoteWake: WakeEmitterCar[] = [];
     /** Other players on this circuit last frame (a room's lobby included): the mirror's auto mode shows for them */
@@ -2759,12 +2786,29 @@ export class DriveSession {
     const ghostPos = new THREE.Vector3();
     const guardSelf: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
     const guardOther: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
+    const localContactSafety = new LocalContactSafety();
+    localContactSafety.armSpawnProtection(performance.now());
+    const pitProbeHit: GroundHit = {
+      height: 0,
+      nx: 0,
+      ny: 1,
+      nz: 0,
+      surface: "road",
+      grip: 1,
+      props: DEFAULT_SURFACE_TABLE.road,
+      source: "",
+    };
+    const isInPitlaneAt = (x: number, z: number, y: number): boolean =>
+      Boolean(physics.groundQuery?.query(x, z, y + 0.5, pitProbeHit) && pitProbeHit.surface === "pitlane");
     const radarInvQ = new THREE.Quaternion();
-    // Audio cue edges: DRS available / open last frame, shift beep armed for this gear
+    // Audio cue edges: DRS available / open last frame, shift beep armed for this gear, rolling-start 3-2-1-GREEN
     let cueDrsAvail = false;
     let cueDrsOpen = false;
     let cueShiftArmed = true;
     let cueGear = 0;
+    let cueRollingRunId = -1;
+    let cueRollingActive = false;
+    let cueRollingCountdown: number | undefined = undefined;
     const radarRel = new THREE.Vector3();
     const radarFwd = new THREE.Vector3();
     const ghostQuat = new THREE.Quaternion();
@@ -3075,8 +3119,8 @@ export class DriveSession {
             lightsPressed = true;
             continue;
           }
-          // Boost and the flash act while held (`boostHeld`, `device.held`); the MFD and HUD buttons go to the HUD
-          if (action !== "boost" && action !== "headlightFlash") runAction(action);
+          // Boost, flash and MFD dial controls act via held / repeat handlers below; the MFD and HUD toggles go to the HUD
+          if (action !== "boost" && action !== "headlightFlash" && !isMfdDialAction(action)) runAction(action);
         }
 
         if (padCameraHeldSinceMs !== null) {
@@ -3094,6 +3138,9 @@ export class DriveSession {
       // The flash: the high beam while the flash key or button is held, or the headlight button is still short of a
       // hold (which switches the lights instead); a tap still lights it for MIN_FLASH_MS
       const buttonsLive = driving && !inMenu && !gpuLost;
+      for (const mfdAction of mfdRepeat.update(device.pressed, device.held, nowMs, buttonsLive)) {
+        window.dispatchEvent(new Event(HUD_TOGGLE_EVENT[mfdAction]));
+      }
       const lightsButton = headlightButton.update(lightsPressed, device.held?.has("headlights") === true, nowMs, buttonsLive);
       if (lightsButton.toggle) runAction("headlights");
       // (an F1 car has no headlights to flash)
@@ -3239,6 +3286,8 @@ export class DriveSession {
         !touch.steerLeft &&
         !touch.steerRight &&
         ((gamepadStick === undefined && gamepadSteer === undefined) || Math.abs(touch.steer) > 0.01);
+      // The automatic gearbox's Reverse and Drive buttons go straight to their gear, past neutral
+      let selectGear: -1 | 1 | undefined;
       if (touchInput.active) {
         if (driving) {
           if (touchInput.shiftUp) runAction("shiftUp");
@@ -3246,8 +3295,11 @@ export class DriveSession {
           if (touchInput.aero) runAction("aero");
           if (touchInput.boost) runAction("boostLatch");
           if (touchInput.overtake) runAction("overtake");
+          if (touchInput.reverse) selectGear = -1;
+          else if (touchInput.drive) selectGear = 1;
         }
         touchInput.shiftUp = touchInput.shiftDown = touchInput.aero = touchInput.boost = touchInput.overtake = false;
+        touchInput.reverse = touchInput.drive = false;
       }
       // Wheel, mouse and touch steer the rack directly; the car's steering assist picks between them, the keys and the
       // stick (steering-assist.ts: a pressed key takes over, and hands back once its ramp is at centre)
@@ -3277,6 +3329,7 @@ export class DriveSession {
         shiftUp: heldKeys.shiftUp && !startClutch.active,
         shiftDown: heldKeys.shiftDown,
         neutral: heldKeys.neutral,
+        selectGear,
         clutchBound,
         ...(clutchPedal > 0 ? { clutch: clutchPedal } : {}),
       };
@@ -3363,7 +3416,14 @@ export class DriveSession {
         const gridHeld = raceInWorker
           ? aiField.playerFrozen && aiField.manualStart && !aiField.gridStanding
           : (aiField?.playerFrozen === true && aiField.manualStart && !aiField.gridStanding) || (mpFrozen && mpManualStart);
-        if (!raceInWorker) physics.gridHold = gridHeld;
+        if (!raceInWorker) {
+          physics.gridHold = gridHeld;
+          if (mpRace) {
+            physics.speedLimiterMs = mpFrame?.phase === "racing" ? mpRace.rollingLimiterMs : undefined;
+          } else if (!aiField) {
+            physics.speedLimiterMs = undefined;
+          }
+        }
         // A jump start: race control's call once the lights are out (+5 s, +10 s for a big one), into an AI race's
         // ledger and feed; an online race serves it with the player's own penalties below
         const startCall = jumpWatch.update(
@@ -3681,6 +3741,30 @@ export class DriveSession {
         lapLengthM: track.totalLengthM,
         offTrack: physics.telemetry.offTrack,
       });
+      // Safety ghosting for local car: spawn protection, pitlane, paused/menu, or AFK (broadcast as `hz` so peers
+      // also pass through cleanly instead of hitting a paused, spawning, or pitlane car)
+      let nearestPeerDistM = Infinity;
+      for (const p of latestRemotePeers) {
+        if (p.isAiPeer) continue;
+        const d = Math.hypot(p.position.x - physics.worldPosition.x, p.position.z - physics.worldPosition.z);
+        if (d < nearestPeerDistM) nearestPeerDistM = d;
+      }
+      const localInPitlane = isInPitlaneAt(physics.worldPosition.x, physics.worldPosition.z, physics.worldPosition.y);
+      const localHasInput =
+        Math.abs(physics.steerAngleNorm) > 0.05 ||
+        physics.telemetry.throttle > 0.05 ||
+        physics.telemetry.brake > 0.05;
+      const localSafety = localContactSafety.update({
+        nowMs,
+        dtS: dtSeconds,
+        paused: this.snapshot.paused,
+        inMenu,
+        inPitlane: localInPitlane,
+        speedMs: physics.telemetry.speedKmh / 3.6,
+        hasInput: localHasInput,
+        gridHeld: mpFrozen || gridHeldLastFrame,
+        nearestPeerDistM,
+      });
       // With the GPU lost no state goes out: the others see this car go, not parked where it stopped
       const interpolatedPeers = multiplayerSync.update(
         nowMs,
@@ -3695,7 +3779,7 @@ export class DriveSession {
               : multiplayerSync.lobby
                 ? { id: "practice", dist: Math.round(physics.sMeters * 10) / 10, fin: null, best: mpPracticeBestMs, cmp: physics.tireCompound }
                 : undefined,
-          hz: guard?.self.flag || undefined,
+          hz: guard?.self.flag || localSafety.ghost || undefined,
           fl: playerFlashing || undefined,
           vehicle: vehicleNow,
           trackId,
@@ -3733,43 +3817,78 @@ export class DriveSession {
       // On the lap where they are drawn, not where their newest packet put them (the tower, the relative, the gaps)
       placePeersWhereDrawn(samePeers, track.projectWorldToTrack, track.totalLengthM);
       peerWakeEmitters(track, samePeers, remoteWake);
+      const activeCollisionMode = mpRace
+        ? mpRace.start.collisions
+        : (multiplayerSync.lobby?.settings.collisions ?? "on");
       if (mpRace && mpFrame) {
         mpRace.ingestPeers(samePeers, mpFrame.phase === "racing" ? mpFrame.raceTimeS : 0);
-        // Contact with the other players (one-sided: each client resolves its own car)
-        guardSelf.x = physics.worldPosition.x;
-        guardSelf.z = physics.worldPosition.z;
-        guardSelf.vx = carVelocityWorld.x;
-        guardSelf.vz = carVelocityWorld.z;
-        for (const p of samePeers) {
-          let solid = !p.isAiPeer && p.race?.id === mpRace.start.id && mpRace.collisionsActiveWith(mpFrame, p.peerId);
-          let through = false;
-          if (guard && solid) {
+      }
+      // Car-to-car contact with remote multiplayer players — active both in races AND in lobby practice/qualifying,
+      // gated by ghost-mode lobbies, spawn protection, pitlane, paused/AFK, heavy lag/desync, and open-race ContactGuard
+      guardSelf.x = physics.worldPosition.x;
+      guardSelf.z = physics.worldPosition.z;
+      guardSelf.vx = carVelocityWorld.x;
+      guardSelf.vz = carVelocityWorld.z;
+      for (const p of samePeers) {
+        if (p.isAiPeer) continue;
+        const peerInPitlane = isInPitlaneAt(p.position.x, p.position.z, p.position.y);
+        let raceSnap: Parameters<typeof evaluatePeerContact>[0]["race"] = null;
+        if (mpRace && mpFrame) {
+          const sameRace = p.race?.id === mpRace.start.id;
+          const finished =
+            mpFrame.phase === "racing" &&
+            sameRace &&
+            (mpRace.lapClock.finishTimeS !== null || p.race?.fin !== null);
+          const collisionsActiveWithPeer = sameRace && mpRace.collisionsActiveWith(mpFrame, p.peerId);
+          let guardBlocked = false;
+          let guardRammed = false;
+          if (guard && collisionsActiveWithPeer && !finished) {
             guardOther.x = p.position.x;
             guardOther.z = p.position.z;
             guardOther.vx = p.linearVelocity.x;
             guardOther.vz = p.linearVelocity.z;
-            solid = !guard.blocks(p.peerId, guardSelf, guardOther, p.hazard === true);
-            through = p.hazard === true || guard.rammed(p.peerId);
+            guardBlocked = guard.blocks(p.peerId, guardSelf, guardOther, p.hazard === true);
+            guardRammed = guard.rammed(p.peerId);
           }
-          // polish:B a car that has taken the flag passes through (collisionsActiveWith), drawn as a ghost
-          if (mpFrame.phase === "racing" && p.race?.id === mpRace.start.id && (mpRace.lapClock.finishTimeS !== null || p.race.fin !== null)) through = true;
-          p.passThrough = through;
-          if (driving && solid) {
-            const hit = resolvePlayerVsRemoteCar(physics, p, dtSeconds);
-            if (hit && mpRace.damage && mpFrame.phase === "racing") {
-              const closingMs = Math.hypot(carVelocityWorld.x - p.linearVelocity.x, carVelocityWorld.z - p.linearVelocity.z);
-              if (closingMs > 2) mpRace.damage.registerImpact({ localX: 0, localZ: 2.0, speedMs: closingMs, source: "car" });
-            }
+          raceSnap = {
+            sameRace,
+            phase: mpFrame.phase,
+            collisionsActiveWithPeer,
+            finished,
+            guardBlocked,
+            guardRammed,
+          };
+        }
+        const verdict = evaluatePeerContact({
+          collisionMode: activeCollisionMode,
+          localSafetyGhost: localSafety.ghost,
+          peer: {
+            isAiPeer: p.isAiPeer,
+            contactReady: p.contactReady,
+            stale: p.stale,
+            desync: p.desync,
+            hazard: p.hazard,
+            ghost: p.ghost,
+            inPitlane: peerInPitlane,
+          },
+          race: raceSnap,
+        });
+        p.passThrough = verdict.passThrough;
+        if (driving && verdict.solid) {
+          const hit = resolvePlayerVsRemoteCar(physics, p, dtSeconds);
+          if (hit && mpRace?.damage && mpFrame?.phase === "racing") {
+            const closingMs = Math.hypot(carVelocityWorld.x - p.linearVelocity.x, carVelocityWorld.z - p.linearVelocity.z);
+            if (closingMs > 2) mpRace.damage.registerImpact({ localX: 0, localZ: 2.0, speedMs: closingMs, source: "car" });
           }
         }
+      }
+      if (mpRace && mpFrame) {
         // Multiplayer car damage from walls and car contact when enabled by the room rules
         if (mpRace.damage && driving && mpFrame.phase === "racing") damageFeed.update(mpRace.damage, physics);
         // polish:D yellow flags: a car stopped, off or going the wrong way on the road ahead (mp-flags.ts)
         if (physics.telemetry.race && mpFrame.phase === "racing") {
           flagMultiplayerRace(mpRace, physics.telemetry.race, track, samePeers, dtSeconds, mpFrame.raceTimeS, physics.sMeters);
         }
-      } else {
-        for (const p of samePeers) p.passThrough = false;
       }
       // Practice damage (the player's setting): practice and time trials driven alone, not qualifying for an AI race nor
       // anything in an online room, where restarts are not the player's alone (as for Flashback)
@@ -4221,6 +4340,9 @@ export class DriveSession {
             camCarVel = replayPlayerVel;
           }
         }
+        rainCockpitCarId = camCarId;
+        rainCockpitChassis = camChassis;
+        rainCockpitEye = camAnchors?.cockpit.pos ?? null;
         if (!podium.placeCamera(camera)) cameraRig.update({
           dt: drawDtS,
           nowMs,
@@ -4300,7 +4422,8 @@ export class DriveSession {
         }
         cueDrsAvail = drsAvail;
         cueDrsOpen = drsOpen;
-        const limiter = vehicleModelSpec(vehicleNow).limiterRpm;
+        // A mod car's physics file may move the limiter
+        const limiter = carById(carIdNow).simProfile?.config.gearbox.gears.redline_rpm ?? vehicleModelSpec(vehicleNow).limiterRpm;
         if (tc.gear !== cueGear || tc.rpm < limiter - 600) {
           cueGear = tc.gear;
           cueShiftArmed = true;
@@ -4308,6 +4431,22 @@ export class DriveSession {
         if (cues.shiftBeep && cueShiftArmed && tc.gear > 0 && tc.rpm >= limiter - SHIFT_BEEP_BELOW_LIMITER_RPM) {
           audio?.cue("shift");
           cueShiftArmed = false;
+        }
+        // Rolling-start 3-2-1-GREEN audio cues (reset cleanly across restarts / new runs)
+        const raceStatus = tc.race;
+        const rolling = raceStatus?.phase === "racing" ? raceStatus.rollingFormation : undefined;
+        if (cueRollingRunId !== runId || !raceStatus) {
+          cueRollingRunId = runId;
+          cueRollingActive = Boolean(rolling);
+          cueRollingCountdown = rolling?.countdown;
+        } else {
+          if (rolling?.countdown !== undefined && rolling.countdown !== cueRollingCountdown) {
+            audio?.cue("rolling_countdown");
+          } else if (cueRollingActive && !rolling && raceStatus.phase === "racing") {
+            audio?.cue("rolling_green");
+          }
+          cueRollingActive = Boolean(rolling);
+          cueRollingCountdown = rolling?.countdown;
         }
       }
 
@@ -4327,7 +4466,10 @@ export class DriveSession {
         skyConditions.windVxMs = wx.windVxMs;
         skyConditions.windVzMs = wx.windVzMs;
         if (!cloudConditions || !sameConditions(cloudConditions, wx.conditions)) {
-          if (cloudConditions && cloudConditions.timeOfDay !== wx.conditions.timeOfDay) {
+          if (
+            cloudConditions &&
+            (cloudConditions.timeOfDay !== wx.conditions.timeOfDay || cloudConditions.weather !== wx.conditions.weather)
+          ) {
             headlightMode = "auto";
             lastWeatherHudMs = -Infinity;
           }
@@ -4341,7 +4483,9 @@ export class DriveSession {
           env.setCloudSeed(fixedCloudSeed ?? Math.floor(Math.random() * 2 ** 31));
         }
         env.setConditions(skyConditions);
-        venueNight?.setNight(nightShareOf(skyConditions.elevationDeg));
+        const nightShare = nightShareOf(skyConditions.elevationDeg);
+        venueNight?.setNight(nightShare);
+        postFx.setNightShare(nightShare);
         setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity);
         // The water under the player's own wheels, not the lap's mean line water
         // (in a race the worker runs, its road under the car)
@@ -4396,6 +4540,30 @@ export class DriveSession {
         visualFx.setHeadlights(headlights.opponents, camera);
         if (opponentBeams) opponentBeams.update(beamScratch, visualFx.collectBeams(beamScratch), rainCamPos);
         visualFx.setLightLevel(skyLight);
+        const hasEye = rainCockpitEye !== null;
+        if (
+          rainCockpitCarId !== cachedCockpitCarId ||
+          hasEye !== cachedCockpitHasEye ||
+          (hasEye &&
+            (rainCockpitEye!.x !== cachedCockpitEyeX ||
+              rainCockpitEye!.y !== cachedCockpitEyeY ||
+              rainCockpitEye!.z !== cachedCockpitEyeZ))
+        ) {
+          cachedCockpitCarId = rainCockpitCarId;
+          cachedCockpitHasEye = hasEye;
+          if (hasEye) {
+            cachedCockpitEyeX = rainCockpitEye!.x;
+            cachedCockpitEyeY = rainCockpitEye!.y;
+            cachedCockpitEyeZ = rainCockpitEye!.z;
+          }
+          cachedCockpitVol = cockpitRainVolumeFor(rainCockpitCarId, rainCockpitEye);
+        }
+        if (cachedCockpitVol) {
+          rainCockpitChassis.updateWorldMatrix(true, false);
+          rainFx.setCockpitOcclusion(cachedCockpitVol, rainCockpitChassis.matrixWorld);
+        } else {
+          rainFx.setCockpitOcclusion(null, null);
+        }
         rainFx.update(
           drawDtS,
           wx.rainIntensity,

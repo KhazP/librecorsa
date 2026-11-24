@@ -7,6 +7,7 @@ import { isPointToPointTrack } from "../../src/lib/track-kinds";
 import { LAP_SAMPLE_STRIDE, parseLapConditions, type LapConditions, type LapRecording } from "../../src/lib/sim/lap-types";
 import { parseSharedSetup, type SharedCarSetup } from "../../src/lib/sim/setup-share";
 import { isVehicleModelId } from "../../src/types/f1";
+import trackIndex from "../../public/tracks/index.json";
 
 export type CheckedLap = LapRecording & { conditions: LapConditions };
 export type LapCheck = { ok: true; rec: CheckedLap } | { ok: false; error: string };
@@ -19,6 +20,11 @@ const MIN_PAIR_DT_S = 0.02;
 const MIN_SAMPLES = 10;
 const MAX_SAMPLES = 20000;
 export const TRACK_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+/**
+ * The circuits the game ships, unlisted ones included (a modder's circuit tried on the live site): a lap on any other
+ * id, a mod package's circuit or one made up, starts no board
+ */
+export const SHIPPED_CIRCUITS: ReadonlySet<string> = new Set((trackIndex as { id: string }[]).map((t) => t.id));
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -34,6 +40,8 @@ export function checkLap(raw: unknown): LapCheck {
 
   const trackId = raw.trackId;
   if (typeof trackId !== "string" || !TRACK_ID_RE.test(trackId)) return bad("Invalid trackId");
+  if (!SHIPPED_CIRCUITS.has(trackId)) return bad("Unknown circuit: laps on circuits the game doesn't ship stay off the boards");
+  if (raw.mod === true) return bad("Laps with mod cars or mod circuits stay off the online boards");
   const vehicle = raw.vehicle;
   if (!isVehicleModelId(vehicle)) return bad("Invalid vehicle");
 

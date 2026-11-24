@@ -10,6 +10,8 @@ export interface SegmentedOption<T extends string> {
   label: React.ReactNode;
   /** Leading icon (16 px) */
   icon?: React.ReactNode;
+  /** Optional tooltip shown on hover */
+  title?: string;
   disabled?: boolean;
   /** Accessible name when the label is not plain words */
   "aria-label"?: string;
@@ -118,6 +120,7 @@ export function Segmented<T extends string>({
             role="radio"
             aria-checked={chosen}
             aria-label={o["aria-label"]}
+            title={o.title}
             aria-disabled={off || undefined}
             tabIndex={chosen || (!hasChosen && i === 0) ? 0 : -1}
             data-nav-default={navDefault && chosen ? "" : undefined}

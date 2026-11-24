@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { VehicleModelId } from "@/types/f1";
 import { seatCorner, type WheelSeating } from "./corner-rig";
+import { bodyKindOf, type BodyKind } from "@/lib/cars/body-kind";
 
 /**
  * A soft dark footprint under a car, on every graphics preset: the sun's shadow map is too coarse to darken the road
@@ -42,7 +43,7 @@ function shadowTexture(): THREE.CanvasTexture | null {
   return texture;
 }
 
-type ShadowKind = "f1" | "gt3" | "road" | "proto" | "lmdh" | "classic";
+type ShadowKind = BodyKind;
 const geometries = new Map<ShadowKind, THREE.PlaneGeometry>();
 let material: THREE.MeshBasicMaterial | null = null;
 
@@ -66,23 +67,7 @@ const LIFT_M = 0.012;
 export function addContactShadow(root: THREE.Object3D, vehicle: VehicleModelId | undefined): THREE.Mesh | null {
   const map = shadowTexture();
   if (!map) return null;
-  const kind: ShadowKind =
-    vehicle === "amg-gt3"
-      ? "gt3"
-      : vehicle === "liana" || vehicle === "vw-scirocco-gtx"
-        ? "road"
-        : vehicle === "mtr-496r"
-          ? "proto"
-          : vehicle === "lc-lmdh"
-            ? "lmdh"
-            : vehicle === "nissan-r33-jgtc" ||
-                vehicle === "nissan-r32-jtcc" ||
-                vehicle === "bmw-m1-procar" ||
-                vehicle === "chaparral-2d" ||
-                vehicle === "chaparral-2d-67" ||
-                vehicle === "porsche-934-rsr"
-            ? "classic"
-            : "f1";
+  const kind: ShadowKind = bodyKindOf(vehicle);
   // One quad per car model and one material for all of them, rather than a fresh pair per rig
   let geometry = geometries.get(kind);
   if (!geometry) {
