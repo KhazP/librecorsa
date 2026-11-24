@@ -127,7 +127,7 @@ You can append query parameters to `https://librecorsa.org/play` (or `http://loc
 | `room` | `?room=ABCDEF` | Joins a private multiplayer room code automatically once loaded |
 | `lang` | `?lang=tr`, `?lang=en-XA` | Overrides UI language (`en-XA` enables bracketed pseudo-localization for translation checks) |
 | `perf` | `?perf=1` | Enables the 10-second session **Performance report** recorder in Pause > Session |
-| `mods` | `?mods=off` | Safe mode: lists installed mod packages in the Mods panel without loading their content |
+| `mods` | `?mods=off` | Safe mode (desktop app and dev server): lists installed mod packages in the Mods panel without loading their content |
 | `colliders` | `?colliders=1` | Renders physics collider surfaces overlaid on the 3D circuit |
 | `profile` | `?profile` | Enables the on-screen render profiler overlay |
 | `sim` | `?sim=main` / `?sim=worker` | Forces physics onto the main thread or back into the simulation Web Worker (persisted in `localStorage`) |

@@ -4,7 +4,8 @@
  * - The game's pages and scripts for offline play ("the shell", below the files' code): a page always comes from the
  *   server when there is one, and from the shell only when there isn't.
  * - Mod packages the player imported (src/lib/mods/mod-store.ts), answered under /mods/ from the cache the page
- *   writes them to. Nothing here ever deletes them: only the player's Remove does. A catalogue of packages and the
+ *   writes them to, in the offline launcher and a clone's dev server only (`MODS_HERE`). Nothing here ever deletes
+ *   them: only the player's Remove does. A catalogue of packages and the
  *   zips it offers (/mods/_catalogue/, src/lib/mods/mod-catalogue.ts) pass by untouched.
  *
  * Most of these files keep their name when they change: a circuit's GLB and track_data.json, a layout's file, car
@@ -38,6 +39,11 @@ const TRANSCODER_PATH = /\/basis\/basis_transcoder\.(js|wasm)$/;
 const BASE = self.location.pathname.replace(/[^/]*$/, "");
 /** Imported mod packages (src/lib/mods/mod-store.ts `MODS_CACHE`), by URL */
 const MODS = "librecorsa-mods-v1";
+/**
+ * Mods are taken only by a copy of the game on this computer, the offline launcher or a clone's dev server
+ * (src/lib/mods/mod-manifest.ts `modsAvailableOn`): on the web this worker leaves /mods/ alone
+ */
+const MODS_HERE = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(self.location.hostname);
 /** The shell: one cache per build (`librecorsa-shell-<build>`), the previous build's deleted once the next is whole */
 const SHELL_PREFIX = "librecorsa-shell-";
 /** What the build lists for the shell (scripts/site/build-offline-manifest.mjs) */
@@ -88,9 +94,9 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   // A catalogue and the zips it offers: straight from the server and never kept, since a zip is downloaded once, to
   // be imported. Offline, the Mods panel says so
-  if (url.pathname.startsWith(`${BASE}mods/_catalogue/`)) return;
+  if (MODS_HERE && url.pathname.startsWith(`${BASE}mods/_catalogue/`)) return;
   // Imported mods: their own cache first, then the server (`public/mods/`, the launcher's folder)
-  if (url.pathname.startsWith(`${BASE}mods/`)) {
+  if (MODS_HERE && url.pathname.startsWith(`${BASE}mods/`)) {
     event.respondWith(serveMod(req, url));
     return;
   }

@@ -2,7 +2,7 @@ import { withBasePath } from "@/lib/base-path";
 import { registerModTracks, type ModOrigin, type TrackInfo } from "@/lib/track-registry";
 import { modCarProfile, modDefinitions, registerModContent } from "@/lib/mods/mod-content";
 import type { CarSimProfile } from "@/lib/sim/f12026-car/F12026CarSim";
-import { hostMayServeMods, isModPackageId, isSha256Hex, modContentId, modFileUrl, validateModManifest, type ModManifest } from "./mod-manifest";
+import { modsAvailableOn, isModPackageId, isSha256Hex, modContentId, modFileUrl, validateModManifest, type ModManifest } from "./mod-manifest";
 import { disabledPackages, FOLDER_INDEX_PATH, modsStorageAvailable, readInstalled, readInstalledJson } from "./mod-store";
 
 /**
@@ -48,8 +48,8 @@ interface FolderEntry {
 /** How long the start waits for a folder of packages to answer before going on without it */
 const FOLDER_INDEX_TIMEOUT_MS = 1500;
 
-/** Whether this copy of the game can have a folder of packages beside it (mod-manifest.ts `hostMayServeMods`) */
-const mayHaveModsFolder = (): boolean => hostMayServeMods(window.location.hostname);
+/** Whether this copy of the game takes mods (mod-manifest.ts `modsAvailableOn`): the launcher and a clone's dev server */
+export const modsAvailable = (): boolean => typeof window !== "undefined" && modsAvailableOn(window.location.hostname);
 
 /** `?mods=off`: start without any package, to get past one that keeps the game from starting (the Mods panel can then remove it) */
 export const modsSwitchedOff = (): boolean => {
@@ -61,7 +61,7 @@ export const modsSwitchedOff = (): boolean => {
 };
 
 async function readFolderIndex(): Promise<FolderEntry[]> {
-  if (!mayHaveModsFolder()) return [];
+  if (!modsAvailable()) return [];
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), FOLDER_INDEX_TIMEOUT_MS);
   try {
@@ -214,7 +214,8 @@ async function load(): Promise<ModsState> {
  * rejects: a package that can't be read is listed with its problem, and the game starts without it.
  */
 export function loadMods(): Promise<ModsState> {
-  if (typeof window === "undefined") return Promise.resolve(state);
+  // On the web nothing is read: not the browser's storage, not a folder
+  if (!modsAvailable()) return Promise.resolve(state);
   loading ??= load().catch((err) => {
     console.warn("Mods could not be read:", err);
     return state;

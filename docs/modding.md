@@ -1,6 +1,6 @@
 # Making mods
 
-Mod packages let you add new circuits, cars, liveries, and physics variants to LibreCorsa without modifying the game's source code. Players import a package `.zip` or folder through the in-game **Mods** panel (or get one there from a [catalogue](#sharing-packages-through-a-catalogue))—where it is stored locally in the browser and works offline—or drop unpacked packages into the offline launcher's `mods/` directory.
+Mod packages let you add new circuits, cars, liveries, and physics variants to LibreCorsa without modifying the game's source code. Mods are played in the **LibreCorsa desktop app** (the offline launcher, [launcher/README.md](../launcher/README.md)): drop an unpacked package into `Documents/LibreCorsa/mods/`, or import a `.zip` or folder in the game's **Mods** panel (or get one there from a [catalogue](#sharing-packages-through-a-catalogue)). The game on librecorsa.org takes no mods: like other sims, mods are files on the player's own computer. When you make mods in a clone, the dev server (`npm run dev`) has the Mods panel too.
 
 > **Data only, never code:** Because LibreCorsa's browser origin stores your driver identity key and saved data, mod packages are strictly data-only. Scripts, custom shaders, and HTML are never accepted or executed.
 
@@ -218,7 +218,7 @@ It reads each zip with the game's own zip reader, unpacks it into a temporary fo
 
 The game reads catalogues from two places, only when the Mods panel opens, and gives each 6 seconds:
 
-1. **This copy's own**, `/mods/_catalogue/catalogue.json` (under the site's base path). The launcher serves its `mods/_catalogue/` folder there (only `catalogue.json`, zips and preview pictures, no subfolders). A clone's dev server and build serve `public/mods/_catalogue/`. Any other host serves that path. librecorsa.org has none, so the game there doesn't ask for it (unless the build names that path).
+1. **This copy's own**, `/mods/_catalogue/catalogue.json` (under the site's base path). The launcher serves its `mods/_catalogue/` folder there (only `catalogue.json`, zips and preview pictures, no subfolders). A clone's dev server serves `public/mods/_catalogue/`. A copy of the game on the web takes no mods, so it reads no catalogue at all.
 2. **The one the build names**: set `NEXT_PUBLIC_MOD_CATALOGUE_URL` at build time to an `https://` address or a path on the site.
 
 If neither answers, or a catalogue lists nothing, the panel shows nothing about catalogues. If the one the build names can't be reached (the player is offline), the panel says so and offers **Try again**. A package listed in both is taken from this copy's own.

@@ -1,5 +1,5 @@
 import { withBasePath } from "@/lib/base-path";
-import { hostMayServeMods, isModPackageId, isSha256Hex, MODS_PATH } from "./mod-manifest";
+import { modsAvailableOn, isModPackageId, isSha256Hex, MODS_PATH } from "./mod-manifest";
 import { Sha256 } from "./sha256-stream";
 import { ZIP_MAX_TOTAL_BYTES } from "./zip-reader";
 
@@ -9,9 +9,8 @@ import { ZIP_MAX_TOTAL_BYTES } from "./zip-reader";
  * one in a click (src/components/menu/ModCatalogue.tsx); docs/modding.md describes the format for modders and hosts.
  *
  * The game reads two places, only when the Mods panel opens, never at start:
- * - this copy's own (`/mods/_catalogue/catalogue.json`): the launcher serves it from its mods folder, a clone from
- *   `public/mods/`, any other host from that path (not librecorsa.org, which has none: mod-manifest.ts
- *   `hostMayServeMods`)
+ * - this copy's own (`/mods/_catalogue/catalogue.json`): the launcher serves it from its mods folder, a clone's dev
+ *   server from `public/mods/`
  * - the one the build names (`NEXT_PUBLIC_MOD_CATALOGUE_URL`), when it names one
  * Neither answering is the usual case, and the panel then says nothing about a catalogue.
  *
@@ -107,13 +106,14 @@ export interface CatalogueSource {
 
 /**
  * The catalogues this copy reads, as absolute URLs: its own, then the one the build names (`configured`), once each.
- * A configured value that is neither an https:// address nor a path on the site is left out, with a warning. On
- * librecorsa.org this copy has no catalogue of its own, so it is read only when the build names it.
+ * A configured value that is neither an https:// address nor a path on the site is left out, with a warning. A copy
+ * on the web takes no mods (mod-manifest.ts `modsAvailableOn`), so it reads none.
  */
 export function catalogueSources(configured: string, pageUrl: string): CatalogueSource[] {
   const page = new URL(pageUrl);
   const origin = page.origin;
-  const own = hostMayServeMods(page.hostname) ? catalogueLink(withBasePath(CATALOGUE_PATH), pageUrl, origin) : null;
+  if (!modsAvailableOn(page.hostname)) return [];
+  const own = catalogueLink(withBasePath(CATALOGUE_PATH), pageUrl, origin);
   const sources: CatalogueSource[] = own ? [{ url: own, named: false }] : [];
   if (!configured) return sources;
   let named: string | null = null;

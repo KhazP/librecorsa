@@ -124,24 +124,22 @@ async function main(): Promise<void> {
   const warnings: string[] = [];
   const warn = console.warn;
   console.warn = (...args: unknown[]) => void warnings.push(args.join(" "));
-  const page = `${SITE}/play`;
+  // Only a copy on this computer takes mods: the launcher, a clone's dev server
+  const page = `${LAUNCHER}/play`;
+  const ownHere = `${LAUNCHER}/mods/_catalogue/catalogue.json`;
   let sources = catalogueSources("", page);
-  check("No setting: this copy's own catalogue only", sources.length === 1 && sources[0].url === own && !sources[0].named, JSON.stringify(sources));
+  check("No setting: this copy's own catalogue only", sources.length === 1 && sources[0].url === ownHere && !sources[0].named, JSON.stringify(sources));
   sources = catalogueSources(`${CDN}/catalogue.json`, page);
   check("A setting adds the catalogue it names, after this copy's own", sources.length === 2 && sources[1].url === `${CDN}/catalogue.json` && sources[1].named);
   sources = catalogueSources("/packs/catalogue.json", page);
-  check("A path in the setting is on the game's site", sources[1]?.url === `${SITE}/packs/catalogue.json`);
+  check("A path in the setting is on the game's own server", sources[1]?.url === `${LAUNCHER}/packs/catalogue.json`);
   sources = catalogueSources("/mods/_catalogue/catalogue.json", page);
   check("A setting naming this copy's own catalogue reads it once, as named", sources.length === 1 && sources[0].named);
-  // librecorsa.org has no catalogue of its own: nothing is asked for there (no 404 each time the panel opens)
-  for (const live of ["https://librecorsa.org/play", "https://www.librecorsa.org/play", "https://LibreCorsa.org/"]) {
-    check(`On ${new URL(live).host}, no catalogue of its own is read`, catalogueSources("", live).length === 0, JSON.stringify(catalogueSources("", live)));
+  check("The dev server on localhost reads its own", catalogueSources("", "http://localhost:3000/play").length === 1);
+  // A copy on the web takes no mods: nothing is asked for there, not even a catalogue the build names
+  for (const live of ["https://librecorsa.org/play", "https://www.librecorsa.org/play", `${SITE}/play`, "https://notlibrecorsa.org/play"]) {
+    check(`On ${new URL(live).host}, no catalogue is read, named or not`, catalogueSources("", live).length === 0 && catalogueSources(`${CDN}/catalogue.json`, live).length === 0);
   }
-  sources = catalogueSources("/mods/_catalogue/catalogue.json", "https://librecorsa.org/play");
-  check("…unless the build names it", sources.length === 1 && sources[0].url === "https://librecorsa.org/mods/_catalogue/catalogue.json" && sources[0].named);
-  sources = catalogueSources(`${CDN}/catalogue.json`, "https://librecorsa.org/play");
-  check("…and the one the build names elsewhere is still read", sources.length === 1 && sources[0].url === `${CDN}/catalogue.json`);
-  check("A host that only ends in librecorsa.org has its own", catalogueSources("", "https://notlibrecorsa.org/play").length === 1);
   const before = warnings.length;
   check(
     "An http://, protocol-relative or relative setting is left out, with a warning",
@@ -241,7 +239,7 @@ async function main(): Promise<void> {
   const both = await loadCatalogues(`${CDN}/catalogue.json`, {
     pageUrl: page,
     fetch: fetchOf((url) =>
-      url === own
+      url === ownHere
         ? json({ format: 1, packages: [entry({ name: "From this copy" })] })
         : json({ format: 1, packages: [entry({ name: "From the CDN" }), entry({ id: "jdoe.track" })] }),
     ),
@@ -250,7 +248,7 @@ async function main(): Promise<void> {
   const offline = await loadCatalogues(`${CDN}/catalogue.json`, {
     pageUrl: page,
     fetch: fetchOf((url) => {
-      if (url === own) return new Response("", { status: 404 });
+      if (url === ownHere) return new Response("", { status: 404 });
       throw new TypeError("Failed to fetch");
     }),
   });

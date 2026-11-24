@@ -1,7 +1,8 @@
 "use client";
 import { useTranslations } from "use-intl/react";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import dynamic from "next/dynamic";
 import { flushSync } from "react-dom";
 import type { PauseMenuProps } from "@/components/hud/PauseMenu";
 import type { VehicleModelId } from "@/types/f1";
@@ -39,8 +40,11 @@ import { CarClassTag, TrackQualityBadge } from "./menu-content-ui";
 import { HeroAction, RailRow, RESET_ROW_PROMPT, ShellPrompts, usePanelReadingOrder, useRowResettable } from "./menu-shell";
 import { feedbackContextOf, RequestPanel, type FeedbackContext } from "./RequestPanel";
 import { CircuitBrowser } from "./CircuitBrowser";
-import { ModsPanel } from "./ModsPanel";
-import { modsState } from "@/lib/mods/mod-loader";
+/** For a value that never changes while the page is open */
+const noSubscription = () => () => {};
+// The Mods panel, and what it brings (the zip reader, the package store, the catalogue), loads only where mods are taken
+const ModsPanel = dynamic(() => import("./ModsPanel").then((m) => m.ModsPanel), { ssr: false });
+import { modsAvailable, modsState } from "@/lib/mods/mod-loader";
 import { CarBrowser } from "./CarBrowser";
 import { TrackOutline } from "./circuit-outline";
 import { ConditionsPanel } from "./ConditionsPanel";
@@ -660,6 +664,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   );
   // The mod packages switched on (read once, as the game started with them)
   const modCount = useMemo(() => modsState().packages.filter((p) => p.enabled && p.manifest).length, []);
+  // Mods are for the offline launcher and a clone's dev server (mod-loader.ts modsAvailable); the page is built without
+  // a window, so the entry comes in after the first render
+  const modsHere = useSyncExternalStore(noSubscription, modsAvailable, () => false);
   const items: MenuItem[] = [
     {
       id: "drive",
@@ -764,15 +771,19 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       run: () => (props.onOpenSettings ? props.onOpenSettings() : onControls()),
     },
     { id: "credits", label: t("credits"), icon: "credits" as const, panel: "credits", run: () => openPanel("credits") },
-    {
-      id: "mods",
-      label: t("mods"),
-      // How many packages are switched on, when any are installed
-      badge: modCount > 0 ? t("modsDetail", { count: modCount }) : undefined,
-      icon: "mods" as const,
-      panel: "mods",
-      run: () => openPanel("mods"),
-    },
+    ...(modsHere
+      ? [
+          {
+            id: "mods",
+            label: t("mods"),
+            // How many packages are switched on, when any are installed
+            badge: modCount > 0 ? t("modsDetail", { count: modCount }) : undefined,
+            icon: "mods" as const,
+            panel: "mods" as const,
+            run: () => openPanel("mods"),
+          },
+        ]
+      : []),
     {
       id: "request",
       label: t("feedback"),
@@ -1072,7 +1083,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     <LeaderboardPanel {...props.leaderboardPanel} jumpTarget={leaderboardJump} />
                   ) : null}
                   {panel === "credits" ? <Credits /> : null}
-                  {panel === "mods" ? <ModsPanel /> : null}
+                  {panel === "mods" && modsHere ? <ModsPanel /> : null}
                   {panel === "request" ? (
                     // The frame above names it, with Close beside the name: the panel leaves out its own heading
                     <RequestPanel

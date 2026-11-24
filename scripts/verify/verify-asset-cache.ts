@@ -194,10 +194,10 @@ interface Worker {
   message(data: unknown): Promise<void>;
 }
 
-function startWorker(site: Site, storage: FakeStorage): Worker {
+function startWorker(site: Site, storage: FakeStorage, at = ORIGIN): Worker {
   const listeners = new Map<string, ((e: object) => void)[]>();
   const self = {
-    location: new URL(`${ORIGIN}/sw.js`),
+    location: new URL(`${at}/sw.js`),
     addEventListener: (type: string, fn: (e: object) => void) => listeners.set(type, [...(listeners.get(type) ?? []), fn]),
     skipWaiting: async () => {},
     clients: { claim: async () => {} },
@@ -215,7 +215,7 @@ function startWorker(site: Site, storage: FakeStorage): Worker {
       fire("message", { data, waitUntil: (w: Promise<unknown>) => work.push(w) });
       await Promise.all(work);
     },
-    async get(p, { client = "page", init, origin = ORIGIN, navigate = false, destination } = {}) {
+    async get(p, { client = "page", init, origin = at, navigate = false, destination } = {}) {
       let answer: Promise<Response> | null = null;
       const later: Promise<unknown>[] = [];
       const request = new Request(origin + p, init);
@@ -446,14 +446,22 @@ const enc = (text: string) => new TextEncoder().encode(text);
 const host = (site: Site, p: string, text: string, etag: string) => site.files.set(p, { body: enc(text), etag, headers: { "Content-Type": "text/html" } });
 const textOf = (r: { body?: Uint8Array }) => (r.body ? new TextDecoder().decode(r.body) : "");
 
-/** Imported mod packages: their own cache, never swept */
+/** Imported mod packages: their own cache, never swept; only in a copy on this computer (the launcher, a dev server) */
 async function modChecks(): Promise<void> {
+  // On the web the worker leaves /mods/ to the network, imported or not
+  const web = new Site();
+  const webBox = new FakeStorage();
+  await (await webBox.open("librecorsa-mods-v1")).put(`${ORIGIN}/mods/jdoe.pack/mod.json`, new Response("{}"));
+  const onWeb = startWorker(web, webBox);
+  check("On the web, /mods/ is left to the network (no mods there)", !(await onWeb.get("/mods/jdoe.pack/mod.json")).intercepted && !(await onWeb.get("/mods/_index.json")).intercepted);
+
+  const LAUNCHER = "http://127.0.0.1:47826";
   const site = new Site();
   const box = new FakeStorage();
   box.quota = 2 * 1024 * KB; // a 1 MB budget for kept files
-  const sw = startWorker(site, box);
+  const sw = startWorker(site, box, LAUNCHER);
   const MOD_GLB = "/mods/jdoe.pack/ring/ring.glb";
-  await (await box.open("librecorsa-mods-v1")).put(ORIGIN + MOD_GLB, new Response(new Uint8Array(900 * KB).fill(7), { headers: { "X-File-Size": String(900 * KB) } }));
+  await (await box.open("librecorsa-mods-v1")).put(LAUNCHER + MOD_GLB, new Response(new Uint8Array(900 * KB).fill(7), { headers: { "X-File-Size": String(900 * KB) } }));
   let mark = site.log.length;
   let r = await sw.get(MOD_GLB);
   check("An imported mod's file comes from its own cache, the server never asked", r.intercepted && r.body?.length === 900 * KB && site.since(mark).requests === 0);
@@ -478,8 +486,8 @@ async function modChecks(): Promise<void> {
   check("Circuit files past the budget are swept", box.kept().length < 4, box.kept().join());
   clock.now += 46 * DAY;
   site.put("/tracks/e/e.glb", 10 * KB, 50);
-  await startWorker(site, box).get("/tracks/e/e.glb", { client: "m-e" });
-  check("But the sweep (budget or 45 idle days) never touches an imported mod", !!(await (await box.open("librecorsa-mods-v1")).match(ORIGIN + MOD_GLB)));
+  await startWorker(site, box, LAUNCHER).get("/tracks/e/e.glb", { client: "m-e" });
+  check("But the sweep (budget or 45 idle days) never touches an imported mod", !!(await (await box.open("librecorsa-mods-v1")).match(LAUNCHER + MOD_GLB)));
 }
 
 /** The shell: the game's pages and scripts, per build, for offline play */
