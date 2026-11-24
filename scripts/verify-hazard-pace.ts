@@ -10,9 +10,10 @@
  * held to and the autopilot drives to is a share of the car's own speed too.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
+import { VEHICLE_MODELS, vehicleModelSpec } from '../src/lib/cars/vehicle-models';
 import { AiOpponentField, aiDriversFor } from '../src/lib/sim/ai-opponents';
 import { hazardPaceProfile, isHazardSpeed } from '../src/lib/sim/ai-racecraft';
+import { ownPaceFor, ownSpeedAt, racingLineOfVehicle, vehicleOwnSpeedMs } from '../src/lib/sim/own-pace';
 import type { SimulatorCar } from '../src/lib/sim/simulator-car';
 import { TrackEnvironment } from '../src/lib/sim/track-environment';
 import { VSC_PACE_SHARE, vscReferenceSpeedMs } from '../src/lib/sim/vsc';
@@ -167,6 +168,25 @@ console.log('\n== AiOpponentField on RISE short (road cars)');
       f.updateVsc(1 / 60);
     }
     check('at full pace down the straight under the VSC, the player\'s delta falls', delta() < d0 - 0.5, `${d0.toFixed(2)} → ${delta().toFixed(2)} s in 2 s`);
+  }
+}
+
+console.log('\n== own-pace.ts (an online car is known by its model alone)');
+{
+  const id = 'rwanda_official_short';
+  const file = `public/tracks/${id}/track_data.json`;
+  if (existsSync(file)) {
+    setActiveTrack(id, JSON.parse(readFileSync(file, 'utf8')) as RawTrackJson);
+    const track = getActiveTrackData(1200);
+    const wrong: string[] = [];
+    for (const v of Object.keys(VEHICLE_MODELS) as (keyof typeof VEHICLE_MODELS)[]) {
+      const line = vehicleModelSpec(v).createSim(track, null).racingLineId ?? 'f1';
+      if (racingLineOfVehicle(v) !== line) wrong.push(`${v}: ${racingLineOfVehicle(v)} vs ${line}`);
+    }
+    check('every model\'s racing line from its class is the line its car drives', wrong.length === 0, wrong.join(', '));
+    const liana = ownPaceFor(track, 'liana', 'gt3');
+    check('a model named in packets has the own pace its car has', liana !== null && vehicleOwnSpeedMs(track, 'liana', 1310) === ownSpeedAt(liana, 1310, true), `${f1(vehicleOwnSpeedMs(track, 'liana', 1310) ?? NaN)} m/s at T3`);
+    check('an unknown or missing model has none (the fixed rules hold)', vehicleOwnSpeedMs(track, 'some-mod-car', 1310) === undefined && vehicleOwnSpeedMs(track, undefined, 1310) === undefined);
   }
 }
 

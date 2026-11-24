@@ -4,7 +4,8 @@
  * shows the player the same flag messages. No penalties: a flag only warns.
  *
  * A car is an incident when, before its flag (and off the start, once past its first 150 m), it is
- *  - stopped or crawling (under the speed at which the fair-play rule calls a car standing, contact-guard.ts)
+ *  - stopped or crawling (under the speed at which the fair-play rule calls a car standing, contact-guard.ts: for a
+ *    slow car in a corner it takes slowly, less, from the model its packets name)
  *  - going the wrong way along the track
  *  - off the track by the road, about to rejoin (far out in a run-off it is in nobody's way)
  *  - flagged by its own packets as a hazard (`hz`, an open race's fair-play rule: the others pass through it) while
@@ -17,7 +18,7 @@
 import { text as tx } from '@/lib/text';
 import type { RaceControlFeedMessage, RaceStatus } from '@/types/f1';
 import type { InterpolatedPeerState } from './multiplayer-sync';
-import { SLOW_MS, WRONG_WAY_MS } from './contact-guard';
+import { SLOW_MS, slowMsFor, WRONG_WAY_MS } from './contact-guard';
 
 /** Yellow zone: from this far before the incident to this far past it (m) */
 export const YELLOW_AHEAD_M = 300;
@@ -71,7 +72,12 @@ export interface FlagCar {
   racing: boolean;
   /** Distance covered since the start (m) */
   distM: number;
+  /** Its own speed here (m/s, own-pace.ts; given only under SLOW_MS): absent for a model this client doesn't know */
+  ownMs?: number;
 }
+
+/** A car's own speed (m/s) at lap distance `s` from the model its packets name (`vehicleOwnSpeedMs`) */
+export type OwnSpeedOf = (vehicle: string | undefined, s: number) => number | undefined;
 
 /** Why a car is an incident right now, or null */
 export function causeOf(c: FlagCar): YellowCause | null {
@@ -80,7 +86,7 @@ export function causeOf(c: FlagCar): YellowCause | null {
   if (beyondEdge > NEAR_ROAD_M) return null;
   if (c.alongMs < -WRONG_WAY_MS) return 'wrong_way';
   if (c.speedMs < STOPPED_MS) return 'stopped';
-  if (c.speedMs < SLOW_MS) return 'slow';
+  if (c.speedMs < slowMsFor(c.ownMs)) return 'slow';
   if (beyondEdge > OFF_TRACK_M) return 'off_track';
   if (c.hazard && c.speedMs < HAZARD_RACING_MS) return 'hazard';
   return null;
@@ -191,9 +197,9 @@ export interface FlagTrack {
 
 /**
  * The other players' cars in race `raceId`, placed on the track from their drawn pose. The along-track speed comes
- * from the velocity, not from `trackS`, which steps once per packet.
+ * from the velocity, not from `trackS`, which steps once per packet. `ownSpeedOf`: each car's own speed, by its model
  */
-export function flagCarsOf(track: FlagTrack, peers: readonly InterpolatedPeerState[], raceId: string): FlagCar[] {
+export function flagCarsOf(track: FlagTrack, peers: readonly InterpolatedPeerState[], raceId: string, ownSpeedOf?: OwnSpeedOf): FlagCar[] {
   const out: FlagCar[] = [];
   for (const p of peers) {
     if (p.ghost || p.isAiPeer || !p.race || p.race.id !== raceId) continue;
@@ -201,16 +207,19 @@ export function flagCarsOf(track: FlagTrack, peers: readonly InterpolatedPeerSta
     if (!Number.isFinite(proj.s) || !Number.isFinite(proj.lateralOffset)) continue;
     const t = proj.sample.tangent;
     const tLen = Math.hypot(t.x, t.z) || 1;
+    const speedMs = p.speedKmh / 3.6;
     out.push({
       id: p.peerId,
       s: proj.s,
       latM: proj.lateralOffset,
       halfWidthM: proj.sample.width / 2,
-      speedMs: p.speedKmh / 3.6,
+      speedMs,
       alongMs: (p.linearVelocity.x * t.x + p.linearVelocity.z * t.z) / tLen,
       hazard: p.hazard === true,
       racing: p.race.fin === null,
       distM: p.race.dist,
+      // (only a car under the fixed speed can be slow for itself: built on the first such car, not at the lights)
+      ownMs: speedMs < SLOW_MS ? ownSpeedOf?.(p.vehicle, proj.s) : undefined,
     });
   }
   return out;
@@ -229,7 +238,8 @@ export function flagMultiplayerRace(
   peers: readonly InterpolatedPeerState[],
   dtS: number,
   raceTimeS: number,
-  playerS: number
+  playerS: number,
+  ownSpeedOf?: OwnSpeedOf
 ): void {
   let flags = byRace.get(race);
   if (!flags) {
@@ -238,7 +248,7 @@ export function flagMultiplayerRace(
   }
   const poleS = track.spawnGrid?.[0]?.s;
   const startOriginM = poleS !== undefined && Number.isFinite(poleS) && poleS > 0 && poleS < track.totalLengthM * 0.5 ? poleS : 0;
-  flags.update(dtS, raceTimeS, playerS, track.totalLengthM, flagCarsOf(track, peers, race.start.id), status.phase === 'racing', startOriginM);
+  flags.update(dtS, raceTimeS, playerS, track.totalLengthM, flagCarsOf(track, peers, race.start.id, ownSpeedOf), status.phase === 'racing', startOriginM);
   status.yellow = flags.yellow || undefined;
   const feed = flags.feed(raceTimeS);
   if (feed) status.raceControl = [...feed, ...(status.raceControl ?? [])].slice(0, 2);

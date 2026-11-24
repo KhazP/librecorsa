@@ -16,13 +16,21 @@
  *
  * The speeds and times are starting values, not yet tuned in races between people. No three.js, no DOM.
  */
+import { HAZARD_FLOOR_SHARE } from './ai-racecraft';
 
 /**
  * Under this speed a car is standing on the track as far as the others are concerned (m/s, ~32 km/h): just above the
- * 29 km/h the MTR 496R creeps along at when left in gear. Kept low so that no corner is slow enough to trip it (not
- * measured for every car and circuit); a car driven slowly on purpose above it is caught by the ram rule instead
+ * 29 km/h the MTR 496R creeps along at when left in gear. A car driven slowly on purpose above it is caught by the ram
+ * rule instead. Where the car's own speed is slower (`slowMsFor`), less
  */
 export const SLOW_MS = 9;
+/**
+ * Standing, for a car whose own speed here is `ownMs` (own-pace.ts): under `SLOW_MS`, or in a corner it takes slowly
+ * under the AI field's hazard share of that (a road car's 10.6 m/s hairpin at RISE: 5.8 m/s). It was 9 m/s whatever
+ * the car, and a road car at its normal pace through a hairpin stood, was passed through and flagged. Unknown: SLOW_MS
+ */
+export const slowMsFor = (ownMs?: number): number =>
+  ownMs !== undefined && ownMs > 0 ? Math.min(SLOW_MS, HAZARD_FLOOR_SHARE * ownMs) : SLOW_MS;
 /** Going backwards along the track faster than this is the wrong way (m/s) */
 export const WRONG_WAY_MS = 3;
 /** A hazard this long is flagged to the others, and a little later the car stops taking contact itself (s) */
@@ -50,6 +58,8 @@ export interface SelfMotion {
   lapLengthM: number;
   /** Every wheel off the track */
   offTrack: boolean;
+  /** The car's own speed here (m/s, own-pace.ts), asked only under SLOW_MS; absent or undefined: SLOW_MS alone */
+  ownMs?: () => number | undefined;
 }
 
 /** A car on the ground plane: position and velocity (m, m/s) */
@@ -83,7 +93,8 @@ export class HazardState {
     }
     this.prevS = m.trackS;
 
-    const cause = m.offTrack || m.speedMs < SLOW_MS || this.alongMs < -WRONG_WAY_MS;
+    const slow = m.speedMs < SLOW_MS && m.speedMs < slowMsFor(m.ownMs?.());
+    const cause = m.offTrack || slow || this.alongMs < -WRONG_WAY_MS;
     if (cause) {
       this.causeS += dtS;
       this.clearS = 0;

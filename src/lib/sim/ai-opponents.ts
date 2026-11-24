@@ -50,7 +50,6 @@ import {
   chooseDefenseTarget,
   hazardHalfWidthM,
   hazardLine,
-  hazardPaceProfile,
   inYellowZone,
   isHazardSpeed,
   overlapNow,
@@ -63,6 +62,7 @@ import { RaceIncidents } from '@/lib/sim/race-incidents';
 import { YellowPassJudge, type PassCar, type YellowLevel } from '@/lib/sim/yellow-passes';
 import { BlueFlagJudge, blueFlagYieldTarget, type BlueFlagCar } from '@/lib/sim/blue-flags';
 import { VSC_PACE_SHARE, VscController, vscReferenceSpeedMs } from '@/lib/sim/vsc';
+import { ownPaceFor, ownSpeedAt, type OwnPace } from '@/lib/sim/own-pace';
 import type { PenaltyReason } from '@/lib/sim/penalty-ledger';
 import { aiQualifyingMs, qualifyingOrder, type QualifyingGridInput, type QualifyingResult } from '@/lib/sim/qualifying';
 import { aiTrackFor, gridIndex, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
@@ -679,16 +679,6 @@ const HAZARD_LAUNCH_MAX_S = 40;
 const HAZARD_STALL_AFTER_S = 8;
 /** Off the start, got going: half its own speed there, or 12 m/s where that is slow (well clear of `isHazardSpeed`) */
 export const hasLaunched = (speedMs: number, roadSpeedMs: number): boolean => speedMs >= Math.max(12, 0.5 * roadSpeedMs);
-/**
- * A car model's own pace round its line (`AiOpponentField.ownPace`), per circuit, model and line: its expected speeds
- * and the eased ones its slowness is judged by (`hazardPaceProfile`), m/s every `ds` m
- */
-interface OwnPace {
-  expected: Float64Array;
-  hazard: Float64Array;
-  ds: number;
-}
-const ownPaces = new WeakMap<BuiltTrackData, Map<string, OwnPace>>();
 /**
  * Queuing, not crawling: a car alongside or this close ahead (m centre to centre, plus s of its speed), no faster by
  * this (m/s)
@@ -2536,7 +2526,8 @@ export class AiOpponentField implements AiRace {
 
   /**
    * The player's car on autopilot drives its line blind to traffic: in a race it gets the same grid-lane hold off the
-   * start and "never closer than it could stop" cap as the AI cars, or it swerves across rows / runs into the back of them.
+   * start, "never closer than it could stop" cap and path check as the AI cars, or it swerves across rows / runs into
+   * the back of them.
    */
   private capPlayerAutopilot(L: number, dtS: number): void {
     const me = this.cars.find((c) => c.isPlayer);
@@ -2559,9 +2550,22 @@ export class AiOpponentField implements AiRace {
     }
     const sample = this.track.getSampleAtDistance(sim.sMeters);
     const line = aiLineOffsetM(sample, sim.racingLineId);
+    // The path check the AI cars run (`pathCheck`): where its line takes it over the next moments against where each
+    // car near it will be. A car its line closes onto is followed, one beside it would squeeze is given room (or, with
+    // none, a lift to drop in behind). Looking only down its own lane, it came down the outside into a pack braking for
+    // a hairpin at racing speed and turned in across the car beside it (GT3s at RISE short's Turn 3, on lap 1)
+    let check: { capMs: number; biasM: number | null; rateMs: number | null } | null = null;
+    if (this.phase === 'racing' && !this.rollingFormation && me.startLaneM === null && this.rc.predictS > 0) {
+      this.predictShare = this.rc.predictAiLatWet > 0 || this.environment.weatherPaceScale(sim) >= 0.999 ? 1 : 0;
+      check = this.pathCheck(me, me.biasM, AVOID_RATE_MS, sample.width / 2 - 1.2, line);
+    }
     // Hold the grid lane through the lights and off the start until a corner arrives or the opening run is done
     if (me.startLaneM !== null) {
       me.biasM = clamp(me.startLaneM - line, -6, 6);
+      if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = me.biasM;
+    } else if (check && check.biasM !== null) {
+      const rate = check.rateMs ?? AVOID_RATE_MS;
+      me.biasM += clamp(check.biasM - me.biasM, -rate * dtS, rate * dtS);
       if (sim.aiLineBiasM !== undefined) sim.aiLineBiasM = me.biasM;
     } else if (me.biasM !== 0) {
       // Ease back to the racing line at a frame-rate-independent rate (τ ≈ 0.25 s)
@@ -2603,6 +2607,7 @@ export class AiOpponentField implements AiRace {
         cap = Math.min(cap, follow);
       }
     }
+    if (check) cap = Math.min(cap, check.capMs);
     sim.aiSpeedCapMs = cap;
   }
 
@@ -2653,7 +2658,8 @@ export class AiOpponentField implements AiRace {
     half: number,
     line: number
   ): { capMs: number; biasM: number | null; rateMs: number | null } {
-    const me = car.ai as SimulatorCar;
+    // (the AI car's own physics, or the player's car on its autopilot: `capPlayerAutopilot`)
+    const me = car.sim;
     const L = this.track.totalLengthM;
     const steps = Math.min(this.pathLine.length, Math.max(1, Math.round(this.rc.predictS / PATH_STEP_S)));
     const meS = me.sMeters;
@@ -2697,8 +2703,10 @@ export class AiOpponentField implements AiRace {
       const besideNow = Math.abs(dsNow) < lenGap;
       const widGap = CAR_WID_M + 0.2 + (human ? 0.5 * this.rc.playerMarginM : 0) + (besideNow && this.rc.yawMargin > 0 ? this.yawRoomM(this.worldHeading(me), os) : 0);
       // Another AI car already beside us keeps the racecraft rules too (room on its side, the corner yielded): those
-      // rules deal with it. The player's car is checked all the way: it keeps none of them
-      if (!human && Math.abs(dsNow) < lenGap && Math.abs(os.lateralOffsetM - meN) < widGap) continue;
+      // rules deal with it. The player's car is checked all the way: it keeps none of them (nor, on its autopilot, does
+      // it keep them against the AI cars: it checks every car all the way)
+      const keepsRules = !human && !car.isPlayer;
+      if (keepsRules && Math.abs(dsNow) < lenGap && Math.abs(os.lateralOffsetM - meN) < widGap) continue;
       const oV = Math.max(0, os.vxMs);
       const oA = (os.telemetry.longitudinalG ?? 0) * 9.81;
       const oLat = human ? this.lateralSpeedMs(os) : 0;
@@ -2740,7 +2748,7 @@ export class AiOpponentField implements AiRace {
         // Ahead: slot in behind it
         capMs = Math.min(capMs, followCapMs(os, dsNow - CAR_LEN_M - (human ? this.rc.playerMarginM : 0), this.rc, this.followDecelMs2));
       } else if (dsNow > -lenGap) {
-        if (!human && this.rc.pathSidePlayerOnly) continue;
+        if (keepsRules && this.rc.pathSidePlayerOnly) continue;
         // Beside: room on our side of it, made quickly, if the road has it; and, not clearly ahead, a lift to drop in
         // behind when it doesn't or the move can't be made in time
         let want: number = (biasM ?? biasTarget) + away * (hit.need + 0.1);
@@ -2920,29 +2928,11 @@ export class AiOpponentField implements AiRace {
   /** Each car's own pace (`ownPace`), looked up once per car (a car's model and line never change) */
   private readonly ownPaceOf = new WeakMap<SimulatorCar, OwnPace | null>();
 
-  /**
-   * A car's own pace round the lap: its model's plan on its line at the plan grip (its cornering, braking, traction
-   * and top speed), built once per circuit, model and line. The circuit's speed profile is the LC26's: a road car's
-   * top speed is 50 m/s where that is 85, its hairpin 10 m/s where that is 18. Null on a point-to-point road
-   */
+  /** A car's own pace round the lap (own-pace.ts): its model's plan on its line. Null on a point-to-point road */
   private ownPace(sim: SimulatorCar): OwnPace | null {
     let pace = this.ownPaceOf.get(sim);
     if (pace !== undefined) return pace;
-    pace = null;
-    if (!this.track.pointToPoint) {
-      let byModel = ownPaces.get(this.track);
-      if (!byModel) ownPaces.set(this.track, (byModel = new Map()));
-      const line = sim.racingLineId ?? 'f1';
-      const key = `${sim.vehicleId ?? ''}|${line}`;
-      pace = byModel.get(key) ?? null;
-      if (!pace) {
-        const limits = carLimitsFor(sim.vehicleId, PLAN_GRIP);
-        const t = (this.aiTrack ??= aiTrackFor(this.track));
-        const expected = makeDrivePlan(t, this.driveLineFor(line), limits).vExpected;
-        pace = { expected, hazard: hazardPaceProfile(expected, t.ds, (v) => limits.braking(v)), ds: t.ds };
-        byModel.set(key, pace);
-      }
-    }
+    pace = ownPaceFor(this.track, sim.vehicleId, sim.racingLineId ?? 'f1');
     this.ownPaceOf.set(sim, pace);
     return pace;
   }
@@ -2954,7 +2944,7 @@ export class AiOpponentField implements AiRace {
   private ownSpeedMs(car: FieldCar, hazard = false): number {
     const pace = this.ownPace(car.sim);
     if (!pace) return this.track.getSampleAtDistance(car.sim.sMeters).optimalSpeedKmh / 3.6;
-    return sampleGrid(hazard ? pace.hazard : pace.expected, car.sim.sMeters, pace.ds);
+    return ownSpeedAt(pace, car.sim.sMeters, hazard);
   }
 
   /** A car's heading in the world (rad, about +y) */
