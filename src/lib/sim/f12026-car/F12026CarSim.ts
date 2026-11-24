@@ -2454,7 +2454,25 @@ export class F12026CarSim implements SimulatorCar {
    */
   private autopilotDials(): AidDials {
     const d = this.profile.assistDials.semi_pro;
-    return d.absLevel > 0 || this.profile.absAllowed !== false ? d : { ...d, absLevel: this.profile.assistDials.assisted.absLevel };
+    const assisted = this.profile.assistDials.assisted;
+    const baseAbs = d.absLevel > 0 || this.profile.absAllowed !== false ? d.absLevel : assisted.absLevel;
+    const wet = clamp(this.vehicle.wetness, 0, 1);
+    if (wet <= 0.2) {
+      return baseAbs === d.absLevel ? d : { ...d, absLevel: baseAbs };
+    }
+    // On wet / flooded roads step AI TC and ABS smoothly toward the wet-safe assisted calibration
+    const u = clamp((wet - 0.2) / 0.6, 0, 1);
+    const lerpInt = (a: number, b: number) => Math.round(a + (Math.max(a, b) - a) * u);
+    return {
+      ...d,
+      tcLevel: lerpInt(d.tcLevel, assisted.tcLevel),
+      tc2Level: lerpInt(d.tc2Level, assisted.tc2Level),
+      absLevel: lerpInt(baseAbs, assisted.absLevel),
+      tcSlipAngleLevel:
+        d.tcSlipAngleLevel !== undefined && assisted.tcSlipAngleLevel !== undefined
+          ? lerpInt(d.tcSlipAngleLevel, assisted.tcSlipAngleLevel)
+          : d.tcSlipAngleLevel,
+    };
   }
 
   /**
@@ -2661,7 +2679,9 @@ export class F12026CarSim implements SimulatorCar {
         : kF > 0
           ? clamp((v.totalMassKg * speed * speed * kappa * this.cgToRearAxleM) / (v.wheelbaseM * kF), -peak, peak)
           : 0;
-    const raw = Math.atan(v.wheelbaseM * kappa) + understeer + 0.8 * beta + kYawP * kYaw * yawErr + this.apYawI;
+    const wet = clamp(v.wetness, 0, 1);
+    const betaGain = 0.8 + 0.45 * wet;
+    const raw = Math.atan(v.wheelbaseM * kappa) + understeer + betaGain * beta + kYawP * kYaw * yawErr + this.apYawI;
     const delta = clamp(raw, betaF - peak, betaF + peak);
     const frontsSaturated = delta !== raw;
     if (!frontsSaturated) this.apYawI = clamp(this.apYawI + yawErr * kYaw * 2 * h, -0.05, 0.05);
@@ -2671,6 +2691,15 @@ export class F12026CarSim implements SimulatorCar {
     const lead = Math.max(5, speed * 0.2);
     const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
     const b = envelopeAt(this.profile.braking, this.circuitAirDensity());
+    const wetBrakeScale =
+      v.waterMm > 0
+        ? clamp(
+            wetGripFactor(this.compoundData.wetTraits ?? SLICK_TRAITS, v.waterMm, Math.max(30, speed), v.realism.wetSeverity, 0) *
+              (this.compoundData.wetTraits?.dryGrip ?? 1),
+            0.35,
+            1
+          )
+        : 1;
     let vTarget = this.aiSpeedCapMs;
     let pedalFF = 0;
     if (plan) {
@@ -2687,7 +2716,10 @@ export class F12026CarSim implements SimulatorCar {
       const own = tab[Math.floor(((p.s + lead + d) % L) / (L / tab.length)) % tab.length];
       const vC = Math.min((smp.brakeLimitKmh ?? smp.optimalSpeedKmh) / 3.6, own) * this.aiPaceScale;
       if (vC >= vTarget) continue;
-      const a = 0.5 * (autopilotDecel(b, vC) + autopilotDecel(b, Math.min(speed, Math.sqrt(vC * vC + 2 * autopilotDecel(b, vC) * d))));
+      const a =
+        0.5 *
+        (autopilotDecel(b, vC) + autopilotDecel(b, Math.min(speed, Math.sqrt(vC * vC + 2 * autopilotDecel(b, vC) * wetBrakeScale * d)))) *
+        wetBrakeScale;
       vTarget = Math.min(vTarget, Math.sqrt(vC * vC + 2 * a * d));
     }
     // Off the line the corner is tighter than planned: give speed away for it
@@ -2705,16 +2737,24 @@ export class F12026CarSim implements SimulatorCar {
     const pedal = clamp(this.apPedal + pedalP + pedalFF, -1, 1);
     const W = v.wheels;
     // The rear stepping out (on a trail-braked entry, or on the power): ease both pedals as the rears' slip angle
-    // passes AP_REAR_GUARD of their peak, so they regain grip to hold the car with rather than spinning it
+    // passes the rear guard of their peak, so they regain grip to hold the car with rather than spinning it
     const rearSlip = Math.max(Math.abs(W[2].slipAngleRad), Math.abs(W[3].slipAngleRad)) / peak;
-    const rearCut = clamp(1 - AP_REAR_GUARD_GAIN * (rearSlip - AP_REAR_GUARD), 0.15, 1);
+    const rearGuard = AP_REAR_GUARD - 0.22 * wet;
+    const rearCut = clamp(1 - AP_REAR_GUARD_GAIN * (rearSlip - rearGuard), 0.15, 1);
     // squeezed on rather than stabbed: at most full throttle in 0.4 s. Off the line (from rest until 72 km/h) it goes
-    // down at once, the traction control metering the wheelspin as on a player's launch (the squeeze cost the AI a car
-    // length to 100 km/h). Only from rest: a quick pedal out of a slow corner put the car in the barrier at Sepang
+    // down at once in the dry, the traction control metering the wheelspin; in wet conditions, feed power progressively
+    // and trim low-speed rear wheelspin even below the car's TC min speed so GT3/F1 never spin up on a flooded grid
     if (speed < 1) this.apLaunch = true;
     else if (speed > 20) this.apLaunch = false;
-    const squeeze = this.apLaunch ? 12 : 2.5;
-    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + squeeze * h) * rearCut;
+    const squeeze = this.apLaunch ? Math.max(2.2, 12 - 9.5 * wet) : Math.max(1.2, 2.5 - 1.1 * wet);
+    let wetLaunchTrim = 1;
+    if (wet > 0.15 && speed < 25) {
+      const [dl, dr] = v.drivenWheels;
+      const driveSpin = Math.max(0, W[dl].slipRatio, W[dr].slipRatio);
+      const spinLimit = 0.22 - 0.08 * wet;
+      if (driveSpin > spinLimit) wetLaunchTrim = clamp(1 - (driveSpin - spinLimit) * 3.5, 0.2, 1);
+    }
+    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + squeeze * h) * rearCut * wetLaunchTrim;
     this.apThrottle = throttle;
     // The car's own TC and per-wheel ABS: a lock-up of the unloaded inside front no longer takes the brakes off all
     // four wheels (the car then ran into the corner 20-25 km/h hot), nor inside-rear wheelspin the whole throttle
@@ -2837,9 +2877,14 @@ export class F12026CarSim implements SimulatorCar {
     // TRACK_REJOIN_MS2: pursuit asks ≈ 2v²e/L², and 4 m off at 190 km/h a short look-ahead asked for several g and spun
     // the car. Within a metre it stays short: tracking errors there are the pursuit's own, and stretching for them
     // only cut the corners further
+    const wet = clamp(v.wetness, 0, 1);
     const nNow = this.planTargetAt(plan, p.s, p.sample, p.lateralOffset);
     const eFar = Math.max(0, Math.abs(nNow - p.lateralOffset) - 1);
-    const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S, Math.sqrt((2 * speed * speed * eFar) / TRACK_REJOIN_MS2)) / this.aiSteerGain;
+    // On wet roads lengthen the look-ahead and soften rejoin lateral acceleration so lane shifts never excite a tank-slapper
+    const lookMin = TRACK_LOOK_MIN_M * (1 + 0.8 * wet);
+    const lookS = TRACK_LOOK_S * (1 + 0.9 * wet);
+    const rejoinMs2 = TRACK_REJOIN_MS2 * (1 - 0.5 * wet);
+    const ld = Math.max(lookMin, speed * lookS, Math.sqrt((2 * speed * speed * eFar) / rejoinMs2)) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
     // centreline, the outside more)
     const kc = sampleGrid(t.kappa, p.s + 0.5 * ld, t.ds);
@@ -2862,6 +2907,11 @@ export class F12026CarSim implements SimulatorCar {
       const errLeft = (nNow - p.lateralOffset) * leftOf;
       this.trackI = clamp(this.trackI + TRACK_KI * errLeft * CONTROL_DT_S, -TRACK_I_MAX_MS2, TRACK_I_MAX_MS2);
       kappa += this.trackI / Math.max(100, speed * speed);
+    }
+    if (wet > 0.15) {
+      const ayWetCap = plan.limits.lateral(speed) * (1.2 - 0.1 * wet);
+      const kappaCap = ayWetCap / Math.max(25, speed * speed);
+      kappa = clamp(kappa, -kappaCap, kappaCap);
     }
     return kappa;
   }

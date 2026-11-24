@@ -196,7 +196,9 @@ export class CarLimits {
 
   /** Forward acceleration at full throttle on level ground (power, traction and drag); falls to 0 at top speed */
   traction(v: number): number {
-    return Math.max(0, interp(this.table.speedsMs, this.table.accelG, v, true) * G);
+    const base = Math.max(0, interp(this.table.speedsMs, this.table.accelG, v, true) * G);
+    // On reduced grip (wet / damaged) low- and mid-speed traction scales down with tyre grip; dry (>= 1) keeps measured power
+    return this.gripScale < 1 ? base * Math.pow(Math.max(0.25, this.gripScale), 0.75) : base;
   }
 
   /** Top speed on level ground (m/s): where traction reaches 0 */
