@@ -231,6 +231,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   paused: boolean;
   /** Settings is open over the pause menu: the menu keeps its state but is not drawn under it */
   pauseMenuCovered?: boolean;
+  /** Active team tag for the player, shown on the timing tower */
+  playerTeamTag?: string;
   onTogglePause: () => void;
   onOpenControls?: () => void;
   /** Opens Settings over the pause menu on a category (the pause menu's links from Conditions and the Garage) */
@@ -694,7 +696,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       ) : (
         /* Classic / Minimal top-left: timing tower (race) and lap timing */
         <div className="absolute top-3 start-3 flex flex-col gap-2 sm:top-4 sm:start-4" style={anchor(scale, "top left")}>
-          {race ? <TimingTower race={race} trackCode={trackInfo.country.slice(0, 3).toUpperCase()} gaps={hud?.towerGaps} /> : null}
+          {race ? <TimingTower race={race} trackCode={trackInfo.country.slice(0, 3).toUpperCase()} gaps={hud?.towerGaps} playerTeamTag={props.playerTeamTag} /> : null}
           <LapPanel telemetry={telemetry} deltaS={deltaS} variant={minimal ? "minimal" : "full"} lapInvalid={lapInvalid} />
           {leftNode}
           {weatherNode}

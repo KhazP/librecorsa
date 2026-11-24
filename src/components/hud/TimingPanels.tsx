@@ -76,9 +76,10 @@ export const TowerHeader: React.FC<{ gaps?: "interval" | "leader" }> = ({ gaps =
 export const TowerRows: React.FC<{
   race: RaceStatus;
   gaps?: "interval" | "leader";
+  playerTeamTag?: string;
   /** Kept for older callers: every tower now sets its rows in `lc-data` */
   mono?: boolean;
-}> = ({ race, gaps = "interval" }) => {
+}> = ({ race, gaps = "interval", playerTeamTag }) => {
   // The rows re-render every frame: their words are resolved once per language (the damage ones once per value)
   const tx = useTranslations("hud.timingPanels.tower");
   const L = useMemo(() => {
@@ -145,6 +146,9 @@ export const TowerRows: React.FC<{
             <span className="h-4 rounded-full" style={{ backgroundColor: e.isPlayer ? "var(--color-lc-void)" : e.teamColorHex }} />
             <span className="flex min-w-0 items-center gap-1.5 tracking-[0.1em]">
               <span className="truncate">{e.driverCode}</span>
+              {e.isPlayer && playerTeamTag ? (
+                <span className="rounded bg-lc-void/15 px-1 text-[10px] font-bold tracking-normal">[{playerTeamTag}]</span>
+              ) : null}
               {e.compound ? <CompoundGlyph compound={e.compound} size={14} /> : null}
               {purple ? (
                 <Badge tone="best" variant="solid" size="hud" title={L.fastestLap} aria-label={L.fastestLap}>
@@ -190,7 +194,12 @@ export const TowerRows: React.FC<{
 };
 
 /** Race order (LibreCorsa telemetry timing tower): position, class/livery bar, driver code, gaps and last laps */
-export const TimingTower: React.FC<{ race: RaceStatus; trackCode?: string; gaps?: "interval" | "leader" }> = ({ race, trackCode, gaps }) => {
+export const TimingTower: React.FC<{
+  race: RaceStatus;
+  trackCode?: string;
+  gaps?: "interval" | "leader";
+  playerTeamTag?: string;
+}> = ({ race, trackCode, gaps, playerTeamTag }) => {
   const tx = useTranslations("hud.timingPanels.tower");
   const region = useMemo(() => tx("region"), [tx]);
   const lapText = useMemo(
@@ -213,7 +222,7 @@ export const TimingTower: React.FC<{ race: RaceStatus; trackCode?: string; gaps?
         {trackCode ? <span className={`${HUD_LBL} text-lc-void/60`}>{trackCode}</span> : null}
       </div>
       <TowerHeader gaps={gaps} />
-      <TowerRows race={race} gaps={gaps} />
+      <TowerRows race={race} gaps={gaps} playerTeamTag={playerTeamTag} />
     </section>
   );
 };

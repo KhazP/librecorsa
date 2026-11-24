@@ -6,6 +6,7 @@ import { Button, ConfirmDialog, SettingRow, TextField } from "@/components/ui";
 import { CHOSEN_TILE, cx, MOTION } from "@/components/ui/styles";
 import { Icon } from "@/components/ui/icons";
 import { focusOnHover } from "@/components/menu/useFocusNav";
+import { TeamsPanel } from "@/components/menu/TeamsPanel";
 import { CLAIMED_TELEMETRY_PORTS, DEFAULT_TELEMETRY_PORT } from "@/lib/input/device-input";
 import { sanitizeColor, sanitizeDriverCode, sanitizeDriverName } from "@/lib/settings/player-settings";
 import { autoUpload, telemetryOut } from "../defs";
@@ -145,7 +146,8 @@ export function DriverTab() {
   };
 
   return (
-    <SettingsCard title={tx("title")} rows={[autoUpload]} before={
+    <>
+      <SettingsCard title={tx("title")} rows={[autoUpload]} before={
       <>
       <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3 pb-2">
         <TextField
@@ -180,7 +182,11 @@ export function DriverTab() {
       <ColourRow />
       </>
     }>
-    </SettingsCard>
+      </SettingsCard>
+      <div className="mt-4">
+        <TeamsPanel playerCode={profile.code} playerName={profile.name} />
+      </div>
+    </>
   );
 }
 
