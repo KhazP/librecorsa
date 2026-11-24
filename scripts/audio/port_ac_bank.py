@@ -922,36 +922,53 @@ _LEVELS = (
     ("lowmed", 0.38), ("medlow", 0.38), ("lowmid", 0.38), ("midlow", 0.38), ("verylow", 0.12), ("vlow", 0.12),
     ("medium", 0.5), ("med", 0.5), ("mid", 0.5), ("high", 0.8), ("low", 0.25), ("max", 1.0), ("redline", 1.0),
 )
+# Words that make a sample no engine loop, each a whole word of its name (a plural, or a number after it, too): "wind"
+# is no part of "windsor", nor "trans" of "trans_am"
 _NOT_ENGINE = (
-    "shift", "gear", "backfire", "bov", "blowoff", "blow_off", "flutter", "turbo", "skid", "tyre", "tire", "wind", "door",
-    "horn", "limit", "brake", "body", "traction", "trans", "whine", "crash", "scrape", "explosion", "unused", "gravel",
-    "dirt", "bump", "kerb", "rolling", "pop", "crackle", "starter", "start", "pit", "click", "horn", "rain",
+    "shift", "gear", "gearbox", "backfire", "bov", "blowoff", "blow_off", "flutter", "turbo", "skid", "tyre", "tire",
+    "wind", "door", "horn", "limit", "limiter", "brake", "body", "traction", "transmission", "whine", "crash", "scrape",
+    "explosion", "unused", "gravel", "dirt", "bump", "kerb", "curb", "rolling", "pop", "crackle", "starter", "start",
+    "pit", "click", "rain",
 )
+_NOT_ENGINE_RE = re.compile(r"(?<![a-z0-9])(?:" + "|".join(map(re.escape, _NOT_ENGINE)) + r")(?:e?s)?\d*(?![a-z0-9])")
+# The throttle's layer, at the start of a word ("on", "offmedhigh", "power", "on6000"): what follows must be nothing, a
+# number or a speed word, so "onboard" is no "on"
+_LAYERS = (("off", "off"), ("on", "on"), ("coast", "off"), ("decel", "off"), ("power", "on"), ("accel", "on"), ("acc", "on"))
 
 
 def _tokens(name: str) -> list[str]:
     return [t for t in re.split(r"[^a-z0-9]+", name.lower()) if t]
 
 
+def _level(word: str) -> float | None:
+    """An engine speed word's share of the idle-to-limiter range ("low", "medhigh", "high2"), or None"""
+    for key, share in _LEVELS:
+        if word == key or word.startswith(key) and len(word) <= len(key) + 1:
+            return share
+    return None
+
+
 def classify_engine_sample(name: str) -> dict[str, Any] | None:
     """What an engine loop's name says: {view: int / ext / None, layer: on / off / idle, share or rpm, rear: an
     exhaust-side recording}; None for a sample that isn't an engine loop"""
     low = name.lower()
-    if any(w in low for w in _NOT_ENGINE) or re.search(r"(^|[^a-z])bf\d*($|[^a-z])", low):
+    if _NOT_ENGINE_RE.search(low) or re.search(r"(^|[^a-z])bf\d*($|[^a-z])", low):
         return None
     toks = _tokens(name)
     view = None
-    if any(t in ("int", "interior", "inside", "cockpit", "onboard", "incar") or t.startswith("int") for t in toks):
+    # "int" a word of its own, or with a number ("int2"): "integra" is a car's name
+    if any(t in ("int", "interior", "internal", "inside", "cockpit", "onboard", "incar") or re.fullmatch(r"int\d+", t) for t in toks):
         view = "int"
     elif any(t in ("ext", "exterior", "outside", "aft", "rear", "front", "exhaust") or t.endswith("ext") for t in toks):
         view = "ext"
     rear = any(t in ("aft", "rear", "exhaust") for t in toks)
     layer, rest = None, []
     for t in toks:
-        for prefix, lay in (("off", "off"), ("on", "on"), ("coast", "off"), ("decel", "off"), ("power", "on"), ("acc", "on")):
-            if t.startswith(prefix):
+        for prefix, lay in _LAYERS:
+            after = t[len(prefix):]
+            if t.startswith(prefix) and (not after or after.isdigit() or _level(after) is not None):
                 layer = layer or lay
-                rest.append(t[len(prefix):])
+                rest.append(after)
                 break
         else:
             rest.append(t)
@@ -961,9 +978,9 @@ def classify_engine_sample(name: str) -> dict[str, Any] | None:
     if layer is None:
         return None
     for word in rest:
-        for key, share in _LEVELS:
-            if word == key or word.startswith(key) and len(word) <= len(key) + 1:
-                return {"view": view, "layer": layer, "share": share, "rear": rear}
+        share = _level(word)
+        if share is not None:
+            return {"view": view, "layer": layer, "share": share, "rear": rear}
     rpms = [int(t) for t in rest if t.isdigit() and 800 <= int(t) <= 20000]
     if rpms:
         return {"view": view, "layer": layer, "rpm": rpms[0], "rear": rear}

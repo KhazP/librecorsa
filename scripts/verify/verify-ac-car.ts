@@ -131,6 +131,19 @@ async function main(): Promise<void> {
     const shots = cfg?.oneshots ?? {};
     check('the shifts, the backfires, the limiter, skid and traction control by name; never the missed-gear grind', shots.gear_up?.[0]?.startsWith('shift_up_1') === true && shots.gear_down?.[0]?.startsWith('shift_down_1') === true && !JSON.stringify(shots).includes('missgear') && (shots.backfire_ext?.length ?? 0) === 2 && cfg?.limiterFallbackSample?.startsWith('limiter_loop') === true && !!cfg?.skid && cfg?.tractionControl?.startsWith('traction_control') === true, JSON.stringify(shots));
     check('the turbo loop only for a car with boost', !!cfg?.turbo && !run('0')?.turbo);
+    // Whole words of a name: a car's name holding "wind", "trans", "int" or "on" is no turbo's, gearbox's or view's
+    const names2 = ['ford_windsor_int_on_5000', 'trans_am_ext_off_4000', 'honda_integra_on_3000', 'onboard_off_7000', 'gears_on_3000', 'turbo2_on_4000'];
+    const cls = spawnSync(
+      'uv',
+      ['run', '--python', '3.14', '--no-project', '--with', 'numpy', '--with', 'scipy', '--with', 'fsb5', 'python', '-P', '-c',
+        "import json, sys; sys.path.insert(0, 'scripts/audio'); import port_ac_bank as b; print(json.dumps([b.classify_engine_sample(n) for n in json.loads(sys.argv[1])]))", JSON.stringify(names2)],
+      { encoding: 'utf8' },
+    );
+    const c = cls.status === 0 ? (JSON.parse(cls.stdout.trim().split('\n').at(-1) ?? '[]') as ({ view: string | null; layer: string; rpm?: number } | null)[]) : [];
+    const said = (i: number) => (c[i] ? `${c[i]!.view}/${c[i]!.layer}/${c[i]!.rpm}` : 'none');
+    check('"windsor" and "trans_am" are engine loops, not wind or a gearbox', said(0) === 'int/on/5000' && said(1) === 'ext/off/4000', `${said(0)} ${said(1)}`);
+    check('"integra" is no inside view; "onboard" is one, and no throttle layer', said(2) === 'null/on/3000' && said(3) === 'int/off/7000', `${said(2)} ${said(3)}`);
+    check('a plural or a numbered word still names a sound that is no engine loop', said(4) === 'none' && said(5) === 'none', `${said(4)} ${said(5)}`);
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
