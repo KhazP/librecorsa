@@ -1,10 +1,12 @@
 # LibreCorsa launcher
 
-A small native program that runs LibreCorsa with no network: it serves the game's static export (`out/` from
-`npm run build`) and the player's mod packages on `127.0.0.1`, and opens the game in a Chromium browser as an app
-window. It also converts a circuit or a car copied from another game into a mod package, from the game's Mods panel,
-with nothing for the player to install. It is written in Go with the standard library only, and is meant to replace
-the Electron wrapper in `desktop/` for offline play.
+A small native program that runs LibreCorsa online and offline: it serves the live site (librecorsa.org) on
+`127.0.0.1`, keeping on disk every page, car and circuit it fetches, so the game is the live one when online and the
+last one seen when not, with the game's static export bundled beside it (`out/` from `npm run build`) for what was
+never fetched. It serves the player's mod packages too, and opens the game in a Chromium browser as an app window. It
+also converts a circuit or a car copied from another game into a mod package, from the game's Mods panel, with nothing
+for the player to install. It is written in Go with the standard library only, and is meant to replace the Electron
+wrapper in `desktop/`, which opens librecorsa.org.
 
 ## Running it
 
@@ -25,12 +27,16 @@ convert from the game's window.
 | `--import <dir>` | `import/` beside the binary (created if missing, with a README); in a clone, `launcher/import` | Circuits and cars to convert |
 | `--converter <dir>` | `converter/` beside the binary; in a clone, `launcher/dist/converter` | The converter bundle |
 | `--toolchain <dir>` | `<config dir>/LibreCorsa/toolchain` | Where the converter's tools are downloaded |
+| `--site <origin>` | `https://librecorsa.org`; none in a clone       | The live site to mirror ([below](#the-live-site-online-and-offline)); `--site ""` for none |
+| `--cache <dir>` | `<config dir>/LibreCorsa/site`                 | Where the site's files are kept                    |
+| `--offline`    | off                                             | Never contact the site: what is kept, else the export |
 | `--port <n>`   | `47826`                                         | Port on 127.0.0.1                                  |
 | `--no-browser` | off                                             | Don't open a browser                               |
 | `--version`    |                                                 | Print the version and exit                         |
 
-In a clone, after `npm run build`: `cd launcher && go run . --no-browser` serves `../out`, with the packages in
-`../public/mods` (where `npm run mod -- index` lists them for the dev server too).
+In a clone, after `npm run build`: `cd launcher && go run . --no-browser` serves `../out` and nothing else (no site,
+so a developer sees their own build), with the packages in `../public/mods` (where `npm run mod -- index` lists them
+for the dev server too). `--site https://librecorsa.org` mirrors the live site over it, as a release does.
 
 ## Folder layout
 
@@ -38,7 +44,7 @@ A release (`npm run launcher:build -- --bundle`) is one folder per platform:
 
 ```
 librecorsa(.exe)   the launcher
-game/              the game's static export (a copy of out/)
+game/              the game's static export (a copy of out/), served when the site can't be
 mods/              mod packages; starts empty, with a README.txt
 import/            circuits and cars to convert; starts empty, with a README.txt
 converter/         the converter: the mod tools and the Python converters (launcher/converter/build.mjs)
@@ -49,7 +55,8 @@ The browser profile the game runs in, and with it the saves (laps, settings, imp
 roaming profile: it holds the downloaded circuits and cars), `~/.config` on Linux. A Snap or Flatpak browser can only
 write inside its own folder, so with one of those it is `~/snap/<name>/common/LibreCorsa` or
 `~/.var/app/<id>/config/LibreCorsa`. Replacing the folder above with a newer release keeps them (copy `mods/` and
-`import/` across). The converter's downloaded tools go beside the profile, in `<config dir>/LibreCorsa/toolchain`.
+`import/` across). The converter's downloaded tools go beside the profile, in `<config dir>/LibreCorsa/toolchain`, and
+the site's files in `<config dir>/LibreCorsa/site`.
 
 ## Why a fixed port
 
@@ -63,9 +70,61 @@ is taken the launcher does not move to another:
 The server listens on 127.0.0.1 only, and refuses any request whose `Host` isn't `127.0.0.1:<port>` or
 `localhost:<port>`, so a web page can't point a name of its own at it and read the game or the mods (DNS rebinding).
 Every answer says `Cross-Origin-Resource-Policy: same-origin`, so another site's page can't embed one either.
-Requests can't leave the game or mods folders: paths with `..`, encoded or not, backslashes or absolute names are
-refused, and files are opened through `os.Root`, which also stops symbolic links that lead outside. Files are only read
-(GET and HEAD); the one thing that takes a POST is the converter's API below, with checks of its own.
+Requests can't leave the game, mods or cache folders: paths with `..`, encoded or not, backslashes or absolute names
+are refused, and files are opened through `os.Root`, which also stops symbolic links that lead outside. Files are only
+read (GET and HEAD); what takes a POST is the converter's API below, with checks of its own, and `/api`, passed on to
+the site, which checks the Origin itself.
+
+## The live site, online and offline
+
+Every page and file outside `/mods/`, `/__launcher…` and `/api/` comes from the site (`--site`, librecorsa.org in a
+release), the way the website serves it, hosted cars and circuits included (they live in the site's R2 bucket, which
+`cloudflare/worker.js` serves at the same paths, not in the export). Each is kept in the cache folder, and asked about
+again as `public/sw.js` does in the browser (`mirror.go`):
+
+- Next's hashed build output (`/_next/static/…`) never changes under its name: a kept copy is served without asking.
+- Pages and the files that say which build is current (navigations, `.html`, Next's `.txt` payloads,
+  `offline-manifest.json`, `build.json`, `sw.js`, `manifest.webmanifest`) are asked about on every request, with the
+  kept copy's ETag: a 304 serves the copy.
+- Everything else (models, textures, sounds, track data, which keep their names when they change) is asked about once
+  per path per launcher run.
+
+A download is streamed to the browser while it is written, with the site's `Content-Length` and `X-File-Size` (the
+loading screen's progress reads it when a file comes compressed, with no length), into a temporary file renamed into
+place once whole, so a cut download never leaves a broken copy (and the browser's copy of it fails too, rather
+than passing for the whole file). Gzip is taken off on the way, and files are kept as the browser gets them. A Range
+for a file not kept goes to the site as it is and isn't kept, but for `bytes=0-`: a media element (the music) asks for
+a whole file that way, and it is downloaded and kept, answered as a 206 of all of it. A kept file answers Ranges
+itself.
+
+When the site answers 404, the kept copy is dropped and the site's 404 page passed on. When it answers 5xx, or the
+network fails, or nothing answers within 6 s, the kept copy is served, else the export beside the launcher (`game/`),
+else the export's 404 page; after a network failure the site isn't asked for 30 s, so offline play doesn't wait on
+every request. `--offline` never asks it.
+
+The cache folder (`<config dir>/LibreCorsa/site`, this user's alone) holds `files/<path>`, the files as served;
+`meta/<path>.json`, each one's ETag, Last-Modified and type, with the size and time of the file it describes (a file
+whose record doesn't match isn't served); and `tmp/`, downloads in progress, emptied at start. A page is kept as
+`<path>.html` and `/dir/` as `dir/index.html`. Deleting the folder only means downloading again.
+
+### `/api`
+
+The game's online side (lap boards, rooms, races, accounts: `cloudflare/api`) is passed on to `<site>/api/`
+(`apiproxy.go`), every method and WebSockets too (a production build calls `/api` and opens its sockets on its own
+origin, here `http://127.0.0.1:<port>`), and never kept. With `--offline` it answers `503`, and `502` when the site
+can't be reached.
+
+- **Origin.** The API answers only its own origin (`allowedOrigin` in `cloudflare/api/index.ts`), so the launcher's
+  own (`http://127.0.0.1:<port>`, `http://localhost:<port>`) is passed on as the site's, and the Referer likewise. Any
+  other Origin goes as it is, and the site refuses it as it would on the web.
+- **Cookies.** Account sessions are cookies, `__Host-` and `Secure` on https (`cloudflare/api/accounts/http.ts`).
+  Chrome (158, tried on macOS) keeps and sends `Secure` and `__Host-` cookies on `http://127.0.0.1:<port>` and
+  `http://localhost:<port>`, which it counts as secure, for navigations and fetches alike. So they pass as they are,
+  with only a `Domain=` taken off (the site sets none today). The launcher's session cookie (`librecorsa_launcher_*`)
+  is never sent on, and the site can't set one of that name. A browser keeps a host's cookies for all its ports, so
+  another launcher on another `--port` shares the account's.
+- **Headers.** `X-Forwarded-*` and `Forwarded` aren't sent, nor hop-by-hop headers (but an `Upgrade`, for sockets).
+  A redirect to the site's own pages comes back as a path on the launcher.
 
 ## Why Chromium
 
@@ -243,7 +302,14 @@ In a clone: `npm run build`, `node launcher/converter/build.mjs`, then `cd launc
 
 - The binaries are not signed or notarized: macOS Gatekeeper and Windows SmartScreen will warn on first run
   (macOS: right-click → Open; Windows: More info → Run anyway).
-- The game's hosted cars and circuits (served from librecorsa.org) are only offline when they are in the export.
+- Accounts sign in with a link code from another device (as the desktop app did). A provider's sign-in (Discord,
+  Google, Steam) comes back to librecorsa.org rather than to the launcher, and passkeys belong to librecorsa.org, so
+  neither can finish in the launcher's window.
+- The cache folder is never trimmed: a car or circuit taken off the site goes when the site answers 404 for it, and
+  nothing else goes. The game's service worker (`public/sw.js`) also keeps the hosted files it loads, in the browser
+  profile, so they are on disk twice.
+- A browser other than Chrome (the default browser, when no Chromium is found) hasn't been tried with the account
+  cookies: one that won't keep a `Secure` cookie on `http://127.0.0.1` can't sign in.
 - The force-feedback bridge (`scripts/ffb-bridge/ffb-bridge.ts`) is not part of it yet.
 - The converter's downloads are pinned for darwin/arm64, darwin/amd64, windows/amd64 and linux/amd64 only (the
   targets above); elsewhere the panel says the tools aren't available. The Python packages are pinned by version and
