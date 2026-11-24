@@ -2,7 +2,10 @@
  * A player's careers (iRacing's Career Mode): each a run up one discipline's ladder (ladder.ts), a season at a time.
  *
  * - **A season** starts in pre-season: the series picked, the car, the calendar's length and circuits, and the
- *   mulligans chosen; a test day if the player likes. Starting the season locks those. Race settings (race length,
+ *   mulligans chosen. Starting the season locks those.
+ * - **Test days**: optional practice in the season's car on the next round's circuit (the first before the season
+ *   starts), at any time: the laps run and the best clean lap against a target, the pace of the promotion places, kept
+ *   on the season per circuit and car. Race settings (race length,
  *   AI level, damage, grid size, qualifying) can change before any round.
  * - **Promotion**: finish the season inside the series' promotion places. Miss them and the season is raced again (an
  *   attempt used); three seasons missed in the same series end the career. Promotion at the top of a ladder completes it.
@@ -21,6 +24,8 @@ import type { CarId } from "@/lib/cars/car-registry";
 import type { DamageLevel } from "@/lib/sim/car-damage";
 import type { QualifyingMinutes } from "@/lib/sim/qualifying";
 import type { TimeOfDayId, WeatherPresetId } from "@/lib/sim/weather";
+import { aiSkillModifiers } from "@/lib/sim/ai-tuning";
+import { aiQualifyingMs } from "@/lib/sim/qualifying";
 import {
   CAREER_SERIES,
   aiSkillFor,
@@ -37,7 +42,7 @@ import {
   type SeasonLength,
   seriesContent,
 } from "./ladder";
-import { careerRng, drawGrid, makeRivals, rivalCode, type CareerRival } from "./rivals";
+import { careerRng, drawGrid, makeRivals, rivalCode, rivalPace, type CareerRival } from "./rivals";
 
 export const CAREER_STORAGE_KEY = "librecorsa.career";
 export const MAX_ATTEMPTS = 3;
@@ -115,6 +120,20 @@ export interface SeasonState {
    * settled the next time the career opens, a mulligan or a retirement, never a free run again
    */
   racing?: number;
+  /** The season's test days, one per circuit and car (absent before the first, and in saves from before they were kept) */
+  tests?: TestDayResult[];
+}
+
+/** A season's test day on one circuit in one car: its laps, the player's best, the lap aimed at */
+export interface TestDayResult {
+  trackId: string;
+  car: CarId;
+  /** Laps completed, on the autopilot too */
+  laps: number;
+  /** The best clean lap the player drove themselves (ms); null without one */
+  bestMs: number | null;
+  /** The lap aimed at (ms, `testTargetMs`); null where no reference lap could be had */
+  targetMs: number | null;
 }
 
 export interface SeasonRecord {
@@ -598,6 +617,55 @@ export function roundConditions(
   return { weather, timeOfDay };
 }
 
+// ---- Test days
+
+/** Where a test day runs: the next round's circuit (the first before the season starts), and that round */
+export function testCircuit(season: SeasonState): { trackId: string; roundIndex: number } | null {
+  const roundIndex = season.started ? (nextRound(season) ?? 0) : 0;
+  const trackId = season.settings.circuits[roundIndex];
+  return trackId ? { trackId, roundIndex } : null;
+}
+
+/** The season's test day on a circuit in a car, once one has a lap */
+export function seasonTest(season: SeasonState, trackId: string, car: CarId): TestDayResult | null {
+  return season.tests?.find((t) => t.trackId === trackId && t.car === car) ?? null;
+}
+
+const better = (a: number | null, b: number | null): number | null => (a === null ? b : b === null ? a : Math.min(a, b));
+
+/** Laps of a test day added to the season's on that circuit in that car: the laps summed, the better best, the newest target */
+export function recordTestDay(run: CareerRun, add: TestDayResult): CareerRun {
+  const season = run.season;
+  if (!season || add.laps <= 0) return run;
+  const tests = season.tests ?? [];
+  const had = seasonTest(season, add.trackId, add.car);
+  const merged: TestDayResult = had
+    ? { ...had, laps: had.laps + add.laps, bestMs: better(had.bestMs, add.bestMs), targetMs: add.targetMs ?? had.targetMs }
+    : { ...add };
+  return touch({ ...run, season: { ...season, tests: had ? tests.map((t) => (t === had ? merged : t)) : [...tests, merged] } });
+}
+
+/**
+ * The lap a test day aims at (ms): the qualifying lap the season's field would do here at the pace of its last
+ * promotion place (the AI car the player must beat to finish inside the places), from a reference lap of the car on
+ * the circuit (`refLapMs` at `refBase`, as qualifying takes the AI cars' laps from it: qualifying.ts). The field's
+ * pace as the race sets it (ai-opponents.ts): each rival's own, spread and scaled by the series' AI level
+ */
+export function testTargetMs(run: CareerRun, refLapMs: number, refBase: number): number | null {
+  const season = run.season;
+  const series = season ? seriesById(season.seriesId) : undefined;
+  if (!season || !series || !(refLapMs > 0) || !(refBase > 0)) return null;
+  const mods = aiSkillModifiers(aiSkillFor(series, season.race.aiLevel));
+  const paces = season.grid
+    .map((id) => run.rivals.find((r) => r.id === id))
+    .filter((r): r is CareerRival => Boolean(r))
+    .map((r) => Math.min(0.999, (1 - (1 - rivalPace(r)) * mods.spread) * mods.paceMult))
+    .sort((a, b) => b - a);
+  if (!paces.length) return null;
+  const places = promotionPlaces(series, season.race.gridSize);
+  return aiQualifyingMs(refLapMs, refBase, paces[Math.min(paces.length - 1, Math.max(0, places - 1))]);
+}
+
 /** What the race of the next round is: its circuit, laps, stops, the field's skill and drivers */
 export interface CareerRacePlan {
   roundIndex: number;
@@ -827,16 +895,18 @@ export function parseCareerSave(raw: unknown): CareerSave {
   if (!raw || typeof raw !== "object") return EMPTY_SAVE;
   const r = raw as Partial<CareerSave>;
   if (r.v !== 1 || !Array.isArray(r.runs)) return EMPTY_SAVE;
-  const runs = r.runs.filter(
-    (c): c is CareerRun =>
-      Boolean(c) &&
-      typeof c === "object" &&
-      typeof c.id === "string" &&
-      (c.discipline === "road" || c.discipline === "historic") &&
-      Array.isArray(c.rivals) &&
-      Array.isArray(c.history) &&
-      (c.season === null || (typeof c.season === "object" && Boolean(seriesById(c.season.seriesId))))
-  );
+  const runs = r.runs
+    .filter(
+      (c): c is CareerRun =>
+        Boolean(c) &&
+        typeof c === "object" &&
+        typeof c.id === "string" &&
+        (c.discipline === "road" || c.discipline === "historic") &&
+        Array.isArray(c.rivals) &&
+        Array.isArray(c.history) &&
+        (c.season === null || (typeof c.season === "object" && Boolean(seriesById(c.season.seriesId))))
+    )
+    .map(cleanTestDays);
   const removed = Array.isArray(r.removed) ? r.removed.filter((id): id is string => typeof id === "string") : [];
   return {
     v: 1,
@@ -844,6 +914,38 @@ export function parseCareerSave(raw: unknown): CareerSave {
     activeId: typeof r.activeId === "string" && runs.some((c) => c.id === r.activeId) ? r.activeId : (runs[0]?.id ?? null),
     ...(removed.length ? { removed } : {}),
   };
+}
+
+/** A career's test days as saved, anything malformed dropped; a career without any comes back as it was (the same object) */
+function cleanTestDays(run: CareerRun): CareerRun {
+  const season = cleanSeasonTests(run.season);
+  const last = cleanSeasonTests(run.lastSeason);
+  return season === run.season && last === run.lastSeason ? run : { ...run, season: season ?? null, ...(last !== undefined ? { lastSeason: last } : {}) };
+}
+
+function cleanSeasonTests<T extends SeasonState | null | undefined>(season: T): T {
+  if (!season || typeof season !== "object" || !("tests" in season)) return season;
+  const raw: unknown = season.tests;
+  const tests = Array.isArray(raw) ? raw.filter(isTestDayResult) : [];
+  if (Array.isArray(raw) && tests.length === raw.length) return season;
+  const { tests: _dropped, ...rest } = season;
+  void _dropped;
+  return (tests.length ? { ...rest, tests } : rest) as T;
+}
+
+function isTestDayResult(t: unknown): t is TestDayResult {
+  if (!t || typeof t !== "object") return false;
+  const x = t as Record<string, unknown>;
+  const ms = (v: unknown) => v === null || (typeof v === "number" && Number.isFinite(v) && v > 0);
+  return (
+    typeof x.trackId === "string" &&
+    typeof x.car === "string" &&
+    typeof x.laps === "number" &&
+    Number.isInteger(x.laps) &&
+    x.laps >= 0 &&
+    ms(x.bestMs) &&
+    ms(x.targetMs)
+  );
 }
 
 /** Replace one career in the save (or add it), and make it the one shown */
