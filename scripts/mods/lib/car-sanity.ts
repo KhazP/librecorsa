@@ -44,6 +44,12 @@ export interface SanityResult {
 const slipOf = (c: F12026CarSim) => Math.abs(Math.atan2(c.vyMs, Math.max(1, Math.abs(c.vxMs))));
 
 /**
+ * Whether the simulation's state is still numbers: a NaN or an infinity makes every comparison below false, so a car
+ * whose physics broke would pass every check it never failed
+ */
+const finiteState = (c: F12026CarSim) => [c.vxMs, c.vyMs, c.yawRateRadS, c.lateralOffsetM, c.sMeters].every(Number.isFinite);
+
+/**
  * The wheel held straight: a car that pulls or weaves with nobody steering shows it here (a driver's corrections, at
  * gains that suit one car, set others weaving at speed)
  */
@@ -57,6 +63,7 @@ export function driveSanity(
   assists: DriverAssistPreset = "semi_pro"
 ): SanityResult {
   const problems: string[] = [];
+  for (const [k, v] of Object.entries(limits)) if (!Number.isFinite(v)) throw new Error(`driveSanity: the limit ${k} is ${v}, not a finite number`);
   const pad = createFlatTestTrack(40_000);
   const car = new F12026CarSim(pad, null, profile);
   // As most players drive it: traction control and ABS on (semi-pro), so the check is the car's, not a flat-out launch's
@@ -73,9 +80,15 @@ export function driveSanity(
   let spun = false;
   let plateauV = 0;
   let plateauT = 0;
+  let broke = false;
   while (t < 240) {
     car.step(DT, { throttle: 1, brake: 0, analogSteer: STRAIGHT });
     t += DT;
+    if (!finiteState(car)) {
+      problems.push(`its simulation stopped being numbers (NaN or infinite) ${t.toFixed(2)} s into the run up the straight`);
+      broke = true;
+      break;
+    }
     const v = car.vxMs * KMH;
     if (zeroTo100S === null && v >= 100) zeroTo100S = t;
     maxSlip = Math.max(maxSlip, slipOf(car));
@@ -89,7 +102,7 @@ export function driveSanity(
       plateauT = t;
     } else if (t - plateauT > 8) break;
   }
-  const topSpeedKmh = car.vxMs * KMH;
+  const topSpeedKmh = broke ? 0 : car.vxMs * KMH;
   if (spun) problems.push(`it spun under power on a straight, at ${topSpeedKmh.toFixed(0)} km/h`);
   if (!spun && maxDrift > 25) problems.push(`it pulled ${maxDrift.toFixed(1)} m off its line under power on a straight`);
   if (!spun && topSpeedKmh < limits.minTopSpeedKmh) problems.push(`top speed ${topSpeedKmh.toFixed(0)} km/h, under the ${limits.minTopSpeedKmh} km/h it should reach`);
@@ -102,6 +115,10 @@ export function driveSanity(
     for (let tb = 0; tb < 60; tb += DT) {
       if (s100 === null && car.vxMs * KMH <= 100) s100 = car.sMeters;
       car.step(DT, { throttle: 0, brake: 1, analogSteer: STRAIGHT });
+      if (!finiteState(car)) {
+        problems.push("its simulation stopped being numbers (NaN or infinite) under braking");
+        return { fromTop: null, from100: null };
+      }
       maxSlip = Math.max(maxSlip, slipOf(car));
       if (slipOf(car) > SPIN_SLIP_RAD) {
         problems.push("it spun under braking on a straight");
@@ -112,7 +129,7 @@ export function driveSanity(
     problems.push("it didn't stop within a minute of full braking");
     return { fromTop: null, from100: null };
   };
-  const stops = spun ? { fromTop: null, from100: null } : brake();
+  const stops = spun || broke ? { fromTop: null, from100: null } : brake();
   if (stops.from100 !== null && stops.from100 > limits.maxStop100M) problems.push(`it took ${stops.from100.toFixed(0)} m to stop from 100 km/h (at most ${limits.maxStop100M} m)`);
 
   const result: SanityResult = {
@@ -139,19 +156,25 @@ export function driveSanity(
     let timeS: number | null = null;
     for (let tl = 0; tl < 900 && laps < 2; tl += DT) {
       lapCar.step(DT, {});
+      if (!finiteState(lapCar)) {
+        problems.push(`its simulation stopped being numbers (NaN or infinite) ${tl.toFixed(1)} s into the autopilot's lap`);
+        break;
+      }
       const tel = lapCar.telemetry;
       if (tel.offTrack) offTrack += DT;
       lapSlip = Math.max(lapSlip, slipOf(lapCar));
       if (slipOf(lapCar) > SPIN_SLIP_RAD && lapCar.vxMs > 5) lapSpun = true;
       if (tel.lapCount > laps) {
         laps = tel.lapCount;
-        if (laps === 2) timeS = tel.lastLapTimeMs === null ? null : tel.lastLapTimeMs / 1000;
+        if (laps === 2) timeS = tel.lastLapTimeMs === null || !Number.isFinite(tel.lastLapTimeMs) ? null : tel.lastLapTimeMs / 1000;
       }
     }
     result.lap = { timeS, offTrackS: offTrack, maxSlipDeg: (lapSlip * 180) / Math.PI, spun: lapSpun };
     if (timeS === null) problems.push("it didn't finish a lap on the autopilot within 15 minutes");
     if (lapSpun) problems.push("it spun on the autopilot's lap");
   }
+  const measured = [result.topSpeedKmh, result.maxSlipDeg, result.maxDriftM, result.zeroTo100S ?? 0, result.stop100M ?? 0, result.stopFromTopM ?? 0];
+  if (!broke && !measured.every(Number.isFinite)) problems.push("a measurement of the drive isn't a finite number");
   result.ok = problems.length === 0;
   return result;
 }

@@ -243,6 +243,18 @@ check("on the 2026 car: no hybrid, no DRS, no active aero", f1.hasErs === false 
   check("the aero fit makes Speed Dreams' downforce on each axle and its drag, within 6 %", err("front") < 0.06 && err("rear") < 0.06 && err("drag") < 0.06, `front ${fit.measured.front.toFixed(3)}/${targets.front.toFixed(3)} rear ${fit.measured.rear.toFixed(3)}/${targets.rear.toFixed(3)} drag ${fit.measured.drag.toFixed(3)}/${targets.drag.toFixed(3)}`);
   const s = driveSanity(prof(withAero(phys.patch, fit.aero)), { minTopSpeedKmh: 200, maxTopSpeedKmh: 330, maxStop100M: 45 });
   check("driven: no spin on the straight, a plausible top speed, it brakes", s.ok, `${s.topSpeedKmh.toFixed(0)} km/h, 100–0 in ${s.stop100M?.toFixed(1)} m ${s.problems.join("; ")}`);
+  // A profile whose simulation goes NaN, and a NaN limit: every comparison with NaN is false, so neither may pass
+  const broken = structuredClone(prof(withAero(phys.patch, fit.aero)));
+  broken.config.chassis.totalMassKg = Number.NaN;
+  const sb = driveSanity(broken, { minTopSpeedKmh: 200, maxTopSpeedKmh: 330, maxStop100M: 45 });
+  check("a car whose simulation goes NaN fails the drive", !sb.ok && sb.problems.some((p) => /NaN/.test(p)), sb.problems.join("; "));
+  let limitErr = "";
+  try {
+    driveSanity(prof(withAero(phys.patch, fit.aero)), { minTopSpeedKmh: Number.NaN, maxTopSpeedKmh: 330, maxStop100M: 45 });
+  } catch (err) {
+    limitErr = (err as Error).message;
+  }
+  check("a NaN limit is refused, not passed", /not a finite number/.test(limitErr), limitErr);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
