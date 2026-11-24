@@ -51,10 +51,10 @@ interface Run {
   note: string;
 }
 const runs: Run[] = [];
-const own = physicsLap(track, root, car, offsets, grips[0], undefined, { plan: false });
+const own = physicsLap(track, root, car, offsets, grips[0], undefined, { plan: false, line });
 runs.push({ name: 'own driver', lapS: own.lapS, t: own.t, v: own.v, note: `${own.offTrackFrames} off, ${own.wallHits} hits, worst ${own.maxErrM.toFixed(2)} m` });
 for (const g of grips) {
-  const lap = physicsLap(track, root, car, offsets, g);
+  const lap = physicsLap(track, root, car, offsets, g, undefined, { line });
   runs.push({ name: `plan ${g}`, lapS: lap.lapS, t: lap.t, v: lap.v, note: `plan ${lap.plan.lapS.toFixed(3)} s, ${lap.offTrackFrames} off, ${lap.wallHits} hits, worst ${lap.maxErrM.toFixed(2)} m` });
 }
 const ghosts = loadGhostLines(track, trackId, { vehicles: [car], n: N, ds: t.ds });

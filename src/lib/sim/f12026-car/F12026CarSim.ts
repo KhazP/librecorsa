@@ -743,7 +743,7 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: 
   if (!perCar) apProfiles.set(track, (perCar = new Map()));
   // The line this car drives here (`racingLineFor`): fixed for a circuit, as the cache is
   const line = racingLineFor(profile.racingLine ?? 'f1', profile.id);
-  const key = edges ? `${profile.id}:colliders` : profile.id;
+  const key = edges ? `${profile.id}:${line}:colliders` : `${profile.id}:${line}`;
   const cached = perCar.get(key);
   if (cached) return cached;
   const b = envelopeAt(profile.braking, airDensityAt(track.baseAltitudeM ?? BASE_ALTITUDE_M));

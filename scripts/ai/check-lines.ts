@@ -79,7 +79,7 @@ for (const car of cars) {
   checkedOn.set(car, line);
   let offsets = lines.get(line);
   if (!offsets) lines.set(line, (offsets = offsetsOf(line)));
-  const lap = physicsLap(track, root, car, offsets, grip);
+  const lap = physicsLap(track, root, car, offsets, grip, undefined, { line });
   const ok = isCleanLap(lap, 3);
   const r3 = (x: number) => Math.round(x * 1000) / 1000;
   checks[car] = storeFor(line)[car] = {
@@ -97,7 +97,7 @@ for (const car of cars) {
   if (ok && ceiling.length) {
     let best = grip;
     for (const g of ceiling) {
-      const l = physicsLap(track, root, car, offsets, g);
+      const l = physicsLap(track, root, car, offsets, g, undefined, { line });
       const clean = isCleanLap(l, 2.5) && l.lapS < lap.lapS;
       console.log(`  grip ${g}: ${clean ? 'clean' : 'not clean'} ${l.lapS.toFixed(3)} s, ${l.wallHits} barrier hits, ${l.offTrackFrames} off-track frames, worst ${l.maxErrM.toFixed(2)} m`);
       if (!clean) break;
@@ -106,7 +106,7 @@ for (const car of cars) {
     checks[car].maxGrip = best;
   } else if (!ok) delete checks[car].maxGrip;
   if (argv.includes('--own')) {
-    const o = physicsLap(track, root, car, offsets, grip, undefined, { plan: false });
+    const o = physicsLap(track, root, car, offsets, grip, undefined, { plan: false, line });
     ownLaps[car] = { lapS: o.lapS, offTrackFrames: o.offTrackFrames, wallHits: o.wallHits, maxErrM: o.maxErrM };
     console.log(`  own driver: ${o.lapS.toFixed(3)} s, ${o.wallHits} barrier hits, ${o.offTrackFrames} off-track frames, worst ${o.maxErrM.toFixed(2)} m`);
   }

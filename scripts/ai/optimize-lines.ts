@@ -278,7 +278,7 @@ if (acLineOn) {
 }
 
 // Who drives the candidates: the cars that run this line on drive plans
-const drive = (n: ArrayLike<number>, g = grip) => judges.map((car) => physicsLap(track, root, car, n, g));
+const drive = (n: ArrayLike<number>, g = grip) => judges.map((car) => physicsLap(track, root, car, n, g, undefined, { line }));
 const isClean = (l: PhysicsLap) => isCleanLap(l);
 const oldLaps = drive(current);
 
@@ -468,8 +468,8 @@ if (write && !(noRoadLine && !changed)) {
     const tb = aiTrackFor(back);
     const nBack = new Float64Array(tb.n);
     for (let i = 0; i < tb.n; i++) nBack[i] = aiLineOffsetM(back.getSampleAtDistance(i * tb.ds), line);
-    const drove = judges.map((car) => physicsLap(back, root, car, nBack, grip));
-    const droveRobust = judges.map((car) => physicsLap(back, root, car, nBack, robustGrip));
+    const drove = judges.map((car) => physicsLap(back, root, car, nBack, grip, undefined, { line }));
+    const droveRobust = judges.map((car) => physicsLap(back, root, car, nBack, robustGrip, undefined, { line }));
     let worst = 0;
     for (let i = 0; i < tb.n; i++) worst = Math.max(worst, Math.abs(nBack[i] - chosen.n[i]));
     console.log(`read back (worst ${worst.toFixed(2)} m from the grid line): ${drove.map(fmt).join(' · ')} · at grip ${robustGrip}: ${droveRobust.map(fmt).join(' · ')}`);

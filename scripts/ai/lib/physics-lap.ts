@@ -9,7 +9,7 @@
  * `{ plan: false }` drives the same car on its own driver instead (`autopilotProfile`, F12026CarSim.ts): what the field
  * races with where a car has no checked plan, at the field's pace cap for it (0.999).
  */
-import type { BuiltTrackData } from '../../../src/lib/track-data';
+import { getActiveTrackMetadata, type BuiltTrackData } from '../../../src/lib/track-data';
 import { F12026CarSim } from '../../../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../../../src/lib/sim/gt3/AmgGt3Sim';
 import { createLc26Sim } from '../../../src/lib/sim/f12026-car/Lc26Sim';
@@ -107,7 +107,37 @@ export function physicsLap(
   offsets: ArrayLike<number>,
   gripScale = 0.95,
   maxS?: number,
-  opts: { plan?: boolean } = {}
+  opts: { plan?: boolean; line?: RacingLineId } = {}
+): PhysicsLap {
+  if (!opts.line) return driveLap(track, root, line, offsets, gripScale, maxS, opts.plan !== false);
+  // The car on the line its offsets are, in everything it reads off its line (its own driver, its flying start, its
+  // recovery): a road car takes the road line from the circuit's checks (`racingLineFor`), so for this lap its check
+  // there reads as passed for the road line and failed for any other, then goes back to what it was
+  const vehicle = physicsLapVehicle(line);
+  const meta = getActiveTrackMetadata();
+  const hadByLine = meta.aiPlansByLine !== undefined;
+  const road = ((meta.aiPlansByLine ??= {}).road ??= {});
+  const had = Object.prototype.hasOwnProperty.call(road, vehicle);
+  const was = road[vehicle];
+  road[vehicle] = { ok: opts.line === 'road', physicsLapS: 0, planLapS: 0, wallHits: 0, offTrackFrames: 0, maxErrM: 0, checked: '' };
+  try {
+    return driveLap(track, root, line, offsets, gripScale, maxS, opts.plan !== false);
+  } finally {
+    if (had) road[vehicle] = was;
+    else delete road[vehicle];
+    if (!hadByLine) delete meta.aiPlansByLine;
+    else if (!Object.keys(road).length) delete meta.aiPlansByLine?.road;
+  }
+}
+
+function driveLap(
+  track: BuiltTrackData,
+  root: THREE.Object3D | null,
+  line: PhysicsLapCar,
+  offsets: ArrayLike<number>,
+  gripScale: number,
+  maxS: number | undefined,
+  onPlan: boolean
 ): PhysicsLap {
   const t = aiTrackFor(track);
   const vehicle = physicsLapVehicle(line);
@@ -116,7 +146,6 @@ export function physicsLap(
   // Grand Prix layout run past a fixed 400 s
   const limitS = maxS ?? Math.max(400, 2.6 * plan.lapS + 60);
   const car = simFor(vehicle, track, root);
-  const onPlan = opts.plan !== false;
   car.assistPreset = 'pro';
   car.aiAutopilot = true;
   // Its own driver: the field's cap for a car without a plan (ai-opponents.ts), on the line its profile names
