@@ -50,7 +50,6 @@ import {
   chooseDefenseTarget,
   hazardHalfWidthM,
   hazardLine,
-  hazardPaceProfile,
   inYellowZone,
   isHazardSpeed,
   overlapNow,
@@ -63,6 +62,7 @@ import { RaceIncidents } from '@/lib/sim/race-incidents';
 import { YellowPassJudge, type PassCar, type YellowLevel } from '@/lib/sim/yellow-passes';
 import { BlueFlagJudge, blueFlagYieldTarget, type BlueFlagCar } from '@/lib/sim/blue-flags';
 import { VSC_PACE_SHARE, VscController, vscReferenceSpeedMs } from '@/lib/sim/vsc';
+import { ownPaceFor, ownSpeedAt, type OwnPace } from '@/lib/sim/own-pace';
 import type { PenaltyReason } from '@/lib/sim/penalty-ledger';
 import { aiQualifyingMs, qualifyingOrder, type QualifyingGridInput, type QualifyingResult } from '@/lib/sim/qualifying';
 import { aiTrackFor, gridIndex, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
@@ -679,16 +679,6 @@ const HAZARD_LAUNCH_MAX_S = 40;
 const HAZARD_STALL_AFTER_S = 8;
 /** Off the start, got going: half its own speed there, or 12 m/s where that is slow (well clear of `isHazardSpeed`) */
 export const hasLaunched = (speedMs: number, roadSpeedMs: number): boolean => speedMs >= Math.max(12, 0.5 * roadSpeedMs);
-/**
- * A car model's own pace round its line (`AiOpponentField.ownPace`), per circuit, model and line: its expected speeds
- * and the eased ones its slowness is judged by (`hazardPaceProfile`), m/s every `ds` m
- */
-interface OwnPace {
-  expected: Float64Array;
-  hazard: Float64Array;
-  ds: number;
-}
-const ownPaces = new WeakMap<BuiltTrackData, Map<string, OwnPace>>();
 /**
  * Queuing, not crawling: a car alongside or this close ahead (m centre to centre, plus s of its speed), no faster by
  * this (m/s)
@@ -2920,29 +2910,11 @@ export class AiOpponentField implements AiRace {
   /** Each car's own pace (`ownPace`), looked up once per car (a car's model and line never change) */
   private readonly ownPaceOf = new WeakMap<SimulatorCar, OwnPace | null>();
 
-  /**
-   * A car's own pace round the lap: its model's plan on its line at the plan grip (its cornering, braking, traction
-   * and top speed), built once per circuit, model and line. The circuit's speed profile is the LC26's: a road car's
-   * top speed is 50 m/s where that is 85, its hairpin 10 m/s where that is 18. Null on a point-to-point road
-   */
+  /** A car's own pace round the lap (own-pace.ts): its model's plan on its line. Null on a point-to-point road */
   private ownPace(sim: SimulatorCar): OwnPace | null {
     let pace = this.ownPaceOf.get(sim);
     if (pace !== undefined) return pace;
-    pace = null;
-    if (!this.track.pointToPoint) {
-      let byModel = ownPaces.get(this.track);
-      if (!byModel) ownPaces.set(this.track, (byModel = new Map()));
-      const line = sim.racingLineId ?? 'f1';
-      const key = `${sim.vehicleId ?? ''}|${line}`;
-      pace = byModel.get(key) ?? null;
-      if (!pace) {
-        const limits = carLimitsFor(sim.vehicleId, PLAN_GRIP);
-        const t = (this.aiTrack ??= aiTrackFor(this.track));
-        const expected = makeDrivePlan(t, this.driveLineFor(line), limits).vExpected;
-        pace = { expected, hazard: hazardPaceProfile(expected, t.ds, (v) => limits.braking(v)), ds: t.ds };
-        byModel.set(key, pace);
-      }
-    }
+    pace = ownPaceFor(this.track, sim.vehicleId, sim.racingLineId ?? 'f1');
     this.ownPaceOf.set(sim, pace);
     return pace;
   }
@@ -2954,7 +2926,7 @@ export class AiOpponentField implements AiRace {
   private ownSpeedMs(car: FieldCar, hazard = false): number {
     const pace = this.ownPace(car.sim);
     if (!pace) return this.track.getSampleAtDistance(car.sim.sMeters).optimalSpeedKmh / 3.6;
-    return sampleGrid(hazard ? pace.hazard : pace.expected, car.sim.sMeters, pace.ds);
+    return ownSpeedAt(pace, car.sim.sMeters, hazard);
   }
 
   /** A car's heading in the world (rad, about +y) */
