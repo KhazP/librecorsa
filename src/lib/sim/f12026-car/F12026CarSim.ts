@@ -2103,6 +2103,7 @@ export class F12026CarSim implements SimulatorCar {
       }
     }
     this.afterPlacement();
+    this.atRestOnLine = pointToPoint && this.s >= L - 10;
     this.vehicle.coldGarageStart = false;
     this.vehicle.ersEnergyJ = this.config.ers.ERS_MAX_CHARGE;
     this.vehicle.resetLapEnergy();
@@ -2126,6 +2127,7 @@ export class F12026CarSim implements SimulatorCar {
   public teleportToDistance(sMeters: number, speedMs = 0, lateral = 0): void {
     this.lineCrossingStartsLap = false;
     this.shortStartLap = false;
+    this.atRestOnLine = false;
     this.telemetry.outLap = false;
     // Moved mid-lap (corner practice, a stuck or lost car's rescue): the lap under way can't count
     this.invalidateLap();
@@ -2139,6 +2141,7 @@ export class F12026CarSim implements SimulatorCar {
     // back onto the out-lap does not count the out-lap as a lap), otherwise preserve the current out-lap flag.
     if (pose.outLap !== undefined) this.lineCrossingStartsLap = pose.outLap;
     this.shortStartLap = false;
+    this.atRestOnLine = false;
     this.invalidateLap();
     if (pose.lapCount !== undefined && Number.isFinite(pose.lapCount)) {
       this.telemetry.lapCount = Math.max(0, Math.floor(pose.lapCount));
@@ -2168,6 +2171,7 @@ export class F12026CarSim implements SimulatorCar {
     const [xb, zb] = onLine(target.s + 2.5);
     this.lineCrossingStartsLap = false;
     this.shortStartLap = false;
+    this.atRestOnLine = false;
     // Corner practice moves the car mid-lap: the lap under way can't count
     this.invalidateLap();
     this.progressHintS = this.poseHintS = target.s;
@@ -3138,8 +3142,8 @@ export class F12026CarSim implements SimulatorCar {
     const p2p = this.track.pointToPoint;
     if (p2p) {
       // A point-to-point course: the start line starts a run (again, when it is crossed again), the finish line ends it.
-      // A run counts from a standing start: at rest within 10 m of the line first, or the run is timed but not valid
-      if (this.s >= L - 10 && Math.abs(this.vxMs) < 0.5) this.atRestOnLine = true;
+      // A run counts from a standing start: at rest within 10 m of the line first, without backing out of that 10 m box
+      // before crossing (#191), or the run is timed but not valid
       if (this.prevS > L * 0.85 && this.s < L * 0.15) {
         // A jump before the start line is not the run's
         this.cutWatch.reset();
@@ -3155,6 +3159,10 @@ export class F12026CarSim implements SimulatorCar {
         if (this.cutWatch.settle()) this.invalidateLap();
         this.runActive = false;
         this.onLapCompleted();
+      } else if (this.s >= L - 10) {
+        if (Math.abs(this.vxMs) < 0.5) this.atRestOnLine = true;
+      } else {
+        this.atRestOnLine = false;
       }
     } else if (this.prevS > L * 0.85 && this.s < L * 0.15) {
       // A jump ahead still pending at the line is the lap's

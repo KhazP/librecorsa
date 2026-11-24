@@ -1131,6 +1131,7 @@ export class F1Physics2026 {
     this.telemetry.outLap = this.lineCrossingStartsLap;
     this.settleSuspension();
     this.finishPlacement();
+    this.atRestOnLine = pointToPoint && this.sMeters >= lapLen - 10;
   }
 
   /** The track collider the car drives on (null on the track samples' ground), for the rigs to seat the wheels on */
@@ -1153,6 +1154,7 @@ export class F1Physics2026 {
   public teleportToDistance(sMeters: number, speedMs = 0, lateral = 0): void {
     this.lineCrossingStartsLap = false;
     this.shortStartLap = false;
+    this.atRestOnLine = false;
     this.telemetry.outLap = false;
     // Moved mid-lap (corner practice, a stuck-car rescue): the lap under way can't count
     this.invalidateLap();
@@ -1178,6 +1180,7 @@ export class F1Physics2026 {
     const trackHeadingRad = Math.atan2(tangent.x, tangent.z);
     if (pose.outLap !== undefined) this.lineCrossingStartsLap = pose.outLap;
     this.shortStartLap = false;
+    this.atRestOnLine = false;
     // Put back mid-lap: the lap under way can't count
     this.invalidateLap();
     if (pose.lapCount !== undefined && Number.isFinite(pose.lapCount)) {
@@ -3040,8 +3043,8 @@ export class F1Physics2026 {
     const p2p = this.track.pointToPoint;
     if (p2p) {
       // A point-to-point course: the start line starts a run (again, when it is crossed again), the finish line ends it.
-      // A run counts from a standing start: at rest within 10 m of the line first, or the run is timed but not valid
-      if (this.sMeters >= this.track.totalLengthM - 10 && Math.abs(this.vxMs) < 0.5) this.atRestOnLine = true;
+      // A run counts from a standing start: at rest within 10 m of the line first, without backing out of that 10 m box
+      // before crossing (#191), or the run is timed but not valid
       if (prevS > this.track.totalLengthM * 0.85 && this.sMeters < this.track.totalLengthM * 0.15) {
         // A jump before the start line is not the run's
         this.cutWatch.reset();
@@ -3057,6 +3060,10 @@ export class F1Physics2026 {
         if (this.cutWatch.settle()) this.invalidateLap();
         this.runActive = false;
         this.onLapCompleted();
+      } else if (this.sMeters >= this.track.totalLengthM - 10) {
+        if (Math.abs(this.vxMs) < 0.5) this.atRestOnLine = true;
+      } else {
+        this.atRestOnLine = false;
       }
     } else if (prevS > this.track.totalLengthM * 0.85 && this.sMeters < this.track.totalLengthM * 0.15) {
       // A jump ahead still pending at the line is the lap's
