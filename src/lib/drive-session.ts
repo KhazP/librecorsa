@@ -2750,6 +2750,8 @@ export class DriveSession {
     const radarFwd = new THREE.Vector3();
     const ghostQuat = new THREE.Quaternion();
     const ghostVel = new THREE.Vector3();
+    const carVelWorldScratch = new THREE.Vector3();
+    const telemetryPeersScratch: NonNullable<CarTelemetry["peers"]> = [];
 
     // Loading: once both GLBs have settled (loaded or given up), compile every shader before the
     // first frame is drawn, then let the loading screen offer to continue
@@ -3650,12 +3652,8 @@ export class DriveSession {
 
       // Update 25 Hz BroadcastChannel + Cubic Hermite/Slerp Multiplayer & AI Opponents
       const carVelocityWorld = physics.worldVelocity
-        ? physics.worldVelocity.clone()
-        : new THREE.Vector3(
-            physics.vyMs,
-            0,
-            physics.vxMs
-          ).applyQuaternion(physics.worldQuaternion);
+        ? carVelWorldScratch.copy(physics.worldVelocity)
+        : carVelWorldScratch.set(physics.vyMs, 0, physics.vxMs).applyQuaternion(physics.worldQuaternion);
       // An open race's fair-play rule: this car judges itself a hazard and says so with its state
       const guard = mpRace && mpFrame?.phase === "racing" ? mpRace.guard : null;
       guard?.self.update(dtSeconds, {
@@ -3939,12 +3937,15 @@ export class DriveSession {
         }
       }
 
-      physics.telemetry.peers = renderPeers.filter((p) => !p.ghost).map((p) => {
+      telemetryPeersScratch.length = 0;
+      for (let i = 0; i < renderPeers.length; i++) {
+        const p = renderPeers[i];
+        if (p.ghost) continue;
         let deltaS = p.trackS - physics.sMeters;
         if (deltaS > track.totalLengthM * 0.5) deltaS -= track.totalLengthM;
         if (deltaS < -track.totalLengthM * 0.5) deltaS += track.totalLengthM;
         const refSpeedMs = Math.max(25, physics.vxMs, p.speedKmh / 3.6);
-        return {
+        telemetryPeersScratch.push({
           peerId: p.peerId,
           driverCode: p.driverCode,
           teamColorHex: p.teamColorHex,
@@ -3952,8 +3953,9 @@ export class DriveSession {
           speedKmh: p.speedKmh,
           gapSeconds: Number((deltaS / refSpeedMs).toFixed(2)),
           isAiPeer: p.isAiPeer,
-        };
-      });
+        });
+      }
+      physics.telemetry.peers = telemetryPeersScratch;
 
       // While the keys steer, the mouse follows the steering, so it takes over (once the keys' ramp is at centre)
       // where the steering is instead of where the mouse was
