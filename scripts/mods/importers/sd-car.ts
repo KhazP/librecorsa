@@ -2,10 +2,10 @@
  * A Speed Dreams car as a mod package: its folder (`…/cars/models/<car>/`: the XML, the AC3D models, textures and
  * engine sample) converted into the game's car rig, liveries, picture, sound bank and a physics patch on the closest of
  * the game's vehicle models. `--fetch <car>` downloads one of the cars the official asset database lists, at the
- * revision scripts/cars/speed-dreams-cars.json pins, into scripts/mods/.cache/speed-dreams/.
+ * revision scripts/cars/speed-dreams-cars.json pins, into scripts/mods/.cache/speed-dreams/ (lib/sd-fetch.ts).
  *
  *   1. its parameters: the car's XML merged over its category's (scripts/lib/sd-params.ts), the category found beside
- *      the car as in the game's data folder, else in the cache, else fetched;
+ *      the car as in the game's data folder, else taken from the pinned shared data;
  *   2. its licence (scripts/cars/sd-licence.ts): a car whose readme, or the official list, doesn't clearly let it be
  *      shared is refused, unless `--personal` (then the package says it is for personal use only); a livery with an
  *      unclear readme of its own is left out;
@@ -29,7 +29,7 @@ import { driveSanity, type SanityResult } from "../lib/car-sanity";
 import { SdParams } from "../../lib/sd-params";
 import { sdAeroTargets, sdCarPhysics, PHYSICS_BASES, SD_KEYS_NOT_CARRIED, type SdCar, type SdPhysics } from "../../cars/sd-car-physics";
 import { findCarLicence, LICENCES, shareable, type CarLicence, type LicenceId } from "../../cars/sd-licence";
-import { fetchCategory, fetchedSource, fetchSdCar, fetchShared, readPins, SD_CACHE_DIR, type PinnedCar } from "../../cars/sd-fetch";
+import { fetchedSource, fetchSdCar, readPins, SD_CACHE_DIR, SD_DATA_DIR, sdCategoryFile, sdSharedFile, type PinnedCar } from "../lib/sd-fetch";
 import { modSimProfile, MOD_PHYSICS_FORMAT } from "../../../src/lib/mods/mod-physics";
 import { VEHICLE_MODELS } from "../../../src/lib/cars/vehicle-models";
 import type { CarSimProfile } from "../../../src/lib/sim/f12026-car/F12026CarSim";
@@ -44,9 +44,9 @@ const PERSONAL_NOTE = "For personal use only, not for sharing.";
 /** The game's car whose sound a class borrows when the car has no sample of its own */
 const SOUND_BY_CLASS: Record<ModCarClass, string> = { f1: "lc26", gt3: "amg-gt3", proto: "mtr-496r", classic: "porsche-934-rsr", road: "vw-scirocco-gtx" };
 
-/** The game's shared folders as a Speed Dreams install or a fetched cache lays them out beside `cars/models/<car>` */
+/** The game's shared folders: in the Speed Dreams install the car sits in (`cars/models/<car>`), then in the cache */
 function sharedDirs(carDir: string): { objects: string[]; textures: string[]; sound: string[] } {
-  const data = [join(carDir, "..", "..", "..", "data"), join(SD_CACHE_DIR, "data")];
+  const data = [join(carDir, "..", "..", "..", "data"), join(SD_DATA_DIR, "data")];
   return {
     objects: data.map((d) => join(d, "objects")).filter(existsSync),
     textures: data.map((d) => join(d, "textures")).filter(existsSync),
@@ -183,12 +183,13 @@ ${PACKAGE_USAGE}
     let params = own;
     let categoryFile = values.category && resolve(values.category);
     if (!categoryFile && category) {
-      categoryFile =
-        [join(carDir, "..", "..", "categories", `${category}.xml`), join(SD_CACHE_DIR, "cars", "categories", `${category}.xml`)].find((f) => existsSync(f)) ??
-        (await fetchCategory(category).catch((err: Error) => {
-          // Its defaults and limits are part of the car (a car may take its tyres' grip from them): no guessing
-          throw new Error(`${car}: its category ${category} is not beside it and could not be fetched (${err.message}); pass --category <file>`);
-        }));
+      const beside = join(carDir, "..", "..", "categories", `${category}.xml`);
+      try {
+        categoryFile = existsSync(beside) ? beside : sdCategoryFile(category);
+      } catch (err) {
+        // Its defaults and limits are part of the car (a car may take its tyres' grip from them): no guessing
+        throw new Error(`${car}: its category ${category} is not beside it and could not be fetched (${(err as Error).message}); pass --category <file>`);
+      }
     }
     if (categoryFile && existsSync(categoryFile)) params = own.mergeOver(SdParams.read(categoryFile));
     else if (category) throw new Error(`${car}: no category file ${categoryFile}`);
@@ -261,7 +262,7 @@ ${PACKAGE_USAGE}
     const G = "Graphic Objects";
     for (const prefix of new Set([params.str(G, "3d front wheel"), params.str(G, "3d rear wheel"), params.str(G, "3d wheel") ?? "wheel"].filter(Boolean) as string[])) {
       const f = `${prefix}0.acc`;
-      if (!existsSync(join(carDir, f)) && !findIn(shared.objects, f)) await fetchShared(`objects/${f}`);
+      if (!existsSync(join(carDir, f)) && !findIn(shared.objects, f)) sdSharedFile("objects", f);
     }
     const glb = join(work, `${pkgCarId}.glb`);
     const skinsOut = join(work, "skins");
@@ -282,7 +283,13 @@ ${PACKAGE_USAGE}
 
     const sample = params.str("Sound", "engine sample") ?? "engine-1.wav";
     let samplePath = existsSync(join(carDir, sample)) ? join(carDir, sample) : findIn(shared.sound, sample);
-    if (!samplePath) samplePath = await fetchShared(`sound/${sample}`).catch(() => undefined);
+    if (!samplePath) {
+      try {
+        samplePath = sdSharedFile("sound", sample) ?? undefined;
+      } catch (err) {
+        console.log(`      its engine sample ${sample}: ${(err as Error).message}`);
+      }
+    }
     let sound: { dir: string; limiterRpm: number } | { car: string };
     let soundNote: string;
     const rpmScale = params.num("Sound", "rpm scale") ?? 1;

@@ -14,7 +14,7 @@ import { crc32, deflateSync } from "node:zlib";
 import { SdParams, sdUnitToSI } from "../lib/sd-params";
 import { chooseBase, PHYSICS_BASES, readSdCar, sdAeroTargets, sdCarPhysics, sdTyreCurve, sdTyreMu } from "../cars/sd-car-physics";
 import { findCarLicence, readLicenceEntry, readLicenceText, shareable } from "../cars/sd-licence";
-import { readPins, SD_CACHE_DIR } from "../cars/sd-fetch";
+import { readPins, SD_CACHE_DIR, SD_DATA_DIR } from "../mods/lib/sd-fetch";
 import { fitAero, withAero } from "../mods/lib/aero-fit";
 import { driveSanity } from "../mods/lib/car-sanity";
 import { modSimProfile, MOD_PHYSICS_FORMAT } from "../../src/lib/mods/mod-physics";
@@ -381,12 +381,12 @@ else {
 // ---------------------------------------------------------------------------------------------------------------------
 // Cars fetched into the cache
 // ---------------------------------------------------------------------------------------------------------------------
-const models = join(SD_CACHE_DIR, "cars", "models");
+const models = join(SD_CACHE_DIR, "cars");
 const cached = existsSync(models) ? readdirSync(models).filter((c) => existsSync(join(models, c, `${c}.xml`))) : [];
 if (!cached.length) console.log("SKIP  fetched cars: none in scripts/mods/.cache/speed-dreams (npm run mod -- import sd-car --fetch <car>)");
 for (const c of cached) {
   const own = SdParams.read(join(models, c, `${c}.xml`));
-  const catFile = join(SD_CACHE_DIR, "cars", "categories", `${own.str("Car", "category")}.xml`);
+  const catFile = join(SD_DATA_DIR, "cars", "categories", `${own.str("Car", "category")}.xml`);
   const p = existsSync(catFile) ? own.mergeOver(SdParams.read(catFile)) : own;
   const ph = sdCarPhysics(p);
   const ok = profileOf(ph.base, ph.patch);

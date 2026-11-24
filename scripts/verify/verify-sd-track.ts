@@ -20,9 +20,10 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { circuitLicence, SD_CACHE, type CircuitSource } from "../mods/importers/sd-track";
+import { circuitLicence, type CircuitSource } from "../mods/importers/sd-track";
 import { copyrightHolders, recogniseLicence } from "../mods/lib/licences";
 import { REPO_ROOT } from "../mods/lib/toolchain";
+import { readSdSource, SD_CACHE_DIR, SD_DATA_DIR } from "../mods/lib/sd-fetch";
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = ""): void {
@@ -306,15 +307,15 @@ if (!ran) {
   }
 
   // --- Speed Dreams' own circuits, when the cache has them ----------------------------------------------------------
-  const circuitsDir = join(SD_CACHE, "circuits");
-  const cached = existsSync(circuitsDir) ? readdirSync(circuitsDir).filter((d) => existsSync(join(circuitsDir, d, ".source.json"))) : [];
-  const baseDir = join(SD_CACHE, "speed-dreams-data", "data");
+  const circuitsDir = join(SD_CACHE_DIR, "circuits");
+  const cached = existsSync(circuitsDir) ? readdirSync(circuitsDir).filter((d) => readSdSource(join(circuitsDir, d))) : [];
+  const baseDir = SD_DATA_DIR;
   if (!cached.length) console.log("SKIP  Speed Dreams' own circuits: none in scripts/mods/.cache/speed-dreams (npm run mod -- import sd-track --fetch <circuit>)");
   for (const d of cached) {
     const dir = join(circuitsDir, d);
-    const source = JSON.parse(readFileSync(join(dir, ".source.json"), "utf8")) as CircuitSource;
+    const source = readSdSource<CircuitSource>(dir);
     const out = join(tmp, d);
-    const r = python(["scripts/tracks/extract_sd_track.py", dir, "--out-glb", `${out}.glb`, "--out-settings", `${out}.json`, "--geometry-json", `${out}.geom.json`, ...(existsSync(baseDir) ? ["--sd-data", baseDir] : [])])!;
+    const r = python(["scripts/tracks/extract_sd_track.py", dir, "--out-glb", `${out}.glb`, "--out-settings", `${out}.json`, "--geometry-json", `${out}.geom.json`, ...(existsSync(join(baseDir, "data", "tracks", "surfaces.xml")) ? ["--sd-data", baseDir] : [])])!;
     check(`${d}: converts`, r.ok, r.ok ? "" : r.out.slice(-800));
     if (!r.ok) continue;
     const g = JSON.parse(readFileSync(`${out}.geom.json`, "utf8")) as { lengthM: number; closureM: number; acRoadOffsetM?: { median: number; p95: number }; scenery?: { triangles: number } };

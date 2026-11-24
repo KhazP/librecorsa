@@ -1,29 +1,20 @@
 /**
  * Re-pins the Speed Dreams cars the sd-car importer fetches (speed-dreams-cars.json): every car in the official asset
  * database, each at the head of its repository on forge.a-lec.org today (or, without one, the database's zip and
- * sha256), and the speed-dreams-data and speed-dreams-code heads. Run it to move the pins forward, then check a car or
- * two still imports.
+ * sha256), and the speed-dreams-data and speed-dreams-code heads. speed-dreams-data's pin is the one both Speed Dreams
+ * importers read (scripts/mods/lib/sd-fetch.ts): the circuits' default surfaces and textures and the cars' categories.
+ * Run it to move the pins forward, then check a circuit and a car or two still import.
  *
  *   node --import tsx scripts/cars/speed-dreams-pins.ts
  */
 import { writeFileSync } from "node:fs";
-import { PINS_FILE, readPins, type PinnedCar, type Pins } from "./sd-fetch";
+import { download, PINS_FILE, readPins, type PinnedCar, type Pins } from "../mods/lib/sd-fetch";
 
 const FORGE_API = "https://forge.a-lec.org/api/v1";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** JSON from the forge's API, waiting while it says it is busy */
-async function getJson<T>(url: string): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
-    const res = await fetch(url, { headers: { "User-Agent": "librecorsa-mod-tool" } });
-    if (res.ok) return (await res.json()) as T;
-    if (res.status === 429 && attempt < 6) {
-      await sleep(20_000 * (attempt + 1));
-      continue;
-    }
-    throw new Error(`${url}: HTTP ${res.status}`);
-  }
-}
+/** JSON from the forge's API (download() waits while it says it is busy) */
+const getJson = async <T>(url: string): Promise<T> => JSON.parse(new TextDecoder().decode(await download(url, "the forge's API"))) as T;
 
 interface Asset {
   name: string;
