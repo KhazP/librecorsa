@@ -141,7 +141,14 @@ func testToolchain(t *testing.T, dir string) *toolchain {
 			t.Fatal(err)
 		}
 	}
+	pinProgram(&tc.pins.UV, exe)
+	pinProgram(&tc.pins.Node, exe)
 	return tc
+}
+
+// pinProgram pins b as p's program
+func pinProgram(p *pinnedFile, b []byte) {
+	p.ProgramSHA256, p.ProgramSize = sha(b), int64(len(b))
 }
 
 // call makes an API request as the game's page makes it, with changes: "-Header" leaves a header out
@@ -485,6 +492,8 @@ func TestToolchainJob(t *testing.T) {
 		UV:   pinnedFile{Name: "uv", Version: "1", URL: srv.URL + "/uv.tar.gz", SHA256: sha(uvArchive), Size: int64(len(uvArchive)), Format: "tar.gz", Member: "uv-test/uv", Program: "uv"},
 		Node: pinnedFile{Name: "node", Version: "1", URL: srv.URL + "/bad.tar.gz", SHA256: sha(nodeArchive), Size: int64(len(nodeArchive)), Format: "tar.gz", Member: "node-test/bin/node", Program: "bin/node"},
 	}
+	pinProgram(&tc.pins.UV, exe)
+	pinProgram(&tc.pins.Node, []byte("node"))
 	js.tc = tc
 
 	// Node's download doesn't match its pin: the setup stops there, and nothing of it is kept
@@ -495,11 +504,11 @@ func TestToolchainJob(t *testing.T) {
 	if job.State != jobFailed || !strings.Contains(job.Error, "node") {
 		t.Fatalf("%+v", job)
 	}
-	if isFile(tc.nodePath()) || tc.ready(js.conv) {
+	if tc.checkProgram(tc.pins.Node, false) == nil || tc.ready(js.conv) {
 		t.Fatal("a download that didn't verify was installed")
 	}
-	if !isFile(tc.uvPath()) {
-		t.Error("uv, which verified, wasn't kept")
+	if err := tc.checkProgram(tc.pins.UV, false); err != nil {
+		t.Errorf("uv, which verified, wasn't kept: %v", err)
 	}
 
 	tc.pins.Node.URL = srv.URL + "/node.tar.gz"

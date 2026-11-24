@@ -17,12 +17,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
 // The converter's toolchain: uv (which fetches Python and the converters' packages) and Node. Nothing is downloaded
 // until the player asks; then each comes from a pinned HTTPS URL and is checked against the SHA-256 pinned here before
-// anything is extracted or run. Only the program itself is taken out of each archive.
+// anything is extracted or run. Only the program itself is taken out of each archive, and it too has a SHA-256 pinned
+// here: it is checked again before each run, so a program swapped or linked in its place afterwards is never run.
 
 // uvVersion and nodeVersion are the pinned releases (https://github.com/astral-sh/uv/releases, https://nodejs.org/dist)
 const (
@@ -46,6 +48,9 @@ type pinnedFile struct {
 	// Member is the program's path in the archive; it is extracted as Program into the component's folder
 	Member  string `json:"-"`
 	Program string `json:"-"`
+	// ProgramSHA256 and ProgramSize are the extracted program's own, checked before every run
+	ProgramSHA256 string `json:"-"`
+	ProgramSize   int64  `json:"-"`
 }
 
 // platformPins are the downloads for each platform a release is built for, with what uv fetches after them
@@ -57,33 +62,43 @@ type platformPins struct {
 
 const mb = 1000 * 1000
 
+// Each pin is the archive's SHA-256 and size, then the program's inside it (`tar -xzOf <archive> <member> | shasum -a
+// 256`, `unzip -p` for a zip)
 var toolchainPins = map[string]platformPins{
 	"darwin/arm64": {
-		UV:           uvPin("aarch64-apple-darwin", "tar.gz", "5aeca67f2283f75235de40d0bd9c0a5bbc5fce23b6d48b3bf9fa1b2db08382ca", 14554974),
-		Node:         nodePin("darwin-arm64", "tar.gz", "aec2514ea1ceb2ba52455e9ec65986f6749a06dd759e5db2a72e6889668c9735", 58340590),
+		UV: uvPin("aarch64-apple-darwin", "tar.gz", "5aeca67f2283f75235de40d0bd9c0a5bbc5fce23b6d48b3bf9fa1b2db08382ca", 14554974,
+			"0e17c316d23b33b4e840669f516f5cb7f5c1faa816ebd3824052ab50082ecefb", 28309040),
+		Node: nodePin("darwin-arm64", "tar.gz", "aec2514ea1ceb2ba52455e9ec65986f6749a06dd759e5db2a72e6889668c9735", 58340590,
+			"266dec4dce3a6cdcf5cdc38722a00cf5ae6a12cc51068d2a227655bbb75751ec", 147366176),
 		PythonApprox: 135 * mb,
 	},
 	"darwin/amd64": {
-		UV:           uvPin("x86_64-apple-darwin", "tar.gz", "617a3211261b0fc739562f0071aa34e9739797c510208ede8e2977c30903d041", 17362924),
-		Node:         nodePin("darwin-x64", "tar.gz", "82bb96078a24ca50b9c9a38f2379e6be6d87171fcd400fc14c8934b3bce96e2f", 59799324),
+		UV: uvPin("x86_64-apple-darwin", "tar.gz", "617a3211261b0fc739562f0071aa34e9739797c510208ede8e2977c30903d041", 17362924,
+			"9d275208c058354f9b300ea46a499c7a29de3249ae839503cadff2c01c159d69", 38942464),
+		Node: nodePin("darwin-x64", "tar.gz", "82bb96078a24ca50b9c9a38f2379e6be6d87171fcd400fc14c8934b3bce96e2f", 59799324,
+			"e85cb6dd5f916a2aa0d05a5874dcf7c69b1ebd7a5347d7ff912bb4d9339f5e23", 150107376),
 		PythonApprox: 127 * mb,
 	},
 	"linux/amd64": {
-		UV:           uvPin("x86_64-unknown-linux-gnu", "tar.gz", "a7fbaff2b9a271d85c1bdb540941090fd1ce011797b4abeb48e4dcd39c2471d5", 17068176),
-		Node:         nodePin("linux-x64", "tar.gz", "518674de2b621728a5e4486f5fb3b7d2900bb3cc4aa97969edaa463db99f9778", 62904977),
+		UV: uvPin("x86_64-unknown-linux-gnu", "tar.gz", "a7fbaff2b9a271d85c1bdb540941090fd1ce011797b4abeb48e4dcd39c2471d5", 17068176,
+			"b73acdf73b96c3ac9e56d2fa933427b3ee6a901e3cce6ba1e3ecb3f91ca0d86a", 38409000),
+		Node: nodePin("linux-x64", "tar.gz", "518674de2b621728a5e4486f5fb3b7d2900bb3cc4aa97969edaa463db99f9778", 62904977,
+			"d931c649850ffa7155b8ceffb400dc916ef325866e509cc52ae36e33e8fbb9a9", 150348872),
 		PythonApprox: 162 * mb,
 	},
 	"windows/amd64": {
-		UV:           uvPin("x86_64-pc-windows-msvc", "zip", "edd61f7f5728a56cc62455386661860bdfc7bab65872f39b0c25bdcc1d8e1beb", 15567875),
-		Node:         nodePin("win-x64", "zip", "e2edda75bfb089654705cf65a13b58933bfd5f57148e8ebda916f58a2474f1f7", 41166246),
+		UV: uvPin("x86_64-pc-windows-msvc", "zip", "edd61f7f5728a56cc62455386661860bdfc7bab65872f39b0c25bdcc1d8e1beb", 15567875,
+			"7e6349bc24cfc7249f892c41298e4371826a19008c3cbcfe13eacd08ac398470", 32581424),
+		Node: nodePin("win-x64", "zip", "e2edda75bfb089654705cf65a13b58933bfd5f57148e8ebda916f58a2474f1f7", 41166246,
+			"f5109dc868ec38703ad8f305e0aceece717cb60d4889873f434017af4e96cccb", 100089160),
 		PythonApprox: 138 * mb,
 	},
 }
 
-func uvPin(triple, format, sha string, size int64) pinnedFile {
+func uvPin(triple, format, sha string, size int64, programSHA string, programSize int64) pinnedFile {
 	name := "uv-" + triple + "." + format
 	p := pinnedFile{
-		Name: "uv", Version: uvVersion, Format: format, SHA256: sha, Size: size,
+		Name: "uv", Version: uvVersion, Format: format, SHA256: sha, Size: size, ProgramSHA256: programSHA, ProgramSize: programSize,
 		URL: "https://github.com/astral-sh/uv/releases/download/" + uvVersion + "/" + name,
 	}
 	if format == "zip" {
@@ -95,10 +110,10 @@ func uvPin(triple, format, sha string, size int64) pinnedFile {
 	return p
 }
 
-func nodePin(platform, format, sha string, size int64) pinnedFile {
+func nodePin(platform, format, sha string, size int64, programSHA string, programSize int64) pinnedFile {
 	dir := "node-" + nodeVersion + "-" + platform
 	p := pinnedFile{
-		Name: "node", Version: nodeVersion, Format: format, SHA256: sha, Size: size,
+		Name: "node", Version: nodeVersion, Format: format, SHA256: sha, Size: size, ProgramSHA256: programSHA, ProgramSize: programSize,
 		URL: "https://nodejs.org/dist/" + nodeVersion + "/" + dir + "." + format,
 	}
 	if format == "zip" {
@@ -117,6 +132,10 @@ type toolchain struct {
 	ok   bool // whether this platform has pins
 	// client fetches the downloads; only HTTPS is followed, redirects included
 	client *http.Client
+
+	// checked remembers each program last found to be the pinned one, for the panel's status (a run checks afresh)
+	checkedMu sync.Mutex
+	checked   map[string]os.FileInfo
 }
 
 func newToolchain(dir, goos, goarch string) *toolchain {
@@ -134,7 +153,7 @@ func newToolchain(dir, goos, goarch string) *toolchain {
 			return nil
 		},
 	}
-	return &toolchain{dir: dir, pins: pins, ok: ok, client: client}
+	return &toolchain{dir: dir, pins: pins, ok: ok, client: client, checked: map[string]os.FileInfo{}}
 }
 
 // defaultToolchainDir is the per-user folder the toolchain is downloaded into, beside the browser profile
@@ -170,8 +189,8 @@ func (t *toolchain) wanted(conv *converterInfo) toolchainState {
 	return toolchainState{UV: uvVersion, Node: nodeVersion, Python: conv.Python.Version, Packages: conv.requirementsHash}
 }
 
-// ready reports whether the toolchain is set up for this converter: both programs there, and Python and its packages
-// fetched for the converter's requirements
+// ready reports whether the toolchain is set up for this converter: both programs there and the pinned ones, and
+// Python and its packages fetched for the converter's requirements
 func (t *toolchain) ready(conv *converterInfo) bool {
 	if !t.ok || conv == nil {
 		return false
@@ -181,12 +200,79 @@ func (t *toolchain) ready(conv *converterInfo) bool {
 	if err != nil || json.Unmarshal(b, &have) != nil || have != t.wanted(conv) {
 		return false
 	}
-	return isFile(t.uvPath()) && isFile(t.nodePath())
+	return t.checkProgram(t.pins.UV, true) == nil && t.checkProgram(t.pins.Node, true) == nil
 }
 
-func isFile(p string) bool {
-	info, err := os.Stat(p)
-	return err == nil && info.Mode().IsRegular()
+// errProgramChanged is a downloaded program that isn't the pinned one any more (changed, replaced or linked)
+var errProgramChanged = errors.New("is not the program that was downloaded: download the converter's tools again")
+
+// checkProgram makes sure a downloaded program is the pinned one: a regular file (no link at it or on the way to it,
+// looked at through os.Root) with the pinned size and SHA-256. With cached, a file already found to be the pinned one
+// and unchanged since (the same file, size and time) isn't read again: the panel's status asks every second while a
+// job runs. A run always checks afresh (verifyPrograms).
+func (t *toolchain) checkProgram(p pinnedFile, cached bool) error {
+	want, err := hex.DecodeString(p.ProgramSHA256)
+	if err != nil || len(want) != sha256.Size || p.ProgramSize <= 0 || !isSafeArchivePath(p.Program) {
+		return fmt.Errorf("%s: no pinned SHA-256 for the program", p.Name)
+	}
+	dir := t.componentDir(p)
+	if info, err := os.Lstat(dir); err != nil || !info.IsDir() {
+		return fmt.Errorf("%s %w", p.Name, errProgramChanged)
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	// Each folder on the way, and the program itself, as they are: a link anywhere is refused, not followed
+	segs := strings.Split(p.Program, "/")
+	for i := range segs {
+		info, err := root.Lstat(strings.Join(segs[:i+1], "/"))
+		last := i == len(segs)-1
+		if err != nil || (last && !info.Mode().IsRegular()) || (!last && !info.IsDir()) {
+			return fmt.Errorf("%s %w", p.Name, errProgramChanged)
+		}
+	}
+	f, err := root.Open(p.Program)
+	if err != nil {
+		return fmt.Errorf("%s %w", p.Name, errProgramChanged)
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() != p.ProgramSize {
+		return fmt.Errorf("%s %w", p.Name, errProgramChanged)
+	}
+	key := filepath.Join(dir, filepath.FromSlash(p.Program))
+	if cached {
+		t.checkedMu.Lock()
+		prev := t.checked[key]
+		t.checkedMu.Unlock()
+		if prev != nil && os.SameFile(prev, info) && prev.Size() == info.Size() && prev.ModTime().Equal(info.ModTime()) {
+			return nil
+		}
+	}
+	h := sha256.New()
+	if _, err := io.Copy(h, io.LimitReader(f, p.ProgramSize+1)); err != nil {
+		return fmt.Errorf("%s: %w", p.Name, err)
+	}
+	t.checkedMu.Lock()
+	defer t.checkedMu.Unlock()
+	if !equalBytes(h.Sum(nil), want) {
+		delete(t.checked, key)
+		return fmt.Errorf("%s %w", p.Name, errProgramChanged)
+	}
+	t.checked[key] = info
+	return nil
+}
+
+// verifyPrograms checks uv and Node afresh, before the converter's programs are run
+func (t *toolchain) verifyPrograms() error {
+	for _, p := range []pinnedFile{t.pins.UV, t.pins.Node} {
+		if err := t.checkProgram(p, false); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // toolchainInfo is what the Mods panel shows before the first download
@@ -209,8 +295,8 @@ func (t *toolchain) info(conv *converterInfo) toolchainInfo {
 	}
 	var downloads []pinnedFile
 	for _, p := range []pinnedFile{t.pins.UV, t.pins.Node} {
-		// One already there (an earlier setup that stopped after it) isn't downloaded again
-		if !isFile(filepath.Join(t.componentDir(p), filepath.FromSlash(p.Program))) {
+		// One already there and still the pinned one (an earlier setup that stopped after it) isn't downloaded again
+		if t.checkProgram(p, true) != nil {
 			downloads = append(downloads, p)
 		}
 	}
@@ -250,7 +336,7 @@ func (t *toolchain) fetchVerified(ctx context.Context, p pinnedFile, dir string,
 	if res.ContentLength > 0 && p.Size > 0 && res.ContentLength != p.Size {
 		return "", fmt.Errorf("%s: %d bytes offered, %d pinned", p.Name, res.ContentLength, p.Size)
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	f, err := os.CreateTemp(dir, p.Name+"-*.download")
@@ -330,7 +416,7 @@ func extractProgram(archive string, p pinnedFile, destDir string) error {
 	if !isSafeArchivePath(p.Member) || !isSafeArchivePath(p.Program) {
 		return fmt.Errorf("%s: unsafe pinned path", p.Name)
 	}
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
+	if err := os.MkdirAll(destDir, 0o700); err != nil {
 		return err
 	}
 	root, err := os.OpenRoot(destDir)
@@ -339,7 +425,7 @@ func extractProgram(archive string, p pinnedFile, destDir string) error {
 	}
 	defer root.Close()
 	if dir := path.Dir(p.Program); dir != "." {
-		if err := root.MkdirAll(dir, 0o755); err != nil {
+		if err := root.MkdirAll(dir, 0o700); err != nil {
 			return err
 		}
 	}
@@ -424,7 +510,7 @@ func extractProgram(archive string, p pinnedFile, destDir string) error {
 	if !found {
 		return fmt.Errorf("%s: %s is not in the archive", p.Name, p.Member)
 	}
-	if err := root.Chmod(tmp, 0o755); err != nil {
+	if err := root.Chmod(tmp, 0o700); err != nil {
 		return err
 	}
 	if err := root.Rename(tmp, p.Program); err != nil {
@@ -451,18 +537,42 @@ func isSafeArchivePath(name string) bool {
 	return true
 }
 
-// install downloads, verifies and extracts one pinned program, unless it is already there
+// install downloads, verifies and extracts one pinned program, unless the pinned program is already there. One that
+// isn't (changed, replaced, linked) goes with its folder, and is downloaded again.
 func (t *toolchain) install(ctx context.Context, p pinnedFile, progress func(done int64)) error {
-	dest := t.componentDir(p)
-	if isFile(filepath.Join(dest, filepath.FromSlash(p.Program))) {
+	if err := t.makeDir(); err != nil {
+		return err
+	}
+	if t.checkProgram(p, false) == nil {
 		return nil
+	}
+	dest := t.componentDir(p)
+	// RemoveAll takes a link away, never what it leads to
+	if err := os.RemoveAll(dest); err != nil {
+		return err
 	}
 	archive, err := t.fetchVerified(ctx, p, filepath.Join(t.dir, "downloads"), progress)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(archive)
-	return extractProgram(archive, p, dest)
+	if err := extractProgram(archive, p, dest); err != nil {
+		return err
+	}
+	return t.checkProgram(p, false)
+}
+
+// makeDir creates the toolchain folder for this user alone: what is in it is run, so no one else may write there
+// (on Windows the folder is in the user's own profile, which other users can't write to)
+func (t *toolchain) makeDir() error {
+	if err := os.MkdirAll(t.dir, 0o700); err != nil {
+		return err
+	}
+	if runtime.GOOS != "windows" {
+		// A folder an earlier version made 0755
+		return os.Chmod(t.dir, 0o700)
+	}
+	return nil
 }
 
 // uvEnv is the environment uv runs in: its cache, Python installs and settings in the toolchain folder, no config

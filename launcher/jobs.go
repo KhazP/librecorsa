@@ -203,14 +203,14 @@ func (js *jobs) startToolchain() (*jobStatus, error) {
 		env := js.programEnv()
 		python := js.conv.Python.Version
 		// Only into the toolchain folder: no `python3.14` on the player's PATH, nothing in the Windows registry
-		if err := runProgram(ctx, j.log, js.conv.Dir, env, uv, "python", "install", "--no-bin", "--no-registry", python); err != nil {
+		if err := js.runTool(ctx, j.log, env, uv, "python", "install", "--no-bin", "--no-registry", python); err != nil {
 			return fmt.Errorf("uv python install %s: %w", python, err)
 		}
 		// The converters' packages, fetched into uv's cache the way runPython (scripts/mods/lib/toolchain.ts) asks for
 		// them, so the first conversion finds them there
 		for _, req := range js.conv.Python.Requirements {
 			argv := []string{uv, "run", "--python", python, "--no-project", "--with-requirements", req, "python", "-c", "pass"}
-			if err := runProgram(ctx, j.log, js.conv.Dir, env, argv...); err != nil {
+			if err := js.runTool(ctx, j.log, env, argv...); err != nil {
 				return fmt.Errorf("the packages in %s: %w", req, err)
 			}
 		}
@@ -266,7 +266,7 @@ func (js *jobs) startConvert(name string) (*jobStatus, error) {
 		before := snapshotPackages(js.modsDir)
 		modTool := filepath.Join(js.conv.Dir, filepath.FromSlash(js.conv.ModTool))
 		env := js.programEnv()
-		runErr := runProgram(ctx, j.log, js.conv.Dir, env, js.tc.nodePath(), modTool, "import", entry.Kind, source, "--out", js.modsDir)
+		runErr := js.runTool(ctx, j.log, env, js.tc.nodePath(), modTool, "import", entry.Kind, source, "--out", js.modsDir)
 		pkgs := changedPackages(js.modsDir, before)
 		lines, _ := j.log.tail(j.log.max)
 		notes := licenceLines(lines)
@@ -276,7 +276,7 @@ func (js *jobs) startConvert(name string) (*jobStatus, error) {
 			js.update(j, func(s *jobStatus) { s.Step = "check" })
 			for _, p := range pkgs {
 				check := newRingLog(500)
-				err := runProgram(ctx, check, js.conv.Dir, env, js.tc.nodePath(), modTool, "check", filepath.Join(js.modsDir, p.ID))
+				err := js.runTool(ctx, check, env, js.tc.nodePath(), modTool, "check", filepath.Join(js.modsDir, p.ID))
 				out, _ := check.tail(check.max)
 				for _, l := range out {
 					j.log.add(l)
@@ -305,6 +305,15 @@ func (js *jobs) startConvert(name string) (*jobStatus, error) {
 		}
 		return nil
 	})
+}
+
+// runTool runs one of the toolchain's programs (or a program with them on PATH), once uv and Node are found to be
+// the pinned ones still
+func (js *jobs) runTool(ctx context.Context, log *ringLog, env []string, argv ...string) error {
+	if err := js.tc.verifyPrograms(); err != nil {
+		return err
+	}
+	return runProgram(ctx, log, js.conv.Dir, env, argv...)
 }
 
 // programEnv is the environment the converter's programs get: not the launcher's, so nothing of the player's
