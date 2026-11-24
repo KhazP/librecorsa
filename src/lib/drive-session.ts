@@ -91,7 +91,7 @@ import { MIN_QUALIFYING_LAP_MS } from "@/lib/net/wire";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { isTouchDevice, touchInput } from "@/lib/input/touch-input";
 import { ScreenWakeLock } from "@/lib/screen-wake-lock";
-import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
+import { cockpitRainVolumeFor, createRainFx, RAIN_VISOR_LAYER, type CockpitRainVolume } from "@/lib/render/rain-fx";
 import { DETAIL_LAYER, DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { HELD_KEYS, heldActionsOf, isHeldKeyAction, PhysicalKeys, type HeldKeyAction } from "@/lib/input/held-keys";
@@ -1577,14 +1577,16 @@ export class DriveSession {
     const initialHeadlightConditions = canSessionGetDark(getTrackEnv().weather.conditions)
       ? getTrackEnv().weather.conditions
       : settings.conditions;
+    let headlightMode: HeadlightMode = "auto";
     // (a car without headlights, an F1 car, has no beam to build)
     const desiredHeadlightSpots = () =>
-      carHasHeadlights(carRigCar) ? headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality) : 0;
+      carHasHeadlights(carRigCar)
+        ? headlightSpotCountFor(getTrackEnv().weather.conditions, settings.graphics.quality, headlightMode === "on")
+        : 0;
     let carHeadlights = new CarHeadlights(carIdNow, {
       spotCount: headlightSpotCountFor(initialHeadlightConditions, settings.graphics.quality),
     });
     carHeadlights.attach(carRig.chassisGroup);
-    let headlightMode: HeadlightMode = "auto";
     const syncHeadlightSpots = () => {
       const wanted = desiredHeadlightSpots();
       if (wanted === carHeadlights.spotCount) return;
@@ -1721,6 +1723,7 @@ export class DriveSession {
       applyGraphicsQuality(renderer, postFx, env, plan);
       venueNight?.setQuality(g.quality);
       visualFx.setGraphicsQuality(g.quality);
+      rainFx.setQuality(g.quality, plan.renderScale);
       reflectionProbe.setQuality(plan.reflections && g.quality !== "low" ? g.quality : "off");
       postFx.setSize(container.clientWidth, container.clientHeight);
       const lowered = level > 0 ? loweredSummary(g.quality, g.renderScale, level, opts) : null;
@@ -2259,6 +2262,7 @@ export class DriveSession {
         case "headlights": {
           const onNow = shouldHeadlightsBeOn(headlightMode, skyConditions.elevationDeg, getTrackEnv().weather.rainIntensity);
           headlightMode = onNow ? "off" : "on";
+          syncHeadlightSpots();
           lastWeatherHudMs = -Infinity;
           break;
         }
@@ -2748,6 +2752,15 @@ export class DriveSession {
     const rainCamPos = new THREE.Vector3();
     const rainCamPrev = new THREE.Vector3();
     const rainCamVel = new THREE.Vector3();
+    let rainCockpitCarId: CarId = carIdNow;
+    let rainCockpitChassis: THREE.Object3D = carRig.chassisGroup;
+    let rainCockpitEye: THREE.Vector3 | null = null;
+    let cachedCockpitCarId: CarId | null = null;
+    let cachedCockpitEyeX = NaN;
+    let cachedCockpitEyeY = NaN;
+    let cachedCockpitEyeZ = NaN;
+    let cachedCockpitHasEye = false;
+    let cachedCockpitVol: CockpitRainVolume | null = null;
     const soloCars: SimulatorCar[] = [];
     const remoteWake: WakeEmitterCar[] = [];
     /** Other players on this circuit last frame (a room's lobby included): the mirror's auto mode shows for them */
@@ -4220,6 +4233,9 @@ export class DriveSession {
             camCarVel = replayPlayerVel;
           }
         }
+        rainCockpitCarId = camCarId;
+        rainCockpitChassis = camChassis;
+        rainCockpitEye = camAnchors?.cockpit.pos ?? null;
         if (!podium.placeCamera(camera)) cameraRig.update({
           dt: drawDtS,
           nowMs,
@@ -4326,7 +4342,10 @@ export class DriveSession {
         skyConditions.windVxMs = wx.windVxMs;
         skyConditions.windVzMs = wx.windVzMs;
         if (!cloudConditions || !sameConditions(cloudConditions, wx.conditions)) {
-          if (cloudConditions && cloudConditions.timeOfDay !== wx.conditions.timeOfDay) {
+          if (
+            cloudConditions &&
+            (cloudConditions.timeOfDay !== wx.conditions.timeOfDay || cloudConditions.weather !== wx.conditions.weather)
+          ) {
             headlightMode = "auto";
             lastWeatherHudMs = -Infinity;
           }
@@ -4340,7 +4359,9 @@ export class DriveSession {
           env.setCloudSeed(fixedCloudSeed ?? Math.floor(Math.random() * 2 ** 31));
         }
         env.setConditions(skyConditions);
-        venueNight?.setNight(nightShareOf(skyConditions.elevationDeg));
+        const nightShare = nightShareOf(skyConditions.elevationDeg);
+        venueNight?.setNight(nightShare);
+        postFx.setNightShare(nightShare);
         setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity);
         // The water under the player's own wheels, not the lap's mean line water
         // (in a race the worker runs, its road under the car)
@@ -4395,6 +4416,30 @@ export class DriveSession {
         visualFx.setHeadlights(headlights.opponents, camera);
         if (opponentBeams) opponentBeams.update(beamScratch, visualFx.collectBeams(beamScratch), rainCamPos);
         visualFx.setLightLevel(skyLight);
+        const hasEye = rainCockpitEye !== null;
+        if (
+          rainCockpitCarId !== cachedCockpitCarId ||
+          hasEye !== cachedCockpitHasEye ||
+          (hasEye &&
+            (rainCockpitEye!.x !== cachedCockpitEyeX ||
+              rainCockpitEye!.y !== cachedCockpitEyeY ||
+              rainCockpitEye!.z !== cachedCockpitEyeZ))
+        ) {
+          cachedCockpitCarId = rainCockpitCarId;
+          cachedCockpitHasEye = hasEye;
+          if (hasEye) {
+            cachedCockpitEyeX = rainCockpitEye!.x;
+            cachedCockpitEyeY = rainCockpitEye!.y;
+            cachedCockpitEyeZ = rainCockpitEye!.z;
+          }
+          cachedCockpitVol = cockpitRainVolumeFor(rainCockpitCarId, rainCockpitEye);
+        }
+        if (cachedCockpitVol) {
+          rainCockpitChassis.updateWorldMatrix(true, false);
+          rainFx.setCockpitOcclusion(cachedCockpitVol, rainCockpitChassis.matrixWorld);
+        } else {
+          rainFx.setCockpitOcclusion(null, null);
+        }
         rainFx.update(
           drawDtS,
           wx.rainIntensity,
