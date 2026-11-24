@@ -216,6 +216,7 @@ async function main(): Promise<void> {
       ['a turbo classic racer', { tags: ['vintage'], year: 1976, turbo: true }, 'porsche-934-rsr'],
       ['an atmospheric classic racer', { tags: ['classic', 'group 4'], year: 1979 }, 'bmw-m1-procar'],
       ['a front-driven classic racer', { tags: ['vintage'], year: 1985, traction: 'FWD' }, 'vw-scirocco-gtx'],
+      ['a front-driven modern touring car', { tags: ['tcr', 'touring'], year: 2020, traction: 'FWD', peakKw: 250 }, 'vw-scirocco-gtx'],
       ['a small road car', { className: 'street', tags: ['hatchback'], peakKw: 80, massKg: 1050 }, 'liana'],
       ['a quicker road car', { className: 'street', tags: [], peakKw: 150, massKg: 1150 }, 'vw-scirocco-gtx'],
       ['a modern race car making real downforce', { year: 2015, massKg: 900, peakKw: 300, clA: 2.5 }, 'mtr-496r'],
