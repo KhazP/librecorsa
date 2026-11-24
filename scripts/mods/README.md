@@ -32,6 +32,9 @@ Every importer does the same three things:
    `port_ac_track.py` for an Assetto Corsa circuit) into `public/tracks/<working id>/`, run with `--no-register` so
    the game's own circuit list is never touched: the builder writes the circuit's listing beside its files
    (`circuit.json`). A car is ported into a GLB laid out as the game's rig expects (docs/PORTING-CARS.md).
+   An Assetto Corsa circuit needs no entry in `AC_TRACKS`: given an id of its own and `--src`, `port_ac_track.py`
+   reads its settings from the mod (`scripts/tracks/ac_mod_entry.py`), and `--entry-only <file>` writes them out
+   without building, which is how `ac-track` names and credits the package before the build.
 2. **Package** it with `packageCircuit` or `packageCar`, which copy only what the package needs, rename the game's
    URLs to paths in the package, write mod.json, and check the folder as the game will.
 3. **Clean up** the working copy (`--keep-build` keeps it), and rebuild `public/mods/_index.json`, so the dev server
@@ -48,6 +51,7 @@ packager. `npm run mod -- import` finds it by its file name. `importers/blender-
 
 - Put the source's credit and licence in the package: `packageCredit` keeps https links only, and a licence file the
   source carries goes in with `extraFiles`.
-- Refuse content the source's licence doesn't let a player share, with a message that says so, rather than packaging
-  it.
+- Content whose licence doesn't let a player share it is still packaged, for the player's own use: its credit's
+  `note` says "For personal use only: the author's permission is needed to share it", and the import prints that
+  plainly. Most Assetto Corsa mods are like this (`ac-track`), and every F1 25 mod (`f1-track`).
 - Give it a suite (`scripts/verify-<name>.ts`) that runs on a small sample, skipped when the sample isn't there.

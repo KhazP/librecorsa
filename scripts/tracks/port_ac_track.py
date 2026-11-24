@@ -3,7 +3,9 @@ Assetto Corsa circuit mod (KN5 + AI + INI data) → LibreCorsa track
 (public/tracks/<id>/track_data.json + public/tracks/<id>/<id>.glb).
 
     python -P scripts/tracks/port_ac_track.py <id|id,id|all> [--src DIR] [--no-glb] [--no-line-opt] [--no-compress]
-                                              [--extras-only]
+                                              [--extras-only] [--no-register]
+    python -P scripts/tracks/port_ac_track.py <new id> --src DIR [--layout NAME] [--settings overrides.json]
+                                              [--entry-only FILE] ...
 
 Reads the KN5 models listed in the layout's models_*.ini, the binary AI lanes (fast_lane.ai and pit_lane.ai),
 and the INI metadata (sections.ini, surfaces.ini, drs_zones.ini, cameras*.ini, groove.ini, crew.ini, lighting.ini),
@@ -13,7 +15,8 @@ lap-time racing-line optimiser for both F1 (`ro`) and GT3 (`roGt3`), and meshopt
 Each circuit's settings are in AC_TRACKS below. `folder` is the mod's track folder (the one holding models*.ini,
 data/ and the layouts), found by the first of: --src DIR (porting a single folder), scripts/tracks/sources.local.json
 ({"<folder or id>": "<path>"}, git-ignored), or $LIBRECORSA_AC_TRACKS/<folder> (e.g. Assetto Corsa's content/tracks).
-See docs/PORTING-TRACKS.md.
+A mod with no entry here is converted under an id of its own from its folder (--src): its settings are read from the
+mod itself (ac_mod_entry.py), with --settings merged over them. See docs/PORTING-TRACKS.md.
 """
 import argparse
 import configparser
@@ -40,6 +43,7 @@ from PIL import Image  # noqa: E402
 from scipy import ndimage  # noqa: E402
 from scipy.spatial import cKDTree  # noqa: E402
 
+import ac_mod_entry  # noqa: E402
 import build_track as bt  # noqa: E402
 import centreline as cl  # noqa: E402
 import surface as srf  # noqa: E402
@@ -4213,6 +4217,39 @@ def resolve_sources(ids, src_arg):
         cfg['base_dir'] = path
 
 
+def mod_entry(tid, args):
+    """The entry of a mod with none in AC_TRACKS, read from the mod (ac_mod_entry.py) with --settings merged over it,
+    its folder from --src or scripts/tracks/sources.local.json"""
+    if not re.fullmatch(r'[a-z0-9_]+', tid):
+        raise SystemExit(f'{tid}: an id is lower case letters, digits and _ (it names the folder and the URL)')
+    local = json.load(open(LOCAL_SOURCES, encoding='utf-8')) if os.path.exists(LOCAL_SOURCES) else {}
+    src = args.src or local.get(tid)
+    if not src:
+        raise SystemExit(f'{tid}: no such circuit in AC_TRACKS. A mod without an entry is read from its track folder: '
+                         '--src DIR')
+    cfg = ac_mod_entry.auto_entry(tid, src, args.layout, args.settings, classify_physics_node)
+    # An id the game lists is taken, unless it is this mod's own earlier build (sync_track_configs recorded its folder)
+    idx_path = os.path.join(ROOT, 'public', 'tracks', 'index.json')
+    listed = {e['id'] for e in json.load(open(idx_path, encoding='utf-8'))} if os.path.exists(idx_path) else set()
+    tjson_path = os.path.join(HERE, 'tracks.json')
+    built = json.load(open(tjson_path, encoding='utf-8')) if os.path.exists(tjson_path) else {}
+    if tid.startswith('rwanda_official') or (tid in listed and built.get(tid, {}).get('folder') != cfg['folder']):
+        raise SystemExit(f'{tid} is taken by a circuit the game already has: pick another id')
+    # The game's own circuit from this layout of the mod, whose entry holds the permission it is hosted with
+    hosted = next((h for h, c in AC_TRACKS.items()
+                   if c['folder'].lower() == cfg['folder'].lower() and c['layout_dir'].lower() == cfg['layout_dir'].lower()), None)
+    if hosted:
+        cfg['_auto']['gameCircuit'] = {'id': hosted, 'author': AC_TRACKS[hosted]['credit']['author']}
+    return cfg
+
+
+def write_entry(path, cfg):
+    """--entry-only: a circuit's entry as JSON, for the mod tools"""
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('id', help='track id, comma-separated ids, or "all"')
@@ -4224,20 +4261,38 @@ def main():
                     help="graft just the circuit's extraModels and driftingObjects into its existing GLB")
     ap.add_argument('--no-register', action='store_true',
                     help="leave the game's circuit lists alone: write public/tracks/<id>/circuit.json for a mod package")
+    ap.add_argument('--layout', help='a mod without an AC_TRACKS entry: the layout to convert (its folder, or its name)')
+    ap.add_argument('--settings', help='a mod without an AC_TRACKS entry: a JSON file of settings merged over the ones '
+                                       'read from the mod')
+    ap.add_argument('--entry-only', metavar='FILE',
+                    help="write the circuit's entry (AC_TRACKS's, or the one read from the mod) to FILE as JSON and stop")
     args = ap.parse_args()
 
     ids = list(AC_TRACKS.keys()) if args.id == 'all' else [x.strip() for x in args.id.split(',')]
-    for tid in ids:
-        if tid not in AC_TRACKS:
-            raise SystemExit(f'Unknown AC track id: {tid}')
-    resolve_sources(ids, args.src)
+    new = [tid for tid in ids if tid not in AC_TRACKS]
+    if new and len(ids) > 1:
+        raise SystemExit(f'{", ".join(new)}: not in AC_TRACKS. A mod without an entry is converted on its own: '
+                         '<id> --src DIR')
+    if not new and (args.layout is not None or args.settings):
+        raise SystemExit('--layout and --settings are for a mod without an AC_TRACKS entry: edit its entry instead')
+    if args.entry_only and len(ids) > 1:
+        raise SystemExit('--entry-only writes one circuit\'s entry')
+    entries = {new[0]: mod_entry(new[0], args)} if new else {tid: AC_TRACKS[tid] for tid in ids}
+    if args.entry_only:
+        # A hand-written entry as it is, without looking for its folder
+        write_entry(args.entry_only, entries[ids[0]])
+        return
+    if new:
+        ac_mod_entry.report(entries[new[0]], log)
+    else:
+        resolve_sources(ids, args.src)
     if args.extras_only:
         for tid in ids:
-            graft_extras(tid, AC_TRACKS[tid])
+            graft_extras(tid, entries[tid])
         return
     built = {}
     for tid in ids:
-        cfg = AC_TRACKS[tid]
+        cfg = entries[tid]
         data = build_ac_track(tid, cfg, args)
         built[tid] = (cfg, data)
 
@@ -4251,8 +4306,8 @@ def main():
         for tid in ids:
             log(f'  optimising F1 and GT3 racing lines for {tid}...')
             # A hill climb's run is timed from rest at the start line to the finish (the optimiser reads pointToPoint)
-            bt.optimise_lines(tid, AC_TRACKS[tid].get('lineMarginM'))
-            apply_street_hairpin_margin(tid, AC_TRACKS[tid])
+            bt.optimise_lines(tid, entries[tid].get('lineMarginM'))
+            apply_street_hairpin_margin(tid, entries[tid])
 
 
 if __name__ == '__main__':
