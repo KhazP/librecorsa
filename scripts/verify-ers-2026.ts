@@ -17,7 +17,18 @@
  *   npx tsx scripts/verify-ers-2026.ts
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { cutEnergyJ, Ers2026Control, ersKDeployLimitW, ersValueSPerMJ, F1_2026_ERS, type ErsStepInput } from '../src/lib/sim/f12026-car/ers-2026';
+import {
+  BOOST_RAMP_WPS,
+  CUT_ENERGY_MARGIN_J,
+  cutEnergyJ,
+  DEPLOY_THROTTLE_START,
+  Ers2026Control,
+  ersKDeployLimitW,
+  ersValueSPerMJ,
+  F1_2026_ERS,
+  maxSafeDeployW,
+  type ErsStepInput,
+} from '../src/lib/sim/f12026-car/ers-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { LC26_SIM_PROFILE } from '../src/lib/sim/f12026-car/Lc26Sim';
 import { LC26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Lc26Tune';
@@ -102,33 +113,62 @@ function run(c: Ers2026Control, steps: number, over: Partial<ErsStepInput> | ((k
   const c = new Ers2026Control();
   const on = run(c, 50, {});
   check('Flat out and worth it: the whole of the curve', on.every((p) => Math.abs(p - 350_000) < 1e-6), kW(on[on.length - 1]));
-  // The value drops under the bar at 250 km/h: the cut (C5.12.4: 150 kW at once, held fixed for 1 s, then 100 kW/s to 100 kW)
+  // Already flat out in Power Limited (PL): mid-straight cut ramps smoothly at C5.12.6's 100 kW/s (no -150 kW cliff)
+  // down to 100 kW (2.5 s), then drops cleanly to 0 W (C5.12.7)
   const cut = run(c, 1500, { valueSPerMJ: 0.5 });
-  check('The cut: 150 kW at once', Math.abs(cut[0] - 200_000) < 1, `${kW(cut[0])} in the first step`);
+  check('Mid-straight PL cut: no 150 kW cliff, starts smoothly at 100 kW/s (C5.12.6)', Math.abs(cut[0] - (350_000 - 100_000 * H)) < 1, `${kW(cut[0])} in the first step`);
   const at = (t: number) => cut[Math.round(t / H) - 1];
-  check('... held fixed for 1 s (C5.12.4)', Math.abs(at(0.5) - 200_000) < 1 && Math.abs(at(1.0) - 200_000) < 1, `${kW(at(0.5))} at 0.5 s, ${kW(at(1.0))} at 1.0 s`);
-  check('... then 100 kW a second', Math.abs(at(1.5) - 150_000) < 500, `${kW(at(1.5))} 1.5 s on`);
+  check('... linear 100 kW/s down to 100 kW', Math.abs(at(1.0) - 250_000) < 500 && Math.abs(at(2.0) - 150_000) < 500, `${kW(at(1.0))} at 1.0 s, ${kW(at(2.0))} at 2.0 s`);
   const zeroAt = cut.findIndex((p) => p <= 0) * H;
-  check('... and the rest at once under 100 kW (≈ 2 s on)', Math.abs(zeroAt - 2.0) < 0.01, `${f(zeroAt, 3)} s`);
+  check('... and the rest at once under 100 kW (≈ 2.5 s on)', Math.abs(zeroAt - 2.5) < 0.01, `${f(zeroAt, 3)} s`);
   let worstRate = 0;
-  for (let k = 2; k < cut.length; k++) if (cut[k - 1] > F1_2026_ERS.limitFreeBelowW) worstRate = Math.max(worstRate, (cut[k - 1] - cut[k]) / H);
+  for (let k = 1; k < cut.length; k++) if (cut[k - 1] > F1_2026_ERS.limitFreeBelowW) worstRate = Math.max(worstRate, (cut[k - 1] - cut[k]) / H);
   check('Never faster than 100 kW a second while over 100 kW', worstRate <= 100_000 + 1, `${f(worstRate / 1000)} kW/s`);
   check('A power-limited period is under way', c.clipping);
-  // Starting a normal cut below 250 kW still respects C5.12.4's max 150 kW step + 1 s hold (never snaps straight to 0 on tick 0)
+
+  // Circuits over 3.5 km power-limited (50 kW/s C5.12.6 rate): 350 → 100 → 0 kW takes 5.0 s
+  const slowRate = new Ers2026Control();
+  run(slowRate, 50, { cutRateWps: 50_000 });
+  const slowRamp = run(slowRate, 2600, { cutRateWps: 50_000, valueSPerMJ: 0.5 });
+  const slowZeroAt = slowRamp.findIndex((p) => p <= 0) * H;
+  check('50 kW/s power-limited circuit ramps 350 → 100 → 0 kW in ≈ 5.0 s (C5.12.6)', Math.abs(slowZeroAt - 5.0) < 0.02, `${f(slowZeroAt, 3)} s`);
+
+  // Fresh full-throttle entry at >= 210 km/h (Power Limited Pending, C5.12.4): max 150 kW initial drop held fixed for 1 s, then 100 kW/s
+  const plp = new Ers2026Control();
+  run(plp, 20, { throttle: 0.5 });
+  const plpCut = run(plp, 1200, { throttle: 1, valueSPerMJ: 0.5 });
+  const plpAt = (t: number) => plpCut[Math.round(t / H) - 1];
+  const plpZero = plpCut.findIndex((p) => p <= 0) * H;
+  check('PLP start on fresh full throttle: 150 kW initial step held fixed 1 s, then 100 kW/s (C5.12.4)',
+    Math.abs(plpCut[0] - 200_000) < 1 && Math.abs(plpAt(0.5) - 200_000) < 1 && Math.abs(plpAt(1.0) - 200_000) < 1 && Math.abs(plpAt(1.5) - 150_000) < 500 && Math.abs(plpZero - 2.0) < 0.01,
+    `step0 ${kW(plpCut[0])}, 1.0 s ${kW(plpAt(1.0))}, 1.5 s ${kW(plpAt(1.5))}, zero ${f(plpZero, 3)} s`);
+
+  // Starting PLP below 250 kW still respects C5.12.4's max 150 kW step + 1 s hold (never snaps straight to 0 on tick 0)
   const midCut = new Ers2026Control();
-  run(midCut, 20, { share: 220_000 / 350_000 });
-  const sub250 = run(midCut, 600, { share: 1, valueSPerMJ: 0.5 });
-  check('Cut starting below 250 kW holds after 150 kW step for 1 s (C5.12.4)', Math.abs(sub250[0] - 70_000) < 1 && Math.abs(sub250[499] - 70_000) < 1 && sub250[502] === 0, `${kW(sub250[0])} → ${kW(sub250[499])} → ${kW(sub250[502])}`);
+  run(midCut, 20, { throttle: 0.5, share: 220_000 / 350_000 });
+  const sub250 = run(midCut, 600, { throttle: 1, share: 220_000 / 350_000, valueSPerMJ: 0.5 });
+  check('PLP starting below 250 kW holds after 150 kW step for 1 s (C5.12.4)', Math.abs(sub250[0] - 70_000) < 1 && Math.abs(sub250[499] - 70_000) < 1 && sub250[502] === 0, `${kW(sub250[0])} → ${kW(sub250[499])} → ${kW(sub250[502])}`);
+
   // Worth it again inside the same period: nothing given back (C5.12.5)
   const held = run(c, 200, { valueSPerMJ: 10 });
   check('Nothing given back inside the period (C5.12.5)', held.every((p) => p <= 0), kW(Math.max(...held)));
-  // The Boost gives it back
-  const boost = run(c, 5, { boost: true });
-  check('... except by the Boost', Math.abs(boost[4] - 350_000) < 1e-6, kW(boost[4]));
+  // The Boost gives it back smoothly at BOOST_RAMP_WPS (2000 kW/s: 0 → 350 kW in 0.175 s)
+  const boost = run(c, 100, { boost: true });
+  check('... except by the Boost, ramping cleanly at 2000 kW/s', Math.abs(boost[0] - BOOST_RAMP_WPS * H) < 1 && Math.abs(boost[99] - 350_000) < 1e-6, `step0 ${kW(boost[0])}, 0.2 s ${kW(boost[99])}`);
   // Off the throttle the period ends; back flat out the deployment is there again
   run(c, 5, { throttle: 0.5, valueSPerMJ: 10 });
   const again = run(c, 5, { valueSPerMJ: 10 });
   check('A lift ends the period: on the throttle again it deploys', Math.abs(again[4] - 350_000) < 1e-6 && !c.clipping, kW(again[4]));
+
+  // Normal deploy blends in smoothly above DEPLOY_THROTTLE_START (60 % pedal); Boost deploys from any positive pedal
+  const pedal = new Ers2026Control();
+  const p50 = run(pedal, 5, { throttle: 0.5 })[4];
+  const p80 = run(pedal, 5, { throttle: 0.8 })[4];
+  const p50Boost = run(pedal, 5, { throttle: 0.5, boost: true })[4];
+  const expect80 = 350_000 * ((0.8 - DEPLOY_THROTTLE_START) / (1 - DEPLOY_THROTTLE_START));
+  check('Normal MGU-K deploy starts above 60 % throttle; Boost deploys from any positive throttle',
+    p50 === 0 && Math.abs(p80 - expect80) < 1 && Math.abs(p50Boost - 175_000) < 1,
+    `50%: ${kW(p50)}, 80%: ${kW(p80)}, 50%+Boost: ${kW(p50Boost)}`);
 
   const slow = new Ers2026Control();
   run(slow, 20, { speedKmh: 180 });
@@ -151,8 +191,8 @@ console.log('\n== Superclipping, the store, the start');
 {
   const c = new Ers2026Control();
   run(c, 20, {});
-  // Worth little and the room there: the cut (2 s), then smooth ramp into superclipping (to 350 kW)
-  const sc = run(c, 1600, { valueSPerMJ: 0.1, superclipBelowSPerMJ: 0.5, superclipRoomJ: 1e9 });
+  // Worth little and the room there: the PL cut (2.5 s), then smooth ramp into superclipping (to 350 kW)
+  const sc = run(c, 1750, { valueSPerMJ: 0.1, superclipBelowSPerMJ: 0.5, superclipRoomJ: 1e9 });
   const firstHarvest = sc.findIndex((p) => p < 0);
   check('Superclipping starts only once the cut is done', firstHarvest > 0 && sc.slice(0, firstHarvest).every((p) => p >= 0), `${f(firstHarvest * H, 3)} s`);
   check('... ramps smoothly instead of jumping straight to −350 kW', Math.abs(sc[firstHarvest]) < 5_000 && Math.abs(sc[sc.length - 1] + 350_000) < 1e-6, `step 0: ${kW(sc[firstHarvest])}, end: ${kW(sc[sc.length - 1])}`);
@@ -164,44 +204,56 @@ console.log('\n== Superclipping, the store, the start');
   // No 210 km/h superclipping chatter: dropping below 210 km/h while superclipping inhibits re-entry until a lift
   const ch = new Ers2026Control();
   run(ch, 20, { speedKmh: 260 });
-  run(ch, 1300, { speedKmh: 260, valueSPerMJ: 0.1, superclipBelowSPerMJ: 0.5, superclipRoomJ: 1e9 });
+  run(ch, 1500, { speedKmh: 260, valueSPerMJ: 0.1, superclipBelowSPerMJ: 0.5, superclipRoomJ: 1e9 });
   const dip = run(ch, 5, { speedKmh: 209, valueSPerMJ: 0.1, superclipBelowSPerMJ: 0.5, superclipRoomJ: 1e9 });
   const rebound = run(ch, 20, { speedKmh: 250, valueSPerMJ: 0.1, superclipBelowSPerMJ: 0.5, superclipRoomJ: 1e9 });
   check('No 210 km/h chatter: dipping under 210 km/h inhibits superclipping until a lift', dip.every((p) => p === 0) && rebound.every((p) => p === 0), `rebound ${kW(rebound[19])}`);
 
-  // Low-SOC Boost: even below full 350 kW cut reserve (down to 20 kJ floor), holding Boost still deploys 150 kW cleanly
-  // without leaking full 350 kW turbo fill, and continuous Boost draining from 151–299 kW never empties the store to 0 J
+  // Continuous low-SOC safe envelope (`maxSafeDeployW`): usable charge down to 20 kJ (0.5 % SOC) deploys smoothly
+  // along the C5.12.6 deceleration parabola with fillCeilingW bounded to match, never snapping to 0 J
+  const expect100kJ = maxSafeDeployW(100_000);
   const lbCtrl = new Ers2026Control();
-  const lowBoost = run(lbCtrl, 5, { soc: 100_000 / F1_2026_ERS.storeJ, valueSPerMJ: 0.1, boost: true });
-  check('Low-SOC Boost deploys 150 kW down to 20 kJ with fillCeilingW also capped at 150 kW', Math.abs(lowBoost[4] - 150_000) < 1 && lbCtrl.fillCeilingW <= 150_000 + 1, `${kW(lowBoost[4])}, fill ${kW(lbCtrl.fillCeilingW)}`);
-  // Draining below full-cut reserve while under 210 km/h (no regulated cut) must not latch storeCut and block Boost above 210 km/h
+  const lowBoost = run(lbCtrl, 100, { soc: 100_000 / F1_2026_ERS.storeJ, valueSPerMJ: 0.1, boost: true });
+  check('Low-SOC Boost tracks maxSafeDeployW(100 kJ) with fillCeilingW also capped', Math.abs(lowBoost[99] - expect100kJ) < 1 && lbCtrl.fillCeilingW <= expect100kJ + 1, `${kW(lowBoost[99])}, fill ${kW(lbCtrl.fillCeilingW)}`);
+  // Draining under full-cut reserve below 210 km/h must not block Low-SOC Boost above 210 km/h
   const sub210 = new Ers2026Control();
   run(sub210, 10, { speedKmh: 180, soc: 0.5 });
   run(sub210, 10, { speedKmh: 180, soc: 350_000 / F1_2026_ERS.storeJ });
-  const sub210Boost = run(sub210, 10, { speedKmh: 240, soc: 350_000 / F1_2026_ERS.storeJ, valueSPerMJ: 0.1, boost: true });
-  check('Draining under 370 kJ below 210 km/h does not block Low-SOC Boost above 210 km/h', Math.abs(sub210Boost[9] - 150_000) < 1, kW(sub210Boost[9]));
+  const sub210Boost = run(sub210, 100, { speedKmh: 240, soc: 350_000 / F1_2026_ERS.storeJ, valueSPerMJ: 0.1, boost: true });
+  check('Draining below 210 km/h does not block Low-SOC Boost above 210 km/h', Math.abs(sub210Boost[99] - maxSafeDeployW(350_000)) < 1, kW(sub210Boost[99]));
   for (const [label, over] of [
-    ['310 km/h normal (250 kW)', { speedKmh: 310 }],
-    ['320 km/h normal (200 kW)', { speedKmh: 320 }],
-    ['260 km/h Alt 1 (250 kW)', { speedKmh: 260, alt1Sector: true }],
+    ['310 km/h normal (250 kW, 100 kW/s)', { speedKmh: 310, cutRateWps: 100_000 }],
+    ['320 km/h normal (200 kW, 100 kW/s)', { speedKmh: 320, cutRateWps: 100_000 }],
+    ['260 km/h Alt 1 (250 kW, 100 kW/s)', { speedKmh: 260, alt1Sector: true, cutRateWps: 100_000 }],
+    ['260 km/h 50 kW/s circuit', { speedKmh: 260, cutRateWps: 50_000 }],
   ] as const) {
     const dc = new Ers2026Control();
-    let eJ = 0.15 * F1_2026_ERS.storeJ;
+    let eJ = 0.2 * F1_2026_ERS.storeJ;
     let minE = eJ;
-    for (let k = 0; k < 2500; k++) {
+    let prevP = 0;
+    let prevCap = 0;
+    let worstDropRate = 0;
+    for (let k = 0; k < 4500; k++) {
       const p = dc.step(base({ soc: eJ / F1_2026_ERS.storeJ, boost: true, valueSPerMJ: 0.1, ...over }));
+      const capNow = ersKDeployLimitW(over.speedKmh, false, 'base', Boolean('alt1Sector' in over && over.alt1Sector && (k + 1) * H >= 1));
+      // C5.12.7: rate limit applies while above 100 kW and not caused by a C5.2.8 speed-curve drop (e.g. Alt 1 at 1 s)
+      if (k > 0 && capNow >= prevCap && prevP > F1_2026_ERS.limitFreeBelowW + over.cutRateWps * H && p < prevP) {
+        worstDropRate = Math.max(worstDropRate, (prevP - p) / H);
+      }
+      prevP = p;
+      prevCap = capNow;
       dc.lastDcW = Math.max(0, p);
       eJ = Math.max(0, eJ - Math.max(0, p) * H);
       minE = Math.min(minE, eJ);
     }
-    check(`Continuous Boost drain at ${label} finishes above 15 kJ (no 0 J snap)`, minE >= 15_000, `min ${f(minE / 1000, 1)} kJ`);
+    check(`Continuous Boost drain at ${label} stays >= 15 kJ & <= rate`, minE >= 15_000 && worstDropRate <= over.cutRateWps + 500, `min ${f(minE / 1000, 1)} kJ, max rate ${f(worstDropRate / 1000, 1)} kW/s`);
   }
 
   const low = new Ers2026Control();
-  const empty = run(low, 3, { soc: (cutEnergyJ(350_000) - 1) / F1_2026_ERS.storeJ });
-  check('Never deploys from a store too low to cut at the rules\' rates', empty.every((p) => p === 0), `under ${f(cutEnergyJ(350_000) / 1000, 0)} kJ`);
+  const empty = run(low, 3, { soc: (CUT_ENERGY_MARGIN_J - 1) / F1_2026_ERS.storeJ });
+  check('Never deploys at or below the 20 kJ safety floor', empty.every((p) => p === 0), `under ${f(CUT_ENERGY_MARGIN_J / 1000, 0)} kJ`);
   const ok = run(new Ers2026Control(), 3, { soc: (cutEnergyJ(350_000) + 1000) / F1_2026_ERS.storeJ });
-  check('... and does with that much', ok[0] > 0, kW(ok[0]));
+  check('... and deploys full 350 kW once above cutEnergyJ(350 kW)', Math.abs(ok[0] - 350_000) < 1, kW(ok[0]));
 
   const st = new Ers2026Control();
   st.armStandingStart();
@@ -226,10 +278,10 @@ console.log('\n== The Boost, Overtake\'s lines, the Automatic Overtake');
 {
   const raceBoost = (fromW: number) => {
     const c = new Ers2026Control();
-    // deploying fromW, then cut by the management: the Boost pressed mid-cut
+    // deploying fromW, then cut by the management: the Boost pressed mid-cut (allow 0.2 s for 2000 kW/s Boost ramp)
     run(c, 5, { share: fromW / 350_000 });
-    const held = run(c, 5, { share: 1, valueSPerMJ: 0.1, boost: true, boostCapped: true });
-    return { p: held[4], fill: c.fillCeilingW };
+    const held = run(c, 100, { share: 1, valueSPerMJ: 0.1, boost: true, boostCapped: true });
+    return { p: held[99], fill: c.fillCeilingW };
   };
   const rb100 = raceBoost(100_000);
   const rb280 = raceBoost(280_000);
@@ -238,13 +290,13 @@ console.log('\n== The Boost, Overtake\'s lines, the Automatic Overtake');
   // Holding Race Boost from corner exit (0 kW deploy) through full deploy holds 350 kW into a managed cut (no stale 0 kW latch)
   const raceExit = new Ers2026Control();
   run(raceExit, 10, { share: 0, valueSPerMJ: 10, boost: true, boostCapped: true });
-  run(raceExit, 20, { share: 1, valueSPerMJ: 10, boost: true, boostCapped: true });
+  run(raceExit, 100, { share: 1, valueSPerMJ: 10, boost: true, boostCapped: true });
   const raceHeld = run(raceExit, 20, { share: 1, valueSPerMJ: 0.1, boost: true, boostCapped: true });
   check('Race Boost held from corner exit tracks full power into a managed cut', Math.abs(raceHeld[19] - 350_000) < 1, kW(raceHeld[19]));
   const c = new Ers2026Control();
   run(c, 5, { share: 0.2 });
-  const free = run(c, 5, { boost: true, boostCapped: false, valueSPerMJ: 0.1 });
-  check('Boost outside a race: the whole curve', Math.abs(free[4] - 350_000) < 1e-6, kW(free[4]));
+  const free = run(c, 100, { boost: true, boostCapped: false, valueSPerMJ: 0.1 });
+  check('Boost outside a race: the whole curve', Math.abs(free[99] - 350_000) < 1e-6, kW(free[99]));
   const auto = new Ers2026Control();
   const at320 = run(auto, 5, { speedKmh: 320, overtake: true, overtakeShare: 0.75 })[4];
   const full320 = ersKDeployLimitW(320, true);
@@ -298,6 +350,12 @@ console.log('\n== Each circuit\'s rules (the FIA\'s 2026 Power Unit Information,
     check('... the qualifying lap\'s launch out of the last corner (C5.12.4, C5.12.5)', c.bigCut.length === 1 && c.bigCut[0].timeTrialOnly && c.reset.length === 1 && inStretch(3100, c.reset[0]));
     check('... somewhere to spend an Overtake, with no DRS zone or straight: its longest runs', c.overtakeZones.length === 2 && inStretch(3200, c.overtakeZones[0]), JSON.stringify(c.overtakeZones));
   }
+  // C5.2.10 ii: low-braking high-speed circuits reach the 4.0 MJ qualifying recharge floor
+  const fastPad = createFlatTestTrack(5800, 300);
+  const fastRules = f1EnergyCircuit('monza-like:derived', fastPad.samples, fastPad.totalLengthM, [], []);
+  check('Low-braking circuit reaches FIA C5.2.10 ii 4.0 MJ qualifying recharge floor',
+    fastRules.recharge.timeTrial === 4e6 && fastRules.recharge.race === 7e6 && fastRules.recharge.practice === 7.5e6,
+    `${f(fastRules.recharge.timeTrial / 1e6, 1)} / ${f(fastRules.recharge.race / 1e6, 1)} / ${f(fastRules.recharge.practice / 1e6, 1)} MJ`);
 }
 
 console.log('\n== On the 2026 Prototype');
@@ -430,16 +488,59 @@ console.log('\n== Through the car: the race\'s 250 kW, the Overtake press and it
     }
     const okFlag = sim.telemetry.ersBoostActive;
     const sustainedLowDc = sim.vehicle.telemetry.MGUK_POWER / ers.deployEfficiency;
+    const safe100 = maxSafeDeployW(100_000);
     check(
-      'ersBoostActive aligns with usable reserve and sustains 150 kW Boost at 100 kJ on full car',
-      lowFlag === false && okFlag === true && sustainedLowDc > 140_000 && peakLowDc <= 152_000,
-      `10 kJ: ${lowFlag}, 100 kJ: ${okFlag}, sustained ${kW(sustainedLowDc)}, peak ${kW(peakLowDc)}`
+      'ersBoostActive aligns with 20 kJ floor and tracks maxSafeDeployW(100 kJ) on full car',
+      lowFlag === false && okFlag === true && sustainedLowDc > 110_000 && peakLowDc <= safe100 + 2_000,
+      `10 kJ: ${lowFlag}, 100 kJ: ${okFlag}, sustained ${kW(sustainedLowDc)}, peak ${kW(peakLowDc)} (cap ${kW(safe100)})`
     );
     // CHR mode + Boost at part throttle (60 %): deploys positive power instead of harvesting -80 kW
     sim.setLiveTuner({ ersMode: 'CHR' });
     sim.vehicle.ersEnergyJ = 2e6;
     sim.step(1 / 60, { throttle: 0.6, manualOverride: true });
     check('CHR mode + Boost at 60 % throttle deploys instead of part-throttle harvesting', sim.vehicle.telemetry.MGUK_POWER > 50_000, kW(sim.vehicle.telemetry.MGUK_POWER));
+
+    // Transparent 2026 ICE-to-MGU-K torque arbitration (FIA C5.2.5 / C5.2.10 i):
+    // 1) Part-throttle (30 % pedal): harvests into the store while keeping wheel acceleration identical to unarbitrated full-SOC baseline
+    const runPart = (socJ: number) => {
+      const s = new F12026CarSim(pad, null, LC26_SIM_PROFILE);
+      s.assistPreset = 'pro';
+      s.autoGearbox = true;
+      s.teleportToDistance(2000, 150 / 3.6);
+      s.vehicle.ersEnergyJ = socJ;
+      for (let k = 0; k < 45; k++) s.step(1 / 120, { throttle: 0.3 });
+      return {
+        v: s.vxMs,
+        pK: s.vehicle.telemetry.MGUK_POWER,
+        dE: s.vehicle.ersEnergyJ - socJ,
+        boost: s.vehicle.turboBoostBar,
+      };
+    };
+    const ptArb = runPart(2e6);
+    const ptFull = runPart(3.98e6);
+    check(
+      'Part-throttle torque arbitration harvests transparently (net speed unchanged, turbo spooled)',
+      ptArb.pK < -30_000 && ptArb.dE > 15_000 && Math.abs(ptArb.v - ptFull.v) < 0.08 && ptArb.boost >= ptFull.boost,
+      `MGU-K ${kW(ptArb.pK)}, +${f(ptArb.dE / 1000, 1)} kJ, Δv ${f(Math.abs(ptArb.v - ptFull.v) * 3.6, 2)} km/h, boost ${f(ptArb.boost, 2)} vs ${f(ptFull.boost, 2)} bar`
+    );
+
+    // 2) Trail braking (20 % pedal): fires ICE into unused MGU-K generator headroom without altering rear-axle braking deceleration
+    const runTrail = (socJ: number) => {
+      const s = new F12026CarSim(pad, null, LC26_SIM_PROFILE);
+      s.assistPreset = 'pro';
+      s.autoGearbox = true;
+      s.teleportToDistance(2000, 200 / 3.6);
+      s.vehicle.ersEnergyJ = socJ;
+      for (let k = 0; k < 30; k++) s.step(1 / 120, { throttle: 0, brake: 0.2 });
+      return { v: s.vxMs, pK: s.vehicle.telemetry.MGUK_POWER, dE: s.vehicle.ersEnergyJ - socJ };
+    };
+    const brkArb = runTrail(2e6);
+    const brkFull = runTrail(3.98e6);
+    check(
+      'Trail-braking torque arbitration fills generator headroom without altering braking deceleration',
+      brkArb.pK < brkFull.pK - 50_000 && brkArb.dE > 40_000 && Math.abs(brkArb.v - brkFull.v) < 0.15,
+      `MGU-K ${kW(brkArb.pK)} vs ${kW(brkFull.pK)}, Δv ${f(Math.abs(brkArb.v - brkFull.v) * 3.6, 2)} km/h`
+    );
   }
 
   // The time trial's allowances, given to the car through the simulation worker's messages
@@ -479,7 +580,7 @@ console.log('\n== Low Grip Conditions (B1.5.11, B7.1.2 b, B7.2.1 g, B7.2.2 d, C5
   // ... and Low Grip Boost during active superclipping inhibits deeper harvest without cancelling it to 0 (B7.2.1 g i)
   const lgSc = new Ers2026Control();
   run(lgSc, 20, { speedKmh: 260 });
-  const scRamp = run(lgSc, 1150, { speedKmh: 260, valueSPerMJ: 0.1, superclipBelowSPerMJ: 0.5, superclipRoomJ: 1e9 });
+  const scRamp = run(lgSc, 1450, { speedKmh: 260, valueSPerMJ: 0.1, superclipBelowSPerMJ: 0.5, superclipRoomJ: 1e9 });
   const scAt = scRamp[scRamp.length - 1];
   const scHold = run(lgSc, 200, { speedKmh: 260, valueSPerMJ: 0.1, superclipBelowSPerMJ: 0.5, superclipRoomJ: 1e9, boost: true, boostHoldOnly: true });
   check('... in active superclipping, Low Grip Boost holds harvest without increasing power', scAt < -50_000 && scHold.every((p) => Math.abs(p - scAt) < 1), `${kW(scAt)} held`);

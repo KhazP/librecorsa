@@ -216,16 +216,16 @@ const PERFORMANCE_MODES: Record<PerformanceModeName, PerformanceModeData> = {
   RAC: mode('RAC', lowSpeedDelivery(M.RAC.speed), 0, {
     liftHarvestScale: M.RAC.coastHarvest,
     energyManagement: {
-      deployAboveSPerMJ: [[0, 3.6], [0.15, 1.8], [0.35, 1.05], [0.65, 0.55], [0.9, 0.15], [1, 0]],
-      superclipBelowSPerMJ: [[0, 0.16], [0.3, 0.11], [0.6, 0.05], [0.75, 0]],
+      deployAboveSPerMJ: [[0, 3.6], [0.18, 1.55], [0.38, 0.92], [0.65, 0.48], [0.88, 0.14], [1, 0]],
+      superclipBelowSPerMJ: [[0, 0.28], [0.3, 0.18], [0.6, 0.08], [0.78, 0]],
     },
   }),
   // Balanced: more charge held back for the next straight
   BAL: mode('BAL', lowSpeedDelivery(M.BAL.speed), 0, {
     liftHarvestScale: M.BAL.coastHarvest,
     energyManagement: {
-      deployAboveSPerMJ: [[0, 4.5], [0.2, 2.2], [0.45, 1.25], [0.75, 0.65], [0.95, 0.2], [1, 0]],
-      superclipBelowSPerMJ: [[0, 0.22], [0.4, 0.14], [0.7, 0.06], [0.85, 0]],
+      deployAboveSPerMJ: [[0, 4.4], [0.22, 1.95], [0.45, 1.15], [0.72, 0.6], [0.92, 0.18], [1, 0]],
+      superclipBelowSPerMJ: [[0, 0.38], [0.35, 0.25], [0.65, 0.11], [0.85, 0]],
     },
   }),
   // Low speed: deploys off the slow corners only, and coasts further on a lift [est: the data has no such mode]
@@ -233,7 +233,7 @@ const PERFORMANCE_MODES: Record<PerformanceModeName, PerformanceModeData> = {
     coastTorqueScale: 0.35,
     energyManagement: {
       deployAboveSPerMJ: [[0, 5.5], [0.5, 2.8], [1, 1.8]],
-      superclipBelowSPerMJ: [[0, 0.25], [0.8, 0.14], [1, 0]],
+      superclipBelowSPerMJ: [[0, 0.45], [0.6, 0.22], [1, 0]],
     },
   }),
   // Charge: no deployment; harvests at part throttle, and flat out from 210 km/h up to the recharge limit
