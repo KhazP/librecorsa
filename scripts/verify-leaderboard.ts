@@ -340,6 +340,23 @@ check('a lap 5 % faster on a rescaled clock is refused', lapPlausibilityProblem(
 check('a lap with a third cut out is refused', lapPlausibilityProblem(cut.data) !== null, String(lapPlausibilityProblem(cut.data)));
 const open = { ...real, data: real.data.slice(0, Math.floor(n * 0.9) * S) };
 check('a lap that stops short of the line is refused', lapPlausibilityProblem(open.data) !== null, String(lapPlausibilityProblem(open.data)));
+// Point-to-point (hill climb) open runs (#191): must start from a standing start, not a flying start
+const makeOpenRun = (startKmh: number) => {
+  const rows: number[] = [];
+  let s = 0;
+  for (let i = 0; i <= 100; i++) {
+    const t = i * 0.2;
+    const kmh = Math.min(180, startKmh + i * 2);
+    if (i > 0) {
+      const prevKmh = Math.min(180, startKmh + (i - 1) * 2);
+      s += ((prevKmh + kmh) / 2 / 3.6) * 0.2;
+    }
+    rows.push(t, s, s, 0, 0, 0, 0, 0, 1, kmh, 1, 0, 0, 3);
+  }
+  return rows;
+};
+check('point-to-point run from a standing start is accepted', lapPlausibilityProblem(makeOpenRun(40), { open: true }) === null, String(lapPlausibilityProblem(makeOpenRun(40), { open: true })));
+check('point-to-point run with a flying start is refused (#191)', lapPlausibilityProblem(makeOpenRun(110), { open: true }) !== null, String(lapPlausibilityProblem(makeOpenRun(110), { open: true })));
 
 // 3. The board API -----------------------------------------------------------------------------------------------------
 const schema = ['0001_lap_boards.sql', '0007_lap_input.sql', '0009_lap_setup.sql'].map((f) => readFileSync(join(__dirname, '../cloudflare/migrations', f), 'utf8')).join('\n');
