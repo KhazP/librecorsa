@@ -2932,9 +2932,9 @@ export class F12026CarSim implements SimulatorCar {
     const nNow = this.planTargetAt(plan, p.s, p.sample, p.lateralOffset);
     const eFar = Math.max(0, Math.abs(nNow - p.lateralOffset) - 1);
     // On wet roads lengthen the look-ahead and soften rejoin lateral acceleration so lane shifts never excite a tank-slapper
-    const lookMin = TRACK_LOOK_MIN_M * (1 + 0.8 * wet);
-    const lookS = TRACK_LOOK_S * (1 + 0.9 * wet);
-    const rejoinMs2 = TRACK_REJOIN_MS2 * (1 - 0.5 * wet);
+    const lookMin = TRACK_LOOK_MIN_M * (1 + 0.55 * wet);
+    const lookS = TRACK_LOOK_S * (1 + 0.55 * wet);
+    const rejoinMs2 = TRACK_REJOIN_MS2 * (1 - 0.35 * wet);
     const ld = Math.max(lookMin, speed * lookS, Math.sqrt((2 * speed * speed * eFar) / rejoinMs2)) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
     // centreline, the outside more)
@@ -2960,7 +2960,15 @@ export class F12026CarSim implements SimulatorCar {
       kappa += this.trackI / Math.max(100, speed * speed);
     }
     if (wet > 0.15) {
-      const ayWetCap = plan.limits.lateral(speed) * (1.2 - 0.1 * wet);
+      // Cap curvature to the tyres' true physical wet lateral capability (plus banking), not the conservative
+      // weatherPace² plan grip — otherwise an off-line car in a fast bend cannot even match road curvature
+      const traits = this.compoundData.wetTraits ?? SLICK_TRAITS;
+      const liveWetGrip =
+        (traits.dryGrip ?? 1) *
+        (v.waterMm > 0 ? wetGripFactor(traits, v.waterMm, Math.max(20, speed), v.realism.wetSeverity, 0) : 1);
+      const ayDry = plan.limits.lateral(speed) / Math.max(0.15, plan.limits.gripScale);
+      const ayRealWet = ayDry * liveWetGrip + G * Math.abs(Math.sin(p.sample.bankingRad));
+      const ayWetCap = Math.max(plan.limits.lateral(speed) * 1.25, ayRealWet * (1.18 - 0.08 * wet));
       const kappaCap = ayWetCap / Math.max(25, speed * speed);
       kappa = clamp(kappa, -kappaCap, kappaCap);
     }
