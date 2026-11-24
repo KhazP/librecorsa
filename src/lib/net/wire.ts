@@ -648,15 +648,17 @@ export function sanitizePacket(v: unknown): NetworkVehiclePacket | null {
       : typeof p.liveryId === 'string' && p.liveryId.length > 0
         ? { liveryId: p.liveryId.slice(0, 32) }
         : {}),
-    ...(isObj(p.customLivery) &&
-    typeof p.customLivery.primary === 'string' &&
-    typeof p.customLivery.secondary === 'string' &&
-    typeof p.customLivery.accent === 'string'
+    ...(typeof p.customLivery === 'object' &&
+    p.customLivery !== null &&
+    !Array.isArray(p.customLivery) &&
+    typeof (p.customLivery as Record<string, unknown>).primary === 'string' &&
+    typeof (p.customLivery as Record<string, unknown>).secondary === 'string' &&
+    typeof (p.customLivery as Record<string, unknown>).accent === 'string'
       ? {
           customLivery: {
-            primary: asColor(p.customLivery.primary),
-            secondary: asColor(p.customLivery.secondary),
-            accent: asColor(p.customLivery.accent),
+            primary: asColor((p.customLivery as Record<string, unknown>).primary),
+            secondary: asColor((p.customLivery as Record<string, unknown>).secondary),
+            accent: asColor((p.customLivery as Record<string, unknown>).accent),
           },
         }
       : {}),

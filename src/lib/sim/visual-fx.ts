@@ -718,7 +718,7 @@ export class SimVisualFxManager {
   /** The car the peer reports (AI and older clients: the AMR, which is what F1Physics2026 models) */
   private createOpponentRig(peer: InterpolatedPeerState): SimCarRig {
     const livery =
-      peer.liveryId !== undefined
+      typeof peer.liveryId === 'string' && peer.liveryId.length > 0
         ? resolveLivery(peer.liveryId, peer.customLivery)
         : this.mapDriverToLivery(liveryCodeOf(peer));
     const ghost = Boolean(peer.ghost || peer.passThrough || peer.stale);
@@ -837,7 +837,7 @@ export class SimVisualFxManager {
         (entry as { liveryKey?: string }).liveryKey = liveryKey;
         this.opponentCars.set(peer.peerId, entry);
         this.group.add(entry.rig.root);
-      } else if (!ghost && peer.liveryId !== undefined && (entry as { liveryKey?: string }).liveryKey !== liveryKey) {
+      } else if (!ghost && typeof peer.liveryId === 'string' && peer.liveryId.length > 0 && (entry as { liveryKey?: string }).liveryKey !== liveryKey) {
         (entry as { liveryKey?: string }).liveryKey = liveryKey;
         entry.rig.setLivery(resolveLivery(peer.liveryId, peer.customLivery));
       }
