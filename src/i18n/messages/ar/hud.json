@@ -460,6 +460,20 @@
     "third": "الثالث",
     "skip": "تخطي"
   },
+  "podiumBoard": {
+    "label": "منصة التتويج",
+    "close": "إغلاق",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}، {name}",
+    "classification": "الترتيب",
+    "pointsScored": "{count, plural, zero {+0 نقطة} one {+1 نقطة} two {+2 نقطة} few {+# نقاط} many {+# نقطة} other {+# نقطة}}",
+    "noPoints": "بلا نقاط",
+    "championshipPlace": "البطولة P{position}",
+    "placesUp": "{count, plural, zero {لا تقدّم} one {تقدّم مركزًا واحدًا} two {تقدّم مركزين} few {تقدّم # مراكز} many {تقدّم # مركزًا} other {تقدّم # مركز}}",
+    "placesDown": "{count, plural, zero {لا تراجع} one {تراجع مركزًا واحدًا} two {تراجع مركزين} few {تراجع # مراكز} many {تراجع # مركزًا} other {تراجع # مركز}}",
+    "pointsTotal": "{count, plural, zero {0 نقاط إجمالًا} one {نقطة واحدة إجمالًا} two {نقطتان إجمالًا} few {# نقاط إجمالًا} many {# نقطة إجمالًا} other {# نقطة إجمالًا}}"
+  },
   "qualifyingHud": {
     "clock": "التصفيات",
     "lastLap": "اللفة الأخيرة",

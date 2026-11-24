@@ -460,6 +460,20 @@
     "third": "3.",
     "skip": "Atla"
   },
+  "podiumBoard": {
+    "label": "Podyum",
+    "close": "Kapat",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "Klasman",
+    "pointsScored": "{count, plural, one {+# puan} other {+# puan}}",
+    "noPoints": "Puan yok",
+    "championshipPlace": "Şampiyona P{position}",
+    "placesUp": "{count, plural, one {# sıra yükseldi} other {# sıra yükseldi}}",
+    "placesDown": "{count, plural, one {# sıra düştü} other {# sıra düştü}}",
+    "pointsTotal": "{count, plural, one {Toplam # puan} other {Toplam # puan}}"
+  },
   "qualifyingHud": {
     "clock": "Sıralama turları",
     "lastLap": "Son tur",

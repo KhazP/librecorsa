@@ -391,6 +391,10 @@
       "label": "Karriere-Vorprogramm",
       "hint": "Vor jedem Karrierelauf: Strecke, Wetter, Reifen und Startaufstellung mit Musik. Space überspringt, Enter startet."
     },
+    "fullPodium": {
+      "label": "Vollbild-Podium",
+      "hint": "Nach einem KI-Rennen: die ersten drei auf dem Podium, die Top Ten und die schnellste Runde, vor dem Ergebnis. Jede Taste schließt es."
+    },
     "boardWidget": {
       "label": "Bestenliste",
       "options": {

@@ -391,6 +391,10 @@
       "label": "Pre-gara in carriera",
       "hint": "Prima di ogni round di carriera: circuito, meteo, gomme e griglia con musica. Space salta, Enter avvia."
     },
+    "fullPodium": {
+      "label": "Podio a schermo intero",
+      "hint": "Dopo una gara contro IA: i primi tre sul podio, la top 10 e il giro più veloce, prima dei risultati. Qualsiasi tasto lo chiude."
+    },
     "boardWidget": {
       "label": "Classifica",
       "options": {

@@ -460,6 +460,20 @@
     "third": "3위",
     "skip": "건너뛰기"
   },
+  "podiumBoard": {
+    "label": "포디움",
+    "close": "닫기",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "순위",
+    "pointsScored": "{count, plural, other {+#점}}",
+    "noPoints": "득점 없음",
+    "championshipPlace": "챔피언십 P{position}",
+    "placesUp": "{count, plural, other {#계단 상승}}",
+    "placesDown": "{count, plural, other {#계단 하락}}",
+    "pointsTotal": "{count, plural, other {총 #점}}"
+  },
   "qualifyingHud": {
     "clock": "예선",
     "lastLap": "마지막 랩",

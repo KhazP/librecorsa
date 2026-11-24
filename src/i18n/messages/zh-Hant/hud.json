@@ -460,6 +460,20 @@
     "third": "第 3 名",
     "skip": "略過"
   },
+  "podiumBoard": {
+    "label": "頒獎台",
+    "close": "關閉",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}，{name}",
+    "classification": "排名",
+    "pointsScored": "{count, plural, other {+# 分}}",
+    "noPoints": "未得分",
+    "championshipPlace": "錦標賽 P{position}",
+    "placesUp": "{count, plural, other {上升 # 名}}",
+    "placesDown": "{count, plural, other {下降 # 名}}",
+    "pointsTotal": "{count, plural, other {共 # 分}}"
+  },
   "qualifyingHud": {
     "clock": "排位賽",
     "lastLap": "上一圈",

@@ -460,6 +460,20 @@
     "third": "Ke-3",
     "skip": "Lewati"
   },
+  "podiumBoard": {
+    "label": "Podium",
+    "close": "Tutup",
+    "keyEsc": "Esc",
+    "position": "P{position}",
+    "place": "P{position}, {name}",
+    "classification": "Klasifikasi",
+    "pointsScored": "{count, plural, other {+# poin}}",
+    "noPoints": "Tanpa poin",
+    "championshipPlace": "Kejuaraan P{position}",
+    "placesUp": "{count, plural, other {Naik # posisi}}",
+    "placesDown": "{count, plural, other {Turun # posisi}}",
+    "pointsTotal": "{count, plural, other {Total # poin}}"
+  },
   "qualifyingHud": {
     "clock": "Kualifikasi",
     "lastLap": "Lap terakhir",
