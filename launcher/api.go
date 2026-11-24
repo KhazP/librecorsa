@@ -12,9 +12,12 @@ import (
 )
 
 // The launcher's API for the Mods panel: the import folder's list, the first-use download of the converter's tools,
-// and a conversion's start, status and cancel. Only the game's own page may call it:
+// and a conversion's start, status and cancel. Only the game's own page, in the window the launcher opened, may call
+// it:
 //
 //   - the Host check every request passes (DNS rebinding);
+//   - every call carries this run's session cookie (session.go), which only the window the launcher opened holds:
+//     another user of the computer can reach 127.0.0.1 too;
 //   - every call carries the header apiHeader, which a page of another site can only send after a CORS preflight that
 //     is never answered, and a form or a link can't send at all;
 //   - a call that changes something (POST) must also come from the launcher's own origin (`Origin`), and a fetch
@@ -51,21 +54,25 @@ func isAPIPath(p string) bool {
 	return false
 }
 
-// checkAPICall returns why a call to the API is refused ("" when it isn't). The Host is already checked.
-func (s *server) checkAPICall(r *http.Request) string {
+// checkAPICall returns why a call to the API is refused, and the code the panel tells it by ("" when it isn't). The
+// Host is already checked.
+func (s *server) checkAPICall(r *http.Request) (code, why string) {
 	if r.Header.Get(apiHeader) != "1" {
-		return "missing the " + apiHeader + " header"
+		return "forbidden", "missing the " + apiHeader + " header"
 	}
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
-		return "not from the game's own page"
+		return "forbidden", "not from the game's own page"
 	}
 	if r.Method == http.MethodPost {
 		origin := r.Header.Get("Origin")
 		if origin == "" || origin != "http://"+strings.ToLower(r.Host) {
-			return "not from the game's own page (Origin)"
+			return "forbidden", "not from the game's own page (Origin)"
 		}
 	}
-	return ""
+	if !s.session.valid(r) {
+		return "session", "not from the window the launcher opened (no session)"
+	}
+	return "", ""
 }
 
 func (a *importsAPI) serve(s *server, w http.ResponseWriter, r *http.Request, p string) {
@@ -78,8 +85,8 @@ func (a *importsAPI) serve(s *server, w http.ResponseWriter, r *http.Request, p 
 		writeAPIError(w, http.StatusMethodNotAllowed, "method", "method not allowed")
 		return
 	}
-	if why := s.checkAPICall(r); why != "" {
-		writeAPIError(w, http.StatusForbidden, "forbidden", why)
+	if code, why := s.checkAPICall(r); code != "" {
+		writeAPIError(w, http.StatusForbidden, code, why)
 		return
 	}
 	switch {

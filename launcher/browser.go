@@ -176,7 +176,8 @@ func openGame(url string) {
 	browsers := findChromiums()
 	for _, browser := range browsers {
 		profile := browserProfileDir(browser, home, root)
-		if err := os.MkdirAll(profile, 0o755); err != nil {
+		// The player's saves and the launcher's session cookie: this user's alone
+		if err := os.MkdirAll(profile, 0o700); err != nil {
 			fmt.Fprintf(os.Stderr, "Couldn't create the browser profile %s for %s: %v\n", profile, browser, err)
 			continue
 		}

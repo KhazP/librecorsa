@@ -152,7 +152,8 @@ func pinProgram(p *pinnedFile, b []byte) {
 	p.ProgramSHA256, p.ProgramSize = sha(b), int64(len(b))
 }
 
-// call makes an API request as the game's page makes it, with changes: "-Header" leaves a header out
+// call makes an API request as the game's page makes it, in the window the launcher opened (with its session
+// cookie), with changes: "-Header" leaves a header out ("-Cookie" the session)
 func call(s http.Handler, method, target, body string, header ...string) *httptest.ResponseRecorder {
 	var r *http.Request
 	if body != "" {
@@ -166,6 +167,9 @@ func call(s http.Handler, method, target, body string, header ...string) *httpte
 	r.Header.Set("Sec-Fetch-Site", "same-origin")
 	if method == http.MethodPost {
 		r.Header.Set("Origin", fmt.Sprintf("http://127.0.0.1:%d", testPort))
+	}
+	if srv, ok := s.(*server); ok {
+		r.AddCookie(sessionCookie(srv))
 	}
 	for i := 0; i < len(header); i++ {
 		if name, ok := strings.CutPrefix(header[i], "-"); ok {
@@ -184,6 +188,19 @@ func call(s http.Handler, method, target, body string, header ...string) *httpte
 	w := httptest.NewRecorder()
 	s.ServeHTTP(w, r)
 	return w
+}
+
+// sessionCookie is the cookie a window the launcher opened holds
+func sessionCookie(s *server) *http.Cookie {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, s.session.openURL(fmt.Sprintf("http://127.0.0.1:%d", testPort)), nil)
+	s.session.serveOpen(w, r)
+	for _, c := range w.Result().Cookies() {
+		if c.Name == s.session.cookieName() {
+			return c
+		}
+	}
+	panic("no session cookie")
 }
 
 type statusAnswer struct {
@@ -226,6 +243,12 @@ func TestAPIRefusesOtherPages(t *testing.T) {
 		header       []string
 		want         int
 	}{
+		{"list without the session", http.MethodGet, importsPath, "", []string{"-Cookie"}, http.StatusForbidden},
+		{"status without the session", http.MethodGet, convertPath, "", []string{"-Cookie"}, http.StatusForbidden},
+		{"convert without the session", http.MethodPost, convertPath, convert, []string{"-Cookie"}, http.StatusForbidden},
+		{"toolchain without the session", http.MethodPost, toolchainPath, "", []string{"-Cookie"}, http.StatusForbidden},
+		{"cancel without the session", http.MethodPost, cancelPath, "", []string{"-Cookie"}, http.StatusForbidden},
+		{"convert with another session", http.MethodPost, convertPath, convert, []string{"Cookie", fmt.Sprintf("librecorsa_launcher_%d=%s", testPort, strings.Repeat("0", 64))}, http.StatusForbidden},
 		{"list without the header", http.MethodGet, importsPath, "", []string{"-" + apiHeader}, http.StatusForbidden},
 		{"status without the header", http.MethodGet, convertPath, "", []string{"-" + apiHeader}, http.StatusForbidden},
 		{"header with another value", http.MethodGet, importsPath, "", []string{apiHeader, "yes"}, http.StatusForbidden},

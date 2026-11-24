@@ -27,6 +27,8 @@ type server struct {
 	port int
 	// imports is the import folder's API (api.go), when the launcher has one
 	imports *importsAPI
+	// session tells the window the launcher opened from other programs (session.go)
+	session *session
 }
 
 // newServer serves the static export in gameDir and the packages in modsDir to requests for 127.0.0.1:port or
@@ -41,7 +43,7 @@ func newServer(gameDir, modsDir string, port int) (*server, error) {
 		game.Close()
 		return nil, fmt.Errorf("mods folder: %w", err)
 	}
-	return &server{game: game, mods: mods, port: port}, nil
+	return &server{game: game, mods: mods, port: port, session: newSession(port)}, nil
 }
 
 func (s *server) Close() error {
@@ -88,7 +90,9 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case p == identityPath:
-		s.serveIdentity(w)
+		s.serveIdentity(w, r)
+	case p == openPath:
+		s.session.serveOpen(w, r)
 	case p == modsPrefix+"_index.json":
 		s.mods.serveIndex(w, r)
 	case strings.HasPrefix(p, cataloguePrefix):
@@ -100,13 +104,15 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *server) serveIdentity(w http.ResponseWriter) {
+func (s *server) serveIdentity(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	id := map[string]any{"app": identityApp, "version": version}
 	if s.imports != nil {
-		// The Mods panel offers conversion only from a launcher that has the import folder
+		// The Mods panel offers conversion only from a launcher that has the import folder, and only in the window
+		// that holds its session
 		id["imports"] = true
+		id["session"] = s.session.valid(r)
 	}
 	json.NewEncoder(w).Encode(id)
 }
