@@ -344,6 +344,13 @@ func extractProgram(archive string, p pinnedFile, destDir string) error {
 		}
 	}
 	tmp := p.Program + ".partial"
+	// What is left of a failed extraction goes, whichever step failed
+	placed := false
+	defer func() {
+		if !placed {
+			root.Remove(tmp)
+		}
+	}()
 	write := func(r io.Reader) error {
 		out, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
 		if err != nil {
@@ -370,6 +377,7 @@ func extractProgram(archive string, p pinnedFile, destDir string) error {
 		if err != nil {
 			return err
 		}
+		defer gz.Close()
 		tr := tar.NewReader(gz)
 		for {
 			hdr, err := tr.Next()
@@ -383,7 +391,6 @@ func extractProgram(archive string, p pinnedFile, destDir string) error {
 				continue
 			}
 			if err := write(tr); err != nil {
-				root.Remove(tmp)
 				return err
 			}
 			found = true
@@ -406,7 +413,6 @@ func extractProgram(archive string, p pinnedFile, destDir string) error {
 			err = write(rc)
 			rc.Close()
 			if err != nil {
-				root.Remove(tmp)
 				return err
 			}
 			found = true
@@ -421,7 +427,11 @@ func extractProgram(archive string, p pinnedFile, destDir string) error {
 	if err := root.Chmod(tmp, 0o755); err != nil {
 		return err
 	}
-	return root.Rename(tmp, p.Program)
+	if err := root.Rename(tmp, p.Program); err != nil {
+		return err
+	}
+	placed = true
+	return nil
 }
 
 // isSafeArchivePath reports whether an archive member's name stays inside the folder it is extracted to: relative,
