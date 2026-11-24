@@ -30,7 +30,7 @@ import { driveSanity, type SanityResult } from "../lib/car-sanity";
 import { SdParams } from "../../lib/sd-params";
 import { sdAeroTargets, sdCarPhysics, PHYSICS_BASES, SD_KEYS_NOT_CARRIED, type SdCar, type SdPhysics } from "../../cars/sd-car-physics";
 import { findCarLicence, LICENCES, shareable, type CarLicence, type LicenceId } from "../../cars/sd-licence";
-import { fetchedSource, fetchSdCar, readPins, SD_CACHE_DIR, SD_DATA_DIR, sdCategoryFile, sdSharedFile, type PinnedCar } from "../lib/sd-fetch";
+import { fetchedSource, fetchSdCar, plainFileName, readPins, SD_CACHE_DIR, SD_DATA_DIR, sdCategoryFile, sdSharedFile, type PinnedCar } from "../lib/sd-fetch";
 import { modSimProfile, MOD_PHYSICS_FORMAT } from "../../../src/lib/mods/mod-physics";
 import { VEHICLE_MODELS } from "../../../src/lib/cars/vehicle-models";
 import type { CarSimProfile } from "../../../src/lib/sim/f12026-car/F12026CarSim";
@@ -56,6 +56,15 @@ function sharedDirs(carDir: string): { objects: string[]; textures: string[]; so
 }
 
 const findIn = (dirs: string[], file: string) => dirs.map((d) => join(d, file)).find((p) => existsSync(p));
+
+/**
+ * A file name the car's XML gives (its category, its wheel models, its engine sample), checked to be a plain one before
+ * it is looked for anywhere: `../../x.wav` would reach outside the car's folder and the shared data
+ */
+function plainName(name: string, where: string, car: string): string {
+  if (!plainFileName(name)) throw new Error(`${car}: ${where} is ${JSON.stringify(name)}, which is not a plain file name`);
+  return name;
+}
 
 /** The liveries a car folder has: `<car>-<id>.<image>` that is no texture of its own */
 function liveryCandidates(carDir: string, car: string): string[] {
@@ -180,7 +189,8 @@ ${PACKAGE_USAGE}
 
     // ---- 1. Parameters: the car over its category
     const own = SdParams.read(xml);
-    const category = own.str("Car", "category");
+    const ownCategory = own.str("Car", "category");
+    const category = ownCategory === undefined ? undefined : plainName(ownCategory, "Car/category", car);
     let params = own;
     let categoryFile = values.category && resolve(values.category);
     if (!categoryFile && category) {
@@ -262,7 +272,7 @@ ${PACKAGE_USAGE}
     const shared = sharedDirs(carDir);
     const G = "Graphic Objects";
     for (const prefix of new Set([params.str(G, "3d front wheel"), params.str(G, "3d rear wheel"), params.str(G, "3d wheel") ?? "wheel"].filter(Boolean) as string[])) {
-      const f = `${prefix}0.acc`;
+      const f = plainName(`${prefix}0.acc`, `its wheel model (${G}/3d … wheel "${prefix}")`, car);
       if (!existsSync(join(carDir, f)) && !findIn(shared.objects, f)) sdSharedFile("objects", f);
     }
     const glb = join(work, `${pkgCarId}.glb`);
@@ -282,7 +292,7 @@ ${PACKAGE_USAGE}
       warnings: string[];
     };
 
-    const sample = params.str("Sound", "engine sample") ?? "engine-1.wav";
+    const sample = plainName(params.str("Sound", "engine sample") ?? "engine-1.wav", "Sound/engine sample", car);
     let samplePath = existsSync(join(carDir, sample)) ? join(carDir, sample) : findIn(shared.sound, sample);
     if (!samplePath) {
       try {

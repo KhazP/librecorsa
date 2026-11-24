@@ -18,6 +18,7 @@ import { readPins, SD_CACHE_DIR, SD_DATA_DIR } from "../mods/lib/sd-fetch";
 import { fitAero, withAero } from "../mods/lib/aero-fit";
 import { driveSanity } from "../mods/lib/car-sanity";
 import { modSimProfile, MOD_PHYSICS_FORMAT } from "../../src/lib/mods/mod-physics";
+import sdCarImporter from "../mods/importers/sd-car";
 import { VEHICLE_MODELS } from "../../src/lib/cars/vehicle-models";
 import type { VehicleModelId } from "../../src/types/f1";
 
@@ -563,9 +564,46 @@ for (const c of cached) {
   check(`${c}: its licence is read (${lic.source})`, lic.reading.licences.length > 0 || lic.reading.problems.length > 0, `${lic.reading.licences.join(", ")} ${lic.reading.problems.join("; ")}`);
 }
 
-if (!process.env.SD_KEEP) rmSync(tmp, { recursive: true, force: true });
-if (failed) {
-  console.error(`\n${failed} check(s) failed`);
-  process.exit(1);
+// ---------------------------------------------------------------------------------------------------------------------
+// The importer's own checks, before anything is converted
+// ---------------------------------------------------------------------------------------------------------------------
+async function importerChecks(): Promise<void> {
+  const refusal = async (argv: string[]): Promise<string> => {
+    try {
+      await sdCarImporter.run(argv);
+      return "";
+    } catch (err) {
+      return (err as Error).message;
+    }
+  };
+  const carFolder = (root: string, name: string, xmlText: string) => {
+    const dir = join(tmp, root, "cars", "models", name);
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(join(tmp, root, "cars", "categories"), { recursive: true });
+    writeFileSync(join(tmp, root, "cars", "categories", "LS-GT2.xml"), CATEGORY);
+    writeFileSync(join(dir, `${name}.xml`), xmlText);
+    return dir;
+  };
+  const out = join(tmp, "imported");
+  const escaping = carFolder("escape-cat", "evil-car", carXml().replace('<attstr name="category" val="LS-GT2"/>', '<attstr name="category" val="../../../../../../etc/evil"/>'));
+  const why = await refusal([escaping, "--out", out]);
+  check("a car whose Car/category reaches outside is refused before it is looked for", /Car\/category is .* not a plain file name/.test(why), why);
+  const wheelDir = carFolder(
+    "escape-wheel",
+    "wheel-car",
+    carXml({ name: "Wheel Car" }).replace('<section name="Car">', '<section name="Graphic Objects"><attstr name="3d wheel" val="../../../../../../tmp/evil"/></section>\n  <section name="Car">'),
+  );
+  const whyWheel = await refusal([wheelDir, "--personal", "--no-lap", "--skip-drive-check", "--out", out]);
+  check("a car whose wheel model reaches outside is refused before it is looked for", /wheel model .* not a plain file name/.test(whyWheel), whyWheel);
 }
-console.log("\nAll Speed Dreams car checks passed.");
+
+void importerChecks()
+  .catch((err) => check("the importer could be checked", false, err instanceof Error ? (err.stack ?? err.message) : String(err)))
+  .finally(() => {
+    if (!process.env.SD_KEEP) rmSync(tmp, { recursive: true, force: true });
+    if (failed) {
+      console.error(`\n${failed} check(s) failed`);
+      process.exit(1);
+    }
+    console.log("\nAll Speed Dreams car checks passed.");
+  });
