@@ -72,14 +72,14 @@ const EUROPE_SHORT = ["sachsenring_short", "spielberg_south", "oschersleben", "n
 const ASIA_SHORT = ["rwanda_official_short", "okayama_piper", "barbagallo", "okayama", "chang"];
 
 export const CAREER_SERIES: readonly CareerSeries[] = [
-  // ---- Road: club racing in a road car, by region
+  // ---- Road: club racing in a road car, by region (the Liana or the Golf-based Scirocco, the player's pick)
   ...(["americas", "europe", "asiaPacific"] as const).map<CareerSeries>((region) => ({
     id: `clubCup_${region}`,
     family: "clubCup",
     discipline: "road",
     tier: 0,
     region,
-    cars: ["liana"],
+    cars: ["liana", "vw-scirocco-gtx"],
     calendar: region === "americas" ? AMERICAS_SHORT : region === "europe" ? EUROPE_SHORT : ASIA_SHORT,
     raceKm: 40,
     grid: 8,
@@ -93,7 +93,8 @@ export const CAREER_SERIES: readonly CareerSeries[] = [
     discipline: "road",
     tier: 1,
     region,
-    cars: ["vw-scirocco-gtx"],
+    // A real touring car, a step up from the club's road cars
+    cars: ["nissan-r32-jtcc"],
     calendar:
       region === "americas"
         ? ["vir_north", "watkins_glen_short", "riverside", "bridgehampton", "speedvegas", "vir_patriot_reverse", "vir_south"]
@@ -111,7 +112,7 @@ export const CAREER_SERIES: readonly CareerSeries[] = [
     family: "classicGt",
     discipline: "road",
     tier: 2,
-    cars: ["nissan-r32-jtcc", "nissan-r33-jgtc"],
+    cars: ["nissan-r33-jgtc"],
     calendar: ["okayama", "chang", "sachsenring", "riverside", "barbagallo", "watkins_glen", "norisring", "le_mans_82"],
     raceKm: 90,
     grid: 10,
