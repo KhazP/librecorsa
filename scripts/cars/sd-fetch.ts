@@ -58,8 +58,8 @@ export interface FetchedSource {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** A GET that waits and retries while the forge says it is busy (429, 5xx) */
-async function download(url: string, what: string): Promise<Uint8Array> {
+/** A GET that waits and retries while the forge says it is busy (429, 5xx), `tries` times */
+async function download(url: string, what: string, tries = 6): Promise<Uint8Array> {
   for (let attempt = 0; ; attempt++) {
     let res: Response;
     try {
@@ -70,7 +70,7 @@ async function download(url: string, what: string): Promise<Uint8Array> {
       continue;
     }
     if (res.ok) return new Uint8Array(await res.arrayBuffer());
-    if ((res.status === 429 || res.status >= 500) && attempt < 5) {
+    if ((res.status === 429 || res.status >= 500) && attempt < tries - 1) {
       const wait = Number(res.headers.get("retry-after")) * 1000 || 20_000 * (attempt + 1);
       console.log(`      ${what}: the server is busy (HTTP ${res.status}), trying again in ${Math.round(wait / 1000)} s`);
       await sleep(wait);
@@ -130,13 +130,38 @@ async function fetchZip(pin: PinnedCar, car: string, into: string): Promise<void
   }
 }
 
+/**
+ * One file of speed-dreams-data at the pinned commit: from the forge's raw files, else (when it keeps refusing them)
+ * through git, as a partial clone of the commit that fetches no file but this one. The clone is kept in the cache
+ */
+async function dataFile(path: string, what: string, cacheDir: string): Promise<Uint8Array> {
+  const { data } = readPins();
+  const base = data.repo.replace(/\.git$/, "");
+  try {
+    return await download(`${base}/raw/commit/${data.commit}/${path.split("/").map(encodeURIComponent).join("/")}`, what, 3);
+  } catch (err) {
+    if (git(["--version"]).status !== 0) throw err;
+    console.log(`      ${what}: fetching it through git instead`);
+    const repo = join(cacheDir, ".speed-dreams-data.git");
+    if (!existsSync(join(repo, "HEAD"))) {
+      mkdirSync(repo, { recursive: true });
+      for (const step of [["init", "-q", "--bare", repo], ["-C", repo, "remote", "add", "origin", data.repo]]) git(step);
+    }
+    if (git(["-C", repo, "cat-file", "-e", data.commit]).status !== 0) {
+      const f = git(["-C", repo, "fetch", "-q", "--depth", "1", "--filter=blob:none", "origin", data.commit]);
+      if (f.status !== 0) throw new Error(`${what}: git could not fetch ${data.repo} at ${data.commit} (${f.stderr.trim()})`);
+    }
+    const r = spawnSync("git", ["-C", repo, "cat-file", "blob", `${data.commit}:${path}`], { maxBuffer: 256 << 20 });
+    if (r.status !== 0) throw new Error(`${what}: not in ${data.repo} at ${data.commit} (${r.stderr.toString().trim()})`);
+    return new Uint8Array(r.stdout);
+  }
+}
+
 /** A car category's XML from the pinned speed-dreams-data, into the cache (once) */
 export async function fetchCategory(category: string, cacheDir = SD_CACHE_DIR): Promise<string> {
   const out = join(cacheDir, "cars", "categories", `${category}.xml`);
   if (existsSync(out)) return out;
-  const { data } = readPins();
-  const base = data.repo.replace(/\.git$/, "");
-  const bytes = await download(`${base}/raw/commit/${data.commit}/data/cars/categories/${encodeURIComponent(category)}.xml`, `category ${category}`);
+  const bytes = await dataFile(`data/cars/categories/${category}.xml`, `category ${category}`, cacheDir);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, bytes);
   return out;
@@ -150,9 +175,7 @@ export async function fetchCategory(category: string, cacheDir = SD_CACHE_DIR): 
 export async function fetchShared(file: string, cacheDir = SD_CACHE_DIR): Promise<string> {
   const out = join(cacheDir, "data", ...file.split("/"));
   if (existsSync(out)) return out;
-  const { data } = readPins();
-  const base = data.repo.replace(/\.git$/, "");
-  const bytes = await download(`${base}/raw/commit/${data.commit}/data/data/${file.split("/").map(encodeURIComponent).join("/")}`, file);
+  const bytes = await dataFile(`data/data/${file}`, file, cacheDir);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, bytes);
   return out;
@@ -192,7 +215,9 @@ export async function fetchSdCar(car: string, cacheDir = SD_CACHE_DIR): Promise<
   // Its category, as its XML names it (the database's category is a display name)
   const xml = join(dir, `${car}.xml`);
   const category = existsSync(xml) ? SdParams.read(xml).str("Car", "category") : undefined;
-  if (category) await fetchCategory(category, cacheDir).catch((err) => console.log(`      its category: ${(err as Error).message}`));
+  if (category && !existsSync(join(dirname(dirname(dir)), "categories", `${category}.xml`))) {
+    await fetchCategory(category, cacheDir).catch((err) => console.log(`      its category: ${(err as Error).message}`));
+  }
   return dir;
 }
 
