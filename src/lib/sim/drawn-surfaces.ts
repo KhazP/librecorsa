@@ -59,6 +59,7 @@ export interface DrawnSurfaceRule {
   within:
     | { stretches: readonly (readonly [number, number, -1 | 1])[] }
     | { bands: readonly (readonly [number, number, -1 | 1, number, number])[] }
+    | { pastKerb: readonly (readonly [number, number, -1 | 1])[]; farM?: number }
     | { areas: readonly (readonly number[])[]; except?: readonly (readonly number[])[] }
     | "barriers";
   /**
@@ -227,6 +228,29 @@ export const DRAWN_SURFACE_RULES: Readonly<Record<string, readonly DrawnSurfaceR
     "the lane between the cones",
     "past the cones: the old band round the lap, the open pads, the other lanes and the grass islands",
   ),
+  // Sarthe 1982: paved aprons (ROADX) and the road collider extend 0.5-3.75 m behind the inside apex kerbs at the
+  // Ford Chicanes (Virage Ford T14/T15 and Virage du Raccordement T16/T17), Mulsanne (T4) and Arnage (T7), reading as
+  // valid road. Reclassifying the road past each inside kerb's outer edge as run-off keeps cutting inside the kerbs
+  // off-track without touching the kerbs or the racing asphalt in front of them.
+  le_mans_82: [
+    {
+      materials: null,
+      surface: "runoff",
+      from: ["road"],
+      overRoadCollider: true,
+      within: {
+        pastKerb: [
+          [7738, 7772, 1],
+          [10228, 10256, 1],
+          [13340, 13365, -1],
+          [13366, 13392, 1],
+          [13475, 13500, -1],
+          [13514, 13538, 1],
+        ],
+      },
+      note: "the paved aprons and road collider behind the inside apex kerbs at Mulsanne, Arnage and the Ford Chicanes",
+    },
+  ],
 };
 
 /** The physics nodes a rule may rename, by the surface each holds */
@@ -601,6 +625,8 @@ export function applyDrawnSurfaceRules(
     const barriers = within === "barriers";
     const stretches = !barriers && "stretches" in within ? within.stretches : null;
     const bands = !barriers && "bands" in within ? within.bands : null;
+    const pastKerb = !barriers && "pastKerb" in within ? within.pastKerb : null;
+    const pastKerbFarM = !barriers && "pastKerb" in within ? (within.farM ?? 6) : 6;
     const areas = !barriers && "areas" in within ? within.areas.map(areaMask) : null;
     const except = !barriers && "areas" in within ? (within.except ?? []).map(areaMask) : [];
     const lapLen = (s0: number, s1: number) => (((s1 - s0) % track.totalLengthM) + track.totalLengthM) % track.totalLengthM;
@@ -609,7 +635,7 @@ export function applyDrawnSurfaceRules(
     // its areas or between the barriers (judged per point, from a strip of the lap or the areas' grids)
     const stretchBoxes = areas
       ? areas.map(maskBox)
-      : (stretches ?? bands ?? []).map(([s0, s1]) => {
+      : (stretches ?? bands ?? pastKerb ?? []).map(([s0, s1]) => {
           const bx = new THREE.Box3();
           for (let d = 0; d <= lapLen(s0, s1); d += 5) bx.expandByPoint(track.getSampleAtDistance(s0 + d).position);
           return bx.expandByScalar(40);
@@ -637,6 +663,78 @@ export function applyDrawnSurfaceRules(
         const e = [q.position.x + bx * near, q.position.z + bz * near, q.position.x + bx * far, q.position.z + bz * far];
         if (prev) strip.push(prev[0], prev[1], prev[2], prev[3], e[2], e[3], prev[0], prev[1], e[2], e[3], e[0], e[1]);
         prev = e;
+      }
+    }
+    if (pastKerb?.length) {
+      // Fine 2 m longitudinal bins following the outer edge of `Track_Surface_Kerb` along each listed stretch.
+      // Uses each bin's minimum kerb-triangle midpoint so curved apex kerbs leave zero sliver of `road` behind
+      // them (safe because `from: ["road"]` never touches `Track_Surface_Kerb`, which stays raised above `runoff`).
+      const BIN_M = 2;
+      const L = track.totalLengthM;
+      const items = pastKerb.map(([s0, s1, side], idx) => {
+        const len = lapLen(s0, s1);
+        const bins = Math.max(1, Math.ceil(len / BIN_M));
+        const edge = new Float64Array(bins + 1).fill(Infinity);
+        return { s0, s1, side, len, bins, box: stretchBoxes[idx], hint: s0 + len / 2, edge };
+      });
+      const v = new THREE.Vector3();
+      root.traverse((o) => {
+        if (!(o instanceof THREE.Mesh) || o.name !== "Track_Surface_Kerb") return;
+        const g = o.geometry as THREE.BufferGeometry;
+        const posAttr = g.getAttribute("position");
+        if (!posAttr) return;
+        const idx = g.getIndex();
+        const count = idx ? idx.count : posAttr.count;
+        const pts: [number, number, number][] = [];
+        for (let t = 0; t + 2 < count; t += 3) {
+          pts.length = 0;
+          let bx0 = Infinity, bz0 = Infinity, bx1 = -Infinity, bz1 = -Infinity;
+          for (let j = 0; j < 3; j++) {
+            v.fromBufferAttribute(posAttr, idx ? idx.getX(t + j) : t + j).applyMatrix4(o.matrixWorld);
+            pts.push([v.x, v.y, v.z]);
+            if (v.x < bx0) bx0 = v.x;
+            if (v.z < bz0) bz0 = v.z;
+            if (v.x > bx1) bx1 = v.x;
+            if (v.z > bz1) bz1 = v.z;
+          }
+          for (const it of items) {
+            if (bx1 < it.box.min.x || bx0 > it.box.max.x || bz1 < it.box.min.z || bz0 > it.box.max.z) continue;
+            let dsMin = Infinity, dsMax = -Infinity, sLatMin = Infinity, sLatMax = -Infinity, latSum = 0;
+            for (let j = 0; j < 3; j++) {
+              const p = track.projectWorldToTrack(pts[j][0], pts[j][2], it.hint);
+              const ds = ((((p.s - it.s0) % L) + L * 1.5) % L) - L / 2;
+              if (ds < dsMin) dsMin = ds;
+              if (ds > dsMax) dsMax = ds;
+              latSum += p.lateralOffset;
+              const sLat = it.side * p.lateralOffset;
+              if (sLat < sLatMin) sLatMin = sLat;
+              if (sLat > sLatMax) sLatMax = sLat;
+            }
+            if (latSum * it.side <= 0 || dsMax < 0 || dsMin > it.len || dsMax - dsMin > 30 || sLatMax <= 0) continue;
+            const mid = 0.5 * (Math.max(0, sLatMin) + sLatMax);
+            const b0 = Math.max(0, Math.floor(dsMin / BIN_M));
+            const b1 = Math.min(it.bins, Math.ceil(dsMax / BIN_M));
+            for (let b = b0; b <= b1; b++) if (mid < it.edge[b]) it.edge[b] = mid;
+          }
+        }
+      });
+      for (const it of items) {
+        let prev: number[] | null = null;
+        for (let b = 0; b <= it.bins; b++) {
+          const ke = it.edge[b];
+          if (!Number.isFinite(ke)) {
+            prev = null;
+            continue;
+          }
+          const near = Math.max(0, ke);
+          const far = ke + pastKerbFarM;
+          const q = track.getSampleAtDistance(it.s0 + Math.min(b * BIN_M, it.len));
+          const bl = Math.hypot(q.binormal.x, q.binormal.z) || 1;
+          const bx = (it.side * q.binormal.x) / bl, bz = (it.side * q.binormal.z) / bl;
+          const e = [q.position.x + bx * near, q.position.z + bz * near, q.position.x + bx * far, q.position.z + bz * far];
+          if (prev) strip.push(prev[0], prev[1], prev[2], prev[3], e[2], e[3], prev[0], prev[1], e[2], e[3], e[0], e[1]);
+          prev = e;
+        }
       }
     }
     if (barriers) {
