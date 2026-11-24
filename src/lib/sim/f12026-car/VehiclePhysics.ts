@@ -2611,7 +2611,7 @@ export class VehiclePhysics {
    * Static hub distances and spring preloads, on flat ground at the target ride heights. A heave element in contact at
    * static (`gap` 0) is a preloaded coilover in parallel with the corner springs: from a common free ride height every
    * element is compressed alike, so it carries its rate's share of the weight and the corner springs the rest (the
-   * static ride height is unchanged; VRC's preloaded heave coilovers, AC's heave springs). With a gap it only meets
+   * static ride height is unchanged, as with a preloaded heave coilover or a heave spring). With a gap it only meets
    * the car after that much heave, as before.
    */
   private computeStaticGeometry(): void {
