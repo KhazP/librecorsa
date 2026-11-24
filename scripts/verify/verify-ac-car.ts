@@ -324,6 +324,23 @@ async function main(): Promise<void> {
       check(`no ers.ini on ${model}: no deploy, no harvest of any kind`, !e.hasErs && e.config.ers.ERS_MAX_DEPLOY === 0 && e.config.ers.maxHarvestW === 0 && e.config.ers.topGearLiftHarvestW === 0 && modes.every((x) => x.topGearClipHarvestW === 0 && x.partThrottleHarvestW === 0));
     }
 
+    // No ers.ini on a hybrid base: no motor, no harvest, not only no HUD
+    for (const model of ['f12026-car', 'lc-lmdh'] as const) {
+      const e = acPhysicsPatch(dataDir, { base: model }).profile;
+      const modes = Object.values(e.config.performanceModes);
+      check(`no ers.ini on ${model}: no deploy, no harvest of any kind`, !e.hasErs && e.config.ers.ERS_MAX_DEPLOY === 0 && e.config.ers.maxHarvestW === 0 && e.config.ers.topGearLiftHarvestW === 0 && modes.every((x) => x.topGearClipHarvestW === 0 && x.partThrottleHarvestW === 0));
+    }
+
+    // The base's balance of performance and its differential are the base's, not the car's
+    const lmdh = acPhysicsPatch(dataDir, { base: 'lc-lmdh' });
+    const ownPeak = Math.max(...lmdh.profile.config.engine.powerCurve.map(([, kw]) => kw));
+    const cap = lmdh.profile.config.engine.outputPowerCap!;
+    check("the base's power cap lifted over the car's peak, the same at every speed", cap.curve.every(([, kw]) => kw >= 2 * ownPeak) && (cap.vsSpeedKmh ?? []).every(([, k]) => k === 1), `${JSON.stringify(cap.curve)} for ${ownPeak.toFixed(0)} kW`);
+    const gt3 = acPhysicsPatch(dataDir, { base: 'amg-gt3' }).profile.config.engine.outputPowerCap!;
+    check("... the GT3's too", gt3.curve.every(([, kw]) => kw >= 2 * ownPeak), JSON.stringify(gt3.curve));
+    const ld = lmdh.profile.config.differential.settings;
+    check("the LMDh's differential as AC's: one friction face, 45° ramps", ld.friction_faces === 1 && ld.power_ramp_deg === 45 && ld.coast_ramp_deg === 45 && ld.power === 0.4, JSON.stringify(ld));
+
     const drive = await driveCheck(p.profile);
     check('it drives: no spin flat out, a plausible top speed, braking', drive.ok, `0–100 ${drive.t100.toFixed(2)} s, ${drive.topKmh.toFixed(0)} km/h, ${drive.brakeFromKmh}→0 in ${drive.brakeM.toFixed(0)} m (${drive.brakeG.toFixed(2)} g) ${drive.problems.join('; ')}`);
   }

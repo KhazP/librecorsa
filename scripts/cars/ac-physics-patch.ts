@@ -451,11 +451,17 @@ export function acPhysicsValues(mod: ModData, base: CarSimProfile): Mapper {
   const baseTurbo = bc.engine.turbo;
   const torque = rising(mod.lut('power.lut').filter(([rpm]) => rpm >= 0));
   if (torque.length >= 2) {
-    m.set(
-      'config.engine.powerCurve',
-      torque.map(([rpm, nm]) => [rpm, ((nm * (1 + acBoost(turbos, rpm))) / eff) * ((rpm * Math.PI) / 30) / 1000]),
-      `power.lut (torque ÷ the base's driveline efficiency ${eff}${turbos.length ? ', × the full boost' : ''})`,
-    );
+    const curve = torque.map(([rpm, nm]) => [rpm, ((nm * (1 + acBoost(turbos, rpm))) / eff) * ((rpm * Math.PI) / 30) / 1000]);
+    m.set('config.engine.powerCurve', curve, `power.lut (torque ÷ the base's driveline efficiency ${eff}${turbos.length ? ', × the full boost' : ''})`);
+    // A cap on the power at the driven shafts is the base's class's balance of performance (the GT3's, the LMDh's), not
+    // the car's: lifted flat to twice the car's peak, so it never binds, and the same at every road speed
+    const cap = bc.engine.outputPowerCap;
+    if (cap) {
+      const over = Math.ceil(2 * Math.max(...curve.map(([, kw]) => kw)));
+      const end = Math.max(torque[torque.length - 1][0], limiter || 0, ...cap.curve.map(([rpm]) => rpm));
+      m.set('config.engine.outputPowerCap.curve', [[0, over], [end, over]], "power.lut (the base's power cap lifted over the car's peak: the base class's, not the car's)");
+      if (cap.vsSpeedKmh) m.set('config.engine.outputPowerCap.vsSpeedKmh', [[0, 1], [400, 1]], "power.lut (the base's power cap the same at every speed)");
+    }
   } else m.skip('power.lut', 'missing or empty');
   const idle = eng('ENGINE_DATA', 'MINIMUM');
   const coastRpm = eng('COAST_REF', 'RPM');
@@ -565,6 +571,15 @@ export function acPhysicsValues(mod: ModData, base: CarSimProfile): Mapper {
   }
 
   // ---- brakes
+  // AC's POWER and COAST are the share of the torque a differential locks with: a ramp differential of one friction
+  // face and 45° ramps. A base built otherwise (the LMDh's six faces and 56°/33° ramps) would lock 4 to 9 times as hard
+  const plainRamps = (path: string, from: string) => {
+    const d = valueAt(base, path) as { friction_faces?: number; power_ramp_deg?: number; coast_ramp_deg?: number } | undefined;
+    if (d?.friction_faces !== undefined && d.friction_faces !== 1) m.set(`${path}.friction_faces`, 1, from);
+    for (const k of ['power_ramp_deg', 'coast_ramp_deg'] as const) if (d?.[k] !== undefined && d[k] !== 45) m.set(`${path}.${k}`, 45, from);
+  };
+  plainRamps('config.differential.settings', 'drivetrain.ini [DIFFERENTIAL] POWER, COAST (lock ratios: one face, 45° ramps)');
+  if (traction === 'AWD2' && bc.awd) plainRamps('config.awd.secondaryDiff', 'drivetrain.ini [AWD2] FRONT_DIFF_POWER, FRONT_DIFF_COAST (lock ratios: one face, 45° ramps)');
   m.set('config.brakes.maxTorqueNm', brk('DATA', 'MAX_TORQUE'), 'brakes.ini [DATA] MAX_TORQUE');
   m.set('config.brakes.front_bias', brk('DATA', 'FRONT_SHARE'), 'brakes.ini [DATA] FRONT_SHARE');
   if (brk('DATA', 'HANDBRAKE_TORQUE') > 0) m.set('config.brakes.handbrakeTorqueNm', brk('DATA', 'HANDBRAKE_TORQUE'), 'brakes.ini [DATA] HANDBRAKE_TORQUE');
