@@ -29,7 +29,7 @@ A converted package keeps its source's credit and licence, which the panel shows
 
 ## From the command line
 
-In a clone of the repository, with Node.js and [uv](https://docs.astral.sh/uv/) installed (car imports also need ffmpeg for sound, and Speed Dreams cars need git):
+In a clone of the repository, with Node.js and [uv](https://docs.astral.sh/uv/) installed (car imports need ffmpeg on your PATH to convert a car's own sound, and borrow a game car's without it; Speed Dreams imports that download anything need git):
 
 ```bash
 npm run mod -- import                     # list the importers
@@ -67,7 +67,7 @@ npm run mod -- import sd-track --fetch brno                                 # on
 npm run mod -- import sd-track ~/speed-dreams/data/tracks/circuit/brno      # a circuit folder you already have
 ```
 
-`--fetch` downloads the circuit the way Speed Dreams' own downloader does, checks it against a pinned hash (`scripts/mods/importers/sd-track.circuits.json`), and keeps it in `scripts/mods/.cache/speed-dreams/`. Speed Dreams' shared surfaces and textures are fetched once and reused.
+`--fetch` downloads the circuit the way Speed Dreams' own downloader does, checks it against a pinned hash (`scripts/mods/importers/sd-track.circuits.json`), and keeps it in `scripts/mods/.cache/speed-dreams/`. Speed Dreams' shared surfaces and textures come from its `speed-dreams-data` repository at the commit `scripts/cars/speed-dreams-cars.json` pins: each is fetched once, checked against that commit, and reused.
 
 **What you get:** a package `sd.<circuit>` in `public/mods/`. The road, kerbs, run-off, grass, gravel, pit lane and barriers are rebuilt from the circuit's layout, so the cars drive the same road Speed Dreams does. The buildings, trees and terrain come from the circuit's 3D model. The package includes the circuit's readme and the full licence text.
 
@@ -82,7 +82,7 @@ npm run mod -- import sd-car --fetch ls2-cavallo-360r                       # on
 npm run mod -- import sd-car ~/speed-dreams/data/cars/models/<car>          # a car folder you already have
 ```
 
-A fetched car comes from Speed Dreams' own repositories at forge.a-lec.org, at the revision `scripts/cars/speed-dreams-cars.json` pins, and is kept in `scripts/mods/.cache/speed-dreams/`.
+A fetched car comes from Speed Dreams' own repositories at forge.a-lec.org, at the revision `scripts/cars/speed-dreams-cars.json` pins, and is kept in `scripts/mods/.cache/speed-dreams/`. Its category and the files it shares with other cars (wheels, engine samples) come from `speed-dreams-data` at the commit the same file pins, as the circuits' surfaces do. Nothing downloaded is unpacked or used before it matches its pin, and a car or circuit holding a link, or a file name that reaches outside its folder, is refused.
 
 The package (`sd.<car>`) holds:
 
