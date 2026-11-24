@@ -1167,6 +1167,18 @@
     "field": "The field",
     "startRace": "Start the race",
     "startQualifying": "Start qualifying",
+    "testDay": "Test day",
+    "targetLap": "Target {time}",
+    "weightKg": "{value} kg",
+    "weightLb": "{value} lb",
+    "frontWeight": "{value}% front",
+    "drivetrain": {
+      "rwd": "Rear-wheel drive",
+      "fwd": "Front-wheel drive",
+      "awd": "All-wheel drive"
+    },
+    "revLimit": "{value} rpm limit",
+    "go": "Go",
     "sector": "S{n}"
   }
 }

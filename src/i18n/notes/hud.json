@@ -798,5 +798,10 @@
   "pit.limiterKey": "HUD: the key that switches the pit speed limiter, e.g. 'Limiter: \\\\'.",
   "pit.stopsPill": "Quiet HUD reminder pill when a race requires mandatory pit stops not yet made, e.g. 'Pit 0/1'. Keep short.",
   "pit.stopRequired": "Amber HUD warning shown in the last two laps when mandatory pit stops are still owed. 'Box' is racing radio for pitting.",
-  "timingPanels.tower.pit": "Timing tower, in place of the gap: the car is in the pit lane. Short, capitals."
+  "timingPanels.tower.pit": "Timing tower, in place of the gap: the car is in the pit lane. Short, capitals.",
+  "preRace.testDay": "The title of the career's test-day show: a practice day in the season's car before its races.",
+  "preRace.targetLap": "{time}: a lap time, e.g. 1:32.418. The lap the test day aims at.",
+  "preRace.frontWeight": "The share of the car's weight on its front axle. {value}: a percentage number.",
+  "preRace.revLimit": "The engine's rev limiter. {value}: revolutions per minute.",
+  "preRace.go": "Button on the test day's start card: hands the car to the player."
 }

@@ -1,7 +1,8 @@
 /**
  * What the career tells the pre-race show about a round (useCareerDrive.ts arms the show with it): the series and the
- * round, the race's terms, the field by the codes the race shows, and the championship as it stands. Language-free:
- * the overlay names the series and writes the labels in the player's language.
+ * round, the race's terms, the field by the codes the race shows, and the championship as it stands. A test day's
+ * show is told of its car and its target instead (`test`). Language-free: the overlay names the series and writes the
+ * labels in the player's language.
  */
 import type { TimeOfDayId, WeatherPresetId } from "@/lib/sim/weather";
 
@@ -24,6 +25,21 @@ export interface ShowStanding {
   isPlayer: boolean;
 }
 
+/** A test day's car as the show presents it (the overlay names it from the car registry) and the lap it aims at */
+export interface ShowTestDay {
+  /** car-registry id */
+  car: string;
+  /** Car and driver, without fuel (kg) */
+  massKg: number | null;
+  /** The weight on the front axle (%) */
+  frontPct: number | null;
+  drivetrain: "rwd" | "fwd" | "awd" | null;
+  /** Rev limiter (rpm) */
+  limiterRpm: number | null;
+  /** The test day's target lap (ms): null until it is known */
+  targetMs: number | null;
+}
+
 export interface ShowContext {
   /** ladder.ts series id: the overlay names it */
   seriesId: string;
@@ -41,6 +57,8 @@ export interface ShowContext {
   /** The round's conditions, as the career set them */
   weather: WeatherPresetId;
   timeOfDay: TimeOfDayId;
+  /** A test day (no race: no field, terms or table), its car and target; absent for a round */
+  test?: ShowTestDay;
 }
 
 /** The code's driver, or a stand-in built from the code alone (a car the career did not name) */
@@ -50,6 +68,6 @@ export function showDriver(ctx: ShowContext | null, code: string, color: string,
   return { code, first: "", last: code, number: null, color, isPlayer };
 }
 
-/** The first round has no championship yet: nothing to show */
+/** The first round has no championship yet, and a test day shows none: nothing to show */
 export const hasStandings = (ctx: ShowContext | null): boolean =>
-  Boolean(ctx && ctx.roundIndex > 0 && ctx.standings.some((s) => s.points > 0));
+  Boolean(ctx && !ctx.test && ctx.roundIndex > 0 && ctx.standings.some((s) => s.points > 0));

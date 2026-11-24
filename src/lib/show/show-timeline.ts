@@ -8,13 +8,15 @@
  *   weather, the tyres, then the starting grid two cars at a time from the back to pole, and the start card.
  * - qualifying: a round with a qualifying session. The same opening, then the field (who is entered), then the card.
  * - grid: the race after that qualifying. Only the grid in qualifying order and the start card.
+ * - test: a test day, the opening's short version (the title, the circuit, one or two aerial shots, the tyres), then
+ *   the car itself and the start card. Its cue starts late enough for the tyres to land on their section.
  *
  * The start card waits for the player; nothing starts by itself.
  */
 
-export type ShowKind = "race" | "qualifying" | "grid";
+export type ShowKind = "race" | "qualifying" | "grid" | "test";
 
-export type ShowSceneId = "title" | "circuit" | "aerial" | "tyres" | "gridIntro" | "gridPair" | "field" | "ready";
+export type ShowSceneId = "title" | "circuit" | "aerial" | "tyres" | "gridIntro" | "gridPair" | "field" | "car" | "ready";
 
 /** Where the music's sections fall (s into the cue): the scenes are cut to them */
 export interface ShowMarkers {
@@ -38,6 +40,11 @@ export const PAIR_MIN_S = 2.2;
 export const PAIR_MAX_S = 3.6;
 /** The aerial shots share the scene between them, cut every this long or a little less (s) */
 export const AERIAL_CUT_S = 6.5;
+/** A test day's circuit and aerial scenes (s): the opening's short version */
+export const TEST_CIRCUIT_S = 9;
+export const TEST_AERIAL_S = 8;
+/** A test day's car, on its card (s) */
+export const CAR_S = 8;
 /** The field (qualifying): a moment per row of four entries, within these (s) */
 const FIELD_MIN_S = 10;
 const FIELD_MAX_S = 20;
@@ -79,6 +86,20 @@ export function buildShowTimeline(kind: ShowKind, gridSize: number, markers: Sho
   const pairs = Math.ceil(cars / 2);
   let t = 0;
   let musicFromS = 0;
+  if (kind === "test") {
+    // The opening cut short, its cue started late enough for the tyres to come in on their section, then the car
+    const circuitEnd = TITLE_S + TEST_CIRCUIT_S;
+    const tyresS = circuitEnd + TEST_AERIAL_S;
+    add("title", 0, TITLE_S);
+    add("circuit", TITLE_S, circuitEnd);
+    add("aerial", circuitEnd, tyresS);
+    add("tyres", tyresS, tyresS + (m.gridAtS - m.tyresAtS));
+    t = tyresS + (m.gridAtS - m.tyresAtS);
+    add("car", t, t + CAR_S);
+    t += CAR_S;
+    scenes.push({ id: "ready", startS: t, endS: Infinity });
+    return { kind, scenes, readyAtS: t, musicFromS: Math.max(0, m.tyresAtS - tyresS), pairS: 0 };
+  }
   if (kind !== "grid") {
     // The opening: the title, the circuit, the aerial shots up to the tyres' section, then the tyres to the grid's
     const circuitEnd = TITLE_S + (m.tyresAtS - TITLE_S) * 0.52;

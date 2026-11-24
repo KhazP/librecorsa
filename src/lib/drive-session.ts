@@ -4016,6 +4016,8 @@ export class DriveSession {
           // Only as it forms: a session under way never gets the show
           qualifying: quali !== null && quali.session.elapsedS < 1,
           atLights,
+          // A practice (the career's test day forms in one): its car standing, or under way
+          practice: raceNow().kind === "practice" && quali === null ? (physics.telemetry.speedKmh < 3 ? "standing" : "moving") : undefined,
           grid: atLights && !preRaceShow.playing && preRaceShow.wantsGrid ? showGridOf(raceStatus) : [],
           playerS: physics.sMeters,
           musicS: musicPos === null ? null : musicPos - musicFromS,
