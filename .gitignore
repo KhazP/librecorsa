@@ -38,8 +38,9 @@ __pycache__/
 # Force-feedback helper, compiled on first `npm run ffb`
 /scripts/ffb-bridge/bin/
 
-# Offline launcher builds (npm run launcher:build)
+# Offline launcher builds (npm run launcher:build), and the Windows resources a build makes for a moment
 /launcher/dist/
+/launcher/rsrc_*.syso
 
 # Local notes & scratch dumps
 HANDOFF.md
